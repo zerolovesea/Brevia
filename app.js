@@ -47,6 +47,28 @@ const themeLabels = {
   en: { light: 'Switch to light theme', dark: 'Switch to dark theme' },
   es: { light: 'Cambiar al tema claro', dark: 'Cambiar al tema oscuro' }
 };
+const updateLabels = {
+  zh: { title: '软件更新', description: '当前版本 0.1.0', action: '检查更新', checking: '正在检查…', available: '发现新版本 0.2.0', update: '更新至 0.2.0', floating: '更新 Brevia', updating: '正在更新…', current: '已是最新版本' },
+  en: { title: 'Software updates', description: 'Current version 0.1.0', action: 'Check for updates', checking: 'Checking…', available: 'Version 0.2.0 is available', update: 'Update to 0.2.0', floating: 'Update Brevia', updating: 'Updating…', current: 'Up to date' },
+  es: { title: 'Actualizaciones', description: 'Versión actual 0.1.0', action: 'Buscar actualizaciones', checking: 'Comprobando…', available: 'La versión 0.2.0 está disponible', update: 'Actualizar a 0.2.0', floating: 'Actualizar Brevia', updating: 'Actualizando…', current: 'Ya está actualizado' }
+};
+const updateCard = document.createElement('section');
+updateCard.className = 'update-card';
+updateCard.innerHTML = '<div><h2></h2><p></p></div><button class="update-button" type="button"></button>';
+document.querySelector('#settings-view .settings-grid').append(updateCard);
+const updateTitle = updateCard.querySelector('h2');
+const updateDescription = updateCard.querySelector('p');
+const updateButton = updateCard.querySelector('button');
+const updateNotice = document.createElement('aside');
+updateNotice.className = 'software-update-notice';
+updateNotice.hidden = true;
+updateNotice.innerHTML = '<span></span><button type="button"></button>';
+document.body.append(updateNotice);
+const updateNoticeText = updateNotice.querySelector('span');
+const updateNoticeButton = updateNotice.querySelector('button');
+let updateAvailable = true;
+function renderUpdateNotice() { const copy = updateLabels[locale]; updateNoticeText.textContent = copy.available; updateNoticeButton.textContent = copy.floating; updateNotice.hidden = !updateAvailable; }
+function renderUpdateButton() { const copy = updateLabels[locale]; updateTitle.textContent = copy.title; updateDescription.textContent = updateAvailable ? copy.available : copy.description; updateButton.textContent = updateAvailable ? copy.update : copy.action; updateButton.disabled = false; }
 const slogans = {
   zh: ['每一场对话，都留有依据。', '让重要讨论，不再散落。', '从声音开始，留下清晰结论。', '记录发生的事，推进接下来的事。', '把会议留在掌控之中。'],
   en: ['Every conversation leaves a traceable record.', 'Keep important discussions in one place.', 'Start with sound. End with clear decisions.', 'Record what happened. Move the work forward.', 'Keep every meeting within reach.'],
@@ -113,6 +135,8 @@ function applyLanguage(nextLocale, animate = false) {
     });
     crumb.textContent = catalog[locale].views[activeView];
     renderSlogan(false);
+    renderUpdateButton();
+    renderUpdateNotice();
     if (animate) nodes.forEach((element) => { element.classList.remove('locale-out'); element.classList.add('locale-in'); window.setTimeout(() => element.classList.remove('locale-in'), 520); });
   };
   if (!animate || matchMedia('(prefers-reduced-motion: reduce)').matches) { updateText(); return; }
@@ -141,6 +165,12 @@ collectTranslations();
 applyLanguage(locale);
 applyTheme(theme);
 window.setInterval(() => { sloganIndex = (sloganIndex + 1) % slogans[locale].length; renderSlogan(true); }, 6500);
+updateButton.addEventListener('click', () => {
+  updateButton.disabled = true;
+  updateButton.textContent = updateLabels[locale].checking;
+  window.setTimeout(() => { updateAvailable = true; updateDescription.textContent = updateLabels[locale].available; updateButton.textContent = updateLabels[locale].update; updateButton.disabled = false; renderUpdateNotice(); }, 700);
+});
+updateNoticeButton.addEventListener('click', () => { updateNoticeButton.textContent = updateLabels[locale].updating; updateNoticeButton.disabled = true; window.setTimeout(() => { updateAvailable = false; updateNotice.hidden = true; updateDescription.textContent = updateLabels[locale].current; updateButton.textContent = updateLabels[locale].current; }, 900); });
 function closeLanguageMenu() { languageOptions.hidden = true; languageToggle.setAttribute('aria-expanded', 'false'); }
 languageToggle.addEventListener('click', () => {
   const opening = languageOptions.hidden;
