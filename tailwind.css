@@ -131,6 +131,9 @@
   .notes { @apply col-span-4 border-l border-black pl-8; }.notes h2 { @apply mt-5 text-[22px] font-normal leading-[1.6] tracking-[-.025em]; }.notes section { @apply border-t border-[#e5e5e5] py-6; }.notes h3 { @apply m-0 text-[12px] font-normal uppercase tracking-[.1em]; }.notes p, .notes label { @apply text-[13px] leading-7 text-[#666]; }.notes label { @apply grid grid-cols-[auto_1fr] gap-3 py-2; }.notes label small { @apply block text-[11px] text-[#999]; }
   .settings-grid { @apply mt-12 grid grid-cols-12 gap-8; }.settings-card { @apply col-span-6 border border-[#e5e5e5] p-8; }.settings-card:last-child { @apply col-span-12; }.model-row { @apply grid grid-cols-[40px_1fr_auto] items-center gap-3 border-b border-[#e5e5e5] py-5; }.model-row .model-icon { @apply m-0 size-9 text-base; }.model-row small { @apply mt-1 block text-[11px] text-[#999]; }.secondary { @apply mt-7 border-b border-black pb-1 text-[13px] text-[#404040] transition-opacity duration-300 hover:opacity-70; }.terms { @apply flex flex-wrap gap-x-4 gap-y-2 text-[13px] text-[#666]; }.terms span::before { content: "#"; }
   .toast { @apply fixed right-8 bottom-8 z-10 border border-black bg-white px-4 py-3 text-[13px] text-black opacity-0 transition-opacity duration-300 pointer-events-none; }.toast.visible { @apply opacity-100; }
+  .mini-meeting { @apply fixed bottom-8 left-8 z-10 grid min-w-56 gap-1 border border-black bg-white p-4 text-left text-[13px] text-black shadow-none; animation: mini-in 260ms ease forwards; }
+  .mini-meeting:hover { @apply opacity-70; }
+  .mini-recording { @apply text-[11px] text-[#ff0000]; }.mini-recording i { @apply mr-1 inline-block size-1.5 rounded-full bg-[#ff0000]; }.mini-meeting strong { @apply mt-1 font-normal; }.mini-meeting time { @apply text-[12px] tracking-[.08em] text-[#666]; }.mini-resume { @apply mt-3 text-[12px] text-[#0066ff]; }
 }
 
 @media (max-width: 850px) {
@@ -140,6 +143,7 @@
 @keyframes page-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes page-out { from { opacity: 1; } to { opacity: 0; } }
 @keyframes menu-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes mini-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes language-out { to { opacity: 0; filter: blur(3px); letter-spacing: .08em; } }
 @keyframes language-in { from { opacity: 0; filter: blur(3px); letter-spacing: .08em; } to { opacity: 1; filter: blur(0); } }
 .locale-out { animation: language-out 380ms ease forwards; }
@@ -156,5 +160,6 @@ html[data-theme="dark"] .primary-action, html[data-theme="dark"] .new-meeting, h
 html[data-theme="dark"] .end-button { border-color: #ff5d5d; color: #ff6b6b; }
 html[data-theme="dark"] .status { color: #ddd; }
 html[data-theme="dark"] .toast { border-color: #666; background: #1a1a1a; color: #fff; }
+html[data-theme="dark"] .mini-meeting { border-color: #666; background: #1a1a1a; color: #fff; } html[data-theme="dark"] .mini-meeting time { color: #bbb; }
 html, .app-shell, .sidebar, .workspace, .window-bar, .language-options, input, select { transition: background-color .3s ease, color .3s ease, border-color .3s ease; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }

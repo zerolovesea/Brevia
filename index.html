@@ -48,6 +48,7 @@
         <section class="view" id="settings-view"><button class="back" data-view="home">← 返回会议库</button><p class="eyebrow">设置</p><h1>模型与本地数据</h1><div class="settings-grid"><section class="settings-card"><h2>已安装模型</h2><div class="model-row"><span class="model-icon">⌁</span><div><b>SenseVoice Small</b><small>中文确认文本 · 1.2 GB</small></div><span class="status complete">可用</span></div><div class="model-row"><span class="model-icon">W</span><div><b>Whisper Small</b><small>英文与其他语言 · 466 MB</small></div><span class="status complete">可用</span></div><button class="secondary">下载更多模型</button></section><section class="settings-card"><h2>术语库</h2><p>12 个词条可用于会议准备、搜索和纪要。仅支持的模型会将其用于转写。</p><div class="terms"><span>Brevia</span><span>向量数据库</span><span>CAM++</span><span>+ 9</span></div><button class="secondary">管理术语库</button></section><section class="settings-card"><h2>存储与隐私</h2><p>会议资料保存在此 Mac。外部 LLM 需要在发送逐字稿前明确确认。</p><button class="secondary">查看本地存储</button></section></div></section>
       </section>
     </main>
+    <button class="mini-meeting" id="mini-meeting" hidden><span class="mini-recording"><i></i> 正在录制</span><strong id="mini-title">产品策略周会</strong><time id="mini-timer">00:00:00</time><span class="mini-resume">继续会议 →</span></button>
     <div class="toast" id="toast" role="status"></div>
     <script src="./app.js"></script>
   </body>
