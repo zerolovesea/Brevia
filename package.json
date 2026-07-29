@@ -1,0 +1,17 @@
+{
+  "name": "brevia",
+  "version": "1.0.0",
+  "main": "app.js",
+  "scripts": {
+    "build": "npx @tailwindcss/cli -i ./tailwind.css -o ./styles.css --minify",
+    "test": "node ./test-ui.mjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.3.3",
+    "tailwindcss": "^4.3.3"
+  }
+}

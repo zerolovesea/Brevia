@@ -1,0 +1,160 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Helvetica Neue", "SF Pro Display", "PingFang SC", Arial, sans-serif;
+}
+
+@layer base {
+  * { box-sizing: border-box; }
+  html { background: #fff; color: #1a1a1a; font-family: var(--font-sans); }
+  body { margin: 0; min-width: 320px; background: #fff; font-size: 16px; letter-spacing: .02em; }
+  button, input, select { font: inherit; }
+  button { cursor: pointer; transition: color .3s ease, background-color .3s ease, border-color .3s ease, opacity .3s ease; }
+  button:active { opacity: .7; }
+  button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid #0066ff; outline-offset: 3px; }
+}
+
+@layer components {
+  .app-shell { @apply grid min-h-dvh grid-cols-[224px_minmax(0,1fr)] bg-white; }
+  .sidebar { @apply flex flex-col border-r border-[#e5e5e5] px-6 py-8; }
+  .brand { @apply flex items-center gap-2.5 p-0 text-[20px] font-bold tracking-[-.04em] text-black; }
+  .brand-mark { @apply grid size-7 place-items-center bg-black text-[13px] font-normal text-white; }
+  .new-meeting { @apply mt-12 border border-black bg-black px-4 py-3 text-left text-[14px] text-white transition-opacity duration-300 hover:opacity-70; }
+  .new-meeting span { @apply mr-2 text-lg; }
+  nav { @apply mt-10 grid gap-1; }
+  .nav-item { @apply border-l border-transparent px-3 py-2 text-left text-[14px] text-[#666] transition-all duration-300 hover:text-black; }
+  .nav-item.active { @apply border-black text-black; }
+  .nav-item span { @apply mr-2 inline-block w-5 font-light; }
+  .workspace { @apply min-w-0 px-12 pb-16 max-lg:px-8; }
+  .window-bar { @apply flex h-16 items-center border-b border-[#e5e5e5] text-[12px] text-[#999]; }
+  .traffic { @apply hidden; }
+  .window-bar > span { @apply uppercase tracking-[.1em]; }
+  .icon-button { @apply grid size-9 place-items-center border border-[#e5e5e5] bg-white text-[#404040] transition-opacity duration-300 hover:opacity-70; }
+  .window-actions { @apply ml-auto flex gap-2; }
+  .window-actions .icon-button { @apply text-[13px] font-normal; }
+  .language-menu { @apply relative; }
+  .language-options { @apply absolute top-[calc(100%+8px)] right-0 z-20 w-32 border border-black bg-white p-1 opacity-0; animation: menu-in 220ms ease forwards; }
+  .language-options button { @apply block w-full px-3 py-2 text-left text-[13px] text-[#404040] transition-colors duration-300 hover:bg-[#f5f5f5] hover:text-black; }
+  .language-options button[aria-current="true"] { @apply bg-[#f5f5f5] text-black; }
+  .view { @apply hidden max-w-[1280px] py-16 opacity-0; }
+  .view.active { @apply block; animation: page-in 260ms ease forwards; }
+  .view.leaving { @apply block; animation: page-out 160ms ease forwards; }
+  .page-head, .detail-head { @apply grid grid-cols-12 gap-8; }
+  .page-head > div, .detail-head > div:first-child { @apply col-span-8; }
+  .page-head > .primary-action, .detail-actions { @apply col-span-4 justify-self-end self-end; }
+  .eyebrow { @apply mb-4 text-[12px] font-normal uppercase tracking-[.12em] text-[#666]; }
+  .page-head h1, .prepare-layout h1, .detail-head h1, #settings-view > h1 { @apply m-0 text-[clamp(44px,5vw,72px)] font-light leading-[1.12] tracking-[-.04em] text-black; }
+  .page-head p:not(.eyebrow), .intro, .detail-head p:not(.eyebrow) { @apply mt-6 max-w-[600px] text-[17px] leading-[1.8] text-[#404040]; }
+  .primary-action { @apply inline-flex items-center justify-center gap-8 border border-black bg-black px-6 py-4 text-[14px] text-white transition-opacity duration-300 hover:opacity-70; }
+  .primary-action span { @apply text-lg leading-none; }
+  .library-toolbar { @apply mt-16 grid grid-cols-12 gap-6 border-y border-[#e5e5e5] py-6; }
+  .search { @apply col-span-7 flex items-center gap-3 text-[#666]; }
+  .search input { @apply w-full border-0 bg-transparent text-[15px] outline-none placeholder:text-[#999]; }
+  .filter { @apply col-span-2 text-left text-[13px] text-[#666] transition-colors duration-300 hover:text-black; }
+  .meeting-list { @apply divide-y divide-[#e5e5e5]; }
+  .meeting-row { @apply grid cursor-pointer grid-cols-12 items-center gap-6 py-8 transition-opacity duration-300 hover:opacity-70; }
+  .meeting-color { @apply col-span-1 h-px w-8 bg-black; }
+  .meeting-color.mint, .meeting-color.coral { @apply bg-[#999]; }
+  .meeting-main { @apply col-span-7; }
+  .meeting-main h2 { @apply m-0 text-[19px] font-normal tracking-[-.02em] text-black; }
+  .meeting-main p { @apply mt-2 mb-3 text-[13px] text-[#666]; }
+  .meeting-main p span { @apply mx-1.5; }
+  .tag { @apply mr-2 inline-block text-[11px] text-[#666]; }
+  .tag::before { content: "#"; }
+  .meeting-status { @apply col-span-3 justify-self-end text-right; }
+  .status { @apply text-[12px] font-normal text-[#404040]; }
+  .status.complete::before { content: "已完成"; }
+  .status.processing::before { content: "处理中"; }
+  html[lang="en"] .status.complete::before { content: "Complete"; }
+  html[lang="en"] .status.processing::before { content: "Processing"; }
+  html[lang="es"] .status.complete::before { content: "Completado"; }
+  html[lang="es"] .status.processing::before { content: "Procesando"; }
+  .status { font-size: 0; }
+  .status::before { font-size: 12px; }
+  .meeting-status small { @apply mt-1 block text-[11px] text-[#999]; }
+  .more { @apply col-span-1 justify-self-end text-[#999] transition-colors duration-300 hover:text-black; }
+  .back { @apply mb-12 p-0 text-[13px] text-[#666] transition-colors duration-300 hover:text-[#0066ff]; }
+  .prepare-layout { @apply grid grid-cols-12 gap-8; }
+  .prepare-layout > div { @apply col-span-8; }
+  .prepare-layout h1 { @apply mb-5; }
+  .prepare-layout form { @apply mt-12 grid gap-8; }
+  label { @apply grid gap-3 text-[13px] font-normal text-[#404040]; }
+  input:not([type=checkbox]), select { @apply w-full border border-[#ccc] bg-white px-4 py-3 text-[15px] outline-none transition-colors duration-300 focus:border-black; }
+  .form-grid { @apply grid grid-cols-2 gap-6; }
+  fieldset { @apply m-0 border border-[#e5e5e5] px-6 py-5; }
+  legend { @apply px-1 text-[13px] text-[#404040]; }
+  .choice { @apply grid grid-cols-[auto_1fr_auto] items-center gap-3 py-3; }
+  .choice input { @apply size-4 accent-black; }
+  .choice b, .choice small { @apply block; }
+  .choice small { @apply mt-1 text-[11px] text-[#999]; }
+  .choice strong { @apply text-[11px] font-normal text-[#666]; }
+  .wide { @apply w-full; }
+  .model-card { @apply col-span-4 border-l border-black pl-8; }
+  .model-icon { @apply mb-8 grid size-10 place-items-center border border-black text-lg; }
+  .model-card h2, .settings-card h2 { @apply m-0 text-[22px] font-normal tracking-[-.03em]; }
+  .model-card > p:not(.eyebrow), .settings-card > p { @apply mt-2 text-[13px] leading-7 text-[#666]; }
+  dl { @apply my-8 grid gap-4; }
+  dl div { @apply flex justify-between border-b border-[#e5e5e5] pb-3 text-[13px]; }
+  dt { @apply text-[#666]; } dd { @apply m-0 text-[#1a1a1a]; }
+  .text-button { @apply p-0 text-[13px] text-[#0066ff] transition-opacity duration-300 hover:opacity-70; }
+  .live-header { @apply grid grid-cols-12 items-center gap-6 border-b border-[#e5e5e5] py-5; }
+  .live-title { @apply col-span-7 grid gap-1; }
+  .live-title strong { @apply text-[14px] font-normal; }
+  .recording { @apply text-[11px] text-[#ff0000]; }
+  .recording i { @apply mr-1 inline-block size-1.5 rounded-full bg-[#ff0000]; }
+  #timer { @apply col-span-2 justify-self-end text-[15px] tracking-[.08em]; }
+  .pause-button { @apply col-span-1 text-[13px] text-[#404040] transition-opacity duration-300 hover:opacity-70; }
+  .end-button { @apply col-span-2 border border-[#ff0000] px-4 py-3 text-[13px] text-[#ff0000] transition-colors duration-300 hover:bg-[#ff0000] hover:text-white; }
+  .live-layout { @apply grid grid-cols-12 gap-8 py-12; }
+  .transcript { @apply col-span-8; }
+  .section-heading { @apply flex items-end justify-between border-b border-black pb-8; }
+  .section-heading h1 { @apply m-0 text-[32px] font-normal tracking-[-.035em]; }
+  .translation-toggle { @apply text-[12px] text-[#666] transition-colors duration-300 hover:text-black; }
+  .transcript-scroll { @apply grid max-h-[calc(100dvh-260px)] gap-12 overflow-auto py-12; }
+  .segment { @apply relative pl-24; }
+  .segment-meta { @apply absolute top-0 left-0 grid gap-1 text-[11px]; }
+  .segment-meta time { @apply text-[#999]; }
+  .segment-meta b { @apply text-[12px] font-normal text-[#404040]; }
+  .segment p { @apply m-0 text-[18px] leading-[1.8] tracking-[.02em] text-[#1a1a1a]; }
+  .segment .translation { @apply mt-2 text-[14px] text-[#808080]; }
+  .partial { @apply border-l border-[#999] py-1; }
+  .partial p:first-of-type { @apply text-[#666]; }
+  .latest { @apply mt-2 border-b border-black pb-1 text-[12px] text-[#404040] transition-opacity duration-300 hover:opacity-70; }
+  .live-panel { @apply col-span-4 border-l border-[#e5e5e5] pl-8; }
+  .live-panel section { @apply pb-8; }.live-panel section + section { @apply border-t border-[#e5e5e5] pt-8; }
+  .person { @apply grid grid-cols-[32px_1fr] gap-3 py-3; }.avatar { @apply grid size-8 place-items-center border border-[#999] text-[11px]; }.avatar.blue, .avatar.gray { @apply bg-white text-black; }
+  .person b, .person small { @apply block; }.person b { @apply text-[13px] font-normal; }.person small { @apply mt-1 text-[11px] text-[#999]; }.level { @apply hidden; }
+  .detail-head { @apply mb-12; }.detail-actions { @apply flex gap-3; }
+  .player { @apply grid grid-cols-[40px_auto_auto_auto_1fr_auto_auto] items-center gap-5 border-y border-[#e5e5e5] py-5 text-[12px] text-[#666]; }
+  .play { @apply grid size-9 place-items-center bg-black text-white; }.skip { @apply transition-opacity duration-300 hover:opacity-70; }.player input { @apply w-full accent-black; }.player select { @apply w-auto border-0 p-0 text-[12px]; }
+  .detail-layout { @apply mt-16 grid grid-cols-12 gap-8; }.final-transcript { @apply col-span-8; }.tabbar { @apply mb-12 flex gap-8 border-b border-[#e5e5e5]; }.tab { @apply border-b border-transparent pb-4 text-[13px] text-[#666]; }.tab.active { @apply border-black text-black; }.final-transcript .segment { @apply mb-12; }.jump { @apply mt-2 p-0 text-[11px] text-[#0066ff]; }
+  .notes { @apply col-span-4 border-l border-black pl-8; }.notes h2 { @apply mt-5 text-[22px] font-normal leading-[1.6] tracking-[-.025em]; }.notes section { @apply border-t border-[#e5e5e5] py-6; }.notes h3 { @apply m-0 text-[12px] font-normal uppercase tracking-[.1em]; }.notes p, .notes label { @apply text-[13px] leading-7 text-[#666]; }.notes label { @apply grid grid-cols-[auto_1fr] gap-3 py-2; }.notes label small { @apply block text-[11px] text-[#999]; }
+  .settings-grid { @apply mt-12 grid grid-cols-12 gap-8; }.settings-card { @apply col-span-6 border border-[#e5e5e5] p-8; }.settings-card:last-child { @apply col-span-12; }.model-row { @apply grid grid-cols-[40px_1fr_auto] items-center gap-3 border-b border-[#e5e5e5] py-5; }.model-row .model-icon { @apply m-0 size-9 text-base; }.model-row small { @apply mt-1 block text-[11px] text-[#999]; }.secondary { @apply mt-7 border-b border-black pb-1 text-[13px] text-[#404040] transition-opacity duration-300 hover:opacity-70; }.terms { @apply flex flex-wrap gap-x-4 gap-y-2 text-[13px] text-[#666]; }.terms span::before { content: "#"; }
+  .toast { @apply fixed right-8 bottom-8 z-10 border border-black bg-white px-4 py-3 text-[13px] text-black opacity-0 transition-opacity duration-300 pointer-events-none; }.toast.visible { @apply opacity-100; }
+}
+
+@media (max-width: 850px) {
+  .app-shell { grid-template-columns: 1fr; }.sidebar { display: none; }.workspace { padding: 0 24px 48px; }.view { padding: 48px 0; }.page-head, .detail-head, .prepare-layout, .live-layout, .detail-layout { grid-template-columns: 1fr; }.page-head > div, .detail-head > div:first-child, .page-head > .primary-action, .detail-actions, .prepare-layout > div, .model-card, .transcript, .live-panel, .final-transcript, .notes { grid-column: auto; }.page-head > .primary-action, .detail-actions { justify-self: start; }.library-toolbar { grid-template-columns: 1fr; gap: 16px; margin-top: 48px; }.search, .filter { grid-column: auto; }.meeting-row { grid-template-columns: 32px minmax(0,1fr) 24px; gap: 16px; }.meeting-color, .meeting-main, .more { grid-column: auto; }.meeting-status { display: none; }.form-grid { grid-template-columns: 1fr; }.model-card, .live-panel, .notes { border-left: 0; border-top: 1px solid #e5e5e5; padding: 32px 0 0; }.live-header { grid-template-columns: 1fr auto auto; gap: 12px; }.live-header #timer, .pause-button { display: none; }.live-title { grid-column: auto; }.end-button { grid-column: auto; }.transcript-scroll { max-height: none; }.player { grid-template-columns: 40px auto 1fr auto; gap: 12px; }.player .skip, .player select { display: none; }.settings-grid { grid-template-columns: 1fr; }.settings-card, .settings-card:last-child { grid-column: auto; }
+}
+
+@keyframes page-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes page-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes menu-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes language-out { to { opacity: 0; filter: blur(3px); letter-spacing: .08em; } }
+@keyframes language-in { from { opacity: 0; filter: blur(3px); letter-spacing: .08em; } to { opacity: 1; filter: blur(0); } }
+.locale-out { animation: language-out 380ms ease forwards; }
+.locale-in { animation: language-in 500ms ease forwards; }
+html[data-theme="dark"] { color-scheme: dark; background: #111; color: #f5f5f5; }
+html[data-theme="dark"] .app-shell, html[data-theme="dark"] .sidebar, html[data-theme="dark"] .workspace, html[data-theme="dark"] .window-bar, html[data-theme="dark"] .language-options, html[data-theme="dark"] input:not([type=checkbox]), html[data-theme="dark"] select { background: #111; }
+html[data-theme="dark"] .sidebar, html[data-theme="dark"] .window-bar, html[data-theme="dark"] .library-toolbar, html[data-theme="dark"] .meeting-list, html[data-theme="dark"] .settings-card, html[data-theme="dark"] .model-row, html[data-theme="dark"] .tabbar, html[data-theme="dark"] .player, html[data-theme="dark"] .notes section, html[data-theme="dark"] .live-panel section + section, html[data-theme="dark"] .section-heading, html[data-theme="dark"] .model-card, html[data-theme="dark"] .live-panel, html[data-theme="dark"] .notes, html[data-theme="dark"] fieldset { border-color: #404040; }
+html[data-theme="dark"] .brand, html[data-theme="dark"] .nav-item.active, html[data-theme="dark"] .page-head h1, html[data-theme="dark"] .prepare-layout h1, html[data-theme="dark"] .detail-head h1, html[data-theme="dark"] #settings-view > h1, html[data-theme="dark"] .meeting-main h2, html[data-theme="dark"] .segment p, html[data-theme="dark"] .section-heading h1, html[data-theme="dark"] .model-card h2, html[data-theme="dark"] .settings-card h2, html[data-theme="dark"] .live-title strong, html[data-theme="dark"] dd { color: #fff; }
+html[data-theme="dark"] .page-head p:not(.eyebrow), html[data-theme="dark"] .intro, html[data-theme="dark"] .detail-head p:not(.eyebrow), html[data-theme="dark"] .meeting-main p, html[data-theme="dark"] .segment .translation, html[data-theme="dark"] .notes p, html[data-theme="dark"] .notes label, html[data-theme="dark"] .settings-card > p, html[data-theme="dark"] .model-card > p:not(.eyebrow), html[data-theme="dark"] dt { color: #bbb; }
+html[data-theme="dark"] .icon-button, html[data-theme="dark"] .language-options, html[data-theme="dark"] input:not([type=checkbox]), html[data-theme="dark"] select { border-color: #666; background: #111; color: #eee; }
+html[data-theme="dark"] .language-options button { color: #ddd; }
+html[data-theme="dark"] .language-options button:hover, html[data-theme="dark"] .language-options button[aria-current="true"] { background: #262626; color: #fff; }
+html[data-theme="dark"] .primary-action, html[data-theme="dark"] .new-meeting, html[data-theme="dark"] .play { border-color: #fff; background: #fff; color: #111; }
+html[data-theme="dark"] .end-button { border-color: #ff5d5d; color: #ff6b6b; }
+html[data-theme="dark"] .status { color: #ddd; }
+html[data-theme="dark"] .toast { border-color: #666; background: #1a1a1a; color: #fff; }
+html, .app-shell, .sidebar, .workspace, .window-bar, .language-options, input, select { transition: background-color .3s ease, color .3s ease, border-color .3s ease; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
