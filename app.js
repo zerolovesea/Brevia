@@ -47,6 +47,26 @@ const themeLabels = {
   en: { light: 'Switch to light theme', dark: 'Switch to dark theme' },
   es: { light: 'Cambiar al tema claro', dark: 'Cambiar al tema oscuro' }
 };
+const slogans = {
+  zh: ['每一场对话，都留有依据。', '让重要讨论，不再散落。', '从声音开始，留下清晰结论。', '记录发生的事，推进接下来的事。', '把会议留在掌控之中。'],
+  en: ['Every conversation leaves a traceable record.', 'Keep important discussions in one place.', 'Start with sound. End with clear decisions.', 'Record what happened. Move the work forward.', 'Keep every meeting within reach.'],
+  es: ['Cada conversación conserva un registro verificable.', 'Mantén las conversaciones importantes en un solo lugar.', 'Empieza con la voz. Termina con decisiones claras.', 'Registra lo que ocurrió. Haz avanzar el trabajo.', 'Mantén cada reunión bajo control.']
+};
+const homeSlogan = document.querySelector('#home-slogan');
+let sloganIndex = Math.floor(Math.random() * slogans.zh.length);
+function renderSlogan(animate = false) {
+  const update = () => {
+    homeSlogan.textContent = slogans[locale][sloganIndex];
+    if (animate) {
+      homeSlogan.classList.remove('slogan-out');
+      homeSlogan.classList.add('slogan-in');
+      window.setTimeout(() => homeSlogan.classList.remove('slogan-in'), 440);
+    }
+  };
+  if (!animate || matchMedia('(prefers-reduced-motion: reduce)').matches) { update(); return; }
+  homeSlogan.classList.add('slogan-out');
+  window.setTimeout(update, 280);
+}
 
 function applyTheme(nextTheme) {
   theme = nextTheme;
@@ -92,6 +112,7 @@ function applyLanguage(nextLocale, animate = false) {
       else element[attribute] = value;
     });
     crumb.textContent = catalog[locale].views[activeView];
+    renderSlogan(false);
     if (animate) nodes.forEach((element) => { element.classList.remove('locale-out'); element.classList.add('locale-in'); window.setTimeout(() => element.classList.remove('locale-in'), 520); });
   };
   if (!animate || matchMedia('(prefers-reduced-motion: reduce)').matches) { updateText(); return; }
@@ -119,6 +140,7 @@ const showView = (name) => {
 collectTranslations();
 applyLanguage(locale);
 applyTheme(theme);
+window.setInterval(() => { sloganIndex = (sloganIndex + 1) % slogans[locale].length; renderSlogan(true); }, 6500);
 function closeLanguageMenu() { languageOptions.hidden = true; languageToggle.setAttribute('aria-expanded', 'false'); }
 languageToggle.addEventListener('click', () => {
   const opening = languageOptions.hidden;
