@@ -24,14 +24,17 @@ const catalog = {
     messages: { recordingSaved: 'Grabación guardada. Preparando la transcripción.', located: 'Se abrió el segmento de audio vinculado', playing: 'Reproduciendo pista mezclada', paused: 'Reproducción pausada' }
   }
 };
+Object.assign(catalog.zh.labels, { '播放此段': '播放' });
+Object.assign(catalog.en.labels, { '播放此段': 'Play' });
+Object.assign(catalog.es.labels, { '播放此段': 'Reproducir' });
 Object.assign(catalog.zh.labels, {
-  '开始录制': '开始录制', '继续会议': '继续会议', '我 · 麦克风': '我 · 麦克风', '计算设备': '计算设备', '预计空间': '预计空间', '识别模型': '识别模型', '已应用术语': '已应用术语', '12 个词条': '12 个词条', '可用': '可用', '已完成精修': '已完成精修', '中文确认文本 · 1.2 GB': '中文确认文本 · 1.2 GB', '英文与其他语言 · 466 MB': '英文与其他语言 · 466 MB', '+ 9': '+ 9'
+  '开始录制': '开始录制', '继续会议': '继续会议', '我 · 麦克风': '我 · 麦克风', '计算设备': '计算设备', '预计空间': '预计空间', '识别模型': '识别模型', '已应用术语': '已应用术语', '12 个词条': '12 个词条', '可用': '可用', '已完成精修': '已完成精修', '中文确认文本 · 1.2 GB': '中文确认文本 · 1.2 GB', '英文与其他语言 · 466 MB': '英文与其他语言 · 466 MB', '+ 9': '+ 9', '纪要模型': '纪要模型', '配置用于生成会议纪要的 API。所有配置信息仅保存在本地，不会上传。': '配置用于生成会议纪要的 API。所有配置信息仅保存在本地，不会上传。', '管理纪要模型': '管理纪要模型', '总结提示词': '总结提示词', '编辑提示词': '编辑提示词', '配置 JSON': '配置 JSON', '当前启用的纪要模型配置。': '当前启用的纪要模型配置。'
 });
 Object.assign(catalog.en.labels, {
-  '开始录制': 'Start recording', '继续会议': 'Resume meeting', '我 · 麦克风': 'Me · Microphone', '计算设备': 'Compute device', '预计空间': 'Estimated storage', '识别模型': 'Recognition model', '已应用术语': 'Applied terms', '12 个词条': '12 terms', '可用': 'Available', '已完成精修': 'Refinement complete', '中文确认文本 · 1.2 GB': 'Chinese final transcription · 1.2 GB', '英文与其他语言 · 466 MB': 'English and other languages · 466 MB', '+ 9': '+ 9'
+  '开始录制': 'Start recording', '继续会议': 'Resume meeting', '我 · 麦克风': 'Me · Microphone', '计算设备': 'Compute device', '预计空间': 'Estimated storage', '识别模型': 'Recognition model', '已应用术语': 'Applied terms', '12 个词条': '12 terms', '可用': 'Available', '已完成精修': 'Refinement complete', '中文确认文本 · 1.2 GB': 'Chinese final transcription · 1.2 GB', '英文与其他语言 · 466 MB': 'English and other languages · 466 MB', '+ 9': '+ 9', '纪要模型': 'Summary models', '配置用于生成会议纪要的 API。所有配置信息仅保存在本地，不会上传。': 'Configure APIs for meeting notes. All configuration stays local and is never uploaded.', '管理纪要模型': 'Manage summary models', '总结提示词': 'Summary prompt', '编辑提示词': 'Edit prompt', '配置 JSON': 'Configuration JSON', '当前启用的纪要模型配置。': 'The active summary model configuration.'
 });
 Object.assign(catalog.es.labels, {
-  '开始录制': 'Iniciar grabación', '继续会议': 'Reanudar reunión', '我 · 麦克风': 'Yo · Micrófono', '计算设备': 'Dispositivo de cálculo', '预计空间': 'Almacenamiento estimado', '识别模型': 'Modelo de reconocimiento', '已应用术语': 'Términos aplicados', '12 个词条': '12 términos', '可用': 'Disponible', '已完成精修': 'Refinamiento completo', '中文确认文本 · 1.2 GB': 'Transcripción final en chino · 1.2 GB', '英文与其他语言 · 466 MB': 'Inglés y otros idiomas · 466 MB', '+ 9': '+ 9'
+  '开始录制': 'Iniciar grabación', '继续会议': 'Reanudar reunión', '我 · 麦克风': 'Yo · Micrófono', '计算设备': 'Dispositivo de cálculo', '预计空间': 'Almacenamiento estimado', '识别模型': 'Modelo de reconocimiento', '已应用术语': 'Términos aplicados', '12 个词条': '12 términos', '可用': 'Disponible', '已完成精修': 'Refinamiento completo', '中文确认文本 · 1.2 GB': 'Transcripción final en chino · 1.2 GB', '英文与其他语言 · 466 MB': 'Inglés y otros idiomas · 466 MB', '+ 9': '+ 9', '纪要模型': 'Modelos de resumen', '配置用于生成会议纪要的 API。所有配置信息仅保存在本地，不会上传。': 'Configura API para las notas de reunión. Toda la configuración es local y no se carga.', '管理纪要模型': 'Gestionar modelos de resumen', '总结提示词': 'Prompt de resumen', '编辑提示词': 'Editar prompt', '配置 JSON': 'JSON de configuración', '当前启用的纪要模型配置。': 'La configuración activa del modelo de resumen.'
 });
 let locale = localStorage.getItem('brevia-language') || 'zh';
 let theme = localStorage.getItem('brevia-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
@@ -40,8 +43,11 @@ let toastTimer;
 let switchingLanguage = false;
 let meetingActive = false;
 const translatedNodes = [];
+/** Resolves a display label for the active locale. @param {string} key Chinese source label. @returns {string} Localized label or the original key. */
 const t = (key) => catalog[locale].labels[key] || key;
+/** Resolves a transient message for the active locale. @param {string} key Message identifier. @returns {string} Localized message. */
 const message = (key) => catalog[locale].messages[key];
+renderStaticViews();
 const themeLabels = {
   zh: { light: '切换至浅色主题', dark: '切换至深色主题' },
   en: { light: 'Switch to light theme', dark: 'Switch to dark theme' },
@@ -67,7 +73,11 @@ document.body.append(updateNotice);
 const updateNoticeText = updateNotice.querySelector('span');
 const updateNoticeButton = updateNotice.querySelector('button');
 let updateAvailable = true;
-function renderUpdateNotice() { const copy = updateLabels[locale]; updateNoticeText.textContent = copy.available; updateNoticeButton.textContent = copy.floating; updateNotice.hidden = !updateAvailable; }
+/** Keeps the update notice above the mini meeting when both are visible. @returns {void} */
+function syncFloatingNotices() { updateNotice.style.bottom = miniMeeting.hidden ? '' : `${miniMeeting.offsetHeight + 24}px`; }
+/** Renders the floating update notice from current locale and availability state. @returns {void} */
+function renderUpdateNotice() { const copy = updateLabels[locale]; updateNoticeText.textContent = copy.available; updateNoticeButton.textContent = copy.floating; updateNotice.hidden = !updateAvailable; requestAnimationFrame(syncFloatingNotices); }
+/** Renders the settings-page update action from current locale and availability state. @returns {void} */
 function renderUpdateButton() { const copy = updateLabels[locale]; updateTitle.textContent = copy.title; updateDescription.textContent = updateAvailable ? copy.available : copy.description; updateButton.textContent = updateAvailable ? copy.update : copy.action; updateButton.disabled = false; }
 const modalCopy = {
   zh: {
@@ -88,6 +98,25 @@ const modelLabels = {
   en: { manage: 'Manage model library', download: 'Download', downloading: 'Downloading…', installed: 'Installed', remove: 'Delete' },
   es: { manage: 'Gestionar biblioteca de modelos', download: 'Descargar', downloading: 'Descargando…', installed: 'Instalado', remove: 'Eliminar' }
 };
+const summaryModelCopy = {
+  zh: { title: '管理纪要模型', intro: '所有配置信息仅保存在本地，不会上传。', name: '配置名', provider: '供应商', key: 'API Key', endpoint: '请求地址', format: 'API 格式', model: '主模型', save: '保存配置', add: '新建配置', remove: '删除配置', configured: '已配置模型', active: '正在使用', promptTitle: '总结提示词', promptIntro: '该提示词将用于生成 AI 会议纪要。', jsonTitle: '配置 JSON', jsonIntro: '当前启用的纪要模型配置。', ollama: '本地 Ollama', openAIFormat: 'OpenAI 格式', claudeFormat: 'Claude 格式' },
+  en: { title: 'Manage summary models', intro: 'All configuration stays on this device and is never uploaded.', name: 'Configuration name', provider: 'Provider', key: 'API Key', endpoint: 'Request URL', format: 'API format', model: 'Primary model', save: 'Save configuration', add: 'New configuration', remove: 'Delete configuration', configured: 'Configured models', active: 'In use', promptTitle: 'Summary prompt', promptIntro: 'This prompt is used to generate AI meeting notes.', jsonTitle: 'Configuration JSON', jsonIntro: 'The active summary model configuration.', ollama: 'Local Ollama', openAIFormat: 'OpenAI format', claudeFormat: 'Claude format' },
+  es: { title: 'Gestionar modelos de resumen', intro: 'Toda la configuración se guarda en este dispositivo y no se carga.', name: 'Nombre de configuración', provider: 'Proveedor', key: 'API Key', endpoint: 'URL de solicitud', format: 'Formato de API', model: 'Modelo principal', save: 'Guardar configuración', add: 'Nueva configuración', remove: 'Eliminar configuración', configured: 'Modelos configurados', active: 'En uso', promptTitle: 'Prompt de resumen', promptIntro: 'Este prompt se usa para generar notas de reunión con IA.', jsonTitle: 'JSON de configuración', jsonIntro: 'La configuración activa del modelo de resumen.', ollama: 'Ollama local', openAIFormat: 'Formato OpenAI', claudeFormat: 'Formato Claude' }
+};
+const summaryProviders = ['OpenAI', 'Anthropic', 'Kimi', 'Zhipu GLM', 'MiniMax', 'DeepSeek', 'OpenRouter', 'Ollama'];
+const defaultSummaryModels = [{ name: '配置-1', provider: 'OpenAI', apiKey: '', endpoint: 'https://api.openai.com/v1', format: 'openai', model: 'gpt-4.1-mini' }];
+const savedSummaryConfig = JSON.parse(localStorage.getItem('brevia-summary-config') || 'null');
+let summaryModels = savedSummaryConfig?.models?.length ? savedSummaryConfig.models : defaultSummaryModels;
+let activeSummaryModel = savedSummaryConfig?.active ?? 0;
+let editingSummaryModel = 0;
+let configSequence = savedSummaryConfig?.sequence || summaryModels.length;
+summaryModels.forEach((item, index) => { if (!item.name) item.name = `配置-${index + 1}`; });
+let draftSummaryName = '';
+let summaryPrompt = savedSummaryConfig?.prompt || '基于逐字稿提炼结论、决定、待办和风险；保留可追溯的来源。';
+/** Allocates the next local summary-model configuration name. @returns {string} New configuration name. */
+function nextConfigName() { configSequence += 1; return `配置-${configSequence}`; }
+/** Saves summary-model settings to this browser only. @returns {void} */
+function persistSummaryConfig() { localStorage.setItem('brevia-summary-config', JSON.stringify({ models: summaryModels, active: activeSummaryModel, prompt: summaryPrompt, sequence: configSequence })); }
 const settingsModal = document.createElement('div');
 settingsModal.className = 'modal-backdrop';
 settingsModal.hidden = true;
@@ -96,8 +125,49 @@ document.body.append(settingsModal);
 let activeModal;
 let termEntries = modalCopy.zh.terms.items.map(([name, detail]) => ({ name, detail }));
 let editingTermIndex = null;
-const escapeHtml = (value) => value.replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character]);
+const prepareForm = document.querySelector('#meeting-form');
+/** Rebuilds meeting-language selectors while preserving their submitted values. @returns {void} */
+function renderPrepareSelects() {
+  const values = Object.fromEntries(new FormData(prepareForm));
+  prepareForm.querySelector('.form-grid').innerHTML = `<label>${t('会议语言')}${flowSelect('meeting-language', values['meeting-language'] || '中文', [['中文', t('中文')], ['English', 'English'], ['自动检测', t('自动检测')]])}</label><label>${t('译文目标')}${flowSelect('translation-target', values['translation-target'] || '英语', [['英语', t('英语')], ['不需要翻译', t('不需要翻译')], ['中文', t('中文')]])}</label>`;
+}
+renderPrepareSelects();
+prepareForm.addEventListener('click', (event) => {
+  const toggle = event.target.closest('[data-flow-select-toggle]');
+  if (toggle) {
+    const options = toggle.parentElement.querySelector('.flow-select-options');
+    const opening = options.hidden;
+    prepareForm.querySelectorAll('.flow-select-options').forEach((list) => { list.hidden = true; list.previousElementSibling.previousElementSibling.setAttribute('aria-expanded', 'false'); });
+    options.hidden = !opening;
+    toggle.setAttribute('aria-expanded', String(opening));
+    return;
+  }
+  const choice = event.target.closest('[data-flow-select-choice]');
+  if (!choice) return;
+  const select = choice.closest('.flow-select');
+  select.querySelector('input').value = choice.dataset.value;
+  select.querySelector('.flow-select-toggle').firstChild.nodeValue = choice.textContent;
+  select.querySelector('.flow-select-options').hidden = true;
+  select.querySelector('.flow-select-toggle').setAttribute('aria-expanded', 'false');
+});
+/** Produces the safe-to-display subset of the active model configuration. @returns {string} Formatted JSON without API keys. */
+function renderConfigPreview() {
+  const current = summaryModels[activeSummaryModel];
+  return JSON.stringify(current ? { name: current.name, provider: current.provider, endpoint: current.endpoint, format: current.format, model: current.model } : {}, null, 2);
+}
+/** Renders the editable summary-model configuration modal. @returns {void} */
+function renderSummaryModelModal() {
+  const copy = summaryModelCopy[locale];
+  const current = summaryModels[editingSummaryModel] || { name: draftSummaryName || `配置-${configSequence + 1}`, provider: 'OpenAI', apiKey: '', endpoint: '', format: '', model: '' };
+  const apiFormat = current.format === 'claude' ? 'claude' : 'openai';
+  const configuredControl = summaryModels.length ? `<div class="configured-models"><label class="config-select-field">${copy.configured}${flowSelect('active-summary-model', String(activeSummaryModel), summaryModels.map((item, index) => [String(index), `${item.name} · ${item.provider} · ${item.model}${index === activeSummaryModel ? ` · ${copy.active}` : ''}`]), true)}</label></div>` : '';
+  settingsModal.querySelector('h2').textContent = copy.title;
+  settingsModal.querySelector('.modal-title p').textContent = copy.intro;
+  settingsModal.querySelector('.modal-body').innerHTML = `<form class="summary-model-form"><div class="config-fields"><label>${copy.name}<input name="name" value="${escapeHtml(current.name)}" maxlength="64" required /></label><label class="config-select-field">${copy.provider}${flowSelect('provider', current.provider, summaryProviders.map((provider) => [provider, provider === 'Ollama' ? copy.ollama : provider]))}</label><label>${copy.key}<input name="apiKey" type="password" value="${escapeHtml(current.apiKey)}" required /></label><label>${copy.endpoint}<input name="endpoint" value="${escapeHtml(current.endpoint)}" required /></label><label class="config-select-field">${copy.format}${flowSelect('format', apiFormat, [['openai', copy.openAIFormat], ['claude', copy.claudeFormat]])}</label><label>${copy.model}<input name="model" value="${escapeHtml(current.model)}" required /></label></div><div class="modal-form-actions"><button class="modal-action" type="submit">${copy.save}</button><button class="secondary" data-new-summary-model type="button">${copy.add}</button>${editingSummaryModel >= 0 ? `<button class="model-delete" data-delete-summary-model type="button">${copy.remove}</button>` : ''}</div></form>${configuredControl}<section class="modal-subsection"><h3>${copy.promptTitle}</h3><p>${copy.promptIntro}</p><form class="prompt-form"><textarea name="prompt" rows="9" required>${escapeHtml(summaryPrompt)}</textarea><button class="modal-action" type="submit">${copy.save}</button></form></section><section class="modal-subsection"><h3>${copy.jsonTitle}</h3><p>${copy.jsonIntro}</p><pre class="config-json">${escapeHtml(renderConfigPreview())}</pre></section>`;
+}
+/** Renders one settings modal. @param {'models'|'terms'|'storage'|'summary-model'} kind Requested modal. @returns {void} */
 function renderModal(kind) {
+  if (kind === 'summary-model') { renderSummaryModelModal(); return; }
   const copy = modalCopy[locale][kind];
   const items = kind === 'terms' ? termEntries.map(({ name, detail }) => [name, detail]) : copy.items;
   settingsModal.querySelector('h2').textContent = copy.title;
@@ -110,14 +180,20 @@ function renderModal(kind) {
     return `<div><span>${label}<small>${escapeHtml(detail)}</small></span>${actions}</div>`;
   }).join('')}</div>${kind === 'terms' ? `<form class="term-form"><input name="term" required maxlength="64" placeholder="${copy.placeholder}" /><button type="submit">${copy.add}</button></form>` : ''}`;
 }
-function openModal(kind) { activeModal = kind; renderModal(kind); settingsModal.hidden = false; settingsModal.querySelector('.modal-close').focus(); }
-function closeModal() { activeModal = undefined; settingsModal.hidden = true; }
-const settingsActions = [...document.querySelectorAll('#settings-view .secondary')];
-['models', 'terms', 'storage'].forEach((kind, index) => settingsActions[index].addEventListener('click', () => openModal(kind)));
-const modelCard = settingsActions[0].closest('.settings-card');
+/** Opens and focuses a settings modal. @param {'models'|'terms'|'storage'|'summary-model'} kind Requested modal. @returns {void} */
+function openModal(kind) { activeModal = kind; renderModal(kind); settingsModal.querySelector('.modal-close').setAttribute('aria-label', modalCopy[locale].close); settingsModal.hidden = false; document.body.classList.add('modal-open'); settingsModal.querySelector('.modal-close').focus(); }
+/** Closes the active settings modal and restores page scrolling. @returns {void} */
+function closeModal() { activeModal = undefined; settingsModal.hidden = true; document.body.classList.remove('modal-open'); }
+const settingsActions = [...document.querySelectorAll('#settings-view [data-settings-modal]')];
+settingsActions.forEach((button) => button.addEventListener('click', () => openModal(button.dataset.settingsModal)));
+const modelCard = document.querySelector('#installed-models');
+const modelAction = document.querySelector('[data-settings-modal="models"]');
 const installedModelNames = new Set([...modelCard.querySelectorAll('.model-row b')].map((name) => name.textContent));
+/** Checks whether a model is installed locally. @param {string} name Model name. @returns {boolean} Whether the model exists in the installed set. */
 function isModelInstalled(name) { return installedModelNames.has(name); }
+/** Removes an installed model from the list and local state. @param {string} name Model name. @returns {void} */
 function deleteInstalledModel(name) { const row = [...modelCard.querySelectorAll('.model-row')].find((item) => item.querySelector('b').textContent === name); if (row) row.remove(); installedModelNames.delete(name); }
+/** Adds the per-row delete action if the row does not already have one. @param {HTMLElement} row Installed-model row. @returns {void} */
 function attachModelDelete(row) {
   if (row.querySelector('.model-delete')) return;
   const button = document.createElement('button');
@@ -127,19 +203,52 @@ function attachModelDelete(row) {
   button.addEventListener('click', () => { deleteInstalledModel(row.querySelector('b').textContent); if (activeModal === 'models') renderModal('models'); });
   row.append(button);
 }
-function renderModelControls() { settingsActions[0].textContent = modelLabels[locale].manage; modelCard.querySelectorAll('.model-row').forEach((row) => { attachModelDelete(row); row.querySelector('.model-delete').textContent = modelLabels[locale].remove; }); }
+/** Synchronizes installed-model actions after a locale or model-list change. @returns {void} */
+function renderModelControls() { modelAction.textContent = modelLabels[locale].manage; modelCard.querySelectorAll('.model-row').forEach((row) => { attachModelDelete(row); row.querySelector('.model-delete').textContent = modelLabels[locale].remove; }); }
+/** Inserts a newly downloaded model into the installed-model card. @param {string} name Model name. @param {string} detail Displayed model detail. @returns {void} */
 function installModel(name, detail) {
   if (isModelInstalled(name)) return;
-  const row = document.createElement('div');
-  row.className = 'model-row';
-  row.innerHTML = `<div><b>${escapeHtml(name)}</b><small>${escapeHtml(detail)}</small></div><span class="status complete">可用</span>`;
-  modelCard.insertBefore(row, settingsActions[0]);
+  const template = document.createElement('template');
+  template.innerHTML = renderModelRow({ icon: '', name, detail });
+  const row = template.content.firstElementChild;
+  modelCard.insertBefore(row, modelAction);
   installedModelNames.add(name);
   attachModelDelete(row);
 }
 renderModelControls();
+renderConfigPreview();
 settingsModal.addEventListener('click', (event) => {
   if (event.target === settingsModal || event.target.closest('.modal-close')) { closeModal(); return; }
+  const selectToggle = event.target.closest('[data-flow-select-toggle]');
+  if (selectToggle) {
+    const options = selectToggle.parentElement.querySelector('.flow-select-options');
+    const opening = options.hidden;
+    settingsModal.querySelectorAll('.flow-select-options').forEach((list) => { list.hidden = true; list.previousElementSibling.previousElementSibling?.setAttribute('aria-expanded', 'false'); });
+    options.hidden = !opening;
+    selectToggle.setAttribute('aria-expanded', String(opening));
+    return;
+  }
+  const selectChoice = event.target.closest('[data-flow-select-choice]');
+  if (selectChoice) {
+    const select = selectChoice.closest('.flow-select');
+    select.querySelector('input').value = selectChoice.dataset.value;
+    select.querySelector('.flow-select-toggle').firstChild.nodeValue = selectChoice.textContent;
+    select.querySelector('.flow-select-options').hidden = true;
+    select.querySelector('.flow-select-toggle').setAttribute('aria-expanded', 'false');
+    if (select.hasAttribute('data-active-summary-model')) { activeSummaryModel = Number(selectChoice.dataset.value); editingSummaryModel = activeSummaryModel; persistSummaryConfig(); renderModal('summary-model'); }
+    return;
+  }
+  const addSummaryModel = event.target.closest('[data-new-summary-model]');
+  if (addSummaryModel) { editingSummaryModel = -1; draftSummaryName = nextConfigName(); renderModal('summary-model'); return; }
+  if (event.target.closest('[data-delete-summary-model]')) {
+    summaryModels.splice(editingSummaryModel, 1);
+    activeSummaryModel = summaryModels.length ? Math.min(activeSummaryModel, summaryModels.length - 1) : -1;
+    editingSummaryModel = activeSummaryModel;
+    draftSummaryName = summaryModels.length ? '' : nextConfigName();
+    persistSummaryConfig();
+    renderModal('summary-model');
+    return;
+  }
   const download = event.target.closest('[data-download-model]');
   if (download) { const [name, detail] = modalCopy[locale].models.items[Number(download.dataset.downloadModel)]; download.disabled = true; download.textContent = modelLabels[locale].downloading; window.setTimeout(() => { installModel(name, detail); renderModal('models'); }, 700); return; }
   const deleteModel = event.target.closest('[data-delete-model]');
@@ -152,7 +261,33 @@ settingsModal.addEventListener('click', (event) => {
   const remove = event.target.closest('[data-remove-term]');
   if (remove) { termEntries.splice(Number(remove.dataset.removeTerm), 1); editingTermIndex = null; renderModal('terms'); }
 });
-settingsModal.addEventListener('submit', (event) => { if (!event.target.matches('.term-form')) return; event.preventDefault(); const term = new FormData(event.target).get('term').trim(); if (!term || termEntries.some((entry) => entry.name.toLowerCase() === term.toLowerCase())) return; termEntries.push({ name: term, detail: locale === 'zh' ? '自定义术语' : locale === 'es' ? 'Término personalizado' : 'Custom term' }); renderModal('terms'); });
+settingsModal.addEventListener('submit', (event) => {
+  if (event.target.matches('.summary-model-form')) {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.target));
+    if (editingSummaryModel < 0) { summaryModels.push(values); activeSummaryModel = summaryModels.length - 1; } else summaryModels[editingSummaryModel] = values;
+    editingSummaryModel = activeSummaryModel;
+    draftSummaryName = '';
+    persistSummaryConfig();
+    renderConfigPreview();
+    renderModal('summary-model');
+    return;
+  }
+  if (event.target.matches('.prompt-form')) {
+    event.preventDefault();
+    summaryPrompt = new FormData(event.target).get('prompt').trim();
+    persistSummaryConfig();
+    renderConfigPreview();
+    renderModal('summary-model');
+    return;
+  }
+  if (!event.target.matches('.term-form')) return;
+  event.preventDefault();
+  const term = new FormData(event.target).get('term').trim();
+  if (!term || termEntries.some((entry) => entry.name.toLowerCase() === term.toLowerCase())) return;
+  termEntries.push({ name: term, detail: locale === 'zh' ? '自定义术语' : locale === 'es' ? 'Término personalizado' : 'Custom term' });
+  renderModal('terms');
+});
 const slogans = {
   zh: ['每一场对话，都留有依据。', '让重要讨论，不再散落。', '从声音开始，留下清晰结论。', '记录发生的事，推进接下来的事。', '把会议留在掌控之中。'],
   en: ['Every conversation leaves a traceable record.', 'Keep important discussions in one place.', 'Start with sound. End with clear decisions.', 'Record what happened. Move the work forward.', 'Keep every meeting within reach.'],
@@ -160,6 +295,7 @@ const slogans = {
 };
 const homeSlogan = document.querySelector('#home-slogan');
 let sloganIndex = Math.floor(Math.random() * slogans.zh.length);
+/** Updates the rotating library slogan. @param {boolean} animate Whether to play the transition. @returns {void} */
 function renderSlogan(animate = false) {
   const update = () => {
     homeSlogan.textContent = slogans[locale][sloganIndex];
@@ -174,6 +310,7 @@ function renderSlogan(animate = false) {
   window.setTimeout(update, 280);
 }
 
+/** Applies and persists the selected color theme. @param {'light'|'dark'} nextTheme Theme to apply. @returns {void} */
 function applyTheme(nextTheme) {
   theme = nextTheme;
   localStorage.setItem('brevia-theme', theme);
@@ -184,6 +321,7 @@ function applyTheme(nextTheme) {
   themeToggle.setAttribute('aria-label', themeToggle.title);
 }
 
+/** Records static DOM text and attributes that can be replaced on locale changes. @returns {void} */
 function collectTranslations() {
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   let node;
@@ -202,6 +340,7 @@ function collectTranslations() {
     if (catalog.zh.labels[key]) translatedNodes.push({ element, attribute: 'title', key });
   });
 }
+/** Applies a locale, redraws dependent components, and optionally animates translated nodes. @param {'zh'|'en'|'es'} nextLocale Locale to apply. @param {boolean} animate Whether to animate the change. @returns {void} */
 function applyLanguage(nextLocale, animate = false) {
   locale = nextLocale;
   localStorage.setItem('brevia-language', locale);
@@ -217,11 +356,14 @@ function applyLanguage(nextLocale, animate = false) {
       if (node) node.nodeValue = `${leading}${value}${trailing}`;
       else element[attribute] = value;
     });
+    renderPrepareSelects();
+    renderMeetingDetail();
     crumb.textContent = catalog[locale].views[activeView];
     renderSlogan(false);
     renderUpdateButton();
     renderUpdateNotice();
     renderModelControls();
+    renderConfigPreview();
     if (activeModal) renderModal(activeModal);
     if (animate) nodes.forEach((element) => { element.classList.remove('locale-out'); element.classList.add('locale-in'); window.setTimeout(() => element.classList.remove('locale-in'), 520); });
   };
@@ -230,7 +372,9 @@ function applyLanguage(nextLocale, animate = false) {
   nodes.forEach((element) => element.classList.add('locale-out'));
   window.setTimeout(() => { updateText(); switchingLanguage = false; }, 380);
 }
+/** Shows a short, self-clearing feedback message. @param {string} content Toast text. @returns {void} */
 const showToast = (content) => { toast.textContent = content; toast.classList.add('visible'); clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove('visible'), 2400); };
+/** Switches between top-level app views. @param {'home'|'prepare'|'live'|'detail'|'settings'} name Target view. @returns {void} */
 const showView = (name) => {
   if (name === activeView) return;
   const current = document.querySelector(`#${activeView}-view`);
@@ -257,6 +401,7 @@ updateButton.addEventListener('click', () => {
   window.setTimeout(() => { updateAvailable = true; updateDescription.textContent = updateLabels[locale].available; updateButton.textContent = updateLabels[locale].update; updateButton.disabled = false; renderUpdateNotice(); }, 700);
 });
 updateNoticeButton.addEventListener('click', () => { updateNoticeButton.textContent = updateLabels[locale].updating; updateNoticeButton.disabled = true; window.setTimeout(() => { updateAvailable = false; updateNotice.hidden = true; updateDescription.textContent = updateLabels[locale].current; updateButton.textContent = updateLabels[locale].current; }, 900); });
+/** Closes the language menu and updates its disclosure state. @returns {void} */
 function closeLanguageMenu() { languageOptions.hidden = true; languageToggle.setAttribute('aria-expanded', 'false'); }
 languageToggle.addEventListener('click', () => {
   const opening = languageOptions.hidden;
@@ -271,22 +416,49 @@ languageOptions.addEventListener('click', (event) => {
 });
 document.addEventListener('click', (event) => { if (!event.target.closest('.language-menu')) closeLanguageMenu(); });
 document.addEventListener('keydown', (event) => { if (event.key === 'Escape') { if (activeModal) closeModal(); else { closeLanguageMenu(); languageToggle.focus(); } } });
-function minimizeMeeting() { miniTitle.textContent = document.querySelector('#live-name').textContent; miniTimer.textContent = document.querySelector('#timer').textContent; miniMeeting.hidden = false; }
+/** Shows the compact live-meeting control when navigating away during recording. @returns {void} */
+function minimizeMeeting() { miniTitle.textContent = document.querySelector('#live-name').textContent; miniTimer.textContent = document.querySelector('#timer').textContent; miniMeeting.hidden = false; requestAnimationFrame(syncFloatingNotices); }
 document.addEventListener('click', (event) => { const target = event.target.closest('[data-view]'); if (!target) return; if (activeView === 'live' && meetingActive && target.dataset.view !== 'live') minimizeMeeting(); showView(target.dataset.view); });
-document.querySelector('#meeting-form').addEventListener('submit', (event) => { event.preventDefault(); document.querySelector('#live-name').textContent = document.querySelector('#meeting-title').value || t('会议名称'); meetingActive = true; miniMeeting.hidden = true; showView('live'); startTimer(); });
+document.querySelector('#meeting-form').addEventListener('submit', (event) => { event.preventDefault(); document.querySelector('#live-name').textContent = document.querySelector('#meeting-title').value || t('会议名称'); meetingActive = true; miniMeeting.hidden = true; syncFloatingNotices(); showView('live'); startTimer(); });
 let seconds = 0;
 let timer;
+/** Starts the visible recording timer, replacing any prior timer. @returns {void} */
 function startTimer() { clearInterval(timer); timer = setInterval(() => { seconds += 1; const value = new Date(seconds * 1000).toISOString().slice(11, 19); document.querySelector('#timer').textContent = value; miniTimer.textContent = value; }, 1000); }
 document.querySelector('#pause').addEventListener('click', (event) => { const paused = event.currentTarget.dataset.paused === 'true'; event.currentTarget.dataset.paused = String(!paused); event.currentTarget.textContent = paused ? `Ⅱ ${t('暂停')}` : `▶ ${t('继续')}`; if (paused) startTimer(); else clearInterval(timer); });
-document.querySelector('#end-meeting').addEventListener('click', () => { clearInterval(timer); meetingActive = false; miniMeeting.hidden = true; showView('detail'); showToast(message('recordingSaved')); });
-miniMeeting.addEventListener('click', () => { miniMeeting.hidden = true; showView('live'); });
+document.querySelector('#end-meeting').addEventListener('click', () => { clearInterval(timer); meetingActive = false; miniMeeting.hidden = true; syncFloatingNotices(); showView('detail'); showToast(message('recordingSaved')); });
+miniMeeting.addEventListener('click', () => { miniMeeting.hidden = true; syncFloatingNotices(); showView('live'); });
+/** Replaces a speaker label with an inline editor and propagates the saved name. @param {HTMLElement} label Speaker-name element. @returns {void} */
+function editSpeakerName(label) {
+  const speaker = label.dataset.speaker;
+  const input = document.createElement('input');
+  input.className = 'speaker-name-input';
+  input.value = label.textContent;
+  input.maxLength = 32;
+  const commit = () => {
+    const name = input.value.trim() || `说话人 ${speaker}`;
+    const nextLabel = document.createElement('b');
+    nextLabel.dataset.speaker = speaker;
+    nextLabel.title = '双击修改名称';
+    nextLabel.textContent = name;
+    nextLabel.addEventListener('dblclick', () => editSpeakerName(nextLabel));
+    input.replaceWith(nextLabel);
+    document.querySelectorAll(`[data-speaker="${speaker}"]`).forEach((node) => { node.textContent = name; });
+  };
+  input.addEventListener('blur', commit, { once: true });
+  input.addEventListener('keydown', (event) => { if (event.key === 'Enter') input.blur(); if (event.key === 'Escape') { input.value = label.textContent; input.blur(); } });
+  label.replaceWith(input);
+  input.focus();
+  input.select();
+}
+document.querySelectorAll('.person b[data-speaker]').forEach((label) => label.addEventListener('dblclick', () => editSpeakerName(label)));
 document.querySelector('#translation-toggle').addEventListener('click', (event) => { const enabled = event.currentTarget.dataset.enabled !== 'false'; event.currentTarget.dataset.enabled = String(!enabled); event.currentTarget.textContent = t(enabled ? '译文: 关' : '译文: 开'); document.querySelectorAll('.translation').forEach((line) => line.hidden = enabled); });
 document.querySelector('#latest').addEventListener('click', () => document.querySelector('#transcript-scroll').scrollTo({ top: 9999, behavior: 'smooth' }));
 document.querySelector('#meeting-search').addEventListener('input', (event) => { const query = event.currentTarget.value.trim().toLowerCase(); document.querySelectorAll('.meeting-row').forEach((row) => row.hidden = !row.textContent.toLowerCase().includes(query)); });
 const progress = document.querySelector('#progress');
 const playerTime = document.querySelector('#player-time');
+/** Formats the audio progress control as an mm:ss display. @returns {void} */
 const renderPlayerTime = () => { const value = Number(progress.value); playerTime.textContent = `${String(Math.floor(value / 60)).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}`; };
 progress.addEventListener('input', renderPlayerTime);
-document.querySelectorAll('.jump').forEach((button) => button.addEventListener('click', () => { progress.value = button.dataset.time; renderPlayerTime(); showToast(message('located')); }));
+document.addEventListener('click', (event) => { const button = event.target.closest('.jump'); if (button) { progress.value = button.dataset.time; renderPlayerTime(); showToast(message('located')); } });
 document.querySelector('#play').addEventListener('click', (event) => { const playing = event.currentTarget.textContent === '❚❚'; event.currentTarget.textContent = playing ? '▶' : '❚❚'; showToast(message(playing ? 'paused' : 'playing')); });
 themeToggle.addEventListener('click', () => applyTheme(theme === 'dark' ? 'light' : 'dark'));
