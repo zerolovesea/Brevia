@@ -17,6 +17,50 @@
     "kind": "paraformer"
   },
   {
+    "id": "zipformer-en-streaming-int8",
+    "name": "Streaming Zipformer English",
+    "runtime": "sherpa-onnx==1.13.2",
+    "revision": "asr-models/2023-06-26",
+    "stages": ["streaming"],
+    "languages": ["en"],
+    "backend": ["cpu"],
+    "hotword": false,
+    "speaker": false,
+    "size_bytes": 310414022,
+    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-en-2023-06-26.tar.bz2",
+    "archive_sha256": "639e25b578e9e997131402199419c13a941f8e4e198e2da1ce57dbf5cf401282",
+    "directory": "sherpa-onnx-streaming-zipformer-en-2023-06-26",
+    "files": [
+      "encoder-epoch-99-avg-1-chunk-16-left-128.int8.onnx",
+      "decoder-epoch-99-avg-1-chunk-16-left-128.onnx",
+      "joiner-epoch-99-avg-1-chunk-16-left-128.int8.onnx",
+      "tokens.txt"
+    ],
+    "endpoint": {
+      "rule1_silence": 2.4,
+      "rule2_silence": 1.2,
+      "maximum_utterance_seconds": 20
+    },
+    "kind": "transducer"
+  },
+  {
+    "id": "online-punct-en-int8",
+    "name": "English Punctuation and Casing",
+    "runtime": "sherpa-onnx==1.13.2",
+    "revision": "punctuation-models/2024-08-06",
+    "stages": ["punctuation"],
+    "languages": ["en"],
+    "backend": ["cpu"],
+    "hotword": false,
+    "speaker": false,
+    "size_bytes": 30667839,
+    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/punctuation-models/sherpa-onnx-online-punct-en-2024-08-06.tar.bz2",
+    "archive_sha256": "9f5e5a72c7d2829635bd074fce92b6bbd5b78da8a52e7ad8ed1be933f366b99d",
+    "directory": "sherpa-onnx-online-punct-en-2024-08-06",
+    "files": ["model.int8.onnx", "bpe.vocab"],
+    "kind": "online-punctuation"
+  },
+  {
     "id": "qwen3-asr-0.6b-int8",
     "name": "Qwen3-ASR 0.6B int8",
     "runtime": "sherpa-onnx==1.13.2",

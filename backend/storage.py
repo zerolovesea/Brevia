@@ -5,8 +5,10 @@ import json
 import shutil
 import sqlite3
 import struct
+import sys
 import time
 import wave
+from array import array
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -387,6 +389,7 @@ class Store:
         self.write_manifest(meeting_id, manifest)
         for track in ("mic", "system"):
             self._build_playback(meeting_id, track)
+        self._build_mix(meeting_id)
         return self.get_meeting(meeting_id)
 
     def soft_delete(self, meeting_id, restore=False):
@@ -652,7 +655,7 @@ class Store:
             track: str(audio / f"playback-{track}.wav")
             if (audio / f"playback-{track}.wav").exists()
             else None
-            for track in ("mic", "system")
+            for track in ("mic", "system", "mix")
         }
         return files
 
@@ -670,6 +673,38 @@ class Store:
                     if recording.getparams()[:3] != first.getparams()[:3]:
                         raise ValueError("Audio chunk format changed during recording")
                     output.writeframes(recording.readframes(recording.getnframes()))
+
+    def _build_mix(self, meeting_id):
+        """把麦克风和系统录音等比例混合为详情页默认回放文件。"""
+        playback = self.audio_files(meeting_id)["playback"]
+        if not playback["mic"] or not playback["system"]:
+            return
+        destination = self.meetings_dir / meeting_id / "audio" / "playback-mix.wav"
+        with wave.open(playback["mic"]) as mic, wave.open(playback["system"]) as system:
+            if mic.getparams()[:3] != system.getparams()[:3]:
+                raise ValueError("Audio track format mismatch")
+            with wave.open(str(destination), "wb") as output:
+                output.setparams(mic.getparams())
+                while True:
+                    left, right = array("h"), array("h")
+                    left.frombytes(mic.readframes(65536))
+                    right.frombytes(system.readframes(65536))
+                    if not left and not right:
+                        break
+                    if sys.byteorder != "little":
+                        left.byteswap()
+                        right.byteswap()
+                    mixed = array(
+                        "h",
+                        (
+                            ((left[index] if index < len(left) else 0)
+                             + (right[index] if index < len(right) else 0)) // 2
+                            for index in range(max(len(left), len(right)))
+                        ),
+                    )
+                    if sys.byteorder != "little":
+                        mixed.byteswap()
+                    output.writeframes(mixed.tobytes())
 
     def read_manifest(self, meeting_id):
         """读取录音恢复清单；文件尚不存在时返回空字典。"""

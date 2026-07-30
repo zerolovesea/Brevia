@@ -2,15 +2,20 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const [html, css, js, uiData, components] = await Promise.all(['index.html', 'styles.css', 'app.js', 'ui-data.js', 'ui-components.js'].map((file) => readFile(file)));
+const backendClient = await readFile('backend-client.js');
+const electronMain = await readFile('../electron/main.js');
 const text = (value) => value.toString();
 
 for (const id of ['home-view', 'prepare-view', 'live-view', 'detail-view', 'settings-view', 'meeting-form', 'end-meeting']) {
   assert.match(text(html), new RegExp(`id="${id}"`));
 }
 assert.match(text(css), /prefers-reduced-motion:\s*reduce/);
+assert.match(text(css), /\.window-bar\{[^}]*-webkit-app-region:drag/);
+assert.match(text(css), /\.window-actions\{[^}]*-webkit-app-region:no-drag/);
 assert.match(text(js), /showView\('live'\)/);
 assert.match(text(js), /showView\('detail'\)/);
 assert.match(text(html), /id="language-toggle"/);
+assert.match(text(html), /id="all-meetings"/);
 assert.match(text(html), /id="category-filter"/);
 assert.match(text(html), /id="home-slogan"/);
 assert.match(text(html), /id="mini-meeting"/);
@@ -52,12 +57,34 @@ assert.match(text(js), /所有转写模型都在本地运行，不会将您的�
 assert.doesNotMatch(text(js), /Streaming Zipformer|Whisper/);
 assert.match(text(js), /实时字幕/);
 assert.match(text(js), /会后精修/);
+assert.match(text(js), /language === 'en' \? 'zipformer-en-streaming-int8'/);
+assert.match(text(js), /model\.stages\.includes\('punctuation'\) \? '标点恢复'/);
 assert.doesNotMatch(text(js), /音频分析/);
 assert.match(text(js), /data-download-model/);
 assert.match(text(js), /data-delete-model/);
 assert.match(text(js), /meeting\.exampleLocale === locale/);
+assert.match(text(js), /function selectLibraryNav/);
+assert.match(text(js), /await refreshBackendMeetings\(\)/);
+assert.match(text(js), /let updateAvailable = false/);
+assert.match(text(backendClient), /async prepare\(\{ mic, system \}\)/);
+assert.match(text(backendClient), /await this\.capture\.prepare\(inputs\)[\s\S]*window\.brevia\.meeting\.start\(payload\)/);
+assert.match(text(backendClient), /系统音频.*未产生音频数据/);
+assert.match(text(backendClient), /this\.state\.meeting\?\.id \|\| this\.capture\?\.meetingId/);
+assert.match(text(backendClient), /await this\.capture\.stop\(\)/);
+assert.match(text(electronMain), /function promptInitialPermissions/);
+assert.match(text(electronMain), /desktopCapturer\.getSources/);
+assert.match(text(electronMain), /setDisplayMediaRequestHandler/);
+assert.doesNotMatch(text(electronMain), /useSystemPicker/);
+assert.match(text(electronMain), /MacCatapLoopbackAudioForScreenShare/);
+assert.match(text(electronMain), /requestSingleInstanceLock/);
+assert.match(text(electronMain), /Privacy_ScreenCapture/);
+assert.match(text(js), /const button = event\.currentTarget/);
+assert.match(text(js), /let followLiveTranscript = true/);
+assert.match(text(js), /liveSpeakers\.set/);
+assert.match(text(js), /segment\.classList\.remove\('is-active'\)/);
 assert.match(text(js), /示例会议及录音已删除/);
 assert.match(text(js), /function syncPlaybackTranscript/);
+assert.match(text(js), /playback\.mix \|\| meeting\.audio\.playback\.mic/);
 assert.match(text(js), /segment\.is-active/);
 assert.match(text(js), /body\.scrollTo/);
 assert.match(text(js), /Aún no se ha generado el resumen/);

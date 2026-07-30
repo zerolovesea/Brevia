@@ -23,9 +23,9 @@ function renderModelRow({ icon, name, detail, intro = '' }) {
 function renderSettingsCard({ title, description, terms, action, modal }) {
   return `<section class="settings-card"><h2>${t(title)}</h2><p>${t(description)}</p>${terms ? `<div class="terms">${terms.map((term) => `<span>${t(term)}</span>`).join('')}</div>` : ''}<button class="secondary" data-settings-modal="${modal}">${t(action)}</button></section>`;
 }
-/** Renders one participant in the live-meeting sidebar. @param {{id: string, name: string, source: string, avatar: string, level: string}} participant Participant data. @returns {string} Participant markup. */
-function renderParticipant({ id, name, source, avatar, level }) {
-  return `<div class="person"><span class="avatar ${avatar}">${id}</span><div><b data-speaker="${id}" title="双击修改名称">${name}</b><small>${t(source)}</small></div><i class="level ${level}"></i></div>`;
+/** Renders one participant in the live-meeting sidebar. @param {{id: string, speakerId?: string, name: string, source: string, avatar: string, level: string}} participant Participant data. @returns {string} Participant markup. */
+function renderParticipant({ id, speakerId = id, name, source, avatar, level }) {
+  return `<div class="person"><span class="avatar ${avatar}">${id}</span><div><b data-speaker="${speakerId}" title="双击修改名称">${name}</b><small>${t(source)}</small></div><i class="level ${level}"></i></div>`;
 }
 /** Renders a compact label/value list. @param {Array<{label: string, value: string}>} items Status entries. @returns {string} Definition-list markup. */
 function renderStatusList(items) { return `<dl>${items.map(({ label, value }) => `<div><dt>${t(label)}</dt><dd>${value}</dd></div>`).join('')}</dl>`; }

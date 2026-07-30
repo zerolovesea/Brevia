@@ -163,14 +163,21 @@ class StreamingASR:
         except ImportError as error:
             raise RuntimeError("sherpa-onnx is not installed") from error
         path = manager.path(model_id)
+        endpoint = self.model.get("endpoint", {})
         common = {
             "tokens": str(path / "tokens.txt"),
             "num_threads": manager.device()["threads"],
             "provider": manager.device()["backend"],
             "enable_endpoint_detection": True,
-            "rule1_min_trailing_silence": SETTINGS["asr"]["endpoint_rule1_silence"],
-            "rule2_min_trailing_silence": SETTINGS["asr"]["endpoint_rule2_silence"],
-            "rule3_min_utterance_length": SETTINGS["asr"]["maximum_utterance_seconds"],
+            "rule1_min_trailing_silence": endpoint.get(
+                "rule1_silence", SETTINGS["asr"]["endpoint_rule1_silence"]
+            ),
+            "rule2_min_trailing_silence": endpoint.get(
+                "rule2_silence", SETTINGS["asr"]["endpoint_rule2_silence"]
+            ),
+            "rule3_min_utterance_length": endpoint.get(
+                "maximum_utterance_seconds", SETTINGS["asr"]["maximum_utterance_seconds"]
+            ),
         }
         if self.model["kind"] == "paraformer":
             common.update(
@@ -178,7 +185,7 @@ class StreamingASR:
                 decoder=str(path / "decoder.int8.onnx"),
             )
         else:
-            files = self.model["files"]
+            files = [name for name in self.model["files"] if name.endswith(".onnx")]
             common.update(
                 encoder=str(path / files[0]),
                 decoder=str(path / files[1]),
@@ -212,6 +219,108 @@ class StreamingASR:
             result = self.recognizer.get_result(stream)
             self.recognizer.reset(stream)
         return result, endpoint
+
+
+class EnglishPunctuation:
+    """为英文实时识别结果恢复大小写和标点。"""
+
+    def __init__(self, manager, model_id):
+        """加载英文在线标点模型；模型未安装时抛出 ``RuntimeError``。"""
+        if not manager.is_ready(model_id):
+            raise RuntimeError(f"Model {model_id} is not installed")
+        import sherpa_onnx
+
+        path = manager.path(model_id)
+        model = sherpa_onnx.OnlinePunctuationModelConfig(
+            cnn_bilstm=str(path / "model.int8.onnx"),
+            bpe_vocab=str(path / "bpe.vocab"),
+            num_threads=manager.device()["threads"],
+            provider=manager.device()["backend"],
+        )
+        self.engine = sherpa_onnx.OnlinePunctuation(
+            sherpa_onnx.OnlinePunctuationConfig(model)
+        )
+
+    def apply(self, text):
+        """返回带自然大小写与标点的英文；空文本原样返回。"""
+        return self.engine.add_punctuation_with_case(text.lower()) if text else text
+
+
+class SpeakerTracker:
+    """按声纹相似度为连续语音分配稳定的会议内说话人 ID。"""
+
+    def __init__(self, manager, threshold=None):
+        """加载声纹模型；阈值越低，越倾向于合并为同一说话人。"""
+        config = SETTINGS["diarization"]
+        model_id = config["embedding_model_id"]
+        if not manager.is_ready(model_id):
+            raise RuntimeError("Speaker embedding model is not installed")
+        try:
+            import sherpa_onnx
+        except ImportError as error:
+            raise RuntimeError("sherpa-onnx is not installed") from error
+        model = manager.path(model_id) / manager.get(model_id)["files"][0]
+        extractor_config = sherpa_onnx.SpeakerEmbeddingExtractorConfig(
+            model=str(model),
+            num_threads=manager.device()["threads"],
+            provider=manager.device()["backend"],
+        )
+        if not extractor_config.validate():
+            raise RuntimeError("Invalid speaker embedding configuration")
+        self.extractor = sherpa_onnx.SpeakerEmbeddingExtractor(extractor_config)
+        self.threshold = (
+            config["online_similarity_threshold"] if threshold is None else threshold
+        )
+        self.minimum_seconds = config["minimum_embedding_seconds"]
+        self.centers = []
+        self.counts = []
+        self.last_speaker = None
+
+    @property
+    def speaker_ids(self):
+        """返回当前已发现的说话人 ID。"""
+        return [f"spk-{index + 1}" for index in range(len(self.centers))]
+
+    def assign(self, samples, sample_rate=16000):
+        """提取一段语音的声纹并返回稳定的 ``spk-N``；过短片段沿用上一人。"""
+        import numpy
+
+        if len(samples) < sample_rate * self.minimum_seconds:
+            return self.last_speaker or "spk-1"
+        stream = self.extractor.create_stream()
+        stream.accept_waveform(sample_rate, samples)
+        stream.input_finished()
+        if not self.extractor.is_ready(stream):
+            return self.last_speaker or "spk-1"
+        embedding = numpy.asarray(self.extractor.compute(stream), dtype=numpy.float32)
+        return self.assign_embedding(embedding)
+
+    def assign_embedding(self, embedding):
+        """把已归一化前的声纹向量并入最近聚类，供实时与离线流程复用。"""
+        import math
+
+        embedding = [float(value) for value in embedding]
+        norm = math.sqrt(sum(value * value for value in embedding)) + 1e-9
+        embedding = [value / norm for value in embedding]
+        similarities = [
+            sum(value * center_value for value, center_value in zip(embedding, center))
+            for center in self.centers
+        ]
+        if similarities and max(similarities) >= self.threshold:
+            index = max(range(len(similarities)), key=similarities.__getitem__)
+            self.counts[index] += 1
+            center = [
+                value * (self.counts[index] - 1) + new_value
+                for value, new_value in zip(self.centers[index], embedding)
+            ]
+            norm = math.sqrt(sum(value * value for value in center)) + 1e-9
+            self.centers[index] = [value / norm for value in center]
+        else:
+            index = len(self.centers)
+            self.centers.append(embedding)
+            self.counts.append(1)
+        self.last_speaker = f"spk-{index + 1}"
+        return self.last_speaker
 
 
 class RefinedASR:

@@ -13,7 +13,14 @@ import urllib.request
 from array import array
 from pathlib import Path
 
-from .asr import ModelManager, OfflineDiarizer, RefinedASR, StreamingASR
+from .asr import (
+    EnglishPunctuation,
+    ModelManager,
+    OfflineDiarizer,
+    RefinedASR,
+    SpeakerTracker,
+    StreamingASR,
+)
 from .config import SETTINGS
 from .storage import Store
 
@@ -47,6 +54,8 @@ class Worker:
         self.models = ModelManager(self.store.models_dir, self.emit)
         self.active = None
         self.asr = None
+        self.punctuation = None
+        self.speaker_tracker = None
         self.stream_state = {}
         self.asr_warning_sent = False
 
@@ -150,7 +159,13 @@ class Worker:
         """建立活动会议的双轨识别状态；模型不可用时仍允许安全录音。"""
         self.active = meeting["id"]
         self.stream_state = {
-            track: {"start_ms": start_ms, "revision": 0, "segment": start_ms, "last_text": ""}
+            track: {
+                "start_ms": start_ms,
+                "revision": 0,
+                "segment": start_ms,
+                "last_text": "",
+                "audio": [],
+            }
             for track in ("mic", "system")
         }
         try:
@@ -160,6 +175,25 @@ class Worker:
             self.emit(
                 "worker.warning",
                 {"meeting_id": self.active, "code": "asr_unavailable", "message": str(error)},
+            )
+        if meeting["language"] == "en":
+            try:
+                self.punctuation = EnglishPunctuation(
+                    self.models, SETTINGS["punctuation"]["english_model_id"]
+                )
+            except RuntimeError as error:
+                self.punctuation = None
+                self.emit(
+                    "worker.warning",
+                    {"meeting_id": self.active, "code": "punctuation_unavailable", "message": str(error)},
+                )
+        try:
+            self.speaker_tracker = SpeakerTracker(self.models)
+        except RuntimeError as error:
+            self.speaker_tracker = None
+            self.emit(
+                "worker.warning",
+                {"meeting_id": self.active, "code": "speaker_unavailable", "message": str(error)},
             )
 
     def pause(self, payload):
@@ -200,15 +234,24 @@ class Worker:
         import numpy
 
         samples = numpy.asarray(values, dtype=numpy.float32) / 32768.0
+        state = self.stream_state[payload["track"]]
+        if len(samples):
+            state["audio"].append(samples)
         result, final = self.asr.accept(
             payload["track"], samples, int(payload["sample_rate"]), bool(payload.get("flush"))
         )
-        state = self.stream_state[payload["track"]]
         text = result.strip() if isinstance(result, str) else result.text.strip()
+        if self.punctuation:
+            text = self.punctuation.apply(text)
         end_ms = int(payload["start_ms"] + len(samples) * 1000 / int(payload["sample_rate"]))
         if text and (text != state["last_text"] or final):
             state["revision"] += 1
             segment_id = f"{payload['track']}-{state['segment']}"
+            speaker = "spk-1" if payload["track"] == "mic" else "spk-2"
+            if final and self.speaker_tracker and state["audio"]:
+                speaker = self.speaker_tracker.assign(
+                    numpy.concatenate(state["audio"]), int(payload["sample_rate"])
+                )
             event = {
                 "meeting_id": self.active,
                 "segment_id": segment_id,
@@ -216,7 +259,7 @@ class Worker:
                 "text": text,
                 "start_ms": state["start_ms"],
                 "end_ms": end_ms,
-                "speaker": "spk-1" if payload["track"] == "mic" else "spk-2",
+                "speaker": speaker,
                 "track": payload["track"],
             }
             state["last_text"] = text
@@ -229,7 +272,16 @@ class Worker:
                     revision=0,
                     segment=state["segment"] + 1,
                     last_text="",
+                    audio=[],
                 )
+        elif final:
+            state.update(
+                start_ms=end_ms,
+                revision=0,
+                segment=state["segment"] + 1,
+                last_text="",
+                audio=[],
+            )
         return {"samples": samples_total, "text": text, "final": final}
 
     def stop(self, payload):
@@ -254,7 +306,8 @@ class Worker:
                 )
         meeting = self.store.finish_meeting(self.active, payload["duration_ms"])
         self.emit("meeting.stopped", {"meeting_id": self.active, "meeting": meeting})
-        self.active, self.asr, self.stream_state = None, None, {}
+        self.active, self.asr, self.punctuation = None, None, None
+        self.speaker_tracker, self.stream_state = None, {}
         return meeting
 
     def update_meeting(self, payload):
@@ -474,12 +527,14 @@ class Worker:
         ]
         if not tracks:
             raise ValueError("The meeting has no audio to refine")
+        speaker_tracker = SpeakerTracker(self.models)
         turns = []
         if len(tracks) == 1:
             samples, sample_rate = self._read_wav(meeting["audio"]["playback"][tracks[0]])
             turns = OfflineDiarizer(self.models, num_speakers, threshold).process(
                 samples, sample_rate
             )
+            turns = self._relabel_turns(samples, sample_rate, turns, speaker_tracker)
             self.store.replace_speaker_turns(meeting["id"], turns)
             self.emit(
                 "diarization.ready",
@@ -506,6 +561,8 @@ class Worker:
                 speaker = self._speaker_for(start_ms, end_ms, locked_segments)
                 if not speaker:
                     speaker = self._speaker_for(start_ms, end_ms, turns)
+                if not speaker:
+                    speaker = speaker_tracker.assign(current, sample_rate)
                 event = {
                     "meeting_id": meeting["id"],
                     "segment_id": f"{track}-{start_ms}",
@@ -552,6 +609,15 @@ class Worker:
         ]
         overlap, speaker = max(overlaps, default=(0, None))
         return speaker if overlap > 0 else None
+
+    @staticmethod
+    def _relabel_turns(samples, sample_rate, turns, tracker):
+        """用共享声纹聚类器把 diarization 的局部标签归并为稳定顺序 ID。"""
+        for turn in turns:
+            start = round(turn["start_ms"] * sample_rate / 1000)
+            end = round(turn["end_ms"] * sample_rate / 1000)
+            turn["speaker"] = tracker.assign(samples[start:end], sample_rate)
+        return turns
 
     def summarize(self, payload):
         """把逐字稿发送到用户确认的 LLM，并保存可追溯纪要。

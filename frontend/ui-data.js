@@ -10,7 +10,7 @@ const uiData = {
       { time: '09:42', speaker: { id: '2', name: '说话人 2' }, text: '预算部分我会在周五前补一版，重点说明模型的本地部署成本。', translation: 'I will update the budget by Friday, focusing on local deployment costs.' },
       { time: '09:43', speaker: { id: '1', name: '说话人 1' }, text: '还有一个需要确认的是...', translation: 'One thing we still need to confirm is...', partial: true }
     ],
-    participants: [{ id: '1', name: '说话人 1', source: '麦克风', avatar: 'blue', level: '' }, { id: '2', name: '说话人 2', source: '系统音频', avatar: 'gray', level: 'quiet' }],
+    participants: [],
     status: [{ label: '识别模型', value: 'Streaming Paraformer' }, { label: '计算设备', value: 'CPU' }, { label: '已应用术语', value: '0' }]
   },
   detail: {

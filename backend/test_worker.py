@@ -3,8 +3,10 @@ import io
 import tempfile
 import unittest
 import wave
+from array import array
 from pathlib import Path
 
+from .asr import EnglishPunctuation, SpeakerTracker
 from .worker import Worker
 
 
@@ -28,16 +30,16 @@ class WorkerTest(unittest.TestCase):
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
-        pcm = b"\x00\x00" * 1600
-        self.worker.audio(
-            {
-                "meeting_id": meeting["id"],
-                "track": "mic",
-                "pcm": base64.b64encode(pcm).decode(),
-                "sample_rate": 16000,
-                "start_ms": 0,
-            }
-        )
+        for track, pcm in (("mic", b"\x10\x00" * 1600), ("system", b"\x20\x00" * 1600)):
+            self.worker.audio(
+                {
+                    "meeting_id": meeting["id"],
+                    "track": track,
+                    "pcm": base64.b64encode(pcm).decode(),
+                    "sample_rate": 16000,
+                    "start_ms": 0,
+                }
+            )
         self.worker.store.save_segment(
             {
                 "meeting_id": meeting["id"],
@@ -53,6 +55,10 @@ class WorkerTest(unittest.TestCase):
         with wave.open(str(audio)) as recording:
             self.assertEqual(recording.getnframes(), 1600)
             self.assertEqual(recording.getframerate(), 16000)
+        with wave.open(result["audio"]["playback"]["mix"]) as recording:
+            mixed = array("h")
+            mixed.frombytes(recording.readframes(1))
+            self.assertEqual(mixed[0], 24)
         exported = self.worker.export({"meeting_id": meeting["id"], "format": "srt"})
         self.assertIn("这是联调测试", Path(exported["path"]).read_text())
         self.assertTrue(self.worker.store.read_manifest(meeting["id"])["closed"])
@@ -122,6 +128,29 @@ class WorkerTest(unittest.TestCase):
         saved = self.worker.store.get_meeting(meeting["id"])["speaker_turns"]
         self.assertEqual(saved, [{**turn, "version": "postprocess"} for turn in turns])
         self.assertEqual(self.worker._speaker_for(800, 1500, turns), "spk-2")
+
+    def test_speaker_tracker_reuses_similar_voiceprints(self):
+        tracker = SpeakerTracker.__new__(SpeakerTracker)
+        tracker.threshold = 0.2
+        tracker.centers = []
+        tracker.counts = []
+        tracker.last_speaker = None
+        self.assertEqual(tracker.assign_embedding([1.0, 0.0]), "spk-1")
+        self.assertEqual(tracker.assign_embedding([0.9, 0.1]), "spk-1")
+        self.assertEqual(tracker.assign_embedding([0.0, 1.0]), "spk-2")
+        self.assertEqual(tracker.speaker_ids, ["spk-1", "spk-2"])
+
+    def test_english_punctuation_normalizes_model_text(self):
+        formatter = EnglishPunctuation.__new__(EnglishPunctuation)
+
+        class Engine:
+            def add_punctuation_with_case(self, text):
+                self.text = text
+                return "How are you?"
+
+        formatter.engine = Engine()
+        self.assertEqual(formatter.apply("HOW ARE YOU"), "How are you?")
+        self.assertEqual(formatter.engine.text, "how are you")
 
     def test_examples_are_seeded_once_and_delete_audio_immediately(self):
         self.assertTrue(self.worker.store.seed_examples())

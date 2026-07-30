@@ -1,27 +1,52 @@
 class AudioCapture {
   constructor(send) {
     this.send = send;
+    this.pendingStreams = [];
     this.sources = [];
     this.startedAt = 0;
     this.paused = false;
   }
 
-  async start(meetingId, { mic, system }) {
-    this.meetingId = meetingId;
-    this.startedAt = performance.now();
+  async prepare({ mic, system }) {
     const requests = [];
-    if (mic) requests.push(navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => this.connect('mic', stream)));
-    if (system) requests.push(navigator.mediaDevices.getDisplayMedia({ video: true, audio: true }).then((stream) => this.connect('system', stream)));
+    if (mic) requests.push({ track: 'mic', stream: navigator.mediaDevices.getUserMedia({ audio: true }) });
+    if (system) requests.push({ track: 'system', stream: navigator.mediaDevices.getDisplayMedia({ video: true, audio: true }) });
     if (!requests.length) throw new Error('至少选择一个音频输入');
-    await Promise.all(requests);
+    const results = await Promise.allSettled(requests.map(({ stream }) => stream));
+    const failed = results.findIndex(({ status }) => status === 'rejected');
+    if (failed >= 0) {
+      results.filter(({ status }) => status === 'fulfilled').forEach(({ value }) => value.getTracks().forEach((track) => track.stop()));
+      const label = requests[failed].track === 'system' ? '系统音频' : '麦克风';
+      throw new Error(`无法获取${label}，请检查系统权限后重试`);
+    }
+    this.pendingStreams = results.map(({ value }, index) => ({ track: requests[index].track, stream: value }));
+    const missing = this.pendingStreams.find(({ stream }) => !stream.getAudioTracks().length);
+    if (missing) {
+      await this.stop();
+      throw new Error(`${missing.track === 'system' ? '系统音频' : '麦克风'}没有可用的音频轨道`);
+    }
   }
 
-  async connect(track, stream) {
+  async start(meetingId) {
+    this.meetingId = meetingId;
+    this.startedAt = performance.now();
+    const streams = this.pendingStreams;
+    this.pendingStreams = [];
+    await Promise.all(streams.map(({ track, stream }) => this.connect(track, stream)));
+  }
+
+  connect(track, stream) {
     const context = new AudioContext();
     const source = context.createMediaStreamSource(stream);
     const processor = context.createScriptProcessor(4096, 1, 1);
     let queue = Promise.resolve();
+    let ready;
+    const started = new Promise((resolve, reject) => {
+      ready = resolve;
+      setTimeout(() => reject(new Error(`${track === 'system' ? '系统音频' : '麦克风'}未产生音频数据`)), 3000);
+    });
     processor.onaudioprocess = ({ inputBuffer }) => {
+      ready();
       if (this.paused) return;
       const samples = this.resample(inputBuffer.getChannelData(0), context.sampleRate);
       const pcm = new Int16Array(samples.length);
@@ -41,6 +66,8 @@ class AudioCapture {
     source.connect(processor);
     processor.connect(context.destination);
     this.sources.push({ stream, context, source, processor, pending: () => queue });
+    context.resume();
+    return started;
   }
 
   resample(input, sourceRate) {
@@ -57,6 +84,8 @@ class AudioCapture {
   }
 
   async stop() {
+    this.pendingStreams.forEach(({ stream }) => stream.getTracks().forEach((track) => track.stop()));
+    this.pendingStreams = [];
     this.sources.forEach(({ stream, processor, source }) => {
       processor.disconnect();
       source.disconnect();
@@ -77,12 +106,16 @@ window.breviaClient = window.brevia ? {
     return result;
   },
   async start(payload, inputs) {
-    const meeting = await window.brevia.meeting.start(payload);
     this.capture = new AudioCapture(window.brevia.meeting.audio);
+    let meeting;
     try {
-      await this.capture.start(meeting.id, inputs);
+      await this.capture.prepare(inputs);
+      meeting = await window.brevia.meeting.start(payload);
+      await this.capture.start(meeting.id);
     } catch (error) {
-      await window.brevia.meeting.stop({ meeting_id: meeting.id, duration_ms: 0 });
+      await this.capture.stop();
+      if (meeting) await window.brevia.meeting.stop({ meeting_id: meeting.id, duration_ms: 0 });
+      this.capture = null;
       throw error;
     }
     this.state.meeting = meeting;
@@ -90,14 +123,18 @@ window.breviaClient = window.brevia ? {
     return meeting;
   },
   async pause(paused) {
-    this.capture.paused = paused;
-    return window.brevia.meeting.pause({ meeting_id: this.state.meeting.id, paused });
+    const meetingId = this.state.meeting?.id || this.capture?.meetingId;
+    if (!meetingId) throw new Error('当前没有正在进行的会议');
+    if (this.capture) this.capture.paused = paused;
+    return window.brevia.meeting.pause({ meeting_id: meetingId, paused });
   },
   async stop(durationMs) {
-    await this.capture.stop();
-    const meeting = await window.brevia.meeting.stop({ meeting_id: this.state.meeting.id, duration_ms: durationMs });
+    const meetingId = this.state.meeting?.id || this.capture?.meetingId;
+    if (!meetingId) throw new Error('当前没有正在进行的会议');
+    if (this.capture) await this.capture.stop();
+    const meeting = await window.brevia.meeting.stop({ meeting_id: meetingId, duration_ms: durationMs });
+    this.capture = null;
     this.state.meeting = null;
     return meeting;
   },
 } : null;
-

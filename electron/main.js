@@ -1,10 +1,20 @@
-const { app, BrowserWindow, dialog, ipcMain, safeStorage, ShareMenu, shell } = require('electron');
+const { app, BrowserWindow, desktopCapturer, dialog, ipcMain, safeStorage, session, ShareMenu, shell, systemPreferences } = require('electron');
 const { spawn } = require('node:child_process');
 const { copyFile, mkdir, readFile, writeFile } = require('node:fs/promises');
 const { existsSync } = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { z } = require('zod');
+
+if (process.platform === 'darwin') {
+  app.commandLine.appendSwitch('disable-features', 'MacCatapLoopbackAudioForScreenShare');
+}
+if (!app.requestSingleInstanceLock()) app.quit();
+app.on('second-instance', () => {
+  const [window] = BrowserWindow.getAllWindows();
+  if (window?.isMinimized()) window.restore();
+  window?.focus();
+});
 
 const root = path.join(__dirname, '..');
 const packagedRoot = app.isPackaged ? process.resourcesPath : root;
@@ -225,6 +235,32 @@ function registerIpc() {
   });
 }
 
+async function promptInitialPermissions(window) {
+  if (process.platform !== 'darwin') return;
+  const marker = path.join(dataDir(), 'permissions-v2');
+  if (existsSync(marker)) return;
+  await dialog.showMessageBox(window, {
+    type: 'info',
+    title: '允许录制会议音频',
+    message: 'Brevia 需要麦克风、屏幕与系统音频录制权限。',
+    detail: '接下来会请求麦克风权限，并打开系统设置。授权后请重新打开 Brevia。',
+    buttons: ['继续'],
+  });
+  if (systemPreferences.getMediaAccessStatus('microphone') !== 'granted') {
+    await systemPreferences.askForMediaAccess('microphone');
+  }
+  if (systemPreferences.getMediaAccessStatus('screen') !== 'granted') {
+    await desktopCapturer.getSources({
+      types: ['screen'],
+      thumbnailSize: { width: 1, height: 1 },
+    }).catch(() => []);
+    await shell.openExternal(
+      'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'
+    );
+  }
+  await writeFile(marker, new Date().toISOString());
+}
+
 function createWindow() {
   const window = new BrowserWindow({
     width: 1440,
@@ -240,9 +276,15 @@ function createWindow() {
     },
   });
   window.loadFile(path.join(packagedRoot, 'frontend', 'index.html'));
+  window.once('ready-to-show', () => promptInitialPermissions(window));
+  return window;
 }
 
 app.whenReady().then(() => {
+  session.defaultSession.setDisplayMediaRequestHandler(async (_, callback) => {
+    const [source] = await desktopCapturer.getSources({ types: ['screen'] });
+    callback(source ? { video: source, audio: 'loopback' } : {});
+  });
   worker.start();
   registerIpc();
   createWindow();

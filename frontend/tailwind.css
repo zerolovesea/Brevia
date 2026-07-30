@@ -28,11 +28,11 @@
   .nav-item.active { @apply border-black text-black; }
   .nav-item span { @apply mr-2 inline-block w-6 text-[18px] leading-none font-normal; }
   .workspace { @apply min-w-0 px-12 pb-16 max-lg:px-8; }
-  .window-bar { @apply flex h-16 items-center border-b border-[#e5e5e5] text-[12px] text-[#999]; }
+  .window-bar { @apply flex h-16 select-none items-center border-b border-[#e5e5e5] text-[12px] text-[#999]; -webkit-app-region: drag; }
   .traffic { @apply hidden; }
   .window-bar > span { @apply uppercase tracking-[.1em]; }
   .icon-button { @apply grid size-9 place-items-center border border-[#e5e5e5] bg-white text-[#404040] transition-opacity duration-300 hover:opacity-70; }
-  .window-actions { @apply ml-auto flex gap-2; }
+  .window-actions { @apply ml-auto flex gap-2; -webkit-app-region: no-drag; }
   .window-actions .icon-button { @apply text-[13px] font-normal; }
   .language-menu { @apply relative; }
   .language-options { @apply absolute top-[calc(100%+8px)] right-0 z-20 w-32 border border-black bg-white p-1 opacity-0; animation: menu-in 220ms ease forwards; }
@@ -127,6 +127,8 @@
   .segment-meta b { @apply text-[12px] font-normal text-[#404040]; }
   .segment p { @apply m-0 text-[18px] leading-[1.8] tracking-[.02em] text-[#1a1a1a]; }
   .segment .translation { @apply mt-2 text-[14px] text-[#808080]; }
+  .transcript-scroll .segment { @apply py-3 pr-4 transition-colors duration-200; }
+  .transcript-scroll .segment.is-active { @apply bg-[#f2f2ed]; }
   .partial { @apply border-l border-[#999] py-1; }
   .partial p:first-of-type { @apply text-[#666]; }
   .latest { @apply mt-2 border-b border-black pb-1 text-[12px] text-[#404040] transition-opacity duration-300 hover:opacity-70; }
@@ -134,6 +136,7 @@
   .live-panel section { @apply pb-8; }.live-panel section + section { @apply border-t border-[#e5e5e5] pt-8; }
   .person { @apply grid grid-cols-[32px_1fr] gap-3 py-3; }.avatar { @apply grid size-8 place-items-center border border-[#999] text-[11px]; }.avatar.blue, .avatar.gray { @apply bg-white text-black; }
   .person b, .person small { @apply block; }.person b { @apply text-[13px] font-normal; }.person small { @apply mt-1 text-[11px] text-[#999]; }.level { @apply hidden; }
+  .participants-empty { @apply py-3 text-[12px] text-[#999]; }
   .speaker-name-input { @apply w-full border-b border-black bg-transparent py-0 text-[13px] outline-none; }
   /* Completed-meeting detail: player, transcript metadata, and summary sidebar. */
   .detail-head { @apply mb-12; }.detail-actions { @apply flex gap-3; }
@@ -179,6 +182,7 @@ html[data-theme="dark"] { color-scheme: dark; background: #111; color: #f5f5f5; 
 html[data-theme="dark"] .app-shell, html[data-theme="dark"] .sidebar, html[data-theme="dark"] .workspace, html[data-theme="dark"] .window-bar, html[data-theme="dark"] .language-options, html[data-theme="dark"] input:not([type=checkbox]):not([type=range]), html[data-theme="dark"] select { background: #111; }
 html[data-theme="dark"] .sidebar, html[data-theme="dark"] .window-bar, html[data-theme="dark"] .library-toolbar, html[data-theme="dark"] .meeting-list, html[data-theme="dark"] .settings-card, html[data-theme="dark"] .model-row, html[data-theme="dark"] .tabbar, html[data-theme="dark"] .player, html[data-theme="dark"] .notes section, html[data-theme="dark"] .live-panel section + section, html[data-theme="dark"] .section-heading, html[data-theme="dark"] .model-card, html[data-theme="dark"] .live-panel, html[data-theme="dark"] .notes, html[data-theme="dark"] fieldset { border-color: #404040; }
 html[data-theme="dark"] .final-transcript .segment.is-active { background: #272722; }
+html[data-theme="dark"] .transcript-scroll .segment.is-active { background: #272722; }
 html[data-theme="dark"] .brand, html[data-theme="dark"] .nav-item.active, html[data-theme="dark"] .page-head h1, html[data-theme="dark"] .prepare-layout h1, html[data-theme="dark"] .detail-head h1, html[data-theme="dark"] #settings-view > h1, html[data-theme="dark"] .meeting-main h2, html[data-theme="dark"] .segment p, html[data-theme="dark"] .section-heading h1, html[data-theme="dark"] .model-card h2, html[data-theme="dark"] .settings-card h2, html[data-theme="dark"] .live-title strong, html[data-theme="dark"] dd { color: #fff; }
 html[data-theme="dark"] .page-head p:not(.eyebrow), html[data-theme="dark"] .intro, html[data-theme="dark"] .detail-head p:not(.eyebrow), html[data-theme="dark"] .meeting-main p, html[data-theme="dark"] .segment .translation, html[data-theme="dark"] .notes p, html[data-theme="dark"] .notes label, html[data-theme="dark"] .settings-card > p, html[data-theme="dark"] .model-card > p:not(.eyebrow), html[data-theme="dark"] dt { color: #bbb; }
 html[data-theme="dark"] .icon-button, html[data-theme="dark"] .language-options, html[data-theme="dark"] input:not([type=checkbox]):not([type=range]), html[data-theme="dark"] select { border-color: #666; background: #111; color: #eee; }
