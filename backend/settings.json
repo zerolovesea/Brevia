@@ -7,7 +7,8 @@
     "endpoint_rule1_silence": 3.0,
     "endpoint_rule2_silence": 1.8,
     "maximum_utterance_seconds": 30,
-    "refined_window_seconds": 15
+    "refined_window_seconds": 15,
+    "auto_english_model_id": "zipformer-en-streaming-int8"
   },
   "punctuation": {
     "english_model_id": "online-punct-en-int8"

@@ -1,6 +1,7 @@
 class AudioCapture {
-  constructor(send) {
+  constructor(send, onLevel) {
     this.send = send;
+    this.onLevel = onLevel;
     this.pendingStreams = [];
     this.sources = [];
     this.startedAt = 0;
@@ -48,7 +49,12 @@ class AudioCapture {
     processor.onaudioprocess = ({ inputBuffer }) => {
       ready();
       if (this.paused) return;
-      const samples = this.resample(inputBuffer.getChannelData(0), context.sampleRate);
+      const input = inputBuffer.getChannelData(0);
+      if (track === 'mic' && this.onLevel) {
+        const power = input.reduce((total, sample) => total + sample * sample, 0) / input.length;
+        this.onLevel(track, Math.min(1, Math.sqrt(power) * 8));
+      }
+      const samples = this.resample(input, context.sampleRate);
       const pcm = new Int16Array(samples.length);
       samples.forEach((sample, index) => { pcm[index] = Math.max(-1, Math.min(1, sample)) * 0x7fff; });
       const bytes = new Uint8Array(pcm.buffer);
@@ -100,13 +106,14 @@ class AudioCapture {
 window.breviaClient = window.brevia ? {
   state: { meeting: null, selectedMeetingId: null, initialized: null },
   capture: null,
+  onLevel: null,
   async initialize() {
     const result = await window.brevia.initialize();
     this.state.initialized = result;
     return result;
   },
   async start(payload, inputs) {
-    this.capture = new AudioCapture(window.brevia.meeting.audio);
+    this.capture = new AudioCapture(window.brevia.meeting.audio, this.onLevel);
     let meeting;
     try {
       await this.capture.prepare(inputs);

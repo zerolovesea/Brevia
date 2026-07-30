@@ -373,6 +373,14 @@ class Store:
             )
         return self.get_meeting(meeting_id)
 
+    def set_status(self, meeting_id, status):
+        """更新会议处理状态并返回最新详情。"""
+        if status not in {"ready", "refining", "refined"}:
+            raise ValueError("Invalid meeting status")
+        with self.connect() as db:
+            db.execute("UPDATE meetings SET status=? WHERE id=?", (status, meeting_id))
+        return self.get_meeting(meeting_id)
+
     def finish_meeting(self, meeting_id, duration_ms):
         """结束录制，关闭恢复清单，并为每条已有音轨生成连续播放文件。
 
@@ -422,7 +430,7 @@ class Store:
             )
 
     def purge_expired(self):
-        """删除超过保留期的软删除会议记录，返回被清理的会议 ID。"""
+        """永久删除超过保留期的会议记录及其全部本地文件。"""
         cutoff = (
             datetime.now(timezone.utc)
             - timedelta(days=SETTINGS["meetings"]["deleted_retention_days"])
@@ -435,8 +443,23 @@ class Store:
                     (cutoff,),
                 )
             ]
-            db.executemany("DELETE FROM meetings WHERE id=?", ((item,) for item in ids))
+        for meeting_id in ids:
+            self.permanent_delete(meeting_id)
         return ids
+
+    def permanent_delete(self, meeting_id):
+        """永久删除已进入最近删除的会议及其录音、逐字稿和导出文件。"""
+        with self.connect() as db:
+            meeting = db.execute(
+                "SELECT deleted_at FROM meetings WHERE id=?", (meeting_id,)
+            ).fetchone()
+            if not meeting:
+                raise ValueError("Meeting not found")
+            if not meeting["deleted_at"]:
+                raise ValueError("Only deleted meetings can be permanently deleted")
+        shutil.rmtree(self.meetings_dir / meeting_id, ignore_errors=True)
+        with self.connect() as db:
+            db.execute("DELETE FROM meetings WHERE id=?", (meeting_id,))
 
     def save_segment(self, payload):
         """插入或更新一段逐字稿。

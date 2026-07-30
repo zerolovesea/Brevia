@@ -7,62 +7,10 @@ const themeToggle = document.querySelector('#theme-toggle');
 const miniMeeting = document.querySelector('#mini-meeting');
 const miniTitle = document.querySelector('#mini-title');
 const miniTimer = document.querySelector('#mini-timer');
-const catalog = {
-  zh: {
-    views: { home: '所有会议', prepare: '准备录制', live: '正在录制', detail: '会议详情', settings: '设置' },
-    labels: { '所有会议': '所有会议', '最近删除': '最近删除', '设置': '设置', '开始会议': '开始会议', '会议库': '会议库', '准备录制': '准备录制', '实时字幕': '实时字幕', '会议详情': '会议详情', '本地优先': '本地优先', '音频与文本仅保存在此设备': '音频与文本仅保存在此设备', '每一场对话，都留有依据。': '每一场对话，都留有依据。', '录音、逐字稿和纪要只在你明确操作时导出或发送。': '录音、逐字稿和纪要只在你明确操作时导出或发送。', '搜索会议、逐字稿或标签': '搜索会议、逐字稿或标签', '所有分类': '所有分类', '最近 30 天': '最近 30 天', '返回会议库': '返回会议库', '开始一场会议': '开始一场会议', '先确认语言与音频输入。模型会在开始前加载，录制过程不会因网络状态中断。': '先确认语言与音频输入。模型会在开始前加载，录制过程不会因网络状态中断。', '录制音频': '录制音频', '会议名称': '会议名称', '会议语言': '会议语言', '译文目标': '译文目标', '我的麦克风': '我的麦克风', '系统音频': '系统音频', '输入良好': '输入良好', '已就绪': '已就绪', '当前模型': '当前模型', '中文确认文本与说话人分离': '中文确认文本与说话人分离', '管理模型与术语': '管理模型与术语', '正在录制': '正在录制', '暂停': '暂停', '继续': '继续', '结束会议': '结束会议', '保持在当下': '保持在当下', '译文: 开': '译文: 开', '译文: 关': '译文: 关', '回到最新': '回到最新', '参与者': '参与者', '本场状态': '本场状态', '我': '我', '麦克风': '麦克风', '系统音频': '系统音频', '打开会议面板': '打开会议面板', '导出': '导出', '逐字稿': '逐字稿', '摘要': '摘要', '纪要与待办': '纪要与待办', '播放此段': '播放此段', '生成完整会议纪要': '生成完整会议纪要', '模型与本地数据': '模型与本地数据', '已安装模型': '已安装模型', '下载更多模型': '下载更多模型', '术语库': '术语库', '12 个词条可用于会议准备、搜索和纪要。仅支持的模型会将其用于转写。': '12 个词条可用于会议准备、搜索和纪要。仅支持的模型会将其用于转写。', '管理术语库': '管理术语库', '存储与隐私': '存储与隐私', '会议资料保存在此 Mac。外部 LLM 需要在发送逐字稿前明确确认。': '会议资料保存在此 Mac。外部 LLM 需要在发送逐字稿前明确确认。', '查看本地存储': '查看本地存储', '中文': '中文', '英语': '英语', '不需要翻译': '不需要翻译', '自动检测': '自动检测', '切换语言': '切换语言', '切换主题': '切换主题', 'Brevia': 'Brevia', '向量数据库': '向量数据库', 'CAM++': 'CAM++' },
-    messages: { recordingSaved: '录音已安全保存，正在整理逐字稿', located: '已定位到对应音频片段', playing: '正在播放混音轨道', paused: '播放已暂停' }
-  },
-  en: {
-    views: { home: 'All meetings', prepare: 'Prepare meeting', live: 'Recording', detail: 'Meeting details', settings: 'Settings' },
-    labels: { '所有会议': 'All meetings', '最近删除': 'Recently deleted', '设置': 'Settings', '开始会议': 'Start meeting', '会议库': 'Meeting library', '准备录制': 'Prepare recording', '实时字幕': 'Live transcript', '会议详情': 'Meeting details', '本地优先': 'Local first', '音频与文本仅保存在此设备': 'Audio and text stay on this device', '每一场对话，都留有依据。': 'Every conversation leaves a traceable record.', '录音、逐字稿和纪要只在你明确操作时导出或发送。': 'Audio, transcripts, and notes are exported or shared only when you choose to.', '搜索会议、逐字稿或标签': 'Search meetings, transcripts, or tags', '所有分类': 'All categories', '最近 30 天': 'Last 30 days', '返回会议库': 'Back to library', '开始一场会议': 'Start a meeting', '先确认语言与音频输入。模型会在开始前加载，录制过程不会因网络状态中断。': 'Confirm language and audio input first. The model loads before recording and keeps working without a network connection.', '录制音频': 'Audio capture', '会议名称': 'Meeting name', '会议语言': 'Meeting language', '译文目标': 'Translation target', '我的麦克风': 'My microphone', '系统音频': 'System audio', '输入良好': 'Input ready', '已就绪': 'Ready', '当前模型': 'Current model', '中文确认文本与说话人分离': 'Chinese final transcription and speaker separation', '管理模型与术语': 'Manage models and terms', '正在录制': 'Recording', '暂停': 'Pause', '继续': 'Resume', '结束会议': 'End meeting', '保持在当下': 'Stay with the conversation', '译文: 开': 'Translation: On', '译文: 关': 'Translation: Off', '回到最新': 'Back to latest', '参与者': 'Participants', '本场状态': 'Session status', '我': 'Me', '麦克风': 'Microphone', '系统音频': 'System audio', '打开会议面板': 'Open meeting panel', '导出': 'Export', '逐字稿': 'Transcript', '摘要': 'Summary', '纪要与待办': 'Notes and actions', '播放此段': 'Play this segment', '生成完整会议纪要': 'Generate meeting notes', '模型与本地数据': 'Models and local data', '已安装模型': 'Installed models', '下载更多模型': 'Download more models', '术语库': 'Term library', '12 个词条可用于会议准备、搜索和纪要。仅支持的模型会将其用于转写。': '12 terms are available for meeting preparation, search, and notes. Only supported models use them during transcription.', '管理术语库': 'Manage terms', '存储与隐私': 'Storage and privacy', '会议资料保存在此 Mac。外部 LLM 需要在发送逐字稿前明确确认。': 'Meeting data stays on this Mac. External LLMs require explicit confirmation before receiving a transcript.', '查看本地存储': 'View local storage', '中文': 'Chinese', '英语': 'English', '不需要翻译': 'No translation', '自动检测': 'Auto detect', '切换语言': 'Switch language', '切换主题': 'Switch theme', 'Brevia': 'Brevia', '向量数据库': 'Vector database', 'CAM++': 'CAM++' },
-    messages: { recordingSaved: 'Recording saved safely. Preparing transcript.', located: 'Moved to the linked audio segment', playing: 'Playing mixed track', paused: 'Playback paused' }
-  },
-  es: {
-    views: { home: 'Todas las reuniones', prepare: 'Preparar reunión', live: 'Grabando', detail: 'Detalles de la reunión', settings: 'Configuración' },
-    labels: { '所有会议': 'Todas las reuniones', '最近删除': 'Eliminadas recientemente', '设置': 'Configuración', '开始会议': 'Iniciar reunión', '会议库': 'Biblioteca de reuniones', '准备录制': 'Preparar grabación', '实时字幕': 'Transcripción en vivo', '会议详情': 'Detalles de la reunión', '本地优先': 'Primero local', '音频与文本仅保存在此设备': 'El audio y el texto permanecen en este dispositivo', '每一场对话，都留有依据。': 'Cada conversación conserva un registro verificable.', '录音、逐字稿和纪要只在你明确操作时导出或发送。': 'El audio, las transcripciones y las notas se exportan o comparten solo cuando lo eliges.', '搜索会议、逐字稿或标签': 'Buscar reuniones, transcripciones o etiquetas', '所有分类': 'Todas las categorías', '最近 30 天': 'Últimos 30 días', '返回会议库': 'Volver a la biblioteca', '开始一场会议': 'Iniciar una reunión', '先确认语言与音频输入。模型会在开始前加载，录制过程不会因网络状态中断。': 'Primero confirma el idioma y la entrada de audio. El modelo carga antes de grabar y sigue funcionando sin conexión.', '录制音频': 'Captura de audio', '会议名称': 'Nombre de la reunión', '会议语言': 'Idioma de la reunión', '译文目标': 'Idioma de traducción', '我的麦克风': 'Mi micrófono', '系统音频': 'Audio del sistema', '输入良好': 'Entrada lista', '已就绪': 'Listo', '当前模型': 'Modelo actual', '中文确认文本与说话人分离': 'Transcripción final en chino y separación de hablantes', '管理模型与术语': 'Gestionar modelos y términos', '正在录制': 'Grabando', '暂停': 'Pausar', '继续': 'Reanudar', '结束会议': 'Finalizar reunión', '保持在当下': 'Sigue la conversación', '译文: 开': 'Traducción: Sí', '译文: 关': 'Traducción: No', '回到最新': 'Volver a lo último', '参与者': 'Participantes', '本场状态': 'Estado de la sesión', '我': 'Yo', '麦克风': 'Micrófono', '系统音频': 'Audio del sistema', '打开会议面板': 'Abrir panel de reunión', '导出': 'Exportar', '逐字稿': 'Transcripción', '摘要': 'Resumen', '纪要与待办': 'Notas y tareas', '播放此段': 'Reproducir este segmento', '生成完整会议纪要': 'Generar notas de reunión', '模型与本地数据': 'Modelos y datos locales', '已安装模型': 'Modelos instalados', '下载更多模型': 'Descargar más modelos', '术语库': 'Biblioteca de términos', '12 个词条可用于会议准备、搜索和纪要。仅支持的模型会将其用于转写。': 'Hay 12 términos para preparar reuniones, buscar y crear notas. Solo los modelos compatibles los usan durante la transcripción.', '管理术语库': 'Gestionar términos', '存储与隐私': 'Almacenamiento y privacidad', '会议资料保存在此 Mac。外部 LLM 需要在发送逐字稿前明确确认。': 'Los datos de la reunión permanecen en este Mac. Los LLM externos requieren confirmación antes de recibir una transcripción.', '查看本地存储': 'Ver almacenamiento local', '中文': 'Chino', '英语': 'Inglés', '不需要翻译': 'Sin traducción', '自动检测': 'Detección automática', '切换语言': 'Cambiar idioma', '切换主题': 'Cambiar tema', 'Brevia': 'Brevia', '向量数据库': 'Base de datos vectorial', 'CAM++': 'CAM++' },
-    messages: { recordingSaved: 'Grabación guardada. Preparando la transcripción.', located: 'Se abrió el segmento de audio vinculado', playing: 'Reproduciendo pista mezclada', paused: 'Reproducción pausada' }
-  }
-};
-Object.assign(catalog.zh.labels, { '播放此段': '播放' });
-Object.assign(catalog.en.labels, { '播放此段': 'Play' });
-Object.assign(catalog.es.labels, { '播放此段': 'Reproducir' });
-Object.assign(catalog.zh.labels, {
-  '开始录制': '开始录制', '继续会议': '继续会议', '我 · 麦克风': '我 · 麦克风', '计算设备': '计算设备', '预计空间': '预计空间', '识别模型': '识别模型', '已应用术语': '已应用术语', '12 个词条': '12 个词条', '可用': '可用', '已完成精修': '已完成精修', '中文确认文本 · 1.2 GB': '中文确认文本 · 1.2 GB', '英文与其他语言 · 466 MB': '英文与其他语言 · 466 MB', '+ 9': '+ 9', '模型库': '模型库', '管理模型库': '管理模型库', '纪要模型': '纪要模型', '配置用于生成会议纪要的 API。所有配置信息仅保存在本地，不会上传。': '配置用于生成会议纪要的 API。所有配置信息仅保存在本地，不会上传。', '管理纪要模型': '管理纪要模型', '总结提示词': '总结提示词', '编辑提示词': '编辑提示词', '配置 JSON': '配置 JSON', '当前启用的纪要模型配置。': '当前启用的纪要模型配置。'
-});
-Object.assign(catalog.en.labels, {
-  '开始录制': 'Start recording', '继续会议': 'Resume meeting', '我 · 麦克风': 'Me · Microphone', '计算设备': 'Compute device', '预计空间': 'Estimated storage', '识别模型': 'Recognition model', '已应用术语': 'Applied terms', '12 个词条': '12 terms', '可用': 'Available', '已完成精修': 'Refinement complete', '中文确认文本 · 1.2 GB': 'Chinese final transcription · 1.2 GB', '英文与其他语言 · 466 MB': 'English and other languages · 466 MB', '+ 9': '+ 9', '模型库': 'Model library', '管理模型库': 'Manage model library', '纪要模型': 'Summary models', '配置用于生成会议纪要的 API。所有配置信息仅保存在本地，不会上传。': 'Configure APIs for meeting notes. All configuration stays local and is never uploaded.', '管理纪要模型': 'Manage summary models', '总结提示词': 'Summary prompt', '编辑提示词': 'Edit prompt', '配置 JSON': 'Configuration JSON', '当前启用的纪要模型配置。': 'The active summary model configuration.'
-});
-Object.assign(catalog.es.labels, {
-  '开始录制': 'Iniciar grabación', '继续会议': 'Reanudar reunión', '我 · 麦克风': 'Yo · Micrófono', '计算设备': 'Dispositivo de cálculo', '预计空间': 'Almacenamiento estimado', '识别模型': 'Modelo de reconocimiento', '已应用术语': 'Términos aplicados', '12 个词条': '12 términos', '可用': 'Disponible', '已完成精修': 'Refinamiento completo', '中文确认文本 · 1.2 GB': 'Transcripción final en chino · 1.2 GB', '英文与其他语言 · 466 MB': 'Inglés y otros idiomas · 466 MB', '+ 9': '+ 9', '模型库': 'Biblioteca de modelos', '管理模型库': 'Gestionar biblioteca de modelos', '纪要模型': 'Modelos de resumen', '配置用于生成会议纪要的 API。所有配置信息仅保存在本地，不会上传。': 'Configura API para las notas de reunión. Toda la configuración es local y no se carga.', '管理纪要模型': 'Gestionar modelos de resumen', '总结提示词': 'Prompt de resumen', '编辑提示词': 'Editar prompt', '配置 JSON': 'JSON de configuración', '当前启用的纪要模型配置。': 'La configuración activa del modelo de resumen.'
-});
-Object.assign(catalog.zh.labels, {
-  '分钟': '分钟', '本地录音': '本地录音', '本地保存': '本地保存', '本地会议': '本地会议',
-  '← 返回会议库': '← 返回会议库', '说话人分离': '说话人分离', '自定义术语': '自定义术语', '暂无术语': '暂无术语',
-  '说话人': '说话人', '等待识别说话人': '等待识别说话人',
-  '原始录音与每版逐字稿均保存在本机': '原始录音与每版逐字稿均保存在本机',
-  '会议摘要': '会议摘要', '尚未生成会议摘要': '尚未生成会议摘要', '转发': '转发',
-  '会后精修': '会后精修', '精修': '精修', '正在精修…': '正在精修…',
-  '会后精修已完成': '会后精修已完成', '已整理': '已整理', '决定': '决定', '待办': '待办'
-});
-Object.assign(catalog.en.labels, {
-  '分钟': 'min', '本地录音': 'Local recording', '本地保存': 'Saved locally', '本地会议': 'Local meeting',
-  '← 返回会议库': '← Back to library', '说话人分离': 'Speaker diarization', '自定义术语': 'Custom term', '暂无术语': 'No terms',
-  '说话人': 'Speaker', '等待识别说话人': 'Waiting to identify speakers',
-  '原始录音与每版逐字稿均保存在本机': 'The original recording and every transcript version stay on this device',
-  '会议摘要': 'Meeting summary', '尚未生成会议摘要': 'No meeting summary yet', '转发': 'Share',
-  '会后精修': 'Refine', '精修': 'Refine', '正在精修…': 'Refining…',
-  '会后精修已完成': 'Refinement complete', '已整理': 'Complete', '决定': 'Decisions', '待办': 'Action items'
-});
-Object.assign(catalog.es.labels, {
-  '分钟': 'min', '本地录音': 'Grabación local', '本地保存': 'Guardado localmente', '本地会议': 'Reunión local',
-  '← 返回会议库': '← Volver a la biblioteca', '说话人分离': 'Separación de hablantes', '自定义术语': 'Término personalizado', '暂无术语': 'No hay términos',
-  '说话人': 'Hablante', '等待识别说话人': 'Esperando identificar hablantes',
-  '原始录音与每版逐字稿均保存在本机': 'La grabación original y cada versión de la transcripción se guardan en este dispositivo',
-  '会议摘要': 'Resumen de la reunión', '尚未生成会议摘要': 'Aún no se ha generado el resumen', '转发': 'Compartir',
-  '会后精修': 'Refinar', '精修': 'Refinar', '正在精修…': 'Refinando…',
-  '会后精修已完成': 'Refinamiento completado', '已整理': 'Completado', '决定': 'Decisiones', '待办': 'Tareas'
-});
+const refinementCard = document.querySelector('#refinement-progress');
+const refinementPercent = document.querySelector('#refinement-percent');
+const refinementBar = document.querySelector('#refinement-bar');
+const { catalog } = window.BreviaLocaleData;
 let locale = localStorage.getItem('brevia-language') || 'zh';
 let theme = localStorage.getItem('brevia-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
 let activeView = 'home';
@@ -113,9 +61,10 @@ let updateAvailable = false;
 /** Keeps the update notice above the mini meeting when both are visible. @returns {void} */
 function syncFloatingNotices() { updateNotice.style.bottom = miniMeeting.hidden ? '' : `${miniMeeting.offsetHeight + 24}px`; }
 /** Renders the floating update notice from current locale and availability state. @returns {void} */
-function renderUpdateNotice() { const copy = updateLabels[locale]; updateNoticeText.textContent = copy.available; updateNoticeButton.textContent = copy.floating; updateNotice.hidden = !updateAvailable; requestAnimationFrame(syncFloatingNotices); }
+function updateCopy() { return updateLabels[locale] || { ...updateLabels.en, title: t('软件更新'), description: t('当前版本 0.1.0'), action: t('检查更新') }; }
+function renderUpdateNotice() { const copy = updateCopy(); updateNoticeText.textContent = copy.available; updateNoticeButton.textContent = copy.floating; updateNotice.hidden = !updateAvailable; requestAnimationFrame(syncFloatingNotices); }
 /** Renders the settings-page update action from current locale and availability state. @returns {void} */
-function renderUpdateButton() { const copy = updateLabels[locale]; updateTitle.textContent = copy.title; updateDescription.textContent = updateAvailable ? copy.available : copy.description; updateButton.textContent = updateAvailable ? copy.update : copy.action; updateButton.disabled = false; }
+function renderUpdateButton() { const copy = updateCopy(); updateTitle.textContent = copy.title; updateDescription.textContent = updateAvailable ? copy.available : copy.description; updateButton.textContent = updateAvailable ? copy.update : copy.action; updateButton.disabled = false; }
 const modalCopy = {
   zh: {
     models: { title: '模型库', intro: '所有转写模型都在本地运行，不会将您的隐私上传到网络。', languages: '建议语言', items: [['实时字幕', 'Streaming Paraformer', '中文 / 英语 / 粤语', '原生流式识别，持续更新当前字幕。', '⌁'], ['会后精修', 'Qwen3-ASR', '多语种', '基于完整录音生成高精度修订版本。', 'Q'], ['说话人分离', 'Pyannote Segmentation 3.0', '语言无关', '检测单轨录音中的说话区间。', 'P'], ['说话人分离', '3D-Speaker ERes2Net Base', '中文', '提取声纹并离线聚类说话人。', '3D']] },
@@ -180,17 +129,48 @@ const categoryFilter = document.querySelector('#category-filter');
 const dateFilter = document.querySelector('#date-filter');
 const libraryToolbar = document.querySelector('.library-toolbar');
 const meetingSearch = document.querySelector('#meeting-search');
+const selectedMeetingKeys = new Set();
+const batchToolbar = document.createElement('section');
+batchToolbar.className = 'batch-toolbar';
+batchToolbar.hidden = true;
+batchToolbar.setAttribute('aria-live', 'polite');
+batchToolbar.innerHTML = '<strong data-batch-count></strong><div class="batch-actions"><button type="button" data-batch-restore></button><div class="batch-category" data-batch-category></div><button type="button" data-batch-export></button><button class="batch-delete" type="button" data-batch-delete></button><button type="button" data-batch-clear></button></div>';
+libraryToolbar.after(batchToolbar);
+/** Synchronizes selected-row styling and the contextual batch toolbar. @param {boolean} updateToolbar Whether to redraw batch actions. @returns {void} */
+function syncMeetingSelection(updateToolbar = true) {
+  const rows = [...document.querySelectorAll('.meeting-row')];
+  const available = new Set(rows.map((row) => row.dataset.selectionKey));
+  [...selectedMeetingKeys].filter((key) => !available.has(key)).forEach((key) => selectedMeetingKeys.delete(key));
+  rows.forEach((row) => { const selected = selectedMeetingKeys.has(row.dataset.selectionKey); row.classList.toggle('is-selected', selected); row.setAttribute('aria-selected', String(selected)); });
+  if (!updateToolbar) return;
+  batchToolbar.hidden = selectedMeetingKeys.size === 0;
+  batchToolbar.querySelector('[data-batch-count]').textContent = BreviaI18n.selectionOverview(locale, selectedMeetingKeys.size);
+  const deleted = activeLibraryNav === 'recently-deleted';
+  const category = batchToolbar.querySelector('[data-batch-category]');
+  const exportButton = batchToolbar.querySelector('[data-batch-export]');
+  const restoreButton = batchToolbar.querySelector('[data-batch-restore]');
+  category.hidden = deleted;
+  exportButton.hidden = deleted;
+  restoreButton.hidden = !deleted;
+  category.innerHTML = flowSelect('batch-category', '__choose', [['__choose', t('分类')], ['', t('未分类')], ...categories.map((name) => [name, name])]);
+  restoreButton.textContent = t('恢复');
+  exportButton.textContent = t('导出');
+  batchToolbar.querySelector('[data-batch-delete]').textContent = deleted ? BreviaI18n.trashCopy(locale).purge : t('删除');
+  batchToolbar.querySelector('[data-batch-clear]').textContent = t('取消');
+}
+const selectedMeetings = () => uiData.meetings.filter((meeting, index) => selectedMeetingKeys.has(meeting.id || String(index)));
+function clearMeetingSelection() { selectedMeetingKeys.clear(); syncMeetingSelection(); }
 /** Rebuilds the category filter from user-managed categories. @returns {void} */
-function renderCategoryFilter() { categoryFilter.innerHTML = flowSelect('library-category', activeCategory, [['', t('所有分类')], ['__unclassified', '未分类'], ...categories.map((name) => [name, name])]); }
-function renderDateFilter() { dateFilter.innerHTML = flowSelect('library-date', activeDateRange, [['30', t('最近 30 天')], ['7', '最近 7 天'], ['90', '最近 90 天'], ['all', '全部时间']]); }
+function renderCategoryFilter() { categoryFilter.innerHTML = flowSelect('library-category', activeCategory, [['', t('所有分类')], ['__unclassified', t('未分类')], ...categories.map((name) => [name, name])]); }
+function renderDateFilter() { dateFilter.innerHTML = flowSelect('library-date', activeDateRange, [['30', t('最近 30 天')], ['7', t('最近 7 天')], ['90', t('最近 90 天')], ['all', t('全部时间')]]); }
 /** Applies the active category and text query to the meeting library. @returns {void} */
-function filterMeetings() { const query = meetingSearch.value.trim().toLowerCase(); document.querySelectorAll('.meeting-row').forEach((row) => { const meeting = uiData.meetings[Number(row.dataset.meetingIndex)]; const categoryMatch = !activeCategory || (activeCategory === '__unclassified' ? !meeting.category : meeting.category === activeCategory); row.hidden = !categoryMatch || !row.textContent.toLowerCase().includes(query); }); }
+function filterMeetings() { const query = meetingSearch.value.trim().toLowerCase(); document.querySelectorAll('.meeting-row').forEach((row) => { const meeting = uiData.meetings[Number(row.dataset.meetingIndex)]; const categoryMatch = !activeCategory || (activeCategory === '__unclassified' ? !meeting.category : meeting.category === activeCategory); row.hidden = !categoryMatch || (!window.brevia && !row.textContent.toLowerCase().includes(query)); }); }
 /** Updates a meeting category and its library metadata. @param {object} meeting Meeting to update. @param {string} category Target category or empty for unclassified. @returns {void} */
 function setMeetingCategory(meeting, category) { meeting.category = category; meeting.meta = meeting.meta.replace(/ · [^·]+$/, category ? ` · ${category}` : ''); }
 /** Formats backend meeting metadata in the current interface language. @param {object} meeting Stored UI meeting. @returns {object} Display-ready meeting. */
 function localizeMeeting(meeting) {
   if (!meeting.createdAt) return meeting;
-  const languageTag = { zh: 'zh-CN', en: 'en-US', es: 'es-ES' }[locale];
+  const languageTag = BreviaI18n.localeTag(locale);
   const created = new Date(meeting.createdAt).toLocaleString(languageTag, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   const minutes = Math.round(meeting.durationMs / 60000);
   return {
@@ -202,17 +182,37 @@ function localizeMeeting(meeting) {
   };
 }
 /** Re-renders only the meeting list, preserving settings-modal event bindings. @returns {void} */
-function renderMeetingList() { document.querySelector('.meeting-list').innerHTML = uiData.meetings.map((meeting, index) => !meeting.isExample || meeting.exampleLocale === locale ? renderMeetingRow(localizeMeeting(meeting), index) : '').join(''); filterMeetings(); }
+function renderMeetingList() { document.querySelector('.meeting-list').innerHTML = uiData.meetings.map((meeting, index) => !meeting.isExample || meeting.exampleLocale === locale ? renderMeetingRow(localizeMeeting(meeting), index) : '').join(''); filterMeetings(); syncMeetingSelection(); }
 renderCategoryFilter();
 renderDateFilter();
 const prepareForm = document.querySelector('#meeting-form');
+const meetingTitle = document.querySelector('#meeting-title');
+let meetingTitleEdited = false;
+/** Refreshes the starter title only until the user provides their own. @returns {void} */
+function renderDefaultMeetingTitle() { if (!meetingTitleEdited) meetingTitle.value = BreviaI18n.defaultMeetingTitle(locale); }
+meetingTitle.addEventListener('input', () => { meetingTitleEdited = true; });
 /** Rebuilds meeting-language selectors while preserving their submitted values. @returns {void} */
 function renderPrepareSelects() {
   const values = Object.fromEntries(new FormData(prepareForm));
-  const categoryOptions = [['', '未分类'], ...categories.map((name) => [name, name])];
-  prepareForm.querySelector('.form-grid').innerHTML = `<label>${t('会议语言')}${flowSelect('meeting-language', values['meeting-language'] || '中文', [['中文', t('中文')], ['English', 'English'], ['自动检测', t('自动检测')]])}</label><label>${t('译文目标')}${flowSelect('translation-target', values['translation-target'] || '英语', [['英语', t('英语')], ['不需要翻译', t('不需要翻译')], ['中文', t('中文')]])}</label><label>分类标签${flowSelect('meeting-category', values['meeting-category'] || '', categoryOptions)}</label>`;
+  const categoryOptions = [['', t('未分类')], ...categories.map((name) => [name, name])];
+  prepareForm.querySelector('.form-grid').innerHTML = `<label>${t('会议语言')}${flowSelect('meeting-language', values['meeting-language'] || 'auto', BreviaI18n.languageOptions(locale, t, true))}</label><label>${t('译文目标')}${flowSelect('translation-target', values['translation-target'] || '', BreviaI18n.languageOptions(locale, t))}</label><label>${t('分类标签')}${flowSelect('meeting-category', values['meeting-category'] || '', categoryOptions)}</label>`;
 }
 renderPrepareSelects();
+if (breviaClient) {
+  breviaClient.onLevel = (track, level) => {
+    if (track === 'mic') document.querySelector('#mic-level').style.setProperty('--level', Math.max(.04, level));
+  };
+}
+function showRefinementProgress(completed = 0, total = 0) {
+  const copy = { title: t('正在精修'), detail: t('原版逐字稿仍可查看'), waiting: t('准备中') };
+  const ratio = total ? Math.min(1, completed / total) : 0;
+  refinementCard.hidden = false;
+  refinementCard.querySelector('p').textContent = copy.title;
+  refinementCard.querySelector('small').textContent = copy.detail;
+  refinementPercent.textContent = total ? `${Math.round(ratio * 100)}%` : copy.waiting;
+  refinementBar.style.transform = `scaleX(${ratio})`;
+}
+function hideRefinementProgress() { refinementCard.hidden = true; }
 prepareForm.addEventListener('click', (event) => {
   const toggle = event.target.closest('[data-flow-select-toggle]');
   if (toggle) {
@@ -238,7 +238,7 @@ function renderConfigPreview() {
 }
 /** Renders the editable summary-model configuration modal. @returns {void} */
 function renderSummaryModelModal() {
-  const copy = summaryModelCopy[locale];
+  const copy = summaryModelCopy[locale] || summaryModelCopy.en;
   const current = summaryModels[editingSummaryModel] || { name: draftSummaryName || `配置-${configSequence + 1}`, provider: 'OpenAI', apiKey: '', endpoint: '', format: '', model: '' };
   const apiFormat = current.format === 'claude' ? 'claude' : 'openai';
   const configuredControl = summaryModels.length ? `<div class="configured-models"><label class="config-select-field">${copy.configured}${flowSelect('active-summary-model', String(activeSummaryModel), summaryModels.map((item, index) => [String(index), `${item.name} · ${item.provider} · ${item.model}${index === activeSummaryModel ? ` · ${copy.active}` : ''}`]), true)}</label></div>` : '';
@@ -249,23 +249,23 @@ function renderSummaryModelModal() {
 /** Renders one settings modal. @param {'models'|'terms'|'storage'|'summary-model'} kind Requested modal. @returns {void} */
 function renderModal(kind) {
   if (kind === 'summary-model') { renderSummaryModelModal(); return; }
-  const copy = modalCopy[locale][kind];
+  const copy = (modalCopy[locale] || modalCopy.en)[kind];
   const items = kind === 'terms' ? termEntries.map(({ name, detail }) => [name, detail === '自定义术语' ? t(detail) : detail]) : copy.items;
   settingsModal.querySelector('h2').textContent = copy.title;
   settingsModal.querySelector('.modal-title p').textContent = copy.intro;
-  settingsModal.querySelector('.modal-close').setAttribute('aria-label', modalCopy[locale].close);
+  settingsModal.querySelector('.modal-close').setAttribute('aria-label', (modalCopy[locale] || modalCopy.en).close);
   settingsModal.querySelector('.modal-body').innerHTML = `<div class="modal-list${kind === 'models' ? ' model-library-list' : ''}">${items.map((item, index) => {
     const [name, detail] = kind === 'models' ? item.slice(1, 3) : item;
     const [stage, , , intro] = kind === 'models' ? item : [];
     const termEditing = kind === 'terms' && editingTermIndex === index;
     const label = termEditing ? `<input class="term-edit-input" data-edit-term-input="${index}" value="${escapeHtml(name)}" maxlength="64" />` : `<b>${escapeHtml(name)}</b>`;
-    const actions = kind === 'models' ? `<button class="modal-action${isModelInstalled(name) ? ' modal-danger' : ''}" ${isModelInstalled(name) ? `data-delete-model="${index}"` : `data-download-model="${index}"`} type="button">${isModelInstalled(name) ? modelLabels[locale].remove : modelLabels[locale].download}</button>` : kind === 'terms' ? `<span class="term-actions">${termEditing ? `<button class="modal-action" data-save-term="${index}" type="button">${copy.save}</button><button class="modal-action" data-cancel-term type="button">${copy.cancel}</button>` : `<button class="modal-action" data-edit-term="${index}" type="button">${copy.edit}</button><button class="modal-action" data-remove-term="${index}" type="button">${copy.remove}</button>`}</span>` : '';
+    const actions = kind === 'models' ? `<button class="modal-action${isModelInstalled(name) ? ' modal-danger' : ''}" ${isModelInstalled(name) ? `data-delete-model="${index}"` : `data-download-model="${index}"`} type="button">${isModelInstalled(name) ? (modelLabels[locale] || modelLabels.en).remove : (modelLabels[locale] || modelLabels.en).download}</button>` : kind === 'terms' ? `<span class="term-actions">${termEditing ? `<button class="modal-action" data-save-term="${index}" type="button">${copy.save}</button><button class="modal-action" data-cancel-term type="button">${copy.cancel}</button>` : `<button class="modal-action" data-edit-term="${index}" type="button">${copy.edit}</button><button class="modal-action" data-remove-term="${index}" type="button">${copy.remove}</button>`}</span>` : '';
     const heading = kind === 'models' && (index === 0 || items[index - 1][0] !== stage) ? `<h3>${escapeHtml(stage)}</h3>` : '';
     return `${heading}<div><span>${label}<small>${escapeHtml(detail)}</small>${intro ? `<small>${escapeHtml(intro)}</small>` : ''}</span>${actions}</div>`;
   }).join('')}</div>${kind === 'terms' ? `<form class="term-form"><input name="term" required maxlength="64" placeholder="${copy.placeholder}" /><button type="submit">${copy.add}</button></form>` : ''}`;
 }
 /** Opens and focuses a settings modal. @param {'models'|'terms'|'storage'|'summary-model'} kind Requested modal. @returns {void} */
-function openModal(kind) { activeModal = kind; renderModal(kind); settingsModal.querySelector('.modal-close').setAttribute('aria-label', modalCopy[locale].close); settingsModal.hidden = false; document.body.classList.add('modal-open'); settingsModal.querySelector('.modal-close').focus(); }
+function openModal(kind) { activeModal = kind; renderModal(kind); settingsModal.querySelector('.modal-close').setAttribute('aria-label', (modalCopy[locale] || modalCopy.en).close); settingsModal.hidden = false; document.body.classList.add('modal-open'); settingsModal.querySelector('.modal-close').focus(); }
 /** Closes the active settings modal and restores page scrolling. @returns {void} */
 function closeModal() { activeModal = undefined; settingsModal.hidden = true; document.body.classList.remove('modal-open'); }
 const settingsActions = [...document.querySelectorAll('#settings-view [data-settings-modal]')];
@@ -283,16 +283,16 @@ function attachModelDelete(row) {
   const button = document.createElement('button');
   button.className = 'model-delete';
   button.type = 'button';
-  button.textContent = modelLabels[locale].remove;
+  button.textContent = (modelLabels[locale] || modelLabels.en).remove;
   button.addEventListener('click', () => { deleteInstalledModel(row.querySelector('b').textContent); if (activeModal === 'models') renderModal('models'); });
   row.append(button);
 }
 /** Synchronizes installed-model actions after a locale or model-list change. @returns {void} */
 function renderModelControls() {
-  modelAction.textContent = modelLabels[locale].manage;
+  modelAction.textContent = (modelLabels[locale] || modelLabels.en).manage;
   modelCard.querySelectorAll('.model-row').forEach((row) => {
     attachModelDelete(row);
-    row.querySelector('.model-delete').textContent = modelLabels[locale].remove;
+    row.querySelector('.model-delete').textContent = (modelLabels[locale] || modelLabels.en).remove;
     if (row.dataset.stage) row.querySelector('small').textContent = `${t(row.dataset.stage)} · ${row.dataset.languages}`;
   });
 }
@@ -314,11 +314,7 @@ function installModel(model) {
 function renderTermOverview() {
   const card = document.querySelectorAll('#settings-view .settings-card')[1];
   const count = termEntries.length;
-  card.querySelector('p').textContent = {
-    zh: `${count} 个词条可用于会议准备、搜索和纪要。`,
-    en: `${count} ${count === 1 ? 'term is' : 'terms are'} available for meeting preparation, search, and notes.`,
-    es: `Hay ${count} ${count === 1 ? 'término disponible' : 'términos disponibles'} para preparar reuniones, buscar y crear notas.`,
-  }[locale];
+  card.querySelector('p').textContent = BreviaI18n.termOverview(locale, count);
   card.querySelector('.terms').innerHTML = count
     ? termEntries.slice(0, 4).map((term) => `<span>${escapeHtml(term.name)}</span>`).join('')
     : `<span>${t('暂无术语')}</span>`;
@@ -373,9 +369,9 @@ settingsModal.addEventListener('click', async (event) => {
   const download = event.target.closest('[data-download-model]');
   if (download) {
     const index = Number(download.dataset.downloadModel);
-    const [, name, detail, intro, icon] = modalCopy[locale].models.items[index];
+    const [, name, detail, intro, icon] = (modalCopy[locale] || modalCopy.en).models.items[index];
     download.disabled = true;
-    download.textContent = modelLabels[locale].downloading;
+    download.textContent = (modelLabels[locale] || modelLabels.en).downloading;
     try {
       if (window.brevia) await window.brevia.models.download({ model_id: modelIds[index] });
       installModel({ icon, name, detail, intro });
@@ -386,7 +382,7 @@ settingsModal.addEventListener('click', async (event) => {
   const deleteModel = event.target.closest('[data-delete-model]');
   if (deleteModel) {
     const index = Number(deleteModel.dataset.deleteModel);
-    const [, name] = modalCopy[locale].models.items[index];
+    const [, name] = (modalCopy[locale] || modalCopy.en).models.items[index];
     try {
       if (window.brevia) await window.brevia.models.delete({ model_id: modelIds[index] });
       deleteInstalledModel(name);
@@ -452,17 +448,26 @@ settingsModal.addEventListener('submit', async (event) => {
   } else termEntries.push({ name: term, detail: locale === 'zh' ? '自定义术语' : locale === 'es' ? 'Término personalizado' : 'Custom term' });
   renderModal('terms');
 });
-const slogans = {
+/* Locale copy lives in i18n.js; this alias keeps the renderer focused on state changes. */
+const slogans = BreviaI18n.slogans;
+/*
   zh: ['每一场对话，都留有依据。', '让重要讨论，不再散落。', '从声音开始，留下清晰结论。', '记录发生的事，推进接下来的事。', '把会议留在掌控之中。'],
   en: ['Every conversation leaves a traceable record.', 'Keep important discussions in one place.', 'Start with sound. End with clear decisions.', 'Record what happened. Move the work forward.', 'Keep every meeting within reach.'],
-  es: ['Cada conversación conserva un registro verificable.', 'Mantén las conversaciones importantes en un solo lugar.', 'Empieza con la voz. Termina con decisiones claras.', 'Registra lo que ocurrió. Haz avanzar el trabajo.', 'Mantén cada reunión bajo control.']
-};
+  es: ['Cada conversación conserva un registro verificable.', 'Mantén las conversaciones importantes en un solo lugar.', 'Empieza con la voz. Termina con decisiones claras.', 'Registra lo que ocurrió. Haz avanzar el trabajo.', 'Mantén cada reunión bajo control.'],
+  ja: ['すべての会話に、確かな記録を。', '大切な議論を、一か所に。', '音声から始め、明確な決定へ。', '起きたことを記録し、仕事を前へ進める。', 'すべての会議を手の届く場所に。'],
+  ko: ['모든 대화에 추적 가능한 기록을 남깁니다.', '중요한 논의를 한곳에 모으세요.', '소리로 시작해 명확한 결정으로 마무리하세요.', '일어난 일을 기록하고 업무를 앞으로 나아가게 하세요.', '모든 회의를 가까이 두세요.'],
+  fr: ['Chaque conversation laisse une trace vérifiable.', 'Gardez les discussions importantes au même endroit.', 'Commencez par le son. Terminez par des décisions claires.', 'Consignez ce qui s’est passé. Faites avancer le travail.', 'Gardez chaque réunion à portée de main.'],
+  de: ['Jedes Gespräch hinterlässt eine nachvollziehbare Aufzeichnung.', 'Halten Sie wichtige Gespräche an einem Ort fest.', 'Mit Ton beginnen. Mit klaren Entscheidungen enden.', 'Dokumentieren Sie das Geschehene und bringen Sie die Arbeit voran.', 'Behalten Sie jede Besprechung im Blick.'],
+  ru: ['Каждый разговор оставляет проверяемую запись.', 'Храните важные обсуждения в одном месте.', 'Начните со звука. Завершите ясными решениями.', 'Записывайте произошедшее и двигайте работу вперёд.', 'Держите каждую встречу под рукой.']
+};*/
 const homeSlogan = document.querySelector('#home-slogan');
+const homeEyebrow = document.querySelector('#home-eyebrow');
+const homePrimary = document.querySelector('#home-primary');
 let sloganIndex = Math.floor(Math.random() * slogans.zh.length);
 /** Updates the rotating library slogan. @param {boolean} animate Whether to play the transition. @returns {void} */
 function renderSlogan(animate = false) {
   const update = () => {
-    homeSlogan.textContent = slogans[locale][sloganIndex];
+    homeSlogan.textContent = activeLibraryNav === 'recently-deleted' ? t('最近删除') : (slogans[locale] || slogans.en)[sloganIndex];
     if (animate) {
       homeSlogan.classList.remove('slogan-out');
       homeSlogan.classList.add('slogan-in');
@@ -481,7 +486,7 @@ function applyTheme(nextTheme) {
   document.documentElement.dataset.theme = theme;
   const dark = theme === 'dark';
   themeToggle.textContent = dark ? '☾' : '◐';
-  themeToggle.title = themeLabels[locale][dark ? 'light' : 'dark'];
+  themeToggle.title = (themeLabels[locale] || themeLabels.en)[dark ? 'light' : 'dark'];
   themeToggle.setAttribute('aria-label', themeToggle.title);
 }
 
@@ -521,6 +526,7 @@ function applyLanguage(nextLocale, animate = false) {
       else element[attribute] = value;
     });
     renderPrepareSelects();
+    renderDefaultMeetingTitle();
     renderMeetingList();
     renderMeetingDetail();
     if (activeView === 'home') selectLibraryNav(activeLibraryNav);
@@ -544,38 +550,74 @@ function applyLanguage(nextLocale, animate = false) {
 const showToast = (content) => { toast.textContent = content; toast.classList.add('visible'); clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove('visible'), 2400); };
 /** Marks the active meeting-library source and updates the window breadcrumb. @param {'all-meetings'|'recently-deleted'} id Navigation item ID. @returns {void} */
 function selectLibraryNav(id) {
+  if (id !== activeLibraryNav) clearMeetingSelection();
   activeLibraryNav = id;
   document.querySelectorAll('.nav-item').forEach((item) => item.classList.toggle('active', item.id === id));
   crumb.textContent = id === 'recently-deleted' ? t('最近删除') : catalog[locale].views.home;
+  const deleted = id === 'recently-deleted';
+  homeEyebrow.className = deleted ? 'back' : 'eyebrow';
+  homeEyebrow.disabled = !deleted;
+  homeEyebrow.textContent = deleted ? BreviaI18n.trashCopy(locale).back : t('会议库');
+  homePrimary.hidden = deleted;
+  if (!deleted) homePrimary.innerHTML = `${t('开始会议')} <span>→</span>`;
+  renderSlogan(false);
 }
-/** Switches between top-level app views. @param {'home'|'prepare'|'live'|'detail'|'settings'} name Target view. @returns {void} */
-const showView = (name) => {
-  if (name === activeView) return;
-  const current = document.querySelector(`#${activeView}-view`);
-  const next = document.querySelector(`#${name}-view`);
+/** Runs the shared page-out/page-in transition around a view or content swap. */
+async function transitionPage(current, next, swap) {
   if (current.classList.contains('leaving')) return;
   const duration = matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 160;
   current.classList.add('leaving');
-  window.setTimeout(() => {
-    current.classList.remove('active', 'leaving');
+  await new Promise((resolve) => window.setTimeout(resolve, duration));
+  current.classList.remove('active', 'leaving');
+  try {
+    await swap();
+  } finally {
+    next.classList.remove('active', 'leaving');
+    void next.offsetWidth;
     next.classList.add('active');
+  }
+}
+/** Switches between top-level app views. @param {'home'|'prepare'|'live'|'detail'|'settings'} name Target view. */
+const showView = async (name) => {
+  if (name === activeView) return;
+  const current = document.querySelector(`#${activeView}-view`);
+  const next = document.querySelector(`#${name}-view`);
+  await transitionPage(current, next, () => {
     activeView = name;
     crumb.textContent = catalog[locale].views[name];
-    if (name === 'home') selectLibraryNav('all-meetings');
+    if (name === 'home') selectLibraryNav(activeLibraryNav);
     else document.querySelectorAll('.nav-item').forEach((item) => item.classList.toggle('active', item.dataset.view === name));
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, duration);
+  });
 };
+/** Switches meeting-library sources with the same page-out/page-in timing as top-level views. */
+async function showLibraryNav(id) {
+  const includeDeleted = id === 'recently-deleted';
+  if (activeView === 'live' && meetingActive) minimizeMeeting();
+  if (activeView !== 'home') {
+    selectLibraryNav(id);
+    if (window.brevia) await refreshBackendMeetings(includeDeleted);
+    await showView('home');
+    return;
+  }
+  if (id === activeLibraryNav) return;
+  const home = document.querySelector('#home-view');
+  await transitionPage(home, home, async () => {
+    selectLibraryNav(id);
+    if (window.brevia) await refreshBackendMeetings(includeDeleted);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+}
 collectTranslations();
 applyLanguage(locale);
 applyTheme(theme);
-window.setInterval(() => { sloganIndex = (sloganIndex + 1) % slogans[locale].length; renderSlogan(true); }, 30000);
+window.setInterval(() => { if (activeLibraryNav === 'recently-deleted') return; sloganIndex = (sloganIndex + 1) % (slogans[locale] || slogans.en).length; renderSlogan(true); }, 30000);
 updateButton.addEventListener('click', () => {
   updateButton.disabled = true;
-  updateButton.textContent = updateLabels[locale].checking;
-  window.setTimeout(() => { updateAvailable = false; updateDescription.textContent = updateLabels[locale].current; updateButton.textContent = updateLabels[locale].current; updateButton.disabled = false; renderUpdateNotice(); }, 700);
+  updateButton.textContent = (updateLabels[locale] || updateLabels.en).checking;
+  window.setTimeout(() => { const copy = updateLabels[locale] || updateLabels.en; updateAvailable = false; updateDescription.textContent = copy.current; updateButton.textContent = copy.current; updateButton.disabled = false; renderUpdateNotice(); }, 700);
 });
-updateNoticeButton.addEventListener('click', () => { updateNoticeButton.textContent = updateLabels[locale].updating; updateNoticeButton.disabled = true; window.setTimeout(() => { updateAvailable = false; updateNotice.hidden = true; updateDescription.textContent = updateLabels[locale].current; updateButton.textContent = updateLabels[locale].current; }, 900); });
+updateNoticeButton.addEventListener('click', () => { updateNoticeButton.textContent = (updateLabels[locale] || updateLabels.en).updating; updateNoticeButton.disabled = true; window.setTimeout(() => { const copy = updateLabels[locale] || updateLabels.en; updateAvailable = false; updateNotice.hidden = true; updateDescription.textContent = copy.current; updateButton.textContent = copy.current; }, 900); });
 /** Closes the language menu and updates its disclosure state. @returns {void} */
 function closeLanguageMenu() { languageOptions.hidden = true; languageToggle.setAttribute('aria-expanded', 'false'); }
 languageToggle.addEventListener('click', () => {
@@ -593,15 +635,20 @@ document.addEventListener('click', (event) => { if (!event.target.closest('.lang
 document.addEventListener('keydown', (event) => { if (event.key === 'Escape') { if (activeModal) closeModal(); else { closeLanguageMenu(); languageToggle.focus(); } } });
 /** Shows the compact live-meeting control when navigating away during recording. @returns {void} */
 function minimizeMeeting() { miniTitle.textContent = document.querySelector('#live-name').textContent; miniTimer.textContent = document.querySelector('#timer').textContent; miniMeeting.hidden = false; requestAnimationFrame(syncFloatingNotices); }
-document.addEventListener('click', (event) => { const target = event.target.closest('[data-view]'); if (!target) return; if (activeView === 'live' && meetingActive && target.dataset.view !== 'live') minimizeMeeting(); showView(target.dataset.view); });
+document.addEventListener('click', (event) => { const target = event.target.closest('[data-view]'); if (!target || ['all-meetings', 'recently-deleted'].includes(target.id)) return; if (target.dataset.view === 'home') selectLibraryNav('all-meetings'); if (activeView === 'live' && meetingActive && target.dataset.view !== 'live') minimizeMeeting(); showView(target.dataset.view); });
+homePrimary.addEventListener('click', () => showView('prepare'));
+homeEyebrow.addEventListener('click', async () => {
+  if (activeLibraryNav !== 'recently-deleted') return;
+  await showLibraryNav('all-meetings').catch((error) => showToast(error.message));
+});
 document.querySelector('#meeting-form').addEventListener('submit', async (event) => {
   event.preventDefault();
   const submit = event.submitter;
   submit.disabled = true;
   const form = new FormData(event.currentTarget);
   const title = document.querySelector('#meeting-title').value.trim();
-  const language = { 中文: 'zh', English: 'en', 自动检测: 'zh' }[form.get('meeting-language')] || 'zh';
-  const targetLanguage = { 英语: 'en', 中文: 'zh' }[form.get('translation-target')] || null;
+  const language = form.get('meeting-language') || 'auto';
+  const targetLanguage = form.get('translation-target') || null;
   try {
     const meeting = breviaClient ? await breviaClient.start({
       title,
@@ -611,6 +658,7 @@ document.querySelector('#meeting-form').addEventListener('submit', async (event)
       refined_model_id: 'qwen3-asr-0.6b-int8',
       category: form.get('meeting-category') || '',
     }, { mic: form.has('capture-mic'), system: form.has('capture-system') }) : { id: null };
+    document.querySelector('#active-model-name').textContent = language === 'en' ? 'Streaming Zipformer English' : 'Streaming Paraformer';
     document.querySelector('#live-name').textContent = title;
     uiData.meetings.unshift({ id: meeting.id, tone: 'violet', title, meta: `刚刚 · 0 分钟${form.get('meeting-category') ? ` · ${form.get('meeting-category')}` : ''}`, category: form.get('meeting-category'), tags: [], status: { tone: 'processing', label: '正在录制', detail: '双轨录音' } });
     document.querySelector('#transcript-scroll').innerHTML = '';
@@ -707,7 +755,7 @@ document.querySelector('#latest').addEventListener('click', () => {
   followLiveTranscript = true;
   document.querySelector('#transcript-scroll').scrollTo({ top: 9999, behavior: 'smooth' });
 });
-meetingSearch.addEventListener('input', filterMeetings);
+meetingSearch.addEventListener('input', () => { if (window.brevia) refreshBackendMeetings().catch((error) => showToast(error.message)); else filterMeetings(); });
 libraryToolbar.addEventListener('click', (event) => {
   const toggle = event.target.closest('[data-flow-select-toggle]');
   if (toggle) { const options = toggle.parentElement.querySelector('.flow-select-options'); const opening = options.hidden; libraryToolbar.querySelectorAll('.flow-select-options').forEach((list) => { list.hidden = true; list.previousElementSibling.previousElementSibling.setAttribute('aria-expanded', 'false'); }); options.hidden = !opening; toggle.setAttribute('aria-expanded', String(opening)); return; }
@@ -721,9 +769,119 @@ libraryToolbar.addEventListener('click', (event) => {
   if (choice.dataset.flowSelectChoice === 'library-category') { activeCategory = choice.dataset.value; filterMeetings(); } else { activeDateRange = choice.dataset.value; }
 });
 const meetingList = document.querySelector('.meeting-list');
+const meetingSelectionSurface = document.querySelector('#home-view');
+let dragSelection;
+let suppressMeetingClick = false;
+const toggleMeetingSelection = (row) => { const key = row.dataset.selectionKey; if (selectedMeetingKeys.has(key)) selectedMeetingKeys.delete(key); else selectedMeetingKeys.add(key); syncMeetingSelection(); };
+meetingSelectionSurface.addEventListener('pointerdown', (event) => {
+  if (event.button !== 0 || event.clientY < libraryToolbar.getBoundingClientRect().top || event.target.closest('.meeting-actions, .batch-toolbar')) return;
+  dragSelection = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, additive: event.shiftKey, initial: new Set(selectedMeetingKeys), moved: false, marquee: document.createElement('div') };
+  dragSelection.marquee.className = 'selection-marquee';
+});
+meetingSelectionSurface.addEventListener('dragstart', (event) => event.preventDefault());
+meetingSelectionSurface.addEventListener('pointermove', (event) => {
+  if (!dragSelection || event.pointerId !== dragSelection.pointerId) return;
+  if (!dragSelection.moved && Math.hypot(event.clientX - dragSelection.x, event.clientY - dragSelection.y) < 4) return;
+  event.preventDefault();
+  if (!dragSelection.moved) {
+    dragSelection.moved = true;
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    window.getSelection()?.removeAllRanges();
+    meetingSelectionSurface.setPointerCapture(event.pointerId);
+    meetingList.classList.add('is-selecting');
+    document.body.append(dragSelection.marquee);
+  }
+  const left = Math.min(dragSelection.x, event.clientX);
+  const top = Math.min(dragSelection.y, event.clientY);
+  const right = Math.max(dragSelection.x, event.clientX);
+  const bottom = Math.max(dragSelection.y, event.clientY);
+  dragSelection.marquee.style.cssText = `left:${left}px;top:${top}px;width:${right - left}px;height:${bottom - top}px`;
+  const next = dragSelection.additive ? new Set(dragSelection.initial) : new Set();
+  document.querySelectorAll('.meeting-row:not([hidden])').forEach((row) => {
+    const rect = row.getBoundingClientRect();
+    if (rectanglesIntersect(rect, { left, right, top, bottom })) next.add(row.dataset.selectionKey);
+  });
+  selectedMeetingKeys.clear();
+  next.forEach((key) => selectedMeetingKeys.add(key));
+  syncMeetingSelection(false);
+});
+const finishDragSelection = (event) => {
+  if (!dragSelection || event.pointerId !== dragSelection.pointerId) return;
+  // ponytail: marquee covers visible rows; add edge auto-scroll only if long-list drag selection needs it.
+  if (dragSelection.moved) {
+    suppressMeetingClick = true;
+    window.setTimeout(() => { suppressMeetingClick = false; }, 0);
+  }
+  dragSelection.marquee.remove();
+  meetingList.classList.remove('is-selecting');
+  if (meetingSelectionSurface.hasPointerCapture(event.pointerId)) meetingSelectionSurface.releasePointerCapture(event.pointerId);
+  dragSelection = undefined;
+  syncMeetingSelection();
+};
+meetingSelectionSurface.addEventListener('pointerup', finishDragSelection);
+meetingSelectionSurface.addEventListener('pointercancel', finishDragSelection);
+meetingSelectionSurface.addEventListener('click', (event) => {
+  if (!suppressMeetingClick) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+}, true);
+meetingList.addEventListener('keydown', (event) => {
+  const row = event.target.closest('.meeting-row');
+  if (row && event.key === ' ') { event.preventDefault(); toggleMeetingSelection(row); }
+});
+batchToolbar.addEventListener('click', async (event) => {
+  const toggle = event.target.closest('[data-flow-select-toggle]');
+  if (toggle) { const options = toggle.parentElement.querySelector('.flow-select-options'); options.hidden = !options.hidden; toggle.setAttribute('aria-expanded', String(!options.hidden)); return; }
+  const choice = event.target.closest('[data-flow-select-choice]');
+  if (choice) {
+    choice.closest('.flow-select-options').hidden = true;
+    if (choice.dataset.value === '__choose') return;
+    const meetings = selectedMeetings();
+    meetings.forEach((meeting) => setMeetingCategory(meeting, choice.dataset.value));
+    try {
+      if (window.brevia) await Promise.all(meetings.filter(({ id }) => id).map(({ id, category }) => window.brevia.meeting.update({ meeting_id: id, updates: { category } })));
+      renderMeetingList();
+    } catch (error) { await refreshBackendMeetings(); showToast(error.message); }
+    return;
+  }
+  if (event.target.closest('[data-batch-clear]')) { clearMeetingSelection(); return; }
+  const meetings = selectedMeetings();
+  if (event.target.closest('[data-batch-restore]')) {
+    try {
+      if (window.brevia) await Promise.all(meetings.filter(({ id }) => id).map(({ id }) => window.brevia.meeting.restore({ meeting_id: id })));
+      uiData.meetings = uiData.meetings.filter((meeting, index) => !selectedMeetingKeys.has(meeting.id || String(index)));
+      clearMeetingSelection();
+      renderMeetingList();
+      showToast(t('恢复'));
+    } catch (error) { await refreshBackendMeetings(true); showToast(error.message); }
+    return;
+  }
+  if (event.target.closest('[data-batch-export]')) {
+    const format = prompt('选择格式：md / txt / json / srt / docx / pdf / flac / wav / m4a', 'md')?.toLowerCase();
+    if (!format) return;
+    try {
+      const result = window.brevia ? await window.brevia.meeting.exportMany({ meeting_ids: meetings.map(({ id }) => id).filter(Boolean), format }) : { paths: meetings.map(({ title }) => `${title}.${format}`) };
+      if (result) showToast(`${t('导出')}: ${BreviaI18n.selectionOverview(locale, meetings.length)}`);
+    } catch (error) { showToast(error.message); }
+    return;
+  }
+  const permanently = activeLibraryNav === 'recently-deleted';
+  const deleteLabel = permanently ? BreviaI18n.trashCopy(locale).purge : t('删除');
+  if (event.target.closest('[data-batch-delete]') && confirm(`${BreviaI18n.selectionOverview(locale, meetings.length)}\n${deleteLabel}?`)) {
+    try {
+      if (window.brevia) await Promise.all(meetings.filter(({ id }) => id).map(({ id }) => window.brevia.meeting[permanently ? 'purge' : 'delete']({ meeting_id: id })));
+      uiData.meetings = uiData.meetings.filter((meeting, index) => !selectedMeetingKeys.has(meeting.id || String(index)));
+      clearMeetingSelection();
+      renderMeetingList();
+    } catch (error) { await refreshBackendMeetings(); showToast(error.message); }
+  }
+});
 const closeCategoryMenu = (menu, done) => { if (menu.hidden) { done?.(); return; } menu.classList.add('is-closing'); window.setTimeout(() => { menu.hidden = true; menu.classList.remove('is-closing'); done?.(); }, 180); };
 const closeMeetingMenus = () => { document.querySelectorAll('.meeting-menu, .meeting-rename-menu').forEach((menu) => { menu.hidden = true; }); document.querySelectorAll('.meeting-category-menu').forEach((menu) => closeCategoryMenu(menu)); document.querySelectorAll('[data-meeting-menu]').forEach((toggle) => toggle.setAttribute('aria-expanded', 'false')); };
 meetingList.addEventListener('click', async (event) => {
+  if (suppressMeetingClick) { event.preventDefault(); event.stopImmediatePropagation(); return; }
+  const selectionRow = event.target.closest('.meeting-row');
+  if (selectionRow && (event.metaKey || event.ctrlKey)) { event.preventDefault(); event.stopPropagation(); toggleMeetingSelection(selectionRow); return; }
   const actions = event.target.closest('.meeting-actions');
   if (!actions) return;
   event.stopPropagation();
@@ -748,6 +906,7 @@ meetingList.addEventListener('click', async (event) => {
       return;
     }
     if (action.dataset.meetingAction === 'restore') { if (window.brevia && meeting.id) window.brevia.meeting.restore({ meeting_id: meeting.id }).then(() => { uiData.meetings.splice(index, 1); renderMeetingList(); showToast('会议已恢复'); }).catch((error) => showToast(error.message)); return; }
+    if (action.dataset.meetingAction === 'purge' && confirm(`${BreviaI18n.trashCopy(locale).purge}?`)) { if (window.brevia && meeting.id) window.brevia.meeting.purge({ meeting_id: meeting.id }).then(() => { uiData.meetings.splice(index, 1); renderMeetingList(); showToast(BreviaI18n.trashCopy(locale).purge); }).catch((error) => showToast(error.message)); return; }
   }
   const category = event.target.closest('[data-assign-category]');
   if (category) { const meeting = uiData.meetings[Number(category.dataset.meetingIndex)]; setMeetingCategory(meeting, category.dataset.assignCategory); if (window.brevia && meeting.id) window.brevia.meeting.update({ meeting_id: meeting.id, updates: { category: meeting.category } }).catch((error) => showToast(error.message)); renderMeetingList(); return; }
@@ -773,6 +932,13 @@ document.addEventListener('click', (event) => {
 const progress = document.querySelector('#progress');
 const playerTime = document.querySelector('#player-time');
 const playerAudio = new Audio();
+const playButton = document.querySelector('#play');
+const updatePlayerControl = () => {
+  const playing = !playerAudio.paused && !playerAudio.ended;
+  playButton.classList.toggle('is-playing', playing);
+  playButton.textContent = playing ? '❚❚' : '▶';
+  playButton.setAttribute('aria-label', playing ? '暂停录音' : '播放录音');
+};
 /** Formats the audio progress control as an mm:ss display. @returns {void} */
 const renderPlayerTime = () => { const value = Number(progress.value); playerTime.textContent = `${String(Math.floor(value / 60)).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}`; };
 /** Highlights the transcript segment at the current playback time and keeps it centered in its own scroller. */
@@ -797,18 +963,35 @@ function syncPlaybackTranscript() {
 }
 progress.addEventListener('input', () => { renderPlayerTime(); playerAudio.currentTime = Number(progress.value); syncPlaybackTranscript(); });
 document.addEventListener('click', (event) => { const button = event.target.closest('.jump'); if (button) { progress.value = button.dataset.time; playerAudio.currentTime = Number(button.dataset.time); renderPlayerTime(); syncPlaybackTranscript(); showToast(message('located')); } });
-document.querySelector('#play').addEventListener('click', async (event) => {
+playButton.addEventListener('click', async () => {
   if (!playerAudio.src) { showToast('这场会议没有可播放的录音'); return; }
-  const playing = !playerAudio.paused;
-  if (playing) playerAudio.pause(); else await playerAudio.play();
-  event.currentTarget.textContent = playing ? '▶' : '❚❚';
-  showToast(message(playing ? 'paused' : 'playing'));
+  if (playerAudio.paused) await playerAudio.play(); else playerAudio.pause();
+  showToast(message(playerAudio.paused ? 'paused' : 'playing'));
 });
+playerAudio.addEventListener('play', updatePlayerControl);
+playerAudio.addEventListener('pause', updatePlayerControl);
+playerAudio.addEventListener('ended', updatePlayerControl);
 playerAudio.addEventListener('timeupdate', () => { progress.value = playerAudio.currentTime; renderPlayerTime(); syncPlaybackTranscript(); });
 document.querySelectorAll('.player .skip').forEach((button, index) => button.addEventListener('click', () => {
   playerAudio.currentTime = Math.max(0, Math.min(playerAudio.duration || 0, playerAudio.currentTime + (index ? 15 : -15)));
 }));
-document.querySelector('.player select').addEventListener('change', (event) => { playerAudio.playbackRate = Number.parseFloat(event.target.value); });
+document.querySelector('.player-speed').addEventListener('click', (event) => {
+  const toggle = event.target.closest('[data-flow-select-toggle]');
+  if (toggle) {
+    const options = toggle.parentElement.querySelector('.flow-select-options');
+    options.hidden = !options.hidden;
+    toggle.setAttribute('aria-expanded', String(!options.hidden));
+    return;
+  }
+  const option = event.target.closest('[data-playback-rate]');
+  if (!option) return;
+  const speed = option.closest('.player-speed');
+  speed.querySelector('input').value = option.dataset.playbackRate;
+  speed.querySelector('.flow-select-toggle').firstChild.nodeValue = option.textContent;
+  speed.querySelector('.flow-select-options').hidden = true;
+  speed.querySelector('.flow-select-toggle').setAttribute('aria-expanded', 'false');
+  playerAudio.playbackRate = Number(option.dataset.playbackRate);
+});
 themeToggle.addEventListener('click', () => applyTheme(theme === 'dark' ? 'light' : 'dark'));
 
 function backendMeeting(item) {
@@ -829,8 +1012,11 @@ function backendMeeting(item) {
   };
 }
 
-async function refreshBackendMeetings() {
-  const meetings = await window.brevia.meeting.list();
+let meetingListRequest = 0;
+async function refreshBackendMeetings(includeDeleted = activeLibraryNav === 'recently-deleted') {
+  const request = ++meetingListRequest;
+  const meetings = await window.brevia.meeting.list({ include_deleted: includeDeleted, query: meetingSearch.value.trim() });
+  if (request !== meetingListRequest) return;
   uiData.meetings = meetings.map(backendMeeting);
   renderMeetingList();
 }
@@ -838,7 +1024,7 @@ async function refreshBackendMeetings() {
 function applyBackendDetail(meeting) {
   const versions = { live: 1, postprocess: 2, user: 3 };
   const latest = new Map();
-  const baseVersion = meeting.segments.some((segment) => segment.version === 'postprocess') ? 'postprocess' : 'live';
+  const baseVersion = meeting.status === 'refined' ? 'postprocess' : 'live';
   meeting.segments.filter((segment) => [baseVersion, 'user'].includes(segment.version)).forEach((segment) => {
     if (!latest.has(segment.id) || versions[segment.version] >= versions[latest.get(segment.id).version]) latest.set(segment.id, segment);
   });
@@ -864,7 +1050,7 @@ function applyBackendDetail(meeting) {
   progress.value = 0;
   playerAudio.pause();
   playerAudio.currentTime = 0;
-  document.querySelector('#play').textContent = '▶';
+  updatePlayerControl();
   renderPlayerTime();
   const audioPath = meeting.audio.playback.mix || meeting.audio.playback.mic || meeting.audio.playback.system;
   if (audioPath) window.brevia.audioUrl(audioPath).then((url) => { playerAudio.src = url; });
@@ -970,12 +1156,21 @@ if (window.brevia) {
     if (!line) { line = document.createElement('p'); line.className = 'translation'; element.append(line); }
     line.textContent = payload.translation;
   });
+  window.brevia.on('asr.language', ({ language }) => {
+    document.querySelector('#active-model-name').textContent = language === 'en' ? 'Streaming Zipformer English' : 'Streaming Paraformer';
+  });
+  window.brevia.on('refinement.started', ({ total }) => showRefinementProgress(0, total));
+  window.brevia.on('refinement.progress', ({ completed, total }) => showRefinementProgress(completed, total));
+  window.brevia.on('refinement.ready', ({ meeting }) => {
+    hideRefinementProgress();
+    if (meeting.id === breviaClient.state.selectedMeetingId) applyBackendDetail(meeting);
+  });
   window.brevia.on('worker.warning', ({ message: warning }) => showToast(warning));
   window.brevia.on('worker.error', ({ message: error }) => showToast(error));
 
   meetingList.addEventListener('click', async (event) => {
     const row = event.target.closest('[data-meeting-id]');
-    if (!row || event.target.closest('.meeting-actions')) return;
+    if (!row || activeLibraryNav === 'recently-deleted' || event.target.closest('.meeting-actions')) return;
     try {
       breviaClient.state.selectedMeetingId = row.dataset.meetingId;
       applyBackendDetail(await window.brevia.meeting.get({ meeting_id: row.dataset.meetingId }));
@@ -983,17 +1178,10 @@ if (window.brevia) {
   });
 
   document.querySelector('#recently-deleted').addEventListener('click', async () => {
-    try {
-      uiData.meetings = (await window.brevia.meeting.list({ include_deleted: true })).map(backendMeeting);
-      renderMeetingList();
-      selectLibraryNav('recently-deleted');
-    } catch (error) { showToast(error.message); }
+    await showLibraryNav('recently-deleted').catch((error) => showToast(error.message));
   });
   document.querySelector('#all-meetings').addEventListener('click', async () => {
-    try {
-      await refreshBackendMeetings();
-      selectLibraryNav('all-meetings');
-    } catch (error) { showToast(error.message); }
+    await showLibraryNav('all-meetings').catch((error) => showToast(error.message));
   });
 
   document.addEventListener('click', async (event) => {
@@ -1024,12 +1212,17 @@ if (window.brevia) {
     const button = event.currentTarget;
     button.disabled = true;
     button.textContent = t('正在精修…');
+    showRefinementProgress();
     try {
+      applyBackendDetail(await window.brevia.meeting.get({ meeting_id: breviaClient.state.selectedMeetingId }));
       applyBackendDetail(await window.brevia.meeting.refine({ meeting_id: breviaClient.state.selectedMeetingId }));
       showToast(t('会后精修已完成'));
     } catch (error) { showToast(error.message); }
-    button.disabled = false;
-    button.textContent = t('会后精修');
+    finally {
+      hideRefinementProgress();
+      button.disabled = false;
+      button.textContent = t('会后精修');
+    }
   });
 
   document.querySelector('[data-export-detail]').addEventListener('click', async () => {

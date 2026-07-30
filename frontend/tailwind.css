@@ -18,7 +18,7 @@
 @layer components {
   /* Application shell: persistent navigation and the content workspace. */
   .app-shell { @apply grid min-h-dvh grid-cols-[224px_minmax(0,1fr)] bg-white; }
-  .sidebar { @apply flex flex-col border-r border-[#e5e5e5] px-6 py-8; }
+  .sidebar { @apply sticky top-0 flex h-dvh self-start flex-col border-r border-[#e5e5e5] px-6 py-8; }
   .brand { @apply flex items-center gap-2.5 p-0 text-[20px] font-bold tracking-[-.04em] text-black; }
   .brand-mark { @apply grid size-7 place-items-center bg-black text-[13px] font-normal text-white; }
   .new-meeting { @apply mt-12 border border-black bg-black px-4 py-3 text-left text-[14px] text-white transition-opacity duration-300 hover:opacity-70; }
@@ -27,8 +27,14 @@
   .nav-item { @apply border-l border-transparent px-3 py-2 text-left text-[14px] text-[#666] transition-all duration-300 hover:text-black; }
   .nav-item.active { @apply border-black text-black; }
   .nav-item span { @apply mr-2 inline-block w-6 text-[18px] leading-none font-normal; }
+  .processing-card { @apply mt-auto border border-black bg-white p-4 text-left; }
+  .processing-card p { @apply m-0 text-[12px] text-[#404040]; }
+  .processing-card strong { @apply mt-2 block text-[20px] font-normal tracking-[-.03em]; }
+  .processing-card small { @apply mt-3 block text-[11px] leading-5 text-[#666]; }
+  .processing-bar { @apply mt-3 h-1 overflow-hidden bg-[#e5e5e5]; }
+  .processing-bar i { @apply block h-full origin-left bg-black; transform: scaleX(0); transition: transform .2s ease; }
   .workspace { @apply min-w-0 px-12 pb-16 max-lg:px-8; }
-  .window-bar { @apply flex h-16 select-none items-center border-b border-[#e5e5e5] text-[12px] text-[#999]; -webkit-app-region: drag; }
+  .window-bar { @apply sticky top-0 z-30 flex h-16 select-none items-center border-b border-[#e5e5e5] bg-white text-[12px] text-[#999]; -webkit-app-region: drag; }
   .traffic { @apply hidden; }
   .window-bar > span { @apply uppercase tracking-[.1em]; }
   .icon-button { @apply grid size-9 place-items-center border border-[#e5e5e5] bg-white text-[#404040] transition-opacity duration-300 hover:opacity-70; }
@@ -41,23 +47,32 @@
   .view { @apply hidden max-w-[1280px] py-16 opacity-0; }
   .view.active { @apply block; animation: page-in 260ms ease forwards; }
   .view.leaving { @apply block; animation: page-out 160ms ease forwards; }
+  #home-view { @apply select-none; }
+  #home-view input { @apply select-text; }
   /* Shared page headers and the meeting-library toolbar/list. */
   .page-head, .detail-head { @apply grid grid-cols-12 gap-8; }
-  .page-head > div, .detail-head > div:first-child { @apply col-span-8; }
+  .page-head > div { @apply col-span-8 min-h-56; }
+  .detail-head > div:first-child { @apply col-span-8; }
   .page-head > .primary-action, .detail-actions { @apply col-span-4 justify-self-end self-end; }
   .eyebrow { @apply mb-4 text-[12px] font-normal uppercase tracking-[.12em] text-[#666]; }
+  button.eyebrow { @apply cursor-default; }
   .page-head h1, .prepare-layout h1, .detail-head h1, #settings-view > h1 { @apply m-0 text-[clamp(44px,5vw,72px)] font-light leading-[1.12] tracking-[-.04em] text-black; }
   .page-head p:not(.eyebrow), .intro, .detail-head p:not(.eyebrow) { @apply mt-6 max-w-[600px] text-[17px] leading-[1.8] text-[#404040]; }
   .primary-action { @apply inline-flex items-center justify-center gap-8 border border-black bg-black px-6 py-4 text-[14px] text-white transition-opacity duration-300 hover:opacity-70; }
   .primary-action span { @apply text-lg leading-none; }
   .library-toolbar { @apply mt-16 grid grid-cols-12 gap-6 border-y border-[#e5e5e5] py-6; }
   .search { @apply col-span-7 flex items-center gap-3 text-[#666]; }
-  .search > span { @apply inline-block text-[18px] leading-none; }
+  .search > span { @apply inline-block text-[22px] leading-none; }
   .search input { @apply w-full border-0 bg-transparent text-[15px] outline-none placeholder:text-[#999]; }
+  .library-toolbar .search input, .library-toolbar .flow-select-toggle { @apply h-12; }
   .filter { @apply col-span-2 min-w-0; }
-  .meeting-list { @apply divide-y divide-[#e5e5e5]; }
+  .meeting-list { @apply select-none divide-y divide-[#e5e5e5]; }
   .meeting-row { @apply grid cursor-pointer grid-cols-12 items-center gap-6 py-8 transition-opacity duration-300 hover:opacity-70; }
   .meeting-row:has(.meeting-actions:hover) { opacity: 1; }
+  .meeting-row.is-selected { @apply bg-[#f5f5f5] opacity-100; }
+  .meeting-row:focus-visible { @apply outline-2 outline-offset-[-2px] outline-black; }
+  .meeting-list.is-selecting { @apply cursor-crosshair select-none; }
+  .selection-marquee { @apply pointer-events-none fixed z-40 border border-black bg-black/5; }
   .meeting-color { @apply col-span-1 h-px w-8 bg-black; }
   .meeting-color.mint, .meeting-color.coral { @apply bg-[#999]; }
   .meeting-main { @apply col-span-7; }
@@ -68,15 +83,13 @@
   .tag::before { content: "#"; }
   .meeting-status { @apply col-span-3 justify-self-end text-right; }
   .status { @apply text-[12px] font-normal text-[#404040]; }
-  .status.complete::before { content: "已完成"; }
-  .status.processing::before { content: "处理中"; }
-  html[lang="en"] .status.complete::before { content: "Complete"; }
-  html[lang="en"] .status.processing::before { content: "Processing"; }
-  html[lang="es"] .status.complete::before { content: "Completado"; }
-  html[lang="es"] .status.processing::before { content: "Procesando"; }
-  .status { font-size: 0; }
-  .status::before { font-size: 12px; }
   .meeting-status small { @apply mt-1 block text-[11px] text-[#999]; }
+  .batch-toolbar { @apply sticky top-16 z-20 flex min-h-14 items-center justify-between border-b border-[#e5e5e5] bg-white py-2; }
+  .batch-toolbar strong { @apply text-[13px] font-normal; }
+  .batch-actions { @apply flex items-center gap-2; }
+  .batch-actions > button, .batch-category .flow-select-toggle { @apply h-9 whitespace-nowrap border border-black bg-white px-4 text-[12px] text-black; }
+  .batch-category { @apply w-36; }
+  .batch-delete { @apply border-[#a65b5b]! text-[#a65b5b]!; }
   .meeting-actions { @apply relative col-span-1 justify-self-end; }.more { @apply text-[#999] transition-colors duration-300 hover:text-black; }.meeting-menu, .meeting-rename-menu, .meeting-category-menu { @apply absolute right-0 z-20 w-40 border border-[#ccc] bg-white p-1; }.meeting-menu, .meeting-rename-menu { @apply top-full; }.meeting-category-menu { @apply top-full right-[calc(100%+4px)]; }.meeting-category-menu:not([hidden]) { animation: submenu-in 180ms ease-out both; transform-origin: right top; }.meeting-category-menu.is-closing { animation: submenu-out 180ms ease-in both; }.meeting-menu button, .meeting-category-menu > button { @apply flex w-full items-center justify-between px-3 py-2 text-left text-[13px] text-[#404040] transition-colors duration-300 hover:bg-[#f5f5f5] hover:text-black; }.meeting-menu .meeting-menu-danger { @apply text-[#a65b5b] hover:text-[#a65b5b]; }.meeting-rename-menu form { @apply grid gap-3 p-2 text-[12px] text-[#666]; }.meeting-rename-menu input { @apply mt-1 w-full border border-[#ccc] px-2 py-1.5 text-[13px] text-black outline-none focus:border-black; }.meeting-rename-menu form > span { @apply flex justify-end gap-3; }.meeting-rename-menu button { @apply text-[12px] text-[#404040] hover:text-black; }.meeting-rename-menu button[type=submit] { @apply border border-black bg-black px-2 py-1 text-white hover:opacity-70; }.meeting-category-menu > span { @apply flex items-center; }.meeting-category-menu > button:not(.meeting-menu-back), .meeting-category-menu > span > button:first-child { @apply text-[12px] hover:bg-[#f5f5f5] hover:text-black; }.meeting-category-menu > span > button:first-child { @apply flex-1 py-1.5 text-left; }.meeting-category-delete { @apply px-3 py-1.5 text-[13px] text-[#999] hover:text-[#a65b5b]; }.meeting-menu-back { @apply border-b border-[#e5e5e5]; }.meeting-category-menu form { @apply mt-1 flex border-t border-[#e5e5e5] pt-1; }.meeting-category-menu input { @apply h-7 min-w-0 flex-1 px-2 py-0 text-[12px] outline-none; }.meeting-category-menu form button { @apply h-7 px-2 py-0 text-[12px] text-[#404040] hover:text-black; }
   /* Meeting preparation form, including the reusable recording-source checkbox. */
   .back { @apply mb-12 p-0 text-[13px] text-[#666] transition-colors duration-300 hover:text-[#0066ff]; }
@@ -97,6 +110,9 @@
   .choice b, .choice small { @apply block; }
   .choice small { @apply mt-1 text-[11px] text-[#999]; }
   .choice strong { @apply text-[11px] font-normal text-[#666]; }
+  .choice .input-state { @apply flex items-center gap-2; }
+  .input-meter { @apply relative block h-1 w-9 bg-[#e5e5e5]; }
+  .input-meter::after { content: ""; @apply absolute inset-0 origin-left; background: linear-gradient(90deg, #777 0 55%, #111 55% 80%, #ff0000 80%); transform: scaleX(var(--level, .04)); transition: transform .08s linear; }
   .wide { @apply w-full; }
   .model-card { @apply col-span-4 border-l border-black pl-8; }
   .model-icon { @apply mb-8 grid size-10 place-items-center border border-black text-lg; }
@@ -141,7 +157,7 @@
   /* Completed-meeting detail: player, transcript metadata, and summary sidebar. */
   .detail-head { @apply mb-12; }.detail-actions { @apply flex gap-3; }
   .player { @apply grid grid-cols-[40px_auto_auto_auto_1fr_auto_auto] items-center gap-5 border-y border-[#e5e5e5] py-5 text-[12px] text-[#666]; }
-  .play { @apply grid size-9 place-items-center bg-black text-white; }.skip { @apply transition-opacity duration-300 hover:opacity-70; }.player input[type=range] { @apply m-0 w-full border-0 bg-transparent p-0 accent-black; }.player select { @apply w-auto border-0 p-0 text-[12px]; }
+  .play { @apply grid size-9 place-items-center border border-black bg-black text-white; }.play.is-playing { @apply bg-white text-black; }.skip { @apply transition-opacity duration-300 hover:opacity-70; }.player input[type=range] { @apply m-0 w-full border-0 bg-transparent p-0 accent-black; }.player-speed { @apply w-18; }.player-speed .flow-select-toggle { @apply border-black px-2 py-1 text-[12px]; }.player-speed .flow-select-options { @apply border-black; }
   .detail-layout { @apply mt-16 grid grid-cols-12 gap-8; }.final-transcript { @apply col-span-8 flex h-[560px] min-h-0 flex-col overflow-hidden; }.tabbar { @apply flex shrink-0 gap-8 border-b border-[#e5e5e5]; }.tab { @apply border-b border-transparent pb-4 text-[13px] text-[#666]; }.tab.active { @apply border-black text-black; }.transcript-body { @apply min-h-0 flex-1 overflow-y-auto scroll-smooth pt-8 pr-6; }.final-transcript .segment { @apply mb-6 py-4 pr-4 transition-colors duration-200; }.final-transcript .segment.is-active { @apply bg-[#f2f2ed]; }.jump { @apply mt-2 justify-self-start p-0 text-[11px] text-[#0066ff]; }
   .notes { @apply col-span-4 border-l border-black pl-8; }.notes h2 { @apply mt-5 text-[22px] font-normal leading-[1.6] tracking-[-.025em]; }.notes section { @apply border-t border-[#e5e5e5] py-6; }.notes h3 { @apply m-0 text-[12px] font-normal uppercase tracking-[.1em]; }.notes p, .notes label { @apply text-[13px] leading-7 text-[#666]; }.notes label { @apply grid grid-cols-[auto_1fr] gap-3 py-2; }.notes label small { @apply block text-[11px] text-[#999]; }
   /* Settings cards and model rows; card content comes from the shared UI data. */
@@ -159,7 +175,7 @@
 
 /* Small-screen layout: collapse side-by-side panels without changing component markup. */
 @media (max-width: 850px) {
-  .app-shell { grid-template-columns: 1fr; }.sidebar { display: none; }.workspace { padding: 0 24px 48px; }.view { padding: 48px 0; }.page-head, .detail-head, .prepare-layout, .live-layout, .detail-layout { grid-template-columns: 1fr; }.page-head > div, .detail-head > div:first-child, .page-head > .primary-action, .detail-actions, .prepare-layout > div, .model-card, .transcript, .live-panel, .final-transcript, .notes { grid-column: auto; }.page-head > .primary-action, .detail-actions { justify-self: start; }.library-toolbar { grid-template-columns: 1fr; gap: 16px; margin-top: 48px; }.search, .filter { grid-column: auto; }.meeting-row { grid-template-columns: 32px minmax(0,1fr) 24px; gap: 16px; }.meeting-color, .meeting-main, .more { grid-column: auto; }.meeting-status { display: none; }.form-grid { grid-template-columns: 1fr; }.model-card, .live-panel, .notes { border-left: 0; border-top: 1px solid #e5e5e5; padding: 32px 0 0; }.live-header { grid-template-columns: 1fr auto auto; gap: 12px; }.live-header #timer, .pause-button { display: none; }.live-title { grid-column: auto; }.end-button { grid-column: auto; }.transcript-scroll { max-height: none; }.player { grid-template-columns: 40px auto 1fr auto; gap: 12px; }.player .skip, .player select { display: none; }.settings-grid { grid-template-columns: 1fr; }.settings-card, .settings-card:last-child, .config-card { grid-column: auto; }.config-fields { grid-template-columns: 1fr; }
+  .app-shell { grid-template-columns: 1fr; }.sidebar { display: none; }.workspace { padding: 0 24px 48px; }.view { padding: 48px 0; }.page-head, .detail-head, .prepare-layout, .live-layout, .detail-layout { grid-template-columns: 1fr; }.page-head > div, .detail-head > div:first-child, .page-head > .primary-action, .detail-actions, .prepare-layout > div, .model-card, .transcript, .live-panel, .final-transcript, .notes { grid-column: auto; }.page-head > .primary-action, .detail-actions { justify-self: start; }.library-toolbar { grid-template-columns: 1fr; gap: 16px; margin-top: 48px; }.search, .filter { grid-column: auto; }.meeting-row { grid-template-columns: 32px minmax(0,1fr) 24px; gap: 16px; }.meeting-color, .meeting-main, .more { grid-column: auto; }.meeting-status { display: none; }.batch-toolbar { align-items: flex-start; gap: 8px; flex-direction: column; }.batch-actions { width: 100%; overflow-x: auto; }.form-grid { grid-template-columns: 1fr; }.model-card, .live-panel, .notes { border-left: 0; border-top: 1px solid #e5e5e5; padding: 32px 0 0; }.live-header { grid-template-columns: 1fr auto auto; gap: 12px; }.live-header #timer, .pause-button { display: none; }.live-title { grid-column: auto; }.end-button { grid-column: auto; }.transcript-scroll { max-height: none; }.player { grid-template-columns: 40px auto 1fr auto; gap: 12px; }.player .skip, .player-speed { display: none; }.settings-grid { grid-template-columns: 1fr; }.settings-card, .settings-card:last-child, .config-card { grid-column: auto; }.config-fields { grid-template-columns: 1fr; }.page-head > div { height: auto; overflow: visible; }
 }
 
 /* Motion is limited to view changes and lightweight feedback; reduced-motion rules override it below. */
@@ -183,6 +199,10 @@ html[data-theme="dark"] .app-shell, html[data-theme="dark"] .sidebar, html[data-
 html[data-theme="dark"] .sidebar, html[data-theme="dark"] .window-bar, html[data-theme="dark"] .library-toolbar, html[data-theme="dark"] .meeting-list, html[data-theme="dark"] .settings-card, html[data-theme="dark"] .model-row, html[data-theme="dark"] .tabbar, html[data-theme="dark"] .player, html[data-theme="dark"] .notes section, html[data-theme="dark"] .live-panel section + section, html[data-theme="dark"] .section-heading, html[data-theme="dark"] .model-card, html[data-theme="dark"] .live-panel, html[data-theme="dark"] .notes, html[data-theme="dark"] fieldset { border-color: #404040; }
 html[data-theme="dark"] .final-transcript .segment.is-active { background: #272722; }
 html[data-theme="dark"] .transcript-scroll .segment.is-active { background: #272722; }
+html[data-theme="dark"] .batch-toolbar, html[data-theme="dark"] .batch-actions > button, html[data-theme="dark"] .batch-category .flow-select-toggle { background: #111; color: #fff; border-color: #666; }
+html[data-theme="dark"] .meeting-row.is-selected { background: #262626; }
+html[data-theme="dark"] .meeting-row:focus-visible { outline-color: #fff; }
+html[data-theme="dark"] .selection-marquee { border-color: #fff; background: #ffffff0d; }
 html[data-theme="dark"] .brand, html[data-theme="dark"] .nav-item.active, html[data-theme="dark"] .page-head h1, html[data-theme="dark"] .prepare-layout h1, html[data-theme="dark"] .detail-head h1, html[data-theme="dark"] #settings-view > h1, html[data-theme="dark"] .meeting-main h2, html[data-theme="dark"] .segment p, html[data-theme="dark"] .section-heading h1, html[data-theme="dark"] .model-card h2, html[data-theme="dark"] .settings-card h2, html[data-theme="dark"] .live-title strong, html[data-theme="dark"] dd { color: #fff; }
 html[data-theme="dark"] .page-head p:not(.eyebrow), html[data-theme="dark"] .intro, html[data-theme="dark"] .detail-head p:not(.eyebrow), html[data-theme="dark"] .meeting-main p, html[data-theme="dark"] .segment .translation, html[data-theme="dark"] .notes p, html[data-theme="dark"] .notes label, html[data-theme="dark"] .settings-card > p, html[data-theme="dark"] .model-card > p:not(.eyebrow), html[data-theme="dark"] dt { color: #bbb; }
 html[data-theme="dark"] .icon-button, html[data-theme="dark"] .language-options, html[data-theme="dark"] input:not([type=checkbox]):not([type=range]), html[data-theme="dark"] select { border-color: #666; background: #111; color: #eee; }

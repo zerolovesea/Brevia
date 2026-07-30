@@ -168,6 +168,7 @@ function registerIpc() {
   handle('meeting.update', id.extend({ updates: z.record(z.string(), z.unknown()) }), 'meeting.update');
   handle('meeting.delete', id, 'meeting.delete');
   handle('meeting.restore', id, 'meeting.restore');
+  handle('meeting.purge', id, 'meeting.purge');
   handle('meeting.refine', id.extend({
     num_speakers: z.number().int().min(-1).max(20).optional(),
     cluster_threshold: z.number().min(0).max(1).optional(),
@@ -216,6 +217,21 @@ function registerIpc() {
     if (destination.canceled) return null;
     await copyFile(exported.path, destination.filePath);
     return { ...exported, path: destination.filePath };
+  });
+  ipcMain.handle('meeting.export-many', async (_, payload) => {
+    const value = z.object({ meeting_ids: z.array(z.string().uuid()).min(1).max(200), format: z.enum(['md', 'txt', 'json', 'srt', 'docx', 'pdf', 'flac', 'wav', 'm4a']).default('md') }).parse(payload);
+    const destination = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] });
+    if (destination.canceled) return null;
+    const paths = [];
+    for (const meetingId of value.meeting_ids) {
+      const exported = await worker.request('meeting.export', { meeting_id: meetingId, content: ['flac', 'wav', 'm4a'].includes(value.format) ? 'audio' : 'transcript', format: value.format });
+      const parsed = path.parse(exported.path);
+      let target = path.join(destination.filePaths[0], parsed.base);
+      for (let copy = 2; existsSync(target); copy += 1) target = path.join(destination.filePaths[0], `${parsed.name}-${copy}${parsed.ext}`);
+      await copyFile(exported.path, target);
+      paths.push(target);
+    }
+    return { paths, format: value.format };
   });
   ipcMain.handle('meeting.share', async (_, payload) => {
     const value = id.extend({

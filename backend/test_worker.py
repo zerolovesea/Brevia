@@ -4,6 +4,7 @@ import tempfile
 import unittest
 import wave
 from array import array
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .asr import EnglishPunctuation, SpeakerTracker
@@ -74,6 +75,29 @@ class WorkerTest(unittest.TestCase):
                 },
                 {"seg-1"},
             )
+
+    def test_meeting_search_matches_title_tags_and_transcript(self):
+        meeting = self.worker.start(
+            {
+                "title": "季度路线图",
+                "language": "zh",
+                "streaming_model_id": "paraformer-zh-en-int8",
+                "refined_model_id": "qwen3-asr-0.6b-int8",
+                "tags": ["客户反馈"],
+            }
+        )
+        self.worker.store.save_segment(
+            {
+                "meeting_id": meeting["id"],
+                "segment_id": "mic-0",
+                "text": "下周确认预算",
+                "start_ms": 0,
+                "end_ms": 100,
+                "speaker": "spk-1",
+            }
+        )
+        for query in ("路线图", "客户反馈", "确认预算"):
+            self.assertEqual([item["id"] for item in self.worker.store.list_meetings(query=query)], [meeting["id"]])
 
     def test_translation_is_explicit_and_persisted(self):
         meeting = self.worker.start(
@@ -152,6 +176,22 @@ class WorkerTest(unittest.TestCase):
         self.assertEqual(formatter.apply("HOW ARE YOU"), "How are you?")
         self.assertEqual(formatter.engine.text, "how are you")
 
+    def test_auto_language_detection(self):
+        self.assertEqual(Worker._detect_language("how are you doing today"), "en")
+        self.assertEqual(Worker._detect_language("我们今天讨论产品计划"), "zh")
+
+    def test_refining_status_preserves_meeting(self):
+        meeting = self.worker.start(
+            {
+                "title": "精修状态",
+                "language": "zh",
+                "streaming_model_id": "paraformer-zh-en-int8",
+                "refined_model_id": "qwen3-asr-0.6b-int8",
+            }
+        )
+        self.worker.stop({"meeting_id": meeting["id"], "duration_ms": 0})
+        self.assertEqual(self.worker.store.set_status(meeting["id"], "refining")["status"], "refining")
+
     def test_examples_are_seeded_once_and_delete_audio_immediately(self):
         self.assertTrue(self.worker.store.seed_examples())
         self.assertFalse(self.worker.store.seed_examples())
@@ -172,6 +212,32 @@ class WorkerTest(unittest.TestCase):
             db.execute("DELETE FROM app_meta WHERE key LIKE 'examples_seeded_%'")
         self.assertTrue(self.worker.store.seed_examples())
         self.assertNotIn(meeting["id"], {item["id"] for item in self.worker.store.list_meetings()})
+
+    def test_deleted_meetings_can_be_restored_or_purged_with_files(self):
+        meeting = self.worker.start(
+            {
+                "title": "回收站测试",
+                "language": "zh",
+                "streaming_model_id": "paraformer-zh-en-int8",
+                "refined_model_id": "qwen3-asr-0.6b-int8",
+            }
+        )
+        meeting_dir = self.worker.store.meetings_dir / meeting["id"]
+        self.worker.stop({"meeting_id": meeting["id"], "duration_ms": 0})
+        self.worker.delete_meeting({"meeting_id": meeting["id"]})
+        self.assertEqual(self.worker.store.list_meetings(include_deleted=True)[0]["id"], meeting["id"])
+        self.worker.restore_meeting({"meeting_id": meeting["id"]})
+        self.assertTrue(meeting_dir.exists())
+        self.worker.delete_meeting({"meeting_id": meeting["id"]})
+        with self.worker.store.connect() as db:
+            db.execute(
+                "UPDATE meetings SET deleted_at=? WHERE id=?",
+                ((datetime.now(timezone.utc) - timedelta(days=31)).isoformat(), meeting["id"]),
+            )
+        self.assertEqual(self.worker.store.purge_expired(), [meeting["id"]])
+        self.assertFalse(meeting_dir.exists())
+        with self.assertRaises(ValueError):
+            self.worker.store.get_meeting(meeting["id"])
 
 
 if __name__ == "__main__":

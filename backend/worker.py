@@ -57,6 +57,8 @@ class Worker:
         self.punctuation = None
         self.speaker_tracker = None
         self.stream_state = {}
+        self.meeting_language = None
+        self.detected_language = None
         self.asr_warning_sent = False
 
     def emit(self, event_type, payload):
@@ -95,6 +97,7 @@ class Worker:
             "meeting.update": self.update_meeting,
             "meeting.delete": self.delete_meeting,
             "meeting.restore": self.restore_meeting,
+            "meeting.purge": self.purge_meeting,
             "speaker.rename": self.rename_speaker,
             "terms.list": lambda _: self.store.list_terms(),
             "terms.save": self.store.save_term,
@@ -158,6 +161,8 @@ class Worker:
     def _prepare_active(self, meeting, start_ms=0):
         """建立活动会议的双轨识别状态；模型不可用时仍允许安全录音。"""
         self.active = meeting["id"]
+        self.meeting_language = meeting["language"]
+        self.detected_language = None
         self.stream_state = {
             track: {
                 "start_ms": start_ms,
@@ -241,6 +246,31 @@ class Worker:
             payload["track"], samples, int(payload["sample_rate"]), bool(payload.get("flush"))
         )
         text = result.strip() if isinstance(result, str) else result.text.strip()
+        if self.meeting_language == "auto" and not self.detected_language:
+            detected = self._detect_language(text)
+            if detected:
+                self.detected_language = detected
+                if detected == "en":
+                    try:
+                        self.asr = StreamingASR(
+                            self.models, SETTINGS["asr"]["auto_english_model_id"]
+                        )
+                        self.punctuation = EnglishPunctuation(
+                            self.models, SETTINGS["punctuation"]["english_model_id"]
+                        )
+                        result, _ = self.asr.accept(
+                            payload["track"], numpy.concatenate(state["audio"]), int(payload["sample_rate"])
+                        )
+                        text = result.strip() if isinstance(result, str) else result.text.strip()
+                    except RuntimeError as error:
+                        self.emit(
+                            "worker.warning",
+                            {"meeting_id": self.active, "code": "auto_model_unavailable", "message": str(error)},
+                        )
+                self.emit(
+                    "asr.language",
+                    {"meeting_id": self.active, "language": detected},
+                )
         if self.punctuation:
             text = self.punctuation.apply(text)
         end_ms = int(payload["start_ms"] + len(samples) * 1000 / int(payload["sample_rate"]))
@@ -308,6 +338,7 @@ class Worker:
         self.emit("meeting.stopped", {"meeting_id": self.active, "meeting": meeting})
         self.active, self.asr, self.punctuation = None, None, None
         self.speaker_tracker, self.stream_state = None, {}
+        self.meeting_language, self.detected_language = None, None
         return meeting
 
     def update_meeting(self, payload):
@@ -331,6 +362,14 @@ class Worker:
         require(payload, "meeting_id")
         self.store.soft_delete(payload["meeting_id"], restore=True)
         return self.store.get_meeting(payload["meeting_id"])
+
+    def purge_meeting(self, payload):
+        """永久删除最近删除中的会议及其全部本地文件。"""
+        require(payload, "meeting_id")
+        if payload["meeting_id"] == self.active:
+            raise ValueError("Stop the active meeting before deleting it")
+        self.store.permanent_delete(payload["meeting_id"])
+        return {"meeting_id": payload["meeting_id"], "purged": True}
 
     def rename_speaker(self, payload):
         """保存说话人名称和可选锁定状态，并返回更新后的会议。"""
@@ -527,10 +566,14 @@ class Worker:
         ]
         if not tracks:
             raise ValueError("The meeting has no audio to refine")
+        audio = {
+            track: self._read_wav(meeting["audio"]["playback"][track])
+            for track in tracks
+        }
         speaker_tracker = SpeakerTracker(self.models)
         turns = []
         if len(tracks) == 1:
-            samples, sample_rate = self._read_wav(meeting["audio"]["playback"][tracks[0]])
+            samples, sample_rate = audio[tracks[0]]
             turns = OfflineDiarizer(self.models, num_speakers, threshold).process(
                 samples, sample_rate
             )
@@ -548,38 +591,64 @@ class Worker:
             for segment in meeting["segments"]
             if segment["user_edited"] or segment["speaker"] in locked_ids
         ]
-        for track in tracks:
-            samples, sample_rate = self._read_wav(meeting["audio"]["playback"][track])
-            window = sample_rate * SETTINGS["asr"]["refined_window_seconds"]
-            for offset in range(0, len(samples), window):
-                current = samples[offset : offset + window]
-                text = recognizer.decode(current, sample_rate)
-                if not text:
-                    continue
-                start_ms = round(offset * 1000 / sample_rate)
-                end_ms = start_ms + round(len(current) * 1000 / sample_rate)
-                speaker = self._speaker_for(start_ms, end_ms, locked_segments)
-                if not speaker:
-                    speaker = self._speaker_for(start_ms, end_ms, turns)
-                if not speaker:
-                    speaker = speaker_tracker.assign(current, sample_rate)
-                event = {
-                    "meeting_id": meeting["id"],
-                    "segment_id": f"{track}-{start_ms}",
-                    "version": "postprocess",
-                    "text": text,
-                    "start_ms": start_ms,
-                    "end_ms": end_ms,
-                    "speaker": speaker or ("spk-1" if track == "mic" else "spk-2"),
-                    "track": track,
-                }
-                self.store.save_segment(event)
-                self.emit("refinement.segment", event)
-        with self.store.connect() as db:
-            db.execute("UPDATE meetings SET status='refined' WHERE id=?", (meeting["id"],))
-        result = self.store.get_meeting(meeting["id"])
+        window_size = SETTINGS["asr"]["refined_window_seconds"]
+        total = sum(
+            max(1, -(-len(samples) // (sample_rate * window_size)))
+            for samples, sample_rate in audio.values()
+        )
+        completed = 0
+        self.store.set_status(meeting["id"], "refining")
+        self.emit("refinement.started", {"meeting_id": meeting["id"], "total": total})
+        try:
+            for track in tracks:
+                samples, sample_rate = audio[track]
+                window = sample_rate * window_size
+                for offset in range(0, len(samples), window):
+                    current = samples[offset : offset + window]
+                    text = recognizer.decode(current, sample_rate)
+                    completed += 1
+                    self.emit(
+                        "refinement.progress",
+                        {"meeting_id": meeting["id"], "completed": completed, "total": total},
+                    )
+                    if not text:
+                        continue
+                    start_ms = round(offset * 1000 / sample_rate)
+                    end_ms = start_ms + round(len(current) * 1000 / sample_rate)
+                    speaker = self._speaker_for(start_ms, end_ms, locked_segments)
+                    if not speaker:
+                        speaker = self._speaker_for(start_ms, end_ms, turns)
+                    if not speaker:
+                        speaker = speaker_tracker.assign(current, sample_rate)
+                    event = {
+                        "meeting_id": meeting["id"],
+                        "segment_id": f"{track}-{start_ms}",
+                        "version": "postprocess",
+                        "text": text,
+                        "start_ms": start_ms,
+                        "end_ms": end_ms,
+                        "speaker": speaker or ("spk-1" if track == "mic" else "spk-2"),
+                        "track": track,
+                    }
+                    self.store.save_segment(event)
+                    self.emit("refinement.segment", event)
+        except Exception:
+            self.store.set_status(meeting["id"], "ready")
+            raise
+        result = self.store.set_status(meeting["id"], "refined")
         self.emit("refinement.ready", {"meeting_id": meeting["id"], "meeting": result})
         return result
+
+    @staticmethod
+    def _detect_language(text):
+        """根据首段识别文本选择中文或英文流式模型。"""
+        latin = sum(character.isascii() and character.isalpha() for character in text)
+        han = sum("\u4e00" <= character <= "\u9fff" for character in text)
+        if latin >= 12 and latin > han * 2:
+            return "en"
+        if han:
+            return "zh"
+        return None
 
     @staticmethod
     def _read_wav(path):
