@@ -246,6 +246,28 @@ class EnglishPunctuation:
         return self.engine.add_punctuation_with_case(text.lower()) if text else text
 
 
+class ChinesePunctuation:
+    """使用中英 CT-Transformer 为实时中文结果恢复标点。"""
+
+    def __init__(self, manager, model_id):
+        if not manager.is_ready(model_id):
+            raise RuntimeError(f"Model {model_id} is not installed")
+        import sherpa_onnx
+
+        path = manager.path(model_id)
+        model = sherpa_onnx.OfflinePunctuationModelConfig(
+            ct_transformer=str(path / "model.int8.onnx"),
+            num_threads=manager.device()["threads"],
+            provider=manager.device()["backend"],
+        )
+        self.engine = sherpa_onnx.OfflinePunctuation(
+            sherpa_onnx.OfflinePunctuationConfig(model=model)
+        )
+
+    def apply(self, text):
+        return self.engine.add_punctuation(text) if text else text
+
+
 class SpeakerTracker:
     """按声纹相似度为连续语音分配稳定的会议内说话人 ID。"""
 
@@ -363,7 +385,7 @@ class RefinedASR:
 class OfflineDiarizer:
     """用语音分段、声纹向量和聚类生成单轨说话人时间段。"""
 
-    def __init__(self, manager, num_speakers=None, threshold=None):
+    def __init__(self, manager, num_speakers=None, threshold=None, segmentation_id=None, embedding_id=None):
         """创建离线说话人分离器。
 
         Args:
@@ -372,8 +394,8 @@ class OfflineDiarizer:
             threshold: 聚类阈值；``None`` 使用 ``settings.json`` 的默认值。
         """
         config = SETTINGS["diarization"]
-        segmentation_id = config["segmentation_model_id"]
-        embedding_id = config["embedding_model_id"]
+        segmentation_id = segmentation_id or config["segmentation_model_id"]
+        embedding_id = embedding_id or config["embedding_model_id"]
         if not all(manager.is_ready(model_id) for model_id in (segmentation_id, embedding_id)):
             raise RuntimeError("Speaker diarization models are not installed")
         try:

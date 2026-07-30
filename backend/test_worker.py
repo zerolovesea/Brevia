@@ -3,11 +3,13 @@ import io
 import tempfile
 import unittest
 import wave
+import zipfile
 from array import array
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest.mock import patch
 
-from .asr import EnglishPunctuation, SpeakerTracker
+from .asr import ChinesePunctuation, EnglishPunctuation, SpeakerTracker
 from .worker import Worker
 
 
@@ -62,6 +64,9 @@ class WorkerTest(unittest.TestCase):
             self.assertEqual(mixed[0], 24)
         exported = self.worker.export({"meeting_id": meeting["id"], "format": "srt"})
         self.assertIn("这是联调测试", Path(exported["path"]).read_text())
+        bundle = self.worker.bundle({"meeting_id": meeting["id"]})
+        with zipfile.ZipFile(bundle["path"]) as archive:
+            self.assertEqual({Path(name).suffix for name in archive.namelist()}, {".wav", ".md", ".txt"})
         self.assertTrue(self.worker.store.read_manifest(meeting["id"])["closed"])
 
     def test_summary_requires_valid_evidence(self):
@@ -75,6 +80,63 @@ class WorkerTest(unittest.TestCase):
                 },
                 {"seg-1"},
             )
+
+    def test_cross_track_duplicate_finals_are_suppressed(self):
+        first = {"track": "mic", "text": "我们再一次完整地打一下这一场防疫", "start_ms": 1000, "end_ms": 4000}
+        duplicate = {"track": "system", "text": "我们再一次完整的打一下这一场防疫", "start_ms": 1100, "end_ms": 4100}
+        distinct = {"track": "system", "text": "接下来请产品团队介绍下一步安排", "start_ms": 1100, "end_ms": 4100}
+        self.assertFalse(self.worker._is_duplicate_final(first))
+        self.assertTrue(self.worker._is_duplicate_final(duplicate))
+        self.assertFalse(self.worker._is_duplicate_final(distinct))
+
+    def test_refinement_turns_preserve_speaker_boundaries(self):
+        turns = self.worker._refinement_turns(
+            [{"start_ms": 0, "end_ms": 18000, "speaker": "spk-1"}, {"start_ms": 18000, "end_ms": 21000, "speaker": "spk-2"}],
+            21000,
+            15000,
+        )
+        self.assertEqual([(turn["start_ms"], turn["end_ms"], turn["speaker"]) for turn in turns], [(0, 15000, "spk-1"), (15000, 18000, "spk-1"), (18000, 21000, "spk-2")])
+        self.assertEqual([turn["speaker"] for turn in turns], ["spk-1", "spk-1", "spk-2"])
+
+    def test_bundle_exports_transcript_without_recording(self):
+        meeting = self.worker.start({"title": "无录音", "language": "zh", "streaming_model_id": "paraformer-zh-en-int8", "refined_model_id": "qwen3-asr-0.6b-int8"})
+        self.worker.stop({"meeting_id": meeting["id"], "duration_ms": 0})
+        bundle = self.worker.bundle({"meeting_id": meeting["id"]})
+        self.assertFalse(bundle["recording_included"])
+
+    def test_stop_persists_the_last_partial_transcript(self):
+        meeting = self.worker.start(
+            {
+                "title": "收尾保存",
+                "language": "zh",
+                "streaming_model_id": "paraformer-zh-en-int8",
+                "refined_model_id": "qwen3-asr-0.6b-int8",
+            }
+        )
+
+        class PartialOnlyASR:
+            def accept(self, _track, samples, _sample_rate, flush=False):
+                return ("", True) if flush else ("停止前的实时字幕", False)
+
+        self.worker.asr = PartialOnlyASR()
+        class Samples(list):
+            def __truediv__(self, _value):
+                return self
+
+        numpy = type("Numpy", (), {"float32": float, "asarray": staticmethod(lambda values, dtype: Samples(values))})
+        with patch.dict("sys.modules", {"numpy": numpy}):
+            self.worker.audio(
+                {
+                    "meeting_id": meeting["id"],
+                    "track": "mic",
+                    "pcm": base64.b64encode(b"\x10\x00" * 1600).decode(),
+                    "sample_rate": 16000,
+                    "start_ms": 0,
+                }
+            )
+            self.worker.stop({"meeting_id": meeting["id"], "duration_ms": 100})
+        segments = self.worker.store.get_meeting(meeting["id"])["segments"]
+        self.assertEqual([segment["text"] for segment in segments], ["停止前的实时字幕"])
 
     def test_meeting_search_matches_title_tags_and_transcript(self):
         meeting = self.worker.start(
@@ -175,6 +237,18 @@ class WorkerTest(unittest.TestCase):
         formatter.engine = Engine()
         self.assertEqual(formatter.apply("HOW ARE YOU"), "How are you?")
         self.assertEqual(formatter.engine.text, "how are you")
+
+    def test_chinese_punctuation_preserves_model_sentence_boundaries(self):
+        formatter = ChinesePunctuation.__new__(ChinesePunctuation)
+
+        class Engine:
+            def add_punctuation(self, text):
+                self.text = text
+                return "我们都是木头人，不会说话不会动。"
+
+        formatter.engine = Engine()
+        self.assertEqual(formatter.apply("我们都是木头人不会说话不会动"), "我们都是木头人，不会说话不会动。")
+        self.assertEqual(formatter.engine.text, "我们都是木头人不会说话不会动")
 
     def test_auto_language_detection(self):
         self.assertEqual(Worker._detect_language("how are you doing today"), "en")

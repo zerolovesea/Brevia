@@ -27,6 +27,9 @@ CREATE TABLE IF NOT EXISTS meetings (
   target_language TEXT,
   streaming_model_id TEXT NOT NULL,
   refined_model_id TEXT NOT NULL,
+  speaker_segmentation_model_id TEXT,
+  speaker_embedding_model_id TEXT,
+  num_speakers INTEGER NOT NULL DEFAULT -1,
   category TEXT NOT NULL DEFAULT '',
   tags TEXT NOT NULL DEFAULT '[]',
   status TEXT NOT NULL,
@@ -120,6 +123,12 @@ class Store:
                 db.execute("ALTER TABLE meetings ADD COLUMN is_example INTEGER NOT NULL DEFAULT 0")
             if "example_locale" not in columns:
                 db.execute("ALTER TABLE meetings ADD COLUMN example_locale TEXT")
+            if "speaker_segmentation_model_id" not in columns:
+                db.execute("ALTER TABLE meetings ADD COLUMN speaker_segmentation_model_id TEXT")
+            if "speaker_embedding_model_id" not in columns:
+                db.execute("ALTER TABLE meetings ADD COLUMN speaker_embedding_model_id TEXT")
+            if "num_speakers" not in columns:
+                db.execute("ALTER TABLE meetings ADD COLUMN num_speakers INTEGER NOT NULL DEFAULT -1")
 
     @contextmanager
     def connect(self):
@@ -156,6 +165,9 @@ class Store:
             payload.get("target_language"),
             payload["streaming_model_id"],
             payload["refined_model_id"],
+            payload.get("speaker_segmentation_model_id"),
+            payload.get("speaker_embedding_model_id"),
+            int(payload.get("num_speakers", -1)),
             payload.get("category", ""),
             json.dumps(payload.get("tags", []), ensure_ascii=False),
             "recording",
@@ -166,8 +178,8 @@ class Store:
             db.execute(
                 """INSERT INTO meetings
                 (id,title,language,target_language,streaming_model_id,refined_model_id,
-                 category,tags,status,created_at,started_at)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                 speaker_segmentation_model_id,speaker_embedding_model_id,num_speakers,category,tags,status,created_at,started_at)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 values,
             )
         meeting_dir = self.meetings_dir / meeting_id

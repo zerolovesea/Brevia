@@ -10,10 +10,13 @@ import subprocess
 import sys
 import time
 import urllib.request
+import zipfile
 from array import array
+from difflib import SequenceMatcher
 from pathlib import Path
 
 from .asr import (
+    ChinesePunctuation,
     EnglishPunctuation,
     ModelManager,
     OfflineDiarizer,
@@ -57,6 +60,7 @@ class Worker:
         self.punctuation = None
         self.speaker_tracker = None
         self.stream_state = {}
+        self.recent_finals = []
         self.meeting_language = None
         self.detected_language = None
         self.asr_warning_sent = False
@@ -106,6 +110,7 @@ class Worker:
             "models.download": self.download_model,
             "models.delete": self.delete_model,
             "meeting.export": self.export,
+            "meeting.bundle": self.bundle,
             "meeting.refine": self.refine,
             "summary.generate": self.summarize,
             "translation.generate": self.translate,
@@ -173,6 +178,7 @@ class Worker:
             }
             for track in ("mic", "system")
         }
+        self.recent_finals = []
         try:
             self.asr = StreamingASR(self.models, meeting["streaming_model_id"])
         except RuntimeError as error:
@@ -185,6 +191,17 @@ class Worker:
             try:
                 self.punctuation = EnglishPunctuation(
                     self.models, SETTINGS["punctuation"]["english_model_id"]
+                )
+            except RuntimeError as error:
+                self.punctuation = None
+                self.emit(
+                    "worker.warning",
+                    {"meeting_id": self.active, "code": "punctuation_unavailable", "message": str(error)},
+                )
+        elif meeting["language"] in {"zh", "yue", "auto"}:
+            try:
+                self.punctuation = ChinesePunctuation(
+                    self.models, SETTINGS["punctuation"]["chinese_model_id"]
                 )
             except RuntimeError as error:
                 self.punctuation = None
@@ -246,6 +263,8 @@ class Worker:
             payload["track"], samples, int(payload["sample_rate"]), bool(payload.get("flush"))
         )
         text = result.strip() if isinstance(result, str) else result.text.strip()
+        if final and not text:
+            text = state["last_text"]
         if self.meeting_language == "auto" and not self.detected_language:
             detected = self._detect_language(text)
             if detected:
@@ -294,8 +313,13 @@ class Worker:
             }
             state["last_text"] = text
             if final:
-                self.store.save_segment(event)
-            self.emit("transcript.final" if final else "transcript.partial", event)
+                if self._is_duplicate_final(event):
+                    self.emit("transcript.discarded", {"meeting_id": self.active, "segment_id": segment_id})
+                else:
+                    self.store.save_segment(event)
+                    self.emit("transcript.final", event)
+            elif not final:
+                self.emit("transcript.partial", event)
             if final:
                 state.update(
                     start_ms=end_ms,
@@ -337,7 +361,7 @@ class Worker:
         meeting = self.store.finish_meeting(self.active, payload["duration_ms"])
         self.emit("meeting.stopped", {"meeting_id": self.active, "meeting": meeting})
         self.active, self.asr, self.punctuation = None, None, None
-        self.speaker_tracker, self.stream_state = None, {}
+        self.speaker_tracker, self.stream_state, self.recent_finals = None, {}, []
         self.meeting_language, self.detected_language = None, None
         return meeting
 
@@ -454,6 +478,27 @@ class Worker:
             path.write_text(content, encoding="utf-8")
         return {"path": str(path), "format": export_format}
 
+    def bundle(self, payload):
+        """打包本地录音与 Markdown、TXT 逐字稿。"""
+        require(payload, "meeting_id")
+        meeting = self.store.get_meeting(payload["meeting_id"])
+        directory = self.store.meetings_dir / meeting["id"] / "exports"
+        directory.mkdir(parents=True, exist_ok=True)
+        safe_title = re.sub(r'[<>:"/\\|?*]+', "-", meeting["title"]).strip() or meeting["id"]
+        audio = next(
+            (meeting["audio"]["playback"].get(track) for track in ("mix", "mic", "system") if meeting["audio"]["playback"].get(track)),
+            None,
+        )
+        markdown = self.export({"meeting_id": meeting["id"], "format": "md"})["path"]
+        plain_text = self.export({"meeting_id": meeting["id"], "format": "txt"})["path"]
+        bundle = directory / f"{safe_title}.zip"
+        with zipfile.ZipFile(bundle, "w", zipfile.ZIP_DEFLATED) as archive:
+            if audio:
+                archive.write(audio, arcname=f"{safe_title}.wav")
+            archive.write(markdown, arcname=f"{safe_title}.md")
+            archive.write(plain_text, arcname=f"{safe_title}.txt")
+        return {"path": str(bundle), "format": "zip", "recording_included": bool(audio)}
+
     def _export_audio(self, meeting, path, export_format, track):
         """通过 ffmpeg 导出单轨或归一化混音。
 
@@ -535,7 +580,7 @@ class Worker:
         return destination
 
     def refine(self, payload):
-        """对停止后的会议执行会后转写和单轨说话人聚类。
+        """对停止后的会议执行会后转写和说话人聚类。
 
         Args:
             payload: 会议 ID；可选已知说话人数和聚类阈值。
@@ -544,14 +589,14 @@ class Worker:
             状态更新为 ``refined`` 的会议详情。
 
         Notes:
-            双轨会议沿用音轨身份；单轨会议先生成 diarization 时间段。人工编辑
-            或锁定的说话人优先于聚类结果。
+            优先使用混音轨生成跨音轨的说话人时间段。人工编辑或锁定的说话人
+            优先于聚类结果。
         """
         require(payload, "meeting_id")
         meeting = self.store.get_meeting(payload["meeting_id"])
         if meeting["status"] == "recording":
             raise ValueError("Stop the meeting before refinement")
-        num_speakers = int(payload.get("num_speakers", SETTINGS["diarization"]["num_speakers"]))
+        num_speakers = int(payload.get("num_speakers", meeting.get("num_speakers", SETTINGS["diarization"]["num_speakers"])))
         threshold = float(
             payload.get("cluster_threshold", SETTINGS["diarization"]["cluster_threshold"])
         )
@@ -559,11 +604,11 @@ class Worker:
             raise ValueError("num_speakers must be -1 or a positive integer")
         if not 0 <= threshold <= 1:
             raise ValueError("cluster_threshold must be between 0 and 1")
-        tracks = [
-            track
-            for track in ("mic", "system")
-            if meeting["audio"]["playback"].get(track)
-        ]
+        track = next(
+            (name for name in ("mix", "mic", "system") if meeting["audio"]["playback"].get(name)),
+            None,
+        )
+        tracks = [track] if track else []
         if not tracks:
             raise ValueError("The meeting has no audio to refine")
         audio = {
@@ -571,18 +616,13 @@ class Worker:
             for track in tracks
         }
         speaker_tracker = SpeakerTracker(self.models)
-        turns = []
-        if len(tracks) == 1:
-            samples, sample_rate = audio[tracks[0]]
-            turns = OfflineDiarizer(self.models, num_speakers, threshold).process(
-                samples, sample_rate
-            )
-            turns = self._relabel_turns(samples, sample_rate, turns, speaker_tracker)
-            self.store.replace_speaker_turns(meeting["id"], turns)
-            self.emit(
-                "diarization.ready",
-                {"meeting_id": meeting["id"], "track": tracks[0], "turns": turns},
-            )
+        samples, sample_rate = audio[tracks[0]]
+        turns = OfflineDiarizer(self.models, num_speakers, threshold, meeting.get("speaker_segmentation_model_id"), meeting.get("speaker_embedding_model_id")).process(samples, sample_rate)
+        self.store.replace_speaker_turns(meeting["id"], turns)
+        self.emit(
+            "diarization.ready",
+            {"meeting_id": meeting["id"], "track": tracks[0], "turns": turns},
+        )
         terms = [item["text"] for item in self.store.list_terms()][:200]
         recognizer = RefinedASR(self.models, meeting["refined_model_id"], terms)
         locked_ids = {speaker["id"] for speaker in meeting["speakers"] if speaker["locked"]}
@@ -592,19 +632,18 @@ class Worker:
             if segment["user_edited"] or segment["speaker"] in locked_ids
         ]
         window_size = SETTINGS["asr"]["refined_window_seconds"]
-        total = sum(
-            max(1, -(-len(samples) // (sample_rate * window_size)))
-            for samples, sample_rate in audio.values()
-        )
+        windows = self._refinement_turns(turns, len(samples) * 1000 // sample_rate, window_size * 1000)
+        total = len(windows)
         completed = 0
         self.store.set_status(meeting["id"], "refining")
         self.emit("refinement.started", {"meeting_id": meeting["id"], "total": total})
         try:
             for track in tracks:
-                samples, sample_rate = audio[track]
-                window = sample_rate * window_size
-                for offset in range(0, len(samples), window):
-                    current = samples[offset : offset + window]
+                for turn in windows:
+                    start_ms, end_ms = turn["start_ms"], turn["end_ms"]
+                    start = round(start_ms * sample_rate / 1000)
+                    end = round(end_ms * sample_rate / 1000)
+                    current = samples[start:end]
                     text = recognizer.decode(current, sample_rate)
                     completed += 1
                     self.emit(
@@ -613,11 +652,9 @@ class Worker:
                     )
                     if not text:
                         continue
-                    start_ms = round(offset * 1000 / sample_rate)
-                    end_ms = start_ms + round(len(current) * 1000 / sample_rate)
                     speaker = self._speaker_for(start_ms, end_ms, locked_segments)
                     if not speaker:
-                        speaker = self._speaker_for(start_ms, end_ms, turns)
+                        speaker = turn["speaker"]
                     if not speaker:
                         speaker = speaker_tracker.assign(current, sample_rate)
                     event = {
@@ -638,6 +675,40 @@ class Worker:
         result = self.store.set_status(meeting["id"], "refined")
         self.emit("refinement.ready", {"meeting_id": meeting["id"], "meeting": result})
         return result
+
+    @staticmethod
+    def _refinement_turns(turns, duration_ms, maximum_ms):
+        """按离线说话人边界拆分精修窗口，且单段不超过模型上限。"""
+        source = turns or [{"start_ms": 0, "end_ms": duration_ms, "speaker": None}]
+        return [
+            {"start_ms": start, "end_ms": min(start + maximum_ms, turn["end_ms"]), "speaker": turn["speaker"]}
+            for turn in source
+            for start in range(turn["start_ms"], turn["end_ms"], maximum_ms)
+        ]
+
+    @staticmethod
+    def _normalized_transcript(text):
+        return re.sub(r"[\W_]+", "", text).lower()
+
+    def _is_duplicate_final(self, event):
+        """过滤麦克风与系统音频对同一句话的重复识别。"""
+        text = self._normalized_transcript(event["text"])
+        if len(text) < 8:
+            return False
+        start_ms, end_ms = event["start_ms"], event["end_ms"]
+        self.recent_finals = [
+            item for item in self.recent_finals
+            if item["end_ms"] >= start_ms - 2000 and item["start_ms"] <= end_ms + 2000
+        ]
+        # ponytail: text/timing heuristic; add audio fingerprinting if false matches become measurable.
+        duplicate = any(
+            item["track"] != event["track"]
+            and SequenceMatcher(None, text, item["text"]).ratio() >= 0.75
+            for item in self.recent_finals
+        )
+        if not duplicate:
+            self.recent_finals.append({"track": event["track"], "text": text, "start_ms": start_ms, "end_ms": end_ms})
+        return duplicate
 
     @staticmethod
     def _detect_language(text):
@@ -678,15 +749,6 @@ class Worker:
         ]
         overlap, speaker = max(overlaps, default=(0, None))
         return speaker if overlap > 0 else None
-
-    @staticmethod
-    def _relabel_turns(samples, sample_rate, turns, tracker):
-        """用共享声纹聚类器把 diarization 的局部标签归并为稳定顺序 ID。"""
-        for turn in turns:
-            start = round(turn["start_ms"] * sample_rate / 1000)
-            end = round(turn["end_ms"] * sample_rate / 1000)
-            turn["speaker"] = tracker.assign(samples[start:end], sample_rate)
-        return turns
 
     def summarize(self, payload):
         """把逐字稿发送到用户确认的 LLM，并保存可追溯纪要。

@@ -10,7 +10,7 @@ const miniTimer = document.querySelector('#mini-timer');
 const refinementCard = document.querySelector('#refinement-progress');
 const refinementPercent = document.querySelector('#refinement-percent');
 const refinementBar = document.querySelector('#refinement-bar');
-const { catalog } = window.BreviaLocaleData;
+const { catalog, appCopy: { stageLabels, themeLabels, updateLabels, modalCopy, modelLabels, summaryModelCopy } } = window.BreviaLocaleData;
 let locale = localStorage.getItem('brevia-language') || 'zh';
 let theme = localStorage.getItem('brevia-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
 let activeView = 'home';
@@ -23,26 +23,14 @@ let switchingLanguage = false;
 let meetingActive = false;
 let translationAllowed = false;
 const translatedNodes = [];
-const stageLabels = {
-  标点恢复: { zh: '标点恢复', en: 'Punctuation restoration', es: 'Restauración de puntuación' },
-};
 /** Resolves a display label for the active locale. @param {string} key Chinese source label. @returns {string} Localized label or the original key. */
-const t = (key) => stageLabels[key]?.[locale] || catalog[locale].labels[key] || key;
+const t = (key) => stageLabels[key]?.[locale] || stageLabels[key]?.en || catalog[locale].labels[key] || key;
 /** Resolves a transient message for the active locale. @param {string} key Message identifier. @returns {string} Localized message. */
 const message = (key) => catalog[locale].messages[key];
+function formatBytes(bytes = 0) { return bytes >= 1024 ** 3 ? `${(bytes / 1024 ** 3).toFixed(2)} GB` : bytes >= 1024 ** 2 ? `${(bytes / 1024 ** 2).toFixed(1)} MB` : `${Math.round(bytes / 1024)} KB`; }
 const defaultCategories = ['产品', '设计', '外部会议'];
 let categories = JSON.parse(localStorage.getItem('brevia-categories') || 'null') || defaultCategories;
 renderStaticViews();
-const themeLabels = {
-  zh: { light: '切换至浅色主题', dark: '切换至深色主题' },
-  en: { light: 'Switch to light theme', dark: 'Switch to dark theme' },
-  es: { light: 'Cambiar al tema claro', dark: 'Cambiar al tema oscuro' }
-};
-const updateLabels = {
-  zh: { title: '软件更新', description: '当前版本 0.1.0', action: '检查更新', checking: '正在检查…', available: '发现新版本 0.2.0', update: '更新至 0.2.0', floating: '更新 Brevia', updating: '正在更新…', current: '已是最新版本' },
-  en: { title: 'Software updates', description: 'Current version 0.1.0', action: 'Check for updates', checking: 'Checking…', available: 'Version 0.2.0 is available', update: 'Update to 0.2.0', floating: 'Update Brevia', updating: 'Updating…', current: 'Up to date' },
-  es: { title: 'Actualizaciones', description: 'Versión actual 0.1.0', action: 'Buscar actualizaciones', checking: 'Comprobando…', available: 'La versión 0.2.0 está disponible', update: 'Actualizar a 0.2.0', floating: 'Actualizar Brevia', updating: 'Actualizando…', current: 'Ya está actualizado' }
-};
 const updateCard = document.createElement('section');
 updateCard.className = 'update-card';
 updateCard.innerHTML = '<div><h2></h2><p></p></div><button class="update-button" type="button"></button>';
@@ -65,36 +53,17 @@ function updateCopy() { return updateLabels[locale] || { ...updateLabels.en, tit
 function renderUpdateNotice() { const copy = updateCopy(); updateNoticeText.textContent = copy.available; updateNoticeButton.textContent = copy.floating; updateNotice.hidden = !updateAvailable; requestAnimationFrame(syncFloatingNotices); }
 /** Renders the settings-page update action from current locale and availability state. @returns {void} */
 function renderUpdateButton() { const copy = updateCopy(); updateTitle.textContent = copy.title; updateDescription.textContent = updateAvailable ? copy.available : copy.description; updateButton.textContent = updateAvailable ? copy.update : copy.action; updateButton.disabled = false; }
-const modalCopy = {
-  zh: {
-    models: { title: '模型库', intro: '所有转写模型都在本地运行，不会将您的隐私上传到网络。', languages: '建议语言', items: [['实时字幕', 'Streaming Paraformer', '中文 / 英语 / 粤语', '原生流式识别，持续更新当前字幕。', '⌁'], ['会后精修', 'Qwen3-ASR', '多语种', '基于完整录音生成高精度修订版本。', 'Q'], ['说话人分离', 'Pyannote Segmentation 3.0', '语言无关', '检测单轨录音中的说话区间。', 'P'], ['说话人分离', '3D-Speaker ERes2Net Base', '中文', '提取声纹并离线聚类说话人。', '3D']] },
-    terms: { title: '管理术语库', intro: '术语用于会议准备、搜索和纪要。仅支持的模型会在转写中使用它们。', items: [['Brevia', '产品名称'], ['向量数据库', '技术术语'], ['CAM++', '说话人模型']], add: '添加术语', edit: '编辑', save: '保存', cancel: '取消', remove: '删除', placeholder: '输入术语或短语' },
-    storage: { title: '本地存储', intro: '所有会议资料均保存在此设备。', items: [['会议与录音', '8.4 GB'], ['模型文件', '1.7 GB'], ['导出文件', '240 MB']] }, close: '关闭', download: '下载' },
-  en: {
-    models: { title: 'Model library', intro: 'All transcription models run locally. Your private data is never uploaded to the network.', languages: 'Recommended languages', items: [['Live captions', 'Streaming Paraformer', 'Chinese / English / Cantonese', 'Native streaming recognition that continuously updates the active caption.', '⌁'], ['Post-meeting refinement', 'Qwen3-ASR', 'Multilingual', 'Creates a high-accuracy revision from the complete recording.', 'Q'], ['Speaker diarization', 'Pyannote Segmentation 3.0', 'Language independent', 'Detects speaker regions in a single-track recording.', 'P'], ['Speaker diarization', '3D-Speaker ERes2Net Base', 'Chinese', 'Extracts speaker embeddings for offline clustering.', '3D']] },
-    terms: { title: 'Manage terms', intro: 'Terms support meeting preparation, search, and notes. Only supported models use them in transcription.', items: [['Brevia', 'Product name'], ['Vector database', 'Technical term'], ['CAM++', 'Speaker model']], add: 'Add term', edit: 'Edit', save: 'Save', cancel: 'Cancel', remove: 'Delete', placeholder: 'Enter a term or phrase' },
-    storage: { title: 'Local storage', intro: 'All meeting data stays on this device.', items: [['Meetings and recordings', '8.4 GB'], ['Model files', '1.7 GB'], ['Exports', '240 MB']] }, close: 'Close', download: 'Download' },
-  es: {
-    models: { title: 'Biblioteca de modelos', intro: 'Todos los modelos de transcripción se ejecutan localmente. Tus datos privados nunca se suben a la red.', languages: 'Idiomas recomendados', items: [['Subtítulos en vivo', 'Streaming Paraformer', 'Chino / inglés / cantonés', 'Reconocimiento nativo en streaming que actualiza el subtítulo activo.', '⌁'], ['Refinamiento posterior', 'Qwen3-ASR', 'Multilingüe', 'Crea una revisión precisa a partir de la grabación completa.', 'Q'], ['Separación de hablantes', 'Pyannote Segmentation 3.0', 'Independiente del idioma', 'Detecta regiones de habla en una grabación de una pista.', 'P'], ['Separación de hablantes', '3D-Speaker ERes2Net Base', 'Chino', 'Extrae huellas de voz para agrupar hablantes sin conexión.', '3D']] },
-    terms: { title: 'Gestionar términos', intro: 'Los términos sirven para preparar reuniones, buscar y crear notas. Solo los modelos compatibles los usan al transcribir.', items: [['Brevia', 'Nombre del producto'], ['Base de datos vectorial', 'Término técnico'], ['CAM++', 'Modelo de hablantes']], add: 'Añadir término', edit: 'Editar', save: 'Guardar', cancel: 'Cancelar', remove: 'Eliminar', placeholder: 'Escribe un término o frase' },
-    storage: { title: 'Almacenamiento local', intro: 'Todos los datos de reuniones permanecen en este dispositivo.', items: [['Reuniones y grabaciones', '8.4 GB'], ['Archivos de modelos', '1.7 GB'], ['Exportaciones', '240 MB']] }, close: 'Cerrar', download: 'Descargar' }
-};
 const modelIds = [
   'paraformer-zh-en-int8',
+  'zipformer-en-streaming-int8',
+  'online-punct-en-int8',
+  'punct-ct-transformer-zh-en-int8',
   'qwen3-asr-0.6b-int8',
   'pyannote-segmentation-3.0',
   'eres2net-base-3dspeaker-zh',
+  'zipformer-zh-xlarge-streaming-int8',
 ];
-const modelLabels = {
-  zh: { manage: '管理模型库', download: '下载', downloading: '下载中…', installed: '已安装', remove: '删除' },
-  en: { manage: 'Manage model library', download: 'Download', downloading: 'Downloading…', installed: 'Installed', remove: 'Delete' },
-  es: { manage: 'Gestionar biblioteca de modelos', download: 'Descargar', downloading: 'Descargando…', installed: 'Instalado', remove: 'Eliminar' }
-};
-const summaryModelCopy = {
-  zh: { title: '管理纪要模型', intro: '所有配置信息仅保存在本地，不会上传。', name: '配置名', provider: '供应商', key: 'API Key', endpoint: '请求地址', format: 'API 格式', model: '主模型', save: '保存配置', add: '新建配置', remove: '删除配置', configured: '已配置模型', active: '正在使用', promptTitle: '总结提示词', promptIntro: '该提示词将用于生成 AI 会议纪要。', jsonTitle: '配置 JSON', jsonIntro: '当前启用的纪要模型配置。', ollama: '本地 Ollama', openAIFormat: 'OpenAI 格式', claudeFormat: 'Claude 格式' },
-  en: { title: 'Manage summary models', intro: 'All configuration stays on this device and is never uploaded.', name: 'Configuration name', provider: 'Provider', key: 'API Key', endpoint: 'Request URL', format: 'API format', model: 'Primary model', save: 'Save configuration', add: 'New configuration', remove: 'Delete configuration', configured: 'Configured models', active: 'In use', promptTitle: 'Summary prompt', promptIntro: 'This prompt is used to generate AI meeting notes.', jsonTitle: 'Configuration JSON', jsonIntro: 'The active summary model configuration.', ollama: 'Local Ollama', openAIFormat: 'OpenAI format', claudeFormat: 'Claude format' },
-  es: { title: 'Gestionar modelos de resumen', intro: 'Toda la configuración se guarda en este dispositivo y no se carga.', name: 'Nombre de configuración', provider: 'Proveedor', key: 'API Key', endpoint: 'URL de solicitud', format: 'Formato de API', model: 'Modelo principal', save: 'Guardar configuración', add: 'Nueva configuración', remove: 'Eliminar configuración', configured: 'Modelos configurados', active: 'En uso', promptTitle: 'Prompt de resumen', promptIntro: 'Este prompt se usa para generar notas de reunión con IA.', jsonTitle: 'JSON de configuración', jsonIntro: 'La configuración activa del modelo de resumen.', ollama: 'Ollama local', openAIFormat: 'Formato OpenAI', claudeFormat: 'Formato Claude' }
-};
+const modelSizes = [1047319737, 310414022, 30667839, 64717756, 878702423, 6958444, 39593761, 597755927];
 const summaryProviders = ['OpenAI', 'Anthropic', 'Kimi', 'Zhipu GLM', 'MiniMax', 'DeepSeek', 'OpenRouter', 'Ollama'];
 const defaultSummaryModels = [{ name: '配置-1', provider: 'OpenAI', endpoint: 'https://api.openai.com/v1/chat/completions', format: 'openai', model: 'gpt-4.1-mini' }];
 const savedSummaryConfig = JSON.parse(localStorage.getItem('brevia-summary-config') || 'null');
@@ -120,6 +89,7 @@ settingsModal.hidden = true;
 settingsModal.innerHTML = '<section class="modal-panel" role="dialog" aria-modal="true"><header class="modal-head"><div class="modal-title"><h2></h2><p></p></div><button class="modal-close" type="button" aria-label="Close">×</button></header><div class="modal-body"></div></section>';
 document.body.append(settingsModal);
 let activeModal;
+const modelDownloads = new Map();
 let termEntries = modalCopy.zh.terms.items.map(([name, detail]) => ({ name, detail }));
 let editingTermIndex = null;
 let activeCategory = '';
@@ -195,22 +165,74 @@ meetingTitle.addEventListener('input', () => { meetingTitleEdited = true; });
 function renderPrepareSelects() {
   const values = Object.fromEntries(new FormData(prepareForm));
   const categoryOptions = [['', t('未分类')], ...categories.map((name) => [name, name])];
-  prepareForm.querySelector('.form-grid').innerHTML = `<label>${t('会议语言')}${flowSelect('meeting-language', values['meeting-language'] || 'auto', BreviaI18n.languageOptions(locale, t, true))}</label><label>${t('译文目标')}${flowSelect('translation-target', values['translation-target'] || '', BreviaI18n.languageOptions(locale, t))}</label><label>${t('分类标签')}${flowSelect('meeting-category', values['meeting-category'] || '', categoryOptions)}</label>`;
+  prepareForm.querySelector('.form-grid').innerHTML = `<label>${t('会议语言')}${flowSelect('meeting-language', values['meeting-language'] || 'auto', BreviaI18n.languageOptions(locale, t, true))}</label><label>${t('译文目标')}${flowSelect('translation-target', values['translation-target'] || '', BreviaI18n.languageOptions(locale, t))}</label><label>${t('预期说话人数')}<input name="num-speakers" type="number" min="1" step="1" value="${values['num-speakers'] || ''}" placeholder="${t('留空自动匹配')}" /></label><label>${t('分类标签')}${flowSelect('meeting-category', values['meeting-category'] || '', categoryOptions)}</label>`;
 }
-renderPrepareSelects();
+const prepareModelChoices = {
+  'active-streaming-model': [['', null], ['zipformer-zh-xlarge-streaming-int8', 'Streaming Zipformer Chinese XLarge'], ['paraformer-zh-en-int8', 'Streaming Paraformer'], ['zipformer-en-streaming-int8', 'Streaming Zipformer English']],
+  'active-diarization-model': [['|', null], ['pyannote-segmentation-3.0|eres2net-base-3dspeaker-zh', 'Pyannote + 3D-Speaker']],
+  'active-refined-model': [['', null], ['qwen3-asr-0.6b-int8', 'Qwen3-ASR']],
+};
+const prepareModelCard = document.querySelector('.model-card');
+const modelPicker = document.createElement('div');
+modelPicker.className = 'flow-select-options model-picker';
+modelPicker.hidden = true;
+prepareModelCard.append(modelPicker);
+prepareModelCard.addEventListener('click', (event) => {
+  const choice = event.target.closest('[data-model-picker-choice]');
+  if (!choice) return;
+  const value = document.querySelector(`#${choice.dataset.modelPickerChoice}`);
+  const [first, second] = choice.dataset.value.split('|');
+  if (value.id === 'active-streaming-model') prepareForm.dataset.streamingModel = first;
+  if (value.id === 'active-diarization-model') { prepareForm.dataset.segmentationModel = first; prepareForm.dataset.embeddingModel = second; }
+  if (value.id === 'active-refined-model') prepareForm.dataset.refinedModel = first;
+  value.dataset.model = choice.dataset.value;
+  value.textContent = choice.textContent;
+  modelPicker.hidden = true;
+});
+prepareModelCard.addEventListener('dblclick', (event) => {
+  const value = event.target.closest('dd[id]');
+  const choices = value && prepareModelChoices[value.id];
+  if (!choices) return;
+  modelPicker.innerHTML = choices.map(([id, name]) => `<button type="button" data-model-picker-choice="${value.id}" data-value="${id}">${name || t('自动匹配')}</button>`).join('');
+  modelPicker.style.top = `${value.offsetTop + value.offsetHeight + 4}px`;
+  modelPicker.hidden = false;
+});
+document.addEventListener('click', (event) => { if (!event.target.closest('.model-card')) modelPicker.hidden = true; });
 if (breviaClient) {
   breviaClient.onLevel = (track, level) => {
     if (track === 'mic') document.querySelector('#mic-level').style.setProperty('--level', Math.max(.04, level));
   };
 }
+async function previewMicrophone() {
+  if (!breviaClient || !prepareForm.querySelector('[name="capture-mic"]').checked) return;
+  try {
+    await breviaClient.previewMic();
+    document.querySelector('#mic-input-state').lastChild.textContent = t('输入良好');
+  } catch (error) {
+    document.querySelector('#mic-input-state').lastChild.textContent = error.message;
+  }
+}
+prepareForm.querySelector('[name="capture-mic"]').addEventListener('change', (event) => {
+  if (event.target.checked) void previewMicrophone();
+  else void breviaClient?.stopPreview();
+});
 function showRefinementProgress(completed = 0, total = 0) {
-  const copy = { title: t('正在精修'), detail: t('原版逐字稿仍可查看'), waiting: t('准备中') };
+  clearTimeout(refinementDismissTimer);
+  const copy = { title: t('正在精修'), waiting: t('准备中') };
   const ratio = total ? Math.min(1, completed / total) : 0;
   refinementCard.hidden = false;
   refinementCard.querySelector('p').textContent = copy.title;
-  refinementCard.querySelector('small').textContent = copy.detail;
   refinementPercent.textContent = total ? `${Math.round(ratio * 100)}%` : copy.waiting;
   refinementBar.style.transform = `scaleX(${ratio})`;
+}
+let refinementDismissTimer;
+function showRefinementComplete() {
+  clearTimeout(refinementDismissTimer);
+  refinementCard.hidden = false;
+  refinementCard.querySelector('p').textContent = t('会后精修已完成');
+  refinementPercent.textContent = '100%';
+  refinementBar.style.transform = 'scaleX(1)';
+  refinementDismissTimer = setTimeout(hideRefinementProgress, 10000);
 }
 function hideRefinementProgress() { refinementCard.hidden = true; }
 prepareForm.addEventListener('click', (event) => {
@@ -250,18 +272,26 @@ function renderSummaryModelModal() {
 function renderModal(kind) {
   if (kind === 'summary-model') { renderSummaryModelModal(); return; }
   const copy = (modalCopy[locale] || modalCopy.en)[kind];
-  const items = kind === 'terms' ? termEntries.map(({ name, detail }) => [name, detail === '自定义术语' ? t(detail) : detail]) : copy.items;
+  const modelStageOrder = new Map();
+  (copy.items || []).forEach(([stage], index) => { if (!modelStageOrder.has(stage)) modelStageOrder.set(stage, index); });
+  const items = kind === 'models' ? copy.items.map((item, sourceIndex) => ({ item, sourceIndex })).sort((a, b) => modelStageOrder.get(a.item[0]) - modelStageOrder.get(b.item[0])) : kind === 'terms' ? termEntries.map(({ name, detail }) => [name, detail === '自定义术语' ? t(detail) : detail]) : copy.items;
   settingsModal.querySelector('h2').textContent = copy.title;
   settingsModal.querySelector('.modal-title p').textContent = copy.intro;
   settingsModal.querySelector('.modal-close').setAttribute('aria-label', (modalCopy[locale] || modalCopy.en).close);
-  settingsModal.querySelector('.modal-body').innerHTML = `<div class="modal-list${kind === 'models' ? ' model-library-list' : ''}">${items.map((item, index) => {
+  settingsModal.querySelector('.modal-body').innerHTML = `<div class="modal-list${kind === 'models' ? ' model-library-list' : ''}">${items.map((entry, index) => {
+    const item = kind === 'models' ? entry.item : entry;
+    const sourceIndex = kind === 'models' ? entry.sourceIndex : index;
     const [name, detail] = kind === 'models' ? item.slice(1, 3) : item;
     const [stage, , , intro] = kind === 'models' ? item : [];
     const termEditing = kind === 'terms' && editingTermIndex === index;
     const label = termEditing ? `<input class="term-edit-input" data-edit-term-input="${index}" value="${escapeHtml(name)}" maxlength="64" />` : `<b>${escapeHtml(name)}</b>`;
-    const actions = kind === 'models' ? `<button class="modal-action${isModelInstalled(name) ? ' modal-danger' : ''}" ${isModelInstalled(name) ? `data-delete-model="${index}"` : `data-download-model="${index}"`} type="button">${isModelInstalled(name) ? (modelLabels[locale] || modelLabels.en).remove : (modelLabels[locale] || modelLabels.en).download}</button>` : kind === 'terms' ? `<span class="term-actions">${termEditing ? `<button class="modal-action" data-save-term="${index}" type="button">${copy.save}</button><button class="modal-action" data-cancel-term type="button">${copy.cancel}</button>` : `<button class="modal-action" data-edit-term="${index}" type="button">${copy.edit}</button><button class="modal-action" data-remove-term="${index}" type="button">${copy.remove}</button>`}</span>` : '';
-    const heading = kind === 'models' && (index === 0 || items[index - 1][0] !== stage) ? `<h3>${escapeHtml(stage)}</h3>` : '';
-    return `${heading}<div><span>${label}<small>${escapeHtml(detail)}</small>${intro ? `<small>${escapeHtml(intro)}</small>` : ''}</span>${actions}</div>`;
+    const progress = kind === 'models' ? modelDownloads.get(modelIds[sourceIndex]) : null;
+    const ratio = progress?.total ? Math.min(1, progress.received / progress.total) : 0;
+    const downloadProgress = progress ? `<small class="model-download-progress">${formatBytes(progress.received)} / ${formatBytes(progress.total)} · ${Math.round(ratio * 100)}%</small><div class="processing-bar model-download-bar" aria-hidden="true"><i style="transform:scaleX(${ratio})"></i></div>` : '';
+    const size = kind === 'models' ? `<small>${formatBytes(modelSizes[sourceIndex])}</small>` : '';
+    const actions = kind === 'models' ? `<button class="modal-action${isModelInstalled(name) ? ' modal-danger' : ''}" ${isModelInstalled(name) ? `data-delete-model="${sourceIndex}"` : `data-download-model="${sourceIndex}"`} type="button"${progress ? ' disabled' : ''}>${isModelInstalled(name) ? (modelLabels[locale] || modelLabels.en).remove : progress ? (modelLabels[locale] || modelLabels.en).downloading : (modelLabels[locale] || modelLabels.en).download}</button>` : kind === 'terms' ? `<span class="term-actions">${termEditing ? `<button class="modal-action" data-save-term="${index}" type="button">${copy.save}</button><button class="modal-action" data-cancel-term type="button">${copy.cancel}</button>` : `<button class="modal-action" data-edit-term="${index}" type="button">${copy.edit}</button><button class="modal-action" data-remove-term="${index}" type="button">${copy.remove}</button>`}</span>` : '';
+    const heading = kind === 'models' && (index === 0 || items[index - 1].item[0] !== stage) ? `<h3>${escapeHtml(stage)}</h3>` : '';
+    return `${heading}<div><span>${label}<small>${escapeHtml(detail)}</small>${size}${intro ? `<small>${escapeHtml(intro)}</small>` : ''}${downloadProgress}</span>${actions}</div>`;
   }).join('')}</div>${kind === 'terms' ? `<form class="term-form"><input name="term" required maxlength="64" placeholder="${copy.placeholder}" /><button type="submit">${copy.add}</button></form>` : ''}`;
 }
 /** Opens and focuses a settings modal. @param {'models'|'terms'|'storage'|'summary-model'} kind Requested modal. @returns {void} */
@@ -333,7 +363,6 @@ function renderLivePanel() {
 renderModelControls();
 renderTermOverview();
 renderLivePanel();
-renderConfigPreview();
 settingsModal.addEventListener('click', async (event) => {
   if (event.target === settingsModal || event.target.closest('.modal-close')) { closeModal(); return; }
   const selectToggle = event.target.closest('[data-flow-select-toggle]');
@@ -370,12 +399,13 @@ settingsModal.addEventListener('click', async (event) => {
   if (download) {
     const index = Number(download.dataset.downloadModel);
     const [, name, detail, intro, icon] = (modalCopy[locale] || modalCopy.en).models.items[index];
-    download.disabled = true;
-    download.textContent = (modelLabels[locale] || modelLabels.en).downloading;
+    modelDownloads.set(modelIds[index], { received: 0, total: 0 });
+    renderModal('models');
     try {
       if (window.brevia) await window.brevia.models.download({ model_id: modelIds[index] });
       installModel({ icon, name, detail, intro });
     } catch (error) { showToast(error.message); }
+    finally { modelDownloads.delete(modelIds[index]); }
     renderModal('models');
     return;
   }
@@ -580,6 +610,7 @@ async function transitionPage(current, next, swap) {
 /** Switches between top-level app views. @param {'home'|'prepare'|'live'|'detail'|'settings'} name Target view. */
 const showView = async (name) => {
   if (name === activeView) return;
+  if (activeView === 'prepare' && name !== 'prepare') await breviaClient?.stopPreview();
   const current = document.querySelector(`#${activeView}-view`);
   const next = document.querySelector(`#${name}-view`);
   await transitionPage(current, next, () => {
@@ -589,6 +620,7 @@ const showView = async (name) => {
     else document.querySelectorAll('.nav-item').forEach((item) => item.classList.toggle('active', item.dataset.view === name));
     window.scrollTo({ top: 0, behavior: 'smooth' });
   });
+  if (name === 'prepare') void previewMicrophone();
 };
 /** Switches meeting-library sources with the same page-out/page-in timing as top-level views. */
 async function showLibraryNav(id) {
@@ -649,16 +681,26 @@ document.querySelector('#meeting-form').addEventListener('submit', async (event)
   const title = document.querySelector('#meeting-title').value.trim();
   const language = form.get('meeting-language') || 'auto';
   const targetLanguage = form.get('translation-target') || null;
+  const streamingModelId = prepareForm.dataset.streamingModel || (language === 'en' ? 'zipformer-en-streaming-int8' : 'zipformer-zh-xlarge-streaming-int8');
+  const refinedModelId = prepareForm.dataset.refinedModel || 'qwen3-asr-0.6b-int8';
+  const segmentationModelId = prepareForm.dataset.segmentationModel || undefined;
+  const embeddingModelId = prepareForm.dataset.embeddingModel || undefined;
+  const streamingModelName = streamingModelId === 'zipformer-en-streaming-int8' ? 'Streaming Zipformer English' : streamingModelId === 'paraformer-zh-en-int8' ? 'Streaming Paraformer' : 'Streaming Zipformer Chinese XLarge';
   try {
     const meeting = breviaClient ? await breviaClient.start({
       title,
       language,
       target_language: targetLanguage,
-      streaming_model_id: language === 'en' ? 'zipformer-en-streaming-int8' : 'paraformer-zh-en-int8',
-      refined_model_id: 'qwen3-asr-0.6b-int8',
+      streaming_model_id: streamingModelId,
+      refined_model_id: refinedModelId,
+      speaker_segmentation_model_id: segmentationModelId,
+      speaker_embedding_model_id: embeddingModelId,
+      num_speakers: Number(form.get('num-speakers') || -1),
       category: form.get('meeting-category') || '',
     }, { mic: form.has('capture-mic'), system: form.has('capture-system') }) : { id: null };
-    document.querySelector('#active-model-name').textContent = language === 'en' ? 'Streaming Zipformer English' : 'Streaming Paraformer';
+    document.querySelector('#active-streaming-model').textContent = streamingModelName;
+    document.querySelector('#active-diarization-model').textContent = segmentationModelId || embeddingModelId ? 'Pyannote + 3D-Speaker' : '自动匹配';
+    document.querySelector('#active-refined-model').textContent = refinedModelId === 'qwen3-asr-0.6b-int8' ? 'Qwen3-ASR' : '自动匹配';
     document.querySelector('#live-name').textContent = title;
     uiData.meetings.unshift({ id: meeting.id, tone: 'violet', title, meta: `刚刚 · 0 分钟${form.get('meeting-category') ? ` · ${form.get('meeting-category')}` : ''}`, category: form.get('meeting-category'), tags: [], status: { tone: 'processing', label: '正在录制', detail: '双轨录音' } });
     document.querySelector('#transcript-scroll').innerHTML = '';
@@ -684,30 +726,39 @@ let timer;
 /** Starts the visible recording timer, replacing any prior timer. @returns {void} */
 function startTimer() { clearInterval(timer); timer = setInterval(() => { seconds += 1; const value = new Date(seconds * 1000).toISOString().slice(11, 19); document.querySelector('#timer').textContent = value; miniTimer.textContent = value; }, 1000); }
 document.querySelector('#pause').addEventListener('click', async (event) => {
-  const paused = event.currentTarget.dataset.paused === 'true';
+  const button = event.currentTarget;
+  const paused = button.dataset.paused === 'true';
   try {
     if (breviaClient) await breviaClient.pause(!paused);
-    event.currentTarget.dataset.paused = String(!paused);
-    event.currentTarget.textContent = paused ? `Ⅱ ${t('暂停')}` : `▶ ${t('继续')}`;
+    button.dataset.paused = String(!paused);
+    button.textContent = paused ? `Ⅱ ${t('暂停')}` : `▶ ${t('继续')}`;
     if (paused) startTimer(); else clearInterval(timer);
   } catch (error) { showToast(error.message); }
 });
 document.querySelector('#end-meeting').addEventListener('click', async (event) => {
-  event.currentTarget.disabled = true;
+  const button = event.currentTarget;
+  button.disabled = true;
   clearInterval(timer);
   try {
     const meeting = breviaClient ? await breviaClient.stop(seconds * 1000) : null;
     meetingActive = false;
     miniMeeting.hidden = true;
     syncFloatingNotices();
-    if (meeting) applyBackendDetail(meeting);
+    if (meeting) {
+      applyBackendDetail(meeting);
+      showRefinementProgress();
+      void window.brevia.meeting.refine({ meeting_id: meeting.id }).catch((error) => {
+        hideRefinementProgress();
+        showToast(`会后精修失败：${error.message}`);
+      });
+    }
     showView('detail');
     showToast(message('recordingSaved'));
     if (window.brevia) await refreshBackendMeetings();
   } catch (error) {
     showToast(error.message);
     startTimer();
-  } finally { event.currentTarget.disabled = false; }
+  } finally { button.disabled = false; }
 });
 miniMeeting.addEventListener('click', () => { miniMeeting.hidden = true; syncFloatingNotices(); showView('live'); });
 /** Replaces a speaker label with an inline editor and propagates the saved name. @param {HTMLElement} label Speaker-name element. @returns {void} */
@@ -753,7 +804,9 @@ document.querySelector('#translation-toggle').addEventListener('click', (event) 
 });
 document.querySelector('#latest').addEventListener('click', () => {
   followLiveTranscript = true;
-  document.querySelector('#transcript-scroll').scrollTo({ top: 9999, behavior: 'smooth' });
+  const transcript = document.querySelector('#transcript-scroll');
+  const segment = transcript.lastElementChild;
+  if (segment) transcript.scrollTop = Math.max(0, segment.offsetTop - (transcript.clientHeight - segment.offsetHeight) / 2);
 });
 meetingSearch.addEventListener('input', () => { if (window.brevia) refreshBackendMeetings().catch((error) => showToast(error.message)); else filterMeetings(); });
 libraryToolbar.addEventListener('click', (event) => {
@@ -848,10 +901,7 @@ batchToolbar.addEventListener('click', async (event) => {
   const meetings = selectedMeetings();
   if (event.target.closest('[data-batch-restore]')) {
     try {
-      if (window.brevia) await Promise.all(meetings.filter(({ id }) => id).map(({ id }) => window.brevia.meeting.restore({ meeting_id: id })));
-      uiData.meetings = uiData.meetings.filter((meeting, index) => !selectedMeetingKeys.has(meeting.id || String(index)));
-      clearMeetingSelection();
-      renderMeetingList();
+      await mutateMeetings('restore', meetings);
       showToast(t('恢复'));
     } catch (error) { await refreshBackendMeetings(true); showToast(error.message); }
     return;
@@ -869,21 +919,37 @@ batchToolbar.addEventListener('click', async (event) => {
   const deleteLabel = permanently ? BreviaI18n.trashCopy(locale).purge : t('删除');
   if (event.target.closest('[data-batch-delete]') && confirm(`${BreviaI18n.selectionOverview(locale, meetings.length)}\n${deleteLabel}?`)) {
     try {
-      if (window.brevia) await Promise.all(meetings.filter(({ id }) => id).map(({ id }) => window.brevia.meeting[permanently ? 'purge' : 'delete']({ meeting_id: id })));
-      uiData.meetings = uiData.meetings.filter((meeting, index) => !selectedMeetingKeys.has(meeting.id || String(index)));
-      clearMeetingSelection();
-      renderMeetingList();
+      await mutateMeetings(permanently ? 'purge' : 'delete', meetings);
     } catch (error) { await refreshBackendMeetings(); showToast(error.message); }
   }
 });
 const closeCategoryMenu = (menu, done) => { if (menu.hidden) { done?.(); return; } menu.classList.add('is-closing'); window.setTimeout(() => { menu.hidden = true; menu.classList.remove('is-closing'); done?.(); }, 180); };
 const closeMeetingMenus = () => { document.querySelectorAll('.meeting-menu, .meeting-rename-menu').forEach((menu) => { menu.hidden = true; }); document.querySelectorAll('.meeting-category-menu').forEach((menu) => closeCategoryMenu(menu)); document.querySelectorAll('[data-meeting-menu]').forEach((toggle) => toggle.setAttribute('aria-expanded', 'false')); };
+/** Runs one meeting mutation for both row actions and batch actions. */
+async function mutateMeetings(action, meetings) {
+  const ids = new Set(meetings.map(({ id }) => id).filter(Boolean));
+  if (window.brevia) await Promise.all([...ids].map((meeting_id) => window.brevia.meeting[action]({ meeting_id })));
+  if (['delete', 'restore', 'purge'].includes(action)) uiData.meetings = uiData.meetings.filter((meeting) => !ids.has(meeting.id));
+  clearMeetingSelection();
+  renderMeetingList();
+}
+async function openMeetingRow(row) {
+  if (!window.brevia) { showView('detail'); return; }
+  breviaClient.state.selectedMeetingId = row.dataset.meetingId;
+  applyBackendDetail(await window.brevia.meeting.get({ meeting_id: row.dataset.meetingId }));
+  showView('detail');
+}
 meetingList.addEventListener('click', async (event) => {
   if (suppressMeetingClick) { event.preventDefault(); event.stopImmediatePropagation(); return; }
   const selectionRow = event.target.closest('.meeting-row');
   if (selectionRow && (event.metaKey || event.ctrlKey)) { event.preventDefault(); event.stopPropagation(); toggleMeetingSelection(selectionRow); return; }
   const actions = event.target.closest('.meeting-actions');
-  if (!actions) return;
+  if (!actions) {
+    if (selectionRow && activeLibraryNav !== 'recently-deleted') {
+      try { await openMeetingRow(selectionRow); } catch (error) { showToast(error.message); }
+    }
+    return;
+  }
   event.stopPropagation();
   const menuToggle = event.target.closest('[data-meeting-menu]');
   if (menuToggle) { const menu = actions.querySelector('.meeting-menu'); const opening = menu.hidden; closeMeetingMenus(); menu.hidden = !opening; menuToggle.setAttribute('aria-expanded', String(opening)); return; }
@@ -898,15 +964,13 @@ meetingList.addEventListener('click', async (event) => {
     if (action.dataset.meetingAction === 'export') { closeMeetingMenus(); if (window.brevia && meeting.id) window.brevia.meeting.export({ meeting_id: meeting.id, format: 'md' }).then((value) => value && showToast(`已导出「${meeting.title}」`)).catch((error) => showToast(error.message)); else showToast(`已导出「${meeting.title}」`); return; }
     if (action.dataset.meetingAction === 'delete') {
       try {
-        if (window.brevia && meeting.id) await window.brevia.meeting.delete({ meeting_id: meeting.id });
-        uiData.meetings.splice(index, 1);
-        renderMeetingList();
+        await mutateMeetings('delete', [meeting]);
         showToast(meeting.isExample ? '示例会议及录音已删除' : '会议已移至最近删除');
       } catch (error) { showToast(error.message); }
       return;
     }
-    if (action.dataset.meetingAction === 'restore') { if (window.brevia && meeting.id) window.brevia.meeting.restore({ meeting_id: meeting.id }).then(() => { uiData.meetings.splice(index, 1); renderMeetingList(); showToast('会议已恢复'); }).catch((error) => showToast(error.message)); return; }
-    if (action.dataset.meetingAction === 'purge' && confirm(`${BreviaI18n.trashCopy(locale).purge}?`)) { if (window.brevia && meeting.id) window.brevia.meeting.purge({ meeting_id: meeting.id }).then(() => { uiData.meetings.splice(index, 1); renderMeetingList(); showToast(BreviaI18n.trashCopy(locale).purge); }).catch((error) => showToast(error.message)); return; }
+    if (action.dataset.meetingAction === 'restore') { try { await mutateMeetings('restore', [meeting]); showToast(t('恢复')); } catch (error) { showToast(error.message); } return; }
+    if (action.dataset.meetingAction === 'purge' && confirm(`${BreviaI18n.trashCopy(locale).purge}?`)) { try { await mutateMeetings('purge', [meeting]); showToast(BreviaI18n.trashCopy(locale).purge); } catch (error) { showToast(error.message); } return; }
   }
   const category = event.target.closest('[data-assign-category]');
   if (category) { const meeting = uiData.meetings[Number(category.dataset.meetingIndex)]; setMeetingCategory(meeting, category.dataset.assignCategory); if (window.brevia && meeting.id) window.brevia.meeting.update({ meeting_id: meeting.id, updates: { category: meeting.category } }).catch((error) => showToast(error.message)); renderMeetingList(); return; }
@@ -1065,21 +1129,14 @@ if (window.brevia) {
     termEntries = result.terms.map((item) => ({ id: item.id, name: item.text, detail: item.note || '自定义术语' }));
     installedModelNames.clear();
     modelCard.querySelectorAll('.model-row').forEach((row) => row.remove());
-    result.models.filter((model) => model.status === 'ready').forEach((model) => installModel({
-      icon: model.kind === 'qwen3' ? 'Q' : model.kind === 'speaker-segmentation' ? 'P' : model.kind === 'speaker-embedding' ? '3D' : '⌁',
-      name: model.name.replace(' 0.6B int8', ''),
-      detail: '',
-      stage: model.stages.includes('streaming') ? '实时字幕' : model.stages.includes('diarization') ? '说话人分离' : model.stages.includes('punctuation') ? '标点恢复' : '会后精修',
-      languages: model.languages.slice(0, 3),
-    }));
+    result.models.filter((model) => model.status === 'ready').forEach((model) => installedModelNames.add(model.name.replace(' 0.6B int8', '')));
     document.querySelector('#active-device').textContent = result.device.backend.toUpperCase();
     uiData.live.status[1].value = result.device.backend.toUpperCase();
     uiData.live.status[2].value = String(result.terms.length);
     renderLivePanel();
-    const formatBytes = (bytes) => `${(bytes / 1024 ** 3).toFixed(2)} GB`;
     const storageSizes = [result.storage.meetings, result.storage.models, result.storage.exports].map(formatBytes);
-    ['zh', 'en', 'es'].forEach((language) => {
-      modalCopy[language].storage.items.forEach((item, index) => { item[1] = storageSizes[index]; });
+    Object.values(modalCopy).forEach((copy) => {
+      copy.storage.items.forEach((item, index) => { item[1] = storageSizes[index]; });
     });
     renderTermOverview();
     renderMeetingList();
@@ -1087,11 +1144,14 @@ if (window.brevia) {
   }).catch((error) => showToast(`后端启动失败：${error.message}`));
 
   const transcript = document.querySelector('#transcript-scroll');
-  const scrollLiveToLatest = () => { transcript.scrollTop = transcript.scrollHeight; };
+  const scrollLiveToLatest = (segment) => {
+    if (!segment) return;
+    transcript.scrollTop = Math.max(0, segment.offsetTop - (transcript.clientHeight - segment.offsetHeight) / 2);
+  };
   transcript.addEventListener('wheel', () => { followLiveTranscript = false; }, { passive: true });
   transcript.addEventListener('pointerdown', () => { followLiveTranscript = false; });
   transcript.addEventListener('scroll', () => {
-    if (transcript.scrollHeight - transcript.scrollTop - transcript.clientHeight < 24) followLiveTranscript = true;
+    if (Math.abs(transcript.scrollTop - (transcript.scrollHeight - transcript.clientHeight)) < 24) followLiveTranscript = true;
   }, { passive: true });
   const renderLiveEvent = (payload, partial) => {
     const shouldFollow = followLiveTranscript;
@@ -1128,7 +1188,7 @@ if (window.brevia) {
     });
     element.classList.add('is-active');
     element.setAttribute('aria-current', 'true');
-    if (shouldFollow) scrollLiveToLatest();
+    if (shouldFollow) scrollLiveToLatest(element);
   };
   window.brevia.on('transcript.partial', (payload) => renderLiveEvent(payload, true));
   window.brevia.on('transcript.final', async (payload) => {
@@ -1149,6 +1209,10 @@ if (window.brevia) {
       });
     } catch (error) { showToast(`翻译失败：${error.message}`); }
   });
+  window.brevia.on('transcript.discarded', ({ segment_id }) => {
+    liveSegments.get(segment_id)?.remove();
+    liveSegments.delete(segment_id);
+  });
   window.brevia.on('translation.ready', (payload) => {
     const element = liveSegments.get(payload.segment_id);
     if (!element) return;
@@ -1156,26 +1220,19 @@ if (window.brevia) {
     if (!line) { line = document.createElement('p'); line.className = 'translation'; element.append(line); }
     line.textContent = payload.translation;
   });
-  window.brevia.on('asr.language', ({ language }) => {
-    document.querySelector('#active-model-name').textContent = language === 'en' ? 'Streaming Zipformer English' : 'Streaming Paraformer';
-  });
   window.brevia.on('refinement.started', ({ total }) => showRefinementProgress(0, total));
   window.brevia.on('refinement.progress', ({ completed, total }) => showRefinementProgress(completed, total));
   window.brevia.on('refinement.ready', ({ meeting }) => {
-    hideRefinementProgress();
+    showRefinementComplete();
     if (meeting.id === breviaClient.state.selectedMeetingId) applyBackendDetail(meeting);
+  });
+  window.brevia.on('model.progress', ({ model_id, received, total }) => {
+    if (!modelDownloads.has(model_id)) return;
+    modelDownloads.set(model_id, { received, total });
+    if (activeModal === 'models') renderModal('models');
   });
   window.brevia.on('worker.warning', ({ message: warning }) => showToast(warning));
   window.brevia.on('worker.error', ({ message: error }) => showToast(error));
-
-  meetingList.addEventListener('click', async (event) => {
-    const row = event.target.closest('[data-meeting-id]');
-    if (!row || activeLibraryNav === 'recently-deleted' || event.target.closest('.meeting-actions')) return;
-    try {
-      breviaClient.state.selectedMeetingId = row.dataset.meetingId;
-      applyBackendDetail(await window.brevia.meeting.get({ meeting_id: row.dataset.meetingId }));
-    } catch (error) { showToast(error.message); }
-  });
 
   document.querySelector('#recently-deleted').addEventListener('click', async () => {
     await showLibraryNav('recently-deleted').catch((error) => showToast(error.message));
@@ -1207,24 +1264,6 @@ if (window.brevia) {
     } catch (error) { showToast(error.message); }
   });
 
-  document.querySelector('[data-refine-meeting]').addEventListener('click', async (event) => {
-    if (!breviaClient.state.selectedMeetingId) return;
-    const button = event.currentTarget;
-    button.disabled = true;
-    button.textContent = t('正在精修…');
-    showRefinementProgress();
-    try {
-      applyBackendDetail(await window.brevia.meeting.get({ meeting_id: breviaClient.state.selectedMeetingId }));
-      applyBackendDetail(await window.brevia.meeting.refine({ meeting_id: breviaClient.state.selectedMeetingId }));
-      showToast(t('会后精修已完成'));
-    } catch (error) { showToast(error.message); }
-    finally {
-      hideRefinementProgress();
-      button.disabled = false;
-      button.textContent = t('会后精修');
-    }
-  });
-
   document.querySelector('[data-export-detail]').addEventListener('click', async () => {
     if (!breviaClient.state.selectedMeetingId) return;
     const format = prompt('选择格式：md / txt / json / srt / docx / pdf / flac / wav / m4a', 'md')?.toLowerCase();
@@ -1239,7 +1278,8 @@ if (window.brevia) {
   document.querySelector('[data-share-detail]').addEventListener('click', async () => {
     if (!breviaClient.state.selectedMeetingId) return;
     try {
-      await window.brevia.meeting.share({ meeting_id: breviaClient.state.selectedMeetingId, content: 'transcript', format: 'md' });
+      const result = await window.brevia.meeting.share({ meeting_id: breviaClient.state.selectedMeetingId });
+      if (result) showToast(result.recording_included ? '压缩包已导出' : '未找到录音，已导出逐字稿压缩包');
     } catch (error) { showToast(error.message); }
   });
 }

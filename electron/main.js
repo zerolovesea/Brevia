@@ -1,4 +1,4 @@
-const { app, BrowserWindow, desktopCapturer, dialog, ipcMain, safeStorage, session, ShareMenu, shell, systemPreferences } = require('electron');
+const { app, BrowserWindow, desktopCapturer, dialog, ipcMain, safeStorage, session, shell, systemPreferences } = require('electron');
 const { spawn } = require('node:child_process');
 const { copyFile, mkdir, readFile, writeFile } = require('node:fs/promises');
 const { existsSync } = require('node:fs');
@@ -26,6 +26,9 @@ const meetingStart = z.object({
   target_language: z.string().max(16).nullable().optional(),
   streaming_model_id: z.string().min(1),
   refined_model_id: z.string().min(1),
+  speaker_segmentation_model_id: z.string().min(1).optional(),
+  speaker_embedding_model_id: z.string().min(1).optional(),
+  num_speakers: z.number().int().min(-1).max(20).optional(),
   category: z.string().max(32).optional(),
   tags: z.array(z.string().max(32)).max(20).optional(),
 });
@@ -234,14 +237,11 @@ function registerIpc() {
     return { paths, format: value.format };
   });
   ipcMain.handle('meeting.share', async (_, payload) => {
-    const value = id.extend({
-      content: z.enum(['transcript', 'notes', 'audio']).default('transcript'),
-      format: z.enum(['md', 'txt', 'json', 'srt', 'docx', 'pdf', 'flac', 'wav', 'm4a']).default('md'),
-      track: z.enum(['mix', 'mic', 'system']).optional(),
-    }).parse(payload);
-    const exported = await worker.request('meeting.export', value);
-    new ShareMenu({ filePaths: [exported.path] }).popup();
-    return exported;
+    const exported = await worker.request('meeting.bundle', id.parse(payload));
+    const destination = await dialog.showSaveDialog({ defaultPath: path.basename(exported.path) });
+    if (destination.canceled) return null;
+    await copyFile(exported.path, destination.filePath);
+    return { ...exported, path: destination.filePath };
   });
   ipcMain.handle('shell.showItem', (_, filePath) => shell.showItemInFolder(z.string().parse(filePath)));
   ipcMain.handle('audio.url', (_, filePath) => {

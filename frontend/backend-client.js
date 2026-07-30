@@ -4,6 +4,7 @@ class AudioCapture {
     this.onLevel = onLevel;
     this.pendingStreams = [];
     this.sources = [];
+    this.preview = null;
     this.startedAt = 0;
     this.paused = false;
   }
@@ -26,6 +27,41 @@ class AudioCapture {
       await this.stop();
       throw new Error(`${missing.track === 'system' ? '系统音频' : '麦克风'}没有可用的音频轨道`);
     }
+  }
+
+  async previewMic() {
+    if (this.preview) return;
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    if (!stream.getAudioTracks().length) {
+      stream.getTracks().forEach((track) => track.stop());
+      throw new Error('麦克风没有可用的音频轨道');
+    }
+    const context = new AudioContext();
+    const source = context.createMediaStreamSource(stream);
+    const processor = context.createScriptProcessor(4096, 1, 1);
+    const mute = context.createGain();
+    mute.gain.value = 0;
+    processor.onaudioprocess = ({ inputBuffer }) => {
+      const input = inputBuffer.getChannelData(0);
+      const power = input.reduce((total, sample) => total + sample * sample, 0) / input.length;
+      if (this.onLevel) this.onLevel('mic', Math.min(1, Math.sqrt(power) * 8));
+    };
+    source.connect(processor);
+    processor.connect(mute);
+    mute.connect(context.destination);
+    this.preview = { stream, context, source, processor, mute };
+    await context.resume();
+  }
+
+  async stopPreview() {
+    if (!this.preview) return;
+    const { stream, context, source, processor, mute } = this.preview;
+    this.preview = null;
+    processor.disconnect();
+    source.disconnect();
+    mute.disconnect();
+    stream.getTracks().forEach((track) => track.stop());
+    await context.close();
   }
 
   async start(meetingId) {
@@ -90,6 +126,7 @@ class AudioCapture {
   }
 
   async stop() {
+    await this.stopPreview();
     this.pendingStreams.forEach(({ stream }) => stream.getTracks().forEach((track) => track.stop()));
     this.pendingStreams = [];
     this.sources.forEach(({ stream, processor, source }) => {
@@ -106,6 +143,7 @@ class AudioCapture {
 window.breviaClient = window.brevia ? {
   state: { meeting: null, selectedMeetingId: null, initialized: null },
   capture: null,
+  preview: null,
   onLevel: null,
   async initialize() {
     const result = await window.brevia.initialize();
@@ -113,6 +151,7 @@ window.breviaClient = window.brevia ? {
     return result;
   },
   async start(payload, inputs) {
+    await this.stopPreview();
     this.capture = new AudioCapture(window.brevia.meeting.audio, this.onLevel);
     let meeting;
     try {
@@ -128,6 +167,16 @@ window.breviaClient = window.brevia ? {
     this.state.meeting = meeting;
     this.state.selectedMeetingId = meeting.id;
     return meeting;
+  },
+  async previewMic() {
+    if (!this.preview) this.preview = new AudioCapture(null, this.onLevel);
+    return this.preview.previewMic();
+  },
+  async stopPreview() {
+    if (!this.preview) return;
+    const preview = this.preview;
+    this.preview = null;
+    await preview.stopPreview();
   },
   async pause(paused) {
     const meetingId = this.state.meeting?.id || this.capture?.meetingId;

@@ -1,5 +1,22 @@
 [
   {
+    "id": "zipformer-zh-xlarge-streaming-int8",
+    "name": "Streaming Zipformer Chinese XLarge",
+    "runtime": "sherpa-onnx==1.13.2",
+    "revision": "asr-models/2025-06-30",
+    "stages": ["streaming"],
+    "languages": ["zh"],
+    "backend": ["cpu", "cuda"],
+    "hotword": false,
+    "speaker": false,
+    "size_bytes": 597755927,
+    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30.tar.bz2",
+    "archive_sha256": "30437d84dc4861740d40166212ab05f3728945443d53691620075c4031fb88e1",
+    "directory": "sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30",
+    "files": ["encoder.int8.onnx", "decoder.int8.onnx", "joiner.int8.onnx", "tokens.txt"],
+    "kind": "transducer"
+  },
+  {
     "id": "paraformer-zh-en-int8",
     "name": "Streaming Paraformer",
     "runtime": "sherpa-onnx==1.13.2",
@@ -59,6 +76,23 @@
     "directory": "sherpa-onnx-online-punct-en-2024-08-06",
     "files": ["model.int8.onnx", "bpe.vocab"],
     "kind": "online-punctuation"
+  },
+  {
+    "id": "punct-ct-transformer-zh-en-int8",
+    "name": "Chinese and English Punctuation",
+    "runtime": "sherpa-onnx==1.13.2",
+    "revision": "punctuation-models/2024-04-12",
+    "stages": ["punctuation"],
+    "languages": ["zh", "en", "yue"],
+    "backend": ["cpu"],
+    "hotword": false,
+    "speaker": false,
+    "size_bytes": 64717756,
+    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/punctuation-models/sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8.tar.bz2",
+    "archive_sha256": "c0d5aa5f8eeb686032345e180bedf39319dc2e0556781c6264bcadba8328a6e1",
+    "directory": "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8",
+    "files": ["model.int8.onnx"],
+    "kind": "offline-punctuation"
   },
   {
     "id": "qwen3-asr-0.6b-int8",
