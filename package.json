@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "main": "app.js",
   "scripts": {
-    "build": "npx @tailwindcss/cli -i ./tailwind.css -o ./styles.css --minify",
-    "test": "node ./test-ui.mjs"
+    "build": "cd frontend && npx @tailwindcss/cli -i ./tailwind.css -o ./styles.css --minify",
+    "test": "cd frontend && node ./test-ui.mjs"
   },
   "keywords": [],
   "author": "",
@@ -12,6 +12,10 @@
   "description": "",
   "devDependencies": {
     "@tailwindcss/cli": "^4.3.3",
+    "electron": "^43.2.0",
     "tailwindcss": "^4.3.3"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
   }
 }
