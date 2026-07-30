@@ -1,0 +1,47 @@
+[
+  {
+    "id": "00000000-0000-4000-8000-000000000001",
+    "locale": "zh",
+    "title": "示例 · 产品上线同步会",
+    "category": "示例会议",
+    "tags": ["产品", "上线"],
+    "audio": "example-zh.wav",
+    "duration_ms": 14582,
+    "speakers": {"spk-1": "刘晨", "spk-2": "林悦"},
+    "segments": [
+      [0, 5016, "spk-1", "大家早上好，今天我们确认新用户引导的上线范围。", "Good morning. Today we will confirm the launch scope for the new user onboarding flow."],
+      [5016, 9102, "spk-2", "设计稿已经完成，开发团队周四可以交付测试版本。", "The design is ready, and the engineering team can deliver a test build on Thursday."],
+      [9102, 14582, "spk-1", "好的，那就周五前完成内部验收，下周一开始小范围发布。", "Great. We will finish internal acceptance by Friday and begin a limited rollout next Monday."]
+    ]
+  },
+  {
+    "id": "00000000-0000-4000-8000-000000000002",
+    "locale": "en",
+    "title": "Example · Product Launch Sync",
+    "category": "Example",
+    "tags": ["Product", "Launch"],
+    "audio": "example-en.wav",
+    "duration_ms": 14814,
+    "speakers": {"spk-1": "Maya", "spk-2": "Noah"},
+    "segments": [
+      [0, 5016, "spk-1", "Good morning. Today we need to confirm the launch scope for the new user onboarding flow.", "大家早上好，今天我们需要确认新用户引导的上线范围。"],
+      [5016, 8777, "spk-2", "The design is ready, and the engineering team can deliver a test build on Thursday.", "设计稿已经完成，开发团队周四可以交付测试版本。"],
+      [8777, 14814, "spk-1", "Great. We will finish internal acceptance by Friday and begin a limited rollout next Monday.", "好的，我们将在周五前完成内部验收，并于下周一开始小范围发布。"]
+    ]
+  },
+  {
+    "id": "00000000-0000-4000-8000-000000000003",
+    "locale": "es",
+    "title": "Ejemplo · Reunión de lanzamiento",
+    "category": "Ejemplo",
+    "tags": ["Producto", "Lanzamiento"],
+    "audio": "example-es.wav",
+    "duration_ms": 16393,
+    "speakers": {"spk-1": "Lucía", "spk-2": "Mateo"},
+    "segments": [
+      [0, 5155, "spk-1", "Buenos días. Hoy tenemos que confirmar el alcance del lanzamiento para los nuevos usuarios.", "大家早上好，今天我们需要确认新用户引导的上线范围。"],
+      [5155, 10217, "spk-2", "El diseño está listo y el equipo de desarrollo puede entregar una versión de prueba el jueves.", "设计已经完成，开发团队可以在周四交付测试版本。"],
+      [10217, 16393, "spk-1", "Perfecto. Terminaremos la validación interna el viernes y empezaremos el lanzamiento limitado el lunes.", "很好，我们将在周五完成内部验收，并于周一开始小范围发布。"]
+    ]
+  }
+]

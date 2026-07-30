@@ -3,11 +3,7 @@
  * nested objects describe related state (for example, a meeting's status or speaker).
  */
 const uiData = {
-  meetings: [
-    { tone: 'violet', title: '产品策略周会', meta: '今天 09:30 · 42 分钟 · 产品', category: '产品', tags: ['需求评审', 'Q3'], status: { tone: 'complete', label: '已整理', detail: '3 项待办' } },
-    { tone: 'mint', title: '向量数据库供应商沟通', meta: '昨天 15:10 · 31 分钟 · 外部会议', category: '外部会议', tags: ['供应商'], status: { tone: 'processing', label: '正在精修', detail: '双轨录音' } },
-    { tone: 'coral', title: '设计系统对齐', meta: '7 月 26 日 · 56 分钟 · 设计', category: '设计', tags: ['设计', '组件库'], status: { tone: 'complete', label: '已整理', detail: '无待办' } }
-  ],
+  meetings: [],
   live: {
     transcript: [
       { time: '09:41', speaker: { id: '1', name: '说话人 1' }, text: '我们下周先完成试点，把客服和销售两个场景跑通。', translation: 'Next week, we will complete the pilot for customer support and sales.' },
@@ -15,7 +11,7 @@ const uiData = {
       { time: '09:43', speaker: { id: '1', name: '说话人 1' }, text: '还有一个需要确认的是...', translation: 'One thing we still need to confirm is...', partial: true }
     ],
     participants: [{ id: '1', name: '说话人 1', source: '麦克风', avatar: 'blue', level: '' }, { id: '2', name: '说话人 2', source: '系统音频', avatar: 'gray', level: 'quiet' }],
-    status: [{ label: '识别模型', value: 'SenseVoice' }, { label: '计算设备', value: 'MPS' }, { label: '已应用术语', value: '12' }]
+    status: [{ label: '识别模型', value: 'Streaming Paraformer' }, { label: '计算设备', value: 'CPU' }, { label: '已应用术语', value: '0' }]
   },
   detail: {
     transcript: [

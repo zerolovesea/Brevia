@@ -1,3 +1,7 @@
 node_modules/
+.venv/
+__pycache__/
+*.pyc
+.models/
 .DS_Store
 npm-debug.log*
