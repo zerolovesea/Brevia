@@ -36,6 +36,14 @@ let theme = localStorage.getItem('brevia-theme') || (matchMedia('(prefers-color-
 let activeView = 'home';
 const appOpenedAt = Date.now();
 window.addEventListener('pagehide', () => { void window.brevia?.metrics.record({ app_duration_ms: Date.now() - appOpenedAt }); });
+const scrollingTimers = new WeakMap();
+document.addEventListener('scroll', (event) => {
+  const scroller = event.target instanceof Element ? event.target : document.scrollingElement;
+  if (!scroller) return;
+  scroller.classList.add('is-scrolling');
+  clearTimeout(scrollingTimers.get(scroller));
+  scrollingTimers.set(scroller, setTimeout(() => scroller.classList.remove('is-scrolling'), 700));
+}, true);
 let activeLibraryNav = 'all-meetings';
 const liveSpeakers = new Map();
 const liveSegments = new Map();
@@ -189,8 +197,6 @@ function renderAdvancedSettings(settings) {
   return Object.entries(settings).map(([section, values]) => `<section class="advanced-settings-section"><h3>${escapeHtml(copy.sections[section] || section)}</h3>${Object.entries(values).map(([key, value]) => `<label><span><b>${escapeHtml(copy.fields[key] || key)}</b><small>${escapeHtml(copy.hint)}</small></span><input name="${escapeHtml(`${section}.${key}`)}" type="${typeof value === 'number' ? 'number' : 'text'}" step="any" value="${escapeHtml(String(value))}" /></label>`).join('')}</section>`).join('');
 }
 const modelDownloads = new Map();
-let termEntries = modalCopy.zh.terms.items.map(([name, detail]) => ({ name, detail }));
-let editingTermIndex = null;
 let activeCategory = '';
 let activeDateRange = '30';
 const persistCategories = () => localStorage.setItem('brevia-categories', JSON.stringify(categories));
@@ -577,7 +583,7 @@ function renderSummaryDetailModal() {
   settingsModal.querySelector('.modal-title p').textContent = currentMeetingDetail.title;
   settingsModal.querySelector('.modal-body').innerHTML = `<article class="summary-detail-content"><p class="summary-detail-lead">${escapeHtml(summary.summary)}</p><section><h3>${t('决定')}</h3>${list(summary.decisions, (item) => `<li>${escapeHtml(item.text)}</li>`)}</section><section><h3>${t('待办')}</h3>${list(summary.action_items, (item) => `<li>${escapeHtml(item.task)}<small>${escapeHtml(item.owner || t('待确认'))}${item.due ? ` · ${escapeHtml(item.due)}` : ''}</small></li>`)}</section><section><h3>${t('开放问题')}</h3>${list(summary.open_questions, (item) => `<li>${escapeHtml(String(item))}</li>`)}</section></article><div class="modal-form-actions"><button class="secondary" type="button" data-regenerate-summary>${t('重新生成')}</button></div><section class="modal-subsection"><h3>${t('导出会议纪要')}</h3><div class="export-options"><button type="button" data-summary-export-choice data-format="md"><span><b>Markdown</b><small>${t('完整结构化会议纪要')}</small></span><strong>.md</strong></button><button type="button" data-summary-export-choice data-format="txt"><span><b>TXT</b><small>${t('纯文本会议纪要')}</small></span><strong>.txt</strong></button><button type="button" data-summary-export-choice data-format="pdf"><span><b>PDF</b><small>${t('适合归档与分享')}</small></span><strong>.pdf</strong></button></div></section>`;
 }
-/** Renders one settings modal. @param {'models'|'terms'|'storage'|'summary-model'} kind Requested modal. @returns {void} */
+/** Renders one settings modal. @param {'models'|'storage'|'summary-model'} kind Requested modal. @returns {void} */
 function renderModal(kind) {
   if (kind === 'advanced-settings') {
     settingsModal.querySelector('h2').textContent = t('进阶设置');
@@ -598,7 +604,7 @@ function renderModal(kind) {
   }
   const modelStageOrder = new Map();
   (copy.items || []).forEach(([stage], index) => { if (!modelStageOrder.has(stage)) modelStageOrder.set(stage, index); });
-  const items = kind === 'models' ? copy.items.map((item, sourceIndex) => ({ item, sourceIndex })).sort((a, b) => modelStageOrder.get(a.item[0]) - modelStageOrder.get(b.item[0])) : kind === 'terms' ? termEntries.map(({ name, detail }) => [name, detail === '自定义术语' ? t(detail) : detail]) : copy.items;
+  const items = kind === 'models' ? copy.items.map((item, sourceIndex) => ({ item, sourceIndex })).sort((a, b) => modelStageOrder.get(a.item[0]) - modelStageOrder.get(b.item[0])) : copy.items;
   settingsModal.querySelector('h2').textContent = copy.title;
   settingsModal.querySelector('.modal-title p').textContent = copy.intro;
   settingsModal.querySelector('.modal-close').setAttribute('aria-label', (modalCopy[locale] || modalCopy.en).close);
@@ -607,18 +613,17 @@ function renderModal(kind) {
     const sourceIndex = kind === 'models' ? entry.sourceIndex : index;
     const [name, detail] = kind === 'models' ? item.slice(1, 3) : item;
     const [stage, , , intro] = kind === 'models' ? item : [];
-    const termEditing = kind === 'terms' && editingTermIndex === index;
-    const label = termEditing ? `<input class="term-edit-input" data-edit-term-input="${index}" value="${escapeHtml(name)}" maxlength="64" />` : `<b>${escapeHtml(name)}</b>`;
+    const label = `<b>${escapeHtml(name)}</b>`;
     const progress = kind === 'models' ? modelDownloads.get(modelIds[sourceIndex]) : null;
     const ratio = progress?.total ? Math.min(1, progress.received / progress.total) : 0;
     const downloadProgress = progress?.error ? `<span class="model-download-progress">${escapeHtml(progress.error)}</span>` : progress ? `<span class="model-download-progress">${formatBytes(progress.received)} / ${formatBytes(progress.total)} · ${Math.round(ratio * 100)}%<i aria-hidden="true" style="transform:scaleX(${ratio})"></i></span>` : '';
     const size = kind === 'models' ? `<small>${formatBytes(modelSizes[sourceIndex])}</small>` : '';
-    const actions = kind === 'models' ? `<span class="model-actions">${isModelInstalled(name) && modelPaths.has(modelIds[sourceIndex]) ? `<button class="secondary" data-open-model-folder="${sourceIndex}" type="button">${t('从文件夹打开')}</button>` : ''}<button class="modal-action${isModelInstalled(name) ? ' modal-danger' : ''}" ${isModelInstalled(name) ? `data-delete-model="${sourceIndex}"` : `data-download-model="${sourceIndex}"`} type="button"${progress && !progress.error ? ' disabled' : ''}>${isModelInstalled(name) ? (modelLabels[locale] || modelLabels.en).remove : progress && !progress.error ? (modelLabels[locale] || modelLabels.en).downloading : (modelLabels[locale] || modelLabels.en).download}</button></span>` : kind === 'terms' ? `<span class="term-actions">${termEditing ? `<button class="modal-action" data-save-term="${index}" type="button">${copy.save}</button><button class="modal-action" data-cancel-term type="button">${copy.cancel}</button>` : `<button class="modal-action" data-edit-term="${index}" type="button">${copy.edit}</button><button class="modal-action" data-remove-term="${index}" type="button">${copy.remove}</button>`}</span>` : '';
+    const actions = kind === 'models' ? `<span class="model-actions">${isModelInstalled(name) && modelPaths.has(modelIds[sourceIndex]) ? `<button class="secondary" data-open-model-folder="${sourceIndex}" type="button">${t('从文件夹打开')}</button>` : ''}<button class="modal-action${isModelInstalled(name) ? ' modal-danger' : ''}" ${isModelInstalled(name) ? `data-delete-model="${sourceIndex}"` : `data-download-model="${sourceIndex}"`} type="button"${progress && !progress.error ? ' disabled' : ''}>${isModelInstalled(name) ? (modelLabels[locale] || modelLabels.en).remove : progress && !progress.error ? (modelLabels[locale] || modelLabels.en).downloading : (modelLabels[locale] || modelLabels.en).download}</button></span>` : '';
     const heading = kind === 'models' && (index === 0 || items[index - 1].item[0] !== stage) ? `<h3>${escapeHtml(stage)}</h3>` : '';
     return `${heading}<div><span>${label}${downloadProgress}<small>${escapeHtml(detail)}</small>${size}${intro ? `<small>${escapeHtml(intro)}</small>` : ''}</span>${actions}</div>`;
-  }).join('')}</div>${kind === 'terms' ? `<form class="term-form"><input name="term" required maxlength="64" placeholder="${copy.placeholder}" /><button type="submit">${copy.add}</button></form>` : ''}`;
+  }).join('')}</div>`;
 }
-/** Opens and focuses a settings modal. @param {'models'|'terms'|'storage'|'summary-model'} kind Requested modal. @returns {void} */
+/** Opens and focuses a settings modal. @param {'models'|'storage'|'summary-model'} kind Requested modal. @returns {void} */
 let modalDismissTimer;
 let confirmationAction;
 function openConfirmation(title, detail, action) {
@@ -678,15 +683,6 @@ function installModel(model) {
   if (isModelInstalled(model.name)) return;
   installedModelNames.add(model.name);
 }
-/** Updates the term summary card after terms or the interface language changes. @returns {void} */
-function renderTermOverview() {
-  const card = document.querySelectorAll('#settings-view .settings-card')[1];
-  const count = termEntries.length;
-  card.querySelector('p').textContent = BreviaI18n.termOverview(locale, count);
-  card.querySelector('.terms').innerHTML = count
-    ? termEntries.slice(0, 4).map((term) => `<span>${escapeHtml(term.name)}</span>`).join('')
-    : `<span>${t('暂无术语')}</span>`;
-}
 /** Renders participants discovered from voiceprints together with the current meeting status. @returns {void} */
 function renderLivePanel() {
   const copy = voiceFeaturesCopy[locale] || voiceFeaturesCopy.en;
@@ -703,7 +699,6 @@ function renderLivePanel() {
   document.querySelector('#tts-chat').innerHTML = `<p class="eyebrow">${locale === 'zh' ? '语音对话' : 'Voice conversation'}</p><form id="tts-chat-form"><div class="tts-selects">${flowSelect('voice_id', '', voiceOptions, false, noVoice)}${flowSelect('target_language', 'zh', [['zh', t('中文')], ['en', t('英语')]])}</div><input name="text" maxlength="1000" placeholder="${copy.placeholder}" required /><button type="submit" ${noVoice ? 'disabled' : ''}>${copy.send}</button>${noVoice ? `<p class="tts-hint">${locale === 'zh' ? '请先在声纹库注册可用声音' : 'Register a voiceprint before sending speech'}</p>` : ''}</form>`;
 }
 renderModelControls();
-renderTermOverview();
 renderLivePanel();
 settingsModal.addEventListener('click', async (event) => {
   if (event.target === settingsModal || event.target.closest('.modal-close')) { closeModal(); return; }
@@ -875,29 +870,6 @@ settingsModal.addEventListener('click', async (event) => {
     try { await window.brevia?.showItem(`${directory}/.brevia.json`); } catch (error) { showToast(error.message); }
     return;
   }
-  const edit = event.target.closest('[data-edit-term]');
-  if (edit) { editingTermIndex = Number(edit.dataset.editTerm); renderModal('terms'); settingsModal.querySelector('[data-edit-term-input]').focus(); return; }
-  if (event.target.closest('[data-cancel-term]')) { editingTermIndex = null; renderModal('terms'); return; }
-  const save = event.target.closest('[data-save-term]');
-  if (save) {
-    const index = Number(save.dataset.saveTerm);
-    const input = settingsModal.querySelector(`[data-edit-term-input="${index}"]`);
-    const name = input.value.trim();
-    if (name && !termEntries.some((entry, entryIndex) => entryIndex !== index && entry.name.toLowerCase() === name.toLowerCase())) {
-      termEntries[index].name = name;
-      if (window.brevia) await window.brevia.terms.save({ id: termEntries[index].id, text: name });
-    }
-    editingTermIndex = null;
-    renderModal('terms');
-    return;
-  }
-  const remove = event.target.closest('[data-remove-term]');
-  if (remove) {
-    const [term] = termEntries.splice(Number(remove.dataset.removeTerm), 1);
-    if (window.brevia && term.id) await window.brevia.terms.delete({ term_id: term.id });
-    editingTermIndex = null;
-    renderModal('terms');
-  }
 });
 settingsModal.addEventListener('dblclick', (event) => {
   const profile = event.target.closest('[data-rename-speaker-profile]');
@@ -981,36 +953,48 @@ settingsModal.addEventListener('submit', async (event) => {
     renderModal('speaker-profiles');
     return;
   }
-  if (!event.target.matches('.term-form')) return;
-  event.preventDefault();
-  const term = new FormData(event.target).get('term').trim();
-  if (!term || termEntries.some((entry) => entry.name.toLowerCase() === term.toLowerCase())) return;
-  if (window.brevia) {
-    const terms = await window.brevia.terms.save({ text: term });
-    termEntries = terms.map((item) => ({ id: item.id, name: item.text, detail: item.note || '自定义术语' }));
-  } else termEntries.push({ name: term, detail: locale === 'zh' ? '自定义术语' : locale === 'es' ? 'Término personalizado' : 'Custom term' });
-  renderModal('terms');
 });
+let ttsSubmitting = false;
+let activeTtsAudio;
 async function playTts(result) {
   if (!result) return;
+  activeTtsAudio?.pause();
   const audio = new Audio(await window.brevia.audioUrl(result.path));
+  activeTtsAudio = audio;
+  audio.addEventListener('ended', () => { if (activeTtsAudio === audio) activeTtsAudio = undefined; }, { once: true });
   await audio.play();
   showToast((voiceFeaturesCopy[locale] || voiceFeaturesCopy.en).ready);
 }
 document.querySelector('#live-view').addEventListener('submit', async (event) => {
   if (!event.target.matches('#tts-chat-form')) return;
   event.preventDefault();
+  if (ttsSubmitting) return;
   const values = new FormData(event.target);
+  const submit = event.target.querySelector('[type="submit"]');
+  let submitLabel = '';
   try {
     const voiceId = values.get('voice_id');
     if (!voiceId) { showToast(locale === 'zh' ? '请选择声音' : 'Select a voice first'); return; }
     const config = summaryModels[activeSummaryModel];
     if (!config) { showToast(locale === 'zh' ? '请先配置翻译模型' : 'Configure a translation model first'); return; }
+    ttsSubmitting = true;
+    submitLabel = submit.innerHTML;
+    submit.disabled = true;
+    submit.classList.add('is-pending');
+    submit.setAttribute('aria-busy', 'true');
+    submit.innerHTML = `<i class="button-spinner" aria-hidden="true"></i>${t('准备中')}`;
     const result = await window.brevia?.tts.synthesize({ voice_id: voiceId, target_language: values.get('target_language'), text: values.get('text').trim(), provider: config.provider, endpoint: config.endpoint, model: config.model, format: config.format, key_reference: config.keyReference });
     if (result?.model_required) return;
     await playTts(result);
     event.target.reset();
-  } catch (error) { showToast(error.message); }
+  } catch (error) { showToast(error.message); } finally {
+    if (!ttsSubmitting) return;
+    ttsSubmitting = false;
+    submit.disabled = false;
+    submit.classList.remove('is-pending');
+    submit.removeAttribute('aria-busy');
+    submit.innerHTML = submitLabel;
+  }
 });
 document.querySelector('#tts-chat').addEventListener('click', (event) => {
   const toggle = event.target.closest('[data-flow-select-toggle]');
@@ -1018,6 +1002,13 @@ document.querySelector('#tts-chat').addEventListener('click', (event) => {
     const options = toggle.parentElement.querySelector('.flow-select-options');
     const opening = options.hidden;
     document.querySelector('#tts-chat').querySelectorAll('.flow-select-options').forEach((list) => { list.hidden = true; list.previousElementSibling.previousElementSibling.setAttribute('aria-expanded', 'false'); });
+    const bounds = toggle.getBoundingClientRect();
+    const liveBounds = document.querySelector('#live-view').getBoundingClientRect();
+    const spaceAbove = bounds.top - liveBounds.top;
+    const spaceBelow = liveBounds.bottom - bounds.bottom;
+    const opensUp = spaceAbove > spaceBelow;
+    options.classList.toggle('opens-up', opensUp);
+    options.style.maxHeight = `${Math.max(64, Math.min(160, Math.max(spaceAbove, spaceBelow) - 8))}px`;
     options.hidden = !opening;
     toggle.setAttribute('aria-expanded', String(opening));
     return;
@@ -1118,7 +1109,6 @@ function applyLanguage(nextLocale, animate = false) {
     renderUpdateNotice();
     renderSpeakerProfileCard();
     renderModelControls();
-    renderTermOverview();
     renderLivePanel();
     renderRequiredModelsCard();
     document.querySelector('[data-separate-detail]').textContent = (voiceFeaturesCopy[locale] || voiceFeaturesCopy.en).source;
@@ -1283,7 +1273,9 @@ function setLiveTranslationEnabled(enabled) {
 }
 function activateMeeting(meeting, payload) {
   const { title, category, streaming_model_id: streamingModelId, speaker_segmentation_model_id: segmentationModelId, speaker_embedding_model_id: embeddingModelId, refined_model_id: refinedModelId } = payload;
-  document.querySelector('#active-streaming-model').textContent = prepareModelChoices['active-streaming-model'].find(([id]) => id === streamingModelId)?.[1] || t('自动匹配');
+  const streamingModelName = prepareModelChoices['active-streaming-model'].find(([id]) => id === streamingModelId)?.[1] || t('自动匹配');
+  document.querySelector('#active-streaming-model').textContent = streamingModelName;
+  uiData.live.status[0].value = streamingModelName;
   document.querySelector('#active-diarization-model').textContent = prepareModelChoices['active-diarization-model'].find(([id]) => id === `${segmentationModelId || ''}|${embeddingModelId || ''}`)?.[1] || t('自动匹配');
   document.querySelector('#active-refined-model').textContent = prepareModelChoices['active-refined-model'].find(([id]) => id === refinedModelId)?.[1] || t('自动匹配');
   document.querySelector('#live-name').textContent = title;
@@ -1728,19 +1720,27 @@ let contextSegmentId;
 function closeSegmentContextMenu() {
   contextSegmentId = undefined;
   segmentContextMenu.hidden = true;
-  segmentContextMenu.classList.remove('is-open');
+  segmentContextMenu.querySelectorAll('.is-open').forEach((item) => item.classList.remove('is-open'));
 }
 function openSegmentContextMenu(segmentId, x, y) {
   contextSegmentId = segmentId;
   const profiles = speakerProfiles.map((profile) => `<button type="button" data-add-segment-profile-sample="${profile.id}">${escapeHtml(profile.name)}</button>`).join('');
-  segmentContextMenu.innerHTML = `<div class="segment-context-submenu"><button type="button" data-open-segment-profile-menu>${t('添加录音到声纹库')} <span>›</span></button><div class="segment-context-options">${profiles || `<span>${t('暂无已注册声纹')}</span>`}</div></div>`;
+  const createProfile = `<div class="segment-context-submenu"><button type="button" data-open-segment-profile-create>${t('新增声纹')} <span>›</span></button><form class="segment-context-options segment-context-name-form" data-create-segment-profile><label>${t('声纹名称')}<input name="name" maxlength="32" required autocomplete="off" /></label><button type="submit">${t('确定')}</button></form></div>`;
+  segmentContextMenu.innerHTML = `<div class="segment-context-submenu"><button type="button" data-open-segment-profile-menu>${t('添加录音到声纹库')} <span>›</span></button><div class="segment-context-options">${profiles || `<span>${t('暂无已注册声纹')}</span>`}${createProfile}</div></div>`;
   segmentContextMenu.style.left = `${Math.min(x, window.innerWidth - 260)}px`;
   segmentContextMenu.style.top = `${Math.min(y, window.innerHeight - 48)}px`;
   segmentContextMenu.hidden = false;
 }
 segmentContextMenu.addEventListener('click', async (event) => {
   if (event.target.closest('[data-open-segment-profile-menu]')) {
-    segmentContextMenu.classList.toggle('is-open');
+    event.target.closest('.segment-context-submenu').classList.toggle('is-open');
+    return;
+  }
+  const create = event.target.closest('[data-open-segment-profile-create]');
+  if (create) {
+    const submenu = create.closest('.segment-context-submenu');
+    submenu.classList.add('is-open');
+    submenu.querySelector('input').focus();
     return;
   }
   const profile = event.target.closest('[data-add-segment-profile-sample]');
@@ -1752,6 +1752,21 @@ segmentContextMenu.addEventListener('click', async (event) => {
     speakerProfiles = await window.brevia.speakerProfile.list();
     if (meeting) applyBackendDetail(meeting);
     showToast(t('已添加录音到声纹库'));
+  } catch (error) { showToast(error.message); }
+});
+segmentContextMenu.addEventListener('submit', async (event) => {
+  const form = event.target.closest('[data-create-segment-profile]');
+  if (!form || !contextSegmentId || !currentMeetingDetail) return;
+  event.preventDefault();
+  const name = new FormData(form).get('name').trim();
+  if (!name) return;
+  const segmentId = contextSegmentId;
+  closeSegmentContextMenu();
+  try {
+    const meeting = await window.brevia?.segment.speaker({ meeting_id: currentMeetingDetail.id, segment_id: segmentId, name });
+    speakerProfiles = await window.brevia.speakerProfile.list();
+    if (meeting) applyBackendDetail(meeting);
+    showToast(t('已创建声纹并添加录音'));
   } catch (error) { showToast(error.message); }
 });
 finalTranscript.addEventListener('contextmenu', (event) => {
@@ -1794,7 +1809,6 @@ if (window.brevia) {
     uiData.meetings = result.meetings.map(backendMeeting);
     speakerProfiles = result.speaker_profiles || [];
     presetVoices = result.preset_voices || [];
-    termEntries = result.terms.map((item) => ({ id: item.id, name: item.text, detail: item.note || '自定义术语' }));
     installedModelNames.clear();
     modelPaths.clear();
     result.models.filter((model) => model.status === 'ready').forEach((model) => {
@@ -1803,30 +1817,26 @@ if (window.brevia) {
     });
     document.querySelector('#active-device').textContent = result.device.backend.toUpperCase();
     uiData.live.status[1].value = result.device.backend.toUpperCase();
-    uiData.live.status[2].value = String(result.terms.length);
     renderLivePanel();
     const storageSizes = [result.storage.meetings, result.storage.models, result.storage.exports].map(formatBytes);
     Object.values(modalCopy).forEach((copy) => {
       copy.storage.items.forEach((item, index) => { item[1] = storageSizes[index]; });
     });
-    renderTermOverview();
     renderSpeakerProfileCard();
     renderMeetingList();
     if (result.recoverable.length) showToast(`发现 ${result.recoverable.length} 场可恢复录音`);
   }).catch((error) => showToast(`配置或后端启动失败：${error.message}`));
 
   const transcript = document.querySelector('#transcript-scroll');
+  const isAtLiveBottom = () => transcript.scrollHeight - transcript.clientHeight - transcript.scrollTop <= 32;
   const scrollLiveToLatest = (segment) => {
     if (!segment) return;
     transcript.scrollTop = transcript.scrollHeight;
+    followLiveTranscript = true;
   };
-  transcript.addEventListener('wheel', () => { followLiveTranscript = false; }, { passive: true });
-  transcript.addEventListener('pointerdown', () => { followLiveTranscript = false; });
-  transcript.addEventListener('scroll', () => {
-    if (Math.abs(transcript.scrollTop - (transcript.scrollHeight - transcript.clientHeight)) < 24) followLiveTranscript = true;
-  }, { passive: true });
+  transcript.addEventListener('scroll', () => { followLiveTranscript = isAtLiveBottom(); }, { passive: true });
   const renderLiveEvent = (payload, partial) => {
-    const shouldFollow = followLiveTranscript;
+    const shouldFollow = followLiveTranscript || isAtLiveBottom();
     if (!partial && !liveSpeakers.has(payload.speaker)) {
       const number = liveSpeakers.size + 1;
       liveSpeakers.set(payload.speaker, {
@@ -1911,14 +1921,16 @@ if (window.brevia) {
   window.brevia.on('translation.ready', (payload) => {
     const element = liveSegments.get(payload.segment_id);
     if (!element) return;
+    const shouldFollow = followLiveTranscript || isAtLiveBottom();
     let line = element.querySelector('.translation');
-    if (!line) { line = document.createElement('p'); line.className = 'translation'; element.append(line); }
+    if (!line) { line = document.createElement('p'); line.className = 'translation'; element.querySelector('.segment-copy').append(line); }
     line.textContent = payload.translation;
     if (payload.segment_id === latestLiveSegmentId) {
       const currentTranslation = document.querySelector('#live-caption-translation');
       currentTranslation.textContent = payload.translation;
       currentTranslation.hidden = !translationAllowed;
     }
+    if (shouldFollow) scrollLiveToLatest(element);
   });
   window.brevia.on('refinement.started', ({ total }) => showRefinementProgress(0, total));
   window.brevia.on('refinement.progress', ({ completed, total }) => showRefinementProgress(completed, total));

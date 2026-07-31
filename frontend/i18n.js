@@ -22,10 +22,6 @@
     ru: { slogan: 'Удалённые встречи безвозвратно удаляются через 30 дней.', back: '← Вернуться в библиотеку', purge: 'Удалить навсегда' }
   };
   const defaultMeetingNames = { zh: '产品策略周会', en: 'Product strategy meeting', es: 'Reunión de estrategia de producto', ja: 'プロダクト戦略会議', ko: '제품 전략 회의', fr: 'Réunion de stratégie produit', de: 'Produktstrategie-Meeting', ru: 'Встреча по стратегии продукта' };
-  const termOverview = {
-    zh: (count) => `${count} 个词条可用于会议准备、搜索和纪要。`, en: (count) => `${count} ${count === 1 ? 'term is' : 'terms are'} available for meeting preparation, search, and notes.`, es: (count) => `Hay ${count} ${count === 1 ? 'término disponible' : 'términos disponibles'} para preparar reuniones, buscar y crear notas.`,
-    ja: (count) => `${count} 件の用語を会議準備、検索、議事録に利用できます。`, ko: (count) => `${count}개의 용어를 회의 준비, 검색 및 회의록에 사용할 수 있습니다.`, fr: (count) => `${count} terme${count === 1 ? '' : 's'} disponible${count === 1 ? '' : 's'} pour préparer, rechercher et rédiger des notes.`, de: (count) => `${count} Begriff${count === 1 ? ' ist' : 'e sind'} für Vorbereitung, Suche und Notizen verfügbar.`, ru: (count) => `${count} ${count === 1 ? 'термин доступен' : 'терминов доступно'} для подготовки, поиска и заметок.`
-  };
   const selectionOverview = {
     zh: (count) => `已选择 ${count} 个会议`, en: (count) => `${count} meeting${count === 1 ? '' : 's'} selected`, es: (count) => `${count} ${count === 1 ? 'reunión seleccionada' : 'reuniones seleccionadas'}`,
     ja: (count) => `${count} 件の会議を選択中`, ko: (count) => `회의 ${count}개 선택됨`, fr: (count) => `${count} réunion${count === 1 ? '' : 's'} sélectionnée${count === 1 ? '' : 's'}`, de: (count) => `${count} Besprechung${count === 1 ? '' : 'en'} ausgewählt`, ru: (count) => `Выбрано встреч: ${count}`
@@ -37,7 +33,6 @@
     languageName: (locale, code) => new Intl.DisplayNames([locale], { type: 'language' }).of(code),
     languageOptions: (locale, translate, includeAuto = false) => [[includeAuto ? 'auto' : '', translate(includeAuto ? '自动检测' : '不需要翻译')], ...languageCodes.map((code) => [code, new Intl.DisplayNames([locale], { type: 'language' }).of(code)])],
     defaultMeetingTitle: (locale, date = new Date()) => `${defaultMeetingNames[locale] || defaultMeetingNames.en} ${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}`,
-    termOverview: (locale, count) => (termOverview[locale] || termOverview.en)(count),
     selectionOverview: (locale, count) => (selectionOverview[locale] || selectionOverview.en)(count),
     slogans,
     trashCopy: (locale) => trashCopy[locale] || trashCopy.en,

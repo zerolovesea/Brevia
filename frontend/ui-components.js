@@ -11,7 +11,7 @@ function flowSelect(name, value, options, activeModel = false, disabled = false)
 function renderTranscriptSegment({ time, seconds, startSeconds, endSeconds, speaker, text, translation, partial = false }) {
   const timing = Number.isFinite(startSeconds) && Number.isFinite(endSeconds) ? ` data-start="${startSeconds}" data-end="${endSeconds}"` : '';
   const label = speaker.editing ? `<form class="inline-segment-speaker-form" data-segment-id="${speaker.segmentId}"><input class="speaker-name-input" data-segment-speaker-input name="name" value="${escapeHtml(speaker.name)}" maxlength="32" /></form>` : `<button class="segment-speaker"${speaker.segmentId ? ` data-segment-speaker="${escapeHtml(speaker.segmentId)}"` : ''}>${escapeHtml(speaker.name)}</button>`;
-  return `<article class="segment${partial ? ' partial' : ''}"${partial ? ' id="partial-segment"' : ''}${speaker.segmentId ? ` data-segment-id="${escapeHtml(speaker.segmentId)}"` : ''}${timing}><div class="segment-meta"><time>${escapeHtml(time)}</time>${label}${seconds !== undefined ? `<button class="jump" data-time="${Number(seconds)}">${t('播放此段')}</button>` : ''}</div><p>${escapeHtml(text)}</p>${translation ? `<p class="translation">${escapeHtml(translation)}</p>` : ''}</article>`;
+  return `<article class="segment${partial ? ' partial' : ''}"${partial ? ' id="partial-segment"' : ''}${speaker.segmentId ? ` data-segment-id="${escapeHtml(speaker.segmentId)}"` : ''}${timing}><div class="segment-meta"><time>${escapeHtml(time)}</time>${label}${seconds !== undefined ? `<button class="jump" data-time="${Number(seconds)}">${t('播放此段')}</button>` : ''}</div><div class="segment-copy"><p>${escapeHtml(text)}</p>${translation ? `<p class="translation">${escapeHtml(translation)}</p>` : ''}</div></article>`;
 }
 /** Renders one row in the meeting library. @param {{tone: string, title: string, meta: string, tags: string[], status: object}} meeting Meeting data. @param {number} index Meeting index. @returns {string} Row markup. */
 function renderMeetingRow({ id, tone, title, meta, tags, status, deleted = false }, index) {
@@ -23,9 +23,9 @@ function renderMeetingRow({ id, tone, title, meta, tags, status, deleted = false
 function renderModelRow({ icon, name, detail, intro = '' }) {
   return `<div class="model-row"><span class="model-icon">${icon}</span><div><b>${name}</b><small>${t(detail)}</small>${intro ? `<small>${t(intro)}</small>` : ''}</div><span class="status complete">${t('可用')}</span></div>`;
 }
-/** Renders a settings card with an optional term list and modal action. @param {{title: string, description: string, terms?: string[], action: string, modal: string}} card Card data. @returns {string} Card markup. */
-function renderSettingsCard({ title, description, terms, action, modal }) {
-  return `<section class="settings-card"><h2>${t(title)}</h2><p>${t(description)}</p>${terms ? `<div class="terms">${terms.map((term) => `<span>${t(term)}</span>`).join('')}</div>` : ''}<button class="secondary" data-settings-modal="${modal}">${t(action)}</button></section>`;
+/** Renders a settings card and its modal action. @param {{title: string, description: string, action: string, modal: string}} card Card data. @returns {string} Card markup. */
+function renderSettingsCard({ title, description, action, modal }) {
+  return `<section class="settings-card"><h2>${t(title)}</h2><p>${t(description)}</p><button class="secondary" data-settings-modal="${modal}">${t(action)}</button></section>`;
 }
 /** Renders one participant in the live-meeting sidebar. @param {{id: string, speakerId?: string, name: string, source: string, avatar: string, level: string}} participant Participant data. @returns {string} Participant markup. */
 function renderParticipant({ id, speakerId = id, name, source, avatar, level }) {

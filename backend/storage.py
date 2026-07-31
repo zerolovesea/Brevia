@@ -92,14 +92,6 @@ CREATE TABLE IF NOT EXISTS speaker_turns (
   speaker TEXT NOT NULL,
   PRIMARY KEY (meeting_id, version, start_ms, end_ms, speaker)
 );
-CREATE TABLE IF NOT EXISTS terms (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  text TEXT NOT NULL COLLATE NOCASE,
-  language TEXT NOT NULL DEFAULT '',
-  weight REAL NOT NULL DEFAULT 1,
-  note TEXT NOT NULL DEFAULT '',
-  UNIQUE(text, language)
-);
 CREATE TABLE IF NOT EXISTS summaries (
   meeting_id TEXT PRIMARY KEY REFERENCES meetings(id) ON DELETE CASCADE,
   data TEXT,
@@ -828,49 +820,6 @@ class Store:
                     for turn in turns
                 ),
             )
-
-    def list_terms(self):
-        """返回按文本排序的全部术语。"""
-        with self.connect() as db:
-            return [dict(row) for row in db.execute("SELECT * FROM terms ORDER BY text")]
-
-    def save_term(self, payload):
-        """新增或更新术语，并返回更新后的完整术语表。
-
-        ``payload`` 可带术语 ID；无 ID 时按“文本 + 语言”去重。
-        """
-        text = payload["text"].strip()
-        if not text or len(text) > 64:
-            raise ValueError("Term must contain 1–64 characters")
-        with self.connect() as db:
-            if payload.get("id"):
-                db.execute(
-                    "UPDATE terms SET text=?,language=?,weight=?,note=? WHERE id=?",
-                    (
-                        text,
-                        payload.get("language", ""),
-                        float(payload.get("weight", 1)),
-                        payload.get("note", ""),
-                        int(payload["id"]),
-                    ),
-                )
-            else:
-                db.execute(
-                """INSERT INTO terms(text,language,weight,note) VALUES(?,?,?,?)
-                   ON CONFLICT(text,language) DO UPDATE SET weight=excluded.weight,note=excluded.note""",
-                    (
-                        text,
-                        payload.get("language", ""),
-                        float(payload.get("weight", 1)),
-                        payload.get("note", ""),
-                    ),
-                )
-        return self.list_terms()
-
-    def delete_term(self, term_id):
-        """按整数 ID 删除术语，无匹配记录时保持幂等。"""
-        with self.connect() as db:
-            db.execute("DELETE FROM terms WHERE id=?", (int(term_id),))
 
     def save_summary(self, meeting_id, data, raw_response):
         """保存结构化纪要及供应商原始响应。

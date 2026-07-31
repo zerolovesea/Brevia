@@ -301,9 +301,6 @@ function registerIpc() {
   handle('models.list', z.object({}), 'models.list');
   handle('models.download', z.object({ model_id: z.string() }), 'models.download');
   handle('models.delete', z.object({ model_id: z.string() }), 'models.delete');
-  handle('terms.list', z.object({}), 'terms.list');
-  handle('terms.save', z.object({ id: z.number().int().positive().optional(), text: z.string().trim().min(1).max(64), language: z.string().max(16).optional(), weight: z.number().optional(), note: z.string().max(200).optional() }), 'terms.save');
-  handle('terms.delete', z.object({ term_id: z.number().int().positive() }), 'terms.delete');
   ipcMain.handle('secret.set', async (_, payload) => {
     const value = z.object({ reference: z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/), value: z.string().min(1) }).parse(payload);
     await setSecret(value.reference, value.value);
@@ -409,8 +406,8 @@ async function promptInitialPermissions(window) {
 
 function createWindow() {
   const window = new BrowserWindow({
-    width: 1440,
-    height: 900,
+    width: 1200,
+    height: 760,
     minWidth: 880,
     minHeight: 640,
     titleBarStyle: 'hiddenInset',

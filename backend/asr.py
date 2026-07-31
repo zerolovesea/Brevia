@@ -177,13 +177,12 @@ class ModelManager:
 class StreamingASR:
     """维护每条音轨的在线识别流，生成 partial 和 endpoint 结果。"""
 
-    def __init__(self, manager, model_id, hotwords=()):
+    def __init__(self, manager, model_id):
         """创建流式识别器。
 
         Args:
             manager: 已初始化的 ``ModelManager``。
             model_id: 具备 ``streaming`` 能力且已安装的模型 ID。
-            hotwords: 会议开始时术语库中的热词；仅 Transducer 模型使用。
         """
         self.manager = manager
         self.model = manager.get(model_id)
@@ -222,19 +221,6 @@ class StreamingASR:
                 decoder=str(path / files[1]),
                 joiner=str(path / files[2]),
             )
-            hotword_lines = tuple(dict.fromkeys(
-                word.strip() for word in hotwords if word and "\n" not in word and "\r" not in word
-            ))
-            if hotword_lines and self.model.get("hotword"):
-                hotword_dir = manager.root / ".runtime"
-                hotword_dir.mkdir(exist_ok=True)
-                hotword_file = hotword_dir / f"{model_id}-hotwords.txt"
-                hotword_file.write_text("\n".join(hotword_lines) + "\n", encoding="utf-8")
-                common.update(
-                    decoding_method="modified_beam_search",
-                    hotwords_file=str(hotword_file),
-                    modeling_unit=self.model.get("hotword_modeling_unit", "cjkchar"),
-                )
         self.recognizer = sherpa_onnx.OnlineRecognizer.from_paraformer(**common) if self.model["kind"] == "paraformer" else sherpa_onnx.OnlineRecognizer.from_transducer(**common)
         self.streams = {}
 
@@ -506,13 +492,13 @@ class SpeakerTracker:
 class RefinedASR:
     """使用完整录音窗口执行高精度离线转写。"""
 
-    def __init__(self, manager, model_id, hotwords=()):
+    def __init__(self, manager, model_id):
         """加载 Qwen3-ASR 会后精修模型。
 
         Args:
             manager: 已初始化的 ``ModelManager``。
             model_id: 已安装的 Qwen3-ASR 模型 ID。
-            hotwords: 术语列表；重复项会在传给模型前去除。
+
         """
         model = manager.get(model_id)
         if model["kind"] not in {"qwen3", "sensevoice", "whisper"} or not manager.is_ready(model_id):
@@ -538,7 +524,6 @@ class RefinedASR:
             decoder=str(path / "decoder.int8.onnx"),
             tokenizer=str(path / "tokenizer"),
             **common,
-            hotwords=",".join(dict.fromkeys(hotwords)),
             max_total_len=1024,
             max_new_tokens=1024,
         )

@@ -43,11 +43,6 @@ contextBridge.exposeInMainWorld('brevia', {
     download: invoke('models.download'),
     delete: invoke('models.delete'),
   },
-  terms: {
-    list: invoke('terms.list'),
-    save: invoke('terms.save'),
-    delete: invoke('terms.delete'),
-  },
   summary: { generate: invoke('summary.generate'), config: { get: invoke('summary.config.get'), save: invoke('summary.config.save') } },
   translation: { generate: invoke('translation.generate') },
   secret: { set: invoke('secret.set') },

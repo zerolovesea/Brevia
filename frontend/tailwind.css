@@ -162,17 +162,19 @@
   .pause-button { @apply col-span-1 text-[13px] text-[#404040] transition-opacity duration-300 hover:opacity-70; }
   .end-button { @apply col-span-2 border border-[#ff0000] px-4 py-3 text-[13px] text-[#ff0000] transition-colors duration-300 hover:bg-[#ff0000] hover:text-white; }
   .live-layout { @apply grid min-h-0 grid-cols-12 gap-8 py-6; }
-  .transcript { @apply col-span-9 grid min-h-0 min-w-0 grid-rows-[auto_27rem_auto_auto]; }
+  .transcript { @apply col-span-9 grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto]; }
   .section-heading { @apply flex min-w-0 shrink-0 items-end justify-between overflow-hidden border-b border-black pb-5; }
   .current-caption { @apply min-w-0 flex-1 overflow-hidden; }
-  .section-heading h1 { @apply m-0 w-full max-w-full overflow-x-scroll whitespace-nowrap text-[32px] font-normal tracking-[-.035em]; }
+  .section-heading h1 { @apply m-0 w-full max-w-full overflow-x-scroll whitespace-nowrap text-[clamp(20px,2vw,32px)] font-normal tracking-[-.035em]; }
   .live-caption-translation { @apply mt-3 mb-0 text-[16px] leading-7 text-[#808080]; }
   .translation-toggle { @apply text-[12px] text-[#666] transition-colors duration-300 hover:text-black; }
-  .transcript-scroll { @apply h-108 min-h-0 overflow-y-auto py-0 pr-2; }
-  * { scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: #aaa transparent; }
+  .transcript-scroll { @apply min-h-0 overflow-y-auto py-0 pr-2; }
+  * { scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: transparent transparent; }
+  *:hover, *.is-scrolling { scrollbar-color: #aaa transparent; }
   *::-webkit-scrollbar { width: 10px; height: 10px; }
   *::-webkit-scrollbar-track { background: transparent; }
-  *::-webkit-scrollbar-thumb { background: #aaa; background-clip: padding-box; border: 3px solid transparent; border-radius: 999px; }
+  *::-webkit-scrollbar-thumb { background-color: rgb(170 170 170 / 0); background-clip: padding-box; border: 3px solid transparent; border-radius: 999px; transition: background-color 220ms ease; }
+  *:hover::-webkit-scrollbar-thumb, *.is-scrolling::-webkit-scrollbar-thumb { background-color: #aaa; }
   *::-webkit-scrollbar-thumb:hover { background-color: #666; }
   .segment { @apply relative pl-24; }
   .segment-meta { @apply absolute top-0 left-0 grid gap-1 text-[11px]; }
@@ -180,9 +182,10 @@
   .segment-meta b { @apply text-[12px] font-normal text-[#404040]; }
   .segment p { @apply m-0 text-[18px] leading-[1.8] tracking-[.02em] text-[#1a1a1a]; }
   .segment .translation { @apply mt-2 text-[14px] text-[#808080]; }
-  .transcript-scroll .segment { @apply grid min-h-0 grid-cols-[7rem_minmax(0,1fr)] gap-x-5 py-3 pr-4 transition-colors duration-200; }
+  .transcript-scroll .segment { @apply grid min-h-0 grid-cols-[5.5rem_minmax(0,1fr)] gap-x-5 py-3 pr-4 pl-0 transition-colors duration-200; }
   .transcript-scroll .segment-meta { @apply static self-start content-start gap-1; }
-  .transcript-scroll .segment > p { @apply col-start-2 min-w-0 break-words; }
+  .segment-copy { @apply min-w-0; }
+  .transcript-scroll .segment-copy { @apply col-start-2 min-w-0 break-words; }
   .transcript-scroll .segment.is-active { @apply bg-[#f2f2ed]; }
   .partial { @apply border-l border-[#999] py-1; }
   .partial p:first-of-type { @apply text-[#666]; }
@@ -193,7 +196,7 @@
   .person { @apply grid grid-cols-[32px_1fr] gap-3 py-3; }.avatar { @apply grid size-8 place-items-center border border-[#999] text-[11px]; }.avatar.blue, .avatar.gray { @apply bg-white text-black; }
   .person b, .person small { @apply block; }.person b { @apply text-[13px] font-normal; }.person small { @apply mt-1 text-[11px] text-[#999]; }.level { @apply hidden; }
   .participants-empty { @apply py-3 text-[12px] text-[#999]; }
-  .tts-chat { @apply shrink-0 pt-3; }.tts-chat form { @apply grid gap-3; }.tts-selects { @apply grid min-w-0 grid-cols-2 gap-3; }.tts-chat input { @apply min-w-0 border border-[#ccc] bg-white px-3 py-2 text-[12px] text-black outline-none focus:border-black; }.tts-selects .flow-select-toggle, .tts-selects .flow-select-options button { @apply text-[12px]; }.tts-selects .flow-select-options { @apply max-h-40 overflow-y-auto; }.tts-selects .flow-select-options button { @apply w-full whitespace-nowrap; }.tts-chat form > button[type=submit] { @apply justify-self-start border border-black bg-black px-3 py-2 text-[12px] text-white transition-opacity duration-300 hover:opacity-70 disabled:cursor-not-allowed disabled:opacity-40; }.tts-hint { @apply m-0 text-[11px] text-[#999]; }
+  .tts-chat { @apply shrink-0 pt-3; }.tts-chat form { @apply grid gap-3; }.tts-selects { @apply grid min-w-0 grid-cols-2 gap-3; }.tts-chat input { @apply min-w-0 border border-[#ccc] bg-white px-3 py-2 text-[12px] text-black outline-none focus:border-black; }.tts-selects .flow-select-toggle, .tts-selects .flow-select-options button { @apply text-[12px]; }.tts-selects .flow-select-options { @apply max-h-40 overflow-y-auto; }.tts-selects .flow-select-options.opens-up { @apply top-auto bottom-full; }.tts-selects .flow-select-options button { @apply w-full whitespace-nowrap; }.tts-chat form > button[type=submit] { @apply inline-flex items-center gap-2 justify-self-start border border-black bg-black px-3 py-2 text-[12px] text-white transition-opacity duration-300 hover:opacity-70 disabled:cursor-not-allowed disabled:opacity-40; }.tts-chat form > button[type=submit].is-pending { @apply cursor-wait; }.tts-hint { @apply m-0 text-[11px] text-[#999]; }
   .speaker-name-input { @apply w-full border-b border-black bg-transparent py-0 text-[13px] outline-none; }
   .segment-speaker { @apply w-full p-0 text-left text-[12px] leading-5 font-normal text-[#404040] hover:underline; }
   /* Completed-meeting detail: player, transcript metadata, and summary sidebar. */
@@ -215,13 +218,15 @@
   #detail-view .transcript-body { @apply pt-5 pr-4; }
   #detail-view .final-transcript .segment { @apply mb-0 grid min-h-20 grid-cols-[5.5rem_minmax(0,1fr)] gap-2 py-2 pr-3 pl-0; }
   #detail-view .final-transcript .segment-meta { @apply static self-start content-start gap-0.5; }
-  #detail-view .final-transcript .segment > p { @apply col-start-2 text-[16px] leading-7; }
+  #detail-view .final-transcript .segment-copy { @apply col-start-2 min-w-0; }
+  #detail-view .final-transcript .segment-copy > p { @apply text-[16px] leading-7; }
   #detail-view .final-transcript .jump { @apply mt-1; }
   .segment-context-menu { @apply fixed z-50 min-w-48 border border-black bg-white text-[12px] shadow-sm; }
   .segment-context-submenu { @apply relative; }.segment-context-submenu > button { @apply flex w-full items-center justify-between gap-8 px-3 py-2 text-left hover:bg-[#f2f2ed]; }
   .segment-context-options { @apply absolute left-full top-0 hidden min-w-44 border border-black bg-white shadow-sm; }
-  .segment-context-submenu:hover .segment-context-options, .segment-context-menu.is-open .segment-context-options { @apply block; }
+  .segment-context-submenu:hover > .segment-context-options, .segment-context-submenu.is-open > .segment-context-options { @apply block; }
   .segment-context-options button { @apply block w-full px-3 py-2 text-left hover:bg-[#f2f2ed]; }.segment-context-options span { @apply block px-3 py-2 text-[#666]; }
+  .segment-context-name-form { @apply w-52 p-3; }.segment-context-name-form label { @apply grid gap-2 text-[#666]; }.segment-context-name-form input { @apply min-w-0 border border-[#ccc] px-2 py-1 text-black outline-none focus:border-black; }.segment-context-name-form button { @apply mt-3 border border-black bg-black text-white hover:bg-black; }
   .dual-track-panel { @apply min-h-0 flex-1 overflow-y-auto pt-8 pr-6; }
   .track-player { @apply border-y border-[#e5e5e5] py-6; }.track-player + .track-player { @apply -mt-px; }
   .track-player header { @apply mb-5 flex items-baseline justify-between; }.track-player header b { @apply text-[15px] font-normal; }.track-player header small { @apply text-[10px] tracking-[.12em] text-[#999]; }
@@ -233,7 +238,7 @@
   #detail-view .notes section { @apply py-4; }
   #detail-view .notes p, #detail-view .notes label { @apply text-[12px] leading-6; }
   /* Settings cards and model rows; card content comes from the shared UI data. */
-  .settings-grid { @apply mt-12 grid grid-cols-12 gap-8; }.settings-card { @apply col-span-6 border border-[#e5e5e5] p-8; }.settings-card:last-child, .config-card { @apply col-span-12; }.model-row { @apply grid grid-cols-[1fr_auto_auto] items-center gap-3 border-b border-[#e5e5e5] py-5; }.model-row .model-icon { display: none; }.model-row small { @apply mt-1 block text-[11px] text-[#999]; }.model-delete { @apply border-b border-[#a65b5b] pb-0.5 text-[11px] text-[#a65b5b] transition-opacity duration-300 hover:opacity-70; }.secondary { @apply mt-7 border-b border-black pb-1 text-[13px] text-[#404040] transition-opacity duration-300 hover:opacity-70; }.terms { @apply flex flex-wrap gap-x-4 gap-y-2 text-[13px] text-[#666]; }.terms span::before { content: "#"; }.config-json { @apply mt-5 max-h-64 overflow-auto border border-[#e5e5e5] bg-[#f5f5f5] p-4 font-mono text-[11px] leading-6 text-[#404040]; }
+  .settings-grid { @apply mt-12 grid grid-cols-12 gap-8; }.settings-card { @apply col-span-6 border border-[#e5e5e5] p-8; }.settings-card:last-child, .config-card { @apply col-span-12; }.model-row { @apply grid grid-cols-[1fr_auto_auto] items-center gap-3 border-b border-[#e5e5e5] py-5; }.model-row .model-icon { display: none; }.model-row small { @apply mt-1 block text-[11px] text-[#999]; }.model-delete { @apply border-b border-[#a65b5b] pb-0.5 text-[11px] text-[#a65b5b] transition-opacity duration-300 hover:opacity-70; }.secondary { @apply mt-7 border-b border-black pb-1 text-[13px] text-[#404040] transition-opacity duration-300 hover:opacity-70; }.config-json { @apply mt-5 max-h-64 overflow-auto border border-[#e5e5e5] bg-[#f5f5f5] p-4 font-mono text-[11px] leading-6 text-[#404040]; }
   #settings-view.active { @apply grid h-[calc(100dvh-4rem)] grid-rows-[auto_auto_auto_minmax(0,1fr)] gap-3 overflow-hidden py-8; }
   #settings-view .back { @apply mb-0 justify-self-start; }
   #settings-view > .eyebrow { @apply mb-0 text-[11px]; }
@@ -243,7 +248,7 @@
   #settings-view .model-row { @apply py-3; }
   .update-card { @apply col-span-12 flex items-center justify-between gap-8 border border-black p-8; }.update-card h2 { @apply m-0 text-[22px] font-normal tracking-[-.03em]; }.update-card p { @apply mt-2 text-[13px] text-[#666]; }.update-button { @apply shrink-0 border border-black bg-black px-5 py-3 text-[13px] text-white transition-opacity duration-300 hover:opacity-70 disabled:cursor-wait disabled:opacity-50; }
   /* Shared modal shell, form controls, and custom select styling. */
-  .modal-backdrop { @apply fixed inset-0 z-30 grid place-items-center bg-black/30 p-6; }.modal-panel { @apply w-full max-w-[960px] border border-black bg-white p-8 text-black; }.modal-head { @apply flex items-start justify-between gap-6 border-b border-[#e5e5e5] pb-6; }.modal-title { @apply flex min-w-0 items-baseline gap-4; }.modal-head h2 { @apply m-0 shrink-0 text-[26px] font-normal tracking-[-.03em]; }.modal-head p { @apply m-0 overflow-hidden text-ellipsis whitespace-nowrap text-[12px] text-[#999]; }.modal-close { @apply size-8 shrink-0 border border-[#e5e5e5] text-[18px] text-[#404040] transition-opacity duration-300 hover:opacity-70; }.modal-body { @apply grid min-w-0 max-h-[calc(100vh-180px)] overflow-auto overflow-x-hidden py-7 pr-8; }.modal-list { @apply grid border-b border-[#e5e5e5]; }.model-library-list h3 { @apply pt-5 text-[12px] font-normal text-[#666] first:pt-0; }.modal-list > div { @apply flex items-center justify-between gap-4 border-b border-[#e5e5e5] py-4 last:border-0; }.modal-list b { @apply text-[14px] font-normal; }.modal-list small { @apply block mt-1 text-[11px] text-[#999]; }.model-download-progress { @apply ml-2 inline-flex items-center gap-1 text-[11px] text-[#999]; }.model-download-progress i { @apply block h-1 w-20 origin-left bg-black; }.modal-action { @apply shrink-0 border border-black bg-black px-3 py-2 text-[12px] text-white transition-opacity duration-300 hover:opacity-70 disabled:cursor-default disabled:opacity-40; }.modal-danger { @apply border-[#a65b5b] bg-[#a65b5b]; }.term-actions { @apply flex shrink-0 gap-2; }.term-edit-input { @apply w-full border-b border-black bg-transparent py-1 text-[14px] outline-none; }.term-form { @apply mt-5 flex gap-3; }.term-form input { @apply min-w-0 flex-1 border border-[#ccc] bg-white px-3 py-2 text-[13px] outline-none focus:border-black; }.term-form button { @apply border border-black bg-black px-4 py-2 text-[12px] text-white transition-opacity duration-300 hover:opacity-70; }.config-fields { @apply grid grid-cols-2 gap-4; }.config-fields > * { @apply min-w-0; }.config-fields label { @apply grid gap-2 text-[12px] text-[#666]; }.config-fields input, .config-fields select, .prompt-form textarea { @apply w-full border border-[#ccc] bg-white px-3 py-2 text-[13px] text-black outline-none focus:border-black; }.modal-form-actions { @apply mt-6 flex items-center gap-5; }.modal-form-actions .secondary { @apply mt-0; }.configured-models { @apply mt-8 border-t border-[#e5e5e5] pt-6; }.configured-models > p { @apply mb-3 text-[12px] text-[#666]; }.configured-models label { @apply flex gap-3 border-b border-[#e5e5e5] py-3 text-[13px]; }.configured-models small { @apply mt-1 block text-[11px] text-[#999]; }.modal-subsection { @apply mt-8 border-t border-[#e5e5e5] pt-6; }.modal-subsection h3 { @apply m-0 text-[16px] font-normal; }.modal-subsection > p { @apply mt-2 text-[12px] text-[#666]; }.prompt-form { @apply mt-5 grid gap-5; }.config-select-field { @apply grid gap-2 text-[12px] text-[#666]; }.flow-select { @apply relative grid min-w-0; }.flow-select-toggle { @apply flex w-full items-center justify-between border border-[#ccc] bg-white px-3 py-2 text-left text-[13px] text-black outline-none transition-colors duration-300 hover:border-black focus:border-black; }.config-fields .flow-select-toggle { @apply h-12; }.flow-select-toggle span { @apply text-[16px] leading-none; }.flow-select-options { @apply absolute inset-x-0 top-full z-10 grid max-h-64 overflow-y-auto border border-[#ccc] bg-white p-1; }.flow-select-options button { @apply px-3 py-2 text-left text-[13px] text-[#404040] transition-colors duration-300 hover:bg-[#f5f5f5] hover:text-black; }.configured-models .config-select-field { @apply grid max-w-full border-0 py-0; }.modal-form-actions .model-delete { @apply text-[13px]; }.config-json { @apply whitespace-pre-wrap break-all; }
+  .modal-backdrop { @apply fixed inset-0 z-30 grid place-items-center bg-black/30 p-6; }.modal-panel { @apply w-full max-w-[960px] border border-black bg-white p-8 text-black; }.modal-head { @apply flex items-start justify-between gap-6 border-b border-[#e5e5e5] pb-6; }.modal-title { @apply flex min-w-0 items-baseline gap-4; }.modal-head h2 { @apply m-0 shrink-0 text-[26px] font-normal tracking-[-.03em]; }.modal-head p { @apply m-0 overflow-hidden text-ellipsis whitespace-nowrap text-[12px] text-[#999]; }.modal-close { @apply size-8 shrink-0 border border-[#e5e5e5] text-[18px] text-[#404040] transition-opacity duration-300 hover:opacity-70; }.modal-body { @apply grid min-w-0 max-h-[calc(100vh-180px)] overflow-auto overflow-x-hidden py-7 pr-8; }.modal-list { @apply grid border-b border-[#e5e5e5]; }.modal-list > div { @apply flex items-center justify-between gap-4 border-b border-[#e5e5e5] py-4 last:border-0; }.modal-list b { @apply text-[14px] font-normal; }.modal-list small { @apply block mt-1 text-[11px] text-[#999]; }.model-download-progress { @apply ml-2 inline-flex items-center gap-1 text-[11px] text-[#999]; }.model-download-progress i { @apply block h-1 w-20 origin-left bg-black; }.modal-action { @apply shrink-0 border border-black bg-black px-3 py-2 text-[12px] text-white transition-opacity duration-300 hover:opacity-70 disabled:cursor-default disabled:opacity-40; }.modal-danger { @apply border-[#a65b5b] bg-[#a65b5b]; }.term-actions { @apply flex shrink-0 gap-2; }.term-edit-input { @apply w-full border-b border-black bg-transparent py-1 text-[14px] outline-none; }.term-form { @apply mt-5 flex gap-3; }.term-form input { @apply min-w-0 flex-1 border border-[#ccc] bg-white px-3 py-2 text-[13px] outline-none focus:border-black; }.term-form button { @apply border border-black bg-black px-4 py-2 text-[12px] text-white transition-opacity duration-300 hover:opacity-70; }.config-fields { @apply grid grid-cols-2 gap-4; }.config-fields > * { @apply min-w-0; }.config-fields label { @apply grid gap-2 text-[12px] text-[#666]; }.config-fields input, .config-fields select, .prompt-form textarea { @apply w-full border border-[#ccc] bg-white px-3 py-2 text-[13px] text-black outline-none focus:border-black; }.modal-form-actions { @apply mt-6 flex items-center gap-5; }.modal-form-actions .secondary { @apply mt-0; }.configured-models { @apply mt-8 border-t border-[#e5e5e5] pt-6; }.configured-models > p { @apply mb-3 text-[12px] text-[#666]; }.configured-models label { @apply flex gap-3 border-b border-[#e5e5e5] py-3 text-[13px]; }.configured-models small { @apply mt-1 block text-[11px] text-[#999]; }.modal-subsection { @apply mt-8 border-t border-[#e5e5e5] pt-6; }.modal-subsection h3 { @apply m-0 text-[16px] font-normal; }.modal-subsection > p { @apply mt-2 text-[12px] text-[#666]; }.prompt-form { @apply mt-5 grid gap-5; }.config-select-field { @apply grid gap-2 text-[12px] text-[#666]; }.flow-select { @apply relative grid min-w-0; }.flow-select-toggle { @apply flex w-full items-center justify-between border border-[#ccc] bg-white px-3 py-2 text-left text-[13px] text-black outline-none transition-colors duration-300 hover:border-black focus:border-black; }.config-fields .flow-select-toggle { @apply h-12; }.flow-select-toggle span { @apply text-[16px] leading-none; }.flow-select-options { @apply absolute inset-x-0 top-full z-10 grid max-h-64 overflow-y-auto border border-[#ccc] bg-white p-1; }.flow-select-options button { @apply px-3 py-2 text-left text-[13px] text-[#404040] transition-colors duration-300 hover:bg-[#f5f5f5] hover:text-black; }.configured-models .config-select-field { @apply grid max-w-full border-0 py-0; }.modal-form-actions .model-delete { @apply text-[13px]; }.config-json { @apply whitespace-pre-wrap break-all; }
   .model-actions { @apply flex shrink-0 items-center gap-4; }.model-actions .secondary { @apply mt-0; }
   .model-library-list > div.model-target { @apply bg-[#f2f2ed] transition-colors duration-500; }
   .export-options { @apply grid border-t border-[#e5e5e5]; }.export-options > button { @apply flex items-center justify-between gap-8 border-b border-[#e5e5e5] py-5 text-left transition-opacity duration-300 hover:opacity-60 disabled:cursor-not-allowed disabled:opacity-35; }.export-options b { @apply block text-[15px] font-normal; }.export-options small { @apply mt-1 block text-[11px] text-[#999]; }.export-options strong { @apply text-[11px] font-normal tracking-[.08em] text-[#666]; }
@@ -255,18 +260,29 @@
   .software-update-notice { @apply fixed bottom-8 left-8 z-10 flex items-center gap-4 border border-black bg-white p-3 text-left text-[12px] text-black; animation: mini-in 260ms ease forwards; }.software-update-notice span { @apply text-[#666]; }.software-update-notice button { @apply border border-black bg-black px-3 py-2 text-[12px] text-white transition-opacity duration-300 hover:opacity-70; }
 }
 
+/* Compact desktop windows keep every primary action in the single-screen layout. */
+@media (min-width: 851px) and (max-width: 1100px), (min-width: 851px) and (max-height: 760px) {
+  .app-shell { grid-template-columns: 220px minmax(0, 1fr); }
+  .sidebar { padding: 44px 16px 20px; }.brand img { height: 24px; }.new-meeting { margin-top: 28px; padding: 10px 12px; } nav { margin-top: 24px; }.nav-item { padding: 6px 8px; }
+  .workspace { padding-inline: 24px; }.window-bar { height: 48px; }.icon-button { width: 32px; height: 32px; }
+  #prepare-view.active { height: calc(100dvh - 3rem); gap: 12px; padding-block: 16px; }
+  .prepare-layout { gap: 20px; }.prepare-layout h1, #prepare-view .prepare-layout h1 { margin-bottom: 12px; font-size: clamp(30px, 4vw, 42px); }.prepare-layout form { margin-top: 12px; gap: 10px; }
+  label { gap: 6px; font-size: 12px; } input:not([type=checkbox]):not([type=range]), select { padding: 8px 12px; font-size: 14px; }.form-grid { gap: 12px; } fieldset { padding: 6px 16px; }.choice { gap: 10px; padding-block: 4px; }.choice small { margin-top: 2px; }.choice .input-state { gap: 6px; }.prepare-layout .primary-action { padding-block: 10px; }
+  .model-card { padding-left: 20px; }.model-icon { width: 32px; height: 32px; margin-bottom: 16px; font-size: 14px; } dl { margin-block: 16px; gap: 10px; } dl div { padding-bottom: 8px; font-size: 12px; }
+  #live-view.active { height: calc(100dvh - 3rem); overflow-y: auto; }.live-header { gap: 16px; padding-block: 12px; }.live-layout { gap: 20px; padding-block: 12px; }.transcript { grid-template-rows: auto minmax(0, 1fr) auto; }.section-heading { padding-bottom: 12px; }.section-heading h1 { font-size: 26px; }.live-caption-translation { margin-top: 6px; font-size: 13px; line-height: 1.5; }.transcript-scroll { height: auto; }.tts-chat { padding-top: 8px; }.tts-chat form { gap: 8px; }.tts-selects { gap: 8px; }.tts-chat input, .tts-chat form > button[type=submit] { padding-block: 6px; }.live-panel { padding-left: 16px; }.live-panel section { padding-bottom: 12px; }.live-panel section + section { padding-top: 12px; }.person { padding-block: 6px; }
+  #detail-view.active { height: calc(100dvh - 3rem); gap: 12px; padding-block: 16px; }.detail-head h1, #detail-view .detail-head h1 { font-size: clamp(30px, 4vw, 42px); }.player { gap: 12px; padding-block: 10px; }.detail-layout { gap: 20px; }.notes { padding-left: 16px; }
+}
+
 /* Small-screen layout: collapse side-by-side panels without changing component markup. */
 @media (max-width: 850px) {
   .app-shell { grid-template-columns: 1fr; }.sidebar { display: none; }.workspace { padding: 0 24px 48px; }.view { padding: 48px 0; }.page-head, .detail-head, .prepare-layout, .live-layout, .detail-layout { grid-template-columns: 1fr; }.page-head > div, .detail-head > div:first-child, .page-head > .primary-action, .detail-actions, .prepare-layout > div, .model-card, .transcript, .live-panel, .final-transcript, .notes { grid-column: auto; }.page-head > .primary-action, .detail-actions { justify-self: start; }.library-toolbar { grid-template-columns: 1fr; gap: 16px; margin-top: 48px; }.search, .filter { grid-column: auto; }.meeting-row { grid-template-columns: 32px minmax(0,1fr) 24px; gap: 16px; }.meeting-color, .meeting-main, .more { grid-column: auto; }.meeting-status { display: none; }.batch-toolbar { align-items: flex-start; gap: 8px; flex-direction: column; }.batch-actions { width: 100%; overflow-x: auto; }.form-grid { grid-template-columns: 1fr; }.model-card, .live-panel, .notes { border-left: 0; border-top: 1px solid #e5e5e5; padding: 32px 0 0; }.live-header { grid-template-columns: 1fr auto auto; gap: 12px; }.live-header #timer, .pause-button { display: none; }.live-title { grid-column: auto; }.end-button { grid-column: auto; }.transcript-scroll { max-height: none; }.player { grid-template-columns: 40px auto 1fr auto; gap: 12px; }.player .skip, .player-speed { display: none; }.settings-grid { grid-template-columns: 1fr; }.settings-card, .settings-card:last-child, .config-card { grid-column: auto; }.config-fields { grid-template-columns: 1fr; }.page-head > div { height: auto; overflow: visible; }
-}
-
-@media (max-width: 850px) {
   #live-view.active { height: auto; overflow: visible; padding: 48px 0; }
   #home-view.active, #prepare-view.active, #detail-view.active, #settings-view.active { height: auto; overflow: visible; padding: 48px 0; }
   .workspace:has(#home-view.active), .workspace:has(#live-view.active), .workspace:has(#prepare-view.active), .workspace:has(#detail-view.active), .workspace:has(#settings-view.active) { height: auto; overflow: visible; padding-bottom: 48px; }
   .transcript { grid-template-rows: auto auto auto auto; }
   .transcript-scroll { height: auto; grid-auto-rows: auto; gap: 20px; padding-block: 20px; }
   .transcript-scroll .segment { height: auto; }
+  .notes { height: auto; overflow: visible; }
 }
 
 /* Motion is limited to view changes and lightweight feedback; reduced-motion rules override it below. */
@@ -295,8 +311,10 @@ html[data-theme="dark"] .app-shell, html[data-theme="dark"] .sidebar, html[data-
 html[data-theme="dark"] .sidebar, html[data-theme="dark"] .window-bar, html[data-theme="dark"] .library-toolbar, html[data-theme="dark"] .meeting-list, html[data-theme="dark"] .settings-card, html[data-theme="dark"] .model-row, html[data-theme="dark"] .tabbar, html[data-theme="dark"] .player, html[data-theme="dark"] .notes section, html[data-theme="dark"] .live-panel section + section, html[data-theme="dark"] .section-heading, html[data-theme="dark"] .model-card, html[data-theme="dark"] .live-panel, html[data-theme="dark"] .notes, html[data-theme="dark"] fieldset { border-color: #404040; }
 html[data-theme="dark"] .final-transcript .segment.is-active { background: #272722; }
 html[data-theme="dark"] .transcript-scroll .segment.is-active { background: #272722; }
-html[data-theme="dark"] * { scrollbar-color: #666 transparent; }
-html[data-theme="dark"] *::-webkit-scrollbar-thumb { background-color: #666; }
+html[data-theme="dark"] * { scrollbar-color: transparent transparent; }
+html[data-theme="dark"] *:hover, html[data-theme="dark"] *.is-scrolling { scrollbar-color: #666 transparent; }
+html[data-theme="dark"] *::-webkit-scrollbar-thumb { background-color: rgb(102 102 102 / 0); }
+html[data-theme="dark"] *:hover::-webkit-scrollbar-thumb, html[data-theme="dark"] *.is-scrolling::-webkit-scrollbar-thumb { background-color: #666; }
 html[data-theme="dark"] .batch-toolbar, html[data-theme="dark"] .batch-actions > button, html[data-theme="dark"] .batch-category .flow-select-toggle { background: #111; color: #fff; border-color: #666; }
 html[data-theme="dark"] .meeting-row.is-selected { background: #262626; }
 html[data-theme="dark"] .meeting-row:focus-visible { outline-color: #fff; }
@@ -313,14 +331,27 @@ html[data-theme="dark"] .status { color: #ddd; }
 html[data-theme="dark"] .update-card { border-color: #eee; } html[data-theme="dark"] .update-card h2 { color: #fff; } html[data-theme="dark"] .update-card p { color: #bbb; } html[data-theme="dark"] .update-button { border-color: #fff; background: #fff; color: #111; }
 html[data-theme="dark"] .model-delete { border-color: #a65b5b; color: #c48686; }
 html[data-theme="dark"] .modal-panel { border-color: #eee; background: #1a1a1a; color: #fff; } html[data-theme="dark"] .modal-head, html[data-theme="dark"] .modal-list, html[data-theme="dark"] .modal-list > div { border-color: #404040; } html[data-theme="dark"] .modal-close { border-color: #666; color: #eee; } html[data-theme="dark"] .modal-body p { color: #bbb; } html[data-theme="dark"] .modal-list b { color: #fff; } html[data-theme="dark"] .modal-action { border-color: #fff; background: #fff; color: #111; } html[data-theme="dark"] .modal-danger { border-color: #a65b5b; background: #a65b5b; color: #fff; }
-html[data-theme="dark"] .term-form input { border-color: #666; background: #111; color: #fff; } html[data-theme="dark"] .term-form button { border-color: #fff; background: #fff; color: #111; }
-html[data-theme="dark"] .term-edit-input { border-color: #fff; color: #fff; }
 html[data-theme="dark"] .config-json { border-color: #404040; background: #111; color: #ddd; } html[data-theme="dark"] .config-fields label, html[data-theme="dark"] .configured-models > p { color: #bbb; } html[data-theme="dark"] .config-fields input, html[data-theme="dark"] .config-fields select, html[data-theme="dark"] .prompt-form textarea { border-color: #666; background: #111; color: #fff; } html[data-theme="dark"] .configured-models { border-color: #404040; } html[data-theme="dark"] .configured-models label { border-color: #404040; }
 html[data-theme="dark"] .config-select-field { color: #bbb; } html[data-theme="dark"] .flow-select-toggle, html[data-theme="dark"] .flow-select-options { border-color: #666; background: #111; color: #fff; } html[data-theme="dark"] .flow-select-options button { color: #ddd; } html[data-theme="dark"] .flow-select-options button:hover { background: #262626; color: #fff; }
 html[data-theme="dark"] .modal-head p { color: #999; }
 html[data-theme="dark"] .toast { border-color: #666; background: #1a1a1a; color: #fff; }
 html[data-theme="dark"] .mini-meeting { border-color: #666; background: #1a1a1a; color: #fff; } html[data-theme="dark"] .mini-meeting time { color: #bbb; }
 html[data-theme="dark"] .software-update-notice { border-color: #666; background: #1a1a1a; color: #fff; } html[data-theme="dark"] .software-update-notice span { color: #bbb; } html[data-theme="dark"] .software-update-notice button { border-color: #fff; background: #fff; color: #111; }
+/* Explicit foreground overrides for components that use light-theme utility colors. */
+html[data-theme="dark"] .brand img { filter: invert(1); }
+html[data-theme="dark"] .nav-item, html[data-theme="dark"] .back, html[data-theme="dark"] .eyebrow, html[data-theme="dark"] .pause-button, html[data-theme="dark"] .skip, html[data-theme="dark"] .more, html[data-theme="dark"] .segment-speaker { color: #bbb; }
+html[data-theme="dark"] .secondary { border-color: #eee; color: #eee; }
+html[data-theme="dark"] .meeting-color, html[data-theme="dark"] .model-icon { border-color: #eee; color: #eee; }
+html[data-theme="dark"] .meeting-status small, html[data-theme="dark"] .tag, html[data-theme="dark"] .model-row small, html[data-theme="dark"] .speaker-profile-list small, html[data-theme="dark"] .storage-list small, html[data-theme="dark"] .advanced-settings-form > p, html[data-theme="dark"] .advanced-settings-section small { color: #999; }
+html[data-theme="dark"] .storage-list section, html[data-theme="dark"] .speaker-profile-form, html[data-theme="dark"] .speaker-profile-entry, html[data-theme="dark"] .advanced-settings-section { border-color: #404040; }
+html[data-theme="dark"] .speaker-profile-form label, html[data-theme="dark"] .speaker-sample-form label, html[data-theme="dark"] .advanced-settings-section label, html[data-theme="dark"] .confirmation-actions p { color: #bbb; }
+html[data-theme="dark"] .speaker-profile-rename-form input, html[data-theme="dark"] .advanced-settings-section input { border-color: #666; background: #111; color: #fff; }
+html[data-theme="dark"] .meeting-menu, html[data-theme="dark"] .meeting-rename-menu, html[data-theme="dark"] .meeting-category-menu { border-color: #666; background: #1a1a1a; }
+html[data-theme="dark"] .meeting-menu button, html[data-theme="dark"] .meeting-rename-menu button, html[data-theme="dark"] .meeting-category-menu > button, html[data-theme="dark"] .meeting-category-menu form button { color: #ddd; }
+html[data-theme="dark"] .processing-bar, html[data-theme="dark"] .input-meter { background-color: #404040; }
+html[data-theme="dark"] .processing-bar i, html[data-theme="dark"] .model-download-progress i { background-color: #fff; }
+html[data-theme="dark"] .player input[type=range] { accent-color: #fff; }
+html[data-theme="dark"] .input-meter::after { background: linear-gradient(90deg, #aaa 0 55%, #fff 55% 80%, #ff5d5d 80%); }
 html, .app-shell, .sidebar, .workspace, .window-bar, .language-options, input, select { transition: background-color .3s ease, color .3s ease, border-color .3s ease; }
 body.modal-open { overflow: hidden; }
 .task-card-enter, .modal-backdrop.modal-enter .modal-panel { animation: surface-in 200ms ease-out both; }
@@ -364,5 +395,4 @@ html[data-theme="dark"] .speaker-profile-entry, html[data-theme="dark"] .speaker
 html[data-theme="dark"] .speaker-sample-form { background: #222; }
 html[data-theme="dark"] .speaker-sample-form input { border-color: #666; background: #111; color: #fff; }
 html[data-theme="dark"] .sample-play { border-color: #fff; background: #fff; color: #111; }
-@media (max-width: 850px) { .notes { height: auto; overflow: visible; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }

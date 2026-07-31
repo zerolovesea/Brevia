@@ -142,9 +142,6 @@ class Worker:
             "metrics.record": lambda value: self.store.metrics(value.get("app_duration_ms", 0)),
             "segment.speaker": self.assign_segment_speaker,
             "segment.speaker-profile-sample": self.add_segment_speaker_profile_sample,
-            "terms.list": lambda _: self.store.list_terms(),
-            "terms.save": self.store.save_term,
-            "terms.delete": self.delete_term,
             "models.list": lambda _: self.models.list(),
             "models.download": self.download_model,
             "models.delete": self.delete_model,
@@ -177,7 +174,6 @@ class Worker:
         return {
             "meetings": self.store.list_meetings(),
             "models": self.models.list(),
-            "terms": self.store.list_terms(),
             "speaker_profiles": self.store.list_speaker_profiles(),
             "preset_voices": self.media.preset_voices(),
             "device": self.models.device(),
@@ -287,7 +283,6 @@ class Worker:
             for track in ("mic", "system")
         }
         self.recent_finals = []
-        hotwords = tuple(item["text"] for item in self.store.list_terms()[:200])
         denoiser_id = SETTINGS["live_asr"]["denoiser_model_id"]
         self.denoiser = None
         if self.models.is_ready(denoiser_id):
@@ -301,7 +296,7 @@ class Worker:
             except RuntimeError as error:
                 self.emit("worker.warning", {"meeting_id": self.active, "code": "language_identifier_unavailable", "message": str(error)})
         try:
-            self.asr = SenseVoiceStreamingASR(self.models, meeting["streaming_model_id"], meeting.get("vad_model_id") or "silero-vad") if self.models.get(meeting["streaming_model_id"])["kind"] == "sensevoice" else StreamingASR(self.models, meeting["streaming_model_id"], hotwords)
+            self.asr = SenseVoiceStreamingASR(self.models, meeting["streaming_model_id"], meeting.get("vad_model_id") or "silero-vad") if self.models.get(meeting["streaming_model_id"])["kind"] == "sensevoice" else StreamingASR(self.models, meeting["streaming_model_id"])
         except RuntimeError as error:
             self.asr = None
             self.emit(
@@ -344,7 +339,7 @@ class Worker:
             )
         if meeting["refined_model_id"].startswith("qwen3-") and self.models.is_ready(meeting["refined_model_id"]):
             try:
-                self.live_refiner = RefinedASR(self.models, meeting["refined_model_id"], hotwords)
+                self.live_refiner = RefinedASR(self.models, meeting["refined_model_id"])
                 self.live_refinement = ThreadPoolExecutor(max_workers=1, thread_name_prefix="brevia-live-refine")
             except RuntimeError as error:
                 self.emit("worker.warning", {"meeting_id": self.active, "code": "live_refinement_unavailable", "message": str(error)})
@@ -422,10 +417,7 @@ class Worker:
                 self.detected_language = detected
                 if detected == "en":
                     try:
-                        self.asr = StreamingASR(
-                            self.models, SETTINGS["asr"]["auto_english_model_id"],
-                            tuple(item["text"] for item in self.store.list_terms()[:200]),
-                        )
+                        self.asr = StreamingASR(self.models, SETTINGS["asr"]["auto_english_model_id"])
                         self.punctuation = EnglishPunctuation(
                             self.models, SETTINGS["punctuation"]["english_model_id"]
                         )
@@ -646,12 +638,6 @@ class Worker:
         profile = self.store.delete_speaker_profile_sample(payload["profile_id"], payload["sample_id"])
         self.emit("speaker-profile.updated", {"profile": profile})
         return profile
-
-    def delete_term(self, payload):
-        """删除一个术语并返回剩余术语列表。"""
-        require(payload, "term_id")
-        self.store.delete_term(payload["term_id"])
-        return self.store.list_terms()
 
     def download_model(self, payload):
         """启动指定模型的后台下载，并立即返回其状态。"""
@@ -910,8 +896,7 @@ class Worker:
             "diarization.ready",
             {"meeting_id": meeting["id"], "track": tracks[0], "turns": turns},
         )
-        terms = [item["text"] for item in self.store.list_terms()][:200]
-        recognizer = RefinedASR(self.models, refined_model_id, terms)
+        recognizer = RefinedASR(self.models, refined_model_id)
         locked_ids = {speaker["id"] for speaker in meeting["speakers"] if speaker["locked"]}
         locked_segments = [
             segment

@@ -233,18 +233,27 @@ class WorkerTest(unittest.TestCase):
     def test_zipformer_xlarge_manifest_uses_the_archive_decoder_name(self):
         self.assertIn("decoder.onnx", self.worker.models.get("zipformer-zh-xlarge-streaming-int8")["files"])
 
+    def test_multilingual_zipformer_manifest_uses_the_archive_file_names(self):
+        self.assertEqual(
+            self.worker.models.get("zipformer-multilingual-streaming")["files"][:3],
+            [
+                "encoder-epoch-75-avg-11-chunk-16-left-128.int8.onnx",
+                "decoder-epoch-75-avg-11-chunk-16-left-128.onnx",
+                "joiner-epoch-75-avg-11-chunk-16-left-128.int8.onnx",
+            ],
+        )
+
     def test_whisper_turbo_manifest_uses_the_archive_file_names(self):
         self.assertEqual(self.worker.models.get("whisper-turbo")["files"], ["turbo-encoder.int8.onnx", "turbo-decoder.int8.onnx", "turbo-tokens.txt"])
 
-    def test_streaming_transducer_receives_terms_as_hotwords(self):
-        self.worker.store.save_term({"text": "Brevia"})
+    def test_streaming_transducer_starts_without_extra_terms(self):
         with patch("backend.worker.StreamingASR") as streaming:
             self.worker.start({
-                "title": "热词会议", "language": "zh",
+                "title": "本地会议", "language": "zh",
                 "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             })
-        self.assertEqual(streaming.call_args.args[2], ("Brevia",))
+        self.assertEqual(streaming.call_args.args, (self.worker.models, "zipformer-zh-xlarge-streaming-int8"))
 
     def test_initialize_downloads_the_default_live_denoiser(self):
         with patch.object(self.worker, "download_model") as download:

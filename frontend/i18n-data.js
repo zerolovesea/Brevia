@@ -249,8 +249,8 @@ const prepareModelLabels = {
 };
 Object.entries(prepareModelLabels).forEach(([code, labels]) => Object.assign(catalog[code].labels, labels));
 Object.entries({
-  zh: '管理模型与术语 →', en: 'Manage models and terms →', es: 'Gestionar modelos y términos →', ja: 'モデルと用語を管理 →',
-  ko: '모델 및 용어 관리 →', fr: 'Gérer les modèles et les termes →', de: 'Modelle und Begriffe verwalten →', ru: 'Управление моделями и терминами →',
+  zh: '管理模型 →', en: 'Manage models →', es: 'Gestionar modelos →', ja: 'モデルを管理 →',
+  ko: '모델 관리 →', fr: 'Gérer les modèles →', de: 'Modelle verwalten →', ru: 'Управление моделями →',
 }).forEach(([code, label]) => { catalog[code].labels['管理模型与术语 →'] = label; });
 Object.entries({
   zh: { '从文件夹打开': '从文件夹打开', '未找到录音文件': '未找到录音文件', '未找到模型文件': '未找到模型文件', '准备中': '准备中', '需要下载以下模型': '需要下载以下模型：', '前往模型库': '前往模型库', '精修': '精修' },
@@ -306,14 +306,14 @@ Object.entries({
 }).forEach(([code, labels]) => Object.assign(catalog[code].labels, labels));
 
 Object.entries({
-  zh: { '添加录音到声纹库':'添加录音到声纹库', '暂无已注册声纹':'暂无已注册声纹', '已添加录音到声纹库':'已添加录音到声纹库' },
-  en: { '添加录音到声纹库':'Add recording to voiceprint', '暂无已注册声纹':'No registered voiceprints', '已添加录音到声纹库':'Recording added to voiceprint' },
-  es: { '添加录音到声纹库':'Añadir grabación a la huella de voz', '暂无已注册声纹':'No hay huellas de voz registradas', '已添加录音到声纹库':'Grabación añadida a la huella de voz' },
-  ja: { '添加录音到声纹库':'録音を声紋に追加', '暂无已注册声纹':'登録済みの声紋はありません', '已添加录音到声纹库':'録音を声紋に追加しました' },
-  ko: { '添加录音到声纹库':'음성 지문에 녹음 추가', '暂无已注册声纹':'등록된 음성 지문이 없습니다', '已添加录音到声纹库':'녹음이 음성 지문에 추가되었습니다' },
-  fr: { '添加录音到声纹库':'Ajouter l’enregistrement à l’empreinte vocale', '暂无已注册声纹':'Aucune empreinte vocale enregistrée', '已添加录音到声纹库':'Enregistrement ajouté à l’empreinte vocale' },
-  de: { '添加录音到声纹库':'Aufnahme zum Stimmabdruck hinzufügen', '暂无已注册声纹':'Keine registrierten Stimmabdrücke', '已添加录音到声纹库':'Aufnahme zum Stimmabdruck hinzugefügt' },
-  ru: { '添加录音到声纹库':'Добавить запись в голосовой отпечаток', '暂无已注册声纹':'Нет зарегистрированных голосовых отпечатков', '已添加录音到声纹库':'Запись добавлена в голосовой отпечаток' },
+  zh: { '添加录音到声纹库':'添加录音到声纹库', '暂无已注册声纹':'暂无已注册声纹', '已添加录音到声纹库':'已添加录音到声纹库', '新增声纹':'新增声纹', '声纹名称':'声纹名称', '已创建声纹并添加录音':'已创建声纹并添加录音' },
+  en: { '添加录音到声纹库':'Add recording to voiceprint', '暂无已注册声纹':'No registered voiceprints', '已添加录音到声纹库':'Recording added to voiceprint', '新增声纹':'Create voiceprint', '声纹名称':'Voiceprint name', '已创建声纹并添加录音':'Voiceprint created and recording added' },
+  es: { '添加录音到声纹库':'Añadir grabación a la huella de voz', '暂无已注册声纹':'No hay huellas de voz registradas', '已添加录音到声纹库':'Grabación añadida a la huella de voz', '新增声纹':'Crear huella de voz', '声纹名称':'Nombre de huella de voz', '已创建声纹并添加录音':'Huella de voz creada y grabación añadida' },
+  ja: { '添加录音到声纹库':'録音を声紋に追加', '暂无已注册声纹':'登録済みの声紋はありません', '已添加录音到声纹库':'録音を声紋に追加しました', '新增声纹':'声紋を作成', '声纹名称':'声紋名', '已创建声纹并添加录音':'声紋を作成し録音を追加しました' },
+  ko: { '添加录音到声纹库':'음성 지문에 녹음 추가', '暂无已注册声纹':'등록된 음성 지문이 없습니다', '已添加录音到声纹库':'녹음이 음성 지문에 추가되었습니다', '新增声纹':'음성 지문 만들기', '声纹名称':'음성 지문 이름', '已创建声纹并添加录音':'음성 지문을 만들고 녹음을 추가했습니다' },
+  fr: { '添加录音到声纹库':'Ajouter l’enregistrement à l’empreinte vocale', '暂无已注册声纹':'Aucune empreinte vocale enregistrée', '已添加录音到声纹库':'Enregistrement ajouté à l’empreinte vocale', '新增声纹':'Créer une empreinte vocale', '声纹名称':'Nom de l’empreinte vocale', '已创建声纹并添加录音':'Empreinte vocale créée et enregistrement ajouté' },
+  de: { '添加录音到声纹库':'Aufnahme zum Stimmabdruck hinzufügen', '暂无已注册声纹':'Keine registrierten Stimmabdrücke', '已添加录音到声纹库':'Aufnahme zum Stimmabdruck hinzugefügt', '新增声纹':'Stimmabdruck erstellen', '声纹名称':'Name des Stimmabdrucks', '已创建声纹并添加录音':'Stimmabdruck erstellt und Aufnahme hinzugefügt' },
+  ru: { '添加录音到声纹库':'Добавить запись в голосовой отпечаток', '暂无已注册声纹':'Нет зарегистрированных голосовых отпечатков', '已添加录音到声纹库':'Запись добавлена в голосовой отпечаток', '新增声纹':'Создать голосовой отпечаток', '声纹名称':'Имя голосового отпечатка', '已创建声纹并添加录音':'Голосовой отпечаток создан, запись добавлена' },
 }).forEach(([code, labels]) => Object.assign(catalog[code].labels, labels));
 
 window.BreviaLocaleData = { catalog, appCopy };

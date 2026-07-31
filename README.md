@@ -17,7 +17,7 @@
 
 - Record microphone and system audio, then view live captions while the meeting is happening.
 - Run streaming ASR, punctuation, post-meeting refinement, VAD, and speaker diarization locally through **sherpa-onnx**.
-- Choose downloadable models for the meeting language; add up to 200 local terminology hotwords.
+- Choose downloadable models for the meeting language.
 - Refine a completed recording, identify and rename speakers, and keep recordings and transcript versions on-device.
 - Import audio; export transcript or notes as Markdown, TXT, JSON, SRT, DOCX, or PDF, and audio as FLAC, WAV, or M4A.
 - Generate optional translations and structured summaries only after explicit consent and a provider configuration.
