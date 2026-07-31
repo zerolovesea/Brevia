@@ -8,10 +8,8 @@ import shutil
 import struct
 import subprocess
 import sys
-import tempfile
 import threading
 import time
-import urllib.request
 import zipfile
 from array import array
 from difflib import SequenceMatcher
@@ -20,6 +18,9 @@ from pathlib import Path
 from .asr import (
     ChinesePunctuation,
     EnglishPunctuation,
+    LanguageIdentifier,
+    LiveDenoiser,
+    OfflineDenoiser,
     ModelManager,
     OfflineDiarizer,
     RefinedASR,
@@ -27,6 +28,11 @@ from .asr import (
     SpeakerTracker,
     StreamingASR,
 )
+from .audio_io import read_mono_wav
+from .llm_client import complete
+from .media_tasks import MeetingMediaService
+from .transcript import clock, latest_segments, srt_time, validate_summary
+from .voice_profiles import VoiceProfileService
 from .config import SETTINGS
 from .storage import Store
 
@@ -61,8 +67,15 @@ class Worker:
         self.model_downloads_lock = threading.Lock()
         self.store = Store(root)
         self.models = ModelManager(self.store.models_dir, self.emit)
+        # 服务按存储/模型依赖构造；它们不持有实时会议状态，便于单独测试。
+        self.voice_profiles = VoiceProfileService(self.store, self.models)
+        self.media = MeetingMediaService(self.store, self.models)
+        # 可替换边界让集成测试无需连接外部 LLM，也集中保留用户同意后的唯一出口。
+        self.llm_complete = complete
         self.active = None
         self.asr = None
+        self.denoiser = None
+        self.language_identifier = None
         self.punctuation = None
         self.speaker_tracker = None
         self.stream_state = {}
@@ -114,6 +127,7 @@ class Worker:
             "speaker.rename": self.rename_speaker,
             "speaker-profile.list": lambda _: self.store.list_speaker_profiles(),
             "speaker-profile.enroll": self.enroll_speaker_profile,
+            "speaker-profile.verify": self.verify_speaker_profile,
             "speaker-profile.delete": self.delete_speaker_profile,
             "terms.list": lambda _: self.store.list_terms(),
             "terms.save": self.store.save_term,
@@ -124,6 +138,8 @@ class Worker:
             "meeting.export": self.export,
             "meeting.bundle": self.bundle,
             "meeting.refine": self.refine,
+            "meeting.separate": self.separate_sources,
+            "tts.synthesize": self.synthesize_tts,
             "summary.generate": self.summarize,
             "translation.generate": self.translate,
         }
@@ -135,11 +151,15 @@ class Worker:
         """执行启动期维护，并返回前端首屏需要的完整本地状态。"""
         seeded_examples = self.store.seed_examples()
         purged = self.store.purge_expired()
+        denoiser_id = SETTINGS["live_asr"]["denoiser_model_id"]
+        if not self.models.is_ready(denoiser_id):
+            self.download_model({"model_id": denoiser_id})
         return {
             "meetings": self.store.list_meetings(),
             "models": self.models.list(),
             "terms": self.store.list_terms(),
             "speaker_profiles": self.store.list_speaker_profiles(),
+            "preset_voices": self.media.preset_voices(),
             "device": self.models.device(),
             "storage": self.store.usage(),
             "recoverable": self.store.recoverable_meetings(),
@@ -174,7 +194,7 @@ class Worker:
         destination = self.store.meetings_dir / meeting["id"] / "audio" / "playback-mic.wav"
         try:
             subprocess.run(["ffmpeg", "-y", "-i", str(source), "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", str(destination)], check=True, capture_output=True)
-            _, sample_rate = self._read_wav(destination)
+            _, sample_rate = read_mono_wav(destination)
             import wave
             with wave.open(str(destination)) as audio:
                 duration_ms = round(audio.getnframes() * 1000 / sample_rate)
@@ -215,6 +235,18 @@ class Worker:
         }
         self.recent_finals = []
         hotwords = tuple(item["text"] for item in self.store.list_terms()[:200])
+        denoiser_id = SETTINGS["live_asr"]["denoiser_model_id"]
+        self.denoiser = None
+        if self.models.is_ready(denoiser_id):
+            try:
+                self.denoiser = LiveDenoiser(self.models, denoiser_id)
+            except RuntimeError as error:
+                self.emit("worker.warning", {"meeting_id": self.active, "code": "denoiser_unavailable", "message": str(error)})
+        if meeting["language"] == "auto" and self.models.is_ready("whisper-turbo"):
+            try:
+                self.language_identifier = LanguageIdentifier(self.models)
+            except RuntimeError as error:
+                self.emit("worker.warning", {"meeting_id": self.active, "code": "language_identifier_unavailable", "message": str(error)})
         try:
             self.asr = SenseVoiceStreamingASR(self.models, meeting["streaming_model_id"], meeting.get("vad_model_id") or "silero-vad") if self.models.get(meeting["streaming_model_id"])["kind"] == "sensevoice" else StreamingASR(self.models, meeting["streaming_model_id"], hotwords)
         except RuntimeError as error:
@@ -268,6 +300,20 @@ class Worker:
         )
         return {"paused": bool(payload["paused"])}
 
+    def _enhance_live_microphone(self, samples):
+        """仅为实时识别补偿偏弱麦克风音量，原始录音不受影响。"""
+        config = SETTINGS["live_asr"]
+        if not len(samples):
+            return samples
+        rms = (sum(float(sample) * float(sample) for sample in samples) / len(samples)) ** 0.5
+        if rms < config["microphone_minimum_rms"]:
+            return samples
+        gain = min(config["microphone_max_gain"], config["microphone_target_rms"] / rms)
+        peak = max(abs(float(sample)) for sample in samples)
+        if peak:
+            gain = min(gain, config["microphone_peak"] / peak)
+        return samples if gain <= 1 else samples * gain
+
     def audio(self, payload):
         """持久化一帧音频，并在模型可用时推进实时转写。
 
@@ -299,14 +345,20 @@ class Worker:
         state = self.stream_state[payload["track"]]
         if len(samples):
             state["audio"].append(samples)
+        asr_samples = self._enhance_live_microphone(samples) if payload["track"] == "mic" else samples
+        if payload["track"] == "mic" and self.denoiser:
+            asr_samples = self.denoiser.accept(
+                payload["track"], asr_samples, int(payload["sample_rate"]), bool(payload.get("flush"))
+            )
         result, final = self.asr.accept(
-            payload["track"], samples, int(payload["sample_rate"]), bool(payload.get("flush"))
+            payload["track"], asr_samples, int(payload["sample_rate"]), bool(payload.get("flush"))
         )
         text = result.strip() if isinstance(result, str) else result.text.strip()
         if final and not text:
             text = state["last_text"]
         if self.meeting_language == "auto" and not self.detected_language:
-            detected = self._detect_language(text)
+            context = numpy.concatenate(state["audio"])
+            detected = self.language_identifier.identify(context, int(payload["sample_rate"])) if self.language_identifier and len(context) >= int(payload["sample_rate"]) else self._detect_language(text)
             if detected:
                 self.detected_language = detected
                 if detected == "en":
@@ -419,7 +471,7 @@ class Worker:
                 )
         meeting = self.store.finish_meeting(self.active, payload["duration_ms"])
         self.emit("meeting.stopped", {"meeting_id": self.active, "meeting": meeting})
-        self.active, self.asr, self.punctuation = None, None, None
+        self.active, self.asr, self.punctuation, self.denoiser, self.language_identifier = None, None, None, None, None
         self.speaker_tracker, self.stream_state, self.recent_finals = None, {}, []
         self.meeting_language, self.detected_language = None, None
         return meeting
@@ -463,77 +515,33 @@ class Worker:
             payload["name"],
             payload.get("locked", False),
         )
-        profile = self._learn_speaker_from_meeting(
-            payload["meeting_id"], payload["speaker_id"], payload["name"]
+        profile = self.voice_profiles.learn_from_meeting(
+            self.store.get_meeting(payload["meeting_id"]), payload["speaker_id"], payload["name"]
         )
-        if profile:
-            self.store.rename_speaker(
-                payload["meeting_id"], payload["speaker_id"], payload["name"],
-                payload.get("locked", False), profile["id"],
-            )
+        self.store.rename_speaker(
+            payload["meeting_id"], payload["speaker_id"], payload["name"],
+            payload.get("locked", False), profile["id"],
+        )
+        self.emit("speaker-profile.updated", {"profile": profile})
         return self.store.get_meeting(payload["meeting_id"])
 
     def enroll_speaker_profile(self, payload):
         """从用户选定的单人语音录音注册或补充本地人员声纹。"""
         require(payload, "name", "path")
-        source = Path(payload["path"])
-        if not source.is_file():
-            raise ValueError("Audio file not found")
-        with tempfile.TemporaryDirectory() as temporary:
-            wav = Path(temporary) / "voiceprint.wav"
-            subprocess.run(
-                ["ffmpeg", "-y", "-i", str(source), "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", str(wav)],
-                check=True, capture_output=True,
-            )
-            samples, sample_rate = self._read_wav(wav)
-        tracker = SpeakerTracker(self.models, model_id=payload.get("embedding_model_id"))
-        embedding = tracker.embedding(samples, sample_rate)
-        if embedding is None:
-            raise ValueError("Voice sample is too short for speaker registration")
-        source_key = f"file:{source.resolve()}:{source.stat().st_mtime_ns}:{source.stat().st_size}"
-        result = self.store.save_speaker_profile_sample(
-            payload["name"], embedding, source_key, payload.get("profile_id")
-        )
+        result = self.voice_profiles.enroll(payload)
         self.emit("speaker-profile.updated", {"profile": result})
         return result
+
+    def verify_speaker_profile(self, payload):
+        """验证一段临时选择的音频是否匹配指定本地声纹。"""
+        require(payload, "profile_id", "path")
+        return self.voice_profiles.verify(payload)
 
     def delete_speaker_profile(self, payload):
         require(payload, "profile_id")
         self.store.delete_speaker_profile(payload["profile_id"])
         self.emit("speaker-profile.deleted", {"profile_id": payload["profile_id"]})
         return {"profile_id": payload["profile_id"], "deleted": True}
-
-    def _learn_speaker_from_meeting(self, meeting_id, speaker_id, name):
-        """把已人工标注的会议片段增量加入声纹库；重复片段不会重复计数。"""
-        meeting = self.store.get_meeting(meeting_id)
-        try:
-            tracker = SpeakerTracker(self.models, model_id=meeting.get("speaker_embedding_model_id"))
-        except RuntimeError:
-            return None
-        audio_cache, profile = {}, None
-        latest = {}
-        for segment in meeting["segments"]:
-            if segment["speaker"] != speaker_id:
-                continue
-            if segment["version"] == "live" or segment["version"] == "postprocess":
-                latest[segment["id"]] = segment
-        for segment in sorted(latest.values(), key=lambda item: item["start_ms"])[:12]:
-            path = meeting["audio"]["playback"].get(segment["track"])
-            if not path or not Path(path).exists():
-                continue
-            if path not in audio_cache:
-                audio_cache[path] = self._read_wav(path)
-            samples, sample_rate = audio_cache[path]
-            clip = samples[round(segment["start_ms"] * sample_rate / 1000):round(segment["end_ms"] * sample_rate / 1000)]
-            embedding = tracker.embedding(clip, sample_rate)
-            if embedding is None:
-                continue
-            profile = self.store.save_speaker_profile_sample(
-                name, embedding,
-                f"meeting:{meeting_id}:{speaker_id}:{segment['track']}:{segment['start_ms']}:{segment['end_ms']}",
-                profile["id"] if profile else None,
-            )
-        return profile
 
     def delete_term(self, payload):
         """删除一个术语并返回剩余术语列表。"""
@@ -593,12 +601,12 @@ class Worker:
             raise ValueError("Export content must be transcript, notes, or audio")
         if export_format not in {"md", "txt", "json", "srt", "docx", "pdf"}:
             raise ValueError("Unsupported text export format")
-        segments = self._latest_segments(meeting["segments"])
+        segments = latest_segments(meeting["segments"])
         if export_format == "json":
             content = json.dumps({**meeting, "segments": segments}, ensure_ascii=False, indent=2)
         elif export_format == "srt":
             content = "\n\n".join(
-                f"{index}\n{self._srt_time(item['start_ms'])} --> {self._srt_time(item['end_ms'])}\n"
+                f"{index}\n{srt_time(item['start_ms'])} --> {srt_time(item['end_ms'])}\n"
                 f"{item['speaker_name']}: {item['text']}"
                 for index, item in enumerate(segments, 1)
             )
@@ -609,7 +617,7 @@ class Worker:
             content = self._summary_markdown(meeting["title"], summary)
         else:
             lines = [
-                f"[{self._clock(item['start_ms'])}] {item['speaker_name']}: {item['text']}"
+                f"[{clock(item['start_ms'])}] {item['speaker_name']}: {item['text']}"
                 + (f"\n{item['translation']}" if item.get("translation") else "")
                 for item in segments
             ]
@@ -742,6 +750,10 @@ class Worker:
         meeting = self.store.get_meeting(payload["meeting_id"])
         if meeting["status"] == "recording":
             raise ValueError("Stop the meeting before refinement")
+        refined_model_id = payload.get("refined_model_id", meeting["refined_model_id"])
+        if refined_model_id != meeting["refined_model_id"]:
+            self.models.get(refined_model_id)
+            meeting = self.store.update_meeting(meeting["id"], {"refined_model_id": refined_model_id})
         num_speakers = int(payload.get("num_speakers", meeting.get("num_speakers", SETTINGS["diarization"]["num_speakers"])))
         threshold = float(
             payload.get("cluster_threshold", SETTINGS["diarization"]["cluster_threshold"])
@@ -758,11 +770,17 @@ class Worker:
         if not tracks:
             raise ValueError("The meeting has no audio to refine")
         audio = {
-            track: self._read_wav(meeting["audio"]["playback"][track])
+            track: read_mono_wav(meeting["audio"]["playback"][track])
             for track in tracks
         }
-        speaker_tracker = SpeakerTracker(self.models)
         samples, sample_rate = audio[tracks[0]]
+        denoiser_id = SETTINGS["live_asr"]["denoiser_model_id"]
+        if self.models.is_ready(denoiser_id):
+            try:
+                samples = OfflineDenoiser(self.models, denoiser_id).process(samples, sample_rate)
+            except RuntimeError as error:
+                self.emit("worker.warning", {"meeting_id": meeting["id"], "code": "offline_denoiser_unavailable", "message": str(error)})
+        speaker_tracker = SpeakerTracker(self.models)
         turns = OfflineDiarizer(self.models, num_speakers, threshold, meeting.get("speaker_segmentation_model_id"), meeting.get("speaker_embedding_model_id")).process(samples, sample_rate)
         try:
             identity_tracker = SpeakerTracker(self.models, model_id=meeting.get("speaker_embedding_model_id"))
@@ -783,7 +801,7 @@ class Worker:
             {"meeting_id": meeting["id"], "track": tracks[0], "turns": turns},
         )
         terms = [item["text"] for item in self.store.list_terms()][:200]
-        recognizer = RefinedASR(self.models, meeting["refined_model_id"], terms)
+        recognizer = RefinedASR(self.models, refined_model_id, terms)
         locked_ids = {speaker["id"] for speaker in meeting["speakers"] if speaker["locked"]}
         locked_segments = [
             segment
@@ -795,6 +813,7 @@ class Worker:
         total = len(windows)
         completed = 0
         previous_text = {}
+        refined_segments = []
         overlap_ms = 1000
         self.store.set_status(meeting["id"], "refining")
         self.emit("refinement.started", {"meeting_id": meeting["id"], "total": total})
@@ -835,14 +854,35 @@ class Worker:
                         "speaker": speaker or ("spk-1" if track == "mic" else "spk-2"),
                         "track": track,
                     }
-                    self.store.save_segment(event)
-                    self.emit("refinement.segment", event)
+                    refined_segments.append(event)
         except Exception:
             self.store.set_status(meeting["id"], "ready")
             raise
+        self.store.replace_segments(meeting["id"], refined_segments)
+        for event in refined_segments:
+            self.emit("refinement.segment", event)
         result = self.store.set_status(meeting["id"], "refined")
         self.emit("refinement.ready", {"meeting_id": meeting["id"], "meeting": result})
         return result
+
+    def separate_sources(self, payload):
+        """从已保存会议生成独立的人声和非人声 WAV，不改动原录音。"""
+        require(payload, "meeting_id")
+        event = self.media.separate(self.store.get_meeting(payload["meeting_id"]))
+        self.emit("meeting.sources-separated", event)
+        return event
+
+    def synthesize_tts(self, payload):
+        """使用已注册人员的本地参考音频生成 ZipVoice 聊天语音。"""
+        require(payload, "text", "voice_id", "target_language", "endpoint", "model")
+        payload = {**payload, "language": payload["target_language"]}
+        payload["text"] = self.llm_complete(
+            payload,
+            f"Translate the following text to {'Chinese' if payload['target_language'] == 'zh' else 'English'}. Return only the translation.\n\n{payload['text']}",
+        ).strip()
+        event = self.media.synthesize(payload)
+        self.emit("tts.ready", event)
+        return event
 
     @staticmethod
     def _refinement_turns(turns, duration_ms, maximum_ms):
@@ -898,25 +938,6 @@ class Worker:
         return None
 
     @staticmethod
-    def _read_wav(path):
-        """读取单声道 PCM16 WAV。
-
-        Returns:
-            ``(float32 样本数组, 样本率)``；不支持的声道或位深会报错。
-        """
-        import wave
-        import numpy
-
-        with wave.open(path) as recording:
-            if recording.getnchannels() != 1 or recording.getsampwidth() != 2:
-                raise ValueError("Refinement requires mono PCM16 WAV audio")
-            values = array("h")
-            values.frombytes(recording.readframes(recording.getnframes()))
-            if sys.byteorder != "little":
-                values.byteswap()
-            return numpy.asarray(values, dtype=numpy.float32) / 32768.0, recording.getframerate()
-
-    @staticmethod
     def _speaker_for(start_ms, end_ms, intervals):
         """返回与目标时间窗重叠最长的说话人；完全无重叠时返回 ``None``。"""
         overlaps = [
@@ -941,9 +962,9 @@ class Worker:
         if not payload["consent"]:
             raise ValueError("Transcript sharing was not confirmed")
         meeting = self.store.get_meeting(payload["meeting_id"])
-        segments = self._latest_segments(meeting["segments"])
+        segments = latest_segments(meeting["segments"])
         transcript = "\n".join(
-            f"{item['id']} [{self._clock(item['start_ms'])}] {item['speaker_name']}: {item['text']}"
+            f"{item['id']} [{clock(item['start_ms'])}] {item['speaker_name']}: {item['text']}"
             for item in segments
         )
         schema = (
@@ -955,9 +976,9 @@ class Worker:
             f"仅基于逐字稿生成会议纪要。只输出符合此结构的 JSON：{schema}\n\n{transcript}"
         )
         try:
-            raw = self._call_llm(payload, prompt, json_mode=True)
+            raw = self.llm_complete(payload, prompt, json_mode=True)
             data = json.loads(raw)
-            self._validate_summary(data, {item["id"] for item in segments})
+            validate_summary(data, {item["id"] for item in segments})
         except Exception as error:
             raw = locals().get("raw", str(error))
             self.store.save_summary(meeting["id"], None, raw)
@@ -990,7 +1011,7 @@ class Worker:
         )
         if not segment:
             raise ValueError("Transcript segment not found")
-        translation = self._call_llm(
+        translation = self.llm_complete(
             payload,
             f"Translate the following text to {payload['target_language']}. "
             f"Return only the translation.\n\n{segment['text']}",
@@ -1004,113 +1025,32 @@ class Worker:
         self.emit("translation.ready", event)
         return event
 
-    @staticmethod
-    def _call_llm(payload, prompt, json_mode=False):
-        """调用 OpenAI 兼容或 Claude 兼容的 HTTP 接口。
-
-        Args:
-            payload: endpoint、model、format、可选 API key 与超时。
-            prompt: 发送给模型的用户消息。
-            json_mode: OpenAI 兼容接口是否请求 JSON object 响应。
-
-        Returns:
-            从常见响应结构中提取的文本；未知结构回退为完整 JSON 字符串。
-        """
-        body = {
-            "model": payload["model"],
-            "messages": [{"role": "user", "content": prompt}],
-            "stream": False,
-        }
-        if json_mode:
-            body["response_format"] = {"type": "json_object"}
-        headers = {"Content-Type": "application/json"}
-        if payload.get("format") == "claude":
-            body = {
-                "model": payload["model"],
-                "max_tokens": 2048,
-                "messages": [{"role": "user", "content": prompt}],
-            }
-            headers.update({"anthropic-version": "2023-06-01", "x-api-key": payload.get("api_key", "")})
-        elif payload.get("api_key"):
-            headers["Authorization"] = f"Bearer {payload['api_key']}"
-        request = urllib.request.Request(
-            payload["endpoint"],
-            json.dumps(body).encode(),
-            headers,
-            method="POST",
-        )
-        with urllib.request.urlopen(
-            request,
-            timeout=int(payload.get("timeout", SETTINGS["llm"]["timeout_seconds"])),
-        ) as response:
-            response_data = json.loads(response.read())
-        return (
-            response_data.get("message", {}).get("content")
-            or response_data.get("choices", [{}])[0].get("message", {}).get("content")
-            or (response_data.get("content") or [{}])[0].get("text")
-            or json.dumps(response_data, ensure_ascii=False)
-        )
-
     def _active(self, meeting_id):
         """确认命令指向当前活动会议，无返回值。"""
         if meeting_id != self.active:
             raise ValueError("Meeting is not active")
 
-    @staticmethod
-    def _latest_segments(segments):
-        """选出用于展示和导出的最新逐字稿版本。
-
-        会后版本存在时替代实时版本，人工版本始终拥有最高优先级。
-        返回值按开始时间升序排列。
-        """
-        latest = {}
-        priority = {"live": 1, "postprocess": 2, "user": 3}
-        base = "postprocess" if any(item["version"] == "postprocess" for item in segments) else "live"
-        for item in (item for item in segments if item["version"] in {base, "user"}):
-            if priority.get(item["version"], 0) >= priority.get(
-                latest.get(item["id"], {}).get("version"), 0
-            ):
-                latest[item["id"]] = item
-        return sorted(latest.values(), key=lambda item: item["start_ms"])
-
-    @staticmethod
-    def _validate_summary(data, segment_ids):
-        """校验纪要结构，并确保每项决定和待办引用真实逐字稿段落。"""
-        required = {"summary", "decisions", "action_items", "open_questions"}
-        if not isinstance(data, dict) or not required <= data.keys():
-            raise ValueError("Summary JSON does not match the required schema")
-        for item in [*data["decisions"], *data["action_items"]]:
-            evidence = item.get("evidence_segment_ids")
-            if not evidence or any(segment not in segment_ids for segment in evidence):
-                raise ValueError("Every decision and action item needs valid evidence")
-
-    @staticmethod
-    def _clock(milliseconds):
-        """把毫秒时间戳格式化为 ``MM:SS``。"""
-        seconds = milliseconds // 1000
-        return f"{seconds // 60:02d}:{seconds % 60:02d}"
-
-    @staticmethod
-    def _srt_time(milliseconds):
-        """把毫秒时间戳格式化为 SRT 的 ``HH:MM:SS,mmm``。"""
-        hours, remainder = divmod(milliseconds, 3_600_000)
-        minutes, remainder = divmod(remainder, 60_000)
-        seconds, millis = divmod(remainder, 1000)
-        return f"{hours:02d}:{minutes:02d}:{seconds:02d},{millis:03d}"
-
 
 def main():
     """运行 stdin/stdout JSONL 循环；单条命令失败不会终止 Worker。"""
     worker = Worker()
-    for line in sys.stdin:
-        if not line.strip():
-            continue
-        command = {}
+    def respond(command):
         try:
-            command = json.loads(line)
             worker.response(command.get("id"), worker.handle(command))
         except Exception as error:
             worker.response(command.get("id"), error=error)
+    for line in sys.stdin:
+        if not line.strip():
+            continue
+        try:
+            command = json.loads(line)
+        except Exception as error:
+            worker.response(None, error=error)
+            continue
+        if command.get("type") == "meeting.refine":
+            threading.Thread(target=respond, args=(command,), daemon=True).start()
+        else:
+            respond(command)
 
 
 if __name__ == "__main__":

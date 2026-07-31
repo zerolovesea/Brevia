@@ -11,7 +11,7 @@ class AudioCapture {
 
   async prepare({ mic, system }) {
     const requests = [];
-    if (mic) requests.push({ track: 'mic', stream: navigator.mediaDevices.getUserMedia({ audio: true }) });
+    if (mic) requests.push({ track: 'mic', stream: navigator.mediaDevices.getUserMedia({ audio: { autoGainControl: true, echoCancellation: true, noiseSuppression: true } }) });
     if (system) requests.push({ track: 'system', stream: navigator.mediaDevices.getDisplayMedia({ video: true, audio: true }) });
     if (!requests.length) throw new Error('至少选择一个音频输入');
     const results = await Promise.allSettled(requests.map(({ stream }) => stream));
@@ -31,7 +31,7 @@ class AudioCapture {
 
   async previewMic() {
     if (this.preview) return;
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: { autoGainControl: true, echoCancellation: true, noiseSuppression: true } });
     if (!stream.getAudioTracks().length) {
       stream.getTracks().forEach((track) => track.stop());
       throw new Error('麦克风没有可用的音频轨道');

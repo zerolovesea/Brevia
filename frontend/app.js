@@ -10,7 +10,7 @@ const miniTimer = document.querySelector('#mini-timer');
 const refinementCard = document.querySelector('#refinement-progress');
 const refinementPercent = document.querySelector('#refinement-percent');
 const refinementBar = document.querySelector('#refinement-bar');
-const { catalog, appCopy: { stageLabels, themeLabels, updateLabels, modalCopy, modelLabels, summaryModelCopy, speakerProfileCopy } } = window.BreviaLocaleData;
+const { catalog, appCopy: { stageLabels, themeLabels, updateLabels, modalCopy, modelLabels, summaryModelCopy, speakerProfileCopy, voiceFeaturesCopy } } = window.BreviaLocaleData;
 let locale = localStorage.getItem('brevia-language') || 'zh';
 let theme = localStorage.getItem('brevia-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
 let activeView = 'home';
@@ -19,15 +19,18 @@ const liveSpeakers = new Map();
 const liveSegments = new Map();
 let followLiveTranscript = true;
 let toastTimer;
+let modelScrollFrame;
 let switchingLanguage = false;
 let meetingActive = false;
 let translationAllowed = false;
+let latestLiveSegmentId = null;
 const translatedNodes = [];
 /** Resolves a display label for the active locale. @param {string} key Chinese source label. @returns {string} Localized label or the original key. */
 const t = (key) => stageLabels[key]?.[locale] || stageLabels[key]?.en || catalog[locale].labels[key] || key;
 /** Resolves a transient message for the active locale. @param {string} key Message identifier. @returns {string} Localized message. */
 const message = (key) => catalog[locale].messages[key];
 function formatBytes(bytes = 0) { return bytes >= 1024 ** 3 ? `${(bytes / 1024 ** 3).toFixed(2)} GB` : bytes >= 1024 ** 2 ? `${(bytes / 1024 ** 2).toFixed(1)} MB` : `${Math.round(bytes / 1024)} KB`; }
+function formatMeetingTime(milliseconds = 0) { const seconds = Math.max(0, Math.floor(milliseconds / 1000)); return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`; }
 const defaultCategories = ['产品', '设计', '外部会议'];
 let categories = JSON.parse(localStorage.getItem('brevia-categories') || 'null') || defaultCategories;
 renderStaticViews();
@@ -51,6 +54,7 @@ const updateNoticeText = updateNotice.querySelector('span');
 const updateNoticeButton = updateNotice.querySelector('button');
 let updateAvailable = false;
 let speakerProfiles = [];
+let presetVoices = [];
 function renderSpeakerProfileCard() {
   const copy = speakerProfileCopy[locale] || speakerProfileCopy.en;
   speakerProfileCard.querySelector('h2').textContent = copy.title;
@@ -86,8 +90,11 @@ const modelIds = [
   'nemo-titanet-small-en',
   'campplus-zh-en',
   'zipformer-zh-xlarge-streaming-int8',
+  'gtcrn-live-denoiser',
+  'spleeter-2stems-fp16',
+  'zipvoice-zh-en',
 ];
-const modelSizes = [1047319737, 310414022, 132634597, 511274346, 258999581, 418218652, 398444115, 30667839, 2313101, 332211, 64717756, 878702423, 163002883, 563790207, 2900000000, 6958444, 10918585, 39593761, 40257283, 28281164, 597755927];
+const modelSizes = [1047319737, 310414022, 132634597, 511274346, 258999581, 418218652, 398444115, 30667839, 2313101, 332211, 64717756, 878702423, 163002883, 563790207, 2900000000, 6958444, 10918585, 39593761, 40257283, 28281164, 597755927, 535638, 35271738, 163320194];
 const summaryProviders = ['OpenAI', 'Anthropic', 'Kimi', 'Zhipu GLM', 'MiniMax', 'DeepSeek', 'OpenRouter', 'Ollama'];
 const defaultSummaryModels = [{ name: '配置-1', provider: 'OpenAI', endpoint: 'https://api.openai.com/v1/chat/completions', format: 'openai', model: 'gpt-4.1-mini' }];
 const savedSummaryConfig = JSON.parse(localStorage.getItem('brevia-summary-config') || 'null');
@@ -306,9 +313,10 @@ function renderSummaryModelModal() {
 }
 function renderSpeakerProfileModal() {
   const copy = speakerProfileCopy[locale] || speakerProfileCopy.en;
+  const voiceCopy = voiceFeaturesCopy[locale] || voiceFeaturesCopy.en;
   settingsModal.querySelector('h2').textContent = copy.title;
   settingsModal.querySelector('.modal-title p').textContent = copy.intro;
-  settingsModal.querySelector('.modal-body').innerHTML = `<form class="speaker-profile-form"><label>${copy.name}<input name="name" maxlength="32" required /></label><button class="modal-action" type="submit">${copy.add}</button></form><div class="speaker-profile-list">${speakerProfiles.map((profile) => `<div><span><b>${escapeHtml(profile.name)}</b><small>${profile.sample_count} ${copy.samples}</small></span><span><button class="secondary" data-add-speaker-sample="${profile.id}" type="button">${copy.addSample}</button><button class="model-delete" data-delete-speaker-profile="${profile.id}" type="button">${copy.remove}</button></span></div>`).join('')}</div>`;
+  settingsModal.querySelector('.modal-body').innerHTML = `<form class="speaker-profile-form"><label>${copy.name}<input name="name" maxlength="32" required /></label><label>${voiceCopy.reference}<input name="reference_text" maxlength="500" required /></label><button class="modal-action" type="submit">${copy.add}</button></form><div class="speaker-profile-list">${speakerProfiles.map((profile) => `<div><span><b>${escapeHtml(profile.name)}</b><small>${profile.sample_count} ${copy.samples}</small></span><span><button class="secondary" data-add-speaker-sample="${profile.id}" type="button">${copy.addSample}</button><button class="secondary" data-verify-speaker-profile="${profile.id}" type="button">${voiceCopy.verify}</button><button class="model-delete" data-delete-speaker-profile="${profile.id}" type="button">${copy.remove}</button></span></div>`).join('')}</div>`;
 }
 /** Renders one settings modal. @param {'models'|'terms'|'storage'|'summary-model'} kind Requested modal. @returns {void} */
 function renderModal(kind) {
@@ -332,7 +340,7 @@ function renderModal(kind) {
     const ratio = progress?.total ? Math.min(1, progress.received / progress.total) : 0;
     const downloadProgress = progress?.error ? `<span class="model-download-progress">${escapeHtml(progress.error)}</span>` : progress ? `<span class="model-download-progress">${formatBytes(progress.received)} / ${formatBytes(progress.total)} · ${Math.round(ratio * 100)}%<i aria-hidden="true" style="transform:scaleX(${ratio})"></i></span>` : '';
     const size = kind === 'models' ? `<small>${formatBytes(modelSizes[sourceIndex])}</small>` : '';
-    const actions = kind === 'models' ? `<button class="modal-action${isModelInstalled(name) ? ' modal-danger' : ''}" ${isModelInstalled(name) ? `data-delete-model="${sourceIndex}"` : `data-download-model="${sourceIndex}"`} type="button"${progress && !progress.error ? ' disabled' : ''}>${isModelInstalled(name) ? (modelLabels[locale] || modelLabels.en).remove : progress && !progress.error ? (modelLabels[locale] || modelLabels.en).downloading : (modelLabels[locale] || modelLabels.en).download}</button>` : kind === 'terms' ? `<span class="term-actions">${termEditing ? `<button class="modal-action" data-save-term="${index}" type="button">${copy.save}</button><button class="modal-action" data-cancel-term type="button">${copy.cancel}</button>` : `<button class="modal-action" data-edit-term="${index}" type="button">${copy.edit}</button><button class="modal-action" data-remove-term="${index}" type="button">${copy.remove}</button>`}</span>` : '';
+    const actions = kind === 'models' ? `<span class="model-actions">${isModelInstalled(name) && modelPaths.has(modelIds[sourceIndex]) ? `<button class="secondary" data-open-model-folder="${sourceIndex}" type="button">${t('从文件夹打开')}</button>` : ''}<button class="modal-action${isModelInstalled(name) ? ' modal-danger' : ''}" ${isModelInstalled(name) ? `data-delete-model="${sourceIndex}"` : `data-download-model="${sourceIndex}"`} type="button"${progress && !progress.error ? ' disabled' : ''}>${isModelInstalled(name) ? (modelLabels[locale] || modelLabels.en).remove : progress && !progress.error ? (modelLabels[locale] || modelLabels.en).downloading : (modelLabels[locale] || modelLabels.en).download}</button></span>` : kind === 'terms' ? `<span class="term-actions">${termEditing ? `<button class="modal-action" data-save-term="${index}" type="button">${copy.save}</button><button class="modal-action" data-cancel-term type="button">${copy.cancel}</button>` : `<button class="modal-action" data-edit-term="${index}" type="button">${copy.edit}</button><button class="modal-action" data-remove-term="${index}" type="button">${copy.remove}</button>`}</span>` : '';
     const heading = kind === 'models' && (index === 0 || items[index - 1].item[0] !== stage) ? `<h3>${escapeHtml(stage)}</h3>` : '';
     return `${heading}<div><span>${label}${downloadProgress}<small>${escapeHtml(detail)}</small>${size}${intro ? `<small>${escapeHtml(intro)}</small>` : ''}</span>${actions}</div>`;
   }).join('')}</div>${kind === 'terms' ? `<form class="term-form"><input name="term" required maxlength="64" placeholder="${copy.placeholder}" /><button type="submit">${copy.add}</button></form>` : ''}`;
@@ -346,6 +354,7 @@ settingsActions.forEach((button) => button.addEventListener('click', () => openM
 const modelAction = document.querySelector('[data-settings-modal="models"]');
 speakerProfileCard.querySelector('button').addEventListener('click', () => openModal('speaker-profiles'));
 const installedModelNames = new Set();
+const modelPaths = new Map();
 /** Checks whether a model is installed locally. @param {string} name Model name. @returns {boolean} Whether the model exists in the installed set. */
 function isModelInstalled(name) { return installedModelNames.has(name); }
 /** Removes an installed model from the list and local state. @param {string} name Model name. @returns {void} */
@@ -370,6 +379,7 @@ function renderTermOverview() {
 }
 /** Renders participants discovered from voiceprints together with the current meeting status. @returns {void} */
 function renderLivePanel() {
+  const copy = voiceFeaturesCopy[locale] || voiceFeaturesCopy.en;
   const participants = [...liveSpeakers.values()];
   const people = participants.length
     ? participants.map((participant) => renderParticipant({
@@ -377,7 +387,10 @@ function renderLivePanel() {
       name: participant.name || `${t('说话人')} ${participant.id}`,
     })).join('')
     : `<p class="participants-empty">${t('等待识别说话人')}</p>`;
+  const voices = [...presetVoices, ...speakerProfiles.filter((profile) => profile.has_reference).map((profile) => ({ id: profile.id, name: profile.name }))].map((voice) => `<option value="${escapeHtml(voice.id)}">${escapeHtml(voice.name)}</option>`).join('');
+  const noVoice = !voices;
   document.querySelector('.live-panel').innerHTML = `<section><p class="eyebrow">${t('参与者')} · ${participants.length}</p>${people}</section><section><p class="eyebrow">${t('本场状态')}</p>${renderStatusList(uiData.live.status)}</section>`;
+  document.querySelector('#tts-chat').innerHTML = `<p class="eyebrow">${locale === 'zh' ? '语音对话' : 'Voice conversation'}</p><form id="tts-chat-form"><div class="tts-selects"><select name="voice_id" aria-label="${copy.voice}" ${noVoice ? 'disabled' : ''}><option value="">${copy.voice}</option>${voices}</select><select name="target_language" aria-label="${copy.voice}"><option value="zh">中文</option><option value="en">English</option></select></div><input name="text" maxlength="1000" placeholder="${copy.placeholder}" required /><button type="submit" ${noVoice ? 'disabled' : ''}>${copy.send}</button>${noVoice ? `<p class="tts-hint">${locale === 'zh' ? '请先在声纹库注册可用声音' : 'Register a voiceprint before sending speech'}</p>` : ''}</form>`;
 }
 renderModelControls();
 renderTermOverview();
@@ -417,7 +430,9 @@ settingsModal.addEventListener('click', async (event) => {
   const addSpeakerSample = event.target.closest('[data-add-speaker-sample]');
   if (addSpeakerSample) {
     try {
-      const profile = await window.brevia?.speakerProfile.enroll({ profile_id: addSpeakerSample.dataset.addSpeakerSample, name: speakerProfiles.find((item) => item.id === addSpeakerSample.dataset.addSpeakerSample)?.name });
+      const referenceText = prompt((voiceFeaturesCopy[locale] || voiceFeaturesCopy.en).reference);
+      if (referenceText === null || !referenceText.trim()) return;
+      const profile = await window.brevia?.speakerProfile.enroll({ profile_id: addSpeakerSample.dataset.addSpeakerSample, name: speakerProfiles.find((item) => item.id === addSpeakerSample.dataset.addSpeakerSample)?.name, reference_text: referenceText.trim() });
       if (profile) speakerProfiles = await window.brevia.speakerProfile.list();
     } catch (error) { showToast(error.message); }
     renderModal('speaker-profiles');
@@ -427,6 +442,14 @@ settingsModal.addEventListener('click', async (event) => {
   if (deleteSpeakerProfile) {
     try { await window.brevia?.speakerProfile.delete({ profile_id: deleteSpeakerProfile.dataset.deleteSpeakerProfile }); speakerProfiles = await window.brevia.speakerProfile.list(); } catch (error) { showToast(error.message); }
     renderModal('speaker-profiles');
+    return;
+  }
+  const verifySpeakerProfile = event.target.closest('[data-verify-speaker-profile]');
+  if (verifySpeakerProfile) {
+    try {
+      const result = await window.brevia?.speakerProfile.verify({ profile_id: verifySpeakerProfile.dataset.verifySpeakerProfile });
+      if (result) showToast(`${result.name}: ${(result.score * 100).toFixed(1)}%${result.verified ? ' ✓' : ''}`);
+    } catch (error) { showToast(error.message); }
     return;
   }
   const download = event.target.closest('[data-download-model]');
@@ -451,6 +474,14 @@ settingsModal.addEventListener('click', async (event) => {
       deleteInstalledModel(name);
     } catch (error) { showToast(error.message); }
     renderModal('models');
+    return;
+  }
+  const openModelFolder = event.target.closest('[data-open-model-folder]');
+  if (openModelFolder) {
+    const modelId = modelIds[Number(openModelFolder.dataset.openModelFolder)];
+    const directory = modelPaths.get(modelId);
+    if (!directory) { showToast(t('未找到模型文件')); return; }
+    try { await window.brevia?.showItem(`${directory}/.brevia.json`); } catch (error) { showToast(error.message); }
     return;
   }
   const edit = event.target.closest('[data-edit-term]');
@@ -504,7 +535,8 @@ settingsModal.addEventListener('submit', async (event) => {
   if (event.target.matches('.speaker-profile-form')) {
     event.preventDefault();
     try {
-      const profile = await window.brevia?.speakerProfile.enroll({ name: new FormData(event.target).get('name').trim() });
+      const values = new FormData(event.target);
+      const profile = await window.brevia?.speakerProfile.enroll({ name: values.get('name').trim(), reference_text: values.get('reference_text').trim() });
       if (profile) speakerProfiles = await window.brevia.speakerProfile.list();
     } catch (error) { showToast(error.message); }
     renderModal('speaker-profiles');
@@ -519,6 +551,22 @@ settingsModal.addEventListener('submit', async (event) => {
     termEntries = terms.map((item) => ({ id: item.id, name: item.text, detail: item.note || '自定义术语' }));
   } else termEntries.push({ name: term, detail: locale === 'zh' ? '自定义术语' : locale === 'es' ? 'Término personalizado' : 'Custom term' });
   renderModal('terms');
+});
+document.querySelector('#live-view').addEventListener('submit', async (event) => {
+  if (!event.target.matches('#tts-chat-form')) return;
+  event.preventDefault();
+  const values = new FormData(event.target);
+  try {
+    const voiceId = values.get('voice_id');
+    const config = summaryModels[activeSummaryModel];
+    if (!config) { showToast(locale === 'zh' ? '请先配置翻译模型' : 'Configure a translation model first'); return; }
+    const result = await window.brevia?.tts.synthesize({ voice_id: voiceId, target_language: values.get('target_language'), text: values.get('text').trim(), provider: config.provider, endpoint: config.endpoint, model: config.model, format: config.format, key_reference: config.keyReference });
+    if (!result) return;
+    const audio = new Audio(await window.brevia.audioUrl(result.path));
+    await audio.play();
+    showToast((voiceFeaturesCopy[locale] || voiceFeaturesCopy.en).ready);
+    event.target.reset();
+  } catch (error) { showToast(error.message); }
 });
 /* Locale copy lives in i18n.js; this alias keeps the renderer focused on state changes. */
 const slogans = BreviaI18n.slogans;
@@ -610,6 +658,7 @@ function applyLanguage(nextLocale, animate = false) {
     renderModelControls();
     renderTermOverview();
     renderLivePanel();
+    document.querySelector('[data-separate-detail]').textContent = (voiceFeaturesCopy[locale] || voiceFeaturesCopy.en).source;
     renderConfigPreview();
     if (activeModal) renderModal(activeModal);
     if (animate) nodes.forEach((element) => { element.classList.remove('locale-out'); element.classList.add('locale-in'); window.setTimeout(() => element.classList.remove('locale-in'), 520); });
@@ -620,7 +669,72 @@ function applyLanguage(nextLocale, animate = false) {
   window.setTimeout(() => { updateText(); switchingLanguage = false; }, 380);
 }
 /** Shows a short, self-clearing feedback message. @param {string} content Toast text. @returns {void} */
-const showToast = (content) => { toast.textContent = content; toast.classList.add('visible'); clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove('visible'), 2400); };
+/** Returns locally downloadable model IDs mentioned by a worker error. */
+function missingModelIds(content) {
+  const match = String(content).match(/Models? ([a-z0-9-]+(?:, [a-z0-9-]+)*) (?:is|are) not installed/i);
+  if (match) return match[1].split(', ').filter((id) => modelIds.includes(id));
+  if (/Speaker diarization models are not installed/.test(content)) return ['pyannote-segmentation-3.0', 'eres2net-base-3dspeaker-zh'];
+  return [];
+}
+/** Displays a transient message and, when supplied, one explicit safe next action. */
+const showToast = (content, action) => {
+  const requiredModels = action ? [] : missingModelIds(content);
+  if (requiredModels.length) {
+    const copy = modalCopy[locale] || modalCopy.en;
+    const names = requiredModels.map((id) => copy.models.items[modelIds.indexOf(id)]?.[1] || id);
+    content = `${t('需要下载以下模型')} ${names.join('、')}`;
+    action = { label: t('前往模型库'), run: () => openModelLibraryAt(requiredModels) };
+  }
+  const message = document.createElement('span');
+  message.textContent = content;
+  toast.replaceChildren(message);
+  if (action) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = action.label;
+    button.addEventListener('click', () => { action.run(); toast.classList.remove('visible'); });
+    toast.append(button);
+  }
+  toast.classList.toggle('has-action', Boolean(action));
+  toast.classList.add('visible');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('visible'), 4000);
+};
+
+function openModelLibraryAt(modelIdsToShow) {
+  openModal('models');
+  requestAnimationFrame(() => {
+    const ids = Array.isArray(modelIdsToShow) ? modelIdsToShow : [modelIdsToShow];
+    const targets = ids.map((id) => {
+      const index = modelIds.indexOf(id);
+      const control = settingsModal.querySelector(`[data-download-model="${index}"], [data-delete-model="${index}"]`);
+      return { control, target: control?.closest('.modal-list > div') };
+    }).filter(({ target }) => target);
+    const { control, target } = targets[0] || {};
+    const body = settingsModal.querySelector('.modal-body');
+    if (!target || !body) return;
+    const destination = Math.max(0, body.scrollTop + target.getBoundingClientRect().top - body.getBoundingClientRect().top - (body.clientHeight - target.clientHeight) / 2);
+    const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    cancelAnimationFrame(modelScrollFrame);
+    if (reduced) {
+      body.scrollTop = destination;
+      control.focus();
+    } else {
+      const start = body.scrollTop;
+      const startedAt = performance.now();
+      const step = (now) => {
+        const progress = Math.min(1, (now - startedAt) / 720);
+        // 快速进入、缓慢停靠，避免线性滚动带来的机械感。
+        body.scrollTop = start + (destination - start) * (1 - (1 - progress) ** 4);
+        if (progress < 1) modelScrollFrame = requestAnimationFrame(step);
+        else control.focus({ preventScroll: true });
+      };
+      modelScrollFrame = requestAnimationFrame(step);
+    }
+    targets.forEach(({ target: item }) => item.classList.add('model-target'));
+    window.setTimeout(() => targets.forEach(({ target: item }) => item.classList.remove('model-target')), 900);
+  });
+}
 /** Marks the active meeting-library source and updates the window breadcrumb. @param {'all-meetings'|'recently-deleted'} id Navigation item ID. @returns {void} */
 function selectLibraryNav(id) {
   if (id !== activeLibraryNav) clearMeetingSelection();
@@ -719,7 +833,11 @@ homeEyebrow.addEventListener('click', async () => {
 document.querySelector('#meeting-form').addEventListener('submit', async (event) => {
   event.preventDefault();
   const submit = event.submitter;
+  const submitLabel = submit.innerHTML;
   submit.disabled = true;
+  submit.classList.add('is-pending');
+  submit.setAttribute('aria-busy', 'true');
+  submit.innerHTML = `<i class="button-spinner" aria-hidden="true"></i>${t('准备中')}`;
   const form = new FormData(event.currentTarget);
   const title = document.querySelector('#meeting-title').value.trim();
   const language = form.get('meeting-language') || 'auto';
@@ -748,6 +866,9 @@ document.querySelector('#meeting-form').addEventListener('submit', async (event)
     document.querySelector('#live-name').textContent = title;
     uiData.meetings.unshift({ id: meeting.id, tone: 'violet', title, meta: `刚刚 · 0 分钟${form.get('meeting-category') ? ` · ${form.get('meeting-category')}` : ''}`, category: form.get('meeting-category'), tags: [], status: { tone: 'processing', label: '正在录制', detail: '双轨录音' } });
     document.querySelector('#transcript-scroll').innerHTML = '';
+    document.querySelector('#live-caption').textContent = '';
+    document.querySelector('#live-caption-translation').hidden = true;
+    latestLiveSegmentId = null;
     liveSpeakers.clear();
     liveSegments.clear();
     followLiveTranscript = true;
@@ -763,6 +884,9 @@ document.querySelector('#meeting-form').addEventListener('submit', async (event)
     showToast(error.message);
   } finally {
     submit.disabled = false;
+    submit.classList.remove('is-pending');
+    submit.removeAttribute('aria-busy');
+    submit.innerHTML = submitLabel;
   }
 });
 importRecording.addEventListener('click', async () => {
@@ -865,6 +989,8 @@ document.querySelector('#translation-toggle').addEventListener('click', (event) 
   event.currentTarget.dataset.enabled = String(!enabled);
   event.currentTarget.textContent = t(enabled ? '译文: 关' : '译文: 开');
   document.querySelectorAll('.translation').forEach((line) => { line.hidden = enabled; });
+  const currentTranslation = document.querySelector('#live-caption-translation');
+  currentTranslation.hidden = enabled || !currentTranslation.textContent;
 });
 document.querySelector('#latest').addEventListener('click', () => {
   followLiveTranscript = true;
@@ -1025,6 +1151,16 @@ meetingList.addEventListener('click', async (event) => {
     if (action.dataset.meetingAction === 'category') { actions.querySelector('.meeting-menu').hidden = true; actions.querySelector('.meeting-category-menu').hidden = false; return; }
     if (action.dataset.meetingAction === 'back') { closeCategoryMenu(actions.querySelector('.meeting-category-menu'), () => { actions.querySelector('.meeting-menu').hidden = false; }); return; }
     if (action.dataset.meetingAction === 'rename') { actions.querySelector('.meeting-menu').hidden = true; const rename = actions.querySelector('.meeting-rename-menu'); rename.hidden = false; rename.querySelector('input').focus(); rename.querySelector('input').select(); return; }
+    if (action.dataset.meetingAction === 'open-folder') {
+      try {
+        const detail = await window.brevia?.meeting.get({ meeting_id: meeting.id });
+        const audio = detail?.audio?.playback?.mix || detail?.audio?.playback?.mic || detail?.audio?.playback?.system;
+        if (!audio) { showToast(t('未找到录音文件')); return; }
+        await window.brevia.showItem(audio);
+      } catch (error) { showToast(error.message); }
+      closeMeetingMenus();
+      return;
+    }
     if (action.dataset.meetingAction === 'export') { closeMeetingMenus(); if (window.brevia && meeting.id) window.brevia.meeting.export({ meeting_id: meeting.id, format: 'md' }).then((value) => value && showToast(`已导出「${meeting.title}」`)).catch((error) => showToast(error.message)); else showToast(`已导出「${meeting.title}」`); return; }
     if (action.dataset.meetingAction === 'delete') {
       try {
@@ -1191,9 +1327,14 @@ if (window.brevia) {
   breviaClient.initialize().then((result) => {
     uiData.meetings = result.meetings.map(backendMeeting);
     speakerProfiles = result.speaker_profiles || [];
+    presetVoices = result.preset_voices || [];
     termEntries = result.terms.map((item) => ({ id: item.id, name: item.text, detail: item.note || '自定义术语' }));
     installedModelNames.clear();
-    result.models.filter((model) => model.status === 'ready').forEach((model) => installedModelNames.add(model.name.replace(' 0.6B int8', '')));
+    modelPaths.clear();
+    result.models.filter((model) => model.status === 'ready').forEach((model) => {
+      installedModelNames.add(model.name.replace(' 0.6B int8', ''));
+      if (model.path) modelPaths.set(model.id, model.path);
+    });
     document.querySelector('#active-device').textContent = result.device.backend.toUpperCase();
     uiData.live.status[1].value = result.device.backend.toUpperCase();
     uiData.live.status[2].value = String(result.terms.length);
@@ -1234,12 +1375,18 @@ if (window.brevia) {
     }
     const participant = liveSpeakers.get(payload.speaker);
     const entry = {
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      time: formatMeetingTime(payload.start_ms),
       speaker: { id: payload.speaker, name: participant?.name || `${t('说话人')} ${participant?.id || payload.speaker.split('-').pop()}` },
       text: payload.text,
       translation: payload.translation,
       partial,
     };
+    latestLiveSegmentId = payload.segment_id;
+    const currentCaption = document.querySelector('#live-caption');
+    const currentTranslation = document.querySelector('#live-caption-translation');
+    currentCaption.textContent = payload.text;
+    currentTranslation.hidden = !payload.translation || !translationAllowed;
+    currentTranslation.textContent = payload.translation || '';
     const template = document.createElement('template');
     template.innerHTML = renderTranscriptSegment(entry);
     const previous = liveSegments.get(payload.segment_id);
@@ -1284,10 +1431,18 @@ if (window.brevia) {
     let line = element.querySelector('.translation');
     if (!line) { line = document.createElement('p'); line.className = 'translation'; element.append(line); }
     line.textContent = payload.translation;
+    if (payload.segment_id === latestLiveSegmentId) {
+      const currentTranslation = document.querySelector('#live-caption-translation');
+      currentTranslation.textContent = payload.translation;
+      currentTranslation.hidden = !translationAllowed;
+    }
   });
   window.brevia.on('refinement.started', ({ total }) => showRefinementProgress(0, total));
   window.brevia.on('refinement.progress', ({ completed, total }) => showRefinementProgress(completed, total));
   window.brevia.on('refinement.ready', ({ meeting }) => {
+    const refineButton = document.querySelector('.detail-refine [data-flow-select-toggle]');
+    refineButton.disabled = false;
+    refineButton.innerHTML = `${t('精修')} <span>⌄</span>`;
     showRefinementComplete();
     if (meeting.id === breviaClient.state.selectedMeetingId) applyBackendDetail(meeting);
   });
@@ -1297,17 +1452,31 @@ if (window.brevia) {
     if (activeModal === 'models') renderModal('models');
   });
   window.brevia.on('model.status', ({ model_id, status, error }) => {
-    if (!modelDownloads.has(model_id)) return;
+    const index = modelIds.indexOf(model_id);
+    if (index < 0) return;
     if (status === 'ready') {
-      const index = modelIds.indexOf(model_id);
       const [, name, detail, intro, icon] = (modalCopy[locale] || modalCopy.en).models.items[index];
       installModel({ icon, name, detail, intro });
       modelDownloads.delete(model_id);
-    } else if (status === 'failed') modelDownloads.set(model_id, { error });
+      window.brevia.models.list().then((models) => {
+        const model = models.find((item) => item.id === model_id);
+        if (model?.path) modelPaths.set(model_id, model.path);
+        if (activeModal === 'models') renderModal('models');
+      }).catch(() => {});
+    } else if (status === 'failed' && modelDownloads.has(model_id)) modelDownloads.set(model_id, { error });
     if (activeModal === 'models') renderModal('models');
   });
   window.brevia.on('worker.warning', ({ message: warning }) => showToast(warning));
   window.brevia.on('worker.error', ({ message: error }) => showToast(error));
+  window.brevia.on('model.required', ({ models }) => {
+    hideRefinementProgress();
+    const refineButton = document.querySelector('.detail-refine [data-flow-select-toggle]');
+    refineButton.disabled = false;
+    refineButton.innerHTML = `${t('精修')} <span>⌄</span>`;
+    showToast(`Models ${models.join(', ')} are not installed`);
+  });
+  window.brevia.on('speaker-profile.updated', async () => { speakerProfiles = await window.brevia.speakerProfile.list(); renderSpeakerProfileCard(); renderLivePanel(); });
+  window.brevia.on('speaker-profile.deleted', async () => { speakerProfiles = await window.brevia.speakerProfile.list(); renderSpeakerProfileCard(); renderLivePanel(); });
 
   document.querySelector('#recently-deleted').addEventListener('click', async () => {
     await showLibraryNav('recently-deleted').catch((error) => showToast(error.message));
@@ -1348,6 +1517,41 @@ if (window.brevia) {
       const result = await window.brevia.meeting.export({ meeting_id: breviaClient.state.selectedMeetingId, content, format });
       if (result) showToast('逐字稿已导出');
     } catch (error) { showToast(error.message); }
+  });
+
+  document.querySelector('[data-separate-detail]').addEventListener('click', async () => {
+    if (!breviaClient.state.selectedMeetingId) return;
+    if (!isModelInstalled('Spleeter 2 Stems')) {
+      showToast('Model spleeter-2stems-fp16 is not installed');
+      return;
+    }
+    try {
+      await window.brevia.meeting.separate({ meeting_id: breviaClient.state.selectedMeetingId });
+      showToast((voiceFeaturesCopy[locale] || voiceFeaturesCopy.en).separated);
+    } catch (error) { showToast(error.message); }
+  });
+
+  document.querySelector('.detail-refine').addEventListener('click', (event) => {
+    const toggle = event.target.closest('[data-flow-select-toggle]');
+    const options = event.currentTarget.querySelector('.flow-select-options');
+    if (toggle) {
+      options.hidden = !options.hidden;
+      toggle.setAttribute('aria-expanded', String(!options.hidden));
+      return;
+    }
+    const choice = event.target.closest('[data-refine-model]');
+    if (!choice || !breviaClient.state.selectedMeetingId) return;
+    options.hidden = true;
+    const button = event.currentTarget.querySelector('[data-flow-select-toggle]');
+    button.disabled = true;
+    button.textContent = t('正在精修');
+    showRefinementProgress(0, 0, document.querySelector('#detail-view .detail-head h1').textContent);
+    void window.brevia.meeting.refine({ meeting_id: breviaClient.state.selectedMeetingId, refined_model_id: choice.dataset.refineModel }).catch((error) => {
+      button.disabled = false;
+      button.innerHTML = `${t('精修')} <span>⌄</span>`;
+      hideRefinementProgress();
+      showToast(error.message);
+    });
   });
 
   document.querySelector('[data-share-detail]').addEventListener('click', async () => {

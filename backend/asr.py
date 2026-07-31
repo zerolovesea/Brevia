@@ -83,7 +83,7 @@ class ModelManager:
                 source.mkdir()
                 received = 0
                 for item in model["downloads"]:
-                    destination = source / item["path"]
+                    destination = Path(temporary) / item["path"] if item.get("extract") else source / item["path"]
                     destination.parent.mkdir(parents=True, exist_ok=True)
 
                     def report(blocks, block_size, total, offset=received):
@@ -91,6 +91,19 @@ class ModelManager:
                         self.event("model.progress", {"model_id": model_id, "received": offset + current, "total": model["size_bytes"]})
 
                     urllib.request.urlretrieve(item["url"], destination, report)
+                    if item.get("extract"):
+                        extract_root = Path(temporary) / f"extract-{received}"
+                        extract_root.mkdir()
+                        with tarfile.open(destination) as bundle:
+                            for member in bundle.getmembers():
+                                target = (extract_root / member.name).resolve()
+                                if not target.is_relative_to(extract_root.resolve()):
+                                    raise ValueError("Unsafe model archive path")
+                            bundle.extractall(extract_root, filter="data")
+                        extracted = extract_root / item["directory"]
+                        if not extracted.is_dir():
+                            raise ValueError("Model archive is missing required directory")
+                        shutil.copytree(extracted, source, dirs_exist_ok=True)
                     received += destination.stat().st_size
                 digest = None
             else:
@@ -252,11 +265,89 @@ class StreamingASR:
         return result, endpoint
 
 
+class LiveDenoiser:
+    """用 Sherpa-onnx 在线 GTCRN 降噪后再交给实时识别。"""
+
+    def __init__(self, manager, model_id):
+        if not manager.is_ready(model_id):
+            raise RuntimeError(f"Model {model_id} is not installed")
+        import sherpa_onnx
+
+        config = sherpa_onnx.OnlineSpeechDenoiserConfig()
+        config.model.gtcrn.model = str(manager.path(model_id) / "gtcrn_simple.onnx")
+        config.model.num_threads = manager.device()["threads"]
+        config.model.provider = manager.device()["backend"]
+        if not config.validate():
+            raise RuntimeError("Invalid live denoiser configuration")
+        self.config = config
+        self.engines = {}
+
+    def accept(self, track, samples, sample_rate, flush=False):
+        """按模型帧长处理一条音轨，并在结束时输出缓存尾音。"""
+        import numpy
+        import sherpa_onnx
+
+        engine = self.engines.setdefault(track, sherpa_onnx.OnlineSpeechDenoiser(self.config))
+        output = [
+            numpy.asarray(engine(samples[start:start + engine.frame_shift_in_samples], sample_rate).samples, dtype=numpy.float32)
+            for start in range(0, len(samples), engine.frame_shift_in_samples)
+        ]
+        if flush:
+            output.append(numpy.asarray(engine.flush().samples, dtype=numpy.float32))
+        return numpy.concatenate(output) if output else samples
+
+
+class OfflineDenoiser:
+    """在会后精修前清理整段录音，不改写原始音频文件。"""
+
+    def __init__(self, manager, model_id):
+        if not manager.is_ready(model_id):
+            raise RuntimeError(f"Model {model_id} is not installed")
+        import sherpa_onnx
+
+        config = sherpa_onnx.OfflineSpeechDenoiserConfig()
+        config.model.gtcrn.model = str(manager.path(model_id) / "gtcrn_simple.onnx")
+        config.model.num_threads = manager.device()["threads"]
+        config.model.provider = manager.device()["backend"]
+        if not config.validate():
+            raise RuntimeError("Invalid offline denoiser configuration")
+        self.engine = sherpa_onnx.OfflineSpeechDenoiser(config)
+
+    def process(self, samples, sample_rate):
+        import numpy
+        return numpy.asarray(self.engine(samples, sample_rate).samples, dtype=numpy.float32)
+
+
+class LanguageIdentifier:
+    """使用 Whisper 的原生语言识别替代文本启发式判断。"""
+
+    def __init__(self, manager, model_id="whisper-turbo"):
+        if not manager.is_ready(model_id):
+            raise RuntimeError(f"Model {model_id} is not installed")
+        import sherpa_onnx
+
+        path = manager.path(model_id)
+        config = sherpa_onnx.SpokenLanguageIdentificationConfig(
+            whisper=sherpa_onnx.SpokenLanguageIdentificationWhisperConfig(
+                encoder=str(path / "encoder.int8.onnx"), decoder=str(path / "decoder.int8.onnx"),
+            ),
+            num_threads=manager.device()["threads"], provider=manager.device()["backend"],
+        )
+        if not config.validate():
+            raise RuntimeError("Invalid language-identification configuration")
+        self.engine = sherpa_onnx.SpokenLanguageIdentification(config)
+
+    def identify(self, samples, sample_rate):
+        stream = self.engine.create_stream()
+        stream.accept_waveform(sample_rate, samples)
+        return self.engine.compute(stream)
+
+
 class SenseVoiceStreamingASR:
     """用 Silero VAD 切分音频并驱动 SenseVoice，提供低延迟分段字幕。"""
     def __init__(self, manager, model_id, vad_id="silero-vad"):
         if not (manager.is_ready(model_id) and manager.is_ready(vad_id)):
-            raise RuntimeError("SenseVoice and Silero VAD models must be installed")
+            raise RuntimeError(f"Models {model_id}, {vad_id} are not installed")
         import sherpa_onnx
         path = manager.path(model_id)
         self.recognizer = sherpa_onnx.OfflineRecognizer.from_sense_voice(model=str(path / "model.int8.onnx"), tokens=str(path / "tokens.txt"), language="auto", use_itn=True, num_threads=manager.device()["threads"], provider=manager.device()["backend"])
@@ -338,7 +429,7 @@ class SpeakerTracker:
         config = SETTINGS["diarization"]
         model_id = model_id or config["embedding_model_id"]
         if not manager.is_ready(model_id):
-            raise RuntimeError("Speaker embedding model is not installed")
+            raise RuntimeError(f"Model {model_id} is not installed")
         try:
             import sherpa_onnx
         except ImportError as error:
@@ -425,7 +516,7 @@ class RefinedASR:
         """
         model = manager.get(model_id)
         if model["kind"] not in {"qwen3", "sensevoice", "whisper"} or not manager.is_ready(model_id):
-            raise RuntimeError("The selected refined model is not installed")
+            raise RuntimeError(f"Model {model_id} is not installed")
         try:
             import sherpa_onnx
         except ImportError as error:
@@ -475,7 +566,7 @@ class OfflineDiarizer:
         segmentation_id = segmentation_id or config["segmentation_model_id"]
         embedding_id = embedding_id or config["embedding_model_id"]
         if not all(manager.is_ready(model_id) for model_id in (segmentation_id, embedding_id)):
-            raise RuntimeError("Speaker diarization models are not installed")
+            raise RuntimeError(f"Models {segmentation_id}, {embedding_id} are not installed")
         try:
             import sherpa_onnx
         except ImportError as error:
@@ -526,3 +617,64 @@ class OfflineDiarizer:
             }
             for segment in self.diarizer.process(samples).sort_by_start_time()
         ]
+
+
+class SourceSeparator:
+    """使用 Spleeter 将双声道录音拆为人声与非人声轨。"""
+
+    def __init__(self, manager, model_id="spleeter-2stems-fp16"):
+        if not manager.is_ready(model_id):
+            raise RuntimeError(f"Model {model_id} is not installed")
+        try:
+            import sherpa_onnx
+        except ImportError as error:
+            raise RuntimeError("sherpa-onnx is not installed") from error
+        path = manager.path(model_id)
+        config = sherpa_onnx.OfflineSourceSeparationConfig(
+            model=sherpa_onnx.OfflineSourceSeparationModelConfig(
+                spleeter=sherpa_onnx.OfflineSourceSeparationSpleeterModelConfig(
+                    vocals=str(path / "vocals.fp16.onnx"),
+                    accompaniment=str(path / "accompaniment.fp16.onnx"),
+                ), num_threads=manager.device()["threads"], provider=manager.device()["backend"],
+            )
+        )
+        if not config.validate():
+            raise RuntimeError("Invalid source separation configuration")
+        self.engine = sherpa_onnx.OfflineSourceSeparation(config)
+
+    def process(self, samples, sample_rate):
+        return self.engine.process(sample_rate=sample_rate, samples=samples)
+
+
+class ZipVoiceTTS:
+    """使用 ZipVoice 本地根据参考音频合成中英文语音。"""
+
+    def __init__(self, manager, model_id="zipvoice-zh-en"):
+        if not manager.is_ready(model_id):
+            raise RuntimeError(f"Model {model_id} is not installed")
+        try:
+            import sherpa_onnx
+        except ImportError as error:
+            raise RuntimeError("sherpa-onnx is not installed") from error
+        path = manager.path(model_id)
+        config = sherpa_onnx.OfflineTtsConfig(
+            model=sherpa_onnx.OfflineTtsModelConfig(
+                zipvoice=sherpa_onnx.OfflineTtsZipvoiceModelConfig(
+                    tokens=str(path / "tokens.txt"), encoder=str(path / "encoder.int8.onnx"),
+                    decoder=str(path / "decoder.int8.onnx"), data_dir=str(path / "espeak-ng-data"),
+                    lexicon=str(path / "lexicon.txt"), vocoder=str(path / "vocos_24khz.onnx"),
+                ), num_threads=manager.device()["threads"], provider=manager.device()["backend"],
+            )
+        )
+        if not config.validate():
+            raise RuntimeError("Invalid ZipVoice configuration")
+        self.engine = sherpa_onnx.OfflineTts(config)
+
+    def generate(self, text, reference_audio, reference_sample_rate, reference_text):
+        import sherpa_onnx
+        config = sherpa_onnx.GenerationConfig()
+        config.reference_audio = reference_audio
+        config.reference_sample_rate = reference_sample_rate
+        config.reference_text = reference_text
+        config.num_steps = 4
+        return self.engine.generate(text, config)

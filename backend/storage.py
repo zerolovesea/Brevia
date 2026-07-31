@@ -127,10 +127,12 @@ class Store:
         self.root = Path(root).expanduser()
         self.root.mkdir(parents=True, exist_ok=True)
         self.meetings_dir = self.root / "meetings"
+        self.speaker_profiles_dir = self.root / "speaker-profiles"
         self.models_dir = Path(
             __import__("os").environ.get("BREVIA_MODELS_DIR", self.root / "models")
         ).expanduser()
         self.meetings_dir.mkdir(exist_ok=True)
+        self.speaker_profiles_dir.mkdir(exist_ok=True)
         self.models_dir.mkdir(parents=True, exist_ok=True)
         self.db_path = self.root / "brevia.db"
         with self.connect() as db:
@@ -151,6 +153,11 @@ class Store:
             speaker_columns = {row["name"] for row in db.execute("PRAGMA table_info(speakers)")}
             if "profile_id" not in speaker_columns:
                 db.execute("ALTER TABLE speakers ADD COLUMN profile_id TEXT")
+            sample_columns = {row["name"] for row in db.execute("PRAGMA table_info(speaker_profile_samples)")}
+            if "audio_path" not in sample_columns:
+                db.execute("ALTER TABLE speaker_profile_samples ADD COLUMN audio_path TEXT")
+            if "reference_text" not in sample_columns:
+                db.execute("ALTER TABLE speaker_profile_samples ADD COLUMN reference_text TEXT")
 
     @contextmanager
     def connect(self):
@@ -391,7 +398,7 @@ class Store:
 
         ``updates`` 只接受标题、分类、标签和归档时间，其他键会被忽略。
         """
-        allowed = {"title", "category", "tags", "archived_at"}
+        allowed = {"title", "category", "tags", "archived_at", "refined_model_id"}
         fields = {key: value for key, value in updates.items() if key in allowed}
         if not fields:
             return self.get_meeting(meeting_id)
@@ -539,6 +546,20 @@ class Store:
                 values,
             )
 
+    def replace_segments(self, meeting_id, segments, version="postprocess"):
+        """原子替换一次精修生成的全部段落，保留用户编辑版本。"""
+        with self.connect() as db:
+            db.execute("DELETE FROM segments WHERE meeting_id=? AND version=?", (meeting_id, version))
+            db.executemany(
+                """INSERT INTO segments
+                (id,meeting_id,revision,version,track,start_ms,end_ms,speaker,text,translation,user_edited)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                [
+                    (item["segment_id"], meeting_id, 0, version, item["track"], int(item["start_ms"]), int(item["end_ms"]), item["speaker"], item["text"].strip(), item.get("translation"), 0)
+                    for item in segments
+                ],
+            )
+
     def save_translation(self, meeting_id, segment_id, translation):
         """为会议中同一段落的所有版本保存译文。"""
         with self.connect() as db:
@@ -568,7 +589,9 @@ class Store:
         """返回本地声纹库的人员摘要，不暴露原始声纹向量。"""
         with self.connect() as db:
             rows = db.execute(
-                "SELECT id,name,sample_count,created_at,updated_at FROM speaker_profiles ORDER BY name COLLATE NOCASE"
+                """SELECT id,name,sample_count,created_at,updated_at,
+                   EXISTS(SELECT 1 FROM speaker_profile_samples sample WHERE sample.profile_id=speaker_profiles.id AND sample.audio_path IS NOT NULL AND trim(COALESCE(sample.reference_text,'')) != '') AS has_reference
+                   FROM speaker_profiles ORDER BY name COLLATE NOCASE"""
             ).fetchall()
         return [dict(row) for row in rows]
 
@@ -579,6 +602,28 @@ class Store:
             raise ValueError("Speaker profile not found")
         return dict(row)
 
+    def ensure_speaker_profile(self, name):
+        """确保人工命名的人员立即拥有本地档案。
+
+        人工标注是明确的身份意图，但实时片段可能还不足以提取稳定声纹；先
+        保存空档案以维持会议与人员库的关联，后续样本会在同一档案上补全。
+        """
+        name = name.strip()
+        if not name:
+            raise ValueError("Speaker name cannot be empty")
+        now = utc_now()
+        with self.connect() as db:
+            profile = db.execute("SELECT * FROM speaker_profiles WHERE name=? COLLATE NOCASE", (name,)).fetchone()
+            if not profile:
+                profile_id = str(uuid4())
+                db.execute(
+                    "INSERT INTO speaker_profiles(id,name,embedding,sample_count,created_at,updated_at) VALUES(?,?,?,?,?,?)",
+                    (profile_id, name, "[]", 0, now, now),
+                )
+            else:
+                profile_id = profile["id"]
+        return self.speaker_profile(profile_id)
+
     @staticmethod
     def _normalized_embedding(embedding):
         values = [float(value) for value in embedding]
@@ -587,7 +632,7 @@ class Store:
             raise ValueError("Speaker embedding is empty")
         return [value / norm for value in values]
 
-    def save_speaker_profile_sample(self, name, embedding, source_key, profile_id=None):
+    def save_speaker_profile_sample(self, name, embedding, source_key, profile_id=None, audio_path=None, reference_text=None):
         """保存一条声纹样本，并以所有样本的归一化中心更新人员声纹。"""
         normalized = self._normalized_embedding(embedding)
         now = utc_now()
@@ -603,16 +648,21 @@ class Store:
                     (profile_id, name.strip(), json.dumps(normalized), 0, now, now),
                 )
                 profile = db.execute("SELECT * FROM speaker_profiles WHERE id=?", (profile_id,)).fetchone()
-            elif len(json.loads(profile["embedding"])) != len(normalized):
+            elif json.loads(profile["embedding"]) and len(json.loads(profile["embedding"])) != len(normalized):
                 raise ValueError("Voiceprint model does not match this person's registered samples")
             profile_id = profile["id"]
             existing = db.execute("SELECT id FROM speaker_profile_samples WHERE source_key=?", (source_key,)).fetchone()
             if existing:
                 saved = False
+                if audio_path and reference_text:
+                    db.execute(
+                        "UPDATE speaker_profile_samples SET audio_path=?,reference_text=? WHERE id=?",
+                        (audio_path, reference_text, existing["id"]),
+                    )
             else:
                 db.execute(
-                    "INSERT INTO speaker_profile_samples(id,profile_id,source_key,embedding,created_at) VALUES(?,?,?,?,?)",
-                    (str(uuid4()), profile_id, source_key, json.dumps(normalized), now),
+                    "INSERT INTO speaker_profile_samples(id,profile_id,source_key,embedding,created_at,audio_path,reference_text) VALUES(?,?,?,?,?,?,?)",
+                    (str(uuid4()), profile_id, source_key, json.dumps(normalized), now, audio_path, reference_text),
                 )
                 samples = [json.loads(row["embedding"]) for row in db.execute("SELECT embedding FROM speaker_profile_samples WHERE profile_id=?", (profile_id,))]
                 center = self._normalized_embedding([sum(values) / len(samples) for values in zip(*samples)])
@@ -622,6 +672,18 @@ class Store:
                 )
                 saved = True
         return {**self.speaker_profile(profile_id), "added": saved}
+
+    def speaker_profile_reference(self, profile_id):
+        """返回可用于本地语音克隆的最新带文本参考录音。"""
+        with self.connect() as db:
+            row = db.execute(
+                """SELECT audio_path,reference_text FROM speaker_profile_samples
+                   WHERE profile_id=? AND audio_path IS NOT NULL AND reference_text IS NOT NULL AND trim(reference_text) != ''
+                   ORDER BY created_at DESC LIMIT 1""", (profile_id,)
+            ).fetchone()
+        if not row:
+            raise ValueError("This voiceprint has no reference audio and transcript for voice cloning")
+        return dict(row)
 
     def match_speaker_profile(self, embedding, threshold):
         """按余弦相似度匹配本地人员；低于阈值时返回 ``None``。"""
@@ -641,6 +703,7 @@ class Store:
     def delete_speaker_profile(self, profile_id):
         with self.connect() as db:
             db.execute("DELETE FROM speaker_profiles WHERE id=?", (profile_id,))
+        shutil.rmtree(self.speaker_profiles_dir / profile_id, ignore_errors=True)
 
 
     def replace_speaker_turns(self, meeting_id, turns, version="postprocess"):

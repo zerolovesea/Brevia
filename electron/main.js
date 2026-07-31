@@ -52,9 +52,10 @@ class WorkerClient {
   }
 
   start() {
+    if (this.process?.stdin && !this.process.stdin.destroyed && this.process.exitCode === null) return;
     const bundled = path.join(packagedRoot, '.venv', 'bin', 'python');
     const python = process.env.BREVIA_PYTHON || (existsSync(bundled) ? bundled : 'python3');
-    this.process = spawn(python, ['-m', 'backend.worker'], {
+    const child = spawn(python, ['-m', 'backend.worker'], {
       cwd: packagedRoot,
       env: {
         ...process.env,
@@ -63,18 +64,19 @@ class WorkerClient {
       },
       stdio: ['pipe', 'pipe', 'pipe'],
     });
+    this.process = child;
     let buffer = '';
-    this.process.stdout.setEncoding('utf8');
-    this.process.stdout.on('data', (chunk) => {
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => {
       buffer += chunk;
       const lines = buffer.split('\n');
       buffer = lines.pop();
       lines.filter(Boolean).forEach((line) => this.receive(JSON.parse(line)));
     });
-    this.process.stderr.setEncoding('utf8');
-    this.process.stderr.on('data', (message) => this.sendEvent('worker:log', { message }));
-    this.process.on('error', (error) => this.fail(error));
-    this.process.on('exit', (code) => this.closed(code));
+    child.stderr.setEncoding('utf8');
+    child.stderr.on('data', (message) => this.sendEvent('worker:log', { message }));
+    child.on('error', (error) => this.fail(error));
+    child.on('exit', (code) => this.closed(code, child));
   }
 
   receive(message) {
@@ -90,15 +92,24 @@ class WorkerClient {
 
   request(type, payload = {}) {
     const value = command.parse({ type, payload });
+    if (!this.process?.stdin || this.process.stdin.destroyed || this.process.exitCode !== null) {
+      if (app.isQuitting) return Promise.reject(new Error('Worker is shutting down'));
+      this.start();
+    }
     const requestId = `cmd-${++this.sequence}`;
     return new Promise((resolve, reject) => {
       this.pending.set(requestId, { resolve, reject });
-      this.process.stdin.write(`${JSON.stringify({ id: requestId, ...value })}\n`, (error) => {
-        if (error) {
-          this.pending.delete(requestId);
-          reject(error);
-        }
-      });
+      try {
+        this.process.stdin.write(`${JSON.stringify({ id: requestId, ...value })}\n`, (error) => {
+          if (error) {
+            this.pending.delete(requestId);
+            reject(error);
+          }
+        });
+      } catch (error) {
+        this.pending.delete(requestId);
+        reject(error);
+      }
     });
   }
 
@@ -111,13 +122,16 @@ class WorkerClient {
     this.pending.clear();
   }
 
-  async closed(code) {
+  async closed(code, child) {
+    if (child !== this.process) return;
+    this.process = null;
     if (app.isQuitting) return;
     this.fail(new Error(`Worker exited with code ${code}`));
     this.sendEvent('worker.error', { message: `转写进程已退出（${code}）` });
-    if (!this.active || this.restarts >= 1) return;
+    if (this.restarts >= 1) return;
     this.restarts += 1;
     this.start();
+    if (!this.active) return;
     try {
       await this.request('meeting.resume', {
         meeting_id: this.active.meeting_id,
@@ -134,6 +148,24 @@ const worker = new WorkerClient();
 
 function handle(channel, schema, type = channel) {
   ipcMain.handle(channel, (_, payload = {}) => worker.request(type, schema.parse(payload)));
+}
+
+function requiredModels(error) {
+  const match = String(error.message).match(/Models? ([a-z0-9-]+(?:, [a-z0-9-]+)*) (?:is|are) not installed/i);
+  return match ? match[1].split(', ') : null;
+}
+
+function handleModelRequirement(channel, schema, type = channel) {
+  ipcMain.handle(channel, async (_, payload = {}) => {
+    try {
+      return await worker.request(type, schema.parse(payload));
+    } catch (error) {
+      const models = requiredModels(error);
+      if (!models) throw error;
+      worker.sendEvent('model.required', { models });
+      return { model_required: models };
+    }
+  });
 }
 
 async function setSecret(reference, value) {
@@ -179,19 +211,31 @@ function registerIpc() {
   handle('meeting.delete', id, 'meeting.delete');
   handle('meeting.restore', id, 'meeting.restore');
   handle('meeting.purge', id, 'meeting.purge');
-  handle('meeting.refine', id.extend({
+  handleModelRequirement('meeting.refine', id.extend({
+    refined_model_id: z.string().min(1).optional(),
     num_speakers: z.number().int().min(-1).max(20).optional(),
     cluster_threshold: z.number().min(0).max(1).optional(),
   }), 'meeting.refine');
+  handle('meeting.separate', id, 'meeting.separate');
   handle('speaker.rename', id.extend({ speaker_id: z.string(), name: z.string().trim().min(1).max(32), locked: z.boolean().optional() }), 'speaker.rename');
   handle('speaker-profile.list', z.object({}), 'speaker-profile.list');
   ipcMain.handle('speaker-profile.enroll', async (_, payload) => {
-    const value = z.object({ profile_id: z.string().uuid().optional(), name: z.string().trim().min(1).max(32) }).parse(payload);
+    const value = z.object({ profile_id: z.string().uuid().optional(), name: z.string().trim().min(1).max(32), reference_text: z.string().trim().max(500).optional() }).parse(payload);
     const selected = await dialog.showOpenDialog({ properties: ['openFile'], filters: [{ name: 'Audio', extensions: ['wav', 'mp3', 'm4a', 'flac', 'aac', 'ogg'] }] });
     if (selected.canceled) return null;
     return worker.request('speaker-profile.enroll', { ...value, path: selected.filePaths[0] });
   });
+  ipcMain.handle('speaker-profile.verify', async (_, payload) => {
+    const value = z.object({ profile_id: z.string().uuid() }).parse(payload);
+    const selected = await dialog.showOpenDialog({ properties: ['openFile'], filters: [{ name: 'Audio', extensions: ['wav', 'mp3', 'm4a', 'flac', 'aac', 'ogg'] }] });
+    if (selected.canceled) return null;
+    return worker.request('speaker-profile.verify', { ...value, path: selected.filePaths[0] });
+  });
   handle('speaker-profile.delete', z.object({ profile_id: z.string().uuid() }), 'speaker-profile.delete');
+  ipcMain.handle('tts.synthesize', async (_, payload) => {
+    const value = z.object({ text: z.string().trim().min(1).max(1000), voice_id: z.string().min(1), target_language: z.enum(['zh', 'en']), provider: z.string(), endpoint: z.string().url(), model: z.string(), format: z.enum(['openai', 'claude']).optional(), key_reference: z.string().optional() }).parse(payload);
+    return worker.request('tts.synthesize', { ...value, api_key: await getSecret(value.key_reference) });
+  });
   handle('models.list', z.object({}), 'models.list');
   handle('models.download', z.object({ model_id: z.string() }), 'models.download');
   handle('models.delete', z.object({ model_id: z.string() }), 'models.delete');

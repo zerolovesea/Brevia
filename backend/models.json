@@ -133,6 +133,22 @@
     "kind": "online-punctuation"
   },
   {
+    "id": "gtcrn-live-denoiser",
+    "name": "GTCRN Live Denoiser",
+    "runtime": "sherpa-onnx==1.13.2",
+    "revision": "speech-enhancement-models/gtcrn-simple",
+    "stages": ["speech-enhancement"],
+    "languages": ["all"],
+    "backend": ["cpu", "cuda"],
+    "hotword": false,
+    "speaker": false,
+    "size_bytes": 535638,
+    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speech-enhancement-models/gtcrn_simple.onnx",
+    "archive_sha256": null,
+    "files": ["gtcrn_simple.onnx"],
+    "kind": "speech-denoiser"
+  },
+  {
     "id": "silero-vad",
     "name": "Silero VAD",
     "runtime": "sherpa-onnx==1.13.2", "revision": "asr-models/v5",
@@ -277,5 +293,21 @@
     "stages": ["speaker-embedding"], "languages": ["zh", "en"], "backend": ["cpu", "cuda"], "hotword": false, "speaker": true,
     "size_bytes": 28281164, "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx", "archive_sha256": null,
     "files": ["3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx"], "kind": "speaker-embedding"
+  },
+  {
+    "id": "spleeter-2stems-fp16", "name": "Spleeter 2 Stems", "runtime": "sherpa-onnx==1.13.2", "revision": "source-separation-models/spleeter-2stems-fp16",
+    "stages": ["source-separation"], "languages": ["all"], "backend": ["cpu", "cuda"], "hotword": false, "speaker": false,
+    "size_bytes": 35271738, "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/source-separation-models/sherpa-onnx-spleeter-2stems-fp16.tar.bz2", "archive_sha256": null,
+    "directory": "sherpa-onnx-spleeter-2stems-fp16", "files": ["vocals.fp16.onnx", "accompaniment.fp16.onnx"], "kind": "source-separation"
+  },
+  {
+    "id": "zipvoice-zh-en", "name": "ZipVoice Chinese and English", "runtime": "sherpa-onnx==1.13.2", "revision": "tts-models/zipvoice-zh-en-emilia",
+    "stages": ["tts"], "languages": ["zh", "en"], "backend": ["cpu", "cuda"], "hotword": false, "speaker": false,
+    "size_bytes": 163320194,
+    "downloads": [
+      {"path": "zipvoice.tar.bz2", "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/sherpa-onnx-zipvoice-distill-int8-zh-en-emilia.tar.bz2", "extract": true, "directory": "sherpa-onnx-zipvoice-distill-int8-zh-en-emilia"},
+      {"path": "vocos_24khz.onnx", "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/vocoder-models/vocos_24khz.onnx"}
+    ],
+    "files": ["tokens.txt", "encoder.int8.onnx", "decoder.int8.onnx", "lexicon.txt", "espeak-ng-data", "vocos_24khz.onnx"], "kind": "tts"
   }
 ]

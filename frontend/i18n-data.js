@@ -193,6 +193,35 @@ Object.entries(appCopy.modalCopy).forEach(([code, copy]) => {
   items[embedding].splice(0, 4, localized.embedding, '3D-Speaker ERes2Net Base', items[embedding][2] === 'Chinese' ? localized.campLanguages.split(' / ')[0] : items[embedding][2], items[embedding][3]);
   items.splice(embedding + 1, 0, [localized.embedding, 'NeMo Titanet Small', localized.nemoLanguages, localized.nemo, 'N'], [localized.embedding, '3D-Speaker CAM++', localized.campLanguages, localized.camp, 'C']);
 });
+const liveDenoiserCopy = {
+  zh: ['实时降噪', '所有语言', '实时消除环境噪声后再进行字幕识别。'],
+  en: ['Live denoising', 'All languages', 'Removes background noise before live transcription.'],
+  es: ['Reducción de ruido en directo', 'Todos los idiomas', 'Elimina el ruido ambiental antes de la transcripción en directo.'],
+  ja: ['リアルタイムノイズ除去', 'すべての言語', 'ライブ文字起こしの前に環境ノイズを除去します。'],
+  ko: ['실시간 노이즈 제거', '모든 언어', '실시간 전사 전에 주변 소음을 제거합니다.'],
+  fr: ['Réduction du bruit en direct', 'Toutes les langues', 'Supprime le bruit ambiant avant la transcription en direct.'],
+  de: ['Live-Rauschunterdrückung', 'Alle Sprachen', 'Entfernt Umgebungsgeräusche vor der Live-Transkription.'],
+  ru: ['Шумоподавление в реальном времени', 'Все языки', 'Убирает фоновый шум перед потоковой расшифровкой.'],
+};
+Object.entries(appCopy.modalCopy).forEach(([code, copy]) => {
+  const [stage, languages, intro] = liveDenoiserCopy[code] || liveDenoiserCopy.en;
+  copy.models.items.push([stage, 'GTCRN Live Denoiser', languages, intro, 'N']);
+});
+const voiceFeaturesCopy = {
+  zh: { source: '声源分离', sourceIntro: '将会议录音拆分为人声与非人声轨。', tts: '语音合成与克隆', ttsIntro: '使用本地参考音频，以注册人员的声音合成中英文语音。', chat: '语音聊天', voice: '声音', reference: '参考文本', verify: '验证声音', send: '发送语音', placeholder: '输入要朗读的内容…', ready: '语音已生成', separated: '已生成人声和非人声轨' },
+  en: { source: 'Source separation', sourceIntro: 'Splits meeting audio into vocal and non-vocal tracks.', tts: 'Speech synthesis and cloning', ttsIntro: 'Uses local reference audio to synthesize Chinese and English in a registered voice.', chat: 'Voice chat', voice: 'Voice', reference: 'Reference transcript', verify: 'Verify voice', send: 'Send voice', placeholder: 'Enter text to speak…', ready: 'Speech generated', separated: 'Vocal and non-vocal tracks generated' },
+  es: { source: 'Separación de fuentes', sourceIntro: 'Separa el audio de la reunión en pistas vocales y no vocales.', tts: 'Síntesis y clonación de voz', ttsIntro: 'Usa audio local para sintetizar chino e inglés con una voz registrada.', chat: 'Chat de voz', voice: 'Voz', reference: 'Transcripción de referencia', verify: 'Verificar voz', send: 'Enviar voz', placeholder: 'Escribe el texto que se leerá…', ready: 'Voz generada', separated: 'Pistas vocales y no vocales generadas' },
+  ja: { source: '音源分離', sourceIntro: '会議音声をボーカルと非ボーカルのトラックに分けます。', tts: '音声合成とクローン', ttsIntro: 'ローカル参照音声で登録済みの声による中英語音声を合成します。', chat: '音声チャット', voice: '音声', reference: '参照テキスト', verify: '音声を確認', send: '音声を送信', placeholder: '読み上げる内容を入力…', ready: '音声を生成しました', separated: 'ボーカルと非ボーカルのトラックを生成しました' },
+  ko: { source: '음원 분리', sourceIntro: '회의 오디오를 음성과 비음성 트랙으로 분리합니다.', tts: '음성 합성 및 복제', ttsIntro: '로컬 참조 오디오로 등록된 목소리의 중국어·영어 음성을 합성합니다.', chat: '음성 채팅', voice: '음성', reference: '참조 스크립트', verify: '음성 확인', send: '음성 보내기', placeholder: '읽을 내용을 입력하세요…', ready: '음성이 생성되었습니다', separated: '음성 및 비음성 트랙이 생성되었습니다' },
+  fr: { source: 'Séparation des sources', sourceIntro: 'Sépare l’audio de réunion en pistes vocale et non vocale.', tts: 'Synthèse et clonage vocal', ttsIntro: 'Utilise un audio local pour synthétiser du chinois et de l’anglais avec une voix enregistrée.', chat: 'Chat vocal', voice: 'Voix', reference: 'Transcription de référence', verify: 'Vérifier la voix', send: 'Envoyer la voix', placeholder: 'Saisissez le texte à lire…', ready: 'Voix générée', separated: 'Pistes vocale et non vocale générées' },
+  de: { source: 'Quellentrennung', sourceIntro: 'Trennt Besprechungsaudio in Sprach- und Nichtsprachspuren.', tts: 'Sprachsynthese und Klonen', ttsIntro: 'Erzeugt Chinesisch und Englisch mit einer lokalen registrierten Stimme.', chat: 'Sprachchat', voice: 'Stimme', reference: 'Referenztranskript', verify: 'Stimme prüfen', send: 'Sprache senden', placeholder: 'Text zum Vorlesen eingeben…', ready: 'Sprache erzeugt', separated: 'Sprach- und Nichtsprachspuren erzeugt' },
+  ru: { source: 'Разделение источников', sourceIntro: 'Разделяет аудио встречи на голосовую и неголосовую дорожки.', tts: 'Синтез и клонирование голоса', ttsIntro: 'Использует локальный образец для синтеза китайской и английской речи зарегистрированным голосом.', chat: 'Голосовой чат', voice: 'Голос', reference: 'Текст образца', verify: 'Проверить голос', send: 'Отправить голос', placeholder: 'Введите текст для озвучивания…', ready: 'Речь создана', separated: 'Голосовая и неголосовая дорожки созданы' },
+};
+appCopy.voiceFeaturesCopy = voiceFeaturesCopy;
+Object.entries(appCopy.modalCopy).forEach(([code, copy]) => {
+  const localized = voiceFeaturesCopy[code] || voiceFeaturesCopy.en;
+  copy.models.items.push([localized.source, 'Spleeter 2 Stems', localized.source === 'Source separation' ? 'All languages' : '所有语言', localized.sourceIntro, 'S'], [localized.tts, 'ZipVoice Chinese and English', localized.source === 'Source separation' ? 'Chinese / English' : '中文 / 英语', localized.ttsIntro, 'Z']);
+});
 const additionalStreamingModels = {
   zh: [['Streaming Zipformer Chinese', '中文', '轻量级中文实时识别。'], ['Streaming Zipformer Chinese and English', '中文 / 英语', '支持中英文混说的实时识别。'], ['Streaming Zipformer Multilingual', '阿拉伯语 / 英语 / 印尼语 / 日语 / 俄语 / 泰语 / 越南语 / 中文', '支持八种语言的实时识别。'], ['Streaming Zipformer Korean', '韩语', '原生韩语实时识别。'], ['Streaming Zipformer French', '法语', '原生法语实时识别。']],
   en: [['Streaming Zipformer Chinese', 'Chinese', 'Compact Chinese live transcription model.'], ['Streaming Zipformer Chinese and English', 'Chinese / English', 'Live transcription for mixed Chinese and English.'], ['Streaming Zipformer Multilingual', 'Arabic / English / Indonesian / Japanese / Russian / Thai / Vietnamese / Chinese', 'Live transcription for eight languages.'], ['Streaming Zipformer Korean', 'Korean', 'Native Korean live transcription.'], ['Streaming Zipformer French', 'French', 'Native French live transcription.']],
@@ -223,6 +252,16 @@ Object.entries({
   zh: '管理模型与术语 →', en: 'Manage models and terms →', es: 'Gestionar modelos y términos →', ja: 'モデルと用語を管理 →',
   ko: '모델 및 용어 관리 →', fr: 'Gérer les modèles et les termes →', de: 'Modelle und Begriffe verwalten →', ru: 'Управление моделями и терминами →',
 }).forEach(([code, label]) => { catalog[code].labels['管理模型与术语 →'] = label; });
+Object.entries({
+  zh: { '从文件夹打开': '从文件夹打开', '未找到录音文件': '未找到录音文件', '未找到模型文件': '未找到模型文件', '准备中': '准备中', '需要下载以下模型': '需要下载以下模型：', '前往模型库': '前往模型库', '精修': '精修' },
+  en: { '从文件夹打开': 'Open in folder', '未找到录音文件': 'Recording file not found', '未找到模型文件': 'Model files not found', '准备中': 'Preparing', '需要下载以下模型': 'Download required models:', '前往模型库': 'Go to model library', '精修': 'Refine' },
+  es: { '从文件夹打开': 'Abrir en la carpeta', '未找到录音文件': 'No se encontró el archivo de grabación', '未找到模型文件': 'No se encontraron archivos del modelo', '准备中': 'Preparando', '需要下载以下模型': 'Descarga los modelos necesarios:', '前往模型库': 'Ir a la biblioteca de modelos', '精修': 'Refinar' },
+  ja: { '从文件夹打开': 'フォルダで開く', '未找到录音文件': '録音ファイルが見つかりません', '未找到模型文件': 'モデルファイルが見つかりません', '准备中': '準備中', '需要下载以下模型': '次のモデルをダウンロードしてください：', '前往模型库': 'モデルライブラリへ', '精修': '再調整' },
+  ko: { '从文件夹打开': '폴더에서 열기', '未找到录音文件': '녹음 파일을 찾을 수 없습니다', '未找到模型文件': '모델 파일을 찾을 수 없습니다', '准备中': '준비 중', '需要下载以下模型': '필요한 모델을 다운로드하세요:', '前往模型库': '모델 라이브러리로', '精修': '정교화' },
+  fr: { '从文件夹打开': 'Ouvrir dans le dossier', '未找到录音文件': 'Fichier d’enregistrement introuvable', '未找到模型文件': 'Fichiers du modèle introuvables', '准备中': 'Préparation', '需要下载以下模型': 'Téléchargez les modèles requis :', '前往模型库': 'Aller à la bibliothèque de modèles', '精修': 'Affiner' },
+  de: { '从文件夹打开': 'Im Ordner öffnen', '未找到录音文件': 'Aufnahmedatei nicht gefunden', '未找到模型文件': 'Modelldateien nicht gefunden', '准备中': 'Wird vorbereitet', '需要下载以下模型': 'Erforderliche Modelle herunterladen:', '前往模型库': 'Zur Modellbibliothek', '精修': 'Verfeinern' },
+  ru: { '从文件夹打开': 'Открыть в папке', '未找到录音文件': 'Файл записи не найден', '未找到模型文件': 'Файлы модели не найдены', '准备中': 'Подготовка', '需要下载以下模型': 'Скачайте необходимые модели:', '前往模型库': 'К библиотеке моделей', '精修': 'Уточнить' },
+}).forEach(([code, labels]) => Object.assign(catalog[code].labels, labels));
 
 window.BreviaLocaleData = { catalog, appCopy };
 })();

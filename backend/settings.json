@@ -10,6 +10,13 @@
     "refined_window_seconds": 15,
     "auto_english_model_id": "zipformer-en-streaming-int8"
   },
+  "live_asr": {
+    "denoiser_model_id": "gtcrn-live-denoiser",
+    "microphone_target_rms": 0.08,
+    "microphone_minimum_rms": 0.003,
+    "microphone_max_gain": 4,
+    "microphone_peak": 0.92
+  },
   "punctuation": {
     "english_model_id": "online-punct-en-int8",
     "chinese_model_id": "punct-ct-transformer-zh-en-int8"

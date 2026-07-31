@@ -11,6 +11,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from .asr import ChinesePunctuation, EnglishPunctuation, SpeakerTracker
+from .transcript import validate_summary
 from .worker import Worker
 
 
@@ -72,7 +73,7 @@ class WorkerTest(unittest.TestCase):
 
     def test_summary_requires_valid_evidence(self):
         with self.assertRaises(ValueError):
-            self.worker._validate_summary(
+            validate_summary(
                 {
                     "summary": "摘要",
                     "decisions": [{"text": "决定", "evidence_segment_ids": ["missing"]}],
@@ -102,6 +103,13 @@ class WorkerTest(unittest.TestCase):
     def test_refinement_overlap_removes_repeated_prefix(self):
         self.assertEqual(self.worker._trim_refinement_overlap("我们确认下周的发布计划", "发布计划和负责人"), "和负责人")
 
+    def test_repeated_refinement_replaces_prior_postprocess_segments(self):
+        meeting = self.worker.start({"title": "再次精修", "language": "zh", "streaming_model_id": "paraformer-zh-en-int8", "refined_model_id": "qwen3-asr-0.6b-int8"})
+        self.worker.store.replace_segments(meeting["id"], [{"segment_id": "mic-0", "track": "mic", "start_ms": 0, "end_ms": 1000, "speaker": "spk-1", "text": "旧结果"}])
+        self.worker.store.replace_segments(meeting["id"], [{"segment_id": "mic-1000", "track": "mic", "start_ms": 1000, "end_ms": 2000, "speaker": "spk-1", "text": "新结果"}])
+        segments = self.worker.store.get_meeting(meeting["id"])["segments"]
+        self.assertEqual([segment["text"] for segment in segments], ["新结果"])
+
     def test_zipformer_xlarge_manifest_uses_the_archive_decoder_name(self):
         self.assertIn("decoder.onnx", self.worker.models.get("zipformer-zh-xlarge-streaming-int8")["files"])
 
@@ -114,6 +122,22 @@ class WorkerTest(unittest.TestCase):
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             })
         self.assertEqual(streaming.call_args.args[2], ("Brevia",))
+
+    def test_initialize_downloads_the_default_live_denoiser(self):
+        with patch.object(self.worker, "download_model") as download:
+            self.worker.initialize({})
+        download.assert_called_once_with({"model_id": "gtcrn-live-denoiser"})
+
+    def test_live_microphone_gain_is_bounded_and_skips_near_silence(self):
+        class Samples(list):
+            def __mul__(self, gain):
+                return Samples([value * gain for value in self])
+
+        enhanced = self.worker._enhance_live_microphone(Samples([0.01, -0.01]))
+        self.assertGreater(enhanced[0], 0.01)
+        self.assertLessEqual(max(abs(value) for value in enhanced), 0.92)
+        quiet = Samples([0.001, -0.001])
+        self.assertEqual(self.worker._enhance_live_microphone(quiet), quiet)
 
     def test_speaker_profile_aggregates_samples_and_matches_known_voice(self):
         first = self.worker.store.save_speaker_profile_sample("王琳", [1, 0, 0], "voice-1")
@@ -221,7 +245,7 @@ class WorkerTest(unittest.TestCase):
                 "speaker": "spk-1",
             }
         )
-        self.worker._call_llm = lambda *_args, **_kwargs: "Hello"
+        self.worker.llm_complete = lambda *_args, **_kwargs: "Hello"
         translated = self.worker.translate(
             {
                 "meeting_id": meeting["id"],
@@ -296,6 +320,23 @@ class WorkerTest(unittest.TestCase):
     def test_auto_language_detection(self):
         self.assertEqual(Worker._detect_language("how are you doing today"), "en")
         self.assertEqual(Worker._detect_language("我们今天讨论产品计划"), "zh")
+
+    def test_voiceprint_reference_is_local_and_removed_with_profile(self):
+        profile = self.worker.store.save_speaker_profile_sample("测试人员", [1.0, 0.0], "sample-1")
+        profile_dir = self.worker.store.speaker_profiles_dir / profile["id"]
+        profile_dir.mkdir()
+        reference = profile_dir / "reference.wav"
+        reference.write_bytes(b"local")
+        self.worker.store.save_speaker_profile_sample("测试人员", [1.0, 0.0], "sample-1", profile["id"], str(reference), "这是参考文本")
+        self.assertEqual(self.worker.store.speaker_profile_reference(profile["id"])["audio_path"], str(reference))
+        self.worker.store.delete_speaker_profile(profile["id"])
+        self.assertFalse((self.worker.store.speaker_profiles_dir / profile["id"]).exists())
+
+    def test_named_speaker_creates_profile_before_audio_is_long_enough(self):
+        profile = self.worker.store.ensure_speaker_profile("小林")
+        self.assertEqual((profile["name"], profile["sample_count"], profile["embedding"]), ("小林", 0, "[]"))
+        completed = self.worker.store.save_speaker_profile_sample("小林", [1.0, 0.0], "meeting-short-then-long", profile["id"])
+        self.assertEqual(completed["sample_count"], 1)
 
     def test_refining_status_preserves_meeting(self):
         meeting = self.worker.start(
