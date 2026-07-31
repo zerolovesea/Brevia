@@ -7,13 +7,13 @@
     "stages": ["streaming"],
     "languages": ["zh"],
     "backend": ["cpu", "cuda"],
-    "hotword": false,
+    "hotword": true,
     "speaker": false,
     "size_bytes": 597755927,
     "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30.tar.bz2",
     "archive_sha256": "30437d84dc4861740d40166212ab05f3728945443d53691620075c4031fb88e1",
     "directory": "sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30",
-    "files": ["encoder.int8.onnx", "decoder.int8.onnx", "joiner.int8.onnx", "tokens.txt"],
+    "files": ["encoder.int8.onnx", "decoder.onnx", "joiner.int8.onnx", "tokens.txt"],
     "kind": "transducer"
   },
   {
@@ -61,6 +61,61 @@
     "kind": "transducer"
   },
   {
+    "id": "zipformer-zh-streaming-int8",
+    "name": "Streaming Zipformer Chinese",
+    "runtime": "sherpa-onnx==1.13.2",
+    "revision": "asr-models/2025-06-30",
+    "stages": ["streaming"], "languages": ["zh"], "backend": ["cpu", "cuda"], "hotword": true, "speaker": false,
+    "size_bytes": 132634597,
+    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-zh-int8-2025-06-30.tar.bz2",
+    "archive_sha256": null, "directory": "sherpa-onnx-streaming-zipformer-zh-int8-2025-06-30",
+    "files": ["encoder.int8.onnx", "decoder.onnx", "joiner.int8.onnx", "tokens.txt"], "kind": "transducer"
+  },
+  {
+    "id": "zipformer-zh-en-streaming-int8",
+    "name": "Streaming Zipformer Chinese and English",
+    "runtime": "sherpa-onnx==1.13.2",
+    "revision": "asr-models/2023-02-20",
+    "stages": ["streaming"], "languages": ["zh", "en"], "backend": ["cpu", "cuda"], "hotword": true, "speaker": false,
+    "size_bytes": 511274346,
+    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20.tar.bz2",
+    "archive_sha256": null, "directory": "sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20",
+    "files": ["encoder-epoch-99-avg-1.int8.onnx", "decoder-epoch-99-avg-1.int8.onnx", "joiner-epoch-99-avg-1.int8.onnx", "tokens.txt"], "kind": "transducer"
+  },
+  {
+    "id": "zipformer-multilingual-streaming",
+    "name": "Streaming Zipformer Multilingual",
+    "runtime": "sherpa-onnx==1.13.2",
+    "revision": "asr-models/2025-02-10",
+    "stages": ["streaming"], "languages": ["ar", "en", "id", "ja", "ru", "th", "vi", "zh"], "backend": ["cpu", "cuda"], "hotword": false, "speaker": false,
+    "size_bytes": 258999581,
+    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-ar_en_id_ja_ru_th_vi_zh-2025-02-10.tar.bz2",
+    "archive_sha256": null, "directory": "sherpa-onnx-streaming-zipformer-ar_en_id_ja_ru_th_vi_zh-2025-02-10",
+    "files": ["encoder.int8.onnx", "decoder.onnx", "joiner.int8.onnx", "tokens.txt"], "kind": "transducer"
+  },
+  {
+    "id": "zipformer-ko-streaming-int8",
+    "name": "Streaming Zipformer Korean",
+    "runtime": "sherpa-onnx==1.13.2",
+    "revision": "asr-models/2024-06-16",
+    "stages": ["streaming"], "languages": ["ko"], "backend": ["cpu", "cuda"], "hotword": false, "speaker": false,
+    "size_bytes": 418218652,
+    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-korean-2024-06-16.tar.bz2",
+    "archive_sha256": null, "directory": "sherpa-onnx-streaming-zipformer-korean-2024-06-16",
+    "files": ["encoder-epoch-99-avg-1.int8.onnx", "decoder-epoch-99-avg-1.onnx", "joiner-epoch-99-avg-1.int8.onnx", "tokens.txt"], "kind": "transducer"
+  },
+  {
+    "id": "zipformer-fr-streaming-int8",
+    "name": "Streaming Zipformer French",
+    "runtime": "sherpa-onnx==1.13.2",
+    "revision": "asr-models/2023-04-14",
+    "stages": ["streaming"], "languages": ["fr"], "backend": ["cpu", "cuda"], "hotword": false, "speaker": false,
+    "size_bytes": 398444115,
+    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-fr-2023-04-14.tar.bz2",
+    "archive_sha256": null, "directory": "sherpa-onnx-streaming-zipformer-fr-2023-04-14",
+    "files": ["encoder-epoch-99-avg-1.int8.onnx", "decoder-epoch-99-avg-1.onnx", "joiner-epoch-99-avg-1.int8.onnx", "tokens.txt"], "kind": "transducer"
+  },
+  {
     "id": "online-punct-en-int8",
     "name": "English Punctuation and Casing",
     "runtime": "sherpa-onnx==1.13.2",
@@ -76,6 +131,21 @@
     "directory": "sherpa-onnx-online-punct-en-2024-08-06",
     "files": ["model.int8.onnx", "bpe.vocab"],
     "kind": "online-punctuation"
+  },
+  {
+    "id": "silero-vad",
+    "name": "Silero VAD",
+    "runtime": "sherpa-onnx==1.13.2", "revision": "asr-models/v5",
+    "stages": ["vad"], "languages": ["all"], "backend": ["cpu", "cuda"], "hotword": false, "speaker": false,
+    "size_bytes": 2313101,
+    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad_v5.onnx",
+    "archive_sha256": null, "files": ["silero_vad.onnx"], "kind": "vad"
+  },
+  {
+    "id": "ten-vad", "name": "TEN-VAD", "runtime": "sherpa-onnx==1.13.2", "revision": "asr-models/1",
+    "stages": ["vad"], "languages": ["all"], "backend": ["cpu", "cuda"], "hotword": false, "speaker": false,
+    "size_bytes": 332211, "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/ten-vad.onnx", "archive_sha256": null,
+    "files": ["ten-vad.onnx"], "kind": "ten-vad"
   },
   {
     "id": "punct-ct-transformer-zh-en-int8",
@@ -112,6 +182,52 @@
     "kind": "qwen3"
   },
   {
+    "id": "sensevoice-int8",
+    "name": "SenseVoice int8",
+    "runtime": "sherpa-onnx==1.13.2", "revision": "asr-models/2024-07-17",
+    "stages": ["streaming", "refined"], "languages": ["zh", "en", "ja", "ko", "yue"], "backend": ["cpu", "cuda"], "hotword": false, "speaker": false,
+    "size_bytes": 163002883,
+    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17.tar.bz2",
+    "archive_sha256": null, "directory": "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17",
+    "files": ["model.int8.onnx", "tokens.txt"], "kind": "sensevoice"
+  },
+  {
+    "id": "whisper-turbo",
+    "name": "Whisper Turbo",
+    "runtime": "sherpa-onnx==1.13.2", "revision": "asr-models/whisper-turbo",
+    "stages": ["refined"], "languages": ["multilingual"], "backend": ["cpu", "cuda"], "hotword": false, "speaker": false,
+    "size_bytes": 563790207,
+    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-turbo.tar.bz2",
+    "archive_sha256": null, "directory": "sherpa-onnx-whisper-turbo",
+    "files": ["encoder.int8.onnx", "decoder.int8.onnx", "tokens.txt"], "kind": "whisper"
+  },
+  {
+    "id": "qwen3-asr-1.7b-int8",
+    "name": "Qwen3-ASR 1.7B int8",
+    "runtime": "sherpa-onnx==1.13.2",
+    "revision": "modelscope/1.7B",
+    "stages": ["refined"],
+    "languages": ["zh", "en", "yue", "ar", "de", "fr", "es", "pt", "id", "it", "ko", "ru", "th", "vi", "ja", "tr", "hi", "ms", "nl", "sv", "da", "fi", "pl", "cs", "fil", "fa", "el", "hu", "mk", "ro"],
+    "backend": ["cpu", "cuda"],
+    "hotword": true,
+    "speaker": false,
+    "size_bytes": 2900000000,
+    "archive_sha256": null,
+    "files": ["conv_frontend.onnx", "encoder.int8.onnx", "decoder.int8.onnx", "tokenizer/chat_template.json", "tokenizer/config.json", "tokenizer/merges.txt", "tokenizer/preprocessor_config.json", "tokenizer/tokenizer_config.json", "tokenizer/vocab.json"],
+    "downloads": [
+      {"path": "conv_frontend.onnx", "url": "https://modelscope.cn/models/zengshuishui/Qwen3-ASR-onnx/resolve/master/model_1.7B/conv_frontend.onnx"},
+      {"path": "encoder.int8.onnx", "url": "https://modelscope.cn/models/zengshuishui/Qwen3-ASR-onnx/resolve/master/model_1.7B/encoder.int8.onnx"},
+      {"path": "decoder.int8.onnx", "url": "https://modelscope.cn/models/zengshuishui/Qwen3-ASR-onnx/resolve/master/model_1.7B/decoder.int8.onnx"},
+      {"path": "tokenizer/chat_template.json", "url": "https://modelscope.cn/models/zengshuishui/Qwen3-ASR-onnx/resolve/master/tokenizer/chat_template.json"},
+      {"path": "tokenizer/config.json", "url": "https://modelscope.cn/models/zengshuishui/Qwen3-ASR-onnx/resolve/master/tokenizer/config.json"},
+      {"path": "tokenizer/merges.txt", "url": "https://modelscope.cn/models/zengshuishui/Qwen3-ASR-onnx/resolve/master/tokenizer/merges.txt"},
+      {"path": "tokenizer/preprocessor_config.json", "url": "https://modelscope.cn/models/zengshuishui/Qwen3-ASR-onnx/resolve/master/tokenizer/preprocessor_config.json"},
+      {"path": "tokenizer/tokenizer_config.json", "url": "https://modelscope.cn/models/zengshuishui/Qwen3-ASR-onnx/resolve/master/tokenizer/tokenizer_config.json"},
+      {"path": "tokenizer/vocab.json", "url": "https://modelscope.cn/models/zengshuishui/Qwen3-ASR-onnx/resolve/master/tokenizer/vocab.json"}
+    ],
+    "kind": "qwen3"
+  },
+  {
     "id": "pyannote-segmentation-3.0",
     "name": "Pyannote Segmentation 3.0",
     "runtime": "sherpa-onnx==1.13.2",
@@ -129,6 +245,12 @@
     "kind": "speaker-segmentation"
   },
   {
+    "id": "reverb-diarization-v1", "name": "Reverb Diarization v1", "runtime": "sherpa-onnx==1.13.2", "revision": "speaker-segmentation-models/v1",
+    "stages": ["speaker-segmentation"], "languages": ["all"], "backend": ["cpu", "cuda"], "hotword": false, "speaker": true,
+    "size_bytes": 10918585, "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-reverb-diarization-v1.tar.bz2", "archive_sha256": null,
+    "directory": "sherpa-onnx-reverb-diarization-v1", "files": ["model.onnx"], "kind": "speaker-segmentation"
+  },
+  {
     "id": "eres2net-base-3dspeaker-zh",
     "name": "3D-Speaker ERes2Net Base",
     "runtime": "sherpa-onnx==1.13.2",
@@ -143,5 +265,17 @@
     "archive_sha256": "1a331345f04805badbb495c775a6ddffcdd1a732567d5ec8b3d5749e3c7a5e4b",
     "files": ["3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx"],
     "kind": "speaker-embedding"
+  },
+  {
+    "id": "nemo-titanet-small-en", "name": "NeMo Titanet Small", "runtime": "sherpa-onnx==1.13.2", "revision": "speaker-recognition-models/titanet-small",
+    "stages": ["speaker-embedding"], "languages": ["en"], "backend": ["cpu", "cuda"], "hotword": false, "speaker": true,
+    "size_bytes": 40257283, "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/nemo_en_titanet_small.onnx", "archive_sha256": null,
+    "files": ["nemo_en_titanet_small.onnx"], "kind": "speaker-embedding"
+  },
+  {
+    "id": "campplus-zh-en", "name": "3D-Speaker CAM++", "runtime": "sherpa-onnx==1.13.2", "revision": "speaker-recognition-models/campplus",
+    "stages": ["speaker-embedding"], "languages": ["zh", "en"], "backend": ["cpu", "cuda"], "hotword": false, "speaker": true,
+    "size_bytes": 28281164, "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx", "archive_sha256": null,
+    "files": ["3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx"], "kind": "speaker-embedding"
   }
 ]

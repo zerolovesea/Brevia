@@ -1,6 +1,7 @@
 import base64
 import io
 import tempfile
+import threading
 import unittest
 import wave
 import zipfile
@@ -97,6 +98,46 @@ class WorkerTest(unittest.TestCase):
         )
         self.assertEqual([(turn["start_ms"], turn["end_ms"], turn["speaker"]) for turn in turns], [(0, 15000, "spk-1"), (15000, 18000, "spk-1"), (18000, 21000, "spk-2")])
         self.assertEqual([turn["speaker"] for turn in turns], ["spk-1", "spk-1", "spk-2"])
+
+    def test_refinement_overlap_removes_repeated_prefix(self):
+        self.assertEqual(self.worker._trim_refinement_overlap("我们确认下周的发布计划", "发布计划和负责人"), "和负责人")
+
+    def test_zipformer_xlarge_manifest_uses_the_archive_decoder_name(self):
+        self.assertIn("decoder.onnx", self.worker.models.get("zipformer-zh-xlarge-streaming-int8")["files"])
+
+    def test_streaming_transducer_receives_terms_as_hotwords(self):
+        self.worker.store.save_term({"text": "Brevia"})
+        with patch("backend.worker.StreamingASR") as streaming:
+            self.worker.start({
+                "title": "热词会议", "language": "zh",
+                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
+                "refined_model_id": "qwen3-asr-0.6b-int8",
+            })
+        self.assertEqual(streaming.call_args.args[2], ("Brevia",))
+
+    def test_speaker_profile_aggregates_samples_and_matches_known_voice(self):
+        first = self.worker.store.save_speaker_profile_sample("王琳", [1, 0, 0], "voice-1")
+        second = self.worker.store.save_speaker_profile_sample("王琳", [0.9, 0.1, 0], "voice-2", first["id"])
+        matched = self.worker.store.match_speaker_profile([0.95, 0.05, 0], 0.8)
+        self.assertEqual(second["sample_count"], 2)
+        self.assertEqual(matched["id"], first["id"])
+        self.assertIsNone(self.worker.store.match_speaker_profile([0, 0, 1], 0.8))
+
+    def test_model_downloads_run_in_parallel(self):
+        started, release = threading.Event(), threading.Event()
+        running = []
+
+        def download(model_id):
+            running.append(model_id)
+            if len(running) == 2:
+                started.set()
+            release.wait(1)
+
+        self.worker.models.download = download
+        self.assertEqual(self.worker.download_model({"model_id": "paraformer-zh-en-int8"})["status"], "downloading")
+        self.assertEqual(self.worker.download_model({"model_id": "zipformer-en-streaming-int8"})["status"], "downloading")
+        self.assertTrue(started.wait(1))
+        release.set()
 
     def test_bundle_exports_transcript_without_recording(self):
         meeting = self.worker.start({"title": "无录音", "language": "zh", "streaming_model_id": "paraformer-zh-en-int8", "refined_model_id": "qwen3-asr-0.6b-int8"})
@@ -218,12 +259,14 @@ class WorkerTest(unittest.TestCase):
     def test_speaker_tracker_reuses_similar_voiceprints(self):
         tracker = SpeakerTracker.__new__(SpeakerTracker)
         tracker.threshold = 0.2
+        tracker.max_speakers = 2
         tracker.centers = []
         tracker.counts = []
         tracker.last_speaker = None
         self.assertEqual(tracker.assign_embedding([1.0, 0.0]), "spk-1")
         self.assertEqual(tracker.assign_embedding([0.9, 0.1]), "spk-1")
         self.assertEqual(tracker.assign_embedding([0.0, 1.0]), "spk-2")
+        self.assertIn(tracker.assign_embedding([-1.0, 0.0]), {"spk-1", "spk-2"})
         self.assertEqual(tracker.speaker_ids, ["spk-1", "spk-2"])
 
     def test_english_punctuation_normalizes_model_text(self):

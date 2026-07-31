@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('brevia', {
   initialize: invoke('app.initialize'),
   meeting: {
     start: invoke('meeting.start'),
+    import: invoke('meeting.import'),
     audio: invoke('meeting.audio'),
     pause: invoke('meeting.pause'),
     stop: invoke('meeting.stop'),
@@ -22,6 +23,7 @@ contextBridge.exposeInMainWorld('brevia', {
     share: invoke('meeting.share'),
   },
   speaker: { rename: invoke('speaker.rename') },
+  speakerProfile: { list: invoke('speaker-profile.list'), enroll: invoke('speaker-profile.enroll'), delete: invoke('speaker-profile.delete') },
   models: {
     list: invoke('models.list'),
     download: invoke('models.download'),

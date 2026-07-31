@@ -74,43 +74,60 @@ class ModelManager:
         """
         model = self.get(model_id)
         if self.is_ready(model_id):
+            self.event("model.status", {"model_id": model_id, "status": "ready"})
             return self.path(model_id)
         self.event("model.status", {"model_id": model_id, "status": "downloading"})
         with tempfile.TemporaryDirectory(dir=self.root) as temporary:
-            archive = Path(temporary) / Path(model["url"]).name
-
-            reported = 0
-
-            def report(blocks, block_size, total):
-                """把 urlretrieve 的块进度节流为约每 MiB 一次的 Worker 事件。"""
-                nonlocal reported
-                received = min(blocks * block_size, total) if total > 0 else blocks * block_size
-                if received < total and received - reported < 1024 * 1024:
-                    return
-                reported = received
-                self.event(
-                    "model.progress",
-                    {"model_id": model_id, "received": received, "total": total},
-                )
-
-            urllib.request.urlretrieve(model["url"], archive, report)
-            digest = hashlib.sha256(archive.read_bytes()).hexdigest()
-            if model["archive_sha256"] and digest != model["archive_sha256"]:
-                raise ValueError("Model archive checksum mismatch")
-            source = Path(temporary) / "model"
-            if model.get("directory"):
-                extract_root = Path(temporary) / "extract"
-                extract_root.mkdir()
-                with tarfile.open(archive) as bundle:
-                    for member in bundle.getmembers():
-                        target = (extract_root / member.name).resolve()
-                        if not target.is_relative_to(extract_root.resolve()):
-                            raise ValueError("Unsafe model archive path")
-                    bundle.extractall(extract_root, filter="data")
-                source = extract_root / model["directory"]
-            else:
+            if model.get("downloads"):
+                source = Path(temporary) / "model"
                 source.mkdir()
-                archive.replace(source / model["files"][0])
+                received = 0
+                for item in model["downloads"]:
+                    destination = source / item["path"]
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+
+                    def report(blocks, block_size, total, offset=received):
+                        current = min(blocks * block_size, total) if total > 0 else blocks * block_size
+                        self.event("model.progress", {"model_id": model_id, "received": offset + current, "total": model["size_bytes"]})
+
+                    urllib.request.urlretrieve(item["url"], destination, report)
+                    received += destination.stat().st_size
+                digest = None
+            else:
+                archive = Path(temporary) / Path(model["url"]).name
+
+                reported = 0
+
+                def report(blocks, block_size, total):
+                    """把 urlretrieve 的块进度节流为约每 MiB 一次的 Worker 事件。"""
+                    nonlocal reported
+                    received = min(blocks * block_size, total) if total > 0 else blocks * block_size
+                    if received < total and received - reported < 1024 * 1024:
+                        return
+                    reported = received
+                    self.event(
+                        "model.progress",
+                        {"model_id": model_id, "received": received, "total": total},
+                    )
+
+                urllib.request.urlretrieve(model["url"], archive, report)
+                digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+                if model["archive_sha256"] and digest != model["archive_sha256"]:
+                    raise ValueError("Model archive checksum mismatch")
+                source = Path(temporary) / "model"
+                if model.get("directory"):
+                    extract_root = Path(temporary) / "extract"
+                    extract_root.mkdir()
+                    with tarfile.open(archive) as bundle:
+                        for member in bundle.getmembers():
+                            target = (extract_root / member.name).resolve()
+                            if not target.is_relative_to(extract_root.resolve()):
+                                raise ValueError("Unsafe model archive path")
+                        bundle.extractall(extract_root, filter="data")
+                    source = extract_root / model["directory"]
+                else:
+                    source.mkdir()
+                    archive.replace(source / model["files"][0])
             if not all((source / name).exists() for name in model["files"]):
                 raise ValueError("Model archive is missing required files")
             source.replace(self.path(model_id))
@@ -147,12 +164,13 @@ class ModelManager:
 class StreamingASR:
     """维护每条音轨的在线识别流，生成 partial 和 endpoint 结果。"""
 
-    def __init__(self, manager, model_id):
+    def __init__(self, manager, model_id, hotwords=()):
         """创建流式识别器。
 
         Args:
             manager: 已初始化的 ``ModelManager``。
             model_id: 具备 ``streaming`` 能力且已安装的模型 ID。
+            hotwords: 会议开始时术语库中的热词；仅 Transducer 模型使用。
         """
         self.manager = manager
         self.model = manager.get(model_id)
@@ -191,6 +209,19 @@ class StreamingASR:
                 decoder=str(path / files[1]),
                 joiner=str(path / files[2]),
             )
+            hotword_lines = tuple(dict.fromkeys(
+                word.strip() for word in hotwords if word and "\n" not in word and "\r" not in word
+            ))
+            if hotword_lines and self.model.get("hotword"):
+                hotword_dir = manager.root / ".runtime"
+                hotword_dir.mkdir(exist_ok=True)
+                hotword_file = hotword_dir / f"{model_id}-hotwords.txt"
+                hotword_file.write_text("\n".join(hotword_lines) + "\n", encoding="utf-8")
+                common.update(
+                    decoding_method="modified_beam_search",
+                    hotwords_file=str(hotword_file),
+                    modeling_unit=self.model.get("hotword_modeling_unit", "cjkchar"),
+                )
         self.recognizer = sherpa_onnx.OnlineRecognizer.from_paraformer(**common) if self.model["kind"] == "paraformer" else sherpa_onnx.OnlineRecognizer.from_transducer(**common)
         self.streams = {}
 
@@ -219,6 +250,37 @@ class StreamingASR:
             result = self.recognizer.get_result(stream)
             self.recognizer.reset(stream)
         return result, endpoint
+
+
+class SenseVoiceStreamingASR:
+    """用 Silero VAD 切分音频并驱动 SenseVoice，提供低延迟分段字幕。"""
+    def __init__(self, manager, model_id, vad_id="silero-vad"):
+        if not (manager.is_ready(model_id) and manager.is_ready(vad_id)):
+            raise RuntimeError("SenseVoice and Silero VAD models must be installed")
+        import sherpa_onnx
+        path = manager.path(model_id)
+        self.recognizer = sherpa_onnx.OfflineRecognizer.from_sense_voice(model=str(path / "model.int8.onnx"), tokens=str(path / "tokens.txt"), language="auto", use_itn=True, num_threads=manager.device()["threads"], provider=manager.device()["backend"])
+        config = sherpa_onnx.VadModelConfig()
+        vad = manager.get(vad_id)
+        getattr(config, "ten_vad" if vad["kind"] == "ten-vad" else "silero_vad").model = str(manager.path(vad_id) / vad["files"][0])
+        config.sample_rate = 16000
+        self.vads = {}
+        self.config = config
+
+    def accept(self, track, samples, sample_rate=16000, flush=False):
+        import sherpa_onnx
+        vad = self.vads.setdefault(track, sherpa_onnx.VoiceActivityDetector(self.config, 100))
+        vad.accept_waveform(samples)
+        if flush:
+            vad.flush()
+        if vad.empty():
+            return "", False
+        segment = vad.front
+        stream = self.recognizer.create_stream()
+        stream.accept_waveform(sample_rate, segment.samples)
+        self.recognizer.decode_stream(stream)
+        vad.pop()
+        return stream.result.text.strip(), True
 
 
 class EnglishPunctuation:
@@ -271,10 +333,10 @@ class ChinesePunctuation:
 class SpeakerTracker:
     """按声纹相似度为连续语音分配稳定的会议内说话人 ID。"""
 
-    def __init__(self, manager, threshold=None):
+    def __init__(self, manager, threshold=None, max_speakers=None, model_id=None):
         """加载声纹模型；阈值越低，越倾向于合并为同一说话人。"""
         config = SETTINGS["diarization"]
-        model_id = config["embedding_model_id"]
+        model_id = model_id or config["embedding_model_id"]
         if not manager.is_ready(model_id):
             raise RuntimeError("Speaker embedding model is not installed")
         try:
@@ -294,6 +356,7 @@ class SpeakerTracker:
             config["online_similarity_threshold"] if threshold is None else threshold
         )
         self.minimum_seconds = config["minimum_embedding_seconds"]
+        self.max_speakers = max_speakers if max_speakers and max_speakers > 0 else None
         self.centers = []
         self.counts = []
         self.last_speaker = None
@@ -305,17 +368,21 @@ class SpeakerTracker:
 
     def assign(self, samples, sample_rate=16000):
         """提取一段语音的声纹并返回稳定的 ``spk-N``；过短片段沿用上一人。"""
+        embedding = self.embedding(samples, sample_rate)
+        return self.assign_embedding(embedding) if embedding else self.last_speaker or "spk-1"
+
+    def embedding(self, samples, sample_rate=16000):
+        """提取一段可用于人员库匹配的归一化前声纹；过短或不可用时返回 ``None``。"""
         import numpy
 
         if len(samples) < sample_rate * self.minimum_seconds:
-            return self.last_speaker or "spk-1"
+            return None
         stream = self.extractor.create_stream()
         stream.accept_waveform(sample_rate, samples)
         stream.input_finished()
         if not self.extractor.is_ready(stream):
-            return self.last_speaker or "spk-1"
-        embedding = numpy.asarray(self.extractor.compute(stream), dtype=numpy.float32)
-        return self.assign_embedding(embedding)
+            return None
+        return numpy.asarray(self.extractor.compute(stream), dtype=numpy.float32)
 
     def assign_embedding(self, embedding):
         """把已归一化前的声纹向量并入最近聚类，供实时与离线流程复用。"""
@@ -328,7 +395,7 @@ class SpeakerTracker:
             sum(value * center_value for value, center_value in zip(embedding, center))
             for center in self.centers
         ]
-        if similarities and max(similarities) >= self.threshold:
+        if similarities and (max(similarities) >= self.threshold or (self.max_speakers and len(self.centers) >= self.max_speakers)):
             index = max(range(len(similarities)), key=similarities.__getitem__)
             self.counts[index] += 1
             center = [
@@ -357,21 +424,32 @@ class RefinedASR:
             hotwords: 术语列表；重复项会在传给模型前去除。
         """
         model = manager.get(model_id)
-        if model["kind"] != "qwen3" or not manager.is_ready(model_id):
+        if model["kind"] not in {"qwen3", "sensevoice", "whisper"} or not manager.is_ready(model_id):
             raise RuntimeError("The selected refined model is not installed")
         try:
             import sherpa_onnx
         except ImportError as error:
             raise RuntimeError("sherpa-onnx is not installed") from error
         path = manager.path(model_id)
-        self.recognizer = sherpa_onnx.OfflineRecognizer.from_qwen3_asr(
+        common = dict(num_threads=manager.device()["threads"], provider=manager.device()["backend"])
+        if model["kind"] == "sensevoice":
+            self.recognizer = sherpa_onnx.OfflineRecognizer.from_sense_voice(
+                model=str(path / "model.int8.onnx"), tokens=str(path / "tokens.txt"), language="auto", use_itn=True, **common
+            )
+        elif model["kind"] == "whisper":
+            self.recognizer = sherpa_onnx.OfflineRecognizer.from_whisper(
+                encoder=str(path / "encoder.int8.onnx"), decoder=str(path / "decoder.int8.onnx"), tokens=str(path / "tokens.txt"), language="", **common
+            )
+        else:
+            self.recognizer = sherpa_onnx.OfflineRecognizer.from_qwen3_asr(
             conv_frontend=str(path / "conv_frontend.onnx"),
             encoder=str(path / "encoder.int8.onnx"),
             decoder=str(path / "decoder.int8.onnx"),
             tokenizer=str(path / "tokenizer"),
-            num_threads=manager.device()["threads"],
-            provider=manager.device()["backend"],
+            **common,
             hotwords=",".join(dict.fromkeys(hotwords)),
+            max_total_len=1024,
+            max_new_tokens=1024,
         )
 
     def decode(self, samples, sample_rate=16000):

@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS meetings (
   refined_model_id TEXT NOT NULL,
   speaker_segmentation_model_id TEXT,
   speaker_embedding_model_id TEXT,
+  vad_model_id TEXT,
   num_speakers INTEGER NOT NULL DEFAULT -1,
   category TEXT NOT NULL DEFAULT '',
   tags TEXT NOT NULL DEFAULT '[]',
@@ -61,8 +62,24 @@ CREATE TABLE IF NOT EXISTS speakers (
   meeting_id TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
   id TEXT NOT NULL,
   name TEXT NOT NULL,
+  profile_id TEXT,
   locked INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (meeting_id, id)
+);
+CREATE TABLE IF NOT EXISTS speaker_profiles (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+  embedding TEXT NOT NULL,
+  sample_count INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS speaker_profile_samples (
+  id TEXT PRIMARY KEY,
+  profile_id TEXT NOT NULL REFERENCES speaker_profiles(id) ON DELETE CASCADE,
+  source_key TEXT NOT NULL UNIQUE,
+  embedding TEXT NOT NULL,
+  created_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS speaker_turns (
   meeting_id TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
@@ -129,6 +146,11 @@ class Store:
                 db.execute("ALTER TABLE meetings ADD COLUMN speaker_embedding_model_id TEXT")
             if "num_speakers" not in columns:
                 db.execute("ALTER TABLE meetings ADD COLUMN num_speakers INTEGER NOT NULL DEFAULT -1")
+            if "vad_model_id" not in columns:
+                db.execute("ALTER TABLE meetings ADD COLUMN vad_model_id TEXT")
+            speaker_columns = {row["name"] for row in db.execute("PRAGMA table_info(speakers)")}
+            if "profile_id" not in speaker_columns:
+                db.execute("ALTER TABLE speakers ADD COLUMN profile_id TEXT")
 
     @contextmanager
     def connect(self):
@@ -167,6 +189,7 @@ class Store:
             payload["refined_model_id"],
             payload.get("speaker_segmentation_model_id"),
             payload.get("speaker_embedding_model_id"),
+            payload.get("vad_model_id", "silero-vad"),
             int(payload.get("num_speakers", -1)),
             payload.get("category", ""),
             json.dumps(payload.get("tags", []), ensure_ascii=False),
@@ -178,8 +201,8 @@ class Store:
             db.execute(
                 """INSERT INTO meetings
                 (id,title,language,target_language,streaming_model_id,refined_model_id,
-                 speaker_segmentation_model_id,speaker_embedding_model_id,num_speakers,category,tags,status,created_at,started_at)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                 speaker_segmentation_model_id,speaker_embedding_model_id,vad_model_id,num_speakers,category,tags,status,created_at,started_at)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 values,
             )
         meeting_dir = self.meetings_dir / meeting_id
@@ -343,7 +366,7 @@ class Store:
                 (meeting_id,),
             ).fetchone()
             speakers = db.execute(
-                "SELECT id,name,locked FROM speakers WHERE meeting_id=? ORDER BY id",
+                "SELECT id,name,profile_id,locked FROM speakers WHERE meeting_id=? ORDER BY id",
                 (meeting_id,),
             ).fetchall()
             speaker_turns = db.execute(
@@ -410,6 +433,15 @@ class Store:
         for track in ("mic", "system"):
             self._build_playback(meeting_id, track)
         self._build_mix(meeting_id)
+        return self.get_meeting(meeting_id)
+
+    def finish_imported_meeting(self, meeting_id, duration_ms):
+        """关闭已规范化的单文件导入音频，而不重建录音分块。"""
+        with self.connect() as db:
+            db.execute("UPDATE meetings SET status='ready',ended_at=?,duration_ms=? WHERE id=?", (utc_now(), max(0, int(duration_ms)), meeting_id))
+        manifest = self.read_manifest(meeting_id)
+        manifest["closed"] = True
+        self.write_manifest(meeting_id, manifest)
         return self.get_meeting(meeting_id)
 
     def soft_delete(self, meeting_id, restore=False):
@@ -515,7 +547,7 @@ class Store:
                 (translation, meeting_id, segment_id),
             )
 
-    def rename_speaker(self, meeting_id, speaker_id, name, locked=False):
+    def rename_speaker(self, meeting_id, speaker_id, name, locked=False, profile_id=None):
         """保存会议内的说话人显示名。
 
         Args:
@@ -526,10 +558,90 @@ class Store:
             raise ValueError("Speaker name cannot be empty")
         with self.connect() as db:
             db.execute(
-                """INSERT INTO speakers(meeting_id,id,name,locked) VALUES(?,?,?,?)
-                   ON CONFLICT(meeting_id,id) DO UPDATE SET name=excluded.name,locked=excluded.locked""",
-                (meeting_id, speaker_id, name, int(locked)),
+                """INSERT INTO speakers(meeting_id,id,name,profile_id,locked) VALUES(?,?,?,?,?)
+                   ON CONFLICT(meeting_id,id) DO UPDATE SET name=excluded.name,
+                   profile_id=COALESCE(excluded.profile_id,speakers.profile_id),locked=excluded.locked""",
+                (meeting_id, speaker_id, name, profile_id, int(locked)),
             )
+
+    def list_speaker_profiles(self):
+        """返回本地声纹库的人员摘要，不暴露原始声纹向量。"""
+        with self.connect() as db:
+            rows = db.execute(
+                "SELECT id,name,sample_count,created_at,updated_at FROM speaker_profiles ORDER BY name COLLATE NOCASE"
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def speaker_profile(self, profile_id):
+        with self.connect() as db:
+            row = db.execute("SELECT * FROM speaker_profiles WHERE id=?", (profile_id,)).fetchone()
+        if not row:
+            raise ValueError("Speaker profile not found")
+        return dict(row)
+
+    @staticmethod
+    def _normalized_embedding(embedding):
+        values = [float(value) for value in embedding]
+        norm = sum(value * value for value in values) ** 0.5
+        if not norm:
+            raise ValueError("Speaker embedding is empty")
+        return [value / norm for value in values]
+
+    def save_speaker_profile_sample(self, name, embedding, source_key, profile_id=None):
+        """保存一条声纹样本，并以所有样本的归一化中心更新人员声纹。"""
+        normalized = self._normalized_embedding(embedding)
+        now = utc_now()
+        with self.connect() as db:
+            if profile_id:
+                profile = db.execute("SELECT * FROM speaker_profiles WHERE id=?", (profile_id,)).fetchone()
+            else:
+                profile = db.execute("SELECT * FROM speaker_profiles WHERE name=? COLLATE NOCASE", (name.strip(),)).fetchone()
+            if not profile:
+                profile_id = str(uuid4())
+                db.execute(
+                    "INSERT INTO speaker_profiles(id,name,embedding,sample_count,created_at,updated_at) VALUES(?,?,?,?,?,?)",
+                    (profile_id, name.strip(), json.dumps(normalized), 0, now, now),
+                )
+                profile = db.execute("SELECT * FROM speaker_profiles WHERE id=?", (profile_id,)).fetchone()
+            elif len(json.loads(profile["embedding"])) != len(normalized):
+                raise ValueError("Voiceprint model does not match this person's registered samples")
+            profile_id = profile["id"]
+            existing = db.execute("SELECT id FROM speaker_profile_samples WHERE source_key=?", (source_key,)).fetchone()
+            if existing:
+                saved = False
+            else:
+                db.execute(
+                    "INSERT INTO speaker_profile_samples(id,profile_id,source_key,embedding,created_at) VALUES(?,?,?,?,?)",
+                    (str(uuid4()), profile_id, source_key, json.dumps(normalized), now),
+                )
+                samples = [json.loads(row["embedding"]) for row in db.execute("SELECT embedding FROM speaker_profile_samples WHERE profile_id=?", (profile_id,))]
+                center = self._normalized_embedding([sum(values) / len(samples) for values in zip(*samples)])
+                db.execute(
+                    "UPDATE speaker_profiles SET embedding=?,sample_count=?,updated_at=? WHERE id=?",
+                    (json.dumps(center), len(samples), now, profile_id),
+                )
+                saved = True
+        return {**self.speaker_profile(profile_id), "added": saved}
+
+    def match_speaker_profile(self, embedding, threshold):
+        """按余弦相似度匹配本地人员；低于阈值时返回 ``None``。"""
+        normalized = self._normalized_embedding(embedding)
+        with self.connect() as db:
+            profiles = db.execute("SELECT id,name,embedding,sample_count FROM speaker_profiles").fetchall()
+        scored = []
+        for profile in profiles:
+            candidate = json.loads(profile["embedding"])
+            if len(candidate) == len(normalized):
+                scored.append((sum(left * right for left, right in zip(normalized, candidate)), profile))
+        if not scored:
+            return None
+        score, profile = max(scored, key=lambda item: item[0])
+        return {"id": profile["id"], "name": profile["name"], "sample_count": profile["sample_count"], "score": score} if score >= threshold else None
+
+    def delete_speaker_profile(self, profile_id):
+        with self.connect() as db:
+            db.execute("DELETE FROM speaker_profiles WHERE id=?", (profile_id,))
+
 
     def replace_speaker_turns(self, meeting_id, turns, version="postprocess"):
         """用一组新的聚类时间段替换指定版本结果。

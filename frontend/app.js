@@ -10,7 +10,7 @@ const miniTimer = document.querySelector('#mini-timer');
 const refinementCard = document.querySelector('#refinement-progress');
 const refinementPercent = document.querySelector('#refinement-percent');
 const refinementBar = document.querySelector('#refinement-bar');
-const { catalog, appCopy: { stageLabels, themeLabels, updateLabels, modalCopy, modelLabels, summaryModelCopy } } = window.BreviaLocaleData;
+const { catalog, appCopy: { stageLabels, themeLabels, updateLabels, modalCopy, modelLabels, summaryModelCopy, speakerProfileCopy } } = window.BreviaLocaleData;
 let locale = localStorage.getItem('brevia-language') || 'zh';
 let theme = localStorage.getItem('brevia-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
 let activeView = 'home';
@@ -31,6 +31,10 @@ function formatBytes(bytes = 0) { return bytes >= 1024 ** 3 ? `${(bytes / 1024 *
 const defaultCategories = ['产品', '设计', '外部会议'];
 let categories = JSON.parse(localStorage.getItem('brevia-categories') || 'null') || defaultCategories;
 renderStaticViews();
+const speakerProfileCard = document.createElement('section');
+speakerProfileCard.className = 'settings-card';
+speakerProfileCard.innerHTML = '<h2></h2><p></p><button class="secondary" type="button"></button>';
+document.querySelector('#settings-view .settings-grid').append(speakerProfileCard);
 const updateCard = document.createElement('section');
 updateCard.className = 'update-card';
 updateCard.innerHTML = '<div><h2></h2><p></p></div><button class="update-button" type="button"></button>';
@@ -46,6 +50,13 @@ document.body.append(updateNotice);
 const updateNoticeText = updateNotice.querySelector('span');
 const updateNoticeButton = updateNotice.querySelector('button');
 let updateAvailable = false;
+let speakerProfiles = [];
+function renderSpeakerProfileCard() {
+  const copy = speakerProfileCopy[locale] || speakerProfileCopy.en;
+  speakerProfileCard.querySelector('h2').textContent = copy.title;
+  speakerProfileCard.querySelector('p').textContent = copy.intro;
+  speakerProfileCard.querySelector('button').textContent = copy.title;
+}
 /** Keeps the update notice above the mini meeting when both are visible. @returns {void} */
 function syncFloatingNotices() { updateNotice.style.bottom = miniMeeting.hidden ? '' : `${miniMeeting.offsetHeight + 24}px`; }
 /** Renders the floating update notice from current locale and availability state. @returns {void} */
@@ -56,14 +67,27 @@ function renderUpdateButton() { const copy = updateCopy(); updateTitle.textConte
 const modelIds = [
   'paraformer-zh-en-int8',
   'zipformer-en-streaming-int8',
+  'zipformer-zh-streaming-int8',
+  'zipformer-zh-en-streaming-int8',
+  'zipformer-multilingual-streaming',
+  'zipformer-ko-streaming-int8',
+  'zipformer-fr-streaming-int8',
   'online-punct-en-int8',
+  'silero-vad',
+  'ten-vad',
   'punct-ct-transformer-zh-en-int8',
   'qwen3-asr-0.6b-int8',
+  'sensevoice-int8',
+  'whisper-turbo',
+  'qwen3-asr-1.7b-int8',
   'pyannote-segmentation-3.0',
+  'reverb-diarization-v1',
   'eres2net-base-3dspeaker-zh',
+  'nemo-titanet-small-en',
+  'campplus-zh-en',
   'zipformer-zh-xlarge-streaming-int8',
 ];
-const modelSizes = [1047319737, 310414022, 30667839, 64717756, 878702423, 6958444, 39593761, 597755927];
+const modelSizes = [1047319737, 310414022, 132634597, 511274346, 258999581, 418218652, 398444115, 30667839, 2313101, 332211, 64717756, 878702423, 163002883, 563790207, 2900000000, 6958444, 10918585, 39593761, 40257283, 28281164, 597755927];
 const summaryProviders = ['OpenAI', 'Anthropic', 'Kimi', 'Zhipu GLM', 'MiniMax', 'DeepSeek', 'OpenRouter', 'Ollama'];
 const defaultSummaryModels = [{ name: '配置-1', provider: 'OpenAI', endpoint: 'https://api.openai.com/v1/chat/completions', format: 'openai', model: 'gpt-4.1-mini' }];
 const savedSummaryConfig = JSON.parse(localStorage.getItem('brevia-summary-config') || 'null');
@@ -156,6 +180,12 @@ function renderMeetingList() { document.querySelector('.meeting-list').innerHTML
 renderCategoryFilter();
 renderDateFilter();
 const prepareForm = document.querySelector('#meeting-form');
+const importRecording = document.createElement('button');
+importRecording.className = 'secondary';
+importRecording.type = 'button';
+importRecording.id = 'import-recording';
+importRecording.textContent = '导入录音';
+prepareForm.querySelector('[type="submit"]').after(importRecording);
 const meetingTitle = document.querySelector('#meeting-title');
 let meetingTitleEdited = false;
 /** Refreshes the starter title only until the user provides their own. @returns {void} */
@@ -168,11 +198,13 @@ function renderPrepareSelects() {
   prepareForm.querySelector('.form-grid').innerHTML = `<label>${t('会议语言')}${flowSelect('meeting-language', values['meeting-language'] || 'auto', BreviaI18n.languageOptions(locale, t, true))}</label><label>${t('译文目标')}${flowSelect('translation-target', values['translation-target'] || '', BreviaI18n.languageOptions(locale, t))}</label><label>${t('预期说话人数')}<input name="num-speakers" type="number" min="1" step="1" value="${values['num-speakers'] || ''}" placeholder="${t('留空自动匹配')}" /></label><label>${t('分类标签')}${flowSelect('meeting-category', values['meeting-category'] || '', categoryOptions)}</label>`;
 }
 const prepareModelChoices = {
-  'active-streaming-model': [['', null], ['zipformer-zh-xlarge-streaming-int8', 'Streaming Zipformer Chinese XLarge'], ['paraformer-zh-en-int8', 'Streaming Paraformer'], ['zipformer-en-streaming-int8', 'Streaming Zipformer English']],
-  'active-diarization-model': [['|', null], ['pyannote-segmentation-3.0|eres2net-base-3dspeaker-zh', 'Pyannote + 3D-Speaker']],
-  'active-refined-model': [['', null], ['qwen3-asr-0.6b-int8', 'Qwen3-ASR']],
+  'active-streaming-model': [['', null], ['zipformer-zh-xlarge-streaming-int8', 'Streaming Zipformer Chinese XLarge'], ['zipformer-zh-streaming-int8', 'Streaming Zipformer Chinese'], ['zipformer-zh-en-streaming-int8', 'Streaming Zipformer Chinese and English'], ['zipformer-multilingual-streaming', 'Streaming Zipformer Multilingual'], ['paraformer-zh-en-int8', 'Streaming Paraformer'], ['zipformer-en-streaming-int8', 'Streaming Zipformer English'], ['zipformer-ko-streaming-int8', 'Streaming Zipformer Korean'], ['zipformer-fr-streaming-int8', 'Streaming Zipformer French'], ['sensevoice-int8', 'SenseVoice int8']],
+  'active-diarization-model': [['|', null], ['pyannote-segmentation-3.0|eres2net-base-3dspeaker-zh', 'Pyannote + 3D-Speaker'], ['pyannote-segmentation-3.0|nemo-titanet-small-en', 'Pyannote + NeMo Titanet'], ['pyannote-segmentation-3.0|campplus-zh-en', 'Pyannote + 3D-Speaker CAM++']],
+  'active-vad-model': [['silero-vad', 'Silero VAD'], ['ten-vad', 'TEN-VAD']],
+  'active-refined-model': [['', null], ['qwen3-asr-0.6b-int8', 'Qwen3-ASR'], ['qwen3-asr-1.7b-int8', 'Qwen3-ASR 1.7B int8'], ['sensevoice-int8', 'SenseVoice int8'], ['whisper-turbo', 'Whisper Turbo']],
 };
 const prepareModelCard = document.querySelector('.model-card');
+prepareModelCard.querySelector('dl').insertAdjacentHTML('beforeend', '<div><dt>VAD 模型</dt><dd id="active-vad-model" data-model="silero-vad">Silero VAD</dd></div>');
 const modelPicker = document.createElement('div');
 modelPicker.className = 'flow-select-options model-picker';
 modelPicker.hidden = true;
@@ -185,6 +217,7 @@ prepareModelCard.addEventListener('click', (event) => {
   if (value.id === 'active-streaming-model') prepareForm.dataset.streamingModel = first;
   if (value.id === 'active-diarization-model') { prepareForm.dataset.segmentationModel = first; prepareForm.dataset.embeddingModel = second; }
   if (value.id === 'active-refined-model') prepareForm.dataset.refinedModel = first;
+  if (value.id === 'active-vad-model') prepareForm.dataset.vadModel = first;
   value.dataset.model = choice.dataset.value;
   value.textContent = choice.textContent;
   modelPicker.hidden = true;
@@ -216,12 +249,14 @@ prepareForm.querySelector('[name="capture-mic"]').addEventListener('change', (ev
   if (event.target.checked) void previewMicrophone();
   else void breviaClient?.stopPreview();
 });
-function showRefinementProgress(completed = 0, total = 0) {
+let refinementMeetingTitle = '';
+function showRefinementProgress(completed = 0, total = 0, meetingTitle = refinementMeetingTitle) {
   clearTimeout(refinementDismissTimer);
+  refinementMeetingTitle = meetingTitle;
   const copy = { title: t('正在精修'), waiting: t('准备中') };
   const ratio = total ? Math.min(1, completed / total) : 0;
   refinementCard.hidden = false;
-  refinementCard.querySelector('p').textContent = copy.title;
+  refinementCard.querySelector('p').textContent = refinementMeetingTitle ? `${copy.title} - ${refinementMeetingTitle}` : copy.title;
   refinementPercent.textContent = total ? `${Math.round(ratio * 100)}%` : copy.waiting;
   refinementBar.style.transform = `scaleX(${ratio})`;
 }
@@ -229,7 +264,8 @@ let refinementDismissTimer;
 function showRefinementComplete() {
   clearTimeout(refinementDismissTimer);
   refinementCard.hidden = false;
-  refinementCard.querySelector('p').textContent = t('会后精修已完成');
+  const title = t('会后精修已完成');
+  refinementCard.querySelector('p').textContent = refinementMeetingTitle ? `${title} - ${refinementMeetingTitle}` : title;
   refinementPercent.textContent = '100%';
   refinementBar.style.transform = 'scaleX(1)';
   refinementDismissTimer = setTimeout(hideRefinementProgress, 10000);
@@ -268,9 +304,16 @@ function renderSummaryModelModal() {
   settingsModal.querySelector('.modal-title p').textContent = copy.intro;
   settingsModal.querySelector('.modal-body').innerHTML = `<form class="summary-model-form"><div class="config-fields"><label>${copy.name}<input name="name" value="${escapeHtml(current.name)}" maxlength="64" required /></label><label class="config-select-field">${copy.provider}${flowSelect('provider', current.provider, summaryProviders.map((provider) => [provider, provider === 'Ollama' ? copy.ollama : provider]))}</label><label>${copy.key}<input name="apiKey" type="password" autocomplete="new-password" placeholder="${current.keyReference ? '已安全保存，留空表示不修改' : ''}" /></label><label>${copy.endpoint}<input name="endpoint" value="${escapeHtml(current.endpoint)}" required /></label><label class="config-select-field">${copy.format}${flowSelect('format', apiFormat, [['openai', copy.openAIFormat], ['claude', copy.claudeFormat]])}</label><label>${copy.model}<input name="model" value="${escapeHtml(current.model)}" required /></label></div><div class="modal-form-actions"><button class="modal-action" type="submit">${copy.save}</button><button class="secondary" data-new-summary-model type="button">${copy.add}</button>${editingSummaryModel >= 0 ? `<button class="model-delete" data-delete-summary-model type="button">${copy.remove}</button>` : ''}</div></form>${configuredControl}<section class="modal-subsection"><h3>${copy.promptTitle}</h3><p>${copy.promptIntro}</p><form class="prompt-form"><textarea name="prompt" rows="9" required>${escapeHtml(summaryPrompt)}</textarea><button class="modal-action" type="submit">${copy.save}</button></form></section><section class="modal-subsection"><h3>${copy.jsonTitle}</h3><p>${copy.jsonIntro}</p><pre class="config-json">${escapeHtml(renderConfigPreview())}</pre></section>`;
 }
+function renderSpeakerProfileModal() {
+  const copy = speakerProfileCopy[locale] || speakerProfileCopy.en;
+  settingsModal.querySelector('h2').textContent = copy.title;
+  settingsModal.querySelector('.modal-title p').textContent = copy.intro;
+  settingsModal.querySelector('.modal-body').innerHTML = `<form class="speaker-profile-form"><label>${copy.name}<input name="name" maxlength="32" required /></label><button class="modal-action" type="submit">${copy.add}</button></form><div class="speaker-profile-list">${speakerProfiles.map((profile) => `<div><span><b>${escapeHtml(profile.name)}</b><small>${profile.sample_count} ${copy.samples}</small></span><span><button class="secondary" data-add-speaker-sample="${profile.id}" type="button">${copy.addSample}</button><button class="model-delete" data-delete-speaker-profile="${profile.id}" type="button">${copy.remove}</button></span></div>`).join('')}</div>`;
+}
 /** Renders one settings modal. @param {'models'|'terms'|'storage'|'summary-model'} kind Requested modal. @returns {void} */
 function renderModal(kind) {
   if (kind === 'summary-model') { renderSummaryModelModal(); return; }
+  if (kind === 'speaker-profiles') { renderSpeakerProfileModal(); return; }
   const copy = (modalCopy[locale] || modalCopy.en)[kind];
   const modelStageOrder = new Map();
   (copy.items || []).forEach(([stage], index) => { if (!modelStageOrder.has(stage)) modelStageOrder.set(stage, index); });
@@ -287,11 +330,11 @@ function renderModal(kind) {
     const label = termEditing ? `<input class="term-edit-input" data-edit-term-input="${index}" value="${escapeHtml(name)}" maxlength="64" />` : `<b>${escapeHtml(name)}</b>`;
     const progress = kind === 'models' ? modelDownloads.get(modelIds[sourceIndex]) : null;
     const ratio = progress?.total ? Math.min(1, progress.received / progress.total) : 0;
-    const downloadProgress = progress ? `<small class="model-download-progress">${formatBytes(progress.received)} / ${formatBytes(progress.total)} · ${Math.round(ratio * 100)}%</small><div class="processing-bar model-download-bar" aria-hidden="true"><i style="transform:scaleX(${ratio})"></i></div>` : '';
+    const downloadProgress = progress?.error ? `<span class="model-download-progress">${escapeHtml(progress.error)}</span>` : progress ? `<span class="model-download-progress">${formatBytes(progress.received)} / ${formatBytes(progress.total)} · ${Math.round(ratio * 100)}%<i aria-hidden="true" style="transform:scaleX(${ratio})"></i></span>` : '';
     const size = kind === 'models' ? `<small>${formatBytes(modelSizes[sourceIndex])}</small>` : '';
-    const actions = kind === 'models' ? `<button class="modal-action${isModelInstalled(name) ? ' modal-danger' : ''}" ${isModelInstalled(name) ? `data-delete-model="${sourceIndex}"` : `data-download-model="${sourceIndex}"`} type="button"${progress ? ' disabled' : ''}>${isModelInstalled(name) ? (modelLabels[locale] || modelLabels.en).remove : progress ? (modelLabels[locale] || modelLabels.en).downloading : (modelLabels[locale] || modelLabels.en).download}</button>` : kind === 'terms' ? `<span class="term-actions">${termEditing ? `<button class="modal-action" data-save-term="${index}" type="button">${copy.save}</button><button class="modal-action" data-cancel-term type="button">${copy.cancel}</button>` : `<button class="modal-action" data-edit-term="${index}" type="button">${copy.edit}</button><button class="modal-action" data-remove-term="${index}" type="button">${copy.remove}</button>`}</span>` : '';
+    const actions = kind === 'models' ? `<button class="modal-action${isModelInstalled(name) ? ' modal-danger' : ''}" ${isModelInstalled(name) ? `data-delete-model="${sourceIndex}"` : `data-download-model="${sourceIndex}"`} type="button"${progress && !progress.error ? ' disabled' : ''}>${isModelInstalled(name) ? (modelLabels[locale] || modelLabels.en).remove : progress && !progress.error ? (modelLabels[locale] || modelLabels.en).downloading : (modelLabels[locale] || modelLabels.en).download}</button>` : kind === 'terms' ? `<span class="term-actions">${termEditing ? `<button class="modal-action" data-save-term="${index}" type="button">${copy.save}</button><button class="modal-action" data-cancel-term type="button">${copy.cancel}</button>` : `<button class="modal-action" data-edit-term="${index}" type="button">${copy.edit}</button><button class="modal-action" data-remove-term="${index}" type="button">${copy.remove}</button>`}</span>` : '';
     const heading = kind === 'models' && (index === 0 || items[index - 1].item[0] !== stage) ? `<h3>${escapeHtml(stage)}</h3>` : '';
-    return `${heading}<div><span>${label}<small>${escapeHtml(detail)}</small>${size}${intro ? `<small>${escapeHtml(intro)}</small>` : ''}${downloadProgress}</span>${actions}</div>`;
+    return `${heading}<div><span>${label}${downloadProgress}<small>${escapeHtml(detail)}</small>${size}${intro ? `<small>${escapeHtml(intro)}</small>` : ''}</span>${actions}</div>`;
   }).join('')}</div>${kind === 'terms' ? `<form class="term-form"><input name="term" required maxlength="64" placeholder="${copy.placeholder}" /><button type="submit">${copy.add}</button></form>` : ''}`;
 }
 /** Opens and focuses a settings modal. @param {'models'|'terms'|'storage'|'summary-model'} kind Requested modal. @returns {void} */
@@ -300,45 +343,21 @@ function openModal(kind) { activeModal = kind; renderModal(kind); settingsModal.
 function closeModal() { activeModal = undefined; settingsModal.hidden = true; document.body.classList.remove('modal-open'); }
 const settingsActions = [...document.querySelectorAll('#settings-view [data-settings-modal]')];
 settingsActions.forEach((button) => button.addEventListener('click', () => openModal(button.dataset.settingsModal)));
-const modelCard = document.querySelector('#installed-models');
 const modelAction = document.querySelector('[data-settings-modal="models"]');
-const installedModelNames = new Set([...modelCard.querySelectorAll('.model-row b')].map((name) => name.textContent));
+speakerProfileCard.querySelector('button').addEventListener('click', () => openModal('speaker-profiles'));
+const installedModelNames = new Set();
 /** Checks whether a model is installed locally. @param {string} name Model name. @returns {boolean} Whether the model exists in the installed set. */
 function isModelInstalled(name) { return installedModelNames.has(name); }
 /** Removes an installed model from the list and local state. @param {string} name Model name. @returns {void} */
-function deleteInstalledModel(name) { const row = [...modelCard.querySelectorAll('.model-row')].find((item) => item.querySelector('b').textContent === name); if (row) row.remove(); installedModelNames.delete(name); }
-/** Adds the per-row delete action if the row does not already have one. @param {HTMLElement} row Installed-model row. @returns {void} */
-function attachModelDelete(row) {
-  if (row.querySelector('.model-delete')) return;
-  const button = document.createElement('button');
-  button.className = 'model-delete';
-  button.type = 'button';
-  button.textContent = (modelLabels[locale] || modelLabels.en).remove;
-  button.addEventListener('click', () => { deleteInstalledModel(row.querySelector('b').textContent); if (activeModal === 'models') renderModal('models'); });
-  row.append(button);
-}
+function deleteInstalledModel(name) { installedModelNames.delete(name); }
 /** Synchronizes installed-model actions after a locale or model-list change. @returns {void} */
 function renderModelControls() {
   modelAction.textContent = (modelLabels[locale] || modelLabels.en).manage;
-  modelCard.querySelectorAll('.model-row').forEach((row) => {
-    attachModelDelete(row);
-    row.querySelector('.model-delete').textContent = (modelLabels[locale] || modelLabels.en).remove;
-    if (row.dataset.stage) row.querySelector('small').textContent = `${t(row.dataset.stage)} · ${row.dataset.languages}`;
-  });
 }
-/** Inserts a newly downloaded model into the model-library card. @param {{icon: string, name: string, detail: string, intro: string}} model Downloaded model metadata. @returns {void} */
+/** Records a newly downloaded model for the management dialog. @param {{name: string}} model Downloaded model metadata. @returns {void} */
 function installModel(model) {
   if (isModelInstalled(model.name)) return;
-  const template = document.createElement('template');
-  template.innerHTML = renderModelRow(model);
-  const row = template.content.firstElementChild;
-  if (model.stage) {
-    row.dataset.stage = model.stage;
-    row.dataset.languages = model.languages.join(' / ');
-  }
-  modelCard.insertBefore(row, modelAction);
   installedModelNames.add(model.name);
-  attachModelDelete(row);
 }
 /** Updates the term summary card after terms or the interface language changes. @returns {void} */
 function renderTermOverview() {
@@ -395,6 +414,21 @@ settingsModal.addEventListener('click', async (event) => {
     renderModal('summary-model');
     return;
   }
+  const addSpeakerSample = event.target.closest('[data-add-speaker-sample]');
+  if (addSpeakerSample) {
+    try {
+      const profile = await window.brevia?.speakerProfile.enroll({ profile_id: addSpeakerSample.dataset.addSpeakerSample, name: speakerProfiles.find((item) => item.id === addSpeakerSample.dataset.addSpeakerSample)?.name });
+      if (profile) speakerProfiles = await window.brevia.speakerProfile.list();
+    } catch (error) { showToast(error.message); }
+    renderModal('speaker-profiles');
+    return;
+  }
+  const deleteSpeakerProfile = event.target.closest('[data-delete-speaker-profile]');
+  if (deleteSpeakerProfile) {
+    try { await window.brevia?.speakerProfile.delete({ profile_id: deleteSpeakerProfile.dataset.deleteSpeakerProfile }); speakerProfiles = await window.brevia.speakerProfile.list(); } catch (error) { showToast(error.message); }
+    renderModal('speaker-profiles');
+    return;
+  }
   const download = event.target.closest('[data-download-model]');
   if (download) {
     const index = Number(download.dataset.downloadModel);
@@ -403,9 +437,8 @@ settingsModal.addEventListener('click', async (event) => {
     renderModal('models');
     try {
       if (window.brevia) await window.brevia.models.download({ model_id: modelIds[index] });
-      installModel({ icon, name, detail, intro });
+      else { installModel({ icon, name, detail, intro }); modelDownloads.delete(modelIds[index]); }
     } catch (error) { showToast(error.message); }
-    finally { modelDownloads.delete(modelIds[index]); }
     renderModal('models');
     return;
   }
@@ -466,6 +499,15 @@ settingsModal.addEventListener('submit', async (event) => {
     persistSummaryConfig();
     renderConfigPreview();
     renderModal('summary-model');
+    return;
+  }
+  if (event.target.matches('.speaker-profile-form')) {
+    event.preventDefault();
+    try {
+      const profile = await window.brevia?.speakerProfile.enroll({ name: new FormData(event.target).get('name').trim() });
+      if (profile) speakerProfiles = await window.brevia.speakerProfile.list();
+    } catch (error) { showToast(error.message); }
+    renderModal('speaker-profiles');
     return;
   }
   if (!event.target.matches('.term-form')) return;
@@ -564,6 +606,7 @@ function applyLanguage(nextLocale, animate = false) {
     renderSlogan(false);
     renderUpdateButton();
     renderUpdateNotice();
+    renderSpeakerProfileCard();
     renderModelControls();
     renderTermOverview();
     renderLivePanel();
@@ -628,15 +671,15 @@ async function showLibraryNav(id) {
   if (activeView === 'live' && meetingActive) minimizeMeeting();
   if (activeView !== 'home') {
     selectLibraryNav(id);
-    if (window.brevia) await refreshBackendMeetings(includeDeleted);
     await showView('home');
+    if (window.brevia) void refreshBackendMeetings(includeDeleted).catch((error) => showToast(error.message));
     return;
   }
   if (id === activeLibraryNav) return;
   const home = document.querySelector('#home-view');
-  await transitionPage(home, home, async () => {
+  await transitionPage(home, home, () => {
     selectLibraryNav(id);
-    if (window.brevia) await refreshBackendMeetings(includeDeleted);
+    if (window.brevia) void refreshBackendMeetings(includeDeleted).catch((error) => showToast(error.message));
     window.scrollTo({ top: 0, behavior: 'smooth' });
   });
 }
@@ -695,12 +738,13 @@ document.querySelector('#meeting-form').addEventListener('submit', async (event)
       refined_model_id: refinedModelId,
       speaker_segmentation_model_id: segmentationModelId,
       speaker_embedding_model_id: embeddingModelId,
+      vad_model_id: prepareForm.dataset.vadModel || 'silero-vad',
       num_speakers: Number(form.get('num-speakers') || -1),
       category: form.get('meeting-category') || '',
     }, { mic: form.has('capture-mic'), system: form.has('capture-system') }) : { id: null };
     document.querySelector('#active-streaming-model').textContent = streamingModelName;
-    document.querySelector('#active-diarization-model').textContent = segmentationModelId || embeddingModelId ? 'Pyannote + 3D-Speaker' : '自动匹配';
-    document.querySelector('#active-refined-model').textContent = refinedModelId === 'qwen3-asr-0.6b-int8' ? 'Qwen3-ASR' : '自动匹配';
+    document.querySelector('#active-diarization-model').textContent = prepareModelChoices['active-diarization-model'].find(([id]) => id === `${segmentationModelId || ''}|${embeddingModelId || ''}`)?.[1] || t('自动匹配');
+    document.querySelector('#active-refined-model').textContent = refinedModelId === 'qwen3-asr-1.7b-int8' ? 'Qwen3-ASR 1.7B int8' : refinedModelId === 'qwen3-asr-0.6b-int8' ? 'Qwen3-ASR' : '自动匹配';
     document.querySelector('#live-name').textContent = title;
     uiData.meetings.unshift({ id: meeting.id, tone: 'violet', title, meta: `刚刚 · 0 分钟${form.get('meeting-category') ? ` · ${form.get('meeting-category')}` : ''}`, category: form.get('meeting-category'), tags: [], status: { tone: 'processing', label: '正在录制', detail: '双轨录音' } });
     document.querySelector('#transcript-scroll').innerHTML = '';
@@ -720,6 +764,26 @@ document.querySelector('#meeting-form').addEventListener('submit', async (event)
   } finally {
     submit.disabled = false;
   }
+});
+importRecording.addEventListener('click', async () => {
+  const form = new FormData(prepareForm);
+  const title = meetingTitle.value.trim();
+  if (!title) { meetingTitle.focus(); return; }
+  importRecording.disabled = true;
+  try {
+    const meeting = window.brevia && await window.brevia.meeting.import({
+      title, language: form.get('meeting-language') || 'auto', target_language: form.get('translation-target') || null,
+      streaming_model_id: prepareForm.dataset.streamingModel || 'zipformer-zh-xlarge-streaming-int8', refined_model_id: prepareForm.dataset.refinedModel || 'qwen3-asr-0.6b-int8',
+      speaker_segmentation_model_id: prepareForm.dataset.segmentationModel || undefined, speaker_embedding_model_id: prepareForm.dataset.embeddingModel || undefined,
+      num_speakers: Number(form.get('num-speakers') || -1), category: form.get('meeting-category') || '', path: 'selected-by-electron',
+    });
+    if (!meeting) return;
+    applyBackendDetail(meeting);
+    await refreshBackendMeetings();
+    showView('detail');
+    showRefinementProgress(0, 0, meeting.title);
+    void window.brevia.meeting.refine({ meeting_id: meeting.id }).catch((error) => { hideRefinementProgress(); showToast(error.message); });
+  } catch (error) { showToast(error.message); } finally { importRecording.disabled = false; }
 });
 let seconds = 0;
 let timer;
@@ -746,7 +810,7 @@ document.querySelector('#end-meeting').addEventListener('click', async (event) =
     syncFloatingNotices();
     if (meeting) {
       applyBackendDetail(meeting);
-      showRefinementProgress();
+      showRefinementProgress(0, 0, meeting.title);
       void window.brevia.meeting.refine({ meeting_id: meeting.id }).catch((error) => {
         hideRefinementProgress();
         showToast(`会后精修失败：${error.message}`);
@@ -778,7 +842,7 @@ function editSpeakerName(label) {
     if (liveSpeakers.has(speaker)) liveSpeakers.get(speaker).name = name;
     document.querySelectorAll(`[data-speaker="${speaker}"]`).forEach((node) => { node.textContent = name; });
     const meetingId = breviaClient?.state.meeting?.id || breviaClient?.state.selectedMeetingId;
-    if (window.brevia && meetingId) window.brevia.speaker.rename({ meeting_id: meetingId, speaker_id: speaker.startsWith('spk-') ? speaker : `spk-${speaker}`, name }).catch((error) => showToast(error.message));
+    if (window.brevia && meetingId) window.brevia.speaker.rename({ meeting_id: meetingId, speaker_id: speaker, name }).catch((error) => showToast(error.message));
   };
   input.addEventListener('blur', commit, { once: true });
   input.addEventListener('keydown', (event) => { if (event.key === 'Enter') input.blur(); if (event.key === 'Escape') { input.value = label.textContent; input.blur(); } });
@@ -1126,9 +1190,9 @@ if (window.brevia) {
   Promise.all(legacySummaryKeys.map(({ reference, value }) => window.brevia.secret.set({ reference, value }))).then(persistSummaryConfig).catch((error) => showToast(`密钥迁移失败：${error.message}`));
   breviaClient.initialize().then((result) => {
     uiData.meetings = result.meetings.map(backendMeeting);
+    speakerProfiles = result.speaker_profiles || [];
     termEntries = result.terms.map((item) => ({ id: item.id, name: item.text, detail: item.note || '自定义术语' }));
     installedModelNames.clear();
-    modelCard.querySelectorAll('.model-row').forEach((row) => row.remove());
     result.models.filter((model) => model.status === 'ready').forEach((model) => installedModelNames.add(model.name.replace(' 0.6B int8', '')));
     document.querySelector('#active-device').textContent = result.device.backend.toUpperCase();
     uiData.live.status[1].value = result.device.backend.toUpperCase();
@@ -1139,6 +1203,7 @@ if (window.brevia) {
       copy.storage.items.forEach((item, index) => { item[1] = storageSizes[index]; });
     });
     renderTermOverview();
+    renderSpeakerProfileCard();
     renderMeetingList();
     if (result.recoverable.length) showToast(`发现 ${result.recoverable.length} 场可恢复录音`);
   }).catch((error) => showToast(`后端启动失败：${error.message}`));
@@ -1229,6 +1294,16 @@ if (window.brevia) {
   window.brevia.on('model.progress', ({ model_id, received, total }) => {
     if (!modelDownloads.has(model_id)) return;
     modelDownloads.set(model_id, { received, total });
+    if (activeModal === 'models') renderModal('models');
+  });
+  window.brevia.on('model.status', ({ model_id, status, error }) => {
+    if (!modelDownloads.has(model_id)) return;
+    if (status === 'ready') {
+      const index = modelIds.indexOf(model_id);
+      const [, name, detail, intro, icon] = (modalCopy[locale] || modalCopy.en).models.items[index];
+      installModel({ icon, name, detail, intro });
+      modelDownloads.delete(model_id);
+    } else if (status === 'failed') modelDownloads.set(model_id, { error });
     if (activeModal === 'models') renderModal('models');
   });
   window.brevia.on('worker.warning', ({ message: warning }) => showToast(warning));

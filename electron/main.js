@@ -28,6 +28,7 @@ const meetingStart = z.object({
   refined_model_id: z.string().min(1),
   speaker_segmentation_model_id: z.string().min(1).optional(),
   speaker_embedding_model_id: z.string().min(1).optional(),
+  vad_model_id: z.string().min(1).optional(),
   num_speakers: z.number().int().min(-1).max(20).optional(),
   category: z.string().max(32).optional(),
   tags: z.array(z.string().max(32)).max(20).optional(),
@@ -158,6 +159,12 @@ function registerIpc() {
     worker.restarts = 0;
     return result;
   });
+  ipcMain.handle('meeting.import', async (_, payload) => {
+    const value = meetingStart.extend({ path: z.string().min(1) }).parse(payload);
+    const selected = await dialog.showOpenDialog({ properties: ['openFile'], filters: [{ name: 'Audio', extensions: ['wav', 'mp3', 'm4a', 'flac', 'aac', 'ogg'] }] });
+    if (selected.canceled) return null;
+    return worker.request('meeting.import', { ...value, path: selected.filePaths[0] });
+  });
   handle('meeting.audio', audio, 'meeting.audio');
   handle('meeting.pause', id.extend({ paused: z.boolean() }), 'meeting.pause');
   ipcMain.handle('meeting.stop', async (_, payload) => {
@@ -177,6 +184,14 @@ function registerIpc() {
     cluster_threshold: z.number().min(0).max(1).optional(),
   }), 'meeting.refine');
   handle('speaker.rename', id.extend({ speaker_id: z.string(), name: z.string().trim().min(1).max(32), locked: z.boolean().optional() }), 'speaker.rename');
+  handle('speaker-profile.list', z.object({}), 'speaker-profile.list');
+  ipcMain.handle('speaker-profile.enroll', async (_, payload) => {
+    const value = z.object({ profile_id: z.string().uuid().optional(), name: z.string().trim().min(1).max(32) }).parse(payload);
+    const selected = await dialog.showOpenDialog({ properties: ['openFile'], filters: [{ name: 'Audio', extensions: ['wav', 'mp3', 'm4a', 'flac', 'aac', 'ogg'] }] });
+    if (selected.canceled) return null;
+    return worker.request('speaker-profile.enroll', { ...value, path: selected.filePaths[0] });
+  });
+  handle('speaker-profile.delete', z.object({ profile_id: z.string().uuid() }), 'speaker-profile.delete');
   handle('models.list', z.object({}), 'models.list');
   handle('models.download', z.object({ model_id: z.string() }), 'models.download');
   handle('models.delete', z.object({ model_id: z.string() }), 'models.delete');
