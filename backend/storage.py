@@ -79,7 +79,10 @@ CREATE TABLE IF NOT EXISTS speaker_profile_samples (
   profile_id TEXT NOT NULL REFERENCES speaker_profiles(id) ON DELETE CASCADE,
   source_key TEXT NOT NULL UNIQUE,
   embedding TEXT NOT NULL,
-  created_at TEXT NOT NULL
+  created_at TEXT NOT NULL,
+  audio_path TEXT,
+  reference_text TEXT,
+  duration_ms INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS speaker_turns (
   meeting_id TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
@@ -158,6 +161,8 @@ class Store:
                 db.execute("ALTER TABLE speaker_profile_samples ADD COLUMN audio_path TEXT")
             if "reference_text" not in sample_columns:
                 db.execute("ALTER TABLE speaker_profile_samples ADD COLUMN reference_text TEXT")
+            if "duration_ms" not in sample_columns:
+                db.execute("ALTER TABLE speaker_profile_samples ADD COLUMN duration_ms INTEGER NOT NULL DEFAULT 0")
 
     @contextmanager
     def connect(self):
@@ -546,8 +551,29 @@ class Store:
                 values,
             )
 
-    def replace_segments(self, meeting_id, segments, version="postprocess"):
+    def next_refinement_version(self, meeting_id):
+        """为一次新的精修分配版本，保留此前的精修结果。"""
+        with self.connect() as db:
+            rows = db.execute(
+                "SELECT revision FROM segments WHERE meeting_id=? AND (version='postprocess' OR version GLOB 'postprocess-*')",
+                (meeting_id,),
+            ).fetchall()
+        revision = max((row["revision"] for row in rows), default=-1) + 1
+        return ("postprocess" if revision == 0 else f"postprocess-{revision}", revision)
+
+    def replace_segments(self, meeting_id, segments, version="postprocess", revision=0):
         """原子替换一次精修生成的全部段落，保留用户编辑版本。"""
+        normalized = []
+        segment_ids = set()
+        for item in segments:
+            base_id = item["segment_id"]
+            segment_id = base_id
+            suffix = 1
+            while segment_id in segment_ids:
+                segment_id = f"{base_id}-{suffix}"
+                suffix += 1
+            segment_ids.add(segment_id)
+            normalized.append({**item, "segment_id": segment_id, "version": version, "revision": revision})
         with self.connect() as db:
             db.execute("DELETE FROM segments WHERE meeting_id=? AND version=?", (meeting_id, version))
             db.executemany(
@@ -555,10 +581,11 @@ class Store:
                 (id,meeting_id,revision,version,track,start_ms,end_ms,speaker,text,translation,user_edited)
                 VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
                 [
-                    (item["segment_id"], meeting_id, 0, version, item["track"], int(item["start_ms"]), int(item["end_ms"]), item["speaker"], item["text"].strip(), item.get("translation"), 0)
-                    for item in segments
+                    (item["segment_id"], meeting_id, item["revision"], version, item["track"], int(item["start_ms"]), int(item["end_ms"]), item["speaker"], item["text"].strip(), item.get("translation"), 0)
+                    for item in normalized
                 ],
             )
+        return normalized
 
     def save_translation(self, meeting_id, segment_id, translation):
         """为会议中同一段落的所有版本保存译文。"""
@@ -590,8 +617,21 @@ class Store:
         with self.connect() as db:
             rows = db.execute(
                 """SELECT id,name,sample_count,created_at,updated_at,
+                   COALESCE((SELECT SUM(duration_ms) FROM speaker_profile_samples sample WHERE sample.profile_id=speaker_profiles.id),0) AS duration_ms,
+                   EXISTS(SELECT 1 FROM speaker_profile_samples sample WHERE sample.profile_id=speaker_profiles.id AND sample.source_key LIKE 'builtin:%') AS built_in,
                    EXISTS(SELECT 1 FROM speaker_profile_samples sample WHERE sample.profile_id=speaker_profiles.id AND sample.audio_path IS NOT NULL AND trim(COALESCE(sample.reference_text,'')) != '') AS has_reference
                    FROM speaker_profiles ORDER BY name COLLATE NOCASE"""
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def list_speaker_profile_samples(self, profile_id):
+        """返回人员的句级录音档案，不暴露单条声纹向量。"""
+        self.speaker_profile(profile_id)
+        with self.connect() as db:
+            rows = db.execute(
+                """SELECT id,profile_id,source_key,created_at,audio_path,reference_text,duration_ms
+                   FROM speaker_profile_samples WHERE profile_id=? ORDER BY created_at DESC""",
+                (profile_id,),
             ).fetchall()
         return [dict(row) for row in rows]
 
@@ -632,7 +672,7 @@ class Store:
             raise ValueError("Speaker embedding is empty")
         return [value / norm for value in values]
 
-    def save_speaker_profile_sample(self, name, embedding, source_key, profile_id=None, audio_path=None, reference_text=None):
+    def save_speaker_profile_sample(self, name, embedding, source_key, profile_id=None, audio_path=None, reference_text=None, duration_ms=0):
         """保存一条声纹样本，并以所有样本的归一化中心更新人员声纹。"""
         normalized = self._normalized_embedding(embedding)
         now = utc_now()
@@ -654,15 +694,24 @@ class Store:
             existing = db.execute("SELECT id FROM speaker_profile_samples WHERE source_key=?", (source_key,)).fetchone()
             if existing:
                 saved = False
-                if audio_path and reference_text:
+                if audio_path:
                     db.execute(
-                        "UPDATE speaker_profile_samples SET audio_path=?,reference_text=? WHERE id=?",
-                        (audio_path, reference_text, existing["id"]),
+                        "UPDATE speaker_profile_samples SET audio_path=?,reference_text=?,duration_ms=? WHERE id=?",
+                        (audio_path, reference_text, int(duration_ms), existing["id"]),
                     )
             else:
+                usage = db.execute(
+                    "SELECT COUNT(*) AS samples,COALESCE(SUM(duration_ms),0) AS duration_ms FROM speaker_profile_samples WHERE profile_id=?",
+                    (profile_id,),
+                ).fetchone()
+                limits = SETTINGS["voice_profiles"]
+                if usage["samples"] >= limits["max_samples"]:
+                    raise ValueError(f"A voiceprint can contain at most {limits['max_samples']} recordings")
+                if usage["duration_ms"] + int(duration_ms) > limits["max_total_seconds"] * 1000:
+                    raise ValueError(f"Voiceprint recordings can total at most {limits['max_total_seconds']} seconds")
                 db.execute(
-                    "INSERT INTO speaker_profile_samples(id,profile_id,source_key,embedding,created_at,audio_path,reference_text) VALUES(?,?,?,?,?,?,?)",
-                    (str(uuid4()), profile_id, source_key, json.dumps(normalized), now, audio_path, reference_text),
+                    "INSERT INTO speaker_profile_samples(id,profile_id,source_key,embedding,created_at,audio_path,reference_text,duration_ms) VALUES(?,?,?,?,?,?,?,?)",
+                    (str(uuid4()), profile_id, source_key, json.dumps(normalized), now, audio_path, reference_text, int(duration_ms)),
                 )
                 samples = [json.loads(row["embedding"]) for row in db.execute("SELECT embedding FROM speaker_profile_samples WHERE profile_id=?", (profile_id,))]
                 center = self._normalized_embedding([sum(values) / len(samples) for values in zip(*samples)])
@@ -672,6 +721,37 @@ class Store:
                 )
                 saved = True
         return {**self.speaker_profile(profile_id), "added": saved}
+
+    def delete_speaker_profile_sample(self, profile_id, sample_id):
+        """删除一句存档录音，并用剩余样本增量重算声纹中心。"""
+        with self.connect() as db:
+            sample = db.execute(
+                "SELECT audio_path FROM speaker_profile_samples WHERE id=? AND profile_id=?",
+                (sample_id, profile_id),
+            ).fetchone()
+            if not sample:
+                raise ValueError("Voiceprint recording not found")
+            db.execute("DELETE FROM speaker_profile_samples WHERE id=?", (sample_id,))
+            samples = [json.loads(row["embedding"]) for row in db.execute(
+                "SELECT embedding FROM speaker_profile_samples WHERE profile_id=?", (profile_id,)
+            )]
+            center = self._normalized_embedding(
+                [sum(values) / len(samples) for values in zip(*samples)]
+            ) if samples else []
+            db.execute(
+                "UPDATE speaker_profiles SET embedding=?,sample_count=?,updated_at=? WHERE id=?",
+                (json.dumps(center), len(samples), utc_now(), profile_id),
+            )
+        audio_path = sample["audio_path"]
+        if audio_path:
+            path = Path(audio_path)
+            try:
+                path.relative_to(self.speaker_profiles_dir / profile_id)
+            except ValueError:
+                pass
+            else:
+                path.unlink(missing_ok=True)
+        return self.speaker_profile(profile_id)
 
     def speaker_profile_reference(self, profile_id):
         """返回可用于本地语音克隆的最新带文本参考录音。"""
@@ -867,6 +947,11 @@ class Store:
             else None
             for track in ("mic", "system", "mix")
         }
+        exports = self.meetings_dir / meeting_id / "exports"
+        files["playback"].update({
+            "vocals": str(exports / "separated-vocals.wav") if (exports / "separated-vocals.wav").exists() else None,
+            "accompaniment": str(exports / "separated-accompaniment.wav") if (exports / "separated-accompaniment.wav").exists() else None,
+        })
         return files
 
     def _build_playback(self, meeting_id, track):

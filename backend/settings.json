@@ -31,6 +31,10 @@
     "min_duration_on": 0.3,
     "min_duration_off": 0.5
   },
+  "voice_profiles": {
+    "max_samples": 50,
+    "max_total_seconds": 300
+  },
   "meetings": {
     "deleted_retention_days": 30
   },

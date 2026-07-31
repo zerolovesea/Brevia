@@ -31,7 +31,7 @@ from .asr import (
 from .audio_io import read_mono_wav
 from .llm_client import complete
 from .media_tasks import MeetingMediaService
-from .transcript import clock, latest_segments, srt_time, validate_summary
+from .transcript import clock, latest_segments, parse_json_object, srt_time, validate_summary
 from .voice_profiles import VoiceProfileService
 from .config import SETTINGS
 from .storage import Store
@@ -126,8 +126,10 @@ class Worker:
             "meeting.purge": self.purge_meeting,
             "speaker.rename": self.rename_speaker,
             "speaker-profile.list": lambda _: self.store.list_speaker_profiles(),
+            "speaker-profile.samples": lambda value: self.store.list_speaker_profile_samples(value["profile_id"]),
             "speaker-profile.enroll": self.enroll_speaker_profile,
             "speaker-profile.verify": self.verify_speaker_profile,
+            "speaker-profile.sample-delete": self.delete_speaker_profile_sample,
             "speaker-profile.delete": self.delete_speaker_profile,
             "terms.list": lambda _: self.store.list_terms(),
             "terms.save": self.store.save_term,
@@ -154,6 +156,10 @@ class Worker:
         denoiser_id = SETTINGS["live_asr"]["denoiser_model_id"]
         if not self.models.is_ready(denoiser_id):
             self.download_model({"model_id": denoiser_id})
+        try:
+            self.voice_profiles.seed_builtin_profiles()
+        except RuntimeError as error:
+            self.emit("worker.warning", {"code": "builtin_voiceprints_unavailable", "message": str(error)})
         return {
             "meetings": self.store.list_meetings(),
             "models": self.models.list(),
@@ -179,6 +185,12 @@ class Worker:
         require(payload, "title", "language", "streaming_model_id", "refined_model_id")
         if self.active:
             raise ValueError("A meeting is already active")
+        required_models = [payload.get(key) for key in ("streaming_model_id", "refined_model_id", "speaker_segmentation_model_id", "speaker_embedding_model_id", "vad_model_id")]
+        missing_models = [model_id for model_id in required_models if model_id and not self.models.is_ready(model_id)]
+        if payload.get("require_models") and missing_models:
+            label = "Model" if len(missing_models) == 1 else "Models"
+            verb = "is" if len(missing_models) == 1 else "are"
+            raise RuntimeError(f"{label} {', '.join(missing_models)} {verb} not installed")
         meeting = self.store.create_meeting(payload)
         self._prepare_active(meeting)
         self.emit("meeting.started", {"meeting_id": self.active, "meeting": meeting})
@@ -470,6 +482,8 @@ class Worker:
                     }
                 )
         meeting = self.store.finish_meeting(self.active, payload["duration_ms"])
+        self._learn_named_speakers(meeting)
+        meeting = self.store.get_meeting(meeting["id"])
         self.emit("meeting.stopped", {"meeting_id": self.active, "meeting": meeting})
         self.active, self.asr, self.punctuation, self.denoiser, self.language_identifier = None, None, None, None, None
         self.speaker_tracker, self.stream_state, self.recent_finals = None, {}, []
@@ -525,6 +539,22 @@ class Worker:
         self.emit("speaker-profile.updated", {"profile": profile})
         return self.store.get_meeting(payload["meeting_id"])
 
+    def _learn_named_speakers(self, meeting):
+        """在可播放录音落盘后，为人工命名人员补齐句级声纹档案。"""
+        for speaker in meeting["speakers"]:
+            try:
+                profile = self.voice_profiles.learn_from_meeting(meeting, speaker["id"], speaker["name"])
+                self.store.rename_speaker(
+                    meeting["id"], speaker["id"], speaker["name"], bool(speaker["locked"]), profile["id"]
+                )
+                self.emit("speaker-profile.updated", {"profile": profile})
+            except Exception as error:
+                self.emit("worker.warning", {
+                    "meeting_id": meeting["id"],
+                    "code": "speaker_profile_learning_failed",
+                    "message": str(error),
+                })
+
     def enroll_speaker_profile(self, payload):
         """从用户选定的单人语音录音注册或补充本地人员声纹。"""
         require(payload, "name", "path")
@@ -542,6 +572,13 @@ class Worker:
         self.store.delete_speaker_profile(payload["profile_id"])
         self.emit("speaker-profile.deleted", {"profile_id": payload["profile_id"]})
         return {"profile_id": payload["profile_id"], "deleted": True}
+
+    def delete_speaker_profile_sample(self, payload):
+        """删除一句声纹存档，并发布人员声纹已增量更新。"""
+        require(payload, "profile_id", "sample_id")
+        profile = self.store.delete_speaker_profile_sample(payload["profile_id"], payload["sample_id"])
+        self.emit("speaker-profile.updated", {"profile": profile})
+        return profile
 
     def delete_term(self, payload):
         """删除一个术语并返回剩余术语列表。"""
@@ -565,6 +602,12 @@ class Worker:
         """下载模型并将最终状态作为异步事件发送。"""
         try:
             self.models.download(model_id)
+            if model_id == SETTINGS["diarization"]["embedding_model_id"]:
+                try:
+                    self.voice_profiles.seed_builtin_profiles()
+                    self.emit("speaker-profile.updated", {"profiles": self.store.list_speaker_profiles()})
+                except RuntimeError as error:
+                    self.emit("worker.warning", {"code": "builtin_voiceprints_unavailable", "message": str(error)})
         except Exception as error:
             self.emit("model.status", {"model_id": model_id, "status": "failed", "error": str(error)})
         finally:
@@ -663,7 +706,7 @@ class Worker:
             raise ValueError("Supported audio formats: flac, wav, m4a")
         playback = meeting["audio"]["playback"]
         inputs = [playback[name] for name in ("mic", "system") if playback.get(name)]
-        if track in {"mic", "system"}:
+        if track in {"mic", "system", "vocals", "accompaniment"}:
             inputs = [playback.get(track)] if playback.get(track) else []
         if not inputs:
             raise ValueError("The selected audio track is empty")
@@ -814,6 +857,7 @@ class Worker:
         completed = 0
         previous_text = {}
         refined_segments = []
+        refined_segment_ids = set()
         overlap_ms = 1000
         self.store.set_status(meeting["id"], "refining")
         self.emit("refinement.started", {"meeting_id": meeting["id"], "total": total})
@@ -844,9 +888,10 @@ class Worker:
                         speaker = turn["speaker"]
                     if not speaker:
                         speaker = speaker_tracker.assign(current, sample_rate)
+                    segment_id = self._refinement_segment_id(track, start_ms, index, refined_segment_ids)
                     event = {
                         "meeting_id": meeting["id"],
-                        "segment_id": f"{track}-{start_ms}",
+                        "segment_id": segment_id,
                         "version": "postprocess",
                         "text": text,
                         "start_ms": start_ms,
@@ -858,23 +903,36 @@ class Worker:
         except Exception:
             self.store.set_status(meeting["id"], "ready")
             raise
-        self.store.replace_segments(meeting["id"], refined_segments)
+        version, revision = self.store.next_refinement_version(meeting["id"])
+        refined_segments = self.store.replace_segments(meeting["id"], refined_segments, version, revision)
         for event in refined_segments:
             self.emit("refinement.segment", event)
         result = self.store.set_status(meeting["id"], "refined")
+        self._learn_named_speakers(result)
+        result = self.store.get_meeting(meeting["id"])
         self.emit("refinement.ready", {"meeting_id": meeting["id"], "meeting": result})
         return result
 
     def separate_sources(self, payload):
         """从已保存会议生成独立的人声和非人声 WAV，不改动原录音。"""
         require(payload, "meeting_id")
-        event = self.media.separate(self.store.get_meeting(payload["meeting_id"]))
+        meeting = self.store.get_meeting(payload["meeting_id"])
+        self.emit("separation.started", {"meeting_id": meeting["id"], "completed": 0, "total": 100})
+        event = self.media.separate(
+            meeting,
+            lambda completed, stage: self.emit(
+                "separation.progress",
+                {"meeting_id": meeting["id"], "completed": completed, "total": 100, "stage": stage},
+            ),
+        )
         self.emit("meeting.sources-separated", event)
         return event
 
     def synthesize_tts(self, payload):
         """使用已注册人员的本地参考音频生成 ZipVoice 聊天语音。"""
         require(payload, "text", "voice_id", "target_language", "endpoint", "model")
+        if not self.models.is_ready("zipvoice-zh-en"):
+            raise RuntimeError("Model zipvoice-zh-en is not installed")
         payload = {**payload, "language": payload["target_language"]}
         payload["text"] = self.llm_complete(
             payload,
@@ -893,6 +951,15 @@ class Worker:
             for turn in source
             for start in range(turn["start_ms"], turn["end_ms"], maximum_ms)
         ]
+
+    @staticmethod
+    def _refinement_segment_id(track, start_ms, index, existing):
+        """为重叠的离线窗口保留各自的稳定段落 ID。"""
+        segment_id = f"{track}-{start_ms}"
+        if segment_id in existing:
+            segment_id = f"{segment_id}-{index}"
+        existing.add(segment_id)
+        return segment_id
 
     @staticmethod
     def _trim_refinement_overlap(previous, text):
@@ -962,6 +1029,7 @@ class Worker:
         if not payload["consent"]:
             raise ValueError("Transcript sharing was not confirmed")
         meeting = self.store.get_meeting(payload["meeting_id"])
+        self.emit("summary.started", {"meeting_id": meeting["id"], "completed": 10, "total": 100, "stage": "准备逐字稿"})
         segments = latest_segments(meeting["segments"])
         transcript = "\n".join(
             f"{item['id']} [{clock(item['start_ms'])}] {item['speaker_name']}: {item['text']}"
@@ -972,18 +1040,22 @@ class Worker:
             '"action_items":[{"task":"...","owner":"...","due":null,'
             '"evidence_segment_ids":["..."]}],"open_questions":[]}'
         )
-        prompt = payload.get("prompt") or (
-            f"仅基于逐字稿生成会议纪要。只输出符合此结构的 JSON：{schema}\n\n{transcript}"
+        instructions = (payload.get("prompt") or "提炼结论、决定、待办和风险；保留可追溯的来源。").strip()
+        prompt = (
+            f"{instructions}\n\n仅基于下方逐字稿生成会议纪要。"
+            f"只输出符合此结构的 JSON：{schema}\n\n逐字稿：\n{transcript}"
         )
         try:
+            self.emit("summary.progress", {"meeting_id": meeting["id"], "completed": 60, "total": 100, "stage": "正在调用纪要模型"})
             raw = self.llm_complete(payload, prompt, json_mode=True)
-            data = json.loads(raw)
+            data = parse_json_object(raw)
             validate_summary(data, {item["id"] for item in segments})
         except Exception as error:
             raw = locals().get("raw", str(error))
             self.store.save_summary(meeting["id"], None, raw)
             raise ValueError(f"Summary response was saved but could not be parsed: {error}") from error
         self.store.save_summary(meeting["id"], data, raw)
+        self.emit("summary.progress", {"meeting_id": meeting["id"], "completed": 100, "total": 100, "stage": "正在保存纪要"})
         self.emit("summary.ready", {"meeting_id": meeting["id"], "summary": data})
         return data
 
@@ -1047,7 +1119,7 @@ def main():
         except Exception as error:
             worker.response(None, error=error)
             continue
-        if command.get("type") == "meeting.refine":
+        if command.get("type") in {"meeting.refine", "meeting.separate"}:
             threading.Thread(target=respond, args=(command,), daemon=True).start()
         else:
             respond(command)

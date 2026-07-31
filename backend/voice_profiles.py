@@ -1,12 +1,13 @@
 """声纹注册、验证与会议标注的本地服务。"""
 
 import json
+import re
 import shutil
 import tempfile
 import time
 from pathlib import Path
 
-from .audio_io import convert_to_pcm_wav, read_mono_wav
+from .audio_io import convert_to_pcm_wav, read_mono_wav, write_mono_wav
 from .asr import SpeakerTracker
 from .config import SETTINGS
 
@@ -28,18 +29,20 @@ class VoiceProfileService:
         if embedding is None:
             raise ValueError("Voice sample is too short for speaker registration")
         source_key = f"file:{source.resolve()}:{source.stat().st_mtime_ns}:{source.stat().st_size}"
-        profile = self.store.save_speaker_profile_sample(payload["name"], embedding, source_key, payload.get("profile_id"))
         reference_text = (payload.get("reference_text") or "").strip()
-        if reference_text:
-            directory = self.store.speaker_profiles_dir / profile["id"]
-            directory.mkdir(parents=True, exist_ok=True)
-            reference_audio = directory / f"{int(time.time() * 1000)}.wav"
-            # 保存统一采样率版本，既可作嵌入模型输入，也可作 ZipVoice 参考音频。
-            convert_to_pcm_wav(source, reference_audio)
-            profile = self.store.save_speaker_profile_sample(
-                payload["name"], embedding, source_key, profile["id"], str(reference_audio), reference_text
+        profile = self.store.ensure_speaker_profile(payload["name"]) if not payload.get("profile_id") else self.store.speaker_profile(payload["profile_id"])
+        directory = self.store.speaker_profiles_dir / profile["id"]
+        directory.mkdir(parents=True, exist_ok=True)
+        reference_audio = directory / f"{int(time.time() * 1000)}.wav"
+        convert_to_pcm_wav(source, reference_audio)
+        try:
+            return self.store.save_speaker_profile_sample(
+                payload["name"], embedding, source_key, profile["id"], str(reference_audio),
+                reference_text, round(len(samples) * 1000 / sample_rate),
             )
-        return profile
+        except Exception:
+            reference_audio.unlink(missing_ok=True)
+            raise
 
     def verify(self, payload):
         """对临时选择的录音打分；验证音频不会保存到声纹库。"""
@@ -58,27 +61,104 @@ class VoiceProfileService:
         return {"profile_id": profile["id"], "name": profile["name"], "score": score, "verified": score >= SETTINGS["diarization"]["online_similarity_threshold"]}
 
     def learn_from_meeting(self, meeting, speaker_id, name):
-        """仅学习人工改名后的片段，防止未确认的聚类污染声纹中心。"""
+        """按句保存人工命名说话人的录音，并增量更新声纹中心。"""
         profile = self.store.ensure_speaker_profile(name)
         try:
             tracker = SpeakerTracker(self.models, model_id=meeting.get("speaker_embedding_model_id"))
         except RuntimeError:
             return profile
+        archived = self.store.list_speaker_profile_samples(profile["id"])
+        existing = {sample["source_key"] for sample in archived}
+        count = len(archived)
+        total_ms = sum(sample["duration_ms"] for sample in archived)
+        limits = SETTINGS["voice_profiles"]
         cached, latest = {}, {}
         for segment in meeting["segments"]:
-            if segment["speaker"] == speaker_id and segment["version"] in {"live", "postprocess"}:
+            if segment["speaker"] != speaker_id or (segment["version"] != "live" and not segment["version"].startswith("postprocess")):
+                continue
+            previous = latest.get(segment["id"])
+            if previous is None or segment["version"].startswith("postprocess") and (previous["version"] == "live" or segment["revision"] >= previous["revision"]):
                 latest[segment["id"]] = segment
-        for segment in sorted(latest.values(), key=lambda item: item["start_ms"])[:12]:
+        for segment in sorted(latest.values(), key=lambda item: item["start_ms"]):
             path = meeting["audio"]["playback"].get(segment["track"])
             if not path or not Path(path).exists():
                 continue
             cached.setdefault(path, read_mono_wav(path))
             samples, rate = cached[path]
-            clip = samples[round(segment["start_ms"] * rate / 1000):round(segment["end_ms"] * rate / 1000)]
-            embedding = tracker.embedding(clip, rate)
-            if embedding is not None:
-                profile = self.store.save_speaker_profile_sample(name, embedding, f"meeting:{meeting['id']}:{speaker_id}:{segment['track']}:{segment['start_ms']}:{segment['end_ms']}", profile["id"])
+            sentences = self._sentences(segment["text"])
+            characters = sum(len(sentence) for sentence in sentences)
+            cursor = segment["start_ms"]
+            segment_clip = samples[round(segment["start_ms"] * rate / 1000):round(segment["end_ms"] * rate / 1000)]
+            fallback_embedding = tracker.embedding(segment_clip, rate)
+            for index, sentence in enumerate(sentences):
+                end_ms = segment["end_ms"] if index == len(sentences) - 1 else cursor + round(
+                    (segment["end_ms"] - segment["start_ms"]) * len(sentence) / characters
+                )
+                source_key = f"meeting:{meeting['id']}:{speaker_id}:{segment['id']}:{index}"
+                duration_ms = max(0, end_ms - cursor)
+                if source_key in existing:
+                    cursor = end_ms
+                    continue
+                if count >= limits["max_samples"] or total_ms + duration_ms > limits["max_total_seconds"] * 1000:
+                    return profile
+                clip = samples[round(cursor * rate / 1000):round(end_ms * rate / 1000)]
+                embedding = tracker.embedding(clip, rate)
+                if embedding is None:
+                    embedding = fallback_embedding
+                if embedding is None:
+                    cursor = end_ms
+                    continue
+                directory = self.store.speaker_profiles_dir / profile["id"]
+                directory.mkdir(parents=True, exist_ok=True)
+                audio_path = directory / f"{meeting['id']}-{segment['start_ms']}-{index}.wav"
+                write_mono_wav(audio_path, clip, rate)
+                try:
+                    profile = self.store.save_speaker_profile_sample(
+                        name, embedding, source_key, profile["id"], str(audio_path), sentence, duration_ms
+                    )
+                except Exception:
+                    audio_path.unlink(missing_ok=True)
+                    raise
+                existing.add(source_key)
+                count += 1
+                total_ms += duration_ms
+                cursor = end_ms
         return profile
+
+    def seed_builtin_profiles(self):
+        """用随应用发布的双人示例录音提供一男一女两个默认声纹。"""
+        model_id = SETTINGS["diarization"]["embedding_model_id"]
+        if not self.models.is_ready(model_id):
+            return
+        source = Path(__file__).with_name("fixtures") / "example-zh.wav"
+        if not source.is_file():
+            return
+        samples, rate = read_mono_wav(source)
+        tracker = SpeakerTracker(self.models, model_id=model_id)
+        # ponytail: bundled demo speakers seed defaults; replace fixtures when branded voices are recorded.
+        for key, name, start_ms, end_ms, text in (
+            ("builtin:male", "内置男声", 0, 5016, "大家早上好，今天我们确认新用户引导的上线范围。"),
+            ("builtin:female", "内置女声", 5016, 9102, "设计稿已经完成，开发团队周四可以交付测试版本。"),
+        ):
+            if any(sample["source_key"] == key for profile in self.store.list_speaker_profiles() for sample in self.store.list_speaker_profile_samples(profile["id"])):
+                continue
+            clip = samples[round(start_ms * rate / 1000):round(end_ms * rate / 1000)]
+            embedding = tracker.embedding(clip, rate)
+            if embedding is None:
+                continue
+            profile = self.store.ensure_speaker_profile(name)
+            directory = self.store.speaker_profiles_dir / profile["id"]
+            directory.mkdir(parents=True, exist_ok=True)
+            audio_path = directory / f"{key.split(':')[1]}.wav"
+            write_mono_wav(audio_path, clip, rate)
+            self.store.save_speaker_profile_sample(
+                name, embedding, key, profile["id"], str(audio_path), text, end_ms - start_ms
+            )
+
+    @staticmethod
+    def _sentences(text):
+        """按中英文句末标点拆分，未带标点的段落仍作为一句。"""
+        return [part.strip() for part in re.split(r"(?<=[。！？.!?])\s*", text.strip()) if part.strip()]
 
     @staticmethod
     def _samples(source):

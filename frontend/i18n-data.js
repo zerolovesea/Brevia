@@ -262,6 +262,20 @@ Object.entries({
   de: { '从文件夹打开': 'Im Ordner öffnen', '未找到录音文件': 'Aufnahmedatei nicht gefunden', '未找到模型文件': 'Modelldateien nicht gefunden', '准备中': 'Wird vorbereitet', '需要下载以下模型': 'Erforderliche Modelle herunterladen:', '前往模型库': 'Zur Modellbibliothek', '精修': 'Verfeinern' },
   ru: { '从文件夹打开': 'Открыть в папке', '未找到录音文件': 'Файл записи не найден', '未找到模型文件': 'Файлы модели не найдены', '准备中': 'Подготовка', '需要下载以下模型': 'Скачайте необходимые модели:', '前往模型库': 'К библиотеке моделей', '精修': 'Уточнить' },
 }).forEach(([code, labels]) => Object.assign(catalog[code].labels, labels));
+const workflowLabels = {
+  '双轨录音': 'Dual-track audio', '人声轨': 'Vocal track', '非人声轨': 'Non-vocal track',
+  '正在分离人声与非人声': 'Separating vocal and non-vocal tracks', '声源分离已完成': 'Source separation complete',
+  '完成声源分离后，人声与非人声录音会显示在这里。': 'Vocal and non-vocal recordings appear here after source separation.',
+  '开始声源分离': 'Start source separation', '声源分离结果': 'Source-separation result', '请先完成声源分离': 'Run source separation first',
+  '下载': 'Download', '下载中': 'Downloading', '全部下载': 'Download all',
+  '导出会议': 'Export meeting', '导出完成': 'Export complete', '字幕文件': 'Subtitle file',
+  '原录音': 'Original recording', '带说话人和时间戳的逐字稿': 'Transcript with speakers and timestamps',
+  '标准时间轴字幕': 'Standard timed subtitles', '未修改的会议混音': 'Unmodified meeting mix',
+  '内置': 'Built in', '查看录音': 'View recordings', '收起': 'Collapse',
+  '选择录音并添加': 'Choose recording and add', '播放录音': 'Play recording', '未填写文本': 'No transcript',
+};
+Object.values(catalog).forEach((copy) => Object.assign(copy.labels, workflowLabels));
+Object.assign(catalog.zh.labels, Object.fromEntries(Object.keys(workflowLabels).map((key) => [key, key])));
 
 window.BreviaLocaleData = { catalog, appCopy };
 })();

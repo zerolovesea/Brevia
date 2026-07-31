@@ -31,9 +31,10 @@ function renderParticipant({ id, speakerId = id, name, source, avatar, level }) 
 }
 /** Renders a compact label/value list. @param {Array<{label: string, value: string}>} items Status entries. @returns {string} Definition-list markup. */
 function renderStatusList(items) { return `<dl>${items.map(({ label, value }) => `<div><dt>${t(label)}</dt><dd>${value}</dd></div>`).join('')}</dl>`; }
-/** Renders the read-only meeting summary in the detail sidebar. @param {{title: string, sections: object[]}} summary Summary data. @returns {string} Summary markup. */
-function renderMeetingSummary({ title, sections }) {
-  return `<p class="eyebrow">${t('会议摘要')}</p><h2>${escapeHtml(title || t('尚未生成会议摘要'))}</h2>${sections.map((section) => `<section><h3>${escapeHtml(t(section.title))}</h3>${section.items ? section.items.map((item) => `<label><input type="checkbox" /> ${escapeHtml(item.text)}<small>${escapeHtml(item.speaker)}</small></label>`).join('') : `<p>${escapeHtml(section.text)}</p>`}</section>`).join('')}<button class="text-button" data-generate-summary>${t('生成完整会议纪要')} →</button>`;
+/** Renders the clipped meeting-summary preview in the detail sidebar. @param {{title: string, sections: object[], hasFull?: boolean}} summary Summary data. @returns {string} Summary markup. */
+function renderMeetingSummary({ title, sections, hasFull = false }) {
+  const excerpt = (text, limit) => text.length > limit ? `${text.slice(0, limit)}…` : text;
+  return `<div class="summary-preview"><p class="eyebrow">${t('会议摘要')}</p><h2>${escapeHtml(excerpt(title || t('尚未生成会议摘要'), 96))}</h2>${sections.map((section) => `<section><h3>${escapeHtml(t(section.title))}</h3>${section.items ? section.items.slice(0, 2).map((item) => `<label><input type="checkbox" /> ${escapeHtml(item.text)}<small>${escapeHtml(item.speaker)}</small></label>`).join('') : `<p>${escapeHtml(excerpt(section.text, 150))}</p>`}</section>`).join('')}</div><button class="text-button" ${hasFull ? 'data-view-full-summary' : 'data-generate-summary'}>${hasFull ? t('查看完整内容') : t('生成完整会议纪要')} →</button>`;
 }
 /** Populates all data-driven static regions once the page shell is available. @returns {void} */
 function renderStaticViews() {
@@ -44,6 +45,6 @@ function renderStaticViews() {
 }
 /** Refreshes the transcript and summary panes for the selected meeting. @returns {void} */
 function renderMeetingDetail() {
-  document.querySelector('.final-transcript').innerHTML = `<div class="tabbar"><button class="tab active">${t('逐字稿')}</button><button class="tab">${t('摘要')}</button></div><div class="transcript-body">${uiData.detail.transcript.map(renderTranscriptSegment).join('')}</div>`;
+  document.querySelector('.final-transcript').innerHTML = `<div class="tabbar"><button class="tab active" data-detail-tab="transcript">${t('逐字稿')}</button><button class="tab" data-detail-tab="tracks">${t('双轨录音')}</button></div><div class="transcript-body" data-detail-panel="transcript">${uiData.detail.transcript.map(renderTranscriptSegment).join('')}</div><div class="dual-track-panel" data-detail-panel="tracks" hidden></div>`;
   document.querySelector('.notes').innerHTML = renderMeetingSummary(uiData.detail.summary);
 }

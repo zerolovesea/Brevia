@@ -157,6 +157,11 @@ window.breviaClient = window.brevia ? {
     try {
       await this.capture.prepare(inputs);
       meeting = await window.brevia.meeting.start(payload);
+      if (meeting?.model_required) {
+        await this.capture.stop();
+        this.capture = null;
+        return meeting;
+      }
       await this.capture.start(meeting.id);
     } catch (error) {
       await this.capture.stop();

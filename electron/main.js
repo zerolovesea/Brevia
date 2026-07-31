@@ -1,6 +1,6 @@
 const { app, BrowserWindow, desktopCapturer, dialog, ipcMain, safeStorage, session, shell, systemPreferences } = require('electron');
 const { spawn } = require('node:child_process');
-const { copyFile, mkdir, readFile, writeFile } = require('node:fs/promises');
+const { copyFile, mkdir, readFile, rename, writeFile } = require('node:fs/promises');
 const { existsSync } = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
@@ -42,6 +42,15 @@ const audio = z.object({
   flush: z.boolean().optional(),
 });
 const id = z.object({ meeting_id: z.string().uuid() });
+const summaryModelConfig = z.object({
+  name: z.string().trim().min(1).max(64), provider: z.string().trim().min(1).max(64),
+  endpoint: z.string().url(), format: z.enum(['openai', 'claude']).optional(), model: z.string().trim().min(1).max(128),
+  keyReference: z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/).optional(),
+});
+const summaryConfig = z.object({
+  models: z.array(summaryModelConfig).max(20), active: z.number().int().min(-1).max(19),
+  prompt: z.string().trim().min(1).max(4000), sequence: z.number().int().nonnegative(),
+});
 
 class WorkerClient {
   constructor() {
@@ -151,18 +160,19 @@ function handle(channel, schema, type = channel) {
 }
 
 function requiredModels(error) {
-  const match = String(error.message).match(/Models? ([a-z0-9-]+(?:, [a-z0-9-]+)*) (?:is|are) not installed/i);
+  const match = String(error.message).match(/Models? ([a-z0-9.-]+(?:, [a-z0-9.-]+)*) (?:is|are) not installed/i);
   return match ? match[1].split(', ') : null;
 }
 
 function handleModelRequirement(channel, schema, type = channel) {
   ipcMain.handle(channel, async (_, payload = {}) => {
+    const value = schema.parse(payload);
     try {
-      return await worker.request(type, schema.parse(payload));
+      return await worker.request(type, value);
     } catch (error) {
       const models = requiredModels(error);
       if (!models) throw error;
-      worker.sendEvent('model.required', { models });
+      worker.sendEvent('model.required', { models, task: type, payload: value });
       return { model_required: models };
     }
   });
@@ -177,8 +187,30 @@ async function setSecret(reference, value) {
 
 async function getSecret(reference) {
   if (!reference) return '';
-  const encrypted = await readFile(path.join(dataDir(), 'secrets', `${reference}.bin`));
-  return safeStorage.decryptString(encrypted);
+  try {
+    const encrypted = await readFile(path.join(dataDir(), 'secrets', `${reference}.bin`));
+    return safeStorage.decryptString(encrypted);
+  } catch (error) {
+    if (error.code === 'ENOENT') return '';
+    throw error;
+  }
+}
+
+const summaryConfigPath = () => path.join(dataDir(), 'summary-models.json');
+async function readSummaryConfig() {
+  try {
+    return summaryConfig.parse(JSON.parse(await readFile(summaryConfigPath(), 'utf8')));
+  } catch (error) {
+    if (error.code === 'ENOENT') return null;
+    throw error;
+  }
+}
+async function writeSummaryConfig(config) {
+  const target = summaryConfigPath();
+  const temporary = `${target}.${process.pid}.tmp`;
+  await mkdir(path.dirname(target), { recursive: true });
+  await writeFile(temporary, `${JSON.stringify(summaryConfig.parse(config), null, 2)}\n`, { mode: 0o600 });
+  await rename(temporary, target);
 }
 
 function registerIpc() {
@@ -186,7 +218,15 @@ function registerIpc() {
   ipcMain.handle('meeting.start', async (_, payload) => {
     const value = meetingStart.parse(payload);
     const started = Date.now();
-    const result = await worker.request('meeting.start', value);
+    let result;
+    try {
+      result = await worker.request('meeting.start', { ...value, require_models: true });
+    } catch (error) {
+      const models = requiredModels(error);
+      if (!models) throw error;
+      worker.sendEvent('model.required', { models, task: 'meeting.start', payload: value });
+      return { model_required: models };
+    }
     worker.active = { meeting_id: result.id, elapsed: () => Date.now() - started };
     worker.restarts = 0;
     return result;
@@ -216,9 +256,10 @@ function registerIpc() {
     num_speakers: z.number().int().min(-1).max(20).optional(),
     cluster_threshold: z.number().min(0).max(1).optional(),
   }), 'meeting.refine');
-  handle('meeting.separate', id, 'meeting.separate');
+  handleModelRequirement('meeting.separate', id, 'meeting.separate');
   handle('speaker.rename', id.extend({ speaker_id: z.string(), name: z.string().trim().min(1).max(32), locked: z.boolean().optional() }), 'speaker.rename');
   handle('speaker-profile.list', z.object({}), 'speaker-profile.list');
+  handle('speaker-profile.samples', z.object({ profile_id: z.string().uuid() }), 'speaker-profile.samples');
   ipcMain.handle('speaker-profile.enroll', async (_, payload) => {
     const value = z.object({ profile_id: z.string().uuid().optional(), name: z.string().trim().min(1).max(32), reference_text: z.string().trim().max(500).optional() }).parse(payload);
     const selected = await dialog.showOpenDialog({ properties: ['openFile'], filters: [{ name: 'Audio', extensions: ['wav', 'mp3', 'm4a', 'flac', 'aac', 'ogg'] }] });
@@ -232,9 +273,17 @@ function registerIpc() {
     return worker.request('speaker-profile.verify', { ...value, path: selected.filePaths[0] });
   });
   handle('speaker-profile.delete', z.object({ profile_id: z.string().uuid() }), 'speaker-profile.delete');
+  handle('speaker-profile.sample-delete', z.object({ profile_id: z.string().uuid(), sample_id: z.string().uuid() }), 'speaker-profile.sample-delete');
   ipcMain.handle('tts.synthesize', async (_, payload) => {
     const value = z.object({ text: z.string().trim().min(1).max(1000), voice_id: z.string().min(1), target_language: z.enum(['zh', 'en']), provider: z.string(), endpoint: z.string().url(), model: z.string(), format: z.enum(['openai', 'claude']).optional(), key_reference: z.string().optional() }).parse(payload);
-    return worker.request('tts.synthesize', { ...value, api_key: await getSecret(value.key_reference) });
+    try {
+      return await worker.request('tts.synthesize', { ...value, api_key: await getSecret(value.key_reference) });
+    } catch (error) {
+      const models = requiredModels(error);
+      if (!models) throw error;
+      worker.sendEvent('model.required', { models, task: 'tts.synthesize', payload: value });
+      return { model_required: models };
+    }
   });
   handle('models.list', z.object({}), 'models.list');
   handle('models.download', z.object({ model_id: z.string() }), 'models.download');
@@ -247,13 +296,21 @@ function registerIpc() {
     await setSecret(value.reference, value.value);
     return true;
   });
+  ipcMain.handle('summary.config.get', async () => readSummaryConfig());
+  ipcMain.handle('summary.config.save', async (_, payload) => {
+    const config = summaryConfig.parse(payload);
+    await writeSummaryConfig(config);
+    return config;
+  });
   ipcMain.handle('summary.generate', async (_, payload) => {
     const value = id.extend({
       provider: z.string(), endpoint: z.string().url(), model: z.string(),
       format: z.enum(['openai', 'claude']).optional(),
       key_reference: z.string().optional(), consent: z.literal(true), prompt: z.string().optional(),
     }).parse(payload);
-    return worker.request('summary.generate', { ...value, api_key: await getSecret(value.key_reference) });
+    const api_key = await getSecret(value.key_reference);
+    if (!api_key && value.provider !== 'Ollama') return { configuration_required: true };
+    return worker.request('summary.generate', { ...value, api_key });
   });
   ipcMain.handle('translation.generate', async (_, payload) => {
     const value = id.extend({
@@ -272,7 +329,7 @@ function registerIpc() {
     const value = id.extend({
       content: z.enum(['transcript', 'notes', 'audio']).optional(),
       format: z.enum(['md', 'txt', 'json', 'srt', 'docx', 'pdf', 'flac', 'wav', 'm4a']),
-      track: z.enum(['mix', 'mic', 'system']).optional(),
+      track: z.enum(['mix', 'mic', 'system', 'vocals', 'accompaniment']).optional(),
     }).parse(payload);
     const exported = await worker.request('meeting.export', value);
     const destination = await dialog.showSaveDialog({ defaultPath: path.basename(exported.path) });
@@ -312,28 +369,25 @@ function registerIpc() {
 
 async function promptInitialPermissions(window) {
   if (process.platform !== 'darwin') return;
-  const marker = path.join(dataDir(), 'permissions-v2');
-  if (existsSync(marker)) return;
+  const microphone = systemPreferences.getMediaAccessStatus('microphone');
+  const screen = systemPreferences.getMediaAccessStatus('screen');
+  if (microphone !== 'not-determined' && screen !== 'not-determined') return;
   await dialog.showMessageBox(window, {
     type: 'info',
     title: '允许录制会议音频',
     message: 'Brevia 需要麦克风、屏幕与系统音频录制权限。',
-    detail: '接下来会请求麦克风权限，并打开系统设置。授权后请重新打开 Brevia。',
+    detail: '接下来会请求尚未授权的权限；系统会在需要时显示授权提示。',
     buttons: ['继续'],
   });
-  if (systemPreferences.getMediaAccessStatus('microphone') !== 'granted') {
+  if (microphone === 'not-determined') {
     await systemPreferences.askForMediaAccess('microphone');
   }
-  if (systemPreferences.getMediaAccessStatus('screen') !== 'granted') {
+  if (screen === 'not-determined') {
     await desktopCapturer.getSources({
       types: ['screen'],
       thumbnailSize: { width: 1, height: 1 },
     }).catch(() => []);
-    await shell.openExternal(
-      'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'
-    );
   }
-  await writeFile(marker, new Date().toISOString());
 }
 
 function createWindow() {

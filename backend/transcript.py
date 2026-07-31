@@ -1,12 +1,19 @@
 """逐字稿版本选择、时间格式化与摘要证据校验。"""
 
+import json
+
 
 def latest_segments(segments):
     """选择展示/导出版本：精修覆盖实时，人工编辑始终优先。"""
     latest, priority = {}, {"live": 1, "postprocess": 2, "user": 3}
-    base = "postprocess" if any(item["version"] == "postprocess" for item in segments) else "live"
-    for item in (item for item in segments if item["version"] in {base, "user"}):
-        if priority.get(item["version"], 0) >= priority.get(latest.get(item["id"], {}).get("version"), 0):
+    refined = [item for item in segments if item["version"].startswith("postprocess")]
+    revision = max((item["revision"] for item in refined), default=None)
+    base = [item for item in refined if item["revision"] == revision] if revision is not None else [item for item in segments if item["version"] == "live"]
+    for item in [*base, *(item for item in segments if item["version"] == "user")]:
+        item_priority = priority["postprocess"] if item["version"].startswith("postprocess") else priority[item["version"]]
+        previous = latest.get(item["id"], {})
+        previous_priority = priority["postprocess"] if previous.get("version", "").startswith("postprocess") else priority.get(previous.get("version"), 0)
+        if item_priority >= previous_priority:
             latest[item["id"]] = item
     return sorted(latest.values(), key=lambda item: item["start_ms"])
 
@@ -20,6 +27,22 @@ def validate_summary(data, segment_ids):
         evidence = item.get("evidence_segment_ids")
         if not evidence or any(segment not in segment_ids for segment in evidence):
             raise ValueError("Every decision and action item needs valid evidence")
+
+
+def parse_json_object(value):
+    """从纯 JSON 或 Markdown 代码块响应中提取第一个 JSON 对象。"""
+    text = value.strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+    decoder = json.JSONDecoder()
+    for index, character in enumerate(text):
+        if character == "{":
+            try:
+                data, _ = decoder.raw_decode(text[index:])
+                return data
+            except json.JSONDecodeError:
+                continue
+    raise ValueError("Summary response does not contain a JSON object")
 
 
 def clock(milliseconds):

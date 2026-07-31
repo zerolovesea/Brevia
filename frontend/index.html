@@ -17,7 +17,7 @@
           <button class="nav-item" id="recently-deleted" data-view="home"><span>◷</span> 最近删除</button>
           <button class="nav-item" data-view="settings"><span>⚙</span> 设置</button>
         </nav>
-        <aside class="processing-card" id="refinement-progress" hidden aria-live="polite"><p>正在精修</p><strong id="refinement-percent">准备中</strong><div class="processing-bar" aria-hidden="true"><i id="refinement-bar"></i></div></aside>
+        <div class="task-cards" id="task-cards"><aside class="processing-card" id="refinement-progress" hidden aria-live="polite"><header class="task-card-heading"><p>正在精修</p><button class="task-card-close" data-dismiss-task-card type="button" aria-label="关闭">×</button></header><strong id="refinement-percent">准备中</strong><div class="processing-bar" aria-hidden="true"><i id="refinement-bar"></i></div></aside></div>
       </aside>
 
       <section class="workspace">
@@ -35,7 +35,7 @@
 
         <section class="view" id="live-view">
           <header class="live-header"><div class="live-title"><strong id="live-name">产品策略周会</strong><span class="recording"><i></i> 正在录制</span></div><time id="timer">00:00:00</time><button class="pause-button" id="pause">Ⅱ 暂停</button><button class="end-button" id="end-meeting">结束会议</button></header>
-          <div class="live-layout"><section class="transcript" aria-label="实时字幕"><div class="section-heading"><div class="current-caption"><p class="eyebrow">实时字幕</p><h1 id="live-caption" aria-live="polite"></h1><p class="live-caption-translation" id="live-caption-translation" hidden></p></div><button class="translation-toggle" id="translation-toggle" data-enabled="false">译文: 关</button></div><div class="transcript-scroll" id="transcript-scroll"></div><section class="tts-chat" id="tts-chat"></section><button class="latest" id="latest">回到最新</button></section><aside class="live-panel"></aside></div>
+          <div class="live-layout"><section class="transcript" aria-label="实时字幕"><div class="section-heading"><div class="current-caption"><p class="eyebrow">实时字幕</p><h1 id="live-caption" aria-live="polite"></h1><p class="live-caption-translation" id="live-caption-translation" hidden></p></div><button class="translation-toggle" id="translation-toggle" data-enabled="false">译文: 关</button></div><div class="transcript-scroll" id="transcript-scroll"></div><section class="tts-chat" id="tts-chat"></section></section><aside class="live-panel"></aside></div>
         </section>
 
         <section class="view" id="detail-view">
