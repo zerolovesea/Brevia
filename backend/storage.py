@@ -55,7 +55,7 @@ CREATE TABLE IF NOT EXISTS segments (
   text TEXT NOT NULL,
   translation TEXT,
   user_edited INTEGER NOT NULL DEFAULT 0,
-  PRIMARY KEY (id, version)
+  PRIMARY KEY (meeting_id, id, version)
 );
 CREATE INDEX IF NOT EXISTS segments_meeting_time ON segments(meeting_id, start_ms);
 CREATE TABLE IF NOT EXISTS speakers (
@@ -140,6 +140,21 @@ class Store:
         self.db_path = self.root / "brevia.db"
         with self.connect() as db:
             db.executescript(SCHEMA)
+            segment_key = [row["name"] for row in db.execute("PRAGMA table_info(segments)") if row["pk"]]
+            if segment_key == ["id", "version"]:
+                db.executescript(
+                    """CREATE TABLE segments_new (
+                        id TEXT NOT NULL, meeting_id TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
+                        revision INTEGER NOT NULL DEFAULT 0, version TEXT NOT NULL, track TEXT NOT NULL,
+                        start_ms INTEGER NOT NULL, end_ms INTEGER NOT NULL, speaker TEXT NOT NULL, text TEXT NOT NULL,
+                        translation TEXT, user_edited INTEGER NOT NULL DEFAULT 0,
+                        PRIMARY KEY (meeting_id, id, version)
+                    );
+                    INSERT INTO segments_new SELECT id,meeting_id,revision,version,track,start_ms,end_ms,speaker,text,translation,user_edited FROM segments;
+                    DROP TABLE segments;
+                    ALTER TABLE segments_new RENAME TO segments;
+                    CREATE INDEX segments_meeting_time ON segments(meeting_id, start_ms);"""
+                )
             columns = {row["name"] for row in db.execute("PRAGMA table_info(meetings)")}
             if "is_example" not in columns:
                 db.execute("ALTER TABLE meetings ADD COLUMN is_example INTEGER NOT NULL DEFAULT 0")
@@ -323,7 +338,7 @@ class Store:
                     """INSERT OR IGNORE INTO segments
                     (id,meeting_id,version,track,start_ms,end_ms,speaker,text,translation)
                     VALUES(?,?,?,?,?,?,?,?,?)
-                    ON CONFLICT(id,version) DO UPDATE SET
+                    ON CONFLICT(meeting_id,id,version) DO UPDATE SET
                     start_ms=excluded.start_ms,end_ms=excluded.end_ms,
                     speaker=excluded.speaker,text=excluded.text,
                     translation=excluded.translation""",
@@ -540,16 +555,17 @@ class Store:
             int(payload.get("user_edited", False)),
         )
         with self.connect() as db:
-            db.execute(
+            cursor = db.execute(
                 """INSERT INTO segments
                 (id,meeting_id,revision,version,track,start_ms,end_ms,speaker,text,translation,user_edited)
                 VALUES (?,?,?,?,?,?,?,?,?,?,?)
-                ON CONFLICT(id,version) DO UPDATE SET
+                ON CONFLICT(meeting_id,id,version) DO UPDATE SET
                 revision=excluded.revision,end_ms=excluded.end_ms,speaker=excluded.speaker,
                 text=excluded.text,translation=excluded.translation
                 WHERE segments.user_edited=0""",
                 values,
             )
+            return cursor.rowcount > 0
 
     def next_refinement_version(self, meeting_id):
         """为一次新的精修分配版本，保留此前的精修结果。"""
@@ -563,18 +579,18 @@ class Store:
 
     def replace_segments(self, meeting_id, segments, version="postprocess", revision=0):
         """原子替换一次精修生成的全部段落，保留用户编辑版本。"""
-        normalized = []
-        segment_ids = set()
-        for item in segments:
-            base_id = item["segment_id"]
-            segment_id = base_id
-            suffix = 1
-            while segment_id in segment_ids:
-                segment_id = f"{base_id}-{suffix}"
-                suffix += 1
-            segment_ids.add(segment_id)
-            normalized.append({**item, "segment_id": segment_id, "version": version, "revision": revision})
         with self.connect() as db:
+            segment_ids = set()
+            normalized = []
+            for item in segments:
+                base_id = item["segment_id"]
+                segment_id = base_id
+                suffix = 1
+                while segment_id in segment_ids:
+                    segment_id = f"{base_id}-{suffix}"
+                    suffix += 1
+                segment_ids.add(segment_id)
+                normalized.append({**item, "segment_id": segment_id, "version": version, "revision": revision})
             db.execute("DELETE FROM segments WHERE meeting_id=? AND version=?", (meeting_id, version))
             db.executemany(
                 """INSERT INTO segments
@@ -730,7 +746,7 @@ class Store:
                 (sample_id, profile_id),
             ).fetchone()
             if not sample:
-                raise ValueError("Voiceprint recording not found")
+                return self.speaker_profile(profile_id)
             db.execute("DELETE FROM speaker_profile_samples WHERE id=?", (sample_id,))
             samples = [json.loads(row["embedding"]) for row in db.execute(
                 "SELECT embedding FROM speaker_profile_samples WHERE profile_id=?", (profile_id,)
@@ -1038,6 +1054,51 @@ class Store:
             "root": str(self.root),
             "models_root": str(self.models_dir),
         }
+
+    def metrics(self, app_duration_ms=0):
+        """累计本地使用时长并返回会议内容统计。"""
+        with self.connect() as db:
+            row = db.execute("SELECT value FROM app_meta WHERE key='metrics'").fetchone()
+            value = json.loads(row["value"]) if row else {"app_duration_ms": 0}
+            value["app_duration_ms"] += max(0, int(app_duration_ms))
+            db.execute("INSERT OR REPLACE INTO app_meta(key,value) VALUES('metrics',?)", (json.dumps(value),))
+            value["meeting_duration_ms"] = db.execute("SELECT COALESCE(SUM(duration_ms),0) AS total FROM meetings WHERE deleted_at IS NULL").fetchone()["total"]
+            value["subtitle_count"] = db.execute("SELECT COUNT(*) AS total FROM segments").fetchone()["total"]
+            value["subtitle_lines"] = db.execute("SELECT COALESCE(SUM(LENGTH(text)-LENGTH(REPLACE(text, char(10),''))+1),0) AS total FROM segments").fetchone()["total"]
+            summaries = [row["data"] for row in db.execute("SELECT data FROM summaries WHERE data IS NOT NULL")]
+            value["summary_count"] = len(summaries)
+            value["summary_characters"] = sum(len(json.loads(item).get("summary", "")) for item in summaries)
+        return value
+
+    def set_segment_speaker(self, meeting_id, segment_id, speaker, profile_id=None, name=None):
+        with self.connect() as db:
+            db.execute("UPDATE segments SET speaker=?,user_edited=1 WHERE meeting_id=? AND id=?", (speaker, meeting_id, segment_id))
+            db.execute("INSERT INTO speakers(meeting_id,id,name,profile_id,locked) VALUES(?,?,?,?,1) ON CONFLICT(meeting_id,id) DO UPDATE SET name=excluded.name,profile_id=excluded.profile_id,locked=1", (meeting_id, speaker, name or speaker, profile_id))
+
+    def clear_storage_partition(self, partition):
+        """清理一个明确的本地存储分区。"""
+        if partition == "meetings":
+            with self.connect() as db:
+                db.execute("DELETE FROM meetings")
+            shutil.rmtree(self.meetings_dir, ignore_errors=True)
+            self.meetings_dir.mkdir(exist_ok=True)
+        elif partition == "models":
+            shutil.rmtree(self.models_dir, ignore_errors=True)
+            self.models_dir.mkdir(parents=True, exist_ok=True)
+        elif partition == "exports":
+            for directory in self.meetings_dir.glob("*/exports"):
+                shutil.rmtree(directory, ignore_errors=True)
+        else:
+            raise ValueError("Unknown storage partition")
+        return self.usage()
+
+    def rename_speaker_profile(self, profile_id, name):
+        name = name.strip()
+        if not name:
+            raise ValueError("Speaker profile name cannot be empty")
+        with self.connect() as db:
+            db.execute("UPDATE speaker_profiles SET name=?,updated_at=? WHERE id=?", (name, datetime.now(timezone.utc).isoformat(), profile_id))
+        return self.speaker_profile(profile_id)
 
     @staticmethod
     def _meeting(row):

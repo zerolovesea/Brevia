@@ -7,6 +7,7 @@ class AudioCapture {
     this.preview = null;
     this.startedAt = 0;
     this.paused = false;
+    this.stopPromise = null;
   }
 
   async prepare({ mic, system }) {
@@ -126,17 +127,22 @@ class AudioCapture {
   }
 
   async stop() {
-    await this.stopPreview();
-    this.pendingStreams.forEach(({ stream }) => stream.getTracks().forEach((track) => track.stop()));
-    this.pendingStreams = [];
-    this.sources.forEach(({ stream, processor, source }) => {
-      processor.disconnect();
-      source.disconnect();
-      stream.getTracks().forEach((track) => track.stop());
-    });
-    await Promise.all(this.sources.map(({ pending }) => pending()));
-    await Promise.all(this.sources.map(({ context }) => context.close()));
-    this.sources = [];
+    if (this.stopPromise) return this.stopPromise;
+    this.stopPromise = (async () => {
+      const stopTracks = (stream) => stream.getTracks().filter((track) => track.readyState === 'live').forEach((track) => track.stop());
+      await this.stopPreview();
+      this.pendingStreams.forEach(({ stream }) => stopTracks(stream));
+      this.pendingStreams = [];
+      this.sources.forEach(({ stream, processor, source }) => {
+        processor.disconnect();
+        source.disconnect();
+        stopTracks(stream);
+      });
+      await Promise.all(this.sources.map(({ pending }) => pending()));
+      await Promise.all(this.sources.map(({ context }) => context.close()));
+      this.sources = [];
+    })();
+    return this.stopPromise;
   }
 }
 

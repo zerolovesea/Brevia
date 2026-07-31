@@ -34,6 +34,8 @@ const { catalog, appCopy: { stageLabels, themeLabels, updateLabels, modalCopy, m
 let locale = localStorage.getItem('brevia-language') || 'zh';
 let theme = localStorage.getItem('brevia-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
 let activeView = 'home';
+const appOpenedAt = Date.now();
+window.addEventListener('pagehide', () => { void window.brevia?.metrics.record({ app_duration_ms: Date.now() - appOpenedAt }); });
 let activeLibraryNav = 'all-meetings';
 const liveSpeakers = new Map();
 const liveSegments = new Map();
@@ -77,6 +79,7 @@ let presetVoices = [];
 let currentMeetingDetail = null;
 let expandedSpeakerProfileId = null;
 let addingSampleProfileId = null;
+let editingSpeakerProfileId = null;
 const speakerSamples = new Map();
 const speakerSampleAudio = new Audio();
 speakerSampleAudio.addEventListener('ended', () => {
@@ -169,6 +172,22 @@ settingsModal.hidden = true;
 settingsModal.innerHTML = '<section class="modal-panel" role="dialog" aria-modal="true"><header class="modal-head"><div class="modal-title"><h2></h2><p></p></div><button class="modal-close" type="button" aria-label="Close">×</button></header><div class="modal-body"></div></section>';
 document.body.append(settingsModal);
 let activeModal;
+let editingSegmentSpeakerId;
+let advancedSettings;
+const advancedSettingCopy = {
+  zh: { sections: { audio: '音频', asr: '识别与端点检测', live_asr: '实时识别', punctuation: '标点恢复', diarization: '说话人分离', voice_profiles: '声纹库', meetings: '会议', llm: '纪要模型' }, fields: { sample_rate: '采样率（Hz）', chunk_seconds: '音频分块时长（秒）', endpoint_rule1_silence: '端点规则 1 静音时长（秒）', endpoint_rule2_silence: '端点规则 2 静音时长（秒）', maximum_utterance_seconds: '单句最长时长（秒）', refined_window_seconds: '精修窗口时长（秒）', auto_english_model_id: '英文识别模型', denoiser_model_id: '实时降噪模型', microphone_target_rms: '麦克风目标响度', microphone_minimum_rms: '麦克风最小响度', microphone_max_gain: '麦克风最大增益', microphone_peak: '麦克风峰值限制', english_model_id: '英文标点模型', chinese_model_id: '中英文标点模型', segmentation_model_id: '说话区间模型', embedding_model_id: '声纹嵌入模型', cluster_threshold: '聚类阈值', online_similarity_threshold: '在线匹配阈值', minimum_embedding_seconds: '最短声纹语音（秒）', num_speakers: '固定说话人数（-1 为自动）', min_duration_on: '最短说话时长（秒）', min_duration_off: '最短静音间隔（秒）', max_samples: '每人最大录音条数', max_total_seconds: '每人最大录音时长（秒）', deleted_retention_days: '删除记录保留天数', timeout_seconds: '模型请求超时（秒）' }, hint: '用于本地运行配置。' },
+  en: { sections: { audio: 'Audio', asr: 'Recognition and endpointing', live_asr: 'Live recognition', punctuation: 'Punctuation', diarization: 'Speaker diarization', voice_profiles: 'Voiceprints', meetings: 'Meetings', llm: 'Summary model' }, fields: { sample_rate: 'Sample rate (Hz)', chunk_seconds: 'Audio chunk duration (s)', endpoint_rule1_silence: 'Endpoint rule 1 silence (s)', endpoint_rule2_silence: 'Endpoint rule 2 silence (s)', maximum_utterance_seconds: 'Maximum utterance duration (s)', refined_window_seconds: 'Refinement window (s)', auto_english_model_id: 'English recognition model', denoiser_model_id: 'Live denoiser model', microphone_target_rms: 'Microphone target loudness', microphone_minimum_rms: 'Microphone minimum loudness', microphone_max_gain: 'Microphone maximum gain', microphone_peak: 'Microphone peak limit', english_model_id: 'English punctuation model', chinese_model_id: 'Chinese-English punctuation model', segmentation_model_id: 'Speech-segmentation model', embedding_model_id: 'Voice embedding model', cluster_threshold: 'Clustering threshold', online_similarity_threshold: 'Online matching threshold', minimum_embedding_seconds: 'Minimum voiceprint audio (s)', num_speakers: 'Fixed speaker count (-1 = auto)', min_duration_on: 'Minimum speech duration (s)', min_duration_off: 'Minimum silence gap (s)', max_samples: 'Maximum recordings per person', max_total_seconds: 'Maximum recording duration per person (s)', deleted_retention_days: 'Deleted-record retention (days)', timeout_seconds: 'Model request timeout (s)' }, hint: 'Used by the local runtime.' },
+  es: { sections: { audio: 'Audio', asr: 'Reconocimiento y detección de final', live_asr: 'Reconocimiento en vivo', punctuation: 'Puntuación', diarization: 'Separación de hablantes', voice_profiles: 'Huellas de voz', meetings: 'Reuniones', llm: 'Modelo de resumen' }, fields: { sample_rate: 'Frecuencia de muestreo (Hz)', chunk_seconds: 'Duración del bloque de audio (s)', endpoint_rule1_silence: 'Silencio de regla de final 1 (s)', endpoint_rule2_silence: 'Silencio de regla de final 2 (s)', maximum_utterance_seconds: 'Duración máxima de intervención (s)', refined_window_seconds: 'Ventana de refinamiento (s)', auto_english_model_id: 'Modelo de reconocimiento en inglés', denoiser_model_id: 'Modelo de reducción de ruido en vivo', microphone_target_rms: 'Volumen objetivo del micrófono', microphone_minimum_rms: 'Volumen mínimo del micrófono', microphone_max_gain: 'Ganancia máxima del micrófono', microphone_peak: 'Límite de pico del micrófono', english_model_id: 'Modelo de puntuación en inglés', chinese_model_id: 'Modelo de puntuación chino-inglés', segmentation_model_id: 'Modelo de segmentación de voz', embedding_model_id: 'Modelo de huella de voz', cluster_threshold: 'Umbral de agrupación', online_similarity_threshold: 'Umbral de coincidencia en línea', minimum_embedding_seconds: 'Audio mínimo para huella de voz (s)', num_speakers: 'Número fijo de hablantes (-1 = auto)', min_duration_on: 'Duración mínima de habla (s)', min_duration_off: 'Pausa mínima (s)', max_samples: 'Máximas grabaciones por persona', max_total_seconds: 'Duración máxima por persona (s)', deleted_retention_days: 'Retención de eliminados (días)', timeout_seconds: 'Tiempo de espera de solicitud (s)' }, hint: 'Se usa en la ejecución local.' },
+  ja: { sections: { audio: '音声', asr: '認識と終端検出', live_asr: 'ライブ認識', punctuation: '句読点', diarization: '話者分離', voice_profiles: '声紋', meetings: '会議', llm: '要約モデル' }, fields: { sample_rate: 'サンプリングレート（Hz）', chunk_seconds: '音声チャンク長（秒）', endpoint_rule1_silence: '終端ルール 1 の無音（秒）', endpoint_rule2_silence: '終端ルール 2 の無音（秒）', maximum_utterance_seconds: '発話の最大長（秒）', refined_window_seconds: '高精度化ウィンドウ（秒）', auto_english_model_id: '英語認識モデル', denoiser_model_id: 'ライブノイズ除去モデル', microphone_target_rms: 'マイク目標音量', microphone_minimum_rms: 'マイク最小音量', microphone_max_gain: 'マイク最大ゲイン', microphone_peak: 'マイクピーク上限', english_model_id: '英語句読点モデル', chinese_model_id: '中英句読点モデル', segmentation_model_id: '音声区間モデル', embedding_model_id: '声紋埋め込みモデル', cluster_threshold: 'クラスタリング閾値', online_similarity_threshold: 'オンライン一致閾値', minimum_embedding_seconds: '声紋用の最短音声（秒）', num_speakers: '固定話者数（-1 = 自動）', min_duration_on: '最短発話時間（秒）', min_duration_off: '最短無音間隔（秒）', max_samples: '1 人あたりの最大録音数', max_total_seconds: '1 人あたりの最大録音時間（秒）', deleted_retention_days: '削除済み記録の保持日数', timeout_seconds: 'モデル要求タイムアウト（秒）' }, hint: 'ローカル実行に使用します。' },
+  ko: { sections: { audio: '오디오', asr: '인식 및 종점 감지', live_asr: '실시간 인식', punctuation: '문장 부호', diarization: '화자 분리', voice_profiles: '음성 지문', meetings: '회의', llm: '요약 모델' }, fields: { sample_rate: '샘플링 레이트(Hz)', chunk_seconds: '오디오 청크 길이(초)', endpoint_rule1_silence: '종점 규칙 1 무음(초)', endpoint_rule2_silence: '종점 규칙 2 무음(초)', maximum_utterance_seconds: '최대 발화 길이(초)', refined_window_seconds: '정교화 창(초)', auto_english_model_id: '영어 인식 모델', denoiser_model_id: '실시간 잡음 제거 모델', microphone_target_rms: '마이크 목표 음량', microphone_minimum_rms: '마이크 최소 음량', microphone_max_gain: '마이크 최대 게인', microphone_peak: '마이크 피크 제한', english_model_id: '영어 문장 부호 모델', chinese_model_id: '중영 문장 부호 모델', segmentation_model_id: '음성 구간 모델', embedding_model_id: '음성 지문 임베딩 모델', cluster_threshold: '클러스터링 임계값', online_similarity_threshold: '온라인 일치 임계값', minimum_embedding_seconds: '최소 음성 지문 오디오(초)', num_speakers: '고정 화자 수(-1 = 자동)', min_duration_on: '최소 발화 시간(초)', min_duration_off: '최소 무음 간격(초)', max_samples: '1인당 최대 녹음 수', max_total_seconds: '1인당 최대 녹음 시간(초)', deleted_retention_days: '삭제 기록 보관 기간(일)', timeout_seconds: '모델 요청 시간 제한(초)' }, hint: '로컬 실행에 사용됩니다.' },
+  fr: { sections: { audio: 'Audio', asr: 'Reconnaissance et détection de fin', live_asr: 'Reconnaissance en direct', punctuation: 'Ponctuation', diarization: 'Séparation des locuteurs', voice_profiles: 'Empreintes vocales', meetings: 'Réunions', llm: 'Modèle de résumé' }, fields: { sample_rate: 'Fréquence d’échantillonnage (Hz)', chunk_seconds: 'Durée du bloc audio (s)', endpoint_rule1_silence: 'Silence règle de fin 1 (s)', endpoint_rule2_silence: 'Silence règle de fin 2 (s)', maximum_utterance_seconds: 'Durée maximale de parole (s)', refined_window_seconds: 'Fenêtre d’affinage (s)', auto_english_model_id: 'Modèle de reconnaissance anglaise', denoiser_model_id: 'Modèle de débruitage en direct', microphone_target_rms: 'Volume cible du microphone', microphone_minimum_rms: 'Volume minimal du microphone', microphone_max_gain: 'Gain maximal du microphone', microphone_peak: 'Limite de crête du microphone', english_model_id: 'Modèle de ponctuation anglaise', chinese_model_id: 'Modèle de ponctuation chinois-anglais', segmentation_model_id: 'Modèle de segmentation de parole', embedding_model_id: 'Modèle d’empreinte vocale', cluster_threshold: 'Seuil de regroupement', online_similarity_threshold: 'Seuil de correspondance en ligne', minimum_embedding_seconds: 'Audio minimal pour empreinte (s)', num_speakers: 'Nombre fixe de locuteurs (-1 = auto)', min_duration_on: 'Durée minimale de parole (s)', min_duration_off: 'Pause minimale (s)', max_samples: 'Enregistrements maximum par personne', max_total_seconds: 'Durée maximale par personne (s)', deleted_retention_days: 'Conservation des éléments supprimés (jours)', timeout_seconds: 'Délai de requête du modèle (s)' }, hint: 'Utilisé par l’exécution locale.' },
+  de: { sections: { audio: 'Audio', asr: 'Erkennung und Endpunkterkennung', live_asr: 'Live-Erkennung', punctuation: 'Zeichensetzung', diarization: 'Sprechertrennung', voice_profiles: 'Stimmabdrücke', meetings: 'Besprechungen', llm: 'Zusammenfassungsmodell' }, fields: { sample_rate: 'Abtastrate (Hz)', chunk_seconds: 'Audioblockdauer (s)', endpoint_rule1_silence: 'Stille für Endpunktregel 1 (s)', endpoint_rule2_silence: 'Stille für Endpunktregel 2 (s)', maximum_utterance_seconds: 'Maximale Äußerungsdauer (s)', refined_window_seconds: 'Nachbearbeitungsfenster (s)', auto_english_model_id: 'Englisches Erkennungsmodell', denoiser_model_id: 'Live-Entrauschungsmodell', microphone_target_rms: 'Mikrofon-Ziellautstärke', microphone_minimum_rms: 'Mikrofon-Mindestlautstärke', microphone_max_gain: 'Maximale Mikrofonverstärkung', microphone_peak: 'Mikrofon-Peakgrenze', english_model_id: 'Englisches Zeichensetzungsmodell', chinese_model_id: 'Chinesisch-englisches Zeichensetzungsmodell', segmentation_model_id: 'Sprachsegmentierungsmodell', embedding_model_id: 'Stimmabdruckmodell', cluster_threshold: 'Cluster-Schwellenwert', online_similarity_threshold: 'Online-Abgleichschwelle', minimum_embedding_seconds: 'Minimales Stimmabdruck-Audio (s)', num_speakers: 'Feste Sprecherzahl (-1 = auto)', min_duration_on: 'Minimale Sprechdauer (s)', min_duration_off: 'Minimale Stille (s)', max_samples: 'Maximale Aufnahmen pro Person', max_total_seconds: 'Maximale Aufnahmezeit pro Person (s)', deleted_retention_days: 'Aufbewahrung gelöschter Einträge (Tage)', timeout_seconds: 'Zeitüberschreitung der Modellanfrage (s)' }, hint: 'Wird von der lokalen Laufzeit verwendet.' },
+  ru: { sections: { audio: 'Аудио', asr: 'Распознавание и определение конца', live_asr: 'Распознавание в реальном времени', punctuation: 'Пунктуация', diarization: 'Разделение говорящих', voice_profiles: 'Голосовые отпечатки', meetings: 'Встречи', llm: 'Модель сводки' }, fields: { sample_rate: 'Частота дискретизации (Гц)', chunk_seconds: 'Длительность аудиоблока (с)', endpoint_rule1_silence: 'Тишина правила конца 1 (с)', endpoint_rule2_silence: 'Тишина правила конца 2 (с)', maximum_utterance_seconds: 'Максимальная длительность реплики (с)', refined_window_seconds: 'Окно обработки (с)', auto_english_model_id: 'Модель английского распознавания', denoiser_model_id: 'Модель шумоподавления в реальном времени', microphone_target_rms: 'Целевая громкость микрофона', microphone_minimum_rms: 'Минимальная громкость микрофона', microphone_max_gain: 'Максимальное усиление микрофона', microphone_peak: 'Ограничение пика микрофона', english_model_id: 'Модель английской пунктуации', chinese_model_id: 'Модель китайско-английской пунктуации', segmentation_model_id: 'Модель сегментации речи', embedding_model_id: 'Модель голосового отпечатка', cluster_threshold: 'Порог кластеризации', online_similarity_threshold: 'Порог онлайн-сопоставления', minimum_embedding_seconds: 'Минимальное аудио для отпечатка (с)', num_speakers: 'Фиксированное число говорящих (-1 = авто)', min_duration_on: 'Минимальная длительность речи (с)', min_duration_off: 'Минимальная пауза (с)', max_samples: 'Максимум записей на человека', max_total_seconds: 'Максимальная длительность на человека (с)', deleted_retention_days: 'Хранение удалённых записей (дни)', timeout_seconds: 'Тайм-аут запроса модели (с)' }, hint: 'Используется локальным запуском.' },
+};
+function renderAdvancedSettings(settings) {
+  const copy = advancedSettingCopy[locale] || advancedSettingCopy.en;
+  return Object.entries(settings).map(([section, values]) => `<section class="advanced-settings-section"><h3>${escapeHtml(copy.sections[section] || section)}</h3>${Object.entries(values).map(([key, value]) => `<label><span><b>${escapeHtml(copy.fields[key] || key)}</b><small>${escapeHtml(copy.hint)}</small></span><input name="${escapeHtml(`${section}.${key}`)}" type="${typeof value === 'number' ? 'number' : 'text'}" step="any" value="${escapeHtml(String(value))}" /></label>`).join('')}</section>`).join('');
+}
 const modelDownloads = new Map();
 let termEntries = modalCopy.zh.terms.items.map(([name, detail]) => ({ name, detail }));
 let editingTermIndex = null;
@@ -259,6 +278,40 @@ const prepareModelChoices = {
   'active-vad-model': [['silero-vad', 'Silero VAD'], ['ten-vad', 'TEN-VAD']],
   'active-refined-model': [['', null], ['qwen3-asr-0.6b-int8', 'Qwen3-ASR'], ['qwen3-asr-1.7b-int8', 'Qwen3-ASR 1.7B int8'], ['sensevoice-int8', 'SenseVoice int8'], ['whisper-turbo', 'Whisper Turbo']],
 };
+const languageModelDefaults = {
+  zh: { streaming: 'zipformer-zh-xlarge-streaming-int8', refined: 'qwen3-asr-0.6b-int8', diarization: 'pyannote-segmentation-3.0|eres2net-base-3dspeaker-zh' },
+  en: { streaming: 'zipformer-en-streaming-int8', refined: 'whisper-turbo', diarization: 'pyannote-segmentation-3.0|nemo-titanet-small-en' },
+  ko: { streaming: 'zipformer-ko-streaming-int8', refined: 'whisper-turbo', diarization: 'pyannote-segmentation-3.0|nemo-titanet-small-en' },
+  fr: { streaming: 'zipformer-fr-streaming-int8', refined: 'whisper-turbo', diarization: 'pyannote-segmentation-3.0|nemo-titanet-small-en' },
+  default: { streaming: 'zipformer-multilingual-streaming', refined: 'whisper-turbo', diarization: 'pyannote-segmentation-3.0|nemo-titanet-small-en' },
+};
+const preferredModelsForLanguage = (language) => languageModelDefaults[language] || languageModelDefaults.default;
+const compatibleStreamingModels = (language) => {
+  const supported = {
+    zh: new Set(['', 'zipformer-zh-xlarge-streaming-int8', 'zipformer-zh-streaming-int8', 'zipformer-zh-en-streaming-int8', 'zipformer-multilingual-streaming', 'paraformer-zh-en-int8', 'sensevoice-int8']),
+    en: new Set(['', 'zipformer-en-streaming-int8', 'zipformer-zh-en-streaming-int8', 'zipformer-multilingual-streaming', 'paraformer-zh-en-int8', 'sensevoice-int8']),
+    ko: new Set(['', 'zipformer-ko-streaming-int8', 'zipformer-multilingual-streaming', 'sensevoice-int8']),
+    fr: new Set(['', 'zipformer-fr-streaming-int8', 'zipformer-multilingual-streaming', 'sensevoice-int8']),
+  };
+  const allowed = supported[language] || new Set(['', 'zipformer-multilingual-streaming', 'sensevoice-int8']);
+  return prepareModelChoices['active-streaming-model'].filter(([id]) => allowed.has(id));
+};
+function setPrepareModel(id, model) {
+  const value = document.querySelector(`#${id}`);
+  const [first, second] = model.split('|');
+  if (id === 'active-streaming-model') prepareForm.dataset.streamingModel = first;
+  if (id === 'active-diarization-model') { prepareForm.dataset.segmentationModel = first; prepareForm.dataset.embeddingModel = second; }
+  if (id === 'active-refined-model') prepareForm.dataset.refinedModel = first;
+  if (id === 'active-vad-model') prepareForm.dataset.vadModel = first;
+  value.dataset.model = model;
+  value.textContent = prepareModelChoices[id].find(([choice]) => choice === model)?.[1] || t('自动匹配');
+}
+function applyLanguageModelDefaults(language) {
+  const models = preferredModelsForLanguage(language);
+  setPrepareModel('active-streaming-model', models.streaming);
+  setPrepareModel('active-refined-model', models.refined);
+  setPrepareModel('active-diarization-model', models.diarization);
+}
 const prepareModelCard = document.querySelector('.model-card');
 prepareModelCard.querySelector('dl').insertAdjacentHTML('beforeend', '<div><dt>VAD 模型</dt><dd id="active-vad-model" data-model="silero-vad">Silero VAD</dd></div>');
 const modelPicker = document.createElement('div');
@@ -268,19 +321,13 @@ prepareModelCard.append(modelPicker);
 prepareModelCard.addEventListener('click', (event) => {
   const choice = event.target.closest('[data-model-picker-choice]');
   if (!choice) return;
-  const value = document.querySelector(`#${choice.dataset.modelPickerChoice}`);
-  const [first, second] = choice.dataset.value.split('|');
-  if (value.id === 'active-streaming-model') prepareForm.dataset.streamingModel = first;
-  if (value.id === 'active-diarization-model') { prepareForm.dataset.segmentationModel = first; prepareForm.dataset.embeddingModel = second; }
-  if (value.id === 'active-refined-model') prepareForm.dataset.refinedModel = first;
-  if (value.id === 'active-vad-model') prepareForm.dataset.vadModel = first;
-  value.dataset.model = choice.dataset.value;
-  value.textContent = choice.textContent;
+  setPrepareModel(choice.dataset.modelPickerChoice, choice.dataset.value);
   modelPicker.hidden = true;
 });
 prepareModelCard.addEventListener('dblclick', (event) => {
   const value = event.target.closest('dd[id]');
-  const choices = value && prepareModelChoices[value.id];
+  const language = new FormData(prepareForm).get('meeting-language') || 'auto';
+  const choices = value && (value.id === 'active-streaming-model' ? compatibleStreamingModels(language) : prepareModelChoices[value.id]);
   if (!choices) return;
   modelPicker.innerHTML = choices.map(([id, name]) => `<button type="button" data-model-picker-choice="${value.id}" data-value="${id}">${name || t('自动匹配')}</button>`).join('');
   modelPicker.style.top = `${value.offsetTop + value.offsetHeight + 4}px`;
@@ -480,6 +527,7 @@ prepareForm.addEventListener('click', (event) => {
   select.querySelector('.flow-select-toggle').firstChild.nodeValue = choice.textContent;
   select.querySelector('.flow-select-options').hidden = true;
   select.querySelector('.flow-select-toggle').setAttribute('aria-expanded', 'false');
+  if (choice.dataset.flowSelectChoice === 'meeting-language') applyLanguageModelDefaults(choice.dataset.value);
 });
 /** Produces the safe-to-display subset of the active model configuration. @returns {string} Formatted JSON without API keys. */
 function renderConfigPreview() {
@@ -505,7 +553,8 @@ function renderSpeakerProfileModal() {
     const samples = speakerSamples.get(profile.id) || [];
     const expanded = expandedSpeakerProfileId === profile.id;
     const adding = addingSampleProfileId === profile.id;
-    return `<section class="speaker-profile-entry"><div class="speaker-profile-head"><span><b>${escapeHtml(profile.name)}</b><small>${profile.built_in ? `${t('内置')} · ` : ''}${profile.sample_count}/50 ${copy.samples} · ${formatMeetingTime(profile.duration_ms || 0)} / 05:00</small></span><span><button class="secondary" data-toggle-speaker-samples="${profile.id}" type="button">${expanded ? t('收起') : t('查看录音')}</button><button class="secondary" data-add-speaker-sample="${profile.id}" type="button">${copy.addSample}</button><button class="secondary" data-verify-speaker-profile="${profile.id}" type="button">${voiceCopy.verify}</button>${profile.built_in ? '' : `<button class="model-delete" data-delete-speaker-profile="${profile.id}" type="button">${copy.remove}</button>`}</span></div>${adding ? `<form class="speaker-sample-form" data-speaker-profile="${profile.id}"><label>${voiceCopy.reference}<input name="reference_text" maxlength="500" required autofocus /></label><button class="modal-action" type="submit">${t('选择录音并添加')}</button><button class="secondary" data-cancel-speaker-sample type="button">${t('取消')}</button></form>` : ''}${expanded ? `<div class="speaker-sample-list">${samples.length ? samples.map((sample) => `<article><button class="sample-play" data-play-speaker-sample="${sample.id}" type="button" aria-label="${t('播放录音')}">▶</button><span><b>${escapeHtml(sample.reference_text || t('未填写文本'))}</b><small>${formatMeetingTime(sample.duration_ms || 0)}</small></span>${profile.built_in ? '' : `<button class="model-delete" data-delete-speaker-sample="${sample.id}" data-profile-id="${profile.id}" type="button">${copy.remove}</button>`}</article>`).join('') : `<p>${copy.empty}</p>`}</div>` : ''}</section>`;
+    const name = editingSpeakerProfileId === profile.id ? `<form class="speaker-profile-rename-form" data-profile-id="${profile.id}"><input name="name" value="${escapeHtml(profile.name)}" maxlength="32" required autofocus /></form>` : `<b data-rename-speaker-profile="${profile.id}" title="双击修改名称">${escapeHtml(profile.name)}</b>`;
+    return `<section class="speaker-profile-entry"><div class="speaker-profile-head"><span>${name}<small>${profile.built_in ? `${t('内置')} · ` : ''}${profile.sample_count}/50 ${copy.samples} · ${formatMeetingTime(profile.duration_ms || 0)} / 05:00</small></span><span><button class="secondary" data-toggle-speaker-samples="${profile.id}" type="button">${expanded ? t('收起') : t('查看录音')}</button><button class="secondary" data-add-speaker-sample="${profile.id}" type="button">${copy.addSample}</button><button class="secondary" data-verify-speaker-profile="${profile.id}" type="button">${voiceCopy.verify}</button>${profile.built_in ? '' : `<button class="model-delete" data-delete-speaker-profile="${profile.id}" type="button">${copy.remove}</button>`}</span></div>${adding ? `<form class="speaker-sample-form" data-speaker-profile="${profile.id}"><label>${voiceCopy.reference}<input name="reference_text" maxlength="500" required autofocus /></label><button class="modal-action" type="submit">${t('选择录音并添加')}</button><button class="secondary" data-cancel-speaker-sample type="button">${t('取消')}</button></form>` : ''}${expanded ? `<div class="speaker-sample-list">${samples.length ? samples.map((sample) => `<article><button class="sample-play" data-play-speaker-sample="${sample.id}" type="button" aria-label="${t('播放录音')}">▶</button><span><b>${escapeHtml(sample.reference_text || t('未填写文本'))}</b><small>${formatMeetingTime(sample.duration_ms || 0)}</small></span>${profile.built_in ? '' : `<button class="model-delete" data-delete-speaker-sample="${sample.id}" data-profile-id="${profile.id}" type="button">${copy.remove}</button>`}</article>`).join('') : `<p>${copy.empty}</p>`}</div>` : ''}</section>`;
   }).join('')}</div>`;
 }
 function renderExportModal() {
@@ -530,11 +579,23 @@ function renderSummaryDetailModal() {
 }
 /** Renders one settings modal. @param {'models'|'terms'|'storage'|'summary-model'} kind Requested modal. @returns {void} */
 function renderModal(kind) {
+  if (kind === 'advanced-settings') {
+    settingsModal.querySelector('h2').textContent = t('进阶设置');
+    settingsModal.querySelector('.modal-title p').textContent = t('修改后会立即应用于下一次会议与精修。');
+    settingsModal.querySelector('.modal-body').innerHTML = `<form class="advanced-settings-form"><p>${t('可修改模型、端点静音、说话人分离及 sherpa-onnx 运行参数。')}</p>${renderAdvancedSettings(advancedSettings?.settings || {})}<div class="modal-form-actions"><button class="modal-action" type="submit">${t('确定')}</button><button class="secondary" data-reset-advanced-settings type="button">${t('恢复默认')}</button></div></form>`;
+    return;
+  }
   if (kind === 'summary-model') { renderSummaryModelModal(); return; }
   if (kind === 'speaker-profiles') { renderSpeakerProfileModal(); return; }
   if (kind === 'export') { renderExportModal(); return; }
   if (kind === 'summary-detail') { renderSummaryDetailModal(); return; }
   const copy = (modalCopy[locale] || modalCopy.en)[kind];
+  if (kind === 'storage') {
+    settingsModal.querySelector('h2').textContent = copy.title;
+    settingsModal.querySelector('.modal-title p').textContent = copy.intro;
+    settingsModal.querySelector('.modal-body').innerHTML = `<div class="storage-list">${copy.items.map(([name, size], index) => `<section><span><b>${escapeHtml(name)}</b><small>${escapeHtml(size)}</small></span><span><button class="secondary" data-open-storage="${['meetings', 'models', 'exports'][index]}" type="button">${t('从文件夹打开')}</button><button class="model-delete" data-clear-storage="${['meetings', 'models', 'exports'][index]}" type="button">${t('清空数据')}</button></span></section>`).join('')}</div>`;
+    return;
+  }
   const modelStageOrder = new Map();
   (copy.items || []).forEach(([stage], index) => { if (!modelStageOrder.has(stage)) modelStageOrder.set(stage, index); });
   const items = kind === 'models' ? copy.items.map((item, sourceIndex) => ({ item, sourceIndex })).sort((a, b) => modelStageOrder.get(a.item[0]) - modelStageOrder.get(b.item[0])) : kind === 'terms' ? termEntries.map(({ name, detail }) => [name, detail === '自定义术语' ? t(detail) : detail]) : copy.items;
@@ -559,8 +620,24 @@ function renderModal(kind) {
 }
 /** Opens and focuses a settings modal. @param {'models'|'terms'|'storage'|'summary-model'} kind Requested modal. @returns {void} */
 let modalDismissTimer;
-function openModal(kind) {
+let confirmationAction;
+function openConfirmation(title, detail, action) {
+  confirmationAction = action;
+  activeModal = 'confirmation';
+  settingsModal.querySelector('h2').textContent = title;
+  settingsModal.querySelector('.modal-title p').textContent = detail;
+  settingsModal.querySelector('.modal-body').innerHTML = `<div class="confirmation-actions"><p>${escapeHtml(detail)}</p><button class="modal-action modal-danger" data-confirm-action type="button">${t('确认')}</button><button class="secondary" data-cancel-confirmation type="button">${t('取消')}</button></div>`;
+  settingsModal.classList.remove('modal-leave');
+  settingsModal.hidden = false;
+  requestAnimationFrame(() => settingsModal.classList.add('modal-enter'));
+  document.body.classList.add('modal-open');
+  settingsModal.querySelector('[data-cancel-confirmation]').focus();
+}
+async function openModal(kind) {
   clearTimeout(modalDismissTimer);
+  if (kind === 'advanced-settings') {
+    try { advancedSettings = await window.brevia?.advancedSettings.get() || { settings: {}, defaults: {} }; } catch (error) { showToast(error.message); return; }
+  }
   activeModal = kind;
   renderModal(kind);
   settingsModal.classList.remove('modal-leave');
@@ -620,16 +697,29 @@ function renderLivePanel() {
       name: participant.name || `${t('说话人')} ${participant.id}`,
     })).join('')
     : `<p class="participants-empty">${t('等待识别说话人')}</p>`;
-  const voices = [...presetVoices, ...speakerProfiles.filter((profile) => profile.has_reference).map((profile) => ({ id: profile.id, name: profile.name }))].map((voice) => `<option value="${escapeHtml(voice.id)}">${escapeHtml(voice.name)}</option>`).join('');
-  const noVoice = !voices;
+  const voiceOptions = [['', copy.voice], ...[...presetVoices, ...speakerProfiles.filter((profile) => profile.has_reference).map((profile) => ({ id: profile.id, name: profile.name }))].map((voice) => [voice.id, voice.name])];
+  const noVoice = voiceOptions.length === 1;
   document.querySelector('.live-panel').innerHTML = `<section><p class="eyebrow">${t('参与者')} · ${participants.length}</p><div class="participants-list">${people}</div></section><section><p class="eyebrow">${t('本场状态')}</p>${renderStatusList(uiData.live.status)}</section>`;
-  document.querySelector('#tts-chat').innerHTML = `<p class="eyebrow">${locale === 'zh' ? '语音对话' : 'Voice conversation'}</p><form id="tts-chat-form"><div class="tts-selects"><select name="voice_id" aria-label="${copy.voice}" ${noVoice ? 'disabled' : ''}><option value="">${copy.voice}</option>${voices}</select><select name="target_language" aria-label="${copy.voice}"><option value="zh">中文</option><option value="en">English</option></select></div><input name="text" maxlength="1000" placeholder="${copy.placeholder}" required /><button type="submit" ${noVoice ? 'disabled' : ''}>${copy.send}</button>${noVoice ? `<p class="tts-hint">${locale === 'zh' ? '请先在声纹库注册可用声音' : 'Register a voiceprint before sending speech'}</p>` : ''}</form>`;
+  document.querySelector('#tts-chat').innerHTML = `<p class="eyebrow">${locale === 'zh' ? '语音对话' : 'Voice conversation'}</p><form id="tts-chat-form"><div class="tts-selects">${flowSelect('voice_id', '', voiceOptions, false, noVoice)}${flowSelect('target_language', 'zh', [['zh', t('中文')], ['en', t('英语')]])}</div><input name="text" maxlength="1000" placeholder="${copy.placeholder}" required /><button type="submit" ${noVoice ? 'disabled' : ''}>${copy.send}</button>${noVoice ? `<p class="tts-hint">${locale === 'zh' ? '请先在声纹库注册可用声音' : 'Register a voiceprint before sending speech'}</p>` : ''}</form>`;
 }
 renderModelControls();
 renderTermOverview();
 renderLivePanel();
 settingsModal.addEventListener('click', async (event) => {
   if (event.target === settingsModal || event.target.closest('.modal-close')) { closeModal(); return; }
+  if (event.target.closest('[data-cancel-confirmation]')) { confirmationAction = undefined; closeModal(); return; }
+  if (event.target.closest('[data-reset-advanced-settings]')) { advancedSettings.settings = advancedSettings.defaults; renderModal('advanced-settings'); return; }
+  if (event.target.closest('[data-confirm-action]')) { const action = confirmationAction; confirmationAction = undefined; closeModal(); await action?.(); return; }
+  const openStorage = event.target.closest('[data-open-storage]');
+  if (openStorage) { try { await window.brevia?.storage.open({ partition: openStorage.dataset.openStorage }); } catch (error) { showToast(error.message); } return; }
+  const clearStorage = event.target.closest('[data-clear-storage]');
+  if (clearStorage) {
+    const partition = clearStorage.dataset.clearStorage;
+    openConfirmation(t('清空数据'), t('此操作不可恢复。'), async () => {
+      try { await window.brevia?.storage.clear({ partition }); renderModal('storage'); showToast(t('已清空')); } catch (error) { showToast(error.message); }
+    });
+    return;
+  }
   const summaryExport = event.target.closest('[data-summary-export-choice]');
   if (summaryExport) {
     summaryExport.disabled = true;
@@ -727,6 +817,8 @@ settingsModal.addEventListener('click', async (event) => {
   }
   const deleteSpeakerSample = event.target.closest('[data-delete-speaker-sample]');
   if (deleteSpeakerSample) {
+    if (deleteSpeakerSample.disabled) return;
+    deleteSpeakerSample.disabled = true;
     const profileId = deleteSpeakerSample.dataset.profileId;
     try {
       await window.brevia?.speakerProfile.deleteSample({ profile_id: profileId, sample_id: deleteSpeakerSample.dataset.deleteSpeakerSample });
@@ -807,7 +899,38 @@ settingsModal.addEventListener('click', async (event) => {
     renderModal('terms');
   }
 });
+settingsModal.addEventListener('dblclick', (event) => {
+  const profile = event.target.closest('[data-rename-speaker-profile]');
+  if (!profile) return;
+  editingSpeakerProfileId = profile.dataset.renameSpeakerProfile;
+  renderModal('speaker-profiles');
+  settingsModal.querySelector('.speaker-profile-rename-form input')?.select();
+});
 settingsModal.addEventListener('submit', async (event) => {
+  if (event.target.matches('.advanced-settings-form')) {
+    event.preventDefault();
+    try {
+      const settings = structuredClone(advancedSettings.settings);
+      new FormData(event.target).forEach((value, path) => {
+        const [section, key] = path.split('.');
+        settings[section][key] = typeof settings[section][key] === 'number' ? Number(value) : value;
+      });
+      advancedSettings.settings = settings;
+      await window.brevia?.advancedSettings.save({ settings: advancedSettings.settings });
+      closeModal();
+      showToast(t('已保存'));
+    } catch (error) { showToast(error.message); }
+    return;
+  }
+  if (event.target.matches('.speaker-profile-rename-form')) {
+    event.preventDefault();
+    const profileId = event.target.dataset.profileId;
+    const name = new FormData(event.target).get('name').trim();
+    try { await window.brevia?.speakerProfile.rename({ profile_id: profileId, name }); speakerProfiles = await window.brevia.speakerProfile.list(); } catch (error) { showToast(error.message); }
+    editingSpeakerProfileId = null;
+    renderModal('speaker-profiles');
+    return;
+  }
   if (event.target.matches('.summary-model-form')) {
     event.preventDefault();
     const values = Object.fromEntries(new FormData(event.target));
@@ -880,6 +1003,7 @@ document.querySelector('#live-view').addEventListener('submit', async (event) =>
   const values = new FormData(event.target);
   try {
     const voiceId = values.get('voice_id');
+    if (!voiceId) { showToast(locale === 'zh' ? '请选择声音' : 'Select a voice first'); return; }
     const config = summaryModels[activeSummaryModel];
     if (!config) { showToast(locale === 'zh' ? '请先配置翻译模型' : 'Configure a translation model first'); return; }
     const result = await window.brevia?.tts.synthesize({ voice_id: voiceId, target_language: values.get('target_language'), text: values.get('text').trim(), provider: config.provider, endpoint: config.endpoint, model: config.model, format: config.format, key_reference: config.keyReference });
@@ -887,6 +1011,24 @@ document.querySelector('#live-view').addEventListener('submit', async (event) =>
     await playTts(result);
     event.target.reset();
   } catch (error) { showToast(error.message); }
+});
+document.querySelector('#tts-chat').addEventListener('click', (event) => {
+  const toggle = event.target.closest('[data-flow-select-toggle]');
+  if (toggle) {
+    const options = toggle.parentElement.querySelector('.flow-select-options');
+    const opening = options.hidden;
+    document.querySelector('#tts-chat').querySelectorAll('.flow-select-options').forEach((list) => { list.hidden = true; list.previousElementSibling.previousElementSibling.setAttribute('aria-expanded', 'false'); });
+    options.hidden = !opening;
+    toggle.setAttribute('aria-expanded', String(opening));
+    return;
+  }
+  const choice = event.target.closest('[data-flow-select-choice]');
+  if (!choice) return;
+  const select = choice.closest('.flow-select');
+  select.querySelector('input').value = choice.dataset.value;
+  select.querySelector('.flow-select-toggle').firstChild.nodeValue = choice.textContent;
+  select.querySelector('.flow-select-options').hidden = true;
+  select.querySelector('.flow-select-toggle').setAttribute('aria-expanded', 'false');
 });
 /* Locale copy lives in i18n.js; this alias keeps the renderer focused on state changes. */
 const slogans = BreviaI18n.slogans;
@@ -1100,6 +1242,7 @@ async function showLibraryNav(id) {
 }
 collectTranslations();
 applyLanguage(locale);
+applyLanguageModelDefaults(new FormData(prepareForm).get('meeting-language') || 'auto');
 applyTheme(theme);
 window.setInterval(() => { if (activeLibraryNav === 'recently-deleted') return; sloganIndex = (sloganIndex + 1) % (slogans[locale] || slogans.en).length; renderSlogan(true); }, 30000);
 updateButton.addEventListener('click', () => {
@@ -1131,17 +1274,24 @@ homeEyebrow.addEventListener('click', async () => {
   if (activeLibraryNav !== 'recently-deleted') return;
   await showLibraryNav('all-meetings').catch((error) => showToast(error.message));
 });
+function setLiveTranslationEnabled(enabled) {
+  translationAllowed = enabled;
+  const toggle = document.querySelector('#translation-toggle');
+  toggle.dataset.enabled = String(enabled);
+  toggle.textContent = t(enabled ? '译文: 开' : '译文: 关');
+  if (!enabled) document.querySelectorAll('.translation').forEach((line) => { line.hidden = true; });
+}
 function activateMeeting(meeting, payload) {
   const { title, category, streaming_model_id: streamingModelId, speaker_segmentation_model_id: segmentationModelId, speaker_embedding_model_id: embeddingModelId, refined_model_id: refinedModelId } = payload;
-  const streamingModelName = streamingModelId === 'zipformer-en-streaming-int8' ? 'Streaming Zipformer English' : streamingModelId === 'paraformer-zh-en-int8' ? 'Streaming Paraformer' : 'Streaming Zipformer Chinese XLarge';
-  document.querySelector('#active-streaming-model').textContent = streamingModelName;
+  document.querySelector('#active-streaming-model').textContent = prepareModelChoices['active-streaming-model'].find(([id]) => id === streamingModelId)?.[1] || t('自动匹配');
   document.querySelector('#active-diarization-model').textContent = prepareModelChoices['active-diarization-model'].find(([id]) => id === `${segmentationModelId || ''}|${embeddingModelId || ''}`)?.[1] || t('自动匹配');
-  document.querySelector('#active-refined-model').textContent = refinedModelId === 'qwen3-asr-1.7b-int8' ? 'Qwen3-ASR 1.7B int8' : refinedModelId === 'qwen3-asr-0.6b-int8' ? 'Qwen3-ASR' : '自动匹配';
+  document.querySelector('#active-refined-model').textContent = prepareModelChoices['active-refined-model'].find(([id]) => id === refinedModelId)?.[1] || t('自动匹配');
   document.querySelector('#live-name').textContent = title;
   uiData.meetings.unshift({ id: meeting.id, tone: 'violet', title, meta: `刚刚 · 0 分钟${category ? ` · ${category}` : ''}`, category, tags: [], status: { tone: 'processing', label: '正在录制', detail: '双轨录音' } });
   document.querySelector('#transcript-scroll').innerHTML = '';
   document.querySelector('#live-caption').textContent = '';
   document.querySelector('#live-caption-translation').hidden = true;
+  setLiveTranslationEnabled(Boolean(payload.target_language));
   latestLiveSegmentId = null;
   liveSpeakers.clear();
   liveSegments.clear();
@@ -1166,11 +1316,13 @@ document.querySelector('#meeting-form').addEventListener('submit', async (event)
   const form = new FormData(event.currentTarget);
   const title = document.querySelector('#meeting-title').value.trim();
   const language = form.get('meeting-language') || 'auto';
+  const defaults = preferredModelsForLanguage(language);
   const targetLanguage = form.get('translation-target') || null;
-  const streamingModelId = prepareForm.dataset.streamingModel || (language === 'en' ? 'zipformer-en-streaming-int8' : 'zipformer-zh-xlarge-streaming-int8');
-  const refinedModelId = prepareForm.dataset.refinedModel || 'qwen3-asr-0.6b-int8';
-  const segmentationModelId = prepareForm.dataset.segmentationModel || undefined;
-  const embeddingModelId = prepareForm.dataset.embeddingModel || undefined;
+  const streamingModelId = prepareForm.dataset.streamingModel || defaults.streaming;
+  const refinedModelId = prepareForm.dataset.refinedModel || defaults.refined;
+  const [defaultSegmentationModelId, defaultEmbeddingModelId] = defaults.diarization.split('|');
+  const segmentationModelId = prepareForm.dataset.segmentationModel || defaultSegmentationModelId;
+  const embeddingModelId = prepareForm.dataset.embeddingModel || defaultEmbeddingModelId;
   const payload = {
     title, language, target_language: targetLanguage, streaming_model_id: streamingModelId, refined_model_id: refinedModelId,
     speaker_segmentation_model_id: segmentationModelId, speaker_embedding_model_id: embeddingModelId,
@@ -1197,12 +1349,15 @@ importRecording.addEventListener('click', async () => {
   const form = new FormData(prepareForm);
   const title = meetingTitle.value.trim();
   if (!title) { meetingTitle.focus(); return; }
+  const language = form.get('meeting-language') || 'auto';
+  const defaults = preferredModelsForLanguage(language);
+  const [defaultSegmentationModelId, defaultEmbeddingModelId] = defaults.diarization.split('|');
   importRecording.disabled = true;
   try {
     const meeting = window.brevia && await window.brevia.meeting.import({
-      title, language: form.get('meeting-language') || 'auto', target_language: form.get('translation-target') || null,
-      streaming_model_id: prepareForm.dataset.streamingModel || 'zipformer-zh-xlarge-streaming-int8', refined_model_id: prepareForm.dataset.refinedModel || 'qwen3-asr-0.6b-int8',
-      speaker_segmentation_model_id: prepareForm.dataset.segmentationModel || undefined, speaker_embedding_model_id: prepareForm.dataset.embeddingModel || undefined,
+      title, language, target_language: form.get('translation-target') || null,
+      streaming_model_id: prepareForm.dataset.streamingModel || defaults.streaming, refined_model_id: prepareForm.dataset.refinedModel || defaults.refined,
+      speaker_segmentation_model_id: prepareForm.dataset.segmentationModel || defaultSegmentationModelId, speaker_embedding_model_id: prepareForm.dataset.embeddingModel || defaultEmbeddingModelId,
       num_speakers: Number(form.get('num-speakers') || -1), category: form.get('meeting-category') || '', path: 'selected-by-electron',
     });
     if (!meeting) return;
@@ -1283,16 +1438,14 @@ document.querySelector('.live-panel').addEventListener('dblclick', (event) => {
   if (label) editSpeakerName(label);
 });
 document.querySelector('#translation-toggle').addEventListener('click', (event) => {
-  const enabled = event.currentTarget.dataset.enabled !== 'false';
-  if (!enabled && window.brevia) {
+  const enabled = !translationAllowed;
+  if (enabled && window.brevia) {
     const config = summaryModels[activeSummaryModel];
     if (!config || !breviaClient?.state.meeting?.target_language) { showToast('请先选择译文目标并配置纪要模型'); return; }
     if (!confirm(`将确认字幕发送到 ${config.provider} 生成译文。是否继续？`)) return;
-    translationAllowed = true;
-  } else translationAllowed = false;
-  event.currentTarget.dataset.enabled = String(!enabled);
-  event.currentTarget.textContent = t(enabled ? '译文: 关' : '译文: 开');
-  document.querySelectorAll('.translation').forEach((line) => { line.hidden = enabled; });
+  }
+  setLiveTranslationEnabled(enabled);
+  document.querySelectorAll('.translation').forEach((line) => { line.hidden = !enabled; });
   const currentTranslation = document.querySelector('#live-caption-translation');
   currentTranslation.hidden = enabled || !currentTranslation.textContent;
 });
@@ -1405,10 +1558,10 @@ batchToolbar.addEventListener('click', async (event) => {
   }
   const permanently = activeLibraryNav === 'recently-deleted';
   const deleteLabel = permanently ? BreviaI18n.trashCopy(locale).purge : t('删除');
-  if (event.target.closest('[data-batch-delete]') && confirm(`${BreviaI18n.selectionOverview(locale, meetings.length)}\n${deleteLabel}?`)) {
-    try {
-      await mutateMeetings(permanently ? 'purge' : 'delete', meetings);
-    } catch (error) { await refreshBackendMeetings(); showToast(error.message); }
+  if (event.target.closest('[data-batch-delete]')) {
+    openConfirmation(deleteLabel, `${BreviaI18n.selectionOverview(locale, meetings.length)}\n${deleteLabel}?`, async () => {
+      try { await mutateMeetings(permanently ? 'purge' : 'delete', meetings); } catch (error) { await refreshBackendMeetings(); showToast(error.message); }
+    });
   }
 });
 const closeCategoryMenu = (menu, done) => { if (menu.hidden) { done?.(); return; } menu.classList.add('is-closing'); window.setTimeout(() => { menu.hidden = true; menu.classList.remove('is-closing'); done?.(); }, 180); };
@@ -1461,14 +1614,13 @@ meetingList.addEventListener('click', async (event) => {
     }
     if (action.dataset.meetingAction === 'export') { closeMeetingMenus(); if (window.brevia && meeting.id) window.brevia.meeting.export({ meeting_id: meeting.id, format: 'md' }).then((value) => value && showToast(`已导出「${meeting.title}」`)).catch((error) => showToast(error.message)); else showToast(`已导出「${meeting.title}」`); return; }
     if (action.dataset.meetingAction === 'delete') {
-      try {
-        await mutateMeetings('delete', [meeting]);
-        showToast(meeting.isExample ? '示例会议及录音已删除' : '会议已移至最近删除');
-      } catch (error) { showToast(error.message); }
+      openConfirmation(t('删除'), `「${meeting.title}」`, async () => {
+        try { await mutateMeetings('delete', [meeting]); showToast(meeting.isExample ? '示例会议及录音已删除' : '会议已移至最近删除'); } catch (error) { showToast(error.message); }
+      });
       return;
     }
     if (action.dataset.meetingAction === 'restore') { try { await mutateMeetings('restore', [meeting]); showToast(t('恢复')); } catch (error) { showToast(error.message); } return; }
-    if (action.dataset.meetingAction === 'purge' && confirm(`${BreviaI18n.trashCopy(locale).purge}?`)) { try { await mutateMeetings('purge', [meeting]); showToast(BreviaI18n.trashCopy(locale).purge); } catch (error) { showToast(error.message); } return; }
+    if (action.dataset.meetingAction === 'purge') { openConfirmation(BreviaI18n.trashCopy(locale).purge, `「${meeting.title}」`, async () => { try { await mutateMeetings('purge', [meeting]); showToast(BreviaI18n.trashCopy(locale).purge); } catch (error) { showToast(error.message); } }); return; }
   }
   const category = event.target.closest('[data-assign-category]');
   if (category) { const meeting = uiData.meetings[Number(category.dataset.meetingIndex)]; setMeetingCategory(meeting, category.dataset.assignCategory); if (window.brevia && meeting.id) window.brevia.meeting.update({ meeting_id: meeting.id, updates: { category: meeting.category } }).catch((error) => showToast(error.message)); renderMeetingList(); return; }
@@ -1556,76 +1708,70 @@ document.querySelector('.player-speed').addEventListener('click', (event) => {
 });
 themeToggle.addEventListener('click', () => applyTheme(theme === 'dark' ? 'light' : 'dark'));
 
-function backendMeeting(item) {
-  return {
-    id: item.id,
-    tone: 'violet',
-    title: item.title,
-    createdAt: item.created_at,
-    durationMs: item.duration_ms,
-    statusCode: item.status,
-    meta: '',
-    category: item.category,
-    tags: item.tags,
-    status: {},
-    deleted: Boolean(item.deleted_at),
-    isExample: Boolean(item.is_example),
-    exampleLocale: item.example_locale,
-  };
+async function saveInlineSegmentSpeaker(form) {
+  if (form.dataset.saving) return;
+  const name = new FormData(form).get('name').trim();
+  if (!name) { editingSegmentSpeakerId = undefined; renderMeetingDetail(); return; }
+  form.dataset.saving = 'true';
+  try {
+    const meeting = await window.brevia?.segment.speaker({ meeting_id: currentMeetingDetail.id, segment_id: form.dataset.segmentId, name });
+    editingSegmentSpeakerId = undefined;
+    if (meeting) applyBackendDetail(meeting);
+  } catch (error) { delete form.dataset.saving; showToast(error.message); }
 }
-
-let meetingListRequest = 0;
-async function refreshBackendMeetings(includeDeleted = activeLibraryNav === 'recently-deleted') {
-  const request = ++meetingListRequest;
-  const meetings = await window.brevia.meeting.list({ include_deleted: includeDeleted, query: meetingSearch.value.trim() });
-  if (request !== meetingListRequest) return;
-  uiData.meetings = meetings.map(backendMeeting);
-  renderMeetingList();
+const finalTranscript = document.querySelector('.final-transcript');
+const segmentContextMenu = document.createElement('div');
+segmentContextMenu.className = 'segment-context-menu';
+segmentContextMenu.hidden = true;
+document.body.append(segmentContextMenu);
+let contextSegmentId;
+function closeSegmentContextMenu() {
+  contextSegmentId = undefined;
+  segmentContextMenu.hidden = true;
+  segmentContextMenu.classList.remove('is-open');
 }
-
-let dualTrackAudios = [];
-function renderDualTrackPanel(meeting) {
-  dualTrackAudios.forEach((audio) => { audio.pause(); audio.removeAttribute('src'); });
-  dualTrackAudios = [];
-  const panel = document.querySelector('[data-detail-panel="tracks"]');
-  if (!panel) return;
-  const tracks = [
-    ['vocals', t('人声轨'), meeting.audio.playback.vocals],
-    ['accompaniment', t('非人声轨'), meeting.audio.playback.accompaniment],
-  ].filter(([, , path]) => path);
-  if (!tracks.length) {
-    panel.innerHTML = `<div class="dual-track-empty"><p>${t('完成声源分离后，人声与非人声录音会显示在这里。')}</p><button class="secondary" type="button" data-separate-from-tracks>${t('开始声源分离')}</button></div>`;
+function openSegmentContextMenu(segmentId, x, y) {
+  contextSegmentId = segmentId;
+  const profiles = speakerProfiles.map((profile) => `<button type="button" data-add-segment-profile-sample="${profile.id}">${escapeHtml(profile.name)}</button>`).join('');
+  segmentContextMenu.innerHTML = `<div class="segment-context-submenu"><button type="button" data-open-segment-profile-menu>${t('添加录音到声纹库')} <span>›</span></button><div class="segment-context-options">${profiles || `<span>${t('暂无已注册声纹')}</span>`}</div></div>`;
+  segmentContextMenu.style.left = `${Math.min(x, window.innerWidth - 260)}px`;
+  segmentContextMenu.style.top = `${Math.min(y, window.innerHeight - 48)}px`;
+  segmentContextMenu.hidden = false;
+}
+segmentContextMenu.addEventListener('click', async (event) => {
+  if (event.target.closest('[data-open-segment-profile-menu]')) {
+    segmentContextMenu.classList.toggle('is-open');
     return;
   }
-  panel.innerHTML = tracks.map(([id, label]) => `<section class="track-player" data-track-player="${id}"><header><b>${label}</b><small>WAV</small></header><div><button class="play" type="button" aria-label="${t('播放录音')}">▶</button><time>00:00</time><input type="range" min="0" max="1" value="0" aria-label="${label}" /></div></section>`).join('');
-  tracks.forEach(async ([id, , path]) => {
-    const root = panel.querySelector(`[data-track-player="${id}"]`);
-    const button = root.querySelector('.play');
-    const range = root.querySelector('input');
-    const time = root.querySelector('time');
-    const audio = new Audio();
-    dualTrackAudios.push(audio);
-    try { audio.src = await window.brevia.audioUrl(path); } catch (error) { showToast(error.message); return; }
-    const update = () => {
-      range.value = audio.currentTime;
-      time.textContent = formatMeetingTime(audio.currentTime * 1000);
-      button.textContent = audio.paused ? '▶' : '❚❚';
-      button.classList.toggle('is-playing', !audio.paused);
-    };
-    button.addEventListener('click', async () => {
-      dualTrackAudios.filter((item) => item !== audio).forEach((item) => item.pause());
-      if (audio.paused) await audio.play(); else audio.pause();
-      update();
-    });
-    range.addEventListener('input', () => { audio.currentTime = Number(range.value); update(); });
-    audio.addEventListener('loadedmetadata', () => { range.max = audio.duration || 1; });
-    audio.addEventListener('timeupdate', update);
-    audio.addEventListener('play', update);
-    audio.addEventListener('pause', update);
-    audio.addEventListener('ended', update);
-  });
-}
-document.querySelector('.final-transcript').addEventListener('click', (event) => {
+  const profile = event.target.closest('[data-add-segment-profile-sample]');
+  if (!profile || !contextSegmentId || !currentMeetingDetail) return;
+  const segmentId = contextSegmentId;
+  closeSegmentContextMenu();
+  try {
+    const meeting = await window.brevia?.segment.addProfileSample({ meeting_id: currentMeetingDetail.id, segment_id: segmentId, profile_id: profile.dataset.addSegmentProfileSample });
+    speakerProfiles = await window.brevia.speakerProfile.list();
+    if (meeting) applyBackendDetail(meeting);
+    showToast(t('已添加录音到声纹库'));
+  } catch (error) { showToast(error.message); }
+});
+finalTranscript.addEventListener('contextmenu', (event) => {
+  const segment = event.target.closest('[data-segment-id]');
+  if (!segment || !currentMeetingDetail) return;
+  event.preventDefault();
+  openSegmentContextMenu(segment.dataset.segmentId, event.clientX, event.clientY);
+});
+document.addEventListener('mousedown', (event) => {
+  if (!segmentContextMenu.hidden && !segmentContextMenu.contains(event.target)) closeSegmentContextMenu();
+});
+finalTranscript.addEventListener('dblclick', (event) => {
+  const speaker = event.target.closest('[data-segment-speaker]');
+  if (speaker) {
+    event.preventDefault();
+    editingSegmentSpeakerId = speaker.dataset.segmentSpeaker;
+    renderMeetingDetail();
+    requestAnimationFrame(() => document.querySelector('[data-segment-speaker-input]')?.select());
+    return;
+  }
   if (event.target.closest('[data-separate-from-tracks]')) { void startSeparation(); return; }
   const tab = event.target.closest('[data-detail-tab]');
   if (!tab) return;
@@ -1633,66 +1779,15 @@ document.querySelector('.final-transcript').addEventListener('click', (event) =>
   document.querySelectorAll('[data-detail-tab]').forEach((item) => item.classList.toggle('active', item.dataset.detailTab === target));
   document.querySelectorAll('[data-detail-panel]').forEach((panel) => { panel.hidden = panel.dataset.detailPanel !== target; });
 });
-
-function applyBackendDetail(meeting) {
-  currentMeetingDetail = meeting;
-  const refined = meeting.segments.filter((segment) => segment.version.startsWith('postprocess'));
-  const revision = refined.length ? Math.max(...refined.map((segment) => segment.revision)) : null;
-  const base = revision === null ? meeting.segments.filter((segment) => segment.version === 'live') : refined.filter((segment) => segment.revision === revision);
-  const latest = new Map();
-  [...base, ...meeting.segments.filter((segment) => segment.version === 'user')].forEach((segment) => {
-    if (!latest.has(segment.id) || segment.version === 'user') latest.set(segment.id, segment);
-  });
-  uiData.detail.transcript = [...latest.values()].sort((a, b) => a.start_ms - b.start_ms).map((segment) => ({
-    time: `${String(Math.floor(segment.start_ms / 60000)).padStart(2, '0')}:${String(Math.floor(segment.start_ms / 1000) % 60).padStart(2, '0')}`,
-    seconds: Math.floor(segment.start_ms / 1000),
-    startSeconds: segment.start_ms / 1000,
-    endSeconds: segment.end_ms / 1000,
-    speaker: { name: segment.speaker_name },
-    text: segment.text,
-    translation: segment.translation,
-  }));
-  const summary = meeting.summary?.data;
-  uiData.detail.summary = summary ? {
-    title: summary.summary,
-    sections: [
-      { title: '决定', text: summary.decisions.map((item) => item.text).join('；') || '无' },
-      { title: '待办', items: summary.action_items.map((item) => ({ text: item.task, speaker: item.owner || '待确认' })) },
-    ],
-    hasFull: true,
-  } : { title: '', sections: [], empty: true };
-  document.querySelector('#detail-view .detail-head h1').textContent = meeting.title;
-  progress.max = Math.max(1, Math.ceil(meeting.duration_ms / 1000));
-  progress.value = 0;
-  playerAudio.pause();
-  playerAudio.currentTime = 0;
-  updatePlayerControl();
-  renderPlayerTime();
-  const audioPath = meeting.audio.playback.mix || meeting.audio.playback.mic || meeting.audio.playback.system;
-  if (audioPath) window.brevia.audioUrl(audioPath).then((url) => { playerAudio.src = url; });
-  else { playerAudio.removeAttribute('src'); playerAudio.load(); }
-  renderMeetingDetail();
-  renderDualTrackPanel(meeting);
-}
-
-async function startSeparation() {
-  const meetingId = breviaClient?.state.selectedMeetingId;
-  if (!window.brevia || !meetingId) return;
-  if (!modelPaths.has('spleeter-2stems-fp16')) {
-    queueModelTask('meeting.separate', { meeting_id: meetingId }, ['spleeter-2stems-fp16']);
-    requiredModelIds.add('spleeter-2stems-fp16');
-    renderRequiredModelsCard();
-    return;
-  }
-  showSeparationProgress(0, 100);
-  try {
-    const result = await window.brevia.meeting.separate({ meeting_id: meetingId });
-    if (result?.model_required) result.model_required.forEach((id) => requiredModelIds.add(id));
-  } catch (error) {
-    document.querySelector('#separation-progress')?.remove();
-    showToast(error.message);
-  }
-}
+finalTranscript.addEventListener('submit', (event) => {
+  if (!event.target.matches('.inline-segment-speaker-form')) return;
+  event.preventDefault();
+  void saveInlineSegmentSpeaker(event.target);
+});
+finalTranscript.addEventListener('focusout', (event) => {
+  const form = event.target.closest('.inline-segment-speaker-form');
+  if (form) void saveInlineSegmentSpeaker(form);
+});
 
 if (window.brevia) {
   Promise.all([loadSummaryConfig(), breviaClient.initialize()]).then(([, result]) => {
@@ -1778,22 +1873,35 @@ if (window.brevia) {
     if (shouldFollow) scrollLiveToLatest(element);
   };
   window.brevia.on('transcript.partial', (payload) => renderLiveEvent(payload, true));
+  async function generateSegmentTranslation(payload, targetLanguage) {
+    const config = summaryModels[activeSummaryModel];
+    if (!targetLanguage || !config) return;
+    return window.brevia.translation.generate({
+      meeting_id: payload.meeting_id,
+      segment_id: payload.segment_id || payload.id,
+      segment: {
+        text: payload.text,
+        start_ms: payload.start_ms,
+        end_ms: payload.end_ms,
+        speaker: payload.speaker,
+        track: payload.track,
+        revision: payload.revision || 0,
+      },
+      target_language: targetLanguage,
+      provider: config.provider,
+      endpoint: config.endpoint,
+      model: config.model,
+      format: config.format,
+      key_reference: config.keyReference,
+      consent: true,
+    });
+  }
+  window.brevia.on('transcript.refined', (payload) => renderLiveEvent(payload, false));
   window.brevia.on('transcript.final', async (payload) => {
     renderLiveEvent(payload, false);
     if (!translationAllowed) return;
-    const config = summaryModels[activeSummaryModel];
     try {
-      await window.brevia.translation.generate({
-        meeting_id: payload.meeting_id,
-        segment_id: payload.segment_id,
-        target_language: breviaClient.state.meeting.target_language,
-        provider: config.provider,
-        endpoint: config.endpoint,
-        model: config.model,
-        format: config.format,
-        key_reference: config.keyReference,
-        consent: true,
-      });
+      await generateSegmentTranslation(payload, breviaClient.state.meeting.target_language);
     } catch (error) { showToast(`翻译失败：${error.message}`); }
   });
   window.brevia.on('transcript.discarded', ({ segment_id }) => {
@@ -1814,12 +1922,19 @@ if (window.brevia) {
   });
   window.brevia.on('refinement.started', ({ total }) => showRefinementProgress(0, total));
   window.brevia.on('refinement.progress', ({ completed, total }) => showRefinementProgress(completed, total));
-  window.brevia.on('refinement.ready', ({ meeting }) => {
+  window.brevia.on('refinement.ready', async ({ meeting }) => {
     const refineButton = document.querySelector('.detail-refine [data-flow-select-toggle]');
     refineButton.disabled = false;
     refineButton.innerHTML = `${t('精修')} <span>⌄</span>`;
     showRefinementComplete();
     if (meeting.id === breviaClient.state.selectedMeetingId) applyBackendDetail(meeting);
+    if (!meeting.target_language) return;
+    const refined = meeting.segments.filter((segment) => segment.version.startsWith('postprocess'));
+    const revision = Math.max(...refined.map((segment) => segment.revision), -1);
+    const results = await Promise.allSettled(refined.filter((item) => item.revision === revision).map((segment) => generateSegmentTranslation(segment, meeting.target_language)));
+    const failure = results.find((result) => result.status === 'rejected');
+    if (failure) showToast(`翻译失败：${failure.reason.message}`);
+    if (meeting.id === breviaClient.state.selectedMeetingId) applyBackendDetail(await window.brevia.meeting.get({ meeting_id: meeting.id }));
   });
   window.brevia.on('summary.started', ({ completed, total, stage }) => showSummaryProgress(completed, total, stage));
   window.brevia.on('summary.progress', ({ completed, total, stage }) => showSummaryProgress(completed, total, stage));

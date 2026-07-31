@@ -273,7 +273,20 @@ function registerIpc() {
     return worker.request('speaker-profile.verify', { ...value, path: selected.filePaths[0] });
   });
   handle('speaker-profile.delete', z.object({ profile_id: z.string().uuid() }), 'speaker-profile.delete');
+  handle('speaker-profile.rename', z.object({ profile_id: z.string().uuid(), name: z.string().trim().min(1).max(32) }), 'speaker-profile.rename');
   handle('speaker-profile.sample-delete', z.object({ profile_id: z.string().uuid(), sample_id: z.string().uuid() }), 'speaker-profile.sample-delete');
+  handle('storage.clear', z.object({ partition: z.enum(['meetings', 'models', 'exports']) }), 'storage.clear');
+  handle('settings.advanced.get', z.object({}), 'settings.advanced.get');
+  handle('settings.advanced.save', z.object({ settings: z.record(z.string(), z.unknown()) }), 'settings.advanced.save');
+  handle('metrics.record', z.object({ app_duration_ms: z.number().int().nonnegative().optional() }), 'metrics.record');
+  handle('segment.speaker', id.extend({ segment_id: z.string().min(1), name: z.string().trim().min(1).max(32) }), 'segment.speaker');
+  handle('segment.speaker-profile-sample', id.extend({ segment_id: z.string().min(1), profile_id: z.string().uuid() }), 'segment.speaker-profile-sample');
+  ipcMain.handle('storage.open', async (_, payload) => {
+    const partition = z.enum(['meetings', 'models', 'exports']).parse(payload?.partition);
+    const root = dataDir();
+    const directory = partition === 'models' ? process.env.BREVIA_MODELS_DIR || path.join(root, 'models') : path.join(root, 'meetings');
+    return shell.openPath(directory);
+  });
   ipcMain.handle('tts.synthesize', async (_, payload) => {
     const value = z.object({ text: z.string().trim().min(1).max(1000), voice_id: z.string().min(1), target_language: z.enum(['zh', 'en']), provider: z.string(), endpoint: z.string().url(), model: z.string(), format: z.enum(['openai', 'claude']).optional(), key_reference: z.string().optional() }).parse(payload);
     try {
@@ -315,6 +328,10 @@ function registerIpc() {
   ipcMain.handle('translation.generate', async (_, payload) => {
     const value = id.extend({
       segment_id: z.string(),
+      segment: z.object({
+        text: z.string().trim().min(1), start_ms: z.number().nonnegative(), end_ms: z.number().nonnegative(),
+        speaker: z.string().trim().min(1).max(128), track: z.string().trim().min(1).max(32), revision: z.number().int().nonnegative(),
+      }).optional(),
       target_language: z.string().min(2).max(32),
       provider: z.string(),
       endpoint: z.string().url(),

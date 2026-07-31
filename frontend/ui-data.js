@@ -26,6 +26,6 @@ const uiData = {
       { icon: '⌁', name: 'Streaming Paraformer', detail: '实时字幕 · 中文 / 英语 / 粤语', intro: '原生流式识别，持续更新当前字幕。' },
       { icon: 'Q', name: 'Qwen3-ASR', detail: '会后精修 · 多语种', intro: '基于完整录音生成高精度修订版本。' }
     ],
-    cards: [{ title: '术语库', description: '12 个词条可用于会议准备、搜索和纪要。仅支持的模型会将其用于转写。', terms: ['Brevia', '向量数据库', 'CAM++', '+ 9'], action: '管理术语库', modal: 'terms' }, { title: '纪要模型', description: '配置用于生成会议纪要的 API。所有配置信息仅保存在本地，不会上传。', action: '管理纪要模型', modal: 'summary-model' }, { title: '存储与隐私', description: '会议资料保存在此 Mac。外部 LLM 需要在发送逐字稿前明确确认。', action: '查看本地存储', modal: 'storage' }]
+    cards: [{ title: '术语库', description: '12 个词条可用于会议准备、搜索和纪要。仅支持的模型会将其用于转写。', terms: ['Brevia', '向量数据库', 'CAM++', '+ 9'], action: '管理术语库', modal: 'terms' }, { title: '纪要模型', description: '配置用于生成会议纪要的 API。所有配置信息仅保存在本地，不会上传。', action: '管理纪要模型', modal: 'summary-model' }, { title: '存储与隐私', description: '会议资料保存在此 Mac。外部 LLM 需要在发送逐字稿前明确确认。', action: '查看本地存储', modal: 'storage' }, { title: '进阶设置', description: '调整识别、端点检测、说话人分离和本地模型运行参数。', action: '配置进阶设置', modal: 'advanced-settings' }]
   }
 };

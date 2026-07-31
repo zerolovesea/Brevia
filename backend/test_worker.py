@@ -12,9 +12,10 @@ from pathlib import Path
 from unittest.mock import patch
 
 from .asr import ChinesePunctuation, EnglishPunctuation, SpeakerTracker
+from .config import DEFAULT_SETTINGS, runtime_settings, save_runtime_settings
 from .llm_client import complete
 from .transcript import parse_json_object, validate_summary
-from .worker import Worker
+from .worker import Worker, main
 
 
 class WorkerTest(unittest.TestCase):
@@ -146,6 +147,31 @@ class WorkerTest(unittest.TestCase):
         self.assertTrue(self.worker._is_duplicate_final(duplicate))
         self.assertFalse(self.worker._is_duplicate_final(distinct))
 
+    def test_live_text_removes_model_markers_and_repeating_tail(self):
+        self.assertEqual(Worker._clean_live_text("<|endoftext|>Human / Computer Interaction"), "")
+        self.assertEqual(
+            Worker._clean_live_text("介绍一下 all, over, all, over, all, over, all, over"),
+            "介绍一下 all, over",
+        )
+
+    def test_live_qwen_refinement_replaces_unedited_final_only(self):
+        meeting = self.worker.start({"title": "实时精修", "language": "zh", "streaming_model_id": "paraformer-zh-en-int8", "refined_model_id": "qwen3-asr-0.6b-int8"})
+        event = {"meeting_id": meeting["id"], "segment_id": "mic-0", "revision": 2, "text": "这是直 播识别", "start_ms": 0, "end_ms": 1000, "speaker": "spk-1", "track": "mic"}
+        self.worker.store.save_segment(event)
+
+        class Refiner:
+            def decode(self, _, __):
+                return "这是直播识别。"
+
+        self.worker._refine_live_segment(Refiner(), event, [0.1], 16000)
+        segment = self.worker.store.get_meeting(meeting["id"])["segments"][0]
+        self.assertEqual((segment["text"], segment["revision"]), ("这是直播识别。", 3))
+        self.assertEqual(self.events[-1]["type"], "transcript.refined")
+        with self.worker.store.connect() as db:
+            db.execute("UPDATE segments SET user_edited=1 WHERE id=?", ("mic-0",))
+        self.worker._refine_live_segment(Refiner(), event, [0.1], 16000)
+        self.assertEqual(self.worker.store.get_meeting(meeting["id"])["segments"][0]["text"], "这是直播识别。")
+
     def test_refinement_turns_preserve_speaker_boundaries(self):
         turns = self.worker._refinement_turns(
             [{"start_ms": 0, "end_ms": 18000, "speaker": "spk-1"}, {"start_ms": 18000, "end_ms": 21000, "speaker": "spk-2"}],
@@ -185,8 +211,30 @@ class WorkerTest(unittest.TestCase):
         ])
         self.assertEqual([segment["segment_id"] for segment in segments], ["mix-0", "mix-0-1"])
 
+    def test_refinement_segment_ids_do_not_collide_across_meetings(self):
+        first = self.worker.start({"title": "第一场", "language": "zh", "streaming_model_id": "paraformer-zh-en-int8", "refined_model_id": "qwen3-asr-0.6b-int8"})
+        self.worker.stop({"meeting_id": first["id"], "duration_ms": 0})
+        second = self.worker.start({"title": "第二场", "language": "zh", "streaming_model_id": "paraformer-zh-en-int8", "refined_model_id": "qwen3-asr-0.6b-int8"})
+        self.worker.store.replace_segments(first["id"], [{"segment_id": "mic-0", "track": "mic", "start_ms": 0, "end_ms": 1, "speaker": "spk-1", "text": "一"}])
+        result = self.worker.store.replace_segments(second["id"], [{"segment_id": "mic-0", "track": "mic", "start_ms": 0, "end_ms": 1, "speaker": "spk-1", "text": "二"}])
+        self.assertEqual(result[0]["segment_id"], "mic-0")
+
+    def test_clear_meeting_storage_removes_meeting_records(self):
+        self.worker.start({"title": "待清理", "language": "zh", "streaming_model_id": "paraformer-zh-en-int8", "refined_model_id": "qwen3-asr-0.6b-int8"})
+        self.worker.store.clear_storage_partition("meetings")
+        self.assertEqual(self.worker.store.list_meetings(), [])
+
+    def test_advanced_settings_are_saved_outside_the_default_template(self):
+        settings = json.loads(json.dumps(DEFAULT_SETTINGS))
+        settings["asr"]["endpoint_rule2_silence"] = 0.9
+        save_runtime_settings(self.temp.name, settings)
+        self.assertEqual(runtime_settings(self.temp.name)["asr"]["endpoint_rule2_silence"], 0.9)
+
     def test_zipformer_xlarge_manifest_uses_the_archive_decoder_name(self):
         self.assertIn("decoder.onnx", self.worker.models.get("zipformer-zh-xlarge-streaming-int8")["files"])
+
+    def test_whisper_turbo_manifest_uses_the_archive_file_names(self):
+        self.assertEqual(self.worker.models.get("whisper-turbo")["files"], ["turbo-encoder.int8.onnx", "turbo-decoder.int8.onnx", "turbo-tokens.txt"])
 
     def test_streaming_transducer_receives_terms_as_hotwords(self):
         self.worker.store.save_term({"text": "Brevia"})
@@ -221,6 +269,38 @@ class WorkerTest(unittest.TestCase):
         self.assertEqual(second["sample_count"], 2)
         self.assertEqual(matched["id"], first["id"])
         self.assertIsNone(self.worker.store.match_speaker_profile([0, 0, 1], 0.8))
+
+    def test_assigning_a_sentence_speaker_registers_and_learns_its_voiceprint(self):
+        meeting = self.worker.start({"title": "声纹绑定", "language": "zh", "streaming_model_id": "paraformer-zh-en-int8", "refined_model_id": "qwen3-asr-0.6b-int8"})
+        self.worker.store.save_segment({"meeting_id": meeting["id"], "segment_id": "mic-0", "text": "这是当前句", "start_ms": 0, "end_ms": 1000, "speaker": "spk-1"})
+        with patch.object(self.worker.voice_profiles, "learn_from_meeting", side_effect=lambda _meeting, _speaker, name, **_kwargs: self.worker.store.ensure_speaker_profile(name)) as learn:
+            result = self.worker.assign_segment_speaker({"meeting_id": meeting["id"], "segment_id": "mic-0", "name": "小王"})
+        self.assertEqual(result["segments"][-1]["speaker_name"], "小王")
+        learn.assert_called_once()
+
+    def test_voiceprint_samples_are_added_only_for_the_selected_sentence(self):
+        meeting = self.worker.start({"title": "手动补充声纹", "language": "zh", "streaming_model_id": "paraformer-zh-en-int8", "refined_model_id": "qwen3-asr-0.6b-int8"})
+        self.worker.store.save_segment({"meeting_id": meeting["id"], "segment_id": "mic-0", "text": "只加入这一句", "start_ms": 0, "end_ms": 1000, "speaker": "spk-1"})
+        profile = self.worker.store.ensure_speaker_profile("小林")
+        with patch.object(self.worker.voice_profiles, "learn_from_meeting", return_value=profile) as learn:
+            result = self.worker.add_segment_speaker_profile_sample({"meeting_id": meeting["id"], "segment_id": "mic-0", "profile_id": profile["id"]})
+        self.assertEqual(result["segments"][-1]["speaker_name"], "小林")
+        self.assertEqual(learn.call_args.kwargs, {"segment_ids": {"mic-0"}, "source_id": profile["id"]})
+
+    def test_recognized_voiceprints_are_not_automatically_collected_after_a_meeting(self):
+        meeting = self.worker.start({"title": "不自动采样", "language": "zh", "streaming_model_id": "paraformer-zh-en-int8", "refined_model_id": "qwen3-asr-0.6b-int8"})
+        profile = self.worker.store.ensure_speaker_profile("小林")
+        self.worker.store.rename_speaker(meeting["id"], f"profile-{profile['id']}", profile["name"], profile_id=profile["id"])
+        with patch.object(self.worker.voice_profiles, "learn_from_meeting") as learn:
+            self.worker.stop({"meeting_id": meeting["id"], "duration_ms": 0})
+        learn.assert_not_called()
+
+    def test_default_speaker_labels_do_not_create_voiceprints(self):
+        meeting = self.worker.start({"title": "默认说话人", "language": "zh", "streaming_model_id": "paraformer-zh-en-int8", "refined_model_id": "qwen3-asr-0.6b-int8"})
+        self.worker.store.save_segment({"meeting_id": meeting["id"], "segment_id": "mic-0", "text": "这是当前句", "start_ms": 0, "end_ms": 1000, "speaker": "spk-1"})
+        for name in ("说话人 1", "Speaker 1", "Hablante 1", "話者 1", "화자 1", "Sprecher 1", "Спикер 1"):
+            self.worker.assign_segment_speaker({"meeting_id": meeting["id"], "segment_id": "mic-0", "name": name})
+        self.assertEqual(self.worker.store.list_speaker_profiles(), [])
 
     def test_voiceprint_recording_limits_and_incremental_delete(self):
         with patch.dict("backend.storage.SETTINGS", {"voice_profiles": {"max_samples": 2, "max_total_seconds": 3}}, clear=False):
@@ -358,6 +438,52 @@ class WorkerTest(unittest.TestCase):
             "Hello",
         )
 
+    def test_background_commands_do_not_block_the_command_loop(self):
+        commands = "".join(
+            f'{{"id":"{kind}","type":"{kind}","payload":{{}}}}\n'
+            for kind in (
+                "translation.generate", "summary.generate", "tts.synthesize", "speaker-profile.enroll",
+                "speaker-profile.verify", "speaker-profile.samples", "speaker-profile.sample-delete",
+                "speaker.rename", "segment.speaker", "meeting.export", "meeting.bundle",
+            )
+        )
+        with patch("backend.worker.Worker"), patch("backend.worker.threading.Thread") as thread, patch("sys.stdin", io.StringIO(commands)):
+            main()
+        self.assertEqual(
+            [call.kwargs["args"][0]["type"] for call in thread.call_args_list],
+            [
+                "translation.generate", "summary.generate", "tts.synthesize", "speaker-profile.enroll",
+                "speaker-profile.verify", "speaker-profile.samples", "speaker-profile.sample-delete",
+                "speaker.rename", "segment.speaker", "meeting.export", "meeting.bundle",
+            ],
+        )
+
+    def test_translation_recovers_a_final_segment_not_yet_visible_to_the_request(self):
+        meeting = self.worker.start(
+            {
+                "title": "翻译补写", "language": "zh",
+                "streaming_model_id": "paraformer-zh-en-int8", "refined_model_id": "qwen3-asr-0.6b-int8",
+            }
+        )
+        self.worker.llm_complete = lambda *_args, **_kwargs: "Hello"
+        translated = self.worker.translate(
+            {
+                "meeting_id": meeting["id"], "segment_id": "mic-0", "target_language": "en",
+                "endpoint": "http://127.0.0.1", "model": "local", "consent": True,
+                "segment": {"text": "你好", "start_ms": 0, "end_ms": 100, "speaker": "spk-1", "track": "mic", "revision": 1},
+            }
+        )
+        self.assertEqual(translated["translation"], "Hello")
+        self.assertEqual(self.worker.store.get_meeting(meeting["id"])["segments"][0]["translation"], "Hello")
+
+    def test_segments_with_the_same_live_id_are_scoped_to_their_meeting(self):
+        first = self.worker.store.create_meeting({"title": "第一场", "language": "zh", "streaming_model_id": "paraformer-zh-en-int8", "refined_model_id": "qwen3-asr-0.6b-int8"})
+        second = self.worker.store.create_meeting({"title": "第二场", "language": "zh", "streaming_model_id": "paraformer-zh-en-int8", "refined_model_id": "qwen3-asr-0.6b-int8"})
+        for meeting, text in ((first, "第一句"), (second, "第二句")):
+            self.worker.store.save_segment({"meeting_id": meeting["id"], "segment_id": "mic-0", "text": text, "start_ms": 0, "end_ms": 100, "speaker": "spk-1"})
+        self.assertEqual(self.worker.store.get_meeting(first["id"])["segments"][0]["text"], "第一句")
+        self.assertEqual(self.worker.store.get_meeting(second["id"])["segments"][0]["text"], "第二句")
+
     def test_diarization_turns_and_overlap_assignment(self):
         meeting = self.worker.start(
             {
@@ -400,6 +526,22 @@ class WorkerTest(unittest.TestCase):
         formatter.engine = Engine()
         self.assertEqual(formatter.apply("HOW ARE YOU"), "How are you?")
         self.assertEqual(formatter.engine.text, "how are you")
+
+    def test_stop_with_auto_language_and_no_audio_is_safe(self):
+        meeting = self.worker.start({"title": "空录音", "language": "auto", "streaming_model_id": "paraformer-zh-en-int8", "refined_model_id": "qwen3-asr-0.6b-int8"})
+
+        class EmptyASR:
+            def accept(self, _track, _samples, _sample_rate, _flush=False):
+                return "", True
+
+        self.worker.asr = EmptyASR()
+        class Samples(list):
+            def __truediv__(self, _value):
+                return self
+
+        numpy = type("Numpy", (), {"float32": float, "asarray": staticmethod(lambda values, dtype: Samples(values)), "concatenate": staticmethod(lambda _values: self.fail("empty recording must not concatenate"))})
+        with patch.dict("sys.modules", {"numpy": numpy}):
+            self.worker.stop({"meeting_id": meeting["id"], "duration_ms": 0})
 
     def test_chinese_punctuation_preserves_model_sentence_boundaries(self):
         formatter = ChinesePunctuation.__new__(ChinesePunctuation)

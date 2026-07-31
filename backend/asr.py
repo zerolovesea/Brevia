@@ -329,7 +329,7 @@ class LanguageIdentifier:
         path = manager.path(model_id)
         config = sherpa_onnx.SpokenLanguageIdentificationConfig(
             whisper=sherpa_onnx.SpokenLanguageIdentificationWhisperConfig(
-                encoder=str(path / "encoder.int8.onnx"), decoder=str(path / "decoder.int8.onnx"),
+                encoder=str(path / "turbo-encoder.int8.onnx"), decoder=str(path / "turbo-decoder.int8.onnx"),
             ),
             num_threads=manager.device()["threads"], provider=manager.device()["backend"],
         )
@@ -529,7 +529,7 @@ class RefinedASR:
             )
         elif model["kind"] == "whisper":
             self.recognizer = sherpa_onnx.OfflineRecognizer.from_whisper(
-                encoder=str(path / "encoder.int8.onnx"), decoder=str(path / "decoder.int8.onnx"), tokens=str(path / "tokens.txt"), language="", **common
+                encoder=str(path / "turbo-encoder.int8.onnx"), decoder=str(path / "turbo-decoder.int8.onnx"), tokens=str(path / "turbo-tokens.txt"), language="", **common
             )
         else:
             self.recognizer = sherpa_onnx.OfflineRecognizer.from_qwen3_asr(

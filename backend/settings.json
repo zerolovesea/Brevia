@@ -4,9 +4,9 @@
     "chunk_seconds": 30
   },
   "asr": {
-    "endpoint_rule1_silence": 1.6,
-    "endpoint_rule2_silence": 0.9,
-    "maximum_utterance_seconds": 16,
+    "endpoint_rule1_silence": 2.0,
+    "endpoint_rule2_silence": 1.2,
+    "maximum_utterance_seconds": 24,
     "refined_window_seconds": 15,
     "auto_english_model_id": "zipformer-en-streaming-int8"
   },
@@ -24,12 +24,12 @@
   "diarization": {
     "segmentation_model_id": "pyannote-segmentation-3.0",
     "embedding_model_id": "eres2net-base-3dspeaker-zh",
-    "cluster_threshold": 0.5,
+    "cluster_threshold": 0.35,
     "online_similarity_threshold": 0.65,
     "minimum_embedding_seconds": 0.8,
     "num_speakers": -1,
     "min_duration_on": 0.3,
-    "min_duration_off": 0.5
+    "min_duration_off": 0.2
   },
   "voice_profiles": {
     "max_samples": 50,

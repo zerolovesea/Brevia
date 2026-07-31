@@ -12,6 +12,7 @@ import threading
 import time
 import zipfile
 from array import array
+from concurrent.futures import ThreadPoolExecutor
 from difflib import SequenceMatcher
 from pathlib import Path
 
@@ -33,7 +34,7 @@ from .llm_client import complete
 from .media_tasks import MeetingMediaService
 from .transcript import clock, latest_segments, parse_json_object, srt_time, validate_summary
 from .voice_profiles import VoiceProfileService
-from .config import SETTINGS
+from .config import DEFAULT_SETTINGS, SETTINGS, runtime_settings, save_runtime_settings
 from .storage import Store
 
 
@@ -66,6 +67,7 @@ class Worker:
         self.model_downloads = {}
         self.model_downloads_lock = threading.Lock()
         self.store = Store(root)
+        runtime_settings(self.store.root)
         self.models = ModelManager(self.store.models_dir, self.emit)
         # 服务按存储/模型依赖构造；它们不持有实时会议状态，便于单独测试。
         self.voice_profiles = VoiceProfileService(self.store, self.models)
@@ -83,6 +85,8 @@ class Worker:
         self.meeting_language = None
         self.detected_language = None
         self.asr_warning_sent = False
+        self.live_refiner = None
+        self.live_refinement = None
 
     def emit(self, event_type, payload):
         """向前端发送无请求 ID 的异步事件。"""
@@ -131,6 +135,13 @@ class Worker:
             "speaker-profile.verify": self.verify_speaker_profile,
             "speaker-profile.sample-delete": self.delete_speaker_profile_sample,
             "speaker-profile.delete": self.delete_speaker_profile,
+            "speaker-profile.rename": lambda value: self.store.rename_speaker_profile(value["profile_id"], value["name"]),
+            "storage.clear": lambda value: self.store.clear_storage_partition(value["partition"]),
+            "settings.advanced.get": lambda _: {"settings": SETTINGS, "defaults": DEFAULT_SETTINGS},
+            "settings.advanced.save": lambda value: save_runtime_settings(self.store.root, value["settings"]),
+            "metrics.record": lambda value: self.store.metrics(value.get("app_duration_ms", 0)),
+            "segment.speaker": self.assign_segment_speaker,
+            "segment.speaker-profile-sample": self.add_segment_speaker_profile_sample,
             "terms.list": lambda _: self.store.list_terms(),
             "terms.save": self.store.save_term,
             "terms.delete": self.delete_term,
@@ -160,6 +171,9 @@ class Worker:
             self.voice_profiles.seed_builtin_profiles()
         except RuntimeError as error:
             self.emit("worker.warning", {"code": "builtin_voiceprints_unavailable", "message": str(error)})
+        for profile in self.store.list_speaker_profiles():
+            if self._is_default_speaker_name(profile["name"]):
+                self.store.delete_speaker_profile(profile["id"])
         return {
             "meetings": self.store.list_meetings(),
             "models": self.models.list(),
@@ -172,6 +186,33 @@ class Worker:
             "purged_meeting_ids": purged,
             "seeded_examples": seeded_examples,
         }
+
+    def assign_segment_speaker(self, payload):
+        if self._is_default_speaker_name(payload["name"]):
+            return self.store.get_meeting(payload["meeting_id"])
+        profile = self.store.ensure_speaker_profile(payload["name"])
+        speaker_id = f"profile-{profile['id']}"
+        self.store.set_segment_speaker(payload["meeting_id"], payload["segment_id"], speaker_id, profile["id"], profile["name"])
+        meeting = self.store.get_meeting(payload["meeting_id"])
+        profile = self.voice_profiles.learn_from_meeting(
+            meeting, speaker_id, profile["name"], segment_ids={payload["segment_id"]}, source_id=profile["id"]
+        )
+        self.emit("speaker-profile.updated", {"profile": profile})
+        return self.store.get_meeting(payload["meeting_id"])
+
+    def add_segment_speaker_profile_sample(self, payload):
+        """仅在用户明确选择时，将一段已保存对话加入既有声纹档案。"""
+        require(payload, "meeting_id", "segment_id", "profile_id")
+        profile = self.store.speaker_profile(payload["profile_id"])
+        self.store.set_segment_speaker(
+            payload["meeting_id"], payload["segment_id"], f"profile-{profile['id']}", profile["id"], profile["name"]
+        )
+        profile = self.voice_profiles.learn_from_meeting(
+            self.store.get_meeting(payload["meeting_id"]), None, profile["name"],
+            segment_ids={payload["segment_id"]}, source_id=profile["id"],
+        )
+        self.emit("speaker-profile.updated", {"profile": profile})
+        return self.store.get_meeting(payload["meeting_id"])
 
     def start(self, payload):
         """创建会议并启动流式识别。
@@ -301,6 +342,12 @@ class Worker:
                 "worker.warning",
                 {"meeting_id": self.active, "code": "speaker_unavailable", "message": str(error)},
             )
+        if meeting["refined_model_id"].startswith("qwen3-") and self.models.is_ready(meeting["refined_model_id"]):
+            try:
+                self.live_refiner = RefinedASR(self.models, meeting["refined_model_id"], hotwords)
+                self.live_refinement = ThreadPoolExecutor(max_workers=1, thread_name_prefix="brevia-live-refine")
+            except RuntimeError as error:
+                self.emit("worker.warning", {"meeting_id": self.active, "code": "live_refinement_unavailable", "message": str(error)})
 
     def pause(self, payload):
         """确认目标是当前会议并广播暂停状态；音频停送由前端负责。"""
@@ -365,11 +412,11 @@ class Worker:
         result, final = self.asr.accept(
             payload["track"], asr_samples, int(payload["sample_rate"]), bool(payload.get("flush"))
         )
-        text = result.strip() if isinstance(result, str) else result.text.strip()
+        text = self._clean_live_text(result if isinstance(result, str) else result.text)
         if final and not text:
             text = state["last_text"]
         if self.meeting_language == "auto" and not self.detected_language:
-            context = numpy.concatenate(state["audio"])
+            context = numpy.concatenate(state["audio"]) if state["audio"] else samples
             detected = self.language_identifier.identify(context, int(payload["sample_rate"])) if self.language_identifier and len(context) >= int(payload["sample_rate"]) else self._detect_language(text)
             if detected:
                 self.detected_language = detected
@@ -385,7 +432,7 @@ class Worker:
                         result, _ = self.asr.accept(
                             payload["track"], numpy.concatenate(state["audio"]), int(payload["sample_rate"])
                         )
-                        text = result.strip() if isinstance(result, str) else result.text.strip()
+                        text = self._clean_live_text(result if isinstance(result, str) else result.text)
                     except RuntimeError as error:
                         self.emit(
                             "worker.warning",
@@ -402,11 +449,12 @@ class Worker:
             state["revision"] += 1
             segment_id = f"{payload['track']}-{state['segment']}"
             speaker = "spk-1" if payload["track"] == "mic" else "spk-2"
-            if final and self.speaker_tracker and state["audio"]:
+            segment_audio = numpy.concatenate(state["audio"]) if final and state["audio"] and (self.speaker_tracker or self.live_refiner) else None
+            if final and self.speaker_tracker and segment_audio is not None:
                 speaker = self._identify_speaker(
                     self.active,
                     self.speaker_tracker,
-                    numpy.concatenate(state["audio"]),
+                    segment_audio,
                     int(payload["sample_rate"]),
                 )
             event = {
@@ -426,6 +474,7 @@ class Worker:
                 else:
                     self.store.save_segment(event)
                     self.emit("transcript.final", event)
+                    self._refine_live_segment_later(event, segment_audio, int(payload["sample_rate"]))
             elif not final:
                 self.store.save_segment(event)
                 self.emit("transcript.partial", event)
@@ -446,6 +495,26 @@ class Worker:
                 audio=[],
             )
         return {"samples": samples_total, "text": text, "final": final}
+
+    def _refine_live_segment_later(self, event, samples, sample_rate):
+        """将中文最终段交给单线程 Qwen3，避免阻塞实时 Zipformer。"""
+        if not (self.live_refinement and self.live_refiner and samples is not None):
+            return
+        if self.meeting_language not in {"zh", "yue"} and self.detected_language not in {"zh", "yue"}:
+            return
+        self.live_refinement.submit(self._refine_live_segment, self.live_refiner, event.copy(), samples.copy(), sample_rate)
+
+    def _refine_live_segment(self, refiner, event, samples, sample_rate):
+        """写回同一 live 段；用户已编辑的段落由存储层拒绝覆盖。"""
+        try:
+            text = self._clean_live_text(refiner.decode(samples, sample_rate))
+            if not text or text == event["text"]:
+                return
+            refined = {**event, "text": text, "revision": event["revision"] + 1}
+            if self.store.save_segment(refined):
+                self.emit("transcript.refined", refined)
+        except Exception as error:
+            self.emit("worker.warning", {"meeting_id": event["meeting_id"], "code": "live_refinement_failed", "message": str(error)})
 
     def _identify_speaker(self, meeting_id, tracker, samples, sample_rate):
         """优先匹配已注册人员；未命中时保留会议内的临时说话人 ID。"""
@@ -482,12 +551,14 @@ class Worker:
                     }
                 )
         meeting = self.store.finish_meeting(self.active, payload["duration_ms"])
-        self._learn_named_speakers(meeting)
         meeting = self.store.get_meeting(meeting["id"])
         self.emit("meeting.stopped", {"meeting_id": self.active, "meeting": meeting})
+        if self.live_refinement:
+            self.live_refinement.shutdown(wait=False)
         self.active, self.asr, self.punctuation, self.denoiser, self.language_identifier = None, None, None, None, None
         self.speaker_tracker, self.stream_state, self.recent_finals = None, {}, []
         self.meeting_language, self.detected_language = None, None
+        self.live_refiner, self.live_refinement = None, None
         return meeting
 
     def update_meeting(self, payload):
@@ -523,6 +594,9 @@ class Worker:
     def rename_speaker(self, payload):
         """保存说话人名称和可选锁定状态，并返回更新后的会议。"""
         require(payload, "meeting_id", "speaker_id", "name")
+        if self._is_default_speaker_name(payload["name"]):
+            self.store.rename_speaker(payload["meeting_id"], payload["speaker_id"], payload["name"], payload.get("locked", False))
+            return self.store.get_meeting(payload["meeting_id"])
         self.store.rename_speaker(
             payload["meeting_id"],
             payload["speaker_id"],
@@ -539,21 +613,14 @@ class Worker:
         self.emit("speaker-profile.updated", {"profile": profile})
         return self.store.get_meeting(payload["meeting_id"])
 
-    def _learn_named_speakers(self, meeting):
-        """在可播放录音落盘后，为人工命名人员补齐句级声纹档案。"""
-        for speaker in meeting["speakers"]:
-            try:
-                profile = self.voice_profiles.learn_from_meeting(meeting, speaker["id"], speaker["name"])
-                self.store.rename_speaker(
-                    meeting["id"], speaker["id"], speaker["name"], bool(speaker["locked"]), profile["id"]
-                )
-                self.emit("speaker-profile.updated", {"profile": profile})
-            except Exception as error:
-                self.emit("worker.warning", {
-                    "meeting_id": meeting["id"],
-                    "code": "speaker_profile_learning_failed",
-                    "message": str(error),
-                })
+    @staticmethod
+    def _is_default_speaker_name(name):
+        """识别各界面语言的自动说话人占位名称，避免将其注册为真人声纹。"""
+        normalized = re.sub(r"[\s_-]+", "", name.strip().casefold())
+        return bool(re.fullmatch(
+            r"(?:spk|speaker|说话人|話者|화자|hablante|orador|locuteur|intervenant|sprecher|говорящий|спикер)\d+",
+            normalized,
+        ))
 
     def enroll_speaker_profile(self, payload):
         """从用户选定的单人语音录音注册或补充本地人员声纹。"""
@@ -908,7 +975,6 @@ class Worker:
         for event in refined_segments:
             self.emit("refinement.segment", event)
         result = self.store.set_status(meeting["id"], "refined")
-        self._learn_named_speakers(result)
         result = self.store.get_meeting(meeting["id"])
         self.emit("refinement.ready", {"meeting_id": meeting["id"], "meeting": result})
         return result
@@ -973,6 +1039,22 @@ class Worker:
     def _normalized_transcript(text):
         return re.sub(r"[\W_]+", "", text).lower()
 
+    @staticmethod
+    def _clean_live_text(text):
+        """移除模型终止标记，并截断流式识别末尾的重复循环。"""
+        text = re.split(r"<\|endoftext\|>", str(text or ""), flags=re.IGNORECASE)[0]
+        text = re.sub(r"<\|[^|>]+\|>", " ", text)
+        text = re.sub(r"\s+", " ", text).strip()
+        words = list(re.finditer(r"[\w']+", text, flags=re.UNICODE))
+        for width in range(1, min(6, len(words) // 4) + 1):
+            tail = [word.group().casefold() for word in words[-width:]]
+            cursor, repeats = len(words), 0
+            while cursor >= width and [word.group().casefold() for word in words[cursor - width:cursor]] == tail:
+                cursor, repeats = cursor - width, repeats + 1
+            if repeats >= 4:
+                return text[:words[cursor + width - 1].end()].rstrip(" ,;，、")
+        return text
+
     def _is_duplicate_final(self, event):
         """过滤麦克风与系统音频对同一句话的重复识别。"""
         text = self._normalized_transcript(event["text"])
@@ -985,8 +1067,8 @@ class Worker:
         ]
         # ponytail: text/timing heuristic; add audio fingerprinting if false matches become measurable.
         duplicate = any(
-            item["track"] != event["track"]
-            and SequenceMatcher(None, text, item["text"]).ratio() >= 0.75
+            (item["track"] != event["track"] and SequenceMatcher(None, text, item["text"]).ratio() >= 0.75)
+            or (item["track"] == event["track"] and item["end_ms"] >= start_ms - 800 and SequenceMatcher(None, text, item["text"]).ratio() >= 0.92)
             for item in self.recent_finals
         )
         if not duplicate:
@@ -1081,6 +1163,14 @@ class Worker:
             (item for item in meeting["segments"] if item["id"] == payload["segment_id"]),
             None,
         )
+        # The final event can reach the renderer before an overlapping task has
+        # committed its segment; preserve that event instead of dropping translation.
+        if not segment and payload.get("segment"):
+            self.store.save_segment({
+                "meeting_id": meeting["id"], "segment_id": payload["segment_id"], **payload["segment"],
+            })
+            meeting = self.store.get_meeting(meeting["id"])
+            segment = next((item for item in meeting["segments"] if item["id"] == payload["segment_id"]), None)
         if not segment:
             raise ValueError("Transcript segment not found")
         translation = self.llm_complete(
@@ -1119,7 +1209,13 @@ def main():
         except Exception as error:
             worker.response(None, error=error)
             continue
-        if command.get("type") in {"meeting.refine", "meeting.separate"}:
+        # Keep long-running work and voiceprint SQLite writes off the command loop.
+        if command.get("type") in {
+            "meeting.refine", "meeting.separate", "translation.generate",
+            "speaker-profile.list", "speaker-profile.samples", "speaker-profile.sample-delete",
+            "summary.generate", "tts.synthesize", "speaker-profile.enroll", "speaker-profile.verify",
+            "speaker.rename", "segment.speaker", "segment.speaker-profile-sample", "meeting.export", "meeting.bundle",
+        }:
             threading.Thread(target=respond, args=(command,), daemon=True).start()
         else:
             respond(command)

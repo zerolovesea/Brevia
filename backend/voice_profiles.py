@@ -60,8 +60,8 @@ class VoiceProfileService:
         score = sum(left * right for left, right in zip(candidate, reference))
         return {"profile_id": profile["id"], "name": profile["name"], "score": score, "verified": score >= SETTINGS["diarization"]["online_similarity_threshold"]}
 
-    def learn_from_meeting(self, meeting, speaker_id, name):
-        """按句保存人工命名说话人的录音，并增量更新声纹中心。"""
+    def learn_from_meeting(self, meeting, speaker_id, name, segment_ids=None, source_id=None):
+        """按句保存用户明确选择的会议录音，并增量更新声纹中心。"""
         profile = self.store.ensure_speaker_profile(name)
         try:
             tracker = SpeakerTracker(self.models, model_id=meeting.get("speaker_embedding_model_id"))
@@ -74,7 +74,11 @@ class VoiceProfileService:
         limits = SETTINGS["voice_profiles"]
         cached, latest = {}, {}
         for segment in meeting["segments"]:
-            if segment["speaker"] != speaker_id or (segment["version"] != "live" and not segment["version"].startswith("postprocess")):
+            if (
+                (speaker_id is not None and segment["speaker"] != speaker_id)
+                or (segment_ids is not None and segment["id"] not in segment_ids)
+                or (segment["version"] != "live" and not segment["version"].startswith("postprocess"))
+            ):
                 continue
             previous = latest.get(segment["id"])
             if previous is None or segment["version"].startswith("postprocess") and (previous["version"] == "live" or segment["revision"] >= previous["revision"]):
@@ -94,7 +98,7 @@ class VoiceProfileService:
                 end_ms = segment["end_ms"] if index == len(sentences) - 1 else cursor + round(
                     (segment["end_ms"] - segment["start_ms"]) * len(sentence) / characters
                 )
-                source_key = f"meeting:{meeting['id']}:{speaker_id}:{segment['id']}:{index}"
+                source_key = f"meeting:{meeting['id']}:{source_id or speaker_id}:{segment['id']}:{index}"
                 duration_ms = max(0, end_ms - cursor)
                 if source_key in existing:
                     cursor = end_ms

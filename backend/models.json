@@ -215,7 +215,7 @@
     "size_bytes": 563790207,
     "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-turbo.tar.bz2",
     "archive_sha256": null, "directory": "sherpa-onnx-whisper-turbo",
-    "files": ["encoder.int8.onnx", "decoder.int8.onnx", "tokens.txt"], "kind": "whisper"
+    "files": ["turbo-encoder.int8.onnx", "turbo-decoder.int8.onnx", "turbo-tokens.txt"], "kind": "whisper"
   },
   {
     "id": "qwen3-asr-1.7b-int8",

@@ -31,7 +31,12 @@ contextBridge.exposeInMainWorld('brevia', {
     verify: invoke('speaker-profile.verify'),
     deleteSample: invoke('speaker-profile.sample-delete'),
     delete: invoke('speaker-profile.delete'),
+    rename: invoke('speaker-profile.rename'),
   },
+  storage: { clear: invoke('storage.clear'), open: invoke('storage.open') },
+  advancedSettings: { get: invoke('settings.advanced.get'), save: invoke('settings.advanced.save') },
+  metrics: { record: invoke('metrics.record') },
+  segment: { speaker: invoke('segment.speaker'), addProfileSample: invoke('segment.speaker-profile-sample') },
   tts: { synthesize: invoke('tts.synthesize') },
   models: {
     list: invoke('models.list'),
