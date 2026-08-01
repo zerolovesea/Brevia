@@ -265,7 +265,7 @@ class Store:
             本次是否执行了种子写入；同一版本重复调用返回 ``False``。
         """
         fixture_root = Path(__file__).with_name("fixtures")
-        examples = json.loads(Path(__file__).with_name("examples.json").read_text())
+        examples = json.loads(Path(__file__).with_name("examples.json").read_text(encoding="utf-8"))
         with self.connect() as db:
             if db.execute(
                 "SELECT 1 FROM app_meta WHERE key='examples_seeded_v3'"
@@ -970,21 +970,21 @@ class Store:
     def read_manifest(self, meeting_id):
         """读取录音恢复清单；文件尚不存在时返回空字典。"""
         path = self.meetings_dir / meeting_id / "manifest.json"
-        return json.loads(path.read_text()) if path.exists() else {}
+        return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
 
     def write_manifest(self, meeting_id, data):
         """通过临时文件替换，原子地写入录音恢复清单。"""
         path = self.meetings_dir / meeting_id / "manifest.json"
         temporary = path.with_suffix(".tmp")
-        temporary.write_text(json.dumps(data, ensure_ascii=False, indent=2))
+        temporary.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
         temporary.replace(path)
 
     def recoverable_meetings(self):
         """返回清单仍未关闭的会议，用于 Worker 崩溃后的恢复提示。"""
         return [
-            json.loads(path.read_text())
+            json.loads(path.read_text(encoding="utf-8"))
             for path in self.meetings_dir.glob("*/manifest.json")
-            if not json.loads(path.read_text()).get("closed")
+            if not json.loads(path.read_text(encoding="utf-8")).get("closed")
         ]
 
     def usage(self):

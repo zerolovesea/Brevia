@@ -72,6 +72,8 @@ class WorkerClient {
       cwd: packagedRoot,
       env: {
         ...process.env,
+        PYTHONUTF8: '1',
+        PYTHONIOENCODING: 'utf-8',
         BREVIA_DATA_DIR: dataDir(),
         BREVIA_MODELS_DIR: process.env.BREVIA_MODELS_DIR || (app.isPackaged ? path.join(dataDir(), 'models') : path.join(root, '.models')),
       },
@@ -425,7 +427,8 @@ function createWindow() {
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
   splash.loadFile(path.join(packagedRoot, 'frontend', 'splash.html'));
-  splash.once('ready-to-show', () => splash.show());
+  // Windows does not reliably emit ready-to-show for a frame-less GIF-only window.
+  splash.once('did-finish-load', () => splash.show());
   const window = new BrowserWindow({
     width: 1200,
     height: 760,
@@ -473,6 +476,8 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  session.defaultSession.setPermissionCheckHandler((_, permission) => permission === 'media' || permission === 'display-capture');
+  session.defaultSession.setPermissionRequestHandler((_, permission, callback) => callback(permission === 'media' || permission === 'display-capture'));
   session.defaultSession.setDisplayMediaRequestHandler(async (_, callback) => {
     const [source] = await desktopCapturer.getSources({ types: ['screen'] });
     callback(source ? { video: source, audio: 'loopback' } : {});

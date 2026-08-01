@@ -79,6 +79,11 @@ class WorkerTest(unittest.TestCase):
             self.worker.start({"title": "缺模型", "language": "zh", "streaming_model_id": "paraformer-zh-en-int8", "refined_model_id": "qwen3-asr-0.6b-int8", "require_models": True})
         self.assertEqual([], self.worker.store.list_meetings())
 
+    def test_utf8_json_files_are_read_explicitly_as_utf8(self):
+        with patch.object(Path, "read_text", autospec=True, side_effect=Path.read_text) as read_text:
+            self.worker.store.seed_examples()
+        self.assertTrue(any(call.kwargs.get("encoding") == "utf-8" for call in read_text.call_args_list))
+
     def test_summary_requires_valid_evidence(self):
         with self.assertRaises(ValueError):
             validate_summary(

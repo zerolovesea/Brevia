@@ -33,7 +33,7 @@ class ModelManager:
         self.event = event
         self.catalog = {
             item["id"]: item
-            for item in json.loads(Path(__file__).with_name("models.json").read_text())
+            for item in json.loads(Path(__file__).with_name("models.json").read_text(encoding="utf-8"))
         }
 
     def list(self):
@@ -163,7 +163,7 @@ class ModelManager:
                 raise ValueError("Model archive is missing required files")
             source.replace(self.path(model_id))
         (self.path(model_id) / ".brevia.json").write_text(
-            json.dumps({**model, "downloaded_at": time.time(), "archive_sha256": digest}, indent=2)
+            json.dumps({**model, "downloaded_at": time.time(), "archive_sha256": digest}, indent=2), encoding="utf-8"
         )
         self.event("model.status", {"model_id": model_id, "status": "ready"})
         return self.path(model_id)

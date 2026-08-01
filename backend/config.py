@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 
-DEFAULT_SETTINGS = json.loads(Path(__file__).with_name("settings.json").read_text())
+DEFAULT_SETTINGS = json.loads(Path(__file__).with_name("settings.json").read_text(encoding="utf-8"))
 SETTINGS = json.loads(json.dumps(DEFAULT_SETTINGS))
 
 
@@ -13,7 +13,7 @@ def runtime_settings(root):
     path = Path(root) / "advanced-settings.json"
     value = json.loads(json.dumps(DEFAULT_SETTINGS))
     if path.is_file():
-        value = json.loads(path.read_text())
+        value = json.loads(path.read_text(encoding="utf-8"))
     _validate(value, DEFAULT_SETTINGS)
     SETTINGS.clear()
     SETTINGS.update(value)
@@ -23,7 +23,7 @@ def runtime_settings(root):
 def save_runtime_settings(root, value):
     _validate(value, DEFAULT_SETTINGS)
     path = Path(root) / "advanced-settings.json"
-    path.write_text(json.dumps(value, ensure_ascii=False, indent=2))
+    path.write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding="utf-8")
     SETTINGS.clear()
     SETTINGS.update(value)
     return value
