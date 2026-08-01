@@ -38,7 +38,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: npm ci
-      - run: python -m pip install -r backend/requirements.txt
+      - run: python -m pip install -r backend/requirements-build.txt
       - run: npm test
       - run: ${{ matrix.command }}
       - uses: actions/upload-artifact@v4

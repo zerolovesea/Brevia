@@ -64,9 +64,10 @@ class WorkerClient {
 
   start() {
     if (this.process?.stdin && !this.process.stdin.destroyed && this.process.exitCode === null) return;
-    const bundled = path.join(packagedRoot, '.venv', 'bin', 'python');
-    const python = process.env.BREVIA_PYTHON || (existsSync(bundled) ? bundled : 'python3');
-    const child = spawn(python, ['-m', 'backend.worker'], {
+    const bundled = path.join(packagedRoot, 'backend', process.platform === 'win32' ? 'brevia-worker.exe' : 'brevia-worker');
+    const python = process.env.BREVIA_PYTHON || (existsSync(bundled) ? bundled : process.platform === 'win32' ? 'python' : 'python3');
+    const args = existsSync(bundled) && !process.env.BREVIA_PYTHON ? [] : ['-m', 'backend.worker'];
+    const child = spawn(python, args, {
       cwd: packagedRoot,
       env: {
         ...process.env,

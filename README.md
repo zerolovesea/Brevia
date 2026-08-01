@@ -49,7 +49,7 @@ The renderer never opens a backend port. Electron validates IPC payloads with Zo
 ## Requirements
 
 - Node.js 20+ and npm.
-- Python 3.10+ with a supported `sherpa-onnx` wheel (the app uses Python 3.12 in its diagnostic examples).
+- Python 3.10+ with a supported `sherpa-onnx` wheel is required only when running or building from source.
 - macOS for the current desktop-capture permission flow; microphone and Screen Recording permissions are required for live capture. Imported audio and most local processing do not require capture permissions.
 - Storage for the models you select. The default Chinese streaming model alone is about 570 MiB; refined and diarization models add more.
 - `ffmpeg` is needed for some audio exports. macOS `textutil` / `cupsfilter` are used when available for DOCX / PDF export.
@@ -79,28 +79,28 @@ To keep development data outside the normal app directory:
 BREVIA_DATA_DIR=/absolute/path/to/brevia-data BREVIA_MODELS_DIR=/absolute/path/to/models npm start
 ```
 
-## Install the v0.1.0 macOS development build
+## Install a release build
 
-Download `Brevia-0.1.0-arm64.dmg` from the [GitHub Releases](https://github.com/zerolovesea/Brevia/releases) page, open it, and drag **Brevia** to Applications. This build is for Apple Silicon Macs.
+Download the matching artifact from [GitHub Releases](https://github.com/zerolovesea/Brevia/releases): the ARM64 DMG for Apple Silicon Macs or the x64 EXE installer for Windows. No separate Python installation is needed.
 
-> **Unsigned development build:** v0.1.0 is not code signed or notarized. If macOS blocks the first launch, open **System Settings → Privacy & Security**, then choose **Open Anyway** for Brevia. Alternatively, remove the quarantine attribute in Terminal:
+> **Unsigned development build:** macOS may require **System Settings → Privacy & Security → Open Anyway**. Windows may show a Microsoft Defender SmartScreen prompt; proceed only after verifying the download came from this release.
 
 ```bash
 xattr -dr com.apple.quarantine "/Applications/Brevia.app"
 ```
 
-The first development DMG packages the Electron app and local backend code, but does not yet bundle a portable Python runtime or speech-model dependencies. Install the Python requirements from a source checkout before relying on local transcription.
+Each release bundles the Python runtime and backend dependencies. Speech models remain on-demand downloads from Brevia's model library, so choose the models needed for your language and workflow after installation.
 
 ## Build a development DMG
 
 ```bash
 npm ci
 npm run build
-python3 -m pip install -r backend/requirements.txt
+python3 -m pip install -r backend/requirements-build.txt
 npm run dist
 ```
 
-The DMG is written to `dist/`. For a self-contained future release, bundle a relocatable Python runtime at `.venv/bin/python`; Electron already prefers that path when packaged. Do not ship model weights by assumption: let users download the models they need, preserve each upstream model's license, and make sure the packaged app can write to its user-data directory.
+The platform installer is written to `dist/`. The build packages a native Python worker for the current platform; build macOS and Windows installers on their respective platforms. Models remain on-demand downloads and are not included in the installer.
 
 ## Contributing
 
