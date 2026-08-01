@@ -5,6 +5,7 @@ const listeners = new Map();
 
 contextBridge.exposeInMainWorld('brevia', {
   initialize: invoke('app.initialize'),
+  permissions: { status: invoke('permissions.status'), requestMicrophone: invoke('permissions.request-microphone') },
   meeting: {
     start: invoke('meeting.start'),
     import: invoke('meeting.import'),

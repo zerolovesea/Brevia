@@ -328,6 +328,10 @@ const languageModelDefaults = {
   default: { streaming: 'zipformer-multilingual-streaming', refined: 'whisper-turbo', diarization: 'pyannote-segmentation-3.0|nemo-titanet-small-en' },
 };
 const preferredModelsForLanguage = (language) => languageModelDefaults[language] || languageModelDefaults.default;
+const requiredModelsForLanguage = (language) => {
+  const { streaming, refined, diarization } = preferredModelsForLanguage(language);
+  return [streaming, refined, ...diarization.split('|'), 'silero-vad'];
+};
 const compatibleStreamingModels = (language) => {
   const supported = {
     zh: new Set(['', 'zipformer-zh-xlarge-streaming-int8', 'zipformer-zh-streaming-int8', 'zipformer-multilingual-streaming', 'paraformer-zh-en-int8']),
@@ -465,6 +469,7 @@ function showSummaryComplete() {
 const requiredModelIds = new Set();
 const pendingModelTasks = new Map();
 const resumingModelTasks = new Set();
+let startupModelIds = [];
 function queueModelTask(task, payload, models) {
   if (!task || (!payload?.meeting_id && !['meeting.start', 'tts.synthesize'].includes(task))) return;
   pendingModelTasks.set(`${task}:${payload.meeting_id || 'new'}`, { task, payload, models });
@@ -524,6 +529,7 @@ function renderRequiredModelsCard() {
 }
 async function downloadRequiredModel(modelId) {
   if (modelPaths.has(modelId)) { requiredModelIds.delete(modelId); renderRequiredModelsCard(); return; }
+  if (modelDownloads.has(modelId) && !modelDownloads.get(modelId).error) return;
   modelDownloads.set(modelId, { received: 0, total: 0 });
   renderRequiredModelsCard();
   try {
@@ -532,6 +538,11 @@ async function downloadRequiredModel(modelId) {
     modelDownloads.set(modelId, { error: error.message });
     renderRequiredModelsCard();
   }
+}
+function downloadRequiredModels(models) {
+  models.forEach((modelId) => requiredModelIds.add(modelId));
+  renderRequiredModelsCard();
+  void Promise.all(models.map(downloadRequiredModel));
 }
 taskCards.addEventListener('click', (event) => {
   const close = event.target.closest('[data-dismiss-task-card]');
@@ -549,7 +560,7 @@ taskCards.addEventListener('click', (event) => {
   const one = event.target.closest('[data-download-required]');
   if (one) { void downloadRequiredModel(one.dataset.downloadRequired); return; }
   if (event.target.closest('[data-download-required-all]')) {
-    void Promise.all([...requiredModelIds].map(downloadRequiredModel));
+    downloadRequiredModels([...requiredModelIds]);
   }
 });
 prepareForm.addEventListener('click', (event) => {
@@ -700,6 +711,47 @@ function closeModal() {
     document.body.classList.remove('modal-open');
   }, 220);
 }
+
+function openInitialPermissions() {
+  activeModal = 'initial-permissions';
+  settingsModal.querySelector('.modal-title h2').textContent = '录制权限';
+  settingsModal.querySelector('.modal-title p').textContent = '首次使用时完成设置';
+  settingsModal.querySelector('.modal-body').innerHTML = `<div class="permission-modal"><p>Brevia 需要麦克风、屏幕与系统音频权限，才能录制会议并生成实时字幕。</p><div><b>麦克风</b><small>录制你的发言。</small></div><div><b>屏幕与系统音频</b><small>录制屏幕共享中的系统声音。</small></div>${startupModelIds.length ? '<small>首次会议所需模型正在后台下载，进度显示在左下角。</small>' : ''}<section><button class="modal-action" data-request-initial-permissions type="button">继续</button><button class="secondary" data-dismiss-initial-permissions type="button">稍后</button></section></div>`;
+  settingsModal.classList.remove('modal-leave');
+  settingsModal.hidden = false;
+  requestAnimationFrame(() => settingsModal.classList.add('modal-enter'));
+  document.body.classList.add('modal-open');
+  settingsModal.querySelector('[data-request-initial-permissions]').focus();
+}
+
+function openStartupModels() {
+  activeModal = 'startup-models';
+  settingsModal.querySelector('.modal-title h2').textContent = '正在准备录制模型';
+  settingsModal.querySelector('.modal-title p').textContent = '首次使用';
+  settingsModal.querySelector('.modal-body').innerHTML = '<div class="permission-modal"><p>Brevia 正在并行下载首次会议所需的模型。下载完成后即可开始录制。</p><small>下载进度显示在左下角，关闭此窗口后下载会继续。</small><section><button class="modal-action" data-dismiss-startup-models type="button">后台继续</button></section></div>';
+  settingsModal.classList.remove('modal-leave');
+  settingsModal.hidden = false;
+  requestAnimationFrame(() => settingsModal.classList.add('modal-enter'));
+  document.body.classList.add('modal-open');
+  settingsModal.querySelector('[data-dismiss-startup-models]').focus();
+}
+
+async function requestInitialPermissions(button) {
+  button.disabled = true;
+  try {
+    const status = await window.brevia.permissions.status();
+    if (status.microphone === 'not-determined') await window.brevia.permissions.requestMicrophone();
+    if (status.screen === 'not-determined') {
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+      stream.getTracks().forEach((track) => track.stop());
+    }
+    closeModal();
+    if (startupModelIds.length) openStartupModels();
+  } catch (error) {
+    button.disabled = false;
+    showToast(error.message);
+  }
+}
 const settingsActions = [...document.querySelectorAll('#settings-view [data-settings-modal]')];
 settingsActions.forEach((button) => button.addEventListener('click', () => openModal(button.dataset.settingsModal)));
 const modelAction = document.querySelector('[data-settings-modal="models"]');
@@ -737,6 +789,10 @@ function renderLivePanel() {
 renderModelControls();
 renderLivePanel();
 settingsModal.addEventListener('click', async (event) => {
+  const permissionButton = event.target.closest('[data-request-initial-permissions]');
+  if (permissionButton) { await requestInitialPermissions(permissionButton); return; }
+  if (event.target.closest('[data-dismiss-initial-permissions]')) { closeModal(); return; }
+  if (event.target.closest('[data-dismiss-startup-models]')) { closeModal(); return; }
   if (event.target === settingsModal || event.target.closest('.modal-close')) { closeModal(); return; }
   if (event.target.closest('[data-cancel-confirmation]')) { confirmationAction = undefined; closeModal(); return; }
   if (event.target.closest('[data-reset-advanced-settings]')) { advancedSettings.settings = advancedSettings.defaults; renderModal('advanced-settings'); return; }
@@ -1857,7 +1913,7 @@ finalTranscript.addEventListener('focusout', (event) => {
 });
 
 if (window.brevia) {
-  Promise.all([loadSummaryConfig(), breviaClient.initialize()]).then(([, result]) => {
+  Promise.all([loadSummaryConfig(), breviaClient.initialize(), window.brevia.permissions.status()]).then(([, result, permissions]) => {
     modelCatalog = result.models;
     renderRefinedModelChoices();
     setPrepareModel('active-refined-model', document.querySelector('#active-refined-model').dataset.model);
@@ -1879,6 +1935,10 @@ if (window.brevia) {
     });
     renderSpeakerProfileCard();
     renderMeetingList();
+    startupModelIds = requiredModelsForLanguage(new FormData(prepareForm).get('meeting-language') || 'auto').filter((modelId) => !modelPaths.has(modelId));
+    if (startupModelIds.length) downloadRequiredModels(startupModelIds);
+    if (permissions.microphone === 'not-determined' || permissions.screen === 'not-determined') openInitialPermissions();
+    else if (startupModelIds.length) openStartupModels();
     if (result.recoverable.length) showToast(`发现 ${result.recoverable.length} 场可恢复录音`);
   }).catch((error) => showToast(`配置或后端启动失败：${error.message}`));
 
@@ -2051,8 +2111,7 @@ if (window.brevia) {
     if (task === 'meeting.separate') dismissTaskCard(document.querySelector('#separation-progress'));
     const queued = pendingModelTasks.get(`${task}:${payload?.meeting_id || 'new'}`);
     queueModelTask(task, task === 'meeting.start' && queued?.payload.inputs ? { ...payload, inputs: queued.payload.inputs } : payload, models);
-    models.forEach((id) => requiredModelIds.add(id));
-    renderRequiredModelsCard();
+    downloadRequiredModels(models);
   });
   window.brevia.on('separation.started', ({ completed, total }) => showSeparationProgress(completed, total));
   window.brevia.on('separation.progress', ({ completed, total }) => showSeparationProgress(completed, total));

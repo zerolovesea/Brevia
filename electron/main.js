@@ -217,6 +217,16 @@ async function writeSummaryConfig(config) {
 }
 
 function registerIpc() {
+  ipcMain.handle('permissions.status', () => process.platform === 'darwin'
+    ? { microphone: systemPreferences.getMediaAccessStatus('microphone'), screen: systemPreferences.getMediaAccessStatus('screen') }
+    : { microphone: 'granted', screen: 'granted' });
+  ipcMain.handle('permissions.request-microphone', async () => {
+    if (process.platform !== 'darwin') return 'granted';
+    if (process.platform === 'darwin' && systemPreferences.getMediaAccessStatus('microphone') === 'not-determined') {
+      await systemPreferences.askForMediaAccess('microphone');
+    }
+    return systemPreferences.getMediaAccessStatus('microphone');
+  });
   handle('app.initialize', z.object({}).passthrough(), 'app.initialize');
   ipcMain.handle('meeting.start', async (_, payload) => {
     const value = meetingStart.parse(payload);
@@ -384,29 +394,6 @@ function registerIpc() {
   });
 }
 
-async function promptInitialPermissions(window) {
-  if (process.platform !== 'darwin') return;
-  const microphone = systemPreferences.getMediaAccessStatus('microphone');
-  const screen = systemPreferences.getMediaAccessStatus('screen');
-  if (microphone !== 'not-determined' && screen !== 'not-determined') return;
-  await dialog.showMessageBox(window, {
-    type: 'info',
-    title: '允许录制会议音频',
-    message: 'Brevia 需要麦克风、屏幕与系统音频录制权限。',
-    detail: '接下来会请求尚未授权的权限；系统会在需要时显示授权提示。',
-    buttons: ['继续'],
-  });
-  if (microphone === 'not-determined') {
-    await systemPreferences.askForMediaAccess('microphone');
-  }
-  if (screen === 'not-determined') {
-    await desktopCapturer.getSources({
-      types: ['screen'],
-      thumbnailSize: { width: 1, height: 1 },
-    }).catch(() => []);
-  }
-}
-
 function createWindow() {
   const splash = new BrowserWindow({
     width: 1200,
@@ -442,7 +429,6 @@ function createWindow() {
     if (!mainReady || !animationComplete || revealed || window.isDestroyed()) return;
     revealed = true;
     window.show();
-    promptInitialPermissions(window);
     const started = Date.now();
     const fadeSplash = () => {
       if (splash.isDestroyed()) return;
