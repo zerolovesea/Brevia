@@ -26,7 +26,6 @@ from .asr import (
     ModelManager,
     OfflineDiarizer,
     RefinedASR,
-    SenseVoiceStreamingASR,
     SpeakerTracker,
     StreamingASR,
 )
@@ -306,7 +305,7 @@ class Worker:
             except RuntimeError as error:
                 self.emit("worker.warning", {"meeting_id": self.active, "code": "language_identifier_unavailable", "message": str(error)})
         try:
-            self.asr = SenseVoiceStreamingASR(self.models, meeting["streaming_model_id"], meeting.get("vad_model_id") or "silero-vad") if self.models.get(meeting["streaming_model_id"])["kind"] == "sensevoice" else StreamingASR(self.models, meeting["streaming_model_id"])
+            self.asr = StreamingASR(self.models, meeting["streaming_model_id"])
         except RuntimeError as error:
             self.asr = None
             self.emit(

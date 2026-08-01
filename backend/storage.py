@@ -306,7 +306,7 @@ class Store:
                         example["locale"],
                         "en" if example["locale"] == "zh" else "zh",
                         "paraformer-zh-en-int8",
-                        "qwen3-asr-0.6b-int8",
+                        "funasr-nano-int8",
                         example["category"],
                         json.dumps(example["tags"], ensure_ascii=False),
                         "refined",

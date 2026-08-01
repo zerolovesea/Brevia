@@ -39,9 +39,28 @@ npm start
 
 첫 실행 후 **Settings → Model library**에서 모델을 다운로드합니다. 개발 저장 위치는 `BREVIA_DATA_DIR`, `BREVIA_MODELS_DIR`로 바꾸고 `npm test`로 검증합니다.
 
-## 배포
+## macOS 개발 빌드 v0.1.0 설치
 
-현재는 패키징되지 않은 Electron 앱입니다. 배포 시 `npm ci && npm run build`를 실행하고 `backend/`, `frontend/`, Python 런타임과 의존성을 포함하세요. `.venv/bin/python` 또는 `BREVIA_PYTHON`을 사용하고 모델은 필요할 때 내려받으며 상위 라이선스를 유지합니다.
+[GitHub Releases](https://github.com/zerolovesea/Brevia/releases)에서 `Brevia-0.1.0-arm64.dmg`를 내려받아 열고 **Brevia**를 Applications로 드래그하세요. 이 빌드는 Apple Silicon Mac용입니다.
+
+> **서명되지 않은 개발 빌드:** v0.1.0은 코드 서명이나 공증을 거치지 않았습니다. macOS가 첫 실행을 차단하면 **시스템 설정 → 개인정보 보호 및 보안**에서 Brevia에 대해 **그래도 열기**를 선택하거나, 터미널에서 다음을 실행하세요.
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/Brevia.app"
+```
+
+첫 개발 DMG에는 Electron 앱과 로컬 백엔드 코드가 포함되지만, 이식 가능한 Python 런타임과 음성 모델 의존성은 아직 포함되지 않습니다. 로컬 전사를 사용하기 전에 소스 체크아웃에서 Python 요구 사항을 설치하세요.
+
+## 개발 DMG 빌드
+
+```bash
+npm ci
+npm run build
+python3 -m pip install -r backend/requirements.txt
+npm run dist
+```
+
+DMG는 `dist/`에 생성됩니다. 향후 독립형 릴리스에는 `.venv/bin/python`에 재배치 가능한 Python 런타임을 포함해야 하며, 모델은 계속 필요할 때 내려받고 상위 라이선스를 유지합니다.
 
 ## Contributing
 

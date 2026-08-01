@@ -17,8 +17,8 @@
 
 @layer components {
   /* Application shell: persistent navigation and the content workspace. */
-  .app-shell { @apply grid min-h-dvh grid-cols-[272px_minmax(0,1fr)] bg-white; }
-  .sidebar { @apply sticky top-0 flex h-dvh self-start flex-col border-r border-[#e5e5e5] px-6 py-8; }
+  .app-shell { @apply grid min-h-dvh bg-white; grid-template-columns: clamp(220px, 22vw, 272px) minmax(0, 1fr); }
+  .sidebar { @apply sticky top-0 flex h-dvh self-start flex-col border-r border-[#e5e5e5] px-6 pt-12 pb-8; }
   .brand { @apply flex items-center gap-2.5 p-0 text-[20px] font-bold tracking-[-.04em] text-black; }
   .brand img { @apply h-7 w-auto; }
   .brand-mark { @apply grid size-7 place-items-center bg-black text-[13px] font-normal text-white; }
@@ -47,7 +47,7 @@
   .required-models-card li b { @apply block truncate text-[11px] font-normal; }
   .required-models-card li small { @apply mt-1; }
   .required-models-card li .processing-bar { @apply col-span-2 mt-2 w-full; }
-  .workspace { @apply min-w-0 px-12 pb-16 max-lg:px-8; }
+  .workspace { @apply min-w-0 pb-16; padding-inline: clamp(24px, 4vw, 48px); }
   .workspace:has(#home-view.active), .workspace:has(#live-view.active), .workspace:has(#prepare-view.active), .workspace:has(#detail-view.active), .workspace:has(#settings-view.active) { @apply h-dvh overflow-hidden pb-0; }
   .window-bar { @apply sticky top-0 z-30 flex h-16 select-none items-center border-b border-[#e5e5e5] bg-white text-[12px] text-[#999]; -webkit-app-region: drag; }
   .traffic { @apply hidden; }
@@ -105,8 +105,8 @@
   .batch-actions > button, .batch-category .flow-select-toggle { @apply h-9 whitespace-nowrap border border-black bg-white px-4 text-[12px] text-black; }
   .batch-category { @apply w-36; }
   .batch-delete { @apply border-[#a65b5b]! text-[#a65b5b]!; }
-  .meeting-actions { @apply relative col-span-1 justify-self-end; }.more { @apply text-[#999] transition-colors duration-300 hover:text-black; }.meeting-menu, .meeting-rename-menu, .meeting-category-menu { @apply absolute right-0 z-20 w-40 border border-[#ccc] bg-white p-1; }.meeting-menu, .meeting-rename-menu { @apply top-full; }.meeting-category-menu { @apply top-full right-[calc(100%+4px)]; }.meeting-category-menu:not([hidden]) { animation: submenu-in 180ms ease-out both; transform-origin: right top; }.meeting-category-menu.is-closing { animation: submenu-out 180ms ease-in both; }.meeting-menu button, .meeting-category-menu > button { @apply flex w-full items-center justify-between px-3 py-2 text-left text-[13px] text-[#404040] transition-colors duration-300 hover:bg-[#f5f5f5] hover:text-black; }.meeting-menu .meeting-menu-danger { @apply text-[#a65b5b] hover:text-[#a65b5b]; }.meeting-rename-menu form { @apply grid gap-3 p-2 text-[12px] text-[#666]; }.meeting-rename-menu input { @apply mt-1 w-full border border-[#ccc] px-2 py-1.5 text-[13px] text-black outline-none focus:border-black; }.meeting-rename-menu form > span { @apply flex justify-end gap-3; }.meeting-rename-menu button { @apply text-[12px] text-[#404040] hover:text-black; }.meeting-rename-menu button[type=submit] { @apply border border-black bg-black px-2 py-1 text-white hover:opacity-70; }.meeting-category-menu > span { @apply flex items-center; }.meeting-category-menu > button:not(.meeting-menu-back), .meeting-category-menu > span > button:first-child { @apply text-[12px] hover:bg-[#f5f5f5] hover:text-black; }.meeting-category-menu > span > button:first-child { @apply flex-1 py-1.5 text-left; }.meeting-category-delete { @apply px-3 py-1.5 text-[13px] text-[#999] hover:text-[#a65b5b]; }.meeting-menu-back { @apply border-b border-[#e5e5e5]; }.meeting-category-menu form { @apply mt-1 flex border-t border-[#e5e5e5] pt-1; }.meeting-category-menu input { @apply h-7 min-w-0 flex-1 px-2 py-0 text-[12px] outline-none; }.meeting-category-menu form button { @apply h-7 px-2 py-0 text-[12px] text-[#404040] hover:text-black; }
-  #home-view.active { @apply grid h-[calc(100dvh-4rem)] grid-rows-[auto_auto_auto_minmax(0,1fr)] overflow-hidden py-8; }
+  .meeting-actions { @apply relative col-span-1 justify-self-end; }.more { @apply text-[#999] transition-colors duration-300 hover:text-black; }.meeting-menu, .meeting-rename-menu, .meeting-category-menu { @apply fixed z-50 w-40 border border-[#ccc] bg-white p-1; }.meeting-category-menu:not([hidden]) { animation: submenu-in 180ms ease-out both; transform-origin: right top; }.meeting-category-menu.is-closing { animation: submenu-out 180ms ease-in both; }.meeting-menu button, .meeting-category-menu > button { @apply flex w-full items-center justify-between px-3 py-2 text-left text-[13px] text-[#404040] transition-colors duration-300 hover:bg-[#f5f5f5] hover:text-black; }.meeting-menu .meeting-menu-danger { @apply text-[#a65b5b] hover:text-[#a65b5b]; }.meeting-rename-menu form { @apply grid gap-3 p-2 text-[12px] text-[#666]; }.meeting-rename-menu input { @apply mt-1 w-full border border-[#ccc] px-2 py-1.5 text-[13px] text-black outline-none focus:border-black; }.meeting-rename-menu form > span { @apply flex justify-end gap-3; }.meeting-rename-menu button { @apply text-[12px] text-[#404040] hover:text-black; }.meeting-rename-menu button[type=submit] { @apply border border-black bg-black px-2 py-1 text-white hover:opacity-70; }.meeting-category-menu > span { @apply flex items-center; }.meeting-category-menu > button:not(.meeting-menu-back), .meeting-category-menu > span > button:first-child { @apply text-[12px] hover:bg-[#f5f5f5] hover:text-black; }.meeting-category-menu > span > button:first-child { @apply flex-1 py-1.5 text-left; }.meeting-category-delete { @apply px-3 py-1.5 text-[13px] text-[#999] hover:text-[#a65b5b]; }.meeting-menu-back { @apply border-b border-[#e5e5e5]; }.meeting-category-menu form { @apply mt-1 flex border-t border-[#e5e5e5] pt-1; }.meeting-category-menu input { @apply h-7 min-w-0 flex-1 px-2 py-0 text-[12px] outline-none; }.meeting-category-menu form button { @apply h-7 px-2 py-0 text-[12px] text-[#404040] hover:text-black; }
+  #home-view.active { @apply grid h-[calc(100dvh-4rem)] grid-rows-[auto_auto_auto_minmax(0,1fr)] overflow-hidden pt-8 pb-4; }
   #home-view .page-head > div { @apply min-h-40; }
   #home-view .page-head h1 { @apply text-[clamp(36px,4vw,56px)]; }
   #home-view .primary-action { @apply px-5 py-3 text-[13px]; }
@@ -119,8 +119,8 @@
   .back { @apply mb-12 p-0 text-[13px] text-[#666] transition-colors duration-300 hover:text-[#0066ff]; }
   #prepare-view.active { @apply grid h-[calc(100dvh-4rem)] grid-rows-[auto_minmax(0,1fr)] gap-6 overflow-hidden py-8; }
   #prepare-view .back, #detail-view .back { @apply mb-0 justify-self-start; }
-  .prepare-layout { @apply grid grid-cols-12 gap-8; }
-  .prepare-layout > div { @apply col-span-8; }
+  .prepare-layout { @apply grid gap-8; grid-template-columns: minmax(0, 2fr) minmax(12.5rem, 1fr); align-content: start; transform: scale(var(--prepare-scale, 1)); transform-origin: top left; }
+  .prepare-layout > div { @apply col-auto min-w-0; }
   .prepare-layout h1 { @apply mb-5; }
   #prepare-view .prepare-layout h1 { @apply text-[clamp(34px,3.5vw,52px)]; }
   .prepare-layout form { @apply mt-6 grid gap-4; }
@@ -141,13 +141,13 @@
   .input-meter { @apply relative block h-1 w-9 bg-[#e5e5e5]; }
   .input-meter::after { content: ""; @apply absolute inset-0 origin-left; background: linear-gradient(90deg, #777 0 55%, #111 55% 80%, #ff0000 80%); transform: scaleX(var(--level, .04)); transition: transform .08s linear; }
   .wide { @apply w-full; }
-  .model-card { @apply relative col-span-4 border-l border-black pl-8; }
+  .model-card { @apply relative col-auto min-w-0 border-l border-black pl-8; }
   .model-icon { @apply mb-8 grid size-10 place-items-center border border-black text-lg; }
   .settings-card h2 { @apply m-0 text-[22px] font-normal tracking-[-.03em]; }
   .settings-card > p { @apply mt-2 text-[13px] leading-7 text-[#666]; }
   dl { @apply my-8 grid gap-4; }
   dl div { @apply flex justify-between border-b border-[#e5e5e5] pb-3 text-[13px]; }
-  dt { @apply text-[#666]; } dd { @apply m-0 text-[#1a1a1a]; }
+  dt { @apply text-[#666]; } dd { @apply m-0 min-w-0 break-words text-right text-[#1a1a1a]; }
   .model-card dd[id] { @apply cursor-pointer; }
   .model-card .model-picker { @apply right-0 left-auto w-56; }
   .text-button { @apply p-0 text-[13px] text-[#0066ff] transition-opacity duration-300 hover:opacity-70; }
@@ -201,7 +201,7 @@
   .segment-speaker { @apply w-full p-0 text-left text-[12px] leading-5 font-normal text-[#404040] hover:underline; }
   /* Completed-meeting detail: player, transcript metadata, and summary sidebar. */
   #detail-view.active { @apply grid h-[calc(100dvh-4rem)] grid-rows-[auto_auto_auto_minmax(0,1fr)] gap-6 overflow-hidden py-8; }
-  .detail-head { @apply mb-0; }.detail-actions { @apply flex flex-nowrap items-end gap-3 whitespace-nowrap; }
+  .detail-head { @apply relative z-50 mb-0; }.detail-actions { @apply flex flex-nowrap items-end gap-3 whitespace-nowrap; }
   #detail-view .detail-actions { gap: clamp(8px, 1vw, 16px); }
   #detail-view .detail-actions > button, #detail-view .detail-actions .flow-select-toggle { flex-shrink: 0; white-space: nowrap; }
   #detail-view .detail-actions .secondary { margin-top: 0; font-size: clamp(11px, .9vw, 13px); }
@@ -209,7 +209,7 @@
   #detail-view .detail-head h1 { @apply text-[clamp(32px,3.5vw,52px)] leading-[1.05]; }
   #detail-view .detail-head p:not(.eyebrow) { @apply mt-4 text-[15px] leading-7; }
   #detail-view .eyebrow { @apply mb-2 text-[11px]; }
-  .detail-refine .flow-select-options { @apply w-60; }.detail-refine .flow-select-options button { @apply whitespace-nowrap; }
+  .detail-refine .flow-select-options { @apply z-50 w-80; }.detail-refine .flow-select-options button { @apply whitespace-normal break-words; }
   .player { @apply grid grid-cols-[40px_auto_auto_auto_1fr_auto_auto] items-center gap-5 border-y border-[#e5e5e5] py-5 text-[12px] text-[#666]; }
   .play { @apply grid size-9 place-items-center border border-black bg-black text-white; }.play.is-playing { @apply bg-white text-black; }.skip { @apply transition-opacity duration-300 hover:opacity-70; }.player input[type=range] { @apply m-0 w-full border-0 bg-transparent p-0 accent-black; }.player-speed { @apply w-18; }.player-speed .flow-select-toggle { @apply border-black px-2 py-1 text-[12px]; }.player-speed .flow-select-options { @apply border-black; }
   .detail-layout { @apply mt-0 grid h-full min-h-0 grid-cols-12 gap-8; }.final-transcript { @apply col-span-8 flex h-full min-h-0 flex-col overflow-hidden; }.tabbar { @apply flex shrink-0 gap-8 border-b border-[#e5e5e5]; }.tab { @apply border-b border-transparent pb-4 text-[13px] text-[#666]; }.tab.active { @apply border-black text-black; }.transcript-body { @apply min-h-0 flex-1 overflow-y-auto scroll-smooth pt-8 pr-6; }.final-transcript .segment { @apply mb-6 py-4 pr-4 transition-colors duration-200; }.final-transcript .segment.is-active { @apply bg-[#f2f2ed]; }.jump { @apply mt-2 justify-self-start p-0 text-[11px] text-[#0066ff]; }
@@ -238,7 +238,7 @@
   #detail-view .notes section { @apply py-4; }
   #detail-view .notes p, #detail-view .notes label { @apply text-[12px] leading-6; }
   /* Settings cards and model rows; card content comes from the shared UI data. */
-  .settings-grid { @apply mt-12 grid grid-cols-12 gap-8; }.settings-card { @apply col-span-6 border border-[#e5e5e5] p-8; }.settings-card:last-child, .config-card { @apply col-span-12; }.model-row { @apply grid grid-cols-[1fr_auto_auto] items-center gap-3 border-b border-[#e5e5e5] py-5; }.model-row .model-icon { display: none; }.model-row small { @apply mt-1 block text-[11px] text-[#999]; }.model-delete { @apply border-b border-[#a65b5b] pb-0.5 text-[11px] text-[#a65b5b] transition-opacity duration-300 hover:opacity-70; }.secondary { @apply mt-7 border-b border-black pb-1 text-[13px] text-[#404040] transition-opacity duration-300 hover:opacity-70; }.config-json { @apply mt-5 max-h-64 overflow-auto border border-[#e5e5e5] bg-[#f5f5f5] p-4 font-mono text-[11px] leading-6 text-[#404040]; }
+  .settings-grid { @apply mt-12 grid grid-cols-12 gap-8; }.settings-card { @apply col-span-6 border border-[#e5e5e5] p-8; }.settings-card:last-child, .config-card { @apply col-span-12; }.model-row { @apply grid grid-cols-[1fr_auto_auto] items-center gap-3 border-b border-[#e5e5e5] py-5; }.model-row .model-icon { display: none; }.model-row small { @apply mt-1 block text-[11px] text-[#999]; }.model-delete { @apply border-b border-[#a65b5b] pb-0.5 text-[11px] text-[#a65b5b] transition-opacity duration-300 hover:opacity-70; }.secondary { @apply mt-7 border-b border-black pb-1 text-[13px] text-[#404040] transition-opacity duration-300 hover:opacity-70; }#import-recording { @apply mt-0 justify-self-start; }.config-json { @apply mt-5 max-h-64 overflow-auto border border-[#e5e5e5] bg-[#f5f5f5] p-4 font-mono text-[11px] leading-6 text-[#404040]; }
   #settings-view.active { @apply grid h-[calc(100dvh-4rem)] grid-rows-[auto_auto_auto_minmax(0,1fr)] gap-3 overflow-hidden py-8; }
   #settings-view .back { @apply mb-0 justify-self-start; }
   #settings-view > .eyebrow { @apply mb-0 text-[11px]; }
@@ -258,19 +258,6 @@
   .mini-meeting:hover { @apply opacity-70; }
   .mini-recording { @apply text-[11px] text-[#ff0000]; }.mini-recording i { @apply mr-1 inline-block size-1.5 rounded-full bg-[#ff0000]; }.mini-meeting strong { @apply mt-1 font-normal; }.mini-meeting time { @apply text-[12px] tracking-[.08em] text-[#666]; }.mini-resume { @apply mt-3 text-[12px] text-[#0066ff]; }
   .software-update-notice { @apply fixed bottom-8 left-8 z-10 flex items-center gap-4 border border-black bg-white p-3 text-left text-[12px] text-black; animation: mini-in 260ms ease forwards; }.software-update-notice span { @apply text-[#666]; }.software-update-notice button { @apply border border-black bg-black px-3 py-2 text-[12px] text-white transition-opacity duration-300 hover:opacity-70; }
-}
-
-/* Compact desktop windows keep every primary action in the single-screen layout. */
-@media (min-width: 851px) and (max-width: 1100px), (min-width: 851px) and (max-height: 760px) {
-  .app-shell { grid-template-columns: 220px minmax(0, 1fr); }
-  .sidebar { padding: 44px 16px 20px; }.brand img { height: 24px; }.new-meeting { margin-top: 28px; padding: 10px 12px; } nav { margin-top: 24px; }.nav-item { padding: 6px 8px; }
-  .workspace { padding-inline: 24px; }.window-bar { height: 48px; }.icon-button { width: 32px; height: 32px; }
-  #prepare-view.active { height: calc(100dvh - 3rem); gap: 12px; padding-block: 16px; }
-  .prepare-layout { gap: 20px; }.prepare-layout h1, #prepare-view .prepare-layout h1 { margin-bottom: 12px; font-size: clamp(30px, 4vw, 42px); }.prepare-layout form { margin-top: 12px; gap: 10px; }
-  label { gap: 6px; font-size: 12px; } input:not([type=checkbox]):not([type=range]), select { padding: 8px 12px; font-size: 14px; }.form-grid { gap: 12px; } fieldset { padding: 6px 16px; }.choice { gap: 10px; padding-block: 4px; }.choice small { margin-top: 2px; }.choice .input-state { gap: 6px; }.prepare-layout .primary-action { padding-block: 10px; }
-  .model-card { padding-left: 20px; }.model-icon { width: 32px; height: 32px; margin-bottom: 16px; font-size: 14px; } dl { margin-block: 16px; gap: 10px; } dl div { padding-bottom: 8px; font-size: 12px; }
-  #live-view.active { height: calc(100dvh - 3rem); overflow-y: auto; }.live-header { gap: 16px; padding-block: 12px; }.live-layout { gap: 20px; padding-block: 12px; }.transcript { grid-template-rows: auto minmax(0, 1fr) auto; }.section-heading { padding-bottom: 12px; }.section-heading h1 { font-size: 26px; }.live-caption-translation { margin-top: 6px; font-size: 13px; line-height: 1.5; }.transcript-scroll { height: auto; }.tts-chat { padding-top: 8px; }.tts-chat form { gap: 8px; }.tts-selects { gap: 8px; }.tts-chat input, .tts-chat form > button[type=submit] { padding-block: 6px; }.live-panel { padding-left: 16px; }.live-panel section { padding-bottom: 12px; }.live-panel section + section { padding-top: 12px; }.person { padding-block: 6px; }
-  #detail-view.active { height: calc(100dvh - 3rem); gap: 12px; padding-block: 16px; }.detail-head h1, #detail-view .detail-head h1 { font-size: clamp(30px, 4vw, 42px); }.player { gap: 12px; padding-block: 10px; }.detail-layout { gap: 20px; }.notes { padding-left: 16px; }
 }
 
 /* Small-screen layout: collapse side-by-side panels without changing component markup. */

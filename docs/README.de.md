@@ -39,9 +39,28 @@ npm start
 
 Nach dem Start Modelle unter **Settings → Model library** laden. Entwicklungsordner lassen sich mit `BREVIA_DATA_DIR` und `BREVIA_MODELS_DIR` umstellen; Änderungen mit `npm test` prüfen.
 
-## Bereitstellung
+## macOS-Entwicklungsbuild v0.1.0 installieren
 
-Das Repository läuft derzeit als ungepackte Electron-App. Für eine Distribution `npm ci && npm run build` ausführen sowie `backend/`, `frontend/`, Python und Abhängigkeiten einpacken. `.venv/bin/python` oder `BREVIA_PYTHON` verwenden, Modelle bei Bedarf laden und deren Upstream-Lizenzen beibehalten.
+Lade `Brevia-0.1.0-arm64.dmg` von den [GitHub Releases](https://github.com/zerolovesea/Brevia/releases) herunter, öffne es und ziehe **Brevia** nach Applications. Dieser Build ist für Apple-Silicon-Macs.
+
+> **Unsignierter Entwicklungsbuild:** v0.1.0 ist weder codesigniert noch notarisiert. Wenn macOS den ersten Start blockiert, öffne **Systemeinstellungen → Datenschutz & Sicherheit** und wähle für Brevia **Dennoch öffnen**; alternativ im Terminal ausführen:
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/Brevia.app"
+```
+
+Das erste Entwicklungs-DMG enthält die Electron-App und den lokalen Backend-Code, aber noch keine portable Python-Laufzeit oder Abhängigkeiten für Sprachmodelle. Installiere die Python-Anforderungen aus einem Source-Checkout, bevor du die lokale Transkription verwendest.
+
+## Entwicklungs-DMG bauen
+
+```bash
+npm ci
+npm run build
+python3 -m pip install -r backend/requirements.txt
+npm run dist
+```
+
+Das DMG wird in `dist/` erzeugt. Eine künftige eigenständige Version muss eine verschiebbare Python-Laufzeit unter `.venv/bin/python` enthalten; Modelle sollen weiter bei Bedarf geladen werden und ihre Upstream-Lizenzen behalten.
 
 ## Contributing
 

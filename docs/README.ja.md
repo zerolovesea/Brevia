@@ -39,9 +39,28 @@ npm start
 
 初回起動後、**Settings → Model library** で必要なモデルを取得します。開発時は `BREVIA_DATA_DIR` と `BREVIA_MODELS_DIR` で保存先を変え、`npm test` を実行してください。
 
-## デプロイ
+## macOS 開発版 v0.1.0 のインストール
 
-現状は未パッケージの Electron アプリです。配布時は `npm ci && npm run build` を実行し、`backend/`、`frontend/`、Python 実行環境と依存関係を同梱します。`.venv/bin/python` または `BREVIA_PYTHON` を使い、モデルは必要に応じて取得して各上流ライセンスを維持してください。
+[GitHub Releases](https://github.com/zerolovesea/Brevia/releases) から `Brevia-0.1.0-arm64.dmg` をダウンロードし、開いて **Brevia** を Applications にドラッグします。このビルドは Apple Silicon Mac 向けです。
+
+> **未署名の開発ビルド：**v0.1.0 はコード署名も公証もされていません。初回起動を macOS がブロックした場合は、**システム設定 → プライバシーとセキュリティ** で Brevia の「このまま開く」を選ぶか、ターミナルで次を実行します。
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/Brevia.app"
+```
+
+最初の開発用 DMG には Electron アプリとローカルバックエンドコードが含まれますが、可搬な Python ランタイムと音声モデルの依存関係はまだ含まれません。ローカル文字起こしの前に、ソースチェックアウトから Python の依存関係をインストールしてください。
+
+## 開発用 DMG のビルド
+
+```bash
+npm ci
+npm run build
+python3 -m pip install -r backend/requirements.txt
+npm run dist
+```
+
+DMG は `dist/` に出力されます。将来の自己完結型リリースでは、`.venv/bin/python` に再配置可能な Python ランタイムを同梱します。モデルは引き続き必要に応じて取得し、上流ライセンスを維持してください。
 
 ## Contributing
 

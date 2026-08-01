@@ -43,7 +43,7 @@ The renderer never opens a backend port. Electron validates IPC payloads with Zo
 | Desktop shell | Electron 43, preload bridge, secure context isolation and sandbox |
 | Interface | Vanilla HTML, CSS/Tailwind build, JavaScript, built-in i18n catalog |
 | Local service | Python 3, JSONL worker protocol, SQLite-backed storage |
-| Speech AI | `sherpa-onnx==1.13.2`, ONNX Runtime, Zipformer / Paraformer / SenseVoice / Whisper / Qwen3 model choices |
+| Speech AI | `sherpa-onnx==1.13.2`, ONNX Runtime, Zipformer / Paraformer / Whisper / Qwen3 model choices |
 | Speaker processing | sherpa-onnx Pyannote segmentation and speaker-embedding models |
 
 ## Requirements

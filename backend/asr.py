@@ -376,33 +376,6 @@ class OfflineVAD:
         return segments
 
 
-class SenseVoiceStreamingASR:
-    """用 Silero VAD 切分音频并驱动 SenseVoice，提供低延迟分段字幕。"""
-    def __init__(self, manager, model_id, vad_id="silero-vad"):
-        if not (manager.is_ready(model_id) and manager.is_ready(vad_id)):
-            raise RuntimeError(f"Models {model_id}, {vad_id} are not installed")
-        import sherpa_onnx
-        path = manager.path(model_id)
-        self.recognizer = sherpa_onnx.OfflineRecognizer.from_sense_voice(model=str(path / "model.int8.onnx"), tokens=str(path / "tokens.txt"), language="auto", use_itn=True, num_threads=manager.device()["threads"], provider=manager.device()["backend"])
-        self.vads = {}
-        self.config = _vad_config(manager, vad_id)
-
-    def accept(self, track, samples, sample_rate=16000, flush=False):
-        import sherpa_onnx
-        vad = self.vads.setdefault(track, sherpa_onnx.VoiceActivityDetector(self.config, 100))
-        vad.accept_waveform(samples)
-        if flush:
-            vad.flush()
-        if vad.empty():
-            return "", False
-        segment = vad.front
-        stream = self.recognizer.create_stream()
-        stream.accept_waveform(sample_rate, segment.samples)
-        self.recognizer.decode_stream(stream)
-        vad.pop()
-        return stream.result.text.strip(), True
-
-
 class EnglishPunctuation:
     """为英文实时识别结果恢复大小写和标点。"""
 
@@ -544,7 +517,7 @@ class RefinedASR:
 
         """
         model = manager.get(model_id)
-        if model["kind"] not in {"qwen3", "sensevoice", "whisper"} or not manager.is_ready(model_id):
+        if model["kind"] not in {"qwen3", "whisper", "fire-red-asr-ctc", "funasr-nano"} or not manager.is_ready(model_id):
             raise RuntimeError(f"Model {model_id} is not installed")
         try:
             import sherpa_onnx
@@ -552,10 +525,10 @@ class RefinedASR:
             raise RuntimeError("sherpa-onnx is not installed") from error
         path = manager.path(model_id)
         common = dict(num_threads=manager.device()["threads"], provider=manager.device()["backend"])
-        if model["kind"] == "sensevoice":
-            self.recognizer = sherpa_onnx.OfflineRecognizer.from_sense_voice(
-                model=str(path / "model.int8.onnx"), tokens=str(path / "tokens.txt"), language="auto", use_itn=True, **common
-            )
+        if model["kind"] == "fire-red-asr-ctc":
+            self.recognizer = sherpa_onnx.OfflineRecognizer.from_fire_red_asr_ctc(model=str(path / "model.int8.onnx"), tokens=str(path / "tokens.txt"), **common)
+        elif model["kind"] == "funasr-nano":
+            self.recognizer = sherpa_onnx.OfflineRecognizer.from_funasr_nano(encoder_adaptor=str(path / "encoder_adaptor.int8.onnx"), llm=str(path / "llm.int8.onnx"), embedding=str(path / "embedding.int8.onnx"), tokenizer=str(path / "Qwen3-0.6B"), **common)
         elif model["kind"] == "whisper":
             self.recognizer = sherpa_onnx.OfflineRecognizer.from_whisper(
                 encoder=str(path / "turbo-encoder.int8.onnx"), decoder=str(path / "turbo-decoder.int8.onnx"), tokens=str(path / "turbo-tokens.txt"), language="", **common

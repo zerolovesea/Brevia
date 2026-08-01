@@ -39,9 +39,28 @@ npm start
 
 Après le premier lancement, téléchargez vos modèles dans **Settings → Model library**. Changez les chemins de développement avec `BREVIA_DATA_DIR` et `BREVIA_MODELS_DIR`, puis vérifiez avec `npm test`.
 
-## Déploiement
+## Installer la version de développement macOS v0.1.0
 
-Le dépôt fonctionne actuellement comme application Electron non empaquetée. Pour distribuer : exécutez `npm ci && npm run build`, embarquez `backend/`, `frontend/`, Python et ses dépendances. Utilisez `.venv/bin/python` ou `BREVIA_PYTHON`; téléchargez les modèles à la demande et préservez leurs licences amont.
+Téléchargez `Brevia-0.1.0-arm64.dmg` depuis les [GitHub Releases](https://github.com/zerolovesea/Brevia/releases), ouvrez-le puis faites glisser **Brevia** dans Applications. Cette build est destinée aux Mac Apple Silicon.
+
+> **Build de développement non signée :** v0.1.0 n'est ni signée ni notarisée. Si macOS bloque le premier lancement, ouvrez **Réglages Système → Confidentialité et sécurité**, puis choisissez **Ouvrir quand même** pour Brevia ; ou exécutez dans le Terminal :
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/Brevia.app"
+```
+
+Le premier DMG de développement contient l'application Electron et le code backend local, mais n'inclut pas encore de runtime Python portable ni les dépendances des modèles vocaux. Installez les dépendances Python depuis une copie du code source avant d'utiliser la transcription locale.
+
+## Construire un DMG de développement
+
+```bash
+npm ci
+npm run build
+python3 -m pip install -r backend/requirements.txt
+npm run dist
+```
+
+Le DMG est créé dans `dist/`. Une future version autonome devra fournir un runtime Python relogeable dans `.venv/bin/python` ; les modèles doivent rester téléchargés à la demande et conserver leurs licences amont.
 
 ## Contributing
 
