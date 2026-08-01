@@ -19,11 +19,11 @@ jobs:
         include:
           - name: macOS ARM64
             os: macos-14
-            command: npm run dist:mac
+            command: npm run package:mac
             artifact: Brevia-*.dmg
           - name: Windows x64
             os: windows-latest
-            command: npm run dist:win
+            command: npm run package:win
             artifact: Brevia-*-x64-setup.exe
     runs-on: ${{ matrix.os }}
     env:
@@ -40,6 +40,8 @@ jobs:
       - run: npm ci
       - run: python -m pip install -r backend/requirements-build.txt
       - run: npm test
+      - name: Bundle Python runtime and dependencies
+        run: python backend/pack_worker.py
       - run: ${{ matrix.command }}
       - uses: actions/upload-artifact@v4
         with:

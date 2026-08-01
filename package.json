@@ -12,8 +12,10 @@
     "test:diarization": ".venv/bin/python -m backend.diagnose_diarization --models-dir .models --download",
     "pack:backend": "python backend/pack_worker.py",
     "dist": "npm run dist:mac",
-    "dist:mac": "npm run build && npm run pack:backend && electron-builder --mac dmg --arm64 --publish never",
-    "dist:win": "npm run build && npm run pack:backend && electron-builder --win nsis --x64 --publish never"
+    "package:mac": "npm run build && electron-builder --mac dmg --arm64 --publish never",
+    "package:win": "npm run build && electron-builder --win nsis --x64 --publish never",
+    "dist:mac": "npm run pack:backend && npm run package:mac",
+    "dist:win": "npm run pack:backend && npm run package:win"
   },
   "build": {
     "appId": "com.brevia.app",
