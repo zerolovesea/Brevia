@@ -7,8 +7,8 @@ import time
 import urllib.request
 from pathlib import Path
 
+from .audio_io import read_mono_wav
 from .asr import ModelManager, OfflineDiarizer
-from .worker import Worker
 
 
 TEST_WAV = "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/0-four-speakers-zh.wav"
@@ -35,7 +35,7 @@ def main():
     wav_path = Path(args.wav) if args.wav else Path(args.models_dir) / "0-four-speakers-zh.wav"
     if not wav_path.exists():
         urllib.request.urlretrieve(TEST_WAV, wav_path)
-    samples, sample_rate = Worker._read_wav(str(wav_path))
+    samples, sample_rate = read_mono_wav(wav_path)
     started = time.perf_counter()
     turns = OfflineDiarizer(manager, args.num_speakers).process(samples, sample_rate)
     elapsed = time.perf_counter() - started

@@ -1,6 +1,6 @@
 {
   "name": "brevia",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "main": "electron/main.js",
   "scripts": {
     "build": "cd frontend && npx @tailwindcss/cli -i ./tailwind.css -o ./styles.css --minify",
@@ -9,15 +9,55 @@
     "test:ui": "cd frontend && node ./test-ui.mjs",
     "test:backend": "python3 -m unittest backend.test_worker",
     "test:model": ".venv/bin/python -m backend.diagnose_model --models-dir .models",
-    "test:diarization": ".venv/bin/python -m backend.diagnose_diarization --models-dir .models --download"
+    "test:diarization": ".venv/bin/python -m backend.diagnose_diarization --models-dir .models --download",
+    "dist": "npm run build && electron-builder --mac dmg --arm64"
+  },
+  "build": {
+    "appId": "com.brevia.app",
+    "productName": "Brevia",
+    "files": [
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "backend",
+        "to": "backend",
+        "filter": [
+          "**/*",
+          "!__pycache__/**",
+          "!*.pyc"
+        ]
+      },
+      {
+        "from": "frontend",
+        "to": "frontend"
+      }
+    ],
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
+      "category": "public.app-category.productivity",
+      "identity": null
+    },
+    "dmg": {
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
+    }
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "",
+  "description": "Private, local-first meeting memory.",
   "devDependencies": {
     "@tailwindcss/cli": "^4.3.3",
     "electron": "^43.2.0",
+    "electron-builder": "^26.15.3",
     "tailwindcss": "^4.3.3"
   },
   "dependencies": {

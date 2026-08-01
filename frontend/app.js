@@ -1763,7 +1763,7 @@ segmentContextMenu.addEventListener('submit', async (event) => {
   const segmentId = contextSegmentId;
   closeSegmentContextMenu();
   try {
-    const meeting = await window.brevia?.segment.speaker({ meeting_id: currentMeetingDetail.id, segment_id: segmentId, name });
+    const meeting = await window.brevia?.segment.speaker({ meeting_id: currentMeetingDetail.id, segment_id: segmentId, name, enroll: true });
     speakerProfiles = await window.brevia.speakerProfile.list();
     if (meeting) applyBackendDetail(meeting);
     showToast(t('已创建声纹并添加录音'));
@@ -1852,7 +1852,9 @@ if (window.brevia) {
     const participant = liveSpeakers.get(payload.speaker);
     const entry = {
       time: formatMeetingTime(payload.start_ms),
-      speaker: { id: payload.speaker, name: participant?.name || `${t('说话人')} ${participant?.id || payload.speaker.split('-').pop()}` },
+      startSeconds: payload.start_ms / 1000,
+      endSeconds: payload.end_ms / 1000,
+      speaker: { id: payload.speaker, name: payload.speaker_name || participant?.name || `${t('说话人')} ${participant?.id || payload.speaker.split('-').pop()}` },
       text: payload.text,
       translation: payload.translation,
       partial,
@@ -1872,7 +1874,10 @@ if (window.brevia) {
     const previous = liveSegments.get(payload.segment_id);
     const element = template.content.firstElementChild;
     if (previous) previous.replaceWith(element);
-    else transcript.append(element);
+    else {
+      const next = [...transcript.querySelectorAll('.segment')].find((item) => Number(item.dataset.start) > payload.start_ms / 1000);
+      transcript.insertBefore(element, next || null);
+    }
     liveSegments.set(payload.segment_id, element);
     transcript.querySelectorAll('.segment.is-active').forEach((segment) => {
       segment.classList.remove('is-active');

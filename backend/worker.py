@@ -22,6 +22,7 @@ from .asr import (
     LanguageIdentifier,
     LiveDenoiser,
     OfflineDenoiser,
+    OfflineVAD,
     ModelManager,
     OfflineDiarizer,
     RefinedASR,
@@ -186,6 +187,15 @@ class Worker:
     def assign_segment_speaker(self, payload):
         if self._is_default_speaker_name(payload["name"]):
             return self.store.get_meeting(payload["meeting_id"])
+        meeting = self.store.get_meeting(payload["meeting_id"])
+        if not payload.get("enroll"):
+            segment = next((item for item in meeting["segments"] if item["id"] == payload["segment_id"]), None)
+            if not segment:
+                raise ValueError("Segment not found")
+            self.store.set_segment_speaker(
+                payload["meeting_id"], payload["segment_id"], segment["speaker"], name=payload["name"]
+            )
+            return self.store.get_meeting(payload["meeting_id"])
         profile = self.store.ensure_speaker_profile(payload["name"])
         speaker_id = f"profile-{profile['id']}"
         self.store.set_segment_speaker(payload["meeting_id"], payload["segment_id"], speaker_id, profile["id"], profile["name"])
@@ -337,7 +347,7 @@ class Worker:
                 "worker.warning",
                 {"meeting_id": self.active, "code": "speaker_unavailable", "message": str(error)},
             )
-        if meeting["refined_model_id"].startswith("qwen3-") and self.models.is_ready(meeting["refined_model_id"]):
+        if self.models.is_ready(meeting["refined_model_id"]):
             try:
                 self.live_refiner = RefinedASR(self.models, meeting["refined_model_id"])
                 self.live_refinement = ThreadPoolExecutor(max_workers=1, thread_name_prefix="brevia-live-refine")
@@ -440,9 +450,9 @@ class Worker:
         if text and (text != state["last_text"] or final):
             state["revision"] += 1
             segment_id = f"{payload['track']}-{state['segment']}"
-            speaker = "spk-1" if payload["track"] == "mic" else "spk-2"
+            speaker = "local-user" if payload["track"] == "mic" else "spk-1"
             segment_audio = numpy.concatenate(state["audio"]) if final and state["audio"] and (self.speaker_tracker or self.live_refiner) else None
-            if final and self.speaker_tracker and segment_audio is not None:
+            if final and payload["track"] == "system" and self.speaker_tracker and segment_audio is not None:
                 speaker = self._identify_speaker(
                     self.active,
                     self.speaker_tracker,
@@ -457,8 +467,11 @@ class Worker:
                 "start_ms": state["start_ms"],
                 "end_ms": end_ms,
                 "speaker": speaker,
+                "speaker_name": "Local user" if speaker == "local-user" else None,
                 "track": payload["track"],
             }
+            if speaker == "local-user":
+                self.store.rename_speaker(self.active, speaker, "Local user")
             state["last_text"] = text
             if final:
                 if self._is_duplicate_final(event):
@@ -489,10 +502,8 @@ class Worker:
         return {"samples": samples_total, "text": text, "final": final}
 
     def _refine_live_segment_later(self, event, samples, sample_rate):
-        """将中文最终段交给单线程 Qwen3，避免阻塞实时 Zipformer。"""
+        """将实时最终段交给单线程校准模型，不阻塞快轨。"""
         if not (self.live_refinement and self.live_refiner and samples is not None):
-            return
-        if self.meeting_language not in {"zh", "yue"} and self.detected_language not in {"zh", "yue"}:
             return
         self.live_refinement.submit(self._refine_live_segment, self.live_refiner, event.copy(), samples.copy(), sample_rate)
 
@@ -584,25 +595,14 @@ class Worker:
         return {"meeting_id": payload["meeting_id"], "purged": True}
 
     def rename_speaker(self, payload):
-        """保存说话人名称和可选锁定状态，并返回更新后的会议。"""
+        """只保存会议内名称；声纹样本必须由显式 Enrollment 添加。"""
         require(payload, "meeting_id", "speaker_id", "name")
-        if self._is_default_speaker_name(payload["name"]):
-            self.store.rename_speaker(payload["meeting_id"], payload["speaker_id"], payload["name"], payload.get("locked", False))
-            return self.store.get_meeting(payload["meeting_id"])
         self.store.rename_speaker(
             payload["meeting_id"],
             payload["speaker_id"],
             payload["name"],
             payload.get("locked", False),
         )
-        profile = self.voice_profiles.learn_from_meeting(
-            self.store.get_meeting(payload["meeting_id"]), payload["speaker_id"], payload["name"]
-        )
-        self.store.rename_speaker(
-            payload["meeting_id"], payload["speaker_id"], payload["name"],
-            payload.get("locked", False), profile["id"],
-        )
-        self.emit("speaker-profile.updated", {"profile": profile})
         return self.store.get_meeting(payload["meeting_id"])
 
     @staticmethod
@@ -839,8 +839,8 @@ class Worker:
             状态更新为 ``refined`` 的会议详情。
 
         Notes:
-            优先使用混音轨生成跨音轨的说话人时间段。人工编辑或锁定的说话人
-            优先于聚类结果。
+            麦克风与系统音频始终独立执行 VAD/识别，再按时间戳合并。麦克风
+            直接归属本地用户；系统音频才执行远端说话人分离与 Enrollment 匹配。
         """
         require(payload, "meeting_id")
         meeting = self.store.get_meeting(payload["meeting_id"])
@@ -858,43 +858,65 @@ class Worker:
             raise ValueError("num_speakers must be -1 or a positive integer")
         if not 0 <= threshold <= 1:
             raise ValueError("cluster_threshold must be between 0 and 1")
-        track = next(
-            (name for name in ("mix", "mic", "system") if meeting["audio"]["playback"].get(name)),
-            None,
-        )
-        tracks = [track] if track else []
+        tracks = [
+            track for track in ("mic", "system")
+            if meeting["audio"]["playback"].get(track)
+        ]
         if not tracks:
             raise ValueError("The meeting has no audio to refine")
-        audio = {
-            track: read_mono_wav(meeting["audio"]["playback"][track])
-            for track in tracks
-        }
-        samples, sample_rate = audio[tracks[0]]
+        audio, turns_by_track = {}, {}
+        vad = OfflineVAD(self.models, meeting.get("vad_model_id") or "silero-vad")
+        diarizer = OfflineDiarizer(
+            self.models, num_speakers, threshold,
+            meeting.get("speaker_segmentation_model_id"),
+            meeting.get("speaker_embedding_model_id"),
+        ) if "system" in tracks else None
         denoiser_id = SETTINGS["live_asr"]["denoiser_model_id"]
-        if self.models.is_ready(denoiser_id):
-            try:
-                samples = OfflineDenoiser(self.models, denoiser_id).process(samples, sample_rate)
-            except RuntimeError as error:
-                self.emit("worker.warning", {"meeting_id": meeting["id"], "code": "offline_denoiser_unavailable", "message": str(error)})
-        speaker_tracker = SpeakerTracker(self.models)
-        turns = OfflineDiarizer(self.models, num_speakers, threshold, meeting.get("speaker_segmentation_model_id"), meeting.get("speaker_embedding_model_id")).process(samples, sample_rate)
-        try:
-            identity_tracker = SpeakerTracker(self.models, model_id=meeting.get("speaker_embedding_model_id"))
-            for turn in turns:
-                clip = samples[round(turn["start_ms"] * sample_rate / 1000):round(turn["end_ms"] * sample_rate / 1000)]
-                embedding = identity_tracker.embedding(clip, sample_rate)
-                profile = embedding is not None and self.store.match_speaker_profile(
-                    embedding, SETTINGS["diarization"]["online_similarity_threshold"]
-                )
-                if profile:
-                    turn["speaker"] = f"profile-{profile['id']}"
-                    self.store.rename_speaker(meeting["id"], turn["speaker"], profile["name"], profile_id=profile["id"])
-        except RuntimeError:
-            pass
+        for track in tracks:
+            samples, sample_rate = read_mono_wav(meeting["audio"]["playback"][track])
+            if track == "mic" and self.models.is_ready(denoiser_id):
+                try:
+                    samples = OfflineDenoiser(self.models, denoiser_id).process(samples, sample_rate)
+                except RuntimeError as error:
+                    self.emit("worker.warning", {"meeting_id": meeting["id"], "code": "offline_denoiser_unavailable", "message": str(error)})
+            speech = vad.process(samples, sample_rate)
+            if track == "mic":
+                turns = [{**turn, "speaker": "local-user"} for turn in speech]
+                self.store.rename_speaker(meeting["id"], "local-user", "Local user")
+            else:
+                import numpy
+
+                speech_only = numpy.zeros_like(samples)
+                for turn in speech:
+                    start = round(turn["start_ms"] * sample_rate / 1000)
+                    end = round(turn["end_ms"] * sample_rate / 1000)
+                    speech_only[start:end] = samples[start:end]
+                turns = diarizer.process(speech_only, sample_rate) if speech else []
+                if speech and not turns:
+                    turns = [{**turn, "speaker": "spk-1"} for turn in speech]
+                try:
+                    identity_tracker = SpeakerTracker(self.models, model_id=meeting.get("speaker_embedding_model_id"))
+                    for turn in turns:
+                        clip = samples[round(turn["start_ms"] * sample_rate / 1000):round(turn["end_ms"] * sample_rate / 1000)]
+                        embedding = identity_tracker.embedding(clip, sample_rate)
+                        profile = embedding is not None and self.store.match_speaker_profile(
+                            embedding, SETTINGS["diarization"]["online_similarity_threshold"]
+                        )
+                        if profile:
+                            turn["speaker"] = f"profile-{profile['id']}"
+                            self.store.rename_speaker(meeting["id"], turn["speaker"], profile["name"], profile_id=profile["id"])
+                except RuntimeError:
+                    pass
+            audio[track] = samples, sample_rate
+            turns_by_track[track] = turns
+        turns = sorted(
+            (turn for track_turns in turns_by_track.values() for turn in track_turns),
+            key=lambda turn: (turn["start_ms"], turn["end_ms"]),
+        )
         self.store.replace_speaker_turns(meeting["id"], turns)
         self.emit(
             "diarization.ready",
-            {"meeting_id": meeting["id"], "track": tracks[0], "turns": turns},
+            {"meeting_id": meeting["id"], "tracks": tracks, "turns": turns},
         )
         recognizer = RefinedASR(self.models, refined_model_id)
         locked_ids = {speaker["id"] for speaker in meeting["speakers"] if speaker["locked"]}
@@ -903,9 +925,14 @@ class Worker:
             for segment in meeting["segments"]
             if segment["user_edited"] or segment["speaker"] in locked_ids
         ]
-        window_size = SETTINGS["asr"]["refined_window_seconds"]
-        windows = self._refinement_turns(turns, len(samples) * 1000 // sample_rate, window_size * 1000)
-        total = len(windows)
+        window_size = SETTINGS["asr"]["refined_window_seconds"] * 1000
+        windows_by_track = {
+            track: self._refinement_turns(
+                turns_by_track[track], len(audio[track][0]) * 1000 // audio[track][1], window_size
+            )
+            for track in tracks
+        }
+        total = sum(map(len, windows_by_track.values()))
         completed = 0
         previous_text = {}
         refined_segments = []
@@ -915,6 +942,8 @@ class Worker:
         self.emit("refinement.started", {"meeting_id": meeting["id"], "total": total})
         try:
             for track in tracks:
+                samples, sample_rate = audio[track]
+                windows = windows_by_track[track]
                 for index, turn in enumerate(windows):
                     start_ms, end_ms = turn["start_ms"], turn["end_ms"]
                     before = windows[index - 1] if index else None
@@ -925,7 +954,7 @@ class Worker:
                     end = round(decode_end_ms * sample_rate / 1000)
                     current = samples[start:end]
                     raw_text = recognizer.decode(current, sample_rate)
-                    speaker_key = turn["speaker"] or track
+                    speaker_key = (track, turn["speaker"])
                     text = self._trim_refinement_overlap(previous_text.get(speaker_key, ""), raw_text)
                     previous_text[speaker_key] = raw_text
                     completed += 1
@@ -935,11 +964,10 @@ class Worker:
                     )
                     if not text:
                         continue
-                    speaker = self._speaker_for(start_ms, end_ms, locked_segments)
-                    if not speaker:
-                        speaker = turn["speaker"]
-                    if not speaker:
-                        speaker = speaker_tracker.assign(current, sample_rate)
+                    speaker = self._speaker_for(
+                        start_ms, end_ms,
+                        [segment for segment in locked_segments if segment["track"] == track],
+                    ) or turn["speaker"] or ("local-user" if track == "mic" else "spk-1")
                     segment_id = self._refinement_segment_id(track, start_ms, index, refined_segment_ids)
                     event = {
                         "meeting_id": meeting["id"],
@@ -948,13 +976,14 @@ class Worker:
                         "text": text,
                         "start_ms": start_ms,
                         "end_ms": end_ms,
-                        "speaker": speaker or ("spk-1" if track == "mic" else "spk-2"),
+                        "speaker": speaker,
                         "track": track,
                     }
                     refined_segments.append(event)
         except Exception:
             self.store.set_status(meeting["id"], "ready")
             raise
+        refined_segments.sort(key=lambda item: (item["start_ms"], item["track"], item["end_ms"]))
         version, revision = self.store.next_refinement_version(meeting["id"])
         refined_segments = self.store.replace_segments(meeting["id"], refined_segments, version, revision)
         for event in refined_segments:
@@ -996,10 +1025,9 @@ class Worker:
     @staticmethod
     def _refinement_turns(turns, duration_ms, maximum_ms):
         """按离线说话人边界拆分精修窗口，且单段不超过模型上限。"""
-        source = turns or [{"start_ms": 0, "end_ms": duration_ms, "speaker": None}]
         return [
             {"start_ms": start, "end_ms": min(start + maximum_ms, turn["end_ms"]), "speaker": turn["speaker"]}
-            for turn in source
+            for turn in turns
             for start in range(turn["start_ms"], turn["end_ms"], maximum_ms)
         ]
 

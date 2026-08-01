@@ -329,6 +329,53 @@ class LanguageIdentifier:
         return self.engine.compute(stream)
 
 
+def _vad_config(manager, model_id):
+    """创建实时与离线流程共用的 VAD 配置。"""
+    if not manager.is_ready(model_id):
+        raise RuntimeError(f"Model {model_id} is not installed")
+    import sherpa_onnx
+
+    config = sherpa_onnx.VadModelConfig()
+    model = manager.get(model_id)
+    getattr(config, "ten_vad" if model["kind"] == "ten-vad" else "silero_vad").model = str(
+        manager.path(model_id) / model["files"][0]
+    )
+    config.sample_rate = 16000
+    return config
+
+
+class OfflineVAD:
+    """用会议选择的 VAD 模型生成保留原时间轴的语音区间。"""
+
+    def __init__(self, manager, model_id="silero-vad"):
+        import sherpa_onnx
+
+        self.sherpa_onnx = sherpa_onnx
+        self.config = _vad_config(manager, model_id)
+
+    def process(self, samples, sample_rate=16000):
+        if sample_rate != self.config.sample_rate:
+            raise ValueError(f"VAD requires {self.config.sample_rate} Hz audio")
+        detector = self.sherpa_onnx.VoiceActivityDetector(self.config, 100)
+        segments = []
+
+        def drain():
+            while not detector.empty():
+                segment = detector.front
+                segments.append({
+                    "start_ms": round(segment.start * 1000 / sample_rate),
+                    "end_ms": round((segment.start + len(segment.samples)) * 1000 / sample_rate),
+                })
+                detector.pop()
+
+        for start in range(0, len(samples), sample_rate * 10):
+            detector.accept_waveform(samples[start:start + sample_rate * 10])
+            drain()
+        detector.flush()
+        drain()
+        return segments
+
+
 class SenseVoiceStreamingASR:
     """用 Silero VAD 切分音频并驱动 SenseVoice，提供低延迟分段字幕。"""
     def __init__(self, manager, model_id, vad_id="silero-vad"):
@@ -337,12 +384,8 @@ class SenseVoiceStreamingASR:
         import sherpa_onnx
         path = manager.path(model_id)
         self.recognizer = sherpa_onnx.OfflineRecognizer.from_sense_voice(model=str(path / "model.int8.onnx"), tokens=str(path / "tokens.txt"), language="auto", use_itn=True, num_threads=manager.device()["threads"], provider=manager.device()["backend"])
-        config = sherpa_onnx.VadModelConfig()
-        vad = manager.get(vad_id)
-        getattr(config, "ten_vad" if vad["kind"] == "ten-vad" else "silero_vad").model = str(manager.path(vad_id) / vad["files"][0])
-        config.sample_rate = 16000
         self.vads = {}
-        self.config = config
+        self.config = _vad_config(manager, vad_id)
 
     def accept(self, track, samples, sample_rate=16000, flush=False):
         import sherpa_onnx

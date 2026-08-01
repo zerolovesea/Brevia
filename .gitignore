@@ -5,3 +5,4 @@ __pycache__/
 .models/
 .DS_Store
 npm-debug.log*
+dist/

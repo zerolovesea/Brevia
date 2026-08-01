@@ -18,6 +18,8 @@ app.on('second-instance', () => {
 
 const root = path.join(__dirname, '..');
 const packagedRoot = app.isPackaged ? process.resourcesPath : root;
+const startupAnimationMs = 1400;
+const splashFadeMs = 360;
 const dataDir = () => app.getPath('userData');
 const command = z.object({ type: z.string().min(1), payload: z.record(z.string(), z.unknown()).default({}) });
 const meetingStart = z.object({
@@ -279,7 +281,7 @@ function registerIpc() {
   handle('settings.advanced.get', z.object({}), 'settings.advanced.get');
   handle('settings.advanced.save', z.object({ settings: z.record(z.string(), z.unknown()) }), 'settings.advanced.save');
   handle('metrics.record', z.object({ app_duration_ms: z.number().int().nonnegative().optional() }), 'metrics.record');
-  handle('segment.speaker', id.extend({ segment_id: z.string().min(1), name: z.string().trim().min(1).max(32) }), 'segment.speaker');
+  handle('segment.speaker', id.extend({ segment_id: z.string().min(1), name: z.string().trim().min(1).max(32), enroll: z.boolean().optional() }), 'segment.speaker');
   handle('segment.speaker-profile-sample', id.extend({ segment_id: z.string().min(1), profile_id: z.string().uuid() }), 'segment.speaker-profile-sample');
   ipcMain.handle('storage.open', async (_, payload) => {
     const partition = z.enum(['meetings', 'models', 'exports']).parse(payload?.partition);
@@ -405,11 +407,25 @@ async function promptInitialPermissions(window) {
 }
 
 function createWindow() {
+  const splash = new BrowserWindow({
+    width: 1200,
+    height: 760,
+    show: false,
+    frame: false,
+    resizable: false,
+    movable: false,
+    alwaysOnTop: true,
+    backgroundColor: '#ffffff',
+    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
+  });
+  splash.loadFile(path.join(packagedRoot, 'frontend', 'splash.html'));
+  splash.once('ready-to-show', () => splash.show());
   const window = new BrowserWindow({
     width: 1200,
     height: 760,
     minWidth: 880,
     minHeight: 640,
+    show: false,
     titleBarStyle: 'hiddenInset',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -418,8 +434,36 @@ function createWindow() {
       sandbox: true,
     },
   });
+  let mainReady = false;
+  let animationComplete = false;
+  let revealed = false;
+  const showMain = () => {
+    if (!mainReady || !animationComplete || revealed || window.isDestroyed()) return;
+    revealed = true;
+    window.show();
+    promptInitialPermissions(window);
+    const started = Date.now();
+    const fadeSplash = () => {
+      if (splash.isDestroyed()) return;
+      const progress = Math.min(1, (Date.now() - started) / splashFadeMs);
+      splash.setOpacity(1 - progress * progress);
+      if (progress < 1) setTimeout(fadeSplash, 16);
+      else splash.close();
+    };
+    fadeSplash();
+  };
   window.loadFile(path.join(packagedRoot, 'frontend', 'index.html'));
-  window.once('ready-to-show', () => promptInitialPermissions(window));
+  window.once('ready-to-show', () => {
+    mainReady = true;
+    showMain();
+  });
+  setTimeout(() => {
+    animationComplete = true;
+    showMain();
+  }, startupAnimationMs);
+  window.once('closed', () => {
+    if (!splash.isDestroyed()) splash.close();
+  });
   return window;
 }
 

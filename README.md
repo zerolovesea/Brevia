@@ -79,18 +79,28 @@ To keep development data outside the normal app directory:
 BREVIA_DATA_DIR=/absolute/path/to/brevia-data BREVIA_MODELS_DIR=/absolute/path/to/models npm start
 ```
 
-## Deployment
+## Install the v0.1.0 macOS development build
 
-This repository currently runs as an unpackaged Electron application. Build the frontend CSS, provision the Python runtime and dependencies, then package Electron with the `backend/`, `frontend/`, and required model/runtime files included:
+Download `Brevia-0.1.0-arm64.dmg` from the [GitHub Releases](https://github.com/zerolovesea/Brevia/releases) page, open it, and drag **Brevia** to Applications. This build is for Apple Silicon Macs.
+
+> **Unsigned development build:** v0.1.0 is not code signed or notarized. If macOS blocks the first launch, open **System Settings → Privacy & Security**, then choose **Open Anyway** for Brevia. Alternatively, remove the quarantine attribute in Terminal:
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/Brevia.app"
+```
+
+The first development DMG packages the Electron app and local backend code, but does not yet bundle a portable Python runtime or speech-model dependencies. Install the Python requirements from a source checkout before relying on local transcription.
+
+## Build a development DMG
 
 ```bash
 npm ci
 npm run build
 python3 -m pip install -r backend/requirements.txt
-npm start
+npm run dist
 ```
 
-For a distributable, set `BREVIA_PYTHON` to the bundled Python executable or include it at `.venv/bin/python`; Electron already prefers that path when packaged. Do not ship model weights by assumption: let users download the models they need, preserve each upstream model's license, and make sure the packaged app can write to its user-data directory.
+The DMG is written to `dist/`. For a self-contained future release, bundle a relocatable Python runtime at `.venv/bin/python`; Electron already prefers that path when packaged. Do not ship model weights by assumption: let users download the models they need, preserve each upstream model's license, and make sure the packaged app can write to its user-data directory.
 
 ## Contributing
 

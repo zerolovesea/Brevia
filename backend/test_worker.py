@@ -9,9 +9,9 @@ import zipfile
 from array import array
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
-from .asr import ChinesePunctuation, EnglishPunctuation, SpeakerTracker
+from .asr import ChinesePunctuation, EnglishPunctuation, OfflineVAD, SpeakerTracker
 from .config import DEFAULT_SETTINGS, runtime_settings, save_runtime_settings
 from .llm_client import complete
 from .transcript import parse_json_object, validate_summary
@@ -172,6 +172,81 @@ class WorkerTest(unittest.TestCase):
         self.worker._refine_live_segment(Refiner(), event, [0.1], 16000)
         self.assertEqual(self.worker.store.get_meeting(meeting["id"])["segments"][0]["text"], "这是直播识别。")
 
+    def test_live_revision_layer_runs_for_every_language(self):
+        self.worker.meeting_language = "en"
+        event = {"meeting_id": "meeting", "segment_id": "system-0", "text": "fast"}
+        executor = self.worker.live_refinement = Mock()
+        self.worker.live_refiner = object()
+        self.worker._refine_live_segment_later(event, [0.1], 16000)
+        executor.submit.assert_called_once()
+
+    def test_refinement_keeps_tracks_separate_and_merges_by_timestamp(self):
+        meeting = self.worker.start({"title": "双轨精修", "language": "en", "streaming_model_id": "zipformer-en-streaming-int8", "refined_model_id": "whisper-turbo"})
+        for track, value in (("mic", 16), ("system", 32)):
+            self.worker.audio({
+                "meeting_id": meeting["id"], "track": track,
+                "pcm": base64.b64encode(bytes((value, 0)) * 32000).decode(),
+                "sample_rate": 16000, "start_ms": 0,
+            })
+        self.worker.stop({"meeting_id": meeting["id"], "duration_ms": 2000})
+
+        numpy = type("Numpy", (), {"zeros_like": staticmethod(lambda samples: [0.0] * len(samples))})
+        audio = {"mic": ([0.0005] * 32000, 16000), "system": ([0.001] * 32000, 16000)}
+        with patch("backend.worker.read_mono_wav", side_effect=lambda path: audio["mic" if "mic" in path else "system"]), \
+             patch.dict("sys.modules", {"numpy": numpy}), \
+             patch("backend.worker.OfflineVAD") as vad, \
+             patch("backend.worker.OfflineDiarizer") as diarizer, \
+             patch("backend.worker.SpeakerTracker") as tracker, \
+             patch("backend.worker.RefinedASR") as refined:
+            vad.return_value.process.side_effect = lambda samples, _rate: (
+                [{"start_ms": 1000, "end_ms": 2000}] if samples[0] < 0.0007
+                else [{"start_ms": 0, "end_ms": 1000}]
+            )
+            diarizer.return_value.process.return_value = [{"start_ms": 0, "end_ms": 1000, "speaker": "spk-1"}]
+            tracker.return_value.embedding.return_value = None
+            refined.return_value.decode.side_effect = lambda samples, _rate: "local slow" if samples[0] < 0.0007 else "remote slow"
+            result = self.worker.refine({"meeting_id": meeting["id"]})
+
+        latest = [segment for segment in result["segments"] if segment["version"] == "postprocess"]
+        self.assertEqual([(item["track"], item["text"], item["speaker"]) for item in latest], [
+            ("system", "remote slow", "spk-1"),
+            ("mic", "local slow", "local-user"),
+        ])
+        self.assertNotIn("mix", {item["track"] for item in latest})
+        diarization_event = next(event for event in self.events if event.get("type") == "diarization.ready")
+        self.assertEqual(diarization_event["payload"]["tracks"], ["mic", "system"])
+
+    def test_offline_vad_drains_long_audio_without_losing_timestamps(self):
+        class Detector:
+            def __init__(self, *_):
+                self.queue, self.position = [], 0
+
+            def accept_waveform(self, samples):
+                self.queue.append(type("Segment", (), {"start": self.position, "samples": samples})())
+                self.position += len(samples)
+
+            def flush(self):
+                pass
+
+            def empty(self):
+                return not self.queue
+
+            @property
+            def front(self):
+                return self.queue[0]
+
+            def pop(self):
+                self.queue.pop(0)
+
+        vad = OfflineVAD.__new__(OfflineVAD)
+        vad.config = type("Config", (), {"sample_rate": 16000})()
+        vad.sherpa_onnx = type("Sherpa", (), {"VoiceActivityDetector": Detector})
+        self.assertEqual(vad.process([0.1] * 400000), [
+            {"start_ms": 0, "end_ms": 10000},
+            {"start_ms": 10000, "end_ms": 20000},
+            {"start_ms": 20000, "end_ms": 25000},
+        ])
+
     def test_refinement_turns_preserve_speaker_boundaries(self):
         turns = self.worker._refinement_turns(
             [{"start_ms": 0, "end_ms": 18000, "speaker": "spk-1"}, {"start_ms": 18000, "end_ms": 21000, "speaker": "spk-2"}],
@@ -279,13 +354,29 @@ class WorkerTest(unittest.TestCase):
         self.assertEqual(matched["id"], first["id"])
         self.assertIsNone(self.worker.store.match_speaker_profile([0, 0, 1], 0.8))
 
-    def test_assigning_a_sentence_speaker_registers_and_learns_its_voiceprint(self):
+    def test_assigning_a_sentence_speaker_does_not_enroll_audio(self):
         meeting = self.worker.start({"title": "声纹绑定", "language": "zh", "streaming_model_id": "paraformer-zh-en-int8", "refined_model_id": "qwen3-asr-0.6b-int8"})
         self.worker.store.save_segment({"meeting_id": meeting["id"], "segment_id": "mic-0", "text": "这是当前句", "start_ms": 0, "end_ms": 1000, "speaker": "spk-1"})
         with patch.object(self.worker.voice_profiles, "learn_from_meeting", side_effect=lambda _meeting, _speaker, name, **_kwargs: self.worker.store.ensure_speaker_profile(name)) as learn:
             result = self.worker.assign_segment_speaker({"meeting_id": meeting["id"], "segment_id": "mic-0", "name": "小王"})
         self.assertEqual(result["segments"][-1]["speaker_name"], "小王")
+        learn.assert_not_called()
+        self.assertEqual(self.worker.store.list_speaker_profiles(), [])
+
+    def test_explicit_segment_enrollment_adds_only_that_audio(self):
+        meeting = self.worker.start({"title": "显式 Enrollment", "language": "zh", "streaming_model_id": "paraformer-zh-en-int8", "refined_model_id": "qwen3-asr-0.6b-int8"})
+        self.worker.store.save_segment({"meeting_id": meeting["id"], "segment_id": "mic-0", "text": "这是当前句", "start_ms": 0, "end_ms": 1000, "speaker": "spk-1"})
+        with patch.object(self.worker.voice_profiles, "learn_from_meeting", side_effect=lambda _meeting, _speaker, name, **_kwargs: self.worker.store.ensure_speaker_profile(name)) as learn:
+            result = self.worker.assign_segment_speaker({"meeting_id": meeting["id"], "segment_id": "mic-0", "name": "小王", "enroll": True})
+        self.assertEqual(result["segments"][-1]["speaker_name"], "小王")
         learn.assert_called_once()
+
+    def test_renaming_a_live_speaker_does_not_enroll_audio(self):
+        meeting = self.worker.start({"title": "只改名", "language": "zh", "streaming_model_id": "paraformer-zh-en-int8", "refined_model_id": "qwen3-asr-0.6b-int8"})
+        with patch.object(self.worker.voice_profiles, "learn_from_meeting") as learn:
+            result = self.worker.rename_speaker({"meeting_id": meeting["id"], "speaker_id": "spk-1", "name": "小王"})
+        self.assertEqual(result["speakers"][0]["name"], "小王")
+        learn.assert_not_called()
 
     def test_voiceprint_samples_are_added_only_for_the_selected_sentence(self):
         meeting = self.worker.start({"title": "手动补充声纹", "language": "zh", "streaming_model_id": "paraformer-zh-en-int8", "refined_model_id": "qwen3-asr-0.6b-int8"})
