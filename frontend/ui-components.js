@@ -27,6 +27,10 @@ function renderModelRow({ icon, name, detail, intro = '' }) {
 function renderSettingsCard({ title, description, action, modal }) {
   return `<section class="settings-card"><h2>${t(title)}</h2><p>${t(description)}</p><button class="secondary" data-settings-modal="${modal}">${t(action)}</button></section>`;
 }
+/** Renders the language-dependent settings cards without resetting other views. */
+function renderSettingsView() {
+  document.querySelector('#settings-view .settings-grid').innerHTML = `<section class="settings-card" id="installed-models"><h2>${t('模型库')}</h2><p>${t('管理语言识别模型的下载、删除与版本信息。')}</p><button class="secondary" data-settings-modal="models">${t('管理模型库')}</button></section>${uiData.settings.cards.map(renderSettingsCard).join('')}`;
+}
 /** Renders one participant in the live-meeting sidebar. @param {{id: string, speakerId?: string, name: string, source: string, avatar: string, level: string}} participant Participant data. @returns {string} Participant markup. */
 function renderParticipant({ id, speakerId = id, name, source, avatar, level }) {
   return `<div class="person"><span class="avatar ${avatar}">${id}</span><div><b data-speaker="${speakerId}" title="双击修改名称">${name}</b><small>${t(source)}</small></div><i class="level ${level}"></i></div>`;
@@ -43,7 +47,7 @@ function renderStaticViews() {
   document.querySelector('.meeting-list').innerHTML = uiData.meetings.map(renderMeetingRow).join('');
   document.querySelector('#transcript-scroll').innerHTML = uiData.live.transcript.map(renderTranscriptSegment).join('');
   document.querySelector('.live-panel').innerHTML = `<section><p class="eyebrow">${t('参与者')}</p>${uiData.live.participants.map(renderParticipant).join('')}</section><section><p class="eyebrow">${t('本场状态')}</p>${renderStatusList(uiData.live.status)}</section><button class="text-button">${t('打开会议面板')} →</button>`;
-  document.querySelector('#settings-view .settings-grid').innerHTML = `<section class="settings-card" id="installed-models"><h2>${t('模型库')}</h2><p>${t('管理语言识别模型的下载、删除与版本信息。')}</p><button class="secondary" data-settings-modal="models">${t('管理模型库')}</button></section>${uiData.settings.cards.map(renderSettingsCard).join('')}`;
+  renderSettingsView();
 }
 /** Refreshes the transcript and summary panes for the selected meeting. @returns {void} */
 function renderMeetingDetail() {

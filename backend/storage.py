@@ -627,6 +627,7 @@ class Store:
                 """SELECT id,name,sample_count,created_at,updated_at,
                    COALESCE((SELECT SUM(duration_ms) FROM speaker_profile_samples sample WHERE sample.profile_id=speaker_profiles.id),0) AS duration_ms,
                    EXISTS(SELECT 1 FROM speaker_profile_samples sample WHERE sample.profile_id=speaker_profiles.id AND sample.source_key LIKE 'builtin:%') AS built_in,
+                   (SELECT source_key FROM speaker_profile_samples sample WHERE sample.profile_id=speaker_profiles.id AND sample.source_key LIKE 'builtin:%' LIMIT 1) AS builtin_key,
                    EXISTS(SELECT 1 FROM speaker_profile_samples sample WHERE sample.profile_id=speaker_profiles.id AND sample.audio_path IS NOT NULL AND trim(COALESCE(sample.reference_text,'')) != '') AS has_reference
                    FROM speaker_profiles ORDER BY name COLLATE NOCASE"""
             ).fetchall()

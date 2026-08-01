@@ -28,6 +28,7 @@ function renderDualTrackPanel(meeting) {
 }
 
 function applyBackendDetail(meeting) {
+  const sameMeeting = currentMeetingDetail?.id === meeting.id && Boolean(playerAudio.src);
   currentMeetingDetail = meeting;
   const refined = meeting.segments.filter((segment) => segment.version.startsWith('postprocess'));
   const revision = refined.length ? Math.max(...refined.map((segment) => segment.revision)) : null;
@@ -38,10 +39,12 @@ function applyBackendDetail(meeting) {
   const summary = meeting.summary?.data;
   uiData.detail.summary = summary ? { title: summary.summary, sections: [{ title: '决定', text: summary.decisions.map((item) => item.text).join('；') || '无' }, { title: '待办', items: summary.action_items.map((item) => ({ text: item.task, speaker: item.owner || '待确认' })) }], hasFull: true } : { title: '', sections: [], empty: true };
   document.querySelector('#detail-view .detail-head h1').textContent = meeting.title;
-  progress.max = Math.max(1, Math.ceil(meeting.duration_ms / 1000)); progress.value = 0;
-  playerAudio.pause(); playerAudio.currentTime = 0; updatePlayerControl(); renderPlayerTime();
+  progress.max = Math.max(1, Math.ceil(meeting.duration_ms / 1000));
   const audioPath = meeting.audio.playback.mix || meeting.audio.playback.mic || meeting.audio.playback.system;
-  if (audioPath) window.brevia.audioUrl(audioPath).then((url) => { playerAudio.src = url; }); else { playerAudio.removeAttribute('src'); playerAudio.load(); }
+  if (!sameMeeting) {
+    playerAudio.pause(); playerAudio.currentTime = 0; progress.value = 0; updatePlayerControl(); renderPlayerTime();
+    if (audioPath) window.brevia.audioUrl(audioPath).then((url) => { playerAudio.src = url; }); else { playerAudio.removeAttribute('src'); playerAudio.load(); }
+  } else { progress.value = playerAudio.currentTime; renderPlayerTime(); }
   renderMeetingDetail(); renderDualTrackPanel(meeting);
 }
 

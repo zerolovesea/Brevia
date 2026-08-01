@@ -20,6 +20,7 @@ const root = path.join(__dirname, '..');
 const packagedRoot = app.isPackaged ? process.resourcesPath : root;
 const startupAnimationMs = 1400;
 const splashFadeMs = 360;
+const resetOnboarding = process.argv.includes('--reset-onboarding');
 const dataDir = () => app.getPath('userData');
 const command = z.object({ type: z.string().min(1), payload: z.record(z.string(), z.unknown()).default({}) });
 const meetingStart = z.object({
@@ -217,6 +218,7 @@ async function writeSummaryConfig(config) {
 }
 
 function registerIpc() {
+  ipcMain.handle('app.version', () => app.getVersion());
   ipcMain.handle('permissions.status', () => process.platform === 'darwin'
     ? { microphone: systemPreferences.getMediaAccessStatus('microphone'), screen: systemPreferences.getMediaAccessStatus('screen') }
     : { microphone: 'granted', screen: 'granted' });
@@ -291,7 +293,15 @@ function registerIpc() {
   handle('storage.clear', z.object({ partition: z.enum(['meetings', 'models', 'exports']) }), 'storage.clear');
   handle('settings.advanced.get', z.object({}), 'settings.advanced.get');
   handle('settings.advanced.save', z.object({ settings: z.record(z.string(), z.unknown()) }), 'settings.advanced.save');
-  handle('metrics.record', z.object({ app_duration_ms: z.number().int().nonnegative().optional() }), 'metrics.record');
+  ipcMain.handle('metrics.record', async (_, payload) => {
+    if (app.isQuitting) return null;
+    try {
+      return await worker.request('metrics.record', z.object({ app_duration_ms: z.number().int().nonnegative().optional() }).parse(payload));
+    } catch (error) {
+      if (error.code === 'EPIPE' || app.isQuitting) return null;
+      throw error;
+    }
+  });
   handle('segment.speaker', id.extend({ segment_id: z.string().min(1), name: z.string().trim().min(1).max(32), enroll: z.boolean().optional() }), 'segment.speaker');
   handle('segment.speaker-profile-sample', id.extend({ segment_id: z.string().min(1), profile_id: z.string().uuid() }), 'segment.speaker-profile-sample');
   ipcMain.handle('storage.open', async (_, payload) => {
@@ -313,11 +323,19 @@ function registerIpc() {
   });
   handle('models.list', z.object({}), 'models.list');
   handle('models.download', z.object({ model_id: z.string() }), 'models.download');
+  handle('models.pause', z.object({ model_id: z.string() }), 'models.pause');
+  handle('models.cancel', z.object({ model_id: z.string() }), 'models.cancel');
   handle('models.delete', z.object({ model_id: z.string() }), 'models.delete');
+  handle('task.pause', z.object({ task: z.enum(['meeting.refine', 'meeting.separate', 'summary.generate']), meeting_id: z.string() }), 'task.pause');
+  handle('task.resume', z.object({ task: z.enum(['meeting.refine', 'meeting.separate', 'summary.generate']), meeting_id: z.string() }), 'task.resume');
   ipcMain.handle('secret.set', async (_, payload) => {
     const value = z.object({ reference: z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/), value: z.string().min(1) }).parse(payload);
     await setSecret(value.reference, value.value);
     return true;
+  });
+  ipcMain.handle('secret.get', async (_, payload) => {
+    const { reference } = z.object({ reference: z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/) }).parse(payload);
+    return getSecret(reference);
   });
   ipcMain.handle('summary.config.get', async () => readSummaryConfig());
   ipcMain.handle('summary.config.save', async (_, payload) => {
@@ -439,7 +457,7 @@ function createWindow() {
     };
     fadeSplash();
   };
-  window.loadFile(path.join(packagedRoot, 'frontend', 'index.html'));
+  window.loadFile(path.join(packagedRoot, 'frontend', 'index.html'), resetOnboarding ? { query: { resetOnboarding: '1' } } : undefined);
   window.once('ready-to-show', () => {
     mainReady = true;
     showMain();

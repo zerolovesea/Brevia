@@ -23,6 +23,7 @@ from .asr import (
     LiveDenoiser,
     OfflineDenoiser,
     OfflineVAD,
+    DownloadCancelled,
     ModelManager,
     OfflineDiarizer,
     RefinedASR,
@@ -66,6 +67,8 @@ class Worker:
         self.output_lock = threading.Lock()
         self.model_downloads = {}
         self.model_downloads_lock = threading.Lock()
+        self.task_controls = {}
+        self.task_controls_lock = threading.Lock()
         self.store = Store(root)
         runtime_settings(self.store.root)
         self.models = ModelManager(self.store.models_dir, self.emit)
@@ -144,7 +147,11 @@ class Worker:
             "segment.speaker-profile-sample": self.add_segment_speaker_profile_sample,
             "models.list": lambda _: self.models.list(),
             "models.download": self.download_model,
+            "models.pause": self.pause_model,
+            "models.cancel": self.cancel_model,
             "models.delete": self.delete_model,
+            "task.pause": self.pause_task,
+            "task.resume": self.resume_task,
             "meeting.export": self.export,
             "meeting.bundle": self.bundle,
             "meeting.refine": self.refine,
@@ -643,23 +650,87 @@ class Worker:
         require(payload, "model_id")
         model_id = payload["model_id"]
         with self.model_downloads_lock:
-            if model_id in self.model_downloads:
+            existing = self.model_downloads.get(model_id)
+            if existing:
+                if existing["paused"].is_set() and not existing["cancelled"].is_set():
+                    existing["paused"].clear()
+                    self.emit("model.status", {"model_id": model_id, "status": "downloading"})
                 return {"model_id": model_id, "status": "downloading"}
-            task = threading.Thread(target=self._download_model, args=(model_id,), daemon=True)
-            self.model_downloads[model_id] = task
+            control = {"paused": threading.Event(), "cancelled": threading.Event()}
+            task = threading.Thread(target=self._download_model, args=(model_id, control), daemon=True)
+            self.model_downloads[model_id] = {"task": task, **control}
             task.start()
         return {"model_id": model_id, "status": "downloading"}
 
-    def _download_model(self, model_id):
+    def pause_model(self, payload):
+        """暂停活动下载；网络流会在下一次进度回调处停住。"""
+        require(payload, "model_id")
+        model_id = payload["model_id"]
+        with self.model_downloads_lock:
+            download = self.model_downloads.get(model_id)
+            if not download or download["cancelled"].is_set():
+                raise ValueError("Model is not downloading")
+            download["paused"].set()
+        self.emit("model.status", {"model_id": model_id, "status": "paused"})
+        return {"model_id": model_id, "status": "paused"}
+
+    def cancel_model(self, payload):
+        """取消活动下载，并在当前下载块完成后清理临时文件。"""
+        require(payload, "model_id")
+        model_id = payload["model_id"]
+        with self.model_downloads_lock:
+            download = self.model_downloads.get(model_id)
+            if not download:
+                raise ValueError("Model is not downloading")
+            download["cancelled"].set()
+            download["paused"].clear()
+        self.emit("model.status", {"model_id": model_id, "status": "cancelled"})
+        return {"model_id": model_id, "status": "cancelled"}
+
+    def begin_task(self, task, meeting_id):
+        control = threading.Event()
+        with self.task_controls_lock:
+            self.task_controls[(task, meeting_id)] = control
+        return control
+
+    def wait_task(self, control):
+        while control.is_set():
+            time.sleep(0.1)
+
+    def finish_task(self, task, meeting_id):
+        with self.task_controls_lock:
+            self.task_controls.pop((task, meeting_id), None)
+
+    def set_task_pause(self, payload, paused):
+        require(payload, "task", "meeting_id")
+        key = (payload["task"], payload["meeting_id"])
+        with self.task_controls_lock:
+            control = self.task_controls.get(key)
+            if not control:
+                raise ValueError("Task is not running")
+            control.set() if paused else control.clear()
+        status = "paused" if paused else "running"
+        self.emit("task.status", {"task": key[0], "meeting_id": key[1], "status": status})
+        return {"task": key[0], "meeting_id": key[1], "status": status}
+
+    def pause_task(self, payload):
+        return self.set_task_pause(payload, True)
+
+    def resume_task(self, payload):
+        return self.set_task_pause(payload, False)
+
+    def _download_model(self, model_id, control):
         """下载模型并将最终状态作为异步事件发送。"""
         try:
-            self.models.download(model_id)
+            self.models.download(model_id, control)
             if model_id == SETTINGS["diarization"]["embedding_model_id"]:
                 try:
                     self.voice_profiles.seed_builtin_profiles()
                     self.emit("speaker-profile.updated", {"profiles": self.store.list_speaker_profiles()})
                 except RuntimeError as error:
                     self.emit("worker.warning", {"code": "builtin_voiceprints_unavailable", "message": str(error)})
+        except DownloadCancelled:
+            pass
         except Exception as error:
             self.emit("model.status", {"model_id": model_id, "status": "failed", "error": str(error)})
         finally:
@@ -863,6 +934,16 @@ class Worker:
         ]
         if not tracks:
             raise ValueError("The meeting has no audio to refine")
+        required_models = [refined_model_id, meeting.get("vad_model_id") or "silero-vad"]
+        if "system" in tracks:
+            required_models.extend([meeting.get("speaker_segmentation_model_id"), meeting.get("speaker_embedding_model_id")])
+        missing_models = [model_id for model_id in required_models if model_id and not self.models.is_ready(model_id)]
+        if missing_models:
+            label = "Model" if len(missing_models) == 1 else "Models"
+            verb = "is" if len(missing_models) == 1 else "are"
+            raise RuntimeError(f"{label} {', '.join(missing_models)} {verb} not installed")
+        control = self.begin_task("meeting.refine", meeting["id"])
+        self.emit("refinement.started", {"meeting_id": meeting["id"], "total": 0})
         audio, turns_by_track = {}, {}
         vad = OfflineVAD(self.models, meeting.get("vad_model_id") or "silero-vad")
         diarizer = OfflineDiarizer(
@@ -872,6 +953,7 @@ class Worker:
         ) if "system" in tracks else None
         denoiser_id = SETTINGS["live_asr"]["denoiser_model_id"]
         for track in tracks:
+            self.wait_task(control)
             samples, sample_rate = read_mono_wav(meeting["audio"]["playback"][track])
             if track == "mic" and self.models.is_ready(denoiser_id):
                 try:
@@ -938,12 +1020,13 @@ class Worker:
         refined_segment_ids = set()
         overlap_ms = 1000
         self.store.set_status(meeting["id"], "refining")
-        self.emit("refinement.started", {"meeting_id": meeting["id"], "total": total})
+        self.emit("refinement.progress", {"meeting_id": meeting["id"], "completed": 0, "total": total})
         try:
             for track in tracks:
                 samples, sample_rate = audio[track]
                 windows = windows_by_track[track]
                 for index, turn in enumerate(windows):
+                    self.wait_task(control)
                     start_ms, end_ms = turn["start_ms"], turn["end_ms"]
                     before = windows[index - 1] if index else None
                     after = windows[index + 1] if index + 1 < len(windows) else None
@@ -981,6 +1064,7 @@ class Worker:
                     refined_segments.append(event)
         except Exception:
             self.store.set_status(meeting["id"], "ready")
+            self.finish_task("meeting.refine", meeting["id"])
             raise
         refined_segments.sort(key=lambda item: (item["start_ms"], item["track"], item["end_ms"]))
         version, revision = self.store.next_refinement_version(meeting["id"])
@@ -990,22 +1074,24 @@ class Worker:
         result = self.store.set_status(meeting["id"], "refined")
         result = self.store.get_meeting(meeting["id"])
         self.emit("refinement.ready", {"meeting_id": meeting["id"], "meeting": result})
+        self.finish_task("meeting.refine", meeting["id"])
         return result
 
     def separate_sources(self, payload):
         """从已保存会议生成独立的人声和非人声 WAV，不改动原录音。"""
         require(payload, "meeting_id")
         meeting = self.store.get_meeting(payload["meeting_id"])
+        control = self.begin_task("meeting.separate", meeting["id"])
         self.emit("separation.started", {"meeting_id": meeting["id"], "completed": 0, "total": 100})
-        event = self.media.separate(
-            meeting,
-            lambda completed, stage: self.emit(
-                "separation.progress",
-                {"meeting_id": meeting["id"], "completed": completed, "total": 100, "stage": stage},
-            ),
-        )
-        self.emit("meeting.sources-separated", event)
-        return event
+        def progress(completed, stage):
+            self.wait_task(control)
+            self.emit("separation.progress", {"meeting_id": meeting["id"], "completed": completed, "total": 100, "stage": stage})
+        try:
+            event = self.media.separate(meeting, progress)
+            self.emit("meeting.sources-separated", event)
+            return event
+        finally:
+            self.finish_task("meeting.separate", meeting["id"])
 
     def synthesize_tts(self, payload):
         """使用已注册人员的本地参考音频生成 ZipVoice 聊天语音。"""
@@ -1123,6 +1209,7 @@ class Worker:
         if not payload["consent"]:
             raise ValueError("Transcript sharing was not confirmed")
         meeting = self.store.get_meeting(payload["meeting_id"])
+        control = self.begin_task("summary.generate", meeting["id"])
         self.emit("summary.started", {"meeting_id": meeting["id"], "completed": 10, "total": 100, "stage": "准备逐字稿"})
         segments = latest_segments(meeting["segments"])
         transcript = "\n".join(
@@ -1140,17 +1227,21 @@ class Worker:
             f"只输出符合此结构的 JSON：{schema}\n\n逐字稿：\n{transcript}"
         )
         try:
+            self.wait_task(control)
             self.emit("summary.progress", {"meeting_id": meeting["id"], "completed": 60, "total": 100, "stage": "正在调用纪要模型"})
             raw = self.llm_complete(payload, prompt, json_mode=True)
+            self.wait_task(control)
             data = parse_json_object(raw)
             validate_summary(data, {item["id"] for item in segments})
         except Exception as error:
             raw = locals().get("raw", str(error))
             self.store.save_summary(meeting["id"], None, raw)
+            self.finish_task("summary.generate", meeting["id"])
             raise ValueError(f"Summary response was saved but could not be parsed: {error}") from error
         self.store.save_summary(meeting["id"], data, raw)
         self.emit("summary.progress", {"meeting_id": meeting["id"], "completed": 100, "total": 100, "stage": "正在保存纪要"})
         self.emit("summary.ready", {"meeting_id": meeting["id"], "summary": data})
+        self.finish_task("summary.generate", meeting["id"])
         return data
 
     def translate(self, payload):

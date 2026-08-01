@@ -14,6 +14,10 @@ from pathlib import Path
 from .config import SETTINGS
 
 
+class DownloadCancelled(Exception):
+    """用于中止由下载进度回调驱动的模型下载。"""
+
+
 class ModelManager:
     """按模型清单管理本地文件，并向 Worker 上报下载状态。"""
 
@@ -60,7 +64,7 @@ class ModelManager:
         model, path = self.get(model_id), self.path(model_id)
         return path.is_dir() and all((path / name).exists() for name in model["files"])
 
-    def download(self, model_id):
+    def download(self, model_id, control=None):
         """下载并校验一个模型，成功后原子地放入正式目录。
 
         Args:
@@ -72,6 +76,14 @@ class ModelManager:
         Raises:
             ValueError: 校验和不一致、压缩包越界或缺少必需文件。
         """
+        def check_control():
+            while control and control["paused"].is_set():
+                if control["cancelled"].is_set():
+                    raise DownloadCancelled()
+                time.sleep(0.1)
+            if control and control["cancelled"].is_set():
+                raise DownloadCancelled()
+
         model = self.get(model_id)
         if self.is_ready(model_id):
             self.event("model.status", {"model_id": model_id, "status": "ready"})
@@ -87,10 +99,13 @@ class ModelManager:
                     destination.parent.mkdir(parents=True, exist_ok=True)
 
                     def report(blocks, block_size, total, offset=received):
+                        check_control()
                         current = min(blocks * block_size, total) if total > 0 else blocks * block_size
                         self.event("model.progress", {"model_id": model_id, "received": offset + current, "total": model["size_bytes"]})
 
+                    check_control()
                     urllib.request.urlretrieve(item["url"], destination, report)
+                    check_control()
                     if item.get("extract"):
                         extract_root = Path(temporary) / f"extract-{received}"
                         extract_root.mkdir()
@@ -114,6 +129,7 @@ class ModelManager:
                 def report(blocks, block_size, total):
                     """把 urlretrieve 的块进度节流为约每 MiB 一次的 Worker 事件。"""
                     nonlocal reported
+                    check_control()
                     received = min(blocks * block_size, total) if total > 0 else blocks * block_size
                     if received < total and received - reported < 1024 * 1024:
                         return
@@ -123,9 +139,11 @@ class ModelManager:
                         {"model_id": model_id, "received": received, "total": total},
                     )
 
+                check_control()
                 urllib.request.urlretrieve(model["url"], archive, report)
+                check_control()
                 digest = hashlib.sha256(archive.read_bytes()).hexdigest()
-                if model["archive_sha256"] and digest != model["archive_sha256"]:
+                if model.get("archive_sha256") and digest != model["archive_sha256"]:
                     raise ValueError("Model archive checksum mismatch")
                 source = Path(temporary) / "model"
                 if model.get("directory"):

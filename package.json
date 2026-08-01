@@ -5,6 +5,7 @@
   "scripts": {
     "build": "cd frontend && npx @tailwindcss/cli -i ./tailwind.css -o ./styles.css --minify",
     "start": "electron .",
+    "start:fresh": "electron . --reset-onboarding",
     "test": "npm run test:ui && npm run test:backend",
     "test:ui": "cd frontend && node ./test-ui.mjs",
     "test:backend": "python -m unittest backend.test_worker",
@@ -81,6 +82,7 @@
     "tailwindcss": "^4.3.3"
   },
   "dependencies": {
+    "electron-updater": "^6.8.9",
     "zod": "^4.4.3"
   }
 }

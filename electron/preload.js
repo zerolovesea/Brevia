@@ -5,6 +5,7 @@ const listeners = new Map();
 
 contextBridge.exposeInMainWorld('brevia', {
   initialize: invoke('app.initialize'),
+  appInfo: { version: invoke('app.version') },
   permissions: { status: invoke('permissions.status'), requestMicrophone: invoke('permissions.request-microphone') },
   meeting: {
     start: invoke('meeting.start'),
@@ -42,11 +43,14 @@ contextBridge.exposeInMainWorld('brevia', {
   models: {
     list: invoke('models.list'),
     download: invoke('models.download'),
+    pause: invoke('models.pause'),
+    cancel: invoke('models.cancel'),
     delete: invoke('models.delete'),
   },
+  task: { pause: invoke('task.pause'), resume: invoke('task.resume') },
   summary: { generate: invoke('summary.generate'), config: { get: invoke('summary.config.get'), save: invoke('summary.config.save') } },
   translation: { generate: invoke('translation.generate') },
-  secret: { set: invoke('secret.set') },
+  secret: { get: invoke('secret.get'), set: invoke('secret.set') },
   showItem: invoke('shell.showItem'),
   audioUrl: invoke('audio.url'),
   on(type, handler) {

@@ -17,7 +17,7 @@
           <button class="nav-item" id="recently-deleted" data-view="home"><span>◷</span> 最近删除</button>
           <button class="nav-item" data-view="settings"><span>⚙</span> 设置</button>
         </nav>
-        <div class="task-cards" id="task-cards"><aside class="processing-card" id="refinement-progress" hidden aria-live="polite"><header class="task-card-heading"><p>正在精修</p><button class="task-card-close" data-dismiss-task-card type="button" aria-label="关闭">×</button></header><strong id="refinement-percent">准备中</strong><div class="processing-bar" aria-hidden="true"><i id="refinement-bar"></i></div></aside></div>
+        <div class="task-cards" id="task-cards"><aside class="processing-card" id="refinement-progress" hidden aria-live="polite"><header class="task-card-heading"><p>正在精修</p><span class="task-card-actions"><button class="task-card-close" data-minimize-task-card type="button" aria-label="最小化">—</button><button class="task-card-close" data-dismiss-task-card type="button" aria-label="关闭">×</button></span></header><strong id="refinement-percent">准备中</strong><div class="task-card-progress"><div class="processing-bar" aria-hidden="true"><i id="refinement-bar"></i></div><button class="task-card-close" data-pause-task type="button" aria-label="暂停" disabled>Ⅱ</button></div></aside><button class="mini-meeting" id="mini-meeting" hidden><span class="mini-recording"><i></i> 正在录制</span><strong id="mini-title">产品策略周会</strong><time id="mini-timer">00:00:00</time><span class="mini-resume">继续会议 →</span></button><section class="mini-playback" id="mini-playback" hidden><span id="mini-playback-state">正在播放</span><strong id="mini-playback-title"></strong><p id="mini-playback-caption"></p><div class="mini-playback-controls"><div class="processing-bar mini-playback-seek" id="mini-playback-seek" role="slider" tabindex="0" aria-label="播放进度" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0"><i id="mini-playback-progress"></i></div><button id="mini-playback-toggle" type="button" aria-label="暂停播放">Ⅱ</button></div></section></div>
       </aside>
 
       <section class="workspace">
@@ -45,7 +45,6 @@
         <section class="view" id="settings-view"><button class="back" data-view="home">← 返回会议库</button><p class="eyebrow">设置</p><h1>模型与本地数据</h1><div class="settings-grid"></div></section>
       </section>
     </main>
-    <button class="mini-meeting" id="mini-meeting" hidden><span class="mini-recording"><i></i> 正在录制</span><strong id="mini-title">产品策略周会</strong><time id="mini-timer">00:00:00</time><span class="mini-resume">继续会议 →</span></button>
     <div class="toast" id="toast" role="status"></div>
     <script src="./backend-client.js"></script>
     <script src="./ui-data.js"></script>
@@ -54,6 +53,7 @@
     <script src="./ui-components.js"></script>
     <script src="./app-meetings.js"></script>
     <script src="./app-meeting-detail.js"></script>
+    <script src="./onboarding.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>

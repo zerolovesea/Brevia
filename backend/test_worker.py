@@ -12,7 +12,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 from .asr import ChinesePunctuation, EnglishPunctuation, OfflineVAD, SpeakerTracker
-from .config import DEFAULT_SETTINGS, runtime_settings, save_runtime_settings
+from .config import DEFAULT_SETTINGS, SETTINGS, runtime_settings, save_runtime_settings
 from .llm_client import complete
 from .transcript import parse_json_object, validate_summary
 from .worker import Worker, main
@@ -192,6 +192,7 @@ class WorkerTest(unittest.TestCase):
 
         numpy = type("Numpy", (), {"zeros_like": staticmethod(lambda samples: [0.0] * len(samples))})
         audio = {"mic": ([0.0005] * 32000, 16000), "system": ([0.001] * 32000, 16000)}
+        self.worker.models.is_ready = lambda model_id: model_id != SETTINGS["live_asr"]["denoiser_model_id"]
         with patch("backend.worker.read_mono_wav", side_effect=lambda path: audio["mic" if "mic" in path else "system"]), \
              patch.dict("sys.modules", {"numpy": numpy}), \
              patch("backend.worker.OfflineVAD") as vad, \
@@ -427,7 +428,7 @@ class WorkerTest(unittest.TestCase):
         started, release = threading.Event(), threading.Event()
         running = []
 
-        def download(model_id):
+        def download(model_id, control=None):
             running.append(model_id)
             if len(running) == 2:
                 started.set()
@@ -437,7 +438,17 @@ class WorkerTest(unittest.TestCase):
         self.assertEqual(self.worker.download_model({"model_id": "paraformer-zh-en-int8"})["status"], "downloading")
         self.assertEqual(self.worker.download_model({"model_id": "zipformer-en-streaming-int8"})["status"], "downloading")
         self.assertTrue(started.wait(1))
+        self.assertEqual(self.worker.pause_model({"model_id": "paraformer-zh-en-int8"})["status"], "paused")
+        self.assertEqual(self.worker.download_model({"model_id": "paraformer-zh-en-int8"})["status"], "downloading")
         release.set()
+
+    def test_task_pause_and_resume_control(self):
+        control = self.worker.begin_task("meeting.refine", "meeting-1")
+        self.assertEqual(self.worker.pause_task({"task": "meeting.refine", "meeting_id": "meeting-1"})["status"], "paused")
+        self.assertTrue(control.is_set())
+        self.assertEqual(self.worker.resume_task({"task": "meeting.refine", "meeting_id": "meeting-1"})["status"], "running")
+        self.assertFalse(control.is_set())
+        self.worker.finish_task("meeting.refine", "meeting-1")
 
     def test_bundle_exports_transcript_without_recording(self):
         meeting = self.worker.start({"title": "无录音", "language": "zh", "streaming_model_id": "paraformer-zh-en-int8", "refined_model_id": "qwen3-asr-0.6b-int8"})

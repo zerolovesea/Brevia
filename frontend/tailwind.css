@@ -17,7 +17,7 @@
 
 @layer components {
   /* Application shell: persistent navigation and the content workspace. */
-  .app-shell { @apply grid min-h-dvh bg-white; grid-template-columns: clamp(220px, 22vw, 272px) minmax(0, 1fr); }
+  .app-shell { @apply grid min-h-dvh bg-white; grid-template-columns: clamp(220px, 22vw, 272px) minmax(0, 1fr); transition: opacity 260ms ease, background-color .3s ease, color .3s ease; }
   .sidebar { @apply sticky top-0 flex h-dvh self-start flex-col border-r border-[#e5e5e5] px-6 pt-12 pb-8; }
   .brand { @apply flex items-center gap-2.5 p-0 text-[20px] font-bold tracking-[-.04em] text-black; }
   .brand img { @apply h-7 w-auto; }
@@ -28,21 +28,38 @@
   .nav-item { @apply border-l border-transparent px-3 py-2 text-left text-[14px] text-[#666] transition-all duration-300 hover:text-black; }
   .nav-item.active { @apply border-black text-black; }
   .nav-item span { @apply mr-2 inline-block w-6 text-[18px] leading-none font-normal; }
-  .task-cards { @apply mt-auto grid max-h-[52vh] gap-3 overflow-y-auto; }
-  .processing-card { @apply border border-black bg-white p-4 text-left; }
+  .task-cards { @apply mt-auto grid min-w-0 max-h-[52vh] gap-3 overflow-x-hidden overflow-y-auto; }
+  .task-cards > * { @apply w-full max-w-full; }
+  .processing-card { @apply min-h-32 min-w-0 w-full border border-black bg-white p-4 text-left; transition: min-height 180ms ease, padding 180ms ease; }
   .processing-card p { @apply m-0 text-[12px] text-[#404040]; }
   .processing-card strong { @apply mt-2 block text-[20px] font-normal tracking-[-.03em]; }
   .processing-card small { @apply mt-3 block text-[11px] leading-5 text-[#666]; }
   .task-card-heading { @apply flex items-center justify-between gap-3; }
-  .task-card-actions { @apply flex shrink-0 items-center gap-3; }.task-card-close { @apply shrink-0 text-[18px] leading-none text-[#666] transition-opacity duration-200 hover:opacity-60; }
+  .task-card-actions { @apply flex shrink-0 items-center gap-3; }.task-card-close { @apply relative grid size-5 shrink-0 place-items-center text-[18px] leading-none text-[#666] transition-opacity duration-200 hover:opacity-60; }
+  .task-card-close[data-minimize-task-card], .task-card-close[data-minimize-required-models], .task-card-close[data-dismiss-task-card], .task-card-close[data-cancel-required] { @apply text-[0px]; }
+  .task-card-close[data-minimize-task-card]::before, .task-card-close[data-minimize-required-models]::before { content: ''; @apply absolute left-1/2 top-1/2 block h-px w-2.5 bg-current; transform: translate(-50%, -50%); }
+  .processing-card.is-minimized .task-card-close[data-minimize-task-card]::before, .processing-card.is-minimized .task-card-close[data-minimize-required-models]::before { @apply h-2.5 w-2.5 border border-current bg-transparent; }
+  .task-card-close[data-dismiss-task-card]::before, .task-card-close[data-dismiss-task-card]::after, .task-card-close[data-cancel-required]::before, .task-card-close[data-cancel-required]::after { content: ''; @apply absolute h-px w-3 bg-current; }
+  .task-card-close[data-dismiss-task-card]::before, .task-card-close[data-cancel-required]::before { left: 50%; top: 50%; transform: translate(-50%, -50%) rotate(45deg); }.task-card-close[data-dismiss-task-card]::after, .task-card-close[data-cancel-required]::after { left: 50%; top: 50%; transform: translate(-50%, -50%) rotate(-45deg); }
+  .task-card-progress { @apply mt-3 flex items-center gap-3; }
+  .task-card-progress .processing-bar { @apply mt-0 flex-1; }
   .processing-bar { @apply mt-3 h-1 overflow-hidden bg-[#e5e5e5]; }
   .processing-bar i { @apply block h-full origin-left bg-black; transform: scaleX(0); transition: transform .2s ease; }
   .required-models-card header { @apply flex items-center justify-between gap-2; }
-  .required-models-card header p { @apply whitespace-nowrap; }
+  .required-models-card header p { @apply min-w-0 truncate; }
   .required-models-card header button { @apply shrink-0; }
-  .required-models-card header button:not(.task-card-close), .required-models-card li > button { @apply border-b border-black text-[11px] text-black disabled:border-0 disabled:text-[#999]; }
-  .required-models-card ul { @apply m-0 mt-3 grid list-none gap-3 p-0; }
-  .required-models-card li { @apply grid grid-cols-[1fr_auto] items-start gap-x-2; }
+  .required-models-progress { @apply mt-3; }
+  .required-models-card:not(.is-minimized) .required-models-progress { @apply hidden; }
+  .required-models-card.is-minimized { @apply p-3; }
+  .required-models-card.is-minimized ul, .required-models-card.is-minimized [data-download-required-all] { @apply hidden; }
+  .processing-card.is-minimized > :not(.task-card-heading):not(.processing-bar):not(.task-card-progress) { @apply hidden; }
+  .processing-card.is-minimized { @apply min-h-0; }
+  .processing-card.is-minimized .task-card-progress { @apply block; }
+  .processing-card.is-minimized .task-card-progress [data-pause-task] { @apply hidden; }
+  @media (prefers-reduced-motion: no-preference) { .task-card-resizing { animation: task-card-resize 180ms ease-out; } @keyframes task-card-resize { from { transform: scale(.985); } to { transform: scale(1); } } }
+  .required-models-card header button:not(.task-card-close), .required-models-card li .model-actions button:not(.task-card-close) { @apply border-b border-black text-[11px] text-black disabled:border-0 disabled:text-[#999]; }
+  .required-models-card ul { @apply m-0 mt-3 grid max-h-[min(36vh,18rem)] min-h-0 list-none gap-3 overflow-x-hidden overflow-y-auto p-0; }
+  .required-models-card li { @apply grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-x-2; }
   .required-models-card li span { @apply min-w-0; }
   .required-models-card li b { @apply block truncate text-[11px] font-normal; }
   .required-models-card li small { @apply mt-1; }
@@ -89,7 +106,6 @@
   .meeting-list.is-selecting { @apply cursor-crosshair select-none; }
   .selection-marquee { @apply pointer-events-none fixed z-40 border border-black bg-black/5; }
   .meeting-color { @apply col-span-1 size-6 text-black; }
-  .meeting-color.mint, .meeting-color.coral { @apply text-black; }
   .meeting-main { @apply col-span-7; }
   .meeting-main h2 { @apply m-0 text-[19px] font-normal tracking-[-.02em] text-black; }
   .meeting-main p { @apply mt-2 mb-3 text-[13px] text-[#666]; }
@@ -169,13 +185,13 @@
   .live-caption-translation { @apply mt-3 mb-0 text-[16px] leading-7 text-[#808080]; }
   .translation-toggle { @apply text-[12px] text-[#666] transition-colors duration-300 hover:text-black; }
   .transcript-scroll { @apply min-h-0 overflow-y-auto py-0 pr-2; }
-  * { scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: transparent transparent; }
-  *:hover, *.is-scrolling { scrollbar-color: #aaa transparent; }
-  *::-webkit-scrollbar { width: 10px; height: 10px; }
-  *::-webkit-scrollbar-track { background: transparent; }
-  *::-webkit-scrollbar-thumb { background-color: rgb(170 170 170 / 0); background-clip: padding-box; border: 3px solid transparent; border-radius: 999px; transition: background-color 220ms ease; }
-  *:hover::-webkit-scrollbar-thumb, *.is-scrolling::-webkit-scrollbar-thumb { background-color: #aaa; }
-  *::-webkit-scrollbar-thumb:hover { background-color: #666; }
+  /* All native scroll regions use the same transparent, scroll-triggered scrollbar. */
+  :where(html, body, *) { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+  :where(html, body, *)::-webkit-scrollbar { width: 10px; height: 10px; }
+  :where(html, body, *)::-webkit-scrollbar-track { background: transparent; }
+  :where(html, body, *)::-webkit-scrollbar-thumb { background-color: rgb(170 170 170 / 0); background-clip: padding-box; border: 3px solid transparent; border-radius: 999px; transition: background-color 220ms ease; }
+  :where(html, body, *).is-scrolling { scrollbar-color: #aaa transparent; }
+  :where(html, body, *).is-scrolling::-webkit-scrollbar-thumb { background-color: #aaa; }
   .segment { @apply relative pl-24; }
   .segment-meta { @apply absolute top-0 left-0 grid gap-1 text-[11px]; }
   .segment-meta time { @apply text-[#999]; }
@@ -248,16 +264,66 @@
   #settings-view .model-row { @apply py-3; }
   .update-card { @apply col-span-12 flex items-center justify-between gap-8 border border-black p-8; }.update-card h2 { @apply m-0 text-[22px] font-normal tracking-[-.03em]; }.update-card p { @apply mt-2 text-[13px] text-[#666]; }.update-button { @apply shrink-0 border border-black bg-black px-5 py-3 text-[13px] text-white transition-opacity duration-300 hover:opacity-70 disabled:cursor-wait disabled:opacity-50; }
   /* Shared modal shell, form controls, and custom select styling. */
-  .modal-backdrop { @apply fixed inset-0 z-30 grid place-items-center bg-black/30 p-6; }.modal-panel { @apply w-full max-w-[960px] border border-black bg-white p-8 text-black; }.modal-head { @apply flex items-start justify-between gap-6 border-b border-[#e5e5e5] pb-6; }.modal-title { @apply flex min-w-0 items-baseline gap-4; }.modal-head h2 { @apply m-0 shrink-0 text-[26px] font-normal tracking-[-.03em]; }.modal-head p { @apply m-0 overflow-hidden text-ellipsis whitespace-nowrap text-[12px] text-[#999]; }.modal-close { @apply size-8 shrink-0 border border-[#e5e5e5] text-[18px] text-[#404040] transition-opacity duration-300 hover:opacity-70; }.modal-body { @apply grid min-w-0 max-h-[calc(100vh-180px)] overflow-auto overflow-x-hidden py-7 pr-8; }.modal-list { @apply grid border-b border-[#e5e5e5]; }.modal-list > div { @apply flex items-center justify-between gap-4 border-b border-[#e5e5e5] py-4 last:border-0; }.modal-list b { @apply text-[14px] font-normal; }.modal-list small { @apply block mt-1 text-[11px] text-[#999]; }.model-download-progress { @apply ml-2 inline-flex items-center gap-1 text-[11px] text-[#999]; }.model-download-progress i { @apply block h-1 w-20 origin-left bg-black; }.modal-action { @apply shrink-0 border border-black bg-black px-3 py-2 text-[12px] text-white transition-opacity duration-300 hover:opacity-70 disabled:cursor-default disabled:opacity-40; }.modal-danger { @apply border-[#a65b5b] bg-[#a65b5b]; }.term-actions { @apply flex shrink-0 gap-2; }.term-edit-input { @apply w-full border-b border-black bg-transparent py-1 text-[14px] outline-none; }.term-form { @apply mt-5 flex gap-3; }.term-form input { @apply min-w-0 flex-1 border border-[#ccc] bg-white px-3 py-2 text-[13px] outline-none focus:border-black; }.term-form button { @apply border border-black bg-black px-4 py-2 text-[12px] text-white transition-opacity duration-300 hover:opacity-70; }.config-fields { @apply grid grid-cols-2 gap-4; }.config-fields > * { @apply min-w-0; }.config-fields label { @apply grid gap-2 text-[12px] text-[#666]; }.config-fields input, .config-fields select, .prompt-form textarea { @apply w-full border border-[#ccc] bg-white px-3 py-2 text-[13px] text-black outline-none focus:border-black; }.modal-form-actions { @apply mt-6 flex items-center gap-5; }.modal-form-actions .secondary { @apply mt-0; }.configured-models { @apply mt-8 border-t border-[#e5e5e5] pt-6; }.configured-models > p { @apply mb-3 text-[12px] text-[#666]; }.configured-models label { @apply flex gap-3 border-b border-[#e5e5e5] py-3 text-[13px]; }.configured-models small { @apply mt-1 block text-[11px] text-[#999]; }.modal-subsection { @apply mt-8 border-t border-[#e5e5e5] pt-6; }.modal-subsection h3 { @apply m-0 text-[16px] font-normal; }.modal-subsection > p { @apply mt-2 text-[12px] text-[#666]; }.prompt-form { @apply mt-5 grid gap-5; }.config-select-field { @apply grid gap-2 text-[12px] text-[#666]; }.flow-select { @apply relative grid min-w-0; }.flow-select-toggle { @apply flex w-full items-center justify-between border border-[#ccc] bg-white px-3 py-2 text-left text-[13px] text-black outline-none transition-colors duration-300 hover:border-black focus:border-black; }.config-fields .flow-select-toggle { @apply h-12; }.flow-select-toggle span { @apply text-[16px] leading-none; }.flow-select-options { @apply absolute inset-x-0 top-full z-10 grid max-h-64 overflow-y-auto border border-[#ccc] bg-white p-1; }.flow-select-options button { @apply px-3 py-2 text-left text-[13px] text-[#404040] transition-colors duration-300 hover:bg-[#f5f5f5] hover:text-black; }.configured-models .config-select-field { @apply grid max-w-full border-0 py-0; }.modal-form-actions .model-delete { @apply text-[13px]; }.config-json { @apply whitespace-pre-wrap break-all; }
+  .modal-backdrop { @apply fixed inset-0 z-30 grid place-items-center bg-black/30 p-6; }.modal-panel { @apply w-full max-w-[960px] border border-black bg-white p-8 text-black; }.modal-head { @apply flex items-start justify-between gap-6 border-b border-[#e5e5e5] pb-6; }.modal-title { @apply flex min-w-0 items-baseline gap-4; }.modal-head h2 { @apply m-0 shrink-0 text-[26px] font-normal tracking-[-.03em]; }.modal-head p { @apply m-0 overflow-hidden text-ellipsis whitespace-nowrap text-[12px] text-[#999]; }.modal-close { @apply size-8 shrink-0 border border-[#e5e5e5] text-[18px] text-[#404040] transition-opacity duration-300 hover:opacity-70; }.modal-body { @apply grid min-w-0 max-h-[calc(100vh-180px)] overflow-auto overflow-x-hidden py-7 pr-8; }.modal-list { @apply grid border-b border-[#e5e5e5]; }.modal-list > div { @apply flex items-center justify-between gap-4 border-b border-[#e5e5e5] py-4 last:border-0; }.modal-list b { @apply text-[14px] font-normal; }.modal-list small { @apply block mt-1 text-[11px] text-[#999]; }.model-download-progress { @apply ml-2 inline-flex items-center gap-1 text-[11px] text-[#999]; }.model-download-progress i { @apply block h-1 w-20 origin-left bg-black; }.modal-action { @apply shrink-0 border border-black bg-black px-3 py-2 text-[12px] text-white transition-opacity duration-300 hover:opacity-70 disabled:cursor-default disabled:opacity-40; }.modal-danger { @apply border-[#a65b5b] bg-[#a65b5b]; }.term-actions { @apply flex shrink-0 gap-2; }.term-edit-input { @apply w-full border-b border-black bg-transparent py-1 text-[14px] outline-none; }.term-form { @apply mt-5 flex gap-3; }.term-form input { @apply min-w-0 flex-1 border border-[#ccc] bg-white px-3 py-2 text-[13px] text-black outline-none focus:border-black; }.term-form button { @apply border border-black bg-black px-4 py-2 text-[12px] text-white transition-opacity duration-300 hover:opacity-70; }.config-fields { @apply grid grid-cols-2 gap-4; }.config-fields > * { @apply min-w-0; }.config-fields label { @apply grid gap-2 text-[12px] text-[#666]; }.config-fields input, .config-fields select, .prompt-form textarea { @apply w-full border border-[#ccc] bg-white px-3 py-2 text-[13px] text-black outline-none focus:border-black; }.modal-form-actions { @apply mt-6 flex items-center gap-5; }.modal-form-actions .secondary { @apply mt-0; }.configured-models { @apply mt-8 border-t border-[#e5e5e5] pt-6; }.configured-models > p { @apply mb-3 text-[12px] text-[#666]; }.configured-models label { @apply flex gap-3 border-b border-[#e5e5e5] py-3 text-[13px]; }.configured-models small { @apply mt-1 block text-[11px] text-[#999]; }.modal-subsection { @apply mt-8 border-t border-[#e5e5e5] pt-6; }.modal-subsection h3 { @apply m-0 text-[16px] font-normal; }.modal-subsection > p { @apply mb-3 text-[12px] text-[#666]; }.prompt-form { @apply mt-5 grid gap-5; }.config-select-field { @apply grid gap-2 text-[12px] text-[#666]; }.flow-select { @apply relative grid min-w-0; }.flow-select-toggle { @apply flex w-full items-center justify-between border border-[#ccc] bg-white px-3 py-2 text-left text-[13px] text-black outline-none transition-colors duration-300 hover:border-black focus:border-black; }.config-fields .flow-select-toggle { @apply h-12; }.flow-select-toggle span { @apply text-[16px] leading-none; }.flow-select-options { @apply absolute inset-x-0 top-full z-10 grid max-h-64 overflow-y-auto border border-[#ccc] bg-white p-1; }.flow-select-options button { @apply px-3 py-2 text-left text-[13px] text-[#404040] transition-colors duration-300 hover:bg-[#f5f5f5] hover:text-black; }.configured-models .config-select-field { @apply grid max-w-full border-0 py-0; }.modal-form-actions .model-delete { @apply text-[13px]; }.model-select { @apply flex shrink-0 items-center gap-2 text-[12px] text-[#666]; }.model-select input { @apply size-4; }.config-json { @apply whitespace-pre-wrap break-all; }body:has(.onboarding-page) .modal-backdrop { @apply z-[60]; }
   .permission-modal { @apply grid gap-5 text-[14px] leading-6 text-[#404040]; }.permission-modal > p { @apply m-0 text-[16px] leading-7 text-black; }.permission-modal > div { @apply border-t border-[#e5e5e5] pt-4; }.permission-modal b { @apply block font-normal text-black; }.permission-modal small { @apply mt-1 block text-[12px] text-[#999]; }.permission-modal section { @apply mt-2 flex items-center gap-5; }.permission-modal .secondary { @apply mt-0; }
+  .onboarding-form { @apply grid gap-5 text-[14px] leading-6 text-[#404040]; }.onboarding-form > p { @apply m-0 text-[16px] leading-7 text-black; }.onboarding-form > strong { @apply text-[13px] font-normal text-[#666]; }.onboarding-form section { @apply flex flex-wrap items-center gap-5; }.onboarding-form .secondary { @apply mt-0; }.language-wheel { @apply relative grid h-36 snap-y snap-mandatory overflow-y-auto border-y border-[#e5e5e5] py-12; scrollbar-width: none; }.language-wheel::-webkit-scrollbar { display: none; }.language-wheel::before { @apply pointer-events-none absolute inset-x-0 top-12 z-10 border-y border-black/15; content: ''; height: 48px; }.language-wheel button { @apply h-12 snap-center text-[18px] text-[#999] transition-colors duration-150 focus:outline-none; }.language-wheel button[aria-selected="true"] { @apply text-black; }.onboarding-welcome h3 { @apply m-0 text-[32px] font-normal leading-tight tracking-[-.03em] text-black; }
+  /* Onboarding owns its viewport; setup/welcome classes are content-only. */
+  .onboarding-page.onboarding-active { @apply fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-white p-12 opacity-0; scrollbar-gutter: stable both-edges; }
+  .onboarding-page::before { content: ""; @apply fixed inset-x-0 top-0 z-10 h-12; -webkit-app-region: drag; }
+  .onboarding-page-content { @apply grid w-full max-w-2xl gap-14; margin-inline: auto; }
+  .onboarding-welcome-content, .onboarding-setup-content { max-width: var(--container-4xl); }
+  .onboarding-page-content > div.onboarding-page-copy { @apply grid gap-7; }
+  .onboarding-page h1 { @apply m-0 text-[clamp(34px,4vw,56px)] font-normal leading-none tracking-[-.05em] text-black; }
+  .onboarding-page p { @apply m-0 text-[18px] text-black; }
+  .onboarding-page small { @apply text-[13px] text-[#666]; }
+  .onboarding-page .modal-action { @apply justify-self-start px-5 py-3 text-[14px]; }
+  .onboarding-back { @apply grid size-9 place-items-center border border-[#e5e5e5] text-[18px] text-[#404040] transition-opacity duration-300 hover:opacity-70; }
+  .onboarding-page-enter { animation: overlay-in 260ms ease both; }
+  .onboarding-page-leave { animation: overlay-out 260ms ease both; }
+  body:has(.onboarding-page) .app-shell { @apply hidden; }
+  .onboarding-brand { @apply h-7 w-auto; }
+  .onboarding-welcome-page, .onboarding-setup-page { @apply justify-items-center text-center; }
+  .onboarding-welcome-page { @apply max-w-4xl gap-10; }
+  .onboarding-welcome-page .onboarding-back { @apply justify-self-start; }
+  .onboarding-welcome-page ul { @apply grid w-full grid-cols-3 gap-x-12 border-y border-[#e5e5e5] py-10 text-left transition-opacity duration-200; }
+  .onboarding-welcome-page ul.feature-list-out { @apply opacity-0; }
+  .onboarding-welcome-page li { @apply grid gap-3; }
+  .onboarding-welcome-page li b { @apply text-[15px] font-normal text-black; }
+  .onboarding-welcome-page li span { @apply text-[12px] leading-6 text-[#666]; }
+  .onboarding-setup-page { @apply grid w-full max-w-4xl gap-10; }
+  .onboarding-setup-page .onboarding-back { @apply justify-self-start; }
+  .onboarding-setup-page header { @apply grid justify-items-center gap-5 text-center; }
+  .onboarding-intro { @apply grid w-full justify-items-center gap-3 text-center; }
+  .onboarding-intro small { @apply whitespace-pre-line text-[11px] leading-5 text-[#666]; }
+  .onboarding-setup-page h2 { @apply m-0 text-[16px] font-normal text-black; }
+  .onboarding-section { @apply grid gap-5 border-t border-[#e5e5e5] pt-8; }
+  .onboarding-language-selection { @apply grid h-64 w-full grid-cols-[minmax(0,1fr)_minmax(13rem,.75fr)] gap-12 text-left; }
+  .onboarding-check-grid, .onboarding-feature-grid { @apply grid grid-cols-2 gap-x-12; }
+  .onboarding-check-grid label, .onboarding-feature-grid label { @apply flex items-center gap-3 border-b border-[#e5e5e5] py-4 text-[14px] text-black; }
+  .onboarding-check-grid input, .onboarding-feature-grid input { @apply size-4 accent-black; }
+  .onboarding-feature-grid input:disabled { @apply opacity-100; }
+  .onboarding-model-preview { @apply grid min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-4 border-l border-[#e5e5e5] pl-8; }
+  .onboarding-model-preview strong { @apply text-[14px] font-normal text-black; }
+  .onboarding-model-preview ul { @apply m-0 grid min-h-0 list-none content-start gap-3 overflow-y-auto p-0 pr-3; }
+  .onboarding-model-preview li { @apply flex items-baseline justify-between gap-4 text-[12px] leading-5 text-black; }
+  .onboarding-model-preview li span { @apply min-w-0; }
+  .onboarding-model-preview li small { @apply shrink-0 text-[11px] text-[#666]; }
+  .onboarding-model-summary { @apply grid w-full gap-3 border-t border-[#e5e5e5] pt-8; }
+  .onboarding-model-summary strong { @apply text-[14px] font-normal text-black; }
+  .onboarding-model-summary small { @apply leading-6; }
+  .onboarding-model-summary p { @apply m-0 text-[13px] leading-7 text-[#666]; }
+  .onboarding-actions { @apply flex flex-wrap items-center justify-center gap-6; }
+  .onboarding-actions .secondary { @apply mt-0; }
   .model-actions { @apply flex shrink-0 items-center gap-4; }.model-actions .secondary { @apply mt-0; }
   .model-library-list > div.model-target { @apply bg-[#f2f2ed] transition-colors duration-500; }
   .export-options { @apply grid border-t border-[#e5e5e5]; }.export-options > button { @apply flex items-center justify-between gap-8 border-b border-[#e5e5e5] py-5 text-left transition-opacity duration-300 hover:opacity-60 disabled:cursor-not-allowed disabled:opacity-35; }.export-options b { @apply block text-[15px] font-normal; }.export-options small { @apply mt-1 block text-[11px] text-[#999]; }.export-options strong { @apply text-[11px] font-normal tracking-[.08em] text-[#666]; }
   .summary-detail-content { @apply grid gap-7; }.summary-detail-lead { @apply m-0 text-[18px] leading-8 tracking-[-.02em]; }.summary-detail-content section { @apply border-t border-[#e5e5e5] pt-5; }.summary-detail-content h3 { @apply m-0 text-[12px] font-normal uppercase tracking-[.1em]; }.summary-detail-content ul { @apply mt-4 grid list-disc gap-3 pl-5 text-[14px] leading-7 text-[#404040]; }.summary-detail-content li small { @apply ml-2 text-[11px] text-[#999]; }
   .toast { @apply fixed right-8 bottom-8 z-10 border border-black bg-white px-4 py-3 text-[13px] text-black opacity-0 transition-opacity duration-300 pointer-events-none; }.toast.visible { @apply opacity-100; }.toast.has-action { @apply flex items-center gap-4 pointer-events-auto; }.toast button { @apply shrink-0 border border-black bg-black px-3 py-1.5 text-[12px] text-white transition-opacity duration-300 hover:opacity-70; }
-  .mini-meeting { @apply fixed bottom-8 left-8 z-10 grid min-w-56 gap-1 border border-black bg-white p-4 text-left text-[13px] text-black shadow-none; animation: mini-in 260ms ease forwards; }
+  .mini-meeting { @apply grid min-h-32 min-w-0 gap-1 border border-black bg-white p-4 text-left text-[13px] text-black shadow-none; animation: mini-in 260ms ease forwards; }
   .mini-meeting:hover { @apply opacity-70; }
   .mini-recording { @apply text-[11px] text-[#ff0000]; }.mini-recording i { @apply mr-1 inline-block size-1.5 rounded-full bg-[#ff0000]; }.mini-meeting strong { @apply mt-1 font-normal; }.mini-meeting time { @apply text-[12px] tracking-[.08em] text-[#666]; }.mini-resume { @apply mt-3 text-[12px] text-[#0066ff]; }
+  .mini-playback { @apply grid min-h-32 min-w-0 gap-2 border border-black bg-white p-4 text-left text-black; animation: mini-in 260ms ease forwards; }
+  .mini-playback > span { @apply text-[11px] text-[#666]; }.mini-playback strong { @apply truncate text-[13px] font-normal; }.mini-playback p { @apply m-0 line-clamp-2 text-[12px] leading-5 text-[#666]; }.mini-playback-controls { @apply flex items-center gap-3; }.mini-playback-seek { @apply mt-0 min-w-0 flex-1 cursor-pointer; }.mini-playback-controls button { @apply text-[16px] text-[#666]; }
   .software-update-notice { @apply fixed bottom-8 left-8 z-10 flex items-center gap-4 border border-black bg-white p-3 text-left text-[12px] text-black; animation: mini-in 260ms ease forwards; }.software-update-notice span { @apply text-[#666]; }.software-update-notice button { @apply border border-black bg-black px-3 py-2 text-[12px] text-white transition-opacity duration-300 hover:opacity-70; }
 }
 
@@ -271,6 +337,7 @@
   .transcript-scroll { height: auto; grid-auto-rows: auto; gap: 20px; padding-block: 20px; }
   .transcript-scroll .segment { height: auto; }
   .notes { height: auto; overflow: visible; }
+  .onboarding-language-selection { grid-template-columns: 1fr; gap: 24px; }.onboarding-model-preview { border-left: 0; border-top: 1px solid #e5e5e5; padding-left: 0; padding-top: 24px; }
 }
 
 /* Motion is limited to view changes and lightweight feedback; reduced-motion rules override it below. */
@@ -299,10 +366,6 @@ html[data-theme="dark"] .app-shell, html[data-theme="dark"] .sidebar, html[data-
 html[data-theme="dark"] .sidebar, html[data-theme="dark"] .window-bar, html[data-theme="dark"] .library-toolbar, html[data-theme="dark"] .meeting-list, html[data-theme="dark"] .settings-card, html[data-theme="dark"] .model-row, html[data-theme="dark"] .tabbar, html[data-theme="dark"] .player, html[data-theme="dark"] .notes section, html[data-theme="dark"] .live-panel section + section, html[data-theme="dark"] .section-heading, html[data-theme="dark"] .model-card, html[data-theme="dark"] .live-panel, html[data-theme="dark"] .notes, html[data-theme="dark"] fieldset { border-color: #404040; }
 html[data-theme="dark"] .final-transcript .segment.is-active { background: #272722; }
 html[data-theme="dark"] .transcript-scroll .segment.is-active { background: #272722; }
-html[data-theme="dark"] * { scrollbar-color: transparent transparent; }
-html[data-theme="dark"] *:hover, html[data-theme="dark"] *.is-scrolling { scrollbar-color: #666 transparent; }
-html[data-theme="dark"] *::-webkit-scrollbar-thumb { background-color: rgb(102 102 102 / 0); }
-html[data-theme="dark"] *:hover::-webkit-scrollbar-thumb, html[data-theme="dark"] *.is-scrolling::-webkit-scrollbar-thumb { background-color: #666; }
 html[data-theme="dark"] .batch-toolbar, html[data-theme="dark"] .batch-actions > button, html[data-theme="dark"] .batch-category .flow-select-toggle { background: #111; color: #fff; border-color: #666; }
 html[data-theme="dark"] .meeting-row.is-selected { background: #262626; }
 html[data-theme="dark"] .meeting-row:focus-visible { outline-color: #fff; }
@@ -319,11 +382,14 @@ html[data-theme="dark"] .status { color: #ddd; }
 html[data-theme="dark"] .update-card { border-color: #eee; } html[data-theme="dark"] .update-card h2 { color: #fff; } html[data-theme="dark"] .update-card p { color: #bbb; } html[data-theme="dark"] .update-button { border-color: #fff; background: #fff; color: #111; }
 html[data-theme="dark"] .model-delete { border-color: #a65b5b; color: #c48686; }
 html[data-theme="dark"] .modal-panel { border-color: #eee; background: #1a1a1a; color: #fff; } html[data-theme="dark"] .modal-head, html[data-theme="dark"] .modal-list, html[data-theme="dark"] .modal-list > div { border-color: #404040; } html[data-theme="dark"] .modal-close { border-color: #666; color: #eee; } html[data-theme="dark"] .modal-body p { color: #bbb; } html[data-theme="dark"] .modal-list b { color: #fff; } html[data-theme="dark"] .modal-action { border-color: #fff; background: #fff; color: #111; } html[data-theme="dark"] .modal-danger { border-color: #a65b5b; background: #a65b5b; color: #fff; }
+html[data-theme="dark"] .onboarding-form > p, html[data-theme="dark"] .onboarding-options label, html[data-theme="dark"] .language-wheel button[aria-selected="true"] { color: #fff; } html[data-theme="dark"] .onboarding-form > strong, html[data-theme="dark"] .language-wheel button { color: #999; } html[data-theme="dark"] .onboarding-options, html[data-theme="dark"] .language-wheel { border-color: #404040; } html[data-theme="dark"] .onboarding-options label { border-color: #404040; } html[data-theme="dark"] .language-wheel::before { border-color: #666; }
+html[data-theme="dark"] .onboarding-page { background: #111; } html[data-theme="dark"] .onboarding-page h1, html[data-theme="dark"] .onboarding-page p { color: #fff; }
+html[data-theme="dark"] .onboarding-welcome-page ul, html[data-theme="dark"] .onboarding-section, html[data-theme="dark"] .onboarding-model-summary, html[data-theme="dark"] .onboarding-check-grid label, html[data-theme="dark"] .onboarding-feature-grid label, html[data-theme="dark"] .onboarding-model-preview { border-color: #404040; } html[data-theme="dark"] .onboarding-welcome-page li b, html[data-theme="dark"] .onboarding-setup-page h2, html[data-theme="dark"] .onboarding-check-grid label, html[data-theme="dark"] .onboarding-feature-grid label, html[data-theme="dark"] .onboarding-model-preview strong, html[data-theme="dark"] .onboarding-model-preview li, html[data-theme="dark"] .onboarding-model-summary strong { color: #fff; }
 html[data-theme="dark"] .config-json { border-color: #404040; background: #111; color: #ddd; } html[data-theme="dark"] .config-fields label, html[data-theme="dark"] .configured-models > p { color: #bbb; } html[data-theme="dark"] .config-fields input, html[data-theme="dark"] .config-fields select, html[data-theme="dark"] .prompt-form textarea { border-color: #666; background: #111; color: #fff; } html[data-theme="dark"] .configured-models { border-color: #404040; } html[data-theme="dark"] .configured-models label { border-color: #404040; }
 html[data-theme="dark"] .config-select-field { color: #bbb; } html[data-theme="dark"] .flow-select-toggle, html[data-theme="dark"] .flow-select-options { border-color: #666; background: #111; color: #fff; } html[data-theme="dark"] .flow-select-options button { color: #ddd; } html[data-theme="dark"] .flow-select-options button:hover { background: #262626; color: #fff; }
 html[data-theme="dark"] .modal-head p { color: #999; }
 html[data-theme="dark"] .toast { border-color: #666; background: #1a1a1a; color: #fff; }
-html[data-theme="dark"] .mini-meeting { border-color: #666; background: #1a1a1a; color: #fff; } html[data-theme="dark"] .mini-meeting time { color: #bbb; }
+html[data-theme="dark"] .mini-meeting, html[data-theme="dark"] .mini-playback { border-color: #666; background: #1a1a1a; color: #fff; } html[data-theme="dark"] .mini-meeting time, html[data-theme="dark"] .mini-playback > span, html[data-theme="dark"] .mini-playback p { color: #bbb; } html[data-theme="dark"] .mini-playback > i { background: #404040; } html[data-theme="dark"] .mini-playback > i b { background: #fff; }
 html[data-theme="dark"] .software-update-notice { border-color: #666; background: #1a1a1a; color: #fff; } html[data-theme="dark"] .software-update-notice span { color: #bbb; } html[data-theme="dark"] .software-update-notice button { border-color: #fff; background: #fff; color: #111; }
 /* Explicit foreground overrides for components that use light-theme utility colors. */
 html[data-theme="dark"] .brand img { filter: invert(1); }
@@ -340,7 +406,7 @@ html[data-theme="dark"] .processing-bar, html[data-theme="dark"] .input-meter { 
 html[data-theme="dark"] .processing-bar i, html[data-theme="dark"] .model-download-progress i { background-color: #fff; }
 html[data-theme="dark"] .player input[type=range] { accent-color: #fff; }
 html[data-theme="dark"] .input-meter::after { background: linear-gradient(90deg, #aaa 0 55%, #fff 55% 80%, #ff5d5d 80%); }
-html, .app-shell, .sidebar, .workspace, .window-bar, .language-options, input, select { transition: background-color .3s ease, color .3s ease, border-color .3s ease; }
+html, .sidebar, .workspace, .window-bar, .language-options, input, select { transition: background-color .3s ease, color .3s ease, border-color .3s ease; }
 body.modal-open { overflow: hidden; }
 .task-card-enter, .modal-backdrop.modal-enter .modal-panel { animation: surface-in 200ms ease-out both; }
 .task-card-leave, .modal-backdrop.modal-leave .modal-panel { animation: surface-out 200ms ease-in both; }
@@ -383,4 +449,5 @@ html[data-theme="dark"] .speaker-profile-entry, html[data-theme="dark"] .speaker
 html[data-theme="dark"] .speaker-sample-form { background: #222; }
 html[data-theme="dark"] .speaker-sample-form input { border-color: #666; background: #111; color: #fff; }
 html[data-theme="dark"] .sample-play { border-color: #fff; background: #fff; color: #111; }
+html[data-theme="dark"] .onboarding-back { border-color: #555; color: #f5f5f5; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
