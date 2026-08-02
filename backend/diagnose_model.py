@@ -16,7 +16,9 @@ def main():
     入参来自 argparse：模型目录、模型 ID，以及是否允许下载。成功时向 stdout
     输出识别文本、音频时长、耗时和 RTF 的 JSON；空结果以非零状态退出。
     """
-    parser = argparse.ArgumentParser(description="Download and diagnose a Brevia streaming model")
+    parser = argparse.ArgumentParser(
+        description="Download and diagnose a Brevia streaming model"
+    )
     parser.add_argument("--models-dir", required=True)
     parser.add_argument("--model-id", default="paraformer-zh-en-int8")
     parser.add_argument("--download", action="store_true")
@@ -27,9 +29,12 @@ def main():
     wav_path = next((manager.path(args.model_id) / "test_wavs").glob("*.wav"))
     with wave.open(str(wav_path)) as recording:
         sample_rate = recording.getframerate()
-        samples = numpy.frombuffer(
-            recording.readframes(recording.getnframes()), dtype=numpy.int16
-        ).astype(numpy.float32) / 32768
+        samples = (
+            numpy.frombuffer(
+                recording.readframes(recording.getnframes()), dtype=numpy.int16
+            ).astype(numpy.float32)
+            / 32768
+        )
     started = time.perf_counter()
     finals = []
     if "refined" in manager.get(args.model_id)["stages"]:
@@ -39,7 +44,9 @@ def main():
         recognizer = StreamingASR(manager, args.model_id)
         step = int(sample_rate * 0.6)
         for offset in range(0, len(samples), step):
-            text, final = recognizer.accept("diagnostic", samples[offset : offset + step], sample_rate)
+            text, final = recognizer.accept(
+                "diagnostic", samples[offset : offset + step], sample_rate
+            )
             if final and text:
                 finals.append(text)
         text, _ = recognizer.accept(

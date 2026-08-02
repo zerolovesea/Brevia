@@ -23,6 +23,25 @@ const startupDataWaitMs = 2200;
 const resetOnboarding = process.argv.includes('--reset-onboarding');
 const dataDir = () => app.getPath('userData');
 const command = z.object({ type: z.string().min(1), payload: z.record(z.string(), z.unknown()).default({}) });
+const workerResponse = z.discriminatedUnion('ok', [
+  z.object({ id: z.string().min(1), ok: z.literal(true), result: z.unknown() }).strict(),
+  z.object({ id: z.string().min(1), ok: z.literal(false), error: z.string() }).strict(),
+]);
+const workerEvent = z.object({
+  type: z.enum([
+    'app.maintenance', 'asr.language', 'diarization.ready', 'meeting.imported',
+    'meeting.paused', 'meeting.recovered', 'meeting.sources-separated', 'meeting.started',
+    'meeting.stopped', 'model.progress', 'model.status', 'refinement.progress',
+    'refinement.ready', 'refinement.segment', 'refinement.started', 'separation.progress',
+    'separation.started', 'speaker-profile.deleted', 'speaker-profile.updated',
+    'summary.progress', 'summary.ready', 'summary.started', 'task.status',
+    'transcript.discarded', 'transcript.final', 'transcript.partial', 'transcript.refined',
+    'translation.ready', 'tts.ready', 'worker.error', 'worker.warning',
+  ]),
+  schema_version: z.literal(1),
+  payload: z.record(z.string(), z.unknown()),
+}).strict();
+const workerMessage = z.union([workerResponse, workerEvent]);
 const meetingStart = z.object({
   title: z.string().trim().min(1).max(120),
   language: z.string().min(2).max(16),
@@ -95,7 +114,7 @@ class WorkerClient {
       const lines = buffer.split('\n');
       buffer = lines.pop();
       lines.filter(Boolean).forEach((line) => {
-        try { this.receive(JSON.parse(line)); }
+        try { this.receive(workerMessage.parse(JSON.parse(line))); }
         catch (error) {
           this.fail(error);
           this.sendEvent('worker:log', { message: `Invalid worker output: ${error.message}` });
@@ -174,6 +193,15 @@ class WorkerClient {
 
 const worker = new WorkerClient();
 let startupInitialization;
+
+function reportMainError(error, fatal = false) {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(error);
+  try { worker.sendEvent('worker.error', { message, fatal }); } catch { /* The app may not have a window yet. */ }
+}
+
+process.on('unhandledRejection', (error) => reportMainError(error));
+process.on('uncaughtException', (error) => reportMainError(error, true));
 
 function initializeWorker() {
   if (!startupInitialization) {
@@ -471,15 +499,22 @@ function createWindow() {
   let animationComplete = false;
   let initializationReady = false;
   let revealed = false;
+  let reloadRevealTimer;
   const revealApp = () => {
     if (!pageReady || !animationComplete || !initializationReady || revealed || window.isDestroyed()) return;
     revealed = true;
     window.webContents.send('brevia:event', { type: 'startup.ready' });
   };
-  window.webContents.once('did-finish-load', () => {
+  window.webContents.on('did-finish-load', () => {
     pageReady = true;
     window.show();
-    revealApp();
+    if (revealed) {
+      clearTimeout(reloadRevealTimer);
+      reloadRevealTimer = setTimeout(() => {
+        if (!window.isDestroyed()) window.webContents.send('brevia:event', { type: 'startup.ready' });
+      }, startupAnimationMs);
+    }
+    else revealApp();
   });
   window.loadFile(path.join(packagedRoot, 'frontend', 'index.html'), resetOnboarding ? { query: { resetOnboarding: '1' } } : undefined);
   setTimeout(() => {

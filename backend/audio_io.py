@@ -8,6 +8,8 @@ import os
 import shutil
 import subprocess
 import wave
+
+
 def ffmpeg_path():
     """返回显式配置或 PATH 中的 ffmpeg；缺失时给出统一错误。"""
     executable = os.environ.get("BREVIA_FFMPEG") or shutil.which("ffmpeg")
@@ -19,8 +21,21 @@ def ffmpeg_path():
 def convert_to_pcm_wav(source, destination, sample_rate=16000, channels=1):
     """转为模型可预测的 PCM16 WAV，供临时推理使用。"""
     subprocess.run(
-        [ffmpeg_path(), "-y", "-loglevel", "error", "-i", str(source), "-ar", str(sample_rate),
-         "-ac", str(channels), "-c:a", "pcm_s16le", str(destination)],
+        [
+            ffmpeg_path(),
+            "-y",
+            "-loglevel",
+            "error",
+            "-i",
+            str(source),
+            "-ar",
+            str(sample_rate),
+            "-ac",
+            str(channels),
+            "-c:a",
+            "pcm_s16le",
+            str(destination),
+        ],
         check=True,
     )
 
@@ -32,7 +47,9 @@ def read_mono_wav(path):
     with wave.open(str(path)) as recording:
         if recording.getnchannels() != 1 or recording.getsampwidth() != 2:
             raise ValueError("This operation requires mono PCM16 WAV audio")
-        samples = numpy.frombuffer(recording.readframes(recording.getnframes()), dtype="<i2")
+        samples = numpy.frombuffer(
+            recording.readframes(recording.getnframes()), dtype="<i2"
+        )
         return samples.astype(numpy.float32) / 32768.0, recording.getframerate()
 
 
@@ -56,8 +73,12 @@ def read_wav_channels(path):
         if recording.getsampwidth() != 2:
             raise ValueError("Source separation requires PCM16 WAV audio")
         channels = recording.getnchannels()
-        values = numpy.frombuffer(recording.readframes(recording.getnframes()), dtype="<i2")
-        return values.astype(numpy.float32).reshape(-1, channels).T.copy() / 32768.0, recording.getframerate()
+        values = numpy.frombuffer(
+            recording.readframes(recording.getnframes()), dtype="<i2"
+        )
+        return values.astype(numpy.float32).reshape(
+            -1, channels
+        ).T.copy() / 32768.0, recording.getframerate()
 
 
 def write_wav_channels(path, samples, sample_rate):

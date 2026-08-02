@@ -5,7 +5,9 @@ import math
 from pathlib import Path
 
 
-DEFAULT_SETTINGS = json.loads(Path(__file__).with_name("settings.json").read_text(encoding="utf-8"))
+DEFAULT_SETTINGS = json.loads(
+    Path(__file__).with_name("settings.json").read_text(encoding="utf-8")
+)
 SETTINGS = json.loads(json.dumps(DEFAULT_SETTINGS))
 
 
@@ -47,9 +49,43 @@ def _validate(value, template):
                 raise ValueError(f"Invalid setting: {key}")
             if key == "num_speakers" and current != -1 and not 1 <= current <= 20:
                 raise ValueError("num_speakers must be -1 or between 1 and 20")
-            if key in {"cluster_threshold", "online_similarity_threshold", "microphone_target_rms", "microphone_minimum_rms", "microphone_peak"} and not 0 <= current <= 1:
+            if (
+                key
+                in {
+                    "cluster_threshold",
+                    "online_similarity_threshold",
+                    "microphone_target_rms",
+                    "microphone_minimum_rms",
+                    "microphone_peak",
+                }
+                and not 0 <= current <= 1
+            ):
                 raise ValueError(f"Invalid setting: {key}")
-            if key in {"sample_rate", "chunk_seconds", "maximum_utterance_seconds", "refined_window_seconds", "microphone_max_gain", "max_samples", "max_total_seconds", "timeout_seconds"} and current <= 0:
+            if (
+                key
+                in {
+                    "sample_rate",
+                    "chunk_seconds",
+                    "maximum_utterance_seconds",
+                    "refined_window_seconds",
+                    "microphone_max_gain",
+                    "max_samples",
+                    "max_total_seconds",
+                    "timeout_seconds",
+                }
+                and current <= 0
+            ):
                 raise ValueError(f"Invalid setting: {key}")
-            if key in {"endpoint_rule1_silence", "endpoint_rule2_silence", "minimum_embedding_seconds", "min_duration_on", "min_duration_off", "deleted_retention_days"} and current < 0:
+            if (
+                key
+                in {
+                    "endpoint_rule1_silence",
+                    "endpoint_rule2_silence",
+                    "minimum_embedding_seconds",
+                    "min_duration_on",
+                    "min_duration_off",
+                    "deleted_retention_days",
+                }
+                and current < 0
+            ):
                 raise ValueError(f"Invalid setting: {key}")

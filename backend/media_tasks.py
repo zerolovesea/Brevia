@@ -3,7 +3,13 @@
 from uuid import uuid4
 
 from .asr import SourceSeparator, ZipVoiceTTS
-from .audio_io import convert_to_pcm_wav, read_mono_wav, read_wav_channels, write_mono_wav, write_wav_channels
+from .audio_io import (
+    convert_to_pcm_wav,
+    read_mono_wav,
+    read_wav_channels,
+    write_mono_wav,
+    write_wav_channels,
+)
 
 
 class MeetingMediaService:
@@ -15,7 +21,14 @@ class MeetingMediaService:
 
     def separate(self, meeting, progress=lambda *_: None):
         """返回新生成的人声与非人声文件；原始回放轨保持不变。"""
-        source = next((meeting["audio"]["playback"].get(track) for track in ("mix", "mic", "system") if meeting["audio"]["playback"].get(track)), None)
+        source = next(
+            (
+                meeting["audio"]["playback"].get(track)
+                for track in ("mix", "mic", "system")
+                if meeting["audio"]["playback"].get(track)
+            ),
+            None,
+        )
         if not source:
             raise ValueError("The meeting has no audio to separate")
         directory = self.store.meetings_dir / meeting["id"] / "exports"
@@ -27,13 +40,20 @@ class MeetingMediaService:
             samples, sample_rate = read_wav_channels(input_path)
             progress(35, "separating")
             result = SourceSeparator(self.models).process(samples, sample_rate)
-            vocals, accompaniment = directory / "separated-vocals.wav", directory / "separated-accompaniment.wav"
+            vocals, accompaniment = (
+                directory / "separated-vocals.wav",
+                directory / "separated-accompaniment.wav",
+            )
             progress(85, "writing")
             write_wav_channels(vocals, result.stems[0].data, result.sample_rate)
             progress(95, "writing")
             write_wav_channels(accompaniment, result.stems[1].data, result.sample_rate)
             progress(100, "complete")
-            return {"meeting_id": meeting["id"], "vocals_path": str(vocals), "accompaniment_path": str(accompaniment)}
+            return {
+                "meeting_id": meeting["id"],
+                "vocals_path": str(vocals),
+                "accompaniment_path": str(accompaniment),
+            }
         finally:
             input_path.unlink(missing_ok=True)
 
@@ -46,7 +66,9 @@ class MeetingMediaService:
             raise ValueError("TTS text must contain 1–1000 characters")
         reference = self._voice_reference(payload["voice_id"])
         samples, sample_rate = read_mono_wav(reference["audio_path"])
-        audio = ZipVoiceTTS(self.models).generate(text, samples, sample_rate, reference["reference_text"])
+        audio = ZipVoiceTTS(self.models).generate(
+            text, samples, sample_rate, reference["reference_text"]
+        )
         if not len(audio.samples):
             raise ValueError("ZipVoice did not generate audio")
         directory = self.store.root / "tts"
@@ -58,12 +80,25 @@ class MeetingMediaService:
     def preset_voices(self):
         """公开 ZipVoice 自带且有已知参考文本的本地样例声音。"""
         path = self.models.path("zipvoice-zh-en") / "test_wavs" / "leijun-1.wav"
-        return [{"id": "preset:leijun-1", "name": "ZipVoice · Lei Jun", "audio_path": str(path)}] if self.models.is_ready("zipvoice-zh-en") and path.is_file() else []
+        return (
+            [
+                {
+                    "id": "preset:leijun-1",
+                    "name": "ZipVoice · Lei Jun",
+                    "audio_path": str(path),
+                }
+            ]
+            if self.models.is_ready("zipvoice-zh-en") and path.is_file()
+            else []
+        )
 
     def _voice_reference(self, voice_id):
         if voice_id == "preset:leijun-1":
             preset = self.preset_voices()
             if not preset:
                 raise ValueError("ZipVoice preset voice is unavailable")
-            return {"audio_path": preset[0]["audio_path"], "reference_text": "那还是三十六年前, 一九八七年. 我呢考上了武汉大学的计算机系."}
+            return {
+                "audio_path": preset[0]["audio_path"],
+                "reference_text": "那还是三十六年前, 一九八七年. 我呢考上了武汉大学的计算机系.",
+            }
         return self.store.speaker_profile_reference(voice_id)

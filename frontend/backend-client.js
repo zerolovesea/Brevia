@@ -37,32 +37,34 @@ class AudioCapture {
       stream.getTracks().forEach((track) => track.stop());
       throw new Error('麦克风没有可用的音频轨道');
     }
-    const context = new AudioContext();
-    const source = context.createMediaStreamSource(stream);
-    const processor = context.createScriptProcessor(4096, 1, 1);
-    const mute = context.createGain();
-    mute.gain.value = 0;
-    processor.onaudioprocess = ({ inputBuffer }) => {
-      const input = inputBuffer.getChannelData(0);
-      const power = input.reduce((total, sample) => total + sample * sample, 0) / input.length;
-      if (this.onLevel) this.onLevel('mic', Math.min(1, Math.sqrt(power) * 8));
-    };
-    source.connect(processor);
-    processor.connect(mute);
-    mute.connect(context.destination);
-    this.preview = { stream, context, source, processor, mute };
-    await context.resume();
+    const resource = { stream, context: new AudioContext() };
+    try {
+      resource.source = resource.context.createMediaStreamSource(stream);
+      resource.processor = resource.context.createScriptProcessor(4096, 1, 1);
+      resource.mute = resource.context.createGain();
+      resource.mute.gain.value = 0;
+      resource.processor.onaudioprocess = ({ inputBuffer }) => {
+        const input = inputBuffer.getChannelData(0);
+        const power = input.reduce((total, sample) => total + sample * sample, 0) / input.length;
+        if (this.onLevel) this.onLevel('mic', Math.min(1, Math.sqrt(power) * 8));
+      };
+      resource.source.connect(resource.processor);
+      resource.processor.connect(resource.mute);
+      resource.mute.connect(resource.context.destination);
+      this.preview = resource;
+      await resource.context.resume();
+    } catch (error) {
+      if (this.preview === resource) this.preview = null;
+      await this.release(resource);
+      throw error;
+    }
   }
 
   async stopPreview() {
     if (!this.preview) return;
-    const { stream, context, source, processor, mute } = this.preview;
+    const resource = this.preview;
     this.preview = null;
-    processor.disconnect();
-    source.disconnect();
-    mute.disconnect();
-    stream.getTracks().forEach((track) => track.stop());
-    await context.close();
+    await this.release(resource);
   }
 
   async start(meetingId) {
@@ -73,46 +75,66 @@ class AudioCapture {
     await Promise.all(streams.map(({ track, stream }) => this.connect(track, stream)));
   }
 
-  connect(track, stream) {
-    const context = new AudioContext();
-    const source = context.createMediaStreamSource(stream);
-    const processor = context.createScriptProcessor(4096, 1, 1);
+  async connect(track, stream) {
+    const resource = { stream, context: new AudioContext() };
+    const { context } = resource;
     let queue = Promise.resolve();
     let ready;
     const started = new Promise((resolve, reject) => {
       ready = resolve;
       setTimeout(() => reject(new Error(`${track === 'system' ? '系统音频' : '麦克风'}未产生音频数据`)), 3000);
     });
-    processor.onaudioprocess = ({ inputBuffer }) => {
-      ready();
-      if (this.paused) return;
-      const input = inputBuffer.getChannelData(0);
-      if (track === 'mic' && this.onLevel) {
-        const power = input.reduce((total, sample) => total + sample * sample, 0) / input.length;
-        this.onLevel(track, Math.min(1, Math.sqrt(power) * 8));
-      }
-      const samples = this.resample(input, context.sampleRate);
-      const sampleOffset = this.trackSamples.get(track) || 0;
-      this.trackSamples.set(track, sampleOffset + samples.length);
-      const pcm = new Int16Array(samples.length);
-      samples.forEach((sample, index) => { pcm[index] = Math.max(-1, Math.min(1, sample)) * 0x7fff; });
-      const bytes = new Uint8Array(pcm.buffer);
-      let binary = '';
-      for (let offset = 0; offset < bytes.length; offset += 0x8000) binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
-      const payload = {
-        meeting_id: this.meetingId,
-        track,
-        pcm: btoa(binary),
-        sample_rate: 16000,
-        start_ms: Math.round(sampleOffset / 16),
+    try {
+      resource.source = context.createMediaStreamSource(stream);
+      resource.processor = context.createScriptProcessor(4096, 1, 1);
+      resource.processor.onaudioprocess = ({ inputBuffer }) => {
+        ready();
+        if (this.paused) return;
+        const input = inputBuffer.getChannelData(0);
+        if (track === 'mic' && this.onLevel) {
+          const power = input.reduce((total, sample) => total + sample * sample, 0) / input.length;
+          this.onLevel(track, Math.min(1, Math.sqrt(power) * 8));
+        }
+        const samples = this.resample(input, context.sampleRate);
+        const sampleOffset = this.trackSamples.get(track) || 0;
+        this.trackSamples.set(track, sampleOffset + samples.length);
+        const pcm = new Int16Array(samples.length);
+        samples.forEach((sample, index) => { pcm[index] = Math.max(-1, Math.min(1, sample)) * 0x7fff; });
+        const bytes = new Uint8Array(pcm.buffer);
+        let binary = '';
+        for (let offset = 0; offset < bytes.length; offset += 0x8000) binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+        const payload = {
+          meeting_id: this.meetingId,
+          track,
+          pcm: btoa(binary),
+          sample_rate: 16000,
+          start_ms: Math.round(sampleOffset / 16),
+        };
+        queue = queue.then(() => this.send(payload)).catch((error) => console.error('Audio frame failed', error));
       };
-      queue = queue.then(() => this.send(payload)).catch((error) => console.error('Audio frame failed', error));
-    };
-    source.connect(processor);
-    processor.connect(context.destination);
-    this.sources.push({ stream, context, source, processor, pending: () => queue });
-    context.resume();
-    return started;
+      resource.source.connect(resource.processor);
+      resource.processor.connect(context.destination);
+      resource.pending = () => queue;
+      this.sources.push(resource);
+      await context.resume();
+      await started;
+    } catch (error) {
+      this.sources = this.sources.filter((item) => item !== resource);
+      await this.release(resource);
+      throw error;
+    }
+  }
+
+  async release({ stream, context, source, processor, mute }) {
+    for (const node of [processor, source, mute]) {
+      try { node?.disconnect(); } catch { /* It may not have connected yet. */ }
+    }
+    stream?.getTracks().forEach((track) => {
+      try { track.stop(); } catch { /* Continue releasing the remaining resources. */ }
+    });
+    if (context?.state !== 'closed') {
+      try { await context.close(); } catch (error) { console.error('Audio context cleanup failed', error); }
+    }
   }
 
   resample(input, sourceRate) {
@@ -131,18 +153,17 @@ class AudioCapture {
   async stop() {
     if (this.stopPromise) return this.stopPromise;
     this.stopPromise = (async () => {
-      const stopTracks = (stream) => stream.getTracks().filter((track) => track.readyState === 'live').forEach((track) => track.stop());
-      await this.stopPreview();
-      this.pendingStreams.forEach(({ stream }) => stopTracks(stream));
+      const preview = this.preview;
+      const pendingStreams = this.pendingStreams;
+      const sources = this.sources;
+      this.preview = null;
       this.pendingStreams = [];
-      this.sources.forEach(({ stream, processor, source }) => {
-        processor.disconnect();
-        source.disconnect();
-        stopTracks(stream);
-      });
-      await Promise.all(this.sources.map(({ pending }) => pending()));
-      await Promise.all(this.sources.map(({ context }) => context.close()));
       this.sources = [];
+      await Promise.allSettled(sources.map(({ pending }) => pending()));
+      await Promise.all([
+        ...pendingStreams.map(({ stream }) => this.release({ stream })),
+        ...[preview, ...sources].filter(Boolean).map((resource) => this.release(resource)),
+      ]);
     })();
     return this.stopPromise;
   }

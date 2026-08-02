@@ -33,7 +33,9 @@ class ModelManager:
         self.event = event
         self.catalog = {
             item["id"]: item
-            for item in json.loads(Path(__file__).with_name("models.json").read_text(encoding="utf-8"))
+            for item in json.loads(
+                Path(__file__).with_name("models.json").read_text(encoding="utf-8")
+            )
         }
 
     def list(self):
@@ -42,7 +44,9 @@ class ModelManager:
             {
                 **model,
                 "status": "ready" if self.is_ready(model["id"]) else "not_installed",
-                "path": str(self.path(model["id"])) if self.is_ready(model["id"]) else None,
+                "path": str(self.path(model["id"]))
+                if self.is_ready(model["id"])
+                else None,
             }
             for model in self.catalog.values()
         ]
@@ -76,6 +80,7 @@ class ModelManager:
         Raises:
             ValueError: 校验和不一致、压缩包越界或缺少必需文件。
         """
+
         def check_control():
             while control and control["paused"].is_set():
                 if control["cancelled"].is_set():
@@ -95,13 +100,28 @@ class ModelManager:
                 source.mkdir()
                 received = 0
                 for item in model["downloads"]:
-                    destination = Path(temporary) / item["path"] if item.get("extract") else source / item["path"]
+                    destination = (
+                        Path(temporary) / item["path"]
+                        if item.get("extract")
+                        else source / item["path"]
+                    )
                     destination.parent.mkdir(parents=True, exist_ok=True)
 
                     def report(blocks, block_size, total, offset=received):
                         check_control()
-                        current = min(blocks * block_size, total) if total > 0 else blocks * block_size
-                        self.event("model.progress", {"model_id": model_id, "received": offset + current, "total": model["size_bytes"]})
+                        current = (
+                            min(blocks * block_size, total)
+                            if total > 0
+                            else blocks * block_size
+                        )
+                        self.event(
+                            "model.progress",
+                            {
+                                "model_id": model_id,
+                                "received": offset + current,
+                                "total": model["size_bytes"],
+                            },
+                        )
 
                     check_control()
                     urllib.request.urlretrieve(item["url"], destination, report)
@@ -117,7 +137,9 @@ class ModelManager:
                             bundle.extractall(extract_root, filter="data")
                         extracted = extract_root / item["directory"]
                         if not extracted.is_dir():
-                            raise ValueError("Model archive is missing required directory")
+                            raise ValueError(
+                                "Model archive is missing required directory"
+                            )
                         shutil.copytree(extracted, source, dirs_exist_ok=True)
                     received += destination.stat().st_size
                 digest = None
@@ -130,7 +152,11 @@ class ModelManager:
                     """把 urlretrieve 的块进度节流为约每 MiB 一次的 Worker 事件。"""
                     nonlocal reported
                     check_control()
-                    received = min(blocks * block_size, total) if total > 0 else blocks * block_size
+                    received = (
+                        min(blocks * block_size, total)
+                        if total > 0
+                        else blocks * block_size
+                    )
                     if received < total and received - reported < 1024 * 1024:
                         return
                     reported = received
@@ -163,7 +189,11 @@ class ModelManager:
                 raise ValueError("Model archive is missing required files")
             source.replace(self.path(model_id))
         (self.path(model_id) / ".brevia.json").write_text(
-            json.dumps({**model, "downloaded_at": time.time(), "archive_sha256": digest}, indent=2), encoding="utf-8"
+            json.dumps(
+                {**model, "downloaded_at": time.time(), "archive_sha256": digest},
+                indent=2,
+            ),
+            encoding="utf-8",
         )
         self.event("model.status", {"model_id": model_id, "status": "ready"})
         return self.path(model_id)
@@ -224,7 +254,8 @@ class StreamingASR:
                 "rule2_silence", SETTINGS["asr"]["endpoint_rule2_silence"]
             ),
             "rule3_min_utterance_length": endpoint.get(
-                "maximum_utterance_seconds", SETTINGS["asr"]["maximum_utterance_seconds"]
+                "maximum_utterance_seconds",
+                SETTINGS["asr"]["maximum_utterance_seconds"],
             ),
         }
         if self.model["kind"] == "paraformer":
@@ -239,7 +270,11 @@ class StreamingASR:
                 decoder=str(path / files[1]),
                 joiner=str(path / files[2]),
             )
-        self.recognizer = sherpa_onnx.OnlineRecognizer.from_paraformer(**common) if self.model["kind"] == "paraformer" else sherpa_onnx.OnlineRecognizer.from_transducer(**common)
+        self.recognizer = (
+            sherpa_onnx.OnlineRecognizer.from_paraformer(**common)
+            if self.model["kind"] == "paraformer"
+            else sherpa_onnx.OnlineRecognizer.from_transducer(**common)
+        )
         self.streams = {}
 
     def accept(self, track, samples, sample_rate=16000, flush=False):
@@ -291,9 +326,16 @@ class LiveDenoiser:
         import numpy
         import sherpa_onnx
 
-        engine = self.engines.setdefault(track, sherpa_onnx.OnlineSpeechDenoiser(self.config))
+        engine = self.engines.setdefault(
+            track, sherpa_onnx.OnlineSpeechDenoiser(self.config)
+        )
         output = [
-            numpy.asarray(engine(samples[start:start + engine.frame_shift_in_samples], sample_rate).samples, dtype=numpy.float32)
+            numpy.asarray(
+                engine(
+                    samples[start : start + engine.frame_shift_in_samples], sample_rate
+                ).samples,
+                dtype=numpy.float32,
+            )
             for start in range(0, len(samples), engine.frame_shift_in_samples)
         ]
         if flush:
@@ -319,7 +361,10 @@ class OfflineDenoiser:
 
     def process(self, samples, sample_rate):
         import numpy
-        return numpy.asarray(self.engine(samples, sample_rate).samples, dtype=numpy.float32)
+
+        return numpy.asarray(
+            self.engine(samples, sample_rate).samples, dtype=numpy.float32
+        )
 
 
 class LanguageIdentifier:
@@ -333,9 +378,11 @@ class LanguageIdentifier:
         path = manager.path(model_id)
         config = sherpa_onnx.SpokenLanguageIdentificationConfig(
             whisper=sherpa_onnx.SpokenLanguageIdentificationWhisperConfig(
-                encoder=str(path / "turbo-encoder.int8.onnx"), decoder=str(path / "turbo-decoder.int8.onnx"),
+                encoder=str(path / "turbo-encoder.int8.onnx"),
+                decoder=str(path / "turbo-decoder.int8.onnx"),
             ),
-            num_threads=manager.device()["threads"], provider=manager.device()["backend"],
+            num_threads=manager.device()["threads"],
+            provider=manager.device()["backend"],
         )
         if not config.validate():
             raise RuntimeError("Invalid language-identification configuration")
@@ -355,9 +402,9 @@ def _vad_config(manager, model_id):
 
     config = sherpa_onnx.VadModelConfig()
     model = manager.get(model_id)
-    getattr(config, "ten_vad" if model["kind"] == "ten-vad" else "silero_vad").model = str(
-        manager.path(model_id) / model["files"][0]
-    )
+    getattr(
+        config, "ten_vad" if model["kind"] == "ten-vad" else "silero_vad"
+    ).model = str(manager.path(model_id) / model["files"][0])
     config.sample_rate = 16000
     return config
 
@@ -380,14 +427,18 @@ class OfflineVAD:
         def drain():
             while not detector.empty():
                 segment = detector.front
-                segments.append({
-                    "start_ms": round(segment.start * 1000 / sample_rate),
-                    "end_ms": round((segment.start + len(segment.samples)) * 1000 / sample_rate),
-                })
+                segments.append(
+                    {
+                        "start_ms": round(segment.start * 1000 / sample_rate),
+                        "end_ms": round(
+                            (segment.start + len(segment.samples)) * 1000 / sample_rate
+                        ),
+                    }
+                )
                 detector.pop()
 
         for start in range(0, len(samples), sample_rate * 10):
-            detector.accept_waveform(samples[start:start + sample_rate * 10])
+            detector.accept_waveform(samples[start : start + sample_rate * 10])
             drain()
         detector.flush()
         drain()
@@ -480,7 +531,11 @@ class SpeakerTracker:
     def assign(self, samples, sample_rate=16000):
         """提取一段语音的声纹并返回稳定的 ``spk-N``；过短片段沿用上一人。"""
         embedding = self.embedding(samples, sample_rate)
-        return self.assign_embedding(embedding) if embedding else self.last_speaker or "spk-1"
+        return (
+            self.assign_embedding(embedding)
+            if embedding
+            else self.last_speaker or "spk-1"
+        )
 
     def embedding(self, samples, sample_rate=16000):
         """提取一段可用于人员库匹配的归一化前声纹；过短或不可用时返回 ``None``。"""
@@ -506,7 +561,10 @@ class SpeakerTracker:
             sum(value * center_value for value, center_value in zip(embedding, center))
             for center in self.centers
         ]
-        if similarities and (max(similarities) >= self.threshold or (self.max_speakers and len(self.centers) >= self.max_speakers)):
+        if similarities and (
+            max(similarities) >= self.threshold
+            or (self.max_speakers and len(self.centers) >= self.max_speakers)
+        ):
             index = max(range(len(similarities)), key=similarities.__getitem__)
             self.counts[index] += 1
             center = [
@@ -535,32 +593,54 @@ class RefinedASR:
 
         """
         model = manager.get(model_id)
-        if model["kind"] not in {"qwen3", "whisper", "fire-red-asr-ctc", "funasr-nano"} or not manager.is_ready(model_id):
+        if model["kind"] not in {
+            "qwen3",
+            "whisper",
+            "fire-red-asr-ctc",
+            "funasr-nano",
+        } or not manager.is_ready(model_id):
             raise RuntimeError(f"Model {model_id} is not installed")
         try:
             import sherpa_onnx
         except ImportError as error:
             raise RuntimeError("sherpa-onnx is not installed") from error
         path = manager.path(model_id)
-        common = dict(num_threads=manager.device()["threads"], provider=manager.device()["backend"])
+        common = dict(
+            num_threads=manager.device()["threads"],
+            provider=manager.device()["backend"],
+        )
         if model["kind"] == "fire-red-asr-ctc":
-            self.recognizer = sherpa_onnx.OfflineRecognizer.from_fire_red_asr_ctc(model=str(path / "model.int8.onnx"), tokens=str(path / "tokens.txt"), **common)
+            self.recognizer = sherpa_onnx.OfflineRecognizer.from_fire_red_asr_ctc(
+                model=str(path / "model.int8.onnx"),
+                tokens=str(path / "tokens.txt"),
+                **common,
+            )
         elif model["kind"] == "funasr-nano":
-            self.recognizer = sherpa_onnx.OfflineRecognizer.from_funasr_nano(encoder_adaptor=str(path / "encoder_adaptor.int8.onnx"), llm=str(path / "llm.int8.onnx"), embedding=str(path / "embedding.int8.onnx"), tokenizer=str(path / "Qwen3-0.6B"), **common)
+            self.recognizer = sherpa_onnx.OfflineRecognizer.from_funasr_nano(
+                encoder_adaptor=str(path / "encoder_adaptor.int8.onnx"),
+                llm=str(path / "llm.int8.onnx"),
+                embedding=str(path / "embedding.int8.onnx"),
+                tokenizer=str(path / "Qwen3-0.6B"),
+                **common,
+            )
         elif model["kind"] == "whisper":
             self.recognizer = sherpa_onnx.OfflineRecognizer.from_whisper(
-                encoder=str(path / "turbo-encoder.int8.onnx"), decoder=str(path / "turbo-decoder.int8.onnx"), tokens=str(path / "turbo-tokens.txt"), language="", **common
+                encoder=str(path / "turbo-encoder.int8.onnx"),
+                decoder=str(path / "turbo-decoder.int8.onnx"),
+                tokens=str(path / "turbo-tokens.txt"),
+                language="",
+                **common,
             )
         else:
             self.recognizer = sherpa_onnx.OfflineRecognizer.from_qwen3_asr(
-            conv_frontend=str(path / "conv_frontend.onnx"),
-            encoder=str(path / "encoder.int8.onnx"),
-            decoder=str(path / "decoder.int8.onnx"),
-            tokenizer=str(path / "tokenizer"),
-            **common,
-            max_total_len=1024,
-            max_new_tokens=1024,
-        )
+                conv_frontend=str(path / "conv_frontend.onnx"),
+                encoder=str(path / "encoder.int8.onnx"),
+                decoder=str(path / "decoder.int8.onnx"),
+                tokenizer=str(path / "tokenizer"),
+                **common,
+                max_total_len=1024,
+                max_new_tokens=1024,
+            )
 
     def decode(self, samples, sample_rate=16000):
         """转写一段单声道浮点波形，返回去除首尾空白的文本。"""
@@ -573,7 +653,14 @@ class RefinedASR:
 class OfflineDiarizer:
     """用语音分段、声纹向量和聚类生成单轨说话人时间段。"""
 
-    def __init__(self, manager, num_speakers=None, threshold=None, segmentation_id=None, embedding_id=None):
+    def __init__(
+        self,
+        manager,
+        num_speakers=None,
+        threshold=None,
+        segmentation_id=None,
+        embedding_id=None,
+    ):
         """创建离线说话人分离器。
 
         Args:
@@ -584,13 +671,19 @@ class OfflineDiarizer:
         config = SETTINGS["diarization"]
         segmentation_id = segmentation_id or config["segmentation_model_id"]
         embedding_id = embedding_id or config["embedding_model_id"]
-        if not all(manager.is_ready(model_id) for model_id in (segmentation_id, embedding_id)):
-            raise RuntimeError(f"Models {segmentation_id}, {embedding_id} are not installed")
+        if not all(
+            manager.is_ready(model_id) for model_id in (segmentation_id, embedding_id)
+        ):
+            raise RuntimeError(
+                f"Models {segmentation_id}, {embedding_id} are not installed"
+            )
         try:
             import sherpa_onnx
         except ImportError as error:
             raise RuntimeError("sherpa-onnx is not installed") from error
-        segmentation = manager.path(segmentation_id) / manager.get(segmentation_id)["files"][0]
+        segmentation = (
+            manager.path(segmentation_id) / manager.get(segmentation_id)["files"][0]
+        )
         embedding = manager.path(embedding_id) / manager.get(embedding_id)["files"][0]
         diarization_config = sherpa_onnx.OfflineSpeakerDiarizationConfig(
             segmentation=sherpa_onnx.OfflineSpeakerSegmentationModelConfig(
@@ -606,8 +699,12 @@ class OfflineDiarizer:
                 provider=manager.device()["backend"],
             ),
             clustering=sherpa_onnx.FastClusteringConfig(
-                num_clusters=config["num_speakers"] if num_speakers is None else num_speakers,
-                threshold=config["cluster_threshold"] if threshold is None else threshold,
+                num_clusters=config["num_speakers"]
+                if num_speakers is None
+                else num_speakers,
+                threshold=config["cluster_threshold"]
+                if threshold is None
+                else threshold,
             ),
             min_duration_on=config["min_duration_on"],
             min_duration_off=config["min_duration_off"],
@@ -627,7 +724,9 @@ class OfflineDiarizer:
             按开始时间排序的字典列表，每项包含毫秒时间戳和 ``spk-N``。
         """
         if sample_rate != self.diarizer.sample_rate:
-            raise ValueError(f"Diarization requires {self.diarizer.sample_rate} Hz audio")
+            raise ValueError(
+                f"Diarization requires {self.diarizer.sample_rate} Hz audio"
+            )
         return [
             {
                 "start_ms": round(segment.start * 1000),
@@ -654,7 +753,9 @@ class SourceSeparator:
                 spleeter=sherpa_onnx.OfflineSourceSeparationSpleeterModelConfig(
                     vocals=str(path / "vocals.fp16.onnx"),
                     accompaniment=str(path / "accompaniment.fp16.onnx"),
-                ), num_threads=manager.device()["threads"], provider=manager.device()["backend"],
+                ),
+                num_threads=manager.device()["threads"],
+                provider=manager.device()["backend"],
             )
         )
         if not config.validate():
@@ -679,10 +780,15 @@ class ZipVoiceTTS:
         config = sherpa_onnx.OfflineTtsConfig(
             model=sherpa_onnx.OfflineTtsModelConfig(
                 zipvoice=sherpa_onnx.OfflineTtsZipvoiceModelConfig(
-                    tokens=str(path / "tokens.txt"), encoder=str(path / "encoder.int8.onnx"),
-                    decoder=str(path / "decoder.int8.onnx"), data_dir=str(path / "espeak-ng-data"),
-                    lexicon=str(path / "lexicon.txt"), vocoder=str(path / "vocos_24khz.onnx"),
-                ), num_threads=manager.device()["threads"], provider=manager.device()["backend"],
+                    tokens=str(path / "tokens.txt"),
+                    encoder=str(path / "encoder.int8.onnx"),
+                    decoder=str(path / "decoder.int8.onnx"),
+                    data_dir=str(path / "espeak-ng-data"),
+                    lexicon=str(path / "lexicon.txt"),
+                    vocoder=str(path / "vocos_24khz.onnx"),
+                ),
+                num_threads=manager.device()["threads"],
+                provider=manager.device()["backend"],
             )
         )
         if not config.validate():
@@ -691,6 +797,7 @@ class ZipVoiceTTS:
 
     def generate(self, text, reference_audio, reference_sample_rate, reference_text):
         import sherpa_onnx
+
         config = sherpa_onnx.GenerationConfig()
         config.reference_audio = reference_audio
         config.reference_sample_rate = reference_sample_rate

@@ -1570,7 +1570,18 @@ function applyLanguage(nextLocale, animate = false) {
   languageToggle.setAttribute('aria-label', t('切换语言'));
   applyTheme(theme);
   languageOptions.querySelectorAll('[data-language]').forEach((option) => option.setAttribute('aria-current', String(option.dataset.language === locale)));
-  const nodes = [...new Set(translatedNodes.map(({ node, element }) => node?.parentElement || element).filter(Boolean))];
+  const rerendered = [
+    '.settings-grid', '.meeting-list', '#meeting-form .form-grid',
+    '.final-transcript', '.notes', '.live-panel', '#tts-chat', '#required-models',
+  ].map((selector) => document.querySelector(selector));
+  rerendered.push(batchToolbar, updateNotice.hidden ? null : updateNotice, settingsModal.hidden ? null : settingsModal.querySelector('.modal-panel'));
+  const rerenderedRoots = rerendered.filter(Boolean);
+  const nodes = [...new Set([
+    ...translatedNodes
+      .map(({ node, element }) => node?.parentElement || element)
+      .filter((element) => element && !rerenderedRoots.some((root) => root.contains(element))),
+    ...rerenderedRoots,
+  ])];
   const updateText = () => {
     translatedNodes.forEach(({ node, element, attribute, key, leading = '', trailing = '' }) => {
       const value = t(key);
@@ -1654,6 +1665,15 @@ const showToast = (content, action) => {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => toast.classList.remove('visible'), 4000);
 };
+window.addEventListener('unhandledrejection', (event) => {
+  event.preventDefault();
+  const message = event.reason instanceof Error ? event.reason.message : String(event.reason || '未知异步错误');
+  showToast(`操作失败：${message}`);
+});
+window.addEventListener('error', (event) => {
+  const message = event.error instanceof Error ? event.error.message : event.message;
+  if (message) showToast(`应用错误：${message}`);
+});
 /** Marks the active meeting-library source and updates the window breadcrumb. @param {'all-meetings'|'recently-deleted'} id Navigation item ID. @returns {void} */
 function selectLibraryNav(id) {
   if (id !== activeLibraryNav) clearMeetingSelection();
@@ -2339,6 +2359,14 @@ finalTranscript.addEventListener('contextmenu', (event) => {
 document.addEventListener('mousedown', (event) => {
   if (!segmentContextMenu.hidden && !segmentContextMenu.contains(event.target)) closeSegmentContextMenu();
 });
+finalTranscript.addEventListener('click', (event) => {
+  if (event.target.closest('[data-separate-from-tracks]')) { void startSeparation(); return; }
+  const tab = event.target.closest('[data-detail-tab]');
+  if (!tab) return;
+  const target = tab.dataset.detailTab;
+  finalTranscript.querySelectorAll('[data-detail-tab]').forEach((item) => item.classList.toggle('active', item.dataset.detailTab === target));
+  finalTranscript.querySelectorAll('[data-detail-panel]').forEach((panel) => { panel.hidden = panel.dataset.detailPanel !== target; });
+});
 finalTranscript.addEventListener('dblclick', (event) => {
   const speaker = event.target.closest('[data-segment-speaker]');
   if (speaker) {
@@ -2348,12 +2376,6 @@ finalTranscript.addEventListener('dblclick', (event) => {
     requestAnimationFrame(() => document.querySelector('[data-segment-speaker-input]')?.select());
     return;
   }
-  if (event.target.closest('[data-separate-from-tracks]')) { void startSeparation(); return; }
-  const tab = event.target.closest('[data-detail-tab]');
-  if (!tab) return;
-  const target = tab.dataset.detailTab;
-  document.querySelectorAll('[data-detail-tab]').forEach((item) => item.classList.toggle('active', item.dataset.detailTab === target));
-  document.querySelectorAll('[data-detail-panel]').forEach((panel) => { panel.hidden = panel.dataset.detailPanel !== target; });
 });
 finalTranscript.addEventListener('submit', (event) => {
   if (!event.target.matches('.inline-segment-speaker-form')) return;
@@ -2366,12 +2388,13 @@ finalTranscript.addEventListener('focusout', (event) => {
 });
 
 if (window.brevia) {
-  window.brevia.on('startup.ready', () => {
+  const dismissStartupSplash = () => {
     const splash = document.querySelector('#startup-splash');
     if (!splash) return;
     splash.classList.add('startup-splash-leave');
     splash.addEventListener('transitionend', () => splash.remove(), { once: true });
-  });
+  };
+  window.brevia.on('startup.ready', dismissStartupSplash);
   if (window.BreviaOnboarding.isFirstLaunch()) openOnboardingLanguage();
   void loadSummaryConfig().catch((error) => showToast(`纪要配置加载失败：${error.message}`));
   const permissions = window.brevia.permissions.status();
@@ -2462,6 +2485,9 @@ if (window.brevia) {
     if (shouldFollow) scrollLiveToLatest(element);
   };
   window.brevia.on('transcript.partial', (payload) => renderLiveEvent(payload, true));
+  for (const type of ['meeting.started', 'meeting.recovered', 'meeting.imported', 'meeting.stopped']) {
+    window.brevia.on(type, ({ meeting }) => syncBackendMeeting(meeting));
+  }
   window.brevia.on('app.maintenance', ({ meetings, speaker_profiles: profiles, storage, recoverable }) => {
     uiData.meetings = meetings.map(backendMeeting);
     speakerProfiles = profiles;
@@ -2524,6 +2550,7 @@ if (window.brevia) {
   window.brevia.on('refinement.started', ({ meeting_id, total }) => showRefinementProgress(0, total, refinementMeetingTitle, meeting_id));
   window.brevia.on('refinement.progress', ({ completed, total }) => showRefinementProgress(completed, total));
   window.brevia.on('refinement.ready', async ({ meeting }) => {
+    syncBackendMeeting(meeting);
     const refineButton = document.querySelector('.detail-refine [data-flow-select-toggle]');
     refineButton.disabled = false;
     refineButton.innerHTML = `${t('精修')} <span>⌄</span>`;

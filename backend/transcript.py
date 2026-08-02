@@ -8,11 +8,23 @@ def latest_segments(segments):
     latest, priority = {}, {"live": 1, "postprocess": 2, "user": 3}
     refined = [item for item in segments if item["version"].startswith("postprocess")]
     revision = max((item["revision"] for item in refined), default=None)
-    base = [item for item in refined if item["revision"] == revision] if revision is not None else [item for item in segments if item["version"] == "live"]
+    base = (
+        [item for item in refined if item["revision"] == revision]
+        if revision is not None
+        else [item for item in segments if item["version"] == "live"]
+    )
     for item in [*base, *(item for item in segments if item["version"] == "user")]:
-        item_priority = priority["postprocess"] if item["version"].startswith("postprocess") else priority[item["version"]]
+        item_priority = (
+            priority["postprocess"]
+            if item["version"].startswith("postprocess")
+            else priority[item["version"]]
+        )
         previous = latest.get(item["id"], {})
-        previous_priority = priority["postprocess"] if previous.get("version", "").startswith("postprocess") else priority.get(previous.get("version"), 0)
+        previous_priority = (
+            priority["postprocess"]
+            if previous.get("version", "").startswith("postprocess")
+            else priority.get(previous.get("version"), 0)
+        )
         if item_priority >= previous_priority:
             latest[item["id"]] = item
     return sorted(latest.values(), key=lambda item: item["start_ms"])

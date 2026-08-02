@@ -32,7 +32,9 @@ def main():
     if args.download:
         for model_id in MODEL_IDS:
             manager.download(model_id)
-    wav_path = Path(args.wav) if args.wav else Path(args.models_dir) / "0-four-speakers-zh.wav"
+    wav_path = (
+        Path(args.wav) if args.wav else Path(args.models_dir) / "0-four-speakers-zh.wav"
+    )
     if not wav_path.exists():
         urllib.request.urlretrieve(TEST_WAV, wav_path)
     samples, sample_rate = read_mono_wav(wav_path)
@@ -41,7 +43,9 @@ def main():
     elapsed = time.perf_counter() - started
     speakers = sorted({turn["speaker"] for turn in turns})
     if len(speakers) != args.num_speakers:
-        raise RuntimeError(f"Expected {args.num_speakers} speakers, got {len(speakers)}")
+        raise RuntimeError(
+            f"Expected {args.num_speakers} speakers, got {len(speakers)}"
+        )
     print(
         json.dumps(
             {

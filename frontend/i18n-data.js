@@ -32,7 +32,6 @@ Object.assign(catalog.zh.labels, {
   '分钟': '分钟', '本地录音': '本地录音', '本地保存': '本地保存', '本地会议': '本地会议',
   '← 返回会议库': '← 返回会议库', '说话人分离': '说话人分离', '自定义术语': '自定义术语', '暂无术语': '暂无术语',
   '说话人': '说话人', '等待识别说话人': '等待识别说话人',
-  '原始录音与每版逐字稿均保存在本机': '原始录音与每版逐字稿均保存在本机',
   '会议摘要': '会议摘要', '尚未生成会议摘要': '尚未生成会议摘要', '转发': '转发',
   '会后精修': '会后精修', '精修': '精修', '正在精修…': '正在精修…',
   '会后精修已完成': '会后精修已完成', '已整理': '已整理', '决定': '决定', '待办': '待办'
@@ -41,7 +40,6 @@ Object.assign(catalog.en.labels, {
   '分钟': 'min', '本地录音': 'Local recording', '本地保存': 'Saved locally', '本地会议': 'Local meeting',
   '← 返回会议库': '← Back to library', '说话人分离': 'Speaker diarization', '自定义术语': 'Custom term', '暂无术语': 'No terms',
   '说话人': 'Speaker', '等待识别说话人': 'Waiting to identify speakers',
-  '原始录音与每版逐字稿均保存在本机': 'The original recording and every transcript version stay on this device',
   '会议摘要': 'Meeting summary', '尚未生成会议摘要': 'No meeting summary yet', '转发': 'Share',
   '会后精修': 'Refine', '精修': 'Refine', '正在精修…': 'Refining…',
   '会后精修已完成': 'Refinement complete', '已整理': 'Complete', '决定': 'Decisions', '待办': 'Action items'
@@ -50,7 +48,6 @@ Object.assign(catalog.es.labels, {
   '分钟': 'min', '本地录音': 'Grabación local', '本地保存': 'Guardado localmente', '本地会议': 'Reunión local',
   '← 返回会议库': '← Volver a la biblioteca', '说话人分离': 'Separación de hablantes', '自定义术语': 'Término personalizado', '暂无术语': 'No hay términos',
   '说话人': 'Hablante', '等待识别说话人': 'Esperando identificar hablantes',
-  '原始录音与每版逐字稿均保存在本机': 'La grabación original y cada versión de la transcripción se guardan en este dispositivo',
   '会议摘要': 'Resumen de la reunión', '尚未生成会议摘要': 'Aún no se ha generado el resumen', '转发': 'Compartir',
   '会后精修': 'Refinar', '精修': 'Refinar', '正在精修…': 'Refinando…',
   '会后精修已完成': 'Refinamiento completado', '已整理': 'Completado', '决定': 'Decisiones', '待办': 'Tareas'
@@ -79,11 +76,11 @@ const interfaceLabels = {
 Object.entries(interfaceLabels).forEach(([code, labels]) => Object.assign(catalog[code].labels, labels));
 Object.assign(catalog.en.labels, { '正在精修': 'Refining', '原版逐字稿仍可查看': 'The original transcript remains available', '准备中': 'Preparing' });
 Object.assign(catalog.es.labels, { '正在精修': 'Refinando', '原版逐字稿仍可查看': 'La transcripción original sigue disponible', '准备中': 'Preparando' });
-Object.assign(catalog.ja.labels, { '计算设备': '演算デバイス', '会后精修': '会議後の高精度化', '正在精修': '高精度化中', '原版逐字稿仍可查看': '元の文字起こしは引き続き閲覧できます', '准备中': '準備中', '可用': '利用可能', '本地保存': 'ローカルに保存', '本地会议': 'ローカル会議', '← 返回会议库': '← ライブラリに戻る', '原始录音与每版逐字稿均保存在本机': '元の録音とすべての文字起こし版はこのデバイスに保存されます' });
-Object.assign(catalog.ko.labels, { '计算设备': '연산 장치', '会后精修': '회의 후 정제', '正在精修': '정제 중', '原版逐字稿仍可查看': '원본 녹취는 계속 볼 수 있습니다', '准备中': '준비 중', '可用': '사용 가능', '本地保存': '로컬에 저장됨', '本地会议': '로컬 회의', '← 返回会议库': '← 라이브러리로 돌아가기', '原始录音与每版逐字稿均保存在本机': '원본 녹음과 모든 녹취 버전은 이 기기에 저장됩니다' });
-Object.assign(catalog.fr.labels, { '计算设备': 'Appareil de calcul', '会后精修': 'Affinage après réunion', '正在精修': 'Affinage en cours', '原版逐字稿仍可查看': 'La transcription d’origine reste disponible', '准备中': 'Préparation', '可用': 'Disponible', '本地保存': 'Enregistré localement', '本地会议': 'Réunion locale', '← 返回会议库': '← Retour à la bibliothèque', '原始录音与每版逐字稿均保存在本机': 'L’enregistrement original et toutes les versions de la transcription restent sur cet appareil' });
-Object.assign(catalog.de.labels, { '计算设备': 'Rechengerät', '会后精修': 'Nachbearbeitung', '正在精修': 'Nachbearbeitung läuft', '原版逐字稿仍可查看': 'Das ursprüngliche Transkript bleibt verfügbar', '准备中': 'Vorbereitung', '可用': 'Verfügbar', '本地保存': 'Lokal gespeichert', '本地会议': 'Lokale Besprechung', '← 返回会议库': '← Zurück zur Bibliothek', '原始录音与每版逐字稿均保存在本机': 'Die Originalaufnahme und jede Transkriptversion bleiben auf diesem Gerät' });
-Object.assign(catalog.ru.labels, { '计算设备': 'Вычислительное устройство', '会后精修': 'Обработка после встречи', '正在精修': 'Идёт обработка', '原版逐字稿仍可查看': 'Исходная расшифровка остаётся доступна', '准备中': 'Подготовка', '可用': 'Доступно', '本地保存': 'Сохранено локально', '本地会议': 'Локальная встреча', '← 返回会议库': '← Вернуться в библиотеку', '原始录音与每版逐字稿均保存在本机': 'Исходная запись и все версии расшифровки хранятся на этом устройстве' });
+Object.assign(catalog.ja.labels, { '计算设备': '演算デバイス', '会后精修': '会議後の高精度化', '正在精修': '高精度化中', '原版逐字稿仍可查看': '元の文字起こしは引き続き閲覧できます', '准备中': '準備中', '可用': '利用可能', '本地保存': 'ローカルに保存', '本地会议': 'ローカル会議', '← 返回会议库': '← ライブラリに戻る' });
+Object.assign(catalog.ko.labels, { '计算设备': '연산 장치', '会后精修': '회의 후 정제', '正在精修': '정제 중', '原版逐字稿仍可查看': '원본 녹취는 계속 볼 수 있습니다', '准备中': '준비 중', '可用': '사용 가능', '本地保存': '로컬에 저장됨', '本地会议': '로컬 회의', '← 返回会议库': '← 라이브러리로 돌아가기' });
+Object.assign(catalog.fr.labels, { '计算设备': 'Appareil de calcul', '会后精修': 'Affinage après réunion', '正在精修': 'Affinage en cours', '原版逐字稿仍可查看': 'La transcription d’origine reste disponible', '准备中': 'Préparation', '可用': 'Disponible', '本地保存': 'Enregistré localement', '本地会议': 'Réunion locale', '← 返回会议库': '← Retour à la bibliothèque' });
+Object.assign(catalog.de.labels, { '计算设备': 'Rechengerät', '会后精修': 'Nachbearbeitung', '正在精修': 'Nachbearbeitung läuft', '原版逐字稿仍可查看': 'Das ursprüngliche Transkript bleibt verfügbar', '准备中': 'Vorbereitung', '可用': 'Verfügbar', '本地保存': 'Lokal gespeichert', '本地会议': 'Lokale Besprechung', '← 返回会议库': '← Zurück zur Bibliothek' });
+Object.assign(catalog.ru.labels, { '计算设备': 'Вычислительное устройство', '会后精修': 'Обработка после встречи', '正在精修': 'Идёт обработка', '原版逐字稿仍可查看': 'Исходная расшифровка остаётся доступна', '准备中': 'Подготовка', '可用': 'Доступно', '本地保存': 'Сохранено локально', '本地会议': 'Локальная встреча', '← 返回会议库': '← Вернуться в библиотеку' });
 const settingsLabels = {
   ja: { '会议摘要': '会議の要約', '尚未生成会议摘要': '会議の要約はまだありません', '生成完整会议纪要': '会議メモを生成', '转发': '共有', '已整理': '完了', '已完成': '完了', '处理中': '処理中', '纪要模型': '要約モデル', '管理纪要模型': '要約モデルを管理', '配置用于生成会议纪要的 API。所有配置信息仅保存在本地，不会上传。': '会議メモを生成する API を設定します。すべての設定はローカルに保存されます。', '会议资料保存在此 Mac。外部 LLM 需要在发送逐字稿前明确确认。': '会議データはこの Mac に保存されます。外部 LLM への送信には明示的な確認が必要です。', '返回会议库': 'ライブラリに戻る', '暂无术语': '用語はありません', '软件更新': 'ソフトウェアアップデート', '当前版本 0.1.0': '現在のバージョン 0.1.0', '检查更新': 'アップデートを確認' },
   ko: { '会议摘要': '회의 요약', '尚未生成会议摘要': '아직 회의 요약이 없습니다', '生成完整会议纪要': '회의록 생성', '转发': '공유', '已整理': '완료', '已完成': '완료', '处理中': '처리 중', '纪要模型': '요약 모델', '管理纪要模型': '요약 모델 관리', '配置用于生成会议纪要的 API。所有配置信息仅保存在本地，不会上传。': '회의록 생성 API를 설정합니다. 모든 설정은 로컬에만 저장됩니다.', '会议资料保存在此 Mac。外部 LLM 需要在发送逐字稿前明确确认。': '회의 데이터는 이 Mac에 저장됩니다. 외부 LLM 전송 전 명시적 확인이 필요합니다.', '返回会议库': '라이브러리로 돌아가기', '暂无术语': '용어 없음', '软件更新': '소프트웨어 업데이트', '当前版本 0.1.0': '현재 버전 0.1.0', '检查更新': '업데이트 확인' },

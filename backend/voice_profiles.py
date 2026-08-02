@@ -24,20 +24,31 @@ class VoiceProfileService:
         if not source.is_file():
             raise ValueError("Audio file not found")
         samples, sample_rate = self._samples(source)
-        embedding = SpeakerTracker(self.models, model_id=payload.get("embedding_model_id")).embedding(samples, sample_rate)
+        embedding = SpeakerTracker(
+            self.models, model_id=payload.get("embedding_model_id")
+        ).embedding(samples, sample_rate)
         if embedding is None:
             raise ValueError("Voice sample is too short for speaker registration")
         source_key = f"file:{source.resolve()}:{source.stat().st_mtime_ns}:{source.stat().st_size}"
         reference_text = (payload.get("reference_text") or "").strip()
-        profile = self.store.ensure_speaker_profile(payload["name"]) if not payload.get("profile_id") else self.store.speaker_profile(payload["profile_id"])
+        profile = (
+            self.store.ensure_speaker_profile(payload["name"])
+            if not payload.get("profile_id")
+            else self.store.speaker_profile(payload["profile_id"])
+        )
         directory = self.store.speaker_profiles_dir / profile["id"]
         directory.mkdir(parents=True, exist_ok=True)
         reference_audio = directory / f"{int(time.time() * 1000)}.wav"
         convert_to_pcm_wav(source, reference_audio)
         try:
             return self.store.save_speaker_profile_sample(
-                payload["name"], embedding, source_key, profile["id"], str(reference_audio),
-                reference_text, round(len(samples) * 1000 / sample_rate),
+                payload["name"],
+                embedding,
+                source_key,
+                profile["id"],
+                str(reference_audio),
+                reference_text,
+                round(len(samples) * 1000 / sample_rate),
             )
         except Exception:
             reference_audio.unlink(missing_ok=True)
@@ -49,21 +60,37 @@ class VoiceProfileService:
         if not source.is_file():
             raise ValueError("Audio file not found")
         samples, sample_rate = self._samples(source)
-        embedding = SpeakerTracker(self.models, model_id=payload.get("embedding_model_id")).embedding(samples, sample_rate)
+        embedding = SpeakerTracker(
+            self.models, model_id=payload.get("embedding_model_id")
+        ).embedding(samples, sample_rate)
         if embedding is None:
             raise ValueError("Voice sample is too short for verification")
         profile = self.store.speaker_profile(payload["profile_id"])
-        candidate, reference = self.store._normalized_embedding(embedding), json.loads(profile["embedding"])
+        candidate, reference = (
+            self.store._normalized_embedding(embedding),
+            json.loads(profile["embedding"]),
+        )
         if len(candidate) != len(reference):
-            raise ValueError("Voiceprint model does not match this person's registered samples")
+            raise ValueError(
+                "Voiceprint model does not match this person's registered samples"
+            )
         score = sum(left * right for left, right in zip(candidate, reference))
-        return {"profile_id": profile["id"], "name": profile["name"], "score": score, "verified": score >= SETTINGS["diarization"]["online_similarity_threshold"]}
+        return {
+            "profile_id": profile["id"],
+            "name": profile["name"],
+            "score": score,
+            "verified": score >= SETTINGS["diarization"]["online_similarity_threshold"],
+        }
 
-    def learn_from_meeting(self, meeting, speaker_id, name, segment_ids=None, source_id=None):
+    def learn_from_meeting(
+        self, meeting, speaker_id, name, segment_ids=None, source_id=None
+    ):
         """按句保存用户明确选择的会议录音，并增量更新声纹中心。"""
         profile = self.store.ensure_speaker_profile(name)
         try:
-            tracker = SpeakerTracker(self.models, model_id=meeting.get("speaker_embedding_model_id"))
+            tracker = SpeakerTracker(
+                self.models, model_id=meeting.get("speaker_embedding_model_id")
+            )
         except RuntimeError:
             return profile
         archived = self.store.list_speaker_profile_samples(profile["id"])
@@ -76,11 +103,21 @@ class VoiceProfileService:
             if (
                 (speaker_id is not None and segment["speaker"] != speaker_id)
                 or (segment_ids is not None and segment["id"] not in segment_ids)
-                or (segment["version"] != "live" and not segment["version"].startswith("postprocess"))
+                or (
+                    segment["version"] != "live"
+                    and not segment["version"].startswith("postprocess")
+                )
             ):
                 continue
             previous = latest.get(segment["id"])
-            if previous is None or segment["version"].startswith("postprocess") and (previous["version"] == "live" or segment["revision"] >= previous["revision"]):
+            if (
+                previous is None
+                or segment["version"].startswith("postprocess")
+                and (
+                    previous["version"] == "live"
+                    or segment["revision"] >= previous["revision"]
+                )
+            ):
                 latest[segment["id"]] = segment
         for segment in sorted(latest.values(), key=lambda item: item["start_ms"]):
             path = meeting["audio"]["playback"].get(segment["track"])
@@ -91,20 +128,36 @@ class VoiceProfileService:
             sentences = self._sentences(segment["text"])
             characters = sum(len(sentence) for sentence in sentences)
             cursor = segment["start_ms"]
-            segment_clip = samples[round(segment["start_ms"] * rate / 1000):round(segment["end_ms"] * rate / 1000)]
+            segment_clip = samples[
+                round(segment["start_ms"] * rate / 1000) : round(
+                    segment["end_ms"] * rate / 1000
+                )
+            ]
             fallback_embedding = tracker.embedding(segment_clip, rate)
             for index, sentence in enumerate(sentences):
-                end_ms = segment["end_ms"] if index == len(sentences) - 1 else cursor + round(
-                    (segment["end_ms"] - segment["start_ms"]) * len(sentence) / characters
+                end_ms = (
+                    segment["end_ms"]
+                    if index == len(sentences) - 1
+                    else cursor
+                    + round(
+                        (segment["end_ms"] - segment["start_ms"])
+                        * len(sentence)
+                        / characters
+                    )
                 )
                 source_key = f"meeting:{meeting['id']}:{source_id or speaker_id}:{segment['id']}:{index}"
                 duration_ms = max(0, end_ms - cursor)
                 if source_key in existing:
                     cursor = end_ms
                     continue
-                if count >= limits["max_samples"] or total_ms + duration_ms > limits["max_total_seconds"] * 1000:
+                if (
+                    count >= limits["max_samples"]
+                    or total_ms + duration_ms > limits["max_total_seconds"] * 1000
+                ):
                     return profile
-                clip = samples[round(cursor * rate / 1000):round(end_ms * rate / 1000)]
+                clip = samples[
+                    round(cursor * rate / 1000) : round(end_ms * rate / 1000)
+                ]
                 embedding = tracker.embedding(clip, rate)
                 if embedding is None:
                     embedding = fallback_embedding
@@ -113,11 +166,19 @@ class VoiceProfileService:
                     continue
                 directory = self.store.speaker_profiles_dir / profile["id"]
                 directory.mkdir(parents=True, exist_ok=True)
-                audio_path = directory / f"{meeting['id']}-{segment['start_ms']}-{index}.wav"
+                audio_path = (
+                    directory / f"{meeting['id']}-{segment['start_ms']}-{index}.wav"
+                )
                 write_mono_wav(audio_path, clip, rate)
                 try:
                     profile = self.store.save_speaker_profile_sample(
-                        name, embedding, source_key, profile["id"], str(audio_path), sentence, duration_ms
+                        name,
+                        embedding,
+                        source_key,
+                        profile["id"],
+                        str(audio_path),
+                        sentence,
+                        duration_ms,
                     )
                 except Exception:
                     audio_path.unlink(missing_ok=True)
@@ -140,12 +201,28 @@ class VoiceProfileService:
         tracker = SpeakerTracker(self.models, model_id=model_id)
         # ponytail: bundled demo speakers seed defaults; replace fixtures when branded voices are recorded.
         for key, name, start_ms, end_ms, text in (
-            ("builtin:male", "内置男声", 0, 5016, "大家早上好，今天我们确认新用户引导的上线范围。"),
-            ("builtin:female", "内置女声", 5016, 9102, "设计稿已经完成，开发团队周四可以交付测试版本。"),
+            (
+                "builtin:male",
+                "内置男声",
+                0,
+                5016,
+                "大家早上好，今天我们确认新用户引导的上线范围。",
+            ),
+            (
+                "builtin:female",
+                "内置女声",
+                5016,
+                9102,
+                "设计稿已经完成，开发团队周四可以交付测试版本。",
+            ),
         ):
-            if any(sample["source_key"] == key for profile in self.store.list_speaker_profiles() for sample in self.store.list_speaker_profile_samples(profile["id"])):
+            if any(
+                sample["source_key"] == key
+                for profile in self.store.list_speaker_profiles()
+                for sample in self.store.list_speaker_profile_samples(profile["id"])
+            ):
                 continue
-            clip = samples[round(start_ms * rate / 1000):round(end_ms * rate / 1000)]
+            clip = samples[round(start_ms * rate / 1000) : round(end_ms * rate / 1000)]
             embedding = tracker.embedding(clip, rate)
             if embedding is None:
                 continue
@@ -155,13 +232,23 @@ class VoiceProfileService:
             audio_path = directory / f"{key.split(':')[1]}.wav"
             write_mono_wav(audio_path, clip, rate)
             self.store.save_speaker_profile_sample(
-                name, embedding, key, profile["id"], str(audio_path), text, end_ms - start_ms
+                name,
+                embedding,
+                key,
+                profile["id"],
+                str(audio_path),
+                text,
+                end_ms - start_ms,
             )
 
     @staticmethod
     def _sentences(text):
         """按中英文句末标点拆分，未带标点的段落仍作为一句。"""
-        return [part.strip() for part in re.split(r"(?<=[。！？.!?])\s*", text.strip()) if part.strip()]
+        return [
+            part.strip()
+            for part in re.split(r"(?<=[。！？.!?])\s*", text.strip())
+            if part.strip()
+        ]
 
     @staticmethod
     def _samples(source):

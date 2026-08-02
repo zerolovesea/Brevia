@@ -8,6 +8,21 @@ function backendMeeting(item) {
   };
 }
 
+function syncBackendMeeting(item) {
+  if (!item?.id) return;
+  const meeting = backendMeeting(item);
+  const index = uiData.meetings.findIndex(({ id }) => id === meeting.id);
+  const visible = activeLibraryNav === 'recently-deleted' ? meeting.deleted : !meeting.deleted;
+  if (!visible) {
+    if (index >= 0) uiData.meetings.splice(index, 1);
+    renderMeetingList();
+    return;
+  }
+  if (index < 0) uiData.meetings.unshift(meeting);
+  else uiData.meetings[index] = meeting;
+  renderMeetingList();
+}
+
 let meetingListRequest = 0;
 async function refreshBackendMeetings(includeDeleted = activeLibraryNav === 'recently-deleted') {
   const request = ++meetingListRequest;
