@@ -30,7 +30,7 @@ from .asr import (
     SpeakerTracker,
     StreamingASR,
 )
-from .audio_io import read_mono_wav
+from .audio_io import convert_to_pcm_wav, read_mono_wav
 from .llm_client import complete
 from .media_tasks import MeetingMediaService
 from .transcript import clock, latest_segments, parse_json_object, srt_time, validate_summary
@@ -119,6 +119,7 @@ class Worker:
             raise ValueError("Commands require id and type")
         handlers = {
             "app.initialize": self.initialize,
+            "app.maintain": self.maintain,
             "meeting.start": self.start,
             "meeting.import": self.import_audio,
             "meeting.resume": self.resume,
@@ -139,7 +140,7 @@ class Worker:
             "speaker-profile.sample-delete": self.delete_speaker_profile_sample,
             "speaker-profile.delete": self.delete_speaker_profile,
             "speaker-profile.rename": lambda value: self.store.rename_speaker_profile(value["profile_id"], value["name"]),
-            "storage.clear": lambda value: self.store.clear_storage_partition(value["partition"]),
+            "storage.clear": self.clear_storage,
             "settings.advanced.get": lambda _: {"settings": SETTINGS, "defaults": DEFAULT_SETTINGS},
             "settings.advanced.save": lambda value: save_runtime_settings(self.store.root, value["settings"]),
             "metrics.record": lambda value: self.store.metrics(value.get("app_duration_ms", 0)),
@@ -165,30 +166,45 @@ class Worker:
         return handlers[command_type](payload)
 
     def initialize(self, _):
-        """执行启动期维护，并返回前端首屏需要的完整本地状态。"""
+        """返回首屏状态，并把可延后的启动维护放入后台。"""
         seeded_examples = self.store.seed_examples()
-        purged = self.store.purge_expired()
         denoiser_id = SETTINGS["live_asr"]["denoiser_model_id"]
         if not self.models.is_ready(denoiser_id):
             self.download_model({"model_id": denoiser_id})
-        try:
-            self.voice_profiles.seed_builtin_profiles()
-        except RuntimeError as error:
-            self.emit("worker.warning", {"code": "builtin_voiceprints_unavailable", "message": str(error)})
-        for profile in self.store.list_speaker_profiles():
-            if self._is_default_speaker_name(profile["name"]):
-                self.store.delete_speaker_profile(profile["id"])
         return {
             "meetings": self.store.list_meetings(),
             "models": self.models.list(),
             "speaker_profiles": self.store.list_speaker_profiles(),
             "preset_voices": self.media.preset_voices(),
             "device": self.models.device(),
+            "seeded_examples": seeded_examples,
+        }
+
+    def maintain(self, _):
+        """在首屏已返回后启动可延后的维护任务。"""
+        self._start_startup_maintenance()
+        return {}
+
+    def _start_startup_maintenance(self):
+        threading.Thread(target=self._startup_maintenance, daemon=True).start()
+
+    def _startup_maintenance(self):
+        """完成不影响首屏的清理、声纹预置和磁盘统计。"""
+        try:
+            purged = self.store.purge_expired()
+            self.voice_profiles.seed_builtin_profiles()
+        except RuntimeError as error:
+            self.emit("worker.warning", {"code": "builtin_voiceprints_unavailable", "message": str(error)})
+        for profile in self.store.list_speaker_profiles():
+            if self._is_default_speaker_name(profile["name"]):
+                self.store.delete_speaker_profile(profile["id"])
+        self.emit("app.maintenance", {
+            "meetings": self.store.list_meetings(),
+            "speaker_profiles": self.store.list_speaker_profiles(),
             "storage": self.store.usage(),
             "recoverable": self.store.recoverable_meetings(),
             "purged_meeting_ids": purged,
-            "seeded_examples": seeded_examples,
-        }
+        })
 
     def assign_segment_speaker(self, payload):
         if self._is_default_speaker_name(payload["name"]):
@@ -258,7 +274,7 @@ class Worker:
         meeting = self.store.create_meeting(payload)
         destination = self.store.meetings_dir / meeting["id"] / "audio" / "playback-mic.wav"
         try:
-            subprocess.run(["ffmpeg", "-y", "-i", str(source), "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", str(destination)], check=True, capture_output=True)
+            convert_to_pcm_wav(source, destination)
             _, sample_rate = read_mono_wav(destination)
             import wave
             with wave.open(str(destination)) as audio:
@@ -585,6 +601,12 @@ class Worker:
             raise ValueError("Stop the active meeting before deleting it")
         self.store.soft_delete(payload["meeting_id"])
         return {"meeting_id": payload["meeting_id"], "deleted": True}
+
+    def clear_storage(self, payload):
+        """清理本地分区；录制期间保留会议文件以避免损坏当前会话。"""
+        if payload["partition"] == "meetings" and self.active:
+            raise ValueError("Stop the active meeting before clearing meeting data")
+        return self.store.clear_storage_partition(payload["partition"])
 
     def restore_meeting(self, payload):
         """恢复软删除会议并返回完整详情。"""

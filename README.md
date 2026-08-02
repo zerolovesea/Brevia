@@ -52,7 +52,7 @@ The renderer never opens a backend port. Electron validates IPC payloads with Zo
 - Python 3.10+ with a supported `sherpa-onnx` wheel is required only when running or building from source.
 - macOS for the current desktop-capture permission flow; microphone and Screen Recording permissions are required for live capture. Imported audio and most local processing do not require capture permissions.
 - Storage for the models you select. The default Chinese streaming model alone is about 570 MiB; refined and diarization models add more.
-- `ffmpeg` is needed for some audio exports. macOS `textutil` / `cupsfilter` are used when available for DOCX / PDF export.
+- `ffmpeg` is needed to import audio and for some audio exports; put it on `PATH` or set `BREVIA_FFMPEG`. macOS `textutil` / `cupsfilter` are used when available for DOCX / PDF export.
 
 ## Run locally
 

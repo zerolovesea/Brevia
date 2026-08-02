@@ -303,7 +303,7 @@ function clearMeetingSelection() { selectedMeetingKeys.clear(); syncMeetingSelec
 function renderCategoryFilter() { categoryFilter.innerHTML = flowSelect('library-category', activeCategory, [['', t('所有分类')], ['__unclassified', t('未分类')], ...categories.map((name) => [name, name])]); }
 function renderDateFilter() { dateFilter.innerHTML = flowSelect('library-date', activeDateRange, [['30', t('最近 30 天')], ['7', t('最近 7 天')], ['90', t('最近 90 天')], ['all', t('全部时间')]]); }
 /** Applies the active category and text query to the meeting library. @returns {void} */
-function filterMeetings() { const query = meetingSearch.value.trim().toLowerCase(); document.querySelectorAll('.meeting-row').forEach((row) => { const meeting = uiData.meetings[Number(row.dataset.meetingIndex)]; const categoryMatch = !activeCategory || (activeCategory === '__unclassified' ? !meeting.category : meeting.category === activeCategory); row.hidden = !categoryMatch || (!window.brevia && !row.textContent.toLowerCase().includes(query)); }); }
+function filterMeetings() { const query = meetingSearch.value.trim().toLowerCase(); const cutoff = Date.now() - Number(activeDateRange) * 86_400_000; document.querySelectorAll('.meeting-row').forEach((row) => { const meeting = uiData.meetings[Number(row.dataset.meetingIndex)]; const categoryMatch = !activeCategory || (activeCategory === '__unclassified' ? !meeting.category : meeting.category === activeCategory); const dateMatch = activeDateRange === 'all' || !meeting.createdAt || Date.parse(meeting.createdAt) >= cutoff; row.hidden = !categoryMatch || !dateMatch || (!window.brevia && !row.textContent.toLowerCase().includes(query)); }); }
 /** Updates a meeting category and its library metadata. @param {object} meeting Meeting to update. @param {string} category Target category or empty for unclassified. @returns {void} */
 function setMeetingCategory(meeting, category) { meeting.category = category; meeting.meta = meeting.meta.replace(/ · [^·]+$/, category ? ` · ${category}` : ''); }
 /** Formats backend meeting metadata in the current interface language. @param {object} meeting Stored UI meeting. @returns {object} Display-ready meeting. */
@@ -547,6 +547,7 @@ let requiredModelsCardMinimized = false;
 let onboardingModelIds = [];
 let onboardingModelSelection;
 let initialPermissionsNeeded = false;
+let initializationComplete = false;
 const onboardingCopy = {
   zh: { languageHint: '之后你可以随时修改界面语言。', meetingTitle: '你通常使用哪些会议语言？', meetingHint: '我们正在为您准备需要的语音识别模型。', modelsTitle: '准备离线转写功能', modelsHint: '为此，我们需要下载以下内容。', estimate: '预计占用空间', download: '下载并继续', customize: '自定义下载', later: '稍后设置', ready: '离线转写已准备就绪', capabilities: ['实时字幕', '语音活动检测', '自动标点', '会后精修', '语音分段', '说话人识别', '实时降噪', '声源分离'] },
   en: { languageHint: 'You can change the interface language any time.', meetingTitle: 'What languages do you usually use in meetings?', meetingHint: 'We’ll prepare the speech recognition models you need.', modelsTitle: 'Prepare offline transcription', modelsHint: 'To recognize speech on this device, Brevia needs to download the following.', estimate: 'Estimated storage', download: 'Download and continue', customize: 'Customize downloads', later: 'Set up later', ready: 'Offline transcription is ready', capabilities: ['Live captions', 'Voice activity detection', 'Automatic punctuation', 'Post-meeting refinement', 'Speech segmentation', 'Speaker recognition', 'Live denoising', 'Source separation'] },
@@ -1097,7 +1098,7 @@ function updateOnboardingSetup() {
 function finishOnboarding() {
   window.BreviaOnboarding.complete();
   closeModal();
-  if (initialPermissionsNeeded) window.setTimeout(openInitialPermissions, 230);
+  if (initializationComplete && initialPermissionsNeeded) window.setTimeout(openInitialPermissions, 230);
 }
 
 async function requestInitialPermissions(button) {
@@ -1948,7 +1949,8 @@ libraryToolbar.addEventListener('click', (event) => {
   select.querySelector('.flow-select-toggle').firstChild.nodeValue = choice.textContent;
   select.querySelector('.flow-select-options').hidden = true;
   select.querySelector('.flow-select-toggle').setAttribute('aria-expanded', 'false');
-  if (choice.dataset.flowSelectChoice === 'library-category') { activeCategory = choice.dataset.value; filterMeetings(); } else { activeDateRange = choice.dataset.value; }
+  if (choice.dataset.flowSelectChoice === 'library-category') activeCategory = choice.dataset.value; else activeDateRange = choice.dataset.value;
+  filterMeetings();
 });
 const meetingList = document.querySelector('.meeting-list');
 const meetingSelectionSurface = document.querySelector('#home-view');
@@ -2151,8 +2153,9 @@ const progress = document.querySelector('#progress');
 const playerTime = document.querySelector('#player-time');
 const playerAudio = new Audio();
 const playButton = document.querySelector('#play');
+let playbackStarted = false;
 function renderMiniPlayback() {
-  const active = activeView !== 'detail' && Boolean(playerAudio.src) && !playerAudio.ended;
+  const active = activeView !== 'detail' && playbackStarted && Boolean(playerAudio.src) && !playerAudio.ended;
   const wasHidden = miniPlayback.hidden;
   miniPlayback.hidden = !active;
   if (!active) return;
@@ -2204,9 +2207,9 @@ playButton.addEventListener('click', async () => {
   if (playerAudio.paused) await playerAudio.play(); else playerAudio.pause();
   showToast(message(playerAudio.paused ? 'paused' : 'playing'));
 });
-playerAudio.addEventListener('play', updatePlayerControl);
+playerAudio.addEventListener('play', () => { playbackStarted = true; updatePlayerControl(); });
 playerAudio.addEventListener('pause', updatePlayerControl);
-playerAudio.addEventListener('ended', updatePlayerControl);
+playerAudio.addEventListener('ended', () => { playbackStarted = false; updatePlayerControl(); });
 playerAudio.addEventListener('timeupdate', () => { progress.value = playerAudio.currentTime; renderPlayerTime(); syncPlaybackTranscript(); renderMiniPlayback(); });
 function seekMiniPlayback(clientX) {
   const bounds = miniPlaybackSeek.getBoundingClientRect();
@@ -2361,7 +2364,10 @@ finalTranscript.addEventListener('focusout', (event) => {
 });
 
 if (window.brevia) {
-  Promise.all([loadSummaryConfig(), breviaClient.initialize(), window.brevia.permissions.status()]).then(([, result, permissions]) => {
+  if (window.BreviaOnboarding.isFirstLaunch()) openOnboardingLanguage();
+  void loadSummaryConfig().catch((error) => showToast(`纪要配置加载失败：${error.message}`));
+  const permissions = window.brevia.permissions.status();
+  breviaClient.initialize().then((result) => {
     modelCatalog = result.models;
     renderRefinedModelChoices();
     setPrepareModel('active-refined-model', document.querySelector('#active-refined-model').dataset.model);
@@ -2377,16 +2383,14 @@ if (window.brevia) {
     document.querySelector('#active-device').textContent = result.device.backend.toUpperCase();
     uiData.live.status[1].value = result.device.backend.toUpperCase();
     renderLivePanel();
-    const storageSizes = [result.storage.meetings, result.storage.models, result.storage.exports].map(formatBytes);
-    Object.values(modalCopy).forEach((copy) => {
-      copy.storage.items.forEach((item, index) => { item[1] = storageSizes[index]; });
-    });
     renderSpeakerProfileCard();
     renderMeetingList();
-    initialPermissionsNeeded = permissions.microphone === 'not-determined' || permissions.screen === 'not-determined';
-    if (window.BreviaOnboarding.isFirstLaunch()) openOnboardingLanguage();
-    else if (initialPermissionsNeeded) openInitialPermissions();
-    if (result.recoverable.length) showToast(`发现 ${result.recoverable.length} 场可恢复录音`);
+    initializationComplete = true;
+    void window.brevia.maintain();
+    return permissions;
+  }).then((status) => {
+    initialPermissionsNeeded = status.microphone === 'not-determined' || status.screen === 'not-determined';
+    if (!window.BreviaOnboarding.isFirstLaunch() && initialPermissionsNeeded) openInitialPermissions();
   }).catch((error) => showToast(`配置或后端启动失败：${error.message}`));
 
   const transcript = document.querySelector('#transcript-scroll');
@@ -2450,6 +2454,16 @@ if (window.brevia) {
     if (shouldFollow) scrollLiveToLatest(element);
   };
   window.brevia.on('transcript.partial', (payload) => renderLiveEvent(payload, true));
+  window.brevia.on('app.maintenance', ({ meetings, speaker_profiles: profiles, storage, recoverable }) => {
+    uiData.meetings = meetings.map(backendMeeting);
+    speakerProfiles = profiles;
+    const storageSizes = [storage.meetings, storage.models, storage.exports].map(formatBytes);
+    Object.values(modalCopy).forEach((copy) => copy.storage.items.forEach((item, index) => { item[1] = storageSizes[index]; }));
+    renderSpeakerProfileCard();
+    renderMeetingList();
+    if (activeModal === 'storage') renderModal('storage');
+    if (recoverable.length) showToast(`发现 ${recoverable.length} 场可恢复录音`);
+  });
   async function generateSegmentTranslation(payload, targetLanguage) {
     const config = summaryModels[activeSummaryModel];
     if (!targetLanguage || !config) return;

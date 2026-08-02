@@ -19,6 +19,7 @@ app.on('second-instance', () => {
 const root = path.join(__dirname, '..');
 const packagedRoot = app.isPackaged ? process.resourcesPath : root;
 const startupAnimationMs = 1400;
+const startupDataWaitMs = 2200;
 const splashFadeMs = 360;
 const resetOnboarding = process.argv.includes('--reset-onboarding');
 const dataDir = () => app.getPath('userData');
@@ -66,8 +67,9 @@ class WorkerClient {
   start() {
     if (this.process?.stdin && !this.process.stdin.destroyed && this.process.exitCode === null) return;
     const bundled = path.join(packagedRoot, 'backend', process.platform === 'win32' ? 'brevia-worker.exe' : 'brevia-worker');
-    const python = process.env.BREVIA_PYTHON || (existsSync(bundled) ? bundled : process.platform === 'win32' ? 'python' : 'python3');
-    const args = existsSync(bundled) && !process.env.BREVIA_PYTHON ? [] : ['-m', 'backend.worker'];
+    const useBundledWorker = app.isPackaged && !process.env.BREVIA_PYTHON && existsSync(bundled);
+    const python = useBundledWorker ? bundled : (process.env.BREVIA_PYTHON || (process.platform === 'win32' ? 'python' : 'python3'));
+    const args = useBundledWorker ? [] : ['-m', 'backend.worker'];
     const child = spawn(python, args, {
       cwd: packagedRoot,
       env: {
@@ -160,6 +162,17 @@ class WorkerClient {
 }
 
 const worker = new WorkerClient();
+let startupInitialization;
+
+function initializeWorker() {
+  if (!startupInitialization) {
+    startupInitialization = worker.request('app.initialize').catch((error) => {
+      startupInitialization = null;
+      throw error;
+    });
+  }
+  return startupInitialization;
+}
 
 function handle(channel, schema, type = channel) {
   ipcMain.handle(channel, (_, payload = {}) => worker.request(type, schema.parse(payload)));
@@ -231,7 +244,8 @@ function registerIpc() {
     }
     return systemPreferences.getMediaAccessStatus('microphone');
   });
-  handle('app.initialize', z.object({}).passthrough(), 'app.initialize');
+  ipcMain.handle('app.initialize', () => initializeWorker());
+  handle('app.maintain', z.object({}), 'app.maintain');
   ipcMain.handle('meeting.start', async (_, payload) => {
     const value = meetingStart.parse(payload);
     const started = Date.now();
@@ -426,9 +440,6 @@ function createWindow() {
     backgroundColor: '#ffffff',
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
-  splash.loadFile(path.join(packagedRoot, 'frontend', 'splash.html'));
-  // Windows does not reliably emit ready-to-show for a frame-less GIF-only window.
-  splash.once('did-finish-load', () => splash.show());
   const window = new BrowserWindow({
     width: 1200,
     height: 760,
@@ -444,10 +455,12 @@ function createWindow() {
     },
   });
   let mainReady = false;
+  let splashReady = false;
   let animationComplete = false;
+  let initializationReady = false;
   let revealed = false;
   const showMain = () => {
-    if (!mainReady || !animationComplete || revealed || window.isDestroyed()) return;
+    if (!mainReady || !splashReady || !animationComplete || !initializationReady || revealed || window.isDestroyed()) return;
     revealed = true;
     window.show();
     const started = Date.now();
@@ -460,6 +473,17 @@ function createWindow() {
     };
     fadeSplash();
   };
+  // Windows does not reliably emit ready-to-show for a frame-less GIF-only window.
+  splash.webContents.once('did-finish-load', () => {
+    splashReady = true;
+    splash.show();
+    showMain();
+  });
+  splash.webContents.once('did-fail-load', () => {
+    splashReady = true;
+    showMain();
+  });
+  splash.loadFile(path.join(packagedRoot, 'frontend', 'splash.html'));
   window.loadFile(path.join(packagedRoot, 'frontend', 'index.html'), resetOnboarding ? { query: { resetOnboarding: '1' } } : undefined);
   window.once('ready-to-show', () => {
     mainReady = true;
@@ -469,6 +493,9 @@ function createWindow() {
     animationComplete = true;
     showMain();
   }, startupAnimationMs);
+  void Promise.race([initializeWorker(), new Promise((resolve) => setTimeout(resolve, startupDataWaitMs))])
+    .catch(() => {})
+    .then(() => { initializationReady = true; showMain(); });
   window.once('closed', () => {
     if (!splash.isDestroyed()) splash.close();
   });
@@ -484,6 +511,7 @@ app.whenReady().then(() => {
   });
   worker.start();
   registerIpc();
+  void initializeWorker().catch(() => {});
   createWindow();
   app.on('activate', () => {
     if (!BrowserWindow.getAllWindows().length) createWindow();

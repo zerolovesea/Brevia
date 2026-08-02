@@ -305,6 +305,11 @@ class WorkerTest(unittest.TestCase):
         self.worker.store.clear_storage_partition("meetings")
         self.assertEqual(self.worker.store.list_meetings(), [])
 
+    def test_cannot_clear_meetings_while_recording(self):
+        self.worker.start({"title": "录制中", "language": "zh", "streaming_model_id": "paraformer-zh-en-int8", "refined_model_id": "qwen3-asr-0.6b-int8"})
+        with self.assertRaisesRegex(ValueError, "Stop the active meeting"):
+            self.worker.clear_storage({"partition": "meetings"})
+
     def test_advanced_settings_are_saved_outside_the_default_template(self):
         settings = json.loads(json.dumps(DEFAULT_SETTINGS))
         settings["asr"]["endpoint_rule2_silence"] = 0.9
@@ -337,9 +342,21 @@ class WorkerTest(unittest.TestCase):
         self.assertEqual(streaming.call_args.args, (self.worker.models, "zipformer-zh-xlarge-streaming-int8"))
 
     def test_initialize_downloads_the_default_live_denoiser(self):
-        with patch.object(self.worker, "download_model") as download:
+        with patch.object(self.worker, "download_model") as download, patch.object(self.worker, "_start_startup_maintenance"):
             self.worker.initialize({})
         download.assert_called_once_with({"model_id": "gtcrn-live-denoiser"})
+
+    def test_initialize_defers_maintenance_from_the_first_response(self):
+        with patch.object(self.worker, "download_model"), patch.object(self.worker, "_start_startup_maintenance") as maintenance, patch.object(self.worker.store, "usage") as usage:
+            result = self.worker.initialize({})
+        maintenance.assert_not_called()
+        usage.assert_not_called()
+        self.assertIn("meetings", result)
+
+    def test_maintenance_starts_only_after_the_first_response(self):
+        with patch.object(self.worker, "_start_startup_maintenance") as maintenance:
+            self.worker.maintain({})
+        maintenance.assert_called_once()
 
     def test_live_microphone_gain_is_bounded_and_skips_near_silence(self):
         class Samples(list):

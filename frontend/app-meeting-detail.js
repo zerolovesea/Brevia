@@ -42,6 +42,7 @@ function applyBackendDetail(meeting) {
   progress.max = Math.max(1, Math.ceil(meeting.duration_ms / 1000));
   const audioPath = meeting.audio.playback.mix || meeting.audio.playback.mic || meeting.audio.playback.system;
   if (!sameMeeting) {
+    playbackStarted = false;
     playerAudio.pause(); playerAudio.currentTime = 0; progress.value = 0; updatePlayerControl(); renderPlayerTime();
     if (audioPath) window.brevia.audioUrl(audioPath).then((url) => { playerAudio.src = url; }); else { playerAudio.removeAttribute('src'); playerAudio.load(); }
   } else { progress.value = playerAudio.currentTime; renderPlayerTime(); }

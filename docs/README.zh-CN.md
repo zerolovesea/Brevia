@@ -30,7 +30,7 @@
 
 - Node.js 20+、npm、Python 3.10+（诊断示例使用 Python 3.12）。
 - 当前实时捕获流程面向 macOS：需授予麦克风与屏幕录制权限；导入音频不需要捕获权限。
-- 模型按需占用磁盘；默认中文流式模型约 570 MiB。部分音频导出需要 `ffmpeg`。
+- 模型按需占用磁盘；默认中文流式模型约 570 MiB。导入音频及部分音频导出需要 `ffmpeg`；将其加入 `PATH` 或设置 `BREVIA_FFMPEG`。
 
 ```bash
 npm install
