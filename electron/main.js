@@ -20,7 +20,6 @@ const root = path.join(__dirname, '..');
 const packagedRoot = app.isPackaged ? process.resourcesPath : root;
 const startupAnimationMs = 1400;
 const startupDataWaitMs = 2200;
-const splashFadeMs = 360;
 const resetOnboarding = process.argv.includes('--reset-onboarding');
 const dataDir = () => app.getPath('userData');
 const command = z.object({ type: z.string().min(1), payload: z.record(z.string(), z.unknown()).default({}) });
@@ -40,12 +39,19 @@ const meetingStart = z.object({
 const audio = z.object({
   meeting_id: z.string().uuid(),
   track: z.enum(['mic', 'system']),
-  pcm: z.string(),
+  pcm: z.string().max(4 * 1024 * 1024),
   sample_rate: z.literal(16000),
   start_ms: z.number().nonnegative(),
   flush: z.boolean().optional(),
 });
 const id = z.object({ meeting_id: z.string().uuid() });
+const meetingUpdates = z.object({
+  title: z.string().trim().min(1).max(120),
+  category: z.string().max(32),
+  tags: z.array(z.string().max(32)).max(20),
+  archived_at: z.string().max(64).nullable(),
+  refined_model_id: z.string().min(1).max(128),
+}).partial();
 const summaryModelConfig = z.object({
   name: z.string().trim().min(1).max(64), provider: z.string().trim().min(1).max(64),
   endpoint: z.string().url(), format: z.enum(['openai', 'claude']).optional(), model: z.string().trim().min(1).max(128),
@@ -88,7 +94,13 @@ class WorkerClient {
       buffer += chunk;
       const lines = buffer.split('\n');
       buffer = lines.pop();
-      lines.filter(Boolean).forEach((line) => this.receive(JSON.parse(line)));
+      lines.filter(Boolean).forEach((line) => {
+        try { this.receive(JSON.parse(line)); }
+        catch (error) {
+          this.fail(error);
+          this.sendEvent('worker:log', { message: `Invalid worker output: ${error.message}` });
+        }
+      });
     });
     child.stderr.setEncoding('utf8');
     child.stderr.on('data', (message) => this.sendEvent('worker:log', { message }));
@@ -152,7 +164,6 @@ class WorkerClient {
     try {
       await this.request('meeting.resume', {
         meeting_id: this.active.meeting_id,
-        start_ms: this.active.elapsed(),
       });
       this.sendEvent('worker.recovered', { meeting_id: this.active.meeting_id });
     } catch (error) {
@@ -234,6 +245,7 @@ async function writeSummaryConfig(config) {
 
 function registerIpc() {
   ipcMain.handle('app.version', () => app.getVersion());
+  ipcMain.handle('app.open-releases', () => shell.openExternal('https://github.com/zerolovesea/Brevia/releases'));
   ipcMain.handle('permissions.status', () => process.platform === 'darwin'
     ? { microphone: systemPreferences.getMediaAccessStatus('microphone'), screen: systemPreferences.getMediaAccessStatus('screen') }
     : { microphone: 'granted', screen: 'granted' });
@@ -248,7 +260,6 @@ function registerIpc() {
   handle('app.maintain', z.object({}), 'app.maintain');
   ipcMain.handle('meeting.start', async (_, payload) => {
     const value = meetingStart.parse(payload);
-    const started = Date.now();
     let result;
     try {
       result = await worker.request('meeting.start', { ...value, require_models: true });
@@ -258,7 +269,7 @@ function registerIpc() {
       worker.sendEvent('model.required', { models, task: 'meeting.start', payload: value });
       return { model_required: models };
     }
-    worker.active = { meeting_id: result.id, elapsed: () => Date.now() - started };
+    worker.active = { meeting_id: result.id };
     worker.restarts = 0;
     return result;
   });
@@ -278,7 +289,7 @@ function registerIpc() {
   });
   handle('meeting.list', z.object({ include_deleted: z.boolean().optional(), query: z.string().max(120).optional() }), 'meeting.list');
   handle('meeting.get', id, 'meeting.get');
-  handle('meeting.update', id.extend({ updates: z.record(z.string(), z.unknown()) }), 'meeting.update');
+  handle('meeting.update', id.extend({ updates: meetingUpdates }), 'meeting.update');
   handle('meeting.delete', id, 'meeting.delete');
   handle('meeting.restore', id, 'meeting.restore');
   handle('meeting.purge', id, 'meeting.purge');
@@ -429,17 +440,7 @@ function registerIpc() {
 }
 
 function createWindow() {
-  const splash = new BrowserWindow({
-    width: 1200,
-    height: 760,
-    show: false,
-    frame: false,
-    resizable: false,
-    movable: false,
-    alwaysOnTop: true,
-    backgroundColor: '#ffffff',
-    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
-  });
+  const appUrl = pathToFileURL(path.join(packagedRoot, 'frontend', 'index.html')).href;
   const window = new BrowserWindow({
     width: 1200,
     height: 760,
@@ -454,51 +455,40 @@ function createWindow() {
       sandbox: true,
     },
   });
-  let mainReady = false;
-  let splashReady = false;
+  const openExternal = (url) => {
+    if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
+  };
+  window.webContents.setWindowOpenHandler(({ url }) => {
+    openExternal(url);
+    return { action: 'deny' };
+  });
+  window.webContents.on('will-navigate', (event, url) => {
+    if (url.startsWith(appUrl)) return;
+    event.preventDefault();
+    openExternal(url);
+  });
+  let pageReady = false;
   let animationComplete = false;
   let initializationReady = false;
   let revealed = false;
-  const showMain = () => {
-    if (!mainReady || !splashReady || !animationComplete || !initializationReady || revealed || window.isDestroyed()) return;
+  const revealApp = () => {
+    if (!pageReady || !animationComplete || !initializationReady || revealed || window.isDestroyed()) return;
     revealed = true;
-    window.show();
-    const started = Date.now();
-    const fadeSplash = () => {
-      if (splash.isDestroyed()) return;
-      const progress = Math.min(1, (Date.now() - started) / splashFadeMs);
-      splash.setOpacity(1 - progress * progress);
-      if (progress < 1) setTimeout(fadeSplash, 16);
-      else splash.close();
-    };
-    fadeSplash();
+    window.webContents.send('brevia:event', { type: 'startup.ready' });
   };
-  // Windows does not reliably emit ready-to-show for a frame-less GIF-only window.
-  splash.webContents.once('did-finish-load', () => {
-    splashReady = true;
-    splash.show();
-    showMain();
+  window.webContents.once('did-finish-load', () => {
+    pageReady = true;
+    window.show();
+    revealApp();
   });
-  splash.webContents.once('did-fail-load', () => {
-    splashReady = true;
-    showMain();
-  });
-  splash.loadFile(path.join(packagedRoot, 'frontend', 'splash.html'));
   window.loadFile(path.join(packagedRoot, 'frontend', 'index.html'), resetOnboarding ? { query: { resetOnboarding: '1' } } : undefined);
-  window.once('ready-to-show', () => {
-    mainReady = true;
-    showMain();
-  });
   setTimeout(() => {
     animationComplete = true;
-    showMain();
+    revealApp();
   }, startupAnimationMs);
   void Promise.race([initializeWorker(), new Promise((resolve) => setTimeout(resolve, startupDataWaitMs))])
     .catch(() => {})
-    .then(() => { initializationReady = true; showMain(); });
-  window.once('closed', () => {
-    if (!splash.isDestroyed()) splash.close();
-  });
+    .then(() => { initializationReady = true; revealApp(); });
   return window;
 }
 

@@ -1734,12 +1734,14 @@ async function loadInstalledAppVersion() {
 }
 void loadInstalledAppVersion();
 window.setInterval(() => { if (activeLibraryNav === 'recently-deleted') return; sloganIndex = (sloganIndex + 1) % (slogans[locale] || slogans.en).length; renderSlogan(true); }, 30000);
-updateButton.addEventListener('click', () => {
+updateButton.addEventListener('click', async () => {
   updateButton.disabled = true;
   updateButton.textContent = (updateLabels[locale] || updateLabels.en).checking;
-  window.setTimeout(() => { const copy = updateLabels[locale] || updateLabels.en; updateAvailable = false; updateDescription.textContent = copy.current; updateButton.textContent = copy.current; updateButton.disabled = false; renderUpdateNotice(); }, 700);
+  try { await window.brevia?.openReleases(); }
+  catch (error) { showToast(error.message); }
+  finally { renderUpdateButton(); }
 });
-updateNoticeButton.addEventListener('click', () => { updateNoticeButton.textContent = (updateLabels[locale] || updateLabels.en).updating; updateNoticeButton.disabled = true; window.setTimeout(() => { const copy = updateLabels[locale] || updateLabels.en; updateAvailable = false; updateNotice.hidden = true; updateDescription.textContent = copy.current; updateButton.textContent = copy.current; }, 900); });
+updateNoticeButton.addEventListener('click', () => window.brevia?.openReleases().catch((error) => showToast(error.message)));
 /** Closes the language menu and updates its disclosure state. @returns {void} */
 function closeLanguageMenu() { languageOptions.hidden = true; languageToggle.setAttribute('aria-expanded', 'false'); }
 languageToggle.addEventListener('click', () => {
@@ -2364,6 +2366,12 @@ finalTranscript.addEventListener('focusout', (event) => {
 });
 
 if (window.brevia) {
+  window.brevia.on('startup.ready', () => {
+    const splash = document.querySelector('#startup-splash');
+    if (!splash) return;
+    splash.classList.add('startup-splash-leave');
+    splash.addEventListener('transitionend', () => splash.remove(), { once: true });
+  });
   if (window.BreviaOnboarding.isFirstLaunch()) openOnboardingLanguage();
   void loadSummaryConfig().catch((error) => showToast(`纪要配置加载失败：${error.message}`));
   const permissions = window.brevia.permissions.status();

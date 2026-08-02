@@ -5,7 +5,6 @@ import json
 import os
 import re
 import shutil
-import struct
 import subprocess
 import sys
 import threading
@@ -295,7 +294,15 @@ class Worker:
         meeting = self.store.get_meeting(payload["meeting_id"])
         if meeting["status"] != "recording":
             raise ValueError("Only an unfinished recording can be resumed")
-        self._prepare_active(meeting, int(payload.get("start_ms", 0)))
+        manifest = self.store.read_manifest(meeting["id"])
+        start_ms = max(
+            (
+                round(track.get("samples", 0) * 1000 / track.get("sample_rate", 16000))
+                for track in manifest.get("tracks", {}).values()
+            ),
+            default=0,
+        )
+        self._prepare_active(meeting, start_ms)
         self.emit("meeting.recovered", {"meeting_id": self.active, "meeting": meeting})
         return meeting
 

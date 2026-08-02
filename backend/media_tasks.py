@@ -1,7 +1,6 @@
 """会后媒体任务：不修改原录音的分离和语音合成。"""
 
-import time
-from pathlib import Path
+from uuid import uuid4
 
 from .asr import SourceSeparator, ZipVoiceTTS
 from .audio_io import convert_to_pcm_wav, read_mono_wav, read_wav_channels, write_mono_wav, write_wav_channels
@@ -21,20 +20,22 @@ class MeetingMediaService:
             raise ValueError("The meeting has no audio to separate")
         directory = self.store.meetings_dir / meeting["id"] / "exports"
         input_path = directory / "source-separation-input.wav"
-        progress(10, "preparing")
-        convert_to_pcm_wav(source, input_path, sample_rate=44100, channels=2)
-        progress(25, "reading")
-        samples, sample_rate = read_wav_channels(input_path)
-        progress(35, "separating")
-        result = SourceSeparator(self.models).process(samples, sample_rate)
-        vocals, accompaniment = directory / "separated-vocals.wav", directory / "separated-accompaniment.wav"
-        progress(85, "writing")
-        write_wav_channels(vocals, result.stems[0].data, result.sample_rate)
-        progress(95, "writing")
-        write_wav_channels(accompaniment, result.stems[1].data, result.sample_rate)
-        input_path.unlink(missing_ok=True)
-        progress(100, "complete")
-        return {"meeting_id": meeting["id"], "vocals_path": str(vocals), "accompaniment_path": str(accompaniment)}
+        try:
+            progress(10, "preparing")
+            convert_to_pcm_wav(source, input_path, sample_rate=44100, channels=2)
+            progress(25, "reading")
+            samples, sample_rate = read_wav_channels(input_path)
+            progress(35, "separating")
+            result = SourceSeparator(self.models).process(samples, sample_rate)
+            vocals, accompaniment = directory / "separated-vocals.wav", directory / "separated-accompaniment.wav"
+            progress(85, "writing")
+            write_wav_channels(vocals, result.stems[0].data, result.sample_rate)
+            progress(95, "writing")
+            write_wav_channels(accompaniment, result.stems[1].data, result.sample_rate)
+            progress(100, "complete")
+            return {"meeting_id": meeting["id"], "vocals_path": str(vocals), "accompaniment_path": str(accompaniment)}
+        finally:
+            input_path.unlink(missing_ok=True)
 
     def synthesize(self, payload):
         """用已注册人员最新的带文本参考音频生成本地 ZipVoice 音频。"""
@@ -50,7 +51,7 @@ class MeetingMediaService:
             raise ValueError("ZipVoice did not generate audio")
         directory = self.store.root / "tts"
         directory.mkdir(exist_ok=True)
-        path = directory / f"{int(time.time() * 1000)}.wav"
+        path = directory / f"{uuid4()}.wav"
         write_mono_wav(path, audio.samples, audio.sample_rate)
         return {"path": str(path), "voice_id": payload["voice_id"], "text": text}
 

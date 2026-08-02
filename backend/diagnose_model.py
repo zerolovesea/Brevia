@@ -4,8 +4,6 @@ import argparse
 import json
 import time
 import wave
-from pathlib import Path
-
 import numpy
 
 from .asr import ModelManager, RefinedASR, StreamingASR

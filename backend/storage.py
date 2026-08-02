@@ -6,7 +6,6 @@ import shutil
 import sqlite3
 import struct
 import sys
-import time
 import wave
 from array import array
 from contextlib import contextmanager
@@ -216,18 +215,24 @@ class Store:
             now,
             now,
         )
-        with self.connect() as db:
-            db.execute(
-                """INSERT INTO meetings
-                (id,title,language,target_language,streaming_model_id,refined_model_id,
-                 speaker_segmentation_model_id,speaker_embedding_model_id,vad_model_id,num_speakers,category,tags,status,created_at,started_at)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                values,
-            )
         meeting_dir = self.meetings_dir / meeting_id
-        (meeting_dir / "audio").mkdir(parents=True)
-        (meeting_dir / "exports").mkdir()
-        self.write_manifest(meeting_id, {"meeting_id": meeting_id, "closed": False, "tracks": {}})
+        if meeting_dir.exists():
+            raise ValueError("Meeting data already exists")
+        try:
+            (meeting_dir / "audio").mkdir(parents=True)
+            (meeting_dir / "exports").mkdir()
+            self.write_manifest(meeting_id, {"meeting_id": meeting_id, "closed": False, "tracks": {}})
+            with self.connect() as db:
+                db.execute(
+                    """INSERT INTO meetings
+                    (id,title,language,target_language,streaming_model_id,refined_model_id,
+                     speaker_segmentation_model_id,speaker_embedding_model_id,vad_model_id,num_speakers,category,tags,status,created_at,started_at)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    values,
+                )
+        except Exception:
+            shutil.rmtree(meeting_dir, ignore_errors=True)
+            raise
         return self.get_meeting(meeting_id)
 
     def list_meetings(self, include_deleted=False, query=""):
@@ -441,6 +446,9 @@ class Store:
         Returns:
             状态更新为 ``ready`` 的完整会议详情。
         """
+        for track in ("mic", "system"):
+            self._build_playback(meeting_id, track)
+        self._build_mix(meeting_id)
         with self.connect() as db:
             db.execute(
                 "UPDATE meetings SET status='ready',ended_at=?,duration_ms=? WHERE id=?",
@@ -448,10 +456,15 @@ class Store:
             )
         manifest = self.read_manifest(meeting_id)
         manifest["closed"] = True
-        self.write_manifest(meeting_id, manifest)
-        for track in ("mic", "system"):
-            self._build_playback(meeting_id, track)
-        self._build_mix(meeting_id)
+        try:
+            self.write_manifest(meeting_id, manifest)
+        except Exception:
+            with self.connect() as db:
+                db.execute(
+                    "UPDATE meetings SET status='recording',ended_at=NULL,duration_ms=0 WHERE id=?",
+                    (meeting_id,),
+                )
+            raise
         return self.get_meeting(meeting_id)
 
     def finish_imported_meeting(self, meeting_id, duration_ms):
@@ -981,11 +994,15 @@ class Store:
 
     def recoverable_meetings(self):
         """返回清单仍未关闭的会议，用于 Worker 崩溃后的恢复提示。"""
-        return [
-            json.loads(path.read_text(encoding="utf-8"))
-            for path in self.meetings_dir.glob("*/manifest.json")
-            if not json.loads(path.read_text(encoding="utf-8")).get("closed")
-        ]
+        recoverable = []
+        for path in self.meetings_dir.glob("*/manifest.json"):
+            try:
+                manifest = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if not manifest.get("closed"):
+                recoverable.append(manifest)
+        return recoverable
 
     def usage(self):
         """统计会议、模型与导出文件占用的字节数及其根目录。"""

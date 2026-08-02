@@ -316,6 +316,37 @@ class WorkerTest(unittest.TestCase):
         save_runtime_settings(self.temp.name, settings)
         self.assertEqual(runtime_settings(self.temp.name)["asr"]["endpoint_rule2_silence"], 0.9)
 
+    def test_advanced_settings_reject_values_that_break_runtime_math(self):
+        settings = json.loads(json.dumps(DEFAULT_SETTINGS))
+        settings["audio"]["chunk_seconds"] = 0
+        with self.assertRaisesRegex(ValueError, "chunk_seconds"):
+            save_runtime_settings(self.temp.name, settings)
+
+    def test_failed_playback_build_keeps_meeting_recoverable(self):
+        meeting = self.worker.start({"title": "可恢复", "language": "zh", "streaming_model_id": "paraformer-zh-en-int8", "refined_model_id": "qwen3-asr-0.6b-int8"})
+        with patch.object(self.worker.store, "_build_playback", side_effect=OSError("disk full")):
+            with self.assertRaisesRegex(OSError, "disk full"):
+                self.worker.store.finish_meeting(meeting["id"], 1000)
+        self.assertEqual(self.worker.store.get_meeting(meeting["id"])["status"], "recording")
+        self.assertFalse(self.worker.store.read_manifest(meeting["id"])["closed"])
+        with patch.object(self.worker.store, "write_manifest", side_effect=OSError("disk full")):
+            with self.assertRaisesRegex(OSError, "disk full"):
+                self.worker.store.finish_meeting(meeting["id"], 1000)
+        self.assertEqual(self.worker.store.get_meeting(meeting["id"])["status"], "recording")
+
+    def test_resume_uses_persisted_audio_time_instead_of_wall_clock(self):
+        meeting = self.worker.start({"title": "恢复时间轴", "language": "zh", "streaming_model_id": "paraformer-zh-en-int8", "refined_model_id": "qwen3-asr-0.6b-int8"})
+        self.worker.audio({"meeting_id": meeting["id"], "track": "mic", "pcm": base64.b64encode(b"\0\0" * 8000).decode(), "sample_rate": 16000, "start_ms": 0})
+        self.worker.active = None
+        self.worker.resume({"meeting_id": meeting["id"], "start_ms": 999_999})
+        self.assertEqual(self.worker.stream_state["mic"]["start_ms"], 500)
+
+    def test_corrupt_recovery_manifest_does_not_break_startup(self):
+        path = self.worker.store.meetings_dir / "broken" / "manifest.json"
+        path.parent.mkdir()
+        path.write_text("{broken", encoding="utf-8")
+        self.assertEqual(self.worker.store.recoverable_meetings(), [])
+
     def test_zipformer_xlarge_manifest_uses_the_archive_decoder_name(self):
         self.assertIn("decoder.onnx", self.worker.models.get("zipformer-zh-xlarge-streaming-int8")["files"])
 

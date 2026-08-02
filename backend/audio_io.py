@@ -8,8 +8,6 @@ import os
 import shutil
 import subprocess
 import wave
-from pathlib import Path
-
 def ffmpeg_path():
     """返回显式配置或 PATH 中的 ffmpeg；缺失时给出统一错误。"""
     executable = os.environ.get("BREVIA_FFMPEG") or shutil.which("ffmpeg")

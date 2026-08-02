@@ -5,7 +5,7 @@ class AudioCapture {
     this.pendingStreams = [];
     this.sources = [];
     this.preview = null;
-    this.startedAt = 0;
+    this.trackSamples = new Map();
     this.paused = false;
     this.stopPromise = null;
   }
@@ -67,7 +67,7 @@ class AudioCapture {
 
   async start(meetingId) {
     this.meetingId = meetingId;
-    this.startedAt = performance.now();
+    this.trackSamples.clear();
     const streams = this.pendingStreams;
     this.pendingStreams = [];
     await Promise.all(streams.map(({ track, stream }) => this.connect(track, stream)));
@@ -92,6 +92,8 @@ class AudioCapture {
         this.onLevel(track, Math.min(1, Math.sqrt(power) * 8));
       }
       const samples = this.resample(input, context.sampleRate);
+      const sampleOffset = this.trackSamples.get(track) || 0;
+      this.trackSamples.set(track, sampleOffset + samples.length);
       const pcm = new Int16Array(samples.length);
       samples.forEach((sample, index) => { pcm[index] = Math.max(-1, Math.min(1, sample)) * 0x7fff; });
       const bytes = new Uint8Array(pcm.buffer);
@@ -102,7 +104,7 @@ class AudioCapture {
         track,
         pcm: btoa(binary),
         sample_rate: 16000,
-        start_ms: Math.max(0, Math.round(performance.now() - this.startedAt - samples.length / 16)),
+        start_ms: Math.round(sampleOffset / 16),
       };
       queue = queue.then(() => this.send(payload)).catch((error) => console.error('Audio frame failed', error));
     };

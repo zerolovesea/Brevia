@@ -1,5 +1,5 @@
 /** Escapes text before it is interpolated into component markup. @param {string} value Raw text. @returns {string} Safe HTML text. */
-const escapeHtml = (value) => value.replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character]);
+const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character]);
 /** Returns whether two viewport rectangles overlap. @param {object} first First rectangle. @param {object} second Second rectangle. @returns {boolean} */
 function rectanglesIntersect(first, second) { return first.left <= second.right && first.right >= second.left && first.top <= second.bottom && first.bottom >= second.top; }
 /** Renders the shared custom select control. @param {string} name Submitted field name. @param {string} value Selected value. @param {Array<[string, string]>} options Value/label pairs. @param {boolean} activeModel Marks the active summary-model picker. @returns {string} Select markup. */
@@ -33,10 +33,10 @@ function renderSettingsView() {
 }
 /** Renders one participant in the live-meeting sidebar. @param {{id: string, speakerId?: string, name: string, source: string, avatar: string, level: string}} participant Participant data. @returns {string} Participant markup. */
 function renderParticipant({ id, speakerId = id, name, source, avatar, level }) {
-  return `<div class="person"><span class="avatar ${avatar}">${id}</span><div><b data-speaker="${speakerId}" title="双击修改名称">${name}</b><small>${t(source)}</small></div><i class="level ${level}"></i></div>`;
+  return `<div class="person"><span class="avatar ${escapeHtml(avatar)}">${escapeHtml(id)}</span><div><b data-speaker="${escapeHtml(speakerId)}" title="双击修改名称">${escapeHtml(name)}</b><small>${escapeHtml(t(source))}</small></div><i class="level ${escapeHtml(level)}"></i></div>`;
 }
 /** Renders a compact label/value list. @param {Array<{label: string, value: string}>} items Status entries. @returns {string} Definition-list markup. */
-function renderStatusList(items) { return `<dl>${items.map(({ label, value }) => `<div><dt>${t(label)}</dt><dd>${value}</dd></div>`).join('')}</dl>`; }
+function renderStatusList(items) { return `<dl>${items.map(({ label, value }) => `<div><dt>${escapeHtml(t(label))}</dt><dd>${escapeHtml(value)}</dd></div>`).join('')}</dl>`; }
 /** Renders the clipped meeting-summary preview in the detail sidebar. @param {{title: string, sections: object[], hasFull?: boolean}} summary Summary data. @returns {string} Summary markup. */
 function renderMeetingSummary({ title, sections, hasFull = false }) {
   const excerpt = (text, limit) => text.length > limit ? `${text.slice(0, limit)}…` : text;
