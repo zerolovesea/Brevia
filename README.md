@@ -91,16 +91,18 @@ xattr -dr com.apple.quarantine "/Applications/Brevia.app"
 
 Each release bundles the Python runtime and backend dependencies. Speech models remain on-demand downloads from Brevia's model library, so choose the models needed for your language and workflow after installation.
 
-## Build a development DMG
+## Build a development installer
 
 ```bash
 npm ci
 npm run build
 python3 -m pip install -r backend/requirements-build.txt
-npm run dist
+npm run dist:mac
+# On Windows:
+npm run dist:win
 ```
 
-The platform installer is written to `dist/`. The build packages a native Python worker for the current platform; build macOS and Windows installers on their respective platforms. Models remain on-demand downloads and are not included in the installer.
+The platform installer is written to `dist/`. Build the ARM64 DMG on macOS and the x64 EXE on Windows; each bundles a native Python worker for its own platform. Models remain on-demand downloads and are not included in the installer.
 
 ## Contributing
 
