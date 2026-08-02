@@ -1,35 +1,80 @@
 <p align="center"><img src="assets/brevia-mark.svg" width="258" alt="Brevia" /></p>
 
-<p align="center"><strong>Приватная, локальная память о встречах.</strong><br />Записывайте разговор, следите за ним в реальном времени и сохраняйте проверяемую расшифровку.</p>
+<p align="center"><strong>Минималистичный рекордер встреч, который остаётся на вашем устройстве.</strong><br />Транскрибируйте, резюмируйте с ИИ, запоминайте — без облака, полная приватность.</p>
+
+<p align="center">
+  <a href="https://github.com/zerolovesea/Brevia/releases"><img src="https://img.shields.io/github/v/release/zerolovesea/Brevia?style=flat-square" alt="Release" /></a>
+  <a href="https://github.com/zerolovesea/Brevia/blob/main/LICENSE"><img src="https://img.shields.io/github/license/zerolovesea/Brevia?style=flat-square" alt="License" /></a>
+  <a href="https://github.com/zerolovesea/Brevia/releases"><img src="https://img.shields.io/github/downloads/zerolovesea/Brevia/total?style=flat-square" alt="Downloads" /></a>
+  <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows-blue?style=flat-square" alt="Platform" />
+  <img src="https://img.shields.io/badge/electron-43-47848F?style=flat-square&logo=electron" alt="Electron" />
+  <img src="https://img.shields.io/badge/python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python" />
+</p>
 
 <p align="center"><a href="../README.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.es.md">Español</a> · <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a> · <a href="README.fr.md">Français</a> · <a href="README.de.md">Deutsch</a> · <strong>Русский</strong></p>
 
-## Product tour
+## Обзор продукта
 
 | | |
 | --- | --- |
-| ![Product tour](assets/tour/en/library.png) | ![Product tour](assets/tour/en/prepare.png) |
-| ![Product tour](assets/tour/en/models.png) | ![Product tour](assets/tour/en/settings.png) |
+| ![Библиотека встреч](assets/tour/en/library.png) | ![Начать встречу](assets/tour/en/prepare.png) |
+| ![Библиотека моделей](assets/tour/en/models.png) | ![Локальные настройки](assets/tour/en/settings.png) |
 
-![Product tour](assets/tour/en/notes.png)
+![ИИ-заметки встречи](assets/tour/en/notes.png)
 
 ## Возможности
 
-- Запись микрофона и системного аудио с субтитрами в реальном времени.
-- Локальные потоковый ASR, пунктуация, постобработка, VAD и разделение говорящих через **sherpa-onnx**.
-- Загрузка моделей по языку, до 200 локальных терминов, распознавание и переименование участников.
-- Импорт аудио; экспорт расшифровок/заметок в Markdown, TXT, JSON, SRT, DOCX, PDF и аудио в FLAC, WAV, M4A.
-- Перевод и структурированное резюме необязательны и доступны только после явного согласия и настройки провайдера.
+- **Транскрипция в реальном времени** — одновременный захват микрофона и системного аудио с живыми субтитрами.
+- **Полностью локальный речевой ИИ** — потоковый ASR, пунктуация, постобработка, VAD и разделение говорящих работают на устройстве через sherpa-onnx. Аудио не покидает вашу машину.
+- **27 загружаемых моделей** — Zipformer, Paraformer, Whisper, SenseVoice, FireRedASR, FunASR и другие, покрывая 30+ языков.
+- **Идентификация говорящих** — сегментация Pyannote + модели голосовых эмбеддингов; переименование и отслеживание участников между записями.
+- **Богатый экспорт** — расшифровки и заметки в Markdown, TXT, JSON, SRT, DOCX или PDF; аудио в FLAC, WAV или M4A.
+- **Импорт аудио** — импортируйте существующие записи для офлайн-транскрипции и обработки.
+- **Необязательные ИИ-резюме** — переводы и структурированные заметки только после явного согласия и настройки провайдера.
+- **Многоязычный интерфейс** — английский, упрощённый китайский, испанский, японский, корейский, французский, немецкий и русский.
 
-## Архитектура и стек
+## Установка
 
-`Electron-интерфейс ↔ IPC с проверкой Zod ↔ Python JSONL Worker → sherpa-onnx / локальные SQLite, аудио и экспорты`. Серверный порт не открывается. Используются Electron 43, нативные HTML/CSS/JS, Python 3, SQLite, ONNX Runtime и `sherpa-onnx==1.13.2`; для говорящих применяются Pyannote-сегментация и модели голосовых эмбеддингов sherpa-onnx.
+Скачайте последнюю версию с [GitHub Releases](https://github.com/zerolovesea/Brevia/releases):
 
-## Требования и запуск
+| Платформа | Файл |
+| --- | --- |
+| macOS (Apple Silicon) | `Brevia-<version>-arm64.dmg` |
+| Windows (x64) | `Brevia-<version>-x64-setup.exe` |
 
-- Node.js 20+, npm и Python 3.10+ (примеры диагностики используют Python 3.12).
-- Текущая живая запись рассчитана на macOS и требует прав на микрофон и запись экрана. Импорту аудио они не нужны.
-- Нужен диск для моделей: стандартная китайская потоковая модель занимает ~570 МиБ. Для части аудиоэкспорта нужен `ffmpeg`.
+> **Неподписанная сборка:** macOS может показать предупреждение «повреждено» или заблокировать запуск. Перейдите в **Системные настройки → Конфиденциальность и безопасность → Открыть всё равно**, или выполните:
+>
+> ```bash
+> xattr -dr com.apple.quarantine "/Applications/Brevia.app"
+> ```
+>
+> В Windows Microsoft Defender SmartScreen может предупредить — продолжайте после проверки источника загрузки.
+
+## Архитектура
+
+```mermaid
+flowchart LR
+  A[Electron рендерер<br/>HTML · Tailwind · JS] <-->|IPC + валидация Zod| B[Главный процесс Electron]
+  B <-->|JSONL stdin/stdout| C[Python Worker<br/>встроенная среда]
+  C --> D[sherpa-onnx<br/>ASR · VAD · разделение · пунктуация]
+  C --> E[Локальное хранилище<br/>SQLite · аудио · экспорты]
+  C -. явное согласие .-> F[Опциональный облачный API<br/>резюме · перевод]
+```
+
+Brevia следует строго локальному дизайну. Рендерер не открывает сетевых портов. Electron валидирует все IPC-сообщения Zod-схемами. Главный процесс запускает один Python Worker, который управляет моделями, обработкой аудио, локальным хранилищем и экспортом файлов. Данные хранятся в `~/Library/Application Support/Brevia` (macOS) или `%APPDATA%/Brevia` (Windows).
+
+## Технологический стек
+
+| Уровень | Технология |
+| --- | --- |
+| Оболочка | Electron 43 — preload-мост, изоляция контекста, sandbox-рендерер |
+| Фронтенд | Нативные HTML/CSS/JS, Tailwind CSS, встроенная i18n (8 языков) |
+| Бэкенд | Python 3.10+, JSONL Worker-протокол, хранилище SQLite |
+| Речевой движок | sherpa-onnx 1.13.2, ONNX Runtime, 27 моделей (Zipformer / Paraformer / Whisper / SenseVoice / FireRedASR / FunASR) |
+| Обработка говорящих | sherpa-onnx Pyannote-сегментация + модели голосовых эмбеддингов |
+| Сборка и упаковка | electron-builder, PyInstaller (встроенная среда Python) |
+
+## Запуск из исходного кода
 
 ```bash
 npm install
@@ -37,39 +82,108 @@ python3 -m pip install -r backend/requirements.txt
 npm start
 ```
 
-После первого запуска загрузите модели в **Settings → Model library**. Для разработки задайте `BREVIA_DATA_DIR` и `BREVIA_MODELS_DIR`; проверка изменений — `npm test`.
+При первом запуске разрешите доступ к микрофону и записи экрана. Откройте **Settings → Model Library** и скачайте модели для вашего языка перед записью.
 
-## Установка macOS-версии для разработки v0.1.0
+Команды разработки:
 
-Скачайте `Brevia-0.1.0-arm64.dmg` со страницы [GitHub Releases](https://github.com/zerolovesea/Brevia/releases), откройте его и перетащите **Brevia** в Applications. Эта сборка предназначена для Mac с Apple Silicon.
+```bash
+npm test                    # UI + бэкенд-тесты
+npm run build               # Сборка Tailwind CSS
+npm run test:model          # Диагностика ASR-моделей
+npm run test:diarization    # Диагностика разделения говорящих
+```
 
-> **Неподписанная сборка для разработки:** v0.1.0 не имеет подписи и не нотарифицирована. Если macOS блокирует первый запуск, откройте **Системные настройки → Конфиденциальность и безопасность** и выберите для Brevia **Открыть всё равно**; либо выполните в Терминале:
+Переопределение каталогов данных/моделей для разработки:
+
+```bash
+BREVIA_DATA_DIR=/path/to/data BREVIA_MODELS_DIR=/path/to/models npm start
+```
+
+## Сборка установщика
+
+```bash
+npm ci
+npm run build
+python3 -m pip install -r backend/requirements-build.txt
+npm run dist:mac   # macOS ARM64 DMG
+npm run dist:win   # Windows x64 EXE
+```
+
+Установщик создаётся в `dist/`. Каждая платформенная сборка включает нативный Python Worker; модели не включены и загружаются по требованию.
+
+## Часто задаваемые вопросы
+
+<details>
+<summary><strong>macOS сообщает, что приложение «повреждено» или не может быть открыто</strong></summary>
+
+Это происходит потому, что сборка не подписана. Выполните в Терминале:
 
 ```bash
 xattr -dr com.apple.quarantine "/Applications/Brevia.app"
 ```
 
-Первый DMG для разработки содержит Electron-приложение и код локального backend, но пока не включает переносимую среду Python и зависимости голосовых моделей. Перед локальной транскрибацией установите Python-зависимости из исходного checkout.
+Затем откройте приложение как обычно.
+</details>
 
-## Сборка DMG для разработки
+<details>
+<summary><strong>Нужно ли устанавливать Python отдельно?</strong></summary>
 
-```bash
-npm ci
-npm run build
-python3 -m pip install -r backend/requirements.txt
-npm run dist
-```
+Нет. Релизные сборки включают среду Python и все зависимости. Python нужен только при запуске из исходного кода.
+</details>
 
-DMG создаётся в `dist/`. Будущая автономная версия должна включать переносимую среду Python в `.venv/bin/python`; модели следует по-прежнему загружать по требованию и сохранять их исходные лицензии.
+<details>
+<summary><strong>Где хранятся мои данные?</strong></summary>
 
-## Contributing
+- macOS: `~/Library/Application Support/Brevia`
+- Windows: `%APPDATA%/Brevia`
 
-Делайте небольшие целевые изменения, запускайте `npm test` и относящиеся к речи диагностики. Не коммитьте модели, записи, экспорты, ключи или локальные данные. Поддерживайте все восемь языков и указывайте в PR влияние на модели, разрешения и платформы.
+Записи, расшифровки и профили говорящих остаются на устройстве. Задайте `BREVIA_DATA_DIR` для изменения расположения.
+</details>
 
-## License
+<details>
+<summary><strong>Какие языки поддерживаются для транскрипции?</strong></summary>
 
-Brevia распространяется по [ISC License](../LICENSE); модели и зависимости сохраняют собственные условия.
+Более 30 языков, включая китайский, английский, японский, корейский, французский, немецкий, испанский, русский, арабский, тайский, вьетнамский, индонезийский и другие. Выберите подходящую модель в Библиотеке Моделей.
+</details>
 
-## Acknowledgments
+<details>
+<summary><strong>Отправляет ли Brevia аудио в облако?</strong></summary>
 
-[sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) — основной runtime для локальных ASR, VAD, пунктуации и обработки говорящих; лицензия — [Apache-2.0](https://github.com/k2-fsa/sherpa-onnx/blob/master/LICENSE). Спасибо авторам, Electron, ONNX Runtime, Python и сообществу открытых речевых технологий.
+Нет. Всё распознавание речи работает локально через sherpa-onnx. Опциональная функция резюме/перевода требует явного согласия и настройки собственного API-провайдера — отправляется только текст, никогда аудио.
+</details>
+
+<details>
+<summary><strong>Сколько места на диске занимают модели?</strong></summary>
+
+Зависит от выбранных моделей. Типичная конфигурация (потоковая + обработка + разделение говорящих) занимает около 1–2 ГБ. Компактные потоковые модели начинаются от ~80 МБ; крупные достигают ~1 ГБ.
+</details>
+
+<details>
+<summary><strong>Можно ли импортировать существующие записи?</strong></summary>
+
+Да. Импортируйте аудиофайлы из библиотеки встреч. Brevia выполнит офлайн-транскрипцию тем же речевым движком. Требуется `ffmpeg` в PATH (или задайте `BREVIA_FFMPEG`).
+</details>
+
+<details>
+<summary><strong>Как сменить язык интерфейса?</strong></summary>
+
+Перейдите в **Settings → General** и выберите предпочтительный язык. Поддерживаются английский, упрощённый китайский, испанский, японский, корейский, французский, немецкий и русский.
+</details>
+
+## Участие в разработке
+
+1. Создавайте целевые ветки и делайте изменения небольшими.
+2. Запускайте `npm test`; при изменениях ASR или разделения говорящих — также диагностику моделей.
+3. Не коммитьте модели, записи, экспорты, API-ключи или локальные данные.
+4. Поддерживайте тексты UI согласованными на всех восьми языках.
+5. Описывайте влияние на модели, платформу или разрешения в pull request.
+
+## Лицензия
+
+Brevia выпускается под [ISC License](../LICENSE). Модели и сторонние пакеты сохраняют свои лицензии и условия.
+
+## Благодарности
+
+- [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) — основной runtime для локального ASR, VAD, пунктуации и обработки говорящих. Лицензия [Apache-2.0](https://github.com/k2-fsa/sherpa-onnx/blob/master/LICENSE).
+- Спасибо авторам моделей, объявленных в `backend/models.json`.
+- Electron, ONNX Runtime, Python и сообщество открытых речевых технологий делают этот локальный рабочий процесс возможным.
