@@ -8,6 +8,18 @@ function backendMeeting(item) {
   };
 }
 
+const meetingCacheKey = 'brevia-meetings-v1';
+try {
+  const cachedMeetings = JSON.parse(localStorage.getItem(meetingCacheKey) || '[]');
+  if (Array.isArray(cachedMeetings)) uiData.meetings = cachedMeetings;
+} catch { localStorage.removeItem(meetingCacheKey); }
+
+function cacheMeetingList() {
+  if (!window.brevia || activeLibraryNav !== 'all-meetings' || meetingSearch.value.trim()) return;
+  try { localStorage.setItem(meetingCacheKey, JSON.stringify(uiData.meetings.filter(({ deleted }) => !deleted))); }
+  catch { /* The backend remains authoritative when browser storage is unavailable or full. */ }
+}
+
 function syncBackendMeeting(item) {
   if (!item?.id) return;
   const meeting = backendMeeting(item);

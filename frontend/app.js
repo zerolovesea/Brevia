@@ -309,7 +309,7 @@ function localizeMeeting(meeting) {
   };
 }
 /** Re-renders only the meeting list, preserving settings-modal event bindings. @returns {void} */
-function renderMeetingList() { document.querySelector('.meeting-list').innerHTML = uiData.meetings.map((meeting, index) => !meeting.isExample || meeting.exampleLocale === locale ? renderMeetingRow(localizeMeeting(meeting), index) : '').join(''); filterMeetings(); syncMeetingSelection(); }
+function renderMeetingList() { document.querySelector('.meeting-list').innerHTML = uiData.meetings.map((meeting, index) => !meeting.isExample || meeting.exampleLocale === locale ? renderMeetingRow(localizeMeeting(meeting), index) : '').join(''); filterMeetings(); syncMeetingSelection(); cacheMeetingList(); }
 renderCategoryFilter();
 renderDateFilter();
 const prepareForm = document.querySelector('#meeting-form');

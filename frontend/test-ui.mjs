@@ -20,6 +20,20 @@ mediaContext.stopMediaStream({ getVideoTracks: () => [displayVideo], getAudioTra
 assert.deepEqual(stoppedTracks, ['video']);
 const localeContext = { window: {} };
 runInNewContext(text(i18nData), localeContext);
+const meetingCacheStorage = new Map([['brevia-meetings-v1', JSON.stringify([{ id: 'cached', deleted: false }])]]);
+const meetingCacheContext = {
+  uiData: { meetings: [] }, window: { brevia: {} }, activeLibraryNav: 'all-meetings', meetingSearch: { value: '' },
+  localStorage: {
+    getItem: (key) => meetingCacheStorage.get(key) || null,
+    setItem: (key, value) => meetingCacheStorage.set(key, value),
+    removeItem: (key) => meetingCacheStorage.delete(key),
+  },
+};
+runInNewContext(text(meetings), meetingCacheContext);
+assert.equal(meetingCacheContext.uiData.meetings[0].id, 'cached');
+meetingCacheContext.uiData.meetings.push({ id: 'deleted', deleted: true });
+meetingCacheContext.cacheMeetingList();
+assert.deepEqual(JSON.parse(meetingCacheStorage.get('brevia-meetings-v1')).map(({ id }) => id), ['cached']);
 const advancedDescription = '调整识别、端点检测、说话人分离和本地模型运行参数。';
 for (const code of ['en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']) assert.notEqual(localeContext.window.BreviaLocaleData.catalog[code].labels[advancedDescription], advancedDescription);
 for (const code of ['en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']) assert.notEqual(localeContext.window.BreviaLocaleData.catalog[code].labels['添加录音到声纹库'], '添加录音到声纹库');
@@ -149,7 +163,7 @@ assert.match(text(js), /async function mutateMeetings/);
 assert.match(text(js), /async function openMeetingRow/);
 assert.match(text(components), /data-meeting-action="purge"/);
 assert.match(text(electronMain), /meeting\.purge/);
-assert.match(text(electronMain), /startupAnimationMs = 1400/);
+assert.match(text(electronMain), /startupAnimationMs = 1700/);
 assert.match(text(electronMain), /startupDataWaitMs = 2200/);
 assert.doesNotMatch(text(electronMain), /const splash = new BrowserWindow/);
 assert.match(text(electronMain), /window\.loadFile\(path\.join\(packagedRoot, 'frontend', 'index\.html'\)/);
@@ -162,6 +176,8 @@ assert.match(text(html), /id="startup-splash"/);
 assert.match(text(html), /brevia-logo-reveal\.gif/);
 assert.match(text(js), /brevia\.on\('startup\.ready'/);
 assert.match(text(js), /const dismissStartupSplash/);
+assert.match(text(meetings), /brevia-meetings-v1/);
+assert.match(text(js), /cacheMeetingList\(\)/);
 assert.match(text(css), /\.startup-splash\{[^}]*z-index:100[^}]*transition:opacity \.36s/);
 assert.match(text(electronMain), /PYTHONUTF8: '1'/);
 assert.match(text(electronMain), /setPermissionRequestHandler/);
@@ -241,6 +257,8 @@ assert.match(text(app), /addEventListener\('error'/);
 assert.match(text(backendClient), /await this\.release\(resource\)/);
 assert.match(text(meetings), /function syncBackendMeeting/);
 assert.match(text(packWorker), /resource\("fixtures", "backend\/fixtures"\)/);
+assert.match(text(packWorker), /"--onedir"/);
+assert.doesNotMatch(text(packWorker), /"--onefile"/);
 assert.match(text(css), /\.confirmation-actions \.secondary\{margin-top:0/);
 assert.match(text(css), /\.model-card \.model-picker\{/);
 assert.match(text(js), /prepareModelCard\.addEventListener\('dblclick'/);

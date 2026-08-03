@@ -18,7 +18,7 @@ app.on('second-instance', () => {
 
 const root = path.join(__dirname, '..');
 const packagedRoot = app.isPackaged ? process.resourcesPath : root;
-const startupAnimationMs = 1400;
+const startupAnimationMs = 1700;
 const startupDataWaitMs = 2200;
 const resetOnboarding = process.argv.includes('--reset-onboarding');
 const dataDir = () => path.join(app.getPath('home'), 'brevia');
@@ -111,7 +111,8 @@ class WorkerClient {
 
   start() {
     if (this.process?.stdin && !this.process.stdin.destroyed && this.process.exitCode === null) return;
-    const bundled = path.join(packagedRoot, 'backend', process.platform === 'win32' ? 'brevia-worker.exe' : 'brevia-worker');
+    const workerName = process.platform === 'win32' ? 'brevia-worker.exe' : 'brevia-worker';
+    const bundled = path.join(packagedRoot, 'backend', 'runtime', 'brevia-worker', workerName);
     const useBundledWorker = app.isPackaged && !process.env.BREVIA_PYTHON && existsSync(bundled);
     const python = useBundledWorker ? bundled : (process.env.BREVIA_PYTHON || (process.platform === 'win32' ? 'python' : 'python3'));
     const args = useBundledWorker ? [] : ['-m', 'backend.worker'];
