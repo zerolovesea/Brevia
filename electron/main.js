@@ -78,7 +78,7 @@ const summaryModelConfig = z.object({
 });
 const summaryConfig = z.object({
   models: z.array(summaryModelConfig).max(20), active: z.number().int().min(-1).max(19),
-  prompt: z.string().trim().min(1).max(4000), sequence: z.number().int().nonnegative(),
+  sequence: z.number().int().nonnegative(),
 });
 
 class WorkerClient {
@@ -402,7 +402,7 @@ function registerIpc() {
     const value = id.extend({
       provider: z.string(), endpoint: z.string().url(), model: z.string(),
       format: z.enum(['openai', 'claude']).optional(),
-      key_reference: z.string().optional(), consent: z.literal(true), prompt: z.string().optional(),
+      key_reference: z.string().optional(), language: z.enum(['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']).default('en'), consent: z.literal(true),
     }).parse(payload);
     const api_key = await getSecret(value.key_reference);
     if (!api_key && value.provider !== 'Ollama') return { configuration_required: true };

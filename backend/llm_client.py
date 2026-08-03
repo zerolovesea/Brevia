@@ -14,6 +14,7 @@ from .config import SETTINGS
 def complete(payload, prompt, json_mode=False):
     """调用 OpenAI/Claude 兼容端点并提取常见的文本字段。"""
     api_format = (payload.get("format") or "openai").lower()
+    provider = payload.get("provider", "").lower()
     endpoint = payload["endpoint"].rstrip("/")
     body = {
         "model": payload["model"],
@@ -23,7 +24,12 @@ def complete(payload, prompt, json_mode=False):
     if json_mode:
         body["response_format"] = {"type": "json_object"}
     headers = {"Content-Type": "application/json", "User-Agent": "Brevia/1.0"}
-    if api_format in {"anthropic", "claude"}:
+    if provider in {"ollama", "ollama cloud"} and endpoint.endswith("/api/chat"):
+        # Ollama's native chat API works for both local and cloud hosts.
+        body.pop("stream")
+        if payload.get("api_key"):
+            headers["Authorization"] = f"Bearer {payload['api_key']}"
+    elif api_format in {"anthropic", "claude"}:
         if not endpoint.endswith("/v1/messages"):
             endpoint += "/v1/messages"
         body = {
@@ -56,12 +62,31 @@ def complete(payload, prompt, json_mode=False):
             f"LLM request failed ({error.code}): {detail[:500]}"
         ) from error
     content = data.get("message", {}).get("content")
-    if not content and data.get("choices"):
-        content = data["choices"][0].get("message", {}).get("content")
-    if not content and isinstance(data.get("content"), list):
-        content = "".join(
+    if content is None and data.get("choices"):
+        message = data["choices"][0].get("message", {})
+        content = message.get("content")
+        tool_calls = message.get("tool_calls") or []
+    else:
+        tool_calls = []
+    if content is None and isinstance(data.get("content"), list):
+        content = data["content"]
+    if isinstance(content, list):
+        text = "".join(
             item.get("text", "")
-            for item in data["content"]
+            for item in content
             if item.get("type", "text") == "text"
         )
-    return content or data.get("output_text") or json.dumps(data, ensure_ascii=False)
+        tool_calls.extend(item for item in content if item.get("type") == "tool_use")
+        if text:
+            return text
+    elif isinstance(content, str) and content.strip():
+        return content
+    if data.get("output_text"):
+        return data["output_text"]
+    if tool_calls:
+        names = ", ".join(
+            item.get("name") or item.get("function", {}).get("name", "unknown")
+            for item in tool_calls
+        )
+        raise ValueError(f"LLM returned a tool call instead of text: {names}")
+    raise ValueError("LLM response does not contain text")

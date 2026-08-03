@@ -37,8 +37,37 @@ function renderParticipant({ id, speakerId = id, name, source, avatar, level }) 
 }
 /** Renders a compact label/value list. @param {Array<{label: string, value: string}>} items Status entries. @returns {string} Definition-list markup. */
 function renderStatusList(items) { return `<dl>${items.map(({ label, value }) => `<div><dt>${escapeHtml(t(label))}</dt><dd>${escapeHtml(value)}</dd></div>`).join('')}</dl>`; }
-/** Renders the clipped meeting-summary preview in the detail sidebar. @param {{title: string, sections: object[], hasFull?: boolean}} summary Summary data. @returns {string} Summary markup. */
-function renderMeetingSummary({ title, sections, hasFull = false }) {
+/** Renders the small Markdown subset used by generated meeting notes after escaping model output. */
+function renderMarkdown(markdown) {
+  const inline = (value) => escapeHtml(value).replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  const lines = String(markdown || '').replace(/\r/g, '').split('\n');
+  const html = [];
+  for (let index = 0; index < lines.length;) {
+    const line = lines[index];
+    if (!line.trim()) { index += 1; continue; }
+    const heading = line.match(/^(#{1,3})\s+(.+)$/);
+    if (heading) { const level = heading[1].length; html.push(`<h${level}>${inline(heading[2])}</h${level}>`); index += 1; continue; }
+    if (/^\|/.test(line)) {
+      const rows = [];
+      while (index < lines.length && /^\|/.test(lines[index])) rows.push(lines[index++].split('|').slice(1, -1).map((cell) => inline(cell.trim())));
+      const body = rows.filter((row) => !row.every((cell) => /^:?-{3,}:?$/.test(cell)));
+      if (body.length) html.push(`<table><thead><tr>${body[0].map((cell) => `<th>${cell}</th>`).join('')}</tr></thead><tbody>${body.slice(1).map((row) => `<tr>${row.map((cell) => `<td>${cell}</td>`).join('')}</tr>`).join('')}</tbody></table>`);
+      continue;
+    }
+    if (/^[-*]\s+/.test(line)) {
+      const items = [];
+      while (index < lines.length && /^[-*]\s+/.test(lines[index])) items.push(`<li>${inline(lines[index++].replace(/^[-*]\s+/, ''))}</li>`);
+      html.push(`<ul>${items.join('')}</ul>`); continue;
+    }
+    const paragraph = [];
+    while (index < lines.length && lines[index].trim() && !/^(#{1,3}\s+|\||[-*]\s+)/.test(lines[index])) paragraph.push(lines[index++]);
+    html.push(`<p>${inline(paragraph.join(' '))}</p>`);
+  }
+  return html.join('');
+}
+/** Renders the clipped meeting-summary preview in the detail sidebar. @param {{title: string, sections: object[], markdown?: string, hasFull?: boolean}} summary Summary data. @returns {string} Summary markup. */
+function renderMeetingSummary({ title, sections, markdown, hasFull = false }) {
+  if (markdown) return `<div class="summary-preview markdown-content">${renderMarkdown(markdown)}</div><button class="text-button" data-view-full-summary>${t('查看完整内容')} →</button>`;
   const excerpt = (text, limit) => text.length > limit ? `${text.slice(0, limit)}…` : text;
   return `<div class="summary-preview"><p class="eyebrow">${t('会议摘要')}</p><h2>${escapeHtml(excerpt(title || t('尚未生成会议摘要'), 96))}</h2>${sections.map((section) => `<section><h3>${escapeHtml(t(section.title))}</h3>${section.items ? section.items.slice(0, 2).map((item) => `<label><input type="checkbox" /> ${escapeHtml(item.text)}<small>${escapeHtml(item.speaker)}</small></label>`).join('') : `<p>${escapeHtml(excerpt(section.text, 150))}</p>`}</section>`).join('')}</div><button class="text-button" ${hasFull ? 'data-view-full-summary' : 'data-generate-summary'}>${hasFull ? t('查看完整内容') : t('生成完整会议纪要')} →</button>`;
 }

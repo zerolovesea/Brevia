@@ -37,7 +37,7 @@ function applyBackendDetail(meeting) {
   [...base, ...meeting.segments.filter((segment) => segment.version === 'user')].forEach((segment) => { if (!latest.has(segment.id) || segment.version === 'user') latest.set(segment.id, segment); });
   uiData.detail.transcript = [...latest.values()].sort((a, b) => a.start_ms - b.start_ms).map((segment) => ({ time: `${String(Math.floor(segment.start_ms / 60000)).padStart(2, '0')}:${String(Math.floor(segment.start_ms / 1000) % 60).padStart(2, '0')}`, seconds: Math.floor(segment.start_ms / 1000), startSeconds: segment.start_ms / 1000, endSeconds: segment.end_ms / 1000, speaker: { name: segment.speaker_name, segmentId: segment.id, editing: segment.id === editingSegmentSpeakerId }, text: segment.text, translation: segment.translation }));
   const summary = meeting.summary?.data;
-  uiData.detail.summary = summary ? { title: summary.summary, sections: [{ title: '决定', text: summary.decisions.map((item) => item.text).join('；') || '无' }, { title: '待办', items: summary.action_items.map((item) => ({ text: item.task, speaker: item.owner || '待确认' })) }], hasFull: true } : { title: '', sections: [], empty: true };
+  uiData.detail.summary = summary?.markdown ? { markdown: summary.markdown, hasFull: true } : { title: '', sections: [], empty: true };
   document.querySelector('#detail-view .detail-head h1').textContent = meeting.title;
   progress.max = Math.max(1, Math.ceil(meeting.duration_ms / 1000));
   const audioPath = meeting.audio.playback.mix || meeting.audio.playback.mic || meeting.audio.playback.system;

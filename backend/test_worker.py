@@ -142,8 +142,7 @@ class WorkerTest(unittest.TestCase):
         )
         prompts = []
         self.worker.llm_complete = lambda _payload, prompt, **_kwargs: (
-            prompts.append(prompt)
-            or '```json\n{"summary":"验收安排","decisions":[],"action_items":[{"task":"完成验收","owner":null,"due":null,"evidence_segment_ids":["mic-0"]}],"open_questions":[]}\n```'
+            prompts.append(prompt) or ("[00:00] 说话人 1: 周五完成验收" if len(prompts) == 1 else "# **测试会议**\n\n## **行动项**\n\n- 周五完成验收")
         )
         result = self.worker.summarize(
             {
@@ -153,19 +152,43 @@ class WorkerTest(unittest.TestCase):
                 "model": "claude",
                 "format": "claude",
                 "consent": True,
-                "prompt": "只写关键事项",
+                "language": "zh",
             }
         )
-        self.assertEqual(result["summary"], "验收安排")
-        self.assertIn("只写关键事项", prompts[0])
+        self.assertIn("markdown", result)
+        self.assertIn("会议转录编辑", prompts[0])
         self.assertIn("周五完成验收", prompts[0])
+        self.assertIn("# **纪要联调**", prompts[1])
         progress = [
             event["payload"]["completed"]
             for event in self.events
             if event.get("type") in {"summary.started", "summary.progress"}
         ]
-        self.assertEqual(progress, [10, 60, 100])
+        self.assertEqual(progress, [10, 20, 60, 100])
         self.assertEqual(parse_json_object('说明\n{"summary":"ok"}')["summary"], "ok")
+
+    def test_summary_reuses_saved_cleaned_transcript(self):
+        meeting = self.worker.start(
+            {
+                "title": "复用清洗稿",
+                "language": "zh",
+                "streaming_model_id": "paraformer-zh-en-int8",
+                "refined_model_id": "qwen3-asr-0.6b-int8",
+            }
+        )
+        self.worker.store.save_summary(
+            meeting["id"], {"cleaned_transcript": "[00:00] 说话人 1: 已清洗的内容"}, ""
+        )
+        prompts = []
+        self.worker.llm_complete = lambda _payload, prompt, **_kwargs: (
+            prompts.append(prompt) or "# **复用清洗稿**\n\n## **会议摘要**\n\n已生成"
+        )
+        self.worker.summarize(
+            {"meeting_id": meeting["id"], "provider": "OpenAI", "endpoint": "https://example.test/chat", "model": "gpt", "consent": True, "language": "zh"}
+        )
+        self.assertEqual(len(prompts), 1)
+        self.assertIn("已清洗的内容", prompts[0])
+        self.assertNotIn("会议转录编辑", prompts[0])
 
     def test_summary_exports_markdown_and_text(self):
         meeting = self.worker.start(
@@ -176,19 +199,7 @@ class WorkerTest(unittest.TestCase):
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
-        summary = {
-            "summary": "确认验收安排",
-            "decisions": [{"text": "周五验收", "evidence_segment_ids": []}],
-            "action_items": [
-                {
-                    "task": "准备报告",
-                    "owner": "小王",
-                    "due": None,
-                    "evidence_segment_ids": [],
-                }
-            ],
-            "open_questions": ["是否需要复盘"],
-        }
+        summary = {"markdown": "# **纪要导出**\n\n## **行动项**\n\n- 准备报告"}
         self.worker.store.save_summary(meeting["id"], summary, "raw")
         for export_format in ("md", "txt"):
             exported = self.worker.export(
@@ -258,6 +269,31 @@ class WorkerTest(unittest.TestCase):
             )
             self.assertEqual(json.loads(sent.data)["max_tokens"], 2048)
             self.assertEqual(dict(sent.header_items())["X-api-key"], "token")
+        with patch(
+            "backend.llm_client.urllib.request.urlopen",
+            return_value=Response({"content": [{"type": "tool_use", "name": "EnterPlanMode", "input": {}}]}),
+        ):
+            with self.assertRaisesRegex(ValueError, "tool call instead of text: EnterPlanMode"):
+                complete({"endpoint": "https://example.test/anthropic", "model": "claude", "format": "claude"}, "hello")
+        with patch(
+            "backend.llm_client.urllib.request.urlopen",
+            return_value=Response({"message": {"content": "ollama"}}),
+        ) as request:
+            self.assertEqual(
+                complete({"provider": "Ollama", "endpoint": "http://127.0.0.1:11434/api/chat", "model": "llama3.2"}, "hello"),
+                "ollama",
+            )
+            self.assertNotIn("stream", json.loads(request.call_args.args[0].data))
+            self.assertNotIn("Authorization", dict(request.call_args.args[0].header_items()))
+        with patch(
+            "backend.llm_client.urllib.request.urlopen",
+            return_value=Response({"message": {"content": "cloud"}}),
+        ) as request:
+            self.assertEqual(
+                complete({"provider": "Ollama Cloud", "endpoint": "https://ollama.com/api/chat", "model": "gpt-oss:120b", "api_key": "token"}, "hello"),
+                "cloud",
+            )
+            self.assertEqual(dict(request.call_args.args[0].header_items())["Authorization"], "Bearer token")
 
     def test_cross_track_duplicate_finals_are_suppressed(self):
         first = {

@@ -39,6 +39,6 @@
     "deleted_retention_days": 30
   },
   "llm": {
-    "timeout_seconds": 120
+    "timeout_seconds": 300
   }
 }

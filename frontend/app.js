@@ -170,7 +170,10 @@ const modelIds = [
   'zipvoice-zh-en',
 ];
 const modelSizes = [1047319737, 310414022, 132634597, 258999581, 418218652, 398444115, 30667839, 2313101, 332211, 64717756, 878702423, 520516278, 841730611, 563790207, 2900000000, 6958444, 10918585, 39593761, 40257283, 28281164, 597755927, 535638, 35271738, 163320194];
-const summaryProviders = ['OpenAI', 'Anthropic', 'Kimi', 'Zhipu GLM', 'MiniMax', 'DeepSeek', 'OpenRouter', 'Ollama'];
+const summaryProviders = ['OpenAI', 'Anthropic', 'Kimi', 'Zhipu GLM', 'MiniMax', 'DeepSeek', 'OpenRouter', 'Ollama', 'Ollama Cloud'];
+const ollamaChatEndpoint = 'http://127.0.0.1:11434/api/chat';
+const ollamaCloudChatEndpoint = 'https://ollama.com/api/chat';
+function summaryProviderLabel(provider) { return provider === 'Ollama' ? 'Ollama Local' : provider; }
 const defaultSummaryModels = [{ name: '配置-1', provider: 'OpenAI', endpoint: 'https://api.openai.com/v1/chat/completions', format: 'openai', model: 'gpt-4.1-mini' }];
 let savedSummaryConfig = null;
 try { savedSummaryConfig = JSON.parse(localStorage.getItem('brevia-summary-config') || 'null'); } catch { /* Ignore malformed legacy browser storage. */ }
@@ -182,22 +185,7 @@ let editingSummaryModel = 0;
 let configSequence = savedSummaryConfig?.sequence || summaryModels.length;
 summaryModels.forEach((item, index) => { if (!item.name) item.name = `配置-${index + 1}`; });
 let draftSummaryName = '';
-const defaultSummaryPrompts = {
-  zh: '基于逐字稿提炼结论、决定、待办和风险；保留可追溯的来源。',
-  en: 'Extract conclusions, decisions, action items, and risks from the transcript. Keep sources traceable.',
-  es: 'Extrae conclusiones, decisiones, tareas y riesgos de la transcripción. Conserva fuentes rastreables.',
-  ja: '文字起こしから結論、決定事項、アクション項目、リスクを抽出し、出典を追跡可能にしてください。',
-  ko: '회의록에서 결론, 결정 사항, 실행 항목과 위험을 추출하고 출처를 추적 가능하게 유지하세요.',
-  fr: 'Extrayez les conclusions, décisions, actions et risques de la transcription. Conservez des sources traçables.',
-  de: 'Extrahieren Sie Schlussfolgerungen, Entscheidungen, Aufgaben und Risiken aus dem Transkript. Quellen müssen nachvollziehbar bleiben.',
-  ru: 'Извлеките из расшифровки выводы, решения, задачи и риски. Сохраняйте возможность отследить источники.',
-};
-let summaryPrompt = savedSummaryConfig?.prompt || defaultSummaryPrompts[locale];
 const summaryKeyValues = new Map();
-function defaultSummaryPrompt(localeCode = locale) { return defaultSummaryPrompts[localeCode] || defaultSummaryPrompts.en; }
-function updateDefaultSummaryPrompt(nextLocale) {
-  if (Object.values(defaultSummaryPrompts).includes(summaryPrompt)) summaryPrompt = defaultSummaryPrompt(nextLocale);
-}
 async function loadSummaryKey(reference) {
   if (!reference || summaryKeyValues.has(reference)) return;
   summaryKeyValues.set(reference, '');
@@ -215,7 +203,7 @@ function nextConfigName() { configSequence += 1; return `配置-${configSequence
 /** Returns the non-secret summary configuration persisted in the app data directory. */
 function currentSummaryConfig() {
   const models = summaryModels.map(({ apiKey, ...model }) => model);
-  return { models, active: activeSummaryModel, prompt: summaryPrompt, sequence: configSequence };
+  return { models, active: activeSummaryModel, sequence: configSequence };
 }
 /** Saves summary-model settings outside browser storage; keys remain in Electron safe storage. */
 async function persistSummaryConfig() {
@@ -226,7 +214,6 @@ function applySummaryConfig(config) {
   activeSummaryModel = config.active;
   editingSummaryModel = activeSummaryModel;
   configSequence = config.sequence;
-  summaryPrompt = config.prompt || defaultSummaryPrompt();
   summaryModels.forEach((item, index) => { if (!item.name) item.name = `配置-${index + 1}`; });
 }
 async function loadSummaryConfig() {
@@ -515,7 +502,21 @@ function showSeparationComplete() {
   separationDismissTimer = setTimeout(() => dismissTaskCard(document.querySelector('#separation-progress')), 10000);
 }
 let summaryDismissTimer;
-function showSummaryProgress(completed = 0, total = 100, stage = t('准备中'), meetingId) {
+const summaryTaskCopy = {
+  zh: ['正在生成会议纪要', '准备清洗转录', '正在清洗转录', '正在生成摘要', '正在保存纪要', '纪要已生成'],
+  en: ['Generating meeting notes', 'Preparing transcript cleanup', 'Cleaning transcript', 'Generating summary', 'Saving meeting notes', 'Meeting notes generated'],
+  es: ['Generando notas de reunión', 'Preparando la limpieza de la transcripción', 'Limpiando la transcripción', 'Generando el resumen', 'Guardando las notas', 'Notas de reunión generadas'],
+  ja: ['会議メモを生成中', '文字起こしのクリーンアップを準備中', '文字起こしをクリーンアップ中', '要約を生成中', '会議メモを保存中', '会議メモを生成しました'],
+  ko: ['회의록 생성 중', '전사 정리 준비 중', '전사 정리 중', '요약 생성 중', '회의록 저장 중', '회의록이 생성되었습니다'],
+  fr: ['Génération des notes de réunion', 'Préparation du nettoyage de la transcription', 'Nettoyage de la transcription', 'Génération du résumé', 'Enregistrement des notes', 'Notes de réunion générées'],
+  de: ['Besprechungsnotizen werden erstellt', 'Transkriptbereinigung wird vorbereitet', 'Transkript wird bereinigt', 'Zusammenfassung wird erstellt', 'Besprechungsnotizen werden gespeichert', 'Besprechungsnotizen erstellt'],
+  ru: ['Создание заметок встречи', 'Подготовка очистки расшифровки', 'Очистка расшифровки', 'Создание сводки', 'Сохранение заметок встречи', 'Заметки встречи созданы'],
+};
+function summaryTaskLabel(stage) {
+  const copy = summaryTaskCopy[locale] || summaryTaskCopy.en;
+  return { 'summary.prepare': copy[1], 'summary.cleaning': copy[2], 'summary.generating': copy[3], 'summary.saving': copy[4], 'summary.complete': copy[5] }[stage] || stage || t('准备中');
+}
+function showSummaryProgress(completed = 0, total = 100, stage = 'summary.prepare', meetingId) {
   clearTimeout(summaryDismissTimer);
   let card = document.querySelector('#summary-progress');
   if (!card) {
@@ -528,16 +529,44 @@ function showSummaryProgress(completed = 0, total = 100, stage = t('准备中'),
     enterTaskCard(card);
   } else if (card.classList.contains('task-card-leave')) enterTaskCard(card);
   const ratio = total ? Math.min(1, completed / total) : 0;
-  card.querySelector('p').textContent = '正在生成会议纪要';
-  card.querySelector('strong').textContent = `${stage}${total ? ` · ${Math.round(ratio * 100)}%` : ''}`;
+  card.querySelector('p').textContent = (summaryTaskCopy[locale] || summaryTaskCopy.en)[0];
+  card.querySelector('strong').textContent = `${summaryTaskLabel(stage)}${total ? ` · ${Math.round(ratio * 100)}%` : ''}`;
   card.querySelector('i').style.transform = `scaleX(${ratio})`;
   if (meetingId) setTaskCardTask(card, 'summary.generate', meetingId);
 }
 function hideSummaryProgress() { clearTimeout(summaryDismissTimer); dismissTaskCard(document.querySelector('#summary-progress')); }
 function showSummaryComplete() {
-  showSummaryProgress(100, 100, '纪要已生成');
+  showSummaryProgress(100, 100, 'summary.complete');
   finishTaskCard(document.querySelector('#summary-progress'));
   summaryDismissTimer = setTimeout(hideSummaryProgress, 10000);
+}
+async function generateMeetingSummary() {
+  const config = summaryModels[activeSummaryModel];
+  if (!config || !breviaClient.state.selectedMeetingId) { showSummaryConfigCard(); return; }
+  showSummaryProgress(0, 100, 'summary.prepare');
+  try {
+    const summary = await window.brevia.summary.generate({
+      meeting_id: breviaClient.state.selectedMeetingId,
+      provider: config.provider,
+      endpoint: config.endpoint,
+      model: config.model,
+      format: config.format,
+      key_reference: config.keyReference,
+      language: locale,
+      consent: true,
+    });
+    if (summary?.configuration_required) { hideSummaryProgress(); showSummaryConfigCard(); return; }
+    const meeting = await window.brevia.meeting.get({ meeting_id: breviaClient.state.selectedMeetingId });
+    meeting.summary = { data: summary };
+    applyBackendDetail(meeting);
+    dismissTaskCard(document.querySelector('#summary-config-required'));
+    showSummaryComplete();
+    showToast(t('会议纪要已生成'));
+  } catch (error) {
+    hideSummaryProgress();
+    if (isSummaryAuthenticationError(error)) showSummaryConfigCard(error);
+    else showToast(error.message);
+  }
 }
 const requiredModelIds = new Set();
 const pendingModelTasks = new Map();
@@ -803,13 +832,16 @@ function renderConfigPreview() {
 function renderSummaryModelModal() {
   const copy = summaryModelCopy[locale] || summaryModelCopy.en;
   const current = summaryModels[editingSummaryModel] || { name: draftSummaryName || `配置-${configSequence + 1}`, provider: 'OpenAI', apiKey: '', endpoint: '', format: '', model: '' };
+  const isOllama = current.provider === 'Ollama';
+  const isOllamaCloud = current.provider === 'Ollama Cloud';
   const apiFormat = current.format === 'claude' ? 'claude' : 'openai';
   void loadSummaryKey(current.keyReference);
   const apiKey = current.keyReference ? summaryKeyValues.get(current.keyReference) || '' : '';
-  const configuredControl = summaryModels.length ? `<div class="configured-models"><label class="config-select-field">${copy.configured}${flowSelect('active-summary-model', String(activeSummaryModel), summaryModels.map((item, index) => [String(index), `${item.name} · ${item.provider} · ${item.model}${index === activeSummaryModel ? ` · ${copy.active}` : ''}`]), true)}</label></div>` : '';
+  const configuredControl = summaryModels.length ? `<div class="configured-models"><label class="config-select-field">${copy.configured}${flowSelect('active-summary-model', String(activeSummaryModel), summaryModels.map((item, index) => [String(index), `${item.name} · ${summaryProviderLabel(item.provider)} · ${item.model}${index === activeSummaryModel ? ` · ${copy.active}` : ''}`]), true)}</label></div>` : '';
   settingsModal.querySelector('h2').textContent = copy.title;
   settingsModal.querySelector('.modal-title p').textContent = copy.intro;
-  settingsModal.querySelector('.modal-body').innerHTML = `<form class="summary-model-form"><div class="config-fields"><label>${copy.name}<input name="name" value="${escapeHtml(current.name)}" maxlength="64" required /></label><label class="config-select-field">${copy.provider}${flowSelect('provider', current.provider, summaryProviders.map((provider) => [provider, provider === 'Ollama' ? copy.ollama : provider]))}</label><label>${copy.key}<input name="apiKey" type="password" autocomplete="new-password" value="${escapeHtml(apiKey)}" /></label><label>${copy.endpoint}<input name="endpoint" value="${escapeHtml(current.endpoint)}" required /></label><label class="config-select-field">${copy.format}${flowSelect('format', apiFormat, [['openai', copy.openAIFormat], ['claude', copy.claudeFormat]])}</label><label>${copy.model}<input name="model" value="${escapeHtml(current.model)}" required /></label></div><div class="modal-form-actions"><button class="modal-action" type="submit">${copy.save}</button><button class="secondary" data-new-summary-model type="button">${copy.add}</button>${editingSummaryModel >= 0 ? `<button class="model-delete" data-delete-summary-model type="button">${copy.remove}</button>` : ''}</div></form>${configuredControl}<section class="modal-subsection"><h3>${copy.promptTitle}</h3><p>${copy.promptIntro}</p><form class="prompt-form"><textarea name="prompt" rows="9" required>${escapeHtml(summaryPrompt)}</textarea><button class="modal-action" type="submit">${copy.save}</button></form></section><section class="modal-subsection"><h3>${copy.jsonTitle}</h3><p>${copy.jsonIntro}</p><pre class="config-json">${escapeHtml(renderConfigPreview())}</pre></section>`;
+  const endpoint = current.endpoint || (isOllama ? ollamaChatEndpoint : isOllamaCloud ? ollamaCloudChatEndpoint : '');
+  settingsModal.querySelector('.modal-body').innerHTML = `<form class="summary-model-form"><div class="config-fields"><label>${copy.name}<input name="name" value="${escapeHtml(current.name)}" maxlength="64" required /></label><label class="config-select-field">${copy.provider}${flowSelect('provider', current.provider, summaryProviders.map((provider) => [provider, summaryProviderLabel(provider)]))}</label><label data-summary-api-key${isOllama ? ' hidden' : ''}>${copy.key}<input name="apiKey" type="password" autocomplete="new-password" value="${escapeHtml(apiKey)}" /></label><label>${copy.endpoint}<input name="endpoint" value="${escapeHtml(endpoint)}" required /></label><label class="config-select-field" data-summary-format${(isOllama || isOllamaCloud) ? ' hidden' : ''}>${copy.format}${flowSelect('format', apiFormat, [['openai', copy.openAIFormat], ['claude', copy.claudeFormat]])}</label><label>${copy.model}<input name="model" value="${escapeHtml(current.model)}" placeholder="llama3.2" required /></label></div>${isOllama ? `<p class="ollama-hint">${locale === 'zh' ? '使用本机 Ollama，不需要 API Key。请填写已安装的模型名。' : 'Uses local Ollama with no API key. Enter an installed model name.'}</p>` : isOllamaCloud ? `<p class="ollama-hint">${locale === 'zh' ? '直接调用 Ollama Cloud，需要 API Key。' : 'Calls Ollama Cloud directly and requires an API key.'}</p>` : ''}<div class="modal-form-actions"><button class="modal-action" type="submit">${copy.save}</button><button class="secondary" data-new-summary-model type="button">${copy.add}</button>${editingSummaryModel >= 0 ? `<button class="model-delete" data-delete-summary-model type="button">${copy.remove}</button>` : ''}</div></form>${configuredControl}<section class="modal-subsection"><h3>${copy.jsonTitle}</h3><p>${copy.jsonIntro}</p><pre class="config-json">${escapeHtml(renderConfigPreview())}</pre></section>`;
 }
 function renderSpeakerProfileModal() {
   const copy = speakerProfileCopy[locale] || speakerProfileCopy.en;
@@ -837,13 +869,23 @@ function renderExportModal() {
     <button type="button" data-export-choice data-content="audio" data-format="wav" data-track="accompaniment"${separated ? '' : ' disabled'}><span><b>${t('非人声轨')}</b><small>${separated ? t('声源分离结果') : t('请先完成声源分离')}</small></span><strong>.wav</strong></button>
   </div>`;
 }
+const summaryDetailCopy = {
+  zh: ['完整会议纪要', '重新生成', '导出会议纪要', '完整结构化会议纪要', '纯文本会议纪要', '适合归档与分享'],
+  en: ['Full meeting notes', 'Regenerate', 'Export meeting notes', 'Complete structured meeting notes', 'Plain-text meeting notes', 'Suitable for archiving and sharing'],
+  es: ['Notas completas de la reunión', 'Regenerar', 'Exportar notas de reunión', 'Notas de reunión estructuradas completas', 'Notas de reunión en texto sin formato', 'Adecuado para archivar y compartir'],
+  ja: ['完全な会議メモ', '再生成', '会議メモをエクスポート', '完全な構造化会議メモ', 'プレーンテキストの会議メモ', 'アーカイブと共有に適しています'],
+  ko: ['전체 회의록', '다시 생성', '회의록 내보내기', '완전한 구조화 회의록', '일반 텍스트 회의록', '보관 및 공유에 적합'],
+  fr: ['Notes de réunion complètes', 'Régénérer', 'Exporter les notes de réunion', 'Notes de réunion structurées complètes', 'Notes de réunion en texte brut', 'Adapté à l’archivage et au partage'],
+  de: ['Vollständige Besprechungsnotizen', 'Neu erstellen', 'Besprechungsnotizen exportieren', 'Vollständige strukturierte Besprechungsnotizen', 'Besprechungsnotizen als Klartext', 'Zum Archivieren und Teilen geeignet'],
+  ru: ['Полные заметки встречи', 'Создать заново', 'Экспортировать заметки встречи', 'Полные структурированные заметки встречи', 'Заметки встречи в виде простого текста', 'Подходит для архивации и обмена'],
+};
 function renderSummaryDetailModal() {
-  const summary = currentMeetingDetail?.summary?.data;
-  if (!summary) { closeModal(); return; }
-  const list = (items, render) => items.length ? `<ul>${items.map(render).join('')}</ul>` : `<p>${t('无')}</p>`;
-  settingsModal.querySelector('h2').textContent = t('完整会议纪要');
+  const markdown = currentMeetingDetail?.summary?.data?.markdown;
+  if (!markdown) { closeModal(); return; }
+  const copy = summaryDetailCopy[locale] || summaryDetailCopy.en;
+  settingsModal.querySelector('h2').textContent = copy[0];
   settingsModal.querySelector('.modal-title p').textContent = currentMeetingDetail.title;
-  settingsModal.querySelector('.modal-body').innerHTML = `<article class="summary-detail-content"><p class="summary-detail-lead">${escapeHtml(summary.summary)}</p><section><h3>${t('决定')}</h3>${list(summary.decisions, (item) => `<li>${escapeHtml(item.text)}</li>`)}</section><section><h3>${t('待办')}</h3>${list(summary.action_items, (item) => `<li>${escapeHtml(item.task)}<small>${escapeHtml(item.owner || t('待确认'))}${item.due ? ` · ${escapeHtml(item.due)}` : ''}</small></li>`)}</section><section><h3>${t('开放问题')}</h3>${list(summary.open_questions, (item) => `<li>${escapeHtml(String(item))}</li>`)}</section></article><div class="modal-form-actions"><button class="secondary" type="button" data-regenerate-summary>${t('重新生成')}</button></div><section class="modal-subsection"><h3>${t('导出会议纪要')}</h3><div class="export-options"><button type="button" data-summary-export-choice data-format="md"><span><b>Markdown</b><small>${t('完整结构化会议纪要')}</small></span><strong>.md</strong></button><button type="button" data-summary-export-choice data-format="txt"><span><b>TXT</b><small>${t('纯文本会议纪要')}</small></span><strong>.txt</strong></button><button type="button" data-summary-export-choice data-format="pdf"><span><b>PDF</b><small>${t('适合归档与分享')}</small></span><strong>.pdf</strong></button></div></section>`;
+  settingsModal.querySelector('.modal-body').innerHTML = `<article class="summary-detail-content markdown-content">${renderMarkdown(markdown)}</article><div class="modal-form-actions"><button class="secondary" type="button" data-regenerate-summary>${copy[1]}</button></div><section class="modal-subsection"><h3>${copy[2]}</h3><div class="export-options"><button type="button" data-summary-export-choice data-format="md"><span><b>Markdown</b><small>${copy[3]}</small></span><strong>.md</strong></button><button type="button" data-summary-export-choice data-format="txt"><span><b>TXT</b><small>${copy[4]}</small></span><strong>.txt</strong></button><button type="button" data-summary-export-choice data-format="pdf"><span><b>PDF</b><small>${copy[5]}</small></span><strong>.pdf</strong></button></div></section>`;
 }
 /** Renders one settings modal. @param {'models'|'storage'|'summary-model'} kind Requested modal. @returns {void} */
 function renderModal(kind) {
@@ -1223,6 +1265,18 @@ settingsModal.addEventListener('click', async (event) => {
     select.querySelector('.flow-select-toggle').firstChild.nodeValue = selectChoice.textContent;
     select.querySelector('.flow-select-options').hidden = true;
     select.querySelector('.flow-select-toggle').setAttribute('aria-expanded', 'false');
+    if (select.querySelector('input').name === 'provider') {
+      const form = select.closest('.summary-model-form');
+      const provider = selectChoice.dataset.value;
+      const ollama = provider === 'Ollama';
+      const ollamaCloud = provider === 'Ollama Cloud';
+      form.querySelector('[data-summary-api-key]').hidden = ollama;
+      form.querySelector('[data-summary-format]').hidden = ollama || ollamaCloud;
+      if (ollama || ollamaCloud) {
+        form.querySelector('[name="endpoint"]').value = ollamaCloud ? ollamaCloudChatEndpoint : ollamaChatEndpoint;
+        form.querySelector('[name="format"]').value = 'openai';
+      }
+    }
     if (select.hasAttribute('data-active-summary-model')) { activeSummaryModel = Number(selectChoice.dataset.value); editingSummaryModel = activeSummaryModel; await persistSummaryConfig(); renderModal('summary-model'); }
     return;
   }
@@ -1396,14 +1450,6 @@ settingsModal.addEventListener('submit', async (event) => {
     renderModal('summary-model');
     return;
   }
-  if (event.target.matches('.prompt-form')) {
-    event.preventDefault();
-    summaryPrompt = new FormData(event.target).get('prompt').trim();
-    await persistSummaryConfig();
-    renderConfigPreview();
-    renderModal('summary-model');
-    return;
-  }
   if (event.target.matches('.speaker-sample-form')) {
     event.preventDefault();
     const profileId = event.target.dataset.speakerProfile;
@@ -1562,7 +1608,6 @@ function collectTranslations() {
 }
 /** Applies a locale, redraws dependent components, and optionally animates translated nodes. @param {'zh'|'en'|'es'} nextLocale Locale to apply. @param {boolean} animate Whether to animate the change. @returns {void} */
 function applyLanguage(nextLocale, animate = false) {
-  updateDefaultSummaryPrompt(nextLocale);
   locale = nextLocale;
   localStorage.setItem('brevia-language', locale);
   document.documentElement.lang = locale === 'zh' ? 'zh-CN' : locale;
@@ -2635,34 +2680,6 @@ if (window.brevia) {
     await showLibraryNav('all-meetings').catch((error) => showToast(error.message));
   });
 
-  async function generateMeetingSummary() {
-    const config = summaryModels[activeSummaryModel];
-    if (!config || !breviaClient.state.selectedMeetingId) { showSummaryConfigCard(); return; }
-    showSummaryProgress(0, 100, '准备逐字稿');
-    try {
-      const summary = await window.brevia.summary.generate({
-        meeting_id: breviaClient.state.selectedMeetingId,
-        provider: config.provider,
-        endpoint: config.endpoint,
-        model: config.model,
-        format: config.format,
-        key_reference: config.keyReference,
-        prompt: summaryPrompt,
-        consent: true,
-      });
-      if (summary?.configuration_required) { hideSummaryProgress(); showSummaryConfigCard(); return; }
-      const meeting = await window.brevia.meeting.get({ meeting_id: breviaClient.state.selectedMeetingId });
-      meeting.summary = { data: summary };
-      applyBackendDetail(meeting);
-      dismissTaskCard(document.querySelector('#summary-config-required'));
-      showSummaryComplete();
-      showToast('会议纪要已生成');
-    } catch (error) {
-      hideSummaryProgress();
-      if (isSummaryAuthenticationError(error)) showSummaryConfigCard(error);
-      else showToast(error.message);
-    }
-  }
   document.addEventListener('click', (event) => {
     if (event.target.closest('[data-view-full-summary]')) { openModal('summary-detail'); return; }
     if (event.target.closest('[data-generate-summary]')) void generateMeetingSummary();

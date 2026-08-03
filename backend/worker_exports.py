@@ -57,7 +57,9 @@ class ExportWorkerMixin:
             )
             if not summary:
                 raise ValueError("Generate meeting notes before exporting them")
-            content = self._summary_markdown(meeting["title"], summary)
+            content = summary.get("markdown")
+            if not content:
+                raise ValueError("Meeting notes must be regenerated as Markdown")
         else:
             lines = [
                 f"[{clock(item['start_ms'])}] {item['speaker_name']}: {item['text']}"
@@ -131,27 +133,6 @@ class ExportWorkerMixin:
         command.append(str(path))
         subprocess.run(command, check=True)
         return {"path": str(path), "format": export_format}
-
-    @staticmethod
-    def _summary_markdown(title, summary):
-        """把结构化纪要转换成适合导出的 Markdown 文本。"""
-        decisions = (
-            "\n".join(f"- {item['text']}" for item in summary["decisions"]) or "- 无"
-        )
-        actions = (
-            "\n".join(
-                f"- [ ] {item['task']} · {item.get('owner') or '待确认'} · {item.get('due') or '无截止日期'}"
-                for item in summary["action_items"]
-            )
-            or "- 无"
-        )
-        questions = (
-            "\n".join(f"- {item}" for item in summary["open_questions"]) or "- 无"
-        )
-        return (
-            f"# {title}\n\n{summary['summary']}\n\n## 决定\n\n{decisions}\n\n"
-            f"## 待办\n\n{actions}\n\n## 开放问题\n\n{questions}\n"
-        )
 
     @staticmethod
     def _convert_document(directory, title, export_format, content):
