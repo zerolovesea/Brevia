@@ -424,8 +424,10 @@ class WorkerTest(unittest.TestCase):
                 {"start_ms": 0, "end_ms": 1000, "speaker": "spk-1"}
             ]
             tracker.return_value.embedding.return_value = None
-            refined.return_value.decode.side_effect = lambda samples, _rate: (
-                "local slow" if samples[0] < 0.0007 else "remote slow"
+            refined.return_value.decode_words.side_effect = lambda samples, _rate: (
+                ("local slow", [{"text": "local slow", "start_ms": 0, "end_ms": 1000}])
+                if samples[0] < 0.0007
+                else ("remote slow", [{"text": "remote slow", "start_ms": 0, "end_ms": 1000}])
             )
             result = self.worker.refine({"meeting_id": meeting["id"]})
 
@@ -442,6 +444,7 @@ class WorkerTest(unittest.TestCase):
             ],
         )
         self.assertNotIn("mix", {item["track"] for item in latest})
+        self.assertEqual(latest[0]["word_timestamps"][0]["speaker"], "spk-1")
         diarization_event = next(
             event for event in self.events if event.get("type") == "diarization.ready"
         )
@@ -507,6 +510,56 @@ class WorkerTest(unittest.TestCase):
             ),
             "和负责人",
         )
+
+    def test_speaker_turn_stabilization_and_overlap_detection(self):
+        turns = self.worker._stabilize_speaker_turns([
+            {"start_ms": 0, "end_ms": 900, "speaker": "spk-1"},
+            {"start_ms": 900, "end_ms": 1100, "speaker": "spk-2"},
+            {"start_ms": 1100, "end_ms": 2000, "speaker": "spk-1"},
+        ])
+        self.assertEqual(turns, [{"start_ms": 0, "end_ms": 2000, "speaker": "spk-1"}])
+        turns = self.worker._stabilize_speaker_turns([
+            {"start_ms": 0, "end_ms": 3000, "speaker": "spk-1"},
+            {"start_ms": 2500, "end_ms": 2900, "speaker": "spk-2"},
+        ])
+        self.assertEqual(turns, [{"start_ms": 0, "end_ms": 3000, "speaker": "spk-1"}])
+        overlaps = self.worker._detect_overlaps({"system": [
+            {"start_ms": 0, "end_ms": 1000, "speaker": "spk-1"},
+            {"start_ms": 700, "end_ms": 1200, "speaker": "spk-2"},
+        ]})
+        self.assertEqual(overlaps[0]["speakers"], ["spk-1", "spk-2"])
+
+    def test_profile_assignment_requires_majority_of_cluster_audio(self):
+        evidence = {
+            "spk-1": {
+                "duration_ms": 1000,
+                "profiles": {"known": {"id": "known", "duration_ms": 600}},
+            },
+            "spk-2": {
+                "duration_ms": 1000,
+                "profiles": {"known": {"id": "known", "duration_ms": 400}},
+            },
+        }
+        self.assertEqual(
+            self.worker._profile_assignments(evidence),
+            {"spk-1": evidence["spk-1"]["profiles"]["known"]},
+        )
+
+    def test_auto_cluster_embeddings_selects_four_clear_voices(self):
+        embeddings = [
+            [1, 0, 0, 0],
+            [0.99, 0.01, 0, 0],
+            [0, 1, 0, 0],
+            [0.01, 0.99, 0, 0],
+            [0, 0, 1, 0],
+            [0, 0.01, 0.99, 0],
+            [0, 0, 0, 1],
+            [0.01, 0, 0, 0.99],
+        ]
+        labels = self.worker._auto_cluster_embeddings(embeddings, [1000] * 8)
+        self.assertEqual(len(set(labels)), 4)
+        labels = self.worker._auto_cluster_embeddings([[1, 0]] * 4, [1000] * 4)
+        self.assertEqual(len(set(labels)), 1)
 
     def test_refinement_segment_ids_remain_unique_for_overlapping_turns(self):
         ids = set()
@@ -693,6 +746,11 @@ class WorkerTest(unittest.TestCase):
         settings = json.loads(json.dumps(DEFAULT_SETTINGS))
         settings["audio"]["chunk_seconds"] = 0
         with self.assertRaisesRegex(ValueError, "chunk_seconds"):
+            save_runtime_settings(self.temp.name, settings)
+
+        settings = json.loads(json.dumps(DEFAULT_SETTINGS))
+        settings["diarization"]["cluster_threshold"] = 2.1
+        with self.assertRaisesRegex(ValueError, "cluster_threshold"):
             save_runtime_settings(self.temp.name, settings)
 
     def test_failed_playback_build_keeps_meeting_recoverable(self):
@@ -1604,12 +1662,19 @@ class WorkerTest(unittest.TestCase):
             if meeting["is_example"]
         ]
         self.assertEqual(
-            {meeting["example_locale"] for meeting in examples}, {"zh", "en", "es"}
+            {meeting["example_locale"] for meeting in examples}, {"zh", "en", "es", "ja", "ko", "fr", "de", "ru"}
         )
         meeting = self.worker.store.get_meeting(examples[0]["id"])
         audio = Path(meeting["audio"]["playback"]["mic"])
         self.assertTrue(audio.exists())
         self.assertTrue(all(segment["translation"] for segment in meeting["segments"]))
+        self.assertTrue(all(
+            self.worker.store.get_meeting(item["id"])["summary"]["data"]["markdown"]
+            for item in examples
+        ))
+        spanish = next(item for item in examples if item["example_locale"] == "es")
+        self.assertEqual(spanish["language"], "en")
+        self.assertEqual(spanish["target_language"], "es")
         self.worker.store.soft_delete(meeting["id"])
         self.assertFalse(audio.exists())
         self.assertNotIn(

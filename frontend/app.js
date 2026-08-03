@@ -8,6 +8,7 @@ const miniMeeting = document.querySelector('#mini-meeting');
 const miniPlayback = document.querySelector('#mini-playback');
 const miniPlaybackSeek = document.querySelector('#mini-playback-seek');
 const miniPlaybackToggle = document.querySelector('#mini-playback-toggle');
+const miniPlaybackClose = document.querySelector('#mini-playback-close');
 const miniTitle = document.querySelector('#mini-title');
 const miniTimer = document.querySelector('#mini-timer');
 const refinementCard = document.querySelector('#refinement-progress');
@@ -341,7 +342,7 @@ const importRecording = document.createElement('button');
 importRecording.className = 'secondary';
 importRecording.type = 'button';
 importRecording.id = 'import-recording';
-importRecording.textContent = '导入录音';
+importRecording.textContent = t('导入录音');
 prepareForm.querySelector('[type="submit"]').after(importRecording);
 const meetingTitle = document.querySelector('#meeting-title');
 let meetingTitleEdited = false;
@@ -371,7 +372,7 @@ function renderRefinedModelChoices() {
 }
 renderRefinedModelChoices();
 const languageModelDefaults = {
-  zh: { streaming: 'zipformer-zh-xlarge-streaming-int8', refined: 'funasr-nano-int8', diarization: 'pyannote-segmentation-3.0|eres2net-base-3dspeaker-zh' },
+  zh: { streaming: 'zipformer-zh-xlarge-streaming-int8', refined: 'whisper-turbo', diarization: 'pyannote-segmentation-3.0|eres2net-base-3dspeaker-zh' },
   en: { streaming: 'zipformer-en-streaming-int8', refined: 'whisper-turbo', diarization: 'pyannote-segmentation-3.0|nemo-titanet-small-en' },
   ko: { streaming: 'zipformer-ko-streaming-int8', refined: 'whisper-turbo', diarization: 'pyannote-segmentation-3.0|nemo-titanet-small-en' },
   fr: { streaming: 'zipformer-fr-streaming-int8', refined: 'whisper-turbo', diarization: 'pyannote-segmentation-3.0|nemo-titanet-small-en' },
@@ -462,6 +463,7 @@ function showRefinementProgress(completed = 0, total = 0, meetingTitle = refinem
   refinementCard.querySelector('p').textContent = refinementMeetingTitle ? `${copy.title} - ${refinementMeetingTitle}` : copy.title;
   refinementPercent.textContent = total ? `${Math.round(ratio * 100)}%` : copy.waiting;
   refinementBar.style.transform = `scaleX(${ratio})`;
+  Object.assign(refinementCard.dataset, { completed, total, complete: 'false' });
   if (meetingId) setTaskCardTask(refinementCard, 'meeting.refine', meetingId);
 }
 let refinementDismissTimer;
@@ -472,6 +474,7 @@ function showRefinementComplete() {
   refinementCard.querySelector('p').textContent = refinementMeetingTitle ? `${title} - ${refinementMeetingTitle}` : title;
   refinementPercent.textContent = '100%';
   refinementBar.style.transform = 'scaleX(1)';
+  Object.assign(refinementCard.dataset, { completed: 100, total: 100, complete: 'true' });
   finishTaskCard(refinementCard);
   refinementDismissTimer = setTimeout(hideRefinementProgress, 10000);
 }
@@ -493,11 +496,13 @@ function showSeparationProgress(completed = 0, total = 100, meetingId) {
   card.querySelector('p').textContent = t('正在分离人声与非人声');
   card.querySelector('strong').textContent = total ? `${Math.round(ratio * 100)}%` : t('准备中');
   card.querySelector('i').style.transform = `scaleX(${ratio})`;
+  Object.assign(card.dataset, { completed, total, complete: 'false' });
   if (meetingId) setTaskCardTask(card, 'meeting.separate', meetingId);
 }
 function showSeparationComplete() {
   showSeparationProgress(100, 100);
   document.querySelector('#separation-progress p').textContent = t('声源分离已完成');
+  document.querySelector('#separation-progress').dataset.complete = 'true';
   finishTaskCard(document.querySelector('#separation-progress'));
   separationDismissTimer = setTimeout(() => dismissTaskCard(document.querySelector('#separation-progress')), 10000);
 }
@@ -532,6 +537,7 @@ function showSummaryProgress(completed = 0, total = 100, stage = 'summary.prepar
   card.querySelector('p').textContent = (summaryTaskCopy[locale] || summaryTaskCopy.en)[0];
   card.querySelector('strong').textContent = `${summaryTaskLabel(stage)}${total ? ` · ${Math.round(ratio * 100)}%` : ''}`;
   card.querySelector('i').style.transform = `scaleX(${ratio})`;
+  Object.assign(card.dataset, { completed, total, stage });
   if (meetingId) setTaskCardTask(card, 'summary.generate', meetingId);
 }
 function hideSummaryProgress() { clearTimeout(summaryDismissTimer); dismissTaskCard(document.querySelector('#summary-progress')); }
@@ -539,6 +545,21 @@ function showSummaryComplete() {
   showSummaryProgress(100, 100, 'summary.complete');
   finishTaskCard(document.querySelector('#summary-progress'));
   summaryDismissTimer = setTimeout(hideSummaryProgress, 10000);
+}
+function refreshLocalizedTaskCards() {
+  if (!refinementCard.hidden) {
+    const title = refinementCard.dataset.complete === 'true' ? t('会后精修已完成') : t('正在精修');
+    refinementCard.querySelector('p').textContent = refinementMeetingTitle ? `${title} - ${refinementMeetingTitle}` : title;
+    refinementPercent.textContent = refinementCard.dataset.total === '0' ? t('准备中') : `${Math.round(Number(refinementCard.dataset.completed || 0) / Number(refinementCard.dataset.total || 1) * 100)}%`;
+  }
+  const separation = document.querySelector('#separation-progress');
+  if (separation) separation.querySelector('p').textContent = separation.dataset.complete === 'true' ? t('声源分离已完成') : t('正在分离人声与非人声');
+  const summary = document.querySelector('#summary-progress');
+  if (summary) {
+    const total = Number(summary.dataset.total || 0);
+    summary.querySelector('p').textContent = (summaryTaskCopy[locale] || summaryTaskCopy.en)[0];
+    summary.querySelector('strong').textContent = `${summaryTaskLabel(summary.dataset.stage)}${total ? ` · ${Math.round(Number(summary.dataset.completed || 0) / total * 100)}%` : ''}`;
+  }
 }
 async function generateMeetingSummary() {
   const config = summaryModels[activeSummaryModel];
@@ -690,14 +711,12 @@ function renderRequiredModelsCard() {
   const total = ids.reduce((sum, id) => sum + (modelDownloads.get(id)?.total || modelSizes[modelIds.indexOf(id)] || 0), 0);
   const received = ids.reduce((sum, id) => sum + Math.min(modelDownloads.get(id)?.received || 0, modelDownloads.get(id)?.total || 0), 0);
   const ratio = total ? received / total : 0;
-  const active = ids.filter((id) => modelDownloads.get(id) && !modelDownloads.get(id).error);
-  const allPaused = active.length && active.every((id) => modelDownloads.get(id).paused);
   card.classList.toggle('is-minimized', requiredModelsCardMinimized);
-  card.innerHTML = `<header class="task-card-heading"><p>${requiredModelsCardMinimized ? `${t('需要下载以下模型')} · ${Math.round(ratio * 100)}%` : t('需要下载以下模型')}</p><span class="task-card-actions"><button type="button" data-download-required-all>${t('全部下载')}</button><button class="task-card-close" data-pause-required-all type="button" aria-label="${allPaused ? t('继续') : t('暂停')}"${active.length ? '' : ' disabled'}>${allPaused ? '▶' : 'Ⅱ'}</button><button class="task-card-close" data-minimize-required-models type="button" aria-label="最小化">${requiredModelsCardMinimized ? '□' : '—'}</button><button class="task-card-close" data-dismiss-task-card type="button" aria-label="关闭">×</button></span></header><div class="processing-bar required-models-progress" aria-hidden="true"><i style="transform:scaleX(${ratio})"></i></div><ul>${ids.map((id) => {
+  card.innerHTML = `<header class="task-card-heading"><p>${requiredModelsCardMinimized ? `${t('需要下载以下模型')} · ${Math.round(ratio * 100)}%` : t('需要下载以下模型')}</p><span class="task-card-actions"><button class="task-card-close" data-minimize-required-models type="button" aria-label="最小化">${requiredModelsCardMinimized ? '□' : '—'}</button><button class="task-card-close" data-dismiss-task-card type="button" aria-label="关闭">×</button></span></header><div class="processing-bar required-models-progress" aria-hidden="true"><i style="transform:scaleX(${ratio})"></i></div><ul>${ids.map((id) => {
     const progress = modelDownloads.get(id);
     const ratio = progress?.total ? Math.min(1, progress.received / progress.total) : 0;
     const status = progress?.error ? escapeHtml(progress.error) : progress ? (progress.paused ? t('暂停') : progress.total ? `${Math.round(ratio * 100)}%` : t('准备中')) : '';
-    const action = progress && !progress.error ? `<button type="button" data-pause-required="${id}">${progress.paused ? t('继续') : t('暂停')}</button><button class="task-card-close" type="button" data-cancel-required="${id}" aria-label="取消">×</button>` : `<button type="button" data-download-required="${id}">${t('下载')}</button>`;
+    const action = progress && !progress.error ? `<button class="task-card-close" type="button" data-pause-required="${id}" aria-label="${progress.paused ? t('继续') : t('暂停')}">${progress.paused ? '▶' : 'Ⅱ'}</button><button class="task-card-close" type="button" data-cancel-required="${id}" aria-label="取消">×</button>` : `<button type="button" data-download-required="${id}">${t('下载')}</button>`;
     return `<li><span><b>${escapeHtml(modelDisplayName(id))}</b><small>${status}</small></span><span class="model-actions">${action}</span><div class="processing-bar" aria-hidden="true"><i style="transform:scaleX(${ratio})"></i></div></li>`;
   }).join('')}</ul>`;
   card.querySelector('ul').scrollTop = scrollTop;
@@ -776,16 +795,6 @@ taskCards.addEventListener('click', (event) => {
   }
   const one = event.target.closest('[data-download-required]');
   if (one) { void downloadRequiredModel(one.dataset.downloadRequired); return; }
-  const pauseAll = event.target.closest('[data-pause-required-all]');
-  if (pauseAll) {
-    const active = [...requiredModelIds].filter((id) => modelDownloads.get(id) && !modelDownloads.get(id).error);
-    const resume = active.length && active.every((id) => modelDownloads.get(id).paused);
-    active.forEach((id) => {
-      if (resume) void downloadRequiredModel(id);
-      else void window.brevia?.models.pause({ model_id: id }).catch((error) => showToast(error.message));
-    });
-    return;
-  }
   const pause = event.target.closest('[data-pause-required]');
   if (pause) {
     const modelId = pause.dataset.pauseRequired;
@@ -799,9 +808,6 @@ taskCards.addEventListener('click', (event) => {
     const modelId = cancel.dataset.cancelRequired;
     void window.brevia?.models.cancel({ model_id: modelId }).catch((error) => showToast(error.message));
     return;
-  }
-  if (event.target.closest('[data-download-required-all]')) {
-    downloadRequiredModels([...requiredModelIds]);
   }
 });
 prepareForm.addEventListener('click', (event) => {
@@ -841,7 +847,7 @@ function renderSummaryModelModal() {
   settingsModal.querySelector('h2').textContent = copy.title;
   settingsModal.querySelector('.modal-title p').textContent = copy.intro;
   const endpoint = current.endpoint || (isOllama ? ollamaChatEndpoint : isOllamaCloud ? ollamaCloudChatEndpoint : '');
-  settingsModal.querySelector('.modal-body').innerHTML = `<form class="summary-model-form"><div class="config-fields"><label>${copy.name}<input name="name" value="${escapeHtml(current.name)}" maxlength="64" required /></label><label class="config-select-field">${copy.provider}${flowSelect('provider', current.provider, summaryProviders.map((provider) => [provider, summaryProviderLabel(provider)]))}</label><label data-summary-api-key${isOllama ? ' hidden' : ''}>${copy.key}<input name="apiKey" type="password" autocomplete="new-password" value="${escapeHtml(apiKey)}" /></label><label>${copy.endpoint}<input name="endpoint" value="${escapeHtml(endpoint)}" required /></label><label class="config-select-field" data-summary-format${(isOllama || isOllamaCloud) ? ' hidden' : ''}>${copy.format}${flowSelect('format', apiFormat, [['openai', copy.openAIFormat], ['claude', copy.claudeFormat]])}</label><label>${copy.model}<input name="model" value="${escapeHtml(current.model)}" placeholder="llama3.2" required /></label></div>${isOllama ? `<p class="ollama-hint">${locale === 'zh' ? '使用本机 Ollama，不需要 API Key。请填写已安装的模型名。' : 'Uses local Ollama with no API key. Enter an installed model name.'}</p>` : isOllamaCloud ? `<p class="ollama-hint">${locale === 'zh' ? '直接调用 Ollama Cloud，需要 API Key。' : 'Calls Ollama Cloud directly and requires an API key.'}</p>` : ''}<div class="modal-form-actions"><button class="modal-action" type="submit">${copy.save}</button><button class="secondary" data-new-summary-model type="button">${copy.add}</button>${editingSummaryModel >= 0 ? `<button class="model-delete" data-delete-summary-model type="button">${copy.remove}</button>` : ''}</div></form>${configuredControl}<section class="modal-subsection"><h3>${copy.jsonTitle}</h3><p>${copy.jsonIntro}</p><pre class="config-json">${escapeHtml(renderConfigPreview())}</pre></section>`;
+  settingsModal.querySelector('.modal-body').innerHTML = `<form class="summary-model-form"><div class="config-fields"><label>${copy.name}<input name="name" value="${escapeHtml(current.name)}" maxlength="64" required /></label><label class="config-select-field">${copy.provider}${flowSelect('provider', current.provider, summaryProviders.map((provider) => [provider, summaryProviderLabel(provider)]))}</label><label data-summary-api-key${isOllama ? ' hidden' : ''}>${copy.key}<input name="apiKey" type="password" autocomplete="new-password" value="${escapeHtml(apiKey)}" /></label><label>${copy.endpoint}<input name="endpoint" value="${escapeHtml(endpoint)}" required /></label><label class="config-select-field" data-summary-format${(isOllama || isOllamaCloud) ? ' hidden' : ''}>${copy.format}${flowSelect('format', apiFormat, [['openai', copy.openAIFormat], ['claude', copy.claudeFormat]])}</label><label>${copy.model}<input name="model" value="${escapeHtml(current.model)}" placeholder="llama3.2" required /></label></div>${isOllama ? `<p class="ollama-hint">${t('使用本机 Ollama，不需要 API Key。请填写已安装的模型名。')}</p>` : isOllamaCloud ? `<p class="ollama-hint">${t('直接调用 Ollama Cloud，需要 API Key。')}</p>` : ''}<div class="modal-form-actions"><button class="modal-action" type="submit">${copy.save}</button><button class="secondary" data-new-summary-model type="button">${copy.add}</button>${editingSummaryModel >= 0 ? `<button class="model-delete" data-delete-summary-model type="button">${copy.remove}</button>` : ''}</div></form>${configuredControl}<section class="modal-subsection"><h3>${copy.jsonTitle}</h3><p>${copy.jsonIntro}</p><pre class="config-json">${escapeHtml(renderConfigPreview())}</pre></section>`;
 }
 function renderSpeakerProfileModal() {
   const copy = speakerProfileCopy[locale] || speakerProfileCopy.en;
@@ -972,9 +978,9 @@ function closeModal() {
 
 function openInitialPermissions() {
   activeModal = 'initial-permissions';
-  settingsModal.querySelector('.modal-title h2').textContent = '录制权限';
-  settingsModal.querySelector('.modal-title p').textContent = '首次使用时完成设置';
-  settingsModal.querySelector('.modal-body').innerHTML = '<div class="permission-modal"><p>言录需要麦克风、屏幕与系统音频权限，才能录制会议并生成实时字幕。</p><div><b>麦克风</b><small>录制你的发言。</small></div><div><b>屏幕与系统音频</b><small>录制屏幕共享中的系统声音。</small></div><section><button class="modal-action" data-request-initial-permissions type="button">继续</button><button class="secondary" data-dismiss-initial-permissions type="button">稍后</button></section></div>';
+  settingsModal.querySelector('.modal-title h2').textContent = t('录制权限');
+  settingsModal.querySelector('.modal-title p').textContent = t('首次使用时完成设置');
+  settingsModal.querySelector('.modal-body').innerHTML = `<div class="permission-modal"><p>${t('言录需要麦克风、屏幕与系统音频权限，才能录制会议并生成实时字幕。')}</p><div><b>${t('麦克风')}</b><small>${t('录制你的发言。')}</small></div><div><b>${t('屏幕与系统音频')}</b><small>${t('录制屏幕共享中的系统声音。')}</small></div><section><button class="modal-action" data-request-initial-permissions type="button">${t('继续')}</button><button class="secondary" data-dismiss-initial-permissions type="button">${t('稍后')}</button></section></div>`;
   settingsModal.classList.remove('modal-leave');
   settingsModal.hidden = false;
   requestAnimationFrame(() => settingsModal.classList.add('modal-enter'));
@@ -1150,7 +1156,7 @@ async function requestInitialPermissions(button) {
     if (status.microphone === 'not-determined') await window.brevia.permissions.requestMicrophone();
     if (status.screen === 'not-determined') {
       const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-      stream.getTracks().forEach((track) => track.stop());
+      stopMediaStream(stream);
     }
     closeModal();
   } catch (error) {
@@ -1193,7 +1199,7 @@ function renderLivePanel() {
   const voiceOptions = [['', copy.voice], ...[...presetVoices, ...speakerProfiles.filter((profile) => profile.has_reference).map((profile) => ({ id: profile.id, name: speakerProfileName(profile) }))].map((voice) => [voice.id, voice.name])];
   const noVoice = voiceOptions.length === 1;
   document.querySelector('.live-panel').innerHTML = `<section><p class="eyebrow">${t('参与者')} · ${participants.length}</p><div class="participants-list">${people}</div></section><section><p class="eyebrow">${t('本场状态')}</p>${renderStatusList(uiData.live.status)}</section>`;
-  document.querySelector('#tts-chat').innerHTML = `<p class="eyebrow">${locale === 'zh' ? '语音对话' : 'Voice conversation'}</p><form id="tts-chat-form"><div class="tts-selects">${flowSelect('voice_id', '', voiceOptions, false, noVoice)}${flowSelect('target_language', 'zh', [['zh', t('中文')], ['en', t('英语')]])}</div><input name="text" maxlength="1000" placeholder="${copy.placeholder}" required /><button type="submit" ${noVoice ? 'disabled' : ''}>${copy.send}</button>${noVoice ? `<p class="tts-hint">${locale === 'zh' ? '请先在声纹库注册可用声音' : 'Register a voiceprint before sending speech'}</p>` : ''}</form>`;
+  document.querySelector('#tts-chat').innerHTML = `<p class="eyebrow">${t('语音对话')}</p><form id="tts-chat-form"><div class="tts-selects">${flowSelect('voice_id', '', voiceOptions, false, noVoice)}${flowSelect('target_language', 'zh', [['zh', t('中文')], ['en', t('英语')]])}</div><input name="text" maxlength="1000" placeholder="${copy.placeholder}" required /><button type="submit" ${noVoice ? 'disabled' : ''}>${copy.send}</button>${noVoice ? `<p class="tts-hint">${t('请先在声纹库注册可用声音')}</p>` : ''}</form>`;
 }
 renderModelControls();
 renderLivePanel();
@@ -1637,6 +1643,8 @@ function applyLanguage(nextLocale, animate = false) {
     renderSettingsView();
     document.querySelector('#settings-view .settings-grid').append(speakerProfileCard, updateCard);
     renderDefaultMeetingTitle();
+    renderCategoryFilter();
+    renderDateFilter();
     renderMeetingList();
     renderMeetingDetail();
     if (activeView === 'home') selectLibraryNav(activeLibraryNav);
@@ -1648,6 +1656,7 @@ function applyLanguage(nextLocale, animate = false) {
     renderModelControls();
     renderLivePanel();
     renderRequiredModelsCard();
+    refreshLocalizedTaskCards();
     document.querySelector('[data-separate-detail]').textContent = (voiceFeaturesCopy[locale] || voiceFeaturesCopy.en).source;
     renderConfigPreview();
     if (activeModal) renderModal(activeModal);
@@ -2302,6 +2311,12 @@ miniPlaybackSeek.addEventListener('keydown', (event) => {
 miniPlaybackToggle.addEventListener('click', async () => {
   if (playerAudio.paused) await playerAudio.play();
   else playerAudio.pause();
+});
+miniPlaybackClose.addEventListener('click', () => {
+  playbackStarted = false;
+  playerAudio.pause();
+  playerAudio.currentTime = 0;
+  updatePlayerControl();
 });
 miniPlayback.addEventListener('dblclick', (event) => { if (!event.target.closest('button')) void showView('detail'); });
 document.querySelectorAll('.player .skip').forEach((button, index) => button.addEventListener('click', () => {

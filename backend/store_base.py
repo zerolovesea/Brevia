@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS segments (
   end_ms INTEGER NOT NULL,
   speaker TEXT NOT NULL,
   text TEXT NOT NULL,
+  word_timestamps TEXT,
   translation TEXT,
   user_edited INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (meeting_id, id, version)
@@ -173,6 +174,9 @@ class StoreBase:
                 )
             if "vad_model_id" not in columns:
                 db.execute("ALTER TABLE meetings ADD COLUMN vad_model_id TEXT")
+            segment_columns = {row["name"] for row in db.execute("PRAGMA table_info(segments)")}
+            if "word_timestamps" not in segment_columns:
+                db.execute("ALTER TABLE segments ADD COLUMN word_timestamps TEXT")
             speaker_columns = {
                 row["name"] for row in db.execute("PRAGMA table_info(speakers)")
             }

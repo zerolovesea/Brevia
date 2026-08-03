@@ -53,8 +53,8 @@ class RefinementWorkerMixin:
         )
         if num_speakers != -1 and num_speakers < 1:
             raise ValueError("num_speakers must be -1 or a positive integer")
-        if not 0 <= threshold <= 1:
-            raise ValueError("cluster_threshold must be between 0 and 1")
+        if not 0 <= threshold <= 2:
+            raise ValueError("cluster_threshold must be between 0 and 2")
         tracks = [
             track
             for track in ("mic", "system")
@@ -85,7 +85,7 @@ class RefinementWorkerMixin:
                 f"{label} {', '.join(missing_models)} {verb} not installed"
             )
         self.emit("refinement.started", {"meeting_id": meeting["id"], "total": 0})
-        audio, turns_by_track = {}, {}
+        audio, turns_by_track, raw_turns_by_track = {}, {}, {}
         vad = OfflineVAD(self.models, meeting.get("vad_model_id") or "silero-vad")
         diarizer = (
             OfflineDiarizer(
@@ -135,40 +135,96 @@ class RefinementWorkerMixin:
                     identity_tracker = SpeakerTracker(
                         self.models, model_id=meeting.get("speaker_embedding_model_id")
                     )
+                    turn_embeddings = []
                     for turn in turns:
                         clip = samples[
                             round(turn["start_ms"] * sample_rate / 1000) : round(
                                 turn["end_ms"] * sample_rate / 1000
                             )
                         ]
-                        embedding = identity_tracker.embedding(clip, sample_rate)
-                        profile = (
-                            embedding is not None
-                            and self.store.match_speaker_profile(
-                                embedding,
-                                SETTINGS["diarization"]["online_similarity_threshold"],
+                        turn_embeddings.append(
+                            identity_tracker.embedding(clip, sample_rate)
+                        )
+                    if (
+                        num_speakers == -1
+                        and len({turn["speaker"] for turn in turns}) > 1
+                    ):
+                        known = [
+                            (index, embedding)
+                            for index, embedding in enumerate(turn_embeddings)
+                            if embedding is not None
+                        ]
+                        labels = (
+                            self._auto_cluster_embeddings(
+                                [embedding for _, embedding in known],
+                                [
+                                    turns[index]["end_ms"] - turns[index]["start_ms"]
+                                    for index, _ in known
+                                ],
                             )
+                            if len(known) >= 3
+                            else []
+                        )
+                        labeled = {
+                            index: label for (index, _), label in zip(known, labels)
+                        }
+                        for index, turn in enumerate(turns):
+                            if index not in labeled and labeled:
+                                nearest_index = min(
+                                    labeled,
+                                    key=lambda candidate: max(
+                                        0,
+                                        turn["start_ms"] - turns[candidate]["end_ms"],
+                                        turns[candidate]["start_ms"] - turn["end_ms"],
+                                    ),
+                                )
+                                labeled[index] = labeled[nearest_index]
+                            if index in labeled:
+                                turn["speaker"] = f"spk-{labeled[index] + 1}"
+                    profile_evidence = {}
+                    for turn, embedding in zip(turns, turn_embeddings):
+                        if embedding is None:
+                            continue
+                        duration_ms = turn["end_ms"] - turn["start_ms"]
+                        evidence = profile_evidence.setdefault(
+                            turn["speaker"], {"duration_ms": 0, "profiles": {}}
+                        )
+                        evidence["duration_ms"] += duration_ms
+                        profile = self.store.match_speaker_profile(
+                            embedding,
+                            SETTINGS["diarization"]["online_similarity_threshold"],
                         )
                         if profile:
-                            turn["speaker"] = f"profile-{profile['id']}"
-                            self.store.rename_speaker(
-                                meeting["id"],
-                                turn["speaker"],
-                                profile["name"],
-                                profile_id=profile["id"],
+                            match = evidence["profiles"].setdefault(
+                                profile["id"], {**profile, "duration_ms": 0}
                             )
+                            match["duration_ms"] += duration_ms
+                    assignments = self._profile_assignments(profile_evidence)
+                    for diarized_speaker, profile in assignments.items():
+                        for turn in turns:
+                            if turn["speaker"] == diarized_speaker:
+                                turn["speaker"] = f"profile-{profile['id']}"
+                        self.store.rename_speaker(
+                            meeting["id"],
+                            f"profile-{profile['id']}",
+                            profile["name"],
+                            profile_id=profile["id"],
+                        )
                 except RuntimeError:
                     pass
+            raw_turns_by_track[track] = turns
+            turns = self._stabilize_speaker_turns(turns)
             audio[track] = samples, sample_rate
             turns_by_track[track] = turns
         turns = sorted(
             (turn for track_turns in turns_by_track.values() for turn in track_turns),
             key=lambda turn: (turn["start_ms"], turn["end_ms"]),
         )
+        overlaps = self._detect_overlaps(raw_turns_by_track)
         self.store.replace_speaker_turns(meeting["id"], turns)
         self.emit(
             "diarization.ready",
-            {"meeting_id": meeting["id"], "tracks": tracks, "turns": turns},
+            {"meeting_id": meeting["id"], "tracks": tracks, "turns": turns, "overlaps": overlaps},
         )
         recognizer = RefinedASR(self.models, refined_model_id)
         locked_ids = {
@@ -225,7 +281,7 @@ class RefinementWorkerMixin:
                     start = round(decode_start_ms * sample_rate / 1000)
                     end = round(decode_end_ms * sample_rate / 1000)
                     current = samples[start:end]
-                    raw_text = recognizer.decode(current, sample_rate)
+                    raw_text, words = recognizer.decode_words(current, sample_rate)
                     speaker_key = (track, turn["speaker"])
                     text = self._trim_refinement_overlap(
                         previous_text.get(speaker_key, ""), raw_text
@@ -267,6 +323,25 @@ class RefinementWorkerMixin:
                         "end_ms": end_ms,
                         "speaker": speaker,
                         "track": track,
+                        "word_timestamps": [
+                            {
+                                **word,
+                                "start_ms": word["start_ms"] + decode_start_ms,
+                                "end_ms": word["end_ms"] + decode_start_ms,
+                                "speaker": self._speaker_for(
+                                    word["start_ms"] + decode_start_ms,
+                                    word["end_ms"] + decode_start_ms,
+                                    turns_by_track[track],
+                                ) or speaker,
+                                "overlap": any(
+                                    overlap["track"] == track
+                                    and word["start_ms"] + decode_start_ms < overlap["end_ms"]
+                                    and word["end_ms"] + decode_start_ms > overlap["start_ms"]
+                                    for overlap in overlaps
+                                ),
+                            }
+                            for word in words
+                        ],
                     }
                     refined_segments.append(event)
         except Exception:
@@ -355,6 +430,170 @@ class RefinementWorkerMixin:
             if previous[-length:].casefold() == text[:length].casefold():
                 return text[length:].lstrip()
         return text
+
+    @staticmethod
+    def _stabilize_speaker_turns(turns, minimum_ms=1000):
+        """合并同一说话人，并把相邻的亚秒聚类抖动吸收到较长 turn。"""
+
+        def merge_same(items):
+            merged = []
+            for turn in items:
+                if (
+                    merged
+                    and turn["speaker"] == merged[-1]["speaker"]
+                    and turn["start_ms"] <= merged[-1]["end_ms"] + 200
+                ):
+                    merged[-1]["end_ms"] = max(
+                        merged[-1]["end_ms"], turn["end_ms"]
+                    )
+                else:
+                    merged.append(dict(turn))
+            return merged
+
+        stable = merge_same(
+            sorted(
+                (
+                    turn
+                    for turn in turns
+                    if turn["end_ms"] > turn["start_ms"]
+                ),
+                key=lambda turn: (turn["start_ms"], turn["end_ms"]),
+            )
+        )
+        # ponytail: local turn absorption; keep brief interjections separate when
+        # word-level multi-speaker paragraphs are rendered by the UI.
+        while len(stable) > 1:
+            candidates = []
+            for index, turn in enumerate(stable):
+                if turn["end_ms"] - turn["start_ms"] >= minimum_ms:
+                    continue
+                if index:
+                    previous = stable[index - 1]
+                    candidates.append(
+                        (
+                            max(0, turn["start_ms"] - previous["end_ms"]),
+                            -(previous["end_ms"] - previous["start_ms"]),
+                            index,
+                            index - 1,
+                        )
+                    )
+                if index + 1 < len(stable):
+                    following = stable[index + 1]
+                    candidates.append(
+                        (
+                            max(0, following["start_ms"] - turn["end_ms"]),
+                            -(following["end_ms"] - following["start_ms"]),
+                            index,
+                            index + 1,
+                        )
+                    )
+            if not candidates:
+                break
+            gap, _, index, neighbor_index = min(candidates)
+            turn = stable[index]
+            if gap > 200:
+                break
+            neighbor = stable[neighbor_index]
+            neighbor["start_ms"] = min(neighbor["start_ms"], turn["start_ms"])
+            neighbor["end_ms"] = max(neighbor["end_ms"], turn["end_ms"])
+            stable.pop(index)
+            stable = merge_same(stable)
+        return stable
+
+    @staticmethod
+    def _profile_assignments(evidence):
+        """仅在多数可用音频命中时，统一整个离线说话人簇的实名。"""
+        assignments = {}
+        for speaker, item in evidence.items():
+            profile = max(
+                item["profiles"].values(),
+                key=lambda candidate: candidate["duration_ms"],
+                default=None,
+            )
+            if profile and profile["duration_ms"] * 2 >= item["duration_ms"]:
+                assignments[speaker] = profile
+        return assignments
+
+    @staticmethod
+    def _auto_cluster_embeddings(embeddings, durations):
+        """以加权 silhouette 的首个平台自动选择 1–20 个说话人簇。"""
+        import numpy
+
+        if len(embeddings) < 3:
+            return [0] * len(embeddings)
+        vectors = numpy.asarray(embeddings, dtype=numpy.float32)
+        vectors /= numpy.linalg.norm(vectors, axis=1, keepdims=True) + 1e-9
+        weights = numpy.asarray(durations, dtype=numpy.float64)
+        distances = 1 - numpy.clip(vectors @ vectors.T, -1, 1)
+
+        def cluster(count):
+            centers = [vectors[numpy.argmax(weights)]]
+            for _ in range(1, count):
+                similarity = numpy.max(vectors @ numpy.asarray(centers).T, axis=1)
+                centers.append(vectors[numpy.argmin(similarity)])
+            centers = numpy.asarray(centers)
+            labels = None
+            for _ in range(50):
+                updated = numpy.argmax(vectors @ centers.T, axis=1)
+                if labels is not None and numpy.array_equal(labels, updated):
+                    break
+                labels = updated
+                for label in range(count):
+                    members = labels == label
+                    if members.any():
+                        center = numpy.average(
+                            vectors[members], axis=0, weights=weights[members]
+                        )
+                        centers[label] = center / (numpy.linalg.norm(center) + 1e-9)
+            return labels
+
+        candidates = {}
+        for count in range(2, min(20, len(vectors) - 1) + 1):
+            labels = cluster(count)
+            if len(set(labels)) < 2:
+                candidates[count] = (0, labels)
+                continue
+            scores = []
+            for index, label in enumerate(labels):
+                same = labels == label
+                same[index] = False
+                if not same.any():
+                    scores.append(0)
+                    continue
+                within = numpy.average(distances[index, same], weights=weights[same])
+                nearest = min(
+                    numpy.average(
+                        distances[index, labels == other],
+                        weights=weights[labels == other],
+                    )
+                    for other in set(labels)
+                    if other != label
+                )
+                scores.append((nearest - within) / max(nearest, within, 1e-9))
+            candidates[count] = (numpy.average(scores, weights=weights), labels)
+        best = max(score for score, _ in candidates.values())
+        # ponytail: first silhouette plateau; ask for an explicit count when a
+        # recording genuinely contains more than 20 or tightly similar voices.
+        count = min(
+            count for count, (score, _) in candidates.items() if score >= best - 0.003
+        )
+        return candidates[count][1].tolist()
+
+    @staticmethod
+    def _detect_overlaps(turns_by_track):
+        """从 diarization 的并发说话人活动中提取独立的重叠语音区间。"""
+        overlaps = []
+        for track, turns in turns_by_track.items():
+            for index, first in enumerate(turns):
+                for second in turns[index + 1 :]:
+                    if second["start_ms"] >= first["end_ms"]:
+                        break
+                    if first["speaker"] == second["speaker"]:
+                        continue
+                    start_ms, end_ms = max(first["start_ms"], second["start_ms"]), min(first["end_ms"], second["end_ms"])
+                    if end_ms - start_ms >= 100:
+                        overlaps.append({"track": track, "start_ms": start_ms, "end_ms": end_ms, "speakers": [first["speaker"], second["speaker"]]})
+        return overlaps
 
     @staticmethod
     def _normalized_transcript(text):

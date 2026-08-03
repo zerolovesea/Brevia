@@ -51,7 +51,7 @@
   .required-models-progress { @apply mt-3; }
   .required-models-card:not(.is-minimized) .required-models-progress { @apply hidden; }
   .required-models-card.is-minimized { @apply p-3; }
-  .required-models-card.is-minimized ul, .required-models-card.is-minimized [data-download-required-all] { @apply hidden; }
+  .required-models-card.is-minimized ul { @apply hidden; }
   .processing-card.is-minimized > :not(.task-card-heading):not(.processing-bar):not(.task-card-progress) { @apply hidden; }
   .processing-card.is-minimized { @apply min-h-0; }
   .processing-card.is-minimized .task-card-progress { @apply block; }
@@ -84,7 +84,7 @@
   /* Shared page headers and the meeting-library toolbar/list. */
   .page-head, .detail-head { @apply grid grid-cols-12 gap-8; }
   .page-head > div { @apply col-span-8 min-h-56; }
-  .detail-head > div:first-child { @apply col-span-8; }
+  .detail-head > div:first-child { @apply col-span-8 min-w-0; }
   .page-head > .primary-action, .detail-actions { @apply col-span-4 justify-self-end self-end; }
   .eyebrow { @apply mb-4 text-[12px] font-normal uppercase tracking-[.12em] text-[#666]; }
   button.eyebrow { @apply cursor-default; }
@@ -217,12 +217,12 @@
   .segment-speaker { @apply w-full p-0 text-left text-[12px] leading-5 font-normal text-[#404040] hover:underline; }
   /* Completed-meeting detail: player, transcript metadata, and summary sidebar. */
   #detail-view.active { @apply grid h-[calc(100dvh-4rem)] grid-rows-[auto_auto_auto_minmax(0,1fr)] gap-6 overflow-hidden py-8; }
-  .detail-head { @apply relative z-50 mb-0; }.detail-actions { @apply flex flex-nowrap items-end gap-3 whitespace-nowrap; }
+  .detail-head { @apply relative z-50 mb-0; }.detail-actions { @apply flex flex-wrap justify-end items-end gap-3 whitespace-nowrap; }
   #detail-view .detail-actions { gap: clamp(8px, 1vw, 16px); }
   #detail-view .detail-actions > button, #detail-view .detail-actions .flow-select-toggle { flex-shrink: 0; white-space: nowrap; }
   #detail-view .detail-actions .secondary { margin-top: 0; font-size: clamp(11px, .9vw, 13px); }
   #detail-view .detail-actions .primary-action { gap: clamp(12px, 2vw, 32px); padding: clamp(12px, 1vw, 16px) clamp(14px, 1.5vw, 24px); font-size: clamp(11px, .9vw, 14px); }
-  #detail-view .detail-head h1 { @apply text-[clamp(32px,3.5vw,52px)] leading-[1.05]; }
+  #detail-view .detail-head h1 { @apply break-words text-[clamp(32px,3.5vw,52px)] leading-[1.05]; }
   #detail-view .detail-head p:not(.eyebrow) { @apply mt-4 text-[15px] leading-7; }
   #detail-view .eyebrow { @apply mb-2 text-[11px]; }
   #detail-view .detail-head { isolation: isolate; z-index: 2; }

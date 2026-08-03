@@ -10,6 +10,21 @@ from .config import SETTINGS
 from .store_base import utc_now
 
 
+def example_note(example):
+    """返回与界面语言一致的示例会议纪要。"""
+    notes = {
+        "zh": "## **会议摘要**\n\n会议确认了新用户引导的上线范围。设计已完成，研发将在周四交付测试版本；团队计划周五前完成内部验收，并于下周一开始小范围发布。\n\n## **核心结论**\n\n- 新用户引导按既定范围上线。\n- 周四交付测试版本，周五前完成内部验收。\n\n## **已确认决定**\n\n- 决定：下周一开始小范围发布。\n- 确认方：会议参与者。\n\n## **行动项**\n\n| **任务** | **负责人** | **截止时间** | **状态** |\n| -------- | ---------- | ------------ | -------- |\n| 交付测试版本 | 开发团队 | 周四 | 待开始 |\n| 完成内部验收 | 未明确 | 周五前 | 待开始 |",
+        "en": "## **Meeting Summary**\n\nThe team confirmed the launch scope for the new-user onboarding flow. Design is complete, engineering will deliver a test build on Thursday, and a limited rollout will begin next Monday after internal acceptance.\n\n## **Key Conclusions**\n\n- The onboarding flow will launch within the agreed scope.\n- The test build is due Thursday and internal acceptance is due by Friday.\n\n## **Confirmed Decisions**\n\n- Decision: Begin a limited rollout next Monday.\n- Confirmed by: Meeting participants.\n\n## **Action Items**\n\n| **Task** | **Owner** | **Due date** | **Status** |\n| -------- | ---------- | ------------ | ---------- |\n| Deliver the test build | Engineering team | Thursday | Not started |\n| Complete internal acceptance | Not specified | By Friday | Not started |",
+        "es": "## **Resumen de la reunión**\n\nEl equipo confirmó el alcance del lanzamiento del flujo de incorporación de nuevos usuarios. El diseño está listo, ingeniería entregará una versión de prueba el jueves y el lanzamiento limitado empezará el próximo lunes tras la validación interna.\n\n## **Conclusiones clave**\n\n- El flujo de incorporación se lanzará dentro del alcance acordado.\n- La versión de prueba se entrega el jueves y la validación interna termina antes del viernes.\n\n## **Decisiones confirmadas**\n\n- Decisión: Iniciar un lanzamiento limitado el próximo lunes.\n- Confirmado por: Participantes de la reunión.\n\n## **Acciones**\n\n| **Tarea** | **Responsable** | **Fecha límite** | **Estado** |\n| --------- | --------------- | ---------------- | ---------- |\n| Entregar la versión de prueba | Equipo de ingeniería | Jueves | Sin iniciar |\n| Completar la validación interna | No especificado | Antes del viernes | Sin iniciar |",
+        "ja": "## **会議概要**\n\nチームは新規ユーザー向けオンボーディングのリリース範囲を確認しました。デザインは完了しており、開発チームは木曜日にテストビルドを提供し、社内受け入れ後の翌週月曜日に限定公開を開始します。\n\n## **主要な結論**\n\n- 合意した範囲でオンボーディングをリリースします。\n- テストビルドは木曜日、社内受け入れは金曜日までです。\n\n## **確定した決定**\n\n- 決定：翌週月曜日に限定公開を開始する。\n- 確認者：会議参加者。\n\n## **アクション項目**\n\n| **タスク** | **担当者** | **期限** | **状態** |\n| ---------- | ---------- | -------- | -------- |\n| テストビルドを提供する | 開発チーム | 木曜日 | 未着手 |\n| 社内受け入れを完了する | 未確認 | 金曜日まで | 未着手 |",
+        "ko": "## **회의 요약**\n\n팀은 신규 사용자 온보딩 흐름의 출시 범위를 확정했습니다. 디자인은 완료되었고 개발팀은 목요일에 테스트 빌드를 제공하며, 내부 승인 후 다음 주 월요일에 제한 출시를 시작합니다.\n\n## **핵심 결론**\n\n- 합의된 범위 안에서 온보딩 흐름을 출시합니다.\n- 테스트 빌드는 목요일까지, 내부 승인은 금요일까지 완료합니다.\n\n## **확정된 결정**\n\n- 결정: 다음 주 월요일에 제한 출시를 시작합니다.\n- 확인자: 회의 참석자.\n\n## **실행 항목**\n\n| **작업** | **담당자** | **기한** | **상태** |\n| -------- | ---------- | -------- | -------- |\n| 테스트 빌드 제공 | 개발팀 | 목요일 | 시작 전 |\n| 내부 승인 완료 | 미정 | 금요일까지 | 시작 전 |",
+        "fr": "## **Résumé de la réunion**\n\nL’équipe a confirmé le périmètre de lancement du parcours d’accueil des nouveaux utilisateurs. La conception est terminée, l’équipe d’ingénierie livrera une version de test jeudi et un déploiement limité commencera lundi prochain après la validation interne.\n\n## **Conclusions clés**\n\n- Le parcours d’accueil sera lancé dans le périmètre convenu.\n- La version de test est attendue jeudi et la validation interne avant vendredi.\n\n## **Décisions confirmées**\n\n- Décision : commencer un déploiement limité lundi prochain.\n- Confirmé par : les participants à la réunion.\n\n## **Actions**\n\n| **Tâche** | **Responsable** | **Échéance** | **Statut** |\n| --------- | --------------- | ------------ | ---------- |\n| Livrer la version de test | Équipe d’ingénierie | Jeudi | Non commencé |\n| Finaliser la validation interne | Non précisé | Avant vendredi | Non commencé |",
+        "de": "## **Besprechungszusammenfassung**\n\nDas Team hat den Umfang für den Start des neuen Onboarding-Ablaufs bestätigt. Das Design ist fertig, das Entwicklungsteam liefert am Donnerstag einen Test-Build und nach der internen Abnahme beginnt nächsten Montag eine begrenzte Einführung.\n\n## **Kernpunkte**\n\n- Der Onboarding-Ablauf wird im vereinbarten Umfang gestartet.\n- Der Test-Build ist am Donnerstag, die interne Abnahme bis Freitag fällig.\n\n## **Bestätigte Entscheidungen**\n\n- Entscheidung: Begrenzte Einführung ab nächsten Montag.\n- Bestätigt durch: Die Besprechungsteilnehmer.\n\n## **Aufgaben**\n\n| **Aufgabe** | **Verantwortlich** | **Frist** | **Status** |\n| ----------- | ------------------ | --------- | ---------- |\n| Test-Build liefern | Entwicklungsteam | Donnerstag | Nicht begonnen |\n| Interne Abnahme abschließen | Nicht angegeben | Bis Freitag | Nicht begonnen |",
+        "ru": "## **Краткое содержание встречи**\n\nКоманда подтвердила объём запуска нового сценария адаптации пользователей. Дизайн готов, команда разработки предоставит тестовую сборку в четверг, а ограниченный запуск начнётся в следующий понедельник после внутренней приёмки.\n\n## **Ключевые выводы**\n\n- Сценарий адаптации будет запущен в согласованном объёме.\n- Тестовая сборка должна быть готова в четверг, внутренняя приёмка — к пятнице.\n\n## **Подтверждённые решения**\n\n- Решение: начать ограниченный запуск в следующий понедельник.\n- Подтвердили: участники встречи.\n\n## **Задачи**\n\n| **Задача** | **Ответственный** | **Срок** | **Статус** |\n| ---------- | ----------------- | -------- | ---------- |\n| Предоставить тестовую сборку | Команда разработки | Четверг | Не начато |\n| Завершить внутреннюю приёмку | Не указан | До пятницы | Не начато |",
+    }
+    return f"# **{example['title']}**\n\n{notes[example['locale']]}"
+
+
 class MeetingStoreMixin:
     def create_meeting(self, payload):
         """创建录制中的会议及其音频、导出目录。
@@ -90,7 +105,7 @@ class MeetingStoreMixin:
         return [self._meeting(row) for row in rows]
 
     def seed_examples(self):
-        """按版本写入三语示例会议和录音。
+        """按版本写入所有界面语言的示例会议和录音。
 
         已被用户删除的示例带有 tombstone，升级种子数据时也不会重新创建。
 
@@ -103,7 +118,7 @@ class MeetingStoreMixin:
         )
         with self.connect() as db:
             if db.execute(
-                "SELECT 1 FROM app_meta WHERE key='examples_seeded_v3'"
+                "SELECT 1 FROM app_meta WHERE key='examples_seeded_v5'"
             ).fetchone():
                 return False
             now = utc_now()
@@ -138,8 +153,8 @@ class MeetingStoreMixin:
                     (
                         example["id"],
                         example["title"],
-                        example["locale"],
-                        "en" if example["locale"] == "zh" else "zh",
+                        example.get("language", example["locale"]),
+                        example.get("target_language", "en" if example["locale"] == "zh" else "zh"),
                         "paraformer-zh-en-int8",
                         "funasr-nano-int8",
                         example["category"],
@@ -161,14 +176,12 @@ class MeetingStoreMixin:
                         for speaker_id, name in example["speakers"].items()
                     ),
                 )
+                db.execute("DELETE FROM segments WHERE meeting_id=?", (example["id"],))
                 db.executemany(
-                    """INSERT OR IGNORE INTO segments
+                    """INSERT INTO segments
                         (id,meeting_id,version,track,start_ms,end_ms,speaker,text,translation)
                         VALUES(?,?,?,?,?,?,?,?,?)
-                        ON CONFLICT(meeting_id,id,version) DO UPDATE SET
-                        start_ms=excluded.start_ms,end_ms=excluded.end_ms,
-                        speaker=excluded.speaker,text=excluded.text,
-                        translation=excluded.translation""",
+                    """,
                     (
                         (
                             f"example-{example['locale']}-{index}",
@@ -190,8 +203,14 @@ class MeetingStoreMixin:
                         ) in enumerate(example["segments"], 1)
                     ),
                 )
+                db.execute(
+                    """INSERT INTO summaries(meeting_id,data,raw_response,created_at) VALUES(?,?,?,?)
+                       ON CONFLICT(meeting_id) DO UPDATE SET
+                       data=excluded.data,raw_response=excluded.raw_response,created_at=excluded.created_at""",
+                    (example["id"], json.dumps({"markdown": example_note(example)}, ensure_ascii=False), "example", now),
+                )
             db.execute(
-                "INSERT INTO app_meta(key,value) VALUES('examples_seeded_v3',?)",
+                "INSERT INTO app_meta(key,value) VALUES('examples_seeded_v5',?)",
                 (now,),
             )
         return True
@@ -235,7 +254,10 @@ class MeetingStoreMixin:
                 (meeting_id,),
             ).fetchall()
         result = self._meeting(row)
-        result["segments"] = [dict(segment) for segment in segments]
+        result["segments"] = [
+            {**dict(segment), "word_timestamps": json.loads(segment["word_timestamps"]) if segment["word_timestamps"] else []}
+            for segment in segments
+        ]
         result["speakers"] = [dict(speaker) for speaker in speakers]
         result["speaker_turns"] = [dict(turn) for turn in speaker_turns]
         result["summary"] = (

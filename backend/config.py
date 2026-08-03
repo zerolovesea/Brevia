@@ -49,10 +49,11 @@ def _validate(value, template):
                 raise ValueError(f"Invalid setting: {key}")
             if key == "num_speakers" and current != -1 and not 1 <= current <= 20:
                 raise ValueError("num_speakers must be -1 or between 1 and 20")
+            if key == "cluster_threshold" and not 0 <= current <= 2:
+                raise ValueError(f"Invalid setting: {key}")
             if (
                 key
                 in {
-                    "cluster_threshold",
                     "online_similarity_threshold",
                     "microphone_target_rms",
                     "microphone_minimum_rms",

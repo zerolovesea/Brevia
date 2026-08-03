@@ -324,7 +324,7 @@ function registerIpc() {
   handleModelRequirement('meeting.refine', id.extend({
     refined_model_id: z.string().min(1).optional(),
     num_speakers: z.number().int().min(-1).max(20).optional(),
-    cluster_threshold: z.number().min(0).max(1).optional(),
+    cluster_threshold: z.number().min(0).max(2).optional(),
   }), 'meeting.refine');
   handleModelRequirement('meeting.separate', id, 'meeting.separate');
   handle('speaker.rename', id.extend({ speaker_id: z.string(), name: z.string().trim().min(1).max(32), locked: z.boolean().optional() }), 'speaker.rename');

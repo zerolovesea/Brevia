@@ -25,17 +25,18 @@ class TranscriptStoreMixin:
             int(payload["end_ms"]),
             payload.get("speaker", "spk-1"),
             payload["text"].strip(),
+            json.dumps(payload.get("word_timestamps"), ensure_ascii=False) if payload.get("word_timestamps") else None,
             payload.get("translation"),
             int(payload.get("user_edited", False)),
         )
         with self.connect() as db:
             cursor = db.execute(
                 """INSERT INTO segments
-                    (id,meeting_id,revision,version,track,start_ms,end_ms,speaker,text,translation,user_edited)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                    (id,meeting_id,revision,version,track,start_ms,end_ms,speaker,text,word_timestamps,translation,user_edited)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
                     ON CONFLICT(meeting_id,id,version) DO UPDATE SET
                     revision=excluded.revision,end_ms=excluded.end_ms,speaker=excluded.speaker,
-                    text=excluded.text,translation=excluded.translation
+                    text=excluded.text,word_timestamps=excluded.word_timestamps,translation=excluded.translation
                     WHERE segments.user_edited=0""",
                 values,
             )
@@ -78,8 +79,8 @@ class TranscriptStoreMixin:
             )
             db.executemany(
                 """INSERT INTO segments
-                    (id,meeting_id,revision,version,track,start_ms,end_ms,speaker,text,translation,user_edited)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                    (id,meeting_id,revision,version,track,start_ms,end_ms,speaker,text,word_timestamps,translation,user_edited)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
                 [
                     (
                         item["segment_id"],
@@ -91,6 +92,7 @@ class TranscriptStoreMixin:
                         int(item["end_ms"]),
                         item["speaker"],
                         item["text"].strip(),
+                        json.dumps(item.get("word_timestamps"), ensure_ascii=False) if item.get("word_timestamps") else None,
                         item.get("translation"),
                         0,
                     )

@@ -593,6 +593,7 @@ class RefinedASR:
 
         """
         model = manager.get(model_id)
+        self.model_id = model_id
         if model["kind"] not in {
             "qwen3",
             "whisper",
@@ -644,10 +645,29 @@ class RefinedASR:
 
     def decode(self, samples, sample_rate=16000):
         """转写一段单声道浮点波形，返回去除首尾空白的文本。"""
+        return self.decode_words(samples, sample_rate)[0]
+
+    def decode_words(self, samples, sample_rate=16000):
+        """返回文本及模型提供的 token 级时间戳；不接受插值时间戳。"""
         stream = self.recognizer.create_stream()
         stream.accept_waveform(sample_rate, samples)
         self.recognizer.decode_stream(stream)
-        return stream.result.text.strip()
+        result = stream.result
+        tokens = list(getattr(result, "tokens", []) or [])
+        timestamps = list(getattr(result, "timestamps", []) or [])
+        if not tokens or len(tokens) != len(timestamps):
+            raise RuntimeError(
+                f"Model {self.model_id} does not provide token timestamps; choose Whisper Turbo"
+            )
+        words = []
+        for index, token in enumerate(tokens):
+            if not token or token.startswith("<|"):
+                continue
+            text = token.replace("▁", " ")
+            start_ms = round(float(timestamps[index]) * 1000)
+            end_ms = round(float(timestamps[index + 1]) * 1000) if index + 1 < len(timestamps) else start_ms + 200
+            words.append({"text": text, "start_ms": start_ms, "end_ms": max(start_ms + 1, end_ms)})
+        return result.text.strip(), words
 
 
 class OfflineDiarizer:

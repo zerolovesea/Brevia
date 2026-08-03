@@ -1,3 +1,10 @@
+function stopMediaStream(stream) {
+  for (const track of [...(stream?.getVideoTracks() || []), ...(stream?.getAudioTracks() || [])]) {
+    if (track.readyState !== 'live') continue;
+    try { track.stop(); } catch { /* Continue stopping the remaining tracks. */ }
+  }
+}
+
 class AudioCapture {
   constructor(send, onLevel) {
     this.send = send;
@@ -18,7 +25,7 @@ class AudioCapture {
     const results = await Promise.allSettled(requests.map(({ stream }) => stream));
     const failed = results.findIndex(({ status }) => status === 'rejected');
     if (failed >= 0) {
-      results.filter(({ status }) => status === 'fulfilled').forEach(({ value }) => value.getTracks().forEach((track) => track.stop()));
+      results.filter(({ status }) => status === 'fulfilled').forEach(({ value }) => stopMediaStream(value));
       const label = requests[failed].track === 'system' ? '系统音频' : '麦克风';
       throw new Error(`无法获取${label}，请检查系统权限后重试`);
     }
@@ -34,7 +41,7 @@ class AudioCapture {
     if (this.preview) return;
     const stream = await navigator.mediaDevices.getUserMedia({ audio: { autoGainControl: true, echoCancellation: true, noiseSuppression: true } });
     if (!stream.getAudioTracks().length) {
-      stream.getTracks().forEach((track) => track.stop());
+      stopMediaStream(stream);
       throw new Error('麦克风没有可用的音频轨道');
     }
     const resource = { stream, context: new AudioContext() };
@@ -129,9 +136,7 @@ class AudioCapture {
     for (const node of [processor, source, mute]) {
       try { node?.disconnect(); } catch { /* It may not have connected yet. */ }
     }
-    stream?.getTracks().forEach((track) => {
-      try { track.stop(); } catch { /* Continue releasing the remaining resources. */ }
-    });
+    stopMediaStream(stream);
     if (context?.state !== 'closed') {
       try { await context.close(); } catch (error) { console.error('Audio context cleanup failed', error); }
     }

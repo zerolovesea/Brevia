@@ -32,16 +32,103 @@
   {
     "id": "00000000-0000-4000-8000-000000000003",
     "locale": "es",
+    "language": "en",
+    "target_language": "es",
     "title": "Ejemplo · Reunión de lanzamiento",
     "category": "Ejemplo",
     "tags": ["Producto", "Lanzamiento"],
-    "audio": "example-es.wav",
-    "duration_ms": 16393,
-    "speakers": {"spk-1": "Lucía", "spk-2": "Mateo"},
+    "audio": "example-en.wav",
+    "duration_ms": 14814,
+    "speakers": {"spk-1": "Maya", "spk-2": "Noah"},
     "segments": [
-      [0, 5155, "spk-1", "Buenos días. Hoy tenemos que confirmar el alcance del lanzamiento para los nuevos usuarios.", "大家早上好，今天我们需要确认新用户引导的上线范围。"],
-      [5155, 10217, "spk-2", "El diseño está listo y el equipo de desarrollo puede entregar una versión de prueba el jueves.", "设计已经完成，开发团队可以在周四交付测试版本。"],
-      [10217, 16393, "spk-1", "Perfecto. Terminaremos la validación interna el viernes y empezaremos el lanzamiento limitado el lunes.", "很好，我们将在周五完成内部验收，并于周一开始小范围发布。"]
+      [0, 5016, "spk-1", "Good morning. Today we need to confirm the launch scope for the new user onboarding flow.", "Buenos días. Hoy tenemos que confirmar el alcance del lanzamiento del flujo de incorporación para nuevos usuarios."],
+      [5016, 8777, "spk-2", "The design is ready, and the engineering team can deliver a test build on Thursday.", "El diseño está listo y el equipo de ingeniería puede entregar una versión de prueba el jueves."],
+      [8777, 14814, "spk-1", "Great. We will finish internal acceptance by Friday and begin a limited rollout next Monday.", "Perfecto. Terminaremos la validación interna el viernes y empezaremos un lanzamiento limitado el próximo lunes."]
+    ]
+  },
+  {
+    "id": "00000000-0000-4000-8000-000000000004",
+    "locale": "ja",
+    "language": "en",
+    "target_language": "ja",
+    "title": "例 · プロダクトローンチ同期会",
+    "category": "サンプル",
+    "tags": ["プロダクト", "ローンチ"],
+    "audio": "example-en.wav",
+    "duration_ms": 14814,
+    "speakers": {"spk-1": "Maya", "spk-2": "Noah"},
+    "segments": [
+      [0, 5016, "spk-1", "Good morning. Today we need to confirm the launch scope for the new user onboarding flow.", "おはようございます。本日は新規ユーザー向けオンボーディングフローのリリース範囲を確認します。"],
+      [5016, 8777, "spk-2", "The design is ready, and the engineering team can deliver a test build on Thursday.", "デザインは完了しており、開発チームは木曜日にテストビルドを提供できます。"],
+      [8777, 14814, "spk-1", "Great. We will finish internal acceptance by Friday and begin a limited rollout next Monday.", "では、金曜日までに社内受け入れを完了し、次の月曜日から限定公開を開始します。"]
+    ]
+  },
+  {
+    "id": "00000000-0000-4000-8000-000000000005",
+    "locale": "ko",
+    "language": "en",
+    "target_language": "ko",
+    "title": "예시 · 제품 출시 동기화",
+    "category": "예시",
+    "tags": ["제품", "출시"],
+    "audio": "example-en.wav",
+    "duration_ms": 14814,
+    "speakers": {"spk-1": "Maya", "spk-2": "Noah"},
+    "segments": [
+      [0, 5016, "spk-1", "Good morning. Today we need to confirm the launch scope for the new user onboarding flow.", "좋은 아침입니다. 오늘은 신규 사용자 온보딩 흐름의 출시 범위를 확정해야 합니다."],
+      [5016, 8777, "spk-2", "The design is ready, and the engineering team can deliver a test build on Thursday.", "디자인이 준비되었고 개발팀은 목요일에 테스트 빌드를 제공할 수 있습니다."],
+      [8777, 14814, "spk-1", "Great. We will finish internal acceptance by Friday and begin a limited rollout next Monday.", "좋습니다. 금요일까지 내부 승인을 마치고 다음 주 월요일부터 제한적으로 출시하겠습니다."]
+    ]
+  },
+  {
+    "id": "00000000-0000-4000-8000-000000000006",
+    "locale": "fr",
+    "language": "en",
+    "target_language": "fr",
+    "title": "Exemple · Synchronisation du lancement produit",
+    "category": "Exemple",
+    "tags": ["Produit", "Lancement"],
+    "audio": "example-en.wav",
+    "duration_ms": 14814,
+    "speakers": {"spk-1": "Maya", "spk-2": "Noah"},
+    "segments": [
+      [0, 5016, "spk-1", "Good morning. Today we need to confirm the launch scope for the new user onboarding flow.", "Bonjour. Nous devons aujourd’hui confirmer le périmètre de lancement du parcours d’accueil des nouveaux utilisateurs."],
+      [5016, 8777, "spk-2", "The design is ready, and the engineering team can deliver a test build on Thursday.", "La conception est prête et l’équipe d’ingénierie peut livrer une version de test jeudi."],
+      [8777, 14814, "spk-1", "Great. We will finish internal acceptance by Friday and begin a limited rollout next Monday.", "Parfait. Nous terminerons la validation interne vendredi et commencerons un déploiement limité lundi prochain."]
+    ]
+  },
+  {
+    "id": "00000000-0000-4000-8000-000000000007",
+    "locale": "de",
+    "language": "en",
+    "target_language": "de",
+    "title": "Beispiel · Abstimmung zum Produktstart",
+    "category": "Beispiel",
+    "tags": ["Produkt", "Start"],
+    "audio": "example-en.wav",
+    "duration_ms": 14814,
+    "speakers": {"spk-1": "Maya", "spk-2": "Noah"},
+    "segments": [
+      [0, 5016, "spk-1", "Good morning. Today we need to confirm the launch scope for the new user onboarding flow.", "Guten Morgen. Heute müssen wir den Umfang der Einführung des neuen Onboarding-Ablaufs bestätigen."],
+      [5016, 8777, "spk-2", "The design is ready, and the engineering team can deliver a test build on Thursday.", "Das Design ist fertig, und das Entwicklungsteam kann am Donnerstag einen Test-Build liefern."],
+      [8777, 14814, "spk-1", "Great. We will finish internal acceptance by Friday and begin a limited rollout next Monday.", "Gut. Wir schließen die interne Abnahme bis Freitag ab und beginnen nächsten Montag mit einer begrenzten Einführung."]
+    ]
+  },
+  {
+    "id": "00000000-0000-4000-8000-000000000008",
+    "locale": "ru",
+    "language": "en",
+    "target_language": "ru",
+    "title": "Пример · Синхронизация запуска продукта",
+    "category": "Пример",
+    "tags": ["Продукт", "Запуск"],
+    "audio": "example-en.wav",
+    "duration_ms": 14814,
+    "speakers": {"spk-1": "Maya", "spk-2": "Noah"},
+    "segments": [
+      [0, 5016, "spk-1", "Good morning. Today we need to confirm the launch scope for the new user onboarding flow.", "Доброе утро. Сегодня нам нужно подтвердить объём запуска нового сценария адаптации пользователей."],
+      [5016, 8777, "spk-2", "The design is ready, and the engineering team can deliver a test build on Thursday.", "Дизайн готов, и команда разработки может предоставить тестовую сборку в четверг."],
+      [8777, 14814, "spk-1", "Great. We will finish internal acceptance by Friday and begin a limited rollout next Monday.", "Отлично. Мы завершим внутреннюю приёмку к пятнице и начнём ограниченный запуск в следующий понедельник."]
     ]
   }
 ]
