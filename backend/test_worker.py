@@ -1144,6 +1144,12 @@ class WorkerTest(unittest.TestCase):
         )
         release.set()
 
+    def test_pausing_a_finished_model_download_is_a_noop(self):
+        self.assertEqual(
+            self.worker.pause_model({"model_id": "paraformer-zh-en-int8"})["status"],
+            "not_downloading",
+        )
+
     def test_task_pause_and_resume_control(self):
         control = self.worker.begin_task("meeting.refine", "meeting-1")
         with self.assertRaisesRegex(ValueError, "already running"):

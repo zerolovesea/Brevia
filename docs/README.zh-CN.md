@@ -61,7 +61,7 @@ flowchart LR
   C -. 明确授权 .-> F[可选云端 API<br/>摘要 · 翻译]
 ```
 
-Brevia 采用严格的本地优先设计。渲染进程不打开网络端口。Electron 使用 Zod 验证所有 IPC 消息。主进程启动一个 Python Worker，统一管理模型下载、音频处理、本地存储和文件导出。数据默认存储在 `~/Library/Application Support/Brevia`（macOS）或 `%APPDATA%/Brevia`（Windows）。
+Brevia 采用严格的本地优先设计。渲染进程不打开网络端口。Electron 使用 Zod 验证所有 IPC 消息。主进程启动一个 Python Worker，统一管理模型下载、音频处理、本地存储和文件导出。数据默认存储在 `~/brevia`。
 
 ## 技术栈
 
@@ -134,8 +134,7 @@ xattr -dr com.apple.quarantine "/Applications/Brevia.app"
 <details>
 <summary><strong>数据存储在哪里？</strong></summary>
 
-- macOS：`~/Library/Application Support/Brevia`
-- Windows：`%APPDATA%/Brevia`
+- 默认：`~/brevia`
 
 录音、逐字稿和说话人档案全部保存在本地。设置 `BREVIA_DATA_DIR` 可自定义存储位置。
 </details>

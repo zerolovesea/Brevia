@@ -39,7 +39,7 @@ class ModelTaskWorkerMixin:
         with self.model_downloads_lock:
             download = self.model_downloads.get(model_id)
             if not download or download["cancelled"].is_set():
-                raise ValueError("Model is not downloading")
+                return {"model_id": model_id, "status": "not_downloading"}
             download["paused"].set()
         self.emit("model.status", {"model_id": model_id, "status": "paused"})
         return {"model_id": model_id, "status": "paused"}

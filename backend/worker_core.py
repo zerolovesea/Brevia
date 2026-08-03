@@ -26,7 +26,7 @@ class WorkerCore:
         """
         root = root or os.environ.get(
             "BREVIA_DATA_DIR",
-            Path.home() / "Library" / "Application Support" / "Brevia",
+            Path.home() / "brevia",
         )
         self.output = output or (
             lambda value: print(json.dumps(value, ensure_ascii=False), flush=True)

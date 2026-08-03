@@ -1,6 +1,6 @@
 const { app, BrowserWindow, desktopCapturer, dialog, ipcMain, safeStorage, session, shell, systemPreferences } = require('electron');
 const { spawn } = require('node:child_process');
-const { copyFile, mkdir, readFile, rename, writeFile } = require('node:fs/promises');
+const { appendFile, copyFile, mkdir, readFile, rename, writeFile } = require('node:fs/promises');
 const { existsSync } = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
@@ -21,7 +21,27 @@ const packagedRoot = app.isPackaged ? process.resourcesPath : root;
 const startupAnimationMs = 1400;
 const startupDataWaitMs = 2200;
 const resetOnboarding = process.argv.includes('--reset-onboarding');
-const dataDir = () => app.getPath('userData');
+const dataDir = () => path.join(app.getPath('home'), 'brevia');
+const legacyDataDir = () => app.getPath('userData');
+const logsDir = () => path.join(dataDir(), 'logs');
+const logFile = () => path.join(logsDir(), 'brevia.log');
+const logText = (value) => value instanceof Error ? value.stack || value.message : typeof value === 'string' ? value : JSON.stringify(value);
+const writeLog = (level, value) => {
+  const line = `${new Date().toISOString()} [${level}] ${logText(value).trim()}\n`;
+  void mkdir(logsDir(), { recursive: true }).then(() => appendFile(logFile(), line, 'utf8')).catch(() => {});
+};
+const migrateDataDir = async () => {
+  const source = legacyDataDir();
+  if (!existsSync(source) || existsSync(path.join(dataDir(), 'brevia.db'))) return;
+  await mkdir(dataDir(), { recursive: true });
+  for (const name of ['advanced-settings.json', 'brevia.db', 'brevia.db-shm', 'brevia.db-wal', 'meetings', 'models', 'speaker-profiles', 'summary-models.json', 'secrets', 'tts', 'logs']) {
+    const from = path.join(source, name);
+    const to = path.join(dataDir(), name);
+    if (!existsSync(from) || existsSync(to)) continue;
+    await rename(from, to);
+  }
+};
+app.setAppLogsPath(logsDir());
 const command = z.object({ type: z.string().min(1), payload: z.record(z.string(), z.unknown()).default({}) });
 const workerResponse = z.discriminatedUnion('ok', [
   z.object({ id: z.string().min(1), ok: z.literal(true), result: z.unknown() }).strict(),
@@ -116,18 +136,24 @@ class WorkerClient {
       lines.filter(Boolean).forEach((line) => {
         try { this.receive(workerMessage.parse(JSON.parse(line))); }
         catch (error) {
+          writeLog('ERROR', error);
           this.fail(error);
           this.sendEvent('worker:log', { message: `Invalid worker output: ${error.message}` });
         }
       });
     });
     child.stderr.setEncoding('utf8');
-    child.stderr.on('data', (message) => this.sendEvent('worker:log', { message }));
+    child.stderr.on('data', (message) => {
+      writeLog('WARNING', message);
+      this.sendEvent('worker:log', { message });
+    });
     child.on('error', (error) => this.fail(error));
     child.on('exit', (code) => this.closed(code, child));
   }
 
   receive(message) {
+    if (message.type === 'worker.error' || (message.type === 'model.status' && message.payload.status === 'failed')) writeLog('ERROR', message.payload);
+    if (message.type === 'worker.warning') writeLog('WARNING', message.payload);
     if (message.id) {
       const pending = this.pending.get(message.id);
       if (!pending) return;
@@ -196,12 +222,14 @@ let startupInitialization;
 
 function reportMainError(error, fatal = false) {
   const message = error instanceof Error ? error.message : String(error);
+  writeLog('ERROR', error);
   console.error(error);
   try { worker.sendEvent('worker.error', { message, fatal }); } catch { /* The app may not have a window yet. */ }
 }
 
 process.on('unhandledRejection', (error) => reportMainError(error));
 process.on('uncaughtException', (error) => reportMainError(error, true));
+process.on('warning', (warning) => writeLog('WARNING', warning));
 
 function initializeWorker() {
   if (!startupInitialization) {
@@ -214,7 +242,14 @@ function initializeWorker() {
 }
 
 function handle(channel, schema, type = channel) {
-  ipcMain.handle(channel, (_, payload = {}) => worker.request(type, schema.parse(payload)));
+  ipcMain.handle(channel, async (_, payload = {}) => {
+    try {
+      return await worker.request(type, schema.parse(payload));
+    } catch (error) {
+      writeLog('ERROR', `${type}: ${logText(error)}`);
+      throw error;
+    }
+  });
 }
 
 function requiredModels(error) {
@@ -527,7 +562,8 @@ function createWindow() {
   return window;
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  await migrateDataDir().catch((error) => writeLog('WARNING', `data migration: ${logText(error)}`));
   session.defaultSession.setPermissionCheckHandler((_, permission) => permission === 'media' || permission === 'display-capture');
   session.defaultSession.setPermissionRequestHandler((_, permission, callback) => callback(permission === 'media' || permission === 'display-capture'));
   session.defaultSession.setDisplayMediaRequestHandler(async (_, callback) => {

@@ -1,7 +1,7 @@
 # Brevia Worker
 
 桌面主进程通过 stdin/stdout JSONL 驱动此常驻 Python Worker。数据默认写入
-`~/Library/Application Support/Brevia`，开发和测试可用 `BREVIA_DATA_DIR` 覆盖。
+`~/brevia`，开发和测试可用 `BREVIA_DATA_DIR` 覆盖。
 
 ```bash
 /opt/anaconda3/bin/python3.12 -m pip install -r backend/requirements.txt

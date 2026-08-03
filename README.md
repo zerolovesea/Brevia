@@ -61,7 +61,7 @@ flowchart LR
   C -. explicit consent .-> F[Optional cloud API<br/>summary · translation]
 ```
 
-Brevia follows a strict local-first design. The renderer never opens a network port. Electron validates all IPC payloads with Zod schemas. The main process launches a single Python worker that owns model management, audio processing, local storage, and file exports. Data lives in `~/Library/Application Support/Brevia` (macOS) or `%APPDATA%/Brevia` (Windows) by default.
+Brevia follows a strict local-first design. The renderer never opens a network port. Electron validates all IPC payloads with Zod schemas. The main process launches a single Python worker that owns model management, audio processing, local storage, and file exports. Data lives in `~/brevia` by default.
 
 ## Tech stack
 
@@ -134,8 +134,7 @@ No. Release builds bundle the Python runtime and all required dependencies. A se
 <details>
 <summary><strong>Where is my data stored?</strong></summary>
 
-- macOS: `~/Library/Application Support/Brevia`
-- Windows: `%APPDATA%/Brevia`
+- Default: `~/brevia`
 
 Recordings, transcripts, and speaker profiles all stay on-device. Set `BREVIA_DATA_DIR` to override.
 </details>
