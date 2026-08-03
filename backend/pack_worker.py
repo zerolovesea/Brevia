@@ -33,6 +33,8 @@ PyInstaller.__main__.run(
         "sherpa_onnx",
         "--collect-data",
         "sherpa_onnx",
+        "--collect-data",
+        "certifi",
         "--exclude-module",
         "onnxruntime",
         "--add-data",
