@@ -181,35 +181,21 @@ class RefinementWorkerMixin:
                                 labeled[index] = labeled[nearest_index]
                             if index in labeled:
                                 turn["speaker"] = f"spk-{labeled[index] + 1}"
-                    profile_evidence = {}
                     for turn, embedding in zip(turns, turn_embeddings):
                         if embedding is None:
                             continue
-                        duration_ms = turn["end_ms"] - turn["start_ms"]
-                        evidence = profile_evidence.setdefault(
-                            turn["speaker"], {"duration_ms": 0, "profiles": {}}
-                        )
-                        evidence["duration_ms"] += duration_ms
                         profile = self.store.match_speaker_profile(
                             embedding,
                             SETTINGS["diarization"]["online_similarity_threshold"],
                         )
-                        if profile:
-                            match = evidence["profiles"].setdefault(
-                                profile["id"], {**profile, "duration_ms": 0}
+                        if self._is_confident_profile_match(profile):
+                            turn["speaker"] = f"profile-{profile['id']}"
+                            self.store.rename_speaker(
+                                meeting["id"],
+                                f"profile-{profile['id']}",
+                                profile["name"],
+                                profile_id=profile["id"],
                             )
-                            match["duration_ms"] += duration_ms
-                    assignments = self._profile_assignments(profile_evidence)
-                    for diarized_speaker, profile in assignments.items():
-                        for turn in turns:
-                            if turn["speaker"] == diarized_speaker:
-                                turn["speaker"] = f"profile-{profile['id']}"
-                        self.store.rename_speaker(
-                            meeting["id"],
-                            f"profile-{profile['id']}",
-                            profile["name"],
-                            profile_id=profile["id"],
-                        )
                 except RuntimeError:
                     pass
             raw_turns_by_track[track] = turns
@@ -501,18 +487,8 @@ class RefinementWorkerMixin:
         return stable
 
     @staticmethod
-    def _profile_assignments(evidence):
-        """仅在多数可用音频命中时，统一整个离线说话人簇的实名。"""
-        assignments = {}
-        for speaker, item in evidence.items():
-            profile = max(
-                item["profiles"].values(),
-                key=lambda candidate: candidate["duration_ms"],
-                default=None,
-            )
-            if profile and profile["duration_ms"] * 2 >= item["duration_ms"]:
-                assignments[speaker] = profile
-        return assignments
+    def _is_confident_profile_match(profile):
+        return profile and profile["score"] - profile["runner_up_score"] >= 0.08
 
     @staticmethod
     def _auto_cluster_embeddings(embeddings, durations):

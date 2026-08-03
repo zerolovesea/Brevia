@@ -160,9 +160,13 @@ class WorkerCore:
     def initialize(self, _):
         """返回首屏状态，并把可延后的启动维护放入后台。"""
         seeded_examples = self.store.seed_examples()
-        denoiser_id = SETTINGS["live_asr"]["denoiser_model_id"]
-        if not self.models.is_ready(denoiser_id):
-            self.download_model({"model_id": denoiser_id})
+        for model_id in (
+            SETTINGS["live_asr"]["denoiser_model_id"],
+            SETTINGS["punctuation"]["english_model_id"],
+            SETTINGS["punctuation"]["chinese_model_id"],
+        ):
+            if not self.models.is_ready(model_id):
+                self.download_model({"model_id": model_id})
         return {
             "meetings": self.store.list_meetings(),
             "models": self.models.list(),

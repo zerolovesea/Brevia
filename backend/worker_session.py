@@ -356,6 +356,7 @@ class RecordingSessionMixin:
             state["revision"] += 1
             segment_id = f"{payload['track']}-{state['segment']}"
             speaker = "local-user" if payload["track"] == "mic" else "spk-1"
+            speaker_name = "Local user" if speaker == "local-user" else None
             segment_audio = (
                 numpy.concatenate(state["audio"])
                 if final
@@ -365,11 +366,10 @@ class RecordingSessionMixin:
             )
             if (
                 final
-                and payload["track"] == "system"
                 and self.speaker_tracker
                 and segment_audio is not None
             ):
-                speaker = self._identify_speaker(
+                speaker, speaker_name = self._identify_speaker(
                     self.active,
                     self.speaker_tracker,
                     segment_audio,
@@ -383,7 +383,7 @@ class RecordingSessionMixin:
                 "start_ms": state["start_ms"],
                 "end_ms": end_ms,
                 "speaker": speaker,
-                "speaker_name": "Local user" if speaker == "local-user" else None,
+                "speaker_name": speaker_name,
                 "track": payload["track"],
             }
             if speaker == "local-user":
@@ -457,7 +457,7 @@ class RecordingSessionMixin:
         """优先匹配已注册人员；未命中时保留会议内的临时说话人 ID。"""
         embedding = tracker.embedding(samples, sample_rate)
         if embedding is None:
-            return tracker.last_speaker or "spk-1"
+            return tracker.last_speaker or "spk-1", None
         profile = self.store.match_speaker_profile(
             embedding, SETTINGS["diarization"]["online_similarity_threshold"]
         )
@@ -466,8 +466,8 @@ class RecordingSessionMixin:
             self.store.rename_speaker(
                 meeting_id, speaker_id, profile["name"], profile_id=profile["id"]
             )
-            return speaker_id
-        return tracker.assign_embedding(embedding)
+            return speaker_id, profile["name"]
+        return tracker.assign_embedding(embedding), None
 
     @synchronized_recording
     def stop(self, payload):

@@ -529,21 +529,9 @@ class WorkerTest(unittest.TestCase):
         ]})
         self.assertEqual(overlaps[0]["speakers"], ["spk-1", "spk-2"])
 
-    def test_profile_assignment_requires_majority_of_cluster_audio(self):
-        evidence = {
-            "spk-1": {
-                "duration_ms": 1000,
-                "profiles": {"known": {"id": "known", "duration_ms": 600}},
-            },
-            "spk-2": {
-                "duration_ms": 1000,
-                "profiles": {"known": {"id": "known", "duration_ms": 400}},
-            },
-        }
-        self.assertEqual(
-            self.worker._profile_assignments(evidence),
-            {"spk-1": evidence["spk-1"]["profiles"]["known"]},
-        )
+    def test_profile_assignment_requires_a_clear_best_match(self):
+        self.assertTrue(self.worker._is_confident_profile_match({"score": 0.82, "runner_up_score": 0.71}))
+        self.assertFalse(self.worker._is_confident_profile_match({"score": 0.82, "runner_up_score": 0.76}))
 
     def test_auto_cluster_embeddings_selects_four_clear_voices(self):
         embeddings = [
@@ -845,13 +833,39 @@ class WorkerTest(unittest.TestCase):
             (self.worker.models, "zipformer-zh-xlarge-streaming-int8"),
         )
 
-    def test_initialize_downloads_the_default_live_denoiser(self):
+    def test_initialize_downloads_default_live_models(self):
         with (
             patch.object(self.worker, "download_model") as download,
             patch.object(self.worker, "_start_startup_maintenance"),
         ):
             self.worker.initialize({})
-        download.assert_called_once_with({"model_id": "gtcrn-live-denoiser"})
+        self.assertEqual(
+            [call.args[0]["model_id"] for call in download.call_args_list],
+            [
+                "gtcrn-live-denoiser",
+                "online-punct-en-int8",
+                "punct-ct-transformer-zh-en-int8",
+            ],
+        )
+
+    def test_live_voiceprint_match_returns_its_name(self):
+        meeting = self.worker.start(
+            {
+                "title": "实时声纹",
+                "language": "zh",
+                "streaming_model_id": "paraformer-zh-en-int8",
+                "refined_model_id": "qwen3-asr-0.6b-int8",
+            }
+        )
+        profile = self.worker.store.save_speaker_profile_sample(
+            "王琳", [1, 0], "known-voice"
+        )
+        tracker = Mock(last_speaker=None)
+        tracker.embedding.return_value = [1, 0]
+        speaker, name = self.worker._identify_speaker(
+            meeting["id"], tracker, [0.1], 16000
+        )
+        self.assertEqual((speaker, name), (f"profile-{profile['id']}", "王琳"))
 
     def test_initialize_defers_maintenance_from_the_first_response(self):
         with (

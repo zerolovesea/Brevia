@@ -381,7 +381,8 @@ const languageModelDefaults = {
 const preferredModelsForLanguage = (language) => languageModelDefaults[language] || languageModelDefaults.default;
 const requiredModelsForLanguage = (language) => {
   const { streaming, refined, diarization } = preferredModelsForLanguage(language);
-  return [streaming, 'silero-vad', 'punct-ct-transformer-zh-en-int8', refined, ...diarization.split('|'), 'gtcrn-live-denoiser', 'spleeter-2stems-fp16'];
+  const punctuation = language === 'en' ? 'online-punct-en-int8' : ['zh', 'yue', 'auto'].includes(language) ? 'punct-ct-transformer-zh-en-int8' : undefined;
+  return [streaming, 'silero-vad', punctuation, refined, ...diarization.split('|'), 'gtcrn-live-denoiser', 'spleeter-2stems-fp16'];
 };
 function requiredModelDetails(language) {
   const [streaming, vad, punctuation, refined, segmentation, embedding, denoiser, separation] = requiredModelsForLanguage(language);
@@ -1125,7 +1126,7 @@ function openOnboardingSetup() {
 
 function updateOnboardingSetup() {
   const languages = [...onboardingPage.querySelectorAll('[name="onboarding-language"]:checked')].map((input) => input.value);
-  const uniqueModelIds = (details) => details.map(([modelId]) => modelId).filter((modelId, index, models) => models.indexOf(modelId) === index && !modelPaths.has(modelId));
+  const uniqueModelIds = (details) => details.map(([modelId]) => modelId).filter((modelId, index, models) => modelId && models.indexOf(modelId) === index);
   const languageModels = uniqueModelIds(languages.flatMap((language) => {
     const [streaming, , , refined] = requiredModelsForLanguage(language);
     return [[streaming], [refined]];
@@ -1134,11 +1135,12 @@ function updateOnboardingSetup() {
     const [, vad, punctuation, , segmentation, embedding, denoiser, separation] = requiredModelsForLanguage(language);
     return [[vad], [punctuation], [segmentation], [embedding], [denoiser], [separation]];
   }));
-  onboardingModelIds = [...languageModels, ...featureModels];
+  const models = [...languageModels, ...featureModels];
+  onboardingModelIds = models.filter((modelId) => !modelPaths.has(modelId));
   const modelSize = (modelId) => modelCatalog.find((model) => model.id === modelId)?.size_bytes || modelSizes[modelIds.indexOf(modelId)] || 0;
   const size = onboardingModelIds.reduce((total, modelId) => total + modelSize(modelId), 0);
   onboardingPage.querySelector('[data-onboarding-estimate]').textContent = formatBytes(size);
-  const renderModels = (models) => models.map((modelId) => `<li><span>${escapeHtml(modelDisplayName(modelId))}</span><small>${formatBytes(modelSize(modelId))}</small></li>`).join('');
+  const renderModels = (models) => models.map((modelId) => `<li><span>${escapeHtml(modelDisplayName(modelId))}</span><small>${modelPaths.has(modelId) ? (modelLabels[locale] || modelLabels.en).installed : formatBytes(modelSize(modelId))}</small></li>`).join('');
   onboardingPage.querySelector('[data-onboarding-language-models]').innerHTML = renderModels(languageModels);
   onboardingPage.querySelector('[data-onboarding-feature-models]').innerHTML = renderModels(featureModels);
 }
@@ -2230,6 +2232,7 @@ const playerTime = document.querySelector('#player-time');
 const playerAudio = new Audio();
 const playButton = document.querySelector('#play');
 let playbackStarted = false;
+let followPlaybackTranscript = true;
 function renderMiniPlayback() {
   const active = activeView !== 'detail' && playbackStarted && Boolean(playerAudio.src) && !playerAudio.ended;
   const wasHidden = miniPlayback.hidden;
@@ -2269,6 +2272,7 @@ function syncPlaybackTranscript() {
   if (!active) return;
   active.classList.add('is-active');
   active.setAttribute('aria-current', 'true');
+  if (!followPlaybackTranscript) return;
   const bodyRect = body.getBoundingClientRect();
   const activeRect = active.getBoundingClientRect();
   body.scrollTo({
@@ -2276,8 +2280,8 @@ function syncPlaybackTranscript() {
     behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
   });
 }
-progress.addEventListener('input', () => { renderPlayerTime(); playerAudio.currentTime = Number(progress.value); syncPlaybackTranscript(); });
-document.addEventListener('click', (event) => { const button = event.target.closest('.jump'); if (button) { progress.value = button.dataset.time; playerAudio.currentTime = Number(button.dataset.time); renderPlayerTime(); syncPlaybackTranscript(); showToast(message('located')); } });
+progress.addEventListener('input', () => { followPlaybackTranscript = true; renderPlayerTime(); playerAudio.currentTime = Number(progress.value); syncPlaybackTranscript(); });
+document.addEventListener('click', (event) => { const button = event.target.closest('.jump'); if (button) { followPlaybackTranscript = true; progress.value = button.dataset.time; playerAudio.currentTime = Number(button.dataset.time); renderPlayerTime(); syncPlaybackTranscript(); showToast(message('located')); } });
 playButton.addEventListener('click', async () => {
   if (!playerAudio.src) { showToast('这场会议没有可播放的录音'); return; }
   if (playerAudio.paused) await playerAudio.play(); else playerAudio.pause();
@@ -2288,6 +2292,7 @@ playerAudio.addEventListener('pause', updatePlayerControl);
 playerAudio.addEventListener('ended', () => { playbackStarted = false; updatePlayerControl(); });
 playerAudio.addEventListener('timeupdate', () => { progress.value = playerAudio.currentTime; renderPlayerTime(); syncPlaybackTranscript(); renderMiniPlayback(); });
 function seekMiniPlayback(clientX) {
+  followPlaybackTranscript = true;
   const bounds = miniPlaybackSeek.getBoundingClientRect();
   const ratio = Math.max(0, Math.min(1, (clientX - bounds.left) / bounds.width));
   playerAudio.currentTime = ratio * (playerAudio.duration || 0);
@@ -2358,38 +2363,71 @@ segmentContextMenu.className = 'segment-context-menu';
 segmentContextMenu.hidden = true;
 document.body.append(segmentContextMenu);
 let contextSegmentId;
+let contextMeetingId;
 function closeSegmentContextMenu() {
   contextSegmentId = undefined;
+  contextMeetingId = undefined;
   segmentContextMenu.hidden = true;
-  segmentContextMenu.querySelectorAll('.is-open').forEach((item) => item.classList.remove('is-open'));
+  segmentContextMenu.querySelectorAll('.segment-context-options').forEach((options) => { options.style.removeProperty('left'); options.style.removeProperty('top'); });
+  segmentContextMenu.querySelectorAll('.is-open, .is-positioned').forEach((item) => item.classList.remove('is-open', 'is-positioned'));
 }
-function openSegmentContextMenu(segmentId, x, y) {
+function positionFloating(floating, reference, placements = ['right-start', 'left-start', 'right-end', 'left-end']) {
+  const anchor = reference.getBoundingClientRect ? reference.getBoundingClientRect() : reference;
+  floating.style.left = '0px';
+  floating.style.top = '0px';
+  const width = floating.offsetWidth;
+  const height = floating.offsetHeight;
+  const positions = {
+    'right-start': { left: anchor.right, top: anchor.top },
+    'left-start': { left: anchor.left - width, top: anchor.top },
+    'right-end': { left: anchor.right, top: anchor.bottom - height },
+    'left-end': { left: anchor.left - width, top: anchor.bottom - height },
+  };
+  const position = placements.map((placement) => positions[placement]).find(({ left, top }) => left >= 8 && top >= 8 && left + width <= window.innerWidth - 8 && top + height <= window.innerHeight - 8) || positions[placements[0]];
+  floating.style.left = `${Math.max(8, Math.min(position.left, window.innerWidth - width - 8))}px`;
+  floating.style.top = `${Math.max(8, Math.min(position.top, window.innerHeight - height - 8))}px`;
+}
+function fitSegmentSubmenu(submenu) {
+  const options = submenu.querySelector(':scope > .segment-context-options');
+  if (!options || submenu.classList.contains('is-positioned')) return;
+  positionFloating(options, submenu.querySelector(':scope > button'));
+  submenu.classList.add('is-positioned');
+}
+function openSegmentContextMenu(meetingId, segmentId, x, y) {
+  followLiveTranscript = false;
+  followPlaybackTranscript = false;
+  contextMeetingId = meetingId;
   contextSegmentId = segmentId;
   const profiles = speakerProfiles.map((profile) => `<button type="button" data-add-segment-profile-sample="${profile.id}">${escapeHtml(speakerProfileName(profile))}</button>`).join('');
-  const createProfile = `<div class="segment-context-submenu"><button type="button" data-open-segment-profile-create>${t('新增声纹')} <span>›</span></button><form class="segment-context-options segment-context-name-form" data-create-segment-profile><label>${t('声纹名称')}<input name="name" maxlength="32" required autocomplete="off" /></label><button type="submit">${t('确定')}</button></form></div>`;
-  segmentContextMenu.innerHTML = `<div class="segment-context-submenu"><button type="button" data-open-segment-profile-menu>${t('添加录音到声纹库')} <span>›</span></button><div class="segment-context-options">${profiles || `<span>${t('暂无已注册声纹')}</span>`}${createProfile}</div></div>`;
-  segmentContextMenu.style.left = `${Math.min(x, window.innerWidth - 260)}px`;
-  segmentContextMenu.style.top = `${Math.min(y, window.innerHeight - 48)}px`;
+  const createProfile = `<div class="segment-context-submenu"><button type="button" data-open-segment-profile-create><span class="segment-context-label">${t('新增声纹')}</span><span class="segment-context-arrow" aria-hidden="true">›</span></button><form class="segment-context-options segment-context-name-form" data-create-segment-profile><label>${t('声纹名称')}<input name="name" maxlength="32" required autocomplete="off" /></label><button type="submit">${t('确定')}</button></form></div>`;
+  segmentContextMenu.innerHTML = `<div class="segment-context-submenu"><button type="button" data-open-segment-profile-menu><span class="segment-context-label">${t('添加录音到声纹库')}</span><span class="segment-context-arrow" aria-hidden="true">›</span></button><div class="segment-context-options">${profiles || `<span>${t('暂无已注册声纹')}</span>`}${createProfile}</div></div>`;
+  segmentContextMenu.style.visibility = 'hidden';
   segmentContextMenu.hidden = false;
+  positionFloating(segmentContextMenu, { left: x, right: x, top: y, bottom: y });
+  segmentContextMenu.style.visibility = '';
 }
 segmentContextMenu.addEventListener('click', async (event) => {
   if (event.target.closest('[data-open-segment-profile-menu]')) {
-    event.target.closest('.segment-context-submenu').classList.toggle('is-open');
+    const submenu = event.target.closest('.segment-context-submenu');
+    submenu.classList.toggle('is-open');
+    requestAnimationFrame(() => fitSegmentSubmenu(submenu));
     return;
   }
   const create = event.target.closest('[data-open-segment-profile-create]');
   if (create) {
     const submenu = create.closest('.segment-context-submenu');
     submenu.classList.add('is-open');
+    requestAnimationFrame(() => fitSegmentSubmenu(submenu));
     submenu.querySelector('input').focus();
     return;
   }
   const profile = event.target.closest('[data-add-segment-profile-sample]');
-  if (!profile || !contextSegmentId || !currentMeetingDetail) return;
+  if (!profile || !contextSegmentId || !contextMeetingId) return;
   const segmentId = contextSegmentId;
+  const meetingId = contextMeetingId;
   closeSegmentContextMenu();
   try {
-    const meeting = await window.brevia?.segment.addProfileSample({ meeting_id: currentMeetingDetail.id, segment_id: segmentId, profile_id: profile.dataset.addSegmentProfileSample });
+    const meeting = await window.brevia?.segment.addProfileSample({ meeting_id: meetingId, segment_id: segmentId, profile_id: profile.dataset.addSegmentProfileSample });
     speakerProfiles = await window.brevia.speakerProfile.list();
     if (meeting) applyBackendDetail(meeting);
     showToast(t('已添加录音到声纹库'));
@@ -2397,24 +2435,29 @@ segmentContextMenu.addEventListener('click', async (event) => {
 });
 segmentContextMenu.addEventListener('submit', async (event) => {
   const form = event.target.closest('[data-create-segment-profile]');
-  if (!form || !contextSegmentId || !currentMeetingDetail) return;
+  if (!form || !contextSegmentId || !contextMeetingId) return;
   event.preventDefault();
   const name = new FormData(form).get('name').trim();
   if (!name) return;
   const segmentId = contextSegmentId;
+  const meetingId = contextMeetingId;
   closeSegmentContextMenu();
   try {
-    const meeting = await window.brevia?.segment.speaker({ meeting_id: currentMeetingDetail.id, segment_id: segmentId, name, enroll: true });
+    const meeting = await window.brevia?.segment.speaker({ meeting_id: meetingId, segment_id: segmentId, name, enroll: true });
     speakerProfiles = await window.brevia.speakerProfile.list();
     if (meeting) applyBackendDetail(meeting);
     showToast(t('已创建声纹并添加录音'));
   } catch (error) { showToast(error.message); }
 });
+segmentContextMenu.addEventListener('pointerover', (event) => {
+  const submenu = event.target.closest('.segment-context-submenu');
+  if (submenu) requestAnimationFrame(() => fitSegmentSubmenu(submenu));
+});
 finalTranscript.addEventListener('contextmenu', (event) => {
   const segment = event.target.closest('[data-segment-id]');
   if (!segment || !currentMeetingDetail) return;
   event.preventDefault();
-  openSegmentContextMenu(segment.dataset.segmentId, event.clientX, event.clientY);
+  openSegmentContextMenu(currentMeetingDetail.id, segment.dataset.segmentId, event.clientX, event.clientY);
 });
 document.addEventListener('mousedown', (event) => {
   if (!segmentContextMenu.hidden && !segmentContextMenu.contains(event.target)) closeSegmentContextMenu();
@@ -2492,6 +2535,13 @@ if (window.brevia) {
     followLiveTranscript = true;
   };
   transcript.addEventListener('scroll', () => { followLiveTranscript = isAtLiveBottom(); }, { passive: true });
+  transcript.addEventListener('contextmenu', (event) => {
+    const segment = event.target.closest('[data-segment-id]');
+    const meetingId = breviaClient.state.meeting?.id;
+    if (!segment || segment.classList.contains('partial') || !meetingId) return;
+    event.preventDefault();
+    openSegmentContextMenu(meetingId, segment.dataset.segmentId, event.clientX, event.clientY);
+  });
   const renderLiveEvent = (payload, partial) => {
     const shouldFollow = followLiveTranscript || isAtLiveBottom();
     if (!partial && !liveSpeakers.has(payload.speaker)) {
@@ -2507,11 +2557,15 @@ if (window.brevia) {
       renderLivePanel();
     }
     const participant = liveSpeakers.get(payload.speaker);
+    if (participant && payload.speaker_name && participant.name !== payload.speaker_name) {
+      participant.name = payload.speaker_name;
+      renderLivePanel();
+    }
     const entry = {
       time: formatMeetingTime(payload.start_ms),
       startSeconds: payload.start_ms / 1000,
       endSeconds: payload.end_ms / 1000,
-      speaker: { id: payload.speaker, name: payload.speaker_name || participant?.name || `${t('说话人')} ${participant?.id || payload.speaker.split('-').pop()}` },
+      speaker: { id: payload.speaker, segmentId: payload.segment_id, name: payload.speaker_name || participant?.name || `${t('说话人')} ${participant?.id || payload.speaker.split('-').pop()}` },
       text: payload.text,
       translation: payload.translation,
       partial,

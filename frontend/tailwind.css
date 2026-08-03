@@ -241,11 +241,12 @@
   #detail-view .final-transcript .segment-copy > p { @apply text-[16px] leading-7; }
   #detail-view .final-transcript .jump { @apply mt-1; }
   .segment-context-menu { @apply fixed z-50 min-w-48 border border-black bg-white text-[12px] shadow-sm; }
-  .segment-context-submenu { @apply relative; }.segment-context-submenu > button { @apply flex w-full items-center justify-between gap-8 px-3 py-2 text-left hover:bg-[#f2f2ed]; }
-  .segment-context-options { @apply absolute left-full top-0 hidden min-w-44 border border-black bg-white shadow-sm; }
+  .segment-context-submenu { @apply relative; }.segment-context-submenu > button { @apply flex w-full flex-nowrap items-center justify-between gap-2 whitespace-nowrap px-3 py-2 text-left hover:bg-[#f2f2ed]; }.segment-context-label, .segment-context-arrow { @apply shrink-0 p-0; }
+  .segment-context-options { @apply invisible fixed hidden min-w-44 border border-black bg-white shadow-sm; }
   .segment-context-submenu:hover > .segment-context-options, .segment-context-submenu.is-open > .segment-context-options { @apply block; }
-  .segment-context-options button { @apply block w-full px-3 py-2 text-left hover:bg-[#f2f2ed]; }.segment-context-options span { @apply block px-3 py-2 text-[#666]; }
-  .segment-context-name-form { @apply w-52 p-3; }.segment-context-name-form label { @apply grid gap-2 text-[#666]; }.segment-context-name-form input { @apply min-w-0 border border-[#ccc] px-2 py-1 text-black outline-none focus:border-black; }.segment-context-name-form button { @apply mt-3 border border-black bg-black text-white hover:bg-black; }
+  .segment-context-submenu.is-positioned > .segment-context-options { @apply visible; }
+  .segment-context-options > button { @apply block w-full px-3 py-2 text-left hover:bg-[#f2f2ed]; }.segment-context-options > span { @apply block px-3 py-2 text-[#666]; }
+  .segment-context-name-form { @apply w-52 p-3 text-[12px] leading-5; }.segment-context-name-form label { @apply grid gap-2 text-[12px] leading-5 text-[#666]; }.segment-context-name-form input { @apply h-8 min-w-0 border border-[#ccc] px-2 py-0 text-[12px] leading-5 text-black outline-none focus:border-black; }.segment-context-name-form button { @apply mt-3 text-[12px] leading-5 border border-black bg-black text-white hover:bg-black; }
   .dual-track-panel { @apply min-h-0 flex-1 overflow-y-auto pt-8 pr-6; }
   .track-player { @apply border-y border-[#e5e5e5] py-6; }.track-player + .track-player { @apply -mt-px; }
   .track-player header { @apply mb-5 flex items-baseline justify-between; }.track-player header b { @apply text-[15px] font-normal; }.track-player header small { @apply text-[10px] tracking-[.12em] text-[#999]; }

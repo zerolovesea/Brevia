@@ -246,13 +246,16 @@ class SpeakerProfileStoreMixin:
                 )
         if not scored:
             return None
-        score, profile = max(scored, key=lambda item: item[0])
+        scored.sort(key=lambda item: item[0], reverse=True)
+        score, profile = scored[0]
+        runner_up_score = scored[1][0] if len(scored) > 1 else -1
         return (
             {
                 "id": profile["id"],
                 "name": profile["name"],
                 "sample_count": profile["sample_count"],
                 "score": score,
+                "runner_up_score": runner_up_score,
             }
             if score >= threshold
             else None
