@@ -99,8 +99,6 @@
   .library-toolbar .search input, .library-toolbar .flow-select-toggle { @apply h-12; }
   .filter { @apply col-span-2 min-w-0; }
   .meeting-list { @apply select-none divide-y divide-[#e5e5e5]; }
-  .meeting-list-loading { @apply grid gap-6 py-8; }
-  .meeting-list-loading i { @apply block h-12 animate-pulse bg-[#f0f0f0]; }
   .meeting-row { @apply grid cursor-pointer grid-cols-12 items-center gap-6 py-8 transition-opacity duration-300 hover:opacity-70; }
   .meeting-row:has(.meeting-actions:hover) { opacity: 1; }
   .meeting-row.is-selected { @apply bg-[#f5f5f5] opacity-100; }

@@ -309,16 +309,7 @@ function localizeMeeting(meeting) {
   };
 }
 /** Re-renders only the meeting list, preserving settings-modal event bindings. @returns {void} */
-function renderMeetingList() {
-  const list = document.querySelector('.meeting-list');
-  if (window.brevia && !initializationComplete) {
-    list.innerHTML = '<div class="meeting-list-loading" role="status" aria-label="Loading meetings"><i></i><i></i><i></i></div>';
-    return;
-  }
-  list.innerHTML = uiData.meetings.map((meeting, index) => !meeting.isExample || meeting.exampleLocale === locale ? renderMeetingRow(localizeMeeting(meeting), index) : '').join('');
-  filterMeetings();
-  syncMeetingSelection();
-}
+function renderMeetingList() { document.querySelector('.meeting-list').innerHTML = uiData.meetings.map((meeting, index) => !meeting.isExample || meeting.exampleLocale === locale ? renderMeetingRow(localizeMeeting(meeting), index) : '').join(''); filterMeetings(); syncMeetingSelection(); }
 renderCategoryFilter();
 renderDateFilter();
 const prepareForm = document.querySelector('#meeting-form');
@@ -2491,7 +2482,7 @@ if (window.brevia) {
   }).then((status) => {
     initialPermissionsNeeded = status.microphone === 'not-determined' || status.screen === 'not-determined';
     if (!window.BreviaOnboarding.isFirstLaunch() && initialPermissionsNeeded) openInitialPermissions();
-  }).catch((error) => { initializationComplete = true; renderMeetingList(); showToast(`配置或后端启动失败：${error.message}`); });
+  }).catch((error) => showToast(`配置或后端启动失败：${error.message}`));
 
   const transcript = document.querySelector('#transcript-scroll');
   const isAtLiveBottom = () => transcript.scrollHeight - transcript.clientHeight - transcript.scrollTop <= 32;

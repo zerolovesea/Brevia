@@ -332,8 +332,6 @@ assert.match(text(js), /setTimeout\(\(\) => scroller\.classList\.remove\('is-scr
 assert.match(text(js), /meeting\.exampleLocale === locale/);
 assert.match(text(js), /function selectLibraryNav/);
 assert.match(text(js), /await refreshBackendMeetings\(\)/);
-assert.match(text(js), /meeting-list-loading/);
-assert.match(text(js), /window\.brevia && !initializationComplete/);
 assert.match(text(js), /let updateAvailable = false/);
 assert.match(text(backendClient), /async prepare\(\{ mic, system \}\)/);
 assert.match(text(backendClient), /async previewMic\(\)/);
