@@ -8,7 +8,7 @@ contextBridge.exposeInMainWorld('brevia', {
   maintain: invoke('app.maintain'),
   appInfo: { version: invoke('app.version') },
   openReleases: invoke('app.open-releases'),
-  permissions: { status: invoke('permissions.status'), requestMicrophone: invoke('permissions.request-microphone') },
+  permissions: { status: invoke('permissions.status'), requestMicrophone: invoke('permissions.request-microphone'), openScreenSettings: invoke('permissions.open-screen-settings') },
   meeting: {
     start: invoke('meeting.start'),
     import: invoke('meeting.import'),

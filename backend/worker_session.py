@@ -155,7 +155,9 @@ class RecordingSessionMixin:
                     },
                 )
         try:
-            self.asr = StreamingASR(self.models, meeting["streaming_model_id"])
+            self.asr = StreamingASR(
+                self.models, meeting["streaming_model_id"], meeting["language"]
+            )
         except RuntimeError as error:
             self.asr = None
             self.emit(
@@ -321,7 +323,7 @@ class RecordingSessionMixin:
                 if detected == "en":
                     try:
                         self.asr = StreamingASR(
-                            self.models, SETTINGS["asr"]["auto_english_model_id"]
+                            self.models, SETTINGS["asr"]["auto_english_model_id"], "en"
                         )
                         self.punctuation = EnglishPunctuation(
                             self.models, SETTINGS["punctuation"]["english_model_id"]

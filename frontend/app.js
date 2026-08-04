@@ -88,6 +88,7 @@ let switchingLanguage = false;
 let meetingActive = false;
 let translationAllowed = false;
 let latestLiveSegmentId = null;
+let editingMeetingIndex = null;
 const translatedNodes = [];
 /** Resolves a display label for the active locale. @param {string} key Chinese source label. @returns {string} Localized label or the original key. */
 const t = (key) => stageLabels[key]?.[locale] || stageLabels[key]?.en || catalog[locale].labels[key] || key;
@@ -122,6 +123,25 @@ let speakerProfiles = [];
 let presetVoices = [];
 let currentMeetingDetail = null;
 let modelCatalog = [];
+const modelLibraryMetaCopy = {
+  zh: { download: '下载', languages: '语言', compute: '运行', installed: '已安装', streaming: '实时转写', refined: '会后精修', punctuation: '标点恢复', vad: '语音检测', denoise: '语音降噪', diarization: '说话人分离', voiceprint: '声纹识别' },
+  en: { download: 'Download', languages: 'Languages', compute: 'Compute', installed: 'Installed', streaming: 'Live transcription', refined: 'Post-meeting refinement', punctuation: 'Punctuation', vad: 'Voice detection', denoise: 'Noise reduction', diarization: 'Speaker diarization', voiceprint: 'Voiceprint recognition' },
+  es: { download: 'Descarga', languages: 'Idiomas', compute: 'Ejecución', installed: 'Instalado', streaming: 'Transcripción en vivo', refined: 'Refinamiento posterior', punctuation: 'Puntuación', vad: 'Detección de voz', denoise: 'Reducción de ruido', diarization: 'Separación de hablantes', voiceprint: 'Reconocimiento de voz' },
+  ja: { download: 'ダウンロード', languages: '言語', compute: '実行環境', installed: 'インストール済み', streaming: 'ライブ文字起こし', refined: '会議後の高精度化', punctuation: '句読点復元', vad: '音声検出', denoise: 'ノイズ除去', diarization: '話者分離', voiceprint: '声紋認識' },
+  ko: { download: '다운로드', languages: '언어', compute: '실행 환경', installed: '설치됨', streaming: '실시간 전사', refined: '회의 후 정제', punctuation: '문장 부호', vad: '음성 감지', denoise: '노이즈 제거', diarization: '화자 분리', voiceprint: '음성 지문 인식' },
+  fr: { download: 'Téléchargement', languages: 'Langues', compute: 'Exécution', installed: 'Installé', streaming: 'Transcription en direct', refined: 'Affinage après réunion', punctuation: 'Ponctuation', vad: 'Détection vocale', denoise: 'Réduction du bruit', diarization: 'Séparation des locuteurs', voiceprint: 'Reconnaissance vocale' },
+  de: { download: 'Download', languages: 'Sprachen', compute: 'Ausführung', installed: 'Installiert', streaming: 'Live-Transkription', refined: 'Nachbearbeitung', punctuation: 'Zeichensetzung', vad: 'Spracherkennung', denoise: 'Rauschunterdrückung', diarization: 'Sprechertrennung', voiceprint: 'Stimmabdruck-Erkennung' },
+  ru: { download: 'Загрузка', languages: 'Языки', compute: 'Выполнение', installed: 'Установлено', streaming: 'Потоковая расшифровка', refined: 'Обработка после встречи', punctuation: 'Пунктуация', vad: 'Обнаружение речи', denoise: 'Шумоподавление', diarization: 'Разделение говорящих', voiceprint: 'Распознавание голоса' },
+};
+const modelStageMetaKey = { streaming: 'streaming', refined: 'refined', punctuation: 'punctuation', vad: 'vad', 'speech-enhancement': 'denoise', diarization: 'diarization', 'speaker-segmentation': 'diarization', 'speaker-embedding': 'voiceprint' };
+/** Renders only manifest-backed model capabilities for the model-library card. @param {object|undefined} model Model manifest item. @param {string} languages Localized language summary. @param {boolean} installed Whether the model is available locally. @returns {string} */
+function renderModelLibraryMeta(model, languages, installed) {
+  if (!model) return '';
+  const copy = modelLibraryMetaCopy[locale] || modelLibraryMetaCopy.en;
+  const capabilities = [...new Set((model.stages || []).map((stage) => copy[modelStageMetaKey[stage]]).filter(Boolean))];
+  const compute = (model.backend || []).map((backend) => backend.toUpperCase()).join(' · ');
+  return `<div class="model-library-meta"><span><small>${copy.download}</small><b>${formatBytes(model.size_bytes)}</b></span><span><small>${copy.languages}</small><b>${escapeHtml(languages)}</b></span><span><small>${copy.compute}</small><b>${escapeHtml(compute)}</b></span></div><div class="model-library-tags">${installed ? `<span class="model-library-installed">${copy.installed}</span>` : ''}${capabilities.map((capability) => `<span>${capability}</span>`).join('')}</div>`;
+}
 let expandedSpeakerProfileId = null;
 let addingSampleProfileId = null;
 let editingSpeakerProfileId = null;
@@ -151,14 +171,15 @@ const modelIds = [
   'zipformer-multilingual-streaming',
   'zipformer-ko-streaming-int8',
   'zipformer-fr-streaming-int8',
+  'nemotron-3.5-asr-streaming-0.6b-560ms-int8',
   'silero-vad',
-  'ten-vad',
   'online-punct-en-int8',
   'punct-ct-transformer-zh-en-int8',
   'qwen3-asr-0.6b-int8',
   'fire-red-asr2-ctc-zh-en-int8',
   'funasr-nano-int8',
   'whisper-turbo',
+  'whisper-large-v3',
   'qwen3-asr-1.7b-int8',
   'pyannote-segmentation-3.0',
   'reverb-diarization-v1',
@@ -170,7 +191,7 @@ const modelIds = [
   'spleeter-2stems-fp16',
   'zipvoice-zh-en',
 ];
-const modelSizes = [1047319737, 310414022, 132634597, 258999581, 418218652, 398444115, 30667839, 2313101, 332211, 64717756, 878702423, 520516278, 841730611, 563790207, 2900000000, 6958444, 10918585, 39593761, 40257283, 28281164, 597755927, 535638, 35271738, 163320194];
+const modelSizes = [1047319737, 310414022, 132634597, 258999581, 418218652, 398444115, 685000000, 30667839, 2313101, 332211, 64717756, 878702423, 520516278, 841730611, 563790207, 1068482488, 2900000000, 6958444, 10918585, 39593761, 40257283, 28281164, 597755927, 535638, 35271738, 163320194];
 const summaryProviders = ['OpenAI', 'Anthropic', 'Kimi', 'Zhipu GLM', 'MiniMax', 'DeepSeek', 'OpenRouter', 'Ollama', 'Ollama Cloud'];
 const ollamaChatEndpoint = 'http://127.0.0.1:11434/api/chat';
 const ollamaCloudChatEndpoint = 'https://ollama.com/api/chat';
@@ -354,12 +375,15 @@ function renderPrepareSelects() {
   const values = Object.fromEntries(new FormData(prepareForm));
   const categoryOptions = [['', t('未分类')], ...categories.map((name) => [name, name])];
   prepareForm.querySelector('.form-grid').innerHTML = `<label>${t('会议语言')}${flowSelect('meeting-language', values['meeting-language'] || 'auto', BreviaI18n.languageOptions(locale, t, true))}</label><label>${t('译文目标')}${flowSelect('translation-target', values['translation-target'] || '', BreviaI18n.languageOptions(locale, t))}</label><label>${t('预期说话人数')}<input name="num-speakers" type="number" min="1" step="1" value="${values['num-speakers'] || ''}" placeholder="${t('留空自动匹配')}" /></label><label>${t('分类标签')}${flowSelect('meeting-category', values['meeting-category'] || '', categoryOptions)}</label>`;
+  prepareForm.querySelector('.primary-action').firstChild.nodeValue = `${t('开始录制')} `;
+  importRecording.textContent = t('导入录音');
+  prepareModelCard.querySelector('#active-vad-model').previousElementSibling.textContent = t('VAD 模型');
   requestAnimationFrame(fitPrepareLayout);
 }
 const prepareModelChoices = {
-  'active-streaming-model': [['', null], ['zipformer-zh-xlarge-streaming-int8', 'Streaming Zipformer Chinese XLarge'], ['zipformer-zh-streaming-int8', 'Streaming Zipformer Chinese'], ['zipformer-multilingual-streaming', 'Streaming Zipformer Multilingual'], ['paraformer-zh-en-int8', 'Streaming Paraformer'], ['zipformer-en-streaming-int8', 'Streaming Zipformer English'], ['zipformer-ko-streaming-int8', 'Streaming Zipformer Korean'], ['zipformer-fr-streaming-int8', 'Streaming Zipformer French']],
+  'active-streaming-model': [['', null], ['zipformer-zh-xlarge-streaming-int8', 'Streaming Zipformer Chinese XLarge'], ['zipformer-zh-streaming-int8', 'Streaming Zipformer Chinese'], ['zipformer-multilingual-streaming', 'Streaming Zipformer Multilingual'], ['paraformer-zh-en-int8', 'Streaming Paraformer'], ['zipformer-en-streaming-int8', 'Streaming Zipformer English'], ['zipformer-ko-streaming-int8', 'Streaming Zipformer Korean'], ['zipformer-fr-streaming-int8', 'Streaming Zipformer French'], ['nemotron-3.5-asr-streaming-0.6b-560ms-int8', 'Nemotron 3.5 ASR Streaming 0.6B (560ms)']],
   'active-diarization-model': [['|', null], ['pyannote-segmentation-3.0|eres2net-base-3dspeaker-zh', 'Pyannote + 3D-Speaker'], ['pyannote-segmentation-3.0|nemo-titanet-small-en', 'Pyannote + NeMo Titanet'], ['pyannote-segmentation-3.0|campplus-zh-en', 'Pyannote + 3D-Speaker CAM++'], ['reverb-diarization-v1|eres2net-base-3dspeaker-zh', 'Reverb + 3D-Speaker']],
-  'active-vad-model': [['silero-vad', 'Silero VAD'], ['ten-vad', 'TEN-VAD']],
+  'active-vad-model': [['silero-vad', 'Silero VAD']],
 };
 function modelChoices(id) {
   if (id !== 'active-refined-model') return prepareModelChoices[id];
@@ -376,6 +400,7 @@ const languageModelDefaults = {
   en: { streaming: 'zipformer-en-streaming-int8', refined: 'whisper-turbo', diarization: 'pyannote-segmentation-3.0|nemo-titanet-small-en' },
   ko: { streaming: 'zipformer-ko-streaming-int8', refined: 'whisper-turbo', diarization: 'pyannote-segmentation-3.0|nemo-titanet-small-en' },
   fr: { streaming: 'zipformer-fr-streaming-int8', refined: 'whisper-turbo', diarization: 'pyannote-segmentation-3.0|nemo-titanet-small-en' },
+  es: { streaming: 'nemotron-3.5-asr-streaming-0.6b-560ms-int8', refined: 'whisper-large-v3', diarization: 'pyannote-segmentation-3.0|nemo-titanet-small-en' },
   default: { streaming: 'zipformer-multilingual-streaming', refined: 'whisper-turbo', diarization: 'pyannote-segmentation-3.0|nemo-titanet-small-en' },
 };
 const preferredModelsForLanguage = (language) => languageModelDefaults[language] || languageModelDefaults.default;
@@ -394,6 +419,7 @@ const compatibleStreamingModels = (language) => {
     en: new Set(['', 'zipformer-en-streaming-int8', 'zipformer-multilingual-streaming', 'paraformer-zh-en-int8']),
     ko: new Set(['', 'zipformer-ko-streaming-int8', 'zipformer-multilingual-streaming']),
     fr: new Set(['', 'zipformer-fr-streaming-int8', 'zipformer-multilingual-streaming']),
+    es: new Set(['', 'nemotron-3.5-asr-streaming-0.6b-560ms-int8']),
   };
   const allowed = supported[language] || new Set(['', 'zipformer-multilingual-streaming']);
   return prepareModelChoices['active-streaming-model'].filter(([id]) => allowed.has(id));
@@ -415,7 +441,7 @@ function applyLanguageModelDefaults(language) {
   setPrepareModel('active-diarization-model', models.diarization);
 }
 const prepareModelCard = document.querySelector('.model-card');
-prepareModelCard.querySelector('dl').insertAdjacentHTML('beforeend', '<div><dt>VAD 模型</dt><dd id="active-vad-model" data-model="silero-vad">Silero VAD</dd></div>');
+prepareModelCard.querySelector('dl').insertAdjacentHTML('beforeend', `<div><dt>${t('VAD 模型')}</dt><dd id="active-vad-model" data-model="silero-vad">Silero VAD</dd></div>`);
 const modelPicker = document.createElement('div');
 modelPicker.className = 'flow-select-options model-picker';
 modelPicker.hidden = true;
@@ -692,7 +718,32 @@ function scheduleRequiredModelsCardRender() {
   requiredModelsRenderFrame = requestAnimationFrame(() => {
     requiredModelsRenderFrame = undefined;
     renderRequiredModelsCard();
+    renderModelDownloadQueue();
   });
+}
+function renderModelDownloadQueue() {
+  let card = document.querySelector('#model-download-queue');
+  const entries = [...modelDownloads.entries()];
+  if (!entries.length) { dismissTaskCard(card); return; }
+  if (!card) {
+    card = document.createElement('aside');
+    card.id = 'model-download-queue';
+    card.className = 'processing-card required-models-card';
+    card.setAttribute('aria-live', 'polite');
+    taskCards.append(card);
+    enterTaskCard(card);
+  } else if (card.classList.contains('task-card-leave')) enterTaskCard(card);
+  const scrollTop = card.querySelector('ul')?.scrollTop || 0;
+  const total = entries.reduce((sum, [id, progress]) => sum + (progress.total || modelSizes[modelIds.indexOf(id)] || 0), 0);
+  const received = entries.reduce((sum, [id, progress]) => sum + Math.min(progress.received || 0, progress.total || modelSizes[modelIds.indexOf(id)] || 0), 0);
+  const ratio = total ? received / total : 0;
+  card.innerHTML = `<header class="task-card-heading"><p>${t('模型下载队列')} · ${entries.length}</p>${taskCardControls()}</header><div class="processing-bar" aria-hidden="true"><i style="transform:scaleX(${ratio})"></i></div><ul>${entries.map(([id, progress]) => {
+    const itemRatio = progress.total ? Math.min(1, progress.received / progress.total) : 0;
+    const status = progress.error ? escapeHtml(progress.error) : progress.paused ? t('暂停') : progress.total ? `${Math.round(itemRatio * 100)}%` : t('准备中');
+    const action = progress.error ? `<button type="button" data-download-required="${id}">${t('下载')}</button>` : `<button class="task-card-close" type="button" data-pause-required="${id}" aria-label="${progress.paused ? t('继续') : t('暂停')}">${progress.paused ? '▶' : 'Ⅱ'}</button><button class="task-card-close" type="button" data-cancel-required="${id}" aria-label="取消">×</button>`;
+    return `<li><span><b>${escapeHtml(modelDisplayName(id))}</b><small>${status}</small></span><span class="model-actions">${action}</span><div class="processing-bar" aria-hidden="true"><i style="transform:scaleX(${itemRatio})"></i></div></li>`;
+  }).join('')}</ul>`;
+  card.querySelector('ul').scrollTop = scrollTop;
 }
 function renderRequiredModelsCard() {
   [...requiredModelIds].filter((id) => modelPaths.has(id)).forEach((id) => requiredModelIds.delete(id));
@@ -727,11 +778,13 @@ async function downloadRequiredModel(modelId) {
   if (modelDownloads.has(modelId) && !modelDownloads.get(modelId).error && !modelDownloads.get(modelId).paused) return;
   if (!modelDownloads.has(modelId)) modelDownloads.set(modelId, { received: 0, total: 0 });
   renderRequiredModelsCard();
+  renderModelDownloadQueue();
   try {
     await window.brevia?.models.download({ model_id: modelId });
   } catch (error) {
     modelDownloads.set(modelId, { error: error.message });
     renderRequiredModelsCard();
+    renderModelDownloadQueue();
   }
 }
 function downloadRequiredModels(models) {
@@ -930,9 +983,12 @@ function renderModal(kind) {
     const ratio = progress?.total ? Math.min(1, progress.received / progress.total) : 0;
     const downloadProgress = progress?.error ? `<span class="model-download-progress">${escapeHtml(progress.error)}</span>` : progress ? `<span class="model-download-progress">${formatBytes(progress.received)} / ${formatBytes(progress.total)} · ${Math.round(ratio * 100)}%<i aria-hidden="true" style="transform:scaleX(${ratio})"></i></span>` : '';
     const size = kind === 'models' ? `<small>${formatBytes(modelSizes[sourceIndex])}</small>` : '';
-    const actions = kind === 'models' ? selectingOnboardingModels ? `<label class="model-select"><input type="checkbox" data-onboarding-model-selection value="${modelIds[sourceIndex]}"${modelPaths.has(modelIds[sourceIndex]) ? ' checked disabled' : onboardingModelSelection?.has(modelIds[sourceIndex]) ? ' checked' : ''} /></label>` : `<span class="model-actions">${isModelInstalled(name) && modelPaths.has(modelIds[sourceIndex]) ? `<button class="secondary" data-open-model-folder="${sourceIndex}" type="button">${t('从文件夹打开')}</button>` : ''}<button class="modal-action${isModelInstalled(name) ? ' modal-danger' : ''}" ${isModelInstalled(name) ? `data-delete-model="${sourceIndex}"` : `data-download-model="${sourceIndex}"`} type="button"${progress && !progress.error ? ' disabled' : ''}>${isModelInstalled(name) ? (modelLabels[locale] || modelLabels.en).remove : progress && !progress.error ? (modelLabels[locale] || modelLabels.en).downloading : (modelLabels[locale] || modelLabels.en).download}</button></span>` : '';
+    const installed = kind === 'models' && modelPaths.has(modelIds[sourceIndex]);
+    const model = kind === 'models' ? modelCatalog.find((candidate) => candidate.id === modelIds[sourceIndex]) : null;
+    const metadata = kind === 'models' ? renderModelLibraryMeta(model, detail, installed) : '';
+    const actions = kind === 'models' ? selectingOnboardingModels ? `<label class="model-select"><input type="checkbox" data-onboarding-model-selection value="${modelIds[sourceIndex]}"${installed ? ' checked disabled' : onboardingModelSelection?.has(modelIds[sourceIndex]) ? ' checked' : ''} /></label>` : `<span class="model-actions">${installed ? `<button class="secondary" data-open-model-folder="${sourceIndex}" type="button">${t('从文件夹打开')}</button>` : ''}<button class="modal-action${installed ? ' modal-danger' : ''}" ${installed ? `data-delete-model="${sourceIndex}"` : `data-download-model="${sourceIndex}"`} type="button"${progress && !progress.error ? ' disabled' : ''}>${installed ? (modelLabels[locale] || modelLabels.en).remove : progress && !progress.error ? (modelLabels[locale] || modelLabels.en).downloading : (modelLabels[locale] || modelLabels.en).download}</button></span>` : '';
     const heading = kind === 'models' && (index === 0 || items[index - 1].item[0] !== stage) ? `<h3>${escapeHtml(stage)}</h3>` : '';
-    return `${heading}<div><span>${label}${downloadProgress}<small>${escapeHtml(detail)}</small>${size}${intro ? `<small>${escapeHtml(intro)}</small>` : ''}</span>${actions}</div>`;
+    return `${heading}<div class="${kind === 'models' ? 'model-library-item' : ''}"><span>${label}${downloadProgress}${kind === 'models' ? `${intro ? `<p>${escapeHtml(intro)}</p>` : ''}${metadata}` : `<small>${escapeHtml(detail)}</small>${size}${intro ? `<small>${escapeHtml(intro)}</small>` : ''}`}</span>${actions}</div>`;
   }).join('')}</div>${selectingOnboardingModels ? `<div class="modal-form-actions"><button class="modal-action" data-download-onboarding-selected type="button"${onboardingModelSelection?.size ? '' : ' disabled'}>${(onboardingCopy[locale] || onboardingCopy.en).download}</button></div>` : ''}`;
 }
 /** Opens and focuses a settings modal. @param {'models'|'storage'|'summary-model'} kind Requested modal. @returns {void} */
@@ -999,7 +1055,7 @@ function openOnboardingLanguage(initialLocale = onboardingSelectedLocale || wind
   const wheelItems = Array.from({ length: 5 }, (_, round) => choices.map(([code, label]) => `<button type="button" data-language-wheel-value="${code}" role="option" aria-selected="${code === defaultLocale}"${round === 2 ? '' : ' tabindex="-1"'}>${label}</button>`).join('')).join('');
   onboardingPage = document.createElement('main');
   onboardingPage.className = 'onboarding-page onboarding-active';
-  onboardingPage.innerHTML = `<form class="onboarding-page-content" data-onboarding-language><div class="onboarding-page-copy"><h1></h1><p></p></div><input name="locale" type="hidden" value="${defaultLocale}" /><div class="language-wheel" role="listbox" aria-label="Choose your language">${wheelItems}</div><small class="onboarding-page-copy"></small><button class="modal-action onboarding-page-copy" type="submit"></button></form>`;
+  onboardingPage.innerHTML = `<form class="onboarding-page-content onboarding-language-page" data-onboarding-language><img class="onboarding-brand" src="./assets/brevia-logo.svg" alt="Brevia" /><div class="onboarding-page-copy"><h1></h1><p></p></div><input name="locale" type="hidden" value="${defaultLocale}" /><div class="language-wheel" role="listbox" aria-label="Choose your language">${wheelItems}</div><small class="onboarding-page-copy"></small><div class="onboarding-actions onboarding-page-copy"><button class="modal-action" type="submit"></button></div></form>`;
   document.body.append(onboardingPage);
   updateOnboardingLanguageCopy(defaultLocale);
   requestAnimationFrame(() => onboardingPage.classList.add('onboarding-page-enter'));
@@ -1016,7 +1072,7 @@ function openOnboardingLanguage(initialLocale = onboardingSelectedLocale || wind
       if (onboardingPage === page) onboardingPage = undefined;
       onboardingPreviewLocale = undefined;
       applyLanguage(nextLocale, true);
-      openOnboardingSetup();
+      openOnboardingPermissions();
     }, 260);
   });
 }
@@ -1117,7 +1173,7 @@ function openOnboardingSetup() {
     if (event.target.matches('[name="onboarding-language"]')) updateOnboardingSetup();
   });
   onboardingPage.addEventListener('click', (event) => {
-    if (event.target.closest('[data-onboarding-back-language]')) { dismissOnboardingPage(() => openOnboardingLanguage(onboardingSelectedLocale)); return; }
+    if (event.target.closest('[data-onboarding-back-language]')) { dismissOnboardingPage(openOnboardingPermissions); return; }
     if (event.target.closest('[data-download-onboarding-models]')) { window.BreviaOnboarding.beginDownloads(onboardingModelIds); downloadRequiredModels(onboardingModelIds); dismissOnboardingPage(finishOnboarding); return; }
     if (event.target.closest('[data-customize-onboarding-models]')) { onboardingModelSelection = new Set(onboardingModelIds); void openModal('models'); return; }
     if (event.target.closest('[data-finish-onboarding]')) dismissOnboardingPage(finishOnboarding);
@@ -1148,7 +1204,57 @@ function updateOnboardingSetup() {
 function finishOnboarding() {
   window.BreviaOnboarding.complete();
   closeModal();
-  if (initializationComplete && initialPermissionsNeeded) window.setTimeout(openInitialPermissions, 230);
+}
+
+function openOnboardingPermissions() {
+  const copy = onboardingCopy[locale] || onboardingCopy.en;
+  showOnboardingPage('permissions', `<section class="onboarding-setup-page onboarding-permissions-page"><button class="onboarding-back" data-onboarding-back-language type="button" aria-label="Back">←</button><header><img class="onboarding-brand" src="./assets/brevia-logo.svg" alt="Brevia" /><h1>${t('录制权限')}</h1><div class="onboarding-intro"><p>${t('言录需要麦克风、屏幕与系统音频权限，才能录制会议并生成实时字幕。')}</p></div></header><section class="onboarding-section" data-onboarding-permissions></section><div class="onboarding-actions"><button class="modal-action" data-finish-onboarding type="button" disabled>${t('继续')}</button><button class="secondary" data-skip-onboarding-permissions type="button">${copy.later}</button></div></section>`);
+  const page = onboardingPage;
+  const section = onboardingPage.querySelector('[data-onboarding-permissions]');
+  const continueButton = onboardingPage.querySelector('[data-finish-onboarding]');
+  const steps = [
+    ['microphone', t('麦克风'), t('录制你的发言。')],
+    ['screen', t('屏幕与系统音频'), t('录制屏幕共享中的系统声音。')],
+  ];
+  const render = async () => {
+    const status = await window.brevia.permissions.status();
+    const next = steps.find(([permission]) => status[permission] === 'not-determined');
+    section.innerHTML = steps.map(([permission, label, detail], index) => {
+      const value = status[permission];
+      const granted = value === 'granted';
+      const active = next?.[0] === permission;
+      const state = granted ? '✓' : active ? String(index + 1) : '—';
+      const action = active ? `<button class="modal-action onboarding-permission-action" data-request-onboarding-permission="${permission}" type="button">${permission === 'microphone' ? t('允许') : t('继续')}</button>` : permission === 'screen' && value === 'denied' ? `<button class="modal-action onboarding-permission-action" data-open-screen-settings type="button">${t('允许')}</button>` : '';
+      return `<div class="onboarding-permission${granted ? ' is-granted' : ''}"><span class="onboarding-permission-state">${state}</span><span><b>${label}</b><small>${granted ? t('已允许') : value === 'denied' ? t('请在系统设置中允许') : detail}</small></span>${action}</div>`;
+    }).join('');
+    const complete = steps.every(([permission]) => status[permission] === 'granted');
+    continueButton.disabled = !complete;
+    if (complete) section.insertAdjacentHTML('beforeend', `<div class="onboarding-permission-complete">✓ ${t('录制权限')} ${t('已准备就绪')}</div>`);
+  };
+  void render();
+  const permissionPoll = window.setInterval(() => {
+    if (onboardingPage !== page || !page.isConnected) return window.clearInterval(permissionPoll);
+    void render();
+  }, 1000);
+  onboardingPage.addEventListener('click', async (event) => {
+    if (event.target.closest('[data-onboarding-back-language]')) { dismissOnboardingPage(() => openOnboardingLanguage(onboardingSelectedLocale)); return; }
+    if (event.target.closest('[data-finish-onboarding]')) { dismissOnboardingPage(openOnboardingSetup); return; }
+    if (event.target.closest('[data-skip-onboarding-permissions]')) { dismissOnboardingPage(openOnboardingSetup); return; }
+    if (event.target.closest('[data-open-screen-settings]')) { await window.brevia.permissions.openScreenSettings(); return; }
+    const button = event.target.closest('[data-request-onboarding-permission]');
+    if (!button) return;
+    button.disabled = true;
+    try {
+      if (button.dataset.requestOnboardingPermission === 'microphone') await window.brevia.permissions.requestMicrophone();
+      else {
+        const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+        stopMediaStream(stream);
+      }
+    } catch (error) {
+      showToast(error.message);
+    }
+    await render();
+  });
 }
 
 async function requestInitialPermissions(button) {
@@ -1373,6 +1479,7 @@ settingsModal.addEventListener('click', async (event) => {
     const [, name, detail, intro, icon] = (modalCopy[locale] || modalCopy.en).models.items[index];
     modelDownloads.set(modelIds[index], { received: 0, total: 0 });
     renderModal('models');
+    renderModelDownloadQueue();
     try {
       if (window.brevia) await window.brevia.models.download({ model_id: modelIds[index] });
       else { installModel({ icon, name, detail, intro }); modelDownloads.delete(modelIds[index]); }
@@ -1642,6 +1749,7 @@ function applyLanguage(nextLocale, animate = false) {
       else element[attribute] = value;
     });
     renderPrepareSelects();
+    renderPauseButton();
     renderSettingsView();
     document.querySelector('#settings-view .settings-grid').append(speakerProfileCard, updateCard);
     renderDefaultMeetingTitle();
@@ -1938,6 +2046,12 @@ importRecording.addEventListener('click', async () => {
 });
 let seconds = 0;
 let timer;
+/** Keeps the recording control label in sync with the active locale and state. @returns {void} */
+function renderPauseButton() {
+  const button = document.querySelector('#pause');
+  const paused = button.dataset.paused === 'true';
+  button.textContent = `${paused ? '▶' : 'Ⅱ'} ${t(paused ? '继续' : '暂停')}`;
+}
 /** Starts the visible recording timer, replacing any prior timer. @returns {void} */
 function startTimer() { clearInterval(timer); timer = setInterval(() => { seconds += 1; const value = new Date(seconds * 1000).toISOString().slice(11, 19); document.querySelector('#timer').textContent = value; miniTimer.textContent = value; }, 1000); }
 document.querySelector('#pause').addEventListener('click', async (event) => {
@@ -1946,7 +2060,7 @@ document.querySelector('#pause').addEventListener('click', async (event) => {
   try {
     if (breviaClient) await breviaClient.pause(!paused);
     button.dataset.paused = String(!paused);
-    button.textContent = paused ? `Ⅱ ${t('暂停')}` : `▶ ${t('继续')}`;
+    renderPauseButton();
     if (paused) startTimer(); else clearInterval(timer);
   } catch (error) { showToast(error.message); }
 });
@@ -2088,6 +2202,7 @@ meetingSelectionSurface.addEventListener('click', (event) => {
   event.stopImmediatePropagation();
 }, true);
 meetingList.addEventListener('keydown', (event) => {
+  if (event.target.matches('input, textarea')) return;
   const row = event.target.closest('.meeting-row');
   if (row && event.key === ' ') { event.preventDefault(); toggleMeetingSelection(row); }
 });
@@ -2141,13 +2256,13 @@ const positionMeetingMenu = (menu, toggle, opensLeft = false) => {
   menu.style.top = `${opensUp ? anchor.top - height : anchor.bottom}px`;
   menu.style.left = `${Math.max(8, Math.min(left, window.innerWidth - menu.offsetWidth - 8))}px`;
 };
-const positionOpenMeetingMenus = () => document.querySelectorAll('.meeting-menu:not([hidden]), .meeting-rename-menu:not([hidden]), .meeting-category-menu:not([hidden])').forEach((menu) => {
+const positionOpenMeetingMenus = () => document.querySelectorAll('.meeting-menu:not([hidden]), .meeting-category-menu:not([hidden])').forEach((menu) => {
   const toggle = menu.closest('.meeting-actions')?.querySelector('[data-meeting-menu]');
   if (toggle) positionMeetingMenu(menu, toggle, menu.classList.contains('meeting-category-menu'));
 });
 const openMeetingMenu = (menu, toggle, opensLeft = false) => { menu.hidden = false; positionMeetingMenu(menu, toggle, opensLeft); };
 const closeCategoryMenu = (menu, done) => { if (menu.hidden) { done?.(); return; } menu.classList.add('is-closing'); window.setTimeout(() => { menu.hidden = true; menu.classList.remove('is-closing'); done?.(); }, 180); };
-const closeMeetingMenus = () => { document.querySelectorAll('.meeting-menu, .meeting-rename-menu').forEach((menu) => { menu.hidden = true; }); document.querySelectorAll('.meeting-category-menu').forEach((menu) => closeCategoryMenu(menu)); document.querySelectorAll('[data-meeting-menu]').forEach((toggle) => toggle.setAttribute('aria-expanded', 'false')); };
+const closeMeetingMenus = () => { document.querySelectorAll('.meeting-menu').forEach((menu) => { menu.hidden = true; }); document.querySelectorAll('.meeting-category-menu').forEach((menu) => closeCategoryMenu(menu)); document.querySelectorAll('[data-meeting-menu]').forEach((toggle) => toggle.setAttribute('aria-expanded', 'false')); };
 meetingList.addEventListener('scroll', positionOpenMeetingMenus);
 window.addEventListener('resize', positionOpenMeetingMenus);
 /** Runs one meeting mutation for both row actions and batch actions. */
@@ -2166,6 +2281,7 @@ async function openMeetingRow(row) {
 }
 meetingList.addEventListener('click', async (event) => {
   if (suppressMeetingClick) { event.preventDefault(); event.stopImmediatePropagation(); return; }
+  if (event.target.closest('[data-rename-meeting]')) { event.stopPropagation(); return; }
   const selectionRow = event.target.closest('.meeting-row');
   if (selectionRow && (event.metaKey || event.ctrlKey)) { event.preventDefault(); event.stopPropagation(); toggleMeetingSelection(selectionRow); return; }
   const actions = event.target.closest('.meeting-actions');
@@ -2178,14 +2294,13 @@ meetingList.addEventListener('click', async (event) => {
   event.stopPropagation();
   const menuToggle = event.target.closest('[data-meeting-menu]');
   if (menuToggle) { const menu = actions.querySelector('.meeting-menu'); const opening = menu.hidden; closeMeetingMenus(); if (opening) openMeetingMenu(menu, menuToggle); menuToggle.setAttribute('aria-expanded', String(opening)); return; }
-  if (event.target.closest('[data-cancel-rename]')) { actions.querySelector('.meeting-rename-menu').hidden = true; openMeetingMenu(actions.querySelector('.meeting-menu'), actions.querySelector('[data-meeting-menu]')); return; }
   const action = event.target.closest('[data-meeting-action]');
   if (action) {
     const index = Number(action.dataset.meetingIndex);
     const meeting = uiData.meetings[index];
     if (action.dataset.meetingAction === 'category') { actions.querySelector('.meeting-menu').hidden = true; openMeetingMenu(actions.querySelector('.meeting-category-menu'), actions.querySelector('[data-meeting-menu]'), true); return; }
     if (action.dataset.meetingAction === 'back') { closeCategoryMenu(actions.querySelector('.meeting-category-menu'), () => { openMeetingMenu(actions.querySelector('.meeting-menu'), actions.querySelector('[data-meeting-menu]')); }); return; }
-    if (action.dataset.meetingAction === 'rename') { actions.querySelector('.meeting-menu').hidden = true; const rename = actions.querySelector('.meeting-rename-menu'); openMeetingMenu(rename, actions.querySelector('[data-meeting-menu]')); rename.querySelector('input').focus(); rename.querySelector('input').select(); return; }
+    if (action.dataset.meetingAction === 'rename') { editingMeetingIndex = index; closeMeetingMenus(); renderMeetingList(); requestAnimationFrame(() => { const input = meetingList.querySelector('[data-rename-meeting] input'); input?.focus(); input?.select(); }); return; }
     if (action.dataset.meetingAction === 'open-folder') {
       try {
         const detail = await window.brevia?.meeting.get({ meeting_id: meeting.id });
@@ -2212,7 +2327,7 @@ meetingList.addEventListener('click', async (event) => {
   if (deleteCategory) { const category = deleteCategory.dataset.deleteMeetingCategory; uiData.meetings.filter((meeting) => meeting.category === category).forEach((meeting) => setMeetingCategory(meeting, '')); categories = categories.filter((name) => name !== category); if (activeCategory === category) activeCategory = ''; persistCategories(); renderCategoryFilter(); renderPrepareSelects(); renderMeetingList(); }
 });
 meetingList.addEventListener('submit', (event) => {
-  if (event.target.matches('[data-rename-meeting]')) { event.preventDefault(); const title = new FormData(event.target).get('title').trim(); const meeting = uiData.meetings[Number(event.target.dataset.meetingIndex)]; if (title) { meeting.title = title; if (window.brevia && meeting.id) window.brevia.meeting.update({ meeting_id: meeting.id, updates: { title } }).catch((error) => showToast(error.message)); renderMeetingList(); } return; }
+  if (event.target.matches('[data-rename-meeting]')) { event.preventDefault(); const title = new FormData(event.target).get('title').trim(); const meeting = uiData.meetings[Number(event.target.dataset.meetingIndex)]; editingMeetingIndex = null; if (title) { meeting.title = title; if (window.brevia && meeting.id) window.brevia.meeting.update({ meeting_id: meeting.id, updates: { title } }).catch((error) => showToast(error.message)); } renderMeetingList(); return; }
   if (!event.target.matches('[data-new-meeting-category]')) return;
   event.preventDefault();
   const category = new FormData(event.target).get('category').trim();
@@ -2223,7 +2338,12 @@ meetingList.addEventListener('submit', (event) => {
   renderPrepareSelects();
   renderMeetingList();
 });
+meetingList.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && event.target.matches('[data-rename-meeting] input')) { editingMeetingIndex = null; renderMeetingList(); }
+});
 document.addEventListener('click', (event) => {
+  const renameForm = meetingList.querySelector('[data-rename-meeting]');
+  if (renameForm && !event.target.closest('.meeting-row')) renameForm.requestSubmit();
   if (!event.target.closest('.flow-select')) document.querySelectorAll('.flow-select-options:not([hidden])').forEach((options) => { options.hidden = true; options.previousElementSibling.previousElementSibling.setAttribute('aria-expanded', 'false'); });
   if (!event.target.closest('.meeting-actions')) closeMeetingMenus();
 });
@@ -2561,13 +2681,15 @@ if (window.brevia) {
       participant.name = payload.speaker_name;
       renderLivePanel();
     }
+    const previous = liveSegments.get(payload.segment_id);
+    const translation = payload.translation || previous?.querySelector('.translation')?.textContent;
     const entry = {
       time: formatMeetingTime(payload.start_ms),
       startSeconds: payload.start_ms / 1000,
       endSeconds: payload.end_ms / 1000,
       speaker: { id: payload.speaker, segmentId: payload.segment_id, name: payload.speaker_name || participant?.name || `${t('说话人')} ${participant?.id || payload.speaker.split('-').pop()}` },
       text: payload.text,
-      translation: payload.translation,
+      translation,
       partial,
     };
     latestLiveSegmentId = payload.segment_id;
@@ -2578,11 +2700,10 @@ if (window.brevia) {
     currentCaption.classList.remove('caption-increment');
     void currentCaption.offsetWidth;
     currentCaption.classList.add('caption-increment');
-    currentTranslation.hidden = !payload.translation || !translationAllowed;
-    currentTranslation.textContent = payload.translation || '';
+    currentTranslation.hidden = !translation || !translationAllowed;
+    currentTranslation.textContent = translation || '';
     const template = document.createElement('template');
     template.innerHTML = renderTranscriptSegment(entry);
-    const previous = liveSegments.get(payload.segment_id);
     const element = template.content.firstElementChild;
     if (previous) previous.replaceWith(element);
     else {
@@ -2703,6 +2824,7 @@ if (window.brevia) {
         if (model?.path) modelPaths.set(model_id, model.path);
         if (activeModal === 'models') renderModal('models');
         renderRequiredModelsCard();
+        renderModelDownloadQueue();
         void resumeReadyModelTasks();
       }).catch(() => {});
     } else if (status === 'paused' && modelDownloads.has(model_id)) modelDownloads.set(model_id, { ...modelDownloads.get(model_id), paused: true });
@@ -2712,6 +2834,7 @@ if (window.brevia) {
     else if (status === 'not_installed') modelPaths.delete(model_id);
     if (activeModal === 'models') renderModal('models');
     renderRequiredModelsCard();
+    renderModelDownloadQueue();
   });
   window.brevia.on('worker.warning', ({ message: warning }) => showToast(warning));
   window.brevia.on('worker.error', ({ message: error }) => showToast(error));

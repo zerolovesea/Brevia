@@ -20,6 +20,7 @@ def complete(payload, prompt, json_mode=False):
         "model": payload["model"],
         "messages": [{"role": "user", "content": prompt}],
         "stream": False,
+        "tool_choice": "none",
     }
     if json_mode:
         body["response_format"] = {"type": "json_object"}
@@ -27,6 +28,7 @@ def complete(payload, prompt, json_mode=False):
     if provider in {"ollama", "ollama cloud"} and endpoint.endswith("/api/chat"):
         # Ollama's native chat API works for both local and cloud hosts.
         body.pop("stream")
+        body.pop("tool_choice")
         if payload.get("api_key"):
             headers["Authorization"] = f"Bearer {payload['api_key']}"
     elif api_format in {"anthropic", "claude"}:

@@ -102,6 +102,22 @@
     "files": ["encoder-epoch-99-avg-1.int8.onnx", "decoder-epoch-99-avg-1.onnx", "joiner-epoch-99-avg-1.int8.onnx", "tokens.txt"], "kind": "transducer"
   },
   {
+    "id": "nemotron-3.5-asr-streaming-0.6b-560ms-int8",
+    "name": "Nemotron 3.5 ASR Streaming 0.6B (560ms)",
+    "runtime": "sherpa-onnx==1.13.2",
+    "revision": "asr-models/2026-06-11",
+    "stages": ["streaming"],
+    "languages": ["ar", "de", "en", "es", "fr", "hi", "it", "ja", "ko", "nl", "pt", "ru", "tr", "uk", "vi", "zh"],
+    "backend": ["cpu", "cuda"],
+    "speaker": false,
+    "size_bytes": 685000000,
+    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11.tar.bz2",
+    "archive_sha256": null,
+    "directory": "sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11",
+    "files": ["encoder.int8.onnx", "decoder.int8.onnx", "joiner.int8.onnx", "tokens.txt"],
+    "kind": "nemotron"
+  },
+  {
     "id": "online-punct-en-int8",
     "name": "English Punctuation and Casing",
     "runtime": "sherpa-onnx==1.13.2",
@@ -140,12 +156,6 @@
     "size_bytes": 2313101,
     "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad_v5.onnx",
     "archive_sha256": null, "files": ["silero_vad.onnx"], "kind": "vad"
-  },
-  {
-    "id": "ten-vad", "name": "TEN-VAD", "runtime": "sherpa-onnx==1.13.2", "revision": "asr-models/1",
-    "stages": ["vad"], "languages": ["all"], "backend": ["cpu", "cuda"], "speaker": false,
-    "size_bytes": 332211, "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/ten-vad.onnx", "archive_sha256": null,
-    "files": ["ten-vad.onnx"], "kind": "ten-vad"
   },
   {
     "id": "punct-ct-transformer-zh-en-int8",
@@ -188,6 +198,16 @@
     "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-turbo.tar.bz2",
     "archive_sha256": null, "directory": "sherpa-onnx-whisper-turbo",
     "files": ["turbo-encoder.int8.onnx", "turbo-decoder.int8.onnx", "turbo-tokens.txt"], "kind": "whisper"
+  },
+  {
+    "id": "whisper-large-v3",
+    "name": "Whisper Large v3",
+    "runtime": "sherpa-onnx==1.13.2", "revision": "asr-models/whisper-large-v3",
+    "stages": ["refined"], "languages": ["multilingual"], "backend": ["cpu", "cuda"], "speaker": false,
+    "size_bytes": 1068482488,
+    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-large-v3.tar.bz2",
+    "archive_sha256": null, "directory": "sherpa-onnx-whisper-large-v3",
+    "files": ["large-v3-encoder.int8.onnx", "large-v3-decoder.int8.onnx", "large-v3-tokens.txt"], "kind": "whisper"
   },
   {"id":"fire-red-asr2-ctc-zh-en-int8","name":"FireRedASR2 CTC Chinese and English","runtime":"sherpa-onnx==1.13.2","revision":"asr-models/2026-02-25","stages":["refined"],"languages":["zh","en","yue"],"backend":["cpu","cuda"],"speaker":false,"size_bytes":520516278,"url":"https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-fire-red-asr2-ctc-zh_en-int8-2026-02-25.tar.bz2","directory":"sherpa-onnx-fire-red-asr2-ctc-zh_en-int8-2026-02-25","files":["model.int8.onnx","tokens.txt"],"kind":"fire-red-asr-ctc"},
   {"id":"funasr-nano-int8","name":"FunASR Nano int8","runtime":"sherpa-onnx==1.13.2","revision":"asr-models/2025-12-30","stages":["refined"],"languages":["zh","en","yue"],"backend":["cpu","cuda"],"speaker":false,"size_bytes":841730611,"url":"https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-funasr-nano-int8-2025-12-30.tar.bz2","directory":"sherpa-onnx-funasr-nano-int8-2025-12-30","files":["encoder_adaptor.int8.onnx","llm.int8.onnx","embedding.int8.onnx","Qwen3-0.6B/tokenizer.json"],"kind":"funasr-nano"},

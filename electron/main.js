@@ -123,7 +123,7 @@ class WorkerClient {
         PYTHONUTF8: '1',
         PYTHONIOENCODING: 'utf-8',
         BREVIA_DATA_DIR: dataDir(),
-        BREVIA_MODELS_DIR: process.env.BREVIA_MODELS_DIR || (app.isPackaged ? path.join(dataDir(), 'models') : path.join(root, '.models')),
+        BREVIA_MODELS_DIR: process.env.BREVIA_MODELS_DIR || path.join(dataDir(), 'models'),
       },
       stdio: ['pipe', 'pipe', 'pipe'],
     });
@@ -319,6 +319,12 @@ function registerIpc() {
       await systemPreferences.askForMediaAccess('microphone');
     }
     return systemPreferences.getMediaAccessStatus('microphone');
+  });
+  ipcMain.handle('permissions.open-screen-settings', () => {
+    if (process.platform !== 'darwin') return false;
+    const settings = spawn('open', ['x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'], { detached: true, stdio: 'ignore' });
+    settings.unref();
+    return true;
   });
   ipcMain.handle('app.initialize', () => initializeWorker());
   handle('app.maintain', z.object({}), 'app.maintain');

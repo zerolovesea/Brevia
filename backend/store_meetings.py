@@ -336,6 +336,7 @@ class MeetingStoreMixin:
                 (utc_now(), max(0, int(duration_ms)), meeting_id),
             )
         manifest = self.read_manifest(meeting_id)
+        manifest["source"] = "audio_import"
         manifest["closed"] = True
         self.write_manifest(meeting_id, manifest)
         return self.get_meeting(meeting_id)

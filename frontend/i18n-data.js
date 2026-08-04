@@ -33,7 +33,7 @@ Object.assign(catalog.zh.labels, {
   '← 返回会议库': '← 返回会议库', '说话人分离': '说话人分离', '自定义术语': '自定义术语', '暂无术语': '暂无术语',
   '说话人': '说话人', '等待识别说话人': '等待识别说话人',
   '会议摘要': '会议摘要', '尚未生成会议摘要': '尚未生成会议摘要', '转发': '转发',
-  '会后精修': '会后精修', '精修': '精修', '正在精修…': '正在精修…',
+  '会后精修': '会后精修', '精修': '精修', '精修字稿': '精修字稿', '完成精修后，这里会显示不带时间戳的校对稿。': '完成精修后，这里会显示不带时间戳的校对稿。', '正在精修…': '正在精修…',
   '会后精修已完成': '会后精修已完成', '已整理': '已整理', '决定': '决定', '待办': '待办'
 });
 Object.assign(catalog.en.labels, {
@@ -41,7 +41,7 @@ Object.assign(catalog.en.labels, {
   '← 返回会议库': '← Back to library', '说话人分离': 'Speaker diarization', '自定义术语': 'Custom term', '暂无术语': 'No terms',
   '说话人': 'Speaker', '等待识别说话人': 'Waiting to identify speakers',
   '会议摘要': 'Meeting summary', '尚未生成会议摘要': 'No meeting summary yet', '转发': 'Share',
-  '会后精修': 'Refine', '精修': 'Refine', '正在精修…': 'Refining…',
+  '会后精修': 'Refine', '精修': 'Refine', '精修字稿': 'Refined transcript', '完成精修后，这里会显示不带时间戳的校对稿。': 'The refined transcript without timestamps appears here when refinement finishes.', '正在精修…': 'Refining…',
   '会后精修已完成': 'Refinement complete', '已整理': 'Complete', '决定': 'Decisions', '待办': 'Action items'
 });
 Object.assign(catalog.es.labels, {
@@ -49,7 +49,7 @@ Object.assign(catalog.es.labels, {
   '← 返回会议库': '← Volver a la biblioteca', '说话人分离': 'Separación de hablantes', '自定义术语': 'Término personalizado', '暂无术语': 'No hay términos',
   '说话人': 'Hablante', '等待识别说话人': 'Esperando identificar hablantes',
   '会议摘要': 'Resumen de la reunión', '尚未生成会议摘要': 'Aún no se ha generado el resumen', '转发': 'Compartir',
-  '会后精修': 'Refinar', '精修': 'Refinar', '正在精修…': 'Refinando…',
+  '会后精修': 'Refinar', '精修': 'Refinar', '精修字稿': 'Transcripción refinada', '完成精修后，这里会显示不带时间戳的校对稿。': 'La transcripción refinada sin marcas de tiempo aparecerá aquí al terminar.', '正在精修…': 'Refinando…',
   '会后精修已完成': 'Refinamiento completado', '已整理': 'Completado', '决定': 'Decisiones', '待办': 'Tareas'
 });
 const localeCopies = {
@@ -85,6 +85,17 @@ const missedInterfaceLabels = {
   ru: { '导入录音': 'Импортировать запись', '语音对话': 'Голосовой чат', '请先在声纹库注册可用声音': 'Перед отправкой речи зарегистрируйте голосовой отпечаток', '使用本机 Ollama，不需要 API Key。请填写已安装的模型名。': 'Использует локальный Ollama без API-ключа. Введите имя установленной модели.', '直接调用 Ollama Cloud，需要 API Key。': 'Напрямую вызывает Ollama Cloud и требует API-ключ.', '录制权限': 'Разрешения на запись', '首次使用时完成设置': 'Завершите настройку при первом использовании', '言录需要麦克风、屏幕与系统音频权限，才能录制会议并生成实时字幕。': 'Brevia нужны разрешения на микрофон, экран и системный звук для записи встреч и создания субтитров в реальном времени.', '录制你的发言。': 'Записывает вашу речь.', '录制屏幕共享中的系统声音。': 'Записывает системный звук при демонстрации экрана.', '稍后': 'Позже' },
 };
 Object.entries(missedInterfaceLabels).forEach(([code, labels]) => Object.assign(catalog[code].labels, labels));
+const onboardingPermissionLabels = {
+  zh: { '屏幕与系统音频': '屏幕与系统音频', '允许': '允许', '已允许': '已允许', '请在系统设置中允许': '请在系统设置中批准 言录 的屏幕与系统音频权限。', '已准备就绪': '已准备就绪' },
+  en: { '屏幕与系统音频': 'Screen and system audio', '允许': 'Allow', '已允许': 'Allowed', '请在系统设置中允许': 'Approve Brevia for screen and system-audio access in System Settings.', '已准备就绪': 'Ready' },
+  es: { '屏幕与系统音频': 'Pantalla y audio del sistema', '允许': 'Permitir', '已允许': 'Permitido', '请在系统设置中允许': 'Aprueba el acceso de Brevia a la pantalla y al audio del sistema en Ajustes del Sistema.', '已准备就绪': 'Listo' },
+  ja: { '屏幕与系统音频': '画面とシステム音声', '允许': '許可する', '已允许': '許可済み', '请在系统设置中允许': 'システム設定で、Brevia に画面とシステム音声へのアクセスを許可してください。', '已准备就绪': '準備完了' },
+  ko: { '屏幕与系统音频': '화면 및 시스템 오디오', '允许': '허용', '已允许': '허용됨', '请在系统设置中允许': '시스템 설정에서 Brevia의 화면 및 시스템 오디오 접근을 허용하세요.', '已准备就绪': '준비됨' },
+  fr: { '屏幕与系统音频': 'Écran et audio système', '允许': 'Autoriser', '已允许': 'Autorisé', '请在系统设置中允许': 'Autorisez Brevia à accéder à l’écran et à l’audio système dans Réglages Système.', '已准备就绪': 'Prêt' },
+  de: { '屏幕与系统音频': 'Bildschirm und Systemaudio', '允许': 'Erlauben', '已允许': 'Erlaubt', '请在系统设置中允许': 'Erlauben Sie Brevia in den Systemeinstellungen den Zugriff auf Bildschirm und Systemaudio.', '已准备就绪': 'Bereit' },
+  ru: { '屏幕与系统音频': 'Экран и системный звук', '允许': 'Разрешить', '已允许': 'Разрешено', '请在系统设置中允许': 'Разрешите Brevia доступ к экрану и системному звуку в системных настройках.', '已准备就绪': 'Готово' },
+};
+Object.entries(onboardingPermissionLabels).forEach(([code, labels]) => Object.assign(catalog[code].labels, labels));
 Object.assign(catalog.en.labels, { '正在精修': 'Refining', '原版逐字稿仍可查看': 'The original transcript remains available', '准备中': 'Preparing' });
 Object.assign(catalog.es.labels, { '正在精修': 'Refinando', '原版逐字稿仍可查看': 'La transcripción original sigue disponible', '准备中': 'Preparando' });
 Object.assign(catalog.ja.labels, { '计算设备': '演算デバイス', '会后精修': '会議後の高精度化', '正在精修': '高精度化中', '原版逐字稿仍可查看': '元の文字起こしは引き続き閲覧できます', '准备中': '準備中', '可用': '利用可能', '本地保存': 'ローカルに保存', '本地会议': 'ローカル会議', '← 返回会议库': '← ライブラリに戻る' });
@@ -111,6 +122,17 @@ const modelLibraryLabels = {
   ru: { '模型库': 'Библиотека моделей', '管理模型库': 'Управление библиотекой моделей', '管理语言识别模型的下载、删除与版本信息。': 'Управляйте загрузкой, удалением и сведениями о версиях моделей распознавания речи.' },
 };
 Object.entries(modelLibraryLabels).forEach(([code, labels]) => Object.assign(catalog[code].labels, labels));
+const dynamicInterfaceLabels = {
+  zh: { 'VAD 模型': 'VAD 模型', '查看完整内容': '查看完整内容' },
+  en: { 'VAD 模型': 'VAD model', '查看完整内容': 'View full content' },
+  es: { 'VAD 模型': 'Modelo VAD', '查看完整内容': 'Ver contenido completo' },
+  ja: { 'VAD 模型': 'VAD モデル', '查看完整内容': 'すべて表示' },
+  ko: { 'VAD 模型': 'VAD 모델', '查看完整内容': '전체 내용 보기' },
+  fr: { 'VAD 模型': 'Modèle VAD', '查看完整内容': 'Voir le contenu complet' },
+  de: { 'VAD 模型': 'VAD-Modell', '查看完整内容': 'Vollständigen Inhalt anzeigen' },
+  ru: { 'VAD 模型': 'Модель VAD', '查看完整内容': 'Показать полностью' },
+};
+Object.entries(dynamicInterfaceLabels).forEach(([code, labels]) => Object.assign(catalog[code].labels, labels));
 const appCopy = {
   stageLabels: { 标点恢复: { zh: '标点恢复', en: 'Punctuation restoration', es: 'Restauración de puntuación' }, '预期说话人数': { zh: '预期说话人数', en: 'Expected speakers', es: 'Hablantes esperados' }, '留空自动匹配': { zh: '留空自动匹配', en: 'Leave blank for automatic matching', es: 'Déjalo vacío para la selección automática' }, '自动匹配': { zh: '自动匹配', en: 'Automatic matching', es: 'Selección automática' } },
   themeLabels: { zh: { light: '切换至浅色主题', dark: '切换至深色主题' }, en: { light: 'Switch to light theme', dark: 'Switch to dark theme' }, es: { light: 'Cambiar al tema claro', dark: 'Cambiar al tema oscuro' } },
@@ -214,7 +236,7 @@ Object.entries(appCopy.modalCopy).forEach(([code, copy]) => {
   const localized = addedModelCopy[code] || addedModelCopy.en;
   const items = copy.models.items;
   const punctuation = items.findIndex(([, name]) => name === 'English Punctuation and Casing');
-  items.splice(punctuation, 0, [localized.vad, 'Silero VAD', localized.all, localized.silero, 'V'], [localized.vad, 'TEN-VAD', localized.all, localized.ten, 'V']);
+  items.splice(punctuation, 0, [localized.vad, 'Silero VAD', localized.all, localized.silero, 'V']);
   const refined = items.findIndex(([, name]) => name === 'Qwen3-ASR');
   const largeQwen = items.findIndex(([, name]) => name === 'Qwen3-ASR 1.7B int8');
   items.splice(largeQwen, 0, [items[refined][0], 'Whisper Turbo', localized.whisperLanguages, localized.whisper, 'W']);
@@ -224,6 +246,22 @@ Object.entries(appCopy.modalCopy).forEach(([code, copy]) => {
   const embedding = items.findIndex(([, name]) => name === '3D-Speaker ERes2Net Base');
   items[embedding].splice(0, 4, localized.embedding, '3D-Speaker ERes2Net Base', items[embedding][2] === 'Chinese' ? localized.campLanguages.split(' / ')[0] : items[embedding][2], items[embedding][3]);
   items.splice(embedding + 1, 0, [localized.embedding, 'NeMo Titanet Small', localized.nemoLanguages, localized.nemo, 'N'], [localized.embedding, '3D-Speaker CAM++', localized.campLanguages, localized.camp, 'C']);
+});
+const whisperLargeV3Copy = {
+  zh: ['西班牙语 / 多语种', '西班牙语优先的高精度离线精修。'],
+  en: ['Spanish / Multilingual', 'High-accuracy offline refinement, recommended for Spanish.'],
+  es: ['Español / Multilingüe', 'Refinamiento sin conexión de alta precisión, recomendado para español.'],
+  ja: ['スペイン語 / 多言語', 'スペイン語に推奨する高精度オフライン高精度化。'],
+  ko: ['스페인어 / 다국어', '스페인어에 권장하는 고정확도 오프라인 정제입니다.'],
+  fr: ['Espagnol / multilingue', 'Affinage hors ligne haute précision recommandé pour l’espagnol.'],
+  de: ['Spanisch / mehrsprachig', 'Hochpräzise Offline-Nachbearbeitung, empfohlen für Spanisch.'],
+  ru: ['Испанский / многоязычный', 'Высокоточная автономная обработка, рекомендованная для испанского.'],
+};
+Object.entries(appCopy.modalCopy).forEach(([code, copy]) => {
+  const items = copy.models.items;
+  const index = items.findIndex(([, name]) => name === 'Whisper Turbo');
+  const [languages, intro] = whisperLargeV3Copy[code] || whisperLargeV3Copy.en;
+  items.splice(index + 1, 0, [items[index][0], 'Whisper Large v3', languages, intro, 'W']);
 });
 const liveDenoiserCopy = {
   zh: ['实时降噪', '所有语言', '实时消除环境噪声后再进行字幕识别。'],
@@ -270,6 +308,21 @@ Object.entries(appCopy.modalCopy).forEach(([code, copy]) => {
   const index = items.findIndex(([stage]) => stage !== items[0][0]);
   items.splice(index < 0 ? items.length : index, 0, ...(additionalStreamingModels[code] || additionalStreamingModels.en).filter(([name]) => name !== 'Streaming Zipformer Chinese and English').map(([name, detail, intro]) => [items[0][0], name, detail, intro, 'Z']));
 });
+const nemotronStreamingCopy = {
+  zh: ['英语 / 西班牙语 / 法语 / 德语 / 日语 / 韩语等', '560 毫秒块的多语种高精度实时识别。'],
+  en: ['English / Spanish / French / German / Japanese / Korean and more', 'High-accuracy multilingual live transcription with 560 ms chunks.'],
+  es: ['Español / inglés / francés / alemán / japonés / coreano y más', 'Transcripción en vivo multilingüe de alta precisión con bloques de 560 ms.'],
+  ja: ['英語 / スペイン語 / フランス語 / ドイツ語 / 日本語 / 韓国語など', '560 ミリ秒チャンクの高精度な多言語ライブ文字起こし。'],
+  ko: ['영어 / 스페인어 / 프랑스어 / 독일어 / 일본어 / 한국어 등', '560ms 청크의 고정확도 다국어 실시간 전사입니다.'],
+  fr: ['Anglais / espagnol / français / allemand / japonais / coréen et plus', 'Transcription en direct multilingue haute précision avec des blocs de 560 ms.'],
+  de: ['Englisch / Spanisch / Französisch / Deutsch / Japanisch / Koreanisch und mehr', 'Hochpräzise mehrsprachige Live-Transkription mit 560-ms-Blöcken.'],
+  ru: ['Английский / испанский / французский / немецкий / японский / корейский и другие', 'Высокоточная многоязычная потоковая транскрипция с блоками 560 мс.'],
+};
+Object.entries(appCopy.modalCopy).forEach(([code, copy]) => {
+  const index = copy.models.items.findIndex(([stage]) => stage !== copy.models.items[0][0]);
+  const [languages, intro] = nemotronStreamingCopy[code] || nemotronStreamingCopy.en;
+  copy.models.items.splice(index < 0 ? copy.models.items.length : index, 0, [copy.models.items[0][0], 'Nemotron 3.5 ASR Streaming 0.6B (560ms)', languages, intro, 'N']);
+});
 const prepareModelLabels = {
   zh: { '实时字幕模型': '实时字幕模型', '说话人分离模型': '说话人分离模型', '会后精修模型': '会后精修模型' },
   en: { '实时字幕模型': 'Live caption model', '说话人分离模型': 'Speaker diarization model', '会后精修模型': 'Post-meeting refinement model' },
@@ -286,14 +339,14 @@ Object.entries({
   ko: '모델 관리 →', fr: 'Gérer les modèles →', de: 'Modelle verwalten →', ru: 'Управление моделями →',
 }).forEach(([code, label]) => { catalog[code].labels['管理模型与术语 →'] = label; });
 Object.entries({
-  zh: { '从文件夹打开': '从文件夹打开', '清空数据': '清空数据', '此操作不可恢复。': '此操作不可恢复。', '已清空': '已清空', '未找到录音文件': '未找到录音文件', '未找到模型文件': '未找到模型文件', '准备中': '准备中', '需要下载以下模型': '需要下载以下模型：', '前往模型库': '前往模型库', '精修': '精修' },
-  en: { '从文件夹打开': 'Open in folder', '清空数据': 'Clear data', '此操作不可恢复。': 'This action cannot be undone.', '已清空': 'Data cleared', '未找到录音文件': 'Recording file not found', '未找到模型文件': 'Model files not found', '准备中': 'Preparing', '需要下载以下模型': 'Download required models:', '前往模型库': 'Go to model library', '精修': 'Refine' },
-  es: { '从文件夹打开': 'Abrir en la carpeta', '清空数据': 'Borrar datos', '此操作不可恢复。': 'Esta acción no se puede deshacer.', '已清空': 'Datos borrados', '未找到录音文件': 'No se encontró el archivo de grabación', '未找到模型文件': 'No se encontraron archivos del modelo', '准备中': 'Preparando', '需要下载以下模型': 'Descarga los modelos necesarios:', '前往模型库': 'Ir a la biblioteca de modelos', '精修': 'Refinar' },
-  ja: { '从文件夹打开': 'フォルダで開く', '清空数据': 'データを消去', '此操作不可恢复。': 'この操作は元に戻せません。', '已清空': 'データを消去しました', '未找到录音文件': '録音ファイルが見つかりません', '未找到模型文件': 'モデルファイルが見つかりません', '准备中': '準備中', '需要下载以下模型': '次のモデルをダウンロードしてください：', '前往模型库': 'モデルライブラリへ', '精修': '再調整' },
-  ko: { '从文件夹打开': '폴더에서 열기', '清空数据': '데이터 지우기', '此操作不可恢复。': '이 작업은 되돌릴 수 없습니다.', '已清空': '데이터가 지워졌습니다', '未找到录音文件': '녹음 파일을 찾을 수 없습니다', '未找到模型文件': '모델 파일을 찾을 수 없습니다', '准备中': '준비 중', '需要下载以下模型': '필요한 모델을 다운로드하세요:', '前往模型库': '모델 라이브러리로', '精修': '정교화' },
-  fr: { '从文件夹打开': 'Ouvrir dans le dossier', '清空数据': 'Effacer les données', '此操作不可恢复。': 'Cette action est irréversible.', '已清空': 'Données effacées', '未找到录音文件': 'Fichier d’enregistrement introuvable', '未找到模型文件': 'Fichiers du modèle introuvables', '准备中': 'Préparation', '需要下载以下模型': 'Téléchargez les modèles requis :', '前往模型库': 'Aller à la bibliothèque de modèles', '精修': 'Affiner' },
-  de: { '从文件夹打开': 'Im Ordner öffnen', '清空数据': 'Daten löschen', '此操作不可恢复。': 'Diese Aktion kann nicht rückgängig gemacht werden.', '已清空': 'Daten gelöscht', '未找到录音文件': 'Aufnahmedatei nicht gefunden', '未找到模型文件': 'Modelldateien nicht gefunden', '准备中': 'Wird vorbereitet', '需要下载以下模型': 'Erforderliche Modelle herunterladen:', '前往模型库': 'Zur Modellbibliothek', '精修': 'Verfeinern' },
-  ru: { '从文件夹打开': 'Открыть в папке', '清空数据': 'Очистить данные', '此操作不可恢复。': 'Это действие нельзя отменить.', '已清空': 'Данные очищены', '未找到录音文件': 'Файл записи не найден', '未找到模型文件': 'Файлы модели не найдены', '准备中': 'Подготовка', '需要下载以下模型': 'Скачайте необходимые модели:', '前往模型库': 'К библиотеке моделей', '精修': 'Уточнить' },
+  zh: { '从文件夹打开': '从文件夹打开', '清空数据': '清空数据', '此操作不可恢复。': '此操作不可恢复。', '已清空': '已清空', '未找到录音文件': '未找到录音文件', '未找到模型文件': '未找到模型文件', '准备中': '准备中', '需要下载以下模型': '需要下载以下模型：', '模型下载队列': '模型下载队列', '前往模型库': '前往模型库', '精修': '精修' },
+  en: { '从文件夹打开': 'Open in folder', '清空数据': 'Clear data', '此操作不可恢复。': 'This action cannot be undone.', '已清空': 'Data cleared', '未找到录音文件': 'Recording file not found', '未找到模型文件': 'Model files not found', '准备中': 'Preparing', '需要下载以下模型': 'Download required models:', '模型下载队列': 'Model download queue', '前往模型库': 'Go to model library', '精修': 'Refine' },
+  es: { '从文件夹打开': 'Abrir en la carpeta', '清空数据': 'Borrar datos', '此操作不可恢复。': 'Esta acción no se puede deshacer.', '已清空': 'Datos borrados', '未找到录音文件': 'No se encontró el archivo de grabación', '未找到模型文件': 'No se encontraron archivos del modelo', '准备中': 'Preparando', '需要下载以下模型': 'Descarga los modelos necesarios:', '模型下载队列': 'Cola de descargas de modelos', '前往模型库': 'Ir a la biblioteca de modelos', '精修': 'Refinar' },
+  ja: { '从文件夹打开': 'フォルダで開く', '清空数据': 'データを消去', '此操作不可恢复。': 'この操作は元に戻せません。', '已清空': 'データを消去しました', '未找到录音文件': '録音ファイルが見つかりません', '未找到模型文件': 'モデルファイルが見つかりません', '准备中': '準備中', '需要下载以下模型': '次のモデルをダウンロードしてください：', '模型下载队列': 'モデルダウンロードキュー', '前往模型库': 'モデルライブラリへ', '精修': '再調整' },
+  ko: { '从文件夹打开': '폴더에서 열기', '清空数据': '데이터 지우기', '此操作不可恢复。': '이 작업은 되돌릴 수 없습니다.', '已清空': '데이터가 지워졌습니다', '未找到录音文件': '녹음 파일을 찾을 수 없습니다', '未找到模型文件': '모델 파일을 찾을 수 없습니다', '准备中': '준비 중', '需要下载以下模型': '필요한 모델을 다운로드하세요:', '模型下载队列': '모델 다운로드 대기열', '前往模型库': '모델 라이브러리로', '精修': '정교화' },
+  fr: { '从文件夹打开': 'Ouvrir dans le dossier', '清空数据': 'Effacer les données', '此操作不可恢复。': 'Cette action est irréversible.', '已清空': 'Données effacées', '未找到录音文件': 'Fichier d’enregistrement introuvable', '未找到模型文件': 'Fichiers du modèle introuvables', '准备中': 'Préparation', '需要下载以下模型': 'Téléchargez les modèles requis :', '模型下载队列': 'File de téléchargement des modèles', '前往模型库': 'Aller à la bibliothèque de modèles', '精修': 'Affiner' },
+  de: { '从文件夹打开': 'Im Ordner öffnen', '清空数据': 'Daten löschen', '此操作不可恢复。': 'Diese Aktion kann nicht rückgängig gemacht werden.', '已清空': 'Daten gelöscht', '未找到录音文件': 'Aufnahmedatei nicht gefunden', '未找到模型文件': 'Modelldateien nicht gefunden', '准备中': 'Wird vorbereitet', '需要下载以下模型': 'Erforderliche Modelle herunterladen:', '模型下载队列': 'Modell-Download-Warteschlange', '前往模型库': 'Zur Modellbibliothek', '精修': 'Verfeinern' },
+  ru: { '从文件夹打开': 'Открыть в папке', '清空数据': 'Очистить данные', '此操作不可恢复。': 'Это действие нельзя отменить.', '已清空': 'Данные очищены', '未找到录音文件': 'Файл записи не найден', '未找到模型文件': 'Файлы модели не найдены', '准备中': 'Подготовка', '需要下载以下模型': 'Скачайте необходимые модели:', '模型下载队列': 'Очередь загрузки моделей', '前往模型库': 'К библиотеке моделей', '精修': 'Уточнить' },
 }).forEach(([code, labels]) => Object.assign(catalog[code].labels, labels));
 Object.entries({
   zh: '调整识别、端点检测、说话人分离和本地模型运行参数。',

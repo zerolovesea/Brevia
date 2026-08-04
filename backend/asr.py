@@ -225,15 +225,17 @@ class ModelManager:
 class StreamingASR:
     """维护每条音轨的在线识别流，生成 partial 和 endpoint 结果。"""
 
-    def __init__(self, manager, model_id):
+    def __init__(self, manager, model_id, language="auto"):
         """创建流式识别器。
 
         Args:
             manager: 已初始化的 ``ModelManager``。
             model_id: 具备 ``streaming`` 能力且已安装的模型 ID。
+            language: 会议语言；Nemotron 按流使用此值选择识别语言。
         """
         self.manager = manager
         self.model = manager.get(model_id)
+        self.language = language or "auto"
         if not manager.is_ready(model_id):
             raise RuntimeError(f"Model {model_id} is not installed")
         try:
@@ -289,7 +291,12 @@ class StreamingASR:
         Returns:
             ``(识别结果, 是否句末)``；结果类型由 sherpa-onnx 模型决定。
         """
-        stream = self.streams.setdefault(track, self.recognizer.create_stream())
+        if track not in self.streams:
+            stream = self.recognizer.create_stream()
+            if self.model["kind"] == "nemotron":
+                stream.set_option("language", self.language)
+            self.streams[track] = stream
+        stream = self.streams[track]
         stream.accept_waveform(sample_rate, samples)
         while self.recognizer.is_ready(stream):
             self.recognizer.decode_stream(stream)
@@ -402,9 +409,7 @@ def _vad_config(manager, model_id):
 
     config = sherpa_onnx.VadModelConfig()
     model = manager.get(model_id)
-    getattr(
-        config, "ten_vad" if model["kind"] == "ten-vad" else "silero_vad"
-    ).model = str(manager.path(model_id) / model["files"][0])
+    config.silero_vad.model = str(manager.path(model_id) / model["files"][0])
     config.sample_rate = 16000
     return config
 
@@ -421,7 +426,10 @@ class OfflineVAD:
     def process(self, samples, sample_rate=16000):
         if sample_rate != self.config.sample_rate:
             raise ValueError(f"VAD requires {self.config.sample_rate} Hz audio")
-        detector = self.sherpa_onnx.VoiceActivityDetector(self.config, 100)
+        # The detector keeps an unfinished speech segment in this buffer.  Size it
+        # for the input instead of repeatedly growing on continuous meeting audio.
+        buffer_seconds = max(100, (len(samples) + sample_rate - 1) // sample_rate + 1)
+        detector = self.sherpa_onnx.VoiceActivityDetector(self.config, buffer_seconds)
         segments = []
 
         def drain():
@@ -626,9 +634,9 @@ class RefinedASR:
             )
         elif model["kind"] == "whisper":
             self.recognizer = sherpa_onnx.OfflineRecognizer.from_whisper(
-                encoder=str(path / "turbo-encoder.int8.onnx"),
-                decoder=str(path / "turbo-decoder.int8.onnx"),
-                tokens=str(path / "turbo-tokens.txt"),
+                encoder=str(path / model["files"][0]),
+                decoder=str(path / model["files"][1]),
+                tokens=str(path / model["files"][2]),
                 language="",
                 **common,
             )
@@ -644,11 +652,14 @@ class RefinedASR:
             )
 
     def decode(self, samples, sample_rate=16000):
-        """转写一段单声道浮点波形，返回去除首尾空白的文本。"""
-        return self.decode_words(samples, sample_rate)[0]
+        """返回文本；实时精修不需要词级时间轴。"""
+        stream = self.recognizer.create_stream()
+        stream.accept_waveform(sample_rate, samples)
+        self.recognizer.decode_stream(stream)
+        return stream.result.text.strip()
 
     def decode_words(self, samples, sample_rate=16000):
-        """返回文本及模型提供的 token 级时间戳；不接受插值时间戳。"""
+        """返回文本及模型提供的 token 级时间戳；没有时保留空列表。"""
         stream = self.recognizer.create_stream()
         stream.accept_waveform(sample_rate, samples)
         self.recognizer.decode_stream(stream)
@@ -656,9 +667,7 @@ class RefinedASR:
         tokens = list(getattr(result, "tokens", []) or [])
         timestamps = list(getattr(result, "timestamps", []) or [])
         if not tokens or len(tokens) != len(timestamps):
-            raise RuntimeError(
-                f"Model {self.model_id} does not provide token timestamps; choose Whisper Turbo"
-            )
+            return result.text.strip(), []
         words = []
         for index, token in enumerate(tokens):
             if not token or token.startswith("<|"):

@@ -28,14 +28,21 @@ function renderDualTrackPanel(meeting) {
 }
 
 function applyBackendDetail(meeting) {
-  const sameMeeting = currentMeetingDetail?.id === meeting.id && Boolean(playerAudio.src);
+  const sameDetail = currentMeetingDetail?.id === meeting.id;
+  const transcriptScrollTop = sameDetail ? document.querySelector('.transcript-body')?.scrollTop : undefined;
+  const sameMeeting = sameDetail && Boolean(playerAudio.src);
   currentMeetingDetail = meeting;
   const refined = meeting.segments.filter((segment) => segment.version.startsWith('postprocess'));
   const revision = refined.length ? Math.max(...refined.map((segment) => segment.revision)) : null;
   const base = revision === null ? meeting.segments.filter((segment) => segment.version === 'live') : refined.filter((segment) => segment.revision === revision);
   const latest = new Map();
   [...base, ...meeting.segments.filter((segment) => segment.version === 'user')].forEach((segment) => { if (!latest.has(segment.id) || segment.version === 'user') latest.set(segment.id, segment); });
-  uiData.detail.transcript = [...latest.values()].sort((a, b) => a.start_ms - b.start_ms).map((segment) => ({ time: `${String(Math.floor(segment.start_ms / 60000)).padStart(2, '0')}:${String(Math.floor(segment.start_ms / 1000) % 60).padStart(2, '0')}`, seconds: Math.floor(segment.start_ms / 1000), startSeconds: segment.start_ms / 1000, endSeconds: segment.end_ms / 1000, speaker: { name: segment.speaker_name, segmentId: segment.id, editing: segment.id === editingSegmentSpeakerId }, text: segment.text, translation: segment.translation }));
+  const speakerNames = new Map(meeting.speakers.map((speaker) => [speaker.id, speaker.name]));
+  uiData.detail.transcript = [...latest.values()].sort((a, b) => a.start_ms - b.start_ms).map((segment) => {
+    const overlapSpeakers = [...new Set(segment.word_timestamps.flatMap((word) => word.overlap_speakers || []))];
+    return { time: `${String(Math.floor(segment.start_ms / 60000)).padStart(2, '0')}:${String(Math.floor(segment.start_ms / 1000) % 60).padStart(2, '0')}`, seconds: Math.floor(segment.start_ms / 1000), startSeconds: segment.start_ms / 1000, endSeconds: segment.end_ms / 1000, speaker: { name: segment.speaker_name, segmentId: segment.id, editing: segment.id === editingSegmentSpeakerId, overlapNames: overlapSpeakers.length > 1 ? overlapSpeakers.map((speaker) => speakerNames.get(speaker) || speaker) : [] }, text: segment.text, translation: segment.translation };
+  });
+  uiData.detail.refinedTranscript = revision === null ? [] : [...latest.values()].sort((a, b) => a.start_ms - b.start_ms).map((segment) => ({ speaker: { name: segment.speaker_name }, text: segment.text }));
   const summary = meeting.summary?.data;
   uiData.detail.summary = summary?.markdown ? { markdown: summary.markdown, hasFull: true } : { title: '', sections: [], empty: true };
   document.querySelector('#detail-view .detail-head h1').textContent = meeting.title;
@@ -47,7 +54,9 @@ function applyBackendDetail(meeting) {
     playerAudio.pause(); playerAudio.currentTime = 0; progress.value = 0; updatePlayerControl(); renderPlayerTime();
     if (audioPath) window.brevia.audioUrl(audioPath).then((url) => { playerAudio.src = url; }); else { playerAudio.removeAttribute('src'); playerAudio.load(); }
   } else { progress.value = playerAudio.currentTime; renderPlayerTime(); }
-  renderMeetingDetail(); renderDualTrackPanel(meeting);
+  renderMeetingDetail();
+  if (transcriptScrollTop !== undefined) document.querySelector('.transcript-body').scrollTop = transcriptScrollTop;
+  renderDualTrackPanel(meeting);
 }
 
 async function startSeparation() {

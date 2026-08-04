@@ -12,7 +12,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from .asr import ChinesePunctuation, EnglishPunctuation, OfflineVAD, SpeakerTracker
+from .asr import ChinesePunctuation, EnglishPunctuation, OfflineVAD, RefinedASR, SpeakerTracker
 from .config import DEFAULT_SETTINGS, SETTINGS, runtime_settings, save_runtime_settings
 from .llm_client import complete
 from .storage import Store
@@ -245,6 +245,7 @@ class WorkerTest(unittest.TestCase):
             self.assertEqual(
                 json.loads(sent.data)["response_format"], {"type": "json_object"}
             )
+            self.assertEqual(json.loads(sent.data)["tool_choice"], "none")
             self.assertEqual(dict(sent.header_items())["Authorization"], "Bearer token")
             self.assertEqual(dict(sent.header_items())["User-agent"], "Brevia/1.0")
         with patch(
@@ -284,6 +285,7 @@ class WorkerTest(unittest.TestCase):
                 "ollama",
             )
             self.assertNotIn("stream", json.loads(request.call_args.args[0].data))
+            self.assertNotIn("tool_choice", json.loads(request.call_args.args[0].data))
             self.assertNotIn("Authorization", dict(request.call_args.args[0].header_items()))
         with patch(
             "backend.llm_client.urllib.request.urlopen",
@@ -327,6 +329,10 @@ class WorkerTest(unittest.TestCase):
                 "介绍一下 all, over, all, over, all, over, all, over"
             ),
             "介绍一下 all, over",
+        )
+        self.assertEqual(
+            Worker._clean_live_text("吞噬天地，那那那那那那那那那那"),
+            "吞噬天地，那",
         )
 
     def test_live_qwen_refinement_replaces_unedited_final_only(self):
@@ -450,9 +456,47 @@ class WorkerTest(unittest.TestCase):
         )
         self.assertEqual(diarization_event["payload"]["tracks"], ["mic", "system"])
 
+    def test_imported_audio_is_diarized(self):
+        meeting = self.worker.store.create_meeting(
+            {
+                "title": "导入录音",
+                "language": "zh",
+                "streaming_model_id": "paraformer-zh-en-int8",
+                "refined_model_id": "qwen3-asr-0.6b-int8",
+            }
+        )
+        with wave.open(
+            str(self.worker.store.meetings_dir / meeting["id"] / "audio" / "playback-mic.wav"),
+            "wb",
+        ) as audio:
+            audio.setnchannels(1)
+            audio.setsampwidth(2)
+            audio.setframerate(16000)
+            audio.writeframes(b"\0\0" * 16000)
+        self.worker.store.finish_imported_meeting(meeting["id"], 1000)
+        self.worker.models.is_ready = lambda _: True
+        numpy = type("Numpy", (), {"zeros_like": staticmethod(lambda samples: [0.0] * len(samples))})
+        with (
+            patch("backend.worker_refinement.read_mono_wav", return_value=([0.001] * 16000, 16000)),
+            patch.dict("sys.modules", {"numpy": numpy}),
+            patch("backend.worker_refinement.OfflineVAD") as vad,
+            patch("backend.worker_refinement.OfflineDiarizer") as diarizer,
+            patch("backend.worker_refinement.SpeakerTracker") as tracker,
+            patch("backend.worker_refinement.RefinedASR") as refined,
+        ):
+            vad.return_value.process.return_value = [{"start_ms": 0, "end_ms": 1000}]
+            diarizer.return_value.process.return_value = [{"start_ms": 0, "end_ms": 1000, "speaker": "spk-2"}]
+            tracker.return_value.embedding.return_value = None
+            refined.return_value.decode_words.return_value = ("导入内容", [{"text": "导入内容", "start_ms": 0, "end_ms": 1000}])
+            result = self.worker.refine({"meeting_id": meeting["id"]})
+
+        diarizer.return_value.process.assert_called_once()
+        self.assertEqual(result["segments"][-1]["speaker"], "spk-2")
+
     def test_offline_vad_drains_long_audio_without_losing_timestamps(self):
         class Detector:
-            def __init__(self, *_):
+            def __init__(self, _, buffer_seconds):
+                type(self).last_buffer_seconds = buffer_seconds
                 self.queue, self.position = [], 0
 
             def accept_waveform(self, samples):
@@ -484,6 +528,33 @@ class WorkerTest(unittest.TestCase):
                 {"start_ms": 10000, "end_ms": 20000},
                 {"start_ms": 20000, "end_ms": 25000},
             ],
+        )
+        self.assertEqual(vad.sherpa_onnx.VoiceActivityDetector.last_buffer_seconds, 100)
+        vad.process([0.1] * 1600001)
+        self.assertEqual(vad.sherpa_onnx.VoiceActivityDetector.last_buffer_seconds, 102)
+
+    def test_long_turns_are_split_before_voiceprint_matching(self):
+        turns = self.worker._split_long_turns(
+            [{"start_ms": 0, "end_ms": 13000, "speaker": "spk-1"}]
+        )
+        self.assertEqual(
+            [(turn["start_ms"], turn["end_ms"]) for turn in turns],
+            [(0, 6000), (6000, 12000), (12000, 13000)],
+        )
+
+    def test_refinement_decode_range_adds_context_without_crossing_speakers(self):
+        turn = {"start_ms": 1000, "end_ms": 1200, "speaker": "spk-1"}
+        self.assertEqual(
+            self.worker._decode_range(turn, None, None, 5000), (200, 2000)
+        )
+        self.assertEqual(
+            self.worker._decode_range(
+                turn,
+                {"start_ms": 0, "end_ms": 950, "speaker": "spk-2"},
+                {"start_ms": 1250, "end_ms": 2000, "speaker": "spk-2"},
+                5000,
+            ),
+            (950, 1250),
         )
 
     def test_refinement_turns_preserve_speaker_boundaries(self):
@@ -528,6 +599,13 @@ class WorkerTest(unittest.TestCase):
             {"start_ms": 700, "end_ms": 1200, "speaker": "spk-2"},
         ]})
         self.assertEqual(overlaps[0]["speakers"], ["spk-1", "spk-2"])
+        self.assertEqual(
+            self.worker._overlap_speakers(750, 900, [
+                {"start_ms": 0, "end_ms": 1000, "speaker": "spk-1"},
+                {"start_ms": 700, "end_ms": 1200, "speaker": "spk-2"},
+            ]),
+            ["spk-1", "spk-2"],
+        )
 
     def test_profile_assignment_requires_a_clear_best_match(self):
         self.assertTrue(self.worker._is_confident_profile_match({"score": 0.82, "runner_up_score": 0.71}))
@@ -818,6 +896,34 @@ class WorkerTest(unittest.TestCase):
             ["turbo-encoder.int8.onnx", "turbo-decoder.int8.onnx", "turbo-tokens.txt"],
         )
 
+    def test_whisper_large_v3_manifest_uses_the_archive_file_names(self):
+        self.assertEqual(
+            self.worker.models.get("whisper-large-v3")["files"],
+            ["large-v3-encoder.int8.onnx", "large-v3-decoder.int8.onnx", "large-v3-tokens.txt"],
+        )
+
+    def test_refined_asr_without_token_timestamps_keeps_segment_timing(self):
+        class Stream:
+            def accept_waveform(self, *_):
+                pass
+
+        class Recognizer:
+            def create_stream(self):
+                return Stream()
+
+            def decode_stream(self, stream):
+                stream.result = SimpleNamespace(text="hola mundo", tokens=[], timestamps=[])
+
+        recognizer = object.__new__(RefinedASR)
+        recognizer.recognizer = Recognizer()
+        self.assertEqual(recognizer.decode_words([0.0] * 16000), ("hola mundo", []))
+
+    def test_nemotron_manifest_uses_the_archive_file_names(self):
+        self.assertEqual(
+            self.worker.models.get("nemotron-3.5-asr-streaming-0.6b-560ms-int8")["files"],
+            ["encoder.int8.onnx", "decoder.int8.onnx", "joiner.int8.onnx", "tokens.txt"],
+        )
+
     def test_streaming_transducer_starts_without_extra_terms(self):
         with patch("backend.worker_session.StreamingASR") as streaming:
             self.worker.start(
@@ -830,7 +936,7 @@ class WorkerTest(unittest.TestCase):
             )
         self.assertEqual(
             streaming.call_args.args,
-            (self.worker.models, "zipformer-zh-xlarge-streaming-int8"),
+            (self.worker.models, "zipformer-zh-xlarge-streaming-int8", "zh"),
         )
 
     def test_initialize_downloads_default_live_models(self):

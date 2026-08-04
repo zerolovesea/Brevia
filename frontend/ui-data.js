@@ -19,6 +19,7 @@ const uiData = {
       { time: '02:14', seconds: 134, speaker: { name: '说话人 2' }, text: '预算部分我会在周五前补一版，重点说明模型的本地部署成本。', translation: 'I will update the budget by Friday, focusing on local deployment costs.' },
       { time: '05:48', seconds: 348, speaker: { name: '王琳' }, text: '试点数据确认后，再决定是否开放给更多团队使用。' }
     ],
+    refinedTranscript: [],
     summary: { title: '先完成两个真实场景的本地试点，再评估推广范围。', sections: [{ title: '决定', text: '客服与销售作为首批试点场景。' }, { title: '待办', items: [{ text: '周五前补充本地部署预算', speaker: '说话人 2' }, { text: '确认试点数据指标', speaker: '王琳' }] }] }
   },
   settings: {

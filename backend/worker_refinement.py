@@ -62,11 +62,16 @@ class RefinementWorkerMixin:
         ]
         if not tracks:
             raise ValueError("The meeting has no audio to refine")
+        manifest = self.store.read_manifest(meeting["id"])
+        is_imported_audio = manifest.get("source") == "audio_import" or (
+            not manifest.get("tracks") and set(tracks) == {"mic"}
+        )
+        diarized_tracks = {"system"} | ({"mic"} if is_imported_audio else set())
         required_models = [
             refined_model_id,
             meeting.get("vad_model_id") or "silero-vad",
         ]
-        if "system" in tracks:
+        if diarized_tracks.intersection(tracks):
             required_models.extend(
                 [
                     meeting.get("speaker_segmentation_model_id"),
@@ -95,7 +100,7 @@ class RefinementWorkerMixin:
                 meeting.get("speaker_segmentation_model_id"),
                 meeting.get("speaker_embedding_model_id"),
             )
-            if "system" in tracks
+            if diarized_tracks.intersection(tracks)
             else None
         )
         denoiser_id = SETTINGS["live_asr"]["denoiser_model_id"]
@@ -117,7 +122,7 @@ class RefinementWorkerMixin:
                         },
                     )
             speech = vad.process(samples, sample_rate)
-            if track == "mic":
+            if track not in diarized_tracks:
                 turns = [{**turn, "speaker": "local-user"} for turn in speech]
                 self.store.rename_speaker(meeting["id"], "local-user", "Local user")
             else:
@@ -135,6 +140,7 @@ class RefinementWorkerMixin:
                     identity_tracker = SpeakerTracker(
                         self.models, model_id=meeting.get("speaker_embedding_model_id")
                     )
+                    turns = self._split_long_turns(turns)
                     turn_embeddings = []
                     for turn in turns:
                         clip = samples[
@@ -147,7 +153,7 @@ class RefinementWorkerMixin:
                         )
                     if (
                         num_speakers == -1
-                        and len({turn["speaker"] for turn in turns}) > 1
+                        and len(turns) > 1
                     ):
                         known = [
                             (index, embedding)
@@ -207,10 +213,14 @@ class RefinementWorkerMixin:
             key=lambda turn: (turn["start_ms"], turn["end_ms"]),
         )
         overlaps = self._detect_overlaps(raw_turns_by_track)
-        self.store.replace_speaker_turns(meeting["id"], turns)
+        raw_turns = sorted(
+            (turn for track_turns in raw_turns_by_track.values() for turn in track_turns),
+            key=lambda turn: (turn["start_ms"], turn["end_ms"]),
+        )
+        self.store.replace_speaker_turns(meeting["id"], raw_turns)
         self.emit(
             "diarization.ready",
-            {"meeting_id": meeting["id"], "tracks": tracks, "turns": turns, "overlaps": overlaps},
+            {"meeting_id": meeting["id"], "tracks": tracks, "turns": raw_turns, "overlaps": overlaps},
         )
         recognizer = RefinedASR(self.models, refined_model_id)
         locked_ids = {
@@ -235,7 +245,7 @@ class RefinementWorkerMixin:
         previous_text = {}
         refined_segments = []
         refined_segment_ids = set()
-        overlap_ms = 1000
+        context_ms = 800
         self.store.set_status(meeting["id"], "refining")
         self.emit(
             "refinement.progress",
@@ -250,19 +260,12 @@ class RefinementWorkerMixin:
                     start_ms, end_ms = turn["start_ms"], turn["end_ms"]
                     before = windows[index - 1] if index else None
                     after = windows[index + 1] if index + 1 < len(windows) else None
-                    decode_start_ms = (
-                        start_ms - overlap_ms
-                        if before
-                        and before["speaker"] == turn["speaker"]
-                        and before["end_ms"] == start_ms
-                        else start_ms
-                    )
-                    decode_end_ms = (
-                        end_ms + overlap_ms
-                        if after
-                        and after["speaker"] == turn["speaker"]
-                        and after["start_ms"] == end_ms
-                        else end_ms
+                    decode_start_ms, decode_end_ms = self._decode_range(
+                        turn,
+                        before,
+                        after,
+                        len(samples) * 1000 // sample_rate,
+                        context_ms,
                     )
                     start = round(decode_start_ms * sample_rate / 1000)
                     end = round(decode_end_ms * sample_rate / 1000)
@@ -319,12 +322,18 @@ class RefinementWorkerMixin:
                                     word["end_ms"] + decode_start_ms,
                                     turns_by_track[track],
                                 ) or speaker,
-                                "overlap": any(
-                                    overlap["track"] == track
-                                    and word["start_ms"] + decode_start_ms < overlap["end_ms"]
-                                    and word["end_ms"] + decode_start_ms > overlap["start_ms"]
-                                    for overlap in overlaps
+                                "overlap_speakers": self._overlap_speakers(
+                                    word["start_ms"] + decode_start_ms,
+                                    word["end_ms"] + decode_start_ms,
+                                    raw_turns_by_track[track],
                                 ),
+                                "overlap": len(
+                                    self._overlap_speakers(
+                                        word["start_ms"] + decode_start_ms,
+                                        word["end_ms"] + decode_start_ms,
+                                        raw_turns_by_track[track],
+                                    )
+                                ) > 1,
                             }
                             for word in words
                         ],
@@ -399,6 +408,28 @@ class RefinementWorkerMixin:
             for turn in turns
             for start in range(turn["start_ms"], turn["end_ms"], maximum_ms)
         ]
+
+    @staticmethod
+    def _split_long_turns(turns, maximum_ms=6000):
+        """将异常长的 diarization turn 切成可独立验证声纹的短段。"""
+        split = []
+        for turn in turns:
+            for start_ms in range(turn["start_ms"], turn["end_ms"], maximum_ms):
+                end_ms = min(start_ms + maximum_ms, turn["end_ms"])
+                split.append({**turn, "start_ms": start_ms, "end_ms": end_ms})
+        return split
+
+    @staticmethod
+    def _decode_range(turn, before, after, duration_ms, context_ms=800):
+        """为快速语音保留窗口首尾上下文，但不跨越其他说话人。"""
+        start_ms, end_ms = turn["start_ms"], turn["end_ms"]
+        decode_start_ms = max(0, start_ms - context_ms)
+        decode_end_ms = min(duration_ms, end_ms + context_ms)
+        if before and before["speaker"] != turn["speaker"]:
+            decode_start_ms = max(decode_start_ms, min(start_ms, before["end_ms"]))
+        if after and after["speaker"] != turn["speaker"]:
+            decode_end_ms = min(decode_end_ms, max(end_ms, after["start_ms"]))
+        return decode_start_ms, decode_end_ms
 
     @staticmethod
     def _refinement_segment_id(track, start_ms, index, existing):
@@ -572,6 +603,17 @@ class RefinementWorkerMixin:
         return overlaps
 
     @staticmethod
+    def _overlap_speakers(start_ms, end_ms, turns):
+        """返回与时间范围相交的全部说话人，不把重叠压成单一标签。"""
+        return list(
+            dict.fromkeys(
+                turn["speaker"]
+                for turn in turns
+                if turn["start_ms"] < end_ms and turn["end_ms"] > start_ms
+            )
+        )
+
+    @staticmethod
     def _normalized_transcript(text):
         return re.sub(r"[\W_]+", "", text).lower()
 
@@ -581,6 +623,7 @@ class RefinementWorkerMixin:
         text = re.split(r"<\|endoftext\|>", str(text or ""), flags=re.IGNORECASE)[0]
         text = re.sub(r"<\|[^|>]+\|>", " ", text)
         text = re.sub(r"\s+", " ", text).strip()
+        text = re.sub(r"([\u4e00-\u9fff])\1{7,}$", r"\1", text)
         words = list(re.finditer(r"[\w']+", text, flags=re.UNICODE))
         for width in range(1, min(6, len(words) // 4) + 1):
             tail = [word.group().casefold() for word in words[-width:]]
