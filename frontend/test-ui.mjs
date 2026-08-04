@@ -5,7 +5,7 @@ import { runInNewContext } from 'node:vm';
 const [html, css, app, meetings, meetingDetail, uiData, components, i18n, i18nData, tailwind] = await Promise.all(['index.html', 'styles.css', 'app.js', 'app-meetings.js', 'app-meeting-detail.js', 'ui-data.js', 'ui-components.js', 'i18n.js', 'i18n-data.js', 'tailwind.css'].map((file) => readFile(file)));
 const js = Buffer.concat([app, meetings, meetingDetail]);
 const [backendClient, logo, revealGif] = await Promise.all(['backend-client.js', 'assets/brevia-logo.svg', 'assets/brevia-logo-reveal.gif'].map((file) => readFile(file)));
-const electronMain = await readFile('../electron/main.js');
+const [electronMain, packageManifest, modelManifest] = await Promise.all([readFile('../electron/main.js'), readFile('../package.json', 'utf8').then(JSON.parse), readFile('../backend/models.json', 'utf8').then(JSON.parse)]);
 const asr = await readFile('../backend/asr.py');
 const packWorker = await readFile('../backend/pack_worker.py');
 const workerSession = await readFile('../backend/worker_session.py');
@@ -42,6 +42,7 @@ for (const code of ['en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']) assert.notEqual(l
 for (const code of ['en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']) {
   assert.notEqual(localeContext.window.BreviaLocaleData.catalog[code].labels['VAD 模型'], 'VAD 模型');
   assert.notEqual(localeContext.window.BreviaLocaleData.catalog[code].labels['查看完整内容'], '查看完整内容');
+  assert.notEqual(localeContext.window.BreviaLocaleData.catalog[code].labels['确认'], '确认');
 }
 for (const [code, stage, allLanguages] of [['ja', 'ライブ字幕', 'すべての言語'], ['ko', '실시간 자막', '모든 언어'], ['de', 'Live-Untertitel', 'Alle Sprachen'], ['ru', 'Субтитры в реальном времени', 'Все языки']]) {
   const items = localeContext.window.BreviaLocaleData.appCopy.modalCopy[code].models.items;
@@ -49,6 +50,13 @@ for (const [code, stage, allLanguages] of [['ja', 'ライブ字幕', 'すべて�
   assert.equal(items.find(([, name]) => name === 'Spleeter 2 Stems')[2], allLanguages);
 }
 assert.deepEqual(Array.from(localeContext.window.BreviaLocaleData.appCopy.modalCopy.zh.models.items.slice(10, 16), ([, name]) => name), ['Qwen3-ASR', 'FireRedASR2 CTC', 'FunASR Nano int8', 'Whisper Turbo', 'Whisper Large v3', 'Qwen3-ASR 1.7B int8']);
+for (const [id, language] of [['vits-mimic3-ko-kss-low', 'ko'], ['vits-piper-fr-siwis-medium-int8', 'fr'], ['vits-piper-de-thorsten-medium-int8', 'de'], ['vits-piper-es-sharvard-medium-int8', 'es'], ['vits-piper-ru-irina-medium-int8', 'ru']]) {
+  const model = modelManifest.find((entry) => entry.id === id);
+  assert.deepEqual(model?.languages, [language]);
+  assert.equal(model?.kind, 'tts');
+  assert.match(text(js), new RegExp(`'${id}'`));
+  assert(localeContext.window.BreviaLocaleData.appCopy.modalCopy.zh.models.items.some(([, name]) => name === model?.name));
+}
 assert.equal(componentContext.rectanglesIntersect({ left: 0, right: 10, top: 0, bottom: 10 }, { left: 8, right: 12, top: 8, bottom: 12 }), true);
 assert.equal(componentContext.rectanglesIntersect({ left: 0, right: 2, top: 0, bottom: 2 }, { left: 3, right: 5, top: 3, bottom: 5 }), false);
 componentContext.t = (value) => value;
@@ -285,6 +293,10 @@ assert.equal(revealGif.readUInt16LE(6), 2400);
 assert.equal(revealGif.readUInt16LE(8), 1520);
 assert.equal(revealGif.includes(Buffer.from('NETSCAPE2.0')), false);
 assert.match(text(backendClient), /this\.stopPromise/);
+assert.match(text(electronMain), /@ffmpeg-installer\/ffmpeg/);
+assert.match(text(electronMain), /BREVIA_FFMPEG: ffmpeg/);
+assert.equal(packageManifest.dependencies['@ffmpeg-installer/ffmpeg'], '1.1.0');
+assert.deepEqual(packageManifest.build.asarUnpack, ['node_modules/@ffmpeg-installer/**']);
 assert.match(text(backendClient), /this\.trackSamples/);
 assert.match(text(backendClient), /start_ms: Math\.round\(sampleOffset \/ 16\)/);
 assert.doesNotMatch(text(backendClient), /performance\.now\(\)/);
@@ -476,7 +488,9 @@ assert.match(text(js), /function openOnboardingPermissions/);
 assert.match(text(js), /data-request-onboarding-permission/);
 assert.match(text(js), /onboarding-permission-action/);
 assert.match(text(js), /const permissionPoll = window\.setInterval/);
+assert.match(text(js), /const placeholders = steps\.map[\s\S]*?onboarding-permission-complete/);
 assert.match(text(js), /function openOnboardingLanguage[\s\S]*?openOnboardingPermissions\(\);/);
+assert.match(text(js), /dismissOnboardingPage\(\(\) => \{\s*onboardingPreviewLocale = undefined;\s*applyLanguage\(nextLocale, true\);\s*openOnboardingPermissions\(\);/);
 assert.match(text(js), /data-skip-onboarding-permissions/);
 assert.match(text(js), /dismissOnboardingPage\(openOnboardingSetup\)/);
 assert.doesNotMatch(text(js), /function openOnboardingWelcome/);
@@ -507,6 +521,9 @@ assert.match(text(electronMain), /setDisplayMediaRequestHandler/);
 assert.doesNotMatch(text(electronMain), /useSystemPicker/);
 assert.match(text(electronMain), /MacCatapLoopbackAudioForScreenShare/);
 assert.match(text(electronMain), /requestSingleInstanceLock/);
+assert.match(text(electronMain), /function stopActiveMeetingBeforeQuit/);
+assert.match(text(electronMain), /worker\.request\('meeting\.stop'/);
+assert.match(text(electronMain), /event\.preventDefault\(\)/);
 assert.match(text(electronMain), /meeting\.export-many/);
 assert.match(text(js), /const button = event\.currentTarget/);
 assert.doesNotMatch(text(js), /await breviaClient\.pause\(!paused\)[\s\S]{0,200}event\.currentTarget/);
@@ -518,7 +535,9 @@ assert.match(text(js), /uiData\.live\.status\[0\]\.value = streamingModelName/);
 assert.match(text(js), /segment\.classList\.remove\('is-active'\)/);
 assert.match(text(js), /示例会议及录音已删除/);
 assert.match(text(js), /function syncPlaybackTranscript/);
-assert.match(text(js), /if \(!voiceId\) \{ showToast/);
+assert.match(text(js), /\['zh', 'en'\]\.includes\(targetLanguage\) && !voiceId/);
+assert.match(text(js), /const ttsLanguages = \['zh', 'en', 'ko', 'fr', 'de', 'es', 'ru'\]/);
+assert.match(text(electronMain), /target_language: z\.enum\(\['zh', 'en', 'es', 'ko', 'fr', 'de', 'ru'\]\)/);
 assert.match(text(js), /function showRefinementProgress/);
 assert.match(text(js), /\$\{copy\.title\} - \$\{refinementMeetingTitle\}/);
 assert.match(text(js), /segment\.version\.startsWith\('postprocess'\)/);

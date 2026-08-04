@@ -648,6 +648,19 @@ class WorkerTest(unittest.TestCase):
                 }
             )
 
+    def test_tts_routes_korean_to_its_local_model_without_a_voice(self):
+        with self.assertRaisesRegex(
+            RuntimeError, "Model vits-mimic3-ko-kss-low is not installed"
+        ):
+            self.worker.synthesize_tts(
+                {
+                    "text": "안녕하세요",
+                    "target_language": "ko",
+                    "endpoint": "https://example.test",
+                    "model": "test",
+                }
+            )
+
     def test_refinement_versions_preserve_prior_postprocess_segments(self):
         meeting = self.worker.start(
             {

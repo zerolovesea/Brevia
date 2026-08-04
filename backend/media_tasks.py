@@ -2,7 +2,7 @@
 
 from uuid import uuid4
 
-from .asr import SourceSeparator, ZipVoiceTTS
+from .asr import SourceSeparator, VitsTTS, ZipVoiceTTS
 from .audio_io import (
     convert_to_pcm_wav,
     read_mono_wav,
@@ -10,6 +10,13 @@ from .audio_io import (
     write_mono_wav,
     write_wav_channels,
 )
+
+
+TTS_MODEL_IDS = {
+    "zh": "zipvoice-zh-en", "en": "zipvoice-zh-en", "ko": "vits-mimic3-ko-kss-low",
+    "fr": "vits-piper-fr-siwis-medium-int8", "de": "vits-piper-de-thorsten-medium-int8",
+    "es": "vits-piper-es-sharvard-medium-int8", "ru": "vits-piper-ru-irina-medium-int8",
+}
 
 
 class MeetingMediaService:
@@ -58,24 +65,28 @@ class MeetingMediaService:
             input_path.unlink(missing_ok=True)
 
     def synthesize(self, payload):
-        """用已注册人员最新的带文本参考音频生成本地 ZipVoice 音频。"""
-        if payload["language"] not in {"zh", "en"}:
-            raise ValueError("ZipVoice supports Chinese and English")
+        """按目标语言选择本地声纹复刻或 VITS 语音生成。"""
+        model_id = TTS_MODEL_IDS.get(payload["language"])
+        if not model_id:
+            raise ValueError("Unsupported TTS language")
         text = payload["text"].strip()
         if not text or len(text) > 1000:
             raise ValueError("TTS text must contain 1–1000 characters")
-        reference = self._voice_reference(payload["voice_id"])
-        samples, sample_rate = read_mono_wav(reference["audio_path"])
-        audio = ZipVoiceTTS(self.models).generate(
-            text, samples, sample_rate, reference["reference_text"]
-        )
+        if model_id == "zipvoice-zh-en":
+            reference = self._voice_reference(payload["voice_id"])
+            samples, sample_rate = read_mono_wav(reference["audio_path"])
+            audio = ZipVoiceTTS(self.models).generate(
+                text, samples, sample_rate, reference["reference_text"]
+            )
+        else:
+            audio = VitsTTS(self.models, model_id).generate(text)
         if not len(audio.samples):
-            raise ValueError("ZipVoice did not generate audio")
+            raise ValueError("TTS did not generate audio")
         directory = self.store.root / "tts"
         directory.mkdir(exist_ok=True)
         path = directory / f"{uuid4()}.wav"
         write_mono_wav(path, audio.samples, audio.sample_rate)
-        return {"path": str(path), "voice_id": payload["voice_id"], "text": text}
+        return {"path": str(path), "voice_id": payload.get("voice_id", "builtin"), "text": text}
 
     def preset_voices(self):
         """公开 ZipVoice 自带且有已知参考文本的本地样例声音。"""

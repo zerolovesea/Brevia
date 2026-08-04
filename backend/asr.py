@@ -833,3 +833,34 @@ class ZipVoiceTTS:
         config.reference_text = reference_text
         config.num_steps = 4
         return self.engine.generate(text, config)
+
+
+class VitsTTS:
+    """使用单语言 VITS 模型生成不依赖参考音频的本地语音。"""
+
+    def __init__(self, manager, model_id):
+        if not manager.is_ready(model_id):
+            raise RuntimeError(f"Model {model_id} is not installed")
+        try:
+            import sherpa_onnx
+        except ImportError as error:
+            raise RuntimeError("sherpa-onnx is not installed") from error
+        path = manager.path(model_id)
+        model = next(path.glob("*.onnx"), None)
+        if not model:
+            raise RuntimeError(f"Model {model_id} is missing its VITS file")
+        config = sherpa_onnx.OfflineTtsConfig(
+            model=sherpa_onnx.OfflineTtsModelConfig(
+                vits=sherpa_onnx.OfflineTtsVitsModelConfig(
+                    model=str(model), tokens=str(path / "tokens.txt"), data_dir=str(path / "espeak-ng-data")
+                ),
+                num_threads=manager.device()["threads"],
+                provider=manager.device()["backend"],
+            )
+        )
+        if not config.validate():
+            raise RuntimeError("Invalid VITS configuration")
+        self.engine = sherpa_onnx.OfflineTts(config)
+
+    def generate(self, text):
+        return self.engine.generate(text)

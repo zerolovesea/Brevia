@@ -300,5 +300,35 @@
       {"path": "vocos_24khz.onnx", "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/vocoder-models/vocos_24khz.onnx"}
     ],
     "files": ["tokens.txt", "encoder.int8.onnx", "decoder.int8.onnx", "lexicon.txt", "espeak-ng-data", "vocos_24khz.onnx"], "kind": "tts"
+  },
+  {
+    "id": "vits-mimic3-ko-kss-low", "name": "VITS Mimic3 Korean KSS", "runtime": "sherpa-onnx==1.13.2", "revision": "tts-models/vits-mimic3-ko_KO-kss_low",
+    "stages": ["tts"], "languages": ["ko"], "backend": ["cpu", "cuda"], "speaker": false,
+    "size_bytes": 66838474, "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-mimic3-ko_KO-kss_low.tar.bz2", "archive_sha256": null,
+    "directory": "vits-mimic3-ko_KO-kss_low", "files": ["ko_KO-kss-low.onnx", "tokens.txt", "espeak-ng-data"], "kind": "tts"
+  },
+  {
+    "id": "vits-piper-fr-siwis-medium-int8", "name": "VITS Piper French SIWIS", "runtime": "sherpa-onnx==1.13.2", "revision": "tts-models/vits-piper-fr_FR-siwis-medium-int8",
+    "stages": ["tts"], "languages": ["fr"], "backend": ["cpu", "cuda"], "speaker": false,
+    "size_bytes": 20914888, "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-fr_FR-siwis-medium-int8.tar.bz2", "archive_sha256": null,
+    "directory": "vits-piper-fr_FR-siwis-medium-int8", "files": ["fr_FR-siwis-medium.onnx", "tokens.txt", "espeak-ng-data"], "kind": "tts"
+  },
+  {
+    "id": "vits-piper-de-thorsten-medium-int8", "name": "VITS Piper German Thorsten", "runtime": "sherpa-onnx==1.13.2", "revision": "tts-models/vits-piper-de_DE-thorsten-medium-int8",
+    "stages": ["tts"], "languages": ["de"], "backend": ["cpu", "cuda"], "speaker": false,
+    "size_bytes": 20949833, "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-de_DE-thorsten-medium-int8.tar.bz2", "archive_sha256": null,
+    "directory": "vits-piper-de_DE-thorsten-medium-int8", "files": ["de_DE-thorsten-medium.onnx", "tokens.txt", "espeak-ng-data"], "kind": "tts"
+  },
+  {
+    "id": "vits-piper-es-sharvard-medium-int8", "name": "VITS Piper Spanish Sharvard", "runtime": "sherpa-onnx==1.13.2", "revision": "tts-models/vits-piper-es_ES-sharvard-medium-int8",
+    "stages": ["tts"], "languages": ["es"], "backend": ["cpu", "cuda"], "speaker": false,
+    "size_bytes": 23477120, "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-es_ES-sharvard-medium-int8.tar.bz2", "archive_sha256": null,
+    "directory": "vits-piper-es_ES-sharvard-medium-int8", "files": ["es_ES-sharvard-medium.onnx", "tokens.txt", "espeak-ng-data"], "kind": "tts"
+  },
+  {
+    "id": "vits-piper-ru-irina-medium-int8", "name": "VITS Piper Russian Irina", "runtime": "sherpa-onnx==1.13.2", "revision": "tts-models/vits-piper-ru_RU-irina-medium-int8",
+    "stages": ["tts"], "languages": ["ru"], "backend": ["cpu", "cuda"], "speaker": false,
+    "size_bytes": 21149417, "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-ru_RU-irina-medium-int8.tar.bz2", "archive_sha256": null,
+    "directory": "vits-piper-ru_RU-irina-medium-int8", "files": ["ru_RU-irina-medium.onnx", "tokens.txt", "espeak-ng-data"], "kind": "tts"
   }
 ]

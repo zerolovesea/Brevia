@@ -190,8 +190,13 @@ const modelIds = [
   'gtcrn-live-denoiser',
   'spleeter-2stems-fp16',
   'zipvoice-zh-en',
+  'vits-mimic3-ko-kss-low',
+  'vits-piper-fr-siwis-medium-int8',
+  'vits-piper-de-thorsten-medium-int8',
+  'vits-piper-es-sharvard-medium-int8',
+  'vits-piper-ru-irina-medium-int8',
 ];
-const modelSizes = [1047319737, 310414022, 132634597, 258999581, 418218652, 398444115, 685000000, 30667839, 2313101, 332211, 64717756, 878702423, 520516278, 841730611, 563790207, 1068482488, 2900000000, 6958444, 10918585, 39593761, 40257283, 28281164, 597755927, 535638, 35271738, 163320194];
+const modelSizes = [1047319737, 310414022, 132634597, 258999581, 418218652, 398444115, 685000000, 30667839, 2313101, 332211, 64717756, 878702423, 520516278, 841730611, 563790207, 1068482488, 2900000000, 6958444, 10918585, 39593761, 40257283, 28281164, 597755927, 535638, 35271738, 163320194, 66838474, 20914888, 20949833, 23477120, 21149417];
 const summaryProviders = ['OpenAI', 'Anthropic', 'Kimi', 'Zhipu GLM', 'MiniMax', 'DeepSeek', 'OpenRouter', 'Ollama', 'Ollama Cloud'];
 const ollamaChatEndpoint = 'http://127.0.0.1:11434/api/chat';
 const ollamaCloudChatEndpoint = 'https://ollama.com/api/chat';
@@ -1065,15 +1070,11 @@ function openOnboardingLanguage(initialLocale = onboardingSelectedLocale || wind
     const page = onboardingPage;
     const nextLocale = page.querySelector('[name="locale"]').value;
     onboardingSelectedLocale = nextLocale;
-    page.classList.remove('onboarding-page-enter');
-    page.classList.add('onboarding-page-leave');
-    window.setTimeout(() => {
-      page.remove();
-      if (onboardingPage === page) onboardingPage = undefined;
+    dismissOnboardingPage(() => {
       onboardingPreviewLocale = undefined;
       applyLanguage(nextLocale, true);
       openOnboardingPermissions();
-    }, 260);
+    });
   });
 }
 
@@ -1208,14 +1209,15 @@ function finishOnboarding() {
 
 function openOnboardingPermissions() {
   const copy = onboardingCopy[locale] || onboardingCopy.en;
-  showOnboardingPage('permissions', `<section class="onboarding-setup-page onboarding-permissions-page"><button class="onboarding-back" data-onboarding-back-language type="button" aria-label="Back">←</button><header><img class="onboarding-brand" src="./assets/brevia-logo.svg" alt="Brevia" /><h1>${t('录制权限')}</h1><div class="onboarding-intro"><p>${t('言录需要麦克风、屏幕与系统音频权限，才能录制会议并生成实时字幕。')}</p></div></header><section class="onboarding-section" data-onboarding-permissions></section><div class="onboarding-actions"><button class="modal-action" data-finish-onboarding type="button" disabled>${t('继续')}</button><button class="secondary" data-skip-onboarding-permissions type="button">${copy.later}</button></div></section>`);
-  const page = onboardingPage;
-  const section = onboardingPage.querySelector('[data-onboarding-permissions]');
-  const continueButton = onboardingPage.querySelector('[data-finish-onboarding]');
   const steps = [
     ['microphone', t('麦克风'), t('录制你的发言。')],
     ['screen', t('屏幕与系统音频'), t('录制屏幕共享中的系统声音。')],
   ];
+  const placeholders = steps.map(([permission, label, detail], index) => `<div class="onboarding-permission"><span class="onboarding-permission-state">${index + 1}</span><span><b>${label}</b><small>${detail}</small></span><button class="modal-action onboarding-permission-action onboarding-permission-placeholder" type="button" disabled>${permission === 'microphone' ? t('允许') : t('继续')}</button></div>`).join('') + `<div class="onboarding-permission-complete onboarding-permission-placeholder" aria-hidden="true">&nbsp;</div>`;
+  showOnboardingPage('permissions', `<section class="onboarding-setup-page onboarding-permissions-page"><button class="onboarding-back" data-onboarding-back-language type="button" aria-label="Back">←</button><header><img class="onboarding-brand" src="./assets/brevia-logo.svg" alt="Brevia" /><h1>${t('录制权限')}</h1><div class="onboarding-intro"><p>${t('言录需要麦克风、屏幕与系统音频权限，才能录制会议并生成实时字幕。')}</p></div></header><section class="onboarding-section" data-onboarding-permissions>${placeholders}</section><div class="onboarding-actions"><button class="modal-action" data-finish-onboarding type="button" disabled>${t('继续')}</button><button class="secondary" data-skip-onboarding-permissions type="button">${copy.later}</button></div></section>`);
+  const page = onboardingPage;
+  const section = onboardingPage.querySelector('[data-onboarding-permissions]');
+  const continueButton = onboardingPage.querySelector('[data-finish-onboarding]');
   const render = async () => {
     const status = await window.brevia.permissions.status();
     const next = steps.find(([permission]) => status[permission] === 'not-determined');
@@ -1229,7 +1231,7 @@ function openOnboardingPermissions() {
     }).join('');
     const complete = steps.every(([permission]) => status[permission] === 'granted');
     continueButton.disabled = !complete;
-    if (complete) section.insertAdjacentHTML('beforeend', `<div class="onboarding-permission-complete">✓ ${t('录制权限')} ${t('已准备就绪')}</div>`);
+    section.insertAdjacentHTML('beforeend', complete ? `<div class="onboarding-permission-complete">✓ ${t('录制权限')} ${t('已准备就绪')}</div>` : `<div class="onboarding-permission-complete onboarding-permission-placeholder" aria-hidden="true">&nbsp;</div>`);
   };
   void render();
   const permissionPoll = window.setInterval(() => {
@@ -1305,9 +1307,9 @@ function renderLivePanel() {
     })).join('')
     : `<p class="participants-empty">${t('等待识别说话人')}</p>`;
   const voiceOptions = [['', copy.voice], ...[...presetVoices, ...speakerProfiles.filter((profile) => profile.has_reference).map((profile) => ({ id: profile.id, name: speakerProfileName(profile) }))].map((voice) => [voice.id, voice.name])];
-  const noVoice = voiceOptions.length === 1;
+  const ttsLanguages = ['zh', 'en', 'ko', 'fr', 'de', 'es', 'ru'].map((code) => [code, BreviaI18n.languageName(locale, code)]);
   document.querySelector('.live-panel').innerHTML = `<section><p class="eyebrow">${t('参与者')} · ${participants.length}</p><div class="participants-list">${people}</div></section><section><p class="eyebrow">${t('本场状态')}</p>${renderStatusList(uiData.live.status)}</section>`;
-  document.querySelector('#tts-chat').innerHTML = `<p class="eyebrow">${t('语音对话')}</p><form id="tts-chat-form"><div class="tts-selects">${flowSelect('voice_id', '', voiceOptions, false, noVoice)}${flowSelect('target_language', 'zh', [['zh', t('中文')], ['en', t('英语')]])}</div><input name="text" maxlength="1000" placeholder="${copy.placeholder}" required /><button type="submit" ${noVoice ? 'disabled' : ''}>${copy.send}</button>${noVoice ? `<p class="tts-hint">${t('请先在声纹库注册可用声音')}</p>` : ''}</form>`;
+  document.querySelector('#tts-chat').innerHTML = `<p class="eyebrow">${copy.chat}</p><form id="tts-chat-form"><div class="tts-selects">${flowSelect('voice_id', '', voiceOptions)}${flowSelect('target_language', 'zh', ttsLanguages)}</div><input name="text" maxlength="1000" placeholder="${copy.placeholder}" required /><button type="submit">${copy.send}</button></form>`;
 }
 renderModelControls();
 renderLivePanel();
@@ -1613,7 +1615,8 @@ document.querySelector('#live-view').addEventListener('submit', async (event) =>
   let submitLabel = '';
   try {
     const voiceId = values.get('voice_id');
-    if (!voiceId) { showToast(locale === 'zh' ? '请选择声音' : 'Select a voice first'); return; }
+    const targetLanguage = values.get('target_language');
+    if (['zh', 'en'].includes(targetLanguage) && !voiceId) { showToast(locale === 'zh' ? '请选择声音' : 'Select a voice first'); return; }
     const config = summaryModels[activeSummaryModel];
     if (!config) { showToast(locale === 'zh' ? '请先配置翻译模型' : 'Configure a translation model first'); return; }
     ttsSubmitting = true;
@@ -1622,7 +1625,7 @@ document.querySelector('#live-view').addEventListener('submit', async (event) =>
     submit.classList.add('is-pending');
     submit.setAttribute('aria-busy', 'true');
     submit.innerHTML = `<i class="button-spinner" aria-hidden="true"></i>${t('准备中')}`;
-    const result = await window.brevia?.tts.synthesize({ voice_id: voiceId, target_language: values.get('target_language'), text: values.get('text').trim(), provider: config.provider, endpoint: config.endpoint, model: config.model, format: config.format, key_reference: config.keyReference });
+    const result = await window.brevia?.tts.synthesize({ ...(voiceId ? { voice_id: voiceId } : {}), target_language: targetLanguage, text: values.get('text').trim(), provider: config.provider, endpoint: config.endpoint, model: config.model, format: config.format, key_reference: config.keyReference });
     if (result?.model_required) return;
     await playTts(result);
     event.target.reset();

@@ -326,6 +326,7 @@
   .onboarding-permission b { @apply block text-[14px] font-normal text-black; }
   .onboarding-permission small { @apply mt-1 block text-[12px] text-[#666]; }
   .onboarding-permission-complete { @apply pt-5 text-[13px] text-[#16803c]; }
+  .onboarding-permission-placeholder { visibility: hidden; }
   .onboarding-page .onboarding-permission-action { @apply px-3 py-2 text-[12px]; }
   .model-actions { @apply flex shrink-0 items-center gap-4; }.model-actions .secondary { @apply mt-0; }
   .model-library-list > div.model-target { @apply bg-[#f2f2ed] transition-colors duration-500; }

@@ -12,6 +12,7 @@ from .asr import (
 )
 from .audio_io import read_mono_wav
 from .config import SETTINGS
+from .media_tasks import TTS_MODEL_IDS
 from .worker_common import managed_task, require
 
 
@@ -383,14 +384,20 @@ class RefinementWorkerMixin:
         return event
 
     def synthesize_tts(self, payload):
-        """使用已注册人员的本地参考音频生成 ZipVoice 聊天语音。"""
-        require(payload, "text", "voice_id", "target_language", "endpoint", "model")
-        if not self.models.is_ready("zipvoice-zh-en"):
-            raise RuntimeError("Model zipvoice-zh-en is not installed")
+        """翻译后使用目标语言对应的本地 TTS 模型生成语音。"""
+        require(payload, "text", "target_language", "endpoint", "model")
+        language = payload["target_language"]
+        model_id = TTS_MODEL_IDS.get(language)
+        if not model_id:
+            raise ValueError("Unsupported TTS language")
+        if language in {"zh", "en"}:
+            require(payload, "voice_id")
+        if not self.models.is_ready(model_id):
+            raise RuntimeError(f"Model {model_id} is not installed")
         payload = {**payload, "language": payload["target_language"]}
         payload["text"] = self.llm_complete(
             payload,
-            f"Translate the following text to {'Chinese' if payload['target_language'] == 'zh' else 'English'}. Return only the translation.\n\n{payload['text']}",
+            f"Translate the following text to {language}. Return only the translation.\n\n{payload['text']}",
         ).strip()
         event = self.media.synthesize(payload)
         self.emit("tts.ready", event)

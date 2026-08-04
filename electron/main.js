@@ -26,6 +26,9 @@ const legacyDataDir = () => app.getPath('userData');
 const logsDir = () => path.join(dataDir(), 'logs');
 const logFile = () => path.join(logsDir(), 'brevia.log');
 const logText = (value) => value instanceof Error ? value.stack || value.message : typeof value === 'string' ? value : JSON.stringify(value);
+const bundledFfmpegPath = () => {
+  try { return require('@ffmpeg-installer/ffmpeg').path.replace('app.asar', 'app.asar.unpacked'); } catch { return ''; }
+};
 const writeLog = (level, value) => {
   const line = `${new Date().toISOString()} [${level}] ${logText(value).trim()}\n`;
   void mkdir(logsDir(), { recursive: true }).then(() => appendFile(logFile(), line, 'utf8')).catch(() => {});
@@ -116,6 +119,7 @@ class WorkerClient {
     const useBundledWorker = app.isPackaged && !process.env.BREVIA_PYTHON && existsSync(bundled);
     const python = useBundledWorker ? bundled : (process.env.BREVIA_PYTHON || (process.platform === 'win32' ? 'python' : 'python3'));
     const args = useBundledWorker ? [] : ['-m', 'backend.worker'];
+    const ffmpeg = process.env.BREVIA_FFMPEG || bundledFfmpegPath();
     const child = spawn(python, args, {
       cwd: packagedRoot,
       env: {
@@ -124,6 +128,7 @@ class WorkerClient {
         PYTHONIOENCODING: 'utf-8',
         BREVIA_DATA_DIR: dataDir(),
         BREVIA_MODELS_DIR: process.env.BREVIA_MODELS_DIR || path.join(dataDir(), 'models'),
+        ...(ffmpeg ? { BREVIA_FFMPEG: ffmpeg } : {}),
       },
       stdio: ['pipe', 'pipe', 'pipe'],
     });
@@ -339,7 +344,7 @@ function registerIpc() {
       worker.sendEvent('model.required', { models, task: 'meeting.start', payload: value });
       return { model_required: models };
     }
-    worker.active = { meeting_id: result.id };
+    worker.active = { meeting_id: result.id, started_at: Date.now() };
     worker.restarts = 0;
     return result;
   });
@@ -408,7 +413,7 @@ function registerIpc() {
     return shell.openPath(directory);
   });
   ipcMain.handle('tts.synthesize', async (_, payload) => {
-    const value = z.object({ text: z.string().trim().min(1).max(1000), voice_id: z.string().min(1), target_language: z.enum(['zh', 'en']), provider: z.string(), endpoint: z.string().url(), model: z.string(), format: z.enum(['openai', 'claude']).optional(), key_reference: z.string().optional() }).parse(payload);
+    const value = z.object({ text: z.string().trim().min(1).max(1000), voice_id: z.string().min(1).optional(), target_language: z.enum(['zh', 'en', 'es', 'ko', 'fr', 'de', 'ru']), provider: z.string(), endpoint: z.string().url(), model: z.string(), format: z.enum(['openai', 'claude']).optional(), key_reference: z.string().optional() }).parse(payload);
     try {
       return await worker.request('tts.synthesize', { ...value, api_key: await getSecret(value.key_reference) });
     } catch (error) {
@@ -585,9 +590,28 @@ app.whenReady().then(async () => {
     if (!BrowserWindow.getAllWindows().length) createWindow();
   });
 });
-app.on('before-quit', () => {
-  app.isQuitting = true;
-  worker.process?.kill();
+let quittingAfterMeetingStop = false;
+async function stopActiveMeetingBeforeQuit() {
+  const active = worker.active;
+  if (!active) return;
+  worker.active = null;
+  await worker.request('meeting.stop', {
+    meeting_id: active.meeting_id,
+    duration_ms: Math.max(0, Date.now() - active.started_at),
+  });
+}
+app.on('before-quit', (event) => {
+  if (quittingAfterMeetingStop) {
+    app.isQuitting = true;
+    worker.process?.kill();
+    return;
+  }
+  event.preventDefault();
+  quittingAfterMeetingStop = true;
+  void Promise.race([
+    stopActiveMeetingBeforeQuit(),
+    new Promise((resolve) => setTimeout(resolve, 8000)),
+  ]).catch((error) => writeLog('WARNING', `stop meeting before quit: ${logText(error)}`)).finally(() => app.quit());
 });
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
