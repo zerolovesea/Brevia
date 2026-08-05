@@ -61,6 +61,7 @@
       ],
       "category": "public.app-category.productivity",
       "identity": "YANG ZHOU (4M64879BBM)",
+      "forceCodeSigning": true,
       "hardenedRuntime": true,
       "notarize": true
     },

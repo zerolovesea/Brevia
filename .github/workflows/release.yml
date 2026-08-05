@@ -17,11 +17,9 @@ jobs:
         include:
           - name: macOS ARM64
             os: macos-14
-            command: npm run package:mac
             artifact: Brevia-*.dmg
           - name: Windows x64
             os: windows-latest
-            command: npm run package:win
             artifact: Brevia-*-x64-setup.exe
     runs-on: ${{ matrix.os }}
     env:
@@ -47,18 +45,20 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          CSC_LINK: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
-          CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
         run: |
-          test -n "$CSC_LINK" && test -n "$CSC_KEY_PASSWORD"
           test -n "$APPLE_ID" && test -n "$APPLE_APP_SPECIFIC_PASSWORD" && test -n "$APPLE_TEAM_ID"
-      - run: ${{ matrix.command }}
+      - name: Package and notarize macOS
+        if: matrix.os == 'macos-14'
+        run: npm run package:mac
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           CSC_LINK: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
           CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      - name: Package Windows
+        if: matrix.os == 'windows-latest'
+        run: npm run package:win
       - name: Verify macOS signature and notarization
         if: matrix.os == 'macos-14'
         shell: bash
