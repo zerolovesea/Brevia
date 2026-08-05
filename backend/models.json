@@ -65,7 +65,7 @@
     "stages": ["streaming"], "languages": ["zh"], "backend": ["cpu", "cuda"], "speaker": false,
     "size_bytes": 132634597,
     "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-zh-int8-2025-06-30.tar.bz2",
-    "archive_sha256": null, "directory": "sherpa-onnx-streaming-zipformer-zh-int8-2025-06-30",
+    "archive_sha256": "5a2832047ea1f97dd0dc595b816c230c4bafad65cfc0341fa57517cadc50afd0", "directory": "sherpa-onnx-streaming-zipformer-zh-int8-2025-06-30",
     "files": ["encoder.int8.onnx", "decoder.onnx", "joiner.int8.onnx", "tokens.txt"], "kind": "transducer"
   },
   {
@@ -76,7 +76,7 @@
     "stages": ["streaming"], "languages": ["ar", "en", "id", "ja", "ru", "th", "vi", "zh"], "backend": ["cpu", "cuda"], "speaker": false,
     "size_bytes": 258999581,
     "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-ar_en_id_ja_ru_th_vi_zh-2025-02-10.tar.bz2",
-    "archive_sha256": null, "directory": "sherpa-onnx-streaming-zipformer-ar_en_id_ja_ru_th_vi_zh-2025-02-10",
+    "archive_sha256": "28044b67324f7f831689f0a3761473dd2ade380e93aa53f1dbcd479ef71c40d4", "directory": "sherpa-onnx-streaming-zipformer-ar_en_id_ja_ru_th_vi_zh-2025-02-10",
     "files": ["encoder-epoch-75-avg-11-chunk-16-left-128.int8.onnx", "decoder-epoch-75-avg-11-chunk-16-left-128.onnx", "joiner-epoch-75-avg-11-chunk-16-left-128.int8.onnx", "tokens.txt"], "kind": "transducer"
   },
   {
@@ -87,7 +87,7 @@
     "stages": ["streaming"], "languages": ["ko"], "backend": ["cpu", "cuda"], "speaker": false,
     "size_bytes": 418218652,
     "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-korean-2024-06-16.tar.bz2",
-    "archive_sha256": null, "directory": "sherpa-onnx-streaming-zipformer-korean-2024-06-16",
+    "archive_sha256": "e346a5882a409650472be17326237e24df7bf409db6b4a8a52e1a61422bf2500", "directory": "sherpa-onnx-streaming-zipformer-korean-2024-06-16",
     "files": ["encoder-epoch-99-avg-1.int8.onnx", "decoder-epoch-99-avg-1.onnx", "joiner-epoch-99-avg-1.int8.onnx", "tokens.txt"], "kind": "transducer"
   },
   {
@@ -98,7 +98,7 @@
     "stages": ["streaming"], "languages": ["fr"], "backend": ["cpu", "cuda"], "speaker": false,
     "size_bytes": 398444115,
     "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-fr-2023-04-14.tar.bz2",
-    "archive_sha256": null, "directory": "sherpa-onnx-streaming-zipformer-fr-2023-04-14",
+    "archive_sha256": "77d4cbd61dcfa55fd2c14efc0ce5c6798be5931c05f35df5bab60c921950bb8c", "directory": "sherpa-onnx-streaming-zipformer-fr-2023-04-14",
     "files": ["encoder-epoch-99-avg-1.int8.onnx", "decoder-epoch-99-avg-1.onnx", "joiner-epoch-99-avg-1.int8.onnx", "tokens.txt"], "kind": "transducer"
   },
   {
@@ -112,7 +112,7 @@
     "speaker": false,
     "size_bytes": 685000000,
     "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11.tar.bz2",
-    "archive_sha256": null,
+    "archive_sha256": "dcdae59c496914e465fb1c2ae59cc221c8d7648aa74d3abebc8ca3526fe1f297",
     "directory": "sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11",
     "files": ["encoder.int8.onnx", "decoder.int8.onnx", "joiner.int8.onnx", "tokens.txt"],
     "kind": "nemotron"
@@ -144,7 +144,7 @@
     "speaker": false,
     "size_bytes": 535638,
     "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speech-enhancement-models/gtcrn_simple.onnx",
-    "archive_sha256": null,
+    "archive_sha256": "e77603ac0c23dac3227dd2d7135b3a585cbee2679048aecfa886657d3ae1b534",
     "files": ["gtcrn_simple.onnx"],
     "kind": "speech-denoiser"
   },
@@ -155,7 +155,7 @@
     "stages": ["vad"], "languages": ["all"], "backend": ["cpu", "cuda"], "speaker": false,
     "size_bytes": 2313101,
     "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad_v5.onnx",
-    "archive_sha256": null, "files": ["silero_vad.onnx"], "kind": "vad"
+    "archive_sha256": "6b99cbfd39246b6706f98ec13c7c50c6b299181f2474fa05cbc8046acc274396", "files": ["silero_vad.onnx"], "kind": "vad"
   },
   {
     "id": "punct-ct-transformer-zh-en-int8",
@@ -196,7 +196,7 @@
     "stages": ["refined"], "languages": ["multilingual"], "backend": ["cpu", "cuda"], "speaker": false,
     "size_bytes": 563790207,
     "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-turbo.tar.bz2",
-    "archive_sha256": null, "directory": "sherpa-onnx-whisper-turbo",
+    "archive_sha256": "b11acbbcd660b44a8e0df33724feb5aaa709cf65668f2823d59f656312544f22", "directory": "sherpa-onnx-whisper-turbo",
     "files": ["turbo-encoder.int8.onnx", "turbo-decoder.int8.onnx", "turbo-tokens.txt"], "kind": "whisper"
   },
   {
@@ -206,11 +206,11 @@
     "stages": ["refined"], "languages": ["multilingual"], "backend": ["cpu", "cuda"], "speaker": false,
     "size_bytes": 1068482488,
     "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-large-v3.tar.bz2",
-    "archive_sha256": null, "directory": "sherpa-onnx-whisper-large-v3",
+    "archive_sha256": "2d0e134b3b5fc4a0533baf24a0c9d473b629aa47f030af0a165a05f461df7a03", "directory": "sherpa-onnx-whisper-large-v3",
     "files": ["large-v3-encoder.int8.onnx", "large-v3-decoder.int8.onnx", "large-v3-tokens.txt"], "kind": "whisper"
   },
-  {"id":"fire-red-asr2-ctc-zh-en-int8","name":"FireRedASR2 CTC Chinese and English","runtime":"sherpa-onnx==1.13.2","revision":"asr-models/2026-02-25","stages":["refined"],"languages":["zh","en","yue"],"backend":["cpu","cuda"],"speaker":false,"size_bytes":520516278,"url":"https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-fire-red-asr2-ctc-zh_en-int8-2026-02-25.tar.bz2","directory":"sherpa-onnx-fire-red-asr2-ctc-zh_en-int8-2026-02-25","files":["model.int8.onnx","tokens.txt"],"kind":"fire-red-asr-ctc"},
-  {"id":"funasr-nano-int8","name":"FunASR Nano int8","runtime":"sherpa-onnx==1.13.2","revision":"asr-models/2025-12-30","stages":["refined"],"languages":["zh","en","yue"],"backend":["cpu","cuda"],"speaker":false,"size_bytes":841730611,"url":"https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-funasr-nano-int8-2025-12-30.tar.bz2","directory":"sherpa-onnx-funasr-nano-int8-2025-12-30","files":["encoder_adaptor.int8.onnx","llm.int8.onnx","embedding.int8.onnx","Qwen3-0.6B/tokenizer.json"],"kind":"funasr-nano"},
+  {"id":"fire-red-asr2-ctc-zh-en-int8","name":"FireRedASR2 CTC Chinese and English","runtime":"sherpa-onnx==1.13.2","revision":"asr-models/2026-02-25","stages":["refined"],"languages":["zh","en","yue"],"backend":["cpu","cuda"],"speaker":false,"size_bytes":520516278,"url":"https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-fire-red-asr2-ctc-zh_en-int8-2026-02-25.tar.bz2","archive_sha256":"1da8b737ecc5e29f36759a4460c754863e7c919a4ba325aea187331fbfc83274","directory":"sherpa-onnx-fire-red-asr2-ctc-zh_en-int8-2026-02-25","files":["model.int8.onnx","tokens.txt"],"kind":"fire-red-asr-ctc"},
+  {"id":"funasr-nano-int8","name":"FunASR Nano int8","runtime":"sherpa-onnx==1.13.2","revision":"asr-models/2025-12-30","stages":["refined"],"languages":["zh","en","yue"],"backend":["cpu","cuda"],"speaker":false,"size_bytes":841730611,"url":"https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-funasr-nano-int8-2025-12-30.tar.bz2","archive_sha256":"eb43d7ccc2e86b243f6a03b7df361033dda66db9523d1a92bf6aca2b50c9476b","directory":"sherpa-onnx-funasr-nano-int8-2025-12-30","files":["encoder_adaptor.int8.onnx","llm.int8.onnx","embedding.int8.onnx","Qwen3-0.6B/tokenizer.json"],"kind":"funasr-nano"},
   {
     "id": "qwen3-asr-1.7b-int8",
     "name": "Qwen3-ASR 1.7B int8",
@@ -221,18 +221,17 @@
     "backend": ["cpu", "cuda"],
     "speaker": false,
     "size_bytes": 2900000000,
-    "archive_sha256": null,
     "files": ["conv_frontend.onnx", "encoder.int8.onnx", "decoder.int8.onnx", "tokenizer/chat_template.json", "tokenizer/config.json", "tokenizer/merges.txt", "tokenizer/preprocessor_config.json", "tokenizer/tokenizer_config.json", "tokenizer/vocab.json"],
     "downloads": [
-      {"path": "conv_frontend.onnx", "url": "https://modelscope.cn/models/zengshuishui/Qwen3-ASR-onnx/resolve/master/model_1.7B/conv_frontend.onnx"},
-      {"path": "encoder.int8.onnx", "url": "https://modelscope.cn/models/zengshuishui/Qwen3-ASR-onnx/resolve/master/model_1.7B/encoder.int8.onnx"},
-      {"path": "decoder.int8.onnx", "url": "https://modelscope.cn/models/zengshuishui/Qwen3-ASR-onnx/resolve/master/model_1.7B/decoder.int8.onnx"},
-      {"path": "tokenizer/chat_template.json", "url": "https://modelscope.cn/models/zengshuishui/Qwen3-ASR-onnx/resolve/master/tokenizer/chat_template.json"},
-      {"path": "tokenizer/config.json", "url": "https://modelscope.cn/models/zengshuishui/Qwen3-ASR-onnx/resolve/master/tokenizer/config.json"},
-      {"path": "tokenizer/merges.txt", "url": "https://modelscope.cn/models/zengshuishui/Qwen3-ASR-onnx/resolve/master/tokenizer/merges.txt"},
-      {"path": "tokenizer/preprocessor_config.json", "url": "https://modelscope.cn/models/zengshuishui/Qwen3-ASR-onnx/resolve/master/tokenizer/preprocessor_config.json"},
-      {"path": "tokenizer/tokenizer_config.json", "url": "https://modelscope.cn/models/zengshuishui/Qwen3-ASR-onnx/resolve/master/tokenizer/tokenizer_config.json"},
-      {"path": "tokenizer/vocab.json", "url": "https://modelscope.cn/models/zengshuishui/Qwen3-ASR-onnx/resolve/master/tokenizer/vocab.json"}
+      {"path": "conv_frontend.onnx", "url": "https://modelscope.cn/models/zengshuishui/Qwen3-ASR-onnx/resolve/master/model_1.7B/conv_frontend.onnx", "sha256": "fa894a4ba53da6a4238f2a6ca0b09362e505d39cecbd646051b033e2e8d7e2fb"},
+      {"path": "encoder.int8.onnx", "url": "https://modelscope.cn/models/zengshuishui/Qwen3-ASR-onnx/resolve/master/model_1.7B/encoder.int8.onnx", "sha256": "436fbd910a0c8914851e5ac1354e807be9f283d08a5da728adaa609731c41469"},
+      {"path": "decoder.int8.onnx", "url": "https://modelscope.cn/models/zengshuishui/Qwen3-ASR-onnx/resolve/master/model_1.7B/decoder.int8.onnx", "sha256": "c43c853fa6e97d08365cb8a5502b360b595cd43c00dc60e4d8ca7cc18cad460b"},
+      {"path": "tokenizer/chat_template.json", "url": "https://modelscope.cn/models/zengshuishui/Qwen3-ASR-onnx/resolve/master/tokenizer/chat_template.json", "sha256": "75a8cfca24f00de72d796fbfed6858fc9614ef3dabd8696684cc3bc03a9c58ff"},
+      {"path": "tokenizer/config.json", "url": "https://modelscope.cn/models/zengshuishui/Qwen3-ASR-onnx/resolve/master/tokenizer/config.json", "sha256": "76d3ae4601ce939830b2517f4a6cadb86cc51316c3900af6b020b051c21a478c"},
+      {"path": "tokenizer/merges.txt", "url": "https://modelscope.cn/models/zengshuishui/Qwen3-ASR-onnx/resolve/master/tokenizer/merges.txt", "sha256": "8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5"},
+      {"path": "tokenizer/preprocessor_config.json", "url": "https://modelscope.cn/models/zengshuishui/Qwen3-ASR-onnx/resolve/master/tokenizer/preprocessor_config.json", "sha256": "45e120a4eda2c20c5d7f2ea9354e63536bf35e27aa573fb7cdf78017b378770d"},
+      {"path": "tokenizer/tokenizer_config.json", "url": "https://modelscope.cn/models/zengshuishui/Qwen3-ASR-onnx/resolve/master/tokenizer/tokenizer_config.json", "sha256": "4942d005604266809309cabc9f4e9cb89ce855d59b14681fdc0e1cc62ea26c4c"},
+      {"path": "tokenizer/vocab.json", "url": "https://modelscope.cn/models/zengshuishui/Qwen3-ASR-onnx/resolve/master/tokenizer/vocab.json", "sha256": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910"}
     ],
     "kind": "qwen3"
   },
@@ -255,7 +254,7 @@
   {
     "id": "reverb-diarization-v1", "name": "Reverb Diarization v1", "runtime": "sherpa-onnx==1.13.2", "revision": "speaker-segmentation-models/v1",
     "stages": ["speaker-segmentation"], "languages": ["all"], "backend": ["cpu", "cuda"], "speaker": true,
-    "size_bytes": 10918585, "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-reverb-diarization-v1.tar.bz2", "archive_sha256": null,
+    "size_bytes": 10918585, "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-reverb-diarization-v1.tar.bz2", "archive_sha256": "615761e980be1688da0ef81618c056134d63aa55ea0a5f1494c47393b9398eab",
     "directory": "sherpa-onnx-reverb-diarization-v1", "files": ["model.onnx"], "kind": "speaker-segmentation"
   },
   {
@@ -276,19 +275,19 @@
   {
     "id": "nemo-titanet-small-en", "name": "NeMo Titanet Small", "runtime": "sherpa-onnx==1.13.2", "revision": "speaker-recognition-models/titanet-small",
     "stages": ["speaker-embedding"], "languages": ["en"], "backend": ["cpu", "cuda"], "speaker": true,
-    "size_bytes": 40257283, "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/nemo_en_titanet_small.onnx", "archive_sha256": null,
+    "size_bytes": 40257283, "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/nemo_en_titanet_small.onnx", "archive_sha256": "ad4a1802485d8b34c722d2a9d04249662f2ece5d28a7a039063ca22f515a789e",
     "files": ["nemo_en_titanet_small.onnx"], "kind": "speaker-embedding"
   },
   {
     "id": "campplus-zh-en", "name": "3D-Speaker CAM++", "runtime": "sherpa-onnx==1.13.2", "revision": "speaker-recognition-models/campplus",
     "stages": ["speaker-embedding"], "languages": ["zh", "en"], "backend": ["cpu", "cuda"], "speaker": true,
-    "size_bytes": 28281164, "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx", "archive_sha256": null,
+    "size_bytes": 28281164, "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx", "archive_sha256": "aa3cfc16963a10586a9393f5035d6d6b57e98d358b347f80c2a30bf4f00ceba2",
     "files": ["3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx"], "kind": "speaker-embedding"
   },
   {
     "id": "spleeter-2stems-fp16", "name": "Spleeter 2 Stems", "runtime": "sherpa-onnx==1.13.2", "revision": "source-separation-models/spleeter-2stems-fp16",
     "stages": ["source-separation"], "languages": ["all"], "backend": ["cpu", "cuda"], "speaker": false,
-    "size_bytes": 35271738, "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/source-separation-models/sherpa-onnx-spleeter-2stems-fp16.tar.bz2", "archive_sha256": null,
+    "size_bytes": 35271738, "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/source-separation-models/sherpa-onnx-spleeter-2stems-fp16.tar.bz2", "archive_sha256": "c6c5c4307673bc6813ddf58d4efdff57c26d2dfc3f25b05c7a32db453d70aca6",
     "directory": "sherpa-onnx-spleeter-2stems-fp16", "files": ["vocals.fp16.onnx", "accompaniment.fp16.onnx"], "kind": "source-separation"
   },
   {
@@ -296,39 +295,39 @@
     "stages": ["tts"], "languages": ["zh", "en"], "backend": ["cpu", "cuda"], "speaker": false,
     "size_bytes": 163320194,
     "downloads": [
-      {"path": "zipvoice.tar.bz2", "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/sherpa-onnx-zipvoice-distill-int8-zh-en-emilia.tar.bz2", "extract": true, "directory": "sherpa-onnx-zipvoice-distill-int8-zh-en-emilia"},
-      {"path": "vocos_24khz.onnx", "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/vocoder-models/vocos_24khz.onnx"}
+      {"path": "zipvoice.tar.bz2", "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/sherpa-onnx-zipvoice-distill-int8-zh-en-emilia.tar.bz2", "sha256": "77219c8b40f4ee8d73a7f902305ff6c1128ef9b54461c41b4ca6ed890b6c2803", "extract": true, "directory": "sherpa-onnx-zipvoice-distill-int8-zh-en-emilia"},
+      {"path": "vocos_24khz.onnx", "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/vocoder-models/vocos_24khz.onnx", "sha256": "bcb3b970e384161c4d634f0bb9e999ff1c471b34c9bc0b1049a5014065ed3cc0"}
     ],
     "files": ["tokens.txt", "encoder.int8.onnx", "decoder.int8.onnx", "lexicon.txt", "espeak-ng-data", "vocos_24khz.onnx"], "kind": "tts"
   },
   {
     "id": "vits-mimic3-ko-kss-low", "name": "VITS Mimic3 Korean KSS", "runtime": "sherpa-onnx==1.13.2", "revision": "tts-models/vits-mimic3-ko_KO-kss_low",
     "stages": ["tts"], "languages": ["ko"], "backend": ["cpu", "cuda"], "speaker": false,
-    "size_bytes": 66838474, "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-mimic3-ko_KO-kss_low.tar.bz2", "archive_sha256": null,
+    "size_bytes": 66838474, "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-mimic3-ko_KO-kss_low.tar.bz2", "archive_sha256": "f015d1d15a52ed00d6fe22757c5ef4a74283c53daf829c838fa5c22616ed789c",
     "directory": "vits-mimic3-ko_KO-kss_low", "files": ["ko_KO-kss-low.onnx", "tokens.txt", "espeak-ng-data"], "kind": "tts"
   },
   {
     "id": "vits-piper-fr-siwis-medium-int8", "name": "VITS Piper French SIWIS", "runtime": "sherpa-onnx==1.13.2", "revision": "tts-models/vits-piper-fr_FR-siwis-medium-int8",
     "stages": ["tts"], "languages": ["fr"], "backend": ["cpu", "cuda"], "speaker": false,
-    "size_bytes": 20914888, "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-fr_FR-siwis-medium-int8.tar.bz2", "archive_sha256": null,
+    "size_bytes": 20914888, "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-fr_FR-siwis-medium-int8.tar.bz2", "archive_sha256": "3909cff9b3cfd4820c66aa13bf554315c82e34899c161f0b446ece372bc4b5ec",
     "directory": "vits-piper-fr_FR-siwis-medium-int8", "files": ["fr_FR-siwis-medium.onnx", "tokens.txt", "espeak-ng-data"], "kind": "tts"
   },
   {
     "id": "vits-piper-de-thorsten-medium-int8", "name": "VITS Piper German Thorsten", "runtime": "sherpa-onnx==1.13.2", "revision": "tts-models/vits-piper-de_DE-thorsten-medium-int8",
     "stages": ["tts"], "languages": ["de"], "backend": ["cpu", "cuda"], "speaker": false,
-    "size_bytes": 20949833, "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-de_DE-thorsten-medium-int8.tar.bz2", "archive_sha256": null,
+    "size_bytes": 20949833, "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-de_DE-thorsten-medium-int8.tar.bz2", "archive_sha256": "07e240b7b9c1fc9211d5a69512f8cbe11b3286c2ed79c15c076ac6ed427fdf13",
     "directory": "vits-piper-de_DE-thorsten-medium-int8", "files": ["de_DE-thorsten-medium.onnx", "tokens.txt", "espeak-ng-data"], "kind": "tts"
   },
   {
     "id": "vits-piper-es-sharvard-medium-int8", "name": "VITS Piper Spanish Sharvard", "runtime": "sherpa-onnx==1.13.2", "revision": "tts-models/vits-piper-es_ES-sharvard-medium-int8",
     "stages": ["tts"], "languages": ["es"], "backend": ["cpu", "cuda"], "speaker": false,
-    "size_bytes": 23477120, "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-es_ES-sharvard-medium-int8.tar.bz2", "archive_sha256": null,
+    "size_bytes": 23477120, "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-es_ES-sharvard-medium-int8.tar.bz2", "archive_sha256": "bf5507cbdedea650365bd6175b3164a8ecca5847533ddf97afcba9d76ea599d1",
     "directory": "vits-piper-es_ES-sharvard-medium-int8", "files": ["es_ES-sharvard-medium.onnx", "tokens.txt", "espeak-ng-data"], "kind": "tts"
   },
   {
     "id": "vits-piper-ru-irina-medium-int8", "name": "VITS Piper Russian Irina", "runtime": "sherpa-onnx==1.13.2", "revision": "tts-models/vits-piper-ru_RU-irina-medium-int8",
     "stages": ["tts"], "languages": ["ru"], "backend": ["cpu", "cuda"], "speaker": false,
-    "size_bytes": 21149417, "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-ru_RU-irina-medium-int8.tar.bz2", "archive_sha256": null,
+    "size_bytes": 21149417, "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-ru_RU-irina-medium-int8.tar.bz2", "archive_sha256": "b0000a509f7551a80742eed5c43b8eb03f469cb9f0a42f6feee96ce0da0ebab8",
     "directory": "vits-piper-ru_RU-irina-medium-int8", "files": ["ru_RU-irina-medium.onnx", "tokens.txt", "espeak-ng-data"], "kind": "tts"
   }
 ]

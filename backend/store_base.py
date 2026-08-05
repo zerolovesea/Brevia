@@ -210,6 +210,7 @@ class StoreBase:
         db = sqlite3.connect(self.db_path)
         db.row_factory = sqlite3.Row
         db.execute("PRAGMA foreign_keys=ON")
+        db.execute("PRAGMA busy_timeout=5000")
         try:
             yield db
             db.commit()

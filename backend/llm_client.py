@@ -44,7 +44,6 @@ def complete(payload, prompt, json_mode=False):
                 {
                     "anthropic-version": "2023-06-01",
                     "x-api-key": payload["api_key"],
-                    "Authorization": f"Bearer {payload['api_key']}",
                 }
             )
     elif payload.get("api_key"):
@@ -63,6 +62,8 @@ def complete(payload, prompt, json_mode=False):
         raise ValueError(
             f"LLM request failed ({error.code}): {detail[:500]}"
         ) from error
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as error:
+        raise ValueError(f"LLM request failed: {error}") from error
     content = data.get("message", {}).get("content")
     if content is None and data.get("choices"):
         message = data["choices"][0].get("message", {})

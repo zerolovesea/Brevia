@@ -2,8 +2,6 @@ name: Release
 
 on:
   push:
-    branches: [main]
-    paths: [package.json]
     tags: ['v*']
   workflow_dispatch:
 
@@ -42,7 +40,33 @@ jobs:
       - run: npm test
       - name: Bundle Python runtime and dependencies
         run: python backend/pack_worker.py
+      - name: Configure Apple signing and notarization
+        if: matrix.os == 'macos-14'
+        shell: bash
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          CSC_LINK: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          test -n "$CSC_LINK" && test -n "$CSC_KEY_PASSWORD"
+          test -n "$APPLE_ID" && test -n "$APPLE_APP_SPECIFIC_PASSWORD" && test -n "$APPLE_TEAM_ID"
       - run: ${{ matrix.command }}
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          CSC_LINK: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      - name: Verify macOS signature and notarization
+        if: matrix.os == 'macos-14'
+        shell: bash
+        run: |
+          APP="dist/mac-arm64/Brevia.app"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          xcrun stapler validate "$APP"
+          spctl --assess --type execute --verbose=4 "$APP"
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.name }}

@@ -82,6 +82,7 @@ document.addEventListener('scroll', (event) => {
 let activeLibraryNav = 'all-meetings';
 const liveSpeakers = new Map();
 const liveSegments = new Map();
+const maxLiveSegments = 500;
 let followLiveTranscript = true;
 let toastTimer;
 let switchingLanguage = false;
@@ -91,7 +92,7 @@ let latestLiveSegmentId = null;
 let editingMeetingIndex = null;
 const translatedNodes = [];
 /** Resolves a display label for the active locale. @param {string} key Chinese source label. @returns {string} Localized label or the original key. */
-const t = (key) => stageLabels[key]?.[locale] || stageLabels[key]?.en || catalog[locale].labels[key] || key;
+const t = (key) => stageLabels[key]?.[locale] || stageLabels[key]?.en || catalog[locale].labels[key] || catalog.en.labels[key] || key;
 /** Resolves a transient message for the active locale. @param {string} key Message identifier. @returns {string} Localized message. */
 const message = (key) => catalog[locale].messages[key];
 function formatBytes(bytes = 0) { return bytes >= 1024 ** 3 ? `${(bytes / 1024 ** 3).toFixed(2)} GB` : bytes >= 1024 ** 2 ? `${(bytes / 1024 ** 2).toFixed(1)} MB` : `${Math.round(bytes / 1024)} KB`; }
@@ -212,14 +213,6 @@ let editingSummaryModel = 0;
 let configSequence = savedSummaryConfig?.sequence || summaryModels.length;
 summaryModels.forEach((item, index) => { if (!item.name) item.name = `配置-${index + 1}`; });
 let draftSummaryName = '';
-const summaryKeyValues = new Map();
-async function loadSummaryKey(reference) {
-  if (!reference || summaryKeyValues.has(reference)) return;
-  summaryKeyValues.set(reference, '');
-  try { summaryKeyValues.set(reference, await window.brevia?.secret.get({ reference }) || ''); }
-  catch { /* The password field remains empty when the keychain is unavailable. */ }
-  if (activeModal === 'summary-model') renderModal('summary-model');
-}
 function speakerProfileName(profile) {
   const builtinKey = profile.builtin_key || (profile.built_in && profile.name === '内置女声' ? 'builtin:female' : profile.built_in && profile.name === '内置男声' ? 'builtin:male' : '');
   const builtin = { 'builtin:female': ['内置女声', 'Built-in female voice', 'Voz femenina integrada', '内蔵女性音声', '내장 여성 음성', 'Voix féminine intégrée', 'Integrierte weibliche Stimme', 'Встроенный женский голос'], 'builtin:male': ['内置男声', 'Built-in male voice', 'Voz masculina integrada', '内蔵男性音声', '내장 남성 음성', 'Voix masculine intégrée', 'Integrierte männliche Stimme', 'Встроенный мужской голос'] }[builtinKey];
@@ -630,6 +623,9 @@ let onboardingModelIds = [];
 let onboardingModelSelection;
 let initialPermissionsNeeded = false;
 let initializationComplete = false;
+const useChinaModelSource = () => locale === 'zh' && localStorage.getItem('brevia-china-model-source') === 'true';
+const modelDownloadPayload = (modelId) => ({ model_id: modelId, ...(useChinaModelSource() ? { source: 'china' } : {}) });
+const chinaModelSourceToggle = () => locale === 'zh' ? `<p class="model-source-switch"><label><input type="checkbox" data-china-model-source${useChinaModelSource() ? ' checked' : ''} /><span>您是否身处中国大陆？</span></label><small>选择后将会使用大陆镜像源进行下载提速。</small></p>` : '';
 const onboardingCopy = {
   zh: { languageHint: '之后你可以随时修改界面语言。', meetingTitle: '你通常使用哪些会议语言？', meetingHint: '我们正在为您准备需要的语音识别模型。', modelsTitle: '准备离线转写功能', modelsHint: '为此，我们需要下载以下内容。', estimate: '预计占用空间', download: '下载并继续', customize: '自定义下载', later: '稍后设置', ready: '离线转写已准备就绪', capabilities: ['实时字幕', '语音活动检测', '自动标点', '会后精修', '语音分段', '说话人识别', '实时降噪', '声源分离'] },
   en: { languageHint: 'You can change the interface language any time.', meetingTitle: 'What languages do you usually use in meetings?', meetingHint: 'We’ll prepare the speech recognition models you need.', modelsTitle: 'Prepare offline transcription', modelsHint: 'To recognize speech on this device, Brevia needs to download the following.', estimate: 'Estimated storage', download: 'Download and continue', customize: 'Customize downloads', later: 'Set up later', ready: 'Offline transcription is ready', capabilities: ['Live captions', 'Voice activity detection', 'Automatic punctuation', 'Post-meeting refinement', 'Speech segmentation', 'Speaker recognition', 'Live denoising', 'Source separation'] },
@@ -785,7 +781,7 @@ async function downloadRequiredModel(modelId) {
   renderRequiredModelsCard();
   renderModelDownloadQueue();
   try {
-    await window.brevia?.models.download({ model_id: modelId });
+    await window.brevia?.models.download(modelDownloadPayload(modelId));
   } catch (error) {
     modelDownloads.set(modelId, { error: error.message });
     renderRequiredModelsCard();
@@ -900,13 +896,11 @@ function renderSummaryModelModal() {
   const isOllama = current.provider === 'Ollama';
   const isOllamaCloud = current.provider === 'Ollama Cloud';
   const apiFormat = current.format === 'claude' ? 'claude' : 'openai';
-  void loadSummaryKey(current.keyReference);
-  const apiKey = current.keyReference ? summaryKeyValues.get(current.keyReference) || '' : '';
   const configuredControl = summaryModels.length ? `<div class="configured-models"><label class="config-select-field">${copy.configured}${flowSelect('active-summary-model', String(activeSummaryModel), summaryModels.map((item, index) => [String(index), `${item.name} · ${summaryProviderLabel(item.provider)} · ${item.model}${index === activeSummaryModel ? ` · ${copy.active}` : ''}`]), true)}</label></div>` : '';
   settingsModal.querySelector('h2').textContent = copy.title;
   settingsModal.querySelector('.modal-title p').textContent = copy.intro;
   const endpoint = current.endpoint || (isOllama ? ollamaChatEndpoint : isOllamaCloud ? ollamaCloudChatEndpoint : '');
-  settingsModal.querySelector('.modal-body').innerHTML = `<form class="summary-model-form"><div class="config-fields"><label>${copy.name}<input name="name" value="${escapeHtml(current.name)}" maxlength="64" required /></label><label class="config-select-field">${copy.provider}${flowSelect('provider', current.provider, summaryProviders.map((provider) => [provider, summaryProviderLabel(provider)]))}</label><label data-summary-api-key${isOllama ? ' hidden' : ''}>${copy.key}<input name="apiKey" type="password" autocomplete="new-password" value="${escapeHtml(apiKey)}" /></label><label>${copy.endpoint}<input name="endpoint" value="${escapeHtml(endpoint)}" required /></label><label class="config-select-field" data-summary-format${(isOllama || isOllamaCloud) ? ' hidden' : ''}>${copy.format}${flowSelect('format', apiFormat, [['openai', copy.openAIFormat], ['claude', copy.claudeFormat]])}</label><label>${copy.model}<input name="model" value="${escapeHtml(current.model)}" placeholder="llama3.2" required /></label></div>${isOllama ? `<p class="ollama-hint">${t('使用本机 Ollama，不需要 API Key。请填写已安装的模型名。')}</p>` : isOllamaCloud ? `<p class="ollama-hint">${t('直接调用 Ollama Cloud，需要 API Key。')}</p>` : ''}<div class="modal-form-actions"><button class="modal-action" type="submit">${copy.save}</button><button class="secondary" data-new-summary-model type="button">${copy.add}</button>${editingSummaryModel >= 0 ? `<button class="model-delete" data-delete-summary-model type="button">${copy.remove}</button>` : ''}</div></form>${configuredControl}<section class="modal-subsection"><h3>${copy.jsonTitle}</h3><p>${copy.jsonIntro}</p><pre class="config-json">${escapeHtml(renderConfigPreview())}</pre></section>`;
+  settingsModal.querySelector('.modal-body').innerHTML = `<form class="summary-model-form"><div class="config-fields"><label>${copy.name}<input name="name" value="${escapeHtml(current.name)}" maxlength="64" required /></label><label class="config-select-field">${copy.provider}${flowSelect('provider', current.provider, summaryProviders.map((provider) => [provider, summaryProviderLabel(provider)]))}</label><label data-summary-api-key${isOllama ? ' hidden' : ''}>${copy.key}<input name="apiKey" type="password" autocomplete="new-password" placeholder="${current.keyReference ? '••••••••' : ''}" /></label><label>${copy.endpoint}<input name="endpoint" value="${escapeHtml(endpoint)}" required /></label><label class="config-select-field" data-summary-format${(isOllama || isOllamaCloud) ? ' hidden' : ''}>${copy.format}${flowSelect('format', apiFormat, [['openai', copy.openAIFormat], ['claude', copy.claudeFormat]])}</label><label>${copy.model}<input name="model" value="${escapeHtml(current.model)}" placeholder="llama3.2" required /></label></div>${isOllama ? `<p class="ollama-hint">${t('使用本机 Ollama，不需要 API Key。请填写已安装的模型名。')}</p>` : isOllamaCloud ? `<p class="ollama-hint">${t('直接调用 Ollama Cloud，需要 API Key。请填写已安装的模型名。')}</p>` : ''}<div class="modal-form-actions"><button class="modal-action" type="submit">${copy.save}</button><button class="secondary" data-new-summary-model type="button">${copy.add}</button>${editingSummaryModel >= 0 ? `<button class="model-delete" data-delete-summary-model type="button">${copy.remove}</button>` : ''}</div></form>${configuredControl}<section class="modal-subsection"><h3>${copy.jsonTitle}</h3><p>${copy.jsonIntro}</p><pre class="config-json">${escapeHtml(renderConfigPreview())}</pre></section>`;
 }
 function renderSpeakerProfileModal() {
   const copy = speakerProfileCopy[locale] || speakerProfileCopy.en;
@@ -978,7 +972,7 @@ function renderModal(kind) {
   settingsModal.querySelector('h2').textContent = copy.title;
   settingsModal.querySelector('.modal-title p').textContent = copy.intro;
   settingsModal.querySelector('.modal-close').setAttribute('aria-label', (modalCopy[locale] || modalCopy.en).close);
-  settingsModal.querySelector('.modal-body').innerHTML = `<div class="modal-list${kind === 'models' ? ' model-library-list' : ''}">${items.map((entry, index) => {
+  settingsModal.querySelector('.modal-body').innerHTML = `${kind === 'models' ? chinaModelSourceToggle() : ''}<div class="modal-list${kind === 'models' ? ' model-library-list' : ''}">${items.map((entry, index) => {
     const item = kind === 'models' ? entry.item : entry;
     const sourceIndex = kind === 'models' ? entry.sourceIndex : index;
     const [name, detail] = kind === 'models' ? item.slice(1, 3) : item;
@@ -1168,10 +1162,11 @@ function openOnboardingSetup() {
   const securityHint = onboardingSecurityCopy[locale] || onboardingSecurityCopy.en;
   const choices = ['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru'];
   const defaults = new Set(['en', locale]);
-  showOnboardingPage('setup', `<section class="onboarding-setup-page"><button class="onboarding-back" data-onboarding-back-language type="button" aria-label="Back">←</button><header><img class="onboarding-brand" src="./assets/brevia-logo.svg" alt="Brevia" /><h1>${copy.modelsTitle}</h1><div class="onboarding-intro"><p>${copy.meetingHint} ${copy.modelsHint}</p><small>${securityHint}</small></div></header><section class="onboarding-section"><h2>${copy.meetingTitle}</h2><div class="onboarding-language-selection"><div class="onboarding-check-grid">${choices.map((code) => `<label><input type="checkbox" name="onboarding-language" value="${code}"${defaults.has(code) ? ' checked' : ''} /><span>${new Intl.DisplayNames([locale], { type: 'language' }).of(code)}</span></label>`).join('')}</div><aside class="onboarding-model-preview"><strong>${modelListLabels[0]}</strong><ul data-onboarding-language-models></ul></aside></div></section><section class="onboarding-section"><h2>${locale === 'zh' ? '离线功能' : 'Offline features'}</h2><div class="onboarding-language-selection"><div class="onboarding-feature-grid">${copy.capabilities.map((capability) => `<label><input type="checkbox" checked disabled /><span>${capability}</span></label>`).join('')}</div><aside class="onboarding-model-preview"><strong>${modelListLabels[1]}</strong><ul data-onboarding-feature-models></ul></aside></div></section><section class="onboarding-model-summary"><strong>${copy.estimate}: <span data-onboarding-estimate></span></strong></section><div class="onboarding-actions"><button class="modal-action" data-download-onboarding-models type="button">${copy.download}</button><button class="secondary" data-customize-onboarding-models type="button">${copy.customize}</button><button class="secondary" data-finish-onboarding type="button">${copy.later}</button></div></section>`);
+  showOnboardingPage('setup', `<section class="onboarding-setup-page"><button class="onboarding-back" data-onboarding-back-language type="button" aria-label="Back">←</button><header><img class="onboarding-brand" src="./assets/brevia-logo.svg" alt="Brevia" /><h1>${copy.modelsTitle}</h1><div class="onboarding-intro"><p>${copy.meetingHint} ${copy.modelsHint}</p><small>${securityHint}</small></div></header><section class="onboarding-section"><h2>${copy.meetingTitle}</h2><div class="onboarding-language-selection"><div class="onboarding-check-grid">${choices.map((code) => `<label><input type="checkbox" name="onboarding-language" value="${code}"${defaults.has(code) ? ' checked' : ''} /><span>${new Intl.DisplayNames([locale], { type: 'language' }).of(code)}</span></label>`).join('')}</div><aside class="onboarding-model-preview"><strong>${modelListLabels[0]}</strong><ul data-onboarding-language-models></ul></aside></div></section><section class="onboarding-section"><h2>${t('离线功能')}</h2><div class="onboarding-language-selection"><div class="onboarding-feature-grid">${copy.capabilities.map((capability) => `<label><input type="checkbox" checked disabled /><span>${capability}</span></label>`).join('')}</div><aside class="onboarding-model-preview"><strong>${modelListLabels[1]}</strong><ul data-onboarding-feature-models></ul></aside></div></section><section class="onboarding-model-summary"><strong>${copy.estimate}: <span data-onboarding-estimate></span></strong>${chinaModelSourceToggle()}</section><div class="onboarding-actions"><button class="modal-action" data-download-onboarding-models type="button">${copy.download}</button><button class="secondary" data-customize-onboarding-models type="button">${copy.customize}</button><button class="secondary" data-finish-onboarding type="button">${copy.later}</button></div></section>`);
   updateOnboardingSetup();
   onboardingPage.addEventListener('change', (event) => {
     if (event.target.matches('[name="onboarding-language"]')) updateOnboardingSetup();
+    if (event.target.matches('[data-china-model-source]')) localStorage.setItem('brevia-china-model-source', event.target.checked);
   });
   onboardingPage.addEventListener('click', (event) => {
     if (event.target.closest('[data-onboarding-back-language]')) { dismissOnboardingPage(openOnboardingPermissions); return; }
@@ -1483,7 +1478,7 @@ settingsModal.addEventListener('click', async (event) => {
     renderModal('models');
     renderModelDownloadQueue();
     try {
-      if (window.brevia) await window.brevia.models.download({ model_id: modelIds[index] });
+      if (window.brevia) await window.brevia.models.download(modelDownloadPayload(modelIds[index]));
       else { installModel({ icon, name, detail, intro }); modelDownloads.delete(modelIds[index]); }
     } catch (error) { showToast(error.message); }
     renderModal('models');
@@ -1511,6 +1506,7 @@ settingsModal.addEventListener('click', async (event) => {
   }
 });
 settingsModal.addEventListener('change', (event) => {
+  if (event.target.matches('[data-china-model-source]')) { localStorage.setItem('brevia-china-model-source', event.target.checked); return; }
   const selection = event.target.closest('[data-onboarding-model-selection]');
   if (!selection) return;
   if (selection.checked) onboardingModelSelection.add(selection.value);
@@ -1556,7 +1552,6 @@ settingsModal.addEventListener('submit', async (event) => {
     values.keyReference = previous?.keyReference || `summary-${crypto.randomUUID()}`;
     if (values.apiKey && window.brevia) {
       await window.brevia.secret.set({ reference: values.keyReference, value: values.apiKey });
-      summaryKeyValues.set(values.keyReference, values.apiKey);
     }
     delete values.apiKey;
     if (editingSummaryModel < 0) { summaryModels.push(values); activeSummaryModel = summaryModels.length - 1; } else summaryModels[editingSummaryModel] = values;
@@ -1616,9 +1611,9 @@ document.querySelector('#live-view').addEventListener('submit', async (event) =>
   try {
     const voiceId = values.get('voice_id');
     const targetLanguage = values.get('target_language');
-    if (['zh', 'en'].includes(targetLanguage) && !voiceId) { showToast(locale === 'zh' ? '请选择声音' : 'Select a voice first'); return; }
+    if (['zh', 'en'].includes(targetLanguage) && !voiceId) { showToast(t('请选择声音')); return; }
     const config = summaryModels[activeSummaryModel];
-    if (!config) { showToast(locale === 'zh' ? '请先配置翻译模型' : 'Configure a translation model first'); return; }
+    if (!config) { showToast(t('请先配置翻译模型')); return; }
     ttsSubmitting = true;
     submitLabel = submit.innerHTML;
     submit.disabled = true;
@@ -1800,9 +1795,7 @@ function showSummaryConfigCard(error) {
     enterTaskCard(card);
   } else if (card.classList.contains('task-card-leave')) enterTaskCard(card);
   const rejected = /LLM request failed \(403\)|error code: 1010/i.test(String(error?.message || error));
-  const copy = locale === 'zh'
-    ? { title: rejected ? '纪要服务拒绝了请求' : '纪要模型需要配置', detail: rejected ? '请检查 API 地址、密钥和服务商访问策略。' : 'API Key 未配置、已失效或不匹配当前服务。', action: '配置纪要模型' }
-    : { title: rejected ? 'Summary provider rejected the request' : 'Configure summary model', detail: rejected ? 'Check the API URL, key, and provider access policy.' : 'The API key is missing, invalid, or rejected by this provider.', action: 'Configure model' };
+  const copy = { title: t(rejected ? '纪要服务拒绝了请求' : '纪要模型需要配置'), detail: t(rejected ? '请检查 API 地址、密钥和服务商访问策略。' : 'API Key 未配置、已失效或不匹配当前服务。'), action: t('配置纪要模型') };
   card.innerHTML = `<header class="task-card-heading"><p>${copy.title}</p>${taskCardControls()}</header><strong>${copy.detail}</strong><button class="secondary" type="button">${copy.action}</button>`;
   card.querySelector('.secondary').onclick = () => {
     clearTimeout(summaryConfigDismissTimer);
@@ -1835,11 +1828,11 @@ const showToast = (content, action) => {
 window.addEventListener('unhandledrejection', (event) => {
   event.preventDefault();
   const message = event.reason instanceof Error ? event.reason.message : String(event.reason || '未知异步错误');
-  showToast(`操作失败：${message}`);
+  showToast(`${t('操作失败')}: ${message}`);
 });
 window.addEventListener('error', (event) => {
   const message = event.error instanceof Error ? event.error.message : event.message;
-  if (message) showToast(`应用错误：${message}`);
+  if (message) showToast(`${t('应用错误')}: ${message}`);
 });
 /** Marks the active meeting-library source and updates the window breadcrumb. @param {'all-meetings'|'recently-deleted'} id Navigation item ID. @returns {void} */
 function selectLibraryNav(id) {
@@ -1967,7 +1960,7 @@ function activateMeeting(meeting, payload) {
   document.querySelector('#active-diarization-model').textContent = prepareModelChoices['active-diarization-model'].find(([id]) => id === `${segmentationModelId || ''}|${embeddingModelId || ''}`)?.[1] || t('自动匹配');
   document.querySelector('#active-refined-model').textContent = modelChoices('active-refined-model').find(([id]) => id === refinedModelId)?.[1] || t('自动匹配');
   document.querySelector('#live-name').textContent = title;
-  uiData.meetings.unshift({ id: meeting.id, tone: 'violet', title, meta: `刚刚 · 0 分钟${category ? ` · ${category}` : ''}`, category, tags: [], status: { tone: 'processing', label: '正在录制', detail: '双轨录音' } });
+  uiData.meetings.unshift({ id: meeting.id, tone: 'violet', title, meta: `${t('刚刚')} · 0 ${t('分钟')}${category ? ` · ${category}` : ''}`, category, tags: [], status: { tone: 'processing', label: t('正在录制'), detail: t('双轨录音') } });
   document.querySelector('#transcript-scroll').innerHTML = '';
   document.querySelector('#live-caption').textContent = '';
   document.querySelector('#live-caption-translation').hidden = true;
@@ -2060,12 +2053,20 @@ function startTimer() { clearInterval(timer); timer = setInterval(() => { second
 document.querySelector('#pause').addEventListener('click', async (event) => {
   const button = event.currentTarget;
   const paused = button.dataset.paused === 'true';
+  const nextPaused = !paused;
+  button.disabled = true;
   try {
-    if (breviaClient) await breviaClient.pause(!paused);
-    button.dataset.paused = String(!paused);
+    const request = breviaClient?.pause(nextPaused);
+    button.dataset.paused = String(nextPaused);
     renderPauseButton();
-    if (paused) startTimer(); else clearInterval(timer);
-  } catch (error) { showToast(error.message); }
+    if (nextPaused) clearInterval(timer); else startTimer();
+    await request;
+  } catch (error) {
+    button.dataset.paused = String(paused);
+    renderPauseButton();
+    if (paused) clearInterval(timer); else startTimer();
+    showToast(error.message);
+  } finally { button.disabled = false; }
 });
 document.querySelector('#end-meeting').addEventListener('click', async (event) => {
   const button = event.currentTarget;
@@ -2080,7 +2081,7 @@ document.querySelector('#end-meeting').addEventListener('click', async (event) =
       applyBackendDetail(meeting);
       void window.brevia.meeting.refine({ meeting_id: meeting.id }).catch((error) => {
         hideRefinementProgress();
-        showToast(`会后精修失败：${error.message}`);
+        showToast(`${t('会后精修失败')}: ${error.message}`);
       });
     }
     showView('detail');
@@ -2125,8 +2126,8 @@ document.querySelector('#translation-toggle').addEventListener('click', (event) 
   const enabled = !translationAllowed;
   if (enabled && window.brevia) {
     const config = summaryModels[activeSummaryModel];
-    if (!config || !breviaClient?.state.meeting?.target_language) { showToast('请先选择译文目标并配置纪要模型'); return; }
-    if (!confirm(`将确认字幕发送到 ${config.provider} 生成译文。是否继续？`)) return;
+    if (!config || !breviaClient?.state.meeting?.target_language) { showToast(t('请先选择译文目标并配置纪要模型')); return; }
+    if (!confirm(t('将确认字幕发送到 {provider} 生成译文。是否继续？').replace('{provider}', config.provider))) return;
   }
   setLiveTranslationEnabled(enabled);
   document.querySelectorAll('.translation').forEach((line) => { line.hidden = !enabled; });
@@ -2234,7 +2235,7 @@ batchToolbar.addEventListener('click', async (event) => {
     return;
   }
   if (event.target.closest('[data-batch-export]')) {
-    const format = prompt('选择格式：md / txt / json / srt / docx / pdf / flac / wav / m4a', 'md')?.toLowerCase();
+    const format = prompt(t('选择格式：md / txt / json / srt / docx / pdf / flac / wav / m4a'), 'md')?.toLowerCase();
     if (!format) return;
     try {
       const result = window.brevia ? await window.brevia.meeting.exportMany({ meeting_ids: meetings.map(({ id }) => id).filter(Boolean), format }) : { paths: meetings.map(({ title }) => `${title}.${format}`) };
@@ -2278,8 +2279,11 @@ async function mutateMeetings(action, meetings) {
 }
 async function openMeetingRow(row) {
   if (!window.brevia) { showView('detail'); return; }
+  const request = ++meetingListRequest;
   breviaClient.state.selectedMeetingId = row.dataset.meetingId;
-  applyBackendDetail(await window.brevia.meeting.get({ meeting_id: row.dataset.meetingId }));
+  const meeting = await window.brevia.meeting.get({ meeting_id: row.dataset.meetingId });
+  if (request !== meetingListRequest) return;
+  applyBackendDetail(meeting);
   showView('detail');
 }
 meetingList.addEventListener('click', async (event) => {
@@ -2314,10 +2318,10 @@ meetingList.addEventListener('click', async (event) => {
       closeMeetingMenus();
       return;
     }
-    if (action.dataset.meetingAction === 'export') { closeMeetingMenus(); if (window.brevia && meeting.id) window.brevia.meeting.export({ meeting_id: meeting.id, format: 'md' }).then((value) => value && showToast(`已导出「${meeting.title}」`)).catch((error) => showToast(error.message)); else showToast(`已导出「${meeting.title}」`); return; }
+    if (action.dataset.meetingAction === 'export') { closeMeetingMenus(); if (window.brevia && meeting.id) window.brevia.meeting.export({ meeting_id: meeting.id, format: 'md' }).then((value) => value && showToast(t('已导出「{title}」').replace('{title}', meeting.title))).catch((error) => showToast(error.message)); else showToast(t('已导出「{title}」').replace('{title}', meeting.title)); return; }
     if (action.dataset.meetingAction === 'delete') {
       openConfirmation(t('删除'), `「${meeting.title}」`, async () => {
-        try { await mutateMeetings('delete', [meeting]); showToast(meeting.isExample ? '示例会议及录音已删除' : '会议已移至最近删除'); } catch (error) { showToast(error.message); }
+        try { await mutateMeetings('delete', [meeting]); showToast(t(meeting.isExample ? '示例会议及录音已删除' : '会议已移至最近删除')); } catch (error) { showToast(error.message); }
       });
       return;
     }
@@ -2377,7 +2381,7 @@ const updatePlayerControl = () => {
   const playing = !playerAudio.paused && !playerAudio.ended;
   playButton.classList.toggle('is-playing', playing);
   playButton.textContent = playing ? '❚❚' : '▶';
-  playButton.setAttribute('aria-label', playing ? '暂停录音' : '播放录音');
+  playButton.setAttribute('aria-label', t(playing ? '暂停录音' : '播放录音'));
   renderMiniPlayback();
 };
 /** Formats the audio progress control as an mm:ss display. @returns {void} */
@@ -2406,7 +2410,7 @@ function syncPlaybackTranscript() {
 progress.addEventListener('input', () => { followPlaybackTranscript = true; renderPlayerTime(); playerAudio.currentTime = Number(progress.value); syncPlaybackTranscript(); });
 document.addEventListener('click', (event) => { const button = event.target.closest('.jump'); if (button) { followPlaybackTranscript = true; progress.value = button.dataset.time; playerAudio.currentTime = Number(button.dataset.time); renderPlayerTime(); syncPlaybackTranscript(); showToast(message('located')); } });
 playButton.addEventListener('click', async () => {
-  if (!playerAudio.src) { showToast('这场会议没有可播放的录音'); return; }
+  if (!playerAudio.src) { showToast(t('这场会议没有可播放的录音')); return; }
   if (playerAudio.paused) await playerAudio.play(); else playerAudio.pause();
   showToast(message(playerAudio.paused ? 'paused' : 'playing'));
 });
@@ -2622,7 +2626,7 @@ if (window.brevia) {
   };
   window.brevia.on('startup.ready', dismissStartupSplash);
   if (window.BreviaOnboarding.isFirstLaunch()) openOnboardingLanguage();
-  void loadSummaryConfig().catch((error) => showToast(`纪要配置加载失败：${error.message}`));
+  void loadSummaryConfig().catch((error) => showToast(`${t('纪要配置加载失败')}: ${error.message}`));
   const permissions = window.brevia.permissions.status();
   breviaClient.initialize().then((result) => {
     modelCatalog = result.models;
@@ -2648,7 +2652,7 @@ if (window.brevia) {
   }).then((status) => {
     initialPermissionsNeeded = status.microphone === 'not-determined' || status.screen === 'not-determined';
     if (!window.BreviaOnboarding.isFirstLaunch() && initialPermissionsNeeded) openInitialPermissions();
-  }).catch((error) => showToast(`配置或后端启动失败：${error.message}`));
+  }).catch((error) => showToast(`${t('配置或后端启动失败')}: ${error.message}`));
 
   const transcript = document.querySelector('#transcript-scroll');
   const isAtLiveBottom = () => transcript.scrollHeight - transcript.clientHeight - transcript.scrollTop <= 32;
@@ -2714,6 +2718,11 @@ if (window.brevia) {
       transcript.insertBefore(element, next || null);
     }
     liveSegments.set(payload.segment_id, element);
+    while (liveSegments.size > maxLiveSegments) {
+      const [segmentId, stale] = liveSegments.entries().next().value;
+      liveSegments.delete(segmentId);
+      stale.remove();
+    }
     transcript.querySelectorAll('.segment.is-active').forEach((segment) => {
       segment.classList.remove('is-active');
       segment.removeAttribute('aria-current');
@@ -2734,7 +2743,7 @@ if (window.brevia) {
     renderSpeakerProfileCard();
     renderMeetingList();
     if (activeModal === 'storage') renderModal('storage');
-    if (recoverable.length) showToast(`发现 ${recoverable.length} 场可恢复录音`);
+    if (recoverable.length) showToast(t('发现可恢复录音').replace('{count}', recoverable.length));
   });
   async function generateSegmentTranslation(payload, targetLanguage) {
     const config = summaryModels[activeSummaryModel];
@@ -2765,7 +2774,7 @@ if (window.brevia) {
     if (!translationAllowed) return;
     try {
       await generateSegmentTranslation(payload, breviaClient.state.meeting.target_language);
-    } catch (error) { showToast(`翻译失败：${error.message}`); }
+    } catch (error) { showToast(`${t('翻译失败')}: ${error.message}`); }
   });
   window.brevia.on('transcript.discarded', ({ segment_id }) => {
     liveSegments.get(segment_id)?.remove();
@@ -2799,7 +2808,7 @@ if (window.brevia) {
     const revision = Math.max(...refined.map((segment) => segment.revision), -1);
     const results = await Promise.allSettled(refined.filter((item) => item.revision === revision).map((segment) => generateSegmentTranslation(segment, meeting.target_language)));
     const failure = results.find((result) => result.status === 'rejected');
-    if (failure) showToast(`翻译失败：${failure.reason.message}`);
+    if (failure) showToast(`${t('翻译失败')}: ${failure.reason.message}`);
     if (meeting.id === breviaClient.state.selectedMeetingId) applyBackendDetail(await window.brevia.meeting.get({ meeting_id: meeting.id }));
   });
   window.brevia.on('summary.started', ({ meeting_id, completed, total, stage }) => showSummaryProgress(completed, total, stage, meeting_id));
@@ -2913,7 +2922,7 @@ if (window.brevia) {
     if (!breviaClient.state.selectedMeetingId) return;
     try {
       const result = await window.brevia.meeting.share({ meeting_id: breviaClient.state.selectedMeetingId });
-      if (result) showToast(result.recording_included ? '压缩包已导出' : '未找到录音，已导出逐字稿压缩包');
+      if (result) showToast(t(result.recording_included ? '压缩包已导出' : '未找到录音，已导出逐字稿压缩包'));
     } catch (error) { showToast(error.message); }
   });
 }

@@ -1,5 +1,6 @@
 function stopMediaStream(stream) {
-  for (const track of [...(stream?.getVideoTracks() || []), ...(stream?.getAudioTracks() || [])]) {
+  const videoTracks = stream?.getVideoTracks() || [];
+  for (const track of videoTracks.length ? videoTracks : (stream?.getAudioTracks() || [])) {
     if (track.readyState !== 'live') continue;
     try { track.stop(); } catch { /* Continue stopping the remaining tracks. */ }
   }
@@ -14,6 +15,7 @@ class AudioCapture {
     this.preview = null;
     this.trackSamples = new Map();
     this.paused = false;
+    this.stopping = false;
     this.stopPromise = null;
   }
 
@@ -76,6 +78,7 @@ class AudioCapture {
 
   async start(meetingId) {
     this.meetingId = meetingId;
+    this.stopping = false;
     this.trackSamples.clear();
     const streams = this.pendingStreams;
     this.pendingStreams = [];
@@ -117,7 +120,7 @@ class AudioCapture {
           sample_rate: 16000,
           start_ms: Math.round(sampleOffset / 16),
         };
-        queue = queue.then(() => this.send(payload)).catch((error) => console.error('Audio frame failed', error));
+        queue = queue.then(() => this.stopping ? null : this.send(payload)).catch((error) => console.error('Audio frame failed', error));
       };
       resource.source.connect(resource.processor);
       resource.processor.connect(context.destination);
@@ -158,6 +161,7 @@ class AudioCapture {
   async stop() {
     if (this.stopPromise) return this.stopPromise;
     this.stopPromise = (async () => {
+      this.stopping = true;
       const preview = this.preview;
       const pendingStreams = this.pendingStreams;
       const sources = this.sources;

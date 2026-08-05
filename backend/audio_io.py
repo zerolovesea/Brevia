@@ -10,6 +10,9 @@ import subprocess
 import wave
 
 
+PROCESS_TIMEOUT_SECONDS = 60 * 60
+
+
 def ffmpeg_path():
     """返回显式配置或 PATH 中的 ffmpeg；缺失时给出统一错误。"""
     executable = os.environ.get("BREVIA_FFMPEG") or shutil.which("ffmpeg")
@@ -37,16 +40,28 @@ def convert_to_pcm_wav(source, destination, sample_rate=16000, channels=1):
             str(destination),
         ],
         check=True,
+        timeout=PROCESS_TIMEOUT_SECONDS,
     )
 
 
-def read_mono_wav(path):
+def ensure_wav_duration(path, maximum_seconds, operation="process"):
+    """Reject a WAV before a caller loads its complete waveform."""
+    with wave.open(str(path)) as recording:
+        if recording.getnframes() > recording.getframerate() * maximum_seconds:
+            # ponytail: complete-waveform ceiling; stream model windows when long meetings need this operation.
+            raise ValueError(f"Audio is too long to {operation} in memory")
+
+
+def read_mono_wav(path, maximum_seconds=None):
     """读取单声道 PCM16 WAV，返回归一化 float32 与采样率。"""
     import numpy
 
     with wave.open(str(path)) as recording:
         if recording.getnchannels() != 1 or recording.getsampwidth() != 2:
             raise ValueError("This operation requires mono PCM16 WAV audio")
+        if maximum_seconds and recording.getnframes() > recording.getframerate() * maximum_seconds:
+            # ponytail: in-memory ASR ceiling; stream model windows when long meetings need refinement.
+            raise ValueError("Audio is too long to process in memory")
         samples = numpy.frombuffer(
             recording.readframes(recording.getnframes()), dtype="<i2"
         )
@@ -65,13 +80,16 @@ def write_mono_wav(path, samples, sample_rate):
         recording.writeframes((values * 32767).astype("<i2").tobytes())
 
 
-def read_wav_channels(path):
+def read_wav_channels(path, maximum_seconds=None):
     """读取 PCM16 WAV 为 ``(channels, samples)``，符合 Sherpa 分离器输入。"""
     import numpy
 
     with wave.open(str(path)) as recording:
         if recording.getsampwidth() != 2:
             raise ValueError("Source separation requires PCM16 WAV audio")
+        if maximum_seconds and recording.getnframes() > recording.getframerate() * maximum_seconds:
+            # ponytail: separator loads the complete waveform; add chunked separation when this ceiling is insufficient.
+            raise ValueError("Audio is too long to separate in memory")
         channels = recording.getnchannels()
         values = numpy.frombuffer(
             recording.readframes(recording.getnframes()), dtype="<i2"

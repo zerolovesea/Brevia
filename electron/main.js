@@ -1,6 +1,6 @@
 const { app, BrowserWindow, desktopCapturer, dialog, ipcMain, safeStorage, session, shell, systemPreferences } = require('electron');
-const { spawn } = require('node:child_process');
-const { appendFile, copyFile, mkdir, readFile, rename, writeFile } = require('node:fs/promises');
+const { execFile, spawn } = require('node:child_process');
+const { appendFile, copyFile, mkdir, readFile, rename, rm, writeFile } = require('node:fs/promises');
 const { existsSync } = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
@@ -20,6 +20,7 @@ const root = path.join(__dirname, '..');
 const packagedRoot = app.isPackaged ? process.resourcesPath : root;
 const startupAnimationMs = 1700;
 const startupDataWaitMs = 2200;
+const workerLineLimit = 4 * 1024 * 1024;
 const resetOnboarding = process.argv.includes('--reset-onboarding');
 const dataDir = () => path.join(app.getPath('home'), 'brevia');
 const legacyDataDir = () => app.getPath('userData');
@@ -32,6 +33,11 @@ const bundledFfmpegPath = () => {
 const writeLog = (level, value) => {
   const line = `${new Date().toISOString()} [${level}] ${logText(value).trim()}\n`;
   void mkdir(logsDir(), { recursive: true }).then(() => appendFile(logFile(), line, 'utf8')).catch(() => {});
+};
+const stopProcess = (child) => {
+  if (!child?.pid) return;
+  if (process.platform === 'win32') execFile('taskkill', ['/pid', String(child.pid), '/t', '/f'], () => {});
+  else child.kill();
 };
 const migrateDataDir = async () => {
   const source = legacyDataDir();
@@ -110,10 +116,12 @@ class WorkerClient {
     this.sequence = 0;
     this.restarts = 0;
     this.active = null;
+    this.starting = null;
   }
 
   start() {
-    if (this.process?.stdin && !this.process.stdin.destroyed && this.process.exitCode === null) return;
+    if (this.process?.stdin && !this.process.stdin.destroyed && this.process.exitCode === null) return Promise.resolve();
+    if (this.starting) return this.starting;
     const workerName = process.platform === 'win32' ? 'brevia-worker.exe' : 'brevia-worker';
     const bundled = path.join(packagedRoot, 'backend', 'runtime', 'brevia-worker', workerName);
     const useBundledWorker = app.isPackaged && !process.env.BREVIA_PYTHON && existsSync(bundled);
@@ -133,10 +141,20 @@ class WorkerClient {
       stdio: ['pipe', 'pipe', 'pipe'],
     });
     this.process = child;
+    this.starting = new Promise((resolve, reject) => {
+      child.once('spawn', resolve);
+      child.once('error', reject);
+    }).finally(() => { this.starting = null; });
     let buffer = '';
     child.stdout.setEncoding('utf8');
     child.stdout.on('data', (chunk) => {
       buffer += chunk;
+      if (buffer.length > workerLineLimit) {
+        const error = new Error('Worker output is too large');
+        this.fail(error);
+        stopProcess(child);
+        return;
+      }
       const lines = buffer.split('\n');
       buffer = lines.pop();
       lines.filter(Boolean).forEach((line) => {
@@ -155,6 +173,7 @@ class WorkerClient {
     });
     child.on('error', (error) => this.fail(error));
     child.on('exit', (code) => this.closed(code, child));
+    return this.starting;
   }
 
   receive(message) {
@@ -170,11 +189,11 @@ class WorkerClient {
     if (message.type) this.sendEvent(message.type, message.payload);
   }
 
-  request(type, payload = {}) {
+  async request(type, payload = {}) {
     const value = command.parse({ type, payload });
     if (!this.process?.stdin || this.process.stdin.destroyed || this.process.exitCode !== null) {
       if (app.isQuitting) return Promise.reject(new Error('Worker is shutting down'));
-      this.start();
+      await this.start();
     }
     const requestId = `cmd-${++this.sequence}`;
     return new Promise((resolve, reject) => {
@@ -312,6 +331,21 @@ async function writeSummaryConfig(config) {
   await rename(temporary, target);
 }
 
+async function prepareExport(value) {
+  const exported = await worker.request('meeting.export', value);
+  if (!exported.print_pdf) return exported;
+  const printWindow = new BrowserWindow({ show: false, webPreferences: { sandbox: true } });
+  const pdfPath = exported.path.replace(/\.print\.html$/, '.pdf');
+  try {
+    await printWindow.loadFile(exported.path);
+    await writeFile(pdfPath, await printWindow.webContents.printToPDF({ printBackground: true }));
+    return { path: pdfPath, format: 'pdf' };
+  } finally {
+    if (!printWindow.isDestroyed()) printWindow.destroy();
+    await rm(exported.path, { force: true });
+  }
+}
+
 function registerIpc() {
   ipcMain.handle('app.version', () => app.getVersion());
   ipcMain.handle('app.open-releases', () => shell.openExternal('https://github.com/zerolovesea/Brevia/releases'));
@@ -424,7 +458,7 @@ function registerIpc() {
     }
   });
   handle('models.list', z.object({}), 'models.list');
-  handle('models.download', z.object({ model_id: z.string() }), 'models.download');
+  handle('models.download', z.object({ model_id: z.string(), source: z.enum(['default', 'china']).optional() }), 'models.download');
   handle('models.pause', z.object({ model_id: z.string() }), 'models.pause');
   handle('models.cancel', z.object({ model_id: z.string() }), 'models.cancel');
   handle('models.delete', z.object({ model_id: z.string() }), 'models.delete');
@@ -434,10 +468,6 @@ function registerIpc() {
     const value = z.object({ reference: z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/), value: z.string().min(1) }).parse(payload);
     await setSecret(value.reference, value.value);
     return true;
-  });
-  ipcMain.handle('secret.get', async (_, payload) => {
-    const { reference } = z.object({ reference: z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/) }).parse(payload);
-    return getSecret(reference);
   });
   ipcMain.handle('summary.config.get', async () => readSummaryConfig());
   ipcMain.handle('summary.config.save', async (_, payload) => {
@@ -478,7 +508,7 @@ function registerIpc() {
       format: z.enum(['md', 'txt', 'json', 'srt', 'docx', 'pdf', 'flac', 'wav', 'm4a']),
       track: z.enum(['mix', 'mic', 'system', 'vocals', 'accompaniment']).optional(),
     }).parse(payload);
-    const exported = await worker.request('meeting.export', value);
+    const exported = await prepareExport(value);
     const destination = await dialog.showSaveDialog({ defaultPath: path.basename(exported.path) });
     if (destination.canceled) return null;
     await copyFile(exported.path, destination.filePath);
@@ -490,7 +520,7 @@ function registerIpc() {
     if (destination.canceled) return null;
     const paths = [];
     for (const meetingId of value.meeting_ids) {
-      const exported = await worker.request('meeting.export', { meeting_id: meetingId, content: ['flac', 'wav', 'm4a'].includes(value.format) ? 'audio' : 'transcript', format: value.format });
+      const exported = await prepareExport({ meeting_id: meetingId, content: ['flac', 'wav', 'm4a'].includes(value.format) ? 'audio' : 'transcript', format: value.format });
       const parsed = path.parse(exported.path);
       let target = path.join(destination.filePaths[0], parsed.base);
       for (let copy = 2; existsSync(target); copy += 1) target = path.join(destination.filePaths[0], `${parsed.name}-${copy}${parsed.ext}`);
@@ -603,7 +633,7 @@ async function stopActiveMeetingBeforeQuit() {
 app.on('before-quit', (event) => {
   if (quittingAfterMeetingStop) {
     app.isQuitting = true;
-    worker.process?.kill();
+    stopProcess(worker.process);
     return;
   }
   event.preventDefault();

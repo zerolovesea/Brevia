@@ -5,6 +5,7 @@ from uuid import uuid4
 from .asr import SourceSeparator, VitsTTS, ZipVoiceTTS
 from .audio_io import (
     convert_to_pcm_wav,
+    ensure_wav_duration,
     read_mono_wav,
     read_wav_channels,
     write_mono_wav,
@@ -44,6 +45,7 @@ class MeetingMediaService:
             progress(10, "preparing")
             convert_to_pcm_wav(source, input_path, sample_rate=44100, channels=2)
             progress(25, "reading")
+            ensure_wav_duration(input_path, 15 * 60, "separate")
             samples, sample_rate = read_wav_channels(input_path)
             progress(35, "separating")
             result = SourceSeparator(self.models).process(samples, sample_rate)

@@ -26,7 +26,9 @@ class ModelTaskWorkerMixin:
                 return {"model_id": model_id, "status": "downloading"}
             control = {"paused": threading.Event(), "cancelled": threading.Event()}
             task = threading.Thread(
-                target=self._download_model, args=(model_id, control), daemon=True
+                target=self._download_model,
+                args=(model_id, control, payload.get("source") == "china"),
+                daemon=True,
             )
             self.model_downloads[model_id] = {"task": task, **control}
             task.start()
@@ -83,10 +85,13 @@ class ModelTaskWorkerMixin:
     def resume_task(self, payload):
         return self.set_task_pause(payload, False)
 
-    def _download_model(self, model_id, control):
+    def _download_model(self, model_id, control, china_source=False):
         """下载模型并将最终状态作为异步事件发送。"""
         try:
-            self.models.download(model_id, control)
+            if china_source:
+                self.models.download(model_id, control, china_source=True)
+            else:
+                self.models.download(model_id, control)
             if model_id == SETTINGS["diarization"]["embedding_model_id"]:
                 try:
                     self.voice_profiles.seed_builtin_profiles()

@@ -26,6 +26,32 @@ def example_note(example):
 
 
 class MeetingStoreMixin:
+    def recover_interrupted_meetings(self):
+        """Finalize interrupted recordings and make interrupted refinement retryable."""
+        with self.connect() as db:
+            meetings = db.execute(
+                "SELECT id,status FROM meetings WHERE status IN ('recording','refining')"
+            ).fetchall()
+        recovered = []
+        for meeting in meetings:
+            if meeting["status"] == "recording":
+                manifest = self.read_manifest(meeting["id"])
+                duration_ms = max(
+                    (
+                        round(track.get("samples", 0) * 1000 / track.get("sample_rate", 16000))
+                        for track in manifest.get("tracks", {}).values()
+                    ),
+                    default=0,
+                )
+                try:
+                    self.finish_meeting(meeting["id"], duration_ms)
+                except (OSError, ValueError):
+                    self.set_status(meeting["id"], "ready")
+            else:
+                self.set_status(meeting["id"], "ready")
+            recovered.append(meeting["id"])
+        return recovered
+
     def create_meeting(self, payload):
         """创建录制中的会议及其音频、导出目录。
 
@@ -398,9 +424,9 @@ class MeetingStoreMixin:
                 raise ValueError("Meeting not found")
             if not meeting["deleted_at"]:
                 raise ValueError("Only deleted meetings can be permanently deleted")
-        shutil.rmtree(self.meetings_dir / meeting_id, ignore_errors=True)
         with self.connect() as db:
             db.execute("DELETE FROM meetings WHERE id=?", (meeting_id,))
+        shutil.rmtree(self.meetings_dir / meeting_id, ignore_errors=True)
 
     @staticmethod
     def _meeting(row):

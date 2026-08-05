@@ -300,6 +300,9 @@
   .onboarding-setup-page header { @apply grid justify-items-center gap-5 text-center; }
   .onboarding-intro { @apply grid w-full justify-items-center gap-3 text-center; }
   .onboarding-intro small { @apply whitespace-pre-line text-[11px] leading-5 text-[#666]; }
+  .model-source-switch { @apply grid justify-items-center gap-2 text-center; }
+  .model-source-switch label { @apply flex items-center gap-3 text-[13px] text-[#1a1a1a]; }
+  .model-source-switch small { @apply text-[11px] leading-5 text-[#666]; }
   .onboarding-setup-page h2 { @apply m-0 text-[16px] font-normal text-black; }
   .onboarding-section { @apply grid gap-5 border-t border-[#e5e5e5] pt-8; }
   .onboarding-language-selection { @apply grid h-64 w-full grid-cols-[minmax(0,1fr)_minmax(13rem,.75fr)] gap-12 text-left; }

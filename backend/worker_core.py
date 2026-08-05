@@ -28,15 +28,14 @@ class WorkerCore:
             "BREVIA_DATA_DIR",
             Path.home() / "brevia",
         )
-        self.output = output or (
-            lambda value: print(json.dumps(value, ensure_ascii=False), flush=True)
-        )
+        self.output = output or self._write_stdout
         self.output_lock = threading.Lock()
         self.model_downloads = {}
         self.model_downloads_lock = threading.Lock()
         self.state = WorkerState()
         self.tasks = TaskRegistry()
         self.store = Store(root)
+        self.store.recover_interrupted_meetings()
         runtime_settings(self.store.root)
         self.models = ModelManager(self.store.models_dir, self.emit)
         # 服务按存储/模型依赖构造；它们不持有实时会议状态，便于单独测试。
@@ -57,6 +56,13 @@ class WorkerCore:
         self.asr_warning_sent = False
         self.live_refiner = None
         self.live_refinement = None
+
+    @staticmethod
+    def _write_stdout(value):
+        try:
+            print(json.dumps(value, ensure_ascii=False), flush=True)
+        except BrokenPipeError:
+            pass
 
     @property
     def active(self):

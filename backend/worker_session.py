@@ -14,7 +14,7 @@ from .asr import (
     SpeakerTracker,
     StreamingASR,
 )
-from .audio_io import convert_to_pcm_wav, read_mono_wav
+from .audio_io import convert_to_pcm_wav
 from .config import SETTINGS
 from .worker_common import require, synchronized_recording
 
@@ -78,11 +78,10 @@ class RecordingSessionMixin:
         )
         try:
             convert_to_pcm_wav(source, destination)
-            _, sample_rate = read_mono_wav(destination)
             import wave
 
             with wave.open(str(destination)) as audio:
-                duration_ms = round(audio.getnframes() * 1000 / sample_rate)
+                duration_ms = round(audio.getnframes() * 1000 / audio.getframerate())
             result = self.store.finish_imported_meeting(meeting["id"], duration_ms)
         except Exception:
             self.store.soft_delete(meeting["id"])
@@ -357,7 +356,11 @@ class RecordingSessionMixin:
         if text and (text != state["last_text"] or final):
             state["revision"] += 1
             segment_id = f"{payload['track']}-{state['segment']}"
-            speaker = "local-user" if payload["track"] == "mic" else "spk-1"
+            speaker = "local-user" if payload["track"] == "mic" else (
+                self.speaker_tracker.last_speaker
+                if self.speaker_tracker and self.speaker_tracker.last_speaker
+                else "spk-1"
+            )
             speaker_name = "Local user" if speaker == "local-user" else None
             segment_audio = (
                 numpy.concatenate(state["audio"])

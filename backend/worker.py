@@ -64,8 +64,17 @@ def main():
         except Exception as error:
             worker.response(command.get("id"), error=error)
 
-    for line in sys.stdin:
+    maximum_command_bytes = 4 * 1024 * 1024
+    while line := sys.stdin.readline(maximum_command_bytes + 1):
+        if len(line) > maximum_command_bytes and not line.endswith("\n"):
+            while line and not line.endswith("\n"):
+                line = sys.stdin.readline(maximum_command_bytes + 1)
+            worker.response(None, error=ValueError("Command is too large"))
+            continue
         if not line.strip():
+            continue
+        if len(line) > maximum_command_bytes:
+            worker.response(None, error=ValueError("Command is too large"))
             continue
         try:
             command = json.loads(line)

@@ -6,12 +6,16 @@ import re
 import shutil
 import subprocess
 import zipfile
+from html import escape
+from pathlib import Path
 
+from .audio_io import PROCESS_TIMEOUT_SECONDS
 from .transcript import clock, latest_segments, srt_time
-from .worker_common import require
+from .worker_common import require, synchronized_recording
 
 
 class ExportWorkerMixin:
+    @synchronized_recording
     def export(self, payload):
         """导出逐字稿、纪要或录音。
 
@@ -71,12 +75,19 @@ class ExportWorkerMixin:
                 if export_format == "md"
                 else "\n".join(lines)
             )
-        if export_format in {"docx", "pdf"}:
-            path = self._convert_document(directory, safe_title, export_format, content)
+        if export_format == "docx":
+            path = self._write_docx(directory, safe_title, content)
+        elif export_format == "pdf":
+            path = self._write_print_html(directory, safe_title, content)
         else:
             path.write_text(content, encoding="utf-8")
-        return {"path": str(path), "format": export_format}
+        return {
+            "path": str(path),
+            "format": "html" if export_format == "pdf" else export_format,
+            "print_pdf": export_format == "pdf",
+        }
 
+    @synchronized_recording
     def bundle(self, payload):
         """打包本地录音与 Markdown、TXT 逐字稿。"""
         require(payload, "meeting_id")
@@ -102,6 +113,8 @@ class ExportWorkerMixin:
                 archive.write(audio, arcname=f"{safe_title}.wav")
             archive.write(markdown, arcname=f"{safe_title}.md")
             archive.write(plain_text, arcname=f"{safe_title}.txt")
+        Path(markdown).unlink(missing_ok=True)
+        Path(plain_text).unlink(missing_ok=True)
         return {"path": str(bundle), "format": "zip", "recording_included": bool(audio)}
 
     def _export_audio(self, meeting, path, export_format, track):
@@ -131,52 +144,42 @@ class ExportWorkerMixin:
         if export_format == "m4a":
             command.extend(["-c:a", "aac", "-b:a", "192k"])
         command.append(str(path))
-        subprocess.run(command, check=True)
+        subprocess.run(command, check=True, timeout=PROCESS_TIMEOUT_SECONDS)
         return {"path": str(path), "format": export_format}
 
     @staticmethod
-    def _convert_document(directory, title, export_format, content):
-        """调用 macOS 原生工具把文本转换为 DOCX 或 PDF，返回目标路径。"""
-        source = directory / f"{title}.{'html' if export_format == 'docx' else 'txt'}"
-        source.write_text(
-            (
-                "<!doctype html><meta charset='utf-8'><style>"
-                "body{font:16px -apple-system;line-height:1.7;max-width:760px;margin:48px auto}"
-                "</style><pre style='white-space:pre-wrap'>"
-                + __import__("html").escape(content)
-                + "</pre>"
+    def _write_docx(directory, title, content):
+        """Write a minimal Unicode DOCX without relying on an OS-specific tool."""
+        destination = directory / f"{title}.docx"
+        paragraphs = "".join(
+            f'<w:p><w:r><w:t xml:space="preserve">{escape(line)}</w:t></w:r></w:p>'
+            for line in content.splitlines() or [""]
+        )
+        with zipfile.ZipFile(destination, "w", zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr(
+                "[Content_Types].xml",
+                '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>',
             )
-            if export_format == "docx"
-            else content,
+            archive.writestr(
+                "_rels/.rels",
+                '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>',
+            )
+            archive.writestr(
+                "word/document.xml",
+                '<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'
+                f"{paragraphs}<w:sectPr/></w:body></w:document>",
+            )
+        return destination
+
+    @staticmethod
+    def _write_print_html(directory, title, content):
+        """Create Unicode-safe HTML for Electron's cross-platform PDF renderer."""
+        destination = directory / f"{title}.print.html"
+        destination.write_text(
+            "<!doctype html><meta charset='utf-8'><style>"
+            "body{font:16px system-ui,sans-serif;line-height:1.7;margin:48px auto;max-width:760px}"
+            "pre{font:inherit;white-space:pre-wrap}</style><pre>"
+            f"{escape(content)}</pre>",
             encoding="utf-8",
         )
-        destination = directory / f"{title}.{export_format}"
-        try:
-            if export_format == "docx" and shutil.which("textutil"):
-                subprocess.run(
-                    [
-                        "textutil",
-                        "-convert",
-                        "docx",
-                        "-output",
-                        str(destination),
-                        str(source),
-                    ],
-                    check=True,
-                    capture_output=True,
-                )
-            elif export_format == "pdf" and shutil.which("cupsfilter"):
-                with destination.open("wb") as output:
-                    subprocess.run(
-                        ["cupsfilter", "-m", "application/pdf", str(source)],
-                        check=True,
-                        stdout=output,
-                        stderr=subprocess.PIPE,
-                    )
-            else:
-                raise ValueError(
-                    f"{export_format.upper()} export is unavailable on this device"
-                )
-        finally:
-            source.unlink(missing_ok=True)
         return destination

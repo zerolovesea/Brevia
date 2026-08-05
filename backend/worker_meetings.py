@@ -1,6 +1,6 @@
 """Focused worker responsibility component."""
 
-from .worker_common import require
+from .worker_common import require, synchronized_recording
 
 
 class MeetingCommandMixin:
@@ -9,6 +9,7 @@ class MeetingCommandMixin:
         require(payload, "meeting_id", "updates")
         return self.store.update_meeting(payload["meeting_id"], payload["updates"])
 
+    @synchronized_recording
     def delete_meeting(self, payload):
         """删除非活动会议。
 
@@ -32,6 +33,7 @@ class MeetingCommandMixin:
         self.store.soft_delete(payload["meeting_id"], restore=True)
         return self.store.get_meeting(payload["meeting_id"])
 
+    @synchronized_recording
     def purge_meeting(self, payload):
         """永久删除最近删除中的会议及其全部本地文件。"""
         require(payload, "meeting_id")

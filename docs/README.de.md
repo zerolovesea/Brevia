@@ -1,6 +1,6 @@
 <p align="center"><img src="assets/brevia-mark.svg" width="258" alt="Brevia" /></p>
 
-<p align="center"><strong>Ein minimaler Meeting-Recorder, der auf deinem Geraet bleibt.</strong><br />Transkribieren, mit KI zusammenfassen, erinnern — ohne Cloud, voellig privat.</p>
+<p align="center"><strong>Ein minimalistischer, local-first KI-Meeting-Assistent.</strong><br />Live-Transkription · mehrsprachig · Sprechererkennung · KI-Zusammenfassungen — Audio verlaesst dein Geraet nie.</p>
 
 <p align="center">
   <a href="https://github.com/zerolovesea/Brevia/releases"><img src="https://img.shields.io/github/v/release/zerolovesea/Brevia?style=flat-square" alt="Release" /></a>
@@ -13,93 +13,146 @@
 
 <p align="center"><a href="../README.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.es.md">Español</a> · <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a> · <a href="README.fr.md">Français</a> · <strong>Deutsch</strong> · <a href="README.ru.md">Русский</a></p>
 
-## Produkttour
+---
 
-| | |
-| --- | --- |
-| ![Meeting-Bibliothek](assets/tour/en/library.png) | ![Meeting starten](assets/tour/en/prepare.png) |
-| ![Modell-Bibliothek](assets/tour/en/models.png) | ![Lokale Einstellungen](assets/tour/en/settings.png) |
+## Ueber Brevia
 
-![KI-Meeting-Notizen](assets/tour/en/notes.png)
+Brevia ist ein Desktop-KI-Meeting-Assistent, der den zeitaufwendigsten Teil jedes Meetings — Aufnehmen, Ordnen und Nachvollziehen — an die KI auf deinem Geraet abgibt. Er nimmt Mikrofon und Systemaudio gleichzeitig auf, streamt Live-Untertitel und wandelt das beendete Gespraech in strukturierte Notizen um. Die gesamte Spracherkennung laeuft lokal; Aufnahmen, Transkripte und Sprecherprofile bleiben standardmaessig auf deinem Rechner.
+
+Das Design ist bewusst zurueckhaltend: eine Oberflaeche, die das Meeting nicht stoert, ein Funktionsumfang, der einem klaren Bogen folgt — **erfassen → verstehen → wiederfinden** — und eine feste Regel: Was lokal moeglich ist, geschieht auch lokal.
 
 ## Funktionen
 
-- **Echtzeit-Transkription** — Mikrofon und Systemaudio gleichzeitig aufnehmen mit Live-Untertiteln.
-- **Vollstaendig lokale Sprach-KI** — Streaming-ASR, Zeichensetzung, Nachbearbeitung, VAD und Sprechertrennung laufen via sherpa-onnx auf dem Geraet. Kein Audio verlaesst deinen Rechner.
-- **27 herunterladbare Modelle** — Zipformer, Paraformer, Whisper, SenseVoice, FireRedASR, FunASR u.a., 30+ Sprachen abgedeckt.
-- **Sprechererkennung** — Pyannote-Segmentierung + Voice-Embedding-Modelle; Sprecher umbenennen und ueber Aufnahmen hinweg verfolgen.
-- **Vielseitiger Export** — Transkripte und Notizen als Markdown, TXT, JSON, SRT, DOCX oder PDF; Audio als FLAC, WAV oder M4A.
-- **Audio-Import** — bestehende Aufnahmen importieren fuer Offline-Transkription und Nachbearbeitung.
-- **Optionale KI-Zusammenfassungen** — Uebersetzungen und strukturierte Notizen nur nach ausdruecklicher Zustimmung und Provider-Konfiguration.
+### Eine ruhige Meeting-Oberflaeche mit Live-Transkription und -Uebersetzung
+
+Oeffnen, Aufnahme starten, Untertitel zusehen. Brevia erfasst Mikrofon und Systemaudio gleichzeitig, sodass beide Seiten eines Remote-Gespraechs im gleichen Transkript landen. Die optionale Live-Uebersetzung wird neben dem Untertitel-Stream angezeigt und unterstuetzt mehrsprachige Gespraeche.
+
+![Live-Meeting und Uebersetzung](assets/tour/en/%E5%AE%9E%E6%97%B6%E4%BC%9A%E8%AE%AE%E5%92%8C%E7%BF%BB%E8%AF%91.png)
+
+### 30+ Transkriptionssprachen und KI-Meeting-Notizen
+
+Brevia transkribiert Sprache in mehr als 30 Sprachen — Englisch, Chinesisch, Japanisch, Koreanisch, Franzoesisch, Deutsch, Spanisch, Russisch, Arabisch, Thai, Vietnamesisch, Indonesisch und mehr. Nach Ende des Meetings verbindest du einen beliebigen LLM-Anbieter, und Brevia entwirft in einem Durchgang die Zusammenfassung, wichtigen Entscheidungen und To-dos.
+
+Jeder Anbieter, der das Chat-Format von OpenAI, Anthropic oder Ollama spricht, funktioniert — auch lokale Ollama-Deployments. Es wird nur Text gesendet, niemals Audio.
+
+![Mehrsprachige Unterstuetzung und KI-Notizen](assets/tour/en/%E5%A4%9A%E8%AF%AD%E8%A8%80%E6%94%AF%E6%8C%81%E4%B8%8E%E4%BC%9A%E8%AE%AE%E7%BA%AA%E8%A6%81.png)
+
+### Stimmprofil-Registrierung und meetinguebergreifende Sprechererkennung
+
+Nimm pro Teammitglied eine kurze Sprachprobe auf, und Brevia erkennt sie in allen kuenftigen Meetings namentlich — nicht als „Sprecher 1, Sprecher 2", sondern als die Personen, die sie sind. Die Erkennung funktioniert aufnahmeuebergreifend, sodass die Frage „was hat Alice gesagt?" in den Meetings der letzten Woche mit einem Klick beantwortet ist.
+
+Angetrieben von Pyannote-Segmentierung plus Sprecher-Embedding-Modellen, alles auf dem Geraet.
+
+![Stimmprofil-Registrierung](assets/tour/en/%E6%B3%A8%E5%86%8C%E5%A3%B0%E7%BA%B9%E8%AF%86%E5%88%AB.png)
+
+### Eine kuratierte lokale Modellbibliothek
+
+Mehr als 27 herunterladbare Modelle fuer Streaming-ASR, Offline-Verfeinerung, Zeichensetzung, Sprachaktivitaetserkennung, Sprecherdiarisierung, Sprecher-Embeddings, Sprachsynthese und Quellentrennung. Kombiniere nach Sprache und Genauigkeit — alles laeuft auf deinem Geraet.
+
+![Modellbibliothek](assets/tour/en/%E6%A8%A1%E5%9E%8B%E5%BA%93.png)
+
+### Und mehr
+
+- **TTS-Sprachsynthese und -Klonen** — ZipVoice nutzt Referenzaudio registrierter Sprecher fuer Chinesisch und Englisch; fuer Deutsch, Franzoesisch, Spanisch, Russisch und Koreanisch stehen VITS-Stimmen bereit.
+- **Quellentrennung** — Spleeter trennt Aufnahmen in Vokal- und Nicht-Vokal-Spuren fuer die Nachbearbeitung.
+- **Audio-Import** — bring bestehende Aufnahmen fuer die Offline-Transkription in die gleiche Sprachpipeline.
+- **Vielseitige Exporte** — Transkripte und Notizen als Markdown, TXT, JSON, SRT, DOCX oder PDF; Audio als FLAC, WAV oder M4A.
 - **Mehrsprachige Oberflaeche** — Englisch, vereinfachtes Chinesisch, Spanisch, Japanisch, Koreanisch, Franzoesisch, Deutsch und Russisch.
 
 ## Installation
 
-Die neueste Version von [GitHub Releases](https://github.com/zerolovesea/Brevia/releases) herunterladen:
+Lade die neueste Version von [GitHub Releases](https://github.com/zerolovesea/Brevia/releases) herunter:
 
-| Plattform | Datei |
+| Plattform | Installer |
 | --- | --- |
 | macOS (Apple Silicon) | `Brevia-<version>-arm64.dmg` |
 | Windows (x64) | `Brevia-<version>-x64-setup.exe` |
+> Unter Windows kann beim ersten Start eine **Microsoft Defender SmartScreen**-Warnung erscheinen. Klicke auf **„Weitere Informationen" → „Trotzdem ausfuehren"**, nachdem du bestaetigt hast, dass der Download von der offiziellen Releases-Seite stammt.
 
-> **Hinweis zum unsignierten Build:** macOS zeigt moeglicherweise eine Warnung „beschaedigt" oder blockiert das Oeffnen. Gehe zu **Systemeinstellungen → Datenschutz & Sicherheit → Dennoch oeffnen**, oder fuehre aus:
->
-> ```bash
-> xattr -dr com.apple.quarantine "/Applications/Brevia.app"
-> ```
->
-> Unter Windows warnt moeglicherweise Microsoft Defender SmartScreen — nach Pruefung der Download-Quelle fortfahren.
+Erteile beim ersten Start die Berechtigungen fuer Mikrofon und Bildschirmaufnahme und oeffne dann **Einstellungen → Modellbibliothek**, um die benoetigten Modelle herunterzuladen.
 
 ## Architektur
 
 ```mermaid
 flowchart LR
-  A[Electron Renderer<br/>HTML · Tailwind · JS] <-->|IPC + Zod-Validierung| B[Electron Hauptprozess]
-  B <-->|JSONL stdin/stdout| C[Python Worker<br/>gebundelte Laufzeit]
-  C --> D[sherpa-onnx<br/>ASR · VAD · Sprechertrennung · Zeichensetzung]
-  C --> E[Lokaler Speicher<br/>SQLite · Audio · Exporte]
-  C -. ausdrueckliche Zustimmung .-> F[Optionale Cloud-API<br/>Zusammenfassung · Uebersetzung]
+  A[Electron-Renderer<br/>HTML · Tailwind · JS] <-->|IPC + Zod-Validierung| B[Electron-Hauptprozess]
+  B <-->|JSONL stdin/stdout| C[Python-Worker<br/>gebundelte Runtime]
+  C --> D[sherpa-onnx<br/>ASR · VAD · Sprecher · Zeichensetzung · TTS]
+  C --> E[Lokale Speicherung<br/>SQLite · Audio · Exporte]
+  C -. ausdrueckliche Zustimmung .-> F[Optionale Cloud-API<br/>LLM-Zusammenfassung · Uebersetzung]
 ```
 
-Brevia folgt einem strikt lokalen Design. Der Renderer oeffnet keinen Netzwerk-Port. Electron validiert alle IPC-Nachrichten mit Zod-Schemas. Der Hauptprozess startet einen einzelnen Python-Worker, der Modellverwaltung, Audioverarbeitung, lokalen Speicher und Dateiexporte uebernimmt. Daten liegen in `~/Library/Application Support/Brevia` (macOS) oder `%APPDATA%/Brevia` (Windows).
+Brevia folgt einem strikt local-first Design:
 
-## Technologie-Stack
+- **Der Renderer oeffnet keine Netzwerkports**, und jede IPC-Nachricht wird vom Electron-Hauptprozess gegen ein Zod-Schema validiert.
+- **Der Hauptprozess ist eine duenne Huelle.** Er startet einen einzigen Python-Worker ueber JSONL stdin/stdout; der Worker uebernimmt Modellverwaltung, Audioverarbeitung, Sprecherprofile, lokale Speicherung und Exporte.
+- **Daten leben standardmaessig in `~/brevia`** — SQLite, Rohaudio, Exporte, zwischengespeicherte Modelle und Stimmprofile.
+- **Cloud-Aufrufe sind Opt-in.** LLM-Zusammenfassungen und Uebersetzungen erfordern, dass Nutzerinnen und Nutzer einen Anbieter explizit konfigurieren, und es wird nur Text gesendet.
 
-| Schicht | Technologie |
+## Tech-Stack
+
+| Ebene | Technologie |
 | --- | --- |
-| Desktop-Shell | Electron 43 — Preload-Bruecke, Kontextisolierung, Sandbox-Renderer |
-| Frontend | Natives HTML/CSS/JS, Tailwind CSS, eingebaute i18n (8 Sprachen) |
+| Desktop-Shell | Electron 43 — preload-Bruecke, Kontextisolation, gesandboxter Renderer |
+| Frontend | Vanilla HTML/CSS/JS, Tailwind CSS 4, eingebautes i18n (8 Sprachen) |
 | Backend | Python 3.10+, JSONL-Worker-Protokoll, SQLite-Speicher |
-| Sprach-Engine | sherpa-onnx 1.13.2, ONNX Runtime, 27 Modelle (Zipformer / Paraformer / Whisper / SenseVoice / FireRedASR / FunASR) |
-| Sprecherverarbeitung | sherpa-onnx Pyannote-Segmentierung + Voice-Embedding-Modelle |
-| Build & Paketierung | electron-builder, PyInstaller (Python-Laufzeit integriert) |
+| Sprach-Engine | [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 1.13.2, ONNX Runtime |
+| Sprecherverarbeitung | Pyannote-Segmentierung + 3D-Speaker- / NeMo-Titanet- / CAM++-Embeddings |
+| LLM-Client | OpenAI- / Anthropic- / Ollama-kompatible Chat-APIs |
+| Audio-I/O | ffmpeg (in Releases enthalten) |
+| Build & Paketierung | electron-builder, PyInstaller (Python-Runtime gebundelt) |
+## Unterstuetzte Modelle
 
-## Aus dem Quellcode starten
+Jedes Modell wird bei Bedarf aus **Einstellungen → Modellbibliothek** heruntergeladen. Das Manifest liegt in [`backend/models.json`](../backend/models.json).
+
+| Kategorie | Repraesentative Modelle | Sprachen |
+| --- | --- | --- |
+| Streaming-ASR | Zipformer (zh / en / fr / ko / mehrsprachig), Paraformer zweisprachig, Nemotron 3.5 | 30+ |
+| Verfeinerungs-ASR | Qwen3-ASR 0.6B / 1.7B, Whisper Turbo / Large v3, FireRedASR2, FunASR Nano | Mehrsprachig |
+| Zeichensetzung | CT-Transformer zh+en, Online Punct englische Grossschreibung | zh / en |
+| Sprachaktivitaetserkennung | Silero VAD | Universell |
+| Sprachverbesserung | GTCRN Live Denoiser | Universell |
+| Sprecherdiarisierung | Pyannote Segmentation 3.0, Reverb Diarization v1 | Universell |
+| Sprecher-Embeddings | 3D-Speaker ERes2Net, CAM++, NeMo Titanet | zh / en |
+| Quellentrennung | Spleeter 2 Stems | Universell |
+| Sprachsynthese | ZipVoice (zh + en), VITS Piper (fr / de / es / ru), VITS Mimic3 (ko) | Mehrsprachig |
+
+Fuer LLM-Zusammenfassungen und Uebersetzungen funktioniert jeder Anbieter, der OpenAI Chat Completions, Anthropic Messages oder Ollama Chat spricht — OpenAI, Claude, Gemini (OpenAI-kompatibler Endpoint), DeepSeek, Kimi, Qwen, Ollama und mehr.
+
+## Lokale Entwicklung
+
+Voraussetzungen: Node.js 18+, Python 3.10+, Git und ffmpeg (fuer Audio-Import).
 
 ```bash
+git clone https://github.com/zerolovesea/Brevia.git
+cd Brevia
 npm install
 python3 -m pip install -r backend/requirements.txt
 npm start
 ```
 
-Beim ersten Start Mikrofon- und Bildschirmaufnahme-Zugriff erlauben. Unter **Settings → Model Library** die benoetigten Modelle fuer deine Sprache herunterladen.
+Erteile beim ersten Start die Berechtigungen fuer Mikrofon und Bildschirmaufnahme und lade dann die gewuenschten Modelle aus **Einstellungen → Modellbibliothek** herunter.
 
-Entwicklungsbefehle:
+### Haeufig verwendete Skripte
 
 ```bash
 npm test                    # UI- + Backend-Tests
 npm run build               # Tailwind-CSS-Build
 npm run test:model          # ASR-Modell-Diagnose
-npm run test:diarization    # Sprechertrennung-Diagnose
+npm run test:diarization    # Sprecherdiarisierungs-Diagnose
+npm run start:fresh         # Onboarding zuruecksetzen und starten
 ```
 
-Daten-/Modellverzeichnisse fuer Entwicklung aendern:
+### Umgebungsvariablen
 
 ```bash
-BREVIA_DATA_DIR=/path/to/data BREVIA_MODELS_DIR=/path/to/models npm start
-```
+BREVIA_DATA_DIR=/path/to/data       # Benutzerdefiniertes Datenverzeichnis (Aufnahmen, Exporte, SQLite)
+BREVIA_MODELS_DIR=/path/to/models   # Benutzerdefiniertes Modellverzeichnis
+BREVIA_FFMPEG=/path/to/ffmpeg       # ffmpeg-Binary (falls nicht im PATH)
 
-## Installer erstellen
+BREVIA_DATA_DIR=~/brevia-dev BREVIA_MODELS_DIR=~/brevia-models npm start
+```
+### Installer bauen
 
 ```bash
 npm ci
@@ -109,81 +162,93 @@ npm run dist:mac   # macOS ARM64 DMG
 npm run dist:win   # Windows x64 EXE
 ```
 
-Der Installer wird in `dist/` erstellt. Jeder Plattform-Build enthaelt einen nativen Python-Worker; Modelle sind nicht enthalten und werden bei Bedarf heruntergeladen.
+Die Artefakte landen in `dist/`. Jeder Plattform-Build bundelt einen nativen Python-Worker; Modelle sind nicht enthalten und bleiben On-Demand-Downloads.
 
-## Haeufige Fragen
+## FAQ
 
 <details>
-<summary><strong>macOS meldet, die App sei „beschaedigt" oder kann nicht geoeffnet werden</strong></summary>
+<summary><strong>Windows zeigt eine Microsoft-Defender-SmartScreen-Warnung</strong></summary>
 
-Dies liegt daran, dass der Build nicht codesigniert ist. Im Terminal ausfuehren:
-
-```bash
-xattr -dr com.apple.quarantine "/Applications/Brevia.app"
-```
-
-Danach die App normal oeffnen.
+Release-Builds sind nicht mit einem kostenpflichtigen Code-Signing-Zertifikat signiert, und SmartScreen blockiert neu gesehene ausfuehrbare Dateien standardmaessig. Klicke auf **„Weitere Informationen" → „Trotzdem ausfuehren"**, nachdem du bestaetigt hast, dass der Download von der offiziellen [Releases](https://github.com/zerolovesea/Brevia/releases)-Seite stammt.
 </details>
 
 <details>
 <summary><strong>Muss ich Python separat installieren?</strong></summary>
 
-Nein. Release-Builds enthalten die Python-Laufzeit und alle Abhaengigkeiten. Python wird nur benoetigt, wenn aus dem Quellcode gestartet wird.
+Nein. Release-Builds bundeln die Python-Runtime und alle noetigen Abhaengigkeiten. Eine separate Python-Installation wird nur benoetigt, wenn du aus dem Quellcode startest.
 </details>
 
 <details>
 <summary><strong>Wo werden meine Daten gespeichert?</strong></summary>
 
-- macOS: `~/Library/Application Support/Brevia`
-- Windows: `%APPDATA%/Brevia`
-
-Aufnahmen, Transkripte und Sprecherprofile bleiben auf dem Geraet. Mit `BREVIA_DATA_DIR` den Speicherort aendern.
+Standardmaessig in `~/brevia` — Aufnahmen, Transkripte, Exporte, zwischengespeicherte Modelle, Stimmprofile und die SQLite-Datenbank. Setze `BREVIA_DATA_DIR`, um dies zu aendern.
 </details>
 
 <details>
-<summary><strong>Welche Sprachen werden fuer die Transkription unterstuetzt?</strong></summary>
+<summary><strong>Welche Transkriptionssprachen werden unterstuetzt?</strong></summary>
 
-Ueber 30 Sprachen, darunter Chinesisch, Englisch, Japanisch, Koreanisch, Franzoesisch, Deutsch, Spanisch, Russisch, Arabisch, Thai, Vietnamesisch, Indonesisch und mehr. Das passende Modell in der Modell-Bibliothek auswaehlen.
+Mehr als 30 Sprachen, darunter Chinesisch, Englisch, Japanisch, Koreanisch, Franzoesisch, Deutsch, Spanisch, Russisch, Arabisch, Thai, Vietnamesisch und Indonesisch. Waehle das passende Modell in der Modellbibliothek der App.
 </details>
-
 <details>
 <summary><strong>Sendet Brevia Audio in die Cloud?</strong></summary>
 
-Nein. Alle Spracherkennung laeuft lokal ueber sherpa-onnx. Die optionale Zusammenfassungs-/Uebersetzungsfunktion erfordert ausdrueckliche Zustimmung und eigene API-Provider-Konfiguration — es wird nur Text gesendet, niemals Audio.
+Nein. Spracherkennung, Diarisierung und TTS laufen komplett lokal. Nur LLM-Zusammenfassungen und Uebersetzungen kontaktieren das Netzwerk, und auch nur nachdem du einen Anbieter konfiguriert hast — ausschliesslich Text, niemals Audio.
 </details>
 
 <details>
-<summary><strong>Wie viel Speicherplatz brauchen die Modelle?</strong></summary>
+<summary><strong>Wie viel Speicherplatz benoetigen die Modelle?</strong></summary>
 
-Abhaengig von den gewaehlten Modellen. Eine typische Konfiguration (Streaming + Nachbearbeitung + Sprechertrennung) belegt ca. 1–2 GB. Kompakte Streaming-Modelle beginnen bei ~80 MB; groessere Modelle erreichen ~1 GB.
+Haengt davon ab, welche du installierst. Eine typische Zusammenstellung (Streaming + Verfeinerung + Diarisierung) liegt bei 1–2 GB. Kompakte Streaming-Modelle beginnen bei ca. 80 MB; groessere Modelle uebersteigen 1 GB.
 </details>
 
 <details>
-<summary><strong>Kann ich vorhandene Aufnahmen importieren?</strong></summary>
+<summary><strong>Kann ich bestehende Aufnahmen importieren?</strong></summary>
 
-Ja. Audiodateien ueber die Meeting-Bibliothek importieren. Brevia transkribiert sie offline mit derselben Sprach-Pipeline. `ffmpeg` muss im PATH sein (oder `BREVIA_FFMPEG` setzen).
+Ja. Importiere Audiodateien aus der Meeting-Bibliothek, und Brevia transkribiert sie offline mit derselben Sprachpipeline. Erfordert `ffmpeg` im PATH (oder `BREVIA_FFMPEG` setzen).
 </details>
 
 <details>
-<summary><strong>Wie aendere ich die Oberflaechen-Sprache?</strong></summary>
+<summary><strong>Wie wechsle ich die Oberflaechensprache?</strong></summary>
 
-Unter **Settings → General** die bevorzugte Sprache auswaehlen. Unterstuetzt werden Englisch, vereinfachtes Chinesisch, Spanisch, Japanisch, Koreanisch, Franzoesisch, Deutsch und Russisch.
+**Einstellungen → Allgemein → Oberflaechensprache.** Verfuegbar sind Englisch, vereinfachtes Chinesisch, Spanisch, Japanisch, Koreanisch, Franzoesisch, Deutsch und Russisch.
 </details>
 
-## Beitragen
+<details>
+<summary><strong>Wie werden Stimmproben gespeichert?</strong></summary>
 
-1. Einen fokussierten Branch erstellen und Aenderungen klein halten.
-2. `npm test` ausfuehren; bei ASR- oder Sprechertrennungs-Aenderungen auch die Modelldiagnosen.
-3. Keine Modelle, Aufnahmen, Exporte, API-Schluessel oder lokale Daten committen.
-4. UI-Texte in allen acht Sprachen konsistent halten.
-5. Modell-, Plattform- oder Rechte-Auswirkungen im Pull Request beschreiben.
+Stimm-Embeddings (ein kleiner Float-Vektor) und Referenzaudio liegen in der lokalen SQLite-Datenbank und im Dateisystem. Nichts verlaesst das Geraet, und beim Loeschen eines Profils werden die zugehoerigen Daten entfernt.
+</details>
+
+## Feedback und Beitraege
+
+### Ein Problem melden
+
+Bug oder Feature-Wunsch? Bitte in [GitHub Issues](https://github.com/zerolovesea/Brevia/issues) melden. Die Triage geht schneller mit:
+
+- OS und Version (z. B. macOS 14.5 / Windows 11 23H2)
+- Brevia-Version (**Einstellungen → Info**)
+- Verwendete Modelle und Sprache
+- Reproduktionsschritte / erwartetes Ergebnis / tatsaechliches Ergebnis
+- Relevante Logs (**Einstellungen → Erweitert → Log-Ordner oeffnen**) — bitte vor dem Anhaengen auf sensible Inhalte pruefen
+
+**Sicherheitsprobleme:** bitte kein oeffentliches Issue anlegen. Kontaktiere den Maintainer per E-Mail.
+
+### Beitragen
+
+Pull Requests sind willkommen. Damit der Baum aufgeraeumt bleibt:
+
+1. Zweig von `main` mit engem Fokus — ein Anliegen pro PR.
+2. `npm test` vor dem Einreichen ausfuehren; `npm run test:model` und `npm run test:diarization` ausfuehren, wenn ASR oder Diarisierung beruehrt werden.
+3. Keine heruntergeladenen Modelle, Aufnahmen, Exporte, API-Schluessel oder Inhalte aus `~/brevia` committen.
+4. Bei Aenderungen an nutzersichtbarem Text alle acht Sprachen in `frontend/i18n-data.js` aktualisieren — englische Quellzeichenkette und Uebersetzungen zusammen hinzufuegen.
+5. Auswirkungen auf Modelle, Plattform oder Berechtigungen in der PR-Beschreibung vermerken.
 
 ## Lizenz
 
-Brevia steht unter der [ISC License](../LICENSE). Modelle und Drittanbieter-Pakete behalten ihre eigenen Lizenzen und Bedingungen.
+Brevia wird unter der [ISC License](../LICENSE) veroeffentlicht. Modelldateien und Drittanbieterpakete behalten ihre eigenen Lizenzen und Bedingungen.
 
 ## Danksagungen
 
-- [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) — Kern-Laufzeit fuer lokale ASR, VAD, Zeichensetzung und Sprecherverarbeitung. Lizenziert unter [Apache-2.0](https://github.com/k2-fsa/sherpa-onnx/blob/master/LICENSE).
-- Dank an die Modell-Autoren, die in `backend/models.json` deklariert sind.
-- Electron, ONNX Runtime, Python und die Open-Source-Sprach-Community machen diesen lokalen Workflow moeglich.
+- [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) — die lokale Runtime hinter ASR, VAD, Zeichensetzung, Sprecherverarbeitung und TTS. Lizenziert unter [Apache-2.0](https://github.com/k2-fsa/sherpa-onnx/blob/master/LICENSE).
+- Dank an die Modellautorinnen und -maintainer, deren herunterladbare Artefakte in [`backend/models.json`](../backend/models.json) deklariert sind, darunter Zipformer, Paraformer, Whisper, Qwen3-ASR, FireRedASR, FunASR, Pyannote, 3D-Speaker, NeMo, Silero, Spleeter, ZipVoice, VITS Piper / Mimic3 und mehr.
+- Electron, ONNX Runtime, Python und die Open-Source-Sprach-Community machen diesen local-first Workflow moeglich.

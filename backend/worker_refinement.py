@@ -10,14 +10,15 @@ from .asr import (
     RefinedASR,
     SpeakerTracker,
 )
-from .audio_io import read_mono_wav
+from .audio_io import ensure_wav_duration, read_mono_wav
 from .config import SETTINGS
 from .media_tasks import TTS_MODEL_IDS
-from .worker_common import managed_task, require
+from .worker_common import managed_task, require, synchronized_recording
 
 
 class RefinementWorkerMixin:
     @managed_task("meeting.refine")
+    @synchronized_recording
     def refine(self, payload, control=None):
         """对停止后的会议执行会后转写和说话人聚类。
 
@@ -107,7 +108,9 @@ class RefinementWorkerMixin:
         denoiser_id = SETTINGS["live_asr"]["denoiser_model_id"]
         for track in tracks:
             self.wait_task(control)
-            samples, sample_rate = read_mono_wav(meeting["audio"]["playback"][track])
+            path = meeting["audio"]["playback"][track]
+            ensure_wav_duration(path, 30 * 60, "refine")
+            samples, sample_rate = read_mono_wav(path)
             if track == "mic" and self.models.is_ready(denoiser_id):
                 try:
                     samples = OfflineDenoiser(self.models, denoiser_id).process(
@@ -358,6 +361,7 @@ class RefinementWorkerMixin:
         return result
 
     @managed_task("meeting.separate")
+    @synchronized_recording
     def separate_sources(self, payload, control=None):
         """从已保存会议生成独立的人声和非人声 WAV，不改动原录音。"""
         require(payload, "meeting_id")

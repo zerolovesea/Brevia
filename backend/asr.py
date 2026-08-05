@@ -7,6 +7,7 @@ import platform
 import shutil
 import tarfile
 import tempfile
+import threading
 import time
 import urllib.request
 from pathlib import Path
@@ -16,6 +17,14 @@ from .config import SETTINGS
 
 class DownloadCancelled(Exception):
     """用于中止由下载进度回调驱动的模型下载。"""
+
+
+def sha256_file(path):
+    digest = hashlib.sha256()
+    with path.open("rb") as downloaded:
+        for block in iter(lambda: downloaded.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
 
 
 class ModelManager:
@@ -68,7 +77,12 @@ class ModelManager:
         model, path = self.get(model_id), self.path(model_id)
         return path.is_dir() and all((path / name).exists() for name in model["files"])
 
-    def download(self, model_id, control=None):
+    @staticmethod
+    def download_url(url, china_source=False):
+        """Return the selected source without changing the artifact identity."""
+        return f"https://gh-proxy.com/{url}" if china_source and url.startswith("https://github.com/") else url
+
+    def download(self, model_id, control=None, china_source=False):
         """下载并校验一个模型，成功后原子地放入正式目录。
 
         Args:
@@ -124,8 +138,11 @@ class ModelManager:
                         )
 
                     check_control()
-                    urllib.request.urlretrieve(item["url"], destination, report)
+                    urllib.request.urlretrieve(self.download_url(item["url"], china_source), destination, report)
                     check_control()
+                    digest = sha256_file(destination)
+                    if item.get("sha256") and digest != item["sha256"]:
+                        raise ValueError("Model download checksum mismatch")
                     if item.get("extract"):
                         extract_root = Path(temporary) / f"extract-{received}"
                         extract_root.mkdir()
@@ -166,9 +183,9 @@ class ModelManager:
                     )
 
                 check_control()
-                urllib.request.urlretrieve(model["url"], archive, report)
+                urllib.request.urlretrieve(self.download_url(model["url"], china_source), archive, report)
                 check_control()
-                digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+                digest = sha256_file(archive)
                 if model.get("archive_sha256") and digest != model["archive_sha256"]:
                     raise ValueError("Model archive checksum mismatch")
                 source = Path(temporary) / "model"
@@ -278,6 +295,7 @@ class StreamingASR:
             else sherpa_onnx.OnlineRecognizer.from_transducer(**common)
         )
         self.streams = {}
+        self.lock = threading.Lock()
 
     def accept(self, track, samples, sample_rate=16000, flush=False):
         """向一条音轨追加波形并推进解码。
@@ -291,23 +309,24 @@ class StreamingASR:
         Returns:
             ``(识别结果, 是否句末)``；结果类型由 sherpa-onnx 模型决定。
         """
-        if track not in self.streams:
-            stream = self.recognizer.create_stream()
-            if self.model["kind"] == "nemotron":
-                stream.set_option("language", self.language)
-            self.streams[track] = stream
-        stream = self.streams[track]
-        stream.accept_waveform(sample_rate, samples)
-        while self.recognizer.is_ready(stream):
-            self.recognizer.decode_stream(stream)
-        result = self.recognizer.get_result(stream)
-        endpoint = flush or self.recognizer.is_endpoint(stream)
-        if endpoint:
-            stream.input_finished()
+        with self.lock:
+            if track not in self.streams:
+                stream = self.recognizer.create_stream()
+                if self.model["kind"] == "nemotron":
+                    stream.set_option("language", self.language)
+                self.streams[track] = stream
+            stream = self.streams[track]
+            stream.accept_waveform(sample_rate, samples)
             while self.recognizer.is_ready(stream):
                 self.recognizer.decode_stream(stream)
             result = self.recognizer.get_result(stream)
-            self.recognizer.reset(stream)
+            endpoint = flush or self.recognizer.is_endpoint(stream)
+            if endpoint:
+                stream.input_finished()
+                while self.recognizer.is_ready(stream):
+                    self.recognizer.decode_stream(stream)
+                result = self.recognizer.get_result(stream)
+                self.recognizer.reset(stream)
         return result, endpoint
 
 

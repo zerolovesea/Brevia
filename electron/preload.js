@@ -52,7 +52,7 @@ contextBridge.exposeInMainWorld('brevia', {
   task: { pause: invoke('task.pause'), resume: invoke('task.resume') },
   summary: { generate: invoke('summary.generate'), config: { get: invoke('summary.config.get'), save: invoke('summary.config.save') } },
   translation: { generate: invoke('translation.generate') },
-  secret: { get: invoke('secret.get'), set: invoke('secret.set') },
+  secret: { set: invoke('secret.set') },
   showItem: invoke('shell.showItem'),
   audioUrl: invoke('audio.url'),
   on(type, handler) {

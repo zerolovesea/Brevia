@@ -12,7 +12,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from .asr import ChinesePunctuation, EnglishPunctuation, OfflineVAD, RefinedASR, SpeakerTracker
+from .asr import ChinesePunctuation, EnglishPunctuation, ModelManager, OfflineVAD, RefinedASR, SpeakerTracker
+from .audio_io import ensure_wav_duration
 from .config import DEFAULT_SETTINGS, SETTINGS, runtime_settings, save_runtime_settings
 from .llm_client import complete
 from .storage import Store
@@ -29,6 +30,61 @@ class WorkerTest(unittest.TestCase):
 
     def tearDown(self):
         self.temp.cleanup()
+
+    def test_wav_duration_is_checked_before_loading_audio(self):
+        path = Path(self.temp.name) / "long.wav"
+        with wave.open(str(path), "wb") as recording:
+            recording.setnchannels(1)
+            recording.setsampwidth(2)
+            recording.setframerate(1000)
+            recording.writeframes(b"\0\0" * 2000)
+        with self.assertRaisesRegex(ValueError, "too long"):
+            ensure_wav_duration(path, 1, "refine")
+        ensure_wav_duration(path, 2, "refine")
+
+    def test_translation_does_not_wait_for_the_recording_lock(self):
+        meeting = self.worker.start(
+            {
+                "title": "translation lock",
+                "language": "en",
+                "streaming_model_id": "paraformer-zh-en-int8",
+                "refined_model_id": "qwen3-asr-0.6b-int8",
+            }
+        )
+        self.worker.store.save_segment(
+            {
+                "meeting_id": meeting["id"],
+                "segment_id": "mic-0",
+                "text": "hello",
+                "start_ms": 0,
+                "end_ms": 1,
+                "speaker": "spk-1",
+            }
+        )
+        self.worker.llm_complete = lambda *_: "你好"
+        done = threading.Event()
+
+        def translate():
+            self.worker.translate(
+                {
+                    "meeting_id": meeting["id"],
+                    "segment_id": "mic-0",
+                    "target_language": "zh",
+                    "endpoint": "https://example.com",
+                    "model": "test",
+                    "consent": True,
+                }
+            )
+            done.set()
+
+        self.worker.state.lock.acquire()
+        try:
+            thread = threading.Thread(target=translate)
+            thread.start()
+            self.assertTrue(done.wait(1))
+        finally:
+            self.worker.state.lock.release()
+        thread.join()
 
     def test_meeting_audio_persistence_and_export(self):
         meeting = self.worker.start(
@@ -71,6 +127,12 @@ class WorkerTest(unittest.TestCase):
             self.assertEqual(mixed[0], 24)
         exported = self.worker.export({"meeting_id": meeting["id"], "format": "srt"})
         self.assertIn("这是联调测试", Path(exported["path"]).read_text())
+        docx = self.worker.export({"meeting_id": meeting["id"], "format": "docx"})
+        with zipfile.ZipFile(docx["path"]) as archive:
+            self.assertIn("这是联调测试", archive.read("word/document.xml").decode())
+        pdf = self.worker.export({"meeting_id": meeting["id"], "format": "pdf"})
+        self.assertTrue(pdf["print_pdf"])
+        self.assertIn("这是联调测试", Path(pdf["path"]).read_text())
         bundle = self.worker.bundle({"meeting_id": meeting["id"]})
         with zipfile.ZipFile(bundle["path"]) as archive:
             self.assertEqual(
@@ -893,6 +955,18 @@ class WorkerTest(unittest.TestCase):
             self.worker.models.get("zipformer-zh-xlarge-streaming-int8")["files"],
         )
 
+    def test_model_downloads_have_checksums(self):
+        for model in self.worker.models.catalog.values():
+            if model.get("downloads"):
+                self.assertTrue(all(item.get("sha256") for item in model["downloads"]))
+            else:
+                self.assertTrue(model.get("archive_sha256"), model["id"])
+
+    def test_china_source_only_proxies_github_downloads(self):
+        github = "https://github.com/k2-fsa/sherpa-onnx/releases/download/a/model.tar.bz2"
+        self.assertEqual(ModelManager.download_url(github, True), f"https://gh-proxy.com/{github}")
+        self.assertEqual(ModelManager.download_url("https://modelscope.cn/model.onnx", True), "https://modelscope.cn/model.onnx")
+
     def test_multilingual_zipformer_manifest_uses_the_archive_file_names(self):
         self.assertEqual(
             self.worker.models.get("zipformer-multilingual-streaming")["files"][:3],
@@ -1649,6 +1723,12 @@ class WorkerTest(unittest.TestCase):
         self.assertIn(tracker.assign_embedding([-1.0, 0.0]), {"spk-1", "spk-2"})
         self.assertEqual(tracker.speaker_ids, ["spk-1", "spk-2"])
 
+    def test_speaker_tracker_uses_first_temporary_speaker(self):
+        tracker = SpeakerTracker.__new__(SpeakerTracker)
+        tracker.last_speaker = None
+        tracker.embedding = lambda *_: None
+        self.assertEqual(tracker.assign([], 16000), "spk-1")
+
     def test_english_punctuation_normalizes_model_text(self):
         formatter = EnglishPunctuation.__new__(EnglishPunctuation)
 
@@ -1791,6 +1871,66 @@ class WorkerTest(unittest.TestCase):
             self.worker.store.set_status(meeting["id"], "refining")["status"],
             "refining",
         )
+
+    def test_startup_recovers_interrupted_meetings(self):
+        recording = self.worker.store.create_meeting(
+            {
+                "title": "录制中",
+                "language": "zh",
+                "streaming_model_id": "paraformer-zh-en-int8",
+                "refined_model_id": "qwen3-asr-0.6b-int8",
+            }
+        )
+        self.worker.store.append_audio(
+            recording["id"], "mic", base64.b64encode(b"\0\0" * 16000).decode()
+        )
+        refining = self.worker.store.create_meeting(
+            {
+                "title": "精修中",
+                "language": "zh",
+                "streaming_model_id": "paraformer-zh-en-int8",
+                "refined_model_id": "qwen3-asr-0.6b-int8",
+            }
+        )
+        self.worker.store.finish_meeting(refining["id"], 0)
+        self.worker.store.set_status(refining["id"], "refining")
+        recovered = Worker(root=self.temp.name, output=self.events.append)
+        self.assertEqual(recovered.store.get_meeting(recording["id"])["status"], "ready")
+        self.assertTrue(recovered.store.read_manifest(recording["id"])["closed"])
+        self.assertEqual(recovered.store.get_meeting(refining["id"])["status"], "ready")
+
+    def test_delete_waits_for_a_background_meeting_task(self):
+        meeting = self.worker.start(
+            {
+                "title": "串行任务",
+                "language": "zh",
+                "streaming_model_id": "paraformer-zh-en-int8",
+                "refined_model_id": "qwen3-asr-0.6b-int8",
+            }
+        )
+        self.worker.stop({"meeting_id": meeting["id"], "duration_ms": 0})
+        started, release = threading.Event(), threading.Event()
+
+        def separate(*_):
+            started.set()
+            release.wait(1)
+            return {"meeting_id": meeting["id"]}
+
+        with patch.object(self.worker.media, "separate", side_effect=separate):
+            task = threading.Thread(
+                target=self.worker.separate_sources, args=({"meeting_id": meeting["id"]},)
+            )
+            task.start()
+            self.assertTrue(started.wait(1))
+            deletion = threading.Thread(
+                target=self.worker.delete_meeting, args=({"meeting_id": meeting["id"]},)
+            )
+            deletion.start()
+            self.assertTrue(deletion.is_alive())
+            release.set()
+            task.join(1)
+            deletion.join(1)
+        self.assertIsNotNone(self.worker.store.get_meeting(meeting["id"])["deleted_at"])
 
     def test_examples_are_seeded_once_and_delete_audio_immediately(self):
         self.assertTrue(self.worker.store.seed_examples())
