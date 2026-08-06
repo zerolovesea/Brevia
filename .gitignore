@@ -11,3 +11,4 @@ backend/brevia-worker
 backend/brevia-worker.exe
 backend/runtime/
 /release.sh
+/docs/RELEASING.local.md

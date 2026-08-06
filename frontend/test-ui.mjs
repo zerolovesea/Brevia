@@ -492,7 +492,7 @@ assert.match(text(js), /data-onboarding-back-language/);
 assert.match(text(js), /function openOnboardingPermissions/);
 assert.match(text(js), /data-request-onboarding-permission/);
 assert.match(text(js), /onboarding-permission-action/);
-assert.match(text(js), /const permissionPoll = window\.setInterval/);
+assert.doesNotMatch(text(js), /const permissionPoll = window\.setInterval/);
 assert.match(text(js), /const placeholders = steps\.map[\s\S]*?onboarding-permission-complete/);
 assert.match(text(js), /function openOnboardingLanguage[\s\S]*?openOnboardingPermissions\(\);/);
 assert.match(text(js), /dismissOnboardingPage\(\(\) => \{\s*onboardingPreviewLocale = undefined;\s*applyLanguage\(nextLocale, true\);\s*openOnboardingPermissions\(\);/);

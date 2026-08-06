@@ -1211,7 +1211,7 @@ function openOnboardingPermissions() {
       const granted = value === 'granted';
       const active = next?.[0] === permission;
       const state = granted ? '✓' : active ? String(index + 1) : '—';
-      const action = active ? `<button class="modal-action onboarding-permission-action" data-request-onboarding-permission="${permission}" type="button">${permission === 'microphone' ? t('允许') : t('继续')}</button>` : value === 'denied' ? `<button class="modal-action onboarding-permission-action" data-open-${permission}-settings type="button">${t('允许')}</button>` : '';
+      const action = active || permission === 'screen' && value === 'denied' ? `<button class="modal-action onboarding-permission-action" data-request-onboarding-permission="${permission}" type="button">${t('允许')}</button>` : value === 'denied' ? `<button class="modal-action onboarding-permission-action" data-open-${permission}-settings type="button">${t('允许')}</button>` : '';
       return `<div class="onboarding-permission${granted ? ' is-granted' : ''}"><span class="onboarding-permission-state">${state}</span><span><b>${label}</b><small>${granted ? t('已允许') : value === 'denied' ? t('请在系统设置中允许') : detail}</small></span>${action}</div>`;
     }).join('');
     const complete = steps.every(([permission]) => grantedPermissions.has(permission) || status[permission] === 'granted');
@@ -1220,10 +1220,6 @@ function openOnboardingPermissions() {
   };
   const grantedPermissions = new Set();
   void render();
-  const permissionPoll = window.setInterval(() => {
-    if (onboardingPage !== page || !page.isConnected) return window.clearInterval(permissionPoll);
-    void render();
-  }, 1000);
   onboardingPage.addEventListener('click', async (event) => {
     if (event.target.closest('[data-onboarding-back-language]')) { dismissOnboardingPage(() => openOnboardingLanguage(onboardingSelectedLocale)); return; }
     if (event.target.closest('[data-finish-onboarding]')) { dismissOnboardingPage(openOnboardingSetup); return; }
@@ -1245,7 +1241,8 @@ function openOnboardingPermissions() {
         grantedPermissions.add('screen');
       }
     } catch (error) {
-      showToast(error.message);
+      if (button.dataset.requestOnboardingPermission === 'screen') await window.brevia.permissions.openScreenSettings();
+      else showToast(error.message);
     }
     await render();
   });

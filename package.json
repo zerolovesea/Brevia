@@ -15,7 +15,8 @@
     "package:mac": "npm run build && electron-builder --mac dmg zip --arm64 --publish never",
     "package:win": "npm run build && electron-builder --win nsis --x64 --publish never",
     "dist:mac": "npm run pack:backend && npm run package:mac",
-    "dist:win": "npm run pack:backend && npm run package:win"
+    "dist:win": "npm run pack:backend && npm run package:win",
+    "release:offline": "npm run build && npm run pack:backend && env -u APPLE_ID -u APPLE_APP_SPECIFIC_PASSWORD -u APPLE_TEAM_ID electron-builder --mac dmg --arm64 --publish never && electron-builder --win nsis --x64 --publish never"
   },
   "build": {
     "appId": "com.brevia.app",
