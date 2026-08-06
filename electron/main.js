@@ -365,6 +365,12 @@ function registerIpc() {
     settings.unref();
     return true;
   });
+  ipcMain.handle('permissions.open-microphone-settings', () => {
+    if (process.platform !== 'darwin') return false;
+    const settings = spawn('open', ['x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone'], { detached: true, stdio: 'ignore' });
+    settings.unref();
+    return true;
+  });
   ipcMain.handle('app.initialize', () => initializeWorker());
   handle('app.maintain', z.object({}), 'app.maintain');
   ipcMain.handle('meeting.start', async (_, payload) => {
@@ -611,7 +617,7 @@ app.whenReady().then(async () => {
   session.defaultSession.setDisplayMediaRequestHandler(async (_, callback) => {
     const [source] = await desktopCapturer.getSources({ types: ['screen'] });
     callback(source ? { video: source, audio: 'loopback' } : {});
-  });
+  }, { useSystemPicker: process.platform === 'darwin' });
   worker.start();
   registerIpc();
   void initializeWorker().catch(() => {});
