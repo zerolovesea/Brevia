@@ -1,6 +1,6 @@
 {
   "name": "brevia",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "main": "electron/main.js",
   "scripts": {
     "build": "cd frontend && npx @tailwindcss/cli -i ./tailwind.css -o ./styles.css --minify",
@@ -12,7 +12,7 @@
     "test:diarization": ".venv/bin/python -m backend.diagnose_diarization --models-dir .models --download",
     "pack:backend": "python backend/pack_worker.py",
     "dist": "npm run dist:mac",
-    "package:mac": "npm run build && electron-builder --mac dmg --arm64 --publish never",
+    "package:mac": "npm run build && electron-builder --mac dmg zip --arm64 --publish never",
     "package:win": "npm run build && electron-builder --win nsis --x64 --publish never",
     "dist:mac": "npm run pack:backend && npm run package:mac",
     "dist:win": "npm run pack:backend && npm run package:win"
