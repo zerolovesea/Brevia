@@ -355,6 +355,9 @@ function registerIpc() {
   ipcMain.handle('permissions.status', () => process.platform === 'darwin'
     ? { microphone: systemPreferences.getMediaAccessStatus('microphone'), screen: systemPreferences.getMediaAccessStatus('screen') }
     : { microphone: 'granted', screen: 'granted' });
+  ipcMain.handle('permissions.request-microphone', () => process.platform === 'darwin'
+    ? systemPreferences.askForMediaAccess('microphone')
+    : true);
   ipcMain.handle('permissions.open-screen-settings', () => {
     if (process.platform !== 'darwin') return false;
     const settings = spawn('open', ['x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'], { detached: true, stdio: 'ignore' });

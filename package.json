@@ -1,6 +1,6 @@
 {
   "name": "brevia",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "main": "electron/main.js",
   "scripts": {
     "build": "cd frontend && npx @tailwindcss/cli -i ./tailwind.css -o ./styles.css --minify",
@@ -69,6 +69,8 @@
       "identity": "YANG ZHOU (4M64879BBM)",
       "forceCodeSigning": true,
       "hardenedRuntime": true,
+      "entitlements": "electron/entitlements.mac.plist",
+      "entitlementsInherit": "electron/entitlements.mac.plist",
       "notarize": true
     },
     "dmg": {

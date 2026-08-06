@@ -1231,6 +1231,7 @@ function openOnboardingPermissions() {
     button.disabled = true;
     try {
       if (button.dataset.requestOnboardingPermission === 'microphone') {
+        if (!await window.brevia.permissions.requestMicrophone()) throw new Error(t('请在系统设置中允许'));
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         stopMediaStream(stream);
         grantedPermissions.add('microphone');
