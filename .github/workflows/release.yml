@@ -17,10 +17,13 @@ jobs:
         include:
           - name: macOS ARM64
             os: macos-14
-            artifact: Brevia-*.dmg
+            artifact: |
+              dist/Brevia-*.dmg
+              dist/Brevia-*.zip
+              dist/latest-mac.yml
           - name: Windows x64
             os: windows-latest
-            artifact: Brevia-*-x64-setup.exe
+            artifact: dist/Brevia-*-x64-setup.exe
     runs-on: ${{ matrix.os }}
     env:
       PYTHONUTF8: '1'
@@ -70,7 +73,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.name }}
-          path: dist/${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
           if-no-files-found: error
 
   publish:

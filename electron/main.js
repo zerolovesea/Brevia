@@ -5,6 +5,9 @@ const { existsSync } = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { z } = require('zod');
+const { autoUpdater } = require('electron-updater');
+
+const releasesUrl = 'https://github.com/zerolovesea/Brevia/releases/latest';
 
 if (process.platform === 'darwin') {
   app.commandLine.appendSwitch('disable-features', 'MacCatapLoopbackAudioForScreenShare');
@@ -21,7 +24,6 @@ const packagedRoot = app.isPackaged ? process.resourcesPath : root;
 const startupAnimationMs = 1700;
 const startupDataWaitMs = 2200;
 const workerLineLimit = 4 * 1024 * 1024;
-const resetOnboarding = process.argv.includes('--reset-onboarding');
 const dataDir = () => path.join(app.getPath('home'), 'brevia');
 const legacyDataDir = () => app.getPath('userData');
 const logsDir = () => path.join(dataDir(), 'logs');
@@ -348,17 +350,11 @@ async function prepareExport(value) {
 
 function registerIpc() {
   ipcMain.handle('app.version', () => app.getVersion());
-  ipcMain.handle('app.open-releases', () => shell.openExternal('https://github.com/zerolovesea/Brevia/releases'));
+  ipcMain.handle('update.check', () => checkForUpdate());
+  ipcMain.handle('update.install', () => installUpdate());
   ipcMain.handle('permissions.status', () => process.platform === 'darwin'
     ? { microphone: systemPreferences.getMediaAccessStatus('microphone'), screen: systemPreferences.getMediaAccessStatus('screen') }
     : { microphone: 'granted', screen: 'granted' });
-  ipcMain.handle('permissions.request-microphone', async () => {
-    if (process.platform !== 'darwin') return 'granted';
-    if (process.platform === 'darwin' && systemPreferences.getMediaAccessStatus('microphone') === 'not-determined') {
-      await systemPreferences.askForMediaAccess('microphone');
-    }
-    return systemPreferences.getMediaAccessStatus('microphone');
-  });
   ipcMain.handle('permissions.open-screen-settings', () => {
     if (process.platform !== 'darwin') return false;
     const settings = spawn('open', ['x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'], { detached: true, stdio: 'ignore' });
@@ -550,6 +546,49 @@ function registerIpc() {
   });
 }
 
+const versionParts = (version) => version.replace(/^v/, '').split(/[.-]/).slice(0, 3).map(Number);
+const isNewerVersion = (candidate, current) => {
+  const next = versionParts(candidate);
+  const installed = versionParts(current);
+  for (let index = 0; index < 3; index += 1) if (next[index] !== installed[index]) return next[index] > installed[index];
+  return false;
+};
+let macUpdateCheck;
+
+function checkForUpdate() {
+  if (!app.isPackaged) return Promise.resolve({ status: 'unsupported' });
+  if (process.platform === 'win32') return fetch('https://api.github.com/repos/zerolovesea/Brevia/releases/latest', { headers: { 'User-Agent': 'Brevia' } })
+    .then((response) => response.ok ? response.json() : Promise.reject(new Error(`GitHub update check failed (${response.status})`)))
+    .then(({ tag_name }) => ({ status: isNewerVersion(tag_name, app.getVersion()) ? 'available' : 'current', version: tag_name.replace(/^v/, '') }));
+  if (process.platform !== 'darwin') return Promise.resolve({ status: 'unsupported' });
+  if (macUpdateCheck) return macUpdateCheck;
+  autoUpdater.autoDownload = false;
+  macUpdateCheck = new Promise((resolve, reject) => {
+    const done = (result) => { cleanup(); resolve(result); };
+    const fail = (error) => { cleanup(); reject(error); };
+    const cleanup = () => {
+      autoUpdater.removeListener('update-available', available);
+      autoUpdater.removeListener('update-not-available', current);
+      autoUpdater.removeListener('error', fail);
+    };
+    const available = (info) => done({ status: 'available', version: info.version });
+    const current = () => done({ status: 'current' });
+    autoUpdater.once('update-available', available);
+    autoUpdater.once('update-not-available', current);
+    autoUpdater.once('error', fail);
+    autoUpdater.checkForUpdates().catch(fail);
+  }).finally(() => { macUpdateCheck = undefined; });
+  return macUpdateCheck;
+}
+
+async function installUpdate() {
+  if (process.platform === 'win32') return shell.openExternal(releasesUrl);
+  if (process.platform !== 'darwin' || !app.isPackaged) return false;
+  await autoUpdater.downloadUpdate();
+  autoUpdater.quitAndInstall();
+  return true;
+}
+
 function createWindow() {
   const appUrl = pathToFileURL(path.join(packagedRoot, 'frontend', 'index.html')).href;
   const window = new BrowserWindow({
@@ -599,7 +638,7 @@ function createWindow() {
     }
     else revealApp();
   });
-  window.loadFile(path.join(packagedRoot, 'frontend', 'index.html'), resetOnboarding ? { query: { resetOnboarding: '1' } } : undefined);
+  window.loadFile(path.join(packagedRoot, 'frontend', 'index.html'));
   setTimeout(() => {
     animationComplete = true;
     revealApp();

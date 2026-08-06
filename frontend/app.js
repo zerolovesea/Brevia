@@ -65,7 +65,6 @@ function revealTaskCard(card) {
   if (wasHidden || wasLeaving) enterTaskCard(card);
 }
 const { catalog, appCopy: { stageLabels, themeLabels, updateLabels, modalCopy, modelLabels, summaryModelCopy, speakerProfileCopy, voiceFeaturesCopy } } = window.BreviaLocaleData;
-if (new URLSearchParams(location.search).has('resetOnboarding')) localStorage.removeItem('brevia-onboarding-complete');
 let locale = localStorage.getItem('brevia-language') || 'zh';
 let theme = localStorage.getItem('brevia-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
 let activeView = 'home';
@@ -119,6 +118,8 @@ document.body.append(updateNotice);
 const updateNoticeText = updateNotice.querySelector('span');
 const updateNoticeButton = updateNotice.querySelector('button');
 let updateAvailable = false;
+let updateVersion = '';
+let updateBusy = false;
 let installedAppVersion = '—';
 let speakerProfiles = [];
 let presetVoices = [];
@@ -162,9 +163,10 @@ function syncFloatingNotices() { updateNotice.style.bottom = miniMeeting.hidden 
 /** Renders the floating update notice from current locale and availability state. @returns {void} */
 function updateCopy() { return updateLabels[locale] || { ...updateLabels.en, title: t('软件更新'), action: t('检查更新') }; }
 function currentVersionLabel() { return ({ zh: '当前版本', en: 'Current version', es: 'Versión actual', ja: '現在のバージョン', ko: '현재 버전', fr: 'Version actuelle', de: 'Aktuelle Version', ru: 'Текущая версия' })[locale] || 'Current version'; }
-function renderUpdateNotice() { const copy = updateCopy(); updateNoticeText.textContent = copy.available; updateNoticeButton.textContent = copy.floating; updateNotice.hidden = !updateAvailable; requestAnimationFrame(syncFloatingNotices); }
+function availableUpdateLabel() { return updateVersion ? updateCopy().available.replace('0.2.0', updateVersion) : updateCopy().available; }
+function renderUpdateNotice() { const copy = updateCopy(); updateNoticeText.textContent = availableUpdateLabel(); updateNoticeButton.textContent = copy.floating; updateNotice.hidden = !updateAvailable; requestAnimationFrame(syncFloatingNotices); }
 /** Renders the settings-page update action from current locale and availability state. @returns {void} */
-function renderUpdateButton() { const copy = updateCopy(); updateTitle.textContent = copy.title; updateDescription.textContent = updateAvailable ? copy.available : `${currentVersionLabel()} ${installedAppVersion}`; updateButton.textContent = updateAvailable ? copy.update : copy.action; updateButton.disabled = false; }
+function renderUpdateButton() { const copy = updateCopy(); updateTitle.textContent = copy.title; updateDescription.textContent = updateAvailable ? availableUpdateLabel() : `${currentVersionLabel()} ${installedAppVersion}`; updateButton.textContent = updateBusy ? (updateAvailable ? copy.updating : copy.checking) : updateAvailable ? copy.update : copy.action; updateButton.disabled = updateBusy; }
 const modelIds = [
   'paraformer-zh-en-int8',
   'zipformer-en-streaming-int8',
@@ -621,7 +623,6 @@ let requiredModelsCardDismissed = false;
 let requiredModelsCardMinimized = false;
 let onboardingModelIds = [];
 let onboardingModelSelection;
-let initialPermissionsNeeded = false;
 let initializationComplete = false;
 const useChinaModelSource = () => locale === 'zh' && localStorage.getItem('brevia-china-model-source') === 'true';
 const modelDownloadPayload = (modelId) => ({ model_id: modelId, ...(useChinaModelSource() ? { source: 'china' } : {}) });
@@ -1032,17 +1033,6 @@ function closeModal() {
   }, 220);
 }
 
-function openInitialPermissions() {
-  activeModal = 'initial-permissions';
-  settingsModal.querySelector('.modal-title h2').textContent = t('录制权限');
-  settingsModal.querySelector('.modal-title p').textContent = t('首次使用时完成设置');
-  settingsModal.querySelector('.modal-body').innerHTML = `<div class="permission-modal"><p>${t('言录需要麦克风、屏幕与系统音频权限，才能录制会议并生成实时字幕。')}</p><div><b>${t('麦克风')}</b><small>${t('录制你的发言。')}</small></div><div><b>${t('屏幕与系统音频')}</b><small>${t('录制屏幕共享中的系统声音。')}</small></div><section><button class="modal-action" data-request-initial-permissions type="button">${t('继续')}</button><button class="secondary" data-dismiss-initial-permissions type="button">${t('稍后')}</button></section></div>`;
-  settingsModal.classList.remove('modal-leave');
-  settingsModal.hidden = false;
-  requestAnimationFrame(() => settingsModal.classList.add('modal-enter'));
-  document.body.classList.add('modal-open');
-}
-
 let onboardingPage;
 let onboardingPreviewLocale;
 let onboardingSelectedLocale;
@@ -1215,19 +1205,20 @@ function openOnboardingPermissions() {
   const continueButton = onboardingPage.querySelector('[data-finish-onboarding]');
   const render = async () => {
     const status = await window.brevia.permissions.status();
-    const next = steps.find(([permission]) => status[permission] === 'not-determined');
+    const next = steps.find(([permission]) => !grantedPermissions.has(permission) && status[permission] === 'not-determined');
     section.innerHTML = steps.map(([permission, label, detail], index) => {
-      const value = status[permission];
+      const value = grantedPermissions.has(permission) || status[permission] === 'granted' ? 'granted' : status[permission];
       const granted = value === 'granted';
       const active = next?.[0] === permission;
       const state = granted ? '✓' : active ? String(index + 1) : '—';
       const action = active ? `<button class="modal-action onboarding-permission-action" data-request-onboarding-permission="${permission}" type="button">${permission === 'microphone' ? t('允许') : t('继续')}</button>` : value === 'denied' ? `<button class="modal-action onboarding-permission-action" data-open-${permission}-settings type="button">${t('允许')}</button>` : '';
       return `<div class="onboarding-permission${granted ? ' is-granted' : ''}"><span class="onboarding-permission-state">${state}</span><span><b>${label}</b><small>${granted ? t('已允许') : value === 'denied' ? t('请在系统设置中允许') : detail}</small></span>${action}</div>`;
     }).join('');
-    const complete = steps.every(([permission]) => status[permission] === 'granted');
+    const complete = steps.every(([permission]) => grantedPermissions.has(permission) || status[permission] === 'granted');
     continueButton.disabled = !complete;
     section.insertAdjacentHTML('beforeend', complete ? `<div class="onboarding-permission-complete">✓ ${t('录制权限')} ${t('已准备就绪')}</div>` : `<div class="onboarding-permission-complete onboarding-permission-placeholder" aria-hidden="true">&nbsp;</div>`);
   };
+  const grantedPermissions = new Set();
   void render();
   const permissionPoll = window.setInterval(() => {
     if (onboardingPage !== page || !page.isConnected) return window.clearInterval(permissionPoll);
@@ -1243,10 +1234,15 @@ function openOnboardingPermissions() {
     if (!button) return;
     button.disabled = true;
     try {
-      if (button.dataset.requestOnboardingPermission === 'microphone') await window.brevia.permissions.requestMicrophone();
+      if (button.dataset.requestOnboardingPermission === 'microphone') {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stopMediaStream(stream);
+        grantedPermissions.add('microphone');
+      }
       else {
         const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
         stopMediaStream(stream);
+        grantedPermissions.add('screen');
       }
     } catch (error) {
       showToast(error.message);
@@ -1255,21 +1251,6 @@ function openOnboardingPermissions() {
   });
 }
 
-async function requestInitialPermissions(button) {
-  button.disabled = true;
-  try {
-    const status = await window.brevia.permissions.status();
-    if (status.microphone === 'not-determined') await window.brevia.permissions.requestMicrophone();
-    if (status.screen === 'not-determined') {
-      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-      stopMediaStream(stream);
-    }
-    closeModal();
-  } catch (error) {
-    button.disabled = false;
-    showToast(error.message);
-  }
-}
 document.querySelector('#settings-view .settings-grid').addEventListener('click', (event) => {
   const button = event.target.closest('[data-settings-modal]');
   if (button) openModal(button.dataset.settingsModal);
@@ -1310,9 +1291,6 @@ function renderLivePanel() {
 renderModelControls();
 renderLivePanel();
 settingsModal.addEventListener('click', async (event) => {
-  const permissionButton = event.target.closest('[data-request-initial-permissions]');
-  if (permissionButton) { await requestInitialPermissions(permissionButton); return; }
-  if (event.target.closest('[data-dismiss-initial-permissions]')) { closeModal(); return; }
   if (event.target.closest('[data-download-onboarding-selected]')) {
     const models = [...(onboardingModelSelection || [])].filter((modelId) => !modelPaths.has(modelId));
     if (!models.length) return;
@@ -1914,15 +1892,28 @@ async function loadInstalledAppVersion() {
   } catch { /* Keep the unavailable marker when neither source can be read. */ }
 }
 void loadInstalledAppVersion();
+async function checkForUpdates() {
+  updateBusy = true;
+  renderUpdateButton();
+  try {
+    const result = await window.brevia?.update?.check?.();
+    updateAvailable = result?.status === 'available';
+    updateVersion = result?.version || '';
+    if (result?.status === 'current') showToast((updateLabels[locale] || updateLabels.en).current);
+  } catch (error) { showToast(error.message); }
+  finally { updateBusy = false; renderUpdateButton(); renderUpdateNotice(); }
+}
+async function runUpdateAction() {
+  if (!updateAvailable) return checkForUpdates();
+  updateBusy = true;
+  renderUpdateButton();
+  try { await window.brevia.update.install(); }
+  catch (error) { showToast(error.message); updateBusy = false; renderUpdateButton(); }
+}
+void checkForUpdates();
 window.setInterval(() => { if (activeLibraryNav === 'recently-deleted') return; sloganIndex = (sloganIndex + 1) % (slogans[locale] || slogans.en).length; renderSlogan(true); }, 30000);
-updateButton.addEventListener('click', async () => {
-  updateButton.disabled = true;
-  updateButton.textContent = (updateLabels[locale] || updateLabels.en).checking;
-  try { await window.brevia?.openReleases(); }
-  catch (error) { showToast(error.message); }
-  finally { renderUpdateButton(); }
-});
-updateNoticeButton.addEventListener('click', () => window.brevia?.openReleases().catch((error) => showToast(error.message)));
+updateButton.addEventListener('click', () => void runUpdateAction());
+updateNoticeButton.addEventListener('click', () => void runUpdateAction());
 /** Closes the language menu and updates its disclosure state. @returns {void} */
 function closeLanguageMenu() { languageOptions.hidden = true; languageToggle.setAttribute('aria-expanded', 'false'); }
 languageToggle.addEventListener('click', () => {
@@ -2628,7 +2619,6 @@ if (window.brevia) {
   window.brevia.on('startup.ready', dismissStartupSplash);
   if (window.BreviaOnboarding.isFirstLaunch()) openOnboardingLanguage();
   void loadSummaryConfig().catch((error) => showToast(`${t('纪要配置加载失败')}: ${error.message}`));
-  const permissions = window.brevia.permissions.status();
   breviaClient.initialize().then((result) => {
     modelCatalog = result.models;
     renderRefinedModelChoices();
@@ -2649,10 +2639,6 @@ if (window.brevia) {
     renderMeetingList();
     initializationComplete = true;
     void window.brevia.maintain();
-    return permissions;
-  }).then((status) => {
-    initialPermissionsNeeded = status.microphone === 'not-determined' || status.screen === 'not-determined';
-    if (!window.BreviaOnboarding.isFirstLaunch() && initialPermissionsNeeded) openInitialPermissions();
   }).catch((error) => showToast(`${t('配置或后端启动失败')}: ${error.message}`));
 
   const transcript = document.querySelector('#transcript-scroll');
