@@ -136,7 +136,7 @@ Grant microphone and screen-recording permissions on first launch, then download
 ### Common scripts
 
 ```bash
-npm test                    # UI + backend tests
+npm test                    # Electron behavior + UI + backend tests
 npm run build               # Build Tailwind CSS
 npm run test:model          # ASR model diagnostics
 npm run test:diarization    # Speaker diarization diagnostics

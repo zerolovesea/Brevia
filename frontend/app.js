@@ -65,6 +65,7 @@ function revealTaskCard(card) {
   if (wasHidden || wasLeaving) enterTaskCard(card);
 }
 const { catalog, appCopy: { stageLabels, themeLabels, updateLabels, modalCopy, modelLabels, summaryModelCopy, speakerProfileCopy, voiceFeaturesCopy } } = window.BreviaLocaleData;
+if (new URLSearchParams(location.search).has('resetOnboarding')) localStorage.removeItem('brevia-onboarding-complete');
 let locale = localStorage.getItem('brevia-language') || 'zh';
 let theme = localStorage.getItem('brevia-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
 let activeView = 'home';
@@ -125,6 +126,7 @@ let speakerProfiles = [];
 let presetVoices = [];
 let currentMeetingDetail = null;
 let modelCatalog = [];
+const modelSize = (modelId) => modelCatalog.find((model) => model.id === modelId)?.size_bytes || 0;
 const modelLibraryMetaCopy = {
   zh: { download: '下载', languages: '语言', compute: '运行', installed: '已安装', streaming: '实时转写', refined: '会后精修', punctuation: '标点恢复', vad: '语音检测', denoise: '语音降噪', diarization: '说话人分离', voiceprint: '声纹识别' },
   en: { download: 'Download', languages: 'Languages', compute: 'Compute', installed: 'Installed', streaming: 'Live transcription', refined: 'Post-meeting refinement', punctuation: 'Punctuation', vad: 'Voice detection', denoise: 'Noise reduction', diarization: 'Speaker diarization', voiceprint: 'Voiceprint recognition' },
@@ -199,7 +201,6 @@ const modelIds = [
   'vits-piper-es-sharvard-medium-int8',
   'vits-piper-ru-irina-medium-int8',
 ];
-const modelSizes = [1047319737, 310414022, 132634597, 258999581, 418218652, 398444115, 685000000, 30667839, 2313101, 332211, 64717756, 878702423, 520516278, 841730611, 563790207, 1068482488, 2900000000, 6958444, 10918585, 39593761, 40257283, 28281164, 597755927, 535638, 35271738, 163320194, 66838474, 20914888, 20949833, 23477120, 21149417];
 const summaryProviders = ['OpenAI', 'Anthropic', 'Kimi', 'Zhipu GLM', 'MiniMax', 'DeepSeek', 'OpenRouter', 'Ollama', 'Ollama Cloud'];
 const ollamaChatEndpoint = 'http://127.0.0.1:11434/api/chat';
 const ollamaCloudChatEndpoint = 'https://ollama.com/api/chat';
@@ -464,7 +465,8 @@ prepareModelCard.addEventListener('dblclick', (event) => {
 document.addEventListener('click', (event) => { if (!event.target.closest('.model-card')) modelPicker.hidden = true; });
 if (breviaClient) {
   breviaClient.onLevel = (track, level) => {
-    if (track === 'mic') document.querySelector('#mic-level').style.setProperty('--level', Math.max(.04, level));
+    if (track !== 'mic') return;
+    document.querySelectorAll('#mic-level, [data-onboarding-mic-level]').forEach((meter) => meter.style.setProperty('--level', Math.max(.04, level)));
   };
 }
 async function previewMicrophone() {
@@ -619,11 +621,9 @@ async function generateMeetingSummary() {
 const requiredModelIds = new Set();
 const pendingModelTasks = new Map();
 const resumingModelTasks = new Set();
-let requiredModelsCardDismissed = false;
-let requiredModelsCardMinimized = false;
 let onboardingModelIds = [];
 let onboardingModelSelection;
-let initializationComplete = false;
+let initializationPromise;
 const useChinaModelSource = () => locale === 'zh' && localStorage.getItem('brevia-china-model-source') === 'true';
 const modelDownloadPayload = (modelId) => ({ model_id: modelId, ...(useChinaModelSource() ? { source: 'china' } : {}) });
 const chinaModelSourceToggle = () => locale === 'zh' ? `<p class="model-source-switch"><label><input type="checkbox" data-china-model-source${useChinaModelSource() ? ' checked' : ''} /><span>您是否身处中国大陆？</span></label><small>选择后将会使用大陆镜像源进行下载提速。</small></p>` : '';
@@ -720,7 +720,6 @@ function scheduleRequiredModelsCardRender() {
   requiredModelsRenderFrame = requestAnimationFrame(() => {
     requiredModelsRenderFrame = undefined;
     renderRequiredModelsCard();
-    renderModelDownloadQueue();
   });
 }
 function renderModelDownloadQueue() {
@@ -736,63 +735,36 @@ function renderModelDownloadQueue() {
     enterTaskCard(card);
   } else if (card.classList.contains('task-card-leave')) enterTaskCard(card);
   const scrollTop = card.querySelector('ul')?.scrollTop || 0;
-  const total = entries.reduce((sum, [id, progress]) => sum + (progress.total || modelSizes[modelIds.indexOf(id)] || 0), 0);
-  const received = entries.reduce((sum, [id, progress]) => sum + Math.min(progress.received || 0, progress.total || modelSizes[modelIds.indexOf(id)] || 0), 0);
+  const total = entries.reduce((sum, [id, progress]) => sum + (progress.total || modelSize(id)), 0);
+  const received = entries.reduce((sum, [id, progress]) => sum + Math.min(progress.received || 0, progress.total || modelSize(id)), 0);
   const ratio = total ? received / total : 0;
-  card.innerHTML = `<header class="task-card-heading"><p>${t('模型下载队列')} · ${entries.length}</p>${taskCardControls()}</header><div class="processing-bar" aria-hidden="true"><i style="transform:scaleX(${ratio})"></i></div><ul>${entries.map(([id, progress]) => {
+  const heading = entries.some(([id]) => requiredModelIds.has(id)) ? t('需要下载以下模型') : t('模型下载队列');
+  card.innerHTML = `<header class="task-card-heading"><p>${heading} · ${entries.length}</p>${taskCardControls()}</header><div class="processing-bar" aria-hidden="true"><i style="transform:scaleX(${ratio})"></i></div><ul>${entries.map(([id, progress]) => {
     const itemRatio = progress.total ? Math.min(1, progress.received / progress.total) : 0;
-    const status = progress.error ? escapeHtml(progress.error) : progress.paused ? t('暂停') : progress.total ? `${Math.round(itemRatio * 100)}%` : t('准备中');
-    const action = progress.error ? `<button type="button" data-download-required="${id}">${t('下载')}</button>` : `<button class="task-card-close" type="button" data-pause-required="${id}" aria-label="${progress.paused ? t('继续') : t('暂停')}">${progress.paused ? '▶' : 'Ⅱ'}</button><button class="task-card-close" type="button" data-cancel-required="${id}" aria-label="取消">×</button>`;
-    return `<li><span><b>${escapeHtml(modelDisplayName(id))}</b><small>${status}</small></span><span class="model-actions">${action}</span><div class="processing-bar" aria-hidden="true"><i style="transform:scaleX(${itemRatio})"></i></div></li>`;
+    const status = progress.error ? `<small title="${escapeHtml(progress.error)}">${t('下载失败')}</small>` : progress.cancelled ? '' : `<small>${progress.cancelling ? t('正在取消') : progress.paused ? t('暂停') : progress.total ? `${Math.round(itemRatio * 100)}%` : t('准备中')}</small>`;
+    const action = progress.error || progress.cancelled ? `<button type="button" data-download-required="${id}">${t(progress.error ? '重试' : '下载')}</button>` : progress.cancelling ? '' : `<button class="task-card-close" type="button" data-pause-required="${id}" aria-label="${progress.paused ? t('继续') : t('暂停')}">${progress.paused ? '▶' : 'Ⅱ'}</button><button class="task-card-close" type="button" data-cancel-required="${id}" aria-label="取消">×</button>`;
+    return `<li><span><b>${escapeHtml(modelDisplayName(id))}</b>${status}</span><span class="model-actions">${action}</span><div class="processing-bar" aria-hidden="true"><i style="transform:scaleX(${itemRatio})"></i></div></li>`;
   }).join('')}</ul>`;
   card.querySelector('ul').scrollTop = scrollTop;
 }
 function renderRequiredModelsCard() {
   [...requiredModelIds].filter((id) => modelPaths.has(id)).forEach((id) => requiredModelIds.delete(id));
-  let card = document.querySelector('#required-models');
-  if (!requiredModelIds.size) { dismissTaskCard(card); return; }
-  if (requiredModelsCardDismissed) return;
-  if (!card) {
-    card = document.createElement('aside');
-    card.id = 'required-models';
-    card.className = 'processing-card required-models-card';
-    card.setAttribute('aria-live', 'polite');
-    taskCards.append(card);
-    enterTaskCard(card);
-  } else if (card.classList.contains('task-card-leave')) enterTaskCard(card);
-  const scrollTop = card.querySelector('ul')?.scrollTop || 0;
-  const ids = [...requiredModelIds];
-  const total = ids.reduce((sum, id) => sum + (modelDownloads.get(id)?.total || modelSizes[modelIds.indexOf(id)] || 0), 0);
-  const received = ids.reduce((sum, id) => sum + Math.min(modelDownloads.get(id)?.received || 0, modelDownloads.get(id)?.total || 0), 0);
-  const ratio = total ? received / total : 0;
-  card.classList.toggle('is-minimized', requiredModelsCardMinimized);
-  card.innerHTML = `<header class="task-card-heading"><p>${requiredModelsCardMinimized ? `${t('需要下载以下模型')} · ${Math.round(ratio * 100)}%` : t('需要下载以下模型')}</p><span class="task-card-actions"><button class="task-card-close" data-minimize-required-models type="button" aria-label="最小化">${requiredModelsCardMinimized ? '□' : '—'}</button><button class="task-card-close" data-dismiss-task-card type="button" aria-label="关闭">×</button></span></header><div class="processing-bar required-models-progress" aria-hidden="true"><i style="transform:scaleX(${ratio})"></i></div><ul>${ids.map((id) => {
-    const progress = modelDownloads.get(id);
-    const ratio = progress?.total ? Math.min(1, progress.received / progress.total) : 0;
-    const status = progress?.error ? escapeHtml(progress.error) : progress ? (progress.paused ? t('暂停') : progress.total ? `${Math.round(ratio * 100)}%` : t('准备中')) : '';
-    const action = progress && !progress.error ? `<button class="task-card-close" type="button" data-pause-required="${id}" aria-label="${progress.paused ? t('继续') : t('暂停')}">${progress.paused ? '▶' : 'Ⅱ'}</button><button class="task-card-close" type="button" data-cancel-required="${id}" aria-label="取消">×</button>` : `<button type="button" data-download-required="${id}">${t('下载')}</button>`;
-    return `<li><span><b>${escapeHtml(modelDisplayName(id))}</b><small>${status}</small></span><span class="model-actions">${action}</span><div class="processing-bar" aria-hidden="true"><i style="transform:scaleX(${ratio})"></i></div></li>`;
-  }).join('')}</ul>`;
-  card.querySelector('ul').scrollTop = scrollTop;
+  renderModelDownloadQueue();
 }
 async function downloadRequiredModel(modelId) {
   if (modelPaths.has(modelId)) { requiredModelIds.delete(modelId); renderRequiredModelsCard(); return; }
-  if (modelDownloads.has(modelId) && !modelDownloads.get(modelId).error && !modelDownloads.get(modelId).paused) return;
-  if (!modelDownloads.has(modelId)) modelDownloads.set(modelId, { received: 0, total: 0 });
+  if (modelDownloads.has(modelId) && !modelDownloads.get(modelId).error && !modelDownloads.get(modelId).paused && !modelDownloads.get(modelId).cancelled) return;
+  if (!modelDownloads.has(modelId) || modelDownloads.get(modelId).error || modelDownloads.get(modelId).cancelled) modelDownloads.set(modelId, { received: 0, total: 0 });
   renderRequiredModelsCard();
-  renderModelDownloadQueue();
   try {
     await window.brevia?.models.download(modelDownloadPayload(modelId));
   } catch (error) {
     modelDownloads.set(modelId, { error: error.message });
     renderRequiredModelsCard();
-    renderModelDownloadQueue();
   }
 }
 function downloadRequiredModels(models) {
-  requiredModelsCardDismissed = false;
   models.forEach((modelId) => requiredModelIds.add(modelId));
-  renderRequiredModelsCard();
   void Promise.all(models.map(downloadRequiredModel));
 }
 function showOfflineTranscriptionReady() {
@@ -826,22 +798,11 @@ taskCards.addEventListener('click', (event) => {
     toggleTaskCardMinimized(card, minimize);
     return;
   }
-  if (event.target.closest('[data-minimize-required-models]')) {
-    requiredModelsCardMinimized = !requiredModelsCardMinimized;
-    const card = event.target.closest('.processing-card');
-    card.classList.add('task-card-resizing');
-    card.classList.toggle('is-minimized', requiredModelsCardMinimized);
-    event.target.textContent = requiredModelsCardMinimized ? '□' : '—';
-    card.querySelector('.task-card-heading p').textContent = requiredModelsCardMinimized ? `${t('需要下载以下模型')} · ${Math.round(Number(card.querySelector('.required-models-progress i').style.transform.match(/[\d.]+/)?.[0] || 0) * 100)}%` : t('需要下载以下模型');
-    window.setTimeout(() => card.classList.remove('task-card-resizing'), 180);
-    return;
-  }
   const close = event.target.closest('[data-dismiss-task-card]');
   if (close) {
     const card = close.closest('.processing-card');
     if (card === refinementCard) hideRefinementProgress();
     else {
-      if (card?.id === 'required-models') requiredModelsCardDismissed = true;
       if (card?.id === 'separation-progress') clearTimeout(separationDismissTimer);
       if (card?.id === 'summary-progress') clearTimeout(summaryDismissTimer);
       if (card?.id === 'summary-config-required') clearTimeout(summaryConfigDismissTimer);
@@ -862,7 +823,13 @@ taskCards.addEventListener('click', (event) => {
   const cancel = event.target.closest('[data-cancel-required]');
   if (cancel) {
     const modelId = cancel.dataset.cancelRequired;
-    void window.brevia?.models.cancel({ model_id: modelId }).catch((error) => showToast(error.message));
+    modelDownloads.set(modelId, { ...modelDownloads.get(modelId), cancelling: true });
+    renderRequiredModelsCard();
+    void window.brevia?.models.cancel({ model_id: modelId }).catch((error) => {
+      if (modelDownloads.has(modelId)) modelDownloads.set(modelId, { ...modelDownloads.get(modelId), cancelling: false });
+      renderRequiredModelsCard();
+      showToast(error.message);
+    });
     return;
   }
 });
@@ -982,7 +949,7 @@ function renderModal(kind) {
     const progress = kind === 'models' ? modelDownloads.get(modelIds[sourceIndex]) : null;
     const ratio = progress?.total ? Math.min(1, progress.received / progress.total) : 0;
     const downloadProgress = progress?.error ? `<span class="model-download-progress">${escapeHtml(progress.error)}</span>` : progress ? `<span class="model-download-progress">${formatBytes(progress.received)} / ${formatBytes(progress.total)} · ${Math.round(ratio * 100)}%<i aria-hidden="true" style="transform:scaleX(${ratio})"></i></span>` : '';
-    const size = kind === 'models' ? `<small>${formatBytes(modelSizes[sourceIndex])}</small>` : '';
+    const size = kind === 'models' ? `<small>${formatBytes(modelSize(modelIds[sourceIndex]))}</small>` : '';
     const installed = kind === 'models' && modelPaths.has(modelIds[sourceIndex]);
     const model = kind === 'models' ? modelCatalog.find((candidate) => candidate.id === modelIds[sourceIndex]) : null;
     const metadata = kind === 'models' ? renderModelLibraryMeta(model, detail, installed) : '';
@@ -1137,6 +1104,7 @@ function showOnboardingPage(kind, content) {
 
 function dismissOnboardingPage(next) {
   const page = onboardingPage;
+  void breviaClient?.stopPreview();
   page.classList.remove('onboarding-page-enter');
   page.classList.add('onboarding-page-leave');
   window.setTimeout(() => {
@@ -1146,7 +1114,9 @@ function dismissOnboardingPage(next) {
   }, 260);
 }
 
-function openOnboardingSetup() {
+async function openOnboardingSetup() {
+  try { if (initializationPromise) await initializationPromise; }
+  catch (error) { showToast(`${t('配置或后端启动失败')}: ${error.message}`); openOnboardingPermissions(); return; }
   const copy = onboardingCopy[locale] || onboardingCopy.en;
   const modelListLabels = onboardingModelListLabel[locale] || onboardingModelListLabel.en;
   const securityHint = onboardingSecurityCopy[locale] || onboardingSecurityCopy.en;
@@ -1179,7 +1149,6 @@ function updateOnboardingSetup() {
   }));
   const models = [...languageModels, ...featureModels];
   onboardingModelIds = models.filter((modelId) => !modelPaths.has(modelId));
-  const modelSize = (modelId) => modelCatalog.find((model) => model.id === modelId)?.size_bytes || modelSizes[modelIds.indexOf(modelId)] || 0;
   const size = onboardingModelIds.reduce((total, modelId) => total + modelSize(modelId), 0);
   onboardingPage.querySelector('[data-onboarding-estimate]').textContent = formatBytes(size);
   const renderModels = (models) => models.map((modelId) => `<li><span>${escapeHtml(modelDisplayName(modelId))}</span><small>${modelPaths.has(modelId) ? (modelLabels[locale] || modelLabels.en).installed : formatBytes(modelSize(modelId))}</small></li>`).join('');
@@ -1203,23 +1172,40 @@ function openOnboardingPermissions() {
   const page = onboardingPage;
   const section = onboardingPage.querySelector('[data-onboarding-permissions]');
   const continueButton = onboardingPage.querySelector('[data-finish-onboarding]');
+  let microphonePreviewed = false;
   const render = async () => {
     const status = await window.brevia.permissions.status();
-    const next = steps.find(([permission]) => !grantedPermissions.has(permission) && status[permission] === 'not-determined');
+    const permissionGranted = (permission) => grantedPermissions.has(permission) || status[permission] === 'granted';
+    const next = steps.find(([permission]) => !permissionGranted(permission) && (permission !== 'screen' || status.systemAudioSupported));
     section.innerHTML = steps.map(([permission, label, detail], index) => {
-      const value = grantedPermissions.has(permission) || status[permission] === 'granted' ? 'granted' : status[permission];
-      const granted = value === 'granted';
+      const unsupported = permission === 'screen' && !status.systemAudioSupported;
+      const granted = permissionGranted(permission);
+      const value = granted ? 'granted' : status[permission];
       const active = next?.[0] === permission;
       const state = granted ? '✓' : active ? String(index + 1) : '—';
-      const action = active || permission === 'screen' && value === 'denied' ? `<button class="modal-action onboarding-permission-action" data-request-onboarding-permission="${permission}" type="button">${t('允许')}</button>` : value === 'denied' ? `<button class="modal-action onboarding-permission-action" data-open-${permission}-settings type="button">${t('允许')}</button>` : '';
-      return `<div class="onboarding-permission${granted ? ' is-granted' : ''}"><span class="onboarding-permission-state">${state}</span><span><b>${label}</b><small>${granted ? t('已允许') : value === 'denied' ? t('请在系统设置中允许') : detail}</small></span>${action}</div>`;
+      const action = granted ? `<button class="onboarding-permission-action onboarding-permission-granted" type="button" disabled>${t('已允许')}</button>` : active ? `<button class="modal-action onboarding-permission-action" ${permission === 'screen' ? 'data-open-screen-settings' : 'data-request-onboarding-permission="microphone"'} type="button">${t('允许')}</button>` : value === 'denied' && !unsupported ? `<button class="modal-action onboarding-permission-action" data-open-${permission}-settings type="button">${t('允许')}</button>` : '';
+      const hint = unsupported ? t('当前系统不支持直接录制系统音频，请仅使用麦克风') : granted ? t('已允许') : value === 'denied' ? t('请在系统设置中允许') : detail;
+      const meter = permission === 'microphone' && granted ? `<i class="input-meter onboarding-mic-meter" data-onboarding-mic-level aria-label="${t('麦克风')} ${t('音量')}"></i>` : '';
+      return `<div class="onboarding-permission${granted ? ' is-granted' : ''}"><span class="onboarding-permission-state">${state}</span><span><span class="onboarding-permission-title"><b>${label}</b>${meter}</span><small>${hint}</small></span>${action}</div>`;
     }).join('');
-    const complete = steps.every(([permission]) => grantedPermissions.has(permission) || status[permission] === 'granted');
+    if (permissionGranted('microphone') && !microphonePreviewed) {
+      microphonePreviewed = true;
+      void breviaClient?.previewMic().catch((error) => { microphonePreviewed = false; showToast(error.message); });
+    }
+    if (!permissionGranted('microphone') && microphonePreviewed) {
+      microphonePreviewed = false;
+      void breviaClient?.stopPreview();
+    }
+    const complete = steps.every(([permission]) => permissionGranted(permission));
     continueButton.disabled = !complete;
     section.insertAdjacentHTML('beforeend', complete ? `<div class="onboarding-permission-complete">✓ ${t('录制权限')} ${t('已准备就绪')}</div>` : `<div class="onboarding-permission-complete onboarding-permission-placeholder" aria-hidden="true">&nbsp;</div>`);
   };
   const grantedPermissions = new Set();
   void render();
+  const permissionPoll = window.setInterval(() => {
+    if (onboardingPage !== page) { window.clearInterval(permissionPoll); return; }
+    void render();
+  }, 1000);
   onboardingPage.addEventListener('click', async (event) => {
     if (event.target.closest('[data-onboarding-back-language]')) { dismissOnboardingPage(() => openOnboardingLanguage(onboardingSelectedLocale)); return; }
     if (event.target.closest('[data-finish-onboarding]')) { dismissOnboardingPage(openOnboardingSetup); return; }
@@ -1236,14 +1222,8 @@ function openOnboardingPermissions() {
         stopMediaStream(stream);
         grantedPermissions.add('microphone');
       }
-      else {
-        const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-        stopMediaStream(stream);
-        grantedPermissions.add('screen');
-      }
     } catch (error) {
-      if (button.dataset.requestOnboardingPermission === 'screen') await window.brevia.permissions.openScreenSettings();
-      else showToast(error.message);
+      showToast(error.message);
     }
     await render();
   });
@@ -1707,7 +1687,7 @@ function applyLanguage(nextLocale, animate = false) {
   languageOptions.querySelectorAll('[data-language]').forEach((option) => option.setAttribute('aria-current', String(option.dataset.language === locale)));
   const rerendered = [
     '.settings-grid', '.meeting-list', '#meeting-form .form-grid',
-    '.final-transcript', '.notes', '.live-panel', '#tts-chat', '#required-models',
+    '.final-transcript', '.notes', '.live-panel', '#tts-chat', '#model-download-queue',
   ].map((selector) => document.querySelector(selector));
   rerendered.push(batchToolbar, updateNotice.hidden ? null : updateNotice, settingsModal.hidden ? null : settingsModal.querySelector('.modal-panel'));
   const rerenderedRoots = rerendered.filter(Boolean);
@@ -1890,15 +1870,15 @@ async function loadInstalledAppVersion() {
   } catch { /* Keep the unavailable marker when neither source can be read. */ }
 }
 void loadInstalledAppVersion();
-async function checkForUpdates() {
+async function checkForUpdates({ silent = false } = {}) {
   updateBusy = true;
   renderUpdateButton();
   try {
     const result = await window.brevia?.update?.check?.();
     updateAvailable = result?.status === 'available';
     updateVersion = result?.version || '';
-    if (result?.status === 'current') showToast((updateLabels[locale] || updateLabels.en).current);
-  } catch (error) { showToast(error.message); }
+    if (!silent && result?.status === 'current') showToast((updateLabels[locale] || updateLabels.en).current);
+  } catch (error) { if (!silent) showToast(error.message); }
   finally { updateBusy = false; renderUpdateButton(); renderUpdateNotice(); }
 }
 async function runUpdateAction() {
@@ -1908,7 +1888,7 @@ async function runUpdateAction() {
   try { await window.brevia.update.install(); }
   catch (error) { showToast(error.message); updateBusy = false; renderUpdateButton(); }
 }
-void checkForUpdates();
+void checkForUpdates({ silent: true });
 window.setInterval(() => { if (activeLibraryNav === 'recently-deleted') return; sloganIndex = (sloganIndex + 1) % (slogans[locale] || slogans.en).length; renderSlogan(true); }, 30000);
 updateButton.addEventListener('click', () => void runUpdateAction());
 updateNoticeButton.addEventListener('click', () => void runUpdateAction());
@@ -2617,7 +2597,7 @@ if (window.brevia) {
   window.brevia.on('startup.ready', dismissStartupSplash);
   if (window.BreviaOnboarding.isFirstLaunch()) openOnboardingLanguage();
   void loadSummaryConfig().catch((error) => showToast(`${t('纪要配置加载失败')}: ${error.message}`));
-  breviaClient.initialize().then((result) => {
+  initializationPromise = breviaClient.initialize().then((result) => {
     modelCatalog = result.models;
     renderRefinedModelChoices();
     setPrepareModel('active-refined-model', document.querySelector('#active-refined-model').dataset.model);
@@ -2635,9 +2615,9 @@ if (window.brevia) {
     renderLivePanel();
     renderSpeakerProfileCard();
     renderMeetingList();
-    initializationComplete = true;
     void window.brevia.maintain();
-  }).catch((error) => showToast(`${t('配置或后端启动失败')}: ${error.message}`));
+  });
+  void initializationPromise.catch((error) => showToast(`${t('配置或后端启动失败')}: ${error.message}`));
 
   const transcript = document.querySelector('#transcript-scroll');
   const isAtLiveBottom = () => transcript.scrollHeight - transcript.clientHeight - transcript.scrollTop <= 32;
@@ -2821,17 +2801,18 @@ if (window.brevia) {
         if (model?.path) modelPaths.set(model_id, model.path);
         if (activeModal === 'models') renderModal('models');
         renderRequiredModelsCard();
-        renderModelDownloadQueue();
         void resumeReadyModelTasks();
       }).catch(() => {});
     } else if (status === 'paused' && modelDownloads.has(model_id)) modelDownloads.set(model_id, { ...modelDownloads.get(model_id), paused: true });
     else if (status === 'downloading' && modelDownloads.has(model_id)) modelDownloads.set(model_id, { ...modelDownloads.get(model_id), paused: false });
-    else if (status === 'cancelled' && modelDownloads.has(model_id)) modelDownloads.delete(model_id);
+    else if (status === 'cancelled' && modelDownloads.has(model_id)) {
+      if (requiredModelIds.has(model_id)) modelDownloads.set(model_id, { cancelled: true });
+      else modelDownloads.delete(model_id);
+    }
     else if (status === 'failed' && modelDownloads.has(model_id)) modelDownloads.set(model_id, { error });
     else if (status === 'not_installed') modelPaths.delete(model_id);
     if (activeModal === 'models') renderModal('models');
     renderRequiredModelsCard();
-    renderModelDownloadQueue();
   });
   window.brevia.on('worker.warning', ({ message: warning }) => showToast(warning));
   window.brevia.on('worker.error', ({ message: error }) => showToast(error));

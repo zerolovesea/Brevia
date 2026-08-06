@@ -4,6 +4,7 @@ import json
 import tempfile
 import threading
 import unittest
+import urllib.error
 import wave
 import zipfile
 from array import array
@@ -12,7 +13,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from .asr import ChinesePunctuation, EnglishPunctuation, ModelManager, OfflineVAD, RefinedASR, SpeakerTracker
+from .asr import DownloadCancelled, ChinesePunctuation, EnglishPunctuation, ModelManager, OfflineVAD, RefinedASR, SpeakerTracker
 from .audio_io import ensure_wav_duration
 from .config import DEFAULT_SETTINGS, SETTINGS, runtime_settings, save_runtime_settings
 from .llm_client import complete
@@ -961,6 +962,10 @@ class WorkerTest(unittest.TestCase):
                 self.assertTrue(all(item.get("sha256") for item in model["downloads"]))
             else:
                 self.assertTrue(model.get("archive_sha256"), model["id"])
+        self.assertEqual(
+            self.worker.models.get("spleeter-2stems-fp16")["archive_sha256"],
+            "d54561979bd2e08a51e7dbd99ac36bb47564e089eefd403636dbca93e811bba2",
+        )
 
     def test_china_source_only_proxies_github_downloads(self):
         github = "https://github.com/k2-fsa/sherpa-onnx/releases/download/a/model.tar.bz2"
@@ -1320,13 +1325,15 @@ class WorkerTest(unittest.TestCase):
         self.assertTrue(all(profile["built_in"] for profile in profiles))
 
     def test_model_downloads_run_in_parallel(self):
-        started, release = threading.Event(), threading.Event()
+        started, third_started, release = threading.Event(), threading.Event(), threading.Event()
         running = []
 
-        def download(model_id, control=None):
+        def download(model_id, control=None, china_source=False):
             running.append(model_id)
             if len(running) == 2:
                 started.set()
+            if model_id == "zipformer-multilingual-streaming":
+                third_started.set()
             release.wait(1)
 
         self.worker.models.download = download
@@ -1342,6 +1349,11 @@ class WorkerTest(unittest.TestCase):
         )
         self.assertTrue(started.wait(1))
         self.assertEqual(
+            self.worker.download_model({"model_id": "zipformer-multilingual-streaming"})["status"],
+            "downloading",
+        )
+        self.assertFalse(third_started.wait(0.1))
+        self.assertEqual(
             self.worker.pause_model({"model_id": "paraformer-zh-en-int8"})["status"],
             "paused",
         )
@@ -1350,6 +1362,115 @@ class WorkerTest(unittest.TestCase):
             "downloading",
         )
         release.set()
+        self.assertTrue(third_started.wait(1))
+
+    def test_model_worker_delegates_network_retry_to_model_manager(self):
+        control = {"paused": threading.Event(), "cancelled": Mock()}
+        control["cancelled"].wait.return_value = False
+        control["cancelled"].is_set.return_value = False
+        self.worker.models.download = Mock(side_effect=urllib.error.URLError("offline"))
+        self.worker._download_model("paraformer-zh-en-int8", control)
+        self.assertEqual(self.worker.models.download.call_count, 1)
+        self.assertEqual(self.events[-1]["payload"]["status"], "failed")
+
+    def test_cancelled_model_is_retryable_only_after_worker_cleanup(self):
+        started, release, calls = threading.Event(), threading.Event(), []
+
+        def download(model_id, control=None, china_source=False):
+            calls.append(model_id)
+            if len(calls) == 1:
+                started.set()
+                release.wait(1)
+                raise DownloadCancelled()
+
+        self.worker.models.download = download
+        model_id = "paraformer-zh-en-int8"
+        self.worker.download_model({"model_id": model_id})
+        self.assertTrue(started.wait(1))
+        self.assertEqual(
+            self.worker.cancel_model({"model_id": model_id})["status"],
+            "cancelling",
+        )
+        self.assertFalse(
+            any(event["payload"].get("status") == "cancelled" for event in self.events)
+        )
+        release.set()
+        self.worker.model_downloads[model_id]["task"].join(1)
+        self.assertEqual(self.events[-1]["payload"]["status"], "cancelled")
+        self.worker.download_model({"model_id": model_id})
+        self.assertEqual(calls, [model_id, model_id])
+
+    def test_model_file_download_has_a_timeout_and_reports_bytes(self):
+        manager = ModelManager(Path(self.temp.name) / "download-test")
+        response = io.BytesIO(b"model-data")
+        destination = Path(self.temp.name) / "model.bin"
+        progress = []
+        with patch("backend.asr.urllib.request.urlopen", return_value=response) as open_url:
+            manager._download_file(
+                "https://example.test/model.bin",
+                destination,
+                lambda: None,
+                progress.append,
+            )
+        self.assertEqual(destination.read_bytes(), b"model-data")
+        self.assertEqual(progress, [0, 10])
+        self.assertEqual(open_url.call_args.kwargs["timeout"], 30)
+
+    def test_model_file_download_retries_from_the_partial_file(self):
+        manager = ModelManager(Path(self.temp.name) / "download-test")
+        destination = Path(self.temp.name) / "model.bin"
+
+        class InterruptedResponse:
+            def __init__(self):
+                self.calls = 0
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                return False
+
+            def getcode(self):
+                return 200
+
+            def read(self, _):
+                self.calls += 1
+                if self.calls == 1:
+                    return b"abc"
+                raise TimeoutError()
+
+        resumed = io.BytesIO(b"def")
+        resumed.getcode = lambda: 206
+        with (
+            patch("backend.asr.urllib.request.urlopen", side_effect=[InterruptedResponse(), resumed]) as open_url,
+            patch("backend.asr.time.sleep"),
+        ):
+            manager._download_file("https://example.test/model.bin", destination, lambda: None, lambda _: None)
+        self.assertEqual(destination.read_bytes(), b"abcdef")
+        self.assertEqual(open_url.call_args_list[1].args[0].get_header("Range"), "bytes=3-")
+
+    def test_model_file_download_accepts_a_complete_range_after_416(self):
+        manager = ModelManager(Path(self.temp.name) / "download-test")
+        destination = Path(self.temp.name) / "model.bin"
+        destination.write_bytes(b"complete")
+        error = urllib.error.HTTPError(
+            "https://example.test/model.bin",
+            416,
+            "Range Not Satisfiable",
+            {"Content-Range": "bytes */8"},
+            None,
+        )
+        progress = []
+        with patch("backend.asr.urllib.request.urlopen", side_effect=error) as open_url:
+            manager._download_file(
+                "https://example.test/model.bin",
+                destination,
+                lambda: None,
+                progress.append,
+            )
+        self.assertEqual(open_url.call_count, 1)
+        self.assertEqual(destination.read_bytes(), b"complete")
+        self.assertEqual(progress, [8])
 
     def test_pausing_a_finished_model_download_is_a_noop(self):
         self.assertEqual(

@@ -86,8 +86,8 @@ const missedInterfaceLabels = {
 };
 Object.entries(missedInterfaceLabels).forEach(([code, labels]) => Object.assign(catalog[code].labels, labels));
 const onboardingPermissionLabels = {
-  zh: { '屏幕与系统音频': '屏幕与系统音频', '允许': '允许', '已允许': '已允许', '请在系统设置中允许': '请在系统设置中批准 言录 的屏幕与系统音频权限。', '已准备就绪': '已准备就绪' },
-  en: { '屏幕与系统音频': 'Screen and system audio', '允许': 'Allow', '已允许': 'Allowed', '请在系统设置中允许': 'Approve Brevia for screen and system-audio access in System Settings.', '已准备就绪': 'Ready' },
+  zh: { '屏幕与系统音频': '屏幕与系统音频', '允许': '允许', '已允许': '已允许', '请在系统设置中允许': '请在系统设置中批准 言录 的屏幕与系统音频权限。', '已准备就绪': '已准备就绪', '检测系统音频': '检测系统音频', '请检测系统音频': '请检测系统音频', '正在检测麦克风': '正在检测麦克风', '当前系统不支持直接录制系统音频，请仅使用麦克风': '当前系统不支持直接录制系统音频，请仅使用麦克风', '未检测到系统音频，请在系统设置中允许屏幕与系统音频录制后重试。': '未检测到系统音频，请在系统设置中允许屏幕与系统音频录制后重试。' },
+  en: { '屏幕与系统音频': 'Screen and system audio', '允许': 'Allow', '已允许': 'Allowed', '请在系统设置中允许': 'Approve Brevia for screen and system-audio access in System Settings.', '已准备就绪': 'Ready', '检测系统音频': 'Check system audio', '请检测系统音频': 'Check system audio to continue', '正在检测麦克风': 'Checking microphone', '当前系统不支持直接录制系统音频，请仅使用麦克风': 'Direct system-audio capture is unavailable. Use the microphone only.', '未检测到系统音频，请在系统设置中允许屏幕与系统音频录制后重试。': 'No system-audio track was detected. Allow screen and system-audio recording in System Settings, then try again.' },
   es: { '屏幕与系统音频': 'Pantalla y audio del sistema', '允许': 'Permitir', '已允许': 'Permitido', '请在系统设置中允许': 'Aprueba el acceso de Brevia a la pantalla y al audio del sistema en Ajustes del Sistema.', '已准备就绪': 'Listo' },
   ja: { '屏幕与系统音频': '画面とシステム音声', '允许': '許可する', '已允许': '許可済み', '请在系统设置中允许': 'システム設定で、Brevia に画面とシステム音声へのアクセスを許可してください。', '已准备就绪': '準備完了' },
   ko: { '屏幕与系统音频': '화면 및 시스템 오디오', '允许': '허용', '已允许': '허용됨', '请在系统设置中允许': '시스템 설정에서 Brevia의 화면 및 시스템 오디오 접근을 허용하세요.', '已准备就绪': '준비됨' },
@@ -96,7 +96,7 @@ const onboardingPermissionLabels = {
   ru: { '屏幕与系统音频': 'Экран и системный звук', '允许': 'Разрешить', '已允许': 'Разрешено', '请在系统设置中允许': 'Разрешите Brevia доступ к экрану и системному звуку в системных настройках.', '已准备就绪': 'Готово' },
 };
 Object.entries(onboardingPermissionLabels).forEach(([code, labels]) => Object.assign(catalog[code].labels, labels));
-Object.assign(catalog.en.labels, { '正在精修': 'Refining', '原版逐字稿仍可查看': 'The original transcript remains available', '准备中': 'Preparing' });
+Object.assign(catalog.en.labels, { '正在精修': 'Refining', '原版逐字稿仍可查看': 'The original transcript remains available', '准备中': 'Preparing', '正在取消': 'Cancelling' });
 Object.assign(catalog.es.labels, { '正在精修': 'Refinando', '原版逐字稿仍可查看': 'La transcripción original sigue disponible', '准备中': 'Preparando' });
 Object.assign(catalog.ja.labels, { '计算设备': '演算デバイス', '会后精修': '会議後の高精度化', '正在精修': '高精度化中', '原版逐字稿仍可查看': '元の文字起こしは引き続き閲覧できます', '准备中': '準備中', '可用': '利用可能', '本地保存': 'ローカルに保存', '本地会议': 'ローカル会議', '← 返回会议库': '← ライブラリに戻る' });
 Object.assign(catalog.ko.labels, { '计算设备': '연산 장치', '会后精修': '회의 후 정제', '正在精修': '정제 중', '原版逐字稿仍可查看': '원본 녹취는 계속 볼 수 있습니다', '准备中': '준비 중', '可用': '사용 가능', '本地保存': '로컬에 저장됨', '本地会议': '로컬 회의', '← 返回会议库': '← 라이브러리로 돌아가기' });
@@ -364,8 +364,8 @@ Object.entries({
   ko: '모델 관리 →', fr: 'Gérer les modèles →', de: 'Modelle verwalten →', ru: 'Управление моделями →',
 }).forEach(([code, label]) => { catalog[code].labels['管理模型与术语 →'] = label; });
 Object.entries({
-  zh: { '从文件夹打开': '从文件夹打开', '清空数据': '清空数据', '此操作不可恢复。': '此操作不可恢复。', '已清空': '已清空', '未找到录音文件': '未找到录音文件', '未找到模型文件': '未找到模型文件', '准备中': '准备中', '需要下载以下模型': '需要下载以下模型：', '模型下载队列': '模型下载队列', '前往模型库': '前往模型库', '精修': '精修' },
-  en: { '从文件夹打开': 'Open in folder', '清空数据': 'Clear data', '此操作不可恢复。': 'This action cannot be undone.', '已清空': 'Data cleared', '未找到录音文件': 'Recording file not found', '未找到模型文件': 'Model files not found', '准备中': 'Preparing', '需要下载以下模型': 'Download required models:', '模型下载队列': 'Model download queue', '前往模型库': 'Go to model library', '精修': 'Refine' },
+  zh: { '从文件夹打开': '从文件夹打开', '清空数据': '清空数据', '此操作不可恢复。': '此操作不可恢复。', '已清空': '已清空', '未找到录音文件': '未找到录音文件', '未找到模型文件': '未找到模型文件', '准备中': '准备中', '需要下载以下模型': '需要下载以下模型：', '模型下载队列': '模型下载队列', '下载失败': '下载失败，请检查网络', '重试': '重试', '前往模型库': '前往模型库', '精修': '精修' },
+  en: { '从文件夹打开': 'Open in folder', '清空数据': 'Clear data', '此操作不可恢复。': 'This action cannot be undone.', '已清空': 'Data cleared', '未找到录音文件': 'Recording file not found', '未找到模型文件': 'Model files not found', '准备中': 'Preparing', '需要下载以下模型': 'Download required models:', '模型下载队列': 'Model download queue', '下载失败': 'Download failed. Check your connection.', '重试': 'Retry', '前往模型库': 'Go to model library', '精修': 'Refine' },
   es: { '从文件夹打开': 'Abrir en la carpeta', '清空数据': 'Borrar datos', '此操作不可恢复。': 'Esta acción no se puede deshacer.', '已清空': 'Datos borrados', '未找到录音文件': 'No se encontró el archivo de grabación', '未找到模型文件': 'No se encontraron archivos del modelo', '准备中': 'Preparando', '需要下载以下模型': 'Descarga los modelos necesarios:', '模型下载队列': 'Cola de descargas de modelos', '前往模型库': 'Ir a la biblioteca de modelos', '精修': 'Refinar' },
   ja: { '从文件夹打开': 'フォルダで開く', '清空数据': 'データを消去', '此操作不可恢复。': 'この操作は元に戻せません。', '已清空': 'データを消去しました', '未找到录音文件': '録音ファイルが見つかりません', '未找到模型文件': 'モデルファイルが見つかりません', '准备中': '準備中', '需要下载以下模型': '次のモデルをダウンロードしてください：', '模型下载队列': 'モデルダウンロードキュー', '前往模型库': 'モデルライブラリへ', '精修': '再調整' },
   ko: { '从文件夹打开': '폴더에서 열기', '清空数据': '데이터 지우기', '此操作不可恢复。': '이 작업은 되돌릴 수 없습니다.', '已清空': '데이터가 지워졌습니다', '未找到录音文件': '녹음 파일을 찾을 수 없습니다', '未找到模型文件': '모델 파일을 찾을 수 없습니다', '准备中': '준비 중', '需要下载以下模型': '필요한 모델을 다운로드하세요:', '模型下载队列': '모델 다운로드 대기열', '前往模型库': '모델 라이브러리로', '精修': '정교화' },
@@ -373,6 +373,12 @@ Object.entries({
   de: { '从文件夹打开': 'Im Ordner öffnen', '清空数据': 'Daten löschen', '此操作不可恢复。': 'Diese Aktion kann nicht rückgängig gemacht werden.', '已清空': 'Daten gelöscht', '未找到录音文件': 'Aufnahmedatei nicht gefunden', '未找到模型文件': 'Modelldateien nicht gefunden', '准备中': 'Wird vorbereitet', '需要下载以下模型': 'Erforderliche Modelle herunterladen:', '模型下载队列': 'Modell-Download-Warteschlange', '前往模型库': 'Zur Modellbibliothek', '精修': 'Verfeinern' },
   ru: { '从文件夹打开': 'Открыть в папке', '清空数据': 'Очистить данные', '此操作不可恢复。': 'Это действие нельзя отменить.', '已清空': 'Данные очищены', '未找到录音文件': 'Файл записи не найден', '未找到模型文件': 'Файлы модели не найдены', '准备中': 'Подготовка', '需要下载以下模型': 'Скачайте необходимые модели:', '模型下载队列': 'Очередь загрузки моделей', '前往模型库': 'К библиотеке моделей', '精修': 'Уточнить' },
 }).forEach(([code, labels]) => Object.assign(catalog[code].labels, labels));
+Object.entries({
+  zh: ['下载失败，请检查网络', '重试'], en: ['Download failed. Check your connection.', 'Retry'],
+  es: ['La descarga falló. Comprueba la conexión.', 'Reintentar'], ja: ['ダウンロードに失敗しました。接続を確認してください。', '再試行'],
+  ko: ['다운로드에 실패했습니다. 연결을 확인하세요.', '다시 시도'], fr: ['Échec du téléchargement. Vérifiez la connexion.', 'Réessayer'],
+  de: ['Download fehlgeschlagen. Verbindung prüfen.', 'Erneut versuchen'], ru: ['Не удалось скачать. Проверьте подключение.', 'Повторить'],
+}).forEach(([code, [failed, retry]]) => Object.assign(catalog[code].labels, { '下载失败': failed, '重试': retry }));
 Object.entries({
   zh: '调整识别、端点检测、说话人分离和本地模型运行参数。',
   en: 'Adjust recognition, endpoint detection, speaker diarization, and local model runtime parameters.',

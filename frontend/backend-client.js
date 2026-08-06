@@ -1,6 +1,6 @@
 function stopMediaStream(stream) {
-  const videoTracks = stream?.getVideoTracks() || [];
-  for (const track of videoTracks.length ? videoTracks : (stream?.getAudioTracks() || [])) {
+  const tracks = [...(stream?.getVideoTracks() || []), ...(stream?.getAudioTracks() || [])];
+  for (const track of tracks) {
     if (track.readyState !== 'live') continue;
     try { track.stop(); } catch { /* Continue stopping the remaining tracks. */ }
   }
@@ -22,7 +22,7 @@ class AudioCapture {
   async prepare({ mic, system }) {
     const requests = [];
     if (mic) requests.push({ track: 'mic', stream: navigator.mediaDevices.getUserMedia({ audio: { autoGainControl: true, echoCancellation: true, noiseSuppression: true } }) });
-    if (system) requests.push({ track: 'system', stream: navigator.mediaDevices.getDisplayMedia({ video: true, audio: true }) });
+    if (system) requests.push({ track: 'system', stream: navigator.mediaDevices.getDisplayMedia({ video: true, audio: { systemAudio: 'include', suppressLocalAudioPlayback: false } }) });
     if (!requests.length) throw new Error('至少选择一个音频输入');
     const results = await Promise.allSettled(requests.map(({ stream }) => stream));
     const failed = results.findIndex(({ status }) => status === 'rejected');
@@ -35,7 +35,7 @@ class AudioCapture {
     const missing = this.pendingStreams.find(({ stream }) => !stream.getAudioTracks().length);
     if (missing) {
       await this.stop();
-      throw new Error(`${missing.track === 'system' ? '系统音频' : '麦克风'}没有可用的音频轨道`);
+      throw new Error(missing.track === 'system' ? '未检测到系统音频，请在系统设置中允许屏幕与系统音频录制后重试' : '麦克风没有可用的音频轨道');
     }
   }
 
@@ -193,6 +193,10 @@ window.breviaClient = window.brevia ? {
     this.capture = new AudioCapture(window.brevia.meeting.audio, this.onLevel);
     let meeting;
     try {
+      if (inputs.system) {
+        const permissions = await window.brevia.permissions.status();
+        if (permissions.systemAudioSupported === false) throw new Error('当前系统不支持直接录制系统音频，请仅使用麦克风');
+      }
       await this.capture.prepare(inputs);
       meeting = await window.brevia.meeting.start(payload);
       if (meeting?.model_required) {

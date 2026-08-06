@@ -287,7 +287,7 @@
   {
     "id": "spleeter-2stems-fp16", "name": "Spleeter 2 Stems", "runtime": "sherpa-onnx==1.13.2", "revision": "source-separation-models/spleeter-2stems-fp16",
     "stages": ["source-separation"], "languages": ["all"], "backend": ["cpu", "cuda"], "speaker": false,
-    "size_bytes": 35271738, "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/source-separation-models/sherpa-onnx-spleeter-2stems-fp16.tar.bz2", "archive_sha256": "c6c5c4307673bc6813ddf58d4efdff57c26d2dfc3f25b05c7a32db453d70aca6",
+    "size_bytes": 35271738, "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/source-separation-models/sherpa-onnx-spleeter-2stems-fp16.tar.bz2", "archive_sha256": "d54561979bd2e08a51e7dbd99ac36bb47564e089eefd403636dbca93e811bba2",
     "directory": "sherpa-onnx-spleeter-2stems-fp16", "files": ["vocals.fp16.onnx", "accompaniment.fp16.onnx"], "kind": "source-separation"
   },
   {

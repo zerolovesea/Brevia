@@ -32,6 +32,7 @@ class WorkerCore:
         self.output_lock = threading.Lock()
         self.model_downloads = {}
         self.model_downloads_lock = threading.Lock()
+        self.model_download_slots = threading.Semaphore(2)
         self.state = WorkerState()
         self.tasks = TaskRegistry()
         self.store = Store(root)

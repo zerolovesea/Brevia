@@ -56,8 +56,7 @@ class ModelTaskWorkerMixin:
                 raise ValueError("Model is not downloading")
             download["cancelled"].set()
             download["paused"].clear()
-        self.emit("model.status", {"model_id": model_id, "status": "cancelled"})
-        return {"model_id": model_id, "status": "cancelled"}
+        return {"model_id": model_id, "status": "cancelling"}
 
     def begin_task(self, task, meeting_id):
         return self.tasks.begin(task, meeting_id)
@@ -87,11 +86,15 @@ class ModelTaskWorkerMixin:
 
     def _download_model(self, model_id, control, china_source=False):
         """下载模型并将最终状态作为异步事件发送。"""
+        completed = False
+        acquired = False
         try:
-            if china_source:
-                self.models.download(model_id, control, china_source=True)
-            else:
-                self.models.download(model_id, control)
+            while not acquired:
+                if control["cancelled"].is_set():
+                    raise DownloadCancelled()
+                acquired = self.model_download_slots.acquire(timeout=0.1)
+            self.models.download(model_id, control, china_source=china_source)
+            completed = True
             if model_id == SETTINGS["diarization"]["embedding_model_id"]:
                 try:
                     self.voice_profiles.seed_builtin_profiles()
@@ -115,8 +118,14 @@ class ModelTaskWorkerMixin:
                 {"model_id": model_id, "status": "failed", "error": str(error)},
             )
         finally:
+            if acquired:
+                self.model_download_slots.release()
             with self.model_downloads_lock:
                 self.model_downloads.pop(model_id, None)
+            if control["cancelled"].is_set() and not completed:
+                self.emit(
+                    "model.status", {"model_id": model_id, "status": "cancelled"}
+                )
 
     def delete_model(self, payload):
         """删除模型；活动会议正在使用的实时模型不可删除。"""

@@ -5,7 +5,9 @@
   "scripts": {
     "build": "cd frontend && npx @tailwindcss/cli -i ./tailwind.css -o ./styles.css --minify",
     "start": "electron .",
-    "test": "npm run test:ui && npm run test:backend",
+    "start:fresh": "electron . --reset-onboarding",
+    "test": "npm run test:electron && npm run test:ui && npm run test:backend",
+    "test:electron": "node electron/test-main-logic.mjs",
     "test:ui": "cd frontend && node ./test-ui.mjs",
     "test:backend": "python -m unittest backend.test_worker",
     "test:model": ".venv/bin/python -m backend.diagnose_model --models-dir .models",
@@ -23,6 +25,7 @@
     "productName": "Brevia",
     "files": [
       "electron/**/*",
+      "!electron/test-*.mjs",
       "package.json"
     ],
     "asarUnpack": [
@@ -51,6 +54,10 @@
     ],
     "mac": {
       "icon": "electron/assets/icon.icns",
+      "extendInfo": {
+        "NSAudioCaptureUsageDescription": "Brevia captures system audio to transcribe meetings locally.",
+        "NSMicrophoneUsageDescription": "Brevia captures microphone audio to transcribe meetings locally."
+      },
       "target": [
         {
           "target": "dmg",

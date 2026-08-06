@@ -2,16 +2,16 @@ const { app, BrowserWindow, desktopCapturer, dialog, ipcMain, safeStorage, sessi
 const { execFile, spawn } = require('node:child_process');
 const { appendFile, copyFile, mkdir, readFile, rename, rm, writeFile } = require('node:fs/promises');
 const { existsSync } = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { z } = require('zod');
 const { autoUpdater } = require('electron-updater');
+const { configureMacUpdater, createDisplayMediaHandler, isNewerVersion, registerScreenPermission, systemAudioSupported } = require('./main-logic');
 
 const releasesUrl = 'https://github.com/zerolovesea/Brevia/releases/latest';
 
-if (process.platform === 'darwin') {
-  app.commandLine.appendSwitch('disable-features', 'MacCatapLoopbackAudioForScreenShare');
-}
+if (process.platform === 'darwin') app.commandLine.appendSwitch('disable-features', 'MacCatapLoopbackAudioForScreenShare');
 if (!app.requestSingleInstanceLock()) app.quit();
 app.on('second-instance', () => {
   const [window] = BrowserWindow.getAllWindows();
@@ -24,7 +24,12 @@ const packagedRoot = app.isPackaged ? process.resourcesPath : root;
 const startupAnimationMs = 1700;
 const startupDataWaitMs = 2200;
 const workerLineLimit = 4 * 1024 * 1024;
-const dataDir = () => path.join(app.getPath('home'), 'brevia');
+const workerRequestTimeouts = new Map([
+  ['models.download', 15000], ['models.pause', 15000], ['models.cancel', 15000],
+  ['task.pause', 15000], ['task.resume', 15000],
+]);
+const resetOnboarding = process.argv.includes('--reset-onboarding');
+const dataDir = () => process.env.BREVIA_DATA_DIR || path.join(app.getPath('home'), 'brevia');
 const legacyDataDir = () => app.getPath('userData');
 const logsDir = () => path.join(dataDir(), 'logs');
 const logFile = () => path.join(logsDir(), 'brevia.log');
@@ -42,6 +47,7 @@ const stopProcess = (child) => {
   else child.kill();
 };
 const migrateDataDir = async () => {
+  if (process.env.BREVIA_DATA_DIR) return;
   const source = legacyDataDir();
   if (!existsSync(source) || existsSync(path.join(dataDir(), 'brevia.db'))) return;
   await mkdir(dataDir(), { recursive: true });
@@ -185,6 +191,7 @@ class WorkerClient {
       const pending = this.pending.get(message.id);
       if (!pending) return;
       this.pending.delete(message.id);
+      clearTimeout(pending.timer);
       message.ok ? pending.resolve(message.result) : pending.reject(new Error(message.error));
       return;
     }
@@ -199,16 +206,23 @@ class WorkerClient {
     }
     const requestId = `cmd-${++this.sequence}`;
     return new Promise((resolve, reject) => {
-      this.pending.set(requestId, { resolve, reject });
+      const timeout = workerRequestTimeouts.get(type);
+      const timer = timeout && setTimeout(() => {
+        if (!this.pending.delete(requestId)) return;
+        reject(new Error(`Worker request timed out: ${type}`));
+      }, timeout);
+      this.pending.set(requestId, { resolve, reject, timer });
       try {
         this.process.stdin.write(`${JSON.stringify({ id: requestId, ...value })}\n`, (error) => {
           if (error) {
             this.pending.delete(requestId);
+            clearTimeout(timer);
             reject(error);
           }
         });
       } catch (error) {
         this.pending.delete(requestId);
+        clearTimeout(timer);
         reject(error);
       }
     });
@@ -219,7 +233,10 @@ class WorkerClient {
   }
 
   fail(error) {
-    this.pending.forEach(({ reject }) => reject(error));
+    this.pending.forEach(({ reject, timer }) => {
+      clearTimeout(timer);
+      reject(error);
+    });
     this.pending.clear();
   }
 
@@ -246,6 +263,7 @@ class WorkerClient {
 
 const worker = new WorkerClient();
 let startupInitialization;
+const supportsSystemAudio = () => systemAudioSupported(process.platform, os.release());
 
 function reportMainError(error, fatal = false) {
   const message = error instanceof Error ? error.message : String(error);
@@ -353,13 +371,14 @@ function registerIpc() {
   ipcMain.handle('update.check', () => checkForUpdate());
   ipcMain.handle('update.install', () => installUpdate());
   ipcMain.handle('permissions.status', () => process.platform === 'darwin'
-    ? { microphone: systemPreferences.getMediaAccessStatus('microphone'), screen: systemPreferences.getMediaAccessStatus('screen') }
-    : { microphone: 'granted', screen: 'granted' });
+    ? { microphone: systemPreferences.getMediaAccessStatus('microphone'), screen: systemPreferences.getMediaAccessStatus('screen'), systemAudioSupported: supportsSystemAudio() }
+    : { microphone: 'granted', screen: 'granted', systemAudioSupported: supportsSystemAudio() });
   ipcMain.handle('permissions.request-microphone', () => process.platform === 'darwin'
     ? systemPreferences.askForMediaAccess('microphone')
     : true);
-  ipcMain.handle('permissions.open-screen-settings', () => {
+  ipcMain.handle('permissions.open-screen-settings', async () => {
     if (process.platform !== 'darwin') return false;
+    await registerScreenPermission(desktopCapturer, writeLog);
     const settings = spawn('open', ['x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'], { detached: true, stdio: 'ignore' });
     settings.unref();
     return true;
@@ -549,13 +568,6 @@ function registerIpc() {
   });
 }
 
-const versionParts = (version) => version.replace(/^v/, '').split(/[.-]/).slice(0, 3).map(Number);
-const isNewerVersion = (candidate, current) => {
-  const next = versionParts(candidate);
-  const installed = versionParts(current);
-  for (let index = 0; index < 3; index += 1) if (next[index] !== installed[index]) return next[index] > installed[index];
-  return false;
-};
 let macUpdateCheck;
 
 function checkForUpdate() {
@@ -565,7 +577,7 @@ function checkForUpdate() {
     .then(({ tag_name }) => ({ status: isNewerVersion(tag_name, app.getVersion()) ? 'available' : 'current', version: tag_name.replace(/^v/, '') }));
   if (process.platform !== 'darwin') return Promise.resolve({ status: 'unsupported' });
   if (macUpdateCheck) return macUpdateCheck;
-  autoUpdater.autoDownload = false;
+  configureMacUpdater(autoUpdater);
   macUpdateCheck = new Promise((resolve, reject) => {
     const done = (result) => { cleanup(); resolve(result); };
     const fail = (error) => { cleanup(); reject(error); };
@@ -641,7 +653,7 @@ function createWindow() {
     }
     else revealApp();
   });
-  window.loadFile(path.join(packagedRoot, 'frontend', 'index.html'));
+  window.loadFile(path.join(packagedRoot, 'frontend', 'index.html'), resetOnboarding ? { query: { resetOnboarding: '1' } } : undefined);
   setTimeout(() => {
     animationComplete = true;
     revealApp();
@@ -656,10 +668,7 @@ app.whenReady().then(async () => {
   await migrateDataDir().catch((error) => writeLog('WARNING', `data migration: ${logText(error)}`));
   session.defaultSession.setPermissionCheckHandler((_, permission) => permission === 'media' || permission === 'display-capture');
   session.defaultSession.setPermissionRequestHandler((_, permission, callback) => callback(permission === 'media' || permission === 'display-capture'));
-  session.defaultSession.setDisplayMediaRequestHandler(async (_, callback) => {
-    const [source] = await desktopCapturer.getSources({ types: ['screen'] });
-    callback(source ? { video: source, audio: 'loopback' } : {});
-  }, { useSystemPicker: process.platform === 'darwin' });
+  session.defaultSession.setDisplayMediaRequestHandler(createDisplayMediaHandler(desktopCapturer, writeLog));
   worker.start();
   registerIpc();
   void initializeWorker().catch(() => {});

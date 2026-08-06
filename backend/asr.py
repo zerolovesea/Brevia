@@ -1,6 +1,7 @@
 """本地模型的下载管理，以及 sherpa-onnx 识别与说话人聚类封装。"""
 
 import hashlib
+import http.client
 import json
 import os
 import platform
@@ -13,6 +14,10 @@ import urllib.request
 from pathlib import Path
 
 from .config import SETTINGS
+
+
+DOWNLOAD_TIMEOUT_SECONDS = 30
+DOWNLOAD_RETRIES = 5
 
 
 class DownloadCancelled(Exception):
@@ -82,6 +87,47 @@ class ModelManager:
         """Return the selected source without changing the artifact identity."""
         return f"https://gh-proxy.com/{url}" if china_source and url.startswith("https://github.com/") else url
 
+    @staticmethod
+    def _download_file(url, destination, check_control, progress):
+        """Download one file with retry and HTTP Range resume support."""
+        for attempt in range(DOWNLOAD_RETRIES):
+            check_control()
+            received = destination.stat().st_size if destination.exists() else 0
+            request = urllib.request.Request(
+                url, headers={"Range": f"bytes={received}-"} if received else {}
+            )
+            try:
+                with urllib.request.urlopen(request, timeout=DOWNLOAD_TIMEOUT_SECONDS) as response:
+                    partial = received and response.getcode() == 206
+                    if not partial:
+                        received = 0
+                    with destination.open("ab" if partial else "wb") as downloaded:
+                        progress(received)
+                        while block := response.read(256 * 1024):
+                            check_control()
+                            downloaded.write(block)
+                            received += len(block)
+                            progress(received)
+                check_control()
+                return
+            except urllib.error.HTTPError as error:
+                if error.code == 416 and destination.exists():
+                    total = error.headers.get("Content-Range", "").rpartition("/")[2]
+                    if total.isdigit() and destination.stat().st_size == int(total):
+                        progress(int(total))
+                        check_control()
+                        return
+                    destination.unlink()
+                if attempt == DOWNLOAD_RETRIES - 1:
+                    raise
+                check_control()
+                time.sleep(2**attempt)
+            except (urllib.error.URLError, TimeoutError, ConnectionError, http.client.IncompleteRead):
+                if attempt == DOWNLOAD_RETRIES - 1:
+                    raise
+                check_control()
+                time.sleep(2**attempt)
+
     def download(self, model_id, control=None, china_source=False):
         """下载并校验一个模型，成功后原子地放入正式目录。
 
@@ -121,13 +167,7 @@ class ModelManager:
                     )
                     destination.parent.mkdir(parents=True, exist_ok=True)
 
-                    def report(blocks, block_size, total, offset=received):
-                        check_control()
-                        current = (
-                            min(blocks * block_size, total)
-                            if total > 0
-                            else blocks * block_size
-                        )
+                    def report(current, offset=received):
                         self.event(
                             "model.progress",
                             {
@@ -138,7 +178,12 @@ class ModelManager:
                         )
 
                     check_control()
-                    urllib.request.urlretrieve(self.download_url(item["url"], china_source), destination, report)
+                    self._download_file(
+                        self.download_url(item["url"], china_source),
+                        destination,
+                        check_control,
+                        report,
+                    )
                     check_control()
                     digest = sha256_file(destination)
                     if item.get("sha256") and digest != item["sha256"]:
@@ -163,27 +208,23 @@ class ModelManager:
             else:
                 archive = Path(temporary) / Path(model["url"]).name
 
-                reported = 0
-
-                def report(blocks, block_size, total):
-                    """把 urlretrieve 的块进度节流为约每 MiB 一次的 Worker 事件。"""
-                    nonlocal reported
-                    check_control()
-                    received = (
-                        min(blocks * block_size, total)
-                        if total > 0
-                        else blocks * block_size
-                    )
-                    if received < total and received - reported < 1024 * 1024:
-                        return
-                    reported = received
+                def report(received):
                     self.event(
                         "model.progress",
-                        {"model_id": model_id, "received": received, "total": total},
+                        {
+                            "model_id": model_id,
+                            "received": received,
+                            "total": model["size_bytes"],
+                        },
                     )
 
                 check_control()
-                urllib.request.urlretrieve(self.download_url(model["url"], china_source), archive, report)
+                self._download_file(
+                    self.download_url(model["url"], china_source),
+                    archive,
+                    check_control,
+                    report,
+                )
                 check_control()
                 digest = sha256_file(archive)
                 if model.get("archive_sha256") and digest != model["archive_sha256"]:
@@ -204,6 +245,7 @@ class ModelManager:
                     archive.replace(source / model["files"][0])
             if not all((source / name).exists() for name in model["files"]):
                 raise ValueError("Model archive is missing required files")
+            check_control()
             source.replace(self.path(model_id))
         (self.path(model_id) / ".brevia.json").write_text(
             json.dumps(
