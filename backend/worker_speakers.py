@@ -70,14 +70,28 @@ class SpeakerCommandMixin:
         return self.store.get_meeting(payload["meeting_id"])
 
     def rename_speaker(self, payload):
-        """只保存会议内名称；声纹样本必须由显式 Enrollment 添加。"""
+        """保存会议内名称，并把真人命名实时同步到本地人员库。
+
+        人工把说话人命名为真实姓名，是明确的身份意图；即便会议仍在进行、
+        暂时无法提取稳定声纹，也先建立空档案并关联会议说话人，使其立刻出现
+        在设置的说话人识别列表中。占位名（如“说话人1”）不注册为真人。声纹
+        样本仍由显式 Enrollment 或分配片段时补全。
+        """
         require(payload, "meeting_id", "speaker_id", "name")
+        profile = (
+            None
+            if self._is_default_speaker_name(payload["name"])
+            else self.store.ensure_speaker_profile(payload["name"])
+        )
         self.store.rename_speaker(
             payload["meeting_id"],
             payload["speaker_id"],
             payload["name"],
             payload.get("locked", False),
+            profile["id"] if profile else None,
         )
+        if profile:
+            self.emit("speaker-profile.updated", {"profile": profile})
         return self.store.get_meeting(payload["meeting_id"])
 
     @staticmethod

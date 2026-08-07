@@ -129,105 +129,140 @@ class RecordingSessionMixin:
         self.recent_finals = []
         denoiser_id = SETTINGS["live_asr"]["denoiser_model_id"]
         self.denoiser = None
-        if self.models.is_ready(denoiser_id):
+
+        # 各加载闭包在工作线程中运行，绝不能访问 self.active——它是受 state.lock 保护
+        # 的属性，而本方法已在该锁内运行，跨线程再次获取会死锁。改用本地会议 ID。
+        meeting_id = meeting["id"]
+
+        # 每个模型加载彼此独立，且 sherpa-onnx 的原生初始化会释放 GIL，因此并行
+        # 加载可把「准备中」墙钟时间从各模型耗时之和降到最慢的一个（通常是精修用
+        # 的 Qwen3-ASR）。此方法始终在录音状态锁内单线程进入，各闭包只写各自的
+        # self 属性，emit 也已加锁，故并行不改变加载后的任何运行时行为。
+        def load_denoiser():
+            if self.models.is_ready(denoiser_id):
+                try:
+                    self.denoiser = LiveDenoiser(self.models, denoiser_id)
+                except RuntimeError as error:
+                    self.emit(
+                        "worker.warning",
+                        {
+                            "meeting_id": meeting_id,
+                            "code": "denoiser_unavailable",
+                            "message": str(error),
+                        },
+                    )
+
+        def load_language_identifier():
+            if meeting["language"] == "auto" and self.models.is_ready("whisper-turbo"):
+                try:
+                    self.language_identifier = LanguageIdentifier(self.models)
+                except RuntimeError as error:
+                    self.emit(
+                        "worker.warning",
+                        {
+                            "meeting_id": meeting_id,
+                            "code": "language_identifier_unavailable",
+                            "message": str(error),
+                        },
+                    )
+
+        def load_asr():
             try:
-                self.denoiser = LiveDenoiser(self.models, denoiser_id)
+                self.asr = StreamingASR(
+                    self.models, meeting["streaming_model_id"], meeting["language"]
+                )
             except RuntimeError as error:
+                self.asr = None
                 self.emit(
                     "worker.warning",
                     {
-                        "meeting_id": self.active,
-                        "code": "denoiser_unavailable",
+                        "meeting_id": meeting_id,
+                        "code": "asr_unavailable",
                         "message": str(error),
                     },
                 )
-        if meeting["language"] == "auto" and self.models.is_ready("whisper-turbo"):
+
+        def load_punctuation():
+            if meeting["language"] == "en":
+                try:
+                    self.punctuation = EnglishPunctuation(
+                        self.models, SETTINGS["punctuation"]["english_model_id"]
+                    )
+                except RuntimeError as error:
+                    self.punctuation = None
+                    self.emit(
+                        "worker.warning",
+                        {
+                            "meeting_id": meeting_id,
+                            "code": "punctuation_unavailable",
+                            "message": str(error),
+                        },
+                    )
+            elif meeting["language"] in {"zh", "yue", "auto"}:
+                try:
+                    self.punctuation = ChinesePunctuation(
+                        self.models, SETTINGS["punctuation"]["chinese_model_id"]
+                    )
+                except RuntimeError as error:
+                    self.punctuation = None
+                    self.emit(
+                        "worker.warning",
+                        {
+                            "meeting_id": meeting_id,
+                            "code": "punctuation_unavailable",
+                            "message": str(error),
+                        },
+                    )
+
+        def load_speaker_tracker():
             try:
-                self.language_identifier = LanguageIdentifier(self.models)
+                self.speaker_tracker = SpeakerTracker(
+                    self.models,
+                    max_speakers=meeting.get("num_speakers"),
+                    model_id=meeting.get("speaker_embedding_model_id"),
+                )
             except RuntimeError as error:
+                self.speaker_tracker = None
                 self.emit(
                     "worker.warning",
                     {
-                        "meeting_id": self.active,
-                        "code": "language_identifier_unavailable",
+                        "meeting_id": meeting_id,
+                        "code": "speaker_unavailable",
                         "message": str(error),
                     },
                 )
-        try:
-            self.asr = StreamingASR(
-                self.models, meeting["streaming_model_id"], meeting["language"]
-            )
-        except RuntimeError as error:
-            self.asr = None
-            self.emit(
-                "worker.warning",
-                {
-                    "meeting_id": self.active,
-                    "code": "asr_unavailable",
-                    "message": str(error),
-                },
-            )
-        if meeting["language"] == "en":
-            try:
-                self.punctuation = EnglishPunctuation(
-                    self.models, SETTINGS["punctuation"]["english_model_id"]
-                )
-            except RuntimeError as error:
-                self.punctuation = None
-                self.emit(
-                    "worker.warning",
-                    {
-                        "meeting_id": self.active,
-                        "code": "punctuation_unavailable",
-                        "message": str(error),
-                    },
-                )
-        elif meeting["language"] in {"zh", "yue", "auto"}:
-            try:
-                self.punctuation = ChinesePunctuation(
-                    self.models, SETTINGS["punctuation"]["chinese_model_id"]
-                )
-            except RuntimeError as error:
-                self.punctuation = None
-                self.emit(
-                    "worker.warning",
-                    {
-                        "meeting_id": self.active,
-                        "code": "punctuation_unavailable",
-                        "message": str(error),
-                    },
-                )
-        try:
-            self.speaker_tracker = SpeakerTracker(
-                self.models,
-                max_speakers=meeting.get("num_speakers"),
-                model_id=meeting.get("speaker_embedding_model_id"),
-            )
-        except RuntimeError as error:
-            self.speaker_tracker = None
-            self.emit(
-                "worker.warning",
-                {
-                    "meeting_id": self.active,
-                    "code": "speaker_unavailable",
-                    "message": str(error),
-                },
-            )
-        if self.models.is_ready(meeting["refined_model_id"]):
-            try:
-                self.live_refiner = RefinedASR(self.models, meeting["refined_model_id"])
-                self.live_refinement = ThreadPoolExecutor(
-                    max_workers=1, thread_name_prefix="brevia-live-refine"
-                )
-            except RuntimeError as error:
-                self.emit(
-                    "worker.warning",
-                    {
-                        "meeting_id": self.active,
-                        "code": "live_refinement_unavailable",
-                        "message": str(error),
-                    },
-                )
+
+        def load_live_refiner():
+            if self.models.is_ready(meeting["refined_model_id"]):
+                try:
+                    self.live_refiner = RefinedASR(
+                        self.models, meeting["refined_model_id"]
+                    )
+                    self.live_refinement = ThreadPoolExecutor(
+                        max_workers=1, thread_name_prefix="brevia-live-refine"
+                    )
+                except RuntimeError as error:
+                    self.emit(
+                        "worker.warning",
+                        {
+                            "meeting_id": meeting_id,
+                            "code": "live_refinement_unavailable",
+                            "message": str(error),
+                        },
+                    )
+
+        loaders = (
+            load_denoiser,
+            load_language_identifier,
+            load_asr,
+            load_punctuation,
+            load_speaker_tracker,
+            load_live_refiner,
+        )
+        with ThreadPoolExecutor(max_workers=len(loaders)) as pool:
+            for future in [pool.submit(loader) for loader in loaders]:
+                # 复现串行版本的语义：非 RuntimeError 的意外异常仍向上冒泡。
+                future.result()
 
     @synchronized_recording
     def pause(self, payload):

@@ -397,6 +397,13 @@ class WorkerTest(unittest.TestCase):
             Worker._clean_live_text("吞噬天地，那那那那那那那那那那"),
             "吞噬天地，那",
         )
+        # decoder 空转的重复片段可能出现在句中（后面仍接正常文字），而非仅句尾。
+        self.assertEqual(
+            Worker._clean_live_text(
+                "隔了好久，就" + "就" * 29 + "。对，但是平常的吧"
+            ),
+            "隔了好久，就。对，但是平常的吧",
+        )
 
     def test_live_qwen_refinement_replaces_unedited_final_only(self):
         meeting = self.worker.start(

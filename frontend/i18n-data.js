@@ -435,5 +435,7 @@ Object.entries({
 
 Object.entries({ zh: '确认', en: 'Confirm', es: 'Confirmar', ja: '確認', ko: '확인', fr: 'Confirmer', de: 'Bestätigen', ru: 'Подтвердить' }).forEach(([code, label]) => { catalog[code].labels['确认'] = label; });
 
+Object.entries({ zh: '重叠说话', en: 'Overlapping speech', es: 'Habla superpuesta', ja: '発話の重なり', ko: '중첩 발화', fr: 'Parole superposée', de: 'Überlappende Sprache', ru: 'Перекрывающаяся речь' }).forEach(([code, label]) => { catalog[code].labels['重叠说话'] = label; });
+
 window.BreviaLocaleData = { catalog, appCopy };
 })();
