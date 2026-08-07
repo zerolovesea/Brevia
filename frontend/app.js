@@ -121,6 +121,7 @@ const updateNoticeButton = updateNotice.querySelector('button');
 let updateAvailable = false;
 let updateVersion = '';
 let updateBusy = false;
+let updateDownloadProgress = null;
 let installedAppVersion = '—';
 let speakerProfiles = [];
 let presetVoices = [];
@@ -175,7 +176,20 @@ function currentVersionLabel() { return ({ zh: '当前版本', en: 'Current vers
 function availableUpdateLabel() { return updateVersion ? updateCopy().available.replace('0.2.0', updateVersion) : updateCopy().available; }
 function renderUpdateNotice() { const copy = updateCopy(); updateNoticeText.textContent = availableUpdateLabel(); updateNoticeButton.textContent = copy.floating; updateNotice.hidden = !updateAvailable; requestAnimationFrame(syncFloatingNotices); }
 /** Renders the settings-page update action from current locale and availability state. @returns {void} */
-function renderUpdateButton() { const copy = updateCopy(); updateTitle.textContent = copy.title; updateDescription.textContent = updateAvailable ? availableUpdateLabel() : `${currentVersionLabel()} ${installedAppVersion}`; updateButton.textContent = updateBusy ? (updateAvailable ? copy.updating : copy.checking) : updateAvailable ? copy.update : copy.action; updateButton.disabled = updateBusy; }
+function renderUpdateButton() {
+  const copy = updateCopy();
+  updateTitle.textContent = copy.title;
+  if (updateDownloadProgress) {
+    const percent = Math.round(updateDownloadProgress.percent);
+    const transferred = formatBytes(updateDownloadProgress.transferred);
+    const total = formatBytes(updateDownloadProgress.total);
+    updateDescription.textContent = `${copy.downloading || '正在下载'} ${percent}% · ${transferred} / ${total}`;
+  } else {
+    updateDescription.textContent = updateAvailable ? availableUpdateLabel() : `${currentVersionLabel()} ${installedAppVersion}`;
+  }
+  updateButton.textContent = updateDownloadProgress ? `${copy.downloading || '正在下载'} ${Math.round(updateDownloadProgress.percent)}%` : updateBusy ? (updateAvailable ? copy.updating : copy.checking) : updateAvailable ? copy.update : copy.action;
+  updateButton.disabled = updateBusy;
+}
 const modelIds = [
   'paraformer-zh-en-int8',
   'zipformer-en-streaming-int8',
@@ -1916,9 +1930,10 @@ async function checkForUpdates({ silent = false } = {}) {
 async function runUpdateAction() {
   if (!updateAvailable) return checkForUpdates();
   updateBusy = true;
+  updateDownloadProgress = null;
   renderUpdateButton();
   try { await window.brevia.update.install(); }
-  catch (error) { showToast(error.message); updateBusy = false; renderUpdateButton(); }
+  catch (error) { showToast(error.message); updateBusy = false; updateDownloadProgress = null; renderUpdateButton(); }
 }
 void checkForUpdates({ silent: true });
 window.setInterval(() => { if (activeLibraryNav === 'recently-deleted') return; sloganIndex = (sloganIndex + 1) % (slogans[locale] || slogans.en).length; renderSlogan(true); }, 30000);
@@ -2848,6 +2863,10 @@ if (window.brevia) {
   });
   window.brevia.on('worker.warning', ({ message: warning }) => showToast(warning));
   window.brevia.on('worker.error', ({ message: error }) => showToast(error));
+  window.brevia.on('update.download-progress', (progress) => {
+    updateDownloadProgress = progress;
+    renderUpdateButton();
+  });
   window.brevia.on('task.status', ({ task, meeting_id, status }) => {
     const card = [...taskCards.querySelectorAll('.processing-card')].find((item) => item.dataset.task === task && item.dataset.meetingId === meeting_id);
     setTaskCardPaused(card, status === 'paused');

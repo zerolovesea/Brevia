@@ -598,9 +598,34 @@ function checkForUpdate() {
 async function installUpdate() {
   if (process.platform === 'win32') return shell.openExternal(releasesUrl);
   if (process.platform !== 'darwin' || !app.isPackaged) return false;
-  await autoUpdater.downloadUpdate();
-  autoUpdater.quitAndInstall();
-  return true;
+
+  // 监听下载进度并发送给前端
+  const progressHandler = (info) => {
+    const windows = BrowserWindow.getAllWindows();
+    windows.forEach((win) => {
+      win.webContents.send('ipc-event', {
+        type: 'update.download-progress',
+        payload: {
+          bytesPerSecond: info.bytesPerSecond,
+          percent: info.percent,
+          transferred: info.transferred,
+          total: info.total,
+        },
+      });
+    });
+  };
+
+  autoUpdater.on('download-progress', progressHandler);
+
+  try {
+    await autoUpdater.downloadUpdate();
+    autoUpdater.removeListener('download-progress', progressHandler);
+    autoUpdater.quitAndInstall();
+    return true;
+  } catch (error) {
+    autoUpdater.removeListener('download-progress', progressHandler);
+    throw error;
+  }
 }
 
 function createWindow() {
