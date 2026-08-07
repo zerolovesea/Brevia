@@ -11,11 +11,10 @@ from pathlib import Path
 
 from .audio_io import PROCESS_TIMEOUT_SECONDS
 from .transcript import clock, latest_segments, srt_time
-from .worker_common import require, synchronized_recording
+from .worker_common import require
 
 
 class ExportWorkerMixin:
-    @synchronized_recording
     def export(self, payload):
         """导出逐字稿、纪要或录音。
 
@@ -87,7 +86,6 @@ class ExportWorkerMixin:
             "print_pdf": export_format == "pdf",
         }
 
-    @synchronized_recording
     def bundle(self, payload):
         """打包本地录音与 Markdown、TXT 逐字稿。"""
         require(payload, "meeting_id")

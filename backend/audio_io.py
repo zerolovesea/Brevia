@@ -68,6 +68,41 @@ def read_mono_wav(path, maximum_seconds=None):
         return samples.astype(numpy.float32) / 32768.0, recording.getframerate()
 
 
+def mono_wav_meta(path):
+    """返回单声道 PCM16 WAV 的 ``(sample_rate, num_frames)``，不载入波形。"""
+    with wave.open(str(path)) as recording:
+        if recording.getnchannels() != 1 or recording.getsampwidth() != 2:
+            raise ValueError("This operation requires mono PCM16 WAV audio")
+        return recording.getframerate(), recording.getnframes()
+
+
+def read_mono_wav_window(path, start_ms, end_ms):
+    """按毫秒区间从磁盘只读取所需窗口，避免整段驻留内存。
+
+    Args:
+        path: 单声道 PCM16 WAV 路径。
+        start_ms: 窗口起点（含），毫秒；负值按 0 处理。
+        end_ms: 窗口终点（不含），毫秒；超出音频长度时自动截断。
+
+    Returns:
+        ``(归一化 float32 样本, 采样率)``；空区间返回长度为 0 的数组。
+    """
+    import numpy
+
+    with wave.open(str(path)) as recording:
+        if recording.getnchannels() != 1 or recording.getsampwidth() != 2:
+            raise ValueError("This operation requires mono PCM16 WAV audio")
+        sample_rate = recording.getframerate()
+        total = recording.getnframes()
+        start = max(0, min(total, round(start_ms * sample_rate / 1000)))
+        end = max(start, min(total, round(end_ms * sample_rate / 1000)))
+        if end <= start:
+            return numpy.zeros(0, dtype=numpy.float32), sample_rate
+        recording.setpos(start)
+        samples = numpy.frombuffer(recording.readframes(end - start), dtype="<i2")
+        return samples.astype(numpy.float32) / 32768.0, sample_rate
+
+
 def write_mono_wav(path, samples, sample_rate):
     """写入单声道 PCM16 WAV；浮点振幅先限幅以防止溢出失真。"""
     import numpy

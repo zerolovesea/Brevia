@@ -27,6 +27,18 @@ function renderDualTrackPanel(meeting) {
   });
 }
 
+function displaySpeakerName(name) {
+  // 后端已把命中声纹的 profile-{id} 与非聚类轨道重命名为真实姓名/“Local user”，
+  // 这里只把未命中的原始标签（spk-N / mic-spk-N / system-spk-N）转成可读文案。
+  const match = /^(?:(mic|system)-)?spk-(\d+)$/.exec(String(name ?? ''));
+  if (!match) return name;
+  const [, track, index] = match;
+  const zh = locale === 'zh';
+  const origin = track === 'mic' ? (zh ? '本机' : 'Mic') : track === 'system' ? (zh ? '远端' : 'Remote') : '';
+  const speaker = zh ? `说话人 ${index}` : `Speaker ${index}`;
+  return origin ? `${origin}${zh ? '' : ' '}${speaker}` : speaker;
+}
+
 function applyBackendDetail(meeting) {
   const sameDetail = currentMeetingDetail?.id === meeting.id;
   const transcriptScrollTop = sameDetail ? document.querySelector('.transcript-body')?.scrollTop : undefined;
@@ -40,9 +52,9 @@ function applyBackendDetail(meeting) {
   const speakerNames = new Map(meeting.speakers.map((speaker) => [speaker.id, speaker.name]));
   uiData.detail.transcript = [...latest.values()].sort((a, b) => a.start_ms - b.start_ms).map((segment) => {
     const overlapSpeakers = [...new Set(segment.word_timestamps.flatMap((word) => word.overlap_speakers || []))];
-    return { time: `${String(Math.floor(segment.start_ms / 60000)).padStart(2, '0')}:${String(Math.floor(segment.start_ms / 1000) % 60).padStart(2, '0')}`, seconds: Math.floor(segment.start_ms / 1000), startSeconds: segment.start_ms / 1000, endSeconds: segment.end_ms / 1000, speaker: { name: segment.speaker_name, segmentId: segment.id, editing: segment.id === editingSegmentSpeakerId, overlapNames: overlapSpeakers.length > 1 ? overlapSpeakers.map((speaker) => speakerNames.get(speaker) || speaker) : [] }, text: segment.text, translation: segment.translation };
+    return { time: `${String(Math.floor(segment.start_ms / 60000)).padStart(2, '0')}:${String(Math.floor(segment.start_ms / 1000) % 60).padStart(2, '0')}`, seconds: Math.floor(segment.start_ms / 1000), startSeconds: segment.start_ms / 1000, endSeconds: segment.end_ms / 1000, speaker: { name: displaySpeakerName(segment.speaker_name), segmentId: segment.id, editing: segment.id === editingSegmentSpeakerId, overlapNames: overlapSpeakers.length > 1 ? overlapSpeakers.map((speaker) => displaySpeakerName(speakerNames.get(speaker) || speaker)) : [] }, text: segment.text, translation: segment.translation };
   });
-  uiData.detail.refinedTranscript = revision === null ? [] : [...latest.values()].sort((a, b) => a.start_ms - b.start_ms).map((segment) => ({ speaker: { name: segment.speaker_name }, text: segment.text }));
+  uiData.detail.refinedTranscript = revision === null ? [] : [...latest.values()].sort((a, b) => a.start_ms - b.start_ms).map((segment) => ({ speaker: { name: displaySpeakerName(segment.speaker_name) }, text: segment.text }));
   const summary = meeting.summary?.data;
   uiData.detail.summary = summary?.markdown ? { markdown: summary.markdown, hasFull: true } : { title: '', sections: [], empty: true };
   document.querySelector('#detail-view .detail-head h1').textContent = meeting.title;
@@ -55,7 +67,7 @@ function applyBackendDetail(meeting) {
     if (audioPath) window.brevia.audioUrl(audioPath).then((url) => { playerAudio.src = url; }); else { playerAudio.removeAttribute('src'); playerAudio.load(); }
   } else { progress.value = playerAudio.currentTime; renderPlayerTime(); }
   renderMeetingDetail();
-  if (transcriptScrollTop !== undefined) document.querySelector('.transcript-body').scrollTop = transcriptScrollTop;
+  if (transcriptScrollTop !== undefined) document.querySelector('.transcript-body')?.scrollTo({ top: transcriptScrollTop, behavior: 'instant' });
   renderDualTrackPanel(meeting);
 }
 

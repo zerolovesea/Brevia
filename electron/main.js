@@ -1,4 +1,4 @@
-const { app, BrowserWindow, desktopCapturer, dialog, ipcMain, safeStorage, session, shell, systemPreferences } = require('electron');
+const { app, BrowserWindow, desktopCapturer, dialog, ipcMain, session, shell, systemPreferences } = require('electron');
 const { execFile, spawn } = require('node:child_process');
 const { appendFile, copyFile, mkdir, readFile, rename, rm, writeFile } = require('node:fs/promises');
 const { existsSync } = require('node:fs');
@@ -112,6 +112,7 @@ const summaryModelConfig = z.object({
   name: z.string().trim().min(1).max(64), provider: z.string().trim().min(1).max(64),
   endpoint: z.string().url(), format: z.enum(['openai', 'claude']).optional(), model: z.string().trim().min(1).max(128),
   keyReference: z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/).optional(),
+  keyLength: z.number().int().positive().max(512).optional(),
 });
 const summaryConfig = z.object({
   models: z.array(summaryModelConfig).max(20), active: z.number().int().min(-1).max(19),
@@ -317,17 +318,15 @@ function handleModelRequirement(channel, schema, type = channel) {
 }
 
 async function setSecret(reference, value) {
-  if (!safeStorage.isEncryptionAvailable()) throw new Error('系统钥匙串不可用');
   const directory = path.join(dataDir(), 'secrets');
   await mkdir(directory, { recursive: true });
-  await writeFile(path.join(directory, `${reference}.bin`), safeStorage.encryptString(value), { mode: 0o600 });
+  await writeFile(path.join(directory, `${reference}.key`), value, { encoding: 'utf8', mode: 0o600 });
 }
 
 async function getSecret(reference) {
   if (!reference) return '';
   try {
-    const encrypted = await readFile(path.join(dataDir(), 'secrets', `${reference}.bin`));
-    return safeStorage.decryptString(encrypted);
+    return await readFile(path.join(dataDir(), 'secrets', `${reference}.key`), 'utf8');
   } catch (error) {
     if (error.code === 'ENOENT') return '';
     throw error;

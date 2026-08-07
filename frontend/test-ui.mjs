@@ -426,7 +426,7 @@ assert.match(text(js), /data-delete-model/);
 assert.match(text(css), /::-webkit-scrollbar-thumb\{/);
 assert.match(text(css), /:where\(html,body,\*\)\.is-scrolling\{scrollbar-color:#aaa transparent/);
 assert.doesNotMatch(text(css), /scrollbar-color:#666 transparent/);
-assert.match(text(css), /html\[data-theme=dark\] \.brand img\{filter:invert\(\)/);
+assert.match(text(css), /html\[data-theme=dark\] \.brand img,html\[data-theme=dark\] \.onboarding-brand\{filter:invert\(\)/);
 assert.match(text(css), /html\[data-theme=dark\] \.secondary,html\[data-theme=dark\] \.meeting-color,html\[data-theme=dark\] \.model-icon\{color:#eee;border-color:#eee/);
 assert.match(text(css), /html\[data-theme=dark\] \.processing-bar i,html\[data-theme=dark\] \.model-download-progress i\{background-color:#fff/);
 assert.match(text(js), /document\.addEventListener\('scroll',[\s\S]{0,300}is-scrolling/);

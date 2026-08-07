@@ -478,6 +478,13 @@ class WorkerTest(unittest.TestCase):
                 "backend.worker_refinement.read_mono_wav",
                 side_effect=lambda path: audio["mic" if "mic" in path else "system"],
             ),
+            patch(
+                "backend.worker_refinement.read_mono_wav_window",
+                side_effect=lambda path, _start_ms, _end_ms: (
+                    audio["mic" if "mic" in path else "system"][0],
+                    16000,
+                ),
+            ),
             patch.dict("sys.modules", {"numpy": numpy}),
             patch("backend.worker_refinement.OfflineVAD") as vad,
             patch("backend.worker_refinement.OfflineDiarizer") as diarizer,
@@ -508,16 +515,107 @@ class WorkerTest(unittest.TestCase):
         self.assertEqual(
             [(item["track"], item["text"], item["speaker"]) for item in latest],
             [
-                ("system", "remote slow", "spk-1"),
-                ("mic", "local slow", "local-user"),
+                ("mic", "local slow", "mic-spk-1"),
+                ("system", "remote slow", "system-spk-1"),
             ],
         )
         self.assertNotIn("mix", {item["track"] for item in latest})
-        self.assertEqual(latest[0]["word_timestamps"][0]["speaker"], "spk-1")
+        self.assertEqual(latest[0]["word_timestamps"][0]["speaker"], "mic-spk-1")
         diarization_event = next(
             event for event in self.events if event.get("type") == "diarization.ready"
         )
         self.assertEqual(diarization_event["payload"]["tracks"], ["mic", "system"])
+
+    def test_mic_track_matches_registered_voiceprint_on_refine(self):
+        meeting = self.worker.start(
+            {
+                "title": "远端会",
+                "language": "en",
+                "streaming_model_id": "zipformer-en-streaming-int8",
+                "refined_model_id": "whisper-turbo",
+            }
+        )
+        for track, value in (("mic", 16), ("system", 32)):
+            self.worker.audio(
+                {
+                    "meeting_id": meeting["id"],
+                    "track": track,
+                    "pcm": base64.b64encode(bytes((value, 0)) * 32000).decode(),
+                    "sample_rate": 16000,
+                    "start_ms": 0,
+                }
+            )
+        self.worker.stop({"meeting_id": meeting["id"], "duration_ms": 2000})
+
+        numpy = type(
+            "Numpy",
+            (),
+            {"zeros_like": staticmethod(lambda samples: [0.0] * len(samples))},
+        )
+        audio = {"mic": ([0.0005] * 32000, 16000), "system": ([0.001] * 32000, 16000)}
+        self.worker.models.is_ready = lambda model_id: (
+            model_id != SETTINGS["live_asr"]["denoiser_model_id"]
+        )
+        with (
+            patch(
+                "backend.worker_refinement.read_mono_wav",
+                side_effect=lambda path: audio["mic" if "mic" in path else "system"],
+            ),
+            patch(
+                "backend.worker_refinement.read_mono_wav_window",
+                side_effect=lambda path, _start_ms, _end_ms: (
+                    audio["mic" if "mic" in path else "system"][0],
+                    16000,
+                ),
+            ),
+            patch.dict("sys.modules", {"numpy": numpy}),
+            patch("backend.worker_refinement.OfflineVAD") as vad,
+            patch("backend.worker_refinement.OfflineDiarizer") as diarizer,
+            patch("backend.worker_refinement.SpeakerTracker") as tracker,
+            patch("backend.worker_refinement.RefinedASR") as refined,
+            patch.object(
+                self.worker.store,
+                "match_speaker_profile",
+                side_effect=lambda embedding, _threshold: (
+                    {
+                        "id": "p1",
+                        "name": "李雷",
+                        "sample_count": 3,
+                        "score": 0.9,
+                        "runner_up_score": 0.4,
+                    }
+                    if embedding == [1.0, 0.0, 0.0]
+                    else None
+                ),
+            ),
+        ):
+            vad.return_value.process.return_value = [{"start_ms": 0, "end_ms": 1000}]
+            diarizer.return_value.process.return_value = [
+                {"start_ms": 0, "end_ms": 1000, "speaker": "spk-1"}
+            ]
+            # 只有麦克风轨道给出可匹配声纹的 embedding，远端不命中任何声纹。
+            tracker.return_value.embedding.side_effect = lambda clip, _rate: (
+                [1.0, 0.0, 0.0] if clip[0] < 0.0007 else None
+            )
+            refined.return_value.decode_words.side_effect = lambda samples, _rate: (
+                ("local slow", [{"text": "local slow", "start_ms": 0, "end_ms": 1000}])
+                if samples[0] < 0.0007
+                else ("remote slow", [{"text": "remote slow", "start_ms": 0, "end_ms": 1000}])
+            )
+            result = self.worker.refine({"meeting_id": meeting["id"]})
+
+        latest = [
+            (item["track"], item["speaker"], item["speaker_name"])
+            for item in result["segments"]
+            if item["version"] == "postprocess"
+        ]
+        self.assertEqual(
+            latest,
+            [
+                ("mic", "profile-p1", "李雷"),
+                ("system", "system-spk-1", "system-spk-1"),
+            ],
+        )
 
     def test_imported_audio_is_diarized(self):
         meeting = self.worker.store.create_meeting(
@@ -541,6 +639,10 @@ class WorkerTest(unittest.TestCase):
         numpy = type("Numpy", (), {"zeros_like": staticmethod(lambda samples: [0.0] * len(samples))})
         with (
             patch("backend.worker_refinement.read_mono_wav", return_value=([0.001] * 16000, 16000)),
+            patch(
+                "backend.worker_refinement.read_mono_wav_window",
+                return_value=([0.001] * 16000, 16000),
+            ),
             patch.dict("sys.modules", {"numpy": numpy}),
             patch("backend.worker_refinement.OfflineVAD") as vad,
             patch("backend.worker_refinement.OfflineDiarizer") as diarizer,

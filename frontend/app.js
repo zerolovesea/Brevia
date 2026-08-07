@@ -92,7 +92,7 @@ let latestLiveSegmentId = null;
 let editingMeetingIndex = null;
 const translatedNodes = [];
 /** Resolves a display label for the active locale. @param {string} key Chinese source label. @returns {string} Localized label or the original key. */
-const t = (key) => stageLabels[key]?.[locale] || stageLabels[key]?.en || catalog[locale].labels[key] || catalog.en.labels[key] || key;
+const t = (key) => stageLabels[key]?.[locale] || stageLabels[key]?.en || catalog[locale].labels[key] || key;
 /** Resolves a transient message for the active locale. @param {string} key Message identifier. @returns {string} Localized message. */
 const message = (key) => catalog[locale].messages[key];
 function formatBytes(bytes = 0) { return bytes >= 1024 ** 3 ? `${(bytes / 1024 ** 3).toFixed(2)} GB` : bytes >= 1024 ** 2 ? `${(bytes / 1024 ** 2).toFixed(1)} MB` : `${Math.round(bytes / 1024)} KB`; }
@@ -138,13 +138,20 @@ const modelLibraryMetaCopy = {
   ru: { download: 'Загрузка', languages: 'Языки', compute: 'Выполнение', installed: 'Установлено', streaming: 'Потоковая расшифровка', refined: 'Обработка после встречи', punctuation: 'Пунктуация', vad: 'Обнаружение речи', denoise: 'Шумоподавление', diarization: 'Разделение говорящих', voiceprint: 'Распознавание голоса' },
 };
 const modelStageMetaKey = { streaming: 'streaming', refined: 'refined', punctuation: 'punctuation', vad: 'vad', 'speech-enhancement': 'denoise', diarization: 'diarization', 'speaker-segmentation': 'diarization', 'speaker-embedding': 'voiceprint' };
-/** Renders only manifest-backed model capabilities for the model-library card. @param {object|undefined} model Model manifest item. @param {string} languages Localized language summary. @param {boolean} installed Whether the model is available locally. @returns {string} */
-function renderModelLibraryMeta(model, languages, installed) {
+/** Renders manifest-backed download/language/compute metadata for the model-library card. @param {object|undefined} model Model manifest item. @param {string} languages Localized language summary. @returns {string} */
+function renderModelLibraryMeta(model, languages) {
+  if (!model) return '';
+  const copy = modelLibraryMetaCopy[locale] || modelLibraryMetaCopy.en;
+  const compute = (model.backend || []).map((backend) => backend.toUpperCase()).join(' · ');
+  return `<div class="model-library-meta"><span><small>${copy.download}</small><b>${formatBytes(model.size_bytes)}</b></span><span><small>${copy.languages}</small><b>${escapeHtml(languages)}</b></span><span><small>${copy.compute}</small><b>${escapeHtml(compute)}</b></span></div>`;
+}
+/** Renders capability/installed tags shown inline beside the model name. @param {object|undefined} model Model manifest item. @param {boolean} installed Whether the model is available locally. @returns {string} */
+function renderModelLibraryTags(model, installed) {
   if (!model) return '';
   const copy = modelLibraryMetaCopy[locale] || modelLibraryMetaCopy.en;
   const capabilities = [...new Set((model.stages || []).map((stage) => copy[modelStageMetaKey[stage]]).filter(Boolean))];
-  const compute = (model.backend || []).map((backend) => backend.toUpperCase()).join(' · ');
-  return `<div class="model-library-meta"><span><small>${copy.download}</small><b>${formatBytes(model.size_bytes)}</b></span><span><small>${copy.languages}</small><b>${escapeHtml(languages)}</b></span><span><small>${copy.compute}</small><b>${escapeHtml(compute)}</b></span></div><div class="model-library-tags">${installed ? `<span class="model-library-installed">${copy.installed}</span>` : ''}${capabilities.map((capability) => `<span>${capability}</span>`).join('')}</div>`;
+  if (!installed && !capabilities.length) return '';
+  return `<div class="model-library-tags">${installed ? `<span class="model-library-installed">${copy.installed}</span>` : ''}${capabilities.map((capability) => `<span>${capability}</span>`).join('')}</div>`;
 }
 let expandedSpeakerProfileId = null;
 let addingSampleProfileId = null;
@@ -734,18 +741,40 @@ function renderModelDownloadQueue() {
     taskCards.append(card);
     enterTaskCard(card);
   } else if (card.classList.contains('task-card-leave')) enterTaskCard(card);
-  const scrollTop = card.querySelector('ul')?.scrollTop || 0;
   const total = entries.reduce((sum, [id, progress]) => sum + (progress.total || modelSize(id)), 0);
   const received = entries.reduce((sum, [id, progress]) => sum + Math.min(progress.received || 0, progress.total || modelSize(id)), 0);
   const ratio = total ? received / total : 0;
   const heading = entries.some(([id]) => requiredModelIds.has(id)) ? t('需要下载以下模型') : t('模型下载队列');
-  card.innerHTML = `<header class="task-card-heading"><p>${heading} · ${entries.length}</p>${taskCardControls()}</header><div class="processing-bar" aria-hidden="true"><i style="transform:scaleX(${ratio})"></i></div><ul>${entries.map(([id, progress]) => {
+  // 只有条目或按钮状态变化时才重建 DOM。进度每秒刷新数十次，若每次都重建，
+  // 会在 mousedown 与 mouseup 之间销毁按钮，click 永远无法触发，卡片看似点不动。
+  const signature = JSON.stringify(entries.map(([id, progress]) => [id, !!progress.error, !!progress.cancelled, !!progress.cancelling, !!progress.paused]).concat([[heading]]));
+  if (card.dataset.signature !== signature) {
+    card.dataset.signature = signature;
+    const scrollTop = card.querySelector('ul')?.scrollTop || 0;
+    card.innerHTML = `<header class="task-card-heading"><p>${heading} · ${entries.length}</p>${taskCardControls()}</header><div class="processing-bar" aria-hidden="true"><i style="transform:scaleX(${ratio})"></i></div><ul>${entries.map(([id, progress]) => {
+      const itemRatio = progress.total ? Math.min(1, progress.received / progress.total) : 0;
+      const status = progress.error ? `<small title="${escapeHtml(progress.error)}">${t('下载失败')}</small>` : progress.cancelled ? '' : `<small>${progress.cancelling ? t('正在取消') : progress.paused ? t('暂停') : progress.total ? `${Math.round(itemRatio * 100)}%` : t('准备中')}</small>`;
+      const action = progress.error || progress.cancelled ? `<button type="button" data-download-required="${id}">${t(progress.error ? '重试' : '下载')}</button>` : progress.cancelling ? '' : `<button class="task-card-close" type="button" data-pause-required="${id}" aria-label="${progress.paused ? t('继续') : t('暂停')}">${progress.paused ? '▶' : 'Ⅱ'}</button><button class="task-card-close" type="button" data-cancel-required="${id}" aria-label="取消">×</button>`;
+      return `<li><span><b>${escapeHtml(modelDisplayName(id))}</b>${status}</span><span class="model-actions">${action}</span><div class="processing-bar" aria-hidden="true"><i style="transform:scaleX(${itemRatio})"></i></div></li>`;
+    }).join('')}</ul>`;
+    card.querySelector('ul').scrollTop = scrollTop;
+    return;
+  }
+  // 纯进度刷新：原地更新进度条与百分比，保留按钮节点，点击才能命中。
+  const topBar = card.querySelector(':scope > .processing-bar > i');
+  if (topBar) topBar.style.transform = `scaleX(${ratio})`;
+  const items = card.querySelectorAll(':scope > ul > li');
+  entries.forEach(([id, progress], index) => {
+    const li = items[index];
+    if (!li) return;
     const itemRatio = progress.total ? Math.min(1, progress.received / progress.total) : 0;
-    const status = progress.error ? `<small title="${escapeHtml(progress.error)}">${t('下载失败')}</small>` : progress.cancelled ? '' : `<small>${progress.cancelling ? t('正在取消') : progress.paused ? t('暂停') : progress.total ? `${Math.round(itemRatio * 100)}%` : t('准备中')}</small>`;
-    const action = progress.error || progress.cancelled ? `<button type="button" data-download-required="${id}">${t(progress.error ? '重试' : '下载')}</button>` : progress.cancelling ? '' : `<button class="task-card-close" type="button" data-pause-required="${id}" aria-label="${progress.paused ? t('继续') : t('暂停')}">${progress.paused ? '▶' : 'Ⅱ'}</button><button class="task-card-close" type="button" data-cancel-required="${id}" aria-label="取消">×</button>`;
-    return `<li><span><b>${escapeHtml(modelDisplayName(id))}</b>${status}</span><span class="model-actions">${action}</span><div class="processing-bar" aria-hidden="true"><i style="transform:scaleX(${itemRatio})"></i></div></li>`;
-  }).join('')}</ul>`;
-  card.querySelector('ul').scrollTop = scrollTop;
+    const bar = li.querySelector(':scope > .processing-bar > i');
+    if (bar) bar.style.transform = `scaleX(${itemRatio})`;
+    if (!progress.error && !progress.cancelled && !progress.cancelling && !progress.paused) {
+      const small = li.querySelector('span small');
+      if (small) small.textContent = progress.total ? `${Math.round(itemRatio * 100)}%` : t('准备中');
+    }
+  });
 }
 function renderRequiredModelsCard() {
   [...requiredModelIds].filter((id) => modelPaths.has(id)).forEach((id) => requiredModelIds.delete(id));
@@ -868,7 +897,7 @@ function renderSummaryModelModal() {
   settingsModal.querySelector('h2').textContent = copy.title;
   settingsModal.querySelector('.modal-title p').textContent = copy.intro;
   const endpoint = current.endpoint || (isOllama ? ollamaChatEndpoint : isOllamaCloud ? ollamaCloudChatEndpoint : '');
-  settingsModal.querySelector('.modal-body').innerHTML = `<form class="summary-model-form"><div class="config-fields"><label>${copy.name}<input name="name" value="${escapeHtml(current.name)}" maxlength="64" required /></label><label class="config-select-field">${copy.provider}${flowSelect('provider', current.provider, summaryProviders.map((provider) => [provider, summaryProviderLabel(provider)]))}</label><label data-summary-api-key${isOllama ? ' hidden' : ''}>${copy.key}<input name="apiKey" type="password" autocomplete="new-password" placeholder="${current.keyReference ? '••••••••' : ''}" /></label><label>${copy.endpoint}<input name="endpoint" value="${escapeHtml(endpoint)}" required /></label><label class="config-select-field" data-summary-format${(isOllama || isOllamaCloud) ? ' hidden' : ''}>${copy.format}${flowSelect('format', apiFormat, [['openai', copy.openAIFormat], ['claude', copy.claudeFormat]])}</label><label>${copy.model}<input name="model" value="${escapeHtml(current.model)}" placeholder="llama3.2" required /></label></div>${isOllama ? `<p class="ollama-hint">${t('使用本机 Ollama，不需要 API Key。请填写已安装的模型名。')}</p>` : isOllamaCloud ? `<p class="ollama-hint">${t('直接调用 Ollama Cloud，需要 API Key。请填写已安装的模型名。')}</p>` : ''}<div class="modal-form-actions"><button class="modal-action" type="submit">${copy.save}</button><button class="secondary" data-new-summary-model type="button">${copy.add}</button>${editingSummaryModel >= 0 ? `<button class="model-delete" data-delete-summary-model type="button">${copy.remove}</button>` : ''}</div></form>${configuredControl}<section class="modal-subsection"><h3>${copy.jsonTitle}</h3><p>${copy.jsonIntro}</p><pre class="config-json">${escapeHtml(renderConfigPreview())}</pre></section>`;
+  settingsModal.querySelector('.modal-body').innerHTML = `<form class="summary-model-form"><div class="config-fields"><label>${copy.name}<input name="name" value="${escapeHtml(current.name)}" maxlength="64" required /></label><label class="config-select-field">${copy.provider}${flowSelect('provider', current.provider, summaryProviders.map((provider) => [provider, summaryProviderLabel(provider)]))}</label><label data-summary-api-key${isOllama ? ' hidden' : ''}>${copy.key}<input name="apiKey" type="password" autocomplete="new-password" placeholder="${current.keyReference ? '•'.repeat(current.keyLength || 8) : ''}" /></label><label>${copy.endpoint}<input name="endpoint" value="${escapeHtml(endpoint)}" required /></label><label class="config-select-field" data-summary-format${(isOllama || isOllamaCloud) ? ' hidden' : ''}>${copy.format}${flowSelect('format', apiFormat, [['openai', copy.openAIFormat], ['claude', copy.claudeFormat]])}</label><label>${copy.model}<input name="model" value="${escapeHtml(current.model)}" placeholder="llama3.2" required /></label></div>${isOllama ? `<p class="ollama-hint">${t('使用本机 Ollama，不需要 API Key。请填写已安装的模型名。')}</p>` : isOllamaCloud ? `<p class="ollama-hint">${t('直接调用 Ollama Cloud，需要 API Key。请填写已安装的模型名。')}</p>` : ''}<div class="modal-form-actions"><button class="modal-action" type="submit">${copy.save}</button><button class="secondary" data-new-summary-model type="button">${copy.add}</button>${editingSummaryModel >= 0 ? `<button class="model-delete" data-delete-summary-model type="button">${copy.remove}</button>` : ''}</div></form>${configuredControl}<section class="modal-subsection"><h3>${copy.jsonTitle}</h3><p>${copy.jsonIntro}</p><pre class="config-json">${escapeHtml(renderConfigPreview())}</pre></section>`;
 }
 function renderSpeakerProfileModal() {
   const copy = speakerProfileCopy[locale] || speakerProfileCopy.en;
@@ -912,7 +941,7 @@ function renderSummaryDetailModal() {
   const copy = summaryDetailCopy[locale] || summaryDetailCopy.en;
   settingsModal.querySelector('h2').textContent = copy[0];
   settingsModal.querySelector('.modal-title p').textContent = currentMeetingDetail.title;
-  settingsModal.querySelector('.modal-body').innerHTML = `<article class="summary-detail-content markdown-content">${renderMarkdown(markdown)}</article><div class="modal-form-actions"><button class="secondary" type="button" data-regenerate-summary>${copy[1]}</button></div><section class="modal-subsection"><h3>${copy[2]}</h3><div class="export-options"><button type="button" data-summary-export-choice data-format="md"><span><b>Markdown</b><small>${copy[3]}</small></span><strong>.md</strong></button><button type="button" data-summary-export-choice data-format="txt"><span><b>TXT</b><small>${copy[4]}</small></span><strong>.txt</strong></button><button type="button" data-summary-export-choice data-format="pdf"><span><b>PDF</b><small>${copy[5]}</small></span><strong>.pdf</strong></button></div></section>`;
+  settingsModal.querySelector('.modal-body').innerHTML = `<article class="markdown-content">${renderMarkdown(markdown)}</article><div class="modal-form-actions"><button class="secondary" type="button" data-regenerate-summary>${copy[1]}</button></div><section class="modal-subsection"><h3>${copy[2]}</h3><div class="export-options"><button type="button" data-summary-export-choice data-format="md"><span><b>Markdown</b><small>${copy[3]}</small></span><strong>.md</strong></button><button type="button" data-summary-export-choice data-format="txt"><span><b>TXT</b><small>${copy[4]}</small></span><strong>.txt</strong></button><button type="button" data-summary-export-choice data-format="pdf"><span><b>PDF</b><small>${copy[5]}</small></span><strong>.pdf</strong></button></div></section>`;
 }
 /** Renders one settings modal. @param {'models'|'storage'|'summary-model'} kind Requested modal. @returns {void} */
 function renderModal(kind) {
@@ -952,10 +981,12 @@ function renderModal(kind) {
     const size = kind === 'models' ? `<small>${formatBytes(modelSize(modelIds[sourceIndex]))}</small>` : '';
     const installed = kind === 'models' && modelPaths.has(modelIds[sourceIndex]);
     const model = kind === 'models' ? modelCatalog.find((candidate) => candidate.id === modelIds[sourceIndex]) : null;
-    const metadata = kind === 'models' ? renderModelLibraryMeta(model, detail, installed) : '';
+    const metadata = kind === 'models' ? renderModelLibraryMeta(model, detail) : '';
+    const tags = kind === 'models' ? renderModelLibraryTags(model, installed) : '';
+    const nameRow = kind === 'models' ? `<div class="model-library-name">${label}${tags}</div>` : label;
     const actions = kind === 'models' ? selectingOnboardingModels ? `<label class="model-select"><input type="checkbox" data-onboarding-model-selection value="${modelIds[sourceIndex]}"${installed ? ' checked disabled' : onboardingModelSelection?.has(modelIds[sourceIndex]) ? ' checked' : ''} /></label>` : `<span class="model-actions">${installed ? `<button class="secondary" data-open-model-folder="${sourceIndex}" type="button">${t('从文件夹打开')}</button>` : ''}<button class="modal-action${installed ? ' modal-danger' : ''}" ${installed ? `data-delete-model="${sourceIndex}"` : `data-download-model="${sourceIndex}"`} type="button"${progress && !progress.error ? ' disabled' : ''}>${installed ? (modelLabels[locale] || modelLabels.en).remove : progress && !progress.error ? (modelLabels[locale] || modelLabels.en).downloading : (modelLabels[locale] || modelLabels.en).download}</button></span>` : '';
     const heading = kind === 'models' && (index === 0 || items[index - 1].item[0] !== stage) ? `<h3>${escapeHtml(stage)}</h3>` : '';
-    return `${heading}<div class="${kind === 'models' ? 'model-library-item' : ''}"><span>${label}${downloadProgress}${kind === 'models' ? `${intro ? `<p>${escapeHtml(intro)}</p>` : ''}${metadata}` : `<small>${escapeHtml(detail)}</small>${size}${intro ? `<small>${escapeHtml(intro)}</small>` : ''}`}</span>${actions}</div>`;
+    return `${heading}<div class="${kind === 'models' ? 'model-library-item' : ''}"><span>${nameRow}${downloadProgress}${kind === 'models' ? `${intro ? `<p>${escapeHtml(intro)}</p>` : ''}${metadata}` : `<small>${escapeHtml(detail)}</small>${size}${intro ? `<small>${escapeHtml(intro)}</small>` : ''}`}</span>${actions}</div>`;
   }).join('')}</div>${selectingOnboardingModels ? `<div class="modal-form-actions"><button class="modal-action" data-download-onboarding-selected type="button"${onboardingModelSelection?.size ? '' : ' disabled'}>${(onboardingCopy[locale] || onboardingCopy.en).download}</button></div>` : ''}`;
 }
 /** Opens and focuses a settings modal. @param {'models'|'storage'|'summary-model'} kind Requested modal. @returns {void} */
@@ -1508,6 +1539,7 @@ settingsModal.addEventListener('submit', async (event) => {
     const previous = summaryModels[editingSummaryModel];
     values.keyReference = previous?.keyReference || `summary-${crypto.randomUUID()}`;
     if (values.apiKey && window.brevia) {
+      values.keyLength = values.apiKey.length;
       await window.brevia.secret.set({ reference: values.keyReference, value: values.apiKey });
     }
     delete values.apiKey;

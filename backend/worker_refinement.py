@@ -2,6 +2,7 @@
 
 import re
 from difflib import SequenceMatcher
+from pathlib import Path
 
 from .asr import (
     OfflineDenoiser,
@@ -10,15 +11,22 @@ from .asr import (
     RefinedASR,
     SpeakerTracker,
 )
-from .audio_io import ensure_wav_duration, read_mono_wav
+from .audio_io import (
+    ensure_wav_duration,
+    read_mono_wav,
+    read_mono_wav_window,
+)
 from .config import SETTINGS
 from .media_tasks import TTS_MODEL_IDS
-from .worker_common import managed_task, require, synchronized_recording
+from .worker_common import managed_task, require
+
+# 精修先做 VAD/说话人聚类，需要整段波形常驻，故仍有内存上限；识别阶段改为
+# 逐窗从磁盘读取，聚类才是真正的天花板，这里放宽到 4 小时覆盖绝大多数会议。
+MAX_REFINE_SECONDS = 4 * 60 * 60
 
 
 class RefinementWorkerMixin:
     @managed_task("meeting.refine")
-    @synchronized_recording
     def refine(self, payload, control=None):
         """对停止后的会议执行会后转写和说话人聚类。
 
@@ -68,12 +76,16 @@ class RefinementWorkerMixin:
         is_imported_audio = manifest.get("source") == "audio_import" or (
             not manifest.get("tracks") and set(tracks) == {"mic"}
         )
-        diarized_tracks = {"system"} | ({"mic"} if is_imported_audio else set())
+        # 系统音频（远端）与导入的麦克风必须聚类；实时麦克风只要声纹模型就绪也
+        # 一起聚类，让本机说话人同样接受声纹库匹配，而不再一律标成 local-user。
+        required_diarized = (
+            {"system"} | ({"mic"} if is_imported_audio else set())
+        ) & set(tracks)
         required_models = [
             refined_model_id,
             meeting.get("vad_model_id") or "silero-vad",
         ]
-        if diarized_tracks.intersection(tracks):
+        if required_diarized:
             required_models.extend(
                 [
                     meeting.get("speaker_segmentation_model_id"),
@@ -91,8 +103,25 @@ class RefinementWorkerMixin:
             raise RuntimeError(
                 f"{label} {', '.join(missing_models)} {verb} not installed"
             )
+        segmentation_id = (
+            meeting.get("speaker_segmentation_model_id")
+            or SETTINGS["diarization"]["segmentation_model_id"]
+        )
+        embedding_id = (
+            meeting.get("speaker_embedding_model_id")
+            or SETTINGS["diarization"]["embedding_model_id"]
+        )
+        speaker_models_ready = self.models.is_ready(
+            segmentation_id
+        ) and self.models.is_ready(embedding_id)
+        diarized_tracks = set(required_diarized)
+        if speaker_models_ready:
+            diarized_tracks |= set(tracks)
+        # 多个轨道同时聚类时，未命中声纹库的 spk-N 需按轨道命名，避免麦克风与系统
+        # 音频各自的 spk-1 在按时间戳合并后串成同一个人。
+        namespace_tracks = len(diarized_tracks) > 1
         self.emit("refinement.started", {"meeting_id": meeting["id"], "total": 0})
-        audio, turns_by_track, raw_turns_by_track = {}, {}, {}
+        sources, turns_by_track, raw_turns_by_track = {}, {}, {}
         vad = OfflineVAD(self.models, meeting.get("vad_model_id") or "silero-vad")
         diarizer = (
             OfflineDiarizer(
@@ -109,14 +138,16 @@ class RefinementWorkerMixin:
         for track in tracks:
             self.wait_task(control)
             path = meeting["audio"]["playback"][track]
-            ensure_wav_duration(path, 30 * 60, "refine")
+            ensure_wav_duration(path, MAX_REFINE_SECONDS, "refine")
             samples, sample_rate = read_mono_wav(path)
-            if track == "mic" and self.models.is_ready(denoiser_id):
+            denoise = track == "mic" and self.models.is_ready(denoiser_id)
+            if denoise:
                 try:
                     samples = OfflineDenoiser(self.models, denoiser_id).process(
                         samples, sample_rate
                     )
                 except RuntimeError as error:
+                    denoise = False
                     self.emit(
                         "worker.warning",
                         {
@@ -138,8 +169,12 @@ class RefinementWorkerMixin:
                     end = round(turn["end_ms"] * sample_rate / 1000)
                     speech_only[start:end] = samples[start:end]
                 turns = diarizer.process(speech_only, sample_rate) if speech else []
+                del speech_only
                 if speech and not turns:
                     turns = [{**turn, "speaker": "spk-1"} for turn in speech]
+                # Initialise to None so the finally clause always has a name to del,
+                # even when SpeakerTracker() raises before assignment completes.
+                identity_tracker = None
                 try:
                     identity_tracker = SpeakerTracker(
                         self.models, model_id=meeting.get("speaker_embedding_model_id")
@@ -208,10 +243,28 @@ class RefinementWorkerMixin:
                             )
                 except RuntimeError:
                     pass
+                finally:
+                    # Explicitly release the native ONNX embedding extractor
+                    # so its C++ heap memory is freed before the next track
+                    # allocates another one, reducing peak memory pressure.
+                    del identity_tracker
+            if namespace_tracks:
+                # 命中声纹库的 turn 已是全局 profile-{id}，跨轨道自然合并同一人；
+                # 仅给未命中的 spk-N 加轨道前缀，避免不同轨道的 spk-1 混为一人。
+                for turn in turns:
+                    if str(turn.get("speaker", "")).startswith("spk-"):
+                        turn["speaker"] = f"{track}-{turn['speaker']}"
             raw_turns_by_track[track] = turns
             turns = self._stabilize_speaker_turns(turns)
-            audio[track] = samples, sample_rate
+            sources[track] = {
+                "path": path,
+                "sample_rate": sample_rate,
+                "duration_ms": len(samples) * 1000 // sample_rate,
+                "denoise": denoise,
+            }
             turns_by_track[track] = turns
+            # 精修识别阶段改为逐窗从磁盘读取，这里立即释放整段波形。
+            del samples
         turns = sorted(
             (turn for track_turns in turns_by_track.values() for turn in track_turns),
             key=lambda turn: (turn["start_ms"], turn["end_ms"]),
@@ -239,11 +292,16 @@ class RefinementWorkerMixin:
         windows_by_track = {
             track: self._refinement_turns(
                 turns_by_track[track],
-                len(audio[track][0]) * 1000 // audio[track][1],
+                sources[track]["duration_ms"],
                 window_size,
             )
             for track in tracks
         }
+        denoiser = (
+            OfflineDenoiser(self.models, denoiser_id)
+            if any(source["denoise"] for source in sources.values())
+            else None
+        )
         total = sum(map(len, windows_by_track.values()))
         completed = 0
         previous_text = {}
@@ -257,7 +315,9 @@ class RefinementWorkerMixin:
         )
         try:
             for track in tracks:
-                samples, sample_rate = audio[track]
+                source = sources[track]
+                sample_rate = source["sample_rate"]
+                duration_ms = source["duration_ms"]
                 windows = windows_by_track[track]
                 for index, turn in enumerate(windows):
                     self.wait_task(control)
@@ -268,12 +328,14 @@ class RefinementWorkerMixin:
                         turn,
                         before,
                         after,
-                        len(samples) * 1000 // sample_rate,
+                        duration_ms,
                         context_ms,
                     )
-                    start = round(decode_start_ms * sample_rate / 1000)
-                    end = round(decode_end_ms * sample_rate / 1000)
-                    current = samples[start:end]
+                    current, _ = read_mono_wav_window(
+                        source["path"], decode_start_ms, decode_end_ms
+                    )
+                    if source["denoise"] and denoiser is not None and len(current):
+                        current = denoiser.process(current, sample_rate)
                     raw_text, words = recognizer.decode_words(current, sample_rate)
                     speaker_key = (track, turn["speaker"])
                     text = self._trim_refinement_overlap(
@@ -361,7 +423,6 @@ class RefinementWorkerMixin:
         return result
 
     @managed_task("meeting.separate")
-    @synchronized_recording
     def separate_sources(self, payload, control=None):
         """从已保存会议生成独立的人声和非人声 WAV，不改动原录音。"""
         require(payload, "meeting_id")

@@ -85,17 +85,18 @@ CLEANING_PROMPTS = {
 }
 
 SUMMARY_PROMPTS = {
-    "en": """You are a professional meeting-notes assistant. From the cleaned transcript, produce accurate, concise, structured Markdown.
+    "en": """You are a professional meeting-notes assistant. From the cleaned transcript, produce accurate, detailed, structured Markdown. Preserve as much of the meeting's substance as possible; err on the side of thoroughness rather than omitting points.
 
 1. Use only explicitly stated input information; do not add or guess.
 2. Distinguish discussion, personal views, suggestions, confirmed decisions, action items, and open items.
 3. Do not present suggestions or tentative plans as final decisions.
 4. Do not invent owners or due dates; use “To confirm” or “Not specified”.
 5. Preserve important names, organizations, projects, amounts, dates, IDs, and technical parameters.
-6. Merge identical topics; do not repeat each sentence.
-7. Omit irrelevant sections. Output Markdown only, never explanation or JSON.
+6. Develop each topic fully: capture the background, each party's views and reasoning, proposals raised, points of agreement and disagreement, and supporting examples or data. Merge identical topics, but never drop detail for the sake of brevity.
+7. Cover every substantive topic raised, not just a few. Keep background, arguments, examples, and data under the relevant topic.
+8. Omit irrelevant sections. Output Markdown only, never explanation or JSON.
 
-Use: # **{title}**; Meeting Summary; Key Conclusions; Topic Discussion; Confirmed Decisions; Action Items (Task | Owner | Due date | Status); Open Items; Key Data.""",
+Use: # **{title}**; Meeting Summary (one or two paragraphs); Key Conclusions; Topic Discussion (repeat a subsection per topic with Discussion / Current conclusion / Risks / To confirm); Confirmed Decisions; Action Items (Task | Owner | Due date | Status); Open Items; Key Data.""",
     "es": """Eres un asistente profesional de notas de reunión. A partir de la transcripción limpia, crea Markdown preciso, conciso y estructurado.
 
 Usa solo información explícita; diferencia discusión, opiniones, sugerencias, decisiones confirmadas, tareas y asuntos pendientes. No presentes sugerencias como decisiones ni inventes responsables o fechas (usa «Por confirmar» o «No especificado»). Conserva nombres, organizaciones, proyectos, importes, fechas, IDs y parámetros técnicos; agrupa temas iguales y omite secciones irrelevantes. Devuelve solo Markdown.
@@ -153,7 +154,7 @@ def cleaning_prompt(transcript, language):
 def summary_prompt(transcript, title, language):
     """Build the fixed second-pass Markdown-notes prompt."""
     if language == "zh":
-        instructions = """你是一名专业的会议纪要助手。请根据以下清洗后的会议转录，生成准确、简洁、结构化的 Markdown 会议纪要。
+        instructions = """你是一名专业的会议纪要助手。请根据以下清洗后的会议转录，生成准确、详实、结构化的 Markdown 会议纪要。纪要应尽可能完整地保留会议中的信息量，宁可详细也不要遗漏要点。
 
 要求：
 
@@ -162,9 +163,10 @@ def summary_prompt(transcript, title, language):
 3. 不得把建议或暂定方案写成最终决定。
 4. 不得为行动项编造负责人或截止时间；未明确时写“待确认”或“未明确”。
 5. 保留重要的人名、公司名、项目名、金额、日期、编号和技术参数。
-6. 相同议题应合并整理，不要逐句复述。
-7. 没有相关内容的章节可以省略。
-8. 只输出 Markdown，不输出解释或 JSON。
+6. 每个议题都要充分展开：完整记录讨论背景、各方观点与理由、提出的方案、达成或未达成的共识，以及分歧点。相同议题合并整理，但不要为了简短而丢失细节。
+7. 覆盖会议中出现的全部实质性议题，不要只挑选少数几个。逐句复述之外的信息（背景、论据、举例、数据）都应保留在相应议题下。
+8. 没有相关内容的章节可以省略。
+9. 只输出 Markdown，不输出解释或 JSON。
 
 输出格式：
 
@@ -172,21 +174,23 @@ def summary_prompt(transcript, title, language):
 
 ## **会议摘要**
 
-用一段话概括会议目的、主要讨论内容、结果和下一步。
+用一到两段话概括会议目的、主要讨论内容、结果和下一步，覆盖会议的整体脉络。
 
 ## **核心结论**
 
-- 列出重要结论。
+- 逐条列出重要结论，每条可附一句简要说明。
 - 没有明确结论时写“本次会议未形成最终结论”。
 
 ## **议题讨论**
 
 ### **议题名称**
 
-- 主要讨论：
+- 主要讨论：完整叙述该议题下的讨论过程、各方观点与理由、举例和相关数据。
 - 当前结论：
 - 风险或限制：
 - 待确认：
+
+（为每个实质性议题重复以上结构。）
 
 ## **已确认决定**
 
@@ -206,7 +210,7 @@ def summary_prompt(transcript, title, language):
 
 ## **待确认事项**
 
-- 列出尚未解决或需要进一步确认的问题。
+- 列出尚未解决或需要进一步确认的问题，并说明其背景。
 
 ## **关键数据**
 
