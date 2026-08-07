@@ -369,12 +369,16 @@ function registerIpc() {
   ipcMain.handle('app.version', () => app.getVersion());
   ipcMain.handle('update.check', () => checkForUpdate());
   ipcMain.handle('update.install', () => installUpdate());
-  ipcMain.handle('permissions.status', () => process.platform === 'darwin'
-    ? { microphone: systemPreferences.getMediaAccessStatus('microphone'), screen: systemPreferences.getMediaAccessStatus('screen'), systemAudioSupported: supportsSystemAudio() }
-    : { microphone: 'granted', screen: 'granted', systemAudioSupported: supportsSystemAudio() });
+  ipcMain.handle('permissions.status', () => {
+    if (process.platform === 'darwin') return { microphone: systemPreferences.getMediaAccessStatus('microphone'), screen: systemPreferences.getMediaAccessStatus('screen'), systemAudioSupported: supportsSystemAudio() };
+    // Windows reports the real microphone privacy state; screen capture is not gated the same way.
+    if (process.platform === 'win32') return { microphone: systemPreferences.getMediaAccessStatus('microphone'), screen: 'granted', systemAudioSupported: supportsSystemAudio() };
+    return { microphone: 'granted', screen: 'granted', systemAudioSupported: supportsSystemAudio() };
+  });
   ipcMain.handle('permissions.request-microphone', () => process.platform === 'darwin'
     ? systemPreferences.askForMediaAccess('microphone')
-    : true);
+    // Windows has no runtime prompt; report whether the OS privacy toggle already allows access.
+    : process.platform !== 'win32' || systemPreferences.getMediaAccessStatus('microphone') === 'granted');
   ipcMain.handle('permissions.open-screen-settings', async () => {
     if (process.platform !== 'darwin') return false;
     await registerScreenPermission(desktopCapturer, writeLog);
@@ -382,11 +386,17 @@ function registerIpc() {
     settings.unref();
     return true;
   });
-  ipcMain.handle('permissions.open-microphone-settings', () => {
-    if (process.platform !== 'darwin') return false;
-    const settings = spawn('open', ['x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone'], { detached: true, stdio: 'ignore' });
-    settings.unref();
-    return true;
+  ipcMain.handle('permissions.open-microphone-settings', async () => {
+    if (process.platform === 'darwin') {
+      const settings = spawn('open', ['x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone'], { detached: true, stdio: 'ignore' });
+      settings.unref();
+      return true;
+    }
+    if (process.platform === 'win32') {
+      await shell.openExternal('ms-settings:privacy-microphone');
+      return true;
+    }
+    return false;
   });
   ipcMain.handle('app.initialize', () => initializeWorker());
   handle('app.maintain', z.object({}), 'app.maintain');

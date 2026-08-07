@@ -6,6 +6,15 @@ function stopMediaStream(stream) {
   }
 }
 
+// Turns a getUserMedia DOMException into an actionable message. NotFoundError means the OS exposes no
+// input device (on Windows, typically the microphone privacy toggle is off); NotAllowedError means access was denied.
+function describeMicError(error) {
+  if (error?.name === 'NotFoundError' || error?.name === 'DevicesNotFoundError') return '未检测到麦克风设备，请在系统设置中开启麦克风访问权限并确认已连接麦克风后重试';
+  if (error?.name === 'NotAllowedError' || error?.name === 'PermissionDeniedError') return '麦克风访问被拒绝，请在系统设置中允许应用使用麦克风后重试';
+  if (error?.name === 'NotReadableError') return '麦克风被其他程序占用，请关闭占用麦克风的程序后重试';
+  return error?.message || '无法获取麦克风';
+}
+
 class AudioCapture {
   constructor(send, onLevel) {
     this.send = send;
@@ -28,8 +37,8 @@ class AudioCapture {
     const failed = results.findIndex(({ status }) => status === 'rejected');
     if (failed >= 0) {
       results.filter(({ status }) => status === 'fulfilled').forEach(({ value }) => stopMediaStream(value));
-      const label = requests[failed].track === 'system' ? '系统音频' : '麦克风';
-      throw new Error(`无法获取${label}，请检查系统权限后重试`);
+      if (requests[failed].track === 'mic') throw new Error(describeMicError(results[failed].reason));
+      throw new Error('无法获取系统音频，请检查系统权限后重试');
     }
     this.pendingStreams = results.map(({ value }, index) => ({ track: requests[index].track, stream: value }));
     const missing = this.pendingStreams.find(({ stream }) => !stream.getAudioTracks().length);
@@ -41,7 +50,12 @@ class AudioCapture {
 
   async previewMic() {
     if (this.preview) return;
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: { autoGainControl: true, echoCancellation: true, noiseSuppression: true } });
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: { autoGainControl: true, echoCancellation: true, noiseSuppression: true } });
+    } catch (error) {
+      throw new Error(describeMicError(error));
+    }
     if (!stream.getAudioTracks().length) {
       stopMediaStream(stream);
       throw new Error('麦克风没有可用的音频轨道');
