@@ -1,4 +1,4 @@
-const { app, BrowserWindow, desktopCapturer, dialog, ipcMain, session, shell, systemPreferences } = require('electron');
+const { app, BrowserWindow, desktopCapturer, dialog, ipcMain, screen, session, shell, systemPreferences } = require('electron');
 const { execFile, spawn } = require('node:child_process');
 const { appendFile, copyFile, mkdir, readFile, rename, rm, writeFile } = require('node:fs/promises');
 const { existsSync } = require('node:fs');
@@ -6,7 +6,6 @@ const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { z } = require('zod');
-const { autoUpdater } = require('electron-updater');
 const { configureMacUpdater, createDisplayMediaHandler, isNewerVersion, registerScreenPermission, systemAudioSupported } = require('./main-logic');
 
 const releasesUrl = 'https://github.com/zerolovesea/Brevia/releases/latest';
@@ -575,6 +574,98 @@ function registerIpc() {
     if (!resolved.startsWith(`${path.resolve(dataDir())}${path.sep}`)) throw new Error('Invalid audio path');
     return pathToFileURL(resolved).href;
   });
+  ipcMain.handle('floating-caption.show', () => showFloatingCaption());
+  ipcMain.handle('floating-caption.close', () => closeFloatingCaption());
+  ipcMain.handle('floating-caption.update', (_, payload) => {
+    const value = floatingCaptionPayload.parse(payload ?? {});
+
+    // Handle finalize: move current → lastFinalized
+    if (value.finalize) {
+      floatingCaptionState.lastFinalized = {
+        segmentId: floatingCaptionState.current.segmentId,
+        text: floatingCaptionState.current.text,
+        translation: floatingCaptionState.current.translation || null,
+      };
+      floatingCaptionState.current = { segmentId: null, text: '', isRefined: false, translation: null };
+      sendFloatingCaptionState();
+      return true;
+    }
+
+    // Handle updateFinalized: update the lastFinalized text directly (for refined segments)
+    if (value.updateFinalized && value.text !== undefined) {
+      // Update the lastFinalized area with the refined text
+      // This happens when a segment is refined after being finalized
+      floatingCaptionState.lastFinalized.text = value.text;
+      if (value.segmentId !== undefined) {
+        floatingCaptionState.lastFinalized.segmentId = value.segmentId;
+      }
+      // Clear current area only if it's showing the same segment that was just refined
+      if (value.clearCurrentIfMatch && value.segmentId === floatingCaptionState.current.segmentId) {
+        floatingCaptionState.current = { segmentId: null, text: '', isRefined: false, translation: null };
+      }
+      sendFloatingCaptionState();
+      return true;
+    }
+
+    // Handle segment text update
+    if (value.segmentId !== undefined && value.text !== undefined) {
+      // Starting a new segment
+      if (floatingCaptionState.current.segmentId !== value.segmentId) {
+        floatingCaptionState.current = {
+          segmentId: value.segmentId,
+          text: value.text,
+          isRefined: value.isRefined || false,
+          translation: null,
+        };
+      } else {
+        // Updating existing segment
+        floatingCaptionState.current.text = value.text;
+        if (value.isRefined !== undefined) {
+          floatingCaptionState.current.isRefined = value.isRefined;
+        }
+      }
+    }
+
+    // Handle translation update
+    if (value.translation !== undefined && value.segmentId !== undefined) {
+      if (value.segmentId === floatingCaptionState.current.segmentId) {
+        floatingCaptionState.current.translation = value.translation;
+      } else if (value.segmentId === floatingCaptionState.lastFinalized.segmentId) {
+        floatingCaptionState.lastFinalized.translation = value.translation;
+      } else {
+        // Store as pending if doesn't match current segments
+        floatingCaptionState.pendingTranslation = {
+          segmentId: value.segmentId,
+          text: value.translation,
+        };
+      }
+    }
+
+    if (value.locale !== undefined) floatingCaptionState.locale = value.locale;
+
+    sendFloatingCaptionState();
+    return true;
+  });
+
+  ipcMain.handle('floating-caption.move', (_, payload) => {
+    const value = z.object({ deltaX: z.number(), deltaY: z.number() }).parse(payload ?? {});
+    if (floatingCaptionWindow && !floatingCaptionWindow.isDestroyed()) {
+      const bounds = floatingCaptionWindow.getBounds();
+      floatingCaptionWindow.setBounds({
+        x: bounds.x + Math.round(value.deltaX),
+        y: bounds.y + Math.round(value.deltaY),
+      });
+    }
+    return true;
+  });
+
+  ipcMain.handle('floating-caption.set-always-on-top', (_, payload) => {
+    const value = z.object({ alwaysOnTop: z.boolean() }).parse(payload ?? {});
+    if (floatingCaptionWindow && !floatingCaptionWindow.isDestroyed()) {
+      floatingCaptionWindow.setAlwaysOnTop(value.alwaysOnTop, 'screen-saver');
+    }
+    return value.alwaysOnTop;
+  });
 }
 
 let macUpdateCheck;
@@ -586,6 +677,7 @@ function checkForUpdate() {
     .then(({ tag_name }) => ({ status: isNewerVersion(tag_name, app.getVersion()) ? 'available' : 'current', version: tag_name.replace(/^v/, '') }));
   if (process.platform !== 'darwin') return Promise.resolve({ status: 'unsupported' });
   if (macUpdateCheck) return macUpdateCheck;
+  const { autoUpdater } = require('electron-updater');
   configureMacUpdater(autoUpdater);
   macUpdateCheck = new Promise((resolve, reject) => {
     const done = (result) => { cleanup(); resolve(result); };
@@ -608,6 +700,8 @@ function checkForUpdate() {
 async function installUpdate() {
   if (process.platform === 'win32') return shell.openExternal(releasesUrl);
   if (process.platform !== 'darwin' || !app.isPackaged) return false;
+
+  const { autoUpdater } = require('electron-updater');
 
   // 监听下载进度并发送给前端
   const progressHandler = (info) => {
@@ -695,7 +789,144 @@ function createWindow() {
   void Promise.race([initializeWorker(), new Promise((resolve) => setTimeout(resolve, startupDataWaitMs))])
     .catch(() => {})
     .then(() => { initializationReady = true; revealApp(); });
+  window.on('closed', () => { closeFloatingCaption(); });
   return window;
+}
+
+let floatingCaptionWindow = null;
+let floatingCaptionReady = false;
+const floatingCaptionState = {
+  lastFinalized: { segmentId: null, text: '', translation: null },
+  current: { segmentId: null, text: '', isRefined: false, translation: null },
+  pendingTranslation: { segmentId: null, text: null },
+  locale: 'zh',
+};
+const floatingCaptionPayload = z.object({
+  segmentId: z.string().max(200).nullable().optional(),
+  text: z.string().max(4000).optional(),
+  translation: z.string().max(4000).nullable().optional(),
+  isRefined: z.boolean().optional(),
+  finalize: z.boolean().optional(),
+  updateFinalized: z.boolean().optional(),
+  clearCurrentIfMatch: z.boolean().optional(),
+  locale: z.string().max(16).optional(),
+}).strict();
+
+function sendFloatingCaptionState() {
+  if (!floatingCaptionWindow || floatingCaptionWindow.isDestroyed() || !floatingCaptionReady) return;
+  // Send the entire state structure - the renderer knows how to handle it
+  floatingCaptionWindow.webContents.send('floating-caption:update', {
+    lastFinalized: floatingCaptionState.lastFinalized,
+    current: floatingCaptionState.current,
+    pendingTranslation: floatingCaptionState.pendingTranslation,
+    locale: floatingCaptionState.locale,
+  });
+}
+
+let floatingCaptionBounds = null;
+
+function showFloatingCaption() {
+  // Reuse existing window if it's still valid
+  if (floatingCaptionWindow && !floatingCaptionWindow.isDestroyed()) {
+    floatingCaptionWindow.show();
+    floatingCaptionWindow.focus();
+    return true;
+  }
+
+  // Clear stale reference if window was destroyed
+  if (floatingCaptionWindow) {
+    floatingCaptionWindow = null;
+    floatingCaptionReady = false;
+  }
+
+  const { workArea } = screen.getPrimaryDisplay();
+  const width = Math.min(760, workArea.width - 80);
+  const height = 180;
+
+  // Restore saved position or use default centered position
+  const x = floatingCaptionBounds?.x ?? Math.round(workArea.x + (workArea.width - width) / 2);
+  const y = floatingCaptionBounds?.y ?? Math.round(workArea.y + workArea.height - height - 60);
+
+  floatingCaptionReady = false;
+  floatingCaptionWindow = new BrowserWindow({
+    width,
+    height,
+    x,
+    y,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    movable: true,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    skipTaskbar: true, // Skip taskbar to prevent appearing as separate window in dock
+    alwaysOnTop: true,
+    hasShadow: false,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+
+  // On macOS, explicitly show dock icon when floating caption is created
+  // This ensures the main app stays accessible via dock
+  if (process.platform === 'darwin' && app.dock) {
+    app.dock.show();
+  }
+  floatingCaptionWindow.setAlwaysOnTop(true, 'screen-saver');
+  floatingCaptionWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+
+  floatingCaptionWindow.webContents.on('did-finish-load', () => {
+    floatingCaptionReady = true;
+    sendFloatingCaptionState();
+    if (floatingCaptionWindow && !floatingCaptionWindow.isDestroyed()) {
+      floatingCaptionWindow.show();
+      // After showing floating caption, restore focus to main window
+      const mainWindow = BrowserWindow.getAllWindows().find(w => w !== floatingCaptionWindow && !w.isDestroyed());
+      if (mainWindow) {
+        mainWindow.focus();
+      }
+    }
+  });
+
+  // Save position before window is destroyed
+  floatingCaptionWindow.on('close', () => {
+    if (floatingCaptionWindow && !floatingCaptionWindow.isDestroyed()) {
+      floatingCaptionBounds = floatingCaptionWindow.getBounds();
+    }
+  });
+
+  floatingCaptionWindow.on('closed', () => {
+    floatingCaptionWindow = null;
+    floatingCaptionReady = false;
+
+    // Notify all windows that floating caption was closed
+    BrowserWindow.getAllWindows().forEach((window) => {
+      if (!window.isDestroyed()) {
+        window.webContents.send('brevia:event', {
+          type: 'floating-caption.closed',
+          payload: {}
+        });
+      }
+    });
+  });
+  void floatingCaptionWindow.loadFile(path.join(packagedRoot, 'frontend', 'floating-caption.html'));
+  return true;
+}
+
+function closeFloatingCaption() {
+  if (floatingCaptionWindow && !floatingCaptionWindow.isDestroyed()) {
+    // Save position before closing
+    floatingCaptionBounds = floatingCaptionWindow.getBounds();
+    floatingCaptionWindow.close();
+  }
+  floatingCaptionWindow = null;
+  floatingCaptionReady = false;
+  return true;
 }
 
 app.whenReady().then(async () => {
@@ -708,7 +939,18 @@ app.whenReady().then(async () => {
   void initializeWorker().catch(() => {});
   createWindow();
   app.on('activate', () => {
-    if (!BrowserWindow.getAllWindows().length) createWindow();
+    const mainWindow = BrowserWindow.getAllWindows().find(w => w !== floatingCaptionWindow && !w.isDestroyed());
+    if (mainWindow) {
+      // Restore and focus main window when dock icon is clicked
+      if (mainWindow.isMinimized()) {
+        mainWindow.restore();
+      }
+      mainWindow.show();
+      mainWindow.focus();
+    } else {
+      // No main window exists, create one
+      createWindow();
+    }
   });
 });
 let quittingAfterMeetingStop = false;

@@ -55,6 +55,20 @@ contextBridge.exposeInMainWorld('brevia', {
   secret: { set: invoke('secret.set') },
   showItem: invoke('shell.showItem'),
   audioUrl: invoke('audio.url'),
+  floatingCaption: {
+    show: invoke('floating-caption.show'),
+    close: invoke('floating-caption.close'),
+    update: invoke('floating-caption.update'),
+    move: invoke('floating-caption.move'),
+    setAlwaysOnTop: invoke('floating-caption.set-always-on-top'),
+  },
+  closeFloatingCaption: invoke('floating-caption.close'),
+  setFloatingCaptionAlwaysOnTop: invoke('floating-caption.set-always-on-top'),
+  onFloatingCaptionUpdate(handler) {
+    const listener = (_, data) => handler(data);
+    ipcRenderer.on('floating-caption:update', listener);
+    return () => ipcRenderer.removeListener('floating-caption:update', listener);
+  },
   on(type, handler) {
     const listener = (_, event) => {
       if (event.type === type) handler(event.payload);

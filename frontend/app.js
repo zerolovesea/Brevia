@@ -91,6 +91,8 @@ let translationAllowed = false;
 let latestLiveSegmentId = null;
 let editingMeetingIndex = null;
 const translatedNodes = [];
+let floatingCaptionEnabled = false;
+let floatingCaptionLocale = locale;
 /** Resolves a display label for the active locale. @param {string} key Chinese source label. @returns {string} Localized label or the original key. */
 const t = (key) => stageLabels[key]?.[locale] || stageLabels[key]?.en || catalog[locale].labels[key] || key;
 /** Resolves a transient message for the active locale. @param {string} key Message identifier. @returns {string} Localized message. */
@@ -1771,6 +1773,11 @@ function applyLanguage(nextLocale, animate = false) {
     document.querySelector('[data-separate-detail]').textContent = (voiceFeaturesCopy[locale] || voiceFeaturesCopy.en).source;
     renderConfigPreview();
     if (activeModal) renderModal(activeModal);
+    // Update floating caption button tooltip
+    const floatingCaptionToggle = document.querySelector('#floating-caption-toggle');
+    if (floatingCaptionToggle) {
+      floatingCaptionToggle.title = t('悬浮字幕');
+    }
   };
   if (!animate || matchMedia('(prefers-reduced-motion: reduce)').matches) { updateText(); return; }
   switchingLanguage = true;
@@ -2150,6 +2157,54 @@ document.querySelector('#translation-toggle').addEventListener('click', (event) 
   document.querySelectorAll('.translation').forEach((line) => { line.hidden = !enabled; });
   const currentTranslation = document.querySelector('#live-caption-translation');
   currentTranslation.hidden = enabled || !currentTranslation.textContent;
+  // Update floating caption if enabled
+  if (floatingCaptionEnabled && window.brevia?.floatingCaption) {
+    if (enabled && currentTranslation.textContent) {
+      window.brevia.floatingCaption.update({
+        segmentId: latestLiveSegmentId,
+        translation: currentTranslation.textContent,
+      });
+    } else {
+      window.brevia.floatingCaption.update({
+        segmentId: latestLiveSegmentId,
+        translation: null,
+      });
+    }
+  }
+});
+document.querySelector('#floating-caption-toggle').addEventListener('click', async (event) => {
+  const toggle = event.currentTarget;
+  floatingCaptionEnabled = !floatingCaptionEnabled;
+  floatingCaptionLocale = locale;
+  toggle.dataset.enabled = String(floatingCaptionEnabled);
+
+  if (floatingCaptionEnabled) {
+    try {
+      await window.brevia?.floatingCaption?.show();
+      // Wait a bit for the window to be fully ready
+      await new Promise(resolve => setTimeout(resolve, 200));
+      const currentCaption = document.querySelector('#live-caption');
+      const currentTranslation = document.querySelector('#live-caption-translation');
+      window.brevia.floatingCaption.update({
+        segmentId: latestLiveSegmentId,
+        text: currentCaption.textContent,
+        isRefined: false,
+        locale: floatingCaptionLocale,
+      });
+      if (translationAllowed && currentTranslation.textContent) {
+        window.brevia.floatingCaption.update({
+          segmentId: latestLiveSegmentId,
+          translation: currentTranslation.textContent,
+        });
+      }
+    } catch (error) {
+      showToast(error.message);
+      floatingCaptionEnabled = false;
+      toggle.dataset.enabled = 'false';
+    }
+  } else {
+    await window.brevia?.floatingCaption?.close();
+  }
 });
 meetingSearch.addEventListener('input', () => { if (window.brevia) refreshBackendMeetings().catch((error) => showToast(error.message)); else filterMeetings(); });
 libraryToolbar.addEventListener('click', (event) => {
@@ -2298,10 +2353,35 @@ async function openMeetingRow(row) {
   if (!window.brevia) { showView('detail'); return; }
   const request = ++meetingListRequest;
   breviaClient.state.selectedMeetingId = row.dataset.meetingId;
-  const meeting = await window.brevia.meeting.get({ meeting_id: row.dataset.meetingId });
-  if (request !== meetingListRequest) return;
-  applyBackendDetail(meeting);
-  showView('detail');
+
+  // Fix issue #3: Add visual feedback and timeout to prevent UI blocking
+  const meetingId = row.dataset.meetingId;
+  row.style.opacity = '0.6'; // Visual feedback that click is being processed
+
+  try {
+    // Add a race condition with timeout to detect if backend is busy
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('timeout')), 5000)
+    );
+
+    const meeting = await Promise.race([
+      window.brevia.meeting.get({ meeting_id: meetingId }),
+      timeoutPromise
+    ]);
+
+    row.style.opacity = '';
+    if (request !== meetingListRequest) return;
+    applyBackendDetail(meeting);
+    showView('detail');
+  } catch (error) {
+    row.style.opacity = '';
+    if (error.message === 'timeout') {
+      // Backend is busy, show toast and allow user to try again
+      showToast(t('准备中') + '，请稍后重试');
+    } else {
+      showToast(error.message);
+    }
+  }
 }
 meetingList.addEventListener('click', async (event) => {
   if (suppressMeetingClick) { event.preventDefault(); event.stopImmediatePropagation(); return; }
@@ -2721,6 +2801,17 @@ if (window.brevia) {
     currentCaption.classList.add('caption-increment');
     currentTranslation.hidden = !translation || !translationAllowed;
     currentTranslation.textContent = translation || '';
+    // Update floating caption if enabled
+    // - For partial transcripts: update current area
+    // - For final transcripts: also update current area before finalizing
+    if (floatingCaptionEnabled && window.brevia?.floatingCaption) {
+      window.brevia.floatingCaption.update({
+        segmentId: payload.segment_id,
+        text: payload.text,
+        isRefined: false,
+        locale: floatingCaptionLocale,
+      });
+    }
     const template = document.createElement('template');
     template.innerHTML = renderTranscriptSegment(entry);
     const element = template.content.firstElementChild;
@@ -2747,6 +2838,15 @@ if (window.brevia) {
   for (const type of ['meeting.started', 'meeting.recovered', 'meeting.imported', 'meeting.stopped']) {
     window.brevia.on(type, ({ meeting }) => syncBackendMeeting(meeting));
   }
+  // Close floating caption when meeting stops
+  window.brevia.on('meeting.stopped', () => {
+    if (floatingCaptionEnabled && window.brevia?.floatingCaption) {
+      window.brevia.floatingCaption.close();
+      floatingCaptionEnabled = false;
+      const toggle = document.querySelector('#floating-caption-toggle');
+      if (toggle) toggle.dataset.enabled = 'false';
+    }
+  });
   window.brevia.on('app.maintenance', ({ meetings, speaker_profiles: profiles, storage, recoverable }) => {
     uiData.meetings = meetings.map(backendMeeting);
     speakerProfiles = profiles;
@@ -2780,9 +2880,25 @@ if (window.brevia) {
       consent: true,
     });
   }
-  window.brevia.on('transcript.refined', (payload) => renderLiveEvent(payload, false));
+  window.brevia.on('transcript.refined', (payload) => {
+    renderLiveEvent(payload, false);
+    // Update floating caption with refined text
+    // Move the refined text to the finalized area (top)
+    // Clear current area (bottom) only if it's showing the same segment being refined
+    if (floatingCaptionEnabled && window.brevia?.floatingCaption) {
+      window.brevia.floatingCaption.update({
+        segmentId: payload.segment_id,
+        text: payload.text,
+        isRefined: true,
+        updateFinalized: true,
+        clearCurrentIfMatch: true,
+      });
+    }
+  });
   window.brevia.on('transcript.final', async (payload) => {
     renderLiveEvent(payload, false);
+    // Don't finalize immediately - wait for refinement to complete
+    // The refined event will handle moving to lastFinalized area
     if (!translationAllowed) return;
     try {
       await generateSegmentTranslation(payload, breviaClient.state.meeting.target_language);
@@ -2803,6 +2919,13 @@ if (window.brevia) {
       const currentTranslation = document.querySelector('#live-caption-translation');
       currentTranslation.textContent = payload.translation;
       currentTranslation.hidden = !translationAllowed;
+      // Update floating caption translation if enabled
+      if (floatingCaptionEnabled && window.brevia?.floatingCaption) {
+        window.brevia.floatingCaption.update({
+          segmentId: payload.segment_id,
+          translation: translationAllowed ? payload.translation : null,
+        });
+      }
     }
     if (shouldFollow) scrollLiveToLatest(element);
   });
@@ -2893,6 +3016,15 @@ if (window.brevia) {
   });
   window.brevia.on('speaker-profile.updated', async () => { speakerProfiles = await window.brevia.speakerProfile.list(); renderSpeakerProfileCard(); renderLivePanel(); });
   window.brevia.on('speaker-profile.deleted', async () => { speakerProfiles = await window.brevia.speakerProfile.list(); renderSpeakerProfileCard(); renderLivePanel(); });
+
+  // Listen for floating caption window closed event to sync state
+  window.brevia.on('floating-caption.closed', () => {
+    floatingCaptionEnabled = false;
+    const toggle = document.querySelector('#floating-caption-toggle');
+    if (toggle) {
+      toggle.dataset.enabled = 'false';
+    }
+  });
 
   document.querySelector('#recently-deleted').addEventListener('click', async () => {
     await showLibraryNav('recently-deleted').catch((error) => showToast(error.message));

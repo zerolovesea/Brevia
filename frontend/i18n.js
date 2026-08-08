@@ -21,7 +21,7 @@
     de: { slogan: 'Gelöschte Besprechungen werden nach 30 Tagen endgültig entfernt.', back: '← Zurück zur Bibliothek', purge: 'Endgültig löschen' },
     ru: { slogan: 'Удалённые встречи безвозвратно удаляются через 30 дней.', back: '← Вернуться в библиотеку', purge: 'Удалить навсегда' }
   };
-  const defaultMeetingNames = { zh: '产品策略周会', en: 'Product strategy meeting', es: 'Reunión de estrategia de producto', ja: 'プロダクト戦略会議', ko: '제품 전략 회의', fr: 'Réunion de stratégie produit', de: 'Produktstrategie-Meeting', ru: 'Встреча по стратегии продукта' };
+  const defaultMeetingNames = { zh: '会议', en: 'Meeting', es: 'Reunión', ja: '会議', ko: '회의', fr: 'Réunion', de: 'Meeting', ru: 'Встреча' };
   const selectionOverview = {
     zh: (count) => `已选择 ${count} 个会议`, en: (count) => `${count} meeting${count === 1 ? '' : 's'} selected`, es: (count) => `${count} ${count === 1 ? 'reunión seleccionada' : 'reuniones seleccionadas'}`,
     ja: (count) => `${count} 件の会議を選択中`, ko: (count) => `회의 ${count}개 선택됨`, fr: (count) => `${count} réunion${count === 1 ? '' : 's'} sélectionnée${count === 1 ? '' : 's'}`, de: (count) => `${count} Besprechung${count === 1 ? '' : 'en'} ausgewählt`, ru: (count) => `Выбрано встреч: ${count}`

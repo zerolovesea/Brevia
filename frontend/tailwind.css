@@ -181,6 +181,10 @@
   .current-caption { @apply min-w-0 flex-1 overflow-hidden; }
   .section-heading h1 { @apply m-0 w-full max-w-full overflow-x-scroll whitespace-nowrap text-[clamp(20px,2vw,32px)] font-normal tracking-[-.035em]; }
   .live-caption-translation { @apply mt-3 mb-0 text-[16px] leading-7 text-[#808080]; }
+  .caption-controls { @apply flex shrink-0 items-center gap-3; }
+  .floating-caption-toggle { @apply flex items-center justify-center w-8 h-8 text-[#666] transition-colors duration-300 hover:text-black; }
+  .floating-caption-toggle svg { @apply w-4 h-4; }
+  .floating-caption-toggle[data-enabled="true"] { @apply text-black; }
   .translation-toggle { @apply text-[12px] text-[#666] transition-colors duration-300 hover:text-black; }
   .transcript-scroll { @apply min-h-0 overflow-y-auto py-0 pr-2; }
   /* All native scroll regions use the same transparent, scroll-triggered scrollbar. */
