@@ -40,7 +40,7 @@ assert.equal(isNewerVersion('1.0.4', '1.0.5'), false);
 
 // 纪要配置只认 version 2：旧的 {models, active, sequence} 结构不再迁移，一律当作未配置。
 const { z } = require('zod');
-const mainSource = await readFile(new URL('./main.js', import.meta.url), 'utf8');
+const mainSource = (await readFile(new URL('./main.js', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const oneLine = (decl) => { const start = mainSource.indexOf(decl); return mainSource.slice(start, mainSource.indexOf('\n', start) + 1); };
 const schemaBlock = (decl) => { const start = mainSource.indexOf(decl); return mainSource.slice(start, mainSource.indexOf('\n});', start) + 5); };
 const asyncFn = (name) => { const start = mainSource.indexOf(`async function ${name}(`); return mainSource.slice(start, mainSource.indexOf('\n}\n', start) + 2); };
