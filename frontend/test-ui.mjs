@@ -9,7 +9,7 @@ const [electronMain, preload, packageManifest, modelManifest] = await Promise.al
 const asr = await readFile('../backend/asr.py');
 const packWorker = await readFile('../backend/pack_worker.py');
 const workerSession = await readFile('../backend/worker_session.py');
-const text = (value) => value.toString();
+const text = (value) => value.toString().replace(/\r\n/g, '\n');
 const componentContext = {};
 runInNewContext(text(components), componentContext);
 const mediaContext = { window: {}, navigator: { mediaDevices: {} } };
