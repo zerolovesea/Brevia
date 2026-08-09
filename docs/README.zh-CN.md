@@ -33,7 +33,7 @@ Brevia 是一款桌面端 AI 会议助手，把会议里最耗时间的部分—
 
 Brevia 支持 30+ 种语言的语音转写，涵盖中文、英语、日语、韩语、法语、德语、西班牙语、俄语、阿拉伯语、泰语、越南语、印尼语等。会议结束后，可连接大模型自动生成结构化纪要——会议摘要、关键决策、待办事项，一次成稿。
 
-配置任意兼容 OpenAI / Anthropic / Ollama 格式的服务商即可使用，本机可跑的模型也行（如 Ollama 本地部署）。摘要只发送文本，不上传音频。
+内置 AI 可在本机直接运行捆绑模型，也可以接入 Claude、OpenAI、OpenRouter，或任意兼容 OpenAI / Anthropic 格式的自建服务。摘要只发送文本，不上传音频。
 
 ![多语言支持与会议纪要](assets/tour/zh/%E5%A4%9A%E8%AF%AD%E8%A8%80%E6%94%AF%E6%8C%81%E4%B8%8E%E4%BC%9A%E8%AE%AE%E7%BA%AA%E8%A6%81.png)
 
@@ -99,7 +99,7 @@ Brevia 采用严格的本地优先架构：
 | 后端 | Python 3.10+、JSONL Worker 协议、SQLite 存储 |
 | 语音引擎 | [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 1.13.2、ONNX Runtime |
 | 说话人处理 | Pyannote 分段 + 3D-Speaker / NeMo Titanet / CAM++ 声纹嵌入 |
-| LLM 客户端 | 兼容 OpenAI / Anthropic / Ollama 等标准 API |
+| LLM 客户端 | 内置 llama.cpp（GGUF）+ 兼容 OpenAI / Anthropic 的标准 API |
 | 音频 I/O | ffmpeg（发行版内置） |
 | 构建打包 | electron-builder、PyInstaller（打包原生 Python 运行时） |
 
@@ -119,7 +119,7 @@ Brevia 采用严格的本地优先架构：
 | 人声分离 | Spleeter 2 Stems | 通用 |
 | 语音合成 | ZipVoice（中英）、VITS Piper（法/德/西/俄）、VITS Mimic3（韩） | 多语言 |
 
-LLM 摘要和翻译支持任意兼容 OpenAI Chat Completions、Anthropic Messages 或 Ollama Chat 格式的服务商——包括 OpenAI、Claude、Gemini（OpenAI 兼容端点）、DeepSeek、Kimi、通义千问、Ollama 本地部署等。
+LLM 摘要可以选「内置 AI」在本机运行捆绑的 GGUF 模型（Qwen 3.5 2B / 4B、Gemma 3 1B / 4B），也可以接入 Claude、OpenAI、OpenRouter，或任意兼容 OpenAI Chat Completions / Anthropic Messages 的自建服务——例如 Gemini（OpenAI 兼容端点）、DeepSeek、Kimi、通义千问等。
 
 ## 本地开发
 

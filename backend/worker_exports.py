@@ -1,4 +1,4 @@
-"""Focused worker responsibility component."""
+"""聚焦的 worker 职责组件。"""
 
 import json
 import os
@@ -147,7 +147,7 @@ class ExportWorkerMixin:
 
     @staticmethod
     def _write_docx(directory, title, content):
-        """Write a minimal Unicode DOCX without relying on an OS-specific tool."""
+        """写入最小化的 Unicode DOCX，无需依赖操作系统特定工具。"""
         destination = directory / f"{title}.docx"
         paragraphs = "".join(
             f'<w:p><w:r><w:t xml:space="preserve">{escape(line)}</w:t></w:r></w:p>'
@@ -171,7 +171,7 @@ class ExportWorkerMixin:
 
     @staticmethod
     def _write_print_html(directory, title, content):
-        """Create Unicode-safe HTML for Electron's cross-platform PDF renderer."""
+        """创建 Unicode 安全的 HTML，供 Electron 跨平台 PDF 渲染器使用。"""
         destination = directory / f"{title}.print.html"
         destination.write_text(
             "<!doctype html><meta charset='utf-8'><style>"

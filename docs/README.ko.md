@@ -33,7 +33,7 @@ Brevia 는 회의에서 가장 시간이 많이 걸리는 부분——기록, �
 
 Brevia 는 30 개 이상의 언어로 음성을 전사합니다 — 영어, 중국어, 일본어, 한국어, 프랑스어, 독일어, 스페인어, 러시아어, 아랍어, 태국어, 베트남어, 인도네시아어 등. 회의가 끝나면 원하는 LLM 공급자를 연결하기만 하면 Brevia 가 회의 요약, 주요 결정 사항, 실행 항목을 한 번에 작성합니다.
 
-OpenAI, Anthropic, Ollama 채팅 형식을 지원하는 어떤 공급자든 작동합니다 — 로컬 Ollama 배포 포함. 오디오가 아닌 텍스트만 전송됩니다.
+내장 AI는 번들 모델을 이 기기에서 실행합니다. Claude, OpenAI, OpenRouter 또는 OpenAI / Anthropic 채팅 형식을 지원하는 서비스도 연결할 수 있습니다. 오디오가 아닌 텍스트만 전송됩니다.
 
 ![다국어 지원과 AI 회의록](assets/tour/en/%E5%A4%9A%E8%AF%AD%E8%A8%80%E6%94%AF%E6%8C%81%E4%B8%8E%E4%BC%9A%E8%AE%AE%E7%BA%AA%E8%A6%81.png)
 
@@ -98,7 +98,7 @@ Brevia 는 엄격한 로컬 우선 설계를 따릅니다:
 | 백엔드 | Python 3.10+, JSONL 워커 프로토콜, SQLite 스토리지 |
 | 음성 엔진 | [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 1.13.2, ONNX Runtime |
 | 화자 처리 | Pyannote 분할 + 3D-Speaker / NeMo Titanet / CAM++ 임베딩 |
-| LLM 클라이언트 | OpenAI / Anthropic / Ollama 호환 채팅 API |
+| LLM 클라이언트 | 내장 llama.cpp(GGUF) + OpenAI / Anthropic 호환 채팅 API |
 | 오디오 I/O | ffmpeg (릴리스에 포함) |
 | 빌드 및 패키징 | electron-builder, PyInstaller (Python 런타임 포함) |
 ## 지원 모델
@@ -117,7 +117,7 @@ Brevia 는 엄격한 로컬 우선 설계를 따릅니다:
 | 소스 분리 | Spleeter 2 Stems | 범용 |
 | 음성 합성 | ZipVoice (zh + en), VITS Piper (fr / de / es / ru), VITS Mimic3 (ko) | 다국어 |
 
-LLM 요약과 번역은 OpenAI Chat Completions, Anthropic Messages, Ollama Chat 형식을 지원하는 어떤 공급자든 작동합니다 — OpenAI, Claude, Gemini (OpenAI 호환 엔드포인트), DeepSeek, Kimi, Qwen, Ollama 등.
+LLM 요약에서는 **내장 AI**를 선택해 번들 GGUF 모델(Qwen 3.5 2B / 4B, Gemma 3 1B / 4B)을 로컬에서 실행할 수 있고, Claude, OpenAI, OpenRouter 또는 OpenAI Chat Completions / Anthropic Messages를 지원하는 자체 서비스(Gemini의 OpenAI 호환 엔드포인트, DeepSeek, Kimi, Qwen 등)를 연결할 수도 있습니다.
 
 ## 로컬 개발
 

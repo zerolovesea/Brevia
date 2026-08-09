@@ -199,7 +199,7 @@ class VoiceProfileService:
             return
         samples, rate = read_mono_wav(source)
         tracker = SpeakerTracker(self.models, model_id=model_id)
-        # ponytail: bundled demo speakers seed defaults; replace fixtures when branded voices are recorded.
+        # ponytail: 随应用打包的演示说话人作为默认种子；录制品牌声音后替换 fixtures。
         for key, name, start_ms, end_ms, text in (
             (
                 "builtin:male",
@@ -252,6 +252,7 @@ class VoiceProfileService:
 
     @staticmethod
     def _samples(source):
+        """从任意音频文件转换并读取为单声道 PCM16 样本。"""
         with tempfile.TemporaryDirectory() as directory:
             wav = Path(directory) / "voice.wav"
             convert_to_pcm_wav(source, wav)

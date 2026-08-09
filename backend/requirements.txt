@@ -1,3 +1,4 @@
 sherpa-onnx==1.13.2
 numpy>=1.26,<2
 certifi>=2024.2.2
+llama-cpp-python>=0.3.2

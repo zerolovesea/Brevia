@@ -1,4 +1,4 @@
-"""Stable storage facade composed from focused repositories."""
+"""由聚焦职责的存储库组合而成的稳定存储门面。"""
 
 from .store_audio import AudioStoreMixin
 from .store_base import StoreBase
@@ -16,4 +16,4 @@ class Store(
     MaintenanceStoreMixin,
     StoreBase,
 ):
-    """Public storage API; behavior lives in responsibility-specific components."""
+    """公共存储 API；行为位于按职责划分的组件中。"""

@@ -1,4 +1,4 @@
-"""Focused worker responsibility component."""
+"""聚焦的 worker 职责组件。"""
 
 import re
 from difflib import SequenceMatcher
@@ -487,7 +487,7 @@ class RefinementWorkerMixin:
 
     def synthesize_tts(self, payload):
         """翻译后使用目标语言对应的本地 TTS 模型生成语音。"""
-        require(payload, "text", "target_language", "endpoint", "model")
+        require(payload, "text", "target_language", "provider", "model")
         language = payload["target_language"]
         model_id = TTS_MODEL_IDS.get(language)
         if not model_id:
@@ -497,7 +497,7 @@ class RefinementWorkerMixin:
         if not self.models.is_ready(model_id):
             raise RuntimeError(f"Model {model_id} is not installed")
         payload = {**payload, "language": payload["target_language"]}
-        payload["text"] = self.llm_complete(
+        payload["text"] = self._complete(
             payload,
             f"Translate the following text to {language}. Return only the translation.\n\n{payload['text']}",
         ).strip()

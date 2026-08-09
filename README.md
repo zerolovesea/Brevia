@@ -33,7 +33,7 @@ Open it, press record, watch the captions appear. Brevia captures your microphon
 
 Brevia transcribes speech in 30+ languages — including English, Chinese, Japanese, Korean, French, German, Spanish, Russian, Arabic, Thai, Vietnamese, and Indonesian. Once a meeting ends, plug in any LLM provider and Brevia will draft the meeting summary, key decisions, and action items in one pass.
 
-Any provider that speaks the OpenAI, Anthropic, or Ollama chat format works — including local Ollama deployments. Only text is sent, never audio.
+Built-in AI runs a bundled model on your own machine, or plug in Claude, OpenAI, OpenRouter, or any service that speaks the OpenAI or Anthropic chat format. Only text is sent, never audio.
 
 ![Multilingual support and AI notes](docs/assets/tour/en/%E5%A4%9A%E8%AF%AD%E8%A8%80%E6%94%AF%E6%8C%81%E4%B8%8E%E4%BC%9A%E8%AE%AE%E7%BA%AA%E8%A6%81.png)
 
@@ -98,7 +98,7 @@ Brevia follows a strict local-first design:
 | Backend | Python 3.10+, JSONL worker protocol, SQLite storage |
 | Speech engine | [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 1.13.2, ONNX Runtime |
 | Speaker processing | Pyannote segmentation + 3D-Speaker / NeMo Titanet / CAM++ embeddings |
-| LLM client | OpenAI / Anthropic / Ollama compatible chat APIs |
+| LLM client | Built-in llama.cpp (GGUF) plus OpenAI- / Anthropic-compatible chat APIs |
 | Audio I/O | ffmpeg (bundled in releases) |
 | Build & packaging | electron-builder, PyInstaller (bundled Python runtime) |
 ## Supported models
@@ -117,7 +117,7 @@ Every model is downloaded on demand from **Settings → Model Library**. The man
 | Source separation | Spleeter 2 Stems | Universal |
 | Text-to-speech | ZipVoice (zh + en), VITS Piper (fr / de / es / ru), VITS Mimic3 (ko) | Multilingual |
 
-For LLM summaries and translation, any provider that speaks OpenAI Chat Completions, Anthropic Messages, or Ollama Chat works — OpenAI, Claude, Gemini (OpenAI-compatible endpoint), DeepSeek, Kimi, Qwen, Ollama, and more.
+For LLM summaries, pick **Built-in AI** to run a bundled GGUF model locally (Qwen 3.5 2B / 4B, Gemma 3 1B / 4B), or point Brevia at Claude, OpenAI, OpenRouter, or any custom service that speaks OpenAI Chat Completions or Anthropic Messages — Gemini (OpenAI-compatible endpoint), DeepSeek, Kimi, Qwen, and more.
 
 ## Local development
 

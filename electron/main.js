@@ -66,7 +66,7 @@ const workerResponse = z.discriminatedUnion('ok', [
 const workerEvent = z.object({
   type: z.enum([
     'app.maintenance', 'asr.language', 'diarization.ready', 'meeting.imported',
-    'meeting.paused', 'meeting.recovered', 'meeting.sources-separated', 'meeting.started',
+    'meeting.paused', 'meeting.reconfigured', 'meeting.recovered', 'meeting.sources-separated', 'meeting.started',
     'meeting.stopped', 'model.progress', 'model.status', 'refinement.progress',
     'refinement.ready', 'refinement.segment', 'refinement.started', 'separation.progress',
     'separation.started', 'speaker-profile.deleted', 'speaker-profile.updated',
@@ -107,15 +107,34 @@ const meetingUpdates = z.object({
   archived_at: z.string().max(64).nullable(),
   refined_model_id: z.string().min(1).max(128),
 }).partial();
-const summaryModelConfig = z.object({
-  name: z.string().trim().min(1).max(64), provider: z.string().trim().min(1).max(64),
-  endpoint: z.string().url(), format: z.enum(['openai', 'claude']).optional(), model: z.string().trim().min(1).max(128),
+const meetingReconfigure = id.extend({
+  language: z.string().min(2).max(16).optional(),
+  target_language: z.string().max(16).nullable().optional(),
+  streaming_model_id: z.string().min(1).max(128).optional(),
+  refined_model_id: z.string().min(1).max(128).optional(),
+});
+// 纪要供应商固定为这六项；只有 built-in 在本地运行，因此其余都必须带请求地址。
+const summaryProviderIds = ['built-in', 'claude', 'openai', 'openrouter', 'custom-openai', 'custom-claude'];
+const isBuiltInProvider = (provider) => provider.toLowerCase() === 'built-in';
+const requiresEndpoint = (provider) => !isBuiltInProvider(provider);
+const summaryProviderEntry = z.object({
+  model: z.string().trim().min(1).max(128),
+  endpoint: z.string().url().optional(),
   keyReference: z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/).optional(),
   keyLength: z.number().int().positive().max(512).optional(),
 });
+const llmRequest = z.object({
+  provider: z.string().trim().min(1), endpoint: z.string().url().optional(), model: z.string().trim().min(1),
+  format: z.enum(['openai', 'claude']).optional(), key_reference: z.string().optional(),
+}).refine(({ provider, endpoint }) => !requiresEndpoint(provider) || Boolean(endpoint), {
+  message: 'Endpoint is required for remote providers', path: ['endpoint'],
+});
+// 单套生效配置，但每个供应商的模型/地址/密钥引用分别留存，切换供应商不会丢已填内容。
 const summaryConfig = z.object({
-  models: z.array(summaryModelConfig).max(20), active: z.number().int().min(-1).max(19),
-  sequence: z.number().int().nonnegative(),
+  version: z.literal(2),
+  provider: z.enum(summaryProviderIds),
+  // partialRecord：只有用户配置过的供应商才出现在这里；z.record 在 zod 4 里要求键穷尽。
+  providers: z.partialRecord(z.enum(summaryProviderIds), summaryProviderEntry),
 });
 
 class WorkerClient {
@@ -334,11 +353,20 @@ async function getSecret(reference) {
 
 const summaryConfigPath = () => path.join(dataDir(), 'summary-models.json');
 async function readSummaryConfig() {
+  let text;
   try {
-    return summaryConfig.parse(JSON.parse(await readFile(summaryConfigPath(), 'utf8')));
+    text = await readFile(summaryConfigPath(), 'utf8');
   } catch (error) {
     if (error.code === 'ENOENT') return null;
     throw error;
+  }
+  // 只认 version 2；旧结构、非法 JSON 一律当作未配置，由渲染层回落到内置供应商。
+  // 用户无法手动修复这个文件，所以这里不抛错，下次保存时直接覆盖。
+  try {
+    const current = summaryConfig.safeParse(JSON.parse(text));
+    return current.success ? current.data : null;
+  } catch {
+    return null;
   }
 }
 async function writeSummaryConfig(config) {
@@ -422,6 +450,7 @@ function registerIpc() {
   });
   handle('meeting.audio', audio, 'meeting.audio');
   handle('meeting.pause', id.extend({ paused: z.boolean() }), 'meeting.pause');
+  handleModelRequirement('meeting.reconfigure', meetingReconfigure, 'meeting.reconfigure');
   ipcMain.handle('meeting.stop', async (_, payload) => {
     const value = id.extend({ duration_ms: z.number().nonnegative() }).parse(payload);
     const result = await worker.request('meeting.stop', value);
@@ -479,7 +508,7 @@ function registerIpc() {
     return shell.openPath(directory);
   });
   ipcMain.handle('tts.synthesize', async (_, payload) => {
-    const value = z.object({ text: z.string().trim().min(1).max(1000), voice_id: z.string().min(1).optional(), target_language: z.enum(['zh', 'en', 'es', 'ko', 'fr', 'de', 'ru']), provider: z.string(), endpoint: z.string().url(), model: z.string(), format: z.enum(['openai', 'claude']).optional(), key_reference: z.string().optional() }).parse(payload);
+    const value = llmRequest.extend({ text: z.string().trim().min(1).max(1000), voice_id: z.string().min(1).optional(), target_language: z.enum(['zh', 'en', 'es', 'ko', 'fr', 'de', 'ru']) }).parse(payload);
     try {
       return await worker.request('tts.synthesize', { ...value, api_key: await getSecret(value.key_reference) });
     } catch (error) {
@@ -509,12 +538,13 @@ function registerIpc() {
   });
   ipcMain.handle('summary.generate', async (_, payload) => {
     const value = id.extend({
-      provider: z.string(), endpoint: z.string().url(), model: z.string(),
-      format: z.enum(['openai', 'claude']).optional(),
-      key_reference: z.string().optional(), language: z.enum(['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']).default('en'), consent: z.literal(true),
+      ...llmRequest.shape,
+      language: z.enum(['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']).default('en'), consent: z.literal(true),
+    }).refine(({ provider, endpoint }) => !requiresEndpoint(provider) || Boolean(endpoint), {
+      message: 'Endpoint is required for remote providers', path: ['endpoint'],
     }).parse(payload);
     const api_key = await getSecret(value.key_reference);
-    if (!api_key && value.provider !== 'Ollama') return { configuration_required: true };
+    if (!api_key && !isBuiltInProvider(value.provider)) return { configuration_required: true };
     return worker.request('summary.generate', { ...value, api_key });
   });
   ipcMain.handle('translation.generate', async (_, payload) => {
@@ -525,14 +555,9 @@ function registerIpc() {
         speaker: z.string().trim().min(1).max(128), track: z.string().trim().min(1).max(32), revision: z.number().int().nonnegative(),
       }).optional(),
       target_language: z.string().min(2).max(32),
-      provider: z.string(),
-      endpoint: z.string().url(),
-      model: z.string(),
-      format: z.enum(['openai', 'claude']).optional(),
-      key_reference: z.string().optional(),
       consent: z.literal(true),
     }).parse(payload);
-    return worker.request('translation.generate', { ...value, api_key: await getSecret(value.key_reference) });
+    return worker.request('translation.generate', value);
   });
   ipcMain.handle('meeting.export', async (_, payload) => {
     const value = id.extend({
@@ -628,6 +653,9 @@ function registerIpc() {
 
     // Handle translation update
     if (value.translation !== undefined && value.segmentId !== undefined) {
+      if (floatingCaptionState.translationPending.segmentId === value.segmentId) {
+        floatingCaptionState.translationPending = { segmentId: null };
+      }
       if (value.segmentId === floatingCaptionState.current.segmentId) {
         floatingCaptionState.current.translation = value.translation;
       } else if (value.segmentId === floatingCaptionState.lastFinalized.segmentId) {
@@ -639,6 +667,12 @@ function registerIpc() {
           text: value.translation,
         };
       }
+    }
+
+    if (value.translationPending !== undefined && value.segmentId !== undefined) {
+      floatingCaptionState.translationPending = {
+        segmentId: value.translationPending ? value.segmentId : null,
+      };
     }
 
     if (value.locale !== undefined) floatingCaptionState.locale = value.locale;
@@ -799,6 +833,7 @@ const floatingCaptionState = {
   lastFinalized: { segmentId: null, text: '', translation: null },
   current: { segmentId: null, text: '', isRefined: false, translation: null },
   pendingTranslation: { segmentId: null, text: null },
+  translationPending: { segmentId: null },
   locale: 'zh',
 };
 const floatingCaptionPayload = z.object({
@@ -809,6 +844,7 @@ const floatingCaptionPayload = z.object({
   finalize: z.boolean().optional(),
   updateFinalized: z.boolean().optional(),
   clearCurrentIfMatch: z.boolean().optional(),
+  translationPending: z.boolean().optional(),
   locale: z.string().max(16).optional(),
 }).strict();
 
@@ -819,6 +855,7 @@ function sendFloatingCaptionState() {
     lastFinalized: floatingCaptionState.lastFinalized,
     current: floatingCaptionState.current,
     pendingTranslation: floatingCaptionState.pendingTranslation,
+    translationPending: floatingCaptionState.translationPending,
     locale: floatingCaptionState.locale,
   });
 }

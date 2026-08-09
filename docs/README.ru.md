@@ -33,7 +33,7 @@ Brevia — это настольный ИИ-ассистент встреч, к�
 
 Brevia транскрибирует речь на 30+ языках — английский, китайский, японский, корейский, французский, немецкий, испанский, русский, арабский, тайский, вьетнамский, индонезийский и другие. По окончании встречи подключите любого LLM-провайдера, и Brevia за один проход составит резюме, ключевые решения и задачи.
 
-Работает с любым провайдером, поддерживающим формат чата OpenAI, Anthropic или Ollama — включая локальные развёртывания Ollama. Отправляется только текст, никогда — аудио.
+Встроенный ИИ запускает входящую в состав модель прямо на вашем устройстве, либо можно подключить Claude, OpenAI, OpenRouter или любой сервис с форматом чата OpenAI или Anthropic. Отправляется только текст, никогда — аудио.
 
 ![Многоязычная поддержка и ИИ-заметки](assets/tour/en/%E5%A4%9A%E8%AF%AD%E8%A8%80%E6%94%AF%E6%8C%81%E4%B8%8E%E4%BC%9A%E8%AE%AE%E7%BA%AA%E8%A6%81.png)
 
@@ -98,7 +98,7 @@ Brevia следует строгой local-first архитектуре:
 | Бэкенд | Python 3.10+, протокол воркера JSONL, хранилище SQLite |
 | Речевой движок | [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 1.13.2, ONNX Runtime |
 | Обработка говорящих | Сегментация Pyannote + эмбеддинги 3D-Speaker / NeMo Titanet / CAM++ |
-| LLM-клиент | Chat-API, совместимые с OpenAI / Anthropic / Ollama |
+| LLM-клиент | Встроенный llama.cpp (GGUF) и Chat-API, совместимые с OpenAI / Anthropic |
 | Ввод-вывод аудио | ffmpeg (входит в релизы) |
 | Сборка и упаковка | electron-builder, PyInstaller (встроенный Python-runtime) |
 ## Поддерживаемые модели
@@ -117,7 +117,7 @@ Brevia следует строгой local-first архитектуре:
 | Разделение источников | Spleeter 2 Stems | Универсальный |
 | Синтез речи | ZipVoice (zh + en), VITS Piper (fr / de / es / ru), VITS Mimic3 (ko) | Многоязычные |
 
-Для LLM-резюме и перевода подходит любой провайдер, поддерживающий формат OpenAI Chat Completions, Anthropic Messages или Ollama Chat — OpenAI, Claude, Gemini (OpenAI-совместимый endpoint), DeepSeek, Kimi, Qwen, Ollama и другие.
+Для LLM-резюме можно выбрать **Встроенный ИИ** и запустить входящую в состав модель GGUF локально (Qwen 3.5 2B / 4B, Gemma 3 1B / 4B) либо указать Claude, OpenAI, OpenRouter или свой сервис с форматом OpenAI Chat Completions или Anthropic Messages — Gemini (OpenAI-совместимый endpoint), DeepSeek, Kimi, Qwen и другие.
 
 ## Локальная разработка
 

@@ -58,11 +58,13 @@ def parse_json_object(value):
 
 
 def clock(milliseconds):
+    """将毫秒转为 MM:SS 格式的时钟显示。"""
     seconds = milliseconds // 1000
     return f"{seconds // 60:02d}:{seconds % 60:02d}"
 
 
 def srt_time(milliseconds):
+    """将毫秒转为 SRT 字幕格式的时间戳 (HH:MM:SS,mmm)。"""
     hours, remainder = divmod(milliseconds, 3_600_000)
     minutes, remainder = divmod(remainder, 60_000)
     seconds, millis = divmod(remainder, 1000)

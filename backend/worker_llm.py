@@ -1,7 +1,22 @@
-"""Focused worker responsibility component."""
+"""聚焦的 worker 职责组件。"""
 
 from .transcript import clock, latest_segments
 from .worker_common import managed_task, require
+
+# 内置翻译在本地运行捆绑的 Hy-MT2 GGUF 模型。
+TRANSLATION_MODEL_ID = "hy-mt2-1.8b-q4km"
+
+# 将 UI 语言代码映射到 prompt 中的自然语言名称。
+LANGUAGE_NAMES = {
+    "zh": "Chinese",
+    "en": "English",
+    "es": "Spanish",
+    "ja": "Japanese",
+    "ko": "Korean",
+    "fr": "French",
+    "de": "German",
+    "ru": "Russian",
+}
 
 
 CLEANING_PROMPTS = {
@@ -131,7 +146,7 @@ Format: # **{title}**; Besprechungszusammenfassung; Kernergebnisse; Themenbespre
 
 
 def cleaning_prompt(transcript, language):
-    """Build the fixed first-pass prompt in the selected UI language."""
+    """构建选定 UI 语言的固定第一轮 prompt。"""
     if language == "zh":
         instructions = """你是一名会议转录编辑。请清理以下 ASR 转录，输出易读、忠于原意的 Markdown。
 
@@ -152,7 +167,7 @@ def cleaning_prompt(transcript, language):
 
 
 def summary_prompt(transcript, title, language):
-    """Build the fixed second-pass Markdown-notes prompt."""
+    """构建固定的第二轮 Markdown 纪要 prompt。"""
     if language == "zh":
         instructions = """你是一名专业的会议纪要助手。请根据以下清洗后的会议转录，生成准确、详实、结构化的 Markdown 会议纪要。纪要应尽可能完整地保留会议中的信息量，宁可详细也不要遗漏要点。
 
@@ -221,6 +236,16 @@ def summary_prompt(transcript, title, language):
 
 
 class LLMWorkerMixin:
+    def _complete(self, payload, prompt):
+        """将补全路由到内置 llama sidecar 或 HTTP 端点。
+
+        提供商 ``Built-in`` 通过 llama sidecar 在本地运行；其他提供商通过共享的
+        HTTP 客户端接口（``self.llm_complete``）。
+        """
+        if (payload.get("provider") or "").lower() in {"built-in", "builtin"}:
+            return self.llama_sidecar_complete(payload, prompt)
+        return self.llm_complete(payload, prompt)
+
     @managed_task("summary.generate")
     def summarize(self, payload, control=None):
         """两次调用 LLM 清洗逐字稿并生成 Markdown 纪要。
@@ -231,7 +256,10 @@ class LLMWorkerMixin:
         Returns:
             保存为 ``markdown`` 字段的纪要字典。
         """
-        require(payload, "meeting_id", "provider", "endpoint", "model", "consent")
+        require(payload, "meeting_id", "provider", "model", "consent")
+        # Built-in 在本地运行捆绑的 GGUF；只有远程提供商需要端点。
+        if (payload.get("provider") or "").lower() not in {"built-in", "builtin"}:
+            require(payload, "endpoint")
         if not payload["consent"]:
             raise ValueError("Transcript sharing was not confirmed")
         meeting = self.store.get_meeting(payload["meeting_id"])
@@ -252,8 +280,7 @@ class LLMWorkerMixin:
         language = payload.get("language", "en")
         previous = (meeting.get("summary") or {}).get("data") or {}
         cleaned_transcript = previous.get("cleaned_transcript", "")
-        # A pre-guard release stored an Anthropic tool response as the cleaned
-        # transcript. It is not a usable cleanup result and must be regenerated.
+        # 早期版本将 Anthropic 工具响应存储为清洗后的转录。它不是可用的清洗结果，必须重新生成。
         if cleaned_transcript.lstrip().startswith('{"content":'):
             cleaned_transcript = ""
         try:
@@ -268,7 +295,7 @@ class LLMWorkerMixin:
                         "stage": "summary.cleaning",
                     },
                 )
-                cleaned_transcript = self.llm_complete(
+                cleaned_transcript = self._complete(
                     payload, cleaning_prompt(transcript, language)
                 ).strip()
             self.wait_task(control)
@@ -281,7 +308,7 @@ class LLMWorkerMixin:
                     "stage": "summary.generating",
                 },
             )
-            markdown = self.llm_complete(
+            markdown = self._complete(
                 payload, summary_prompt(cleaned_transcript, meeting["title"], language)
             ).strip()
             if not markdown:
@@ -319,8 +346,6 @@ class LLMWorkerMixin:
             "meeting_id",
             "segment_id",
             "target_language",
-            "endpoint",
-            "model",
             "consent",
         )
         if not payload["consent"]:
@@ -334,8 +359,7 @@ class LLMWorkerMixin:
             ),
             None,
         )
-        # The final event can reach the renderer before an overlapping task has
-        # committed its segment; preserve that event instead of dropping translation.
+        # 最终事件可能在重叠任务提交其段落之前到达渲染器；保留该事件而不是丢弃翻译。
         if not segment and payload.get("segment"):
             self.store.save_segment(
                 {
@@ -355,10 +379,19 @@ class LLMWorkerMixin:
             )
         if not segment:
             raise ValueError("Transcript segment not found")
-        translation = self.llm_complete(
-            payload,
-            f"Translate the following text to {payload['target_language']}. "
-            f"Return only the translation.\n\n{segment['text']}",
+        target = LANGUAGE_NAMES.get(payload["target_language"], payload["target_language"])
+        prompt = (
+            f"Translate the following text into {target}. "
+            f"Output only the translation, with no explanations.\n\n{segment['text']}"
+        )
+        translation = self.llama_generate(
+            "translation",
+            TRANSLATION_MODEL_ID,
+            prompt,
+            max_tokens=512,
+            context_size=4096,
+            temperature=0.3,
+            stop_tokens=["<|im_end|>", "<|endoftext|>"],
         ).strip()
         self.store.save_translation(meeting["id"], segment["id"], translation)
         event = {

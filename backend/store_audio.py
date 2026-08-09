@@ -1,4 +1,4 @@
-"""Focused storage responsibility component."""
+"""聚焦存储职责的组件。"""
 
 import base64
 import json
@@ -19,6 +19,7 @@ class AudioStoreMixin:
         track,
         pcm_base64,
         sample_rate=SETTINGS["audio"]["sample_rate"],
+        start_ms=0,
     ):
         """把一帧 base64 PCM16 追加到会议音轨。
 
@@ -43,33 +44,40 @@ class AudioStoreMixin:
         if state["sample_rate"] != sample_rate:
             raise ValueError("Sample rate changed during recording")
         chunk_samples = sample_rate * SETTINGS["audio"]["chunk_seconds"]
-        offset = 0
-        while offset < len(pcm):
-            chunk_index = state["samples"] // chunk_samples
-            in_chunk = state["samples"] % chunk_samples
-            take = min((chunk_samples - in_chunk) * 2, len(pcm) - offset)
-            name = f"{track}-{chunk_index:05d}.wav"
-            path = self.meetings_dir / meeting_id / "audio" / name
-            frame = pcm[offset : offset + take]
-            if not path.exists():
-                with wave.open(str(path), "wb") as output:
-                    output.setnchannels(1)
-                    output.setsampwidth(2)
-                    output.setframerate(sample_rate)
-                    output.writeframes(frame)
-            else:
-                with path.open("r+b") as output:
-                    output.seek(0, 2)
-                    output.write(frame)
-                    size = output.tell()
-                    output.seek(4)
-                    output.write(struct.pack("<I", size - 8))
-                    output.seek(40)
-                    output.write(struct.pack("<I", size - 44))
-            if name not in state["chunks"]:
-                state["chunks"].append(name)
-            state["samples"] += take // 2
-            offset += take
+
+        def append_pcm(data):
+            offset = 0
+            while offset < len(data):
+                chunk_index = state["samples"] // chunk_samples
+                in_chunk = state["samples"] % chunk_samples
+                take = min((chunk_samples - in_chunk) * 2, len(data) - offset)
+                name = f"{track}-{chunk_index:05d}.wav"
+                path = self.meetings_dir / meeting_id / "audio" / name
+                frame = data[offset : offset + take]
+                if not path.exists():
+                    with wave.open(str(path), "wb") as output:
+                        output.setnchannels(1)
+                        output.setsampwidth(2)
+                        output.setframerate(sample_rate)
+                        output.writeframes(frame)
+                else:
+                    with path.open("r+b") as output:
+                        output.seek(0, 2)
+                        output.write(frame)
+                        size = output.tell()
+                        output.seek(4)
+                        output.write(struct.pack("<I", size - 8))
+                        output.seek(40)
+                        output.write(struct.pack("<I", size - 44))
+                if name not in state["chunks"]:
+                    state["chunks"].append(name)
+                state["samples"] += take // 2
+                offset += take
+
+        target_samples = round(max(0, start_ms) * sample_rate / 1000)
+        while state["samples"] < target_samples:
+            append_pcm(b"\0\0" * min(target_samples - state["samples"], chunk_samples))
+        append_pcm(pcm)
         self.write_manifest(meeting_id, manifest)
         return state["samples"]
 

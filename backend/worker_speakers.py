@@ -1,4 +1,4 @@
-"""Focused worker responsibility component."""
+"""聚焦的 worker 职责组件。"""
 
 import re
 
@@ -7,6 +7,7 @@ from .worker_common import require
 
 class SpeakerCommandMixin:
     def assign_segment_speaker(self, payload):
+        """将段落分配给指定说话人，可选是否同时注册声纹。"""
         if self._is_default_speaker_name(payload["name"]):
             return self.store.get_meeting(payload["meeting_id"])
         meeting = self.store.get_meeting(payload["meeting_id"])
@@ -118,6 +119,7 @@ class SpeakerCommandMixin:
         return self.voice_profiles.verify(payload)
 
     def delete_speaker_profile(self, payload):
+        """删除指定的本地声纹档案。"""
         require(payload, "profile_id")
         self.store.delete_speaker_profile(payload["profile_id"])
         self.emit("speaker-profile.deleted", {"profile_id": payload["profile_id"]})

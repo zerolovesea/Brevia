@@ -25,6 +25,7 @@ class DownloadCancelled(Exception):
 
 
 def sha256_file(path):
+    """计算文件的 SHA256 哈希值。"""
     digest = hashlib.sha256()
     with path.open("rb") as downloaded:
         for block in iter(lambda: downloaded.read(1024 * 1024), b""):
@@ -84,12 +85,18 @@ class ModelManager:
 
     @staticmethod
     def download_url(url, china_source=False):
-        """Return the selected source without changing the artifact identity."""
-        return f"https://gh-proxy.com/{url}" if china_source and url.startswith("https://github.com/") else url
+        """返回选定的源，不改变构件标识。"""
+        if not china_source:
+            return url
+        if url.startswith("https://github.com/"):
+            return f"https://gh-proxy.com/{url}"
+        if url.startswith("https://huggingface.co/"):
+            return url.replace("https://huggingface.co/", "https://hf-mirror.com/", 1)
+        return url
 
     @staticmethod
     def _download_file(url, destination, check_control, progress):
-        """Download one file with retry and HTTP Range resume support."""
+        """下载单个文件，支持重试和 HTTP Range 断点续传。"""
         for attempt in range(DOWNLOAD_RETRIES):
             check_control()
             received = destination.stat().st_size if destination.exists() else 0
@@ -219,16 +226,23 @@ class ModelManager:
                     )
 
                 check_control()
+                # 优先使用 china_url（如果存在且启用了大陆镜像）
+                model_url = model.get("china_url") if china_source and model.get("china_url") else model["url"]
                 self._download_file(
-                    self.download_url(model["url"], china_source),
+                    self.download_url(model_url, china_source),
                     archive,
                     check_control,
                     report,
                 )
                 check_control()
-                digest = sha256_file(archive)
-                if model.get("archive_sha256") and digest != model["archive_sha256"]:
-                    raise ValueError("Model archive checksum mismatch")
+                # 仅当有校验和需要验证时才计算 SHA256 — 否则会在大文件 100% 进度时停顿数秒且无益处。
+                expected_checksum = model.get("archive_sha256")
+                if expected_checksum:
+                    digest = sha256_file(archive)
+                    if digest != expected_checksum:
+                        raise ValueError("Model archive checksum mismatch")
+                else:
+                    digest = None
                 source = Path(temporary) / "model"
                 if model.get("directory"):
                     extract_root = Path(temporary) / "extract"
@@ -376,6 +390,12 @@ class LiveDenoiser:
     """用 Sherpa-onnx 在线 GTCRN 降噪后再交给实时识别。"""
 
     def __init__(self, manager, model_id):
+        """初始化在线降噪器。
+
+        Args:
+            manager: 已初始化的 ModelManager。
+            model_id: 已安装的降噪模型 ID。
+        """
         if not manager.is_ready(model_id):
             raise RuntimeError(f"Model {model_id} is not installed")
         import sherpa_onnx
@@ -415,6 +435,12 @@ class OfflineDenoiser:
     """在会后精修前清理整段录音，不改写原始音频文件。"""
 
     def __init__(self, manager, model_id):
+        """初始化离线降噪器。
+
+        Args:
+            manager: 已初始化的 ModelManager。
+            model_id: 已安装的降噪模型 ID。
+        """
         if not manager.is_ready(model_id):
             raise RuntimeError(f"Model {model_id} is not installed")
         import sherpa_onnx
@@ -428,6 +454,7 @@ class OfflineDenoiser:
         self.engine = sherpa_onnx.OfflineSpeechDenoiser(config)
 
     def process(self, samples, sample_rate):
+        """处理音频样本并返回降噪后的波形。"""
         import numpy
 
         return numpy.asarray(
@@ -438,16 +465,25 @@ class OfflineDenoiser:
 class LanguageIdentifier:
     """使用 Whisper 的原生语言识别替代文本启发式判断。"""
 
-    def __init__(self, manager, model_id="whisper-turbo"):
+    def __init__(self, manager, model_id="whisper-large-v3"):
+        """初始化语言识别器。
+
+        Args:
+            manager: 已初始化的 ModelManager。
+            model_id: 已安装的 Whisper 模型 ID。
+        """
         if not manager.is_ready(model_id):
             raise RuntimeError(f"Model {model_id} is not installed")
         import sherpa_onnx
 
         path = manager.path(model_id)
+        files = manager.get(model_id)["files"]
+        encoder = next(name for name in files if "encoder" in name)
+        decoder = next(name for name in files if "decoder" in name)
         config = sherpa_onnx.SpokenLanguageIdentificationConfig(
             whisper=sherpa_onnx.SpokenLanguageIdentificationWhisperConfig(
-                encoder=str(path / "turbo-encoder.int8.onnx"),
-                decoder=str(path / "turbo-decoder.int8.onnx"),
+                encoder=str(path / encoder),
+                decoder=str(path / decoder),
             ),
             num_threads=manager.device()["threads"],
             provider=manager.device()["backend"],
@@ -457,6 +493,7 @@ class LanguageIdentifier:
         self.engine = sherpa_onnx.SpokenLanguageIdentification(config)
 
     def identify(self, samples, sample_rate):
+        """识别音频样本的语言并返回语言代码。"""
         stream = self.engine.create_stream()
         stream.accept_waveform(sample_rate, samples)
         return self.engine.compute(stream)
@@ -479,6 +516,12 @@ class OfflineVAD:
     """用会议选择的 VAD 模型生成保留原时间轴的语音区间。"""
 
     def __init__(self, manager, model_id="silero-vad"):
+        """初始化离线 VAD 检测器。
+
+        Args:
+            manager: 已初始化的 ModelManager。
+            model_id: 已安装的 VAD 模型 ID。
+        """
         import sherpa_onnx
 
         self.sherpa_onnx = sherpa_onnx
@@ -487,8 +530,7 @@ class OfflineVAD:
     def process(self, samples, sample_rate=16000):
         if sample_rate != self.config.sample_rate:
             raise ValueError(f"VAD requires {self.config.sample_rate} Hz audio")
-        # The detector keeps an unfinished speech segment in this buffer.  Size it
-        # for the input instead of repeatedly growing on continuous meeting audio.
+        # 检测器在此缓冲区中保留未完成的语音段。按输入大小分配，而不是在连续会议音频上反复增长。
         buffer_seconds = max(100, (len(samples) + sample_rate - 1) // sample_rate + 1)
         detector = self.sherpa_onnx.VoiceActivityDetector(self.config, buffer_seconds)
         segments = []
@@ -543,6 +585,7 @@ class ChinesePunctuation:
     """使用中英 CT-Transformer 为实时中文结果恢复标点。"""
 
     def __init__(self, manager, model_id):
+        """加载中文在线标点模型；模型未安装时抛出 RuntimeError。"""
         if not manager.is_ready(model_id):
             raise RuntimeError(f"Model {model_id} is not installed")
         import sherpa_onnx
@@ -558,6 +601,7 @@ class ChinesePunctuation:
         )
 
     def apply(self, text):
+        """返回带标点的中文；空文本原样返回。"""
         return self.engine.add_punctuation(text) if text else text
 
 
@@ -831,6 +875,12 @@ class SourceSeparator:
     """使用 Spleeter 将双声道录音拆为人声与非人声轨。"""
 
     def __init__(self, manager, model_id="spleeter-2stems-fp16"):
+        """初始化音频分离器。
+
+        Args:
+            manager: 已初始化的 ModelManager。
+            model_id: 已安装的 Spleeter 模型 ID。
+        """
         if not manager.is_ready(model_id):
             raise RuntimeError(f"Model {model_id} is not installed")
         try:
@@ -853,6 +903,7 @@ class SourceSeparator:
         self.engine = sherpa_onnx.OfflineSourceSeparation(config)
 
     def process(self, samples, sample_rate):
+        """分离音频为人声和伴奏并返回结果。"""
         return self.engine.process(sample_rate=sample_rate, samples=samples)
 
 
@@ -860,6 +911,12 @@ class ZipVoiceTTS:
     """使用 ZipVoice 本地根据参考音频合成中英文语音。"""
 
     def __init__(self, manager, model_id="zipvoice-zh-en"):
+        """初始化 ZipVoice TTS 引擎。
+
+        Args:
+            manager: 已初始化的 ModelManager。
+            model_id: 已安装的 ZipVoice 模型 ID。
+        """
         if not manager.is_ready(model_id):
             raise RuntimeError(f"Model {model_id} is not installed")
         try:
@@ -886,6 +943,7 @@ class ZipVoiceTTS:
         self.engine = sherpa_onnx.OfflineTts(config)
 
     def generate(self, text, reference_audio, reference_sample_rate, reference_text):
+        """根据参考音频和文本生成语音。"""
         import sherpa_onnx
 
         config = sherpa_onnx.GenerationConfig()
@@ -900,6 +958,12 @@ class VitsTTS:
     """使用单语言 VITS 模型生成不依赖参考音频的本地语音。"""
 
     def __init__(self, manager, model_id):
+        """初始化 VITS TTS 引擎。
+
+        Args:
+            manager: 已初始化的 ModelManager。
+            model_id: 已安装的 VITS 模型 ID。
+        """
         if not manager.is_ready(model_id):
             raise RuntimeError(f"Model {model_id} is not installed")
         try:
@@ -924,4 +988,5 @@ class VitsTTS:
         self.engine = sherpa_onnx.OfflineTts(config)
 
     def generate(self, text):
+        """生成语音并返回音频对象。"""
         return self.engine.generate(text)

@@ -33,7 +33,7 @@ Ouvrez l'application, appuyez sur enregistrer, et regardez les sous-titres appar
 
 Brevia transcrit la parole dans plus de 30 langues — anglais, chinois, japonais, coreen, francais, allemand, espagnol, russe, arabe, thai, vietnamien, indonesien et plus. Une fois la reunion terminee, branchez n'importe quel fournisseur LLM et Brevia redigera le resume, les decisions cles et les taches en un seul passage.
 
-Tout fournisseur compatible avec le format chat OpenAI, Anthropic ou Ollama fonctionne — y compris les deploiements Ollama locaux. Seul le texte est envoye, jamais l'audio.
+L'IA integree execute un modele fourni directement sur votre machine, ou vous pouvez brancher Claude, OpenAI, OpenRouter ou tout service compatible avec le format chat OpenAI ou Anthropic. Seul le texte est envoye, jamais l'audio.
 
 ![Support multilingue et notes IA](assets/tour/en/%E5%A4%9A%E8%AF%AD%E8%A8%80%E6%94%AF%E6%8C%81%E4%B8%8E%E4%BC%9A%E8%AE%AE%E7%BA%AA%E8%A6%81.png)
 
@@ -98,7 +98,7 @@ Brevia suit une conception strictement local-first :
 | Backend | Python 3.10+, protocole worker JSONL, stockage SQLite |
 | Moteur vocal | [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 1.13.2, ONNX Runtime |
 | Traitement des locuteurs | Segmentation Pyannote + embeddings 3D-Speaker / NeMo Titanet / CAM++ |
-| Client LLM | APIs chat compatibles OpenAI / Anthropic / Ollama |
+| Client LLM | llama.cpp integre (GGUF) et APIs chat compatibles OpenAI / Anthropic |
 | I/O audio | ffmpeg (integre aux releases) |
 | Build et empaquetage | electron-builder, PyInstaller (runtime Python integre) |
 ## Modeles pris en charge
@@ -117,7 +117,7 @@ Chaque modele est telecharge a la demande depuis **Reglages → Bibliotheque de 
 | Separation de sources | Spleeter 2 Stems | Universel |
 | Synthese vocale | ZipVoice (zh + en), VITS Piper (fr / de / es / ru), VITS Mimic3 (ko) | Multilingue |
 
-Pour les resumes LLM et la traduction, tout fournisseur compatible avec OpenAI Chat Completions, Anthropic Messages ou Ollama Chat fonctionne — OpenAI, Claude, Gemini (endpoint compatible OpenAI), DeepSeek, Kimi, Qwen, Ollama et plus.
+Pour les resumes LLM, choisissez **IA integree** pour executer localement un modele GGUF fourni (Qwen 3.5 2B / 4B, Gemma 3 1B / 4B), ou pointez Brevia vers Claude, OpenAI, OpenRouter ou tout service personnalise compatible avec OpenAI Chat Completions ou Anthropic Messages : Gemini (endpoint compatible OpenAI), DeepSeek, Kimi, Qwen et plus.
 
 ## Developpement local
 

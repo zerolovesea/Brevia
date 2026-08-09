@@ -1,4 +1,4 @@
-"""Focused storage responsibility component."""
+"""聚焦存储职责的组件。"""
 
 import json
 import shutil
@@ -27,7 +27,7 @@ def example_note(example):
 
 class MeetingStoreMixin:
     def recover_interrupted_meetings(self):
-        """Finalize interrupted recordings and make interrupted refinement retryable."""
+        """完成中断的录制并使中断的精修可重试。"""
         with self.connect() as db:
             meetings = db.execute(
                 "SELECT id,status FROM meetings WHERE status IN ('recording','refining')"
@@ -300,9 +300,18 @@ class MeetingStoreMixin:
     def update_meeting(self, meeting_id, updates):
         """更新允许用户编辑的会议字段并返回最新详情。
 
-        ``updates`` 只接受标题、分类、标签和归档时间，其他键会被忽略。
+        ``updates`` 只接受标题、分类、标签、归档时间以及会中可热切换的语言与实时/精修
+        模型；其他键会被忽略。
         """
-        allowed = {"title", "category", "tags", "archived_at", "refined_model_id"}
+        allowed = {
+            "title",
+            "category",
+            "tags",
+            "archived_at",
+            "refined_model_id",
+            "language",
+            "streaming_model_id",
+        }
         fields = {key: value for key, value in updates.items() if key in allowed}
         if not fields:
             return self.get_meeting(meeting_id)

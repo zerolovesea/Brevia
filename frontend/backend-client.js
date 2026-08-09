@@ -1,13 +1,22 @@
+// 每个 AudioContext 只需注册一次 worklet 模块。用 WeakMap 记录已加载的 context,
+// 避免重复 addModule(重复调用虽无害但会产生冗余的网络/解析开销)。
+const workletContexts = new WeakMap();
+async function loadAudioWorklet(context) {
+  if (workletContexts.get(context)) return;
+  await context.audioWorklet.addModule('./audio-processor.js');
+  workletContexts.set(context, true);
+}
+
 function stopMediaStream(stream) {
   const tracks = [...(stream?.getVideoTracks() || []), ...(stream?.getAudioTracks() || [])];
   for (const track of tracks) {
     if (track.readyState !== 'live') continue;
-    try { track.stop(); } catch { /* Continue stopping the remaining tracks. */ }
+    try { track.stop(); } catch { /* 继续停止剩余的轨道。 */ }
   }
 }
 
-// Turns a getUserMedia DOMException into an actionable message. NotFoundError means the OS exposes no
-// input device (on Windows, typically the microphone privacy toggle is off); NotAllowedError means access was denied.
+// 将 getUserMedia DOMException 转换为可操作的消息。NotFoundError 表示操作系统未暴露
+// 输入设备（在 Windows 上，通常是麦克风隐私开关关闭）；NotAllowedError 表示访问被拒绝。
 function describeMicError(error) {
   if (error?.name === 'NotFoundError' || error?.name === 'DevicesNotFoundError') return '未检测到麦克风设备，请在系统设置中开启麦克风访问权限并确认已连接麦克风后重试';
   if (error?.name === 'NotAllowedError' || error?.name === 'PermissionDeniedError') return '麦克风访问被拒绝，请在系统设置中允许应用使用麦克风后重试';
@@ -22,22 +31,36 @@ class AudioCapture {
     this.pendingStreams = [];
     this.sources = [];
     this.preview = null;
-    this.trackSamples = new Map();
     this.paused = false;
     this.stopping = false;
     this.stopPromise = null;
   }
 
+  async requestTrack(track) {
+    let stream;
+    try {
+      stream = track === 'mic'
+        ? await navigator.mediaDevices.getUserMedia({ audio: { autoGainControl: true, echoCancellation: true, noiseSuppression: true } })
+        : await navigator.mediaDevices.getDisplayMedia({ video: true, audio: { systemAudio: 'include', suppressLocalAudioPlayback: false } });
+    } catch (error) {
+      if (track === 'mic') throw new Error(describeMicError(error));
+      throw error instanceof Error ? error : new Error('无法获取系统音频，请检查系统权限后重试');
+    }
+    if (!stream.getAudioTracks().length) throw new Error(track === 'system' ? '未检测到系统音频，请在系统设置中允许屏幕与系统音频录制后重试' : '麦克风没有可用的音频轨道');
+    return stream;
+  }
+
   async prepare({ mic, system }) {
     const requests = [];
-    if (mic) requests.push({ track: 'mic', stream: navigator.mediaDevices.getUserMedia({ audio: { autoGainControl: true, echoCancellation: true, noiseSuppression: true } }) });
-    if (system) requests.push({ track: 'system', stream: navigator.mediaDevices.getDisplayMedia({ video: true, audio: { systemAudio: 'include', suppressLocalAudioPlayback: false } }) });
+    if (mic) requests.push({ track: 'mic', stream: this.requestTrack('mic') });
+    if (system) requests.push({ track: 'system', stream: this.requestTrack('system') });
     if (!requests.length) throw new Error('至少选择一个音频输入');
     const results = await Promise.allSettled(requests.map(({ stream }) => stream));
     const failed = results.findIndex(({ status }) => status === 'rejected');
     if (failed >= 0) {
       results.filter(({ status }) => status === 'fulfilled').forEach(({ value }) => stopMediaStream(value));
       if (requests[failed].track === 'mic') throw new Error(describeMicError(results[failed].reason));
+      if (results[failed].reason?.message?.includes('未检测到系统音频')) throw results[failed].reason;
       throw new Error('无法获取系统音频，请检查系统权限后重试');
     }
     this.pendingStreams = results.map(({ value }, index) => ({ track: requests[index].track, stream: value }));
@@ -62,18 +85,15 @@ class AudioCapture {
     }
     const resource = { stream, context: new AudioContext() };
     try {
+      await loadAudioWorklet(resource.context);
       resource.source = resource.context.createMediaStreamSource(stream);
-      resource.processor = resource.context.createScriptProcessor(4096, 1, 1);
-      resource.mute = resource.context.createGain();
-      resource.mute.gain.value = 0;
-      resource.processor.onaudioprocess = ({ inputBuffer }) => {
-        const input = inputBuffer.getChannelData(0);
-        const power = input.reduce((total, sample) => total + sample * sample, 0) / input.length;
-        if (this.onLevel) this.onLevel('mic', Math.min(1, Math.sqrt(power) * 8));
+      resource.processor = new AudioWorkletNode(resource.context, 'audio-capture-processor');
+      // worklet 只回传电平,预览阶段无需推流。节点不写输出缓冲,因此接到 destination 也是静音。
+      resource.processor.port.onmessage = ({ data }) => {
+        if (this.onLevel) this.onLevel('mic', data.level);
       };
       resource.source.connect(resource.processor);
-      resource.processor.connect(resource.mute);
-      resource.mute.connect(resource.context.destination);
+      resource.processor.connect(resource.context.destination);
       this.preview = resource;
       await resource.context.resume();
     } catch (error) {
@@ -93,35 +113,36 @@ class AudioCapture {
   async start(meetingId) {
     this.meetingId = meetingId;
     this.stopping = false;
-    this.trackSamples.clear();
+    this.startedAt = performance.now();
     const streams = this.pendingStreams;
     this.pendingStreams = [];
     await Promise.all(streams.map(({ track, stream }) => this.connect(track, stream)));
   }
 
   async connect(track, stream) {
-    const resource = { stream, context: new AudioContext() };
+    const resource = { track, stream, context: new AudioContext(), startMs: Math.round(performance.now() - this.startedAt) };
     const { context } = resource;
     let queue = Promise.resolve();
+    let sampleOffset = 0;
     let ready;
     const started = new Promise((resolve, reject) => {
       ready = resolve;
       setTimeout(() => reject(new Error(`${track === 'system' ? '系统音频' : '麦克风'}未产生音频数据`)), 3000);
     });
     try {
+      await loadAudioWorklet(context);
       resource.source = context.createMediaStreamSource(stream);
-      resource.processor = context.createScriptProcessor(4096, 1, 1);
-      resource.processor.onaudioprocess = ({ inputBuffer }) => {
+      resource.processor = new AudioWorkletNode(context, 'audio-capture-processor');
+      // worklet 累积样本并回传主线程,在此处理暂停/静音逻辑并推流到后端。
+      resource.processor.port.onmessage = ({ data }) => {
         ready();
         if (this.paused) return;
-        const input = inputBuffer.getChannelData(0);
         if (track === 'mic' && this.onLevel) {
-          const power = input.reduce((total, sample) => total + sample * sample, 0) / input.length;
-          this.onLevel(track, Math.min(1, Math.sqrt(power) * 8));
+          this.onLevel(track, data.level);
         }
-        const samples = this.resample(input, context.sampleRate);
-        const sampleOffset = this.trackSamples.get(track) || 0;
-        this.trackSamples.set(track, sampleOffset + samples.length);
+        const samples = this.resample(data.samples, context.sampleRate);
+        const offset = sampleOffset;
+        sampleOffset += samples.length;
         const pcm = new Int16Array(samples.length);
         samples.forEach((sample, index) => { pcm[index] = Math.max(-1, Math.min(1, sample)) * 0x7fff; });
         const bytes = new Uint8Array(pcm.buffer);
@@ -132,7 +153,7 @@ class AudioCapture {
           track,
           pcm: btoa(binary),
           sample_rate: 16000,
-          start_ms: Math.round(sampleOffset / 16),
+          start_ms: resource.startMs + Math.round(offset / 16),
         };
         queue = queue.then(() => this.stopping ? null : this.send(payload)).catch((error) => console.error('Audio frame failed', error));
       };
@@ -149,14 +170,38 @@ class AudioCapture {
     }
   }
 
-  async release({ stream, context, source, processor, mute }) {
-    for (const node of [processor, source, mute]) {
-      try { node?.disconnect(); } catch { /* It may not have connected yet. */ }
+  async release({ stream, context, source, processor }) {
+    for (const node of [processor, source]) {
+      try { node?.disconnect(); } catch { /* 可能尚未连接。 */ }
     }
     stopMediaStream(stream);
-    if (context?.state !== 'closed') {
+    if (context && context.state !== 'closed') {
       try { await context.close(); } catch (error) { console.error('Audio context cleanup failed', error); }
     }
+  }
+
+  async setTrackEnabled(track, enabled) {
+    const source = this.sources.find((item) => item.track === track);
+    if (enabled) {
+      if (source) return;
+      await this.connect(track, await this.requestTrack(track));
+      return;
+    }
+    if (!source) return;
+    source.processor.port.onmessage = null;
+    source.processor.disconnect();
+    source.source.disconnect();
+    await source.pending();
+    await this.send({
+      meeting_id: this.meetingId,
+      track,
+      pcm: '',
+      sample_rate: 16000,
+      start_ms: Math.round(performance.now() - this.startedAt),
+      flush: true,
+    });
+    this.sources = this.sources.filter((item) => item !== source);
+    await this.release(source);
   }
 
   resample(input, sourceRate) {
@@ -193,7 +238,7 @@ class AudioCapture {
 }
 
 window.breviaClient = window.brevia ? {
-  state: { meeting: null, selectedMeetingId: null, initialized: null },
+  state: { meeting: null, selectedMeetingId: null, initialized: null, inputs: null },
   capture: null,
   preview: null,
   onLevel: null,
@@ -227,7 +272,17 @@ window.breviaClient = window.brevia ? {
     }
     this.state.meeting = meeting;
     this.state.selectedMeetingId = meeting.id;
+    this.state.inputs = { ...inputs };
     return meeting;
+  },
+  async setTrackEnabled(track, enabled) {
+    if (!this.capture) throw new Error('当前没有正在进行的会议');
+    if (track === 'system' && enabled) {
+      const permissions = await window.brevia.permissions.status();
+      if (permissions.systemAudioSupported === false) throw new Error('当前系统不支持直接录制系统音频');
+    }
+    await this.capture.setTrackEnabled(track, enabled);
+    this.state.inputs = { ...this.state.inputs, [track]: enabled };
   },
   async previewMic() {
     if (!this.preview) this.preview = new AudioCapture(null, this.onLevel);
@@ -252,6 +307,7 @@ window.breviaClient = window.brevia ? {
     const meeting = await window.brevia.meeting.stop({ meeting_id: meetingId, duration_ms: durationMs });
     this.capture = null;
     this.state.meeting = null;
+    this.state.inputs = null;
     return meeting;
   },
 } : null;

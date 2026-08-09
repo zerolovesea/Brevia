@@ -14,7 +14,6 @@ from .config import SETTINGS
 def complete(payload, prompt, json_mode=False):
     """调用 OpenAI/Claude 兼容端点并提取常见的文本字段。"""
     api_format = (payload.get("format") or "openai").lower()
-    provider = payload.get("provider", "").lower()
     endpoint = payload["endpoint"].rstrip("/")
     body = {
         "model": payload["model"],
@@ -25,13 +24,7 @@ def complete(payload, prompt, json_mode=False):
     if json_mode:
         body["response_format"] = {"type": "json_object"}
     headers = {"Content-Type": "application/json", "User-Agent": "Brevia/1.0"}
-    if provider in {"ollama", "ollama cloud"} and endpoint.endswith("/api/chat"):
-        # Ollama's native chat API works for both local and cloud hosts.
-        body.pop("stream")
-        body.pop("tool_choice")
-        if payload.get("api_key"):
-            headers["Authorization"] = f"Bearer {payload['api_key']}"
-    elif api_format in {"anthropic", "claude"}:
+    if api_format in {"anthropic", "claude"}:
         if not endpoint.endswith("/v1/messages"):
             endpoint += "/v1/messages"
         body = {

@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
-"""JSONL worker entry point and stable Worker facade."""
+"""JSONL worker 入口点与稳定的 Worker 外观。"""
 
 import json
 import sys
 import threading
+from concurrent.futures import ThreadPoolExecutor
 
 from .worker_core import WorkerCore
 from .worker_exports import ExportWorkerMixin
 from .worker_llm import LLMWorkerMixin
+from .worker_llama_sidecar import LlamaSidecarMixin
 from .worker_meetings import MeetingCommandMixin
 from .worker_models import ModelTaskWorkerMixin
 from .worker_refinement import RefinementWorkerMixin
@@ -24,12 +26,13 @@ class Worker(
     ExportWorkerMixin,
     RefinementWorkerMixin,
     LLMWorkerMixin,
+    LlamaSidecarMixin,
 ):
-    """Protocol facade composed from focused worker services."""
+    """从聚焦的 worker 服务组合而成的协议外观。"""
 
 
 def install_global_error_handlers(worker):
-    """Report otherwise-unhandled process and background-thread failures."""
+    """报告未被捕获的进程和后台线程故障。"""
 
     def thread_error(args):
         try:
@@ -54,7 +57,7 @@ def install_global_error_handlers(worker):
 
 
 def main():
-    """Run the stdin/stdout JSONL loop; one failed command does not stop the worker."""
+    """运行 stdin/stdout JSONL 循环；单个命令失败不会停止 worker。"""
     worker = Worker()
     install_global_error_handlers(worker)
 
@@ -63,6 +66,11 @@ def main():
             worker.response(command.get("id"), worker.handle(command))
         except Exception as error:
             worker.response(command.get("id"), error=error)
+
+    # 单工作线程执行器序列化翻译推理，使得每次只运行一个翻译任务（有序输出，限制本地模型加载）。
+    translation_executor = ThreadPoolExecutor(
+        max_workers=1, thread_name_prefix="brevia-translation"
+    )
 
     maximum_command_bytes = 4 * 1024 * 1024
     while line := sys.stdin.readline(maximum_command_bytes + 1):
@@ -81,10 +89,11 @@ def main():
         except Exception as error:
             worker.response(None, error=error)
             continue
-        if command.get("type") in {
+        if command.get("type") == "translation.generate":
+            translation_executor.submit(respond, command)
+        elif command.get("type") in {
             "meeting.refine",
             "meeting.separate",
-            "translation.generate",
             "speaker-profile.list",
             "speaker-profile.samples",
             "speaker-profile.sample-delete",

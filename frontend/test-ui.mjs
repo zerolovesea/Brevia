@@ -54,7 +54,7 @@ meetingCacheContext.cacheMeetingList();
 assert.deepEqual(JSON.parse(meetingCacheStorage.get('brevia-meetings-v1')).map(({ id }) => id), ['cached']);
 const advancedDescription = '调整识别、端点检测、说话人分离和本地模型运行参数。';
 for (const code of ['en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']) assert.notEqual(localeContext.window.BreviaLocaleData.catalog[code].labels[advancedDescription], advancedDescription);
-const runtimeI18nKeys = ['离线功能', '请选择声音', '请先配置翻译模型', '纪要服务拒绝了请求', '纪要模型需要配置', '请先选择译文目标并配置纪要模型', '将确认字幕发送到 {provider} 生成译文。是否继续？', '选择格式：md / txt / json / srt / docx / pdf / flac / wav / m4a', '刚刚', '已导出「{title}」', '示例会议及录音已删除', '会议已移至最近删除', '暂停录音', '播放录音', '这场会议没有可播放的录音', '纪要配置加载失败', '配置或后端启动失败', '翻译失败', '压缩包已导出', '未找到录音，已导出逐字稿压缩包'];
+const runtimeI18nKeys = ['离线功能', '请选择声音', '请先配置翻译模型', '纪要服务拒绝了请求', '纪要模型需要配置', '请先选择译文目标并配置纪要模型', '将确认字幕发送到 {provider} 生成译文。是否继续？', '选择格式：md / txt / json / srt / docx / pdf / flac / wav / m4a', '刚刚', '已导出「{title}」', '示例会议及录音已删除', '会议已移至最近删除', '暂停录音', '播放录音', '这场会议没有可播放的录音', '纪要配置加载失败', '配置或后端启动失败', '翻译失败', '压缩包已导出', '未找到录音，已导出逐字稿压缩包', '内置纪要模型清单暂不可用。', '请先选择或填写纪要模型。', '请填写请求地址。', '请填写 API Key。', '纪要模型已保存'];
 for (const code of ['en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']) for (const key of runtimeI18nKeys) assert.notEqual(localeContext.window.BreviaLocaleData.catalog[code].labels[key], key);
 for (const code of ['en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']) assert.notEqual(localeContext.window.BreviaLocaleData.catalog[code].labels['添加录音到声纹库'], '添加录音到声纹库');
 for (const code of ['en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']) assert.notEqual(localeContext.window.BreviaLocaleData.catalog[code].labels['清空数据'], '清空数据');
@@ -68,13 +68,10 @@ for (const [code, stage, allLanguages] of [['ja', 'ライブ字幕', 'すべて�
   assert.equal(items[0][0], stage);
   assert.equal(items.find(([, name]) => name === 'Spleeter 2 Stems')[2], allLanguages);
 }
-assert.deepEqual(Array.from(localeContext.window.BreviaLocaleData.appCopy.modalCopy.zh.models.items.slice(10, 16), ([, name]) => name), ['Qwen3-ASR', 'FireRedASR2 CTC', 'FunASR Nano int8', 'Whisper Turbo', 'Whisper Large v3', 'Qwen3-ASR 1.7B int8']);
-for (const [id, language] of [['vits-mimic3-ko-kss-low', 'ko'], ['vits-piper-fr-siwis-medium-int8', 'fr'], ['vits-piper-de-thorsten-medium-int8', 'de'], ['vits-piper-es-sharvard-medium-int8', 'es'], ['vits-piper-ru-irina-medium-int8', 'ru']]) {
-  const model = modelManifest.find((entry) => entry.id === id);
-  assert.deepEqual(model?.languages, [language]);
-  assert.equal(model?.kind, 'tts');
-  assert.match(text(js), new RegExp(`'${id}'`));
-  assert(localeContext.window.BreviaLocaleData.appCopy.modalCopy.zh.models.items.some(([, name]) => name === model?.name));
+assert.deepEqual(Array.from(localeContext.window.BreviaLocaleData.appCopy.modalCopy.zh.models.items.slice(9, 13), ([, name]) => name), ['Qwen3-ASR', 'FunASR Nano int8', 'Whisper Large v3', 'Qwen3-ASR 1.7B int8']);
+for (const id of ['vits-mimic3-ko-kss-low', 'vits-piper-fr-siwis-medium-int8', 'vits-piper-de-thorsten-medium-int8', 'vits-piper-es-sharvard-medium-int8', 'vits-piper-ru-irina-medium-int8', 'zipformer-zh-streaming-int8', 'whisper-turbo', 'fire-red-asr2-ctc-zh-en-int8', 'nemo-titanet-small-en']) {
+  assert.equal(modelManifest.find((entry) => entry.id === id), undefined, `pruned model ${id} still in manifest`);
+  assert.doesNotMatch(text(js), new RegExp(`'${id}'`), `pruned model ${id} still referenced in app js`);
 }
 assert.equal(componentContext.rectanglesIntersect({ left: 0, right: 10, top: 0, bottom: 10 }, { left: 8, right: 12, top: 8, bottom: 12 }), true);
 assert.equal(componentContext.rectanglesIntersect({ left: 0, right: 2, top: 0, bottom: 2 }, { left: 3, right: 5, top: 3, bottom: 5 }), false);
@@ -142,6 +139,7 @@ assert.match(text(js), /function setLiveTranslationEnabled/);
 assert.match(text(js), /setLiveTranslationEnabled\(Boolean\(payload\.target_language\)\)/);
 assert.match(text(js), /showView\('detail'\)/);
 assert.match(text(html), /id="language-toggle"/);
+assert.match(text(html), /href="https:\/\/github\.com\/zerolovesea\/Brevia"/);
 assert.match(text(html), /id="all-meetings"/);
 assert.match(text(html), /id="category-filter"/);
 assert.match(text(js), /renderCategoryFilter\(\);\s*renderDateFilter\(\);\s*renderMeetingList\(\);/);
@@ -163,10 +161,18 @@ assert.match(text(html), /id="playback-rate"/);
 assert.match(text(i18nData), /catalog\s*=\s*{/);
 assert.match(text(js), /window\.BreviaLocaleData/);
 assert.doesNotMatch(text(js), /defaultSummaryPrompts|prompt-form/);
-assert.match(text(js), /ollamaChatEndpoint/);
-assert.match(text(js), /ollamaCloudChatEndpoint/);
-assert.match(text(js), /data-summary-api-key/);
-assert.match(text(js), /type="password"[^>]*placeholder="\$\{current\.keyReference/);
+assert.match(text(js), /const summaryProviders = \['built-in', 'claude', 'openai', 'openrouter', 'custom-openai', 'custom-claude'\]/);
+assert.match(text(js), /model\.kind === 'llama-chat' && modelPaths\.has\(model\.id\)/);
+// 只有两个自定义供应商暴露请求地址，固定供应商的地址由 summaryProviderPresets 派生。
+assert.match(text(js), /const endpointField = preset\.needsEndpoint \?/);
+assert.match(text(js), /'custom-openai': \{ format: 'openai', endpoint: '', needsKey: true, needsEndpoint: true/);
+assert.match(text(js), /openrouter: \{ format: 'openai', endpoint: 'https:\/\/openrouter\.ai\/api\/v1\/chat\/completions', needsKey: true, needsEndpoint: false/);
+assert.match(text(js), /data-download-summary-model="\$\{escapeHtml\(model\.id\)\}"/);
+assert.match(text(js), /data-builtin-model-id="\$\{escapeHtml\(model\.id\)\}"/);
+assert.doesNotMatch(text(js), /ollama/i);
+assert.doesNotMatch(text(i18nData), /ollama/i);
+assert.doesNotMatch(text(js), /data-new-summary-model|data-delete-summary-model|active-summary-config/);
+assert.match(text(js), /type="password"[^>]*placeholder="\$\{entry\.keyReference/);
 assert.doesNotMatch(text(js), /secret\.get|summaryKeyValues/);
 assert.match(text(js), /speakerProfileName\(profile\)/);
 assert.match(text(js), /window\.brevia\?\.appInfo\?\.version\?\.\(\)/);
@@ -221,6 +227,20 @@ assert.match(text(js), /async function mutateMeetings/);
 assert.match(text(js), /async function openMeetingRow/);
 assert.match(text(components), /data-meeting-action="purge"/);
 assert.match(text(electronMain), /meeting\.purge/);
+assert.match(text(electronMain), /handleModelRequirement\('meeting\.reconfigure', meetingReconfigure, 'meeting\.reconfigure'\)/);
+assert.match(text(electronMain), /const meetingReconfigure = id\.extend/);
+assert.match(text(electronMain), /'meeting\.reconfigured'/);
+assert.match(text(electronMain), /endpoint: z\.string\(\)\.url\(\)\.optional\(\)/);
+// 纪要配置收敛为「单套激活 + 按供应商记住凭据」，只认 version 2，不再迁移旧结构。
+assert.match(text(electronMain), /const summaryProviderIds = \['built-in', 'claude', 'openai', 'openrouter', 'custom-openai', 'custom-claude'\]/);
+assert.match(text(electronMain), /providers: z\.partialRecord\(z\.enum\(summaryProviderIds\), summaryProviderEntry\)/);
+assert.match(text(electronMain), /if \(!api_key && !isBuiltInProvider\(value\.provider\)\) return \{ configuration_required: true \}/);
+assert.match(text(electronMain), /return current\.success \? current\.data : null;/);
+assert.doesNotMatch(text(electronMain), /legacySummaryConfig|migrateSummaryConfig/);
+assert.doesNotMatch(text(js), /migrateSummaryConfig|inferSummaryProvider/);
+assert.doesNotMatch(text(electronMain), /ollama/i);
+assert.match(text(electronMain), /ipcMain\.handle\('translation\.generate',[\s\S]{0,700}target_language: z\.string\(\)\.min\(2\)\.max\(32\),[\s\S]{0,100}consent: z\.literal\(true\)/);
+assert.doesNotMatch(text(electronMain), /ipcMain\.handle\('translation\.generate',[\s\S]{0,700}provider: z\.string\(\)/);
 assert.match(text(electronMain), /startupAnimationMs = 1700/);
 assert.match(text(electronMain), /startupDataWaitMs = 2200/);
 assert.doesNotMatch(text(electronMain), /const splash = new BrowserWindow/);
@@ -270,7 +290,7 @@ assert.match(text(i18nData), /所有转写模型都在本地运行，不会将�
 assert.match(text(i18nData), /Réunions et enregistrements/);
 assert.match(text(i18nData), /Modèle de sous-titres en direct/);
 assert.match(text(i18nData), /Gérer les modèles →/);
-assert.match(text(js), /whisper-turbo/);
+assert.match(text(js), /whisper-large-v3/);
 assert.match(text(i18nData), /实时字幕/);
 assert.match(text(i18nData), /会后精修/);
 assert.match(text(js), /const languageModelDefaults/);
@@ -279,7 +299,7 @@ assert.match(text(html), /id="active-refined-model" data-model="funasr-nano-int8
 assert.match(text(electronMain), /path\.join\(app\.getPath\('home'\), 'brevia'\)/);
 assert.match(text(electronMain), /appendFile\(logFile\(\), line, 'utf8'\)/);
 assert.match(text(electronMain), /await migrateDataDir\(\)/);
-assert.match(text(js), /en: \{ streaming: 'zipformer-en-streaming-int8', refined: 'whisper-turbo'/);
+assert.match(text(js), /en: \{ streaming: 'zipformer-en-streaming-int8', refined: 'whisper-large-v3'/);
 assert.match(text(js), /const compatibleStreamingModels/);
 assert.match(text(html), /src="\.\/i18n\.js"/);
 assert.match(text(js), /BreviaI18n\.languageOptions\(locale, t/);
@@ -292,6 +312,11 @@ assert.match(text(js), /\(themeLabels\[locale\] \|\| themeLabels\.en\)/);
 for (const code of ['ja', 'ko', 'fr', 'de', 'ru']) assert.match(text(html), new RegExp(`data-language="${code}"`));
 assert.doesNotMatch(text(js), /音频分析/);
 assert.match(text(js), /data-download-model/);
+// A cancelled download is terminal: the library button must not stay disabled on "下载中", and dismissing the
+// queue must drop cancelled/failed entries so re-downloading works. Guards the stuck-"下载中" regression.
+assert.match(text(js), /const downloadInFlight = progress && !progress\.error && !progress\.cancelled/);
+assert.match(text(js), /\$\{downloadInFlight \? ' disabled' : ''\}/);
+assert.match(text(js), /if \(card\?\.id === 'model-download-queue'\) \{[\s\S]*?if \(progress\.cancelled \|\| progress\.error\) \{ modelDownloads\.delete\(modelId\); requiredModelIds\.delete\(modelId\); \}/);
 assert.match(text(js), /prepareModelChoices/);
 assert.match(text(js), /t\('VAD 模型'\)/);
 assert.match(text(js), /function renderPrepareSelects\(\) \{[\s\S]*?importRecording\.textContent = t\('导入录音'\);/);
@@ -302,10 +327,28 @@ assert.match(text(js), /qwen3-asr-1\.7b-int8/);
 assert.match(text(js), /'silero-vad',\s*'online-punct-en-int8'/);
 assert.doesNotMatch(text(js), /ten-vad|TEN-VAD/);
 assert.doesNotMatch(text(asr), /ten_vad/);
-assert.match(text(js), /function renderModelLibraryMeta/);
+// The download size rides in the tag row as its own tag; the compute/runtime tag was dropped.
 assert.match(text(js), /model\.size_bytes/);
-assert.match(text(js), /model\.backend/);
+assert.match(text(js), /model-library-size/);
+assert.doesNotMatch(text(js), /function renderModelLibraryMeta/);
+assert.doesNotMatch(text(js), /model-library-meta/);
 assert.match(text(js), /model-library-installed/);
+// The library foregrounds curated quality/speed ratings and the supported language, demoting the model name to a caption.
+assert.match(text(js), /const modelRatings = \{/);
+assert.match(text(js), /function renderModelLibraryRatings/);
+assert.match(text(js), /model-library-ratings/);
+assert.match(text(js), /rating-scale/);
+assert.match(text(js), /model-library-headline/);
+assert.match(text(js), /model-library-modelname/);
+// The model name rides inside the tag row (renderModelLibraryTags), not on a line of its own.
+assert.match(text(js), /function renderModelLibraryTags\(model, installed, name\)/);
+assert.match(text(js), /class="model-library-modelname">\$\{escapeHtml\(name\)\}/);
+// Every catalogued model must carry a rating so no card renders a blank ratings row.
+for (const id of ['paraformer-zh-en-int8', 'whisper-large-v3', 'zipformer-zh-xlarge-streaming-int8', 'silero-vad', 'zipvoice-zh-en']) {
+  assert.match(text(js), new RegExp(`'${id.replace(/[.]/g, '\\.')}':\\s*\\{ quality:`));
+}
+assert.match(text(js), /qualityTiers: \['标准', '高', '极高'\]/);
+assert.match(text(js), /speedTiers: \['较慢', '均衡', '快'\]/);
 assert.match(text(js), /zipformer-multilingual-streaming/);
 assert.match(text(js), /active-diarization-model/);
 assert.doesNotMatch(text(html), /id="active-model-name"/);
@@ -320,9 +363,9 @@ assert.match(text(electronMain), /@ffmpeg-installer\/ffmpeg/);
 assert.match(text(electronMain), /BREVIA_FFMPEG: ffmpeg/);
 assert.equal(packageManifest.dependencies['@ffmpeg-installer/ffmpeg'], '1.1.0');
 assert.deepEqual(packageManifest.build.asarUnpack, ['node_modules/@ffmpeg-installer/**']);
-assert.match(text(backendClient), /this\.trackSamples/);
-assert.match(text(backendClient), /start_ms: Math\.round\(sampleOffset \/ 16\)/);
-assert.doesNotMatch(text(backendClient), /performance\.now\(\)/);
+assert.match(text(backendClient), /async setTrackEnabled\(track, enabled\)/);
+assert.match(text(backendClient), /start_ms: resource\.startMs \+ Math\.round\(offset \/ 16\)/);
+assert.match(text(backendClient), /this\.startedAt = performance\.now\(\)/);
 assert.match(text(electronMain), /setWindowOpenHandler/);
 assert.match(text(electronMain), /will-navigate/);
 assert.match(text(electronMain), /process\.on\('unhandledRejection'/);
@@ -372,6 +415,13 @@ assert.match(text(css), /\.transcript-scroll \.segment\{[^}]*grid-template-colum
 assert.match(text(css), /\.transcript-scroll \.segment-meta\{[^}]*align-self:flex-start/);
 assert.doesNotMatch(text(css), /\.transcript-scroll \.segment p\{[^}]*-webkit-line-clamp/);
 assert.match(text(css), /participants-list/);
+assert.match(text(tailwind), /\.live-panel \{ @apply col-span-3 min-h-0 min-w-0 overflow-y-auto/);
+assert.match(text(tailwind), /\.participants-list \{ @apply min-h-0 max-h-48 overflow-y-auto/);
+assert.match(text(tailwind), /\.live-settings \.flow-select-options button \{ @apply break-words whitespace-normal/);
+assert.match(text(js), /<select class="flow-select-toggle" name="live-translation-target">/);
+assert.match(text(js), /select\[name="live-translation-target"\]/);
+assert.match(text(js), /void reconfigureLive\(\{ target_language: value \}\)/);
+assert.match(text(js), /const translationTarget = liveConfig\.target_language \|\| ''/);
 assert.match(text(js), /function renderExportModal/);
 assert.match(text(js), /data-track="vocals"/);
 assert.match(text(js), /data-track="accompaniment"/);
@@ -410,7 +460,8 @@ assert.match(text(js), /separation\.progress/);
 assert.match(text(js), /speakerProfile\.samples/);
 assert.match(text(js), /speakerProfile\.deleteSample/);
 assert.match(text(asr), /Models \{segmentation_id\}, \{embedding_id\} are not installed/);
-assert.match(text(asr), /model\.get\("archive_sha256"\) and digest != model\["archive_sha256"\]/);
+assert.match(text(asr), /expected_checksum = model\.get\("archive_sha256"\)/);
+assert.match(text(asr), /if digest != expected_checksum:/);
 assert.match(text(electronMain), /meeting\.bundle/);
 assert.match(text(electronMain), /error\.code === 'ENOENT'/);
 assert.match(text(electronMain), /configuration_required: true/);
@@ -421,7 +472,11 @@ assert.match(text(js), /online-punct-en-int8/);
 assert.doesNotMatch(text(js), /const modelSizes/);
 assert.match(text(js), /const modelSize = \(modelId\) => modelCatalog\.find/);
 const frontendModelIds = [...text(js).match(/const modelIds = \[([\s\S]*?)\];/)[1].matchAll(/'([^']+)'/g)].map(([, id]) => id);
-assert.deepEqual(new Set(frontendModelIds), new Set(modelManifest.map(({ id }) => id)));
+// llama-chat GGUF models are managed through the summary modal, not the generic
+// model library. llama-translation models (caption translation) are now shown in
+// the generic model library, so they're included in modelIds.
+const libraryManifestIds = modelManifest.filter(({ kind }) => kind !== 'llama-chat').map(({ id }) => id);
+assert.deepEqual(new Set(frontendModelIds), new Set(libraryManifestIds));
 assert.match(text(js), /data-delete-model/);
 assert.match(text(css), /::-webkit-scrollbar-thumb\{/);
 assert.match(text(css), /:where\(html,body,\*\)\.is-scrolling\{scrollbar-color:#aaa transparent/);
@@ -529,6 +584,15 @@ assert.match(text(js), /<li><span>\$\{escapeHtml\(modelDisplayName\(modelId\)\)\
 assert.match(text(css), /\.onboarding-model-preview\{[^}]*border-left/);
 assert.match(text(css), /\.onboarding-setup-page header\{[^}]*justify-items:center[^}]*text-align:center/);
 assert.match(text(css), /\.onboarding-language-selection\{[^}]*height:calc\(var\(--spacing\) \* 64\)/);
+// Onboarding quality/performance preference drives which models get selected, coupled to runtime defaults via preferredModelsForLanguage.
+assert.match(text(js), /const modelPreference = \(\)/);
+assert.match(text(js), /const languageModelPreferences = \{/);
+assert.match(text(js), /function onboardingPreferenceControl/);
+assert.match(text(js), /name="onboarding-model-preference"/);
+assert.match(text(js), /brevia-model-preference/);
+assert.match(text(js), /const preset = languageModelPreferences\[modelPreference\(\)\]/);
+assert.match(text(js), /preferenceQuality: '质量优先'/);
+assert.match(text(css), /\.onboarding-preference-option\{/);
 assert.match(text(js), /data-onboarding-back-language/);
 assert.match(text(js), /function openOnboardingPermissions/);
 assert.match(text(js), /data-request-onboarding-permission/);
@@ -587,13 +651,18 @@ assert.doesNotMatch(text(js), /segment\.offsetTop - \(transcript\.clientHeight -
 assert.match(text(js), /liveSpeakers\.set/);
 assert.match(text(js), /const maxLiveSegments = 500/);
 assert.match(text(js), /while \(liveSegments\.size > maxLiveSegments\)/);
-assert.match(text(js), /uiData\.live\.status\[0\]\.value = streamingModelName/);
+assert.match(text(js), /liveConfig = \{ language: language \|\| 'auto', streaming_model_id: streamingModelId \|\| '', refined_model_id: refinedModelId \|\| '', target_language: payload\.target_language \|\| null \}/);
+assert.match(text(js), /await window\.brevia\.meeting\.reconfigure\(\{ meeting_id: meetingId, \.\.\.changes \}\)/);
+assert.match(text(js), /breviaClient\?\.setTrackEnabled\(track, enabled\)/);
+assert.doesNotMatch(text(js), /uiData\.live\.status/);
 assert.match(text(js), /segment\.classList\.remove\('is-active'\)/);
 assert.match(text(js), /示例会议及录音已删除/);
 assert.match(text(js), /function syncPlaybackTranscript/);
 assert.match(text(js), /\['zh', 'en'\]\.includes\(targetLanguage\) && !voiceId/);
-assert.match(text(js), /const ttsLanguages = \['zh', 'en', 'ko', 'fr', 'de', 'es', 'ru'\]/);
+assert.match(text(js), /const ttsLanguages = \['zh', 'en'\]/);
 assert.match(text(electronMain), /target_language: z\.enum\(\['zh', 'en', 'es', 'ko', 'fr', 'de', 'ru'\]\)/);
+assert.match(text(electronMain), /translationPending: z\.boolean\(\)\.optional\(\)/);
+assert.match(text(electronMain), /translationPending: floatingCaptionState\.translationPending/);
 assert.match(text(js), /function showRefinementProgress/);
 assert.match(text(js), /\$\{copy\.title\} - \$\{refinementMeetingTitle\}/);
 assert.match(text(js), /segment\.version\.startsWith\('postprocess'\)/);
@@ -631,4 +700,80 @@ assert.match(text(css), /\.input-meter/);
 assert.match(text(css), /\.selection-marquee\{/);
 assert.match(text(css), /\.meeting-row\.is-selected\{/);
 assert.match(text(html), /ui-data\.js[\s\S]*ui-components\.js[\s\S]*app\.js/);
+// 纪要模态框的真实渲染产物：字段可见性、内置模型清单、凭据回填、转义和八语言标签。
+const summaryAppSource = text(app);
+const summaryFn = (name) => { const start = summaryAppSource.indexOf(`function ${name}(`); return summaryAppSource.slice(start, summaryAppSource.indexOf('\n}\n', start) + 2); };
+const summaryConst = (decl, multiline = false) => { const start = summaryAppSource.indexOf(decl); return multiline ? summaryAppSource.slice(start, summaryAppSource.indexOf('\n};', start) + 3) : summaryAppSource.slice(start, summaryAppSource.indexOf('\n', start) + 1); };
+const summaryNodes = { h2: { textContent: '' }, '.modal-title p': { textContent: '' }, '.modal-body': { innerHTML: '' } };
+const summaryContext = {
+  locale: 'zh',
+  t: (value) => localeContext.window.BreviaLocaleData.catalog.zh.labels[value] || value,
+  summaryModelCopy: localeContext.window.BreviaLocaleData.appCopy.summaryModelCopy,
+  modelLabels: localeContext.window.BreviaLocaleData.appCopy.modelLabels,
+  formatBytes: (bytes) => `${bytes}B`,
+  modelDownloads: new Map(),
+  settingsModal: { querySelector: (selector) => summaryNodes[selector] },
+};
+runInNewContext(`${text(components)}\nthis.escapeHtml = escapeHtml;`, summaryContext);
+runInNewContext(`${summaryConst('const summaryProviders = ')}${summaryConst('const summaryProviderPresets = ', true)}\n${summaryFn('summaryProviderLabel')}${summaryFn('summaryProviderEntry')}${summaryFn('renderBuiltinSummaryModels')}${summaryFn('renderSummaryModelModal')}`, summaryContext);
+const summaryCatalogModels = [{ id: 'qwen3.5-2b-q4km', name: 'Qwen 3.5 2B', kind: 'llama-chat', size_bytes: 100 }, { id: 'gemma3-1b-q8', name: 'Gemma 3 1B', kind: 'llama-chat' }, { id: 'whisper-large-v3', name: 'Whisper', kind: 'asr' }];
+const renderSummaryModal = (provider, { providers = {}, installed = [] } = {}) => {
+  summaryContext.modelCatalog = summaryCatalogModels;
+  summaryContext.modelPaths = new Map(installed.map((id) => [id, `/tmp/${id}`]));
+  summaryContext.summaryConfig = { version: 2, provider, providers };
+  summaryContext.selectedBuiltinModel = '';
+  summaryContext.renderSummaryModelModal();
+  return summaryNodes['.modal-body'].innerHTML;
+};
+let summaryHtml = renderSummaryModal('built-in', { installed: ['qwen3.5-2b-q4km'] });
+assert.match(summaryHtml, /data-builtin-model-id="qwen3\.5-2b-q4km"/);
+assert.match(summaryHtml, /data-download-summary-model="gemma3-1b-q8"/);
+assert.doesNotMatch(summaryHtml, /whisper-large-v3/);
+assert.match(summaryHtml, /name="model" value="qwen3\.5-2b-q4km"/);
+assert.doesNotMatch(summaryHtml, /name="apiKey"|name="endpoint"/);
+assert.doesNotMatch(summaryHtml, /type="submit" disabled/);
+// 一个内置模型都没装时无从选择，保存必须禁用。
+summaryHtml = renderSummaryModal('built-in');
+assert.match(summaryHtml, /type="submit" disabled/);
+assert.doesNotMatch(summaryHtml, /data-builtin-model-id/);
+for (const provider of ['claude', 'openai', 'openrouter']) {
+  summaryHtml = renderSummaryModal(provider);
+  assert.doesNotMatch(summaryHtml, /name="endpoint"/, `${provider} must not expose an endpoint field`);
+  assert.match(summaryHtml, /name="apiKey"/, `${provider} needs an api key field`);
+  assert.match(summaryHtml, /name="model"/, `${provider} needs a model field`);
+  assert.doesNotMatch(summaryHtml, /data-builtin-model-id|data-download-summary-model/);
+}
+for (const provider of ['custom-openai', 'custom-claude']) {
+  assert.match(renderSummaryModal(provider), /name="endpoint"[^>]*type="url"/, `${provider} needs an endpoint field`);
+}
+// 已存凭据只回填模型和圆点占位长度，密钥引用和明文都不进 DOM。
+summaryHtml = renderSummaryModal('openai', { providers: { openai: { model: 'gpt-4.1-mini', keyReference: 'summary-1', keyLength: 12 } } });
+assert.match(summaryHtml, /name="model" value="gpt-4\.1-mini"/);
+assert.match(summaryHtml, /name="apiKey"[^>]*type="password"/);
+assert.match(summaryHtml, /name="apiKey"[^>]*autocomplete="new-password"/);
+assert.match(summaryHtml, /name="apiKey"[^>]*placeholder="••••••••••••"/);
+assert.doesNotMatch(summaryHtml, /summary-1/);
+// 输入上限必须和主进程 zod 的上限一致，否则超长值要到主进程才被拒。
+assert.match(summaryHtml, /name="apiKey"[^>]*maxlength="512"/);
+assert.match(summaryHtml, /name="model"[^>]*maxlength="128"/);
+assert.match(text(electronMain), /model: z\.string\(\)\.trim\(\)\.min\(1\)\.max\(128\)/);
+assert.match(text(electronMain), /keyLength: z\.number\(\)\.int\(\)\.positive\(\)\.max\(512\)/);
+summaryHtml = renderSummaryModal('openai');
+for (const id of ['built-in', 'claude', 'openai', 'openrouter', 'custom-openai', 'custom-claude']) {
+  assert.match(summaryHtml, new RegExp(`data-flow-select-choice="provider" data-value="${id}"`), `missing provider choice ${id}`);
+}
+for (const code of ['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']) {
+  summaryContext.locale = code;
+  const copy = localeContext.window.BreviaLocaleData.appCopy.summaryModelCopy[code];
+  summaryHtml = renderSummaryModal('custom-openai');
+  assert.ok(summaryHtml.includes(copy.providers['custom-openai']), `${code} is missing the custom-openai label`);
+  assert.ok(summaryHtml.includes(copy.save), `${code} is missing the save label`);
+  assert.equal(summaryNodes.h2.textContent, copy.title);
+}
+summaryContext.locale = 'zh';
+summaryContext.modelCatalog = [{ id: '"><img src=x onerror=alert(1)>', name: '<script>alert(1)</script>', kind: 'llama-chat' }];
+summaryContext.modelPaths = new Map();
+summaryContext.summaryConfig = { version: 2, provider: 'built-in', providers: {} };
+summaryContext.renderSummaryModelModal();
+assert.doesNotMatch(summaryNodes['.modal-body'].innerHTML, /<img|<script>/);
 console.log('UI structure checks passed.');

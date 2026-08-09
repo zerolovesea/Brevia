@@ -1,4 +1,4 @@
-"""PyInstaller entry point for the packaged backend worker."""
+"""PyInstaller 打包后的后端 worker 入口点。"""
 
 import os
 

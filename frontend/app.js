@@ -15,8 +15,8 @@ const refinementCard = document.querySelector('#refinement-progress');
 const refinementPercent = document.querySelector('#refinement-percent');
 const refinementBar = document.querySelector('#refinement-bar');
 const taskCards = document.querySelector('#task-cards');
-function taskCardControls() { return '<span class="task-card-actions"><button class="task-card-close" data-minimize-task-card type="button" aria-label="最小化">—</button><button class="task-card-close" data-dismiss-task-card type="button" aria-label="关闭">×</button></span>'; }
-function taskPauseControl() { return '<button class="task-card-close" data-pause-task type="button" aria-label="暂停" disabled>Ⅱ</button>'; }
+function taskCardControls() { return `<span class="task-card-actions"><button class="task-card-close" data-minimize-task-card type="button" aria-label="${t('最小化')}">—</button><button class="task-card-close" data-dismiss-task-card type="button" aria-label="${t('关闭')}">×</button></span>`; }
+function taskPauseControl() { return `<button class="task-card-close" data-pause-task type="button" aria-label="${t('暂停')}" disabled>Ⅱ</button>`; }
 function setTaskCardTask(card, task, meetingId) {
   card.dataset.task = task;
   card.dataset.meetingId = meetingId;
@@ -87,15 +87,19 @@ let followLiveTranscript = true;
 let toastTimer;
 let switchingLanguage = false;
 let meetingActive = false;
+// 镜像当前会议的实时配置，使实时面板控件能够反映（并驱动）热切换。
+let liveConfig = { language: 'auto', streaming_model_id: '', refined_model_id: '', target_language: null };
+// 此会议打开了哪些捕获轨道；此处不存在的轨道无法实时切换。
+let liveInputs = { mic: true, system: true };
 let translationAllowed = false;
 let latestLiveSegmentId = null;
 let editingMeetingIndex = null;
 const translatedNodes = [];
 let floatingCaptionEnabled = false;
 let floatingCaptionLocale = locale;
-/** Resolves a display label for the active locale. @param {string} key Chinese source label. @returns {string} Localized label or the original key. */
+/** 解析当前语言环境的显示标签。@param {string} key 中文源标签。@returns {string} 本地化后的标签或原始键。*/
 const t = (key) => stageLabels[key]?.[locale] || stageLabels[key]?.en || catalog[locale].labels[key] || key;
-/** Resolves a transient message for the active locale. @param {string} key Message identifier. @returns {string} Localized message. */
+/** 解析当前语言环境的临时消息。@param {string} key 消息标识符。@returns {string} 本地化后的消息。*/
 const message = (key) => catalog[locale].messages[key];
 function formatBytes(bytes = 0) { return bytes >= 1024 ** 3 ? `${(bytes / 1024 ** 3).toFixed(2)} GB` : bytes >= 1024 ** 2 ? `${(bytes / 1024 ** 2).toFixed(1)} MB` : `${Math.round(bytes / 1024)} KB`; }
 function formatMeetingTime(milliseconds = 0) { const seconds = Math.max(0, Math.floor(milliseconds / 1000)); return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`; }
@@ -131,30 +135,114 @@ let currentMeetingDetail = null;
 let modelCatalog = [];
 const modelSize = (modelId) => modelCatalog.find((model) => model.id === modelId)?.size_bytes || 0;
 const modelLibraryMetaCopy = {
-  zh: { download: '下载', languages: '语言', compute: '运行', installed: '已安装', streaming: '实时转写', refined: '会后精修', punctuation: '标点恢复', vad: '语音检测', denoise: '语音降噪', diarization: '说话人分离', voiceprint: '声纹识别' },
-  en: { download: 'Download', languages: 'Languages', compute: 'Compute', installed: 'Installed', streaming: 'Live transcription', refined: 'Post-meeting refinement', punctuation: 'Punctuation', vad: 'Voice detection', denoise: 'Noise reduction', diarization: 'Speaker diarization', voiceprint: 'Voiceprint recognition' },
-  es: { download: 'Descarga', languages: 'Idiomas', compute: 'Ejecución', installed: 'Instalado', streaming: 'Transcripción en vivo', refined: 'Refinamiento posterior', punctuation: 'Puntuación', vad: 'Detección de voz', denoise: 'Reducción de ruido', diarization: 'Separación de hablantes', voiceprint: 'Reconocimiento de voz' },
-  ja: { download: 'ダウンロード', languages: '言語', compute: '実行環境', installed: 'インストール済み', streaming: 'ライブ文字起こし', refined: '会議後の高精度化', punctuation: '句読点復元', vad: '音声検出', denoise: 'ノイズ除去', diarization: '話者分離', voiceprint: '声紋認識' },
-  ko: { download: '다운로드', languages: '언어', compute: '실행 환경', installed: '설치됨', streaming: '실시간 전사', refined: '회의 후 정제', punctuation: '문장 부호', vad: '음성 감지', denoise: '노이즈 제거', diarization: '화자 분리', voiceprint: '음성 지문 인식' },
-  fr: { download: 'Téléchargement', languages: 'Langues', compute: 'Exécution', installed: 'Installé', streaming: 'Transcription en direct', refined: 'Affinage après réunion', punctuation: 'Ponctuation', vad: 'Détection vocale', denoise: 'Réduction du bruit', diarization: 'Séparation des locuteurs', voiceprint: 'Reconnaissance vocale' },
-  de: { download: 'Download', languages: 'Sprachen', compute: 'Ausführung', installed: 'Installiert', streaming: 'Live-Transkription', refined: 'Nachbearbeitung', punctuation: 'Zeichensetzung', vad: 'Spracherkennung', denoise: 'Rauschunterdrückung', diarization: 'Sprechertrennung', voiceprint: 'Stimmabdruck-Erkennung' },
-  ru: { download: 'Загрузка', languages: 'Языки', compute: 'Выполнение', installed: 'Установлено', streaming: 'Потоковая расшифровка', refined: 'Обработка после встречи', punctuation: 'Пунктуация', vad: 'Обнаружение речи', denoise: 'Шумоподавление', diarization: 'Разделение говорящих', voiceprint: 'Распознавание голоса' },
+  zh: { download: '下载', languages: '语言', compute: '运行', installed: '已安装', quality: '质量', speed: '速度', qualityTiers: ['标准', '高', '极高'], speedTiers: ['较慢', '均衡', '快'], streaming: '实时转写', refined: '会后精修', punctuation: '标点恢复', vad: '语音检测', denoise: '语音降噪', diarization: '说话人分离', voiceprint: '声纹识别', summary: '会议纪要', translation: '字幕翻译' },
+  en: { download: 'Download', languages: 'Languages', compute: 'Compute', installed: 'Installed', quality: 'Quality', speed: 'Speed', qualityTiers: ['Standard', 'High', 'Very high'], speedTiers: ['Slower', 'Balanced', 'Fast'], streaming: 'Live transcription', refined: 'Post-meeting refinement', punctuation: 'Punctuation', vad: 'Voice detection', denoise: 'Noise reduction', diarization: 'Speaker diarization', voiceprint: 'Voiceprint recognition', summary: 'Meeting notes', translation: 'Caption translation' },
+  es: { download: 'Descarga', languages: 'Idiomas', compute: 'Ejecución', installed: 'Instalado', quality: 'Calidad', speed: 'Velocidad', qualityTiers: ['Estándar', 'Alta', 'Muy alta'], speedTiers: ['Más lento', 'Equilibrado', 'Rápido'], streaming: 'Transcripción en vivo', refined: 'Refinamiento posterior', punctuation: 'Puntuación', vad: 'Detección de voz', denoise: 'Reducción de ruido', diarization: 'Separación de hablantes', voiceprint: 'Reconocimiento de voz', summary: 'Notas de reunión', translation: 'Traducción de subtítulos' },
+  ja: { download: 'ダウンロード', languages: '言語', compute: '実行環境', installed: 'インストール済み', quality: '品質', speed: '速度', qualityTiers: ['標準', '高', '最高'], speedTiers: ['やや遅い', 'バランス', '高速'], streaming: 'ライブ文字起こし', refined: '会議後の高精度化', punctuation: '句読点復元', vad: '音声検出', denoise: 'ノイズ除去', diarization: '話者分離', voiceprint: '声紋認識', summary: '議事録', translation: '字幕翻訳' },
+  ko: { download: '다운로드', languages: '언어', compute: '실행 환경', installed: '설치됨', quality: '품질', speed: '속도', qualityTiers: ['표준', '높음', '최고'], speedTiers: ['다소 느림', '균형', '빠름'], streaming: '실시간 전사', refined: '회의 후 정제', punctuation: '문장 부호', vad: '음성 감지', denoise: '노이즈 제거', diarization: '화자 분리', voiceprint: '음성 지문 인식', summary: '회의록', translation: '자막 번역' },
+  fr: { download: 'Téléchargement', languages: 'Langues', compute: 'Exécution', installed: 'Installé', quality: 'Qualité', speed: 'Vitesse', qualityTiers: ['Standard', 'Élevée', 'Très élevée'], speedTiers: ['Plus lent', 'Équilibré', 'Rapide'], streaming: 'Transcription en direct', refined: 'Affinage après réunion', punctuation: 'Ponctuation', vad: 'Détection vocale', denoise: 'Réduction du bruit', diarization: 'Séparation des locuteurs', voiceprint: 'Reconnaissance vocale', summary: 'Notes de réunion', translation: 'Traduction des sous-titres' },
+  de: { download: 'Download', languages: 'Sprachen', compute: 'Ausführung', installed: 'Installiert', quality: 'Qualität', speed: 'Geschwindigkeit', qualityTiers: ['Standard', 'Hoch', 'Sehr hoch'], speedTiers: ['Langsamer', 'Ausgewogen', 'Schnell'], streaming: 'Live-Transkription', refined: 'Nachbearbeitung', punctuation: 'Zeichensetzung', vad: 'Spracherkennung', denoise: 'Rauschunterdrückung', diarization: 'Sprechertrennung', voiceprint: 'Stimmabdruck-Erkennung', summary: 'Besprechungsnotizen', translation: 'Untertitelübersetzung' },
+  ru: { download: 'Загрузка', languages: 'Языки', compute: 'Выполнение', installed: 'Установлено', quality: 'Качество', speed: 'Скорость', qualityTiers: ['Стандарт', 'Высокое', 'Очень высокое'], speedTiers: ['Медленнее', 'Сбалансированно', 'Быстро'], streaming: 'Потоковая расшифровка', refined: 'Обработка после встречи', punctuation: 'Пунктуация', vad: 'Обнаружение речи', denoise: 'Шумоподавление', diarization: 'Разделение говорящих', voiceprint: 'Распознавание голоса', summary: 'Протокол встречи', translation: 'Перевод субтитров' },
 };
-const modelStageMetaKey = { streaming: 'streaming', refined: 'refined', punctuation: 'punctuation', vad: 'vad', 'speech-enhancement': 'denoise', diarization: 'diarization', 'speaker-segmentation': 'diarization', 'speaker-embedding': 'voiceprint' };
-/** Renders manifest-backed download/language/compute metadata for the model-library card. @param {object|undefined} model Model manifest item. @param {string} languages Localized language summary. @returns {string} */
-function renderModelLibraryMeta(model, languages) {
-  if (!model) return '';
-  const copy = modelLibraryMetaCopy[locale] || modelLibraryMetaCopy.en;
-  const compute = (model.backend || []).map((backend) => backend.toUpperCase()).join(' · ');
-  return `<div class="model-library-meta"><span><small>${copy.download}</small><b>${formatBytes(model.size_bytes)}</b></span><span><small>${copy.languages}</small><b>${escapeHtml(languages)}</b></span><span><small>${copy.compute}</small><b>${escapeHtml(compute)}</b></span></div>`;
+const modelStageMetaKey = { streaming: 'streaming', refined: 'refined', punctuation: 'punctuation', vad: 'vad', 'speech-enhancement': 'denoise', diarization: 'diarization', 'speaker-segmentation': 'diarization', 'speaker-embedding': 'voiceprint', summary: 'summary', translation: 'translation' };
+// 精心设计的质量/速度评级（1..3 → 标准/高/极高，较慢/均衡/快），以便模型库可以突出
+// 模型擅长的方面，而不是模型名称。基于公开基准测试（WER/CER、DER/WDER、EER、RTF、参数）；
+// 参见模型库重新设计说明。这些值是编辑评判，而非清单字段。
+const modelRatings = {
+  'paraformer-zh-en-int8': { quality: 1, speed: 3 },
+  'zipformer-en-streaming-int8': { quality: 2, speed: 3 },
+  'zipformer-multilingual-streaming': { quality: 1, speed: 3 },
+  'zipformer-ko-streaming-int8': { quality: 2, speed: 3 },
+  'zipformer-fr-streaming-int8': { quality: 2, speed: 3 },
+  'nemotron-3.5-asr-streaming-0.6b-560ms-int8': { quality: 3, speed: 2 },
+  'silero-vad': { quality: 3, speed: 3 },
+  'online-punct-en-int8': { quality: 1, speed: 3 },
+  'punct-ct-transformer-zh-en-int8': { quality: 2, speed: 3 },
+  'qwen3-asr-0.6b-int8': { quality: 2, speed: 3 },
+  'funasr-nano-int8': { quality: 2, speed: 3 },
+  'whisper-large-v3': { quality: 2, speed: 1 },
+  'qwen3-asr-1.7b-int8': { quality: 3, speed: 2 },
+  'pyannote-segmentation-3.0': { quality: 2, speed: 3 },
+  'reverb-diarization-v1': { quality: 2, speed: 2 },
+  'eres2net-base-3dspeaker-zh': { quality: 2, speed: 3 },
+  'campplus-zh-en': { quality: 2, speed: 3 },
+  'zipformer-zh-xlarge-streaming-int8': { quality: 3, speed: 1 },
+  'gtcrn-live-denoiser': { quality: 2, speed: 3 },
+  'spleeter-2stems-fp16': { quality: 1, speed: 2 },
+  'zipvoice-zh-en': { quality: 3, speed: 3 },
+  // Built-in summary (llama-chat) models. Grounded in public reports: Qwen3.5 small models punch far
+  // above their parameter count (4B rivals much larger models); Gemma 3 1B is the fastest/smallest.
+  'qwen3.5-4b-q4km': { quality: 3, speed: 1 },
+  'qwen3.5-2b-q4km': { quality: 3, speed: 2 },
+  'gemma3-4b-q4km': { quality: 2, speed: 2 },
+  'gemma3-1b-q8': { quality: 1, speed: 3 },
+  // 内置字幕翻译（llama-translation）。捆绑的 Hy-MT2 1.8B 在本地运行，兼顾速度与质量。
+  'hy-mt2-1.8b-q4km': { quality: 3, speed: 3 },
+};
+// 内置纪要模型的编辑性单行描述，取自每个模型的公开
+// 定位（参数、优势、硬件适配）。按模型 id 索引，然后按语言环境索引。
+const builtinModelIntro = {
+  'qwen3.5-4b-q4km': {
+    zh: 'Qwen3.5 系列旗舰小模型，4B 参数即可媲美更大模型，中英文纪要质量最高，适合性能较强的设备。',
+    en: 'Flagship of the Qwen3.5 small series. At 4B it rivals much larger models, giving the best Chinese/English notes. Best on a capable machine.',
+    es: 'Buque insignia de la serie Qwen3.5. Con 4B rivaliza con modelos más grandes y ofrece las mejores notas en chino/inglés. Ideal para equipos potentes.',
+    ja: 'Qwen3.5 小型シリーズの旗艦。4B ながら大型モデルに匹敵し、中英の議事録品質は最高。高性能な端末向け。',
+    ko: 'Qwen3.5 소형 시리즈의 플래그십. 4B로도 더 큰 모델에 필적하며 중국어/영어 회의록 품질이 가장 높습니다. 고성능 기기에 적합.',
+    fr: 'Fleuron de la série Qwen3.5. À 4B, il rivalise avec des modèles bien plus grands et offre les meilleures notes en chinois/anglais. Idéal sur une machine puissante.',
+    de: 'Flaggschiff der Qwen3.5-Kleinserie. Mit 4B misst es sich mit viel größeren Modellen und liefert die besten Notizen auf Chinesisch/Englisch. Ideal für leistungsstarke Geräte.',
+    ru: 'Флагман малой серии Qwen3.5. При 4B соперничает с гораздо более крупными моделями и даёт лучшие заметки на китайском/английском. Лучше на мощном устройстве.',
+  },
+  'qwen3.5-2b-q4km': {
+    zh: 'Qwen3.5 2B 参数，质量与速度均衡，中英文纪要表现出色，适合大多数设备日常使用。',
+    en: 'Qwen3.5 at 2B. A balance of quality and speed with strong Chinese/English notes. A solid everyday choice for most machines.',
+    es: 'Qwen3.5 de 2B. Equilibrio entre calidad y velocidad con buenas notas en chino/inglés. Buena opción diaria para la mayoría de equipos.',
+    ja: 'Qwen3.5 2B。品質と速度のバランスが良く、中英の議事録も優秀。ほとんどの端末で日常使いに最適。',
+    ko: 'Qwen3.5 2B. 품질과 속도의 균형이 좋고 중국어/영어 회의록이 뛰어납니다. 대부분의 기기에서 일상용으로 적합.',
+    fr: 'Qwen3.5 en 2B. Équilibre entre qualité et vitesse avec de bonnes notes en chinois/anglais. Un bon choix quotidien pour la plupart des machines.',
+    de: 'Qwen3.5 mit 2B. Ausgewogen zwischen Qualität und Geschwindigkeit mit starken Notizen auf Chinesisch/Englisch. Solide Alltagswahl für die meisten Geräte.',
+    ru: 'Qwen3.5 на 2B. Баланс качества и скорости с хорошими заметками на китайском/английском. Надёжный повседневный выбор для большинства устройств.',
+  },
+  'gemma3-4b-q4km': {
+    zh: 'Google Gemma 3 4B，多语言能力强，纪要质量稳定，适合中端设备。',
+    en: 'Google Gemma 3 at 4B. Strong multilingual coverage and steady note quality. Fits mid-range machines.',
+    es: 'Google Gemma 3 de 4B. Amplia cobertura multilingüe y calidad de notas estable. Apto para equipos de gama media.',
+    ja: 'Google Gemma 3 4B。多言語対応が強く、議事録品質も安定。ミドルレンジの端末向け。',
+    ko: 'Google Gemma 3 4B. 강력한 다국어 지원과 안정적인 회의록 품질. 중급 기기에 적합.',
+    fr: 'Google Gemma 3 en 4B. Bonne couverture multilingue et qualité de notes régulière. Convient aux machines de milieu de gamme.',
+    de: 'Google Gemma 3 mit 4B. Starke Mehrsprachigkeit und gleichmäßige Notizqualität. Passt zu Mittelklasse-Geräten.',
+    ru: 'Google Gemma 3 на 4B. Хорошее многоязычное покрытие и стабильное качество заметок. Подходит для устройств среднего класса.',
+  },
+  'gemma3-1b-q8': {
+    zh: 'Google Gemma 3 1B，体积最小、速度最快，适合低配设备或追求即时响应的场景。',
+    en: 'Google Gemma 3 at 1B. The smallest and fastest option, best for low-spec machines or when you want instant responses.',
+    es: 'Google Gemma 3 de 1B. La opción más pequeña y rápida, ideal para equipos modestos o respuestas instantáneas.',
+    ja: 'Google Gemma 3 1B。最小・最速の選択肢。低スペック端末や即応性を求める場面に最適。',
+    ko: 'Google Gemma 3 1B. 가장 작고 빠른 선택지로, 저사양 기기나 즉각적인 응답이 필요할 때 적합.',
+    fr: 'Google Gemma 3 en 1B. L’option la plus légère et la plus rapide, idéale pour les machines modestes ou les réponses instantanées.',
+    de: 'Google Gemma 3 mit 1B. Die kleinste und schnellste Option, ideal für schwache Geräte oder sofortige Antworten.',
+    ru: 'Google Gemma 3 на 1B. Самый компактный и быстрый вариант, лучший для слабых устройств или мгновенных ответов.',
+  },
+};
+/** 渲染一个评级维度的 3 级质量/速度刻度。@param {string} label 本地化的维度标签。@param {number} level 等级 1-3。@param {string} tierWord 本地化的等级名称。@returns {string} */
+function ratingScale(label, level, tierWord) {
+  const dots = [1, 2, 3].map((step) => `<i${step <= level ? ' class="on"' : ''}></i>`).join('');
+  return `<span class="model-library-rating"><small>${escapeHtml(label)}</small><b>${escapeHtml(tierWord)}</b><span class="rating-scale" aria-hidden="true">${dots}</span></span>`;
 }
-/** Renders capability/installed tags shown inline beside the model name. @param {object|undefined} model Model manifest item. @param {boolean} installed Whether the model is available locally. @returns {string} */
-function renderModelLibraryTags(model, installed) {
+/** 渲染模型库卡片的精心设计的质量/速度评级行。@param {object|undefined} model 模型清单项。@returns {string} */
+function renderModelLibraryRatings(model) {
+  const rating = model && modelRatings[model.id];
+  if (!rating) return '';
+  const copy = modelLibraryMetaCopy[locale] || modelLibraryMetaCopy.en;
+  return `<div class="model-library-ratings">${ratingScale(copy.quality, rating.quality, copy.qualityTiers[rating.quality - 1])}${ratingScale(copy.speed, rating.speed, copy.speedTiers[rating.speed - 1])}</div>`;
+}
+/** 渲染语言标题旁边显示的能力/大小/已安装/名称标签。模型名称在这个标签行中（而非单独一行），以便在不与标题竞争的情况下保持可识别性。下载大小在这里作为标签，而非单独的元数据行，并且运行环境标签已被删除。@param {object|undefined} model 模型清单项。@param {boolean} installed 模型是否在本地可用。@param {string} name 本地化的模型显示名称。@returns {string} */
+function renderModelLibraryTags(model, installed, name) {
   if (!model) return '';
   const copy = modelLibraryMetaCopy[locale] || modelLibraryMetaCopy.en;
   const capabilities = [...new Set((model.stages || []).map((stage) => copy[modelStageMetaKey[stage]]).filter(Boolean))];
-  if (!installed && !capabilities.length) return '';
-  return `<div class="model-library-tags">${installed ? `<span class="model-library-installed">${copy.installed}</span>` : ''}${capabilities.map((capability) => `<span>${capability}</span>`).join('')}</div>`;
+  const sizeTag = model.size_bytes ? `<span class="model-library-size">${escapeHtml(formatBytes(model.size_bytes))}</span>` : '';
+  const nameTag = name ? `<span class="model-library-modelname">${escapeHtml(name)}</span>` : '';
+  return `<div class="model-library-tags">${installed ? `<span class="model-library-installed">${copy.installed}</span>` : ''}${capabilities.map((capability) => `<span>${capability}</span>`).join('')}${sizeTag}${nameTag}</div>`;
 }
 let expandedSpeakerProfileId = null;
 let addingSampleProfileId = null;
@@ -170,14 +258,14 @@ function renderSpeakerProfileCard() {
   speakerProfileCard.querySelector('p').textContent = copy.intro;
   speakerProfileCard.querySelector('button').textContent = copy.title;
 }
-/** Keeps the update notice above the mini meeting when both are visible. @returns {void} */
+/** 当两者都可见时，将更新通知保持在小型会议上方。@returns {void} */
 function syncFloatingNotices() { updateNotice.style.bottom = miniMeeting.hidden ? '' : `${miniMeeting.offsetHeight + 24}px`; }
-/** Renders the floating update notice from current locale and availability state. @returns {void} */
+/** 根据当前语言环境和可用性状态渲染浮动更新通知。@returns {void} */
 function updateCopy() { return updateLabels[locale] || { ...updateLabels.en, title: t('软件更新'), action: t('检查更新') }; }
 function currentVersionLabel() { return ({ zh: '当前版本', en: 'Current version', es: 'Versión actual', ja: '現在のバージョン', ko: '현재 버전', fr: 'Version actuelle', de: 'Aktuelle Version', ru: 'Текущая версия' })[locale] || 'Current version'; }
 function availableUpdateLabel() { return updateVersion ? updateCopy().available.replace('0.2.0', updateVersion) : updateCopy().available; }
 function renderUpdateNotice() { const copy = updateCopy(); updateNoticeText.textContent = availableUpdateLabel(); updateNoticeButton.textContent = copy.floating; updateNotice.hidden = !updateAvailable; requestAnimationFrame(syncFloatingNotices); }
-/** Renders the settings-page update action from current locale and availability state. @returns {void} */
+/** 根据当前语言环境和可用性状态渲染设置页面的更新操作。@returns {void} */
 function renderUpdateButton() {
   const copy = updateCopy();
   updateTitle.textContent = copy.title;
@@ -195,7 +283,6 @@ function renderUpdateButton() {
 const modelIds = [
   'paraformer-zh-en-int8',
   'zipformer-en-streaming-int8',
-  'zipformer-zh-streaming-int8',
   'zipformer-multilingual-streaming',
   'zipformer-ko-streaming-int8',
   'zipformer-fr-streaming-int8',
@@ -204,71 +291,80 @@ const modelIds = [
   'online-punct-en-int8',
   'punct-ct-transformer-zh-en-int8',
   'qwen3-asr-0.6b-int8',
-  'fire-red-asr2-ctc-zh-en-int8',
   'funasr-nano-int8',
-  'whisper-turbo',
   'whisper-large-v3',
   'qwen3-asr-1.7b-int8',
   'pyannote-segmentation-3.0',
   'reverb-diarization-v1',
   'eres2net-base-3dspeaker-zh',
-  'nemo-titanet-small-en',
   'campplus-zh-en',
   'zipformer-zh-xlarge-streaming-int8',
   'gtcrn-live-denoiser',
   'spleeter-2stems-fp16',
   'zipvoice-zh-en',
-  'vits-mimic3-ko-kss-low',
-  'vits-piper-fr-siwis-medium-int8',
-  'vits-piper-de-thorsten-medium-int8',
-  'vits-piper-es-sharvard-medium-int8',
-  'vits-piper-ru-irina-medium-int8',
+  'hy-mt2-1.8b-q4km',
 ];
-const summaryProviders = ['OpenAI', 'Anthropic', 'Kimi', 'Zhipu GLM', 'MiniMax', 'DeepSeek', 'OpenRouter', 'Ollama', 'Ollama Cloud'];
-const ollamaChatEndpoint = 'http://127.0.0.1:11434/api/chat';
-const ollamaCloudChatEndpoint = 'https://ollama.com/api/chat';
-function summaryProviderLabel(provider) { return provider === 'Ollama' ? 'Ollama Local' : provider; }
-const defaultSummaryModels = [{ name: '配置-1', provider: 'OpenAI', endpoint: 'https://api.openai.com/v1/chat/completions', format: 'openai', model: 'gpt-4.1-mini' }];
-let savedSummaryConfig = null;
-try { savedSummaryConfig = JSON.parse(localStorage.getItem('brevia-summary-config') || 'null'); } catch { /* Ignore malformed legacy browser storage. */ }
-let summaryModels = savedSummaryConfig?.models?.length ? savedSummaryConfig.models : defaultSummaryModels;
-const legacySummaryKeys = summaryModels.filter((item) => item.apiKey).map((item) => ({ reference: item.keyReference || `summary-${crypto.randomUUID()}`, value: item.apiKey, item }));
-legacySummaryKeys.forEach(({ reference, item }) => { item.keyReference = reference; delete item.apiKey; });
-let activeSummaryModel = savedSummaryConfig?.active ?? 0;
-let editingSummaryModel = 0;
-let configSequence = savedSummaryConfig?.sequence || summaryModels.length;
-summaryModels.forEach((item, index) => { if (!item.name) item.name = `配置-${index + 1}`; });
-let draftSummaryName = '';
+// 纪要供应商固定为这六项。请求地址由 summaryProviderPresets 派生，只有两个自定义
+// 供应商才向用户暴露地址输入框。
+const summaryProviders = ['built-in', 'claude', 'openai', 'openrouter', 'custom-openai', 'custom-claude'];
+const summaryProviderPresets = {
+  'built-in': { format: 'openai', endpoint: '', needsKey: false, needsEndpoint: false, model: '' },
+  claude: { format: 'claude', endpoint: 'https://api.anthropic.com', needsKey: true, needsEndpoint: false, model: 'claude-sonnet-4-5' },
+  openai: { format: 'openai', endpoint: 'https://api.openai.com/v1/chat/completions', needsKey: true, needsEndpoint: false, model: 'gpt-4.1-mini' },
+  openrouter: { format: 'openai', endpoint: 'https://openrouter.ai/api/v1/chat/completions', needsKey: true, needsEndpoint: false, model: 'openai/gpt-4.1-mini' },
+  'custom-openai': { format: 'openai', endpoint: '', needsKey: true, needsEndpoint: true, model: '' },
+  'custom-claude': { format: 'claude', endpoint: '', needsKey: true, needsEndpoint: true, model: '' },
+};
+function summaryProviderLabel(provider) {
+  const copy = summaryModelCopy[locale] || summaryModelCopy.en;
+  return copy.providers?.[provider] || (summaryModelCopy.en.providers?.[provider] ?? provider);
+}
+// 只有一套生效配置，但每个供应商的模型/地址/密钥引用分别留存，来回切换不会丢失已填内容。
+let summaryConfig = { version: 2, provider: 'built-in', providers: {} };
+// 内置供应商在表单里待选的模型。重新渲染（下载/删除/选择）时存活，切换供应商时重置。
+let selectedBuiltinModel = '';
+/** 返回当前供应商的已存字段。@returns {object} 供应商条目。*/
+function summaryProviderEntry(provider = summaryConfig.provider) {
+  return summaryConfig.providers[provider] || {};
+}
+/** 组装一次 LLM 请求所需的连接信息；配置不完整时返回 null。@returns {object|null} */
+function summaryRequestConfig() {
+  const provider = summaryConfig.provider;
+  const preset = summaryProviderPresets[provider];
+  if (!preset) return null;
+  const entry = summaryProviderEntry(provider);
+  const endpoint = preset.needsEndpoint ? entry.endpoint : preset.endpoint;
+  if (!entry.model) return null;
+  if (preset.needsEndpoint && !endpoint) return null;
+  if (preset.needsKey && !entry.keyReference) return null;
+  return { provider, endpoint, model: entry.model, format: preset.format, keyReference: entry.keyReference };
+}
 function speakerProfileName(profile) {
   const builtinKey = profile.builtin_key || (profile.built_in && profile.name === '内置女声' ? 'builtin:female' : profile.built_in && profile.name === '内置男声' ? 'builtin:male' : '');
   const builtin = { 'builtin:female': ['内置女声', 'Built-in female voice', 'Voz femenina integrada', '内蔵女性音声', '내장 여성 음성', 'Voix féminine intégrée', 'Integrierte weibliche Stimme', 'Встроенный женский голос'], 'builtin:male': ['内置男声', 'Built-in male voice', 'Voz masculina integrada', '内蔵男性音声', '내장 남성 음성', 'Voix masculine intégrée', 'Integrierte männliche Stimme', 'Встроенный мужской голос'] }[builtinKey];
   return builtin ? builtin[['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru'].indexOf(locale)] : profile.name;
 }
-/** Allocates the next local summary-model configuration name. @returns {string} New configuration name. */
-function nextConfigName() { configSequence += 1; return `配置-${configSequence}`; }
-/** Returns the non-secret summary configuration persisted in the app data directory. */
+/** 返回保存在应用数据目录中的非机密纪要配置。*/
 function currentSummaryConfig() {
-  const models = summaryModels.map(({ apiKey, ...model }) => model);
-  return { models, active: activeSummaryModel, sequence: configSequence };
+  return { version: 2, provider: summaryConfig.provider, providers: summaryConfig.providers };
 }
-/** Saves summary-model settings outside browser storage; keys remain in Electron safe storage. */
+/** 在浏览器存储之外保存纪要模型设置；密钥保留在 Electron 安全存储中。*/
 async function persistSummaryConfig() {
   await window.brevia?.summary.config.save(currentSummaryConfig());
 }
+/** 应用已读取的配置；只认 version 2，其余一律回落到默认的内置供应商。*/
 function applySummaryConfig(config) {
-  summaryModels = config.models;
-  activeSummaryModel = config.active;
-  editingSummaryModel = activeSummaryModel;
-  configSequence = config.sequence;
-  summaryModels.forEach((item, index) => { if (!item.name) item.name = `配置-${index + 1}`; });
+  summaryConfig = {
+    version: 2,
+    provider: summaryProviders.includes(config?.provider) ? config.provider : 'built-in',
+    providers: config?.providers && typeof config.providers === 'object' ? config.providers : {},
+  };
+  selectedBuiltinModel = '';
 }
 async function loadSummaryConfig() {
   const stored = await window.brevia?.summary.config.get();
   if (stored) applySummaryConfig(stored);
-  else {
-    await Promise.all(legacySummaryKeys.map(({ reference, value }) => window.brevia?.secret.set({ reference, value })));
-    await persistSummaryConfig();
-  }
+  // 1.0.8 之前的版本把整个配置（含 apiKey 明文）存在 localStorage 里，清掉。
   localStorage.removeItem('brevia-summary-config');
 }
 const settingsModal = document.createElement('div');
@@ -279,6 +375,8 @@ document.body.append(settingsModal);
 let activeModal;
 let editingSegmentSpeakerId;
 let advancedSettings;
+let permissionStatus;
+let permissionPollTimer;
 const advancedSettingCopy = {
   zh: { sections: { audio: '音频', asr: '识别与端点检测', live_asr: '实时识别', punctuation: '标点恢复', diarization: '说话人分离', voice_profiles: '声纹库', meetings: '会议', llm: '纪要模型' }, fields: { sample_rate: '采样率（Hz）', chunk_seconds: '音频分块时长（秒）', endpoint_rule1_silence: '端点规则 1 静音时长（秒）', endpoint_rule2_silence: '端点规则 2 静音时长（秒）', maximum_utterance_seconds: '单句最长时长（秒）', refined_window_seconds: '精修窗口时长（秒）', auto_english_model_id: '英文识别模型', denoiser_model_id: '实时降噪模型', microphone_target_rms: '麦克风目标响度', microphone_minimum_rms: '麦克风最小响度', microphone_max_gain: '麦克风最大增益', microphone_peak: '麦克风峰值限制', english_model_id: '英文标点模型', chinese_model_id: '中英文标点模型', segmentation_model_id: '说话区间模型', embedding_model_id: '声纹嵌入模型', cluster_threshold: '聚类阈值', online_similarity_threshold: '在线匹配阈值', minimum_embedding_seconds: '最短声纹语音（秒）', num_speakers: '固定说话人数（-1 为自动）', min_duration_on: '最短说话时长（秒）', min_duration_off: '最短静音间隔（秒）', max_samples: '每人最大录音条数', max_total_seconds: '每人最大录音时长（秒）', deleted_retention_days: '删除记录保留天数', timeout_seconds: '模型请求超时（秒）' }, hint: '用于本地运行配置。' },
   en: { sections: { audio: 'Audio', asr: 'Recognition and endpointing', live_asr: 'Live recognition', punctuation: 'Punctuation', diarization: 'Speaker diarization', voice_profiles: 'Voiceprints', meetings: 'Meetings', llm: 'Summary model' }, fields: { sample_rate: 'Sample rate (Hz)', chunk_seconds: 'Audio chunk duration (s)', endpoint_rule1_silence: 'Endpoint rule 1 silence (s)', endpoint_rule2_silence: 'Endpoint rule 2 silence (s)', maximum_utterance_seconds: 'Maximum utterance duration (s)', refined_window_seconds: 'Refinement window (s)', auto_english_model_id: 'English recognition model', denoiser_model_id: 'Live denoiser model', microphone_target_rms: 'Microphone target loudness', microphone_minimum_rms: 'Microphone minimum loudness', microphone_max_gain: 'Microphone maximum gain', microphone_peak: 'Microphone peak limit', english_model_id: 'English punctuation model', chinese_model_id: 'Chinese-English punctuation model', segmentation_model_id: 'Speech-segmentation model', embedding_model_id: 'Voice embedding model', cluster_threshold: 'Clustering threshold', online_similarity_threshold: 'Online matching threshold', minimum_embedding_seconds: 'Minimum voiceprint audio (s)', num_speakers: 'Fixed speaker count (-1 = auto)', min_duration_on: 'Minimum speech duration (s)', min_duration_off: 'Minimum silence gap (s)', max_samples: 'Maximum recordings per person', max_total_seconds: 'Maximum recording duration per person (s)', deleted_retention_days: 'Deleted-record retention (days)', timeout_seconds: 'Model request timeout (s)' }, hint: 'Used by the local runtime.' },
@@ -292,6 +390,26 @@ const advancedSettingCopy = {
 function renderAdvancedSettings(settings) {
   const copy = advancedSettingCopy[locale] || advancedSettingCopy.en;
   return Object.entries(settings).map(([section, values]) => `<section class="advanced-settings-section"><h3>${escapeHtml(copy.sections[section] || section)}</h3>${Object.entries(values).map(([key, value]) => `<label><span><b>${escapeHtml(copy.fields[key] || key)}</b><small>${escapeHtml(copy.hint)}</small></span><input name="${escapeHtml(`${section}.${key}`)}" type="${typeof value === 'number' ? 'number' : 'text'}" step="any" value="${escapeHtml(String(value))}" /></label>`).join('')}</section>`).join('');
+}
+/** 构建权限部分的一行：状态标记、标签、提示和上下文操作按钮。*/
+function permissionRow(kind, label, detail, granted, denied, active, unsupported) {
+  const state = granted ? '✓' : '—';
+  const hint = unsupported ? t('当前系统不支持直接录制系统音频，请仅使用麦克风') : granted ? t('已允许') : denied ? t('请在系统设置中开启此权限') : detail;
+  const action = granted || unsupported ? ''
+    : active ? `<button class="modal-action permission-setting-action" data-request-permission="${kind}" type="button">${t('允许')}</button>`
+    : `<button class="modal-action permission-setting-action" data-open-permission-settings="${kind}" type="button">${t('打开系统设置')}</button>`;
+  return `<label class="permission-setting-row${granted ? ' is-granted' : ''}"><span><b>${escapeHtml(label)}</b><small>${escapeHtml(hint)}</small></span><span class="permission-setting-control"><span class="permission-setting-state">${state}</span>${action}</span></label>`;
+}
+/** 渲染显示在高级设置模态框顶部的系统权限部分。@returns {string} */
+function renderPermissionSettings() {
+  const status = permissionStatus || {};
+  const micGranted = status.microphone === 'granted';
+  const micActive = status.microphone === 'not-determined';
+  const screenGranted = status.screen === 'granted';
+  const screenUnsupported = !status.systemAudioSupported;
+  const rows = permissionRow('microphone', t('麦克风'), t('录制你的发言。'), micGranted, status.microphone === 'denied', micActive, false)
+    + permissionRow('screen', t('屏幕与系统音频'), t('录制屏幕共享中的系统声音。'), screenGranted && !screenUnsupported, status.screen === 'denied', false, screenUnsupported);
+  return `<section class="advanced-settings-section permission-settings-section" data-permission-settings><h3>${t('系统权限')}</h3>${rows}</section>`;
 }
 const modelDownloads = new Map();
 let activeCategory = '';
@@ -308,7 +426,7 @@ batchToolbar.hidden = true;
 batchToolbar.setAttribute('aria-live', 'polite');
 batchToolbar.innerHTML = '<strong data-batch-count></strong><div class="batch-actions"><button type="button" data-batch-restore></button><div class="batch-category" data-batch-category></div><button type="button" data-batch-export></button><button class="batch-delete" type="button" data-batch-delete></button><button type="button" data-batch-clear></button></div>';
 libraryToolbar.after(batchToolbar);
-/** Synchronizes selected-row styling and the contextual batch toolbar. @param {boolean} updateToolbar Whether to redraw batch actions. @returns {void} */
+/** 同步选中行样式和上下文批量工具栏。@param {boolean} updateToolbar 是否重绘批量操作。@returns {void} */
 function syncMeetingSelection(updateToolbar = true) {
   const rows = [...document.querySelectorAll('.meeting-row')];
   const available = new Set(rows.map((row) => row.dataset.selectionKey));
@@ -332,14 +450,14 @@ function syncMeetingSelection(updateToolbar = true) {
 }
 const selectedMeetings = () => uiData.meetings.filter((meeting, index) => selectedMeetingKeys.has(meeting.id || String(index)));
 function clearMeetingSelection() { selectedMeetingKeys.clear(); syncMeetingSelection(); }
-/** Rebuilds the category filter from user-managed categories. @returns {void} */
+/** 从用户管理的分类重建分类过滤器。@returns {void} */
 function renderCategoryFilter() { categoryFilter.innerHTML = flowSelect('library-category', activeCategory, [['', t('所有分类')], ['__unclassified', t('未分类')], ...categories.map((name) => [name, name])]); }
 function renderDateFilter() { dateFilter.innerHTML = flowSelect('library-date', activeDateRange, [['30', t('最近 30 天')], ['7', t('最近 7 天')], ['90', t('最近 90 天')], ['all', t('全部时间')]]); }
-/** Applies the active category and text query to the meeting library. @returns {void} */
+/** 将活动分类和文本查询应用于会议库。@returns {void} */
 function filterMeetings() { const query = meetingSearch.value.trim().toLowerCase(); const cutoff = Date.now() - Number(activeDateRange) * 86_400_000; document.querySelectorAll('.meeting-row').forEach((row) => { const meeting = uiData.meetings[Number(row.dataset.meetingIndex)]; const categoryMatch = !activeCategory || (activeCategory === '__unclassified' ? !meeting.category : meeting.category === activeCategory); const dateMatch = activeDateRange === 'all' || !meeting.createdAt || Date.parse(meeting.createdAt) >= cutoff; row.hidden = !categoryMatch || !dateMatch || (!window.brevia && !row.textContent.toLowerCase().includes(query)); }); }
-/** Updates a meeting category and its library metadata. @param {object} meeting Meeting to update. @param {string} category Target category or empty for unclassified. @returns {void} */
+/** 更新会议分类及其库元数据。@param {object} meeting 要更新的会议。@param {string} category 目标分类或空表示未分类。@returns {void} */
 function setMeetingCategory(meeting, category) { meeting.category = category; meeting.meta = meeting.meta.replace(/ · [^·]+$/, category ? ` · ${category}` : ''); }
-/** Formats backend meeting metadata in the current interface language. @param {object} meeting Stored UI meeting. @returns {object} Display-ready meeting. */
+/** 使用当前界面语言格式化后端会议元数据。@param {object} meeting 存储的 UI 会议。@returns {object} 显示就绪的会议。*/
 function localizeMeeting(meeting) {
   if (!meeting.createdAt) return meeting;
   const languageTag = BreviaI18n.localeTag(locale);
@@ -353,7 +471,7 @@ function localizeMeeting(meeting) {
       : { tone: 'complete', label: t('已整理'), detail: t('本地录音') },
   };
 }
-/** Re-renders only the meeting list, preserving settings-modal event bindings. @returns {void} */
+/** 仅重新渲染会议列表，保留设置模态框事件绑定。@returns {void} */
 function renderMeetingList() { document.querySelector('.meeting-list').innerHTML = uiData.meetings.map((meeting, index) => !meeting.isExample || meeting.exampleLocale === locale ? renderMeetingRow(localizeMeeting(meeting), index) : '').join(''); filterMeetings(); syncMeetingSelection(); cacheMeetingList(); }
 renderCategoryFilter();
 renderDateFilter();
@@ -362,7 +480,7 @@ const prepareView = document.querySelector('#prepare-view');
 const prepareLayout = prepareView.querySelector('.prepare-layout');
 const prepareBack = prepareView.querySelector('.back');
 const desktopPrepareLayout = matchMedia('(min-width: 851px)');
-/** Fits preparation controls into the visible desktop workspace while the window is resized. @returns {void} */
+/** 在窗口调整大小时，将准备控件适配到可见的桌面工作空间。@returns {void} */
 function fitPrepareLayout() {
   if (activeView !== 'prepare' || !desktopPrepareLayout.matches) {
     prepareLayout.style.removeProperty('transform');
@@ -391,10 +509,10 @@ importRecording.textContent = t('导入录音');
 prepareForm.querySelector('[type="submit"]').after(importRecording);
 const meetingTitle = document.querySelector('#meeting-title');
 let meetingTitleEdited = false;
-/** Refreshes the starter title only until the user provides their own. @returns {void} */
+/** 仅在用户提供自己的标题之前刷新起始标题。@returns {void} */
 function renderDefaultMeetingTitle() { if (!meetingTitleEdited) meetingTitle.value = BreviaI18n.defaultMeetingTitle(locale); }
 meetingTitle.addEventListener('input', () => { meetingTitleEdited = true; });
-/** Rebuilds meeting-language selectors while preserving their submitted values. @returns {void} */
+/** 在保留其提交值的同时重建会议语言选择器。@returns {void} */
 function renderPrepareSelects() {
   const values = Object.fromEntries(new FormData(prepareForm));
   const categoryOptions = [['', t('未分类')], ...categories.map((name) => [name, name])];
@@ -405,8 +523,8 @@ function renderPrepareSelects() {
   requestAnimationFrame(fitPrepareLayout);
 }
 const prepareModelChoices = {
-  'active-streaming-model': [['', null], ['zipformer-zh-xlarge-streaming-int8', 'Streaming Zipformer Chinese XLarge'], ['zipformer-zh-streaming-int8', 'Streaming Zipformer Chinese'], ['zipformer-multilingual-streaming', 'Streaming Zipformer Multilingual'], ['paraformer-zh-en-int8', 'Streaming Paraformer'], ['zipformer-en-streaming-int8', 'Streaming Zipformer English'], ['zipformer-ko-streaming-int8', 'Streaming Zipformer Korean'], ['zipformer-fr-streaming-int8', 'Streaming Zipformer French'], ['nemotron-3.5-asr-streaming-0.6b-560ms-int8', 'Nemotron 3.5 ASR Streaming 0.6B (560ms)']],
-  'active-diarization-model': [['|', null], ['pyannote-segmentation-3.0|eres2net-base-3dspeaker-zh', 'Pyannote + 3D-Speaker'], ['pyannote-segmentation-3.0|nemo-titanet-small-en', 'Pyannote + NeMo Titanet'], ['pyannote-segmentation-3.0|campplus-zh-en', 'Pyannote + 3D-Speaker CAM++'], ['reverb-diarization-v1|eres2net-base-3dspeaker-zh', 'Reverb + 3D-Speaker']],
+  'active-streaming-model': [['', null], ['zipformer-zh-xlarge-streaming-int8', 'Streaming Zipformer Chinese XLarge'], ['zipformer-multilingual-streaming', 'Streaming Zipformer Multilingual'], ['paraformer-zh-en-int8', 'Streaming Paraformer'], ['zipformer-en-streaming-int8', 'Streaming Zipformer English'], ['zipformer-ko-streaming-int8', 'Streaming Zipformer Korean'], ['zipformer-fr-streaming-int8', 'Streaming Zipformer French'], ['nemotron-3.5-asr-streaming-0.6b-560ms-int8', 'Nemotron 3.5 ASR Streaming 0.6B (560ms)']],
+  'active-diarization-model': [['|', null], ['pyannote-segmentation-3.0|eres2net-base-3dspeaker-zh', 'Pyannote + 3D-Speaker'], ['pyannote-segmentation-3.0|campplus-zh-en', 'Pyannote + 3D-Speaker CAM++'], ['reverb-diarization-v1|eres2net-base-3dspeaker-zh', 'Reverb + 3D-Speaker']],
   'active-vad-model': [['silero-vad', 'Silero VAD']],
 };
 function modelChoices(id) {
@@ -419,15 +537,40 @@ function renderRefinedModelChoices() {
   options.innerHTML = modelChoices('active-refined-model').slice(1).map(([id, name]) => `<button type="button" data-refine-model="${escapeHtml(id)}">${escapeHtml(name)}</button>`).join('');
 }
 renderRefinedModelChoices();
+/** 读取新手引导模型质量偏好；null（未设置）为现有安装保留传统的每语言默认值。@returns {'quality'|'performance'|null} */
+const modelPreference = () => { const value = localStorage.getItem('brevia-model-preference'); return value === 'quality' || value === 'performance' ? value : null; };
+// 偏好预设：质量优先倾向于最强模型，性能优先倾向于最快模型，保持与传统默认值相同的说话人分离配对。
+const languageModelPreferences = {
+  quality: {
+    zh: { streaming: 'zipformer-zh-xlarge-streaming-int8', refined: 'funasr-nano-int8', diarization: 'pyannote-segmentation-3.0|eres2net-base-3dspeaker-zh' },
+    en: { streaming: 'zipformer-en-streaming-int8', refined: 'qwen3-asr-1.7b-int8', diarization: 'pyannote-segmentation-3.0|campplus-zh-en' },
+    ko: { streaming: 'zipformer-ko-streaming-int8', refined: 'qwen3-asr-1.7b-int8', diarization: 'pyannote-segmentation-3.0|campplus-zh-en' },
+    fr: { streaming: 'zipformer-fr-streaming-int8', refined: 'qwen3-asr-1.7b-int8', diarization: 'pyannote-segmentation-3.0|campplus-zh-en' },
+    es: { streaming: 'nemotron-3.5-asr-streaming-0.6b-560ms-int8', refined: 'qwen3-asr-1.7b-int8', diarization: 'pyannote-segmentation-3.0|campplus-zh-en' },
+    default: { streaming: 'zipformer-multilingual-streaming', refined: 'qwen3-asr-1.7b-int8', diarization: 'pyannote-segmentation-3.0|campplus-zh-en' },
+  },
+  performance: {
+    zh: { streaming: 'paraformer-zh-en-int8', refined: 'funasr-nano-int8', diarization: 'pyannote-segmentation-3.0|eres2net-base-3dspeaker-zh' },
+    en: { streaming: 'zipformer-en-streaming-int8', refined: 'qwen3-asr-0.6b-int8', diarization: 'pyannote-segmentation-3.0|campplus-zh-en' },
+    ko: { streaming: 'zipformer-ko-streaming-int8', refined: 'qwen3-asr-0.6b-int8', diarization: 'pyannote-segmentation-3.0|campplus-zh-en' },
+    fr: { streaming: 'zipformer-fr-streaming-int8', refined: 'qwen3-asr-0.6b-int8', diarization: 'pyannote-segmentation-3.0|campplus-zh-en' },
+    es: { streaming: 'nemotron-3.5-asr-streaming-0.6b-560ms-int8', refined: 'qwen3-asr-0.6b-int8', diarization: 'pyannote-segmentation-3.0|campplus-zh-en' },
+    default: { streaming: 'zipformer-multilingual-streaming', refined: 'qwen3-asr-0.6b-int8', diarization: 'pyannote-segmentation-3.0|campplus-zh-en' },
+  },
+};
 const languageModelDefaults = {
   zh: { streaming: 'zipformer-zh-xlarge-streaming-int8', refined: 'funasr-nano-int8', diarization: 'pyannote-segmentation-3.0|eres2net-base-3dspeaker-zh' },
-  en: { streaming: 'zipformer-en-streaming-int8', refined: 'whisper-turbo', diarization: 'pyannote-segmentation-3.0|nemo-titanet-small-en' },
-  ko: { streaming: 'zipformer-ko-streaming-int8', refined: 'whisper-turbo', diarization: 'pyannote-segmentation-3.0|nemo-titanet-small-en' },
-  fr: { streaming: 'zipformer-fr-streaming-int8', refined: 'whisper-turbo', diarization: 'pyannote-segmentation-3.0|nemo-titanet-small-en' },
-  es: { streaming: 'nemotron-3.5-asr-streaming-0.6b-560ms-int8', refined: 'whisper-large-v3', diarization: 'pyannote-segmentation-3.0|nemo-titanet-small-en' },
-  default: { streaming: 'zipformer-multilingual-streaming', refined: 'whisper-turbo', diarization: 'pyannote-segmentation-3.0|nemo-titanet-small-en' },
+  en: { streaming: 'zipformer-en-streaming-int8', refined: 'whisper-large-v3', diarization: 'pyannote-segmentation-3.0|campplus-zh-en' },
+  ko: { streaming: 'zipformer-ko-streaming-int8', refined: 'whisper-large-v3', diarization: 'pyannote-segmentation-3.0|campplus-zh-en' },
+  fr: { streaming: 'zipformer-fr-streaming-int8', refined: 'whisper-large-v3', diarization: 'pyannote-segmentation-3.0|campplus-zh-en' },
+  es: { streaming: 'nemotron-3.5-asr-streaming-0.6b-560ms-int8', refined: 'whisper-large-v3', diarization: 'pyannote-segmentation-3.0|campplus-zh-en' },
+  default: { streaming: 'zipformer-multilingual-streaming', refined: 'whisper-large-v3', diarization: 'pyannote-segmentation-3.0|campplus-zh-en' },
 };
-const preferredModelsForLanguage = (language) => languageModelDefaults[language] || languageModelDefaults.default;
+const preferredModelsForLanguage = (language) => {
+  const preset = languageModelPreferences[modelPreference()];
+  const table = preset || languageModelDefaults;
+  return table[language] || table.default;
+};
 const requiredModelsForLanguage = (language) => {
   const { streaming, refined, diarization } = preferredModelsForLanguage(language);
   const punctuation = language === 'en' ? 'online-punct-en-int8' : ['zh', 'yue', 'auto'].includes(language) ? 'punct-ct-transformer-zh-en-int8' : undefined;
@@ -439,7 +582,7 @@ function requiredModelDetails(language) {
 }
 const compatibleStreamingModels = (language) => {
   const supported = {
-    zh: new Set(['', 'zipformer-zh-xlarge-streaming-int8', 'zipformer-zh-streaming-int8', 'zipformer-multilingual-streaming', 'paraformer-zh-en-int8']),
+    zh: new Set(['', 'zipformer-zh-xlarge-streaming-int8', 'zipformer-multilingual-streaming', 'paraformer-zh-en-int8']),
     en: new Set(['', 'zipformer-en-streaming-int8', 'zipformer-multilingual-streaming', 'paraformer-zh-en-int8']),
     ko: new Set(['', 'zipformer-ko-streaming-int8', 'zipformer-multilingual-streaming']),
     fr: new Set(['', 'zipformer-fr-streaming-int8', 'zipformer-multilingual-streaming']),
@@ -614,14 +757,14 @@ function refreshLocalizedTaskCards() {
   }
 }
 async function generateMeetingSummary() {
-  const config = summaryModels[activeSummaryModel];
+  const config = summaryRequestConfig();
   if (!config || !breviaClient.state.selectedMeetingId) { showSummaryConfigCard(); return; }
   showSummaryProgress(0, 100, 'summary.prepare');
   try {
     const summary = await window.brevia.summary.generate({
       meeting_id: breviaClient.state.selectedMeetingId,
       provider: config.provider,
-      endpoint: config.endpoint,
+      ...(config.endpoint ? { endpoint: config.endpoint } : {}),
       model: config.model,
       format: config.format,
       key_reference: config.keyReference,
@@ -651,14 +794,14 @@ const useChinaModelSource = () => locale === 'zh' && localStorage.getItem('brevi
 const modelDownloadPayload = (modelId) => ({ model_id: modelId, ...(useChinaModelSource() ? { source: 'china' } : {}) });
 const chinaModelSourceToggle = () => locale === 'zh' ? `<p class="model-source-switch"><label><input type="checkbox" data-china-model-source${useChinaModelSource() ? ' checked' : ''} /><span>您是否身处中国大陆？</span></label><small>选择后将会使用大陆镜像源进行下载提速。</small></p>` : '';
 const onboardingCopy = {
-  zh: { languageHint: '之后你可以随时修改界面语言。', meetingTitle: '你通常使用哪些会议语言？', meetingHint: '我们正在为您准备需要的语音识别模型。', modelsTitle: '准备离线转写功能', modelsHint: '为此，我们需要下载以下内容。', estimate: '预计占用空间', download: '下载并继续', customize: '自定义下载', later: '稍后设置', ready: '离线转写已准备就绪', capabilities: ['实时字幕', '语音活动检测', '自动标点', '会后精修', '语音分段', '说话人识别', '实时降噪', '声源分离'] },
-  en: { languageHint: 'You can change the interface language any time.', meetingTitle: 'What languages do you usually use in meetings?', meetingHint: 'We’ll prepare the speech recognition models you need.', modelsTitle: 'Prepare offline transcription', modelsHint: 'To recognize speech on this device, Brevia needs to download the following.', estimate: 'Estimated storage', download: 'Download and continue', customize: 'Customize downloads', later: 'Set up later', ready: 'Offline transcription is ready', capabilities: ['Live captions', 'Voice activity detection', 'Automatic punctuation', 'Post-meeting refinement', 'Speech segmentation', 'Speaker recognition', 'Live denoising', 'Source separation'] },
-  es: { languageHint: 'Puedes cambiar el idioma de la interfaz en cualquier momento.', meetingTitle: '¿Qué idiomas usas habitualmente en las reuniones?', meetingHint: 'Prepararemos los modelos de reconocimiento de voz que necesitas.', modelsTitle: 'Preparar transcripción sin conexión', modelsHint: 'Para reconocer voz en este dispositivo, Brevia necesita descargar lo siguiente.', estimate: 'Almacenamiento estimado', download: 'Descargar y continuar', customize: 'Personalizar descargas', later: 'Configurar más tarde', ready: 'La transcripción sin conexión está lista', capabilities: ['Subtítulos en vivo', 'Detección de voz', 'Puntuación automática', 'Refinamiento posterior', 'Segmentación de voz', 'Reconocimiento de hablantes', 'Reducción de ruido', 'Separación de fuentes'] },
-  ja: { languageHint: '表示言語はいつでも変更できます。', meetingTitle: '会議ではどの言語をよく使いますか？', meetingHint: '必要な音声認識モデルを準備します。', modelsTitle: 'オフライン文字起こしを準備', modelsHint: 'このデバイスで音声を認識するため、以下をダウンロードします。', estimate: '必要な容量', download: 'ダウンロードして続ける', customize: 'ダウンロードをカスタマイズ', later: 'あとで設定', ready: 'オフライン文字起こしの準備ができました', capabilities: ['ライブ字幕', '音声区間検出', '自動句読点', '会議後の高精度化', '音声分割', '話者認識', 'ライブノイズ除去', '音源分離'] },
-  ko: { languageHint: '인터페이스 언어는 언제든 변경할 수 있습니다.', meetingTitle: '회의에서 주로 어떤 언어를 사용하나요?', meetingHint: '필요한 음성 인식 모델을 준비합니다.', modelsTitle: '오프라인 전사 준비', modelsHint: '이 기기에서 음성을 인식하려면 다음 항목을 다운로드해야 합니다.', estimate: '예상 저장 공간', download: '다운로드하고 계속', customize: '다운로드 사용자 지정', later: '나중에 설정', ready: '오프라인 전사가 준비되었습니다', capabilities: ['실시간 자막', '음성 활동 감지', '자동 문장 부호', '회의 후 정제', '음성 분할', '화자 인식', '실시간 노이즈 제거', '음원 분리'] },
-  fr: { languageHint: 'Vous pourrez modifier la langue de l’interface à tout moment.', meetingTitle: 'Quelles langues utilisez-vous habituellement en réunion ?', meetingHint: 'Nous préparerons les modèles de reconnaissance vocale nécessaires.', modelsTitle: 'Préparer la transcription hors ligne', modelsHint: 'Pour reconnaître la voix sur cet appareil, Brevia doit télécharger les éléments suivants.', estimate: 'Espace estimé', download: 'Télécharger et continuer', customize: 'Personnaliser les téléchargements', later: 'Configurer plus tard', ready: 'La transcription hors ligne est prête', capabilities: ['Sous-titres en direct', 'Détection d’activité vocale', 'Ponctuation automatique', 'Affinage après réunion', 'Segmentation vocale', 'Reconnaissance du locuteur', 'Réduction du bruit', 'Séparation des sources'] },
-  de: { languageHint: 'Sie können die Sprache der Oberfläche jederzeit ändern.', meetingTitle: 'Welche Sprachen verwenden Sie üblicherweise in Besprechungen?', meetingHint: 'Wir bereiten die benötigten Spracherkennungsmodelle vor.', modelsTitle: 'Offline-Transkription vorbereiten', modelsHint: 'Um Sprache auf diesem Gerät zu erkennen, muss Brevia Folgendes herunterladen.', estimate: 'Geschätzter Speicherbedarf', download: 'Herunterladen und fortfahren', customize: 'Downloads anpassen', later: 'Später einrichten', ready: 'Offline-Transkription ist bereit', capabilities: ['Live-Untertitel', 'Sprachaktivitätserkennung', 'Automatische Zeichensetzung', 'Nachbearbeitung', 'Sprachsegmentierung', 'Sprechererkennung', 'Live-Rauschunterdrückung', 'Quellentrennung'] },
-  ru: { languageHint: 'Язык интерфейса можно изменить в любое время.', meetingTitle: 'Какие языки вы обычно используете на встречах?', meetingHint: 'Мы подготовим нужные модели распознавания речи.', modelsTitle: 'Подготовить офлайн-расшифровку', modelsHint: 'Чтобы распознавать речь на этом устройстве, Brevia нужно скачать следующее.', estimate: 'Требуемое место', download: 'Скачать и продолжить', customize: 'Настроить загрузки', later: 'Настроить позже', ready: 'Офлайн-расшифровка готова', capabilities: ['Субтитры в реальном времени', 'Определение голосовой активности', 'Автопунктуация', 'Обработка после встречи', 'Сегментация речи', 'Распознавание говорящих', 'Шумоподавление в реальном времени', 'Разделение источников'] },
+  zh: { languageHint: '之后你可以随时修改界面语言。', meetingTitle: '你通常使用哪些会议语言？', meetingHint: '我们正在为您准备需要的语音识别模型。', modelsTitle: '准备离线转写功能', modelsHint: '为此，我们需要下载以下内容。', estimate: '预计占用空间', download: '下载并继续', customize: '自定义下载', later: '稍后设置', ready: '离线转写已准备就绪', preferenceTitle: '你更看重哪一点？', preferenceQuality: '质量优先', preferenceQualityHint: '选用精度更高的模型，占用与耗时更大。', preferencePerformance: '性能优先', preferencePerformanceHint: '选用更轻快的模型，转写更省资源。', capabilities: ['实时字幕', '语音活动检测', '自动标点', '会后精修', '语音分段', '说话人识别', '实时降噪', '声源分离'], translation: '字幕翻译' },
+  en: { languageHint: 'You can change the interface language any time.', meetingTitle: 'What languages do you usually use in meetings?', meetingHint: 'We’ll prepare the speech recognition models you need.', modelsTitle: 'Prepare offline transcription', modelsHint: 'To recognize speech on this device, Brevia needs to download the following.', estimate: 'Estimated storage', download: 'Download and continue', customize: 'Customize downloads', later: 'Set up later', ready: 'Offline transcription is ready', preferenceTitle: 'What matters more to you?', preferenceQuality: 'Prioritize quality', preferenceQualityHint: 'Higher-accuracy models that use more space and time.', preferencePerformance: 'Prioritize performance', preferencePerformanceHint: 'Lighter, faster models that use fewer resources.', capabilities: ['Live captions', 'Voice activity detection', 'Automatic punctuation', 'Post-meeting refinement', 'Speech segmentation', 'Speaker recognition', 'Live denoising', 'Source separation'], translation: 'Caption translation' },
+  es: { languageHint: 'Puedes cambiar el idioma de la interfaz en cualquier momento.', meetingTitle: '¿Qué idiomas usas habitualmente en las reuniones?', meetingHint: 'Prepararemos los modelos de reconocimiento de voz que necesitas.', modelsTitle: 'Preparar transcripción sin conexión', modelsHint: 'Para reconocer voz en este dispositivo, Brevia necesita descargar lo siguiente.', estimate: 'Almacenamiento estimado', download: 'Descargar y continuar', customize: 'Personalizar descargas', later: 'Configurar más tarde', ready: 'La transcripción sin conexión está lista', preferenceTitle: '¿Qué te importa más?', preferenceQuality: 'Priorizar la calidad', preferenceQualityHint: 'Modelos más precisos que usan más espacio y tiempo.', preferencePerformance: 'Priorizar el rendimiento', preferencePerformanceHint: 'Modelos más ligeros y rápidos que usan menos recursos.', capabilities: ['Subtítulos en vivo', 'Detección de voz', 'Puntuación automática', 'Refinamiento posterior', 'Segmentación de voz', 'Reconocimiento de hablantes', 'Reducción de ruido', 'Separación de fuentes'], translation: 'Traducción de subtítulos' },
+  ja: { languageHint: '表示言語はいつでも変更できます。', meetingTitle: '会議ではどの言語をよく使いますか？', meetingHint: '必要な音声認識モデルを準備します。', modelsTitle: 'オフライン文字起こしを準備', modelsHint: 'このデバイスで音声を認識するため、以下をダウンロードします。', estimate: '必要な容量', download: 'ダウンロードして続ける', customize: 'ダウンロードをカスタマイズ', later: 'あとで設定', ready: 'オフライン文字起こしの準備ができました', preferenceTitle: 'どちらを重視しますか？', preferenceQuality: '品質を優先', preferenceQualityHint: 'より高精度なモデル。容量と処理時間は増えます。', preferencePerformance: '性能を優先', preferencePerformanceHint: 'より軽快なモデル。リソース消費を抑えます。', capabilities: ['ライブ字幕', '音声区間検出', '自動句読点', '会議後の高精度化', '音声分割', '話者認識', 'ライブノイズ除去', '音源分離'], translation: '字幕翻訳' },
+  ko: { languageHint: '인터페이스 언어는 언제든 변경할 수 있습니다.', meetingTitle: '회의에서 주로 어떤 언어를 사용하나요?', meetingHint: '필요한 음성 인식 모델을 준비합니다.', modelsTitle: '오프라인 전사 준비', modelsHint: '이 기기에서 음성을 인식하려면 다음 항목을 다운로드해야 합니다.', estimate: '예상 저장 공간', download: '다운로드하고 계속', customize: '다운로드 사용자 지정', later: '나중에 설정', ready: '오프라인 전사가 준비되었습니다', preferenceTitle: '무엇을 더 중시하나요?', preferenceQuality: '품질 우선', preferenceQualityHint: '정확도가 높은 모델. 용량과 시간이 더 필요합니다.', preferencePerformance: '성능 우선', preferencePerformanceHint: '더 가볍고 빠른 모델. 리소스를 적게 씁니다.', capabilities: ['실시간 자막', '음성 활동 감지', '자동 문장 부호', '회의 후 정제', '음성 분할', '화자 인식', '실시간 노이즈 제거', '음원 분리'], translation: '자막 번역' },
+  fr: { languageHint: 'Vous pourrez modifier la langue de l’interface à tout moment.', meetingTitle: 'Quelles langues utilisez-vous habituellement en réunion ?', meetingHint: 'Nous préparerons les modèles de reconnaissance vocale nécessaires.', modelsTitle: 'Préparer la transcription hors ligne', modelsHint: 'Pour reconnaître la voix sur cet appareil, Brevia doit télécharger les éléments suivants.', estimate: 'Espace estimé', download: 'Télécharger et continuer', customize: 'Personnaliser les téléchargements', later: 'Configurer plus tard', ready: 'La transcription hors ligne est prête', preferenceTitle: 'Qu’est-ce qui compte le plus pour vous ?', preferenceQuality: 'Privilégier la qualité', preferenceQualityHint: 'Modèles plus précis, plus gourmands en espace et en temps.', preferencePerformance: 'Privilégier la performance', preferencePerformanceHint: 'Modèles plus légers et rapides, moins gourmands en ressources.', capabilities: ['Sous-titres en direct', 'Détection d’activité vocale', 'Ponctuation automatique', 'Affinage après réunion', 'Segmentation vocale', 'Reconnaissance du locuteur', 'Réduction du bruit', 'Séparation des sources'], translation: 'Traduction des sous-titres' },
+  de: { languageHint: 'Sie können die Sprache der Oberfläche jederzeit ändern.', meetingTitle: 'Welche Sprachen verwenden Sie üblicherweise in Besprechungen?', meetingHint: 'Wir bereiten die benötigten Spracherkennungsmodelle vor.', modelsTitle: 'Offline-Transkription vorbereiten', modelsHint: 'Um Sprache auf diesem Gerät zu erkennen, muss Brevia Folgendes herunterladen.', estimate: 'Geschätzter Speicherbedarf', download: 'Herunterladen und fortfahren', customize: 'Downloads anpassen', later: 'Später einrichten', ready: 'Offline-Transkription ist bereit', preferenceTitle: 'Was ist Ihnen wichtiger?', preferenceQuality: 'Qualität priorisieren', preferenceQualityHint: 'Genauere Modelle, die mehr Speicher und Zeit benötigen.', preferencePerformance: 'Leistung priorisieren', preferencePerformanceHint: 'Leichtere, schnellere Modelle mit geringerem Ressourcenbedarf.', capabilities: ['Live-Untertitel', 'Sprachaktivitätserkennung', 'Automatische Zeichensetzung', 'Nachbearbeitung', 'Sprachsegmentierung', 'Sprechererkennung', 'Live-Rauschunterdrückung', 'Quellentrennung'], translation: 'Untertitelübersetzung' },
+  ru: { languageHint: 'Язык интерфейса можно изменить в любое время.', meetingTitle: 'Какие языки вы обычно используете на встречах?', meetingHint: 'Мы подготовим нужные модели распознавания речи.', modelsTitle: 'Подготовить офлайн-расшифровку', modelsHint: 'Чтобы распознавать речь на этом устройстве, Brevia нужно скачать следующее.', estimate: 'Требуемое место', download: 'Скачать и продолжить', customize: 'Настроить загрузки', later: 'Настроить позже', ready: 'Офлайн-расшифровка готова', preferenceTitle: 'Что для вас важнее?', preferenceQuality: 'Приоритет качеству', preferenceQualityHint: 'Более точные модели, требующие больше места и времени.', preferencePerformance: 'Приоритет производительности', preferencePerformanceHint: 'Более лёгкие и быстрые модели с меньшим потреблением ресурсов.', capabilities: ['Субтитры в реальном времени', 'Определение голосовой активности', 'Автопунктуация', 'Обработка после встречи', 'Сегментация речи', 'Распознавание говорящих', 'Шумоподавление в реальном времени', 'Разделение источников'], translation: 'Перевод субтитров' },
 };
 const onboardingSecurityCopy = {
   zh: '模型资源来自可信来源，并经过完整性校验。\n您的音频数据不会上传至云端。',
@@ -713,6 +856,9 @@ async function resumeReadyModelTasks() {
     try {
       if (pending.task === 'meeting.refine') {
         await window.brevia.meeting.refine(pending.payload);
+      } else if (pending.task === 'meeting.reconfigure') {
+        // 仅在此会议仍是实时会议时重试；已停止的会议无法重新配置。
+        if (breviaClient?.state.meeting?.id === pending.payload.meeting_id) await window.brevia.meeting.reconfigure(pending.payload);
       } else if (pending.task === 'meeting.separate') {
         showSeparationProgress(0, 100);
         await window.brevia.meeting.separate(pending.payload);
@@ -770,7 +916,7 @@ function renderModelDownloadQueue() {
     card.innerHTML = `<header class="task-card-heading"><p>${heading} · ${entries.length}</p>${taskCardControls()}</header><div class="processing-bar" aria-hidden="true"><i style="transform:scaleX(${ratio})"></i></div><ul>${entries.map(([id, progress]) => {
       const itemRatio = progress.total ? Math.min(1, progress.received / progress.total) : 0;
       const status = progress.error ? `<small title="${escapeHtml(progress.error)}">${t('下载失败')}</small>` : progress.cancelled ? '' : `<small>${progress.cancelling ? t('正在取消') : progress.paused ? t('暂停') : progress.total ? `${Math.round(itemRatio * 100)}%` : t('准备中')}</small>`;
-      const action = progress.error || progress.cancelled ? `<button type="button" data-download-required="${id}">${t(progress.error ? '重试' : '下载')}</button>` : progress.cancelling ? '' : `<button class="task-card-close" type="button" data-pause-required="${id}" aria-label="${progress.paused ? t('继续') : t('暂停')}">${progress.paused ? '▶' : 'Ⅱ'}</button><button class="task-card-close" type="button" data-cancel-required="${id}" aria-label="取消">×</button>`;
+      const action = progress.error || progress.cancelled ? `<button type="button" data-download-required="${id}">${t(progress.error ? '重试' : '下载')}</button>` : progress.cancelling ? '' : `<button class="task-card-close" type="button" data-pause-required="${id}" aria-label="${progress.paused ? t('继续') : t('暂停')}">${progress.paused ? '▶' : 'Ⅱ'}</button><button class="task-card-close" type="button" data-cancel-required="${id}" aria-label="${t('取消')}">×</button>`;
       return `<li><span><b>${escapeHtml(modelDisplayName(id))}</b>${status}</span><span class="model-actions">${action}</span><div class="processing-bar" aria-hidden="true"><i style="transform:scaleX(${itemRatio})"></i></div></li>`;
     }).join('')}</ul>`;
     card.querySelector('ul').scrollTop = scrollTop;
@@ -851,6 +997,14 @@ taskCards.addEventListener('click', (event) => {
       if (card?.id === 'separation-progress') clearTimeout(separationDismissTimer);
       if (card?.id === 'summary-progress') clearTimeout(summaryDismissTimer);
       if (card?.id === 'summary-config-required') clearTimeout(summaryConfigDismissTimer);
+      // 关闭下载队列对于已取消/失败的模型是终结性的：删除它们，以便卡片无法
+      // 重新浮现（并且库无法一直停留在"下载中"）。正在进行的下载继续运行。
+      if (card?.id === 'model-download-queue') {
+        for (const [modelId, progress] of modelDownloads) {
+          if (progress.cancelled || progress.error) { modelDownloads.delete(modelId); requiredModelIds.delete(modelId); }
+        }
+        if (activeModal === 'models') renderModal('models');
+      }
       dismissTaskCard(card);
     }
     return;
@@ -897,23 +1051,55 @@ prepareForm.addEventListener('click', (event) => {
   select.querySelector('.flow-select-toggle').setAttribute('aria-expanded', 'false');
   if (choice.dataset.flowSelectChoice === 'meeting-language') applyLanguageModelDefaults(choice.dataset.value);
 });
-/** Produces the safe-to-display subset of the active model configuration. @returns {string} Formatted JSON without API keys. */
-function renderConfigPreview() {
-  const current = summaryModels[activeSummaryModel];
-  return JSON.stringify(current ? { name: current.name, provider: current.provider, endpoint: current.endpoint, format: current.format, model: current.model } : {}, null, 2);
+/** 渲染内置纪要模型清单，含未安装模型的下载入口。@returns {string} 清单标记。*/
+function renderBuiltinSummaryModels(currentModelId) {
+  const copy = summaryModelCopy[locale] || summaryModelCopy.en;
+  const models = modelCatalog.filter((model) => model.kind === 'llama-chat');
+  if (!models.length) return `<p class="summary-model-hint">${t('内置纪要模型清单暂不可用。')}</p>`;
+  const labels = modelLabels[locale] || modelLabels.en;
+  const rows = models.map((model) => {
+    const installed = modelPaths.has(model.id);
+    const download = modelDownloads.get(model.id);
+    const selected = installed && model.id === currentModelId;
+    const progress = download ? `<span class="model-download-progress">${download.total ? `${Math.round((download.received / download.total) * 100)}%` : labels.downloading}<i style="transform:scaleX(${download.total ? download.received / download.total : 0})"></i></span>` : '';
+    const action = installed
+      ? `<span class="summary-config-badge">${labels.installed}</span>`
+      : `<button class="modal-action" data-download-summary-model="${escapeHtml(model.id)}" type="button"${download ? ' disabled' : ''}>${download ? labels.downloading : labels.download}</button>`;
+    return `<div class="model-library-item${selected ? ' builtin-model-selected' : ''}"${installed ? ` data-builtin-model-id="${escapeHtml(model.id)}"` : ''}><span><b class="model-library-headline">${escapeHtml(model.name)}</b><small>${escapeHtml(model.id)}${model.size_bytes ? ` · ${formatBytes(model.size_bytes)}` : ''}</small>${progress}</span><span class="model-actions">${action}</span></div>`;
+  }).join('');
+  return `<div class="builtin-model-list modal-list">${rows}</div><p class="summary-model-hint">${copy.builtinHint}</p>`;
 }
-/** Renders the editable summary-model configuration modal. @returns {void} */
+/** 渲染纪要模型配置模态框：单选供应商 + 按供应商条件显示的字段。@returns {void} */
 function renderSummaryModelModal() {
   const copy = summaryModelCopy[locale] || summaryModelCopy.en;
-  const current = summaryModels[editingSummaryModel] || { name: draftSummaryName || `配置-${configSequence + 1}`, provider: 'OpenAI', apiKey: '', endpoint: '', format: '', model: '' };
-  const isOllama = current.provider === 'Ollama';
-  const isOllamaCloud = current.provider === 'Ollama Cloud';
-  const apiFormat = current.format === 'claude' ? 'claude' : 'openai';
-  const configuredControl = summaryModels.length ? `<div class="configured-models"><label class="config-select-field">${copy.configured}${flowSelect('active-summary-model', String(activeSummaryModel), summaryModels.map((item, index) => [String(index), `${item.name} · ${summaryProviderLabel(item.provider)} · ${item.model}${index === activeSummaryModel ? ` · ${copy.active}` : ''}`]), true)}</label></div>` : '';
+  const provider = summaryConfig.provider;
+  const preset = summaryProviderPresets[provider];
+  const entry = summaryProviderEntry(provider);
+  const isBuiltin = provider === 'built-in';
+
   settingsModal.querySelector('h2').textContent = copy.title;
   settingsModal.querySelector('.modal-title p').textContent = copy.intro;
-  const endpoint = current.endpoint || (isOllama ? ollamaChatEndpoint : isOllamaCloud ? ollamaCloudChatEndpoint : '');
-  settingsModal.querySelector('.modal-body').innerHTML = `<form class="summary-model-form"><div class="config-fields"><label>${copy.name}<input name="name" value="${escapeHtml(current.name)}" maxlength="64" required /></label><label class="config-select-field">${copy.provider}${flowSelect('provider', current.provider, summaryProviders.map((provider) => [provider, summaryProviderLabel(provider)]))}</label><label data-summary-api-key${isOllama ? ' hidden' : ''}>${copy.key}<input name="apiKey" type="password" autocomplete="new-password" placeholder="${current.keyReference ? '•'.repeat(current.keyLength || 8) : ''}" /></label><label>${copy.endpoint}<input name="endpoint" value="${escapeHtml(endpoint)}" required /></label><label class="config-select-field" data-summary-format${(isOllama || isOllamaCloud) ? ' hidden' : ''}>${copy.format}${flowSelect('format', apiFormat, [['openai', copy.openAIFormat], ['claude', copy.claudeFormat]])}</label><label>${copy.model}<input name="model" value="${escapeHtml(current.model)}" placeholder="llama3.2" required /></label></div>${isOllama ? `<p class="ollama-hint">${t('使用本机 Ollama，不需要 API Key。请填写已安装的模型名。')}</p>` : isOllamaCloud ? `<p class="ollama-hint">${t('直接调用 Ollama Cloud，需要 API Key。请填写已安装的模型名。')}</p>` : ''}<div class="modal-form-actions"><button class="modal-action" type="submit">${copy.save}</button><button class="secondary" data-new-summary-model type="button">${copy.add}</button>${editingSummaryModel >= 0 ? `<button class="model-delete" data-delete-summary-model type="button">${copy.remove}</button>` : ''}</div></form>${configuredControl}<section class="modal-subsection"><h3>${copy.jsonTitle}</h3><p>${copy.jsonIntro}</p><pre class="config-json">${escapeHtml(renderConfigPreview())}</pre></section>`;
+
+  const providerField = `<label class="config-select-field">${copy.provider}${flowSelect('provider', provider, summaryProviders.map((id) => [id, summaryProviderLabel(id)]))}</label>`;
+  let fields = '';
+  let builtinModelList = '';
+  let currentModelId = '';
+  if (isBuiltin) {
+    const installed = modelCatalog.filter((model) => model.kind === 'llama-chat' && modelPaths.has(model.id));
+    currentModelId = selectedBuiltinModel || (modelPaths.has(entry.model) ? entry.model : installed[0]?.id || '');
+    builtinModelList = `<input type="hidden" name="model" value="${escapeHtml(currentModelId)}" />${renderBuiltinSummaryModels(currentModelId)}`;
+  } else {
+    // 固定供应商的请求地址由代码派生，只有自定义供应商才让用户填写。
+    const endpointField = preset.needsEndpoint ? `<label>${copy.endpoint}<input name="endpoint" value="${escapeHtml(entry.endpoint || '')}" type="url" placeholder="${escapeHtml(copy.endpointPlaceholder)}" required /></label>` : '';
+    // maxlength 对齐主进程的 zod 上限（model 128、keyLength 512），否则超长值要到
+    // 主进程才被拒，用户只会看到一句无从下手的「操作失败」。
+    const keyField = `<label>${copy.key}<input name="apiKey" type="password" autocomplete="new-password" maxlength="512" placeholder="${entry.keyReference ? '•'.repeat(entry.keyLength || 8) : ''}"${entry.keyReference ? '' : ' required'} /></label>`;
+    const modelField = `<label>${copy.model}<input name="model" value="${escapeHtml(entry.model || '')}" maxlength="128" placeholder="${escapeHtml(preset.model)}" required /></label>`;
+    fields = `${endpointField}${keyField}${modelField}`;
+  }
+
+  const saveDisabled = isBuiltin && !modelPaths.has(currentModelId);
+  settingsModal.querySelector('.modal-body').innerHTML = `<form class="summary-model-form"><div class="config-fields">${providerField}${fields}</div>${builtinModelList}<div class="modal-form-actions"><button class="modal-action" type="submit"${saveDisabled ? ' disabled' : ''}>${copy.save}</button></div></form>`;
 }
 function renderSpeakerProfileModal() {
   const copy = speakerProfileCopy[locale] || speakerProfileCopy.en;
@@ -959,12 +1145,12 @@ function renderSummaryDetailModal() {
   settingsModal.querySelector('.modal-title p').textContent = currentMeetingDetail.title;
   settingsModal.querySelector('.modal-body').innerHTML = `<article class="markdown-content">${renderMarkdown(markdown)}</article><div class="modal-form-actions"><button class="secondary" type="button" data-regenerate-summary>${copy[1]}</button></div><section class="modal-subsection"><h3>${copy[2]}</h3><div class="export-options"><button type="button" data-summary-export-choice data-format="md"><span><b>Markdown</b><small>${copy[3]}</small></span><strong>.md</strong></button><button type="button" data-summary-export-choice data-format="txt"><span><b>TXT</b><small>${copy[4]}</small></span><strong>.txt</strong></button><button type="button" data-summary-export-choice data-format="pdf"><span><b>PDF</b><small>${copy[5]}</small></span><strong>.pdf</strong></button></div></section>`;
 }
-/** Renders one settings modal. @param {'models'|'storage'|'summary-model'} kind Requested modal. @returns {void} */
+/** 渲染一个设置模态框。@param {'models'|'storage'|'summary-model'} kind 请求的模态框。@returns {void} */
 function renderModal(kind) {
   if (kind === 'advanced-settings') {
     settingsModal.querySelector('h2').textContent = t('进阶设置');
     settingsModal.querySelector('.modal-title p').textContent = t('修改后会立即应用于下一次会议与精修。');
-    settingsModal.querySelector('.modal-body').innerHTML = `<form class="advanced-settings-form"><p>${t('可修改模型、端点静音、说话人分离及 sherpa-onnx 运行参数。')}</p>${renderAdvancedSettings(advancedSettings?.settings || {})}<div class="modal-form-actions"><button class="modal-action" type="submit">${t('确定')}</button><button class="secondary" data-reset-advanced-settings type="button">${t('恢复默认')}</button></div></form>`;
+    settingsModal.querySelector('.modal-body').innerHTML = `${renderPermissionSettings()}<form class="advanced-settings-form"><p>${t('可修改模型、端点静音、说话人分离及 sherpa-onnx 运行参数。')}</p>${renderAdvancedSettings(advancedSettings?.settings || {})}<div class="modal-form-actions"><button class="modal-action" type="submit">${t('确定')}</button><button class="secondary" data-reset-advanced-settings type="button">${t('恢复默认')}</button></div></form>`;
     return;
   }
   if (kind === 'summary-model') { renderSummaryModelModal(); return; }
@@ -993,16 +1179,20 @@ function renderModal(kind) {
     const label = `<b>${escapeHtml(name)}</b>`;
     const progress = kind === 'models' ? modelDownloads.get(modelIds[sourceIndex]) : null;
     const ratio = progress?.total ? Math.min(1, progress.received / progress.total) : 0;
-    const downloadProgress = progress?.error ? `<span class="model-download-progress">${escapeHtml(progress.error)}</span>` : progress ? `<span class="model-download-progress">${formatBytes(progress.received)} / ${formatBytes(progress.total)} · ${Math.round(ratio * 100)}%<i aria-hidden="true" style="transform:scaleX(${ratio})"></i></span>` : '';
+    // 已取消的条目是终结性的，而非进行中的：不为其渲染进度且不禁用其按钮，
+    // 否则库会显示永久禁用的"下载中"，重新下载将变得不可能。
+    const downloadInFlight = progress && !progress.error && !progress.cancelled;
+    const downloadProgress = progress?.error ? `<span class="model-download-progress">${escapeHtml(progress.error)}</span>` : downloadInFlight ? `<span class="model-download-progress">${formatBytes(progress.received)} / ${formatBytes(progress.total)} · ${Math.round(ratio * 100)}%<i aria-hidden="true" style="transform:scaleX(${ratio})"></i></span>` : '';
     const size = kind === 'models' ? `<small>${formatBytes(modelSize(modelIds[sourceIndex]))}</small>` : '';
     const installed = kind === 'models' && modelPaths.has(modelIds[sourceIndex]);
     const model = kind === 'models' ? modelCatalog.find((candidate) => candidate.id === modelIds[sourceIndex]) : null;
-    const metadata = kind === 'models' ? renderModelLibraryMeta(model, detail) : '';
-    const tags = kind === 'models' ? renderModelLibraryTags(model, installed) : '';
-    const nameRow = kind === 'models' ? `<div class="model-library-name">${label}${tags}</div>` : label;
-    const actions = kind === 'models' ? selectingOnboardingModels ? `<label class="model-select"><input type="checkbox" data-onboarding-model-selection value="${modelIds[sourceIndex]}"${installed ? ' checked disabled' : onboardingModelSelection?.has(modelIds[sourceIndex]) ? ' checked' : ''} /></label>` : `<span class="model-actions">${installed ? `<button class="secondary" data-open-model-folder="${sourceIndex}" type="button">${t('从文件夹打开')}</button>` : ''}<button class="modal-action${installed ? ' modal-danger' : ''}" ${installed ? `data-delete-model="${sourceIndex}"` : `data-download-model="${sourceIndex}"`} type="button"${progress && !progress.error ? ' disabled' : ''}>${installed ? (modelLabels[locale] || modelLabels.en).remove : progress && !progress.error ? (modelLabels[locale] || modelLabels.en).downloading : (modelLabels[locale] || modelLabels.en).download}</button></span>` : '';
+    const ratings = kind === 'models' ? renderModelLibraryRatings(model) : '';
+    const tags = kind === 'models' ? renderModelLibraryTags(model, installed, name) : '';
+    // 以语言为主（"哪种声音"的问题）；模型名称在标签行中，而非单独一行。
+    const nameRow = kind === 'models' ? `<div class="model-library-name"><b class="model-library-headline">${escapeHtml(detail)}</b>${tags}</div>` : label;
+    const actions = kind === 'models' ? selectingOnboardingModels ? `<label class="model-select"><input type="checkbox" data-onboarding-model-selection value="${modelIds[sourceIndex]}"${installed ? ' checked disabled' : onboardingModelSelection?.has(modelIds[sourceIndex]) ? ' checked' : ''} /></label>` : `<span class="model-actions">${installed ? `<button class="secondary" data-open-model-folder="${sourceIndex}" type="button">${t('从文件夹打开')}</button>` : ''}<button class="modal-action${installed ? ' modal-danger' : ''}" ${installed ? `data-delete-model="${sourceIndex}"` : `data-download-model="${sourceIndex}"`} type="button"${downloadInFlight ? ' disabled' : ''}>${installed ? (modelLabels[locale] || modelLabels.en).remove : downloadInFlight ? (modelLabels[locale] || modelLabels.en).downloading : (modelLabels[locale] || modelLabels.en).download}</button></span>` : '';
     const heading = kind === 'models' && (index === 0 || items[index - 1].item[0] !== stage) ? `<h3>${escapeHtml(stage)}</h3>` : '';
-    return `${heading}<div class="${kind === 'models' ? 'model-library-item' : ''}"><span>${nameRow}${downloadProgress}${kind === 'models' ? `${intro ? `<p>${escapeHtml(intro)}</p>` : ''}${metadata}` : `<small>${escapeHtml(detail)}</small>${size}${intro ? `<small>${escapeHtml(intro)}</small>` : ''}`}</span>${actions}</div>`;
+    return `${heading}<div class="${kind === 'models' ? 'model-library-item' : ''}"><span>${nameRow}${downloadProgress}${kind === 'models' ? `${ratings}${intro ? `<p>${escapeHtml(intro)}</p>` : ''}` : `<small>${escapeHtml(detail)}</small>${size}${intro ? `<small>${escapeHtml(intro)}</small>` : ''}`}</span>${actions}</div>`;
   }).join('')}</div>${selectingOnboardingModels ? `<div class="modal-form-actions"><button class="modal-action" data-download-onboarding-selected type="button"${onboardingModelSelection?.size ? '' : ' disabled'}>${(onboardingCopy[locale] || onboardingCopy.en).download}</button></div>` : ''}`;
 }
 /** Opens and focuses a settings modal. @param {'models'|'storage'|'summary-model'} kind Requested modal. @returns {void} */
@@ -1023,7 +1213,11 @@ function openConfirmation(title, detail, action) {
 async function openModal(kind) {
   clearTimeout(modalDismissTimer);
   if (kind === 'advanced-settings') {
-    try { advancedSettings = await window.brevia?.advancedSettings.get() || { settings: {}, defaults: {} }; } catch (error) { showToast(error.message); return; }
+    try {
+      const [settings, status] = await Promise.all([window.brevia?.advancedSettings.get(), window.brevia?.permissions.status().catch(() => undefined)]);
+      advancedSettings = settings || { settings: {}, defaults: {} };
+      permissionStatus = status;
+    } catch (error) { showToast(error.message); return; }
   }
   activeModal = kind;
   renderModal(kind);
@@ -1032,10 +1226,25 @@ async function openModal(kind) {
   requestAnimationFrame(() => settingsModal.classList.add('modal-enter'));
   document.body.classList.add('modal-open');
   settingsModal.querySelector('.modal-close').focus();
+  if (kind === 'advanced-settings') startPermissionPoll();
 }
-/** Closes the active settings modal and restores page scrolling. @returns {void} */
+/** 在高级设置模态框打开时轮询系统权限状态，并仅在更改时重新渲染该部分。@returns {void} */
+function startPermissionPoll() {
+  window.clearInterval(permissionPollTimer);
+  permissionPollTimer = window.setInterval(async () => {
+    if (activeModal !== 'advanced-settings' || settingsModal.hidden) { window.clearInterval(permissionPollTimer); return; }
+    const status = await window.brevia?.permissions.status().catch(() => undefined);
+    if (!status) return;
+    const changed = JSON.stringify(status) !== JSON.stringify(permissionStatus);
+    permissionStatus = status;
+    const section = settingsModal.querySelector('[data-permission-settings]');
+    if (changed && section) section.outerHTML = renderPermissionSettings();
+  }, 1000);
+}
+/** 关闭活动的设置模态框并恢复页面滚动。@returns {void} */
 function closeModal() {
   if (settingsModal.hidden) return;
+  window.clearInterval(permissionPollTimer);
   activeModal = undefined;
   settingsModal.classList.remove('modal-enter');
   settingsModal.classList.add('modal-leave');
@@ -1161,18 +1370,31 @@ function dismissOnboardingPage(next) {
   }, 260);
 }
 
+/** 构建驱动新手引导选择哪些模型的质量/性能分段控件。@param {object} copy 语言环境副本包。@returns {string} */
+function onboardingPreferenceControl(copy) {
+  const active = modelPreference() || 'quality';
+  const option = (value, label, hint) => `<label class="onboarding-preference-option${active === value ? ' is-active' : ''}"><input type="radio" name="onboarding-model-preference" value="${value}"${active === value ? ' checked' : ''} /><span><b>${escapeHtml(label)}</b><small>${escapeHtml(hint)}</small></span></label>`;
+  return `<section class="onboarding-section onboarding-preference"><h2>${escapeHtml(copy.preferenceTitle)}</h2><div class="onboarding-preference-grid">${option('quality', copy.preferenceQuality, copy.preferenceQualityHint)}${option('performance', copy.preferencePerformance, copy.preferencePerformanceHint)}</div></section>`;
+}
+
 async function openOnboardingSetup() {
   try { if (initializationPromise) await initializationPromise; }
   catch (error) { showToast(`${t('配置或后端启动失败')}: ${error.message}`); openOnboardingPermissions(); return; }
   const copy = onboardingCopy[locale] || onboardingCopy.en;
   const modelListLabels = onboardingModelListLabel[locale] || onboardingModelListLabel.en;
   const securityHint = onboardingSecurityCopy[locale] || onboardingSecurityCopy.en;
+  if (!modelPreference()) localStorage.setItem('brevia-model-preference', 'quality');
   const choices = ['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru'];
   const defaults = new Set(['en', locale]);
-  showOnboardingPage('setup', `<section class="onboarding-setup-page"><button class="onboarding-back" data-onboarding-back-language type="button" aria-label="Back">←</button><header><img class="onboarding-brand" src="./assets/brevia-logo.svg" alt="Brevia" /><h1>${copy.modelsTitle}</h1><div class="onboarding-intro"><p>${copy.meetingHint} ${copy.modelsHint}</p><small>${securityHint}</small></div></header><section class="onboarding-section"><h2>${copy.meetingTitle}</h2><div class="onboarding-language-selection"><div class="onboarding-check-grid">${choices.map((code) => `<label><input type="checkbox" name="onboarding-language" value="${code}"${defaults.has(code) ? ' checked' : ''} /><span>${new Intl.DisplayNames([locale], { type: 'language' }).of(code)}</span></label>`).join('')}</div><aside class="onboarding-model-preview"><strong>${modelListLabels[0]}</strong><ul data-onboarding-language-models></ul></aside></div></section><section class="onboarding-section"><h2>${t('离线功能')}</h2><div class="onboarding-language-selection"><div class="onboarding-feature-grid">${copy.capabilities.map((capability) => `<label><input type="checkbox" checked disabled /><span>${capability}</span></label>`).join('')}</div><aside class="onboarding-model-preview"><strong>${modelListLabels[1]}</strong><ul data-onboarding-feature-models></ul></aside></div></section><section class="onboarding-model-summary"><strong>${copy.estimate}: <span data-onboarding-estimate></span></strong>${chinaModelSourceToggle()}</section><div class="onboarding-actions"><button class="modal-action" data-download-onboarding-models type="button">${copy.download}</button><button class="secondary" data-customize-onboarding-models type="button">${copy.customize}</button><button class="secondary" data-finish-onboarding type="button">${copy.later}</button></div></section>`);
+  showOnboardingPage('setup', `<section class="onboarding-setup-page"><button class="onboarding-back" data-onboarding-back-language type="button" aria-label="${t('返回')}">←</button><header><img class="onboarding-brand" src="./assets/brevia-logo.svg" alt="Brevia" /><h1>${copy.modelsTitle}</h1><div class="onboarding-intro"><p>${copy.meetingHint} ${copy.modelsHint}</p><small>${securityHint}</small></div></header>${onboardingPreferenceControl(copy)}<section class="onboarding-section"><h2>${copy.meetingTitle}</h2><div class="onboarding-language-selection"><div class="onboarding-check-grid">${choices.map((code) => `<label><input type="checkbox" name="onboarding-language" value="${code}"${defaults.has(code) ? ' checked' : ''} /><span>${new Intl.DisplayNames([locale], { type: 'language' }).of(code)}</span></label>`).join('')}</div><aside class="onboarding-model-preview"><strong>${modelListLabels[0]}</strong><ul data-onboarding-language-models></ul></aside></div></section><section class="onboarding-section"><h2>${t('离线功能')}</h2><div class="onboarding-language-selection"><div class="onboarding-feature-grid">${copy.capabilities.map((capability) => `<label><input type="checkbox" checked disabled /><span>${capability}</span></label>`).join('')}<label><input type="checkbox" name="onboarding-translation" /><span>${copy.translation}</span></label></div><aside class="onboarding-model-preview"><strong>${modelListLabels[1]}</strong><ul data-onboarding-feature-models></ul></aside></div></section><section class="onboarding-model-summary"><strong>${copy.estimate}: <span data-onboarding-estimate></span></strong>${chinaModelSourceToggle()}</section><div class="onboarding-actions"><button class="modal-action" data-download-onboarding-models type="button">${copy.download}</button><button class="secondary" data-customize-onboarding-models type="button">${copy.customize}</button><button class="secondary" data-finish-onboarding type="button">${copy.later}</button></div></section>`);
   updateOnboardingSetup();
   onboardingPage.addEventListener('change', (event) => {
-    if (event.target.matches('[name="onboarding-language"]')) updateOnboardingSetup();
+    if (event.target.matches('[name="onboarding-language"]') || event.target.matches('[name="onboarding-translation"]')) updateOnboardingSetup();
+    if (event.target.matches('[name="onboarding-model-preference"]')) {
+      localStorage.setItem('brevia-model-preference', event.target.value);
+      onboardingPage.querySelectorAll('.onboarding-preference-option').forEach((option) => option.classList.toggle('is-active', option.querySelector('input').checked));
+      updateOnboardingSetup();
+    }
     if (event.target.matches('[data-china-model-source]')) localStorage.setItem('brevia-china-model-source', event.target.checked);
   });
   onboardingPage.addEventListener('click', (event) => {
@@ -1190,10 +1412,14 @@ function updateOnboardingSetup() {
     const [streaming, , , refined] = requiredModelsForLanguage(language);
     return [[streaming], [refined]];
   }));
-  const featureModels = uniqueModelIds(languages.flatMap((language) => {
-    const [, vad, punctuation, , segmentation, embedding, denoiser, separation] = requiredModelsForLanguage(language);
-    return [[vad], [punctuation], [segmentation], [embedding], [denoiser], [separation]];
-  }));
+  const translationSelected = onboardingPage.querySelector('[name="onboarding-translation"]')?.checked;
+  const featureModels = uniqueModelIds([
+    ...languages.flatMap((language) => {
+      const [, vad, punctuation, , segmentation, embedding, denoiser, separation] = requiredModelsForLanguage(language);
+      return [[vad], [punctuation], [segmentation], [embedding], [denoiser], [separation]];
+    }),
+    ...(translationSelected ? [['hy-mt2-1.8b-q4km']] : []),
+  ]);
   const models = [...languageModels, ...featureModels];
   onboardingModelIds = models.filter((modelId) => !modelPaths.has(modelId));
   const size = onboardingModelIds.reduce((total, modelId) => total + modelSize(modelId), 0);
@@ -1215,7 +1441,7 @@ function openOnboardingPermissions() {
     ['screen', t('屏幕与系统音频'), t('录制屏幕共享中的系统声音。')],
   ];
   const placeholders = steps.map(([permission, label, detail], index) => `<div class="onboarding-permission"><span class="onboarding-permission-state">${index + 1}</span><span><b>${label}</b><small>${detail}</small></span><button class="modal-action onboarding-permission-action onboarding-permission-placeholder" type="button" disabled>${permission === 'microphone' ? t('允许') : t('继续')}</button></div>`).join('') + `<div class="onboarding-permission-complete onboarding-permission-placeholder" aria-hidden="true">&nbsp;</div>`;
-  showOnboardingPage('permissions', `<section class="onboarding-setup-page onboarding-permissions-page"><button class="onboarding-back" data-onboarding-back-language type="button" aria-label="Back">←</button><header><img class="onboarding-brand" src="./assets/brevia-logo.svg" alt="Brevia" /><h1>${t('录制权限')}</h1><div class="onboarding-intro"><p>${t('言录需要麦克风、屏幕与系统音频权限，才能录制会议并生成实时字幕。')}</p></div></header><section class="onboarding-section" data-onboarding-permissions>${placeholders}</section><div class="onboarding-actions"><button class="modal-action" data-finish-onboarding type="button" disabled>${t('继续')}</button><button class="secondary" data-skip-onboarding-permissions type="button">${copy.later}</button></div></section>`);
+  showOnboardingPage('permissions', `<section class="onboarding-setup-page onboarding-permissions-page"><button class="onboarding-back" data-onboarding-back-language type="button" aria-label="${t('返回')}">←</button><header><img class="onboarding-brand" src="./assets/brevia-logo.svg" alt="Brevia" /><h1>${t('录制权限')}</h1><div class="onboarding-intro"><p>${t('言录需要麦克风、屏幕与系统音频权限，才能录制会议并生成实时字幕。')}</p></div></header><section class="onboarding-section" data-onboarding-permissions>${placeholders}</section><div class="onboarding-actions"><button class="modal-action" data-finish-onboarding type="button" disabled>${t('继续')}</button><button class="secondary" data-skip-onboarding-permissions type="button">${copy.later}</button></div></section>`);
   const page = onboardingPage;
   const section = onboardingPage.querySelector('[data-onboarding-permissions]');
   const continueButton = onboardingPage.querySelector('[data-finish-onboarding]');
@@ -1284,34 +1510,79 @@ let modelAction = document.querySelector('[data-settings-modal="models"]');
 speakerProfileCard.querySelector('button').addEventListener('click', () => openModal('speaker-profiles'));
 const installedModelNames = new Set();
 const modelPaths = new Map();
-/** Checks whether a model is installed locally. @param {string} name Model name. @returns {boolean} Whether the model exists in the installed set. */
+/** 检查模型是否在本地安装。@param {string} name 模型名称。@returns {boolean} 模型是否存在于已安装集合中。*/
 function isModelInstalled(name) { return installedModelNames.has(name); }
-/** Removes an installed model from the list and local state. @param {string} name Model name. @returns {void} */
+/** 从列表和本地状态中移除已安装的模型。@param {string} name 模型名称。@returns {void} */
 function deleteInstalledModel(name) { installedModelNames.delete(name); }
-/** Synchronizes installed-model actions after a locale or model-list change. @returns {void} */
+/** 在语言环境或模型列表更改后同步已安装模型操作。@returns {void} */
 function renderModelControls() {
   modelAction = document.querySelector('[data-settings-modal="models"]');
   modelAction.textContent = (modelLabels[locale] || modelLabels.en).manage;
 }
-/** Records a newly downloaded model for the management dialog. @param {{name: string}} model Downloaded model metadata. @returns {void} */
+/** 为管理对话框记录新下载的模型。@param {{name: string}} model 已下载的模型元数据。@returns {void} */
 function installModel(model) {
   if (isModelInstalled(model.name)) return;
   installedModelNames.add(model.name);
 }
-/** Renders participants discovered from voiceprints together with the current meeting status. @returns {void} */
+/** 为活动语言构建实时流式模型选项，始终保留当前模型。@param {string} language 会议语言。@returns {Array<[string, string]>} 值/标签对。*/
+function liveStreamingModelOptions(language) {
+  const options = compatibleStreamingModels(language).filter(([id]) => id);
+  const current = liveConfig.streaming_model_id;
+  if (current && !options.some(([id]) => id === current)) {
+    const label = prepareModelChoices['active-streaming-model'].find(([id]) => id === current)?.[1] || current;
+    options.unshift([current, label]);
+  }
+  return options;
+}
+/** 渲染从声纹发现的参与者以及实时模型/设置控件。@returns {void} */
 function renderLivePanel() {
   const copy = voiceFeaturesCopy[locale] || voiceFeaturesCopy.en;
   const participants = [...liveSpeakers.values()];
   const people = participants.length
     ? participants.map((participant) => renderParticipant({
       ...participant,
-      name: participant.name || `${t('说话人')} ${participant.id}`,
+      name: formatSpeakerName(participant.name || participant.id) || `${t('说话人')} ${participant.id}`,
     })).join('')
     : `<p class="participants-empty">${t('等待识别说话人')}</p>`;
+  const languageChoices = BreviaI18n.languageOptions(locale, t, true);
+  const streamingChoices = liveStreamingModelOptions(liveConfig.language);
+  const refinedChoices = modelChoices('active-refined-model').slice(1);
+  const translationLanguages = BreviaI18n.languageOptions(locale, t);
+  const translationTarget = liveConfig.target_language || '';
+  const track = (name, label, enabled) => `<label class="choice live-toggle"><input name="live-${name}" type="checkbox"${enabled ? ' checked' : ''} /> <span><b>${label}</b></span></label>`;
+  const settings = `<section class="live-settings"><p class="eyebrow">${t('模型与设置')}</p>`
+    + `<label class="config-select-field">${t('会议语言')}${flowSelect('live-language', liveConfig.language || 'auto', languageChoices)}</label>`
+    + `<label class="config-select-field">${t('实时识别模型')}${flowSelect('live-streaming-model', liveConfig.streaming_model_id, streamingChoices)}</label>`
+    + `<label class="config-select-field">${t('精修模型')}${flowSelect('live-refined-model', liveConfig.refined_model_id, refinedChoices)}</label>`
+    + `<label class="config-select-field">${t('译文目标')}<select class="flow-select-toggle" name="live-translation-target">${translationLanguages.map(([value, label]) => `<option value="${escapeHtml(value)}"${value === translationTarget ? ' selected' : ''}>${escapeHtml(label)}</option>`).join('')}</select></label>`
+    + `<div class="live-toggles">${track('mic', t('麦克风'), liveInputs.mic)}${track('system', t('系统音频'), liveInputs.system)}</div></section>`;
   const voiceOptions = [['', copy.voice], ...[...presetVoices, ...speakerProfiles.filter((profile) => profile.has_reference).map((profile) => ({ id: profile.id, name: speakerProfileName(profile) }))].map((voice) => [voice.id, voice.name])];
-  const ttsLanguages = ['zh', 'en', 'ko', 'fr', 'de', 'es', 'ru'].map((code) => [code, BreviaI18n.languageName(locale, code)]);
-  document.querySelector('.live-panel').innerHTML = `<section><p class="eyebrow">${t('参与者')} · ${participants.length}</p><div class="participants-list">${people}</div></section><section><p class="eyebrow">${t('本场状态')}</p>${renderStatusList(uiData.live.status)}</section>`;
-  document.querySelector('#tts-chat').innerHTML = `<p class="eyebrow">${copy.chat}</p><form id="tts-chat-form"><div class="tts-selects">${flowSelect('voice_id', '', voiceOptions)}${flowSelect('target_language', 'zh', ttsLanguages)}</div><input name="text" maxlength="1000" placeholder="${copy.placeholder}" required /><button type="submit">${copy.send}</button></form>`;
+  const ttsLanguages = ['zh', 'en'].map((code) => [code, BreviaI18n.languageName(locale, code)]);
+  const ttsSection = `<section class="tts-chat"><p class="eyebrow">${copy.chat}</p><form id="tts-chat-form"><div class="tts-selects">${flowSelect('voice_id', '', voiceOptions)}${flowSelect('target_language', 'zh', ttsLanguages)}</div><input name="text" maxlength="1000" placeholder="${copy.placeholder}" required /><button type="submit">${copy.send}</button></form></section>`;
+  document.querySelector('.live-panel').innerHTML = `<section><p class="eyebrow">${t('参与者')} · ${participants.length}</p><div class="participants-list">${people}</div></section>${settings}${ttsSection}`;
+}
+/** 热切换当前会议的实时配置（语言/流式/精修模型）。@param {object} changes 部分配置。@returns {Promise<void>} */
+async function reconfigureLive(changes) {
+  const meetingId = breviaClient?.state.meeting?.id;
+  if (!window.brevia || !meetingId) return;
+  // 乐观应用，以便控件感觉即时；meeting.reconfigured 事件确认它。
+  const previous = { ...liveConfig };
+  liveConfig = { ...liveConfig, ...changes };
+  if ('target_language' in changes) setLiveTranslationEnabled(Boolean(changes.target_language));
+  renderLivePanel();
+  try {
+    const result = await window.brevia.meeting.reconfigure({ meeting_id: meetingId, ...changes });
+    if (result?.model_required) {
+      liveConfig = previous;
+      if ('target_language' in changes) setLiveTranslationEnabled(Boolean(previous.target_language));
+      renderLivePanel();
+    }
+  } catch (error) {
+    liveConfig = previous;
+    if ('target_language' in changes) setLiveTranslationEnabled(Boolean(previous.target_language));
+    renderLivePanel();
+    showToast(error.message);
+  }
 }
 renderModelControls();
 renderLivePanel();
@@ -1329,6 +1600,24 @@ settingsModal.addEventListener('click', async (event) => {
   if (event.target === settingsModal || event.target.closest('.modal-close')) { closeModal(); return; }
   if (event.target.closest('[data-cancel-confirmation]')) { confirmationAction = undefined; closeModal(); return; }
   if (event.target.closest('[data-reset-advanced-settings]')) { advancedSettings.settings = advancedSettings.defaults; renderModal('advanced-settings'); return; }
+  const openPermission = event.target.closest('[data-open-permission-settings]');
+  if (openPermission) {
+    try { await (openPermission.dataset.openPermissionSettings === 'screen' ? window.brevia.permissions.openScreenSettings() : window.brevia.permissions.openMicrophoneSettings()); }
+    catch (error) { showToast(error.message); }
+    return;
+  }
+  const requestPermission = event.target.closest('[data-request-permission]');
+  if (requestPermission) {
+    requestPermission.disabled = true;
+    try {
+      if (!await window.brevia.permissions.requestMicrophone()) throw new Error(t('请在系统设置中允许'));
+      stopMediaStream(await navigator.mediaDevices.getUserMedia({ audio: true }));
+    } catch (error) { showToast(error.message); }
+    permissionStatus = await window.brevia?.permissions.status().catch(() => permissionStatus);
+    const section = settingsModal.querySelector('[data-permission-settings]');
+    if (section) section.outerHTML = renderPermissionSettings();
+    return;
+  }
   if (event.target.closest('[data-confirm-action]')) { const action = confirmationAction; confirmationAction = undefined; closeModal(); await action?.(); return; }
   const openStorage = event.target.closest('[data-open-storage]');
   if (openStorage) { try { await window.brevia?.storage.open({ partition: openStorage.dataset.openStorage }); } catch (error) { showToast(error.message); } return; }
@@ -1376,34 +1665,46 @@ settingsModal.addEventListener('click', async (event) => {
   const selectChoice = event.target.closest('[data-flow-select-choice]');
   if (selectChoice) {
     const select = selectChoice.closest('.flow-select');
-    select.querySelector('input').value = selectChoice.dataset.value;
+    const choiceName = selectChoice.dataset.flowSelectChoice;
+    const value = selectChoice.dataset.value;
+    select.querySelector('input').value = value;
     select.querySelector('.flow-select-toggle').firstChild.nodeValue = selectChoice.textContent;
     select.querySelector('.flow-select-options').hidden = true;
     select.querySelector('.flow-select-toggle').setAttribute('aria-expanded', 'false');
-    if (select.querySelector('input').name === 'provider') {
-      const form = select.closest('.summary-model-form');
-      const provider = selectChoice.dataset.value;
-      const ollama = provider === 'Ollama';
-      const ollamaCloud = provider === 'Ollama Cloud';
-      form.querySelector('[data-summary-api-key]').hidden = ollama;
-      form.querySelector('[data-summary-format]').hidden = ollama || ollamaCloud;
-      if (ollama || ollamaCloud) {
-        form.querySelector('[name="endpoint"]').value = ollamaCloud ? ollamaCloudChatEndpoint : ollamaChatEndpoint;
-        form.querySelector('[name="format"]').value = 'openai';
-      }
+
+    // 切换供应商只改当前选择；每个供应商已填的字段留在 providers 里，切回来仍在。
+    if (choiceName === 'provider' && summaryProviders.includes(value)) {
+      summaryConfig.provider = value;
+      selectedBuiltinModel = '';
+      renderModal('summary-model');
+      return;
     }
-    if (select.hasAttribute('data-active-summary-model')) { activeSummaryModel = Number(selectChoice.dataset.value); editingSummaryModel = activeSummaryModel; await persistSummaryConfig(); renderModal('summary-model'); }
     return;
   }
-  const addSummaryModel = event.target.closest('[data-new-summary-model]');
-  if (addSummaryModel) { editingSummaryModel = -1; draftSummaryName = nextConfigName(); renderModal('summary-model'); return; }
-  if (event.target.closest('[data-delete-summary-model]')) {
-    summaryModels.splice(editingSummaryModel, 1);
-    activeSummaryModel = summaryModels.length ? Math.min(activeSummaryModel, summaryModels.length - 1) : -1;
-    editingSummaryModel = activeSummaryModel;
-    draftSummaryName = summaryModels.length ? '' : nextConfigName();
-    await persistSummaryConfig();
+  // 选择内置模型行将其标记为此配置将使用的模型。
+  const builtinModelItem = event.target.closest('[data-builtin-model-id]');
+  if (builtinModelItem) {
+    const modelId = builtinModelItem.dataset.builtinModelId;
+    const form = builtinModelItem.closest('.summary-model-form');
+    if (form) form.querySelector('[name="model"]').value = modelId;
+    selectedBuiltinModel = modelId;
     renderModal('summary-model');
+    return;
+  }
+  // 内置纪要模型（llama-chat）不在通用模型库里，只能从这里下载。
+  const downloadSummaryModel = event.target.closest('[data-download-summary-model]');
+  if (downloadSummaryModel) {
+    const modelId = downloadSummaryModel.dataset.downloadSummaryModel;
+    modelDownloads.set(modelId, { received: 0, total: 0 });
+    renderModal('summary-model');
+    renderModelDownloadQueue();
+    try {
+      if (window.brevia) await window.brevia.models.download(modelDownloadPayload(modelId));
+    } catch (error) {
+      modelDownloads.delete(modelId);
+      showToast(error.message);
+      renderModal('summary-model');
+    }
     return;
   }
   const toggleSpeakerSamples = event.target.closest('[data-toggle-speaker-samples]');
@@ -1552,19 +1853,30 @@ settingsModal.addEventListener('submit', async (event) => {
   if (event.target.matches('.summary-model-form')) {
     event.preventDefault();
     const values = Object.fromEntries(new FormData(event.target));
-    const previous = summaryModels[editingSummaryModel];
-    values.keyReference = previous?.keyReference || `summary-${crypto.randomUUID()}`;
-    if (values.apiKey && window.brevia) {
-      values.keyLength = values.apiKey.length;
-      await window.brevia.secret.set({ reference: values.keyReference, value: values.apiKey });
+    const provider = summaryProviders.includes(values.provider) ? values.provider : summaryConfig.provider;
+    const preset = summaryProviderPresets[provider];
+    const previous = summaryProviderEntry(provider);
+    const entry = { model: (values.model || '').trim() };
+    if (!entry.model) { showToast(t('请先选择或填写纪要模型。')); return; }
+    if (preset.needsEndpoint) {
+      entry.endpoint = (values.endpoint || '').trim();
+      if (!entry.endpoint) { showToast(t('请填写请求地址。')); return; }
     }
-    delete values.apiKey;
-    if (editingSummaryModel < 0) { summaryModels.push(values); activeSummaryModel = summaryModels.length - 1; } else summaryModels[editingSummaryModel] = values;
-    editingSummaryModel = activeSummaryModel;
-    draftSummaryName = '';
+    if (preset.needsKey) {
+      entry.keyReference = previous.keyReference || `summary-${crypto.randomUUID()}`;
+      if (values.apiKey && window.brevia) {
+        entry.keyLength = values.apiKey.length;
+        await window.brevia.secret.set({ reference: entry.keyReference, value: values.apiKey });
+      } else if (previous.keyLength) entry.keyLength = previous.keyLength;
+      else if (!values.apiKey) { showToast(t('请填写 API Key。')); return; }
+    }
+    summaryConfig.provider = provider;
+    summaryConfig.providers = { ...summaryConfig.providers, [provider]: entry };
+    selectedBuiltinModel = '';
     await persistSummaryConfig();
-    renderConfigPreview();
+    dismissTaskCard(document.querySelector('#summary-config-required'));
     renderModal('summary-model');
+    showToast(t('纪要模型已保存'));
     return;
   }
   if (event.target.matches('.speaker-sample-form')) {
@@ -1617,7 +1929,7 @@ document.querySelector('#live-view').addEventListener('submit', async (event) =>
     const voiceId = values.get('voice_id');
     const targetLanguage = values.get('target_language');
     if (['zh', 'en'].includes(targetLanguage) && !voiceId) { showToast(t('请选择声音')); return; }
-    const config = summaryModels[activeSummaryModel];
+    const config = summaryRequestConfig();
     if (!config) { showToast(t('请先配置翻译模型')); return; }
     ttsSubmitting = true;
     submitLabel = submit.innerHTML;
@@ -1625,7 +1937,7 @@ document.querySelector('#live-view').addEventListener('submit', async (event) =>
     submit.classList.add('is-pending');
     submit.setAttribute('aria-busy', 'true');
     submit.innerHTML = `<i class="button-spinner" aria-hidden="true"></i>${t('准备中')}`;
-    const result = await window.brevia?.tts.synthesize({ ...(voiceId ? { voice_id: voiceId } : {}), target_language: targetLanguage, text: values.get('text').trim(), provider: config.provider, endpoint: config.endpoint, model: config.model, format: config.format, key_reference: config.keyReference });
+    const result = await window.brevia?.tts.synthesize({ ...(voiceId ? { voice_id: voiceId } : {}), target_language: targetLanguage, text: values.get('text').trim(), provider: config.provider, ...(config.endpoint ? { endpoint: config.endpoint } : {}), model: config.model, format: config.format, key_reference: config.keyReference });
     if (result?.model_required) return;
     await playTts(result);
     event.target.reset();
@@ -1637,31 +1949,6 @@ document.querySelector('#live-view').addEventListener('submit', async (event) =>
     submit.removeAttribute('aria-busy');
     submit.innerHTML = submitLabel;
   }
-});
-document.querySelector('#tts-chat').addEventListener('click', (event) => {
-  const toggle = event.target.closest('[data-flow-select-toggle]');
-  if (toggle) {
-    const options = toggle.parentElement.querySelector('.flow-select-options');
-    const opening = options.hidden;
-    document.querySelector('#tts-chat').querySelectorAll('.flow-select-options').forEach((list) => { list.hidden = true; list.previousElementSibling.previousElementSibling.setAttribute('aria-expanded', 'false'); });
-    const bounds = toggle.getBoundingClientRect();
-    const liveBounds = document.querySelector('#live-view').getBoundingClientRect();
-    const spaceAbove = bounds.top - liveBounds.top;
-    const spaceBelow = liveBounds.bottom - bounds.bottom;
-    const opensUp = spaceAbove > spaceBelow;
-    options.classList.toggle('opens-up', opensUp);
-    options.style.maxHeight = `${Math.max(64, Math.min(160, Math.max(spaceAbove, spaceBelow) - 8))}px`;
-    options.hidden = !opening;
-    toggle.setAttribute('aria-expanded', String(opening));
-    return;
-  }
-  const choice = event.target.closest('[data-flow-select-choice]');
-  if (!choice) return;
-  const select = choice.closest('.flow-select');
-  select.querySelector('input').value = choice.dataset.value;
-  select.querySelector('.flow-select-toggle').firstChild.nodeValue = choice.textContent;
-  select.querySelector('.flow-select-options').hidden = true;
-  select.querySelector('.flow-select-toggle').setAttribute('aria-expanded', 'false');
 });
 /* Locale copy lives in i18n.js; this alias keeps the renderer focused on state changes. */
 const slogans = BreviaI18n.slogans;
@@ -1679,7 +1966,7 @@ const homeSlogan = document.querySelector('#home-slogan');
 const homeEyebrow = document.querySelector('#home-eyebrow');
 const homePrimary = document.querySelector('#home-primary');
 let sloganIndex = Math.floor(Math.random() * slogans.zh.length);
-/** Updates the rotating library slogan. @param {boolean} animate Whether to play the transition. @returns {void} */
+/** 更新旋转的库标语。@param {boolean} animate 是否播放过渡动画。@returns {void} */
 function renderSlogan(animate = false) {
   const update = () => {
     homeSlogan.textContent = activeLibraryNav === 'recently-deleted' ? t('最近删除') : (slogans[locale] || slogans.en)[sloganIndex];
@@ -1694,7 +1981,7 @@ function renderSlogan(animate = false) {
   window.setTimeout(update, 280);
 }
 
-/** Applies and persists the selected color theme. @param {'light'|'dark'} nextTheme Theme to apply. @returns {void} */
+/** 应用并持久化选定的颜色主题。@param {'light'|'dark'} nextTheme 要应用的主题。@returns {void} */
 function applyTheme(nextTheme) {
   theme = nextTheme;
   localStorage.setItem('brevia-theme', theme);
@@ -1705,7 +1992,7 @@ function applyTheme(nextTheme) {
   themeToggle.setAttribute('aria-label', themeToggle.title);
 }
 
-/** Records static DOM text and attributes that can be replaced on locale changes. @returns {void} */
+/** 记录可在语言环境更改时替换的静态 DOM 文本和属性。@returns {void} */
 function collectTranslations() {
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   let node;
@@ -1724,7 +2011,7 @@ function collectTranslations() {
     if (catalog.zh.labels[key]) translatedNodes.push({ element, attribute: 'title', key });
   });
 }
-/** Applies a locale, redraws dependent components, and optionally animates translated nodes. @param {'zh'|'en'|'es'} nextLocale Locale to apply. @param {boolean} animate Whether to animate the change. @returns {void} */
+/** 应用语言环境、重绘依赖组件，并可选择对翻译节点进行动画处理。@param {'zh'|'en'|'es'} nextLocale 要应用的语言环境。@param {boolean} animate 是否对更改进行动画处理。@returns {void} */
 function applyLanguage(nextLocale, animate = false) {
   locale = nextLocale;
   localStorage.setItem('brevia-language', locale);
@@ -1771,9 +2058,8 @@ function applyLanguage(nextLocale, animate = false) {
     renderRequiredModelsCard();
     refreshLocalizedTaskCards();
     document.querySelector('[data-separate-detail]').textContent = (voiceFeaturesCopy[locale] || voiceFeaturesCopy.en).source;
-    renderConfigPreview();
     if (activeModal) renderModal(activeModal);
-    // Update floating caption button tooltip
+    // 更新浮动字幕按钮工具提示
     const floatingCaptionToggle = document.querySelector('#floating-caption-toggle');
     if (floatingCaptionToggle) {
       floatingCaptionToggle.title = t('悬浮字幕');
@@ -1790,8 +2076,8 @@ function applyLanguage(nextLocale, animate = false) {
     }
   }, 380);
 }
-/** Shows a short, self-clearing feedback message. @param {string} content Toast text. @returns {void} */
-/** Shows the shared task card for missing or rejected summary-provider credentials. */
+/** 显示简短的、自动清除的反馈消息。@param {string} content Toast 文本。@returns {void} */
+/** 为缺失或被拒绝的纪要提供商凭据显示共享任务卡片。*/
 let summaryConfigDismissTimer;
 function showSummaryConfigCard(error) {
   clearTimeout(summaryConfigDismissTimer);
@@ -1810,7 +2096,6 @@ function showSummaryConfigCard(error) {
   card.querySelector('.secondary').onclick = () => {
     clearTimeout(summaryConfigDismissTimer);
     dismissTaskCard(card);
-    editingSummaryModel = activeSummaryModel;
     openModal('summary-model');
   };
   summaryConfigDismissTimer = setTimeout(() => dismissTaskCard(card), 30000);
@@ -1818,7 +2103,7 @@ function showSummaryConfigCard(error) {
 function isSummaryAuthenticationError(error) {
   return /LLM request failed \((401|403)\)|error code: 1010|API key|Authorization header|invalid_api_key|authentication/i.test(String(error.message));
 }
-/** Displays a transient message and, when supplied, one explicit safe next action. */
+/** 显示临时消息，并在提供时显示一个显式的安全下一步操作。*/
 const showToast = (content, action) => {
   const message = document.createElement('span');
   message.textContent = content;
@@ -1844,7 +2129,7 @@ window.addEventListener('error', (event) => {
   const message = event.error instanceof Error ? event.error.message : event.message;
   if (message) showToast(`${t('应用错误')}: ${message}`);
 });
-/** Marks the active meeting-library source and updates the window breadcrumb. @param {'all-meetings'|'recently-deleted'} id Navigation item ID. @returns {void} */
+/** 标记活动的会议库源并更新窗口面包屑。@param {'all-meetings'|'recently-deleted'} id 导航项 ID。@returns {void} */
 function selectLibraryNav(id) {
   if (id !== activeLibraryNav) clearMeetingSelection();
   activeLibraryNav = id;
@@ -1858,7 +2143,7 @@ function selectLibraryNav(id) {
   if (!deleted) homePrimary.innerHTML = `${t('开始会议')} <span>→</span>`;
   renderSlogan(false);
 }
-/** Runs the shared page-out/page-in transition around a view or content swap. */
+/** 在视图或内容交换周围运行共享的页面淡出/淡入过渡。*/
 async function transitionPage(current, next, swap) {
   if (current.classList.contains('leaving')) return;
   const duration = matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 160;
@@ -1873,7 +2158,7 @@ async function transitionPage(current, next, swap) {
     next.classList.add('active');
   }
 }
-/** Switches between top-level app views. @param {'home'|'prepare'|'live'|'detail'|'settings'} name Target view. */
+/** 在顶级应用视图之间切换。@param {'home'|'prepare'|'live'|'detail'|'settings'} name 目标视图。*/
 const showView = async (name) => {
   if (name === activeView) return;
   if (activeView === 'prepare' && name !== 'prepare') await breviaClient?.stopPreview();
@@ -1889,7 +2174,7 @@ const showView = async (name) => {
   if (name === 'prepare') { requestAnimationFrame(fitPrepareLayout); void previewMicrophone(); }
   renderMiniPlayback();
 };
-/** Switches meeting-library sources with the same page-out/page-in timing as top-level views. */
+/** 使用与顶级视图相同的页面淡出/淡入时序切换会议库源。*/
 async function showLibraryNav(id) {
   const includeDeleted = id === 'recently-deleted';
   if (activeView === 'live' && meetingActive) minimizeMeeting();
@@ -1946,7 +2231,7 @@ void checkForUpdates({ silent: true });
 window.setInterval(() => { if (activeLibraryNav === 'recently-deleted') return; sloganIndex = (sloganIndex + 1) % (slogans[locale] || slogans.en).length; renderSlogan(true); }, 30000);
 updateButton.addEventListener('click', () => void runUpdateAction());
 updateNoticeButton.addEventListener('click', () => void runUpdateAction());
-/** Closes the language menu and updates its disclosure state. @returns {void} */
+/** 关闭语言菜单并更新其展开状态。@returns {void} */
 function closeLanguageMenu() { languageOptions.hidden = true; languageToggle.setAttribute('aria-expanded', 'false'); }
 languageToggle.addEventListener('click', () => {
   const opening = languageOptions.hidden;
@@ -1961,7 +2246,7 @@ languageOptions.addEventListener('click', (event) => {
 });
 document.addEventListener('click', (event) => { if (!event.target.closest('.language-menu')) closeLanguageMenu(); });
 document.addEventListener('keydown', (event) => { if (event.key === 'Escape') { if (activeModal) closeModal(); else { closeLanguageMenu(); languageToggle.focus(); } } });
-/** Shows the compact live-meeting control when navigating away during recording. @returns {void} */
+/** 在录制期间导航离开时显示紧凑的实时会议控件。@returns {void} */
 function minimizeMeeting() { miniTitle.textContent = document.querySelector('#live-name').textContent; miniTimer.textContent = document.querySelector('#timer').textContent; const wasHidden = miniMeeting.hidden; miniMeeting.hidden = false; if (wasHidden) taskCards.append(miniMeeting); requestAnimationFrame(syncFloatingNotices); }
 document.addEventListener('click', (event) => { const target = event.target.closest('[data-view]'); if (!target || ['all-meetings', 'recently-deleted'].includes(target.id)) return; if (target.dataset.view === 'home') selectLibraryNav('all-meetings'); if (activeView === 'live' && meetingActive && target.dataset.view !== 'live') minimizeMeeting(); showView(target.dataset.view); });
 homePrimary.addEventListener('click', () => showView('prepare'));
@@ -1977,10 +2262,11 @@ function setLiveTranslationEnabled(enabled) {
   if (!enabled) document.querySelectorAll('.translation').forEach((line) => { line.hidden = true; });
 }
 function activateMeeting(meeting, payload) {
-  const { title, category, streaming_model_id: streamingModelId, speaker_segmentation_model_id: segmentationModelId, speaker_embedding_model_id: embeddingModelId, refined_model_id: refinedModelId } = payload;
+  const { title, category, language, streaming_model_id: streamingModelId, speaker_segmentation_model_id: segmentationModelId, speaker_embedding_model_id: embeddingModelId, refined_model_id: refinedModelId } = payload;
   const streamingModelName = prepareModelChoices['active-streaming-model'].find(([id]) => id === streamingModelId)?.[1] || t('自动匹配');
   document.querySelector('#active-streaming-model').textContent = streamingModelName;
-  uiData.live.status[0].value = streamingModelName;
+  liveConfig = { language: language || 'auto', streaming_model_id: streamingModelId || '', refined_model_id: refinedModelId || '', target_language: payload.target_language || null };
+  liveInputs = breviaClient?.state.inputs ? { ...breviaClient.state.inputs } : { mic: true, system: true };
   document.querySelector('#active-diarization-model').textContent = prepareModelChoices['active-diarization-model'].find(([id]) => id === `${segmentationModelId || ''}|${embeddingModelId || ''}`)?.[1] || t('自动匹配');
   document.querySelector('#active-refined-model').textContent = modelChoices('active-refined-model').find(([id]) => id === refinedModelId)?.[1] || t('自动匹配');
   document.querySelector('#live-name').textContent = title;
@@ -2066,13 +2352,13 @@ importRecording.addEventListener('click', async () => {
 });
 let seconds = 0;
 let timer;
-/** Keeps the recording control label in sync with the active locale and state. @returns {void} */
+/** 使录制控件标签与活动语言环境和状态保持同步。@returns {void} */
 function renderPauseButton() {
   const button = document.querySelector('#pause');
   const paused = button.dataset.paused === 'true';
   button.textContent = `${paused ? '▶' : 'Ⅱ'} ${t(paused ? '继续' : '暂停')}`;
 }
-/** Starts the visible recording timer, replacing any prior timer. @returns {void} */
+/** 启动可见的录制计时器，替换任何先前的计时器。@returns {void} */
 function startTimer() { clearInterval(timer); timer = setInterval(() => { seconds += 1; const value = new Date(seconds * 1000).toISOString().slice(11, 19); document.querySelector('#timer').textContent = value; miniTimer.textContent = value; }, 1000); }
 document.querySelector('#pause').addEventListener('click', async (event) => {
   const button = event.currentTarget;
@@ -2117,7 +2403,7 @@ document.querySelector('#end-meeting').addEventListener('click', async (event) =
   } finally { button.disabled = false; }
 });
 miniMeeting.addEventListener('click', () => { miniMeeting.hidden = true; syncFloatingNotices(); showView('live'); });
-/** Replaces a speaker label with an inline editor and propagates the saved name. @param {HTMLElement} label Speaker-name element. @returns {void} */
+/** 用内联编辑器替换说话人标签并传播保存的名称。@param {HTMLElement} label 说话人名称元素。@returns {void} */
 function editSpeakerName(label) {
   const speaker = label.dataset.speaker;
   const input = document.createElement('input');
@@ -2125,7 +2411,7 @@ function editSpeakerName(label) {
   input.value = label.textContent;
   input.maxLength = 32;
   const commit = () => {
-    const name = input.value.trim() || `说话人 ${speaker}`;
+    const name = input.value.trim() || `${t('说话人')} ${speaker}`;
     const nextLabel = document.createElement('b');
     nextLabel.dataset.speaker = speaker;
     nextLabel.title = '双击修改名称';
@@ -2146,12 +2432,70 @@ document.querySelector('.live-panel').addEventListener('dblclick', (event) => {
   const label = event.target.closest('.person b[data-speaker]');
   if (label) editSpeakerName(label);
 });
+const livePanel = document.querySelector('.live-panel');
+livePanel.addEventListener('click', (event) => {
+  const toggle = event.target.closest('[data-flow-select-toggle]');
+  if (toggle) {
+    const options = toggle.parentElement.querySelector('.flow-select-options');
+    const opening = options.hidden;
+    livePanel.querySelectorAll('.flow-select-options').forEach((list) => { list.hidden = true; list.previousElementSibling.previousElementSibling.setAttribute('aria-expanded', 'false'); });
+    // The panel sits low in the viewport, so open toward whichever side has more room.
+    const bounds = toggle.getBoundingClientRect();
+    const liveBounds = document.querySelector('#live-view').getBoundingClientRect();
+    const spaceAbove = bounds.top - liveBounds.top;
+    const spaceBelow = liveBounds.bottom - bounds.bottom;
+    options.classList.toggle('opens-up', spaceAbove > spaceBelow);
+    options.style.maxHeight = `${Math.max(64, Math.min(200, Math.max(spaceAbove, spaceBelow) - 8))}px`;
+    options.hidden = !opening;
+    toggle.setAttribute('aria-expanded', String(opening));
+    return;
+  }
+  const choice = event.target.closest('[data-flow-select-choice]');
+  if (!choice) return;
+  const select = choice.closest('.flow-select');
+  const name = choice.dataset.flowSelectChoice;
+  const value = choice.dataset.value;
+  select.querySelector('input').value = value;
+  select.querySelector('.flow-select-toggle').firstChild.nodeValue = choice.textContent;
+  select.querySelector('.flow-select-options').hidden = true;
+  select.querySelector('.flow-select-toggle').setAttribute('aria-expanded', 'false');
+  if (name === 'live-language') {
+    if (value === liveConfig.language) return;
+    // Changing language resets the streaming model to that language's default, mirroring the prepare form.
+    void reconfigureLive({ language: value, streaming_model_id: preferredModelsForLanguage(value).streaming });
+  } else if (name === 'live-streaming-model') {
+    if (value === liveConfig.streaming_model_id) return;
+    void reconfigureLive({ streaming_model_id: value });
+  } else if (name === 'live-refined-model') {
+    if (value === liveConfig.refined_model_id) return;
+    void reconfigureLive({ refined_model_id: value });
+  }
+});
+livePanel.addEventListener('change', (event) => {
+  const translationTarget = event.target.closest('select[name="live-translation-target"]');
+  if (translationTarget) {
+    const value = translationTarget.value || null;
+    if (value === liveConfig.target_language) return;
+    void reconfigureLive({ target_language: value });
+    return;
+  }
+  const toggle = event.target.closest('.live-toggle input[name^="live-"]');
+  if (!toggle) return;
+  const track = toggle.name.slice('live-'.length);
+  const enabled = toggle.checked;
+  void breviaClient?.setTrackEnabled(track, enabled).then(() => {
+    liveInputs = { ...breviaClient.state.inputs };
+    renderLivePanel();
+  }).catch((error) => {
+    showToast(error.message);
+    renderLivePanel();
+  });
+});
 document.querySelector('#translation-toggle').addEventListener('click', (event) => {
   const enabled = !translationAllowed;
   if (enabled && window.brevia) {
-    const config = summaryModels[activeSummaryModel];
-    if (!config || !breviaClient?.state.meeting?.target_language) { showToast(t('请先选择译文目标并配置纪要模型')); return; }
-    if (!confirm(t('将确认字幕发送到 {provider} 生成译文。是否继续？').replace('{provider}', config.provider))) return;
+    const targetLanguage = breviaClient?.state.meeting?.target_language;
+    if (!targetLanguage) { showToast(t('请先在"模型与设置"中选择译文目标语言')); return; }
   }
   setLiveTranslationEnabled(enabled);
   document.querySelectorAll('.translation').forEach((line) => { line.hidden = !enabled; });
@@ -2341,7 +2685,7 @@ const closeCategoryMenu = (menu, done) => { if (menu.hidden) { done?.(); return;
 const closeMeetingMenus = () => { document.querySelectorAll('.meeting-menu').forEach((menu) => { menu.hidden = true; }); document.querySelectorAll('.meeting-category-menu').forEach((menu) => closeCategoryMenu(menu)); document.querySelectorAll('[data-meeting-menu]').forEach((toggle) => toggle.setAttribute('aria-expanded', 'false')); };
 meetingList.addEventListener('scroll', positionOpenMeetingMenus);
 window.addEventListener('resize', positionOpenMeetingMenus);
-/** Runs one meeting mutation for both row actions and batch actions. */
+/** 为行操作和批量操作运行一次会议变更。*/
 async function mutateMeetings(action, meetings) {
   const ids = new Set(meetings.map(({ id }) => id).filter(Boolean));
   if (window.brevia) await Promise.all([...ids].map((meeting_id) => window.brevia.meeting[action]({ meeting_id })));
@@ -2481,9 +2825,9 @@ const updatePlayerControl = () => {
   playButton.setAttribute('aria-label', t(playing ? '暂停录音' : '播放录音'));
   renderMiniPlayback();
 };
-/** Formats the audio progress control as an mm:ss display. @returns {void} */
+/** 将音频进度控件格式化为 mm:ss 显示。@returns {void} */
 const renderPlayerTime = () => { const value = Number(progress.value); playerTime.textContent = `${String(Math.floor(value / 60)).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}`; };
-/** Highlights the transcript segment at the current playback time and keeps it centered in its own scroller. */
+/** 突出显示当前播放时间的转录段落，并使其在自己的滚动器中居中。*/
 function syncPlaybackTranscript() {
   const body = document.querySelector('.transcript-body');
   if (!body) return;
@@ -2738,7 +3082,6 @@ if (window.brevia) {
       if (model.path) modelPaths.set(model.id, model.path);
     });
     document.querySelector('#active-device').textContent = result.device.backend.toUpperCase();
-    uiData.live.status[1].value = result.device.backend.toUpperCase();
     renderLivePanel();
     renderSpeakerProfileCard();
     renderMeetingList();
@@ -2786,7 +3129,7 @@ if (window.brevia) {
       time: formatMeetingTime(payload.start_ms),
       startSeconds: payload.start_ms / 1000,
       endSeconds: payload.end_ms / 1000,
-      speaker: { id: payload.speaker, segmentId: payload.segment_id, name: payload.speaker_name || participant?.name || `${t('说话人')} ${participant?.id || payload.speaker.split('-').pop()}` },
+      speaker: { id: payload.speaker, segmentId: payload.segment_id, name: formatSpeakerName(payload.speaker_name || participant?.name || payload.speaker) || `${t('说话人')} ${participant?.id || payload.speaker.split('-').pop()}` },
       text: payload.text,
       translation,
       partial,
@@ -2838,6 +3181,16 @@ if (window.brevia) {
   for (const type of ['meeting.started', 'meeting.recovered', 'meeting.imported', 'meeting.stopped']) {
     window.brevia.on(type, ({ meeting }) => syncBackendMeeting(meeting));
   }
+  window.brevia.on('meeting.reconfigured', ({ meeting }) => {
+    syncBackendMeeting(meeting);
+    if (!meeting || meeting.id !== breviaClient?.state.meeting?.id) return;
+    breviaClient.state.meeting = { ...breviaClient.state.meeting, ...meeting };
+    liveConfig = { language: meeting.language || 'auto', streaming_model_id: meeting.streaming_model_id || '', refined_model_id: meeting.refined_model_id || '', target_language: meeting.target_language || null };
+    setLiveTranslationEnabled(Boolean(liveConfig.target_language));
+    document.querySelector('#active-streaming-model').textContent = prepareModelChoices['active-streaming-model'].find(([id]) => id === meeting.streaming_model_id)?.[1] || t('自动匹配');
+    document.querySelector('#active-refined-model').textContent = modelChoices('active-refined-model').find(([id]) => id === meeting.refined_model_id)?.[1] || t('自动匹配');
+    if (meetingActive) renderLivePanel();
+  });
   // Close floating caption when meeting stops
   window.brevia.on('meeting.stopped', () => {
     if (floatingCaptionEnabled && window.brevia?.floatingCaption) {
@@ -2858,8 +3211,8 @@ if (window.brevia) {
     if (recoverable.length) showToast(t('发现可恢复录音').replace('{count}', recoverable.length));
   });
   async function generateSegmentTranslation(payload, targetLanguage) {
-    const config = summaryModels[activeSummaryModel];
-    if (!targetLanguage || !config) return;
+    // Translation runs on the bundled local model — no provider config needed.
+    if (!targetLanguage) return;
     return window.brevia.translation.generate({
       meeting_id: payload.meeting_id,
       segment_id: payload.segment_id || payload.id,
@@ -2872,15 +3225,10 @@ if (window.brevia) {
         revision: payload.revision || 0,
       },
       target_language: targetLanguage,
-      provider: config.provider,
-      endpoint: config.endpoint,
-      model: config.model,
-      format: config.format,
-      key_reference: config.keyReference,
       consent: true,
     });
   }
-  window.brevia.on('transcript.refined', (payload) => {
+  window.brevia.on('transcript.refined', async (payload) => {
     renderLiveEvent(payload, false);
     // Update floating caption with refined text
     // Move the refined text to the finalized area (top)
@@ -2894,15 +3242,19 @@ if (window.brevia) {
         clearCurrentIfMatch: true,
       });
     }
-  });
-  window.brevia.on('transcript.final', async (payload) => {
-    renderLiveEvent(payload, false);
-    // Don't finalize immediately - wait for refinement to complete
-    // The refined event will handle moving to lastFinalized area
+    // Translate only after refinement completes, so caption and translation
+    // always match the final refined text.
     if (!translationAllowed) return;
+    if (floatingCaptionEnabled && window.brevia?.floatingCaption) {
+      window.brevia.floatingCaption.update({ segmentId: payload.segment_id, translationPending: true });
+    }
     try {
-      await generateSegmentTranslation(payload, breviaClient.state.meeting.target_language);
+      await generateSegmentTranslation(payload, liveConfig.target_language);
     } catch (error) { showToast(`${t('翻译失败')}: ${error.message}`); }
+  });
+  window.brevia.on('transcript.final', (payload) => {
+    renderLiveEvent(payload, false);
+    // Wait for refinement to translate — see the transcript.refined handler.
   });
   window.brevia.on('transcript.discarded', ({ segment_id }) => {
     liveSegments.get(segment_id)?.remove();
@@ -2953,14 +3305,19 @@ if (window.brevia) {
     if (!modelDownloads.has(model_id)) return;
     modelDownloads.set(model_id, { ...modelDownloads.get(model_id), received, total, paused: false });
     if (activeModal === 'models') renderModal('models');
+    if (activeModal === 'summary-model') renderModal('summary-model');
     scheduleRequiredModelsCardRender();
   });
   window.brevia.on('model.status', ({ model_id, status, error }) => {
     const index = modelIds.indexOf(model_id);
-    if (index < 0) return;
+    // Summary / llama-chat models live only in modelCatalog, not in modelIds. Handle
+    // their status the same way — otherwise a "ready" event is dropped and the download
+    // sticks at 100% forever because modelDownloads is never cleared.
     if (status === 'ready') {
-      const [, name, detail, intro, icon] = (modalCopy[locale] || modalCopy.en).models.items[index];
-      installModel({ icon, name, detail, intro });
+      if (index >= 0) {
+        const [, name, detail, intro, icon] = (modalCopy[locale] || modalCopy.en).models.items[index];
+        installModel({ icon, name, detail, intro });
+      }
       modelDownloads.delete(model_id);
       requiredModelIds.delete(model_id);
       if (onboardingModelIds.includes(model_id) && window.BreviaOnboarding.modelReady(model_id)) showOfflineTranscriptionReady();
@@ -2970,6 +3327,7 @@ if (window.brevia) {
         const model = models.find((item) => item.id === model_id);
         if (model?.path) modelPaths.set(model_id, model.path);
         if (activeModal === 'models') renderModal('models');
+        if (activeModal === 'summary-model') renderModal('summary-model');
         renderRequiredModelsCard();
         void resumeReadyModelTasks();
       }).catch(() => {});
@@ -2982,6 +3340,7 @@ if (window.brevia) {
     else if (status === 'failed' && modelDownloads.has(model_id)) modelDownloads.set(model_id, { error });
     else if (status === 'not_installed') modelPaths.delete(model_id);
     if (activeModal === 'models') renderModal('models');
+    if (activeModal === 'summary-model') renderModal('summary-model');
     renderRequiredModelsCard();
   });
   window.brevia.on('worker.warning', ({ message: warning }) => showToast(warning));

@@ -1,4 +1,4 @@
-"""Shared SQLite connection and filesystem roots for storage components."""
+"""稳定存储组件的共享 SQLite 连接和文件系统根目录。"""
 
 import sqlite3
 import threading
@@ -103,7 +103,7 @@ def utc_now():
 
 
 def synchronized_storage_files(method):
-    """Serialize manifest and audio-file mutations for one Store instance."""
+    """为单个 Store 实例序列化清单和音频文件变更。"""
 
     @wraps(method)
     def synchronized(self, *args, **kwargs):

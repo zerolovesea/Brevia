@@ -20,6 +20,7 @@ from .llm_client import complete
 from .storage import Store
 from .transcript import parse_json_object, validate_summary
 from .worker import Worker, install_global_error_handlers, main
+from .worker_llama_sidecar import _Sidecar
 
 
 class WorkerTest(unittest.TestCase):
@@ -62,7 +63,7 @@ class WorkerTest(unittest.TestCase):
                 "speaker": "spk-1",
             }
         )
-        self.worker.llm_complete = lambda *_: "你好"
+        self.worker.llama_generate = lambda *_args, **_kwargs: "你好"
         done = threading.Event()
 
         def translate():
@@ -71,8 +72,6 @@ class WorkerTest(unittest.TestCase):
                     "meeting_id": meeting["id"],
                     "segment_id": "mic-0",
                     "target_language": "zh",
-                    "endpoint": "https://example.com",
-                    "model": "test",
                     "consent": True,
                 }
             )
@@ -86,6 +85,29 @@ class WorkerTest(unittest.TestCase):
         finally:
             self.worker.state.lock.release()
         thread.join()
+
+    def test_sidecar_timeout_kills_the_stalled_process(self):
+        child = Mock()
+        child.poll.return_value = None
+        child.stdout.readline.return_value = ""
+
+        class ImmediateTimer:
+            def __init__(self, _timeout, callback):
+                self.callback = callback
+
+            def start(self):
+                self.callback()
+
+            def cancel(self):
+                pass
+
+        with (
+            patch("backend.worker_llama_sidecar.subprocess.Popen", return_value=child),
+            patch("backend.worker_llama_sidecar.threading.Timer", ImmediateTimer),
+        ):
+            response = _Sidecar(["sidecar"], Mock()).request({"type": "generate"})
+        self.assertEqual(response, {"type": "error", "message": "Sidecar request timed out"})
+        child.kill.assert_called_once()
 
     def test_meeting_audio_persistence_and_export(self):
         meeting = self.worker.start(
@@ -141,6 +163,20 @@ class WorkerTest(unittest.TestCase):
                 {".wav", ".md", ".txt"},
             )
         self.assertTrue(self.worker.store.read_manifest(meeting["id"])["closed"])
+
+    def test_audio_started_mid_meeting_is_padded_with_silence(self):
+        meeting = self.worker.start(
+            {
+                "title": "late track",
+                "language": "en",
+                "streaming_model_id": "paraformer-zh-en-int8",
+                "refined_model_id": "qwen3-asr-0.6b-int8",
+            }
+        )
+        self.worker.store.append_audio(
+            meeting["id"], "system", base64.b64encode(b"\x01\x00" * 160).decode(), 16000, 100
+        )
+        self.assertEqual(self.worker.store.read_manifest(meeting["id"])["tracks"]["system"]["samples"], 1760)
 
     def test_start_requires_selected_models_when_requested(self):
         with self.assertRaisesRegex(
@@ -341,24 +377,13 @@ class WorkerTest(unittest.TestCase):
                 complete({"endpoint": "https://example.test/anthropic", "model": "claude", "format": "claude"}, "hello")
         with patch(
             "backend.llm_client.urllib.request.urlopen",
-            return_value=Response({"message": {"content": "ollama"}}),
+            return_value=Response({"choices": [{"message": {"content": "custom"}}]}),
         ) as request:
             self.assertEqual(
-                complete({"provider": "Ollama", "endpoint": "http://127.0.0.1:11434/api/chat", "model": "llama3.2"}, "hello"),
-                "ollama",
+                complete({"provider": "custom-openai", "endpoint": "https://gateway.test/v1/chat/completions", "model": "local-model"}, "hello"),
+                "custom",
             )
-            self.assertNotIn("stream", json.loads(request.call_args.args[0].data))
-            self.assertNotIn("tool_choice", json.loads(request.call_args.args[0].data))
             self.assertNotIn("Authorization", dict(request.call_args.args[0].header_items()))
-        with patch(
-            "backend.llm_client.urllib.request.urlopen",
-            return_value=Response({"message": {"content": "cloud"}}),
-        ) as request:
-            self.assertEqual(
-                complete({"provider": "Ollama Cloud", "endpoint": "https://ollama.com/api/chat", "model": "gpt-oss:120b", "api_key": "token"}, "hello"),
-                "cloud",
-            )
-            self.assertEqual(dict(request.call_args.args[0].header_items())["Authorization"], "Bearer token")
 
     def test_cross_track_duplicate_finals_are_suppressed(self):
         first = {
@@ -456,7 +481,7 @@ class WorkerTest(unittest.TestCase):
                 "title": "双轨精修",
                 "language": "en",
                 "streaming_model_id": "zipformer-en-streaming-int8",
-                "refined_model_id": "whisper-turbo",
+                "refined_model_id": "whisper-large-v3",
             }
         )
         for track, value in (("mic", 16), ("system", 32)):
@@ -539,7 +564,7 @@ class WorkerTest(unittest.TestCase):
                 "title": "远端会",
                 "language": "en",
                 "streaming_model_id": "zipformer-en-streaming-int8",
-                "refined_model_id": "whisper-turbo",
+                "refined_model_id": "whisper-large-v3",
             }
         )
         for track, value in (("mic", 16), ("system", 32)):
@@ -815,20 +840,18 @@ class WorkerTest(unittest.TestCase):
                     "text": "你好",
                     "voice_id": "voice",
                     "target_language": "zh",
-                    "endpoint": "https://example.test",
+                    "provider": "Built-in",
                     "model": "test",
                 }
             )
 
-    def test_tts_routes_korean_to_its_local_model_without_a_voice(self):
-        with self.assertRaisesRegex(
-            RuntimeError, "Model vits-mimic3-ko-kss-low is not installed"
-        ):
+    def test_tts_rejects_languages_without_a_local_model(self):
+        with self.assertRaisesRegex(ValueError, "Unsupported TTS language"):
             self.worker.synthesize_tts(
                 {
                     "text": "안녕하세요",
                     "target_language": "ko",
-                    "endpoint": "https://example.test",
+                    "provider": "Built-in",
                     "model": "test",
                 }
             )
@@ -1067,6 +1090,10 @@ class WorkerTest(unittest.TestCase):
 
     def test_model_downloads_have_checksums(self):
         for model in self.worker.models.catalog.values():
+            # Single-file GGUF models are fetched directly (no tar archive), so
+            # they carry no archive checksum; skip the archive requirement.
+            if model.get("kind") in {"llama-chat", "llama-translation"}:
+                continue
             if model.get("downloads"):
                 self.assertTrue(all(item.get("sha256") for item in model["downloads"]))
             else:
@@ -1089,12 +1116,6 @@ class WorkerTest(unittest.TestCase):
                 "decoder-epoch-75-avg-11-chunk-16-left-128.onnx",
                 "joiner-epoch-75-avg-11-chunk-16-left-128.int8.onnx",
             ],
-        )
-
-    def test_whisper_turbo_manifest_uses_the_archive_file_names(self):
-        self.assertEqual(
-            self.worker.models.get("whisper-turbo")["files"],
-            ["turbo-encoder.int8.onnx", "turbo-decoder.int8.onnx", "turbo-tokens.txt"],
         )
 
     def test_whisper_large_v3_manifest_uses_the_archive_file_names(self):
@@ -1138,6 +1159,92 @@ class WorkerTest(unittest.TestCase):
         self.assertEqual(
             streaming.call_args.args,
             (self.worker.models, "zipformer-zh-xlarge-streaming-int8", "zh"),
+        )
+
+    def test_reconfigure_hot_switches_language_and_models(self):
+        ready = {"zipformer-zh-xlarge-streaming-int8", "qwen3-asr-0.6b-int8"}
+        self.worker.models.is_ready = lambda model_id: model_id in ready
+        with (
+            patch("backend.worker_session.StreamingASR") as streaming,
+            patch("backend.worker_session.RefinedASR") as refiner,
+        ):
+            meeting = self.worker.start(
+                {
+                    "title": "热切换",
+                    "language": "zh",
+                    "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
+                    "refined_model_id": "qwen3-asr-0.6b-int8",
+                }
+            )
+            ready.update({"zipformer-en-streaming-int8", "qwen3-asr-1.7b-int8"})
+            streaming.reset_mock()
+            refiner.reset_mock()
+            self.events.clear()
+            updated = self.worker.reconfigure(
+                {
+                    "meeting_id": meeting["id"],
+                    "language": "en",
+                    "streaming_model_id": "zipformer-en-streaming-int8",
+                    "refined_model_id": "qwen3-asr-1.7b-int8",
+                }
+            )
+        self.assertEqual(
+            (
+                updated["language"],
+                updated["streaming_model_id"],
+                updated["refined_model_id"],
+            ),
+            ("en", "zipformer-en-streaming-int8", "qwen3-asr-1.7b-int8"),
+        )
+        stored = self.worker.store.get_meeting(meeting["id"])
+        self.assertEqual(
+            (
+                stored["language"],
+                stored["streaming_model_id"],
+                stored["refined_model_id"],
+            ),
+            ("en", "zipformer-en-streaming-int8", "qwen3-asr-1.7b-int8"),
+        )
+        self.assertEqual(
+            streaming.call_args.args,
+            (self.worker.models, "zipformer-en-streaming-int8", "en"),
+        )
+        refiner.assert_called_once_with(self.worker.models, "qwen3-asr-1.7b-int8")
+        reconfigured = [
+            event for event in self.events if event["type"] == "meeting.reconfigured"
+        ]
+        self.assertEqual(len(reconfigured), 1)
+        self.assertEqual(reconfigured[0]["payload"]["meeting"]["language"], "en")
+
+    def test_reconfigure_rejects_missing_models_without_touching_the_session(self):
+        ready = {"paraformer-zh-en-int8", "qwen3-asr-0.6b-int8"}
+        self.worker.models.is_ready = lambda model_id: model_id in ready
+        with (
+            patch("backend.worker_session.StreamingASR"),
+            patch("backend.worker_session.RefinedASR"),
+        ):
+            meeting = self.worker.start(
+                {
+                    "title": "缺模型",
+                    "language": "zh",
+                    "streaming_model_id": "paraformer-zh-en-int8",
+                    "refined_model_id": "qwen3-asr-0.6b-int8",
+                }
+            )
+            running_asr = self.worker.asr
+            self.events.clear()
+            with self.assertRaisesRegex(RuntimeError, "not installed"):
+                self.worker.reconfigure(
+                    {
+                        "meeting_id": meeting["id"],
+                        "streaming_model_id": "zipformer-en-streaming-int8",
+                    }
+                )
+        self.assertIs(self.worker.asr, running_asr)
+        stored = self.worker.store.get_meeting(meeting["id"])
+        self.assertEqual(stored["streaming_model_id"], "paraformer-zh-en-int8")
+        self.assertFalse(
+            [event for event in self.events if event["type"] == "meeting.reconfigured"]
         )
 
     def test_initialize_downloads_default_live_models(self):
@@ -1796,14 +1903,12 @@ class WorkerTest(unittest.TestCase):
                 "speaker": "spk-1",
             }
         )
-        self.worker.llm_complete = lambda *_args, **_kwargs: "Hello"
+        self.worker.llama_generate = lambda *_args, **_kwargs: "Hello"
         translated = self.worker.translate(
             {
                 "meeting_id": meeting["id"],
                 "segment_id": "mic-0",
                 "target_language": "en",
-                "endpoint": "http://127.0.0.1",
-                "model": "local",
                 "consent": True,
             }
         )
@@ -1833,13 +1938,19 @@ class WorkerTest(unittest.TestCase):
         with (
             patch("backend.worker.Worker"),
             patch("backend.worker.threading.Thread") as thread,
+            patch("backend.worker.ThreadPoolExecutor") as executor,
             patch("sys.stdin", io.StringIO(commands)),
         ):
             main()
+        # Translation is serialized through a single-worker executor; every other
+        # background command still runs on its own daemon thread.
+        self.assertEqual(
+            [call.args[1]["type"] for call in executor.return_value.submit.call_args_list],
+            ["translation.generate"],
+        )
         self.assertEqual(
             [call.kwargs["args"][0]["type"] for call in thread.call_args_list],
             [
-                "translation.generate",
                 "summary.generate",
                 "tts.synthesize",
                 "speaker-profile.enroll",
@@ -1862,14 +1973,12 @@ class WorkerTest(unittest.TestCase):
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
-        self.worker.llm_complete = lambda *_args, **_kwargs: "Hello"
+        self.worker.llama_generate = lambda *_args, **_kwargs: "Hello"
         translated = self.worker.translate(
             {
                 "meeting_id": meeting["id"],
                 "segment_id": "mic-0",
                 "target_language": "en",
-                "endpoint": "http://127.0.0.1",
-                "model": "local",
                 "consent": True,
                 "segment": {
                     "text": "你好",

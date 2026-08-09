@@ -24,6 +24,7 @@ def runtime_settings(root):
 
 
 def save_runtime_settings(root, value):
+    """保存用户本地覆盖配置到 advanced-settings.json。"""
     _validate(value, DEFAULT_SETTINGS)
     path = Path(root) / "advanced-settings.json"
     path.write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -33,6 +34,7 @@ def save_runtime_settings(root, value):
 
 
 def _validate(value, template):
+    """递归验证配置项类型、值域和结构完整性。"""
     if not isinstance(value, dict) or set(value) != set(template):
         raise ValueError("Advanced settings must match the default template")
     for key, default in template.items():

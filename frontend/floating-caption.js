@@ -4,24 +4,25 @@ const captionText = document.getElementById('caption-text');
 const captionTranslation = document.getElementById('caption-translation');
 const closeBtn = document.getElementById('close-btn');
 
-// State tracking
+// 状态跟踪
 let state = {
   lastFinalized: { segmentId: null, text: '', translation: null },
   current: { segmentId: null, text: '', isRefined: false },
   pendingTranslation: { segmentId: null, text: null },
+  translationPending: { segmentId: null },
 };
 
-// Close button handler
+// 关闭按钮处理器
 closeBtn.addEventListener('click', () => {
   if (window.brevia?.floatingCaption?.close) {
     window.brevia.floatingCaption.close();
   }
 });
 
-// Manual window dragging
+// 手动窗口拖拽
 let dragState = null;
 captionContainer.addEventListener('mousedown', (event) => {
-  // Don't start drag on close button
+  // 不在关闭按钮上开始拖拽
   if (event.target.closest('.close-btn')) return;
 
   dragState = {
@@ -48,13 +49,13 @@ document.addEventListener('mouseup', () => {
   dragState = null;
 });
 
-// Render current state to UI
+// 将当前状态渲染到 UI
 function render() {
-  // Render finalized segment (top line)
+  // 渲染已定稿的片段（顶行）
   if (state.lastFinalized.text) {
     captionFinalized.textContent = state.lastFinalized.text;
     captionFinalized.classList.remove('hidden');
-    // Auto-scroll to bottom to show latest content
+    // 自动滚动到底部以显示最新内容
     requestAnimationFrame(() => {
       captionFinalized.scrollTop = captionFinalized.scrollHeight;
     });
@@ -62,19 +63,19 @@ function render() {
     captionFinalized.classList.add('hidden');
   }
 
-  // Render current segment (bottom line)
+  // 渲染当前片段（底行）
   captionText.textContent = state.current.text || '';
 
-  // Auto-scroll to bottom to show latest content
+  // 自动滚动到底部以显示最新内容
   requestAnimationFrame(() => {
     captionText.scrollTop = captionText.scrollHeight;
   });
 
-  // Render translation
+  // 渲染译文
   let translationText = '';
   let isDimmed = false;
 
-  // Priority: match current segment, else match finalized segment (dimmed), else pending
+  // 优先级：匹配当前片段，否则匹配已定稿片段（变暗），否则待定
   if (state.current.translation) {
     translationText = state.current.translation;
   } else if (state.lastFinalized.translation) {
@@ -85,25 +86,37 @@ function render() {
     isDimmed = true;
   }
 
-  captionTranslation.textContent = translationText;
-  captionTranslation.classList.toggle('hidden', !translationText);
-  captionTranslation.classList.toggle('dimmed', isDimmed);
+  // 当显示的片段正在翻译时显示加载点
+  const pendingId = state.translationPending?.segmentId;
+  const showLoading = !translationText && pendingId
+    && (pendingId === state.current.segmentId || pendingId === state.lastFinalized.segmentId);
+
+  if (showLoading) {
+    captionTranslation.innerHTML = '<span class="translation-loading"><span></span><span></span><span></span></span>';
+    captionTranslation.classList.remove('hidden');
+    captionTranslation.classList.add('dimmed');
+  } else {
+    captionTranslation.textContent = translationText;
+    captionTranslation.classList.toggle('hidden', !translationText);
+    captionTranslation.classList.toggle('dimmed', isDimmed);
+  }
 }
 
-// Listen for caption updates - wait for brevia to be ready
+// 监听字幕更新 - 等待 brevia 准备就绪
 function setupListener() {
   if (window.brevia?.onFloatingCaptionUpdate) {
     window.brevia.onFloatingCaptionUpdate((data) => {
-      // If we receive a full state object from the main process (on window load)
+      // 如果我们从主进程接收到完整状态对象（在窗口加载时）
       if (data.lastFinalized !== undefined && data.current !== undefined) {
         state.lastFinalized = data.lastFinalized;
         state.current = data.current;
         state.pendingTranslation = data.pendingTranslation;
+        if (data.translationPending !== undefined) state.translationPending = data.translationPending;
         render();
         return;
       }
 
-      // Handle finalize: move current → lastFinalized
+      // 处理定稿：将当前片段移动到已定稿
       if (data.finalize) {
         state.lastFinalized = {
           segmentId: state.current.segmentId,
@@ -115,9 +128,9 @@ function setupListener() {
         return;
       }
 
-      // Handle segment text update
+      // 处理片段文本更新
       if (data.segmentId !== undefined && data.text !== undefined) {
-        // Starting a new segment
+        // 开始新片段
         if (state.current.segmentId !== data.segmentId) {
           state.current = {
             segmentId: data.segmentId,
@@ -126,7 +139,7 @@ function setupListener() {
             translation: null,
           };
         } else {
-          // Updating existing segment
+          // 更新现有片段
           state.current.text = data.text;
           if (data.isRefined !== undefined) {
             state.current.isRefined = data.isRefined;
@@ -134,14 +147,14 @@ function setupListener() {
         }
       }
 
-      // Handle translation update
+      // 处理译文更新
       if (data.translation !== undefined && data.segmentId !== undefined) {
         if (data.segmentId === state.current.segmentId) {
           state.current.translation = data.translation;
         } else if (data.segmentId === state.lastFinalized.segmentId) {
           state.lastFinalized.translation = data.translation;
         } else {
-          // Store as pending if doesn't match current segments
+          // 如果不匹配当前片段，则存储为待定
           state.pendingTranslation = {
             segmentId: data.segmentId,
             text: data.translation,
@@ -156,5 +169,5 @@ function setupListener() {
   }
 }
 
-// Start setup immediately
+// 立即开始设置
 setupListener();

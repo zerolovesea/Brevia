@@ -1,4 +1,4 @@
-"""Focused storage responsibility component."""
+"""聚焦存储职责的组件。"""
 
 import json
 import shutil
@@ -36,6 +36,7 @@ class SpeakerProfileStoreMixin:
         return [dict(row) for row in rows]
 
     def speaker_profile(self, profile_id):
+        """根据 ID 获取单个人员档案详情。"""
         with self.connect() as db:
             row = db.execute(
                 "SELECT * FROM speaker_profiles WHERE id=?", (profile_id,)
@@ -70,6 +71,7 @@ class SpeakerProfileStoreMixin:
 
     @staticmethod
     def _normalized_embedding(embedding):
+        """归一化声纹向量到单位长度。"""
         values = [float(value) for value in embedding]
         norm = sum(value * value for value in values) ** 0.5
         if not norm:
@@ -262,6 +264,7 @@ class SpeakerProfileStoreMixin:
         )
 
     def delete_speaker_profile(self, profile_id):
+        """删除人员档案及其所有声纹样本和本地录音文件。"""
         with self.connect() as db:
             db.execute("DELETE FROM speaker_profiles WHERE id=?", (profile_id,))
         shutil.rmtree(self.speaker_profiles_dir / profile_id, ignore_errors=True)
@@ -269,6 +272,7 @@ class SpeakerProfileStoreMixin:
     def set_segment_speaker(
         self, meeting_id, segment_id, speaker, profile_id=None, name=None
     ):
+        """设置段落的说话人并标记为用户编辑。"""
         with self.connect() as db:
             db.execute(
                 "UPDATE segments SET speaker=?,user_edited=1 WHERE meeting_id=? AND id=?",
@@ -280,6 +284,7 @@ class SpeakerProfileStoreMixin:
             )
 
     def rename_speaker_profile(self, profile_id, name):
+        """重命名人员档案。"""
         name = name.strip()
         if not name:
             raise ValueError("Speaker profile name cannot be empty")

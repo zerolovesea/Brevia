@@ -1,4 +1,4 @@
-"""Focused worker responsibility component."""
+"""聚焦的 worker 职责组件。"""
 
 from .worker_common import require, synchronized_recording
 

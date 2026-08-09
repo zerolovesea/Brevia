@@ -33,7 +33,7 @@ Brevia は、会議で最も時間のかかる部分——記録・整理・振�
 
 Brevia は 30 以上の言語で音声を文字起こしします——英語、中国語、日本語、韓国語、フランス語、ドイツ語、スペイン語、ロシア語、アラビア語、タイ語、ベトナム語、インドネシア語など。会議終了後、任意の LLM プロバイダに接続すれば、会議要約、重要な決定事項、アクションアイテムを一気に生成します。
 
-OpenAI、Anthropic、Ollama のチャット形式に対応したプロバイダなら何でも利用可能——ローカルの Ollama デプロイも含みます。送信されるのはテキストのみで、音声は送信されません。
+内蔵 AI はバンドルされたモデルをこの端末で実行します。Claude、OpenAI、OpenRouter、または OpenAI / Anthropic のチャット形式に対応したサービスを接続することもできます。送信されるのはテキストのみで、音声は送信されません。
 
 ![多言語サポートと AI 議事録](assets/tour/en/%E5%A4%9A%E8%AF%AD%E8%A8%80%E6%94%AF%E6%8C%81%E4%B8%8E%E4%BC%9A%E8%AE%AE%E7%BA%AA%E8%A6%81.png)
 
@@ -98,7 +98,7 @@ Brevia は厳密なローカルファースト設計に従います：
 | バックエンド | Python 3.10+、JSONL ワーカープロトコル、SQLite ストレージ |
 | 音声エンジン | [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 1.13.2、ONNX Runtime |
 | 話者処理 | Pyannote セグメンテーション + 3D-Speaker / NeMo Titanet / CAM++ 埋め込み |
-| LLM クライアント | OpenAI / Anthropic / Ollama 互換チャット API |
+| LLM クライアント | 内蔵 llama.cpp（GGUF）＋ OpenAI / Anthropic 互換チャット API |
 | 音声 I/O | ffmpeg（リリースに同梱） |
 | ビルドとパッケージ | electron-builder、PyInstaller（Python ランタイム同梱） |
 ## 対応モデル
@@ -117,7 +117,7 @@ Brevia は厳密なローカルファースト設計に従います：
 | ソース分離 | Spleeter 2 Stems | 汎用 |
 | 音声合成 | ZipVoice（zh + en）、VITS Piper（fr / de / es / ru）、VITS Mimic3（ko） | 多言語 |
 
-LLM 要約と翻訳は、OpenAI Chat Completions、Anthropic Messages、Ollama Chat 形式に対応したプロバイダなら何でも利用可能——OpenAI、Claude、Gemini（OpenAI 互換エンドポイント）、DeepSeek、Kimi、Qwen、Ollama など。
+LLM 要約では「内蔵 AI」を選ぶとバンドルされた GGUF モデル（Qwen 3.5 2B / 4B、Gemma 3 1B / 4B）をローカルで実行できます。Claude、OpenAI、OpenRouter、または OpenAI Chat Completions / Anthropic Messages に対応した独自サービス（Gemini の OpenAI 互換エンドポイント、DeepSeek、Kimi、Qwen など）も利用可能です。
 
 ## ローカル開発
 

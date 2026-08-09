@@ -1,4 +1,4 @@
-"""Focused worker responsibility component."""
+"""聚焦的 worker 职责组件。"""
 
 import sys
 from array import array
@@ -153,7 +153,7 @@ class RecordingSessionMixin:
                     )
 
         def load_language_identifier():
-            if meeting["language"] == "auto" and self.models.is_ready("whisper-turbo"):
+            if meeting["language"] == "auto" and self.models.is_ready("whisper-large-v3"):
                 try:
                     self.language_identifier = LanguageIdentifier(self.models)
                 except RuntimeError as error:
@@ -183,36 +183,9 @@ class RecordingSessionMixin:
                 )
 
         def load_punctuation():
-            if meeting["language"] == "en":
-                try:
-                    self.punctuation = EnglishPunctuation(
-                        self.models, SETTINGS["punctuation"]["english_model_id"]
-                    )
-                except RuntimeError as error:
-                    self.punctuation = None
-                    self.emit(
-                        "worker.warning",
-                        {
-                            "meeting_id": meeting_id,
-                            "code": "punctuation_unavailable",
-                            "message": str(error),
-                        },
-                    )
-            elif meeting["language"] in {"zh", "yue", "auto"}:
-                try:
-                    self.punctuation = ChinesePunctuation(
-                        self.models, SETTINGS["punctuation"]["chinese_model_id"]
-                    )
-                except RuntimeError as error:
-                    self.punctuation = None
-                    self.emit(
-                        "worker.warning",
-                        {
-                            "meeting_id": meeting_id,
-                            "code": "punctuation_unavailable",
-                            "message": str(error),
-                        },
-                    )
+            self.punctuation = self._build_live_punctuation(
+                meeting["language"], meeting_id
+            )
 
         def load_speaker_tracker():
             try:
@@ -275,6 +248,124 @@ class RecordingSessionMixin:
         )
         return {"paused": bool(payload["paused"])}
 
+    def _build_live_punctuation(self, language, meeting_id):
+        """按语言构建实时标点模型；不可用时发告警并返回 None。"""
+        if language == "en":
+            builder = EnglishPunctuation, SETTINGS["punctuation"]["english_model_id"]
+        elif language in {"zh", "yue", "auto"}:
+            builder = ChinesePunctuation, SETTINGS["punctuation"]["chinese_model_id"]
+        else:
+            return None
+        cls, model_id = builder
+        try:
+            return cls(self.models, model_id)
+        except RuntimeError as error:
+            self.emit(
+                "worker.warning",
+                {
+                    "meeting_id": meeting_id,
+                    "code": "punctuation_unavailable",
+                    "message": str(error),
+                },
+            )
+            return None
+
+    @synchronized_recording
+    def reconfigure(self, payload):
+        """会中热切换语言与实时/精修模型，对当前录音立即生效。
+
+        仅重建受影响的组件：改语言会同时重建实时识别与标点；改实时模型只重建识别；
+        改精修模型只替换后续实时精修所用的模型。新模型先构建到局部变量，全部成功后
+        再原子替换，任一步骤失败都不会破坏正在运行的识别流。缺失模型会以 ``not
+        installed`` 抛出，交由上层触发下载流程。
+
+        Args:
+            payload: ``meeting_id`` 必填；``language``、``streaming_model_id``、
+                ``refined_model_id``、``target_language`` 至少提供一项。
+
+        Returns:
+            持久化后的会议详情；同时发布 ``meeting.reconfigured``。
+        """
+        require(payload, "meeting_id")
+        self._active(payload["meeting_id"])
+        meeting = self.store.get_meeting(self.active)
+        language = payload.get("language") or meeting["language"]
+        streaming_model_id = (
+            payload.get("streaming_model_id") or meeting["streaming_model_id"]
+        )
+        refined_model_id = (
+            payload.get("refined_model_id") or meeting["refined_model_id"]
+        )
+        target_language = (
+            payload.get("target_language")
+            if "target_language" in payload
+            else meeting["target_language"]
+        )
+        language_changed = language != meeting["language"]
+        streaming_changed = streaming_model_id != meeting["streaming_model_id"]
+        refined_changed = refined_model_id != meeting["refined_model_id"]
+        target_language_changed = target_language != meeting["target_language"]
+        if not (language_changed or streaming_changed or refined_changed or target_language_changed):
+            return meeting
+
+        # 先校验所有目标模型已安装，缺失即抛错（不做任何替换），让上层弹出下载。
+        missing = [
+            model_id
+            for model_id in (streaming_model_id, refined_model_id)
+            if not self.models.is_ready(model_id)
+        ]
+        if missing:
+            label = "Model" if len(missing) == 1 else "Models"
+            verb = "is" if len(missing) == 1 else "are"
+            raise RuntimeError(f"{label} {', '.join(missing)} {verb} not installed")
+
+        # 全部构建到局部变量，成功后再原子替换。
+        new_asr = self.asr
+        if streaming_changed or language_changed:
+            new_asr = StreamingASR(self.models, streaming_model_id, language)
+        new_refiner = self.live_refiner
+        if refined_changed:
+            new_refiner = RefinedASR(self.models, refined_model_id)
+
+        self.asr = new_asr
+        if refined_changed:
+            self.live_refiner = new_refiner
+            if self.live_refinement is None:
+                self.live_refinement = ThreadPoolExecutor(
+                    max_workers=1, thread_name_prefix="brevia-live-refine"
+                )
+        if language_changed:
+            self.meeting_language = language
+            self.detected_language = None
+            self.punctuation = self._build_live_punctuation(language, self.active)
+            self.language_identifier = None
+            if language == "auto" and self.models.is_ready("whisper-large-v3"):
+                try:
+                    self.language_identifier = LanguageIdentifier(self.models)
+                except RuntimeError as error:
+                    self.emit(
+                        "worker.warning",
+                        {
+                            "meeting_id": self.active,
+                            "code": "language_identifier_unavailable",
+                            "message": str(error),
+                        },
+                    )
+
+        meeting = self.store.update_meeting(
+            self.active,
+            {
+                "language": language,
+                "streaming_model_id": streaming_model_id,
+                "refined_model_id": refined_model_id,
+                "target_language": target_language,
+            },
+        )
+        self.emit(
+            "meeting.reconfigured", {"meeting_id": self.active, "meeting": meeting}
+        )
+        return meeting
+
     def _enhance_live_microphone(self, samples):
         """仅为实时识别补偿偏弱麦克风音量，原始录音不受影响。"""
         config = SETTINGS["live_asr"]
@@ -308,7 +399,11 @@ class RecordingSessionMixin:
         require(payload, "meeting_id", "track", "pcm", "sample_rate", "start_ms")
         self._active(payload["meeting_id"])
         samples_total = self.store.append_audio(
-            self.active, payload["track"], payload["pcm"], int(payload["sample_rate"])
+            self.active,
+            payload["track"],
+            payload["pcm"],
+            int(payload["sample_rate"]),
+            int(payload["start_ms"]),
         )
         if not self.asr:
             return {"samples": samples_total}
@@ -540,7 +635,7 @@ class RecordingSessionMixin:
         return meeting
 
     def _release_active_session(self):
-        """Release model and executor resources before persisting the stopped state."""
+        """在持久化停止状态前释放模型和执行器资源。"""
         refinement = self.live_refinement
         self.live_refinement = None
         if refinement:

@@ -14,9 +14,7 @@ from .audio_io import (
 
 
 TTS_MODEL_IDS = {
-    "zh": "zipvoice-zh-en", "en": "zipvoice-zh-en", "ko": "vits-mimic3-ko-kss-low",
-    "fr": "vits-piper-fr-siwis-medium-int8", "de": "vits-piper-de-thorsten-medium-int8",
-    "es": "vits-piper-es-sharvard-medium-int8", "ru": "vits-piper-ru-irina-medium-int8",
+    "zh": "zipvoice-zh-en", "en": "zipvoice-zh-en",
 }
 
 
@@ -106,6 +104,7 @@ class MeetingMediaService:
         )
 
     def _voice_reference(self, voice_id):
+        """根据 voice_id 获取语音克隆所需的参考音频和文本。"""
         if voice_id == "preset:leijun-1":
             preset = self.preset_voices()
             if not preset:

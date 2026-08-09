@@ -1,4 +1,4 @@
-"""Focused worker responsibility component."""
+"""聚焦的 worker 职责组件。"""
 
 import json
 import os
@@ -57,9 +57,13 @@ class WorkerCore:
         self.asr_warning_sent = False
         self.live_refiner = None
         self.live_refinement = None
+        # 继续协作初始化链，使兄弟 mixin（如 llama sidecar 管理器）的 __init__ 也能
+        # 运行——否则 _sidecars_lock 等属性永远不会被创建。
+        super().__init__()
 
     @staticmethod
     def _write_stdout(value):
+        """将 JSON 写入 stdout，忽略管道断开。"""
         try:
             print(json.dumps(value, ensure_ascii=False), flush=True)
         except BrokenPipeError:
@@ -112,6 +116,7 @@ class WorkerCore:
             "meeting.import": self.import_audio,
             "meeting.resume": self.resume,
             "meeting.pause": self.pause,
+            "meeting.reconfigure": self.reconfigure,
             "meeting.audio": self.audio,
             "meeting.stop": self.stop,
             "meeting.list": lambda value: self.store.list_meetings(**value),

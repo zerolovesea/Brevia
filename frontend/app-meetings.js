@@ -1,4 +1,4 @@
-/** Maps persisted meetings into the presentation shape used by the meeting library. */
+/** 将持久化的会议数据映射为会议列表所需的展示结构。 */
 function backendMeeting(item) {
   return {
     id: item.id, tone: 'violet', title: item.title, createdAt: item.created_at,
@@ -17,7 +17,7 @@ try {
 function cacheMeetingList() {
   if (!window.brevia || activeLibraryNav !== 'all-meetings' || meetingSearch.value.trim()) return;
   try { localStorage.setItem(meetingCacheKey, JSON.stringify(uiData.meetings.filter(({ deleted }) => !deleted))); }
-  catch { /* The backend remains authoritative when browser storage is unavailable or full. */ }
+  catch { /* 当浏览器存储不可用或已满时，以后端数据为准。 */ }
 }
 
 function syncBackendMeeting(item) {

@@ -45,10 +45,10 @@ def convert_to_pcm_wav(source, destination, sample_rate=16000, channels=1):
 
 
 def ensure_wav_duration(path, maximum_seconds, operation="process"):
-    """Reject a WAV before a caller loads its complete waveform."""
+    """在调用方加载完整波形之前拒绝过长的 WAV 文件。"""
     with wave.open(str(path)) as recording:
         if recording.getnframes() > recording.getframerate() * maximum_seconds:
-            # ponytail: complete-waveform ceiling; stream model windows when long meetings need this operation.
+            # ponytail: 完整波形上限；当长会议需要此操作时改用流式模型窗口。
             raise ValueError(f"Audio is too long to {operation} in memory")
 
 
@@ -60,7 +60,7 @@ def read_mono_wav(path, maximum_seconds=None):
         if recording.getnchannels() != 1 or recording.getsampwidth() != 2:
             raise ValueError("This operation requires mono PCM16 WAV audio")
         if maximum_seconds and recording.getnframes() > recording.getframerate() * maximum_seconds:
-            # ponytail: in-memory ASR ceiling; stream model windows when long meetings need refinement.
+            # ponytail: 内存中 ASR 上限；当长会议需要精修时改用流式模型窗口。
             raise ValueError("Audio is too long to process in memory")
         samples = numpy.frombuffer(
             recording.readframes(recording.getnframes()), dtype="<i2"
@@ -123,7 +123,7 @@ def read_wav_channels(path, maximum_seconds=None):
         if recording.getsampwidth() != 2:
             raise ValueError("Source separation requires PCM16 WAV audio")
         if maximum_seconds and recording.getnframes() > recording.getframerate() * maximum_seconds:
-            # ponytail: separator loads the complete waveform; add chunked separation when this ceiling is insufficient.
+            # ponytail: 分离器加载完整波形；当此上限不足时添加分块分离。
             raise ValueError("Audio is too long to separate in memory")
         channels = recording.getnchannels()
         values = numpy.frombuffer(

@@ -58,17 +58,6 @@
     "kind": "transducer"
   },
   {
-    "id": "zipformer-zh-streaming-int8",
-    "name": "Streaming Zipformer Chinese",
-    "runtime": "sherpa-onnx==1.13.2",
-    "revision": "asr-models/2025-06-30",
-    "stages": ["streaming"], "languages": ["zh"], "backend": ["cpu", "cuda"], "speaker": false,
-    "size_bytes": 132634597,
-    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-zh-int8-2025-06-30.tar.bz2",
-    "archive_sha256": "5a2832047ea1f97dd0dc595b816c230c4bafad65cfc0341fa57517cadc50afd0", "directory": "sherpa-onnx-streaming-zipformer-zh-int8-2025-06-30",
-    "files": ["encoder.int8.onnx", "decoder.onnx", "joiner.int8.onnx", "tokens.txt"], "kind": "transducer"
-  },
-  {
     "id": "zipformer-multilingual-streaming",
     "name": "Streaming Zipformer Multilingual",
     "runtime": "sherpa-onnx==1.13.2",
@@ -190,16 +179,6 @@
     "kind": "qwen3"
   },
   {
-    "id": "whisper-turbo",
-    "name": "Whisper Turbo",
-    "runtime": "sherpa-onnx==1.13.2", "revision": "asr-models/whisper-turbo",
-    "stages": ["refined"], "languages": ["multilingual"], "backend": ["cpu", "cuda"], "speaker": false,
-    "size_bytes": 563790207,
-    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-turbo.tar.bz2",
-    "archive_sha256": "b11acbbcd660b44a8e0df33724feb5aaa709cf65668f2823d59f656312544f22", "directory": "sherpa-onnx-whisper-turbo",
-    "files": ["turbo-encoder.int8.onnx", "turbo-decoder.int8.onnx", "turbo-tokens.txt"], "kind": "whisper"
-  },
-  {
     "id": "whisper-large-v3",
     "name": "Whisper Large v3",
     "runtime": "sherpa-onnx==1.13.2", "revision": "asr-models/whisper-large-v3",
@@ -209,7 +188,6 @@
     "archive_sha256": "2d0e134b3b5fc4a0533baf24a0c9d473b629aa47f030af0a165a05f461df7a03", "directory": "sherpa-onnx-whisper-large-v3",
     "files": ["large-v3-encoder.int8.onnx", "large-v3-decoder.int8.onnx", "large-v3-tokens.txt"], "kind": "whisper"
   },
-  {"id":"fire-red-asr2-ctc-zh-en-int8","name":"FireRedASR2 CTC Chinese and English","runtime":"sherpa-onnx==1.13.2","revision":"asr-models/2026-02-25","stages":["refined"],"languages":["zh","en","yue"],"backend":["cpu","cuda"],"speaker":false,"size_bytes":520516278,"url":"https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-fire-red-asr2-ctc-zh_en-int8-2026-02-25.tar.bz2","archive_sha256":"1da8b737ecc5e29f36759a4460c754863e7c919a4ba325aea187331fbfc83274","directory":"sherpa-onnx-fire-red-asr2-ctc-zh_en-int8-2026-02-25","files":["model.int8.onnx","tokens.txt"],"kind":"fire-red-asr-ctc"},
   {"id":"funasr-nano-int8","name":"FunASR Nano int8","runtime":"sherpa-onnx==1.13.2","revision":"asr-models/2025-12-30","stages":["refined"],"languages":["zh","en","yue"],"backend":["cpu","cuda"],"speaker":false,"size_bytes":841730611,"url":"https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-funasr-nano-int8-2025-12-30.tar.bz2","archive_sha256":"eb43d7ccc2e86b243f6a03b7df361033dda66db9523d1a92bf6aca2b50c9476b","directory":"sherpa-onnx-funasr-nano-int8-2025-12-30","files":["encoder_adaptor.int8.onnx","llm.int8.onnx","embedding.int8.onnx","Qwen3-0.6B/tokenizer.json"],"kind":"funasr-nano"},
   {
     "id": "qwen3-asr-1.7b-int8",
@@ -273,12 +251,6 @@
     "kind": "speaker-embedding"
   },
   {
-    "id": "nemo-titanet-small-en", "name": "NeMo Titanet Small", "runtime": "sherpa-onnx==1.13.2", "revision": "speaker-recognition-models/titanet-small",
-    "stages": ["speaker-embedding"], "languages": ["en"], "backend": ["cpu", "cuda"], "speaker": true,
-    "size_bytes": 40257283, "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/nemo_en_titanet_small.onnx", "archive_sha256": "ad4a1802485d8b34c722d2a9d04249662f2ece5d28a7a039063ca22f515a789e",
-    "files": ["nemo_en_titanet_small.onnx"], "kind": "speaker-embedding"
-  },
-  {
     "id": "campplus-zh-en", "name": "3D-Speaker CAM++", "runtime": "sherpa-onnx==1.13.2", "revision": "speaker-recognition-models/campplus",
     "stages": ["speaker-embedding"], "languages": ["zh", "en"], "backend": ["cpu", "cuda"], "speaker": true,
     "size_bytes": 28281164, "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx", "archive_sha256": "aa3cfc16963a10586a9393f5035d6d6b57e98d358b347f80c2a30bf4f00ceba2",
@@ -301,33 +273,42 @@
     "files": ["tokens.txt", "encoder.int8.onnx", "decoder.int8.onnx", "lexicon.txt", "espeak-ng-data", "vocos_24khz.onnx"], "kind": "tts"
   },
   {
-    "id": "vits-mimic3-ko-kss-low", "name": "VITS Mimic3 Korean KSS", "runtime": "sherpa-onnx==1.13.2", "revision": "tts-models/vits-mimic3-ko_KO-kss_low",
-    "stages": ["tts"], "languages": ["ko"], "backend": ["cpu", "cuda"], "speaker": false,
-    "size_bytes": 66838474, "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-mimic3-ko_KO-kss_low.tar.bz2", "archive_sha256": "f015d1d15a52ed00d6fe22757c5ef4a74283c53daf829c838fa5c22616ed789c",
-    "directory": "vits-mimic3-ko_KO-kss_low", "files": ["ko_KO-kss-low.onnx", "tokens.txt", "espeak-ng-data"], "kind": "tts"
+    "id": "qwen3.5-2b-q4km", "name": "Qwen 3.5 2B", "runtime": "llama-cpp-python", "revision": "llama-models/2025-08",
+    "stages": ["summary"], "languages": ["zh", "en"], "backend": ["cpu", "cuda", "metal"], "speaker": false,
+    "size_bytes": 1280835840, "url": "https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/main/Qwen3.5-2B-Q4_K_M.gguf",
+    "china_url": "https://modelscope.cn/models/Qwen/Qwen3.5-2B-Instruct-GGUF/resolve/master/qwen3.5-2b-instruct-q4_k_m.gguf",
+    "files": ["Qwen3.5-2B-Q4_K_M.gguf"], "kind": "llama-chat",
+    "context_size": 32768, "speed": 4, "quality": 4, "tier": "balanced"
   },
   {
-    "id": "vits-piper-fr-siwis-medium-int8", "name": "VITS Piper French SIWIS", "runtime": "sherpa-onnx==1.13.2", "revision": "tts-models/vits-piper-fr_FR-siwis-medium-int8",
-    "stages": ["tts"], "languages": ["fr"], "backend": ["cpu", "cuda"], "speaker": false,
-    "size_bytes": 20914888, "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-fr_FR-siwis-medium-int8.tar.bz2", "archive_sha256": "3909cff9b3cfd4820c66aa13bf554315c82e34899c161f0b446ece372bc4b5ec",
-    "directory": "vits-piper-fr_FR-siwis-medium-int8", "files": ["fr_FR-siwis-medium.onnx", "tokens.txt", "espeak-ng-data"], "kind": "tts"
+    "id": "qwen3.5-4b-q4km", "name": "Qwen 3.5 4B", "runtime": "llama-cpp-python", "revision": "llama-models/2025-08",
+    "stages": ["summary"], "languages": ["zh", "en"], "backend": ["cpu", "cuda", "metal"], "speaker": false,
+    "size_bytes": 2740937888, "url": "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/main/Qwen3.5-4B-Q4_K_M.gguf",
+    "china_url": "https://modelscope.cn/models/Qwen/Qwen3.5-4B-Instruct-GGUF/resolve/master/qwen3.5-4b-instruct-q4_k_m.gguf",
+    "files": ["Qwen3.5-4B-Q4_K_M.gguf"], "kind": "llama-chat",
+    "context_size": 32768, "speed": 2, "quality": 5, "tier": "quality"
   },
   {
-    "id": "vits-piper-de-thorsten-medium-int8", "name": "VITS Piper German Thorsten", "runtime": "sherpa-onnx==1.13.2", "revision": "tts-models/vits-piper-de_DE-thorsten-medium-int8",
-    "stages": ["tts"], "languages": ["de"], "backend": ["cpu", "cuda"], "speaker": false,
-    "size_bytes": 20949833, "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-de_DE-thorsten-medium-int8.tar.bz2", "archive_sha256": "07e240b7b9c1fc9211d5a69512f8cbe11b3286c2ed79c15c076ac6ed427fdf13",
-    "directory": "vits-piper-de_DE-thorsten-medium-int8", "files": ["de_DE-thorsten-medium.onnx", "tokens.txt", "espeak-ng-data"], "kind": "tts"
+    "id": "gemma3-1b-q8", "name": "Gemma 3 1B", "runtime": "llama-cpp-python", "revision": "llama-models/2025-08",
+    "stages": ["summary"], "languages": ["zh", "en"], "backend": ["cpu", "cuda", "metal"], "speaker": false,
+    "size_bytes": 1069306624, "url": "https://huggingface.co/bartowski/google_gemma-3-1b-it-GGUF/resolve/main/google_gemma-3-1b-it-Q8_0.gguf",
+    "china_url": "https://modelscope.cn/models/LLM-Research/gemma-3-1b-it-GGUF/resolve/master/gemma-3-1b-it-Q8_0.gguf",
+    "files": ["google_gemma-3-1b-it-Q8_0.gguf"], "kind": "llama-chat",
+    "context_size": 32768, "speed": 5, "quality": 3, "tier": "fast"
   },
   {
-    "id": "vits-piper-es-sharvard-medium-int8", "name": "VITS Piper Spanish Sharvard", "runtime": "sherpa-onnx==1.13.2", "revision": "tts-models/vits-piper-es_ES-sharvard-medium-int8",
-    "stages": ["tts"], "languages": ["es"], "backend": ["cpu", "cuda"], "speaker": false,
-    "size_bytes": 23477120, "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-es_ES-sharvard-medium-int8.tar.bz2", "archive_sha256": "bf5507cbdedea650365bd6175b3164a8ecca5847533ddf97afcba9d76ea599d1",
-    "directory": "vits-piper-es_ES-sharvard-medium-int8", "files": ["es_ES-sharvard-medium.onnx", "tokens.txt", "espeak-ng-data"], "kind": "tts"
+    "id": "gemma3-4b-q4km", "name": "Gemma 3 4B", "runtime": "llama-cpp-python", "revision": "llama-models/2025-08",
+    "stages": ["summary"], "languages": ["zh", "en"], "backend": ["cpu", "cuda", "metal"], "speaker": false,
+    "size_bytes": 2489758112, "url": "https://huggingface.co/bartowski/google_gemma-3-4b-it-GGUF/resolve/main/google_gemma-3-4b-it-Q4_K_M.gguf",
+    "china_url": "https://modelscope.cn/models/LLM-Research/gemma-3-4b-it-GGUF/resolve/master/gemma-3-4b-it-Q4_K_M.gguf",
+    "files": ["google_gemma-3-4b-it-Q4_K_M.gguf"], "kind": "llama-chat",
+    "context_size": 32768, "speed": 3, "quality": 4, "tier": "balanced"
   },
   {
-    "id": "vits-piper-ru-irina-medium-int8", "name": "VITS Piper Russian Irina", "runtime": "sherpa-onnx==1.13.2", "revision": "tts-models/vits-piper-ru_RU-irina-medium-int8",
-    "stages": ["tts"], "languages": ["ru"], "backend": ["cpu", "cuda"], "speaker": false,
-    "size_bytes": 21149417, "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-ru_RU-irina-medium-int8.tar.bz2", "archive_sha256": "b0000a509f7551a80742eed5c43b8eb03f469cb9f0a42f6feee96ce0da0ebab8",
-    "directory": "vits-piper-ru_RU-irina-medium-int8", "files": ["ru_RU-irina-medium.onnx", "tokens.txt", "espeak-ng-data"], "kind": "tts"
+    "id": "hy-mt2-1.8b-q4km", "name": "Tencent Hy-MT2 1.8B", "runtime": "llama-cpp-python", "revision": "llama-models/2025-08",
+    "stages": ["translation"], "languages": ["all"], "backend": ["cpu", "cuda", "metal"], "speaker": false,
+    "size_bytes": 1133080448, "url": "https://huggingface.co/tencent/Hy-MT2-1.8B-GGUF/resolve/main/Hy-MT2-1.8B-Q4_K_M.gguf",
+    "files": ["Hy-MT2-1.8B-Q4_K_M.gguf"], "kind": "llama-translation",
+    "context_size": 4096, "speed": 4, "quality": 4, "tier": "fast"
   }
 ]

@@ -1,4 +1,4 @@
-"""Focused storage responsibility component."""
+"""聚焦存储职责的组件。"""
 
 import json
 

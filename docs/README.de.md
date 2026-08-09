@@ -33,7 +33,7 @@ Oeffnen, Aufnahme starten, Untertitel zusehen. Brevia erfasst Mikrofon und Syste
 
 Brevia transkribiert Sprache in mehr als 30 Sprachen — Englisch, Chinesisch, Japanisch, Koreanisch, Franzoesisch, Deutsch, Spanisch, Russisch, Arabisch, Thai, Vietnamesisch, Indonesisch und mehr. Nach Ende des Meetings verbindest du einen beliebigen LLM-Anbieter, und Brevia entwirft in einem Durchgang die Zusammenfassung, wichtigen Entscheidungen und To-dos.
 
-Jeder Anbieter, der das Chat-Format von OpenAI, Anthropic oder Ollama spricht, funktioniert — auch lokale Ollama-Deployments. Es wird nur Text gesendet, niemals Audio.
+Die integrierte KI fuehrt ein mitgeliefertes Modell auf dem eigenen Rechner aus. Alternativ lassen sich Claude, OpenAI, OpenRouter oder jeder Dienst anbinden, der das Chat-Format von OpenAI oder Anthropic spricht. Es wird nur Text gesendet, niemals Audio.
 
 ![Mehrsprachige Unterstuetzung und KI-Notizen](assets/tour/en/%E5%A4%9A%E8%AF%AD%E8%A8%80%E6%94%AF%E6%8C%81%E4%B8%8E%E4%BC%9A%E8%AE%AE%E7%BA%AA%E8%A6%81.png)
 
@@ -98,7 +98,7 @@ Brevia folgt einem strikt local-first Design:
 | Backend | Python 3.10+, JSONL-Worker-Protokoll, SQLite-Speicher |
 | Sprach-Engine | [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 1.13.2, ONNX Runtime |
 | Sprecherverarbeitung | Pyannote-Segmentierung + 3D-Speaker- / NeMo-Titanet- / CAM++-Embeddings |
-| LLM-Client | OpenAI- / Anthropic- / Ollama-kompatible Chat-APIs |
+| LLM-Client | Integriertes llama.cpp (GGUF) sowie OpenAI- / Anthropic-kompatible Chat-APIs |
 | Audio-I/O | ffmpeg (in Releases enthalten) |
 | Build & Paketierung | electron-builder, PyInstaller (Python-Runtime gebundelt) |
 ## Unterstuetzte Modelle
@@ -117,7 +117,7 @@ Jedes Modell wird bei Bedarf aus **Einstellungen → Modellbibliothek** herunter
 | Quellentrennung | Spleeter 2 Stems | Universell |
 | Sprachsynthese | ZipVoice (zh + en), VITS Piper (fr / de / es / ru), VITS Mimic3 (ko) | Mehrsprachig |
 
-Fuer LLM-Zusammenfassungen und Uebersetzungen funktioniert jeder Anbieter, der OpenAI Chat Completions, Anthropic Messages oder Ollama Chat spricht — OpenAI, Claude, Gemini (OpenAI-kompatibler Endpoint), DeepSeek, Kimi, Qwen, Ollama und mehr.
+Fuer LLM-Zusammenfassungen waehlen Sie **Integrierte KI**, um ein mitgeliefertes GGUF-Modell lokal auszufuehren (Qwen 3.5 2B / 4B, Gemma 3 1B / 4B), oder verweisen Brevia auf Claude, OpenAI, OpenRouter bzw. einen eigenen Dienst, der OpenAI Chat Completions oder Anthropic Messages spricht — Gemini (OpenAI-kompatibler Endpoint), DeepSeek, Kimi, Qwen und mehr.
 
 ## Lokale Entwicklung
 

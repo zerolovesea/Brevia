@@ -1,4 +1,4 @@
-"""为当前平台构建自包含的后端 Worker。"""
+"""为当前平台构建自包含的 llama 侧车进程。"""
 
 import os
 from pathlib import Path
@@ -21,7 +21,7 @@ PyInstaller.__main__.run(
         "--clean",
         "--onedir",
         "--name",
-        "brevia-worker",
+        "brevia-llama-helper",
         "--paths",
         str(ROOT),
         "--distpath",
@@ -31,21 +31,11 @@ PyInstaller.__main__.run(
         "--specpath",
         str(BACKEND / "build"),
         "--collect-binaries",
-        "sherpa_onnx",
+        "llama_cpp",
         "--collect-data",
-        "sherpa_onnx",
-        "--collect-data",
-        "certifi",
-        "--exclude-module",
-        "onnxruntime",
-        "--add-data",
-        resource("settings.json"),
-        "--add-data",
-        resource("models.json"),
-        "--add-data",
-        resource("examples.json"),
-        "--add-data",
-        resource("fixtures", "backend/fixtures"),
-        str(BACKEND / "worker_entry.py"),
+        "llama_cpp",
+        "--hidden-import",
+        "llama_cpp",
+        str(BACKEND / "llama_sidecar.py"),
     ]
 )

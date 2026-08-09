@@ -41,6 +41,8 @@ jobs:
       - run: npm test
       - name: Bundle Python runtime and dependencies
         run: python backend/pack_worker.py
+      - name: Bundle llama sidecar
+        run: python backend/pack_llama_sidecar.py
       - name: Configure Apple signing and notarization
         if: matrix.os == 'macos-14'
         shell: bash

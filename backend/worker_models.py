@@ -1,4 +1,4 @@
-"""Focused worker responsibility component."""
+"""聚焦的 worker 职责组件。"""
 
 import threading
 import time
@@ -59,16 +59,20 @@ class ModelTaskWorkerMixin:
         return {"model_id": model_id, "status": "cancelling"}
 
     def begin_task(self, task, meeting_id):
+        """开始一个任务并返回其控制事件。"""
         return self.tasks.begin(task, meeting_id)
 
     def wait_task(self, control):
+        """等待任务控制事件解除暂停。"""
         while control.is_set():
             time.sleep(0.1)
 
     def finish_task(self, task, meeting_id, control=None):
+        """结束任务并释放其控制记录。"""
         self.tasks.finish(task, meeting_id, control)
 
     def set_task_pause(self, payload, paused):
+        """设置任务暂停状态并发布状态事件。"""
         require(payload, "task", "meeting_id")
         key = (payload["task"], payload["meeting_id"])
         self.tasks.set_paused(*key, paused)
@@ -79,9 +83,11 @@ class ModelTaskWorkerMixin:
         return {"task": key[0], "meeting_id": key[1], "status": status}
 
     def pause_task(self, payload):
+        """暂停长时运行任务。"""
         return self.set_task_pause(payload, True)
 
     def resume_task(self, payload):
+        """恢复暂停的任务。"""
         return self.set_task_pause(payload, False)
 
     def _download_model(self, model_id, control, china_source=False):

@@ -1,7 +1,16 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 const invoke = (channel) => (payload = {}) => ipcRenderer.invoke(channel, payload);
-const listeners = new Map();
+
+// 单一共享分发器：一个 ipcRenderer 监听器将事件分发到每种类型的处理器集合
+// 这避免了每次 window.brevia.on() 调用时累积新的 'brevia:event' 监听器
+// （这会在重新渲染时触发 MaxListenersExceededWarning）
+const handlersByType = new Map();
+ipcRenderer.on('brevia:event', (_, event) => {
+  const handlers = handlersByType.get(event.type);
+  if (!handlers) return;
+  for (const handler of [...handlers]) handler(event.payload);
+});
 
 contextBridge.exposeInMainWorld('brevia', {
   initialize: invoke('app.initialize'),
@@ -14,6 +23,7 @@ contextBridge.exposeInMainWorld('brevia', {
     import: invoke('meeting.import'),
     audio: invoke('meeting.audio'),
     pause: invoke('meeting.pause'),
+    reconfigure: invoke('meeting.reconfigure'),
     stop: invoke('meeting.stop'),
     list: invoke('meeting.list'),
     get: invoke('meeting.get'),
@@ -70,14 +80,17 @@ contextBridge.exposeInMainWorld('brevia', {
     return () => ipcRenderer.removeListener('floating-caption:update', listener);
   },
   on(type, handler) {
-    const listener = (_, event) => {
-      if (event.type === type) handler(event.payload);
-    };
-    listeners.set(handler, listener);
-    ipcRenderer.on('brevia:event', listener);
+    let handlers = handlersByType.get(type);
+    if (!handlers) {
+      handlers = new Set();
+      handlersByType.set(type, handlers);
+    }
+    handlers.add(handler);
     return () => {
-      ipcRenderer.removeListener('brevia:event', listener);
-      listeners.delete(handler);
+      const set = handlersByType.get(type);
+      if (!set) return;
+      set.delete(handler);
+      if (set.size === 0) handlersByType.delete(type);
     };
   },
 });
