@@ -20,6 +20,7 @@ from .llm_client import complete
 from .storage import Store
 from .transcript import parse_json_object, validate_summary
 from .worker import Worker, install_global_error_handlers, main
+from .worker_core import WorkerCore
 from .worker_llama_sidecar import _Sidecar
 
 
@@ -32,6 +33,23 @@ class WorkerTest(unittest.TestCase):
 
     def tearDown(self):
         self.temp.cleanup()
+
+    def test_worker_protocol_is_safe_on_gbk_stdout(self):
+        class GbkStdout:
+            def __init__(self):
+                self.value = ""
+
+            def write(self, value):
+                value.encode("gbk")
+                self.value += value
+
+            def flush(self):
+                pass
+
+        output = GbkStdout()
+        with patch("sys.stdout", output):
+            WorkerCore._write_stdout({"title": "예시"})
+        self.assertEqual(json.loads(output.value), {"title": "예시"})
 
     def test_wav_duration_is_checked_before_loading_audio(self):
         path = Path(self.temp.name) / "long.wav"

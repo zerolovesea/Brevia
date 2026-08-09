@@ -1,4 +1,4 @@
-const { app, BrowserWindow, desktopCapturer, dialog, ipcMain, screen, session, shell, systemPreferences } = require('electron');
+const { app, BrowserWindow, desktopCapturer, dialog, ipcMain, Menu, screen, session, shell, systemPreferences } = require('electron');
 const { execFile, spawn } = require('node:child_process');
 const { appendFile, copyFile, mkdir, readFile, rename, rm, writeFile } = require('node:fs/promises');
 const { existsSync } = require('node:fs');
@@ -967,6 +967,7 @@ function closeFloatingCaption() {
 }
 
 app.whenReady().then(async () => {
+  if (process.platform === 'win32') Menu.setApplicationMenu(null);
   await migrateDataDir().catch((error) => writeLog('WARNING', `data migration: ${logText(error)}`));
   session.defaultSession.setPermissionCheckHandler((_, permission) => permission === 'media' || permission === 'display-capture');
   session.defaultSession.setPermissionRequestHandler((_, permission, callback) => callback(permission === 'media' || permission === 'display-capture'));

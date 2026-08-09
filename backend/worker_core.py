@@ -65,7 +65,7 @@ class WorkerCore:
     def _write_stdout(value):
         """将 JSON 写入 stdout，忽略管道断开。"""
         try:
-            print(json.dumps(value, ensure_ascii=False), flush=True)
+            print(json.dumps(value), flush=True)
         except BrokenPipeError:
             pass
 
