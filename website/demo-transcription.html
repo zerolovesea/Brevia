@@ -4,214 +4,39 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light" />
-    <title>实时转录演示</title>
-    <link rel="stylesheet" href="./styles.css" />
+    <title>实时转录翻译演示</title>
+    <link rel="stylesheet" href="../frontend/styles.css" />
+    <link rel="stylesheet" href="./demo-shared.css" />
     <style>
+      html,
       body {
+        height: 100%;
         margin: 0;
         padding: 0;
-        overflow: hidden;
         background: #fff;
-      }
-
-      .demo-wrapper {
-        width: 100%;
-        height: 100%;
-        background: #fff;
-        overflow: hidden;
-        position: relative;
-      }
-
-      .app-shell {
-        width: 1440px;
-        height: 900px;
-        transform-origin: top left;
-        position: absolute;
-        top: 0;
-        left: 0;
-      }
-
-      /* 确保实时字幕可见 */
-      #live-view.active {
-        display: grid;
-      }
-
-      .live-layout {
-        display: grid;
-      }
-
-      .transcript-scroll {
-        overflow-y: auto;
       }
     </style>
   </head>
-  <body>
-    <div class="demo-wrapper">
-      <main class="app-shell" aria-live="polite">
-        <aside class="sidebar" aria-label="主导航">
-          <button class="brand" aria-label="言录首页">
-            <img src="./assets/brevia-logo.svg" alt="brevia" />
-          </button>
-          <button class="new-meeting"><span>+</span> 开始会议</button>
-          <nav>
-            <button class="nav-item"><span>⌂</span> 所有会议</button>
-            <button class="nav-item"><span>◷</span> 最近删除</button>
-            <button class="nav-item"><span>⚙</span> 设置</button>
-          </nav>
-        </aside>
+  <body data-demo="transcription">
+    <div class="demo-container">
+      <div class="demo-viewport" id="demo-viewport">
+        <!-- Virtual cursor -->
+        <div class="virtual-cursor" id="virtual-cursor">
+          <svg class="cursor-arrow" viewBox="0 0 24 24">
+            <path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z" fill="currentColor" />
+          </svg>
+          <div class="cursor-ripple" id="cursor-ripple"></div>
+        </div>
 
-        <section class="workspace">
-          <header class="window-bar">
-            <div class="traffic"><i></i><i></i><i></i></div>
-            <span id="crumb">实时会议</span>
-            <div class="window-actions">
-              <button class="icon-button" aria-label="切换主题">◐</button>
-            </div>
-          </header>
-
-          <section class="view active" id="live-view">
-            <header class="live-header">
-              <div class="live-title">
-                <strong>产品评审会议</strong>
-                <span class="recording"><i></i> 正在录制</span>
-              </div>
-              <time id="timer">00:08:42</time>
-              <button class="pause-button">Ⅱ 暂停</button>
-              <button class="end-button">结束会议</button>
-            </header>
-
-            <div class="live-layout">
-              <section class="transcript" aria-label="实时字幕">
-                <div class="section-heading">
-                  <div class="current-caption">
-                    <p class="eyebrow">实时字幕</p>
-                    <h1 id="live-caption" aria-live="polite">The new AI transcription features are on track for release.</h1>
-                    <p class="live-caption-translation">新的AI转录功能按计划将要发布。</p>
-                  </div>
-                  <div class="caption-controls">
-                    <button class="translation-toggle" data-enabled="true">译文: 开</button>
-                  </div>
-                </div>
-
-                <div class="transcript-scroll" id="transcript-scroll">
-                  <article class="segment">
-                    <div class="segment-meta">
-                      <time>00:07:28</time>
-                      <b>Sarah Kim</b>
-                    </div>
-                    <div class="segment-copy">
-                      <p>Let me walk you through the Q2 roadmap updates.</p>
-                      <p class="translation">让我向大家介绍第二季度路线图的更新。</p>
-                    </div>
-                  </article>
-
-                  <article class="segment">
-                    <div class="segment-meta">
-                      <time>00:07:45</time>
-                      <b>Sarah Kim</b>
-                    </div>
-                    <div class="segment-copy">
-                      <p>We've made significant progress on the real-time transcription engine.</p>
-                      <p class="translation">我们在实时转录引擎方面取得了重大进展。</p>
-                    </div>
-                  </article>
-
-                  <article class="segment">
-                    <div class="segment-meta">
-                      <time>00:08:12</time>
-                      <b>Alex Chen</b>
-                    </div>
-                    <div class="segment-copy">
-                      <p>That's great. What about the multilingual support?</p>
-                      <p class="translation">太好了。多语言支持方面呢？</p>
-                    </div>
-                  </article>
-
-                  <article class="segment is-active">
-                    <div class="segment-meta">
-                      <time>00:08:35</time>
-                      <b>Sarah Kim</b>
-                    </div>
-                    <div class="segment-copy">
-                      <p>The new AI transcription features are on track for release.</p>
-                      <p class="translation">新的AI转录功能按计划将要发布。</p>
-                    </div>
-                  </article>
-                </div>
-              </section>
-
-              <aside class="live-panel">
-                <section>
-                  <p class="eyebrow">参与者</p>
-                  <div class="participants-list">
-                    <article class="person">
-                      <div class="avatar blue">SK</div>
-                      <span>
-                        <b>Sarah Kim</b>
-                        <small>产品经理</small>
-                      </span>
-                    </article>
-                    <article class="person">
-                      <div class="avatar gray">AC</div>
-                      <span>
-                        <b>Alex Chen</b>
-                        <small>工程师</small>
-                      </span>
-                    </article>
-                  </div>
-                </section>
-
-                <section>
-                  <p class="eyebrow">会议设置</p>
-                  <div class="live-settings">
-                    <div class="config-select-field">
-                      <label>会议语言</label>
-                      <div class="flow-select">
-                        <button class="flow-select-toggle" type="button">English</button>
-                      </div>
-                    </div>
-                    <div class="config-select-field">
-                      <label>译文语言</label>
-                      <div class="flow-select">
-                        <button class="flow-select-toggle" type="button">中文</button>
-                      </div>
-                    </div>
-                  </div>
-                </section>
-              </aside>
-            </div>
-          </section>
-        </section>
-      </main>
+        <!-- Product UI is injected + animated here -->
+        <div id="demo-content"></div>
+      </div>
     </div>
 
-    <script>
-      // Auto-scale to fit container
-      function scaleDemo() {
-        const wrapper = document.querySelector('.demo-wrapper');
-        const shell = document.querySelector('.app-shell');
-
-        if (!wrapper || !shell) return;
-
-        const wrapperRect = wrapper.getBoundingClientRect();
-        const scaleX = wrapperRect.width / 1440;
-        const scaleY = wrapperRect.height / 900;
-        const scale = Math.min(scaleX, scaleY, 1);
-
-        shell.style.transform = `scale(${scale})`;
-
-        // Center the scaled content
-        const scaledWidth = 1440 * scale;
-        const scaledHeight = 900 * scale;
-        shell.style.left = `${(wrapperRect.width - scaledWidth) / 2}px`;
-        shell.style.top = `${(wrapperRect.height - scaledHeight) / 2}px`;
-      }
-
-      window.addEventListener('load', scaleDemo);
-      window.addEventListener('resize', scaleDemo);
-
-      // Initial call
-      scaleDemo();
-    </script>
+    <script src="./demo-engine.js"></script>
+    <script src="./demo-timeline.js"></script>
+    <script src="./demo-scenarios-v3-part1.js"></script>
+    <script src="./demo-scenarios-v3-part2.js"></script>
+    <script src="./demo-single.js"></script>
   </body>
 </html>

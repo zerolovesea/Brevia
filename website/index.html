@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Brevia — Local-first AI Meeting Assistant</title>
+    <meta
+      name="description"
+      content="Brevia is a desktop AI meeting assistant. Live transcription, multilingual notes, and speaker identification — no audio leaves your device."
+    />
+    <link rel="icon" href="../docs/assets/brevia-mark.svg" />
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        background: #fff;
+        color: #000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+      }
+      .loader {
+        text-align: center;
+      }
+      .loader h1 {
+        font-size: 24px;
+        font-weight: 300;
+        margin: 0 0 16px;
+        letter-spacing: -0.02em;
+      }
+      .loader p {
+        font-size: 14px;
+        color: #666;
+        margin: 0;
+      }
+      .loader a {
+        color: #0066ff;
+        text-decoration: none;
+      }
+      .loader a:hover {
+        text-decoration: underline;
+      }
+    </style>
+    <script>
+      (function () {
+        // Check if user has already selected a language this session
+        const selected = sessionStorage.getItem('lang-selected');
+        if (selected) {
+          window.location.href = selected === 'zh' ? './index-zh.html' : './index-en.html';
+          return;
+        }
+
+        // Detect browser language
+        const userLang = navigator.language || navigator.userLanguage || 'en';
+        const isZh = userLang.toLowerCase().startsWith('zh');
+
+        // Redirect to appropriate language version
+        window.location.href = isZh ? './index-zh.html' : './index-en.html';
+      })();
+    </script>
+  </head>
+  <body>
+    <div class="loader">
+      <h1>Brevia</h1>
+      <p>Redirecting...</p>
+      <p style="margin-top: 24px;">
+        <a href="./index-en.html">English</a> · <a href="./index-zh.html">中文</a>
+      </p>
+    </div>
+  </body>
+</html>

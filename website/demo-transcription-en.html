@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light" />
-    <title>AI 会议纪要演示</title>
+    <title>Live Transcription Demo</title>
     <link rel="stylesheet" href="../frontend/styles.css" />
     <link rel="stylesheet" href="./demo-shared.css" />
     <style>
@@ -17,7 +17,7 @@
       }
     </style>
   </head>
-  <body data-demo="summary">
+  <body data-demo="transcription" data-lang="en">
     <div class="demo-container">
       <div class="demo-viewport" id="demo-viewport">
         <!-- Virtual cursor -->
@@ -37,6 +37,7 @@
     <script src="./demo-timeline.js"></script>
     <script src="./demo-scenarios-v3-part1.js"></script>
     <script src="./demo-scenarios-v3-part2.js"></script>
+    <script src="./demo-i18n-en.js"></script>
     <script src="./demo-single.js"></script>
   </body>
 </html>

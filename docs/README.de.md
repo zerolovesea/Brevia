@@ -21,6 +21,8 @@ Brevia ist ein Desktop-KI-Meeting-Assistent, der den zeitaufwendigsten Teil jede
 
 Das Design ist bewusst zurueckhaltend: eine Oberflaeche, die das Meeting nicht stoert, ein Funktionsumfang, der einem klaren Bogen folgt — **erfassen → verstehen → wiederfinden** — und eine feste Regel: Was lokal moeglich ist, geschieht auch lokal.
 
+<p align="center"><img src="assets/demo/transcription-en.gif" width="820" alt="Brevia Demo: Live-Transkription und -Uebersetzung" /></p>
+
 ## Funktionen
 
 ### Eine ruhige Meeting-Oberflaeche mit Live-Transkription und -Uebersetzung

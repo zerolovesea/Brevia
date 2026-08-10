@@ -21,6 +21,8 @@ Brevia est un assistant de reunion IA pour ordinateur de bureau qui delegue a l'
 
 Le design est deliberement discret : une interface qui ne gene pas la reunion, un ensemble de fonctionnalites qui suit un seul arc — **capturer → comprendre → retrouver** — et une regle ferme : ce qui peut se faire en local doit se faire en local.
 
+<p align="center"><img src="assets/demo/transcription-en.gif" width="820" alt="Demo de transcription et traduction en direct de Brevia" /></p>
+
 ## Fonctionnalites
 
 ### Un ecran de reunion discret avec transcription et traduction en direct

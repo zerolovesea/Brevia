@@ -122,27 +122,45 @@
 
     currentDemo = demoConfig.name;
 
-    // Setup UI
     const content = document.getElementById('demo-content');
-    content.innerHTML = demoConfig.setupUI();
-
-    // Calculate scale to fit viewport
     const viewport = document.getElementById('demo-viewport');
-    const appShell = content.querySelector('.app-shell');
-    if (appShell) {
-      const scale = calculateScale(viewport, appShell);
-      appShell.style.transform = `scale(${scale})`;
-      appShell.style.transformOrigin = 'top left';
-    }
 
-    // Load timeline steps
-    timeline.setSteps(demoConfig.steps);
+    // Fade out → swap content → fade in
+    content.classList.add('fading-out');
 
-    // Reset and start
-    engine.reset();
     setTimeout(() => {
-      timeline.run();
-    }, 300);
+      content.innerHTML = demoConfig.setupUI();
+
+      // Scale to fit
+      const appShell = content.querySelector('.app-shell');
+      if (appShell) {
+        const scale = calculateScale(viewport, appShell);
+        appShell.style.transform = `scale(${scale})`;
+        appShell.style.transformOrigin = 'top left';
+      }
+
+      content.classList.remove('fading-out');
+      content.classList.add('fading-in');
+
+      // Trigger fade-in on next frame
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          content.classList.add('visible');
+        });
+      });
+
+      // Clean up classes after transition
+      setTimeout(() => {
+        content.classList.remove('fading-in', 'visible');
+      }, 350);
+
+      // Load timeline steps and start
+      timeline.setSteps(demoConfig.steps);
+      engine.reset();
+      setTimeout(() => {
+        timeline.run();
+      }, 300);
+    }, 250);
   }
 
   function calculateScale(viewport, content) {

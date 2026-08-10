@@ -297,6 +297,102 @@ class DemoScenariosV3 {
     return html;
   }
 
+  /**
+   * Demo 2: 会议纪要展示
+   */
+  getSummaryDemo() {
+    return {
+      name: 'summary',
+      setupUI: () => this.setupSummaryUI(),
+      steps: [
+        { action: 'wait', duration: 800 },
+
+        // 移动到会议列表中的某个会议
+        {
+          action: 'moveCursor',
+          target: '.meeting-row:first-child',
+          duration: 1200,
+          delay: 400
+        },
+        { action: 'hover', duration: 400 },
+        { action: 'click', duration: 300 },
+
+        // 切换到详情视图
+        {
+          action: 'setState',
+          handler: () => this.showSummaryDetail(),
+          delay: 300
+        },
+
+        { action: 'wait', duration: 1200 },
+
+        // 移动到右侧纪要面板
+        {
+          action: 'moveCursor',
+          target: '.notes',
+          duration: 800,
+          delay: 400
+        },
+
+        { action: 'wait', duration: 1000 },
+
+        // 移动到"查看完整内容"按钮
+        {
+          action: 'moveCursor',
+          target: '[data-demo-id="view-full-summary"]',
+          duration: 600,
+          delay: 400
+        },
+        { action: 'hover', duration: 400 },
+        { action: 'click', duration: 300 },
+
+        // 弹出完整纪要弹窗
+        {
+          action: 'setState',
+          handler: () => this.openSummaryModal(),
+          delay: 300
+        },
+
+        { action: 'wait', duration: 1200 },
+
+        // 滚动浏览完整内容
+        {
+          action: 'scrollToBottom',
+          target: '[data-demo-id="summary-modal-body"]',
+          duration: 6000,
+          delay: 200
+        },
+
+        { action: 'wait', duration: 2000 }
+      ]
+    };
+  }
+
+  /**
+   * Demo 3: 声纹识别展示
+   */
+  getVoiceprintDemo() {
+    const segments = [
+      { time: '00:14:12', provisional: '说话人 1', speaker: '张伟', text: '大家好，我们开始今天的周会吧。' },
+      { time: '00:14:28', provisional: '说话人 2', speaker: '李娜', text: '好的，我先汇报一下我这边的工作进展。' },
+      { time: '00:14:45', provisional: '说话人 3', speaker: '王强', text: '上周遇到的技术问题已经解决了。' },
+      { time: '00:15:18', provisional: '说话人 2', speaker: '李娜', text: '我这边的进度已经完成了百分之八十。' }
+    ];
+
+    return {
+      name: 'voiceprint',
+      setupUI: () => this.setupVoiceprintUI(),
+      steps: [
+        { action: 'wait', duration: 800 },
+
+        // 显示声纹识别的转录内容
+        ...this.generateVoiceprintSegmentSteps(segments),
+
+        { action: 'wait', duration: 2000 }
+      ]
+    };
+  }
+
   // 继续在下一个文件中...
 }
 

@@ -21,6 +21,8 @@ Brevia es un asistente de reuniones con IA para escritorio que delega en la IA l
 
 El diseño es deliberadamente silencioso: una interfaz que no estorba a la reunión, un conjunto de funciones que sigue un solo arco — **capturar → entender → recuperar** — y una regla firme: lo que puede hacerse en local, se hace en local.
 
+<p align="center"><img src="assets/demo/transcription-en.gif" width="820" alt="Demostración de transcripción y traducción en vivo de Brevia" /></p>
+
 ## Funcionalidades
 
 ### Pantalla de reunión silenciosa con transcripción y traducción en vivo

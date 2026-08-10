@@ -99,6 +99,56 @@
         animation: text-appear 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
       }
 
+      /* Voiceprint speaker switch highlight */
+      .speaker-name {
+        display: inline-block;
+        transform-origin: left center;
+        transition: color 0.3s ease;
+      }
+
+      .speaker-name.provisional {
+        color: #999;
+      }
+
+      @keyframes speaker-resolve {
+        0% {
+          transform: scale(1);
+          color: #999;
+        }
+        40% {
+          transform: scale(1.35);
+          color: #000;
+        }
+        100% {
+          transform: scale(1);
+          color: #000;
+        }
+      }
+
+      .speaker-name.resolving {
+        animation: speaker-resolve 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        font-weight: 600;
+      }
+
+      /* Demo content fade transition */
+      #demo-content {
+        position: relative;
+      }
+
+      #demo-content.fading-out {
+        opacity: 0;
+        transition: opacity 0.25s ease;
+      }
+
+      #demo-content.fading-in {
+        opacity: 0;
+      }
+
+      #demo-content.fading-in.visible {
+        opacity: 1;
+        transition: opacity 0.3s ease;
+      }
+
       /* Demo controls */
       .demo-controls {
         padding: 20px;
@@ -129,6 +179,30 @@
       /* Visibility control */
       [data-demo-hidden="true"] {
         display: none !important;
+      }
+
+      /* Demo panel layout fixes — prevent overlap when scaled */
+      .demo-viewport .live-panel {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 24px;
+        overflow-y: auto !important;
+        grid-template-rows: none !important;
+      }
+
+      .demo-viewport .live-panel > section {
+        flex: 0 0 auto;
+      }
+
+      .demo-viewport .live-settings {
+        display: grid !important;
+        gap: 12px;
+      }
+
+      .demo-viewport .tts-selects {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
       }
 
       /* Performance optimization */
