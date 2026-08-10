@@ -319,7 +319,7 @@ DemoScenariosV3.prototype.fillMeetingTitle = function(title) {
   const input = this.engine.viewport.querySelector('[data-demo-id="meeting-title"]');
   if (input) {
     input.value = title;
-    input.focus();
+    input.focus({ preventScroll: true });
   }
 };
 

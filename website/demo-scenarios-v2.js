@@ -514,7 +514,7 @@ class DemoScenariosV2 {
     const input = this.engine.viewport.querySelector('[data-demo-id="meeting-title-input"]');
     if (input) {
       input.value = title;
-      input.focus();
+      input.focus({ preventScroll: true });
     }
   }
 

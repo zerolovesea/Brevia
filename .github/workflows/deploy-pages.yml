@@ -1,0 +1,42 @@
+name: Deploy website to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'website/**'
+      - 'frontend/**'
+      - 'docs/assets/**'
+      - '.github/workflows/deploy-pages.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assemble static site
+        run: |
+          mkdir site
+          rsync -a --exclude='.DS_Store' website/ site/
+          rsync -a frontend/ site/frontend/
+          rsync -a docs/assets/ site/docs/assets/
+          sed -i 's#\.\./frontend/#./frontend/#g; s#\.\./docs/assets/#./docs/assets/#g' site/*.html
+          printf 'brevia.work\n' > site/CNAME
+          touch site/.nojekyll
+      - name: Publish
+        run: |
+          cd site
+          git init -b gh-pages
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add .
+          git commit -m "Deploy website"
+          git remote add origin "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+          git push --force origin gh-pages

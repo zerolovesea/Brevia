@@ -10,6 +10,7 @@
       content="言录是桌面 AI 会议助手。实时转录、多语言笔记和说话人识别 — 音频不会离开您的设备。"
     />
     <link rel="icon" href="../docs/assets/brevia-mark.svg" />
+    <script defer src="./release-downloads.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -106,6 +107,41 @@
         border: 0;
         transform: scale(var(--demo-scale, 1));
         transform-origin: top left;
+      }
+      .feature-rail {
+        display: grid;
+        gap: 1.5rem;
+        overflow: hidden;
+      }
+      .feature-track {
+        display: flex;
+        gap: 1.5rem;
+        width: max-content;
+        animation: feature-scroll 42s linear infinite;
+      }
+      .feature-track.reverse {
+        animation-direction: reverse;
+      }
+      .feature-rail:hover .feature-track,
+      .feature-rail:focus-within .feature-track {
+        animation-play-state: paused;
+      }
+      .feature-card {
+        flex: 0 0 min(360px, 86vw);
+        min-height: 230px;
+      }
+      @keyframes feature-scroll {
+        to {
+          transform: translateX(-50%);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .feature-rail {
+          overflow-x: auto;
+        }
+        .feature-track {
+          animation: none;
+        }
       }
       /* Accordion */
       .faq-item summary {
@@ -288,7 +324,7 @@
               <iframe
                 class="demo-frame"
                 src="./demo-voiceprint.html"
-                loading="lazy"
+                loading="eager"
                 title="声纹识别演示"
               ></iframe>
             </div>
@@ -306,38 +342,58 @@
             精选本地模型与实用工具，让会议记录的每一步都更完整。按语言和精度自由搭配，所有处理都在音频所在的设备上完成。
           </p>
         </div>
-        <div class="grid grid-cols-12 gap-6">
-          <article class="reveal col-span-12 border border-line2 p-8 transition-colors duration-300 hover:border-ink md:col-span-7 md:p-10">
+        <div class="feature-rail reveal">
+          <article class="feature-card border border-line2 p-8 transition-colors duration-300 hover:border-ink">
             <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">模型库</span>
             <p class="display mt-5 text-[40px] font-light text-ink">27+</p>
             <p class="measure mt-3 max-w-[420px] text-[15px] text-slate">
               可下载的模型涵盖流式 ASR、离线精修、标点恢复、语音活动检测、说话人分离、说话人嵌入、语音合成和音源分离。
             </p>
           </article>
-          <article class="reveal col-span-12 border border-line2 p-8 transition-colors duration-300 hover:border-ink md:col-span-5 md:p-10" style="--reveal-delay: 80ms">
+          <article class="feature-card border border-line2 p-8 transition-colors duration-300 hover:border-ink">
             <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">语言</span>
             <p class="display mt-5 text-[40px] font-light text-ink">30+</p>
             <p class="measure mt-3 text-[15px] text-slate">
               支持英语、中文、日语、韩语、法语、德语、西班牙语、俄语、阿拉伯语、泰语、越南语等 30+ 种语言的转录。
             </p>
           </article>
-          <article class="reveal col-span-12 border border-line2 p-8 transition-colors duration-300 hover:border-ink md:col-span-4 md:p-10" style="--reveal-delay: 120ms">
+          <article class="feature-card border border-line2 p-8 transition-colors duration-300 hover:border-ink">
             <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">TTS 和克隆</span>
             <p class="measure mt-4 text-[15px] text-slate">
               ZipVoice 可根据录入的参考音频合成中文和英文语音；VITS 声音支持德语、法语、西班牙语、俄语和韩语。
             </p>
           </article>
-          <article class="reveal col-span-12 border border-line2 p-8 transition-colors duration-300 hover:border-ink md:col-span-4 md:p-10" style="--reveal-delay: 160ms">
+          <article class="feature-card border border-line2 p-8 transition-colors duration-300 hover:border-ink">
             <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">导入和分离</span>
             <p class="measure mt-4 text-[15px] text-slate">
               导入已有的录音文件进行离线转录。Spleeter 可将音频分离为人声和背景音轨，便于后期处理。
             </p>
           </article>
-          <article class="reveal col-span-12 border border-line2 p-8 transition-colors duration-300 hover:border-ink md:col-span-4 md:p-10" style="--reveal-delay: 200ms">
+          <article class="feature-card border border-line2 p-8 transition-colors duration-300 hover:border-ink">
             <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">丰富的导出</span>
             <p class="measure mt-4 text-[15px] text-slate">
               转录和笔记可导出为 Markdown、TXT、JSON、SRT、DOCX 或 PDF 格式；音频可导出为 FLAC、WAV 或 M4A 格式。
             </p>
+          </article>
+          <article class="feature-card border border-line2 p-8 transition-colors duration-300 hover:border-ink">
+            <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">实时字幕</span>
+            <p class="display mt-5 text-[40px] font-light text-ink">实时</p>
+            <p class="measure mt-3 text-[15px] text-slate">录制开始后，发言会持续转为可读字幕，方便即时跟上每一句讨论。</p>
+          </article>
+          <article class="feature-card border border-line2 p-8 transition-colors duration-300 hover:border-ink">
+            <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">实时翻译</span>
+            <p class="display mt-5 text-[40px] font-light text-ink">双语</p>
+            <p class="measure mt-3 text-[15px] text-slate">在原文字幕旁同步显示译文，让跨语言会议更容易参与和回看。</p>
+          </article>
+          <article class="feature-card border border-line2 p-8 transition-colors duration-300 hover:border-ink">
+            <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">AI 会议纪要</span>
+            <p class="display mt-5 text-[40px] font-light text-ink">提炼</p>
+            <p class="measure mt-3 text-[15px] text-slate">用本地或已连接的大模型，从转录文本中提炼摘要、决策和待办事项。</p>
+          </article>
+          <article class="feature-card border border-line2 p-8 transition-colors duration-300 hover:border-ink">
+            <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">高效处理</span>
+            <p class="display mt-5 text-[40px] font-light text-ink">流式</p>
+            <p class="measure mt-3 text-[15px] text-slate">流式转录与翻译让内容随对话出现，会议结束后无需等待漫长处理。</p>
           </article>
         </div>
       </section>
@@ -409,6 +465,7 @@
           <div class="col-span-12 md:col-span-7">
             <a
               href="https://github.com/zerolovesea/Brevia/releases"
+              data-release-asset=".dmg"
               class="group flex items-center justify-between border border-line2 px-8 py-7 transition-colors duration-300 hover:border-ink"
             >
               <div>
@@ -419,6 +476,7 @@
             </a>
             <a
               href="https://github.com/zerolovesea/Brevia/releases"
+              data-release-asset=".exe"
               class="group mt-4 flex items-center justify-between border border-line2 px-8 py-7 transition-colors duration-300 hover:border-ink"
             >
               <div>
@@ -564,6 +622,24 @@
         canvases.forEach(function (canvas) {
           resize(canvas);
           observer.observe(canvas);
+        });
+      })();
+
+      (function () {
+        var rail = document.querySelector('.feature-rail');
+        if (!rail) return;
+        var tracks = [document.createElement('div'), document.createElement('div')];
+        Array.from(rail.children).forEach(function (card, index) {
+          tracks[index % 2].appendChild(card);
+        });
+        tracks.forEach(function (track, index) {
+          track.className = 'feature-track' + (index ? ' reverse' : '');
+          Array.from(track.children).forEach(function (card) {
+            var copy = card.cloneNode(true);
+            copy.setAttribute('aria-hidden', 'true');
+            track.appendChild(copy);
+          });
+          rail.appendChild(track);
         });
       })();
     </script>
