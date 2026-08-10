@@ -13,6 +13,7 @@ ipcRenderer.on('brevia:event', (_, event) => {
 });
 
 contextBridge.exposeInMainWorld('brevia', {
+  platform: process.platform,
   initialize: invoke('app.initialize'),
   maintain: invoke('app.maintain'),
   appInfo: { version: invoke('app.version') },
@@ -36,6 +37,12 @@ contextBridge.exposeInMainWorld('brevia', {
     export: invoke('meeting.export'),
     exportMany: invoke('meeting.export-many'),
     share: invoke('meeting.share'),
+  },
+  share: {
+    copyText: invoke('share.copy-text'),
+    openExternal: invoke('share.open-external'),
+    file: invoke('share.file'),
+    system: invoke('share.system'),
   },
   speaker: { rename: invoke('speaker.rename') },
   speakerProfile: {

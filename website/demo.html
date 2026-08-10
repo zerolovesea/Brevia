@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light" />
+    <title>Brevia Product Demo</title>
+    <link rel="stylesheet" href="../frontend/styles.css" />
+    <style>
+      /* Demo Container */
+      .demo-container {
+        position: relative;
+        width: 100%;
+        max-width: 1440px;
+        margin: 0 auto;
+        background: #fff;
+        overflow: hidden;
+      }
+
+      .demo-viewport {
+        position: relative;
+        width: 100%;
+        aspect-ratio: 16 / 10;
+        overflow: hidden;
+        border: 1px solid #e5e5e5;
+      }
+
+      /* Virtual Cursor */
+      .virtual-cursor {
+        position: absolute;
+        width: 24px;
+        height: 24px;
+        pointer-events: none;
+        z-index: 9999;
+        transform: translate(-50%, -50%);
+        will-change: transform;
+        transition: none;
+      }
+
+      .cursor-arrow {
+        position: absolute;
+        width: 20px;
+        height: 20px;
+        fill: #000;
+        filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+      }
+
+      .cursor-ripple {
+        position: absolute;
+        width: 40px;
+        height: 40px;
+        border: 2px solid #000;
+        border-radius: 50%;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%) scale(0);
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .cursor-ripple.active {
+        animation: ripple 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
+      @keyframes ripple {
+        0% {
+          transform: translate(-50%, -50%) scale(0.5);
+          opacity: 0.8;
+        }
+        100% {
+          transform: translate(-50%, -50%) scale(1.5);
+          opacity: 0;
+        }
+      }
+
+      /* Demo-specific overrides */
+      .demo-viewport .app-shell {
+        transform-origin: top left;
+        min-height: 100%;
+      }
+
+      .demo-viewport .workspace {
+        padding-bottom: 32px;
+      }
+
+      /* Smooth appearing animations */
+      @keyframes text-appear {
+        from {
+          opacity: 0;
+          transform: translateY(4px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .text-appearing {
+        animation: text-appear 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+      }
+
+      /* Demo controls */
+      .demo-controls {
+        padding: 20px;
+        text-align: center;
+        border-top: 1px solid #e5e5e5;
+        background: #fafafa;
+      }
+
+      .demo-controls button {
+        margin: 0 8px;
+        padding: 10px 20px;
+        border: 1px solid #000;
+        background: #fff;
+        cursor: pointer;
+        font-size: 13px;
+        transition: background 0.2s;
+      }
+
+      .demo-controls button:hover {
+        background: #f5f5f5;
+      }
+
+      .demo-controls button.active {
+        background: #000;
+        color: #fff;
+      }
+
+      /* Visibility control */
+      [data-demo-hidden="true"] {
+        display: none !important;
+      }
+
+      /* Performance optimization */
+      .demo-viewport * {
+        will-change: auto;
+      }
+
+      .demo-animating {
+        will-change: transform, opacity;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="demo-container">
+      <div class="demo-viewport" id="demo-viewport">
+        <!-- Virtual cursor -->
+        <div class="virtual-cursor" id="virtual-cursor">
+          <svg class="cursor-arrow" viewBox="0 0 24 24">
+            <path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z" fill="currentColor"/>
+          </svg>
+          <div class="cursor-ripple" id="cursor-ripple"></div>
+        </div>
+
+        <!-- Product UI will be injected here -->
+        <div id="demo-content"></div>
+      </div>
+
+      <div class="demo-controls">
+        <button id="demo-1" data-demo="transcription">Demo 1: 实时转录翻译</button>
+        <button id="demo-2" data-demo="summary">Demo 2: AI会议纪要</button>
+        <button id="demo-3" data-demo="voiceprint">Demo 3: 声纹识别</button>
+        <button id="demo-restart">重新播放</button>
+        <button id="demo-pause">暂停</button>
+      </div>
+    </div>
+
+    <script src="./demo-engine.js"></script>
+    <script src="./demo-timeline.js"></script>
+    <script src="./demo-scenarios-v3-part1.js"></script>
+    <script src="./demo-scenarios-v3-part2.js"></script>
+    <script src="./demo-main.js"></script>
+  </body>
+</html>

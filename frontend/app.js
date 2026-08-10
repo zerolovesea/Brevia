@@ -90,7 +90,6 @@ let meetingActive = false;
 // 镜像当前会议的实时配置，使实时面板控件能够反映（并驱动）热切换。
 let liveConfig = { language: 'auto', streaming_model_id: '', refined_model_id: '', target_language: null };
 // 此会议打开了哪些捕获轨道；此处不存在的轨道无法实时切换。
-let liveInputs = { mic: true, system: true };
 let translationAllowed = false;
 let latestLiveSegmentId = null;
 let editingMeetingIndex = null;
@@ -120,9 +119,11 @@ const updateButton = updateCard.querySelector('button');
 const updateNotice = document.createElement('aside');
 updateNotice.className = 'software-update-notice';
 updateNotice.hidden = true;
-updateNotice.innerHTML = '<span></span><button type="button"></button>';
+updateNotice.innerHTML = '<span></span><i hidden aria-hidden="true"><b></b></i><button type="button"></button>';
 document.body.append(updateNotice);
 const updateNoticeText = updateNotice.querySelector('span');
+const updateNoticeProgress = updateNotice.querySelector('i');
+const updateNoticeProgressBar = updateNoticeProgress.querySelector('b');
 const updateNoticeButton = updateNotice.querySelector('button');
 let updateAvailable = false;
 let updateVersion = '';
@@ -264,7 +265,17 @@ function syncFloatingNotices() { updateNotice.style.bottom = miniMeeting.hidden 
 function updateCopy() { return updateLabels[locale] || { ...updateLabels.en, title: t('软件更新'), action: t('检查更新') }; }
 function currentVersionLabel() { return ({ zh: '当前版本', en: 'Current version', es: 'Versión actual', ja: '現在のバージョン', ko: '현재 버전', fr: 'Version actuelle', de: 'Aktuelle Version', ru: 'Текущая версия' })[locale] || 'Current version'; }
 function availableUpdateLabel() { return updateVersion ? updateCopy().available.replace('0.2.0', updateVersion) : updateCopy().available; }
-function renderUpdateNotice() { const copy = updateCopy(); updateNoticeText.textContent = availableUpdateLabel(); updateNoticeButton.textContent = copy.floating; updateNotice.hidden = !updateAvailable; requestAnimationFrame(syncFloatingNotices); }
+function renderUpdateNotice() {
+  const copy = updateCopy();
+  const progress = updateDownloadProgress && Math.max(0, Math.min(100, updateDownloadProgress.percent || 0));
+  updateNoticeText.textContent = progress === null ? availableUpdateLabel() : `${copy.downloading || '正在下载'} ${Math.round(progress)}%`;
+  updateNoticeProgress.hidden = progress === null;
+  updateNoticeProgressBar.style.transform = `scaleX(${(progress || 0) / 100})`;
+  updateNoticeButton.textContent = progress === null ? copy.floating : copy.updating;
+  updateNoticeButton.disabled = updateBusy;
+  updateNotice.hidden = !updateAvailable;
+  requestAnimationFrame(syncFloatingNotices);
+}
 /** 根据当前语言环境和可用性状态渲染设置页面的更新操作。@returns {void} */
 function renderUpdateButton() {
   const copy = updateCopy();
@@ -1115,18 +1126,198 @@ function renderSpeakerProfileModal() {
     return `<section class="speaker-profile-entry"><div class="speaker-profile-head"><span>${name}<small>${profile.built_in ? `${t('内置')} · ` : ''}${profile.sample_count}/50 ${copy.samples} · ${formatMeetingTime(profile.duration_ms || 0)} / 05:00</small></span><span><button class="secondary" data-toggle-speaker-samples="${profile.id}" type="button">${expanded ? t('收起') : t('查看录音')}</button><button class="secondary" data-add-speaker-sample="${profile.id}" type="button">${copy.addSample}</button><button class="secondary" data-verify-speaker-profile="${profile.id}" type="button">${voiceCopy.verify}</button>${profile.built_in ? '' : `<button class="model-delete" data-delete-speaker-profile="${profile.id}" type="button">${copy.remove}</button>`}</span></div>${adding ? `<form class="speaker-sample-form" data-speaker-profile="${profile.id}"><label>${voiceCopy.reference}<input name="reference_text" maxlength="500" required autofocus /></label><button class="modal-action" type="submit">${t('选择录音并添加')}</button><button class="secondary" data-cancel-speaker-sample type="button">${t('取消')}</button></form>` : ''}${expanded ? `<div class="speaker-sample-list">${samples.length ? samples.map((sample) => `<article><button class="sample-play" data-play-speaker-sample="${sample.id}" type="button" aria-label="${t('播放录音')}">▶</button><span><b>${escapeHtml(sample.reference_text || t('未填写文本'))}</b><small>${formatMeetingTime(sample.duration_ms || 0)}</small></span>${profile.built_in ? '' : `<button class="model-delete" data-delete-speaker-sample="${sample.id}" data-profile-id="${profile.id}" type="button">${copy.remove}</button>`}</article>`).join('') : `<p>${copy.empty}</p>`}</div>` : ''}</section>`;
   }).join('')}</div>`;
 }
+// 社交平台网页分享入口。本地应用没有可公开访问的会议链接,因此只能携带一小段文本;
+// 各平台按 limit 截断。仅使用有稳定 https web-intent 的平台,微信等无 API 平台走文件分享。
+const shareSocialUrls = {
+  weibo: { limit: 1800, url: (text) => `https://service.weibo.com/share/share.php?title=${encodeURIComponent(text)}` },
+  x: { limit: 260, url: (text) => `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}` },
+  telegram: { limit: 1500, url: (text) => `https://t.me/share/url?url=&text=${encodeURIComponent(text)}` },
+  whatsapp: { limit: 1500, url: (text) => `https://wa.me/?text=${encodeURIComponent(text)}` },
+};
+// 每个分享上下文对应的「导出文件」按钮与「微信/文件分享」所导出的文件类型。
+const shareContexts = {
+  notes: { file: { content: 'notes', format: 'pdf' } },
+  transcript: { file: { content: 'transcript', format: 'md' } },
+  meeting: { file: { kind: 'bundle' } },
+};
+// 把 Markdown 纪要转成便于粘贴的纯文本(去标题井号、加粗、行内代码、列表符与表格竖线)。
+function markdownToPlainText(markdown) {
+  return String(markdown || '')
+    .replace(/\r/g, '')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/^\s*[-*]\s+/gm, '• ')
+    .replace(/^\s*\|(.*)\|\s*$/gm, (_, row) => row.split('|').map((cell) => cell.trim()).filter(Boolean).join(' · '))
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+function shareTranscriptText() {
+  return (uiData.detail.transcript || []).map((row) => `[${row.time}] ${row.speaker.name}: ${row.text}`).join('\n');
+}
+// 完整分享文本:剪贴板与邮件用。逐字稿上下文优先逐字稿,其余优先纪要,互相回退。
+function shareFullText(context) {
+  const markdown = currentMeetingDetail?.summary?.data?.markdown;
+  const notes = markdown ? markdownToPlainText(markdown) : '';
+  const transcript = shareTranscriptText();
+  return context === 'transcript' ? transcript || notes : notes || transcript;
+}
+// 社交平台摘要:标题 + 正文开头,按平台字数上限截断。
+function shareExcerpt(context, limit) {
+  const title = currentMeetingDetail?.title || '';
+  const body = shareFullText(context);
+  const combined = title && body ? `${title}\n\n${body}` : title || body;
+  if (!combined) return '';
+  return combined.length > limit ? `${combined.slice(0, Math.max(1, limit - 1)).trimEnd()}…` : combined;
+}
+// mailto: 正文经 URL 编码后 CJK 字符会膨胀约 9 倍;邮件客户端与主进程都对 URL 长度有上限。
+// 按「编码后长度」而非字符数截断,保证最终 URL 稳定落在安全范围(远低于 8000)。整篇正文
+// 应通过附件或「复制到剪贴板」传递,mailto 只带开头。
+function buildMailto(subject, body, maxEncodedBody = 1600) {
+  let text = body || '';
+  while (text && encodeURIComponent(text).length > maxEncodedBody) {
+    // 每次砍掉约 10%,直到编码后长度达标;CJK 下几次即可收敛。
+    text = text.slice(0, Math.max(1, Math.floor(text.length * 0.9)));
+  }
+  if (text && text.length < (body || '').length) text = `${text.trimEnd()}…`;
+  return `mailto:?subject=${encodeURIComponent(subject || '')}&body=${encodeURIComponent(text)}`;
+}
 function renderExportModal() {
-  const separated = Boolean(currentMeetingDetail?.audio?.playback?.vocals && currentMeetingDetail?.audio?.playback?.accompaniment);
-  settingsModal.querySelector('h2').textContent = t('导出会议');
+  const copy = shareCopy[locale] || shareCopy.en;
+  settingsModal.querySelector('h2').textContent = copy.contexts.transcript;
   settingsModal.querySelector('.modal-title p').textContent = currentMeetingDetail?.title || '';
-  settingsModal.querySelector('.modal-body').innerHTML = `<div class="export-options">
-    <button type="button" data-export-choice data-content="transcript" data-format="md"><span><b>Markdown</b><small>${t('带说话人和时间戳的逐字稿')}</small></span><strong>.md</strong></button>
-    <button type="button" data-export-choice data-content="transcript" data-format="srt"><span><b>${t('字幕文件')}</b><small>${t('标准时间轴字幕')}</small></span><strong>.srt</strong></button>
-    <button type="button" data-export-choice data-content="audio" data-format="wav" data-track="mix"><span><b>${t('原录音')}</b><small>${t('未修改的会议混音')}</small></span><strong>.wav</strong></button>
-    <button type="button" data-export-choice data-content="audio" data-format="wav" data-track="vocals"${separated ? '' : ' disabled'}><span><b>${t('人声轨')}</b><small>${separated ? t('声源分离结果') : t('请先完成声源分离')}</small></span><strong>.wav</strong></button>
-    <button type="button" data-export-choice data-content="audio" data-format="wav" data-track="accompaniment"${separated ? '' : ' disabled'}><span><b>${t('非人声轨')}</b><small>${separated ? t('声源分离结果') : t('请先完成声源分离')}</small></span><strong>.wav</strong></button>
+  settingsModal.querySelector('.modal-body').innerHTML = sharePanelHtml('transcript');
+}
+function renderShareModal() {
+  const copy = shareCopy[locale] || shareCopy.en;
+  settingsModal.querySelector('h2').textContent = copy.contexts.meeting;
+  settingsModal.querySelector('.modal-title p').textContent = currentMeetingDetail?.title || '';
+  settingsModal.querySelector('.modal-body').innerHTML = sharePanelHtml('meeting');
+}
+// 生成分享面板:上半为平台按钮,下半为按上下文变化的导出文件按钮。三处入口共用。
+function sharePanelHtml(context) {
+  const copy = shareCopy[locale] || shareCopy.en;
+  // 系统原生分享面板仅 macOS 提供(NSSharingServicePicker);放在首位,可一键转发到微信等 App。
+  const order = [...(window.brevia?.platform === 'darwin' ? ['system'] : []), 'copy', 'email', 'wechat', 'weibo', 'x', 'telegram', 'whatsapp'];
+  const platforms = order.map((id) => {
+    const [label, desc] = copy.platforms[id];
+    const attrs = id === 'wechat' ? `data-share-file data-context="${context}"` : `data-share-platform="${id}" data-context="${context}"`;
+    return `<button type="button" class="share-platform" ${attrs}><b>${escapeHtml(label)}</b><small>${escapeHtml(desc)}</small></button>`;
+  }).join('');
+  return `<section class="modal-subsection share-section"><h3>${copy.shareTo}</h3><p>${copy.shareHint}</p><div class="share-platforms">${platforms}</div></section>`
+    + `<section class="modal-subsection"><h3>${copy.exportFiles}</h3>${exportOptionsHtml(context)}</section>`;
+}
+// 每个上下文的「导出文件」按钮列表,复用现有 .export-options 样式。
+// 已「瘦身」:只保留分享(复制/邮件/社交)覆盖不到的产物——音频、SRT 字幕、
+// 完整 zip,以及无法用复制粘贴还原的格式化 PDF。纯文本 md/txt 交给复制与邮件。
+function exportOptionsHtml(context) {
+  const copy = shareCopy[locale] || shareCopy.en;
+  if (context === 'notes') {
+    // 纪要的 md/txt 已被复制/邮件覆盖;仅保留归档用的 PDF。
+    return `<div class="export-options"><button type="button" data-share-export data-content="notes" data-format="pdf"><span><b>${escapeHtml(copy.notesPdf[0])}</b><small>${escapeHtml(copy.notesPdf[1])}</small></span><strong>.pdf</strong></button></div>`;
+  }
+  if (context === 'meeting') {
+    const hasNotes = Boolean(currentMeetingDetail?.summary?.data?.markdown);
+    return `<div class="export-options"><button type="button" data-share-export data-kind="bundle" data-format="zip"><span><b>${escapeHtml(copy.bundle[0])}</b><small>${escapeHtml(copy.bundle[1])}</small></span><strong>.zip</strong></button>${hasNotes ? `<button type="button" data-share-export data-content="notes" data-format="pdf"><span><b>${escapeHtml(copy.notesPdf[0])}</b><small>${escapeHtml(copy.notesPdf[1])}</small></span><strong>.pdf</strong></button>` : ''}</div>`;
+  }
+  const separated = Boolean(currentMeetingDetail?.audio?.playback?.vocals && currentMeetingDetail?.audio?.playback?.accompaniment);
+  return `<div class="export-options">
+    <button type="button" data-share-export data-content="transcript" data-format="srt"><span><b>${t('字幕文件')}</b><small>${t('标准时间轴字幕')}</small></span><strong>.srt</strong></button>
+    <button type="button" data-share-export data-content="audio" data-format="wav" data-track="mix"><span><b>${t('原录音')}</b><small>${t('未修改的会议混音')}</small></span><strong>.wav</strong></button>
+    <button type="button" data-share-export data-content="audio" data-format="wav" data-track="vocals"${separated ? '' : ' disabled'}><span><b>${t('人声轨')}</b><small>${separated ? t('声源分离结果') : t('请先完成声源分离')}</small></span><strong>.wav</strong></button>
+    <button type="button" data-share-export data-content="audio" data-format="wav" data-track="accompaniment"${separated ? '' : ' disabled'}><span><b>${t('非人声轨')}</b><small>${separated ? t('声源分离结果') : t('请先完成声源分离')}</small></span><strong>.wav</strong></button>
   </div>`;
 }
+const shareCopy = {
+  zh: {
+    contexts: { transcript: '导出与分享', meeting: '分享会议', notes: '分享会议纪要' },
+    shareTo: '分享到', shareHint: '社交平台仅能携带标题与摘要开头;微信等需先导出文件再手动发送。',
+    exportFiles: '导出文件',
+    platforms: {
+      system: ['分享到…', '用系统面板转发到 AirDrop、微信等'], copy: ['复制到剪贴板', '复制全文,自行粘贴'], email: ['邮件', '用默认邮件客户端发送'],
+      wechat: ['微信', '导出文件并在文件夹中定位'], weibo: ['微博', '打开网页分享'],
+      x: ['X', '打开网页分享'], telegram: ['Telegram', '打开网页分享'], whatsapp: ['WhatsApp', '打开网页分享'],
+    },
+    bundle: ['完整压缩包', '录音 + 逐字稿 (Markdown / 纯文本)'], notesPdf: ['会议纪要 PDF', '适合归档与分享'],
+  },
+  en: {
+    contexts: { transcript: 'Export & share', meeting: 'Share meeting', notes: 'Share meeting notes' },
+    shareTo: 'Share to', shareHint: 'Social platforms carry only the title and an excerpt; WeChat and similar need a file exported first.',
+    exportFiles: 'Export files',
+    platforms: {
+      system: ['Share to…', 'Use the system panel: AirDrop, Messages, WeChat…'], copy: ['Copy to clipboard', 'Copy full text to paste anywhere'], email: ['Email', 'Open your default mail client'],
+      wechat: ['WeChat', 'Export a file and reveal it'], weibo: ['Weibo', 'Open web share'],
+      x: ['X', 'Open web share'], telegram: ['Telegram', 'Open web share'], whatsapp: ['WhatsApp', 'Open web share'],
+    },
+    bundle: ['Full bundle', 'Recording + transcript (Markdown / plain text)'], notesPdf: ['Notes PDF', 'Good for archiving and sharing'],
+  },
+  es: {
+    contexts: { transcript: 'Exportar y compartir', meeting: 'Compartir reunión', notes: 'Compartir notas' },
+    shareTo: 'Compartir en', shareHint: 'Las redes sociales solo llevan el título y un extracto; WeChat y similares requieren exportar un archivo primero.',
+    exportFiles: 'Exportar archivos',
+    platforms: {
+      system: ['Compartir en…', 'Usar el panel del sistema: AirDrop, Mensajes, WeChat…'], copy: ['Copiar al portapapeles', 'Copiar todo el texto para pegar'], email: ['Correo', 'Abrir tu cliente de correo'],
+      wechat: ['WeChat', 'Exportar un archivo y localizarlo'], weibo: ['Weibo', 'Abrir compartir web'],
+      x: ['X', 'Abrir compartir web'], telegram: ['Telegram', 'Abrir compartir web'], whatsapp: ['WhatsApp', 'Abrir compartir web'],
+    },
+    bundle: ['Paquete completo', 'Grabación + transcripción (Markdown / texto)'], notesPdf: ['Notas PDF', 'Ideal para archivar y compartir'],
+  },
+  ja: {
+    contexts: { transcript: 'エクスポートと共有', meeting: '会議を共有', notes: '会議メモを共有' },
+    shareTo: '共有先', shareHint: 'SNS はタイトルと抜粋のみを送れます。WeChat などは先にファイルを書き出してください。',
+    exportFiles: 'ファイルを書き出す',
+    platforms: {
+      system: ['共有…', 'システムパネルで AirDrop・メッセージ・WeChat などに転送'], copy: ['クリップボードにコピー', '全文をコピーして貼り付け'], email: ['メール', '既定のメールアプリで開く'],
+      wechat: ['WeChat', 'ファイルを書き出して表示'], weibo: ['Weibo', 'ウェブ共有を開く'],
+      x: ['X', 'ウェブ共有を開く'], telegram: ['Telegram', 'ウェブ共有を開く'], whatsapp: ['WhatsApp', 'ウェブ共有を開く'],
+    },
+    bundle: ['完全パッケージ', '録音 + 文字起こし (Markdown / テキスト)'], notesPdf: ['会議メモ PDF', 'アーカイブと共有に最適'],
+  },
+  ko: {
+    contexts: { transcript: '내보내기 및 공유', meeting: '회의 공유', notes: '회의록 공유' },
+    shareTo: '공유 대상', shareHint: 'SNS는 제목과 발췌만 담을 수 있습니다. 위챗 등은 먼저 파일을 내보내세요.',
+    exportFiles: '파일 내보내기',
+    platforms: {
+      system: ['공유…', '시스템 패널로 AirDrop·메시지·WeChat 등에 전달'], copy: ['클립보드에 복사', '전체 텍스트를 복사해 붙여넣기'], email: ['이메일', '기본 메일 앱 열기'],
+      wechat: ['위챗', '파일을 내보내고 위치 표시'], weibo: ['웨이보', '웹 공유 열기'],
+      x: ['X', '웹 공유 열기'], telegram: ['Telegram', '웹 공유 열기'], whatsapp: ['WhatsApp', '웹 공유 열기'],
+    },
+    bundle: ['전체 패키지', '녹음 + 녹취 (Markdown / 텍스트)'], notesPdf: ['회의록 PDF', '보관 및 공유에 적합'],
+  },
+  fr: {
+    contexts: { transcript: 'Exporter et partager', meeting: 'Partager la réunion', notes: 'Partager les notes' },
+    shareTo: 'Partager sur', shareHint: 'Les réseaux ne portent que le titre et un extrait ; WeChat et similaires exigent d’exporter un fichier.',
+    exportFiles: 'Exporter des fichiers',
+    platforms: {
+      system: ['Partager vers…', 'Panneau système : AirDrop, Messages, WeChat…'], copy: ['Copier dans le presse-papiers', 'Copier tout le texte à coller'], email: ['E-mail', 'Ouvrir votre client de messagerie'],
+      wechat: ['WeChat', 'Exporter un fichier et le localiser'], weibo: ['Weibo', 'Ouvrir le partage web'],
+      x: ['X', 'Ouvrir le partage web'], telegram: ['Telegram', 'Ouvrir le partage web'], whatsapp: ['WhatsApp', 'Ouvrir le partage web'],
+    },
+    bundle: ['Paquet complet', 'Enregistrement + transcription (Markdown / texte)'], notesPdf: ['Notes PDF', 'Adapté à l’archivage et au partage'],
+  },
+  de: {
+    contexts: { transcript: 'Exportieren und teilen', meeting: 'Besprechung teilen', notes: 'Notizen teilen' },
+    shareTo: 'Teilen auf', shareHint: 'Soziale Netzwerke übertragen nur Titel und Auszug; WeChat u. Ä. benötigen zuerst eine exportierte Datei.',
+    exportFiles: 'Dateien exportieren',
+    platforms: {
+      system: ['Teilen an…', 'Systempanel: AirDrop, Nachrichten, WeChat…'], copy: ['In Zwischenablage kopieren', 'Gesamten Text zum Einfügen kopieren'], email: ['E-Mail', 'Standard-Mailprogramm öffnen'],
+      wechat: ['WeChat', 'Datei exportieren und anzeigen'], weibo: ['Weibo', 'Web-Freigabe öffnen'],
+      x: ['X', 'Web-Freigabe öffnen'], telegram: ['Telegram', 'Web-Freigabe öffnen'], whatsapp: ['WhatsApp', 'Web-Freigabe öffnen'],
+    },
+    bundle: ['Vollständiges Paket', 'Aufnahme + Transkript (Markdown / Text)'], notesPdf: ['Notizen-PDF', 'Zum Archivieren und Teilen geeignet'],
+  },
+  ru: {
+    contexts: { transcript: 'Экспорт и отправка', meeting: 'Поделиться встречей', notes: 'Поделиться заметками' },
+    shareTo: 'Поделиться в', shareHint: 'Соцсети несут только заголовок и фрагмент; для WeChat и подобных сначала экспортируйте файл.',
+    exportFiles: 'Экспорт файлов',
+    platforms: {
+      system: ['Поделиться…', 'Системная панель: AirDrop, Сообщения, WeChat…'], copy: ['Копировать в буфер обмена', 'Скопировать весь текст для вставки'], email: ['Эл. почта', 'Открыть почтовый клиент'],
+      wechat: ['WeChat', 'Экспортировать файл и показать его'], weibo: ['Weibo', 'Открыть веб-отправку'],
+      x: ['X', 'Открыть веб-отправку'], telegram: ['Telegram', 'Открыть веб-отправку'], whatsapp: ['WhatsApp', 'Открыть веб-отправку'],
+    },
+    bundle: ['Полный пакет', 'Запись + расшифровка (Markdown / текст)'], notesPdf: ['PDF заметок', 'Подходит для архивации и обмена'],
+  },
+};
 const summaryDetailCopy = {
   zh: ['完整会议纪要', '重新生成', '导出会议纪要', '完整结构化会议纪要', '纯文本会议纪要', '适合归档与分享'],
   en: ['Full meeting notes', 'Regenerate', 'Export meeting notes', 'Complete structured meeting notes', 'Plain-text meeting notes', 'Suitable for archiving and sharing'],
@@ -1143,7 +1334,7 @@ function renderSummaryDetailModal() {
   const copy = summaryDetailCopy[locale] || summaryDetailCopy.en;
   settingsModal.querySelector('h2').textContent = copy[0];
   settingsModal.querySelector('.modal-title p').textContent = currentMeetingDetail.title;
-  settingsModal.querySelector('.modal-body').innerHTML = `<article class="markdown-content">${renderMarkdown(markdown)}</article><div class="modal-form-actions"><button class="secondary" type="button" data-regenerate-summary>${copy[1]}</button></div><section class="modal-subsection"><h3>${copy[2]}</h3><div class="export-options"><button type="button" data-summary-export-choice data-format="md"><span><b>Markdown</b><small>${copy[3]}</small></span><strong>.md</strong></button><button type="button" data-summary-export-choice data-format="txt"><span><b>TXT</b><small>${copy[4]}</small></span><strong>.txt</strong></button><button type="button" data-summary-export-choice data-format="pdf"><span><b>PDF</b><small>${copy[5]}</small></span><strong>.pdf</strong></button></div></section>`;
+  settingsModal.querySelector('.modal-body').innerHTML = `<article class="markdown-content">${renderMarkdown(markdown)}</article><div class="modal-form-actions"><button class="secondary" type="button" data-regenerate-summary>${copy[1]}</button></div>${sharePanelHtml('notes')}`;
 }
 /** 渲染一个设置模态框。@param {'models'|'storage'|'summary-model'} kind 请求的模态框。@returns {void} */
 function renderModal(kind) {
@@ -1156,6 +1347,7 @@ function renderModal(kind) {
   if (kind === 'summary-model') { renderSummaryModelModal(); return; }
   if (kind === 'speaker-profiles') { renderSpeakerProfileModal(); return; }
   if (kind === 'export') { renderExportModal(); return; }
+  if (kind === 'share') { renderShareModal(); return; }
   if (kind === 'summary-detail') { renderSummaryDetailModal(); return; }
   const copy = (modalCopy[locale] || modalCopy.en)[kind];
   if (kind === 'storage') {
@@ -1541,21 +1733,17 @@ function renderLivePanel() {
   const people = participants.length
     ? participants.map((participant) => renderParticipant({
       ...participant,
-      name: formatSpeakerName(participant.name || participant.id) || `${t('说话人')} ${participant.id}`,
+      name: formatSpeakerName(participant.name || participant.speakerId) || `${t('说话人')} ${participant.id}`,
     })).join('')
     : `<p class="participants-empty">${t('等待识别说话人')}</p>`;
   const languageChoices = BreviaI18n.languageOptions(locale, t, true);
   const streamingChoices = liveStreamingModelOptions(liveConfig.language);
   const refinedChoices = modelChoices('active-refined-model').slice(1);
-  const translationLanguages = BreviaI18n.languageOptions(locale, t);
-  const translationTarget = liveConfig.target_language || '';
-  const track = (name, label, enabled) => `<label class="choice live-toggle"><input name="live-${name}" type="checkbox"${enabled ? ' checked' : ''} /> <span><b>${label}</b></span></label>`;
   const settings = `<section class="live-settings"><p class="eyebrow">${t('模型与设置')}</p>`
     + `<label class="config-select-field">${t('会议语言')}${flowSelect('live-language', liveConfig.language || 'auto', languageChoices)}</label>`
     + `<label class="config-select-field">${t('实时识别模型')}${flowSelect('live-streaming-model', liveConfig.streaming_model_id, streamingChoices)}</label>`
     + `<label class="config-select-field">${t('精修模型')}${flowSelect('live-refined-model', liveConfig.refined_model_id, refinedChoices)}</label>`
-    + `<label class="config-select-field">${t('译文目标')}<select class="flow-select-toggle" name="live-translation-target">${translationLanguages.map(([value, label]) => `<option value="${escapeHtml(value)}"${value === translationTarget ? ' selected' : ''}>${escapeHtml(label)}</option>`).join('')}</select></label>`
-    + `<div class="live-toggles">${track('mic', t('麦克风'), liveInputs.mic)}${track('system', t('系统音频'), liveInputs.system)}</div></section>`;
+    + `</section>`;
   const voiceOptions = [['', copy.voice], ...[...presetVoices, ...speakerProfiles.filter((profile) => profile.has_reference).map((profile) => ({ id: profile.id, name: speakerProfileName(profile) }))].map((voice) => [voice.id, voice.name])];
   const ttsLanguages = ['zh', 'en'].map((code) => [code, BreviaI18n.languageName(locale, code)]);
   const ttsSection = `<section class="tts-chat"><p class="eyebrow">${copy.chat}</p><form id="tts-chat-form"><div class="tts-selects">${flowSelect('voice_id', '', voiceOptions)}${flowSelect('target_language', 'zh', ttsLanguages)}</div><input name="text" maxlength="1000" placeholder="${copy.placeholder}" required /><button type="submit">${copy.send}</button></form></section>`;
@@ -1568,18 +1756,15 @@ async function reconfigureLive(changes) {
   // 乐观应用，以便控件感觉即时；meeting.reconfigured 事件确认它。
   const previous = { ...liveConfig };
   liveConfig = { ...liveConfig, ...changes };
-  if ('target_language' in changes) setLiveTranslationEnabled(Boolean(changes.target_language));
   renderLivePanel();
   try {
     const result = await window.brevia.meeting.reconfigure({ meeting_id: meetingId, ...changes });
     if (result?.model_required) {
       liveConfig = previous;
-      if ('target_language' in changes) setLiveTranslationEnabled(Boolean(previous.target_language));
       renderLivePanel();
     }
   } catch (error) {
     liveConfig = previous;
-    if ('target_language' in changes) setLiveTranslationEnabled(Boolean(previous.target_language));
     renderLivePanel();
     showToast(error.message);
   }
@@ -1629,28 +1814,65 @@ settingsModal.addEventListener('click', async (event) => {
     });
     return;
   }
-  const summaryExport = event.target.closest('[data-summary-export-choice]');
-  if (summaryExport) {
-    summaryExport.disabled = true;
+  if (event.target.closest('[data-regenerate-summary]')) { closeModal(); void generateMeetingSummary(); return; }
+  const sharePlatform = event.target.closest('[data-share-platform]');
+  if (sharePlatform) {
+    const { sharePlatform: platform, context } = sharePlatform.dataset;
+    sharePlatform.disabled = true;
     try {
-      const result = await window.brevia?.meeting.export({ meeting_id: breviaClient.state.selectedMeetingId, content: 'notes', format: summaryExport.dataset.format });
-      if (result) { closeModal(); showToast(t('导出完成')); }
-    } catch (error) { summaryExport.disabled = false; showToast(error.message); }
+      if (platform === 'system') {
+        // 系统面板分享文件(与微信一致的产物),让用户转发到 AirDrop / 信息 / 微信等任意 App。
+        // 传点击坐标(相对窗口内容区),让原生弹窗锚定在光标处——与系统右键菜单一致。
+        // 注意:不关闭分享面板——原生弹窗要贴着按钮显示,面板关掉就会让弹窗孤立浮现。
+        await window.brevia?.share.system({
+          anchor: { x: Math.round(event.clientX), y: Math.round(event.clientY) },
+          file: { meeting_id: breviaClient.state.selectedMeetingId, ...(shareContexts[context]?.file || shareContexts.transcript.file) },
+        });
+        sharePlatform.disabled = false;
+      } else if (platform === 'copy') {
+        const text = shareFullText(context);
+        if (!text) throw new Error(t('暂无可分享的内容'));
+        await window.brevia?.share.copyText({ text });
+        closeModal(); showToast(t('已复制到剪贴板'));
+      } else if (platform === 'email') {
+        const subject = currentMeetingDetail?.title || '';
+        const body = shareFullText(context);
+        if (!subject && !body) throw new Error(t('暂无可分享的内容'));
+        await window.brevia?.share.openExternal({ url: buildMailto(subject, body) });
+        closeModal();
+      } else {
+        const spec = shareSocialUrls[platform];
+        const text = shareExcerpt(context, spec.limit);
+        if (!text) throw new Error(t('暂无可分享的内容'));
+        await window.brevia?.share.openExternal({ url: spec.url(text) });
+        closeModal();
+      }
+    } catch (error) { sharePlatform.disabled = false; showToast(error.message); }
     return;
   }
-  if (event.target.closest('[data-regenerate-summary]')) { closeModal(); void generateMeetingSummary(); return; }
-  const exportChoice = event.target.closest('[data-export-choice]');
-  if (exportChoice) {
-    exportChoice.disabled = true;
+  const shareFile = event.target.closest('[data-share-file]');
+  if (shareFile) {
+    shareFile.disabled = true;
     try {
-      const result = await window.brevia?.meeting.export({
-        meeting_id: breviaClient.state.selectedMeetingId,
-        content: exportChoice.dataset.content,
-        format: exportChoice.dataset.format,
-        ...(exportChoice.dataset.track ? { track: exportChoice.dataset.track } : {}),
-      });
+      const result = await window.brevia?.share.file({ meeting_id: breviaClient.state.selectedMeetingId, ...(shareContexts[shareFile.dataset.context]?.file || shareContexts.transcript.file) });
+      if (result) { closeModal(); showToast(t('文件已导出并在文件夹中显示')); }
+    } catch (error) { shareFile.disabled = false; showToast(error.message); }
+    return;
+  }
+  const shareExport = event.target.closest('[data-share-export]');
+  if (shareExport) {
+    shareExport.disabled = true;
+    try {
+      const result = shareExport.dataset.kind === 'bundle'
+        ? await window.brevia?.meeting.share({ meeting_id: breviaClient.state.selectedMeetingId })
+        : await window.brevia?.meeting.export({
+          meeting_id: breviaClient.state.selectedMeetingId,
+          content: shareExport.dataset.content,
+          format: shareExport.dataset.format,
+          ...(shareExport.dataset.track ? { track: shareExport.dataset.track } : {}),
+        });
       if (result) { closeModal(); showToast(t('导出完成')); }
-    } catch (error) { exportChoice.disabled = false; showToast(error.message); }
+    } catch (error) { shareExport.disabled = false; showToast(error.message); }
     return;
   }
   const selectToggle = event.target.closest('[data-flow-select-toggle]');
@@ -2058,6 +2280,8 @@ function applyLanguage(nextLocale, animate = false) {
     renderRequiredModelsCard();
     refreshLocalizedTaskCards();
     document.querySelector('[data-separate-detail]').textContent = (voiceFeaturesCopy[locale] || voiceFeaturesCopy.en).source;
+    const refineButton = document.querySelector('.detail-refine [data-flow-select-toggle]');
+    if (refineButton) refineButton.innerHTML = refineButton.disabled ? t('正在精修') : `${t('精修')} <span>⌄</span>`;
     if (activeModal) renderModal(activeModal);
     // 更新浮动字幕按钮工具提示
     const floatingCaptionToggle = document.querySelector('#floating-caption-toggle');
@@ -2224,8 +2448,9 @@ async function runUpdateAction() {
   updateBusy = true;
   updateDownloadProgress = null;
   renderUpdateButton();
+  renderUpdateNotice();
   try { await window.brevia.update.install(); }
-  catch (error) { showToast(error.message); updateBusy = false; updateDownloadProgress = null; renderUpdateButton(); }
+  catch (error) { showToast(error.message); updateBusy = false; updateDownloadProgress = null; renderUpdateButton(); renderUpdateNotice(); }
 }
 void checkForUpdates({ silent: true });
 window.setInterval(() => { if (activeLibraryNav === 'recently-deleted') return; sloganIndex = (sloganIndex + 1) % (slogans[locale] || slogans.en).length; renderSlogan(true); }, 30000);
@@ -2266,7 +2491,6 @@ function activateMeeting(meeting, payload) {
   const streamingModelName = prepareModelChoices['active-streaming-model'].find(([id]) => id === streamingModelId)?.[1] || t('自动匹配');
   document.querySelector('#active-streaming-model').textContent = streamingModelName;
   liveConfig = { language: language || 'auto', streaming_model_id: streamingModelId || '', refined_model_id: refinedModelId || '', target_language: payload.target_language || null };
-  liveInputs = breviaClient?.state.inputs ? { ...breviaClient.state.inputs } : { mic: true, system: true };
   document.querySelector('#active-diarization-model').textContent = prepareModelChoices['active-diarization-model'].find(([id]) => id === `${segmentationModelId || ''}|${embeddingModelId || ''}`)?.[1] || t('自动匹配');
   document.querySelector('#active-refined-model').textContent = modelChoices('active-refined-model').find(([id]) => id === refinedModelId)?.[1] || t('自动匹配');
   document.querySelector('#live-name').textContent = title;
@@ -2420,7 +2644,7 @@ function editSpeakerName(label) {
     if (liveSpeakers.has(speaker)) liveSpeakers.get(speaker).name = name;
     document.querySelectorAll(`[data-speaker="${speaker}"]`).forEach((node) => { node.textContent = name; });
     const meetingId = breviaClient?.state.meeting?.id || breviaClient?.state.selectedMeetingId;
-    if (window.brevia && meetingId) window.brevia.speaker.rename({ meeting_id: meetingId, speaker_id: speaker, name }).catch((error) => showToast(error.message));
+    if (window.brevia && meetingId) window.brevia.speaker.rename({ meeting_id: meetingId, speaker_id: speaker, name, locked: true }).catch((error) => showToast(error.message));
   };
   input.addEventListener('blur', commit, { once: true });
   input.addEventListener('keydown', (event) => { if (event.key === 'Enter') input.blur(); if (event.key === 'Escape') { input.value = label.textContent; input.blur(); } });
@@ -2470,26 +2694,6 @@ livePanel.addEventListener('click', (event) => {
     if (value === liveConfig.refined_model_id) return;
     void reconfigureLive({ refined_model_id: value });
   }
-});
-livePanel.addEventListener('change', (event) => {
-  const translationTarget = event.target.closest('select[name="live-translation-target"]');
-  if (translationTarget) {
-    const value = translationTarget.value || null;
-    if (value === liveConfig.target_language) return;
-    void reconfigureLive({ target_language: value });
-    return;
-  }
-  const toggle = event.target.closest('.live-toggle input[name^="live-"]');
-  if (!toggle) return;
-  const track = toggle.name.slice('live-'.length);
-  const enabled = toggle.checked;
-  void breviaClient?.setTrackEnabled(track, enabled).then(() => {
-    liveInputs = { ...breviaClient.state.inputs };
-    renderLivePanel();
-  }).catch((error) => {
-    showToast(error.message);
-    renderLivePanel();
-  });
 });
 document.querySelector('#translation-toggle').addEventListener('click', (event) => {
   const enabled = !translationAllowed;
@@ -3348,6 +3552,7 @@ if (window.brevia) {
   window.brevia.on('update.download-progress', (progress) => {
     updateDownloadProgress = progress;
     renderUpdateButton();
+    renderUpdateNotice();
   });
   window.brevia.on('task.status', ({ task, meeting_id, status }) => {
     const card = [...taskCards.querySelectorAll('.processing-card')].find((item) => item.dataset.task === task && item.dataset.meetingId === meeting_id);
@@ -3426,11 +3631,8 @@ if (window.brevia) {
     });
   });
 
-  document.querySelector('[data-share-detail]').addEventListener('click', async () => {
+  document.querySelector('[data-share-detail]').addEventListener('click', () => {
     if (!breviaClient.state.selectedMeetingId) return;
-    try {
-      const result = await window.brevia.meeting.share({ meeting_id: breviaClient.state.selectedMeetingId });
-      if (result) showToast(t(result.recording_included ? '压缩包已导出' : '未找到录音，已导出逐字稿压缩包'));
-    } catch (error) { showToast(error.message); }
+    openModal('share');
   });
 }

@@ -75,4 +75,15 @@ await writeConfig({ version: 2, provider: 'built-in', providers: {} });
 assert.deepEqual(await readConfig(), { version: 2, provider: 'built-in', providers: {} }, 'built-in needs no provider entry');
 await rm(configDir, { recursive: true, force: true });
 
+// share.open-external 只放行社交网页(https)与邮件(mailto),其余 scheme 一律拒绝,
+// 避免通过 IPC 触发任意协议处理器。直接复用 main.js 中的守卫正则,防止实现漂移。
+const shareGuardSource = oneLine('    if (!/^(https:\\/\\/|mailto:)/i.test(value.url)) throw new Error');
+assert.ok(shareGuardSource.includes('Unsupported share URL'), 'share.open-external keeps its scheme guard');
+const shareGuard = new Function('url', `${shareGuardSource.trim().replace('value.url', 'url')} return true;`);
+assert.equal(shareGuard('https://twitter.com/intent/tweet?text=hi'), true, 'https web share is allowed');
+assert.equal(shareGuard('mailto:?subject=x&body=y'), true, 'mailto is allowed');
+for (const blocked of ['file:///etc/passwd', 'http://insecure.example', 'javascript:alert(1)', 'ms-settings:privacy']) {
+  assert.throws(() => shareGuard(blocked), /Unsupported share URL/, `${blocked} is rejected`);
+}
+
 console.log('Electron behavior tests passed');

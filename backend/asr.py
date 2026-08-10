@@ -162,11 +162,14 @@ class ModelManager:
             return self.path(model_id)
         self.event("model.status", {"model_id": model_id, "status": "downloading"})
         with tempfile.TemporaryDirectory(dir=self.root) as temporary:
-            if model.get("downloads"):
+            downloads = model.get("china_downloads") if china_source else None
+            if downloads is None:
+                downloads = model.get("downloads")
+            if downloads:
                 source = Path(temporary) / "model"
                 source.mkdir()
                 received = 0
-                for item in model["downloads"]:
+                for item in downloads:
                     destination = (
                         Path(temporary) / item["path"]
                         if item.get("extract")
@@ -199,10 +202,6 @@ class ModelManager:
                         extract_root = Path(temporary) / f"extract-{received}"
                         extract_root.mkdir()
                         with tarfile.open(destination) as bundle:
-                            for member in bundle.getmembers():
-                                target = (extract_root / member.name).resolve()
-                                if not target.is_relative_to(extract_root.resolve()):
-                                    raise ValueError("Unsafe model archive path")
                             bundle.extractall(extract_root, filter="data")
                         extracted = extract_root / item["directory"]
                         if not extracted.is_dir():
@@ -248,10 +247,6 @@ class ModelManager:
                     extract_root = Path(temporary) / "extract"
                     extract_root.mkdir()
                     with tarfile.open(archive) as bundle:
-                        for member in bundle.getmembers():
-                            target = (extract_root / member.name).resolve()
-                            if not target.is_relative_to(extract_root.resolve()):
-                                raise ValueError("Unsafe model archive path")
                         bundle.extractall(extract_root, filter="data")
                     source = extract_root / model["directory"]
                 else:

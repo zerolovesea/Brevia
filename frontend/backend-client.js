@@ -1,6 +1,7 @@
 // 每个 AudioContext 只需注册一次 worklet 模块。用 WeakMap 记录已加载的 context,
 // 避免重复 addModule(重复调用虽无害但会产生冗余的网络/解析开销)。
 const workletContexts = new WeakMap();
+const stoppedMediaTracks = new WeakSet();
 async function loadAudioWorklet(context) {
   if (workletContexts.get(context)) return;
   await context.audioWorklet.addModule('./audio-processor.js');
@@ -10,7 +11,8 @@ async function loadAudioWorklet(context) {
 function stopMediaStream(stream) {
   const tracks = [...(stream?.getVideoTracks() || []), ...(stream?.getAudioTracks() || [])];
   for (const track of tracks) {
-    if (track.readyState !== 'live') continue;
+    if (track.readyState !== 'live' || stoppedMediaTracks.has(track)) continue;
+    stoppedMediaTracks.add(track);
     try { track.stop(); } catch { /* 继续停止剩余的轨道。 */ }
   }
 }
@@ -180,30 +182,6 @@ class AudioCapture {
     }
   }
 
-  async setTrackEnabled(track, enabled) {
-    const source = this.sources.find((item) => item.track === track);
-    if (enabled) {
-      if (source) return;
-      await this.connect(track, await this.requestTrack(track));
-      return;
-    }
-    if (!source) return;
-    source.processor.port.onmessage = null;
-    source.processor.disconnect();
-    source.source.disconnect();
-    await source.pending();
-    await this.send({
-      meeting_id: this.meetingId,
-      track,
-      pcm: '',
-      sample_rate: 16000,
-      start_ms: Math.round(performance.now() - this.startedAt),
-      flush: true,
-    });
-    this.sources = this.sources.filter((item) => item !== source);
-    await this.release(source);
-  }
-
   resample(input, sourceRate) {
     if (sourceRate === 16000) return input;
     const output = new Float32Array(Math.round(input.length * 16000 / sourceRate));
@@ -274,15 +252,6 @@ window.breviaClient = window.brevia ? {
     this.state.selectedMeetingId = meeting.id;
     this.state.inputs = { ...inputs };
     return meeting;
-  },
-  async setTrackEnabled(track, enabled) {
-    if (!this.capture) throw new Error('当前没有正在进行的会议');
-    if (track === 'system' && enabled) {
-      const permissions = await window.brevia.permissions.status();
-      if (permissions.systemAudioSupported === false) throw new Error('当前系统不支持直接录制系统音频');
-    }
-    await this.capture.setTrackEnabled(track, enabled);
-    this.state.inputs = { ...this.state.inputs, [track]: enabled };
   },
   async previewMic() {
     if (!this.preview) this.preview = new AudioCapture(null, this.onLevel);

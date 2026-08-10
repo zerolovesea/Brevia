@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import threading
 from pathlib import Path
 
@@ -14,6 +15,20 @@ from .media_tasks import MeetingMediaService
 from .storage import Store
 from .voice_profiles import VoiceProfileService
 from .worker_common import SCHEMA_VERSION, TaskRegistry, WorkerState
+
+
+_LONE_SURROGATE = re.compile(r"[\ud800-\udfff]")
+
+
+def sanitize_unicode(value):
+    """将 JSON 中不能编码为 UTF-8 的代理项替换为 U+FFFD。"""
+    if isinstance(value, str):
+        return _LONE_SURROGATE.sub("\ufffd", value)
+    if isinstance(value, list):
+        return [sanitize_unicode(item) for item in value]
+    if isinstance(value, dict):
+        return {sanitize_unicode(key): sanitize_unicode(item) for key, item in value.items()}
+    return value
 
 
 class WorkerCore:
@@ -106,7 +121,9 @@ class WorkerCore:
         """
         command_id = command.get("id")
         command_type = command.get("type")
-        payload = command.get("payload") or {}
+        # Node 的 JSON.stringify 会把孤立代理项转义为 \udxxx；json.loads 后它会
+        # 变成 Python str 中不能写入 SQLite/UTF-8 的字符。所有 IPC 指令都经过此处。
+        payload = sanitize_unicode(command.get("payload") or {})
         if not command_id or not command_type:
             raise ValueError("Commands require id and type")
         handlers = {

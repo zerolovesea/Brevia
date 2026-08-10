@@ -10,6 +10,7 @@
     "speaker": false,
     "size_bytes": 597755927,
     "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30.tar.bz2",
+    "china_url": "https://modelscope.cn/models/zyaztec/sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30/resolve/master/sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30.tar.bz2",
     "archive_sha256": "30437d84dc4861740d40166212ab05f3728945443d53691620075c4031fb88e1",
     "directory": "sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30",
     "files": ["encoder.int8.onnx", "decoder.onnx", "joiner.int8.onnx", "tokens.txt"],
@@ -27,6 +28,11 @@
     "size_bytes": 1047319737,
     "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-paraformer-bilingual-zh-en.tar.bz2",
     "archive_sha256": "5462a1fce42693deae572af1e8c4687124b12aa85fe61ff4d3168bb5280e205f",
+    "china_downloads": [
+      {"path": "encoder.int8.onnx", "url": "https://modelscope.cn/models/pengzhendong/sherpa-onnx-streaming-paraformer-bilingual-zh-en/resolve/master/encoder.int8.onnx", "sha256": "81a70226a8934e6ed92aa1d4fc486b428b5398e2f2619ed4897b7294cab90e9a"},
+      {"path": "decoder.int8.onnx", "url": "https://modelscope.cn/models/pengzhendong/sherpa-onnx-streaming-paraformer-bilingual-zh-en/resolve/master/decoder.int8.onnx", "sha256": "f3cca9f77bb9d93c8fcbfb63ae617b6b1ee96818df3aa3b151c40658fe38594f"},
+      {"path": "tokens.txt", "url": "https://modelscope.cn/models/pengzhendong/sherpa-onnx-streaming-paraformer-bilingual-zh-en/resolve/master/tokens.txt", "sha256": "59aba8873a2ed1e122c25fee421e25f283b63290efbde85c1f01a853d83cb6e6"}
+    ],
     "directory": "sherpa-onnx-streaming-paraformer-bilingual-zh-en",
     "files": ["encoder.int8.onnx", "decoder.int8.onnx", "tokens.txt"],
     "kind": "paraformer"
@@ -42,6 +48,7 @@
     "speaker": false,
     "size_bytes": 310414022,
     "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-en-2023-06-26.tar.bz2",
+    "china_url": "https://modelscope.cn/models/zyaztec/sherpa-onnx-streaming-zipformer-en-2023-06-26/resolve/master/sherpa-onnx-streaming-zipformer-en-2023-06-26.tar.bz2",
     "archive_sha256": "639e25b578e9e997131402199419c13a941f8e4e198e2da1ce57dbf5cf401282",
     "directory": "sherpa-onnx-streaming-zipformer-en-2023-06-26",
     "files": [
@@ -65,6 +72,7 @@
     "stages": ["streaming"], "languages": ["ar", "en", "id", "ja", "ru", "th", "vi", "zh"], "backend": ["cpu", "cuda"], "speaker": false,
     "size_bytes": 258999581,
     "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-ar_en_id_ja_ru_th_vi_zh-2025-02-10.tar.bz2",
+    "china_url": "https://modelscope.cn/models/zyaztec/sherpa-onnx-streaming-zipformer-ar-en-id-ja-ru-th-vi-zh-2025-02-10/resolve/master/sherpa-onnx-streaming-zipformer-ar_en_id_ja_ru_th_vi_zh-2025-02-10.tar.bz2",
     "archive_sha256": "28044b67324f7f831689f0a3761473dd2ade380e93aa53f1dbcd479ef71c40d4", "directory": "sherpa-onnx-streaming-zipformer-ar_en_id_ja_ru_th_vi_zh-2025-02-10",
     "files": ["encoder-epoch-75-avg-11-chunk-16-left-128.int8.onnx", "decoder-epoch-75-avg-11-chunk-16-left-128.onnx", "joiner-epoch-75-avg-11-chunk-16-left-128.int8.onnx", "tokens.txt"], "kind": "transducer"
   },
@@ -76,7 +84,14 @@
     "stages": ["streaming"], "languages": ["ko"], "backend": ["cpu", "cuda"], "speaker": false,
     "size_bytes": 418218652,
     "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-korean-2024-06-16.tar.bz2",
-    "archive_sha256": "e346a5882a409650472be17326237e24df7bf409db6b4a8a52e1a61422bf2500", "directory": "sherpa-onnx-streaming-zipformer-korean-2024-06-16",
+    "archive_sha256": "e346a5882a409650472be17326237e24df7bf409db6b4a8a52e1a61422bf2500",
+    "china_downloads": [
+      {"path": "encoder-epoch-99-avg-1.int8.onnx", "url": "https://modelscope.cn/models/k2-fsa/sherpa-onnx-streaming-zipformer-korean-2024-06-16/resolve/master/encoder-epoch-99-avg-1.int8.onnx", "sha256": "8d0b1aa24fbedd4e3948564ab7facd151b8ce9b0c48fc987c541de2de3af5697"},
+      {"path": "decoder-epoch-99-avg-1.onnx", "url": "https://modelscope.cn/models/k2-fsa/sherpa-onnx-streaming-zipformer-korean-2024-06-16/resolve/master/decoder-epoch-99-avg-1.onnx", "sha256": "b29cfb4575141e50a30a22b2c4579934f3d4f45b83c9c8c08c3aef5a3fa7abfc"},
+      {"path": "joiner-epoch-99-avg-1.int8.onnx", "url": "https://modelscope.cn/models/k2-fsa/sherpa-onnx-streaming-zipformer-korean-2024-06-16/resolve/master/joiner-epoch-99-avg-1.int8.onnx", "sha256": "128b80a66a1f718488af8560f9d15895109b99ff3e573f0a0130e03774ef1ced"},
+      {"path": "tokens.txt", "url": "https://modelscope.cn/models/k2-fsa/sherpa-onnx-streaming-zipformer-korean-2024-06-16/resolve/master/tokens.txt", "sha256": "016bdf0965029263b7ad01b742366ee542ef0bef38261510e8176ff6f2e9e668"}
+    ],
+    "directory": "sherpa-onnx-streaming-zipformer-korean-2024-06-16",
     "files": ["encoder-epoch-99-avg-1.int8.onnx", "decoder-epoch-99-avg-1.onnx", "joiner-epoch-99-avg-1.int8.onnx", "tokens.txt"], "kind": "transducer"
   },
   {
@@ -87,6 +102,7 @@
     "stages": ["streaming"], "languages": ["fr"], "backend": ["cpu", "cuda"], "speaker": false,
     "size_bytes": 398444115,
     "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-fr-2023-04-14.tar.bz2",
+    "china_url": "https://modelscope.cn/models/zyaztec/sherpa-onnx-streaming-zipformer-fr-2023-04-14/resolve/master/sherpa-onnx-streaming-zipformer-fr-2023-04-14.tar.bz2",
     "archive_sha256": "77d4cbd61dcfa55fd2c14efc0ce5c6798be5931c05f35df5bab60c921950bb8c", "directory": "sherpa-onnx-streaming-zipformer-fr-2023-04-14",
     "files": ["encoder-epoch-99-avg-1.int8.onnx", "decoder-epoch-99-avg-1.onnx", "joiner-epoch-99-avg-1.int8.onnx", "tokens.txt"], "kind": "transducer"
   },
@@ -99,9 +115,10 @@
     "languages": ["ar", "de", "en", "es", "fr", "hi", "it", "ja", "ko", "nl", "pt", "ru", "tr", "uk", "vi", "zh"],
     "backend": ["cpu", "cuda"],
     "speaker": false,
-    "size_bytes": 685000000,
+    "size_bytes": 475271763,
     "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11.tar.bz2",
-    "archive_sha256": "dcdae59c496914e465fb1c2ae59cc221c8d7648aa74d3abebc8ca3526fe1f297",
+    "china_url": "https://modelscope.cn/models/zyaztec/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11/resolve/master/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11.tar.bz2",
+    "archive_sha256": "c6bf5e0df765f9d5b43bc9e0536d4b4b3e7d40bdf5ecf13e45f134c51c05ae3a",
     "directory": "sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11",
     "files": ["encoder.int8.onnx", "decoder.int8.onnx", "joiner.int8.onnx", "tokens.txt"],
     "kind": "nemotron"
@@ -117,6 +134,7 @@
     "speaker": false,
     "size_bytes": 30667839,
     "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/punctuation-models/sherpa-onnx-online-punct-en-2024-08-06.tar.bz2",
+    "china_url": "https://modelscope.cn/models/zyaztec/sherpa-onnx-online-punct-en-2024-08-06/resolve/master/sherpa-onnx-online-punct-en-2024-08-06.tar.bz2",
     "archive_sha256": "9f5e5a72c7d2829635bd074fce92b6bbd5b78da8a52e7ad8ed1be933f366b99d",
     "directory": "sherpa-onnx-online-punct-en-2024-08-06",
     "files": ["model.int8.onnx", "bpe.vocab"],
@@ -133,6 +151,7 @@
     "speaker": false,
     "size_bytes": 535638,
     "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speech-enhancement-models/gtcrn_simple.onnx",
+    "china_url": "https://modelscope.cn/models/zyaztec/sherpa-onnx-gtcrn-simple/resolve/master/gtcrn_simple.onnx",
     "archive_sha256": "e77603ac0c23dac3227dd2d7135b3a585cbee2679048aecfa886657d3ae1b534",
     "files": ["gtcrn_simple.onnx"],
     "kind": "speech-denoiser"
@@ -144,7 +163,9 @@
     "stages": ["vad"], "languages": ["all"], "backend": ["cpu", "cuda"], "speaker": false,
     "size_bytes": 2313101,
     "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad_v5.onnx",
-    "archive_sha256": "6b99cbfd39246b6706f98ec13c7c50c6b299181f2474fa05cbc8046acc274396", "files": ["silero_vad.onnx"], "kind": "vad"
+    "archive_sha256": "6b99cbfd39246b6706f98ec13c7c50c6b299181f2474fa05cbc8046acc274396",
+    "china_downloads": [{"path": "silero_vad.onnx", "url": "https://modelscope.cn/models/manyeyes/silero-vad-v5-onnx/resolve/master/silero_vad.onnx", "sha256": "6b99cbfd39246b6706f98ec13c7c50c6b299181f2474fa05cbc8046acc274396"}],
+    "files": ["silero_vad.onnx"], "kind": "vad"
   },
   {
     "id": "punct-ct-transformer-zh-en-int8",
@@ -158,6 +179,7 @@
     "size_bytes": 64717756,
     "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/punctuation-models/sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8.tar.bz2",
     "archive_sha256": "c0d5aa5f8eeb686032345e180bedf39319dc2e0556781c6264bcadba8328a6e1",
+    "china_downloads": [{"path": "model.int8.onnx", "url": "https://modelscope.cn/models/ranger810/sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8/resolve/master/model.int8.onnx", "sha256": "65a3fb9f5ad7bfb96bf69e0dc4481df97f6ee60513c1d94ce981ba6effd524b1"}],
     "directory": "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8",
     "files": ["model.int8.onnx"],
     "kind": "offline-punctuation"
@@ -174,6 +196,14 @@
     "size_bytes": 878702423,
     "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25.tar.bz2",
     "archive_sha256": "393f8a14e2f5fb96746aaab342997a40641001fbd5bf9592a080a8329178ee96",
+    "china_downloads": [
+      {"path": "conv_frontend.onnx", "url": "https://modelscope.cn/models/jkman2023/sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25/resolve/master/conv_frontend.onnx", "sha256": "d22dc4423e0940e49884e903d2ea2f7e5567c14fc1aed97e4e26d6b8f208ef9e"},
+      {"path": "encoder.int8.onnx", "url": "https://modelscope.cn/models/jkman2023/sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25/resolve/master/encoder.int8.onnx", "sha256": "60748d3e6744a57c9c91e1b17424a6c2990567e8adceb0783940c03ed98fa9d9"},
+      {"path": "decoder.int8.onnx", "url": "https://modelscope.cn/models/jkman2023/sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25/resolve/master/decoder.int8.onnx", "sha256": "4f6885be5959ae26af3089d38ee7972c5fafbeeb1cf8d5e76eab6d8b61ca5771"},
+      {"path": "tokenizer/merges.txt", "url": "https://modelscope.cn/models/jkman2023/sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25/resolve/master/tokenizer/merges.txt", "sha256": "8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5"},
+      {"path": "tokenizer/tokenizer_config.json", "url": "https://modelscope.cn/models/jkman2023/sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25/resolve/master/tokenizer/tokenizer_config.json", "sha256": "4942d005604266809309cabc9f4e9cb89ce855d59b14681fdc0e1cc62ea26c4c"},
+      {"path": "tokenizer/vocab.json", "url": "https://modelscope.cn/models/jkman2023/sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25/resolve/master/tokenizer/vocab.json", "sha256": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910"}
+    ],
     "directory": "sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25",
     "files": ["conv_frontend.onnx", "encoder.int8.onnx", "decoder.int8.onnx", "tokenizer"],
     "kind": "qwen3"
@@ -185,10 +215,16 @@
     "stages": ["refined"], "languages": ["multilingual"], "backend": ["cpu", "cuda"], "speaker": false,
     "size_bytes": 1068482488,
     "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-large-v3.tar.bz2",
-    "archive_sha256": "2d0e134b3b5fc4a0533baf24a0c9d473b629aa47f030af0a165a05f461df7a03", "directory": "sherpa-onnx-whisper-large-v3",
+    "archive_sha256": "2d0e134b3b5fc4a0533baf24a0c9d473b629aa47f030af0a165a05f461df7a03",
+    "china_downloads": [
+      {"path": "large-v3-encoder.int8.onnx", "url": "https://modelscope.cn/models/pengzhendong/sherpa-onnx-whisper-large-v3/resolve/master/large-v3-encoder.int8.onnx", "sha256": "d531cf17248acc43e8c09b472a0877055e770877857a5332fc1304b36534ec85"},
+      {"path": "large-v3-decoder.int8.onnx", "url": "https://modelscope.cn/models/pengzhendong/sherpa-onnx-whisper-large-v3/resolve/master/large-v3-decoder.int8.onnx", "sha256": "ebc6bfd88e162a46cb3edee8a7e727e1dcbc65cabecb19e2573695e4d495e1af"},
+      {"path": "large-v3-tokens.txt", "url": "https://modelscope.cn/models/pengzhendong/sherpa-onnx-whisper-large-v3/resolve/master/large-v3-tokens.txt", "sha256": "b34b360dbb493e781e479794586d661700670d65564001f23024971d1f2fa126"}
+    ],
+    "directory": "sherpa-onnx-whisper-large-v3",
     "files": ["large-v3-encoder.int8.onnx", "large-v3-decoder.int8.onnx", "large-v3-tokens.txt"], "kind": "whisper"
   },
-  {"id":"funasr-nano-int8","name":"FunASR Nano int8","runtime":"sherpa-onnx==1.13.2","revision":"asr-models/2025-12-30","stages":["refined"],"languages":["zh","en","yue"],"backend":["cpu","cuda"],"speaker":false,"size_bytes":841730611,"url":"https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-funasr-nano-int8-2025-12-30.tar.bz2","archive_sha256":"eb43d7ccc2e86b243f6a03b7df361033dda66db9523d1a92bf6aca2b50c9476b","directory":"sherpa-onnx-funasr-nano-int8-2025-12-30","files":["encoder_adaptor.int8.onnx","llm.int8.onnx","embedding.int8.onnx","Qwen3-0.6B/tokenizer.json"],"kind":"funasr-nano"},
+  {"id":"funasr-nano-int8","name":"FunASR Nano int8","runtime":"sherpa-onnx==1.13.2","revision":"asr-models/2025-12-30","stages":["refined"],"languages":["zh","en","yue"],"backend":["cpu","cuda"],"speaker":false,"size_bytes":841730611,"url":"https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-funasr-nano-int8-2025-12-30.tar.bz2","china_url":"https://modelscope.cn/models/fuyuantech/fuyuan-sherpa-onnx-funasr-nano-int8-2025-12-30/resolve/master/sherpa-onnx-funasr-nano-int8-2025-12-30.tar.bz2","archive_sha256":"eb43d7ccc2e86b243f6a03b7df361033dda66db9523d1a92bf6aca2b50c9476b","directory":"sherpa-onnx-funasr-nano-int8-2025-12-30","files":["encoder_adaptor.int8.onnx","llm.int8.onnx","embedding.int8.onnx","Qwen3-0.6B/tokenizer.json"],"kind":"funasr-nano"},
   {
     "id": "qwen3-asr-1.7b-int8",
     "name": "Qwen3-ASR 1.7B int8",
@@ -225,6 +261,7 @@
     "size_bytes": 6958444,
     "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2",
     "archive_sha256": "24615ee884c897d9d2ba09bb4d30da6bb1b15e685065962db5b02e76e4996488",
+    "china_downloads": [{"path": "model.onnx", "url": "https://modelscope.cn/models/pengzhendong/sherpa-onnx-pyannote-segmentation-3-0/resolve/master/model.onnx", "sha256": "220ad67ca923bef2fa91f2390c786097bf305bceb5e261d4af67b38e938e1079"}],
     "directory": "sherpa-onnx-pyannote-segmentation-3-0",
     "files": ["model.onnx"],
     "kind": "speaker-segmentation"
@@ -233,6 +270,7 @@
     "id": "reverb-diarization-v1", "name": "Reverb Diarization v1", "runtime": "sherpa-onnx==1.13.2", "revision": "speaker-segmentation-models/v1",
     "stages": ["speaker-segmentation"], "languages": ["all"], "backend": ["cpu", "cuda"], "speaker": true,
     "size_bytes": 10918585, "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-reverb-diarization-v1.tar.bz2", "archive_sha256": "615761e980be1688da0ef81618c056134d63aa55ea0a5f1494c47393b9398eab",
+    "china_downloads": [{"path": "model.onnx", "url": "https://modelscope.cn/models/pengzhendong/sherpa-onnx-reverb-diarization-v1/resolve/master/model.onnx", "sha256": "08a5eb1dff82847656baa7bf022c85bd9c90dd5a6a1f1b06f3ebfca0482beb5a"}],
     "directory": "sherpa-onnx-reverb-diarization-v1", "files": ["model.onnx"], "kind": "speaker-segmentation"
   },
   {
@@ -246,6 +284,7 @@
     "speaker": true,
     "size_bytes": 39593761,
     "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx",
+    "china_url": "https://modelscope.cn/models/zyaztec/sherpa-onnx-3dspeaker-eres2net-base-sv-zh-cn/resolve/master/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx",
     "archive_sha256": "1a331345f04805badbb495c775a6ddffcdd1a732567d5ec8b3d5749e3c7a5e4b",
     "files": ["3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx"],
     "kind": "speaker-embedding"
@@ -254,12 +293,14 @@
     "id": "campplus-zh-en", "name": "3D-Speaker CAM++", "runtime": "sherpa-onnx==1.13.2", "revision": "speaker-recognition-models/campplus",
     "stages": ["speaker-embedding"], "languages": ["zh", "en"], "backend": ["cpu", "cuda"], "speaker": true,
     "size_bytes": 28281164, "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx", "archive_sha256": "aa3cfc16963a10586a9393f5035d6d6b57e98d358b347f80c2a30bf4f00ceba2",
+    "china_downloads": [{"path": "3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx", "url": "https://modelscope.cn/models/fengge2024/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx/resolve/master/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx", "sha256": "aa3cfc16963a10586a9393f5035d6d6b57e98d358b347f80c2a30bf4f00ceba2"}],
     "files": ["3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx"], "kind": "speaker-embedding"
   },
   {
     "id": "spleeter-2stems-fp16", "name": "Spleeter 2 Stems", "runtime": "sherpa-onnx==1.13.2", "revision": "source-separation-models/spleeter-2stems-fp16",
     "stages": ["source-separation"], "languages": ["all"], "backend": ["cpu", "cuda"], "speaker": false,
     "size_bytes": 35271738, "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/source-separation-models/sherpa-onnx-spleeter-2stems-fp16.tar.bz2", "archive_sha256": "d54561979bd2e08a51e7dbd99ac36bb47564e089eefd403636dbca93e811bba2",
+    "china_url": "https://modelscope.cn/models/zyaztec/sherpa-onnx-spleeter-2stems-fp16/resolve/master/sherpa-onnx-spleeter-2stems-fp16.tar.bz2",
     "directory": "sherpa-onnx-spleeter-2stems-fp16", "files": ["vocals.fp16.onnx", "accompaniment.fp16.onnx"], "kind": "source-separation"
   },
   {
@@ -270,13 +311,17 @@
       {"path": "zipvoice.tar.bz2", "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/sherpa-onnx-zipvoice-distill-int8-zh-en-emilia.tar.bz2", "sha256": "77219c8b40f4ee8d73a7f902305ff6c1128ef9b54461c41b4ca6ed890b6c2803", "extract": true, "directory": "sherpa-onnx-zipvoice-distill-int8-zh-en-emilia"},
       {"path": "vocos_24khz.onnx", "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/vocoder-models/vocos_24khz.onnx", "sha256": "bcb3b970e384161c4d634f0bb9e999ff1c471b34c9bc0b1049a5014065ed3cc0"}
     ],
+    "china_downloads": [
+      {"path": "zipvoice.tar.bz2", "url": "https://modelscope.cn/models/zyaztec/sherpa-onnx-zipvoice-distill-int8-zh-en-emilia/resolve/master/sherpa-onnx-zipvoice-distill-int8-zh-en-emilia.tar.bz2", "sha256": "77219c8b40f4ee8d73a7f902305ff6c1128ef9b54461c41b4ca6ed890b6c2803", "extract": true, "directory": "sherpa-onnx-zipvoice-distill-int8-zh-en-emilia"},
+      {"path": "vocos_24khz.onnx", "url": "https://modelscope.cn/models/zyaztec/sherpa-onnx-zipvoice-distill-int8-zh-en-emilia/resolve/master/vocos_24khz.onnx", "sha256": "bcb3b970e384161c4d634f0bb9e999ff1c471b34c9bc0b1049a5014065ed3cc0"}
+    ],
     "files": ["tokens.txt", "encoder.int8.onnx", "decoder.int8.onnx", "lexicon.txt", "espeak-ng-data", "vocos_24khz.onnx"], "kind": "tts"
   },
   {
     "id": "qwen3.5-2b-q4km", "name": "Qwen 3.5 2B", "runtime": "llama-cpp-python", "revision": "llama-models/2025-08",
     "stages": ["summary"], "languages": ["zh", "en"], "backend": ["cpu", "cuda", "metal"], "speaker": false,
     "size_bytes": 1280835840, "url": "https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/main/Qwen3.5-2B-Q4_K_M.gguf",
-    "china_url": "https://modelscope.cn/models/Qwen/Qwen3.5-2B-Instruct-GGUF/resolve/master/qwen3.5-2b-instruct-q4_k_m.gguf",
+    "china_url": "https://modelscope.cn/models/unsloth/Qwen3.5-2B-GGUF/resolve/master/Qwen3.5-2B-Q4_K_M.gguf",
     "files": ["Qwen3.5-2B-Q4_K_M.gguf"], "kind": "llama-chat",
     "context_size": 32768, "speed": 4, "quality": 4, "tier": "balanced"
   },
@@ -284,7 +329,7 @@
     "id": "qwen3.5-4b-q4km", "name": "Qwen 3.5 4B", "runtime": "llama-cpp-python", "revision": "llama-models/2025-08",
     "stages": ["summary"], "languages": ["zh", "en"], "backend": ["cpu", "cuda", "metal"], "speaker": false,
     "size_bytes": 2740937888, "url": "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/main/Qwen3.5-4B-Q4_K_M.gguf",
-    "china_url": "https://modelscope.cn/models/Qwen/Qwen3.5-4B-Instruct-GGUF/resolve/master/qwen3.5-4b-instruct-q4_k_m.gguf",
+    "china_url": "https://modelscope.cn/models/unsloth/Qwen3.5-4B-GGUF/resolve/master/Qwen3.5-4B-Q4_K_M.gguf",
     "files": ["Qwen3.5-4B-Q4_K_M.gguf"], "kind": "llama-chat",
     "context_size": 32768, "speed": 2, "quality": 5, "tier": "quality"
   },
@@ -292,7 +337,7 @@
     "id": "gemma3-1b-q8", "name": "Gemma 3 1B", "runtime": "llama-cpp-python", "revision": "llama-models/2025-08",
     "stages": ["summary"], "languages": ["zh", "en"], "backend": ["cpu", "cuda", "metal"], "speaker": false,
     "size_bytes": 1069306624, "url": "https://huggingface.co/bartowski/google_gemma-3-1b-it-GGUF/resolve/main/google_gemma-3-1b-it-Q8_0.gguf",
-    "china_url": "https://modelscope.cn/models/LLM-Research/gemma-3-1b-it-GGUF/resolve/master/gemma-3-1b-it-Q8_0.gguf",
+    "china_url": "https://modelscope.cn/models/bartowski/google_gemma-3-1b-it-GGUF/resolve/master/google_gemma-3-1b-it-Q8_0.gguf",
     "files": ["google_gemma-3-1b-it-Q8_0.gguf"], "kind": "llama-chat",
     "context_size": 32768, "speed": 5, "quality": 3, "tier": "fast"
   },
@@ -300,7 +345,7 @@
     "id": "gemma3-4b-q4km", "name": "Gemma 3 4B", "runtime": "llama-cpp-python", "revision": "llama-models/2025-08",
     "stages": ["summary"], "languages": ["zh", "en"], "backend": ["cpu", "cuda", "metal"], "speaker": false,
     "size_bytes": 2489758112, "url": "https://huggingface.co/bartowski/google_gemma-3-4b-it-GGUF/resolve/main/google_gemma-3-4b-it-Q4_K_M.gguf",
-    "china_url": "https://modelscope.cn/models/LLM-Research/gemma-3-4b-it-GGUF/resolve/master/gemma-3-4b-it-Q4_K_M.gguf",
+    "china_url": "https://modelscope.cn/models/bartowski/google_gemma-3-4b-it-GGUF/resolve/master/google_gemma-3-4b-it-Q4_K_M.gguf",
     "files": ["google_gemma-3-4b-it-Q4_K_M.gguf"], "kind": "llama-chat",
     "context_size": 32768, "speed": 3, "quality": 4, "tier": "balanced"
   },
@@ -308,6 +353,7 @@
     "id": "hy-mt2-1.8b-q4km", "name": "Tencent Hy-MT2 1.8B", "runtime": "llama-cpp-python", "revision": "llama-models/2025-08",
     "stages": ["translation"], "languages": ["all"], "backend": ["cpu", "cuda", "metal"], "speaker": false,
     "size_bytes": 1133080448, "url": "https://huggingface.co/tencent/Hy-MT2-1.8B-GGUF/resolve/main/Hy-MT2-1.8B-Q4_K_M.gguf",
+    "china_url": "https://modelscope.cn/models/Tencent-Hunyuan/Hy-MT2-1.8B-GGUF/resolve/master/Hy-MT2-1.8B-Q4_K_M.gguf",
     "files": ["Hy-MT2-1.8B-Q4_K_M.gguf"], "kind": "llama-translation",
     "context_size": 4096, "speed": 4, "quality": 4, "tier": "fast"
   }

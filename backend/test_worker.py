@@ -1,6 +1,7 @@
 import base64
 import io
 import json
+import tarfile
 import tempfile
 import threading
 import unittest
@@ -50,6 +51,21 @@ class WorkerTest(unittest.TestCase):
         with patch("sys.stdout", output):
             WorkerCore._write_stdout({"title": "예시"})
         self.assertEqual(json.loads(output.value), {"title": "예시"})
+
+    def test_worker_command_replaces_lone_surrogates_before_sqlite(self):
+        meeting = self.worker.handle(
+            {
+                "id": "start",
+                "type": "meeting.start",
+                "payload": {
+                    "title": "\ud800会议 😀",
+                    "language": "zh",
+                    "streaming_model_id": "paraformer-zh-en-int8",
+                    "refined_model_id": "qwen3-asr-0.6b-int8",
+                },
+            }
+        )
+        self.assertEqual(meeting["title"], "\ufffd会议 😀")
 
     def test_wav_duration_is_checked_before_loading_audio(self):
         path = Path(self.temp.name) / "long.wav"
@@ -427,6 +443,10 @@ class WorkerTest(unittest.TestCase):
         self.assertFalse(self.worker._is_duplicate_final(distinct))
 
     def test_live_text_removes_model_markers_and_repeating_tail(self):
+        self.assertEqual(
+            Worker._clean_live_text("language English<asr_text>Thought we would reinvent it."),
+            "Thought we would reinvent it.",
+        )
         self.assertEqual(
             Worker._clean_live_text("<|endoftext|>Human / Computer Interaction"), ""
         )
@@ -1121,10 +1141,40 @@ class WorkerTest(unittest.TestCase):
             "d54561979bd2e08a51e7dbd99ac36bb47564e089eefd403636dbca93e811bba2",
         )
 
+    def test_model_extraction_rejects_paths_outside_the_install_directory(self):
+        archive = Path(self.temp.name) / "unsafe.tar.bz2"
+        with tarfile.open(archive, "w:bz2") as bundle:
+            member = tarfile.TarInfo("../escaped")
+            member.size = 1
+            bundle.addfile(member, io.BytesIO(b"x"))
+        manager = ModelManager(Path(self.temp.name) / "models")
+        manager.catalog["unsafe"] = {"id": "unsafe", "revision": "1", "url": "https://example.test/unsafe.tar.bz2", "size_bytes": archive.stat().st_size, "directory": "model", "files": ["model.onnx"]}
+        manager._download_file = lambda _url, destination, _control, progress: (destination.write_bytes(archive.read_bytes()), progress(archive.stat().st_size))
+        with self.assertRaises(tarfile.FilterError):
+            manager.download("unsafe")
+        self.assertFalse((Path(self.temp.name) / "escaped").exists())
+
     def test_china_source_only_proxies_github_downloads(self):
         github = "https://github.com/k2-fsa/sherpa-onnx/releases/download/a/model.tar.bz2"
         self.assertEqual(ModelManager.download_url(github, True), f"https://gh-proxy.com/{github}")
         self.assertEqual(ModelManager.download_url("https://modelscope.cn/model.onnx", True), "https://modelscope.cn/model.onnx")
+
+    def test_china_source_prefers_modelscope_file_downloads(self):
+        manager = ModelManager(Path(self.temp.name) / "models")
+        manager.catalog["mirror"] = {
+            "id": "mirror", "revision": "1", "url": "https://example.test/model.tar.bz2",
+            "size_bytes": 5, "files": ["model.onnx"],
+            "china_downloads": [{"path": "model.onnx", "url": "https://modelscope.cn/example/model.onnx"}],
+        }
+        urls = []
+        def download(url, destination, _control, progress):
+            urls.append(url)
+            destination.write_bytes(b"model")
+            progress(5)
+        manager._download_file = download
+        manager.download("mirror", china_source=True)
+        self.assertEqual(urls, ["https://modelscope.cn/example/model.onnx"])
+        self.assertTrue(manager.is_ready("mirror"))
 
     def test_multilingual_zipformer_manifest_uses_the_archive_file_names(self):
         self.assertEqual(
@@ -1419,9 +1469,10 @@ class WorkerTest(unittest.TestCase):
         )
         with patch.object(self.worker.voice_profiles, "learn_from_meeting") as learn:
             result = self.worker.rename_speaker(
-                {"meeting_id": meeting["id"], "speaker_id": "spk-1", "name": "小王"}
+                {"meeting_id": meeting["id"], "speaker_id": "spk-1", "name": "小王", "locked": True}
             )
         self.assertEqual(result["speakers"][0]["name"], "小王")
+        self.assertTrue(result["speakers"][0]["locked"])
         learn.assert_not_called()
 
     def test_voiceprint_samples_are_added_only_for_the_selected_sentence(self):

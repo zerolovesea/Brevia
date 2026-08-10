@@ -1,4 +1,4 @@
-const { app, BrowserWindow, desktopCapturer, dialog, ipcMain, Menu, screen, session, shell, systemPreferences } = require('electron');
+const { app, BrowserWindow, clipboard, desktopCapturer, dialog, ipcMain, Menu, screen, session, ShareMenu, shell, systemPreferences } = require('electron');
 const { execFile, spawn } = require('node:child_process');
 const { appendFile, copyFile, mkdir, readFile, rename, rm, writeFile } = require('node:fs/promises');
 const { existsSync } = require('node:fs');
@@ -34,7 +34,9 @@ const logsDir = () => path.join(dataDir(), 'logs');
 const logFile = () => path.join(logsDir(), 'brevia.log');
 const logText = (value) => value instanceof Error ? value.stack || value.message : typeof value === 'string' ? value : JSON.stringify(value);
 const bundledFfmpegPath = () => {
-  try { return require('@ffmpeg-installer/ffmpeg').path.replace('app.asar', 'app.asar.unpacked'); } catch { return ''; }
+  const base = app.isPackaged ? path.join(process.resourcesPath, 'app.asar.unpacked') : root;
+  const binary = path.join(base, 'node_modules', '@ffmpeg-installer', `${process.platform}-${process.arch}`, process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg');
+  return existsSync(binary) ? binary : '';
 };
 const writeLog = (level, value) => {
   const line = `${new Date().toISOString()} [${level}] ${logText(value).trim()}\n`;
@@ -592,6 +594,62 @@ function registerIpc() {
     if (destination.canceled) return null;
     await copyFile(exported.path, destination.filePath);
     return { ...exported, path: destination.filePath };
+  });
+  ipcMain.handle('share.copy-text', (_, payload) => {
+    const value = z.object({ text: z.string().min(1).max(200000) }).parse(payload);
+    clipboard.writeText(value.text);
+    return { copied: true };
+  });
+  ipcMain.handle('share.open-external', async (_, payload) => {
+    const value = z.object({ url: z.string().min(1).max(8000) }).parse(payload);
+    // 仅放行社交网页分享(https)与邮件(mailto)。其余 scheme 一律拒绝,避免通过 IPC 触发任意协议处理器。
+    if (!/^(https:\/\/|mailto:)/i.test(value.url)) throw new Error('Unsupported share URL');
+    await shell.openExternal(value.url);
+    return { opened: true };
+  });
+  ipcMain.handle('share.file', async (_, payload) => {
+    const value = z.object({
+      meeting_id: z.string().uuid(),
+      kind: z.enum(['export', 'bundle']).default('export'),
+      content: z.enum(['transcript', 'notes', 'audio']).optional(),
+      format: z.enum(['md', 'txt', 'json', 'srt', 'docx', 'pdf', 'flac', 'wav', 'm4a']).optional(),
+      track: z.enum(['mix', 'mic', 'system', 'vocals', 'accompaniment']).optional(),
+    }).parse(payload);
+    // 与「导出」不同:直接写入会议的 exports 目录并在文件管理器中高亮,供用户手动拖入微信等无 API 平台。
+    const exported = value.kind === 'bundle'
+      ? await worker.request('meeting.bundle', { meeting_id: value.meeting_id })
+      : await prepareExport({ meeting_id: value.meeting_id, content: value.content, format: value.format || 'md', ...(value.track ? { track: value.track } : {}) });
+    shell.showItemInFolder(exported.path);
+    return { ...exported, revealed: true };
+  });
+  // 系统原生分享面板(NSSharingServicePicker)。仅 macOS 提供;可分享纯文本或先导出的文件,
+  // 用户从面板选 AirDrop / 信息 / 邮件 / 备忘录,以及任何注册了分享扩展的 App(如微信)。
+  ipcMain.handle('share.system', async (event, payload) => {
+    if (process.platform !== 'darwin' || typeof ShareMenu !== 'function') throw new Error('System share is only available on macOS');
+    const value = z.object({
+      text: z.string().min(1).max(200000).optional(),
+      anchor: z.object({ x: z.number().int().min(0).max(100000), y: z.number().int().min(0).max(100000) }).optional(),
+      file: z.object({
+        meeting_id: z.string().uuid(),
+        kind: z.enum(['export', 'bundle']).default('export'),
+        content: z.enum(['transcript', 'notes', 'audio']).optional(),
+        format: z.enum(['md', 'txt', 'json', 'srt', 'docx', 'pdf', 'flac', 'wav', 'm4a']).optional(),
+        track: z.enum(['mix', 'mic', 'system', 'vocals', 'accompaniment']).optional(),
+      }).optional(),
+    }).refine((v) => v.text || v.file, { message: 'Nothing to share' }).parse(payload);
+    const sharingItem = {};
+    if (value.text) sharingItem.texts = [value.text];
+    if (value.file) {
+      const exported = value.file.kind === 'bundle'
+        ? await worker.request('meeting.bundle', { meeting_id: value.file.meeting_id })
+        : await prepareExport({ meeting_id: value.file.meeting_id, content: value.file.content, format: value.file.format || 'md', ...(value.file.track ? { track: value.file.track } : {}) });
+      sharingItem.filePaths = [exported.path];
+    }
+    const window = BrowserWindow.fromWebContents(event.sender) || BrowserWindow.getAllWindows()[0];
+    if (!window) throw new Error('No window to anchor the share menu');
+    // 传入按钮坐标(相对窗口内容区),弹窗锚定在按钮处;无坐标时回退到窗口默认位置。
+    new ShareMenu(sharingItem).popup({ window, ...(value.anchor ? { x: value.anchor.x, y: value.anchor.y } : {}) });
+    return { shared: true };
   });
   ipcMain.handle('shell.showItem', (_, filePath) => shell.showItemInFolder(z.string().parse(filePath)));
   ipcMain.handle('audio.url', (_, filePath) => {

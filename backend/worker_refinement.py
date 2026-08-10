@@ -739,6 +739,8 @@ class RefinementWorkerMixin:
     @staticmethod
     def _clean_live_text(text):
         """移除模型终止标记，并截断流式识别末尾的重复循环。"""
+        # Qwen3-ASR may prepend its language metadata before this marker.
+        text = re.split(r"<asr_text>", str(text or ""), flags=re.IGNORECASE)[-1]
         text = re.split(r"<\|endoftext\|>", str(text or ""), flags=re.IGNORECASE)[0]
         text = re.sub(r"<\|[^|>]+\|>", " ", text)
         text = re.sub(r"\s+", " ", text).strip()
