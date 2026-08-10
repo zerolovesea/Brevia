@@ -23,7 +23,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Assemble static site
         run: |
-          mkdir site
+          mkdir -p site/docs
           rsync -a --exclude='.DS_Store' website/ site/
           rsync -a frontend/ site/frontend/
           rsync -a docs/assets/ site/docs/assets/
