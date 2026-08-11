@@ -16,11 +16,12 @@ from typing import Optional
 # 推理模型（Qwen3.5 等）将思维链包装在 <think>...</think> 中。即使思考实际关闭，
 # 它们也会发出一个空块，因此在到达摘要/翻译管道之前从每次内置补全中剥离它。
 _THINK_BLOCK = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
+_THINKING_PROCESS = re.compile(r"^\s*(?:thinking process|reasoning|analysis)\s*:", re.IGNORECASE)
 REQUEST_TIMEOUT_SECONDS = 10 * 60
 
 
 def strip_reasoning(text: str) -> str:
-    """从模型输出中移除 <think> 推理块和零散的 think 标签。"""
+    """从模型输出中移除推理块，只保留最终回答。"""
     if not text:
         return text
     cleaned = _THINK_BLOCK.sub("", text)
@@ -30,6 +31,9 @@ def strip_reasoning(text: str) -> str:
     if "</think>" in lower:
         cleaned = cleaned[lower.rindex("</think>") + len("</think>"):]
     cleaned = re.sub(r"</?think>", "", cleaned, flags=re.IGNORECASE)
+    if _THINKING_PROCESS.match(cleaned):
+        final = re.search(r"(?m)^#\s+", cleaned)
+        cleaned = cleaned[final.start():] if final else ""
     return cleaned.strip()
 
 
@@ -193,6 +197,8 @@ class LlamaSidecarMixin:
         model_id = payload.get("model_id") or payload.get("model")
         if not model_id:
             raise ValueError("Built-in AI requires a model id in payload")
+        if model_id.startswith("qwen3"):
+            prompt = f"{prompt}\n/no_think"
         return self.llama_generate(
             "summary",
             model_id,

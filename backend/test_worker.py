@@ -1,4 +1,5 @@
 import base64
+import hashlib
 import io
 import json
 import tarfile
@@ -22,7 +23,7 @@ from .storage import Store
 from .transcript import parse_json_object, validate_summary
 from .worker import Worker, install_global_error_handlers, main
 from .worker_core import WorkerCore
-from .worker_llama_sidecar import _Sidecar
+from .worker_llama_sidecar import _Sidecar, strip_reasoning
 
 
 class WorkerTest(unittest.TestCase):
@@ -323,6 +324,13 @@ class WorkerTest(unittest.TestCase):
                 {"seg-1"},
             )
 
+    def test_strip_reasoning_removes_plain_thinking_process(self):
+        self.assertEqual(
+            strip_reasoning("Thinking Process:\n1. Plan\n# Meeting notes\n\nDone"),
+            "# Meeting notes\n\nDone",
+        )
+        self.assertEqual(strip_reasoning("Thinking Process:\n1. Plan"), "")
+
     def test_summary_appends_transcript_to_custom_prompt_and_parses_code_fence(self):
         meeting = self.worker.start(
             {
@@ -378,8 +386,24 @@ class WorkerTest(unittest.TestCase):
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
+        self.worker.store.save_segment(
+            {
+                "meeting_id": meeting["id"],
+                "segment_id": "mic-0",
+                "text": "已清洗的内容",
+                "start_ms": 0,
+                "end_ms": 1000,
+                "speaker": "spk-1",
+            }
+        )
+        transcript = "mic-0 [00:00] spk-1: 已清洗的内容"
         self.worker.store.save_summary(
-            meeting["id"], {"cleaned_transcript": "[00:00] 说话人 1: 已清洗的内容"}, ""
+            meeting["id"],
+            {
+                "cleaned_transcript": "[00:00] 说话人 1: 已清洗的内容",
+                "transcript_hash": hashlib.sha256(transcript.encode()).hexdigest(),
+            },
+            "",
         )
         prompts = []
         self.worker.llm_complete = lambda _payload, prompt, **_kwargs: (
@@ -391,6 +415,96 @@ class WorkerTest(unittest.TestCase):
         self.assertEqual(len(prompts), 1)
         self.assertIn("已清洗的内容", prompts[0])
         self.assertNotIn("会议转录编辑", prompts[0])
+
+    def test_summary_uses_live_text_when_postprocess_is_empty(self):
+        meeting = self.worker.start(
+            {
+                "title": "实时逐字稿",
+                "language": "zh",
+                "streaming_model_id": "paraformer-zh-en-int8",
+                "refined_model_id": "qwen3-asr-0.6b-int8",
+            }
+        )
+        self.worker.store.save_segment(
+            {
+                "meeting_id": meeting["id"],
+                "segment_id": "mic-0",
+                "text": "本周五完成验收",
+                "start_ms": 0,
+                "end_ms": 1000,
+                "speaker": "spk-1",
+            }
+        )
+        self.worker.store.save_segment(
+            {
+                "meeting_id": meeting["id"],
+                "segment_id": "postprocess-0",
+                "version": "postprocess",
+                "text": " ",
+                "start_ms": 0,
+                "end_ms": 1000,
+                "speaker": "spk-1",
+            }
+        )
+        prompts = []
+        self.worker.llm_complete = lambda _payload, prompt, **_kwargs: (
+            prompts.append(prompt) or ("[00:00] 说话人 1: 本周五完成验收" if len(prompts) == 1 else "# **实时逐字稿**")
+        )
+        self.worker.summarize(
+            {
+                "meeting_id": meeting["id"],
+                "provider": "OpenAI",
+                "endpoint": "https://example.test/chat",
+                "model": "gpt",
+                "consent": True,
+                "language": "zh",
+            }
+        )
+        self.assertIn("本周五完成验收", prompts[0])
+
+    def test_summary_reuses_cleaned_transcript_after_generation_failure(self):
+        meeting = self.worker.start(
+            {
+                "title": "失败后重试",
+                "language": "zh",
+                "streaming_model_id": "paraformer-zh-en-int8",
+                "refined_model_id": "qwen3-asr-0.6b-int8",
+            }
+        )
+        self.worker.store.save_segment(
+            {
+                "meeting_id": meeting["id"],
+                "segment_id": "mic-0",
+                "text": "确认下周发布",
+                "start_ms": 0,
+                "end_ms": 1000,
+                "speaker": "spk-1",
+            }
+        )
+        prompts = []
+
+        def complete(_payload, prompt, **_kwargs):
+            prompts.append(prompt)
+            if len(prompts) == 1:
+                return "[00:00] 说话人 1: 确认下周发布"
+            if len(prompts) == 2:
+                raise RuntimeError("temporary failure")
+            return "# **失败后重试**"
+
+        self.worker.llm_complete = complete
+        payload = {
+            "meeting_id": meeting["id"],
+            "provider": "OpenAI",
+            "endpoint": "https://example.test/chat",
+            "model": "gpt",
+            "consent": True,
+            "language": "zh",
+        }
+        with self.assertRaisesRegex(ValueError, "temporary failure"):
+            self.worker.summarize(payload)
+        self.worker.summarize(payload)
+        self.assertEqual(len(prompts), 3)
+        self.assertIn("确认下周发布", prompts[-1])
 
     def test_summary_exports_markdown_and_text(self):
         meeting = self.worker.start(

@@ -1,5 +1,7 @@
 """聚焦的 worker 职责组件。"""
 
+import hashlib
+
 from .transcript import clock, latest_segments
 from .worker_common import managed_task, require
 
@@ -163,7 +165,7 @@ def cleaning_prompt(transcript, language):
 9. 只输出清洗后的 Markdown，不输出解释或 JSON。"""
     else:
         instructions = CLEANING_PROMPTS.get(language, CLEANING_PROMPTS["en"])
-    return f"{instructions}\n\n<transcript>\n{transcript}\n</transcript>"
+    return f"{instructions}\n\nDo not reveal reasoning or a thinking process. Begin directly with the cleaned transcript.\n\n<transcript>\n{transcript}\n</transcript>"
 
 
 def summary_prompt(transcript, title, language):
@@ -232,7 +234,7 @@ def summary_prompt(transcript, title, language):
 - 列出重要日期、金额、数量、版本号、项目编号或技术参数。""".format(title=title)
     else:
         instructions = SUMMARY_PROMPTS.get(language, SUMMARY_PROMPTS["en"]).format(title=title)
-    return f"{instructions}\n\n<transcript>\n{transcript}\n</transcript>"
+    return f"{instructions}\n\nDo not reveal reasoning or a thinking process. Begin directly with the requested Markdown.\n\n<transcript>\n{transcript}\n</transcript>"
 
 
 class LLMWorkerMixin:
@@ -276,10 +278,18 @@ class LLMWorkerMixin:
         transcript = "\n".join(
             f"{item['id']} [{clock(item['start_ms'])}] {item['speaker_name']}: {item['text']}"
             for item in segments
+            if str(item.get("text") or "").strip()
         )
+        if not transcript:
+            raise ValueError("No transcript text is available for meeting notes")
+        transcript_hash = hashlib.sha256(transcript.encode()).hexdigest()
         language = payload.get("language", "en")
         previous = (meeting.get("summary") or {}).get("data") or {}
-        cleaned_transcript = previous.get("cleaned_transcript", "")
+        cleaned_transcript = (
+            previous.get("cleaned_transcript", "")
+            if previous.get("transcript_hash") == transcript_hash
+            else ""
+        )
         # 早期版本将 Anthropic 工具响应存储为清洗后的转录。它不是可用的清洗结果，必须重新生成。
         if cleaned_transcript.lstrip().startswith('{"content":'):
             cleaned_transcript = ""
@@ -315,13 +325,23 @@ class LLMWorkerMixin:
                 raise ValueError("Summary response was empty")
         except Exception as error:
             raw = locals().get("markdown", locals().get("cleaned_transcript", str(error)))
+            failed_data = {**previous}
+            if cleaned_transcript:
+                failed_data.update(
+                    cleaned_transcript=cleaned_transcript,
+                    transcript_hash=transcript_hash,
+                )
             self.store.save_summary(
                 meeting["id"],
-                {**previous, **({"cleaned_transcript": cleaned_transcript} if cleaned_transcript else {})} or None,
+                failed_data or None,
                 raw,
             )
             raise ValueError(f"Summary response was saved but could not be generated: {error}") from error
-        data = {"markdown": markdown, "cleaned_transcript": cleaned_transcript}
+        data = {
+            "markdown": markdown,
+            "cleaned_transcript": cleaned_transcript,
+            "transcript_hash": transcript_hash,
+        }
         self.store.save_summary(meeting["id"], data, markdown)
         self.emit(
             "summary.progress",

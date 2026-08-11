@@ -6,12 +6,20 @@ import json
 def latest_segments(segments):
     """选择展示/导出版本：精修覆盖实时，人工编辑始终优先。"""
     latest, priority = {}, {"live": 1, "postprocess": 2, "user": 3}
-    refined = [item for item in segments if item["version"].startswith("postprocess")]
+    refined = [
+        item
+        for item in segments
+        if item["version"].startswith("postprocess") and str(item.get("text") or "").strip()
+    ]
     revision = max((item["revision"] for item in refined), default=None)
     base = (
         [item for item in refined if item["revision"] == revision]
         if revision is not None
-        else [item for item in segments if item["version"] == "live"]
+        else [
+            item
+            for item in segments
+            if item["version"] == "live" and str(item.get("text") or "").strip()
+        ]
     )
     for item in [*base, *(item for item in segments if item["version"] == "user")]:
         item_priority = (

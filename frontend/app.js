@@ -2538,6 +2538,9 @@ function activateMeeting(meeting, payload) {
   renderMeetingList();
   meetingActive = true;
   seconds = 0;
+  const pauseButton = document.querySelector('#pause');
+  pauseButton.dataset.paused = 'false';
+  renderPauseButton();
   miniMeeting.hidden = true;
   syncFloatingNotices();
   showView('live');
@@ -2642,13 +2645,7 @@ document.querySelector('#end-meeting').addEventListener('click', async (event) =
     meetingActive = false;
     miniMeeting.hidden = true;
     syncFloatingNotices();
-    if (meeting) {
-      applyBackendDetail(meeting);
-      void window.brevia.meeting.refine({ meeting_id: meeting.id }).catch((error) => {
-        hideRefinementProgress();
-        showToast(`${t('会后精修失败')}: ${error.message}`);
-      });
-    }
+    if (meeting) applyBackendDetail(meeting);
     showView('detail');
     showToast(message('recordingSaved'));
     if (window.brevia) await refreshBackendMeetings();
