@@ -91,11 +91,57 @@
       .link-quiet:hover {
         opacity: 0.6;
       }
-      .demo-frame {
-        display: block;
+      .demo-canvas {
+        position: relative;
         width: 100%;
-        height: 620px;
+        aspect-ratio: 16 / 10;
+        overflow: hidden;
+      }
+      .demo-frame {
+        position: absolute;
+        top: 0;
+        left: 0;
+        display: block;
+        width: 1440px;
+        height: 900px;
         border: 0;
+        transform: scale(var(--demo-scale, 1));
+        transform-origin: top left;
+      }
+      .feature-rail {
+        display: grid;
+        gap: 1.5rem;
+        overflow: hidden;
+      }
+      .feature-track {
+        display: flex;
+        gap: 1.5rem;
+        width: max-content;
+        animation: feature-scroll 42s linear infinite;
+      }
+      .feature-track.reverse {
+        animation-direction: reverse;
+      }
+      .feature-rail:hover .feature-track,
+      .feature-rail:focus-within .feature-track {
+        animation-play-state: paused;
+      }
+      .feature-card {
+        flex: 0 0 min(360px, 86vw);
+        min-height: 230px;
+      }
+      @keyframes feature-scroll {
+        to {
+          transform: translateX(-50%);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .feature-rail {
+          overflow-x: auto;
+        }
+        .feature-track {
+          animation: none;
+        }
       }
       /* Accordion */
       .faq-item summary {
@@ -232,12 +278,14 @@
             </p>
           </div>
           <div class="reveal col-span-12 md:col-span-8" style="--reveal-delay: 120ms">
-            <iframe
+            <div class="demo-canvas">
+              <iframe
                 class="demo-frame"
                 src="./demo-transcription-en.html"
                 loading="lazy"
                 title="Live transcription and translation demo"
               ></iframe>
+            </div>
           </div>
         </div>
       </section>
@@ -258,12 +306,14 @@
             </p>
           </div>
           <div class="reveal col-span-12 md:order-1 md:col-span-8" style="--reveal-delay: 120ms">
-            <iframe
+            <div class="demo-canvas">
+              <iframe
                 class="demo-frame"
                 src="./demo-summary-en.html"
                 loading="lazy"
                 title="AI meeting notes demo"
               ></iframe>
+            </div>
           </div>
         </div>
       </section>
@@ -284,12 +334,14 @@
             </p>
           </div>
           <div class="reveal col-span-12 md:col-span-8" style="--reveal-delay: 120ms">
-            <iframe
+            <div class="demo-canvas">
+              <iframe
                 class="demo-frame"
                 src="./demo-voiceprint-en.html"
-                loading="lazy"
+                loading="eager"
                 title="Voiceprint speaker identification demo"
               ></iframe>
+            </div>
           </div>
         </div>
       </section>
@@ -306,8 +358,8 @@
             where the audio already is.
           </p>
         </div>
-        <div class="grid grid-cols-12 gap-6">
-          <article class="reveal col-span-12 border border-line2 p-8 transition-colors duration-300 hover:border-ink md:col-span-7 md:p-10">
+        <div class="feature-rail reveal" aria-label="More features; hover to pause scrolling">
+          <article class="feature-card border border-line2 p-8 transition-colors duration-300 hover:border-ink">
             <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">Model library</span>
             <p class="display mt-5 text-[40px] font-light text-ink">27+</p>
             <p class="measure mt-3 max-w-[420px] text-[15px] text-slate">
@@ -316,7 +368,7 @@
               embedding, text-to-speech, and source separation.
             </p>
           </article>
-          <article class="reveal col-span-12 border border-line2 p-8 transition-colors duration-300 hover:border-ink md:col-span-5 md:p-10" style="--reveal-delay: 80ms">
+          <article class="feature-card border border-line2 p-8 transition-colors duration-300 hover:border-ink">
             <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">Languages</span>
             <p class="display mt-5 text-[40px] font-light text-ink">30+</p>
             <p class="measure mt-3 text-[15px] text-slate">
@@ -324,7 +376,7 @@
               German, Spanish, Russian, Arabic, Thai, Vietnamese, and more.
             </p>
           </article>
-          <article class="reveal col-span-12 border border-line2 p-8 transition-colors duration-300 hover:border-ink md:col-span-4 md:p-10" style="--reveal-delay: 120ms">
+          <article class="feature-card border border-line2 p-8 transition-colors duration-300 hover:border-ink">
             <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">TTS &amp; cloning</span>
             <p class="measure mt-4 text-[15px] text-slate">
               ZipVoice synthesizes Chinese and English speech from enrolled
@@ -332,19 +384,39 @@
               and Korean.
             </p>
           </article>
-          <article class="reveal col-span-12 border border-line2 p-8 transition-colors duration-300 hover:border-ink md:col-span-4 md:p-10" style="--reveal-delay: 160ms">
+          <article class="feature-card border border-line2 p-8 transition-colors duration-300 hover:border-ink">
             <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">Import &amp; separate</span>
             <p class="measure mt-4 text-[15px] text-slate">
               Bring in existing recordings for offline transcription. Spleeter
               splits audio into vocal and non-vocal stems for post-processing.
             </p>
           </article>
-          <article class="reveal col-span-12 border border-line2 p-8 transition-colors duration-300 hover:border-ink md:col-span-4 md:p-10" style="--reveal-delay: 200ms">
+          <article class="feature-card border border-line2 p-8 transition-colors duration-300 hover:border-ink">
             <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">Rich exports</span>
             <p class="measure mt-4 text-[15px] text-slate">
               Transcript and notes as Markdown, TXT, JSON, SRT, DOCX, or PDF; audio
               as FLAC, WAV, or M4A.
             </p>
+          </article>
+          <article class="feature-card border border-line2 p-8 transition-colors duration-300 hover:border-ink">
+            <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">Live captions</span>
+            <p class="display mt-5 text-[40px] font-light text-ink">Live</p>
+            <p class="measure mt-3 text-[15px] text-slate">Speech turns into readable captions as the conversation happens.</p>
+          </article>
+          <article class="feature-card border border-line2 p-8 transition-colors duration-300 hover:border-ink">
+            <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">Live translation</span>
+            <p class="display mt-5 text-[40px] font-light text-ink">Bilingual</p>
+            <p class="measure mt-3 text-[15px] text-slate">See translations alongside the original captions in multilingual meetings.</p>
+          </article>
+          <article class="feature-card border border-line2 p-8 transition-colors duration-300 hover:border-ink">
+            <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">AI meeting notes</span>
+            <p class="display mt-5 text-[40px] font-light text-ink">Distill</p>
+            <p class="measure mt-3 text-[15px] text-slate">Use a local or connected model to extract summaries, decisions, and action items.</p>
+          </article>
+          <article class="feature-card border border-line2 p-8 transition-colors duration-300 hover:border-ink">
+            <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">Streaming speed</span>
+            <p class="display mt-5 text-[40px] font-light text-ink">Now</p>
+            <p class="measure mt-3 text-[15px] text-slate">Streaming transcription and translation keep pace with the meeting.</p>
           </article>
         </div>
       </section>
@@ -575,6 +647,40 @@
               if (other !== item) other.open = false;
             });
           });
+        });
+      })();
+
+      (function () {
+        var canvases = document.querySelectorAll('.demo-canvas');
+        var resize = function (canvas) {
+          canvas.style.setProperty('--demo-scale', canvas.clientWidth / 1440);
+        };
+        var observer = new ResizeObserver(function (entries) {
+          entries.forEach(function (entry) {
+            resize(entry.target);
+          });
+        });
+        canvases.forEach(function (canvas) {
+          resize(canvas);
+          observer.observe(canvas);
+        });
+      })();
+
+      (function () {
+        var rail = document.querySelector('.feature-rail');
+        if (!rail) return;
+        var tracks = [document.createElement('div'), document.createElement('div')];
+        Array.from(rail.children).forEach(function (card, index) {
+          tracks[index % 2].appendChild(card);
+        });
+        tracks.forEach(function (track, index) {
+          track.className = 'feature-track' + (index ? ' reverse' : '');
+          Array.from(track.children).forEach(function (card) {
+            var copy = card.cloneNode(true);
+            copy.setAttribute('aria-hidden', 'true');
+            track.appendChild(copy);
+          });
+          rail.appendChild(track);
         });
       })();
     </script>
