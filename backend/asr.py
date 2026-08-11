@@ -18,6 +18,7 @@ from .config import SETTINGS
 
 DOWNLOAD_TIMEOUT_SECONDS = 30
 DOWNLOAD_RETRIES = 5
+DOWNLOAD_FREE_SPACE_MULTIPLIER = 2
 
 
 class DownloadCancelled(Exception):
@@ -36,7 +37,7 @@ def sha256_file(path):
 class ModelManager:
     """按模型清单管理本地文件，并向 Worker 上报下载状态。"""
 
-    def __init__(self, root, event=lambda *_: None):
+    def __init__(self, root, event=lambda *_: None, bundled_root=None):
         """加载模型清单。
 
         Args:
@@ -45,6 +46,8 @@ class ModelManager:
         """
         self.root = Path(root)
         self.root.mkdir(parents=True, exist_ok=True)
+        bundled_root = bundled_root or os.environ.get("BREVIA_BUNDLED_MODELS_DIR")
+        self.bundled_root = Path(bundled_root) if bundled_root else None
         self.event = event
         self.catalog = {
             item["id"]: item
@@ -59,6 +62,7 @@ class ModelManager:
             {
                 **model,
                 "status": "ready" if self.is_ready(model["id"]) else "not_installed",
+                "bundled": self.is_bundled(model["id"]),
                 "path": str(self.path(model["id"]))
                 if self.is_ready(model["id"])
                 else None,
@@ -66,10 +70,25 @@ class ModelManager:
             for model in self.catalog.values()
         ]
 
-    def path(self, model_id):
-        """返回指定模型在本机的版本化目录，不检查目录是否存在。"""
+    def local_path(self, model_id):
+        """返回指定模型的可写版本化目录，不检查目录是否存在。"""
         model = self.get(model_id)
         return self.root / f"{model_id}-{model['revision'].replace('/', '-')}"
+
+    def bundled_path(self, model_id):
+        """返回随安装包提供的模型路径；开发环境可能不存在。"""
+        if not self.bundled_root:
+            return None
+        model = self.get(model_id)
+        return self.bundled_root / f"{model_id}-{model['revision'].replace('/', '-')}"
+
+    def path(self, model_id):
+        """返回可用模型路径，优先用户下载的版本。"""
+        local = self.local_path(model_id)
+        bundled = self.bundled_path(model_id)
+        if not self._is_ready(model_id, local) and bundled and self._is_ready(model_id, bundled):
+            return bundled
+        return local
 
     def get(self, model_id):
         """按下载 ID 读取模型配置；未知 ID 会抛出 ``ValueError``。"""
@@ -78,10 +97,18 @@ class ModelManager:
         except KeyError as error:
             raise ValueError("Unknown model") from error
 
-    def is_ready(self, model_id):
-        """检查模型目录及清单声明的必需文件是否完整。"""
-        model, path = self.get(model_id), self.path(model_id)
+    def _is_ready(self, model_id, path):
+        model = self.get(model_id)
         return path.is_dir() and all((path / name).exists() for name in model["files"])
+
+    def is_bundled(self, model_id):
+        """检查模型是否可直接从安装包使用。"""
+        bundled = self.bundled_path(model_id)
+        return bool(bundled and self._is_ready(model_id, bundled))
+
+    def is_ready(self, model_id):
+        """检查用户目录或安装包中的模型是否完整。"""
+        return self._is_ready(model_id, self.local_path(model_id)) or self.is_bundled(model_id)
 
     @staticmethod
     def download_url(url, china_source=False):
@@ -160,6 +187,9 @@ class ModelManager:
         if self.is_ready(model_id):
             self.event("model.status", {"model_id": model_id, "status": "ready"})
             return self.path(model_id)
+        required_space = model["size_bytes"] * DOWNLOAD_FREE_SPACE_MULTIPLIER
+        if shutil.disk_usage(self.root).free < required_space:
+            raise OSError(f"Insufficient disk space: need {required_space} bytes free")
         self.event("model.status", {"model_id": model_id, "status": "downloading"})
         with tempfile.TemporaryDirectory(dir=self.root) as temporary:
             downloads = model.get("china_downloads") if china_source else None
@@ -268,10 +298,13 @@ class ModelManager:
 
     def delete(self, model_id):
         """删除指定模型目录，并发布未安装状态。"""
-        path = self.path(model_id)
+        path = self.local_path(model_id)
         if path.exists():
             shutil.rmtree(path)
-        self.event("model.status", {"model_id": model_id, "status": "not_installed"})
+        self.event(
+            "model.status",
+            {"model_id": model_id, "status": "ready" if self.is_bundled(model_id) else "not_installed"},
+        )
 
     @staticmethod
     def device():

@@ -10,5 +10,6 @@ backend/build/
 backend/brevia-worker
 backend/brevia-worker.exe
 backend/runtime/
+backend/bundled-models/
 /release.sh
 /docs/RELEASING.local.md

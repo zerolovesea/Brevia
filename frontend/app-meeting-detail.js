@@ -68,7 +68,6 @@ function applyBackendDetail(meeting) {
   } else { progress.value = playerAudio.currentTime; renderPlayerTime(); }
   renderMeetingDetail();
   if (transcriptScrollTop !== undefined) document.querySelector('.transcript-body')?.scrollTo({ top: transcriptScrollTop, behavior: 'instant' });
-  renderDualTrackPanel(meeting);
 }
 
 async function startSeparation() {

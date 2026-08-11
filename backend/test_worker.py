@@ -52,6 +52,14 @@ class WorkerTest(unittest.TestCase):
             WorkerCore._write_stdout({"title": "예시"})
         self.assertEqual(json.loads(output.value), {"title": "예시"})
 
+    def test_meeting_get_compacts_superseded_word_timestamps(self):
+        meeting = self.worker.start({"title": "compact", "language": "zh", "streaming_model_id": "paraformer-zh-en-int8", "refined_model_id": "qwen3-asr-0.6b-int8"})
+        for version, revision, text in (("live", 0, "live"), ("postprocess", 0, "old"), ("postprocess-1", 1, "current")):
+            self.worker.store.save_segment({"meeting_id": meeting["id"], "segment_id": version, "version": version, "revision": revision, "start_ms": 0, "end_ms": 1000, "speaker": "spk-1", "text": text, "word_timestamps": [{"text": "word", "overlap_speakers": ["spk-1", "spk-2"]}]})
+        result = self.worker.handle({"id": "compact-get", "type": "meeting.get", "payload": {"meeting_id": meeting["id"]}})
+        self.assertEqual([segment["text"] for segment in result["segments"]], ["current"])
+        self.assertEqual(result["segments"][0]["word_timestamps"], [{"overlap_speakers": ["spk-1", "spk-2"]}])
+
     def test_worker_command_replaces_lone_surrogates_before_sqlite(self):
         meeting = self.worker.handle(
             {
@@ -66,6 +74,50 @@ class WorkerTest(unittest.TestCase):
             }
         )
         self.assertEqual(meeting["title"], "\ufffd会议 😀")
+
+    def test_worker_rejects_excessive_command_rate_and_depth(self):
+        for index in range(100):
+            with self.assertRaisesRegex(ValueError, "Unknown command"):
+                self.worker.handle({"id": str(index), "type": "unknown"})
+        with self.assertRaisesRegex(ValueError, "rate limit"):
+            self.worker.handle({"id": "limited", "type": "unknown"})
+        payload = {}
+        for _ in range(65):
+            payload = {"a": payload}
+        with self.assertRaisesRegex(ValueError, "nested too deeply"):
+            WorkerCore(self.temp.name).handle({"id": "deep", "type": "unknown", "payload": payload})
+
+    def test_workspace_delete_restores_meeting_and_workspace_together(self):
+        meeting = self.worker.start({"title": "workspace", "language": "zh", "streaming_model_id": "paraformer-zh-en-int8", "refined_model_id": "qwen3-asr-0.6b-int8"})
+        workspace = self.worker.store.create_workspace({"name": "Test"})
+        self.worker.store.assign_meeting_to_workspace(meeting["id"], workspace["id"])
+        self.worker.store.delete_workspace(workspace["id"])
+        self.assertEqual(self.worker.store.list_meetings(include_deleted=True)[0]["id"], meeting["id"])
+        self.worker.restore_meeting({"meeting_id": meeting["id"]})
+        self.assertEqual(self.worker.store.get_meeting(meeting["id"])["workspace_id"], workspace["id"])
+        self.assertEqual(self.worker.store.get_workspace(workspace["id"])["id"], workspace["id"])
+
+    def test_meeting_can_start_in_a_workspace(self):
+        workspace = self.worker.store.create_workspace({"name": "Team"})
+        meeting = self.worker.start({"title": "workspace", "language": "zh", "streaming_model_id": "paraformer-zh-en-int8", "refined_model_id": "qwen3-asr-0.6b-int8", "workspace_id": workspace["id"]})
+        self.assertEqual(meeting["workspace_id"], workspace["id"])
+
+    def test_legacy_category_migrates_once_to_workspace_id(self):
+        meeting = self.worker.start({"title": "legacy", "language": "zh", "streaming_model_id": "paraformer-zh-en-int8", "refined_model_id": "qwen3-asr-0.6b-int8"})
+        with self.worker.store.connect() as db:
+            db.execute("UPDATE meetings SET category='Legacy', workspace_id=NULL WHERE id=?", (meeting["id"],))
+        migrated = Store(self.temp.name).get_meeting(meeting["id"])
+        self.assertEqual(migrated["category"], "")
+        self.assertEqual(Store(self.temp.name).get_workspace(migrated["workspace_id"])["name"], "Legacy")
+
+    def test_example_workspace_is_not_shown_as_a_real_workspace(self):
+        workspace = self.worker.store.create_workspace({"name": "Example"})
+        meeting = self.worker.start({"title": "example", "language": "en", "streaming_model_id": "paraformer-zh-en-int8", "refined_model_id": "qwen3-asr-0.6b-int8"})
+        with self.worker.store.connect() as db:
+            db.execute("UPDATE meetings SET is_example=1, workspace_id=? WHERE id=?", (workspace["id"], meeting["id"]))
+        Store(self.temp.name)
+        self.assertIsNone(Store(self.temp.name).get_meeting(meeting["id"])["workspace_id"])
+        self.assertIsNone(Store(self.temp.name).get_workspace(workspace["id"]))
 
     def test_wav_duration_is_checked_before_loading_audio(self):
         path = Path(self.temp.name) / "long.wav"
@@ -1171,6 +1223,22 @@ class WorkerTest(unittest.TestCase):
             manager.download("unsafe")
         self.assertFalse((Path(self.temp.name) / "escaped").exists())
 
+    def test_bundled_model_is_ready_without_copying_it_to_user_data(self):
+        root = Path(self.temp.name)
+        manager = ModelManager(root / "models", bundled_root=root / "bundled-models")
+        model_id = "silero-vad"
+        bundled = manager.bundled_path(model_id)
+        bundled.mkdir(parents=True)
+        (bundled / "silero_vad.onnx").write_bytes(b"model")
+
+        self.assertTrue(manager.is_ready(model_id))
+        self.assertTrue(manager.is_bundled(model_id))
+        self.assertEqual(manager.path(model_id), bundled)
+        manager.local_path(model_id).mkdir()
+        self.assertEqual(manager.path(model_id), bundled)
+        manager.delete(model_id)
+        self.assertTrue(manager.is_ready(model_id))
+
     def test_china_source_only_proxies_github_downloads(self):
         github = "https://github.com/k2-fsa/sherpa-onnx/releases/download/a/model.tar.bz2"
         self.assertEqual(ModelManager.download_url(github, True), f"https://gh-proxy.com/{github}")
@@ -1340,11 +1408,7 @@ class WorkerTest(unittest.TestCase):
             self.worker.initialize({})
         self.assertEqual(
             [call.args[0]["model_id"] for call in download.call_args_list],
-            [
-                "gtcrn-live-denoiser",
-                "online-punct-en-int8",
-                "punct-ct-transformer-zh-en-int8",
-            ],
+            ["gtcrn-live-denoiser"],
         )
 
     def test_live_voiceprint_match_returns_its_name(self):

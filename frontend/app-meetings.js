@@ -1,22 +1,30 @@
 /** 将持久化的会议数据映射为会议列表所需的展示结构。 */
 function backendMeeting(item) {
+  const workspaceId = item.is_example ? '' : (item.workspace_id || '');
   return {
     id: item.id, tone: 'violet', title: item.title, createdAt: item.created_at,
-    durationMs: item.duration_ms, statusCode: item.status, meta: '', category: item.category,
+    durationMs: item.duration_ms, statusCode: item.status, meta: '',
+    workspaceId: workspaceId,
+    workspace: workspaceId && typeof getWorkspaceName === 'function' ? {
+      name: getWorkspaceName(workspaceId),
+      color: getWorkspaceColor(workspaceId)
+    } : null,
     tags: item.tags, status: {}, deleted: Boolean(item.deleted_at),
     isExample: Boolean(item.is_example), exampleLocale: item.example_locale,
   };
 }
 
 const meetingCacheKey = 'brevia-meetings-v1';
+const meetingCacheMaxAgeMs = 5 * 60 * 1000;
 try {
-  const cachedMeetings = JSON.parse(localStorage.getItem(meetingCacheKey) || '[]');
-  if (Array.isArray(cachedMeetings)) uiData.meetings = cachedMeetings;
+  const cached = JSON.parse(localStorage.getItem(meetingCacheKey) || 'null');
+  if (cached?.savedAt > Date.now() - meetingCacheMaxAgeMs && Array.isArray(cached.meetings)) uiData.meetings = cached.meetings;
+  else localStorage.removeItem(meetingCacheKey);
 } catch { localStorage.removeItem(meetingCacheKey); }
 
 function cacheMeetingList() {
   if (!window.brevia || activeLibraryNav !== 'all-meetings' || meetingSearch.value.trim()) return;
-  try { localStorage.setItem(meetingCacheKey, JSON.stringify(uiData.meetings.filter(({ deleted }) => !deleted))); }
+  try { localStorage.setItem(meetingCacheKey, JSON.stringify({ savedAt: Date.now(), meetings: uiData.meetings.filter(({ deleted }) => !deleted) })); }
   catch { /* 当浏览器存储不可用或已满时，以后端数据为准。 */ }
 }
 

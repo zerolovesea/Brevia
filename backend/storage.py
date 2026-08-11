@@ -6,6 +6,7 @@ from .store_maintenance import MaintenanceStoreMixin
 from .store_meetings import MeetingStoreMixin
 from .store_speakers import SpeakerProfileStoreMixin
 from .store_transcripts import TranscriptStoreMixin
+from .store_workspaces import WorkspaceStoreMixin
 
 
 class Store(
@@ -14,6 +15,7 @@ class Store(
     SpeakerProfileStoreMixin,
     AudioStoreMixin,
     MaintenanceStoreMixin,
+    WorkspaceStoreMixin,
     StoreBase,
 ):
     """公共存储 API；行为位于按职责划分的组件中。"""

@@ -45,6 +45,14 @@ contextBridge.exposeInMainWorld('brevia', {
     system: invoke('share.system'),
   },
   speaker: { rename: invoke('speaker.rename') },
+  workspace: {
+    list: invoke('workspace.list'),
+    get: invoke('workspace.get'),
+    create: invoke('workspace.create'),
+    update: invoke('workspace.update'),
+    delete: invoke('workspace.delete'),
+    assign: invoke('workspace.assign'),
+  },
   speakerProfile: {
     list: invoke('speaker-profile.list'),
     samples: invoke('speaker-profile.samples'),

@@ -1,4 +1,4 @@
-<p align="center"><img src="assets/brevia-mark.svg" width="258" alt="Brevia" /></p>
+<p align="center"><img src="assets/brevia-mark.svg" width="258" alt="言录" /></p>
 
 <p align="center"><strong>极简设计，本地部署的 AI 会议助手。</strong><br />实时转写 · 多语言 · 说话人识别 · AI 总结 — 音频不出本机。</p>
 
@@ -17,11 +17,11 @@
 
 ## 项目简介
 
-Brevia 是一款桌面端 AI 会议助手，把会议里最耗时间的部分——记录、整理、复盘——交给设备上的 AI。它同时录制麦克风和系统音频，实时生成字幕，会后自动整理成结构化笔记。所有语音识别都在本机运行，录音、文字稿、说话人档案默认保存在你自己的电脑上。
+言录是一款桌面端 AI 会议助手，把会议里最耗时间的部分——记录、整理、复盘——交给设备上的 AI。它同时录制麦克风和系统音频，实时生成字幕，会后自动整理成结构化笔记。所有语音识别都在本机运行，录音、文字稿、说话人档案默认保存在你自己的电脑上。
 
 设计上追求"少即是多"：界面尽可能安静，不打扰会议本身；功能围绕"记录 → 理解 → 检索"这条主线展开；能本地做的绝不发到云端。
 
-<p align="center"><img src="assets/demo/transcription-zh.gif" width="820" alt="Brevia 实时转写与翻译演示" /></p>
+<p align="center"><img src="assets/demo/transcription-zh.gif" width="820" alt="言录实时转写与翻译演示" /></p>
 
 ## 功能介绍
 
@@ -33,7 +33,7 @@ Brevia 是一款桌面端 AI 会议助手，把会议里最耗时间的部分—
 
 ### 多语言支持 + AI 会议纪要
 
-Brevia 支持 30+ 种语言的语音转写，涵盖中文、英语、日语、韩语、法语、德语、西班牙语、俄语、阿拉伯语、泰语、越南语、印尼语等。会议结束后，可连接大模型自动生成结构化纪要——会议摘要、关键决策、待办事项，一次成稿。
+言录支持 30+ 种语言的语音转写，涵盖中文、英语、日语、韩语、法语、德语、西班牙语、俄语、阿拉伯语、泰语、越南语、印尼语等。会议结束后，可连接大模型自动生成结构化纪要——会议摘要、关键决策、待办事项，一次成稿。
 
 内置 AI 可在本机直接运行捆绑模型，也可以接入 Claude、OpenAI、OpenRouter，或任意兼容 OpenAI / Anthropic 格式的自建服务。摘要只发送文本，不上传音频。
 
@@ -41,7 +41,7 @@ Brevia 支持 30+ 种语言的语音转写，涵盖中文、英语、日语、�
 
 ### 声纹注册 + 跨会议说话人识别
 
-给团队成员录一段声音样本，Brevia 就能在之后的每一场会议里认出他们——不只是"说话人 1、说话人 2"，而是真实的姓名。跨录音识别、自动归档，回看时一眼就能找到"张三上周说过什么"。
+给团队成员录一段声音样本，言录就能在之后的每一场会议里认出他们——不只是"说话人 1、说话人 2"，而是真实的姓名。跨录音识别、自动归档，回看时一眼就能找到"张三上周说过什么"。
 
 底层用 Pyannote 分段 + 声纹嵌入模型，全部在本机运行。
 
@@ -85,7 +85,7 @@ flowchart LR
   C -. 显式授权 .-> F[可选云端 API<br/>LLM 摘要 · 翻译]
 ```
 
-Brevia 采用严格的本地优先架构：
+言录采用严格的本地优先架构：
 
 - **渲染进程不打开任何网络端口**，所有跨进程通信由 Electron 主进程用 Zod schema 校验。
 - **主进程只是壳**，启动一个 Python Worker，通过 JSONL over stdin/stdout 通信；Worker 负责模型管理、音频处理、说话人档案、本地存储、导出等所有重逻辑。
@@ -201,7 +201,7 @@ npm run dist:win   # Windows x64 EXE
 </details>
 
 <details>
-<summary><strong>Brevia 会把音频发送到云端吗？</strong></summary>
+<summary><strong>言录会把音频发送到云端吗？</strong></summary>
 
 不会。所有语音识别、说话人分离、TTS 都在本机运行。只有 LLM 摘要 / 翻译需要联网，且必须由用户显式配置服务商——只发送文本，不上传音频。
 </details>
@@ -215,7 +215,7 @@ npm run dist:win   # Windows x64 EXE
 <details>
 <summary><strong>可以导入已有的会议录音吗？</strong></summary>
 
-可以。从会议库导入音频，Brevia 会用同一套语音管线离线转写。需要系统 PATH 中有 `ffmpeg`（或设置 `BREVIA_FFMPEG`）。
+可以。从会议库导入音频，言录会用同一套语音管线离线转写。需要系统 PATH 中有 `ffmpeg`（或设置 `BREVIA_FFMPEG`）。
 </details>
 
 <details>
@@ -237,7 +237,7 @@ npm run dist:win   # Windows x64 EXE
 发现 Bug 或有新功能建议？欢迎前往 [GitHub Issues](https://github.com/zerolovesea/Brevia/issues) 提交。为了让问题更快得到定位，请尽量提供：
 
 - 操作系统与版本（如 macOS 14.5 / Windows 11 23H2）
-- Brevia 版本号（**设置 → 关于**）
+- 言录版本号（**设置 → 关于**）
 - 使用的模型和语言
 - 复现步骤 / 期望结果 / 实际结果
 - 相关日志（**设置 → 高级 → 打开日志目录**），提交前请自行确认不含敏感信息
@@ -256,7 +256,7 @@ npm run dist:win   # Windows x64 EXE
 
 ## License
 
-Brevia 使用 [ISC License](../LICENSE) 发布。模型文件与第三方依赖遵循各自的许可证条款。
+言录使用 [ISC License](../LICENSE) 发布。模型文件与第三方依赖遵循各自的许可证条款。
 
 ## 致谢
 

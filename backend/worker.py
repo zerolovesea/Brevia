@@ -7,6 +7,9 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 
 from .worker_core import WorkerCore
+
+
+MAXIMUM_COMMAND_BYTES = 1024 * 1024
 from .worker_exports import ExportWorkerMixin
 from .worker_llm import LLMWorkerMixin
 from .worker_llama_sidecar import LlamaSidecarMixin
@@ -72,16 +75,15 @@ def main():
         max_workers=1, thread_name_prefix="brevia-translation"
     )
 
-    maximum_command_bytes = 4 * 1024 * 1024
-    while line := sys.stdin.readline(maximum_command_bytes + 1):
-        if len(line) > maximum_command_bytes and not line.endswith("\n"):
+    while line := sys.stdin.readline(MAXIMUM_COMMAND_BYTES + 1):
+        if len(line) > MAXIMUM_COMMAND_BYTES and not line.endswith("\n"):
             while line and not line.endswith("\n"):
-                line = sys.stdin.readline(maximum_command_bytes + 1)
+                line = sys.stdin.readline(MAXIMUM_COMMAND_BYTES + 1)
             worker.response(None, error=ValueError("Command is too large"))
             continue
         if not line.strip():
             continue
-        if len(line) > maximum_command_bytes:
+        if len(line) > MAXIMUM_COMMAND_BYTES:
             worker.response(None, error=ValueError("Command is too large"))
             continue
         try:

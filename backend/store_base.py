@@ -22,6 +22,8 @@ CREATE TABLE IF NOT EXISTS meetings (
   speaker_embedding_model_id TEXT,
   vad_model_id TEXT,
   num_speakers INTEGER NOT NULL DEFAULT -1,
+  workspace_id TEXT REFERENCES workspaces(id) ON DELETE SET NULL,
+  previous_workspace_id TEXT,
   category TEXT NOT NULL DEFAULT '',
   tags TEXT NOT NULL DEFAULT '[]',
   status TEXT NOT NULL,
@@ -94,6 +96,16 @@ CREATE TABLE IF NOT EXISTS app_meta (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS workspaces (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  description TEXT NOT NULL DEFAULT '',
+  color TEXT NOT NULL DEFAULT 'violet',
+  position INTEGER NOT NULL DEFAULT 0,
+  deleted_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
 """
 
 
@@ -133,6 +145,9 @@ class StoreBase:
         self.storage_file_lock = threading.RLock()
         self.db_path = self.root / "brevia.db"
         with self.connect() as db:
+            had_workspaces = db.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='workspaces'"
+            ).fetchone()
             db.executescript(SCHEMA)
             segment_key = [
                 row["name"]
@@ -154,10 +169,17 @@ class StoreBase:
                         CREATE INDEX segments_meeting_time ON segments(meeting_id, start_ms);"""
                 )
             columns = {row["name"] for row in db.execute("PRAGMA table_info(meetings)")}
+            if "workspace_id" not in columns:
+                db.execute("ALTER TABLE meetings ADD COLUMN workspace_id TEXT")
+            if "previous_workspace_id" not in columns:
+                db.execute("ALTER TABLE meetings ADD COLUMN previous_workspace_id TEXT")
             if "is_example" not in columns:
                 db.execute(
                     "ALTER TABLE meetings ADD COLUMN is_example INTEGER NOT NULL DEFAULT 0"
                 )
+            workspace_columns = {row["name"] for row in db.execute("PRAGMA table_info(workspaces)")}
+            if "deleted_at" not in workspace_columns:
+                db.execute("ALTER TABLE workspaces ADD COLUMN deleted_at TEXT")
             if "example_locale" not in columns:
                 db.execute("ALTER TABLE meetings ADD COLUMN example_locale TEXT")
             if "speaker_segmentation_model_id" not in columns:
@@ -198,6 +220,11 @@ class StoreBase:
                 db.execute(
                     "ALTER TABLE speaker_profile_samples ADD COLUMN duration_ms INTEGER NOT NULL DEFAULT 0"
                 )
+            self._clear_example_workspaces(db)
+            if not had_workspaces or db.execute(
+                "SELECT 1 FROM meetings WHERE category != '' AND is_example=0 LIMIT 1"
+            ).fetchone():
+                self._migrate_categories_to_workspaces(db)
 
     @contextmanager
     def connect(self):
@@ -216,3 +243,48 @@ class StoreBase:
             db.commit()
         finally:
             db.close()
+
+    def _migrate_categories_to_workspaces(self, db):
+        """将旧分类或旧版工作区 ID 一次性迁移到独立字段。"""
+        from uuid import uuid4
+
+        categories = db.execute(
+            "SELECT DISTINCT category FROM meetings WHERE category != '' AND is_example=0"
+        ).fetchall()
+
+        now = utc_now()
+        colors = ['violet', 'blue', 'green', 'orange', 'red', 'pink', 'cyan', 'gray']
+
+        for idx, row in enumerate(categories):
+            category_name = row['category']
+            workspace = db.execute(
+                "SELECT id FROM workspaces WHERE id = ? OR name = ? COLLATE NOCASE",
+                (category_name, category_name),
+            ).fetchone()
+            workspace_id = workspace["id"] if workspace else str(uuid4())
+            if not workspace:
+                db.execute(
+                    """INSERT INTO workspaces (id, name, description, color, position, created_at, updated_at)
+                       VALUES (?, ?, '', ?, ?, ?, ?)""",
+                    (workspace_id, category_name, colors[idx % len(colors)], idx, now, now),
+                )
+            db.execute(
+                "UPDATE meetings SET workspace_id = ?, category = '' WHERE category = ?",
+                (workspace_id, category_name),
+            )
+
+    @staticmethod
+    def _clear_example_workspaces(db):
+        """示例会议始终属于公开区，并清除旧迁移生成的空示例工作区。"""
+        workspace_ids = [
+            row["workspace_id"]
+            for row in db.execute(
+                "SELECT DISTINCT workspace_id FROM meetings WHERE is_example=1 AND workspace_id IS NOT NULL"
+            )
+        ]
+        db.execute("UPDATE meetings SET workspace_id=NULL, category='' WHERE is_example=1")
+        db.executemany(
+            """DELETE FROM workspaces WHERE id=?
+               AND NOT EXISTS (SELECT 1 FROM meetings WHERE workspace_id=workspaces.id)""",
+            ((workspace_id,) for workspace_id in workspace_ids),
+        )

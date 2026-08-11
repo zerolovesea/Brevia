@@ -4,6 +4,8 @@ import json
 import os
 import re
 import threading
+import time
+from collections import deque
 from pathlib import Path
 
 from .asr import (
@@ -18,16 +20,21 @@ from .worker_common import SCHEMA_VERSION, TaskRegistry, WorkerState
 
 
 _LONE_SURROGATE = re.compile(r"[\ud800-\udfff]")
+COMMANDS_PER_SECOND = 100
+MAX_JSON_DEPTH = 64
+MODEL_DOWNLOAD_CONCURRENCY = 2
 
 
-def sanitize_unicode(value):
+def sanitize_unicode(value, depth=0):
     """将 JSON 中不能编码为 UTF-8 的代理项替换为 U+FFFD。"""
+    if depth > MAX_JSON_DEPTH:
+        raise ValueError("Command payload is nested too deeply")
     if isinstance(value, str):
         return _LONE_SURROGATE.sub("\ufffd", value)
     if isinstance(value, list):
-        return [sanitize_unicode(item) for item in value]
+        return [sanitize_unicode(item, depth + 1) for item in value]
     if isinstance(value, dict):
-        return {sanitize_unicode(key): sanitize_unicode(item) for key, item in value.items()}
+        return {sanitize_unicode(key, depth + 1): sanitize_unicode(item, depth + 1) for key, item in value.items()}
     return value
 
 
@@ -47,7 +54,9 @@ class WorkerCore:
         self.output_lock = threading.Lock()
         self.model_downloads = {}
         self.model_downloads_lock = threading.Lock()
-        self.model_download_slots = threading.Semaphore(2)
+        self.model_download_slots = threading.Semaphore(MODEL_DOWNLOAD_CONCURRENCY)
+        self.command_times = deque()
+        self.command_times_lock = threading.Lock()
         self.state = WorkerState()
         self.tasks = TaskRegistry()
         self.store = Store(root)
@@ -119,6 +128,13 @@ class WorkerCore:
         Returns:
             对应处理器的结果，最终由 ``response`` 包装。
         """
+        with self.command_times_lock:
+            now = time.monotonic()
+            while self.command_times and self.command_times[0] <= now - 1:
+                self.command_times.popleft()
+            if len(self.command_times) >= COMMANDS_PER_SECOND:
+                raise ValueError("Command rate limit exceeded")
+            self.command_times.append(now)
         command_id = command.get("id")
         command_type = command.get("type")
         # Node 的 JSON.stringify 会把孤立代理项转义为 \udxxx；json.loads 后它会
@@ -137,7 +153,7 @@ class WorkerCore:
             "meeting.audio": self.audio,
             "meeting.stop": self.stop,
             "meeting.list": lambda value: self.store.list_meetings(**value),
-            "meeting.get": lambda value: self.store.get_meeting(value["meeting_id"]),
+            "meeting.get": lambda value: self.store.get_meeting(value["meeting_id"], compact=True),
             "meeting.update": self.update_meeting,
             "meeting.delete": self.delete_meeting,
             "meeting.restore": self.restore_meeting,
@@ -181,6 +197,17 @@ class WorkerCore:
             "tts.synthesize": self.synthesize_tts,
             "summary.generate": self.summarize,
             "translation.generate": self.translate,
+            "workspace.list": lambda _: self.store.list_workspaces(),
+            "workspace.get": lambda value: self.store.get_workspace(value["workspace_id"]),
+            "workspace.create": lambda value: self.store.create_workspace(value),
+            "workspace.update": lambda value: self.store.update_workspace(
+                value["workspace_id"], value["updates"]
+            ),
+            "workspace.delete": lambda value: self.store.delete_workspace(value["workspace_id"]),
+            "workspace.reorder": lambda value: self.store.reorder_workspaces(value["workspace_ids"]),
+            "workspace.assign": lambda value: self.store.assign_meeting_to_workspace(
+                value["meeting_id"], value["workspace_id"]
+            ),
         }
         if command_type not in handlers:
             raise ValueError(f"Unknown command: {command_type}")
@@ -189,15 +216,12 @@ class WorkerCore:
     def initialize(self, _):
         """返回首屏状态，并把可延后的启动维护放入后台。"""
         seeded_examples = self.store.seed_examples()
-        for model_id in (
-            SETTINGS["live_asr"]["denoiser_model_id"],
-            SETTINGS["punctuation"]["english_model_id"],
-            SETTINGS["punctuation"]["chinese_model_id"],
-        ):
+        for model_id in (SETTINGS["live_asr"]["denoiser_model_id"],):
             if not self.models.is_ready(model_id):
                 self.download_model({"model_id": model_id})
         return {
             "meetings": self.store.list_meetings(),
+            "workspaces": self.store.list_workspaces(),
             "models": self.models.list(),
             "speaker_profiles": self.store.list_speaker_profiles(),
             "preset_voices": self.media.preset_voices(),

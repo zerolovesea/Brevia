@@ -5,14 +5,34 @@ from pathlib import Path
 
 import PyInstaller.__main__
 
+from backend.asr import ModelManager
+
 
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "backend"
+BUNDLED_MODELS = BACKEND / "bundled-models"
+BUNDLED_MODEL_IDS = (
+    "silero-vad",
+    "online-punct-en-int8",
+    "punct-ct-transformer-zh-en-int8",
+    "pyannote-segmentation-3.0",
+    "campplus-zh-en",
+)
 
 
 def resource(name, destination="backend"):
     """构建资源路径参数。"""
     return f"{BACKEND / name}{os.pathsep}{destination}"
+
+
+def prepare_bundled_models():
+    """将开箱即用的基础模型放进安装包；其余模型仍按需下载。"""
+    manager = ModelManager(BUNDLED_MODELS)
+    for model_id in BUNDLED_MODEL_IDS:
+        manager.download(model_id)
+
+
+prepare_bundled_models()
 
 
 PyInstaller.__main__.run(

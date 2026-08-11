@@ -20,10 +20,9 @@ app.on('second-instance', () => {
 
 const root = path.join(__dirname, '..');
 const packagedRoot = app.isPackaged ? process.resourcesPath : root;
-const startupAnimationMs = 1700;
-const startupDataWaitMs = 2200;
-const workerLineLimit = 4 * 1024 * 1024;
+const workerLineLimit = 8 * 1024 * 1024;
 const workerRequestTimeouts = new Map([
+  ['meeting.get', 15000],
   ['models.download', 15000], ['models.pause', 15000], ['models.cancel', 15000],
   ['task.pause', 15000], ['task.resume', 15000],
 ]);
@@ -40,7 +39,7 @@ const bundledFfmpegPath = () => {
 };
 const writeLog = (level, value) => {
   const line = `${new Date().toISOString()} [${level}] ${logText(value).trim()}\n`;
-  void mkdir(logsDir(), { recursive: true }).then(() => appendFile(logFile(), line, 'utf8')).catch(() => {});
+  void mkdir(logsDir(), { recursive: true }).then(() => appendFile(logFile(), line, 'utf8')).catch((error) => console.error('Log write failed', error));
 };
 const stopProcess = (child) => {
   if (!child?.pid) return;
@@ -90,7 +89,7 @@ const meetingStart = z.object({
   speaker_embedding_model_id: z.string().min(1).optional(),
   vad_model_id: z.string().min(1).optional(),
   num_speakers: z.number().int().min(-1).max(20).optional(),
-  category: z.string().max(32).optional(),
+  workspace_id: z.string().uuid().nullable().optional(),
   tags: z.array(z.string().max(32)).max(20).optional(),
 });
 const audio = z.object({
@@ -104,7 +103,6 @@ const audio = z.object({
 const id = z.object({ meeting_id: z.string().uuid() });
 const meetingUpdates = z.object({
   title: z.string().trim().min(1).max(120),
-  category: z.string().max(32),
   tags: z.array(z.string().max(32)).max(20),
   archived_at: z.string().max(64).nullable(),
   refined_model_id: z.string().min(1).max(128),
@@ -165,6 +163,7 @@ class WorkerClient {
         PYTHONIOENCODING: 'utf-8',
         BREVIA_DATA_DIR: dataDir(),
         BREVIA_MODELS_DIR: process.env.BREVIA_MODELS_DIR || path.join(dataDir(), 'models'),
+        BREVIA_BUNDLED_MODELS_DIR: path.join(packagedRoot, 'backend', 'bundled-models'),
         ...(ffmpeg ? { BREVIA_FFMPEG: ffmpeg } : {}),
       },
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -471,6 +470,12 @@ function registerIpc() {
     cluster_threshold: z.number().min(0).max(2).optional(),
   }), 'meeting.refine');
   handleModelRequirement('meeting.separate', id, 'meeting.separate');
+  handle('workspace.list', z.object({}), 'workspace.list');
+  handle('workspace.get', z.object({ workspace_id: z.string() }), 'workspace.get');
+  handle('workspace.create', z.object({ name: z.string().trim().min(1).max(50), description: z.string().max(200).optional(), color: z.string().optional() }), 'workspace.create');
+  handle('workspace.update', z.object({ workspace_id: z.string(), updates: z.object({ name: z.string().trim().min(1).max(50).optional(), description: z.string().max(200).optional(), color: z.string().optional() }) }), 'workspace.update');
+  handle('workspace.delete', z.object({ workspace_id: z.string() }), 'workspace.delete');
+  handle('workspace.assign', z.object({ meeting_id: z.string().uuid(), workspace_id: z.string().uuid().nullable() }), 'workspace.assign');
   handle('speaker.rename', id.extend({ speaker_id: z.string(), name: z.string().trim().min(1).max(32), locked: z.boolean().optional() }), 'speaker.rename');
   handle('speaker-profile.list', z.object({}), 'speaker-profile.list');
   handle('speaker-profile.samples', z.object({ profile_id: z.string().uuid() }), 'speaker-profile.samples');
@@ -869,18 +874,15 @@ function createWindow() {
       clearTimeout(reloadRevealTimer);
       reloadRevealTimer = setTimeout(() => {
         if (!window.isDestroyed()) window.webContents.send('brevia:event', { type: 'startup.ready' });
-      }, startupAnimationMs);
+      }, 0);
     }
     else revealApp();
   });
   window.loadFile(path.join(packagedRoot, 'frontend', 'index.html'), resetOnboarding ? { query: { resetOnboarding: '1' } } : undefined);
-  setTimeout(() => {
-    animationComplete = true;
-    revealApp();
-  }, startupAnimationMs);
-  void Promise.race([initializeWorker(), new Promise((resolve) => setTimeout(resolve, startupDataWaitMs))])
-    .catch(() => {})
-    .then(() => { initializationReady = true; revealApp(); });
+  animationComplete = true;
+  void initializeWorker()
+    .then(() => { initializationReady = true; revealApp(); })
+    .catch((error) => reportMainError(error));
   window.on('closed', () => { closeFloatingCaption(); });
   return window;
 }
@@ -1035,7 +1037,7 @@ app.whenReady().then(async () => {
   session.defaultSession.setDisplayMediaRequestHandler(createDisplayMediaHandler(desktopCapturer, writeLog));
   worker.start();
   registerIpc();
-  void initializeWorker().catch(() => {});
+  void initializeWorker().catch((error) => reportMainError(error));
   createWindow();
   app.on('activate', () => {
     const mainWindow = BrowserWindow.getAllWindows().find(w => w !== floatingCaptionWindow && !w.isDestroyed());

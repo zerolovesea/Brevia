@@ -254,4 +254,3 @@ Brevia se publica bajo la [ISC License](../LICENSE). Los archivos de modelos y p
 - [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) — el runtime local que impulsa ASR, VAD, puntuación, procesamiento de hablantes y TTS. Licenciado bajo [Apache-2.0](https://github.com/k2-fsa/sherpa-onnx/blob/master/LICENSE).
 - Gracias a los autores y mantenedores de modelos cuyos artefactos descargables se declaran en [`backend/models.json`](../backend/models.json), incluyendo Zipformer, Paraformer, Whisper, Qwen3-ASR, FireRedASR, FunASR, Pyannote, 3D-Speaker, NeMo, Silero, Spleeter, ZipVoice, VITS Piper / Mimic3 y más.
 - Electron, ONNX Runtime, Python y la comunidad open-source de voz hacen posible este flujo local.
-

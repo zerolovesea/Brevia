@@ -7,6 +7,7 @@
     <meta name="color-scheme" content="light dark" />
     <title>Brevia - 言录</title>
     <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./workspace-styles.css" />
   </head>
   <body>
     <div class="startup-splash" id="startup-splash" aria-hidden="true"><img src="./assets/brevia-logo-reveal.gif" alt="" /></div>
@@ -15,6 +16,7 @@
         <button class="brand" data-view="home" aria-label="Brevia 首页"><img src="./assets/brevia-logo.svg" alt="brevia" /></button>
         <button class="new-meeting" data-view="prepare"><span>+</span> 开始会议</button>
         <nav>
+          <div class="workspace-container"></div>
           <button class="nav-item active" id="all-meetings" data-view="home"><span>⌂</span> 所有会议</button>
           <button class="nav-item" id="recently-deleted" data-view="home"><span>◷</span> 最近删除</button>
           <button class="nav-item" data-view="settings"><span>⚙</span> 设置</button>
@@ -27,7 +29,7 @@
 
         <section class="view active" id="home-view">
           <div class="page-head"><div><button class="eyebrow" id="home-eyebrow" type="button" disabled>会议库</button><h1 id="home-slogan">每一场对话，都留有依据。</h1></div><button class="primary-action" id="home-primary">开始会议 <span>→</span></button></div>
-          <div class="library-toolbar"><label class="search"><span>⌕</span><input id="meeting-search" type="search" placeholder="搜索会议、逐字稿或标签" /></label><div class="filter" id="category-filter" aria-label="按分类筛选会议"></div><div class="filter" id="date-filter" aria-label="按日期筛选会议"></div></div>
+          <div class="library-toolbar"><label class="search"><span>⌕</span><input id="meeting-search" type="search" placeholder="搜索会议、逐字稿或标签" /></label><div class="filter" id="date-filter" aria-label="按日期筛选会议"></div></div>
           <section class="meeting-list" aria-label="最近会议"></section>
         </section>
 
@@ -37,7 +39,7 @@
 
         <section class="view" id="live-view">
           <header class="live-header"><div class="live-title"><strong id="live-name">会议</strong><span class="recording"><i></i> 正在录制</span></div><time id="timer">00:00:00</time><button class="pause-button" id="pause">Ⅱ 暂停</button><button class="end-button" id="end-meeting">结束会议</button></header>
-          <div class="live-layout"><section class="transcript" aria-label="实时字幕"><div class="section-heading"><div class="current-caption"><p class="eyebrow">实时字幕</p><h1 id="live-caption" aria-live="polite"></h1><p class="live-caption-translation" id="live-caption-translation" hidden></p></div><div class="caption-controls"><button class="floating-caption-toggle" id="floating-caption-toggle" data-enabled="false" title="悬浮字幕"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="3" width="12" height="8" rx="1" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M4 6h8M4 8h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button><button class="translation-toggle" id="translation-toggle" data-enabled="false">译文: 关</button></div></div><div class="transcript-scroll" id="transcript-scroll"></div></section><aside class="live-panel"></aside></div>
+          <div class="live-layout"><section class="transcript" aria-label="实时字幕"><div class="section-heading"><div class="current-caption"><p class="eyebrow">实时字幕</p><h1 id="live-caption" aria-live="polite"></h1><p class="live-caption-translation" id="live-caption-translation" hidden></p></div><div class="caption-controls"><button class="floating-caption-toggle" id="floating-caption-toggle" data-enabled="false" title="悬浮字幕"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="3" width="12" height="8" rx="1" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M4 6h8M4 8h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button><button class="translation-toggle" id="translation-toggle" data-enabled="false">译文: 关</button></div></div><div class="transcript-scroll" id="transcript-scroll"></div></section><aside class="live-panel"></aside><button class="live-panel-toggle" type="button" aria-controls="live-panel" aria-expanded="true" title="收起">›</button></div>
         </section>
 
         <section class="view" id="detail-view">
@@ -53,6 +55,7 @@
     <script src="./i18n.js"></script>
     <script src="./i18n-data.js"></script>
     <script src="./ui-components.js"></script>
+    <script src="./workspaces.js"></script>
     <script src="./app-meetings.js"></script>
     <script src="./app-meeting-detail.js"></script>
     <script src="./onboarding.js"></script>

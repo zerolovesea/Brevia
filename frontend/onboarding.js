@@ -9,6 +9,7 @@
   window.BreviaOnboarding = {
     isFirstLaunch: () => !localStorage.getItem('brevia-onboarding-complete'),
     systemLocale,
+    defaultMeetingLanguages: (locale) => [locale],
     start(showLanguage) { if (this.isFirstLaunch()) showLanguage(systemLocale()); },
     complete() { localStorage.setItem('brevia-onboarding-complete', 'true'); },
     beginDownloads(ids) { pendingDownloads = new Set(ids); trackingDownloads = pendingDownloads.size > 0; },

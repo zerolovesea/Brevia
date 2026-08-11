@@ -1,4 +1,4 @@
-fetch('https://api.github.com/repos/zerolovesea/Brevia/releases/latest')
+fetch(`https://api.github.com/repos/zerolovesea/Brevia/releases/latest?${Date.now()}`, { cache: 'no-store' })
   .then((response) => response.ok && response.json())
   .then((release) => {
     if (!release) return;

@@ -53,7 +53,7 @@ def complete(payload, prompt, json_mode=False):
     except urllib.error.HTTPError as error:
         detail = error.read().decode("utf-8", "replace")
         raise ValueError(
-            f"LLM request failed ({error.code}): {detail[:500]}"
+            f"LLM request failed ({error.code}): {detail}"
         ) from error
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as error:
         raise ValueError(f"LLM request failed: {error}") from error
