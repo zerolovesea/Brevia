@@ -91,6 +91,9 @@
       .link-quiet:hover {
         opacity: 0.6;
       }
+      .hero-title {
+        font-size: clamp(38px, 4.6vw, 58px);
+      }
       .demo-canvas {
         position: relative;
         width: 100%;
@@ -102,11 +105,16 @@
         top: 0;
         left: 0;
         display: block;
-        width: 1440px;
-        height: 900px;
+        width: 1200px;
+        height: 750px;
         border: 0;
         transform: scale(var(--demo-scale, 1));
         transform-origin: top left;
+      }
+      @media (min-width: 1024px) {
+        .hero-demo-canvas {
+          width: 118%;
+        }
       }
       .feature-rail {
         display: grid;
@@ -169,6 +177,16 @@
         max-height: 320px;
         opacity: 1;
       }
+      /* Section divider: a quiet content-width rule with balanced space above and below */
+      .divide-top {
+        border-top: 1px solid #e5e5e5;
+        margin-top: 6rem;
+      }
+      @media (min-width: 768px) {
+        .divide-top {
+          margin-top: 8rem;
+        }
+      }
     </style>
   </head>
   <body class="bg-white font-sans text-slate antialiased">
@@ -179,10 +197,12 @@
           <span class="flex h-8 w-8 items-center justify-center rounded-md bg-[#080808] text-[15px] font-bold leading-none text-white">言</span>
           <span class="text-[19px] font-bold tracking-tightest text-ink">brevia</span>
         </a>
-        <div class="hidden items-center gap-9 text-[14px] text-gray1 md:flex">
+        <div class="hidden items-center gap-8 text-[14px] text-gray1 md:flex">
           <a href="#features" class="link-quiet">Features</a>
-          <a href="#how" class="link-quiet">How it works</a>
+          <a href="#compare" class="link-quiet">Compare</a>
+          <a href="#use-cases" class="link-quiet">Use cases</a>
           <a href="#privacy" class="link-quiet">Privacy</a>
+          <a href="#pricing" class="link-quiet">Pricing</a>
           <a href="#faq" class="link-quiet">FAQ</a>
         </div>
         <div class="flex items-center gap-5 text-[14px]">
@@ -205,15 +225,15 @@
             <p class="mb-8 font-mono text-[13px] uppercase tracking-[0.18em] text-gray3">
               Local-first meeting assistant
             </p>
-            <h1 class="display text-[clamp(44px,6vw,76px)] font-light text-ink">
+            <h1 class="hero-title display font-light text-ink">
               Meetings, captured<br />and understood<br />
-              <span class="text-gray2">on your device.</span>
+              <span class="text-gray2">on your device</span>
             </h1>
             <p class="measure mt-10 max-w-[560px] text-[18px] text-slate">
-              Brevia records microphone and system audio together, streams live
-              captions, and turns the finished conversation into structured notes.
-              All speech recognition runs locally — recordings, transcripts, and
-              speaker profiles stay on your machine.
+              Brevia is a local meeting assistant that turns computer and microphone
+              audio into live captions, transcripts, and meeting notes. From online
+              calls and videos to in-person conversations, important details are
+              captured, organized, and easy to find again.
             </p>
             <div class="mt-12 flex flex-wrap items-center gap-4">
               <a
@@ -234,7 +254,7 @@
             </div>
           </div>
           <div class="reveal" style="--reveal-delay: 120ms">
-            <div class="demo-canvas">
+            <div class="demo-canvas hero-demo-canvas">
               <iframe
                 class="demo-frame"
                 src="./demo-home-en.html"
@@ -248,8 +268,44 @@
 
       <hr class="mx-auto max-w-content border-0 border-t border-line2" />
 
+      <!-- Why local-first — problem framing -->
+      <section class="mx-auto max-w-content px-6 pt-24 md:px-8 md:pt-32">
+        <div class="reveal grid grid-cols-12 gap-8">
+          <div class="col-span-12 md:col-span-4">
+            <p class="font-mono text-[13px] uppercase tracking-[0.18em] text-gray3">
+              Why local-first
+            </p>
+          </div>
+          <div class="col-span-12 md:col-span-8">
+            <h2 class="display max-w-[620px] text-[clamp(28px,4vw,42px)] font-light text-ink">
+              Keep the record moving, even without a reliable connection
+            </h2>
+            <p class="measure mt-6 max-w-[600px] text-[17px] text-slate">
+              Captions and transcripts are created directly on your computer, with
+              no upload queue to wait for. On a shaky connection, offline, or in an
+              in-person conversation, Brevia keeps recording so the meeting can
+              keep moving.
+            </p>
+            <div class="mt-10 grid gap-px border border-line2 bg-line2 sm:grid-cols-3">
+              <div class="bg-white p-6">
+                <p class="display text-[34px] font-light text-ink">Works offline</p>
+                <p class="measure mt-2 text-[14px] text-slate">Keep recording and reading captions when the connection is unreliable.</p>
+              </div>
+              <div class="bg-white p-6">
+                <p class="display text-[34px] font-light text-ink">No account</p>
+                <p class="measure mt-2 text-[14px] text-slate">No sign-up, no login. Download and start.</p>
+              </div>
+              <div class="bg-white p-6">
+                <p class="display text-[34px] font-light text-ink">No waiting</p>
+                <p class="measure mt-2 text-[14px] text-slate">Your computer creates the record without waiting for cloud processing.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- Features intro -->
-      <section id="features" class="mx-auto max-w-content px-6 pt-24 md:px-8 md:pt-32">
+      <section id="features" class="divide-top mx-auto max-w-content px-6 pt-24 md:px-8 md:pt-32">
         <div class="reveal grid grid-cols-12 gap-8">
           <div class="col-span-12 md:col-span-4">
             <p class="font-mono text-[13px] uppercase tracking-[0.18em] text-gray3">
@@ -258,12 +314,11 @@
           </div>
           <div class="col-span-12 md:col-span-8">
             <h2 class="display max-w-[620px] text-[clamp(30px,4vw,44px)] font-light text-ink">
-              One quiet arc, three moving parts.
+              One quiet arc, three moving parts
             </h2>
             <p class="measure mt-6 max-w-[560px] text-[17px] text-slate">
               Every feature follows the same path — from the moment audio arrives
-              to the moment you go looking for it again. The animations below run
-              live; nothing is a video.
+              to the moment you go looking for it again.
             </p>
           </div>
         </div>
@@ -272,7 +327,7 @@
       <!-- Demo 1 — Transcription -->
       <section class="mx-auto max-w-content px-6 pt-20 md:px-8 md:pt-28">
         <div class="grid grid-cols-12 items-center gap-8 md:gap-12">
-          <div class="reveal col-span-12 md:col-span-4">
+          <div class="reveal col-span-12 md:col-span-3">
             <span class="font-mono text-[13px] tracking-[0.14em] text-gray3">01</span>
             <h3 class="display mt-4 text-[28px] font-normal text-ink">
               Live transcription &amp; translation
@@ -284,7 +339,7 @@
               alongside the caption stream.
             </p>
           </div>
-          <div class="reveal col-span-12 md:col-span-8" style="--reveal-delay: 120ms">
+          <div class="reveal col-span-12 md:col-span-9" style="--reveal-delay: 120ms">
             <div class="demo-canvas">
               <iframe
                 class="demo-frame"
@@ -300,7 +355,7 @@
       <!-- Demo 2 — Summary -->
       <section class="mx-auto max-w-content px-6 pt-20 md:px-8 md:pt-28">
         <div class="grid grid-cols-12 items-center gap-8 md:gap-12">
-          <div class="reveal col-span-12 md:order-2 md:col-span-4">
+          <div class="reveal col-span-12 md:order-2 md:col-span-3">
             <span class="font-mono text-[13px] tracking-[0.14em] text-gray3">02</span>
             <h3 class="display mt-4 text-[28px] font-normal text-ink">
               AI meeting notes in one pass
@@ -312,7 +367,7 @@
               Only text is sent, never audio.
             </p>
           </div>
-          <div class="reveal col-span-12 md:order-1 md:col-span-8" style="--reveal-delay: 120ms">
+          <div class="reveal col-span-12 md:order-1 md:col-span-9" style="--reveal-delay: 120ms">
             <div class="demo-canvas">
               <iframe
                 class="demo-frame"
@@ -328,7 +383,7 @@
       <!-- Demo 3 — Voiceprint -->
       <section class="mx-auto max-w-content px-6 pt-20 md:px-8 md:pt-28">
         <div class="grid grid-cols-12 items-center gap-8 md:gap-12">
-          <div class="reveal col-span-12 md:col-span-4">
+          <div class="reveal col-span-12 md:col-span-3">
             <span class="font-mono text-[13px] tracking-[0.14em] text-gray3">03</span>
             <h3 class="display mt-4 text-[28px] font-normal text-ink">
               Voiceprints that carry across meetings
@@ -340,7 +395,7 @@
               someone said last week is a single click.
             </p>
           </div>
-          <div class="reveal col-span-12 md:col-span-8" style="--reveal-delay: 120ms">
+          <div class="reveal col-span-12 md:col-span-9" style="--reveal-delay: 120ms">
             <div class="demo-canvas">
               <iframe
                 class="demo-frame"
@@ -353,11 +408,61 @@
         </div>
       </section>
 
+      <!-- Demo 4 — Caption bar -->
+      <section class="mx-auto max-w-content px-6 pt-20 md:px-8 md:pt-28">
+        <div class="grid grid-cols-12 items-center gap-8 md:gap-12">
+          <div class="reveal col-span-12 md:order-2 md:col-span-3">
+            <span class="font-mono text-[13px] tracking-[0.14em] text-gray3">04</span>
+            <h3 class="display mt-4 text-[28px] font-normal text-ink">
+              Floating caption actions
+            </h3>
+            <p class="measure mt-5 text-[16px] text-slate">
+              Keep captions visible at the bottom of your screen while you work in other apps. When you need to revisit a line, click to copy, translate, play, or jump to its place in the timeline—without returning to the app window.
+            </p>
+          </div>
+          <div class="reveal col-span-12 md:order-1 md:col-span-9" style="--reveal-delay: 120ms">
+            <div class="demo-canvas">
+              <iframe
+                class="demo-frame"
+                src="./demo-caption-bar-en.html"
+                loading="lazy"
+                title="Floating caption bar demo"
+              ></iframe>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Demo 5 — Model library -->
+      <section class="mx-auto max-w-content px-6 pt-20 md:px-8 md:pt-28">
+        <div class="grid grid-cols-12 items-center gap-8 md:gap-12">
+          <div class="reveal col-span-12 md:col-span-3">
+            <span class="font-mono text-[13px] tracking-[0.14em] text-gray3">05</span>
+            <h3 class="display mt-4 text-[28px] font-normal text-ink">
+              Rich model library
+            </h3>
+            <p class="measure mt-5 text-[16px] text-slate">
+              Choose and download the capabilities you need for captions, translation, speaker identification, and meeting notes. Pick a lighter setup for speed or a more complete one for better results—no technical vocabulary required.
+            </p>
+          </div>
+          <div class="reveal col-span-12 md:col-span-9" style="--reveal-delay: 120ms">
+            <div class="demo-canvas">
+              <iframe
+                class="demo-frame"
+                src="./demo-model-library-en.html"
+                loading="lazy"
+                title="Model library demo"
+              ></iframe>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- Bento grid — And more -->
       <section class="mx-auto max-w-content px-6 pt-24 md:px-8 md:pt-32">
         <div class="reveal mb-12 max-w-read">
           <h2 class="display text-[clamp(30px,4vw,44px)] font-light text-ink">
-            Everything else, on device.
+            Everything else, on device
           </h2>
           <p class="measure mt-6 text-[17px] text-slate">
             A curated local model library and a handful of quieter tools round out
@@ -368,7 +473,7 @@
         <div class="feature-rail reveal" aria-label="More features; hover to pause scrolling">
           <article class="feature-card border border-line2 p-8 transition-colors duration-300 hover:border-ink">
             <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">Model library</span>
-            <p class="display mt-5 text-[40px] font-light text-ink">27+</p>
+            <p class="display mt-5 text-[40px] font-light text-ink">Pick the right model</p>
             <p class="measure mt-3 max-w-[420px] text-[15px] text-slate">
               Downloadable models spanning streaming ASR, offline refinement,
               punctuation, voice activity detection, diarization, speaker
@@ -377,7 +482,7 @@
           </article>
           <article class="feature-card border border-line2 p-8 transition-colors duration-300 hover:border-ink">
             <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">Languages</span>
-            <p class="display mt-5 text-[40px] font-light text-ink">30+</p>
+            <p class="display mt-5 text-[40px] font-light text-ink">Speak more languages</p>
             <p class="measure mt-3 text-[15px] text-slate">
               Transcription across English, Chinese, Japanese, Korean, French,
               German, Spanish, Russian, Arabic, Thai, Vietnamese, and more.
@@ -385,7 +490,7 @@
           </article>
           <article class="feature-card border border-line2 p-8 transition-colors duration-300 hover:border-ink">
             <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">TTS &amp; cloning</span>
-            <p class="display mt-5 text-[40px] font-light text-ink">Export</p>
+            <p class="display mt-5 text-[40px] font-light text-ink">Generate natural speech</p>
             <p class="measure mt-3 text-[15px] text-slate">
               ZipVoice synthesizes Chinese and English speech from enrolled
               reference audio; VITS voices cover German, French, Spanish, Russian,
@@ -394,7 +499,7 @@
           </article>
           <article class="feature-card border border-line2 p-8 transition-colors duration-300 hover:border-ink">
             <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">Import &amp; separate</span>
-            <p class="display mt-5 text-[40px] font-light text-ink">Process</p>
+            <p class="display mt-5 text-[40px] font-light text-ink">Bring audio together</p>
             <p class="measure mt-3 text-[15px] text-slate">
               Bring in existing recordings for offline transcription. Spleeter
               splits audio into vocal and non-vocal stems for post-processing.
@@ -402,7 +507,7 @@
           </article>
           <article class="feature-card border border-line2 p-8 transition-colors duration-300 hover:border-ink">
             <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">Rich exports</span>
-            <p class="display mt-5 text-[40px] font-light text-ink">Synthesize</p>
+            <p class="display mt-5 text-[40px] font-light text-ink">Take notes anywhere</p>
             <p class="measure mt-3 text-[15px] text-slate">
               Transcript and notes as Markdown, TXT, JSON, SRT, DOCX, or PDF; audio
               as FLAC, WAV, or M4A.
@@ -410,33 +515,33 @@
           </article>
           <article class="feature-card border border-line2 p-8 transition-colors duration-300 hover:border-ink">
             <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">Live captions</span>
-            <p class="display mt-5 text-[40px] font-light text-ink">Live</p>
+            <p class="display mt-5 text-[40px] font-light text-ink">Read it as it happens</p>
             <p class="measure mt-3 text-[15px] text-slate">Speech turns into readable captions as the conversation happens.</p>
           </article>
           <article class="feature-card border border-line2 p-8 transition-colors duration-300 hover:border-ink">
             <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">Live translation</span>
-            <p class="display mt-5 text-[40px] font-light text-ink">Bilingual</p>
+            <p class="display mt-5 text-[40px] font-light text-ink">Understand every language</p>
             <p class="measure mt-3 text-[15px] text-slate">See translations alongside the original captions in multilingual meetings.</p>
           </article>
           <article class="feature-card border border-line2 p-8 transition-colors duration-300 hover:border-ink">
             <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">AI meeting notes</span>
-            <p class="display mt-5 text-[40px] font-light text-ink">Distill</p>
+            <p class="display mt-5 text-[40px] font-light text-ink">Turn talk into action</p>
             <p class="measure mt-3 text-[15px] text-slate">Use a local or connected model to extract summaries, decisions, and action items.</p>
           </article>
           <article class="feature-card border border-line2 p-8 transition-colors duration-300 hover:border-ink">
             <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">Streaming speed</span>
-            <p class="display mt-5 text-[40px] font-light text-ink">Now</p>
+            <p class="display mt-5 text-[40px] font-light text-ink">Results without waiting</p>
             <p class="measure mt-3 text-[15px] text-slate">Streaming transcription and translation keep pace with the meeting.</p>
           </article>
         </div>
       </section>
 
       <!-- How it works -->
-      <section id="how" class="mx-auto max-w-content px-6 pt-24 md:px-8 md:pt-32">
+      <section id="how" class="divide-top mx-auto max-w-content px-6 pt-24 md:px-8 md:pt-32">
         <div class="reveal mb-14 max-w-read">
           <p class="font-mono text-[13px] uppercase tracking-[0.18em] text-gray3">How it works</p>
           <h2 class="display mt-6 text-[clamp(30px,4vw,44px)] font-light text-ink">
-            Three steps, no cloud round-trip.
+            Three steps, no cloud round-trip
           </h2>
         </div>
         <div class="grid grid-cols-12 gap-8">
@@ -467,13 +572,45 @@
         </div>
       </section>
 
+      <!-- Works with any meeting app -->
+      <section id="integrations" class="divide-top mx-auto max-w-content px-6 pt-24 md:px-8 md:pt-32">
+        <div class="reveal grid grid-cols-12 gap-8">
+          <div class="col-span-12 md:col-span-4">
+            <p class="font-mono text-[13px] uppercase tracking-[0.18em] text-gray3">
+              Works with any meeting app
+            </p>
+            <h2 class="display mt-6 text-[clamp(28px,4vw,40px)] font-light text-ink">
+              Keep a complete record, wherever you meet
+            </h2>
+            <p class="measure mt-6 max-w-[420px] text-[16px] text-slate">
+              Whether you use a meeting app, watch a video, or meet in person,
+              Brevia captures computer and microphone audio in one record. There is
+              no need to configure every platform separately.
+            </p>
+          </div>
+          <div class="col-span-12 md:col-span-8">
+            <div class="grid grid-cols-2 gap-px border border-line2 bg-line2 sm:grid-cols-3">
+              <div class="flex items-center justify-center bg-white px-4 py-8 text-[15px] font-medium text-ink">Zoom</div>
+              <div class="flex items-center justify-center bg-white px-4 py-8 text-[15px] font-medium text-ink">Google Meet</div>
+              <div class="flex items-center justify-center bg-white px-4 py-8 text-[15px] font-medium text-ink">Microsoft Teams</div>
+              <div class="flex items-center justify-center bg-white px-4 py-8 text-[15px] font-medium text-ink">Webex</div>
+              <div class="flex items-center justify-center bg-white px-4 py-8 text-[15px] font-medium text-ink">Slack huddles</div>
+              <div class="flex items-center justify-center bg-white px-4 py-8 text-[15px] font-medium text-ink">Discord</div>
+              <div class="flex items-center justify-center bg-white px-4 py-8 text-[15px] font-medium text-ink">In-person</div>
+              <div class="flex items-center justify-center bg-white px-4 py-8 text-[15px] font-medium text-ink">Podcasts &amp; media</div>
+              <div class="flex items-center justify-center bg-white px-4 py-8 text-center text-[14px] text-gray1">Any app with sound</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- Privacy callout -->
       <section id="privacy" class="mx-auto mt-24 max-w-content px-6 md:mt-32 md:px-8">
         <div class="reveal bg-mist px-8 py-20 md:px-20 md:py-28">
           <div class="max-w-read">
             <p class="font-mono text-[13px] uppercase tracking-[0.18em] text-gray3">Privacy</p>
             <h2 class="display mt-6 text-[clamp(28px,4vw,42px)] font-light text-ink">
-              What happens on your machine stays on your machine.
+              What happens on your machine stays on your machine
             </h2>
             <p class="measure mt-6 text-[17px] text-slate">
               Speech recognition, diarization, and speaker embeddings all run
@@ -481,16 +618,243 @@
               uploaded. When you opt into AI notes, only the transcript text is
               sent to the provider you choose — never the audio.
             </p>
+            <div class="mt-10 grid gap-x-10 gap-y-6 sm:grid-cols-2">
+              <div class="border-t border-line1 pt-4">
+                <p class="text-[15px] font-medium text-ink">No telemetry, no tracking</p>
+                <p class="measure mt-1 text-[14px] text-slate">The renderer opens no network ports. No usage data is collected, and there's no analytics SDK.</p>
+              </div>
+              <div class="border-t border-line1 pt-4">
+                <p class="text-[15px] font-medium text-ink">Your data stays yours</p>
+                <p class="measure mt-1 text-[14px] text-slate">Recordings, transcripts, exports, voiceprints, and the SQLite database live in <span class="font-mono text-[13px]">~/brevia</span> by default.</p>
+              </div>
+              <div class="border-t border-line1 pt-4">
+                <p class="text-[15px] font-medium text-ink">Cloud calls are opt-in</p>
+                <p class="measure mt-1 text-[14px] text-slate">Text is sent only after you configure a provider yourself, and every IPC message is validated.</p>
+              </div>
+              <div class="border-t border-line1 pt-4">
+                <p class="text-[15px] font-medium text-ink">Auditable source</p>
+                <p class="measure mt-1 text-[14px] text-slate">Fully open source under the ISC license — the privacy claims can be read line by line, not just taken on faith.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Comparison -->
+      <section id="compare" class="divide-top mx-auto max-w-content px-6 pt-24 md:px-8 md:pt-32">
+        <div class="reveal mb-12 max-w-read">
+          <p class="font-mono text-[13px] uppercase tracking-[0.18em] text-gray3">Compare</p>
+          <h2 class="display mt-6 text-[clamp(30px,4vw,44px)] font-light text-ink">
+            Local-first vs. cloud subscription tools
+          </h2>
+          <p class="measure mt-6 text-[17px] text-slate">
+            Most meeting transcription products upload your recordings to their
+            servers and bill you monthly. Brevia puts the same capabilities back
+            on your device.
+          </p>
+        </div>
+        <div class="reveal overflow-x-auto">
+          <table class="w-full min-w-[640px] border-collapse text-left">
+            <thead>
+              <tr class="border-b border-ink">
+                <th class="py-5 pr-6 text-[14px] font-medium text-gray1"></th>
+                <th class="py-5 pr-6 text-[16px] font-bold text-ink">Brevia</th>
+                <th class="py-5 pr-6 text-[16px] font-normal text-gray1">Typical cloud meeting tool</th>
+              </tr>
+            </thead>
+            <tbody class="text-[15px]">
+              <tr class="border-b border-line2">
+                <td class="py-5 pr-6 text-slate">Where audio is processed</td>
+                <td class="py-5 pr-6 font-medium text-ink">On your device</td>
+                <td class="py-5 pr-6 text-gray1">Uploaded to the vendor cloud</td>
+              </tr>
+              <tr class="border-b border-line2">
+                <td class="py-5 pr-6 text-slate">Cost</td>
+                <td class="py-5 pr-6 font-medium text-ink">Free · open source</td>
+                <td class="py-5 pr-6 text-gray1">Monthly / per-seat subscription</td>
+              </tr>
+              <tr class="border-b border-line2">
+                <td class="py-5 pr-6 text-slate">Account required</td>
+                <td class="py-5 pr-6 font-medium text-ink">No</td>
+                <td class="py-5 pr-6 text-gray1">Sign-up and login</td>
+              </tr>
+              <tr class="border-b border-line2">
+                <td class="py-5 pr-6 text-slate">Works offline</td>
+                <td class="py-5 pr-6 font-medium text-ink">Yes (transcription is fully offline)</td>
+                <td class="py-5 pr-6 text-gray1">Requires a connection</td>
+              </tr>
+              <tr class="border-b border-line2">
+                <td class="py-5 pr-6 text-slate">How it joins meetings</td>
+                <td class="py-5 pr-6 font-medium text-ink">Captures system audio, any app</td>
+                <td class="py-5 pr-6 text-gray1">Plugin or a bot that joins</td>
+              </tr>
+              <tr class="border-b border-line2">
+                <td class="py-5 pr-6 text-slate">Speaker identification</td>
+                <td class="py-5 pr-6 font-medium text-ink">Local voiceprints, reused across meetings</td>
+                <td class="py-5 pr-6 text-gray1">Cloud-side, varies</td>
+              </tr>
+              <tr class="border-b border-line2">
+                <td class="py-5 pr-6 text-slate">AI notes</td>
+                <td class="py-5 pr-6 font-medium text-ink">Local model, or your own API key</td>
+                <td class="py-5 pr-6 text-gray1">Locked to the vendor, usage-capped</td>
+              </tr>
+              <tr class="border-b border-line2">
+                <td class="py-5 pr-6 text-slate">Telemetry / data collection</td>
+                <td class="py-5 pr-6 font-medium text-ink">None</td>
+                <td class="py-5 pr-6 text-gray1">Usually present</td>
+              </tr>
+              <tr>
+                <td class="py-5 pr-6 text-slate">Auditable source</td>
+                <td class="py-5 pr-6 font-medium text-ink">Yes (ISC, open source)</td>
+                <td class="py-5 pr-6 text-gray1">Closed source</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="measure mt-6 text-[13px] text-gray2">
+          Comparison reflects common differences between local-first apps and
+          mainstream cloud subscription meeting tools; specific features vary by
+          product.
+        </p>
+      </section>
+
+      <!-- Use cases -->
+      <section id="use-cases" class="divide-top mx-auto max-w-content px-6 pt-24 md:px-8 md:pt-32">
+        <div class="reveal mb-12 max-w-read">
+          <p class="font-mono text-[13px] uppercase tracking-[0.18em] text-gray3">Use cases</p>
+          <h2 class="display mt-6 text-[clamp(30px,4vw,44px)] font-light text-ink">
+            Built for people who need to keep the conversation
+          </h2>
+        </div>
+        <div class="reveal grid grid-cols-1 gap-px border border-line2 bg-line2 sm:grid-cols-2 lg:grid-cols-3">
+          <div class="bg-white p-8">
+            <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">Remote teams</span>
+            <p class="mt-4 text-[18px] font-medium text-ink">Both sides in one transcript</p>
+            <p class="measure mt-3 text-[15px] text-slate">Microphone and system audio land in the same transcript, so nothing on a remote call is missed — with decisions and action items drafted afterward.</p>
+          </div>
+          <div class="bg-white p-8">
+            <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">Research &amp; interviews</span>
+            <p class="mt-4 text-[18px] font-medium text-ink">Subjects never leave the device</p>
+            <p class="measure mt-3 text-[15px] text-slate">Transcribe sensitive interviews fully offline, tell participants apart by voiceprint, and export to formats built for later coding and analysis.</p>
+          </div>
+          <div class="bg-white p-8">
+            <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">Legal &amp; consulting</span>
+            <p class="mt-4 text-[18px] font-medium text-ink">Privileged talks stay on-device</p>
+            <p class="measure mt-3 text-[15px] text-slate">Client-privileged conversations don't have to go to a third-party cloud — verbatim records and summaries are generated and stored locally.</p>
+          </div>
+          <div class="bg-white p-8">
+            <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">Students &amp; lectures</span>
+            <p class="mt-4 text-[18px] font-medium text-ink">Live captions plus notes</p>
+            <p class="measure mt-3 text-[15px] text-slate">Follow captions as you listen, with optional live translation; distill the key points afterward, or import an existing recording to transcribe.</p>
+          </div>
+          <div class="bg-white p-8">
+            <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">Sales &amp; customer success</span>
+            <p class="mt-4 text-[18px] font-medium text-ink">Review every call</p>
+            <p class="measure mt-3 text-[15px] text-slate">Browse history by account or teammate and search "what did they mention last time?" — without handing customer data to an outside platform.</p>
+          </div>
+          <div class="bg-white p-8">
+            <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">Cross-language work</span>
+            <p class="mt-4 text-[18px] font-medium text-ink">Bilingual captions in sync</p>
+            <p class="measure mt-3 text-[15px] text-slate">Transcribe 30+ languages with the original and translation side by side, making multilingual meetings easier to join and revisit.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- System requirements -->
+      <section id="requirements" class="divide-top mx-auto max-w-content px-6 pt-24 md:px-8 md:pt-32">
+        <div class="reveal grid grid-cols-12 gap-8">
+          <div class="col-span-12 md:col-span-4">
+            <p class="font-mono text-[13px] uppercase tracking-[0.18em] text-gray3">System requirements</p>
+            <h2 class="display mt-6 text-[clamp(28px,4vw,40px)] font-light text-ink">
+              Everyday computers can keep up
+            </h2>
+            <p class="measure mt-6 max-w-[420px] text-[16px] text-slate">
+              Start after downloading—no complex setup required. Everyday meetings
+              can run on your CPU, and you can choose models to balance speed,
+              quality, and disk use.
+            </p>
+          </div>
+          <div class="col-span-12 md:col-span-8">
+            <div class="grid grid-cols-1 gap-px border border-line2 bg-line2 sm:grid-cols-2">
+              <div class="bg-white p-6">
+                <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">macOS</span>
+                <p class="mt-3 text-[16px] font-medium text-ink">Apple Silicon</p>
+                <p class="measure mt-2 text-[14px] text-slate">A Mac with Apple Silicon (M-series). Ships as a .dmg.</p>
+              </div>
+              <div class="bg-white p-6">
+                <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">Windows</span>
+                <p class="mt-3 text-[16px] font-medium text-ink">x64</p>
+                <p class="measure mt-2 text-[14px] text-slate">64-bit Windows. Ships as a setup .exe.</p>
+              </div>
+              <div class="bg-white p-6">
+                <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">Model footprint</span>
+                <p class="mt-3 text-[16px] font-medium text-ink">1–2 GB typical</p>
+                <p class="measure mt-2 text-[14px] text-slate">Compact streaming models start around 80 MB; larger models exceed 1 GB. A common setup (streaming + refinement + diarization) is about 1–2 GB.</p>
+              </div>
+              <div class="bg-white p-6">
+                <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">Permissions</span>
+                <p class="mt-3 text-[16px] font-medium text-ink">Mic + screen recording</p>
+                <p class="measure mt-2 text-[14px] text-slate">Grant microphone and screen-recording access on first launch (to capture system audio), then download the models you need.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Pricing -->
+      <section id="pricing" class="divide-top mx-auto max-w-content px-6 pt-24 md:px-8 md:pt-32">
+        <div class="reveal border border-ink px-8 py-16 md:px-16 md:py-20">
+          <div class="grid items-center gap-10 md:grid-cols-2">
+            <div>
+              <p class="font-mono text-[13px] uppercase tracking-[0.18em] text-gray3">Pricing</p>
+              <h2 class="display mt-6 text-[clamp(34px,5vw,56px)] font-light text-ink">
+                Free, entirely
+              </h2>
+              <p class="measure mt-6 max-w-[440px] text-[17px] text-slate">
+                Brevia is open source under the ISC license. No subscription, no
+                paywall, no per-seat pricing. Download and use it without an
+                account. The only cost you might ever see is usage you pay directly
+                to a cloud AI provider if you choose to connect one — and that's
+                between you and them.
+              </p>
+              <a
+                href="#download"
+                class="mt-8 inline-flex items-center border border-ink bg-ink px-8 py-4 text-[15px] text-white transition-opacity duration-300 hover:opacity-70"
+                >Download free</a
+              >
+            </div>
+            <div class="grid gap-px border border-line2 bg-line2">
+              <div class="flex items-center justify-between bg-white px-6 py-5">
+                <span class="text-[15px] text-slate">The app itself</span>
+                <span class="text-[15px] font-medium text-ink">$0 · open source</span>
+              </div>
+              <div class="flex items-center justify-between bg-white px-6 py-5">
+                <span class="text-[15px] text-slate">Local transcription &amp; speaker ID</span>
+                <span class="text-[15px] font-medium text-ink">$0</span>
+              </div>
+              <div class="flex items-center justify-between bg-white px-6 py-5">
+                <span class="text-[15px] text-slate">Local AI meeting notes</span>
+                <span class="text-[15px] font-medium text-ink">$0</span>
+              </div>
+              <div class="flex items-center justify-between bg-white px-6 py-5">
+                <span class="text-[15px] text-slate">Account / subscription</span>
+                <span class="text-[15px] font-medium text-ink">None</span>
+              </div>
+              <div class="flex items-center justify-between bg-white px-6 py-5">
+                <span class="text-[15px] text-slate">Optional: cloud AI provider</span>
+                <span class="text-[14px] text-gray1">Billed by usage, with your provider</span>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
       <!-- Download -->
-      <section id="download" class="mx-auto max-w-content px-6 pt-24 md:px-8 md:pt-32">
+      <section id="download" class="divide-top mx-auto max-w-content px-6 pt-24 md:px-8 md:pt-32">
         <div class="reveal grid grid-cols-12 gap-8">
           <div class="col-span-12 md:col-span-5">
             <h2 class="display text-[clamp(30px,4vw,44px)] font-light text-ink">
-              Download Brevia.
+              Download Brevia
             </h2>
             <p class="measure mt-6 max-w-[420px] text-[17px] text-slate">
               Grab the latest release, then open Settings → Model Library to
@@ -535,12 +899,70 @@
         </div>
       </section>
 
+      <!-- Version & roadmap -->
+      <section id="releases" class="divide-top mx-auto max-w-content px-6 pt-24 md:px-8 md:pt-32">
+        <div class="reveal grid grid-cols-12 gap-8">
+          <div class="col-span-12 md:col-span-4">
+            <p class="font-mono text-[13px] uppercase tracking-[0.18em] text-gray3">Releases &amp; progress</p>
+            <h2 class="display mt-6 text-[clamp(28px,4vw,40px)] font-light text-ink">
+              Shipping, actively
+            </h2>
+            <div class="mt-8 flex items-baseline gap-3">
+              <span class="display text-[40px] font-light text-ink" data-release-version>v1.0.13</span>
+              <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">Latest release</span>
+            </div>
+            <div class="mt-8 flex flex-wrap gap-4 text-[14px]">
+              <a href="https://github.com/zerolovesea/Brevia/releases" class="link-quiet text-link">Full changelog →</a>
+              <a href="https://github.com/zerolovesea/Brevia/commits/main" class="link-quiet text-gray1">Commit history →</a>
+            </div>
+          </div>
+          <div class="col-span-12 md:col-span-8">
+            <p class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">Direction</p>
+            <p class="measure mt-3 max-w-[560px] text-[15px] text-gray1">Where things are heading — directions in progress, not a promised timeline. Weigh in on priorities on GitHub.</p>
+            <div class="mt-6 grid gap-px border border-line2 bg-line2 sm:grid-cols-2">
+              <div class="bg-white p-6">
+                <p class="text-[16px] font-medium text-ink">Cross-meeting summaries</p>
+                <p class="measure mt-2 text-[14px] text-slate">Pull conclusions, decisions, and action items scattered across many meetings into one place to review and manage.</p>
+              </div>
+              <div class="bg-white p-6">
+                <p class="text-[16px] font-medium text-ink">Progress &amp; Gantt charts</p>
+                <p class="measure mt-2 text-[14px] text-slate">Build project progress views and Gantt charts automatically from how things advance across meetings.</p>
+              </div>
+              <div class="bg-white p-6">
+                <p class="text-[16px] font-medium text-ink">Real-time suggested replies</p>
+                <p class="measure mt-2 text-[14px] text-slate">Analyze context during a live meeting and surface suggested talking points in the moment.</p>
+              </div>
+              <div class="bg-white p-6">
+                <p class="text-[16px] font-medium text-ink">Mobile support</p>
+                <p class="measure mt-2 text-[14px] text-slate">Bring recording and review to mobile devices, so you can capture meetings anywhere.</p>
+              </div>
+              <div class="bg-white p-6">
+                <p class="text-[16px] font-medium text-ink">More models &amp; languages</p>
+                <p class="measure mt-2 text-[14px] text-slate">Keep growing the model library across more languages and higher-precision ASR.</p>
+              </div>
+              <div class="bg-white p-6">
+                <p class="text-[16px] font-medium text-ink">Faster local inference</p>
+                <p class="measure mt-2 text-[14px] text-slate">Reduce streaming latency and make better use of hardware acceleration.</p>
+              </div>
+              <div class="bg-white p-6">
+                <p class="text-[16px] font-medium text-ink">Stronger retrieval</p>
+                <p class="measure mt-2 text-[14px] text-slate">Make cross-meeting search and browsing more precise and quicker to reach the right moment.</p>
+              </div>
+              <div class="bg-white p-6">
+                <p class="text-[16px] font-medium text-ink">Exports &amp; integrations</p>
+                <p class="measure mt-2 text-[14px] text-slate">Broaden export formats to fit into the notes and knowledge workflows you already use.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- FAQ -->
-      <section id="faq" class="mx-auto max-w-content px-6 pt-24 md:px-8 md:pt-32">
+      <section id="faq" class="divide-top mx-auto max-w-content px-6 pt-24 md:px-8 md:pt-32">
         <div class="grid grid-cols-12 gap-8">
           <div class="reveal col-span-12 md:col-span-4">
             <h2 class="display text-[clamp(30px,4vw,44px)] font-light text-ink">
-              Questions.
+              Questions
             </h2>
           </div>
           <div class="reveal col-span-12 md:col-span-8">
@@ -596,6 +1018,50 @@
                 </p>
               </div>
             </details>
+            <details class="faq-item border-b border-line2">
+              <summary class="flex items-center justify-between py-6">
+                <span class="text-[18px] text-ink">Can I use Brevia without an internet connection?</span>
+                <span class="faq-sign ml-6 font-mono text-[20px] text-gray2"></span>
+              </summary>
+              <div class="faq-body">
+                <p class="measure pb-6 text-[16px] text-slate">
+                  Yes. Live captions, recording, transcription, and local models run on your device. An internet connection is only needed when you choose an external AI service for meeting notes.
+                </p>
+              </div>
+            </details>
+            <details class="faq-item border-b border-line2">
+              <summary class="flex items-center justify-between py-6">
+                <span class="text-[18px] text-ink">What meetings and audio can I capture?</span>
+                <span class="faq-sign ml-6 font-mono text-[20px] text-gray2"></span>
+              </summary>
+              <div class="faq-body">
+                <p class="measure pb-6 text-[16px] text-slate">
+                  Brevia records microphone and computer audio together, so it works with common meeting apps, audio and video in your browser, and in-person conversations. Capturing computer audio requires screen-recording permission the first time.
+                </p>
+              </div>
+            </details>
+            <details class="faq-item border-b border-line2">
+              <summary class="flex items-center justify-between py-6">
+                <span class="text-[18px] text-ink">Do I need to download every model?</span>
+                <span class="faq-sign ml-6 font-mono text-[20px] text-gray2"></span>
+              </summary>
+              <div class="faq-body">
+                <p class="measure pb-6 text-[16px] text-slate">
+                  No. Download models by language and capability as you need them. Start with a lightweight setup for everyday meetings, then add translation, speaker identification, or higher-quality models later.
+                </p>
+              </div>
+            </details>
+            <details class="faq-item border-b border-line2">
+              <summary class="flex items-center justify-between py-6">
+                <span class="text-[18px] text-ink">Can I export my meeting record?</span>
+                <span class="faq-sign ml-6 font-mono text-[20px] text-gray2"></span>
+              </summary>
+              <div class="faq-body">
+                <p class="measure pb-6 text-[16px] text-slate">
+                  Yes. Export transcripts and notes as Markdown, TXT, JSON, SRT, DOCX, or PDF; export audio as FLAC, WAV, or M4A.
+                </p>
+              </div>
+            </details>
           </div>
         </div>
       </section>
@@ -603,20 +1069,53 @@
       <!-- Footer -->
       <footer class="mx-auto mt-24 max-w-content px-6 pb-16 md:mt-32 md:px-8">
         <hr class="border-0 border-t border-line2" />
-        <div class="flex flex-col gap-6 pt-10 md:flex-row md:items-center md:justify-between">
-          <div class="flex items-center gap-3">
-            <span class="flex h-7 w-7 items-center justify-center rounded-md bg-[#080808] text-[13px] font-bold leading-none text-white">言</span>
-            <span class="text-[16px] font-bold tracking-tightest text-ink">brevia</span>
+        <div class="grid grid-cols-2 gap-8 pt-12 md:grid-cols-4">
+          <div class="col-span-2 md:col-span-1">
+            <div class="flex items-center gap-3">
+              <span class="flex h-7 w-7 items-center justify-center rounded-md bg-[#080808] text-[13px] font-bold leading-none text-white">言</span>
+              <span class="text-[16px] font-bold tracking-tightest text-ink">brevia</span>
+            </div>
+            <p class="measure mt-4 max-w-[240px] text-[13px] text-gray1">
+              A minimal, local-first AI meeting assistant. No audio leaves your device.
+            </p>
           </div>
-          <div class="flex flex-wrap gap-x-8 gap-y-2 text-[14px] text-gray1">
-            <a href="#features" class="link-quiet">Features</a>
-            <a href="#privacy" class="link-quiet">Privacy</a>
-            <a href="#download" class="link-quiet">Download</a>
-            <a href="https://github.com/zerolovesea/Brevia" class="link-quiet">GitHub</a>
+          <div>
+            <p class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">Product</p>
+            <div class="mt-4 flex flex-col gap-2.5 text-[14px] text-gray1">
+              <a href="#features" class="link-quiet">Features</a>
+              <a href="#compare" class="link-quiet">Compare</a>
+              <a href="#use-cases" class="link-quiet">Use cases</a>
+              <a href="#pricing" class="link-quiet">Pricing</a>
+              <a href="#download" class="link-quiet">Download</a>
+            </div>
           </div>
+          <div>
+            <p class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">Resources</p>
+            <div class="mt-4 flex flex-col gap-2.5 text-[14px] text-gray1">
+              <a href="https://github.com/zerolovesea/Brevia#readme" class="link-quiet">Documentation</a>
+              <a href="https://github.com/zerolovesea/Brevia/releases" class="link-quiet">Changelog</a>
+              <a href="#requirements" class="link-quiet">System requirements</a>
+              <a href="#faq" class="link-quiet">FAQ</a>
+            </div>
+          </div>
+          <div>
+            <p class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">Community &amp; support</p>
+            <div class="mt-4 flex flex-col gap-2.5 text-[14px] text-gray1">
+              <a href="https://github.com/zerolovesea/Brevia" class="link-quiet">GitHub</a>
+              <a href="https://github.com/zerolovesea/Brevia/issues" class="link-quiet">Report an issue</a>
+              <a href="https://github.com/zerolovesea/Brevia/blob/main/README.md#feedback-and-contributing" class="link-quiet">Contributing</a>
+              <a href="https://github.com/zerolovesea/Brevia/blob/main/LICENSE" class="link-quiet">ISC License</a>
+            </div>
+          </div>
+        </div>
+        <div class="mt-12 flex flex-col gap-4 border-t border-line2 pt-8 md:flex-row md:items-center md:justify-between">
           <p class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">
-            Local-first · ISC License
+            Local-first · ISC License · No telemetry
           </p>
+          <div class="flex items-center gap-5 text-[13px] text-gray1">
+            <a href="./index-zh.html" class="link-quiet" onclick="sessionStorage.setItem('lang-selected', 'zh')">中文</a>
+            <span data-release-version class="font-mono text-gray3">v1.0.13</span>
+          </div>
         </div>
       </footer>
     </main>
@@ -663,7 +1162,7 @@
       (function () {
         var canvases = document.querySelectorAll('.demo-canvas');
         var resize = function (canvas) {
-          canvas.style.setProperty('--demo-scale', canvas.clientWidth / 1440);
+          canvas.style.setProperty('--demo-scale', canvas.clientWidth / 1200);
         };
         var observer = new ResizeObserver(function (entries) {
           entries.forEach(function (entry) {
