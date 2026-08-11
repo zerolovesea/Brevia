@@ -16,6 +16,7 @@ from .asr import (
 )
 from .audio_io import convert_to_pcm_wav
 from .config import SETTINGS
+from .worker_llm import TRANSLATION_MODEL_ID
 from .worker_common import require, synchronized_recording
 
 
@@ -43,6 +44,8 @@ class RecordingSessionMixin:
                 "vad_model_id",
             )
         ]
+        if payload.get("target_language"):
+            required_models.append(TRANSLATION_MODEL_ID)
         missing_models = [
             model_id
             for model_id in required_models

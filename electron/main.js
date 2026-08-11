@@ -934,13 +934,16 @@ function showFloatingCaption() {
     floatingCaptionReady = false;
   }
 
-  const { workArea } = screen.getPrimaryDisplay();
+  const mainWindow = BrowserWindow.getAllWindows().find(window => window !== floatingCaptionWindow && !window.isDestroyed());
+  const display = mainWindow ? screen.getDisplayMatching(mainWindow.getBounds()) : screen.getPrimaryDisplay();
+  const { workArea } = display;
   const width = Math.min(760, workArea.width - 80);
   const height = 180;
 
   // Restore saved position or use default centered position
-  const x = floatingCaptionBounds?.x ?? Math.round(workArea.x + (workArea.width - width) / 2);
-  const y = floatingCaptionBounds?.y ?? Math.round(workArea.y + workArea.height - height - 60);
+  const savedBounds = floatingCaptionBounds && screen.getDisplayMatching(floatingCaptionBounds).id === display.id ? floatingCaptionBounds : null;
+  const x = savedBounds?.x ?? Math.round(workArea.x + (workArea.width - width) / 2);
+  const y = savedBounds?.y ?? Math.round(workArea.y + workArea.height - height - 60);
 
   floatingCaptionReady = false;
   floatingCaptionWindow = new BrowserWindow({

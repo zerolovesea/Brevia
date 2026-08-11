@@ -228,6 +228,23 @@ class WorkerTest(unittest.TestCase):
             )
         self.assertEqual([], self.worker.store.list_meetings())
 
+    def test_start_requires_translation_model_when_translation_is_selected(self):
+        with self.assertRaisesRegex(
+            RuntimeError,
+            "Models paraformer-zh-en-int8, qwen3-asr-0.6b-int8, hy-mt2-1.8b-q4km are not installed",
+        ):
+            self.worker.start(
+                {
+                    "title": "缺翻译模型",
+                    "language": "zh",
+                    "target_language": "en",
+                    "streaming_model_id": "paraformer-zh-en-int8",
+                    "refined_model_id": "qwen3-asr-0.6b-int8",
+                    "require_models": True,
+                }
+            )
+        self.assertEqual([], self.worker.store.list_meetings())
+
     def test_utf8_json_files_are_read_explicitly_as_utf8(self):
         with patch.object(
             Path, "read_text", autospec=True, side_effect=Path.read_text
