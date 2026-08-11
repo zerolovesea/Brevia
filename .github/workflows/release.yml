@@ -20,10 +20,14 @@ jobs:
             artifact: |
               dist/Brevia-*.dmg
               dist/Brevia-*.zip
+              dist/Brevia-*.zip.blockmap
               dist/latest-mac.yml
           - name: Windows x64
             os: windows-latest
-            artifact: dist/Brevia-*-x64-setup.exe
+            artifact: |
+              dist/Brevia-*-x64-setup.exe
+              dist/Brevia-*-x64-setup.exe.blockmap
+              dist/latest.yml
     runs-on: ${{ matrix.os }}
     env:
       PYTHONUTF8: '1'

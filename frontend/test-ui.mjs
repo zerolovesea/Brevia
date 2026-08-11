@@ -193,7 +193,8 @@ assert.match(text(electronMain), /ipcMain\.handle\('app\.version', \(\) => app\.
 assert.match(text(electronMain), /handle\('app\.maintain', z\.object\(\{\}\), 'app\.maintain'\)/);
 assert.match(text(electronMain), /const useBundledWorker = app\.isPackaged/);
 assert.match(text(js), /fetch\('\.\.\/package\.json'\)/);
-assert.match(text(js), /profile\.builtin_key \|\| \(profile\.built_in/);
+assert.match(text(js), /const BUILTIN_VOICE_NAMES =/);
+assert.match(text(js), /Object\.keys\(BUILTIN_VOICE_NAMES\)\.find/);
 assert.match(text(js), /renderSettingsView\(\);[\s\S]{0,120}append\(speakerProfileCard, updateCard\)/);
 assert.match(text(components), /function renderSettingsView\(\)/);
 assert.doesNotMatch(text(electronMain), /ipcMain\.handle\('secret\.get'/);
@@ -576,7 +577,7 @@ assert.match(text(electronMain), /systemAudioSupported/);
 assert.match(text(electronMain), /require\('node:os'\)/);
 assert.doesNotMatch(text(electronMain), /app\.getSystemVersion/);
 assert.match(text(electronMain), /createDisplayMediaHandler\(desktopCapturer, writeLog\)/);
-assert.match(text(js), /checkForUpdates\(\{ silent: true \}\)/);
+assert.doesNotMatch(text(js), /checkForUpdates\(\{ silent: true \}\)/);
 assert.match(text(js), /if \(!silent\) showToast\(error\.message\)/);
 assert.match(text(js), /const requiredModelsForLanguage/);
 assert.match(text(js), /const punctuation = language === 'en' \? 'online-punct-en-int8'/);

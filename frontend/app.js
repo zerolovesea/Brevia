@@ -348,9 +348,16 @@ function summaryRequestConfig() {
   if (preset.needsKey && !entry.keyReference) return null;
   return { provider, endpoint, model: entry.model, format: preset.format, keyReference: entry.keyReference };
 }
+const BUILTIN_VOICE_NAMES = {
+  'builtin:female': ['内置女声', 'Built-in female voice', 'Voz femenina integrada', '内蔵女性音声', '내장 여성 음성', 'Voix féminine intégrée', 'Integrierte weibliche Stimme', 'Встроенный женский голос'],
+  'builtin:male': ['内置男声', 'Built-in male voice', 'Voz masculina integrada', '内蔵男性音声', '내장 남성 음성', 'Voix masculine intégrée', 'Integrierte männliche Stimme', 'Встроенный мужской голос'],
+};
 function speakerProfileName(profile) {
-  const builtinKey = profile.builtin_key || (profile.built_in && profile.name === '内置女声' ? 'builtin:female' : profile.built_in && profile.name === '内置男声' ? 'builtin:male' : '');
-  const builtin = { 'builtin:female': ['内置女声', 'Built-in female voice', 'Voz femenina integrada', '内蔵女性音声', '내장 여성 음성', 'Voix féminine intégrée', 'Integrierte weibliche Stimme', 'Встроенный женский голос'], 'builtin:male': ['内置男声', 'Built-in male voice', 'Voz masculina integrada', '内蔵男性音声', '내장 남성 음성', 'Voix masculine intégrée', 'Integrierte männliche Stimme', 'Встроенный мужской голос'] }[builtinKey];
+  let builtinKey = profile.builtin_key || '';
+  if (!builtinKey && profile.built_in) {
+    builtinKey = Object.keys(BUILTIN_VOICE_NAMES).find(key => BUILTIN_VOICE_NAMES[key].includes(profile.name)) || '';
+  }
+  const builtin = BUILTIN_VOICE_NAMES[builtinKey];
   return builtin ? builtin[['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru'].indexOf(locale)] : profile.name;
 }
 /** 返回保存在应用数据目录中的非机密纪要配置。*/
@@ -2477,7 +2484,6 @@ async function runUpdateAction() {
   try { await window.brevia.update.install(); }
   catch (error) { showToast(error.message); updateBusy = false; updateDownloadProgress = null; renderUpdateButton(); renderUpdateNotice(); }
 }
-void checkForUpdates({ silent: true });
 window.setInterval(() => { if (activeLibraryNav === 'recently-deleted') return; sloganIndex = (sloganIndex + 1) % (slogans[locale] || slogans.en).length; renderSlogan(true); }, 30000);
 updateButton.addEventListener('click', () => void runUpdateAction());
 updateNoticeButton.addEventListener('click', () => void runUpdateAction());

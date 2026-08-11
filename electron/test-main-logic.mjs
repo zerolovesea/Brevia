@@ -43,6 +43,7 @@ const { z } = require('zod');
 const mainSource = (await readFile(new URL('./main.js', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 assert.match(mainSource, /process\.platform === 'win32'\) Menu\.setApplicationMenu\(null\)/);
 assert.match(mainSource, /screen\.getDisplayMatching\(mainWindow\.getBounds\(\)\)/, 'floating captions open on the main window display');
+assert.match(mainSource, /webContents\.send\('brevia:event', \{\n        type: 'update\.download-progress'/, 'update progress uses the renderer event channel');
 const oneLine = (decl) => { const start = mainSource.indexOf(decl); return mainSource.slice(start, mainSource.indexOf('\n', start) + 1); };
 const schemaBlock = (decl) => { const start = mainSource.indexOf(decl); return mainSource.slice(start, mainSource.indexOf('\n});', start) + 5); };
 const asyncFn = (name) => { const start = mainSource.indexOf(`async function ${name}(`); return mainSource.slice(start, mainSource.indexOf('\n}\n', start) + 2); };

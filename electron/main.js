@@ -769,10 +769,7 @@ let macUpdateCheck;
 
 function checkForUpdate() {
   if (!app.isPackaged) return Promise.resolve({ status: 'unsupported' });
-  if (process.platform === 'win32') return fetch('https://api.github.com/repos/zerolovesea/Brevia/releases/latest', { headers: { 'User-Agent': 'Brevia' } })
-    .then((response) => response.ok ? response.json() : Promise.reject(new Error(`GitHub update check failed (${response.status})`)))
-    .then(({ tag_name }) => ({ status: isNewerVersion(tag_name, app.getVersion()) ? 'available' : 'current', version: tag_name.replace(/^v/, '') }));
-  if (process.platform !== 'darwin') return Promise.resolve({ status: 'unsupported' });
+  if (!['darwin', 'win32'].includes(process.platform)) return Promise.resolve({ status: 'unsupported' });
   if (macUpdateCheck) return macUpdateCheck;
   const { autoUpdater } = require('electron-updater');
   configureMacUpdater(autoUpdater);
@@ -795,8 +792,7 @@ function checkForUpdate() {
 }
 
 async function installUpdate() {
-  if (process.platform === 'win32') return shell.openExternal(releasesUrl);
-  if (process.platform !== 'darwin' || !app.isPackaged) return false;
+  if (!['darwin', 'win32'].includes(process.platform) || !app.isPackaged) return false;
 
   const { autoUpdater } = require('electron-updater');
 
@@ -804,7 +800,7 @@ async function installUpdate() {
   const progressHandler = (info) => {
     const windows = BrowserWindow.getAllWindows();
     windows.forEach((win) => {
-      win.webContents.send('ipc-event', {
+      win.webContents.send('brevia:event', {
         type: 'update.download-progress',
         payload: {
           bytesPerSecond: info.bytesPerSecond,

@@ -494,5 +494,18 @@ Object.entries({
   ru: { '内置纪要模型清单暂不可用。':'Список встроенных моделей сводки недоступен.', '请先选择或填写纪要模型。':'Сначала выберите или укажите модель сводки.', '请填写请求地址。':'Укажите URL запроса.', '请填写 API Key。':'Укажите ключ API.', '纪要模型已保存':'Модель сводки сохранена' },
 }).forEach(([code, labels]) => Object.assign(catalog[code].labels, labels));
 
+// 侧边栏与顶栏图标按钮的无障碍标签（供屏幕阅读器朗读）。
+const accessibilityLabels = {
+  zh: { '主导航': '主导航', 'Brevia 首页': 'Brevia 首页', '在 GitHub 上查看 Brevia': '在 GitHub 上查看 Brevia' },
+  en: { '主导航': 'Main navigation', 'Brevia 首页': 'Brevia home', '在 GitHub 上查看 Brevia': 'View Brevia on GitHub' },
+  es: { '主导航': 'Navegación principal', 'Brevia 首页': 'Inicio de Brevia', '在 GitHub 上查看 Brevia': 'Ver Brevia en GitHub' },
+  ja: { '主导航': 'メインナビゲーション', 'Brevia 首页': 'Brevia ホーム', '在 GitHub 上查看 Brevia': 'GitHub で Brevia を見る' },
+  ko: { '主导航': '주 탐색', 'Brevia 首页': 'Brevia 홈', '在 GitHub 上查看 Brevia': 'GitHub에서 Brevia 보기' },
+  fr: { '主导航': 'Navigation principale', 'Brevia 首页': 'Accueil Brevia', '在 GitHub 上查看 Brevia': 'Voir Brevia sur GitHub' },
+  de: { '主导航': 'Hauptnavigation', 'Brevia 首页': 'Brevia-Startseite', '在 GitHub 上查看 Brevia': 'Brevia auf GitHub ansehen' },
+  ru: { '主导航': 'Основная навигация', 'Brevia 首页': 'Главная Brevia', '在 GitHub 上查看 Brevia': 'Посмотреть Brevia на GitHub' },
+};
+Object.entries(accessibilityLabels).forEach(([code, labels]) => Object.assign(catalog[code].labels, labels));
+
 window.BreviaLocaleData = { catalog, appCopy };
 })();
