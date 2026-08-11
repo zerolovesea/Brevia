@@ -1,14 +1,17 @@
 """为当前平台构建自包含的后端 Worker。"""
 
 import os
+import sys
 from pathlib import Path
 
 import PyInstaller.__main__
 
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
 from backend.asr import ModelManager
 
 
-ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "backend"
 BUNDLED_MODELS = BACKEND / "bundled-models"
 BUNDLED_MODEL_IDS = (
