@@ -1,6 +1,6 @@
 {
   "name": "brevia",
-  "version": "1.0.16",
+  "version": "1.0.17",
   "main": "electron/main.js",
   "scripts": {
     "build": "cd frontend && npx @tailwindcss/cli -i ./tailwind.css -o ./styles.css --minify",
