@@ -20,6 +20,8 @@ app.on('second-instance', () => {
 
 const root = path.join(__dirname, '..');
 const packagedRoot = app.isPackaged ? process.resourcesPath : root;
+const startupAnimationMs = 1700;
+const startupDataWaitMs = 2200;
 const workerLineLimit = 8 * 1024 * 1024;
 const workerRequestTimeouts = new Map([
   ['meeting.get', 15000],
@@ -870,15 +872,18 @@ function createWindow() {
       clearTimeout(reloadRevealTimer);
       reloadRevealTimer = setTimeout(() => {
         if (!window.isDestroyed()) window.webContents.send('brevia:event', { type: 'startup.ready' });
-      }, 0);
+      }, startupAnimationMs);
     }
     else revealApp();
   });
   window.loadFile(path.join(packagedRoot, 'frontend', 'index.html'), resetOnboarding ? { query: { resetOnboarding: '1' } } : undefined);
-  animationComplete = true;
-  void initializeWorker()
-    .then(() => { initializationReady = true; revealApp(); })
-    .catch((error) => reportMainError(error));
+  setTimeout(() => {
+    animationComplete = true;
+    revealApp();
+  }, startupAnimationMs);
+  void Promise.race([initializeWorker(), new Promise((resolve) => setTimeout(resolve, startupDataWaitMs))])
+    .catch((error) => reportMainError(error))
+    .then(() => { initializationReady = true; revealApp(); });
   window.on('closed', () => { closeFloatingCaption(); });
   return window;
 }

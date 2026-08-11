@@ -782,13 +782,13 @@ function refreshLocalizedTaskCards() {
     summary.querySelector('strong').textContent = `${summaryTaskLabel(summary.dataset.stage)}${total ? ` · ${Math.round(Number(summary.dataset.completed || 0) / total * 100)}%` : ''}`;
   }
 }
-async function generateMeetingSummary() {
+async function generateMeetingSummary(meetingId = breviaClient?.state.selectedMeetingId) {
   const config = summaryRequestConfig();
-  if (!config || !breviaClient.state.selectedMeetingId) { showSummaryConfigCard(); return; }
-  showSummaryProgress(0, 100, 'summary.prepare');
+  if (!config || !meetingId) { showSummaryConfigCard(); return; }
+  showSummaryProgress(0, 100, 'summary.prepare', meetingId);
   try {
     const summary = await window.brevia.summary.generate({
-      meeting_id: breviaClient.state.selectedMeetingId,
+      meeting_id: meetingId,
       provider: config.provider,
       ...(config.endpoint ? { endpoint: config.endpoint } : {}),
       model: config.model,
@@ -798,9 +798,9 @@ async function generateMeetingSummary() {
       consent: true,
     });
     if (summary?.configuration_required) { hideSummaryProgress(); showSummaryConfigCard(); return; }
-    const meeting = await window.brevia.meeting.get({ meeting_id: breviaClient.state.selectedMeetingId });
+    const meeting = await window.brevia.meeting.get({ meeting_id: meetingId });
     meeting.summary = { data: summary };
-    applyBackendDetail(meeting);
+    if (meetingId === breviaClient.state.selectedMeetingId) applyBackendDetail(meeting);
     dismissTaskCard(document.querySelector('#summary-config-required'));
     showSummaryComplete();
     showToast(t('会议纪要已生成'));
@@ -1094,13 +1094,14 @@ function renderBuiltinSummaryModels(currentModelId) {
   const labels = modelLabels[locale] || modelLabels.en;
   const rows = models.map((model) => {
     const installed = modelPaths.has(model.id);
+    const intro = builtinModelIntro[model.id]?.[locale] || builtinModelIntro[model.id]?.en || '';
     const download = modelDownloads.get(model.id);
     const selected = installed && model.id === currentModelId;
     const progress = download ? `<span class="model-download-progress">${download.total ? `${Math.round((download.received / download.total) * 100)}%` : labels.downloading}<i style="transform:scaleX(${download.total ? download.received / download.total : 0})"></i></span>` : '';
     const action = installed
       ? `<span class="summary-config-badge">${labels.installed}</span>`
       : `<button class="modal-action" data-download-summary-model="${escapeHtml(model.id)}" type="button"${download ? ' disabled' : ''}>${download ? labels.downloading : labels.download}</button>`;
-    return `<div class="model-library-item${selected ? ' builtin-model-selected' : ''}"${installed ? ` data-builtin-model-id="${escapeHtml(model.id)}"` : ''}><span><b class="model-library-headline">${escapeHtml(model.name)}</b><small>${escapeHtml(model.id)}${model.size_bytes ? ` · ${formatBytes(model.size_bytes)}` : ''}</small>${progress}</span><span class="model-actions">${action}</span></div>`;
+    return `<div class="model-library-item${selected ? ' builtin-model-selected' : ''}"${installed ? ` data-builtin-model-id="${escapeHtml(model.id)}"` : ''}><span><b class="model-library-headline">${escapeHtml(model.name)}</b><small>${escapeHtml(model.id)}${model.size_bytes ? ` · ${formatBytes(model.size_bytes)}` : ''}</small>${intro ? `<small>${escapeHtml(intro)}</small>` : ''}${renderModelLibraryRatings(model)}${progress}</span><span class="model-actions">${action}</span></div>`;
   }).join('');
   return `<div class="builtin-model-list modal-list">${rows}</div><p class="summary-model-hint">${copy.builtinHint}</p>`;
 }
@@ -2645,10 +2646,14 @@ document.querySelector('#end-meeting').addEventListener('click', async (event) =
     meetingActive = false;
     miniMeeting.hidden = true;
     syncFloatingNotices();
-    if (meeting) applyBackendDetail(meeting);
+    if (meeting) {
+      breviaClient.state.selectedMeetingId = meeting.id;
+      applyBackendDetail(meeting);
+    }
     showView('detail');
     showToast(message('recordingSaved'));
     if (window.brevia) await refreshBackendMeetings();
+    if (meeting && summaryRequestConfig()) void generateMeetingSummary(meeting.id);
   } catch (error) {
     showToast(error.message);
     startTimer();
@@ -2962,9 +2967,10 @@ meetingList.addEventListener('click', async (event) => {
     const index = Number(action.dataset.meetingIndex);
     const meeting = uiData.meetings[index];
     if (action.dataset.meetingAction === 'workspace') {
+      const rect = action.getBoundingClientRect();
       closeMeetingMenus();
       if (typeof showWorkspaceAssignMenu === 'function') {
-        showWorkspaceAssignMenu(index, action);
+        showWorkspaceAssignMenu(index, rect);
       }
       return;
     }

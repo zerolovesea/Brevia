@@ -413,9 +413,9 @@ function showEditWorkspaceDialog(workspaceId) {
 /**
  * 显示会议工作区分配菜单
  * @param {number} meetingIndex - 会议在 uiData.meetings 中的索引
- * @param {HTMLElement} anchor - 菜单锚点元素
+ * @param {DOMRect} anchorRect - 菜单锚点位置
  */
-function showWorkspaceAssignMenu(meetingIndex, anchor) {
+function showWorkspaceAssignMenu(meetingIndex, anchorRect) {
   const meeting = uiData.meetings[meetingIndex];
   if (!meeting) return;
 
@@ -444,10 +444,9 @@ function showWorkspaceAssignMenu(meetingIndex, anchor) {
   `;
 
   // 定位菜单
-  const rect = anchor.getBoundingClientRect();
   menu.style.position = 'fixed';
-  menu.style.top = `${rect.bottom + 4}px`;
-  menu.style.right = `${window.innerWidth - rect.right}px`;
+  menu.style.top = `${anchorRect.bottom + 4}px`;
+  menu.style.right = `${window.innerWidth - anchorRect.right}px`;
 
   document.body.appendChild(menu);
 

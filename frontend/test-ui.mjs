@@ -227,6 +227,7 @@ assert.match(text(js), /function selectCurrentWorkspaceForMeeting/);
 assert.match(text(js), /if \(target\.dataset\.view === 'prepare'\) selectCurrentWorkspaceForMeeting\(\)/);
 assert.match(text(js), /__new_workspace__/);
 assert.match(text(js), /showNewWorkspaceDialog\(null, \(workspace\)/);
+assert.match(text(app), /const rect = action\.getBoundingClientRect\(\);\s+closeMeetingMenus\(\);\s+if \(typeof showWorkspaceAssignMenu === 'function'\) \{\s+showWorkspaceAssignMenu\(index, rect\);/);
 assert.match(text(js), /function renderWorkspaceNav/);
 assert.match(text(js), /async function switchWorkspace/);
 assert.match(text(js), /await transitionPage\(document\.querySelector\('#home-view'\), document\.querySelector\('#home-view'\), applyWorkspace\)/);
@@ -261,7 +262,8 @@ assert.doesNotMatch(text(js), /migrateSummaryConfig|inferSummaryProvider/);
 assert.doesNotMatch(text(electronMain), /ollama/i);
 assert.match(text(electronMain), /ipcMain\.handle\('translation\.generate',[\s\S]{0,700}target_language: z\.string\(\)\.min\(2\)\.max\(32\),[\s\S]{0,100}consent: z\.literal\(true\)/);
 assert.doesNotMatch(text(electronMain), /ipcMain\.handle\('translation\.generate',[\s\S]{0,700}provider: z\.string\(\)/);
-assert.doesNotMatch(text(electronMain), /startupAnimationMs|startupDataWaitMs/);
+assert.match(text(electronMain), /const startupAnimationMs = 1700;/);
+assert.match(text(electronMain), /const startupDataWaitMs = 2200;/);
 assert.doesNotMatch(text(electronMain), /const splash = new BrowserWindow/);
 assert.match(text(electronMain), /window\.loadFile\(path\.join\(packagedRoot, 'frontend', 'index\.html'\)/);
 assert.match(text(electronMain), /webContents\.on\('did-finish-load'/);
@@ -475,6 +477,8 @@ assert.match(text(js), /renderSummaryDetailModal/);
 assert.match(text(js), /sharePanelHtml\('notes'\)/);
 assert.match(text(js), /data-format="pdf"/);
 assert.match(text(js), /data-regenerate-summary/);
+assert.match(text(js), /async function generateMeetingSummary\(meetingId = breviaClient\?\.state\.selectedMeetingId\)/);
+assert.match(text(js), /if \(meeting && summaryRequestConfig\(\)\) void generateMeetingSummary\(meeting\.id\);/);
 assert.match(text(js), /data-content="notes"/);
 // 统一分享面板:三处入口共用平台按钮 + 导出文件按钮。
 assert.match(text(js), /function sharePanelHtml/);
@@ -765,6 +769,8 @@ const summaryContext = {
   t: (value) => localeContext.window.BreviaLocaleData.catalog.zh.labels[value] || value,
   summaryModelCopy: localeContext.window.BreviaLocaleData.appCopy.summaryModelCopy,
   modelLabels: localeContext.window.BreviaLocaleData.appCopy.modelLabels,
+  builtinModelIntro: { 'qwen3.5-2b-q4km': { zh: '质量与速度均衡' } },
+  renderModelLibraryRatings: () => '<span>质量：极高 · 速度：均衡</span>',
   formatBytes: (bytes) => `${bytes}B`,
   modelDownloads: new Map(),
   settingsModal: { querySelector: (selector) => summaryNodes[selector] },
@@ -783,6 +789,8 @@ const renderSummaryModal = (provider, { providers = {}, installed = [] } = {}) =
 let summaryHtml = renderSummaryModal('built-in', { installed: ['qwen3.5-2b-q4km'] });
 assert.match(summaryHtml, /data-builtin-model-id="qwen3\.5-2b-q4km"/);
 assert.match(summaryHtml, /data-download-summary-model="gemma3-1b-q8"/);
+assert.match(summaryHtml, /质量与速度均衡/);
+assert.match(summaryHtml, /质量：极高 · 速度：均衡/);
 assert.doesNotMatch(summaryHtml, /whisper-large-v3/);
 assert.match(summaryHtml, /name="model" value="qwen3\.5-2b-q4km"/);
 assert.doesNotMatch(summaryHtml, /name="apiKey"|name="endpoint"/);
