@@ -194,6 +194,7 @@ class DemoTimeline {
   async restart() {
     this.stop();
     this.currentStep = 0;
+    if (this.onRestart) await this.onRestart();
     this.engine.reset();
     await this.engine.wait(100);
     await this.run();

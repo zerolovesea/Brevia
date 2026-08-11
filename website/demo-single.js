@@ -77,12 +77,17 @@
     const demoConfig = getDemoConfig(resolveDemoName());
     if (!demoConfig) return;
 
-    // Inject the initial UI and start playing
+    // Restore the initial UI before each loop so animated segments never
+    // accumulate from the previous run.
     const content = document.getElementById('demo-content');
-    content.innerHTML = demoConfig.setupUI();
-    applyScale();
+    const renderInitialUI = () => {
+      content.innerHTML = demoConfig.setupUI();
+      applyScale();
+    };
+    renderInitialUI();
 
     timeline.setSteps(demoConfig.steps);
+    timeline.onRestart = renderInitialUI;
     engine.reset();
     setTimeout(() => timeline.run(), 400);
 
