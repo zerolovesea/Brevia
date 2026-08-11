@@ -210,75 +210,75 @@ class DemoScenariosV3 {
                   </svg>
                 </div>
                 <div class="meeting-main">
-                  <h2>乐信 墨西哥会议 20260807</h2>
+                  <h2>产品周例会 · 第 32 周</h2>
                   <p>
                     <time>8月7日 15:11</time>
                     <span>·</span>
-                    <span>11 分钟</span>
-                  </p>
-                  <div>
-                    <span class="tag">本地录音</span>
-                  </div>
-                </div>
-                <div class="meeting-status">
-                  <span class="status">已整理</span>
-                  <small>本地资源</small>
-                </div>
-                <div class="meeting-actions">
-                  <button class="more" title="更多操作">⋯</button>
-                </div>
-              </div>
-
-              <div class="meeting-row">
-                <div class="meeting-color" style="background: var(--color-black); display: flex; align-items: center; justify-content: center;">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
-                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-                    <line x1="12" y1="19" x2="12" y2="23"></line>
-                    <line x1="8" y1="23" x2="16" y2="23"></line>
-                  </svg>
-                </div>
-                <div class="meeting-main">
-                  <h2>会议 20260806</h2>
-                  <p>
-                    <time>8月6日 20:40</time>
-                    <span>·</span>
-                    <span>52 分钟</span>
-                  </p>
-                  <div>
-                    <span class="tag">本地录音</span>
-                  </div>
-                </div>
-                <div class="meeting-status">
-                  <span class="status">已整理</span>
-                  <small>本地资源</small>
-                </div>
-                <div class="meeting-actions">
-                  <button class="more" title="更多操作">⋯</button>
-                </div>
-              </div>
-
-              <div class="meeting-row">
-                <div class="meeting-color" style="background: var(--color-black); display: flex; align-items: center; justify-content: center;">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
-                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-                    <line x1="12" y1="19" x2="12" y2="23"></line>
-                    <line x1="8" y1="23" x2="16" y2="23"></line>
-                  </svg>
-                </div>
-                <div class="meeting-main">
-                  <h2>示例·产品上线同步会</h2>
-                  <p>
-                    <time>8月6日 07:54</time>
-                    <span>·</span>
-                    <span>0 分钟</span>
-                    <span>·</span>
-                    <span>示例会议</span>
+                    <span>38 分钟</span>
                   </p>
                   <div>
                     <span class="tag">产品</span>
-                    <span class="tag">上线</span>
+                    <span class="tag">规划</span>
+                  </div>
+                </div>
+                <div class="meeting-status">
+                  <span class="status">已整理</span>
+                  <small>本地资源</small>
+                </div>
+                <div class="meeting-actions">
+                  <button class="more" title="更多操作">⋯</button>
+                </div>
+              </div>
+
+              <div class="meeting-row">
+                <div class="meeting-color" style="background: var(--color-black); display: flex; align-items: center; justify-content: center;">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                    <line x1="12" y1="19" x2="12" y2="23"></line>
+                    <line x1="8" y1="23" x2="16" y2="23"></line>
+                  </svg>
+                </div>
+                <div class="meeting-main">
+                  <h2>客户访谈 · 华东团队</h2>
+                  <p>
+                    <time>8月6日 20:40</time>
+                    <span>·</span>
+                    <span>47 分钟</span>
+                  </p>
+                  <div>
+                    <span class="tag">客户</span>
+                    <span class="tag">访谈</span>
+                  </div>
+                </div>
+                <div class="meeting-status">
+                  <span class="status">已整理</span>
+                  <small>本地资源</small>
+                </div>
+                <div class="meeting-actions">
+                  <button class="more" title="更多操作">⋯</button>
+                </div>
+              </div>
+
+              <div class="meeting-row">
+                <div class="meeting-color" style="background: var(--color-black); display: flex; align-items: center; justify-content: center;">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                    <line x1="12" y1="19" x2="12" y2="23"></line>
+                    <line x1="8" y1="23" x2="16" y2="23"></line>
+                  </svg>
+                </div>
+                <div class="meeting-main">
+                  <h2>设计走查 · 桌面端</h2>
+                  <p>
+                    <time>8月6日 07:54</time>
+                    <span>·</span>
+                    <span>26 分钟</span>
+                  </p>
+                  <div>
+                    <span class="tag">设计</span>
+                    <span class="tag">体验</span>
                   </div>
                 </div>
                 <div class="meeting-status">
