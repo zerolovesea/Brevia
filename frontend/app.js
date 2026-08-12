@@ -2950,6 +2950,7 @@ window.addEventListener('resize', positionOpenMeetingMenus);
 async function mutateMeetings(action, meetings) {
   const ids = new Set(meetings.map(({ id }) => id).filter(Boolean));
   if (window.brevia) await Promise.all([...ids].map((meeting_id) => window.brevia.meeting[action]({ meeting_id })));
+  if (action === 'purge' && window.brevia) { await refreshBackendMeetings(true); return; }
   if (['delete', 'restore', 'purge'].includes(action)) uiData.meetings = uiData.meetings.filter((meeting) => !ids.has(meeting.id));
   clearMeetingSelection();
   renderMeetingList();
@@ -3384,7 +3385,10 @@ if (window.brevia) {
     splash.classList.add('startup-splash-leave');
     splash.addEventListener('transitionend', () => splash.remove(), { once: true });
   };
-  window.brevia.on('startup.ready', dismissStartupSplash);
+  window.brevia.on('startup.ready', () => {
+    dismissStartupSplash();
+    void checkForUpdates({ silent: true });
+  });
   if (window.BreviaOnboarding.isFirstLaunch()) openOnboardingLanguage();
   void loadSummaryConfig().catch((error) => showToast(`${t('纪要配置加载失败')}: ${error.message}`));
   initializationPromise = breviaClient.initialize().then((result) => {
