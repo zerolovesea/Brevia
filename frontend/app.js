@@ -94,7 +94,7 @@ let translationAllowed = false;
 let latestLiveSegmentId = null;
 let editingMeetingIndex = null;
 const translatedNodes = [];
-let floatingCaptionEnabled = false;
+let floatingCaptionMode = null;
 let floatingCaptionLocale = locale;
 /** 解析当前语言环境的显示标签。@param {string} key 中文源标签。@returns {string} 本地化后的标签或原始键。*/
 const t = (key) => stageLabels[key]?.[locale] || stageLabels[key]?.en || catalog[locale].labels[key] || key;
@@ -263,6 +263,7 @@ function syncFloatingNotices() { updateNotice.style.bottom = miniMeeting.hidden 
 function updateCopy() { return updateLabels[locale] || { ...updateLabels.en, title: t('软件更新'), action: t('检查更新') }; }
 function currentVersionLabel() { return ({ zh: '当前版本', en: 'Current version', es: 'Versión actual', ja: '現在のバージョン', ko: '현재 버전', fr: 'Version actuelle', de: 'Aktuelle Version', ru: 'Текущая версия' })[locale] || 'Current version'; }
 function availableUpdateLabel() { return updateVersion ? updateCopy().available.replace('0.2.0', updateVersion) : updateCopy().available; }
+function availableUpdateActionLabel() { return updateVersion ? updateCopy().update.replace('0.2.0', updateVersion) : updateCopy().update; }
 function renderUpdateNotice() {
   const copy = updateCopy();
   const progress = updateDownloadProgress && Math.max(0, Math.min(100, updateDownloadProgress.percent || 0));
@@ -286,7 +287,7 @@ function renderUpdateButton() {
   } else {
     updateDescription.textContent = updateAvailable ? availableUpdateLabel() : `${currentVersionLabel()} ${installedAppVersion}`;
   }
-  updateButton.textContent = updateDownloadProgress ? `${copy.downloading || '正在下载'} ${Math.round(updateDownloadProgress.percent)}%` : updateBusy ? (updateAvailable ? copy.updating : copy.checking) : updateAvailable ? copy.update : copy.action;
+  updateButton.textContent = updateDownloadProgress ? `${copy.downloading || '正在下载'} ${Math.round(updateDownloadProgress.percent)}%` : updateBusy ? (updateAvailable ? copy.updating : copy.checking) : updateAvailable ? availableUpdateActionLabel() : copy.action;
   updateButton.disabled = updateBusy;
 }
 const modelIds = [
@@ -537,7 +538,7 @@ function renderPrepareSelects() {
     ['__new_workspace__', `+ ${t('新建工作区')}`],
   ];
   const workspaceValue = values['meeting-workspace'] === '__new_workspace__' ? activeWorkspaceId : values['meeting-workspace'] ?? activeWorkspaceId;
-  prepareForm.querySelector('.form-grid').innerHTML = `<label>${t('会议语言')}${flowSelect('meeting-language', values['meeting-language'] || 'auto', BreviaI18n.languageOptions(locale, t, true))}</label><label>${t('译文目标')}${flowSelect('translation-target', values['translation-target'] || '', BreviaI18n.languageOptions(locale, t))}</label><label>${t('预期说话人数')}<input name="num-speakers" type="number" min="1" step="1" value="${values['num-speakers'] || ''}" placeholder="${t('留空自动匹配')}" /></label><label>${t('工作区')}${flowSelect('meeting-workspace', workspaceValue, workspaceOptions)}</label>`;
+  prepareForm.querySelector('.form-grid').innerHTML = `<label>${t('会议语言')}${flowSelect('meeting-language', values['meeting-language'] || locale, BreviaI18n.languageOptions(locale, t, true))}</label><label>${t('译文目标')}${flowSelect('translation-target', values['translation-target'] || '', BreviaI18n.languageOptions(locale, t))}</label><label>${t('预期说话人数')}<input name="num-speakers" type="number" min="1" step="1" value="${values['num-speakers'] || ''}" placeholder="${t('留空自动匹配')}" /></label><label>${t('工作区')}${flowSelect('meeting-workspace', workspaceValue, workspaceOptions)}</label>`;
   prepareForm.querySelector('.primary-action').firstChild.nodeValue = `${t('开始录制')} `;
   importRecording.textContent = t('导入录音');
   prepareModelCard.querySelector('#active-vad-model').previousElementSibling.textContent = t('VAD 模型');
@@ -729,18 +730,18 @@ function showSeparationComplete() {
 }
 let summaryDismissTimer;
 const summaryTaskCopy = {
-  zh: ['正在生成会议纪要', '准备清洗转录', '正在清洗转录', '正在生成摘要', '正在保存纪要', '纪要已生成'],
-  en: ['Generating meeting notes', 'Preparing transcript cleanup', 'Cleaning transcript', 'Generating summary', 'Saving meeting notes', 'Meeting notes generated'],
-  es: ['Generando notas de reunión', 'Preparando la limpieza de la transcripción', 'Limpiando la transcripción', 'Generando el resumen', 'Guardando las notas', 'Notas de reunión generadas'],
-  ja: ['会議メモを生成中', '文字起こしのクリーンアップを準備中', '文字起こしをクリーンアップ中', '要約を生成中', '会議メモを保存中', '会議メモを生成しました'],
-  ko: ['회의록 생성 중', '전사 정리 준비 중', '전사 정리 중', '요약 생성 중', '회의록 저장 중', '회의록이 생성되었습니다'],
-  fr: ['Génération des notes de réunion', 'Préparation du nettoyage de la transcription', 'Nettoyage de la transcription', 'Génération du résumé', 'Enregistrement des notes', 'Notes de réunion générées'],
-  de: ['Besprechungsnotizen werden erstellt', 'Transkriptbereinigung wird vorbereitet', 'Transkript wird bereinigt', 'Zusammenfassung wird erstellt', 'Besprechungsnotizen werden gespeichert', 'Besprechungsnotizen erstellt'],
-  ru: ['Создание заметок встречи', 'Подготовка очистки расшифровки', 'Очистка расшифровки', 'Создание сводки', 'Сохранение заметок встречи', 'Заметки встречи созданы'],
+  zh: ['正在生成会议纪要', '准备生成纪要', '正在生成摘要', '正在保存纪要', '纪要已生成'],
+  en: ['Generating meeting notes', 'Preparing meeting notes', 'Generating summary', 'Saving meeting notes', 'Meeting notes generated'],
+  es: ['Generando notas de reunión', 'Preparando las notas de reunión', 'Generando el resumen', 'Guardando las notas', 'Notas de reunión generadas'],
+  ja: ['会議メモを生成中', '会議メモを準備中', '要約を生成中', '会議メモを保存中', '会議メモを生成しました'],
+  ko: ['회의록 생성 중', '회의록 준비 중', '요약 생성 중', '회의록 저장 중', '회의록이 생성되었습니다'],
+  fr: ['Génération des notes de réunion', 'Préparation des notes de réunion', 'Génération du résumé', 'Enregistrement des notes', 'Notes de réunion générées'],
+  de: ['Besprechungsnotizen werden erstellt', 'Besprechungsnotizen werden vorbereitet', 'Zusammenfassung wird erstellt', 'Besprechungsnotizen werden gespeichert', 'Besprechungsnotizen erstellt'],
+  ru: ['Создание заметок встречи', 'Подготовка заметок встречи', 'Создание сводки', 'Сохранение заметок встречи', 'Заметки встречи созданы'],
 };
 function summaryTaskLabel(stage) {
   const copy = summaryTaskCopy[locale] || summaryTaskCopy.en;
-  return { 'summary.prepare': copy[1], 'summary.cleaning': copy[2], 'summary.generating': copy[3], 'summary.saving': copy[4], 'summary.complete': copy[5] }[stage] || stage || t('准备中');
+  return { 'summary.prepare': copy[1], 'summary.generating': copy[2], 'summary.saving': copy[3], 'summary.complete': copy[4] }[stage] || stage || t('准备中');
 }
 function showSummaryProgress(completed = 0, total = 100, stage = 'summary.prepare', meetingId) {
   clearTimeout(summaryDismissTimer);
@@ -2207,31 +2208,25 @@ document.querySelector('#live-view').addEventListener('submit', async (event) =>
 });
 /* Locale copy lives in i18n.js; this alias keeps the renderer focused on state changes. */
 const slogans = BreviaI18n.slogans;
-/*
-  zh: ['每一场对话，都留有依据。', '让重要讨论，不再散落。', '从声音开始，留下清晰结论。', '记录发生的事，推进接下来的事。', '把会议留在掌控之中。'],
-  en: ['Every conversation leaves a traceable record.', 'Keep important discussions in one place.', 'Start with sound. End with clear decisions.', 'Record what happened. Move the work forward.', 'Keep every meeting within reach.'],
-  es: ['Cada conversación conserva un registro verificable.', 'Mantén las conversaciones importantes en un solo lugar.', 'Empieza con la voz. Termina con decisiones claras.', 'Registra lo que ocurrió. Haz avanzar el trabajo.', 'Mantén cada reunión bajo control.'],
-  ja: ['すべての会話に、確かな記録を。', '大切な議論を、一か所に。', '音声から始め、明確な決定へ。', '起きたことを記録し、仕事を前へ進める。', 'すべての会議を手の届く場所に。'],
-  ko: ['모든 대화에 추적 가능한 기록을 남깁니다.', '중요한 논의를 한곳에 모으세요.', '소리로 시작해 명확한 결정으로 마무리하세요.', '일어난 일을 기록하고 업무를 앞으로 나아가게 하세요.', '모든 회의를 가까이 두세요.'],
-  fr: ['Chaque conversation laisse une trace vérifiable.', 'Gardez les discussions importantes au même endroit.', 'Commencez par le son. Terminez par des décisions claires.', 'Consignez ce qui s’est passé. Faites avancer le travail.', 'Gardez chaque réunion à portée de main.'],
-  de: ['Jedes Gespräch hinterlässt eine nachvollziehbare Aufzeichnung.', 'Halten Sie wichtige Gespräche an einem Ort fest.', 'Mit Ton beginnen. Mit klaren Entscheidungen enden.', 'Dokumentieren Sie das Geschehene und bringen Sie die Arbeit voran.', 'Behalten Sie jede Besprechung im Blick.'],
-  ru: ['Каждый разговор оставляет проверяемую запись.', 'Храните важные обсуждения в одном месте.', 'Начните со звука. Завершите ясными решениями.', 'Записывайте произошедшее и двигайте работу вперёд.', 'Держите каждую встречу под рукой.']
-};*/
 const homeSlogan = document.querySelector('#home-slogan');
 const homeEyebrow = document.querySelector('#home-eyebrow');
 const homePrimary = document.querySelector('#home-primary');
 let sloganIndex = Math.floor(Math.random() * slogans.zh.length);
+function activeWorkspaceDescription() {
+  return activeWorkspaceId ? workspaces.find((workspace) => workspace.id === activeWorkspaceId)?.description?.trim() || '' : '';
+}
 /** 更新旋转的库标语。@param {boolean} animate 是否播放过渡动画。@returns {void} */
 function renderSlogan(animate = false) {
+  const workspaceDescription = activeWorkspaceDescription();
   const update = () => {
-    homeSlogan.textContent = activeLibraryNav === 'recently-deleted' ? t('最近删除') : (slogans[locale] || slogans.en)[sloganIndex];
+    homeSlogan.textContent = activeLibraryNav === 'recently-deleted' ? t('最近删除') : workspaceDescription || (slogans[locale] || slogans.en)[sloganIndex];
     if (animate) {
       homeSlogan.classList.remove('slogan-out');
       homeSlogan.classList.add('slogan-in');
       window.setTimeout(() => homeSlogan.classList.remove('slogan-in'), 440);
     }
   };
-  if (!animate || matchMedia('(prefers-reduced-motion: reduce)').matches) { update(); return; }
+  if (!animate || workspaceDescription || matchMedia('(prefers-reduced-motion: reduce)').matches) { update(); return; }
   homeSlogan.classList.add('slogan-out');
   window.setTimeout(update, 280);
 }
@@ -2286,6 +2281,9 @@ function applyLanguage(nextLocale, animate = false) {
       .map(({ node, element }) => node?.parentElement || element)
       .filter((element) => element && !rerenderedRoots.some((root) => root.contains(element))),
     ...rerenderedRoots,
+    ...['#floating-caption-toggle', '#translation-toggle', '#playback-floating-caption-toggle']
+      .map((selector) => document.querySelector(selector))
+      .filter(Boolean),
   ])];
   const updateText = () => {
     translatedNodes.forEach(({ node, element, attribute, key, leading = '', trailing = '' }) => {
@@ -2300,6 +2298,7 @@ function applyLanguage(nextLocale, animate = false) {
     renderDefaultMeetingTitle();
     renderDateFilter();
     renderMeetingList();
+    renderWorkspaceNav();
     renderMeetingDetail();
     if (activeView === 'home') selectLibraryNav(activeLibraryNav);
     else crumb.textContent = catalog[locale].views[activeView];
@@ -2316,11 +2315,14 @@ function applyLanguage(nextLocale, animate = false) {
     const refineButton = document.querySelector('.detail-refine [data-flow-select-toggle]');
     if (refineButton) refineButton.innerHTML = refineButton.disabled ? t('正在精修') : `${t('精修')} <span>⌄</span>`;
     if (activeModal) renderModal(activeModal);
+    renderFloatingCaptionToggle();
+    setLiveTranslationEnabled(translationAllowed);
+    renderPlaybackFloatingCaptionToggle();
     // 更新浮动字幕按钮工具提示
-    const floatingCaptionToggle = document.querySelector('#floating-caption-toggle');
-    if (floatingCaptionToggle) {
+    document.querySelectorAll('#floating-caption-toggle, #playback-floating-caption-toggle').forEach((floatingCaptionToggle) => {
       floatingCaptionToggle.title = t('悬浮字幕');
-    }
+      floatingCaptionToggle.setAttribute('aria-label', t('悬浮字幕'));
+    });
   };
   if (!animate || matchMedia('(prefers-reduced-motion: reduce)').matches) { updateText(); return; }
   switchingLanguage = true;
@@ -2360,10 +2362,13 @@ function showSummaryConfigCard(error) {
 function isSummaryAuthenticationError(error) {
   return /LLM request failed \((401|403)\)|error code: 1010|API key|Authorization header|invalid_api_key|authentication/i.test(String(error.message));
 }
+function userFacingError(content) {
+  return /\b(?:worker request |operation )timed out\b/i.test(String(content)) ? t('操作超时，请稍后重试') : content;
+}
 /** 显示临时消息，并在提供时显示一个显式的安全下一步操作。*/
 const showToast = (content, action) => {
   const message = document.createElement('span');
-  message.textContent = content;
+  message.textContent = userFacingError(content);
   toast.replaceChildren(message);
   if (action) {
     const button = document.createElement('button');
@@ -2485,7 +2490,7 @@ async function runUpdateAction() {
   try { await window.brevia.update.install(); }
   catch (error) { showToast(error.message); updateBusy = false; updateDownloadProgress = null; renderUpdateButton(); renderUpdateNotice(); }
 }
-window.setInterval(() => { if (activeLibraryNav === 'recently-deleted') return; sloganIndex = (sloganIndex + 1) % (slogans[locale] || slogans.en).length; renderSlogan(true); }, 30000);
+window.setInterval(() => { if (activeLibraryNav === 'recently-deleted' || activeWorkspaceDescription()) return; sloganIndex = (sloganIndex + 1) % (slogans[locale] || slogans.en).length; renderSlogan(true); }, 30000);
 updateButton.addEventListener('click', () => void runUpdateAction());
 updateNoticeButton.addEventListener('click', () => void runUpdateAction());
 /** 关闭语言菜单并更新其展开状态。@returns {void} */
@@ -2518,6 +2523,19 @@ function setLiveTranslationEnabled(enabled) {
   toggle.textContent = t(enabled ? '译文: 开' : '译文: 关');
   if (!enabled) document.querySelectorAll('.translation').forEach((line) => { line.hidden = true; });
 }
+function renderFloatingCaptionToggle() {
+  const toggle = document.querySelector('#floating-caption-toggle');
+  if (!toggle) return;
+  toggle.dataset.enabled = String(floatingCaptionMode === 'live');
+  toggle.textContent = t(floatingCaptionMode === 'live' ? '字幕：开' : '字幕：关');
+}
+function renderPlaybackFloatingCaptionToggle() {
+  const toggle = document.querySelector('#playback-floating-caption-toggle');
+  if (!toggle) return;
+  toggle.dataset.enabled = String(floatingCaptionMode === 'playback');
+  toggle.textContent = t('字幕');
+}
+function nextFloatingCaptionMode(mode) { return floatingCaptionMode === mode ? null : mode; }
 function activateMeeting(meeting, payload) {
   const { title, workspace_id: workspaceId, language, streaming_model_id: streamingModelId, speaker_segmentation_model_id: segmentationModelId, speaker_embedding_model_id: embeddingModelId, refined_model_id: refinedModelId } = payload;
   const streamingModelName = prepareModelChoices['active-streaming-model'].find(([id]) => id === streamingModelId)?.[1] || t('自动匹配');
@@ -2528,8 +2546,6 @@ function activateMeeting(meeting, payload) {
   document.querySelector('#live-name').textContent = title;
   uiData.meetings.unshift({ id: meeting.id, tone: 'violet', title, meta: `${t('刚刚')} · 0 ${t('分钟')}`, workspaceId: workspaceId || '', workspace: workspaceId ? { name: getWorkspaceName(workspaceId), color: getWorkspaceColor(workspaceId) } : null, tags: [], status: { tone: 'processing', label: t('正在录制'), detail: t('双轨录音') } });
   document.querySelector('#transcript-scroll').innerHTML = '';
-  document.querySelector('#live-caption').textContent = '';
-  document.querySelector('#live-caption-translation').hidden = true;
   setLiveTranslationEnabled(Boolean(payload.target_language));
   latestLiveSegmentId = null;
   liveSpeakers.clear();
@@ -2639,7 +2655,11 @@ document.querySelector('#pause').addEventListener('click', async (event) => {
 });
 document.querySelector('#end-meeting').addEventListener('click', async (event) => {
   const button = event.currentTarget;
+  const buttonLabel = button.innerHTML;
   button.disabled = true;
+  button.classList.add('is-pending');
+  button.setAttribute('aria-busy', 'true');
+  button.innerHTML = `<i class="button-spinner" aria-hidden="true"></i>${t('结束中')}`;
   clearInterval(timer);
   try {
     const meeting = breviaClient ? await breviaClient.stop(seconds * 1000) : null;
@@ -2657,7 +2677,12 @@ document.querySelector('#end-meeting').addEventListener('click', async (event) =
   } catch (error) {
     showToast(error.message);
     startTimer();
-  } finally { button.disabled = false; }
+  } finally {
+    button.disabled = false;
+    button.classList.remove('is-pending');
+    button.removeAttribute('aria-busy');
+    button.innerHTML = buttonLabel;
+  }
 });
 miniMeeting.addEventListener('click', () => { miniMeeting.hidden = true; syncFloatingNotices(); showView('live'); });
 /** 用内联编辑器替换说话人标签并传播保存的名称。@param {HTMLElement} label 说话人名称元素。@returns {void} */
@@ -2742,14 +2767,13 @@ document.querySelector('#translation-toggle').addEventListener('click', (event) 
   }
   setLiveTranslationEnabled(enabled);
   document.querySelectorAll('.translation').forEach((line) => { line.hidden = !enabled; });
-  const currentTranslation = document.querySelector('#live-caption-translation');
-  currentTranslation.hidden = enabled || !currentTranslation.textContent;
   // Update floating caption if enabled
-  if (floatingCaptionEnabled && window.brevia?.floatingCaption) {
-    if (enabled && currentTranslation.textContent) {
+  if (floatingCaptionMode === 'live' && window.brevia?.floatingCaption) {
+    const translation = liveSegments.get(latestLiveSegmentId)?.querySelector('.translation')?.textContent;
+    if (enabled && translation) {
       window.brevia.floatingCaption.update({
         segmentId: latestLiveSegmentId,
-        translation: currentTranslation.textContent,
+        translation,
       });
     } else {
       window.brevia.floatingCaption.update({
@@ -2759,35 +2783,38 @@ document.querySelector('#translation-toggle').addEventListener('click', (event) 
     }
   }
 });
-document.querySelector('#floating-caption-toggle').addEventListener('click', async (event) => {
-  const toggle = event.currentTarget;
-  floatingCaptionEnabled = !floatingCaptionEnabled;
+document.querySelector('#floating-caption-toggle').addEventListener('click', async () => {
+  floatingCaptionMode = nextFloatingCaptionMode('live');
   floatingCaptionLocale = locale;
-  toggle.dataset.enabled = String(floatingCaptionEnabled);
+  renderFloatingCaptionToggle();
+  renderPlaybackFloatingCaptionToggle();
 
-  if (floatingCaptionEnabled) {
+  if (floatingCaptionMode === 'live') {
     try {
       await window.brevia?.floatingCaption?.show();
       // Wait a bit for the window to be fully ready
       await new Promise(resolve => setTimeout(resolve, 200));
-      const currentCaption = document.querySelector('#live-caption');
-      const currentTranslation = document.querySelector('#live-caption-translation');
+      if (floatingCaptionMode !== 'live') return;
+      const currentSegment = liveSegments.get(latestLiveSegmentId);
       window.brevia.floatingCaption.update({
         segmentId: latestLiveSegmentId,
-        text: currentCaption.textContent,
+        text: currentSegment?.querySelector('.segment-copy > p')?.textContent || '',
         isRefined: false,
         locale: floatingCaptionLocale,
       });
-      if (translationAllowed && currentTranslation.textContent) {
+      const translation = currentSegment?.querySelector('.translation')?.textContent;
+      if (translationAllowed && translation) {
         window.brevia.floatingCaption.update({
           segmentId: latestLiveSegmentId,
-          translation: currentTranslation.textContent,
+          translation,
         });
       }
     } catch (error) {
+      if (floatingCaptionMode !== 'live') return;
       showToast(error.message);
-      floatingCaptionEnabled = false;
-      toggle.dataset.enabled = 'false';
+      floatingCaptionMode = null;
+      renderFloatingCaptionToggle();
+      renderPlaybackFloatingCaptionToggle();
     }
   } else {
     await window.brevia?.floatingCaption?.close();
@@ -3061,6 +3088,15 @@ const playerAudio = new Audio();
 const playButton = document.querySelector('#play');
 let playbackStarted = false;
 let followPlaybackTranscript = true;
+let playbackCaptionSegmentId = undefined;
+function syncPlaybackFloatingCaption() {
+  if (floatingCaptionMode !== 'playback' || !window.brevia?.floatingCaption) return;
+  const segment = uiData.detail.transcript.find((item) => playerAudio.currentTime >= item.startSeconds && playerAudio.currentTime < item.endSeconds);
+  const segmentId = segment?.speaker?.segmentId ?? null;
+  if (segmentId === playbackCaptionSegmentId) return;
+  playbackCaptionSegmentId = segmentId;
+  window.brevia.floatingCaption.update({ segmentId, text: segment?.text || '', translation: segment?.translation || null, isRefined: true, locale: floatingCaptionLocale });
+}
 function renderMiniPlayback() {
   const active = activeView !== 'detail' && playbackStarted && Boolean(playerAudio.src) && !playerAudio.ended;
   const wasHidden = miniPlayback.hidden;
@@ -3089,6 +3125,7 @@ const updatePlayerControl = () => {
 const renderPlayerTime = () => { const value = Number(progress.value); playerTime.textContent = `${String(Math.floor(value / 60)).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}`; };
 /** 突出显示当前播放时间的转录段落，并使其在自己的滚动器中居中。*/
 function syncPlaybackTranscript() {
+  syncPlaybackFloatingCaption();
   const body = document.querySelector('.transcript-body');
   if (!body) return;
   const current = playerAudio.currentTime;
@@ -3119,6 +3156,24 @@ playerAudio.addEventListener('play', () => { playbackStarted = true; updatePlaye
 playerAudio.addEventListener('pause', updatePlayerControl);
 playerAudio.addEventListener('ended', () => { playbackStarted = false; updatePlayerControl(); });
 playerAudio.addEventListener('timeupdate', () => { progress.value = playerAudio.currentTime; renderPlayerTime(); syncPlaybackTranscript(); renderMiniPlayback(); });
+document.querySelector('#playback-floating-caption-toggle').addEventListener('click', async () => {
+  floatingCaptionMode = nextFloatingCaptionMode('playback');
+  renderFloatingCaptionToggle();
+  renderPlaybackFloatingCaptionToggle();
+  if (floatingCaptionMode !== 'playback') { await window.brevia?.floatingCaption?.close(); return; }
+  try {
+    await window.brevia?.floatingCaption?.show();
+    if (floatingCaptionMode !== 'playback') return;
+    playbackCaptionSegmentId = undefined;
+    syncPlaybackFloatingCaption();
+  } catch (error) {
+    if (floatingCaptionMode !== 'playback') return;
+    showToast(error.message);
+    floatingCaptionMode = null;
+    renderFloatingCaptionToggle();
+    renderPlaybackFloatingCaptionToggle();
+  }
+});
 function seekMiniPlayback(clientX) {
   followPlaybackTranscript = true;
   const bounds = miniPlaybackSeek.getBoundingClientRect();
@@ -3150,6 +3205,11 @@ miniPlaybackClose.addEventListener('click', () => {
   playerAudio.pause();
   playerAudio.currentTime = 0;
   updatePlayerControl();
+  if (floatingCaptionMode === 'playback') {
+    floatingCaptionMode = null;
+    renderPlaybackFloatingCaptionToggle();
+    void window.brevia?.floatingCaption?.close();
+  }
 });
 miniPlayback.addEventListener('dblclick', (event) => { if (!event.target.closest('button')) void showView('detail'); });
 document.querySelectorAll('.player .skip').forEach((button, index) => button.addEventListener('click', () => {
@@ -3400,19 +3460,10 @@ if (window.brevia) {
       partial,
     };
     latestLiveSegmentId = payload.segment_id;
-    const currentCaption = document.querySelector('#live-caption');
-    const currentTranslation = document.querySelector('#live-caption-translation');
-    currentCaption.textContent = payload.text;
-    currentCaption.scrollLeft = currentCaption.scrollWidth;
-    currentCaption.classList.remove('caption-increment');
-    void currentCaption.offsetWidth;
-    currentCaption.classList.add('caption-increment');
-    currentTranslation.hidden = !translation || !translationAllowed;
-    currentTranslation.textContent = translation || '';
     // Update floating caption if enabled
     // - For partial transcripts: update current area
     // - For final transcripts: also update current area before finalizing
-    if (floatingCaptionEnabled && window.brevia?.floatingCaption) {
+    if (floatingCaptionMode === 'live' && window.brevia?.floatingCaption) {
       window.brevia.floatingCaption.update({
         segmentId: payload.segment_id,
         text: payload.text,
@@ -3456,14 +3507,29 @@ if (window.brevia) {
     document.querySelector('#active-refined-model').textContent = modelChoices('active-refined-model').find(([id]) => id === meeting.refined_model_id)?.[1] || t('自动匹配');
     if (meetingActive) renderLivePanel();
   });
-  // Close floating caption when meeting stops
-  window.brevia.on('meeting.stopped', () => {
-    if (floatingCaptionEnabled && window.brevia?.floatingCaption) {
+  window.brevia.on('meeting.stopped', async ({ meeting }) => {
+    if (floatingCaptionMode === 'live' && window.brevia?.floatingCaption) {
       window.brevia.floatingCaption.close();
-      floatingCaptionEnabled = false;
-      const toggle = document.querySelector('#floating-caption-toggle');
-      if (toggle) toggle.dataset.enabled = 'false';
+      floatingCaptionMode = null;
+      renderFloatingCaptionToggle();
     }
+    if (!meetingActive) return;
+    clearInterval(timer);
+    if (breviaClient?.capture) await breviaClient.capture.stop();
+    if (breviaClient) {
+      breviaClient.capture = null;
+      breviaClient.state.meeting = null;
+      breviaClient.state.inputs = null;
+      if (meeting) {
+        breviaClient.state.selectedMeetingId = meeting.id;
+        applyBackendDetail(meeting);
+      }
+    }
+    meetingActive = false;
+    miniMeeting.hidden = true;
+    syncFloatingNotices();
+    showView('detail');
+    void refreshBackendMeetings();
   });
   window.brevia.on('app.maintenance', ({ meetings, speaker_profiles: profiles, storage, recoverable }) => {
     uiData.meetings = meetings.map(backendMeeting);
@@ -3498,7 +3564,7 @@ if (window.brevia) {
     // Update floating caption with refined text
     // Move the refined text to the finalized area (top)
     // Clear current area (bottom) only if it's showing the same segment being refined
-    if (floatingCaptionEnabled && window.brevia?.floatingCaption) {
+    if (floatingCaptionMode === 'live' && window.brevia?.floatingCaption) {
       window.brevia.floatingCaption.update({
         segmentId: payload.segment_id,
         text: payload.text,
@@ -3510,7 +3576,7 @@ if (window.brevia) {
     // Translate only after refinement completes, so caption and translation
     // always match the final refined text.
     if (!translationAllowed) return;
-    if (floatingCaptionEnabled && window.brevia?.floatingCaption) {
+    if (floatingCaptionMode === 'live' && window.brevia?.floatingCaption) {
       window.brevia.floatingCaption.update({ segmentId: payload.segment_id, translationPending: true });
     }
     try {
@@ -3532,17 +3598,8 @@ if (window.brevia) {
     let line = element.querySelector('.translation');
     if (!line) { line = document.createElement('p'); line.className = 'translation'; element.querySelector('.segment-copy').append(line); }
     line.textContent = payload.translation;
-    if (payload.segment_id === latestLiveSegmentId) {
-      const currentTranslation = document.querySelector('#live-caption-translation');
-      currentTranslation.textContent = payload.translation;
-      currentTranslation.hidden = !translationAllowed;
-      // Update floating caption translation if enabled
-      if (floatingCaptionEnabled && window.brevia?.floatingCaption) {
-        window.brevia.floatingCaption.update({
-          segmentId: payload.segment_id,
-          translation: translationAllowed ? payload.translation : null,
-        });
-      }
+    if (floatingCaptionMode === 'live' && window.brevia?.floatingCaption) {
+      window.brevia.floatingCaption.update({ segmentId: payload.segment_id, translation: translationAllowed ? payload.translation : null });
     }
     if (shouldFollow) scrollLiveToLatest(element);
   });
@@ -3644,18 +3701,32 @@ if (window.brevia) {
 
   // Listen for floating caption window closed event to sync state
   window.brevia.on('floating-caption.closed', () => {
-    floatingCaptionEnabled = false;
-    const toggle = document.querySelector('#floating-caption-toggle');
-    if (toggle) {
-      toggle.dataset.enabled = 'false';
-    }
+    floatingCaptionMode = null;
+    document.querySelectorAll('#floating-caption-toggle, #playback-floating-caption-toggle').forEach((toggle) => { toggle.dataset.enabled = 'false'; });
+    renderFloatingCaptionToggle();
   });
 
   document.querySelector('#recently-deleted').addEventListener('click', async () => {
     await showLibraryNav('recently-deleted').catch((error) => showToast(error.message));
   });
-  document.querySelector('#all-meetings').addEventListener('click', async () => {
+  document.querySelector('#all-meetings').addEventListener('click', async (event) => {
+    const button = event.currentTarget;
+    if (activeView === 'home' && activeLibraryNav === 'all-meetings') {
+      const workspaceNav = document.querySelector('.workspace-subnav');
+      if (workspaceNav) {
+        const collapsed = workspaceNav.classList.toggle('is-collapsed');
+        workspaceNav.setAttribute('aria-hidden', String(collapsed));
+        button.setAttribute('aria-expanded', String(!collapsed));
+      }
+      return;
+    }
     await showLibraryNav('all-meetings').catch((error) => showToast(error.message));
+    const workspaceNav = document.querySelector('.workspace-subnav');
+    if (workspaceNav) {
+      workspaceNav.classList.remove('is-collapsed');
+      workspaceNav.setAttribute('aria-hidden', 'false');
+      button.setAttribute('aria-expanded', 'true');
+    }
   });
 
   document.addEventListener('click', (event) => {

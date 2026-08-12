@@ -16,40 +16,62 @@
       body {
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
         background: transparent;
-        color: white;
+        color: #fff;
         overflow: hidden;
         user-select: none;
         -webkit-user-select: none;
       }
 
-      .caption-container {
-        padding: 16px 20px;
-        min-height: 100px;
+      .caption-shell {
         position: relative;
-        background: rgba(0, 0, 0, 0.5);
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
-        border-radius: 8px;
+      }
+
+      .caption-container {
+        padding: 16px 44px 16px 20px;
+        min-height: 116px;
+        position: relative;
+        background: rgba(10, 15, 24, 0.88);
+        backdrop-filter: blur(24px) saturate(1.2);
+        -webkit-backdrop-filter: blur(24px) saturate(1.2);
+        border: 1px solid rgba(255, 255, 255, 0.28);
+        border-radius: 12px;
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.46), inset 0 1px rgba(255, 255, 255, 0.12);
+        max-height: 220px;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        scrollbar-color: rgba(255, 255, 255, 0.48) transparent;
         transition: background 0.2s ease;
         cursor: move;
       }
 
+      .caption-container::-webkit-scrollbar {
+        width: 8px;
+      }
+
+      .caption-container::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.48);
+        border: 2px solid transparent;
+        border-radius: 999px;
+        background-clip: padding-box;
+      }
+
       .caption-container:hover {
-        background: rgba(0, 0, 0, 0.8);
+        background: rgba(10, 15, 24, 0.96);
       }
 
       .caption-controls {
         position: absolute;
         top: 8px;
         right: 8px;
+        z-index: 1;
         display: flex;
         gap: 8px;
         -webkit-app-region: no-drag;
-        opacity: 0;
+        opacity: 1;
         transition: opacity 0.2s ease;
       }
 
-      .caption-container:hover .caption-controls {
+      .caption-shell:hover .caption-controls {
         opacity: 1;
       }
 
@@ -59,7 +81,7 @@
         height: 20px;
         border: none;
         background: transparent;
-        color: #666;
+        color: rgba(255, 255, 255, 0.72);
         cursor: pointer;
         font-size: 0;
         line-height: 1;
@@ -94,41 +116,28 @@
         font-size: clamp(20px, 2vw, 32px);
         line-height: 1.5;
         font-weight: normal;
-        color: white;
+        color: #fff;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
         letter-spacing: -0.035em;
         word-wrap: break-word;
         overflow-wrap: break-word;
-        max-height: calc(1.5em * 3);
-        overflow-y: auto;
-        overflow-x: hidden;
         transition: opacity 0.2s ease;
-        scrollbar-width: none;
-        -ms-overflow-style: none;
       }
 
-      .caption-text::-webkit-scrollbar {
-        display: none;
+      .caption-fade {
+        animation: caption-fade 160ms ease-out;
       }
 
       .caption-finalized {
         font-size: clamp(16px, 1.6vw, 24px);
         line-height: 1.4;
         font-weight: normal;
-        color: rgba(255, 255, 255, 0.75);
+        color: rgba(255, 255, 255, 0.82);
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
         word-wrap: break-word;
         overflow-wrap: break-word;
         letter-spacing: -0.035em;
-        max-height: calc(1.4em * 3);
-        overflow-y: auto;
-        overflow-x: hidden;
-        margin-bottom: 6px;
         transition: opacity 0.2s ease;
-        scrollbar-width: none;
-        -ms-overflow-style: none;
-      }
-
-      .caption-finalized::-webkit-scrollbar {
-        display: none;
       }
 
       .caption-finalized.hidden {
@@ -136,10 +145,12 @@
       }
 
       .caption-translation {
-        font-size: 16px;
+        font-size: clamp(15px, 1.5vw, 22px);
         line-height: 1.4;
-        color: rgba(255, 255, 255, 0.8);
+        color: #b9d5ff;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
         margin-top: 8px;
+        margin-bottom: 14px;
         word-wrap: break-word;
         overflow-wrap: break-word;
         transition: opacity 0.2s ease;
@@ -179,42 +190,27 @@
         40% { transform: scale(1); opacity: 1; }
       }
 
-      /* Light theme adjustments */
-      @media (prefers-color-scheme: light) {
-        .caption-container {
-          background: rgba(255, 255, 255, 0.3);
-        }
-
-        .caption-container:hover {
-          background: rgba(255, 255, 255, 0.95);
-        }
-
-        .caption-text {
-          color: #1d1d1f;
-        }
-
-        .caption-finalized {
-          color: rgba(0, 0, 0, 0.65);
-        }
-
-        .caption-translation {
-          color: rgba(0, 0, 0, 0.7);
-        }
-
-        .close-btn {
-          color: #666;
-        }
+      @keyframes caption-fade {
+        from { opacity: 0.65; }
+        to { opacity: 1; }
       }
+
+      @media (prefers-reduced-motion: reduce) {
+        .caption-fade { animation: none; }
+      }
+
     </style>
   </head>
   <body>
-    <div class="caption-container" id="caption-container">
+    <div class="caption-shell">
       <div class="caption-controls">
         <button class="close-btn" id="close-btn" title="Close" aria-label="关闭">×</button>
       </div>
+      <div class="caption-container" id="caption-container">
       <div class="caption-finalized hidden" id="caption-finalized"></div>
       <div class="caption-text" id="caption-text"></div>
       <div class="caption-translation hidden" id="caption-translation"></div>
+      </div>
     </div>
 
     <script src="./floating-caption.js"></script>

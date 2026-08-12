@@ -97,12 +97,16 @@ function renderWorkspaceNav() {
       allMeetingsNav.parentNode.insertBefore(workspaceContainer, allMeetingsNav.nextSibling);
     }
   }
+  workspaceContainer.id = 'workspace-subnav';
+  allMeetingsNav.setAttribute('aria-controls', workspaceContainer.id);
 
   workspaceContainer.innerHTML = `
-    ${workspaceSubItems}
-    <button class="new-workspace" data-new-workspace>
-      <span>+</span> ${t('新建工作区')}
-    </button>
+    <div class="workspace-subnav-content">
+      ${workspaceSubItems}
+      <button class="new-workspace" data-new-workspace>
+        <span>+</span> ${t('新建工作区')}
+      </button>
+    </div>
   `;
 
 }

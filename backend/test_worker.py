@@ -20,7 +20,6 @@ from .audio_io import ensure_wav_duration
 from .config import DEFAULT_SETTINGS, SETTINGS, runtime_settings, save_runtime_settings
 from .llm_client import complete
 from .storage import Store
-from .transcript import parse_json_object, validate_summary
 from .worker import Worker, install_global_error_handlers, main
 from .worker_core import WorkerCore
 from .worker_llama_sidecar import _Sidecar, strip_reasoning
@@ -310,20 +309,6 @@ class WorkerTest(unittest.TestCase):
             )
         )
 
-    def test_summary_requires_valid_evidence(self):
-        with self.assertRaises(ValueError):
-            validate_summary(
-                {
-                    "summary": "摘要",
-                    "decisions": [
-                        {"text": "决定", "evidence_segment_ids": ["missing"]}
-                    ],
-                    "action_items": [],
-                    "open_questions": [],
-                },
-                {"seg-1"},
-            )
-
     def test_strip_reasoning_removes_plain_thinking_process(self):
         self.assertEqual(
             strip_reasoning("Thinking Process:\n1. Plan\n# Meeting notes\n\nDone"),
@@ -351,9 +336,7 @@ class WorkerTest(unittest.TestCase):
             }
         )
         prompts = []
-        self.worker.llm_complete = lambda _payload, prompt, **_kwargs: (
-            prompts.append(prompt) or ("[00:00] 说话人 1: 周五完成验收" if len(prompts) == 1 else "# **测试会议**\n\n## **行动项**\n\n- 周五完成验收")
-        )
+        self.worker.llm_complete = lambda _payload, prompt, **_kwargs: (prompts.append(prompt) or "# **测试会议**\n\n## **行动项**\n\n- 周五完成验收")
         result = self.worker.summarize(
             {
                 "meeting_id": meeting["id"],
@@ -366,18 +349,16 @@ class WorkerTest(unittest.TestCase):
             }
         )
         self.assertIn("markdown", result)
-        self.assertIn("会议转录编辑", prompts[0])
+        self.assertIn("会议纪要助手", prompts[0])
         self.assertIn("周五完成验收", prompts[0])
-        self.assertIn("# **纪要联调**", prompts[1])
         progress = [
             event["payload"]["completed"]
             for event in self.events
             if event.get("type") in {"summary.started", "summary.progress"}
         ]
-        self.assertEqual(progress, [10, 20, 60, 100])
-        self.assertEqual(parse_json_object('说明\n{"summary":"ok"}')["summary"], "ok")
+        self.assertEqual(progress, [10, 60, 100])
 
-    def test_summary_reuses_saved_cleaned_transcript(self):
+    def test_summary_ignores_legacy_cleaned_transcript(self):
         meeting = self.worker.start(
             {
                 "title": "复用清洗稿",
@@ -400,7 +381,7 @@ class WorkerTest(unittest.TestCase):
         self.worker.store.save_summary(
             meeting["id"],
             {
-                "cleaned_transcript": "[00:00] 说话人 1: 已清洗的内容",
+                "cleaned_transcript": "不应作为纪要输入",
                 "transcript_hash": hashlib.sha256(transcript.encode()).hexdigest(),
             },
             "",
@@ -414,7 +395,7 @@ class WorkerTest(unittest.TestCase):
         )
         self.assertEqual(len(prompts), 1)
         self.assertIn("已清洗的内容", prompts[0])
-        self.assertNotIn("会议转录编辑", prompts[0])
+        self.assertNotIn("不应作为纪要输入", prompts[0])
 
     def test_summary_uses_live_text_when_postprocess_is_empty(self):
         meeting = self.worker.start(
@@ -447,9 +428,7 @@ class WorkerTest(unittest.TestCase):
             }
         )
         prompts = []
-        self.worker.llm_complete = lambda _payload, prompt, **_kwargs: (
-            prompts.append(prompt) or ("[00:00] 说话人 1: 本周五完成验收" if len(prompts) == 1 else "# **实时逐字稿**")
-        )
+        self.worker.llm_complete = lambda _payload, prompt, **_kwargs: (prompts.append(prompt) or "# **实时逐字稿**")
         self.worker.summarize(
             {
                 "meeting_id": meeting["id"],
@@ -462,7 +441,7 @@ class WorkerTest(unittest.TestCase):
         )
         self.assertIn("本周五完成验收", prompts[0])
 
-    def test_summary_reuses_cleaned_transcript_after_generation_failure(self):
+    def test_summary_retries_after_generation_failure(self):
         meeting = self.worker.start(
             {
                 "title": "失败后重试",
@@ -486,8 +465,6 @@ class WorkerTest(unittest.TestCase):
         def complete(_payload, prompt, **_kwargs):
             prompts.append(prompt)
             if len(prompts) == 1:
-                return "[00:00] 说话人 1: 确认下周发布"
-            if len(prompts) == 2:
                 raise RuntimeError("temporary failure")
             return "# **失败后重试**"
 
@@ -503,7 +480,7 @@ class WorkerTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "temporary failure"):
             self.worker.summarize(payload)
         self.worker.summarize(payload)
-        self.assertEqual(len(prompts), 3)
+        self.assertEqual(len(prompts), 2)
         self.assertIn("确认下周发布", prompts[-1])
 
     def test_summary_exports_markdown_and_text(self):

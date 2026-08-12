@@ -1,7 +1,5 @@
 """聚焦的 worker 职责组件。"""
 
-import hashlib
-
 from .transcript import clock, latest_segments
 from .worker_common import managed_task, require
 
@@ -20,86 +18,6 @@ LANGUAGE_NAMES = {
     "ru": "Russian",
 }
 
-
-CLEANING_PROMPTS = {
-    "en": """You are a meeting transcript editor. Clean the ASR transcript below into readable, faithful Markdown.
-
-1. Remove filler words, obvious repetitions, and spoken self-corrections.
-2. Repair punctuation, sentence boundaries, and clear recognition errors.
-3. Keep speakers, timestamps, and all meaningful information.
-4. Do not summarize, substantially compress, or change meaning.
-5. Do not guess names, organizations, products, amounts, dates, IDs, or technical parameters.
-6. Keep uncertain content and mark it as [uncertain].
-7. Do not turn suggestions into decisions or personal opinions into consensus.
-8. Merge adjacent turns from the same speaker while preserving their timestamp range.
-9. Output only cleaned Markdown; no explanation or JSON.""",
-    "es": """Eres editor de transcripciones de reuniones. Limpia la siguiente transcripción ASR y devuelve Markdown legible y fiel.
-
-1. Elimina muletillas, repeticiones evidentes y autocorrecciones orales.
-2. Corrige puntuación, frases y errores claros de reconocimiento.
-3. Conserva hablantes, marcas de tiempo e información válida.
-4. No resumas, comprimas de forma sustancial ni cambies el significado.
-5. No adivines nombres, organizaciones, productos, importes, fechas, IDs ni parámetros técnicos.
-6. Conserva lo incierto y márcalo como [incierto].
-7. No conviertas sugerencias en decisiones ni opiniones en consenso.
-8. Une intervenciones adyacentes del mismo hablante manteniendo su rango temporal.
-9. Devuelve solo Markdown limpio, sin explicación ni JSON.""",
-    "ja": """あなたは会議文字起こしの編集者です。以下の ASR 文字起こしを、読みやすく原意に忠実な Markdown に整えてください。
-
-1. 無意味な言いよどみ、明らかな重複、口頭での言い直しを削除します。
-2. 句読点、文の区切り、明白な認識誤りを修正します。
-3. 話者、タイムスタンプ、有効な情報をすべて残します。
-4. 要約・大幅な圧縮・意味の変更は禁止です。
-5. 人名、組織名、製品名、金額、日付、番号、技術パラメータを推測しません。
-6. 不確かな内容は原文を残し [不確か] と示します。
-7. 提案を決定に、個人意見を合意に変えません。
-8. 同一話者の連続発話を時間範囲を保って統合します。
-9. 整理済み Markdown のみを出力し、説明や JSON は出力しません。""",
-    "ko": """당신은 회의 전사 편집자입니다. 다음 ASR 전사를 읽기 쉽고 원문에 충실한 Markdown으로 정리하세요.
-
-1. 군더더기, 명백한 반복, 말로 한 자기수정을 제거합니다.
-2. 문장부호, 문장 경계, 명백한 인식 오류를 수정합니다.
-3. 화자, 타임스탬프, 유효한 정보를 모두 보존합니다.
-4. 요약, 과도한 축약, 의미 변경을 하지 않습니다.
-5. 이름, 조직, 제품, 금액, 날짜, ID, 기술 매개변수를 추측하지 않습니다.
-6. 불확실한 내용은 원문을 보존하고 [불확실]로 표시합니다.
-7. 제안을 결정으로, 개인 의견을 합의로 바꾸지 않습니다.
-8. 같은 화자의 인접 발화를 시간 범위를 보존해 합칩니다.
-9. 정리된 Markdown만 출력하고 설명이나 JSON은 출력하지 않습니다.""",
-    "fr": """Vous êtes éditeur de transcriptions de réunion. Nettoyez la transcription ASR suivante en Markdown lisible et fidèle.
-
-1. Supprimez les tics de langage, répétitions évidentes et autocorrections orales.
-2. Corrigez la ponctuation, les phrases et les erreurs de reconnaissance manifestes.
-3. Conservez intervenants, horodatages et toutes les informations utiles.
-4. Ne résumez pas, ne compressez pas fortement et ne modifiez pas le sens.
-5. Ne devinez pas noms, organisations, produits, montants, dates, identifiants ou paramètres techniques.
-6. Gardez les éléments incertains et marquez-les [incertain].
-7. Ne transformez ni suggestions en décisions ni opinions en consensus.
-8. Fusionnez les tours adjacents du même intervenant en conservant leur plage horaire.
-9. Retournez uniquement le Markdown nettoyé, sans explication ni JSON.""",
-    "de": """Sie sind Redakteur für Besprechungstranskripte. Bereinigen Sie das folgende ASR-Transkript als gut lesbares, sinngetreues Markdown.
-
-1. Entfernen Sie Füllwörter, offensichtliche Wiederholungen und mündliche Selbstkorrekturen.
-2. Korrigieren Sie Zeichensetzung, Satzgrenzen und klare Erkennungsfehler.
-3. Behalten Sie Sprecher, Zeitstempel und alle relevanten Informationen bei.
-4. Fassen Sie nicht zusammen, kürzen Sie nicht wesentlich und ändern Sie keine Bedeutung.
-5. Raten Sie keine Namen, Organisationen, Produkte, Beträge, Daten, IDs oder technischen Parameter.
-6. Belassen Sie Unsicheres und kennzeichnen Sie es mit [unsicher].
-7. Machen Sie aus Vorschlägen keine Entscheidungen und aus Meinungen keinen Konsens.
-8. Führen Sie benachbarte Beiträge desselben Sprechers unter Erhalt des Zeitbereichs zusammen.
-9. Geben Sie nur bereinigtes Markdown aus, keine Erklärung und kein JSON.""",
-    "ru": """Вы редактор расшифровок встреч. Очистите следующую ASR-расшифровку и верните читаемый Markdown без искажения смысла.
-
-1. Удалите слова-паразиты, очевидные повторы и устные самоисправления.
-2. Исправьте пунктуацию, границы предложений и явные ошибки распознавания.
-3. Сохраните говорящих, временные метки и всю значимую информацию.
-4. Не обобщайте, не сокращайте существенно и не меняйте смысл.
-5. Не угадывайте имена, организации, продукты, суммы, даты, идентификаторы или технические параметры.
-6. Сохраните неясное и пометьте [неуверенно].
-7. Не превращайте предложения в решения и личные мнения в консенсус.
-8. Объединяйте соседние реплики одного говорящего, сохраняя их временной диапазон.
-9. Выводите только очищенный Markdown, без объяснений и JSON.""",
-}
 
 SUMMARY_PROMPTS = {
     "en": """You are a professional meeting-notes assistant. From the cleaned transcript, produce accurate, detailed, structured Markdown. Preserve as much of the meeting's substance as possible; err on the side of thoroughness rather than omitting points.
@@ -147,31 +65,10 @@ Format: # **{title}**; Besprechungszusammenfassung; Kernergebnisse; Themenbespre
 }
 
 
-def cleaning_prompt(transcript, language):
-    """构建选定 UI 语言的固定第一轮 prompt。"""
-    if language == "zh":
-        instructions = """你是一名会议转录编辑。请清理以下 ASR 转录，输出易读、忠于原意的 Markdown。
-
-要求：
-
-1. 删除无意义语气词、明显重复和口头自我修正。
-2. 修正标点、断句和明显的普通识别错误。
-3. 保留说话人、时间戳和全部有效信息。
-4. 不总结，不大幅压缩，不改变原意。
-5. 不猜测人名、公司名、产品名、金额、日期、编号或技术参数。
-6. 无法确认的内容保留原文，并标记为 [不确定]。
-7. 不把建议改成决定，不把个人观点改成会议共识。
-8. 合并相邻同一说话人的连续内容，并保留其时间范围。
-9. 只输出清洗后的 Markdown，不输出解释或 JSON。"""
-    else:
-        instructions = CLEANING_PROMPTS.get(language, CLEANING_PROMPTS["en"])
-    return f"{instructions}\n\nDo not reveal reasoning or a thinking process. Begin directly with the cleaned transcript.\n\n<transcript>\n{transcript}\n</transcript>"
-
-
 def summary_prompt(transcript, title, language):
-    """构建固定的第二轮 Markdown 纪要 prompt。"""
+    """构建基于规则过滤转录的 Markdown 纪要 prompt。"""
     if language == "zh":
-        instructions = """你是一名专业的会议纪要助手。请根据以下清洗后的会议转录，生成准确、详实、结构化的 Markdown 会议纪要。纪要应尽可能完整地保留会议中的信息量，宁可详细也不要遗漏要点。
+        instructions = """你是一名专业的会议纪要助手。请根据以下已规则过滤的会议转录，生成准确、详实、结构化的 Markdown 会议纪要。纪要应尽可能完整地保留会议中的信息量，宁可详细也不要遗漏要点。
 
 要求：
 
@@ -250,7 +147,7 @@ class LLMWorkerMixin:
 
     @managed_task("summary.generate")
     def summarize(self, payload, control=None):
-        """两次调用 LLM 清洗逐字稿并生成 Markdown 纪要。
+        """基于已规则过滤的逐字稿生成 Markdown 纪要。
 
         Args:
             payload: 会议和模型连接信息，``consent`` 必须明确为真。
@@ -282,32 +179,8 @@ class LLMWorkerMixin:
         )
         if not transcript:
             raise ValueError("No transcript text is available for meeting notes")
-        transcript_hash = hashlib.sha256(transcript.encode()).hexdigest()
         language = payload.get("language", "en")
-        previous = (meeting.get("summary") or {}).get("data") or {}
-        cleaned_transcript = (
-            previous.get("cleaned_transcript", "")
-            if previous.get("transcript_hash") == transcript_hash
-            else ""
-        )
-        # 早期版本将 Anthropic 工具响应存储为清洗后的转录。它不是可用的清洗结果，必须重新生成。
-        if cleaned_transcript.lstrip().startswith('{"content":'):
-            cleaned_transcript = ""
         try:
-            if not cleaned_transcript:
-                self.wait_task(control)
-                self.emit(
-                    "summary.progress",
-                    {
-                        "meeting_id": meeting["id"],
-                        "completed": 20,
-                        "total": 100,
-                        "stage": "summary.cleaning",
-                    },
-                )
-                cleaned_transcript = self._complete(
-                    payload, cleaning_prompt(transcript, language)
-                ).strip()
             self.wait_task(control)
             self.emit(
                 "summary.progress",
@@ -319,29 +192,14 @@ class LLMWorkerMixin:
                 },
             )
             markdown = self._complete(
-                payload, summary_prompt(cleaned_transcript, meeting["title"], language)
+                payload, summary_prompt(transcript, meeting["title"], language)
             ).strip()
             if not markdown:
                 raise ValueError("Summary response was empty")
         except Exception as error:
-            raw = locals().get("markdown", locals().get("cleaned_transcript", str(error)))
-            failed_data = {**previous}
-            if cleaned_transcript:
-                failed_data.update(
-                    cleaned_transcript=cleaned_transcript,
-                    transcript_hash=transcript_hash,
-                )
-            self.store.save_summary(
-                meeting["id"],
-                failed_data or None,
-                raw,
-            )
+            self.store.save_summary(meeting["id"], None, locals().get("markdown", str(error)))
             raise ValueError(f"Summary response was saved but could not be generated: {error}") from error
-        data = {
-            "markdown": markdown,
-            "cleaned_transcript": cleaned_transcript,
-            "transcript_hash": transcript_hash,
-        }
+        data = {"markdown": markdown}
         self.store.save_summary(meeting["id"], data, markdown)
         self.emit(
             "summary.progress",

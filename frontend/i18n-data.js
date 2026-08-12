@@ -121,6 +121,7 @@ const permissionSettingLabels = {
   ru: { '系统权限': 'Системные разрешения', '打开系统设置': 'Открыть системные настройки', '请在系统设置中开启此权限': 'Отклонено. Включите это разрешение в системных настройках.' },
 };
 Object.entries(permissionSettingLabels).forEach(([code, labels]) => Object.assign(catalog[code].labels, labels));
+Object.entries({ zh: '结束中', en: 'Ending meeting…', es: 'Finalizando reunión…', ja: '会議を終了中', ko: '회의 종료 중', fr: 'Fin de la réunion…', de: 'Besprechung wird beendet…', ru: 'Завершение встречи…' }).forEach(([code, label]) => { catalog[code].labels['结束中'] = label; });
 Object.assign(catalog.en.labels, { '正在精修': 'Refining', '原版逐字稿仍可查看': 'The original transcript remains available', '准备中': 'Preparing', '正在取消': 'Cancelling' });
 Object.assign(catalog.es.labels, { '正在精修': 'Refinando', '原版逐字稿仍可查看': 'La transcripción original sigue disponible', '准备中': 'Preparando' });
 Object.assign(catalog.ja.labels, { '计算设备': '演算デバイス', '会后精修': '会議後の高精度化', '正在精修': '高精度化中', '原版逐字稿仍可查看': '元の文字起こしは引き続き閲覧できます', '准备中': '準備中', '可用': '利用可能', '本地保存': 'ローカルに保存', '本地会议': 'ローカル会議', '← 返回会议库': '← ライブラリに戻る' });
@@ -139,6 +140,32 @@ const runtimeLabels = {
   ru: { '软件更新': 'Обновления ПО', '检查更新': 'Проверить обновления', '会议纪要已生成': 'Заметки встречи созданы', '正在播放': 'Воспроизведение', '操作失败': 'Не удалось выполнить действие', '应用错误': 'Ошибка приложения', '会后精修失败': 'Не удалось обработать запись встречи', '发现可恢复录音': 'Найдено восстанавливаемых записей: {count}', '离线功能': 'Автономные функции', '请选择声音': 'Сначала выберите голос', '请先配置翻译模型': 'Сначала настройте модель перевода', '纪要服务拒绝了请求': 'Поставщик сводки отклонил запрос', '纪要模型需要配置': 'Настройте модель сводки', '请检查 API 地址、密钥和服务商访问策略。': 'Проверьте URL API, ключ и политику доступа поставщика.', 'API Key 未配置、已失效或不匹配当前服务。': 'Ключ API отсутствует, недействителен или отклонён этим поставщиком.', '配置纪要模型': 'Настроить модель', '刚刚': 'Только что', '请先选择译文目标并配置纪要模型': 'Сначала выберите язык перевода и настройте модель сводки', '将确认字幕发送到 {provider} 生成译文。是否继续？': 'Отправить подтверждённые субтитры в {provider} для перевода?', '选择格式：md / txt / json / srt / docx / pdf / flac / wav / m4a': 'Выберите формат: md / txt / json / srt / docx / pdf / flac / wav / m4a', '已导出「{title}」': '«{title}» экспортировано', '示例会议及录音已删除': 'Пример встречи и запись удалены', '会议已移至最近删除': 'Встреча перемещена в Недавно удалённые', '暂停录音': 'Приостановить запись', '这场会议没有可播放的录音': 'У этой встречи нет доступной для воспроизведения записи', '纪要配置加载失败': 'Не удалось загрузить конфигурацию сводки', '配置或后端启动失败': 'Не удалось запустить конфигурацию или серверную часть', '翻译失败': 'Не удалось перевести', '压缩包已导出': 'Архив экспортирован', '未找到录音，已导出逐字稿压缩包': 'Запись не найдена; архив расшифровки экспортирован' },
 };
 Object.entries(runtimeLabels).forEach(([code, labels]) => Object.assign(catalog[code].labels, labels));
+const timeoutLabels = {
+  zh: '操作超时，请稍后重试',
+  en: 'The operation timed out. Please try again.',
+  es: 'La operación agotó el tiempo de espera. Inténtalo de nuevo.',
+  ja: '操作がタイムアウトしました。もう一度お試しください。',
+  ko: '작업 시간이 초과되었습니다. 다시 시도해 주세요.',
+  fr: 'L’opération a expiré. Réessayez plus tard.',
+  de: 'Der Vorgang ist abgelaufen. Bitte versuchen Sie es erneut.',
+  ru: 'Время ожидания операции истекло. Повторите попытку.',
+};
+Object.entries(timeoutLabels).forEach(([code, label]) => { catalog[code].labels['操作超时，请稍后重试'] = label; });
+const captionButtonLabels = {
+  zh: ['字幕', '字幕：开', '字幕：关'], en: ['Captions', 'Captions: On', 'Captions: Off'], es: ['Subtítulos', 'Subtítulos: Sí', 'Subtítulos: No'], ja: ['字幕', '字幕：オン', '字幕：オフ'],
+  ko: ['자막', '자막: 켬', '자막: 끔'], fr: ['Sous-titres', 'Sous-titres : Oui', 'Sous-titres : Non'], de: ['Untertitel', 'Untertitel: An', 'Untertitel: Aus'], ru: ['Субтитры', 'Субтитры: Вкл.', 'Субтитры: Выкл.'],
+};
+Object.entries(captionButtonLabels).forEach(([code, [label, on, off]]) => Object.assign(catalog[code].labels, { '字幕': label, '字幕：开': on, '字幕：关': off }));
+const workspaceButtonLabels = {
+  zh: '新建工作区', en: 'New workspace', es: 'Nuevo espacio de trabajo', ja: 'ワークスペースを作成',
+  ko: '새 작업 공간', fr: 'Nouvel espace de travail', de: 'Neuer Arbeitsbereich', ru: 'Новое рабочее пространство',
+};
+Object.entries(workspaceButtonLabels).forEach(([code, label]) => { catalog[code].labels['新建工作区'] = label; });
+const translationToggleLabels = {
+  zh: ['译文：开', '译文：关'], en: ['Translation: On', 'Translation: Off'], es: ['Traducción: Sí', 'Traducción: No'], ja: ['翻訳：オン', '翻訳：オフ'],
+  ko: ['번역: 켬', '번역: 끔'], fr: ['Traduction : Oui', 'Traduction : Non'], de: ['Übersetzung: An', 'Übersetzung: Aus'], ru: ['Перевод: Вкл.', 'Перевод: Выкл.'],
+};
+Object.entries(translationToggleLabels).forEach(([code, [on, off]]) => Object.assign(catalog[code].labels, { '译文: 开': on, '译文: 关': off }));
 const settingsLabels = {
   ja: { '会议摘要': '会議の要約', '尚未生成会议摘要': '会議の要約はまだありません', '生成完整会议纪要': '会議メモを生成', '转发': '共有', '已整理': '完了', '已完成': '完了', '处理中': '処理中', '纪要模型': '要約モデル', '管理纪要模型': '要約モデルを管理', '配置用于生成会议纪要的 API。所有配置信息仅保存在本地，不会上传。': '会議メモを生成する API を設定します。すべての設定はローカルに保存されます。', '会议资料保存在此 Mac。外部 LLM 需要在发送逐字稿前明确确认。': '会議データはこの Mac に保存されます。外部 LLM への送信には明示的な確認が必要です。', '返回会议库': 'ライブラリに戻る', '暂无术语': '用語はありません', '软件更新': 'ソフトウェアアップデート', '当前版本 0.1.0': '現在のバージョン 0.1.0', '检查更新': 'アップデートを確認' },
   ko: { '会议摘要': '회의 요약', '尚未生成会议摘要': '아직 회의 요약이 없습니다', '生成完整会议纪要': '회의록 생성', '转发': '공유', '已整理': '완료', '已完成': '완료', '处理中': '처리 중', '纪要模型': '요약 모델', '管理纪要模型': '요약 모델 관리', '配置用于生成会议纪要的 API。所有配置信息仅保存在本地，不会上传。': '회의록 생성 API를 설정합니다. 모든 설정은 로컬에만 저장됩니다.', '会议资料保存在此 Mac。外部 LLM 需要在发送逐字稿前明确确认。': '회의 데이터는 이 Mac에 저장됩니다. 외부 LLM 전송 전 명시적 확인이 필요합니다.', '返回会议库': '라이브러리로 돌아가기', '暂无术语': '용어 없음', '软件更新': '소프트웨어 업데이트', '当前版本 0.1.0': '현재 버전 0.1.0', '检查更新': '업데이트 확인' },

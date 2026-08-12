@@ -1,4 +1,4 @@
-const { app, BrowserWindow, clipboard, desktopCapturer, dialog, ipcMain, Menu, screen, session, ShareMenu, shell, systemPreferences } = require('electron');
+const { app, BrowserWindow, clipboard, desktopCapturer, dialog, ipcMain, Menu, powerMonitor, screen, session, ShareMenu, shell, systemPreferences } = require('electron');
 const { execFile, spawn } = require('node:child_process');
 const { appendFile, copyFile, mkdir, readFile, rename, rm, writeFile } = require('node:fs/promises');
 const { existsSync } = require('node:fs');
@@ -443,13 +443,16 @@ function registerIpc() {
     }
     worker.active = { meeting_id: result.id, started_at: Date.now() };
     worker.restarts = 0;
+    resetFloatingCaptionState();
     return result;
   });
   ipcMain.handle('meeting.import', async (_, payload) => {
     const value = meetingStart.extend({ path: z.string().min(1) }).parse(payload);
     const selected = await dialog.showOpenDialog({ properties: ['openFile'], filters: [{ name: 'Audio', extensions: ['wav', 'mp3', 'm4a', 'flac', 'aac', 'ogg'] }] });
     if (selected.canceled) return null;
-    return worker.request('meeting.import', { ...value, path: selected.filePaths[0] });
+    const result = await worker.request('meeting.import', { ...value, path: selected.filePaths[0] });
+    resetFloatingCaptionState();
+    return result;
   });
   handle('meeting.audio', audio, 'meeting.audio');
   handle('meeting.pause', id.extend({ paused: z.boolean() }), 'meeting.pause');
@@ -664,7 +667,7 @@ function registerIpc() {
     if (!resolved.startsWith(`${path.resolve(dataDir())}${path.sep}`)) throw new Error('Invalid audio path');
     return pathToFileURL(resolved).href;
   });
-  ipcMain.handle('floating-caption.show', () => showFloatingCaption());
+  ipcMain.handle('floating-caption.show', () => { resetFloatingCaptionState(); return showFloatingCaption(); });
   ipcMain.handle('floating-caption.close', () => closeFloatingCaption());
   ipcMain.handle('floating-caption.update', (_, payload) => {
     const value = floatingCaptionPayload.parse(payload ?? {});
@@ -683,12 +686,12 @@ function registerIpc() {
 
     // Handle updateFinalized: update the lastFinalized text directly (for refined segments)
     if (value.updateFinalized && value.text !== undefined) {
-      // Update the lastFinalized area with the refined text
-      // This happens when a segment is refined after being finalized
-      floatingCaptionState.lastFinalized.text = value.text;
-      if (value.segmentId !== undefined) {
-        floatingCaptionState.lastFinalized.segmentId = value.segmentId;
-      }
+      const pendingTranslation = floatingCaptionState.pendingTranslation.segmentId === value.segmentId
+        ? floatingCaptionState.pendingTranslation.text : null;
+      const existingTranslation = floatingCaptionState.lastFinalized.segmentId === value.segmentId
+        ? floatingCaptionState.lastFinalized.translation : null;
+      floatingCaptionState.lastFinalized = { segmentId: value.segmentId ?? null, text: value.text, translation: pendingTranslation || existingTranslation };
+      if (pendingTranslation) floatingCaptionState.pendingTranslation = { segmentId: null, text: null };
       // Clear current area only if it's showing the same segment that was just refined
       if (value.clearCurrentIfMatch && value.segmentId === floatingCaptionState.current.segmentId) {
         floatingCaptionState.current = { segmentId: null, text: '', isRefined: false, translation: null };
@@ -909,6 +912,14 @@ const floatingCaptionPayload = z.object({
   locale: z.string().max(16).optional(),
 }).strict();
 
+function resetFloatingCaptionState() {
+  floatingCaptionState.lastFinalized = { segmentId: null, text: '', translation: null };
+  floatingCaptionState.current = { segmentId: null, text: '', isRefined: false, translation: null };
+  floatingCaptionState.pendingTranslation = { segmentId: null, text: null };
+  floatingCaptionState.translationPending = { segmentId: null };
+  sendFloatingCaptionState();
+}
+
 function sendFloatingCaptionState() {
   if (!floatingCaptionWindow || floatingCaptionWindow.isDestroyed() || !floatingCaptionReady) return;
   // Send the entire state structure - the renderer knows how to handle it
@@ -941,7 +952,7 @@ function showFloatingCaption() {
   const display = mainWindow ? screen.getDisplayMatching(mainWindow.getBounds()) : screen.getPrimaryDisplay();
   const { workArea } = display;
   const width = Math.min(760, workArea.width - 80);
-  const height = 180;
+  const height = 220;
 
   // Restore saved position or use default centered position
   const savedBounds = floatingCaptionBounds && screen.getDisplayMatching(floatingCaptionBounds).id === display.id ? floatingCaptionBounds : null;
@@ -949,7 +960,7 @@ function showFloatingCaption() {
   const y = savedBounds?.y ?? Math.round(workArea.y + workArea.height - height - 60);
 
   floatingCaptionReady = false;
-  floatingCaptionWindow = new BrowserWindow({
+  const captionWindow = floatingCaptionWindow = new BrowserWindow({
     width,
     height,
     x,
@@ -978,16 +989,17 @@ function showFloatingCaption() {
   if (process.platform === 'darwin' && app.dock) {
     app.dock.show();
   }
-  floatingCaptionWindow.setAlwaysOnTop(true, 'screen-saver');
-  floatingCaptionWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  captionWindow.setAlwaysOnTop(true, 'screen-saver');
+  captionWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
 
-  floatingCaptionWindow.webContents.on('did-finish-load', () => {
+  captionWindow.webContents.on('did-finish-load', () => {
+    if (floatingCaptionWindow !== captionWindow) return;
     floatingCaptionReady = true;
     sendFloatingCaptionState();
-    if (floatingCaptionWindow && !floatingCaptionWindow.isDestroyed()) {
-      floatingCaptionWindow.show();
+    if (!captionWindow.isDestroyed()) {
+      captionWindow.show();
       // After showing floating caption, restore focus to main window
-      const mainWindow = BrowserWindow.getAllWindows().find(w => w !== floatingCaptionWindow && !w.isDestroyed());
+      const mainWindow = BrowserWindow.getAllWindows().find(w => w !== captionWindow && !w.isDestroyed());
       if (mainWindow) {
         mainWindow.focus();
       }
@@ -995,13 +1007,14 @@ function showFloatingCaption() {
   });
 
   // Save position before window is destroyed
-  floatingCaptionWindow.on('close', () => {
-    if (floatingCaptionWindow && !floatingCaptionWindow.isDestroyed()) {
-      floatingCaptionBounds = floatingCaptionWindow.getBounds();
+  captionWindow.on('close', () => {
+    if (floatingCaptionWindow === captionWindow && !captionWindow.isDestroyed()) {
+      floatingCaptionBounds = captionWindow.getBounds();
     }
   });
 
-  floatingCaptionWindow.on('closed', () => {
+  captionWindow.on('closed', () => {
+    if (floatingCaptionWindow !== captionWindow) return;
     floatingCaptionWindow = null;
     floatingCaptionReady = false;
 
@@ -1015,7 +1028,7 @@ function showFloatingCaption() {
       }
     });
   });
-  void floatingCaptionWindow.loadFile(path.join(packagedRoot, 'frontend', 'floating-caption.html'));
+  void captionWindow.loadFile(path.join(packagedRoot, 'frontend', 'floating-caption.html'));
   return true;
 }
 
@@ -1056,15 +1069,28 @@ app.whenReady().then(async () => {
   });
 });
 let quittingAfterMeetingStop = false;
-async function stopActiveMeetingBeforeQuit() {
+let stoppingForSleep = false;
+async function stopActiveMeeting() {
   const active = worker.active;
   if (!active) return;
-  worker.active = null;
   await worker.request('meeting.stop', {
     meeting_id: active.meeting_id,
     duration_ms: Math.max(0, Date.now() - active.started_at),
   });
+  if (worker.active === active) worker.active = null;
 }
+async function stopActiveMeetingForSleep() {
+  if (stoppingForSleep || !worker.active) return;
+  stoppingForSleep = true;
+  try {
+    await stopActiveMeeting();
+  } catch (error) {
+    writeLog('WARNING', `stop meeting for system sleep: ${logText(error)}`);
+  } finally {
+    stoppingForSleep = false;
+  }
+}
+powerMonitor.on('suspend', () => { void stopActiveMeetingForSleep(); });
 app.on('before-quit', (event) => {
   if (quittingAfterMeetingStop) {
     app.isQuitting = true;
@@ -1074,7 +1100,7 @@ app.on('before-quit', (event) => {
   event.preventDefault();
   quittingAfterMeetingStop = true;
   void Promise.race([
-    stopActiveMeetingBeforeQuit(),
+    stopActiveMeeting(),
     new Promise((resolve) => setTimeout(resolve, 8000)),
   ]).catch((error) => writeLog('WARNING', `stop meeting before quit: ${logText(error)}`)).finally(() => app.quit());
 });

@@ -28,11 +28,9 @@
     timeline = new DemoTimeline(engine);
     timeline.setLoop(true, 2000);
 
-    // Initialize scenarios (use V3 if available, fallback to V2, then V1)
+    // Initialize the current scenarios, with the original demo as a fallback.
     if (window.DemoScenariosV3) {
       scenarios = new DemoScenariosV3(engine, timeline);
-    } else if (window.DemoScenariosV2) {
-      scenarios = new DemoScenariosV2(engine, timeline);
     } else {
       scenarios = new DemoScenarios(engine, timeline);
     }

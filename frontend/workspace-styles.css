@@ -1,10 +1,28 @@
 /* 工作区子导航（"所有会议"下的子级） */
 .workspace-subnav {
+  display: grid;
+  grid-template-rows: 1fr;
+  overflow: hidden;
   padding-left: 1.5rem;
   margin-top: 0.5rem;
   border-left: 2px solid rgba(0, 0, 0, 0.1);
   margin-left: 1rem;
+  opacity: 1;
+  transition: grid-template-rows 180ms ease, opacity 140ms ease, margin 180ms ease, padding 180ms ease, border-width 180ms ease;
 }
+
+.workspace-subnav-content { min-height: 0; overflow: hidden; }
+
+.workspace-subnav.is-collapsed {
+  grid-template-rows: 0fr;
+  margin-top: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  border-left-width: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
 
 [data-theme="dark"] .workspace-subnav {
   border-left-color: rgba(255, 255, 255, 0.1);

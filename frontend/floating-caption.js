@@ -3,6 +3,12 @@ const captionFinalized = document.getElementById('caption-finalized');
 const captionText = document.getElementById('caption-text');
 const captionTranslation = document.getElementById('caption-translation');
 const closeBtn = document.getElementById('close-btn');
+let renderedCaptionText = '';
+let renderedFinalizedText = '';
+let renderedTranslationText = '';
+let showingTranslationLoading = false;
+let followLiveCaption = true;
+let autoScrolling = false;
 
 // 状态跟踪
 let state = {
@@ -49,57 +55,94 @@ document.addEventListener('mouseup', () => {
   dragState = null;
 });
 
+captionContainer.addEventListener('scroll', () => {
+  if (autoScrolling) return;
+  followLiveCaption = captionContainer.scrollHeight - captionContainer.clientHeight - captionContainer.scrollTop <= 24;
+});
+
+function restartAnimation(element, className) {
+  element.classList.remove(className);
+  void element.offsetWidth;
+  element.classList.add(className);
+}
+
+function renderCaptionText(text, streaming) {
+  if (text === renderedCaptionText) return;
+  if (streaming && renderedCaptionText && text.startsWith(renderedCaptionText)) {
+    captionText.append(document.createTextNode(text.slice(renderedCaptionText.length)));
+  } else {
+    captionText.textContent = text;
+    if (!streaming) restartAnimation(captionText, 'caption-fade');
+  }
+  renderedCaptionText = text;
+}
+
+function renderTranslationText(text) {
+  if (text === renderedTranslationText) return;
+  captionTranslation.textContent = text;
+  if (text) restartAnimation(captionTranslation, 'caption-fade');
+  renderedTranslationText = text;
+}
+
+function renderFinalizedText(text) {
+  if (text === renderedFinalizedText) return;
+  captionFinalized.textContent = text;
+  if (text) restartAnimation(captionFinalized, 'caption-fade');
+  renderedFinalizedText = text;
+}
+
 // 将当前状态渲染到 UI
 function render() {
+  const shouldFollow = followLiveCaption;
   // 渲染已定稿的片段（顶行）
   if (state.lastFinalized.text) {
-    captionFinalized.textContent = state.lastFinalized.text;
+    renderFinalizedText(state.lastFinalized.text);
     captionFinalized.classList.remove('hidden');
-    // 自动滚动到底部以显示最新内容
-    requestAnimationFrame(() => {
-      captionFinalized.scrollTop = captionFinalized.scrollHeight;
-    });
   } else {
+    renderedFinalizedText = '';
     captionFinalized.classList.add('hidden');
   }
 
   // 渲染当前片段（底行）
-  captionText.textContent = state.current.text || '';
+  renderCaptionText(state.current.text || '', !state.current.isRefined);
 
-  // 自动滚动到底部以显示最新内容
-  requestAnimationFrame(() => {
-    captionText.scrollTop = captionText.scrollHeight;
-  });
-
-  // 渲染译文
+  // 译文始终与上一段定稿原文配对；回放只有当前段时，才显示当前段译文。
   let translationText = '';
-  let isDimmed = false;
-
-  // 优先级：匹配当前片段，否则匹配已定稿片段（变暗），否则待定
-  if (state.current.translation) {
-    translationText = state.current.translation;
-  } else if (state.lastFinalized.translation) {
+  const hasFinalized = Boolean(state.lastFinalized.text);
+  if (hasFinalized) {
     translationText = state.lastFinalized.translation;
-    isDimmed = true;
-  } else if (state.pendingTranslation.text) {
-    translationText = state.pendingTranslation.text;
-    isDimmed = true;
+    if (captionTranslation.previousElementSibling !== captionFinalized) captionFinalized.after(captionTranslation);
+  } else if (state.current.isRefined) {
+    translationText = state.current.translation;
+    if (captionTranslation.previousElementSibling !== captionText) captionText.after(captionTranslation);
   }
 
-  // 当显示的片段正在翻译时显示加载点
+  // 仅为上一段定稿字幕显示翻译中的状态。
   const pendingId = state.translationPending?.segmentId;
-  const showLoading = !translationText && pendingId
-    && (pendingId === state.current.segmentId || pendingId === state.lastFinalized.segmentId);
+  const showLoading = hasFinalized && !translationText && pendingId === state.lastFinalized.segmentId;
 
   if (showLoading) {
-    captionTranslation.innerHTML = '<span class="translation-loading"><span></span><span></span><span></span></span>';
-    captionTranslation.classList.remove('hidden');
-    captionTranslation.classList.add('dimmed');
+    if (!showingTranslationLoading) {
+      captionTranslation.innerHTML = '<span class="translation-loading"><span></span><span></span><span></span></span>';
+      renderedTranslationText = '';
+      captionTranslation.classList.remove('hidden');
+      captionTranslation.classList.add('dimmed');
+      showingTranslationLoading = true;
+    }
   } else {
-    captionTranslation.textContent = translationText;
+    showingTranslationLoading = false;
+    renderTranslationText(translationText);
     captionTranslation.classList.toggle('hidden', !translationText);
-    captionTranslation.classList.toggle('dimmed', isDimmed);
+    captionTranslation.classList.toggle('dimmed', false);
   }
+
+  requestAnimationFrame(() => {
+    if (shouldFollow) {
+      autoScrolling = true;
+      captionContainer.scrollTop = captionContainer.scrollHeight;
+      requestAnimationFrame(() => { autoScrolling = false; });
+    }
+  });
 }
 
 // 监听字幕更新 - 等待 brevia 准备就绪
@@ -112,6 +155,7 @@ function setupListener() {
         state.current = data.current;
         state.pendingTranslation = data.pendingTranslation;
         if (data.translationPending !== undefined) state.translationPending = data.translationPending;
+        if (!state.lastFinalized.text && !state.current.text) followLiveCaption = true;
         render();
         return;
       }

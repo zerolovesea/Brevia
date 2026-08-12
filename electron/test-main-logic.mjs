@@ -43,12 +43,25 @@ const { z } = require('zod');
 const mainSource = (await readFile(new URL('./main.js', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 assert.match(mainSource, /process\.platform === 'win32'\) Menu\.setApplicationMenu\(null\)/);
 assert.match(mainSource, /screen\.getDisplayMatching\(mainWindow\.getBounds\(\)\)/, 'floating captions open on the main window display');
+assert.match(mainSource, /const captionWindow = floatingCaptionWindow = new BrowserWindow/, 'caption callbacks keep ownership of their own window');
+assert.match(mainSource, /if \(floatingCaptionWindow !== captionWindow\) return;/, 'stale caption callbacks cannot clear a newer window');
 assert.match(mainSource, /webContents\.send\('brevia:event', \{\n        type: 'update\.download-progress'/, 'update progress uses the renderer event channel');
 assert.match(mainSource, /const startupAnimationMs = 1700;/, 'startup animation keeps a visible minimum duration');
 assert.match(mainSource, /Promise\.race\(\[initializeWorker\(\), new Promise\(\(resolve\) => setTimeout\(resolve, startupDataWaitMs\)\)\]\)/, 'startup does not wait indefinitely for the worker');
+assert.match(mainSource, /powerMonitor\.on\('suspend', \(\) => \{ void stopActiveMeetingForSleep\(\); \}\);/, 'system sleep stops an active meeting');
+assert.match(mainSource, /async function stopActiveMeetingForSleep\(\)/, 'system sleep shares the normal meeting stop path');
 const oneLine = (decl) => { const start = mainSource.indexOf(decl); return mainSource.slice(start, mainSource.indexOf('\n', start) + 1); };
 const schemaBlock = (decl) => { const start = mainSource.indexOf(decl); return mainSource.slice(start, mainSource.indexOf('\n});', start) + 5); };
 const asyncFn = (name) => { const start = mainSource.indexOf(`async function ${name}(`); return mainSource.slice(start, mainSource.indexOf('\n}\n', start) + 2); };
+
+const activeMeeting = { meeting_id: 'meeting-1', started_at: Date.now() };
+const stopContext = { worker: { active: activeMeeting, request: async () => { throw new Error('offline'); } } };
+runInNewContext(`${asyncFn('stopActiveMeeting')}\nthis.stopActiveMeeting = stopActiveMeeting;`, stopContext);
+await assert.rejects(stopContext.stopActiveMeeting(), /offline/);
+assert.equal(stopContext.worker.active, activeMeeting, 'a failed stop remains retryable');
+stopContext.worker.request = async () => ({});
+await stopContext.stopActiveMeeting();
+assert.equal(stopContext.worker.active, null, 'a confirmed stop clears the active meeting');
 
 const configDir = await mkdtemp(path.join(tmpdir(), 'brevia-summary-config-'));
 const configFile = path.join(configDir, 'summary-models.json');
