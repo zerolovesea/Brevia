@@ -77,7 +77,9 @@ class ExportWorkerMixin:
         if export_format == "docx":
             path = self._write_docx(directory, safe_title, content)
         elif export_format == "pdf":
-            path = self._write_print_html(directory, safe_title, content)
+            path = self._write_print_html(
+                directory, safe_title, content, markdown=content_type == "notes"
+            )
         else:
             path.write_text(content, encoding="utf-8")
         return {
@@ -170,14 +172,60 @@ class ExportWorkerMixin:
         return destination
 
     @staticmethod
-    def _write_print_html(directory, title, content):
+    def _write_print_html(directory, title, content, markdown=False):
         """创建 Unicode 安全的 HTML，供 Electron 跨平台 PDF 渲染器使用。"""
         destination = directory / f"{title}.print.html"
+        body = ExportWorkerMixin._markdown_html(content) if markdown else f"<pre>{escape(content)}</pre>"
         destination.write_text(
             "<!doctype html><meta charset='utf-8'><style>"
             "body{font:16px system-ui,sans-serif;line-height:1.7;margin:48px auto;max-width:760px}"
-            "pre{font:inherit;white-space:pre-wrap}</style><pre>"
-            f"{escape(content)}</pre>",
+            "h1,h2,h3{line-height:1.3}h1{font-size:28px}h2{font-size:21px;margin-top:32px}"
+            "h3{font-size:17px;margin-top:24px}ul{padding-left:1.4em}"
+            "table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;padding:6px;text-align:left}"
+            "pre{font:inherit;white-space:pre-wrap}</style>"
+            f"{body}",
             encoding="utf-8",
         )
         return destination
+
+    @staticmethod
+    def _markdown_html(markdown):
+        """渲染纪要使用的标题、列表、表格和段落 Markdown 子集。"""
+        lines = str(markdown or "").replace("\r", "").split("\n")
+        html, index = [], 0
+        inline = lambda value: escape(value).replace("**", "")
+        while index < len(lines):
+            line = lines[index]
+            if not line.strip():
+                index += 1
+                continue
+            heading = re.match(r"^(#{1,3})\s+(.+)$", line)
+            if heading:
+                level = len(heading.group(1))
+                html.append(f"<h{level}>{inline(heading.group(2))}</h{level}>")
+                index += 1
+                continue
+            if line.startswith(("- ", "* ")):
+                items = []
+                while index < len(lines) and lines[index].startswith(("- ", "* ")):
+                    items.append(f"<li>{inline(lines[index][2:])}</li>")
+                    index += 1
+                html.append(f"<ul>{''.join(items)}</ul>")
+                continue
+            if line.startswith("|"):
+                rows = []
+                while index < len(lines) and lines[index].startswith("|"):
+                    cells = [cell.strip() for cell in lines[index].split("|")[1:-1]]
+                    if not all(re.fullmatch(r":?-{3,}:?", cell) for cell in cells):
+                        rows.append(cells)
+                    index += 1
+                if rows:
+                    header, *body = rows
+                    html.append("<table><thead><tr>" + "".join(f"<th>{inline(cell)}</th>" for cell in header) + "</tr></thead><tbody>" + "".join("<tr>" + "".join(f"<td>{inline(cell)}</td>" for cell in row) + "</tr>" for row in body) + "</tbody></table>")
+                continue
+            paragraph = []
+            while index < len(lines) and lines[index].strip() and not re.match(r"^(#{1,3}\s+|[-*]\s+|\|)", lines[index]):
+                paragraph.append(lines[index])
+                index += 1
+            html.append(f"<p>{inline(' '.join(paragraph))}</p>")
+        return "".join(html)

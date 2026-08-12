@@ -503,6 +503,12 @@ class WorkerTest(unittest.TestCase):
                 }
             )
             self.assertIn("准备报告", Path(exported["path"]).read_text())
+        pdf = self.worker.export(
+            {"meeting_id": meeting["id"], "content": "notes", "format": "pdf"}
+        )
+        printed = Path(pdf["path"]).read_text()
+        self.assertIn("<h2>行动项</h2>", printed)
+        self.assertNotIn("## **行动项**", printed)
 
     def test_llm_client_supports_openai_and_anthropic_shapes(self):
         class Response:
