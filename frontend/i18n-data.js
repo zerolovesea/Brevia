@@ -569,6 +569,17 @@ const refinementStageLabels = {
 };
 Object.entries(refinementStageLabels).forEach(([code, labels]) => Object.assign(catalog[code].labels, labels));
 
+const refinedModelOptionTags = {
+  zh: { 'qwen3-asr-0.6b-int8': ['多语言', '中英混说', '中等资源占用'], 'funasr-nano-int8': ['中文 / 英文 / 粤语', '较快'], 'qwen3-asr-1.7b-int8': ['多语言', '高精度', '较高资源占用'], 'whisper-large-v3': ['多语言', '兼容性强', '较慢'] },
+  en: { 'qwen3-asr-0.6b-int8': ['Multilingual', 'Chinese-English mixed', 'Moderate resources'], 'funasr-nano-int8': ['Chinese / English / Cantonese', 'Fast'], 'qwen3-asr-1.7b-int8': ['Multilingual', 'High accuracy', 'Higher resources'], 'whisper-large-v3': ['Multilingual', 'Broad compatibility', 'Slower'] },
+  es: { 'qwen3-asr-0.6b-int8': ['Multilingüe', 'Chino-inglés mixto', 'Recursos moderados'], 'funasr-nano-int8': ['Chino / inglés / cantonés', 'Rápido'], 'qwen3-asr-1.7b-int8': ['Multilingüe', 'Alta precisión', 'Más recursos'], 'whisper-large-v3': ['Multilingüe', 'Amplia compatibilidad', 'Más lento'] },
+  ja: { 'qwen3-asr-0.6b-int8': ['多言語', '中英語混在', '中程度のリソース'], 'funasr-nano-int8': ['中国語 / 英語 / 広東語', '高速'], 'qwen3-asr-1.7b-int8': ['多言語', '高精度', '高いリソース使用量'], 'whisper-large-v3': ['多言語', '高い互換性', '低速'] },
+  ko: { 'qwen3-asr-0.6b-int8': ['다국어', '중국어·영어 혼용', '중간 리소스'], 'funasr-nano-int8': ['중국어 / 영어 / 광둥어', '빠름'], 'qwen3-asr-1.7b-int8': ['다국어', '고정밀', '높은 리소스'], 'whisper-large-v3': ['다국어', '폭넓은 호환성', '느림'] },
+  fr: { 'qwen3-asr-0.6b-int8': ['Multilingue', 'Chinois-anglais mixte', 'Ressources modérées'], 'funasr-nano-int8': ['Chinois / anglais / cantonais', 'Rapide'], 'qwen3-asr-1.7b-int8': ['Multilingue', 'Haute précision', 'Ressources élevées'], 'whisper-large-v3': ['Multilingue', 'Large compatibilité', 'Plus lent'] },
+  de: { 'qwen3-asr-0.6b-int8': ['Mehrsprachig', 'Chinesisch-Englisch gemischt', 'Mittlerer Ressourcenbedarf'], 'funasr-nano-int8': ['Chinesisch / Englisch / Kantonesisch', 'Schnell'], 'qwen3-asr-1.7b-int8': ['Mehrsprachig', 'Hohe Genauigkeit', 'Höherer Ressourcenbedarf'], 'whisper-large-v3': ['Mehrsprachig', 'Hohe Kompatibilität', 'Langsamer'] },
+  ru: { 'qwen3-asr-0.6b-int8': ['Многоязычный', 'Китайский и английский', 'Среднее потребление ресурсов'], 'funasr-nano-int8': ['Китайский / английский / кантонский', 'Быстрый'], 'qwen3-asr-1.7b-int8': ['Многоязычный', 'Высокая точность', 'Высокое потребление ресурсов'], 'whisper-large-v3': ['Многоязычный', 'Широкая совместимость', 'Медленнее'] },
+};
+
 const zipformerChineseLanguages = {
   zh: '中文', en: 'Chinese', es: 'Chino', ja: '中国語', ko: '중국어', fr: 'Chinois', de: 'Chinesisch', ru: 'Китайский',
 };
@@ -578,5 +589,5 @@ Object.entries(appCopy.modalCopy).forEach(([code, copy]) => {
     : item);
 });
 
-window.BreviaLocaleData = { catalog, appCopy };
+window.BreviaLocaleData = { catalog, appCopy, refinedModelOptionTags };
 })();

@@ -94,7 +94,7 @@ function revealTaskCard(card) {
   card.hidden = false;
   if (wasHidden || wasLeaving) { taskCards.append(card); enterTaskCard(card); }
 }
-const { catalog, appCopy: { stageLabels, themeLabels, updateLabels, modalCopy, modelLabels, summaryModelCopy, speakerProfileCopy, voiceFeaturesCopy } } = window.BreviaLocaleData;
+const { catalog, refinedModelOptionTags, appCopy: { stageLabels, themeLabels, updateLabels, modalCopy, modelLabels, summaryModelCopy, speakerProfileCopy, voiceFeaturesCopy } } = window.BreviaLocaleData;
 if (new URLSearchParams(location.search).has('resetOnboarding')) localStorage.removeItem('brevia-onboarding-complete');
 let locale = localStorage.getItem('brevia-language') || 'zh';
 let theme = localStorage.getItem('brevia-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
@@ -584,15 +584,16 @@ function modelChoices(id) {
   return [['', null], ...modelCatalog.filter((model) => model.stages?.includes('refined')).map((model) => [model.id, model.name])];
 }
 const refinedModelOptionMeta = {
-  'qwen3-asr-0.6b-int8': ['Qwen3-ASR 0.6B', '多语言 · 中英混说 · 中等资源占用'],
-  'funasr-nano-int8': ['FunASR Nano', '中文 / 英文 / 粤语 · 较快'],
-  'qwen3-asr-1.7b-int8': ['Qwen3-ASR 1.7B', '多语言 · 高精度 · 较高资源占用'],
-  'whisper-large-v3': ['Whisper Large v3', '多语言 · 兼容性强 · 较慢'],
+  'qwen3-asr-0.6b-int8': 'Qwen3-ASR 0.6B',
+  'funasr-nano-int8': 'FunASR Nano',
+  'qwen3-asr-1.7b-int8': 'Qwen3-ASR 1.7B',
+  'whisper-large-v3': 'Whisper Large v3',
 };
 function renderRefinedModelChoices() {
   const options = document.querySelector('.detail-refine .flow-select-options');
   if (!options) return;
-  options.innerHTML = Object.entries(refinedModelOptionMeta).filter(([id]) => modelCatalog.some((model) => model.id === id)).map(([id, [name, tags]]) => `<button type="button" data-refine-model="${escapeHtml(id)}"><b>${escapeHtml(name)}</b><span class="model-library-tags">${tags.split(' · ').map((tag) => `<span>${escapeHtml(tag)}</span>`).join('')}</span></button>`).join('');
+  const tags = refinedModelOptionTags[locale] || refinedModelOptionTags.en;
+  options.innerHTML = Object.entries(refinedModelOptionMeta).filter(([id]) => modelCatalog.some((model) => model.id === id)).map(([id, name]) => `<button type="button" data-refine-model="${escapeHtml(id)}"><b>${escapeHtml(name)}</b><span class="model-library-tags">${tags[id].map((tag) => `<span>${escapeHtml(tag)}</span>`).join('')}</span></button>`).join('');
 }
 renderRefinedModelChoices();
 const languageModelDefaults = {
@@ -2275,6 +2276,7 @@ function applyLanguage(nextLocale, animate = false) {
     renderMeetingList();
     renderWorkspaceNav();
     renderMeetingDetail();
+    renderRefinedModelChoices();
     if (activeView === 'home') selectLibraryNav(activeLibraryNav);
     else crumb.textContent = catalog[locale].views[activeView];
     renderSlogan(false);
