@@ -49,13 +49,12 @@
 
 ### 丰富的本地模型库
 
-内置 27+ 个可下载的语音模型，覆盖流式转写、离线精修、标点恢复、语音活动检测、说话人分离、声纹嵌入、语音合成、人声分离等场景。可以按语言和精度自由组合，全部在设备上运行。
+可下载模型覆盖流式转写、离线精修、标点恢复、语音活动检测、说话人分离、声纹嵌入和人声分离。可以按语言和精度自由组合，全部在设备上运行。
 
 ![模型库](assets/tour/zh/%E6%A8%A1%E5%9E%8B%E5%BA%93.png)
 
 ### 更多能力
 
-- **TTS 语音合成与克隆** — 基于 ZipVoice，用注册人员的参考音频合成中英文语音；德、法、西、俄、韩单独提供 VITS 声音。
 - **人声分离** — Spleeter 把录音拆成人声与非人声两轨，方便二次剪辑。
 - **音频导入** — 已有的会议录音可直接导入离线转写，共用同一套语音管线。
 - **多格式导出** — 逐字稿 / 笔记支持 Markdown、TXT、JSON、SRT、DOCX、PDF；音频支持 FLAC、WAV、M4A。
@@ -80,7 +79,7 @@
 flowchart LR
   A[Electron 渲染进程<br/>HTML · Tailwind · JS] <-->|IPC + Zod 校验| B[Electron 主进程]
   B <-->|JSONL stdin/stdout| C[Python Worker<br/>内置运行时]
-  C --> D[sherpa-onnx<br/>ASR · VAD · 说话人 · 标点 · TTS]
+  C --> D[sherpa-onnx<br/>ASR · VAD · 说话人 · 标点]
   C --> E[本地存储<br/>SQLite · 音频 · 导出]
   C -. 显式授权 .-> F[可选云端 API<br/>LLM 摘要 · 翻译]
 ```
@@ -100,7 +99,7 @@ flowchart LR
 | 前端 | 原生 HTML/CSS/JS、Tailwind CSS 4、内置 i18n（8 种语言） |
 | 后端 | Python 3.10+、JSONL Worker 协议、SQLite 存储 |
 | 语音引擎 | [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 1.13.2、ONNX Runtime |
-| 说话人处理 | Pyannote 分段 + 3D-Speaker / NeMo Titanet / CAM++ 声纹嵌入 |
+| 说话人处理 | Pyannote 分段 + 3D-Speaker ERes2Net Base 声纹嵌入 |
 | LLM 客户端 | 内置 llama.cpp（GGUF）+ 兼容 OpenAI / Anthropic 的标准 API |
 | 音频 I/O | ffmpeg（发行版内置） |
 | 构建打包 | electron-builder、PyInstaller（打包原生 Python 运行时） |
@@ -111,15 +110,14 @@ flowchart LR
 
 | 类型 | 代表模型 | 语言 |
 | --- | --- | --- |
-| 流式 ASR | Zipformer（中/英/法/韩/多语言）、Paraformer 双语、Nemotron 3.5 | 30+ |
-| 精修 ASR | Qwen3-ASR 0.6B / 1.7B、Whisper Turbo / Large v3、FireRedASR2、FunASR Nano | 多语言 |
+| 流式 ASR | Zipformer（中/英/法/韩/多语言）、Nemotron 3.5 | 30+ |
+| 精修 ASR | Qwen3-ASR 0.6B / 1.7B、Whisper Large v3、FunASR Nano | 多语言 |
 | 标点恢复 | CT-Transformer 中英标点、Online Punct 英文标点与大小写 | 中/英 |
 | 语音活动检测 | Silero VAD | 通用 |
 | 语音增强 | GTCRN Live Denoiser | 通用 |
 | 说话人分离 | Pyannote Segmentation 3.0、Reverb Diarization v1 | 通用 |
-| 声纹嵌入 | 3D-Speaker ERes2Net、CAM++、NeMo Titanet | 中/英 |
+| 声纹嵌入 | 3D-Speaker ERes2Net Base | 通用 |
 | 人声分离 | Spleeter 2 Stems | 通用 |
-| 语音合成 | ZipVoice（中英）、VITS Piper（法/德/西/俄）、VITS Mimic3（韩） | 多语言 |
 
 LLM 摘要可以选「内置 AI」在本机运行捆绑的 GGUF 模型（Qwen 3.5 2B / 4B、Gemma 3 1B / 4B），也可以接入 Claude、OpenAI、OpenRouter，或任意兼容 OpenAI Chat Completions / Anthropic Messages 的自建服务——例如 Gemini（OpenAI 兼容端点）、DeepSeek、Kimi、通义千问等。
 
@@ -203,7 +201,7 @@ npm run dist:win   # Windows x64 EXE
 <details>
 <summary><strong>言录会把音频发送到云端吗？</strong></summary>
 
-不会。所有语音识别、说话人分离、TTS 都在本机运行。只有 LLM 摘要 / 翻译需要联网，且必须由用户显式配置服务商——只发送文本，不上传音频。
+不会。所有语音识别和说话人分离都在本机运行。只有 LLM 摘要 / 翻译需要联网，且必须由用户显式配置服务商——只发送文本，不上传音频。
 </details>
 
 <details>
@@ -260,6 +258,6 @@ npm run dist:win   # Windows x64 EXE
 
 ## 致谢
 
-- [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) — 本地 ASR、VAD、标点、说话人处理和 TTS 的核心运行时，采用 [Apache-2.0](https://github.com/k2-fsa/sherpa-onnx/blob/master/LICENSE) 许可。
-- 感谢 [`backend/models.json`](../backend/models.json) 中声明的所有模型作者与维护者，包括 Zipformer、Paraformer、Whisper、Qwen3-ASR、FireRedASR、FunASR、Pyannote、3D-Speaker、NeMo、Silero、Spleeter、ZipVoice、VITS Piper / Mimic3 等。
+- [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) — 本地 ASR、VAD、标点和说话人处理的核心运行时，采用 [Apache-2.0](https://github.com/k2-fsa/sherpa-onnx/blob/master/LICENSE) 许可。
+- 感谢 [`backend/models.json`](../backend/models.json) 中声明的所有模型作者与维护者，包括 Zipformer、Whisper、Qwen3-ASR、FunASR、Pyannote、3D-Speaker、Silero、Spleeter 和 Tencent Hy-MT2。
 - Electron、ONNX Runtime、Python 以及整个开源语音社区，让本地优先的会议工作流成为可能。

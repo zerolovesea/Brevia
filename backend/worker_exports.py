@@ -178,7 +178,8 @@ class ExportWorkerMixin:
         body = ExportWorkerMixin._markdown_html(content) if markdown else f"<pre>{escape(content)}</pre>"
         destination.write_text(
             "<!doctype html><meta charset='utf-8'><style>"
-            "body{font:16px system-ui,sans-serif;line-height:1.7;margin:48px auto;max-width:760px}"
+            "@page{margin:64px 44px 48px}"
+            "body{font:16px system-ui,sans-serif;line-height:1.7;margin:0 auto;max-width:760px}"
             "h1,h2,h3{line-height:1.3}h1{font-size:28px}h2{font-size:21px;margin-top:32px}"
             "h3{font-size:17px;margin-top:24px}ul{padding-left:1.4em}"
             "table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;padding:6px;text-align:left}"
@@ -193,7 +194,10 @@ class ExportWorkerMixin:
         """渲染纪要使用的标题、列表、表格和段落 Markdown 子集。"""
         lines = str(markdown or "").replace("\r", "").split("\n")
         html, index = [], 0
-        inline = lambda value: escape(value).replace("**", "")
+
+        def inline(value):
+            return escape(value).replace("**", "")
+
         while index < len(lines):
             line = lines[index]
             if not line.strip():

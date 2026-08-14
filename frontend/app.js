@@ -15,6 +15,35 @@ const refinementCard = document.querySelector('#refinement-progress');
 const refinementPercent = document.querySelector('#refinement-percent');
 const refinementBar = document.querySelector('#refinement-bar');
 const taskCards = document.querySelector('#task-cards');
+const stackableTaskCardSelector = ':scope > :is(.processing-card, .mini-meeting, .mini-playback):not([hidden])';
+function syncTaskCardStack(active) {
+  const cards = [...taskCards.querySelectorAll(stackableTaskCardSelector)];
+  active ||= cards.at(-1);
+  taskCards.style.setProperty('--task-card-back-count', Math.max(0, cards.length - 1));
+  cards.forEach((card, index) => {
+    const isBack = card !== active;
+    card.classList.add('task-card-stack-item');
+    card.style.setProperty('--task-card-index', index);
+    card.style.setProperty('--task-card-depth', Math.min(3, cards.length - 1 - index));
+    card.style.zIndex = index + 1;
+    card.classList.toggle('is-task-card-back', isBack);
+    if (isBack) {
+      card.tabIndex = 0;
+      card.setAttribute('role', 'button');
+      card.setAttribute('aria-label', card.querySelector('.task-card-heading p, :scope > span, :scope > strong')?.textContent.trim() || 'Task');
+    } else {
+      card.removeAttribute('tabindex');
+      card.removeAttribute('role');
+      card.removeAttribute('aria-label');
+    }
+  });
+}
+function activateTaskCard(card) {
+  if (!card?.matches(':is(.processing-card, .mini-meeting, .mini-playback):not([hidden])') || card.classList.contains('task-card-leave')) return;
+  taskCards.append(card);
+  syncTaskCardStack(card);
+}
+new MutationObserver(() => syncTaskCardStack()).observe(taskCards, { childList: true, attributes: true, attributeFilter: ['hidden'], subtree: true });
 function taskCardControls() { return `<span class="task-card-actions"><button class="task-card-close" data-minimize-task-card type="button" aria-label="${t('最小化')}">—</button><button class="task-card-close" data-dismiss-task-card type="button" aria-label="${t('关闭')}">×</button></span>`; }
 function taskPauseControl() { return `<button class="task-card-close" data-pause-task type="button" aria-label="${t('暂停')}" disabled>Ⅱ</button>`; }
 function setTaskCardTask(card, task, meetingId) {
@@ -47,6 +76,7 @@ function toggleTaskCardMinimized(card, button) {
 }
 function enterTaskCard(card) {
   card.classList.remove('task-card-leave');
+  activateTaskCard(card);
   card.classList.add('task-card-enter');
   window.setTimeout(() => card.classList.remove('task-card-enter'), 220);
 }
@@ -62,7 +92,7 @@ function revealTaskCard(card) {
   const wasHidden = card.hidden;
   const wasLeaving = card.classList.contains('task-card-leave');
   card.hidden = false;
-  if (wasHidden || wasLeaving) enterTaskCard(card);
+  if (wasHidden || wasLeaving) { taskCards.append(card); enterTaskCard(card); }
 }
 const { catalog, appCopy: { stageLabels, themeLabels, updateLabels, modalCopy, modelLabels, summaryModelCopy, speakerProfileCopy, voiceFeaturesCopy } } = window.BreviaLocaleData;
 if (new URLSearchParams(location.search).has('resetOnboarding')) localStorage.removeItem('brevia-onboarding-complete');
@@ -88,7 +118,7 @@ let toastTimer;
 let switchingLanguage = false;
 let meetingActive = false;
 // 镜像当前会议的实时配置，使实时面板控件能够反映（并驱动）热切换。
-let liveConfig = { language: 'auto', streaming_model_id: '', refined_model_id: '', target_language: null };
+let liveConfig = { language: 'auto', streaming_model_id: '', refined_model_id: '', target_language: null, power_saving: false };
 // 此会议打开了哪些捕获轨道；此处不存在的轨道无法实时切换。
 let translationAllowed = false;
 let latestLiveSegmentId = null;
@@ -118,7 +148,7 @@ const updateNotice = document.createElement('aside');
 updateNotice.className = 'software-update-notice';
 updateNotice.hidden = true;
 updateNotice.innerHTML = '<span></span><i hidden aria-hidden="true"><b></b></i><button type="button"></button>';
-document.body.append(updateNotice);
+taskCards.append(updateNotice);
 const updateNoticeText = updateNotice.querySelector('span');
 const updateNoticeProgress = updateNotice.querySelector('i');
 const updateNoticeProgressBar = updateNoticeProgress.querySelector('b');
@@ -128,8 +158,12 @@ let updateVersion = '';
 let updateBusy = false;
 let updateDownloadProgress = null;
 let installedAppVersion = '—';
+const appVersion = document.querySelector('#app-version');
+const appMeta = document.createElement('footer');
+appMeta.className = 'app-meta';
+appMeta.append(document.querySelector('.app-credit'));
+document.querySelector('.app-shell').append(appMeta);
 let speakerProfiles = [];
-let presetVoices = [];
 let currentMeetingDetail = null;
 let modelCatalog = [];
 const modelSize = (modelId) => modelCatalog.find((model) => model.id === modelId)?.size_bytes || 0;
@@ -148,7 +182,6 @@ const modelStageMetaKey = { streaming: 'streaming', refined: 'refined', punctuat
 // 模型擅长的方面，而不是模型名称。基于公开基准测试（WER/CER、DER/WDER、EER、RTF、参数）；
 // 参见模型库重新设计说明。这些值是编辑评判，而非清单字段。
 const modelRatings = {
-  'paraformer-zh-en-int8': { quality: 1, speed: 3 },
   'zipformer-en-streaming-int8': { quality: 2, speed: 3 },
   'zipformer-multilingual-streaming': { quality: 1, speed: 3 },
   'zipformer-ko-streaming-int8': { quality: 2, speed: 3 },
@@ -164,11 +197,9 @@ const modelRatings = {
   'pyannote-segmentation-3.0': { quality: 2, speed: 3 },
   'reverb-diarization-v1': { quality: 2, speed: 2 },
   'eres2net-base-3dspeaker-zh': { quality: 2, speed: 3 },
-  'campplus-zh-en': { quality: 2, speed: 3 },
   'zipformer-zh-xlarge-streaming-int8': { quality: 3, speed: 1 },
   'gtcrn-live-denoiser': { quality: 2, speed: 3 },
   'spleeter-2stems-fp16': { quality: 1, speed: 2 },
-  'zipvoice-zh-en': { quality: 3, speed: 3 },
   // Built-in summary (llama-chat) models. Grounded in public reports: Qwen3.5 small models punch far
   // above their parameter count (4B rivals much larger models); Gemma 3 1B is the fastest/smallest.
   'qwen3.5-4b-q4km': { quality: 3, speed: 1 },
@@ -257,8 +288,6 @@ function renderSpeakerProfileCard() {
   speakerProfileCard.querySelector('p').textContent = copy.intro;
   speakerProfileCard.querySelector('button').textContent = copy.title;
 }
-/** 当两者都可见时，将更新通知保持在小型会议上方。@returns {void} */
-function syncFloatingNotices() { updateNotice.style.bottom = miniMeeting.hidden ? '' : `${miniMeeting.offsetHeight + 24}px`; }
 /** 根据当前语言环境和可用性状态渲染浮动更新通知。@returns {void} */
 function updateCopy() { return updateLabels[locale] || { ...updateLabels.en, title: t('软件更新'), action: t('检查更新') }; }
 function currentVersionLabel() { return ({ zh: '当前版本', en: 'Current version', es: 'Versión actual', ja: '現在のバージョン', ko: '현재 버전', fr: 'Version actuelle', de: 'Aktuelle Version', ru: 'Текущая версия' })[locale] || 'Current version'; }
@@ -272,8 +301,9 @@ function renderUpdateNotice() {
   updateNoticeProgressBar.style.transform = `scaleX(${(progress || 0) / 100})`;
   updateNoticeButton.textContent = progress === null ? copy.floating : copy.updating;
   updateNoticeButton.disabled = updateBusy;
+  const wasHidden = updateNotice.hidden;
   updateNotice.hidden = !updateAvailable;
-  requestAnimationFrame(syncFloatingNotices);
+  if (updateAvailable && wasHidden) { taskCards.append(updateNotice); enterTaskCard(updateNotice); }
 }
 /** 根据当前语言环境和可用性状态渲染设置页面的更新操作。@returns {void} */
 function renderUpdateButton() {
@@ -291,7 +321,7 @@ function renderUpdateButton() {
   updateButton.disabled = updateBusy;
 }
 const modelIds = [
-  'paraformer-zh-en-int8',
+  'zipformer-zh-xlarge-streaming-int8',
   'zipformer-en-streaming-int8',
   'zipformer-multilingual-streaming',
   'zipformer-ko-streaming-int8',
@@ -307,11 +337,8 @@ const modelIds = [
   'pyannote-segmentation-3.0',
   'reverb-diarization-v1',
   'eres2net-base-3dspeaker-zh',
-  'campplus-zh-en',
-  'zipformer-zh-xlarge-streaming-int8',
   'gtcrn-live-denoiser',
   'spleeter-2stems-fp16',
-  'zipvoice-zh-en',
   'hy-mt2-1.8b-q4km',
 ];
 // 纪要供应商固定为这六项。请求地址由 summaryProviderPresets 派生，只有两个自定义
@@ -395,14 +422,14 @@ let advancedSettings;
 let permissionStatus;
 let permissionPollTimer;
 const advancedSettingCopy = {
-  zh: { sections: { audio: '音频', asr: '识别与端点检测', live_asr: '实时识别', punctuation: '标点恢复', diarization: '说话人分离', voice_profiles: '声纹库', meetings: '会议', llm: '纪要模型' }, fields: { sample_rate: '采样率（Hz）', chunk_seconds: '音频分块时长（秒）', endpoint_rule1_silence: '端点规则 1 静音时长（秒）', endpoint_rule2_silence: '端点规则 2 静音时长（秒）', maximum_utterance_seconds: '单句最长时长（秒）', refined_window_seconds: '精修窗口时长（秒）', auto_english_model_id: '英文识别模型', denoiser_model_id: '实时降噪模型', microphone_target_rms: '麦克风目标响度', microphone_minimum_rms: '麦克风最小响度', microphone_max_gain: '麦克风最大增益', microphone_peak: '麦克风峰值限制', english_model_id: '英文标点模型', chinese_model_id: '中英文标点模型', segmentation_model_id: '说话区间模型', embedding_model_id: '声纹嵌入模型', cluster_threshold: '聚类阈值', online_similarity_threshold: '在线匹配阈值', minimum_embedding_seconds: '最短声纹语音（秒）', num_speakers: '固定说话人数（-1 为自动）', min_duration_on: '最短说话时长（秒）', min_duration_off: '最短静音间隔（秒）', max_samples: '每人最大录音条数', max_total_seconds: '每人最大录音时长（秒）', deleted_retention_days: '删除记录保留天数', timeout_seconds: '模型请求超时（秒）' }, hint: '用于本地运行配置。' },
-  en: { sections: { audio: 'Audio', asr: 'Recognition and endpointing', live_asr: 'Live recognition', punctuation: 'Punctuation', diarization: 'Speaker diarization', voice_profiles: 'Voiceprints', meetings: 'Meetings', llm: 'Summary model' }, fields: { sample_rate: 'Sample rate (Hz)', chunk_seconds: 'Audio chunk duration (s)', endpoint_rule1_silence: 'Endpoint rule 1 silence (s)', endpoint_rule2_silence: 'Endpoint rule 2 silence (s)', maximum_utterance_seconds: 'Maximum utterance duration (s)', refined_window_seconds: 'Refinement window (s)', auto_english_model_id: 'English recognition model', denoiser_model_id: 'Live denoiser model', microphone_target_rms: 'Microphone target loudness', microphone_minimum_rms: 'Microphone minimum loudness', microphone_max_gain: 'Microphone maximum gain', microphone_peak: 'Microphone peak limit', english_model_id: 'English punctuation model', chinese_model_id: 'Chinese-English punctuation model', segmentation_model_id: 'Speech-segmentation model', embedding_model_id: 'Voice embedding model', cluster_threshold: 'Clustering threshold', online_similarity_threshold: 'Online matching threshold', minimum_embedding_seconds: 'Minimum voiceprint audio (s)', num_speakers: 'Fixed speaker count (-1 = auto)', min_duration_on: 'Minimum speech duration (s)', min_duration_off: 'Minimum silence gap (s)', max_samples: 'Maximum recordings per person', max_total_seconds: 'Maximum recording duration per person (s)', deleted_retention_days: 'Deleted-record retention (days)', timeout_seconds: 'Model request timeout (s)' }, hint: 'Used by the local runtime.' },
-  es: { sections: { audio: 'Audio', asr: 'Reconocimiento y detección de final', live_asr: 'Reconocimiento en vivo', punctuation: 'Puntuación', diarization: 'Separación de hablantes', voice_profiles: 'Huellas de voz', meetings: 'Reuniones', llm: 'Modelo de resumen' }, fields: { sample_rate: 'Frecuencia de muestreo (Hz)', chunk_seconds: 'Duración del bloque de audio (s)', endpoint_rule1_silence: 'Silencio de regla de final 1 (s)', endpoint_rule2_silence: 'Silencio de regla de final 2 (s)', maximum_utterance_seconds: 'Duración máxima de intervención (s)', refined_window_seconds: 'Ventana de refinamiento (s)', auto_english_model_id: 'Modelo de reconocimiento en inglés', denoiser_model_id: 'Modelo de reducción de ruido en vivo', microphone_target_rms: 'Volumen objetivo del micrófono', microphone_minimum_rms: 'Volumen mínimo del micrófono', microphone_max_gain: 'Ganancia máxima del micrófono', microphone_peak: 'Límite de pico del micrófono', english_model_id: 'Modelo de puntuación en inglés', chinese_model_id: 'Modelo de puntuación chino-inglés', segmentation_model_id: 'Modelo de segmentación de voz', embedding_model_id: 'Modelo de huella de voz', cluster_threshold: 'Umbral de agrupación', online_similarity_threshold: 'Umbral de coincidencia en línea', minimum_embedding_seconds: 'Audio mínimo para huella de voz (s)', num_speakers: 'Número fijo de hablantes (-1 = auto)', min_duration_on: 'Duración mínima de habla (s)', min_duration_off: 'Pausa mínima (s)', max_samples: 'Máximas grabaciones por persona', max_total_seconds: 'Duración máxima por persona (s)', deleted_retention_days: 'Retención de eliminados (días)', timeout_seconds: 'Tiempo de espera de solicitud (s)' }, hint: 'Se usa en la ejecución local.' },
-  ja: { sections: { audio: '音声', asr: '認識と終端検出', live_asr: 'ライブ認識', punctuation: '句読点', diarization: '話者分離', voice_profiles: '声紋', meetings: '会議', llm: '要約モデル' }, fields: { sample_rate: 'サンプリングレート（Hz）', chunk_seconds: '音声チャンク長（秒）', endpoint_rule1_silence: '終端ルール 1 の無音（秒）', endpoint_rule2_silence: '終端ルール 2 の無音（秒）', maximum_utterance_seconds: '発話の最大長（秒）', refined_window_seconds: '高精度化ウィンドウ（秒）', auto_english_model_id: '英語認識モデル', denoiser_model_id: 'ライブノイズ除去モデル', microphone_target_rms: 'マイク目標音量', microphone_minimum_rms: 'マイク最小音量', microphone_max_gain: 'マイク最大ゲイン', microphone_peak: 'マイクピーク上限', english_model_id: '英語句読点モデル', chinese_model_id: '中英句読点モデル', segmentation_model_id: '音声区間モデル', embedding_model_id: '声紋埋め込みモデル', cluster_threshold: 'クラスタリング閾値', online_similarity_threshold: 'オンライン一致閾値', minimum_embedding_seconds: '声紋用の最短音声（秒）', num_speakers: '固定話者数（-1 = 自動）', min_duration_on: '最短発話時間（秒）', min_duration_off: '最短無音間隔（秒）', max_samples: '1 人あたりの最大録音数', max_total_seconds: '1 人あたりの最大録音時間（秒）', deleted_retention_days: '削除済み記録の保持日数', timeout_seconds: 'モデル要求タイムアウト（秒）' }, hint: 'ローカル実行に使用します。' },
-  ko: { sections: { audio: '오디오', asr: '인식 및 종점 감지', live_asr: '실시간 인식', punctuation: '문장 부호', diarization: '화자 분리', voice_profiles: '음성 지문', meetings: '회의', llm: '요약 모델' }, fields: { sample_rate: '샘플링 레이트(Hz)', chunk_seconds: '오디오 청크 길이(초)', endpoint_rule1_silence: '종점 규칙 1 무음(초)', endpoint_rule2_silence: '종점 규칙 2 무음(초)', maximum_utterance_seconds: '최대 발화 길이(초)', refined_window_seconds: '정교화 창(초)', auto_english_model_id: '영어 인식 모델', denoiser_model_id: '실시간 잡음 제거 모델', microphone_target_rms: '마이크 목표 음량', microphone_minimum_rms: '마이크 최소 음량', microphone_max_gain: '마이크 최대 게인', microphone_peak: '마이크 피크 제한', english_model_id: '영어 문장 부호 모델', chinese_model_id: '중영 문장 부호 모델', segmentation_model_id: '음성 구간 모델', embedding_model_id: '음성 지문 임베딩 모델', cluster_threshold: '클러스터링 임계값', online_similarity_threshold: '온라인 일치 임계값', minimum_embedding_seconds: '최소 음성 지문 오디오(초)', num_speakers: '고정 화자 수(-1 = 자동)', min_duration_on: '최소 발화 시간(초)', min_duration_off: '최소 무음 간격(초)', max_samples: '1인당 최대 녹음 수', max_total_seconds: '1인당 최대 녹음 시간(초)', deleted_retention_days: '삭제 기록 보관 기간(일)', timeout_seconds: '모델 요청 시간 제한(초)' }, hint: '로컬 실행에 사용됩니다.' },
-  fr: { sections: { audio: 'Audio', asr: 'Reconnaissance et détection de fin', live_asr: 'Reconnaissance en direct', punctuation: 'Ponctuation', diarization: 'Séparation des locuteurs', voice_profiles: 'Empreintes vocales', meetings: 'Réunions', llm: 'Modèle de résumé' }, fields: { sample_rate: 'Fréquence d’échantillonnage (Hz)', chunk_seconds: 'Durée du bloc audio (s)', endpoint_rule1_silence: 'Silence règle de fin 1 (s)', endpoint_rule2_silence: 'Silence règle de fin 2 (s)', maximum_utterance_seconds: 'Durée maximale de parole (s)', refined_window_seconds: 'Fenêtre d’affinage (s)', auto_english_model_id: 'Modèle de reconnaissance anglaise', denoiser_model_id: 'Modèle de débruitage en direct', microphone_target_rms: 'Volume cible du microphone', microphone_minimum_rms: 'Volume minimal du microphone', microphone_max_gain: 'Gain maximal du microphone', microphone_peak: 'Limite de crête du microphone', english_model_id: 'Modèle de ponctuation anglaise', chinese_model_id: 'Modèle de ponctuation chinois-anglais', segmentation_model_id: 'Modèle de segmentation de parole', embedding_model_id: 'Modèle d’empreinte vocale', cluster_threshold: 'Seuil de regroupement', online_similarity_threshold: 'Seuil de correspondance en ligne', minimum_embedding_seconds: 'Audio minimal pour empreinte (s)', num_speakers: 'Nombre fixe de locuteurs (-1 = auto)', min_duration_on: 'Durée minimale de parole (s)', min_duration_off: 'Pause minimale (s)', max_samples: 'Enregistrements maximum par personne', max_total_seconds: 'Durée maximale par personne (s)', deleted_retention_days: 'Conservation des éléments supprimés (jours)', timeout_seconds: 'Délai de requête du modèle (s)' }, hint: 'Utilisé par l’exécution locale.' },
-  de: { sections: { audio: 'Audio', asr: 'Erkennung und Endpunkterkennung', live_asr: 'Live-Erkennung', punctuation: 'Zeichensetzung', diarization: 'Sprechertrennung', voice_profiles: 'Stimmabdrücke', meetings: 'Besprechungen', llm: 'Zusammenfassungsmodell' }, fields: { sample_rate: 'Abtastrate (Hz)', chunk_seconds: 'Audioblockdauer (s)', endpoint_rule1_silence: 'Stille für Endpunktregel 1 (s)', endpoint_rule2_silence: 'Stille für Endpunktregel 2 (s)', maximum_utterance_seconds: 'Maximale Äußerungsdauer (s)', refined_window_seconds: 'Nachbearbeitungsfenster (s)', auto_english_model_id: 'Englisches Erkennungsmodell', denoiser_model_id: 'Live-Entrauschungsmodell', microphone_target_rms: 'Mikrofon-Ziellautstärke', microphone_minimum_rms: 'Mikrofon-Mindestlautstärke', microphone_max_gain: 'Maximale Mikrofonverstärkung', microphone_peak: 'Mikrofon-Peakgrenze', english_model_id: 'Englisches Zeichensetzungsmodell', chinese_model_id: 'Chinesisch-englisches Zeichensetzungsmodell', segmentation_model_id: 'Sprachsegmentierungsmodell', embedding_model_id: 'Stimmabdruckmodell', cluster_threshold: 'Cluster-Schwellenwert', online_similarity_threshold: 'Online-Abgleichschwelle', minimum_embedding_seconds: 'Minimales Stimmabdruck-Audio (s)', num_speakers: 'Feste Sprecherzahl (-1 = auto)', min_duration_on: 'Minimale Sprechdauer (s)', min_duration_off: 'Minimale Stille (s)', max_samples: 'Maximale Aufnahmen pro Person', max_total_seconds: 'Maximale Aufnahmezeit pro Person (s)', deleted_retention_days: 'Aufbewahrung gelöschter Einträge (Tage)', timeout_seconds: 'Zeitüberschreitung der Modellanfrage (s)' }, hint: 'Wird von der lokalen Laufzeit verwendet.' },
-  ru: { sections: { audio: 'Аудио', asr: 'Распознавание и определение конца', live_asr: 'Распознавание в реальном времени', punctuation: 'Пунктуация', diarization: 'Разделение говорящих', voice_profiles: 'Голосовые отпечатки', meetings: 'Встречи', llm: 'Модель сводки' }, fields: { sample_rate: 'Частота дискретизации (Гц)', chunk_seconds: 'Длительность аудиоблока (с)', endpoint_rule1_silence: 'Тишина правила конца 1 (с)', endpoint_rule2_silence: 'Тишина правила конца 2 (с)', maximum_utterance_seconds: 'Максимальная длительность реплики (с)', refined_window_seconds: 'Окно обработки (с)', auto_english_model_id: 'Модель английского распознавания', denoiser_model_id: 'Модель шумоподавления в реальном времени', microphone_target_rms: 'Целевая громкость микрофона', microphone_minimum_rms: 'Минимальная громкость микрофона', microphone_max_gain: 'Максимальное усиление микрофона', microphone_peak: 'Ограничение пика микрофона', english_model_id: 'Модель английской пунктуации', chinese_model_id: 'Модель китайско-английской пунктуации', segmentation_model_id: 'Модель сегментации речи', embedding_model_id: 'Модель голосового отпечатка', cluster_threshold: 'Порог кластеризации', online_similarity_threshold: 'Порог онлайн-сопоставления', minimum_embedding_seconds: 'Минимальное аудио для отпечатка (с)', num_speakers: 'Фиксированное число говорящих (-1 = авто)', min_duration_on: 'Минимальная длительность речи (с)', min_duration_off: 'Минимальная пауза (с)', max_samples: 'Максимум записей на человека', max_total_seconds: 'Максимальная длительность на человека (с)', deleted_retention_days: 'Хранение удалённых записей (дни)', timeout_seconds: 'Тайм-аут запроса модели (с)' }, hint: 'Используется локальным запуском.' },
+  zh: { sections: { audio: '音频', asr: '识别与端点检测', live_asr: '实时识别', punctuation: '标点恢复', diarization: '说话人分离', voice_profiles: '声纹库', meetings: '会议', llm: '纪要模型' }, fields: { sample_rate: '采样率（Hz）', chunk_seconds: '音频分块时长（秒）', endpoint_rule1_silence: '端点规则 1 静音时长（秒）', endpoint_rule2_silence: '端点规则 2 静音时长（秒）', maximum_utterance_seconds: '单句最长时长（秒）', refined_window_seconds: '精修窗口时长（秒）', auto_english_model_id: '英文识别模型', denoiser_model_id: '实时降噪模型', microphone_target_rms: '麦克风目标响度', microphone_minimum_rms: '麦克风最小响度', microphone_max_gain: '麦克风最大增益', microphone_peak: '麦克风峰值限制', english_model_id: '英文标点模型', chinese_model_id: '中英文标点模型', segmentation_model_id: '说话区间模型', cluster_threshold: '聚类阈值', online_similarity_threshold: '在线匹配阈值', minimum_embedding_seconds: '最短声纹语音（秒）', num_speakers: '固定说话人数（-1 为自动）', min_duration_on: '最短说话时长（秒）', min_duration_off: '最短静音间隔（秒）', max_samples: '每人最大录音条数', max_total_seconds: '每人最大录音时长（秒）', deleted_retention_days: '删除记录保留天数', timeout_seconds: '模型请求超时（秒）' }, hint: '用于本地运行配置。' },
+  en: { sections: { audio: 'Audio', asr: 'Recognition and endpointing', live_asr: 'Live recognition', punctuation: 'Punctuation', diarization: 'Speaker diarization', voice_profiles: 'Voiceprints', meetings: 'Meetings', llm: 'Summary model' }, fields: { sample_rate: 'Sample rate (Hz)', chunk_seconds: 'Audio chunk duration (s)', endpoint_rule1_silence: 'Endpoint rule 1 silence (s)', endpoint_rule2_silence: 'Endpoint rule 2 silence (s)', maximum_utterance_seconds: 'Maximum utterance duration (s)', refined_window_seconds: 'Refinement window (s)', auto_english_model_id: 'English recognition model', denoiser_model_id: 'Live denoiser model', microphone_target_rms: 'Microphone target loudness', microphone_minimum_rms: 'Microphone minimum loudness', microphone_max_gain: 'Microphone maximum gain', microphone_peak: 'Microphone peak limit', english_model_id: 'English punctuation model', chinese_model_id: 'Chinese-English punctuation model', segmentation_model_id: 'Speech-segmentation model', cluster_threshold: 'Clustering threshold', online_similarity_threshold: 'Online matching threshold', minimum_embedding_seconds: 'Minimum voiceprint audio (s)', num_speakers: 'Fixed speaker count (-1 = auto)', min_duration_on: 'Minimum speech duration (s)', min_duration_off: 'Minimum silence gap (s)', max_samples: 'Maximum recordings per person', max_total_seconds: 'Maximum recording duration per person (s)', deleted_retention_days: 'Deleted-record retention (days)', timeout_seconds: 'Model request timeout (s)' }, hint: 'Used by the local runtime.' },
+  es: { sections: { audio: 'Audio', asr: 'Reconocimiento y detección de final', live_asr: 'Reconocimiento en vivo', punctuation: 'Puntuación', diarization: 'Separación de hablantes', voice_profiles: 'Huellas de voz', meetings: 'Reuniones', llm: 'Modelo de resumen' }, fields: { sample_rate: 'Frecuencia de muestreo (Hz)', chunk_seconds: 'Duración del bloque de audio (s)', endpoint_rule1_silence: 'Silencio de regla de final 1 (s)', endpoint_rule2_silence: 'Silencio de regla de final 2 (s)', maximum_utterance_seconds: 'Duración máxima de intervención (s)', refined_window_seconds: 'Ventana de refinamiento (s)', auto_english_model_id: 'Modelo de reconocimiento en inglés', denoiser_model_id: 'Modelo de reducción de ruido en vivo', microphone_target_rms: 'Volumen objetivo del micrófono', microphone_minimum_rms: 'Volumen mínimo del micrófono', microphone_max_gain: 'Ganancia máxima del micrófono', microphone_peak: 'Límite de pico del micrófono', english_model_id: 'Modelo de puntuación en inglés', chinese_model_id: 'Modelo de puntuación chino-inglés', segmentation_model_id: 'Modelo de segmentación de voz', cluster_threshold: 'Umbral de agrupación', online_similarity_threshold: 'Umbral de coincidencia en línea', minimum_embedding_seconds: 'Audio mínimo para huella de voz (s)', num_speakers: 'Número fijo de hablantes (-1 = auto)', min_duration_on: 'Duración mínima de habla (s)', min_duration_off: 'Pausa mínima (s)', max_samples: 'Máximas grabaciones por persona', max_total_seconds: 'Duración máxima por persona (s)', deleted_retention_days: 'Retención de eliminados (días)', timeout_seconds: 'Tiempo de espera de solicitud (s)' }, hint: 'Se usa en la ejecución local.' },
+  ja: { sections: { audio: '音声', asr: '認識と終端検出', live_asr: 'ライブ認識', punctuation: '句読点', diarization: '話者分離', voice_profiles: '声紋', meetings: '会議', llm: '要約モデル' }, fields: { sample_rate: 'サンプリングレート（Hz）', chunk_seconds: '音声チャンク長（秒）', endpoint_rule1_silence: '終端ルール 1 の無音（秒）', endpoint_rule2_silence: '終端ルール 2 の無音（秒）', maximum_utterance_seconds: '発話の最大長（秒）', refined_window_seconds: '高精度化ウィンドウ（秒）', auto_english_model_id: '英語認識モデル', denoiser_model_id: 'ライブノイズ除去モデル', microphone_target_rms: 'マイク目標音量', microphone_minimum_rms: 'マイク最小音量', microphone_max_gain: 'マイク最大ゲイン', microphone_peak: 'マイクピーク上限', english_model_id: '英語句読点モデル', chinese_model_id: '中英句読点モデル', segmentation_model_id: '音声区間モデル', cluster_threshold: 'クラスタリング閾値', online_similarity_threshold: 'オンライン一致閾値', minimum_embedding_seconds: '声紋用の最短音声（秒）', num_speakers: '固定話者数（-1 = 自動）', min_duration_on: '最短発話時間（秒）', min_duration_off: '最短無音間隔（秒）', max_samples: '1 人あたりの最大録音数', max_total_seconds: '1 人あたりの最大録音時間（秒）', deleted_retention_days: '削除済み記録の保持日数', timeout_seconds: 'モデル要求タイムアウト（秒）' }, hint: 'ローカル実行に使用します。' },
+  ko: { sections: { audio: '오디오', asr: '인식 및 종점 감지', live_asr: '실시간 인식', punctuation: '문장 부호', diarization: '화자 분리', voice_profiles: '음성 지문', meetings: '회의', llm: '요약 모델' }, fields: { sample_rate: '샘플링 레이트(Hz)', chunk_seconds: '오디오 청크 길이(초)', endpoint_rule1_silence: '종점 규칙 1 무음(초)', endpoint_rule2_silence: '종점 규칙 2 무음(초)', maximum_utterance_seconds: '최대 발화 길이(초)', refined_window_seconds: '정교화 창(초)', auto_english_model_id: '영어 인식 모델', denoiser_model_id: '실시간 잡음 제거 모델', microphone_target_rms: '마이크 목표 음량', microphone_minimum_rms: '마이크 최소 음량', microphone_max_gain: '마이크 최대 게인', microphone_peak: '마이크 피크 제한', english_model_id: '영어 문장 부호 모델', chinese_model_id: '중영 문장 부호 모델', segmentation_model_id: '음성 구간 모델', cluster_threshold: '클러스터링 임계값', online_similarity_threshold: '온라인 일치 임계값', minimum_embedding_seconds: '최소 음성 지문 오디오(초)', num_speakers: '고정 화자 수(-1 = 자동)', min_duration_on: '최소 발화 시간(초)', min_duration_off: '최소 무음 간격(초)', max_samples: '1인당 최대 녹음 수', max_total_seconds: '1인당 최대 녹음 시간(초)', deleted_retention_days: '삭제 기록 보관 기간(일)', timeout_seconds: '모델 요청 시간 제한(초)' }, hint: '로컬 실행에 사용됩니다.' },
+  fr: { sections: { audio: 'Audio', asr: 'Reconnaissance et détection de fin', live_asr: 'Reconnaissance en direct', punctuation: 'Ponctuation', diarization: 'Séparation des locuteurs', voice_profiles: 'Empreintes vocales', meetings: 'Réunions', llm: 'Modèle de résumé' }, fields: { sample_rate: 'Fréquence d’échantillonnage (Hz)', chunk_seconds: 'Durée du bloc audio (s)', endpoint_rule1_silence: 'Silence règle de fin 1 (s)', endpoint_rule2_silence: 'Silence règle de fin 2 (s)', maximum_utterance_seconds: 'Durée maximale de parole (s)', refined_window_seconds: 'Fenêtre d’affinage (s)', auto_english_model_id: 'Modèle de reconnaissance anglaise', denoiser_model_id: 'Modèle de débruitage en direct', microphone_target_rms: 'Volume cible du microphone', microphone_minimum_rms: 'Volume minimal du microphone', microphone_max_gain: 'Gain maximal du microphone', microphone_peak: 'Limite de crête du microphone', english_model_id: 'Modèle de ponctuation anglaise', chinese_model_id: 'Modèle de ponctuation chinois-anglais', segmentation_model_id: 'Modèle de segmentation de parole', cluster_threshold: 'Seuil de regroupement', online_similarity_threshold: 'Seuil de correspondance en ligne', minimum_embedding_seconds: 'Audio minimal pour empreinte (s)', num_speakers: 'Nombre fixe de locuteurs (-1 = auto)', min_duration_on: 'Durée minimale de parole (s)', min_duration_off: 'Pause minimale (s)', max_samples: 'Enregistrements maximum par personne', max_total_seconds: 'Durée maximale par personne (s)', deleted_retention_days: 'Conservation des éléments supprimés (jours)', timeout_seconds: 'Délai de requête du modèle (s)' }, hint: 'Utilisé par l’exécution locale.' },
+  de: { sections: { audio: 'Audio', asr: 'Erkennung und Endpunkterkennung', live_asr: 'Live-Erkennung', punctuation: 'Zeichensetzung', diarization: 'Sprechertrennung', voice_profiles: 'Stimmabdrücke', meetings: 'Besprechungen', llm: 'Zusammenfassungsmodell' }, fields: { sample_rate: 'Abtastrate (Hz)', chunk_seconds: 'Audioblockdauer (s)', endpoint_rule1_silence: 'Stille für Endpunktregel 1 (s)', endpoint_rule2_silence: 'Stille für Endpunktregel 2 (s)', maximum_utterance_seconds: 'Maximale Äußerungsdauer (s)', refined_window_seconds: 'Nachbearbeitungsfenster (s)', auto_english_model_id: 'Englisches Erkennungsmodell', denoiser_model_id: 'Live-Entrauschungsmodell', microphone_target_rms: 'Mikrofon-Ziellautstärke', microphone_minimum_rms: 'Mikrofon-Mindestlautstärke', microphone_max_gain: 'Maximale Mikrofonverstärkung', microphone_peak: 'Mikrofon-Peakgrenze', english_model_id: 'Englisches Zeichensetzungsmodell', chinese_model_id: 'Chinesisch-englisches Zeichensetzungsmodell', segmentation_model_id: 'Sprachsegmentierungsmodell', cluster_threshold: 'Cluster-Schwellenwert', online_similarity_threshold: 'Online-Abgleichschwelle', minimum_embedding_seconds: 'Minimales Stimmabdruck-Audio (s)', num_speakers: 'Feste Sprecherzahl (-1 = auto)', min_duration_on: 'Minimale Sprechdauer (s)', min_duration_off: 'Minimale Stille (s)', max_samples: 'Maximale Aufnahmen pro Person', max_total_seconds: 'Maximale Aufnahmezeit pro Person (s)', deleted_retention_days: 'Aufbewahrung gelöschter Einträge (Tage)', timeout_seconds: 'Zeitüberschreitung der Modellanfrage (s)' }, hint: 'Wird von der lokalen Laufzeit verwendet.' },
+  ru: { sections: { audio: 'Аудио', asr: 'Распознавание и определение конца', live_asr: 'Распознавание в реальном времени', punctuation: 'Пунктуация', diarization: 'Разделение говорящих', voice_profiles: 'Голосовые отпечатки', meetings: 'Встречи', llm: 'Модель сводки' }, fields: { sample_rate: 'Частота дискретизации (Гц)', chunk_seconds: 'Длительность аудиоблока (с)', endpoint_rule1_silence: 'Тишина правила конца 1 (с)', endpoint_rule2_silence: 'Тишина правила конца 2 (с)', maximum_utterance_seconds: 'Максимальная длительность реплики (с)', refined_window_seconds: 'Окно обработки (с)', auto_english_model_id: 'Модель английского распознавания', denoiser_model_id: 'Модель шумоподавления в реальном времени', microphone_target_rms: 'Целевая громкость микрофона', microphone_minimum_rms: 'Минимальная громкость микрофона', microphone_max_gain: 'Максимальное усиление микрофона', microphone_peak: 'Ограничение пика микрофона', english_model_id: 'Модель английской пунктуации', chinese_model_id: 'Модель китайско-английской пунктуации', segmentation_model_id: 'Модель сегментации речи', cluster_threshold: 'Порог кластеризации', online_similarity_threshold: 'Порог онлайн-сопоставления', minimum_embedding_seconds: 'Минимальное аудио для отпечатка (с)', num_speakers: 'Фиксированное число говорящих (-1 = авто)', min_duration_on: 'Минимальная длительность речи (с)', min_duration_off: 'Минимальная пауза (с)', max_samples: 'Максимум записей на человека', max_total_seconds: 'Максимальная длительность на человека (с)', deleted_retention_days: 'Хранение удалённых записей (дни)', timeout_seconds: 'Тайм-аут запроса модели (с)' }, hint: 'Используется локальным запуском.' },
 };
 function renderAdvancedSettings(settings) {
   const copy = advancedSettingCopy[locale] || advancedSettingCopy.en;
@@ -539,6 +566,8 @@ function renderPrepareSelects() {
   ];
   const workspaceValue = values['meeting-workspace'] === '__new_workspace__' ? activeWorkspaceId : values['meeting-workspace'] ?? activeWorkspaceId;
   prepareForm.querySelector('.form-grid').innerHTML = `<label>${t('会议语言')}${flowSelect('meeting-language', values['meeting-language'] || locale, BreviaI18n.languageOptions(locale, t, true))}</label><label>${t('译文目标')}${flowSelect('translation-target', values['translation-target'] || '', BreviaI18n.languageOptions(locale, t))}</label><label>${t('预期说话人数')}<input name="num-speakers" type="number" min="1" step="1" value="${values['num-speakers'] || ''}" placeholder="${t('留空自动匹配')}" /></label><label>${t('工作区')}${flowSelect('meeting-workspace', workspaceValue, workspaceOptions)}</label>`;
+  const powerSaving = values['power-saving'] === 'on' || (!Object.hasOwn(values, 'power-saving') && localStorage.getItem('brevia-power-saving') === 'true');
+  prepareForm.querySelector('[data-meeting-power-saving]').innerHTML = `<fieldset><legend>${t('会议模式')}</legend><label class="choice"><input name="power-saving" type="checkbox"${powerSaving ? ' checked' : ''} /><span><b>${t('省电模式')}</b><small>${t('关闭实时降噪和精修，降低字幕更新频率；会后精修保持可用。')}</small></span></label></fieldset>`;
   prepareForm.querySelector('.primary-action').firstChild.nodeValue = `${t('开始录制')} `;
   importRecording.textContent = t('导入录音');
   prepareModelCard.querySelector('#active-vad-model').previousElementSibling.textContent = t('VAD 模型');
@@ -550,8 +579,8 @@ function selectCurrentWorkspaceForMeeting() {
   renderPrepareSelects();
 }
 const prepareModelChoices = {
-  'active-streaming-model': [['', null], ['zipformer-zh-xlarge-streaming-int8', 'Streaming Zipformer Chinese XLarge'], ['zipformer-multilingual-streaming', 'Streaming Zipformer Multilingual'], ['paraformer-zh-en-int8', 'Streaming Paraformer'], ['zipformer-en-streaming-int8', 'Streaming Zipformer English'], ['zipformer-ko-streaming-int8', 'Streaming Zipformer Korean'], ['zipformer-fr-streaming-int8', 'Streaming Zipformer French'], ['nemotron-3.5-asr-streaming-0.6b-560ms-int8', 'Nemotron 3.5 ASR Streaming 0.6B (560ms)']],
-  'active-diarization-model': [['|', null], ['pyannote-segmentation-3.0|eres2net-base-3dspeaker-zh', 'Pyannote + 3D-Speaker'], ['pyannote-segmentation-3.0|campplus-zh-en', 'Pyannote + 3D-Speaker CAM++'], ['reverb-diarization-v1|eres2net-base-3dspeaker-zh', 'Reverb + 3D-Speaker']],
+  'active-streaming-model': [['', null], ['zipformer-zh-xlarge-streaming-int8', 'Streaming Zipformer Chinese XLarge'], ['zipformer-multilingual-streaming', 'Streaming Zipformer Multilingual'], ['zipformer-en-streaming-int8', 'Streaming Zipformer English'], ['zipformer-ko-streaming-int8', 'Streaming Zipformer Korean'], ['zipformer-fr-streaming-int8', 'Streaming Zipformer French'], ['nemotron-3.5-asr-streaming-0.6b-560ms-int8', 'Nemotron 3.5 ASR Streaming 0.6B (560ms)']],
+  'active-diarization-model': [['', null], ['pyannote-segmentation-3.0', 'Pyannote + 3D-Speaker'], ['reverb-diarization-v1', 'Reverb + 3D-Speaker']],
   'active-vad-model': [['silero-vad', 'Silero VAD']],
 };
 function modelChoices(id) {
@@ -564,44 +593,19 @@ function renderRefinedModelChoices() {
   options.innerHTML = modelChoices('active-refined-model').slice(1).map(([id, name]) => `<button type="button" data-refine-model="${escapeHtml(id)}">${escapeHtml(name)}</button>`).join('');
 }
 renderRefinedModelChoices();
-/** 读取新手引导模型质量偏好；null（未设置）为现有安装保留传统的每语言默认值。@returns {'quality'|'performance'|null} */
-const modelPreference = () => { const value = localStorage.getItem('brevia-model-preference'); return value === 'quality' || value === 'performance' ? value : null; };
-// 偏好预设：质量优先倾向于最强模型，性能优先倾向于最快模型，保持与传统默认值相同的说话人分离配对。
-const languageModelPreferences = {
-  quality: {
-    zh: { streaming: 'zipformer-zh-xlarge-streaming-int8', refined: 'funasr-nano-int8', diarization: 'pyannote-segmentation-3.0|campplus-zh-en' },
-    en: { streaming: 'zipformer-en-streaming-int8', refined: 'qwen3-asr-1.7b-int8', diarization: 'pyannote-segmentation-3.0|campplus-zh-en' },
-    ko: { streaming: 'zipformer-ko-streaming-int8', refined: 'qwen3-asr-1.7b-int8', diarization: 'pyannote-segmentation-3.0|campplus-zh-en' },
-    fr: { streaming: 'zipformer-fr-streaming-int8', refined: 'qwen3-asr-1.7b-int8', diarization: 'pyannote-segmentation-3.0|campplus-zh-en' },
-    es: { streaming: 'nemotron-3.5-asr-streaming-0.6b-560ms-int8', refined: 'qwen3-asr-1.7b-int8', diarization: 'pyannote-segmentation-3.0|campplus-zh-en' },
-    default: { streaming: 'zipformer-multilingual-streaming', refined: 'qwen3-asr-1.7b-int8', diarization: 'pyannote-segmentation-3.0|campplus-zh-en' },
-  },
-  performance: {
-    zh: { streaming: 'paraformer-zh-en-int8', refined: 'funasr-nano-int8', diarization: 'pyannote-segmentation-3.0|campplus-zh-en' },
-    en: { streaming: 'zipformer-en-streaming-int8', refined: 'qwen3-asr-0.6b-int8', diarization: 'pyannote-segmentation-3.0|campplus-zh-en' },
-    ko: { streaming: 'zipformer-ko-streaming-int8', refined: 'qwen3-asr-0.6b-int8', diarization: 'pyannote-segmentation-3.0|campplus-zh-en' },
-    fr: { streaming: 'zipformer-fr-streaming-int8', refined: 'qwen3-asr-0.6b-int8', diarization: 'pyannote-segmentation-3.0|campplus-zh-en' },
-    es: { streaming: 'nemotron-3.5-asr-streaming-0.6b-560ms-int8', refined: 'qwen3-asr-0.6b-int8', diarization: 'pyannote-segmentation-3.0|campplus-zh-en' },
-    default: { streaming: 'zipformer-multilingual-streaming', refined: 'qwen3-asr-0.6b-int8', diarization: 'pyannote-segmentation-3.0|campplus-zh-en' },
-  },
-};
 const languageModelDefaults = {
-  zh: { streaming: 'zipformer-zh-xlarge-streaming-int8', refined: 'funasr-nano-int8', diarization: 'pyannote-segmentation-3.0|campplus-zh-en' },
-  en: { streaming: 'zipformer-en-streaming-int8', refined: 'qwen3-asr-1.7b-int8', diarization: 'pyannote-segmentation-3.0|campplus-zh-en' },
-  ko: { streaming: 'zipformer-ko-streaming-int8', refined: 'whisper-large-v3', diarization: 'pyannote-segmentation-3.0|campplus-zh-en' },
-  fr: { streaming: 'zipformer-fr-streaming-int8', refined: 'whisper-large-v3', diarization: 'pyannote-segmentation-3.0|campplus-zh-en' },
-  es: { streaming: 'nemotron-3.5-asr-streaming-0.6b-560ms-int8', refined: 'whisper-large-v3', diarization: 'pyannote-segmentation-3.0|campplus-zh-en' },
-  default: { streaming: 'zipformer-multilingual-streaming', refined: 'whisper-large-v3', diarization: 'pyannote-segmentation-3.0|campplus-zh-en' },
+  zh: { streaming: 'zipformer-zh-xlarge-streaming-int8', refined: 'qwen3-asr-0.6b-int8', segmentation: 'pyannote-segmentation-3.0' },
+  en: { streaming: 'zipformer-en-streaming-int8', refined: 'qwen3-asr-0.6b-int8', segmentation: 'pyannote-segmentation-3.0' },
+  ko: { streaming: 'zipformer-ko-streaming-int8', refined: 'qwen3-asr-0.6b-int8', segmentation: 'pyannote-segmentation-3.0' },
+  fr: { streaming: 'zipformer-fr-streaming-int8', refined: 'qwen3-asr-0.6b-int8', segmentation: 'pyannote-segmentation-3.0' },
+  es: { streaming: 'nemotron-3.5-asr-streaming-0.6b-560ms-int8', refined: 'qwen3-asr-0.6b-int8', segmentation: 'pyannote-segmentation-3.0' },
+  default: { streaming: 'zipformer-multilingual-streaming', refined: 'qwen3-asr-0.6b-int8', segmentation: 'pyannote-segmentation-3.0' },
 };
-const preferredModelsForLanguage = (language) => {
-  const preset = languageModelPreferences[modelPreference()];
-  const table = preset || languageModelDefaults;
-  return table[language] || table.default;
-};
+const preferredModelsForLanguage = (language) => languageModelDefaults[language] || languageModelDefaults.default;
 const requiredModelsForLanguage = (language) => {
-  const { streaming, refined, diarization } = preferredModelsForLanguage(language);
+  const { streaming, refined, segmentation } = preferredModelsForLanguage(language);
   const punctuation = language === 'en' ? 'online-punct-en-int8' : ['zh', 'yue', 'auto'].includes(language) ? 'punct-ct-transformer-zh-en-int8' : undefined;
-  return [streaming, 'silero-vad', punctuation, refined, ...diarization.split('|'), 'gtcrn-live-denoiser'];
+  return [streaming, 'silero-vad', punctuation, refined, segmentation, 'eres2net-base-3dspeaker-zh', 'gtcrn-live-denoiser'];
 };
 function requiredModelDetails(language) {
   const [streaming, vad, punctuation, refined, segmentation, embedding, denoiser] = requiredModelsForLanguage(language);
@@ -609,8 +613,8 @@ function requiredModelDetails(language) {
 }
 const compatibleStreamingModels = (language) => {
   const supported = {
-    zh: new Set(['', 'zipformer-zh-xlarge-streaming-int8', 'zipformer-multilingual-streaming', 'paraformer-zh-en-int8']),
-    en: new Set(['', 'zipformer-en-streaming-int8', 'zipformer-multilingual-streaming', 'paraformer-zh-en-int8']),
+    zh: new Set(['', 'zipformer-zh-xlarge-streaming-int8', 'zipformer-multilingual-streaming']),
+    en: new Set(['', 'zipformer-en-streaming-int8', 'zipformer-multilingual-streaming']),
     ko: new Set(['', 'zipformer-ko-streaming-int8', 'zipformer-multilingual-streaming']),
     fr: new Set(['', 'zipformer-fr-streaming-int8', 'zipformer-multilingual-streaming']),
     es: new Set(['', 'nemotron-3.5-asr-streaming-0.6b-560ms-int8']),
@@ -620,11 +624,10 @@ const compatibleStreamingModels = (language) => {
 };
 function setPrepareModel(id, model) {
   const value = document.querySelector(`#${id}`);
-  const [first, second] = model.split('|');
-  if (id === 'active-streaming-model') prepareForm.dataset.streamingModel = first;
-  if (id === 'active-diarization-model') { prepareForm.dataset.segmentationModel = first; prepareForm.dataset.embeddingModel = second; }
-  if (id === 'active-refined-model') prepareForm.dataset.refinedModel = first;
-  if (id === 'active-vad-model') prepareForm.dataset.vadModel = first;
+  if (id === 'active-streaming-model') prepareForm.dataset.streamingModel = model;
+  if (id === 'active-diarization-model') prepareForm.dataset.segmentationModel = model;
+  if (id === 'active-refined-model') prepareForm.dataset.refinedModel = model;
+  if (id === 'active-vad-model') prepareForm.dataset.vadModel = model;
   value.dataset.model = model;
   value.textContent = modelChoices(id)?.find(([choice]) => choice === model)?.[1] || t('自动匹配');
 }
@@ -632,7 +635,7 @@ function applyLanguageModelDefaults(language) {
   const models = preferredModelsForLanguage(language);
   setPrepareModel('active-streaming-model', models.streaming);
   setPrepareModel('active-refined-model', models.refined);
-  setPrepareModel('active-diarization-model', models.diarization);
+  setPrepareModel('active-diarization-model', models.segmentation);
 }
 const prepareModelCard = document.querySelector('.model-card');
 prepareModelCard.querySelector('dl').insertAdjacentHTML('beforeend', `<div><dt>${t('VAD 模型')}</dt><dd id="active-vad-model" data-model="silero-vad">Silero VAD</dd></div>`);
@@ -676,21 +679,33 @@ prepareForm.querySelector('[name="capture-mic"]').addEventListener('change', (ev
   else void breviaClient?.stopPreview();
 });
 let refinementMeetingTitle = '';
-function showRefinementProgress(completed = 0, total = 0, meetingTitle = refinementMeetingTitle, meetingId) {
+let refinementCardDismissed = false;
+function refinementTitle(meetingId) {
+  return currentMeetingDetail?.id === meetingId ? currentMeetingDetail.title
+    : breviaClient?.state.meeting?.id === meetingId ? breviaClient.state.meeting.title
+      : uiData.meetings.find((meeting) => meeting.id === meetingId)?.title || '';
+}
+function showRefinementProgress(completed = 0, total = 0, meetingTitle = refinementMeetingTitle, meetingId, stage) {
   clearTimeout(refinementDismissTimer);
+  if (meetingId) refinementCardDismissed = false;
+  if (refinementCardDismissed) return;
   refinementMeetingTitle = meetingTitle;
-  const copy = { title: t('正在精修'), waiting: t('准备中') };
+  const copy = { title: t('正在精修'), waiting: t(stage || '准备中') };
   const ratio = total ? Math.min(1, completed / total) : 0;
   revealTaskCard(refinementCard);
   refinementCard.querySelector('p').textContent = refinementMeetingTitle ? `${copy.title} - ${refinementMeetingTitle}` : copy.title;
-  refinementPercent.textContent = total ? `${Math.round(ratio * 100)}%` : copy.waiting;
+  refinementPercent.textContent = total ? `${copy.waiting} · ${Math.round(ratio * 100)}%` : copy.waiting;
   refinementBar.style.transform = `scaleX(${ratio})`;
-  Object.assign(refinementCard.dataset, { completed, total, complete: 'false' });
+  Object.assign(refinementCard.dataset, { completed, total, stage: stage || '', complete: 'false' });
   if (meetingId) setTaskCardTask(refinementCard, 'meeting.refine', meetingId);
 }
 let refinementDismissTimer;
 function showRefinementComplete() {
   clearTimeout(refinementDismissTimer);
+  if (refinementCardDismissed) {
+    refinementCardDismissed = false;
+    return;
+  }
   revealTaskCard(refinementCard);
   const title = t('会后精修已完成');
   refinementCard.querySelector('p').textContent = refinementMeetingTitle ? `${title} - ${refinementMeetingTitle}` : title;
@@ -700,7 +715,10 @@ function showRefinementComplete() {
   finishTaskCard(refinementCard);
   refinementDismissTimer = setTimeout(hideRefinementProgress, 10000);
 }
-function hideRefinementProgress() { dismissTaskCard(refinementCard, () => { refinementCard.hidden = true; refinementCard.classList.remove('task-card-leave'); }); }
+function hideRefinementProgress(dismissActiveTask = false) {
+  if (dismissActiveTask && refinementCard.dataset.complete !== 'true') refinementCardDismissed = true;
+  dismissTaskCard(refinementCard, () => { refinementCard.hidden = true; refinementCard.classList.remove('task-card-leave'); });
+}
 let separationDismissTimer;
 function showSeparationProgress(completed = 0, total = 100, meetingId) {
   clearTimeout(separationDismissTimer);
@@ -739,6 +757,16 @@ const summaryTaskCopy = {
   de: ['Besprechungsnotizen werden erstellt', 'Besprechungsnotizen werden vorbereitet', 'Zusammenfassung wird erstellt', 'Besprechungsnotizen werden gespeichert', 'Besprechungsnotizen erstellt'],
   ru: ['Создание заметок встречи', 'Подготовка заметок встречи', 'Создание сводки', 'Сохранение заметок встречи', 'Заметки встречи созданы'],
 };
+const summaryEmptyTranscriptCopy = {
+  zh: '当前会议暂无逐字稿内容，请先完成转写后再生成会议纪要。',
+  en: 'This meeting has no transcript yet. Finish transcription before generating meeting notes.',
+  es: 'Esta reunión aún no tiene transcripción. Finaliza la transcripción antes de generar las notas.',
+  ja: 'この会議にはまだ文字起こしがありません。文字起こし完了後に会議メモを生成してください。',
+  ko: '이 회의에는 아직 전사 내용이 없습니다. 전사를 완료한 후 회의록을 생성하세요.',
+  fr: 'Cette réunion ne contient pas encore de transcription. Terminez-la avant de générer les notes.',
+  de: 'Für diese Besprechung liegt noch kein Transkript vor. Schließen Sie die Transkription zuerst ab.',
+  ru: 'Для этой встречи пока нет расшифровки. Завершите расшифровку перед созданием заметок.',
+};
 function summaryTaskLabel(stage) {
   const copy = summaryTaskCopy[locale] || summaryTaskCopy.en;
   return { 'summary.prepare': copy[1], 'summary.generating': copy[2], 'summary.saving': copy[3], 'summary.complete': copy[4] }[stage] || stage || t('准备中');
@@ -772,7 +800,8 @@ function refreshLocalizedTaskCards() {
   if (!refinementCard.hidden) {
     const title = refinementCard.dataset.complete === 'true' ? t('会后精修已完成') : t('正在精修');
     refinementCard.querySelector('p').textContent = refinementMeetingTitle ? `${title} - ${refinementMeetingTitle}` : title;
-    refinementPercent.textContent = refinementCard.dataset.total === '0' ? t('准备中') : `${Math.round(Number(refinementCard.dataset.completed || 0) / Number(refinementCard.dataset.total || 1) * 100)}%`;
+    const stage = t(refinementCard.dataset.stage || '准备中');
+    refinementPercent.textContent = refinementCard.dataset.total === '0' ? stage : `${stage} · ${Math.round(Number(refinementCard.dataset.completed || 0) / Number(refinementCard.dataset.total || 1) * 100)}%`;
   }
   const separation = document.querySelector('#separation-progress');
   if (separation) separation.querySelector('p').textContent = separation.dataset.complete === 'true' ? t('声源分离已完成') : t('正在分离人声与非人声');
@@ -808,7 +837,8 @@ async function generateMeetingSummary(meetingId = breviaClient?.state.selectedMe
   } catch (error) {
     hideSummaryProgress();
     if (isSummaryAuthenticationError(error)) showSummaryConfigCard(error);
-    else showToast(error.message);
+    else if (error.message === summaryEmptyTranscriptCopy.zh) showToast(summaryEmptyTranscriptCopy[locale] || summaryEmptyTranscriptCopy.en);
+    else showToast(error.message === 'Summary generation failed' ? t('纪要服务暂时不可用，请检查网络或稍后重试。') : error.message);
   }
 }
 const requiredModelIds = new Set();
@@ -872,7 +902,7 @@ const onboardingLanguageCopy = {
   ru: ['Выберите язык', 'Выберите язык для Brevia.', 'Продолжить'],
 };
 function queueModelTask(task, payload, models) {
-  if (!task || (!payload?.meeting_id && !['meeting.start', 'tts.synthesize'].includes(task))) return;
+  if (!task || (!payload?.meeting_id && !['meeting.start'].includes(task))) return;
   pendingModelTasks.set(`${task}:${payload.meeting_id || 'new'}`, { task, payload, models });
 }
 async function resumeReadyModelTasks() {
@@ -894,10 +924,6 @@ async function resumeReadyModelTasks() {
         const meeting = await breviaClient.start(payload, inputs);
         if (meeting?.model_required) queueModelTask('meeting.start', pending.payload, meeting.model_required);
         else activateMeeting(meeting, payload);
-      } else if (pending.task === 'tts.synthesize') {
-        const result = await window.brevia.tts.synthesize(pending.payload);
-        if (result?.model_required) queueModelTask('tts.synthesize', pending.payload, result.model_required);
-        else await playTts(result);
       }
     } catch (error) {
       hideRefinementProgress();
@@ -999,6 +1025,8 @@ function showOfflineTranscriptionReady() {
   window.setTimeout(() => dismissTaskCard(card), 10000);
 }
 taskCards.addEventListener('click', (event) => {
+  const backCard = event.target.closest('.is-task-card-back');
+  if (backCard) { activateTaskCard(backCard); return; }
   const taskPause = event.target.closest('[data-pause-task]');
   if (taskPause) {
     const card = taskPause.closest('.processing-card');
@@ -1019,7 +1047,11 @@ taskCards.addEventListener('click', (event) => {
   const close = event.target.closest('[data-dismiss-task-card]');
   if (close) {
     const card = close.closest('.processing-card');
-    if (card === refinementCard) hideRefinementProgress();
+    if (card === refinementCard) {
+      const { task, meetingId } = card.dataset;
+      hideRefinementProgress(true);
+      if (task && meetingId) void window.brevia.task.cancel({ task, meeting_id: meetingId }).catch((error) => showToast(error.message));
+    }
     else {
       if (card?.id === 'separation-progress') clearTimeout(separationDismissTimer);
       if (card?.id === 'summary-progress') clearTimeout(summaryDismissTimer);
@@ -1058,6 +1090,10 @@ taskCards.addEventListener('click', (event) => {
     });
     return;
   }
+});
+taskCards.addEventListener('keydown', (event) => {
+  const card = event.target.closest('.is-task-card-back');
+  if (card && ['Enter', ' '].includes(event.key)) { event.preventDefault(); activateTaskCard(card); }
 });
 prepareForm.addEventListener('click', (event) => {
   const toggle = event.target.closest('[data-flow-select-toggle]');
@@ -1143,13 +1179,13 @@ function renderSpeakerProfileModal() {
   const voiceCopy = voiceFeaturesCopy[locale] || voiceFeaturesCopy.en;
   settingsModal.querySelector('h2').textContent = copy.title;
   settingsModal.querySelector('.modal-title p').textContent = copy.intro;
-  settingsModal.querySelector('.modal-body').innerHTML = `<form class="speaker-profile-form"><label>${copy.name}<input name="name" maxlength="32" required /></label><label>${voiceCopy.reference}<input name="reference_text" maxlength="500" required /></label><button class="modal-action" type="submit">${copy.add}</button></form><div class="speaker-profile-list">${speakerProfiles.map((profile) => {
+  settingsModal.querySelector('.modal-body').innerHTML = `<form class="speaker-profile-form"><label>${copy.name}<input name="name" maxlength="32" required /></label><button class="modal-action" type="submit">${copy.add}</button></form><div class="speaker-profile-list">${speakerProfiles.map((profile) => {
     const samples = speakerSamples.get(profile.id) || [];
     const expanded = expandedSpeakerProfileId === profile.id;
     const adding = addingSampleProfileId === profile.id;
     const profileName = speakerProfileName(profile);
     const name = editingSpeakerProfileId === profile.id ? `<form class="speaker-profile-rename-form" data-profile-id="${profile.id}"><input name="name" value="${escapeHtml(profileName)}" maxlength="32" required autofocus /></form>` : `<b data-rename-speaker-profile="${profile.id}" title="双击修改名称">${escapeHtml(profileName)}</b>`;
-    return `<section class="speaker-profile-entry"><div class="speaker-profile-head"><span>${name}<small>${profile.built_in ? `${t('内置')} · ` : ''}${profile.sample_count}/50 ${copy.samples} · ${formatMeetingTime(profile.duration_ms || 0)} / 05:00</small></span><span><button class="secondary" data-toggle-speaker-samples="${profile.id}" type="button">${expanded ? t('收起') : t('查看录音')}</button><button class="secondary" data-add-speaker-sample="${profile.id}" type="button">${copy.addSample}</button><button class="secondary" data-verify-speaker-profile="${profile.id}" type="button">${voiceCopy.verify}</button>${profile.built_in ? '' : `<button class="model-delete" data-delete-speaker-profile="${profile.id}" type="button">${copy.remove}</button>`}</span></div>${adding ? `<form class="speaker-sample-form" data-speaker-profile="${profile.id}"><label>${voiceCopy.reference}<input name="reference_text" maxlength="500" required autofocus /></label><button class="modal-action" type="submit">${t('选择录音并添加')}</button><button class="secondary" data-cancel-speaker-sample type="button">${t('取消')}</button></form>` : ''}${expanded ? `<div class="speaker-sample-list">${samples.length ? samples.map((sample) => `<article><button class="sample-play" data-play-speaker-sample="${sample.id}" type="button" aria-label="${t('播放录音')}">▶</button><span><b>${escapeHtml(sample.reference_text || t('未填写文本'))}</b><small>${formatMeetingTime(sample.duration_ms || 0)}</small></span>${profile.built_in ? '' : `<button class="model-delete" data-delete-speaker-sample="${sample.id}" data-profile-id="${profile.id}" type="button">${copy.remove}</button>`}</article>`).join('') : `<p>${copy.empty}</p>`}</div>` : ''}</section>`;
+    return `<section class="speaker-profile-entry"><div class="speaker-profile-head"><span>${name}<small>${profile.built_in ? `${t('内置')} · ` : ''}${profile.sample_count}/50 ${copy.samples} · ${formatMeetingTime(profile.duration_ms || 0)} / 05:00</small></span><span><button class="secondary" data-toggle-speaker-samples="${profile.id}" type="button">${expanded ? t('收起') : t('查看录音')}</button><button class="secondary" data-add-speaker-sample="${profile.id}" type="button">${copy.addSample}</button><button class="secondary" data-verify-speaker-profile="${profile.id}" type="button">${voiceCopy.verify}</button>${profile.built_in ? '' : `<button class="model-delete" data-delete-speaker-profile="${profile.id}" type="button">${copy.remove}</button>`}</span></div>${adding ? `<form class="speaker-sample-form" data-speaker-profile="${profile.id}"><button class="modal-action" type="submit">${t('选择录音并添加')}</button><button class="secondary" data-cancel-speaker-sample type="button">${t('取消')}</button></form>` : ''}${expanded ? `<div class="speaker-sample-list">${samples.length ? samples.map((sample) => `<article><button class="sample-play" data-play-speaker-sample="${sample.id}" type="button" aria-label="${t('播放录音')}">▶</button><span><small>${formatMeetingTime(sample.duration_ms || 0)}</small></span>${profile.built_in ? '' : `<button class="model-delete" data-delete-speaker-sample="${sample.id}" data-profile-id="${profile.id}" type="button">${copy.remove}</button>`}</article>`).join('') : `<p>${copy.empty}</p>`}</div>` : ''}</section>`;
   }).join('')}</div>`;
 }
 // 社交平台网页分享入口。本地应用没有可公开访问的会议链接,因此只能携带一小段文本;
@@ -1483,7 +1519,7 @@ function openOnboardingLanguage(initialLocale = onboardingSelectedLocale || wind
   const wheelItems = Array.from({ length: 5 }, (_, round) => choices.map(([code, label]) => `<button type="button" data-language-wheel-value="${code}" role="option" aria-selected="${code === defaultLocale}"${round === 2 ? '' : ' tabindex="-1"'}>${label}</button>`).join('')).join('');
   onboardingPage = document.createElement('main');
   onboardingPage.className = 'onboarding-page onboarding-active';
-  onboardingPage.innerHTML = `<form class="onboarding-page-content onboarding-language-page" data-onboarding-language><img class="onboarding-brand" src="./assets/brevia-logo.svg" alt="Brevia" /><div class="onboarding-page-copy"><h1></h1><p></p></div><input name="locale" type="hidden" value="${defaultLocale}" /><div class="language-wheel" role="listbox" aria-label="Choose your language">${wheelItems}</div><small class="onboarding-page-copy"></small><div class="onboarding-actions onboarding-page-copy"><button class="modal-action" type="submit"></button></div></form>`;
+  onboardingPage.innerHTML = `<form class="onboarding-page-content onboarding-language-page" data-onboarding-language><img class="onboarding-brand" src="./assets/brevia-logo.svg" alt="Brevia" /><div class="onboarding-page-copy"><h1></h1><p></p></div><input name="locale" type="hidden" value="${defaultLocale}" /><div class="language-wheel" role="listbox" aria-label="Choose your language">${wheelItems}</div><small class="onboarding-page-copy"></small><div class="onboarding-actions onboarding-page-copy"><button class="modal-action" type="submit"></button></div></form><small class="onboarding-credit">Powered by zerolovesea</small>`;
   document.body.append(onboardingPage);
   updateOnboardingLanguageCopy(defaultLocale);
   requestAnimationFrame(() => onboardingPage.classList.add('onboarding-page-enter'));
@@ -1569,7 +1605,7 @@ function initializeLanguageWheel(wheel, onSelect = () => {}) {
 function showOnboardingPage(kind, content) {
   onboardingPage = document.createElement('main');
   onboardingPage.className = `onboarding-page onboarding-active onboarding-${kind}-overlay`;
-  onboardingPage.innerHTML = `<div class="onboarding-page-content onboarding-${kind}-content">${content}</div>`;
+  onboardingPage.innerHTML = `<div class="onboarding-page-content onboarding-${kind}-content">${content}</div><small class="onboarding-credit">Powered by zerolovesea</small>`;
   document.body.append(onboardingPage);
   requestAnimationFrame(() => onboardingPage.classList.add('onboarding-page-enter'));
 }
@@ -1586,32 +1622,19 @@ function dismissOnboardingPage(next) {
   }, 260);
 }
 
-/** 构建驱动新手引导选择哪些模型的质量/性能分段控件。@param {object} copy 语言环境副本包。@returns {string} */
-function onboardingPreferenceControl(copy) {
-  const active = modelPreference() || 'quality';
-  const option = (value, label, hint) => `<label class="onboarding-preference-option${active === value ? ' is-active' : ''}"><input type="radio" name="onboarding-model-preference" value="${value}"${active === value ? ' checked' : ''} /><span><b>${escapeHtml(label)}</b><small>${escapeHtml(hint)}</small></span></label>`;
-  return `<section class="onboarding-section onboarding-preference"><h2>${escapeHtml(copy.preferenceTitle)}</h2><div class="onboarding-preference-grid">${option('quality', copy.preferenceQuality, copy.preferenceQualityHint)}${option('performance', copy.preferencePerformance, copy.preferencePerformanceHint)}</div></section>`;
-}
-
 async function openOnboardingSetup() {
   try { if (initializationPromise) await initializationPromise; }
   catch (error) { showToast(`${t('配置或后端启动失败')}: ${error.message}`); openOnboardingPermissions(); return; }
   const copy = onboardingCopy[locale] || onboardingCopy.en;
   const modelListLabels = onboardingModelListLabel[locale] || onboardingModelListLabel.en;
   const securityHint = onboardingSecurityCopy[locale] || onboardingSecurityCopy.en;
-  if (!modelPreference()) localStorage.setItem('brevia-model-preference', 'quality');
   const choices = ['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru'];
   const defaults = new Set(window.BreviaOnboarding.defaultMeetingLanguages(locale));
-  showOnboardingPage('setup', `<section class="onboarding-setup-page"><button class="onboarding-back" data-onboarding-back-language type="button" aria-label="${t('返回')}">←</button><header><img class="onboarding-brand" src="./assets/brevia-logo.svg" alt="Brevia" /><h1>${copy.modelsTitle}</h1><div class="onboarding-intro"><p>${copy.meetingHint} ${copy.modelsHint}</p><small>${securityHint}</small></div></header>${onboardingPreferenceControl(copy)}<section class="onboarding-section"><h2>${copy.meetingTitle}</h2><div class="onboarding-language-selection"><div class="onboarding-check-grid">${choices.map((code) => `<label><input type="checkbox" name="onboarding-language" value="${code}"${defaults.has(code) ? ' checked' : ''} /><span>${new Intl.DisplayNames([locale], { type: 'language' }).of(code)}</span></label>`).join('')}</div><aside class="onboarding-model-preview"><strong>${modelListLabels[0]}</strong><ul data-onboarding-language-models></ul></aside></div></section><section class="onboarding-section"><h2>${t('离线功能')}</h2><div class="onboarding-language-selection onboarding-feature-selection"><div class="onboarding-feature-grid">${copy.capabilities.slice(-2).map((capability, index) => `<label><input type="checkbox" name="onboarding-${index ? 'source-separation' : 'denoiser'}" checked /><span>${capability}</span></label>`).join('')}<label><input type="checkbox" name="onboarding-translation" checked /><span>${copy.translation}</span></label></div><aside class="onboarding-model-preview"><strong>${modelListLabels[1]}</strong><ul data-onboarding-feature-models></ul></aside></div></section><section class="onboarding-model-summary"><strong>${copy.estimate}: <span data-onboarding-estimate></span></strong>${chinaModelSourceToggle()}</section><div class="onboarding-actions"><button class="modal-action" data-download-onboarding-models type="button">${copy.download}</button><button class="secondary" data-customize-onboarding-models type="button">${copy.customize}</button><button class="secondary" data-finish-onboarding type="button">${copy.later}</button></div></section>`);
+  showOnboardingPage('setup', `<section class="onboarding-setup-page"><button class="onboarding-back" data-onboarding-back-language type="button" aria-label="${t('返回')}">←</button><header><img class="onboarding-brand" src="./assets/brevia-logo.svg" alt="Brevia" /><h1>${copy.modelsTitle}</h1><div class="onboarding-intro"><p>${copy.meetingHint} ${copy.modelsHint}</p><small>${securityHint}</small></div></header><section class="onboarding-section"><h2>${copy.meetingTitle}</h2><div class="onboarding-language-selection"><div class="onboarding-check-grid">${choices.map((code) => `<label><input type="checkbox" name="onboarding-language" value="${code}"${defaults.has(code) ? ' checked' : ''} /><span>${new Intl.DisplayNames([locale], { type: 'language' }).of(code)}</span></label>`).join('')}</div><aside class="onboarding-model-preview"><strong>${modelListLabels[0]}</strong><ul data-onboarding-language-models></ul></aside></div></section><section class="onboarding-section"><h2>${t('离线功能')}</h2><div class="onboarding-language-selection onboarding-feature-selection"><div class="onboarding-feature-grid">${copy.capabilities.slice(-2).map((capability, index) => `<label><input type="checkbox" name="onboarding-${index ? 'source-separation' : 'denoiser'}" checked /><span>${capability}</span></label>`).join('')}<label><input type="checkbox" name="onboarding-translation" checked /><span>${copy.translation}</span></label></div><aside class="onboarding-model-preview"><strong>${modelListLabels[1]}</strong><ul data-onboarding-feature-models></ul></aside></div></section><section class="onboarding-model-summary"><strong>${copy.estimate}: <span data-onboarding-estimate></span></strong>${chinaModelSourceToggle()}</section><div class="onboarding-actions"><button class="modal-action" data-download-onboarding-models type="button">${copy.download}</button><button class="secondary" data-customize-onboarding-models type="button">${copy.customize}</button><button class="secondary" data-finish-onboarding type="button">${copy.later}</button></div></section>`);
   onboardingPage.querySelector('[name="onboarding-source-separation"]')?.closest('label')?.remove();
   updateOnboardingSetup();
   onboardingPage.addEventListener('change', (event) => {
     if (event.target.matches('[name="onboarding-language"], [name="onboarding-denoiser"], [name="onboarding-source-separation"], [name="onboarding-translation"]')) updateOnboardingSetup();
-    if (event.target.matches('[name="onboarding-model-preference"]')) {
-      localStorage.setItem('brevia-model-preference', event.target.value);
-      onboardingPage.querySelectorAll('.onboarding-preference-option').forEach((option) => option.classList.toggle('is-active', option.querySelector('input').checked));
-      updateOnboardingSetup();
-    }
     if (event.target.matches('[data-china-model-source]')) localStorage.setItem('brevia-china-model-source', event.target.checked);
   });
   onboardingPage.addEventListener('click', (event) => {
@@ -1750,7 +1773,6 @@ function liveStreamingModelOptions(language) {
 }
 /** 渲染从声纹发现的参与者以及实时模型/设置控件。@returns {void} */
 function renderLivePanel() {
-  const copy = voiceFeaturesCopy[locale] || voiceFeaturesCopy.en;
   const participants = [...liveSpeakers.values()];
   const people = participants.length
     ? participants.map((participant) => renderParticipant({
@@ -1765,11 +1787,9 @@ function renderLivePanel() {
     + `<label class="config-select-field">${t('会议语言')}${flowSelect('live-language', liveConfig.language || 'auto', languageChoices)}</label>`
     + `<label class="config-select-field">${t('实时识别模型')}${flowSelect('live-streaming-model', liveConfig.streaming_model_id, streamingChoices)}</label>`
     + `<label class="config-select-field">${t('精修模型')}${flowSelect('live-refined-model', liveConfig.refined_model_id, refinedChoices)}</label>`
+    + `<label class="choice live-power-saving"><input data-live-power-saving type="checkbox"${liveConfig.power_saving ? ' checked' : ''} /><span><b>${t('省电模式')}</b><small>${t('关闭实时降噪和精修，降低字幕更新频率；会后精修保持可用。')}</small></span></label>`
     + `</section>`;
-  const voiceOptions = [['', copy.voice], ...[...presetVoices, ...speakerProfiles.filter((profile) => profile.has_reference).map((profile) => ({ id: profile.id, name: speakerProfileName(profile) }))].map((voice) => [voice.id, voice.name])];
-  const ttsLanguages = ['zh', 'en'].map((code) => [code, BreviaI18n.languageName(locale, code)]);
-  const ttsSection = `<section class="tts-chat"><p class="eyebrow">${copy.chat}</p><form id="tts-chat-form"><div class="tts-selects">${flowSelect('voice_id', '', voiceOptions)}${flowSelect('target_language', 'zh', ttsLanguages)}</div><input name="text" maxlength="1000" placeholder="${copy.placeholder}" required /><button type="submit">${copy.send}</button></form></section>`;
-  document.querySelector('.live-panel').innerHTML = `<section><p class="eyebrow">${t('参与者')} · ${participants.length}</p><div class="participants-list">${people}</div></section>${settings}${ttsSection}`;
+  document.querySelector('.live-panel').innerHTML = `<section><p class="eyebrow">${t('参与者')} · ${participants.length}</p><div class="participants-list">${people}</div></section><div class="live-controls">${settings}</div>`;
 }
 function syncLivePanelToggle() {
   const layout = document.querySelector('.live-layout');
@@ -1802,6 +1822,12 @@ async function reconfigureLive(changes) {
     showToast(error.message);
   }
 }
+async function setLivePowerSaving(enabled) {
+  await reconfigureLive({ power_saving: enabled });
+}
+document.querySelector('.live-panel').addEventListener('change', (event) => {
+  if (event.target.matches('[data-live-power-saving]')) void setLivePowerSaving(event.target.checked);
+});
 renderModelControls();
 renderLivePanel();
 syncLivePanelToggle();
@@ -2140,8 +2166,7 @@ settingsModal.addEventListener('submit', async (event) => {
     const profileId = event.target.dataset.speakerProfile;
     const profile = speakerProfiles.find((item) => item.id === profileId);
     try {
-      const referenceText = new FormData(event.target).get('reference_text').trim();
-      const result = await window.brevia?.speakerProfile.enroll({ profile_id: profileId, name: profile.name, reference_text: referenceText });
+      const result = await window.brevia?.speakerProfile.enroll({ profile_id: profileId, name: profile.name });
       if (result) {
         speakerProfiles = await window.brevia.speakerProfile.list();
         speakerSamples.set(profileId, await window.brevia.speakerProfile.samples({ profile_id: profileId }));
@@ -2156,54 +2181,11 @@ settingsModal.addEventListener('submit', async (event) => {
     event.preventDefault();
     try {
       const values = new FormData(event.target);
-      const profile = await window.brevia?.speakerProfile.enroll({ name: values.get('name').trim(), reference_text: values.get('reference_text').trim() });
+      const profile = await window.brevia?.speakerProfile.enroll({ name: values.get('name').trim() });
       if (profile) speakerProfiles = await window.brevia.speakerProfile.list();
     } catch (error) { showToast(error.message); }
     renderModal('speaker-profiles');
     return;
-  }
-});
-let ttsSubmitting = false;
-let activeTtsAudio;
-async function playTts(result) {
-  if (!result) return;
-  activeTtsAudio?.pause();
-  const audio = new Audio(await window.brevia.audioUrl(result.path));
-  activeTtsAudio = audio;
-  audio.addEventListener('ended', () => { if (activeTtsAudio === audio) activeTtsAudio = undefined; }, { once: true });
-  await audio.play();
-  showToast((voiceFeaturesCopy[locale] || voiceFeaturesCopy.en).ready);
-}
-document.querySelector('#live-view').addEventListener('submit', async (event) => {
-  if (!event.target.matches('#tts-chat-form')) return;
-  event.preventDefault();
-  if (ttsSubmitting) return;
-  const values = new FormData(event.target);
-  const submit = event.target.querySelector('[type="submit"]');
-  let submitLabel = '';
-  try {
-    const voiceId = values.get('voice_id');
-    const targetLanguage = values.get('target_language');
-    if (['zh', 'en'].includes(targetLanguage) && !voiceId) { showToast(t('请选择声音')); return; }
-    const config = summaryRequestConfig();
-    if (!config) { showToast(t('请先配置翻译模型')); return; }
-    ttsSubmitting = true;
-    submitLabel = submit.innerHTML;
-    submit.disabled = true;
-    submit.classList.add('is-pending');
-    submit.setAttribute('aria-busy', 'true');
-    submit.innerHTML = `<i class="button-spinner" aria-hidden="true"></i>${t('准备中')}`;
-    const result = await window.brevia?.tts.synthesize({ ...(voiceId ? { voice_id: voiceId } : {}), target_language: targetLanguage, text: values.get('text').trim(), provider: config.provider, ...(config.endpoint ? { endpoint: config.endpoint } : {}), model: config.model, format: config.format, key_reference: config.keyReference });
-    if (result?.model_required) return;
-    await playTts(result);
-    event.target.reset();
-  } catch (error) { showToast(error.message); } finally {
-    if (!ttsSubmitting) return;
-    ttsSubmitting = false;
-    submit.disabled = false;
-    submit.classList.remove('is-pending');
-    submit.removeAttribute('aria-busy');
-    submit.innerHTML = submitLabel;
   }
 });
 /* Locale copy lives in i18n.js; this alias keeps the renderer focused on state changes. */
@@ -2272,7 +2254,7 @@ function applyLanguage(nextLocale, animate = false) {
   languageOptions.querySelectorAll('[data-language]').forEach((option) => option.setAttribute('aria-current', String(option.dataset.language === locale)));
   const rerendered = [
     '.settings-grid', '.meeting-list', '#meeting-form .form-grid',
-    '.final-transcript', '.notes', '.live-panel', '#tts-chat', '#model-download-queue',
+    '.final-transcript', '.notes', '.live-panel', '#model-download-queue',
   ].map((selector) => document.querySelector(selector));
   rerendered.push(batchToolbar, updateNotice.hidden ? null : updateNotice, settingsModal.hidden ? null : settingsModal.querySelector('.modal-panel'));
   const rerenderedRoots = rerendered.filter(Boolean);
@@ -2461,12 +2443,12 @@ applyTheme(theme);
 async function loadInstalledAppVersion() {
   try {
     const version = await window.brevia?.appInfo?.version?.();
-    if (version) { installedAppVersion = version; renderUpdateButton(); return; }
+    if (version) { installedAppVersion = version; appVersion.textContent = `v${version}`; renderUpdateButton(); return; }
   } catch { /* Fall through to the packaged manifest. */ }
   try {
     const response = await fetch('../package.json');
     const { version } = await response.json();
-    if (response.ok && version) { installedAppVersion = version; renderUpdateButton(); }
+    if (response.ok && version) { installedAppVersion = version; appVersion.textContent = `v${version}`; renderUpdateButton(); }
   } catch { /* Keep the unavailable marker when neither source can be read. */ }
 }
 void loadInstalledAppVersion();
@@ -2509,7 +2491,7 @@ languageOptions.addEventListener('click', (event) => {
 document.addEventListener('click', (event) => { if (!event.target.closest('.language-menu')) closeLanguageMenu(); });
 document.addEventListener('keydown', (event) => { if (event.key === 'Escape') { if (activeModal) closeModal(); else { closeLanguageMenu(); languageToggle.focus(); } } });
 /** 在录制期间导航离开时显示紧凑的实时会议控件。@returns {void} */
-function minimizeMeeting() { miniTitle.textContent = document.querySelector('#live-name').textContent; miniTimer.textContent = document.querySelector('#timer').textContent; const wasHidden = miniMeeting.hidden; miniMeeting.hidden = false; if (wasHidden) taskCards.append(miniMeeting); requestAnimationFrame(syncFloatingNotices); }
+function minimizeMeeting() { miniTitle.textContent = document.querySelector('#live-name').textContent; miniTimer.textContent = document.querySelector('#timer').textContent; const wasHidden = miniMeeting.hidden; miniMeeting.hidden = false; if (wasHidden) taskCards.append(miniMeeting); }
 document.addEventListener('click', (event) => { const target = event.target.closest('[data-view]'); if (!target || ['all-meetings', 'recently-deleted'].includes(target.id)) return; if (target.dataset.view === 'home') selectLibraryNav('all-meetings'); if (target.dataset.view === 'prepare') selectCurrentWorkspaceForMeeting(); if (activeView === 'live' && meetingActive && target.dataset.view !== 'live') minimizeMeeting(); showView(target.dataset.view); });
 homePrimary.addEventListener('click', () => { selectCurrentWorkspaceForMeeting(); showView('prepare'); });
 homeEyebrow.addEventListener('click', async () => {
@@ -2536,12 +2518,27 @@ function renderPlaybackFloatingCaptionToggle() {
   toggle.textContent = t('字幕');
 }
 function nextFloatingCaptionMode(mode) { return floatingCaptionMode === mode ? null : mode; }
+let powerStatusTimer;
+let lowPowerHintShown = false;
+async function checkPowerSavingSuggestion() {
+  if (!meetingActive || liveConfig.power_saving || lowPowerHintShown) return;
+  const status = await window.brevia?.power.status().catch(() => null);
+  if (!status?.low_battery) return;
+  lowPowerHintShown = true;
+  showToast(t('电量较低，开启省电模式可延长会议时长。'), { label: t('开启省电模式'), run: () => void setLivePowerSaving(true) });
+}
+function startPowerStatusChecks() {
+  clearInterval(powerStatusTimer);
+  lowPowerHintShown = false;
+  void checkPowerSavingSuggestion();
+  powerStatusTimer = setInterval(() => void checkPowerSavingSuggestion(), 300000);
+}
 function activateMeeting(meeting, payload) {
-  const { title, workspace_id: workspaceId, language, streaming_model_id: streamingModelId, speaker_segmentation_model_id: segmentationModelId, speaker_embedding_model_id: embeddingModelId, refined_model_id: refinedModelId } = payload;
+  const { title, workspace_id: workspaceId, language, streaming_model_id: streamingModelId, speaker_segmentation_model_id: segmentationModelId, refined_model_id: refinedModelId } = payload;
   const streamingModelName = prepareModelChoices['active-streaming-model'].find(([id]) => id === streamingModelId)?.[1] || t('自动匹配');
   document.querySelector('#active-streaming-model').textContent = streamingModelName;
-  liveConfig = { language: language || 'auto', streaming_model_id: streamingModelId || '', refined_model_id: refinedModelId || '', target_language: payload.target_language || null };
-  document.querySelector('#active-diarization-model').textContent = prepareModelChoices['active-diarization-model'].find(([id]) => id === `${segmentationModelId || ''}|${embeddingModelId || ''}`)?.[1] || t('自动匹配');
+  liveConfig = { language: language || 'auto', streaming_model_id: streamingModelId || '', refined_model_id: refinedModelId || '', target_language: payload.target_language || null, power_saving: Boolean(payload.power_saving) };
+  document.querySelector('#active-diarization-model').textContent = prepareModelChoices['active-diarization-model'].find(([id]) => id === (segmentationModelId || ''))?.[1] || t('自动匹配');
   document.querySelector('#active-refined-model').textContent = modelChoices('active-refined-model').find(([id]) => id === refinedModelId)?.[1] || t('自动匹配');
   document.querySelector('#live-name').textContent = title;
   uiData.meetings.unshift({ id: meeting.id, tone: 'violet', title, meta: `${t('刚刚')} · 0 ${t('分钟')}`, workspaceId: workspaceId || '', workspace: workspaceId ? { name: getWorkspaceName(workspaceId), color: getWorkspaceColor(workspaceId) } : null, tags: [], status: { tone: 'processing', label: t('正在录制'), detail: t('双轨录音') } });
@@ -2559,9 +2556,9 @@ function activateMeeting(meeting, payload) {
   pauseButton.dataset.paused = 'false';
   renderPauseButton();
   miniMeeting.hidden = true;
-  syncFloatingNotices();
   showView('live');
   startTimer();
+  startPowerStatusChecks();
 }
 document.querySelector('#meeting-form').addEventListener('submit', async (event) => {
   event.preventDefault();
@@ -2578,14 +2575,13 @@ document.querySelector('#meeting-form').addEventListener('submit', async (event)
   const targetLanguage = form.get('translation-target') || null;
   const streamingModelId = prepareForm.dataset.streamingModel || defaults.streaming;
   const refinedModelId = prepareForm.dataset.refinedModel || defaults.refined;
-  const [defaultSegmentationModelId, defaultEmbeddingModelId] = defaults.diarization.split('|');
-  const segmentationModelId = prepareForm.dataset.segmentationModel || defaultSegmentationModelId;
-  const embeddingModelId = prepareForm.dataset.embeddingModel || defaultEmbeddingModelId;
+  const segmentationModelId = prepareForm.dataset.segmentationModel || defaults.segmentation;
   const payload = {
     title, language, target_language: targetLanguage, streaming_model_id: streamingModelId, refined_model_id: refinedModelId,
-    speaker_segmentation_model_id: segmentationModelId, speaker_embedding_model_id: embeddingModelId,
-    vad_model_id: prepareForm.dataset.vadModel || 'silero-vad', num_speakers: Number(form.get('num-speakers') || -1), workspace_id: form.get('meeting-workspace') || null,
+    speaker_segmentation_model_id: segmentationModelId,
+    vad_model_id: prepareForm.dataset.vadModel || 'silero-vad', num_speakers: Number(form.get('num-speakers') || -1), power_saving: form.has('power-saving'), workspace_id: form.get('meeting-workspace') || null,
   };
+  localStorage.setItem('brevia-power-saving', String(payload.power_saving));
   const inputs = { mic: form.has('capture-mic'), system: form.has('capture-system') };
   try {
     const meeting = breviaClient ? await breviaClient.start(payload, inputs) : { id: null };
@@ -2609,13 +2605,12 @@ importRecording.addEventListener('click', async () => {
   if (!title) { meetingTitle.focus(); return; }
   const language = form.get('meeting-language') || 'auto';
   const defaults = preferredModelsForLanguage(language);
-  const [defaultSegmentationModelId, defaultEmbeddingModelId] = defaults.diarization.split('|');
   importRecording.disabled = true;
   try {
     const meeting = window.brevia && await window.brevia.meeting.import({
       title, language, target_language: form.get('translation-target') || null,
       streaming_model_id: prepareForm.dataset.streamingModel || defaults.streaming, refined_model_id: prepareForm.dataset.refinedModel || defaults.refined,
-      speaker_segmentation_model_id: prepareForm.dataset.segmentationModel || defaultSegmentationModelId, speaker_embedding_model_id: prepareForm.dataset.embeddingModel || defaultEmbeddingModelId,
+      speaker_segmentation_model_id: prepareForm.dataset.segmentationModel || defaults.segmentation,
       num_speakers: Number(form.get('num-speakers') || -1), workspace_id: form.get('meeting-workspace') || null, path: 'selected-by-electron',
     });
     if (!meeting) return;
@@ -2664,8 +2659,8 @@ document.querySelector('#end-meeting').addEventListener('click', async (event) =
   try {
     const meeting = breviaClient ? await breviaClient.stop(seconds * 1000) : null;
     meetingActive = false;
+    clearInterval(powerStatusTimer);
     miniMeeting.hidden = true;
-    syncFloatingNotices();
     if (meeting) {
       breviaClient.state.selectedMeetingId = meeting.id;
       applyBackendDetail(meeting);
@@ -2684,7 +2679,7 @@ document.querySelector('#end-meeting').addEventListener('click', async (event) =
     button.innerHTML = buttonLabel;
   }
 });
-miniMeeting.addEventListener('click', () => { miniMeeting.hidden = true; syncFloatingNotices(); showView('live'); });
+miniMeeting.addEventListener('click', () => { miniMeeting.hidden = true; showView('live'); });
 /** 用内联编辑器替换说话人标签并传播保存的名称。@param {HTMLElement} label 说话人名称元素。@returns {void} */
 function editSpeakerName(label) {
   const speaker = label.dataset.speaker;
@@ -3403,7 +3398,6 @@ if (window.brevia) {
       updateHomeViewTitle();
     }
     speakerProfiles = result.speaker_profiles || [];
-    presetVoices = result.preset_voices || [];
     installedModelNames.clear();
     modelPaths.clear();
     result.models.filter((model) => model.status === 'ready').forEach((model) => {
@@ -3505,7 +3499,7 @@ if (window.brevia) {
     syncBackendMeeting(meeting);
     if (!meeting || meeting.id !== breviaClient?.state.meeting?.id) return;
     breviaClient.state.meeting = { ...breviaClient.state.meeting, ...meeting };
-    liveConfig = { language: meeting.language || 'auto', streaming_model_id: meeting.streaming_model_id || '', refined_model_id: meeting.refined_model_id || '', target_language: meeting.target_language || null };
+    liveConfig = { language: meeting.language || 'auto', streaming_model_id: meeting.streaming_model_id || '', refined_model_id: meeting.refined_model_id || '', target_language: meeting.target_language || null, power_saving: Boolean(meeting.power_saving) };
     setLiveTranslationEnabled(Boolean(liveConfig.target_language));
     document.querySelector('#active-streaming-model').textContent = prepareModelChoices['active-streaming-model'].find(([id]) => id === meeting.streaming_model_id)?.[1] || t('自动匹配');
     document.querySelector('#active-refined-model').textContent = modelChoices('active-refined-model').find(([id]) => id === meeting.refined_model_id)?.[1] || t('自动匹配');
@@ -3531,7 +3525,6 @@ if (window.brevia) {
     }
     meetingActive = false;
     miniMeeting.hidden = true;
-    syncFloatingNotices();
     showView('detail');
     void refreshBackendMeetings();
   });
@@ -3607,9 +3600,18 @@ if (window.brevia) {
     }
     if (shouldFollow) scrollLiveToLatest(element);
   });
-  window.brevia.on('refinement.started', ({ meeting_id, total }) => showRefinementProgress(0, total, refinementMeetingTitle, meeting_id));
-  window.brevia.on('refinement.progress', ({ completed, total }) => showRefinementProgress(completed, total));
-  window.brevia.on('refinement.ready', async ({ meeting }) => {
+  window.brevia.on('refinement.started', ({ meeting_id, total, stage }) => showRefinementProgress(0, total, refinementTitle(meeting_id), meeting_id, stage));
+  window.brevia.on('refinement.progress', ({ completed, total, stage }) => showRefinementProgress(completed, total, refinementMeetingTitle, undefined, stage));
+  window.brevia.on('refinement.cancelled', async ({ meeting }) => {
+    hideRefinementProgress();
+    const refineButton = document.querySelector('.detail-refine [data-flow-select-toggle]');
+    refineButton.disabled = false;
+    refineButton.innerHTML = `${t('精修')} <span>⌄</span>`;
+    if (meeting?.id === breviaClient.state.selectedMeetingId) applyBackendDetail(meeting);
+    void refreshBackendMeetings();
+  });
+  window.brevia.on('refinement.ready', async ({ meeting_id }) => {
+    const meeting = await window.brevia.meeting.get({ meeting_id });
     syncBackendMeeting(meeting);
     const refineButton = document.querySelector('.detail-refine [data-flow-select-toggle]');
     refineButton.disabled = false;

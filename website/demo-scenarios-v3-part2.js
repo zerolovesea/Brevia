@@ -123,7 +123,7 @@ DemoScenariosV3.prototype.setupPrepareUI = function() {
                 </div>
                 <div>
                   <dt>说话人分离模型</dt>
-                  <dd>Pyannote + 3D-Speaker CAM++</dd>
+                  <dd>Pyannote + 3D-Speaker ERes2Net</dd>
                 </div>
                 <div>
                   <dt>会后精修模型</dt>
@@ -241,32 +241,6 @@ DemoScenariosV3.prototype.setupLiveUI = function(meetingTitle) {
                     </button>
                   </div>
                 </label>
-              </section>
-
-              <!-- 语音生成 -->
-              <section class="tts-chat">
-                <p class="eyebrow" style="margin-bottom: 16px;">语音生成</p>
-                <div class="tts-selects">
-                  <label class="config-select-field">
-                    声音
-                    <div class="flow-select">
-                      <button class="flow-select-toggle" type="button">
-                        中文 <span>⌄</span>
-                      </button>
-                    </div>
-                  </label>
-
-                  <label class="config-select-field">
-                    语言
-                    <div class="flow-select">
-                      <button class="flow-select-toggle" type="button">
-                        中文 <span>⌄</span>
-                      </button>
-                    </div>
-                  </label>
-                </div>
-
-                <input type="text" placeholder="输入要朗读的内容..." style="width: 100%; padding: 8px; border: 1px solid #e5e5e5; border-radius: 4px; margin-top: 12px;" />
               </section>
             </aside>
           </div>

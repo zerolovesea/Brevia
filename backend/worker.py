@@ -7,9 +7,6 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 
 from .worker_core import WorkerCore
-
-
-MAXIMUM_COMMAND_BYTES = 1024 * 1024
 from .worker_exports import ExportWorkerMixin
 from .worker_llm import LLMWorkerMixin
 from .worker_llama_sidecar import LlamaSidecarMixin
@@ -18,6 +15,9 @@ from .worker_models import ModelTaskWorkerMixin
 from .worker_refinement import RefinementWorkerMixin
 from .worker_session import RecordingSessionMixin
 from .worker_speakers import SpeakerCommandMixin
+
+
+MAXIMUM_COMMAND_BYTES = 1024 * 1024
 
 
 class Worker(
@@ -100,7 +100,6 @@ def main():
             "speaker-profile.samples",
             "speaker-profile.sample-delete",
             "summary.generate",
-            "tts.synthesize",
             "speaker-profile.enroll",
             "speaker-profile.verify",
             "speaker.rename",

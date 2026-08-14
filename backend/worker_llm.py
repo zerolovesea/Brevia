@@ -1,5 +1,7 @@
 """聚焦的 worker 职责组件。"""
 
+import re
+
 from .transcript import clock, latest_segments
 from .worker_common import managed_task, require
 
@@ -178,7 +180,7 @@ class LLMWorkerMixin:
             if str(item.get("text") or "").strip()
         )
         if not transcript:
-            raise ValueError("No transcript text is available for meeting notes")
+            raise ValueError("当前会议暂无逐字稿内容，请先完成转写后再生成会议纪要。")
         language = payload.get("language", "en")
         try:
             self.wait_task(control)
@@ -198,7 +200,13 @@ class LLMWorkerMixin:
                 raise ValueError("Summary response was empty")
         except Exception as error:
             self.store.save_summary(meeting["id"], None, locals().get("markdown", str(error)))
-            raise ValueError(f"Summary response was saved but could not be generated: {error}") from error
+            if re.search(
+                r"\b(?:401|403)\b|error code:\s*1010|API key|Authorization header|invalid_api_key|authentication",
+                str(error),
+                re.IGNORECASE,
+            ):
+                raise ValueError("Summary authentication failed") from error
+            raise ValueError("Summary generation failed") from error
         data = {"markdown": markdown}
         self.store.save_summary(meeting["id"], data, markdown)
         self.emit(

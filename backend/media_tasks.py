@@ -1,21 +1,12 @@
-"""会后媒体任务：不修改原录音的分离和语音合成。"""
+"""会后媒体任务：不修改原录音的分离。"""
 
-from uuid import uuid4
-
-from .asr import SourceSeparator, VitsTTS, ZipVoiceTTS
+from .asr import SourceSeparator
 from .audio_io import (
     convert_to_pcm_wav,
     ensure_wav_duration,
-    read_mono_wav,
     read_wav_channels,
-    write_mono_wav,
     write_wav_channels,
 )
-
-
-TTS_MODEL_IDS = {
-    "zh": "zipvoice-zh-en", "en": "zipvoice-zh-en",
-}
 
 
 class MeetingMediaService:
@@ -63,54 +54,3 @@ class MeetingMediaService:
             }
         finally:
             input_path.unlink(missing_ok=True)
-
-    def synthesize(self, payload):
-        """按目标语言选择本地声纹复刻或 VITS 语音生成。"""
-        model_id = TTS_MODEL_IDS.get(payload["language"])
-        if not model_id:
-            raise ValueError("Unsupported TTS language")
-        text = payload["text"].strip()
-        if not text or len(text) > 1000:
-            raise ValueError("TTS text must contain 1–1000 characters")
-        if model_id == "zipvoice-zh-en":
-            reference = self._voice_reference(payload["voice_id"])
-            samples, sample_rate = read_mono_wav(reference["audio_path"])
-            audio = ZipVoiceTTS(self.models).generate(
-                text, samples, sample_rate, reference["reference_text"]
-            )
-        else:
-            audio = VitsTTS(self.models, model_id).generate(text)
-        if not len(audio.samples):
-            raise ValueError("TTS did not generate audio")
-        directory = self.store.root / "tts"
-        directory.mkdir(exist_ok=True)
-        path = directory / f"{uuid4()}.wav"
-        write_mono_wav(path, audio.samples, audio.sample_rate)
-        return {"path": str(path), "voice_id": payload.get("voice_id", "builtin"), "text": text}
-
-    def preset_voices(self):
-        """公开 ZipVoice 自带且有已知参考文本的本地样例声音。"""
-        path = self.models.path("zipvoice-zh-en") / "test_wavs" / "leijun-1.wav"
-        return (
-            [
-                {
-                    "id": "preset:leijun-1",
-                    "name": "ZipVoice · Lei Jun",
-                    "audio_path": str(path),
-                }
-            ]
-            if self.models.is_ready("zipvoice-zh-en") and path.is_file()
-            else []
-        )
-
-    def _voice_reference(self, voice_id):
-        """根据 voice_id 获取语音克隆所需的参考音频和文本。"""
-        if voice_id == "preset:leijun-1":
-            preset = self.preset_voices()
-            if not preset:
-                raise ValueError("ZipVoice preset voice is unavailable")
-            return {
-                "audio_path": preset[0]["audio_path"],
-                "reference_text": "那还是三十六年前, 一九八七年. 我呢考上了武汉大学的计算机系.",
-            }
-        return self.store.speaker_profile_reference(voice_id)

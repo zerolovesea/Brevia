@@ -20,7 +20,7 @@ def main():
         description="Download and diagnose a Brevia streaming model"
     )
     parser.add_argument("--models-dir", required=True)
-    parser.add_argument("--model-id", default="paraformer-zh-en-int8")
+    parser.add_argument("--model-id", default="zipformer-zh-xlarge-streaming-int8")
     parser.add_argument("--download", action="store_true")
     args = parser.parse_args()
     manager = ModelManager(args.models_dir)

@@ -15,7 +15,7 @@ from .asr import (
     StreamingASR,
 )
 from .audio_io import convert_to_pcm_wav
-from .config import SETTINGS
+from .config import SETTINGS, SPEAKER_EMBEDDING_MODEL_ID
 from .worker_llm import TRANSLATION_MODEL_ID
 from .worker_common import require, synchronized_recording
 
@@ -40,10 +40,10 @@ class RecordingSessionMixin:
                 "streaming_model_id",
                 "refined_model_id",
                 "speaker_segmentation_model_id",
-                "speaker_embedding_model_id",
                 "vad_model_id",
             )
         ]
+        required_models.append(SPEAKER_EMBEDDING_MODEL_ID)
         if payload.get("target_language"):
             required_models.append(TRANSLATION_MODEL_ID)
         missing_models = [
@@ -119,13 +119,17 @@ class RecordingSessionMixin:
         self.active = meeting["id"]
         self.meeting_language = meeting["language"]
         self.detected_language = None
+        self.power_saving = bool(meeting.get("power_saving"))
         self.stream_state = {
             track: {
                 "start_ms": start_ms,
                 "revision": 0,
                 "segment": start_ms,
                 "last_text": "",
+                "last_raw_text": "",
                 "audio": [],
+                "pending_asr": [],
+                "pending_asr_samples": 0,
             }
             for track in ("mic", "system")
         }
@@ -142,7 +146,7 @@ class RecordingSessionMixin:
         # 的 Qwen3-ASR）。此方法始终在录音状态锁内单线程进入，各闭包只写各自的
         # self 属性，emit 也已加锁，故并行不改变加载后的任何运行时行为。
         def load_denoiser():
-            if self.models.is_ready(denoiser_id):
+            if not self.power_saving and self.models.is_ready(denoiser_id):
                 try:
                     self.denoiser = LiveDenoiser(self.models, denoiser_id)
                 except RuntimeError as error:
@@ -193,9 +197,7 @@ class RecordingSessionMixin:
         def load_speaker_tracker():
             try:
                 self.speaker_tracker = SpeakerTracker(
-                    self.models,
-                    max_speakers=meeting.get("num_speakers"),
-                    model_id=meeting.get("speaker_embedding_model_id"),
+                    self.models, max_speakers=meeting.get("num_speakers")
                 )
             except RuntimeError as error:
                 self.speaker_tracker = None
@@ -209,13 +211,10 @@ class RecordingSessionMixin:
                 )
 
         def load_live_refiner():
-            if self.models.is_ready(meeting["refined_model_id"]):
+            if not self.power_saving and self.models.is_ready(meeting["refined_model_id"]):
                 try:
                     self.live_refiner = RefinedASR(
                         self.models, meeting["refined_model_id"]
-                    )
-                    self.live_refinement = ThreadPoolExecutor(
-                        max_workers=1, thread_name_prefix="brevia-live-refine"
                     )
                 except RuntimeError as error:
                     self.emit(
@@ -239,16 +238,16 @@ class RecordingSessionMixin:
             for future in [pool.submit(loader) for loader in loaders]:
                 # 复现串行版本的语义：非 RuntimeError 的意外异常仍向上冒泡。
                 future.result()
+        if self.speaker_tracker or self.live_refiner:
+            self.live_postprocessing = ThreadPoolExecutor(
+                max_workers=1, thread_name_prefix="brevia-live-postprocess"
+            )
 
     @synchronized_recording
     def pause(self, payload):
-        """确认目标是当前会议并广播暂停状态；音频停送由前端负责。"""
+        """确认目标是当前会议；音频停送由前端负责。"""
         require(payload, "meeting_id", "paused")
         self._active(payload["meeting_id"])
-        self.emit(
-            "meeting.paused",
-            {"meeting_id": self.active, "paused": bool(payload["paused"])},
-        )
         return {"paused": bool(payload["paused"])}
 
     def _build_live_punctuation(self, language, meeting_id):
@@ -308,7 +307,9 @@ class RecordingSessionMixin:
         streaming_changed = streaming_model_id != meeting["streaming_model_id"]
         refined_changed = refined_model_id != meeting["refined_model_id"]
         target_language_changed = target_language != meeting["target_language"]
-        if not (language_changed or streaming_changed or refined_changed or target_language_changed):
+        power_saving = bool(payload.get("power_saving", self.power_saving))
+        power_saving_changed = power_saving != self.power_saving
+        if not (language_changed or streaming_changed or refined_changed or target_language_changed or power_saving_changed):
             return meeting
 
         # 先校验所有目标模型已安装，缺失即抛错（不做任何替换），让上层弹出下载。
@@ -322,29 +323,38 @@ class RecordingSessionMixin:
             verb = "is" if len(missing) == 1 else "are"
             raise RuntimeError(f"{label} {', '.join(missing)} {verb} not installed")
 
-        # 全部构建到局部变量，成功后再原子替换。
+        # 全部构建到局部变量并先持久化，成功后再一次性替换运行态。
         new_asr = self.asr
         if streaming_changed or language_changed:
             new_asr = StreamingASR(self.models, streaming_model_id, language)
+        new_denoiser = self.denoiser
         new_refiner = self.live_refiner
-        if refined_changed:
-            new_refiner = RefinedASR(self.models, refined_model_id)
-
-        self.asr = new_asr
-        if refined_changed:
-            self.live_refiner = new_refiner
-            if self.live_refinement is None:
-                self.live_refinement = ThreadPoolExecutor(
-                    max_workers=1, thread_name_prefix="brevia-live-refine"
+        new_postprocessing = self.live_postprocessing
+        if power_saving:
+            new_denoiser = new_refiner = None
+        else:
+            if power_saving_changed:
+                denoiser_id = SETTINGS["live_asr"]["denoiser_model_id"]
+                new_denoiser = (
+                    LiveDenoiser(self.models, denoiser_id)
+                    if self.models.is_ready(denoiser_id)
+                    else None
                 )
+            if refined_changed or power_saving_changed:
+                new_refiner = RefinedASR(self.models, refined_model_id)
+            if new_refiner is not None and new_postprocessing is None:
+                new_postprocessing = ThreadPoolExecutor(
+                    max_workers=1, thread_name_prefix="brevia-live-postprocess"
+                )
+
+        new_punctuation = self.punctuation
+        new_language_identifier = self.language_identifier
         if language_changed:
-            self.meeting_language = language
-            self.detected_language = None
-            self.punctuation = self._build_live_punctuation(language, self.active)
-            self.language_identifier = None
+            new_punctuation = self._build_live_punctuation(language, self.active)
+            new_language_identifier = None
             if language == "auto" and self.models.is_ready("whisper-large-v3"):
                 try:
-                    self.language_identifier = LanguageIdentifier(self.models)
+                    new_language_identifier = LanguageIdentifier(self.models)
                 except RuntimeError as error:
                     self.emit(
                         "worker.warning",
@@ -355,15 +365,35 @@ class RecordingSessionMixin:
                         },
                     )
 
-        meeting = self.store.update_meeting(
-            self.active,
-            {
-                "language": language,
-                "streaming_model_id": streaming_model_id,
-                "refined_model_id": refined_model_id,
-                "target_language": target_language,
-            },
-        )
+        try:
+            meeting = self.store.update_meeting(
+                self.active,
+                {
+                    "language": language,
+                    "streaming_model_id": streaming_model_id,
+                    "refined_model_id": refined_model_id,
+                    "target_language": target_language,
+                    "power_saving": int(power_saving),
+                },
+            )
+        except Exception:
+            if new_postprocessing is not self.live_postprocessing and new_postprocessing:
+                new_postprocessing.shutdown(wait=False, cancel_futures=True)
+            raise
+
+        old_postprocessing = self.live_postprocessing
+        self.asr = new_asr
+        self.denoiser = new_denoiser
+        self.live_refiner = new_refiner
+        self.live_postprocessing = new_postprocessing
+        self.power_saving = power_saving
+        if language_changed:
+            self.meeting_language = language
+            self.detected_language = None
+            self.punctuation = new_punctuation
+            self.language_identifier = new_language_identifier
+        if old_postprocessing is not new_postprocessing and old_postprocessing:
+            old_postprocessing.shutdown(wait=False, cancel_futures=True)
         self.emit(
             "meeting.reconfigured", {"meeting_id": self.active, "meeting": meeting}
         )
@@ -426,6 +456,16 @@ class RecordingSessionMixin:
             if payload["track"] == "mic"
             else samples
         )
+        if self.power_saving:
+            if len(asr_samples):
+                state["pending_asr"].append(asr_samples)
+                state["pending_asr_samples"] += len(asr_samples)
+            if not payload.get("flush") and state["pending_asr_samples"] < int(payload["sample_rate"]):
+                return {"samples": samples_total}
+            if state["pending_asr"]:
+                asr_samples = numpy.concatenate(state["pending_asr"])
+                state["pending_asr"] = []
+                state["pending_asr_samples"] = 0
         if payload["track"] == "mic" and self.denoiser:
             asr_samples = self.denoiser.accept(
                 payload["track"],
@@ -441,7 +481,7 @@ class RecordingSessionMixin:
         )
         text = self._clean_live_text(result if isinstance(result, str) else result.text)
         if final and not text:
-            text = state["last_text"]
+            text = state["last_raw_text"]
         if self.meeting_language == "auto" and not self.detected_language:
             context = numpy.concatenate(state["audio"]) if state["audio"] else samples
             detected = (
@@ -477,12 +517,12 @@ class RecordingSessionMixin:
                                 "message": str(error),
                             },
                         )
-                self.emit(
-                    "asr.language",
-                    {"meeting_id": self.active, "language": detected},
-                )
-        if self.punctuation:
-            text = self.punctuation.apply(text)
+        raw_text = text
+        if raw_text == state["last_raw_text"]:
+            text = state["last_text"]
+        elif self.punctuation:
+            text = self.punctuation.apply(raw_text)
+        state["last_raw_text"] = raw_text
         end_ms = int(
             payload["start_ms"] + len(samples) * 1000 / int(payload["sample_rate"])
         )
@@ -502,17 +542,6 @@ class RecordingSessionMixin:
                 and (self.speaker_tracker or self.live_refiner)
                 else None
             )
-            if (
-                final
-                and self.speaker_tracker
-                and segment_audio is not None
-            ):
-                speaker, speaker_name = self._identify_speaker(
-                    self.active,
-                    self.speaker_tracker,
-                    segment_audio,
-                    int(payload["sample_rate"]),
-                )
             event = {
                 "meeting_id": self.active,
                 "segment_id": segment_id,
@@ -536,7 +565,7 @@ class RecordingSessionMixin:
                 else:
                     self.store.save_segment(event)
                     self.emit("transcript.final", event)
-                    self._refine_live_segment_later(
+                    self._postprocess_live_segment_later(
                         event, segment_audio, int(payload["sample_rate"])
                     )
             elif not final:
@@ -548,7 +577,10 @@ class RecordingSessionMixin:
                     revision=0,
                     segment=state["segment"] + 1,
                     last_text="",
+                    last_raw_text="",
                     audio=[],
+                    pending_asr=[],
+                    pending_asr_samples=0,
                 )
         elif final:
             state.update(
@@ -556,43 +588,70 @@ class RecordingSessionMixin:
                 revision=0,
                 segment=state["segment"] + 1,
                 last_text="",
+                last_raw_text="",
                 audio=[],
+                pending_asr=[],
+                pending_asr_samples=0,
             )
         return {"samples": samples_total, "text": text, "final": final}
 
-    def _refine_live_segment_later(self, event, samples, sample_rate):
-        """将实时最终段交给单线程校准模型，不阻塞快轨。"""
-        if not (self.live_refinement and self.live_refiner and samples is not None):
+    def _postprocess_live_segment_later(self, event, samples, sample_rate):
+        """异步更新最终段的说话人与精修文本，不阻塞音频处理。"""
+        if not (
+            self.live_postprocessing
+            and (self.speaker_tracker or self.live_refiner)
+            and samples is not None
+        ):
             return
-        self.live_refinement.submit(
-            self._refine_live_segment,
+        self.live_postprocessing.submit(
+            self._postprocess_live_segment,
+            self.speaker_tracker,
             self.live_refiner,
             event.copy(),
             samples.copy(),
             sample_rate,
         )
 
-    def _refine_live_segment(self, refiner, event, samples, sample_rate):
-        """写回同一 live 段；用户已编辑的段落由存储层拒绝覆盖。"""
-        try:
-            text = self._clean_live_text(refiner.decode(samples, sample_rate))
-            if not text or text == event["text"]:
-                return
-            refined = {**event, "text": text, "revision": event["revision"] + 1}
-            if self.store.save_segment(refined):
-                self.emit("transcript.refined", refined)
-        except Exception as error:
-            self.emit(
-                "worker.warning",
-                {
-                    "meeting_id": event["meeting_id"],
-                    "code": "live_refinement_failed",
-                    "message": str(error),
-                },
-            )
+    def _postprocess_live_segment(self, tracker, refiner, event, samples, sample_rate):
+        """合并异步声纹与文本结果；存储层保护用户编辑。"""
+        updated = event.copy()
+        if tracker:
+            try:
+                speaker, speaker_name = self._identify_speaker(
+                    event["meeting_id"], tracker, samples, sample_rate
+                )
+                updated.update(speaker=speaker, speaker_name=speaker_name)
+            except Exception as error:
+                self.emit(
+                    "worker.warning",
+                    {
+                        "meeting_id": event["meeting_id"],
+                        "code": "live_speaker_identification_failed",
+                        "message": str(error),
+                    },
+                )
+        if refiner:
+            try:
+                text = self._clean_live_text(refiner.decode(samples, sample_rate))
+                if text:
+                    updated["text"] = text
+            except Exception as error:
+                self.emit(
+                    "worker.warning",
+                    {
+                        "meeting_id": event["meeting_id"],
+                        "code": "live_refinement_failed",
+                        "message": str(error),
+                    },
+                )
+        if all(updated.get(key) == event.get(key) for key in ("speaker", "speaker_name", "text")):
+            return
+        updated["revision"] = event["revision"] + 1
+        if self.store.save_segment(updated):
+            self.emit("transcript.refined", updated)
 
     def _identify_speaker(self, meeting_id, tracker, samples, sample_rate):
-        """优先匹配已注册人员；未命中时保留会议内的临时说话人 ID。"""
+        """优先匹配声纹库，未命中时分配会议内临时说话人。"""
         embedding = tracker.embedding(samples, sample_rate)
         if embedding is None:
             return tracker.last_speaker or "spk-1", None
@@ -639,10 +698,10 @@ class RecordingSessionMixin:
 
     def _release_active_session(self):
         """在持久化停止状态前释放模型和执行器资源。"""
-        refinement = self.live_refinement
-        self.live_refinement = None
-        if refinement:
-            refinement.shutdown(wait=True, cancel_futures=True)
+        postprocessing = self.live_postprocessing
+        self.live_postprocessing = None
+        if postprocessing:
+            postprocessing.shutdown(wait=True, cancel_futures=True)
         (
             self.active,
             self.asr,
@@ -653,6 +712,7 @@ class RecordingSessionMixin:
         self.speaker_tracker, self.stream_state, self.recent_finals = None, {}, []
         self.meeting_language, self.detected_language = None, None
         self.live_refiner = None
+        self.power_saving = False
 
     def _active(self, meeting_id):
         """确认命令指向当前活动会议，无返回值。"""

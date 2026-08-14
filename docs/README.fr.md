@@ -49,13 +49,12 @@ Propulse par la segmentation Pyannote plus les modeles d'embeddings de locuteur,
 
 ### Une bibliotheque locale de modeles selectionnee
 
-Plus de 27 modeles telechargeables couvrant l'ASR en streaming, le raffinement hors ligne, la restauration de ponctuation, la detection d'activite vocale, la diarisation, l'embedding de locuteur, la synthese vocale et la separation de sources. Combinez-les par langue et precision — tout s'execute sur votre appareil.
+Des modeles telechargeables couvrant l'ASR en streaming, le raffinement hors ligne, la restauration de ponctuation, la detection d'activite vocale, la diarisation, l'embedding de locuteur et la separation de sources. Combinez-les par langue et precision — tout s'execute sur votre appareil.
 
 ![Bibliotheque de modeles](assets/tour/en/%E6%A8%A1%E5%9E%8B%E5%BA%93.png)
 
 ### Et plus encore
 
-- **Synthese et clonage vocal TTS** — ZipVoice utilise l'audio de reference des locuteurs enregistres pour synthetiser le chinois et l'anglais ; des voix VITS sont disponibles pour l'allemand, le francais, l'espagnol, le russe et le coreen.
 - **Separation de sources** — Spleeter separe les enregistrements en pistes vocales et non vocales pour la post-production.
 - **Import audio** — apportez des enregistrements existants pour une transcription hors ligne via le meme pipeline.
 - **Exports riches** — transcriptions et notes en Markdown, TXT, JSON, SRT, DOCX ou PDF ; audio en FLAC, WAV ou M4A.
@@ -79,7 +78,7 @@ Au premier lancement, accordez les permissions microphone et enregistrement d'ec
 flowchart LR
   A[Renderer Electron<br/>HTML · Tailwind · JS] <-->|IPC + validation Zod| B[Processus principal Electron]
   B <-->|JSONL stdin/stdout| C[Worker Python<br/>runtime integre]
-  C --> D[sherpa-onnx<br/>ASR · VAD · locuteurs · ponctuation · TTS]
+  C --> D[sherpa-onnx<br/>ASR · VAD · locuteurs · ponctuation]
   C --> E[Stockage local<br/>SQLite · audio · exports]
   C -. consentement explicite .-> F[API cloud optionnelle<br/>resume LLM · traduction]
 ```
@@ -99,7 +98,7 @@ Brevia suit une conception strictement local-first :
 | Frontend | HTML/CSS/JS natif, Tailwind CSS 4, i18n integre (8 langues) |
 | Backend | Python 3.10+, protocole worker JSONL, stockage SQLite |
 | Moteur vocal | [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 1.13.2, ONNX Runtime |
-| Traitement des locuteurs | Segmentation Pyannote + embeddings 3D-Speaker / NeMo Titanet / CAM++ |
+| Traitement des locuteurs | Segmentation Pyannote + embeddings 3D-Speaker ERes2Net Base |
 | Client LLM | llama.cpp integre (GGUF) et APIs chat compatibles OpenAI / Anthropic |
 | I/O audio | ffmpeg (integre aux releases) |
 | Build et empaquetage | electron-builder, PyInstaller (runtime Python integre) |
@@ -109,15 +108,14 @@ Chaque modele est telecharge a la demande depuis **Reglages → Bibliotheque de 
 
 | Categorie | Modeles representatifs | Langues |
 | --- | --- | --- |
-| ASR streaming | Zipformer (zh / en / fr / ko / multilingue), Paraformer bilingue, Nemotron 3.5 | 30+ |
-| ASR raffinement | Qwen3-ASR 0.6B / 1.7B, Whisper Turbo / Large v3, FireRedASR2, FunASR Nano | Multilingue |
+| ASR streaming | Zipformer (zh / en / fr / ko / multilingue), Nemotron 3.5 | 30+ |
+| ASR raffinement | Qwen3-ASR 0.6B / 1.7B, Whisper Large v3, FunASR Nano | Multilingue |
 | Ponctuation | CT-Transformer zh+en, Online Punct casse anglaise | zh / en |
 | Detection d'activite vocale | Silero VAD | Universel |
 | Amelioration vocale | GTCRN Live Denoiser | Universel |
 | Diarisation | Pyannote Segmentation 3.0, Reverb Diarization v1 | Universel |
-| Embeddings de locuteur | 3D-Speaker ERes2Net, CAM++, NeMo Titanet | zh / en |
+| Embeddings de locuteur | 3D-Speaker ERes2Net Base | Universel |
 | Separation de sources | Spleeter 2 Stems | Universel |
-| Synthese vocale | ZipVoice (zh + en), VITS Piper (fr / de / es / ru), VITS Mimic3 (ko) | Multilingue |
 
 Pour les resumes LLM, choisissez **IA integree** pour executer localement un modele GGUF fourni (Qwen 3.5 2B / 4B, Gemma 3 1B / 4B), ou pointez Brevia vers Claude, OpenAI, OpenRouter ou tout service personnalise compatible avec OpenAI Chat Completions ou Anthropic Messages : Gemini (endpoint compatible OpenAI), DeepSeek, Kimi, Qwen et plus.
 
@@ -194,7 +192,7 @@ Plus de 30 langues incluant le chinois, l'anglais, le japonais, le coreen, le fr
 <details>
 <summary><strong>Brevia envoie-t-il de l'audio vers le cloud ?</strong></summary>
 
-Non. La reconnaissance vocale, la diarisation et le TTS s'executent tous en local. Seuls les resumes LLM et la traduction contactent le reseau, et uniquement apres que vous ayez configure un fournisseur — texte uniquement, jamais d'audio.
+Non. La reconnaissance vocale et la diarisation s'executent toutes en local. Seuls les resumes LLM et la traduction contactent le reseau, et uniquement apres que vous ayez configure un fournisseur — texte uniquement, jamais d'audio.
 </details>
 
 <details>
@@ -251,6 +249,6 @@ Brevia est publie sous la [ISC License](../LICENSE). Les fichiers de modeles et 
 
 ## Remerciements
 
-- [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) — le runtime local propulsant ASR, VAD, ponctuation, traitement des locuteurs et TTS. Sous licence [Apache-2.0](https://github.com/k2-fsa/sherpa-onnx/blob/master/LICENSE).
-- Merci aux auteurs et mainteneurs des modeles dont les artefacts telechargeables sont declares dans [`backend/models.json`](../backend/models.json), incluant Zipformer, Paraformer, Whisper, Qwen3-ASR, FireRedASR, FunASR, Pyannote, 3D-Speaker, NeMo, Silero, Spleeter, ZipVoice, VITS Piper / Mimic3 et plus.
+- [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) — le runtime local propulsant ASR, VAD, ponctuation et traitement des locuteurs. Sous licence [Apache-2.0](https://github.com/k2-fsa/sherpa-onnx/blob/master/LICENSE).
+- Merci aux auteurs et mainteneurs des modeles dont les artefacts telechargeables sont declares dans [`backend/models.json`](../backend/models.json), incluant Zipformer, Whisper, Qwen3-ASR, FunASR, Pyannote, 3D-Speaker, Silero, Spleeter et Tencent Hy-MT2.
 - Electron, ONNX Runtime, Python et la communaute open-source de la parole rendent ce flux local-first possible.

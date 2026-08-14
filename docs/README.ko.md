@@ -49,13 +49,12 @@ Pyannote 분할 + 화자 임베딩 모델을 사용하며 모두 기기에서 �
 
 ### 정선된 로컬 모델 라이브러리
 
-스트리밍 ASR, 오프라인 정제, 구두점 복원, 음성 활동 감지, 화자 다이어라이제이션, 화자 임베딩, 음성 합성, 소스 분리를 아우르는 27 개 이상의 다운로드 가능한 모델. 언어와 정밀도에 따라 자유롭게 조합 — 모두 기기에서 실행됩니다.
+스트리밍 ASR, 오프라인 정제, 구두점 복원, 음성 활동 감지, 화자 다이어라이제이션, 화자 임베딩, 소스 분리를 아우르는 다운로드 가능한 모델. 언어와 정밀도에 따라 자유롭게 조합 — 모두 기기에서 실행됩니다.
 
 ![모델 라이브러리](assets/tour/en/%E6%A8%A1%E5%9E%8B%E5%BA%93.png)
 
 ### 그 외
 
-- **TTS 음성 합성 및 복제** — ZipVoice 는 등록된 화자의 참조 오디오로 중국어와 영어를 합성; 독일어, 프랑스어, 스페인어, 러시아어, 한국어에는 별도의 VITS 목소리 제공.
 - **소스 분리** — Spleeter 가 녹음을 보컬과 비보컬 트랙으로 분할해 후처리에 활용.
 - **오디오 가져오기** — 기존 녹음을 같은 음성 파이프라인으로 오프라인 전사.
 - **다양한 내보내기** — 전사와 메모를 Markdown, TXT, JSON, SRT, DOCX, PDF 로; 오디오를 FLAC, WAV, M4A 로.
@@ -79,7 +78,7 @@ Pyannote 분할 + 화자 임베딩 모델을 사용하며 모두 기기에서 �
 flowchart LR
   A[Electron 렌더러<br/>HTML · Tailwind · JS] <-->|IPC + Zod 검증| B[Electron 메인 프로세스]
   B <-->|JSONL stdin/stdout| C[Python 워커<br/>번들 런타임]
-  C --> D[sherpa-onnx<br/>ASR · VAD · 화자 · 구두점 · TTS]
+  C --> D[sherpa-onnx<br/>ASR · VAD · 화자 · 구두점]
   C --> E[로컬 스토리지<br/>SQLite · 오디오 · 내보내기]
   C -. 명시적 동의 .-> F[선택적 클라우드 API<br/>LLM 요약 · 번역]
 ```
@@ -99,7 +98,7 @@ Brevia 는 엄격한 로컬 우선 설계를 따릅니다:
 | 프론트엔드 | 순수 HTML/CSS/JS, Tailwind CSS 4, 내장 i18n (8 로케일) |
 | 백엔드 | Python 3.10+, JSONL 워커 프로토콜, SQLite 스토리지 |
 | 음성 엔진 | [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 1.13.2, ONNX Runtime |
-| 화자 처리 | Pyannote 분할 + 3D-Speaker / NeMo Titanet / CAM++ 임베딩 |
+| 화자 처리 | Pyannote 분할 + 3D-Speaker ERes2Net Base 임베딩 |
 | LLM 클라이언트 | 내장 llama.cpp(GGUF) + OpenAI / Anthropic 호환 채팅 API |
 | 오디오 I/O | ffmpeg (릴리스에 포함) |
 | 빌드 및 패키징 | electron-builder, PyInstaller (Python 런타임 포함) |
@@ -109,15 +108,14 @@ Brevia 는 엄격한 로컬 우선 설계를 따릅니다:
 
 | 분류 | 대표 모델 | 언어 |
 | --- | --- | --- |
-| 스트리밍 ASR | Zipformer (zh / en / fr / ko / 다국어), Paraformer 이중언어, Nemotron 3.5 | 30+ |
-| 정제 ASR | Qwen3-ASR 0.6B / 1.7B, Whisper Turbo / Large v3, FireRedASR2, FunASR Nano | 다국어 |
+| 스트리밍 ASR | Zipformer (zh / en / fr / ko / 다국어), Nemotron 3.5 | 30+ |
+| 정제 ASR | Qwen3-ASR 0.6B / 1.7B, Whisper Large v3, FunASR Nano | 다국어 |
 | 구두점 | CT-Transformer zh+en, Online Punct 영어 대소문자 | zh / en |
 | 음성 활동 감지 | Silero VAD | 범용 |
 | 음성 향상 | GTCRN Live Denoiser | 범용 |
 | 화자 다이어라이제이션 | Pyannote Segmentation 3.0, Reverb Diarization v1 | 범용 |
-| 화자 임베딩 | 3D-Speaker ERes2Net, CAM++, NeMo Titanet | zh / en |
+| 화자 임베딩 | 3D-Speaker ERes2Net Base | 범용 |
 | 소스 분리 | Spleeter 2 Stems | 범용 |
-| 음성 합성 | ZipVoice (zh + en), VITS Piper (fr / de / es / ru), VITS Mimic3 (ko) | 다국어 |
 
 LLM 요약에서는 **내장 AI**를 선택해 번들 GGUF 모델(Qwen 3.5 2B / 4B, Gemma 3 1B / 4B)을 로컬에서 실행할 수 있고, Claude, OpenAI, OpenRouter 또는 OpenAI Chat Completions / Anthropic Messages를 지원하는 자체 서비스(Gemini의 OpenAI 호환 엔드포인트, DeepSeek, Kimi, Qwen 등)를 연결할 수도 있습니다.
 
@@ -194,7 +192,7 @@ npm run dist:win   # Windows x64 EXE
 <details>
 <summary><strong>Brevia 가 오디오를 클라우드로 보내나요?</strong></summary>
 
-아니요. 음성 인식, 다이어라이제이션, TTS 는 모두 로컬에서 실행됩니다. LLM 요약과 번역만 네트워크와 통신하며, 공급자를 구성한 이후에만 — 텍스트만, 오디오는 절대 보내지 않습니다.
+아니요. 음성 인식과 다이어라이제이션은 모두 로컬에서 실행됩니다. LLM 요약과 번역만 네트워크와 통신하며, 공급자를 구성한 이후에만 — 텍스트만, 오디오는 절대 보내지 않습니다.
 </details>
 
 <details>
@@ -251,6 +249,6 @@ Brevia 는 [ISC License](../LICENSE) 하에 배포됩니다. 모델 파일과 �
 
 ## 감사의 말
 
-- [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) — ASR, VAD, 구두점, 화자 처리, TTS 를 지원하는 로컬 런타임. [Apache-2.0](https://github.com/k2-fsa/sherpa-onnx/blob/master/LICENSE) 라이선스로 배포.
-- [`backend/models.json`](../backend/models.json) 에 선언된 다운로드 가능한 산출물의 모델 작성자와 메인테이너 여러분께 감사드립니다 — Zipformer, Paraformer, Whisper, Qwen3-ASR, FireRedASR, FunASR, Pyannote, 3D-Speaker, NeMo, Silero, Spleeter, ZipVoice, VITS Piper / Mimic3 등.
+- [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) — ASR, VAD, 구두점, 화자 처리를 지원하는 로컬 런타임. [Apache-2.0](https://github.com/k2-fsa/sherpa-onnx/blob/master/LICENSE) 라이선스로 배포.
+- [`backend/models.json`](../backend/models.json) 에 선언된 다운로드 가능한 산출물의 모델 작성자와 메인테이너 여러분께 감사드립니다 — Zipformer, Whisper, Qwen3-ASR, FunASR, Pyannote, 3D-Speaker, Silero, Spleeter, Tencent Hy-MT2 등.
 - Electron, ONNX Runtime, Python, 그리고 오픈 소스 음성 커뮤니티 덕분에 이 로컬 우선 워크플로가 가능해졌습니다.

@@ -17,27 +17,6 @@
     "kind": "transducer"
   },
   {
-    "id": "paraformer-zh-en-int8",
-    "name": "Streaming Paraformer",
-    "runtime": "sherpa-onnx==1.13.2",
-    "revision": "asr-models/2024-03-10",
-    "stages": ["streaming"],
-    "languages": ["zh", "en", "yue"],
-    "backend": ["cpu"],
-    "speaker": false,
-    "size_bytes": 1047319737,
-    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-paraformer-bilingual-zh-en.tar.bz2",
-    "archive_sha256": "5462a1fce42693deae572af1e8c4687124b12aa85fe61ff4d3168bb5280e205f",
-    "china_downloads": [
-      {"path": "encoder.int8.onnx", "url": "https://modelscope.cn/models/pengzhendong/sherpa-onnx-streaming-paraformer-bilingual-zh-en/resolve/master/encoder.int8.onnx", "sha256": "81a70226a8934e6ed92aa1d4fc486b428b5398e2f2619ed4897b7294cab90e9a"},
-      {"path": "decoder.int8.onnx", "url": "https://modelscope.cn/models/pengzhendong/sherpa-onnx-streaming-paraformer-bilingual-zh-en/resolve/master/decoder.int8.onnx", "sha256": "f3cca9f77bb9d93c8fcbfb63ae617b6b1ee96818df3aa3b151c40658fe38594f"},
-      {"path": "tokens.txt", "url": "https://modelscope.cn/models/pengzhendong/sherpa-onnx-streaming-paraformer-bilingual-zh-en/resolve/master/tokens.txt", "sha256": "59aba8873a2ed1e122c25fee421e25f283b63290efbde85c1f01a853d83cb6e6"}
-    ],
-    "directory": "sherpa-onnx-streaming-paraformer-bilingual-zh-en",
-    "files": ["encoder.int8.onnx", "decoder.int8.onnx", "tokens.txt"],
-    "kind": "paraformer"
-  },
-  {
     "id": "zipformer-en-streaming-int8",
     "name": "Streaming Zipformer English",
     "runtime": "sherpa-onnx==1.13.2",
@@ -290,32 +269,11 @@
     "kind": "speaker-embedding"
   },
   {
-    "id": "campplus-zh-en", "name": "3D-Speaker CAM++", "runtime": "sherpa-onnx==1.13.2", "revision": "speaker-recognition-models/campplus",
-    "stages": ["speaker-embedding"], "languages": ["zh", "en"], "backend": ["cpu", "cuda"], "speaker": true,
-    "size_bytes": 28281164, "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx", "archive_sha256": "aa3cfc16963a10586a9393f5035d6d6b57e98d358b347f80c2a30bf4f00ceba2",
-    "china_downloads": [{"path": "3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx", "url": "https://modelscope.cn/models/fengge2024/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx/resolve/master/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx", "sha256": "aa3cfc16963a10586a9393f5035d6d6b57e98d358b347f80c2a30bf4f00ceba2"}],
-    "files": ["3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx"], "kind": "speaker-embedding"
-  },
-  {
     "id": "spleeter-2stems-fp16", "name": "Spleeter 2 Stems", "runtime": "sherpa-onnx==1.13.2", "revision": "source-separation-models/spleeter-2stems-fp16",
     "stages": ["source-separation"], "languages": ["all"], "backend": ["cpu", "cuda"], "speaker": false,
     "size_bytes": 35271738, "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/source-separation-models/sherpa-onnx-spleeter-2stems-fp16.tar.bz2", "archive_sha256": "d54561979bd2e08a51e7dbd99ac36bb47564e089eefd403636dbca93e811bba2",
     "china_url": "https://modelscope.cn/models/zyaztec/sherpa-onnx-spleeter-2stems-fp16/resolve/master/sherpa-onnx-spleeter-2stems-fp16.tar.bz2",
     "directory": "sherpa-onnx-spleeter-2stems-fp16", "files": ["vocals.fp16.onnx", "accompaniment.fp16.onnx"], "kind": "source-separation"
-  },
-  {
-    "id": "zipvoice-zh-en", "name": "ZipVoice Chinese and English", "runtime": "sherpa-onnx==1.13.2", "revision": "tts-models/zipvoice-zh-en-emilia",
-    "stages": ["tts"], "languages": ["zh", "en"], "backend": ["cpu", "cuda"], "speaker": false,
-    "size_bytes": 163320194,
-    "downloads": [
-      {"path": "zipvoice.tar.bz2", "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/sherpa-onnx-zipvoice-distill-int8-zh-en-emilia.tar.bz2", "sha256": "77219c8b40f4ee8d73a7f902305ff6c1128ef9b54461c41b4ca6ed890b6c2803", "extract": true, "directory": "sherpa-onnx-zipvoice-distill-int8-zh-en-emilia"},
-      {"path": "vocos_24khz.onnx", "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/vocoder-models/vocos_24khz.onnx", "sha256": "bcb3b970e384161c4d634f0bb9e999ff1c471b34c9bc0b1049a5014065ed3cc0"}
-    ],
-    "china_downloads": [
-      {"path": "zipvoice.tar.bz2", "url": "https://modelscope.cn/models/zyaztec/sherpa-onnx-zipvoice-distill-int8-zh-en-emilia/resolve/master/sherpa-onnx-zipvoice-distill-int8-zh-en-emilia.tar.bz2", "sha256": "77219c8b40f4ee8d73a7f902305ff6c1128ef9b54461c41b4ca6ed890b6c2803", "extract": true, "directory": "sherpa-onnx-zipvoice-distill-int8-zh-en-emilia"},
-      {"path": "vocos_24khz.onnx", "url": "https://modelscope.cn/models/zyaztec/sherpa-onnx-zipvoice-distill-int8-zh-en-emilia/resolve/master/vocos_24khz.onnx", "sha256": "bcb3b970e384161c4d634f0bb9e999ff1c471b34c9bc0b1049a5014065ed3cc0"}
-    ],
-    "files": ["tokens.txt", "encoder.int8.onnx", "decoder.int8.onnx", "lexicon.txt", "espeak-ng-data", "vocos_24khz.onnx"], "kind": "tts"
   },
   {
     "id": "qwen3.5-2b-q4km", "name": "Qwen 3.5 2B", "runtime": "llama-cpp-python", "revision": "llama-models/2025-08",

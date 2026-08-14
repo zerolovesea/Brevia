@@ -4,12 +4,30 @@ import { runInNewContext } from 'node:vm';
 
 const [html, css, app, meetings, meetingDetail, uiData, components, i18n, i18nData, tailwind, onboarding, workspaces, floatingCaption, floatingCaptionHtml] = await Promise.all(['index.html', 'styles.css', 'app.js', 'app-meetings.js', 'app-meeting-detail.js', 'ui-data.js', 'ui-components.js', 'i18n.js', 'i18n-data.js', 'tailwind.css', 'onboarding.js', 'workspaces.js', 'floating-caption.js', 'floating-caption.html'].map((file) => readFile(file)));
 const js = Buffer.concat([app, meetings, meetingDetail, workspaces]);
-const [backendClient, logo, revealGif] = await Promise.all(['backend-client.js', 'assets/brevia-logo.svg', 'assets/brevia-logo-reveal.gif'].map((file) => readFile(file)));
+const [backendClient, audioProcessor, logo, revealGif] = await Promise.all(['backend-client.js', 'audio-processor.js', 'assets/brevia-logo.svg', 'assets/brevia-logo-reveal.gif'].map((file) => readFile(file)));
 const [electronMain, preload, packageManifest, modelManifest] = await Promise.all([readFile('../electron/main.js'), readFile('../electron/preload.js'), readFile('../package.json', 'utf8').then(JSON.parse), readFile('../backend/models.json', 'utf8').then(JSON.parse)]);
 const asr = await readFile('../backend/asr.py');
 const packWorker = await readFile('../backend/pack_worker.py');
 const workerSession = await readFile('../backend/worker_session.py');
 const text = (value) => value.toString().replace(/\r\n/g, '\n');
+assert.match(text(audioProcessor), /const BLOCK_SIZE = 8192;/);
+assert.match(text(audioProcessor), /data\?\.type !== 'flush'/);
+assert.match(text(audioProcessor), /this\.buffer\.slice\(0, count\)/);
+assert.match(text(backendClient), /sources\.map\(\(resource\) => this\.flush\(resource\)\)/);
+const workletMessages = [];
+const workletContext = {
+  AudioWorkletProcessor: class {
+    constructor() { this.port = { onmessage: null, postMessage: (data) => workletMessages.push(data) }; }
+  },
+  registerProcessor: (_name, processor) => { workletContext.Processor = processor; },
+  Float32Array,
+};
+runInNewContext(text(audioProcessor), workletContext);
+const processor = new workletContext.Processor();
+processor.process([[new Float32Array([0.1, 0.2, 0.3])]]);
+processor.port.onmessage({ data: { type: 'flush' } });
+assert.equal(workletMessages[0].samples.length, 3, 'stop flush preserves the partial audio block');
+assert.equal(workletMessages[1].flushed, true);
 const onboardingContext = { window: {}, localStorage: { getItem: () => null, setItem() {} }, navigator: { language: 'zh-CN' } };
 runInNewContext(text(onboarding), onboardingContext);
 assert.deepEqual(Array.from(onboardingContext.window.BreviaOnboarding.defaultMeetingLanguages('zh')), ['zh']);
@@ -18,7 +36,7 @@ assert.match(text(app), /name="onboarding-\$\{index \? 'source-separation' : 'de
 assert.match(text(app), /name="onboarding-translation" checked/);
 const componentContext = {};
 runInNewContext(text(components), componentContext);
-const mediaContext = { window: {}, navigator: { mediaDevices: {} } };
+const mediaContext = { window: {}, navigator: { mediaDevices: {} }, console, btoa: (value) => Buffer.from(value, 'binary').toString('base64') };
 runInNewContext(`${text(backendClient)}\nthis.AudioCapture = AudioCapture;`, mediaContext);
 const stoppedTracks = [];
 const loopbackAudio = { readyState: 'live', stop() { stoppedTracks.push('audio'); } };
@@ -42,6 +60,31 @@ await systemCapture.prepare({ mic: false, system: true });
 assert.equal(displayConstraints.audio.systemAudio, 'include');
 assert.equal(systemCapture.pendingStreams[0].track, 'system');
 await systemCapture.stop();
+const pauseCapture = new mediaContext.AudioCapture();
+const contextStates = [];
+pauseCapture.sources = [{ context: {
+  state: 'running',
+  async suspend() { contextStates.push('suspend'); this.state = 'suspended'; },
+  async resume() { contextStates.push('resume'); this.state = 'running'; },
+} }];
+await pauseCapture.setPaused(true);
+await pauseCapture.setPaused(false);
+assert.deepEqual(contextStates, ['suspend', 'resume']);
+let releaseFirstAudio;
+const sentAudio = [];
+const batchingCapture = new mediaContext.AudioCapture((payload) => {
+  sentAudio.push(payload);
+  if (sentAudio.length === 1) return new Promise((resolve) => { releaseFirstAudio = resolve; });
+});
+batchingCapture.meetingId = 'meeting';
+const batchingResource = { track: 'mic', pendingPcm: [], pendingSamples: 0, pendingStartMs: null, inFlight: null };
+batchingCapture.enqueue(batchingResource, new Int16Array([1, 2]), 0);
+batchingCapture.enqueue(batchingResource, new Int16Array([3, 4]), 1);
+assert.equal(sentAudio.length, 1, 'only one audio request is in flight');
+releaseFirstAudio();
+await batchingResource.inFlight;
+const secondAudio = Buffer.from(sentAudio[1].pcm, 'base64');
+assert.deepEqual([secondAudio.readInt16LE(0), secondAudio.readInt16LE(2)], [3, 4]);
 mediaContext.navigator.mediaDevices.getDisplayMedia = async () => ({ getAudioTracks: () => [], getVideoTracks: () => [{ readyState: 'live', stop() {} }] });
 await assert.rejects(new mediaContext.AudioCapture().prepare({ mic: false, system: true }), /未检测到系统音频/);
 const localeContext = { window: {} };
@@ -77,7 +120,8 @@ for (const [code, stage, allLanguages] of [['ja', 'ライブ字幕', 'すべて�
   assert.equal(items.find(([, name]) => name === 'Spleeter 2 Stems')[2], allLanguages);
 }
 assert.deepEqual(Array.from(localeContext.window.BreviaLocaleData.appCopy.modalCopy.zh.models.items.slice(9, 13), ([, name]) => name), ['Qwen3-ASR', 'FunASR Nano int8', 'Whisper Large v3', 'Qwen3-ASR 1.7B int8']);
-for (const id of ['vits-mimic3-ko-kss-low', 'vits-piper-fr-siwis-medium-int8', 'vits-piper-de-thorsten-medium-int8', 'vits-piper-es-sharvard-medium-int8', 'vits-piper-ru-irina-medium-int8', 'zipformer-zh-streaming-int8', 'whisper-turbo', 'fire-red-asr2-ctc-zh-en-int8', 'nemo-titanet-small-en']) {
+assert.equal(localeContext.window.BreviaLocaleData.appCopy.modalCopy.zh.models.items.find(([, name]) => name === '3D-Speaker ERes2Net Base')[2], '语言无关');
+for (const id of ['vits-mimic3-ko-kss-low', 'vits-piper-fr-siwis-medium-int8', 'vits-piper-de-thorsten-medium-int8', 'vits-piper-es-sharvard-medium-int8', 'vits-piper-ru-irina-medium-int8', 'zipformer-zh-streaming-int8', 'paraformer-zh-en-int8', 'whisper-turbo', 'fire-red-asr2-ctc-zh-en-int8', 'nemo-titanet-small-en', 'campplus-zh-en']) {
   assert.equal(modelManifest.find((entry) => entry.id === id), undefined, `pruned model ${id} still in manifest`);
   assert.doesNotMatch(text(js), new RegExp(`'${id}'`), `pruned model ${id} still referenced in app js`);
 }
@@ -100,7 +144,7 @@ for (const id of ['home-view', 'prepare-view', 'live-view', 'detail-view', 'sett
 assert.match(text(html), /Content-Security-Policy/);
 assert.match(text(html), /frame-src 'none'/);
 assert.doesNotMatch(text(preload), /secret\.get/);
-assert.match(text(electronMain), /printToPDF\(\{ printBackground: true \}\)/);
+assert.match(text(electronMain), /printToPDF\(\{\s*printBackground: true,\s*displayHeaderFooter: true,/);
 assert.match(text(css), /prefers-reduced-motion:\s*reduce/);
 assert.match(text(css), /\.window-bar\{[^}]*-webkit-app-region:drag/);
 assert.match(text(css), /\.window-bar\{[^}]*position:sticky/);
@@ -120,7 +164,16 @@ assert.match(text(js), /Math\.max\(8, Math\.min\(position\.left, window\.innerWi
 assert.match(text(js), /function fitSegmentSubmenu/);
 assert.match(text(js), /submenu\.classList\.contains\('is-positioned'\)/);
 assert.match(text(css), /\.app-shell\{[^}]*grid-template-columns:clamp\(220px,22vw,272px\)/);
-assert.match(text(css), /\.task-cards\{[^}]*min-width:0[^}]*overflow:hidden auto/);
+assert.match(text(css), /\.task-cards\{(?=[^}]*display:grid)(?=[^}]*overflow:visible)(?=[^}]*--task-card-back-count)/);
+assert.match(text(tailwind), /\.task-card-stack-item \{ @apply relative col-start-1 row-start-1/);
+assert.match(text(app), /stackableTaskCardSelector = '[^']*\.mini-meeting[^']*\.mini-playback/);
+assert.match(text(app), /--task-card-index/);
+assert.match(text(app), /--task-card-depth/);
+assert.match(text(tailwind), /\.task-cards > \.task-card-stack-item \{[^}]*width: calc\(100% - var\(--task-card-depth/);
+assert.match(text(tailwind), /\.task-cards > \.is-task-card-back \{[^}]*box-shadow:/);
+assert.match(text(app), /function activateTaskCard\(card\)/);
+assert.match(text(app), /\['Enter', ' '\]\.includes\(event\.key\)/);
+assert.match(text(electronMain), /ipcMain\.handle\('app\.maintain'[\s\S]{0,300}if \(app\.isQuitting\) return \{\}/);
 assert.match(text(css), /\.required-models-card ul\{[^}]*max-height:min\(36vh,18rem\)[^}]*overflow:hidden auto/);
 assert.match(text(css), /#prepare-view\.active\{[^}]*overflow:hidden/);
 assert.match(text(css), /\.prepare-layout\{[^}]*grid-template-columns:minmax\(0,2fr\) minmax\(12\.5rem,1fr\)/);
@@ -140,13 +193,15 @@ assert.match(text(js), /miniPlaybackSeek\.addEventListener\('pointerdown'/);
 assert.match(text(js), /let contextMeetingId;/);
 assert.match(text(js), /openSegmentContextMenu\(meetingId, segmentId, x, y\)/);
 assert.match(text(js), /followPlaybackTranscript = false/);
-assert.match(text(workerSession), /speaker, speaker_name = self\._identify_speaker/);
-assert.doesNotMatch(text(workerSession), /payload\["track"\] == "system"/);
+assert.match(text(workerSession), /self\._identify_speaker/);
+assert.match(text(workerSession), /tracker\.assign_embedding/);
+assert.doesNotMatch(text(js), /name="num-speakers"[^>]*max="20"/);
 assert.match(text(js), /styles\.paddingTop.*styles\.paddingBottom/);
 assert.match(text(js), /new ResizeObserver\(\(\) => requestAnimationFrame\(fitPrepareLayout\)\)/);
 assert.doesNotMatch(text(css), /max-width:1100px|max-height:760px/);
 assert.match(text(css), /\.library-toolbar \.search input,.library-toolbar \.flow-select-toggle\{[^}]*height:/);
 assert.match(text(css), /\.window-actions\{[^}]*-webkit-app-region:no-drag/);
+assert.match(text(tailwind), /\.window-actions \{ @apply ml-auto flex items-center gap-2;/);
 assert.match(text(js), /showView\('live'\)/);
 assert.match(text(js), /function setLiveTranslationEnabled/);
 assert.match(text(js), /setLiveTranslationEnabled\(Boolean\(payload\.target_language\)\)/);
@@ -193,7 +248,6 @@ assert.doesNotMatch(text(js), /secret\.get|summaryKeyValues/);
 assert.match(text(js), /speakerProfileName\(profile\)/);
 assert.match(text(js), /window\.brevia\?\.appInfo\?\.version\?\.\(\)/);
 assert.match(text(electronMain), /ipcMain\.handle\('app\.version', \(\) => app\.getVersion\(\)\)/);
-assert.match(text(electronMain), /handle\('app\.maintain', z\.object\(\{\}\), 'app\.maintain'\)/);
 assert.match(text(electronMain), /const useBundledWorker = app\.isPackaged/);
 assert.match(text(js), /fetch\('\.\.\/package\.json'\)/);
 assert.match(text(js), /const BUILTIN_VOICE_NAMES =/);
@@ -202,6 +256,12 @@ assert.match(text(js), /renderSettingsView\(\);[\s\S]{0,120}append\(speakerProfi
 assert.match(text(components), /function renderSettingsView\(\)/);
 assert.doesNotMatch(text(electronMain), /ipcMain\.handle\('secret\.get'/);
 assert.match(text(js), /renderSlogan/);
+assert.match(text(app), /refinement\.progress'.*stage.*showRefinementProgress/s);
+assert.match(text(i18nData), /'检查音频': 'Checking audio'/);
+assert.match(text(i18nData), /const refinementStageLabels =/);
+for (const locale of ['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']) {
+  assert.match(text(i18nData), new RegExp(`${locale}: \\{[^}]*'转写中 · 校正说话人'`));
+}
 assert.match(text(js), /activeLibraryNav === 'recently-deleted' \? t\('最近删除'\)/);
 assert.match(text(js), /if \(name === 'home'\) selectLibraryNav\(activeLibraryNav\)/);
 assert.match(text(js), /async function showLibraryNav/);
@@ -254,6 +314,7 @@ assert.match(text(components), /data-meeting-action="purge"/);
 assert.match(text(electronMain), /meeting\.purge/);
 assert.match(text(electronMain), /handleModelRequirement\('meeting\.reconfigure', meetingReconfigure, 'meeting\.reconfigure'\)/);
 assert.match(text(electronMain), /const meetingReconfigure = id\.extend/);
+assert.match(text(electronMain), /power_saving: z\.boolean\(\)\.optional\(\)/);
 assert.match(text(electronMain), /'meeting\.reconfigured'/);
 assert.match(text(electronMain), /endpoint: z\.string\(\)\.url\(\)\.optional\(\)/);
 // 纪要配置收敛为「单套激活 + 按供应商记住凭据」，只认 version 2，不再迁移旧结构。
@@ -277,12 +338,20 @@ assert.match(text(electronMain), /reloadRevealTimer = setTimeout/);
 assert.match(text(electronMain), /!pageReady \|\| !animationComplete \|\| !initializationReady/);
 assert.match(text(electronMain), /type: 'startup\.ready'/);
 assert.match(text(html), /id="startup-splash"/);
+assert.match(text(html), /Powered by zerolovesea/);
+assert.match(text(html), /class="app-credit">Powered by zerolovesea/);
+assert.match(text(html), /id="app-version">v—/);
+assert.match(text(html), /window-actions"><small id="app-version">v—<\/small><a class="icon-button" href="https:\/\/github\.com\/zerolovesea\/Brevia"/);
+assert.match(text(js), /appMeta\.className = 'app-meta'/);
+assert.match(text(tailwind), /\.app-meta \.app-credit \{ @apply font-mono text-\[10px\] tracking-\[\.08em\] text-\[#666\]; \}/);
 assert.match(text(html), /brevia-logo-reveal\.gif/);
 assert.match(text(js), /brevia\.on\('startup\.ready'/);
 assert.match(text(js), /const dismissStartupSplash/);
 assert.match(text(meetings), /brevia-meetings-v1/);
 assert.match(text(js), /cacheMeetingList\(\)/);
 assert.match(text(css), /\.startup-splash\{[^}]*z-index:100[^}]*transition:opacity \.36s/);
+assert.match(text(css), /\.startup-splash \.startup-credit,\.onboarding-credit\{[^}]*font-family:var\(--font-mono\)/);
+assert.match(text(js), /class="onboarding-credit">Powered by zerolovesea/);
 assert.match(text(electronMain), /PYTHONUTF8: '1'/);
 assert.match(text(electronMain), /setPermissionRequestHandler/);
 assert.match(text(js), /exportMany/);
@@ -307,7 +376,7 @@ assert.doesNotMatch(text(js), /data-new-meeting-category/);
 assert.match(text(js), /event\.target\.matches\('input, textarea'\)\) return/);
 assert.doesNotMatch(text(js), /meeting-category/);
 assert.match(text(uiData), /const uiData/);
-assert.match(text(uiData), /Streaming Paraformer/);
+assert.match(text(uiData), /Streaming Zipformer Chinese XLarge/);
 assert.match(text(uiData), /Qwen3-ASR/);
 assert.match(text(i18nData), /Qwen3-ASR 1\.7B int8/);
 assert.doesNotMatch(text(uiData), /VAD \+ Speaker/);
@@ -320,12 +389,12 @@ assert.match(text(js), /whisper-large-v3/);
 assert.match(text(i18nData), /实时字幕/);
 assert.match(text(i18nData), /会后精修/);
 assert.match(text(js), /const languageModelDefaults/);
-assert.match(text(js), /zh: \{ streaming: 'zipformer-zh-xlarge-streaming-int8', refined: 'funasr-nano-int8'/);
-assert.match(text(html), /id="active-refined-model" data-model="funasr-nano-int8">FunASR Nano int8/);
+assert.match(text(js), /zh: \{ streaming: 'zipformer-zh-xlarge-streaming-int8', refined: 'qwen3-asr-0\.6b-int8'/);
+assert.match(text(html), /id="active-refined-model" data-model="qwen3-asr-0\.6b-int8">Qwen3-ASR 0\.6B int8/);
 assert.match(text(electronMain), /path\.join\(app\.getPath\('home'\), 'brevia'\)/);
 assert.match(text(electronMain), /appendFile\(logFile\(\), line, 'utf8'\)/);
 assert.match(text(electronMain), /await migrateDataDir\(\)/);
-assert.match(text(js), /en: \{ streaming: 'zipformer-en-streaming-int8', refined: 'qwen3-asr-1\.7b-int8'/);
+assert.match(text(js), /en: \{ streaming: 'zipformer-en-streaming-int8', refined: 'qwen3-asr-0\.6b-int8'/);
 assert.match(text(js), /const compatibleStreamingModels/);
 assert.match(text(html), /src="\.\/i18n\.js"/);
 assert.match(text(js), /BreviaI18n\.languageOptions\(locale, t/);
@@ -370,7 +439,7 @@ assert.match(text(js), /model-library-modelname/);
 assert.match(text(js), /function renderModelLibraryTags\(model, installed, name\)/);
 assert.match(text(js), /class="model-library-modelname">\$\{escapeHtml\(name\)\}/);
 // Every catalogued model must carry a rating so no card renders a blank ratings row.
-for (const id of ['paraformer-zh-en-int8', 'whisper-large-v3', 'zipformer-zh-xlarge-streaming-int8', 'silero-vad', 'zipvoice-zh-en']) {
+for (const id of ['whisper-large-v3', 'zipformer-zh-xlarge-streaming-int8', 'silero-vad']) {
   assert.match(text(js), new RegExp(`'${id.replace(/[.]/g, '\\.')}':\\s*\\{ quality:`));
 }
 assert.match(text(js), /qualityTiers: \['标准', '高', '极高'\]/);
@@ -391,7 +460,7 @@ assert.match(text(electronMain), /BREVIA_FFMPEG: ffmpeg/);
 assert.equal(packageManifest.dependencies['@ffmpeg-installer/ffmpeg'], '1.1.0');
 assert.deepEqual(packageManifest.build.asarUnpack, ['node_modules/@ffmpeg-installer/**']);
 assert.doesNotMatch(text(backendClient), /setTrackEnabled\(/);
-assert.match(text(backendClient), /start_ms: resource\.startMs \+ Math\.round\(offset \/ 16\)/);
+assert.match(text(backendClient), /this\.enqueue\(resource, pcm, resource\.startMs \+ Math\.round\(offset \/ 16\)\)/);
 assert.match(text(backendClient), /this\.startedAt = performance\.now\(\)/);
 assert.match(text(electronMain), /setWindowOpenHandler/);
 assert.match(text(electronMain), /will-navigate/);
@@ -427,11 +496,18 @@ assert.match(text(html), /id="task-cards"/);
 assert.match(text(html), /data-dismiss-task-card/);
 assert.match(text(js), /data-dismiss-task-card/);
 assert.match(text(js), /function hideRefinementProgress/);
+assert.match(text(app), /let refinementCardDismissed = false/);
+assert.match(text(app), /if \(refinementCardDismissed\) return/);
+assert.match(text(app), /hideRefinementProgress\(true\)/);
+assert.match(text(app), /window\.brevia\.task\.cancel\(\{ task, meeting_id: meetingId \}\)/);
+assert.match(text(electronMain), /'refinement\.cancelled'/);
+assert.match(text(app), /window\.brevia\.on\('refinement\.cancelled'/);
 assert.match(text(js), /transcript\.scrollTop = transcript\.scrollHeight/);
 assert.match(text(js), /const isAtLiveBottom = \(\) => transcript\.scrollHeight - transcript\.clientHeight - transcript\.scrollTop <= 32/);
 assert.doesNotMatch(text(html), /current-caption|id="live-caption/);
 assert.doesNotMatch(text(js), /#live-caption|caption-increment/);
 assert.match(text(html), /live-header[\s\S]*live-caption-controls[\s\S]*floating-caption-toggle[\s\S]*translation-toggle/);
+assert.match(text(html), /data-meeting-power-saving/);
 assert.match(text(html), /live-status[\s\S]*recording[\s\S]*id="timer"/);
 assert.match(text(i18nData), /captionButtonLabels/);
 assert.match(text(i18nData), /workspaceButtonLabels/);
@@ -460,7 +536,7 @@ assert.match(text(css), /\.transcript-scroll \.segment\{[^}]*grid-template-colum
 assert.match(text(css), /\.transcript-scroll \.segment-meta\{[^}]*align-self:flex-start/);
 assert.doesNotMatch(text(css), /\.transcript-scroll \.segment p\{[^}]*-webkit-line-clamp/);
 assert.match(text(css), /participants-list/);
-assert.match(text(tailwind), /\.live-panel \{ @apply col-start-10 col-span-3 grid min-h-0 min-w-0 grid-rows-\[minmax\(14rem,1fr\)_auto_auto\] overflow-hidden/);
+assert.match(text(tailwind), /\.live-panel \{ @apply col-start-10 col-span-3 grid min-h-0 min-w-0 grid-rows-\[minmax\(0,1fr\)_auto\] overflow-hidden/);
 assert.match(text(tailwind), /\.live-layout\.is-panel-collapsed \.transcript \{ @apply col-start-1 col-span-12 row-start-1; \}/);
 assert.match(text(tailwind), /\.live-layout\.is-panel-collapsed \.live-panel \{ @apply row-start-1;/);
 assert.match(text(css), /\.live-layout\.is-panel-collapsed \.transcript\{grid-column:1\/span 12;grid-row-start:1\}/);
@@ -491,12 +567,6 @@ assert.match(text(js), /summary\?\.configuration_required/);
 assert.match(text(js), /function showSummaryProgress/);
 assert.match(text(js), /summary\.started/);
 assert.match(text(js), /pendingModelTasks/);
-assert.match(text(js), /pending\.task === 'tts\.synthesize'/);
-assert.match(text(js), /function playTts/);
-assert.match(text(js), /let ttsSubmitting = false/);
-assert.match(text(js), /if \(ttsSubmitting\) return/);
-assert.match(text(js), /submit\.setAttribute\('aria-busy', 'true'\)/);
-assert.match(text(css), /\.tts-selects \.flow-select-options\.opens-up/);
 assert.doesNotMatch(text(js), /将逐字稿发送到所选模型供应商以生成纪要/);
 assert.match(text(js), /openModal\('summary-model'\)/);
 assert.match(text(js), /renderSummaryDetailModal/);
@@ -554,14 +624,21 @@ assert.match(text(electronMain), /configuration_required: true/);
 assert.match(text(electronMain), /summary\.config\.save/);
 assert.match(text(js), /punct-ct-transformer-zh-en-int8/);
 assert.match(text(js), /online-punct-en-int8/);
+assert.match(text(js), /当前会议暂无逐字稿内容，请先完成转写后再生成会议纪要/);
+assert.match(text(js), /This meeting has no transcript yet/);
 assert.doesNotMatch(text(js), /const modelSizes/);
 assert.match(text(js), /const modelSize = \(modelId\) => modelCatalog\.find/);
 const frontendModelIds = [...text(js).match(/const modelIds = \[([\s\S]*?)\];/)[1].matchAll(/'([^']+)'/g)].map(([, id]) => id);
+assert.equal(frontendModelIds.length, new Set(frontendModelIds).size, 'model library IDs must be unique');
+for (const code of ['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']) {
+  assert.equal(localeContext.window.BreviaLocaleData.appCopy.modalCopy[code].models.items.length, frontendModelIds.length, `${code} model copy must align with model IDs`);
+}
 // llama-chat GGUF models are managed through the summary modal, not the generic
 // model library. llama-translation models (caption translation) are now shown in
 // the generic model library, so they're included in modelIds.
 const libraryManifestIds = modelManifest.filter(({ kind }) => kind !== 'llama-chat').map(({ id }) => id);
 assert.deepEqual(new Set(frontendModelIds), new Set(libraryManifestIds));
+assert.doesNotMatch(text(js), /reference_text|embeddingModel|embedding_model_id/);
 assert.match(text(js), /data-delete-model/);
 assert.match(text(css), /::-webkit-scrollbar-thumb\{/);
 assert.match(text(css), /:where\(html,body,\*\)\.is-scrolling\{scrollbar-color:#aaa transparent/);
@@ -578,6 +655,7 @@ assert.match(text(js), /let updateAvailable = false/);
 assert.match(text(js), /updateNoticeProgressBar\.style\.transform/);
 assert.match(text(js), /renderUpdateNotice\(\);/);
 assert.match(text(tailwind), /\.software-update-notice > i/);
+assert.match(text(js), /taskCards\.append\(updateNotice\)/);
 assert.match(text(backendClient), /async prepare\(\{ mic, system \}\)/);
 assert.match(text(backendClient), /async previewMic\(\)/);
 assert.match(text(backendClient), /async stopPreview\(\)/);
@@ -609,7 +687,7 @@ assert.match(text(app), /worker request \|operation \)timed out/);
 assert.match(text(app), /t\('操作超时，请稍后重试'\)/);
 assert.match(text(i18nData), /操作超时，请稍后重试/);
 assert.match(text(electronMain), /clearTimeout\(pending\.timer\)/);
-assert.doesNotMatch(text(electronMain).match(/workerRequestTimeouts = new Map\(\[[\s\S]*?\]\);/)?.[0] || '', /meeting\.(audio|pause|stop)/);
+assert.doesNotMatch(text(electronMain).match(/workerRequestTimeouts = new Map\(\[[\s\S]*?\]\);/)?.[0] || '', /meeting\.(pause|stop)/);
 assert.doesNotMatch(text(electronMain).match(/const timer = timeout && setTimeout\([\s\S]*?\}, timeout\);/)?.[0] || '', /stopProcess/);
 assert.match(text(backendClient), /navigator\.mediaDevices\.getDisplayMedia/);
 assert.match(text(backendClient), /systemAudio: 'include'/);
@@ -677,15 +755,10 @@ assert.match(text(js), /<li><span>\$\{escapeHtml\(modelDisplayName\(modelId\)\)\
 assert.match(text(css), /\.onboarding-model-preview\{[^}]*border-left/);
 assert.match(text(css), /\.onboarding-setup-page header\{[^}]*justify-items:center[^}]*text-align:center/);
 assert.match(text(css), /\.onboarding-language-selection\{[^}]*height:calc\(var\(--spacing\) \* 64\)/);
-// Onboarding quality/performance preference drives which models get selected, coupled to runtime defaults via preferredModelsForLanguage.
-assert.match(text(js), /const modelPreference = \(\)/);
-assert.match(text(js), /const languageModelPreferences = \{/);
-assert.match(text(js), /function onboardingPreferenceControl/);
-assert.match(text(js), /name="onboarding-model-preference"/);
-assert.match(text(js), /brevia-model-preference/);
-assert.match(text(js), /const preset = languageModelPreferences\[modelPreference\(\)\]/);
-assert.match(text(js), /preferenceQuality: '质量优先'/);
-assert.match(text(css), /\.onboarding-preference-option\{/);
+assert.match(text(js), /refined: 'qwen3-asr-0\.6b-int8'/);
+assert.doesNotMatch(text(js), /name="onboarding-model-preference"/);
+assert.doesNotMatch(text(css), /\.onboarding-preference-option\{/);
+assert.match(text(i18nData), /const refinementStatusLabels = \{/);
 assert.match(text(js), /data-onboarding-back-language/);
 assert.match(text(js), /function openOnboardingPermissions/);
 assert.match(text(js), /data-request-onboarding-permission/);
@@ -708,7 +781,7 @@ assert.doesNotMatch(text(js), /function openOnboardingWelcome/);
 assert.match(text(js), /const page = onboardingPage/);
 assert.match(text(js), /page\.querySelector\('\[name="locale"\]'\)\.value/);
 assert.match(text(js), /finally \{\s*switchingLanguage = false/);
-for (const selector of ['.settings-grid', '.meeting-list', '#meeting-form .form-grid', '.final-transcript', '.notes', '.live-panel', '#tts-chat', '#model-download-queue']) {
+for (const selector of ['.settings-grid', '.meeting-list', '#meeting-form .form-grid', '.final-transcript', '.notes', '.live-panel', '#model-download-queue']) {
   assert.match(text(js), new RegExp(selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
 }
 assert.match(text(js), /rerendered\.push\(batchToolbar, updateNotice/);
@@ -748,8 +821,23 @@ assert.doesNotMatch(text(js), /segment\.offsetTop - \(transcript\.clientHeight -
 assert.match(text(js), /liveSpeakers\.set/);
 assert.match(text(js), /const maxLiveSegments = 500/);
 assert.match(text(js), /while \(liveSegments\.size > maxLiveSegments\)/);
-assert.match(text(js), /liveConfig = \{ language: language \|\| 'auto', streaming_model_id: streamingModelId \|\| '', refined_model_id: refinedModelId \|\| '', target_language: payload\.target_language \|\| null \}/);
+assert.match(text(js), /liveConfig = \{ language: language \|\| 'auto', streaming_model_id: streamingModelId \|\| '', refined_model_id: refinedModelId \|\| '', target_language: payload\.target_language \|\| null, power_saving: Boolean\(payload\.power_saving\) \}/);
 assert.match(text(js), /await window\.brevia\.meeting\.reconfigure\(\{ meeting_id: meetingId, \.\.\.changes \}\)/);
+assert.match(text(js), /function setLivePowerSaving\(enabled\)/);
+assert.match(text(js), /data-live-power-saving/);
+assert.match(text(js), /function checkPowerSavingSuggestion\(\)/);
+assert.match(text(js), /纪要服务暂时不可用，请检查网络或稍后重试。/);
+assert.doesNotMatch(text(js), /paraformer-zh-en-int8/);
+assert.doesNotMatch(text(uiData), /Streaming Paraformer/);
+for (const code of ['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']) {
+  const labels = localeContext.window.BreviaLocaleData.catalog[code].labels;
+  assert.ok(labels['省电模式']);
+  assert.ok(labels['纪要服务暂时不可用，请检查网络或稍后重试。']);
+  if (code !== 'zh') {
+    assert.notEqual(labels['省电模式'], '省电模式');
+    assert.notEqual(labels['纪要服务暂时不可用，请检查网络或稍后重试。'], '纪要服务暂时不可用，请检查网络或稍后重试。');
+  }
+}
 assert.doesNotMatch(text(js), /setTrackEnabled\(/);
 assert.doesNotMatch(text(js), /uiData\.live\.status/);
 assert.match(text(js), /segment\.classList\.remove\('is-active'\)/);
@@ -774,15 +862,16 @@ assert.match(text(floatingCaptionHtml), /max-height: 220px;[\s\S]*overflow-y: au
 assert.match(text(floatingCaptionHtml), /\.caption-controls \{[\s\S]*z-index: 1;[\s\S]*opacity: 1;/);
 assert.match(text(floatingCaptionHtml), /class="caption-shell">[\s\S]*class="caption-controls"[\s\S]*class="caption-container"/);
 assert.match(text(floatingCaptionHtml), /@keyframes caption-fade \{\s*from \{ opacity: 0\.65; \}/);
-assert.match(text(js), /\['zh', 'en'\]\.includes\(targetLanguage\) && !voiceId/);
-assert.match(text(js), /const ttsLanguages = \['zh', 'en'\]/);
-assert.match(text(electronMain), /target_language: z\.enum\(\['zh', 'en', 'es', 'ko', 'fr', 'de', 'ru'\]\)/);
 assert.match(text(electronMain), /translationPending: z\.boolean\(\)\.optional\(\)/);
 assert.match(text(electronMain), /worker\.restarts = 0;\s*resetFloatingCaptionState\(\);/);
 assert.match(text(electronMain), /pendingTranslation\.segmentId === value\.segmentId/);
 assert.match(text(electronMain), /translationPending: floatingCaptionState\.translationPending/);
 assert.match(text(js), /function showRefinementProgress/);
+assert.match(text(js), /function refinementTitle\(meetingId\)/);
+assert.match(text(js), /refinementTitle\(meeting_id\), meeting_id, stage/);
 assert.match(text(js), /\$\{copy\.title\} - \$\{refinementMeetingTitle\}/);
+assert.match(text(js), /\$\{copy\.waiting\} · \$\{Math\.round\(ratio \* 100\)\}%/);
+assert.match(text(i18nData), /'转写中 · 校正说话人': 'Transcribing · Correcting speakers'/);
 assert.match(text(js), /segment\.version\.startsWith\('postprocess'\)/);
 assert.match(text(js), /playback\.mix \|\| meeting\.audio\.playback\.mic/);
 assert.match(text(js), /segment\.is-active/);
@@ -898,4 +987,6 @@ summaryContext.modelPaths = new Map();
 summaryContext.summaryConfig = { version: 2, provider: 'built-in', providers: {} };
 summaryContext.renderSummaryModelModal();
 assert.doesNotMatch(summaryNodes['.modal-body'].innerHTML, /<img|<script>/);
+assert.doesNotMatch(text(html), /管理模型与术语/);
+assert.match(text(html), /管理模型 →/);
 console.log('UI structure checks passed.');

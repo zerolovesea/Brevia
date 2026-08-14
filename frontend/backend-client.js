@@ -121,15 +121,26 @@ class AudioCapture {
     await Promise.all(streams.map(({ track, stream }) => this.connect(track, stream)));
   }
 
+  async setPaused(paused) {
+    this.paused = paused;
+    await Promise.allSettled(this.sources.map(async ({ context }) => {
+      if (paused && context.state === 'running') await context.suspend();
+      if (!paused && context.state === 'suspended') await context.resume();
+    }));
+  }
+
   async connect(track, stream) {
-    const resource = { track, stream, context: new AudioContext(), startMs: Math.round(performance.now() - this.startedAt) };
+    const resource = {
+      track, stream, context: new AudioContext(), startMs: Math.round(performance.now() - this.startedAt),
+      inFlight: null, flushResolve: null,
+    };
     const { context } = resource;
-    let queue = Promise.resolve();
     let sampleOffset = 0;
     let ready;
+    let readyTimer;
     const started = new Promise((resolve, reject) => {
-      ready = resolve;
-      setTimeout(() => reject(new Error(`${track === 'system' ? '系统音频' : '麦克风'}未产生音频数据`)), 3000);
+      ready = () => { clearTimeout(readyTimer); resolve(); };
+      readyTimer = setTimeout(() => reject(new Error(`${track === 'system' ? '系统音频' : '麦克风'}未产生音频数据`)), 3000);
     });
     try {
       await loadAudioWorklet(context);
@@ -137,8 +148,13 @@ class AudioCapture {
       resource.processor = new AudioWorkletNode(context, 'audio-capture-processor');
       // worklet 累积样本并回传主线程,在此处理暂停/静音逻辑并推流到后端。
       resource.processor.port.onmessage = ({ data }) => {
+        if (data.flushed) {
+          resource.flushResolve?.();
+          resource.flushResolve = null;
+          return;
+        }
         ready();
-        if (this.paused) return;
+        if (this.paused || this.stopping) return;
         if (track === 'mic' && this.onLevel) {
           this.onLevel(track, data.level);
         }
@@ -147,32 +163,52 @@ class AudioCapture {
         sampleOffset += samples.length;
         const pcm = new Int16Array(samples.length);
         samples.forEach((sample, index) => { pcm[index] = Math.max(-1, Math.min(1, sample)) * 0x7fff; });
-        const bytes = new Uint8Array(pcm.buffer);
-        let binary = '';
-        for (let offset = 0; offset < bytes.length; offset += 0x8000) binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
-        const payload = {
-          meeting_id: this.meetingId,
-          track,
-          pcm: btoa(binary),
-          sample_rate: 16000,
-          start_ms: resource.startMs + Math.round(offset / 16),
-        };
-        queue = queue.then(() => this.stopping ? null : this.send(payload)).catch((error) => console.error('Audio frame failed', error));
+        this.enqueue(resource, pcm, resource.startMs + Math.round(offset / 16));
       };
       resource.source.connect(resource.processor);
       resource.processor.connect(context.destination);
-      resource.pending = () => queue;
+      resource.pending = () => resource.inFlight;
       this.sources.push(resource);
       await context.resume();
       await started;
     } catch (error) {
+      clearTimeout(readyTimer);
       this.sources = this.sources.filter((item) => item !== resource);
       await this.release(resource);
       throw error;
     }
   }
 
+  enqueue(resource, pcm, startMs) {
+    if (!pcm.length) return;
+    const send = async () => {
+      const bytes = new Uint8Array(pcm.buffer);
+      let binary = '';
+      for (let offset = 0; offset < bytes.length; offset += 0x8000) binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+      try {
+        await this.send({ meeting_id: this.meetingId, track: resource.track, pcm: btoa(binary), sample_rate: 16000, start_ms: startMs });
+      } catch (error) { console.error('Audio frame failed', error); }
+    };
+    resource.inFlight = resource.inFlight ? resource.inFlight.then(send) : send();
+  }
+
+  flush(resource) {
+    if (!resource.processor?.port) return Promise.resolve();
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        resource.flushResolve = null;
+        resolve();
+      }, 500);
+      resource.flushResolve = () => { clearTimeout(timer); resolve(); };
+      resource.processor.port.postMessage({ type: 'flush' });
+    });
+  }
+
   async release({ stream, context, source, processor }) {
+    if (processor?.port) {
+      processor.port.onmessage = null;
+      try { processor.port.close(); } catch { /* 端口可能已经关闭。 */ }
+    }
     for (const node of [processor, source]) {
       try { node?.disconnect(); } catch { /* 可能尚未连接。 */ }
     }
@@ -198,13 +234,14 @@ class AudioCapture {
   async stop() {
     if (this.stopPromise) return this.stopPromise;
     this.stopPromise = (async () => {
-      this.stopping = true;
       const preview = this.preview;
       const pendingStreams = this.pendingStreams;
       const sources = this.sources;
       this.preview = null;
       this.pendingStreams = [];
       this.sources = [];
+      await Promise.allSettled(sources.map((resource) => this.flush(resource)));
+      this.stopping = true;
       await Promise.allSettled(sources.map(({ pending }) => pending()));
       await Promise.all([
         ...pendingStreams.map(({ stream }) => this.release({ stream })),
@@ -266,7 +303,7 @@ window.breviaClient = window.brevia ? {
   async pause(paused) {
     const meetingId = this.state.meeting?.id || this.capture?.meetingId;
     if (!meetingId) throw new Error('当前没有正在进行的会议');
-    if (this.capture) this.capture.paused = paused;
+    if (this.capture) await this.capture.setPaused(paused);
     return window.brevia.meeting.pause({ meeting_id: meetingId, paused });
   },
   async stop(durationMs) {

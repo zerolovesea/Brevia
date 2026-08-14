@@ -19,9 +19,9 @@ CREATE TABLE IF NOT EXISTS meetings (
   streaming_model_id TEXT NOT NULL,
   refined_model_id TEXT NOT NULL,
   speaker_segmentation_model_id TEXT,
-  speaker_embedding_model_id TEXT,
   vad_model_id TEXT,
   num_speakers INTEGER NOT NULL DEFAULT -1,
+  power_saving INTEGER NOT NULL DEFAULT 0,
   workspace_id TEXT REFERENCES workspaces(id) ON DELETE SET NULL,
   previous_workspace_id TEXT,
   category TEXT NOT NULL DEFAULT '',
@@ -75,7 +75,6 @@ CREATE TABLE IF NOT EXISTS speaker_profile_samples (
   embedding TEXT NOT NULL,
   created_at TEXT NOT NULL,
   audio_path TEXT,
-  reference_text TEXT,
   duration_ms INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS speaker_turns (
@@ -186,13 +185,13 @@ class StoreBase:
                 db.execute(
                     "ALTER TABLE meetings ADD COLUMN speaker_segmentation_model_id TEXT"
                 )
-            if "speaker_embedding_model_id" not in columns:
-                db.execute(
-                    "ALTER TABLE meetings ADD COLUMN speaker_embedding_model_id TEXT"
-                )
             if "num_speakers" not in columns:
                 db.execute(
                     "ALTER TABLE meetings ADD COLUMN num_speakers INTEGER NOT NULL DEFAULT -1"
+                )
+            if "power_saving" not in columns:
+                db.execute(
+                    "ALTER TABLE meetings ADD COLUMN power_saving INTEGER NOT NULL DEFAULT 0"
                 )
             if "vad_model_id" not in columns:
                 db.execute("ALTER TABLE meetings ADD COLUMN vad_model_id TEXT")
@@ -211,10 +210,6 @@ class StoreBase:
             if "audio_path" not in sample_columns:
                 db.execute(
                     "ALTER TABLE speaker_profile_samples ADD COLUMN audio_path TEXT"
-                )
-            if "reference_text" not in sample_columns:
-                db.execute(
-                    "ALTER TABLE speaker_profile_samples ADD COLUMN reference_text TEXT"
                 )
             if "duration_ms" not in sample_columns:
                 db.execute(

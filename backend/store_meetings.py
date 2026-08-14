@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
 
-from .config import SETTINGS
+from .config import SETTINGS, validate_num_speakers
 from .store_base import utc_now
 
 
@@ -77,9 +77,9 @@ class MeetingStoreMixin:
             payload["streaming_model_id"],
             payload["refined_model_id"],
             payload.get("speaker_segmentation_model_id"),
-            payload.get("speaker_embedding_model_id"),
             payload.get("vad_model_id", "silero-vad"),
-            int(payload.get("num_speakers", -1)),
+            validate_num_speakers(payload.get("num_speakers", -1)),
+            int(bool(payload.get("power_saving"))),
             payload.get("workspace_id"),
             json.dumps(payload.get("tags", []), ensure_ascii=False),
             "recording",
@@ -103,7 +103,7 @@ class MeetingStoreMixin:
                 db.execute(
                     """INSERT INTO meetings
                         (id,title,language,target_language,streaming_model_id,refined_model_id,
-                         speaker_segmentation_model_id,speaker_embedding_model_id,vad_model_id,num_speakers,workspace_id,tags,status,created_at,started_at)
+                         speaker_segmentation_model_id,vad_model_id,num_speakers,power_saving,workspace_id,tags,status,created_at,started_at)
                         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                     values,
                 )
@@ -191,7 +191,7 @@ class MeetingStoreMixin:
                         example["title"],
                         example.get("language", example["locale"]),
                         example.get("target_language", "en" if example["locale"] == "zh" else "zh"),
-                        "paraformer-zh-en-int8",
+                        "zipformer-zh-xlarge-streaming-int8",
                         "funasr-nano-int8",
                         json.dumps(example["tags"], ensure_ascii=False),
                         "refined",
@@ -336,7 +336,9 @@ class MeetingStoreMixin:
             "archived_at",
             "refined_model_id",
             "language",
+            "target_language",
             "streaming_model_id",
+            "power_saving",
         }
         fields = {key: value for key, value in updates.items() if key in allowed}
         if not fields:

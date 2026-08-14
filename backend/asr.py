@@ -13,12 +13,26 @@ import time
 import urllib.request
 from pathlib import Path
 
-from .config import SETTINGS
+from .config import SETTINGS, SPEAKER_EMBEDDING_MODEL_ID
 
 
 DOWNLOAD_TIMEOUT_SECONDS = 30
 DOWNLOAD_RETRIES = 5
 DOWNLOAD_FREE_SPACE_MULTIPLIER = 2
+DEPRECATED_MODEL_PREFIXES = (
+    "campplus-zh-en-",
+    "fire-red-asr2-ctc-zh-en-int8-",
+    "nemo-titanet-small-en-",
+    "paraformer-zh-en-int8-",
+    "vits-mimic3-ko-kss-low-",
+    "vits-piper-de-thorsten-medium-int8-",
+    "vits-piper-es-sharvard-medium-int8-",
+    "vits-piper-fr-siwis-medium-int8-",
+    "vits-piper-ru-irina-medium-int8-",
+    "whisper-turbo-",
+    "zipformer-zh-streaming-int8-",
+    "zipvoice-zh-en-",
+)
 
 
 class DownloadCancelled(Exception):
@@ -55,6 +69,13 @@ class ModelManager:
                 Path(__file__).with_name("models.json").read_text(encoding="utf-8")
             )
         }
+        self.remove_deprecated_models()
+
+    def remove_deprecated_models(self):
+        """删除已从清单移除、且应用不再提供删除入口的旧模型。"""
+        for path in self.root.iterdir():
+            if path.is_dir() and path.name.startswith(DEPRECATED_MODEL_PREFIXES):
+                shutil.rmtree(path, ignore_errors=True)
 
     def list(self):
         """返回模型清单，并补充本机安装状态和安装路径。"""
@@ -309,16 +330,30 @@ class ModelManager:
     @staticmethod
     def device():
         """探测 ONNX Runtime 执行后端，并给出保守的推理线程数。"""
-        try:
-            import onnxruntime
+        requested = os.environ.get("BREVIA_ASR_BACKEND", "").lower()
+        if requested not in {"", "cpu", "cuda", "coreml", "mps"}:
+            raise ValueError("BREVIA_ASR_BACKEND must be cpu, cuda, coreml, or mps")
+        if requested:
+            # sherpa-onnx 没有 MPS provider；Apple 语音模型实测 CPU 更快，Metal
+            # 仍由 llama.cpp 用于纪要与翻译。CUDA/CoreML 保留给专用运行时构件。
+            backend = "cpu" if requested == "mps" else requested
+            providers = {
+                "cpu": ["CPUExecutionProvider"],
+                "cuda": ["CUDAExecutionProvider"],
+                "coreml": ["CoreMLExecutionProvider"],
+            }[backend]
+        else:
+            try:
+                import onnxruntime
 
-            providers = onnxruntime.get_available_providers()
-        except ImportError:
-            providers = ["CPUExecutionProvider"]
+                providers = onnxruntime.get_available_providers()
+            except ImportError:
+                providers = ["CPUExecutionProvider"]
+            backend = "cuda" if "CUDAExecutionProvider" in providers else "cpu"
         return {
             "architecture": platform.machine(),
             "providers": providers,
-            "backend": "cuda" if "CUDAExecutionProvider" in providers else "cpu",
+            "backend": backend,
             "threads": max(1, min(4, (os.cpu_count() or 2) // 2)),
         }
 
@@ -361,23 +396,13 @@ class StreamingASR:
                 SETTINGS["asr"]["maximum_utterance_seconds"],
             ),
         }
-        if self.model["kind"] == "paraformer":
-            common.update(
-                encoder=str(path / "encoder.int8.onnx"),
-                decoder=str(path / "decoder.int8.onnx"),
-            )
-        else:
-            files = [name for name in self.model["files"] if name.endswith(".onnx")]
-            common.update(
-                encoder=str(path / files[0]),
-                decoder=str(path / files[1]),
-                joiner=str(path / files[2]),
-            )
-        self.recognizer = (
-            sherpa_onnx.OnlineRecognizer.from_paraformer(**common)
-            if self.model["kind"] == "paraformer"
-            else sherpa_onnx.OnlineRecognizer.from_transducer(**common)
+        files = [name for name in self.model["files"] if name.endswith(".onnx")]
+        common.update(
+            encoder=str(path / files[0]),
+            decoder=str(path / files[1]),
+            joiner=str(path / files[2]),
         )
+        self.recognizer = sherpa_onnx.OnlineRecognizer.from_transducer(**common)
         self.streams = {}
         self.lock = threading.Lock()
 
@@ -636,10 +661,10 @@ class ChinesePunctuation:
 class SpeakerTracker:
     """按声纹相似度为连续语音分配稳定的会议内说话人 ID。"""
 
-    def __init__(self, manager, threshold=None, max_speakers=None, model_id=None):
+    def __init__(self, manager, threshold=None, max_speakers=None, threads=None):
         """加载声纹模型；阈值越低，越倾向于合并为同一说话人。"""
         config = SETTINGS["diarization"]
-        model_id = model_id or config["embedding_model_id"]
+        model_id = SPEAKER_EMBEDDING_MODEL_ID
         if not manager.is_ready(model_id):
             raise RuntimeError(f"Model {model_id} is not installed")
         try:
@@ -649,7 +674,7 @@ class SpeakerTracker:
         model = manager.path(model_id) / manager.get(model_id)["files"][0]
         extractor_config = sherpa_onnx.SpeakerEmbeddingExtractorConfig(
             model=str(model),
-            num_threads=manager.device()["threads"],
+            num_threads=threads or manager.device()["threads"],
             provider=manager.device()["backend"],
         )
         if not extractor_config.validate():
@@ -674,7 +699,7 @@ class SpeakerTracker:
         embedding = self.embedding(samples, sample_rate)
         return (
             self.assign_embedding(embedding)
-            if embedding
+            if embedding is not None
             else self.last_speaker or "spk-1"
         )
 
@@ -821,7 +846,6 @@ class OfflineDiarizer:
         num_speakers=None,
         threshold=None,
         segmentation_id=None,
-        embedding_id=None,
     ):
         """创建离线说话人分离器。
 
@@ -832,7 +856,7 @@ class OfflineDiarizer:
         """
         config = SETTINGS["diarization"]
         segmentation_id = segmentation_id or config["segmentation_model_id"]
-        embedding_id = embedding_id or config["embedding_model_id"]
+        embedding_id = SPEAKER_EMBEDDING_MODEL_ID
         if not all(
             manager.is_ready(model_id) for model_id in (segmentation_id, embedding_id)
         ):
@@ -933,88 +957,3 @@ class SourceSeparator:
     def process(self, samples, sample_rate):
         """分离音频为人声和伴奏并返回结果。"""
         return self.engine.process(sample_rate=sample_rate, samples=samples)
-
-
-class ZipVoiceTTS:
-    """使用 ZipVoice 本地根据参考音频合成中英文语音。"""
-
-    def __init__(self, manager, model_id="zipvoice-zh-en"):
-        """初始化 ZipVoice TTS 引擎。
-
-        Args:
-            manager: 已初始化的 ModelManager。
-            model_id: 已安装的 ZipVoice 模型 ID。
-        """
-        if not manager.is_ready(model_id):
-            raise RuntimeError(f"Model {model_id} is not installed")
-        try:
-            import sherpa_onnx
-        except ImportError as error:
-            raise RuntimeError("sherpa-onnx is not installed") from error
-        path = manager.path(model_id)
-        config = sherpa_onnx.OfflineTtsConfig(
-            model=sherpa_onnx.OfflineTtsModelConfig(
-                zipvoice=sherpa_onnx.OfflineTtsZipvoiceModelConfig(
-                    tokens=str(path / "tokens.txt"),
-                    encoder=str(path / "encoder.int8.onnx"),
-                    decoder=str(path / "decoder.int8.onnx"),
-                    data_dir=str(path / "espeak-ng-data"),
-                    lexicon=str(path / "lexicon.txt"),
-                    vocoder=str(path / "vocos_24khz.onnx"),
-                ),
-                num_threads=manager.device()["threads"],
-                provider=manager.device()["backend"],
-            )
-        )
-        if not config.validate():
-            raise RuntimeError("Invalid ZipVoice configuration")
-        self.engine = sherpa_onnx.OfflineTts(config)
-
-    def generate(self, text, reference_audio, reference_sample_rate, reference_text):
-        """根据参考音频和文本生成语音。"""
-        import sherpa_onnx
-
-        config = sherpa_onnx.GenerationConfig()
-        config.reference_audio = reference_audio
-        config.reference_sample_rate = reference_sample_rate
-        config.reference_text = reference_text
-        config.num_steps = 4
-        return self.engine.generate(text, config)
-
-
-class VitsTTS:
-    """使用单语言 VITS 模型生成不依赖参考音频的本地语音。"""
-
-    def __init__(self, manager, model_id):
-        """初始化 VITS TTS 引擎。
-
-        Args:
-            manager: 已初始化的 ModelManager。
-            model_id: 已安装的 VITS 模型 ID。
-        """
-        if not manager.is_ready(model_id):
-            raise RuntimeError(f"Model {model_id} is not installed")
-        try:
-            import sherpa_onnx
-        except ImportError as error:
-            raise RuntimeError("sherpa-onnx is not installed") from error
-        path = manager.path(model_id)
-        model = next(path.glob("*.onnx"), None)
-        if not model:
-            raise RuntimeError(f"Model {model_id} is missing its VITS file")
-        config = sherpa_onnx.OfflineTtsConfig(
-            model=sherpa_onnx.OfflineTtsModelConfig(
-                vits=sherpa_onnx.OfflineTtsVitsModelConfig(
-                    model=str(model), tokens=str(path / "tokens.txt"), data_dir=str(path / "espeak-ng-data")
-                ),
-                num_threads=manager.device()["threads"],
-                provider=manager.device()["backend"],
-            )
-        )
-        if not config.validate():
-            raise RuntimeError("Invalid VITS configuration")
-        self.engine = sherpa_onnx.OfflineTts(config)
-
-    def generate(self, text):
-        """生成语音并返回音频对象。"""
-        return self.engine.generate(text)

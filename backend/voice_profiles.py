@@ -8,7 +8,7 @@ from pathlib import Path
 
 from .audio_io import convert_to_pcm_wav, read_mono_wav, write_mono_wav
 from .asr import SpeakerTracker
-from .config import SETTINGS
+from .config import SETTINGS, SPEAKER_EMBEDDING_MODEL_ID
 
 
 class VoiceProfileService:
@@ -19,18 +19,15 @@ class VoiceProfileService:
         self.models = models
 
     def enroll(self, payload):
-        """提取声纹并可选保存克隆所需的本地参考音频与文字。"""
+        """提取声纹并保存用于后续验证的本地录音。"""
         source = Path(payload["path"])
         if not source.is_file():
             raise ValueError("Audio file not found")
         samples, sample_rate = self._samples(source)
-        embedding = SpeakerTracker(
-            self.models, model_id=payload.get("embedding_model_id")
-        ).embedding(samples, sample_rate)
+        embedding = SpeakerTracker(self.models).embedding(samples, sample_rate)
         if embedding is None:
             raise ValueError("Voice sample is too short for speaker registration")
         source_key = f"file:{source.resolve()}:{source.stat().st_mtime_ns}:{source.stat().st_size}"
-        reference_text = (payload.get("reference_text") or "").strip()
         profile = (
             self.store.ensure_speaker_profile(payload["name"])
             if not payload.get("profile_id")
@@ -38,20 +35,19 @@ class VoiceProfileService:
         )
         directory = self.store.speaker_profiles_dir / profile["id"]
         directory.mkdir(parents=True, exist_ok=True)
-        reference_audio = directory / f"{int(time.time() * 1000)}.wav"
-        convert_to_pcm_wav(source, reference_audio)
+        sample_audio = directory / f"{int(time.time() * 1000)}.wav"
+        convert_to_pcm_wav(source, sample_audio)
         try:
             return self.store.save_speaker_profile_sample(
                 payload["name"],
                 embedding,
                 source_key,
                 profile["id"],
-                str(reference_audio),
-                reference_text,
+                str(sample_audio),
                 round(len(samples) * 1000 / sample_rate),
             )
         except Exception:
-            reference_audio.unlink(missing_ok=True)
+            sample_audio.unlink(missing_ok=True)
             raise
 
     def verify(self, payload):
@@ -60,9 +56,7 @@ class VoiceProfileService:
         if not source.is_file():
             raise ValueError("Audio file not found")
         samples, sample_rate = self._samples(source)
-        embedding = SpeakerTracker(
-            self.models, model_id=payload.get("embedding_model_id")
-        ).embedding(samples, sample_rate)
+        embedding = SpeakerTracker(self.models).embedding(samples, sample_rate)
         if embedding is None:
             raise ValueError("Voice sample is too short for verification")
         profile = self.store.speaker_profile(payload["profile_id"])
@@ -88,9 +82,7 @@ class VoiceProfileService:
         """按句保存用户明确选择的会议录音，并增量更新声纹中心。"""
         profile = self.store.ensure_speaker_profile(name)
         try:
-            tracker = SpeakerTracker(
-                self.models, model_id=meeting.get("speaker_embedding_model_id")
-            )
+            tracker = SpeakerTracker(self.models)
         except RuntimeError:
             return profile
         archived = self.store.list_speaker_profile_samples(profile["id"])
@@ -177,7 +169,6 @@ class VoiceProfileService:
                         source_key,
                         profile["id"],
                         str(audio_path),
-                        sentence,
                         duration_ms,
                     )
                 except Exception:
@@ -191,29 +182,27 @@ class VoiceProfileService:
 
     def seed_builtin_profiles(self):
         """用随应用发布的双人示例录音提供一男一女两个默认声纹。"""
-        model_id = SETTINGS["diarization"]["embedding_model_id"]
+        model_id = SPEAKER_EMBEDDING_MODEL_ID
         if not self.models.is_ready(model_id):
             return
         source = Path(__file__).with_name("fixtures") / "example-zh.wav"
         if not source.is_file():
             return
         samples, rate = read_mono_wav(source)
-        tracker = SpeakerTracker(self.models, model_id=model_id)
+        tracker = SpeakerTracker(self.models)
         # ponytail: 随应用打包的演示说话人作为默认种子；录制品牌声音后替换 fixtures。
-        for key, name, start_ms, end_ms, text in (
+        for key, name, start_ms, end_ms in (
             (
                 "builtin:male",
                 "内置男声",
                 0,
                 5016,
-                "大家早上好，今天我们确认新用户引导的上线范围。",
             ),
             (
                 "builtin:female",
                 "内置女声",
                 5016,
                 9102,
-                "设计稿已经完成，开发团队周四可以交付测试版本。",
             ),
         ):
             if any(
@@ -237,7 +226,6 @@ class VoiceProfileService:
                 key,
                 profile["id"],
                 str(audio_path),
-                text,
                 end_ms - start_ms,
             )
 

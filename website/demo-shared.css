@@ -195,9 +195,3 @@
   display: grid !important;
   gap: 12px;
 }
-
-.demo-viewport .tts-selects {
-  display: grid !important;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}

@@ -49,13 +49,12 @@ Powered by Pyannote segmentation plus speaker-embedding models, all running on-d
 
 ### A curated local model library
 
-27+ downloadable models covering streaming ASR, offline refinement, punctuation restoration, voice activity detection, speaker diarization, speaker embedding, text-to-speech, and source separation. Mix and match by language and precision — everything runs on your device.
+Downloadable models cover streaming ASR, offline refinement, punctuation restoration, voice activity detection, speaker diarization, speaker embedding, and source separation. Mix and match by language and precision — everything runs on your device.
 
 ![Model library](docs/assets/tour/en/%E6%A8%A1%E5%9E%8B%E5%BA%93.png)
 
 ### And more
 
-- **TTS voice synthesis and cloning** — ZipVoice uses reference audio from enrolled speakers to synthesize Chinese and English speech; VITS voices are available for German, French, Spanish, Russian, and Korean.
 - **Source separation** — Spleeter splits recordings into vocal and non-vocal stems for post-processing.
 - **Audio import** — bring in existing recordings for offline transcription through the same speech pipeline.
 - **Rich exports** — transcript and notes as Markdown, TXT, JSON, SRT, DOCX, or PDF; audio as FLAC, WAV, or M4A.
@@ -79,7 +78,7 @@ On first launch, grant microphone and screen-recording permissions, then open **
 flowchart LR
   A[Electron renderer<br/>HTML · Tailwind · JS] <-->|IPC + Zod validation| B[Electron main process]
   B <-->|JSONL stdin/stdout| C[Python worker<br/>bundled runtime]
-  C --> D[sherpa-onnx<br/>ASR · VAD · speakers · punctuation · TTS]
+  C --> D[sherpa-onnx<br/>ASR · VAD · speakers · punctuation]
   C --> E[Local storage<br/>SQLite · audio · exports]
   C -. explicit consent .-> F[Optional cloud API<br/>LLM summary · translation]
 ```
@@ -99,7 +98,7 @@ Brevia follows a strict local-first design:
 | Frontend | Vanilla HTML/CSS/JS, Tailwind CSS 4, built-in i18n (8 locales) |
 | Backend | Python 3.10+, JSONL worker protocol, SQLite storage |
 | Speech engine | [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 1.13.2, ONNX Runtime |
-| Speaker processing | Pyannote segmentation + 3D-Speaker / NeMo Titanet / CAM++ embeddings |
+| Speaker processing | Pyannote segmentation + 3D-Speaker ERes2Net Base embeddings |
 | LLM client | Built-in llama.cpp (GGUF) plus OpenAI- / Anthropic-compatible chat APIs |
 | Audio I/O | ffmpeg (bundled in releases) |
 | Build & packaging | electron-builder, PyInstaller (bundled Python runtime) |
@@ -109,15 +108,14 @@ Every model is downloaded on demand from **Settings → Model Library**. The man
 
 | Category | Representative models | Languages |
 | --- | --- | --- |
-| Streaming ASR | Zipformer (zh / en / fr / ko / multilingual), Paraformer bilingual, Nemotron 3.5 | 30+ |
-| Refinement ASR | Qwen3-ASR 0.6B / 1.7B, Whisper Turbo / Large v3, FireRedASR2, FunASR Nano | Multilingual |
+| Streaming ASR | Zipformer (zh / en / fr / ko / multilingual), Nemotron 3.5 | 30+ |
+| Refinement ASR | Qwen3-ASR 0.6B / 1.7B, Whisper Large v3, FunASR Nano | Multilingual |
 | Punctuation | CT-Transformer zh+en, Online Punct English casing | zh / en |
 | Voice activity detection | Silero VAD | Universal |
 | Speech enhancement | GTCRN Live Denoiser | Universal |
 | Speaker diarization | Pyannote Segmentation 3.0, Reverb Diarization v1 | Universal |
-| Speaker embeddings | 3D-Speaker ERes2Net, CAM++, NeMo Titanet | zh / en |
+| Speaker embeddings | 3D-Speaker ERes2Net Base | Universal |
 | Source separation | Spleeter 2 Stems | Universal |
-| Text-to-speech | ZipVoice (zh + en), VITS Piper (fr / de / es / ru), VITS Mimic3 (ko) | Multilingual |
 
 For LLM summaries, pick **Built-in AI** to run a bundled GGUF model locally (Qwen 3.5 2B / 4B, Gemma 3 1B / 4B), or point Brevia at Claude, OpenAI, OpenRouter, or any custom service that speaks OpenAI Chat Completions or Anthropic Messages — Gemini (OpenAI-compatible endpoint), DeepSeek, Kimi, Qwen, and more.
 
@@ -151,6 +149,7 @@ npm run start:fresh         # Reset the onboarding flow and start
 BREVIA_DATA_DIR=/path/to/data       # Custom data dir (recordings, exports, SQLite)
 BREVIA_MODELS_DIR=/path/to/models   # Custom model dir
 BREVIA_FFMPEG=/path/to/ffmpeg       # ffmpeg binary (if not on PATH)
+BREVIA_ASR_BACKEND=cpu              # cpu, cuda, or coreml; mps safely maps to cpu
 
 BREVIA_DATA_DIR=~/brevia-dev BREVIA_MODELS_DIR=~/brevia-models npm start
 ```
@@ -194,7 +193,7 @@ No. Release builds bundle the Python runtime and all required dependencies. A se
 <details>
 <summary><strong>Does Brevia send audio to the cloud?</strong></summary>
 
-No. Speech recognition, diarization, and TTS all run locally. Only LLM summaries and translation contact the network, and only after you configure a provider — text only, never audio.
+No. Speech recognition and diarization run locally. Only LLM summaries and translation contact the network, and only after you configure a provider — text only, never audio.
 </details>
 
 <details>
@@ -251,6 +250,6 @@ Brevia is released under the [ISC License](LICENSE). Model files and third-party
 
 ## Acknowledgments
 
-- [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) — the local runtime powering ASR, VAD, punctuation, speaker processing, and TTS. Licensed under [Apache-2.0](https://github.com/k2-fsa/sherpa-onnx/blob/master/LICENSE).
-- Thanks to the model authors and maintainers whose downloadable artifacts are declared in [`backend/models.json`](backend/models.json), including Zipformer, Paraformer, Whisper, Qwen3-ASR, FireRedASR, FunASR, Pyannote, 3D-Speaker, NeMo, Silero, Spleeter, ZipVoice, VITS Piper / Mimic3, and more.
+- [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) — the local runtime powering ASR, VAD, punctuation, and speaker processing. Licensed under [Apache-2.0](https://github.com/k2-fsa/sherpa-onnx/blob/master/LICENSE).
+- Thanks to the model authors and maintainers whose downloadable artifacts are declared in [`backend/models.json`](backend/models.json), including Zipformer, Whisper, Qwen3-ASR, FunASR, Pyannote, 3D-Speaker, Silero, Spleeter, and Tencent Hy-MT2.
 - Electron, ONNX Runtime, Python, and the open-source speech community make this local-first workflow possible.

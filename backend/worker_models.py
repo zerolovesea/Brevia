@@ -6,8 +6,8 @@ import time
 from .asr import (
     DownloadCancelled,
 )
-from .config import SETTINGS
-from .worker_common import require
+from .config import SPEAKER_EMBEDDING_MODEL_ID
+from .worker_common import TaskCancelled, require
 
 
 class ModelTaskWorkerMixin:
@@ -64,8 +64,12 @@ class ModelTaskWorkerMixin:
 
     def wait_task(self, control):
         """等待任务控制事件解除暂停。"""
-        while control.is_set():
+        while control.paused.is_set():
+            if control.cancelled.is_set():
+                raise TaskCancelled()
             time.sleep(0.1)
+        if control.cancelled.is_set():
+            raise TaskCancelled()
 
     def finish_task(self, task, meeting_id, control=None):
         """结束任务并释放其控制记录。"""
@@ -90,6 +94,16 @@ class ModelTaskWorkerMixin:
         """恢复暂停的任务。"""
         return self.set_task_pause(payload, False)
 
+    def cancel_task(self, payload):
+        """请求运行中的任务取消，并发布状态事件。"""
+        require(payload, "task", "meeting_id")
+        self.tasks.cancel(payload["task"], payload["meeting_id"])
+        self.emit(
+            "task.status",
+            {"task": payload["task"], "meeting_id": payload["meeting_id"], "status": "cancelling"},
+        )
+        return {"task": payload["task"], "meeting_id": payload["meeting_id"], "status": "cancelling"}
+
     def _download_model(self, model_id, control, china_source=False):
         """下载模型并将最终状态作为异步事件发送。"""
         completed = False
@@ -101,7 +115,7 @@ class ModelTaskWorkerMixin:
                 acquired = self.model_download_slots.acquire(timeout=0.1)
             self.models.download(model_id, control, china_source=china_source)
             completed = True
-            if model_id == SETTINGS["diarization"]["embedding_model_id"]:
+            if model_id == SPEAKER_EMBEDDING_MODEL_ID:
                 try:
                     self.voice_profiles.seed_builtin_profiles()
                     self.emit(

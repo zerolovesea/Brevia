@@ -49,13 +49,12 @@ Con segmentación Pyannote más modelos de embeddings de voz, todo ejecutándose
 
 ### Biblioteca local de modelos curada
 
-27+ modelos descargables que cubren ASR en streaming, refinamiento offline, restauración de puntuación, detección de actividad vocal, diarización, embeddings de hablante, síntesis de voz y separación de fuentes. Combínalos por idioma y precisión — todo corre en tu dispositivo.
+Modelos descargables que cubren ASR en streaming, refinamiento offline, restauración de puntuación, detección de actividad vocal, diarización, embeddings de hablante y separación de fuentes. Combínalos por idioma y precisión — todo corre en tu dispositivo.
 
 ![Biblioteca de modelos](assets/tour/en/%E6%A8%A1%E5%9E%8B%E5%BA%93.png)
 
 ### Y más
 
-- **Síntesis y clonación de voz TTS** — ZipVoice usa audio de referencia de personas registradas para sintetizar chino e inglés; VITS ofrece voces en alemán, francés, español, ruso y coreano.
 - **Separación de fuentes** — Spleeter divide grabaciones en pistas vocales y no vocales para postproducción.
 - **Importación de audio** — trae grabaciones existentes para transcribirlas offline con el mismo pipeline.
 - **Exportaciones versátiles** — transcripciones y notas en Markdown, TXT, JSON, SRT, DOCX o PDF; audio en FLAC, WAV o M4A.
@@ -79,7 +78,7 @@ En el primer arranque, concede permisos de micrófono y grabación de pantalla, 
 flowchart LR
   A[Renderer Electron<br/>HTML · Tailwind · JS] <-->|IPC + validación Zod| B[Proceso principal Electron]
   B <-->|JSONL stdin/stdout| C[Worker Python<br/>runtime incluido]
-  C --> D[sherpa-onnx<br/>ASR · VAD · hablantes · puntuación · TTS]
+  C --> D[sherpa-onnx<br/>ASR · VAD · hablantes · puntuación]
   C --> E[Almacenamiento local<br/>SQLite · audio · exportaciones]
   C -. consentimiento explícito .-> F[API cloud opcional<br/>resumen LLM · traducción]
 ```
@@ -99,7 +98,7 @@ Brevia sigue un diseño estrictamente local:
 | Frontend | HTML/CSS/JS nativo, Tailwind CSS 4, i18n integrado (8 idiomas) |
 | Backend | Python 3.10+, protocolo worker JSONL, almacenamiento SQLite |
 | Motor de voz | [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 1.13.2, ONNX Runtime |
-| Procesamiento de hablantes | Segmentación Pyannote + embeddings 3D-Speaker / NeMo Titanet / CAM++ |
+| Procesamiento de hablantes | Segmentación Pyannote + embeddings 3D-Speaker ERes2Net Base |
 | Cliente LLM | llama.cpp integrado (GGUF) y APIs chat compatibles con OpenAI / Anthropic |
 | E/S de audio | ffmpeg (incluido en releases) |
 | Build y empaquetado | electron-builder, PyInstaller (runtime Python incluido) |
@@ -109,15 +108,14 @@ Cada modelo se descarga bajo demanda desde **Settings → Model Library**. El ma
 
 | Categoría | Modelos representativos | Idiomas |
 | --- | --- | --- |
-| ASR streaming | Zipformer (zh / en / fr / ko / multilingüe), Paraformer bilingüe, Nemotron 3.5 | 30+ |
-| ASR refinamiento | Qwen3-ASR 0.6B / 1.7B, Whisper Turbo / Large v3, FireRedASR2, FunASR Nano | Multilingüe |
+| ASR streaming | Zipformer (zh / en / fr / ko / multilingüe), Nemotron 3.5 | 30+ |
+| ASR refinamiento | Qwen3-ASR 0.6B / 1.7B, Whisper Large v3, FunASR Nano | Multilingüe |
 | Puntuación | CT-Transformer zh+en, Online Punct English casing | zh / en |
 | Detección de actividad vocal | Silero VAD | Universal |
 | Mejora de voz | GTCRN Live Denoiser | Universal |
 | Diarización | Pyannote Segmentation 3.0, Reverb Diarization v1 | Universal |
-| Embeddings de hablante | 3D-Speaker ERes2Net, CAM++, NeMo Titanet | zh / en |
+| Embeddings de hablante | 3D-Speaker ERes2Net Base | Universal |
 | Separación de fuentes | Spleeter 2 Stems | Universal |
-| Síntesis de voz | ZipVoice (zh + en), VITS Piper (fr / de / es / ru), VITS Mimic3 (ko) | Multilingüe |
 
 Para los resúmenes LLM, elige **IA integrada** para ejecutar en local un modelo GGUF incluido (Qwen 3.5 2B / 4B, Gemma 3 1B / 4B), o apunta Brevia a Claude, OpenAI, OpenRouter o cualquier servicio propio compatible con OpenAI Chat Completions o Anthropic Messages: Gemini (endpoint compatible con OpenAI), DeepSeek, Kimi, Qwen y más.
 
@@ -194,7 +192,7 @@ Más de 30 idiomas incluyendo chino, inglés, japonés, coreano, francés, alem�
 <details>
 <summary><strong>¿Brevia envía audio a la nube?</strong></summary>
 
-No. Reconocimiento de voz, diarización y TTS se ejecutan localmente. Solo los resúmenes LLM y traducción contactan la red, y únicamente tras configurar un proveedor — solo texto, nunca audio.
+No. Reconocimiento de voz y diarización se ejecutan localmente. Solo los resúmenes LLM y traducción contactan la red, y únicamente tras configurar un proveedor — solo texto, nunca audio.
 </details>
 
 <details>
@@ -251,6 +249,6 @@ Brevia se publica bajo la [ISC License](../LICENSE). Los archivos de modelos y p
 
 ## Agradecimientos
 
-- [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) — el runtime local que impulsa ASR, VAD, puntuación, procesamiento de hablantes y TTS. Licenciado bajo [Apache-2.0](https://github.com/k2-fsa/sherpa-onnx/blob/master/LICENSE).
-- Gracias a los autores y mantenedores de modelos cuyos artefactos descargables se declaran en [`backend/models.json`](../backend/models.json), incluyendo Zipformer, Paraformer, Whisper, Qwen3-ASR, FireRedASR, FunASR, Pyannote, 3D-Speaker, NeMo, Silero, Spleeter, ZipVoice, VITS Piper / Mimic3 y más.
+- [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) — el runtime local que impulsa ASR, VAD, puntuación y procesamiento de hablantes. Licenciado bajo [Apache-2.0](https://github.com/k2-fsa/sherpa-onnx/blob/master/LICENSE).
+- Gracias a los autores y mantenedores de modelos cuyos artefactos descargables se declaran en [`backend/models.json`](../backend/models.json), incluyendo Zipformer, Whisper, Qwen3-ASR, FunASR, Pyannote, 3D-Speaker, Silero, Spleeter y Tencent Hy-MT2.
 - Electron, ONNX Runtime, Python y la comunidad open-source de voz hacen posible este flujo local.

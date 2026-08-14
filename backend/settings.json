@@ -23,7 +23,6 @@
   },
   "diarization": {
     "segmentation_model_id": "pyannote-segmentation-3.0",
-    "embedding_model_id": "campplus-zh-en",
     "cluster_threshold": 0.35,
     "online_similarity_threshold": 0.65,
     "minimum_embedding_seconds": 0.8,

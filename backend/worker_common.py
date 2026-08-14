@@ -7,6 +7,18 @@ from functools import wraps
 SCHEMA_VERSION = 1
 
 
+class TaskCancelled(Exception):
+    """任务在安全检查点收到取消请求。"""
+
+
+class TaskControl:
+    """长时任务的暂停与取消状态。"""
+
+    def __init__(self):
+        self.paused = threading.Event()
+        self.cancelled = threading.Event()
+
+
 def require(payload, *names):
     """检查 payload 必需字段，缺失时抛出 ValueError。"""
     missing = [name for name in names if name not in payload]
@@ -82,7 +94,7 @@ class TaskRegistry:
         with self._lock:
             if key in self._controls:
                 raise ValueError("Task is already running")
-            control = threading.Event()
+            control = TaskControl()
             self._controls[key] = control
             return control
 
@@ -100,5 +112,16 @@ class TaskRegistry:
             control = self._controls.get(key)
             if not control:
                 raise ValueError("Task is not running")
-            control.set() if paused else control.clear()
+            control.paused.set() if paused else control.paused.clear()
+        return control
+
+    def cancel(self, task, meeting_id):
+        """请求运行中的任务在下一个安全检查点停止。"""
+        key = (task, meeting_id)
+        with self._lock:
+            control = self._controls.get(key)
+            if not control:
+                raise ValueError("Task is not running")
+            control.cancelled.set()
+            control.paused.clear()
         return control

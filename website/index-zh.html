@@ -198,7 +198,7 @@
       <nav class="mx-auto flex h-16 max-w-content items-center justify-between px-6 md:px-8">
         <a href="#top" class="flex items-center gap-3 link-quiet" aria-label="言录首页">
           <span class="flex h-8 w-8 items-center justify-center rounded-md bg-[#080808] text-[15px] font-bold leading-none text-white">言</span>
-          <span class="text-[19px] font-bold tracking-tightest text-ink">言录</span>
+          <span class="hidden text-[19px] font-bold tracking-tightest text-ink sm:inline">言录</span>
         </a>
         <div class="hidden items-center gap-8 text-[14px] text-gray1 md:flex">
           <a href="#features" class="link-quiet">功能</a>
@@ -209,7 +209,7 @@
           <a href="#faq" class="link-quiet">常见问题</a>
         </div>
         <div class="flex items-center gap-2 text-[14px]">
-          <div class="relative hidden sm:block" data-lang>
+          <div class="relative" data-lang>
             <button type="button" data-lang-toggle aria-haspopup="true" aria-expanded="false" aria-label="切换语言" title="语言" class="inline-flex h-9 items-center gap-1 rounded-md px-2 text-gray1 transition-colors duration-300 hover:bg-mist hover:text-ink">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.5 2.4 3.9 5.6 4 9-.1 3.4-1.5 6.6-4 9-2.5-2.4-3.9-5.6-4-9 .1-3.4 1.5-6.6 4-9z"/></svg>
               <svg data-lang-caret width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="transition-transform duration-200" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
@@ -225,7 +225,7 @@
               </a>
             </div>
           </div>
-          <a href="https://github.com/zerolovesea/Brevia" class="hidden h-9 items-center gap-2 rounded-md px-2.5 text-gray1 transition-colors duration-300 hover:bg-mist hover:text-ink sm:inline-flex" aria-label="在 GitHub 上加星" title="在 GitHub 上加星">
+          <a href="https://github.com/zerolovesea/Brevia" class="inline-flex h-9 items-center gap-2 rounded-md px-2.5 text-gray1 transition-colors duration-300 hover:bg-mist hover:text-ink" aria-label="在 GitHub 上加星" title="在 GitHub 上加星">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.37.5 0 5.87 0 12.5c0 5.3 3.44 9.8 8.21 11.39.6.11.82-.26.82-.58 0-.29-.01-1.04-.02-2.05-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.33-1.76-1.33-1.76-1.09-.74.08-.73.08-.73 1.2.09 1.84 1.24 1.84 1.24 1.07 1.83 2.81 1.3 3.5.99.11-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.13-.31-.54-1.52.11-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.29-1.55 3.3-1.23 3.3-1.23.65 1.66.24 2.87.12 3.18.77.84 1.23 1.91 1.23 3.22 0 4.61-2.8 5.62-5.48 5.92.43.37.81 1.1.81 2.22 0 1.6-.01 2.9-.01 3.29 0 .32.21.7.82.58A12.01 12.01 0 0 0 24 12.5C24 5.87 18.63.5 12 .5z"/></svg>
             <span data-gh-star-wrap class="hidden items-center gap-1 text-[13px] font-medium leading-none tabular-nums">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.9 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l7.1-1.01L12 2z"/></svg>
@@ -477,7 +477,7 @@
             <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">模型库</span>
             <p class="display mt-5 text-[40px] font-light text-ink">模型自由组合</p>
             <p class="measure mt-3 max-w-[420px] text-[15px] text-slate">
-              可下载的模型涵盖流式 ASR、离线精修、标点恢复、语音活动检测、说话人分离、说话人嵌入、语音合成和音源分离。
+              可下载的模型涵盖流式 ASR、离线精修、标点恢复、语音活动检测、说话人分离、说话人嵌入和音源分离。
             </p>
           </article>
           <article class="feature-card border border-line2 p-8 transition-colors duration-300 hover:border-ink">
@@ -485,13 +485,6 @@
             <p class="display mt-5 text-[40px] font-light text-ink">覆盖更多语言</p>
             <p class="measure mt-3 text-[15px] text-slate">
               支持英语、中文、日语、韩语、法语、德语、西班牙语、俄语、阿拉伯语、泰语、越南语等 30+ 种语言的转录。
-            </p>
-          </article>
-          <article class="feature-card border border-line2 p-8 transition-colors duration-300 hover:border-ink">
-            <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">TTS 和克隆</span>
-            <p class="display mt-5 text-[40px] font-light text-ink">自然语音生成</p>
-            <p class="measure mt-3 text-[15px] text-slate">
-              ZipVoice 可根据录入的参考音频合成中文和英文语音；VITS 声音支持德语、法语、西班牙语、俄语和韩语。
             </p>
           </article>
           <article class="feature-card border border-line2 p-8 transition-colors duration-300 hover:border-ink">

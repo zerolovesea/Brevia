@@ -60,7 +60,8 @@ class WorkerCore:
         self.state = WorkerState()
         self.tasks = TaskRegistry()
         self.store = Store(root)
-        self.store.recover_interrupted_meetings()
+        if os.environ.get("BREVIA_RECOVER_INTERRUPTED", "1") == "1":
+            self.store.recover_interrupted_meetings()
         runtime_settings(self.store.root)
         self.models = ModelManager(self.store.models_dir, self.emit)
         # 服务按存储/模型依赖构造；它们不持有实时会议状态，便于单独测试。
@@ -80,7 +81,8 @@ class WorkerCore:
         self.detected_language = None
         self.asr_warning_sent = False
         self.live_refiner = None
-        self.live_refinement = None
+        self.live_postprocessing = None
+        self.power_saving = False
         # 继续协作初始化链，使兄弟 mixin（如 llama sidecar 管理器）的 __init__ 也能
         # 运行——否则 _sidecars_lock 等属性永远不会被创建。
         super().__init__()
@@ -190,11 +192,12 @@ class WorkerCore:
             "models.delete": self.delete_model,
             "task.pause": self.pause_task,
             "task.resume": self.resume_task,
+            "task.cancel": self.cancel_task,
             "meeting.export": self.export,
             "meeting.bundle": self.bundle,
+            "meeting.refinement-recover": self.recover_refinement,
             "meeting.refine": self.refine,
             "meeting.separate": self.separate_sources,
-            "tts.synthesize": self.synthesize_tts,
             "summary.generate": self.summarize,
             "translation.generate": self.translate,
             "workspace.list": lambda _: self.store.list_workspaces(),
@@ -224,7 +227,6 @@ class WorkerCore:
             "workspaces": self.store.list_workspaces(),
             "models": self.models.list(),
             "speaker_profiles": self.store.list_speaker_profiles(),
-            "preset_voices": self.media.preset_voices(),
             "device": self.models.device(),
             "seeded_examples": seeded_examples,
         }

@@ -11,7 +11,10 @@ npm run test:model
 npm run test:diarization
 ```
 
-模型下载、会议、音频、逐字稿、术语、导出与总结均使用同一 command/event
+模型下载、会议、音频、逐字稿、导出与总结均使用同一 command/event
 协议；Worker 不监听网络端口。单轨录音在会后精修时使用 sherpa-onnx
 Pyannote segmentation + 3D-Speaker ERes2Net 完成本地说话人聚类，参数位于
 `settings.json` 的 `diarization`。
+
+语音推理默认自动选择 CPU/CUDA，也可用 `BREVIA_ASR_BACKEND=cpu|cuda|coreml`
+覆盖。Sherpa 没有 MPS provider；`mps` 会安全回退 CPU，Metal 仅用于 llama.cpp。

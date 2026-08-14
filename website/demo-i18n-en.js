@@ -76,7 +76,6 @@
     '实时识别模型': 'Live Recognition Model',
     '精修模型': 'Refinement Model',
     '模型与设置': 'Models & Settings',
-    '语音生成': 'Speech Generation',
     '声音': 'Voice',
     '语言': 'Language',
     '中文': 'Chinese',

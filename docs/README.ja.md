@@ -49,13 +49,12 @@ Pyannote のセグメンテーションと話者埋め込みモデルを組み�
 
 ### 精選されたローカルモデルライブラリ
 
-ストリーミング ASR、オフライン精修、句読点復元、音声区間検出、話者ダイアライゼーション、話者埋め込み、音声合成、ソース分離をカバーする 27+ のダウンロード可能なモデル。言語と精度で自由に組み合わせ——すべて端末上で動作します。
+ストリーミング ASR、オフライン精修、句読点復元、音声区間検出、話者ダイアライゼーション、話者埋め込み、ソース分離をカバーするダウンロード可能なモデル。言語と精度で自由に組み合わせ——すべて端末上で動作します。
 
 ![モデルライブラリ](assets/tour/en/%E6%A8%A1%E5%9E%8B%E5%BA%93.png)
 
 ### さらに
 
-- **TTS 音声合成とクローン** — ZipVoice は登録話者の参考音声を使って中国語と英語を合成、ドイツ語・フランス語・スペイン語・ロシア語・韓国語には専用の VITS ボイスを提供。
 - **ソース分離** — Spleeter が録音をボーカルと非ボーカルのトラックに分割、後処理に便利。
 - **音声インポート** — 既存の録音を持ち込んで、同じ音声パイプラインでオフライン文字起こし。
 - **豊富なエクスポート** — 文字起こしとメモを Markdown、TXT、JSON、SRT、DOCX、PDF で；音声を FLAC、WAV、M4A で。
@@ -79,7 +78,7 @@ Pyannote のセグメンテーションと話者埋め込みモデルを組み�
 flowchart LR
   A[Electron レンダラー<br/>HTML · Tailwind · JS] <-->|IPC + Zod 検証| B[Electron メインプロセス]
   B <-->|JSONL stdin/stdout| C[Python ワーカー<br/>同梱ランタイム]
-  C --> D[sherpa-onnx<br/>ASR · VAD · 話者 · 句読点 · TTS]
+  C --> D[sherpa-onnx<br/>ASR · VAD · 話者 · 句読点]
   C --> E[ローカルストレージ<br/>SQLite · 音声 · エクスポート]
   C -. 明示的同意 .-> F[オプションのクラウド API<br/>LLM 要約 · 翻訳]
 ```
@@ -99,7 +98,7 @@ Brevia は厳密なローカルファースト設計に従います：
 | フロントエンド | 素の HTML/CSS/JS、Tailwind CSS 4、組み込み i18n（8 ロケール） |
 | バックエンド | Python 3.10+、JSONL ワーカープロトコル、SQLite ストレージ |
 | 音声エンジン | [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 1.13.2、ONNX Runtime |
-| 話者処理 | Pyannote セグメンテーション + 3D-Speaker / NeMo Titanet / CAM++ 埋め込み |
+| 話者処理 | Pyannote セグメンテーション + 3D-Speaker ERes2Net Base 埋め込み |
 | LLM クライアント | 内蔵 llama.cpp（GGUF）＋ OpenAI / Anthropic 互換チャット API |
 | 音声 I/O | ffmpeg（リリースに同梱） |
 | ビルドとパッケージ | electron-builder、PyInstaller（Python ランタイム同梱） |
@@ -109,15 +108,14 @@ Brevia は厳密なローカルファースト設計に従います：
 
 | カテゴリ | 代表的なモデル | 言語 |
 | --- | --- | --- |
-| ストリーミング ASR | Zipformer（zh / en / fr / ko / 多言語）、Paraformer バイリンガル、Nemotron 3.5 | 30+ |
-| 精修 ASR | Qwen3-ASR 0.6B / 1.7B、Whisper Turbo / Large v3、FireRedASR2、FunASR Nano | 多言語 |
+| ストリーミング ASR | Zipformer（zh / en / fr / ko / 多言語）、Nemotron 3.5 | 30+ |
+| 精修 ASR | Qwen3-ASR 0.6B / 1.7B、Whisper Large v3、FunASR Nano | 多言語 |
 | 句読点 | CT-Transformer zh+en、Online Punct 英語ケーシング | zh / en |
 | 音声区間検出 | Silero VAD | 汎用 |
 | 音声強調 | GTCRN Live Denoiser | 汎用 |
 | ダイアライゼーション | Pyannote Segmentation 3.0、Reverb Diarization v1 | 汎用 |
-| 話者埋め込み | 3D-Speaker ERes2Net、CAM++、NeMo Titanet | zh / en |
+| 話者埋め込み | 3D-Speaker ERes2Net Base | 汎用 |
 | ソース分離 | Spleeter 2 Stems | 汎用 |
-| 音声合成 | ZipVoice（zh + en）、VITS Piper（fr / de / es / ru）、VITS Mimic3（ko） | 多言語 |
 
 LLM 要約では「内蔵 AI」を選ぶとバンドルされた GGUF モデル（Qwen 3.5 2B / 4B、Gemma 3 1B / 4B）をローカルで実行できます。Claude、OpenAI、OpenRouter、または OpenAI Chat Completions / Anthropic Messages に対応した独自サービス（Gemini の OpenAI 互換エンドポイント、DeepSeek、Kimi、Qwen など）も利用可能です。
 
@@ -194,7 +192,7 @@ npm run dist:win   # Windows x64 EXE
 <details>
 <summary><strong>Brevia は音声をクラウドに送信しますか？</strong></summary>
 
-送信しません。音声認識、ダイアライゼーション、TTS はすべてローカルで実行されます。LLM 要約と翻訳のみがネットワークに接続しますが、プロバイダを設定した後のみ——テキストのみで、音声は決して送信しません。
+送信しません。音声認識とダイアライゼーションはすべてローカルで実行されます。LLM 要約と翻訳のみがネットワークに接続しますが、プロバイダを設定した後のみ——テキストのみで、音声は決して送信しません。
 </details>
 
 <details>
@@ -251,6 +249,6 @@ Brevia は [ISC License](../LICENSE) の下でリリースされています。�
 
 ## 謝辞
 
-- [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) — ASR、VAD、句読点、話者処理、TTS を支えるローカルランタイム。[Apache-2.0](https://github.com/k2-fsa/sherpa-onnx/blob/master/LICENSE) でライセンスされています。
-- [`backend/models.json`](../backend/models.json) で宣言されているダウンロード可能な成果物のモデル作者とメンテナに感謝します——Zipformer、Paraformer、Whisper、Qwen3-ASR、FireRedASR、FunASR、Pyannote、3D-Speaker、NeMo、Silero、Spleeter、ZipVoice、VITS Piper / Mimic3 など。
+- [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) — ASR、VAD、句読点、話者処理を支えるローカルランタイム。[Apache-2.0](https://github.com/k2-fsa/sherpa-onnx/blob/master/LICENSE) でライセンスされています。
+- [`backend/models.json`](../backend/models.json) で宣言されているダウンロード可能な成果物のモデル作者とメンテナに感謝します——Zipformer、Whisper、Qwen3-ASR、FunASR、Pyannote、3D-Speaker、Silero、Spleeter、Tencent Hy-MT2 など。
 - Electron、ONNX Runtime、Python、オープンソースの音声コミュニティが、このローカルファーストのワークフローを可能にしています。

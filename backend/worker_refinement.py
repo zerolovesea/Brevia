@@ -1,11 +1,11 @@
 """聚焦的 worker 职责组件。"""
 
+import os
 import re
 from difflib import SequenceMatcher
-from pathlib import Path
 
 from .asr import (
-    OfflineDenoiser,
+    ModelManager,
     OfflineVAD,
     OfflineDiarizer,
     RefinedASR,
@@ -16,16 +16,118 @@ from .audio_io import (
     read_mono_wav,
     read_mono_wav_window,
 )
-from .config import SETTINGS
-from .media_tasks import TTS_MODEL_IDS
-from .worker_common import managed_task, require
+from .config import SETTINGS, SPEAKER_EMBEDDING_MODEL_ID, validate_num_speakers
+from .worker_common import TaskCancelled, managed_task, require
 
 # 精修先做 VAD/说话人聚类，需要整段波形常驻，故仍有内存上限；识别阶段改为
 # 逐窗从磁盘读取，聚类才是真正的天花板，这里放宽到 4 小时覆盖绝大多数会议。
 MAX_REFINE_SECONDS = 4 * 60 * 60
+MAX_AUTO_SPEAKERS = 20
+MIN_AUTO_SPEAKER_WINDOWS = 2
+MIN_AUTO_SPEAKER_DURATION_MS = 4000
+AUTO_CLUSTER_SCORE_TOLERANCE = 0.05
+DIARIZATION_CHUNK_MS = 15_000
+DIARIZATION_OVERLAP_MS = 1_000
+EMBEDDING_WINDOW_MS = 6_000
+
+
+def _diarize_chunk_process(connection, payload):
+    """在短生命进程内完成分段和声纹，让 OS 回收 Sherpa 原生缓冲。"""
+    try:
+        manager = ModelManager(
+            payload["models_root"], bundled_root=payload.get("bundled_models_root")
+        )
+        samples, sample_rate = read_mono_wav_window(
+            payload["path"], payload["window_start_ms"], payload["window_end_ms"]
+        )
+        cursor = 0
+        for speech in payload["speech"]:
+            start = max(
+                cursor,
+                round(
+                    (speech["start_ms"] - payload["window_start_ms"])
+                    * sample_rate
+                    / 1000
+                ),
+            )
+            end = min(
+                len(samples),
+                round(
+                    (speech["end_ms"] - payload["window_start_ms"])
+                    * sample_rate
+                    / 1000
+                ),
+            )
+            samples[cursor:start] = 0
+            cursor = max(cursor, end)
+        samples[cursor:] = 0
+        tracker = SpeakerTracker(manager)
+        turns = []
+        if payload.get("vad_fallback"):
+            diarized = [
+                {
+                    "start_ms": max(
+                        payload["window_start_ms"], speech["start_ms"]
+                    )
+                    - payload["window_start_ms"],
+                    "end_ms": min(payload["window_end_ms"], speech["end_ms"])
+                    - payload["window_start_ms"],
+                    "speaker": "spk-1",
+                }
+                for speech in payload["speech"]
+            ]
+        else:
+            diarizer = OfflineDiarizer(
+                manager,
+                -1,
+                payload["threshold"],
+                payload["segmentation_id"],
+            )
+            diarized = diarizer.process(samples, sample_rate)
+        for turn in diarized:
+            start_ms = max(
+                payload["core_start_ms"],
+                payload["window_start_ms"] + turn["start_ms"],
+            )
+            end_ms = min(
+                payload["core_end_ms"],
+                payload["window_start_ms"] + turn["end_ms"],
+            )
+            for part_start in range(start_ms, end_ms, EMBEDDING_WINDOW_MS):
+                part_end = min(part_start + EMBEDDING_WINDOW_MS, end_ms)
+                local_start = round(
+                    (part_start - payload["window_start_ms"]) * sample_rate / 1000
+                )
+                local_end = round(
+                    (part_end - payload["window_start_ms"]) * sample_rate / 1000
+                )
+                embedding = tracker.embedding(samples[local_start:local_end], sample_rate)
+                turns.append(
+                    {
+                        "start_ms": part_start,
+                        "end_ms": part_end,
+                        "speaker": turn["speaker"],
+                        "_embedding": embedding.tolist()
+                        if embedding is not None
+                        else None,
+                    }
+                )
+        connection.send((True, turns))
+    except BaseException as error:
+        connection.send((False, f"{type(error).__name__}: {error}"))
+    finally:
+        connection.close()
 
 
 class RefinementWorkerMixin:
+    def recover_refinement(self, payload):
+        """将异常退出的精修恢复为可重试状态。"""
+        require(payload, "meeting_id")
+        meeting = self.store.get_meeting(payload["meeting_id"])
+        if meeting["status"] == "refining":
+            meeting = self.store.set_status(meeting["id"], "ready")
+        return meeting
+
     @managed_task("meeting.refine")
     def refine(self, payload, control=None):
         """对停止后的会议执行会后转写和说话人聚类。
@@ -61,8 +163,7 @@ class RefinementWorkerMixin:
                 "cluster_threshold", SETTINGS["diarization"]["cluster_threshold"]
             )
         )
-        if num_speakers != -1 and num_speakers < 1:
-            raise ValueError("num_speakers must be -1 or a positive integer")
+        validate_num_speakers(num_speakers)
         if not 0 <= threshold <= 2:
             raise ValueError("cluster_threshold must be between 0 and 2")
         tracks = [
@@ -89,7 +190,7 @@ class RefinementWorkerMixin:
             required_models.extend(
                 [
                     meeting.get("speaker_segmentation_model_id"),
-                    meeting.get("speaker_embedding_model_id"),
+                    SPEAKER_EMBEDDING_MODEL_ID,
                 ]
             )
         missing_models = [
@@ -107,10 +208,7 @@ class RefinementWorkerMixin:
             meeting.get("speaker_segmentation_model_id")
             or SETTINGS["diarization"]["segmentation_model_id"]
         )
-        embedding_id = (
-            meeting.get("speaker_embedding_model_id")
-            or SETTINGS["diarization"]["embedding_model_id"]
-        )
+        embedding_id = SPEAKER_EMBEDDING_MODEL_ID
         speaker_models_ready = self.models.is_ready(
             segmentation_id
         ) and self.models.is_ready(embedding_id)
@@ -120,10 +218,17 @@ class RefinementWorkerMixin:
         # 多个轨道同时聚类时，未命中声纹库的 spk-N 需按轨道命名，避免麦克风与系统
         # 音频各自的 spk-1 在按时间戳合并后串成同一个人。
         namespace_tracks = len(diarized_tracks) > 1
-        self.emit("refinement.started", {"meeting_id": meeting["id"], "total": 0})
-        sources, turns_by_track, raw_turns_by_track = {}, {}, {}
-        denoiser_id = SETTINGS["live_asr"]["denoiser_model_id"]
+        self.emit(
+            "refinement.started",
+            {"meeting_id": meeting["id"], "total": 0, "stage": "准备精修"},
+        )
 
+        def cancel_refinement():
+            self.store.set_status(meeting["id"], "ready")
+            self.emit("refinement.cancelled", {"meeting_id": meeting["id"]})
+            return self.store.get_meeting(meeting["id"])
+
+        sources, turns_by_track, raw_turns_by_track = {}, {}, {}
         def prepare(track):
             return self._prepare_track(
                 track,
@@ -133,19 +238,33 @@ class RefinementWorkerMixin:
                 namespace_tracks,
                 num_speakers,
                 threshold,
-                denoiser_id,
             )
 
-        # 双轨会议并行准备：sherpa-onnx 每个模型仅占用约一半 CPU 核心（见
-        # ModelManager.device），两条轨道并行执行 VAD/聚类/声纹提取正好吃满
-        # CPU，把准备阶段的墙钟时间从双份降到接近单份，且不改变任一算法结果。
-        if len(tracks) > 1:
-            from concurrent.futures import ThreadPoolExecutor
+        # 每条轨道会使用 ModelManager.device() 规定的线程数；只有 CPU 预算足够
+        # 时才并行，避免双轨在低核设备上互相争抢而让准备阶段更慢。
+        try:
+            device = self.models.device()
+            workers = (
+                min(
+                    len(tracks),
+                    (os.cpu_count() or 1) // max(1, device["threads"]),
+                )
+                if device["backend"] == "cpu"
+                else 1
+            )
+            if workers > 1:
+                from concurrent.futures import ThreadPoolExecutor
 
-            with ThreadPoolExecutor(max_workers=len(tracks)) as pool:
-                prepared = list(pool.map(prepare, tracks))
-        else:
-            prepared = [prepare(track) for track in tracks]
+                with ThreadPoolExecutor(max_workers=workers) as pool:
+                    prepared = list(pool.map(prepare, tracks))
+            else:
+                prepared = [prepare(track) for track in tracks]
+        except TaskCancelled:
+            return cancel_refinement()
+        try:
+            self.wait_task(control)
+        except TaskCancelled:
+            return cancel_refinement()
         for track, source, raw_turns, stable_turns in prepared:
             sources[track] = source
             raw_turns_by_track[track] = raw_turns
@@ -154,15 +273,13 @@ class RefinementWorkerMixin:
             (turn for track_turns in turns_by_track.values() for turn in track_turns),
             key=lambda turn: (turn["start_ms"], turn["end_ms"]),
         )
-        overlaps = self._detect_overlaps(raw_turns_by_track)
-        raw_turns = sorted(
-            (turn for track_turns in raw_turns_by_track.values() for turn in track_turns),
-            key=lambda turn: (turn["start_ms"], turn["end_ms"]),
-        )
-        self.store.replace_speaker_turns(meeting["id"], raw_turns)
+        try:
+            self.wait_task(control)
+        except TaskCancelled:
+            return cancel_refinement()
         self.emit(
-            "diarization.ready",
-            {"meeting_id": meeting["id"], "tracks": tracks, "turns": raw_turns, "overlaps": overlaps},
+            "refinement.progress",
+            {"meeting_id": meeting["id"], "completed": 0, "total": 0, "stage": "分析说话人"},
         )
         recognizer = RefinedASR(self.models, refined_model_id)
         locked_ids = {
@@ -182,11 +299,6 @@ class RefinementWorkerMixin:
             )
             for track in tracks
         }
-        denoiser = (
-            OfflineDenoiser(self.models, denoiser_id)
-            if any(source["denoise"] for source in sources.values())
-            else None
-        )
         total = sum(map(len, windows_by_track.values()))
         completed = 0
         previous_text = {}
@@ -196,7 +308,7 @@ class RefinementWorkerMixin:
         self.store.set_status(meeting["id"], "refining")
         self.emit(
             "refinement.progress",
-            {"meeting_id": meeting["id"], "completed": 0, "total": total},
+            {"meeting_id": meeting["id"], "completed": 0, "total": total, "stage": "转写中 · 校正说话人"},
         )
         try:
             for track in tracks:
@@ -219,8 +331,6 @@ class RefinementWorkerMixin:
                     current, _ = read_mono_wav_window(
                         source["path"], decode_start_ms, decode_end_ms
                     )
-                    if source["denoise"] and denoiser is not None and len(current):
-                        current = denoiser.process(current, sample_rate)
                     raw_text, words = recognizer.decode_words(current, sample_rate)
                     raw_text = self._clean_live_text(raw_text)
                     speaker_key = (track, turn["speaker"])
@@ -235,6 +345,7 @@ class RefinementWorkerMixin:
                             "meeting_id": meeting["id"],
                             "completed": completed,
                             "total": total,
+                            "stage": "转写中 · 校正说话人",
                         },
                     )
                     if not text:
@@ -274,26 +385,34 @@ class RefinementWorkerMixin:
                                     word["end_ms"] + decode_start_ms,
                                     turns_by_track[track],
                                 ) or speaker,
-                                "overlap_speakers": self._overlap_speakers(
-                                    word["start_ms"] + decode_start_ms,
-                                    word["end_ms"] + decode_start_ms,
-                                    raw_turns_by_track[track],
-                                ),
-                                "overlap": len(
-                                    self._overlap_speakers(
-                                        word["start_ms"] + decode_start_ms,
-                                        word["end_ms"] + decode_start_ms,
-                                        raw_turns_by_track[track],
-                                    )
-                                ) > 1,
                             }
                             for word in words
                         ],
                     }
+                    for word in event["word_timestamps"]:
+                        word["overlap_speakers"] = self._overlap_speakers(
+                            word["start_ms"], word["end_ms"], turns_by_track[track]
+                        )
+                        word["overlap"] = len(word["overlap_speakers"]) > 1
                     refined_segments.append(event)
+            self.emit(
+                "refinement.progress",
+                {"meeting_id": meeting["id"], "completed": total, "total": total, "stage": "校正说话人"},
+            )
+            self.emit(
+                "refinement.progress",
+                {"meeting_id": meeting["id"], "completed": total, "total": total, "stage": "整理结果"},
+            )
+            self.wait_task(control)
+        except TaskCancelled:
+            return cancel_refinement()
         except Exception:
             self.store.set_status(meeting["id"], "ready")
             raise
+        try:
+            self.wait_task(control)
+        except TaskCancelled:
+            return cancel_refinement()
         refined_segments.sort(
             key=lambda item: (item["start_ms"], item["track"], item["end_ms"])
         )
@@ -301,11 +420,10 @@ class RefinementWorkerMixin:
         refined_segments = self.store.replace_segments(
             meeting["id"], refined_segments, version, revision
         )
-        for event in refined_segments:
-            self.emit("refinement.segment", event)
-        result = self.store.set_status(meeting["id"], "refined")
-        result = self.store.get_meeting(meeting["id"])
-        self.emit("refinement.ready", {"meeting_id": meeting["id"], "meeting": result})
+        self.store.replace_speaker_turns(meeting["id"], turns)
+        self.store.set_status(meeting["id"], "refined")
+        result = {"meeting_id": meeting["id"], "status": "refined"}
+        self.emit("refinement.ready", result)
         return result
 
     def _prepare_track(
@@ -317,7 +435,6 @@ class RefinementWorkerMixin:
         namespace_tracks,
         num_speakers,
         threshold,
-        denoiser_id,
     ):
         """对单条轨道执行 VAD/聚类/声纹提取，返回稳定化前后的说话人时间段。
 
@@ -327,121 +444,92 @@ class RefinementWorkerMixin:
         """
         self.wait_task(control)
         path = meeting["audio"]["playback"][track]
+        self.emit(
+            "refinement.progress",
+            {"meeting_id": meeting["id"], "completed": 0, "total": 0, "stage": "准备精修"},
+        )
         ensure_wav_duration(path, MAX_REFINE_SECONDS, "refine")
         samples, sample_rate = read_mono_wav(path)
-        denoise = track == "mic" and self.models.is_ready(denoiser_id)
-        if denoise:
-            try:
-                samples = OfflineDenoiser(self.models, denoiser_id).process(
-                    samples, sample_rate
-                )
-            except RuntimeError as error:
-                denoise = False
-                self.emit(
-                    "worker.warning",
-                    {
-                        "meeting_id": meeting["id"],
-                        "code": "offline_denoiser_unavailable",
-                        "message": str(error),
-                    },
-                )
-        vad = OfflineVAD(self.models, meeting.get("vad_model_id") or "silero-vad")
-        speech = vad.process(samples, sample_rate)
+        duration_ms = len(samples) * 1000 // sample_rate
         if track not in diarized_tracks:
+            vad = OfflineVAD(
+                self.models, meeting.get("vad_model_id") or "silero-vad"
+            )
+            speech = vad.process(samples, sample_rate)
             turns = [{**turn, "speaker": "local-user"} for turn in speech]
             self.store.rename_speaker(meeting["id"], "local-user", "Local user")
         else:
-            import numpy
-
-            diarizer = OfflineDiarizer(
-                self.models,
-                num_speakers,
-                threshold,
-                meeting.get("speaker_segmentation_model_id"),
-                meeting.get("speaker_embedding_model_id"),
+            vad = OfflineVAD(
+                self.models, meeting.get("vad_model_id") or "silero-vad"
             )
-            speech_only = numpy.zeros_like(samples)
-            for turn in speech:
-                start = round(turn["start_ms"] * sample_rate / 1000)
-                end = round(turn["end_ms"] * sample_rate / 1000)
-                speech_only[start:end] = samples[start:end]
-            turns = diarizer.process(speech_only, sample_rate) if speech else []
-            del speech_only
-            if speech and not turns:
-                turns = [{**turn, "speaker": "spk-1"} for turn in speech]
-            # Initialise to None so the finally clause always has a name to del,
-            # even when SpeakerTracker() raises before assignment completes.
-            identity_tracker = None
-            try:
-                identity_tracker = SpeakerTracker(
-                    self.models, model_id=meeting.get("speaker_embedding_model_id")
+            speech = vad.process(samples, sample_rate)
+
+            self.emit(
+                "refinement.progress",
+                {"meeting_id": meeting["id"], "completed": 0, "total": 0, "stage": "分析说话人"},
+            )
+            if duration_ms > DIARIZATION_CHUNK_MS:
+                turns = self._diarize_long_track(
+                    path,
+                    duration_ms,
+                    speech,
+                    meeting.get("speaker_segmentation_model_id")
+                    or SETTINGS["diarization"]["segmentation_model_id"],
+                    threshold,
+                    control,
                 )
+            else:
+                # 短音频直接处理；长音频由短生命子进程回收 Sherpa 原生内存。
+                cursor = 0
+                for turn in speech:
+                    start = round(turn["start_ms"] * sample_rate / 1000)
+                    end = round(turn["end_ms"] * sample_rate / 1000)
+                    try:
+                        samples[cursor:start] = 0
+                    except TypeError:
+                        samples[cursor:start] = [0] * (start - cursor)
+                    cursor = end
+                try:
+                    samples[cursor:] = 0
+                except TypeError:
+                    samples[cursor:] = [0] * (len(samples) - cursor)
+                diarizer = OfflineDiarizer(
+                    self.models,
+                    -1,
+                    threshold,
+                    meeting.get("speaker_segmentation_model_id"),
+                )
+                turns = (
+                    [dict(turn) for turn in diarizer.process(samples, sample_rate)]
+                    if speech
+                    else []
+                )
+
+            if speech and not turns:
+                # diarizer 失败时 fallback 到单说话人
+                turns = [{**turn, "speaker": "spk-1"} for turn in speech]
+            if duration_ms <= DIARIZATION_CHUNK_MS and turns:
+                try:
+                    tracker = SpeakerTracker(self.models)
+                except RuntimeError:
+                    tracker = None
                 turns = self._split_long_turns(turns)
-                turn_embeddings = []
                 for turn in turns:
-                    clip = samples[
-                        round(turn["start_ms"] * sample_rate / 1000) : round(
-                            turn["end_ms"] * sample_rate / 1000
-                        )
-                    ]
-                    turn_embeddings.append(
-                        identity_tracker.embedding(clip, sample_rate)
+                    start = round(turn["start_ms"] * sample_rate / 1000)
+                    end = round(turn["end_ms"] * sample_rate / 1000)
+                    embedding = (
+                        tracker.embedding(samples[start:end], sample_rate)
+                        if tracker
+                        else None
                     )
-                if num_speakers == -1 and len(turns) > 1:
-                    known = [
-                        (index, embedding)
-                        for index, embedding in enumerate(turn_embeddings)
-                        if embedding is not None
-                    ]
-                    labels = (
-                        self._auto_cluster_embeddings(
-                            [embedding for _, embedding in known],
-                            [
-                                turns[index]["end_ms"] - turns[index]["start_ms"]
-                                for index, _ in known
-                            ],
-                        )
-                        if len(known) >= 3
-                        else []
+                    turn["_embedding"] = (
+                        embedding.tolist()
+                        if hasattr(embedding, "tolist")
+                        else embedding
                     )
-                    labeled = {
-                        index: label for (index, _), label in zip(known, labels)
-                    }
-                    for index, turn in enumerate(turns):
-                        if index not in labeled and labeled:
-                            nearest_index = min(
-                                labeled,
-                                key=lambda candidate: max(
-                                    0,
-                                    turn["start_ms"] - turns[candidate]["end_ms"],
-                                    turns[candidate]["start_ms"] - turn["end_ms"],
-                                ),
-                            )
-                            labeled[index] = labeled[nearest_index]
-                        if index in labeled:
-                            turn["speaker"] = f"spk-{labeled[index] + 1}"
-                for turn, embedding in zip(turns, turn_embeddings):
-                    if embedding is None:
-                        continue
-                    profile = self.store.match_speaker_profile(
-                        embedding,
-                        SETTINGS["diarization"]["online_similarity_threshold"],
-                    )
-                    if self._is_confident_profile_match(profile):
-                        turn["speaker"] = f"profile-{profile['id']}"
-                        self.store.rename_speaker(
-                            meeting["id"],
-                            f"profile-{profile['id']}",
-                            profile["name"],
-                            profile_id=profile["id"],
-                        )
-            except RuntimeError:
-                pass
-            finally:
-                # Explicitly release the native ONNX embedding extractor so its
-                # C++ heap memory is freed before returning, reducing peak
-                # memory pressure when tracks run in parallel.
-                del identity_tracker
+            turns = self._cluster_speaker_turns(
+                meeting, turns, sample_rate, num_speakers
+            )
         if namespace_tracks:
             # 命中声纹库的 turn 已是全局 profile-{id}，跨轨道自然合并同一人；
             # 仅给未命中的 spk-N 加轨道前缀，避免不同轨道的 spk-1 混为一人。
@@ -451,13 +539,168 @@ class RefinementWorkerMixin:
         source = {
             "path": path,
             "sample_rate": sample_rate,
-            "duration_ms": len(samples) * 1000 // sample_rate,
-            "denoise": denoise,
+            "duration_ms": duration_ms,
         }
         stable_turns = self._stabilize_speaker_turns(turns)
         # 精修识别阶段改为逐窗从磁盘读取，这里立即释放整段波形。
         del samples
         return track, source, turns, stable_turns
+
+    def _diarize_long_track(
+        self, path, duration_ms, speech, segmentation_id, threshold, control
+    ):
+        """分块隔离 Sherpa 原生推理，防止长音频缓冲在 worker 内累积。"""
+        import multiprocessing
+
+        context = multiprocessing.get_context("spawn")
+        turns = []
+        use_vad_fallback = False
+        for core_start in range(0, duration_ms, DIARIZATION_CHUNK_MS):
+            self.wait_task(control)
+            core_end = min(duration_ms, core_start + DIARIZATION_CHUNK_MS)
+            window_start = max(0, core_start - DIARIZATION_OVERLAP_MS)
+            window_end = min(duration_ms, core_end + DIARIZATION_OVERLAP_MS)
+            window_speech = [
+                turn
+                for turn in speech
+                if turn["end_ms"] > window_start
+                and turn["start_ms"] < window_end
+            ]
+            if not window_speech:
+                continue
+            payload = {
+                "path": str(path),
+                "models_root": str(self.models.root),
+                "bundled_models_root": str(self.models.bundled_root)
+                if self.models.bundled_root
+                else None,
+                "segmentation_id": segmentation_id,
+                "threshold": threshold,
+                "core_start_ms": core_start,
+                "core_end_ms": core_end,
+                "window_start_ms": window_start,
+                "window_end_ms": window_end,
+                "speech": window_speech,
+                "vad_fallback": use_vad_fallback,
+            }
+            fallback_error = None
+            try:
+                result = self._run_diarization_process(context, payload, control)
+            except RuntimeError as error:
+                if use_vad_fallback:
+                    fallback_error = error
+                else:
+                    # ponytail: 首次原生崩溃后整条轨道熔断，升级 Sherpa 后可删除。
+                    use_vad_fallback = True
+                    self.emit(
+                        "worker.warning",
+                        {
+                            "code": "diarization_chunk_fallback",
+                            "start_ms": core_start,
+                            "message": str(error),
+                        },
+                    )
+                    try:
+                        result = self._run_diarization_process(
+                            context, {**payload, "vad_fallback": True}, control
+                        )
+                    except RuntimeError as error:
+                        fallback_error = error
+                if fallback_error:
+                    self.emit(
+                        "worker.warning",
+                        {
+                            "code": "diarization_chunk_vad_only",
+                            "start_ms": core_start,
+                            "message": str(fallback_error),
+                        },
+                    )
+                    result = [
+                        {
+                            "start_ms": max(core_start, turn["start_ms"]),
+                            "end_ms": min(core_end, turn["end_ms"]),
+                            "speaker": "spk-1",
+                            "_embedding": None,
+                        }
+                        for turn in window_speech
+                        if turn["end_ms"] > core_start
+                        and turn["start_ms"] < core_end
+                    ]
+            turns.extend(result)
+        return turns
+
+    def _run_diarization_process(self, context, payload, control):
+        receiver, sender = context.Pipe(duplex=False)
+        process = context.Process(
+            target=_diarize_chunk_process, args=(sender, payload)
+        )
+        process.start()
+        sender.close()
+        try:
+            while process.is_alive() and not receiver.poll(0.1):
+                self.wait_task(control)
+            if not receiver.poll():
+                raise RuntimeError(
+                    f"Diarization subprocess exited with code {process.exitcode} "
+                    f"at {payload['core_start_ms']} ms"
+                )
+            try:
+                ok, result = receiver.recv()
+            except EOFError as error:
+                process.join()
+                raise RuntimeError(
+                    f"Diarization subprocess exited with code {process.exitcode} "
+                    f"at {payload['core_start_ms']} ms"
+                ) from error
+            if not ok:
+                raise RuntimeError(result)
+            return result
+        finally:
+            receiver.close()
+            if process.is_alive():
+                process.terminate()
+            process.join()
+
+    def _cluster_speaker_turns(
+        self, meeting, turns, sample_rate, num_speakers=-1
+    ):
+        """用子进程返回的声纹在全会议时间轴上统一聚类。"""
+        known = [
+            (index, turn["_embedding"])
+            for index, turn in enumerate(turns)
+            if turn.get("_embedding") is not None
+        ]
+        labels = (
+            [0] * len(known)
+            if len(known) < 2
+            else self._auto_cluster_embeddings(
+                [embedding for _, embedding in known],
+                [
+                    turns[index]["end_ms"] - turns[index]["start_ms"]
+                    for index, _ in known
+                ],
+                num_speakers,
+            )
+        )
+        assigned = {index: label for (index, _), label in zip(known, labels)}
+        for index, turn in enumerate(turns):
+            if index not in assigned and assigned:
+                nearest = min(
+                    assigned,
+                    key=lambda other: max(
+                        0,
+                        turn["start_ms"] - turns[other]["end_ms"],
+                        turns[other]["start_ms"] - turn["end_ms"],
+                    ),
+                )
+                assigned[index] = assigned[nearest]
+            if index in assigned:
+                turn["speaker"] = f"spk-{assigned[index] + 1}"
+        if self.store.list_speaker_profiles():
+            self._match_speaker_profiles(meeting, turns)
+        for turn in turns:
+            turn.pop("_embedding", None)
+        return turns
 
     @managed_task("meeting.separate")
     def separate_sources(self, payload, control=None):
@@ -485,26 +728,6 @@ class RefinementWorkerMixin:
         self.emit("meeting.sources-separated", event)
         return event
 
-    def synthesize_tts(self, payload):
-        """翻译后使用目标语言对应的本地 TTS 模型生成语音。"""
-        require(payload, "text", "target_language", "provider", "model")
-        language = payload["target_language"]
-        model_id = TTS_MODEL_IDS.get(language)
-        if not model_id:
-            raise ValueError("Unsupported TTS language")
-        if language in {"zh", "en"}:
-            require(payload, "voice_id")
-        if not self.models.is_ready(model_id):
-            raise RuntimeError(f"Model {model_id} is not installed")
-        payload = {**payload, "language": payload["target_language"]}
-        payload["text"] = self._complete(
-            payload,
-            f"Translate the following text to {language}. Return only the translation.\n\n{payload['text']}",
-        ).strip()
-        event = self.media.synthesize(payload)
-        self.emit("tts.ready", event)
-        return event
-
     @staticmethod
     def _refinement_turns(turns, duration_ms, maximum_ms):
         """按离线说话人边界拆分精修窗口，且单段不超过模型上限。"""
@@ -518,15 +741,36 @@ class RefinementWorkerMixin:
             for start in range(turn["start_ms"], turn["end_ms"], maximum_ms)
         ]
 
-    @staticmethod
-    def _split_long_turns(turns, maximum_ms=6000):
-        """将异常长的 diarization turn 切成可独立验证声纹的短段。"""
-        split = []
+    def _match_speaker_profiles(self, meeting, turns):
+        """为每位 diarized speaker 的最长片段做一次声纹库匹配。"""
+        representatives = {}
         for turn in turns:
-            for start_ms in range(turn["start_ms"], turn["end_ms"], maximum_ms):
-                end_ms = min(start_ms + maximum_ms, turn["end_ms"])
-                split.append({**turn, "start_ms": start_ms, "end_ms": end_ms})
-        return split
+            speaker = turn.get("speaker")
+            if not speaker or (
+                speaker in representatives
+                and turn["end_ms"] - turn["start_ms"]
+                <= representatives[speaker]["end_ms"] - representatives[speaker]["start_ms"]
+            ):
+                continue
+            representatives[speaker] = turn
+        replacements = {}
+        for speaker, turn in representatives.items():
+            embedding = turn.get("_embedding")
+            if embedding is None:
+                continue
+            profile = self.store.match_speaker_profile(
+                embedding, SETTINGS["diarization"]["online_similarity_threshold"]
+            )
+            if self._is_confident_profile_match(profile):
+                replacements[speaker] = f"profile-{profile['id']}"
+                self.store.rename_speaker(
+                    meeting["id"],
+                    replacements[speaker],
+                    profile["name"],
+                    profile_id=profile["id"],
+                )
+        for turn in turns:
+            turn["speaker"] = replacements.get(turn.get("speaker"), turn.get("speaker"))
 
     @staticmethod
     def _decode_range(turn, before, after, duration_ms, context_ms=800):
@@ -552,10 +796,99 @@ class RefinementWorkerMixin:
     @staticmethod
     def _trim_refinement_overlap(previous, text):
         """移除相邻精修窗口因上下文重叠产生的重复前缀。"""
+        if (
+            previous
+            and text
+            and SequenceMatcher(
+                None,
+                RefinementWorkerMixin._normalized_transcript(previous),
+                RefinementWorkerMixin._normalized_transcript(text),
+            ).ratio()
+            >= 0.92
+        ):
+            return ""
         for length in range(min(len(previous), len(text), 120), 2, -1):
             if previous[-length:].casefold() == text[:length].casefold():
                 return text[length:].lstrip()
         return text
+
+    @staticmethod
+    def _split_long_turns(turns, maximum_ms=6000):
+        return [
+            {**turn, "start_ms": start_ms, "end_ms": min(start_ms + maximum_ms, turn["end_ms"])}
+            for turn in turns
+            for start_ms in range(turn["start_ms"], turn["end_ms"], maximum_ms)
+        ]
+
+    @staticmethod
+    def _auto_cluster_embeddings(embeddings, durations, num_speakers=-1):
+        """以时长加权 silhouette 选择自动说话人数。"""
+        import numpy
+
+        if not embeddings:
+            return []
+        vectors = numpy.asarray(embeddings, dtype=numpy.float32)
+        vectors /= numpy.linalg.norm(vectors, axis=1, keepdims=True) + 1e-9
+        weights = numpy.asarray(durations, dtype=numpy.float64)
+        distances = 1 - numpy.clip(vectors @ vectors.T, -1, 1)
+
+        def cluster(count):
+            centers = [vectors[numpy.argmax(weights)]]
+            for _ in range(1, count):
+                centers.append(vectors[numpy.argmin(numpy.max(vectors @ numpy.asarray(centers).T, axis=1))])
+            centers, labels = numpy.asarray(centers), None
+            for _ in range(50):
+                updated = numpy.argmax(vectors @ centers.T, axis=1)
+                if labels is not None and numpy.array_equal(labels, updated):
+                    break
+                labels = updated
+                for label in range(count):
+                    members = labels == label
+                    if members.any():
+                        center = numpy.average(vectors[members], axis=0, weights=weights[members])
+                        centers[label] = center / (numpy.linalg.norm(center) + 1e-9)
+            return labels
+
+        if num_speakers > 0:
+            return cluster(min(num_speakers, len(vectors))).tolist()
+        if len(embeddings) < 3:
+            return [0] * len(embeddings)
+
+        candidates = {}
+        for count in range(1, min(MAX_AUTO_SPEAKERS, len(vectors) - 1) + 1):
+            labels = cluster(count)
+            if len(set(labels)) == count and all(
+                (labels == label).sum() >= MIN_AUTO_SPEAKER_WINDOWS
+                and weights[labels == label].sum() >= MIN_AUTO_SPEAKER_DURATION_MS
+                for label in set(labels)
+            ):
+                candidates[count] = labels
+        if not candidates:
+            return [0] * len(embeddings)
+        scores = {}
+        for count, labels in candidates.items():
+            if count == 1:
+                scores[count] = 0
+                continue
+            values = []
+            for index, label in enumerate(labels):
+                same = labels == label
+                same[index] = False
+                if not same.any():
+                    values.append(0)
+                    continue
+                within = numpy.average(distances[index, same], weights=weights[same])
+                nearest = min(numpy.average(distances[index, labels == other], weights=weights[labels == other]) for other in set(labels) if other != label)
+                values.append((nearest - within) / max(nearest, within, 1e-9))
+            scores[count] = numpy.average(values, weights=weights)
+        best = max(scores.values())
+        return candidates[
+            max(
+                count
+                for count, score in scores.items()
+                if score >= best - AUTO_CLUSTER_SCORE_TOLERANCE
+            )
+        ].tolist()
 
     @staticmethod
     def _stabilize_speaker_turns(turns, minimum_ms=1000, merge_gap_ms=600):
@@ -641,87 +974,6 @@ class RefinementWorkerMixin:
         return profile and profile["score"] - profile["runner_up_score"] >= 0.08
 
     @staticmethod
-    def _auto_cluster_embeddings(embeddings, durations):
-        """以加权 silhouette 的首个平台自动选择 1–20 个说话人簇。"""
-        import numpy
-
-        if len(embeddings) < 3:
-            return [0] * len(embeddings)
-        vectors = numpy.asarray(embeddings, dtype=numpy.float32)
-        vectors /= numpy.linalg.norm(vectors, axis=1, keepdims=True) + 1e-9
-        weights = numpy.asarray(durations, dtype=numpy.float64)
-        distances = 1 - numpy.clip(vectors @ vectors.T, -1, 1)
-
-        def cluster(count):
-            centers = [vectors[numpy.argmax(weights)]]
-            for _ in range(1, count):
-                similarity = numpy.max(vectors @ numpy.asarray(centers).T, axis=1)
-                centers.append(vectors[numpy.argmin(similarity)])
-            centers = numpy.asarray(centers)
-            labels = None
-            for _ in range(50):
-                updated = numpy.argmax(vectors @ centers.T, axis=1)
-                if labels is not None and numpy.array_equal(labels, updated):
-                    break
-                labels = updated
-                for label in range(count):
-                    members = labels == label
-                    if members.any():
-                        center = numpy.average(
-                            vectors[members], axis=0, weights=weights[members]
-                        )
-                        centers[label] = center / (numpy.linalg.norm(center) + 1e-9)
-            return labels
-
-        candidates = {}
-        for count in range(2, min(20, len(vectors) - 1) + 1):
-            labels = cluster(count)
-            if len(set(labels)) < 2:
-                candidates[count] = (0, labels)
-                continue
-            scores = []
-            for index, label in enumerate(labels):
-                same = labels == label
-                same[index] = False
-                if not same.any():
-                    scores.append(0)
-                    continue
-                within = numpy.average(distances[index, same], weights=weights[same])
-                nearest = min(
-                    numpy.average(
-                        distances[index, labels == other],
-                        weights=weights[labels == other],
-                    )
-                    for other in set(labels)
-                    if other != label
-                )
-                scores.append((nearest - within) / max(nearest, within, 1e-9))
-            candidates[count] = (numpy.average(scores, weights=weights), labels)
-        best = max(score for score, _ in candidates.values())
-        # ponytail: first silhouette plateau; ask for an explicit count when a
-        # recording genuinely contains more than 20 or tightly similar voices.
-        count = min(
-            count for count, (score, _) in candidates.items() if score >= best - 0.003
-        )
-        return candidates[count][1].tolist()
-
-    @staticmethod
-    def _detect_overlaps(turns_by_track):
-        """从 diarization 的并发说话人活动中提取独立的重叠语音区间。"""
-        overlaps = []
-        for track, turns in turns_by_track.items():
-            for index, first in enumerate(turns):
-                for second in turns[index + 1 :]:
-                    if second["start_ms"] >= first["end_ms"]:
-                        break
-                    if first["speaker"] == second["speaker"]:
-                        continue
-                    start_ms, end_ms = max(first["start_ms"], second["start_ms"]), min(first["end_ms"], second["end_ms"])
-                    if end_ms - start_ms >= 100:
-                        overlaps.append({"track": track, "start_ms": start_ms, "end_ms": end_ms, "speakers": [first["speaker"], second["speaker"]]})
-        return overlaps
-
-    @staticmethod
     def _overlap_speakers(start_ms, end_ms, turns):
         """返回与时间范围相交的全部说话人，不把重叠压成单一标签。"""
         return list(
@@ -759,6 +1011,13 @@ class RefinementWorkerMixin:
                 cursor, repeats = cursor - width, repeats + 1
             if repeats >= 4:
                 return text[: words[cursor + width - 1].end()].rstrip(" ,;，、")
+        # 一些离线 decoder 会重复整句而非单个汉字。仅压缩至少 8 个字符、连续三次
+        # 出现的完全相同片段（任意语言），避免吞掉正常的短语强调。
+        while match := next(
+            re.finditer(r"(?P<phrase>.{8,80}?)(?P=phrase){2,}", text),
+            None,
+        ):
+            text = f"{text[:match.start()]}{match.group('phrase')}{text[match.end():]}"
         return text
 
     def _is_duplicate_final(self, event):

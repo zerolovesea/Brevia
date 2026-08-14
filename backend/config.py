@@ -9,6 +9,23 @@ DEFAULT_SETTINGS = json.loads(
     Path(__file__).with_name("settings.json").read_text(encoding="utf-8")
 )
 SETTINGS = json.loads(json.dumps(DEFAULT_SETTINGS))
+SPEAKER_EMBEDDING_MODEL_ID = "eres2net-base-3dspeaker-zh"
+
+
+def validate_num_speakers(value):
+    """接受自动模式 ``-1`` 或受资源上限保护的固定人数。"""
+    if isinstance(value, bool):
+        raise ValueError("num_speakers must be an integer")
+    try:
+        integer = int(value)
+    except (TypeError, ValueError) as error:
+        raise ValueError("num_speakers must be an integer") from error
+    if integer != value:
+        raise ValueError("num_speakers must be an integer")
+    value = integer
+    if value != -1 and value < 1:
+        raise ValueError("num_speakers must be -1 or a positive integer")
+    return value
 
 
 def runtime_settings(root):
@@ -17,6 +34,7 @@ def runtime_settings(root):
     value = json.loads(json.dumps(DEFAULT_SETTINGS))
     if path.is_file():
         value = json.loads(path.read_text(encoding="utf-8"))
+    value.get("diarization", {}).pop("embedding_model_id", None)
     _validate(value, DEFAULT_SETTINGS)
     SETTINGS.clear()
     SETTINGS.update(value)
@@ -25,6 +43,8 @@ def runtime_settings(root):
 
 def save_runtime_settings(root, value):
     """保存用户本地覆盖配置到 advanced-settings.json。"""
+    value = json.loads(json.dumps(value))
+    value.get("diarization", {}).pop("embedding_model_id", None)
     _validate(value, DEFAULT_SETTINGS)
     path = Path(root) / "advanced-settings.json"
     path.write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -49,8 +69,8 @@ def _validate(value, template):
         elif isinstance(current, (int, float)):
             if not math.isfinite(current):
                 raise ValueError(f"Invalid setting: {key}")
-            if key == "num_speakers" and current != -1 and not 1 <= current <= 20:
-                raise ValueError("num_speakers must be -1 or between 1 and 20")
+            if key == "num_speakers":
+                validate_num_speakers(current)
             if key == "cluster_threshold" and not 0 <= current <= 2:
                 raise ValueError(f"Invalid setting: {key}")
             if (

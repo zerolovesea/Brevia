@@ -49,13 +49,12 @@ Brevia транскрибирует речь на 30+ языках — англ�
 
 ### Курируемая локальная библиотека моделей
 
-27+ загружаемых моделей, охватывающих потоковое ASR, офлайн-уточнение, восстановление пунктуации, детекцию речевой активности, диаризацию, эмбеддинги говорящего, синтез речи и разделение источников. Комбинируйте по языку и точности — всё работает на вашем устройстве.
+Загружаемые модели охватывают потоковое ASR, офлайн-уточнение, восстановление пунктуации, детекцию речевой активности, диаризацию, эмбеддинги говорящего и разделение источников. Комбинируйте по языку и точности — всё работает на вашем устройстве.
 
 ![Библиотека моделей](assets/tour/en/%E6%A8%A1%E5%9E%8B%E5%BA%93.png)
 
 ### И это ещё не всё
 
-- **TTS-синтез и клонирование голоса** — ZipVoice использует референсное аудио зарегистрированных говорящих для синтеза китайского и английского; для немецкого, французского, испанского, русского и корейского доступны голоса VITS.
 - **Разделение источников** — Spleeter разделяет записи на вокальные и невокальные дорожки для постобработки.
 - **Импорт аудио** — принесите существующие записи для офлайн-транскрипции через тот же речевой конвейер.
 - **Богатый экспорт** — транскрипции и заметки в Markdown, TXT, JSON, SRT, DOCX или PDF; аудио в FLAC, WAV или M4A.
@@ -79,7 +78,7 @@ Brevia транскрибирует речь на 30+ языках — англ�
 flowchart LR
   A[Рендерер Electron<br/>HTML · Tailwind · JS] <-->|IPC + валидация Zod| B[Главный процесс Electron]
   B <-->|JSONL stdin/stdout| C[Python-воркер<br/>встроенный runtime]
-  C --> D[sherpa-onnx<br/>ASR · VAD · говорящие · пунктуация · TTS]
+  C --> D[sherpa-onnx<br/>ASR · VAD · говорящие · пунктуация]
   C --> E[Локальное хранилище<br/>SQLite · аудио · экспорты]
   C -. явное согласие .-> F[Опциональный облачный API<br/>LLM-резюме · перевод]
 ```
@@ -99,7 +98,7 @@ Brevia следует строгой local-first архитектуре:
 | Фронтенд | Ванильный HTML/CSS/JS, Tailwind CSS 4, встроенная i18n (8 локалей) |
 | Бэкенд | Python 3.10+, протокол воркера JSONL, хранилище SQLite |
 | Речевой движок | [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 1.13.2, ONNX Runtime |
-| Обработка говорящих | Сегментация Pyannote + эмбеддинги 3D-Speaker / NeMo Titanet / CAM++ |
+| Обработка говорящих | Сегментация Pyannote + эмбеддинги 3D-Speaker ERes2Net Base |
 | LLM-клиент | Встроенный llama.cpp (GGUF) и Chat-API, совместимые с OpenAI / Anthropic |
 | Ввод-вывод аудио | ffmpeg (входит в релизы) |
 | Сборка и упаковка | electron-builder, PyInstaller (встроенный Python-runtime) |
@@ -109,15 +108,14 @@ Brevia следует строгой local-first архитектуре:
 
 | Категория | Представительные модели | Языки |
 | --- | --- | --- |
-| Потоковое ASR | Zipformer (zh / en / fr / ko / многоязычный), Paraformer двуязычный, Nemotron 3.5 | 30+ |
-| Уточняющее ASR | Qwen3-ASR 0.6B / 1.7B, Whisper Turbo / Large v3, FireRedASR2, FunASR Nano | Многоязычные |
+| Потоковое ASR | Zipformer (zh / en / fr / ko / многоязычный), Nemotron 3.5 | 30+ |
+| Уточняющее ASR | Qwen3-ASR 0.6B / 1.7B, Whisper Large v3, FunASR Nano | Многоязычные |
 | Пунктуация | CT-Transformer zh+en, Online Punct английский регистр | zh / en |
 | Детекция речевой активности | Silero VAD | Универсальный |
 | Улучшение речи | GTCRN Live Denoiser | Универсальный |
 | Диаризация | Pyannote Segmentation 3.0, Reverb Diarization v1 | Универсальный |
-| Эмбеддинги говорящего | 3D-Speaker ERes2Net, CAM++, NeMo Titanet | zh / en |
+| Эмбеддинги говорящего | 3D-Speaker ERes2Net Base | Универсальный |
 | Разделение источников | Spleeter 2 Stems | Универсальный |
-| Синтез речи | ZipVoice (zh + en), VITS Piper (fr / de / es / ru), VITS Mimic3 (ko) | Многоязычные |
 
 Для LLM-резюме можно выбрать **Встроенный ИИ** и запустить входящую в состав модель GGUF локально (Qwen 3.5 2B / 4B, Gemma 3 1B / 4B) либо указать Claude, OpenAI, OpenRouter или свой сервис с форматом OpenAI Chat Completions или Anthropic Messages — Gemini (OpenAI-совместимый endpoint), DeepSeek, Kimi, Qwen и другие.
 
@@ -194,7 +192,7 @@ npm run dist:win   # Windows x64 EXE
 <details>
 <summary><strong>Отправляет ли Brevia аудио в облако?</strong></summary>
 
-Нет. Распознавание речи, диаризация и TTS работают полностью локально. Только LLM-резюме и перевод обращаются к сети, и только после того, как вы настроите провайдера — исключительно текст, никогда — аудио.
+Нет. Распознавание речи и диаризация работают полностью локально. Только LLM-резюме и перевод обращаются к сети, и только после того, как вы настроите провайдера — исключительно текст, никогда — аудио.
 </details>
 
 <details>
@@ -251,6 +249,6 @@ Brevia выпускается под [ISC License](../LICENSE). Файлы мо�
 
 ## Благодарности
 
-- [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) — локальный runtime, обеспечивающий ASR, VAD, пунктуацию, обработку говорящих и TTS. Лицензирован под [Apache-2.0](https://github.com/k2-fsa/sherpa-onnx/blob/master/LICENSE).
-- Спасибо авторам и сопровождающим моделей, чьи загружаемые артефакты заявлены в [`backend/models.json`](../backend/models.json), включая Zipformer, Paraformer, Whisper, Qwen3-ASR, FireRedASR, FunASR, Pyannote, 3D-Speaker, NeMo, Silero, Spleeter, ZipVoice, VITS Piper / Mimic3 и другие.
+- [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) — локальный runtime, обеспечивающий ASR, VAD, пунктуацию и обработку говорящих. Лицензирован под [Apache-2.0](https://github.com/k2-fsa/sherpa-onnx/blob/master/LICENSE).
+- Спасибо авторам и сопровождающим моделей, чьи загружаемые артефакты заявлены в [`backend/models.json`](../backend/models.json), включая Zipformer, Whisper, Qwen3-ASR, FunASR, Pyannote, 3D-Speaker, Silero, Spleeter и Tencent Hy-MT2.
 - Electron, ONNX Runtime, Python и открытое сообщество распознавания речи делают этот local-first рабочий процесс возможным.

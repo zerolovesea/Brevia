@@ -24,9 +24,10 @@ const startupAnimationMs = 1700;
 const startupDataWaitMs = 2200;
 const workerLineLimit = 8 * 1024 * 1024;
 const workerRequestTimeouts = new Map([
+  ['meeting.audio', 15000],
   ['meeting.get', 15000],
   ['models.download', 15000], ['models.pause', 15000], ['models.cancel', 15000],
-  ['task.pause', 15000], ['task.resume', 15000],
+  ['task.pause', 15000], ['task.resume', 15000], ['task.cancel', 15000],
 ]);
 const resetOnboarding = process.argv.includes('--reset-onboarding');
 const dataDir = () => process.env.BREVIA_DATA_DIR || path.join(app.getPath('home'), 'brevia');
@@ -34,6 +35,16 @@ const legacyDataDir = () => app.getPath('userData');
 const logsDir = () => path.join(dataDir(), 'logs');
 const logFile = () => path.join(logsDir(), 'brevia.log');
 const logText = (value) => value instanceof Error ? value.stack || value.message : typeof value === 'string' ? value : JSON.stringify(value);
+const powerStatus = async () => {
+  if (!powerMonitor.isOnBatteryPower()) return { on_battery: false, low_battery: false };
+  if (process.platform !== 'darwin') return { on_battery: true, low_battery: false };
+  return new Promise((resolve) => {
+    execFile('pmset', ['-g', 'batt'], (error, stdout = '') => {
+      const percentage = Number(/(\d+)%/.exec(stdout)?.[1]);
+      resolve({ on_battery: true, low_battery: Number.isFinite(percentage) && percentage <= 20 });
+    });
+  });
+};
 const bundledFfmpegPath = () => {
   const base = app.isPackaged ? path.join(process.resourcesPath, 'app.asar.unpacked') : root;
   const binary = path.join(base, 'node_modules', '@ffmpeg-installer', `${process.platform}-${process.arch}`, process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg');
@@ -53,7 +64,7 @@ const migrateDataDir = async () => {
   const source = legacyDataDir();
   if (!existsSync(source) || existsSync(path.join(dataDir(), 'brevia.db'))) return;
   await mkdir(dataDir(), { recursive: true });
-  for (const name of ['advanced-settings.json', 'brevia.db', 'brevia.db-shm', 'brevia.db-wal', 'meetings', 'models', 'speaker-profiles', 'summary-models.json', 'secrets', 'tts', 'logs']) {
+  for (const name of ['advanced-settings.json', 'brevia.db', 'brevia.db-shm', 'brevia.db-wal', 'meetings', 'models', 'speaker-profiles', 'summary-models.json', 'secrets', 'logs']) {
     const from = path.join(source, name);
     const to = path.join(dataDir(), name);
     if (!existsSync(from) || existsSync(to)) continue;
@@ -68,14 +79,14 @@ const workerResponse = z.discriminatedUnion('ok', [
 ]);
 const workerEvent = z.object({
   type: z.enum([
-    'app.maintenance', 'asr.language', 'diarization.ready', 'meeting.imported',
-    'meeting.paused', 'meeting.reconfigured', 'meeting.recovered', 'meeting.sources-separated', 'meeting.started',
-    'meeting.stopped', 'model.progress', 'model.status', 'refinement.progress',
-    'refinement.ready', 'refinement.segment', 'refinement.started', 'separation.progress',
+    'app.maintenance', 'meeting.imported', 'meeting.reconfigured', 'meeting.recovered',
+    'meeting.sources-separated', 'meeting.started',
+    'meeting.stopped', 'model.progress', 'model.status', 'refinement.cancelled', 'refinement.progress',
+    'refinement.ready', 'refinement.started', 'separation.progress',
     'separation.started', 'speaker-profile.deleted', 'speaker-profile.updated',
     'summary.progress', 'summary.ready', 'summary.started', 'task.status',
     'transcript.discarded', 'transcript.final', 'transcript.partial', 'transcript.refined',
-    'translation.ready', 'tts.ready', 'worker.error', 'worker.warning',
+    'translation.ready', 'worker.error', 'worker.warning',
   ]),
   schema_version: z.literal(1),
   payload: z.record(z.string(), z.unknown()),
@@ -88,9 +99,9 @@ const meetingStart = z.object({
   streaming_model_id: z.string().min(1),
   refined_model_id: z.string().min(1),
   speaker_segmentation_model_id: z.string().min(1).optional(),
-  speaker_embedding_model_id: z.string().min(1).optional(),
   vad_model_id: z.string().min(1).optional(),
-  num_speakers: z.number().int().min(-1).max(20).optional(),
+  num_speakers: z.number().int().refine((value) => value === -1 || value >= 1).optional(),
+  power_saving: z.boolean().optional(),
   workspace_id: z.string().uuid().nullable().optional(),
   tags: z.array(z.string().max(32)).max(20).optional(),
 });
@@ -114,6 +125,7 @@ const meetingReconfigure = id.extend({
   target_language: z.string().max(16).nullable().optional(),
   streaming_model_id: z.string().min(1).max(128).optional(),
   refined_model_id: z.string().min(1).max(128).optional(),
+  power_saving: z.boolean().optional(),
 });
 // 纪要供应商固定为这六项；只有 built-in 在本地运行，因此其余都必须带请求地址。
 const summaryProviderIds = ['built-in', 'claude', 'openai', 'openrouter', 'custom-openai', 'custom-claude'];
@@ -140,12 +152,15 @@ const summaryConfig = z.object({
 });
 
 class WorkerClient {
-  constructor() {
+  constructor({ refinement = false } = {}) {
     this.pending = new Map();
     this.sequence = 0;
     this.restarts = 0;
     this.active = null;
     this.starting = null;
+    this.refinement = refinement;
+    this.recycleRequested = false;
+    this.hasSpawned = false;
   }
 
   start() {
@@ -157,6 +172,7 @@ class WorkerClient {
     const python = useBundledWorker ? bundled : (process.env.BREVIA_PYTHON || (process.platform === 'win32' ? 'python' : 'python3'));
     const args = useBundledWorker ? [] : ['-m', 'backend.worker'];
     const ffmpeg = process.env.BREVIA_FFMPEG || bundledFfmpegPath();
+    const recoverInterrupted = !this.refinement && !this.hasSpawned;
     const child = spawn(python, args, {
       cwd: packagedRoot,
       env: {
@@ -166,13 +182,14 @@ class WorkerClient {
         BREVIA_DATA_DIR: dataDir(),
         BREVIA_MODELS_DIR: process.env.BREVIA_MODELS_DIR || path.join(dataDir(), 'models'),
         BREVIA_BUNDLED_MODELS_DIR: path.join(packagedRoot, 'backend', 'bundled-models'),
+        BREVIA_RECOVER_INTERRUPTED: recoverInterrupted ? '1' : '0',
         ...(ffmpeg ? { BREVIA_FFMPEG: ffmpeg } : {}),
       },
       stdio: ['pipe', 'pipe', 'pipe'],
     });
     this.process = child;
     this.starting = new Promise((resolve, reject) => {
-      child.once('spawn', resolve);
+      child.once('spawn', () => { this.hasSpawned = true; resolve(); });
       child.once('error', reject);
     }).finally(() => { this.starting = null; });
     let buffer = '';
@@ -202,7 +219,7 @@ class WorkerClient {
       this.sendEvent('worker:log', { message });
     });
     child.on('error', (error) => this.fail(error));
-    child.on('exit', (code) => this.closed(code, child));
+    child.on('exit', (code, signal) => this.closed(code, signal, child));
     return this.starting;
   }
 
@@ -215,6 +232,7 @@ class WorkerClient {
       this.pending.delete(message.id);
       clearTimeout(pending.timer);
       message.ok ? pending.resolve(message.result) : pending.reject(new Error(message.error));
+      this.recycleIfIdle();
       return;
     }
     if (message.type) this.sendEvent(message.type, message.payload);
@@ -232,6 +250,7 @@ class WorkerClient {
       const timer = timeout && setTimeout(() => {
         if (!this.pending.delete(requestId)) return;
         reject(new Error(`Worker request timed out: ${type}`));
+        this.recycleIfIdle();
       }, timeout);
       this.pending.set(requestId, { resolve, reject, timer });
       try {
@@ -254,6 +273,20 @@ class WorkerClient {
     BrowserWindow.getAllWindows().forEach((window) => window.webContents.send('brevia:event', { type, payload }));
   }
 
+  recycle() {
+    this.recycleRequested = true;
+    this.recycleIfIdle();
+  }
+
+  recycleIfIdle() {
+    if (!this.recycleRequested || this.active || this.pending.size) return;
+    const child = this.process;
+    this.recycleRequested = false;
+    if (!child) return;
+    this.process = null;
+    stopProcess(child);
+  }
+
   fail(error) {
     this.pending.forEach(({ reject, timer }) => {
       clearTimeout(timer);
@@ -262,12 +295,21 @@ class WorkerClient {
     this.pending.clear();
   }
 
-  async closed(code, child) {
+  async closed(code, signal, child) {
     if (child !== this.process) return;
     this.process = null;
     if (app.isQuitting) return;
-    this.fail(new Error(`Worker exited with code ${code}`));
-    this.sendEvent('worker.error', { message: `转写进程已退出（${code}）` });
+    const reason = signal || `code ${code}`;
+    this.fail(new Error(`Worker exited with ${reason}`));
+    this.sendEvent('worker.error', { message: `转写进程已退出（${reason}）` });
+    if (this.refinement) {
+      const meetingId = this.active?.meeting_id;
+      this.active = null;
+      if (meetingId) void worker.request('meeting.refinement-recover', { meeting_id: meetingId })
+        .then((meeting) => this.sendEvent('refinement.cancelled', { meeting_id: meetingId, meeting }))
+        .catch((error) => writeLog('ERROR', `recover refinement: ${logText(error)}`));
+      return;
+    }
     if (this.restarts >= 1) return;
     this.restarts += 1;
     this.start();
@@ -284,6 +326,8 @@ class WorkerClient {
 }
 
 const worker = new WorkerClient();
+// 精修会长时间占用 ONNX 线程；独立进程保证会议列表和详情查询不会被它饿死。
+const refinementWorker = new WorkerClient({ refinement: true });
 let startupInitialization;
 const supportsSystemAudio = () => systemAudioSupported(process.platform, os.release());
 
@@ -338,6 +382,38 @@ function handleModelRequirement(channel, schema, type = channel) {
   });
 }
 
+function handleRefinement(payload) {
+  const value = id.extend({
+    refined_model_id: z.string().min(1).optional(),
+    num_speakers: z.number().int().refine((count) => count === -1 || count >= 1).optional(),
+    cluster_threshold: z.number().min(0).max(2).optional(),
+  }).parse(payload);
+  if (refinementWorker.active) {
+    if (refinementWorker.active.meeting_id === value.meeting_id) return refinementWorker.active.promise;
+    return Promise.reject(new Error('Another meeting is already being refined'));
+  }
+  const active = { meeting_id: value.meeting_id, promise: null };
+  refinementWorker.active = active;
+  active.promise = refinementWorker.request('meeting.refine', value).catch((error) => {
+    const models = requiredModels(error);
+    if (!models) throw error;
+    worker.sendEvent('model.required', { models, task: 'meeting.refine', payload: value });
+    return { model_required: models };
+  }).finally(() => {
+    if (refinementWorker.active !== active) return;
+    refinementWorker.active = null;
+    refinementWorker.recycle();
+  });
+  return active.promise;
+}
+
+function handleTaskControl(channel, schema) {
+  ipcMain.handle(channel, (_, payload) => {
+    const value = schema.parse(payload);
+    return (value.task === 'meeting.refine' ? refinementWorker : worker).request(channel, value);
+  });
+}
+
 async function setSecret(reference, value) {
   const directory = path.join(dataDir(), 'secrets');
   await mkdir(directory, { recursive: true });
@@ -387,7 +463,12 @@ async function prepareExport(value) {
   const pdfPath = exported.path.replace(/\.print\.html$/, '.pdf');
   try {
     await printWindow.loadFile(exported.path);
-    await writeFile(pdfPath, await printWindow.webContents.printToPDF({ printBackground: true }));
+    await writeFile(pdfPath, await printWindow.webContents.printToPDF({
+      printBackground: true,
+      displayHeaderFooter: true,
+      headerTemplate: '<div style="width:100%;text-align:center;opacity:.72"><svg width="98" height="28" viewBox="0 0 196 56" xmlns="http://www.w3.org/2000/svg" aria-label="Brevia"><rect width="56" height="56" fill="#000"/><text x="28" y="39" fill="#fff" font-family="PingFang SC,Hiragino Sans GB,Noto Sans CJK SC,sans-serif" font-size="28" font-weight="600" text-anchor="middle">言</text><text x="76" y="42" fill="#000" font-family="Arial,Helvetica,sans-serif" font-size="38" font-weight="700" letter-spacing="-2">brevia</text></svg></div>',
+      footerTemplate: '<div></div>',
+    }));
     return { path: pdfPath, format: 'pdf' };
   } finally {
     if (!printWindow.isDestroyed()) printWindow.destroy();
@@ -429,7 +510,17 @@ function registerIpc() {
     return false;
   });
   ipcMain.handle('app.initialize', () => initializeWorker());
-  handle('app.maintain', z.object({}), 'app.maintain');
+  ipcMain.handle('power.status', () => powerStatus());
+  ipcMain.handle('app.maintain', async () => {
+    if (app.isQuitting) return {};
+    try {
+      return await worker.request('app.maintain');
+    } catch (error) {
+      if (app.isQuitting) return {};
+      writeLog('ERROR', `app.maintain: ${logText(error)}`);
+      throw error;
+    }
+  });
   ipcMain.handle('meeting.start', async (_, payload) => {
     const value = meetingStart.parse(payload);
     let result;
@@ -461,6 +552,7 @@ function registerIpc() {
     const value = id.extend({ duration_ms: z.number().nonnegative() }).parse(payload);
     const result = await worker.request('meeting.stop', value);
     worker.active = null;
+    worker.recycle();
     return result;
   });
   handle('meeting.list', z.object({ include_deleted: z.boolean().optional(), query: z.string().max(120).optional() }), 'meeting.list');
@@ -469,11 +561,7 @@ function registerIpc() {
   handle('meeting.delete', id, 'meeting.delete');
   handle('meeting.restore', id, 'meeting.restore');
   handle('meeting.purge', id, 'meeting.purge');
-  handleModelRequirement('meeting.refine', id.extend({
-    refined_model_id: z.string().min(1).optional(),
-    num_speakers: z.number().int().min(-1).max(20).optional(),
-    cluster_threshold: z.number().min(0).max(2).optional(),
-  }), 'meeting.refine');
+  ipcMain.handle('meeting.refine', (_, payload) => handleRefinement(payload));
   handleModelRequirement('meeting.separate', id, 'meeting.separate');
   handle('workspace.list', z.object({}), 'workspace.list');
   handle('workspace.get', z.object({ workspace_id: z.string() }), 'workspace.get');
@@ -485,16 +573,18 @@ function registerIpc() {
   handle('speaker-profile.list', z.object({}), 'speaker-profile.list');
   handle('speaker-profile.samples', z.object({ profile_id: z.string().uuid() }), 'speaker-profile.samples');
   ipcMain.handle('speaker-profile.enroll', async (_, payload) => {
-    const value = z.object({ profile_id: z.string().uuid().optional(), name: z.string().trim().min(1).max(32), reference_text: z.string().trim().max(500).optional() }).parse(payload);
+    const value = z.object({ profile_id: z.string().uuid().optional(), name: z.string().trim().min(1).max(32) }).parse(payload);
     const selected = await dialog.showOpenDialog({ properties: ['openFile'], filters: [{ name: 'Audio', extensions: ['wav', 'mp3', 'm4a', 'flac', 'aac', 'ogg'] }] });
     if (selected.canceled) return null;
-    return worker.request('speaker-profile.enroll', { ...value, path: selected.filePaths[0] });
+    return worker.request('speaker-profile.enroll', { ...value, path: selected.filePaths[0] })
+      .finally(() => worker.recycle());
   });
   ipcMain.handle('speaker-profile.verify', async (_, payload) => {
     const value = z.object({ profile_id: z.string().uuid() }).parse(payload);
     const selected = await dialog.showOpenDialog({ properties: ['openFile'], filters: [{ name: 'Audio', extensions: ['wav', 'mp3', 'm4a', 'flac', 'aac', 'ogg'] }] });
     if (selected.canceled) return null;
-    return worker.request('speaker-profile.verify', { ...value, path: selected.filePaths[0] });
+    return worker.request('speaker-profile.verify', { ...value, path: selected.filePaths[0] })
+      .finally(() => worker.recycle());
   });
   handle('speaker-profile.delete', z.object({ profile_id: z.string().uuid() }), 'speaker-profile.delete');
   handle('speaker-profile.rename', z.object({ profile_id: z.string().uuid(), name: z.string().trim().min(1).max(32) }), 'speaker-profile.rename');
@@ -512,31 +602,25 @@ function registerIpc() {
     }
   });
   handle('segment.speaker', id.extend({ segment_id: z.string().min(1), name: z.string().trim().min(1).max(32), enroll: z.boolean().optional() }), 'segment.speaker');
-  handle('segment.speaker-profile-sample', id.extend({ segment_id: z.string().min(1), profile_id: z.string().uuid() }), 'segment.speaker-profile-sample');
+  ipcMain.handle('segment.speaker-profile-sample', async (_, payload) => {
+    const value = id.extend({ segment_id: z.string().min(1), profile_id: z.string().uuid() }).parse(payload);
+    return worker.request('segment.speaker-profile-sample', value).finally(() => worker.recycle());
+  });
   ipcMain.handle('storage.open', async (_, payload) => {
     const partition = z.enum(['meetings', 'models', 'exports']).parse(payload?.partition);
     const root = dataDir();
     const directory = partition === 'models' ? process.env.BREVIA_MODELS_DIR || path.join(root, 'models') : path.join(root, 'meetings');
     return shell.openPath(directory);
   });
-  ipcMain.handle('tts.synthesize', async (_, payload) => {
-    const value = llmRequest.extend({ text: z.string().trim().min(1).max(1000), voice_id: z.string().min(1).optional(), target_language: z.enum(['zh', 'en', 'es', 'ko', 'fr', 'de', 'ru']) }).parse(payload);
-    try {
-      return await worker.request('tts.synthesize', { ...value, api_key: await getSecret(value.key_reference) });
-    } catch (error) {
-      const models = requiredModels(error);
-      if (!models) throw error;
-      worker.sendEvent('model.required', { models, task: 'tts.synthesize', payload: value });
-      return { model_required: models };
-    }
-  });
   handle('models.list', z.object({}), 'models.list');
   handle('models.download', z.object({ model_id: z.string(), source: z.enum(['default', 'china']).optional() }), 'models.download');
   handle('models.pause', z.object({ model_id: z.string() }), 'models.pause');
   handle('models.cancel', z.object({ model_id: z.string() }), 'models.cancel');
   handle('models.delete', z.object({ model_id: z.string() }), 'models.delete');
-  handle('task.pause', z.object({ task: z.enum(['meeting.refine', 'meeting.separate', 'summary.generate']), meeting_id: z.string() }), 'task.pause');
-  handle('task.resume', z.object({ task: z.enum(['meeting.refine', 'meeting.separate', 'summary.generate']), meeting_id: z.string() }), 'task.resume');
+  const taskControl = z.object({ task: z.enum(['meeting.refine', 'meeting.separate', 'summary.generate']), meeting_id: z.string() });
+  handleTaskControl('task.pause', taskControl);
+  handleTaskControl('task.resume', taskControl);
+  handleTaskControl('task.cancel', taskControl);
   ipcMain.handle('secret.set', async (_, payload) => {
     const value = z.object({ reference: z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/), value: z.string().min(1) }).parse(payload);
     await setSecret(value.reference, value.value);
@@ -1095,6 +1179,7 @@ app.on('before-quit', (event) => {
   if (quittingAfterMeetingStop) {
     app.isQuitting = true;
     stopProcess(worker.process);
+    stopProcess(refinementWorker.process);
     return;
   }
   event.preventDefault();

@@ -18,8 +18,7 @@ class SpeakerProfileStoreMixin:
                 """SELECT id,name,sample_count,created_at,updated_at,
                        COALESCE((SELECT SUM(duration_ms) FROM speaker_profile_samples sample WHERE sample.profile_id=speaker_profiles.id),0) AS duration_ms,
                        EXISTS(SELECT 1 FROM speaker_profile_samples sample WHERE sample.profile_id=speaker_profiles.id AND sample.source_key LIKE 'builtin:%') AS built_in,
-                       (SELECT source_key FROM speaker_profile_samples sample WHERE sample.profile_id=speaker_profiles.id AND sample.source_key LIKE 'builtin:%' LIMIT 1) AS builtin_key,
-                       EXISTS(SELECT 1 FROM speaker_profile_samples sample WHERE sample.profile_id=speaker_profiles.id AND sample.audio_path IS NOT NULL AND trim(COALESCE(sample.reference_text,'')) != '') AS has_reference
+                       (SELECT source_key FROM speaker_profile_samples sample WHERE sample.profile_id=speaker_profiles.id AND sample.source_key LIKE 'builtin:%' LIMIT 1) AS builtin_key
                        FROM speaker_profiles ORDER BY name COLLATE NOCASE"""
             ).fetchall()
         return [dict(row) for row in rows]
@@ -29,7 +28,7 @@ class SpeakerProfileStoreMixin:
         self.speaker_profile(profile_id)
         with self.connect() as db:
             rows = db.execute(
-                """SELECT id,profile_id,source_key,created_at,audio_path,reference_text,duration_ms
+                """SELECT id,profile_id,source_key,created_at,audio_path,duration_ms
                        FROM speaker_profile_samples WHERE profile_id=? ORDER BY created_at DESC""",
                 (profile_id,),
             ).fetchall()
@@ -85,7 +84,6 @@ class SpeakerProfileStoreMixin:
         source_key,
         profile_id=None,
         audio_path=None,
-        reference_text=None,
         duration_ms=0,
     ):
         """保存一条声纹样本，并以所有样本的归一化中心更新人员声纹。"""
@@ -125,8 +123,8 @@ class SpeakerProfileStoreMixin:
                 saved = False
                 if audio_path:
                     db.execute(
-                        "UPDATE speaker_profile_samples SET audio_path=?,reference_text=?,duration_ms=? WHERE id=?",
-                        (audio_path, reference_text, int(duration_ms), existing["id"]),
+                        "UPDATE speaker_profile_samples SET audio_path=?,duration_ms=? WHERE id=?",
+                        (audio_path, int(duration_ms), existing["id"]),
                     )
             else:
                 usage = db.execute(
@@ -146,7 +144,7 @@ class SpeakerProfileStoreMixin:
                         f"Voiceprint recordings can total at most {limits['max_total_seconds']} seconds"
                     )
                 db.execute(
-                    "INSERT INTO speaker_profile_samples(id,profile_id,source_key,embedding,created_at,audio_path,reference_text,duration_ms) VALUES(?,?,?,?,?,?,?,?)",
+                    "INSERT INTO speaker_profile_samples(id,profile_id,source_key,embedding,created_at,audio_path,duration_ms) VALUES(?,?,?,?,?,?,?)",
                     (
                         str(uuid4()),
                         profile_id,
@@ -154,7 +152,6 @@ class SpeakerProfileStoreMixin:
                         json.dumps(normalized),
                         now,
                         audio_path,
-                        reference_text,
                         int(duration_ms),
                     ),
                 )
@@ -213,21 +210,6 @@ class SpeakerProfileStoreMixin:
             else:
                 path.unlink(missing_ok=True)
         return self.speaker_profile(profile_id)
-
-    def speaker_profile_reference(self, profile_id):
-        """返回可用于本地语音克隆的最新带文本参考录音。"""
-        with self.connect() as db:
-            row = db.execute(
-                """SELECT audio_path,reference_text FROM speaker_profile_samples
-                       WHERE profile_id=? AND audio_path IS NOT NULL AND reference_text IS NOT NULL AND trim(reference_text) != ''
-                       ORDER BY created_at DESC LIMIT 1""",
-                (profile_id,),
-            ).fetchone()
-        if not row:
-            raise ValueError(
-                "This voiceprint has no reference audio and transcript for voice cloning"
-            )
-        return dict(row)
 
     def match_speaker_profile(self, embedding, threshold):
         """按余弦相似度匹配本地人员；低于阈值时返回 ``None``。"""
