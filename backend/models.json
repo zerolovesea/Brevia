@@ -44,18 +44,6 @@
     "kind": "transducer"
   },
   {
-    "id": "zipformer-multilingual-streaming",
-    "name": "Streaming Zipformer Multilingual",
-    "runtime": "sherpa-onnx==1.13.2",
-    "revision": "asr-models/2025-02-10",
-    "stages": ["streaming"], "languages": ["ar", "en", "id", "ja", "ru", "th", "vi", "zh"], "backend": ["cpu", "cuda"], "speaker": false,
-    "size_bytes": 258999581,
-    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-ar_en_id_ja_ru_th_vi_zh-2025-02-10.tar.bz2",
-    "china_url": "https://modelscope.cn/models/zyaztec/sherpa-onnx-streaming-zipformer-ar-en-id-ja-ru-th-vi-zh-2025-02-10/resolve/master/sherpa-onnx-streaming-zipformer-ar_en_id_ja_ru_th_vi_zh-2025-02-10.tar.bz2",
-    "archive_sha256": "28044b67324f7f831689f0a3761473dd2ade380e93aa53f1dbcd479ef71c40d4", "directory": "sherpa-onnx-streaming-zipformer-ar_en_id_ja_ru_th_vi_zh-2025-02-10",
-    "files": ["encoder-epoch-75-avg-11-chunk-16-left-128.int8.onnx", "decoder-epoch-75-avg-11-chunk-16-left-128.onnx", "joiner-epoch-75-avg-11-chunk-16-left-128.int8.onnx", "tokens.txt"], "kind": "transducer"
-  },
-  {
     "id": "zipformer-ko-streaming-int8",
     "name": "Streaming Zipformer Korean",
     "runtime": "sherpa-onnx==1.13.2",
@@ -88,7 +76,7 @@
   {
     "id": "nemotron-3.5-asr-streaming-0.6b-560ms-int8",
     "name": "Nemotron 3.5 ASR Streaming 0.6B (560ms)",
-    "runtime": "sherpa-onnx==1.13.2",
+    "runtime": "sherpa-onnx==1.13.5",
     "revision": "asr-models/2026-06-11",
     "stages": ["streaming"],
     "languages": ["ar", "de", "en", "es", "fr", "hi", "it", "ja", "ko", "nl", "pt", "ru", "tr", "uk", "vi", "zh"],
@@ -244,13 +232,6 @@
     "directory": "sherpa-onnx-pyannote-segmentation-3-0",
     "files": ["model.onnx"],
     "kind": "speaker-segmentation"
-  },
-  {
-    "id": "reverb-diarization-v1", "name": "Reverb Diarization v1", "runtime": "sherpa-onnx==1.13.2", "revision": "speaker-segmentation-models/v1",
-    "stages": ["speaker-segmentation"], "languages": ["all"], "backend": ["cpu", "cuda"], "speaker": true,
-    "size_bytes": 10918585, "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-reverb-diarization-v1.tar.bz2", "archive_sha256": "615761e980be1688da0ef81618c056134d63aa55ea0a5f1494c47393b9398eab",
-    "china_downloads": [{"path": "model.onnx", "url": "https://modelscope.cn/models/pengzhendong/sherpa-onnx-reverb-diarization-v1/resolve/master/model.onnx", "sha256": "08a5eb1dff82847656baa7bf022c85bd9c90dd5a6a1f1b06f3ebfca0482beb5a"}],
-    "directory": "sherpa-onnx-reverb-diarization-v1", "files": ["model.onnx"], "kind": "speaker-segmentation"
   },
   {
     "id": "eres2net-base-3dspeaker-zh",

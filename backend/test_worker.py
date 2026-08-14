@@ -1644,16 +1644,6 @@ class WorkerTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "BREVIA_ASR_BACKEND"):
                 ModelManager.device()
 
-    def test_multilingual_zipformer_manifest_uses_the_archive_file_names(self):
-        self.assertEqual(
-            self.worker.models.get("zipformer-multilingual-streaming")["files"][:3],
-            [
-                "encoder-epoch-75-avg-11-chunk-16-left-128.int8.onnx",
-                "decoder-epoch-75-avg-11-chunk-16-left-128.onnx",
-                "joiner-epoch-75-avg-11-chunk-16-left-128.int8.onnx",
-            ],
-        )
-
     def test_whisper_large_v3_manifest_uses_the_archive_file_names(self):
         self.assertEqual(
             self.worker.models.get("whisper-large-v3")["files"],
@@ -1677,10 +1667,12 @@ class WorkerTest(unittest.TestCase):
         self.assertEqual(recognizer.decode_words([0.0] * 16000), ("hola mundo", []))
 
     def test_nemotron_manifest_uses_the_archive_file_names(self):
+        model = self.worker.models.get("nemotron-3.5-asr-streaming-0.6b-560ms-int8")
         self.assertEqual(
-            self.worker.models.get("nemotron-3.5-asr-streaming-0.6b-560ms-int8")["files"],
+            model["files"],
             ["encoder.int8.onnx", "decoder.int8.onnx", "joiner.int8.onnx", "tokens.txt"],
         )
+        self.assertEqual(model["runtime"], "sherpa-onnx==1.13.5")
 
     def test_streaming_transducer_starts_without_extra_terms(self):
         with patch("backend.worker_session.StreamingASR") as streaming:
@@ -2260,7 +2252,7 @@ class WorkerTest(unittest.TestCase):
             running.append(model_id)
             if len(running) == 2:
                 started.set()
-            if model_id == "zipformer-multilingual-streaming":
+            if model_id == "zipformer-ko-streaming-int8":
                 third_started.set()
             release.wait(1)
 
@@ -2277,7 +2269,7 @@ class WorkerTest(unittest.TestCase):
         )
         self.assertTrue(started.wait(1))
         self.assertEqual(
-            self.worker.download_model({"model_id": "zipformer-multilingual-streaming"})["status"],
+            self.worker.download_model({"model_id": "zipformer-ko-streaming-int8"})["status"],
             "downloading",
         )
         self.assertFalse(third_started.wait(0.1))

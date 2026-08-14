@@ -183,7 +183,6 @@ const modelStageMetaKey = { streaming: 'streaming', refined: 'refined', punctuat
 // 参见模型库重新设计说明。这些值是编辑评判，而非清单字段。
 const modelRatings = {
   'zipformer-en-streaming-int8': { quality: 2, speed: 3 },
-  'zipformer-multilingual-streaming': { quality: 1, speed: 3 },
   'zipformer-ko-streaming-int8': { quality: 2, speed: 3 },
   'zipformer-fr-streaming-int8': { quality: 2, speed: 3 },
   'nemotron-3.5-asr-streaming-0.6b-560ms-int8': { quality: 3, speed: 2 },
@@ -195,7 +194,6 @@ const modelRatings = {
   'whisper-large-v3': { quality: 2, speed: 1 },
   'qwen3-asr-1.7b-int8': { quality: 3, speed: 2 },
   'pyannote-segmentation-3.0': { quality: 2, speed: 3 },
-  'reverb-diarization-v1': { quality: 2, speed: 2 },
   'eres2net-base-3dspeaker-zh': { quality: 2, speed: 3 },
   'zipformer-zh-xlarge-streaming-int8': { quality: 3, speed: 1 },
   'gtcrn-live-denoiser': { quality: 2, speed: 3 },
@@ -323,7 +321,6 @@ function renderUpdateButton() {
 const modelIds = [
   'zipformer-zh-xlarge-streaming-int8',
   'zipformer-en-streaming-int8',
-  'zipformer-multilingual-streaming',
   'zipformer-ko-streaming-int8',
   'zipformer-fr-streaming-int8',
   'nemotron-3.5-asr-streaming-0.6b-560ms-int8',
@@ -335,7 +332,6 @@ const modelIds = [
   'whisper-large-v3',
   'qwen3-asr-1.7b-int8',
   'pyannote-segmentation-3.0',
-  'reverb-diarization-v1',
   'eres2net-base-3dspeaker-zh',
   'gtcrn-live-denoiser',
   'spleeter-2stems-fp16',
@@ -579,27 +575,34 @@ function selectCurrentWorkspaceForMeeting() {
   renderPrepareSelects();
 }
 const prepareModelChoices = {
-  'active-streaming-model': [['', null], ['zipformer-zh-xlarge-streaming-int8', 'Streaming Zipformer Chinese XLarge'], ['zipformer-multilingual-streaming', 'Streaming Zipformer Multilingual'], ['zipformer-en-streaming-int8', 'Streaming Zipformer English'], ['zipformer-ko-streaming-int8', 'Streaming Zipformer Korean'], ['zipformer-fr-streaming-int8', 'Streaming Zipformer French'], ['nemotron-3.5-asr-streaming-0.6b-560ms-int8', 'Nemotron 3.5 ASR Streaming 0.6B (560ms)']],
-  'active-diarization-model': [['', null], ['pyannote-segmentation-3.0', 'Pyannote + 3D-Speaker'], ['reverb-diarization-v1', 'Reverb + 3D-Speaker']],
+  'active-streaming-model': [['', null], ['zipformer-zh-xlarge-streaming-int8', 'Streaming Zipformer Chinese XLarge'], ['zipformer-en-streaming-int8', 'Streaming Zipformer English'], ['zipformer-ko-streaming-int8', 'Streaming Zipformer Korean'], ['zipformer-fr-streaming-int8', 'Streaming Zipformer French'], ['nemotron-3.5-asr-streaming-0.6b-560ms-int8', 'Nemotron 3.5 ASR Streaming 0.6B (560ms)']],
+  'active-diarization-model': [['', null], ['pyannote-segmentation-3.0', 'Pyannote + 3D-Speaker']],
   'active-vad-model': [['silero-vad', 'Silero VAD']],
 };
 function modelChoices(id) {
   if (id !== 'active-refined-model') return prepareModelChoices[id];
   return [['', null], ...modelCatalog.filter((model) => model.stages?.includes('refined')).map((model) => [model.id, model.name])];
 }
+const refinedModelOptionMeta = {
+  'qwen3-asr-0.6b-int8': ['Qwen3-ASR 0.6B', '多语言 · 中英混说 · 中等资源占用'],
+  'funasr-nano-int8': ['FunASR Nano', '中文 / 英文 / 粤语 · 较快'],
+  'qwen3-asr-1.7b-int8': ['Qwen3-ASR 1.7B', '多语言 · 高精度 · 较高资源占用'],
+  'whisper-large-v3': ['Whisper Large v3', '多语言 · 兼容性强 · 较慢'],
+};
 function renderRefinedModelChoices() {
   const options = document.querySelector('.detail-refine .flow-select-options');
   if (!options) return;
-  options.innerHTML = modelChoices('active-refined-model').slice(1).map(([id, name]) => `<button type="button" data-refine-model="${escapeHtml(id)}">${escapeHtml(name)}</button>`).join('');
+  options.innerHTML = Object.entries(refinedModelOptionMeta).filter(([id]) => modelCatalog.some((model) => model.id === id)).map(([id, [name, tags]]) => `<button type="button" data-refine-model="${escapeHtml(id)}"><b>${escapeHtml(name)}</b><span class="model-library-tags">${tags.split(' · ').map((tag) => `<span>${escapeHtml(tag)}</span>`).join('')}</span></button>`).join('');
 }
 renderRefinedModelChoices();
 const languageModelDefaults = {
-  zh: { streaming: 'zipformer-zh-xlarge-streaming-int8', refined: 'qwen3-asr-0.6b-int8', segmentation: 'pyannote-segmentation-3.0' },
+  zh: { streaming: 'zipformer-zh-xlarge-streaming-int8', refined: 'funasr-nano-int8', segmentation: 'pyannote-segmentation-3.0' },
   en: { streaming: 'zipformer-en-streaming-int8', refined: 'qwen3-asr-0.6b-int8', segmentation: 'pyannote-segmentation-3.0' },
   ko: { streaming: 'zipformer-ko-streaming-int8', refined: 'qwen3-asr-0.6b-int8', segmentation: 'pyannote-segmentation-3.0' },
   fr: { streaming: 'zipformer-fr-streaming-int8', refined: 'qwen3-asr-0.6b-int8', segmentation: 'pyannote-segmentation-3.0' },
   es: { streaming: 'nemotron-3.5-asr-streaming-0.6b-560ms-int8', refined: 'qwen3-asr-0.6b-int8', segmentation: 'pyannote-segmentation-3.0' },
-  default: { streaming: 'zipformer-multilingual-streaming', refined: 'qwen3-asr-0.6b-int8', segmentation: 'pyannote-segmentation-3.0' },
+  auto: { streaming: 'nemotron-3.5-asr-streaming-0.6b-560ms-int8', refined: 'qwen3-asr-0.6b-int8', segmentation: 'pyannote-segmentation-3.0' },
+  default: { streaming: 'nemotron-3.5-asr-streaming-0.6b-560ms-int8', refined: 'qwen3-asr-0.6b-int8', segmentation: 'pyannote-segmentation-3.0' },
 };
 const preferredModelsForLanguage = (language) => languageModelDefaults[language] || languageModelDefaults.default;
 const requiredModelsForLanguage = (language) => {
@@ -611,17 +614,7 @@ function requiredModelDetails(language) {
   const [streaming, vad, punctuation, refined, segmentation, embedding, denoiser] = requiredModelsForLanguage(language);
   return [[streaming, 0], [vad, 1], [punctuation, 2], [refined, 3], [segmentation, 4], [embedding, 5], [denoiser, 6]];
 }
-const compatibleStreamingModels = (language) => {
-  const supported = {
-    zh: new Set(['', 'zipformer-zh-xlarge-streaming-int8', 'zipformer-multilingual-streaming']),
-    en: new Set(['', 'zipformer-en-streaming-int8', 'zipformer-multilingual-streaming']),
-    ko: new Set(['', 'zipformer-ko-streaming-int8', 'zipformer-multilingual-streaming']),
-    fr: new Set(['', 'zipformer-fr-streaming-int8', 'zipformer-multilingual-streaming']),
-    es: new Set(['', 'nemotron-3.5-asr-streaming-0.6b-560ms-int8']),
-  };
-  const allowed = supported[language] || new Set(['', 'zipformer-multilingual-streaming']);
-  return prepareModelChoices['active-streaming-model'].filter(([id]) => allowed.has(id));
-};
+const compatibleStreamingModels = () => prepareModelChoices['active-streaming-model'];
 function setPrepareModel(id, model) {
   const value = document.querySelector(`#${id}`);
   if (id === 'active-streaming-model') prepareForm.dataset.streamingModel = model;
@@ -3526,6 +3519,21 @@ if (window.brevia) {
     meetingActive = false;
     miniMeeting.hidden = true;
     showView('detail');
+    void refreshBackendMeetings();
+  });
+  window.brevia.on('meeting.interrupted', async ({ meeting_id: meetingId }) => {
+    if (!meetingActive || meetingId !== breviaClient?.state.meeting?.id) return;
+    meetingActive = false;
+    clearInterval(timer);
+    clearInterval(powerStatusTimer);
+    miniMeeting.hidden = true;
+    if (breviaClient?.capture) await breviaClient.capture.stop();
+    if (breviaClient) {
+      breviaClient.capture = null;
+      breviaClient.state.meeting = null;
+      breviaClient.state.inputs = null;
+    }
+    showView('home');
     void refreshBackendMeetings();
   });
   window.brevia.on('app.maintenance', ({ meetings, speaker_profiles: profiles, storage, recoverable }) => {

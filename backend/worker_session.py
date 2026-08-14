@@ -141,10 +141,8 @@ class RecordingSessionMixin:
         # 的属性，而本方法已在该锁内运行，跨线程再次获取会死锁。改用本地会议 ID。
         meeting_id = meeting["id"]
 
-        # 每个模型加载彼此独立，且 sherpa-onnx 的原生初始化会释放 GIL，因此并行
-        # 加载可把「准备中」墙钟时间从各模型耗时之和降到最慢的一个（通常是精修用
-        # 的 Qwen3-ASR）。此方法始终在录音状态锁内单线程进入，各闭包只写各自的
-        # self 属性，emit 也已加锁，故并行不改变加载后的任何运行时行为。
+        # sherpa-onnx 模型初始化会进入原生运行时；按序加载避免不同模型的原生
+        # 初始化相互竞争导致 worker 直接退出。
         def load_denoiser():
             if not self.power_saving and self.models.is_ready(denoiser_id):
                 try:
@@ -234,10 +232,8 @@ class RecordingSessionMixin:
             load_speaker_tracker,
             load_live_refiner,
         )
-        with ThreadPoolExecutor(max_workers=len(loaders)) as pool:
-            for future in [pool.submit(loader) for loader in loaders]:
-                # 复现串行版本的语义：非 RuntimeError 的意外异常仍向上冒泡。
-                future.result()
+        for loader in loaders:
+            loader()
         if self.speaker_tracker or self.live_refiner:
             self.live_postprocessing = ThreadPoolExecutor(
                 max_workers=1, thread_name_prefix="brevia-live-postprocess"

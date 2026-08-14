@@ -80,7 +80,7 @@ const workerResponse = z.discriminatedUnion('ok', [
 const workerEvent = z.object({
   type: z.enum([
     'app.maintenance', 'meeting.imported', 'meeting.reconfigured', 'meeting.recovered',
-    'meeting.sources-separated', 'meeting.started',
+    'meeting.interrupted', 'meeting.sources-separated', 'meeting.started',
     'meeting.stopped', 'model.progress', 'model.status', 'refinement.cancelled', 'refinement.progress',
     'refinement.ready', 'refinement.started', 'separation.progress',
     'separation.started', 'speaker-profile.deleted', 'speaker-profile.updated',
@@ -169,7 +169,8 @@ class WorkerClient {
     const workerName = process.platform === 'win32' ? 'brevia-worker.exe' : 'brevia-worker';
     const bundled = path.join(packagedRoot, 'backend', 'runtime', 'brevia-worker', workerName);
     const useBundledWorker = app.isPackaged && !process.env.BREVIA_PYTHON && existsSync(bundled);
-    const python = useBundledWorker ? bundled : (process.env.BREVIA_PYTHON || (process.platform === 'win32' ? 'python' : 'python3'));
+    const projectPython = path.join(root, '.venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
+    const python = useBundledWorker ? bundled : (process.env.BREVIA_PYTHON || (existsSync(projectPython) ? projectPython : (process.platform === 'win32' ? 'python' : 'python3')));
     const args = useBundledWorker ? [] : ['-m', 'backend.worker'];
     const ffmpeg = process.env.BREVIA_FFMPEG || bundledFfmpegPath();
     const recoverInterrupted = !this.refinement && !this.hasSpawned;
@@ -295,14 +296,21 @@ class WorkerClient {
     this.pending.clear();
   }
 
+  abandonActive(reason) {
+    const active = this.active;
+    if (!active) return;
+    this.active = null;
+    this.sendEvent('meeting.interrupted', { meeting_id: active.meeting_id, reason });
+  }
+
   async closed(code, signal, child) {
     if (child !== this.process) return;
     this.process = null;
     if (app.isQuitting) return;
     const reason = signal || `code ${code}`;
     this.fail(new Error(`Worker exited with ${reason}`));
-    this.sendEvent('worker.error', { message: `转写进程已退出（${reason}）` });
     if (this.refinement) {
+      this.sendEvent('worker.error', { message: `转写进程已退出（${reason}）` });
       const meetingId = this.active?.meeting_id;
       this.active = null;
       if (meetingId) void worker.request('meeting.refinement-recover', { meeting_id: meetingId })
@@ -310,10 +318,17 @@ class WorkerClient {
         .catch((error) => writeLog('ERROR', `recover refinement: ${logText(error)}`));
       return;
     }
-    if (this.restarts >= 1) return;
+    if (this.restarts >= 1) {
+      this.sendEvent('worker.error', { message: `转写进程已退出（${reason}）` });
+      this.abandonActive(reason);
+      return;
+    }
     this.restarts += 1;
     this.start();
-    if (!this.active) return;
+    if (!this.active) {
+      this.sendEvent('worker.error', { message: `转写进程已退出（${reason}）` });
+      return;
+    }
     try {
       await this.request('meeting.resume', {
         meeting_id: this.active.meeting_id,
@@ -321,6 +336,7 @@ class WorkerClient {
       this.sendEvent('worker.recovered', { meeting_id: this.active.meeting_id });
     } catch (error) {
       this.sendEvent('worker.error', { message: `录音仍在本地保留，但转写无法恢复：${error.message}` });
+      this.abandonActive(error.message);
     }
   }
 }

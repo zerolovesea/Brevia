@@ -52,6 +52,7 @@ assert.match(mainSource, /powerMonitor\.on\('suspend', \(\) => \{ void stopActiv
 assert.match(mainSource, /async function stopActiveMeetingForSleep\(\)/, 'system sleep shares the normal meeting stop path');
 assert.match(mainSource, /const refinementWorker = new WorkerClient\(\{ refinement: true \}\);/, 'refinement runs in an isolated worker process');
 assert.match(mainSource, /BREVIA_RECOVER_INTERRUPTED: recoverInterrupted \? '1' : '0'/, 'only the first main worker recovers interrupted meetings');
+assert.match(mainSource, /existsSync\(projectPython\) \? projectPython/, 'development uses the project runtime when available');
 assert.match(mainSource, /refinementWorker\.request\('meeting\.refine', value\)/, 'refinement IPC uses the isolated worker');
 assert.match(mainSource, /Another meeting is already being refined/, 'the isolated worker rejects concurrent meetings');
 assert.doesNotMatch(mainSource, /'tts'/, 'removed TTS data is not migrated');
@@ -60,6 +61,8 @@ assert.match(mainSource, /headerTemplate: '<div style="width:100%;text-align:cen
 assert.match(mainSource, /value\.task === 'meeting\.refine' \? refinementWorker : worker/, 'refinement task controls target the isolated worker');
 assert.match(mainSource, /worker\.request\('meeting\.refinement-recover', \{ meeting_id: meetingId \}\)/, 'a crashed refinement returns the meeting to a retryable state');
 assert.match(mainSource, /\['meeting\.audio', 15000\]/, 'audio IPC cannot retain requests forever');
+assert.match(mainSource, /abandonActive\(reason\)/, 'a worker that cannot resume clears its stale active meeting');
+assert.match(mainSource, /'meeting\.interrupted'/, 'the renderer receives an interrupted-meeting event');
 assert.match(mainSource, /worker\.active = null;\n    worker\.recycle\(\);/, 'a stopped meeting recycles native model memory');
 assert.match(mainSource, /refinementWorker\.active !== active[\s\S]*refinementWorker\.active = null;\n    refinementWorker\.recycle\(\);/, 'a completed refinement releases only its own isolated worker state');
 assert.match(mainSource, /speaker-profile\.enroll[\s\S]*?\.finally\(\(\) => worker\.recycle\(\)\)/, 'voice enrollment releases native speaker models while idle');

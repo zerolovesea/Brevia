@@ -14,6 +14,10 @@ assert.match(text(audioProcessor), /const BLOCK_SIZE = 8192;/);
 assert.match(text(audioProcessor), /data\?\.type !== 'flush'/);
 assert.match(text(audioProcessor), /this\.buffer\.slice\(0, count\)/);
 assert.match(text(backendClient), /sources\.map\(\(resource\) => this\.flush\(resource\)\)/);
+assert.match(text(app), /zh: \{ streaming: 'zipformer-zh-xlarge-streaming-int8', refined: 'funasr-nano-int8'/);
+assert.match(text(app), /auto: \{ streaming: 'nemotron-3\.5-asr-streaming-0\.6b-560ms-int8'/);
+assert.match(text(app), /default: \{ streaming: 'nemotron-3\.5-asr-streaming-0\.6b-560ms-int8'/);
+assert.match(text(app), /window\.brevia\.on\('meeting\.interrupted'/);
 const workletMessages = [];
 const workletContext = {
   AudioWorkletProcessor: class {
@@ -119,7 +123,7 @@ for (const [code, stage, allLanguages] of [['ja', 'ライブ字幕', 'すべて�
   assert.equal(items[0][0], stage);
   assert.equal(items.find(([, name]) => name === 'Spleeter 2 Stems')[2], allLanguages);
 }
-assert.deepEqual(Array.from(localeContext.window.BreviaLocaleData.appCopy.modalCopy.zh.models.items.slice(9, 13), ([, name]) => name), ['Qwen3-ASR', 'FunASR Nano int8', 'Whisper Large v3', 'Qwen3-ASR 1.7B int8']);
+assert.deepEqual(Array.from(localeContext.window.BreviaLocaleData.appCopy.modalCopy.zh.models.items.slice(8, 12), ([, name]) => name), ['Qwen3-ASR', 'FunASR Nano int8', 'Whisper Large v3', 'Qwen3-ASR 1.7B int8']);
 assert.equal(localeContext.window.BreviaLocaleData.appCopy.modalCopy.zh.models.items.find(([, name]) => name === '3D-Speaker ERes2Net Base')[2], '语言无关');
 for (const id of ['vits-mimic3-ko-kss-low', 'vits-piper-fr-siwis-medium-int8', 'vits-piper-de-thorsten-medium-int8', 'vits-piper-es-sharvard-medium-int8', 'vits-piper-ru-irina-medium-int8', 'zipformer-zh-streaming-int8', 'paraformer-zh-en-int8', 'whisper-turbo', 'fire-red-asr2-ctc-zh-en-int8', 'nemo-titanet-small-en', 'campplus-zh-en']) {
   assert.equal(modelManifest.find((entry) => entry.id === id), undefined, `pruned model ${id} still in manifest`);
@@ -150,6 +154,10 @@ assert.match(text(css), /\.window-bar\{[^}]*-webkit-app-region:drag/);
 assert.match(text(css), /\.window-bar\{[^}]*position:sticky/);
 assert.match(text(css), /\.detail-refine \.flow-select-options button\{[^}]*overflow-wrap:anywhere/);
 assert.match(text(css), /\.detail-refine \.flow-select-options\{[^}]*width:clamp\(16rem,30vw,26rem\)/);
+assert.match(text(css), /\.detail-refine \.flow-select-options\{(?=[^}]*right:0)(?=[^}]*left:auto)/);
+assert.match(text(app), /const refinedModelOptionMeta/);
+assert.match(text(app), /'多语言 · 中英混说 · 中等资源占用'/);
+assert.match(text(app), /'中文 \/ 英文 \/ 粤语 · 较快'/);
 assert.match(text(tailwind), /segment-context-label, \.segment-context-arrow \{ @apply shrink-0 p-0/);
 assert.match(text(tailwind), /segment-context-options > button \{ @apply block w-full px-3 py-2/);
 assert.match(text(tailwind), /segment-context-options > span \{ @apply block px-3 py-2/);
@@ -389,8 +397,8 @@ assert.match(text(js), /whisper-large-v3/);
 assert.match(text(i18nData), /实时字幕/);
 assert.match(text(i18nData), /会后精修/);
 assert.match(text(js), /const languageModelDefaults/);
-assert.match(text(js), /zh: \{ streaming: 'zipformer-zh-xlarge-streaming-int8', refined: 'qwen3-asr-0\.6b-int8'/);
-assert.match(text(html), /id="active-refined-model" data-model="qwen3-asr-0\.6b-int8">Qwen3-ASR 0\.6B int8/);
+assert.match(text(js), /zh: \{ streaming: 'zipformer-zh-xlarge-streaming-int8', refined: 'funasr-nano-int8'/);
+assert.match(text(html), /id="active-refined-model" data-model="funasr-nano-int8">FunASR Nano int8/);
 assert.match(text(electronMain), /path\.join\(app\.getPath\('home'\), 'brevia'\)/);
 assert.match(text(electronMain), /appendFile\(logFile\(\), line, 'utf8'\)/);
 assert.match(text(electronMain), /await migrateDataDir\(\)/);
@@ -444,7 +452,6 @@ for (const id of ['whisper-large-v3', 'zipformer-zh-xlarge-streaming-int8', 'sil
 }
 assert.match(text(js), /qualityTiers: \['标准', '高', '极高'\]/);
 assert.match(text(js), /speedTiers: \['较慢', '均衡', '快'\]/);
-assert.match(text(js), /zipformer-multilingual-streaming/);
 assert.match(text(js), /active-diarization-model/);
 assert.doesNotMatch(text(html), /id="active-model-name"/);
 assert.doesNotMatch(text(js), /createElement\('select'\)/);
