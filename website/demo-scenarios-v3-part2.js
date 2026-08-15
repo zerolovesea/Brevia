@@ -980,24 +980,24 @@ DemoScenariosV3.prototype.openModelLibraryModal = function () {
   shell.appendChild(backdrop);
 };
 
-DemoScenariosV3.prototype.getModelLibraryDemo = function () {
-  return {
-    name: 'model-library',
-    setupUI: () => this.setupSettingsUI(),
-    steps: [
-      { action: 'wait', duration: 900 },
-      { action: 'moveCursor', target: '[data-demo-id="manage-models-btn"]', duration: 1200, delay: 400 },
-      { action: 'hover', duration: 400 },
-      { action: 'click', duration: 300 },
-      { action: 'setState', handler: () => this.openModelLibraryModal(), delay: 300 },
-      { action: 'wait', duration: 1400 },
-      { action: 'moveCursor', target: '[data-demo-id="model-library-body"] .model-library-item:first-child .model-actions button', duration: 900, delay: 300 },
-      { action: 'wait', duration: 900 },
-      { action: 'scrollToBottom', target: '[data-demo-id="model-library-body"]', duration: 5000, delay: 200 },
-      { action: 'wait', duration: 2200 }
-    ]
-  };
-};
+  getModelLibraryDemo() {
+    return {
+      name: 'model-library',
+      setupUI: () => this.setupSettingsUI(),
+      steps: [
+        { action: 'wait', duration: 900 },
+        { action: 'moveCursor', target: '[data-demo-id="manage-models-btn"]', duration: 1200, delay: 400 },
+        { action: 'hover', duration: 400 },
+        { action: 'click', duration: 300 },
+        { action: 'setState', handler: () => this.openModelLibraryModal(), delay: 300 },
+        { action: 'wait', duration: 1400 },
+        { action: 'moveCursor', target: '[data-demo-id="model-library-body"] .model-library-item:first-child .model-actions button', duration: 900, delay: 300 },
+        { action: 'wait', duration: 900 },
+        { action: 'scrollToBottom', target: '[data-demo-id="model-library-body"]', duration: 5000, delay: 200 },
+        { action: 'wait', duration: 2200 }
+      ]
+    };
+  }
 // ============================================================================
 // Floating Caption Bar demo — real live view + real floating-caption overlay
 // ============================================================================
@@ -1120,25 +1120,26 @@ DemoScenariosV3.prototype.generateCaptionSteps = function () {
   return steps;
 };
 
-DemoScenariosV3.prototype.getCaptionBarDemo = function () {
-  return {
-    name: 'caption-bar',
-    setupUI: () => this.setupCaptionUI(),
-    steps: [
-      { action: 'wait', duration: 700 },
-      // Enable the floating-caption toggle in the live header.
-      { action: 'moveCursor', target: '[data-demo-id="caption-toggle"]', duration: 1000, delay: 300 },
-      { action: 'hover', duration: 300 },
-      { action: 'click', duration: 300 },
-      { action: 'setState', handler: () => {
-        const toggle = this.engine.viewport.querySelector('[data-demo-id="caption-toggle"]');
-        if (toggle) toggle.setAttribute('data-enabled', 'true');
-        const overlay = this.engine.viewport.querySelector('[data-demo-id="caption-overlay"]');
-        if (overlay) overlay.classList.add('is-visible');
-      }, delay: 200 },
-      { action: 'wait', duration: 600 },
-      ...this.generateCaptionSteps(),
-      { action: 'wait', duration: 2000 }
-    ]
-  };
-};
+  getCaptionBarDemo() {
+    return {
+      name: 'caption-bar',
+      setupUI: () => this.setupCaptionUI(),
+      steps: [
+        { action: 'wait', duration: 700 },
+        // Enable the floating-caption toggle in the live header.
+        { action: 'moveCursor', target: '[data-demo-id="caption-toggle"]', duration: 1000, delay: 300 },
+        { action: 'hover', duration: 300 },
+        { action: 'click', duration: 300 },
+        { action: 'setState', handler: () => {
+          const toggle = this.engine.viewport.querySelector('[data-demo-id="caption-toggle"]');
+          if (toggle) toggle.setAttribute('data-enabled', 'true');
+          const overlay = this.engine.viewport.querySelector('[data-demo-id="caption-overlay"]');
+          if (overlay) overlay.classList.add('is-visible');
+        }, delay: 200 },
+        { action: 'wait', duration: 600 },
+        ...this.generateCaptionSteps(),
+        { action: 'wait', duration: 2000 }
+      ]
+    };
+  }
+}
