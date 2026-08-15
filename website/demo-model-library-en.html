@@ -4,10 +4,24 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Model Library Demo</title>
-    <link rel="stylesheet" href="./demo-product-frame.css" />
+    <link rel="stylesheet" href="../frontend/styles.css" />
+    <link rel="stylesheet" href="./demo-shared.css" />
   </head>
-  <body data-product-demo="models" data-lang="en">
-    <div id="product-demo"></div>
-    <script src="./demo-product-frame.js"></script>
+  <body data-demo="model-library" data-lang="en">
+    <div class="demo-container">
+      <div class="demo-viewport" id="demo-viewport">
+        <div class="virtual-cursor" id="virtual-cursor">
+          <svg class="cursor-arrow" viewBox="0 0 24 24"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z" fill="currentColor" /></svg>
+          <div class="cursor-ripple" id="cursor-ripple"></div>
+        </div>
+        <div id="demo-content"></div>
+      </div>
+    </div>
+    <script src="./demo-engine.js"></script>
+    <script src="./demo-timeline.js"></script>
+    <script src="./demo-scenarios-v3-part1.js"></script>
+    <script src="./demo-scenarios-v3-part2.js"></script>
+    <script src="./demo-i18n-en.js"></script>
+    <script src="./demo-single.js"></script>
   </body>
 </html>

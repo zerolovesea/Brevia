@@ -91,6 +91,9 @@
     '说话人 2': 'Speaker 2',
     '说话人 3': 'Speaker 3',
     '参与者 : 0': 'Participants: 0',
+    '参与者': 'Participants',
+    '麦克风': 'Microphone',
+    '字幕': 'Captions',
     '等待识别说话人': 'Waiting to identify speakers',
     '正在录制': 'Recording',
     '暂停': 'Pause',
@@ -154,8 +157,8 @@
     '声纹识别': 'Voiceprint Recognition',
     '实时会议': 'Live Meeting',
     '团队周会': 'Team Weekly Meeting',
-    '参与者（已识别声纹）': 'Participants (identified voiceprints)',
-    '系统已自动识别参与者的声纹特征，无需手动标注说话人。': 'Voiceprints are identified automatically, so no manual speaker labels are needed.',
+    '省电模式': 'Power saving',
+    '关闭实时降噪和精修，降低字幕更新频率；会后精修保持可用。': 'Disables live denoising and refinement and updates captions less often. Post-meeting refinement remains available.',
     '项目经理': 'Project Manager',
     '前端工程师': 'Frontend Engineer',
     '后端工程师': 'Backend Engineer',
@@ -163,7 +166,11 @@
     '大家好，我们开始今天的周会吧。': 'Good morning, everyone. Let’s start today’s weekly meeting.',
     '好的，我先汇报一下我这边的工作进展。': 'Sure. I’ll start with an update on my work.',
     '上周遇到的技术问题已经解决了。': 'The technical issue we encountered last week has been resolved.',
-    '我这边的进度已经完成了百分之八十。': 'My work is now 80% complete.'
+    '我这边的进度已经完成了百分之八十。': 'My work is now 80% complete.',
+
+    // Settings view + model library + caption bar chrome
+    '关闭': 'Close',
+    '字幕开关': 'Caption toggle'
   };
 
   // Intercept DemoScenariosV3 methods to translate output
@@ -240,7 +247,35 @@
     originalUpdateVoiceprintParticipants.call(this, speakers);
     const list = this.engine.viewport.querySelector('[data-demo-id="voiceprint-participants"]');
     if (list) list.innerHTML = translateHTML(list.innerHTML);
+    const eyebrow = this.engine.viewport.querySelector('[data-demo-id="voiceprint-eyebrow"]');
+    if (eyebrow) eyebrow.textContent = translateHTML(eyebrow.textContent);
   };
+
+  // The live-transcription participants panel is rendered via textContent /
+  // innerHTML that bypasses translateHTML, so re-translate after each update.
+  if (DemoScenariosV3.prototype.updateParticipantList) {
+    const originalUpdateParticipantList = DemoScenariosV3.prototype.updateParticipantList;
+    DemoScenariosV3.prototype.updateParticipantList = function (speakers) {
+      originalUpdateParticipantList.call(this, speakers);
+      const list = this.engine.viewport.querySelector('[data-demo-id="participants-list"]');
+      if (list) list.innerHTML = translateHTML(list.innerHTML);
+      const eyebrow = this.engine.viewport.querySelector('[data-demo-id="participants-eyebrow"]');
+      if (eyebrow) eyebrow.textContent = translateHTML(eyebrow.textContent);
+    };
+  }
+
+  // Label getters return Chinese and feed dynamic textContent; override to EN.
+  if (DemoScenariosV3.prototype.getParticipantsLabel) {
+    DemoScenariosV3.prototype.getParticipantsLabel = function () { return 'Participants'; };
+  }
+  if (DemoScenariosV3.prototype.getParticipantSourceLabel) {
+    DemoScenariosV3.prototype.getParticipantSourceLabel = function () { return 'Microphone'; };
+  }
+  if (DemoScenariosV3.prototype.getVoiceprintRoles) {
+    DemoScenariosV3.prototype.getVoiceprintRoles = function () {
+      return ['Project Manager', 'Frontend Engineer', 'Backend Engineer', 'Designer'];
+    };
+  }
 
   // Helper: translate HTML string
   function translateHTML(html) {
@@ -273,6 +308,105 @@
     }
     return data;
   };
+
+  // ── Model library demo ─────────────────────────────────────────────
+  // Override data wholesale so single-character tier words (High/Fast) are
+  // never produced by fragile substring replacement.
+  if (DemoScenariosV3.prototype.getSettingsCopy) {
+    DemoScenariosV3.prototype.getSettingsCopy = function () {
+      return {
+        crumb: 'Settings',
+        back: '← Back to Library',
+        eyebrow: 'Settings',
+        h1: 'Models and local data',
+        cards: [
+          { id: 'manage-models', title: 'Model library', desc: 'Manage downloads, deletion, and version details for speech recognition models.', button: 'Manage model library' },
+          { id: 'terms', title: 'Term library', desc: '12 terms are available for meeting preparation, search, and notes. Only supported models use them during transcription.', button: 'Manage terms' },
+          { id: 'storage', title: 'Storage and privacy', desc: 'Meeting data stays on this device. External LLMs require explicit confirmation before receiving a transcript.', button: 'View local storage' },
+          { id: 'speaker', title: 'Speaker recognition', desc: 'Only explicitly submitted single-speaker audio is saved for identifying and naming meeting speakers.', button: 'Manage speakers' }
+        ]
+      };
+    };
+  }
+
+  if (DemoScenariosV3.prototype.getModelLibraryData) {
+    DemoScenariosV3.prototype.getModelLibraryData = function () {
+      return {
+        title: 'Model library',
+        intro: 'All transcription models run locally. Your private data is never uploaded to the network.',
+        qualityLabel: 'Quality',
+        speedLabel: 'Speed',
+        qualityTiers: ['Standard', 'High', 'Very high'],
+        speedTiers: ['Slower', 'Balanced', 'Fast'],
+        downloadLabel: 'Download',
+        installedLabel: 'Installed',
+        items: [
+          { stage: 'Live captions', name: 'Streaming Zipformer Chinese XLarge', language: 'Chinese / English / Cantonese', intro: 'Native streaming recognition that continuously updates the active caption.', quality: 3, speed: 1, installed: true, size: '1.1 GB' },
+          { stage: 'Live captions', name: 'Streaming Zipformer English', language: 'English', intro: 'Native streaming recognition for English.', quality: 2, speed: 3, installed: false, size: '520 MB' },
+          { stage: 'Punctuation restoration', name: 'English Punctuation and Casing', language: 'English', intro: 'Restores English punctuation and casing.', quality: 1, speed: 3, installed: false, size: '280 MB' },
+          { stage: 'Punctuation restoration', name: 'Chinese and English Punctuation', language: 'Chinese / English / Cantonese', intro: 'Adds commas, full stops, and question marks to live captions.', quality: 2, speed: 3, installed: true, size: '290 MB' },
+          { stage: 'Post-meeting refinement', name: 'Qwen3-ASR', language: 'Multilingual', intro: 'Creates a high-accuracy revision from the complete recording.', quality: 2, speed: 3, installed: false, size: '1.9 GB' },
+          { stage: 'Speaker diarization', name: 'Pyannote Segmentation 3.0', language: 'Language independent', intro: 'Detects regions of speech in a single-track recording.', quality: 2, speed: 3, installed: true, size: '90 MB' },
+          { stage: 'Speaker diarization', name: '3D-Speaker ERes2Net Base', language: 'Chinese', intro: 'Extracts speaker embeddings for offline clustering.', quality: 2, speed: 3, installed: false, size: '210 MB' }
+        ]
+      };
+    };
+  }
+
+  if (DemoScenariosV3.prototype.renderModelLibraryItems) {
+    const originalRenderModelLibraryItems = DemoScenariosV3.prototype.renderModelLibraryItems;
+    DemoScenariosV3.prototype.renderModelLibraryItems = function () {
+      // Data is already English; still run the delete/download action words.
+      return originalRenderModelLibraryItems.call(this)
+        .replace(/>删除</g, '>Delete<');
+    };
+  }
+
+  if (DemoScenariosV3.prototype.setupSettingsUI) {
+    const originalSetupSettingsUI = DemoScenariosV3.prototype.setupSettingsUI;
+    DemoScenariosV3.prototype.setupSettingsUI = function () {
+      return translateHTML(originalSetupSettingsUI.call(this));
+    };
+  }
+
+  if (DemoScenariosV3.prototype.openModelLibraryModal) {
+    const originalOpenModelLibraryModal = DemoScenariosV3.prototype.openModelLibraryModal;
+    DemoScenariosV3.prototype.openModelLibraryModal = function () {
+      originalOpenModelLibraryModal.call(this);
+      const backdrop = this.engine.viewport.querySelector('.modal-backdrop');
+      if (backdrop) backdrop.innerHTML = translateHTML(backdrop.innerHTML);
+    };
+  }
+
+  // ── Caption bar demo ───────────────────────────────────────────────
+  if (DemoScenariosV3.prototype.getCaptionData) {
+    DemoScenariosV3.prototype.getCaptionData = function () {
+      return {
+        meetingTitle: 'Product Review',
+        lines: [
+          { text: "Let's start by reviewing the overall progress this quarter.", translation: '我们先过一下这个季度的整体进展。' },
+          { text: 'Live transcription latency is now under 300 milliseconds.', translation: '实时转录的延迟已经优化到三百毫秒以内。' },
+          { text: 'Multilingual support now covers more than 30 languages.', translation: '多语言支持这块也覆盖了三十多种语言。' }
+        ]
+      };
+    };
+  }
+
+  if (DemoScenariosV3.prototype.getCaptionTranscript) {
+    DemoScenariosV3.prototype.getCaptionTranscript = function () {
+      return [
+        { time: '00:00:12', speaker: 'Host', text: 'Welcome everyone to this product review. Let’s follow the agenda.' },
+        { time: '00:00:24', speaker: 'Sarah Kim', text: 'Sure. First, an update on where we are this quarter.' }
+      ];
+    };
+  }
+
+  if (DemoScenariosV3.prototype.setupCaptionUI) {
+    const originalSetupCaptionUI = DemoScenariosV3.prototype.setupCaptionUI;
+    DemoScenariosV3.prototype.setupCaptionUI = function () {
+      return translateHTML(originalSetupCaptionUI.call(this));
+    };
+  }
 
   console.log('[i18n-en] English translation patch loaded');
 })();

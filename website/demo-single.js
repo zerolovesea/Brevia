@@ -33,6 +33,10 @@
         return scenarios.getSummaryDemo();
       case 'voiceprint':
         return scenarios.getVoiceprintDemo();
+      case 'model-library':
+        return scenarios.getModelLibraryDemo();
+      case 'caption-bar':
+        return scenarios.getCaptionBarDemo();
       default:
         console.error('Unknown demo:', name);
         return null;

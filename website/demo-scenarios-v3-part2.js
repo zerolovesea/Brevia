@@ -144,6 +144,43 @@ DemoScenariosV3.prototype.setupPrepareUI = function() {
   return html;
 };
 
+// The real app's live panel is identical for every meeting (renderLivePanel in
+// frontend/app.js): 模型与设置 with three selectors plus the power-saving choice.
+// Shared here so the transcription and voiceprint demos render the same panel.
+DemoScenariosV3.prototype.getLiveSettingsMarkup = function() {
+  return String.raw`
+    <section class="live-settings">
+      <p class="eyebrow">模型与设置</p>
+
+      <label class="config-select-field">
+        会议语言
+        <div class="flow-select">
+          <button class="flow-select-toggle" type="button" aria-expanded="false">自动检测<span>⌄</span></button>
+        </div>
+      </label>
+
+      <label class="config-select-field">
+        实时识别模型
+        <div class="flow-select">
+          <button class="flow-select-toggle" type="button" aria-expanded="false">Streaming Zipformer Multilingual<span>⌄</span></button>
+        </div>
+      </label>
+
+      <label class="config-select-field">
+        精修模型
+        <div class="flow-select">
+          <button class="flow-select-toggle" type="button" aria-expanded="false">Qwen3-ASR 1.7B int8<span>⌄</span></button>
+        </div>
+      </label>
+
+      <label class="choice live-power-saving">
+        <input type="checkbox" />
+        <span><b>省电模式</b><small>关闭实时降噪和精修，降低字幕更新频率；会后精修保持可用。</small></span>
+      </label>
+    </section>
+  `;
+};
+
 DemoScenariosV3.prototype.setupLiveUI = function(meetingTitle) {
   // 精确还原实时会议页面（基于第三张截图）
   const html = String.raw`
@@ -172,77 +209,37 @@ DemoScenariosV3.prototype.setupLiveUI = function(meetingTitle) {
           <header class="live-header">
             <div class="live-title">
               <strong>${meetingTitle}</strong>
-              <span class="recording"><i></i> 正在录制</span>
+              <div class="live-status">
+                <span class="recording"><i></i> 正在录制</span>
+                <time data-demo-id="timer">00:00:00</time>
+              </div>
             </div>
-            <time data-demo-id="timer">00:00:00</time>
+            <div class="live-caption-controls">
+              <button class="floating-caption-toggle" data-demo-id="caption-toggle" data-enabled="false" type="button" title="悬浮字幕">字幕</button>
+              <button class="translation-toggle" data-demo-id="translation-toggle" data-enabled="false" type="button">译文: 关</button>
+            </div>
             <button class="pause-button">Ⅱ 暂停</button>
             <button class="end-button">结束会议</button>
           </header>
 
           <div class="live-layout">
             <section class="transcript" aria-label="实时字幕">
-              <div class="section-heading">
-                <div class="current-caption">
-                  <p class="eyebrow">实时字幕</p>
-                  <h1 data-demo-id="live-caption"></h1>
-                  <p class="live-caption-translation" data-demo-id="live-caption-translation" hidden></p>
-                </div>
-                <div class="caption-controls">
-                  <button class="floating-caption-toggle" data-enabled="false" title="悬浮字幕">
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                      <rect x="2" y="3" width="12" height="8" rx="1" stroke="currentColor" stroke-width="1.5" fill="none"/>
-                      <path d="M4 6h8M4 8h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                    </svg>
-                  </button>
-                  <button class="translation-toggle" data-demo-id="translation-toggle" data-enabled="false">
-                    译文: 关
-                  </button>
-                </div>
-              </div>
               <div class="transcript-scroll" data-demo-id="transcript-scroll"></div>
             </section>
 
             <aside class="live-panel">
-              <!-- 参与者 -->
               <section>
-                <p class="eyebrow" style="margin-bottom: 16px;">参与者 : 0</p>
+                <p class="eyebrow" data-demo-id="participants-eyebrow">参与者 · 0</p>
                 <div class="participants-list" data-demo-id="participants-list">
                   <p class="participants-empty">等待识别说话人</p>
                 </div>
               </section>
 
-              <!-- 模型与设置 -->
-              <section class="live-settings">
-                <p class="eyebrow" style="margin-bottom: 16px;">模型与设置</p>
-
-                <label class="config-select-field">
-                  会议语言
-                  <div class="flow-select">
-                    <button class="flow-select-toggle" type="button">
-                      自动检测 <span>⌄</span>
-                    </button>
-                  </div>
-                </label>
-
-                <label class="config-select-field">
-                  实时识别模型
-                  <div class="flow-select">
-                    <button class="flow-select-toggle" type="button">
-                      Streaming Zipformer Multilingual <span>⌄</span>
-                    </button>
-                  </div>
-                </label>
-
-                <label class="config-select-field">
-                  精修模型
-                  <div class="flow-select">
-                    <button class="flow-select-toggle" type="button">
-                      Qwen3-ASR 1.7B int8 <span>⌄</span>
-                    </button>
-                  </div>
-                </label>
-              </section>
+              <div class="live-controls">
+                ${this.getLiveSettingsMarkup()}
+              </div>
             </aside>
+            <button class="live-panel-toggle" type="button" aria-controls="live-panel" aria-expanded="true" title="收起">›</button>
           </div>
         </section>
       </section>
@@ -323,16 +320,10 @@ DemoScenariosV3.prototype.startTimer = function() {
 };
 
 DemoScenariosV3.prototype.enableTranslation = function() {
-  const toggle = this.engine.viewport.querySelector('[data-demo-id="translation-toggle"]');
-  const liveCaptionTranslation = this.engine.viewport.querySelector('[data-demo-id="live-caption-translation"]');
-
-  if (toggle) {
-    toggle.textContent = '译文: 开';
-    toggle.setAttribute('data-enabled', 'true');
-  }
-
-  if (liveCaptionTranslation) {
-    liveCaptionTranslation.removeAttribute('hidden');
+  // Enable translation toggle button
+  const translationToggle = this.engine.viewport.querySelector('[data-demo-id="translation-toggle"]');
+  if (translationToggle) {
+    translationToggle.setAttribute('data-enabled', 'true');
   }
 
   // Show translations on existing segments
@@ -348,18 +339,12 @@ DemoScenariosV3.prototype.enableTranslation = function() {
 };
 
 DemoScenariosV3.prototype.updateLiveCaption = function(text, translation) {
-  const captionEl = this.engine.viewport.querySelector('[data-demo-id="live-caption"]');
-  const translationEl = this.engine.viewport.querySelector('[data-demo-id="live-caption-translation"]');
+  // Caption elements removed - this method is now a no-op
+  // Kept for compatibility with existing demo step sequences
+};
 
-  if (captionEl) {
-    captionEl.textContent = text;
-    captionEl.classList.add('caption-increment');
-    setTimeout(() => captionEl.classList.remove('caption-increment'), 420);
-  }
-
-  if (translationEl && !translationEl.hasAttribute('hidden') && translation) {
-    translationEl.textContent = translation;
-  }
+DemoScenariosV3.prototype.getParticipantSourceLabel = function() {
+  return '麦克风';
 };
 
 DemoScenariosV3.prototype.updateParticipantList = function(speakers) {
@@ -370,25 +355,29 @@ DemoScenariosV3.prototype.updateParticipantList = function(speakers) {
   const emptyMsg = participantsList.querySelector('.participants-empty');
   if (emptyMsg) emptyMsg.remove();
 
-  // Update participant count
-  const eyebrow = this.engine.viewport.querySelector('.live-panel .eyebrow');
-  if (eyebrow && eyebrow.textContent.includes('参与者')) {
-    eyebrow.textContent = `参与者 : ${speakers.length}`;
-  }
+  // Update participant count on the participants eyebrow (real app: "参与者 · N")
+  const eyebrow = this.engine.viewport.querySelector('[data-demo-id="participants-eyebrow"]');
+  if (eyebrow) eyebrow.textContent = `${this.getParticipantsLabel()} · ${speakers.length}`;
 
-  // Add participants
-  speakers.forEach(speaker => {
+  const avatarTones = ['blue', 'gray'];
+  const source = this.getParticipantSourceLabel();
+
+  // Add participants using the real .person markup
+  speakers.forEach((speaker, index) => {
     const existing = Array.from(participantsList.querySelectorAll('.person b')).find(b => b.textContent === speaker);
     if (!existing) {
+      const initial = speaker.trim().charAt(0).toUpperCase();
+      const tone = avatarTones[index % avatarTones.length];
       const person = document.createElement('div');
       person.className = 'person';
-      person.innerHTML = `
-        <div class="avatar">${speaker.split(' ').map(n => n[0]).join('').toUpperCase()}</div>
-        <span><b>${speaker}</b></span>
-      `;
+      person.innerHTML = `<span class="avatar ${tone}">${initial}</span><div><b>${speaker}</b><small>${source}</small></div><i class="level"></i>`;
       participantsList.appendChild(person);
     }
   });
+};
+
+DemoScenariosV3.prototype.getParticipantsLabel = function() {
+  return '参与者';
 };
 
 DemoScenariosV3.prototype.generateLiveSegmentSteps = function(segments, start, end, withTranslation = false) {
@@ -398,30 +387,26 @@ DemoScenariosV3.prototype.generateLiveSegmentSteps = function(segments, start, e
   for (let i = start; i < end && i < segments.length; i++) {
     const segment = segments[i];
     uniqueSpeakers.add(segment.speaker);
+    // Snapshot the speakers known so far, so each step reveals only the
+    // participants seen up to this segment (the Set keeps growing while steps
+    // are built, so capturing it by reference would fill the panel at once).
+    const speakersSoFar = Array.from(uniqueSpeakers);
 
-    // Update participants list
-    if (uniqueSpeakers.size > 0) {
-      steps.push({
-        action: 'setState',
-        handler: () => this.updateParticipantList(Array.from(uniqueSpeakers)),
-        delay: 100
-      });
-    }
-
-    // Update live caption
-    steps.push({
-      action: 'setState',
-      handler: () => this.updateLiveCaption(segment.text, segment.translation),
-      delay: 200
-    });
-
-    // Append segment to transcript
+    // Append this segment to the transcript.
     steps.push({
       action: 'appendSegment',
       target: '[data-demo-id="transcript-scroll"]',
       html: this.createSegmentHTML(segment, withTranslation),
       duration: 300,
       delay: 200
+    });
+
+    // Reveal the speaker in the participants panel in the same beat as their
+    // transcript line, so the two stay in sync.
+    steps.push({
+      action: 'setState',
+      handler: () => this.updateParticipantList(speakersSoFar),
+      delay: 100
     });
 
     // Scroll to bottom
@@ -694,8 +679,9 @@ DemoScenariosV3.prototype.setupVoiceprintUI = function() {
       <section class="workspace">
         <header class="window-bar">
           <div class="traffic"><i></i><i></i><i></i></div>
-          <span>实时会议</span>
+          <span>正在录制</span>
           <div class="window-actions">
+            <button class="icon-button">文</button>
             <button class="icon-button">◐</button>
           </div>
         </header>
@@ -704,42 +690,37 @@ DemoScenariosV3.prototype.setupVoiceprintUI = function() {
           <header class="live-header">
             <div class="live-title">
               <strong>团队周会</strong>
-              <span class="recording"><i></i> 正在录制</span>
+              <div class="live-status">
+                <span class="recording"><i></i> 正在录制</span>
+                <time id="timer">00:15:23</time>
+              </div>
             </div>
-            <time id="timer">00:15:23</time>
+            <div class="live-caption-controls">
+              <button class="floating-caption-toggle" data-enabled="false" type="button" title="悬浮字幕">字幕</button>
+              <button class="translation-toggle" data-enabled="false" type="button">译文: 关</button>
+            </div>
             <button class="pause-button">Ⅱ 暂停</button>
             <button class="end-button">结束会议</button>
           </header>
 
           <div class="live-layout">
-            <section class="transcript">
-              <div class="section-heading">
-                <div class="current-caption">
-                  <p class="eyebrow">实时字幕</p>
-                  <h1 id="live-caption" aria-live="polite"></h1>
-                </div>
-              </div>
-
+            <section class="transcript" aria-label="实时字幕">
               <div class="transcript-scroll" id="transcript-scroll"></div>
             </section>
 
             <aside class="live-panel">
               <section>
-                <p class="eyebrow" style="margin-bottom: 16px;">参与者（已识别声纹）</p>
+                <p class="eyebrow" data-demo-id="voiceprint-eyebrow">参与者 · 0</p>
                 <div class="participants-list" data-demo-id="voiceprint-participants">
                   <p class="participants-empty">等待识别说话人</p>
                 </div>
               </section>
 
-              <section>
-                <p class="eyebrow">声纹识别</p>
-                <div class="live-settings">
-                  <p style="font-size: 13px; color: #666; line-height: 1.6;">
-                    系统已自动识别参与者的声纹特征，无需手动标注说话人。
-                  </p>
-                </div>
-              </section>
+              <div class="live-controls">
+                ${this.getLiveSettingsMarkup()}
+              </div>
             </aside>
+            <button class="live-panel-toggle" type="button" aria-controls="live-panel" aria-expanded="true" title="收起">›</button>
           </div>
         </section>
       </section>
@@ -782,16 +763,14 @@ DemoScenariosV3.prototype.generateVoiceprintSegmentSteps = function(segments) {
       delay: 200
     });
 
-    // 逐字打出字幕（同步更新顶部大字幕和段落文本）
+    // 逐字打出字幕（段落文本）
     steps.push({
       action: 'setState',
       handler: async () => {
-        const caption = this.engine.viewport.querySelector('#live-caption');
         const segText = this.engine.viewport.querySelector(`[data-demo-id="${segId}-text"]`);
         const scroll = this.engine.viewport.querySelector('#transcript-scroll');
         const chars = segment.text.split('');
 
-        if (caption) caption.textContent = '';
         if (segText) segText.textContent = '';
 
         for (let i = 0; i < chars.length; i++) {
@@ -801,7 +780,6 @@ DemoScenariosV3.prototype.generateVoiceprintSegmentSteps = function(segments) {
             continue;
           }
           const ch = chars[i];
-          if (caption) caption.textContent += ch;
           if (segText) segText.textContent += ch;
           if (scroll) scroll.scrollTop = scroll.scrollHeight;
           await this.engine.wait(60);
@@ -835,26 +813,332 @@ DemoScenariosV3.prototype.generateVoiceprintSegmentSteps = function(segments) {
   return steps;
 };
 
+DemoScenariosV3.prototype.getVoiceprintRoles = function() {
+  return ['项目经理', '前端工程师', '后端工程师', '设计师'];
+};
+
 DemoScenariosV3.prototype.updateVoiceprintParticipants = function(speakers) {
   const list = this.engine.viewport.querySelector('[data-demo-id="voiceprint-participants"]');
   if (!list) return;
 
-  const colors = ['blue', 'gray', 'green'];
-  const roles = ['项目经理', '前端工程师', '后端工程师', '设计师'];
+  const colors = ['blue', 'gray'];
+  const roles = this.getVoiceprintRoles();
 
+  // Update the participant count eyebrow (real app: "参与者 · N")
+  const eyebrow = this.engine.viewport.querySelector('[data-demo-id="voiceprint-eyebrow"]');
+  if (eyebrow) eyebrow.textContent = `${this.getParticipantsLabel()} · ${speakers.length}`;
+
+  // Use the real .person markup: avatar + name/role + level meter.
   list.innerHTML = speakers.map((speaker, index) => {
-    const initial = speaker.charAt(0);
+    const initial = speaker.trim().charAt(0);
     const color = colors[index % colors.length];
     const role = roles[index % roles.length];
-
-    return `
-      <article class="person">
-        <div class="avatar ${color}">${initial}</div>
-        <span>
-          <b>${speaker}</b>
-          <small>${role}</small>
-        </span>
-      </article>
-    `;
+    return `<div class="person"><span class="avatar ${color}">${initial}</span><div><b>${speaker}</b><small>${role}</small></div><i class="level"></i></div>`;
   }).join('');
+};
+
+// ============================================================================
+// Model Library demo — real settings view + real model-library modal
+// ============================================================================
+
+// Localizable copy for the settings view. EN patch overrides this wholesale.
+DemoScenariosV3.prototype.getSettingsCopy = function () {
+  return {
+    crumb: '设置',
+    back: '← 返回会议库',
+    eyebrow: '设置',
+    h1: '模型与本地数据',
+    cards: [
+      { id: 'manage-models', title: '模型库', desc: '管理语言识别模型的下载、删除与版本信息。', button: '管理模型库' },
+      { id: 'terms', title: '术语库', desc: '12 个词条可用于会议准备、搜索和纪要。仅支持的模型会将其用于转写。', button: '管理术语库' },
+      { id: 'storage', title: '存储与隐私', desc: '会议资料保存在此设备。外部 LLM 需要在发送逐字稿前明确确认。', button: '查看本地存储' },
+      { id: 'speaker', title: '说话人识别', desc: '仅保存用户明确提交的单人语音，用于会议片段的说话人识别与命名。', button: '管理说话人' }
+    ]
+  };
+};
+
+// Real model-library data. EN patch overrides this wholesale so we never rely
+// on fragile substring translation for single-character tier words like 高/快.
+DemoScenariosV3.prototype.getModelLibraryData = function () {
+  return {
+    title: '模型库',
+    intro: '所有转写模型都在本地运行，不会将您的隐私上传到网络。',
+    qualityLabel: '质量',
+    speedLabel: '速度',
+    qualityTiers: ['标准', '高', '极高'],
+    speedTiers: ['较慢', '均衡', '快'],
+    downloadLabel: '下载',
+    installedLabel: '已安装',
+    items: [
+      { stage: '实时字幕', name: 'Streaming Zipformer Chinese XLarge', language: '中文 / 英语 / 粤语', intro: '原生流式识别，持续更新当前字幕。', quality: 3, speed: 1, installed: true, size: '1.1 GB' },
+      { stage: '实时字幕', name: 'Streaming Zipformer English', language: '英语', intro: '英语原生流式识别。', quality: 2, speed: 3, installed: false, size: '520 MB' },
+      { stage: '标点恢复', name: 'English Punctuation and Casing', language: '英语', intro: '恢复英文标点与大小写。', quality: 1, speed: 3, installed: false, size: '280 MB' },
+      { stage: '标点恢复', name: '中英文标点恢复', language: '中文 / 英语 / 粤语', intro: '为实时字幕补全逗号、句号和问号。', quality: 2, speed: 3, installed: true, size: '290 MB' },
+      { stage: '会后精修', name: 'Qwen3-ASR', language: '多语种', intro: '基于完整录音生成高精度修订版本。', quality: 2, speed: 3, installed: false, size: '1.9 GB' },
+      { stage: '说话人分离', name: 'Pyannote Segmentation 3.0', language: '语言无关', intro: '检测单轨录音中的说话区间。', quality: 2, speed: 3, installed: true, size: '90 MB' },
+      { stage: '说话人分离', name: '3D-Speaker ERes2Net Base', language: '中文', intro: '提取声纹并离线聚类说话人。', quality: 2, speed: 3, installed: false, size: '210 MB' }
+    ]
+  };
+};
+DemoScenariosV3.prototype.setupSettingsUI = function () {
+  const copy = this.getSettingsCopy();
+  const cards = copy.cards.map((card, index) => String.raw`
+    <section class="settings-card"${index === 0 ? ' data-demo-id="model-library-card"' : ''}>
+      <h2>${card.title}</h2>
+      <p>${card.desc}</p>
+      <button class="secondary" type="button"${index === 0 ? ' data-demo-id="manage-models-btn"' : ''}>${card.button}</button>
+    </section>
+  `).join('');
+
+  return String.raw`
+    <main class="app-shell">
+      <aside class="sidebar">
+        <button class="brand"><img src="../frontend/assets/brevia-logo.svg" alt="brevia" /></button>
+        <button class="new-meeting"><span>+</span> 开始会议</button>
+        <nav>
+          <button class="nav-item"><span>⌂</span> 所有会议</button>
+          <button class="nav-item"><span>◷</span> 最近删除</button>
+          <button class="nav-item active"><span>⚙</span> 设置</button>
+        </nav>
+      </aside>
+
+      <section class="workspace">
+        <header class="window-bar">
+          <div class="traffic"><i></i><i></i><i></i></div>
+          <span>${copy.crumb}</span>
+          <div class="window-actions">
+            <button class="icon-button">文</button>
+            <button class="icon-button">◐</button>
+          </div>
+        </header>
+
+        <section class="view active" id="settings-view">
+          <button class="back">${copy.back}</button>
+          <p class="eyebrow">${copy.eyebrow}</p>
+          <h1>${copy.h1}</h1>
+          <div class="settings-grid">${cards}</div>
+        </section>
+      </section>
+    </main>
+  `;
+};
+
+// Build the real .model-library-item card markup, grouped by <h3> stage.
+DemoScenariosV3.prototype.renderModelLibraryItems = function () {
+  const data = this.getModelLibraryData();
+  let lastStage = null;
+  return data.items.map((item) => {
+    const heading = item.stage !== lastStage ? `<h3>${item.stage}</h3>` : '';
+    lastStage = item.stage;
+    const dots = (level) => [1, 2, 3].map((step) => `<i${step <= level ? ' class="on"' : ''}></i>`).join('');
+    const ratings = String.raw`
+      <div class="model-library-ratings">
+        <span class="model-library-rating"><small>${data.qualityLabel}</small><b>${data.qualityTiers[item.quality - 1]}</b><span class="rating-scale" aria-hidden="true">${dots(item.quality)}</span></span>
+        <span class="model-library-rating"><small>${data.speedLabel}</small><b>${data.speedTiers[item.speed - 1]}</b><span class="rating-scale" aria-hidden="true">${dots(item.speed)}</span></span>
+      </div>`;
+    const tags = String.raw`<div class="model-library-tags">${item.installed ? `<span class="model-library-installed">${data.installedLabel}</span>` : ''}<span>${item.language}</span><span class="model-library-size">${item.size}</span><span class="model-library-modelname">${item.name}</span></div>`;
+    const action = item.installed
+      ? `<button class="modal-action modal-danger" type="button">删除</button>`
+      : `<button class="modal-action" type="button">${data.downloadLabel}</button>`;
+    return String.raw`
+      ${heading}
+      <div class="model-library-item">
+        <span>
+          <div class="model-library-name"><b class="model-library-headline">${item.language}</b>${tags}</div>
+          ${ratings}
+          <p>${item.intro}</p>
+        </span>
+        <span class="model-actions">${action}</span>
+      </div>`;
+  }).join('');
+};
+
+DemoScenariosV3.prototype.openModelLibraryModal = function () {
+  const shell = this.engine.viewport.querySelector('.app-shell');
+  if (!shell) return;
+
+  const existing = shell.querySelector('.modal-backdrop');
+  if (existing) existing.remove();
+
+  const data = this.getModelLibraryData();
+  const backdrop = document.createElement('div');
+  backdrop.className = 'modal-backdrop modal-enter';
+  backdrop.innerHTML = String.raw`
+    <section class="modal-panel" role="dialog" aria-modal="true">
+      <header class="modal-head">
+        <div class="modal-title">
+          <h2>${data.title}</h2>
+          <p>${data.intro}</p>
+        </div>
+        <button class="modal-close" type="button" aria-label="关闭">×</button>
+      </header>
+      <div class="modal-body" data-demo-id="model-library-body">
+        <div class="modal-list model-library-list">${this.renderModelLibraryItems()}</div>
+      </div>
+    </section>
+  `;
+  shell.appendChild(backdrop);
+};
+
+DemoScenariosV3.prototype.getModelLibraryDemo = function () {
+  return {
+    name: 'model-library',
+    setupUI: () => this.setupSettingsUI(),
+    steps: [
+      { action: 'wait', duration: 900 },
+      { action: 'moveCursor', target: '[data-demo-id="manage-models-btn"]', duration: 1200, delay: 400 },
+      { action: 'hover', duration: 400 },
+      { action: 'click', duration: 300 },
+      { action: 'setState', handler: () => this.openModelLibraryModal(), delay: 300 },
+      { action: 'wait', duration: 1400 },
+      { action: 'moveCursor', target: '[data-demo-id="model-library-body"] .model-library-item:first-child .model-actions button', duration: 900, delay: 300 },
+      { action: 'wait', duration: 900 },
+      { action: 'scrollToBottom', target: '[data-demo-id="model-library-body"]', duration: 5000, delay: 200 },
+      { action: 'wait', duration: 2200 }
+    ]
+  };
+};
+// ============================================================================
+// Floating Caption Bar demo — real live view + real floating-caption overlay
+// ============================================================================
+
+// Caption script: each line finalizes the previous line, streams a new live
+// line, then reveals its translation. EN patch overrides this wholesale.
+DemoScenariosV3.prototype.getCaptionData = function () {
+  return {
+    meetingTitle: '产品评审会议',
+    lines: [
+      { text: '我们先过一下这个季度的整体进展。', translation: "Let's start by reviewing the overall progress this quarter." },
+      { text: '实时转录的延迟已经优化到三百毫秒以内。', translation: 'Live transcription latency is now under 300 milliseconds.' },
+      { text: '多语言支持这块也覆盖了三十多种语言。', translation: 'Multilingual support now covers more than 30 languages.' }
+    ]
+  };
+};
+
+DemoScenariosV3.prototype.getCaptionTranscript = function () {
+  return [
+    { time: '00:00:12', speaker: '主持人', text: '欢迎大家参加这次产品评审，我们按议程开始。' },
+    { time: '00:00:24', speaker: '李娜', text: '好的，我先同步一下这个季度的整体情况。' }
+  ];
+};
+
+DemoScenariosV3.prototype.setupCaptionUI = function () {
+  const { meetingTitle } = this.getCaptionData();
+  // Reuse the real live view, then overlay the real floating-caption component.
+  let liveHtml = this.setupLiveUI(meetingTitle);
+
+  // Pre-populate the transcript so the live view reads as an active meeting.
+  const transcript = this.getCaptionTranscript().map((segment) => String.raw`
+    <div class="segment" style="padding: 16px 0;">
+      <div class="segment-meta" style="gap: 4px;"><time>${segment.time}</time><b>${segment.speaker}</b></div>
+      <div class="segment-copy"><p style="font-size: 18px; line-height: 1.8; margin: 0;">${segment.text}</p></div>
+    </div>
+  `).join('');
+  liveHtml = liveHtml.replace(
+    '<div class="transcript-scroll" data-demo-id="transcript-scroll"></div>',
+    `<div class="transcript-scroll" data-demo-id="transcript-scroll">${transcript}</div>`
+  );
+
+  const overlay = String.raw`
+    <div class="demo-caption-overlay" data-demo-id="caption-overlay">
+      <div class="caption-shell">
+        <div class="caption-controls">
+          <button class="close-btn" type="button" title="关闭" aria-label="关闭">×</button>
+        </div>
+        <div class="caption-container">
+          <div class="caption-finalized hidden" data-demo-id="caption-finalized"></div>
+          <div class="caption-text" data-demo-id="caption-text"></div>
+          <div class="caption-translation hidden" data-demo-id="caption-translation"></div>
+        </div>
+      </div>
+    </div>
+  `;
+  // Inject the overlay just before the closing </main> so it scales with the shell.
+  return liveHtml.replace('</main>', `${overlay}</main>`);
+};
+
+DemoScenariosV3.prototype.generateCaptionSteps = function () {
+  const { lines } = this.getCaptionData();
+  const steps = [];
+
+  lines.forEach((line, index) => {
+    // Finalize the previous live line into the dimmed history row.
+    if (index > 0) {
+      const prev = lines[index - 1];
+      steps.push({
+        action: 'setState',
+        handler: () => {
+          const finalized = this.engine.viewport.querySelector('[data-demo-id="caption-finalized"]');
+          const translation = this.engine.viewport.querySelector('[data-demo-id="caption-translation"]');
+          const text = this.engine.viewport.querySelector('[data-demo-id="caption-text"]');
+          if (finalized) {
+            finalized.textContent = prev.text;
+            finalized.classList.remove('hidden');
+          }
+          if (translation) { translation.textContent = ''; translation.classList.add('hidden'); }
+          if (text) text.textContent = '';
+        },
+        delay: 100
+      });
+    }
+
+    // Stream the live caption character by character.
+    steps.push({
+      action: 'setState',
+      handler: async () => {
+        const text = this.engine.viewport.querySelector('[data-demo-id="caption-text"]');
+        if (!text) return;
+        text.textContent = '';
+        const chars = line.text.split('');
+        for (let i = 0; i < chars.length; i++) {
+          if (this.engine.isPaused) { await this.engine.wait(100); i--; continue; }
+          text.textContent += chars[i];
+          await this.engine.wait(55);
+        }
+      },
+      delay: 200
+    });
+
+    steps.push({ action: 'wait', duration: 500 });
+
+    // Reveal the translation line beneath the live caption.
+    steps.push({
+      action: 'setState',
+      handler: () => {
+        const translation = this.engine.viewport.querySelector('[data-demo-id="caption-translation"]');
+        if (translation) {
+          translation.textContent = line.translation;
+          translation.classList.remove('hidden');
+        }
+      },
+      delay: 100
+    });
+
+    steps.push({ action: 'wait', duration: 1600 });
+  });
+
+  return steps;
+};
+
+DemoScenariosV3.prototype.getCaptionBarDemo = function () {
+  return {
+    name: 'caption-bar',
+    setupUI: () => this.setupCaptionUI(),
+    steps: [
+      { action: 'wait', duration: 700 },
+      // Enable the floating-caption toggle in the live header.
+      { action: 'moveCursor', target: '[data-demo-id="caption-toggle"]', duration: 1000, delay: 300 },
+      { action: 'hover', duration: 300 },
+      { action: 'click', duration: 300 },
+      { action: 'setState', handler: () => {
+        const toggle = this.engine.viewport.querySelector('[data-demo-id="caption-toggle"]');
+        if (toggle) toggle.setAttribute('data-enabled', 'true');
+        const overlay = this.engine.viewport.querySelector('[data-demo-id="caption-overlay"]');
+        if (overlay) overlay.classList.add('is-visible');
+      }, delay: 200 },
+      { action: 'wait', duration: 600 },
+      ...this.generateCaptionSteps(),
+      { action: 'wait', duration: 2000 }
+    ]
+  };
 };
