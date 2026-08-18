@@ -13,7 +13,6 @@ from .asr import (
 )
 from .config import DEFAULT_SETTINGS, SETTINGS, runtime_settings, save_runtime_settings
 from .llm_client import complete
-from .media_tasks import MeetingMediaService
 from .storage import Store
 from .voice_profiles import VoiceProfileService
 from .worker_common import SCHEMA_VERSION, TaskRegistry, WorkerState
@@ -66,7 +65,6 @@ class WorkerCore:
         self.models = ModelManager(self.store.models_dir, self.emit)
         # 服务按存储/模型依赖构造；它们不持有实时会议状态，便于单独测试。
         self.voice_profiles = VoiceProfileService(self.store, self.models)
-        self.media = MeetingMediaService(self.store, self.models)
         # 可替换边界让集成测试无需连接外部 LLM，也集中保留用户同意后的唯一出口。
         self.llm_complete = complete
         self.active = None
@@ -82,6 +80,7 @@ class WorkerCore:
         self.asr_warning_sent = False
         self.live_refiner = None
         self.live_postprocessing = None
+        self.live_punctuation = None
         self.power_saving = False
         # 继续协作初始化链，使兄弟 mixin（如 llama sidecar 管理器）的 __init__ 也能
         # 运行——否则 _sidecars_lock 等属性永远不会被创建。
@@ -197,7 +196,6 @@ class WorkerCore:
             "meeting.bundle": self.bundle,
             "meeting.refinement-recover": self.recover_refinement,
             "meeting.refine": self.refine,
-            "meeting.separate": self.separate_sources,
             "summary.generate": self.summarize,
             "translation.generate": self.translate,
             "workspace.list": lambda _: self.store.list_workspaces(),
@@ -240,18 +238,13 @@ class WorkerCore:
         threading.Thread(target=self._startup_maintenance, daemon=True).start()
 
     def _startup_maintenance(self):
-        """完成不影响首屏的清理、声纹预置和磁盘统计。"""
-        try:
-            purged = self.store.purge_expired()
-            self.voice_profiles.seed_builtin_profiles()
-        except RuntimeError as error:
-            self.emit(
-                "worker.warning",
-                {"code": "builtin_voiceprints_unavailable", "message": str(error)},
-            )
+        """完成不影响首屏的清理与磁盘统计。"""
+        purged = self.store.purge_expired()
         for profile in self.store.list_speaker_profiles():
             if self._is_default_speaker_name(profile["name"]):
                 self.store.delete_speaker_profile(profile["id"])
+        # 旧版本曾内置「内置男声/内置女声」演示说话人；删除其种子遗留。
+        self.store.delete_legacy_builtin_profiles()
         self.emit(
             "app.maintenance",
             {

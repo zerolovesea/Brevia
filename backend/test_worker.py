@@ -718,6 +718,28 @@ class WorkerTest(unittest.TestCase):
             f"开场。{repeated}继续讨论。",
         )
 
+    def test_live_text_removes_qwen3_hallucinated_artifacts(self):
+        # Qwen3-ASR 在静音/低信噪窗口会幻听出代码围栏、"language <语言>" 标签等。
+        self.assertEqual(Worker._clean_live_text("```python language Chinese"), "")
+        self.assertEqual(Worker._clean_live_text("```java"), "")
+        self.assertEqual(Worker._clean_live_text("```language=Germantic"), "")
+        self.assertEqual(Worker._clean_live_text("```python language None ```"), "")
+        self.assertEqual(Worker._clean_live_text("`(1)"), "")
+        self.assertEqual(Worker._clean_live_text("**language Chinese**"), "")
+        self.assertEqual(Worker._clean_live_text("language Chinese。"), "")
+        self.assertEqual(
+            Worker._clean_live_text("language Chinese一条是这个域名，它有域名的。"),
+            "一条是这个域名，它有域名的。",
+        )
+        self.assertEqual(
+            Worker._clean_live_text("他们聊，也就是说，language Chinese。"),
+            "他们聊，也就是说，。",
+        )
+        self.assertEqual(
+            Worker._clean_live_text("这是正常的中文文本。"),
+            "这是正常的中文文本。",
+        )
+
     def test_live_qwen_refinement_replaces_unedited_final_only(self):
         meeting = self.worker.start(
             {
@@ -743,13 +765,13 @@ class WorkerTest(unittest.TestCase):
             def decode(self, _, __):
                 return "这是直播识别。"
 
-        self.worker._postprocess_live_segment(None, Refiner(), event, [0.1], 16000)
+        self.worker._postprocess_live_segment(None, Refiner(), event, None, [0.1], 16000)
         segment = self.worker.store.get_meeting(meeting["id"])["segments"][0]
         self.assertEqual((segment["text"], segment["revision"]), ("这是直播识别。", 3))
         self.assertEqual(self.events[-1]["type"], "transcript.refined")
         with self.worker.store.connect() as db:
             db.execute("UPDATE segments SET user_edited=1 WHERE id=?", ("mic-0",))
-        self.worker._postprocess_live_segment(None, Refiner(), event, [0.1], 16000)
+        self.worker._postprocess_live_segment(None, Refiner(), event, None, [0.1], 16000)
         self.assertEqual(
             self.worker.store.get_meeting(meeting["id"])["segments"][0]["text"],
             "这是直播识别。",
@@ -760,15 +782,15 @@ class WorkerTest(unittest.TestCase):
         event = {"meeting_id": "meeting", "segment_id": "system-0", "text": "fast"}
         executor = self.worker.live_postprocessing = Mock()
         self.worker.live_refiner = object()
-        self.worker._postprocess_live_segment_later(event, [0.1], 16000)
+        self.worker._postprocess_live_segment_later(event, [0.1], [0.1], 16000)
         executor.submit.assert_called_once()
 
     def test_live_revision_queues_work_when_the_single_slot_is_busy(self):
         self.worker.live_postprocessing = executor = Mock()
         self.worker.live_refiner = object()
         event = {"meeting_id": "meeting", "segment_id": "system-0", "text": "fast"}
-        self.worker._postprocess_live_segment_later(event, [0.1], 16000)
-        self.worker._postprocess_live_segment_later(event, [0.2], 16000)
+        self.worker._postprocess_live_segment_later(event, [0.1], [0.1], 16000)
+        self.worker._postprocess_live_segment_later(event, [0.2], [0.2], 16000)
         self.assertEqual(executor.submit.call_count, 2)
 
     def test_refinement_keeps_tracks_separate_and_merges_by_timestamp(self):
@@ -1263,6 +1285,93 @@ class WorkerTest(unittest.TestCase):
             ["spk-1", "spk-2"],
         )
 
+    def test_deoverlap_speaker_turns_splits_overlapping_boundaries(self):
+        deoverlapped = self.worker._deoverlap_speaker_turns([
+            {"start_ms": 0, "end_ms": 1000, "speaker": "spk-1"},
+            {"start_ms": 900, "end_ms": 2000, "speaker": "spk-2"},
+        ])
+        self.assertEqual(
+            [(turn["start_ms"], turn["end_ms"], turn["speaker"]) for turn in deoverlapped],
+            [(0, 950, "spk-1"), (950, 2000, "spk-2")],
+        )
+
+    def test_deoverlap_speaker_turns_keeps_same_speaker_overlap(self):
+        deoverlapped = self.worker._deoverlap_speaker_turns([
+            {"start_ms": 0, "end_ms": 1000, "speaker": "spk-1"},
+            {"start_ms": 900, "end_ms": 2000, "speaker": "spk-1"},
+        ])
+        self.assertEqual(len(deoverlapped), 2)
+
+    def test_overlap_speakers_ignores_boundary_noise(self):
+        self.assertEqual(
+            self.worker._overlap_speakers(900, 1000, [
+                {"start_ms": 0, "end_ms": 950, "speaker": "spk-1"},
+                {"start_ms": 950, "end_ms": 2000, "speaker": "spk-2"},
+            ]),
+            [],
+        )
+
+    def test_vad_params_for_language_falls_back_to_default(self):
+        self.assertEqual(
+            self.worker._vad_params_for("zh"), SETTINGS["vad"]["zh"]
+        )
+        self.assertEqual(
+            self.worker._vad_params_for("en"), SETTINGS["vad"]["default"]
+        )
+        self.assertEqual(
+            self.worker._vad_params_for("auto"), SETTINGS["vad"]["default"]
+        )
+
+    def test_refined_asr_language_hints_force_chinese(self):
+        self.assertEqual(RefinedASR._funasr_nano_language("zh"), "中文")
+        self.assertEqual(RefinedASR._funasr_nano_language("ja"), "日语")
+        self.assertEqual(RefinedASR._funasr_nano_language("auto"), "")
+        self.assertEqual(RefinedASR._funasr_nano_language(None), "")
+        self.assertEqual(RefinedASR._whisper_language("zh"), "zh")
+        self.assertEqual(RefinedASR._whisper_language("auto"), "")
+
+    def test_assemble_utterances_merges_adjacent_same_speaker_windows(self):
+        assembled = self.worker._assemble_utterances([
+            {"track": "mic", "start_ms": 0, "end_ms": 15000, "speaker": "mic-spk-1", "text": "我们来看一下", "word_timestamps": [{"text": "我", "start_ms": 0, "end_ms": 100}]},
+            {"track": "mic", "start_ms": 15000, "end_ms": 30000, "speaker": "mic-spk-1", "text": "这个数据的情况", "word_timestamps": [{"text": "这", "start_ms": 15000, "end_ms": 15100}]},
+            {"track": "mic", "start_ms": 30000, "end_ms": 45000, "speaker": "mic-spk-2", "text": "对，是这样的", "word_timestamps": []},
+        ])
+        self.assertEqual(
+            [(item["start_ms"], item["end_ms"], item["speaker"], item["text"]) for item in assembled],
+            [
+                (0, 30000, "mic-spk-1", "我们来看一下这个数据的情况"),
+                (30000, 45000, "mic-spk-2", "对，是这样的"),
+            ],
+        )
+        self.assertEqual(len(assembled[0]["word_timestamps"]), 2)
+
+    def test_assemble_utterances_keeps_tracks_and_speakers_separate(self):
+        assembled = self.worker._assemble_utterances([
+            {"track": "mic", "start_ms": 0, "end_ms": 1000, "speaker": "mic-spk-1", "text": "你好", "word_timestamps": []},
+            {"track": "system", "start_ms": 0, "end_ms": 1000, "speaker": "system-spk-1", "text": "hi", "word_timestamps": []},
+        ])
+        self.assertEqual(len(assembled), 2)
+        self.assertEqual([item["track"] for item in assembled], ["mic", "system"])
+
+    def test_assemble_utterances_splits_at_sentence_boundary_when_overlong(self):
+        # 第二句跨窗口：窗口 2 以半句话结尾，句末在窗口 3 中。超长时应在
+        # 第一个完整句末处拆分，而不是从窗口边界（半句话）硬切。
+        assembled = self.worker._assemble_utterances([
+            {"track": "system", "start_ms": 0, "end_ms": 15000, "speaker": "system-spk-1", "text": "第一句话。", "word_timestamps": [{"text": "a", "start_ms": 0, "end_ms": 1000}]},
+            {"track": "system", "start_ms": 15000, "end_ms": 30000, "speaker": "system-spk-1", "text": "第二句话还没", "word_timestamps": [{"text": "b", "start_ms": 15000, "end_ms": 16000}]},
+            {"track": "system", "start_ms": 30000, "end_ms": 45000, "speaker": "system-spk-1", "text": "讲完。第三句话。", "word_timestamps": [{"text": "c", "start_ms": 30000, "end_ms": 31000}]},
+        ])
+        self.assertEqual(
+            [(item["text"]) for item in assembled],
+            ["第一句话。", "第二句话还没讲完。第三句话。"],
+        )
+
+    def test_join_utterance_text_preserves_cjk_and_adds_latin_space(self):
+        self.assertEqual(self.worker._join_utterance_text("我们看", "一下"), "我们看一下")
+        self.assertEqual(self.worker._join_utterance_text("hello", "world"), "hello world")
+        self.assertEqual(self.worker._join_utterance_text("", "内容"), "内容")
+
+
     def test_profile_assignment_requires_a_clear_best_match(self):
         self.assertTrue(self.worker._is_confident_profile_match({"score": 0.82, "runner_up_score": 0.71}))
         self.assertFalse(self.worker._is_confident_profile_match({"score": 0.82, "runner_up_score": 0.76}))
@@ -1563,10 +1672,6 @@ class WorkerTest(unittest.TestCase):
                 self.assertTrue(all(item.get("sha256") for item in model["downloads"]))
             else:
                 self.assertTrue(model.get("archive_sha256"), model["id"])
-        self.assertEqual(
-            self.worker.models.get("spleeter-2stems-fp16")["archive_sha256"],
-            "d54561979bd2e08a51e7dbd99ac36bb47564e089eefd403636dbca93e811bba2",
-        )
 
     def test_model_extraction_rejects_paths_outside_the_install_directory(self):
         archive = Path(self.temp.name) / "unsafe.tar.bz2"
@@ -1740,7 +1845,7 @@ class WorkerTest(unittest.TestCase):
             streaming.call_args.args,
             (self.worker.models, "zipformer-en-streaming-int8", "en"),
         )
-        refiner.assert_called_once_with(self.worker.models, "qwen3-asr-1.7b-int8")
+        refiner.assert_called_once_with(self.worker.models, "qwen3-asr-1.7b-int8", language="en")
         reconfigured = [
             event for event in self.events if event["type"] == "meeting.reconfigured"
         ]
@@ -1762,6 +1867,7 @@ class WorkerTest(unittest.TestCase):
                     "refined_model_id": "qwen3-asr-0.6b-int8",
                 }
             )
+            self.worker._wait_prepare()
             running_asr = self.worker.asr
             self.events.clear()
             with self.assertRaisesRegex(RuntimeError, "not installed"):
@@ -1920,8 +2026,8 @@ class WorkerTest(unittest.TestCase):
         )
         self.worker.asr = Mock()
         self.worker.asr.accept.side_effect = [
-            (SimpleNamespace(text="第一位发言"), True),
-            (SimpleNamespace(text="第二位发言"), True),
+            (SimpleNamespace(text="这是第一位发言"), True),
+            (SimpleNamespace(text="这是第二位发言"), True),
         ]
         self.worker.punctuation = None
         self.worker.live_refiner = None
@@ -1936,12 +2042,13 @@ class WorkerTest(unittest.TestCase):
         payload = {
             "meeting_id": meeting["id"],
             "track": "mic",
-            "pcm": base64.b64encode(b"\x01\x00" * 1600).decode(),
+            # 用 3 秒音频，让每段超过短插话阈值，避免被跨说话人并入主线。
+            "pcm": base64.b64encode(b"\x01\x00" * 48000).decode(),
             "sample_rate": 16000,
             "start_ms": 0,
         }
         self.worker.audio(payload)
-        self.worker.audio({**payload, "start_ms": 100})
+        self.worker.audio({**payload, "start_ms": 3000})
         final_speakers = [
             event["payload"]["speaker"]
             for event in self.events
@@ -1957,6 +2064,121 @@ class WorkerTest(unittest.TestCase):
             if event["type"] == "transcript.refined"
         ]
         self.assertEqual(refined_speakers, ["spk-1", "spk-2"])
+
+    def test_live_pin_forces_endpoint_without_trailing_silence(self):
+        meeting = self.worker.start(
+            {
+                "title": "软钉",
+                "language": "zh",
+                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
+                "refined_model_id": "qwen3-asr-0.6b-int8",
+            }
+        )
+        self.worker.asr = Mock()
+        self.worker.asr.accept.return_value = (SimpleNamespace(text="一句很长的话"), False)
+        self.worker.asr.force_endpoint.return_value = SimpleNamespace(text="一句很长的话。")
+        self.worker.punctuation = None
+        self.worker.live_refiner = None
+        # 语义软钉：无标点时靠硬上限兜底触发
+        with patch.dict(SETTINGS["asr"], {"live_pin_seconds": 0.05, "live_pin_max_seconds": 0.05}):
+            self.worker.audio(
+                {
+                    "meeting_id": meeting["id"],
+                    "track": "mic",
+                    "pcm": base64.b64encode(b"\x01\x00" * 1600).decode(),
+                    "sample_rate": 16000,
+                    "start_ms": 0,
+                }
+            )
+        final = next(event for event in self.events if event["type"] == "transcript.final")
+        self.assertTrue(final["payload"]["pinned"])
+        self.worker.asr.force_endpoint.assert_called_once_with("mic")
+
+    def test_live_pin_cuts_at_middle_sentence_boundary(self):
+        meeting = self.worker.start(
+            {
+                "title": "语义软钉",
+                "language": "zh",
+                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
+                "refined_model_id": "qwen3-asr-0.6b-int8",
+            }
+        )
+        self.worker.asr = Mock()
+        self.worker.asr.accept.return_value = (SimpleNamespace(text="一句很长的话"), False)
+        self.worker.asr.force_endpoint.return_value = SimpleNamespace(text="一句很长的话。")
+        self.worker.punctuation = Mock()
+        # 标点模型总会在末尾补句末；只有中间还有句末才说明真的跨过了一句话。
+        self.worker.punctuation.apply.return_value = "一句很长的话。然后呢。"
+        self.worker.live_refiner = None
+        payload = {
+            "meeting_id": meeting["id"],
+            "track": "mic",
+            "pcm": base64.b64encode(b"\x01\x00" * 1600).decode(),
+            "sample_rate": 16000,
+        }
+        with patch.dict(SETTINGS["asr"], {"live_pin_seconds": 0.05, "live_pin_max_seconds": 40}):
+            self.worker.audio({**payload, "start_ms": 0})
+        final = next(event for event in self.events if event["type"] == "transcript.final")
+        self.assertTrue(final["payload"]["pinned"])
+        self.worker.asr.force_endpoint.assert_called_once_with("mic")
+
+    def test_live_pin_does_not_cut_mid_phrase(self):
+        meeting = self.worker.start(
+            {
+                "title": "语义软钉",
+                "language": "zh",
+                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
+                "refined_model_id": "qwen3-asr-0.6b-int8",
+            }
+        )
+        self.worker.asr = Mock()
+        self.worker.asr.accept.return_value = (SimpleNamespace(text="调控起来简单"), False)
+        self.worker.asr.force_endpoint.return_value = SimpleNamespace(text="调控起来简单")
+        self.worker.punctuation = Mock()
+        # 末尾只有一个「伪句末」，中间没有真句末 → 不应切（「简单直接」不能拆）。
+        self.worker.punctuation.apply.return_value = "调控起来简单。"
+        self.worker.live_refiner = None
+        payload = {
+            "meeting_id": meeting["id"],
+            "track": "mic",
+            "pcm": base64.b64encode(b"\x01\x00" * 1600).decode(),
+            "sample_rate": 16000,
+        }
+        with patch.dict(SETTINGS["asr"], {"live_pin_seconds": 0.05, "live_pin_max_seconds": 40}):
+            self.worker.audio({**payload, "start_ms": 0})
+        self.assertEqual(
+            [event["type"] for event in self.events if event["type"] == "transcript.final"],
+            [],
+        )
+        self.worker.asr.force_endpoint.assert_not_called()
+
+    def test_async_punctuation_defers_when_executor_present(self):
+        meeting = self.worker.start(
+            {
+                "title": "异步标点",
+                "language": "zh",
+                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
+                "refined_model_id": "qwen3-asr-0.6b-int8",
+            }
+        )
+        self.worker.asr = Mock()
+        self.worker.asr.accept.return_value = (SimpleNamespace(text="测试"), False)
+        self.worker.punctuation = Mock()
+        self.worker.punctuation.apply.return_value = "测试。"
+        executor = self.worker.live_punctuation = Mock()
+        self.worker.audio(
+            {
+                "meeting_id": meeting["id"],
+                "track": "mic",
+                "pcm": base64.b64encode(b"\x01\x00" * 1600).decode(),
+                "sample_rate": 16000,
+                "start_ms": 0,
+            }
+        )
+        partial = next(event for event in self.events if event["type"] == "transcript.partial")
+        self.assertEqual(partial["payload"]["text"], "测试")
+        self.worker.punctuation.apply.assert_not_called()
+        executor.submit.assert_called_once()
 
     def test_unchanged_partial_does_not_repeat_punctuation_inference(self):
         meeting = self.worker.start(
@@ -2222,27 +2444,6 @@ class WorkerTest(unittest.TestCase):
         self.assertEqual(
             self.worker.store.speaker_profile(profile["id"])["sample_count"], 1
         )
-
-    def test_two_builtin_voiceprints_are_seeded_from_bundled_audio(self):
-        self.worker.models.is_ready = lambda _: True
-        with (
-            patch("backend.voice_profiles.SpeakerTracker") as tracker,
-            patch(
-                "backend.voice_profiles.read_mono_wav",
-                return_value=([0.1] * 160000, 16000),
-            ),
-            patch(
-                "backend.voice_profiles.write_mono_wav",
-                side_effect=lambda path, *_: Path(path).write_bytes(b"wav"),
-            ),
-        ):
-            tracker.return_value.embedding.return_value = [1.0, 0.0]
-            self.worker.voice_profiles.seed_builtin_profiles()
-        profiles = self.worker.store.list_speaker_profiles()
-        self.assertEqual(
-            {profile["name"] for profile in profiles}, {"内置男声", "内置女声"}
-        )
-        self.assertTrue(all(profile["built_in"] for profile in profiles))
 
     def test_model_downloads_run_in_parallel(self):
         started, third_started, release = threading.Event(), threading.Event(), threading.Event()
@@ -2965,7 +3166,7 @@ class WorkerTest(unittest.TestCase):
             restarted = Worker(root=self.temp.name, output=self.events.append)
         self.assertEqual(restarted.store.get_meeting(meeting["id"])["status"], "refining")
 
-    def test_delete_waits_for_a_background_meeting_task(self):
+    def test_delete_cancels_a_running_background_task(self):
         meeting = self.worker.start(
             {
                 "title": "串行任务",
@@ -2975,27 +3176,13 @@ class WorkerTest(unittest.TestCase):
             }
         )
         self.worker.stop({"meeting_id": meeting["id"], "duration_ms": 0})
-        started, release = threading.Event(), threading.Event()
-
-        def separate(*_):
-            started.set()
-            release.wait(1)
-            return {"meeting_id": meeting["id"]}
-
-        with patch.object(self.worker.media, "separate", side_effect=separate):
-            task = threading.Thread(
-                target=self.worker.separate_sources, args=({"meeting_id": meeting["id"]},)
-            )
-            task.start()
-            self.assertTrue(started.wait(1))
-            deletion = threading.Thread(
-                target=self.worker.delete_meeting, args=({"meeting_id": meeting["id"]},)
-            )
-            deletion.start()
-            self.assertTrue(deletion.is_alive())
-            release.set()
-            task.join(1)
-            deletion.join(1)
+        control = self.worker.tasks.begin("meeting.refine", meeting["id"])
+        try:
+            # 现在删除会先请求取消后台任务再删除，不再抛错阻塞。
+            self.worker.delete_meeting({"meeting_id": meeting["id"]})
+        finally:
+            self.worker.tasks.finish("meeting.refine", meeting["id"], control)
+        self.assertTrue(control.cancelled.is_set())
         self.assertIsNotNone(self.worker.store.get_meeting(meeting["id"])["deleted_at"])
 
     def test_examples_are_seeded_once_and_delete_audio_immediately(self):

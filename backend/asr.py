@@ -24,6 +24,7 @@ DEPRECATED_MODEL_PREFIXES = (
     "fire-red-asr2-ctc-zh-en-int8-",
     "nemo-titanet-small-en-",
     "paraformer-zh-en-int8-",
+    "qwen3-asr-1.7b-",
     "vits-mimic3-ko-kss-low-",
     "vits-piper-de-thorsten-medium-int8-",
     "vits-piper-es-sharvard-medium-int8-",
@@ -406,6 +407,25 @@ class StreamingASR:
         self.streams = {}
         self.lock = threading.Lock()
 
+    def _stream(self, track):
+        """返回音轨的识别流，首次访问时创建。"""
+        if track not in self.streams:
+            stream = self.recognizer.create_stream()
+            if self.model["kind"] == "nemotron":
+                stream.set_option("language", self.language)
+            self.streams[track] = stream
+        return self.streams[track]
+
+    def _finalize(self, track):
+        """结束并重置一条音轨的识别流，返回最终文本。"""
+        stream = self.streams[track]
+        stream.input_finished()
+        while self.recognizer.is_ready(stream):
+            self.recognizer.decode_stream(stream)
+        result = self.recognizer.get_result(stream)
+        self.recognizer.reset(stream)
+        return result
+
     def accept(self, track, samples, sample_rate=16000, flush=False):
         """向一条音轨追加波形并推进解码。
 
@@ -417,26 +437,30 @@ class StreamingASR:
 
         Returns:
             ``(识别结果, 是否句末)``；结果类型由 sherpa-onnx 模型决定。
+
+        Notes:
+            句末由 sherpa-onnx 的内置端点检测决定：尾静音（rule1/rule2）触发，
+            连续语音则靠 rule3（``maximum_utterance_seconds``）兜底强制结束，
+            或 ``flush`` 时结束。实时字幕保持「流式输出 → 精修原地覆盖」的
+            单阶段体验，不再在 worker 里做软钉切分。
         """
         with self.lock:
-            if track not in self.streams:
-                stream = self.recognizer.create_stream()
-                if self.model["kind"] == "nemotron":
-                    stream.set_option("language", self.language)
-                self.streams[track] = stream
-            stream = self.streams[track]
+            stream = self._stream(track)
             stream.accept_waveform(sample_rate, samples)
             while self.recognizer.is_ready(stream):
                 self.recognizer.decode_stream(stream)
             result = self.recognizer.get_result(stream)
             endpoint = flush or self.recognizer.is_endpoint(stream)
             if endpoint:
-                stream.input_finished()
-                while self.recognizer.is_ready(stream):
-                    self.recognizer.decode_stream(stream)
-                result = self.recognizer.get_result(stream)
-                self.recognizer.reset(stream)
+                result = self._finalize(track)
         return result, endpoint
+
+    def force_endpoint(self, track):
+        """无尾静音时强制结束当前句，返回最终文本并重置流。"""
+        with self.lock:
+            if track not in self.streams:
+                return ""
+            return self._finalize(track)
 
 
 class LiveDenoiser:
@@ -552,8 +576,8 @@ class LanguageIdentifier:
         return self.engine.compute(stream)
 
 
-def _vad_config(manager, model_id):
-    """创建实时与离线流程共用的 VAD 配置。"""
+def _vad_config(manager, model_id, vad_params=None):
+    """创建实时与离线流程共用的 VAD 配置，可覆盖 Silero 阈值/时长参数。"""
     if not manager.is_ready(model_id):
         raise RuntimeError(f"Model {model_id} is not installed")
     import sherpa_onnx
@@ -562,23 +586,33 @@ def _vad_config(manager, model_id):
     model = manager.get(model_id)
     config.silero_vad.model = str(manager.path(model_id) / model["files"][0])
     config.sample_rate = 16000
+    vad_params = vad_params or {}
+    for key in (
+        "threshold",
+        "min_silence_duration",
+        "min_speech_duration",
+        "max_speech_duration",
+    ):
+        if key in vad_params and vad_params[key] is not None:
+            setattr(config.silero_vad, key, float(vad_params[key]))
     return config
 
 
 class OfflineVAD:
     """用会议选择的 VAD 模型生成保留原时间轴的语音区间。"""
 
-    def __init__(self, manager, model_id="silero-vad"):
+    def __init__(self, manager, model_id="silero-vad", vad_params=None):
         """初始化离线 VAD 检测器。
 
         Args:
             manager: 已初始化的 ModelManager。
             model_id: 已安装的 VAD 模型 ID。
+            vad_params: 可选阈值/时长覆盖，用于按语言调优分段粒度。
         """
         import sherpa_onnx
 
         self.sherpa_onnx = sherpa_onnx
-        self.config = _vad_config(manager, model_id)
+        self.config = _vad_config(manager, model_id, vad_params)
 
     def process(self, samples, sample_rate=16000):
         if sample_rate != self.config.sample_rate:
@@ -750,12 +784,28 @@ class SpeakerTracker:
 class RefinedASR:
     """使用完整录音窗口执行高精度离线转写。"""
 
-    def __init__(self, manager, model_id):
+    # FunASR Nano 的语言提示会拼进 ``语音转写成{language}`` 的 prompt，
+    # 因此使用自然语言名称而不是 ISO 代码，避免自动检测把中文误判成日语等。
+    FUNASR_NANO_LANGUAGE_HINTS = {
+        "zh": "中文",
+        "en": "英文",
+        "yue": "粤语",
+        "ja": "日语",
+        "ko": "韩语",
+        "fr": "法语",
+        "de": "德语",
+        "es": "西班牙语",
+        "ru": "俄语",
+    }
+
+    def __init__(self, manager, model_id, language=None):
         """加载 Qwen3-ASR 会后精修模型。
 
         Args:
             manager: 已初始化的 ``ModelManager``。
             model_id: 已安装的 Qwen3-ASR 模型 ID。
+            language: 会议语言代码；支持的语言会强制模型按该语言转写，
+                避免短窗口自动检测把中文误判成日语等其他语言。
 
         """
         model = manager.get(model_id)
@@ -788,6 +838,7 @@ class RefinedASR:
                 llm=str(path / "llm.int8.onnx"),
                 embedding=str(path / "embedding.int8.onnx"),
                 tokenizer=str(path / "Qwen3-0.6B"),
+                language=self._funasr_nano_language(language),
                 **common,
             )
         elif model["kind"] == "whisper":
@@ -795,7 +846,7 @@ class RefinedASR:
                 encoder=str(path / model["files"][0]),
                 decoder=str(path / model["files"][1]),
                 tokens=str(path / model["files"][2]),
-                language="",
+                language=self._whisper_language(language),
                 **common,
             )
         else:
@@ -806,8 +857,22 @@ class RefinedASR:
                 tokenizer=str(path / "tokenizer"),
                 **common,
                 max_total_len=1024,
-                max_new_tokens=1024,
+                max_new_tokens=512,
             )
+
+    @classmethod
+    def _funasr_nano_language(cls, language):
+        """把会议语言映射为 FunASR Nano 的自然语言提示；``auto`` 保持自动。"""
+        if not language or language == "auto":
+            return ""
+        return cls.FUNASR_NANO_LANGUAGE_HINTS.get(language, "")
+
+    @staticmethod
+    def _whisper_language(language):
+        """Whisper 使用 ISO 639-1 代码；``auto`` 保持自动检测。"""
+        if not language or language == "auto":
+            return ""
+        return language
 
     def decode(self, samples, sample_rate=16000):
         """返回文本；实时精修不需要词级时间轴。"""
@@ -922,38 +987,3 @@ class OfflineDiarizer:
             for segment in self.diarizer.process(samples).sort_by_start_time()
         ]
 
-
-class SourceSeparator:
-    """使用 Spleeter 将双声道录音拆为人声与非人声轨。"""
-
-    def __init__(self, manager, model_id="spleeter-2stems-fp16"):
-        """初始化音频分离器。
-
-        Args:
-            manager: 已初始化的 ModelManager。
-            model_id: 已安装的 Spleeter 模型 ID。
-        """
-        if not manager.is_ready(model_id):
-            raise RuntimeError(f"Model {model_id} is not installed")
-        try:
-            import sherpa_onnx
-        except ImportError as error:
-            raise RuntimeError("sherpa-onnx is not installed") from error
-        path = manager.path(model_id)
-        config = sherpa_onnx.OfflineSourceSeparationConfig(
-            model=sherpa_onnx.OfflineSourceSeparationModelConfig(
-                spleeter=sherpa_onnx.OfflineSourceSeparationSpleeterModelConfig(
-                    vocals=str(path / "vocals.fp16.onnx"),
-                    accompaniment=str(path / "accompaniment.fp16.onnx"),
-                ),
-                num_threads=manager.device()["threads"],
-                provider=manager.device()["backend"],
-            )
-        )
-        if not config.validate():
-            raise RuntimeError("Invalid source separation configuration")
-        self.engine = sherpa_onnx.OfflineSourceSeparation(config)
-
-    def process(self, samples, sample_rate):
-        """分离音频为人声和伴奏并返回结果。"""
-        return self.engine.process(sample_rate=sample_rate, samples=samples)

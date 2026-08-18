@@ -6,8 +6,7 @@ function backendMeeting(item) {
     durationMs: item.duration_ms, statusCode: item.status, meta: '',
     workspaceId: workspaceId,
     workspace: workspaceId && typeof getWorkspaceName === 'function' ? {
-      name: getWorkspaceName(workspaceId),
-      color: getWorkspaceColor(workspaceId)
+      name: getWorkspaceName(workspaceId)
     } : null,
     tags: item.tags, status: {}, deleted: Boolean(item.deleted_at),
     isExample: Boolean(item.is_example), exampleLocale: item.example_locale,

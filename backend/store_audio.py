@@ -94,17 +94,6 @@ class AudioStoreMixin:
             else None
             for track in ("mic", "system", "mix")
         }
-        exports = self.meetings_dir / meeting_id / "exports"
-        files["playback"].update(
-            {
-                "vocals": str(exports / "separated-vocals.wav")
-                if (exports / "separated-vocals.wav").exists()
-                else None,
-                "accompaniment": str(exports / "separated-accompaniment.wav")
-                if (exports / "separated-accompaniment.wav").exists()
-                else None,
-            }
-        )
         return files
 
     def _build_playback(self, meeting_id, track):

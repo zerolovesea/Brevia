@@ -114,33 +114,3 @@ def write_mono_wav(path, samples, sample_rate):
         recording.setframerate(sample_rate)
         recording.writeframes((values * 32767).astype("<i2").tobytes())
 
-
-def read_wav_channels(path, maximum_seconds=None):
-    """读取 PCM16 WAV 为 ``(channels, samples)``，符合 Sherpa 分离器输入。"""
-    import numpy
-
-    with wave.open(str(path)) as recording:
-        if recording.getsampwidth() != 2:
-            raise ValueError("Source separation requires PCM16 WAV audio")
-        if maximum_seconds and recording.getnframes() > recording.getframerate() * maximum_seconds:
-            # ponytail: 分离器加载完整波形；当此上限不足时添加分块分离。
-            raise ValueError("Audio is too long to separate in memory")
-        channels = recording.getnchannels()
-        values = numpy.frombuffer(
-            recording.readframes(recording.getnframes()), dtype="<i2"
-        )
-        return values.astype(numpy.float32).reshape(
-            -1, channels
-        ).T.copy() / 32768.0, recording.getframerate()
-
-
-def write_wav_channels(path, samples, sample_rate):
-    """把 ``(channels, samples)`` 波形写回标准交错 PCM16 WAV。"""
-    import numpy
-
-    values = numpy.clip(numpy.asarray(samples).T, -1, 1)
-    with wave.open(str(path), "wb") as recording:
-        recording.setnchannels(values.shape[1])
-        recording.setsampwidth(2)
-        recording.setframerate(sample_rate)
-        recording.writeframes((values * 32767).astype("<i2").tobytes())

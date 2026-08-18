@@ -8,7 +8,7 @@ from pathlib import Path
 
 from .audio_io import convert_to_pcm_wav, read_mono_wav, write_mono_wav
 from .asr import SpeakerTracker
-from .config import SETTINGS, SPEAKER_EMBEDDING_MODEL_ID
+from .config import SETTINGS
 
 
 class VoiceProfileService:
@@ -179,55 +179,6 @@ class VoiceProfileService:
                 total_ms += duration_ms
                 cursor = end_ms
         return profile
-
-    def seed_builtin_profiles(self):
-        """用随应用发布的双人示例录音提供一男一女两个默认声纹。"""
-        model_id = SPEAKER_EMBEDDING_MODEL_ID
-        if not self.models.is_ready(model_id):
-            return
-        source = Path(__file__).with_name("fixtures") / "example-zh.wav"
-        if not source.is_file():
-            return
-        samples, rate = read_mono_wav(source)
-        tracker = SpeakerTracker(self.models)
-        # ponytail: 随应用打包的演示说话人作为默认种子；录制品牌声音后替换 fixtures。
-        for key, name, start_ms, end_ms in (
-            (
-                "builtin:male",
-                "内置男声",
-                0,
-                5016,
-            ),
-            (
-                "builtin:female",
-                "内置女声",
-                5016,
-                9102,
-            ),
-        ):
-            if any(
-                sample["source_key"] == key
-                for profile in self.store.list_speaker_profiles()
-                for sample in self.store.list_speaker_profile_samples(profile["id"])
-            ):
-                continue
-            clip = samples[round(start_ms * rate / 1000) : round(end_ms * rate / 1000)]
-            embedding = tracker.embedding(clip, rate)
-            if embedding is None:
-                continue
-            profile = self.store.ensure_speaker_profile(name)
-            directory = self.store.speaker_profiles_dir / profile["id"]
-            directory.mkdir(parents=True, exist_ok=True)
-            audio_path = directory / f"{key.split(':')[1]}.wav"
-            write_mono_wav(audio_path, clip, rate)
-            self.store.save_speaker_profile_sample(
-                name,
-                embedding,
-                key,
-                profile["id"],
-                str(audio_path),
-                end_ms - start_ms,
-            )
 
     @staticmethod
     def _sentences(text):

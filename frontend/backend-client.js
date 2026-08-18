@@ -17,13 +17,23 @@ function stopMediaStream(stream) {
   }
 }
 
+// 音频采集错误文案通过运行时 i18n 目录查询，键为中文源串。目录尚未加载或缺少键时回退到中文键。
+const micMessage = (key) => {
+  let locale = 'zh';
+  if (typeof localStorage !== 'undefined') {
+    try { locale = localStorage.getItem('brevia-language') || 'zh'; } catch { /* 回退到中文。 */ }
+  }
+  const labels = window.BreviaLocaleData?.catalog?.[locale]?.labels || {};
+  return labels[key] || key;
+};
+
 // 将 getUserMedia DOMException 转换为可操作的消息。NotFoundError 表示操作系统未暴露
 // 输入设备（在 Windows 上，通常是麦克风隐私开关关闭）；NotAllowedError 表示访问被拒绝。
 function describeMicError(error) {
-  if (error?.name === 'NotFoundError' || error?.name === 'DevicesNotFoundError') return '未检测到麦克风设备，请在系统设置中开启麦克风访问权限并确认已连接麦克风后重试';
-  if (error?.name === 'NotAllowedError' || error?.name === 'PermissionDeniedError') return '麦克风访问被拒绝，请在系统设置中允许应用使用麦克风后重试';
-  if (error?.name === 'NotReadableError') return '麦克风被其他程序占用，请关闭占用麦克风的程序后重试';
-  return error?.message || '无法获取麦克风';
+  if (error?.name === 'NotFoundError' || error?.name === 'DevicesNotFoundError') return micMessage('未检测到麦克风设备，请在系统设置中开启麦克风访问权限并确认已连接麦克风后重试');
+  if (error?.name === 'NotAllowedError' || error?.name === 'PermissionDeniedError') return micMessage('麦克风访问被拒绝，请在系统设置中允许应用使用麦克风后重试');
+  if (error?.name === 'NotReadableError') return micMessage('麦克风被其他程序占用，请关闭占用麦克风的程序后重试');
+  return error?.message || micMessage('无法获取麦克风');
 }
 
 class AudioCapture {
@@ -46,9 +56,9 @@ class AudioCapture {
         : await navigator.mediaDevices.getDisplayMedia({ video: true, audio: { systemAudio: 'include', suppressLocalAudioPlayback: false } });
     } catch (error) {
       if (track === 'mic') throw new Error(describeMicError(error));
-      throw error instanceof Error ? error : new Error('无法获取系统音频，请检查系统权限后重试');
+      throw error instanceof Error ? error : new Error(micMessage('无法获取系统音频，请检查系统权限后重试'));
     }
-    if (!stream.getAudioTracks().length) throw new Error(track === 'system' ? '未检测到系统音频，请在系统设置中允许屏幕与系统音频录制后重试' : '麦克风没有可用的音频轨道');
+    if (!stream.getAudioTracks().length) throw new Error(micMessage(track === 'system' ? '未检测到系统音频，请在系统设置中允许屏幕与系统音频录制后重试' : '麦克风没有可用的音频轨道'));
     return stream;
   }
 
@@ -56,20 +66,20 @@ class AudioCapture {
     const requests = [];
     if (mic) requests.push({ track: 'mic', stream: this.requestTrack('mic') });
     if (system) requests.push({ track: 'system', stream: this.requestTrack('system') });
-    if (!requests.length) throw new Error('至少选择一个音频输入');
+    if (!requests.length) throw new Error(micMessage('至少选择一个音频输入'));
     const results = await Promise.allSettled(requests.map(({ stream }) => stream));
     const failed = results.findIndex(({ status }) => status === 'rejected');
     if (failed >= 0) {
       results.filter(({ status }) => status === 'fulfilled').forEach(({ value }) => stopMediaStream(value));
       if (requests[failed].track === 'mic') throw new Error(describeMicError(results[failed].reason));
-      if (results[failed].reason?.message?.includes('未检测到系统音频')) throw results[failed].reason;
-      throw new Error('无法获取系统音频，请检查系统权限后重试');
+      if (results[failed].reason?.message === micMessage('未检测到系统音频，请在系统设置中允许屏幕与系统音频录制后重试')) throw results[failed].reason;
+      throw new Error(micMessage('无法获取系统音频，请检查系统权限后重试'));
     }
     this.pendingStreams = results.map(({ value }, index) => ({ track: requests[index].track, stream: value }));
     const missing = this.pendingStreams.find(({ stream }) => !stream.getAudioTracks().length);
     if (missing) {
       await this.stop();
-      throw new Error(missing.track === 'system' ? '未检测到系统音频，请在系统设置中允许屏幕与系统音频录制后重试' : '麦克风没有可用的音频轨道');
+      throw new Error(micMessage(missing.track === 'system' ? '未检测到系统音频，请在系统设置中允许屏幕与系统音频录制后重试' : '麦克风没有可用的音频轨道'));
     }
   }
 
@@ -83,7 +93,7 @@ class AudioCapture {
     }
     if (!stream.getAudioTracks().length) {
       stopMediaStream(stream);
-      throw new Error('麦克风没有可用的音频轨道');
+      throw new Error(micMessage('麦克风没有可用的音频轨道'));
     }
     const resource = { stream, context: new AudioContext() };
     try {
@@ -140,7 +150,7 @@ class AudioCapture {
     let readyTimer;
     const started = new Promise((resolve, reject) => {
       ready = () => { clearTimeout(readyTimer); resolve(); };
-      readyTimer = setTimeout(() => reject(new Error(`${track === 'system' ? '系统音频' : '麦克风'}未产生音频数据`)), 3000);
+      readyTimer = setTimeout(() => reject(new Error(micMessage(track === 'system' ? '系统音频未产生音频数据' : '麦克风未产生音频数据'))), 3000);
     });
     try {
       await loadAudioWorklet(context);

@@ -4,9 +4,11 @@
     "chunk_seconds": 30
   },
   "asr": {
-    "endpoint_rule1_silence": 2.0,
-    "endpoint_rule2_silence": 1.2,
-    "maximum_utterance_seconds": 24,
+    "endpoint_rule1_silence": 1.5,
+    "endpoint_rule2_silence": 0.8,
+    "maximum_utterance_seconds": 3600,
+    "live_pin_seconds": 20,
+    "live_pin_max_seconds": 40,
     "refined_window_seconds": 15,
     "auto_english_model_id": "zipformer-en-streaming-int8"
   },
@@ -15,7 +17,10 @@
     "microphone_target_rms": 0.08,
     "microphone_minimum_rms": 0.003,
     "microphone_max_gain": 4,
-    "microphone_peak": 0.92
+    "microphone_peak": 0.92,
+    "merge_gap_ms": 3000,
+    "backchannel_max_ms": 2500,
+    "max_merge_ms": 45000
   },
   "punctuation": {
     "english_model_id": "online-punct-en-int8",
@@ -24,11 +29,38 @@
   "diarization": {
     "segmentation_model_id": "pyannote-segmentation-3.0",
     "cluster_threshold": 0.35,
-    "online_similarity_threshold": 0.65,
-    "minimum_embedding_seconds": 0.8,
+    "online_similarity_threshold": 0.74,
+    "voiceprint_similarity_threshold": 0.6,
+    "minimum_embedding_seconds": 0.25,
+    "boundary_tail_seconds": 3.0,
+    "speaker_change_detection": "segmentation",
     "num_speakers": -1,
-    "min_duration_on": 0.3,
-    "min_duration_off": 0.2
+    "min_duration_on": 0.5,
+    "min_duration_off": 0.4
+  },
+  "refinement": {
+    "max_refine_seconds": 14400,
+    "diarization_chunk_ms": 15000,
+    "diarization_overlap_ms": 1000,
+    "embedding_window_ms": 15000,
+    "max_auto_speakers": 20,
+    "min_auto_speaker_windows": 2,
+    "min_auto_speaker_duration_ms": 4000,
+    "auto_cluster_score_tolerance": 0.05
+  },
+  "vad": {
+    "default": {
+      "threshold": 0.5,
+      "min_silence_duration": 0.5,
+      "min_speech_duration": 0.25,
+      "max_speech_duration": 20.0
+    },
+    "zh": {
+      "threshold": 0.4,
+      "min_silence_duration": 0.7,
+      "min_speech_duration": 0.3,
+      "max_speech_duration": 30.0
+    }
   },
   "voice_profiles": {
     "max_samples": 50,

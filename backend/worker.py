@@ -95,7 +95,7 @@ def main():
             translation_executor.submit(respond, command)
         elif command.get("type") in {
             "meeting.refine",
-            "meeting.separate",
+            "meeting.import",
             "speaker-profile.list",
             "speaker-profile.samples",
             "speaker-profile.sample-delete",
@@ -111,6 +111,9 @@ def main():
             threading.Thread(target=respond, args=(command,), daemon=True).start()
         else:
             respond(command)
+
+    worker.shutdown_sidecars()
+    translation_executor.shutdown(wait=True)
 
 
 if __name__ == "__main__":

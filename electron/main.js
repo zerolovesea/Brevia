@@ -57,7 +57,11 @@ const writeLog = (level, value) => {
 const stopProcess = (child) => {
   if (!child?.pid) return;
   if (process.platform === 'win32') execFile('taskkill', ['/pid', String(child.pid), '/t', '/f'], () => {});
-  else child.kill();
+  else {
+    // 杀掉整个进程组：worker 会派生 ffmpeg 与 llama sidecar，只 SIGTERM 父进程会留下孤儿进程。
+    try { process.kill(-child.pid, 'SIGTERM'); }
+    catch { try { child.kill(); } catch { /* 进程可能已退出。 */ } }
+  }
 };
 const migrateDataDir = async () => {
   if (process.env.BREVIA_DATA_DIR) return;
@@ -80,10 +84,9 @@ const workerResponse = z.discriminatedUnion('ok', [
 const workerEvent = z.object({
   type: z.enum([
     'app.maintenance', 'meeting.imported', 'meeting.reconfigured', 'meeting.recovered',
-    'meeting.interrupted', 'meeting.sources-separated', 'meeting.started',
+    'meeting.interrupted', 'meeting.started',
     'meeting.stopped', 'model.progress', 'model.status', 'refinement.cancelled', 'refinement.progress',
-    'refinement.ready', 'refinement.started', 'separation.progress',
-    'separation.started', 'speaker-profile.deleted', 'speaker-profile.updated',
+    'refinement.ready', 'refinement.started', 'speaker-profile.deleted', 'speaker-profile.updated',
     'summary.progress', 'summary.ready', 'summary.started', 'task.status',
     'transcript.discarded', 'transcript.final', 'transcript.partial', 'transcript.refined',
     'translation.ready', 'worker.error', 'worker.warning',
@@ -139,7 +142,7 @@ const summaryProviderEntry = z.object({
 });
 const llmRequest = z.object({
   provider: z.string().trim().min(1), endpoint: z.string().url().optional(), model: z.string().trim().min(1),
-  format: z.enum(['openai', 'claude']).optional(), key_reference: z.string().optional(),
+  format: z.enum(['openai', 'claude']).optional(), key_reference: z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/).optional(),
 }).refine(({ provider, endpoint }) => !requiresEndpoint(provider) || Boolean(endpoint), {
   message: 'Endpoint is required for remote providers', path: ['endpoint'],
 });
@@ -187,6 +190,7 @@ class WorkerClient {
         ...(ffmpeg ? { BREVIA_FFMPEG: ffmpeg } : {}),
       },
       stdio: ['pipe', 'pipe', 'pipe'],
+      detached: process.platform !== 'win32',
     });
     this.process = child;
     this.starting = new Promise((resolve, reject) => {
@@ -438,6 +442,7 @@ async function setSecret(reference, value) {
 
 async function getSecret(reference) {
   if (!reference) return '';
+  if (!/^[a-zA-Z0-9_-]{1,64}$/.test(reference)) return '';
   try {
     return await readFile(path.join(dataDir(), 'secrets', `${reference}.key`), 'utf8');
   } catch (error) {
@@ -578,11 +583,10 @@ function registerIpc() {
   handle('meeting.restore', id, 'meeting.restore');
   handle('meeting.purge', id, 'meeting.purge');
   ipcMain.handle('meeting.refine', (_, payload) => handleRefinement(payload));
-  handleModelRequirement('meeting.separate', id, 'meeting.separate');
   handle('workspace.list', z.object({}), 'workspace.list');
   handle('workspace.get', z.object({ workspace_id: z.string() }), 'workspace.get');
-  handle('workspace.create', z.object({ name: z.string().trim().min(1).max(50), description: z.string().max(200).optional(), color: z.string().optional() }), 'workspace.create');
-  handle('workspace.update', z.object({ workspace_id: z.string(), updates: z.object({ name: z.string().trim().min(1).max(50).optional(), description: z.string().max(200).optional(), color: z.string().optional() }) }), 'workspace.update');
+  handle('workspace.create', z.object({ name: z.string().trim().min(1).max(50), description: z.string().max(200).optional() }), 'workspace.create');
+  handle('workspace.update', z.object({ workspace_id: z.string(), updates: z.object({ name: z.string().trim().min(1).max(50).optional(), description: z.string().max(200).optional() }) }), 'workspace.update');
   handle('workspace.delete', z.object({ workspace_id: z.string() }), 'workspace.delete');
   handle('workspace.assign', z.object({ meeting_id: z.string().uuid(), workspace_id: z.string().uuid().nullable() }), 'workspace.assign');
   handle('speaker.rename', id.extend({ speaker_id: z.string(), name: z.string().trim().min(1).max(32), locked: z.boolean().optional() }), 'speaker.rename');
@@ -633,7 +637,7 @@ function registerIpc() {
   handle('models.pause', z.object({ model_id: z.string() }), 'models.pause');
   handle('models.cancel', z.object({ model_id: z.string() }), 'models.cancel');
   handle('models.delete', z.object({ model_id: z.string() }), 'models.delete');
-  const taskControl = z.object({ task: z.enum(['meeting.refine', 'meeting.separate', 'summary.generate']), meeting_id: z.string() });
+  const taskControl = z.object({ task: z.enum(['meeting.refine', 'summary.generate']), meeting_id: z.string() });
   handleTaskControl('task.pause', taskControl);
   handleTaskControl('task.resume', taskControl);
   handleTaskControl('task.cancel', taskControl);
@@ -922,6 +926,10 @@ async function installUpdate() {
   try {
     await autoUpdater.downloadUpdate();
     autoUpdater.removeListener('download-progress', progressHandler);
+    // 安装器启动前先停掉后台转写进程，避免占用安装目录里的文件。
+    installingUpdate = true;
+    stopProcess(worker.process);
+    stopProcess(refinementWorker.process);
     autoUpdater.quitAndInstall();
     return true;
   } catch (error) {
@@ -1169,6 +1177,7 @@ app.whenReady().then(async () => {
   });
 });
 let quittingAfterMeetingStop = false;
+let installingUpdate = false;
 let stoppingForSleep = false;
 async function stopActiveMeeting() {
   const active = worker.active;
@@ -1192,7 +1201,8 @@ async function stopActiveMeetingForSleep() {
 }
 powerMonitor.on('suspend', () => { void stopActiveMeetingForSleep(); });
 app.on('before-quit', (event) => {
-  if (quittingAfterMeetingStop) {
+  // 更新安装时立即退出：安装器已经启动，不能等待优雅停会（否则与卸载器争抢文件）。
+  if (quittingAfterMeetingStop || installingUpdate) {
     app.isQuitting = true;
     stopProcess(worker.process);
     stopProcess(refinementWorker.process);

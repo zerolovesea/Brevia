@@ -34,7 +34,6 @@ contextBridge.exposeInMainWorld('brevia', {
     restore: invoke('meeting.restore'),
     purge: invoke('meeting.purge'),
     refine: invoke('meeting.refine'),
-    separate: invoke('meeting.separate'),
     export: invoke('meeting.export'),
     exportMany: invoke('meeting.export-many'),
     share: invoke('meeting.share'),

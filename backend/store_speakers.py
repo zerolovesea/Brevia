@@ -16,9 +16,7 @@ class SpeakerProfileStoreMixin:
         with self.connect() as db:
             rows = db.execute(
                 """SELECT id,name,sample_count,created_at,updated_at,
-                       COALESCE((SELECT SUM(duration_ms) FROM speaker_profile_samples sample WHERE sample.profile_id=speaker_profiles.id),0) AS duration_ms,
-                       EXISTS(SELECT 1 FROM speaker_profile_samples sample WHERE sample.profile_id=speaker_profiles.id AND sample.source_key LIKE 'builtin:%') AS built_in,
-                       (SELECT source_key FROM speaker_profile_samples sample WHERE sample.profile_id=speaker_profiles.id AND sample.source_key LIKE 'builtin:%' LIMIT 1) AS builtin_key
+                       COALESCE((SELECT SUM(duration_ms) FROM speaker_profile_samples sample WHERE sample.profile_id=speaker_profiles.id),0) AS duration_ms
                        FROM speaker_profiles ORDER BY name COLLATE NOCASE"""
             ).fetchall()
         return [dict(row) for row in rows]
@@ -250,6 +248,17 @@ class SpeakerProfileStoreMixin:
         with self.connect() as db:
             db.execute("DELETE FROM speaker_profiles WHERE id=?", (profile_id,))
         shutil.rmtree(self.speaker_profiles_dir / profile_id, ignore_errors=True)
+
+    def delete_legacy_builtin_profiles(self):
+        """删除旧版本内置演示说话人（样本 source_key 以 ``builtin:`` 开头）。"""
+        with self.connect() as db:
+            rows = db.execute(
+                "SELECT DISTINCT profile_id FROM speaker_profile_samples "
+                "WHERE source_key LIKE 'builtin:%'"
+            ).fetchall()
+        for row in rows:
+            self.delete_speaker_profile(row["profile_id"])
+        return len(rows)
 
     def set_segment_speaker(
         self, meeting_id, segment_id, speaker, profile_id=None, name=None

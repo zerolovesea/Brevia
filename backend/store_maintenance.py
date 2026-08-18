@@ -55,7 +55,7 @@ class MaintenanceStoreMixin:
             ]
             value["summary_count"] = len(summaries)
             value["summary_characters"] = sum(
-                len(json.loads(item).get("summary", "")) for item in summaries
+                len(json.loads(item).get("markdown", "")) for item in summaries
             )
         return value
 

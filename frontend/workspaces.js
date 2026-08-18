@@ -42,17 +42,6 @@ function getWorkspaceName(workspaceId) {
 }
 
 /**
- * 获取工作区颜色
- * @param {string} workspaceId - 工作区 ID
- * @returns {string} 颜色标识
- */
-function getWorkspaceColor(workspaceId) {
-  if (!workspaceId) return 'violet';
-  const workspace = workspaces.find(w => w.id === workspaceId);
-  return workspace?.color || 'violet';
-}
-
-/**
  * 渲染侧边栏工作区导航
  */
 function renderWorkspaceNav() {
@@ -167,7 +156,7 @@ document.addEventListener('drop', async (event) => {
     if (previousWorkspace) previousWorkspace.meeting_count = Math.max(0, previousWorkspace.meeting_count - 1);
     if (nextWorkspace) nextWorkspace.meeting_count += 1;
     meeting.workspaceId = workspaceId;
-    meeting.workspace = workspaceId ? { name: getWorkspaceName(workspaceId), color: getWorkspaceColor(workspaceId) } : null;
+    meeting.workspace = workspaceId ? { name: getWorkspaceName(workspaceId) } : null;
     renderWorkspaceNav();
     renderMeetingList();
   } catch (error) {
@@ -274,7 +263,6 @@ function showNewWorkspaceDialog(assignMeetingId, onCreated) {
     const payload = {
       name: formData.get('name').trim(),
       description: formData.get('description').trim(),
-      color: 'violet' // 默认颜色，不再由用户选择
     };
 
     try {
@@ -428,14 +416,14 @@ function showWorkspaceAssignMenu(meetingIndex, anchorRect) {
   menu.innerHTML = `
     <div class="menu-section">
       ${[
-        { id: '', name: t('公开工作区'), color: 'violet' },
+        { id: '', name: t('公开工作区') },
         ...workspaces
       ].map(workspace => `
         <button type="button"
                 data-assign-workspace="${escapeHtml(workspace.id)}"
                 data-meeting-index="${meetingIndex}"
                 class="menu-item ${meeting.workspaceId === workspace.id ? 'active' : ''}">
-          <span class="workspace-icon" data-color="${escapeHtml(workspace.color)}">${workspace.id ? '◆' : '⊕'}</span>
+          <span class="workspace-icon">${workspace.id ? '◆' : '⊕'}</span>
           <span>${escapeHtml(workspace.name)}</span>
           ${meeting.workspaceId === workspace.id ? '<span class="check">✓</span>' : ''}
         </button>
@@ -480,8 +468,7 @@ async function assignMeetingToWorkspace(meetingId, workspaceId) {
     if (meeting) {
       meeting.workspaceId = workspaceId;
       meeting.workspace = workspaceId ? {
-        name: getWorkspaceName(workspaceId),
-        color: getWorkspaceColor(workspaceId)
+        name: getWorkspaceName(workspaceId)
       } : null;
     }
 

@@ -1,6 +1,8 @@
 """聚焦的 worker 职责组件。"""
 
+import base64
 import sys
+import threading
 from array import array
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -18,6 +20,11 @@ from .audio_io import convert_to_pcm_wav
 from .config import SETTINGS, SPEAKER_EMBEDDING_MODEL_ID
 from .worker_llm import TRANSLATION_MODEL_ID
 from .worker_common import require, synchronized_recording
+
+# 语义软钉可接受的切点：句末标点优先，逗号/分号作为次优切点（连续语音里标点模型
+# 常把句号降级成逗号，若只认句号会一直等、最后从词中间硬切）。
+_SENTENCE_FINAL = "。！？.!?；;"
+_PIN_BOUNDARY = "。！？.!?；;，,"
 
 
 class RecordingSessionMixin:
@@ -127,7 +134,15 @@ class RecordingSessionMixin:
                 "segment": start_ms,
                 "last_text": "",
                 "last_raw_text": "",
+                "last_final_text": "",
+                "punctuation_epoch": 0,
+                "pending_pin": False,
                 "audio": [],
+                "refine_audio": [],
+                "startup_audio": [],
+                "carry_audio": [],
+                "carry_raw_audio": [],
+                "carry_ms": 0,
                 "pending_asr": [],
                 "pending_asr_samples": 0,
             }
@@ -142,11 +157,12 @@ class RecordingSessionMixin:
         meeting_id = meeting["id"]
 
         # sherpa-onnx 模型初始化会进入原生运行时；按序加载避免不同模型的原生
-        # 初始化相互竞争导致 worker 直接退出。
-        def load_denoiser():
+        # 初始化相互竞争导致 worker 直接退出。构建闭包返回模型，由调用方决定
+        # 何时/在哪个线程做赋值。
+        def build_denoiser():
             if not self.power_saving and self.models.is_ready(denoiser_id):
                 try:
-                    self.denoiser = LiveDenoiser(self.models, denoiser_id)
+                    return LiveDenoiser(self.models, denoiser_id)
                 except RuntimeError as error:
                     self.emit(
                         "worker.warning",
@@ -156,11 +172,12 @@ class RecordingSessionMixin:
                             "message": str(error),
                         },
                     )
+            return None
 
-        def load_language_identifier():
+        def build_language_identifier():
             if meeting["language"] == "auto" and self.models.is_ready("whisper-large-v3"):
                 try:
-                    self.language_identifier = LanguageIdentifier(self.models)
+                    return LanguageIdentifier(self.models)
                 except RuntimeError as error:
                     self.emit(
                         "worker.warning",
@@ -170,14 +187,14 @@ class RecordingSessionMixin:
                             "message": str(error),
                         },
                     )
+            return None
 
-        def load_asr():
+        def build_asr():
             try:
-                self.asr = StreamingASR(
+                return StreamingASR(
                     self.models, meeting["streaming_model_id"], meeting["language"]
                 )
             except RuntimeError as error:
-                self.asr = None
                 self.emit(
                     "worker.warning",
                     {
@@ -186,19 +203,17 @@ class RecordingSessionMixin:
                         "message": str(error),
                     },
                 )
+                return None
 
-        def load_punctuation():
-            self.punctuation = self._build_live_punctuation(
-                meeting["language"], meeting_id
-            )
+        def build_punctuation():
+            return self._build_live_punctuation(meeting["language"], meeting_id)
 
-        def load_speaker_tracker():
+        def build_speaker_tracker():
             try:
-                self.speaker_tracker = SpeakerTracker(
+                return SpeakerTracker(
                     self.models, max_speakers=meeting.get("num_speakers")
                 )
             except RuntimeError as error:
-                self.speaker_tracker = None
                 self.emit(
                     "worker.warning",
                     {
@@ -207,12 +222,13 @@ class RecordingSessionMixin:
                         "message": str(error),
                     },
                 )
+                return None
 
-        def load_live_refiner():
+        def build_live_refiner():
             if not self.power_saving and self.models.is_ready(meeting["refined_model_id"]):
                 try:
-                    self.live_refiner = RefinedASR(
-                        self.models, meeting["refined_model_id"]
+                    return RefinedASR(
+                        self.models, meeting["refined_model_id"], language=meeting.get("language")
                     )
                 except RuntimeError as error:
                     self.emit(
@@ -223,21 +239,57 @@ class RecordingSessionMixin:
                             "message": str(error),
                         },
                     )
+            return None
 
-        loaders = (
-            load_denoiser,
-            load_language_identifier,
-            load_asr,
-            load_punctuation,
-            load_speaker_tracker,
-            load_live_refiner,
-        )
-        for loader in loaders:
-            loader()
-        if self.speaker_tracker or self.live_refiner:
+        # 流式 ASR、降噪、标点、声纹是实时字幕的关键路径且加载快：同步加载，
+        # start() 返回后首帧音频即可带标点/声纹转写。语言识别（whisper-large-v3）
+        # 与实时精修模型较重，在后台按序加载，避免原生初始化竞争，同时显著缩短
+        # 「准备中」等待；加载完成前语言回退到文本启发式，精修回退到流式文本。
+        # 只同步加载「快」模型（降噪/标点/声纹）；流式 ASR（zipformer 等大模型
+        # 加载需数秒）与语言识别、精修模型一起放到后台加载。start() 因此能立刻
+        # 返回进入录制界面，加载完成前音频会被缓冲，不丢字。
+        self.denoiser = build_denoiser()
+        self.punctuation = build_punctuation()
+        self.speaker_tracker = build_speaker_tracker()
+        # 标点补发与精修各用一个单线程执行器：精修（RefinedASR）较慢，若与标点
+        # 共用执行器会把快速的部分标点堵在队列里，导致字幕卡顿。
+        if self.punctuation:
+            self.live_punctuation = ThreadPoolExecutor(
+                max_workers=1, thread_name_prefix="brevia-live-punctuation"
+            )
+        if self.speaker_tracker:
             self.live_postprocessing = ThreadPoolExecutor(
                 max_workers=1, thread_name_prefix="brevia-live-postprocess"
             )
+
+        def load_remaining():
+            asr = build_asr()
+            language_identifier = build_language_identifier()
+            live_refiner = build_live_refiner()
+            with self.state.lock:
+                # 若会议已停止或被 reconfigure 接管，则不覆盖运行态，避免泄漏线程。
+                if self.state.active != meeting_id:
+                    return
+                # 只填充尚未就绪的模型：若 reconfigure 或测试已提前注入，则不覆盖。
+                if self.asr is None:
+                    self.asr = asr
+                if self.language_identifier is None:
+                    self.language_identifier = language_identifier
+                if self.live_refiner is None:
+                    self.live_refiner = live_refiner
+                if live_refiner and self.live_postprocessing is None:
+                    self.live_postprocessing = ThreadPoolExecutor(
+                        max_workers=1, thread_name_prefix="brevia-live-postprocess"
+                    )
+
+        self._prepare_thread = threading.Thread(target=load_remaining, daemon=True)
+        self._prepare_thread.start()
+
+    def _wait_prepare(self, timeout=10):
+        """等待后台模型加载线程结束（测试/诊断用），不阻塞正常启动流程。"""
+        thread = getattr(self, "_prepare_thread", None)
+        if thread and thread.is_alive():
+            thread.join(timeout)
 
     @synchronized_recording
     def pause(self, payload):
@@ -337,16 +389,21 @@ class RecordingSessionMixin:
                     else None
                 )
             if refined_changed or power_saving_changed:
-                new_refiner = RefinedASR(self.models, refined_model_id)
+                new_refiner = RefinedASR(self.models, refined_model_id, language=language)
             if new_refiner is not None and new_postprocessing is None:
                 new_postprocessing = ThreadPoolExecutor(
                     max_workers=1, thread_name_prefix="brevia-live-postprocess"
                 )
 
         new_punctuation = self.punctuation
+        new_punctuation_executor = self.live_punctuation
         new_language_identifier = self.language_identifier
         if language_changed:
             new_punctuation = self._build_live_punctuation(language, self.active)
+            if new_punctuation is not None and new_punctuation_executor is None:
+                new_punctuation_executor = ThreadPoolExecutor(
+                    max_workers=1, thread_name_prefix="brevia-live-punctuation"
+                )
             new_language_identifier = None
             if language == "auto" and self.models.is_ready("whisper-large-v3"):
                 try:
@@ -375,9 +432,15 @@ class RecordingSessionMixin:
         except Exception:
             if new_postprocessing is not self.live_postprocessing and new_postprocessing:
                 new_postprocessing.shutdown(wait=False, cancel_futures=True)
+            if (
+                new_punctuation_executor is not self.live_punctuation
+                and new_punctuation_executor
+            ):
+                new_punctuation_executor.shutdown(wait=False, cancel_futures=True)
             raise
 
         old_postprocessing = self.live_postprocessing
+        old_punctuation_executor = self.live_punctuation
         self.asr = new_asr
         self.denoiser = new_denoiser
         self.live_refiner = new_refiner
@@ -388,8 +451,14 @@ class RecordingSessionMixin:
             self.detected_language = None
             self.punctuation = new_punctuation
             self.language_identifier = new_language_identifier
+            self.live_punctuation = new_punctuation_executor
         if old_postprocessing is not new_postprocessing and old_postprocessing:
             old_postprocessing.shutdown(wait=False, cancel_futures=True)
+        if (
+            old_punctuation_executor is not new_punctuation_executor
+            and old_punctuation_executor
+        ):
+            old_punctuation_executor.shutdown(wait=False, cancel_futures=True)
         self.emit(
             "meeting.reconfigured", {"meeting_id": self.active, "meeting": meeting}
         )
@@ -434,9 +503,7 @@ class RecordingSessionMixin:
             int(payload["sample_rate"]),
             int(payload["start_ms"]),
         )
-        if not self.asr:
-            return {"samples": samples_total}
-        pcm = __import__("base64").b64decode(payload["pcm"], validate=True)
+        pcm = base64.b64decode(payload["pcm"], validate=True)
         values = array("h")
         values.frombytes(pcm)
         if sys.byteorder != "little":
@@ -445,6 +512,10 @@ class RecordingSessionMixin:
 
         samples = numpy.asarray(values, dtype=numpy.float32) / 32768.0
         state = self.stream_state[payload["track"]]
+        # 上一段软钉截断后带过来的尾巴（原始音频），先并入本段音频缓冲。
+        if state["carry_raw_audio"]:
+            state["audio"].extend(state["carry_raw_audio"])
+            state["carry_raw_audio"] = []
         if len(samples):
             state["audio"].append(samples)
         asr_samples = (
@@ -468,6 +539,33 @@ class RecordingSessionMixin:
                 asr_samples,
                 int(payload["sample_rate"]),
                 bool(payload.get("flush")),
+            )
+        # 上一段软钉截断后带过来的尾巴（已降噪），先并入本段流式识别，避免边界丢字。
+        if state["carry_audio"]:
+            carried = numpy.concatenate(state["carry_audio"])
+            state["carry_audio"] = []
+            asr_samples = (
+                numpy.concatenate([carried, asr_samples])
+                if len(asr_samples)
+                else carried
+            )
+        # 精修与实时字幕共用同一份「增益+降噪」后的音频，避免精修解码原始（更安静/更嘈杂）
+        # 音频而漏字。声纹识别仍用 state["audio"] 的原始音频，保留说话人特征。
+        if len(asr_samples):
+            state["refine_audio"].append(asr_samples)
+        # 流式 ASR 尚未加载完成：缓冲已增益+降噪的样本，加载后由后续帧统一送入，
+        # 避免「准备中」期间的开头几秒音频丢字。
+        if self.asr is None:
+            if len(asr_samples):
+                state["startup_audio"].append(asr_samples)
+            return {"samples": samples_total}
+        if state["startup_audio"]:
+            buffered = numpy.concatenate(state["startup_audio"])
+            state["startup_audio"] = []
+            asr_samples = (
+                numpy.concatenate([buffered, asr_samples])
+                if len(asr_samples)
+                else buffered
             )
         result, final = self.asr.accept(
             payload["track"],
@@ -514,14 +612,77 @@ class RecordingSessionMixin:
                             },
                         )
         raw_text = text
-        if raw_text == state["last_raw_text"]:
-            text = state["last_text"]
-        elif self.punctuation:
-            text = self.punctuation.apply(raw_text)
-        state["last_raw_text"] = raw_text
         end_ms = int(
             payload["start_ms"] + len(samples) * 1000 / int(payload["sample_rate"])
         )
+        pinned = False
+        # 语义软钉：无尾静音但单句已持续 live_pin_seconds 时，等到句末/逗号等语义
+        # 切点再切，把「还没说完的尾巴」音频带到下一段重识别，避免从词中间硬切；
+        # 超过 live_pin_max_seconds 则硬切兜底。只切分、不跨段合并，字幕原地精修。
+        pin_seconds = SETTINGS["asr"].get("live_pin_seconds", 20)
+        pin_max_seconds = SETTINGS["asr"].get("live_pin_max_seconds", 40)
+        pin_ready = False
+        if not final and pin_seconds > 0 and raw_text:
+            elapsed_ms = end_ms - state["start_ms"]
+            if elapsed_ms >= pin_seconds * 1000:
+                state["pending_pin"] = True
+            if state.get("pending_pin"):
+                if elapsed_ms >= pin_max_seconds * 1000:
+                    pin_ready = True
+                else:
+                    check_text = (
+                        self.punctuation.apply(raw_text)
+                        if self.punctuation
+                        else raw_text
+                    )
+                    stripped = (check_text or "").strip()
+                    # 标点模型对未说完的文本也总会补一个句末标点，先剥掉末尾「伪句末」；
+                    # 只有中间还残留语义切点才切，避免把短语从中间切开。
+                    if stripped and stripped[-1] in "。！？.!?":
+                        stripped = stripped[:-1]
+                    if any(ch in _PIN_BOUNDARY for ch in stripped):
+                        pin_ready = True
+        if pin_ready and not final and raw_text:
+            pinned_result = self.asr.force_endpoint(payload["track"])
+            pinned_raw = self._clean_live_text(
+                pinned_result
+                if isinstance(pinned_result, str)
+                else getattr(pinned_result, "text", "")
+            )
+            if pinned_raw:
+                # 截断到最后一个完整语义切点，并把尾部音频带到下一段重识别，边界不丢字。
+                raw_text, boundary_ratio = self._sentence_boundary(pinned_raw)
+                if boundary_ratio < 1.0 and state["audio"]:
+                    full_raw = numpy.concatenate(state["audio"])
+                    split = max(1, int(len(full_raw) * boundary_ratio))
+                    state["carry_raw_audio"] = [full_raw[split:]]
+                    state["audio"] = [full_raw[:split]]
+                    if state["refine_audio"]:
+                        full_asr = numpy.concatenate(state["refine_audio"])
+                        asr_split = max(1, int(len(full_asr) * boundary_ratio))
+                        state["carry_audio"] = [full_asr[asr_split:]]
+                        state["refine_audio"] = [full_asr[:asr_split]]
+                    state["carry_ms"] = round(
+                        len(full_raw[split:]) * 1000 / int(payload["sample_rate"])
+                    )
+                pinned = True
+                final = True
+                state["pending_pin"] = False
+        raw_changed = raw_text != state["last_raw_text"]
+        state["last_raw_text"] = raw_text
+        if raw_changed and self.punctuation and self.live_punctuation and not final:
+            # 异步标点：先发裸文本，标点由后台补发，避免 CT-Transformer 阻塞录音锁。
+            text = raw_text
+        elif raw_changed and self.punctuation:
+            text = self.punctuation.apply(raw_text)
+        elif raw_changed:
+            text = raw_text
+        else:
+            text = state["last_text"]
+            # 异步模式下 partial 是裸文本；句末若仍无标点则补一次（final 是一次性事件，
+            # 代价可忽略），避免 final 沿用了未标点的裸文本。
+            if final and self.punctuation and raw_text and text == raw_text:
+                text = self.punctuation.apply(raw_text)
         if text and (text != state["last_text"] or final):
             state["revision"] += 1
             segment_id = f"{payload['track']}-{state['segment']}"
@@ -538,21 +699,35 @@ class RecordingSessionMixin:
                 and (self.speaker_tracker or self.live_refiner)
                 else None
             )
+            segment_refine_audio = (
+                numpy.concatenate(state["refine_audio"])
+                if final
+                and state["refine_audio"]
+                and self.live_refiner
+                else None
+            )
+            # 软钉截断时，段落尾时间要扣掉被 carry 的尾巴，否则字幕时间戳与下一段重叠。
+            segment_end_ms = (
+                end_ms - state.get("carry_ms", 0) if pinned else end_ms
+            )
             event = {
                 "meeting_id": self.active,
                 "segment_id": segment_id,
                 "revision": state["revision"],
                 "text": text,
                 "start_ms": state["start_ms"],
-                "end_ms": end_ms,
+                "end_ms": segment_end_ms,
                 "speaker": speaker,
                 "speaker_name": speaker_name,
                 "track": payload["track"],
+                "pinned": pinned,
             }
             if speaker == "local-user":
                 self.store.rename_speaker(self.active, speaker, "Local user")
             state["last_text"] = text
             if final:
+                state["last_final_text"] = text
+                state["punctuation_epoch"] = state.get("punctuation_epoch", 0) + 1
                 if self._is_duplicate_final(event):
                     self.emit(
                         "transcript.discarded",
@@ -562,23 +737,38 @@ class RecordingSessionMixin:
                     self.store.save_segment(event)
                     self.emit("transcript.final", event)
                     self._postprocess_live_segment_later(
-                        event, segment_audio, int(payload["sample_rate"])
+                        event,
+                        segment_audio,
+                        segment_refine_audio,
+                        int(payload["sample_rate"]),
                     )
             elif not final:
                 self.store.save_segment(event)
                 self.emit("transcript.partial", event)
+                if raw_changed and self.punctuation and self.live_punctuation:
+                    self.live_punctuation.submit(
+                        self._punctuate_partial_later,
+                        event.copy(),
+                        raw_text,
+                        state.get("punctuation_epoch", 0),
+                    )
             if final:
                 state.update(
-                    start_ms=end_ms,
+                    start_ms=end_ms - state.get("carry_ms", 0),
                     revision=0,
                     segment=state["segment"] + 1,
                     last_text="",
                     last_raw_text="",
                     audio=[],
+                    refine_audio=[],
                     pending_asr=[],
                     pending_asr_samples=0,
+                    pending_pin=False,
+                    carry_ms=0,
                 )
         elif final:
+            state["last_final_text"] = ""
+            state["punctuation_epoch"] = state.get("punctuation_epoch", 0) + 1
             state.update(
                 start_ms=end_ms,
                 revision=0,
@@ -588,33 +778,75 @@ class RecordingSessionMixin:
                 audio=[],
                 pending_asr=[],
                 pending_asr_samples=0,
+                pending_pin=False,
+                carry_ms=0,
             )
         return {"samples": samples_total, "text": text, "final": final}
 
-    def _postprocess_live_segment_later(self, event, samples, sample_rate):
-        """异步更新最终段的说话人与精修文本，不阻塞音频处理。"""
+    def _postprocess_live_segment_later(self, event, samples, refine_samples, sample_rate):
+        """异步更新最终段的说话人与精修文本，不阻塞音频处理。
+
+        ``samples`` 是原始音频（用于声纹），``refine_samples`` 是增益+降噪后的音频
+        （用于精修转写），二者不一致时以 refiner 是否可用为准。
+        """
         if not (
             self.live_postprocessing
             and (self.speaker_tracker or self.live_refiner)
-            and samples is not None
+            and (samples is not None or refine_samples is not None)
         ):
             return
         self.live_postprocessing.submit(
-            self._postprocess_live_segment,
+            self._refine_live_utterance,
             self.speaker_tracker,
             self.live_refiner,
             event.copy(),
-            samples.copy(),
+            samples.copy() if samples is not None else None,
+            refine_samples.copy() if refine_samples is not None else None,
             sample_rate,
         )
 
-    def _postprocess_live_segment(self, tracker, refiner, event, samples, sample_rate):
+    def _punctuate_partial_later(self, event, raw_text, epoch):
+        """在后台为 partial 补标点；若该句已 final 则丢弃（精修会补齐标点）。"""
+        try:
+            if not self.punctuation:
+                return
+            state = self.stream_state.get(event["track"])
+            if state is None or state.get("punctuation_epoch", 0) != epoch:
+                return
+            punctuated = self.punctuation.apply(raw_text)
+            if not punctuated or punctuated == raw_text:
+                return
+            updated = {**event, "text": punctuated, "revision": event["revision"] + 1}
+            if self.store.save_segment(updated):
+                self.emit("transcript.partial", updated)
+        except Exception as error:
+            self.emit(
+                "worker.warning",
+                {
+                    "meeting_id": event.get("meeting_id"),
+                    "code": "live_punctuation_failed",
+                    "message": str(error),
+                },
+            )
+
+    def _refine_live_utterance(self, tracker, refiner, event, samples, refine_samples, sample_rate):
+        """对单个 live final 做整段精修。
+
+        单阶段字幕：整段用 RefinedASR 转写、用 SpeakerTracker 给一个说话人标签，
+        然后原地覆盖当前段的文本，不跨段拆分/合并。
+        """
+        self._postprocess_live_segment(tracker, refiner, event, samples, refine_samples, sample_rate)
+
+    def _postprocess_live_segment(self, tracker, refiner, event, samples, refine_samples, sample_rate):
         """合并异步声纹与文本结果；存储层保护用户编辑。"""
         updated = event.copy()
-        if tracker:
+        if tracker and samples is not None:
             try:
                 speaker, speaker_name = self._identify_speaker(
-                    event["meeting_id"], tracker, samples, sample_rate
+                    event["meeting_id"],
+                    tracker,
+                    samples,
+                    sample_rate,
                 )
                 updated.update(speaker=speaker, speaker_name=speaker_name)
             except Exception as error:
@@ -627,8 +859,11 @@ class RecordingSessionMixin:
                     },
                 )
         if refiner:
+            audio = refine_samples if refine_samples is not None else samples
+            if audio is None:
+                return
             try:
-                text = self._clean_live_text(refiner.decode(samples, sample_rate))
+                text = self._refine_live_audio(refiner, audio, sample_rate)
                 if text:
                     updated["text"] = text
             except Exception as error:
@@ -643,16 +878,106 @@ class RecordingSessionMixin:
         if all(updated.get(key) == event.get(key) for key in ("speaker", "speaker_name", "text")):
             return
         updated["revision"] = event["revision"] + 1
+        self._emit_refined_segment(updated)
+
+    def _refine_live_audio(self, refiner, audio, sample_rate):
+        """把一段音频精修为文本；超长段落切成 ≤15s 窗口逐段精修后拼接。
+
+        funasr-nano 等精修模型的 KV 容量有限（约 20s），去掉 utterance 硬切后单条
+        字幕可能长达 30~90s，直接整段解码会溢出丢字。这里按 ``refined_window_seconds``
+        切窗逐段解码再拼接，避免溢出，同时保持「原地精修、不跨段」。
+        """
+        window_samples = int(SETTINGS["asr"]["refined_window_seconds"] * sample_rate)
+        if len(audio) <= window_samples:
+            return self._clean_live_text(refiner.decode(audio, sample_rate))
+        result = ""
+        for start in range(0, len(audio), window_samples):
+            chunk = audio[start : start + window_samples]
+            part = self._clean_live_text(refiner.decode(chunk, sample_rate))
+            if part:
+                result = self._join_utterance_text(result, part)
+        return result
+
+    def _emit_refined_segment(self, updated):
+        """发射精修段：原地替换当前段的文本与说话人，不跨段合并。
+
+        实时字幕保持「流式输出 → 精修原地覆盖」：精修只更新同一条 segment 的内容，
+        软钉切出的段先截到最后一个完整句末，丢掉未说完的尾巴，避免位置偏移。
+        """
+        if updated.get("pinned") and updated.get("text"):
+            updated["text"] = self._truncate_punctuated_tail(updated["text"])
+            if not updated["text"]:
+                self.store.delete_segment(updated["meeting_id"], updated["segment_id"])
+                self.emit(
+                    "transcript.discarded",
+                    {"meeting_id": updated["meeting_id"], "segment_id": updated["segment_id"]},
+                )
+                return
         if self.store.save_segment(updated):
             self.emit("transcript.refined", updated)
 
+    @staticmethod
+    def _truncate_punctuated_tail(text):
+        """把已加标点文本截断到最后一个完整句末，丢掉未说完的尾巴（如「……」「半句话」）。"""
+        stripped = (text or "").strip()
+        last = max(
+            (index for index, ch in enumerate(stripped) if ch in "。！？.!?"),
+            default=-1,
+        )
+        if last < 0:
+            return text
+        return stripped[: last + 1].strip()
+
+    def _sentence_boundary(self, raw_text):
+        """返回 ``(截断后的原文, 边界比例)``。
+
+        流式标点模型对未说完的文本也会在末尾补一个句号，所以先把末尾句号剥掉，
+        找中间最后一个语义切点（句末优先、逗号兜底），把原始文本截到那里。比例用于
+        把音频缓冲也按同一位置切开，把「还没说完的尾巴」带到下一段重识别。没有
+        完整切点时比例返回 1.0（不截断、不 carry）。
+        """
+        if not raw_text or not self.punctuation:
+            return raw_text, 1.0
+        punctuated = self.punctuation.apply(raw_text)
+        stripped = (punctuated or "").strip()
+        if not stripped or stripped[-1] not in "。！？.!?":
+            return raw_text, 1.0
+        stripped = stripped[:-1]
+        # 优先切在句末标点；只有当中间没有句末标点时才用逗号兜底，避免把标点模型
+        # 临时补的逗号当成切点。
+        last = max(
+            (index for index, ch in enumerate(stripped) if ch in _SENTENCE_FINAL),
+            default=-1,
+        )
+        if last < 0:
+            last = max(
+                (index for index, ch in enumerate(stripped) if ch in "，,；;"),
+                default=-1,
+            )
+        if last < 0:
+            return raw_text, 1.0
+        punctuation = set("，。！？、；：,.!?;:…'\"「」（）() \t")
+        content_count = sum(1 for ch in stripped[: last + 1] if ch not in punctuation)
+        total_chars = sum(1 for ch in raw_text if ch not in " \t")
+        ratio = min(1.0, content_count / total_chars) if total_chars else 1.0
+        truncated = raw_text[:content_count].rstrip("，。！？、；：,.!?;: ")
+        return (truncated if truncated else raw_text), ratio
+
     def _identify_speaker(self, meeting_id, tracker, samples, sample_rate):
-        """优先匹配声纹库，未命中时分配会议内临时说话人。"""
+        """优先匹配声纹库，未命中时分配会议内临时说话人。
+
+        去掉 utterance 硬切后单条字幕可能包含多个说话人（连续/抢话场景），整段声纹
+        会是多人的混合，容易把不同人聚到一起。这里取段落前 15s 的声纹（更可能还是
+        同一说话人），提升聚类稳定性。
+        """
+        window = sample_rate * 15
+        if len(samples) > window:
+            samples = samples[:window]
         embedding = tracker.embedding(samples, sample_rate)
         if embedding is None:
             return tracker.last_speaker or "spk-1", None
         profile = self.store.match_speaker_profile(
-            embedding, SETTINGS["diarization"]["online_similarity_threshold"]
+            embedding, SETTINGS["diarization"]["voiceprint_similarity_threshold"]
         )
         if profile:
             speaker_id = f"profile-{profile['id']}"
@@ -695,9 +1020,13 @@ class RecordingSessionMixin:
     def _release_active_session(self):
         """在持久化停止状态前释放模型和执行器资源。"""
         postprocessing = self.live_postprocessing
+        punctuation = self.live_punctuation
         self.live_postprocessing = None
+        self.live_punctuation = None
         if postprocessing:
             postprocessing.shutdown(wait=True, cancel_futures=True)
+        if punctuation:
+            punctuation.shutdown(wait=True, cancel_futures=True)
         (
             self.active,
             self.asr,

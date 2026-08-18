@@ -19,16 +19,61 @@ from .audio_io import (
 from .config import SETTINGS, SPEAKER_EMBEDDING_MODEL_ID, validate_num_speakers
 from .worker_common import TaskCancelled, managed_task, require
 
-# 精修先做 VAD/说话人聚类，需要整段波形常驻，故仍有内存上限；识别阶段改为
-# 逐窗从磁盘读取，聚类才是真正的天花板，这里放宽到 4 小时覆盖绝大多数会议。
-MAX_REFINE_SECONDS = 4 * 60 * 60
-MAX_AUTO_SPEAKERS = 20
-MIN_AUTO_SPEAKER_WINDOWS = 2
-MIN_AUTO_SPEAKER_DURATION_MS = 4000
-AUTO_CLUSTER_SCORE_TOLERANCE = 0.05
-DIARIZATION_CHUNK_MS = 15_000
-DIARIZATION_OVERLAP_MS = 1_000
-EMBEDDING_WINDOW_MS = 6_000
+# 该值在 diarization 子进程内使用；子进程不加载用户覆盖，故经 payload 传入，
+# 这里仅作缺失时的回退默认值。较长窗口让声纹更稳定，避免把同一个人聚成多人。
+EMBEDDING_WINDOW_MS = 15_000
+
+_CN_NUM = {
+    "零": 0, "〇": 0, "一": 1, "二": 2, "两": 2, "三": 3, "四": 4,
+    "五": 5, "六": 6, "七": 7, "八": 8, "九": 9,
+}
+_CN_UNIT = {"十": 10, "百": 100, "千": 1000}
+_CN_BIG_UNIT = {"万": 10000, "亿": 100000000}
+# 仅在这些「计量单位」前把中文数字转阿拉伯，避免把成语/惯用短语里的数字误转。
+_NUM_SUFFIX = "岁年月日号元块角毛个"
+
+
+def _cn_to_int(text):
+    """把中文数字串转为整数；失败返回 ``None``。"""
+    if not text:
+        return None
+    if all(ch in _CN_NUM for ch in text):
+        return int("".join(str(_CN_NUM[ch]) for ch in text))
+    total = 0
+    section = 0
+    number = 0
+    for ch in text:
+        if ch in _CN_NUM:
+            number = _CN_NUM[ch]
+        elif ch in _CN_UNIT:
+            section += (number if number else 1) * _CN_UNIT[ch]
+            number = 0
+        elif ch in _CN_BIG_UNIT:
+            section = (section + number) * _CN_BIG_UNIT[ch]
+            total += section
+            section = 0
+            number = 0
+        else:
+            return None
+    return total + section + number
+
+
+def _normalize_numbers(text):
+    """把「中文数字 + 计量单位」中的数字转成阿拉伯数字，惯用短语原样保留。"""
+    pattern = re.compile(r"([零〇一二两三四五六七八九十百千万亿]+)([" + _NUM_SUFFIX + r"])")
+    return pattern.sub(
+        lambda match: (
+            f"{_cn_to_int(match.group(1))}{match.group(2)}"
+            if _cn_to_int(match.group(1)) is not None
+            else match.group(0)
+        ),
+        text,
+    )
+
+
+def _refinement(key):
+    """读取可被 advanced-settings 覆盖的精修/聚类参数。"""
+    return SETTINGS["refinement"][key]
 
 
 def _diarize_chunk_process(connection, payload):
@@ -93,8 +138,9 @@ def _diarize_chunk_process(connection, payload):
                 payload["core_end_ms"],
                 payload["window_start_ms"] + turn["end_ms"],
             )
-            for part_start in range(start_ms, end_ms, EMBEDDING_WINDOW_MS):
-                part_end = min(part_start + EMBEDDING_WINDOW_MS, end_ms)
+            embedding_window_ms = payload.get("embedding_window_ms", EMBEDDING_WINDOW_MS)
+            for part_start in range(start_ms, end_ms, embedding_window_ms):
+                part_end = min(part_start + embedding_window_ms, end_ms)
                 local_start = round(
                     (part_start - payload["window_start_ms"]) * sample_rate / 1000
                 )
@@ -281,7 +327,9 @@ class RefinementWorkerMixin:
             "refinement.progress",
             {"meeting_id": meeting["id"], "completed": 0, "total": 0, "stage": "分析说话人"},
         )
-        recognizer = RefinedASR(self.models, refined_model_id)
+        recognizer = RefinedASR(
+            self.models, refined_model_id, language=meeting.get("language")
+        )
         locked_ids = {
             speaker["id"] for speaker in meeting["speakers"] if speaker["locked"]
         }
@@ -332,7 +380,9 @@ class RefinementWorkerMixin:
                         source["path"], decode_start_ms, decode_end_ms
                     )
                     raw_text, words = recognizer.decode_words(current, sample_rate)
-                    raw_text = self._clean_live_text(raw_text)
+                    # 精修是离线完整音频，不会有流式空转重复，只清理模型标记
+                    raw_text = re.split(r"<\|endoftext\|>", str(raw_text or ""), flags=re.IGNORECASE)[0]
+                    raw_text = re.sub(r"<\|[^|>]+\|>", " ", raw_text).strip()
                     speaker_key = (track, turn["speaker"])
                     text = self._trim_refinement_overlap(
                         previous_text.get(speaker_key, ""), raw_text
@@ -414,8 +464,9 @@ class RefinementWorkerMixin:
         except TaskCancelled:
             return cancel_refinement()
         refined_segments.sort(
-            key=lambda item: (item["start_ms"], item["track"], item["end_ms"])
+            key=lambda item: (item["track"], item["start_ms"], item["end_ms"])
         )
+        refined_segments = self._assemble_utterances(refined_segments)
         version, revision = self.store.next_refinement_version(meeting["id"])
         refined_segments = self.store.replace_segments(
             meeting["id"], refined_segments, version, revision
@@ -425,6 +476,17 @@ class RefinementWorkerMixin:
         result = {"meeting_id": meeting["id"], "status": "refined"}
         self.emit("refinement.ready", result)
         return result
+
+    @staticmethod
+    def _vad_params_for(language):
+        """返回按会议语言选择的 VAD 参数；未配置的语言回落到 default。
+
+        中文没有英文那样靠停顿切词的边界，Silero 的默认阈值会把连续语音
+        切成碎片，因此用更低的阈值、更长的静默判定和更长的单段上限合并
+        整句话，避免会后精修把一个人拆成好几段。
+        """
+        vad = SETTINGS.get("vad") or {}
+        return vad.get(language) or vad.get("default") or {}
 
     def _prepare_track(
         self,
@@ -448,19 +510,24 @@ class RefinementWorkerMixin:
             "refinement.progress",
             {"meeting_id": meeting["id"], "completed": 0, "total": 0, "stage": "准备精修"},
         )
-        ensure_wav_duration(path, MAX_REFINE_SECONDS, "refine")
+        ensure_wav_duration(path, _refinement("max_refine_seconds"), "refine")
         samples, sample_rate = read_mono_wav(path)
         duration_ms = len(samples) * 1000 // sample_rate
+        vad_params = self._vad_params_for(meeting.get("language"))
         if track not in diarized_tracks:
             vad = OfflineVAD(
-                self.models, meeting.get("vad_model_id") or "silero-vad"
+                self.models,
+                meeting.get("vad_model_id") or "silero-vad",
+                vad_params=vad_params,
             )
             speech = vad.process(samples, sample_rate)
             turns = [{**turn, "speaker": "local-user"} for turn in speech]
             self.store.rename_speaker(meeting["id"], "local-user", "Local user")
         else:
             vad = OfflineVAD(
-                self.models, meeting.get("vad_model_id") or "silero-vad"
+                self.models,
+                meeting.get("vad_model_id") or "silero-vad",
+                vad_params=vad_params,
             )
             speech = vad.process(samples, sample_rate)
 
@@ -468,7 +535,7 @@ class RefinementWorkerMixin:
                 "refinement.progress",
                 {"meeting_id": meeting["id"], "completed": 0, "total": 0, "stage": "分析说话人"},
             )
-            if duration_ms > DIARIZATION_CHUNK_MS:
+            if duration_ms > _refinement("diarization_chunk_ms"):
                 turns = self._diarize_long_track(
                     path,
                     duration_ms,
@@ -508,12 +575,12 @@ class RefinementWorkerMixin:
             if speech and not turns:
                 # diarizer 失败时 fallback 到单说话人
                 turns = [{**turn, "speaker": "spk-1"} for turn in speech]
-            if duration_ms <= DIARIZATION_CHUNK_MS and turns:
+            if duration_ms <= _refinement("diarization_chunk_ms") and turns:
                 try:
                     tracker = SpeakerTracker(self.models)
                 except RuntimeError:
                     tracker = None
-                turns = self._split_long_turns(turns)
+                turns = self._split_long_turns(turns, _refinement("embedding_window_ms"))
                 for turn in turns:
                     start = round(turn["start_ms"] * sample_rate / 1000)
                     end = round(turn["end_ms"] * sample_rate / 1000)
@@ -542,6 +609,7 @@ class RefinementWorkerMixin:
             "duration_ms": duration_ms,
         }
         stable_turns = self._stabilize_speaker_turns(turns)
+        stable_turns = self._deoverlap_speaker_turns(stable_turns)
         # 精修识别阶段改为逐窗从磁盘读取，这里立即释放整段波形。
         del samples
         return track, source, turns, stable_turns
@@ -554,12 +622,12 @@ class RefinementWorkerMixin:
 
         context = multiprocessing.get_context("spawn")
         turns = []
-        use_vad_fallback = False
-        for core_start in range(0, duration_ms, DIARIZATION_CHUNK_MS):
+        native_broken = False  # 首次原生崩溃后整轨熔断（升级 Sherpa 后可删除）
+        for core_start in range(0, duration_ms, _refinement("diarization_chunk_ms")):
             self.wait_task(control)
-            core_end = min(duration_ms, core_start + DIARIZATION_CHUNK_MS)
-            window_start = max(0, core_start - DIARIZATION_OVERLAP_MS)
-            window_end = min(duration_ms, core_end + DIARIZATION_OVERLAP_MS)
+            core_end = min(duration_ms, core_start + _refinement("diarization_chunk_ms"))
+            window_start = max(0, core_start - _refinement("diarization_overlap_ms"))
+            window_end = min(duration_ms, core_end + _refinement("diarization_overlap_ms"))
             window_speech = [
                 turn
                 for turn in speech
@@ -576,58 +644,67 @@ class RefinementWorkerMixin:
                 else None,
                 "segmentation_id": segmentation_id,
                 "threshold": threshold,
+                "embedding_window_ms": _refinement("embedding_window_ms"),
                 "core_start_ms": core_start,
                 "core_end_ms": core_end,
                 "window_start_ms": window_start,
                 "window_end_ms": window_end,
                 "speech": window_speech,
-                "vad_fallback": use_vad_fallback,
             }
-            fallback_error = None
-            try:
-                result = self._run_diarization_process(context, payload, control)
-            except RuntimeError as error:
-                if use_vad_fallback:
-                    fallback_error = error
-                else:
-                    # ponytail: 首次原生崩溃后整条轨道熔断，升级 Sherpa 后可删除。
-                    use_vad_fallback = True
-                    self.emit(
-                        "worker.warning",
-                        {
-                            "code": "diarization_chunk_fallback",
-                            "start_ms": core_start,
-                            "message": str(error),
-                        },
-                    )
-                    try:
-                        result = self._run_diarization_process(
-                            context, {**payload, "vad_fallback": True}, control
-                        )
-                    except RuntimeError as error:
-                        fallback_error = error
-                if fallback_error:
-                    self.emit(
-                        "worker.warning",
-                        {
-                            "code": "diarization_chunk_vad_only",
-                            "start_ms": core_start,
-                            "message": str(fallback_error),
-                        },
-                    )
-                    result = [
-                        {
-                            "start_ms": max(core_start, turn["start_ms"]),
-                            "end_ms": min(core_end, turn["end_ms"]),
-                            "speaker": "spk-1",
-                            "_embedding": None,
-                        }
-                        for turn in window_speech
-                        if turn["end_ms"] > core_start
-                        and turn["start_ms"] < core_end
-                    ]
+            result, native_crashed = self._diarize_chunk(
+                context, payload, control, try_native=not native_broken
+            )
+            native_broken = native_broken or native_crashed
             turns.extend(result)
         return turns
+
+    def _diarize_chunk(self, context, payload, control, try_native):
+        """单个分块的降级链：原生 → VAD-only → 单说话人。
+
+        返回 (turns, native_crashed)；native_crashed 供调用方决定是否整轨熔断。
+        两种策略都失败时不抛异常，而是降级为 spk-1，保持轨道可用。
+        """
+        strategies = []
+        if try_native:
+            strategies.append(("native", {**payload, "vad_fallback": False}))
+        strategies.append(("vad_only", {**payload, "vad_fallback": True}))
+
+        native_crashed = False
+        for strategy, modified_payload in strategies:
+            try:
+                result = self._run_diarization_process(
+                    context, modified_payload, control
+                )
+                return result, native_crashed
+            except RuntimeError as error:
+                if strategy == "native":
+                    native_crashed = True
+                self.emit(
+                    "worker.warning",
+                    {
+                        "code": (
+                            "diarization_chunk_fallback"
+                            if strategy == "native"
+                            else "diarization_chunk_vad_only"
+                        ),
+                        "start_ms": payload["core_start_ms"],
+                        "end_ms": payload["core_end_ms"],
+                        "error_type": type(error).__name__,
+                        "message": str(error),
+                    },
+                )
+
+        core_start, core_end = payload["core_start_ms"], payload["core_end_ms"]
+        return [
+            {
+                "start_ms": max(core_start, turn["start_ms"]),
+                "end_ms": min(core_end, turn["end_ms"]),
+                "speaker": "spk-1",
+                "_embedding": None,
+            }
+            for turn in payload["speech"]
+            if turn["end_ms"] > core_start and turn["start_ms"] < core_end
+        ], native_crashed
 
     def _run_diarization_process(self, context, payload, control):
         receiver, sender = context.Pipe(duplex=False)
@@ -702,32 +779,6 @@ class RefinementWorkerMixin:
             turn.pop("_embedding", None)
         return turns
 
-    @managed_task("meeting.separate")
-    def separate_sources(self, payload, control=None):
-        """从已保存会议生成独立的人声和非人声 WAV，不改动原录音。"""
-        require(payload, "meeting_id")
-        meeting = self.store.get_meeting(payload["meeting_id"])
-        self.emit(
-            "separation.started",
-            {"meeting_id": meeting["id"], "completed": 0, "total": 100},
-        )
-
-        def progress(completed, stage):
-            self.wait_task(control)
-            self.emit(
-                "separation.progress",
-                {
-                    "meeting_id": meeting["id"],
-                    "completed": completed,
-                    "total": 100,
-                    "stage": stage,
-                },
-            )
-
-        event = self.media.separate(meeting, progress)
-        self.emit("meeting.sources-separated", event)
-        return event
-
     @staticmethod
     def _refinement_turns(turns, duration_ms, maximum_ms):
         """按离线说话人边界拆分精修窗口，且单段不超过模型上限。"""
@@ -740,6 +791,127 @@ class RefinementWorkerMixin:
             for turn in turns
             for start in range(turn["start_ms"], turn["end_ms"], maximum_ms)
         ]
+
+    @staticmethod
+    def _assemble_utterances(segments):
+        """把同一说话人、同一轨道上相邻的精修窗口组装成一条 utterance。
+
+        单条 turn 会被 ``refined_window_seconds`` 切成多个解码窗口，每个窗口
+        原本各生成一个段落，导致一个人的连续发言被拆成好几段。这里在解码后
+        按 (track, speaker, 时间相邻) 合并，恢复连续的发言边界。
+
+        同时合并同说话人的短间隔句子（< 1.5s），减少 LLM 类 ASR 模型的
+        过度断句。合并只发生在解码后、按文本拼接，不会把静默喂给解码器。
+
+        单段默认不超过 ``refined_window_seconds * 2``（约 30s），且超限时优先在
+        最后一个句末标点处拆分（语义切点），避免从一句话中间断开；找不到句末
+        标点才退回窗口边界。
+        """
+        if not segments:
+            return []
+        assembled = []
+        max_merge_gap_ms = 1500
+        max_segment_ms = SETTINGS["asr"]["refined_window_seconds"] * 2 * 1000
+        for event in segments:
+            previous = assembled[-1] if assembled else None
+            mergeable = (
+                previous
+                and previous["track"] == event["track"]
+                and previous["speaker"] == event["speaker"]
+            )
+            gap_ms = event["start_ms"] - previous["end_ms"] if previous else float("inf")
+            if not mergeable or gap_ms > max_merge_gap_ms:
+                assembled.append(
+                    {**event, "word_timestamps": list(event.get("word_timestamps", []))}
+                )
+                continue
+            merged_duration = event["end_ms"] - previous["start_ms"]
+            if merged_duration <= max_segment_ms:
+                previous["text"] = RefinementWorkerMixin._join_utterance_text(
+                    previous["text"], event["text"]
+                )
+                previous["end_ms"] = max(previous["end_ms"], event["end_ms"])
+                previous["word_timestamps"].extend(event.get("word_timestamps", []))
+                continue
+            # 超长：优先在 previous 最后一个句末标点处语义拆分。
+            head, tail = RefinementWorkerMixin._split_utterance_at_sentence(previous)
+            if head is None:
+                assembled.append(
+                    {**event, "word_timestamps": list(event.get("word_timestamps", []))}
+                )
+                continue
+            assembled[-1] = head
+            assembled.append(
+                {
+                    **event,
+                    "text": RefinementWorkerMixin._join_utterance_text(
+                        tail["text"], event["text"]
+                    ),
+                    "start_ms": tail["start_ms"],
+                    "end_ms": event["end_ms"],
+                    "word_timestamps": tail["word_timestamps"]
+                    + list(event.get("word_timestamps", [])),
+                }
+            )
+        return assembled
+
+    @staticmethod
+    def _split_utterance_at_sentence(segment):
+        """在段内最后一个「有效」句末标点处拆开，返回 ``(head, tail)``；无则返回 ``(None, None)``。
+
+        LLM 类 ASR 常在窗口末尾补一个「伪句末」（如 ``…but if you.``，实际句子还没完）。
+        因此从后往前找第一个「后面还有实质内容」的句末标点作为切点，跳过末尾伪句末，
+        避免把 ``if you ask them…`` 从中间断开。拆点用字符比例映射到时间。
+        """
+        text = (segment.get("text") or "").strip()
+        positions = [index for index, ch in enumerate(text) if ch in "。！？.!?；;"]
+        for last in reversed(positions):
+            if last + 1 >= len(text):
+                continue  # 末尾句末（伪句末），跳过
+            head_text = text[: last + 1].strip()
+            tail_text = text[last + 1 :].strip()
+            if not head_text or not tail_text:
+                continue
+            start_ms = segment["start_ms"]
+            end_ms = segment["end_ms"]
+            split_ms = start_ms + round((end_ms - start_ms) * (last + 1) / len(text))
+            words = segment.get("word_timestamps", []) or []
+            head_words = [word for word in words if word["start_ms"] < split_ms]
+            tail_words = [word for word in words if word["start_ms"] >= split_ms]
+            head = {
+                **segment,
+                "text": head_text,
+                "end_ms": split_ms,
+                "word_timestamps": head_words,
+            }
+            tail = {
+                **segment,
+                "text": tail_text,
+                "start_ms": split_ms,
+                "word_timestamps": tail_words,
+            }
+            return head, tail
+        return None, None
+
+    @staticmethod
+    def _join_utterance_text(previous, current):
+        """拼接相邻窗口文本；句末标点后补空格，拉丁词边界补空格，其余直接相连。"""
+        previous = (previous or "").strip()
+        current = (current or "").strip()
+        if not previous:
+            return current
+        if not current:
+            return previous
+        if previous[-1] in "。！？.!?；;":
+            return f"{previous} {current}"
+        if (
+            previous[-1].isascii()
+            and previous[-1].isalnum()
+            and current[0].isascii()
+            and current[0].isalnum()
+        ):
+            return f"{previous} {current}"
+        return f"{previous}{current}"
 
     def _match_speaker_profiles(self, meeting, turns):
         """为每位 diarized speaker 的最长片段做一次声纹库匹配。"""
@@ -759,7 +931,7 @@ class RefinementWorkerMixin:
             if embedding is None:
                 continue
             profile = self.store.match_speaker_profile(
-                embedding, SETTINGS["diarization"]["online_similarity_threshold"]
+                embedding, SETTINGS["diarization"]["voiceprint_similarity_threshold"]
             )
             if self._is_confident_profile_match(profile):
                 replacements[speaker] = f"profile-{profile['id']}"
@@ -795,21 +967,31 @@ class RefinementWorkerMixin:
 
     @staticmethod
     def _trim_refinement_overlap(previous, text):
-        """移除相邻精修窗口因上下文重叠产生的重复前缀。"""
-        if (
-            previous
-            and text
-            and SequenceMatcher(
-                None,
-                RefinementWorkerMixin._normalized_transcript(previous),
-                RefinementWorkerMixin._normalized_transcript(text),
-            ).ratio()
-            >= 0.92
-        ):
+        """移除相邻精修窗口因上下文重叠产生的重复前缀。
+
+        LLM 类 ASR（如 Qwen3-ASR）对同一段重叠音频在两个窗口里会带不同上下文解码，
+        标点/大小写常有差异，纯字符串精确匹配会漏掉。这里先做「去标点 + 小写」的
+        归一化，在归一化文本上找最长公共后缀/前缀，再映射回原文截断。
+        """
+        if not previous or not text:
+            return text
+        prev_norm = RefinementWorkerMixin._normalized_transcript(previous)
+        text_norm = RefinementWorkerMixin._normalized_transcript(text)
+        if not prev_norm or not text_norm:
+            return text
+        if SequenceMatcher(None, prev_norm, text_norm).ratio() >= 0.92:
             return ""
-        for length in range(min(len(previous), len(text), 120), 2, -1):
-            if previous[-length:].casefold() == text[:length].casefold():
-                return text[length:].lstrip()
+        max_len = min(len(prev_norm), len(text_norm), 200)
+        for length in range(max_len, 3, -1):
+            if prev_norm[-length:] == text_norm[:length]:
+                # 把归一化前缀的 length 个「词字符」映射回原文 text 的字符偏移。
+                count = 0
+                for index, ch in enumerate(text):
+                    if ch.isalnum():
+                        count += 1
+                        if count >= length:
+                            return text[index + 1 :].lstrip(" \t,.;:!?，。；：！？")
+                break
         return text
 
     @staticmethod
@@ -855,11 +1037,11 @@ class RefinementWorkerMixin:
             return [0] * len(embeddings)
 
         candidates = {}
-        for count in range(1, min(MAX_AUTO_SPEAKERS, len(vectors) - 1) + 1):
+        for count in range(1, min(_refinement("max_auto_speakers"), len(vectors) - 1) + 1):
             labels = cluster(count)
             if len(set(labels)) == count and all(
-                (labels == label).sum() >= MIN_AUTO_SPEAKER_WINDOWS
-                and weights[labels == label].sum() >= MIN_AUTO_SPEAKER_DURATION_MS
+                (labels == label).sum() >= _refinement("min_auto_speaker_windows")
+                and weights[labels == label].sum() >= _refinement("min_auto_speaker_duration_ms")
                 for label in set(labels)
             ):
                 candidates[count] = labels
@@ -886,7 +1068,7 @@ class RefinementWorkerMixin:
             max(
                 count
                 for count, score in scores.items()
-                if score >= best - AUTO_CLUSTER_SCORE_TOLERANCE
+                if score >= best - _refinement("auto_cluster_score_tolerance")
             )
         ].tolist()
 
@@ -970,19 +1152,49 @@ class RefinementWorkerMixin:
         return stable
 
     @staticmethod
+    def _deoverlap_speaker_turns(turns):
+        """消除相邻不同说话人 turn 的时间重叠，避免被误判成两人同时说话。
+
+        pyannote 分段在说话人切换处常产生重叠边界（相邻 turn 有几百毫秒到几秒的
+        交叠），这些交叠是 diarization 的边界噪声，并非真实的同时说话。这里按重叠
+        区中点切分，让同一时刻只归属一位说话人，从而去掉 UI 上大量虚假的「重叠说话」。
+        """
+        turns = sorted(turns, key=lambda turn: (turn["start_ms"], turn["end_ms"]))
+        deoverlapped = []
+        for turn in turns:
+            if (
+                deoverlapped
+                and turn["start_ms"] < deoverlapped[-1]["end_ms"]
+                and turn["speaker"] != deoverlapped[-1]["speaker"]
+            ):
+                previous = deoverlapped[-1]
+                # 完全被前一个 turn 包含的碎片（如 1ms 的 diarization 噪声）直接丢弃。
+                if turn["end_ms"] <= previous["end_ms"]:
+                    continue
+                boundary = (turn["start_ms"] + previous["end_ms"]) // 2
+                previous["end_ms"] = max(previous["start_ms"] + 1, boundary)
+                turn = {**turn, "start_ms": min(boundary, turn["end_ms"] - 1)}
+            deoverlapped.append(dict(turn))
+        return [turn for turn in deoverlapped if turn["end_ms"] > turn["start_ms"]]
+
+    @staticmethod
     def _is_confident_profile_match(profile):
         return profile and profile["score"] - profile["runner_up_score"] >= 0.08
 
     @staticmethod
     def _overlap_speakers(start_ms, end_ms, turns):
-        """返回与时间范围相交的全部说话人，不把重叠压成单一标签。"""
-        return list(
-            dict.fromkeys(
-                turn["speaker"]
-                for turn in turns
-                if turn["start_ms"] < end_ms and turn["end_ms"] > start_ms
-            )
-        )
+        """返回实质性覆盖该时间范围的说话人，过滤 diarization 边界噪声。
+
+        仅当某位说话人的 turn 覆盖超过一半时长时才计入，这样跨说话人切换的单个
+        token（其时间范围横跨两个相邻 turn）不会再被误标成两人同时说话。
+        """
+        span = max(1, end_ms - start_ms)
+        speakers = []
+        for turn in turns:
+            overlap = min(end_ms, turn["end_ms"]) - max(start_ms, turn["start_ms"])
+            if overlap > span / 2:
+                speakers.append(turn["speaker"])
+        return list(dict.fromkeys(speakers))
 
     @staticmethod
     def _normalized_transcript(text):
@@ -990,12 +1202,27 @@ class RefinementWorkerMixin:
 
     @staticmethod
     def _clean_live_text(text):
-        """移除模型终止标记，并截断流式识别末尾的重复循环。"""
+        """移除模型终止标记、幻觉标签，并截断流式识别末尾的重复循环。"""
         # Qwen3-ASR may prepend its language metadata before this marker.
         text = re.split(r"<asr_text>", str(text or ""), flags=re.IGNORECASE)[-1]
         text = re.split(r"<\|endoftext\|>", str(text or ""), flags=re.IGNORECASE)[0]
         text = re.sub(r"<\|[^|>]+\|>", " ", text)
+        # 字节级 BPE 流式模型（如 zipformer-zh-xlarge）在多字节字符的字节尚未补齐时，
+        # get_result 会把半个字符解码成 U+FFFD（前端显示为 �/?）。合法转写不会出现该
+        # 字符，全部删除；beam search 回退时它也可能落在句中，故不限句尾。下一帧字节
+        # 补齐后重算的 partial 即恢复正常文字。
+        text = text.replace("�", "")
+        # Qwen3-ASR 是 LLM 型 ASR，在静音/低信噪窗口会幻听出 markdown 代码围栏
+        # （```python、```java、```language=...）、"language <语言>" 标签、反引号
+        # 序号（`(1)）等非转写内容，统一清理后再做重复检测。
+        text = re.sub(r"```[^\n]*", "", text)
+        text = re.sub(r"`\([^)]*\)`?", "", text)
+        text = re.sub(r"\*\*(.*?)\*\*", r"\1", text)
+        text = re.sub(r"language\s*=?\s*[A-Za-z]+", "", text, flags=re.IGNORECASE)
         text = re.sub(r"\s+", " ", text).strip()
+        # 清理后只剩标点/空白（幻觉内容被移除），按空文本处理。
+        if not re.search(r"[A-Za-z0-9\u4e00-\u9fff]", text):
+            return ""
         # \u6298\u53e0 decoder \u7a7a\u8f6c\u4ea7\u751f\u7684\u91cd\u590d CJK \u7247\u6bb5\uff081\u20134 \u5b57\u4e3a\u4e00\u4e2a\u5355\u5143\u3001\u8fde\u7eed 8 \u6b21\u4ee5\u4e0a\uff09\uff0c
         # \u4e0d\u518d\u4ec5\u9650\u53e5\u5c3e\uff1a\u957f\u9759\u9ed8\u7a97\u53e3\u5e38\u5728\u53e5\u4e2d\u6253\u8f6c\uff08\u5982\u201c\u5c31\u5c31\u5c31\u2026\u201d\u540e\u4ecd\u63a5\u6b63\u5e38\u6587\u5b57\uff09\u3002
         text = re.sub(r"([\u4e00-\u9fff]{1,4}?)\1{7,}", r"\1", text)
@@ -1018,7 +1245,7 @@ class RefinementWorkerMixin:
             None,
         ):
             text = f"{text[:match.start()]}{match.group('phrase')}{text[match.end():]}"
-        return text
+        return _normalize_numbers(text)
 
     def _is_duplicate_final(self, event):
         """过滤麦克风与系统音频对同一句话的重复识别。"""

@@ -101,6 +101,14 @@ class TranscriptStoreMixin:
             )
         return normalized
 
+    def delete_segment(self, meeting_id, segment_id, version="live"):
+        """删除单个段落；用户编辑过的段落不会被自动结果删除。"""
+        with self.connect() as db:
+            db.execute(
+                "DELETE FROM segments WHERE meeting_id=? AND id=? AND version=? AND user_edited=0",
+                (meeting_id, segment_id, version),
+            )
+
     def save_translation(self, meeting_id, segment_id, translation):
         """为会议中同一段落的所有版本保存译文。"""
         with self.connect() as db:

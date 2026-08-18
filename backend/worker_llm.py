@@ -182,6 +182,7 @@ class LLMWorkerMixin:
         if not transcript:
             raise ValueError("当前会议暂无逐字稿内容，请先完成转写后再生成会议纪要。")
         language = payload.get("language", "en")
+        markdown = ""
         try:
             self.wait_task(control)
             self.emit(
@@ -199,7 +200,7 @@ class LLMWorkerMixin:
             if not markdown:
                 raise ValueError("Summary response was empty")
         except Exception as error:
-            self.store.save_summary(meeting["id"], None, locals().get("markdown", str(error)))
+            self.store.save_summary(meeting["id"], None, markdown or str(error))
             if re.search(
                 r"\b(?:401|403)\b|error code:\s*1010|API key|Authorization header|invalid_api_key|authentication",
                 str(error),

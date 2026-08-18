@@ -41,45 +41,49 @@ class WorkspaceStoreMixin:
                     WHERE m.workspace_id = w.id AND m.deleted_at IS NULL) as meeting_count
                    FROM workspaces w
                    WHERE w.id = ? AND w.deleted_at IS NULL""",
-                (workspace_id,)
+                (workspace_id,),
             ).fetchone()
         return dict(row) if row else None
 
     def create_workspace(self, payload):
-        """创建新工作区。
+        """创建新工作区；同名工作区若已被软删除则直接恢复。
 
         Args:
-            payload: 包含 name, description(可选), color(可选) 的字典。
+            payload: 包含 name 与可选 description 的字典。
 
         Returns:
-            创建的工作区字典。
+            创建或恢复的工作区字典。
 
         Raises:
-            ValueError: 工作区名称已存在。
+            ValueError: 工作区名称已存在且未被删除。
         """
-        workspace_id = str(uuid4())
-        name = payload['name'].strip()
-        description = payload.get('description', '').strip()
-        color = payload.get('color', 'violet')
+        name = payload["name"].strip()
+        description = payload.get("description", "").strip()
         now = utc_now()
 
         with self.connect() as db:
-            # Check if name exists
             existing = db.execute(
-                "SELECT id FROM workspaces WHERE name = ? COLLATE NOCASE",
-                (name,)
+                "SELECT id, deleted_at FROM workspaces WHERE name = ? COLLATE NOCASE",
+                (name,),
             ).fetchone()
             if existing:
-                raise ValueError(f"Workspace '{name}' already exists")
+                if existing["deleted_at"] is None:
+                    raise ValueError(f"Workspace '{name}' already exists")
+                db.execute(
+                    "UPDATE workspaces SET deleted_at = NULL, updated_at = ? WHERE id = ?",
+                    (now, existing["id"]),
+                )
+                return self.get_workspace(existing["id"])
 
-            # Get max position
-            max_pos = db.execute("SELECT MAX(position) as max_pos FROM workspaces").fetchone()
-            position = (max_pos['max_pos'] or -1) + 1
-
+            max_pos = db.execute(
+                "SELECT MAX(position) as max_pos FROM workspaces"
+            ).fetchone()
+            position = (max_pos["max_pos"] or -1) + 1
+            workspace_id = str(uuid4())
             db.execute(
-                """INSERT INTO workspaces (id, name, description, color, position, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                (workspace_id, name, description, color, position, now, now)
+                """INSERT INTO workspaces (id, name, description, position, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (workspace_id, name, description, position, now, now),
             )
 
         return self.get_workspace(workspace_id)
@@ -89,7 +93,7 @@ class WorkspaceStoreMixin:
 
         Args:
             workspace_id: 工作区 ID。
-            updates: 包含要更新的字段的字典 (name, description, color)。
+            updates: 包含要更新的字段的字典 (name, description)。
 
         Returns:
             更新后的工作区字典。
@@ -107,40 +111,36 @@ class WorkspaceStoreMixin:
             set_clauses = []
             params = []
 
-            if 'name' in updates:
-                name = updates['name'].strip()
-                # Check if new name conflicts
+            if "name" in updates:
+                name = updates["name"].strip()
                 conflict = db.execute(
                     "SELECT id FROM workspaces WHERE name = ? COLLATE NOCASE AND id != ?",
-                    (name, workspace_id)
+                    (name, workspace_id),
                 ).fetchone()
                 if conflict:
                     raise ValueError(f"Workspace name '{name}' already exists")
                 set_clauses.append("name = ?")
                 params.append(name)
 
-            if 'description' in updates:
+            if "description" in updates:
                 set_clauses.append("description = ?")
-                params.append(updates['description'].strip())
-
-            if 'color' in updates:
-                set_clauses.append("color = ?")
-                params.append(updates['color'])
+                params.append(updates["description"].strip())
 
             if set_clauses:
                 set_clauses.append("updated_at = ?")
                 params.append(utc_now())
                 params.append(workspace_id)
-
                 db.execute(
                     f"UPDATE workspaces SET {', '.join(set_clauses)} WHERE id = ?",
-                    params
+                    params,
                 )
 
         return self.get_workspace(workspace_id)
 
     def delete_workspace(self, workspace_id):
-        """删除工作区，并将其中的会议移至最近删除。
+        """软删除工作区，并将其中的会议移至最近删除。
+
+        保留原工作区记录，恢复会议时可还原归属。
 
         Args:
             workspace_id: 工作区 ID。
@@ -155,15 +155,18 @@ class WorkspaceStoreMixin:
             if not existing:
                 raise ValueError(f"Workspace '{workspace_id}' not found")
 
-            # 保留原工作区记录，恢复会议时可还原归属。
             db.execute(
-                "UPDATE meetings SET deleted_at = ?, previous_workspace_id = workspace_id, workspace_id = NULL WHERE workspace_id = ? AND deleted_at IS NULL",
+                "UPDATE meetings SET deleted_at = ?, previous_workspace_id = workspace_id, workspace_id = NULL "
+                "WHERE workspace_id = ? AND deleted_at IS NULL",
                 (utc_now(), workspace_id),
             )
-            db.execute("UPDATE workspaces SET deleted_at = ? WHERE id = ?", (utc_now(), workspace_id))
+            db.execute(
+                "UPDATE workspaces SET deleted_at = ? WHERE id = ?",
+                (utc_now(), workspace_id),
+            )
 
     def reorder_workspaces(self, workspace_ids):
-        """重新排序工作区。
+        """按给定顺序更新工作区排序。
 
         Args:
             workspace_ids: 按新顺序排列的工作区 ID 列表。
@@ -172,7 +175,7 @@ class WorkspaceStoreMixin:
             for position, workspace_id in enumerate(workspace_ids):
                 db.execute(
                     "UPDATE workspaces SET position = ?, updated_at = ? WHERE id = ?",
-                    (position, utc_now(), workspace_id)
+                    (position, utc_now(), workspace_id),
                 )
 
     def assign_meeting_to_workspace(self, meeting_id, workspace_id):
@@ -186,23 +189,21 @@ class WorkspaceStoreMixin:
             ValueError: 会议或工作区不存在。
         """
         with self.connect() as db:
-            # Check meeting exists
             meeting = db.execute(
                 "SELECT id FROM meetings WHERE id = ?", (meeting_id,)
             ).fetchone()
             if not meeting:
                 raise ValueError(f"Meeting '{meeting_id}' not found")
 
-            # Check workspace exists (unless empty string for public)
             if workspace_id:
                 workspace = db.execute(
-                "SELECT id FROM workspaces WHERE id = ? AND deleted_at IS NULL", (workspace_id,)
+                    "SELECT id FROM workspaces WHERE id = ? AND deleted_at IS NULL",
+                    (workspace_id,),
                 ).fetchone()
                 if not workspace:
                     raise ValueError(f"Workspace '{workspace_id}' not found")
 
-            # Update meeting
             db.execute(
                 "UPDATE meetings SET workspace_id = ? WHERE id = ?",
-                (workspace_id or None, meeting_id)
+                (workspace_id or None, meeting_id),
             )

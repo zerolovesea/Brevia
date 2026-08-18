@@ -68,6 +68,11 @@ jobs:
       - name: Package Windows
         if: matrix.os == 'windows-latest'
         run: npm run package:win
+        env:
+          # 有 Windows 代码签名证书时，用这两个 secret 签名（避免杀软/SmartScreen 拦截安装器）。
+          # 未配置时保持未签名构建，不会导致流程失败。
+          CSC_LINK: ${{ secrets.WIN_CERTIFICATE_P12_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.WIN_CERTIFICATE_PASSWORD }}
       - name: Verify macOS signature and notarization
         if: matrix.os == 'macos-14'
         shell: bash

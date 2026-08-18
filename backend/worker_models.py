@@ -6,7 +6,6 @@ import time
 from .asr import (
     DownloadCancelled,
 )
-from .config import SPEAKER_EMBEDDING_MODEL_ID
 from .worker_common import TaskCancelled, require
 
 
@@ -115,21 +114,6 @@ class ModelTaskWorkerMixin:
                 acquired = self.model_download_slots.acquire(timeout=0.1)
             self.models.download(model_id, control, china_source=china_source)
             completed = True
-            if model_id == SPEAKER_EMBEDDING_MODEL_ID:
-                try:
-                    self.voice_profiles.seed_builtin_profiles()
-                    self.emit(
-                        "speaker-profile.updated",
-                        {"profiles": self.store.list_speaker_profiles()},
-                    )
-                except RuntimeError as error:
-                    self.emit(
-                        "worker.warning",
-                        {
-                            "code": "builtin_voiceprints_unavailable",
-                            "message": str(error),
-                        },
-                    )
         except DownloadCancelled:
             pass
         except Exception as error:

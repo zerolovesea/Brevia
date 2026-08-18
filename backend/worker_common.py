@@ -125,3 +125,25 @@ class TaskRegistry:
             control.cancelled.set()
             control.paused.clear()
         return control
+
+    def cancel_for_meeting(self, meeting_id):
+        """请求该会议的所有后台任务在下一个安全检查点停止，返回取消的任务名列表。"""
+        with self._lock:
+            keys = [key for key in self._controls if key[1] == meeting_id]
+        for task, mid in keys:
+            with self._lock:
+                control = self._controls.get((task, mid))
+                if control:
+                    control.cancelled.set()
+                    control.paused.clear()
+        return [task for task, _mid in keys]
+
+    def has_for_meeting(self, meeting_id):
+        """返回该会议是否存在运行中的长任务。"""
+        with self._lock:
+            return any(mid == meeting_id for _task, mid in self._controls)
+
+    def has_any(self):
+        """返回是否存在任何运行中的长任务。"""
+        with self._lock:
+            return bool(self._controls)

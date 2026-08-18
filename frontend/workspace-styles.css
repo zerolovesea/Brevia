@@ -82,15 +82,6 @@
   color: #8b5cf6;
 }
 
-.workspace-icon[data-color="violet"] { color: #8b5cf6; }
-.workspace-icon[data-color="blue"] { color: #3b82f6; }
-.workspace-icon[data-color="green"] { color: #10b981; }
-.workspace-icon[data-color="orange"] { color: #f97316; }
-.workspace-icon[data-color="red"] { color: #ef4444; }
-.workspace-icon[data-color="pink"] { color: #ec4899; }
-.workspace-icon[data-color="cyan"] { color: #06b6d4; }
-.workspace-icon[data-color="gray"] { color: #6b7280; }
-
 /* 工作区标签 */
 .workspace-label {
   flex: 1;
@@ -223,45 +214,6 @@
   min-height: 4rem;
 }
 
-/* 颜色选择器 */
-.workspace-color-picker {
-  display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  gap: 0.5rem;
-}
-
-.workspace-color-swatch {
-  width: 2rem;
-  height: 2rem;
-  border: 2px solid transparent;
-  border-radius: 0.375rem;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.workspace-color-swatch:hover {
-  transform: scale(1.1);
-}
-
-.workspace-color-swatch.selected {
-  border-color: currentColor;
-  box-shadow: 0 0 0 2px white, 0 0 0 4px currentColor;
-}
-
-[data-theme="dark"] .workspace-color-swatch.selected {
-  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.9), 0 0 0 4px currentColor;
-}
-
-/* 颜色样式 */
-.workspace-color-swatch[data-color="violet"] { background-color: #8b5cf6; color: #8b5cf6; }
-.workspace-color-swatch[data-color="blue"] { background-color: #3b82f6; color: #3b82f6; }
-.workspace-color-swatch[data-color="green"] { background-color: #10b981; color: #10b981; }
-.workspace-color-swatch[data-color="orange"] { background-color: #f97316; color: #f97316; }
-.workspace-color-swatch[data-color="red"] { background-color: #ef4444; color: #ef4444; }
-.workspace-color-swatch[data-color="pink"] { background-color: #ec4899; color: #ec4899; }
-.workspace-color-swatch[data-color="cyan"] { background-color: #06b6d4; color: #06b6d4; }
-.workspace-color-swatch[data-color="gray"] { background-color: #6b7280; color: #6b7280; }
-
 /* 工作区徽章（会议列表中） */
 .workspace-badge {
   display: inline-flex;
@@ -277,21 +229,3 @@
 [data-theme="dark"] .workspace-badge {
   background-color: rgba(255, 255, 255, 0.1);
 }
-
-.workspace-badge[data-color="violet"] { background-color: rgba(139, 92, 246, 0.15); color: #8b5cf6; }
-.workspace-badge[data-color="blue"] { background-color: rgba(59, 130, 246, 0.15); color: #3b82f6; }
-.workspace-badge[data-color="green"] { background-color: rgba(16, 185, 129, 0.15); color: #10b981; }
-.workspace-badge[data-color="orange"] { background-color: rgba(249, 115, 22, 0.15); color: #f97316; }
-.workspace-badge[data-color="red"] { background-color: rgba(239, 68, 68, 0.15); color: #ef4444; }
-.workspace-badge[data-color="pink"] { background-color: rgba(236, 72, 153, 0.15); color: #ec4899; }
-.workspace-badge[data-color="cyan"] { background-color: rgba(6, 182, 212, 0.15); color: #06b6d4; }
-.workspace-badge[data-color="gray"] { background-color: rgba(107, 114, 128, 0.15); color: #6b7280; }
-
-[data-theme="dark"] .workspace-badge[data-color="violet"] { background-color: rgba(139, 92, 246, 0.2); color: #a78bfa; }
-[data-theme="dark"] .workspace-badge[data-color="blue"] { background-color: rgba(59, 130, 246, 0.2); color: #60a5fa; }
-[data-theme="dark"] .workspace-badge[data-color="green"] { background-color: rgba(16, 185, 129, 0.2); color: #34d399; }
-[data-theme="dark"] .workspace-badge[data-color="orange"] { background-color: rgba(249, 115, 22, 0.2); color: #fb923c; }
-[data-theme="dark"] .workspace-badge[data-color="red"] { background-color: rgba(239, 68, 68, 0.2); color: #f87171; }
-[data-theme="dark"] .workspace-badge[data-color="pink"] { background-color: rgba(236, 72, 153, 0.2); color: #f472b6; }
-[data-theme="dark"] .workspace-badge[data-color="cyan"] { background-color: rgba(6, 182, 212, 0.2); color: #22d3ee; }
-[data-theme="dark"] .workspace-badge[data-color="gray"] { background-color: rgba(107, 114, 128, 0.2); color: #9ca3af; }

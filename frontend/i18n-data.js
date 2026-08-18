@@ -132,6 +132,8 @@ Object.assign(catalog.ko.labels, { '计算设备': '연산 장치', '会后精�
 Object.assign(catalog.fr.labels, { '计算设备': 'Appareil de calcul', '会后精修': 'Affinage après réunion', '正在精修': 'Affinage en cours', '原版逐字稿仍可查看': 'La transcription d’origine reste disponible', '准备中': 'Préparation', '检查音频': 'Vérification de l’audio', '降噪音频': 'Réduction du bruit', '检测语音': 'Détection de la parole', '识别说话人': 'Identification des intervenants', '匹配声纹': 'Comparaison des empreintes vocales', '整理说话人': 'Préparation de la chronologie des intervenants', '可用': 'Disponible', '本地保存': 'Enregistré localement', '本地会议': 'Réunion locale', '← 返回会议库': '← Retour à la bibliothèque' });
 Object.assign(catalog.de.labels, { '计算设备': 'Rechengerät', '会后精修': 'Nachbearbeitung', '正在精修': 'Nachbearbeitung läuft', '原版逐字稿仍可查看': 'Das ursprüngliche Transkript bleibt verfügbar', '准备中': 'Vorbereitung', '检查音频': 'Audio wird geprüft', '降噪音频': 'Rauschen wird reduziert', '检测语音': 'Sprache wird erkannt', '识别说话人': 'Sprechende werden erkannt', '匹配声纹': 'Stimmabdrücke werden abgeglichen', '整理说话人': 'Sprecher-Zeitleiste wird vorbereitet', '可用': 'Verfügbar', '本地保存': 'Lokal gespeichert', '本地会议': 'Lokale Besprechung', '← 返回会议库': '← Zurück zur Bibliothek' });
 Object.assign(catalog.ru.labels, { '计算设备': 'Вычислительное устройство', '会后精修': 'Обработка после встречи', '正在精修': 'Идёт обработка', '原版逐字稿仍可查看': 'Исходная расшифровка остаётся доступна', '准备中': 'Подготовка', '检查音频': 'Проверка аудио', '降噪音频': 'Удаление шума', '检测语音': 'Обнаружение речи', '识别说话人': 'Определение говорящих', '匹配声纹': 'Сопоставление голосовых отпечатков', '整理说话人': 'Подготовка временной шкалы говорящих', '可用': 'Доступно', '本地保存': 'Сохранено локально', '本地会议': 'Локальная встреча', '← 返回会议库': '← Вернуться в библиотеку' });
+Object.entries({ zh: '全选', en: 'Select all', es: 'Seleccionar todo', ja: 'すべて選択', ko: '전체 선택', fr: 'Tout sélectionner', de: 'Alle auswählen', ru: 'Выбрать все' }).forEach(([code, label]) => { catalog[code].labels['全选'] = label; });
+Object.entries({ zh: '取消全选', en: 'Deselect all', es: 'Deseleccionar todo', ja: '選択を解除', ko: '전체 해제', fr: 'Tout désélectionner', de: 'Auswahl aufheben', ru: 'Снять выделение' }).forEach(([code, label]) => { catalog[code].labels['取消全选'] = label; });
 const refinementStatusLabels = {
   zh: { '重新聚类说话人': '重新聚类说话人', '校正说话人': '校正说话人', '正在取消': '正在取消' },
   en: { '重新聚类说话人': 'Reclustering speakers', '校正说话人': 'Correcting speakers', '正在取消': 'Cancelling' },
@@ -223,14 +225,14 @@ const modelLibraryLabels = {
 };
 Object.entries(modelLibraryLabels).forEach(([code, labels]) => Object.assign(catalog[code].labels, labels));
 const dynamicInterfaceLabels = {
-  zh: { 'VAD 模型': 'VAD 模型', '查看完整内容': '查看完整内容' },
-  en: { 'VAD 模型': 'VAD model', '查看完整内容': 'View full content' },
-  es: { 'VAD 模型': 'Modelo VAD', '查看完整内容': 'Ver contenido completo' },
-  ja: { 'VAD 模型': 'VAD モデル', '查看完整内容': 'すべて表示' },
-  ko: { 'VAD 模型': 'VAD 모델', '查看完整内容': '전체 내용 보기' },
-  fr: { 'VAD 模型': 'Modèle VAD', '查看完整内容': 'Voir le contenu complet' },
-  de: { 'VAD 模型': 'VAD-Modell', '查看完整内容': 'Vollständigen Inhalt anzeigen' },
-  ru: { 'VAD 模型': 'Модель VAD', '查看完整内容': 'Показать полностью' },
+  zh: { 'VAD 模型': 'VAD 模型', '查看完整内容': '查看完整内容', '会议人数': '会议人数', '继续精修': '继续精修', '留空自动识别': '留空自动识别', '选择导出格式': '选择导出格式' },
+  en: { 'VAD 模型': 'VAD model', '查看完整内容': 'View full content', '会议人数': 'Participants', '继续精修': 'Continue refinement', '留空自动识别': 'Leave blank for auto-detection', '选择导出格式': 'Choose export format' },
+  es: { 'VAD 模型': 'Modelo VAD', '查看完整内容': 'Ver contenido completo', '会议人数': 'Participantes', '继续精修': 'Continuar refinamiento', '留空自动识别': 'Déjalo vacío para auto-detección', '选择导出格式': 'Elegir formato de exportación' },
+  ja: { 'VAD 模型': 'VAD モデル', '查看完整内容': 'すべて表示', '会议人数': '会議の人数', '继续精修': '高精度化を続ける', '留空自动识别': '空欄なら自動検出', '选择导出格式': 'エクスポート形式を選択' },
+  ko: { 'VAD 模型': 'VAD 모델', '查看完整内容': '전체 내용 보기', '会议人数': '회의 참석자 수', '继续精修': '정제 계속', '留空自动识别': '비워 두면 자동 감지', '选择导出格式': '내보내기 형식 선택' },
+  fr: { 'VAD 模型': 'Modèle VAD', '查看完整内容': 'Voir le contenu complet', '会议人数': 'Participants', '继续精修': 'Continuer l’affinage', '留空自动识别': 'Laisser vide pour auto-détection', '选择导出格式': 'Choisir le format d’export' },
+  de: { 'VAD 模型': 'VAD-Modell', '查看完整内容': 'Vollständigen Inhalt anzeigen', '会议人数': 'Teilnehmer', '继续精修': 'Nachbearbeitung fortsetzen', '留空自动识别': 'Leer lassen für automatische Erkennung', '选择导出格式': 'Exportformat wählen' },
+  ru: { 'VAD 模型': 'Модель VAD', '查看完整内容': 'Показать полностью', '会议人数': 'Участники', '继续精修': 'Продолжить обработку', '留空自动识别': 'Оставьте пустым для автоопределения', '选择导出格式': 'Выбрать формат экспорта' },
 };
 Object.entries(dynamicInterfaceLabels).forEach(([code, labels]) => Object.assign(catalog[code].labels, labels));
 const appCopy = {
@@ -295,16 +297,6 @@ const storageItemLabels = {
   ja: ['会議と録音', 'モデルファイル', 'エクスポート'], ko: ['회의 및 녹음', '모델 파일', '내보내기'], fr: ['Réunions et enregistrements', 'Fichiers de modèles', 'Exportations'], de: ['Besprechungen und Aufnahmen', 'Modelldateien', 'Exporte'], ru: ['Встречи и записи', 'Файлы моделей', 'Экспорты'],
 };
 Object.entries(storageItemLabels).forEach(([code, labels]) => { appCopy.modalCopy[code].storage.items = labels.map((label, index) => [label, appCopy.modalCopy.en.storage.items[index][1]]); });
-const highPrecisionModelIntro = {
-  zh: '更大规模的会后精修模型，适合优先准确率的场景。', en: 'Larger post-meeting refinement model for accuracy-first work.', es: 'Modelo de refinamiento más grande para priorizar la precisión.',
-  ja: '精度を優先するための大規模な会議後高精度化モデル。', ko: '정확도를 우선하는 대규모 회의 후 정제 모델입니다.', fr: 'Modèle d’affinage plus grand, conçu pour privilégier la précision.',
-  de: 'Größeres Nachbearbeitungsmodell für Szenarien mit Genauigkeitspriorität.', ru: 'Более крупная модель обработки после встречи для максимальной точности.',
-};
-Object.entries(highPrecisionModelIntro).forEach(([code, intro]) => {
-  const items = appCopy.modalCopy[code].models.items;
-  const index = items.findIndex(([, name]) => name === 'Qwen3-ASR');
-  items.splice(index + 1, 0, [items[index][0], 'Qwen3-ASR 1.7B int8', items[index][2], intro, 'Q']);
-});
 const newRefinementModelCopy = {
   zh: ['中文 / 英语 / 粤语', '高准确率中文会议精修。', '快速离线中英文精修。'],
   en: ['Chinese / English / Cantonese', 'High-accuracy Chinese meeting refinement.', 'Fast offline Chinese and English refinement.'],
@@ -354,9 +346,9 @@ const whisperLargeV3Copy = {
 };
 Object.entries(appCopy.modalCopy).forEach(([code, copy]) => {
   const items = copy.models.items;
-  const index = items.findIndex(([, name]) => name === 'Qwen3-ASR 1.7B int8');
+  const index = items.findIndex(([, name]) => name === 'FunASR Nano int8');
   const [languages, intro] = whisperLargeV3Copy[code] || whisperLargeV3Copy.en;
-  items.splice(index, 0, [items[index][0], 'Whisper Large v3', languages, intro, 'W']);
+  items.splice(index + 1, 0, [items[index][0], 'Whisper Large v3', languages, intro, 'W']);
 });
 const liveDenoiserCopy = {
   zh: ['实时降噪', '所有语言', '实时消除环境噪声后再进行字幕识别。'],
@@ -373,21 +365,16 @@ Object.entries(appCopy.modalCopy).forEach(([code, copy]) => {
   copy.models.items.push([stage, 'GTCRN Live Denoiser', languages, intro, 'N']);
 });
 const voiceFeaturesCopy = {
-  zh: { source: '声源分离', sourceIntro: '将会议录音拆分为人声与非人声轨。', verify: '验证声音', separated: '已生成人声和非人声轨' },
-  en: { source: 'Source separation', sourceIntro: 'Splits meeting audio into vocal and non-vocal tracks.', verify: 'Verify voice', separated: 'Vocal and non-vocal tracks generated' },
-  es: { source: 'Separación de fuentes', sourceIntro: 'Separa el audio de la reunión en pistas vocales y no vocales.', verify: 'Verificar voz', separated: 'Pistas vocales y no vocales generadas' },
-  ja: { source: '音源分離', sourceIntro: '会議音声をボーカルと非ボーカルのトラックに分けます。', verify: '音声を確認', separated: 'ボーカルと非ボーカルのトラックを生成しました' },
-  ko: { source: '음원 분리', sourceIntro: '회의 오디오를 음성과 비음성 트랙으로 분리합니다.', verify: '음성 확인', separated: '음성 및 비음성 트랙이 생성되었습니다' },
-  fr: { source: 'Séparation des sources', sourceIntro: 'Sépare l’audio de réunion en pistes vocale et non vocale.', verify: 'Vérifier la voix', separated: 'Pistes vocale et non vocale générées' },
-  de: { source: 'Quellentrennung', sourceIntro: 'Trennt Besprechungsaudio in Sprach- und Nichtsprachspuren.', verify: 'Stimme prüfen', separated: 'Sprach- und Nichtsprachspuren erzeugt' },
-  ru: { source: 'Разделение источников', sourceIntro: 'Разделяет аудио встречи на голосовую и неголосовую дорожки.', verify: 'Проверить голос', separated: 'Голосовая и неголосовая дорожки созданы' },
+  zh: { verify: '验证声音' },
+  en: { verify: 'Verify voice' },
+  es: { verify: 'Verificar voz' },
+  ja: { verify: '音声を確認' },
+  ko: { verify: '음성 확인' },
+  fr: { verify: 'Vérifier la voix' },
+  de: { verify: 'Stimme prüfen' },
+  ru: { verify: 'Проверить голос' },
 };
 appCopy.voiceFeaturesCopy = voiceFeaturesCopy;
-Object.entries(appCopy.modalCopy).forEach(([code, copy]) => {
-  const localized = voiceFeaturesCopy[code] || voiceFeaturesCopy.en;
-  const modelCopy = addedModelCopy[code] || addedModelCopy.en;
-  copy.models.items.push([localized.source, 'Spleeter 2 Stems', modelCopy.all, localized.sourceIntro, 'S']);
-});
 const captionTranslationCopy = {
   zh: ['字幕翻译', '多语种', '在本地翻译实时字幕，无需 API，隐私数据不出本机。'],
   en: ['Caption translation', 'Multilingual', 'Translates live captions locally with no API. Your data stays on device.'],
@@ -485,10 +472,6 @@ Object.entries({
   ru: 'Настройте распознавание, определение конца фразы, разделение говорящих и параметры локальных моделей.',
 }).forEach(([code, value]) => { catalog[code].labels['调整识别、端点检测、说话人分离和本地模型运行参数。'] = value; });
 const workflowLabels = {
-  '双轨录音': 'Dual-track audio', '人声轨': 'Vocal track', '非人声轨': 'Non-vocal track',
-  '正在分离人声与非人声': 'Separating vocal and non-vocal tracks', '声源分离已完成': 'Source separation complete',
-  '完成声源分离后，人声与非人声录音会显示在这里。': 'Vocal and non-vocal recordings appear here after source separation.',
-  '开始声源分离': 'Start source separation', '声源分离结果': 'Source-separation result', '请先完成声源分离': 'Run source separation first',
   '下载': 'Download', '下载中': 'Downloading', '全部下载': 'Download all',
   '导出会议': 'Export meeting', '导出完成': 'Export complete', '字幕文件': 'Subtitle file',
   '原录音': 'Original recording', '带说话人和时间戳的逐字稿': 'Transcript with speakers and timestamps',
@@ -500,12 +483,12 @@ const workflowLabels = {
 Object.assign(catalog.en.labels, workflowLabels);
 Object.assign(catalog.zh.labels, Object.fromEntries(Object.keys(workflowLabels).map((key) => [key, key])));
 Object.entries({
-  es: { '双轨录音':'Audio de doble pista','人声轨':'Pista vocal','非人声轨':'Pista no vocal','正在分离人声与非人声':'Separando pistas vocal y no vocal','声源分离已完成':'Separación de fuentes completada','完成声源分离后，人声与非人声录音会显示在这里。':'Las grabaciones vocales y no vocales aparecerán aquí al terminar.','开始声源分离':'Iniciar separación de fuentes','声源分离结果':'Resultado de separación de fuentes','请先完成声源分离':'Primero completa la separación de fuentes','下载':'Descargar','下载中':'Descargando','全部下载':'Descargar todo','导出会议':'Exportar reunión','导出完成':'Exportación completada','字幕文件':'Archivo de subtítulos','原录音':'Grabación original','带说话人和时间戳的逐字稿':'Transcripción con hablantes y marcas de tiempo','标准时间轴字幕':'Subtítulos cronometrados estándar','未修改的会议混音':'Mezcla de reunión sin modificar','内置':'Integrado','查看录音':'Ver grabaciones','收起':'Contraer','选择录音并添加':'Elegir grabación y añadir','播放录音':'Reproducir grabación','未填写文本':'Sin transcripción','已复制到剪贴板':'Copiado al portapapeles','文件已导出并在文件夹中显示':'Archivo exportado y mostrado en la carpeta','暂无可分享的内容':'Aún no hay nada que compartir' },
-  ja: { '双轨录音':'デュアルトラック音声','人声轨':'音声トラック','非人声轨':'非音声トラック','正在分离人声与非人声':'音声と非音声を分離しています','声源分离已完成':'音源分離が完了しました','完成声源分离后，人声与非人声录音会显示在这里。':'分離完了後、音声と非音声の録音がここに表示されます。','开始声源分离':'音源分離を開始','声源分离结果':'音源分離の結果','请先完成声源分离':'先に音源分離を完了してください','下载':'ダウンロード','下载中':'ダウンロード中','全部下载':'すべてダウンロード','导出会议':'会議をエクスポート','导出完成':'エクスポート完了','字幕文件':'字幕ファイル','原录音':'元の録音','带说话人和时间戳的逐字稿':'話者と時刻付き文字起こし','标准时间轴字幕':'標準タイムコード字幕','未修改的会议混音':'未変更の会議ミックス','内置':'内蔵','查看录音':'録音を表示','收起':'折りたたむ','选择录音并添加':'録音を選択して追加','播放录音':'録音を再生','未填写文本':'文字起こしなし','已复制到剪贴板':'クリップボードにコピーしました','文件已导出并在文件夹中显示':'ファイルを書き出してフォルダに表示しました','暂无可分享的内容':'共有できる内容がまだありません' },
-  ko: { '双轨录音':'이중 트랙 오디오','人声轨':'음성 트랙','非人声轨':'비음성 트랙','正在分离人声与非人声':'음성 및 비음성 트랙을 분리하는 중','声源分离已完成':'음원 분리 완료','完成声源分离后，人声与非人声录音会显示在这里。':'분리 완료 후 음성 및 비음성 녹음이 여기에 표시됩니다.','开始声源分离':'음원 분리 시작','声源分离结果':'음원 분리 결과','请先完成声源分离':'먼저 음원 분리를 완료하세요','下载':'다운로드','下载中':'다운로드 중','全部下载':'모두 다운로드','导出会议':'회의 내보내기','导出完成':'내보내기 완료','字幕文件':'자막 파일','原录音':'원본 녹음','带说话人和时间戳的逐字稿':'화자 및 시간 정보가 있는 녹취','标准时间轴字幕':'표준 시간 자막','未修改的会议混音':'수정하지 않은 회의 믹스','内置':'내장','查看录音':'녹음 보기','收起':'접기','选择录音并添加':'녹음 선택 및 추가','播放录音':'녹음 재생','未填写文本':'녹취 없음','已复制到剪贴板':'클립보드에 복사했습니다','文件已导出并在文件夹中显示':'파일을 내보내고 폴더에 표시했습니다','暂无可分享的内容':'아직 공유할 내용이 없습니다' },
-  fr: { '双轨录音':'Audio à deux pistes','人声轨':'Piste vocale','非人声轨':'Piste non vocale','正在分离人声与非人声':'Séparation des pistes vocale et non vocale','声源分离已完成':'Séparation des sources terminée','完成声源分离后，人声与非人声录音会显示在这里。':'Les enregistrements vocaux et non vocaux apparaîtront ici après la séparation.','开始声源分离':'Démarrer la séparation des sources','声源分离结果':'Résultat de la séparation des sources','请先完成声源分离':'Terminez d’abord la séparation des sources','下载':'Télécharger','下载中':'Téléchargement','全部下载':'Tout télécharger','导出会议':'Exporter la réunion','导出完成':'Exportation terminée','字幕文件':'Fichier de sous-titres','原录音':'Enregistrement original','带说话人和时间戳的逐字稿':'Transcription avec locuteurs et horodatage','标准时间轴字幕':'Sous-titres temporels standard','未修改的会议混音':'Mixage de réunion non modifié','内置':'Intégré','查看录音':'Voir les enregistrements','收起':'Réduire','选择录音并添加':'Choisir un enregistrement et ajouter','播放录音':'Lire l’enregistrement','未填写文本':'Aucune transcription','已复制到剪贴板':'Copié dans le presse-papiers','文件已导出并在文件夹中显示':'Fichier exporté et affiché dans le dossier','暂无可分享的内容':'Rien à partager pour le moment' },
-  de: { '双轨录音':'Zweispur-Audio','人声轨':'Stimmspur','非人声轨':'Nicht-Stimmspur','正在分离人声与非人声':'Stimm- und Nicht-Stimmspur werden getrennt','声源分离已完成':'Quellentrennung abgeschlossen','完成声源分离后，人声与非人声录音会显示在这里。':'Nach der Trennung erscheinen Stimm- und Nicht-Stimmaufnahmen hier.','开始声源分离':'Quellentrennung starten','声源分离结果':'Ergebnis der Quellentrennung','请先完成声源分离':'Schließen Sie zuerst die Quellentrennung ab','下载':'Herunterladen','下载中':'Wird heruntergeladen','全部下载':'Alle herunterladen','导出会议':'Besprechung exportieren','导出完成':'Export abgeschlossen','字幕文件':'Untertiteldatei','原录音':'Originalaufnahme','带说话人和时间戳的逐字稿':'Transkript mit Sprechern und Zeitstempeln','标准时间轴字幕':'Standard-Timeline-Untertitel','未修改的会议混音':'Unveränderter Besprechungsmix','内置':'Integriert','查看录音':'Aufnahmen anzeigen','收起':'Einklappen','选择录音并添加':'Aufnahme auswählen und hinzufügen','播放录音':'Aufnahme abspielen','未填写文本':'Kein Transkript','已复制到剪贴板':'In die Zwischenablage kopiert','文件已导出并在文件夹中显示':'Datei exportiert und im Ordner angezeigt','暂无可分享的内容':'Noch nichts zu teilen' },
-  ru: { '双轨录音':'Двухдорожечное аудио','人声轨':'Голосовая дорожка','非人声轨':'Неголосовая дорожка','正在分离人声与非人声':'Разделяются голосовая и неголосовая дорожки','声源分离已完成':'Разделение источников завершено','完成声源分离后，人声与非人声录音会显示在这里。':'После разделения здесь появятся голосовая и неголосовая записи.','开始声源分离':'Начать разделение источников','声源分离结果':'Результат разделения источников','请先完成声源分离':'Сначала завершите разделение источников','下载':'Скачать','下载中':'Скачивание','全部下载':'Скачать всё','导出会议':'Экспортировать встречу','导出完成':'Экспорт завершён','字幕文件':'Файл субтитров','原录音':'Исходная запись','带说话人和时间戳的逐字稿':'Расшифровка с говорящими и метками времени','标准时间轴字幕':'Стандартные субтитры по времени','未修改的会议混音':'Неизменённый микс встречи','内置':'Встроено','查看录音':'Просмотреть записи','收起':'Свернуть','选择录音并添加':'Выбрать и добавить запись','播放录音':'Воспроизвести запись','未填写文本':'Нет расшифровки','已复制到剪贴板':'Скопировано в буфер обмена','文件已导出并在文件夹中显示':'Файл экспортирован и показан в папке','暂无可分享的内容':'Пока нечем поделиться' },
+  es: { '下载':'Descargar','下载中':'Descargando','全部下载':'Descargar todo','导出会议':'Exportar reunión','导出完成':'Exportación completada','字幕文件':'Archivo de subtítulos','原录音':'Grabación original','带说话人和时间戳的逐字稿':'Transcripción con hablantes y marcas de tiempo','标准时间轴字幕':'Subtítulos cronometrados estándar','未修改的会议混音':'Mezcla de reunión sin modificar','内置':'Integrado','查看录音':'Ver grabaciones','收起':'Contraer','选择录音并添加':'Elegir grabación y añadir','播放录音':'Reproducir grabación','未填写文本':'Sin transcripción','已复制到剪贴板':'Copiado al portapapeles','文件已导出并在文件夹中显示':'Archivo exportado y mostrado en la carpeta','暂无可分享的内容':'Aún no hay nada que compartir' },
+  ja: { '下载':'ダウンロード','下载中':'ダウンロード中','全部下载':'すべてダウンロード','导出会议':'会議をエクスポート','导出完成':'エクスポート完了','字幕文件':'字幕ファイル','原录音':'元の録音','带说话人和时间戳的逐字稿':'話者と時刻付き文字起こし','标准时间轴字幕':'標準タイムコード字幕','未修改的会议混音':'未変更の会議ミックス','内置':'内蔵','查看录音':'録音を表示','收起':'折りたたむ','选择录音并添加':'録音を選択して追加','播放录音':'録音を再生','未填写文本':'文字起こしなし','已复制到剪贴板':'クリップボードにコピーしました','文件已导出并在文件夹中显示':'ファイルを書き出してフォルダに表示しました','暂无可分享的内容':'共有できる内容がまだありません' },
+  ko: { '下载':'다운로드','下载中':'다운로드 중','全部下载':'모두 다운로드','导出会议':'회의 내보내기','导出完成':'내보내기 완료','字幕文件':'자막 파일','原录音':'원본 녹음','带说话人和时间戳的逐字稿':'화자 및 시간 정보가 있는 녹취','标准时间轴字幕':'표준 시간 자막','未修改的会议混音':'수정하지 않은 회의 믹스','内置':'내장','查看录音':'녹음 보기','收起':'접기','选择录音并添加':'녹음 선택 및 추가','播放录音':'녹음 재생','未填写文本':'녹취 없음','已复制到剪贴板':'클립보드에 복사했습니다','文件已导出并在文件夹中显示':'파일을 내보내고 폴더에 표시했습니다','暂无可分享的内容':'아직 공유할 내용이 없습니다' },
+  fr: { '下载':'Télécharger','下载中':'Téléchargement','全部下载':'Tout télécharger','导出会议':'Exporter la réunion','导出完成':'Exportation terminée','字幕文件':'Fichier de sous-titres','原录音':'Enregistrement original','带说话人和时间戳的逐字稿':'Transcription avec locuteurs et horodatage','标准时间轴字幕':'Sous-titres temporels standard','未修改的会议混音':'Mixage de réunion non modifié','内置':'Intégré','查看录音':'Voir les enregistrements','收起':'Réduire','选择录音并添加':'Choisir un enregistrement et ajouter','播放录音':'Lire l’enregistrement','未填写文本':'Aucune transcription','已复制到剪贴板':'Copié dans le presse-papiers','文件已导出并在文件夹中显示':'Fichier exporté et affiché dans le dossier','暂无可分享的内容':'Rien à partager pour le moment' },
+  de: { '下载':'Herunterladen','下载中':'Wird heruntergeladen','全部下载':'Alle herunterladen','导出会议':'Besprechung exportieren','导出完成':'Export abgeschlossen','字幕文件':'Untertiteldatei','原录音':'Originalaufnahme','带说话人和时间戳的逐字稿':'Transkript mit Sprechern und Zeitstempeln','标准时间轴字幕':'Standard-Timeline-Untertitel','未修改的会议混音':'Unveränderter Besprechungsmix','内置':'Integriert','查看录音':'Aufnahmen anzeigen','收起':'Einklappen','选择录音并添加':'Aufnahme auswählen und hinzufügen','播放录音':'Aufnahme abspielen','未填写文本':'Kein Transkript','已复制到剪贴板':'In die Zwischenablage kopiert','文件已导出并在文件夹中显示':'Datei exportiert und im Ordner angezeigt','暂无可分享的内容':'Noch nichts zu teilen' },
+  ru: { '下载':'Скачать','下载中':'Скачивание','全部下载':'Скачать всё','导出会议':'Экспортировать встречу','导出完成':'Экспорт завершён','字幕文件':'Файл субтитров','原录音':'Исходная запись','带说话人和时间戳的逐字稿':'Расшифровка с говорящими и метками времени','标准时间轴字幕':'Стандартные субтитры по времени','未修改的会议混音':'Неизменённый микс встречи','内置':'Встроено','查看录音':'Просмотреть записи','收起':'Свернуть','选择录音并添加':'Выбрать и добавить запись','播放录音':'Воспроизвести запись','未填写文本':'Нет расшифровки','已复制到剪贴板':'Скопировано в буфер обмена','文件已导出并在文件夹中显示':'Файл экспортирован и показан в папке','暂无可分享的内容':'Пока нечем поделиться' },
 }).forEach(([code, labels]) => Object.assign(catalog[code].labels, labels));
 Object.entries({
   zh: { '进阶设置':'进阶设置','配置进阶设置':'配置进阶设置','恢复默认':'恢复默认','确定':'确定','已保存':'已保存','标记说话人':'标记说话人','选择已注册声纹或新建说话人。':'选择已注册声纹或新建说话人。','已注册声纹':'已注册声纹','新建说话人':'新建说话人','说话人名称':'说话人名称','可修改模型、端点静音、说话人分离及 sherpa-onnx 运行参数。':'可修改模型、端点静音、说话人分离及 sherpa-onnx 运行参数。','修改后会立即应用于下一次会议与精修。':'修改后会立即应用于下一次会议与精修。' },
@@ -570,14 +553,25 @@ const refinementStageLabels = {
 Object.entries(refinementStageLabels).forEach(([code, labels]) => Object.assign(catalog[code].labels, labels));
 
 const refinedModelOptionTags = {
-  zh: { 'qwen3-asr-0.6b-int8': ['多语言', '中英混说', '中等资源占用'], 'funasr-nano-int8': ['中文 / 英文 / 粤语', '较快'], 'qwen3-asr-1.7b-int8': ['多语言', '高精度', '较高资源占用'], 'whisper-large-v3': ['多语言', '兼容性强', '较慢'] },
-  en: { 'qwen3-asr-0.6b-int8': ['Multilingual', 'Chinese-English mixed', 'Moderate resources'], 'funasr-nano-int8': ['Chinese / English / Cantonese', 'Fast'], 'qwen3-asr-1.7b-int8': ['Multilingual', 'High accuracy', 'Higher resources'], 'whisper-large-v3': ['Multilingual', 'Broad compatibility', 'Slower'] },
-  es: { 'qwen3-asr-0.6b-int8': ['Multilingüe', 'Chino-inglés mixto', 'Recursos moderados'], 'funasr-nano-int8': ['Chino / inglés / cantonés', 'Rápido'], 'qwen3-asr-1.7b-int8': ['Multilingüe', 'Alta precisión', 'Más recursos'], 'whisper-large-v3': ['Multilingüe', 'Amplia compatibilidad', 'Más lento'] },
-  ja: { 'qwen3-asr-0.6b-int8': ['多言語', '中英語混在', '中程度のリソース'], 'funasr-nano-int8': ['中国語 / 英語 / 広東語', '高速'], 'qwen3-asr-1.7b-int8': ['多言語', '高精度', '高いリソース使用量'], 'whisper-large-v3': ['多言語', '高い互換性', '低速'] },
-  ko: { 'qwen3-asr-0.6b-int8': ['다국어', '중국어·영어 혼용', '중간 리소스'], 'funasr-nano-int8': ['중국어 / 영어 / 광둥어', '빠름'], 'qwen3-asr-1.7b-int8': ['다국어', '고정밀', '높은 리소스'], 'whisper-large-v3': ['다국어', '폭넓은 호환성', '느림'] },
-  fr: { 'qwen3-asr-0.6b-int8': ['Multilingue', 'Chinois-anglais mixte', 'Ressources modérées'], 'funasr-nano-int8': ['Chinois / anglais / cantonais', 'Rapide'], 'qwen3-asr-1.7b-int8': ['Multilingue', 'Haute précision', 'Ressources élevées'], 'whisper-large-v3': ['Multilingue', 'Large compatibilité', 'Plus lent'] },
-  de: { 'qwen3-asr-0.6b-int8': ['Mehrsprachig', 'Chinesisch-Englisch gemischt', 'Mittlerer Ressourcenbedarf'], 'funasr-nano-int8': ['Chinesisch / Englisch / Kantonesisch', 'Schnell'], 'qwen3-asr-1.7b-int8': ['Mehrsprachig', 'Hohe Genauigkeit', 'Höherer Ressourcenbedarf'], 'whisper-large-v3': ['Mehrsprachig', 'Hohe Kompatibilität', 'Langsamer'] },
-  ru: { 'qwen3-asr-0.6b-int8': ['Многоязычный', 'Китайский и английский', 'Среднее потребление ресурсов'], 'funasr-nano-int8': ['Китайский / английский / кантонский', 'Быстрый'], 'qwen3-asr-1.7b-int8': ['Многоязычный', 'Высокая точность', 'Высокое потребление ресурсов'], 'whisper-large-v3': ['Многоязычный', 'Широкая совместимость', 'Медленнее'] },
+  zh: { 'qwen3-asr-0.6b-int8': ['多语言', '中英混说', '中等资源占用'], 'funasr-nano-int8': ['中文 / 英文 / 粤语', '较快'], 'whisper-large-v3': ['多语言', '兼容性强', '较慢'] },
+  en: { 'qwen3-asr-0.6b-int8': ['Multilingual', 'Chinese-English mixed', 'Moderate resources'], 'funasr-nano-int8': ['Chinese / English / Cantonese', 'Fast'], 'whisper-large-v3': ['Multilingual', 'Broad compatibility', 'Slower'] },
+  es: { 'qwen3-asr-0.6b-int8': ['Multilingüe', 'Chino-inglés mixto', 'Recursos moderados'], 'funasr-nano-int8': ['Chino / inglés / cantonés', 'Rápido'], 'whisper-large-v3': ['Multilingüe', 'Amplia compatibilidad', 'Más lento'] },
+  ja: { 'qwen3-asr-0.6b-int8': ['多言語', '中英語混在', '中程度のリソース'], 'funasr-nano-int8': ['中国語 / 英語 / 広東語', '高速'], 'whisper-large-v3': ['多言語', '高い互換性', '低速'] },
+  ko: { 'qwen3-asr-0.6b-int8': ['다국어', '중국어·영어 혼용', '중간 리소스'], 'funasr-nano-int8': ['중국어 / 영어 / 광둥어', '빠름'], 'whisper-large-v3': ['다국어', '폭넓은 호환성', '느림'] },
+  fr: { 'qwen3-asr-0.6b-int8': ['Multilingue', 'Chinois-anglais mixte', 'Ressources modérées'], 'funasr-nano-int8': ['Chinois / anglais / cantonais', 'Rapide'], 'whisper-large-v3': ['Multilingue', 'Large compatibilité', 'Plus lent'] },
+  de: { 'qwen3-asr-0.6b-int8': ['Mehrsprachig', 'Chinesisch-Englisch gemischt', 'Mittlerer Ressourcenbedarf'], 'funasr-nano-int8': ['Chinesisch / Englisch / Kantonesisch', 'Schnell'], 'whisper-large-v3': ['Mehrsprachig', 'Hohe Kompatibilität', 'Langsamer'] },
+  ru: { 'qwen3-asr-0.6b-int8': ['Многоязычный', 'Китайский и английский', 'Среднее потребление ресурсов'], 'funasr-nano-int8': ['Китайский / английский / кантонский', 'Быстрый'], 'whisper-large-v3': ['Многоязычный', 'Широкая совместимость', 'Медленнее'] },
+};
+
+const streamingModelOptionTags = {
+  zh: { 'zipformer-zh-xlarge-streaming-int8': ['中文'], 'zipformer-en-streaming-int8': ['英语'], 'zipformer-ko-streaming-int8': ['韩语'], 'zipformer-fr-streaming-int8': ['法语'], 'nemotron-3.5-asr-streaming-0.6b-560ms-int8': ['多语言'] },
+  en: { 'zipformer-zh-xlarge-streaming-int8': ['Chinese'], 'zipformer-en-streaming-int8': ['English'], 'zipformer-ko-streaming-int8': ['Korean'], 'zipformer-fr-streaming-int8': ['French'], 'nemotron-3.5-asr-streaming-0.6b-560ms-int8': ['Multilingual'] },
+  es: { 'zipformer-zh-xlarge-streaming-int8': ['Chino'], 'zipformer-en-streaming-int8': ['Inglés'], 'zipformer-ko-streaming-int8': ['Coreano'], 'zipformer-fr-streaming-int8': ['Francés'], 'nemotron-3.5-asr-streaming-0.6b-560ms-int8': ['Multilingüe'] },
+  ja: { 'zipformer-zh-xlarge-streaming-int8': ['中国語'], 'zipformer-en-streaming-int8': ['英語'], 'zipformer-ko-streaming-int8': ['韓国語'], 'zipformer-fr-streaming-int8': ['フランス語'], 'nemotron-3.5-asr-streaming-0.6b-560ms-int8': ['多言語'] },
+  ko: { 'zipformer-zh-xlarge-streaming-int8': ['중국어'], 'zipformer-en-streaming-int8': ['영어'], 'zipformer-ko-streaming-int8': ['한국어'], 'zipformer-fr-streaming-int8': ['프랑스어'], 'nemotron-3.5-asr-streaming-0.6b-560ms-int8': ['다국어'] },
+  fr: { 'zipformer-zh-xlarge-streaming-int8': ['Chinois'], 'zipformer-en-streaming-int8': ['Anglais'], 'zipformer-ko-streaming-int8': ['Coréen'], 'zipformer-fr-streaming-int8': ['Français'], 'nemotron-3.5-asr-streaming-0.6b-560ms-int8': ['Multilingue'] },
+  de: { 'zipformer-zh-xlarge-streaming-int8': ['Chinesisch'], 'zipformer-en-streaming-int8': ['Englisch'], 'zipformer-ko-streaming-int8': ['Koreanisch'], 'zipformer-fr-streaming-int8': ['Französisch'], 'nemotron-3.5-asr-streaming-0.6b-560ms-int8': ['Mehrsprachig'] },
+  ru: { 'zipformer-zh-xlarge-streaming-int8': ['Китайский'], 'zipformer-en-streaming-int8': ['Английский'], 'zipformer-ko-streaming-int8': ['Корейский'], 'zipformer-fr-streaming-int8': ['Французский'], 'nemotron-3.5-asr-streaming-0.6b-560ms-int8': ['Многоязычный'] },
 };
 
 const zipformerChineseLanguages = {
@@ -589,5 +583,105 @@ Object.entries(appCopy.modalCopy).forEach(([code, copy]) => {
     : item);
 });
 
-window.BreviaLocaleData = { catalog, appCopy, refinedModelOptionTags };
+const micErrorLabels = {
+  zh: {
+    '未检测到麦克风设备，请在系统设置中开启麦克风访问权限并确认已连接麦克风后重试': '未检测到麦克风设备，请在系统设置中开启麦克风访问权限并确认已连接麦克风后重试',
+    '麦克风访问被拒绝，请在系统设置中允许应用使用麦克风后重试': '麦克风访问被拒绝，请在系统设置中允许应用使用麦克风后重试',
+    '麦克风被其他程序占用，请关闭占用麦克风的程序后重试': '麦克风被其他程序占用，请关闭占用麦克风的程序后重试',
+    '无法获取麦克风': '无法获取麦克风',
+    '无法获取系统音频，请检查系统权限后重试': '无法获取系统音频，请检查系统权限后重试',
+    '未检测到系统音频，请在系统设置中允许屏幕与系统音频录制后重试': '未检测到系统音频，请在系统设置中允许屏幕与系统音频录制后重试',
+    '麦克风没有可用的音频轨道': '麦克风没有可用的音频轨道',
+    '至少选择一个音频输入': '至少选择一个音频输入',
+    '系统音频未产生音频数据': '系统音频未产生音频数据',
+    '麦克风未产生音频数据': '麦克风未产生音频数据',
+  },
+  en: {
+    '未检测到麦克风设备，请在系统设置中开启麦克风访问权限并确认已连接麦克风后重试': 'No microphone was detected. Enable microphone access in System Settings, make sure a microphone is connected, then try again.',
+    '麦克风访问被拒绝，请在系统设置中允许应用使用麦克风后重试': 'Microphone access was denied. Allow the app to use the microphone in System Settings, then try again.',
+    '麦克风被其他程序占用，请关闭占用麦克风的程序后重试': 'The microphone is in use by another app. Close that app, then try again.',
+    '无法获取麦克风': 'Unable to access the microphone',
+    '无法获取系统音频，请检查系统权限后重试': 'Unable to capture system audio. Check system permissions, then try again.',
+    '未检测到系统音频，请在系统设置中允许屏幕与系统音频录制后重试': 'No system audio was detected. Allow screen and system-audio recording in System Settings, then try again.',
+    '麦克风没有可用的音频轨道': 'The microphone has no available audio track',
+    '至少选择一个音频输入': 'Select at least one audio input',
+    '系统音频未产生音频数据': 'System audio produced no audio data',
+    '麦克风未产生音频数据': 'The microphone produced no audio data',
+  },
+  es: {
+    '未检测到麦克风设备，请在系统设置中开启麦克风访问权限并确认已连接麦克风后重试': 'No se detectó ningún micrófono. Habilita el acceso al micrófono en Ajustes del Sistema, confirma que hay uno conectado y vuelve a intentarlo.',
+    '麦克风访问被拒绝，请在系统设置中允许应用使用麦克风后重试': 'Se denegó el acceso al micrófono. Permite que la app use el micrófono en Ajustes del Sistema y vuelve a intentarlo.',
+    '麦克风被其他程序占用，请关闭占用麦克风的程序后重试': 'El micrófono está en uso por otra app. Ciérrala y vuelve a intentarlo.',
+    '无法获取麦克风': 'No se pudo acceder al micrófono',
+    '无法获取系统音频，请检查系统权限后重试': 'No se pudo capturar el audio del sistema. Revisa los permisos del sistema y vuelve a intentarlo.',
+    '未检测到系统音频，请在系统设置中允许屏幕与系统音频录制后重试': 'No se detectó audio del sistema. Permite la grabación de pantalla y audio del sistema en Ajustes del Sistema y vuelve a intentarlo.',
+    '麦克风没有可用的音频轨道': 'El micrófono no tiene una pista de audio disponible',
+    '至少选择一个音频输入': 'Selecciona al menos una entrada de audio',
+    '系统音频未产生音频数据': 'El audio del sistema no produjo datos de audio',
+    '麦克风未产生音频数据': 'El micrófono no produjo datos de audio',
+  },
+  ja: {
+    '未检测到麦克风设备，请在系统设置中开启麦克风访问权限并确认已连接麦克风后重试': 'マイクが検出されませんでした。システム設定でマイクへのアクセスを許可し、マイクが接続されていることを確認してから再試行してください。',
+    '麦克风访问被拒绝，请在系统设置中允许应用使用麦克风后重试': 'マイクへのアクセスが拒否されました。システム設定でアプリのマイク使用を許可してから再試行してください。',
+    '麦克风被其他程序占用，请关闭占用麦克风的程序后重试': 'マイクが他のプログラムで使用されています。使用中のプログラムを閉じてから再試行してください。',
+    '无法获取麦克风': 'マイクを取得できません',
+    '无法获取系统音频，请检查系统权限后重试': 'システム音声を取得できません。システムの権限を確認して再試行してください。',
+    '未检测到系统音频，请在系统设置中允许屏幕与系统音频录制后重试': 'システム音声が検出されませんでした。システム設定で画面とシステム音声の録音を許可してから再試行してください。',
+    '麦克风没有可用的音频轨道': 'マイクに利用可能な音声トラックがありません',
+    '至少选择一个音频输入': '少なくとも 1 つの音声入力を選択してください',
+    '系统音频未产生音频数据': 'システム音声から音声データが生成されませんでした',
+    '麦克风未产生音频数据': 'マイクから音声データが生成されませんでした',
+  },
+  ko: {
+    '未检测到麦克风设备，请在系统设置中开启麦克风访问权限并确认已连接麦克风后重试': '마이크를 감지하지 못했습니다. 시스템 설정에서 마이크 접근을 허용하고 마이크가 연결되어 있는지 확인한 후 다시 시도하세요.',
+    '麦克风访问被拒绝，请在系统设置中允许应用使用麦克风后重试': '마이크 접근이 거부되었습니다. 시스템 설정에서 앱의 마이크 사용을 허용한 후 다시 시도하세요.',
+    '麦克风被其他程序占用，请关闭占用麦克风的程序后重试': '마이크를 다른 프로그램이 사용 중입니다. 해당 프로그램을 닫은 후 다시 시도하세요.',
+    '无法获取麦克风': '마이크를 가져올 수 없습니다',
+    '无法获取系统音频，请检查系统权限后重试': '시스템 오디오를 가져올 수 없습니다. 시스템 권한을 확인한 후 다시 시도하세요.',
+    '未检测到系统音频，请在系统设置中允许屏幕与系统音频录制后重试': '시스템 오디오가 감지되지 않았습니다. 시스템 설정에서 화면 및 시스템 오디오 녹음을 허용한 후 다시 시도하세요.',
+    '麦克风没有可用的音频轨道': '마이크에 사용 가능한 오디오 트랙이 없습니다',
+    '至少选择一个音频输入': '오디오 입력을 하나 이상 선택하세요',
+    '系统音频未产生音频数据': '시스템 오디오에서 오디오 데이터가 생성되지 않았습니다',
+    '麦克风未产生音频数据': '마이크에서 오디오 데이터가 생성되지 않았습니다',
+  },
+  fr: {
+    '未检测到麦克风设备，请在系统设置中开启麦克风访问权限并确认已连接麦克风后重试': 'Aucun microphone détecté. Autorisez l’accès au microphone dans Réglages Système, vérifiez qu’un microphone est connecté, puis réessayez.',
+    '麦克风访问被拒绝，请在系统设置中允许应用使用麦克风后重试': 'L’accès au microphone a été refusé. Autorisez l’application à utiliser le microphone dans Réglages Système, puis réessayez.',
+    '麦克风被其他程序占用，请关闭占用麦克风的程序后重试': 'Le microphone est utilisé par un autre programme. Fermez ce programme, puis réessayez.',
+    '无法获取麦克风': 'Impossible d’accéder au microphone',
+    '无法获取系统音频，请检查系统权限后重试': 'Impossible de capturer l’audio système. Vérifiez les autorisations système, puis réessayez.',
+    '未检测到系统音频，请在系统设置中允许屏幕与系统音频录制后重试': 'Aucun audio système détecté. Autorisez l’enregistrement de l’écran et de l’audio système dans Réglages Système, puis réessayez.',
+    '麦克风没有可用的音频轨道': 'Le microphone n’a aucune piste audio disponible',
+    '至少选择一个音频输入': 'Sélectionnez au moins une entrée audio',
+    '系统音频未产生音频数据': 'L’audio système n’a produit aucune donnée audio',
+    '麦克风未产生音频数据': 'Le microphone n’a produit aucune donnée audio',
+  },
+  de: {
+    '未检测到麦克风设备，请在系统设置中开启麦克风访问权限并确认已连接麦克风后重试': 'Kein Mikrofon erkannt. Erlauben Sie in den Systemeinstellungen den Mikrofonzugriff, stellen Sie sicher, dass ein Mikrofon angeschlossen ist, und versuchen Sie es erneut.',
+    '麦克风访问被拒绝，请在系统设置中允许应用使用麦克风后重试': 'Der Mikrofonzugriff wurde verweigert. Erlauben Sie der App in den Systemeinstellungen die Verwendung des Mikrofons und versuchen Sie es erneut.',
+    '麦克风被其他程序占用，请关闭占用麦克风的程序后重试': 'Das Mikrofon wird von einem anderen Programm verwendet. Schließen Sie dieses Programm und versuchen Sie es erneut.',
+    '无法获取麦克风': 'Mikrofon nicht verfügbar',
+    '无法获取系统音频，请检查系统权限后重试': 'Systemaudio konnte nicht erfasst werden. Prüfen Sie die Systemberechtigungen und versuchen Sie es erneut.',
+    '未检测到系统音频，请在系统设置中允许屏幕与系统音频录制后重试': 'Kein Systemaudio erkannt. Erlauben Sie in den Systemeinstellungen die Aufnahme von Bildschirm und Systemaudio und versuchen Sie es erneut.',
+    '麦克风没有可用的音频轨道': 'Das Mikrofon hat keine verfügbare Audiospur',
+    '至少选择一个音频输入': 'Wählen Sie mindestens eine Audioeingabe aus',
+    '系统音频未产生音频数据': 'Systemaudio hat keine Audiodaten erzeugt',
+    '麦克风未产生音频数据': 'Das Mikrofon hat keine Audiodaten erzeugt',
+  },
+  ru: {
+    '未检测到麦克风设备，请在系统设置中开启麦克风访问权限并确认已连接麦克风后重试': 'Микрофон не обнаружен. Разрешите доступ к микрофону в системных настройках, убедитесь, что он подключён, и повторите попытку.',
+    '麦克风访问被拒绝，请在系统设置中允许应用使用麦克风后重试': 'Доступ к микрофону отклонён. Разрешите приложению использовать микрофон в системных настройках и повторите попытку.',
+    '麦克风被其他程序占用，请关闭占用麦克风的程序后重试': 'Микрофон занят другой программой. Закройте её и повторите попытку.',
+    '无法获取麦克风': 'Не удалось получить доступ к микрофону',
+    '无法获取系统音频，请检查系统权限后重试': 'Не удалось получить системный звук. Проверьте системные разрешения и повторите попытку.',
+    '未检测到系统音频，请在系统设置中允许屏幕与系统音频录制后重试': 'Системный звук не обнаружен. Разрешите запись экрана и системного звука в системных настройках и повторите попытку.',
+    '麦克风没有可用的音频轨道': 'У микрофона нет доступной звуковой дорожки',
+    '至少选择一个音频输入': 'Выберите хотя бы один источник звука',
+    '系统音频未产生音频数据': 'Системный звук не дал аудиоданных',
+    '麦克风未产生音频数据': 'Микрофон не дал аудиоданных',
+  },
+};
+Object.entries(micErrorLabels).forEach(([code, labels]) => Object.assign(catalog[code].labels, labels));
+
+window.BreviaLocaleData = { catalog, appCopy, refinedModelOptionTags, streamingModelOptionTags };
 })();

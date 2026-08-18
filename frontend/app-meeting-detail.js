@@ -1,32 +1,3 @@
-let dualTrackAudios = [];
-
-function renderDualTrackPanel(meeting) {
-  dualTrackAudios.forEach((audio) => { audio.pause(); audio.removeAttribute('src'); });
-  dualTrackAudios = [];
-  const panel = document.querySelector('[data-detail-panel="tracks"]');
-  if (!panel) return;
-  const tracks = [['vocals', t('人声轨'), meeting.audio.playback.vocals], ['accompaniment', t('非人声轨'), meeting.audio.playback.accompaniment]].filter(([, , path]) => path);
-  if (!tracks.length) {
-    panel.innerHTML = `<div class="dual-track-empty"><p>${t('完成声源分离后，人声与非人声录音会显示在这里。')}</p><button class="secondary" type="button" data-separate-from-tracks>${t('开始声源分离')}</button></div>`;
-    return;
-  }
-  panel.innerHTML = tracks.map(([id, label]) => `<section class="track-player" data-track-player="${id}"><header><b>${label}</b><small>WAV</small></header><div><button class="play" type="button" aria-label="${t('播放录音')}">▶</button><time>00:00</time><input type="range" min="0" max="1" value="0" aria-label="${label}" /></div></section>`).join('');
-  tracks.forEach(async ([id, , path]) => {
-    const root = panel.querySelector(`[data-track-player="${id}"]`);
-    const button = root.querySelector('.play');
-    const range = root.querySelector('input');
-    const time = root.querySelector('time');
-    const audio = new Audio();
-    dualTrackAudios.push(audio);
-    try { audio.src = await window.brevia.audioUrl(path); } catch (error) { showToast(error.message); return; }
-    const update = () => { range.value = audio.currentTime; time.textContent = formatMeetingTime(audio.currentTime * 1000); button.textContent = audio.paused ? '▶' : '❚❚'; button.classList.toggle('is-playing', !audio.paused); };
-    button.addEventListener('click', async () => { dualTrackAudios.filter((item) => item !== audio).forEach((item) => item.pause()); if (audio.paused) await audio.play(); else audio.pause(); update(); });
-    range.addEventListener('input', () => { audio.currentTime = Number(range.value); update(); });
-    audio.addEventListener('loadedmetadata', () => { range.max = audio.duration || 1; });
-    ['timeupdate', 'play', 'pause', 'ended'].forEach((event) => audio.addEventListener(event, update));
-  });
-}
-
 function displaySpeakerName(name) {
   // 后端已把命中声纹的 profile-{id} 与非聚类轨道重命名为真实姓名/“Local user”，
   // 这里只把未命中的原始标签（spk-N / mic-spk-N / system-spk-N）转成可读文案。
@@ -68,18 +39,4 @@ function applyBackendDetail(meeting) {
   } else { progress.value = playerAudio.currentTime; renderPlayerTime(); }
   renderMeetingDetail();
   if (transcriptScrollTop !== undefined) document.querySelector('.transcript-body')?.scrollTo({ top: transcriptScrollTop, behavior: 'instant' });
-}
-
-async function startSeparation() {
-  const meetingId = breviaClient?.state.selectedMeetingId;
-  if (!window.brevia || !meetingId) return;
-  if (!modelPaths.has('spleeter-2stems-fp16')) {
-    queueModelTask('meeting.separate', { meeting_id: meetingId }, ['spleeter-2stems-fp16']);
-    requiredModelIds.add('spleeter-2stems-fp16'); renderRequiredModelsCard(); return;
-  }
-  showSeparationProgress(0, 100);
-  try {
-    const result = await window.brevia.meeting.separate({ meeting_id: meetingId });
-    if (result?.model_required) result.model_required.forEach((id) => requiredModelIds.add(id));
-  } catch (error) { document.querySelector('#separation-progress')?.remove(); showToast(error.message); }
 }

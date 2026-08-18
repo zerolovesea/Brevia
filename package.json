@@ -101,6 +101,13 @@
         }
       ],
       "artifactName": "${productName}-${version}-x64-setup.${ext}"
+    },
+    "nsis": {
+      "include": "build/installer.nsh",
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false
     }
   },
   "keywords": [],

@@ -3,6 +3,7 @@
 import json
 import logging
 import shutil
+import wave
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
@@ -50,7 +51,7 @@ class MeetingStoreMixin:
                 )
                 try:
                     self.finish_meeting(meeting["id"], duration_ms)
-                except (OSError, ValueError):
+                except (OSError, ValueError, wave.Error):
                     logger.exception("Failed to recover meeting %s", meeting["id"])
                     self.set_status(meeting["id"], "ready")
             else:

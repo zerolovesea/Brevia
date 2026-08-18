@@ -1,5 +1,6 @@
 """稳定存储组件的共享 SQLite 连接和文件系统根目录。"""
 
+import os
 import sqlite3
 import threading
 from contextlib import contextmanager
@@ -136,7 +137,7 @@ class StoreBase:
         self.meetings_dir = self.root / "meetings"
         self.speaker_profiles_dir = self.root / "speaker-profiles"
         self.models_dir = Path(
-            __import__("os").environ.get("BREVIA_MODELS_DIR", self.root / "models")
+            os.environ.get("BREVIA_MODELS_DIR", self.root / "models")
         ).expanduser()
         self.meetings_dir.mkdir(exist_ok=True)
         self.speaker_profiles_dir.mkdir(exist_ok=True)
@@ -154,22 +155,28 @@ class StoreBase:
                 if row["pk"]
             ]
             if segment_key == ["id", "version"]:
-                db.executescript(
-                    """CREATE TABLE segments_new (
-                            id TEXT NOT NULL, meeting_id TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
-                            revision INTEGER NOT NULL DEFAULT 0, version TEXT NOT NULL, track TEXT NOT NULL,
-                            start_ms INTEGER NOT NULL, end_ms INTEGER NOT NULL, speaker TEXT NOT NULL, text TEXT NOT NULL,
-                            translation TEXT, user_edited INTEGER NOT NULL DEFAULT 0,
-                            PRIMARY KEY (meeting_id, id, version)
-                        );
-                        INSERT INTO segments_new SELECT id,meeting_id,revision,version,track,start_ms,end_ms,speaker,text,translation,user_edited FROM segments;
-                        DROP TABLE segments;
-                        ALTER TABLE segments_new RENAME TO segments;
-                        CREATE INDEX segments_meeting_time ON segments(meeting_id, start_ms);"""
+                # 重建表以把 meeting_id 并入主键；必须连同 word_timestamps 一并迁移，
+                # 否则从中间版本升级会静默丢失全部词级时间戳。
+                db.execute(
+                    "CREATE TABLE segments_new ("
+                    "id TEXT NOT NULL, meeting_id TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE, "
+                    "revision INTEGER NOT NULL DEFAULT 0, version TEXT NOT NULL, track TEXT NOT NULL, "
+                    "start_ms INTEGER NOT NULL, end_ms INTEGER NOT NULL, speaker TEXT NOT NULL, text TEXT NOT NULL, "
+                    "word_timestamps TEXT, translation TEXT, user_edited INTEGER NOT NULL DEFAULT 0, "
+                    "PRIMARY KEY (meeting_id, id, version))"
                 )
+                db.execute(
+                    "INSERT INTO segments_new SELECT id,meeting_id,revision,version,track,start_ms,end_ms,"
+                    "speaker,text,word_timestamps,translation,user_edited FROM segments"
+                )
+                db.execute("DROP TABLE segments")
+                db.execute("ALTER TABLE segments_new RENAME TO segments")
+                db.execute("CREATE INDEX segments_meeting_time ON segments(meeting_id, start_ms)")
             columns = {row["name"] for row in db.execute("PRAGMA table_info(meetings)")}
             if "workspace_id" not in columns:
-                db.execute("ALTER TABLE meetings ADD COLUMN workspace_id TEXT")
+                db.execute(
+                    "ALTER TABLE meetings ADD COLUMN workspace_id TEXT REFERENCES workspaces(id) ON DELETE SET NULL"
+                )
             if "previous_workspace_id" not in columns:
                 db.execute("ALTER TABLE meetings ADD COLUMN previous_workspace_id TEXT")
             if "is_example" not in columns:

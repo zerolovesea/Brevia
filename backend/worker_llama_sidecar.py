@@ -55,7 +55,7 @@ class _Sidecar:
                 self.cmd,
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                stderr=None,
                 text=True,
                 bufsize=1,
             )
