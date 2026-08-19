@@ -259,7 +259,13 @@ class WorkerClient {
       }, timeout);
       this.pending.set(requestId, { resolve, reject, timer });
       try {
-        this.process.stdin.write(`${JSON.stringify({ id: requestId, ...value })}\n`, (error) => {
+        // 与 Python 侧 json.dumps(ensure_ascii=True) 对齐：把命令 JSON 里的非 ASCII
+        // 字符转义为 \uXXXX，使写入 worker stdin 的字节流保持纯 ASCII。Windows 上
+        // worker 的 stdin 可能按系统 ANSI 代码页（中文区域为 GBK）解码，原始 UTF-8
+        // 中文会变成乱码（如“会议”→“浼氳”）；纯 ASCII 在任何代码页下都能正确还原。
+        const asciiSafe = JSON.stringify({ id: requestId, ...value })
+          .replace(/[\u0080-\uffff]/g, (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`);
+        this.process.stdin.write(`${asciiSafe}\n`, (error) => {
           if (error) {
             this.pending.delete(requestId);
             clearTimeout(timer);

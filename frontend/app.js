@@ -351,11 +351,18 @@ function summaryProviderLabel(provider) {
 }
 // 只有一套生效配置，但每个供应商的模型/地址/密钥引用分别留存，来回切换不会丢失已填内容。
 let summaryConfig = { version: 2, provider: 'built-in', providers: {} };
+// 配置写入版本号：loadSummaryConfig 读取期间若发生保存，旧值作废（防覆盖竞态）。
+let summaryConfigRevision = 0;
 // 内置供应商在表单里待选的模型。重新渲染（下载/删除/选择）时存活，切换供应商时重置。
 let selectedBuiltinModel = '';
 /** 返回当前供应商的已存字段。@returns {object} 供应商条目。*/
 function summaryProviderEntry(provider = summaryConfig.provider) {
   return summaryConfig.providers[provider] || {};
+}
+/** 内置供应商可用的已安装模型；未显式选择时回退到第一个已安装的 llama-chat 模型。@returns {string} */
+function builtinFallbackModel() {
+  const installed = modelCatalog.filter((model) => model.kind === 'llama-chat' && modelPaths.has(model.id));
+  return installed[0]?.id || '';
 }
 /** 组装一次 LLM 请求所需的连接信息；配置不完整时返回 null。@returns {object|null} */
 function summaryRequestConfig() {
@@ -363,11 +370,14 @@ function summaryRequestConfig() {
   const preset = summaryProviderPresets[provider];
   if (!preset) return null;
   const entry = summaryProviderEntry(provider);
+  // 内置模型：未显式选择时自动回退到第一个已安装的 llama-chat 模型，
+  // 避免“首次点击就要求配置”的摩擦（本地模型与 API Key 无关）。
+  const model = entry.model || (provider === 'built-in' ? builtinFallbackModel() : '');
+  if (!model) return null;
   const endpoint = preset.needsEndpoint ? entry.endpoint : preset.endpoint;
-  if (!entry.model) return null;
   if (preset.needsEndpoint && !endpoint) return null;
   if (preset.needsKey && !entry.keyReference) return null;
-  return { provider, endpoint, model: entry.model, format: preset.format, keyReference: entry.keyReference };
+  return { provider, endpoint, model, format: preset.format, keyReference: entry.keyReference };
 }
 function speakerProfileName(profile) {
   return profile.name;
@@ -390,7 +400,11 @@ function applySummaryConfig(config) {
   selectedBuiltinModel = '';
 }
 async function loadSummaryConfig() {
+  // 读取期间用户可能已经保存了新配置；快照版本号，旧值晚到就直接丢弃，
+  // 避免启动时的一次慢读取把刚保存的配置覆盖回旧值。
+  const revision = summaryConfigRevision;
   const stored = await window.brevia?.summary.config.get();
+  if (revision !== summaryConfigRevision) return;
   if (stored) applySummaryConfig(stored);
   // 1.0.8 之前的版本把整个配置（含 apiKey 明文）存在 localStorage 里，清掉。
   localStorage.removeItem('brevia-summary-config');
@@ -667,13 +681,49 @@ if (breviaClient) {
     document.querySelectorAll('#mic-level, [data-onboarding-mic-level]').forEach((meter) => meter.style.setProperty('--level', Math.max(.04, level)));
   };
 }
+/** 设置录音源状态徽标：授权正常显示 ✓ 与状态，异常显示 — 并把解释放回提示行。@returns {void} */
+function setSourceBadge(labelEl, hintEl, { ok, text, hint }) {
+  if (labelEl) {
+    labelEl.textContent = `${ok ? '✓ ' : '— '}${text}`;
+    labelEl.dataset.tone = ok ? 'ok' : 'warn';
+  }
+  if (hintEl) {
+    hintEl.textContent = hint || '';
+    hintEl.hidden = !hint;
+  }
+}
+/** 根据系统权限状态刷新录制前页的录音源（麦克风 / 系统音频）状态。@returns {void} */
+function renderPrepareAudioSources() {
+  if (!permissionStatus) return; // 尚未取得权限状态时保留静态默认文案
+  const status = permissionStatus || {};
+  const micGranted = status.microphone === 'granted';
+  const micDenied = status.microphone === 'denied';
+  const screenUnsupported = !status.systemAudioSupported;
+  const screenGranted = status.screen === 'granted';
+  const micLabel = document.querySelector('#mic-input-label');
+  const micHint = document.querySelector('#mic-source-hint');
+  const systemLabel = document.querySelector('#system-input-label');
+  const systemHint = document.querySelector('#system-source-hint');
+  if (micGranted) setSourceBadge(micLabel, micHint, { ok: true, text: t('输入良好') });
+  else setSourceBadge(micLabel, micHint, { ok: false, text: t('未就绪'), hint: micDenied ? t('请在系统设置中开启此权限') : t('需要麦克风权限') });
+  if (screenGranted && !screenUnsupported) setSourceBadge(systemLabel, systemHint, { ok: true, text: t('已连接') });
+  else setSourceBadge(systemLabel, systemHint, { ok: false, text: t('未就绪'), hint: screenUnsupported ? t('当前系统不支持直接录制系统音频，请仅使用麦克风') : (status.screen === 'denied' ? t('请在系统设置中开启此权限') : t('需要授予屏幕与系统音频权限')) });
+}
+/** 拉取最新权限状态并刷新录音前页的录音源显示。@returns {Promise<void>} */
+async function refreshPrepareAudioSources() {
+  if (window.brevia?.permissions?.status) {
+    const status = await window.brevia.permissions.status().catch(() => permissionStatus);
+    if (status) permissionStatus = status;
+  }
+  renderPrepareAudioSources();
+}
 async function previewMicrophone() {
   if (!breviaClient || !prepareForm.querySelector('[name="capture-mic"]').checked) return;
   try {
     await breviaClient.previewMic();
-    document.querySelector('#mic-input-state').lastChild.textContent = t('输入良好');
+    setSourceBadge(document.querySelector('#mic-input-label'), document.querySelector('#mic-source-hint'), { ok: true, text: t('输入良好') });
   } catch (error) {
-    document.querySelector('#mic-input-state').lastChild.textContent = error.message;
+    setSourceBadge(document.querySelector('#mic-input-label'), document.querySelector('#mic-source-hint'), { ok: false, text: error.message, hint: t('需要麦克风权限') });
   }
 }
 prepareForm.querySelector('[name="capture-mic"]').addEventListener('change', (event) => {
@@ -811,7 +861,8 @@ async function generateMeetingSummary(meetingId = breviaClient?.state.selectedMe
     hideSummaryProgress();
     if (isSummaryAuthenticationError(error)) showSummaryConfigCard(error);
     else if (error.message === summaryEmptyTranscriptCopy.zh) showToast(summaryEmptyTranscriptCopy[locale] || summaryEmptyTranscriptCopy.en);
-    else showToast(error.message === 'Summary generation failed' ? t('纪要服务暂时不可用，请检查网络或稍后重试。') : error.message);
+    else if (String(error.message || '').startsWith('Summary generation failed')) showToast(t('纪要服务暂时不可用，请检查网络或稍后重试。'));
+    else showToast(error.message);
   }
 }
 const requiredModelIds = new Set();
@@ -1762,7 +1813,7 @@ function liveStreamingModelOptions(language) {
   }
   return options;
 }
-/** 渲染从声纹发现的参与者以及实时模型/设置控件。@returns {void} */
+/** 渲染从声纹发现的参与者。录制开始后刻意不再暴露模型/设置控件，保持用户只专注“听 → 看字幕”。@returns {void} */
 function renderLivePanel() {
   const participants = [...liveSpeakers.values()];
   const people = participants.length
@@ -1771,16 +1822,7 @@ function renderLivePanel() {
       name: formatSpeakerName(participant.name || participant.speakerId) || `${t('说话人')} ${participant.id}`,
     })).join('')
     : `<p class="participants-empty">${t('等待识别说话人')}</p>`;
-  const languageChoices = BreviaI18n.languageOptions(locale, t, true);
-  const streamingChoices = liveStreamingModelOptions(liveConfig.language);
-  const refinedChoices = modelChoices('active-refined-model').slice(1);
-  const settings = `<section class="live-settings"><p class="eyebrow">${t('模型与设置')}</p>`
-    + `<label class="config-select-field">${t('会议语言')}${flowSelect('live-language', liveConfig.language || 'auto', languageChoices)}</label>`
-    + `<label class="config-select-field">${t('实时识别模型')}${flowSelectWithTags('live-streaming-model', liveConfig.streaming_model_id, streamingChoices, modelTagsFor(streamingModelOptionTags))}</label>`
-    + `<label class="config-select-field">${t('精修模型')}${flowSelectWithTags('live-refined-model', liveConfig.refined_model_id, refinedChoices, modelTagsFor(refinedModelOptionTags))}</label>`
-    + `<label class="choice live-power-saving"><input data-live-power-saving type="checkbox"${liveConfig.power_saving ? ' checked' : ''} /><span><b>${t('省电模式')}</b><small>${t('关闭实时降噪和精修，降低字幕更新频率；会后精修保持可用。')}</small></span></label>`
-    + `</section>`;
-  document.querySelector('.live-panel').innerHTML = `<section><p class="eyebrow">${t('参与者')} · ${participants.length}</p><div class="participants-list">${people}</div></section><div class="live-controls">${settings}</div>`;
+  document.querySelector('.live-panel').innerHTML = `<section><p class="eyebrow">${t('参与者')} · ${participants.length}</p><div class="participants-list">${people}</div></section>`;
 }
 function syncLivePanelToggle() {
   const layout = document.querySelector('.live-layout');
@@ -2147,6 +2189,7 @@ settingsModal.addEventListener('submit', async (event) => {
     }
     summaryConfig.provider = provider;
     summaryConfig.providers = { ...summaryConfig.providers, [provider]: entry };
+    summaryConfigRevision += 1;
     selectedBuiltinModel = '';
     await persistSummaryConfig();
     dismissTaskCard(document.querySelector('#summary-config-required'));
@@ -2267,6 +2310,7 @@ function applyLanguage(nextLocale, animate = false) {
       else element[attribute] = value;
     });
     renderPrepareSelects();
+    renderPrepareAudioSources();
     renderPauseButton();
     renderSettingsView();
     document.querySelector('#settings-view .settings-grid').append(speakerProfileCard, updateCard);
@@ -2325,7 +2369,12 @@ function showSummaryConfigCard(error) {
     enterTaskCard(card);
   } else if (card.classList.contains('task-card-leave')) enterTaskCard(card);
   const rejected = /LLM request failed \(403\)|error code: 1010/i.test(String(error?.message || error));
-  const copy = { title: t(rejected ? '纪要服务拒绝了请求' : '纪要模型需要配置'), detail: t(rejected ? '请检查 API 地址、密钥和服务商访问策略。' : 'API Key 未配置、已失效或不匹配当前服务。'), action: t('配置纪要模型') };
+  // 内置模型走本地 GGUF，与 API Key 无关；缺配置时给出针对性的指引，
+  // 避免把「未选择本地模型」误报成「API Key 未配置」。
+  const builtin = summaryConfig.provider === 'built-in';
+  const copy = builtin
+    ? { title: t('内置纪要模型未配置'), detail: t('请选择并下载一个内置纪要模型，之后即可完全离线生成纪要。'), action: t('选择纪要模型') }
+    : { title: t(rejected ? '纪要服务拒绝了请求' : '纪要模型需要配置'), detail: t(rejected ? '请检查 API 地址、密钥和服务商访问策略。' : 'API Key 未配置、已失效或不匹配当前服务。'), action: t('配置纪要模型') };
   card.innerHTML = `<header class="task-card-heading"><p>${copy.title}</p>${taskCardControls()}</header><strong>${copy.detail}</strong><button class="secondary" type="button">${copy.action}</button>`;
   card.querySelector('.secondary').onclick = () => {
     clearTimeout(summaryConfigDismissTimer);
@@ -2408,7 +2457,7 @@ const showView = async (name) => {
     else document.querySelectorAll('.nav-item').forEach((item) => item.classList.toggle('active', item.dataset.view === name));
     window.scrollTo({ top: 0, behavior: 'smooth' });
   });
-  if (name === 'prepare') { requestAnimationFrame(fitPrepareLayout); void previewMicrophone(); }
+  if (name === 'prepare') { requestAnimationFrame(fitPrepareLayout); void previewMicrophone(); void refreshPrepareAudioSources(); }
   renderMiniPlayback();
 };
 /** 使用与顶级视图相同的页面淡出/淡入时序切换会议库源。*/

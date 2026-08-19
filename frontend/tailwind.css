@@ -163,6 +163,8 @@
   .choice small { @apply mt-1 text-[11px] text-[#999]; }
   .choice strong { @apply text-[11px] font-normal text-[#666]; }
   .choice .input-state { @apply flex items-center gap-2; }
+  .input-state [data-tone="ok"] { @apply text-[#16803c]; }
+  .input-state [data-tone="warn"] { @apply text-[#a05a00]; }
   .input-meter { @apply relative block h-1 w-9 bg-[#e5e5e5]; }
   .input-meter::after { content: ""; @apply absolute inset-0 origin-left; background: linear-gradient(90deg, #777 0 55%, #111 55% 80%, #ff0000 80%); transform: scaleX(var(--level, .04)); transition: transform .08s linear; }
   .wide { @apply w-full; }
@@ -185,8 +187,9 @@
   .recording { @apply text-[11px] text-[#ff0000]; }
   .recording i { @apply mr-1 inline-block size-1.5 rounded-full bg-[#ff0000]; }
   #timer { @apply text-[12px] tracking-[.08em] text-[#666]; }
+  .save-state { @apply text-[11px] text-[#16803c]; }
   .pause-button { @apply col-span-1 text-[13px] text-[#404040] transition-opacity duration-300 hover:opacity-70; }
-  .end-button { @apply col-span-2 border border-[#ff0000] px-4 py-3 text-[13px] text-[#ff0000] transition-colors duration-300 hover:bg-[#ff0000] hover:text-white; }
+  .end-button { @apply col-span-2 border border-[#ff8a8a] px-3 py-1.5 text-[12px] text-[#ff0000] transition-colors duration-300 hover:bg-[#ff0000] hover:text-white; }
   .live-caption-controls { @apply col-span-2 flex items-center justify-end gap-3; }
   .live-layout { @apply relative grid min-h-0 grid-cols-12 gap-8 overflow-hidden py-6; }
   .transcript { @apply col-span-9 flex min-h-0 min-w-0; }
@@ -422,6 +425,9 @@ html[data-theme="dark"] .language-options button { color: #ddd; }
 html[data-theme="dark"] .language-options button:hover, html[data-theme="dark"] .language-options button[aria-current="true"] { background: #363636; color: #fff; }
 html[data-theme="dark"] .primary-action, html[data-theme="dark"] .new-meeting, html[data-theme="dark"] .play { border-color: #fff; background: #fff; color: #262626; }
 html[data-theme="dark"] .end-button { border-color: #ff5d5d; color: #ff6b6b; }
+html[data-theme="dark"] .save-state { color: #72c991; }
+html[data-theme="dark"] .input-state [data-tone="ok"] { color: #72c991; }
+html[data-theme="dark"] .input-state [data-tone="warn"] { color: #d9a441; }
 html[data-theme="dark"] .status { color: #ddd; }
 html[data-theme="dark"] .update-card { border-color: #eee; } html[data-theme="dark"] .update-card h2 { color: #fff; } html[data-theme="dark"] .update-card p { color: #bbb; } html[data-theme="dark"] .update-button { border-color: #fff; background: #fff; color: #262626; }
 html[data-theme="dark"] .model-delete { border-color: #a65b5b; color: #c48686; } html[data-theme="dark"] .model-library-item > span > p, html[data-theme="dark"] .model-library-meta b, html[data-theme="dark"] .model-library-tags span { color: #bbb; } html[data-theme="dark"] .model-library-meta, html[data-theme="dark"] .model-library-tags span { border-color: #454545; } html[data-theme="dark"] .model-library-tags .model-library-installed { border-color: #3da866; color: #72c991; } html[data-theme="dark"] .model-library-tags .model-library-modelname { border-color: #4a4a4a; color: #8a8a8a; }

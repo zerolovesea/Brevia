@@ -17,7 +17,9 @@ from typing import Optional
 # 它们也会发出一个空块，因此在到达摘要/翻译管道之前从每次内置补全中剥离它。
 _THINK_BLOCK = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
 _THINKING_PROCESS = re.compile(r"^\s*(?:thinking process|reasoning|analysis)\s*:", re.IGNORECASE)
-REQUEST_TIMEOUT_SECONDS = 10 * 60
+# 内置模型在 CPU（Windows 无 GPU 卸载时）上生成纪要很慢；超时保留足够余量，
+# 避免 2B~4B GGUF 在慢速机器上被误杀。
+REQUEST_TIMEOUT_SECONDS = 20 * 60
 
 
 def strip_reasoning(text: str) -> str:
@@ -51,12 +53,16 @@ class _Sidecar:
         if self.process and self.process.poll() is None:
             return True
         try:
+            # 显式 UTF-8 文本管道：Windows 下 subprocess 文本管道默认按系统 ANSI
+            # 代码页编解码，与 sidecar 内部固定为 UTF-8 的 stdio 保持一致。
             self.process = subprocess.Popen(
                 self.cmd,
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=None,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 bufsize=1,
             )
             return True

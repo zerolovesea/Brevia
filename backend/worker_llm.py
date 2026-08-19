@@ -207,7 +207,9 @@ class LLMWorkerMixin:
                 re.IGNORECASE,
             ):
                 raise ValueError("Summary authentication failed") from error
-            raise ValueError("Summary generation failed") from error
+            # 带上底层原因，避免 Windows 等环境下内置模型加载/超时/空响应
+            # 被笼统的 “Summary generation failed” 掩盖，无法定位。
+            raise ValueError(f"Summary generation failed: {error}") from error
         data = {"markdown": markdown}
         self.store.save_summary(meeting["id"], data, markdown)
         self.emit(

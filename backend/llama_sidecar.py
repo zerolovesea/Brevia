@@ -5,6 +5,7 @@
 处理模型懒加载、GPU 层检测和文本生成。
 """
 
+import io
 import json
 import sys
 from pathlib import Path
@@ -38,13 +39,30 @@ class LlamaSidecar:
         # 检测 GPU 层数
         n_gpu_layers = self._detect_gpu_layers()
 
-        # 加载模型
-        self.model = Llama(
-            model_path=str(path),
-            n_ctx=context_size,
-            n_gpu_layers=n_gpu_layers,
-            verbose=False,
-        )
+        # 加载模型。GPU 卸载失败（如 CUDA 构建但机器无对应显卡/驱动）时
+        # 自动降级为纯 CPU 重试一次，而不是直接把错误抛给上层。
+        try:
+            self.model = Llama(
+                model_path=str(path),
+                n_ctx=context_size,
+                n_gpu_layers=n_gpu_layers,
+                verbose=False,
+            )
+        except Exception:
+            if n_gpu_layers != 0:
+                try:
+                    self.model = Llama(
+                        model_path=str(path),
+                        n_ctx=context_size,
+                        n_gpu_layers=0,
+                        verbose=False,
+                    )
+                except Exception:
+                    self.model = None
+                    raise
+            else:
+                self.model = None
+                raise
         self.model_path = path
         self.context_size = context_size
 
@@ -68,11 +86,14 @@ class LlamaSidecar:
         except Exception:
             pass
 
+        # 之前的实现尝试 import torch 来探测 CUDA，但打包环境并不包含 torch，
+        # 导致 Windows 机器永远回退到 CPU，2B~4B 的 GGUF 在 CPU 上生成纪要经常
+        # 超过超时。改用 llama-cpp-python 自身的后端能力探测：
+        # 只要构建支持 GPU 卸载（CUDA/ROCm/Vulkan 等）就先试全量卸载。
         try:
-            # 尝试检测 CUDA
-            import torch
-            if torch.cuda.is_available():
-                return -1  # 将所有层卸载到 CUDA
+            import llama_cpp
+            if llama_cpp.llama_supports_gpu_offload():
+                return -1  # 尝试将所有层卸载到 GPU
         except Exception:
             pass
 
@@ -151,6 +172,14 @@ class LlamaSidecar:
 
 def main():
     """主循环：从 stdin 读取 JSON，向 stdout 写入 JSON。"""
+    # 与主 worker 相同：Windows 上管道 stdio 默认按系统 ANSI 代码页解码，
+    # 这里显式固定为 UTF-8，避免 JSON 行中的非 ASCII 内容被 GBK 等代码页破坏。
+    for stream in (sys.stdin, sys.stdout, sys.stderr):
+        if stream is not None and stream.encoding and stream.encoding.lower() not in {"utf-8", "utf8"}:
+            try:
+                stream.reconfigure(encoding="utf-8", errors="replace")
+            except (AttributeError, io.UnsupportedOperation, ValueError):
+                pass
     if Llama is None:
         print(
             json.dumps({"type": "error", "message": "llama-cpp-python not installed"}),

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """JSONL worker 入口点与稳定的 Worker 外观。"""
 
+import io
 import json
 import sys
 import threading
@@ -61,6 +62,15 @@ def install_global_error_handlers(worker):
 
 def main():
     """运行 stdin/stdout JSONL 循环；单个命令失败不会停止 worker。"""
+    # Windows 上管道 stdio 默认按系统 ANSI 代码页解码（中文区域为 GBK），与主进程
+    # 写入的 UTF-8 字节不一致，会把非 ASCII 文本（如会议名称）解成乱码。这里显式
+    # 固定为 UTF-8，不依赖 PYTHONIOENCODING/PYTHONUTF8 环境变量是否生效。
+    for stream in (sys.stdin, sys.stdout, sys.stderr):
+        if stream is not None and stream.encoding and stream.encoding.lower() not in {"utf-8", "utf8"}:
+            try:
+                stream.reconfigure(encoding="utf-8", errors="replace")
+            except (AttributeError, io.UnsupportedOperation, ValueError):
+                pass
     worker = Worker()
     install_global_error_handlers(worker)
 
