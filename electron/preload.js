@@ -75,6 +75,8 @@ contextBridge.exposeInMainWorld('brevia', {
   },
   task: { pause: invoke('task.pause'), resume: invoke('task.resume'), cancel: invoke('task.cancel') },
   summary: { generate: invoke('summary.generate'), config: { get: invoke('summary.config.get'), save: invoke('summary.config.save') } },
+  aiAssist: { config: { get: invoke('ai-assist.config.get'), save: invoke('ai-assist.config.save') } },
+  aiNote: { start: invoke('ai-note.start'), stop: invoke('ai-note.stop'), typing: invoke('ai-note.typing'), request: invoke('ai-note.request'), dismiss: invoke('ai-note.dismiss') },
   translation: { generate: invoke('translation.generate') },
   secret: { set: invoke('secret.set') },
   showItem: invoke('shell.showItem'),

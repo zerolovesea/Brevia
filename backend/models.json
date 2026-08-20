@@ -581,66 +581,6 @@
     "tier": "quality"
   },
   {
-    "id": "gemma3-1b-q8",
-    "name": "Gemma 3 1B",
-    "runtime": "llama-cpp-python",
-    "revision": "llama-models/2025-08",
-    "stages": [
-      "summary"
-    ],
-    "languages": [
-      "zh",
-      "en"
-    ],
-    "backend": [
-      "cpu",
-      "cuda",
-      "metal"
-    ],
-    "speaker": false,
-    "size_bytes": 1069306624,
-    "url": "https://huggingface.co/bartowski/google_gemma-3-1b-it-GGUF/resolve/main/google_gemma-3-1b-it-Q8_0.gguf",
-    "china_url": "https://modelscope.cn/models/bartowski/google_gemma-3-1b-it-GGUF/resolve/master/google_gemma-3-1b-it-Q8_0.gguf",
-    "files": [
-      "google_gemma-3-1b-it-Q8_0.gguf"
-    ],
-    "kind": "llama-chat",
-    "context_size": 32768,
-    "speed": 5,
-    "quality": 3,
-    "tier": "fast"
-  },
-  {
-    "id": "gemma3-4b-q4km",
-    "name": "Gemma 3 4B",
-    "runtime": "llama-cpp-python",
-    "revision": "llama-models/2025-08",
-    "stages": [
-      "summary"
-    ],
-    "languages": [
-      "zh",
-      "en"
-    ],
-    "backend": [
-      "cpu",
-      "cuda",
-      "metal"
-    ],
-    "speaker": false,
-    "size_bytes": 2489758112,
-    "url": "https://huggingface.co/bartowski/google_gemma-3-4b-it-GGUF/resolve/main/google_gemma-3-4b-it-Q4_K_M.gguf",
-    "china_url": "https://modelscope.cn/models/bartowski/google_gemma-3-4b-it-GGUF/resolve/master/google_gemma-3-4b-it-Q4_K_M.gguf",
-    "files": [
-      "google_gemma-3-4b-it-Q4_K_M.gguf"
-    ],
-    "kind": "llama-chat",
-    "context_size": 32768,
-    "speed": 3,
-    "quality": 4,
-    "tier": "balanced"
-  },
-  {
     "id": "hy-mt2-1.8b-q4km",
     "name": "Tencent Hy-MT2 1.8B",
     "runtime": "llama-cpp-python",

@@ -92,6 +92,7 @@ const workerEvent = z.object({
     'summary.progress', 'summary.ready', 'summary.started', 'task.status',
     'transcript.discarded', 'transcript.final', 'transcript.partial', 'transcript.refined',
     'translation.ready', 'worker.error', 'worker.warning',
+    'ai-note.suggestion', 'ai-note.analyzing',
   ]),
   schema_version: z.literal(1),
   payload: z.record(z.string(), z.unknown()),
@@ -155,6 +156,32 @@ const summaryConfig = z.object({
   provider: z.enum(summaryProviderIds),
   // partialRecord：只有用户配置过的供应商才出现在这里；z.record 在 zod 4 里要求键穷尽。
   providers: z.partialRecord(z.enum(summaryProviderIds), summaryProviderEntry),
+});
+// 实时 AI 辅助笔记：连接信息复用纪要 provider；api_key 由 key_reference 在主进程解析。
+const aiNoteStart = z.object({
+  meeting_id: z.string().uuid(),
+  provider: z.string().trim().min(1),
+  endpoint: z.string().url().optional(),
+  model: z.string().trim().min(1),
+  format: z.enum(['openai', 'claude']).optional(),
+  key_reference: z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/).optional(),
+  proactivity: z.enum(['quiet', 'assist', 'auto']).default('assist'),
+  language: z.enum(['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']).default('zh'),
+}).refine(({ provider, endpoint }) => !requiresEndpoint(provider) || Boolean(endpoint), {
+  message: 'Endpoint is required for remote providers', path: ['endpoint'],
+});
+const aiNoteTyping = z.object({
+  meeting_id: z.string().uuid(),
+  typing: z.boolean(),
+  notes: z.string().max(20000).optional(),
+});
+const aiNoteRequest = z.object({
+  meeting_id: z.string().uuid(),
+  notes: z.string().max(20000).optional(),
+});
+const aiNoteDismiss = z.object({
+  meeting_id: z.string().uuid(),
+  text: z.string().max(400).optional(),
 });
 
 class WorkerClient {
@@ -486,6 +513,38 @@ async function writeSummaryConfig(config) {
   await rename(temporary, target);
 }
 
+// AI 辅助笔记的轻量配置：只存开关与主动性等级。模型连接（provider/endpoint/密钥）
+// 复用 summary-models.json 的纪要配置，避免维护两套 API Key。
+const aiAssistConfig = z.object({
+  version: z.literal(1),
+  enabled: z.boolean(),
+  proactivity: z.enum(['quiet', 'assist', 'auto']),
+});
+const aiAssistConfigPath = () => path.join(dataDir(), 'ai-assist.json');
+async function readAiAssistConfig() {
+  let text;
+  try {
+    text = await readFile(aiAssistConfigPath(), 'utf8');
+  } catch (error) {
+    if (error.code === 'ENOENT') return null;
+    throw error;
+  }
+  // 只认 version 1；非法 JSON 或旧结构当作未配置，下次保存时直接覆盖。
+  try {
+    const parsed = aiAssistConfig.safeParse(JSON.parse(text));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+async function writeAiAssistConfig(config) {
+  const target = aiAssistConfigPath();
+  const temporary = `${target}.${process.pid}.tmp`;
+  await mkdir(path.dirname(target), { recursive: true });
+  await writeFile(temporary, `${JSON.stringify(aiAssistConfig.parse(config), null, 2)}\n`, { mode: 0o600 });
+  await rename(temporary, target);
+}
+
 async function prepareExport(value) {
   const exported = await worker.request('meeting.export', value);
   if (!exported.print_pdf) return exported;
@@ -661,6 +720,12 @@ function registerIpc() {
     await writeSummaryConfig(config);
     return config;
   });
+  ipcMain.handle('ai-assist.config.get', async () => readAiAssistConfig());
+  ipcMain.handle('ai-assist.config.save', async (_, payload) => {
+    const config = aiAssistConfig.parse(payload);
+    await writeAiAssistConfig(config);
+    return config;
+  });
   ipcMain.handle('summary.generate', async (_, payload) => {
     const value = id.extend({
       ...llmRequest.shape,
@@ -684,6 +749,16 @@ function registerIpc() {
     }).parse(payload);
     return worker.request('translation.generate', value);
   });
+  ipcMain.handle('ai-note.start', async (_, payload) => {
+    const value = aiNoteStart.parse(payload);
+    const api_key = await getSecret(value.key_reference);
+    if (!api_key && !isBuiltInProvider(value.provider)) return { configuration_required: true };
+    return worker.request('ai-note.start', { ...value, api_key });
+  });
+  ipcMain.handle('ai-note.stop', (_, payload) => worker.request('ai-note.stop', id.parse(payload)));
+  ipcMain.handle('ai-note.typing', (_, payload) => worker.request('ai-note.typing', aiNoteTyping.parse(payload)));
+  ipcMain.handle('ai-note.request', (_, payload) => worker.request('ai-note.request', aiNoteRequest.parse(payload)));
+  ipcMain.handle('ai-note.dismiss', (_, payload) => worker.request('ai-note.dismiss', aiNoteDismiss.parse(payload)));
   ipcMain.handle('meeting.export', async (_, payload) => {
     const value = id.extend({
       content: z.enum(['transcript', 'notes', 'mynotes', 'audio']).optional(),

@@ -4,10 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light" />
-    <title>Brevia — A minimal, local-first AI meeting assistant</title>
+    <title>Brevia — Turn meetings into clear next steps</title>
     <meta
       name="description"
-      content="Brevia is a desktop AI meeting assistant. Live transcription, multilingual notes, and speaker identification — no audio leaves your device."
+      content="Brevia captures meetings locally, then uses AI Assist Notes to surface decisions, action items, and open questions while the conversation is still happening."
     />
     <link rel="icon" href="../docs/assets/brevia-mark.svg" />
     <link rel="stylesheet" href="./site-header.css" />
@@ -101,6 +101,9 @@
         width: 100%;
         aspect-ratio: 16 / 10;
         overflow: hidden;
+        border: 1px solid #d6d6d6;
+        background: #fff;
+        box-shadow: 12px 12px 0 #f1f1f1;
       }
       .demo-frame {
         position: absolute;
@@ -243,17 +246,15 @@
         <div class="grid items-center gap-12 lg:grid-cols-2">
           <div class="reveal max-w-read">
             <p class="mb-8 font-mono text-[13px] uppercase tracking-[0.18em] text-gray3">
-              Local-first meeting assistant
+              Local-first, AI-assisted meeting notes
             </p>
             <h1 class="hero-title display font-light text-ink">
-              Meetings, captured<br />and understood<br />
-              <span class="text-gray2">on your device</span>
+              Hear the meeting.<br />Keep the <span class="text-gray2">next step.</span>
             </h1>
             <p class="measure mt-10 max-w-[560px] text-[18px] text-slate">
-              Brevia is a local meeting assistant that turns computer and microphone
-              audio into live captions, transcripts, and meeting notes. From online
-              calls and videos to in-person conversations, important details are
-              captured, organized, and easy to find again.
+              Capture every voice locally. AI Assist Notes surfaces decisions, action
+              items, and open questions as the conversation unfolds, so the record is
+              useful before the meeting ends.
             </p>
             <div class="mt-12 flex flex-wrap items-center gap-4">
               <a
@@ -266,11 +267,6 @@
                 class="inline-flex items-center border border-line1 bg-white px-8 py-4 text-[15px] text-ink transition-colors duration-300 hover:border-ink"
                 >See it in motion</a
               >
-            </div>
-            <div class="mt-14 flex flex-wrap gap-x-10 gap-y-3 font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">
-              <span>No audio leaves your device</span>
-              <span>30+ languages</span>
-              <span>Speaker identification</span>
             </div>
           </div>
           <div class="reveal" style="--reveal-delay: 120ms">
@@ -334,11 +330,11 @@
           </div>
           <div class="col-span-12 md:col-span-8">
             <h2 class="display max-w-[620px] text-[clamp(30px,4vw,44px)] font-light text-ink">
-              One quiet arc, three moving parts
+              From live conversation to clear follow-through
             </h2>
             <p class="measure mt-6 max-w-[560px] text-[17px] text-slate">
-              Every feature follows the same path — from the moment audio arrives
-              to the moment you go looking for it again.
+              Capture the conversation, keep the important moments, and leave with a
+              note the team can act on.
             </p>
           </div>
         </div>
@@ -372,39 +368,57 @@
         </div>
       </section>
 
-      <!-- Demo 2 — Summary -->
+      <!-- Demo 2 — AI Assist Notes -->
       <section class="mx-auto max-w-content px-6 pt-20 md:px-8 md:pt-28">
         <div class="grid grid-cols-12 items-center gap-8 md:gap-12">
           <div class="reveal col-span-12 md:order-2 md:col-span-3">
             <span class="font-mono text-[13px] tracking-[0.14em] text-gray3">02</span>
-            <h3 class="display mt-4 text-[28px] font-normal text-ink">
-              AI meeting notes in one pass
-            </h3>
+            <h3 class="display mt-4 text-[28px] font-normal text-ink">AI Assist Notes, while you meet</h3>
             <p class="measure mt-5 text-[16px] text-slate">
-              When a meeting ends, plug in any LLM provider and Brevia drafts the
-              summary, key decisions, and action items together. Run a bundled
-              model on your own machine, or connect Claude, OpenAI, or OpenRouter.
-              Only text is sent, never audio.
+              Let Brevia flag a decision, an action item, or a question while there is
+              still time to clarify it. Review each suggestion and keep only what
+              belongs in the meeting record.
             </p>
           </div>
           <div class="reveal col-span-12 md:order-1 md:col-span-9" style="--reveal-delay: 120ms">
             <div class="demo-canvas">
               <iframe
                 class="demo-frame"
-                src="./demo-summary-en.html"
+                src="./demo-ai-assist-en.html"
                 loading="lazy"
-                title="AI meeting notes demo"
+                title="AI Assist Notes demo"
               ></iframe>
             </div>
           </div>
         </div>
       </section>
 
-      <!-- Demo 3 — Voiceprint -->
+      <!-- Demo 3 — Summary -->
       <section class="mx-auto max-w-content px-6 pt-20 md:px-8 md:pt-28">
         <div class="grid grid-cols-12 items-center gap-8 md:gap-12">
           <div class="reveal col-span-12 md:col-span-3">
             <span class="font-mono text-[13px] tracking-[0.14em] text-gray3">03</span>
+            <h3 class="display mt-4 text-[28px] font-normal text-ink">A meeting note, ready to share</h3>
+            <p class="measure mt-5 text-[16px] text-slate">
+              When the meeting ends, turn the reviewed record into a structured
+              summary, decisions, and action items with your selected AI provider.
+              Local models and compatible services are both supported; audio stays
+              on your device.
+            </p>
+          </div>
+          <div class="reveal col-span-12 md:col-span-9" style="--reveal-delay: 120ms">
+            <div class="demo-canvas">
+              <iframe class="demo-frame" src="./demo-summary-en.html" loading="lazy" title="AI meeting notes demo"></iframe>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Demo 4 — Voiceprint -->
+      <section class="mx-auto max-w-content px-6 pt-20 md:px-8 md:pt-28">
+        <div class="grid grid-cols-12 items-center gap-8 md:gap-12">
+          <div class="reveal col-span-12 md:col-span-3">
+            <span class="font-mono text-[13px] tracking-[0.14em] text-gray3">04</span>
             <h3 class="display mt-4 text-[28px] font-normal text-ink">
               Voiceprints that carry across meetings
             </h3>
@@ -428,11 +442,11 @@
         </div>
       </section>
 
-      <!-- Demo 4 — Caption bar -->
+      <!-- Demo 5 — Caption bar -->
       <section class="mx-auto max-w-content px-6 pt-20 md:px-8 md:pt-28">
         <div class="grid grid-cols-12 items-center gap-8 md:gap-12">
           <div class="reveal col-span-12 md:order-2 md:col-span-3">
-            <span class="font-mono text-[13px] tracking-[0.14em] text-gray3">04</span>
+            <span class="font-mono text-[13px] tracking-[0.14em] text-gray3">05</span>
             <h3 class="display mt-4 text-[28px] font-normal text-ink">
               Floating caption actions
             </h3>
@@ -453,16 +467,16 @@
         </div>
       </section>
 
-      <!-- Demo 5 — Model library -->
+      <!-- Demo 6 — Model library -->
       <section class="mx-auto max-w-content px-6 pt-20 md:px-8 md:pt-28">
         <div class="grid grid-cols-12 items-center gap-8 md:gap-12">
           <div class="reveal col-span-12 md:col-span-3">
-            <span class="font-mono text-[13px] tracking-[0.14em] text-gray3">05</span>
+            <span class="font-mono text-[13px] tracking-[0.14em] text-gray3">06</span>
             <h3 class="display mt-4 text-[28px] font-normal text-ink">
               Rich model library
             </h3>
             <p class="measure mt-5 text-[16px] text-slate">
-              Choose and download the capabilities you need for captions, translation, speaker identification, and meeting notes. Pick a lighter setup for speed or a more complete one for better results—no technical vocabulary required.
+              Choose and download the capabilities you need for captions, translation, speaker identification, and AI notes. Pick a lighter setup for speed or a more complete one for better results, with no technical vocabulary required.
             </p>
           </div>
           <div class="reveal col-span-12 md:col-span-9" style="--reveal-delay: 120ms">
@@ -485,9 +499,8 @@
             Everything else, on device
           </h2>
           <p class="measure mt-6 text-[17px] text-slate">
-            A curated local model library and a handful of quieter tools round out
-            the workflow. Mix and match by language and precision — it all runs
-            where the audio already is.
+            A curated local model library and quieter tools round out the workflow.
+            Mix and match by language and precision, right where the audio already is.
           </p>
         </div>
         <div class="feature-rail reveal" aria-label="More features; hover to pause scrolling">
@@ -535,14 +548,34 @@
             <p class="measure mt-3 text-[15px] text-slate">See translations alongside the original captions in multilingual meetings.</p>
           </article>
           <article class="feature-card border border-line2 p-8 transition-colors duration-300 hover:border-ink">
-            <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">AI meeting notes</span>
-            <p class="display mt-5 text-[40px] font-light text-ink">Turn talk into action</p>
-            <p class="measure mt-3 text-[15px] text-slate">Use a local or connected model to extract summaries, decisions, and action items.</p>
+            <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">AI Assist Notes</span>
+            <p class="display mt-5 text-[40px] font-light text-ink">Keep the moment that matters</p>
+            <p class="measure mt-3 text-[15px] text-slate">Surface decisions, action items, and open questions during the meeting, then shape them into a shareable note.</p>
           </article>
           <article class="feature-card border border-line2 p-8 transition-colors duration-300 hover:border-ink">
             <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">Streaming speed</span>
             <p class="display mt-5 text-[40px] font-light text-ink">Results without waiting</p>
             <p class="measure mt-3 text-[15px] text-slate">Streaming transcription and translation keep pace with the meeting.</p>
+          </article>
+          <article class="feature-card border border-line2 p-8 transition-colors duration-300 hover:border-ink">
+            <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">Rich-text notes</span>
+            <p class="display mt-5 text-[40px] font-light text-ink">Write as you think</p>
+            <p class="measure mt-3 text-[15px] text-slate">Take notes in a rich-text or Markdown editor with headings, lists, quotes, links, and inline code.</p>
+          </article>
+          <article class="feature-card border border-line2 p-8 transition-colors duration-300 hover:border-ink">
+            <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">Notes &amp; captions</span>
+            <p class="display mt-5 text-[40px] font-light text-ink">One tap, two views</p>
+            <p class="measure mt-3 text-[15px] text-slate">Switch between a notes-first view and a captions-first view with a single tap, both live.</p>
+          </article>
+          <article class="feature-card border border-line2 p-8 transition-colors duration-300 hover:border-ink">
+            <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">In-meeting notes</span>
+            <p class="display mt-5 text-[40px] font-light text-ink">Capture while you listen</p>
+            <p class="measure mt-3 text-[15px] text-slate">Jot a decision or insert the current caption directly into your notes without leaving the call.</p>
+          </article>
+          <article class="feature-card border border-line2 p-8 transition-colors duration-300 hover:border-ink">
+            <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">Cross-meeting voiceprint</span>
+            <p class="display mt-5 text-[40px] font-light text-ink">Names that follow you</p>
+            <p class="measure mt-3 text-[15px] text-slate">Voiceprints are reused across meetings, so real names appear every time, not “Speaker 1”.</p>
           </article>
         </div>
       </section>
@@ -568,8 +601,8 @@
             <span class="font-mono text-[13px] tracking-[0.14em] text-gray3">Step 02</span>
             <h3 class="mt-4 text-[20px] font-medium text-ink">Understand</h3>
             <p class="measure mt-3 text-[15px] text-slate">
-              At the end, an LLM drafts the summary, decisions, and action items.
-              Speakers are named from their enrolled voiceprints.
+              AI Assist Notes surfaces decisions and action items as they emerge.
+              At the end, shape the reviewed record into a meeting note.
             </p>
           </div>
           <div class="reveal col-span-12 border-t border-ink pt-6 md:col-span-4" style="--reveal-delay: 160ms">

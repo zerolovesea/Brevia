@@ -94,7 +94,7 @@ function revealTaskCard(card) {
   card.hidden = false;
   if (wasHidden || wasLeaving) { taskCards.append(card); enterTaskCard(card); }
 }
-const { catalog, streamingModelOptionTags, appCopy: { stageLabels, themeLabels, updateLabels, modalCopy, modelLabels, summaryModelCopy, speakerProfileCopy, voiceFeaturesCopy } } = window.BreviaLocaleData;
+const { catalog, streamingModelOptionTags, appCopy: { stageLabels, themeLabels, updateLabels, modalCopy, modelLabels, summaryModelCopy, speakerProfileCopy, voiceFeaturesCopy, aiAssistCopy } } = window.BreviaLocaleData;
 if (new URLSearchParams(location.search).has('resetOnboarding')) localStorage.removeItem('brevia-onboarding-complete');
 let locale = localStorage.getItem('brevia-language') || 'zh';
 let theme = localStorage.getItem('brevia-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
@@ -112,6 +112,8 @@ document.addEventListener('scroll', (event) => {
 let activeLibraryNav = 'all-meetings';
 const liveSegments = new Map();
 const liveSegmentRevisions = new Map();
+// 实时字幕段落元数据（text/start_ms/speaker），供「加入笔记 / 标记时间点」等本地规则辅助读取。
+const liveSegmentData = new Map();
 const maxLiveSegments = 500;
 let followLiveTranscript = true;
 let toastTimer;
@@ -163,10 +165,7 @@ let updateBusy = false;
 let updateDownloadProgress = null;
 let installedAppVersion = '—';
 const appVersion = document.querySelector('#app-version');
-const appMeta = document.createElement('footer');
-appMeta.className = 'app-meta';
-appMeta.append(document.querySelector('.app-credit'));
-document.querySelector('.app-shell').append(appMeta);
+document.querySelectorAll('.startup-credit, .app-credit').forEach((credit) => credit.remove());
 let speakerProfiles = [];
 let currentMeetingDetail = null;
 let modelCatalog = [];
@@ -200,12 +199,9 @@ const modelRatings = {
   'eres2net-base-3dspeaker-zh': { quality: 2, speed: 3 },
   'zipformer-zh-xlarge-streaming-int8': { quality: 3, speed: 1 },
   'gtcrn-live-denoiser': { quality: 2, speed: 3 },
-  // Built-in summary (llama-chat) models. Grounded in public reports: Qwen3.5 small models punch far
-  // above their parameter count (4B rivals much larger models); Gemma 3 1B is the fastest/smallest.
+  // Built-in summary (llama-chat) models.
   'qwen3.5-4b-q4km': { quality: 3, speed: 1 },
   'qwen3.5-2b-q4km': { quality: 3, speed: 2 },
-  'gemma3-4b-q4km': { quality: 2, speed: 2 },
-  'gemma3-1b-q8': { quality: 1, speed: 3 },
   // 内置字幕翻译（llama-translation）。捆绑的 Hy-MT2 1.8B 在本地运行，兼顾速度与质量。
   'hy-mt2-1.8b-q4km': { quality: 3, speed: 3 },
 };
@@ -231,26 +227,6 @@ const builtinModelIntro = {
     fr: 'Qwen3.5 en 2B. Équilibre entre qualité et vitesse avec de bonnes notes en chinois/anglais. Un bon choix quotidien pour la plupart des machines.',
     de: 'Qwen3.5 mit 2B. Ausgewogen zwischen Qualität und Geschwindigkeit mit starken Notizen auf Chinesisch/Englisch. Solide Alltagswahl für die meisten Geräte.',
     ru: 'Qwen3.5 на 2B. Баланс качества и скорости с хорошими заметками на китайском/английском. Надёжный повседневный выбор для большинства устройств.',
-  },
-  'gemma3-4b-q4km': {
-    zh: 'Google Gemma 3 4B，多语言能力强，纪要质量稳定，适合中端设备。',
-    en: 'Google Gemma 3 at 4B. Strong multilingual coverage and steady note quality. Fits mid-range machines.',
-    es: 'Google Gemma 3 de 4B. Amplia cobertura multilingüe y calidad de notas estable. Apto para equipos de gama media.',
-    ja: 'Google Gemma 3 4B。多言語対応が強く、議事録品質も安定。ミドルレンジの端末向け。',
-    ko: 'Google Gemma 3 4B. 강력한 다국어 지원과 안정적인 회의록 품질. 중급 기기에 적합.',
-    fr: 'Google Gemma 3 en 4B. Bonne couverture multilingue et qualité de notes régulière. Convient aux machines de milieu de gamme.',
-    de: 'Google Gemma 3 mit 4B. Starke Mehrsprachigkeit und gleichmäßige Notizqualität. Passt zu Mittelklasse-Geräten.',
-    ru: 'Google Gemma 3 на 4B. Хорошее многоязычное покрытие и стабильное качество заметок. Подходит для устройств среднего класса.',
-  },
-  'gemma3-1b-q8': {
-    zh: 'Google Gemma 3 1B，体积最小、速度最快，适合低配设备或追求即时响应的场景。',
-    en: 'Google Gemma 3 at 1B. The smallest and fastest option, best for low-spec machines or when you want instant responses.',
-    es: 'Google Gemma 3 de 1B. La opción más pequeña y rápida, ideal para equipos modestos o respuestas instantáneas.',
-    ja: 'Google Gemma 3 1B。最小・最速の選択肢。低スペック端末や即応性を求める場面に最適。',
-    ko: 'Google Gemma 3 1B. 가장 작고 빠른 선택지로, 저사양 기기나 즉각적인 응답이 필요할 때 적합.',
-    fr: 'Google Gemma 3 en 1B. L’option la plus légère et la plus rapide, idéale pour les machines modestes ou les réponses instantanées.',
-    de: 'Google Gemma 3 mit 1B. Die kleinste und schnellste Option, ideal für schwache Geräte oder sofortige Antworten.',
-    ru: 'Google Gemma 3 на 1B. Самый компактный и быстрый вариант, лучший для слабых устройств или мгновенных ответов.',
   },
 };
 /** 渲染一个评级维度的 3 级质量/速度刻度。@param {string} label 本地化的维度标签。@param {number} level 等级 1-3。@param {string} tierWord 本地化的等级名称。@returns {string} */
@@ -411,6 +387,33 @@ async function loadSummaryConfig() {
   if (stored) applySummaryConfig(stored);
   // 1.0.8 之前的版本把整个配置（含 apiKey 明文）存在 localStorage 里，清掉。
   localStorage.removeItem('brevia-summary-config');
+}
+// —— AI 辅助笔记配置（开关 + 主动性三档）。模型连接复用纪要配置。 ——
+let aiAssistConfig = { enabled: false, proactivity: 'assist' };
+let aiAssistConfigRevision = 0;
+/** 返回当前 AI 辅助配置的可持久化形态。@returns {object} */
+function currentAiAssistConfig() {
+  return { version: 1, enabled: aiAssistConfig.enabled, proactivity: aiAssistConfig.proactivity };
+}
+async function persistAiAssistConfig() {
+  await window.brevia?.aiAssist.config.save(currentAiAssistConfig());
+}
+function applyAiAssistConfig(config) {
+  aiAssistConfig = {
+    enabled: Boolean(config?.enabled),
+    proactivity: ['quiet', 'assist', 'auto'].includes(config?.proactivity) ? config.proactivity : 'assist',
+  };
+}
+async function loadAiAssistConfig() {
+  const revision = aiAssistConfigRevision;
+  const stored = await window.brevia?.aiAssist.config.get();
+  if (revision !== aiAssistConfigRevision) return;
+  if (stored) applyAiAssistConfig(stored);
+  renderAiAssistToggle();
+}
+/** AI 辅助是否开启（仅当用户显式启用时才返回真）。@returns {boolean} */
+function aiAssistEnabled() {
+  return aiAssistConfig.enabled;
 }
 const settingsModal = document.createElement('div');
 settingsModal.className = 'modal-backdrop';
@@ -856,6 +859,7 @@ async function generateMeetingSummary(meetingId = breviaClient?.state.selectedMe
       consent: true,
     });
     if (summary?.configuration_required) { hideSummaryProgress(); showSummaryConfigCard(); return; }
+    if (summary?.cancelled) { hideSummaryProgress(); return; }
     const meeting = await window.brevia.meeting.get({ meeting_id: meetingId });
     meeting.summary = { data: summary };
     if (meetingId === breviaClient.state.selectedMeetingId) applyBackendDetail(meeting);
@@ -1198,6 +1202,15 @@ function renderSummaryModelModal() {
   const saveDisabled = isBuiltin && !modelPaths.has(currentModelId);
   settingsModal.querySelector('.modal-body').innerHTML = `<form class="summary-model-form"><div class="config-fields">${providerField}${fields}</div>${builtinModelList}<div class="modal-form-actions"><button class="modal-action" type="submit"${saveDisabled ? ' disabled' : ''}>${copy.save}</button></div></form>`;
 }
+/** 渲染「AI 辅助」设置模态框：开关 + 主动性三档。模型连接沿用纪要配置。@returns {void} */
+function renderAiAssistModal() {
+  const copy = (aiAssistCopy[locale] || aiAssistCopy.en).modal;
+  settingsModal.querySelector('h2').textContent = copy.title;
+  settingsModal.querySelector('.modal-title p').textContent = copy.intro;
+  const enabled = aiAssistConfig.enabled;
+  const levels = copy.levels.map(([value, title, detail]) => `<label class="ai-assist-level${aiAssistConfig.proactivity === value ? ' is-selected' : ''}"><input type="radio" name="proactivity" value="${escapeHtml(value)}"${aiAssistConfig.proactivity === value ? ' checked' : ''} /><span><b>${escapeHtml(title)}</b><small>${escapeHtml(detail)}</small></span></label>`).join('');
+  settingsModal.querySelector('.modal-body').innerHTML = `<form class="ai-assist-form"><label class="ai-assist-enable"><span><b>${escapeHtml(copy.enable)}</b><small>${escapeHtml(copy.intro)}</small></span><input type="checkbox" name="enabled" data-ai-assist-enable${enabled ? ' checked' : ''} /></label><section class="ai-assist-proactivity"${enabled ? '' : ' hidden'}><p>${escapeHtml(copy.proactivityLabel)}</p><div class="ai-assist-levels">${levels}</div><p class="ai-assist-model-hint">${escapeHtml(copy.modelHint)} <button type="button" class="text-button" data-open-summary-model>${escapeHtml(copy.manageModel)}</button></p></section><div class="modal-form-actions"><button class="modal-action" type="submit">${escapeHtml(copy.save)}</button></div></form>`;
+}
 function renderSpeakerProfileModal() {
   const copy = speakerProfileCopy[locale] || speakerProfileCopy.en;
   const voiceCopy = voiceFeaturesCopy[locale] || voiceFeaturesCopy.en;
@@ -1427,7 +1440,7 @@ function renderSummaryDetailModal() {
   const copy = summaryDetailCopy[locale] || summaryDetailCopy.en;
   settingsModal.querySelector('h2').textContent = copy[0];
   settingsModal.querySelector('.modal-title p').textContent = currentMeetingDetail.title;
-  settingsModal.querySelector('.modal-body').innerHTML = `<article class="markdown-content">${renderMarkdown(markdown)}</article><div class="modal-form-actions"><button class="secondary" type="button" data-regenerate-summary>${copy[1]}</button></div>${sharePanelHtml('notes')}`;
+  settingsModal.querySelector('.modal-body').innerHTML = `<article class="markdown-content">${renderMarkdown(cleanSummaryMarkdown(markdown))}</article><div class="modal-form-actions"><button class="secondary" type="button" data-regenerate-summary>${copy[1]}</button></div>${sharePanelHtml('notes')}`;
 }
 /** 渲染一个设置模态框。@param {'models'|'storage'|'summary-model'} kind 请求的模态框。@returns {void} */
 function renderModal(kind) {
@@ -1438,6 +1451,7 @@ function renderModal(kind) {
     return;
   }
   if (kind === 'summary-model') { renderSummaryModelModal(); return; }
+  if (kind === 'ai-assist') { renderAiAssistModal(); return; }
   if (kind === 'speaker-profiles') { renderSpeakerProfileModal(); return; }
   if (kind === 'export') { renderExportModal(); return; }
   if (kind === 'share') { renderShareModal(); return; }
@@ -1561,8 +1575,26 @@ function closeModal() {
 }
 
 let onboardingPage;
+let onboardingAiDemoTimer;
 let onboardingPreviewLocale;
 let onboardingSelectedLocale;
+let onboardingTourIndex = 0;
+function renderOnboardingAiDemo() {
+  const demo = onboardingPage?.querySelector('[data-onboarding-ai-demo]');
+  const mode = onboardingPage?.querySelector('[name="onboarding-ai-proactivity"]:checked')?.value || 'quiet';
+  if (!demo) return;
+  const copy = aiOnboardingCopy[locale] || aiOnboardingCopy.en;
+  const demoCopy = aiOnboardingDemoCopy[locale] || copy.demo || aiOnboardingCopy.en.demo;
+  let index = 0;
+  const paint = () => {
+    const [title, suggestion, note] = demoCopy.scenes[mode][index++ % demoCopy.scenes[mode].length];
+    demo.innerHTML = `<div class="onboarding-demo-window"><header><small><i></i> ${escapeHtml(demoCopy.recording)}</small><b>${escapeHtml(demoCopy.meeting)}</b></header><section><small>${escapeHtml(demoCopy.transcript)}</small><p>${escapeHtml(demoCopy.transcriptText)}</p></section><section><small>${escapeHtml(demoCopy.notes)} · ${escapeHtml(title)}</small><span>${escapeHtml(suggestion)}</span><strong>${escapeHtml(note).replace(/\n/g, '<br />')}</strong></section></div>`;
+  };
+  clearInterval(onboardingAiDemoTimer);
+  demo.dataset.mode = mode;
+  paint();
+  onboardingAiDemoTimer = setInterval(paint, 2800);
+}
 function openOnboardingLanguage(initialLocale = onboardingSelectedLocale || window.BreviaOnboarding.systemLocale()) {
   activeModal = undefined;
   onboardingPreviewLocale = undefined;
@@ -1571,7 +1603,7 @@ function openOnboardingLanguage(initialLocale = onboardingSelectedLocale || wind
   const wheelItems = Array.from({ length: 5 }, (_, round) => choices.map(([code, label]) => `<button type="button" data-language-wheel-value="${code}" role="option" aria-selected="${code === defaultLocale}"${round === 2 ? '' : ' tabindex="-1"'}>${label}</button>`).join('')).join('');
   onboardingPage = document.createElement('main');
   onboardingPage.className = 'onboarding-page onboarding-active';
-  onboardingPage.innerHTML = `<form class="onboarding-page-content onboarding-language-page" data-onboarding-language><img class="onboarding-brand" src="./assets/brevia-logo.svg" alt="Brevia" /><div class="onboarding-page-copy"><h1></h1><p></p></div><input name="locale" type="hidden" value="${defaultLocale}" /><div class="language-wheel" role="listbox" aria-label="Choose your language">${wheelItems}</div><small class="onboarding-page-copy"></small><div class="onboarding-actions onboarding-page-copy"><button class="modal-action" type="submit"></button></div></form><small class="onboarding-credit">Powered by zerolovesea</small>`;
+  onboardingPage.innerHTML = `<form class="onboarding-page-content onboarding-language-page" data-onboarding-language><img class="onboarding-brand" src="./assets/brevia-logo.svg" alt="Brevia" /><div class="onboarding-page-copy"><h1></h1><p></p></div><input name="locale" type="hidden" value="${defaultLocale}" /><div class="language-wheel" role="listbox" aria-label="Choose your language">${wheelItems}</div><small class="onboarding-page-copy"></small><div class="onboarding-actions onboarding-page-copy"><button class="modal-action" type="submit"></button></div></form>`;
   document.body.append(onboardingPage);
   updateOnboardingLanguageCopy(defaultLocale);
   requestAnimationFrame(() => onboardingPage.classList.add('onboarding-page-enter'));
@@ -1587,6 +1619,164 @@ function openOnboardingLanguage(initialLocale = onboardingSelectedLocale || wind
       openOnboardingPermissions();
     });
   });
+}
+
+// 首次引导：功能演示（tour）。在设置完成后，以 1:1 复刻的应用界面逐一展示言录的核心能力。
+const tourMeetingFallback = { zh: '会议', en: 'Meeting', es: 'Reunión', ja: '会議', ko: '회의', fr: 'Réunion', de: 'Besprechung', ru: 'Встреча' };
+const tourAiSuggestionFallback = { zh: 'AI 建议', en: 'AI suggestion', es: 'Sugerencia de IA', ja: 'AI 提案', ko: 'AI 제안', fr: 'Suggestion IA', de: 'KI-Vorschlag', ru: 'Совет ИИ' };
+const tourHowtoLabel = { zh: '如何使用', en: 'How to use', es: 'Cómo usarlo', ja: '使い方', ko: '사용 방법', fr: 'Comment l’utiliser', de: 'So verwenden', ru: 'Как использовать' };
+const tourHowto = {
+  zh: {
+    0: ['在搜索框输入关键词，查找会议、逐字稿或标签。', '点击日期筛选，缩小到需要的时段。', '勾选多条记录，可批量删除或导出。'],
+    1: ['输入会议名称，并选择会议语言与译文目标。', '勾选要录制的音频来源（麦克风 / 系统音频）。', '点击「开始录制」，模型加载后会自动开录。'],
+    2: ['录制时，右侧实时字幕会持续滚动更新。', '每条字幕带时间与说话人，点击可回放定位。', '点击「展开字幕」，把字幕切到主视图。'],
+    3: ['点击「AI 辅助」开启实时纪要。', 'AI 会自动提炼结论、风险与待办到笔记区。', '可将当前字幕片段一键加入笔记。'],
+    4: ['会后自动生成精修逐字稿与纪要。', '拖动播放条回听，字幕会随之高亮。', '点击「导出」或「分享」，保存或发送纪要。'],
+  },
+  en: {
+    0: ['Type keywords to find meetings, transcripts, or tags.', 'Use the date filter to narrow the time range.', 'Select multiple rows to batch delete or export.'],
+    1: ['Enter a meeting title, then choose the language and translation target.', 'Check which audio sources to record (mic / system audio).', 'Hit Start recording; models load before recording begins.'],
+    2: ['Live captions scroll continuously on the right while recording.', 'Each caption carries a time and speaker; click to jump playback.', 'Expand captions to bring them to the main view.'],
+    3: ['Enable AI assist to start real-time notes.', 'AI surfaces decisions, risks, and actions into your notes.', 'Add the current caption segment to your notes in one click.'],
+    4: ['A refined transcript and notes are generated automatically.', 'Drag the playback bar to listen; captions highlight in sync.', 'Export or share the notes when you are done.'],
+  },
+  es: {
+    0: ['Escribe palabras clave para buscar reuniones, transcripciones o etiquetas.', 'Usa el filtro de fechas para acotar el periodo.', 'Selecciona varias filas para borrar o exportar en lote.'],
+    1: ['Escribe un título y elige el idioma y la traducción.', 'Marca qué fuentes de audio grabar (micrófono / sistema).', 'Pulsa Iniciar grabación; los modelos cargan antes.'],
+    2: ['Los subtítulos en vivo se desplazan a la derecha al grabar.', 'Cada subtítulo tiene hora y hablante; pulsa para saltar.', 'Amplía los subtítulos para llevarlos a la vista principal.'],
+    3: ['Activa la IA para notas en tiempo real.', 'La IA extrae conclusiones, riesgos y tareas a tus notas.', 'Añade el segmento actual a tus notas con un clic.'],
+    4: ['Se genera automáticamente una transcripción refinada y notas.', 'Arrastra la barra para escuchar; los subtítulos se resaltan.', 'Exporta o comparte las notas al terminar.'],
+  },
+  ja: {
+    0: ['キーワードを入力して会議・文字起こし・タグを検索。', '日付フィルターで期間を絞り込み。', '複数行を選択して一括削除・エクスポート。'],
+    1: ['会議名を入力し、言語と翻訳先を選択。', '録音する音声ソース（マイク/システム）を選択。', '「録音を開始」でモデル読み込み後に開始。'],
+    2: ['録音中、右側にライブ字幕が流れます。', '各字幕に時間と話者が付き、クリックで再生位置へ。', '「字幕を展開」で字幕をメイン表示に。'],
+    3: ['「AI アシスト」を有効にしてリアルタイムメモ。', 'AI が結論・リスク・ToDo をメモに抽出。', '現在の字幕をワンクリックでメモに追加。'],
+    4: ['終了後に精修済みの文字起こしとメモを自動生成。', 'バーをドラッグして再生、字幕が連動ハイライト。', '「エクスポート」「共有」で保存・送信。'],
+  },
+  ko: {
+    0: ['키워드로 회의·녹취·태그를 검색하세요.', '날짜 필터로 기간을 좁히세요.', '여러 행을 선택해 일괄 삭제·내보내기.'],
+    1: ['회의 이름을 입력하고 언어·번역 대상을 선택하세요.', '녹음할 오디오 소스(마이크/시스템)를 선택하세요.', '「녹음 시작」을 누르면 모델 로드 후 시작됩니다.'],
+    2: ['녹음 중 오른쪽에 실시간 자막이 흐릅니다.', '각 자막에 시간·화자가 표시되며 클릭으로 이동.', '「자막 확대」로 자막을 메인 화면에.'],
+    3: ['「AI 어시스트」를 켜서 실시간 메모를 시작하세요.', 'AI가 결론·리스크·할 일을 메모로 추출합니다.', '현재 자막을 한 번에 메모에 추가하세요.'],
+    4: ['종료 후 정제된 녹취와 메모를 자동 생성합니다.', '바를 드래그해 재생하면 자막이 연동됩니다.', '「내보내기」「공유」로 저장·전송하세요.'],
+  },
+  fr: {
+    0: ['Saisissez des mots-clés pour chercher réunions, transcriptions ou étiquettes.', 'Utilisez le filtre de dates pour restreindre la période.', 'Sélectionnez plusieurs lignes pour supprimer ou exporter en lot.'],
+    1: ['Saisissez un titre, puis choisissez la langue et la traduction.', 'Cochez les sources audio à enregistrer (micro / système).', 'Cliquez sur Démarrer ; les modèles se chargent avant.'],
+    2: ['Les sous-titres défilent à droite pendant l’enregistrement.', 'Chaque sous-titre a une heure et un locuteur ; cliquez pour sauter.', 'Agrandissez les sous-titres pour les mettre en premier plan.'],
+    3: ['Activez l’assistance IA pour les notes en temps réel.', 'L’IA extrait conclusions, risques et tâches dans vos notes.', 'Ajoutez le segment courant à vos notes en un clic.'],
+    4: ['Une transcription affinée et des notes sont générées automatiquement.', 'Faites glisser la barre pour écouter ; les sous-titres se surlignent.', 'Exportez ou partagez les notes à la fin.'],
+  },
+  de: {
+    0: ['Geben Sie Schlüsselwörter ein, um Besprechungen, Transkripte oder Tags zu finden.', 'Mit dem Datumsfilter eingrenzen.', 'Mehrere Zeilen auswählen, um in Stapeln zu löschen oder zu exportieren.'],
+    1: ['Titel eingeben, Sprache und Übersetzungsziel wählen.', 'Audioquellen (Mikrofon/System) zum Aufnehmen auswählen.', '„Aufnahme starten“; die Modelle laden vor dem Start.'],
+    2: ['Live-Untertitel laufen rechts während der Aufnahme.', 'Jeder Untertitel hat Zeit und Sprecher; klicken zum Springen.', 'Untertitel vergrößern, um sie in die Hauptansicht zu bringen.'],
+    3: ['KI-Assistenz aktivieren für Notizen in Echtzeit.', 'KI zieht Schlussfolgerungen, Risiken und Aufgaben in Ihre Notizen.', 'Aktuelles Segment mit einem Klick zu Notizen hinzufügen.'],
+    4: ['Ein bearbeitetes Transkript und Notizen werden automatisch erstellt.', 'Balken ziehen zum Anhören; Untertitel werden synchron hervorgehoben.', 'Notizen am Ende exportieren oder teilen.'],
+  },
+  ru: {
+    0: ['Введите ключевые слова, чтобы найти встречи, расшифровки или теги.', 'Используйте фильтр дат, чтобы сузить период.', 'Выберите несколько строк для массового удаления или экспорта.'],
+    1: ['Введите название, затем выберите язык и перевод.', 'Отметьте источники звука для записи (микрофон/система).', 'Нажмите «Начать запись»; модели загрузятся заранее.'],
+    2: ['Субтитры прокручиваются справа во время записи.', 'У каждого субтитра есть время и говорящий; клик для перехода.', 'Разверните субтитры, чтобы показать их на главном экране.'],
+    3: ['Включите ИИ-помощника для заметок в реальном времени.', 'ИИ извлекает выводы, риски и задачи в ваши заметки.', 'Добавьте текущий фрагмент в заметки одним кликом.'],
+    4: ['Обработанная расшифровка и заметки создаются автоматически.', 'Перетащите полосу для прослушивания; субтитры подсвечиваются.', 'Экспортируйте или поделитесь заметками в конце.'],
+  },
+};
+function openOnboardingTour() {
+  const copy = tourCopy[locale] || tourCopy.en;
+  onboardingTourIndex = 0;
+  const steps = copy.steps.map((step, index) => `<button type="button" class="onboarding-tour-step${index === 0 ? ' is-active' : ''}" data-onboarding-tour-step="${index}"><em>${String(index + 1).padStart(2, '0')}</em><span>${escapeHtml(step.label)}</span></button>`).join('');
+  showOnboardingPage('tour', `<section class="onboarding-tour-page"><button class="onboarding-tour-skip" data-onboarding-tour-skip type="button">${escapeHtml(copy.skip)}</button><header class="onboarding-tour-head"><img class="onboarding-brand" src="./assets/brevia-logo.svg" alt="Brevia" /><h1>${escapeHtml(copy.title)}</h1><div class="onboarding-intro"><p>${escapeHtml(copy.intro)}</p></div></header><div class="onboarding-tour"><div class="onboarding-tour-stage" data-onboarding-tour-stage></div><div class="onboarding-tour-side"><div class="onboarding-tour-steps">${steps}</div><div class="onboarding-tour-copy" data-onboarding-tour-copy></div><div class="onboarding-tour-actions"><button class="secondary" type="button" data-onboarding-tour-prev hidden>${escapeHtml(copy.back)}</button><button class="modal-action" type="button" data-onboarding-tour-next>${escapeHtml(copy.next)}</button></div></div></div><small class="onboarding-tour-hint">${escapeHtml(copy.hint)}</small></section>`);
+  const page = onboardingPage;
+  updateOnboardingTour(page, 0);
+  window.addEventListener('resize', fitTourWindow);
+  page.addEventListener('click', (event) => {
+    const step = event.target.closest('[data-onboarding-tour-step]');
+    if (step) { updateOnboardingTour(page, Number(step.dataset.onboardingTourStep)); return; }
+    if (event.target.closest('[data-onboarding-tour-skip]')) { dismissOnboardingPage(finishOnboarding); return; }
+    if (event.target.closest('[data-onboarding-tour-prev]')) { updateOnboardingTour(page, onboardingTourIndex - 1); return; }
+    if (event.target.closest('[data-onboarding-tour-next]')) {
+      const last = (tourCopy[locale] || tourCopy.en).steps.length - 1;
+      if (onboardingTourIndex < last) updateOnboardingTour(page, onboardingTourIndex + 1);
+      else dismissOnboardingPage(finishOnboarding);
+    }
+  });
+}
+function updateOnboardingTour(page, index) {
+  onboardingTourIndex = index;
+  const copy = tourCopy[locale] || tourCopy.en;
+  const step = copy.steps[index];
+  page.querySelectorAll('[data-onboarding-tour-step]').forEach((button, i) => button.classList.toggle('is-active', i === index));
+  page.querySelector('[data-onboarding-tour-stage]').innerHTML = renderTourWindow(index);
+  fitTourWindow();
+  const prev = page.querySelector('[data-onboarding-tour-prev]');
+  const next = page.querySelector('[data-onboarding-tour-next]');
+  prev.hidden = index === 0;
+  next.textContent = index === copy.steps.length - 1 ? copy.start : copy.next;
+  page.querySelector('[data-onboarding-tour-copy]').innerHTML = `<h3>${escapeHtml(step.heading)}</h3><p>${escapeHtml(step.body)}</p><ul>${step.points.map((point) => `<li>${escapeHtml(point)}</li>`).join('')}</ul>${(tourHowto[locale] || {})[index]?.length ? `<p class="onboarding-tour-howto-label">${escapeHtml(tourHowtoLabel[locale] || tourHowtoLabel.en)}</p><ol class="onboarding-tour-howto">${(tourHowto[locale][index] || tourHowto.en[index] || []).map((line) => `<li>${escapeHtml(line)}</li>`).join('')}</ol>` : ''}`;
+}
+// 按当前版面宽度与高度计算缩放，使 1:1 复刻的应用界面等比铺入演示窗口。
+// 采用 requestAnimationFrame 等布局完成后取宽度，避免首帧拿到 0 宽导致整屏空白。
+function fitTourWindow() {
+  const page = onboardingPage;
+  const stage = page?.querySelector('[data-onboarding-tour-stage]');
+  const frame = stage?.querySelector('[data-onboarding-tour-window]');
+  if (!stage || !frame) return;
+  requestAnimationFrame(() => {
+    const width = stage.clientWidth || stage.getBoundingClientRect().width;
+    if (width <= 0) return;
+    const repW = 1180;
+    const repH = 660;
+    const scale = Math.min(width / repW, (window.innerHeight * 0.66) / repH);
+    frame.style.setProperty('--tour-scale', scale);
+    frame.style.setProperty('--tour-w', `${Math.round(repW * scale)}px`);
+    frame.style.setProperty('--tour-h', `${Math.round(repH * scale)}px`);
+  });
+}
+function renderTourWindow(index) {
+  const step = (tourCopy[locale] || tourCopy.en).steps[index];
+  const crumbs = [t('所有会议'), t('准备录制'), t('实时字幕'), t('实时字幕'), t('会议详情')];
+  return `<div class="onboarding-tour-window" data-onboarding-tour-window>${renderTourReplica(index, crumbs[index] || '')}<div class="onboarding-tour-callout tour-callout--${step.callout}">${index + 1}</div></div>`;
+}
+function renderTourReplica(index, crumb) {
+  const step = (tourCopy[locale] || tourCopy.en).steps[index];
+  return `<div class="onboarding-tour-replica">${tourSidebar(index)}<section class="workspace"><header class="window-bar"><div class="traffic"><i></i><i></i><i></i></div><span>${escapeHtml(crumb)}</span><div class="window-actions"><small>v—</small></div></header>${tourView(index, step.demo)}</section></div>`;
+}
+function tourSidebar(index) {
+  const items = [['all', '⌂', t('所有会议')], ['trash', '◷', t('最近删除')], ['settings', '⚙', t('设置')]];
+  return `<aside class="sidebar"><button class="brand"><span class="brand-mark">言</span><img src="./assets/brevia-logo.svg" alt="brevia" /></button><button class="new-meeting${index === 1 ? ' is-tour-highlight' : ''}"><span class="new-meeting-icon">+</span><span class="new-meeting-label">${escapeHtml(t('开始会议'))}</span></button><nav>${items.map(([id, icon, label]) => `<button class="nav-item${id === 'all' ? ' active' : ''}"><span>${icon}</span>${escapeHtml(label)}</button>`).join('')}</nav></aside>`;
+}
+function tourView(index, demo) {
+  const meetingName = demo.meeting || tourMeetingFallback[locale] || 'Meeting';
+  const aiSuggestionLabel = tourAiSuggestionFallback[locale] || 'AI';
+  const aiToggleLabel = (aiAssistCopy[locale] || aiAssistCopy.en).toggleOff;
+  const liveHeader = (time) => `<header class="live-header tour-anim" style="--tour-delay:0ms"><div class="live-title"><strong>${escapeHtml(meetingName)}</strong><div class="live-status"><span class="recording"><i></i>${escapeHtml(t('正在录制'))}</span><time>${time}</time><span class="save-state"><svg class="check-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3 8.5 3.2 3.2L13 4.5" /></svg>${escapeHtml(t('已保存'))}</span></div></div><div class="live-caption-controls"><button class="floating-caption-toggle">${escapeHtml(t('悬浮字幕'))}</button><button class="translation-toggle">${escapeHtml(t('译文: 关'))}</button></div><button class="pause-button">Ⅱ ${escapeHtml(t('暂停'))}</button><button class="end-button">${escapeHtml(t('结束会议'))}</button></header>`;
+  const captionsPanel = (segments) => `<section class="live-captions tour-anim" style="--tour-delay:160ms"><header class="live-section-head"><p class="eyebrow">${escapeHtml(t('实时字幕'))}</p><button class="live-mode-toggle" data-toggle-live-mode="notes">← ${escapeHtml(t('返回笔记'))}</button></header><div class="transcript-scroll">${segments}</div></section>`;
+  const segment = (time, speaker, text, delay = 220) => `<div class="segment tour-anim" style="--tour-delay:${delay}ms"><div class="segment-meta"><time>${time}</time><button class="segment-speaker">${escapeHtml(speaker)}</button></div><div class="segment-copy"><p>${escapeHtml(text)}</p></div></div>`;
+  switch (index) {
+    case 0: {
+      const rows = demo.meetings.map(([title, meta, tags], i) => `<article class="meeting-row tour-anim" style="--tour-delay:${160 + i * 110}ms"><div class="meeting-main"><h2>${escapeHtml(title)}</h2><p>${escapeHtml(meta)}</p><div class="meeting-tags">${(tags || []).map((tag) => `<div class="tag">${escapeHtml(tag)}</div>`).join('')}</div></div><div class="meeting-status"><span class="status">${escapeHtml(t('已精修'))}</span><small>${escapeHtml(demo.time || '14:20')}</small></div><div class="meeting-actions"><button class="more">•••</button></div></article>`).join('');
+      return `<section class="view active" id="home-view"><div class="page-head"><div><button class="eyebrow tour-anim" type="button">${escapeHtml(t('会议库'))}</button><h1 class="tour-anim" style="--tour-delay:70ms">${escapeHtml(t('每一场对话，都留有依据。'))}</h1></div></div><div class="library-toolbar tour-anim" style="--tour-delay:110ms"><label class="search"><span>⌕</span><input type="search" placeholder="${escapeHtml(t('搜索会议…'))}" /></label><div class="filter"><span class="flow-select-toggle">${escapeHtml(t('最近 30 天'))} <span>⌄</span></span></div></div><section class="meeting-list">${rows}</section></section>`;
+    }
+    case 1:
+      return `<section class="view active" id="prepare-view"><button class="back tour-anim">← ${escapeHtml(t('返回会议库'))}</button><div class="prepare-layout"><div class="tour-anim" style="--tour-delay:60ms"><p class="eyebrow">${escapeHtml(t('准备录制'))}</p><h1>${escapeHtml(t('开始一场会议'))}</h1><form><label>${escapeHtml(t('会议名称'))}<input value="${escapeHtml(demo.name)}" /></label><div class="form-grid"><label>${escapeHtml(t('会议语言'))}<input value="${escapeHtml(demo.language)}" /></label><label>${escapeHtml(t('译文目标'))}<input value="${escapeHtml(demo.translation || t('不需要翻译'))}" /></label></div><fieldset><legend>${escapeHtml(t('录制音频'))}</legend><label class="choice"><input type="checkbox" checked /><span><b>${escapeHtml(t('我的麦克风'))}</b><small>${escapeHtml(t('系统默认麦克风'))}</small></span><strong class="input-state"><i class="input-meter" style="--level:.72"></i><span>${escapeHtml(t('输入良好'))}</span></strong></label><label class="choice"><input type="checkbox" checked /><span><b>${escapeHtml(t('系统音频'))}</b><small>${escapeHtml(t('需要授予屏幕与系统音频权限'))}</small></span><strong class="input-state"><span>${escapeHtml(t('已就绪'))}</span></strong></label></fieldset><button class="primary-action wide tour-anim" style="--tour-delay:200ms">${escapeHtml(t('开始录制'))} <span>→</span></button></form></div><aside class="model-card tour-anim" style="--tour-delay:140ms"><div class="model-icon">⌁</div><dl><div><dt>${escapeHtml(t('计算设备'))}</dt><dd>${escapeHtml(demo.device)}</dd></div><div><dt>${escapeHtml(t('会议语言'))}</dt><dd>${escapeHtml(demo.language)}</dd></div><div><dt>${escapeHtml(t('会议模式'))}</dt><dd>${escapeHtml(demo.mode)}</dd></div></dl><button class="text-button">${escapeHtml(t('管理模型与术语'))} →</button></aside></div></section>`;
+    case 2: {
+      const segments = demo.segments.map(([speaker, text], i) => segment(`${String((i * 3) + 2).padStart(2, '0')}:00`, speaker, text, 240 + i * 130)).join('');
+      return `<section class="view active" id="live-view">${liveHeader('04:23')}<div class="live-layout"><section class="live-notes tour-anim" style="--tour-delay:120ms"><header class="live-section-head"><p class="eyebrow">${escapeHtml(t('我的笔记'))}</p><button class="ai-assist-toggle"><span class="ai-assist-toggle-star">✦</span> ${escapeHtml(aiToggleLabel)}</button><button class="live-mode-toggle" data-toggle-live-mode="caption">${escapeHtml(t('展开字幕'))} →</button></header><div class="notes-editor">${(demo.notes || []).map((line) => `<p>${escapeHtml(line)}</p>`).join('')}</div></section>${captionsPanel(segments)}</div></section>`;
+    }
+    case 3: {
+      // AI 纪要步骤的 demo 只含 decision/actions，无字幕；回退到上一步（实时字幕）的片段，
+      // 避免渲染出空说话人 + 空文本的字幕行。
+      const live = demo.live || demo.segments?.[0] || (tourCopy[locale] || tourCopy.en).steps[2].demo.segments?.[0] || [];
+      return `<section class="view active" id="live-view">${liveHeader('07:41')}<div class="live-layout"><section class="live-notes tour-anim" style="--tour-delay:120ms"><header class="live-section-head"><p class="eyebrow">${escapeHtml(t('我的笔记'))}</p><button class="ai-assist-toggle is-enabled"><span class="ai-assist-toggle-star">✦</span> ${escapeHtml(aiToggleLabel)}</button><button class="live-mode-toggle" data-toggle-live-mode="caption">${escapeHtml(t('展开字幕'))} →</button></header><div class="ai-suggestion tour-anim" style="--tour-delay:220ms"><div class="ai-suggestion-card"><div class="ai-suggestion-head"><span class="ai-suggestion-star">✦</span><span class="ai-suggestion-type">${escapeHtml(aiSuggestionLabel)}</span></div><p class="ai-suggestion-text">${escapeHtml(demo.decision)}</p></div></div><div class="notes-editor tour-anim" style="--tour-delay:320ms">${(demo.actions || []).map((action) => `<p>• ${escapeHtml(action)}</p>`).join('')}</div></section>${captionsPanel(segment('00:02', live[0] || '', live[1] || '', 300))}</div></section>`;
+    }
+    case 4: {
+      const meta = demo.meta || (tourCopy[locale] || tourCopy.en).steps[0].demo.meetings[0]?.[1] || '';
+      return `<section class="view active" id="detail-view"><button class="back tour-anim">← ${escapeHtml(t('返回会议库'))}</button><header class="detail-head tour-anim" style="--tour-delay:60ms"><div><p class="eyebrow">${escapeHtml(t('本地会议'))}</p><h1>${escapeHtml(meetingName)}</h1><p class="detail-meta">${escapeHtml(meta)}</p></div><div class="detail-actions"><button class="secondary">${escapeHtml(t('分享'))}</button><button class="primary-action">${escapeHtml(t('导出'))} <span>↓</span></button></div></header><section class="player tour-anim" style="--tour-delay:140ms"><button class="play">▶</button><button class="skip">↶ 15</button><button class="skip">15 ↷</button><span class="player-time">00:00</span><input type="range" min="0" max="1" value="0" /><span>${escapeHtml(t('本地录音'))}</span><div class="player-speed flow-select"><button class="flow-select-toggle" type="button">1× <span>⌄</span></button></div></section><div class="detail-layout"><section class="final-transcript tour-anim" style="--tour-delay:220ms"><div class="tabbar"><div class="tabbar-tabs"><button class="tab active">${escapeHtml(t('精修字幕'))}</button><button class="tab">${escapeHtml(t('原始转写'))}</button></div><button class="tabbar-action">${escapeHtml(t('更多'))}</button></div><div class="refined-fulltext"><div class="refined-fulltext-body">${escapeHtml(demo.refined)}</div></div></section><aside class="notes tour-anim" style="--tour-delay:300ms"><div class="tabbar"><div class="tabbar-tabs"><button class="tab active">${escapeHtml(t('会议纪要'))}</button></div></div><div class="detail-notes-panel"><p>${escapeHtml(demo.summary)}</p></div></aside></div></section>`;
+    }
+  }
+  return '';
 }
 
 function updateOnboardingLanguageCopy(nextLocale) {
@@ -1657,13 +1847,14 @@ function initializeLanguageWheel(wheel, onSelect = () => {}) {
 function showOnboardingPage(kind, content) {
   onboardingPage = document.createElement('main');
   onboardingPage.className = `onboarding-page onboarding-active onboarding-${kind}-overlay`;
-  onboardingPage.innerHTML = `<div class="onboarding-page-content onboarding-${kind}-content">${content}</div><small class="onboarding-credit">Powered by zerolovesea</small>`;
+  onboardingPage.innerHTML = `<div class="onboarding-page-content onboarding-${kind}-content">${content}</div>`;
   document.body.append(onboardingPage);
   requestAnimationFrame(() => onboardingPage.classList.add('onboarding-page-enter'));
 }
 
 function dismissOnboardingPage(next) {
   const page = onboardingPage;
+  clearInterval(onboardingAiDemoTimer);
   void breviaClient?.stopPreview();
   page.classList.remove('onboarding-page-enter');
   page.classList.add('onboarding-page-leave');
@@ -1690,9 +1881,9 @@ async function openOnboardingSetup() {
   });
   onboardingPage.addEventListener('click', (event) => {
     if (event.target.closest('[data-onboarding-back-language]')) { dismissOnboardingPage(openOnboardingPermissions); return; }
-    if (event.target.closest('[data-download-onboarding-models]')) { window.BreviaOnboarding.beginDownloads(onboardingModelIds); downloadRequiredModels(onboardingModelIds); dismissOnboardingPage(finishOnboarding); return; }
+    if (event.target.closest('[data-download-onboarding-models]')) { window.BreviaOnboarding.beginDownloads(onboardingModelIds); downloadRequiredModels(onboardingModelIds); dismissOnboardingPage(openOnboardingAi); return; }
     if (event.target.closest('[data-customize-onboarding-models]')) { onboardingModelSelection = new Set(onboardingModelIds); void openModal('models'); return; }
-    if (event.target.closest('[data-finish-onboarding]')) dismissOnboardingPage(finishOnboarding);
+    if (event.target.closest('[data-finish-onboarding]')) dismissOnboardingPage(openOnboardingAi);
   });
 }
 
@@ -1719,6 +1910,147 @@ function updateOnboardingSetup() {
 function finishOnboarding() {
   window.BreviaOnboarding.complete();
   closeModal();
+}
+// Onboarding 的 AI 辅助配置页（PRD §22）：离线功能配置之后进入。
+const aiOnboardingCopy = {
+  zh: { title: '启用 AI 辅助', intro: '让 AI 在会议过程中帮你发现重点、提取待办并整理笔记。', wayTitle: '选择 AI 运行方式', builtin: '下载内置 AI', builtinHint: '在本机运行，音频与文本都不离开设备。', online: '使用在线 AI', onlineHint: '使用你自己的 API Key，只发送文本、绝不发送音频。', configureOnline: '配置在线服务', proactivityTitle: '你希望 AI 怎样协助记录？', levels: [['quiet', '只在我需要时', '只有你点击 AI、选中文字或主动要求时才出现。'], ['assist', '发现重点时提醒我', '发现结论、决策、待办、重要数字时适度提醒。'], ['auto', '自动帮我整理', '自动归纳结论、收集待办并整理会议内容。']], demo: { recording: '正在录制', meeting: '会议 20260820', transcript: '实时字幕', transcriptText: '“我们周五完成验收。”', notes: '我的笔记', scenes: { quiet: [['仅在需要时', '✦ AI 建议：确认截止时间', '• 周五前完成内部验收'], ['仅在需要时', '✦ AI 建议：记录待办', '• 产品团队跟进验收']], assist: [['发现重点', '✦ AI 建议：重要决策', '• 下周一开始小范围发布'], ['发现重点', '✦ AI 建议：行动项', '• 开发团队周四交付测试版']], auto: [['自动整理', '✦ AI 正在整理会议内容', '## 会议结论\n- 周五完成验收'], ['自动整理', '✦ AI 正在归纳待办', '## 下一步\n- 准备测试版本']] } }, finish: '完成', skip: '暂不启用' },
+  en: { title: 'Enable AI assist', intro: 'Let AI surface key points, extract action items, and organize your notes during meetings.', wayTitle: 'How should AI run?', builtin: 'Download built-in AI', builtinHint: 'Runs on this device. Audio and text never leave it.', online: 'Use online AI', onlineHint: 'Use your own API key. Only text is sent, never audio.', configureOnline: 'Configure online service', proactivityTitle: 'How should AI help you take notes?', levels: [['quiet', 'Only when I ask', 'Appears only when you click AI, select text, or ask directly.'], ['assist', 'Notify me of key points', 'Lightly notifies you about conclusions, decisions, actions, and key figures.'], ['auto', 'Organize for me automatically', 'Automatically summarizes conclusions and organizes the meeting.']], demo: { recording: 'Recording', meeting: 'Meeting 20260820', transcript: 'Live transcript', transcriptText: '“We’ll complete acceptance on Friday.”', notes: 'My notes', scenes: { quiet: [['When needed', '✦ AI suggestion: confirm deadline', '• Finish internal acceptance by Friday'], ['When needed', '✦ AI suggestion: capture action', '• Product team follows up on acceptance']], assist: [['Key point found', '✦ AI suggestion: key decision', '• Start a limited rollout next Monday'], ['Key point found', '✦ AI suggestion: action item', '• Engineering delivers a test build Thursday']], auto: [['Auto organize', '✦ AI is organizing the meeting', '## Decision\n- Complete acceptance Friday'], ['Auto organize', '✦ AI is grouping actions', '## Next step\n- Prepare a test build']] } }, finish: 'Done', skip: 'Not now' },
+  es: { title: 'Activar asistencia IA', intro: 'Deja que la IA detecte puntos clave, extraiga tareas y organice tus notas durante la reunión.', wayTitle: '¿Cómo debe ejecutarse la IA?', builtin: 'Descargar IA integrada', builtinHint: 'Se ejecuta en este dispositivo. El audio y el texto nunca salen de él.', online: 'Usar IA en línea', onlineHint: 'Usa tu propia API Key. Solo se envía texto, nunca audio.', configureOnline: 'Configurar servicio en línea', proactivityTitle: '¿Cómo quieres que la IA te ayude a tomar notas?', levels: [['quiet', 'Solo cuando lo pida', 'Aparece solo cuando haces clic en IA, seleccionas texto o lo pides.'], ['assist', 'Avisarme de puntos clave', 'Avisa de conclusiones, decisiones, tareas y cifras clave.'], ['auto', 'Organizar automáticamente', 'Resume conclusiones y organiza la reunión automáticamente.']], finish: 'Listo', skip: 'Ahora no' },
+  ja: { title: 'AI アシストを有効にする', intro: '会議中に AI が要点の発見・ToDo の抽出・メモ整理を支援します。', wayTitle: 'AI の実行方法', builtin: '内蔵 AI をダウンロード', builtinHint: 'このデバイス上で実行。音声とテキストは端末から出ません。', online: 'オンライン AI を使う', onlineHint: '自分の API キーを使います。送信するのはテキストのみで音声は送りません。', configureOnline: 'オンラインサービスを設定', proactivityTitle: 'AI にどのようにメモを手伝ってほしいですか？', levels: [['quiet', '必要なときだけ', 'クリックや選択、直接依頼したときだけ表示。'], ['assist', '要点を知らせる', '結論・決定・ToDo・重要な数字を適度に知らせます。'], ['auto', '自動で整理する', '結論をまとめ、会議内容を自動整理します。']], finish: '完了', skip: 'あとで' },
+  ko: { title: 'AI 어시스트 사용', intro: '회의 중 AI가 핵심 포인트 발견, 할 일 추출, 메모 정리를 돕습니다.', wayTitle: 'AI 실행 방식', builtin: '내장 AI 다운로드', builtinHint: '이 기기에서 실행됩니다. 오디오와 텍스트는 기기를 벗어나지 않습니다.', online: '온라인 AI 사용', onlineHint: '자신의 API 키를 사용합니다. 텍스트만 전송하고 오디오는 전송하지 않습니다.', configureOnline: '온라인 서비스 구성', proactivityTitle: 'AI가 메모를 어떻게 도와주길 원하시나요?', levels: [['quiet', '필요할 때만', '클릭, 선택 또는 직접 요청할 때만 표시됩니다.'], ['assist', '핵심 포인트 알림', '결론·결정·할 일·중요 수치를 적절히 알립니다.'], ['auto', '자동으로 정리', '결론을 요약하고 회의를 자동 정리합니다.']], finish: '완료', skip: '나중에' },
+  fr: { title: "Activer l'assistance IA", intro: "Laissez l'IA repérer les points clés, extraire les tâches et organiser vos notes pendant la réunion.", wayTitle: "Comment l'IA doit-elle s'exécuter ?", builtin: "Télécharger l'IA intégrée", builtinHint: "S'exécute sur cet appareil. L'audio et le texte n'en sortent jamais.", online: "Utiliser une IA en ligne", onlineHint: 'Utilisez votre propre clé API. Seul le texte est envoyé, jamais l’audio.', configureOnline: 'Configurer le service en ligne', proactivityTitle: "Comment l'IA doit-elle vous aider à prendre des notes ?", levels: [['quiet', 'Seulement quand je demande', "N'apparaît que lorsque vous cliquez, sélectionnez du texte ou demandez."], ['assist', "M'alerter des points clés", 'Alerte sur les conclusions, décisions, tâches et chiffres clés.'], ['auto', 'Organiser automatiquement', 'Résume les conclusions et organise la réunion automatiquement.']], finish: 'Terminé', skip: 'Pas maintenant' },
+  de: { title: 'KI-Assistenz aktivieren', intro: 'Lassen Sie die KI während der Besprechung Kernpunkte finden, Aufgaben extrahieren und Notizen ordnen.', wayTitle: 'Wie soll die KI laufen?', builtin: 'Integrierte KI herunterladen', builtinHint: 'Läuft auf diesem Gerät. Audio und Text verlassen es nie.', online: 'Online-KI verwenden', onlineHint: 'Verwenden Sie Ihren eigenen API-Schlüssel. Es wird nur Text gesendet, nie Audio.', configureOnline: 'Onlinedienst konfigurieren', proactivityTitle: 'Wie soll die KI beim Mitschreiben helfen?', levels: [['quiet', 'Nur wenn ich frage', 'Erscheint nur beim Klicken, Auswählen oder direkter Anfrage.'], ['assist', 'Über Kernpunkte informieren', 'Hinweise auf Schlussfolgerungen, Entscheidungen, Aufgaben und Zahlen.'], ['auto', 'Automatisch ordnen', 'Fasst Schlussfolgerungen zusammen und ordnet die Besprechung automatisch.']], finish: 'Fertig', skip: 'Später' },
+  ru: { title: 'Включить ИИ-помощника', intro: 'Позвольте ИИ находить ключевые моменты, извлекать задачи и упорядочивать заметки во время встречи.', wayTitle: 'Как должен работать ИИ?', builtin: 'Скачать встроенный ИИ', builtinHint: 'Работает на этом устройстве. Аудио и текст не покидают его.', online: 'Использовать онлайн-ИИ', onlineHint: 'Используйте свой ключ API. Отправляется только текст, никогда аудио.', configureOnline: 'Настроить онлайн-сервис', proactivityTitle: 'Как ИИ должен помогать вести заметки?', levels: [['quiet', 'Только когда попрошу', 'Появляется только при клике, выборе текста или прямой просьбе.'], ['assist', 'Сообщать о ключевых моментах', 'Сообщает о выводах, решениях, задачах и важных цифрах.'], ['auto', 'Упорядочивать автоматически', 'Автоматически резюмирует выводы и упорядочивает встречу.']], finish: 'Готово', skip: 'Не сейчас' },
+};
+const aiOnboardingDemoCopy = {
+  es: { recording: 'Grabando', meeting: 'Reunión 20260820', transcript: 'Transcripción en vivo', transcriptText: '“Terminaremos la aceptación el viernes.”', notes: 'Mis notas', scenes: { quiet: [['Cuando sea necesario', '✦ Sugerencia de IA: confirmar plazo', '• Terminar la aceptación interna el viernes'], ['Cuando sea necesario', '✦ Sugerencia de IA: registrar tarea', '• Producto da seguimiento a la aceptación']], assist: [['Punto clave detectado', '✦ Sugerencia de IA: decisión clave', '• Iniciar despliegue limitado el lunes'], ['Punto clave detectado', '✦ Sugerencia de IA: tarea', '• Ingeniería entrega una versión de prueba el jueves']], auto: [['Organización automática', '✦ La IA organiza la reunión', '## Decisión\n- Completar la aceptación el viernes'], ['Organización automática', '✦ La IA agrupa las tareas', '## Siguiente paso\n- Preparar una versión de prueba']] } },
+  ja: { recording: '録音中', meeting: '会議 20260820', transcript: 'ライブ字幕', transcriptText: '「金曜日に受け入れを完了します。」', notes: '自分のメモ', scenes: { quiet: [['必要なとき', '✦ AI の提案：期限を確認', '• 金曜日までに社内受け入れを完了'], ['必要なとき', '✦ AI の提案：タスクを記録', '• プロダクトチームが受け入れをフォロー']], assist: [['要点を発見', '✦ AI の提案：重要な決定', '• 来週月曜に限定公開を開始'], ['要点を発見', '✦ AI の提案：アクション', '• 開発チームが木曜にテスト版を納品']], auto: [['自動整理', '✦ AI が会議を整理中', '## 決定事項\n- 金曜日に受け入れを完了'], ['自動整理', '✦ AI がタスクを整理中', '## 次の手順\n- テスト版を準備']] } },
+  ko: { recording: '녹음 중', meeting: '회의 20260820', transcript: '실시간 자막', transcriptText: '“금요일에 검수를 완료하겠습니다.”', notes: '내 메모', scenes: { quiet: [['필요할 때', '✦ AI 제안: 마감일 확인', '• 금요일까지 내부 검수 완료'], ['필요할 때', '✦ AI 제안: 할 일 기록', '• 제품팀이 검수를 후속 처리']], assist: [['핵심 포인트 발견', '✦ AI 제안: 주요 결정', '• 다음 주 월요일 제한 배포 시작'], ['핵심 포인트 발견', '✦ AI 제안: 실행 항목', '• 개발팀이 목요일 테스트 빌드 제공']], auto: [['자동 정리', '✦ AI가 회의를 정리 중', '## 결정\n- 금요일에 검수 완료'], ['자동 정리', '✦ AI가 할 일을 정리 중', '## 다음 단계\n- 테스트 빌드 준비']] } },
+  fr: { recording: 'Enregistrement', meeting: 'Réunion 20260820', transcript: 'Transcription en direct', transcriptText: '« Nous terminerons la recette vendredi. »', notes: 'Mes notes', scenes: { quiet: [['Au besoin', '✦ Suggestion IA : confirmer l’échéance', '• Terminer la recette interne vendredi'], ['Au besoin', '✦ Suggestion IA : noter une tâche', '• L’équipe produit suit la recette']], assist: [['Point clé détecté', '✦ Suggestion IA : décision clé', '• Lancement limité lundi prochain'], ['Point clé détecté', '✦ Suggestion IA : action', '• L’équipe technique livre une version de test jeudi']], auto: [['Organisation auto', '✦ L’IA organise la réunion', '## Décision\n- Terminer la recette vendredi'], ['Organisation auto', '✦ L’IA regroupe les actions', '## Prochaine étape\n- Préparer une version de test']] } },
+  de: { recording: 'Aufnahme läuft', meeting: 'Besprechung 20260820', transcript: 'Live-Transkript', transcriptText: '„Wir schließen die Abnahme am Freitag ab.“', notes: 'Meine Notizen', scenes: { quiet: [['Bei Bedarf', '✦ KI-Vorschlag: Frist bestätigen', '• Interne Abnahme bis Freitag abschließen'], ['Bei Bedarf', '✦ KI-Vorschlag: Aufgabe erfassen', '• Produktteam begleitet die Abnahme']], assist: [['Kernpunkt erkannt', '✦ KI-Vorschlag: wichtige Entscheidung', '• Begrenzten Rollout nächsten Montag starten'], ['Kernpunkt erkannt', '✦ KI-Vorschlag: Aktion', '• Entwicklung liefert Donnerstag einen Test-Build']], auto: [['Automatisch ordnen', '✦ KI ordnet die Besprechung', '## Entscheidung\n- Abnahme am Freitag abschließen'], ['Automatisch ordnen', '✦ KI bündelt Aufgaben', '## Nächster Schritt\n- Test-Build vorbereiten']] } },
+  ru: { recording: 'Идёт запись', meeting: 'Встреча 20260820', transcript: 'Субтитры в реальном времени', transcriptText: '«Мы завершим приёмку в пятницу.»', notes: 'Мои заметки', scenes: { quiet: [['По запросу', '✦ Совет ИИ: подтвердить срок', '• Завершить внутреннюю приёмку к пятнице'], ['По запросу', '✦ Совет ИИ: записать задачу', '• Команда продукта сопровождает приёмку']], assist: [['Найден ключевой момент', '✦ Совет ИИ: важное решение', '• Начать ограниченный запуск в следующий понедельник'], ['Найден ключевой момент', '✦ Совет ИИ: задача', '• Разработка сдаёт тестовую сборку в четверг']], auto: [['Автоупорядочивание', '✦ ИИ упорядочивает встречу', '## Решение\n- Завершить приёмку в пятницу'], ['Автоупорядочивание', '✦ ИИ группирует задачи', '## Следующий шаг\n- Подготовить тестовую сборку']] } },
+};
+// 首次引导功能演示（tour）文案。
+const tourCopy = {
+  zh: {
+    title: '三分钟了解言录', intro: '把每一场对话，变成可回看、可检索、可分享的记录。', start: '开始使用', next: '下一步', back: '上一步', skip: '跳过演示',
+    hint: '识别、纪要、精修都在本机完成，音频不会上传到云端。',
+    steps: [
+      { label: '会议库', heading: '可检索的会议库', body: '所有会议按时间归档。你随时可以按名称、逐字稿或标签，快速找回某一场对话。', points: ['搜索会议、逐字稿与标签', '日期范围筛选', '删除后 30 天内可恢复'], callout: 'search', demo: { meetings: [['产品周会 · 2026-08-19', '04:23 · 中文 · 12 位参与者', ['发布计划', '风险']], ['需求评审 · 2026-08-17', '01:48 · 中文 · 6 位参与者', ['评审']]] } },
+      { label: '准备会议', heading: '三秒开始一场会议', body: '只需起个名字、选好语言与音频来源，点一下就能开始。', points: ['选择会议语言与翻译目标', '麦克风 + 系统音频双轨录制', '录制前自动加载模型，不依赖网络'], callout: 'form', demo: { name: '会议', language: '中文', device: 'CPU', mode: '标准模式' } },
+      { label: '实时字幕', heading: '边开会，边出字幕', body: '低延迟实时转写持续更新当前发言，还能区分不同说话人。', points: ['毫秒级实时字幕', '说话人识别与区分', '可开启悬浮字幕窗口'], callout: 'transcript', demo: { segments: [['张伟', '我们周五前要完成内部验收。'], ['李娜', '好，我把风险点整理出来。'], ['张伟', '那下周一同步进展。']] } },
+      { label: 'AI 纪要', heading: 'AI 自动提炼结论与待办', body: '会议过程中 AI 帮你记录重点、提取决策与待办，不遗漏任何行动项。', points: ['自动提炼结论、风险与待办', '支持内置离线 AI 或在线服务', '文本才会发送，音频永远留在本机'], callout: 'notes', demo: { decision: '周五前完成内部验收', actions: ['产品团队跟进验收', '开发下周一同步进展'] } },
+      { label: '会议详情', heading: '回放、精修与分享', body: '结束后可回听录音、查看精修后的逐字稿，并导出或分享纪要。', points: ['回放录音并跳转到对应字幕', '会后精修，提升正式记录可读性', '导出与分享会议纪要'], callout: 'player', demo: { refined: '我们确定周五前完成内部验收，风险点由李娜统一整理，下周一同步进展。', summary: '周五前完成内部验收' } },
+    ],
+  },
+  en: {
+    title: 'Meet Brevia in three minutes', intro: 'Turn every conversation into a record you can revisit, search, and share.', start: 'Start using', next: 'Next', back: 'Back', skip: 'Skip tour',
+    hint: 'Recognition, notes, and refinement all run on this device; your audio never leaves it.',
+    steps: [
+      { label: 'Library', heading: 'A searchable meeting library', body: 'Every meeting is archived by time. Return to any conversation by name, transcript, or tag.', points: ['Search meetings, transcripts, and tags', 'Filter by date range', 'Restore within 30 days of deletion'], callout: 'search', demo: { meetings: [['Product weekly · 2026-08-19', '04:23 · Chinese · 12 participants', ['Launch', 'Risks']], ['Requirements review · 2026-08-17', '01:48 · Chinese · 6 participants', ['Review']]] } },
+      { label: 'Prepare', heading: 'Start a meeting in seconds', body: 'Give it a name, pick a language and audio source, then hit record.', points: ['Choose the meeting language and translation target', 'Record mic and system audio together', 'Models load before recording, so it works offline'], callout: 'form', demo: { name: 'Meeting', language: 'Chinese', device: 'CPU', mode: 'Standard mode' } },
+      { label: 'Live captions', heading: 'Captions as you speak', body: 'Low-latency live transcription tracks the current speaker and separates voices.', points: ['Millisecond-level live captions', 'Speaker recognition and separation', 'Optional floating caption window'], callout: 'transcript', demo: { segments: [['Alex', 'We need to complete acceptance by Friday.'], ['Mia', 'Got it, I’ll list the risks.'], ['Alex', 'We’ll sync progress Monday.']] } },
+      { label: 'AI notes', heading: 'Key points and actions, automatically', body: 'AI captures decisions and to-dos while you talk, so no action is missed.', points: ['Derive conclusions, risks, and to-dos', 'Built-in offline or online AI', 'Only text is sent; audio stays on device'], callout: 'notes', demo: { decision: 'Complete acceptance by Friday', actions: ['Product team to follow up on acceptance', 'Engineering syncs progress Monday'] } },
+      { label: 'Details', heading: 'Play back, refine, and share', body: 'Afterward, replay the audio, read the refined transcript, and export or share notes.', points: ['Replay audio and jump to matching captions', 'Post-meeting refinement for polished records', 'Export and share meeting notes'], callout: 'player', demo: { refined: 'We agreed to complete acceptance by Friday. Mia will consolidate the risks, and we will sync progress on Monday.', summary: 'Complete acceptance by Friday' } },
+    ],
+  },
+  es: {
+    title: 'Conoce Brevia en tres minutos', intro: 'Convierte cada conversación en un registro que puedes revisar, buscar y compartir.', start: 'Comenzar', next: 'Siguiente', back: 'Atrás', skip: 'Saltar la guía',
+    hint: 'El reconocimiento, las notas y el refinado se ejecutan en este dispositivo; tu audio nunca sale de él.',
+    steps: [
+      { label: 'Biblioteca', heading: 'Una biblioteca de reuniones consultable', body: 'Cada reunión queda archivada por fecha. Vuelve a cualquier conversación por nombre, transcripción o etiqueta.', points: ['Busca reuniones, transcripciones y etiquetas', 'Filtra por rango de fechas', 'Restaura hasta 30 días después de eliminar'], callout: 'search', demo: { meetings: [['Reunión semanal de producto · 2026-08-19', '04:23 · Chino · 12 participantes', ['Lanzamiento', 'Riesgos']], ['Revisión de requisitos · 2026-08-17', '01:48 · Chino · 6 participantes', ['Revisión']]] } },
+      { label: 'Preparar', heading: 'Empieza una reunión en segundos', body: 'Dale un nombre, elige el idioma y la fuente de audio, y pulsa grabar.', points: ['Elige idioma y traducción', 'Graba micrófono y audio del sistema', 'Los modelos cargan antes, sin depender de la red'], callout: 'form', demo: { name: 'Reunión', language: 'Chino', device: 'CPU', mode: 'Modo estándar' } },
+      { label: 'Subtítulos en vivo', heading: 'Subtítulos mientras hablas', body: 'La transcripción en vivo de baja latencia sigue al hablante y separa las voces.', points: ['Subtítulos en vivo con baja latencia', 'Reconocimiento y separación de hablantes', 'Ventana de subtítulos flotante opcional'], callout: 'transcript', demo: { segments: [['Álex', 'Debemos completar la aceptación el viernes.'], ['Mía', 'Entendido, ordenaré los riesgos.'], ['Álex', 'Sincronizamos el progreso el lunes.']] } },
+      { label: 'Notas IA', heading: 'Puntos clave y tareas, automáticamente', body: 'La IA captura decisiones y pendientes mientras hablas, para que nada se pierda.', points: ['Deriva conclusiones, riesgos y tareas', 'IA integrada sin conexión o en línea', 'Solo se envía texto; el audio queda en el dispositivo'], callout: 'notes', demo: { decision: 'Completar la aceptación el viernes', actions: ['El equipo de producto da seguimiento', 'Ingeniería sincroniza el lunes'] } },
+      { label: 'Detalles', heading: 'Reproduce, refina y comparte', body: 'Después, reproduce el audio, lee la transcripción refinada y exporta o comparte las notas.', points: ['Reproduce y salta a los subtítulos', 'Refinamiento posterior para registros pulidos', 'Exporta y comparte las notas'], callout: 'player', demo: { refined: 'Acordamos completar la aceptación el viernes. Mía ordenará los riesgos y sincronizaremos el lunes.', summary: 'Completar la aceptación el viernes' } },
+    ],
+  },
+  ja: {
+    title: 'Brevia を 3 分で知る', intro: 'すべての会話を、見返して検索・共有できる記録に。', start: 'はじめる', next: '次へ', back: '戻る', skip: 'ガイドをスキップ',
+    hint: '認識・議事録・精修はすべてこの端末で実行。音声は外に出ません。',
+    steps: [
+      { label: 'ライブラリ', heading: '検索できる会議ライブラリ', body: 'すべての会議が日時で整理されます。名前・文字起こし・タグでいつでも検索。', points: ['会議・文字起こし・タグを検索', '期間で絞り込み', '削除後 30 日以内に復元'], callout: 'search', demo: { meetings: [['プロダクト定例会 · 2026-08-19', '04:23 · 中国語 · 12 名', ['リリース', 'リスク']], ['要件レビュー · 2026-08-17', '01:48 · 中国語 · 6 名', ['レビュー']]] } },
+      { label: '準備', heading: '数秒で会議を開始', body: '名前を付け、言語と音声ソースを選んで録音を始めるだけ。', points: ['会議言語と翻訳先を選択', 'マイク＋システム音声で録音', '開始前にモデルを読み込み、オフライン対応'], callout: 'form', demo: { name: '会議', language: '中国語', device: 'CPU', mode: '標準モード' } },
+      { label: 'ライブ字幕', heading: '話すそばから字幕', body: '低遅延のリアルタイム文字起こしが発言を追い、話者を区別します。', points: ['低遅延のライブ字幕', '話者認識と分離', 'フローティング字幕も可能'], callout: 'transcript', demo: { segments: [['佐藤', '金曜までに内部受け入れを完了しましょう。'], ['鈴木', 'わかりました。リスクを整理します。'], ['佐藤', '月曜に進捗を共有しましょう。']] } },
+      { label: 'AI メモ', heading: '結論と ToDo を自動で抽出', body: 'AI が話しながら決定やタスクを記録し、行動項目を逃しません。', points: ['結論・リスク・ToDo を抽出', '内蔵オフライン AI またはオンライン', '送信されるのはテキストのみ。音声は端末内'], callout: 'notes', demo: { decision: '金曜までに内部受け入れを完了', actions: ['プロダクトチームが受け入れをフォロー', 'エンジニアリングは月曜に同期'] } },
+      { label: '詳細', heading: '再生・精修・共有', body: '終了後は音声を再生し、精修済みの文字起こしを確認して共有できます。', points: ['音声を再生し字幕へジャンプ', '会議後の精修で読みやすく', '議事録をエクスポート・共有'], callout: 'player', demo: { refined: '金曜までに内部受け入れを完了することで合意。リスクは鈴木が整理し、月曜に進捗を共有します。', summary: '金曜までに内部受け入れを完了' } },
+    ],
+  },
+  ko: {
+    title: 'Brevia를 3분 만에 알아보기', intro: '모든 대화를 다시 보고 검색하고 공유할 수 있는 기록으로.', start: '시작하기', next: '다음', back: '뒤로', skip: '둘러보기 건너뛰기',
+    hint: '인식·회의록·정제가 모두 이 기기에서 실행되며, 오디오는 기기를 벗어나지 않습니다.',
+    steps: [
+      { label: '라이브러리', heading: '검색 가능한 회의 라이브러리', body: '모든 회의가 날짜별로 보관됩니다. 이름·녹취·태그로 언제든 다시 찾아보세요.', points: ['회의·녹취·태그 검색', '기간으로 필터링', '삭제 후 30일 이내 복원'], callout: 'search', demo: { meetings: [['제품 주간회의 · 2026-08-19', '04:23 · 한국어 · 참가자 12명', ['출시', '리스크']], ['요구사항 검토 · 2026-08-17', '01:48 · 한국어 · 참가자 6명', ['검토']]] } },
+      { label: '준비', heading: '몇 초 만에 회의 시작', body: '이름을 정하고 언어와 오디오 소스를 선택한 뒤 녹음을 시작하세요.', points: ['회의 언어와 번역 대상 선택', '마이크 + 시스템 오디오 녹음', '시작 전 모델 로드, 오프라인 대응'], callout: 'form', demo: { name: '회의', language: '한국어', device: 'CPU', mode: '표준 모드' } },
+      { label: '실시간 자막', heading: '말하는 즉시 자막', body: '저지연 실시간 전사가 발언을 따라가며 화자를 구분합니다.', points: ['밀리초 수준의 실시간 자막', '화자 인식 및 구분', '플로팅 자막 창 가능'], callout: 'transcript', demo: { segments: [['김민수', '금요일까지 내부 검수를 마칩시다.'], ['이지은', '네, 리스크를 정리할게요.'], ['김민수', '월요일에 진행 상황을 공유하죠.']] } },
+      { label: 'AI 메모', heading: '결론과 할 일을 자동으로', body: '말하는 동안 AI가 결정과 작업을 기록해 놓치는 일이 없습니다.', points: ['결론·리스크·할 일 추출', '내장 오프라인 또는 온라인 AI', '텍스트만 전송, 오디오는 기기에 유지'], callout: 'notes', demo: { decision: '금요일까지 내부 검수 완료', actions: ['제품팀이 검수 후속 처리', '엔지니어링 월요일 동기화'] } },
+      { label: '상세', heading: '재생·정제·공유', body: '종료 후 오디오를 재생하고 정제된 녹취를 확인하며 메모를 내보낼 수 있습니다.', points: ['오디오 재생 및 자막 이동', '회의 후 정제로 다듬기', '회의록 내보내기 및 공유'], callout: 'player', demo: { refined: '금요일까지 내부 검수를 완료하기로 합의했습니다. 리스크는 이지은이 정리하고 월요일에 진행 상황을 공유합니다.', summary: '금요일까지 내부 검수 완료' } },
+    ],
+  },
+  fr: {
+    title: 'Découvrez Brevia en trois minutes', intro: 'Transformez chaque conversation en un enregistrement à relire, chercher et partager.', start: 'Commencer', next: 'Suivant', back: 'Retour', skip: 'Passer la démo',
+    hint: 'La reconnaissance, les notes et l’affinage tournent sur cet appareil ; votre audio ne le quitte jamais.',
+    steps: [
+      { label: 'Bibliothèque', heading: 'Une bibliothèque de réunions consultable', body: 'Chaque réunion est archivée par date. Retrouvez toute conversation par nom, transcription ou étiquette.', points: ['Rechercher réunions, transcriptions et étiquettes', 'Filtrer par période', 'Restaurer sous 30 jours après suppression'], callout: 'search', demo: { meetings: [['Réunion produit hebdo · 2026-08-19', '04:23 · Chinois · 12 participants', ['Lancement', 'Risques']], ['Revue des exigences · 2026-08-17', '01:48 · Chinois · 6 participants', ['Revue']]] } },
+      { label: 'Préparer', heading: 'Lancez une réunion en quelques secondes', body: 'Donnez-lui un nom, choisissez la langue et la source audio, puis enregistrez.', points: ['Choisir langue et traduction', 'Enregistrer micro et audio système', 'Modèles chargés avant, fonctionne hors ligne'], callout: 'form', demo: { name: 'Réunion', language: 'Chinois', device: 'CPU', mode: 'Mode standard' } },
+      { label: 'Sous-titres en direct', heading: 'Des sous-titres pendant que vous parlez', body: 'La transcription en direct à faible latence suit l’intervenant et sépare les voix.', points: ['Sous-titres en direct à faible latence', 'Reconnaissance et séparation des locuteurs', 'Fenêtre de sous-titres flottante optionnelle'], callout: 'transcript', demo: { segments: [['Paul', 'Nous devons finaliser la recette vendredi.'], ['Marie', 'D’accord, je liste les risques.'], ['Paul', 'Nous synchroniserons lundi.']] } },
+      { label: 'Notes IA', heading: 'Points clés et actions, automatiquement', body: 'L’IA capture décisions et tâches pendant que vous parlez, sans rien manquer.', points: ['Déduire conclusions, risques et tâches', 'IA intégrée hors ligne ou en ligne', 'Seul le texte est envoyé ; l’audio reste local'], callout: 'notes', demo: { decision: 'Finaliser la recette vendredi', actions: ['L’équipe produit suit la recette', 'L’équipe technique synchronise lundi'] } },
+      { label: 'Détails', heading: 'Relire, affiner et partager', body: 'Après coup, écoutez l’audio, lisez la transcription affinée et exportez ou partagez les notes.', points: ['Écouter et sauter aux sous-titres', 'Affinage après réunion', 'Exporter et partager les notes'], callout: 'player', demo: { refined: 'Nous avons convenu de finaliser la recette vendredi. Marie consolidera les risques et nous synchroniserons lundi.', summary: 'Finaliser la recette vendredi' } },
+    ],
+  },
+  de: {
+    title: 'Brevia in drei Minuten kennenlernen', intro: 'Machen Sie aus jedem Gespräch eine Aufzeichnung, die Sie nachschlagen, durchsuchen und teilen können.', start: 'Starten', next: 'Weiter', back: 'Zurück', skip: 'Tour überspringen',
+    hint: 'Erkennung, Notizen und Nachbearbeitung laufen auf diesem Gerät; Ihre Audiodaten verlassen es nie.',
+    steps: [
+      { label: 'Bibliothek', heading: 'Eine durchsuchbare Besprechungsbibliothek', body: 'Jede Besprechung wird nach Datum archiviert. Finden Sie jede Unterhaltung über Name, Transkript oder Tag wieder.', points: ['Besprechungen, Transkripte und Tags durchsuchen', 'Nach Zeitraum filtern', 'Innerhalb von 30 Tagen nach Löschung wiederherstellen'], callout: 'search', demo: { meetings: [['Produktwochenmeeting · 2026-08-19', '04:23 · Chinesisch · 12 Teilnehmer', ['Launch', 'Risiken']], ['Anforderungsreview · 2026-08-17', '01:48 · Chinesisch · 6 Teilnehmer', ['Review']]] } },
+      { label: 'Vorbereiten', heading: 'In Sekunden eine Besprechung starten', body: 'Geben Sie einen Namen ein, wählen Sie Sprache und Audioquelle und drücken Sie Aufnahme.', points: ['Sprache und Übersetzungsziel wählen', 'Mikrofon und Systemaudio aufnehmen', 'Modelle laden vor dem Start, offline-tauglich'], callout: 'form', demo: { name: 'Besprechung', language: 'Chinesisch', device: 'CPU', mode: 'Standardmodus' } },
+      { label: 'Live-Untertitel', heading: 'Untertitel, während Sie sprechen', body: 'Die latenzarme Live-Transkription verfolgt den Sprecher und trennt die Stimmen.', points: ['Latenzarme Live-Untertitel', 'Sprechererkennung und -trennung', 'Optional schwebendes Untertitelfenster'], callout: 'transcript', demo: { segments: [['Alex', 'Wir müssen die Abnahme bis Freitag abschließen.'], ['Mia', 'Verstanden, ich liste die Risiken.'], ['Alex', 'Wir stimmen uns Montag ab.']] } },
+      { label: 'KI-Notizen', heading: 'Kernpunkte und Aufgaben, automatisch', body: 'Die KI erfasst Entscheidungen und Aufgaben, während Sie sprechen – nichts wird übersehen.', points: ['Schlussfolgerungen, Risiken und Aufgaben ableiten', 'Integrierte Offline- oder Online-KI', 'Nur Text wird gesendet; Audio bleibt lokal'], callout: 'notes', demo: { decision: 'Abnahme bis Freitag abschließen', actions: ['Produktteam begleitet die Abnahme', 'Entwicklung stimmt sich Montag ab'] } },
+      { label: 'Details', heading: 'Abspielen, nachbearbeiten und teilen', body: 'Danach können Sie das Audio abspielen, das bearbeitete Transkript lesen und Notizen exportieren oder teilen.', points: ['Audio abspielen und zu Untertiteln springen', 'Nachbearbeitung für saubere Aufzeichnungen', 'Notizen exportieren und teilen'], callout: 'player', demo: { refined: 'Wir haben vereinbart, die Abnahme bis Freitag abzuschließen. Mia konsolidiert die Risiken, und wir stimmen uns Montag ab.', summary: 'Abnahme bis Freitag abschließen' } },
+    ],
+  },
+  ru: {
+    title: 'Познакомьтесь с Brevia за три минуты', intro: 'Превратите любой разговор в запись, которую можно пересмотреть, найти и поделиться.', start: 'Начать', next: 'Далее', back: 'Назад', skip: 'Пропустить обзор',
+    hint: 'Распознавание, заметки и обработка выполняются на этом устройстве; ваш звук никогда его не покидает.',
+    steps: [
+      { label: 'Библиотека', heading: 'Поисковая библиотека встреч', body: 'Каждая встреча архивируется по дате. Вернитесь к любому разговору по названию, расшифровке или тегу.', points: ['Поиск встреч, расшифровок и тегов', 'Фильтр по периоду', 'Восстановление в течение 30 дней'], callout: 'search', demo: { meetings: [['Еженедельная встреча продукта · 2026-08-19', '04:23 · Китайский · 12 участников', ['Запуск', 'Риски']], ['Ревью требований · 2026-08-17', '01:48 · Китайский · 6 участников', ['Ревью']]] } },
+      { label: 'Подготовка', heading: 'Начните встречу за секунды', body: 'Дайте название, выберите язык и источник звука — и нажмите запись.', points: ['Выбор языка и перевода', 'Запись микрофона и системного звука', 'Модели загружаются заранее, работает офлайн'], callout: 'form', demo: { name: 'Встреча', language: 'Китайский', device: 'CPU', mode: 'Стандартный режим' } },
+      { label: 'Субтитры', heading: 'Субтитры, пока вы говорите', body: 'Низколатентная расшифровка в реальном времени следит за говорящим и разделяет голоса.', points: ['Субтитры в реальном времени', 'Распознавание и разделение говорящих', 'Опциональное плавающее окно субтитров'], callout: 'transcript', demo: { segments: [['Алекс', 'Нам нужно завершить приёмку к пятнице.'], ['Мия', 'Понял, я сведу риски.'], ['Алекс', 'Синхронизируемся в понедельник.']] } },
+      { label: 'Заметки ИИ', heading: 'Ключевые моменты и задачи автоматически', body: 'ИИ фиксирует решения и задачи, пока вы говорите, чтобы ничего не упустить.', points: ['Вывод выводов, рисков и задач', 'Встроенный офлайн или онлайн-ИИ', 'Отправляется только текст; звук остаётся локально'], callout: 'notes', demo: { decision: 'Завершить приёмку к пятнице', actions: ['Команда продукта сопровождает приёмку', 'Разработка синхронизируется в понедельник'] } },
+      { label: 'Детали', heading: 'Воспроизводите, обрабатывайте и делитесь', body: 'После завершения прослушайте звук, прочитайте обработанную расшифровку и экспортируйте или поделитесь заметками.', points: ['Прослушивание и переход к субтитрам', 'Обработка после встречи', 'Экспорт и обмен заметками'], callout: 'player', demo: { refined: 'Мы договорились завершить приёмку к пятнице. Мия сведёт риски, и мы синхронизируемся в понедельник.', summary: 'Завершить приёмку к пятнице' } },
+    ],
+  },
+};
+function openOnboardingAi() {
+  const copy = aiOnboardingCopy[locale] || aiOnboardingCopy.en;
+  const levels = copy.levels.map(([value, title, detail], index) => `<label class="onboarding-ai-level${index === 1 ? ' is-selected' : ''}"><input type="radio" name="onboarding-ai-proactivity" value="${value}"${index === 1 ? ' checked' : ''} /><span><b>${escapeHtml(title)}</b><small>${escapeHtml(detail)}</small></span></label>`).join('');
+  showOnboardingPage('setup', `<section class="onboarding-setup-page onboarding-ai-setup-page"><button class="onboarding-back" data-onboarding-back-language type="button" aria-label="${t('返回')}">←</button><header><img class="onboarding-brand" src="./assets/brevia-logo.svg" alt="Brevia" /><h1>${escapeHtml(copy.title)}</h1><div class="onboarding-intro"><p>${escapeHtml(copy.intro)}</p></div></header><section class="onboarding-section"><h2>${escapeHtml(copy.wayTitle)}</h2><div class="onboarding-ai-ways"><label><input type="radio" name="onboarding-ai-way" value="built-in" /><span><b>${escapeHtml(copy.builtin)}</b><small>${escapeHtml(copy.builtinHint)}</small></span></label><label><input type="radio" name="onboarding-ai-way" value="online" /><span><b>${escapeHtml(copy.online)}</b><small>${escapeHtml(copy.onlineHint)}</small></span></label></div></section><section class="onboarding-section"><h2>${escapeHtml(copy.proactivityTitle)}</h2><aside class="onboarding-ai-demo" data-onboarding-ai-demo></aside><div class="onboarding-ai-levels">${levels}</div></section><div class="onboarding-actions"><button class="modal-action" data-onboarding-ai-finish type="button">${escapeHtml(copy.finish)}</button><button class="secondary" data-onboarding-ai-skip type="button">${escapeHtml(copy.skip)}</button></div></section>`);
+  renderOnboardingAiDemo();
+  onboardingPage.addEventListener('change', (event) => {
+    if (event.target.matches('[name="onboarding-ai-proactivity"]')) {
+      onboardingPage.querySelectorAll('.onboarding-ai-level').forEach((level) => level.classList.toggle('is-selected', level.querySelector('input').checked));
+      renderOnboardingAiDemo();
+    }
+  });
+  onboardingPage.addEventListener('click', (event) => {
+    const aiWay = event.target.closest('.onboarding-ai-ways label');
+    if (aiWay) {
+      summaryConfig = { ...summaryConfig, provider: aiWay.querySelector('[value="built-in"]') ? 'built-in' : 'openai' };
+      openModal('summary-model');
+      return;
+    }
+    if (event.target.closest('[data-onboarding-back-language]')) { dismissOnboardingPage(openOnboardingSetup); return; }
+    if (event.target.closest('[data-onboarding-ai-finish]')) { void finishAiOnboarding(true); return; }
+    if (event.target.closest('[data-onboarding-ai-skip]')) { void finishAiOnboarding(false); return; }
+  });
+}
+async function finishAiOnboarding(enabled) {
+  const proactivity = onboardingPage.querySelector('[name="onboarding-ai-proactivity"]:checked')?.value || 'assist';
+  aiAssistConfig.enabled = enabled;
+  aiAssistConfig.proactivity = ['quiet', 'assist', 'auto'].includes(proactivity) ? proactivity : 'assist';
+  aiAssistConfigRevision += 1;
+  await persistAiAssistConfig().catch(() => {});
+  dismissOnboardingPage(openOnboardingTour);
 }
 
 function openOnboardingPermissions() {
@@ -1850,12 +2182,13 @@ settingsModal.addEventListener('click', async (event) => {
     window.BreviaOnboarding.beginDownloads(models);
     downloadRequiredModels(models);
     closeModal();
-    dismissOnboardingPage(finishOnboarding);
+    dismissOnboardingPage(openOnboardingTour);
     return;
   }
   if (event.target === settingsModal || event.target.closest('.modal-close')) { closeModal(); return; }
   if (event.target.closest('[data-cancel-confirmation]')) { confirmationAction = undefined; closeModal(); return; }
   if (event.target.closest('[data-reset-advanced-settings]')) { advancedSettings.settings = advancedSettings.defaults; renderModal('advanced-settings'); return; }
+  if (event.target.closest('[data-open-summary-model]')) { openModal('summary-model'); return; }
   const openPermission = event.target.closest('[data-open-permission-settings]');
   if (openPermission) {
     try { await (openPermission.dataset.openPermissionSettings === 'screen' ? window.brevia.permissions.openScreenSettings() : window.brevia.permissions.openMicrophoneSettings()); }
@@ -2107,6 +2440,14 @@ settingsModal.addEventListener('click', async (event) => {
 });
 settingsModal.addEventListener('change', (event) => {
   if (event.target.matches('[data-china-model-source]')) { localStorage.setItem('brevia-china-model-source', event.target.checked); return; }
+  if (event.target.matches('[data-ai-assist-enable]')) {
+    settingsModal.querySelector('.ai-assist-proactivity').hidden = !event.target.checked;
+    return;
+  }
+  if (event.target.matches('.ai-assist-level input[type=radio]')) {
+    settingsModal.querySelectorAll('.ai-assist-level').forEach((level) => level.classList.toggle('is-selected', level.querySelector('input[type=radio]').checked));
+    return;
+  }
   const selection = event.target.closest('[data-onboarding-model-selection]');
   if (!selection) return;
   if (selection.checked) onboardingModelSelection.add(selection.value);
@@ -2143,6 +2484,24 @@ settingsModal.addEventListener('submit', async (event) => {
     try { await window.brevia?.speakerProfile.rename({ profile_id: profileId, name }); speakerProfiles = await window.brevia.speakerProfile.list(); } catch (error) { showToast(error.message); }
     editingSpeakerProfileId = null;
     renderModal('speaker-profiles');
+    return;
+  }
+  if (event.target.matches('.ai-assist-form')) {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.target));
+    aiAssistConfig.enabled = values.enabled === 'on';
+    if (['quiet', 'assist', 'auto'].includes(values.proactivity)) aiAssistConfig.proactivity = values.proactivity;
+    aiAssistConfigRevision += 1;
+    await persistAiAssistConfig();
+    closeModal();
+    renderAiAssistToggle();
+    const meetingId = breviaClient?.state.meeting?.id;
+    if (meetingActive && meetingId) {
+      if (aiAssistEnabled()) void startAiNoteForMeeting(meetingId);
+      else stopAiNoteForMeeting(meetingId);
+    }
+    renderAiAssistEmptyState();
+    showToast(t('AI 辅助已保存'));
     return;
   }
   if (event.target.matches('.summary-model-form')) {
@@ -2289,6 +2648,7 @@ function applyLanguage(nextLocale, animate = false) {
     renderPrepareSelects();
     renderPrepareAudioSources();
     renderPauseButton();
+    document.querySelector('#end-meeting').textContent = t('结束会议');
     renderSettingsView();
     document.querySelector('#settings-view .settings-grid').append(speakerProfileCard, updateCard);
     renderDefaultMeetingTitle();
@@ -2422,6 +2782,7 @@ const showView = async (name) => {
   const next = document.querySelector(`#${name}-view`);
   await transitionPage(current, next, () => {
     activeView = name;
+    document.querySelector('.app-shell').classList.toggle('is-live-meeting', name === 'live' && meetingActive);
     crumb.textContent = catalog[locale].views[name];
     if (name === 'home') selectLibraryNav(activeLibraryNav);
     else document.querySelectorAll('.nav-item').forEach((item) => item.classList.toggle('active', item.dataset.view === name));
@@ -2436,17 +2797,19 @@ async function showLibraryNav(id) {
   if (activeView === 'live' && meetingActive) minimizeMeeting();
   if (activeView !== 'home') {
     selectLibraryNav(id);
+    const refresh = window.brevia ? refreshBackendMeetings(includeDeleted) : Promise.resolve();
+    await refresh.catch((error) => showToast(error.message));
     await showView('home');
-    if (window.brevia) void refreshBackendMeetings(includeDeleted).catch((error) => showToast(error.message));
     return;
   }
   if (id === activeLibraryNav) return;
   const home = document.querySelector('#home-view');
+  selectLibraryNav(id);
+  const refresh = window.brevia ? refreshBackendMeetings(includeDeleted) : Promise.resolve();
   await transitionPage(home, home, () => {
-    selectLibraryNav(id);
-    if (window.brevia) void refreshBackendMeetings(includeDeleted).catch((error) => showToast(error.message));
     window.scrollTo({ top: 0, behavior: 'smooth' });
   });
+  await refresh.catch((error) => showToast(error.message));
 }
 collectTranslations();
 applyLanguage(locale);
@@ -2502,6 +2865,14 @@ languageOptions.addEventListener('click', (event) => {
 });
 document.addEventListener('click', (event) => { if (!event.target.closest('.language-menu')) closeLanguageMenu(); });
 document.addEventListener('keydown', (event) => { if (event.key === 'Escape') { if (activeModal) closeModal(); else { closeLanguageMenu(); languageToggle.focus(); } } });
+// Command+/ 或 Ctrl+/：切换富文本 / Markdown 编辑模式。
+document.addEventListener('keydown', (event) => {
+  if (!(event.metaKey || event.ctrlKey) || event.key !== '/') return;
+  const editor = meetingActive ? liveNotesEditor : (detailNotesEditor || null);
+  if (!editor) return;
+  event.preventDefault();
+  editor.setMode(editor.getMode() === 'rich' ? 'markdown' : 'rich');
+});
 /** 在录制期间导航离开时显示紧凑的实时会议控件。@returns {void} */
 function minimizeMeeting() { miniTitle.textContent = document.querySelector('#live-name').textContent; miniTimer.textContent = document.querySelector('#timer').textContent; const wasHidden = miniMeeting.hidden; miniMeeting.hidden = false; if (wasHidden) taskCards.append(miniMeeting); }
 document.addEventListener('click', (event) => { const target = event.target.closest('[data-view]'); if (!target || ['all-meetings', 'recently-deleted'].includes(target.id)) return; if (target.dataset.view === 'home') selectLibraryNav('all-meetings'); if (target.dataset.view === 'prepare') selectCurrentWorkspaceForMeeting(); if (activeView === 'live' && meetingActive && target.dataset.view !== 'live') minimizeMeeting(); showView(target.dataset.view); });
@@ -2561,6 +2932,8 @@ function activateMeeting(meeting, payload) {
     liveNotesEditor.setMode('rich');
   }
   setLiveLayoutMode('notes');
+  resetAiNoteSuggestions();
+  renderAiAssistToggle();
   setLiveTranslationEnabled(Boolean(payload.target_language));
   latestLiveSegmentId = null;
   liveSegments.clear();
@@ -2572,6 +2945,8 @@ function activateMeeting(meeting, payload) {
   const pauseButton = document.querySelector('#pause');
   pauseButton.dataset.paused = 'false';
   renderPauseButton();
+  renderAiAssistEmptyState();
+  void startAiNoteForMeeting(meeting.id);
   miniMeeting.hidden = true;
   showView('live');
   startTimer();
@@ -2742,13 +3117,249 @@ function setLiveLayoutMode(mode) {
 document.querySelectorAll('[data-toggle-live-mode]').forEach((button) => {
   button.addEventListener('click', () => setLiveLayoutMode(button.dataset.toggleLiveMode));
 });
-const liveNotesEditor = createNotesEditor(document.querySelector('[data-live-notes-root]'), { onInput: () => scheduleNotesSave(liveNotesSaveTimer, currentNotesMarkdown, () => breviaClient?.state.meeting?.id) });
-/** 切换笔记编辑模式：'rich'（所见即所得，默认）或 'markdown'（源码编辑）。@param {'rich'|'markdown'} mode 目标模式。@returns {void} */
-function setNotesMode(mode) {
-  document.querySelectorAll('[data-notes-mode]').forEach((tab) => tab.classList.toggle('is-active', tab.dataset.notesMode === mode));
-  liveNotesEditor.setMode(mode);
+const liveNotesRoot = document.querySelector('[data-live-notes-root]');
+const aiSuggestionHost = document.querySelector('[data-ai-suggestion]');
+if (aiSuggestionHost) liveNotesRoot.append(aiSuggestionHost);
+const liveNotesEditor = createNotesEditor(liveNotesRoot, {
+  onInput: (opts) => {
+    scheduleNotesSave(liveNotesSaveTimer, currentNotesMarkdown, () => breviaClient?.state.meeting?.id);
+    hideAiAssistEmptyState();
+    // 程序化写入（AI 落笔/插入字幕/时间戳）不算用户打字，避免触发 4 秒静默窗口。
+    if (opts?.programmatic) return;
+    signalAiNoteTyping(true);
+    clearTimeout(aiNoteTypingTimer);
+    aiNoteTypingTimer = setTimeout(() => signalAiNoteTyping(false), 4000);
+  },
+});
+// —— AI 辅助：header 开关、空态引导、未启用 Popover ——
+function aiAssistEmptyRoot() { return document.querySelector('[data-ai-assist-empty]'); }
+function aiAssistToggleButton() { return document.querySelector('[data-ai-assist-toggle]'); }
+function aiRequestButton() { return document.querySelector('[data-ai-request]'); }
+const aiRequestLabels = { zh: '请求建议', en: 'Request suggestion', es: 'Pedir sugerencia', ja: '提案を求める', ko: '제안 요청', fr: 'Demander une suggestion', de: 'Vorschlag anfordern', ru: 'Запросить предложение' };
+function renderAiAssistToggle() {
+  const button = aiAssistToggleButton();
+  if (!button) return;
+  const copy = (aiAssistCopy[locale] || aiAssistCopy.en);
+  const label = button.querySelector('[data-ai-assist-toggle-label]');
+  if (label) label.textContent = aiAssistEnabled() ? copy.toggleOn : copy.toggleOff;
+  button.classList.toggle('is-enabled', aiAssistEnabled());
+  button.setAttribute('aria-expanded', 'false');
+  const request = aiRequestButton();
+  if (request) {
+    request.hidden = !aiAssistEnabled() || aiAssistConfig.proactivity !== 'quiet';
+    request.textContent = aiRequestLabels[locale] || aiRequestLabels.en;
+  }
 }
-document.querySelectorAll('[data-notes-mode]').forEach((tab) => tab.addEventListener('click', () => setNotesMode(tab.dataset.notesMode)));
+function renderAiAssistEmptyState() {
+  const root = aiAssistEmptyRoot();
+  if (!root) return;
+  const copy = (aiAssistCopy[locale] || aiAssistCopy.en);
+  const hasNotes = Boolean(currentNotesMarkdown().trim());
+  if (hasNotes || !meetingActive) { root.hidden = true; root.innerHTML = ''; return; }
+  const hasAi = aiAssistEnabled();
+  const disabledActions = ['insert-latest', 'insert-time'];
+  const tags = hasAi
+    ? copy.emptyEnabledTags.map((tag) => `<span>${escapeHtml(tag)}</span>`).join('')
+    : copy.emptyDisabledTags.map((tag, index) => `<button type="button" data-ai-empty-action="${disabledActions[index] || ''}">${escapeHtml(tag)}</button>`).join('');
+  root.innerHTML = `<div class="ai-assist-empty-inner"><strong>${escapeHtml(hasAi ? copy.emptyEnabledTitle : copy.emptyDisabledTitle)}</strong><p>${escapeHtml(hasAi ? copy.emptyEnabledBody : copy.emptyDisabledBody)}</p><div class="ai-assist-empty-tags">${tags}</div></div>`;
+  root.hidden = false;
+}
+function hideAiAssistEmptyState() {
+  const root = aiAssistEmptyRoot();
+  if (root) { root.hidden = true; root.innerHTML = ''; }
+}
+function openAiAssistPopover(anchor) {
+  document.querySelector('[data-ai-assist-popover]')?.remove();
+  const copy = (aiAssistCopy[locale] || aiAssistCopy.en).popover;
+  const pop = document.createElement('div');
+  pop.className = 'ai-assist-popover';
+  pop.dataset.aiAssistPopover = '';
+  pop.innerHTML = `<strong>${escapeHtml(copy.title)}</strong><p>${escapeHtml(copy.body)}</p><div class="ai-assist-popover-actions"><button class="modal-action" data-ai-assist-configure type="button">${escapeHtml(copy.configure)}</button><button class="secondary" data-ai-assist-later type="button">${escapeHtml(copy.later)}</button></div>`;
+  document.body.append(pop);
+  const rect = anchor.getBoundingClientRect();
+  pop.style.top = `${Math.round(rect.bottom + 8)}px`;
+  pop.style.right = `${Math.max(12, Math.round(window.innerWidth - rect.right))}px`;
+  pop.addEventListener('click', (event) => {
+    if (event.target.closest('[data-ai-assist-configure]')) { pop.remove(); openModal('ai-assist'); }
+    else if (event.target.closest('[data-ai-assist-later]')) { pop.remove(); }
+  });
+  const close = (event) => { if (!pop.contains(event.target) && !anchor.contains(event.target)) { pop.remove(); document.removeEventListener('click', close); } };
+  setTimeout(() => document.addEventListener('click', close), 0);
+}
+document.querySelector('[data-ai-assist-toggle]')?.addEventListener('click', () => {
+  const button = aiAssistToggleButton();
+  if (!button) return;
+  if (aiAssistEnabled()) { openModal('ai-assist'); return; }
+  openAiAssistPopover(button);
+});
+// 空态引导中的快捷操作（无需 AI）：插入当前字幕 / 记录当前时间点。
+document.addEventListener('click', (event) => {
+  const action = event.target.closest('[data-ai-empty-action]');
+  if (!action || !meetingActive) return;
+  if (action.dataset.aiEmptyAction === 'insert-time') {
+    liveNotesEditor.appendMarkdown(`**[${formatMeetingTime(seconds * 1000)}]**`);
+    showToast(t('已加入笔记'));
+  } else if (action.dataset.aiEmptyAction === 'insert-latest') {
+    const info = liveSegmentData.get(latestLiveSegmentId);
+    if (info) { liveNotesEditor.appendMarkdown(`${segmentTimestampMarkdown(info.start_ms)} ${info.text}`); showToast(t('已加入笔记')); }
+    else showToast(t('暂无字幕可插入'));
+  }
+});
+// —— 实时 AI 辅助（阶段 3/4）：启动/停止引擎 + 输入状态信号 + 建议接收与 UI ——
+let latestAiSuggestion = null;
+let aiSuggestionQueue = [];
+let aiNoteTypingTimer;
+let aiNoteUserTyping = false;
+let aiSuggestionAutoFadeTimer;
+function aiSuggestionRoot() { return document.querySelector('[data-ai-suggestion]'); }
+/** 组装 AI 辅助的连接信息，复用纪要配置；未配置返回 null。@returns {object|null} */
+function aiNoteConnection() {
+  const config = summaryRequestConfig();
+  if (!config) return null;
+  return {
+    provider: config.provider,
+    ...(config.endpoint ? { endpoint: config.endpoint } : {}),
+    model: config.model,
+    format: config.format,
+    key_reference: config.keyReference,
+  };
+}
+/** AI 已启用且模型已配置时启动实时引擎。@param {string} meetingId 会议 id。@returns {Promise<void>} */
+async function startAiNoteForMeeting(meetingId) {
+  if (!aiAssistEnabled() || !window.brevia?.aiNote) return;
+  const connection = aiNoteConnection();
+  if (!connection) return;
+  try {
+    await window.brevia.aiNote.start({ meeting_id: meetingId, ...connection, proactivity: aiAssistConfig.proactivity, language: locale });
+  } catch { /* Best Effort：AI 辅助启动失败不影响录音与字幕主链路 */ }
+}
+function stopAiNoteForMeeting(meetingId) {
+  if (window.brevia?.aiNote) window.brevia.aiNote.stop({ meeting_id: meetingId }).catch(() => {});
+}
+/** 向引擎上报输入状态：打字中静默，停笔后重新评估（PRD §19）。@param {boolean} typing 是否正在输入。@returns {void} */
+function signalAiNoteTyping(typing) {
+  const meetingId = breviaClient?.state.meeting?.id;
+  aiNoteUserTyping = typing;
+  if (!typing) flushAutoSuggestions();
+  renderAiSuggestion();
+  if (!meetingId || !aiAssistEnabled() || !window.brevia?.aiNote) return;
+  window.brevia.aiNote.typing({ meeting_id: meetingId, typing, ...(typing ? {} : { notes: currentNotesMarkdown() }) }).catch(() => {});
+}
+function requestAiSuggestion() {
+  const meetingId = breviaClient?.state.meeting?.id;
+  if (!meetingId || !aiAssistEnabled() || aiAssistConfig.proactivity !== 'quiet') return;
+  window.brevia?.aiNote?.request({ meeting_id: meetingId, notes: currentNotesMarkdown() }).catch(() => {});
+}
+document.querySelector('[data-ai-request]')?.addEventListener('click', requestAiSuggestion);
+const pendingAutoSuggestions = [];
+function resetAiNoteSuggestions() {
+  clearTimeout(aiNoteTypingTimer);
+  aiNoteUserTyping = false;
+  pendingAutoSuggestions.length = 0;
+  aiSuggestionQueue = [];
+  latestAiSuggestion = null;
+  hideAiSuggestion();
+}
+function appendAiSuggestion(suggestion) {
+  liveNotesEditor.appendMarkdown(`${suggestion.type === 'topic' ? '##' : '-'} ${suggestion.text}`);
+  scheduleNotesSave(liveNotesSaveTimer, currentNotesMarkdown, () => breviaClient?.state.meeting?.id);
+  window.brevia?.aiNote.dismiss({ meeting_id: suggestion.meeting_id, text: suggestion.text }).catch(() => {});
+}
+function flushAutoSuggestions() {
+  if (aiAssistConfig.proactivity !== 'auto' || aiNoteUserTyping) return;
+  while (pendingAutoSuggestions.length) appendAiSuggestion(pendingAutoSuggestions.shift());
+}
+if (window.brevia?.on) window.brevia.on('ai-note.suggestion', (payload) => {
+  if (!meetingActive || payload.meeting_id !== breviaClient?.state.meeting?.id) return;
+  if (aiAssistConfig.proactivity === 'auto') {
+    if (aiNoteUserTyping) pendingAutoSuggestions.push(payload);
+    else appendAiSuggestion(payload);
+    return;
+  }
+  // 一次分析可能产出多条建议：入队逐条展示，避免后面的覆盖前面的。
+  aiSuggestionQueue.push(payload);
+  if (aiSuggestionQueue.length > 5) aiSuggestionQueue.shift();
+  if (!latestAiSuggestion) showNextAiSuggestion();
+});
+/** 展示队列里的下一条建议（没有则回到空状态）。@returns {void} */
+function showNextAiSuggestion() {
+  latestAiSuggestion = aiSuggestionQueue.shift() || null;
+  renderAiSuggestion();
+}
+if (window.brevia?.on) window.brevia.on('ai-note.analyzing', ({ meeting_id: meetingId, active }) => {
+  if (meetingId !== breviaClient?.state.meeting?.id) return;
+  aiAssistToggleButton()?.classList.toggle('is-analyzing', Boolean(active));
+});
+/** 建议类型 → 浅色标签键。@param {string} type 后端建议类型。@returns {string} 文案键。 */
+function aiSuggestionTypeKey(type) {
+  return ({ conclusion: '可能是一个结论', decision: '可能的决策', action: '可能的待办', number: '重要数字', date: '重要日期', question: '待确认事项', risk: '可能的风险', supplement: '补充', topic: '新话题' })[type] || '可能是一个结论';
+}
+/** 渲染建议：topic → 分割线；打字中 → 徽标；否则 → 建议卡。@returns {void} */
+function renderAiSuggestion() {
+  const root = aiSuggestionRoot();
+  if (!root) return;
+  clearTimeout(aiSuggestionAutoFadeTimer);
+  if (!latestAiSuggestion || !meetingActive) { root.hidden = true; root.innerHTML = ''; renderAiAssistEmptyState(); return; }
+  const suggestion = latestAiSuggestion;
+  hideAiAssistEmptyState();
+  if (suggestion.type === 'topic') {
+    root.innerHTML = `<button type="button" class="ai-topic-divider" data-ai-topic="${escapeHtml(suggestion.id)}">${t('AI 检测到新话题：')}${escapeHtml(suggestion.text)}</button>`;
+    root.hidden = false;
+    scheduleAiSuggestionAutoFade();
+    return;
+  }
+  if (aiNoteUserTyping) {
+    root.innerHTML = `<button type="button" class="ai-suggestion-badge" data-ai-suggestion-badge>✦ ${t('1 条建议')}</button>`;
+    root.hidden = false;
+    return;
+  }
+  const label = t(aiSuggestionTypeKey(suggestion.type));
+  const actionLabel = suggestion.type === 'supplement' ? t('补充') : t('加入笔记');
+  root.innerHTML = `<div class="ai-suggestion-card"><div class="ai-suggestion-head"><span class="ai-suggestion-star">✦</span> <span class="ai-suggestion-type">${escapeHtml(label)}</span></div><p class="ai-suggestion-text">${escapeHtml(suggestion.text)}</p><div class="ai-suggestion-actions"><button type="button" class="ai-suggestion-accept" data-ai-accept>＋ ${escapeHtml(actionLabel)}</button><button type="button" class="ai-suggestion-ignore" data-ai-ignore>${t('忽略')}</button></div></div>`;
+  root.hidden = false;
+  scheduleAiSuggestionAutoFade();
+}
+function scheduleAiSuggestionAutoFade() {
+  clearTimeout(aiSuggestionAutoFadeTimer);
+  aiSuggestionAutoFadeTimer = setTimeout(hideAiSuggestion, 15000);
+}
+function hideAiSuggestion() {
+  clearTimeout(aiSuggestionAutoFadeTimer);
+  latestAiSuggestion = null;
+  // 若队列里还有建议，继续展示下一条；否则回到空状态。
+  if (aiSuggestionQueue.length) { showNextAiSuggestion(); return; }
+  const root = aiSuggestionRoot();
+  if (root) { root.hidden = true; root.innerHTML = ''; }
+  renderAiAssistEmptyState();
+}
+/** 接受建议：把内容写入正式笔记并上报忽略（去重）。@param {string} text 建议文本。@returns {void} */
+function acceptAiSuggestion(text) {
+  const suggestion = latestAiSuggestion;
+  if (!suggestion || !text) return;
+  appendAiSuggestion(suggestion);
+  hideAiSuggestion();
+  showToast(t('已加入笔记'));
+}
+/** 把 topic 建议转换为笔记正式标题。@returns {void} */
+function convertTopicToHeading() {
+  const suggestion = latestAiSuggestion;
+  if (!suggestion || suggestion.type !== 'topic') return;
+  liveNotesEditor.appendMarkdown(`## ${suggestion.text}`);
+  hideAiSuggestion();
+}
+document.addEventListener('click', (event) => {
+  const accept = event.target.closest('[data-ai-accept]');
+  if (accept) { const suggestion = latestAiSuggestion; if (suggestion) acceptAiSuggestion(suggestion.text); return; }
+  if (event.target.closest('[data-ai-ignore]')) {
+    const suggestion = latestAiSuggestion;
+    const meetingId = breviaClient?.state.meeting?.id;
+    if (suggestion && meetingId && window.brevia?.aiNote) window.brevia.aiNote.dismiss({ meeting_id: meetingId, text: suggestion.text }).catch(() => {});
+    hideAiSuggestion();
+    return;
+  }
+  if (event.target.closest('[data-ai-suggestion-badge]')) { aiNoteUserTyping = false; renderAiSuggestion(); return; }
+  if (event.target.closest('[data-ai-topic]')) { convertTopicToHeading(); return; }
+});
 /** 返回当前笔记的 Markdown 文本（富文本或源码模式）。@returns {string} Markdown 笔记。 */
 function currentNotesMarkdown() {
   return liveNotesEditor.getMarkdown();
@@ -2992,7 +3603,6 @@ window.addEventListener('resize', positionOpenMeetingMenus);
 async function mutateMeetings(action, meetings) {
   const ids = new Set(meetings.map(({ id }) => id).filter(Boolean));
   if (window.brevia) await Promise.all([...ids].map((meeting_id) => window.brevia.meeting[action]({ meeting_id })));
-  if (action === 'purge' && window.brevia) { await refreshBackendMeetings(true); return; }
   if (['delete', 'restore', 'purge'].includes(action)) uiData.meetings = uiData.meetings.filter((meeting) => !ids.has(meeting.id));
   clearMeetingSelection();
   renderMeetingList();
@@ -3189,7 +3799,6 @@ function syncPlaybackTranscript() {
   });
 }
 progress.addEventListener('input', () => { followPlaybackTranscript = true; renderPlayerTime(); playerAudio.currentTime = Number(progress.value); syncPlaybackTranscript(); });
-document.addEventListener('click', (event) => { const button = event.target.closest('.jump'); if (button) { followPlaybackTranscript = true; progress.value = button.dataset.time; playerAudio.currentTime = Number(button.dataset.time); renderPlayerTime(); syncPlaybackTranscript(); showToast(message('located')); } });
 playButton.addEventListener('click', async () => {
   if (!playerAudio.src) { showToast(t('这场会议没有可播放的录音')); return; }
   if (playerAudio.paused) await playerAudio.play(); else playerAudio.pause();
@@ -3299,9 +3908,11 @@ segmentContextMenu.hidden = true;
 document.body.append(segmentContextMenu);
 let contextSegmentId;
 let contextMeetingId;
+let contextSegment;
 function closeSegmentContextMenu() {
   contextSegmentId = undefined;
   contextMeetingId = undefined;
+  contextSegment = undefined;
   segmentContextMenu.hidden = true;
   segmentContextMenu.querySelectorAll('.segment-context-options').forEach((options) => { options.style.removeProperty('left'); options.style.removeProperty('top'); });
   segmentContextMenu.querySelectorAll('.is-open, .is-positioned').forEach((item) => item.classList.remove('is-open', 'is-positioned'));
@@ -3328,20 +3939,64 @@ function fitSegmentSubmenu(submenu) {
   positionFloating(options, submenu.querySelector(':scope > button'));
   submenu.classList.add('is-positioned');
 }
-function openSegmentContextMenu(meetingId, segmentId, x, y) {
+function openSegmentContextMenu(meetingId, segmentId, x, y, segmentInfo) {
   followLiveTranscript = false;
   followPlaybackTranscript = false;
   contextMeetingId = meetingId;
   contextSegmentId = segmentId;
+  contextSegment = segmentInfo || null;
   const profiles = speakerProfiles.map((profile) => `<button type="button" data-add-segment-profile-sample="${profile.id}">${escapeHtml(speakerProfileName(profile))}</button>`).join('');
   const createProfile = `<div class="segment-context-submenu"><button type="button" data-open-segment-profile-create><span class="segment-context-label">${t('新增声纹')}</span><span class="segment-context-arrow" aria-hidden="true">›</span></button><form class="segment-context-options segment-context-name-form" data-create-segment-profile><label>${t('声纹名称')}<input name="name" maxlength="32" required autocomplete="off" /></label><button type="submit">${t('确定')}</button></form></div>`;
-  segmentContextMenu.innerHTML = `<div class="segment-context-submenu"><button type="button" data-open-segment-profile-menu><span class="segment-context-label">${t('添加录音到声纹库')}</span><span class="segment-context-arrow" aria-hidden="true">›</span></button><div class="segment-context-options">${profiles || `<span>${t('暂无已注册声纹')}</span>`}${createProfile}</div></div>`;
+  segmentContextMenu.innerHTML = `<div class="segment-context-submenu"><button type="button" data-add-segment-note><span class="segment-context-label">${t('加入笔记')}</span></button><button type="button" data-add-segment-time><span class="segment-context-label">${t('标记当前时间点')}</span></button></div><div class="segment-context-submenu"><button type="button" data-open-segment-profile-menu><span class="segment-context-label">${t('添加录音到声纹库')}</span><span class="segment-context-arrow" aria-hidden="true">›</span></button><div class="segment-context-options">${profiles || `<span>${t('暂无已注册声纹')}</span>`}${createProfile}</div></div>`;
   segmentContextMenu.style.visibility = 'hidden';
   segmentContextMenu.hidden = false;
   positionFloating(segmentContextMenu, { left: x, right: x, top: y, bottom: y });
   segmentContextMenu.style.visibility = '';
 }
+/** 把某段字幕的起始时间格式化为可写入笔记的时间戳引用。@param {number} startMs 起始毫秒。@returns {string} Markdown 时间戳。 */
+function segmentTimestampMarkdown(startMs) {
+  return `**[${formatMeetingTime(startMs)}]**`;
+}
+/** 把文本追加到当前活跃的笔记编辑器（live 视图或详情页编辑态）。@param {string} markdown 追加的 Markdown。@param {string} [meetingId] 目标会议 id（live 视图判定用）。@returns {void} */
+function appendTextToActiveNotes(markdown, meetingId) {
+  if (meetingActive && meetingId && breviaClient?.state.meeting?.id === meetingId) {
+    liveNotesEditor.appendMarkdown(markdown);
+    return;
+  }
+  if (!detailNotesEditor) {
+    detailNotesBeforeEdit = uiData.detail.notes;
+    uiData.detail.notesEditing = true;
+    detailActiveTab = 'notes';
+    renderMeetingDetail();
+  }
+  detailNotesEditor.appendMarkdown(markdown);
+  scheduleDetailNotesSave();
+}
+/** 根据会议与段落 id 解析字幕元数据（live 视图从内存映射取，详情页从后端段落取）。@param {string} meetingId 会议 id。@param {string} segmentId 段落 id。@returns {{text:string, start_ms:number, speaker:string}|null} */
+function segmentInfoFor(meetingId, segmentId) {
+  if (meetingId === breviaClient?.state.meeting?.id) {
+    return liveSegmentData.get(segmentId) || null;
+  }
+  const segment = currentMeetingDetail?.segments?.find((item) => item.id === segmentId);
+  return segment ? { text: segment.text, start_ms: segment.start_ms, speaker: segment.speaker_name || segment.speaker } : null;
+}
 segmentContextMenu.addEventListener('click', async (event) => {
+  if (event.target.closest('[data-add-segment-note]')) {
+    const info = contextSegment;
+    const meetingId = contextMeetingId;
+    closeSegmentContextMenu();
+    if (info) { appendTextToActiveNotes(`${segmentTimestampMarkdown(info.start_ms)} ${info.text}`, meetingId); showToast(t('已加入笔记')); }
+    else showToast(t('无法获取字幕内容'));
+    return;
+  }
+  if (event.target.closest('[data-add-segment-time]')) {
+    const info = contextSegment;
+    const meetingId = contextMeetingId;
+    closeSegmentContextMenu();
+    if (info) { appendTextToActiveNotes(segmentTimestampMarkdown(info.start_ms), meetingId); showToast(t('已加入笔记')); }
+    else showToast(t('无法获取字幕内容'));
+    return;
+  }
   if (event.target.closest('[data-open-segment-profile-menu]')) {
     const submenu = event.target.closest('.segment-context-submenu');
     submenu.classList.toggle('is-open');
@@ -3392,7 +4047,7 @@ finalTranscript.addEventListener('contextmenu', (event) => {
   const segment = event.target.closest('[data-segment-id]');
   if (!segment || !currentMeetingDetail) return;
   event.preventDefault();
-  openSegmentContextMenu(currentMeetingDetail.id, segment.dataset.segmentId, event.clientX, event.clientY);
+  openSegmentContextMenu(currentMeetingDetail.id, segment.dataset.segmentId, event.clientX, event.clientY, segmentInfoFor(currentMeetingDetail.id, segment.dataset.segmentId));
 });
 document.addEventListener('mousedown', (event) => {
   if (!segmentContextMenu.hidden && !segmentContextMenu.contains(event.target)) closeSegmentContextMenu();
@@ -3420,9 +4075,9 @@ const startRefinement = (refinedModelId, numSpeakers) => {
   });
 };
 finalTranscript.addEventListener('click', (event) => {
-  // 点击字幕段的时间戳/说话人区域 → 定位播放该段（jump 按钮已有独立处理）。
+  // 点击字幕段的时间戳/说话人区域 → 定位播放该段。
   const segmentMeta = event.target.closest('.segment-meta');
-  if (segmentMeta && !event.target.closest('.jump') && !event.target.closest('[data-segment-speaker-input]')) {
+  if (segmentMeta && !event.target.closest('[data-segment-speaker-input]')) {
     const start = Number(segmentMeta.closest('.segment')?.dataset.start);
     if (Number.isFinite(start)) {
       followPlaybackTranscript = true;
@@ -3588,6 +4243,7 @@ if (window.brevia) {
   });
   if (window.BreviaOnboarding.isFirstLaunch()) openOnboardingLanguage();
   void loadSummaryConfig().catch((error) => showToast(`${t('纪要配置加载失败')}: ${error.message}`));
+  void loadAiAssistConfig().catch((error) => showToast(`${t('AI 辅助配置加载失败')}: ${error.message}`));
   initializationPromise = breviaClient.initialize().then((result) => {
     modelCatalog = result.models;
     setPrepareModel('active-refined-model', document.querySelector('#active-refined-model').dataset.model);
@@ -3637,7 +4293,7 @@ if (window.brevia) {
     const meetingId = breviaClient.state.meeting?.id;
     if (!segment || segment.classList.contains('partial') || !meetingId) return;
     event.preventDefault();
-    openSegmentContextMenu(meetingId, segment.dataset.segmentId, event.clientX, event.clientY);
+    openSegmentContextMenu(meetingId, segment.dataset.segmentId, event.clientX, event.clientY, segmentInfoFor(meetingId, segment.dataset.segmentId));
   });
   const renderLiveEvent = (payload, partial) => {
     // 丢弃乱序/过期的段落更新：异步标点或精修可能晚于更新的 partial/final 到达，
@@ -3679,9 +4335,11 @@ if (window.brevia) {
       transcript.insertBefore(element, next || null);
     }
     liveSegments.set(payload.segment_id, element);
+    liveSegmentData.set(payload.segment_id, { text: payload.text, start_ms: payload.start_ms, speaker: payload.speaker_name || payload.speaker });
     while (liveSegments.size > maxLiveSegments) {
       const [segmentId, stale] = liveSegments.entries().next().value;
       liveSegments.delete(segmentId);
+      liveSegmentData.delete(segmentId);
       stale.remove();
     }
     transcript.querySelectorAll('.segment.is-active').forEach((segment) => {
@@ -3713,6 +4371,8 @@ if (window.brevia) {
     }
     if (!meetingActive) return;
     clearInterval(timer);
+    if (meeting?.id) stopAiNoteForMeeting(meeting.id);
+    resetAiNoteSuggestions();
     if (breviaClient?.capture) await breviaClient.capture.stop();
     if (breviaClient) {
       breviaClient.capture = null;
@@ -3733,6 +4393,7 @@ if (window.brevia) {
     meetingActive = false;
     clearInterval(timer);
     clearInterval(powerStatusTimer);
+    resetAiNoteSuggestions();
     miniMeeting.hidden = true;
     if (breviaClient?.capture) await breviaClient.capture.stop();
     if (breviaClient) {

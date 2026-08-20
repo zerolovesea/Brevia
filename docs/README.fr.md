@@ -117,7 +117,7 @@ Chaque modele est telecharge a la demande depuis **Reglages → Bibliotheque de 
 | Embeddings de locuteur | 3D-Speaker ERes2Net Base | Universel |
 | Separation de sources | Spleeter 2 Stems | Universel |
 
-Pour les resumes LLM, choisissez **IA integree** pour executer localement un modele GGUF fourni (Qwen 3.5 2B / 4B, Gemma 3 1B / 4B), ou pointez Brevia vers Claude, OpenAI, OpenRouter ou tout service personnalise compatible avec OpenAI Chat Completions ou Anthropic Messages : Gemini (endpoint compatible OpenAI), DeepSeek, Kimi, Qwen et plus.
+Pour les resumes LLM, choisissez **IA integree** pour executer localement un modele GGUF fourni (Qwen 3.5 2B / 4B), ou pointez Brevia vers Claude, OpenAI, OpenRouter ou tout service personnalise compatible avec OpenAI Chat Completions ou Anthropic Messages : Gemini (endpoint compatible OpenAI), DeepSeek, Kimi, Qwen et plus.
 
 ## Developpement local
 

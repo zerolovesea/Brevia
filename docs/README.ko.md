@@ -117,7 +117,7 @@ Brevia 는 엄격한 로컬 우선 설계를 따릅니다:
 | 화자 임베딩 | 3D-Speaker ERes2Net Base | 범용 |
 | 소스 분리 | Spleeter 2 Stems | 범용 |
 
-LLM 요약에서는 **내장 AI**를 선택해 번들 GGUF 모델(Qwen 3.5 2B / 4B, Gemma 3 1B / 4B)을 로컬에서 실행할 수 있고, Claude, OpenAI, OpenRouter 또는 OpenAI Chat Completions / Anthropic Messages를 지원하는 자체 서비스(Gemini의 OpenAI 호환 엔드포인트, DeepSeek, Kimi, Qwen 등)를 연결할 수도 있습니다.
+LLM 요약에서는 **내장 AI**를 선택해 번들 GGUF 모델(Qwen 3.5 2B / 4B)을 로컬에서 실행할 수 있고, Claude, OpenAI, OpenRouter 또는 OpenAI Chat Completions / Anthropic Messages를 지원하는 자체 서비스(Gemini의 OpenAI 호환 엔드포인트, DeepSeek, Kimi, Qwen 등)를 연결할 수도 있습니다.
 
 ## 로컬 개발
 

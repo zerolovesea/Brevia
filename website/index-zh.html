@@ -4,10 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light" />
-    <title>言录 — 简洁、本地优先的 AI 会议助手</title>
+    <title>言录 — 把会议变成清晰的下一步</title>
     <meta
       name="description"
-      content="言录是桌面 AI 会议助手。实时转录、多语言笔记和说话人识别 — 音频不会离开您的设备。"
+      content="言录在本地捕捉会议，并通过 AI 辅助笔记在对话进行中整理决策、待办与待确认事项。"
     />
     <link rel="icon" href="../docs/assets/brevia-mark.svg" />
     <link rel="stylesheet" href="./site-header.css" />
@@ -101,6 +101,9 @@
         width: 100%;
         aspect-ratio: 16 / 10;
         overflow: hidden;
+        border: 1px solid #d6d6d6;
+        background: #fff;
+        box-shadow: 12px 12px 0 #f1f1f1;
       }
       .demo-frame {
         position: absolute;
@@ -243,14 +246,13 @@
         <div class="grid items-center gap-12 lg:grid-cols-2">
           <div class="reveal max-w-read">
             <p class="mb-8 font-mono text-[13px] uppercase tracking-[0.18em] text-gray3">
-              本地优先的会议助手
+              本地优先，AI 辅助笔记
             </p>
             <h1 class="hero-title display font-light text-ink">
-              留住每一次讨论<br />理清每一个决定<br />
-              <span class="text-gray2">一切，都在本地完成</span>
+              听见每一次讨论<br />留下清晰的<span class="text-gray2">下一步</span>
             </h1>
             <p class="measure mt-10 max-w-[560px] text-[18px] text-slate">
-              言录是一款本地运行的会议助手：它把电脑和麦克风中的对话实时变成字幕、逐字稿和会议纪要。无论线上会议、视频内容还是线下面谈，重要信息都能被记录、整理并随时找回。
+              言录在本地捕捉每一次发言。AI 辅助笔记会在对话进行中标记决策、待办与待确认事项，让会议还未结束，记录就已开始发挥作用。
             </p>
             <div class="mt-12 flex flex-wrap items-center gap-4">
               <a
@@ -263,11 +265,6 @@
                 class="inline-flex items-center border border-line1 bg-white px-8 py-4 text-[15px] text-ink transition-colors duration-300 hover:border-ink"
                 >查看功能演示</a
               >
-            </div>
-            <div class="mt-14 flex flex-wrap gap-x-10 gap-y-3 font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">
-              <span>音频不离开设备</span>
-              <span>支持 30+ 种语言</span>
-              <span>声纹识别说话人</span>
             </div>
           </div>
           <div class="reveal" style="--reveal-delay: 120ms">
@@ -328,10 +325,10 @@
           </div>
           <div class="col-span-12 md:col-span-8">
             <h2 class="display max-w-[620px] text-[clamp(30px,4vw,44px)] font-light text-ink">
-              从听见，到理解，再到随时找回
+              从实时对话，到清晰跟进
             </h2>
             <p class="measure mt-6 max-w-[560px] text-[17px] text-slate">
-              一段对话从被捕捉开始，经过整理，最终变成随时可查的记录。
+              捕捉对话，留住关键信息，带着团队可以执行的记录离开会议。
             </p>
           </div>
         </div>
@@ -362,36 +359,52 @@
         </div>
       </section>
 
-      <!-- Demo 2 — Summary -->
+      <!-- Demo 2 — AI Assist Notes -->
       <section class="mx-auto max-w-content px-6 pt-20 md:px-8 md:pt-28">
         <div class="grid grid-cols-12 items-center gap-8 md:gap-12">
           <div class="reveal col-span-12 md:order-2 md:col-span-3">
             <span class="font-mono text-[13px] tracking-[0.14em] text-gray3">02</span>
-            <h3 class="display mt-4 text-[28px] font-normal text-ink">
-              一键生成会议纪要
-            </h3>
+            <h3 class="display mt-4 text-[28px] font-normal text-ink">会议中，AI 辅助记笔记</h3>
             <p class="measure mt-5 text-[16px] text-slate">
-              会议结束后，言录可生成摘要、关键决策和待办事项。您可以使用内置本地模型，也可以连接 Claude、OpenAI 或 OpenRouter；发送给服务商的只有转录文本，绝不包含音频。
+              当对话出现决策、待办或需要确认的问题时，言录会及时提示。您可以逐条审阅，只把真正需要的内容写入会议记录。
             </p>
           </div>
           <div class="reveal col-span-12 md:order-1 md:col-span-9" style="--reveal-delay: 120ms">
             <div class="demo-canvas">
               <iframe
                 class="demo-frame"
-                src="./demo-summary.html"
+                src="./demo-ai-assist.html"
                 loading="lazy"
-                title="AI 会议纪要演示"
+                title="AI 辅助笔记演示"
               ></iframe>
             </div>
           </div>
         </div>
       </section>
 
-      <!-- Demo 3 — Voiceprint -->
+      <!-- Demo 3 — Summary -->
       <section class="mx-auto max-w-content px-6 pt-20 md:px-8 md:pt-28">
         <div class="grid grid-cols-12 items-center gap-8 md:gap-12">
           <div class="reveal col-span-12 md:col-span-3">
             <span class="font-mono text-[13px] tracking-[0.14em] text-gray3">03</span>
+            <h3 class="display mt-4 text-[28px] font-normal text-ink">一份可以直接分享的会议纪要</h3>
+            <p class="measure mt-5 text-[16px] text-slate">
+              会议结束后，使用您选择的 AI 服务把已审阅的记录整理成摘要、决策和待办。支持本地模型与兼容服务，音频始终留在设备上。
+            </p>
+          </div>
+          <div class="reveal col-span-12 md:col-span-9" style="--reveal-delay: 120ms">
+            <div class="demo-canvas">
+              <iframe class="demo-frame" src="./demo-summary.html" loading="lazy" title="AI 会议纪要演示"></iframe>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Demo 4 — Voiceprint -->
+      <section class="mx-auto max-w-content px-6 pt-20 md:px-8 md:pt-28">
+        <div class="grid grid-cols-12 items-center gap-8 md:gap-12">
+          <div class="reveal col-span-12 md:col-span-3">
+            <span class="font-mono text-[13px] tracking-[0.14em] text-gray3">04</span>
             <h3 class="display mt-4 text-[28px] font-normal text-ink">
               跨会议的声纹识别
             </h3>
@@ -412,11 +425,11 @@
         </div>
       </section>
 
-      <!-- Demo 4 — Caption bar -->
+      <!-- Demo 5 — Caption bar -->
       <section class="mx-auto max-w-content px-6 pt-20 md:px-8 md:pt-28">
         <div class="grid grid-cols-12 items-center gap-8 md:gap-12">
           <div class="reveal col-span-12 md:order-2 md:col-span-3">
-            <span class="font-mono text-[13px] tracking-[0.14em] text-gray3">04</span>
+            <span class="font-mono text-[13px] tracking-[0.14em] text-gray3">05</span>
             <h3 class="display mt-4 text-[28px] font-normal text-ink">
               悬浮字幕快捷操作
             </h3>
@@ -437,16 +450,16 @@
         </div>
       </section>
 
-      <!-- Demo 5 — Model library -->
+      <!-- Demo 6 — Model library -->
       <section class="mx-auto max-w-content px-6 pt-20 md:px-8 md:pt-28">
         <div class="grid grid-cols-12 items-center gap-8 md:gap-12">
           <div class="reveal col-span-12 md:col-span-3">
-            <span class="font-mono text-[13px] tracking-[0.14em] text-gray3">05</span>
+            <span class="font-mono text-[13px] tracking-[0.14em] text-gray3">06</span>
             <h3 class="display mt-4 text-[28px] font-normal text-ink">
               丰富的模型库
             </h3>
             <p class="measure mt-5 text-[16px] text-slate">
-              按需要选择和下载字幕、翻译、说话人识别与会议纪要所需的能力。可选轻巧组合优先速度，或选择更完整的模型提升效果，不必了解背后的技术名称。
+              按需要选择和下载字幕、翻译、说话人识别与 AI 笔记所需的能力。可选轻巧组合优先速度，或选择更完整的模型提升效果，不必了解背后的技术名称。
             </p>
           </div>
           <div class="reveal col-span-12 md:col-span-9" style="--reveal-delay: 120ms">
@@ -512,14 +525,34 @@
             <p class="measure mt-3 text-[15px] text-slate">在原文字幕旁同步显示译文，让跨语言会议更容易参与和回看。</p>
           </article>
           <article class="feature-card border border-line2 p-8 transition-colors duration-300 hover:border-ink">
-            <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">AI 会议纪要</span>
-            <p class="display mt-5 text-[40px] font-light text-ink">从对话到结论</p>
-            <p class="measure mt-3 text-[15px] text-slate">用本地或已连接的大模型，从转录文本中提炼摘要、决策和待办事项。</p>
+            <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">AI 辅助笔记</span>
+            <p class="display mt-5 text-[40px] font-light text-ink">留住正在发生的关键时刻</p>
+            <p class="measure mt-3 text-[15px] text-slate">在会议中标记决策、待办与待确认事项，再把已审阅的记录整理成纪要。</p>
           </article>
           <article class="feature-card border border-line2 p-8 transition-colors duration-300 hover:border-ink">
             <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">高效处理</span>
             <p class="display mt-5 text-[40px] font-light text-ink">边说边出结果</p>
             <p class="measure mt-3 text-[15px] text-slate">流式转录与翻译让内容随对话出现，会议结束后无需等待漫长处理。</p>
+          </article>
+          <article class="feature-card border border-line2 p-8 transition-colors duration-300 hover:border-ink">
+            <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">富文本笔记</span>
+            <p class="display mt-5 text-[40px] font-light text-ink">想怎么写，就怎么写</p>
+            <p class="measure mt-3 text-[15px] text-slate">在富文本或 Markdown 编辑器中记笔记，支持标题、列表、引用、链接与行内代码。</p>
+          </article>
+          <article class="feature-card border border-line2 p-8 transition-colors duration-300 hover:border-ink">
+            <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">笔记与字幕</span>
+            <p class="display mt-5 text-[40px] font-light text-ink">一键切换两种视图</p>
+            <p class="measure mt-3 text-[15px] text-slate">在「笔记为主」与「字幕为主」之间一键切换，二者都实时更新。</p>
+          </article>
+          <article class="feature-card border border-line2 p-8 transition-colors duration-300 hover:border-ink">
+            <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">会议中记笔记</span>
+            <p class="display mt-5 text-[40px] font-light text-ink">边听边记，随手捕捉</p>
+            <p class="measure mt-3 text-[15px] text-slate">随手记下一条决策，或把当前字幕直接插入笔记，不必离开通话。</p>
+          </article>
+          <article class="feature-card border border-line2 p-8 transition-colors duration-300 hover:border-ink">
+            <span class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">跨会议声纹</span>
+            <p class="display mt-5 text-[40px] font-light text-ink">名字跨会议复用</p>
+            <p class="measure mt-3 text-[15px] text-slate">声纹档案可跨会议复用，每次都能显示真实姓名，而不是“说话人 1”。</p>
           </article>
         </div>
       </section>
@@ -544,7 +577,7 @@
             <span class="font-mono text-[13px] tracking-[0.14em] text-gray3">步骤 02</span>
             <h3 class="mt-4 text-[20px] font-medium text-ink">理解</h3>
             <p class="measure mt-3 text-[15px] text-slate">
-              会议结束后，LLM 生成摘要、决定和行动项。说话人通过已录入的声纹自动识别。
+              AI 辅助笔记在对话中浮现决策与行动项。会议结束后，把已审阅的记录整理成一份会议纪要。
             </p>
           </div>
           <div class="reveal col-span-12 border-t border-ink pt-6 md:col-span-4" style="--reveal-delay: 160ms">
@@ -596,7 +629,7 @@
               会议内容，始终留在您的设备上
             </h2>
             <p class="measure mt-6 text-[17px] text-slate">
-              语音识别、说话人分离和声纹提取都在设备上完成。录音、转录和声纹档案绝不会上传；如您启用 AI 会议纪要，发送给所选服务商的也仅是转录文本，音频始终不会离开设备。
+              语音识别、说话人分离和声纹提取都在设备上完成。录音、转录和声纹档案绝不会上传；如您启用 AI 辅助笔记或会议纪要，发送给所选服务商的也仅是转录文本，音频始终不会离开设备。
             </p>
             <div class="mt-10 grid gap-x-10 gap-y-6 sm:grid-cols-2">
               <div class="border-t border-line1 pt-4">
@@ -939,7 +972,7 @@
               </summary>
               <div class="faq-body">
                 <p class="measure pb-6 text-[16px] text-slate">
-                  不会。语音识别和说话人处理都在本地完成。若您启用 AI 会议纪要，只有转录文本会发送至您配置的 AI 服务商；音频始终不会离开设备。
+                  不会。语音识别和说话人处理都在本地完成。若您启用 AI 辅助笔记或会议纪要，只有转录文本会发送至您配置的 AI 服务商；音频始终不会离开设备。
                 </p>
               </div>
             </details>
@@ -983,7 +1016,7 @@
               </summary>
               <div class="faq-body">
                 <p class="measure pb-6 text-[16px] text-slate">
-                  可以。实时字幕、录音、转录和本地模型都可在设备上运行。只有您主动连接外部 AI 服务生成会议纪要时，才需要网络。
+                  可以。实时字幕、录音、转录和本地模型都可在设备上运行。只有您主动连接外部 AI 服务使用辅助笔记或生成会议纪要时，才需要网络。
                 </p>
               </div>
             </details>

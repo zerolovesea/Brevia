@@ -167,10 +167,14 @@ class TranscriptStoreMixin:
         """保存结构化纪要及供应商原始响应。
 
         解析失败时 ``data`` 可为空，原始响应仍会留下，便于排查而不必重发文本。
+        返回是否写入：已删除的会议不再接受后台任务的迟到结果。
         """
         with self.connect() as db:
-            db.execute(
-                """INSERT INTO summaries(meeting_id,data,raw_response,created_at) VALUES(?,?,?,?)
+            result = db.execute(
+                """INSERT INTO summaries(meeting_id,data,raw_response,created_at)
+                   SELECT ?,?,?,? WHERE EXISTS(
+                       SELECT 1 FROM meetings WHERE id=? AND deleted_at IS NULL
+                   )
                        ON CONFLICT(meeting_id) DO UPDATE SET
                        data=excluded.data,raw_response=excluded.raw_response,created_at=excluded.created_at""",
                 (
@@ -178,5 +182,7 @@ class TranscriptStoreMixin:
                     json.dumps(data, ensure_ascii=False) if data else None,
                     raw_response,
                     utc_now(),
+                    meeting_id,
                 ),
             )
+        return result.rowcount > 0

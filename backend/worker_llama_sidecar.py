@@ -5,6 +5,7 @@ GGUF）。翻译序列化由 ``worker.py`` 中的单工作线程执行器在上�
 """
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -70,8 +71,8 @@ class _Sidecar:
             self.on_error(f"Failed to start llama sidecar: {error}")
             return False
 
-    def request(self, request: dict) -> dict:
-        """发送请求并返回 sidecar 响应。"""
+    def request(self, request: dict, timeout_seconds=None) -> dict:
+        """发送请求并返回 sidecar 响应；``timeout_seconds`` 为空时用默认超时。"""
         with self.lock:
             if not self._ensure():
                 return {"type": "error", "message": "Sidecar not available"}
@@ -82,7 +83,7 @@ class _Sidecar:
                 if self.process and self.process.poll() is None:
                     self.process.kill()
 
-            timer = threading.Timer(REQUEST_TIMEOUT_SECONDS, terminate)
+            timer = threading.Timer(timeout_seconds or REQUEST_TIMEOUT_SECONDS, terminate)
             timer.start()
             try:
                 self.process.stdin.write(json.dumps(request) + "\n")
@@ -100,6 +101,16 @@ class _Sidecar:
                 return {"type": "error", "message": f"Sidecar communication error: {error}"}
             finally:
                 timer.cancel()
+
+    def cancel(self):
+        """立即终止在飞的推理（不持有锁，以便从请求等待中解除阻塞）。"""
+        process = self.process
+        if process and process.poll() is None:
+            try:
+                process.kill()
+            except Exception:  # noqa: BLE001 - best-effort cancellation
+                pass
+        self.process = None
 
     def shutdown(self):
         """优雅地关闭 sidecar 进程。"""
@@ -125,6 +136,10 @@ class LlamaSidecarMixin:
 
     def _sidecar_command(self):
         """解析启动 llama sidecar 的命令。"""
+        # 开发/测试用：跳过已打包的二进制，直接跑当前源码模块
+        # （打包后的二进制不会带上 llama_sidecar.py 的最新改动）。
+        if os.environ.get("BREVIA_LLAMA_HELPER", "").lower() in {"module", "dev", "python"}:
+            return [sys.executable, "-m", "backend.llama_sidecar"]
         if getattr(sys, "frozen", False):
             bundle_dir = Path(sys._MEIPASS)
             runtime_dir = bundle_dir.parent.parent / "brevia-llama-helper"
@@ -216,6 +231,42 @@ class LlamaSidecarMixin:
             top_p=payload.get("top_p", 0.95),
             stop_tokens=payload.get("stop_tokens"),
         )
+
+    def llama_generate_realtime(self, model_id: str, prompt: str) -> str:
+        """通过专用 ``ai-note`` sidecar 运行实时短任务（短超时、可取消、限长输出）。
+
+        Qwen3 系列（2B/4B）默认把思维链包在 <think> 块里，会占满实时任务本就有限的
+        输出预算并拖慢 CPU 推理；这里显式追加 ``/no_think`` 关闭思考，只输出 JSON。
+        """
+        from .worker_ai_note import REALTIME_MAX_TOKENS, REALTIME_TIMEOUT_SECONDS
+
+        if model_id.startswith("qwen3"):
+            prompt = f"{prompt}\n/no_think"
+        model_file = self._resolve_gguf(model_id)
+        request = {
+            "type": "generate",
+            "model_path": str(model_file),
+            "prompt": prompt,
+            "max_tokens": REALTIME_MAX_TOKENS,
+            "context_size": 8192,
+            "temperature": 0.2,
+            "top_k": 40,
+            "top_p": 0.95,
+            "stop_tokens": ["<|im_end|>", "<|endoftext|>"],
+        }
+        response = self._get_sidecar("ai-note").request(request, timeout_seconds=REALTIME_TIMEOUT_SECONDS)
+        if response.get("type") == "error":
+            raise RuntimeError(f"Sidecar error: {response.get('message')}")
+        if response.get("type") != "response":
+            raise RuntimeError(f"Unexpected sidecar response: {response.get('type')}")
+        return strip_reasoning(response.get("text", ""))
+
+    def cancel_sidecar(self, name: str):
+        """取消命名 sidecar 的在飞推理（用于实时任务超时/取消）。"""
+        with self._sidecars_lock:
+            sidecar = self._sidecars.get(name)
+        if sidecar:
+            sidecar.cancel()
 
     def shutdown_sidecars(self):
         """优雅地关闭所有 sidecar 进程。"""

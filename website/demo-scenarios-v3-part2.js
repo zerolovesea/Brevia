@@ -67,7 +67,7 @@ DemoScenariosV3.prototype.setupPrepareUI = function() {
                   </label>
 
                   <label>
-                    分类标签
+                    工作区
                     <div class="flow-select">
                       <button class="flow-select-toggle" data-demo-id="category" type="button">
                         未分类 <span>⌄</span>
@@ -111,15 +111,24 @@ DemoScenariosV3.prototype.setupPrepareUI = function() {
 
             <aside class="model-card">
               <div class="model-icon">⌁</div>
-              <h2 style="font-size: 16px; font-weight: 500; margin-bottom: 8px;">计算设备</h2>
               <dl>
                 <div>
                   <dt>计算设备</dt>
                   <dd>CPU</dd>
                 </div>
                 <div>
+                  <dt>会议语言</dt>
+                  <dd>中文</dd>
+                </div>
+                <div>
+                  <dt>会议模式</dt>
+                  <dd>标准模式</dd>
+                </div>
+              </dl>
+              <dl class="model-detail-list" hidden>
+                <div>
                   <dt>实时字幕模型</dt>
-                  <dd>Streaming Zipformer Multilingual</dd>
+                  <dd>Streaming Zipformer Chinese XLarge</dd>
                 </div>
                 <div>
                   <dt>说话人分离模型</dt>
@@ -127,11 +136,7 @@ DemoScenariosV3.prototype.setupPrepareUI = function() {
                 </div>
                 <div>
                   <dt>会后精修模型</dt>
-                  <dd>Qwen3-ASR 1.7B int8</dd>
-                </div>
-                <div>
-                  <dt>VAD 模型</dt>
-                  <dd>Silero VAD</dd>
+                  <dd>FunASR Nano int8</dd>
                 </div>
               </dl>
               <button class="text-button" style="margin-top: 24px;">管理模型 →</button>
@@ -181,13 +186,41 @@ DemoScenariosV3.prototype.getLiveSettingsMarkup = function() {
   `;
 };
 
+// The real notes editor toolbar (1:1 with createNotesEditor in frontend/ui-components.js).
+// Buttons: bold, italic, h1–h3, ul/ol (SVG), quote, link, image, code, todo, highlight, mode-toggle.
+DemoScenariosV3.prototype.notesToolbarHtml = function () {
+  const ul = '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="3" cy="4" r="1.1" fill="currentColor" stroke="none"/><circle cx="3" cy="8" r="1.1" fill="currentColor" stroke="none"/><circle cx="3" cy="12" r="1.1" fill="currentColor" stroke="none"/><path d="M7 4h6M7 8h6M7 12h6"/></svg>';
+  const ol = '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><text x="1.5" y="5" font-size="6.5" fill="currentColor" stroke="none">1</text><text x="1.5" y="9.5" font-size="6.5" fill="currentColor" stroke="none">2</text><text x="1.5" y="14" font-size="6.5" fill="currentColor" stroke="none">3</text><path d="M7 4h6M7 8.5h6M7 13h6"/></svg>';
+  const link = '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6.2 9.8 3.6-3.6" /><path d="M7.2 11.4 5.6 13a2.6 2.6 0 0 1-3.6-3.6l1.6-1.6a2.6 2.6 0 0 1 3.6 0" /><path d="M8.8 4.6l1.6-1.6a2.6 2.6 0 0 1 3.6 3.6l-1.6 1.6a2.6 2.6 0 0 1-3.6 0" /></svg>';
+  const image = '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="2.5" width="13" height="11" rx="1" /><circle cx="5.5" cy="6.2" r="1.4" /><path d="m1.5 11 3.6-3.6L11 12.8" /></svg>';
+  const mode = '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3.5 3h9M8 3v10"/></svg>';
+  const btns = [
+    ['bold', '加粗', '<b>B</b>'],
+    ['italic', '斜体', '<i>I</i>'],
+    ['h1', '标题 1', 'H1'],
+    ['h2', '标题 2', 'H2'],
+    ['h3', '标题 3', 'H3'],
+    ['ul', '列表', ul],
+    ['ol', '编号列表', ol],
+    ['quote', '引用', '❝'],
+    ['link', '插入链接', link],
+    ['image', '插入图片', image],
+    ['code', '行内代码', '&lt;/&gt;'],
+    ['todo', '待办', '☐'],
+    ['highlight', '重点', '★'],
+    ['mode-toggle', '富文本', mode]
+  ];
+  return '<div class="notes-toolbar">' + btns.map(([command, label, html]) => `<button type="button" data-notes-command="${command}" title="${label}" aria-label="${label}">${html}</button>`).join('') + '</div>';
+};
+
 DemoScenariosV3.prototype.setupLiveUI = function(meetingTitle) {
-  // 精确还原实时会议页面（基于第三张截图）
+  // 精确还原新版实时会议页面：左侧「我的笔记」（AI 辅助开关 + 编辑器），右侧「实时字幕」。
+  const notesToolbar = this.notesToolbarHtml();
   const html = String.raw`
-    <main class="app-shell">
-      <aside class="sidebar">
-        <button class="brand"><img src="../frontend/assets/brevia-logo.svg" alt="brevia" /></button>
-        <button class="new-meeting"><span>+</span> 开始会议</button>
+    <main class="app-shell is-live-meeting">
+      <aside class="sidebar" aria-label="主导航">
+        <button class="brand"><span class="brand-mark" aria-hidden="true">言</span><img src="../frontend/assets/brevia-logo.svg" alt="brevia" /></button>
+        <button class="new-meeting"><span class="new-meeting-icon">+</span><span class="new-meeting-label">开始会议</span></button>
         <nav>
           <button class="nav-item active"><span>⌂</span> 所有会议</button>
           <button class="nav-item"><span>◷</span> 最近删除</button>
@@ -212,6 +245,7 @@ DemoScenariosV3.prototype.setupLiveUI = function(meetingTitle) {
               <div class="live-status">
                 <span class="recording"><i></i> 正在录制</span>
                 <time data-demo-id="timer">00:00:00</time>
+                <span class="save-state"><svg class="check-icon" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3 8.5 3.2 3.2L13 4.5" /></svg> <span>已保存</span></span>
               </div>
             </div>
             <div class="live-caption-controls">
@@ -223,23 +257,37 @@ DemoScenariosV3.prototype.setupLiveUI = function(meetingTitle) {
           </header>
 
           <div class="live-layout">
-            <section class="transcript" aria-label="实时字幕">
-              <div class="transcript-scroll" data-demo-id="transcript-scroll"></div>
+            <section class="live-notes">
+              <header class="live-section-head">
+                <p class="eyebrow">我的笔记</p>
+                <button class="ai-assist-toggle" type="button"><span class="ai-assist-toggle-star">✦</span> <span>AI 辅助</span></button>
+                <button class="live-mode-toggle" data-toggle-live-mode="caption" type="button"><span>展开字幕</span> →</button>
+              </header>
+              <div data-live-notes-root>
+                <div class="ai-assist-empty">
+                  <div class="ai-assist-empty-inner">
+                    <strong>开始记录会议重点</strong>
+                    <p>你可以直接输入，也可以从右侧实时字幕中将重要内容加入笔记。</p>
+                    <div class="ai-assist-empty-tags">
+                      <button type="button">插入当前字幕</button>
+                      <button type="button">记录当前时间点</button>
+                    </div>
+                  </div>
+                </div>
+                ${notesToolbar}
+                <div class="notes-editor" data-demo-id="notes-editor" contenteditable="false" aria-label="我的笔记" spellcheck="false"></div>
+                <textarea class="notes-input" hidden></textarea>
+              </div>
             </section>
 
-            <aside class="live-panel">
-              <section>
-                <p class="eyebrow" data-demo-id="participants-eyebrow">参与者 · 0</p>
-                <div class="participants-list" data-demo-id="participants-list">
-                  <p class="participants-empty">等待识别说话人</p>
-                </div>
-              </section>
-
-              <div class="live-controls">
-                ${this.getLiveSettingsMarkup()}
-              </div>
-            </aside>
-            <button class="live-panel-toggle" type="button" aria-controls="live-panel" aria-expanded="true" title="收起">›</button>
+            <section class="live-captions">
+              <header class="live-section-head">
+                <p class="eyebrow">实时字幕</p>
+                <button class="live-mode-toggle" data-toggle-live-mode="notes" type="button"><span>返回笔记</span> ←</button>
+              </header>
+              <div class="transcript-scroll" data-demo-id="transcript-scroll"></div>
+              <button class="back-to-latest" type="button" hidden><span>↓</span> <span>回到最新</span></button>
+            </section>
           </div>
         </section>
       </section>
@@ -482,15 +530,13 @@ DemoScenariosV3.prototype.showSummaryDetail = function() {
         <section class="view active" id="detail-view">
           <button class="back">← 返回会议库</button>
           <header class="detail-head">
-            <div>
+            <div class="detail-title">
               <p class="eyebrow">本地会议</p>
               <h1>Q3 产品评审会议</h1>
-              <p>2026年8月7日 · 45分钟</p>
+              <p class="detail-meta">2026年8月7日 · 45 分钟 · 3 位参与者 · 已生成纪要</p>
             </div>
             <div class="detail-actions">
-              <button class="secondary">精修</button>
-              <button class="secondary">声源分离</button>
-              <button class="secondary">转发</button>
+              <button class="secondary">分享</button>
               <button class="primary-action">导出 <span>↓</span></button>
             </div>
           </header>
@@ -502,69 +548,94 @@ DemoScenariosV3.prototype.showSummaryDetail = function() {
             <span class="player-time">18:32</span>
             <input type="range" min="0" max="100" value="42" />
             <span>本地录音</span>
+            <div class="player-speed flow-select">
+              <button class="flow-select-toggle" type="button">1×<span>⌄</span></button>
+            </div>
           </section>
 
           <div class="detail-layout">
             <section class="final-transcript">
               <div class="tabbar">
-                <button class="tab active">逐字稿</button>
-                <button class="tab">精修字稿</button>
-                <button class="tab">双轨录音</button>
+                <div class="tabbar-tabs">
+                  <button class="tab active" data-detail-tab="notes">我的笔记</button>
+                  <button class="tab" data-detail-tab="transcript">字幕</button>
+                </div>
+                <div class="tabbar-extra">
+                  <span class="refine-state is-done"><svg class="check-icon" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3 8.5 3.2 3.2L13 4.5" /></svg> 已精修</span>
+                  <button class="refine-more" type="button" aria-label="更多">···</button>
+                </div>
               </div>
 
-              <div class="transcript-body">
-                <article class="segment">
-                  <div class="segment-meta">
-                    <time>01:39</time>
-                    <b>李娜</b>
+              <div class="detail-notes-panel" data-detail-panel="notes">
+                <div class="detail-notes-view">
+                  <div class="detail-notes-content markdown-content">
+                    <h2>本周重点</h2>
+                    <ul>
+                      <li>移动端验收：本周完成</li>
+                      <li>测试版本：周五前提交</li>
+                      <li>转录延迟优化至 300ms 以内</li>
+                    </ul>
                   </div>
-                  <div class="segment-copy">
-                    <p>先同步一下工程进度，实时转录引擎的性能优化基本完成了，延迟从原来的八百毫秒降到了三百毫秒以内。</p>
-                  </div>
-                </article>
+                </div>
+              </div>
+              <div class="transcript-panel" data-detail-panel="transcript" hidden>
+                <div class="transcript-body">
+                  <article class="segment">
+                    <div class="segment-meta">
+                      <time>01:39</time>
+                      <button class="segment-speaker">李娜</button>
+                    </div>
+                    <div class="segment-copy">
+                      <p>先同步一下工程进度，实时转录引擎的性能优化基本完成了，延迟从原来的八百毫秒降到了三百毫秒以内。</p>
+                    </div>
+                  </article>
 
-                <article class="segment">
-                  <div class="segment-meta">
-                    <time>01:54</time>
-                    <b>张伟</b>
-                  </div>
-                  <div class="segment-copy">
-                    <p>很好。多语言支持这块进展怎么样？我们这次要覆盖多少种语言？</p>
-                  </div>
-                </article>
+                  <article class="segment">
+                    <div class="segment-meta">
+                      <time>01:54</time>
+                      <button class="segment-speaker">张伟</button>
+                    </div>
+                    <div class="segment-copy">
+                      <p>很好。多语言支持这块进展怎么样？我们这次要覆盖多少种语言？</p>
+                    </div>
+                  </article>
 
-                <article class="segment">
-                  <div class="segment-meta">
-                    <time>02:01</time>
-                    <b>李娜</b>
-                  </div>
-                  <div class="segment-copy">
-                    <p>目前已经支持三十多种语言，主流语种的识别准确率都在百分之九十五以上。</p>
-                  </div>
-                </article>
+                  <article class="segment">
+                    <div class="segment-meta">
+                      <time>02:01</time>
+                      <button class="segment-speaker">李娜</button>
+                    </div>
+                    <div class="segment-copy">
+                      <p>目前已经支持三十多种语言，主流语种的识别准确率都在百分之九十五以上。</p>
+                    </div>
+                  </article>
+                </div>
               </div>
             </section>
 
             <aside class="notes">
-              <h2>Q3 产品评审会议</h2>
-
-              <section>
-                <h3>会议摘要</h3>
-                <p style="font-size: 14px; color: #666; line-height: 1.6;">
-                  本次会议评审了第三季度的产品进展，重点包括实时转录引擎的性能优化、多语言支持的扩展以及新版界面的设计方向。团队确认了发布时间节点和后续的测试计划。
-                </p>
-              </section>
-
-              <section>
-                <h3>核心结论</h3>
-                <ul style="font-size: 13px; line-height: 1.8; color: #404040;">
-                  <li>实时转录延迟优化至 300 毫秒以内</li>
-                  <li>多语言支持已覆盖 30+ 语种</li>
-                  <li>新版界面将于本季度末发布</li>
-                </ul>
-              </section>
-
-              <button class="text-button" data-demo-id="view-full-summary" style="margin-top: 20px;">查看完整内容 →</button>
+              <div class="summary-preview">
+                <div class="summary-head">
+                  <p class="eyebrow">会议纪要</p>
+                  <button class="text-button">重新生成</button>
+                </div>
+                <div class="summary-body markdown-content">
+                  <h2>摘要</h2>
+                  <p>本次会议评审了第三季度的产品进展，重点包括实时转录引擎的性能优化、多语言支持的扩展以及新版界面的设计方向。</p>
+                  <h2>核心结论</h2>
+                  <ul>
+                    <li>实时转录延迟优化至 300 毫秒以内</li>
+                    <li>多语言支持已覆盖 30+ 语种</li>
+                    <li>新版界面将于本季度末发布</li>
+                  </ul>
+                  <h2>行动项</h2>
+                  <ul>
+                    <li>完成实时转录引擎的性能压测 <small>李娜 · 8月20日</small></li>
+                    <li>制定发布前的灰度测试方案 <small>张伟 · 8月22日</small></li>
+                  </ul>
+                </div>
+                <button class="text-button" data-demo-id="view-full-summary" style="margin-top: 12px;">查看完整内容 →</button>
+              </div>
             </aside>
           </div>
         </section>
@@ -664,11 +735,13 @@ DemoScenariosV3.prototype.openSummaryModal = function() {
 
 // Voiceprint demo UI setup
 DemoScenariosV3.prototype.setupVoiceprintUI = function() {
+  // 声纹演示：切换到字幕模式（点击「展开字幕」一次后）——实时字幕在左（宽），笔记在右（窄）。
+  const notesToolbar = this.notesToolbarHtml();
   const html = String.raw`
-    <main class="app-shell">
-      <aside class="sidebar">
-        <button class="brand"><img src="../frontend/assets/brevia-logo.svg" alt="brevia" /></button>
-        <button class="new-meeting"><span>+</span> 开始会议</button>
+    <main class="app-shell is-live-meeting">
+      <aside class="sidebar" aria-label="主导航">
+        <button class="brand"><span class="brand-mark" aria-hidden="true">言</span><img src="../frontend/assets/brevia-logo.svg" alt="brevia" /></button>
+        <button class="new-meeting"><span class="new-meeting-icon">+</span><span class="new-meeting-label">开始会议</span></button>
         <nav>
           <button class="nav-item active"><span>⌂</span> 所有会议</button>
           <button class="nav-item"><span>◷</span> 最近删除</button>
@@ -692,7 +765,8 @@ DemoScenariosV3.prototype.setupVoiceprintUI = function() {
               <strong>团队周会</strong>
               <div class="live-status">
                 <span class="recording"><i></i> 正在录制</span>
-                <time id="timer">00:15:23</time>
+                <time data-demo-id="timer">00:15:23</time>
+                <span class="save-state"><svg class="check-icon" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3 8.5 3.2 3.2L13 4.5" /></svg> <span>已保存</span></span>
               </div>
             </div>
             <div class="live-caption-controls">
@@ -703,24 +777,39 @@ DemoScenariosV3.prototype.setupVoiceprintUI = function() {
             <button class="end-button">结束会议</button>
           </header>
 
-          <div class="live-layout">
-            <section class="transcript" aria-label="实时字幕">
-              <div class="transcript-scroll" id="transcript-scroll"></div>
+          <div class="live-layout is-caption-mode">
+            <section class="live-notes">
+              <header class="live-section-head">
+                <p class="eyebrow">我的笔记</p>
+                <button class="ai-assist-toggle is-enabled" type="button"><span class="ai-assist-toggle-star">✦</span> <span>AI 辅助</span></button>
+                <button class="live-mode-toggle" data-toggle-live-mode="caption" type="button"><span>展开字幕</span> →</button>
+              </header>
+              <div data-live-notes-root>
+                <div class="ai-assist-empty">
+                  <div class="ai-assist-empty-inner">
+                    <strong>开始记录吧</strong>
+                    <p>AI 会自动发现关键结论、待办和重要信息。</p>
+                    <div class="ai-assist-empty-tags">
+                      <span>记录重点</span>
+                      <span>自动整理</span>
+                      <span>关联工作区</span>
+                    </div>
+                  </div>
+                </div>
+                ${notesToolbar}
+                <div class="notes-editor" data-demo-id="notes-editor" contenteditable="false" aria-label="我的笔记" spellcheck="false"></div>
+                <textarea class="notes-input" hidden></textarea>
+              </div>
             </section>
 
-            <aside class="live-panel">
-              <section>
-                <p class="eyebrow" data-demo-id="voiceprint-eyebrow">参与者 · 0</p>
-                <div class="participants-list" data-demo-id="voiceprint-participants">
-                  <p class="participants-empty">等待识别说话人</p>
-                </div>
-              </section>
-
-              <div class="live-controls">
-                ${this.getLiveSettingsMarkup()}
-              </div>
-            </aside>
-            <button class="live-panel-toggle" type="button" aria-controls="live-panel" aria-expanded="true" title="收起">›</button>
+            <section class="live-captions">
+              <header class="live-section-head">
+                <p class="eyebrow">实时字幕</p>
+                <button class="live-mode-toggle" data-toggle-live-mode="notes" type="button"><span>返回笔记</span> ←</button>
+              </header>
+              <div class="transcript-scroll" id="transcript-scroll"></div>
+              <button class="back-to-latest" type="button" hidden><span>↓</span> <span>回到最新</span></button>
+            </section>
           </div>
         </section>
       </section>
@@ -980,7 +1069,7 @@ DemoScenariosV3.prototype.openModelLibraryModal = function () {
   shell.appendChild(backdrop);
 };
 
-  getModelLibraryDemo() {
+DemoScenariosV3.prototype.getModelLibraryDemo = function () {
     return {
       name: 'model-library',
       setupUI: () => this.setupSettingsUI(),
@@ -997,7 +1086,7 @@ DemoScenariosV3.prototype.openModelLibraryModal = function () {
         { action: 'wait', duration: 2200 }
       ]
     };
-  }
+  };
 // ============================================================================
 // Floating Caption Bar demo — real live view + real floating-caption overlay
 // ============================================================================
@@ -1120,7 +1209,7 @@ DemoScenariosV3.prototype.generateCaptionSteps = function () {
   return steps;
 };
 
-  getCaptionBarDemo() {
+DemoScenariosV3.prototype.getCaptionBarDemo = function () {
     return {
       name: 'caption-bar',
       setupUI: () => this.setupCaptionUI(),
@@ -1141,5 +1230,4 @@ DemoScenariosV3.prototype.generateCaptionSteps = function () {
         { action: 'wait', duration: 2000 }
       ]
     };
-  }
-}
+  };

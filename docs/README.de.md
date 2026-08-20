@@ -117,7 +117,7 @@ Jedes Modell wird bei Bedarf aus **Einstellungen → Modellbibliothek** herunter
 | Sprecher-Embeddings | 3D-Speaker ERes2Net Base | Universell |
 | Quellentrennung | Spleeter 2 Stems | Universell |
 
-Fuer LLM-Zusammenfassungen waehlen Sie **Integrierte KI**, um ein mitgeliefertes GGUF-Modell lokal auszufuehren (Qwen 3.5 2B / 4B, Gemma 3 1B / 4B), oder verweisen Brevia auf Claude, OpenAI, OpenRouter bzw. einen eigenen Dienst, der OpenAI Chat Completions oder Anthropic Messages spricht — Gemini (OpenAI-kompatibler Endpoint), DeepSeek, Kimi, Qwen und mehr.
+Fuer LLM-Zusammenfassungen waehlen Sie **Integrierte KI**, um ein mitgeliefertes GGUF-Modell lokal auszufuehren (Qwen 3.5 2B / 4B), oder verweisen Brevia auf Claude, OpenAI, OpenRouter bzw. einen eigenen Dienst, der OpenAI Chat Completions oder Anthropic Messages spricht — Gemini (OpenAI-kompatibler Endpoint), DeepSeek, Kimi, Qwen und mehr.
 
 ## Lokale Entwicklung
 

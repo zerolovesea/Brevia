@@ -117,7 +117,7 @@ Cada modelo se descarga bajo demanda desde **Settings → Model Library**. El ma
 | Embeddings de hablante | 3D-Speaker ERes2Net Base | Universal |
 | Separación de fuentes | Spleeter 2 Stems | Universal |
 
-Para los resúmenes LLM, elige **IA integrada** para ejecutar en local un modelo GGUF incluido (Qwen 3.5 2B / 4B, Gemma 3 1B / 4B), o apunta Brevia a Claude, OpenAI, OpenRouter o cualquier servicio propio compatible con OpenAI Chat Completions o Anthropic Messages: Gemini (endpoint compatible con OpenAI), DeepSeek, Kimi, Qwen y más.
+Para los resúmenes LLM, elige **IA integrada** para ejecutar en local un modelo GGUF incluido (Qwen 3.5 2B / 4B), o apunta Brevia a Claude, OpenAI, OpenRouter o cualquier servicio propio compatible con OpenAI Chat Completions o Anthropic Messages: Gemini (endpoint compatible con OpenAI), DeepSeek, Kimi, Qwen y más.
 
 ## Desarrollo local
 

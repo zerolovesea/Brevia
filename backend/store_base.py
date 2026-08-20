@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS segments (
   PRIMARY KEY (meeting_id, id, version)
 );
 CREATE INDEX IF NOT EXISTS segments_meeting_time ON segments(meeting_id, start_ms);
+CREATE INDEX IF NOT EXISTS meetings_deleted_created ON meetings(deleted_at, created_at DESC);
 CREATE TABLE IF NOT EXISTS speakers (
   meeting_id TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
   id TEXT NOT NULL,

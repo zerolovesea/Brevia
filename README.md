@@ -117,7 +117,7 @@ Every model is downloaded on demand from **Settings → Model Library**. The man
 | Speaker embeddings | 3D-Speaker ERes2Net Base | Universal |
 | Source separation | Spleeter 2 Stems | Universal |
 
-For LLM summaries, pick **Built-in AI** to run a bundled GGUF model locally (Qwen 3.5 2B / 4B, Gemma 3 1B / 4B), or point Brevia at Claude, OpenAI, OpenRouter, or any custom service that speaks OpenAI Chat Completions or Anthropic Messages — Gemini (OpenAI-compatible endpoint), DeepSeek, Kimi, Qwen, and more.
+For LLM summaries, pick **Built-in AI** to run a bundled GGUF model locally (Qwen 3.5 2B / 4B), or point Brevia at Claude, OpenAI, OpenRouter, or any custom service that speaks OpenAI Chat Completions or Anthropic Messages — Gemini (OpenAI-compatible endpoint), DeepSeek, Kimi, Qwen, and more.
 
 ## Local development
 

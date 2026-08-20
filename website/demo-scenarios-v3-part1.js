@@ -121,23 +121,54 @@ class DemoScenariosV3 {
 
         ...this.generateLiveSegmentSteps(segments, 3, 6, true),
 
-        { action: 'wait', duration: 2500 }
+        { action: 'wait', duration: 1200 },
+
+        // 手动在笔记编辑器中写笔记：移动光标到笔记区域，点击后逐字输入。
+        {
+          action: 'moveCursor',
+          target: '[data-demo-id="notes-editor"]',
+          duration: 1000,
+          delay: 400
+        },
+        { action: 'click', duration: 250 },
+        {
+          action: 'setState',
+          handler: () => this.typeNoteIntoEditor('待办：周五前补一版本地部署预算。'),
+          delay: 150
+        },
+
+        { action: 'wait', duration: 2200 }
       ]
     };
+  }
+
+  typeNoteIntoEditor(text) {
+    const editor = this.engine.viewport.querySelector('[data-demo-id="notes-editor"]');
+    if (!editor) return;
+    const chars = text.split('');
+    const typeChar = (i) => {
+      if (!this.timeline || !this.timeline.isRunning || this.engine.isPaused) return;
+      if (i >= chars.length) return;
+      editor.textContent += chars[i];
+      editor.scrollTop = editor.scrollHeight;
+      setTimeout(() => typeChar(i + 1), 55);
+    };
+    typeChar(0);
   }
 
   // ===== UI Setup Methods =====
 
   setupHomeUI() {
-    // 精确还原截图中的主页
+    // 精确还原新版主页：无 page-head 主操作按钮，搜索“搜索会议…”，会议行无麦克风图标
     const html = String.raw`
       <main class="app-shell">
         <aside class="sidebar" aria-label="主导航">
           <button class="brand" data-view="home" aria-label="Brevia 首页">
+            <span class="brand-mark" aria-hidden="true">言</span>
             <img src="../frontend/assets/brevia-logo.svg" alt="brevia" />
           </button>
           <button class="new-meeting" data-demo-id="new-meeting-btn" data-view="prepare">
-            <span>+</span> 开始会议
+            <span class="new-meeting-icon">+</span><span class="new-meeting-label">开始会议</span>
           </button>
           <nav>
             <button class="nav-item active" id="all-meetings" data-view="home">
@@ -170,26 +201,16 @@ class DemoScenariosV3 {
           <section class="view active" id="home-view">
             <div class="page-head">
               <div>
-                <button class="eyebrow" type="button" disabled>会议库</button>
-                <h1 id="home-slogan">把会议留在掌控之中。</h1>
+                <button class="eyebrow" id="home-eyebrow" type="button" disabled>会议库</button>
+                <h1 id="home-slogan">听见讨论，留下下一步。</h1>
               </div>
-              <button class="primary-action" data-demo-id="home-primary">
-                开始会议 <span>→</span>
-              </button>
             </div>
 
             <div class="library-toolbar">
               <label class="search">
                 <span>⌕</span>
-                <input type="search" placeholder="搜索会议、逐字稿或标签" />
+                <input type="search" placeholder="搜索会议…" />
               </label>
-              <div class="filter" id="category-filter">
-                <div class="flow-select">
-                  <button class="flow-select-toggle" type="button">
-                    所有分类 <span>⌄</span>
-                  </button>
-                </div>
-              </div>
               <div class="filter" id="date-filter">
                 <div class="flow-select">
                   <button class="flow-select-toggle" type="button">
@@ -197,18 +218,11 @@ class DemoScenariosV3 {
                   </button>
                 </div>
               </div>
+              <button class="meeting-select-all" id="meeting-select-all" type="button" hidden>全选</button>
             </div>
 
             <section class="meeting-list" aria-label="最近会议">
               <div class="meeting-row">
-                <div class="meeting-color" style="background: var(--color-black); display: flex; align-items: center; justify-content: center;">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
-                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-                    <line x1="12" y1="19" x2="12" y2="23"></line>
-                    <line x1="8" y1="23" x2="16" y2="23"></line>
-                  </svg>
-                </div>
                 <div class="meeting-main">
                   <h2>产品周例会 · 第 32 周</h2>
                   <p>
@@ -216,14 +230,14 @@ class DemoScenariosV3 {
                     <span>·</span>
                     <span>38 分钟</span>
                   </p>
-                  <div>
-                    <span class="tag">产品</span>
-                    <span class="tag">规划</span>
+                  <div class="meeting-tags">
+                    <div class="tag">产品</div>
+                    <div class="tag">规划</div>
                   </div>
                 </div>
                 <div class="meeting-status">
-                  <span class="status">已整理</span>
-                  <small>本地资源</small>
+                  <span class="status complete">已整理</span>
+                  <small>本地录音</small>
                 </div>
                 <div class="meeting-actions">
                   <button class="more" title="更多操作">⋯</button>
@@ -231,14 +245,6 @@ class DemoScenariosV3 {
               </div>
 
               <div class="meeting-row">
-                <div class="meeting-color" style="background: var(--color-black); display: flex; align-items: center; justify-content: center;">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
-                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-                    <line x1="12" y1="19" x2="12" y2="23"></line>
-                    <line x1="8" y1="23" x2="16" y2="23"></line>
-                  </svg>
-                </div>
                 <div class="meeting-main">
                   <h2>客户访谈 · 华东团队</h2>
                   <p>
@@ -246,14 +252,14 @@ class DemoScenariosV3 {
                     <span>·</span>
                     <span>47 分钟</span>
                   </p>
-                  <div>
-                    <span class="tag">客户</span>
-                    <span class="tag">访谈</span>
+                  <div class="meeting-tags">
+                    <div class="tag">客户</div>
+                    <div class="tag">访谈</div>
                   </div>
                 </div>
                 <div class="meeting-status">
-                  <span class="status">已整理</span>
-                  <small>本地资源</small>
+                  <span class="status complete">已整理</span>
+                  <small>本地录音</small>
                 </div>
                 <div class="meeting-actions">
                   <button class="more" title="更多操作">⋯</button>
@@ -261,14 +267,6 @@ class DemoScenariosV3 {
               </div>
 
               <div class="meeting-row">
-                <div class="meeting-color" style="background: var(--color-black); display: flex; align-items: center; justify-content: center;">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
-                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-                    <line x1="12" y1="19" x2="12" y2="23"></line>
-                    <line x1="8" y1="23" x2="16" y2="23"></line>
-                  </svg>
-                </div>
                 <div class="meeting-main">
                   <h2>设计走查 · 桌面端</h2>
                   <p>
@@ -276,14 +274,14 @@ class DemoScenariosV3 {
                     <span>·</span>
                     <span>26 分钟</span>
                   </p>
-                  <div>
-                    <span class="tag">设计</span>
-                    <span class="tag">体验</span>
+                  <div class="meeting-tags">
+                    <div class="tag">设计</div>
+                    <div class="tag">体验</div>
                   </div>
                 </div>
                 <div class="meeting-status">
-                  <span class="status">已整理</span>
-                  <small>本地资源</small>
+                  <span class="status complete">已整理</span>
+                  <small>本地录音</small>
                 </div>
                 <div class="meeting-actions">
                   <button class="more" title="更多操作">⋯</button>

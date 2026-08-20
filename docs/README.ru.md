@@ -117,7 +117,7 @@ Brevia следует строгой local-first архитектуре:
 | Эмбеддинги говорящего | 3D-Speaker ERes2Net Base | Универсальный |
 | Разделение источников | Spleeter 2 Stems | Универсальный |
 
-Для LLM-резюме можно выбрать **Встроенный ИИ** и запустить входящую в состав модель GGUF локально (Qwen 3.5 2B / 4B, Gemma 3 1B / 4B) либо указать Claude, OpenAI, OpenRouter или свой сервис с форматом OpenAI Chat Completions или Anthropic Messages — Gemini (OpenAI-совместимый endpoint), DeepSeek, Kimi, Qwen и другие.
+Для LLM-резюме можно выбрать **Встроенный ИИ** и запустить входящую в состав модель GGUF локально (Qwen 3.5 2B / 4B) либо указать Claude, OpenAI, OpenRouter или свой сервис с форматом OpenAI Chat Completions или Anthropic Messages — Gemini (OpenAI-совместимый endpoint), DeepSeek, Kimi, Qwen и другие.
 
 ## Локальная разработка
 

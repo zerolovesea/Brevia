@@ -736,6 +736,11 @@ class RecordingSessionMixin:
                 else:
                     self.store.save_segment(event)
                     self.emit("transcript.final", event)
+                    try:
+                        self.ai_note_on_segment(event)
+                    except Exception:
+                        # AI 辅助笔记失败绝不能影响字幕/保存主链路。
+                        pass
                     self._postprocess_live_segment_later(
                         event,
                         segment_audio,
@@ -1019,6 +1024,9 @@ class RecordingSessionMixin:
 
     def _release_active_session(self):
         """在持久化停止状态前释放模型和执行器资源。"""
+        meeting_id = self.active
+        if meeting_id and hasattr(self, "ai_note_stop"):
+            self.ai_note_stop({"meeting_id": meeting_id})
         postprocessing = self.live_postprocessing
         punctuation = self.live_punctuation
         self.live_postprocessing = None

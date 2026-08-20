@@ -986,4 +986,3 @@ class OfflineDiarizer:
             }
             for segment in self.diarizer.process(samples).sort_by_start_time()
         ]
-

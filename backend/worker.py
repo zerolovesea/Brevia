@@ -16,6 +16,7 @@ from .worker_models import ModelTaskWorkerMixin
 from .worker_refinement import RefinementWorkerMixin
 from .worker_session import RecordingSessionMixin
 from .worker_speakers import SpeakerCommandMixin
+from .worker_ai_note import AiNoteWorkerMixin
 
 
 MAXIMUM_COMMAND_BYTES = 1024 * 1024
@@ -31,6 +32,7 @@ class Worker(
     RefinementWorkerMixin,
     LLMWorkerMixin,
     LlamaSidecarMixin,
+    AiNoteWorkerMixin,
 ):
     """从聚焦的 worker 服务组合而成的协议外观。"""
 
@@ -122,6 +124,7 @@ def main():
         else:
             respond(command)
 
+    worker.shutdown_ai_note()
     worker.shutdown_sidecars()
     translation_executor.shutdown(wait=True)
 

@@ -3,7 +3,7 @@
 import re
 
 from .transcript import clock, latest_segments
-from .worker_common import managed_task, require
+from .worker_common import TaskCancelled, managed_task, require
 
 # 内置翻译在本地运行捆绑的 Hy-MT2 GGUF 模型。
 TRANSLATION_MODEL_ID = "hy-mt2-1.8b-q4km"
@@ -18,6 +18,14 @@ MAX_SUMMARY_CHUNKS = 6
 SUMMARY_CHUNK_MAX_TOKENS = 768
 # 合并阶段输入的字符上限（中文约等于 token 数）：超出后截断并提示。
 MAX_MERGE_INPUT_CHARS = 12000
+
+
+def clean_summary_markdown(markdown):
+    """丢弃模型在 Markdown 标题前泄漏的控制标记。"""
+    text = str(markdown or "").strip()
+    heading = re.search(r"(?m)^#{1,6}\s+", text)
+    return text[heading.start():] if heading else text
+
 
 # 将 UI 语言代码映射到 prompt 中的自然语言名称。
 LANGUAGE_NAMES = {
@@ -289,10 +297,14 @@ class LLMWorkerMixin:
             else:
                 prompt = summary_prompt(transcript, meeting["title"], language)
                 markdown = self._complete_with_retry(payload, prompt)
+            self.wait_task(control)
             if not markdown:
                 raise ValueError("Summary response was empty")
+        except TaskCancelled:
+            return {"cancelled": True}
         except Exception as error:
-            self.store.save_summary(meeting["id"], None, markdown or str(error))
+            if not self.store.save_summary(meeting["id"], None, markdown or str(error)):
+                return {"cancelled": True}
             if re.search(
                 r"\b(?:401|403)\b|error code:\s*1010|API key|Authorization header|invalid_api_key|authentication",
                 str(error),
@@ -303,7 +315,8 @@ class LLMWorkerMixin:
             # 被笼统的 “Summary generation failed” 掩盖，无法定位。
             raise ValueError(f"Summary generation failed: {error}") from error
         data = {"markdown": markdown}
-        self.store.save_summary(meeting["id"], data, markdown)
+        if not self.store.save_summary(meeting["id"], data, markdown):
+            return {"cancelled": True}
         self.emit(
             "summary.progress",
             {
@@ -318,9 +331,9 @@ class LLMWorkerMixin:
 
     def _complete_with_retry(self, payload, prompt):
         """生成响应；偶发空响应（CPU 上生成超时/被中断）重试一次再判失败。"""
-        markdown = self._complete(payload, prompt).strip()
+        markdown = clean_summary_markdown(self._complete(payload, prompt))
         if not markdown:
-            markdown = self._complete(payload, prompt).strip()
+            markdown = clean_summary_markdown(self._complete(payload, prompt))
         return markdown
 
     def _summarize_in_chunks(self, transcript, meeting, language, payload, control):

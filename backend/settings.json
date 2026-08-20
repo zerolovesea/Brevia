@@ -29,7 +29,7 @@
   "diarization": {
     "segmentation_model_id": "pyannote-segmentation-3.0",
     "cluster_threshold": 0.35,
-    "online_similarity_threshold": 0.74,
+    "online_similarity_threshold": 0.68,
     "voiceprint_similarity_threshold": 0.6,
     "minimum_embedding_seconds": 0.25,
     "boundary_tail_seconds": 3.0,

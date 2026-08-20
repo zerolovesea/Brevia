@@ -76,7 +76,19 @@ class LlamaSidecar:
         )
 
     def _detect_gpu_layers(self) -> int:
-        """根据可用后端自动检测最佳 GPU 层数。"""
+        """根据可用后端自动检测最佳 GPU 层数。
+
+        ``BREVIA_GPU_LAYERS`` 环境变量可强制指定层数（如 ``0`` 表示纯 CPU），
+        用于测试与无 GPU 的部署验证。
+        """
+        import os
+
+        override = os.environ.get("BREVIA_GPU_LAYERS")
+        if override is not None and override.strip() != "":
+            try:
+                return max(-1, int(override))
+            except ValueError:
+                pass
         try:
             # 尝试检测 Metal (macOS)
             import platform

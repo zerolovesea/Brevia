@@ -5,6 +5,7 @@ import json
 import tarfile
 import tempfile
 import threading
+import time
 import unittest
 import urllib.error
 import wave
@@ -35,6 +36,185 @@ class WorkerTest(unittest.TestCase):
 
     def tearDown(self):
         self.temp.cleanup()
+
+    def _wait_ai_suggestions(self, count=1, timeout=5.0):
+        """等待出现至少 count 条 ai-note.suggestion 事件。"""
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            suggestions = [e for e in self.events if e.get("type") == "ai-note.suggestion"]
+            if len(suggestions) >= count:
+                return suggestions
+            time.sleep(0.05)
+        return [e for e in self.events if e.get("type") == "ai-note.suggestion"]
+
+    def _patch_ai_note_cadence(self):
+        """把调度节奏调成近乎即时，便于测试去重/门控等逻辑本身。"""
+        import backend.worker_ai_note as ai_note
+
+        patchers = [
+            patch.object(ai_note, "ANALYSIS_MIN_INTERVAL_AUTO", 0.0),
+            patch.object(ai_note, "ANALYSIS_MIN_INTERVAL_ASSIST", 0.0),
+            patch.object(ai_note, "SUGGESTION_EMIT_GAP_SECONDS", 0.0),
+        ]
+        for patcher in patchers:
+            patcher.start()
+        self.addCleanup(lambda: [p.stop() for p in patchers])
+
+    def test_ai_note_emits_suggestion_and_dedups(self):
+        meeting_id = "11111111-1111-1111-1111-111111111111"
+        self._patch_ai_note_cadence()
+        self.worker.llm_complete = lambda payload, prompt: json.dumps({"type": "action", "text": "调研下一代主机发布节奏", "importance": "high"})
+        self.worker.llama_generate_realtime = lambda model_id, prompt: json.dumps({"type": "action", "text": "调研下一代主机发布节奏", "importance": "high"})
+        self.worker.ai_note_start({"meeting_id": meeting_id, "provider": "built-in", "model": "qwen3.5-2b", "proactivity": "assist", "language": "zh"})
+        self.worker.ai_note_on_segment({"meeting_id": meeting_id, "text": "下一步需要小王确认报价 160 万", "start_ms": 5000, "speaker": "spk-1"})
+        suggestions = self._wait_ai_suggestions()
+        self.assertTrue(suggestions, "expected an ai-note.suggestion event")
+        self.assertEqual(suggestions[0]["payload"]["type"], "action")
+        self.assertIn("调研", suggestions[0]["payload"]["text"])
+        # 去重：模型再次输出同一建议时不应重复发出。
+        self.worker.ai_note_on_segment({"meeting_id": meeting_id, "text": "再次确认下一步需要小王确认报价 160 万", "start_ms": 9000, "speaker": "spk-1"})
+        time.sleep(0.8)
+        count = sum(1 for e in self.events if e.get("type") == "ai-note.suggestion")
+        self.assertEqual(count, 1, "duplicate suggestion should be suppressed")
+        self.worker.ai_note_stop({"meeting_id": meeting_id})
+
+    def test_ai_note_emits_batch_suggestions(self):
+        """一次分析产出多条建议时应逐条发出（前端队列逐条展示）。"""
+        meeting_id = "22222222-2222-2222-2222-222222222222"
+        self._patch_ai_note_cadence()
+        batch = {
+            "suggestions": [
+                {"type": "number", "text": "2026 年全国企业平均每周工作 48.2 小时", "importance": "high"},
+                {"type": "topic", "text": "严格执行劳动法的影响", "importance": "high"},
+                {"type": "action", "text": "需要评估每周 40 小时对人力成本的影响", "importance": "medium"},
+            ]
+        }
+        self.worker.llama_generate_realtime = lambda model_id, prompt: json.dumps(batch, ensure_ascii=False)
+        self.worker.ai_note_start({"meeting_id": meeting_id, "provider": "built-in", "model": "qwen3.5-2b", "proactivity": "assist", "language": "zh"})
+        self.worker.ai_note_on_segment({"meeting_id": meeting_id, "text": "2026 年全国企业就业人员每周平均工作 48.2 小时，家具制造业利润只有 5.36%。", "start_ms": 5000, "speaker": "spk-1"})
+        suggestions = self._wait_ai_suggestions(count=3)
+        self.assertEqual(len(suggestions), 3, "expected 3 suggestion events from one batch")
+        types = [e["payload"]["type"] for e in suggestions]
+        self.assertEqual(types, ["number", "topic", "action"])
+        self.worker.ai_note_stop({"meeting_id": meeting_id})
+
+    def test_ai_note_drops_generic_and_typo_suggestions(self):
+        """价值门控：泛泛文本、无数字的 number、未命名的 topic 都应被丢弃。"""
+        meeting_id = "33333333-3333-3333-3333-333333333333"
+        self._patch_ai_note_cadence()
+        calls = []
+
+        def fake(model_id, prompt):
+            calls.append(prompt)
+            return json.dumps(
+                {
+                    "suggestions": [
+                        {"type": "decision", "text": "企业严格执行劳动法需要增加两成人力", "importance": "high"},
+                        {"type": "supplement", "text": "本期播客讨论了劳动法的话题", "importance": "high"},
+                        {"type": "number", "text": "生产效率", "importance": "high"},
+                    ]
+                },
+                ensure_ascii=False,
+            )
+
+        self.worker.llama_generate_realtime = fake
+        self.worker.ai_note_start({"meeting_id": meeting_id, "provider": "built-in", "model": "qwen3.5-2b", "proactivity": "assist", "language": "zh"})
+        self.worker.ai_note_on_segment({"meeting_id": meeting_id, "text": "严格执行劳动法，企业需要增加百分之二十的人力。", "start_ms": 5000, "speaker": "spk-1"})
+        time.sleep(1.0)
+        suggestions = [e for e in self.events if e.get("type") == "ai-note.suggestion"]
+        self.assertEqual(len(suggestions), 1, "only the decision suggestion should pass the value gate")
+        self.assertEqual(suggestions[0]["payload"]["type"], "decision")
+        self.worker.ai_note_stop({"meeting_id": meeting_id})
+
+    def test_ai_note_fuzzy_dedup_suppresses_paraphrase(self):
+        """近义去重：换说法重述同一条信息不应再次发出。"""
+        meeting_id = "44444444-4444-4444-4444-444444444444"
+        self._patch_ai_note_cadence()
+
+        def fake(model_id, prompt):
+            return json.dumps(
+                {"suggestions": [{"type": "number", "text": "2026 年全国企业平均每周工作 48.2 小时", "importance": "high"}]},
+                ensure_ascii=False,
+            )
+
+        self.worker.llama_generate_realtime = fake
+        self.worker.ai_note_start({"meeting_id": meeting_id, "provider": "built-in", "model": "qwen3.5-2b", "proactivity": "assist", "language": "zh"})
+        self.worker.ai_note_on_segment({"meeting_id": meeting_id, "text": "2026 年全国企业就业人员每周平均工作时间是 48.2 个小时。", "start_ms": 5000, "speaker": "spk-1"})
+        self._wait_ai_suggestions(count=1)
+        # 模型换了个说法重述同一条数据。
+        self.worker.ai_note_on_segment({"meeting_id": meeting_id, "text": "每周平均工作 48.2 小时这个数据很关键。", "start_ms": 9000, "speaker": "spk-1"})
+        time.sleep(0.8)
+        count = sum(1 for e in self.events if e.get("type") == "ai-note.suggestion")
+        self.assertEqual(count, 1, "paraphrased duplicate should be suppressed")
+        self.worker.ai_note_stop({"meeting_id": meeting_id})
+
+    def test_ai_note_new_content_during_run_is_not_skipped(self):
+        """调度器不打断在飞任务：运行期间到达的新内容应在下一轮被分析。"""
+        meeting_id = "55555555-5555-5555-5555-555555555555"
+        self._patch_ai_note_cadence()
+        calls = []
+        release = threading.Event()
+
+        def fake(model_id, prompt):
+            calls.append(1)
+            if len(calls) == 1:
+                release.wait(timeout=5)  # 第一轮在飞时挂起
+            return json.dumps(
+                {"suggestions": [{"type": "action", "text": f"行动项 {len(calls)}", "importance": "medium"}]},
+                ensure_ascii=False,
+            )
+
+        self.worker.llama_generate_realtime = fake
+        self.worker.ai_note_start({"meeting_id": meeting_id, "provider": "built-in", "model": "qwen3.5-2b", "proactivity": "auto", "language": "zh"})
+        self.worker.ai_note_on_segment({"meeting_id": meeting_id, "text": "第一步我们需要安排调研供应商资质和报价，确认交付时间", "start_ms": 5000, "speaker": "spk-1"})
+        deadline = time.time() + 5
+        while time.time() < deadline and not calls:
+            time.sleep(0.05)
+        self.assertTrue(calls, "first analysis should have started")
+        # 在飞期间到达的新内容：不应取消第一轮，也不应被跳过。
+        self.worker.ai_note_on_segment({"meeting_id": meeting_id, "text": "第二步我们需要安排开发团队进场，评估排期风险", "start_ms": 9000, "speaker": "spk-1"})
+        time.sleep(0.4)
+        self.assertEqual(len(calls), 1, "in-flight analysis must not be interrupted")
+        release.set()
+        deadline = time.time() + 5
+        while time.time() < deadline and len(calls) < 2:
+            time.sleep(0.05)
+        self.assertGreaterEqual(len(calls), 2, "content arriving during the run should trigger a follow-up analysis")
+        self.worker.ai_note_stop({"meeting_id": meeting_id})
+
+    def test_ai_note_quiet_mode_requires_explicit_request(self):
+        """安静档：字幕和停笔均不触发，只有显式请求才运行。"""
+        meeting_id = "66666666-6666-6666-6666-666666666666"
+        self._patch_ai_note_cadence()
+        calls = []
+
+        def fake(model_id, prompt):
+            calls.append(1)
+            return json.dumps(
+                {"suggestions": [{"type": "decision", "text": "决定先做小范围灰度发布", "importance": "high"}]},
+                ensure_ascii=False,
+            )
+
+        self.worker.llama_generate_realtime = fake
+        self.worker.ai_note_start({"meeting_id": meeting_id, "provider": "built-in", "model": "qwen3.5-2b", "proactivity": "quiet", "language": "zh"})
+        self.worker.ai_note_on_segment({"meeting_id": meeting_id, "text": "下一步需要小王确认报价 160 万", "start_ms": 5000, "speaker": "spk-1"})
+        time.sleep(0.6)
+        self.assertEqual(len(calls), 0, "quiet mode must not analyze on segments alone")
+        self.worker.ai_note_typing({"meeting_id": meeting_id, "typing": True})
+        time.sleep(0.2)
+        self.assertEqual(len(calls), 0, "typing start must stay silent")
+        self.worker.ai_note_typing({"meeting_id": meeting_id, "typing": False, "notes": "记录一下"})
+        time.sleep(0.6)
+        self.assertEqual(len(calls), 0, "typing stop must stay silent in quiet mode")
+        self.worker.ai_note_request({"meeting_id": meeting_id, "notes": "记录一下"})
+        deadline = time.time() + 5
+        while time.time() < deadline and not calls:
+            time.sleep(0.05)
+        self.assertTrue(calls, "explicit request should trigger analysis in quiet mode")
+        suggestions = [e for e in self.events if e.get("type") == "ai-note.suggestion"]
+        self.assertEqual(len(suggestions), 1, "quiet mode should emit the requested suggestion")
+        self.assertEqual(suggestions[0]["payload"]["type"], "decision")
+        self.worker.ai_note_stop({"meeting_id": meeting_id})
 
     def test_worker_protocol_is_safe_on_gbk_stdout(self):
         class GbkStdout:
@@ -212,6 +392,26 @@ class WorkerTest(unittest.TestCase):
         finally:
             self.worker.state.lock.release()
         thread.join()
+
+    def test_delete_and_purge_do_not_wait_for_recording_lock(self):
+        meeting = self.worker.start(
+            {"title": "fast delete", "language": "zh", "streaming_model_id": "zipformer-zh-xlarge-streaming-int8", "refined_model_id": "qwen3-asr-0.6b-int8"}
+        )
+        self.worker.stop({"meeting_id": meeting["id"], "duration_ms": 0})
+
+        def run(action):
+            done = threading.Event()
+            thread = threading.Thread(target=lambda: (action(), done.set()))
+            self.worker.state.lock.acquire()
+            try:
+                thread.start()
+                self.assertTrue(done.wait(1))
+            finally:
+                self.worker.state.lock.release()
+            thread.join()
+
+        run(lambda: self.worker.delete_meeting({"meeting_id": meeting["id"]}))
+        run(lambda: self.worker.purge_meeting({"meeting_id": meeting["id"]}))
 
     def test_sidecar_timeout_kills_the_stalled_process(self):
         child = Mock()
@@ -399,6 +599,24 @@ class WorkerTest(unittest.TestCase):
         ]
         self.assertEqual(progress, [10, 60, 100])
 
+    def test_summary_strips_model_control_marker_before_title(self):
+        meeting = self.worker.start(
+            {
+                "title": "控制标记", "language": "zh",
+                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
+                "refined_model_id": "qwen3-asr-0.6b-int8",
+            }
+        )
+        self.worker.store.save_segment(
+            {"meeting_id": meeting["id"], "segment_id": "mic-0", "text": "讨论完成",
+             "start_ms": 0, "end_ms": 1000, "speaker": "spk-1"}
+        )
+        self.worker.llm_complete = lambda *_args, **_kwargs: "_tag\n# **控制标记**\n\n内容"
+        result = self.worker.summarize(
+            {"meeting_id": meeting["id"], "provider": "OpenAI", "endpoint": "https://example.test/chat", "model": "gpt", "consent": True}
+        )
+        self.assertEqual(result["markdown"], "# **控制标记**\n\n内容")
+
     def test_summary_ignores_legacy_cleaned_transcript(self):
         meeting = self.worker.start(
             {
@@ -481,6 +699,41 @@ class WorkerTest(unittest.TestCase):
             }
         )
         self.assertIn("本周五完成验收", prompts[0])
+
+    def test_summary_cancellation_skips_late_save(self):
+        meeting = self.worker.start(
+            {
+                "title": "取消纪要",
+                "language": "zh",
+                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
+                "refined_model_id": "qwen3-asr-0.6b-int8",
+            }
+        )
+        self.worker.store.save_segment(
+            {
+                "meeting_id": meeting["id"], "segment_id": "mic-0", "text": "不要保存",
+                "start_ms": 0, "end_ms": 1000, "speaker": "spk-1",
+            }
+        )
+        self.worker.llm_complete = lambda *_args, **_kwargs: (
+            self.worker.tasks.cancel("summary.generate", meeting["id"]), "# 已取消"
+        )[1]
+        result = self.worker.summarize(
+            {"meeting_id": meeting["id"], "provider": "OpenAI", "endpoint": "https://example.test/chat", "model": "gpt", "consent": True}
+        )
+        self.assertEqual(result, {"cancelled": True})
+        self.assertIsNone(self.worker.store.get_meeting(meeting["id"])["summary"])
+
+    def test_deleted_meeting_rejects_late_summary_save(self):
+        meeting = self.worker.start(
+            {
+                "title": "删除纪要", "language": "zh",
+                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
+                "refined_model_id": "qwen3-asr-0.6b-int8",
+            }
+        )
+        self.worker.store.soft_delete(meeting["id"])
+        self.assertFalse(self.worker.store.save_summary(meeting["id"], {"markdown": "迟到"}, "迟到"))
 
     def test_summary_without_transcript_returns_readable_error(self):
         meeting = self.worker.start(

@@ -1,18 +1,18 @@
 (function () {
   const slogans = {
     zh: [
-      '每一场对话，都留有依据。',
-      '让重要讨论，不再散落。',
-      '从声音开始，留下清晰结论。',
-      '记录发生的事，推进接下来的事。',
-      '把会议留在掌控之中。'
+      '听见讨论，留下下一步。',
+      'AI 辅助笔记，及时接住关键时刻。',
+      '决策、待办与问题，不必等到会后。',
+      '记录正在发生的事，推进接下来的事。',
+      '把每场会议，变成可行动的记录。'
     ],
     en: [
-      'Every conversation leaves a traceable record.',
-      'Keep important discussions in one place.',
-      'Start with sound. End with clear decisions.',
-      'Record what happened. Move the work forward.',
-      'Keep every meeting within reach.'
+      'Hear the discussion. Keep the next step.',
+      'AI Assist Notes catches the moments that matter.',
+      'Decisions, actions, and questions before the meeting ends.',
+      'Record what is happening. Move the work forward.',
+      'Turn every meeting into an actionable record.'
     ]
   };
 

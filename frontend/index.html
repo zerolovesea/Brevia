@@ -1,3 +1,9 @@
+<!--
+ * @Author: yangzhou
+ * @Email: zyaztec@gmail.com
+ * @Date: 2026-08-20 13:19:23
+ * @LastEditTime: 2026-08-20 16:31:08
+-->
 <!doctype html>
 <html lang="zh-CN">
   <head>
@@ -13,8 +19,8 @@
     <div class="startup-splash" id="startup-splash" aria-hidden="true"><img src="./assets/brevia-logo-reveal.gif" alt="" /><span class="startup-credit">Powered by zerolovesea</span></div>
     <main class="app-shell" aria-live="polite">
       <aside class="sidebar" aria-label="主导航">
-        <button class="brand" data-view="home" aria-label="Brevia 首页"><img src="./assets/brevia-logo.svg" alt="brevia" /></button>
-        <button class="new-meeting" data-view="prepare"><span>+</span> 开始会议</button>
+        <button class="brand" data-view="home" aria-label="Brevia 首页"><span class="brand-mark" aria-hidden="true">言</span><img src="./assets/brevia-logo.svg" alt="brevia" /></button>
+        <button class="new-meeting" data-view="prepare"><span class="new-meeting-icon">+</span><span class="new-meeting-label">开始会议</span></button>
         <nav>
           <div class="workspace-container"></div>
           <button class="nav-item active" id="all-meetings" data-view="home" aria-expanded="true"><span>⌂</span> 所有会议</button>
@@ -39,7 +45,7 @@
 
         <section class="view" id="live-view">
           <header class="live-header"><div class="live-title"><strong id="live-name">会议</strong><div class="live-status"><span class="recording"><i></i> 正在录制</span><time id="timer">00:00:00</time><span class="save-state" id="save-state"><svg class="check-icon" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3 8.5 3.2 3.2L13 4.5" /></svg> <span>已保存</span></span></div></div><div class="live-caption-controls"><button class="floating-caption-toggle" id="floating-caption-toggle" data-enabled="false" title="悬浮字幕">字幕</button><button class="translation-toggle" id="translation-toggle" data-enabled="false">译文: 关</button></div><button class="pause-button" id="pause">Ⅱ 暂停</button><button class="end-button" id="end-meeting">结束会议</button></header>
-          <div class="live-layout"><section class="live-notes"><header class="live-section-head"><p class="eyebrow">我的笔记</p><div class="notes-mode-tabs"><button class="notes-mode-tab is-active" data-notes-mode="rich" type="button">富文本</button><button class="notes-mode-tab" data-notes-mode="markdown" type="button">Markdown</button></div><button class="live-mode-toggle" data-toggle-live-mode="caption" type="button"><span>展开字幕</span> ↗</button></header><div data-live-notes-root></div></section><section class="live-captions"><header class="live-section-head"><p class="eyebrow">实时字幕</p><button class="live-mode-toggle" data-toggle-live-mode="notes" type="button"><span>返回笔记</span> ←</button></header><div class="transcript-scroll" id="transcript-scroll"></div><button class="back-to-latest" id="back-to-latest" type="button" hidden><span>↓</span> <span>回到最新</span></button></section></div>
+          <div class="live-layout"><section class="live-notes"><header class="live-section-head"><p class="eyebrow">我的笔记</p><button class="ai-assist-toggle" data-ai-assist-toggle type="button" aria-haspopup="true" aria-expanded="false"><span class="ai-assist-toggle-star">✦</span> <span data-ai-assist-toggle-label>AI 辅助</span></button><button class="text-button" data-ai-request type="button" hidden>请求建议</button><button class="live-mode-toggle" data-toggle-live-mode="caption" type="button"><span>展开字幕</span> →</button></header><div class="ai-suggestion" data-ai-suggestion hidden></div><div data-live-notes-root><div class="ai-assist-empty" data-ai-assist-empty hidden></div></div></section><section class="live-captions"><header class="live-section-head"><p class="eyebrow">实时字幕</p><button class="live-mode-toggle" data-toggle-live-mode="notes" type="button"><span>返回笔记</span> ←</button></header><div class="transcript-scroll" id="transcript-scroll"></div><button class="back-to-latest" id="back-to-latest" type="button" hidden><span>↓</span> <span>回到最新</span></button></section></div>
         </section>
 
         <section class="view" id="detail-view">

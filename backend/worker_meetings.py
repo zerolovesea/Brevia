@@ -2,7 +2,7 @@
 
 import time
 
-from .worker_common import require, synchronized_recording
+from .worker_common import require
 
 
 class MeetingCommandMixin:
@@ -22,7 +22,6 @@ class MeetingCommandMixin:
         while self.tasks.has_for_meeting(meeting_id) and time.monotonic() < deadline:
             time.sleep(0.05)
 
-    @synchronized_recording
     def delete_meeting(self, payload):
         """删除非活动会议。
 
@@ -30,7 +29,8 @@ class MeetingCommandMixin:
         若会议有正在运行的后台任务，先请求取消再删除，不再阻塞用户。
         """
         require(payload, "meeting_id")
-        if payload["meeting_id"] == self.active:
+        # 删除不能排在实时音频处理之后；读取活动 ID 不需要占用录音锁。
+        if payload["meeting_id"] == self.state._active:
             raise ValueError("Stop the active meeting before deleting it")
         if self.tasks.has_for_meeting(payload["meeting_id"]):
             self._cancel_meeting_tasks(payload["meeting_id"])
@@ -51,11 +51,11 @@ class MeetingCommandMixin:
         self.store.soft_delete(payload["meeting_id"], restore=True)
         return self.store.get_meeting(payload["meeting_id"])
 
-    @synchronized_recording
     def purge_meeting(self, payload):
         """永久删除最近删除中的会议及其全部本地文件。"""
         require(payload, "meeting_id")
-        if payload["meeting_id"] == self.active:
+        # 同上：彻底删除也必须能立即取消目标会议的后台任务。
+        if payload["meeting_id"] == self.state._active:
             raise ValueError("Stop the active meeting before deleting it")
         if self.tasks.has_for_meeting(payload["meeting_id"]):
             self._cancel_meeting_tasks(payload["meeting_id"], timeout=5.0)

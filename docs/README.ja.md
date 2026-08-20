@@ -117,7 +117,7 @@ Brevia は厳密なローカルファースト設計に従います：
 | 話者埋め込み | 3D-Speaker ERes2Net Base | 汎用 |
 | ソース分離 | Spleeter 2 Stems | 汎用 |
 
-LLM 要約では「内蔵 AI」を選ぶとバンドルされた GGUF モデル（Qwen 3.5 2B / 4B、Gemma 3 1B / 4B）をローカルで実行できます。Claude、OpenAI、OpenRouter、または OpenAI Chat Completions / Anthropic Messages に対応した独自サービス（Gemini の OpenAI 互換エンドポイント、DeepSeek、Kimi、Qwen など）も利用可能です。
+LLM 要約では「内蔵 AI」を選ぶとバンドルされた GGUF モデル（Qwen 3.5 2B / 4B）をローカルで実行できます。Claude、OpenAI、OpenRouter、または OpenAI Chat Completions / Anthropic Messages に対応した独自サービス（Gemini の OpenAI 互換エンドポイント、DeepSeek、Kimi、Qwen など）も利用可能です。
 
 ## ローカル開発
 

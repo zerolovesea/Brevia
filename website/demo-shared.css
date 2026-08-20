@@ -19,7 +19,8 @@
   width: 100%;
   aspect-ratio: 16 / 10;
   overflow: hidden;
-  border: 1px solid #e5e5e5;
+  border: 1px solid #d6d6d6;
+  background: #fcfcfc;
 }
 
 /* Virtual Cursor */
@@ -290,22 +291,4 @@
 .demo-caption-overlay .caption-finalized.hidden,
 .demo-caption-overlay .caption-translation.hidden {
   display: none;
-}
-
-/* Demo panel layout fixes — prevent overlap when scaled */
-.demo-viewport .live-panel {
-  display: flex !important;
-  flex-direction: column !important;
-  gap: 24px;
-  overflow-y: auto !important;
-  grid-template-rows: none !important;
-}
-
-.demo-viewport .live-panel > section {
-  flex: 0 0 auto;
-}
-
-.demo-viewport .live-settings {
-  display: grid !important;
-  gap: 12px;
 }
