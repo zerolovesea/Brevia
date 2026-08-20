@@ -35,7 +35,8 @@ CREATE TABLE IF NOT EXISTS meetings (
   archived_at TEXT,
   deleted_at TEXT,
   is_example INTEGER NOT NULL DEFAULT 0,
-  example_locale TEXT
+  example_locale TEXT,
+  notes TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS segments (
   id TEXT NOT NULL,
@@ -125,9 +126,14 @@ def synchronized_storage_files(method):
     return synchronized
 
 
+# 数据库结构版本：用 PRAGMA user_version 记录。结构迁移只在版本落后时执行一次，
+# 达标后启动热路径不再重复 PRAGMA 列检查；数据级清理（示例工作区等）仍按需运行。
+CURRENT_SCHEMA_VERSION = 1
+
+
 class StoreBase:
     def __init__(self, root):
-        """创建数据目录、打开数据库并执行向后兼容的轻量迁移。
+        """创建数据目录、打开数据库并执行向后兼容的迁移。
 
         Args:
             root: Brevia 数据根目录；支持 ``~``。
@@ -145,88 +151,106 @@ class StoreBase:
         self.storage_file_lock = threading.RLock()
         self.db_path = self.root / "brevia.db"
         with self.connect() as db:
-            had_workspaces = db.execute(
-                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='workspaces'"
-            ).fetchone()
             db.executescript(SCHEMA)
-            segment_key = [
-                row["name"]
-                for row in db.execute("PRAGMA table_info(segments)")
-                if row["pk"]
-            ]
-            if segment_key == ["id", "version"]:
-                # 重建表以把 meeting_id 并入主键；必须连同 word_timestamps 一并迁移，
-                # 否则从中间版本升级会静默丢失全部词级时间戳。
-                db.execute(
-                    "CREATE TABLE segments_new ("
-                    "id TEXT NOT NULL, meeting_id TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE, "
-                    "revision INTEGER NOT NULL DEFAULT 0, version TEXT NOT NULL, track TEXT NOT NULL, "
-                    "start_ms INTEGER NOT NULL, end_ms INTEGER NOT NULL, speaker TEXT NOT NULL, text TEXT NOT NULL, "
-                    "word_timestamps TEXT, translation TEXT, user_edited INTEGER NOT NULL DEFAULT 0, "
-                    "PRIMARY KEY (meeting_id, id, version))"
-                )
-                db.execute(
-                    "INSERT INTO segments_new SELECT id,meeting_id,revision,version,track,start_ms,end_ms,"
-                    "speaker,text,word_timestamps,translation,user_edited FROM segments"
-                )
-                db.execute("DROP TABLE segments")
-                db.execute("ALTER TABLE segments_new RENAME TO segments")
-                db.execute("CREATE INDEX segments_meeting_time ON segments(meeting_id, start_ms)")
-            columns = {row["name"] for row in db.execute("PRAGMA table_info(meetings)")}
-            if "workspace_id" not in columns:
-                db.execute(
-                    "ALTER TABLE meetings ADD COLUMN workspace_id TEXT REFERENCES workspaces(id) ON DELETE SET NULL"
-                )
-            if "previous_workspace_id" not in columns:
-                db.execute("ALTER TABLE meetings ADD COLUMN previous_workspace_id TEXT")
-            if "is_example" not in columns:
-                db.execute(
-                    "ALTER TABLE meetings ADD COLUMN is_example INTEGER NOT NULL DEFAULT 0"
-                )
-            workspace_columns = {row["name"] for row in db.execute("PRAGMA table_info(workspaces)")}
-            if "deleted_at" not in workspace_columns:
-                db.execute("ALTER TABLE workspaces ADD COLUMN deleted_at TEXT")
-            if "example_locale" not in columns:
-                db.execute("ALTER TABLE meetings ADD COLUMN example_locale TEXT")
-            if "speaker_segmentation_model_id" not in columns:
-                db.execute(
-                    "ALTER TABLE meetings ADD COLUMN speaker_segmentation_model_id TEXT"
-                )
-            if "num_speakers" not in columns:
-                db.execute(
-                    "ALTER TABLE meetings ADD COLUMN num_speakers INTEGER NOT NULL DEFAULT -1"
-                )
-            if "power_saving" not in columns:
-                db.execute(
-                    "ALTER TABLE meetings ADD COLUMN power_saving INTEGER NOT NULL DEFAULT 0"
-                )
-            if "vad_model_id" not in columns:
-                db.execute("ALTER TABLE meetings ADD COLUMN vad_model_id TEXT")
-            segment_columns = {row["name"] for row in db.execute("PRAGMA table_info(segments)")}
-            if "word_timestamps" not in segment_columns:
-                db.execute("ALTER TABLE segments ADD COLUMN word_timestamps TEXT")
-            speaker_columns = {
-                row["name"] for row in db.execute("PRAGMA table_info(speakers)")
-            }
-            if "profile_id" not in speaker_columns:
-                db.execute("ALTER TABLE speakers ADD COLUMN profile_id TEXT")
-            sample_columns = {
-                row["name"]
-                for row in db.execute("PRAGMA table_info(speaker_profile_samples)")
-            }
-            if "audio_path" not in sample_columns:
-                db.execute(
-                    "ALTER TABLE speaker_profile_samples ADD COLUMN audio_path TEXT"
-                )
-            if "duration_ms" not in sample_columns:
-                db.execute(
-                    "ALTER TABLE speaker_profile_samples ADD COLUMN duration_ms INTEGER NOT NULL DEFAULT 0"
-                )
+            self._migrate_schema(db)
+            # 示例会议始终属于公开区：数据级防御清理，每次启动保持（依赖用户数据状态）。
             self._clear_example_workspaces(db)
-            if not had_workspaces or db.execute(
-                "SELECT 1 FROM meetings WHERE category != '' AND is_example=0 LIMIT 1"
-            ).fetchone():
-                self._migrate_categories_to_workspaces(db)
+
+    def _migrate_schema(self, db):
+        """执行 user_version 控制的一次性结构迁移；达到目标版本后直接跳过。
+
+        历史列补丁与 segments 主键重建只在版本落后时运行一次，避免每次启动
+        重复 PRAGMA 元数据检查；数据级清理（示例工作区等）仍在 __init__ 按需执行。
+        """
+        version = db.execute("PRAGMA user_version").fetchone()[0]
+        if version >= CURRENT_SCHEMA_VERSION:
+            return
+        if version < 1:
+            self._migrate_v1(db)
+        db.execute(f"PRAGMA user_version = {CURRENT_SCHEMA_VERSION}")
+
+    def _migrate_v1(self, db):
+        """v0 → v1：segments 主键并入 meeting_id、各表补列、旧分类迁移到工作区。"""
+        segment_key = [
+            row["name"] for row in db.execute("PRAGMA table_info(segments)") if row["pk"]
+        ]
+        if segment_key == ["id", "version"]:
+            # 重建表以把 meeting_id 并入主键；必须连同 word_timestamps 一并迁移，
+            # 否则从中间版本升级会静默丢失全部词级时间戳。
+            db.execute(
+                "CREATE TABLE segments_new ("
+                "id TEXT NOT NULL, meeting_id TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE, "
+                "revision INTEGER NOT NULL DEFAULT 0, version TEXT NOT NULL, track TEXT NOT NULL, "
+                "start_ms INTEGER NOT NULL, end_ms INTEGER NOT NULL, speaker TEXT NOT NULL, text TEXT NOT NULL, "
+                "word_timestamps TEXT, translation TEXT, user_edited INTEGER NOT NULL DEFAULT 0, "
+                "PRIMARY KEY (meeting_id, id, version))"
+            )
+            db.execute(
+                "INSERT INTO segments_new SELECT id,meeting_id,revision,version,track,start_ms,end_ms,"
+                "speaker,text,word_timestamps,translation,user_edited FROM segments"
+            )
+            db.execute("DROP TABLE segments")
+            db.execute("ALTER TABLE segments_new RENAME TO segments")
+            db.execute("CREATE INDEX segments_meeting_time ON segments(meeting_id, start_ms)")
+        columns = {row["name"] for row in db.execute("PRAGMA table_info(meetings)")}
+        if "workspace_id" not in columns:
+            db.execute(
+                "ALTER TABLE meetings ADD COLUMN workspace_id TEXT REFERENCES workspaces(id) ON DELETE SET NULL"
+            )
+        if "previous_workspace_id" not in columns:
+            db.execute("ALTER TABLE meetings ADD COLUMN previous_workspace_id TEXT")
+        if "is_example" not in columns:
+            db.execute(
+                "ALTER TABLE meetings ADD COLUMN is_example INTEGER NOT NULL DEFAULT 0"
+            )
+        workspace_columns = {row["name"] for row in db.execute("PRAGMA table_info(workspaces)")}
+        if "deleted_at" not in workspace_columns:
+            db.execute("ALTER TABLE workspaces ADD COLUMN deleted_at TEXT")
+        if "example_locale" not in columns:
+            db.execute("ALTER TABLE meetings ADD COLUMN example_locale TEXT")
+        if "notes" not in columns:
+            db.execute(
+                "ALTER TABLE meetings ADD COLUMN notes TEXT NOT NULL DEFAULT ''"
+            )
+        if "speaker_segmentation_model_id" not in columns:
+            db.execute(
+                "ALTER TABLE meetings ADD COLUMN speaker_segmentation_model_id TEXT"
+            )
+        if "num_speakers" not in columns:
+            db.execute(
+                "ALTER TABLE meetings ADD COLUMN num_speakers INTEGER NOT NULL DEFAULT -1"
+            )
+        if "power_saving" not in columns:
+            db.execute(
+                "ALTER TABLE meetings ADD COLUMN power_saving INTEGER NOT NULL DEFAULT 0"
+            )
+        if "vad_model_id" not in columns:
+            db.execute("ALTER TABLE meetings ADD COLUMN vad_model_id TEXT")
+        segment_columns = {row["name"] for row in db.execute("PRAGMA table_info(segments)")}
+        if "word_timestamps" not in segment_columns:
+            db.execute("ALTER TABLE segments ADD COLUMN word_timestamps TEXT")
+        speaker_columns = {
+            row["name"] for row in db.execute("PRAGMA table_info(speakers)")
+        }
+        if "profile_id" not in speaker_columns:
+            db.execute("ALTER TABLE speakers ADD COLUMN profile_id TEXT")
+        sample_columns = {
+            row["name"]
+            for row in db.execute("PRAGMA table_info(speaker_profile_samples)")
+        }
+        if "audio_path" not in sample_columns:
+            db.execute(
+                "ALTER TABLE speaker_profile_samples ADD COLUMN audio_path TEXT"
+            )
+        if "duration_ms" not in sample_columns:
+            db.execute(
+                "ALTER TABLE speaker_profile_samples ADD COLUMN duration_ms INTEGER NOT NULL DEFAULT 0"
+            )
+        # 旧分类迁移到工作区：升级时一次性处理 category 残留（新库无数据，检查直接跳过）。
+        if db.execute(
+            "SELECT 1 FROM meetings WHERE category != '' AND is_example=0 LIMIT 1"
+        ).fetchone():
+            self._migrate_categories_to_workspaces(db)
 
     @contextmanager
     def connect(self):

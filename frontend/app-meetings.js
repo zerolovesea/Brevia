@@ -10,6 +10,8 @@ function backendMeeting(item) {
     } : null,
     tags: item.tags, status: {}, deleted: Boolean(item.deleted_at),
     isExample: Boolean(item.is_example), exampleLocale: item.example_locale,
+    hasSummary: Boolean(item.has_summary),
+    speakerCount: Number(item.speaker_count || 0),
   };
 }
 

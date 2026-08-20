@@ -425,7 +425,7 @@ function showWorkspaceAssignMenu(meetingIndex, anchorRect) {
                 class="menu-item ${meeting.workspaceId === workspace.id ? 'active' : ''}">
           <span class="workspace-icon">${workspace.id ? '◆' : '⊕'}</span>
           <span>${escapeHtml(workspace.name)}</span>
-          ${meeting.workspaceId === workspace.id ? '<span class="check">✓</span>' : ''}
+          ${meeting.workspaceId === workspace.id ? `<span class="check">${checkIconSvg}</span>` : ''}
         </button>
       `).join('')}
     </div>

@@ -107,9 +107,29 @@ class WorkerTest(unittest.TestCase):
         meeting = self.worker.start({"title": "legacy", "language": "zh", "streaming_model_id": "zipformer-zh-xlarge-streaming-int8", "refined_model_id": "qwen3-asr-0.6b-int8"})
         with self.worker.store.connect() as db:
             db.execute("UPDATE meetings SET category='Legacy', workspace_id=NULL WHERE id=?", (meeting["id"],))
+            # 模拟旧版数据库：user_version 为 0，下一次初始化应执行一次性结构迁移。
+            db.execute("PRAGMA user_version = 0")
         migrated = Store(self.temp.name).get_meeting(meeting["id"])
         self.assertEqual(migrated["category"], "")
         self.assertEqual(Store(self.temp.name).get_workspace(migrated["workspace_id"])["name"], "Legacy")
+
+    def test_schema_migration_runs_once_and_is_idempotent(self):
+        """结构迁移按 user_version 只执行一次：升级库迁移、已迁移库跳过。"""
+        meeting = self.worker.start({"title": "migrate", "language": "zh", "streaming_model_id": "zipformer-zh-xlarge-streaming-int8", "refined_model_id": "qwen3-asr-0.6b-int8"})
+        with self.worker.store.connect() as db:
+            db.execute("UPDATE meetings SET category='Old', workspace_id=NULL WHERE id=?", (meeting["id"],))
+        with Store(self.temp.name).connect() as db:
+            # 模拟旧版库：结构落后 + category 残留。
+            db.execute("PRAGMA user_version = 0")
+        store = Store(self.temp.name)
+        self.assertEqual(store.get_meeting(meeting["id"])["category"], "")
+        with store.connect() as db:
+            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 1)
+        # 已迁移到目标版本后，再次初始化不再触碰 category 残留（一次性迁移语义）。
+        with store.connect() as db:
+            db.execute("UPDATE meetings SET category='Stale' WHERE id=?", (meeting["id"],))
+        Store(self.temp.name)
+        self.assertEqual(Store(self.temp.name).get_meeting(meeting["id"])["category"], "Stale")
 
     def test_example_workspace_is_not_shown_as_a_real_workspace(self):
         workspace = self.worker.store.create_workspace({"name": "Example"})
@@ -525,6 +545,188 @@ class WorkerTest(unittest.TestCase):
         self.assertEqual(len(prompts), 2)
         self.assertIn("确认下周发布", prompts[-1])
 
+    def test_summary_retries_empty_response_once(self):
+        meeting = self.worker.start(
+            {
+                "title": "空响应重试",
+                "language": "zh",
+                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
+                "refined_model_id": "qwen3-asr-0.6b-int8",
+            }
+        )
+        self.worker.store.save_segment(
+            {
+                "meeting_id": meeting["id"],
+                "segment_id": "mic-0",
+                "text": "确认下周发布",
+                "start_ms": 0,
+                "end_ms": 1000,
+                "speaker": "spk-1",
+            }
+        )
+        prompts = []
+
+        def complete(_payload, prompt, **_kwargs):
+            prompts.append(prompt)
+            if len(prompts) == 1:
+                return "   "
+            return "# **空响应重试成功**"
+
+        self.worker.llm_complete = complete
+        payload = {
+            "meeting_id": meeting["id"],
+            "provider": "OpenAI",
+            "endpoint": "https://example.test/chat",
+            "model": "gpt",
+            "consent": True,
+            "language": "zh",
+        }
+        result = self.worker.summarize(payload)
+        self.assertEqual(len(prompts), 2)
+        self.assertIn("空响应重试成功", result["markdown"])
+
+    def test_summary_chunks_long_transcript(self):
+        meeting = self.worker.start(
+            {
+                "title": "超长转录分段",
+                "language": "zh",
+                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
+                "refined_model_id": "qwen3-asr-0.6b-int8",
+            }
+        )
+        self.worker.store.save_segment(
+            {
+                "meeting_id": meeting["id"],
+                "segment_id": "mic-0",
+                "text": "内容" * 8000,
+                "start_ms": 0,
+                "end_ms": 1000,
+                "speaker": "spk-1",
+            }
+        )
+        prompts = []
+
+        def complete(_payload, prompt, **_kwargs):
+            prompts.append(prompt)
+            return "# **块纪要**"
+
+        self.worker.llm_complete = complete
+        payload = {
+            "meeting_id": meeting["id"],
+            "provider": "OpenAI",
+            "endpoint": "https://example.test/chat",
+            "model": "gpt",
+            "consent": True,
+            "language": "zh",
+        }
+        self.worker.summarize(payload)
+        # 长转录走分段：每块一次块级摘要 + 一次合并。
+        self.assertGreaterEqual(len(prompts), 3)
+        self.assertIn("<partial summaries>", prompts[-1])
+        self.assertIn("<transcript>", prompts[0])
+        # 每个块级提示词都要小于单次生成的转录上限，避免超出上下文。
+        for prompt in prompts[:-1]:
+            self.assertLess(len(prompt), 14000)
+        # 结果保存为合并后的 markdown。
+        result = self.worker.store.get_meeting(meeting["id"])["summary"]["data"]
+        self.assertIn("# **块纪要**", result["markdown"])
+
+    def test_summary_warns_when_transcript_truncated(self):
+        meeting = self.worker.start(
+            {
+                "title": "超长转录截断提示",
+                "language": "zh",
+                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
+                "refined_model_id": "qwen3-asr-0.6b-int8",
+            }
+        )
+        # 转录远超 MAX_SUMMARY_CHUNKS * SUMMARY_CHUNK_CHARS，必然触发截断。
+        self.worker.store.save_segment(
+            {
+                "meeting_id": meeting["id"],
+                "segment_id": "mic-0",
+                "text": "内容" * 60000,
+                "start_ms": 0,
+                "end_ms": 1000,
+                "speaker": "spk-1",
+            }
+        )
+        prompts = []
+
+        def complete(_payload, prompt, **_kwargs):
+            prompts.append(prompt)
+            return "# **块纪要**"
+
+        self.worker.llm_complete = complete
+        self.worker.summarize(
+            {
+                "meeting_id": meeting["id"],
+                "provider": "OpenAI",
+                "endpoint": "https://example.test/chat",
+                "model": "gpt",
+                "consent": True,
+                "language": "zh",
+            }
+        )
+        # 超出块数上限时向用户发出“纪要未覆盖全部内容”的警告。
+        warnings = [event for event in self.events if event.get("type") == "worker.warning"]
+        self.assertTrue(any("转录过长" in event["payload"]["message"] for event in warnings))
+
+    def test_meeting_speaker_count_reflects_diarization(self):
+        meeting = self.worker.start(
+            {
+                "title": "参与者统计",
+                "language": "zh",
+                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
+                "refined_model_id": "qwen3-asr-0.6b-int8",
+            }
+        )
+        for index, speaker in enumerate(["spk-1", "spk-2", "spk-3"]):
+            self.worker.store.save_segment(
+                {
+                    "meeting_id": meeting["id"],
+                    "segment_id": f"mic-{index}",
+                    "text": f"发言 {index}",
+                    "start_ms": index * 1000,
+                    "end_ms": (index + 1) * 1000,
+                    "speaker": speaker,
+                }
+            )
+        # 未聚类时回退到字幕中 distinct speaker 数。
+        listed = [m for m in self.worker.store.list_meetings() if m["id"] == meeting["id"]][0]
+        self.assertEqual(listed["speaker_count"], 3)
+        # 聚类后（speaker_turns postprocess）优先使用聚类结果。
+        self.worker.store.replace_speaker_turns(
+            meeting["id"],
+            [
+                {"start_ms": 0, "end_ms": 1000, "speaker": "spk-1"},
+                {"start_ms": 1000, "end_ms": 2000, "speaker": "spk-2"},
+                {"start_ms": 2000, "end_ms": 3000, "speaker": "spk-1"},
+            ],
+        )
+        listed = [m for m in self.worker.store.list_meetings() if m["id"] == meeting["id"]][0]
+        self.assertEqual(listed["speaker_count"], 2)
+        fetched = self.worker.store.get_meeting(meeting["id"])
+        self.assertEqual(fetched["speaker_count"], 2)
+
+    def test_meeting_notes_persist_through_update(self):
+        meeting = self.worker.start(
+            {
+                "title": "笔记持久化",
+                "language": "zh",
+                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
+                "refined_model_id": "qwen3-asr-0.6b-int8",
+            }
+        )
+        notes = "# 要点\n\n- 发布计划\n- 风险：网络"
+        updated = self.worker.store.update_meeting(meeting["id"], {"notes": notes})
+        self.assertEqual(updated["notes"], notes)
+        fetched = self.worker.store.get_meeting(meeting["id"])
+        self.assertEqual(fetched["notes"], notes)
+        # 超长笔记应被截断到存储上限。
+        truncated = self.worker.store.update_meeting(meeting["id"], {"notes": "字" * 30000})
+        self.assertLessEqual(len(truncated["notes"]), 20000)
+
     def test_summary_authentication_error_remains_actionable(self):
         meeting = self.worker.start(
             {
@@ -588,6 +790,39 @@ class WorkerTest(unittest.TestCase):
         self.assertNotIn("print-brand", printed)
         self.assertIn("<h2>行动项</h2>", printed)
         self.assertNotIn("## **行动项**", printed)
+
+    def test_mynotes_exports_markdown_and_pdf(self):
+        meeting = self.worker.start(
+            {
+                "title": "我的笔记导出",
+                "language": "zh",
+                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
+                "refined_model_id": "qwen3-asr-0.6b-int8",
+            }
+        )
+        self.worker.store.update_meeting(
+            meeting["id"], {"notes": "# 要点\n\n- 发布计划\n- 风险：网络"}
+        )
+        for export_format in ("md", "txt"):
+            exported = self.worker.export(
+                {
+                    "meeting_id": meeting["id"],
+                    "content": "mynotes",
+                    "format": export_format,
+                }
+            )
+            self.assertIn("发布计划", Path(exported["path"]).read_text())
+        pdf = self.worker.export(
+            {"meeting_id": meeting["id"], "content": "mynotes", "format": "pdf"}
+        )
+        printed = Path(pdf["path"]).read_text()
+        self.assertIn("<h1>要点</h1>", printed)
+        # 没有笔记时给出可读错误。
+        self.worker.store.update_meeting(meeting["id"], {"notes": ""})
+        with self.assertRaisesRegex(ValueError, "会议中没有记录笔记"):
+            self.worker.export(
+                {"meeting_id": meeting["id"], "content": "mynotes", "format": "md"}
+            )
 
     def test_llm_client_supports_openai_and_anthropic_shapes(self):
         class Response:

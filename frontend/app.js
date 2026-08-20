@@ -94,7 +94,7 @@ function revealTaskCard(card) {
   card.hidden = false;
   if (wasHidden || wasLeaving) { taskCards.append(card); enterTaskCard(card); }
 }
-const { catalog, refinedModelOptionTags, streamingModelOptionTags, appCopy: { stageLabels, themeLabels, updateLabels, modalCopy, modelLabels, summaryModelCopy, speakerProfileCopy, voiceFeaturesCopy } } = window.BreviaLocaleData;
+const { catalog, streamingModelOptionTags, appCopy: { stageLabels, themeLabels, updateLabels, modalCopy, modelLabels, summaryModelCopy, speakerProfileCopy, voiceFeaturesCopy } } = window.BreviaLocaleData;
 if (new URLSearchParams(location.search).has('resetOnboarding')) localStorage.removeItem('brevia-onboarding-complete');
 let locale = localStorage.getItem('brevia-language') || 'zh';
 let theme = localStorage.getItem('brevia-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
@@ -110,7 +110,6 @@ document.addEventListener('scroll', (event) => {
   scrollingTimers.set(scroller, setTimeout(() => scroller.classList.remove('is-scrolling'), 2000));
 }, true);
 let activeLibraryNav = 'all-meetings';
-const liveSpeakers = new Map();
 const liveSegments = new Map();
 const liveSegmentRevisions = new Map();
 const maxLiveSegments = 500;
@@ -124,6 +123,10 @@ let liveConfig = { language: 'auto', streaming_model_id: '', refined_model_id: '
 let translationAllowed = false;
 let latestLiveSegmentId = null;
 let editingMeetingIndex = null;
+// 详情页状态：当前字幕视图（精修/原始）、激活 tab、编辑前笔记（取消时恢复）。
+let detailTranscriptView = 'refined';
+let detailActiveTab = 'notes';
+let detailNotesBeforeEdit = '';
 const translatedNodes = [];
 let floatingCaptionMode = null;
 let floatingCaptionLocale = locale;
@@ -435,7 +438,7 @@ function renderAdvancedSettings(settings) {
 }
 /** 构建权限部分的一行：状态标记、标签、提示和上下文操作按钮。*/
 function permissionRow(kind, label, detail, granted, denied, active, unsupported) {
-  const state = granted ? '✓' : '—';
+  const state = granted ? checkIconSvg : '—';
   const hint = unsupported ? t('当前系统不支持直接录制系统音频，请仅使用麦克风') : granted ? t('已允许') : denied ? t('请在系统设置中开启此权限') : detail;
   const action = granted || unsupported ? ''
     : active ? `<button class="modal-action permission-setting-action" data-request-permission="${kind}" type="button">${t('允许')}</button>`
@@ -485,9 +488,13 @@ function syncMeetingSelection(updateToolbar = true) {
   batchToolbar.querySelector('[data-batch-clear]').textContent = t('取消');
   const selectAllButton = document.querySelector('#meeting-select-all');
   if (selectAllButton) {
-    const visibleRows = rows.filter((row) => !row.hidden);
-    const allSelected = visibleRows.length > 0 && visibleRows.every((row) => selectedMeetingKeys.has(row.dataset.selectionKey));
-    selectAllButton.textContent = allSelected ? t('取消全选') : t('全选');
+    // 「全选」只在进入批量管理模式（已有选中）后出现，默认不占视觉。
+    selectAllButton.hidden = selectedMeetingKeys.size === 0;
+    if (selectedMeetingKeys.size > 0) {
+      const visibleRows = rows.filter((row) => !row.hidden);
+      const allSelected = visibleRows.length > 0 && visibleRows.every((row) => selectedMeetingKeys.has(row.dataset.selectionKey));
+      selectAllButton.textContent = allSelected ? t('取消全选') : t('全选');
+    }
   }
 }
 const selectedMeetings = () => uiData.meetings.filter((meeting, index) => selectedMeetingKeys.has(meeting.id || String(index)));
@@ -517,8 +524,15 @@ function localizeMeeting(meeting) {
     meta: `${created} · ${minutes} ${t('分钟')}`,
     status: meeting.statusCode === 'recording'
       ? { tone: 'processing', label: t('正在录制'), detail: t('本地保存') }
-      : { tone: 'complete', label: t('已整理'), detail: t('本地录音') },
+      : { tone: 'complete', label: t('已整理'), detail: meetingSecondaryInfo(meeting) },
   };
+}
+/** 已完成会议的价值信息：参与者数与纪要状态，比“本地录音”更有判断价值。@param {object} meeting 会议数据。@returns {string} 次要信息文本。*/
+function meetingSecondaryInfo(meeting) {
+  const parts = [];
+  if (meeting.speakerCount > 0) parts.push(`${meeting.speakerCount} ${t('位参与者')}`);
+  if (meeting.hasSummary) parts.push(t('已生成纪要'));
+  return parts.length ? parts.join(' · ') : t('本地录音');
 }
 /** 仅重新渲染会议列表，保留设置模态框事件绑定。@returns {void} */
 function renderMeetingList() { document.querySelector('.meeting-list').innerHTML = uiData.meetings.map((meeting, index) => !meeting.isExample || meeting.exampleLocale === locale ? renderMeetingRow(localizeMeeting(meeting), index) : '').join(''); filterMeetings(); syncMeetingSelection(); cacheMeetingList(); }
@@ -575,6 +589,10 @@ function renderPrepareSelects() {
   prepareForm.querySelector('.primary-action').firstChild.nodeValue = `${t('开始录制')} `;
   importRecording.textContent = t('导入录音');
   prepareModelCard.querySelector('#active-vad-model').previousElementSibling.textContent = t('VAD 模型');
+  // 右侧摘要只保留普通用户关心的“当前模式”：语言与会议模式（省电与否）。
+  const languageName = values['meeting-language'] === 'auto' ? t('自动检测') : new Intl.DisplayNames([locale], { type: 'language' }).of(values['meeting-language'] || locale);
+  prepareModelCard.querySelector('#active-meeting-language').textContent = languageName;
+  prepareModelCard.querySelector('#active-meeting-mode').textContent = powerSaving ? t('省电模式') : t('标准模式');
   requestAnimationFrame(fitPrepareLayout);
 }
 function selectCurrentWorkspaceForMeeting() {
@@ -594,19 +612,6 @@ function modelChoices(id) {
   if (id !== 'active-refined-model') return prepareModelChoices[id];
   return [['', null], ...modelCatalog.filter((model) => model.stages?.includes('refined') && !removedRefinedModelIds.has(model.id)).map((model) => [model.id, model.name])];
 }
-const refinedModelOptionMeta = {
-  'qwen3-asr-0.6b-int8': 'Qwen3-ASR 0.6B',
-  'funasr-nano-int8': 'FunASR Nano',
-  'whisper-large-v3': 'Whisper Large v3',
-};
-function renderRefinedModelChoices() {
-  const options = document.querySelector('.detail-refine .flow-select-options');
-  if (!options) return;
-  const tags = refinedModelOptionTags[locale] || refinedModelOptionTags.en;
-  const speakerCount = `<label class="refine-speaker-count"><span>${t('会议人数')}</span><input type="number" min="1" step="1" inputmode="numeric" data-refine-num-speakers placeholder="${t('留空自动识别')}" /></label>`;
-  options.innerHTML = speakerCount + Object.entries(refinedModelOptionMeta).filter(([id]) => modelCatalog.some((model) => model.id === id)).map(([id, name]) => `<button type="button" data-refine-model="${escapeHtml(id)}"><b>${escapeHtml(name)}</b><span class="model-library-tags">${tags[id].map((tag) => `<span>${escapeHtml(tag)}</span>`).join('')}</span></button>`).join('');
-}
-renderRefinedModelChoices();
 function flowSelectWithTags(name, value, options, tagsFor) {
   const selected = options.find(([option]) => option === value) || options[0] || ['', ''];
   const disabled = options.length === 0;
@@ -654,7 +659,7 @@ function applyLanguageModelDefaults(language) {
   setPrepareModel('active-diarization-model', models.segmentation);
 }
 const prepareModelCard = document.querySelector('.model-card');
-prepareModelCard.querySelector('dl').insertAdjacentHTML('beforeend', `<div><dt>${t('VAD 模型')}</dt><dd id="active-vad-model" data-model="silero-vad">Silero VAD</dd></div>`);
+prepareModelCard.querySelector('.model-detail-list').insertAdjacentHTML('beforeend', `<div><dt>${t('VAD 模型')}</dt><dd id="active-vad-model" data-model="silero-vad">Silero VAD</dd></div>`);
 const modelPicker = document.createElement('div');
 modelPicker.className = 'flow-select-options model-picker';
 modelPicker.hidden = true;
@@ -681,10 +686,10 @@ if (breviaClient) {
     document.querySelectorAll('#mic-level, [data-onboarding-mic-level]').forEach((meter) => meter.style.setProperty('--level', Math.max(.04, level)));
   };
 }
-/** 设置录音源状态徽标：授权正常显示 ✓ 与状态，异常显示 — 并把解释放回提示行。@returns {void} */
+/** 设置录音源状态徽标：授权正常显示勾选图标与状态，异常显示 — 并把解释放回提示行。@returns {void} */
 function setSourceBadge(labelEl, hintEl, { ok, text, hint }) {
   if (labelEl) {
-    labelEl.textContent = `${ok ? '✓ ' : '— '}${text}`;
+    labelEl.innerHTML = `${ok ? checkIconSvg : '— '}${escapeHtml(text)}`;
     labelEl.dataset.tone = ok ? 'ok' : 'warn';
   }
   if (hintEl) {
@@ -861,7 +866,7 @@ async function generateMeetingSummary(meetingId = breviaClient?.state.selectedMe
     hideSummaryProgress();
     if (isSummaryAuthenticationError(error)) showSummaryConfigCard(error);
     else if (error.message === summaryEmptyTranscriptCopy.zh) showToast(summaryEmptyTranscriptCopy[locale] || summaryEmptyTranscriptCopy.en);
-    else if (String(error.message || '').startsWith('Summary generation failed')) showToast(t('纪要服务暂时不可用，请检查网络或稍后重试。'));
+    else if (/Summary response was empty|Summary generation failed/.test(String(error.message || ''))) showToast(t('纪要生成失败：模型未返回有效内容，请稍后重试。'));
     else showToast(error.message);
   }
 }
@@ -1300,17 +1305,20 @@ function sharePanelHtml(context) {
 // 完整 zip,以及无法用复制粘贴还原的格式化 PDF。纯文本 md/txt 交给复制与邮件。
 function exportOptionsHtml(context) {
   const copy = shareCopy[locale] || shareCopy.en;
+  const hasMyNotes = Boolean(String(currentMeetingDetail?.notes || '').trim());
+  const myNotesButtons = hasMyNotes ? `<button type="button" data-share-export data-content="mynotes" data-format="md"><span><b>${escapeHtml(copy.myNotesMd[0])}</b><small>${escapeHtml(copy.myNotesMd[1])}</small></span><strong>.md</strong></button><button type="button" data-share-export data-content="mynotes" data-format="pdf"><span><b>${escapeHtml(copy.myNotesPdf[0])}</b><small>${escapeHtml(copy.myNotesPdf[1])}</small></span><strong>.pdf</strong></button>` : '';
   if (context === 'notes') {
-    // 纪要的 md/txt 已被复制/邮件覆盖;仅保留归档用的 PDF。
-    return `<div class="export-options"><button type="button" data-share-export data-content="notes" data-format="pdf"><span><b>${escapeHtml(copy.notesPdf[0])}</b><small>${escapeHtml(copy.notesPdf[1])}</small></span><strong>.pdf</strong></button></div>`;
+    // 纪要的 md/txt 已被复制/邮件覆盖;仅保留归档用的 PDF,同时提供我的笔记导出。
+    return `<div class="export-options"><button type="button" data-share-export data-content="notes" data-format="pdf"><span><b>${escapeHtml(copy.notesPdf[0])}</b><small>${escapeHtml(copy.notesPdf[1])}</small></span><strong>.pdf</strong></button>${myNotesButtons}</div>`;
   }
   if (context === 'meeting') {
     const hasNotes = Boolean(currentMeetingDetail?.summary?.data?.markdown);
-    return `<div class="export-options"><button type="button" data-share-export data-kind="bundle" data-format="zip"><span><b>${escapeHtml(copy.bundle[0])}</b><small>${escapeHtml(copy.bundle[1])}</small></span><strong>.zip</strong></button>${hasNotes ? `<button type="button" data-share-export data-content="notes" data-format="pdf"><span><b>${escapeHtml(copy.notesPdf[0])}</b><small>${escapeHtml(copy.notesPdf[1])}</small></span><strong>.pdf</strong></button>` : ''}</div>`;
+    return `<div class="export-options"><button type="button" data-share-export data-kind="bundle" data-format="zip"><span><b>${escapeHtml(copy.bundle[0])}</b><small>${escapeHtml(copy.bundle[1])}</small></span><strong>.zip</strong></button>${hasNotes ? `<button type="button" data-share-export data-content="notes" data-format="pdf"><span><b>${escapeHtml(copy.notesPdf[0])}</b><small>${escapeHtml(copy.notesPdf[1])}</small></span><strong>.pdf</strong></button>` : ''}${myNotesButtons}</div>`;
   }
   return `<div class="export-options">
     <button type="button" data-share-export data-content="transcript" data-format="srt"><span><b>${t('字幕文件')}</b><small>${t('标准时间轴字幕')}</small></span><strong>.srt</strong></button>
     <button type="button" data-share-export data-content="audio" data-format="wav" data-track="mix"><span><b>${t('原录音')}</b><small>${t('未修改的会议混音')}</small></span><strong>.wav</strong></button>
+    ${myNotesButtons}
   </div>`;
 }
 const shareCopy = {
@@ -1323,7 +1331,7 @@ const shareCopy = {
       wechat: ['微信', '导出文件并在文件夹中定位'], weibo: ['微博', '打开网页分享'],
       x: ['X', '打开网页分享'], telegram: ['Telegram', '打开网页分享'], whatsapp: ['WhatsApp', '打开网页分享'],
     },
-    bundle: ['完整压缩包', '录音 + 逐字稿 (Markdown / 纯文本)'], notesPdf: ['会议纪要 PDF', '适合归档与分享'],
+    bundle: ['完整压缩包', '录音 + 逐字稿 (Markdown / 纯文本)'], notesPdf: ['会议纪要 PDF', '适合归档与分享'], myNotesMd: ['我的笔记 Markdown', '导出会议中手动记录的笔记'], myNotesPdf: ['我的笔记 PDF', '适合归档与分享'],
   },
   en: {
     contexts: { transcript: 'Export & share', meeting: 'Share meeting', notes: 'Share meeting notes' },
@@ -1334,7 +1342,7 @@ const shareCopy = {
       wechat: ['WeChat', 'Export a file and reveal it'], weibo: ['Weibo', 'Open web share'],
       x: ['X', 'Open web share'], telegram: ['Telegram', 'Open web share'], whatsapp: ['WhatsApp', 'Open web share'],
     },
-    bundle: ['Full bundle', 'Recording + transcript (Markdown / plain text)'], notesPdf: ['Notes PDF', 'Good for archiving and sharing'],
+    bundle: ['Full bundle', 'Recording + transcript (Markdown / plain text)'], notesPdf: ['Notes PDF', 'Good for archiving and sharing'], myNotesMd: ['My notes (Markdown)', 'Export the notes you took during the meeting'], myNotesPdf: ['My notes PDF', 'Good for archiving and sharing'],
   },
   es: {
     contexts: { transcript: 'Exportar y compartir', meeting: 'Compartir reunión', notes: 'Compartir notas' },
@@ -1345,7 +1353,7 @@ const shareCopy = {
       wechat: ['WeChat', 'Exportar un archivo y localizarlo'], weibo: ['Weibo', 'Abrir compartir web'],
       x: ['X', 'Abrir compartir web'], telegram: ['Telegram', 'Abrir compartir web'], whatsapp: ['WhatsApp', 'Abrir compartir web'],
     },
-    bundle: ['Paquete completo', 'Grabación + transcripción (Markdown / texto)'], notesPdf: ['Notas PDF', 'Ideal para archivar y compartir'],
+    bundle: ['Paquete completo', 'Grabación + transcripción (Markdown / texto)'], notesPdf: ['Notas PDF', 'Ideal para archivar y compartir'], myNotesMd: ['Mis notas (Markdown)', 'Exportar las notas tomadas durante la reunión'], myNotesPdf: ['Mis notas PDF', 'Ideal para archivar y compartir'],
   },
   ja: {
     contexts: { transcript: 'エクスポートと共有', meeting: '会議を共有', notes: '会議メモを共有' },
@@ -1356,7 +1364,7 @@ const shareCopy = {
       wechat: ['WeChat', 'ファイルを書き出して表示'], weibo: ['Weibo', 'ウェブ共有を開く'],
       x: ['X', 'ウェブ共有を開く'], telegram: ['Telegram', 'ウェブ共有を開く'], whatsapp: ['WhatsApp', 'ウェブ共有を開く'],
     },
-    bundle: ['完全パッケージ', '録音 + 文字起こし (Markdown / テキスト)'], notesPdf: ['会議メモ PDF', 'アーカイブと共有に最適'],
+    bundle: ['完全パッケージ', '録音 + 文字起こし (Markdown / テキスト)'], notesPdf: ['会議メモ PDF', 'アーカイブと共有に最適'], myNotesMd: ['私のメモ（Markdown）', '会議中に記録したメモを書き出し'], myNotesPdf: ['私のメモ PDF', '保存・共有に最適'],
   },
   ko: {
     contexts: { transcript: '내보내기 및 공유', meeting: '회의 공유', notes: '회의록 공유' },
@@ -1367,7 +1375,7 @@ const shareCopy = {
       wechat: ['위챗', '파일을 내보내고 위치 표시'], weibo: ['웨이보', '웹 공유 열기'],
       x: ['X', '웹 공유 열기'], telegram: ['Telegram', '웹 공유 열기'], whatsapp: ['WhatsApp', '웹 공유 열기'],
     },
-    bundle: ['전체 패키지', '녹음 + 녹취 (Markdown / 텍스트)'], notesPdf: ['회의록 PDF', '보관 및 공유에 적합'],
+    bundle: ['전체 패키지', '녹음 + 녹취 (Markdown / 텍스트)'], notesPdf: ['회의록 PDF', '보관 및 공유에 적합'], myNotesMd: ['내 메모 (Markdown)', '회의 중 작성한 메모 내보내기'], myNotesPdf: ['내 메모 PDF', '보관·공유에 적합'],
   },
   fr: {
     contexts: { transcript: 'Exporter et partager', meeting: 'Partager la réunion', notes: 'Partager les notes' },
@@ -1378,7 +1386,7 @@ const shareCopy = {
       wechat: ['WeChat', 'Exporter un fichier et le localiser'], weibo: ['Weibo', 'Ouvrir le partage web'],
       x: ['X', 'Ouvrir le partage web'], telegram: ['Telegram', 'Ouvrir le partage web'], whatsapp: ['WhatsApp', 'Ouvrir le partage web'],
     },
-    bundle: ['Paquet complet', 'Enregistrement + transcription (Markdown / texte)'], notesPdf: ['Notes PDF', 'Adapté à l’archivage et au partage'],
+    bundle: ['Paquet complet', 'Enregistrement + transcription (Markdown / texte)'], notesPdf: ['Notes PDF', 'Adapté à l’archivage et au partage'], myNotesMd: ['Mes notes (Markdown)', 'Exporter les notes prises pendant la réunion'], myNotesPdf: ['Mes notes PDF', 'Idéal pour archiver et partager'],
   },
   de: {
     contexts: { transcript: 'Exportieren und teilen', meeting: 'Besprechung teilen', notes: 'Notizen teilen' },
@@ -1389,7 +1397,7 @@ const shareCopy = {
       wechat: ['WeChat', 'Datei exportieren und anzeigen'], weibo: ['Weibo', 'Web-Freigabe öffnen'],
       x: ['X', 'Web-Freigabe öffnen'], telegram: ['Telegram', 'Web-Freigabe öffnen'], whatsapp: ['WhatsApp', 'Web-Freigabe öffnen'],
     },
-    bundle: ['Vollständiges Paket', 'Aufnahme + Transkript (Markdown / Text)'], notesPdf: ['Notizen-PDF', 'Zum Archivieren und Teilen geeignet'],
+    bundle: ['Vollständiges Paket', 'Aufnahme + Transkript (Markdown / Text)'], notesPdf: ['Notizen-PDF', 'Zum Archivieren und Teilen geeignet'], myNotesMd: ['Meine Notizen (Markdown)', 'Während der Besprechung erfasste Notizen exportieren'], myNotesPdf: ['Meine Notizen PDF', 'Gut zum Archivieren und Teilen'],
   },
   ru: {
     contexts: { transcript: 'Экспорт и отправка', meeting: 'Поделиться встречей', notes: 'Поделиться заметками' },
@@ -1400,7 +1408,7 @@ const shareCopy = {
       wechat: ['WeChat', 'Экспортировать файл и показать его'], weibo: ['Weibo', 'Открыть веб-отправку'],
       x: ['X', 'Открыть веб-отправку'], telegram: ['Telegram', 'Открыть веб-отправку'], whatsapp: ['WhatsApp', 'Открыть веб-отправку'],
     },
-    bundle: ['Полный пакет', 'Запись + расшифровка (Markdown / текст)'], notesPdf: ['PDF заметок', 'Подходит для архивации и обмена'],
+    bundle: ['Полный пакет', 'Запись + расшифровка (Markdown / текст)'], notesPdf: ['PDF заметок', 'Подходит для архивации и обмена'], myNotesMd: ['Мои заметки (Markdown)', 'Экспорт заметок, сделанных на встрече'], myNotesPdf: ['Мои заметки PDF', 'Подходит для архива и обмена'],
   },
 };
 const summaryDetailCopy = {
@@ -1734,7 +1742,7 @@ function openOnboardingPermissions() {
       const granted = permissionGranted(permission);
       const value = granted ? 'granted' : status[permission];
       const active = next?.[0] === permission;
-      const state = granted ? '✓' : active ? String(index + 1) : '—';
+      const state = granted ? checkIconSvg : active ? String(index + 1) : '—';
       const action = granted ? `<button class="onboarding-permission-action onboarding-permission-granted" type="button" disabled>${t('已允许')}</button>` : active ? `<button class="modal-action onboarding-permission-action" ${permission === 'screen' ? 'data-open-screen-settings' : 'data-request-onboarding-permission="microphone"'} type="button">${t('允许')}</button>` : value === 'denied' && !unsupported ? `<button class="modal-action onboarding-permission-action" data-open-${permission}-settings type="button">${t('允许')}</button>` : '';
       const hint = unsupported ? t('当前系统不支持直接录制系统音频，请仅使用麦克风') : granted ? t('已允许') : value === 'denied' ? t('请在系统设置中允许') : detail;
       const meter = permission === 'microphone' && granted ? `<i class="input-meter onboarding-mic-meter" data-onboarding-mic-level aria-label="${t('麦克风')} ${t('音量')}"></i>` : '';
@@ -1750,7 +1758,7 @@ function openOnboardingPermissions() {
     }
     const complete = steps.every(([permission]) => permissionGranted(permission));
     continueButton.disabled = !complete;
-    section.insertAdjacentHTML('beforeend', complete ? `<div class="onboarding-permission-complete">✓ ${t('录制权限')} ${t('已准备就绪')}</div>` : `<div class="onboarding-permission-complete onboarding-permission-placeholder" aria-hidden="true">&nbsp;</div>`);
+    section.insertAdjacentHTML('beforeend', complete ? `<div class="onboarding-permission-complete">${checkIconSvg} ${t('录制权限')} ${t('已准备就绪')}</div>` : `<div class="onboarding-permission-complete onboarding-permission-placeholder" aria-hidden="true">&nbsp;</div>`);
   };
   const grantedPermissions = new Set();
   void render();
@@ -1813,27 +1821,6 @@ function liveStreamingModelOptions(language) {
   }
   return options;
 }
-/** 渲染从声纹发现的参与者。录制开始后刻意不再暴露模型/设置控件，保持用户只专注“听 → 看字幕”。@returns {void} */
-function renderLivePanel() {
-  const participants = [...liveSpeakers.values()];
-  const people = participants.length
-    ? participants.map((participant) => renderParticipant({
-      ...participant,
-      name: formatSpeakerName(participant.name || participant.speakerId) || `${t('说话人')} ${participant.id}`,
-    })).join('')
-    : `<p class="participants-empty">${t('等待识别说话人')}</p>`;
-  document.querySelector('.live-panel').innerHTML = `<section><p class="eyebrow">${t('参与者')} · ${participants.length}</p><div class="participants-list">${people}</div></section>`;
-}
-function syncLivePanelToggle() {
-  const layout = document.querySelector('.live-layout');
-  const toggle = layout?.querySelector('.live-panel-toggle');
-  if (!toggle) return;
-  const collapsed = layout.classList.contains('is-panel-collapsed');
-  toggle.textContent = collapsed ? '‹' : '›';
-  toggle.title = t(collapsed ? '展开' : '收起');
-  toggle.setAttribute('aria-label', toggle.title);
-  toggle.setAttribute('aria-expanded', String(!collapsed));
-}
 /** 热切换当前会议的实时配置（语言/流式/精修模型）。@param {object} changes 部分配置。@returns {Promise<void>} */
 async function reconfigureLive(changes) {
   const meetingId = breviaClient?.state.meeting?.id;
@@ -1841,29 +1828,20 @@ async function reconfigureLive(changes) {
   // 乐观应用，以便控件感觉即时；meeting.reconfigured 事件确认它。
   const previous = { ...liveConfig };
   liveConfig = { ...liveConfig, ...changes };
-  renderLivePanel();
   try {
     const result = await window.brevia.meeting.reconfigure({ meeting_id: meetingId, ...changes });
     if (result?.model_required) {
       liveConfig = previous;
-      renderLivePanel();
     }
   } catch (error) {
     liveConfig = previous;
-    renderLivePanel();
-    syncLivePanelToggle();
     showToast(error.message);
   }
 }
 async function setLivePowerSaving(enabled) {
   await reconfigureLive({ power_saving: enabled });
 }
-document.querySelector('.live-panel').addEventListener('change', (event) => {
-  if (event.target.matches('[data-live-power-saving]')) void setLivePowerSaving(event.target.checked);
-});
 renderModelControls();
-renderLivePanel();
-syncLivePanelToggle();
 settingsModal.addEventListener('click', async (event) => {
   if (event.target.closest('[data-download-onboarding-selected]')) {
     const models = [...(onboardingModelSelection || [])].filter((modelId) => !modelPaths.has(modelId));
@@ -2228,7 +2206,6 @@ settingsModal.addEventListener('submit', async (event) => {
 const slogans = BreviaI18n.slogans;
 const homeSlogan = document.querySelector('#home-slogan');
 const homeEyebrow = document.querySelector('#home-eyebrow');
-const homePrimary = document.querySelector('#home-primary');
 let sloganIndex = Math.floor(Math.random() * slogans.zh.length);
 function activeWorkspaceDescription() {
   return activeWorkspaceId ? workspaces.find((workspace) => workspace.id === activeWorkspaceId)?.description?.trim() || '' : '';
@@ -2290,7 +2267,7 @@ function applyLanguage(nextLocale, animate = false) {
   languageOptions.querySelectorAll('[data-language]').forEach((option) => option.setAttribute('aria-current', String(option.dataset.language === locale)));
   const rerendered = [
     '.settings-grid', '.meeting-list', '#meeting-form .form-grid',
-    '.final-transcript', '.notes', '.live-panel', '#model-download-queue',
+    '.final-transcript', '.notes', '#model-download-queue',
   ].map((selector) => document.querySelector(selector));
   rerendered.push(batchToolbar, updateNotice.hidden ? null : updateNotice, settingsModal.hidden ? null : settingsModal.querySelector('.modal-panel'));
   const rerenderedRoots = rerendered.filter(Boolean);
@@ -2319,7 +2296,6 @@ function applyLanguage(nextLocale, animate = false) {
     renderMeetingList();
     renderWorkspaceNav();
     renderMeetingDetail();
-    renderRefinedModelChoices();
     if (activeView === 'home') selectLibraryNav(activeLibraryNav);
     else crumb.textContent = catalog[locale].views[activeView];
     renderSlogan(false);
@@ -2327,12 +2303,8 @@ function applyLanguage(nextLocale, animate = false) {
     renderUpdateNotice();
     renderSpeakerProfileCard();
     renderModelControls();
-    renderLivePanel();
-    syncLivePanelToggle();
     renderRequiredModelsCard();
     refreshLocalizedTaskCards();
-    const refineButton = document.querySelector('.detail-refine [data-flow-select-toggle]');
-    if (refineButton) refineButton.innerHTML = refineButton.disabled ? t('正在精修') : `${t('精修')} <span>⌄</span>`;
     if (activeModal) renderModal(activeModal);
     renderFloatingCaptionToggle();
     setLiveTranslationEnabled(translationAllowed);
@@ -2425,8 +2397,6 @@ function selectLibraryNav(id) {
   homeEyebrow.className = deleted ? 'back' : 'eyebrow';
   homeEyebrow.disabled = !deleted;
   homeEyebrow.textContent = deleted ? BreviaI18n.trashCopy(locale).back : t('会议库');
-  homePrimary.hidden = deleted;
-  if (!deleted) homePrimary.innerHTML = `${t('开始会议')} <span>→</span>`;
   renderSlogan(false);
 }
 /** 在视图或内容交换周围运行共享的页面淡出/淡入过渡。*/
@@ -2535,7 +2505,6 @@ document.addEventListener('keydown', (event) => { if (event.key === 'Escape') { 
 /** 在录制期间导航离开时显示紧凑的实时会议控件。@returns {void} */
 function minimizeMeeting() { miniTitle.textContent = document.querySelector('#live-name').textContent; miniTimer.textContent = document.querySelector('#timer').textContent; const wasHidden = miniMeeting.hidden; miniMeeting.hidden = false; if (wasHidden) taskCards.append(miniMeeting); }
 document.addEventListener('click', (event) => { const target = event.target.closest('[data-view]'); if (!target || ['all-meetings', 'recently-deleted'].includes(target.id)) return; if (target.dataset.view === 'home') selectLibraryNav('all-meetings'); if (target.dataset.view === 'prepare') selectCurrentWorkspaceForMeeting(); if (activeView === 'live' && meetingActive && target.dataset.view !== 'live') minimizeMeeting(); showView(target.dataset.view); });
-homePrimary.addEventListener('click', () => { selectCurrentWorkspaceForMeeting(); showView('prepare'); });
 homeEyebrow.addEventListener('click', async () => {
   if (activeLibraryNav !== 'recently-deleted') return;
   await showLibraryNav('all-meetings').catch((error) => showToast(error.message));
@@ -2585,13 +2554,18 @@ function activateMeeting(meeting, payload) {
   document.querySelector('#live-name').textContent = title;
   uiData.meetings.unshift({ id: meeting.id, tone: 'violet', title, meta: `${t('刚刚')} · 0 ${t('分钟')}`, workspaceId: workspaceId || '', workspace: workspaceId ? { name: getWorkspaceName(workspaceId) } : null, tags: [], status: { tone: 'processing', label: t('正在录制'), detail: t('本地保存') } });
   document.querySelector('#transcript-scroll').innerHTML = '';
+  const backToLatestButton = document.querySelector('#back-to-latest');
+  if (backToLatestButton) backToLatestButton.hidden = true;
+  if (liveNotesEditor) {
+    liveNotesEditor.setMarkdown('');
+    liveNotesEditor.setMode('rich');
+  }
+  setLiveLayoutMode('notes');
   setLiveTranslationEnabled(Boolean(payload.target_language));
   latestLiveSegmentId = null;
-  liveSpeakers.clear();
   liveSegments.clear();
   liveSegmentRevisions.clear();
   followLiveTranscript = true;
-  renderLivePanel();
   renderMeetingList();
   meetingActive = true;
   seconds = 0;
@@ -2700,6 +2674,13 @@ document.querySelector('#end-meeting').addEventListener('click', async (event) =
   button.innerHTML = `<i class="button-spinner" aria-hidden="true"></i>${t('结束中')}`;
   clearInterval(timer);
   try {
+    // 结束前把笔记落库，会议详情页“我的笔记”延续显示。
+    clearTimeout(liveNotesSaveTimer.current);
+    const notes = currentNotesMarkdown();
+    const activeMeetingId = breviaClient?.state.meeting?.id;
+    if (notes && activeMeetingId) {
+      await persistNotes(activeMeetingId, notes);
+    }
     const meeting = breviaClient ? await breviaClient.stop(seconds * 1000) : null;
     meetingActive = false;
     clearInterval(powerStatusTimer);
@@ -2737,7 +2718,6 @@ function editSpeakerName(label) {
     nextLabel.title = '双击修改名称';
     nextLabel.textContent = name;
     input.replaceWith(nextLabel);
-    if (liveSpeakers.has(speaker)) liveSpeakers.get(speaker).name = name;
     document.querySelectorAll(`[data-speaker="${speaker}"]`).forEach((node) => { node.textContent = name; });
     const meetingId = breviaClient?.state.meeting?.id || breviaClient?.state.selectedMeetingId;
     if (window.brevia && meetingId) window.brevia.speaker.rename({ meeting_id: meetingId, speaker_id: speaker, name, locked: true }).catch((error) => showToast(error.message));
@@ -2748,55 +2728,56 @@ function editSpeakerName(label) {
   input.focus();
   input.select();
 }
-document.querySelector('.live-panel').addEventListener('dblclick', (event) => {
-  const label = event.target.closest('.person b[data-speaker]');
-  if (label) editSpeakerName(label);
-});
-const livePanel = document.querySelector('.live-panel');
-livePanel.id = 'live-panel';
-document.querySelector('.live-panel-toggle').addEventListener('click', () => {
+/** 切换会议主区域布局：'notes'（笔记模式，默认）或 'caption'（字幕展开模式）。@param {'notes'|'caption'} mode 目标模式。@returns {void} */
+function setLiveLayoutMode(mode) {
   const layout = document.querySelector('.live-layout');
-  layout.classList.toggle('is-panel-collapsed');
-  syncLivePanelToggle();
-});
-livePanel.addEventListener('click', (event) => {
-  const toggle = event.target.closest('[data-flow-select-toggle]');
-  if (toggle) {
-    const options = toggle.parentElement.querySelector('.flow-select-options');
-    const opening = options.hidden;
-    livePanel.querySelectorAll('.flow-select-options').forEach((list) => { list.hidden = true; list.previousElementSibling.previousElementSibling.setAttribute('aria-expanded', 'false'); });
-    // The panel sits low in the viewport, so open toward whichever side has more room.
-    const bounds = toggle.getBoundingClientRect();
-    const liveBounds = document.querySelector('#live-view').getBoundingClientRect();
-    const spaceAbove = bounds.top - liveBounds.top;
-    const spaceBelow = liveBounds.bottom - bounds.bottom;
-    options.classList.toggle('opens-up', spaceAbove > spaceBelow);
-    options.style.maxHeight = `${Math.max(64, Math.min(200, Math.max(spaceAbove, spaceBelow) - 8))}px`;
-    options.hidden = !opening;
-    toggle.setAttribute('aria-expanded', String(opening));
-    return;
+  if (!layout) return;
+  layout.classList.toggle('is-caption-mode', mode === 'caption');
+  layout.dataset.liveMode = mode;
+  if (mode === 'caption') {
+    const transcript = document.querySelector('#transcript-scroll');
+    if (transcript) transcript.scrollTop = transcript.scrollHeight;
   }
-  const choice = event.target.closest('[data-flow-select-choice]');
-  if (!choice) return;
-  const select = choice.closest('.flow-select');
-  const name = choice.dataset.flowSelectChoice;
-  const value = choice.dataset.value;
-  select.querySelector('input').value = value;
-  select.querySelector('.flow-select-toggle').firstChild.nodeValue = choice.dataset.label || choice.textContent;
-  select.querySelector('.flow-select-options').hidden = true;
-  select.querySelector('.flow-select-toggle').setAttribute('aria-expanded', 'false');
-  if (name === 'live-language') {
-    if (value === liveConfig.language) return;
-    // Changing language resets the streaming model to that language's default, mirroring the prepare form.
-    void reconfigureLive({ language: value, streaming_model_id: preferredModelsForLanguage(value).streaming });
-  } else if (name === 'live-streaming-model') {
-    if (value === liveConfig.streaming_model_id) return;
-    void reconfigureLive({ streaming_model_id: value });
-  } else if (name === 'live-refined-model') {
-    if (value === liveConfig.refined_model_id) return;
-    void reconfigureLive({ refined_model_id: value });
-  }
+}
+document.querySelectorAll('[data-toggle-live-mode]').forEach((button) => {
+  button.addEventListener('click', () => setLiveLayoutMode(button.dataset.toggleLiveMode));
 });
+const liveNotesEditor = createNotesEditor(document.querySelector('[data-live-notes-root]'), { onInput: () => scheduleNotesSave(liveNotesSaveTimer, currentNotesMarkdown, () => breviaClient?.state.meeting?.id) });
+/** 切换笔记编辑模式：'rich'（所见即所得，默认）或 'markdown'（源码编辑）。@param {'rich'|'markdown'} mode 目标模式。@returns {void} */
+function setNotesMode(mode) {
+  document.querySelectorAll('[data-notes-mode]').forEach((tab) => tab.classList.toggle('is-active', tab.dataset.notesMode === mode));
+  liveNotesEditor.setMode(mode);
+}
+document.querySelectorAll('[data-notes-mode]').forEach((tab) => tab.addEventListener('click', () => setNotesMode(tab.dataset.notesMode)));
+/** 返回当前笔记的 Markdown 文本（富文本或源码模式）。@returns {string} Markdown 笔记。 */
+function currentNotesMarkdown() {
+  return liveNotesEditor.getMarkdown();
+}
+/** 笔记存储上限（与后端及 IPC 校验一致）。 */
+const MAX_NOTES_CHARS = 20000;
+let notesLimitNotified = false;
+/** 立即把笔记写入后端；超出上限时截断到存储上限并提示一次。@param {string|undefined} meetingId 会议 id。@param {string} notes Markdown 文本。@returns {Promise<void>} */
+function persistNotes(meetingId, notes) {
+  if (!meetingId || !window.brevia?.meeting?.update) return Promise.resolve();
+  let text = String(notes || '');
+  if (text.length > MAX_NOTES_CHARS) {
+    text = text.slice(0, MAX_NOTES_CHARS);
+    if (!notesLimitNotified) {
+      notesLimitNotified = true;
+      showToast(t('笔记已达 20000 字符上限，超出部分未保存。'));
+    }
+  }
+  return window.brevia.meeting.update({ meeting_id: meetingId, updates: { notes: text } }).catch(() => {});
+}
+/** 防抖保存笔记（live 视图与详情页共用）。@param {{current: number|undefined}} timer 防抖计时器。@param {() => string} getNotes 取笔记文本。@param {() => string|undefined} getMeetingId 取会议 id。@returns {void} */
+function scheduleNotesSave(timer, getNotes, getMeetingId) {
+  const meetingId = getMeetingId();
+  if (!meetingId || !window.brevia?.meeting?.update) return;
+  clearTimeout(timer.current);
+  timer.current = setTimeout(() => persistNotes(meetingId, getNotes()), 800);
+}
+const liveNotesSaveTimer = { current: undefined };
+const detailNotesSaveTimer = { current: undefined };
 document.querySelector('#translation-toggle').addEventListener('click', (event) => {
   const enabled = !translationAllowed;
   if (enabled && window.brevia) {
@@ -3218,7 +3199,7 @@ playerAudio.addEventListener('play', () => { playbackStarted = true; updatePlaye
 playerAudio.addEventListener('pause', updatePlayerControl);
 playerAudio.addEventListener('ended', () => { playbackStarted = false; updatePlayerControl(); });
 playerAudio.addEventListener('timeupdate', () => { progress.value = playerAudio.currentTime; renderPlayerTime(); syncPlaybackTranscript(); renderMiniPlayback(); });
-document.querySelector('#playback-floating-caption-toggle').addEventListener('click', async () => {
+document.querySelector('#playback-floating-caption-toggle')?.addEventListener('click', async () => {
   floatingCaptionMode = nextFloatingCaptionMode('playback');
   renderFloatingCaptionToggle();
   renderPlaybackFloatingCaptionToggle();
@@ -3308,6 +3289,10 @@ async function saveInlineSegmentSpeaker(form) {
   } catch (error) { delete form.dataset.saving; showToast(error.message); }
 }
 const finalTranscript = document.querySelector('.final-transcript');
+// 精修模型是否输出可对齐到原 segment 时间戳的结果。当前内置精修模型均为窗口式逐句精修
+// （继承原时间戳）；未来若接入整段式无时间戳输出的模型，不会出现在该集合中，将走“精修全文”展示。
+const timestampAlignedRefinedModels = new Set(['qwen3-asr-0.6b-int8', 'funasr-nano-int8', 'whisper-large-v3']);
+function refinedModelSupportsTimestamps(modelId) { return timestampAlignedRefinedModels.has(modelId); }
 const segmentContextMenu = document.createElement('div');
 segmentContextMenu.className = 'segment-context-menu';
 segmentContextMenu.hidden = true;
@@ -3412,13 +3397,141 @@ finalTranscript.addEventListener('contextmenu', (event) => {
 document.addEventListener('mousedown', (event) => {
   if (!segmentContextMenu.hidden && !segmentContextMenu.contains(event.target)) closeSegmentContextMenu();
 });
+/** 读取精修菜单中的固定说话人数；空或无效返回 undefined（自动识别）。@returns {number|undefined} */
+function refineNumSpeakers() {
+  const input = document.querySelector('[data-refine-num-speakers]');
+  const parsed = Number(String(input?.value ?? '').trim());
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
+}
+/** 触发会后精修并同步字幕面板状态。@param {string} refinedModelId 精修模型 id。@param {number} [numSpeakers] 固定说话人数。@returns {void} */
+const startRefinement = (refinedModelId, numSpeakers) => {
+  if (!window.brevia?.meeting?.refine || !breviaClient?.state?.selectedMeetingId) return;
+  uiData.detail.refineState = 'refining';
+  renderMeetingDetail();
+  void window.brevia.meeting.refine({
+    meeting_id: breviaClient.state.selectedMeetingId,
+    refined_model_id: refinedModelId,
+    ...(numSpeakers ? { num_speakers: numSpeakers } : {}),
+  }).catch((error) => {
+    uiData.detail.refineState = 'idle';
+    renderMeetingDetail();
+    hideRefinementProgress();
+    showToast(error.message);
+  });
+};
 finalTranscript.addEventListener('click', (event) => {
+  // 点击字幕段的时间戳/说话人区域 → 定位播放该段（jump 按钮已有独立处理）。
+  const segmentMeta = event.target.closest('.segment-meta');
+  if (segmentMeta && !event.target.closest('.jump') && !event.target.closest('[data-segment-speaker-input]')) {
+    const start = Number(segmentMeta.closest('.segment')?.dataset.start);
+    if (Number.isFinite(start)) {
+      followPlaybackTranscript = true;
+      playerAudio.currentTime = start;
+      progress.value = start;
+      renderPlayerTime();
+      syncPlaybackTranscript();
+      return;
+    }
+  }
+  const editNotes = event.target.closest('[data-edit-notes]');
+  if (editNotes) {
+    detailNotesBeforeEdit = uiData.detail.notes;
+    uiData.detail.notesEditing = true;
+    renderMeetingDetail();
+    return;
+  }
+  const notesCancel = event.target.closest('[data-notes-cancel]');
+  if (notesCancel) {
+    clearTimeout(detailNotesSaveTimer.current);
+    detailNotesEditor = null;
+    uiData.detail.notes = detailNotesBeforeEdit;
+    uiData.detail.notesEditing = false;
+    // 取消后必然回到「我的笔记」只读态，编辑按钮始终可见；
+    // 防止任何并发刷新把激活 tab 带到别处后编辑入口消失。
+    detailActiveTab = 'notes';
+    renderMeetingDetail();
+    return;
+  }
+  const notesSave = event.target.closest('[data-notes-save]');
+  if (notesSave) {
+    clearTimeout(detailNotesSaveTimer.current);
+    const notes = detailNotesEditor ? detailNotesEditor.getMarkdown() : uiData.detail.notes;
+    detailNotesEditor = null;
+    uiData.detail.notes = notes;
+    uiData.detail.notesEditing = false;
+    detailActiveTab = 'notes';
+    renderMeetingDetail();
+    if (breviaClient?.state.selectedMeetingId) {
+      void persistNotes(breviaClient.state.selectedMeetingId, notes);
+    }
+    return;
+  }
+  const refineNow = event.target.closest('[data-refine-now]');
+  if (refineNow) {
+    startRefinement(uiData.detail.refinedModelId || 'qwen3-asr-0.6b-int8');
+    return;
+  }
+  const more = event.target.closest('[data-refine-more]');
+  if (more) {
+    const menu = more.nextElementSibling;
+    finalTranscript.querySelectorAll('.refine-menu').forEach((other) => { if (other !== menu) other.hidden = true; });
+    const opening = menu.hidden;
+    menu.hidden = !opening;
+    more.setAttribute('aria-expanded', String(!menu.hidden));
+    // 打开选单时预填当前会议已知的说话人数（自动则留空，提示手动输入）。
+    if (opening) {
+      const input = menu.querySelector('[data-refine-num-speakers]');
+      const numSpeakers = currentMeetingDetail?.num_speakers;
+      if (input) input.value = Number.isInteger(numSpeakers) && numSpeakers > 0 ? numSpeakers : '';
+    }
+    return;
+  }
+  const refineAction = event.target.closest('[data-refine-action]');
+  if (refineAction) {
+    const menu = refineAction.closest('.refine-menu');
+    if (refineAction.dataset.refineAction === 'original') {
+      detailTranscriptView = detailTranscriptView === 'original' ? 'refined' : 'original';
+      renderMeetingDetail();
+      return;
+    }
+    if (refineAction.dataset.refineAction === 're-refine') {
+      if (menu) menu.hidden = true;
+      startRefinement(uiData.detail.refinedModelId || 'qwen3-asr-0.6b-int8', refineNumSpeakers());
+      return;
+    }
+    if (refineAction.dataset.refineAction === 'model') {
+      const list = refineAction.nextElementSibling;
+      if (list) list.hidden = !list.hidden;
+      return;
+    }
+  }
+  const refineModel = event.target.closest('.refine-menu [data-refine-model]');
+  if (refineModel) {
+    const menu = refineModel.closest('.refine-menu');
+    if (menu) menu.hidden = true;
+    startRefinement(refineModel.dataset.refineModel, refineNumSpeakers());
+    return;
+  }
   const tab = event.target.closest('[data-detail-tab]');
   if (!tab) return;
   const target = tab.dataset.detailTab;
+  detailActiveTab = target;
   finalTranscript.querySelectorAll('[data-detail-tab]').forEach((item) => item.classList.toggle('active', item.dataset.detailTab === target));
   finalTranscript.querySelectorAll('[data-detail-panel]').forEach((panel) => { panel.hidden = panel.dataset.detailPanel !== target; });
 });
+document.addEventListener('click', (event) => {
+  if (event.target.closest('.refine-menu, [data-refine-more]')) return;
+  document.querySelectorAll('.refine-menu').forEach((menu) => { menu.hidden = true; });
+  document.querySelectorAll('[data-refine-more]').forEach((button) => button.setAttribute('aria-expanded', 'false'));
+});
+/** 详情页富文本笔记编辑器实例（编辑模式下由 renderMeetingDetail 创建）。@type {object|null} */
+let detailNotesEditor = null;
+/** 详情页笔记防抖自动保存（800ms）；输入时即时同步到 uiData，避免重建面板丢失草稿。@returns {void} */
+function scheduleDetailNotesSave() {
+  if (!detailNotesEditor) return;
+  uiData.detail.notes = detailNotesEditor.getMarkdown(); // 即时同步，避免重建面板时丢失未保存内容
+  scheduleNotesSave(detailNotesSaveTimer, () => uiData.detail.notes, () => breviaClient?.state.selectedMeetingId);
+}
 finalTranscript.addEventListener('dblclick', (event) => {
   const speaker = event.target.closest('[data-segment-speaker]');
   if (speaker) {
@@ -3477,7 +3590,6 @@ if (window.brevia) {
   void loadSummaryConfig().catch((error) => showToast(`${t('纪要配置加载失败')}: ${error.message}`));
   initializationPromise = breviaClient.initialize().then((result) => {
     modelCatalog = result.models;
-    renderRefinedModelChoices();
     setPrepareModel('active-refined-model', document.querySelector('#active-refined-model').dataset.model);
     uiData.meetings = result.meetings.map(backendMeeting);
     // 初始化工作区
@@ -3494,7 +3606,6 @@ if (window.brevia) {
       if (model.path) modelPaths.set(model.id, model.path);
     });
     document.querySelector('#active-device').textContent = result.device.backend.toUpperCase();
-    renderLivePanel();
     renderSpeakerProfileCard();
     renderMeetingList();
     void window.brevia.maintain();
@@ -3502,13 +3613,25 @@ if (window.brevia) {
   void initializationPromise.catch((error) => showToast(`${t('配置或后端启动失败')}: ${error.message}`));
 
   const transcript = document.querySelector('#transcript-scroll');
+  const backToLatest = document.querySelector('#back-to-latest');
   const isAtLiveBottom = () => transcript.scrollHeight - transcript.clientHeight - transcript.scrollTop <= 32;
   const scrollLiveToLatest = (segment) => {
     if (!segment) return;
     transcript.scrollTop = transcript.scrollHeight;
     followLiveTranscript = true;
+    if (backToLatest) backToLatest.hidden = true;
   };
-  transcript.addEventListener('scroll', () => { followLiveTranscript = isAtLiveBottom(); }, { passive: true });
+  transcript.addEventListener('scroll', () => {
+    followLiveTranscript = isAtLiveBottom();
+    if (backToLatest) backToLatest.hidden = followLiveTranscript;
+  }, { passive: true });
+  if (backToLatest) {
+    backToLatest.addEventListener('click', () => {
+      followLiveTranscript = true;
+      transcript.scrollTop = transcript.scrollHeight;
+      backToLatest.hidden = true;
+    });
+  }
   transcript.addEventListener('contextmenu', (event) => {
     const segment = event.target.closest('[data-segment-id]');
     const meetingId = breviaClient.state.meeting?.id;
@@ -3524,30 +3647,13 @@ if (window.brevia) {
     if (seenRevision !== undefined && revision <= seenRevision) return;
     liveSegmentRevisions.set(payload.segment_id, revision);
     const shouldFollow = followLiveTranscript || isAtLiveBottom();
-    if (!partial && !liveSpeakers.has(payload.speaker)) {
-      const number = liveSpeakers.size + 1;
-      liveSpeakers.set(payload.speaker, {
-        id: String(number),
-        speakerId: payload.speaker,
-        name: '',
-        source: payload.track === 'system' ? '系统音频' : '麦克风',
-        avatar: number % 2 ? 'blue' : 'gray',
-        level: '',
-      });
-      renderLivePanel();
-    }
-    const participant = liveSpeakers.get(payload.speaker);
-    if (participant && payload.speaker_name && participant.name !== payload.speaker_name) {
-      participant.name = payload.speaker_name;
-      renderLivePanel();
-    }
     const previous = liveSegments.get(payload.segment_id);
     const translation = payload.translation || previous?.querySelector('.translation')?.textContent;
     const entry = {
       time: formatMeetingTime(payload.start_ms),
       startSeconds: payload.start_ms / 1000,
       endSeconds: payload.end_ms / 1000,
-      speaker: { id: payload.speaker, segmentId: payload.segment_id, name: formatSpeakerName(payload.speaker_name || participant?.name || payload.speaker) || `${t('说话人')} ${participant?.id || payload.speaker.split('-').pop()}` },
+      speaker: { id: payload.speaker, segmentId: payload.segment_id, name: formatSpeakerName(payload.speaker_name || payload.speaker) || `${t('说话人')} ${payload.speaker.split('-').pop()}` },
       text: payload.text,
       translation,
       partial,
@@ -3598,7 +3704,6 @@ if (window.brevia) {
     setLiveTranslationEnabled(Boolean(liveConfig.target_language));
     document.querySelector('#active-streaming-model').textContent = prepareModelChoices['active-streaming-model'].find(([id]) => id === meeting.streaming_model_id)?.[1] || t('自动匹配');
     document.querySelector('#active-refined-model').textContent = modelChoices('active-refined-model').find(([id]) => id === meeting.refined_model_id)?.[1] || t('自动匹配');
-    if (meetingActive) renderLivePanel();
   });
   window.brevia.on('meeting.stopped', async ({ meeting }) => {
     if (floatingCaptionMode === 'live' && window.brevia?.floatingCaption) {
@@ -3711,24 +3816,30 @@ if (window.brevia) {
     }
     if (shouldFollow) scrollLiveToLatest(element);
   });
-  window.brevia.on('refinement.started', ({ meeting_id, total, stage }) => showRefinementProgress(0, total, refinementTitle(meeting_id), meeting_id, stage));
+  window.brevia.on('refinement.started', ({ meeting_id, total, stage }) => {
+    showRefinementProgress(0, total, refinementTitle(meeting_id), meeting_id, stage);
+    if (meeting_id === breviaClient.state.selectedMeetingId) {
+      uiData.detail.refineState = 'refining';
+      renderMeetingDetail();
+    }
+  });
   window.brevia.on('refinement.progress', ({ completed, total, stage }) => showRefinementProgress(completed, total, refinementMeetingTitle, undefined, stage));
   window.brevia.on('refinement.cancelled', async ({ meeting }) => {
     hideRefinementProgress();
-    const refineButton = document.querySelector('.detail-refine [data-flow-select-toggle]');
-    refineButton.disabled = false;
-    refineButton.innerHTML = `${t('精修')} <span>⌄</span>`;
-    if (meeting?.id === breviaClient.state.selectedMeetingId) applyBackendDetail(meeting);
+    if (meeting?.id === breviaClient.state.selectedMeetingId) {
+      uiData.detail.refineState = 'idle';
+      applyBackendDetail(meeting);
+    }
     void refreshBackendMeetings();
   });
   window.brevia.on('refinement.ready', async ({ meeting_id }) => {
     const meeting = await window.brevia.meeting.get({ meeting_id });
     syncBackendMeeting(meeting);
-    const refineButton = document.querySelector('.detail-refine [data-flow-select-toggle]');
-    refineButton.disabled = false;
-    refineButton.innerHTML = `${t('精修')} <span>⌄</span>`;
     showRefinementComplete();
-    if (meeting.id === breviaClient.state.selectedMeetingId) applyBackendDetail(meeting);
+    if (meeting.id === breviaClient.state.selectedMeetingId) {
+      uiData.detail.refineState = 'idle';
+      applyBackendDetail(meeting);
+    }
     if (!meeting.target_language) return;
     const refined = meeting.segments.filter((segment) => segment.version.startsWith('postprocess'));
     const revision = Math.max(...refined.map((segment) => segment.revision), -1);
@@ -3762,7 +3873,6 @@ if (window.brevia) {
       if (onboardingModelIds.includes(model_id) && window.BreviaOnboarding.modelReady(model_id)) showOfflineTranscriptionReady();
       window.brevia.models.list().then((models) => {
         modelCatalog = models;
-        renderRefinedModelChoices();
         const model = models.find((item) => item.id === model_id);
         if (model?.path) modelPaths.set(model_id, model.path);
         if (activeModal === 'models') renderModal('models');
@@ -3795,17 +3905,17 @@ if (window.brevia) {
   });
   window.brevia.on('model.required', ({ models, task, payload }) => {
     if (task === 'meeting.refine') {
-      hideRefinementProgress();
-      const refineButton = document.querySelector('.detail-refine [data-flow-select-toggle]');
-      refineButton.disabled = false;
-      refineButton.innerHTML = `${t('精修')} <span>⌄</span>`;
+      // 精修被模型缺失阻塞：复位精修状态，避免详情页停留在“正在精修”；
+      // 模型下载完成后 resumeReadyModelTasks 会自动重试精修。
+      uiData.detail.refineState = 'idle';
+      renderMeetingDetail();
     }
     const queued = pendingModelTasks.get(`${task}:${payload?.meeting_id || 'new'}`);
     queueModelTask(task, task === 'meeting.start' && queued?.payload.inputs ? { ...payload, inputs: queued.payload.inputs } : payload, models);
     downloadRequiredModels(models);
   });
-  window.brevia.on('speaker-profile.updated', async () => { speakerProfiles = await window.brevia.speakerProfile.list(); renderSpeakerProfileCard(); renderLivePanel(); });
-  window.brevia.on('speaker-profile.deleted', async () => { speakerProfiles = await window.brevia.speakerProfile.list(); renderSpeakerProfileCard(); renderLivePanel(); });
+  window.brevia.on('speaker-profile.updated', async () => { speakerProfiles = await window.brevia.speakerProfile.list(); renderSpeakerProfileCard(); });
+  window.brevia.on('speaker-profile.deleted', async () => { speakerProfiles = await window.brevia.speakerProfile.list(); renderSpeakerProfileCard(); });
 
   // Listen for floating caption window closed event to sync state
   window.brevia.on('floating-caption.closed', () => {
@@ -3845,43 +3955,6 @@ if (window.brevia) {
   document.querySelector('[data-export-detail]').addEventListener('click', async () => {
     if (!breviaClient.state.selectedMeetingId) return;
     openModal('export');
-  });
-
-  const startRefinement = (refinedModelId, numSpeakers) => {
-    const button = document.querySelector('.detail-refine [data-flow-select-toggle]');
-    button.disabled = true;
-    button.textContent = t('正在精修');
-    void window.brevia.meeting.refine({
-      meeting_id: breviaClient.state.selectedMeetingId,
-      refined_model_id: refinedModelId,
-      ...(numSpeakers ? { num_speakers: numSpeakers } : {}),
-    }).catch((error) => {
-      button.disabled = false;
-      button.innerHTML = `${t('精修')} <span>⌄</span>`;
-      hideRefinementProgress();
-      showToast(error.message);
-    });
-  };
-  document.querySelector('.detail-refine').addEventListener('click', (event) => {
-    const toggle = event.target.closest('[data-flow-select-toggle]');
-    const options = event.currentTarget.querySelector('.flow-select-options');
-    if (toggle) {
-      options.hidden = !options.hidden;
-      toggle.setAttribute('aria-expanded', String(!options.hidden));
-      if (!options.hidden) {
-        // 打开选单时预填当前会议人数（自动则留空，提示手动输入）。
-        const input = options.querySelector('[data-refine-num-speakers]');
-        const numSpeakers = currentMeetingDetail?.num_speakers;
-        if (input) input.value = Number.isInteger(numSpeakers) && numSpeakers > 0 ? numSpeakers : '';
-      }
-      return;
-    }
-    const choice = event.target.closest('[data-refine-model]');
-    if (!choice || !breviaClient.state.selectedMeetingId) return;
-    options.hidden = true;
-    const refinedModelId = choice.dataset.refineModel;
-    const parsed = Number(String(options.querySelector('[data-refine-num-speakers]')?.value ?? '').trim());
-    startRefinement(refinedModelId, Number.isInteger(parsed) && parsed > 0 ? parsed : undefined);
   });
 
   document.querySelector('[data-share-detail]').addEventListener('click', () => {

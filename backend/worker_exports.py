@@ -37,8 +37,8 @@ class ExportWorkerMixin:
             return self._export_audio(
                 meeting, path, export_format, payload.get("track", "mix")
             )
-        if content_type not in {"transcript", "notes"}:
-            raise ValueError("Export content must be transcript, notes, or audio")
+        if content_type not in {"transcript", "notes", "mynotes"}:
+            raise ValueError("Export content must be transcript, notes, mynotes, or audio")
         if export_format not in {"md", "txt", "json", "srt", "docx", "pdf"}:
             raise ValueError("Unsupported text export format")
         segments = latest_segments(meeting["segments"])
@@ -52,6 +52,10 @@ class ExportWorkerMixin:
                 f"{item['speaker_name']}: {item['text']}"
                 for index, item in enumerate(segments, 1)
             )
+        elif content_type == "mynotes":
+            content = meeting.get("notes") or ""
+            if not content.strip():
+                raise ValueError("会议中没有记录笔记。")
         elif content_type == "notes":
             summary = (
                 meeting.get("summary", {}).get("data")
@@ -78,7 +82,10 @@ class ExportWorkerMixin:
             path = self._write_docx(directory, safe_title, content)
         elif export_format == "pdf":
             path = self._write_print_html(
-                directory, safe_title, content, markdown=content_type == "notes"
+                directory,
+                safe_title,
+                content,
+                markdown=content_type in {"notes", "mynotes"},
             )
         else:
             path.write_text(content, encoding="utf-8")

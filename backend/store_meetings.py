@@ -15,6 +15,18 @@ from .store_base import utc_now
 logger = logging.getLogger(__name__)
 EXAMPLES_SEED_KEY = "examples_seeded_v5"
 
+# 说话人计数：聚类后（speaker_turns postprocess）优先用聚类结果，否则回退到字幕的 distinct speaker。
+_SPEAKER_COUNT_SQL = """
+    CASE WHEN EXISTS(SELECT 1 FROM speaker_turns st WHERE st.meeting_id = m.id AND st.version = 'postprocess')
+         THEN (SELECT COUNT(DISTINCT speaker) FROM speaker_turns st WHERE st.meeting_id = m.id AND st.version = 'postprocess')
+         ELSE (SELECT COUNT(DISTINCT speaker) FROM segments s WHERE s.meeting_id = m.id)
+    END
+"""
+# 是否已有非空纪要。
+_HAS_SUMMARY_SQL = (
+    "EXISTS(SELECT 1 FROM summaries s WHERE s.meeting_id = m.id AND s.data IS NOT NULL)"
+)
+
 
 def example_note(example):
     """返回与界面语言一致的示例会议纪要。"""
@@ -125,18 +137,21 @@ class MeetingStoreMixin:
         """
         clauses, params = [], []
         clauses.append(
-            "deleted_at IS NOT NULL" if include_deleted else "deleted_at IS NULL"
+            "m.deleted_at IS NOT NULL" if include_deleted else "m.deleted_at IS NULL"
         )
         if query:
             clauses.append(
-                "(title LIKE ? OR tags LIKE ? OR id IN "
+                "(m.title LIKE ? OR m.tags LIKE ? OR m.id IN "
                 "(SELECT meeting_id FROM segments WHERE text LIKE ?))"
             )
             like = f"%{query}%"
             params.extend([like, like, like])
         with self.connect() as db:
             rows = db.execute(
-                f"SELECT * FROM meetings WHERE {' AND '.join(clauses)} ORDER BY created_at DESC",
+                f"""SELECT m.*,
+                    {_SPEAKER_COUNT_SQL} AS speaker_count,
+                    {_HAS_SUMMARY_SQL} AS has_summary
+                    FROM meetings m WHERE {' AND '.join(clauses)} ORDER BY m.created_at DESC""",
                 params,
             ).fetchall()
         return [self._meeting(row) for row in rows]
@@ -265,7 +280,11 @@ class MeetingStoreMixin:
         """
         with self.connect() as db:
             row = db.execute(
-                "SELECT * FROM meetings WHERE id=?", (meeting_id,)
+                f"""SELECT m.*,
+                    {_SPEAKER_COUNT_SQL} AS speaker_count,
+                    {_HAS_SUMMARY_SQL} AS has_summary
+                    FROM meetings m WHERE m.id=?""",
+                (meeting_id,),
             ).fetchone()
             if not row:
                 raise ValueError("Meeting not found")
@@ -340,6 +359,7 @@ class MeetingStoreMixin:
             "target_language",
             "streaming_model_id",
             "power_saving",
+            "notes",
         }
         fields = {key: value for key, value in updates.items() if key in allowed}
         if not fields:
@@ -348,6 +368,8 @@ class MeetingStoreMixin:
             fields["title"] = fields["title"].strip()
             if not fields["title"]:
                 raise ValueError("Title cannot be empty")
+        if "notes" in fields:
+            fields["notes"] = str(fields["notes"] or "")[:20000]
         if "tags" in fields:
             fields["tags"] = json.dumps(fields["tags"], ensure_ascii=False)
         with self.connect() as db:

@@ -210,7 +210,7 @@ class LlamaSidecarMixin:
             model_id,
             prompt,
             max_tokens=payload.get("max_tokens", 2048),
-            context_size=payload.get("context_size", 8192),
+            context_size=payload.get("context_size", 16384),
             temperature=payload.get("temperature", 0.7),
             top_k=payload.get("top_k", 40),
             top_p=payload.get("top_p", 0.95),

@@ -8,6 +8,17 @@ from .worker_common import managed_task, require
 # 内置翻译在本地运行捆绑的 Hy-MT2 GGUF 模型。
 TRANSLATION_MODEL_ID = "hy-mt2-1.8b-q4km"
 
+# 内置纪要模型 prompt 中允许的转录字符上限（含时间戳与说话人前缀）。
+# 配合 sidecar 的 16k 上下文，约可完整覆盖 40 分钟左右的会议；更长则分段生成后合并。
+MAX_SUMMARY_TRANSCRIPT_CHARS = 10000
+# 分段总结参数：每块转录字符数、最大块数（超出则截取前几块并提示）。
+SUMMARY_CHUNK_CHARS = 9000
+MAX_SUMMARY_CHUNKS = 6
+# 块级摘要的输出 token 上限：控制合并阶段输入规模，避免合并 prompt 超出上下文。
+SUMMARY_CHUNK_MAX_TOKENS = 768
+# 合并阶段输入的字符上限（中文约等于 token 数）：超出后截断并提示。
+MAX_MERGE_INPUT_CHARS = 12000
+
 # 将 UI 语言代码映射到 prompt 中的自然语言名称。
 LANGUAGE_NAMES = {
     "zh": "Chinese",
@@ -136,6 +147,82 @@ def summary_prompt(transcript, title, language):
     return f"{instructions}\n\nDo not reveal reasoning or a thinking process. Begin directly with the requested Markdown.\n\n<transcript>\n{transcript}\n</transcript>"
 
 
+def _split_transcript(transcript, chunk_chars):
+    """按换行把转录切成不超过 ``chunk_chars`` 的块（尽量在行边界断开；超长行按字符硬切）。"""
+    lines = transcript.split("\n")
+    chunks, current, size = [], [], 0
+    for line in lines:
+        if len(line) > chunk_chars:
+            # 罕见但存在：单个超长段落（如导入的整段文本）无法按行断开，强制截断。
+            if current:
+                chunks.append("\n".join(current))
+                current, size = [], 0
+            for start in range(0, len(line), chunk_chars):
+                chunks.append(line[start:start + chunk_chars])
+            continue
+        if current and size + len(line) + 1 > chunk_chars:
+            chunks.append("\n".join(current))
+            current, size = [], 0
+        current.append(line)
+        size += len(line) + 1
+    if current:
+        chunks.append("\n".join(current))
+    return chunks or [""]
+
+
+def chunk_summary_prompt(transcript, title, language):
+    """长转录分段生成时的“块级摘要” prompt：从片段提取关键信息，供合并阶段使用。"""
+    if language == "zh":
+        instructions = """你是一名专业的会议纪要助手。下面是一段会议转录片段，请从中提取关键信息，输出精炼的结构化摘要（Markdown），用于后续合并成完整纪要。
+要求：
+1. 只使用输入中明确出现的信息，不得补充或猜测。
+2. 区分讨论、个人观点、建议、已确认决定、行动项和待确认事项。
+3. 保留重要的人名、公司名、项目名、金额、日期、编号和技术参数。
+4. 保留实质内容与数据，省略寒暄、重复和无关闲聊。
+5. 输出结构：## **议题讨论**（各议题要点）、## **已确认决定**、## **行动项**（任务 | 负责人 | 截止时间 | 状态）、## **待确认事项**、## **关键数据**。没有内容的章节省略。
+6. 只输出 Markdown，不输出解释或 JSON。"""
+    else:
+        instructions = (
+            "You are a professional meeting-notes assistant. Extract the key information from the "
+            "transcript excerpt below and produce a concise structured Markdown summary for later "
+            "merging into complete meeting notes. Use only explicitly stated information; distinguish "
+            "discussion, opinions, proposals, confirmed decisions, action items, and open questions; "
+            "keep important names, organizations, projects, amounts, dates, IDs, and technical "
+            "parameters; keep substantive content and data, omit pleasantries and repetition. Output "
+            "sections: ## **Topics discussed**, ## **Confirmed decisions**, ## **Action items** "
+            "(task | owner | due | status), ## **Open questions**, ## **Key data** (omit empty "
+            "sections). Output only Markdown."
+        )
+    return f"{instructions}\n\n<transcript>\n{transcript}\n</transcript>"
+
+
+def merge_summary_prompt(chunk_summaries, title, language):
+    """把分段纪要合并为最终完整纪要的 prompt。"""
+    blocks = "\n\n---\n\n".join(chunk_summaries)
+    if language == "zh":
+        instructions = """你是一名专业的会议纪要助手。以下是同一场会议的若干分段纪要，请合并为一份完整、无重复、结构清晰的 Markdown 会议纪要。
+要求：
+1. 只使用输入中明确出现的信息，不得补充或猜测。
+2. 合并相同议题与重复内容，覆盖所有分段纪要中的实质性内容。
+3. 区分已确认决定、建议、行动项和待确认事项；行动项未明确负责人或截止时间时写“待确认”。
+4. 保留所有重要人名、公司名、项目名、金额、日期、编号和技术参数。
+5. 输出格式：# **{title}**；## **会议摘要**（概括整体）；## **核心结论**；## **议题讨论**；## **已确认决定**；## **行动项**（表格）；## **待确认事项**；## **关键数据**。
+6. 只输出 Markdown。""".format(title=title)
+    else:
+        instructions = (
+            "You are a professional meeting-notes assistant. Merge the partial meeting summaries "
+            "below (all from the same meeting) into one complete, non-redundant, well-structured "
+            "Markdown meeting note. Merge identical topics and remove duplication while covering all "
+            "substantive content; distinguish confirmed decisions, proposals, action items, and open "
+            "questions (mark unknown owners/due dates as \"TBD\"); keep all important names, "
+            "organizations, projects, amounts, dates, IDs, and technical parameters. Format: "
+            "# **{title}**; ## **Summary**; ## **Key takeaways**; ## **Topics discussed**; "
+            "## **Confirmed decisions**; ## **Action items** (table); ## **Open questions**; "
+            "## **Key data**. Output only Markdown."
+        ).format(title=title)
+    return f"{instructions}\n\n<partial summaries>\n{blocks}\n</partial summaries>"
+
+
 class LLMWorkerMixin:
     def _complete(self, payload, prompt):
         """将补全路由到内置 llama sidecar 或 HTTP 端点。
@@ -194,9 +281,14 @@ class LLMWorkerMixin:
                     "stage": "summary.generating",
                 },
             )
-            markdown = self._complete(
-                payload, summary_prompt(transcript, meeting["title"], language)
-            ).strip()
+            if len(transcript) > MAX_SUMMARY_TRANSCRIPT_CHARS:
+                # 长会议：分段提取关键信息后合并，避免提示词超出上下文导致空响应或丢内容。
+                markdown = self._summarize_in_chunks(
+                    transcript, meeting, language, payload, control
+                )
+            else:
+                prompt = summary_prompt(transcript, meeting["title"], language)
+                markdown = self._complete_with_retry(payload, prompt)
             if not markdown:
                 raise ValueError("Summary response was empty")
         except Exception as error:
@@ -223,6 +315,76 @@ class LLMWorkerMixin:
         )
         self.emit("summary.ready", {"meeting_id": meeting["id"], "summary": data})
         return data
+
+    def _complete_with_retry(self, payload, prompt):
+        """生成响应；偶发空响应（CPU 上生成超时/被中断）重试一次再判失败。"""
+        markdown = self._complete(payload, prompt).strip()
+        if not markdown:
+            markdown = self._complete(payload, prompt).strip()
+        return markdown
+
+    def _summarize_in_chunks(self, transcript, meeting, language, payload, control):
+        """长转录的分段摘要：逐块提取关键信息，最后合并为完整纪要。
+
+        转录超过 ``MAX_SUMMARY_CHUNKS`` 块或合并输入超过上下文预算时，
+        截断并发出 ``worker.warning``，让用户知道纪要未覆盖全部内容。
+        """
+        chunks = _split_transcript(transcript, SUMMARY_CHUNK_CHARS)
+        truncated_chunks = len(chunks) > MAX_SUMMARY_CHUNKS
+        chunks = chunks[:MAX_SUMMARY_CHUNKS]
+        chunk_payload = {**payload, "max_tokens": SUMMARY_CHUNK_MAX_TOKENS}
+        chunk_summaries = []
+        total = len(chunks)
+        for index, chunk in enumerate(chunks):
+            self.wait_task(control)
+            prompt = chunk_summary_prompt(chunk, meeting["title"], language)
+            chunk_summaries.append(self._complete_with_retry(chunk_payload, prompt))
+            self.emit(
+                "summary.progress",
+                {
+                    "meeting_id": meeting["id"],
+                    "completed": 60 + 30 * (index + 1) // total,
+                    "total": 100,
+                    "stage": "summary.generating",
+                },
+            )
+        self.wait_task(control)
+        merge_prompt, merge_truncated = self._merge_summary_prompt(
+            chunk_summaries, meeting["title"], language
+        )
+        markdown = self._complete_with_retry(payload, merge_prompt)
+        if truncated_chunks or merge_truncated:
+            if language == "zh":
+                message = (
+                    f"会议转录过长，纪要仅覆盖前 {total} 段（约前 "
+                    f"{MAX_SUMMARY_CHUNKS * SUMMARY_CHUNK_CHARS} 字符），"
+                    "未覆盖部分未包含在纪要中。"
+                )
+            else:
+                message = (
+                    f"Meeting transcript is too long; notes cover only the first "
+                    f"{total} segments (about "
+                    f"{MAX_SUMMARY_CHUNKS * SUMMARY_CHUNK_CHARS} characters). "
+                    "Later content is not included."
+                )
+            self.emit(
+                "worker.warning",
+                {"meeting_id": meeting["id"], "code": "summary_truncated", "message": message},
+            )
+        return markdown
+
+    def _merge_summary_prompt(self, chunk_summaries, title, language):
+        """构造合并 prompt；合并输入超过上下文预算时截断并标记，避免溢出。
+
+        Returns:
+            ``(prompt, truncated)``：prompt 为合并提示词；truncated 表示是否发生了截断。
+        """
+        blocks = "\n\n---\n\n".join(chunk_summaries)
+        truncated = len(blocks) > MAX_MERGE_INPUT_CHARS
+        if truncated:
+            marker = "（分段纪要过长，已截断）" if language == "zh" else "(partial summaries truncated)"
+            blocks = blocks[:MAX_MERGE_INPUT_CHARS] + f"\n\n{marker}"
+        return merge_summary_prompt([blocks], title, language), truncated
 
     def translate(self, payload):
         """翻译一个已落库段落，并把结果写回所有同 ID 版本。

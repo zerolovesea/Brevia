@@ -22,7 +22,9 @@ const root = path.join(__dirname, '..');
 const packagedRoot = app.isPackaged ? process.resourcesPath : root;
 const startupAnimationMs = 1700;
 const startupDataWaitMs = 2200;
-const workerLineLimit = 8 * 1024 * 1024;
+// 单行 JSON 消息上限：长会议逐字稿（含逐词时间戳）可能达到数十 MB；
+// 8 MB 会在长时间录制/导入的会议请求时截断消息，64 MB 留足余量。
+const workerLineLimit = 64 * 1024 * 1024;
 const workerRequestTimeouts = new Map([
   ['meeting.audio', 15000],
   ['meeting.get', 15000],
@@ -122,6 +124,7 @@ const meetingUpdates = z.object({
   tags: z.array(z.string().max(32)).max(20),
   archived_at: z.string().max(64).nullable(),
   refined_model_id: z.string().min(1).max(128),
+  notes: z.string().max(20000),
 }).partial();
 const meetingReconfigure = id.extend({
   language: z.string().min(2).max(16).optional(),
@@ -683,7 +686,7 @@ function registerIpc() {
   });
   ipcMain.handle('meeting.export', async (_, payload) => {
     const value = id.extend({
-      content: z.enum(['transcript', 'notes', 'audio']).optional(),
+      content: z.enum(['transcript', 'notes', 'mynotes', 'audio']).optional(),
       format: z.enum(['md', 'txt', 'json', 'srt', 'docx', 'pdf', 'flac', 'wav', 'm4a']),
       track: z.enum(['mix', 'mic', 'system', 'vocals', 'accompaniment']).optional(),
     }).parse(payload);
@@ -731,7 +734,7 @@ function registerIpc() {
     const value = z.object({
       meeting_id: z.string().uuid(),
       kind: z.enum(['export', 'bundle']).default('export'),
-      content: z.enum(['transcript', 'notes', 'audio']).optional(),
+      content: z.enum(['transcript', 'notes', 'mynotes', 'audio']).optional(),
       format: z.enum(['md', 'txt', 'json', 'srt', 'docx', 'pdf', 'flac', 'wav', 'm4a']).optional(),
       track: z.enum(['mix', 'mic', 'system', 'vocals', 'accompaniment']).optional(),
     }).parse(payload);
@@ -752,7 +755,7 @@ function registerIpc() {
       file: z.object({
         meeting_id: z.string().uuid(),
         kind: z.enum(['export', 'bundle']).default('export'),
-        content: z.enum(['transcript', 'notes', 'audio']).optional(),
+        content: z.enum(['transcript', 'notes', 'mynotes', 'audio']).optional(),
         format: z.enum(['md', 'txt', 'json', 'srt', 'docx', 'pdf', 'flac', 'wav', 'm4a']).optional(),
         track: z.enum(['mix', 'mic', 'system', 'vocals', 'accompaniment']).optional(),
       }).optional(),
