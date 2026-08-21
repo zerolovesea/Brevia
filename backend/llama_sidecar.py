@@ -120,10 +120,27 @@ class LlamaSidecar:
         top_k: int = 40,
         top_p: float = 0.95,
         stop: Optional[list] = None,
+        chat: bool = False,
     ) -> str:
-        """从已加载的模型生成文本。"""
+        """从已加载的模型生成文本。
+
+        ``chat`` 为 True 时走聊天模板（``create_chat_completion``）。Qwen 系列在
+        原始 completion 模式下会额外输出 <think> 思维链，浪费 token 并导致纪要
+        正文被截断；聊天模板能正确抑制思考、直接产出最终答案。
+        """
         if not self.model:
             raise RuntimeError("Model not loaded")
+
+        if chat:
+            response = self.model.create_chat_completion(
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=max_tokens,
+                temperature=temperature,
+                top_k=top_k,
+                top_p=top_p,
+                stop=stop or [],
+            )
+            return response["choices"][0]["message"]["content"]
 
         response = self.model(
             prompt,
@@ -161,6 +178,7 @@ class LlamaSidecar:
                 top_k = request.get("top_k", 40)
                 top_p = request.get("top_p", 0.95)
                 stop = request.get("stop_tokens")
+                chat = bool(request.get("chat"))
 
                 text = self.generate(
                     prompt=prompt,
@@ -169,6 +187,7 @@ class LlamaSidecar:
                     top_k=top_k,
                     top_p=top_p,
                     stop=stop,
+                    chat=chat,
                 )
 
                 return {"type": "response", "text": text, "error": None}

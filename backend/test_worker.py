@@ -24,6 +24,7 @@ from .storage import Store
 from .worker import Worker, install_global_error_handlers, main
 from .worker_common import TaskCancelled
 from .worker_core import WorkerCore
+from .llama_sidecar import LlamaSidecar
 from .worker_llama_sidecar import _Sidecar, strip_reasoning
 
 
@@ -59,6 +60,23 @@ class WorkerTest(unittest.TestCase):
         for patcher in patchers:
             patcher.start()
         self.addCleanup(lambda: [p.stop() for p in patchers])
+
+    def test_llama_sidecar_chat_generation_uses_chat_template(self):
+        sidecar = LlamaSidecar()
+        sidecar.model = Mock()
+        sidecar.model.create_chat_completion.return_value = {
+            "choices": [{"message": {"content": "# Meeting notes"}}]
+        }
+
+        self.assertEqual(sidecar.generate("Summarize this", max_tokens=1200, chat=True), "# Meeting notes")
+        sidecar.model.create_chat_completion.assert_called_once_with(
+            messages=[{"role": "user", "content": "Summarize this"}],
+            max_tokens=1200,
+            temperature=0.7,
+            top_k=40,
+            top_p=0.95,
+            stop=[],
+        )
 
     def test_ai_note_emits_suggestion_and_dedups(self):
         meeting_id = "11111111-1111-1111-1111-111111111111"

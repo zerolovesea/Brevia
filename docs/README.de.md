@@ -1,6 +1,6 @@
 <p align="center"><img src="assets/brevia-mark.svg" width="258" alt="Brevia" /></p>
 
-<p align="center"><strong>Ein minimalistischer, local-first KI-Meeting-Assistent.</strong><br />Live-Transkription · mehrsprachig · Sprechererkennung · KI-Zusammenfassungen — Audio verlaesst dein Geraet nie.</p>
+<p align="center"><strong>Ein minimalistischer, local-first KI-Meeting-Assistent.</strong><br />AI-Assist-Notizen · Live-Transkription · mehrsprachig · Sprechererkennung · ueberpruefbare Zusammenfassungen — Audio verlaesst dein Geraet nie.</p>
 
 <p align="center">
   <a href="https://github.com/zerolovesea/Brevia/releases"><img src="https://img.shields.io/github/v/release/zerolovesea/Brevia?style=flat-square" alt="Release" /></a>
@@ -21,9 +21,17 @@ Brevia ist ein Desktop-KI-Meeting-Assistent, der den zeitaufwendigsten Teil jede
 
 Das Design ist bewusst zurueckhaltend: eine Oberflaeche, die das Meeting nicht stoert, ein Funktionsumfang, der einem klaren Bogen folgt — **erfassen → verstehen → wiederfinden** — und eine feste Regel: Was lokal moeglich ist, geschieht auch lokal.
 
-<p align="center"><img src="assets/demo/transcription-en.gif" width="820" alt="Brevia Demo: Live-Transkription und -Uebersetzung" /></p>
+<p align="center"><img src="assets/demo/ai-assist-en.gif" width="820" alt="Brevia AI-Assist-Notizen-Demo" /></p>
 
 ## Funktionen
+
+### Ueberpruefbare AI-Assist-Notizen
+
+AI Assist verfolgt das Live-Transkript und kann Entscheidungen, Aufgaben, wichtige Zahlen, Risiken, Fragen und Themenwechsel hervorheben. Waehle bei Bedarf, dezente Hinweise oder automatische Organisation. Alle Vorschlaege bleiben ueberpruefbar: Fuege nur Nuetzliches zu deinen Notizen hinzu und schreibe daneben in Rich Text oder Markdown weiter.
+
+AI Assist nutzt die vorhandene Konfiguration des Zusammenfassungsmodells. Bei einem Remote-Anbieter werden nur Transkripttext und aktueller Notizkontext gesendet; Audio verlaesst dein Geraet nie.
+
+![AI-Assist-Notizen](assets/tour/en/AI%20Assist%20Notes.png)
 
 ### Eine ruhige Meeting-Oberflaeche mit Live-Transkription und -Uebersetzung
 
@@ -31,13 +39,11 @@ Oeffnen, Aufnahme starten, Untertitel zusehen. Brevia erfasst Mikrofon und Syste
 
 ![Live-Meeting und Uebersetzung](assets/tour/en/%E5%AE%9E%E6%97%B6%E4%BC%9A%E8%AE%AE%E5%92%8C%E7%BF%BB%E8%AF%91.png)
 
-### 30+ Transkriptionssprachen und KI-Meeting-Notizen
+### 30+ Transkriptionssprachen und Meeting-Zusammenfassungen
 
-Brevia transkribiert Sprache in mehr als 30 Sprachen — Englisch, Chinesisch, Japanisch, Koreanisch, Franzoesisch, Deutsch, Spanisch, Russisch, Arabisch, Thai, Vietnamesisch, Indonesisch und mehr. Nach Ende des Meetings verbindest du einen beliebigen LLM-Anbieter, und Brevia entwirft in einem Durchgang die Zusammenfassung, wichtigen Entscheidungen und To-dos.
+Brevia transkribiert Sprache in mehr als 30 Sprachen — Englisch, Chinesisch, Japanisch, Koreanisch, Franzoesisch, Deutsch, Spanisch, Russisch, Arabisch, Thai, Vietnamesisch, Indonesisch und mehr. Nach Ende des Meetings verbindest du einen beliebigen LLM-Anbieter, und Brevia entwirft aus deinem ueberprueften Transkript die Zusammenfassung, wichtigen Entscheidungen und To-dos.
 
 Die integrierte KI fuehrt ein mitgeliefertes Modell auf dem eigenen Rechner aus. Alternativ lassen sich Claude, OpenAI, OpenRouter oder jeder Dienst anbinden, der das Chat-Format von OpenAI oder Anthropic spricht. Es wird nur Text gesendet, niemals Audio.
-
-![Mehrsprachige Unterstuetzung und KI-Notizen](assets/tour/en/%E5%A4%9A%E8%AF%AD%E8%A8%80%E6%94%AF%E6%8C%81%E4%B8%8E%E4%BC%9A%E8%AE%AE%E7%BA%AA%E8%A6%81.png)
 
 ### Stimmprofil-Registrierung und meetinguebergreifende Sprechererkennung
 
@@ -58,6 +64,7 @@ Herunterladbare Modelle fuer Streaming-ASR, Offline-Verfeinerung, Zeichensetzung
 - **Quellentrennung** — Spleeter trennt Aufnahmen in Vokal- und Nicht-Vokal-Spuren fuer die Nachbearbeitung.
 - **Audio-Import** — bring bestehende Aufnahmen fuer die Offline-Transkription in die gleiche Sprachpipeline.
 - **Vielseitige Exporte** — Transkripte und Notizen als Markdown, TXT, JSON, SRT, DOCX oder PDF; Audio als FLAC, WAV oder M4A.
+- **Ueberpruefbare Notizen** — schreibe in Rich Text oder Markdown und uebernimm nur hilfreiche KI-Vorschlaege.
 - **Mehrsprachige Oberflaeche** — Englisch, vereinfachtes Chinesisch, Spanisch, Japanisch, Koreanisch, Franzoesisch, Deutsch und Russisch.
 
 ## Installation

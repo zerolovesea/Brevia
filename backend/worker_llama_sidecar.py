@@ -191,8 +191,12 @@ class LlamaSidecarMixin:
         top_k: int = 40,
         top_p: float = 0.95,
         stop_tokens: Optional[list] = None,
+        chat: bool = False,
     ) -> str:
-        """通过命名 sidecar 使用已下载的 GGUF 模型生成文本。"""
+        """通过命名 sidecar 使用已下载的 GGUF 模型生成文本。
+
+        ``chat`` 为 True 时走聊天模板，用于摘要等需要抑制思维链的任务。
+        """
         model_file = self._resolve_gguf(model_id)
         request = {
             "type": "generate",
@@ -204,6 +208,7 @@ class LlamaSidecarMixin:
             "top_k": top_k,
             "top_p": top_p,
             "stop_tokens": stop_tokens,
+            "chat": chat,
         }
         response = self._get_sidecar(sidecar_name).request(request)
         if response.get("type") == "error":
@@ -213,13 +218,16 @@ class LlamaSidecarMixin:
         return strip_reasoning(response.get("text", ""))
 
     def llama_sidecar_complete(self, payload: dict, prompt: str) -> str:
-        """通过内置 AI（``summary`` sidecar）进行摘要侧补全。"""
+        """通过内置 AI（``summary`` sidecar）进行摘要侧补全。
+
+        摘要走聊天模板（``chat=True``）：Qwen 系列在原始 completion 下会先输出
+        <think> 思维链，占用输出预算并导致纪要正文被截断；聊天模板能抑制思考、
+        直接产出完整纪要。
+        """
         # UI 在 ``model`` 中发送选定的 GGUF 目录 id；接受显式的 ``model_id`` 别名作为回退。
         model_id = payload.get("model_id") or payload.get("model")
         if not model_id:
             raise ValueError("Built-in AI requires a model id in payload")
-        if model_id.startswith("qwen3"):
-            prompt = f"{prompt}\n/no_think"
         return self.llama_generate(
             "summary",
             model_id,
@@ -230,6 +238,7 @@ class LlamaSidecarMixin:
             top_k=payload.get("top_k", 40),
             top_p=payload.get("top_p", 0.95),
             stop_tokens=payload.get("stop_tokens"),
+            chat=True,
         )
 
     def llama_generate_realtime(self, model_id: str, prompt: str) -> str:

@@ -18,6 +18,11 @@ MAX_SUMMARY_CHUNKS = 6
 SUMMARY_CHUNK_MAX_TOKENS = 768
 # 合并阶段输入的字符上限（中文约等于 token 数）：超出后截断并提示。
 MAX_MERGE_INPUT_CHARS = 12000
+# 内置纪要模型单次生成的输出 token 上限。内置模型在本地 CPU/GPU 上逐 token 生成，
+# 输出越长耗时线性增长。摘要走聊天模板（抑制思维链）后正文不再被 <think> 挤占预算，
+# 1200 token 足够覆盖常规会议的完整纪要结构（若仍触顶会走 finish_reason=length，
+# 但相比 900 大幅降低截断概率）。
+SUMMARY_MAX_TOKENS = 1200
 
 
 def clean_summary_markdown(markdown):
@@ -152,7 +157,17 @@ def summary_prompt(transcript, title, language):
 - 列出重要日期、金额、数量、版本号、项目编号或技术参数。""".format(title=title)
     else:
         instructions = SUMMARY_PROMPTS.get(language, SUMMARY_PROMPTS["en"]).format(title=title)
-    return f"{instructions}\n\nDo not reveal reasoning or a thinking process. Begin directly with the requested Markdown.\n\n<transcript>\n{transcript}\n</transcript>"
+    length_note = {
+        "zh": "请聚焦重点、突出结论与行动项，控制纪要总长度（中文约 600~900 字），避免逐句复述全部讨论细节。",
+        "en": "Keep the notes focused: emphasize conclusions and action items, and keep the total output concise (roughly 400~700 words). Do not paraphrase every line of the transcript.",
+        "es": "Mantén las notas enfocadas: prioriza conclusiones y tareas, y mantén el resultado conciso.",
+        "ja": "要点を絞り、結論と行動項目を優先し、出力を簡潔に保ってください。",
+        "ko": "핵심에 집중해 결론과 실행 항목을 우선하고 출력을 간결하게 유지하세요.",
+        "fr": "Restez concis et priorisez conclusions et actions dans vos notes.",
+        "de": "Halten Sie die Notizen fokussiert und knapp; priorisieren Sie Schlussfolgerungen und Aufgaben.",
+        "ru": "Делайте заметки сфокусированными и краткими, выделяя выводы и задачи.",
+    }.get(language, "Keep the notes focused and concise, emphasizing conclusions and action items.")
+    return f"{instructions}\n\n{length_note}\n\nDo not reveal reasoning or a thinking process. Begin directly with the requested Markdown.\n\n<transcript>\n{transcript}\n</transcript>"
 
 
 def _split_transcript(transcript, chunk_chars):
@@ -296,7 +311,13 @@ class LLMWorkerMixin:
                 )
             else:
                 prompt = summary_prompt(transcript, meeting["title"], language)
-                markdown = self._complete_with_retry(payload, prompt)
+                # 内置模型在本地逐 token 生成：限制单轮输出长度，避免长纪要拖慢等待时间。
+                if (payload.get("provider") or "").lower() in {"built-in", "builtin"}:
+                    markdown = self._complete_with_retry(
+                        {**payload, "max_tokens": SUMMARY_MAX_TOKENS}, prompt
+                    )
+                else:
+                    markdown = self._complete_with_retry(payload, prompt)
             self.wait_task(control)
             if not markdown:
                 raise ValueError("Summary response was empty")

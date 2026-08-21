@@ -3135,7 +3135,6 @@ const liveNotesEditor = createNotesEditor(liveNotesRoot, {
 function aiAssistEmptyRoot() { return document.querySelector('[data-ai-assist-empty]'); }
 function aiAssistToggleButton() { return document.querySelector('[data-ai-assist-toggle]'); }
 function aiRequestButton() { return document.querySelector('[data-ai-request]'); }
-const aiRequestLabels = { zh: '请求建议', en: 'Request suggestion', es: 'Pedir sugerencia', ja: '提案を求める', ko: '제안 요청', fr: 'Demander une suggestion', de: 'Vorschlag anfordern', ru: 'Запросить предложение' };
 function renderAiAssistToggle() {
   const button = aiAssistToggleButton();
   if (!button) return;
@@ -3147,7 +3146,7 @@ function renderAiAssistToggle() {
   const request = aiRequestButton();
   if (request) {
     request.hidden = !aiAssistEnabled() || aiAssistConfig.proactivity !== 'quiet';
-    request.textContent = aiRequestLabels[locale] || aiRequestLabels.en;
+    request.textContent = copy.request || aiAssistCopy.en.request;
   }
 }
 function renderAiAssistEmptyState() {
@@ -4611,6 +4610,7 @@ if (window.brevia) {
   document.addEventListener('click', (event) => {
     if (event.target.closest('[data-view-full-summary]')) { openModal('summary-detail'); return; }
     if (event.target.closest('[data-generate-summary]')) void generateMeetingSummary();
+    if (event.target.closest('[data-regenerate-summary]')) void generateMeetingSummary();
   });
 
   document.querySelector('[data-export-detail]').addEventListener('click', async () => {

@@ -1,6 +1,6 @@
 <p align="center"><img src="docs/assets/brevia-mark.svg" width="258" alt="Brevia" /></p>
 
-<p align="center"><strong>A minimal, local-first AI meeting assistant.</strong><br />Live transcription · multilingual · speaker identification · AI summaries — no audio leaves your device.</p>
+<p align="center"><strong>A minimal, local-first AI meeting assistant.</strong><br />AI Assist Notes · live transcription · multilingual · speaker identification · reviewable summaries — no audio leaves your device.</p>
 
 <p align="center">
   <a href="https://github.com/zerolovesea/Brevia/releases"><img src="https://img.shields.io/github/v/release/zerolovesea/Brevia?style=flat-square" alt="Release" /></a>
@@ -17,13 +17,21 @@
 
 ## About
 
-Brevia is a desktop AI meeting assistant that hands the most time-consuming part of any meeting — capturing, organizing, and revisiting — off to on-device AI. It records microphone and system audio at the same time, streams live captions, and turns the finished conversation into structured notes. All speech recognition runs locally; recordings, transcripts, and speaker profiles stay on your machine by default.
+Brevia is a desktop AI meeting assistant that hands the most time-consuming part of any meeting — capturing, organizing, and revisiting — off to on-device AI. It records microphone and system audio at the same time, streams live captions, and turns the finished conversation into structured notes. AI Assist Notes can surface useful moments while the meeting is still happening. All speech recognition runs locally; recordings, transcripts, and speaker profiles stay on your machine by default.
 
 The design is deliberately quiet: an interface that doesn't get in the way of the meeting, a feature set that follows a single arc — **capture → understand → retrieve** — and a firm rule that anything that can happen locally should.
 
-<p align="center"><img src="docs/assets/demo/transcription-en.gif" width="820" alt="Brevia live transcription and translation demo" /></p>
+<p align="center"><img src="docs/assets/demo/ai-assist-en.gif" width="820" alt="Brevia AI Assist Notes demo" /></p>
 
 ## Features
+
+### AI Assist Notes that stay reviewable
+
+AI Assist watches the live transcript and can surface decisions, action items, key numbers, risks, questions, and topic changes. Choose request-only, gentle prompts, or automatic organization. Suggestions remain reviewable: add only the useful ones to your notes, and write alongside them in rich text or Markdown.
+
+AI Assist uses your existing summary-model configuration. With a remote provider, only transcript text and current note context are sent; audio never leaves your device.
+
+![AI Assist Notes](docs/assets/tour/en/AI%20Assist%20Notes.png)
 
 ### A quiet meeting screen with live transcription and translation
 
@@ -31,13 +39,11 @@ Open it, press record, watch the captions appear. Brevia captures your microphon
 
 ![Live meeting and translation](docs/assets/tour/en/%E5%AE%9E%E6%97%B6%E4%BC%9A%E8%AE%AE%E5%92%8C%E7%BF%BB%E8%AF%91.png)
 
-### 30+ transcription languages and AI meeting notes
+### 30+ transcription languages and meeting summaries
 
-Brevia transcribes speech in 30+ languages — including English, Chinese, Japanese, Korean, French, German, Spanish, Russian, Arabic, Thai, Vietnamese, and Indonesian. Once a meeting ends, plug in any LLM provider and Brevia will draft the meeting summary, key decisions, and action items in one pass.
+Brevia transcribes speech in 30+ languages — including English, Chinese, Japanese, Korean, French, German, Spanish, Russian, Arabic, Thai, Vietnamese, and Indonesian. Once a meeting ends, plug in any LLM provider and Brevia will draft a summary, key decisions, and action items from your reviewed transcript.
 
 Built-in AI runs a bundled model on your own machine, or plug in Claude, OpenAI, OpenRouter, or any service that speaks the OpenAI or Anthropic chat format. Only text is sent, never audio.
-
-![Multilingual support and AI notes](docs/assets/tour/en/%E5%A4%9A%E8%AF%AD%E8%A8%80%E6%94%AF%E6%8C%81%E4%B8%8E%E4%BC%9A%E8%AE%AE%E7%BA%AA%E8%A6%81.png)
 
 ### Voiceprint enrollment and cross-meeting speaker identification
 
@@ -58,6 +64,7 @@ Downloadable models cover streaming ASR, offline refinement, punctuation restora
 - **Source separation** — Spleeter splits recordings into vocal and non-vocal stems for post-processing.
 - **Audio import** — bring in existing recordings for offline transcription through the same speech pipeline.
 - **Rich exports** — transcript and notes as Markdown, TXT, JSON, SRT, DOCX, or PDF; audio as FLAC, WAV, or M4A.
+- **Reviewable notes** — write in rich text or Markdown, then accept only the AI suggestions that help.
 - **Multilingual UI** — English, Simplified Chinese, Spanish, Japanese, Korean, French, German, and Russian.
 
 ## Install
@@ -80,7 +87,7 @@ flowchart LR
   B <-->|JSONL stdin/stdout| C[Python worker<br/>bundled runtime]
   C --> D[sherpa-onnx<br/>ASR · VAD · speakers · punctuation]
   C --> E[Local storage<br/>SQLite · audio · exports]
-  C -. explicit consent .-> F[Optional cloud API<br/>LLM summary · translation]
+  C -. explicit consent .-> F[Optional cloud API<br/>AI Assist · summaries · translation]
 ```
 
 Brevia follows a strict local-first design:
@@ -88,7 +95,7 @@ Brevia follows a strict local-first design:
 - **The renderer opens no network ports**, and every IPC message is validated by the Electron main process against a Zod schema.
 - **The main process is a thin shell.** It launches a single Python worker over JSONL stdin/stdout; the worker owns model management, audio processing, speaker profiles, local storage, and exports.
 - **Data lives in `~/brevia`** by default — SQLite, raw audio, exports, cached models, and voice profiles.
-- **Cloud calls are opt-in.** LLM summaries and translation require the user to configure a provider explicitly, and only text is sent upstream.
+- **Cloud calls are opt-in.** AI Assist, LLM summaries, and translation require the user to configure a provider explicitly, and only text is sent upstream.
 
 ## Tech stack
 

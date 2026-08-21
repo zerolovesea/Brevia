@@ -1,6 +1,6 @@
 <p align="center"><img src="assets/brevia-mark.svg" width="258" alt="Brevia" /></p>
 
-<p align="center"><strong>Un asistente de reuniones con IA minimalista y local.</strong><br />Transcripción en vivo · multilingüe · identificación de hablantes · resúmenes con IA — el audio nunca sale de tu equipo.</p>
+<p align="center"><strong>Un asistente de reuniones con IA minimalista y local.</strong><br />Notas de AI Assist · transcripción en vivo · multilingüe · identificación de hablantes · resúmenes revisables — el audio nunca sale de tu equipo.</p>
 
 <p align="center">
   <a href="https://github.com/zerolovesea/Brevia/releases"><img src="https://img.shields.io/github/v/release/zerolovesea/Brevia?style=flat-square" alt="Release" /></a>
@@ -21,9 +21,17 @@ Brevia es un asistente de reuniones con IA para escritorio que delega en la IA l
 
 El diseño es deliberadamente silencioso: una interfaz que no estorba a la reunión, un conjunto de funciones que sigue un solo arco — **capturar → entender → recuperar** — y una regla firme: lo que puede hacerse en local, se hace en local.
 
-<p align="center"><img src="assets/demo/transcription-en.gif" width="820" alt="Demostración de transcripción y traducción en vivo de Brevia" /></p>
+<p align="center"><img src="assets/demo/ai-assist-en.gif" width="820" alt="Demostración de notas con AI Assist de Brevia" /></p>
 
 ## Funcionalidades
+
+### Notas de AI Assist siempre revisables
+
+AI Assist sigue la transcripción en vivo y señala decisiones, tareas, cifras clave, riesgos, preguntas y cambios de tema. Elige entre activarlo bajo demanda, recibir avisos suaves u organizar automáticamente. Las sugerencias siempre se revisan: añade solo las útiles a tus notas y edítalas en texto enriquecido o Markdown.
+
+AI Assist usa la configuración existente del modelo de resumen. Con un proveedor remoto, solo se envían el texto de la transcripción y el contexto actual de las notas; el audio nunca sale de tu equipo.
+
+![Notas de AI Assist](assets/tour/en/AI%20Assist%20Notes.png)
 
 ### Pantalla de reunión silenciosa con transcripción y traducción en vivo
 
@@ -31,13 +39,11 @@ El diseño es deliberadamente silencioso: una interfaz que no estorba a la reuni
 
 ![Reunión y traducción en vivo](assets/tour/en/%E5%AE%9E%E6%97%B6%E4%BC%9A%E8%AE%AE%E5%92%8C%E7%BF%BB%E8%AF%91.png)
 
-### 30+ idiomas de transcripción y notas de reunión con IA
+### 30+ idiomas de transcripción y resúmenes de reuniones
 
-Brevia transcribe voz en más de 30 idiomas — inglés, chino, japonés, coreano, francés, alemán, español, ruso, árabe, tailandés, vietnamita, indonesio y más. Al terminar la reunión, conecta cualquier proveedor de LLM y Brevia redactará el resumen, decisiones clave y tareas en una sola pasada.
+Brevia transcribe voz en más de 30 idiomas — inglés, chino, japonés, coreano, francés, alemán, español, ruso, árabe, tailandés, vietnamita, indonesio y más. Al terminar la reunión, conecta cualquier proveedor de LLM y Brevia redactará el resumen, decisiones clave y tareas a partir de tu transcripción revisada.
 
 La IA integrada ejecuta un modelo incluido en tu propio equipo, o puedes conectar Claude, OpenAI, OpenRouter o cualquier servicio compatible con el formato chat de OpenAI o Anthropic. Solo se envía texto, nunca audio.
-
-![Soporte multilingüe y notas con IA](assets/tour/en/%E5%A4%9A%E8%AF%AD%E8%A8%80%E6%94%AF%E6%8C%81%E4%B8%8E%E4%BC%9A%E8%AE%AE%E7%BA%AA%E8%A6%81.png)
 
 ### Registro de voz e identificación de hablantes entre reuniones
 
@@ -58,6 +64,7 @@ Modelos descargables que cubren ASR en streaming, refinamiento offline, restaura
 - **Separación de fuentes** — Spleeter divide grabaciones en pistas vocales y no vocales para postproducción.
 - **Importación de audio** — trae grabaciones existentes para transcribirlas offline con el mismo pipeline.
 - **Exportaciones versátiles** — transcripciones y notas en Markdown, TXT, JSON, SRT, DOCX o PDF; audio en FLAC, WAV o M4A.
+- **Notas revisables** — escribe en texto enriquecido o Markdown y acepta solo las sugerencias de IA que te sirvan.
 - **Interfaz multilingüe** — inglés, chino simplificado, español, japonés, coreano, francés, alemán y ruso.
 
 ## Instalación

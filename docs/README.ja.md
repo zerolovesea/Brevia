@@ -1,6 +1,6 @@
 <p align="center"><img src="assets/brevia-mark.svg" width="258" alt="Brevia" /></p>
 
-<p align="center"><strong>ミニマルでローカル完結型の AI 会議アシスタント。</strong><br />リアルタイム文字起こし · 多言語 · 話者識別 · AI 要約 — 音声は端末から出ません。</p>
+<p align="center"><strong>ミニマルでローカル完結型の AI 会議アシスタント。</strong><br />AI Assist Notes · リアルタイム文字起こし · 多言語 · 話者識別 · 確認可能な要約 — 音声は端末から出ません。</p>
 
 <p align="center">
   <a href="https://github.com/zerolovesea/Brevia/releases"><img src="https://img.shields.io/github/v/release/zerolovesea/Brevia?style=flat-square" alt="Release" /></a>
@@ -21,9 +21,17 @@ Brevia は、会議で最も時間のかかる部分——記録・整理・振�
 
 デザインは意図的に静かです：会議の邪魔をしないインターフェース、**キャプチャ → 理解 → 検索** という一本の流れに沿った機能セット、そして「ローカルでできることはローカルで」という一貫したルール。
 
-<p align="center"><img src="assets/demo/transcription-en.gif" width="820" alt="Brevia のリアルタイム文字起こしと翻訳のデモ" /></p>
+<p align="center"><img src="assets/demo/ai-assist-en.gif" width="820" alt="Brevia AI Assist Notes のデモ" /></p>
 
 ## 機能
+
+### 確認して使える AI Assist Notes
+
+AI Assist はリアルタイム文字起こしを見ながら、決定事項、アクション、重要な数値、リスク、質問、話題の切り替わりを提示します。必要なときだけ使う、控えめな提案、自動整理から選べます。提案はすべて確認可能で、役立つものだけをノートへ追加し、リッチテキストまたは Markdown で編集できます。
+
+AI Assist は既存の要約モデル設定を利用します。リモートプロバイダ使用時に送信されるのは文字起こしテキストと現在のノート文脈だけで、音声は端末から出ません。
+
+![AI Assist Notes](assets/tour/en/AI%20Assist%20Notes.png)
 
 ### 静かな会議画面でのリアルタイム文字起こしと翻訳
 
@@ -31,13 +39,11 @@ Brevia は、会議で最も時間のかかる部分——記録・整理・振�
 
 ![リアルタイム会議と翻訳](assets/tour/en/%E5%AE%9E%E6%97%B6%E4%BC%9A%E8%AE%AE%E5%92%8C%E7%BF%BB%E8%AF%91.png)
 
-### 30 以上の文字起こし言語と AI 議事録
+### 30 以上の文字起こし言語と会議要約
 
-Brevia は 30 以上の言語で音声を文字起こしします——英語、中国語、日本語、韓国語、フランス語、ドイツ語、スペイン語、ロシア語、アラビア語、タイ語、ベトナム語、インドネシア語など。会議終了後、任意の LLM プロバイダに接続すれば、会議要約、重要な決定事項、アクションアイテムを一気に生成します。
+Brevia は 30 以上の言語で音声を文字起こしします——英語、中国語、日本語、韓国語、フランス語、ドイツ語、スペイン語、ロシア語、アラビア語、タイ語、ベトナム語、インドネシア語など。会議終了後、任意の LLM プロバイダに接続すれば、確認済みの文字起こしから会議要約、重要な決定事項、アクションアイテムを生成します。
 
 内蔵 AI はバンドルされたモデルをこの端末で実行します。Claude、OpenAI、OpenRouter、または OpenAI / Anthropic のチャット形式に対応したサービスを接続することもできます。送信されるのはテキストのみで、音声は送信されません。
-
-![多言語サポートと AI 議事録](assets/tour/en/%E5%A4%9A%E8%AF%AD%E8%A8%80%E6%94%AF%E6%8C%81%E4%B8%8E%E4%BC%9A%E8%AE%AE%E7%BA%AA%E8%A6%81.png)
 
 ### 声紋登録と会議横断での話者識別
 
@@ -58,6 +64,7 @@ Pyannote のセグメンテーションと話者埋め込みモデルを組み�
 - **ソース分離** — Spleeter が録音をボーカルと非ボーカルのトラックに分割、後処理に便利。
 - **音声インポート** — 既存の録音を持ち込んで、同じ音声パイプラインでオフライン文字起こし。
 - **豊富なエクスポート** — 文字起こしとメモを Markdown、TXT、JSON、SRT、DOCX、PDF で；音声を FLAC、WAV、M4A で。
+- **確認可能なノート** — リッチテキストまたは Markdown で書き、役立つ AI 提案だけを採用。
 - **多言語 UI** — 英語、簡体中国語、スペイン語、日本語、韓国語、フランス語、ドイツ語、ロシア語。
 
 ## インストール

@@ -1,6 +1,6 @@
 <p align="center"><img src="assets/brevia-mark.svg" width="258" alt="Brevia" /></p>
 
-<p align="center"><strong>미니멀하고 로컬 우선인 AI 회의 어시스턴트.</strong><br />실시간 전사 · 다국어 · 화자 식별 · AI 요약 — 오디오가 기기를 벗어나지 않습니다.</p>
+<p align="center"><strong>미니멀하고 로컬 우선인 AI 회의 어시스턴트.</strong><br />AI Assist Notes · 실시간 전사 · 다국어 · 화자 식별 · 검토 가능한 요약 — 오디오가 기기를 벗어나지 않습니다.</p>
 
 <p align="center">
   <a href="https://github.com/zerolovesea/Brevia/releases"><img src="https://img.shields.io/github/v/release/zerolovesea/Brevia?style=flat-square" alt="Release" /></a>
@@ -21,9 +21,17 @@ Brevia 는 회의에서 가장 시간이 많이 걸리는 부분——기록, �
 
 디자인은 의도적으로 조용합니다: 회의를 방해하지 않는 인터페이스, **캡처 → 이해 → 검색** 이라는 하나의 흐름을 따르는 기능 세트, 그리고 로컬에서 할 수 있는 일은 로컬에서 한다는 확고한 원칙.
 
-<p align="center"><img src="assets/demo/transcription-en.gif" width="820" alt="Brevia 실시간 전사 및 번역 데모" /></p>
+<p align="center"><img src="assets/demo/ai-assist-en.gif" width="820" alt="Brevia AI Assist Notes 데모" /></p>
 
 ## 기능
+
+### 검토하며 쓰는 AI Assist Notes
+
+AI Assist는 실시간 전사를 따라가며 결정, 실행 항목, 핵심 수치, 위험, 질문, 주제 전환을 제안합니다. 필요할 때만 요청하거나, 가벼운 안내 또는 자동 정리를 선택할 수 있습니다. 모든 제안은 검토 후 사용합니다. 유용한 항목만 노트에 넣고 서식 있는 텍스트 또는 Markdown으로 이어서 작성하세요.
+
+AI Assist는 기존 요약 모델 설정을 사용합니다. 원격 공급자를 쓸 때도 전사 텍스트와 현재 노트 맥락만 전송되며 오디오는 기기를 벗어나지 않습니다.
+
+![AI Assist Notes](assets/tour/en/AI%20Assist%20Notes.png)
 
 ### 조용한 회의 화면에서의 실시간 전사와 번역
 
@@ -31,13 +39,11 @@ Brevia 는 회의에서 가장 시간이 많이 걸리는 부분——기록, �
 
 ![실시간 회의와 번역](assets/tour/en/%E5%AE%9E%E6%97%B6%E4%BC%9A%E8%AE%AE%E5%92%8C%E7%BF%BB%E8%AF%91.png)
 
-### 30 개 이상의 전사 언어와 AI 회의록
+### 30 개 이상의 전사 언어와 회의 요약
 
-Brevia 는 30 개 이상의 언어로 음성을 전사합니다 — 영어, 중국어, 일본어, 한국어, 프랑스어, 독일어, 스페인어, 러시아어, 아랍어, 태국어, 베트남어, 인도네시아어 등. 회의가 끝나면 원하는 LLM 공급자를 연결하기만 하면 Brevia 가 회의 요약, 주요 결정 사항, 실행 항목을 한 번에 작성합니다.
+Brevia 는 30 개 이상의 언어로 음성을 전사합니다 — 영어, 중국어, 일본어, 한국어, 프랑스어, 독일어, 스페인어, 러시아어, 아랍어, 태국어, 베트남어, 인도네시아어 등. 회의가 끝나면 원하는 LLM 공급자를 연결해 검토한 전사를 바탕으로 회의 요약, 주요 결정 사항, 실행 항목을 작성합니다.
 
 내장 AI는 번들 모델을 이 기기에서 실행합니다. Claude, OpenAI, OpenRouter 또는 OpenAI / Anthropic 채팅 형식을 지원하는 서비스도 연결할 수 있습니다. 오디오가 아닌 텍스트만 전송됩니다.
-
-![다국어 지원과 AI 회의록](assets/tour/en/%E5%A4%9A%E8%AF%AD%E8%A8%80%E6%94%AF%E6%8C%81%E4%B8%8E%E4%BC%9A%E8%AE%AE%E7%BA%AA%E8%A6%81.png)
 
 ### 성문 등록과 회의 간 화자 식별
 
@@ -58,6 +64,7 @@ Pyannote 분할 + 화자 임베딩 모델을 사용하며 모두 기기에서 �
 - **소스 분리** — Spleeter 가 녹음을 보컬과 비보컬 트랙으로 분할해 후처리에 활용.
 - **오디오 가져오기** — 기존 녹음을 같은 음성 파이프라인으로 오프라인 전사.
 - **다양한 내보내기** — 전사와 메모를 Markdown, TXT, JSON, SRT, DOCX, PDF 로; 오디오를 FLAC, WAV, M4A 로.
+- **검토 가능한 메모** — 서식 있는 텍스트 또는 Markdown으로 작성하고 유용한 AI 제안만 반영.
 - **다국어 UI** — 영어, 중국어 간체, 스페인어, 일본어, 한국어, 프랑스어, 독일어, 러시아어.
 
 ## 설치

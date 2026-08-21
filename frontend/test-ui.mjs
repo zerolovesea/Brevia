@@ -574,6 +574,7 @@ assert.match(text(js), /renderSummaryDetailModal/);
 assert.match(text(js), /sharePanelHtml\('notes'\)/);
 assert.match(text(js), /data-format="pdf"/);
 assert.match(text(js), /data-regenerate-summary/);
+assert.match(text(js), /data-regenerate-summary\]'\)\) void generateMeetingSummary\(\)/);
 const stoppedListeners = text(app).match(/window\.brevia\.on\('meeting\.stopped'/g) || [];
 assert.equal(stoppedListeners.length, 1);
 assert.match(text(app), /window\.brevia\.on\('meeting\.stopped', async \(\{ meeting \}\) => \{[\s\S]{0,400}floatingCaptionMode = null;[\s\S]{0,150}if \(!meetingActive\) return;\s+clearInterval\(timer\);/);
@@ -1010,6 +1011,7 @@ assert.match(text(tailwind), /\.ai-assist-toggle/);
 assert.match(text(tailwind), /\.ai-assist-popover/);
 assert.match(text(i18nData), /aiAssistCopy/);
 assert.match(text(i18nData), /aiAssistCopyLocales/);
+assert.match(text(i18nData), /aiAssistRequestLabels/);
 assert.match(text(i18nData), /toggleOn: 'AI 辅助 开'/);
 // AI 辅助笔记（阶段 2 无需 AI 本地规则）：加入笔记 / 时间戳 / 信号检测。
 assert.match(text(components), /appendMarkdown\(markdown\)/);

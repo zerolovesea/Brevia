@@ -1,6 +1,6 @@
 <p align="center"><img src="assets/brevia-mark.svg" width="258" alt="Brevia" /></p>
 
-<p align="center"><strong>Un assistant de reunion IA minimaliste et local-first.</strong><br />Transcription en direct · multilingue · identification des locuteurs · resumes IA — l'audio ne quitte pas votre appareil.</p>
+<p align="center"><strong>Un assistant de reunion IA minimaliste et local-first.</strong><br />Notes AI Assist · transcription en direct · multilingue · identification des locuteurs · resumes verifiables — l'audio ne quitte pas votre appareil.</p>
 
 <p align="center">
   <a href="https://github.com/zerolovesea/Brevia/releases"><img src="https://img.shields.io/github/v/release/zerolovesea/Brevia?style=flat-square" alt="Release" /></a>
@@ -21,9 +21,17 @@ Brevia est un assistant de reunion IA pour ordinateur de bureau qui delegue a l'
 
 Le design est deliberement discret : une interface qui ne gene pas la reunion, un ensemble de fonctionnalites qui suit un seul arc — **capturer → comprendre → retrouver** — et une regle ferme : ce qui peut se faire en local doit se faire en local.
 
-<p align="center"><img src="assets/demo/transcription-en.gif" width="820" alt="Demo de transcription et traduction en direct de Brevia" /></p>
+<p align="center"><img src="assets/demo/ai-assist-en.gif" width="820" alt="Demo de AI Assist Notes de Brevia" /></p>
 
 ## Fonctionnalites
+
+### Des notes AI Assist toujours verifiables
+
+AI Assist suit la transcription en direct et peut signaler decisions, actions, chiffres cles, risques, questions et changements de sujet. Choisissez l'activation a la demande, des suggestions discretes ou l'organisation automatique. Chaque suggestion reste verifiable : ajoutez seulement les utiles a vos notes et continuez a ecrire en texte enrichi ou Markdown.
+
+AI Assist utilise votre configuration existante de modele de resume. Avec un fournisseur distant, seuls le texte de transcription et le contexte actuel des notes sont envoyes ; l'audio ne quitte jamais votre appareil.
+
+![AI Assist Notes](assets/tour/en/AI%20Assist%20Notes.png)
 
 ### Un ecran de reunion discret avec transcription et traduction en direct
 
@@ -31,13 +39,11 @@ Ouvrez l'application, appuyez sur enregistrer, et regardez les sous-titres appar
 
 ![Reunion et traduction en direct](assets/tour/en/%E5%AE%9E%E6%97%B6%E4%BC%9A%E8%AE%AE%E5%92%8C%E7%BF%BB%E8%AF%91.png)
 
-### Plus de 30 langues de transcription et des notes de reunion IA
+### Plus de 30 langues de transcription et des resumes de reunion
 
-Brevia transcrit la parole dans plus de 30 langues — anglais, chinois, japonais, coreen, francais, allemand, espagnol, russe, arabe, thai, vietnamien, indonesien et plus. Une fois la reunion terminee, branchez n'importe quel fournisseur LLM et Brevia redigera le resume, les decisions cles et les taches en un seul passage.
+Brevia transcrit la parole dans plus de 30 langues — anglais, chinois, japonais, coreen, francais, allemand, espagnol, russe, arabe, thai, vietnamien, indonesien et plus. Une fois la reunion terminee, branchez n'importe quel fournisseur LLM et Brevia redigera le resume, les decisions cles et les taches a partir de votre transcription verifiee.
 
 L'IA integree execute un modele fourni directement sur votre machine, ou vous pouvez brancher Claude, OpenAI, OpenRouter ou tout service compatible avec le format chat OpenAI ou Anthropic. Seul le texte est envoye, jamais l'audio.
-
-![Support multilingue et notes IA](assets/tour/en/%E5%A4%9A%E8%AF%AD%E8%A8%80%E6%94%AF%E6%8C%81%E4%B8%8E%E4%BC%9A%E8%AE%AE%E7%BA%AA%E8%A6%81.png)
 
 ### Enregistrement d'empreinte vocale et identification des locuteurs entre reunions
 
@@ -58,6 +64,7 @@ Des modeles telechargeables couvrant l'ASR en streaming, le raffinement hors lig
 - **Separation de sources** — Spleeter separe les enregistrements en pistes vocales et non vocales pour la post-production.
 - **Import audio** — apportez des enregistrements existants pour une transcription hors ligne via le meme pipeline.
 - **Exports riches** — transcriptions et notes en Markdown, TXT, JSON, SRT, DOCX ou PDF ; audio en FLAC, WAV ou M4A.
+- **Notes verifiables** — ecrivez en texte enrichi ou Markdown et acceptez seulement les suggestions IA utiles.
 - **Interface multilingue** — anglais, chinois simplifie, espagnol, japonais, coreen, francais, allemand et russe.
 
 ## Installation
