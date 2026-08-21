@@ -93,6 +93,10 @@ mediaContext.navigator.mediaDevices.getDisplayMedia = async () => ({ getAudioTra
 await assert.rejects(new mediaContext.AudioCapture().prepare({ mic: false, system: true }), /未检测到系统音频/);
 const localeContext = { window: {} };
 runInNewContext(text(i18nData), localeContext);
+const i18nStaticKeys = new Set([text(app), text(meetings), text(meetingDetail), text(workspaces), text(components)].flatMap((source) => [...source.matchAll(/\bt\('([^']+)'\)/g)].map((match) => match[1])));
+for (const key of i18nStaticKeys) for (const code of ['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']) {
+  assert.ok(localeContext.window.BreviaLocaleData.appCopy.stageLabels[key]?.[code] || localeContext.window.BreviaLocaleData.catalog[code].labels[key], `missing ${code} translation for ${key}`);
+}
 const meetingCacheStorage = new Map([['brevia-meetings-v1', JSON.stringify({ savedAt: Date.now(), meetings: [{ id: 'cached', deleted: false }] })]]);
 const meetingCacheContext = {
   uiData: { meetings: [] }, window: { brevia: {} }, activeLibraryNav: 'all-meetings', meetingSearch: { value: '' },
@@ -169,7 +173,10 @@ assert.match(text(js), /placements\.map\(\(placement\) => positions\[placement\]
 assert.match(text(js), /Math\.max\(8, Math\.min\(position\.left, window\.innerWidth - width - 8\)\)/);
 assert.match(text(js), /function fitSegmentSubmenu/);
 assert.match(text(js), /submenu\.classList\.contains\('is-positioned'\)/);
-assert.match(text(css), /\.app-shell\{[^}]*grid-template-columns:clamp\(220px,22vw,272px\)/);
+assert.match(text(css), /\.app-shell\{[^}]*grid-template-columns:272px minmax\(0,1fr\)/);
+assert.match(text(workspaces), /class="new-workspace"/);
+assert.match(text(tailwind), /#settings-view \.settings-card \{ @apply p-4/);
+assert.match(text(tailwind), /\.update-card \{ @apply col-span-12 flex items-center justify-between gap-6/);
 assert.match(text(css), /\.task-cards\{(?=[^}]*display:grid)(?=[^}]*overflow:visible)(?=[^}]*--task-card-back-count)/);
 assert.match(text(tailwind), /\.task-card-stack-item \{ @apply relative col-start-1 row-start-1/);
 assert.match(text(app), /stackableTaskCardSelector = '[^']*\.mini-meeting[^']*\.mini-playback/);
@@ -707,6 +714,8 @@ assert.match(text(js), /onboardingModelIds = models\.filter\(\(modelId\) => !mod
 assert.match(text(js), /modelPaths\.has\(modelId\) \? \(modelLabels\[locale\] \|\| modelLabels\.en\)\.installed/);
 assert.match(text(js), /function downloadRequiredModels/);
 assert.match(text(js), /void Promise\.all\(models\.map\(downloadRequiredModel\)\)/);
+assert.match(text(js), /if \(meeting\?\.model_required\) \{[\s\S]{0,260}downloadRequiredModels\(meeting\.model_required\);[\s\S]{0,180}showToast\(t\('正在下载会议所需模型，完成后会自动开始录制'\)\)/);
+assert.match(text(i18nData), /正在下载会议所需模型，完成后会自动开始录制/);
 assert.match(text(js), /function scheduleRequiredModelsCardRender/);
 assert.match(text(js), /requestAnimationFrame\(\(\) => \{\s*requiredModelsRenderFrame = undefined;\s*renderRequiredModelsCard\(\);/);
 assert.match(text(js), /const scrollTop = card\.querySelector\('ul'\)\?\.scrollTop \|\| 0;/);

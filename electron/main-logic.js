@@ -1,8 +1,8 @@
-const githubUpdateFeed = Object.freeze({ provider: 'github', owner: 'zerolovesea', repo: 'Brevia' });
+const modelscopeUpdateFeed = Object.freeze({ provider: 'generic', url: 'https://modelscope.cn/models/zyaztec/brevia-release/resolve/master' });
 
 function configureMacUpdater(updater) {
   updater.autoDownload = false;
-  updater.setFeedURL(githubUpdateFeed);
+  updater.setFeedURL(modelscopeUpdateFeed);
 }
 
 function createDisplayMediaHandler(desktopCapturer, writeLog) {

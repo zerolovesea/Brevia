@@ -2979,6 +2979,9 @@ document.querySelector('#meeting-form').addEventListener('submit', async (event)
     const meeting = breviaClient ? await breviaClient.start(payload, inputs) : { id: null };
     if (meeting?.model_required) {
       queueModelTask('meeting.start', { ...payload, inputs }, meeting.model_required);
+      downloadRequiredModels(meeting.model_required);
+      activateTaskCard(document.querySelector('#model-download-queue'));
+      showToast(t('正在下载会议所需模型，完成后会自动开始录制'));
       return;
     }
     activateMeeting(meeting, payload);

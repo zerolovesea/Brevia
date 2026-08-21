@@ -97,6 +97,19 @@ jobs:
         with:
           path: dist
           merge-multiple: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Write mirror release index
+        run: >
+          node -e "const fs = require('node:fs'); fs.writeFileSync('dist/release.json', JSON.stringify({ tag: process.env.GITHUB_REF_NAME, assets: fs.readdirSync('dist').filter((name) => /\\.(dmg|exe)$/.test(name)) }))"
+      - name: Mirror release to ModelScope
+        env:
+          MODELSCOPE_API_TOKEN: ${{ secrets.MODELSCOPE_API_TOKEN }}
+          MODELSCOPE_REPO: zyaztec/brevia-release
+        run: |
+          python -m pip install --disable-pip-version-check modelscope
+          modelscope --token "$MODELSCOPE_API_TOKEN" upload "$MODELSCOPE_REPO" dist --repo-type model --commit-message "Mirror $GITHUB_REF_NAME" --disable-tqdm
       - env:
           GH_TOKEN: ${{ github.token }}
         run: |

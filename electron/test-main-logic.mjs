@@ -28,7 +28,7 @@ assert.deepEqual(logged, ['WARNING', 'screen permission registration: not listed
 const updater = { setFeedURL(value) { this.feed = value; } };
 configureMacUpdater(updater);
 assert.equal(updater.autoDownload, false);
-assert.deepEqual(updater.feed, { provider: 'github', owner: 'zerolovesea', repo: 'Brevia' });
+assert.deepEqual(updater.feed, { provider: 'generic', url: 'https://modelscope.cn/models/zyaztec/brevia-release/resolve/master' });
 
 assert.equal(systemAudioSupported('darwin', '21.6.0'), false);
 assert.equal(systemAudioSupported('darwin', '22.0.0'), true);
