@@ -260,7 +260,9 @@ class RefinementWorkerMixin:
         meeting = self.store.get_meeting(payload["meeting_id"])
         if meeting["status"] == "recording":
             raise ValueError("Stop the meeting before refinement")
-        refined_model_id = payload.get("refined_model_id", meeting["refined_model_id"])
+        refined_model_id = payload.get(
+            "refined_model_id", meeting["refined_model_id"]
+        )
         if refined_model_id != meeting["refined_model_id"]:
             self.models.get(refined_model_id)
             meeting = self.store.update_meeting(
@@ -448,11 +450,12 @@ class RefinementWorkerMixin:
                         source["path"], decode_start_ms, decode_end_ms
                     )
                     raw_text, words = recognizer.decode_words(current, sample_rate)
-                    # 精修是离线完整音频，不会有流式空转重复，只清理模型标记
+                    # 音频窗口只提供识别上下文；重复在 ASR 返回的字幕文本层裁切。
                     raw_text = re.split(r"<\|endoftext\|>", str(raw_text or ""), flags=re.IGNORECASE)[0]
                     raw_text = re.sub(r"<\|[^|>]+\|>", " ", raw_text).strip()
+                    raw_text = self._trim_refinement_repeats(raw_text)
                     speaker_key = (track, turn["speaker"])
-                    text = self._trim_refinement_overlap(
+                    text, continued = self._trim_refinement_overlap_detailed(
                         previous_text.get(speaker_key, ""), raw_text
                     )
                     # 精修是离线完整音频，不会有流式空转重复；统一把中文数字转成阿拉伯，
@@ -496,6 +499,7 @@ class RefinementWorkerMixin:
                         "end_ms": end_ms,
                         "speaker": speaker,
                         "track": track,
+                        "continues_previous": continued,
                         "word_timestamps": [
                             {
                                 **word,
@@ -898,10 +902,14 @@ class RefinementWorkerMixin:
                 continue
             merged_duration = event["end_ms"] - previous["start_ms"]
             if merged_duration <= max_segment_ms:
-                previous["text"] = RefinementWorkerMixin._join_utterance_text(
-                    previous["text"], event["text"]
+                previous["text"] = RefinementWorkerMixin._join_utterance_pair(
+                    previous["text"],
+                    event["text"],
+                    continuation=bool(event.get("continues_previous")),
                 )
                 previous["end_ms"] = max(previous["end_ms"], event["end_ms"])
+                # 词级数据仅用于详情页的重叠说话人提示，完整保留各窗口即可；
+                # 文本去重不再尝试替换整组词时间戳。
                 previous["word_timestamps"].extend(event.get("word_timestamps", []))
                 continue
             # 超长：优先在 previous 最后一个句末标点处语义拆分。
@@ -912,19 +920,134 @@ class RefinementWorkerMixin:
                 )
                 continue
             assembled[-1] = head
+            # 拆分出的尾句可能仍是残句或续接窗口，沿用与普通合并相同的拼接规则
+            # （截断重启整句替换、续接窗口去掉伪句号），而不是简单按标点粘接。
+            merged_text = RefinementWorkerMixin._join_utterance_pair(
+                tail["text"],
+                event["text"],
+                continuation=bool(event.get("continues_previous")),
+            )
+            merged_words = tail["word_timestamps"] + list(event.get("word_timestamps", []))
             assembled.append(
                 {
                     **event,
-                    "text": RefinementWorkerMixin._join_utterance_text(
-                        tail["text"], event["text"]
-                    ),
+                    "text": merged_text,
                     "start_ms": tail["start_ms"],
                     "end_ms": event["end_ms"],
-                    "word_timestamps": tail["word_timestamps"]
-                    + list(event.get("word_timestamps", [])),
+                    "word_timestamps": merged_words,
                 }
             )
         return assembled
+
+    @staticmethod
+    def _is_decimal_dot(text, index):
+        """判断 ``text[index]`` 处的小数点是否属于数字（两侧都是数字）。
+
+        ASR 输出里小数点（如 ``60.99亿元``、``涨幅629.44%``）不是句末标点，
+        切句与拼接时不能当成句号。仅当两侧都是数字时才是小数点。
+        """
+        return (
+            text[index] == "."
+            and index > 0
+            and text[index - 1].isdigit()
+            and index + 1 < len(text)
+            and text[index + 1].isdigit()
+        )
+
+    @staticmethod
+    def _split_sentences(text):
+        """按句末标点切分为句子（含标点），数字内的小数点不作为句末。
+
+        返回的每个片段保留标点后的前导空白，便于英文等以空格分词的语言原样粘回。
+        """
+        if not text:
+            return []
+        chunks = []
+        start = 0
+        for index, ch in enumerate(text):
+            is_end = ch in "。！？!?；;"
+            if ch == "." and not RefinementWorkerMixin._is_decimal_dot(text, index):
+                is_end = True
+            if is_end:
+                chunks.append(text[start : index + 1])
+                start = index + 1
+        if start < len(text):
+            chunks.append(text[start:])
+        return chunks
+
+    @staticmethod
+    def _numberish_core(text):
+        """返回文本去掉句末标点与计量单位后的「数字残片核心」；不是短数字则返回 ``None``。
+
+        例如 ``五十九点。`` → ``五十九``、``6000亿元。`` → ``6000``；而 ``59.17亿元。``
+        （完整数字）核心过长返回 ``None``。用于识别 ASR 把同一个数字说/转写两遍时
+        前一处的残片（中文数字、被截断的小数等）。
+        """
+        core = (text or "").strip(" \t。！？.!?；;，,、")
+        core = core.rstrip("元亿元万块角毛分个点")
+        if not core or len(core) > 4:
+            return None
+        if all(ch.isdigit() or ch in "零〇一二两三四五六七八九十百千万亿点" for ch in core):
+            return core
+        return None
+
+    @staticmethod
+    def _number_rephrase(previous, current):
+        """数字重述拼接：``previous`` 以数字残片结尾，``current`` 重述其前缀并补全数字。
+
+        ASR 跨窗口/跨句会把同一个数字说两遍，第一处常是残片、第二处用另一种形式补全：
+        「…净募集资金约五十九点。」接「募集资金约59.17亿元，刨除…」共享前缀
+        「募集资金约」，应把残片「五十九点」换成「59.17亿元」→
+        「…净募集资金约59.17亿元，刨除…」。命中返回拼接结果，否则返回 ``None``。
+        """
+        if not previous or not current:
+            return None
+        prefix = ""
+        for ch in current:
+            if "\u4e00" <= ch <= "\u9fff":
+                prefix += ch
+            else:
+                break
+        # 从长到短找 current 开头的纯中文前缀，且它出现在 previous 内部、previous 其后
+        # 是数字残片（而不是完整句）。纯中文前缀归一化与原文 1:1 对应，便于映射。
+        for length in range(min(len(prefix), 10), 3, -1):
+            piece = prefix[:length]
+            pos = previous.rfind(piece)
+            if pos < 0:
+                continue
+            tail = previous[pos + length :]
+            if RefinementWorkerMixin._numberish_core(tail) is not None:
+                return (previous[: pos + length] + current[length:]).strip()
+        # 短数词常在句首被语气词打断（「哎，对，这八千七百三。」→
+        # 「对，这8734股呢」），共享的业务前缀只剩「这」。此时只接受“中文数字
+        # 残片 → 阿拉伯数字”的明确更正，保留原来的语气词。
+        match = re.search(r"(?P<prefix>[\u4e00-\u9fff]{1,4})(?P<number>\d+(?:\.\d+)?)", current)
+        if match:
+            for length in range(len(match["prefix"]), 0, -1):
+                piece = match["prefix"][-length:]
+                pos = previous.rfind(piece)
+                tail = previous[pos + length :] if pos >= 0 else ""
+                if re.fullmatch(r"[零〇一二两三四五六七八九十百千万亿点]+[。！？.!?；;]*", tail):
+                    return previous[:pos] + current[match.start("prefix") :]
+        return None
+
+    @staticmethod
+    def _is_fragment(shorter, longer):
+        """判断 ``shorter`` 是否几乎完全是 ``longer`` 的开头残片。"""
+        shorter_norm = RefinementWorkerMixin._normalized_transcript(shorter)
+        longer_norm = RefinementWorkerMixin._normalized_transcript(longer)
+        if not shorter_norm or not longer_norm:
+            return False
+        common = 0
+        for left, right in zip(shorter_norm, longer_norm):
+            if left != right:
+                break
+            common += 1
+        return (
+            common >= 4
+            and 0 < len(shorter_norm) - common <= max(1, len(shorter_norm) // 5)
+            and (len(shorter_norm) - common) / len(shorter_norm) <= 0.2
+        )
 
     @staticmethod
     def _split_utterance_at_sentence(segment):
@@ -933,9 +1056,15 @@ class RefinementWorkerMixin:
         LLM 类 ASR 常在窗口末尾补一个「伪句末」（如 ``…but if you.``，实际句子还没完）。
         因此从后往前找第一个「后面还有实质内容」的句末标点作为切点，跳过末尾伪句末，
         避免把 ``if you ask them…`` 从中间断开。拆点用字符比例映射到时间。
+        数字内的小数点（如 ``60.99亿元``）不是句末，不会被当作切点。
         """
         text = (segment.get("text") or "").strip()
-        positions = [index for index, ch in enumerate(text) if ch in "。！？.!?；;"]
+        positions = [
+            index
+            for index, ch in enumerate(text)
+            if ch in "。！？.!?；;"
+            and not RefinementWorkerMixin._is_decimal_dot(text, index)
+        ]
         for last in reversed(positions):
             if last + 1 >= len(text):
                 continue  # 末尾句末（伪句末），跳过
@@ -983,6 +1112,88 @@ class RefinementWorkerMixin:
         ):
             return f"{previous} {current}"
         return f"{previous}{current}"
+
+    @staticmethod
+    def _join_utterance_pair(previous, current, continuation=False):
+        """合并相邻窗口文本；前一句是当前句开头的截断残片时整体替换。
+
+        跨窗口解码时，前一个窗口可能只解码出句子开头的残片（如「今天我们就打开语。」，
+        词在窗口边界被截断），后一个窗口带上下文重新解码出完整句子。若按标点拼接会
+        得到「残片。 完整句」，因此当较短的一句几乎被两句共享前缀覆盖时，整体用更
+        完整的一句替换，词级时间戳也随替换。
+
+        ``continuation`` 为真表示当前句是上一句的直接续接（重叠裁切已命中，见
+        :meth:`_trim_refinement_overlap_detailed`），上一句末尾的伪句号应去掉后再
+        拼接，与单窗口内的重复合并（:meth:`_trim_refinement_repeats`）保持一致。
+
+        词级时间戳仅用于重叠说话人提示，因此组装时始终保留各窗口的数据。
+        """
+        previous = (previous or "").strip()
+        current = (current or "").strip()
+        if not previous:
+            return current
+        if not current:
+            return previous
+        if continuation and previous[-1] in "。！？.!?；;":
+            return previous.rstrip("。！？.!?；; ").rstrip() + current
+        # 数字重述：上一段以数字残片结尾、当前段重述其前缀并补全数字（如「…净募集
+        # 资金约五十九点。」接「募集资金约59.17亿元…」），拼成完整数字。
+        rephrased = RefinementWorkerMixin._number_rephrase(previous, current)
+        if rephrased is not None:
+            return rephrased
+        # 残片常出现在相邻窗口文本的拼接边界：前一段的最后一句是当前句开头的
+        # 截断重启（如「…研究。今天我们就打开语。」接「今天我们就打开宇树的
+        # 招股说明书…」），或当前段的第一句是上一句的残片，需要整句丢弃。
+        fragment = RefinementWorkerMixin._boundary_fragment(previous, current)
+        if fragment == "previous":
+            chunks = list(RefinementWorkerMixin._split_sentences(previous))
+            head = "".join(chunks[:-1]).strip()
+            # 前一段整体就是残片：直接用当前段。
+            if not head:
+                return current
+            return RefinementWorkerMixin._join_utterance_text(head, current)
+        if fragment == "current":
+            chunks = list(RefinementWorkerMixin._split_sentences(current))
+            rest = "".join(chunks[1:]).strip()
+            if not rest:
+                return previous
+            return RefinementWorkerMixin._join_utterance_text(previous, rest)
+        if RefinementWorkerMixin._is_fragment(previous, current):
+            return current
+        if RefinementWorkerMixin._is_fragment(current, previous):
+            return previous
+        return RefinementWorkerMixin._join_utterance_text(previous, current)
+
+    @staticmethod
+    def _boundary_fragment(previous, current):
+        """判断拼接边界处是否存在截断残句，返回丢弃哪一侧。
+
+        前一段的最后一句可能是当前句开头的截断重启（返回 ``"previous"``，
+        丢弃前一段的最后一句）；当前段的第一句可能是前一段的残片（返回
+        ``"current"``，丢弃当前段的第一句）。都不是则返回 ``None``。
+
+        例如「…还得分开来研究。今天我们就打开语。」接「今天我们就打开宇树的
+        招股说明书…」：前一句的最后一句「今天我们就打开语。」是「今天我们就打
+        开宇树的招股说明书…」的截断残片，应丢弃并保留当前段。
+        """
+        prev_chunks = [
+            chunk.strip()
+            for chunk in RefinementWorkerMixin._split_sentences(previous)
+        ]
+        cur_chunks = [
+            chunk.strip()
+            for chunk in RefinementWorkerMixin._split_sentences(current)
+        ]
+        if not prev_chunks or not cur_chunks:
+            return None
+
+        prev_last = prev_chunks[-1]
+        cur_first = cur_chunks[0]
+        if RefinementWorkerMixin._is_fragment(prev_last, current) or RefinementWorkerMixin._is_fragment(prev_last, cur_first):
+            return "previous"
+        if RefinementWorkerMixin._is_fragment(cur_first, previous) or RefinementWorkerMixin._is_fragment(cur_first, prev_last):
+            return "current"
+        return None
 
     def _match_speaker_profiles(self, meeting, turns):
         """为每位 diarized speaker 的最长片段做一次声纹库匹配。"""
@@ -1044,20 +1255,40 @@ class RefinementWorkerMixin:
         标点/大小写常有差异，纯字符串精确匹配会漏掉。这里先做「去标点 + 小写」的
         归一化，在归一化文本上找最长公共后缀/前缀，再映射回原文截断。
         """
+        trimmed, _ = RefinementWorkerMixin._trim_refinement_overlap_detailed(
+            previous, text
+        )
+        return trimmed
+
+    @staticmethod
+    def _trim_refinement_overlap_detailed(previous, text):
+        """同 :meth:`_trim_refinement_overlap`，额外返回 ``continued``。
+
+        ``continued`` 为真表示当前窗口是上一窗口句子的直接续接：重叠裁切命中
+        （如「美元一圈仍然浮盈…」接「…一圈仍然浮。」），拼接时应去掉上一句句末
+        的伪句号。窗口边界落在句中时，下一窗口通常会把上下文完整重说一遍，因此
+        只要发生裁切就按续接处理；干净重复（如「2025年末」接「2025年末固定资产…」）
+        同样是句中截断，句号同样要去掉。
+        """
         if not previous or not text:
-            return text
+            return text, False
         prev_norm = RefinementWorkerMixin._normalized_transcript(previous)
         text_norm = RefinementWorkerMixin._normalized_transcript(text)
         if not prev_norm or not text_norm:
-            return text
+            return text, False
         if SequenceMatcher(None, prev_norm, text_norm).ratio() >= 0.92:
-            return ""
+            return "", False
         max_len = min(len(prev_norm), len(text_norm), 200)
-        best = 0
+        best = offset = 0
         # 精确匹配优先：先完整扫描，找到最长精确重叠。
-        for length in range(max_len, 3, -1):
-            if prev_norm[-length:] == text_norm[:length]:
-                best = length
+        # decoder 偶尔会在重复内容前多吐出一两个字（如「一好，我们先聊…」）。
+        # 重叠仍紧贴窗口开头，跳过极短前缀后匹配即可，且不会扫描到正文中误删。
+        for prefix in range(min(4, len(text_norm))):
+            for length in range(min(max_len, len(text_norm) - prefix), 3, -1):
+                if prev_norm[-length:] == text_norm[prefix : prefix + length]:
+                    best, offset = length, prefix
+                    break
+            if best:
                 break
         # 没有任何精确匹配时，才允许高相似度兜底，容忍 LLM ASR 对同一重叠音频的
         # 标点/字词抖动（如「好，我们先聊。一好，我们先聊一聊…」）。相似度够高、
@@ -1065,20 +1296,81 @@ class RefinementWorkerMixin:
         if best == 0:
             for length in range(max_len, 3, -1):
                 if length >= 4 and SequenceMatcher(
-                    None, prev_norm[-length:], text_norm[:length]
+                    None, prev_norm[-length:], text_norm[offset : offset + length]
                 ).ratio() >= 0.9:
                     best = length
                     break
         if best == 0:
-            return text
+            return text, False
         # 把归一化前缀的 best 个「词字符」映射回原文 text 的字符偏移。
         count = 0
         for index, ch in enumerate(text):
             if ch.isalnum():
                 count += 1
-                if count >= best:
-                    return text[index + 1 :].lstrip(" \t,.;:!?，。；：！？")
-        return text
+                if count >= offset + best:
+                    return (
+                        text[index + 1 :].lstrip(" \t,.;:!?，。；：！？"),
+                        True,
+                    )
+        return text, False
+
+    @staticmethod
+    def _trim_refinement_repeats(text):
+        """移除单次离线 ASR 输出中跨句的重复前缀。"""
+        sentences = []
+        previous_text = ""
+        for chunk in RefinementWorkerMixin._split_sentences(text):
+            sentence = chunk.lstrip()
+            previous = previous_text
+            previous_norm = RefinementWorkerMixin._normalized_transcript(previous)
+            sentence_norm = RefinementWorkerMixin._normalized_transcript(sentence)
+            overlap = None
+            if previous_norm and sentence_norm and sentence_norm[0] != previous_norm[0]:
+                for offset in range(1, min(4, len(sentence_norm))):
+                    for length in range(min(len(previous_norm), len(sentence_norm) - offset), 3, -1):
+                        if previous_norm[-length:] == sentence_norm[offset : offset + length]:
+                            overlap = offset + length
+                            break
+                    if overlap:
+                        break
+            if overlap:
+                count = 0
+                for index, char in enumerate(sentence):
+                    if char.isalnum():
+                        count += 1
+                        if count == overlap:
+                            sentence = sentence[index + 1 :].lstrip()
+                            break
+                merged = RefinementWorkerMixin._join_utterance_text(
+                    previous.rstrip("。！？.!?；; "), sentence
+                )
+                sentences[-1] = merged
+                previous_text = merged
+                continue
+            # 数字重述：前一句以数字残片结尾、当前句重述其前缀并补全数字
+            # （「制造基地计划投入6000亿元。」接「制造基地计划投入6.24亿元。」）。
+            rephrased = RefinementWorkerMixin._number_rephrase(previous, sentence)
+            if rephrased is not None:
+                sentences[-1] = rephrased
+                previous_text = rephrased
+                continue
+            # 截断重启：前一句是当前句开头的残片（「今天我们就打开语。」→
+            # 「今天我们就打开宇树的招股说明书…」），保留更完整的一句；
+            # 若当前句反而更短，说明它只是上一句末尾的残片，直接丢弃，避免
+            # 把完整句替换成残片。两句完全同前缀（common == min，如「互联网
+            # 金融。互联网金融有很多服务。」）不是残片，保持原样。
+            if RefinementWorkerMixin._is_fragment(previous, sentence):
+                sentences[-1] = sentence
+                previous_text = sentence
+                continue
+            if RefinementWorkerMixin._is_fragment(sentence, previous):
+                # 当前句是残片：不追加，且继续用上一句作为比较基准。
+                previous_text = previous
+                continue
+            # 未裁切时必须保留原句前空白，英文等以空格分词的语言不能粘句。
+            sentences.append(chunk)
+            previous_text = sentence
+        return "".join(sentences)
 
     @staticmethod
     def _split_long_turns(turns, maximum_ms=6000):

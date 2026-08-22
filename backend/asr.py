@@ -19,6 +19,7 @@ from .config import SETTINGS, SPEAKER_EMBEDDING_MODEL_ID
 DOWNLOAD_TIMEOUT_SECONDS = 30
 DOWNLOAD_RETRIES = 5
 DOWNLOAD_FREE_SPACE_MULTIPLIER = 2
+DEFAULT_REFINED_MODEL_ID = "funasr-nano-int8"
 DEPRECATED_MODEL_PREFIXES = (
     "campplus-zh-en-",
     "fire-red-asr2-ctc-zh-en-int8-",

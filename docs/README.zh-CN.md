@@ -21,7 +21,7 @@
 
 设计上追求"少即是多"：界面尽可能安静，不打扰会议本身；功能围绕"记录 → 理解 → 检索"这条主线展开；能本地做的绝不发到云端。
 
-<p align="center"><img src="assets/demo/ai-assist-zh.gif" width="820" alt="言录 AI 辅助笔记演示" /></p>
+<p align="center"><img src="assets/demo/ai-assist-zh.gif" width="704" alt="言录 AI 辅助笔记演示" /></p>
 
 ## 功能介绍
 

@@ -61,6 +61,7 @@ assert.match(mainSource, /headerTemplate: '<div style="width:100%;text-align:cen
 assert.match(mainSource, /value\.task === 'meeting\.refine' \? refinementWorker : worker/, 'refinement task controls target the isolated worker');
 assert.match(mainSource, /worker\.request\('meeting\.refinement-recover', \{ meeting_id: meetingId \}\)/, 'a crashed refinement returns the meeting to a retryable state');
 assert.match(mainSource, /\['meeting\.audio', 15000\]/, 'audio IPC cannot retain requests forever');
+assert.match(mainSource, /stoppingForSleep \|\| worker\.active\?\.meeting_id !== value\.meeting_id\) return \{ dropped: true \}/, 'late audio frames are dropped while a sleep stop is in progress');
 assert.match(mainSource, /abandonActive\(reason\)/, 'a worker that cannot resume clears its stale active meeting');
 assert.match(mainSource, /'meeting\.interrupted'/, 'the renderer receives an interrupted-meeting event');
 assert.match(mainSource, /worker\.active = null;\n    worker\.recycle\(\);/, 'a stopped meeting recycles native model memory');

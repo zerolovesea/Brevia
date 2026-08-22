@@ -21,7 +21,7 @@ Brevia 는 회의에서 가장 시간이 많이 걸리는 부분——기록, �
 
 디자인은 의도적으로 조용합니다: 회의를 방해하지 않는 인터페이스, **캡처 → 이해 → 검색** 이라는 하나의 흐름을 따르는 기능 세트, 그리고 로컬에서 할 수 있는 일은 로컬에서 한다는 확고한 원칙.
 
-<p align="center"><img src="assets/demo/ai-assist-en.gif" width="820" alt="Brevia AI Assist Notes 데모" /></p>
+<p align="center"><img src="assets/demo/ai-assist-en.gif" width="704" alt="Brevia AI Assist Notes 데모" /></p>
 
 ## 기능
 

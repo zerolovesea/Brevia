@@ -434,7 +434,8 @@ class AiNoteWorkerMixin:
     def _fuzzy_duplicate(norms, norm):
         """近义重复检测：与最近建议的归一化文本相似度过高则视为重复。"""
         for previous in norms[-12:]:
-            if SequenceMatcher(None, previous, norm).ratio() >= 0.85:
+            # ponytail: 字符相似度只拦截改写；若误拦截可改用语义模型重排。
+            if SequenceMatcher(None, previous, norm).ratio() >= 0.70:
                 return True
         return False
 

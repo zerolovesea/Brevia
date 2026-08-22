@@ -638,7 +638,12 @@ function registerIpc() {
     resetFloatingCaptionState();
     return result;
   });
-  handle('meeting.audio', audio, 'meeting.audio');
+  ipcMain.handle('meeting.audio', (_, payload) => {
+    const value = audio.parse(payload);
+    // 熄屏停会不会先等渲染进程的音频队列；丢弃其尾帧，避免已停止的 worker 报错。
+    if (stoppingForSleep || worker.active?.meeting_id !== value.meeting_id) return { dropped: true };
+    return worker.request('meeting.audio', value);
+  });
   handle('meeting.pause', id.extend({ paused: z.boolean() }), 'meeting.pause');
   handleModelRequirement('meeting.reconfigure', meetingReconfigure, 'meeting.reconfigure');
   ipcMain.handle('meeting.stop', async (_, payload) => {

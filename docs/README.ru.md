@@ -21,7 +21,7 @@ Brevia — это настольный ИИ-ассистент встреч, к�
 
 Дизайн намеренно спокойный: интерфейс, который не мешает встрече, набор функций, следующий единой линии — **захват → понимание → поиск** — и твёрдое правило: то, что можно сделать локально, должно делаться локально.
 
-<p align="center"><img src="assets/demo/ai-assist-en.gif" width="820" alt="Демонстрация AI Assist Notes Brevia" /></p>
+<p align="center"><img src="assets/demo/ai-assist-en.gif" width="704" alt="Демонстрация AI Assist Notes Brevia" /></p>
 
 ## Возможности
 

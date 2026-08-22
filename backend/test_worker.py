@@ -221,6 +221,13 @@ class WorkerTest(unittest.TestCase):
         self.assertEqual(count, 1, "paraphrased duplicate should be suppressed")
         self.worker.ai_note_stop({"meeting_id": meeting_id})
 
+    def test_ai_note_fuzzy_dedup_suppresses_rephrased_character_feedback(self):
+        """角色评价的补充措辞不应变成多条建议。"""
+        norms = ["女主角色塑造急躁暴躁对人敌意大让人难以共情"]
+        self.assertTrue(
+            self.worker._fuzzy_duplicate(norms, "女主角色塑造问题急躁暴躁难以共情")
+        )
+
     def test_ai_note_new_content_during_run_is_not_skipped(self):
         """调度器不打断在飞任务：运行期间到达的新内容应在下一轮被分析。"""
         meeting_id = "55555555-5555-5555-5555-555555555555"
@@ -1914,6 +1921,19 @@ class WorkerTest(unittest.TestCase):
             ),
             "IPO，语数这次发行了。",
         )
+        # 重叠前偶发的单字幻听也不能让重复漏过。
+        self.assertEqual(
+            self.worker._trim_refinement_overlap(
+                "这个故事得先从人形。", "是得先从人形机器人说起。"
+            ),
+            "机器人说起。",
+        )
+        self.assertEqual(
+            self.worker._trim_refinement_overlap(
+                "好，我们先聊。", "一好，我们先聊一聊IPO里的几个热门话题。"
+            ),
+            "一聊IPO里的几个热门话题。",
+        )
         # 不同的真实内容不能被误删。
         self.assertEqual(
             self.worker._trim_refinement_overlap(
@@ -1921,6 +1941,326 @@ class WorkerTest(unittest.TestCase):
             ),
             "接下来我们看看下一个问题。",
         )
+
+    def test_refinement_trims_repeated_prefixes_within_one_asr_output(self):
+        self.assertEqual(
+            self.worker._trim_refinement_repeats(
+                "这个故事得先从人形。 是得先从人形机器人说起。"
+            ),
+            "这个故事得先从人形机器人说起。",
+        )
+        self.assertEqual(
+            self.worker._trim_refinement_repeats(
+                "今天我们就打开语。 今天我们就打开宇树的招股说明书。"
+            ),
+            "今天我们就打开宇树的招股说明书。",
+        )
+        self.assertEqual(
+            self.worker._trim_refinement_repeats(
+                "好，我们先聊。 一好，我们先聊一聊IPO里的几个热门话题。"
+            ),
+            "好，我们先聊一聊IPO里的几个热门话题。",
+        )
+        self.assertEqual(
+            self.worker._trim_refinement_repeats("Good morning. Today we start."),
+            "Good morning. Today we start.",
+        )
+        self.assertEqual(
+            self.worker._trim_refinement_repeats("互联网金融。互联网金融有很多服务。"),
+            "互联网金融。互联网金融有很多服务。",
+        )
+
+    def test_refinement_repeats_never_replaces_complete_sentence_with_fragment(self):
+        # 残片在完整句之后（同一次 ASR 输出的尾部重启）：保留完整句，丢弃残片。
+        self.assertEqual(
+            self.worker._trim_refinement_repeats(
+                "今天我们就打开宇树的招股说明书，看看他已经把生意做到了什么程度。 今天我们就打开语。"
+            ),
+            "今天我们就打开宇树的招股说明书，看看他已经把生意做到了什么程度。",
+        )
+        # 完全同前缀（如「今天我们讨论。」是「今天我们讨论季度目标。」的前缀）
+        # 不是残片，与「互联网金融」一致保持原样。
+        self.assertEqual(
+            self.worker._trim_refinement_repeats(
+                "今天我们讨论季度目标。 今天我们讨论。"
+            ),
+            "今天我们讨论季度目标。 今天我们讨论。",
+        )
+
+    def test_refinement_overlap_reports_sentence_continuation(self):
+        # 带噪声前缀的重叠（offset >= 1）是句子续接：句首伪句号应在拼接时去掉。
+        text, continued = self.worker._trim_refinement_overlap_detailed(
+            "到了收盘，股价回落到八百三十五元，一圈仍然浮。",
+            "美元一圈仍然浮盈347100可如果有人在1100元开盘价买入500股呢？",
+        )
+        self.assertEqual(
+            text, "盈347100可如果有人在1100元开盘价买入500股呢？"
+        )
+        self.assertTrue(continued)
+        # 干净重复（offset 0）同样是句中截断续接：窗口边界落在句中，下一窗口
+        # 把上下文完整重说了一遍，句首伪句号同样要去掉。
+        text, continued = self.worker._trim_refinement_overlap_detailed(
+            "资产负债表也能看出来啊，2025年末。",
+            "出来啊，2025年末固定资产只有3500多万。",
+        )
+        self.assertEqual(text, "固定资产只有3500多万。")
+        self.assertTrue(continued)
+        # 未命中重叠时不是续接。
+        text, continued = self.worker._trim_refinement_overlap_detailed(
+            "……我们讨论完了。", "接下来我们看看下一个问题。"
+        )
+        self.assertEqual(text, "接下来我们看看下一个问题。")
+        self.assertFalse(continued)
+
+    def test_refinement_joins_utterance_pair_drops_fragment_or_period(self):
+        join = self.worker._join_utterance_pair
+        # 前一段的最后一句是截断残片：丢弃残句，保留完整句。
+        self.assertEqual(
+            join(
+                "还得分开来研究。今天我们就打开语。",
+                "今天我们就打开宇树的招股说明书，看看他已经把生意做到了什么程度。",
+            ),
+            "还得分开来研究。 今天我们就打开宇树的招股说明书，看看他已经把生意做到了什么程度。",
+        )
+        # 前一段整体就是残片：直接用当前句。
+        self.assertEqual(
+            join(
+                "今天我们就打开语。",
+                "今天我们就打开宇树的招股说明书，看看他已经把生意做到了什么程度。",
+            ),
+            "今天我们就打开宇树的招股说明书，看看他已经把生意做到了什么程度。",
+        )
+        # 当前段的第一句是残片：丢弃残句，保留前一段。
+        self.assertEqual(
+            join(
+                "今天我们就打开宇树的招股说明书，看看他已经把生意做到了什么程度。",
+                "今天我们就打开语。下一步又准备往哪里走？",
+            ),
+            "今天我们就打开宇树的招股说明书，看看他已经把生意做到了什么程度。 下一步又准备往哪里走？",
+        )
+        # 完全同前缀不是残片，普通拼接。
+        self.assertEqual(
+            join("互联网金融。", "互联网金融有很多服务。"),
+            "互联网金融。 互联网金融有很多服务。",
+        )
+        # 续接窗口：去掉上一句末尾的伪句号再拼接。
+        self.assertEqual(
+            join(
+                "到了收盘，股价回落到八百三十五元，一圈仍然浮。",
+                "盈347100可如果有人在1100元开盘价买入500股呢？",
+                continuation=True,
+            ),
+            "到了收盘，股价回落到八百三十五元，一圈仍然浮盈347100可如果有人在1100元开盘价买入500股呢？",
+        )
+        self.assertEqual(
+            join(
+                "这个量级即便在科创板。",
+                "也可以算是非常非常小盘了。",
+                continuation=True,
+            ),
+            "这个量级即便在科创板也可以算是非常非常小盘了。",
+        )
+        # 非续接窗口照常按标点拼接。
+        self.assertEqual(
+            join("今天天气很好。", "我们出发吧。"),
+            "今天天气很好。 我们出发吧。",
+        )
+
+    def test_refinement_assembles_utterances_merging_fragments(self):
+        segments = [
+            {
+                "track": "system",
+                "speaker": "system-spk-1",
+                "start_ms": 0,
+                "end_ms": 4_000,
+                "text": "今天我们就打开语。",
+                "word_timestamps": [{"start_ms": 100, "end_ms": 300, "word": "今天"}],
+            },
+            {
+                "track": "system",
+                "speaker": "system-spk-1",
+                "start_ms": 4_000,
+                "end_ms": 15_000,
+                "text": "今天我们就打开宇树的招股说明书，看看他已经把生意做到了什么程度。",
+                "word_timestamps": [
+                    {"start_ms": 4_100, "end_ms": 4_300, "word": "今天"},
+                    {"start_ms": 14_700, "end_ms": 14_900, "word": "程度"},
+                ],
+                "continues_previous": False,
+            },
+            {
+                "track": "system",
+                "speaker": "system-spk-1",
+                "start_ms": 15_000,
+                "end_ms": 20_000,
+                "text": "下一步又准备往哪里走？",
+                "word_timestamps": [
+                    {"start_ms": 15_100, "end_ms": 15_300, "word": "下一步"}
+                ],
+            },
+        ]
+        assembled = self.worker._assemble_utterances(segments)
+        self.assertEqual(len(assembled), 1)
+        self.assertEqual(
+            assembled[0]["text"],
+            "今天我们就打开宇树的招股说明书，看看他已经把生意做到了什么程度。 下一步又准备往哪里走？",
+        )
+        # 词级数据只用于重叠说话人提示，保留所有窗口的数据。
+        self.assertEqual(len(assembled[0]["word_timestamps"]), 4)
+
+    def test_refinement_assembles_utterances_continuation_strips_period(self):
+        segments = [
+            {
+                "track": "system",
+                "speaker": "system-spk-1",
+                "start_ms": 0,
+                "end_ms": 5_000,
+                "text": "这个量级即便在科创板。",
+                "word_timestamps": [],
+            },
+            {
+                "track": "system",
+                "speaker": "system-spk-1",
+                "start_ms": 5_000,
+                "end_ms": 12_000,
+                "text": "也可以算是非常非常小盘了。",
+                "word_timestamps": [],
+                "continues_previous": True,
+            },
+        ]
+        assembled = self.worker._assemble_utterances(segments)
+        self.assertEqual(
+            assembled[0]["text"],
+            "这个量级即便在科创板也可以算是非常非常小盘了。",
+        )
+        # 非续接的相邻句子保留句末标点。
+        segments[1]["text"] = "我们接下来看市值。"
+        segments[1]["continues_previous"] = False
+        assembled = self.worker._assemble_utterances(segments)
+        self.assertEqual(
+            assembled[0]["text"], "这个量级即便在科创板。 我们接下来看市值。"
+        )
+
+    def test_refinement_assembles_utterances_split_branch_joins_continuation(self):
+        # 超长拆分的尾句是残句或续接窗口时，也要走与普通合并相同的拼接规则：
+        # 续接窗口去掉伪句号，截断重启整句替换。
+        def ev(start, end, text, cont):
+            return {
+                "track": "system",
+                "speaker": "system-spk-1",
+                "start_ms": start,
+                "end_ms": end,
+                "text": text,
+                "word_timestamps": [],
+                "continues_previous": cont,
+            }
+
+        events = [
+            ev(16185, 41185, "五百二十九点四四，A股一圈是五百股。按照开盘价计算，账面浮盈四十七万四千六百元。到了收盘，股价回落到八百三十五元，一圈仍然浮。", False),
+            ev(41185, 56185, "盈347100可如果有人在1100元开盘价买入500股呢？", True),
+        ]
+        assembled = self.worker._assemble_utterances(events)
+        self.assertEqual(
+            assembled[0]["text"],
+            "五百二十九点四四，A股一圈是五百股。按照开盘价计算，账面浮盈四十七万四千六百元。",
+        )
+        self.assertEqual(
+            assembled[1]["text"],
+            "到了收盘，股价回落到八百三十五元，一圈仍然浮盈347100可如果有人在1100元开盘价买入500股呢？",
+        )
+        # 拆分出的尾句是截断残片、当前句是完整句时整体替换。
+        events = [
+            ev(101185, 116185, "还得分开来研究。今天我们就打开语。", True),
+            ev(116185, 131185, "今天我们就打开宇树的招股说明书，看看他已经把生意做到了什么程度。", False),
+        ]
+        assembled = self.worker._assemble_utterances(events)
+        self.assertEqual(len(assembled), 1)
+        self.assertEqual(
+            assembled[0]["text"],
+            "还得分开来研究。 今天我们就打开宇树的招股说明书，看看他已经把生意做到了什么程度。",
+        )
+
+    def test_refinement_number_rephrase_joins_restated_fragment(self):
+        # ASR 把同一个数字说/转写两遍：前一处是残片（中文数字/被截断），后一处
+        # 补全。拼接时应去掉残片、保留补全形式，避免「净募集资金约五十九点。
+        # 募集资金约59.17亿元」这类重复。
+        self.assertEqual(
+            self.worker._number_rephrase(
+                "扣除发行费用以后，净募集资金约五十九点。",
+                "募集资金约59.17亿元，刨除一些限售的份额。",
+            ),
+            "扣除发行费用以后，净募集资金约59.17亿元，刨除一些限售的份额。",
+        )
+        self.assertEqual(
+            self.worker._number_rephrase(
+                "制造基地计划投入6000亿元。", "制造基地计划投入6.24亿元。"
+            ),
+            "制造基地计划投入6.24亿元。",
+        )
+        self.assertEqual(
+            self.worker._trim_refinement_repeats(
+                "哎，对，这八千七百三。 对，这8734股呢，全部来自网上投资者。"
+            ),
+            "哎，对，这8734股呢，全部来自网上投资者。",
+        )
+        # 单窗口内也去重。
+        self.assertEqual(
+            self.worker._trim_refinement_repeats(
+                "制造基地计划投入6000亿元。 制造基地计划投入6.24亿元。过去语速积累最深的是身体和小脑。"
+            ),
+            "制造基地计划投入6.24亿元。过去语速积累最深的是身体和小脑。",
+        )
+        # 跨窗口合并时也去重。
+        self.assertEqual(
+            self.worker._join_utterance_pair(
+                "扣除发行费用以后，净募集资金约五十九点。",
+                "募集资金约59.17亿元，刨除一些限售的份额。",
+            ),
+            "扣除发行费用以后，净募集资金约59.17亿元，刨除一些限售的份额。",
+        )
+        # 完整数字不误删、无共享前缀/非数字残片不误删。
+        self.assertIsNone(
+            self.worker._number_rephrase(
+                "募集资金约59.17亿元。", "募集资金约59.17亿元，用于新项目。"
+            )
+        )
+        self.assertIsNone(
+            self.worker._number_rephrase("我们讨论了预算方案。", "预算方案需要再确认。")
+        )
+        self.assertIsNone(
+            self.worker._number_rephrase("我觉得这个方案可行。", "我觉得需要再讨论。")
+        )
+        self.assertIsNone(
+            self.worker._number_rephrase(
+                "我们讨论新项目A1。", "讨论新项目A2需要追加预算。"
+            )
+        )
+
+    def test_refinement_split_does_not_cut_decimal_points(self):
+        # 数字内的小数点（60.99、涨幅629.44%）不是句末标点，超长拆分与切句
+        # 都不能在它这里断开，否则会把「约60.99亿元」截成「约60. + 99亿元」。
+        self.assertEqual(
+            self.worker._split_sentences("募集资金总额约60.99亿元，扣除发行费用以后。"),
+            ["募集资金总额约60.99亿元，扣除发行费用以后。"],
+        )
+        self.assertEqual(
+            self.worker._split_sentences("涨幅629.44%，A股一手是五百股。"),
+            ["涨幅629.44%，A股一手是五百股。"],
+        )
+        # 英文句点仍是句末，数字内的小数点不是。
+        self.assertEqual(
+            self.worker._split_sentences("Good morning. Today we start at 10.30 am."),
+            ["Good morning.", " Today we start at 10.30 am."],
+        )
+        segment = {
+            "text": "好，我们先聊一聊IPO里的几个热门话题。宇树这次发行了4000多万股新股，募集资金总额约60.99亿元，扣除发行费用以后，净募集资金约五十九点。",
+            "start_ms": 0,
+            "end_ms": 30000,
+            "word_timestamps": [],
+        }
+        head, tail = self.worker._split_utterance_at_sentence(segment)
+        self.assertEqual(head["text"], "好，我们先聊一聊IPO里的几个热门话题。")
+        self.assertIn("募集资金总额约60.99亿元", tail["text"])
 
     def test_refinement_splits_long_turns_for_second_pass(self):
         turns = self.worker._split_long_turns(
@@ -2460,6 +2800,27 @@ class WorkerTest(unittest.TestCase):
             (self.worker.models, "zipformer-zh-xlarge-streaming-int8", "zh"),
         )
 
+    def test_start_defaults_refined_model_without_overwriting_explicit_model(self):
+        # 应用不提供模型选择；省略时使用 Qwen，但 worker 不应静默改写调用方值。
+        chinese = self.worker.start(
+            {
+                "title": "中文会议",
+                "language": "zh",
+                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
+            }
+        )
+        self.assertEqual(chinese["refined_model_id"], "funasr-nano-int8")
+        self.worker.stop({"meeting_id": chinese["id"], "duration_ms": 0})
+        english = self.worker.start(
+            {
+                "title": "English meeting",
+                "language": "en",
+                "streaming_model_id": "zipformer-en-streaming-int8",
+                "refined_model_id": "whisper-large-v3",
+            }
+        )
+        self.assertEqual(english["refined_model_id"], "whisper-large-v3")
+
     def test_reconfigure_hot_switches_language_and_models(self):
         ready = {"zipformer-zh-xlarge-streaming-int8", "qwen3-asr-0.6b-int8"}
         self.worker.models.is_ready = lambda model_id: model_id in ready
@@ -2475,7 +2836,7 @@ class WorkerTest(unittest.TestCase):
                     "refined_model_id": "qwen3-asr-0.6b-int8",
                 }
             )
-            ready.update({"zipformer-en-streaming-int8", "qwen3-asr-1.7b-int8"})
+            ready.add("zipformer-en-streaming-int8")
             streaming.reset_mock()
             refiner.reset_mock()
             self.events.clear()
@@ -2495,7 +2856,7 @@ class WorkerTest(unittest.TestCase):
                 updated["streaming_model_id"],
                 updated["refined_model_id"],
             ),
-            ("en", "zh", "zipformer-en-streaming-int8", "qwen3-asr-1.7b-int8"),
+            ("en", "zh", "zipformer-en-streaming-int8", "qwen3-asr-0.6b-int8"),
         )
         stored = self.worker.store.get_meeting(meeting["id"])
         self.assertEqual(
@@ -2505,13 +2866,13 @@ class WorkerTest(unittest.TestCase):
                 stored["streaming_model_id"],
                 stored["refined_model_id"],
             ),
-            ("en", "zh", "zipformer-en-streaming-int8", "qwen3-asr-1.7b-int8"),
+            ("en", "zh", "zipformer-en-streaming-int8", "qwen3-asr-0.6b-int8"),
         )
         self.assertEqual(
             streaming.call_args.args,
             (self.worker.models, "zipformer-en-streaming-int8", "en"),
         )
-        refiner.assert_called_once_with(self.worker.models, "qwen3-asr-1.7b-int8", language="en")
+        refiner.assert_not_called()
         reconfigured = [
             event for event in self.events if event["type"] == "meeting.reconfigured"
         ]

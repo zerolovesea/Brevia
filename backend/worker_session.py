@@ -8,6 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from .asr import (
+    DEFAULT_REFINED_MODEL_ID,
     ChinesePunctuation,
     EnglishPunctuation,
     LanguageIdentifier,
@@ -38,7 +39,8 @@ class RecordingSessionMixin:
         Returns:
             新会议详情；同时发布 ``meeting.started``。
         """
-        require(payload, "title", "language", "streaming_model_id", "refined_model_id")
+        require(payload, "title", "language", "streaming_model_id")
+        payload = {"refined_model_id": DEFAULT_REFINED_MODEL_ID, **payload}
         if self.active:
             raise ValueError("A meeting is already active")
         required_models = [
@@ -76,9 +78,9 @@ class RecordingSessionMixin:
             "title",
             "language",
             "streaming_model_id",
-            "refined_model_id",
             "path",
         )
+        payload = {"refined_model_id": DEFAULT_REFINED_MODEL_ID, **payload}
         source = Path(payload["path"])
         if not source.is_file():
             raise ValueError("Audio file not found")
@@ -315,16 +317,15 @@ class RecordingSessionMixin:
 
     @synchronized_recording
     def reconfigure(self, payload):
-        """会中热切换语言与实时/精修模型，对当前录音立即生效。
+        """会中热切换语言与实时模型，对当前录音立即生效。
 
-        仅重建受影响的组件：改语言会同时重建实时识别与标点；改实时模型只重建识别；
-        改精修模型只替换后续实时精修所用的模型。新模型先构建到局部变量，全部成功后
-        再原子替换，任一步骤失败都不会破坏正在运行的识别流。缺失模型会以 ``not
-        installed`` 抛出，交由上层触发下载流程。
+        仅重建受影响的组件：改语言会同时重建实时识别与标点；改实时模型只重建识别。
+        新模型先构建到局部变量，全部成功后再原子替换，任一步骤失败都不会破坏正在
+        运行的识别流。缺失模型会以 ``not installed`` 抛出，交由上层触发下载流程。
 
         Args:
             payload: ``meeting_id`` 必填；``language``、``streaming_model_id``、
-                ``refined_model_id``、``target_language`` 至少提供一项。
+                ``target_language`` 至少提供一项。
 
         Returns:
             持久化后的会议详情；同时发布 ``meeting.reconfigured``。
@@ -336,9 +337,7 @@ class RecordingSessionMixin:
         streaming_model_id = (
             payload.get("streaming_model_id") or meeting["streaming_model_id"]
         )
-        refined_model_id = (
-            payload.get("refined_model_id") or meeting["refined_model_id"]
-        )
+        refined_model_id = meeting["refined_model_id"]
         target_language = (
             payload.get("target_language")
             if "target_language" in payload
@@ -346,11 +345,10 @@ class RecordingSessionMixin:
         )
         language_changed = language != meeting["language"]
         streaming_changed = streaming_model_id != meeting["streaming_model_id"]
-        refined_changed = refined_model_id != meeting["refined_model_id"]
         target_language_changed = target_language != meeting["target_language"]
         power_saving = bool(payload.get("power_saving", self.power_saving))
         power_saving_changed = power_saving != self.power_saving
-        if not (language_changed or streaming_changed or refined_changed or target_language_changed or power_saving_changed):
+        if not (language_changed or streaming_changed or target_language_changed or power_saving_changed):
             return meeting
 
         # 先校验所有目标模型已安装，缺失即抛错（不做任何替换），让上层弹出下载。
@@ -381,7 +379,7 @@ class RecordingSessionMixin:
                     if self.models.is_ready(denoiser_id)
                     else None
                 )
-            if refined_changed or power_saving_changed:
+            if power_saving_changed:
                 new_refiner = RefinedASR(self.models, refined_model_id, language=language)
             if new_refiner is not None and new_postprocessing is None:
                 new_postprocessing = ThreadPoolExecutor(

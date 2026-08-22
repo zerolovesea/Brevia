@@ -608,13 +608,10 @@ const prepareModelChoices = {
   'active-diarization-model': [['', null], ['pyannote-segmentation-3.0', 'Pyannote + 3D-Speaker']],
   'active-vad-model': [['silero-vad', 'Silero VAD']],
 };
-// Qwen3-ASR 1.7B 在当前 sherpa-onnx（1.13.5）下不支持语言强制，中文精修幻觉
-// 严重（```java / language Chinese 等），暂时从精修模型选单移除，待上游支持后再评估。
+const DEFAULT_REFINED_MODEL_ID = 'funasr-nano-int8';
+// Qwen3-ASR 1.7B 在当前 sherpa-onnx 下不支持语言强制，暂不提供此模型。
 const removedRefinedModelIds = new Set(['qwen3-asr-1.7b-int8']);
-function modelChoices(id) {
-  if (id !== 'active-refined-model') return prepareModelChoices[id];
-  return [['', null], ...modelCatalog.filter((model) => model.stages?.includes('refined') && !removedRefinedModelIds.has(model.id)).map((model) => [model.id, model.name])];
-}
+const refinedModelName = (id = DEFAULT_REFINED_MODEL_ID) => modelCatalog.find((model) => model.id === id)?.name || 'FunASR Nano int8';
 function flowSelectWithTags(name, value, options, tagsFor) {
   const selected = options.find(([option]) => option === value) || options[0] || ['', ''];
   const disabled = options.length === 0;
@@ -627,13 +624,13 @@ function flowSelectWithTags(name, value, options, tagsFor) {
 }
 const modelTagsFor = (tags) => (id) => tags[locale]?.[id] || tags.en?.[id] || [];
 const languageModelDefaults = {
-  zh: { streaming: 'zipformer-zh-xlarge-streaming-int8', refined: 'funasr-nano-int8', segmentation: 'pyannote-segmentation-3.0' },
-  en: { streaming: 'zipformer-en-streaming-int8', refined: 'qwen3-asr-0.6b-int8', segmentation: 'pyannote-segmentation-3.0' },
-  ko: { streaming: 'zipformer-ko-streaming-int8', refined: 'qwen3-asr-0.6b-int8', segmentation: 'pyannote-segmentation-3.0' },
-  fr: { streaming: 'zipformer-fr-streaming-int8', refined: 'qwen3-asr-0.6b-int8', segmentation: 'pyannote-segmentation-3.0' },
-  es: { streaming: 'nemotron-3.5-asr-streaming-0.6b-560ms-int8', refined: 'qwen3-asr-0.6b-int8', segmentation: 'pyannote-segmentation-3.0' },
-  auto: { streaming: 'nemotron-3.5-asr-streaming-0.6b-560ms-int8', refined: 'qwen3-asr-0.6b-int8', segmentation: 'pyannote-segmentation-3.0' },
-  default: { streaming: 'nemotron-3.5-asr-streaming-0.6b-560ms-int8', refined: 'qwen3-asr-0.6b-int8', segmentation: 'pyannote-segmentation-3.0' },
+  zh: { streaming: 'zipformer-zh-xlarge-streaming-int8', refined: DEFAULT_REFINED_MODEL_ID, segmentation: 'pyannote-segmentation-3.0' },
+  en: { streaming: 'zipformer-en-streaming-int8', refined: DEFAULT_REFINED_MODEL_ID, segmentation: 'pyannote-segmentation-3.0' },
+  ko: { streaming: 'zipformer-ko-streaming-int8', refined: DEFAULT_REFINED_MODEL_ID, segmentation: 'pyannote-segmentation-3.0' },
+  fr: { streaming: 'zipformer-fr-streaming-int8', refined: DEFAULT_REFINED_MODEL_ID, segmentation: 'pyannote-segmentation-3.0' },
+  es: { streaming: 'nemotron-3.5-asr-streaming-0.6b-560ms-int8', refined: DEFAULT_REFINED_MODEL_ID, segmentation: 'pyannote-segmentation-3.0' },
+  auto: { streaming: 'nemotron-3.5-asr-streaming-0.6b-560ms-int8', refined: DEFAULT_REFINED_MODEL_ID, segmentation: 'pyannote-segmentation-3.0' },
+  default: { streaming: 'nemotron-3.5-asr-streaming-0.6b-560ms-int8', refined: DEFAULT_REFINED_MODEL_ID, segmentation: 'pyannote-segmentation-3.0' },
 };
 const preferredModelsForLanguage = (language) => languageModelDefaults[language] || languageModelDefaults.default;
 const requiredModelsForLanguage = (language) => {
@@ -650,15 +647,16 @@ function setPrepareModel(id, model) {
   const value = document.querySelector(`#${id}`);
   if (id === 'active-streaming-model') prepareForm.dataset.streamingModel = model;
   if (id === 'active-diarization-model') prepareForm.dataset.segmentationModel = model;
-  if (id === 'active-refined-model') prepareForm.dataset.refinedModel = model;
   if (id === 'active-vad-model') prepareForm.dataset.vadModel = model;
   value.dataset.model = model;
-  value.textContent = modelChoices(id)?.find(([choice]) => choice === model)?.[1] || t('自动匹配');
+  value.textContent = id === 'active-refined-model'
+    ? refinedModelName(model)
+    : prepareModelChoices[id]?.find(([choice]) => choice === model)?.[1] || t('自动匹配');
 }
 function applyLanguageModelDefaults(language) {
   const models = preferredModelsForLanguage(language);
   setPrepareModel('active-streaming-model', models.streaming);
-  setPrepareModel('active-refined-model', models.refined);
+  setPrepareModel('active-refined-model', DEFAULT_REFINED_MODEL_ID);
   setPrepareModel('active-diarization-model', models.segmentation);
 }
 const prepareModelCard = document.querySelector('.model-card');
@@ -676,7 +674,8 @@ prepareModelCard.addEventListener('click', (event) => {
 prepareModelCard.addEventListener('dblclick', (event) => {
   const value = event.target.closest('dd[id]');
   const language = new FormData(prepareForm).get('meeting-language') || 'auto';
-  const choices = value && (value.id === 'active-streaming-model' ? compatibleStreamingModels(language) : modelChoices(value.id));
+  if (value?.id === 'active-refined-model') return;
+  const choices = value && (value.id === 'active-streaming-model' ? compatibleStreamingModels(language) : prepareModelChoices[value.id]);
   if (!choices) return;
   modelPicker.innerHTML = choices.map(([id, name]) => `<button type="button" data-model-picker-choice="${value.id}" data-value="${id}">${name || t('自动匹配')}</button>`).join('');
   modelPicker.style.top = `${value.offsetTop + value.offsetHeight + 4}px`;
@@ -2154,7 +2153,7 @@ function liveStreamingModelOptions(language) {
   }
   return options;
 }
-/** 热切换当前会议的实时配置（语言/流式/精修模型）。@param {object} changes 部分配置。@returns {Promise<void>} */
+/** 热切换当前会议的实时配置（语言/流式模型）。@param {object} changes 部分配置。@returns {Promise<void>} */
 async function reconfigureLive(changes) {
   const meetingId = breviaClient?.state.meeting?.id;
   if (!window.brevia || !meetingId) return;
@@ -2917,12 +2916,12 @@ function startPowerStatusChecks() {
   powerStatusTimer = setInterval(() => void checkPowerSavingSuggestion(), 300000);
 }
 function activateMeeting(meeting, payload) {
-  const { title, workspace_id: workspaceId, language, streaming_model_id: streamingModelId, speaker_segmentation_model_id: segmentationModelId, refined_model_id: refinedModelId } = payload;
+  const { title, workspace_id: workspaceId, language, streaming_model_id: streamingModelId, speaker_segmentation_model_id: segmentationModelId, refined_model_id: refinedModelId } = meeting || payload;
   const streamingModelName = prepareModelChoices['active-streaming-model'].find(([id]) => id === streamingModelId)?.[1] || t('自动匹配');
   document.querySelector('#active-streaming-model').textContent = streamingModelName;
   liveConfig = { language: language || 'auto', streaming_model_id: streamingModelId || '', refined_model_id: refinedModelId || '', target_language: payload.target_language || null, power_saving: Boolean(payload.power_saving) };
   document.querySelector('#active-diarization-model').textContent = prepareModelChoices['active-diarization-model'].find(([id]) => id === (segmentationModelId || ''))?.[1] || t('自动匹配');
-  document.querySelector('#active-refined-model').textContent = modelChoices('active-refined-model').find(([id]) => id === refinedModelId)?.[1] || t('自动匹配');
+  document.querySelector('#active-refined-model').textContent = refinedModelName(refinedModelId);
   document.querySelector('#live-name').textContent = title;
   uiData.meetings.unshift({ id: meeting.id, tone: 'violet', title, meta: `${t('刚刚')} · 0 ${t('分钟')}`, workspaceId: workspaceId || '', workspace: workspaceId ? { name: getWorkspaceName(workspaceId) } : null, tags: [], status: { tone: 'processing', label: t('正在录制'), detail: t('本地保存') } });
   document.querySelector('#transcript-scroll').innerHTML = '';
@@ -2967,10 +2966,9 @@ document.querySelector('#meeting-form').addEventListener('submit', async (event)
   const defaults = preferredModelsForLanguage(language);
   const targetLanguage = form.get('translation-target') || null;
   const streamingModelId = prepareForm.dataset.streamingModel || defaults.streaming;
-  const refinedModelId = prepareForm.dataset.refinedModel || defaults.refined;
   const segmentationModelId = prepareForm.dataset.segmentationModel || defaults.segmentation;
   const payload = {
-    title, language, target_language: targetLanguage, streaming_model_id: streamingModelId, refined_model_id: refinedModelId,
+    title, language, target_language: targetLanguage, streaming_model_id: streamingModelId, refined_model_id: DEFAULT_REFINED_MODEL_ID,
     speaker_segmentation_model_id: segmentationModelId,
     vad_model_id: prepareForm.dataset.vadModel || 'silero-vad', num_speakers: Number(form.get('num-speakers') || -1), power_saving: form.has('power-saving'), workspace_id: form.get('meeting-workspace') || null,
   };
@@ -3005,7 +3003,7 @@ importRecording.addEventListener('click', async () => {
   try {
     const meeting = window.brevia && await window.brevia.meeting.import({
       title, language, target_language: form.get('translation-target') || null,
-      streaming_model_id: prepareForm.dataset.streamingModel || defaults.streaming, refined_model_id: prepareForm.dataset.refinedModel || defaults.refined,
+      streaming_model_id: prepareForm.dataset.streamingModel || defaults.streaming, refined_model_id: DEFAULT_REFINED_MODEL_ID,
       speaker_segmentation_model_id: prepareForm.dataset.segmentationModel || defaults.segmentation,
       num_speakers: Number(form.get('num-speakers') || -1), workspace_id: form.get('meeting-workspace') || null, path: 'selected-by-electron',
     });
@@ -4126,7 +4124,7 @@ finalTranscript.addEventListener('click', (event) => {
   }
   const refineNow = event.target.closest('[data-refine-now]');
   if (refineNow) {
-    startRefinement(uiData.detail.refinedModelId || 'qwen3-asr-0.6b-int8');
+    startRefinement(DEFAULT_REFINED_MODEL_ID);
     return;
   }
   const more = event.target.closest('[data-refine-more]');
@@ -4154,7 +4152,7 @@ finalTranscript.addEventListener('click', (event) => {
     }
     if (refineAction.dataset.refineAction === 're-refine') {
       if (menu) menu.hidden = true;
-      startRefinement(uiData.detail.refinedModelId || 'qwen3-asr-0.6b-int8', refineNumSpeakers());
+      startRefinement(DEFAULT_REFINED_MODEL_ID, refineNumSpeakers());
       return;
     }
     if (refineAction.dataset.refineAction === 'model') {
@@ -4364,7 +4362,7 @@ if (window.brevia) {
     liveConfig = { language: meeting.language || 'auto', streaming_model_id: meeting.streaming_model_id || '', refined_model_id: meeting.refined_model_id || '', target_language: meeting.target_language || null, power_saving: Boolean(meeting.power_saving) };
     setLiveTranslationEnabled(Boolean(liveConfig.target_language));
     document.querySelector('#active-streaming-model').textContent = prepareModelChoices['active-streaming-model'].find(([id]) => id === meeting.streaming_model_id)?.[1] || t('自动匹配');
-    document.querySelector('#active-refined-model').textContent = modelChoices('active-refined-model').find(([id]) => id === meeting.refined_model_id)?.[1] || t('自动匹配');
+    document.querySelector('#active-refined-model').textContent = refinedModelName(meeting.refined_model_id);
   });
   window.brevia.on('meeting.stopped', async ({ meeting }) => {
     if (floatingCaptionMode === 'live' && window.brevia?.floatingCaption) {
