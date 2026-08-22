@@ -121,6 +121,7 @@ jobs:
       - name: Commit website download links
         env:
           GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ github.ref_name }}
         run: |
           git fetch origin main
           git checkout -B main origin/main
