@@ -118,3 +118,13 @@ jobs:
           else
             gh release create "$GITHUB_REF_NAME" dist/* --title "Brevia $GITHUB_REF_NAME" --notes-file "docs/releases/$GITHUB_REF_NAME.md"
           fi
+      - name: Commit website download links
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git fetch origin main
+          git checkout -B main origin/main
+          node scripts/update-release-links.mjs
+          git add website/index-zh.html website/index-en.html
+          git diff --cached --quiet || git commit -m "chore: update download links for $GITHUB_REF_NAME"
+          git push origin main
