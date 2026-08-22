@@ -4,11 +4,15 @@ import base64
 import json
 import struct
 import sys
+import time
 import wave
 from array import array
 
 from .config import SETTINGS
 from .store_base import synchronized_storage_files
+
+
+AUDIO_MANIFEST_CHECKPOINT_SECONDS = 1
 
 
 class AudioStoreMixin:
@@ -21,12 +25,12 @@ class AudioStoreMixin:
         sample_rate=SETTINGS["audio"]["sample_rate"],
         start_ms=0,
     ):
-        """把一帧 base64 PCM16 追加到会议音轨。
+        """把一帧 PCM16 追加到会议音轨。
 
         Args:
             meeting_id: 正在录制的会议 UUID。
             track: ``mic`` 或 ``system``。
-            pcm_base64: 小端 PCM16 字节的 base64 表示；空字符串用于 flush。
+            pcm_base64: 小端 PCM16 字节或其 base64 表示；空数据用于 flush。
             sample_rate: 本帧样本率，同一音轨录制期间不可变化。
 
         Returns:
@@ -34,10 +38,26 @@ class AudioStoreMixin:
         """
         if track not in {"mic", "system"}:
             raise ValueError("Invalid audio track")
-        pcm = base64.b64decode(pcm_base64, validate=True)
+        pcm = (
+            base64.b64decode(pcm_base64, validate=True)
+            if isinstance(pcm_base64, str)
+            else bytes(pcm_base64)
+        )
         if len(pcm) % 2:
             raise ValueError("PCM16 audio has an invalid byte length")
-        manifest = self.read_manifest(meeting_id)
+        session = self._audio_sessions.get(meeting_id)
+        if session is None:
+            manifest = self.read_manifest(meeting_id)
+            # 崩溃恢复时 manifest 至多落后一秒；以每个 WAV 的已更新头部为准，
+            # 避免恢复录音时重叠或留下静音空洞。
+            for track_state in manifest.get("tracks", {}).values():
+                track_state["samples"] = sum(
+                    self._wav_samples(self.meetings_dir / meeting_id / "audio" / name)
+                    for name in track_state.get("chunks", [])
+                )
+            session = {"manifest": manifest, "writers": {}, "last_checkpoint": 0.0}
+            self._audio_sessions[meeting_id] = session
+        manifest = session["manifest"]
         state = manifest["tracks"].setdefault(
             track, {"sample_rate": sample_rate, "samples": 0, "chunks": []}
         )
@@ -54,23 +74,27 @@ class AudioStoreMixin:
                 name = f"{track}-{chunk_index:05d}.wav"
                 path = self.meetings_dir / meeting_id / "audio" / name
                 frame = data[offset : offset + take]
-                if not path.exists():
-                    with wave.open(str(path), "wb") as output:
-                        output.setnchannels(1)
-                        output.setsampwidth(2)
-                        output.setframerate(sample_rate)
-                        output.writeframes(frame)
-                else:
-                    with path.open("r+b") as output:
-                        output.seek(0, 2)
-                        output.write(frame)
-                        size = output.tell()
-                        output.seek(4)
-                        output.write(struct.pack("<I", size - 8))
-                        output.seek(40)
-                        output.write(struct.pack("<I", size - 44))
+                output = session["writers"].get(name)
+                if output is None:
+                    if not path.exists():
+                        with wave.open(str(path), "wb") as created:
+                            created.setnchannels(1)
+                            created.setsampwidth(2)
+                            created.setframerate(sample_rate)
+                    output = path.open("r+b", buffering=0)
+                    session["writers"][name] = output
+                output.seek(0, 2)
+                output.write(frame)
+                size = output.tell()
+                output.seek(4)
+                output.write(struct.pack("<I", size - 8))
+                output.seek(40)
+                output.write(struct.pack("<I", size - 44))
+                output.seek(0, 2)
                 if name not in state["chunks"]:
                     state["chunks"].append(name)
+                    # 新块必须立即登记；崩溃后才可发现它并从 WAV 头恢复准确时长。
+                    session["last_checkpoint"] = 0.0
                 state["samples"] += take // 2
                 offset += take
 
@@ -78,8 +102,54 @@ class AudioStoreMixin:
         while state["samples"] < target_samples:
             append_pcm(b"\0\0" * min(target_samples - state["samples"], chunk_samples))
         append_pcm(pcm)
-        self.write_manifest(meeting_id, manifest)
+        self.flush_audio(meeting_id)
         return state["samples"]
+
+    @staticmethod
+    def _wav_samples(path):
+        try:
+            with wave.open(str(path)) as recording:
+                return recording.getnframes()
+        except (OSError, wave.Error):
+            return 0
+
+    def recorded_duration_ms(self, meeting_id):
+        """按 WAV 实际帧数计算已录时长，供崩溃恢复使用。"""
+        audio = self.meetings_dir / meeting_id / "audio"
+        durations = []
+        for track in ("mic", "system"):
+            total_ms = 0
+            for path in sorted(audio.glob(f"{track}-*.wav")):
+                try:
+                    with wave.open(str(path)) as recording:
+                        total_ms += round(recording.getnframes() * 1000 / recording.getframerate())
+                except (OSError, wave.Error):
+                    continue
+            durations.append(total_ms)
+        return max(durations, default=0)
+
+    @synchronized_storage_files
+    def flush_audio(self, meeting_id, force=False, close=False):
+        """检查点录音清单，并可在结束会议前关闭缓存的 WAV 句柄。"""
+        session = self._audio_sessions.get(meeting_id)
+        if not session:
+            return
+        now = time.monotonic()
+        if force or now - session["last_checkpoint"] >= AUDIO_MANIFEST_CHECKPOINT_SECONDS:
+            self.write_manifest(meeting_id, session["manifest"])
+            session["last_checkpoint"] = now
+        if close:
+            for output in session["writers"].values():
+                output.close()
+            self._audio_sessions.pop(meeting_id, None)
+
+    @synchronized_storage_files
+    def close_audio_sessions(self):
+        """进程退出时释放仍在录制中的文件句柄。"""
+        for session in self._audio_sessions.values():
+            for output in session["writers"].values():
+                output.close()
+        self._audio_sessions.clear()
 
     def audio_files(self, meeting_id):
         """返回会议的分块录音列表及可播放的连续 WAV 路径。"""
@@ -152,6 +222,9 @@ class AudioStoreMixin:
     @synchronized_storage_files
     def read_manifest(self, meeting_id):
         """读取录音恢复清单；文件尚不存在时返回空字典。"""
+        session = getattr(self, "_audio_sessions", {}).get(meeting_id)
+        if session:
+            return json.loads(json.dumps(session["manifest"]))
         path = self.meetings_dir / meeting_id / "manifest.json"
         return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
 

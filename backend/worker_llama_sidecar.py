@@ -1,7 +1,7 @@
 """内置 AI 推理的 LlamaSidecar 管理。
 
-支持多个命名 sidecar 实例，使摘要和翻译各自拥有专用进程（避免每次交替调用时重新加载不同的
-GGUF）。翻译序列化由 ``worker.py`` 中的单工作线程执行器在上游强制执行。
+摘要与实时 AI 辅助共享一个 16K context sidecar；翻译保留独立进程，避免切换不同
+GGUF 时重载。翻译序列化由 ``worker.py`` 中的单工作线程执行器在上游强制执行。
 """
 
 import json
@@ -21,6 +21,7 @@ _THINKING_PROCESS = re.compile(r"^\s*(?:thinking process|reasoning|analysis)\s*:
 # 内置模型在 CPU（Windows 无 GPU 卸载时）上生成纪要很慢；超时保留足够余量，
 # 避免 2B~4B GGUF 在慢速机器上被误杀。
 REQUEST_TIMEOUT_SECONDS = 20 * 60
+ASSISTANT_SIDECAR = "assistant"
 
 
 def strip_reasoning(text: str) -> str:
@@ -218,7 +219,7 @@ class LlamaSidecarMixin:
         return strip_reasoning(response.get("text", ""))
 
     def llama_sidecar_complete(self, payload: dict, prompt: str) -> str:
-        """通过内置 AI（``summary`` sidecar）进行摘要侧补全。
+        """通过共享 ``assistant`` sidecar 进行摘要侧补全。
 
         摘要走聊天模板（``chat=True``）：Qwen 系列在原始 completion 下会先输出
         <think> 思维链，占用输出预算并导致纪要正文被截断；聊天模板能抑制思考、
@@ -229,7 +230,7 @@ class LlamaSidecarMixin:
         if not model_id:
             raise ValueError("Built-in AI requires a model id in payload")
         return self.llama_generate(
-            "summary",
+            ASSISTANT_SIDECAR,
             model_id,
             prompt,
             max_tokens=payload.get("max_tokens", 2048),
@@ -242,7 +243,7 @@ class LlamaSidecarMixin:
         )
 
     def llama_generate_realtime(self, model_id: str, prompt: str) -> str:
-        """通过专用 ``ai-note`` sidecar 运行实时短任务（短超时、可取消、限长输出）。
+        """通过共享 ``assistant`` sidecar 运行实时短任务（短超时、可取消、限长输出）。
 
         Qwen3 系列（2B/4B）默认把思维链包在 <think> 块里，会占满实时任务本就有限的
         输出预算并拖慢 CPU 推理；这里显式追加 ``/no_think`` 关闭思考，只输出 JSON。
@@ -257,13 +258,13 @@ class LlamaSidecarMixin:
             "model_path": str(model_file),
             "prompt": prompt,
             "max_tokens": REALTIME_MAX_TOKENS,
-            "context_size": 8192,
+            "context_size": 16384,
             "temperature": 0.2,
             "top_k": 40,
             "top_p": 0.95,
             "stop_tokens": ["<|im_end|>", "<|endoftext|>"],
         }
-        response = self._get_sidecar("ai-note").request(request, timeout_seconds=REALTIME_TIMEOUT_SECONDS)
+        response = self._get_sidecar(ASSISTANT_SIDECAR).request(request, timeout_seconds=REALTIME_TIMEOUT_SECONDS)
         if response.get("type") == "error":
             raise RuntimeError(f"Sidecar error: {response.get('message')}")
         if response.get("type") != "response":

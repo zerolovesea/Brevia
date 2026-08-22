@@ -22,6 +22,7 @@ from uuid import uuid4
 
 from .transcript import clock
 from .worker_common import require
+from .worker_llama_sidecar import ASSISTANT_SIDECAR
 
 # —— 实时推理预算（CPU 优先）——
 REALTIME_MAX_TOKENS = 160
@@ -128,30 +129,32 @@ class MeetingState:
                 [self.topic] if self.topic else []
             ) + self.facts + self.decisions + self.actions + self.open_questions
 
-    def to_prompt(self):
+    def to_prompt(self, labels):
         snapshot = self.snapshot()
+        topic, facts, decisions, actions, questions = labels
         lines = []
         if snapshot["topic"]:
-            lines.append(f"当前议题：{snapshot['topic']}")
+            lines.append(f"{topic}: {snapshot['topic']}")
         if snapshot["facts"]:
-            lines.append("事实：" + "；".join(snapshot["facts"]))
+            lines.append(f"{facts}: " + "; ".join(snapshot["facts"]))
         if snapshot["decisions"]:
-            lines.append("已确认决定：" + "；".join(snapshot["decisions"]))
+            lines.append(f"{decisions}: " + "; ".join(snapshot["decisions"]))
         if snapshot["actions"]:
-            lines.append("行动项：" + "；".join(snapshot["actions"]))
+            lines.append(f"{actions}: " + "; ".join(snapshot["actions"]))
         if snapshot["open_questions"]:
-            lines.append("待确认：" + "；".join(snapshot["open_questions"]))
+            lines.append(f"{questions}: " + "; ".join(snapshot["open_questions"]))
         return "\n".join(lines)
 
 
 class _AiNoteSession:
     """单场会议的 AI 辅助状态与单飞去抖调度器。"""
 
-    def __init__(self, meeting_id, connection, proactivity, language):
+    def __init__(self, meeting_id, connection, proactivity, language, prompt_copy=None):
         self.meeting_id = meeting_id
         self.language = language or "zh"
         self.connection = connection
         self.proactivity = proactivity or "assist"
+        self.prompt_copy = prompt_copy or {"instructions": "", "state_labels": ("", "", "", "", "")}
         self.meeting_state = MeetingState()
         self.recent_segments = []
         self.user_typing = False
@@ -201,18 +204,14 @@ class AiNoteWorkerMixin:
             connection,
             payload.get("proactivity", "assist"),
             payload.get("language", "zh"),
+            payload.get("prompt"),
         )
         previous = None
         with self._ai_note_lock:
             previous = self._ai_note_sessions.get(meeting_id)
-            if previous:
-                previous.stopped = True
-                with previous.cond:
-                    previous.cond.notify_all()
             self._ai_note_sessions[meeting_id] = session
         if previous:
-            # 旧的调度线程可能正卡在一次推理上：立即终止，避免占用共享 sidecar。
-            self.cancel_sidecar("ai-note")
+            self._cancel_session(previous)
         session.thread = threading.Thread(
             target=self._scheduler_loop,
             args=(session,),
@@ -254,7 +253,7 @@ class AiNoteWorkerMixin:
             else:
                 session.cond.notify_all()
         if cancel_inflight:
-            self.cancel_sidecar("ai-note")
+            self.cancel_sidecar(ASSISTANT_SIDECAR)
         return {"ok": True}
 
     def ai_note_request(self, payload):
@@ -325,8 +324,10 @@ class AiNoteWorkerMixin:
         with session.cond:
             session.stopped = True
             session.generation += 1
+            running = session.running
             session.cond.notify_all()
-        self.cancel_sidecar("ai-note")
+        if running:
+            self.cancel_sidecar(ASSISTANT_SIDECAR)
 
     def _scheduler_loop(self, session):
         """单飞去抖调度：一次只运行一个推理，新内容合并到下一轮，绝不打断在飞任务。"""
@@ -449,41 +450,14 @@ class AiNoteWorkerMixin:
         return False
 
     def _realtime_prompt(self, session):
-        state = session.meeting_state.to_prompt()[:MEETING_STATE_MAX_CHARS]
+        state = session.meeting_state.to_prompt(session.prompt_copy["state_labels"])[:MEETING_STATE_MAX_CHARS]
         lang = session.language if session.language in RECENT_TRANSCRIPT_CHARS else "en"
         recent = "\n".join(
             f"[{clock(segment['start_ms'])}] {segment['text']}"
             for segment in session.recent_segments[-REALTIME_RECENT_SEGMENTS[lang]:]
         )[:RECENT_TRANSCRIPT_CHARS[lang]]
         user = session.user_paragraph[:USER_PARAGRAPH_CHARS]
-        if session.language == "zh":
-            instructions = (
-                "你是会议实时笔记助手。从「最近字幕」和「会议状态」中挑最多3条值得记录的短信息，输出极短 JSON。\n"
-                "只使用字幕里明确出现的内容，不补全、不推测、不写空话；不重复会议状态已有的内容。\n"
-                "类型：conclusion观点 | decision决定 | action待办 | number关键数据 | date关键日期 | "
-                "question待确认 | risk风险 | topic新议题/标题 | supplement重点。\n"
-                "整体议题/节目主题明确时（尤其开头）优先输出一条 topic 作标题候选：2-12字具体名词短语，"
-                "禁止「本期播客将讨论…话题」式泛标题。\n"
-                "number/date 必须原文出现；number 要带主语背景（如「家具制造业利润仅5.36%」），不能只写数字。\n"
-                '输出 {"suggestions":[{"type":"...","text":"8-40字","importance":"high|medium"}]}；'
-                '无价值输出 {"suggestions":[]}。只输出 JSON。'
-            )
-        else:
-            instructions = (
-                "You are a realtime meeting-notes assistant. From the <recent_transcript> and "
-                "<meeting_state>, pick up to 3 short pieces worth capturing; output compact JSON. "
-                "Use only what is explicitly said; do not infer, pad, or repeat state items.\n"
-                "Types: conclusion | decision | action | number | date | question | risk | topic "
-                "(new topic/title) | supplement (noteworthy point).\n"
-                "When a clear overall topic/show title appears (especially the opening), prefer one "
-                "topic item as a title candidate: a specific 2-10 word noun phrase, never "
-                "\"In this episode we discuss...\".\n"
-                "number/date must match explicit figures; a number item must carry subject and "
-                "context (e.g. \"furniture makers' margin is only 5.36%\"), never a bare figure.\n"
-                'Output {"suggestions":[{"type":"...","text":"one short sentence",'
-                '"importance":"high|medium"}]}; output {"suggestions":[]} if nothing is valuable. '
-                "Output only JSON."
-            )
+        instructions = session.prompt_copy["instructions"]
         return (
             f"{instructions}\n\n"
             f"<meeting_state>\n{state or '(empty)'}\n</meeting_state>\n\n"

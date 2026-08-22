@@ -94,7 +94,7 @@ function revealTaskCard(card) {
   card.hidden = false;
   if (wasHidden || wasLeaving) { taskCards.append(card); enterTaskCard(card); }
 }
-const { catalog, streamingModelOptionTags, appCopy: { stageLabels, themeLabels, updateLabels, modalCopy, modelLabels, summaryModelCopy, speakerProfileCopy, voiceFeaturesCopy, aiAssistCopy } } = window.BreviaLocaleData;
+const { catalog, streamingModelOptionTags, aiNotePromptCopy, appCopy: { stageLabels, themeLabels, updateLabels, modalCopy, modelLabels, summaryModelCopy, speakerProfileCopy, voiceFeaturesCopy, aiAssistCopy } } = window.BreviaLocaleData;
 if (new URLSearchParams(location.search).has('resetOnboarding')) localStorage.removeItem('brevia-onboarding-complete');
 let locale = localStorage.getItem('brevia-language') || 'zh';
 let theme = localStorage.getItem('brevia-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
@@ -844,6 +844,7 @@ function refreshLocalizedTaskCards() {
   }
 }
 async function generateMeetingSummary(meetingId = breviaClient?.state.selectedMeetingId) {
+  if (meetingActive) { showToast(t('实时会议中，结束后再生成会议纪要。')); return; }
   const config = summaryRequestConfig();
   if (!config || !meetingId) { showSummaryConfigCard(); return; }
   showSummaryProgress(0, 100, 'summary.prepare', meetingId);
@@ -3232,7 +3233,7 @@ async function startAiNoteForMeeting(meetingId) {
   const connection = aiNoteConnection();
   if (!connection) return;
   try {
-    await window.brevia.aiNote.start({ meeting_id: meetingId, ...connection, proactivity: aiAssistConfig.proactivity, language: locale });
+    await window.brevia.aiNote.start({ meeting_id: meetingId, ...connection, proactivity: aiAssistConfig.proactivity, language: locale, prompt: aiNotePromptCopy[locale] || aiNotePromptCopy.en });
   } catch { /* Best Effort：AI 辅助启动失败不影响录音与字幕主链路 */ }
 }
 function stopAiNoteForMeeting(meetingId) {

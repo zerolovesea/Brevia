@@ -68,6 +68,9 @@ def replay(
             ),
         }
     )
+    worker._wait_prepare(60)
+    if worker.asr is None:
+        raise RuntimeError("Streaming ASR did not become ready")
 
     start_ms = 0
     fed_seconds = 0.0

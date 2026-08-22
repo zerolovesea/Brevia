@@ -150,6 +150,7 @@ class StoreBase:
         self.speaker_profiles_dir.mkdir(exist_ok=True)
         self.models_dir.mkdir(parents=True, exist_ok=True)
         self.storage_file_lock = threading.RLock()
+        self._audio_sessions = {}
         self.db_path = self.root / "brevia.db"
         with self.connect() as db:
             db.executescript(SCHEMA)

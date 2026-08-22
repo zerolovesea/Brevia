@@ -53,14 +53,7 @@ class MeetingStoreMixin:
         recovered = []
         for meeting in meetings:
             if meeting["status"] == "recording":
-                manifest = self.read_manifest(meeting["id"])
-                duration_ms = max(
-                    (
-                        round(track.get("samples", 0) * 1000 / track.get("sample_rate", 16000))
-                        for track in manifest.get("tracks", {}).values()
-                    ),
-                    default=0,
-                )
+                duration_ms = self.recorded_duration_ms(meeting["id"])
                 try:
                     self.finish_meeting(meeting["id"], duration_ms)
                 except (OSError, ValueError, wave.Error):
@@ -393,6 +386,7 @@ class MeetingStoreMixin:
         Returns:
             状态更新为 ``ready`` 的完整会议详情。
         """
+        self.flush_audio(meeting_id, force=True, close=True)
         for track in ("mic", "system"):
             self._build_playback(meeting_id, track)
         self._build_mix(meeting_id)

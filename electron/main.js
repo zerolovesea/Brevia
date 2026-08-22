@@ -167,6 +167,10 @@ const aiNoteStart = z.object({
   key_reference: z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/).optional(),
   proactivity: z.enum(['quiet', 'assist', 'auto']).default('assist'),
   language: z.enum(['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']).default('zh'),
+  prompt: z.object({
+    instructions: z.string().trim().min(1).max(4000),
+    state_labels: z.array(z.string().trim().min(1).max(64)).length(5),
+  }),
 }).refine(({ provider, endpoint }) => !requiresEndpoint(provider) || Boolean(endpoint), {
   message: 'Endpoint is required for remote providers', path: ['endpoint'],
 });

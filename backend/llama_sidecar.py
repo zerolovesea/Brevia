@@ -7,6 +7,7 @@
 
 import io
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Optional
@@ -38,25 +39,25 @@ class LlamaSidecar:
 
         # 检测 GPU 层数
         n_gpu_layers = self._detect_gpu_layers()
+        cpu_threads = self._cpu_threads() if n_gpu_layers == 0 else None
+
+        def create(layers):
+            return Llama(
+                model_path=str(path),
+                n_ctx=context_size,
+                n_gpu_layers=layers,
+                **({"n_threads": cpu_threads or self._cpu_threads()} if layers == 0 else {}),
+                verbose=False,
+            )
 
         # 加载模型。GPU 卸载失败（如 CUDA 构建但机器无对应显卡/驱动）时
         # 自动降级为纯 CPU 重试一次，而不是直接把错误抛给上层。
         try:
-            self.model = Llama(
-                model_path=str(path),
-                n_ctx=context_size,
-                n_gpu_layers=n_gpu_layers,
-                verbose=False,
-            )
+            self.model = create(n_gpu_layers)
         except Exception:
             if n_gpu_layers != 0:
                 try:
-                    self.model = Llama(
-                        model_path=str(path),
-                        n_ctx=context_size,
-                        n_gpu_layers=0,
-                        verbose=False,
-                    )
+                    self.model = create(0)
                 except Exception:
                     self.model = None
                     raise
@@ -74,6 +75,14 @@ class LlamaSidecar:
             flush=True,
             file=sys.stderr,
         )
+
+    @staticmethod
+    def _cpu_threads():
+        """为实时 ASR 留出 CPU：用户可用环境变量覆盖。"""
+        try:
+            return max(1, int(os.environ.get("BREVIA_LLAMA_THREADS", "")))
+        except ValueError:
+            return max(1, min(4, (os.cpu_count() or 2) // 2))
 
     def _detect_gpu_layers(self) -> int:
         """根据可用后端自动检测最佳 GPU 层数。

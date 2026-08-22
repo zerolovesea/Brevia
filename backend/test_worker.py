@@ -22,10 +22,11 @@ from .config import DEFAULT_SETTINGS, SETTINGS, runtime_settings, save_runtime_s
 from .llm_client import complete
 from .storage import Store
 from .worker import Worker, install_global_error_handlers, main
+from .worker_ai_note import _AiNoteSession
 from .worker_common import TaskCancelled
 from .worker_core import WorkerCore
 from .llama_sidecar import LlamaSidecar
-from .worker_llama_sidecar import _Sidecar, strip_reasoning
+from .worker_llama_sidecar import ASSISTANT_SIDECAR, _Sidecar, strip_reasoning
 
 
 class WorkerTest(unittest.TestCase):
@@ -36,6 +37,7 @@ class WorkerTest(unittest.TestCase):
         self.worker.models.is_ready = lambda _: False
 
     def tearDown(self):
+        self.worker.store.close_audio_sessions()
         self.temp.cleanup()
 
     def _wait_ai_suggestions(self, count=1, timeout=5.0):
@@ -77,6 +79,59 @@ class WorkerTest(unittest.TestCase):
             top_p=0.95,
             stop=[],
         )
+
+    def test_ai_note_and_summary_share_the_16k_sidecar(self):
+        self.worker.llama_generate = Mock(return_value="notes")
+        self.assertEqual(
+            self.worker.llama_sidecar_complete({"model": "qwen3.5-2b-q4km"}, "summary"),
+            "notes",
+        )
+        self.worker.llama_generate.assert_called_once_with(
+            ASSISTANT_SIDECAR,
+            "qwen3.5-2b-q4km",
+            "summary",
+            max_tokens=2048,
+            context_size=16384,
+            temperature=0.7,
+            top_k=40,
+            top_p=0.95,
+            stop_tokens=None,
+            chat=True,
+        )
+        sidecar = Mock()
+        sidecar.request.return_value = {"type": "response", "text": '{"suggestions":[]}'}
+        self.worker._resolve_gguf = Mock(return_value=Path("model.gguf"))
+        self.worker._get_sidecar = Mock(return_value=sidecar)
+        self.worker.llama_generate_realtime("qwen3.5-2b-q4km", "assist")
+        self.worker._get_sidecar.assert_called_once_with(ASSISTANT_SIDECAR)
+        self.assertEqual(sidecar.request.call_args.args[0]["context_size"], 16384)
+
+    def test_stopping_an_idle_ai_note_keeps_the_shared_sidecar_warm(self):
+        session = _AiNoteSession("meeting", {}, "assist", "zh")
+        self.worker.cancel_sidecar = Mock()
+        self.worker._cancel_session(session)
+        self.worker.cancel_sidecar.assert_not_called()
+        session.running = True
+        self.worker._cancel_session(session)
+        self.worker.cancel_sidecar.assert_called_once_with(ASSISTANT_SIDECAR)
+
+    def test_ai_note_uses_a_localized_prompt_and_state_labels(self):
+        expected = {
+            "zh": ("会议实时笔记助手", "当前议题"),
+            "en": ("realtime meeting-notes assistant", "Current topic"),
+            "es": ("notas de reunión", "Tema actual"),
+            "ja": ("リアルタイム会議ノート", "現在の議題"),
+            "ko": ("실시간 회의 노트", "현재 주제"),
+            "fr": ("prise de notes", "Sujet actuel"),
+            "de": ("Echtzeit-Meetingnotizen", "Aktuelles Thema"),
+            "ru": ("заметок встречи", "Текущая тема"),
+        }
+        for language, (instructions, topic_label) in expected.items():
+            session = _AiNoteSession("test", {}, "assist", language, {"instructions": instructions, "state_labels": [topic_label, "facts", "decisions", "actions", "questions"]})
+            session.meeting_state.topic = "launch plan"
+            prompt = self.worker._realtime_prompt(session)
+            self.assertIn(instructions, prompt, language)
+            self.assertIn(topic_label, prompt, language)
 
     def test_ai_note_emits_suggestion_and_dedups(self):
         meeting_id = "11111111-1111-1111-1111-111111111111"
@@ -523,6 +578,23 @@ class WorkerTest(unittest.TestCase):
         )
         self.assertEqual(self.worker.store.read_manifest(meeting["id"])["tracks"]["system"]["samples"], 1760)
 
+    def test_audio_resume_recovers_samples_after_a_deferred_manifest_checkpoint(self):
+        meeting = self.worker.start(
+            {
+                "title": "audio checkpoint",
+                "language": "en",
+                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
+                "refined_model_id": "qwen3-asr-0.6b-int8",
+            }
+        )
+        self.worker.store.append_audio(meeting["id"], "mic", b"\0\0" * 40)
+        self.worker.store.append_audio(meeting["id"], "mic", b"\0\0" * 40)
+        recovered = Store(self.temp.name)
+        try:
+            self.assertEqual(recovered.append_audio(meeting["id"], "mic", b"\0\0" * 40), 120)
+        finally:
+            recovered.close_audio_sessions()
+
     def test_start_requires_selected_models_when_requested(self):
         with self.assertRaisesRegex(
             RuntimeError,
@@ -596,6 +668,7 @@ class WorkerTest(unittest.TestCase):
         )
         prompts = []
         self.worker.llm_complete = lambda _payload, prompt, **_kwargs: (prompts.append(prompt) or "# **测试会议**\n\n## **行动项**\n\n- 周五完成验收")
+        self.worker.active = None  # 纪要仅在会议结束后生成
         result = self.worker.summarize(
             {
                 "meeting_id": meeting["id"],
@@ -617,6 +690,20 @@ class WorkerTest(unittest.TestCase):
         ]
         self.assertEqual(progress, [10, 60, 100])
 
+    def test_summary_rejects_while_a_meeting_is_active(self):
+        self.worker.active = "recording-meeting"
+        # 任何会议（含当前录制会议）都禁止在实时会议期间生成纪要。
+        for meeting_id in ("other-meeting", "recording-meeting"):
+            with self.assertRaisesRegex(ValueError, "实时会议中，结束后再生成会议纪要。"):
+                self.worker.summarize(
+                    {
+                        "meeting_id": meeting_id,
+                        "provider": "built-in",
+                        "model": "qwen3.5-2b-q4km",
+                        "consent": True,
+                    }
+                )
+
     def test_summary_strips_model_control_marker_before_title(self):
         meeting = self.worker.start(
             {
@@ -630,6 +717,7 @@ class WorkerTest(unittest.TestCase):
              "start_ms": 0, "end_ms": 1000, "speaker": "spk-1"}
         )
         self.worker.llm_complete = lambda *_args, **_kwargs: "_tag\n# **控制标记**\n\n内容"
+        self.worker.active = None  # 纪要仅在会议结束后生成
         result = self.worker.summarize(
             {"meeting_id": meeting["id"], "provider": "OpenAI", "endpoint": "https://example.test/chat", "model": "gpt", "consent": True}
         )
@@ -667,6 +755,7 @@ class WorkerTest(unittest.TestCase):
         self.worker.llm_complete = lambda _payload, prompt, **_kwargs: (
             prompts.append(prompt) or "# **复用清洗稿**\n\n## **会议摘要**\n\n已生成"
         )
+        self.worker.active = None  # 纪要仅在会议结束后生成
         self.worker.summarize(
             {"meeting_id": meeting["id"], "provider": "OpenAI", "endpoint": "https://example.test/chat", "model": "gpt", "consent": True, "language": "zh"}
         )
@@ -706,6 +795,7 @@ class WorkerTest(unittest.TestCase):
         )
         prompts = []
         self.worker.llm_complete = lambda _payload, prompt, **_kwargs: (prompts.append(prompt) or "# **实时逐字稿**")
+        self.worker.active = None  # 纪要仅在会议结束后生成
         self.worker.summarize(
             {
                 "meeting_id": meeting["id"],
@@ -736,6 +826,7 @@ class WorkerTest(unittest.TestCase):
         self.worker.llm_complete = lambda *_args, **_kwargs: (
             self.worker.tasks.cancel("summary.generate", meeting["id"]), "# 已取消"
         )[1]
+        self.worker.active = None  # 纪要仅在会议结束后生成
         result = self.worker.summarize(
             {"meeting_id": meeting["id"], "provider": "OpenAI", "endpoint": "https://example.test/chat", "model": "gpt", "consent": True}
         )
@@ -765,6 +856,7 @@ class WorkerTest(unittest.TestCase):
         with self.assertRaisesRegex(
             ValueError, "当前会议暂无逐字稿内容，请先完成转写后再生成会议纪要"
         ):
+            self.worker.active = None  # 纪要仅在会议结束后生成
             self.worker.summarize(
                 {
                     "meeting_id": meeting["id"],
@@ -811,7 +903,9 @@ class WorkerTest(unittest.TestCase):
             "language": "zh",
         }
         with self.assertRaisesRegex(ValueError, "Summary generation failed"):
+            self.worker.active = None  # 纪要仅在会议结束后生成
             self.worker.summarize(payload)
+        self.worker.active = None  # 纪要仅在会议结束后生成
         self.worker.summarize(payload)
         self.assertEqual(len(prompts), 2)
         self.assertIn("确认下周发布", prompts[-1])
@@ -852,6 +946,7 @@ class WorkerTest(unittest.TestCase):
             "consent": True,
             "language": "zh",
         }
+        self.worker.active = None  # 纪要仅在会议结束后生成
         result = self.worker.summarize(payload)
         self.assertEqual(len(prompts), 2)
         self.assertIn("空响应重试成功", result["markdown"])
@@ -890,6 +985,7 @@ class WorkerTest(unittest.TestCase):
             "consent": True,
             "language": "zh",
         }
+        self.worker.active = None  # 纪要仅在会议结束后生成
         self.worker.summarize(payload)
         # 长转录走分段：每块一次块级摘要 + 一次合并。
         self.assertGreaterEqual(len(prompts), 3)
@@ -929,6 +1025,7 @@ class WorkerTest(unittest.TestCase):
             return "# **块纪要**"
 
         self.worker.llm_complete = complete
+        self.worker.active = None  # 纪要仅在会议结束后生成
         self.worker.summarize(
             {
                 "meeting_id": meeting["id"],
@@ -1024,6 +1121,7 @@ class WorkerTest(unittest.TestCase):
             side_effect=ValueError("LLM request failed (401): invalid_api_key")
         )
         with self.assertRaisesRegex(ValueError, "Summary authentication failed"):
+            self.worker.active = None  # 纪要仅在会议结束后生成
             self.worker.summarize(
                 {
                     "meeting_id": meeting["id"],
@@ -1245,6 +1343,53 @@ class WorkerTest(unittest.TestCase):
             Worker._clean_live_text("这是正常的中文文本。"),
             "这是正常的中文文本。",
         )
+
+    def test_live_text_number_normalization_keeps_big_units(self):
+        # 亿/万 跟在阿拉伯数字后必须原样保留，不能误转成 0（回归「亿元→0元」）。
+        self.assertEqual(
+            Worker._clean_live_text(
+                "一家2025年收入16.99亿元的公司，为什么能够得到3000多亿元的市场估值？"
+            ),
+            "一家2025年收入16.99亿元的公司，为什么能够得到3000多亿元的市场估值？",
+        )
+        # 中文数字 + 大单位：保留单位，不展开成满屏零。
+        self.assertEqual(Worker._clean_live_text("三亿元的项目"), "3亿元的项目")
+        self.assertEqual(Worker._clean_live_text("估值超过五百二十万元"), "估值超过520万元")
+        self.assertEqual(Worker._clean_live_text("十六点九九亿元"), "16.99亿元")
+        # 小数字 + 单位仍照常转阿拉伯。
+        self.assertEqual(Worker._clean_live_text("三百岁的树，五元一个"), "300岁的树，5元一个")
+        # 量词「一个」不被转成数字。
+        self.assertEqual(Worker._clean_live_text("一个苹果三个人"), "一个苹果三个人")
+
+    def test_normalize_numbers_refined_style_forms(self):
+        # 精修（qwen3-asr 全中文数字）也统一转阿拉伯，且不误伤成语。
+        cases = {
+            "收盘总市值约三千四百多亿元，一家二零二五年收入十六点九九亿元的公司，为什么能够得到三千多亿元的市场估值？":
+                "收盘总市值约3400多亿元，一家2025年收入16.99亿元的公司，为什么能够得到3000多亿元的市场估值？",
+            "涨幅五百二十九点四四，A股一圈是五百股，纵移一圈需要支付七万五千四。按照开盘价计算，账面浮盈四十七万四千六百元。":
+                "涨幅529.44，A股一圈是五百股，纵移一圈需要支付七万五千四。按照开盘价计算，账面浮盈474600元。",
+            "二零二五年，十六点九九亿元，三千多万，四十七万四千六百元":
+                "2025年，16.99亿元，3000多万，474600元",
+        }
+        for source, expected in cases.items():
+            self.assertEqual(Worker._clean_live_text(source), expected)
+        # 成语/惯用语不得被误转。
+        idiom = "万一出问题怎么办？千万要小心，一箭双雕，三心二意，千真万确，百战百胜，三百六十行，一点意思都没有"
+        self.assertEqual(Worker._clean_live_text(idiom), idiom)
+
+    def test_live_text_normalizes_percentages_consistently(self):
+        # 中文「百分之X」统一转阿拉伯百分比，与模型偶发输出的阿拉伯百分比一致。
+        self.assertEqual(
+            Worker._clean_live_text("你只有百分之五的把握，下降了百分之十"),
+            "你只有5%的把握，下降了10%",
+        )
+        self.assertEqual(
+            Worker._clean_live_text("占比百分之二十，达到百分之五点三六"),
+            "占比20%，达到5.36%",
+        )
+        self.assertEqual(Worker._clean_live_text("百分之百是对的"), "100%是对的")
+        # 已是阿拉伯百分比则原样保留。
+        self.assertEqual(Worker._clean_live_text("利润仅5.36%"), "利润仅5.36%")
 
     def test_live_qwen_refinement_replaces_unedited_final_only(self):
         meeting = self.worker.start(
@@ -1760,6 +1905,21 @@ class WorkerTest(unittest.TestCase):
                 "这是一次完整的会议结论和行动项", "这是一次完整的会议结论和行动项"
             ),
             "",
+        )
+        # 相邻窗口对同一重叠音频的转写有细微差异时，用高相似度兜底去重，
+        # 避免「好，我们先聊。一好，我们先聊一聊…」这类重复。
+        self.assertEqual(
+            self.worker._trim_refinement_overlap(
+                "……好，我们先聊一聊。", "好，我们先聊一聊IPO，语数这次发行了。"
+            ),
+            "IPO，语数这次发行了。",
+        )
+        # 不同的真实内容不能被误删。
+        self.assertEqual(
+            self.worker._trim_refinement_overlap(
+                "……我们讨论完了。", "接下来我们看看下一个问题。"
+            ),
+            "接下来我们看看下一个问题。",
         )
 
     def test_refinement_splits_long_turns_for_second_pass(self):

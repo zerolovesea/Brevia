@@ -60,7 +60,8 @@ function applyBackendDetail(meeting) {
   // 编辑中的笔记以本地草稿为准，不覆盖；非编辑状态同步服务器最新值。
   if (!sameDetail || !uiData.detail.notesEditing) uiData.detail.notes = meeting.notes || '';
   const summary = meeting.summary?.data;
-  uiData.detail.summary = summary?.markdown ? { markdown: summary.markdown, hasFull: true } : { title: '', sections: [], empty: true };
+  const summaryBlocked = meetingActive;
+  uiData.detail.summary = summary?.markdown ? { markdown: summary.markdown, hasFull: true, blocked: summaryBlocked } : { title: '', sections: [], empty: true, blocked: summaryBlocked };
   document.querySelector('#detail-view .detail-head h1').textContent = meeting.title;
   const metaParts = [];
   if (meeting.created_at) {

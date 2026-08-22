@@ -1022,6 +1022,11 @@ assert.match(text(i18nData), /aiAssistCopy/);
 assert.match(text(i18nData), /aiAssistCopyLocales/);
 assert.match(text(i18nData), /aiAssistRequestLabels/);
 assert.match(text(i18nData), /toggleOn: 'AI 辅助 开'/);
+assert.deepEqual(Object.keys(localeContext.window.BreviaLocaleData.aiNotePromptCopy), ['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']);
+Object.values(localeContext.window.BreviaLocaleData.aiNotePromptCopy).forEach((copy) => {
+  assert.ok(copy.instructions.length > 0);
+  assert.equal(copy.state_labels.length, 5);
+});
 // AI 辅助笔记（阶段 2 无需 AI 本地规则）：加入笔记 / 时间戳 / 信号检测。
 assert.match(text(components), /appendMarkdown\(markdown\)/);
 assert.match(text(components), /\^\[-\*\]\\s\$/);
@@ -1041,6 +1046,7 @@ assert.match(text(preload), /request: invoke\('ai-note\.request'\)/);
 assert.match(text(workerSession), /self\.ai_note_on_segment\(event\)/);
 assert.match(text(workerSession), /self\.ai_note_stop\(\{"meeting_id": meeting_id\}\)/);
 assert.match(text(app), /function startAiNoteForMeeting/);
+assert.match(text(app), /prompt: aiNotePromptCopy\[locale\] \|\| aiNotePromptCopy\.en/);
 assert.match(text(app), /function signalAiNoteTyping/);
 assert.match(text(app), /function requestAiSuggestion/);
 assert.match(text(app), /function appendAiSuggestion\(suggestion\)/);

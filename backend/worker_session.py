@@ -109,14 +109,7 @@ class RecordingSessionMixin:
         meeting = self.store.get_meeting(payload["meeting_id"])
         if meeting["status"] != "recording":
             raise ValueError("Only an unfinished recording can be resumed")
-        manifest = self.store.read_manifest(meeting["id"])
-        start_ms = max(
-            (
-                round(track.get("samples", 0) * 1000 / track.get("sample_rate", 16000))
-                for track in manifest.get("tracks", {}).values()
-            ),
-            default=0,
-        )
+        start_ms = self.store.recorded_duration_ms(meeting["id"])
         self._prepare_active(meeting, start_ms)
         self.emit("meeting.recovered", {"meeting_id": self.active, "meeting": meeting})
         return meeting
@@ -496,14 +489,14 @@ class RecordingSessionMixin:
         """
         require(payload, "meeting_id", "track", "pcm", "sample_rate", "start_ms")
         self._active(payload["meeting_id"])
+        pcm = base64.b64decode(payload["pcm"], validate=True)
         samples_total = self.store.append_audio(
             self.active,
             payload["track"],
-            payload["pcm"],
+            pcm,
             int(payload["sample_rate"]),
             int(payload["start_ms"]),
         )
-        pcm = base64.b64decode(payload["pcm"], validate=True)
         values = array("h")
         values.frombytes(pcm)
         if sys.byteorder != "little":

@@ -268,6 +268,8 @@ class LLMWorkerMixin:
             保存为 ``markdown`` 字段的纪要字典。
         """
         require(payload, "meeting_id", "provider", "model", "consent")
+        if self.active:
+            raise ValueError("实时会议中，结束后再生成会议纪要。")
         # Built-in 在本地运行捆绑的 GGUF；只有远程提供商需要端点。
         if (payload.get("provider") or "").lower() not in {"built-in", "builtin"}:
             require(payload, "endpoint")

@@ -126,6 +126,7 @@ def main():
 
     worker.shutdown_ai_note()
     worker.shutdown_sidecars()
+    worker.store.close_audio_sessions()
     translation_executor.shutdown(wait=True)
 
 

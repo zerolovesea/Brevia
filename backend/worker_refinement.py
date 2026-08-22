@@ -30,18 +30,23 @@ _CN_NUM = {
 _CN_UNIT = {"十": 10, "百": 100, "千": 1000}
 _CN_BIG_UNIT = {"万": 10000, "亿": 100000000}
 # 仅在这些「计量单位」前把中文数字转阿拉伯，避免把成语/惯用短语里的数字误转。
-_NUM_SUFFIX = "岁年月日号元块角毛个"
+# 不含「个」：量词「一个/一种/一下」不应被转成阿拉伯数字（如「5元1个」）。
+_NUM_SUFFIX = "岁年月日号元块角毛"
 
 
-def _cn_to_int(text):
-    """把中文数字串转为整数；失败返回 ``None``。"""
-    if not text:
+def _cn_int_value(text):
+    """把中文数字串（不含小数）转为整数；无法/不宜转换返回 ``None``。
+
+    仅由大单位占位（如「亿」「万」）的片段不单独转换：这类片段常跟在阿拉伯数字后
+    （``16.99亿``），若强行转会把大单位误成 0，导致「亿元→0元」。
+    「十/百/千」可单独成数（``百分之十``→``10%``），不在此列。
+    """
+    if not text or not any(ch in _CN_NUM or ch in _CN_UNIT for ch in text):
         return None
     if all(ch in _CN_NUM for ch in text):
+        # 纯数字串（如“二零二五”）按位拼接为阿拉伯数字，而非逐字覆盖。
         return int("".join(str(_CN_NUM[ch]) for ch in text))
-    total = 0
-    section = 0
-    number = 0
+    total = section = number = 0
     for ch in text:
         if ch in _CN_NUM:
             number = _CN_NUM[ch]
@@ -51,24 +56,87 @@ def _cn_to_int(text):
         elif ch in _CN_BIG_UNIT:
             section = (section + number) * _CN_BIG_UNIT[ch]
             total += section
-            section = 0
-            number = 0
+            section = number = 0
         else:
             return None
     return total + section + number
 
 
+def _cn_to_display(text):
+    """把中文数字串转为阿拉伯展示串；末尾带「万/亿」时保留单位而不展开全零。
+
+    返回展示串；无法/不宜转换返回 ``None``（此时调用方保留原文）。例如：
+    ``三亿元`` → ``3亿元``；``十六点九九亿元`` → ``16.99亿元``；``16.99亿元``
+    保持不变（不误转成 ``0元``）。
+    """
+    if not text:
+        return None
+    unit = text[-1] if text[-1] in _CN_BIG_UNIT else None
+    body = text[:-1] if unit else text
+    if unit and any(ch in _CN_BIG_UNIT for ch in body):
+        # 嵌套大单位（如「三亿五千万」）解析不可靠，保留原文避免产生错误数字。
+        return None
+    if "点" in body:
+        whole, frac = body.split("点", 1)
+        wval = _cn_int_value(whole) if whole else 0
+        if wval is None:
+            return None
+        fraction = 0.0
+        if frac:
+            for ch in frac:
+                if ch not in _CN_NUM:
+                    return None
+                fraction = fraction * 10 + _CN_NUM[ch]
+            fraction /= 10 ** len(frac)
+        number = wval + fraction
+    else:
+        wval = _cn_int_value(body)
+        if wval is None:
+            return None
+        number = float(wval)
+    if unit:
+        return f"{number:g}{unit}"
+    return f"{number:g}"
+
+
 def _normalize_numbers(text):
-    """把「中文数字 + 计量单位」中的数字转成阿拉伯数字，惯用短语原样保留。"""
-    pattern = re.compile(r"([零〇一二两三四五六七八九十百千万亿]+)([" + _NUM_SUFFIX + r"])")
-    return pattern.sub(
+    """把「中文数字 + 计量单位」中的数字转成阿拉伯数字，惯用短语原样保留。
+
+    - 大单位（万/亿）保留单位字符，不展开成满屏零：``三亿元`` → ``3亿元``。
+    - 跟在阿拉伯数字后的大单位（``16.99亿元``）保持不变，不再被误转成 ``0元``。
+    - ``百分之X`` 统一转成 ``X%``，与模型偶发的阿拉伯百分比输出保持一致。
+    """
+    pattern = re.compile(r"([零〇一二两三四五六七八九十百千万亿点]+)([" + _NUM_SUFFIX + r"])")
+    text = pattern.sub(
         lambda match: (
-            f"{_cn_to_int(match.group(1))}{match.group(2)}"
-            if _cn_to_int(match.group(1)) is not None
+            f"{_cn_to_display(match.group(1))}{match.group(2)}"
+            if _cn_to_display(match.group(1)) is not None
             else match.group(0)
         ),
         text,
     )
+    # 约数大单位：三千四百多亿元 -> 3400多亿元；三千多万 -> 3000多万
+    text = re.sub(
+        r"([零〇一二两三四五六七八九十百千]+)([多余来])([万亿])([" + _NUM_SUFFIX + r"])?",
+        lambda match: (
+            f"{_cn_to_display(match.group(1)) or match.group(1)}"
+            f"{match.group(2)}{match.group(3)}{match.group(4) or ''}"
+        ),
+        text,
+    )
+    # 百分比必须先于独立小数处理，避免「百分之五点三六」的「五点三六」被小数规则抢先。
+    text = re.sub(
+        r"百分之([零〇一二两三四五六七八九十百千万亿点]+)",
+        lambda match: f"{_cn_to_display(match.group(1)) or match.group(1)}%",
+        text,
+    )
+    # 独立小数：五百二十九点四四 -> 529.44（中文小数是明确的数字，不会误伤成语）
+    text = re.sub(
+        r"([零〇一二两三四五六七八九十百千万亿]+点[零〇一二三四五六七八九]+)",
+        lambda match: f"{_cn_to_display(match.group(1)) or match.group(1)}",
+        text,
+    )
+    return text
 
 
 def _refinement(key):
@@ -387,6 +455,9 @@ class RefinementWorkerMixin:
                     text = self._trim_refinement_overlap(
                         previous_text.get(speaker_key, ""), raw_text
                     )
+                    # 精修是离线完整音频，不会有流式空转重复；统一把中文数字转成阿拉伯，
+                    # 与实时字幕保持一致的「亿/万保留单位、百分比归一」规则。
+                    text = _normalize_numbers(text)
                     previous_text[speaker_key] = raw_text
                     completed += 1
                     self.emit(
@@ -982,16 +1053,31 @@ class RefinementWorkerMixin:
         if SequenceMatcher(None, prev_norm, text_norm).ratio() >= 0.92:
             return ""
         max_len = min(len(prev_norm), len(text_norm), 200)
+        best = 0
+        # 精确匹配优先：先完整扫描，找到最长精确重叠。
         for length in range(max_len, 3, -1):
             if prev_norm[-length:] == text_norm[:length]:
-                # 把归一化前缀的 length 个「词字符」映射回原文 text 的字符偏移。
-                count = 0
-                for index, ch in enumerate(text):
-                    if ch.isalnum():
-                        count += 1
-                        if count >= length:
-                            return text[index + 1 :].lstrip(" \t,.;:!?，。；：！？")
+                best = length
                 break
+        # 没有任何精确匹配时，才允许高相似度兜底，容忍 LLM ASR 对同一重叠音频的
+        # 标点/字词抖动（如「好，我们先聊。一好，我们先聊一聊…」）。相似度够高、
+        # 长度不短才启用，降低误删风险。
+        if best == 0:
+            for length in range(max_len, 3, -1):
+                if length >= 4 and SequenceMatcher(
+                    None, prev_norm[-length:], text_norm[:length]
+                ).ratio() >= 0.9:
+                    best = length
+                    break
+        if best == 0:
+            return text
+        # 把归一化前缀的 best 个「词字符」映射回原文 text 的字符偏移。
+        count = 0
+        for index, ch in enumerate(text):
+            if ch.isalnum():
+                count += 1
+                if count >= best:
+                    return text[index + 1 :].lstrip(" \t,.;:!?，。；：！？")
         return text
 
     @staticmethod
