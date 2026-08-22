@@ -21,7 +21,7 @@ Brevia est un assistant de reunion IA pour ordinateur de bureau qui delegue a l'
 
 Le design est deliberement discret : une interface qui ne gene pas la reunion, un ensemble de fonctionnalites qui suit un seul arc — **capturer → comprendre → retrouver** — et une regle ferme : ce qui peut se faire en local doit se faire en local.
 
-<p align="center"><img src="assets/demo/ai-assist-en.gif" width="704" alt="Demo de AI Assist Notes de Brevia" /></p>
+<p align="center"><img src="assets/demo/ai-assist-en.gif" width="820" alt="Demo de AI Assist Notes de Brevia" /></p>
 
 ## Fonctionnalites
 

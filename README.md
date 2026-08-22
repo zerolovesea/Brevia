@@ -21,7 +21,7 @@ Brevia is a desktop AI meeting assistant that hands the most time-consuming part
 
 The design is deliberately quiet: an interface that doesn't get in the way of the meeting, a feature set that follows a single arc — **capture → understand → retrieve** — and a firm rule that anything that can happen locally should.
 
-<p align="center"><img src="docs/assets/demo/ai-assist-en.gif" width="704" alt="Brevia AI Assist Notes demo" /></p>
+<p align="center"><img src="docs/assets/demo/ai-assist-en.gif" width="820" alt="Brevia AI Assist Notes demo" /></p>
 
 ## Features
 
