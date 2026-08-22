@@ -1,0 +1,294 @@
+/**
+ * Shared styles for demo animation pages.
+ * Used by demo.html and the single-feature pages
+ * (demo-transcription.html, demo-summary.html, demo-voiceprint.html).
+ */
+
+/* Demo Container */
+.demo-container {
+  position: relative;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  background: #fff;
+  overflow: hidden;
+}
+
+.demo-viewport {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  border: 1px solid #d6d6d6;
+  background: #fcfcfc;
+}
+
+/* Virtual Cursor */
+.virtual-cursor {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  pointer-events: none;
+  z-index: 9999;
+  transform: translate(-50%, -50%);
+  will-change: transform;
+  transition: none;
+}
+
+.cursor-arrow {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  fill: #000;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+}
+
+.cursor-ripple {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  border: 2px solid #000;
+  border-radius: 50%;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.cursor-ripple.active {
+  animation: ripple 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes ripple {
+  0% {
+    transform: translate(-50%, -50%) scale(0.5);
+    opacity: 0.8;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.5);
+    opacity: 0;
+  }
+}
+
+/* Demo-specific overrides */
+.demo-viewport .app-shell {
+  transform-origin: top left;
+  min-height: 100%;
+}
+
+.demo-viewport .workspace {
+  padding-bottom: 32px;
+}
+
+/* Smooth appearing animations */
+@keyframes text-appear {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.text-appearing {
+  animation: text-appear 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* Voiceprint speaker switch highlight */
+.speaker-name {
+  display: inline-block;
+  transform-origin: left center;
+  transition: color 0.3s ease;
+}
+
+.speaker-name.provisional {
+  color: #999;
+}
+
+@keyframes speaker-resolve {
+  0% {
+    transform: scale(1);
+    color: #999;
+  }
+  40% {
+    transform: scale(1.35);
+    color: #000;
+  }
+  100% {
+    transform: scale(1);
+    color: #000;
+  }
+}
+
+.speaker-name.resolving {
+  animation: speaker-resolve 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  font-weight: 600;
+}
+
+/* Demo content fade transition */
+#demo-content {
+  position: relative;
+}
+
+#demo-content.fading-out {
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+#demo-content.fading-in {
+  opacity: 0;
+}
+
+#demo-content.fading-in.visible {
+  opacity: 1;
+  transition: opacity 0.3s ease;
+}
+
+/* Demo controls */
+.demo-controls {
+  padding: 20px;
+  text-align: center;
+  border-top: 1px solid #e5e5e5;
+  background: #fafafa;
+}
+
+.demo-controls button {
+  margin: 0 8px;
+  padding: 10px 20px;
+  border: 1px solid #000;
+  background: #fff;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.2s;
+}
+
+.demo-controls button:hover {
+  background: #f5f5f5;
+}
+
+.demo-controls button.active {
+  background: #000;
+  color: #fff;
+}
+
+/* Visibility control */
+[data-demo-hidden="true"] {
+  display: none !important;
+}
+
+/* ==========================================================================
+   Floating caption overlay — ported 1:1 from frontend/floating-caption.html
+   so the caption-bar demo matches the real component exactly.
+   ========================================================================== */
+.demo-caption-overlay {
+  position: absolute;
+  left: 50%;
+  bottom: 48px;
+  width: 720px;
+  max-width: 82%;
+  transform: translate(-50%, 12px);
+  z-index: 200;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.32s ease, transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.demo-caption-overlay.is-visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.demo-caption-overlay .caption-shell {
+  position: relative;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  color: #fff;
+}
+
+.demo-caption-overlay .caption-container {
+  padding: 16px 44px 16px 20px;
+  min-height: 116px;
+  position: relative;
+  background: rgba(10, 15, 24, 0.88);
+  backdrop-filter: blur(24px) saturate(1.2);
+  -webkit-backdrop-filter: blur(24px) saturate(1.2);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.46), inset 0 1px rgba(255, 255, 255, 0.12);
+}
+
+.demo-caption-overlay .caption-controls {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  display: flex;
+  gap: 8px;
+}
+
+.demo-caption-overlay .close-btn {
+  position: relative;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.72);
+  cursor: default;
+  font-size: 0;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+
+.demo-caption-overlay .close-btn::before,
+.demo-caption-overlay .close-btn::after {
+  content: '';
+  position: absolute;
+  width: 12px;
+  height: 1px;
+  background: currentColor;
+}
+
+.demo-caption-overlay .close-btn::before { transform: rotate(45deg); }
+.demo-caption-overlay .close-btn::after { transform: rotate(-45deg); }
+
+.demo-caption-overlay .caption-text {
+  font-size: clamp(20px, 2vw, 32px);
+  line-height: 1.5;
+  font-weight: normal;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  letter-spacing: -0.035em;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.demo-caption-overlay .caption-finalized {
+  font-size: clamp(16px, 1.6vw, 24px);
+  line-height: 1.4;
+  font-weight: normal;
+  color: rgba(255, 255, 255, 0.82);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  letter-spacing: -0.035em;
+  margin-bottom: 6px;
+}
+
+.demo-caption-overlay .caption-translation {
+  font-size: clamp(15px, 1.5vw, 22px);
+  line-height: 1.4;
+  color: #b9d5ff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  margin-top: 8px;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.demo-caption-overlay .caption-finalized.hidden,
+.demo-caption-overlay .caption-translation.hidden {
+  display: none;
+}

@@ -1,0 +1,447 @@
+/** 在文本插入到组件标记之前进行转义。@param {string} value 原始文本。@returns {string} 安全的 HTML 文本。 */
+const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character]);
+/** 统一的勾选 SVG 图标（线框风格，颜色跟随 currentColor，由各状态的绿色类控制）。@type {string} */
+const checkIconSvg = '<svg class="check-icon" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3 8.5 3.2 3.2L13 4.5" /></svg>';
+/** 格式化说话人名称，支持多语言。@param {object|string} speaker 说话人对象或名称字符串。@returns {string} 格式化的说话人名称。 */
+function formatSpeakerName(speaker) {
+  const name = typeof speaker === 'string' ? speaker : speaker?.name;
+  if (!name) return '';
+  // 如果是 spk-N 格式，转换为本地化的 "说话人 N" / "Speaker N"
+  const match = name.match(/^spk-(\d+)$/);
+  if (match) return `${t('说话人')} ${match[1]}`;
+  return name;
+}
+/** 判断两个视口矩形是否重叠。@param {object} first 第一个矩形。@param {object} second 第二个矩形。@returns {boolean} */
+function rectanglesIntersect(first, second) { return first.left <= second.right && first.right >= second.left && first.top <= second.bottom && first.bottom >= second.top; }
+/** 渲染共享的自定义选择控件。@param {string} name 提交的字段名称。@param {string} value 选中的值。@param {Array<[string, string]>} options 值/标签对。@param {boolean} activeModel 标记活动的摘要模型选择器。@returns {string} 选择框标记。 */
+function flowSelect(name, value, options, activeModel = false, disabled = false) {
+  // 回退到空白对，使空选项列表渲染为无害的占位符而不是抛出错误。
+  const selected = options.find(([option]) => option === value) || options[0] || ['', ''];
+  disabled = disabled || options.length === 0;
+  return `<div class="flow-select"${activeModel ? ' data-active-summary-model' : ''}><button class="flow-select-toggle" data-flow-select-toggle type="button" aria-expanded="false"${disabled ? ' disabled' : ''}>${escapeHtml(selected[1])}<span>⌄</span></button><input type="hidden" name="${name}" value="${escapeHtml(selected[0])}" /><div class="flow-select-options" hidden>${options.map(([option, label]) => `<button type="button" data-flow-select-choice="${name}" data-value="${escapeHtml(option)}"${disabled ? ' disabled' : ''}>${escapeHtml(label)}</button>`).join('')}</div></div>`;
+}
+/** 基于本地规则检测字幕中的明显信号（数字/日期/问句），不依赖大模型。@param {string} text 字幕文本。@returns {string[]} 命中的信号键名。 */
+function detectCaptionSignals(text) {
+  const value = String(text || '');
+  const signals = [];
+  if (/\d/.test(value)) signals.push('数字');
+  if (/\d{1,4}[年/.-]\d{1,2}(?:[月/.-]\d{1,2})?/.test(value) || /周[一二三四五六日天]/.test(value)) signals.push('日期');
+  if (/[?？]/.test(value) || /为什么|怎么|是否/.test(value)) signals.push('问句');
+  return signals;
+}
+/** 渲染一条逐字稿条目，用于实时会议或已完成的会议。@param {{time: string, startSeconds?: number, endSeconds?: number, speaker: object, text: string, translation?: string, partial?: boolean}} entry 逐字稿数据。@returns {string} 条目标记。 */
+function renderTranscriptSegment({ time, startSeconds, endSeconds, speaker, text, translation, partial = false }) {
+  const timing = Number.isFinite(startSeconds) && Number.isFinite(endSeconds) ? ` data-start="${startSeconds}" data-end="${endSeconds}"` : '';
+  const label = speaker.editing ? `<form class="inline-segment-speaker-form" data-segment-id="${speaker.segmentId}"><input class="speaker-name-input" data-segment-speaker-input name="name" value="${escapeHtml(speaker.name)}" maxlength="32" /></form>` : `<button class="segment-speaker"${speaker.segmentId ? ` data-segment-speaker="${escapeHtml(speaker.segmentId)}"` : ''}${speaker.id ? ` data-speaker="${escapeHtml(speaker.id)}"` : ''}>${escapeHtml(speaker.name)}</button>`;
+  const overlap = speaker.overlapNames?.length ? `<small class="overlap-speakers">${t('重叠说话')}：${escapeHtml(speaker.overlapNames.join('、'))}</small>` : '';
+  const signalBadge = !partial ? (() => { const signals = detectCaptionSignals(text); return signals.length ? `<small class="caption-signals" style="white-space:nowrap;flex:none" aria-label="${signals.map((signal) => t(signal)).join('、')}">${signals.map((signal) => t(signal)).join(' · ')}</small>` : ''; })() : '';
+  return `<article class="segment${partial ? ' partial' : ''}"${partial ? ' id="partial-segment"' : ''}${speaker.segmentId ? ` data-segment-id="${escapeHtml(speaker.segmentId)}"` : ''}${timing}><div class="segment-meta"><time>${escapeHtml(time)}</time>${label}${overlap}${signalBadge}</div><div class="segment-copy"><p>${escapeHtml(text)}</p>${translation ? `<p class="translation">${escapeHtml(translation)}</p>` : ''}</div></article>`;
+}
+/** 渲染会议库中的一行。@param {{tone: string, title: string, meta: string, tags: string[], status: object}} meeting 会议数据。@param {number} index 会议索引。@returns {string} 行标记。 */
+function renderMeetingRow({ id, tone, title, meta, tags, status, deleted = false, workspaceId, workspace }, index) {
+  const workspaceMenu = !deleted && typeof showWorkspaceAssignMenu === 'function'
+    ? `<button data-meeting-action="workspace" data-meeting-index="${index}">${t('移至工作区')} <span>›</span></button>`
+    : '';
+  const menu = deleted ? `<button data-meeting-action="restore" data-meeting-index="${index}">${t('恢复')}</button><button class="meeting-menu-danger" data-meeting-action="purge" data-meeting-index="${index}">${BreviaI18n.trashCopy(locale).purge}</button>` : `<button data-meeting-action="rename" data-meeting-index="${index}">${t('重命名')}</button>${workspaceMenu}<button data-meeting-action="open-folder" data-meeting-index="${index}">${t('从文件夹打开')}</button><button data-meeting-action="export" data-meeting-index="${index}">${t('导出')}</button>${status?.tone === 'processing' ? '' : `<button class="meeting-menu-danger" data-meeting-action="delete" data-meeting-index="${index}">${t('删除')}</button>`}`;
+  const heading = editingMeetingIndex === index ? `<form class="meeting-title-rename" data-rename-meeting data-meeting-index="${index}"><input name="title" value="${escapeHtml(title)}" maxlength="120" required aria-label="${t('重命名')}" /></form>` : `<h2>${escapeHtml(title)}</h2>`;
+  const workspaceBadge = workspace ? `<div class="workspace-badge"><span class="workspace-icon">◆</span>${escapeHtml(workspace.name)}</div>` : '';
+  return `<article class="meeting-row" data-meeting-index="${index}" data-selection-key="${escapeHtml(id || String(index))}" tabindex="0" aria-selected="false"${id ? ` data-meeting-id="${escapeHtml(id)}"` : ''}${!deleted && id ? ' draggable="true"' : ''}><div class="meeting-main">${heading}<p>${escapeHtml(meta)}</p><div class="meeting-tags">${workspaceBadge}${tags.map((tag) => `<div class="tag">${escapeHtml(tag)}</div>`).join('')}</div></div><div class="meeting-status"><span class="status ${status.tone}">${escapeHtml(t(status.label))}</span><small>${escapeHtml(t(status.detail))}</small></div><div class="meeting-actions"><button class="more" data-meeting-menu="${index}" aria-label="${t('更多操作')}" aria-expanded="false">•••</button><div class="meeting-menu" hidden>${menu}</div></div></article>`;
+}
+/** 渲染模型行，用于模型库和新下载的模型。@param {{icon: string, name: string, detail: string, intro?: string}} model 模型数据。@returns {string} 行标记。 */
+function renderModelRow({ icon, name, detail, intro = '' }) {
+  return `<div class="model-row"><span class="model-icon">${icon}</span><div><b>${name}</b><small>${t(detail)}</small>${intro ? `<small>${t(intro)}</small>` : ''}</div><span class="status complete">${t('可用')}</span></div>`;
+}
+/** 渲染设置卡片及其模态框操作。@param {{title: string, description: string, action: string, modal: string}} card 卡片数据。@returns {string} 卡片标记。 */
+function renderSettingsCard({ title, description, action, modal }) {
+  return `<section class="settings-card"><h2>${t(title)}</h2><p>${t(description)}</p><button class="secondary" data-settings-modal="${modal}">${t(action)}</button></section>`;
+}
+/** 渲染语言相关的设置卡片，不重置其他视图。 */
+function renderSettingsView() {
+  const aiCopy = (typeof aiAssistCopy !== 'undefined' ? aiAssistCopy : {})[locale] || { settings: {} };
+  const aiCard = aiCopy.settings?.title
+    ? `<section class="settings-card"><h2>${escapeHtml(aiCopy.settings.title)}</h2><p>${escapeHtml(aiCopy.settings.description)}</p><button class="secondary" data-settings-modal="ai-assist">${escapeHtml(aiCopy.settings.action)}</button></section>`
+    : '';
+  document.querySelector('#settings-view .settings-grid').innerHTML = `<section class="settings-card" id="installed-models"><h2>${t('模型库')}</h2><p>${t('管理语言识别模型的下载、删除与版本信息。')}</p><button class="secondary" data-settings-modal="models">${t('管理模型库')}</button></section>${uiData.settings.cards.map(renderSettingsCard).join('')}${aiCard}`;
+}
+/** 渲染紧凑的标签/值列表。@param {Array<{label: string, value: string}>} items 状态条目。@returns {string} 定义列表标记。 */
+function renderStatusList(items) { return `<dl>${items.map(({ label, value }) => `<div><dt>${escapeHtml(t(label))}</dt><dd>${escapeHtml(value)}</dd></div>`).join('')}</dl>`; }
+/** 仅允许安全协议的链接/图片地址，阻止 javascript: 等注入。@param {string} url 原始地址。@returns {string} 安全地址。 */
+function sanitizeUrl(url = '') {
+  return /^(https?:|mailto:|data:image\/)/i.test(url.trim()) ? url.trim() : '#';
+}
+/** 把富文本编辑器的 DOM 子树转换为 Markdown（支持粗体/斜体/代码/链接/图片/标题/列表/引用/表格）。@param {Node} root 根节点。@returns {string} Markdown 文本。 */
+function htmlToMarkdown(root) {
+  const lines = [];
+  const inline = (node) => {
+    let out = '';
+    for (const child of node.childNodes) {
+      if (child.nodeType === Node.TEXT_NODE) { out += child.textContent; continue; }
+      if (child.nodeType !== Node.ELEMENT_NODE) continue;
+      const tag = child.tagName.toLowerCase();
+      if (tag === 'br') { out += '\n'; continue; }
+      const inner = inline(child);
+      if (tag === 'b' || tag === 'strong') out += `**${inner}**`;
+      else if (tag === 'i' || tag === 'em') out += `*${inner}*`;
+      else if (tag === 'code') out += `\`${inner}\``;
+      else if (tag === 'a') out += `[${inner}](${child.getAttribute('href') || ''})`;
+      else if (tag === 'img') out += `![${child.getAttribute('alt') || ''}](${child.getAttribute('src') || ''})`;
+      else out += inner;
+    }
+    return out;
+  };
+  const walk = (node) => {
+    for (const child of node.childNodes) {
+      if (child.nodeType === Node.TEXT_NODE) { if (child.textContent.trim()) lines.push(child.textContent); continue; }
+      if (child.nodeType !== Node.ELEMENT_NODE) continue;
+      const tag = child.tagName.toLowerCase();
+      if (tag === 'p' || tag === 'div') { lines.push(inline(child)); lines.push(''); }
+      else if (/^h[1-3]$/.test(tag)) { lines.push(`${'#'.repeat(Number(tag[1]))} ${inline(child)}`); lines.push(''); }
+      else if (tag === 'ul' || tag === 'ol') {
+        let index = 1;
+        for (const li of child.children) {
+          if (li.tagName.toLowerCase() !== 'li') continue;
+          lines.push(`${tag === 'ol' ? `${index}.` : '-'} ${inline(li)}`);
+          index += 1;
+        }
+        lines.push('');
+      } else if (tag === 'blockquote') { lines.push(`> ${inline(child)}`); lines.push(''); }
+      else if (tag === 'hr') { lines.push('---'); lines.push(''); }
+      else if (tag === 'table') {
+        const rows = [...child.rows].map((row) => [...row.cells].map((cell) => inline(cell).replace(/\|/g, ' ').trim()));
+        if (rows.length) {
+          lines.push(`| ${rows[0].join(' | ')} |`);
+          lines.push(`| ${rows[0].map(() => '---').join(' | ')} |`);
+          rows.slice(1).forEach((row) => lines.push(`| ${row.join(' | ')} |`));
+          lines.push('');
+        }
+      }
+      else lines.push(inline(child));
+    }
+  };
+  walk(root);
+  return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+/** 用 <code> 包裹编辑器中当前选区；无选区时插入占位代码片段。@param {HTMLElement} editor contenteditable 区域。@returns {void} */
+function wrapInlineCode(editor) {
+  const selection = window.getSelection();
+  if (!selection.rangeCount) return;
+  const range = selection.getRangeAt(0);
+  const text = range.toString();
+  if (!text) { document.execCommand('insertText', false, '`代码`'); return; }
+  const code = document.createElement('code');
+  code.textContent = text;
+  range.deleteContents();
+  range.insertNode(code);
+  range.selectNodeContents(code);
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+/** 创建所见即所得 Markdown 笔记编辑器（富文本默认，可切 Markdown 源码），live 视图与详情页共用。
+ * @param {HTMLElement} root 容器，编辑器 DOM 将追加到其中。
+ * @param {{onInput?: () => void}} options 输入回调（用于自动保存）。
+ * @returns {{setMarkdown: Function, getMarkdown: Function, setMode: Function, focus: Function}} 编辑器 API。 */
+function createNotesEditor(root, options = {}) {
+  const { onInput = null } = options;
+  const toolbarButtons = [
+    ['bold', t('加粗'), '<b>B</b>'],
+    ['italic', t('斜体'), '<i>I</i>'],
+    ['h1', t('标题 1'), 'H1'],
+    ['h2', t('标题 2'), 'H2'],
+    ['h3', t('标题 3'), 'H3'],
+    ['ul', t('列表'), '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="3" cy="4" r="1.1" fill="currentColor" stroke="none"/><circle cx="3" cy="8" r="1.1" fill="currentColor" stroke="none"/><circle cx="3" cy="12" r="1.1" fill="currentColor" stroke="none"/><path d="M7 4h6M7 8h6M7 12h6"/></svg>'],
+    ['ol', t('编号列表'), '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><text x="1.5" y="5" font-size="6.5" fill="currentColor" stroke="none">1</text><text x="1.5" y="9.5" font-size="6.5" fill="currentColor" stroke="none">2</text><text x="1.5" y="14" font-size="6.5" fill="currentColor" stroke="none">3</text><path d="M7 4h6M7 8.5h6M7 13h6"/></svg>'],
+    ['quote', t('引用'), '❝'],
+    ['link', t('插入链接'), '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6.2 9.8 3.6-3.6" /><path d="M7.2 11.4 5.6 13a2.6 2.6 0 0 1-3.6-3.6l1.6-1.6a2.6 2.6 0 0 1 3.6 0" /><path d="M8.8 4.6l1.6-1.6a2.6 2.6 0 0 1 3.6 3.6l-1.6 1.6a2.6 2.6 0 0 1-3.6 0" /></svg>'],
+    ['image', t('插入图片'), '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="2.5" width="13" height="11" rx="1" /><circle cx="5.5" cy="6.2" r="1.4" /><path d="m1.5 11 3.6-3.6L11 12.8" /></svg>'],
+    ['table', t('插入表格'), '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.25"><rect x="2" y="2" width="12" height="12"/><path d="M2 6h12M2 10h12M6 2v12M10 2v12"/></svg>'],
+    ['code', t('行内代码'), '&lt;/&gt;'],
+    ['todo', t('待办'), '☐'],
+    ['highlight', t('重点'), '★'],
+    ['mode-toggle', t('富文本'), '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3.5 3h9M8 3v10"/></svg>'],
+  ];
+  const toolbar = document.createElement('div');
+  toolbar.className = 'notes-toolbar';
+  toolbar.innerHTML = toolbarButtons.map(([command, label, html]) => `<button type="button" data-notes-command="${command}" title="${label}" aria-label="${label}">${html}</button>`).join('');
+  const urlPop = document.createElement('div');
+  urlPop.className = 'notes-url-pop';
+  urlPop.hidden = true;
+  urlPop.innerHTML = `<input type="text" placeholder="https://…" spellcheck="false" /><button class="notes-url-ok" data-notes-url-ok type="button">${t('确定')}</button><button class="text-button" data-notes-url-cancel type="button">${t('取消')}</button>`;
+  const editor = document.createElement('div');
+  editor.className = 'notes-editor';
+  editor.setAttribute('contenteditable', 'true');
+  editor.setAttribute('aria-label', t('我的笔记'));
+  editor.spellcheck = false;
+  const input = document.createElement('textarea');
+  input.className = 'notes-input';
+  input.hidden = true;
+  input.placeholder = '';
+  input.spellcheck = false;
+  const imageInput = document.createElement('input');
+  imageInput.type = 'file';
+  imageInput.accept = 'image/*';
+  imageInput.hidden = true;
+  const suggestion = root.querySelector('[data-ai-suggestion]');
+  root.append(toolbar, urlPop, ...(suggestion ? [suggestion] : []), editor, input, imageInput);
+  // 回车产生 <p>，让富文本编辑器的 DOM 结构规范、便于转回 Markdown。
+  document.execCommand('defaultParagraphSeparator', false, 'p');
+  let urlTarget = null;
+  let mode = 'rich';
+  const urlInput = urlPop.querySelector('input');
+  function insertText(text) {
+    if (mode === 'markdown') {
+      const start = input.selectionStart ?? input.value.length;
+      input.value = input.value.slice(0, start) + text + input.value.slice(input.selectionEnd ?? start);
+      input.focus();
+      if (onInput) onInput();
+    } else {
+      editor.focus();
+      document.execCommand('insertText', false, text);
+      if (onInput) onInput();
+    }
+  }
+  function openUrlPop(target, anchor) {
+    urlTarget = target;
+    urlInput.value = '';
+    urlPop.hidden = false;
+    const rect = anchor.getBoundingClientRect();
+    urlPop.style.position = 'fixed';
+    urlPop.style.top = `${Math.max(12, Math.min(rect.bottom + 6, window.innerHeight - urlPop.offsetHeight - 12))}px`;
+    urlPop.style.left = `${Math.max(12, Math.min(rect.left, window.innerWidth - urlPop.offsetWidth - 12))}px`;
+    urlInput.focus();
+  }
+  function closeUrlPop() { urlPop.hidden = true; urlTarget = null; }
+  /** 切换富文本 / Markdown 模式：工具栏始终可见，Markdown 模式下仅禁用依赖 execCommand 的格式按钮。 */
+  function setMode(nextMode) {
+    mode = nextMode === 'markdown' ? 'markdown' : 'rich';
+    const richOnlyCommands = new Set(['bold', 'italic', 'h1', 'h2', 'h3', 'ul', 'ol', 'quote', 'code', 'link']);
+    toolbar.querySelectorAll('[data-notes-command]').forEach((button) => {
+      const command = button.dataset.notesCommand;
+      if (command === 'mode-toggle') {
+        const showingMarkdown = mode === 'markdown';
+        button.classList.toggle('is-active', showingMarkdown);
+        button.title = showingMarkdown ? t('切换到富文本') : t('切换到 Markdown');
+        button.setAttribute('aria-label', button.title);
+        button.innerHTML = showingMarkdown
+          ? '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="m5.5 4.5-3.5 3.5 3.5 3.5"/><path d="m10.5 4.5 3.5 3.5-3.5 3.5"/></svg>'
+          : '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3.5 3h9M8 3v10"/></svg>';
+        button.disabled = false;
+      } else {
+        button.disabled = mode === 'markdown' && richOnlyCommands.has(command);
+      }
+    });
+    if (mode === 'markdown') {
+      input.value = htmlToMarkdown(editor);
+      editor.hidden = true;
+      input.hidden = false;
+      toolbar.hidden = false;
+      urlPop.hidden = true;
+    } else {
+      editor.innerHTML = renderMarkdown(input.value);
+      editor.hidden = false;
+      input.hidden = true;
+      toolbar.hidden = false;
+    }
+  }
+  toolbar.addEventListener('mousedown', (event) => event.preventDefault());
+  toolbar.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-notes-command]');
+    if (!button) return;
+    const command = button.dataset.notesCommand;
+    if (command === 'mode-toggle') { setMode(mode === 'rich' ? 'markdown' : 'rich'); return; }
+    editor.focus();
+    if (command === 'bold') document.execCommand('bold');
+    else if (command === 'italic') document.execCommand('italic');
+    else if (command === 'h1' || command === 'h2' || command === 'h3') document.execCommand('formatBlock', false, command.toUpperCase());
+    else if (command === 'ul') document.execCommand('insertUnorderedList');
+    else if (command === 'ol') document.execCommand('insertOrderedList');
+    else if (command === 'quote') document.execCommand('formatBlock', false, 'BLOCKQUOTE');
+    else if (command === 'code') wrapInlineCode(editor);
+    else if (command === 'table') {
+      if (mode === 'markdown') insertText(`| ${t('列 1')} | ${t('列 2')} |\n| --- | --- |\n| ${t('内容')} | ${t('内容')} |`);
+      else document.execCommand('insertHTML', false, `<table><thead><tr><th>${t('列 1')}</th><th>${t('列 2')}</th></tr></thead><tbody><tr><td>${t('内容')}</td><td>${t('内容')}</td></tr></tbody></table><p><br></p>`);
+    }
+    else if (command === 'todo') insertText(mode === 'markdown' ? '- [ ] ' : '☐ ');
+    else if (command === 'highlight') {
+      const prefix = t('重点：');
+      if (mode === 'markdown') insertText(`**${prefix}** `);
+      else { document.execCommand('bold'); document.execCommand('insertText', false, prefix); document.execCommand('bold'); if (onInput) onInput(); }
+    }
+    else if (command === 'link') openUrlPop(command, button);
+    else if (command === 'image') imageInput.click();
+  });
+  imageInput.addEventListener('change', () => {
+    const [file] = imageInput.files;
+    imageInput.value = '';
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const source = String(reader.result || '');
+      if (mode === 'markdown') insertText(`![](${source})`);
+      else { editor.focus(); document.execCommand('insertImage', false, source); if (onInput) onInput(); }
+    };
+    reader.readAsDataURL(file);
+  });
+  urlPop.querySelector('[data-notes-url-ok]').addEventListener('click', () => {
+    const url = urlInput.value.trim();
+    if (url && urlTarget) {
+      editor.focus();
+      if (urlTarget === 'link') document.execCommand('createLink', false, url);
+      else document.execCommand('insertImage', false, url);
+    }
+    closeUrlPop();
+  });
+  urlPop.querySelector('[data-notes-url-cancel]').addEventListener('click', closeUrlPop);
+  urlInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') { event.preventDefault(); urlPop.querySelector('[data-notes-url-ok]').click(); }
+    if (event.key === 'Escape') closeUrlPop();
+  });
+  editor.addEventListener('input', () => {
+    const block = window.getSelection()?.anchorNode?.parentElement?.closest('p, div');
+    const ordered = /^\d+\.\s$/.test(block?.textContent || '');
+    if (ordered || /^[-*]\s$/.test(block?.textContent || '')) {
+      const list = document.createElement(ordered ? 'ol' : 'ul');
+      const item = document.createElement('li');
+      list.append(item);
+      if (block === editor) editor.replaceChildren(list);
+      else block.replaceWith(list);
+      const range = document.createRange();
+      range.selectNodeContents(item);
+      range.collapse(true);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+    if (onInput) onInput();
+  });
+  input.addEventListener('input', () => { if (onInput) onInput(); });
+  return {
+    setMarkdown(markdown) {
+      const text = String(markdown || '');
+      input.value = text;
+      editor.innerHTML = renderMarkdown(text);
+    },
+    appendMarkdown(markdown) {
+      const existing = this.getMarkdown();
+      const next = existing && existing.trim() ? `${existing.replace(/\n+$/, '')}\n\n${markdown}` : String(markdown || '');
+      this.setMarkdown(next);
+      // 程序化写入（AI 落笔/插入字幕等）与用户打字区分开，调用方据此决定是否
+      // 触发「正在输入」信号，避免 AI 刚写完自己就被当成用户在打字。
+      if (onInput) onInput({ programmatic: true });
+    },
+    getMarkdown() {
+      return mode === 'rich' ? htmlToMarkdown(editor) : input.value;
+    },
+    getMode() { return mode; },
+    setMode,
+    focus() { (mode === 'rich' ? editor : input).focus(); },
+  };
+}
+/** 渲染生成的会议纪要所使用的 Markdown 子集，已对模型输出进行转义。 */
+function renderMarkdown(markdown) {
+  const inline = (value) => escapeHtml(value)
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, src) => `<img src="${sanitizeUrl(src)}" alt="${alt}" />`)
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, text, url) => `<a href="${sanitizeUrl(url)}" target="_blank" rel="noopener">${text}</a>`)
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*([^*]+)\*/g, '<em>$1</em>');
+  const lines = String(markdown || '').replace(/\r/g, '').split('\n');
+  const html = [];
+  for (let index = 0; index < lines.length;) {
+    const line = lines[index];
+    if (!line.trim()) { index += 1; continue; }
+    const heading = line.match(/^(#{1,3})\s+(.+)$/);
+    if (heading) { const level = heading[1].length; html.push(`<h${level}>${inline(heading[2])}</h${level}>`); index += 1; continue; }
+    if (/^\|/.test(line)) {
+      const rows = [];
+      while (index < lines.length && /^\|/.test(lines[index])) rows.push(lines[index++].split('|').slice(1, -1).map((cell) => inline(cell.trim())));
+      const body = rows.filter((row) => !row.every((cell) => /^:?-{3,}:?$/.test(cell)));
+      if (body.length) html.push(`<table><thead><tr>${body[0].map((cell) => `<th>${cell}</th>`).join('')}</tr></thead><tbody>${body.slice(1).map((row) => `<tr>${row.map((cell) => `<td>${cell}</td>`).join('')}</tr>`).join('')}</tbody></table>`);
+      continue;
+    }
+    if (/^(---|\*\*\*|___)\s*$/.test(line)) { html.push('<hr />'); index += 1; continue; }
+    if (/^>\s?/.test(line)) {
+      const items = [];
+      while (index < lines.length && /^>\s?/.test(lines[index])) items.push(inline(lines[index++].replace(/^>\s?/, '')));
+      html.push(`<blockquote>${items.join('<br />')}</blockquote>`); continue;
+    }
+    if (/^\d+\.\s+/.test(line)) {
+      const items = [];
+      while (index < lines.length && /^\d+\.\s+/.test(lines[index])) items.push(`<li>${inline(lines[index++].replace(/^\d+\.\s+/, ''))}</li>`);
+      html.push(`<ol>${items.join('')}</ol>`); continue;
+    }
+    if (/^[-*]\s*\[[ xX]\]\s*/.test(line)) {
+      const items = [];
+      while (index < lines.length && /^[-*]\s*\[[ xX]\]\s*/.test(lines[index])) {
+        const task = lines[index++].match(/^[-*]\s*\[([ xX])\]\s*(.*)$/);
+        items.push(`<li class="task-item"><span aria-hidden="true">${task[1].toLowerCase() === 'x' ? '☑' : '☐'}</span>${inline(task[2])}</li>`);
+      }
+      html.push(`<ul>${items.join('')}</ul>`); continue;
+    }
+    if (/^[-*]\s+/.test(line)) {
+      const items = [];
+      while (index < lines.length && /^[-*]\s+/.test(lines[index])) items.push(`<li>${inline(lines[index++].replace(/^[-*]\s+/, ''))}</li>`);
+      html.push(`<ul>${items.join('')}</ul>`); continue;
+    }
+    const paragraph = [];
+    while (index < lines.length && lines[index].trim() && !/^(#{1,3}\s+|\||[-*]\s*(?:\[[ xX]\]\s*|\s)|\d+\.\s+|>\s?|---|\*\*\*|___)/.test(lines[index])) paragraph.push(lines[index++]);
+    html.push(`<p>${inline(paragraph.join(' '))}</p>`);
+  }
+  return html.join('');
+}
+/** 移除旧纪要中标题前的模型控制残留，保证已保存内容也能正常显示。 */
+function cleanSummaryMarkdown(markdown) {
+  const text = String(markdown || '').trim();
+  const heading = text.search(/^#{1,6}\s+/m);
+  return heading > 0 ? text.slice(heading) : text;
+}
+/** 渲染详情侧边栏中的会议纪要：标题行（会议纪要 + 生成/重新生成）+ 内容。@param {{markdown?: string, hasFull?: boolean}} summary 摘要数据。@returns {string} 摘要标记。 */
+function renderMeetingSummary({ markdown, hasFull = false, blocked = false }) {
+  const actionName = markdown ? t('重新生成') : `${t('生成')} →`;
+  const action = `<button class="text-button" ${markdown ? 'data-regenerate-summary' : 'data-generate-summary'}${blocked ? ` disabled title="${escapeHtml(t('实时会议中，结束后再生成会议纪要。'))}"` : ''}>${actionName}</button>`;
+  return `<div class="summary-preview"><div class="summary-head"><p class="eyebrow">${t('会议纪要')}</p>${action}</div>${markdown ? `<div class="summary-body markdown-content">${renderMarkdown(cleanSummaryMarkdown(markdown))}</div><button class="text-button" data-view-full-summary>${t('查看完整内容')} →</button>` : `<p class="summary-empty">${t('尚未生成')}</p>`}</div>`;
+}
+/** 在页面外壳可用后填充所有数据驱动的静态区域。@returns {void} */
+function renderStaticViews() {
+  document.querySelector('.meeting-list').innerHTML = uiData.meetings.map(renderMeetingRow).join('');
+  document.querySelector('#transcript-scroll').innerHTML = uiData.live.transcript.map(renderTranscriptSegment).join('');
+  renderSettingsView();
+}
+/** 渲染详情页 tabbar 右侧的精修状态控件（未精修 → 按钮；精修中 → 文案；已精修 → ✓ + ··· 菜单）。@param {object} d 详情数据。@returns {string} 标记。 */
+function renderRefineStatus(d) {
+  if (d.refineState === 'refining') return `<span class="refine-state">${t('正在精修')}</span>`;
+  if (!d.hasRefined) return `<button class="secondary refine-now" data-refine-now type="button">${t('精修字幕')}</button>`;
+  const modelOptions = modelCatalog
+    .filter((model) => model.stages?.includes('refined') && !removedRefinedModelIds.has(model.id))
+    .map((model) => `<button type="button" data-refine-model="${escapeHtml(model.id)}">${escapeHtml(model.name)}</button>`)
+    .join('');
+  return `<span class="refine-state is-done">${checkIconSvg} ${t('已精修')}</span><button class="refine-more" data-refine-more type="button" aria-label="${t('更多')}" aria-expanded="false">···</button><div class="refine-menu" hidden><button type="button" data-refine-action="original">${detailTranscriptView === 'original' ? t('查看精修字幕') : t('查看原始转写')}</button><button type="button" data-refine-action="re-refine">${t('重新精修')}</button><label class="refine-menu-speakers"><span>${t('会议人数')}</span><input type="number" min="1" step="1" inputmode="numeric" data-refine-num-speakers placeholder="${t('留空自动识别')}" /></label><button type="button" data-refine-action="model">${t('更换精修模型')} <span>›</span></button><div class="refine-model-list" data-refine-model-list hidden>${modelOptions}</div></div>`;
+}
+/** 刷新选定会议的逐字稿、笔记和摘要面板。@returns {void} */
+function renderMeetingDetail() {
+  const d = uiData.detail;
+  const notesPanel = d.notesEditing
+    ? `<div class="detail-notes-edit"><div data-detail-notes-root></div></div>`
+    : `<div class="detail-notes-view">${d.notes && String(d.notes).trim() ? `<div class="detail-notes-content markdown-content">${renderMarkdown(d.notes)}</div>` : `<p class="detail-notes-empty">${t('会议中没有记录笔记。')}</p>`}</div>`;
+  const notesTabAction = d.notesEditing
+    ? `<button class="tabbar-action" data-notes-cancel type="button">${t('取消')}</button><button class="tabbar-action is-save" data-notes-save type="button">${t('保存')}</button>`
+    : detailActiveTab === 'notes' ? `<button class="tabbar-action" data-edit-notes type="button">${t('编辑')}</button>` : '';
+  const hasRefined = Boolean(d.hasRefined && d.refinedTranscript.length);
+  const fulltextMode = hasRefined && d.refinedMode === 'fulltext';
+  const showingRefined = hasRefined && d.refinedMode === 'timestamps' && detailTranscriptView !== 'original';
+  let transcriptBody;
+  if (fulltextMode) {
+    transcriptBody = `<div class="refined-fulltext"><p class="eyebrow">${t('精修全文')}</p><p class="refined-fulltext-hint">${t('经过会后模型整理后的完整转写文本。由于当前模型不提供时间戳，该版本不支持逐句音频定位。')}</p><div class="refined-fulltext-body">${escapeHtml(d.refinedFulltext)}</div></div>`;
+  } else {
+    transcriptBody = (showingRefined ? d.refinedTranscript : d.transcript).map(renderTranscriptSegment).join('');
+  }
+  document.querySelector('.final-transcript').innerHTML = `<div class="tabbar"><div class="tabbar-tabs"><button class="tab${detailActiveTab === 'notes' ? ' active' : ''}" data-detail-tab="notes">${t('我的笔记')}</button><button class="tab${detailActiveTab === 'transcript' ? ' active' : ''}" data-detail-tab="transcript">${t('字幕')}</button>${notesTabAction}</div><div class="tabbar-extra">${renderRefineStatus(d)}</div></div><div class="detail-notes-panel" data-detail-panel="notes"${detailActiveTab !== 'notes' ? ' hidden' : ''}>${notesPanel}</div><div class="transcript-panel" data-detail-panel="transcript"${detailActiveTab !== 'transcript' ? ' hidden' : ''}><div class="transcript-body">${transcriptBody}</div></div>`;
+  if (d.notesEditing) {
+    const root = document.querySelector('[data-detail-notes-root]');
+    if (root) {
+      detailNotesEditor = createNotesEditor(root, { onInput: scheduleDetailNotesSave });
+      detailNotesEditor.setMarkdown(d.notes);
+      detailNotesEditor.focus();
+    }
+  }
+  document.querySelector('.notes').innerHTML = renderMeetingSummary(d.summary);
+}
