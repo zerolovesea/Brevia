@@ -125,6 +125,8 @@ jobs:
         run: |
           git fetch origin main
           git checkout -B main origin/main
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           node scripts/update-release-links.mjs
           git add website/index-zh.html website/index-en.html
           git diff --cached --quiet || git commit -m "chore: update download links for $GITHUB_REF_NAME"
