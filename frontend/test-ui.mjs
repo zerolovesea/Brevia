@@ -202,6 +202,7 @@ assert.match(text(electronMain), /const resetOnboarding = process\.argv\.include
 assert.match(text(electronMain), /query: \{ resetOnboarding: '1' \}/);
 assert.match(text(js), /resetOnboarding'\)\) localStorage\.removeItem\('brevia-onboarding-complete'\)/);
 assert.doesNotMatch(text(tailwind), /\.onboarding-ai-demo \{ position: fixed/);
+assert.match(text(app), /deviceIsWeak\(\) && config\.provider === 'built-in' && \/4b\/i\.test/);
 assert.match(text(app), /const aiOnboardingDemoCopy = \{/);
 for (const code of ['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']) assert.match(text(app), new RegExp(`${code}: \\{[^\\n]*?(?:demo:|recording:)`));
 assert.match(text(js), /window\.brevia\.task\[paused \? 'resume' : 'pause'\]/);
@@ -266,7 +267,7 @@ assert.match(text(js), /window\.brevia\?\.appInfo\?\.version\?\.\(\)/);
 assert.match(text(electronMain), /ipcMain\.handle\('app\.version', \(\) => app\.getVersion\(\)\)/);
 assert.match(text(electronMain), /const useBundledWorker = app\.isPackaged/);
 assert.match(text(js), /fetch\('\.\.\/package\.json'\)/);
-assert.match(text(js), /renderSettingsView\(\);[\s\S]{0,120}append\(speakerProfileCard, updateCard\)/);
+assert.match(text(js), /renderSettingsView\(\);[\s\S]{0,220}before\(speakerProfileCard\);[\s\S]{0,120}append\(updateCard\)/);
 assert.match(text(components), /function renderSettingsView\(\)/);
 assert.doesNotMatch(text(electronMain), /ipcMain\.handle\('secret\.get'/);
 assert.match(text(js), /renderSlogan/);
@@ -284,7 +285,8 @@ assert.match(text(js), /transitionPage\(home, home/);
 assert.match(text(js), /minimizeMeeting/);
 assert.match(text(css), /page-in/);
 assert.match(text(css), /language-out/);
-assert.match(text(uiData), /modal: 'summary-model'/);
+assert.match(text(uiData), /title: 'AI 笔记'[\s\S]*modal: 'ai-assist'/);
+assert.match(text(uiData), /title: 'AI 会议总结'[\s\S]*modal: 'summary-model'/);
 assert.match(text(js), /summaryProviders/);
 assert.match(text(js), /persistSummaryConfig/);
 assert.match(text(components), /function renderTranscriptSegment/);
@@ -518,7 +520,7 @@ assert.match(text(js), /const isAtLiveBottom = \(\) => transcript\.scrollHeight 
 assert.doesNotMatch(text(html), /current-caption|id="live-caption/);
 assert.doesNotMatch(text(js), /#live-caption|caption-increment/);
 assert.match(text(html), /live-header[\s\S]*live-caption-controls[\s\S]*floating-caption-toggle[\s\S]*translation-toggle/);
-assert.match(text(html), /data-meeting-power-saving/);
+assert.doesNotMatch(text(html), /data-meeting-power-saving/);
 assert.match(text(html), /live-status[\s\S]*recording[\s\S]*id="timer"/);
 assert.match(text(i18nData), /captionButtonLabels/);
 assert.match(text(i18nData), /workspaceButtonLabels/);
@@ -670,7 +672,7 @@ assert.match(text(backendClient), /async stopPreview\(\)/);
 assert.match(text(js), /async function previewMicrophone/);
 assert.match(text(js), /transcript\.discarded/);
 assert.match(text(js), /window\.brevia\.meeting\.refine\(\{ meeting_id: meeting\.id \}\)/);
-assert.match(text(backendClient), /await this\.capture\.prepare\(inputs\)[\s\S]*window\.brevia\.meeting\.start\(payload\)/);
+assert.match(text(backendClient), /await this\.capture\.prepare\(inputs\)[\s\S]*window\.brevia\.meeting\.start\(\{ \.\.\.payload, audio_tracks:/);
 assert.match(text(backendClient), /系统音频.*未产生音频数据/);
 assert.match(text(backendClient), /this\.state\.meeting\?\.id \|\| this\.capture\?\.meetingId/);
 assert.match(text(backendClient), /await this\.capture\.stop\(\)/);
@@ -838,19 +840,17 @@ assert.match(text(js), /const maxLiveSegments = 500/);
 assert.match(text(js), /while \(liveSegments\.size > maxLiveSegments\)/);
 assert.match(text(js), /liveConfig = \{ language: language \|\| 'auto', streaming_model_id: streamingModelId \|\| '', refined_model_id: refinedModelId \|\| '', target_language: payload\.target_language \|\| null, power_saving: Boolean\(payload\.power_saving\) \}/);
 assert.match(text(js), /await window\.brevia\.meeting\.reconfigure\(\{ meeting_id: meetingId, \.\.\.changes \}\)/);
-assert.match(text(js), /function setLivePowerSaving\(enabled\)/);
+assert.doesNotMatch(text(js), /function setLivePowerSaving\(enabled\)/);
 assert.match(text(js), /笔记已达 20000 字符上限/);
-assert.match(text(js), /function checkPowerSavingSuggestion\(\)/);
+assert.doesNotMatch(text(js), /function checkPowerSavingSuggestion\(\)/);
 assert.match(text(js), /纪要生成失败：模型未返回有效内容，请稍后重试。/);
 assert.doesNotMatch(text(js), /paraformer-zh-en-int8/);
 assert.doesNotMatch(text(uiData), /Streaming Paraformer/);
 for (const code of ['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']) {
   const labels = localeContext.window.BreviaLocaleData.catalog[code].labels;
-  assert.ok(labels['省电模式']);
   assert.ok(labels['纪要服务暂时不可用，请检查网络或稍后重试。']);
   assert.ok(labels['纪要生成失败：模型未返回有效内容，请稍后重试。']);
   if (code !== 'zh') {
-    assert.notEqual(labels['省电模式'], '省电模式');
     assert.notEqual(labels['纪要服务暂时不可用，请检查网络或稍后重试。'], '纪要服务暂时不可用，请检查网络或稍后重试。');
     assert.notEqual(labels['纪要生成失败：模型未返回有效内容，请稍后重试。'], '纪要生成失败：模型未返回有效内容，请稍后重试。');
   }
@@ -935,16 +935,19 @@ const summaryContext = {
   builtinModelIntro: { 'qwen3.5-2b-q4km': { zh: '质量与速度均衡' } },
   renderModelLibraryRatings: () => '<span>质量：极高 · 速度：均衡</span>',
   formatBytes: (bytes) => `${bytes}B`,
+  structuredClone,
   modelDownloads: new Map(),
+  summaryConfigDraft: null,
   settingsModal: { querySelector: (selector) => summaryNodes[selector] },
 };
 runInNewContext(`${text(components)}\nthis.escapeHtml = escapeHtml;`, summaryContext);
-runInNewContext(`${summaryConst('const summaryProviders = ')}${summaryConst('const summaryProviderPresets = ', true)}\n${summaryFn('summaryProviderLabel')}${summaryFn('summaryProviderEntry')}${summaryFn('renderBuiltinSummaryModels')}${summaryFn('renderSummaryModelModal')}`, summaryContext);
+runInNewContext(`${summaryConst('const summaryProviders = ')}${summaryConst('const summaryProviderPresets = ', true)}\n${summaryFn('summaryProviderLabel')}${summaryFn('summaryProviderEntry')}${summaryFn('providerEntry')}${summaryFn('renderBuiltinSummaryModels')}${summaryFn('renderModelConfigFields')}${summaryFn('renderModelConfigForm')}${summaryFn('renderSummaryModelForm')}${summaryFn('renderSummaryModelModal')}`, summaryContext);
 const summaryCatalogModels = [{ id: 'qwen3.5-2b-q4km', name: 'Qwen 3.5 2B', kind: 'llama-chat', size_bytes: 100 }, { id: 'qwen3.5-4b-q4km', name: 'Qwen 3.5 4B', kind: 'llama-chat' }, { id: 'whisper-large-v3', name: 'Whisper', kind: 'asr' }];
 const renderSummaryModal = (provider, { providers = {}, installed = [] } = {}) => {
   summaryContext.modelCatalog = summaryCatalogModels;
   summaryContext.modelPaths = new Map(installed.map((id) => [id, `/tmp/${id}`]));
   summaryContext.summaryConfig = { version: 2, provider, providers };
+  summaryContext.summaryConfigDraft = null;
   summaryContext.selectedBuiltinModel = '';
   summaryContext.renderSummaryModelModal();
   return summaryNodes['.modal-body'].innerHTML;
@@ -962,6 +965,7 @@ assert.doesNotMatch(summaryHtml, /type="submit" disabled/);
 summaryHtml = renderSummaryModal('built-in');
 assert.match(summaryHtml, /type="submit" disabled/);
 assert.doesNotMatch(summaryHtml, /data-builtin-model-id/);
+assert.equal(summaryContext.renderModelConfigFields(summaryContext.summaryConfig, '', { required: false }).saveDisabled, false, 'disabling AI notes must not require a downloaded model');
 for (const provider of ['claude', 'openai', 'openrouter']) {
   summaryHtml = renderSummaryModal(provider);
   assert.doesNotMatch(summaryHtml, /name="endpoint"/, `${provider} must not expose an endpoint field`);
@@ -994,7 +998,7 @@ for (const code of ['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']) {
   summaryHtml = renderSummaryModal('custom-openai');
   assert.ok(summaryHtml.includes(copy.providers['custom-openai']), `${code} is missing the custom-openai label`);
   assert.ok(summaryHtml.includes(copy.save), `${code} is missing the save label`);
-  assert.equal(summaryNodes.h2.textContent, copy.title);
+  assert.equal(summaryNodes.h2.textContent, summaryContext.t('AI 会议总结'));
 }
 summaryContext.locale = 'zh';
 summaryContext.modelCatalog = [{ id: '"><img src=x onerror=alert(1)>', name: '<script>alert(1)</script>', kind: 'llama-chat' }];
@@ -1007,20 +1011,22 @@ assert.match(text(html), /管理模型 →/);
 // AI 辅助笔记（阶段 0/1）：配置 IPC、入口、空态、设置项与八语种文案。
 assert.match(text(electronMain), /ai-assist\.config\.(get|save)/);
 assert.match(text(preload), /aiAssist:\s*\{ config: \{ get: invoke\('ai-assist\.config\.get'\)/);
-assert.match(text(app), /aiAssistConfig\s*=\s*\{ enabled: false, proactivity: 'assist' \}/);
+assert.match(text(app), /aiAssistConfig\s*=\s*\{ version: 2, enabled: false, proactivity: 'assist', provider: 'built-in', providers: \{\} \}/);
+assert.match(text(app), /ai-assist-config-form/);
+assert.match(text(app), /function switchAiAssistTo2B/);
 assert.match(text(app), /function renderAiAssistToggle/);
 assert.match(text(app), /function renderAiAssistEmptyState/);
 assert.match(text(app), /function openAiAssistPopover/);
 assert.match(text(app), /if \(kind === 'ai-assist'\) \{ renderAiAssistModal\(\); return; \}/);
 assert.match(text(html), /data-ai-assist-toggle/);
 assert.match(text(html), /data-ai-assist-empty/);
-assert.match(text(components), /data-settings-modal="ai-assist"/);
+assert.match(text(uiData), /modal: 'ai-assist'/);
 assert.match(text(tailwind), /\.ai-assist-toggle/);
 assert.match(text(tailwind), /\.ai-assist-popover/);
 assert.match(text(i18nData), /aiAssistCopy/);
 assert.match(text(i18nData), /aiAssistCopyLocales/);
 assert.match(text(i18nData), /aiAssistRequestLabels/);
-assert.match(text(i18nData), /toggleOn: 'AI 辅助 开'/);
+assert.match(text(i18nData), /toggleOn: 'AI 笔记 开'/);
 assert.deepEqual(Object.keys(localeContext.window.BreviaLocaleData.aiNotePromptCopy), ['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']);
 Object.values(localeContext.window.BreviaLocaleData.aiNotePromptCopy).forEach((copy) => {
   assert.ok(copy.instructions.length > 0);

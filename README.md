@@ -1,6 +1,6 @@
 <p align="center"><img src="docs/assets/brevia-mark.svg" width="258" alt="Brevia" /></p>
 
-<p align="center"><strong>A minimal, local-first AI meeting assistant.</strong><br />AI Assist Notes · live transcription · multilingual · speaker identification · reviewable summaries — no audio leaves your device.</p>
+<p align="center"><strong>A minimal, local-first AI meeting assistant.</strong><br />AI Notes · live transcription · multilingual · speaker identification · reviewable summaries — no audio leaves your device.</p>
 
 <p align="center">
   <a href="https://github.com/zerolovesea/Brevia/releases"><img src="https://img.shields.io/github/v/release/zerolovesea/Brevia?style=flat-square" alt="Release" /></a>
@@ -17,21 +17,25 @@
 
 ## About
 
-Brevia is a desktop AI meeting assistant that hands the most time-consuming part of any meeting — capturing, organizing, and revisiting — off to on-device AI. It records microphone and system audio at the same time, streams live captions, and turns the finished conversation into structured notes. AI Assist Notes can surface useful moments while the meeting is still happening. All speech recognition runs locally; recordings, transcripts, and speaker profiles stay on your machine by default.
+Brevia is a desktop AI meeting assistant that hands the most time-consuming part of any meeting — capturing, organizing, and revisiting — off to on-device AI. It records microphone and system audio at the same time, streams live captions, and turns the finished conversation into structured notes. AI Notes can surface useful moments while the meeting is still happening. All speech recognition runs locally; recordings, transcripts, and speaker profiles stay on your machine by default.
 
 The design is deliberately quiet: an interface that doesn't get in the way of the meeting, a feature set that follows a single arc — **capture → understand → retrieve** — and a firm rule that anything that can happen locally should.
 
-<p align="center"><img src="docs/assets/demo/ai-assist-en.gif" width="820" alt="Brevia AI Assist Notes demo" /></p>
+<p align="center"><img src="docs/assets/demo/ai-assist-en.gif" width="820" alt="Brevia AI Notes demo" /></p>
 
 ## Features
 
-### AI Assist Notes that stay reviewable
+### AI Notes that stay reviewable
 
-AI Assist watches the live transcript and can surface decisions, action items, key numbers, risks, questions, and topic changes. Choose request-only, gentle prompts, or automatic organization. Suggestions remain reviewable: add only the useful ones to your notes, and write alongside them in rich text or Markdown.
+AI Notes watches the live transcript and can surface decisions, action items, key numbers, risks, questions, and topic changes. Choose request-only, gentle prompts, or automatic organization. Suggestions remain reviewable: add only the useful ones to your notes, and write alongside them in rich text or Markdown.
 
-AI Assist uses your existing summary-model configuration. With a remote provider, only transcript text and current note context are sent; audio never leaves your device.
+Configure AI Notes and AI Meeting Summary independently: each can use its own provider, model, and API key. With a remote provider, only transcript text and current note context are sent; audio never leaves your device. Local models are loaded on demand, so separate preferences do not keep two models resident at once.
 
-![AI Assist Notes](docs/assets/tour/en/AI%20Assist%20Notes.png)
+![AI Notes](docs/assets/tour/en/AI%20Assist%20Notes.png)
+
+### Performance modes for CPU devices
+
+Settings → Performance offers Standard and Efficiency modes. Efficiency disables live denoising and refinement, then lowers built-in AI Notes frequency to keep captions responsive; post-meeting refinement remains available. If live refinement repeatedly falls behind, Brevia offers the same switch during the meeting. Prefer a 2B local model or an online provider on lower-performance machines.
 
 ### A quiet meeting screen with live transcription and translation
 
@@ -157,9 +161,49 @@ BREVIA_DATA_DIR=/path/to/data       # Custom data dir (recordings, exports, SQLi
 BREVIA_MODELS_DIR=/path/to/models   # Custom model dir
 BREVIA_FFMPEG=/path/to/ffmpeg       # ffmpeg binary (if not on PATH)
 BREVIA_ASR_BACKEND=cpu              # cpu, cuda, or coreml; mps safely maps to cpu
+BREVIA_LLAMA_THREADS=2              # Cap llama.cpp CPU threads (default: min(4, cores/2))
+BREVIA_GPU_LAYERS=0                 # Force all llama.cpp layers to CPU
+BREVIA_LIVE_REFINE_SIDECAR=1        # Run live refinement in a separate subprocess
 
 BREVIA_DATA_DIR=~/brevia-dev BREVIA_MODELS_DIR=~/brevia-models npm start
 ```
+
+#### Performance on low-power machines
+
+On 4-core / 8 GB machines without a usable GPU (e.g. Intel i5 "U-series" laptops),
+live transcription plus the real-time second-pass refinement and the built-in
+AI-assist model compete for the same cores, which causes lagging captions and slow
+meeting start/stop. In order of impact:
+
+1. **Enable Settings → 性能 → 效率模式 / Efficiency.** It disables live
+   noise-reduction and live refinement during the call; post-meeting refinement stays
+   available. This is the single biggest lever.
+2. Prefer a **smaller realtime AI-assist model** (e.g. a 1.5B–2B GGUF) and reserve the
+   4B model for the end-of-meeting summary.
+3. Cap concurrent inference threads if CPU is still oversubscribed:
+   `BREVIA_LLAMA_THREADS=2` limits the llama helper; the worker already budgets its
+   sherpa-onnx models by role (realtime ASR keeps priority, refinement/voiceprint yield).
+4. Set `BREVIA_LIVE_REFINE_SIDECAR=1` to move live refinement into a separate
+   subprocess, isolating it from the streaming ASR. It falls back to in-process
+   refinement automatically on any failure, so it is safe to try.
+
+Brevia also surfaces performance controls in the UI:
+
+- **Settings → 性能 / Performance** offers a **性能模式 / Performance mode** with
+  two levels: **Standard** (live denoising + refinement on) and **Efficiency**
+  (turns off live denoising/refinement and lowers the built-in AI-notes frequency —
+  the lowest-power setting). It takes effect for subsequently started meetings and
+  lowers built-in AI-notes frequency when a meeting starts.
+- During a live meeting, if the realtime refinement queue repeatedly falls behind,
+  Brevia emits a bottleneck signal and shows a one-time dialog asking whether to
+  switch to Efficiency mode for this meeting (hot-updates via `reconfigure`). If the
+  AI-assist model is online (not built-in), its frequency is left untouched.
+- On low-power devices (CPU inference with ≤4 cores), the onboarding **AI-assist**
+  step and the Performance settings show a hint recommending a smaller built-in
+  model (e.g. 2B) or an online LLM API.
+
+Backend behavior is tunable via `advanced-settings.json` in the data dir; the
+realtime-refinement backlog cap is `asr.live_refine_max_pending` (default `3`).
 ### Build installers
 
 ```bash

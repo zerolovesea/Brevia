@@ -1,6 +1,6 @@
 <p align="center"><img src="assets/brevia-mark.svg" width="258" alt="Brevia" /></p>
 
-<p align="center"><strong>Un asistente de reuniones con IA minimalista y local.</strong><br />Notas de AI Assist · transcripción en vivo · multilingüe · identificación de hablantes · resúmenes revisables — el audio nunca sale de tu equipo.</p>
+<p align="center"><strong>Un asistente de reuniones con IA minimalista y local.</strong><br />Notas de IA · transcripción en vivo · multilingüe · identificación de hablantes · resúmenes revisables — el audio nunca sale de tu equipo.</p>
 
 <p align="center">
   <a href="https://github.com/zerolovesea/Brevia/releases"><img src="https://img.shields.io/github/v/release/zerolovesea/Brevia?style=flat-square" alt="Release" /></a>
@@ -25,13 +25,17 @@ El diseño es deliberadamente silencioso: una interfaz que no estorba a la reuni
 
 ## Funcionalidades
 
-### Notas de AI Assist siempre revisables
+### Notas de IA siempre revisables
 
-AI Assist sigue la transcripción en vivo y señala decisiones, tareas, cifras clave, riesgos, preguntas y cambios de tema. Elige entre activarlo bajo demanda, recibir avisos suaves u organizar automáticamente. Las sugerencias siempre se revisan: añade solo las útiles a tus notas y edítalas en texto enriquecido o Markdown.
+Las notas de IA siguen la transcripción en vivo y señalan decisiones, tareas, cifras clave, riesgos, preguntas y cambios de tema. Elige entre activarlas bajo demanda, recibir avisos suaves u organizar automáticamente. Las sugerencias siempre se revisan: añade solo las útiles a tus notas y edítalas en texto enriquecido o Markdown.
 
-AI Assist usa la configuración existente del modelo de resumen. Con un proveedor remoto, solo se envían el texto de la transcripción y el contexto actual de las notas; el audio nunca sale de tu equipo.
+Configura por separado las notas de IA y el resumen de la reunión: cada uno puede usar su propio proveedor, modelo y API Key. Con un proveedor remoto, solo se envían el texto de la transcripción y el contexto actual de las notas; el audio nunca sale de tu equipo. Los modelos locales se cargan bajo demanda, por lo que dos preferencias no mantienen dos modelos en memoria.
 
 ![Notas de AI Assist](assets/tour/en/AI%20Assist%20Notes.png)
+
+### Modos de rendimiento para equipos con CPU
+
+En Ajustes → Rendimiento puedes elegir entre los modos Estándar y Eficiencia. Eficiencia desactiva la reducción de ruido y el refinamiento en vivo, y reduce la frecuencia de las notas de IA integradas para mantener los subtítulos ágiles; el refinamiento posterior sigue disponible. Si el refinamiento en vivo se acumula, Brevia ofrece el mismo cambio durante la reunión. En equipos menos potentes, usa un modelo local 2B o un proveedor en línea.
 
 ### Pantalla de reunión silenciosa con transcripción y traducción en vivo
 

@@ -6,9 +6,13 @@ const checkIconSvg = '<svg class="check-icon" viewBox="0 0 16 16" aria-hidden="t
 function formatSpeakerName(speaker) {
   const name = typeof speaker === 'string' ? speaker : speaker?.name;
   if (!name) return '';
-  // 如果是 spk-N 格式，转换为本地化的 "说话人 N" / "Speaker N"
-  const match = name.match(/^spk-(\d+)$/);
-  if (match) return `${t('说话人')} ${match[1]}`;
+  if (name === 'local-user' || name === 'Local user') return t('本机用户');
+  const match = name.match(/^(?:(mic|system)-)?spk-(\d+)$/);
+  if (match) {
+    const [, track, index] = match;
+    const origin = track === 'mic' ? t('本机') : track === 'system' ? t('远端') : '';
+    return `${origin ? `${origin} ` : ''}${t('说话人')} ${index}`;
+  }
   return name;
 }
 /** 判断两个视口矩形是否重叠。@param {object} first 第一个矩形。@param {object} second 第二个矩形。@returns {boolean} */
@@ -53,15 +57,11 @@ function renderModelRow({ icon, name, detail, intro = '' }) {
 }
 /** 渲染设置卡片及其模态框操作。@param {{title: string, description: string, action: string, modal: string}} card 卡片数据。@returns {string} 卡片标记。 */
 function renderSettingsCard({ title, description, action, modal }) {
-  return `<section class="settings-card"><h2>${t(title)}</h2><p>${t(description)}</p><button class="secondary" data-settings-modal="${modal}">${t(action)}</button></section>`;
+  return `<section class="settings-card" id="${modal}"><h2>${t(title)}</h2><p>${t(description)}</p><button class="secondary" data-settings-modal="${modal}">${t(action)}</button></section>`;
 }
 /** 渲染语言相关的设置卡片，不重置其他视图。 */
 function renderSettingsView() {
-  const aiCopy = (typeof aiAssistCopy !== 'undefined' ? aiAssistCopy : {})[locale] || { settings: {} };
-  const aiCard = aiCopy.settings?.title
-    ? `<section class="settings-card"><h2>${escapeHtml(aiCopy.settings.title)}</h2><p>${escapeHtml(aiCopy.settings.description)}</p><button class="secondary" data-settings-modal="ai-assist">${escapeHtml(aiCopy.settings.action)}</button></section>`
-    : '';
-  document.querySelector('#settings-view .settings-grid').innerHTML = `<section class="settings-card" id="installed-models"><h2>${t('模型库')}</h2><p>${t('管理语言识别模型的下载、删除与版本信息。')}</p><button class="secondary" data-settings-modal="models">${t('管理模型库')}</button></section>${uiData.settings.cards.map(renderSettingsCard).join('')}${aiCard}`;
+  document.querySelector('#settings-view .settings-grid').innerHTML = `<section class="settings-card" id="performance-mode-card"><h2>${t('性能')}</h2><p>${t('选择性能或效率模式，在音频效果与字幕实时性之间取舍。')}</p><button class="secondary" data-settings-modal="performance">${t('配置性能模式')}</button></section><section class="settings-card" id="installed-models"><h2>${t('模型库')}</h2><p>${t('下载和管理本地语音识别模型，为字幕、精修和说话人识别提供能力。')}</p><button class="secondary" data-settings-modal="models">${t('管理模型库')}</button></section>${uiData.settings.cards.map(renderSettingsCard).join('')}`;
 }
 /** 渲染紧凑的标签/值列表。@param {Array<{label: string, value: string}>} items 状态条目。@returns {string} 定义列表标记。 */
 function renderStatusList(items) { return `<dl>${items.map(({ label, value }) => `<div><dt>${escapeHtml(t(label))}</dt><dd>${escapeHtml(value)}</dd></div>`).join('')}</dl>`; }

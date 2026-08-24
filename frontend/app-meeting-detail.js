@@ -1,15 +1,3 @@
-function displaySpeakerName(name) {
-  // 后端已把命中声纹的 profile-{id} 与非聚类轨道重命名为真实姓名/“Local user”，
-  // 这里只把未命中的原始标签（spk-N / mic-spk-N / system-spk-N）转成可读文案。
-  const match = /^(?:(mic|system)-)?spk-(\d+)$/.exec(String(name ?? ''));
-  if (!match) return name;
-  const [, track, index] = match;
-  const zh = locale === 'zh';
-  const origin = track === 'mic' ? (zh ? '本机' : 'Mic') : track === 'system' ? (zh ? '远端' : 'Remote') : '';
-  const speaker = zh ? `说话人 ${index}` : `Speaker ${index}`;
-  return origin ? `${origin}${zh ? '' : ' '}${speaker}` : speaker;
-}
-
 /** 把 segment 转为可渲染数据（保留时间戳，供播放定位与逐句显示）。@param {object} segment 后端段落。@param {boolean} editable 是否允许改名。@param {Map} speakerNames 说话人名称表。@returns {object} 渲染数据。 */
 function renderSegmentData(segment, editable, speakerNames) {
   const overlapSpeakers = [...new Set((segment.word_timestamps || []).flatMap((word) => word.overlap_speakers || []))];
@@ -19,10 +7,10 @@ function renderSegmentData(segment, editable, speakerNames) {
     startSeconds: segment.start_ms / 1000,
     endSeconds: segment.end_ms / 1000,
     speaker: {
-      name: displaySpeakerName(segment.speaker_name),
+      name: formatSpeakerName(segment.speaker_name),
       segmentId: editable ? segment.id : undefined,
       editing: editable && segment.id === editingSegmentSpeakerId,
-      overlapNames: overlapSpeakers.length > 1 ? overlapSpeakers.map((speaker) => displaySpeakerName(speakerNames.get(speaker) || speaker)) : [],
+      overlapNames: overlapSpeakers.length > 1 ? overlapSpeakers.map((speaker) => formatSpeakerName(speakerNames.get(speaker) || speaker)) : [],
     },
     text: segment.text,
     translation: segment.translation,
@@ -52,7 +40,7 @@ function applyBackendDetail(meeting) {
   const ordered = [...latest.values()].sort((a, b) => a.start_ms - b.start_ms);
   uiData.detail.transcript = ordered.map((segment) => renderSegmentData(segment, true, speakerNames));
   uiData.detail.refinedTranscript = revision === null ? [] : ordered.map((segment) => renderSegmentData(segment, false, speakerNames));
-  uiData.detail.refinedFulltext = revision === null ? '' : ordered.map((segment) => `${displaySpeakerName(segment.speaker_name)}：${segment.text}`).join('\n\n');
+  uiData.detail.refinedFulltext = revision === null ? '' : ordered.map((segment) => `${formatSpeakerName(segment.speaker_name)}：${segment.text}`).join('\n\n');
   uiData.detail.refinedMode = revision === null ? null : refinedModelSupportsTimestamps(meeting.refined_model_id) ? 'timestamps' : 'fulltext';
   uiData.detail.hasRefined = revision !== null;
   uiData.detail.refinedModelId = meeting.refined_model_id || '';

@@ -1,6 +1,6 @@
 <p align="center"><img src="assets/brevia-mark.svg" width="258" alt="Brevia" /></p>
 
-<p align="center"><strong>Ein minimalistischer, local-first KI-Meeting-Assistent.</strong><br />AI-Assist-Notizen · Live-Transkription · mehrsprachig · Sprechererkennung · ueberpruefbare Zusammenfassungen — Audio verlaesst dein Geraet nie.</p>
+<p align="center"><strong>Ein minimalistischer, local-first KI-Meeting-Assistent.</strong><br />KI-Notizen · Live-Transkription · mehrsprachig · Sprechererkennung · ueberpruefbare Zusammenfassungen — Audio verlaesst dein Geraet nie.</p>
 
 <p align="center">
   <a href="https://github.com/zerolovesea/Brevia/releases"><img src="https://img.shields.io/github/v/release/zerolovesea/Brevia?style=flat-square" alt="Release" /></a>
@@ -25,13 +25,17 @@ Das Design ist bewusst zurueckhaltend: eine Oberflaeche, die das Meeting nicht s
 
 ## Funktionen
 
-### Ueberpruefbare AI-Assist-Notizen
+### Ueberpruefbare KI-Notizen
 
-AI Assist verfolgt das Live-Transkript und kann Entscheidungen, Aufgaben, wichtige Zahlen, Risiken, Fragen und Themenwechsel hervorheben. Waehle bei Bedarf, dezente Hinweise oder automatische Organisation. Alle Vorschlaege bleiben ueberpruefbar: Fuege nur Nuetzliches zu deinen Notizen hinzu und schreibe daneben in Rich Text oder Markdown weiter.
+KI-Notizen verfolgen das Live-Transkript und koennen Entscheidungen, Aufgaben, wichtige Zahlen, Risiken, Fragen und Themenwechsel hervorheben. Waehle bei Bedarf, dezente Hinweise oder automatische Organisation. Alle Vorschlaege bleiben ueberpruefbar: Fuege nur Nuetzliches zu deinen Notizen hinzu und schreibe daneben in Rich Text oder Markdown weiter.
 
-AI Assist nutzt die vorhandene Konfiguration des Zusammenfassungsmodells. Bei einem Remote-Anbieter werden nur Transkripttext und aktueller Notizkontext gesendet; Audio verlaesst dein Geraet nie.
+KI-Notizen und KI-Meeting-Zusammenfassungen werden getrennt konfiguriert: jeweils mit eigenem Anbieter, Modell und API Key. Bei einem Remote-Anbieter werden nur Transkripttext und aktueller Notizkontext gesendet; Audio verlaesst dein Geraet nie. Lokale Modelle werden bei Bedarf geladen, daher halten getrennte Einstellungen nicht zwei Modelle gleichzeitig im Speicher.
 
 ![AI-Assist-Notizen](assets/tour/en/AI%20Assist%20Notes.png)
+
+### Leistungsmodi fuer CPU-Geraete
+
+Unter Einstellungen → Leistung stehen Standard- und Effizienzmodus zur Verfuegung. Der Effizienzmodus deaktiviert Live-Entrauschung und -Nachbearbeitung und reduziert die Frequenz integrierter KI-Notizen, damit Untertitel reaktionsschnell bleiben; die Nachbearbeitung nach dem Meeting bleibt verfuegbar. Wenn die Live-Nachbearbeitung dauerhaft zurueckfaellt, bietet Brevia denselben Wechsel waehrend des Meetings an. Auf leistungsschwaecheren Rechnern empfiehlt sich ein lokales 2B-Modell oder ein Online-Anbieter.
 
 ### Eine ruhige Meeting-Oberflaeche mit Live-Transkription und -Uebersetzung
 

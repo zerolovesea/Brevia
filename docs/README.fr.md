@@ -1,6 +1,6 @@
 <p align="center"><img src="assets/brevia-mark.svg" width="258" alt="Brevia" /></p>
 
-<p align="center"><strong>Un assistant de reunion IA minimaliste et local-first.</strong><br />Notes AI Assist · transcription en direct · multilingue · identification des locuteurs · resumes verifiables — l'audio ne quitte pas votre appareil.</p>
+<p align="center"><strong>Un assistant de reunion IA minimaliste et local-first.</strong><br />Notes IA · transcription en direct · multilingue · identification des locuteurs · resumes verifiables — l'audio ne quitte pas votre appareil.</p>
 
 <p align="center">
   <a href="https://github.com/zerolovesea/Brevia/releases"><img src="https://img.shields.io/github/v/release/zerolovesea/Brevia?style=flat-square" alt="Release" /></a>
@@ -25,13 +25,17 @@ Le design est deliberement discret : une interface qui ne gene pas la reunion, u
 
 ## Fonctionnalites
 
-### Des notes AI Assist toujours verifiables
+### Des notes IA toujours verifiables
 
-AI Assist suit la transcription en direct et peut signaler decisions, actions, chiffres cles, risques, questions et changements de sujet. Choisissez l'activation a la demande, des suggestions discretes ou l'organisation automatique. Chaque suggestion reste verifiable : ajoutez seulement les utiles a vos notes et continuez a ecrire en texte enrichi ou Markdown.
+Les notes IA suivent la transcription en direct et peuvent signaler decisions, actions, chiffres cles, risques, questions et changements de sujet. Choisissez l'activation a la demande, des suggestions discretes ou l'organisation automatique. Chaque suggestion reste verifiable : ajoutez seulement les utiles a vos notes et continuez a ecrire en texte enrichi ou Markdown.
 
-AI Assist utilise votre configuration existante de modele de resume. Avec un fournisseur distant, seuls le texte de transcription et le contexte actuel des notes sont envoyes ; l'audio ne quitte jamais votre appareil.
+Configurez separement les notes IA et le resume de reunion : chacun peut utiliser son propre fournisseur, modele et API Key. Avec un fournisseur distant, seuls le texte de transcription et le contexte actuel des notes sont envoyes ; l'audio ne quitte jamais votre appareil. Les modeles locaux sont charges a la demande, donc deux configurations ne gardent pas deux modeles en memoire.
 
 ![AI Assist Notes](assets/tour/en/AI%20Assist%20Notes.png)
+
+### Modes de performance pour les appareils CPU
+
+Dans Reglages → Performance, choisissez le mode Standard ou Efficacite. Le mode Efficacite desactive le denoising et l'affinage en direct, puis reduit la frequence des notes IA integrees pour garder des sous-titres reactifs ; l'affinage apres reunion reste disponible. Si l'affinage en direct prend durablement du retard, Brevia propose le meme changement pendant la reunion. Sur une machine moins puissante, preferez un modele local 2B ou un fournisseur en ligne.
 
 ### Un ecran de reunion discret avec transcription et traduction en direct
 

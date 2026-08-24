@@ -1,10 +1,12 @@
 """聚焦的 worker 职责组件。"""
 
 import base64
+import os
 import sys
 import threading
 from array import array
 from concurrent.futures import ThreadPoolExecutor
+from collections import deque
 from pathlib import Path
 
 from .asr import (
@@ -19,12 +21,21 @@ from .asr import (
 )
 from .audio_io import convert_to_pcm_wav
 from .config import SETTINGS, SPEAKER_EMBEDDING_MODEL_ID
+from .refine_sidecar import RemoteRefiner
 from .worker_llm import TRANSLATION_MODEL_ID
 from .worker_common import require, synchronized_recording
 
 # 语义软钉可接受的切点：句末标点优先，逗号/分号作为次优切点（连续语音里标点模型
 # 常把句号降级成逗号，若只认句号会一直等、最后从词中间硬切）。
 _SENTENCE_FINAL = "。！？.!?；;"
+
+# 实时双轨混音缓冲的时间跨度上限（毫秒）。单轨停帧时另一轨缓冲会无限增长，这里
+# 限制跨度，超出即丢弃最旧帧，避免内存增长与恢复后的一次性爆量对齐。
+MAX_MIX_BUFFER_MS = 5000
+
+# ``_mix_live_audio`` 的标记值：单轨已停流超过 MAX_MIX_BUFFER_MS，应回退为该轨
+# 独立转写（而非继续空等导致整场 live 字幕空白）。
+_MIX_STALL = object()
 _PIN_BOUNDARY = "。！？.!?；;，,"
 
 
@@ -67,7 +78,7 @@ class RecordingSessionMixin:
                 f"{label} {', '.join(missing_models)} {verb} not installed"
             )
         meeting = self.store.create_meeting(payload)
-        self._prepare_active(meeting)
+        self._prepare_active(meeting, audio_tracks=payload.get("audio_tracks"))
         self.emit("meeting.started", {"meeting_id": self.active, "meeting": meeting})
         return meeting
 
@@ -112,11 +123,18 @@ class RecordingSessionMixin:
         if meeting["status"] != "recording":
             raise ValueError("Only an unfinished recording can be resumed")
         start_ms = self.store.recorded_duration_ms(meeting["id"])
-        self._prepare_active(meeting, start_ms)
+        # 恢复时从录音 manifest 推导本场打开了哪些捕获轨道，以重建双轨混音。
+        # ``audio_tracks`` 未落库，但原始双轨的落盘记录就是最可靠的来源：双轨会议
+        # 的 manifest tracks 含 mic/system 两键，单轨只含其一。否则恢复的双轨会议会
+        # 退回 mic/system 分别转写，重现「同一人声两条字幕」的旧 bug。
+        manifest = self.store.read_manifest(meeting["id"])
+        recorded_tracks = set(manifest.get("tracks", {}))
+        audio_tracks = [track for track in ("mic", "system") if track in recorded_tracks]
+        self._prepare_active(meeting, start_ms, audio_tracks=audio_tracks)
         self.emit("meeting.recovered", {"meeting_id": self.active, "meeting": meeting})
         return meeting
 
-    def _prepare_active(self, meeting, start_ms=0):
+    def _prepare_active(self, meeting, start_ms=0, audio_tracks=None):
         """建立活动会议的双轨识别状态；模型不可用时仍允许安全录音。"""
         self.active = meeting["id"]
         self.meeting_language = meeting["language"]
@@ -138,11 +156,11 @@ class RecordingSessionMixin:
                 "carry_audio": [],
                 "carry_raw_audio": [],
                 "carry_ms": 0,
-                "pending_asr": [],
-                "pending_asr_samples": 0,
             }
-            for track in ("mic", "system")
+            for track in ("mic", "system", "mix")
         }
+        self.live_tracks = set(audio_tracks or ())
+        self.live_mix_buffers = {"mic": deque(), "system": deque()}
         self.recent_finals = []
         denoiser_id = SETTINGS["live_asr"]["denoiser_model_id"]
         self.denoiser = None
@@ -222,8 +240,9 @@ class RecordingSessionMixin:
         def build_live_refiner():
             if not self.power_saving and self.models.is_ready(meeting["refined_model_id"]):
                 try:
-                    return RefinedASR(
-                        self.models, meeting["refined_model_id"], language=meeting.get("language")
+                    return self._create_live_refiner(
+                        meeting["refined_model_id"],
+                        language=meeting.get("language"),
                     )
                 except RuntimeError as error:
                     self.emit(
@@ -292,6 +311,17 @@ class RecordingSessionMixin:
         require(payload, "meeting_id", "paused")
         self._active(payload["meeting_id"])
         return {"paused": bool(payload["paused"])}
+
+    def _create_live_refiner(self, model_id, language=None):
+        """创建实时精修器。
+
+        ``BREVIA_LIVE_REFINE_SIDECAR=1`` 时把 RefinedASR 放入独立子进程
+        （见 ``refine_sidecar``），隔离崩溃并避免抢占流式 ASR；失败自动回退到
+        进程内精修。默认进程内精修（已用低线程预算让出 CPU）。
+        """
+        if os.environ.get("BREVIA_LIVE_REFINE_SIDECAR", "") == "1":
+            return RemoteRefiner(self.models, model_id, language=language)
+        return RefinedASR(self.models, model_id, language=language)
 
     def _build_live_punctuation(self, language, meeting_id):
         """按语言构建实时标点模型；不可用时发告警并返回 None。"""
@@ -380,7 +410,9 @@ class RecordingSessionMixin:
                     else None
                 )
             if power_saving_changed:
-                new_refiner = RefinedASR(self.models, refined_model_id, language=language)
+                new_refiner = self._create_live_refiner(
+                    refined_model_id, language=language
+                )
             if new_refiner is not None and new_postprocessing is None:
                 new_postprocessing = ThreadPoolExecutor(
                     max_workers=1, thread_name_prefix="brevia-live-postprocess"
@@ -432,11 +464,17 @@ class RecordingSessionMixin:
 
         old_postprocessing = self.live_postprocessing
         old_punctuation_executor = self.live_punctuation
+        old_refiner = self.live_refiner
         self.asr = new_asr
         self.denoiser = new_denoiser
         self.live_refiner = new_refiner
         self.live_postprocessing = new_postprocessing
         self.power_saving = power_saving
+        # 替换远程精修器时回收其子进程，避免泄漏。
+        if old_refiner is not new_refiner and isinstance(
+            old_refiner, RemoteRefiner
+        ):
+            old_refiner.shutdown()
         if language_changed:
             self.meeting_language = language
             self.detected_language = None
@@ -471,6 +509,57 @@ class RecordingSessionMixin:
             gain = min(gain, config["microphone_peak"] / peak)
         return samples if gain <= 1 else samples * gain
 
+    def _mix_live_audio(self, track, samples, start_ms, sample_rate):
+        """按时间对齐双轨 PCM，供实时字幕使用；原始双轨仍分别落盘。"""
+        if not len(samples):
+            return None
+        buffers = self.live_mix_buffers
+        buffer = buffers[track]
+        # 单轨停帧保护：若本轨一直有数据而对轨停流，本轨缓冲会无限增长。把缓冲
+        # 跨度限制在 MAX_MIX_BUFFER_MS 内，超出即从最旧丢弃，既避免内存增长，也
+        # 防止对轨恢复后的一次性爆量对齐。实时字幕优先最新内容，丢弃旧帧可接受。
+        while buffer and start_ms - buffer[0][0] > MAX_MIX_BUFFER_MS:
+            buffer.popleft()
+        # 麦克风轨进混音前先做增益均衡，避免人声忽大忽小（与单轨时的增强一致）。
+        if track == "mic":
+            samples = self._enhance_live_microphone(samples)
+        buffer.append([float(start_ms), samples])
+        peer = "system" if track == "mic" else "mic"
+        # 对轨停流检测：本轨已有超过 MAX_MIX_BUFFER_MS 的数据但从未遇到对轨，判定
+        # 对轨停流。此时回退为本轨独立转写，避免整场 live 字幕空白（原始音频仍落盘，
+        # 会后精修可恢复）。对轨恢复后由下一帧重新进入双轨混音。
+        if not buffers[peer] and buffer and start_ms - buffer[0][0] >= MAX_MIX_BUFFER_MS:
+            buffer.clear()
+            return _MIX_STALL
+        mic, system = buffers["mic"], buffers["system"]
+        if not mic or not system:
+            return None
+        import numpy
+
+        # 每次只输出双方都有数据的重叠区间；较早的非重叠部分是启动抖动，直接丢弃。
+        while mic and system:
+            start_ms = max(mic[0][0], system[0][0])
+            for queue in (mic, system):
+                chunk_start, chunk = queue[0]
+                skip = round((start_ms - chunk_start) * sample_rate / 1000)
+                if skip >= len(chunk):
+                    queue.popleft()
+                elif skip > 0:
+                    queue[0] = [start_ms, chunk[skip:]]
+            if not mic or not system:
+                return None
+            count = min(len(mic[0][1]), len(system[0][1]))
+            mixed = (mic[0][1][:count] + system[0][1][:count]) * 0.5
+            next_start = start_ms + count * 1000 / sample_rate
+            for queue in (mic, system):
+                chunk_start, chunk = queue[0]
+                if count == len(chunk):
+                    queue.popleft()
+                else:
+                    queue[0] = [next_start, chunk[count:]]
+            return numpy.clip(mixed, -1, 1), round(start_ms)
+        return None
+
     @synchronized_recording
     def audio(self, payload):
         """持久化一帧音频，并在模型可用时推进实时转写。
@@ -488,9 +577,10 @@ class RecordingSessionMixin:
         require(payload, "meeting_id", "track", "pcm", "sample_rate", "start_ms")
         self._active(payload["meeting_id"])
         pcm = base64.b64decode(payload["pcm"], validate=True)
-        samples_total = self.store.append_audio(
+        source_track = payload["track"]
+        samples_total = 0 if source_track == "mix" else self.store.append_audio(
             self.active,
-            payload["track"],
+            source_track,
             pcm,
             int(payload["sample_rate"]),
             int(payload["start_ms"]),
@@ -502,7 +592,31 @@ class RecordingSessionMixin:
         import numpy
 
         samples = numpy.asarray(values, dtype=numpy.float32) / 32768.0
+        mixed_from_dual_track = False
+        if self.live_tracks == {"mic", "system"} and source_track != "mix":
+            mixed = self._mix_live_audio(source_track, samples, payload["start_ms"], int(payload["sample_rate"]))
+            if mixed is _MIX_STALL:
+                # 对轨停流：回退为本轨独立转写，保持实时字幕不空白。
+                self.live_tracks = {source_track}
+                payload = {**payload, "track": source_track}
+            elif mixed is None:
+                return {"samples": samples_total}
+            else:
+                samples, mixed_start_ms = mixed
+                payload = {**payload, "track": "mix", "start_ms": mixed_start_ms}
+                mixed_from_dual_track = True
         state = self.stream_state[payload["track"]]
+        # mix 流的 state["start_ms"] 初值为会议起点；若某轨领先导致首段混音从较晚的
+        # 对齐点开始，懒初始化首段时间戳，避免首段 start_ms 被错误地前移。仅当本次
+        # 确实由双轨混音产出（而非 stop() 直接 flush 的 mix 空帧）时进行。
+        if (
+            mixed_from_dual_track
+            and payload["track"] == "mix"
+            and not state["audio"]
+            and not state["carry_raw_audio"]
+        ):
+            state["start_ms"] = mixed_start_ms
+            state["segment"] = mixed_start_ms
         # 上一段软钉截断后带过来的尾巴（原始音频），先并入本段音频缓冲。
         if state["carry_raw_audio"]:
             state["audio"].extend(state["carry_raw_audio"])
@@ -514,17 +628,7 @@ class RecordingSessionMixin:
             if payload["track"] == "mic"
             else samples
         )
-        if self.power_saving:
-            if len(asr_samples):
-                state["pending_asr"].append(asr_samples)
-                state["pending_asr_samples"] += len(asr_samples)
-            if not payload.get("flush") and state["pending_asr_samples"] < int(payload["sample_rate"]):
-                return {"samples": samples_total}
-            if state["pending_asr"]:
-                asr_samples = numpy.concatenate(state["pending_asr"])
-                state["pending_asr"] = []
-                state["pending_asr_samples"] = 0
-        if payload["track"] == "mic" and self.denoiser:
+        if payload["track"] in ("mic", "mix") and self.denoiser:
             asr_samples = self.denoiser.accept(
                 payload["track"],
                 asr_samples,
@@ -682,7 +786,7 @@ class RecordingSessionMixin:
                 if self.speaker_tracker and self.speaker_tracker.last_speaker
                 else "spk-1"
             )
-            speaker_name = "Local user" if speaker == "local-user" else None
+            speaker_name = None
             segment_audio = (
                 numpy.concatenate(state["audio"])
                 if final
@@ -713,8 +817,6 @@ class RecordingSessionMixin:
                 "track": payload["track"],
                 "pinned": pinned,
             }
-            if speaker == "local-user":
-                self.store.rename_speaker(self.active, speaker, "Local user")
             state["last_text"] = text
             if final:
                 state["last_final_text"] = text
@@ -757,8 +859,6 @@ class RecordingSessionMixin:
                     last_raw_text="",
                     audio=[],
                     refine_audio=[],
-                    pending_asr=[],
-                    pending_asr_samples=0,
                     pending_pin=False,
                     carry_ms=0,
                 )
@@ -772,8 +872,6 @@ class RecordingSessionMixin:
                 last_text="",
                 last_raw_text="",
                 audio=[],
-                pending_asr=[],
-                pending_asr_samples=0,
                 pending_pin=False,
                 carry_ms=0,
             )
@@ -784,6 +882,11 @@ class RecordingSessionMixin:
 
         ``samples`` 是原始音频（用于声纹），``refine_samples`` 是增益+降噪后的音频
         （用于精修转写），二者不一致时以 refiner 是否可用为准。
+
+        实时精修采用「有界积压」：弱 CPU 上 RefinedASR 可能慢于实时语音。若每个
+        final 都压进单线程执行器且不设上限，积压会无限增长，精修字幕延迟达数分钟。
+        这里限流——在飞+排队超过 ``live_refine_max_pending`` 时跳过本段实时精修
+        （保留其流式原文，会后精修会再覆盖），把延迟压到有界范围内，并自动恢复。
         """
         if not (
             self.live_postprocessing
@@ -791,14 +894,91 @@ class RecordingSessionMixin:
             and (samples is not None or refine_samples is not None)
         ):
             return
+        reservation = self._live_refine_try_reserve()
+        if reservation is None:
+            self._warn_live_refine_degraded(event)
+            self._live_refine_dropped(event.get("meeting_id"))
+            return
         self.live_postprocessing.submit(
-            self._refine_live_utterance,
+            self._refine_live_utterance_with_release,
+            reservation,
             self.speaker_tracker,
             self.live_refiner,
             event.copy(),
             samples.copy() if samples is not None else None,
             refine_samples.copy() if refine_samples is not None else None,
             sample_rate,
+        )
+
+    def _live_refine_try_reserve(self):
+        """占用一个精修名额；返回会话 reservation，满载时返回 ``None``。"""
+        with self._live_refine_lock:
+            if self._live_refine_outstanding >= self._live_refine_max:
+                return None
+            self._live_refine_outstanding += 1
+            # 连续积压已恢复：清空掉段计数（若已进入瓶颈，交 release 发恢复事件）。
+            self._live_refine_drops = 0
+            return self._live_refine_generation
+
+    def _live_refine_release(self, reservation, meeting_id=None):
+        """精修完成（含异常）后归还名额，并在积压排空后发恢复事件。"""
+        with self._live_refine_lock:
+            if reservation != self._live_refine_generation:
+                return
+            self._live_refine_outstanding = max(0, self._live_refine_outstanding - 1)
+            recovered = (
+                self._live_perf_bottleneck
+                and self._live_refine_outstanding == 0
+                and self._live_refine_drops == 0
+            )
+            if recovered:
+                self._live_perf_bottleneck = False
+        if recovered and meeting_id:
+            self.emit(
+                "live.performance",
+                {"meeting_id": meeting_id, "bottleneck": False},
+            )
+
+    def _live_refine_dropped(self, meeting_id):
+        """记录一次被跳过的实时精修；连续达到阈值时发瓶颈事件。"""
+        with self._live_refine_lock:
+            self._live_refine_drops += 1
+            trigger = self._live_refine_drops >= 3 and not self._live_perf_bottleneck
+            if trigger:
+                self._live_perf_bottleneck = True
+        if trigger and meeting_id:
+            self.emit(
+                "live.performance",
+                {"meeting_id": meeting_id, "bottleneck": True},
+            )
+
+    def _refine_live_utterance_with_release(
+        self, reservation, tracker, refiner, event, samples, refine_samples, sample_rate
+    ):
+        """在限流名额内执行单段精修；无论结果如何都释放名额。"""
+        meeting_id = event.get("meeting_id")
+        try:
+            self._refine_live_utterance(
+                tracker, refiner, event, samples, refine_samples, sample_rate
+            )
+        finally:
+            self._live_refine_release(reservation, meeting_id)
+
+    def _warn_live_refine_degraded(self, event):
+        """积压过载导致跳过实时精修时，仅首次告警，避免刷屏。"""
+        with self._live_refine_lock:
+            if self._live_refine_degraded_warned:
+                return
+            self._live_refine_degraded_warned = True
+        self.emit(
+            "worker.warning",
+            {
+                "meeting_id": event.get("meeting_id"),
+                "code": "live_refinement_degraded",
+                "message": (
+                    "实时精修已自动降级以保持字幕实时。"
+                ),
+            },
         )
 
     def _punctuate_partial_later(self, event, raw_text, epoch):
@@ -995,7 +1175,7 @@ class RecordingSessionMixin:
         meeting_id = self.active
         try:
             if self.asr:
-                for track in ("mic", "system"):
+                for track in (("mix",) if self.live_tracks == {"mic", "system"} else ("mic", "system")):
                     self.audio(
                         {
                             "meeting_id": meeting_id,
@@ -1014,7 +1194,12 @@ class RecordingSessionMixin:
         return meeting
 
     def _release_active_session(self):
-        """在持久化停止状态前释放模型和执行器资源。"""
+        """在持久化停止状态前释放模型和执行器资源。
+
+        精修/标点执行器用 ``wait=False`` 关闭：结束会议不应干等排队的精修跑完
+        （弱 CPU 上可能拖到数分钟）。在飞任务保留流式原文，会议结束后由
+        ``meeting.refine`` 统一完整精修。
+        """
         meeting_id = self.active
         if meeting_id and hasattr(self, "ai_note_stop"):
             self.ai_note_stop({"meeting_id": meeting_id})
@@ -1022,10 +1207,19 @@ class RecordingSessionMixin:
         punctuation = self.live_punctuation
         self.live_postprocessing = None
         self.live_punctuation = None
+        with self._live_refine_lock:
+            self._live_refine_generation += 1
+            self._live_refine_outstanding = 0
+            self._live_refine_degraded_warned = False
+            self._live_refine_drops = 0
+            self._live_perf_bottleneck = False
         if postprocessing:
-            postprocessing.shutdown(wait=True, cancel_futures=True)
+            postprocessing.shutdown(wait=False, cancel_futures=True)
         if punctuation:
-            punctuation.shutdown(wait=True, cancel_futures=True)
+            punctuation.shutdown(wait=False, cancel_futures=True)
+        # 远程精修器需要显式回收其子进程。
+        if isinstance(self.live_refiner, RemoteRefiner):
+            self.live_refiner.shutdown()
         (
             self.active,
             self.asr,
@@ -1034,6 +1228,7 @@ class RecordingSessionMixin:
             self.language_identifier,
         ) = None, None, None, None, None
         self.speaker_tracker, self.stream_state, self.recent_finals = None, {}, []
+        self.live_tracks, self.live_mix_buffers = set(), {"mic": deque(), "system": deque()}
         self.meeting_language, self.detected_language = None, None
         self.live_refiner = None
         self.power_saving = False

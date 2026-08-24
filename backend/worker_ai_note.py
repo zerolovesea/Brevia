@@ -169,6 +169,7 @@ class _AiNoteSession:
         self.pending_chars = 0         # 自上次分析以来新增的字数
         self.last_run_at = 0.0         # 上次分析开始时间（monotonic）
         self.typing_trigger = False    # 停笔触发的分析（quiet 档也允许）
+        self.min_interval_override = None  # 会中热调的最小间隔覆盖（秒），None 用默认
         self.thread = None
         # 去重 / 质量
         self.recent_norms = []
@@ -279,6 +280,27 @@ class AiNoteWorkerMixin:
             session.dismissed_norms.add(norm)
         return {"ok": True}
 
+    def ai_note_reconfigure(self, payload):
+        """会中热调 AI 辅助的分析频率，不重启调度线程。
+
+        ``min_interval_seconds`` 为新的最小分析间隔（秒）；传 ``None`` 恢复默认。
+        用于会中检测到性能瓶颈时，降低内置模型的辅助频率（在线 LLM 通常无需调低）。
+        """
+        require(payload, "meeting_id")
+        session = self._session(payload["meeting_id"])
+        if not session:
+            return {"ok": False}
+        interval = payload.get("min_interval_seconds")
+        if interval is not None:
+            interval = max(1.0, float(interval))
+        with session.cond:
+            session.min_interval_override = interval
+            session.cond.notify_all()
+        return {
+            "ok": True,
+            "min_interval_seconds": session.min_interval_override,
+        }
+
     def shutdown_ai_note(self):
         """应用退出时停止全部 AI 辅助会话。"""
         with self._ai_note_lock:
@@ -369,11 +391,16 @@ class AiNoteWorkerMixin:
             return False
         if session.proactivity == "quiet":
             return session.typing_trigger
-        interval = (
-            ANALYSIS_MIN_INTERVAL_AUTO
-            if session.proactivity == "auto"
-            else ANALYSIS_MIN_INTERVAL_ASSIST
-        )
+        # 运行期可被 ``ai-note.reconfigure`` 热调的最小间隔：会中检测到性能瓶颈时，
+        # 前端会调低内置模型的辅助频率（在线 LLM 通常无需调低）。
+        if session.min_interval_override is not None:
+            interval = session.min_interval_override
+        else:
+            interval = (
+                ANALYSIS_MIN_INTERVAL_AUTO
+                if session.proactivity == "auto"
+                else ANALYSIS_MIN_INTERVAL_ASSIST
+            )
         if time.monotonic() - session.last_run_at < interval:
             return False
         if session.proactivity == "auto":
@@ -479,7 +506,6 @@ class AiNoteWorkerMixin:
     def _parse_suggestions(self, raw):
         """解析模型输出为规范化建议列表（支持批量 JSON 与旧版单条 JSON）。"""
         text = str(raw or "").strip()
-        text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text, flags=re.MULTILINE).strip()
         data = _extract_json(text)
         if isinstance(data, dict):
             items = data.get("suggestions")
@@ -655,20 +681,17 @@ def _extract_json(text):
     """从模型输出中提取 JSON 对象或数组；失败返回 None。"""
     value = str(text or "").strip()
     value = re.sub(r"^```(?:json)?\s*|\s*```$", "", value, flags=re.MULTILINE).strip()
-    try:
-        data = json.loads(value)
+    decoder = json.JSONDecoder()
+    for index, character in enumerate(value):
+        if character not in "[{":
+            continue
+        try:
+            data, _ = decoder.raw_decode(value[index:])
+        except json.JSONDecodeError:
+            continue
         if isinstance(data, (dict, list)):
             return data
-    except Exception:
-        pass
-    match = re.search(r"[\[{].*[\]]}", value, re.DOTALL)
-    if not match:
-        return None
-    try:
-        data = json.loads(match.group(0))
-        return data if isinstance(data, (dict, list)) else None
-    except Exception:
-        return None
+    return None
 
 
 def _normalize(value):

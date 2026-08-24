@@ -357,7 +357,33 @@ class ModelManager:
             "providers": providers,
             "backend": backend,
             "threads": max(1, min(4, (os.cpu_count() or 2) // 2)),
+            "cores": os.cpu_count() or 2,
+            # Apple Silicon 的语音模型虽走 CPU provider，但仍可使用 Metal 跑本地 LLM；
+            # 不应仅因 ASR provider 是 CPU 而被误判为弱机。
+            "weak": backend == "cpu" and platform.machine().lower() not in {"arm64", "aarch64"} and (os.cpu_count() or 2) <= 4,
         }
+
+    @staticmethod
+    def thread_budget(role):
+        """按推理角色分配线程数，在低核机器上为实时字幕保留算力。
+
+        每个模型都独立调用 ``device()`` 时，4 核机上流式 ASR、实时精修、声纹、
+        标点会各自开 4 线程，八线程同时跑 native 推理，过度订阅导致互相抢核、
+        字幕卡顿。这里把角色分为两类：
+
+        - 实时关键路径（流式 ASR / 降噪 / 标点 / 在线语言识别）：保持
+          ``min(4, cpu//2)``，与旧行为一致，保证字幕跟得上。
+        - 精修 / 声纹 / 离线 VAD / 说话人聚类等并发度较高的任务：降到
+          ``min(2, cpu//4)``，让出核给实时 ASR，避免抢占。
+
+        ``device()["threads"]`` 仍作为「整机最大可用线程」，供会后离线精修等
+        独占 CPU 的场景使用。
+        """
+        total = os.cpu_count() or 2
+        realtime = {"streaming", "denoiser", "punctuation", "language"}
+        if role in realtime:
+            return max(1, min(4, total // 2))
+        return max(1, min(2, total // 4))
 
 
 class StreamingASR:
@@ -384,7 +410,7 @@ class StreamingASR:
         endpoint = self.model.get("endpoint", {})
         common = {
             "tokens": str(path / "tokens.txt"),
-            "num_threads": manager.device()["threads"],
+            "num_threads": manager.thread_budget("streaming"),
             "provider": manager.device()["backend"],
             "enable_endpoint_detection": True,
             "rule1_min_trailing_silence": endpoint.get(
@@ -480,7 +506,7 @@ class LiveDenoiser:
 
         config = sherpa_onnx.OnlineSpeechDenoiserConfig()
         config.model.gtcrn.model = str(manager.path(model_id) / "gtcrn_simple.onnx")
-        config.model.num_threads = manager.device()["threads"]
+        config.model.num_threads = manager.thread_budget("denoiser")
         config.model.provider = manager.device()["backend"]
         if not config.validate():
             raise RuntimeError("Invalid live denoiser configuration")
@@ -525,7 +551,7 @@ class OfflineDenoiser:
 
         config = sherpa_onnx.OfflineSpeechDenoiserConfig()
         config.model.gtcrn.model = str(manager.path(model_id) / "gtcrn_simple.onnx")
-        config.model.num_threads = manager.device()["threads"]
+        config.model.num_threads = manager.thread_budget("denoiser_offline")
         config.model.provider = manager.device()["backend"]
         if not config.validate():
             raise RuntimeError("Invalid offline denoiser configuration")
@@ -563,7 +589,7 @@ class LanguageIdentifier:
                 encoder=str(path / encoder),
                 decoder=str(path / decoder),
             ),
-            num_threads=manager.device()["threads"],
+            num_threads=manager.thread_budget("language"),
             provider=manager.device()["backend"],
         )
         if not config.validate():
@@ -657,7 +683,7 @@ class EnglishPunctuation:
         model = sherpa_onnx.OnlinePunctuationModelConfig(
             cnn_bilstm=str(path / "model.int8.onnx"),
             bpe_vocab=str(path / "bpe.vocab"),
-            num_threads=manager.device()["threads"],
+            num_threads=manager.thread_budget("punctuation"),
             provider=manager.device()["backend"],
         )
         self.engine = sherpa_onnx.OnlinePunctuation(
@@ -681,7 +707,7 @@ class ChinesePunctuation:
         path = manager.path(model_id)
         model = sherpa_onnx.OfflinePunctuationModelConfig(
             ct_transformer=str(path / "model.int8.onnx"),
-            num_threads=manager.device()["threads"],
+            num_threads=manager.thread_budget("punctuation"),
             provider=manager.device()["backend"],
         )
         self.engine = sherpa_onnx.OfflinePunctuation(
@@ -709,7 +735,7 @@ class SpeakerTracker:
         model = manager.path(model_id) / manager.get(model_id)["files"][0]
         extractor_config = sherpa_onnx.SpeakerEmbeddingExtractorConfig(
             model=str(model),
-            num_threads=threads or manager.device()["threads"],
+            num_threads=threads or manager.thread_budget("speaker"),
             provider=manager.device()["backend"],
         )
         if not extractor_config.validate():
@@ -799,7 +825,7 @@ class RefinedASR:
         "ru": "俄语",
     }
 
-    def __init__(self, manager, model_id, language=None):
+    def __init__(self, manager, model_id, language=None, threads=None):
         """加载 Qwen3-ASR 会后精修模型。
 
         Args:
@@ -807,6 +833,9 @@ class RefinedASR:
             model_id: 已安装的 Qwen3-ASR 模型 ID。
             language: 会议语言代码；支持的语言会强制模型按该语言转写，
                 避免短窗口自动检测把中文误判成日语等其他语言。
+            threads: 推理线程数；默认用 ``thread_budget("refine")`` 的低预算
+                让核给实时流式 ASR。会后离线精修（独占 CPU）可显式传
+                ``manager.device()["threads"]`` 获得满线程。
 
         """
         model = manager.get(model_id)
@@ -824,7 +853,7 @@ class RefinedASR:
             raise RuntimeError("sherpa-onnx is not installed") from error
         path = manager.path(model_id)
         common = dict(
-            num_threads=manager.device()["threads"],
+            num_threads=threads or manager.thread_budget("refine"),
             provider=manager.device()["backend"],
         )
         if model["kind"] == "fire-red-asr-ctc":
@@ -942,12 +971,12 @@ class OfflineDiarizer:
                 pyannote=sherpa_onnx.OfflineSpeakerSegmentationPyannoteModelConfig(
                     model=str(segmentation)
                 ),
-                num_threads=manager.device()["threads"],
+                num_threads=manager.thread_budget("diarization"),
                 provider=manager.device()["backend"],
             ),
             embedding=sherpa_onnx.SpeakerEmbeddingExtractorConfig(
                 model=str(embedding),
-                num_threads=manager.device()["threads"],
+                num_threads=manager.thread_budget("diarization"),
                 provider=manager.device()["backend"],
             ),
             clustering=sherpa_onnx.FastClusteringConfig(

@@ -37,16 +37,6 @@ const legacyDataDir = () => app.getPath('userData');
 const logsDir = () => path.join(dataDir(), 'logs');
 const logFile = () => path.join(logsDir(), 'brevia.log');
 const logText = (value) => value instanceof Error ? value.stack || value.message : typeof value === 'string' ? value : JSON.stringify(value);
-const powerStatus = async () => {
-  if (!powerMonitor.isOnBatteryPower()) return { on_battery: false, low_battery: false };
-  if (process.platform !== 'darwin') return { on_battery: true, low_battery: false };
-  return new Promise((resolve) => {
-    execFile('pmset', ['-g', 'batt'], (error, stdout = '') => {
-      const percentage = Number(/(\d+)%/.exec(stdout)?.[1]);
-      resolve({ on_battery: true, low_battery: Number.isFinite(percentage) && percentage <= 20 });
-    });
-  });
-};
 const bundledFfmpegPath = () => {
   const base = app.isPackaged ? path.join(process.resourcesPath, 'app.asar.unpacked') : root;
   const binary = path.join(base, 'node_modules', '@ffmpeg-installer', `${process.platform}-${process.arch}`, process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg');
@@ -108,6 +98,7 @@ const meetingStart = z.object({
   vad_model_id: z.string().min(1).optional(),
   num_speakers: z.number().int().refine((value) => value === -1 || value >= 1).optional(),
   power_saving: z.boolean().optional(),
+  audio_tracks: z.array(z.enum(['mic', 'system'])).min(1).max(2).optional(),
   workspace_id: z.string().uuid().nullable().optional(),
   tags: z.array(z.string().max(32)).max(20).optional(),
 });
@@ -157,7 +148,7 @@ const summaryConfig = z.object({
   // partialRecord：只有用户配置过的供应商才出现在这里；z.record 在 zod 4 里要求键穷尽。
   providers: z.partialRecord(z.enum(summaryProviderIds), summaryProviderEntry),
 });
-// 实时 AI 辅助笔记：连接信息复用纪要 provider；api_key 由 key_reference 在主进程解析。
+// 实时 AI 辅助笔记：api_key 由 key_reference 在主进程解析。
 const aiNoteStart = z.object({
   meeting_id: z.string().uuid(),
   provider: z.string().trim().min(1),
@@ -186,6 +177,10 @@ const aiNoteRequest = z.object({
 const aiNoteDismiss = z.object({
   meeting_id: z.string().uuid(),
   text: z.string().max(400).optional(),
+});
+const aiNoteReconfigure = z.object({
+  meeting_id: z.string().uuid(),
+  min_interval_seconds: z.number().min(1).max(86400).nullable().optional(),
 });
 
 class WorkerClient {
@@ -517,9 +512,14 @@ async function writeSummaryConfig(config) {
   await rename(temporary, target);
 }
 
-// AI 辅助笔记的轻量配置：只存开关与主动性等级。模型连接（provider/endpoint/密钥）
-// 复用 summary-models.json 的纪要配置，避免维护两套 API Key。
 const aiAssistConfig = z.object({
+  version: z.literal(2),
+  enabled: z.boolean(),
+  proactivity: z.enum(['quiet', 'assist', 'auto']),
+  provider: z.enum(summaryProviderIds),
+  providers: z.partialRecord(z.enum(summaryProviderIds), summaryProviderEntry),
+});
+const aiAssistConfigV1 = z.object({
   version: z.literal(1),
   enabled: z.boolean(),
   proactivity: z.enum(['quiet', 'assist', 'auto']),
@@ -533,10 +533,22 @@ async function readAiAssistConfig() {
     if (error.code === 'ENOENT') return null;
     throw error;
   }
-  // 只认 version 1；非法 JSON 或旧结构当作未配置，下次保存时直接覆盖。
+  // v1 只含开关/主动性，模型连接当时复用纪要配置。升级后保留开关与主动性，
+  // 并把纪要的当前供应商一并带入，避免存量用户（尤其在线供应商）被静默切到
+  // 未配置的内置模型而导致 AI 笔记悄悄失效。
   try {
-    const parsed = aiAssistConfig.safeParse(JSON.parse(text));
-    return parsed.success ? parsed.data : null;
+    const value = JSON.parse(text);
+    const current = aiAssistConfig.safeParse(value);
+    if (current.success) return current.data;
+    const legacy = aiAssistConfigV1.safeParse(value);
+    if (!legacy.success) return null;
+    const summary = await readSummaryConfig();
+    return {
+      ...legacy.data,
+      version: 2,
+      provider: summary && summaryProviderIds.includes(summary.provider) ? summary.provider : 'built-in',
+      providers: summary?.providers && typeof summary.providers === 'object' ? summary.providers : {},
+    };
   } catch {
     return null;
   }
@@ -603,7 +615,6 @@ function registerIpc() {
     return false;
   });
   ipcMain.handle('app.initialize', () => initializeWorker());
-  ipcMain.handle('power.status', () => powerStatus());
   ipcMain.handle('app.maintain', async () => {
     if (app.isQuitting) return {};
     try {
@@ -768,6 +779,7 @@ function registerIpc() {
   ipcMain.handle('ai-note.typing', (_, payload) => worker.request('ai-note.typing', aiNoteTyping.parse(payload)));
   ipcMain.handle('ai-note.request', (_, payload) => worker.request('ai-note.request', aiNoteRequest.parse(payload)));
   ipcMain.handle('ai-note.dismiss', (_, payload) => worker.request('ai-note.dismiss', aiNoteDismiss.parse(payload)));
+  ipcMain.handle('ai-note.reconfigure', (_, payload) => worker.request('ai-note.reconfigure', aiNoteReconfigure.parse(payload)));
   ipcMain.handle('meeting.export', async (_, payload) => {
     const value = id.extend({
       content: z.enum(['transcript', 'notes', 'mynotes', 'audio']).optional(),

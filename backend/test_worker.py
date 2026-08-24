@@ -14,7 +14,7 @@ from array import array
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 from .asr import DownloadCancelled, ChinesePunctuation, EnglishPunctuation, ModelManager, OfflineVAD, RefinedASR, SpeakerTracker
 from .audio_io import ensure_wav_duration
@@ -22,10 +22,11 @@ from .config import DEFAULT_SETTINGS, SETTINGS, runtime_settings, save_runtime_s
 from .llm_client import complete
 from .storage import Store
 from .worker import Worker, install_global_error_handlers, main
-from .worker_ai_note import _AiNoteSession
+from .worker_ai_note import _AiNoteSession, _extract_json
 from .worker_common import TaskCancelled
 from .worker_core import WorkerCore
 from .llama_sidecar import LlamaSidecar
+from .refine_sidecar import REFINE_SIDECAR_TIMEOUT_SECONDS, RemoteRefiner
 from .worker_llama_sidecar import ASSISTANT_SIDECAR, _Sidecar, strip_reasoning
 
 
@@ -62,6 +63,72 @@ class WorkerTest(unittest.TestCase):
         for patcher in patchers:
             patcher.start()
         self.addCleanup(lambda: [p.stop() for p in patchers])
+
+    def test_remote_refiner_sends_before_waiting_for_a_reply(self):
+        refiner = RemoteRefiner.__new__(RemoteRefiner)
+        refiner._closed = False
+        refiner._fallback_locked = False
+        refiner._consecutive_failures = 0
+        refiner._process = Mock()
+        refiner._process.is_alive.return_value = True
+        refiner._conn = Mock()
+        refiner._conn.poll.return_value = True
+        refiner._conn.recv.return_value = ("text", "refined")
+
+        self.assertEqual(refiner.decode([0.1], 16000), "refined")
+        self.assertEqual(
+            refiner._conn.method_calls,
+            [
+                call.send(("decode", [0.1], 16000)),
+                call.poll(timeout=REFINE_SIDECAR_TIMEOUT_SECONDS),
+                call.recv(),
+            ],
+        )
+
+    def test_ai_note_extracts_json_surrounded_by_model_text(self):
+        self.assertEqual(
+            _extract_json('Here is the suggestion: {"type":"action","text":"Follow up"}'),
+            {"type": "action", "text": "Follow up"},
+        )
+
+    def test_remote_refiner_shutdown_drops_inflight_work_without_local_fallback(self):
+        refiner = RemoteRefiner.__new__(RemoteRefiner)
+        refiner._closed = False
+        refiner._fallback_locked = False
+        refiner._conn = Mock()
+        process = refiner._process = Mock()
+        process.is_alive.return_value = True
+
+        refiner.shutdown()
+
+        self.assertEqual(refiner.decode([0.1], 16000), "")
+        process.terminate.assert_called_once_with()
+
+    def test_remote_refiner_locks_into_fallback_after_repeated_failures(self):
+        # 弱机上 sidecar 解码反复失败时，应在达到阈值后永久锁定进程内回退，
+        # 不再反复重建子进程或每段加载第二份模型（粘性降级）。
+        refiner = RemoteRefiner.__new__(RemoteRefiner)
+        refiner._closed = False
+        refiner._fallback = Mock()
+        refiner._fallback.decode.return_value = "local"
+        refiner._consecutive_failures = 0
+        refiner._fallback_locked = False
+        refiner._process = Mock()
+        refiner._process.is_alive.return_value = True
+        refiner._conn = Mock()
+        refiner._conn.poll.return_value = False  # 每次都超时
+        refiner._close = Mock()
+
+        self.assertEqual(refiner.decode([0.1], 16000), "local")
+        self.assertFalse(refiner._fallback_locked, "首次失败不应立即锁定")
+        self.assertEqual(refiner.decode([0.1], 16000), "local")
+        self.assertTrue(refiner._fallback_locked, "连续失败达阈值后应锁定回退")
+        refiner._close.assert_called_once_with()
+
+        # 锁定后直接走进程内回退，不再触碰 sidecar。
+        refiner._conn.send.reset_mock()
+        self.assertEqual(refiner.decode([0.1], 16000), "local")
+        refiner._conn.send.assert_not_called()
 
     def test_llama_sidecar_chat_generation_uses_chat_template(self):
         sidecar = LlamaSidecar()
@@ -570,6 +637,65 @@ class WorkerTest(unittest.TestCase):
                 {".wav", ".md", ".txt"},
             )
         self.assertTrue(self.worker.store.read_manifest(meeting["id"])["closed"])
+
+    def test_dual_track_live_transcription_uses_one_mixed_stream(self):
+        meeting = self.worker.start(
+            {
+                "title": "双轨混音",
+                "language": "zh",
+                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
+                "refined_model_id": "qwen3-asr-0.6b-int8",
+                "audio_tracks": ["mic", "system"],
+            }
+        )
+        self.worker.asr = Mock()
+        self.worker.asr.accept.return_value = (SimpleNamespace(text="同一条字幕"), True)
+        self.worker.punctuation = None
+        self.worker.live_refiner = None
+        for track, value in (("mic", 1000), ("system", 3000)):
+            self.worker.audio(
+                {
+                    "meeting_id": meeting["id"], "track": track,
+                    "pcm": base64.b64encode(value.to_bytes(2, "little", signed=True) * 1600).decode(),
+                    "sample_rate": 16000, "start_ms": 0,
+                }
+            )
+        self.worker.asr.accept.assert_called_once()
+        self.assertEqual(self.worker.asr.accept.call_args.args[0], "mix")
+        final = next(event for event in self.events if event["type"] == "transcript.final")
+        self.assertEqual(final["payload"]["track"], "mix")
+
+    def test_dual_track_falls_back_to_single_track_when_peer_stalls(self):
+        # 双轨会议中一轨停流（另一轨持续有数据超过 MAX_MIX_BUFFER_MS）时，
+        # 应回退为该轨独立转写，而不是整场 live 字幕空白。
+        meeting = self.worker.start(
+            {
+                "title": "单轨停流回退",
+                "language": "zh",
+                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
+                "refined_model_id": "qwen3-asr-0.6b-int8",
+                "audio_tracks": ["mic", "system"],
+            }
+        )
+        self.worker.asr = Mock()
+        self.worker.asr.accept.return_value = (SimpleNamespace(text="独立字幕"), True)
+        self.worker.punctuation = None
+        self.worker.live_refiner = None
+        # 只送 mic 轨，间隔超过 MAX_MIX_BUFFER_MS；system 轨始终无数据。
+        for start_ms in (0, 3000, 8000):
+            self.worker.audio(
+                {
+                    "meeting_id": meeting["id"], "track": "mic",
+                    "pcm": base64.b64encode((1000).to_bytes(2, "little", signed=True) * 1600).decode(),
+                    "sample_rate": 16000, "start_ms": start_ms,
+                }
+            )
+        # 应回退为 mic 独立流（不再混音），并产出 mic 轨字幕。
+        tracks = [call.args[0] for call in self.worker.asr.accept.call_args_list]
+        self.assertIn("mic", tracks)
+        finals = [ev for ev in self.events if ev["type"] == "transcript.final"]
+        self.assertTrue(finals)
+        self.assertEqual(finals[-1]["payload"]["track"], "mic")
 
     def test_audio_started_mid_meeting_is_padded_with_silence(self):
         meeting = self.worker.start(
@@ -1450,6 +1576,81 @@ class WorkerTest(unittest.TestCase):
         self.worker._postprocess_live_segment_later(event, [0.1], [0.1], 16000)
         self.worker._postprocess_live_segment_later(event, [0.2], [0.2], 16000)
         self.assertEqual(executor.submit.call_count, 2)
+
+    def test_live_revision_drops_when_refinement_backlog_is_full(self):
+        # 弱 CPU 上精修慢于实时时，积压达到上限应跳过本段实时精修（保留流式原文），
+        # 而不是无限排队拖慢字幕。
+        self.worker.live_postprocessing = executor = Mock()
+        self.worker.live_refiner = object()
+        self.worker._live_refine_max = 2
+        self.worker._live_refine_outstanding = 2  # 已达到上限
+        event = {"meeting_id": "meeting", "segment_id": "system-0", "text": "fast"}
+        self.worker._postprocess_live_segment_later(event, [0.1], [0.1], 16000)
+        executor.submit.assert_not_called()
+        warning = next(
+            ev for ev in self.events if ev["type"] == "worker.warning"
+            and ev["payload"].get("code") == "live_refinement_degraded"
+        )
+        self.assertIsNotNone(warning)
+
+    def test_live_revision_releases_slot_after_processing(self):
+        # 精修完成后名额应归还，使后续段可继续被实时精修。
+        queued = []
+        self.worker.live_postprocessing = Mock()
+        self.worker.live_postprocessing.submit.side_effect = (
+            lambda function, *args: queued.append((function, args))
+        )
+        self.worker.live_refiner = object()
+        self.worker._live_refine_max = 1
+        event = {"meeting_id": "meeting", "segment_id": "system-0", "text": "fast"}
+        self.worker._postprocess_live_segment_later(event, [0.1], [0.1], 16000)
+        self.assertEqual(self.worker._live_refine_outstanding, 1)
+        function, args = queued[0]
+        function(*args)  # 运行精修（内部无实际模型，仅走兜底）
+        self.assertEqual(self.worker._live_refine_outstanding, 0)
+
+    def test_old_live_refinement_cannot_release_a_new_meeting_slot(self):
+        self.worker.live_postprocessing = executor = Mock()
+        self.worker.live_refiner = object()
+        queued = []
+        executor.submit.side_effect = lambda function, *args: queued.append((function, args))
+        event = {"meeting_id": "first", "segment_id": "system-0", "text": "first"}
+        self.worker._postprocess_live_segment_later(event, [0.1], [0.1], 16000)
+        stale_function, stale_args = queued.pop()
+        self.worker._release_active_session()
+
+        self.worker.live_postprocessing = executor
+        self.worker.live_refiner = object()
+        current = {"meeting_id": "second", "segment_id": "system-1", "text": "second"}
+        self.worker._postprocess_live_segment_later(current, [0.2], [0.2], 16000)
+        self.assertEqual(self.worker._live_refine_outstanding, 1)
+
+        stale_function(*stale_args)
+        self.assertEqual(self.worker._live_refine_outstanding, 1)
+
+    def test_live_performance_emits_bottleneck_after_repeated_drops(self):
+        # 弱 CPU 上精修连续跟不上时，应发出 live.performance 瓶颈事件（前端据此弹窗）。
+        self.worker.live_postprocessing = Mock()
+        self.worker.live_refiner = object()
+        self.worker._live_refine_max = 0  # 每次都跳过
+        event = {"meeting_id": "meeting", "segment_id": "system-0", "text": "fast"}
+        for _ in range(3):
+            self.worker._postprocess_live_segment_later(event, [0.1], [0.1], 16000)
+        perf = [ev for ev in self.events if ev.get("type") == "live.performance"]
+        self.assertEqual(len(perf), 1)
+        self.assertTrue(perf[0]["payload"]["bottleneck"])
+
+    def test_ai_note_reconfigure_tunes_interval(self):
+        meeting_id = "11111111-1111-1111-1111-111111111111"
+        self.worker.ai_note_start({"meeting_id": meeting_id, "provider": "built-in", "model": "qwen3.5-2b", "proactivity": "assist", "language": "zh"})
+        result = self.worker.ai_note_reconfigure({"meeting_id": meeting_id, "min_interval_seconds": 120})
+        self.assertEqual(result["min_interval_seconds"], 120.0)
+        session = self.worker._ai_note_sessions[meeting_id]
+        self.assertEqual(session.min_interval_override, 120.0)
+        # 传 None 恢复默认。
+        result = self.worker.ai_note_reconfigure({"meeting_id": meeting_id, "min_interval_seconds": None})
+        self.assertIsNone(result["min_interval_seconds"])
+        self.assertIsNone(session.min_interval_override)
 
     def test_refinement_keeps_tracks_separate_and_merges_by_timestamp(self):
         meeting = self.worker.start(
@@ -2656,6 +2857,55 @@ class WorkerTest(unittest.TestCase):
         self.worker.resume({"meeting_id": meeting["id"], "start_ms": 999_999})
         self.assertEqual(self.worker.stream_state["mic"]["start_ms"], 500)
 
+    def test_resume_restores_dual_track_mixing_from_manifest(self):
+        # 恢复录音时必须从 manifest 推导 audio_tracks，否则双轨会议退回 mic/system
+        # 分别转写，重现「同一人声两条字幕」的旧 bug。
+        meeting = self.worker.start(
+            {
+                "title": "恢复双轨混音",
+                "language": "zh",
+                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
+                "refined_model_id": "qwen3-asr-0.6b-int8",
+                "audio_tracks": ["mic", "system"],
+            }
+        )
+        for track, value in (("mic", 1000), ("system", 3000)):
+            self.worker.audio(
+                {
+                    "meeting_id": meeting["id"], "track": track,
+                    "pcm": base64.b64encode(value.to_bytes(2, "little", signed=True) * 1600).decode(),
+                    "sample_rate": 16000, "start_ms": 0,
+                }
+            )
+        # 原始双轨已写入 manifest，模拟一场崩溃后待恢复的双轨会议。
+        self.assertEqual(
+            set(self.worker.store.read_manifest(meeting["id"])["tracks"]), {"mic", "system"}
+        )
+        self.worker.active = None
+        self.worker.resume({"meeting_id": meeting["id"]})
+        self.assertEqual(self.worker.live_tracks, {"mic", "system"})
+        # 恢复后的混音应再次把两轨合成一条 mix 流送入 ASR。
+        self.worker.asr = Mock()
+        self.worker.asr.accept.return_value = (SimpleNamespace(text="同一条字幕"), True)
+        self.worker.punctuation = None
+        self.worker.live_refiner = None
+        self.worker.audio(
+            {
+                "meeting_id": meeting["id"], "track": "mic",
+                "pcm": base64.b64encode((1000).to_bytes(2, "little", signed=True) * 1600).decode(),
+                "sample_rate": 16000, "start_ms": 500,
+            }
+        )
+        self.worker.audio(
+            {
+                "meeting_id": meeting["id"], "track": "system",
+                "pcm": base64.b64encode((3000).to_bytes(2, "little", signed=True) * 1600).decode(),
+                "sample_rate": 16000, "start_ms": 500,
+            }
+        )
+        self.worker.asr.accept.assert_called_once()
+        self.assertEqual(self.worker.asr.accept.call_args.args[0], "mix")
+
     def test_corrupt_recovery_manifest_does_not_break_startup(self):
         path = self.worker.store.meetings_dir / "broken" / "manifest.json"
         path.parent.mkdir()
@@ -2754,6 +3004,16 @@ class WorkerTest(unittest.TestCase):
         with patch.dict("os.environ", {"BREVIA_ASR_BACKEND": "invalid"}):
             with self.assertRaisesRegex(ValueError, "BREVIA_ASR_BACKEND"):
                 ModelManager.device()
+
+    def test_asr_device_reports_cores_and_weak_capability(self):
+        device = ModelManager.device()
+        self.assertIsInstance(device["cores"], int)
+        self.assertGreaterEqual(device["cores"], 1)
+        # CUDA 和 Apple Silicon 均不应因 CPU ASR provider 而被归类为弱机。
+        with patch.dict("os.environ", {"BREVIA_ASR_BACKEND": "cuda"}):
+            self.assertFalse(ModelManager.device()["weak"])
+        with patch("backend.asr.platform.machine", return_value="arm64"), patch("backend.asr.os.cpu_count", return_value=4):
+            self.assertFalse(ModelManager.device()["weak"])
 
     def test_whisper_large_v3_manifest_uses_the_archive_file_names(self):
         self.assertEqual(
@@ -4079,7 +4339,9 @@ class WorkerTest(unittest.TestCase):
         self.assertEqual(order, ["cleanup", "database"])
         self.assertIsNone(self.worker.active)
         self.assertIsNone(self.worker.live_postprocessing)
-        postprocessing.shutdown.assert_called_once_with(wait=True, cancel_futures=True)
+        # 结束会议不应等待在飞精修排空（弱 CPU 上会拖到数分钟）；改用 wait=False，
+        # 保留流式原文，会后精修再完整覆盖。
+        postprocessing.shutdown.assert_called_once_with(wait=False, cancel_futures=True)
 
     def test_chinese_punctuation_preserves_model_sentence_boundaries(self):
         formatter = ChinesePunctuation.__new__(ChinesePunctuation)

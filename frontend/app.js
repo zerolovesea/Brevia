@@ -121,6 +121,27 @@ let switchingLanguage = false;
 let meetingActive = false;
 // 镜像当前会议的实时配置，使实时面板控件能够反映（并驱动）热切换。
 let liveConfig = { language: 'auto', streaming_model_id: '', refined_model_id: '', target_language: null, power_saving: false };
+// —— 性能模式 / 设备能力（弱机检测）——
+const PERFORMANCE_MODE_KEY = 'brevia-performance-mode';
+let deviceReport = null;
+let perfBottleneckShownForMeeting = null; // 记录已提示过瓶颈弹窗的会议 id
+/** 读取用户性能模式（标准 / 效率）。@returns {'standard'|'efficiency'} */
+function getPerformanceMode() {
+  return localStorage.getItem(PERFORMANCE_MODE_KEY) === 'efficiency' ? 'efficiency' : 'standard';
+}
+/** 保存性能模式。@param {'standard'|'efficiency'} mode 目标模式。@returns {void} */
+function setPerformanceMode(mode) {
+  localStorage.setItem(PERFORMANCE_MODE_KEY, mode === 'efficiency' ? 'efficiency' : 'standard');
+}
+/** 本机是否属于弱机（CPU 推理且核心少），前端据此建议更小模型/在线 API/效率模式。@returns {boolean} */
+function deviceIsWeak() {
+  return Boolean(deviceReport?.weak);
+}
+/** 当前 AI 辅助是否使用内置（本地）模型；在线 LLM 无需因瓶颈调低频率。@returns {boolean} */
+function aiAssistIsBuiltIn() {
+  const provider = aiAssistConfig?.provider;
+  return provider === 'built-in' || provider === 'builtin';
+}
 // 此会议打开了哪些捕获轨道；此处不存在的轨道无法实时切换。
 let translationAllowed = false;
 let latestLiveSegmentId = null;
@@ -142,7 +163,7 @@ renderStaticViews();
 const speakerProfileCard = document.createElement('section');
 speakerProfileCard.className = 'settings-card';
 speakerProfileCard.innerHTML = '<h2></h2><p></p><button class="secondary" type="button"></button>';
-document.querySelector('#settings-view .settings-grid').append(speakerProfileCard);
+document.querySelector('#advanced-settings').before(speakerProfileCard);
 const updateCard = document.createElement('section');
 updateCard.className = 'update-card';
 updateCard.innerHTML = '<div><h2></h2><p></p></div><button class="update-button" type="button"></button>';
@@ -332,11 +353,16 @@ function summaryProviderLabel(provider) {
 let summaryConfig = { version: 2, provider: 'built-in', providers: {} };
 // 配置写入版本号：loadSummaryConfig 读取期间若发生保存，旧值作废（防覆盖竞态）。
 let summaryConfigRevision = 0;
+let summaryConfigDraft = null;
 // 内置供应商在表单里待选的模型。重新渲染（下载/删除/选择）时存活，切换供应商时重置。
 let selectedBuiltinModel = '';
+let selectedAiAssistBuiltinModel = '';
 /** 返回当前供应商的已存字段。@returns {object} 供应商条目。*/
 function summaryProviderEntry(provider = summaryConfig.provider) {
   return summaryConfig.providers[provider] || {};
+}
+function providerEntry(config, provider = config.provider) {
+  return config.providers[provider] || {};
 }
 /** 内置供应商可用的已安装模型；未显式选择时回退到第一个已安装的 llama-chat 模型。@returns {string} */
 function builtinFallbackModel() {
@@ -344,11 +370,11 @@ function builtinFallbackModel() {
   return installed[0]?.id || '';
 }
 /** 组装一次 LLM 请求所需的连接信息；配置不完整时返回 null。@returns {object|null} */
-function summaryRequestConfig() {
-  const provider = summaryConfig.provider;
+function requestConfig(config) {
+  const provider = config.provider;
   const preset = summaryProviderPresets[provider];
   if (!preset) return null;
-  const entry = summaryProviderEntry(provider);
+  const entry = providerEntry(config, provider);
   // 内置模型：未显式选择时自动回退到第一个已安装的 llama-chat 模型，
   // 避免“首次点击就要求配置”的摩擦（本地模型与 API Key 无关）。
   const model = entry.model || (provider === 'built-in' ? builtinFallbackModel() : '');
@@ -358,6 +384,7 @@ function summaryRequestConfig() {
   if (preset.needsKey && !entry.keyReference) return null;
   return { provider, endpoint, model, format: preset.format, keyReference: entry.keyReference };
 }
+function summaryRequestConfig() { return requestConfig(summaryConfig); }
 function speakerProfileName(profile) {
   return profile.name;
 }
@@ -388,21 +415,27 @@ async function loadSummaryConfig() {
   // 1.0.8 之前的版本把整个配置（含 apiKey 明文）存在 localStorage 里，清掉。
   localStorage.removeItem('brevia-summary-config');
 }
-// —— AI 辅助笔记配置（开关 + 主动性三档）。模型连接复用纪要配置。 ——
-let aiAssistConfig = { enabled: false, proactivity: 'assist' };
+// —— AI 辅助笔记配置（开关、主动性与独立模型连接）。 ——
+let aiAssistConfig = { version: 2, enabled: false, proactivity: 'assist', provider: 'built-in', providers: {} };
 let aiAssistConfigRevision = 0;
+let aiAssistConfigDraft = null;
+let aiAssistTemporarilyDisabled = false;
 /** 返回当前 AI 辅助配置的可持久化形态。@returns {object} */
 function currentAiAssistConfig() {
-  return { version: 1, enabled: aiAssistConfig.enabled, proactivity: aiAssistConfig.proactivity };
+  return { version: 2, enabled: aiAssistConfig.enabled, proactivity: aiAssistConfig.proactivity, provider: aiAssistConfig.provider, providers: aiAssistConfig.providers };
 }
 async function persistAiAssistConfig() {
   await window.brevia?.aiAssist.config.save(currentAiAssistConfig());
 }
 function applyAiAssistConfig(config) {
   aiAssistConfig = {
+    version: 2,
     enabled: Boolean(config?.enabled),
     proactivity: ['quiet', 'assist', 'auto'].includes(config?.proactivity) ? config.proactivity : 'assist',
+    provider: summaryProviders.includes(config?.provider) ? config.provider : 'built-in',
+    providers: config?.providers && typeof config.providers === 'object' ? config.providers : {},
   };
+  selectedAiAssistBuiltinModel = '';
 }
 async function loadAiAssistConfig() {
   const revision = aiAssistConfigRevision;
@@ -413,7 +446,7 @@ async function loadAiAssistConfig() {
 }
 /** AI 辅助是否开启（仅当用户显式启用时才返回真）。@returns {boolean} */
 function aiAssistEnabled() {
-  return aiAssistConfig.enabled;
+  return aiAssistConfig.enabled && !aiAssistTemporarilyDisabled;
 }
 const settingsModal = document.createElement('div');
 settingsModal.className = 'modal-backdrop';
@@ -587,15 +620,13 @@ function renderPrepareSelects() {
   ];
   const workspaceValue = values['meeting-workspace'] === '__new_workspace__' ? activeWorkspaceId : values['meeting-workspace'] ?? activeWorkspaceId;
   prepareForm.querySelector('.form-grid').innerHTML = `<label>${t('会议语言')}${flowSelect('meeting-language', values['meeting-language'] || locale, BreviaI18n.languageOptions(locale, t, true))}</label><label>${t('译文目标')}${flowSelect('translation-target', values['translation-target'] || '', BreviaI18n.languageOptions(locale, t))}</label><label>${t('预期说话人数')}<input name="num-speakers" type="number" min="1" step="1" value="${values['num-speakers'] || ''}" placeholder="${t('留空自动匹配')}" /></label><label>${t('工作区')}${flowSelect('meeting-workspace', workspaceValue, workspaceOptions)}</label>`;
-  const powerSaving = values['power-saving'] === 'on' || (!Object.hasOwn(values, 'power-saving') && localStorage.getItem('brevia-power-saving') === 'true');
-  prepareForm.querySelector('[data-meeting-power-saving]').innerHTML = `<fieldset><legend>${t('会议模式')}</legend><label class="choice"><input name="power-saving" type="checkbox"${powerSaving ? ' checked' : ''} /><span><b>${t('省电模式')}</b><small>${t('关闭实时降噪和精修，降低字幕更新频率；会后精修保持可用。')}</small></span></label></fieldset>`;
   prepareForm.querySelector('.primary-action').firstChild.nodeValue = `${t('开始录制')} `;
   importRecording.textContent = t('导入录音');
   prepareModelCard.querySelector('#active-vad-model').previousElementSibling.textContent = t('VAD 模型');
-  // 右侧摘要只保留普通用户关心的“当前模式”：语言与会议模式（省电与否）。
+  // 右侧摘要只显示当前性能模式。
   const languageName = values['meeting-language'] === 'auto' ? t('自动检测') : new Intl.DisplayNames([locale], { type: 'language' }).of(values['meeting-language'] || locale);
   prepareModelCard.querySelector('#active-meeting-language').textContent = languageName;
-  prepareModelCard.querySelector('#active-meeting-mode').textContent = powerSaving ? t('省电模式') : t('标准模式');
+  prepareModelCard.querySelector('#active-meeting-mode').textContent = getPerformanceMode() === 'efficiency' ? t('效率模式') : t('性能模式');
   requestAnimationFrame(fitPrepareLayout);
 }
 function selectCurrentWorkspaceForMeeting() {
@@ -884,14 +915,14 @@ const useChinaModelSource = () => locale === 'zh' && localStorage.getItem('brevi
 const modelDownloadPayload = (modelId) => ({ model_id: modelId, ...(useChinaModelSource() ? { source: 'china' } : {}) });
 const chinaModelSourceToggle = () => locale === 'zh' ? `<p class="model-source-switch"><label><input type="checkbox" data-china-model-source${useChinaModelSource() ? ' checked' : ''} /><span>您是否身处中国大陆？</span></label><small>选择后将会使用大陆镜像源进行下载提速。</small></p>` : '';
 const onboardingCopy = {
-  zh: { languageHint: '之后你可以随时修改界面语言。', meetingTitle: '你通常使用哪些会议语言？', meetingHint: '我们正在为您准备需要的语音识别模型。', modelsTitle: '准备离线转写功能', modelsHint: '为此，我们需要下载以下内容。', estimate: '预计占用空间', download: '下载并继续', customize: '自定义下载', later: '稍后设置', ready: '离线转写已准备就绪', preferenceTitle: '你更看重哪一点？', preferenceQuality: '质量优先', preferenceQualityHint: '选用精度更高的模型，占用与耗时更大。', preferencePerformance: '性能优先', preferencePerformanceHint: '选用更轻快的模型，转写更省资源。', capabilities: ['实时字幕', '语音活动检测', '自动标点', '会后精修', '语音分段', '说话人识别', '实时降噪'], translation: '字幕翻译' },
-  en: { languageHint: 'You can change the interface language any time.', meetingTitle: 'What languages do you usually use in meetings?', meetingHint: 'We’ll prepare the speech recognition models you need.', modelsTitle: 'Prepare offline transcription', modelsHint: 'To recognize speech on this device, Brevia needs to download the following.', estimate: 'Estimated storage', download: 'Download and continue', customize: 'Customize downloads', later: 'Set up later', ready: 'Offline transcription is ready', preferenceTitle: 'What matters more to you?', preferenceQuality: 'Prioritize quality', preferenceQualityHint: 'Higher-accuracy models that use more space and time.', preferencePerformance: 'Prioritize performance', preferencePerformanceHint: 'Lighter, faster models that use fewer resources.', capabilities: ['Live captions', 'Voice activity detection', 'Automatic punctuation', 'Post-meeting refinement', 'Speech segmentation', 'Speaker recognition', 'Live denoising'], translation: 'Caption translation' },
-  es: { languageHint: 'Puedes cambiar el idioma de la interfaz en cualquier momento.', meetingTitle: '¿Qué idiomas usas habitualmente en las reuniones?', meetingHint: 'Prepararemos los modelos de reconocimiento de voz que necesitas.', modelsTitle: 'Preparar transcripción sin conexión', modelsHint: 'Para reconocer voz en este dispositivo, Brevia necesita descargar lo siguiente.', estimate: 'Almacenamiento estimado', download: 'Descargar y continuar', customize: 'Personalizar descargas', later: 'Configurar más tarde', ready: 'La transcripción sin conexión está lista', preferenceTitle: '¿Qué te importa más?', preferenceQuality: 'Priorizar la calidad', preferenceQualityHint: 'Modelos más precisos que usan más espacio y tiempo.', preferencePerformance: 'Priorizar el rendimiento', preferencePerformanceHint: 'Modelos más ligeros y rápidos que usan menos recursos.', capabilities: ['Subtítulos en vivo', 'Detección de voz', 'Puntuación automática', 'Refinamiento posterior', 'Segmentación de voz', 'Reconocimiento de hablantes', 'Reducción de ruido'], translation: 'Traducción de subtítulos' },
-  ja: { languageHint: '表示言語はいつでも変更できます。', meetingTitle: '会議ではどの言語をよく使いますか？', meetingHint: '必要な音声認識モデルを準備します。', modelsTitle: 'オフライン文字起こしを準備', modelsHint: 'このデバイスで音声を認識するため、以下をダウンロードします。', estimate: '必要な容量', download: 'ダウンロードして続ける', customize: 'ダウンロードをカスタマイズ', later: 'あとで設定', ready: 'オフライン文字起こしの準備ができました', preferenceTitle: 'どちらを重視しますか？', preferenceQuality: '品質を優先', preferenceQualityHint: 'より高精度なモデル。容量と処理時間は増えます。', preferencePerformance: '性能を優先', preferencePerformanceHint: 'より軽快なモデル。リソース消費を抑えます。', capabilities: ['ライブ字幕', '音声区間検出', '自動句読点', '会議後の高精度化', '音声分割', '話者認識', 'ライブノイズ除去'], translation: '字幕翻訳' },
-  ko: { languageHint: '인터페이스 언어는 언제든 변경할 수 있습니다.', meetingTitle: '회의에서 주로 어떤 언어를 사용하나요?', meetingHint: '필요한 음성 인식 모델을 준비합니다.', modelsTitle: '오프라인 전사 준비', modelsHint: '이 기기에서 음성을 인식하려면 다음 항목을 다운로드해야 합니다.', estimate: '예상 저장 공간', download: '다운로드하고 계속', customize: '다운로드 사용자 지정', later: '나중에 설정', ready: '오프라인 전사가 준비되었습니다', preferenceTitle: '무엇을 더 중시하나요?', preferenceQuality: '품질 우선', preferenceQualityHint: '정확도가 높은 모델. 용량과 시간이 더 필요합니다.', preferencePerformance: '성능 우선', preferencePerformanceHint: '더 가볍고 빠른 모델. 리소스를 적게 씁니다.', capabilities: ['실시간 자막', '음성 활동 감지', '자동 문장 부호', '회의 후 정제', '음성 분할', '화자 인식', '실시간 노이즈 제거'], translation: '자막 번역' },
-  fr: { languageHint: 'Vous pourrez modifier la langue de l’interface à tout moment.', meetingTitle: 'Quelles langues utilisez-vous habituellement en réunion ?', meetingHint: 'Nous préparerons les modèles de reconnaissance vocale nécessaires.', modelsTitle: 'Préparer la transcription hors ligne', modelsHint: 'Pour reconnaître la voix sur cet appareil, Brevia doit télécharger les éléments suivants.', estimate: 'Espace estimé', download: 'Télécharger et continuer', customize: 'Personnaliser les téléchargements', later: 'Configurer plus tard', ready: 'La transcription hors ligne est prête', preferenceTitle: 'Qu’est-ce qui compte le plus pour vous ?', preferenceQuality: 'Privilégier la qualité', preferenceQualityHint: 'Modèles plus précis, plus gourmands en espace et en temps.', preferencePerformance: 'Privilégier la performance', preferencePerformanceHint: 'Modèles plus légers et rapides, moins gourmands en ressources.', capabilities: ['Sous-titres en direct', 'Détection d’activité vocale', 'Ponctuation automatique', 'Affinage après réunion', 'Segmentation vocale', 'Reconnaissance du locuteur', 'Réduction du bruit'], translation: 'Traduction des sous-titres' },
-  de: { languageHint: 'Sie können die Sprache der Oberfläche jederzeit ändern.', meetingTitle: 'Welche Sprachen verwenden Sie üblicherweise in Besprechungen?', meetingHint: 'Wir bereiten die benötigten Spracherkennungsmodelle vor.', modelsTitle: 'Offline-Transkription vorbereiten', modelsHint: 'Um Sprache auf diesem Gerät zu erkennen, muss Brevia Folgendes herunterladen.', estimate: 'Geschätzter Speicherbedarf', download: 'Herunterladen und fortfahren', customize: 'Downloads anpassen', later: 'Später einrichten', ready: 'Offline-Transkription ist bereit', preferenceTitle: 'Was ist Ihnen wichtiger?', preferenceQuality: 'Qualität priorisieren', preferenceQualityHint: 'Genauere Modelle, die mehr Speicher und Zeit benötigen.', preferencePerformance: 'Leistung priorisieren', preferencePerformanceHint: 'Leichtere, schnellere Modelle mit geringerem Ressourcenbedarf.', capabilities: ['Live-Untertitel', 'Sprachaktivitätserkennung', 'Automatische Zeichensetzung', 'Nachbearbeitung', 'Sprachsegmentierung', 'Sprechererkennung', 'Live-Rauschunterdrückung'], translation: 'Untertitelübersetzung' },
-  ru: { languageHint: 'Язык интерфейса можно изменить в любое время.', meetingTitle: 'Какие языки вы обычно используете на встречах?', meetingHint: 'Мы подготовим нужные модели распознавания речи.', modelsTitle: 'Подготовить офлайн-расшифровку', modelsHint: 'Чтобы распознавать речь на этом устройстве, Brevia нужно скачать следующее.', estimate: 'Требуемое место', download: 'Скачать и продолжить', customize: 'Настроить загрузки', later: 'Настроить позже', ready: 'Офлайн-расшифровка готова', preferenceTitle: 'Что для вас важнее?', preferenceQuality: 'Приоритет качеству', preferenceQualityHint: 'Более точные модели, требующие больше места и времени.', preferencePerformance: 'Приоритет производительности', preferencePerformanceHint: 'Более лёгкие и быстрые модели с меньшим потреблением ресурсов.', capabilities: ['Субтитры в реальном времени', 'Определение голосовой активности', 'Автопунктуация', 'Обработка после встречи', 'Сегментация речи', 'Распознавание говорящих', 'Шумоподавление в реальном времени'], translation: 'Перевод субтитров' },
+  zh: { languageHint: '之后你可以随时修改界面语言。', meetingTitle: '你通常使用哪些会议语言？', meetingHint: '我们正在为您准备需要的语音识别模型。', modelsTitle: '准备语音识别功能', modelsHint: '为此，我们需要下载以下内容。', estimate: '预计占用空间', download: '下载并继续', customize: '自定义下载', later: '稍后设置', ready: '功能已准备就绪', preferenceTitle: '你更看重哪一点？', preferenceQuality: '质量优先', preferenceQualityHint: '选用精度更高的模型，占用与耗时更大。', preferencePerformance: '性能优先', preferencePerformanceHint: '选用更轻快的模型，转写更省资源。', capabilities: ['实时字幕', '语音活动检测', '自动标点', '会后精修', '语音分段', '说话人识别', '实时降噪'], translation: '字幕翻译' },
+  en: { languageHint: 'You can change the interface language any time.', meetingTitle: 'What languages do you usually use in meetings?', meetingHint: 'We’ll prepare the speech recognition models you need.', modelsTitle: 'Preparing features', modelsHint: 'To recognize speech on this device, Brevia needs to download the following.', estimate: 'Estimated storage', download: 'Download and continue', customize: 'Customize downloads', later: 'Set up later', ready: 'All set', preferenceTitle: 'What matters more to you?', preferenceQuality: 'Prioritize quality', preferenceQualityHint: 'Higher-accuracy models that use more space and time.', preferencePerformance: 'Prioritize performance', preferencePerformanceHint: 'Lighter, faster models that use fewer resources.', capabilities: ['Live captions', 'Voice activity detection', 'Automatic punctuation', 'Post-meeting refinement', 'Speech segmentation', 'Speaker recognition', 'Live denoising'], translation: 'Caption translation' },
+  es: { languageHint: 'Puedes cambiar el idioma de la interfaz en cualquier momento.', meetingTitle: '¿Qué idiomas usas habitualmente en las reuniones?', meetingHint: 'Prepararemos los modelos de reconocimiento de voz que necesitas.', modelsTitle: 'Preparar funciones', modelsHint: 'Para reconocer voz en este dispositivo, Brevia necesita descargar lo siguiente.', estimate: 'Almacenamiento estimado', download: 'Descargar y continuar', customize: 'Personalizar descargas', later: 'Configurar más tarde', ready: 'Funciones listas', preferenceTitle: '¿Qué te importa más?', preferenceQuality: 'Priorizar la calidad', preferenceQualityHint: 'Modelos más precisos que usan más espacio y tiempo.', preferencePerformance: 'Priorizar el rendimiento', preferencePerformanceHint: 'Modelos más ligeros y rápidos que usan menos recursos.', capabilities: ['Subtítulos en vivo', 'Detección de voz', 'Puntuación automática', 'Refinamiento posterior', 'Segmentación de voz', 'Reconocimiento de hablantes', 'Reducción de ruido'], translation: 'Traducción de subtítulos' },
+  ja: { languageHint: '表示言語はいつでも変更できます。', meetingTitle: '会議ではどの言語をよく使いますか？', meetingHint: '必要な音声認識モデルを準備します。', modelsTitle: '機能の準備', modelsHint: 'このデバイスで音声を認識するため、以下をダウンロードします。', estimate: '必要な容量', download: 'ダウンロードして続ける', customize: 'ダウンロードをカスタマイズ', later: 'あとで設定', ready: '機能の準備ができました', preferenceTitle: 'どちらを重視しますか？', preferenceQuality: '品質を優先', preferenceQualityHint: 'より高精度なモデル。容量と処理時間は増えます。', preferencePerformance: '性能を優先', preferencePerformanceHint: 'より軽快なモデル。リソース消費を抑えます。', capabilities: ['ライブ字幕', '音声区間検出', '自動句読点', '会議後の高精度化', '音声分割', '話者認識', 'ライブノイズ除去'], translation: '字幕翻訳' },
+  ko: { languageHint: '인터페이스 언어는 언제든 변경할 수 있습니다.', meetingTitle: '회의에서 주로 어떤 언어를 사용하나요?', meetingHint: '필요한 음성 인식 모델을 준비합니다.', modelsTitle: '기능 준비', modelsHint: '이 기기에서 음성을 인식하려면 다음 항목을 다운로드해야 합니다.', estimate: '예상 저장 공간', download: '다운로드하고 계속', customize: '다운로드 사용자 지정', later: '나중에 설정', ready: '기능이 준비되었습니다', preferenceTitle: '무엇을 더 중시하나요?', preferenceQuality: '품질 우선', preferenceQualityHint: '정확도가 높은 모델. 용량과 시간이 더 필요합니다.', preferencePerformance: '성능 우선', preferencePerformanceHint: '더 가볍고 빠른 모델. 리소스를 적게 씁니다.', capabilities: ['실시간 자막', '음성 활동 감지', '자동 문장 부호', '회의 후 정제', '음성 분할', '화자 인식', '실시간 노이즈 제거'], translation: '자막 번역' },
+  fr: { languageHint: 'Vous pourrez modifier la langue de l’interface à tout moment.', meetingTitle: 'Quelles langues utilisez-vous habituellement en réunion ?', meetingHint: 'Nous préparerons les modèles de reconnaissance vocale nécessaires.', modelsTitle: 'Préparer les fonctions', modelsHint: 'Pour reconnaître la voix sur cet appareil, Brevia doit télécharger les éléments suivants.', estimate: 'Espace estimé', download: 'Télécharger et continuer', customize: 'Personnaliser les téléchargements', later: 'Configurer plus tard', ready: 'Fonctions prêtes', preferenceTitle: 'Qu’est-ce qui compte le plus pour vous ?', preferenceQuality: 'Privilégier la qualité', preferenceQualityHint: 'Modèles plus précis, plus gourmands en espace et en temps.', preferencePerformance: 'Privilégier la performance', preferencePerformanceHint: 'Modèles plus légers et rapides, moins gourmands en ressources.', capabilities: ['Sous-titres en direct', 'Détection d’activité vocale', 'Ponctuation automatique', 'Affinage après réunion', 'Segmentation vocale', 'Reconnaissance du locuteur', 'Réduction du bruit'], translation: 'Traduction des sous-titres' },
+  de: { languageHint: 'Sie können die Sprache der Oberfläche jederzeit ändern.', meetingTitle: 'Welche Sprachen verwenden Sie üblicherweise in Besprechungen?', meetingHint: 'Wir bereiten die benötigten Spracherkennungsmodelle vor.', modelsTitle: 'Funktionen vorbereiten', modelsHint: 'Um Sprache auf diesem Gerät zu erkennen, muss Brevia Folgendes herunterladen.', estimate: 'Geschätzter Speicherbedarf', download: 'Herunterladen und fortfahren', customize: 'Downloads anpassen', later: 'Später einrichten', ready: 'Alles bereit', preferenceTitle: 'Was ist Ihnen wichtiger?', preferenceQuality: 'Qualität priorisieren', preferenceQualityHint: 'Genauere Modelle, die mehr Speicher und Zeit benötigen.', preferencePerformance: 'Leistung priorisieren', preferencePerformanceHint: 'Leichtere, schnellere Modelle mit geringerem Ressourcenbedarf.', capabilities: ['Live-Untertitel', 'Sprachaktivitätserkennung', 'Automatische Zeichensetzung', 'Nachbearbeitung', 'Sprachsegmentierung', 'Sprechererkennung', 'Live-Rauschunterdrückung'], translation: 'Untertitelübersetzung' },
+  ru: { languageHint: 'Язык интерфейса можно изменить в любое время.', meetingTitle: 'Какие языки вы обычно используете на встречах?', meetingHint: 'Мы подготовим нужные модели распознавания речи.', modelsTitle: 'Подготовка функций', modelsHint: 'Чтобы распознавать речь на этом устройстве, Brevia нужно скачать следующее.', estimate: 'Требуемое место', download: 'Скачать и продолжить', customize: 'Настроить загрузки', later: 'Настроить позже', ready: 'Функции готовы', preferenceTitle: 'Что для вас важнее?', preferenceQuality: 'Приоритет качеству', preferenceQualityHint: 'Более точные модели, требующие больше места и времени.', preferencePerformance: 'Приоритет производительности', preferencePerformanceHint: 'Более лёгкие и быстрые модели с меньшим потреблением ресурсов.', capabilities: ['Субтитры в реальном времени', 'Определение голосовой активности', 'Автопунктуация', 'Обработка после встречи', 'Сегментация речи', 'Распознавание говорящих', 'Шумоподавление в реальном времени'], translation: 'Перевод субтитров' },
 };
 const onboardingSecurityCopy = {
   zh: '模型资源来自可信来源，并经过完整性校验。\n您的音频数据不会上传至云端。',
@@ -1152,7 +1183,7 @@ prepareForm.addEventListener('click', (event) => {
   if (choice.dataset.flowSelectChoice === 'meeting-language') applyLanguageModelDefaults(choice.dataset.value);
 });
 /** 渲染内置纪要模型清单，含未安装模型的下载入口。@returns {string} 清单标记。*/
-function renderBuiltinSummaryModels(currentModelId) {
+function renderBuiltinSummaryModels(currentModelId, hint) {
   const copy = summaryModelCopy[locale] || summaryModelCopy.en;
   const models = modelCatalog.filter((model) => model.kind === 'llama-chat');
   if (!models.length) return `<p class="summary-model-hint">${t('内置纪要模型清单暂不可用。')}</p>`;
@@ -1162,24 +1193,22 @@ function renderBuiltinSummaryModels(currentModelId) {
     const intro = builtinModelIntro[model.id]?.[locale] || builtinModelIntro[model.id]?.en || '';
     const download = modelDownloads.get(model.id);
     const selected = installed && model.id === currentModelId;
+    const recommended = model.id === 'qwen3.5-2b-q4km' ? `<em class="builtin-model-recommended">${t('推荐')}</em>` : '';
     const progress = download ? `<span class="model-download-progress">${download.total ? `${Math.round((download.received / download.total) * 100)}%` : labels.downloading}<i style="transform:scaleX(${download.total ? download.received / download.total : 0})"></i></span>` : '';
     const action = installed
       ? `<span class="summary-config-badge">${labels.installed}</span>`
       : `<button class="modal-action" data-download-summary-model="${escapeHtml(model.id)}" type="button"${download ? ' disabled' : ''}>${download ? labels.downloading : labels.download}</button>`;
-    return `<div class="model-library-item${selected ? ' builtin-model-selected' : ''}"${installed ? ` data-builtin-model-id="${escapeHtml(model.id)}"` : ''}><span><b class="model-library-headline">${escapeHtml(model.name)}</b><small>${escapeHtml(model.id)}${model.size_bytes ? ` · ${formatBytes(model.size_bytes)}` : ''}</small>${intro ? `<small>${escapeHtml(intro)}</small>` : ''}${renderModelLibraryRatings(model)}${progress}</span><span class="model-actions">${action}</span></div>`;
+    return `<div class="model-library-item${selected ? ' builtin-model-selected' : ''}"${installed ? ` data-builtin-model-id="${escapeHtml(model.id)}"` : ''}><span><b class="model-library-headline">${escapeHtml(model.name)}${recommended}</b><small>${model.size_bytes ? `${formatBytes(model.size_bytes)}` : ''}</small>${intro ? `<small>${escapeHtml(intro)}</small>` : ''}${renderModelLibraryRatings(model)}${progress}</span><span class="model-actions">${action}</span></div>`;
   }).join('');
-  return `<div class="builtin-model-list modal-list">${rows}</div><p class="summary-model-hint">${copy.builtinHint}</p>`;
+  return `<div class="builtin-model-list modal-list">${rows}</div><p class="summary-model-hint">${hint || copy.builtinHint}</p>`;
 }
-/** 渲染纪要模型配置模态框：单选供应商 + 按供应商条件显示的字段。@returns {void} */
-function renderSummaryModelModal() {
+/** 渲染纪要模型配置表单：单选供应商 + 按供应商条件显示的字段。@returns {string} */
+function renderModelConfigFields(config, selectedModel, { required = true, hint } = {}) {
   const copy = summaryModelCopy[locale] || summaryModelCopy.en;
-  const provider = summaryConfig.provider;
+  const provider = config.provider;
   const preset = summaryProviderPresets[provider];
-  const entry = summaryProviderEntry(provider);
+  const entry = providerEntry(config, provider);
   const isBuiltin = provider === 'built-in';
-
-  settingsModal.querySelector('h2').textContent = copy.title;
-  settingsModal.querySelector('.modal-title p').textContent = copy.intro;
 
   const providerField = `<label class="config-select-field">${copy.provider}${flowSelect('provider', provider, summaryProviders.map((id) => [id, summaryProviderLabel(id)]))}</label>`;
   let fields = '';
@@ -1187,29 +1216,120 @@ function renderSummaryModelModal() {
   let currentModelId = '';
   if (isBuiltin) {
     const installed = modelCatalog.filter((model) => model.kind === 'llama-chat' && modelPaths.has(model.id));
-    currentModelId = selectedBuiltinModel || (modelPaths.has(entry.model) ? entry.model : installed[0]?.id || '');
-    builtinModelList = `<input type="hidden" name="model" value="${escapeHtml(currentModelId)}" />${renderBuiltinSummaryModels(currentModelId)}`;
+    currentModelId = selectedModel || (modelPaths.has(entry.model) ? entry.model : installed[0]?.id || '');
+    builtinModelList = `<input type="hidden" name="model" value="${escapeHtml(currentModelId)}" />${renderBuiltinSummaryModels(currentModelId, hint)}`;
   } else {
     // 固定供应商的请求地址由代码派生，只有自定义供应商才让用户填写。
-    const endpointField = preset.needsEndpoint ? `<label>${copy.endpoint}<input name="endpoint" value="${escapeHtml(entry.endpoint || '')}" type="url" placeholder="${escapeHtml(copy.endpointPlaceholder)}" required /></label>` : '';
+    const requiredAttr = required ? ' required' : '';
+    const endpointField = preset.needsEndpoint ? `<label>${copy.endpoint}<input name="endpoint" value="${escapeHtml(entry.endpoint || '')}" type="url" placeholder="${escapeHtml(copy.endpointPlaceholder)}"${requiredAttr} /></label>` : '';
     // maxlength 对齐主进程的 zod 上限（model 128、keyLength 512），否则超长值要到
     // 主进程才被拒，用户只会看到一句无从下手的「操作失败」。
-    const keyField = `<label>${copy.key}<input name="apiKey" type="password" autocomplete="new-password" maxlength="512" placeholder="${entry.keyReference ? '•'.repeat(entry.keyLength || 8) : ''}"${entry.keyReference ? '' : ' required'} /></label>`;
-    const modelField = `<label>${copy.model}<input name="model" value="${escapeHtml(entry.model || '')}" maxlength="128" placeholder="${escapeHtml(preset.model)}" required /></label>`;
+    const keyField = `<label>${copy.key}<input name="apiKey" type="password" autocomplete="new-password" maxlength="512" placeholder="${entry.keyReference ? '•'.repeat(entry.keyLength || 8) : ''}"${entry.keyReference || !required ? '' : ' required'} /></label>`;
+    const modelField = `<label>${copy.model}<input name="model" value="${escapeHtml(entry.model || '')}" maxlength="128" placeholder="${escapeHtml(preset.model)}"${requiredAttr} /></label>`;
     fields = `${endpointField}${keyField}${modelField}`;
   }
 
-  const saveDisabled = isBuiltin && !modelPaths.has(currentModelId);
-  settingsModal.querySelector('.modal-body').innerHTML = `<form class="summary-model-form"><div class="config-fields">${providerField}${fields}</div>${builtinModelList}<div class="modal-form-actions"><button class="modal-action" type="submit"${saveDisabled ? ' disabled' : ''}>${copy.save}</button></div></form>`;
+  return { markup: `<div class="config-fields">${providerField}${fields}</div>${builtinModelList}`, saveDisabled: required && isBuiltin && !modelPaths.has(currentModelId) };
 }
-/** 渲染「AI 辅助」设置模态框：开关 + 主动性三档。模型连接沿用纪要配置。@returns {void} */
+function renderModelConfigForm(config, formClass, selectedModel) {
+  const copy = summaryModelCopy[locale] || summaryModelCopy.en;
+  const fields = renderModelConfigFields(config, selectedModel);
+  return `<form class="${formClass}">${fields.markup}<div class="modal-form-actions"><button class="modal-action" type="submit"${fields.saveDisabled ? ' disabled' : ''}>${copy.save}</button></div></form>`;
+}
+function renderSummaryModelForm() { return renderModelConfigForm(summaryConfigDraft || summaryConfig, 'summary-model-form', selectedBuiltinModel); }
+/** 渲染纪要模型配置模态框。@returns {void} */
+function renderSummaryModelModal() {
+  summaryConfigDraft ||= structuredClone(summaryConfig);
+  const copy = summaryModelCopy[locale] || summaryModelCopy.en;
+  settingsModal.querySelector('h2').textContent = t('AI 会议总结');
+  settingsModal.querySelector('.modal-title p').textContent = copy.featureIntro || summaryModelCopy.en.featureIntro;
+  settingsModal.querySelector('.modal-body').innerHTML = renderSummaryModelForm();
+}
+/** 渲染「AI 笔记」设置模态框：开关、主动性与独立模型连接。@returns {void} */
 function renderAiAssistModal() {
+  aiAssistConfigDraft ||= structuredClone(aiAssistConfig);
+  const config = aiAssistConfigDraft;
   const copy = (aiAssistCopy[locale] || aiAssistCopy.en).modal;
-  settingsModal.querySelector('h2').textContent = copy.title;
-  settingsModal.querySelector('.modal-title p').textContent = copy.intro;
-  const enabled = aiAssistConfig.enabled;
-  const levels = copy.levels.map(([value, title, detail]) => `<label class="ai-assist-level${aiAssistConfig.proactivity === value ? ' is-selected' : ''}"><input type="radio" name="proactivity" value="${escapeHtml(value)}"${aiAssistConfig.proactivity === value ? ' checked' : ''} /><span><b>${escapeHtml(title)}</b><small>${escapeHtml(detail)}</small></span></label>`).join('');
-  settingsModal.querySelector('.modal-body').innerHTML = `<form class="ai-assist-form"><label class="ai-assist-enable"><span><b>${escapeHtml(copy.enable)}</b><small>${escapeHtml(copy.intro)}</small></span><input type="checkbox" name="enabled" data-ai-assist-enable${enabled ? ' checked' : ''} /></label><section class="ai-assist-proactivity"${enabled ? '' : ' hidden'}><p>${escapeHtml(copy.proactivityLabel)}</p><div class="ai-assist-levels">${levels}</div><p class="ai-assist-model-hint">${escapeHtml(copy.modelHint)} <button type="button" class="text-button" data-open-summary-model>${escapeHtml(copy.manageModel)}</button></p></section><div class="modal-form-actions"><button class="modal-action" type="submit">${escapeHtml(copy.save)}</button></div></form>`;
+  settingsModal.querySelector('h2').textContent = t('AI 笔记');
+  settingsModal.querySelector('.modal-title p').textContent = t('让 AI 在会议中帮你发现重点、提取待办并整理笔记。');
+  const proactivity = aiAssistConfig.enabled ? aiAssistConfig.proactivity : 'off';
+  const levels = (aiOnboardingCopy[locale] || aiOnboardingCopy.en).levels.map(([value, title, detail]) => `<label class="ai-assist-level${proactivity === value ? ' is-selected' : ''}"><input type="radio" name="proactivity" value="${escapeHtml(value)}"${proactivity === value ? ' checked' : ''} /><span><b>${escapeHtml(title)}</b><small>${escapeHtml(detail)}</small></span></label>`).join('');
+  const warning = (deviceIsWeak() && config.provider === 'built-in' && /4b/i.test(providerEntry(config).model || ''))
+    ? `<p class="performance-weak-note">⚠ ${escapeHtml(t('本机性能有限，建议使用更小的内置模型（如 2B）或在线 LLM API，以获得更流畅的实时体验。'))}<br><button class="secondary" data-use-ai-2b type="button">${escapeHtml(t('改用 2B AI 笔记模型'))}</button>${meetingActive ? ` <button class="secondary" data-disable-ai-assist type="button">${escapeHtml(t('暂时停用 AI 笔记'))}</button>` : ''}</p>` : '';
+  const modelFields = renderModelConfigFields(config, selectedAiAssistBuiltinModel, { required: proactivity !== 'off', hint: t('选择一个已下载的内置 AI 笔记模型。未下载的模型可在此直接下载。') });
+  const aiForm = `<form class="ai-assist-config-form"><section class="ai-summary-section">${warning}<section class="ai-assist-proactivity"><p>${escapeHtml(copy.proactivityLabel)}</p><div class="ai-assist-levels">${levels}</div></section></section><section class="ai-summary-section"><h3>${escapeHtml(t('模型'))}</h3>${modelFields.markup}</section><div class="modal-form-actions"><button class="modal-action" type="submit"${modelFields.saveDisabled ? ' disabled' : ''}>${escapeHtml(t('保存配置'))}</button></div></form>`;
+  settingsModal.querySelector('.modal-body').innerHTML = `<div class="ai-summary-settings">${aiForm}</div>`;
+}
+/** 渲染「性能」设置模态框：性能模式（标准/效率）+ 设备能力提示。@returns {void} */
+function renderPerformanceModal() {
+  settingsModal.querySelector('h2').textContent = t('性能');
+  settingsModal.querySelector('.modal-title p').textContent = t('选择性能或效率模式，在音频效果与字幕实时性之间取舍。');
+  const mode = getPerformanceMode();
+  const weakNote = deviceIsWeak()
+    ? `<p class="performance-weak-note">⚠ ${escapeHtml(t('本机性能有限，建议使用更小的内置模型（如 2B）或在线 LLM API，以获得更流畅的实时体验。'))}</p>`
+    : '';
+  const modeRow = (value, title, detail) => `<label class="ai-assist-level${mode === value ? ' is-selected' : ''}"><input type="radio" name="performance-mode" value="${value}"${mode === value ? ' checked' : ''} /><span><b>${escapeHtml(t(title))}</b><small>${escapeHtml(t(detail))}</small></span></label>`;
+  settingsModal.querySelector('.modal-body').innerHTML = `<form class="ai-assist-form">${weakNote}<section class="ai-assist-proactivity performance-mode-options"><p>${escapeHtml(t('性能模式'))}</p><div class="ai-assist-levels">${modeRow('standard', '性能模式', '标准模式：开启实时降噪与实时精修，体验最佳，适合性能较强的设备。')}${modeRow('efficiency', '效率模式', '效率模式：关闭实时降噪与实时精修，降低内置 AI 笔记频率，让字幕更实时。')}</div></section><div class="modal-form-actions"><button class="modal-action" type="submit">${escapeHtml(t('保存'))}</button></div></form>`;
+}
+/** 会中检测到性能瓶颈时，弹出是否临时降低到效率模式的对话框。@returns {void} */
+function openPerformanceBottleneckDialog(meetingId) {
+  settingsModal.querySelector('h2').textContent = t('检测到实时性能瓶颈');
+  settingsModal.querySelector('.modal-title p').textContent = t('实时字幕精修长期积压，字幕出现延迟。是否临时降低到效率模式？');
+  const aiActions = aiAssistEnabled()
+    ? `<button class="secondary" data-use-ai-2b type="button">${escapeHtml(t('改用 2B AI 笔记模型'))}</button><button class="secondary" data-disable-ai-assist type="button">${escapeHtml(t('暂时停用 AI 笔记'))}</button>` : '';
+  settingsModal.querySelector('.modal-body').innerHTML = `<div class="confirmation-actions"><p>${escapeHtml(t('实时字幕精修长期积压，字幕出现延迟。是否临时降低到效率模式？'))}</p><button class="modal-action" data-confirm-perf-lower type="button">${escapeHtml(t('降低到效率模式'))}</button>${aiActions}<button class="secondary" data-cancel-confirmation type="button">${escapeHtml(t('保持当前设置'))}</button></div>`;
+  settingsModal.classList.remove('modal-leave');
+  settingsModal.style.zIndex = '40';
+  settingsModal.hidden = false;
+  requestAnimationFrame(() => settingsModal.classList.add('modal-enter'));
+  document.body.classList.add('modal-open');
+  const keep = settingsModal.querySelector('[data-cancel-confirmation]');
+  if (keep) keep.focus();
+  const lower = settingsModal.querySelector('[data-confirm-perf-lower]');
+  if (lower) {
+    lower.addEventListener('click', async () => {
+      const result = await applyLiveEfficiency(meetingId);
+      if (result) showToast(t('已切换到效率模式，实时字幕更实时；会后精修仍可用。'));
+      closeModal();
+    });
+  }
+}
+async function switchAiAssistTo2B() {
+  const model = 'qwen3.5-2b-q4km';
+  if (!modelPaths.has(model)) { showToast(t('请先下载 2B AI 模型。')); return false; }
+  aiAssistConfig.provider = 'built-in';
+  aiAssistConfig.providers = { ...aiAssistConfig.providers, 'built-in': { model } };
+  aiAssistConfigDraft = structuredClone(aiAssistConfig);
+  aiAssistConfigRevision += 1;
+  await persistAiAssistConfig();
+  const meetingId = breviaClient?.state.meeting?.id;
+  if (meetingActive && meetingId && aiAssistEnabled()) await startAiNoteForMeeting(meetingId);
+  showToast(t('AI 笔记已切换为 2B 模型。'));
+  return true;
+}
+function temporarilyDisableAiAssist() {
+  aiAssistTemporarilyDisabled = true;
+  const meetingId = breviaClient?.state.meeting?.id;
+  if (meetingId) stopAiNoteForMeeting(meetingId);
+  renderAiAssistToggle();
+  renderAiAssistEmptyState();
+  showToast(t('AI 笔记已暂时停用。'));
+}
+/** 会中临时切换到效率模式：关实时降噪+精修，内置 AI 辅助降频。@param {string} meetingId 会议 id。@returns {Promise<boolean>} */
+async function applyLiveEfficiency(meetingId) {
+  const meetingIdSafe = meetingId || breviaClient?.state.meeting?.id;
+  if (!meetingIdSafe || !window.brevia) return false;
+  try {
+    await reconfigureLive({ power_saving: true });
+    if (aiAssistEnabled() && aiAssistIsBuiltIn() && window.brevia.aiNote) {
+      await window.brevia.aiNote.reconfigure({ meeting_id: meetingIdSafe, min_interval_seconds: 120 }).catch(() => {});
+      showToast(t('已降低 AI 笔记频率（内置模型）。'));
+    }
+    return true;
+  } catch (error) {
+    showToast(error.message);
+    return false;
+  }
 }
 function renderSpeakerProfileModal() {
   const copy = speakerProfileCopy[locale] || speakerProfileCopy.en;
@@ -1446,20 +1566,21 @@ function renderSummaryDetailModal() {
 function renderModal(kind) {
   if (kind === 'advanced-settings') {
     settingsModal.querySelector('h2').textContent = t('进阶设置');
-    settingsModal.querySelector('.modal-title p').textContent = t('修改后会立即应用于下一次会议与精修。');
+    settingsModal.querySelector('.modal-title p').textContent = t('为特定会议环境微调识别、端点检测、说话人分离和本地模型。');
     settingsModal.querySelector('.modal-body').innerHTML = `${renderPermissionSettings()}<form class="advanced-settings-form"><p>${t('可修改模型、端点静音、说话人分离及 sherpa-onnx 运行参数。')}</p>${renderAdvancedSettings(advancedSettings?.settings || {})}<div class="modal-form-actions"><button class="modal-action" type="submit">${t('确定')}</button><button class="secondary" data-reset-advanced-settings type="button">${t('恢复默认')}</button></div></form>`;
     return;
   }
   if (kind === 'summary-model') { renderSummaryModelModal(); return; }
   if (kind === 'ai-assist') { renderAiAssistModal(); return; }
+  if (kind === 'performance') { renderPerformanceModal(); return; }
   if (kind === 'speaker-profiles') { renderSpeakerProfileModal(); return; }
   if (kind === 'export') { renderExportModal(); return; }
   if (kind === 'share') { renderShareModal(); return; }
   if (kind === 'summary-detail') { renderSummaryDetailModal(); return; }
   const copy = (modalCopy[locale] || modalCopy.en)[kind];
   if (kind === 'storage') {
-    settingsModal.querySelector('h2').textContent = copy.title;
-    settingsModal.querySelector('.modal-title p').textContent = copy.intro;
+    settingsModal.querySelector('h2').textContent = t('存储与隐私');
+    settingsModal.querySelector('.modal-title p').textContent = t('查看和管理保存在此 Mac 上的会议资料、模型与导出文件。');
     settingsModal.querySelector('.modal-body').innerHTML = `<div class="storage-list">${copy.items.map(([name, size], index) => `<section><span><b>${escapeHtml(name)}</b><small>${escapeHtml(size)}</small></span><span><button class="secondary" data-open-storage="${['meetings', 'models', 'exports'][index]}" type="button">${t('从文件夹打开')}</button><button class="model-delete" data-clear-storage="${['meetings', 'models', 'exports'][index]}" type="button">${t('清空数据')}</button></span></section>`).join('')}</div>`;
     return;
   }
@@ -1468,7 +1589,8 @@ function renderModal(kind) {
   const selectingOnboardingModels = kind === 'models' && Boolean(onboardingPage);
   const items = kind === 'models' ? copy.items.map((item, sourceIndex) => ({ item, sourceIndex })).filter(({ sourceIndex }) => !modelCatalog.find((model) => model.id === modelIds[sourceIndex])?.bundled).sort((a, b) => modelStageOrder.get(a.item[0]) - modelStageOrder.get(b.item[0])) : copy.items;
   settingsModal.querySelector('h2').textContent = copy.title;
-  settingsModal.querySelector('.modal-title p').textContent = copy.intro;
+  // 模型库弹窗简介与设置卡片文案保持一致（以设置卡片内容为准）。
+  settingsModal.querySelector('.modal-title p').textContent = kind === 'models' ? t('下载和管理本地语音识别模型，为字幕、精修和说话人识别提供能力。') : copy.intro;
   settingsModal.querySelector('.modal-close').setAttribute('aria-label', (modalCopy[locale] || modalCopy.en).close);
   settingsModal.querySelector('.modal-body').innerHTML = `${kind === 'models' ? chinaModelSourceToggle() : ''}<div class="modal-list${kind === 'models' ? ' model-library-list' : ''}">${items.map((entry, index) => {
     const item = kind === 'models' ? entry.item : entry;
@@ -1563,7 +1685,10 @@ function startPermissionPoll() {
 function closeModal() {
   if (settingsModal.hidden) return;
   window.clearInterval(permissionPollTimer);
+  summaryConfigDraft = null;
+  aiAssistConfigDraft = null;
   activeModal = undefined;
+  settingsModal.style.zIndex = '';
   settingsModal.classList.remove('modal-enter');
   settingsModal.classList.add('modal-leave');
   modalDismissTimer = setTimeout(() => {
@@ -1576,24 +1701,53 @@ function closeModal() {
 
 let onboardingPage;
 let onboardingAiDemoTimer;
+let onboardingSummaryDemoTimer;
 let onboardingPreviewLocale;
 let onboardingSelectedLocale;
 let onboardingTourIndex = 0;
+/** 渲染「AI 笔记」演示：复刻应用内实时会议界面——右侧实时字幕 + 左侧 AI 建议（随主动性切换）。@returns {void} */
 function renderOnboardingAiDemo() {
   const demo = onboardingPage?.querySelector('[data-onboarding-ai-demo]');
   const mode = onboardingPage?.querySelector('[name="onboarding-ai-proactivity"]:checked')?.value || 'quiet';
   if (!demo) return;
   const copy = aiOnboardingCopy[locale] || aiOnboardingCopy.en;
   const demoCopy = aiOnboardingDemoCopy[locale] || copy.demo || aiOnboardingCopy.en.demo;
+  const speaker = t('说话人');
+  const caption = (n) => `<div class="app-demo-caption"><span class="app-demo-speaker">${escapeHtml(speaker)} ${n}</span><p>${escapeHtml(demoCopy.transcriptText)}</p></div>`;
+  // 「暂不开启」：只显示实时字幕，左侧为空态提示（会中无实时建议）。
+  if (mode === 'off') {
+    demo.innerHTML = `<div class="app-demo-window"><div class="app-demo-window-bar"><i></i><i></i><i></i><span>${escapeHtml(demoCopy.meeting)}</span></div><div class="app-demo-live"><aside class="app-demo-notes"><div class="app-demo-notes-head"><p class="eyebrow">${escapeHtml(demoCopy.notes)}</p></div><p class="app-demo-notes-off">${escapeHtml(copy.offEmpty || '')}</p></aside><div class="app-demo-captions">${caption(1)}${caption(2)}</div></div></div>`;
+    clearInterval(onboardingAiDemoTimer);
+    return;
+  }
   let index = 0;
   const paint = () => {
     const [title, suggestion, note] = demoCopy.scenes[mode][index++ % demoCopy.scenes[mode].length];
-    demo.innerHTML = `<div class="onboarding-demo-window"><header><small><i></i> ${escapeHtml(demoCopy.recording)}</small><b>${escapeHtml(demoCopy.meeting)}</b></header><section><small>${escapeHtml(demoCopy.transcript)}</small><p>${escapeHtml(demoCopy.transcriptText)}</p></section><section><small>${escapeHtml(demoCopy.notes)} · ${escapeHtml(title)}</small><span>${escapeHtml(suggestion)}</span><strong>${escapeHtml(note).replace(/\n/g, '<br />')}</strong></section></div>`;
+    demo.innerHTML = `<div class="app-demo-window"><div class="app-demo-window-bar"><i></i><i></i><i></i><span>${escapeHtml(demoCopy.meeting)}</span></div><div class="app-demo-live"><aside class="app-demo-notes"><div class="app-demo-notes-head"><p class="eyebrow">${escapeHtml(demoCopy.notes)}</p></div><div class="ai-suggestion-card"><div class="ai-suggestion-head"><span class="ai-suggestion-star">✦</span><span class="ai-suggestion-type">${escapeHtml(title)}</span></div><p class="ai-suggestion-text">${escapeHtml(suggestion)}</p></div><p class="app-demo-notes-note">${escapeHtml(note).replace(/\n/g, '<br />')}</p></aside><div class="app-demo-captions">${caption(1)}${caption(2)}</div></div></div>`;
   };
   clearInterval(onboardingAiDemoTimer);
   demo.dataset.mode = mode;
   paint();
   onboardingAiDemoTimer = setInterval(paint, 2800);
+}
+/** 渲染「AI 会议纪要」演示：复刻应用内会议详情界面——先出会后生成任务（进度条），再显示整理好的纪要。@returns {void} */
+function renderOnboardingSummaryDemo() {
+  const frame = onboardingPage?.querySelector('[data-onboarding-summary-demo]');
+  if (!frame) return;
+  const demo = aiOnboardingSummaryDemoCopy[locale] || aiOnboardingSummaryDemoCopy.en;
+  frame.innerHTML = `<div class="app-demo-window"><div class="app-demo-window-bar"><i></i><i></i><i></i><span>${escapeHtml(demo.windowTitle)}</span></div><div class="app-demo-summary"><div class="app-demo-summary-task"><small>${escapeHtml(demo.task)}</small><i><b></b></i><span>${escapeHtml(demo.progress)}</span></div><div class="app-demo-summary-body"><p class="eyebrow">${escapeHtml(demo.heading)}</p><div class="markdown-content"><p>${escapeHtml(demo.decision)}</p><ul>${demo.actions.map((action) => `<li>${escapeHtml(action)}</li>`).join('')}</ul></div></div></div></div>`;
+  const stage = frame.querySelector('.app-demo-summary');
+  let phase = 0;
+  const tick = () => {
+    phase = (phase + 1) % 2;
+    stage.classList.toggle('show-card', phase === 1);
+    stage.classList.remove('run-progress');
+    void stage.offsetWidth; // 重启动画
+    if (phase === 0) stage.classList.add('run-progress');
+  };
+  clearInterval(onboardingSummaryDemoTimer);
+  stage.classList.add('run-progress');
+  onboardingSummaryDemoTimer = setInterval(tick, 3000);
 }
 function openOnboardingLanguage(initialLocale = onboardingSelectedLocale || window.BreviaOnboarding.systemLocale()) {
   activeModal = undefined;
@@ -1630,14 +1784,14 @@ const tourHowto = {
     0: ['在搜索框输入关键词，查找会议、逐字稿或标签。', '点击日期筛选，缩小到需要的时段。', '勾选多条记录，可批量删除或导出。'],
     1: ['输入会议名称，并选择会议语言与译文目标。', '勾选要录制的音频来源（麦克风 / 系统音频）。', '点击「开始录制」，模型加载后会自动开录。'],
     2: ['录制时，右侧实时字幕会持续滚动更新。', '每条字幕带时间与说话人，点击可回放定位。', '点击「展开字幕」，把字幕切到主视图。'],
-    3: ['点击「AI 辅助」开启实时纪要。', 'AI 会自动提炼结论、风险与待办到笔记区。', '可将当前字幕片段一键加入笔记。'],
+    3: ['点击「AI 笔记」开启实时纪要。', 'AI 会自动提炼结论、风险与待办到笔记区。', '可将当前字幕片段一键加入笔记。'],
     4: ['会后自动生成精修逐字稿与纪要。', '拖动播放条回听，字幕会随之高亮。', '点击「导出」或「分享」，保存或发送纪要。'],
   },
   en: {
     0: ['Type keywords to find meetings, transcripts, or tags.', 'Use the date filter to narrow the time range.', 'Select multiple rows to batch delete or export.'],
     1: ['Enter a meeting title, then choose the language and translation target.', 'Check which audio sources to record (mic / system audio).', 'Hit Start recording; models load before recording begins.'],
     2: ['Live captions scroll continuously on the right while recording.', 'Each caption carries a time and speaker; click to jump playback.', 'Expand captions to bring them to the main view.'],
-    3: ['Enable AI assist to start real-time notes.', 'AI surfaces decisions, risks, and actions into your notes.', 'Add the current caption segment to your notes in one click.'],
+    3: ['Enable AI notes to start real-time notes.', 'AI surfaces decisions, risks, and actions into your notes.', 'Add the current caption segment to your notes in one click.'],
     4: ['A refined transcript and notes are generated automatically.', 'Drag the playback bar to listen; captions highlight in sync.', 'Export or share the notes when you are done.'],
   },
   es: {
@@ -1651,35 +1805,35 @@ const tourHowto = {
     0: ['キーワードを入力して会議・文字起こし・タグを検索。', '日付フィルターで期間を絞り込み。', '複数行を選択して一括削除・エクスポート。'],
     1: ['会議名を入力し、言語と翻訳先を選択。', '録音する音声ソース（マイク/システム）を選択。', '「録音を開始」でモデル読み込み後に開始。'],
     2: ['録音中、右側にライブ字幕が流れます。', '各字幕に時間と話者が付き、クリックで再生位置へ。', '「字幕を展開」で字幕をメイン表示に。'],
-    3: ['「AI アシスト」を有効にしてリアルタイムメモ。', 'AI が結論・リスク・ToDo をメモに抽出。', '現在の字幕をワンクリックでメモに追加。'],
+    3: ['「AIメモ」を有効にしてリアルタイムメモ。', 'AI が結論・リスク・ToDo をメモに抽出。', '現在の字幕をワンクリックでメモに追加。'],
     4: ['終了後に精修済みの文字起こしとメモを自動生成。', 'バーをドラッグして再生、字幕が連動ハイライト。', '「エクスポート」「共有」で保存・送信。'],
   },
   ko: {
     0: ['키워드로 회의·녹취·태그를 검색하세요.', '날짜 필터로 기간을 좁히세요.', '여러 행을 선택해 일괄 삭제·내보내기.'],
     1: ['회의 이름을 입력하고 언어·번역 대상을 선택하세요.', '녹음할 오디오 소스(마이크/시스템)를 선택하세요.', '「녹음 시작」을 누르면 모델 로드 후 시작됩니다.'],
     2: ['녹음 중 오른쪽에 실시간 자막이 흐릅니다.', '각 자막에 시간·화자가 표시되며 클릭으로 이동.', '「자막 확대」로 자막을 메인 화면에.'],
-    3: ['「AI 어시스트」를 켜서 실시간 메모를 시작하세요.', 'AI가 결론·리스크·할 일을 메모로 추출합니다.', '현재 자막을 한 번에 메모에 추가하세요.'],
+    3: ['「AI 메모」를 켜서 실시간 메모를 시작하세요.', 'AI가 결론·리스크·할 일을 메모로 추출합니다.', '현재 자막을 한 번에 메모에 추가하세요.'],
     4: ['종료 후 정제된 녹취와 메모를 자동 생성합니다.', '바를 드래그해 재생하면 자막이 연동됩니다.', '「내보내기」「공유」로 저장·전송하세요.'],
   },
   fr: {
     0: ['Saisissez des mots-clés pour chercher réunions, transcriptions ou étiquettes.', 'Utilisez le filtre de dates pour restreindre la période.', 'Sélectionnez plusieurs lignes pour supprimer ou exporter en lot.'],
     1: ['Saisissez un titre, puis choisissez la langue et la traduction.', 'Cochez les sources audio à enregistrer (micro / système).', 'Cliquez sur Démarrer ; les modèles se chargent avant.'],
     2: ['Les sous-titres défilent à droite pendant l’enregistrement.', 'Chaque sous-titre a une heure et un locuteur ; cliquez pour sauter.', 'Agrandissez les sous-titres pour les mettre en premier plan.'],
-    3: ['Activez l’assistance IA pour les notes en temps réel.', 'L’IA extrait conclusions, risques et tâches dans vos notes.', 'Ajoutez le segment courant à vos notes en un clic.'],
+    3: ['Activez les notes IA pour les notes en temps réel.', 'L’IA extrait conclusions, risques et tâches dans vos notes.', 'Ajoutez le segment courant à vos notes en un clic.'],
     4: ['Une transcription affinée et des notes sont générées automatiquement.', 'Faites glisser la barre pour écouter ; les sous-titres se surlignent.', 'Exportez ou partagez les notes à la fin.'],
   },
   de: {
     0: ['Geben Sie Schlüsselwörter ein, um Besprechungen, Transkripte oder Tags zu finden.', 'Mit dem Datumsfilter eingrenzen.', 'Mehrere Zeilen auswählen, um in Stapeln zu löschen oder zu exportieren.'],
     1: ['Titel eingeben, Sprache und Übersetzungsziel wählen.', 'Audioquellen (Mikrofon/System) zum Aufnehmen auswählen.', '„Aufnahme starten“; die Modelle laden vor dem Start.'],
     2: ['Live-Untertitel laufen rechts während der Aufnahme.', 'Jeder Untertitel hat Zeit und Sprecher; klicken zum Springen.', 'Untertitel vergrößern, um sie in die Hauptansicht zu bringen.'],
-    3: ['KI-Assistenz aktivieren für Notizen in Echtzeit.', 'KI zieht Schlussfolgerungen, Risiken und Aufgaben in Ihre Notizen.', 'Aktuelles Segment mit einem Klick zu Notizen hinzufügen.'],
+    3: ['KI-Notizen für Notizen in Echtzeit aktivieren.', 'KI zieht Schlussfolgerungen, Risiken und Aufgaben in Ihre Notizen.', 'Aktuelles Segment mit einem Klick zu Notizen hinzufügen.'],
     4: ['Ein bearbeitetes Transkript und Notizen werden automatisch erstellt.', 'Balken ziehen zum Anhören; Untertitel werden synchron hervorgehoben.', 'Notizen am Ende exportieren oder teilen.'],
   },
   ru: {
     0: ['Введите ключевые слова, чтобы найти встречи, расшифровки или теги.', 'Используйте фильтр дат, чтобы сузить период.', 'Выберите несколько строк для массового удаления или экспорта.'],
     1: ['Введите название, затем выберите язык и перевод.', 'Отметьте источники звука для записи (микрофон/система).', 'Нажмите «Начать запись»; модели загрузятся заранее.'],
     2: ['Субтитры прокручиваются справа во время записи.', 'У каждого субтитра есть время и говорящий; клик для перехода.', 'Разверните субтитры, чтобы показать их на главном экране.'],
-    3: ['Включите ИИ-помощника для заметок в реальном времени.', 'ИИ извлекает выводы, риски и задачи в ваши заметки.', 'Добавьте текущий фрагмент в заметки одним кликом.'],
+    3: ['Включите ИИ-заметки для заметок в реальном времени.', 'ИИ извлекает выводы, риски и задачи в ваши заметки.', 'Добавьте текущий фрагмент в заметки одним кликом.'],
     4: ['Обработанная расшифровка и заметки создаются автоматически.', 'Перетащите полосу для прослушивания; субтитры подсвечиваются.', 'Экспортируйте или поделитесь заметками в конце.'],
   },
 };
@@ -1855,6 +2009,7 @@ function showOnboardingPage(kind, content) {
 function dismissOnboardingPage(next) {
   const page = onboardingPage;
   clearInterval(onboardingAiDemoTimer);
+  clearInterval(onboardingSummaryDemoTimer);
   void breviaClient?.stopPreview();
   page.classList.remove('onboarding-page-enter');
   page.classList.add('onboarding-page-leave');
@@ -1913,22 +2068,33 @@ function finishOnboarding() {
 }
 // Onboarding 的 AI 辅助配置页（PRD §22）：离线功能配置之后进入。
 const aiOnboardingCopy = {
-  zh: { title: '启用 AI 辅助', intro: '让 AI 在会议过程中帮你发现重点、提取待办并整理笔记。', wayTitle: '选择 AI 运行方式', builtin: '下载内置 AI', builtinHint: '在本机运行，音频与文本都不离开设备。', online: '使用在线 AI', onlineHint: '使用你自己的 API Key，只发送文本、绝不发送音频。', configureOnline: '配置在线服务', proactivityTitle: '你希望 AI 怎样协助记录？', levels: [['quiet', '只在我需要时', '只有你点击 AI、选中文字或主动要求时才出现。'], ['assist', '发现重点时提醒我', '发现结论、决策、待办、重要数字时适度提醒。'], ['auto', '自动帮我整理', '自动归纳结论、收集待办并整理会议内容。']], demo: { recording: '正在录制', meeting: '会议 20260820', transcript: '实时字幕', transcriptText: '“我们周五完成验收。”', notes: '我的笔记', scenes: { quiet: [['仅在需要时', '✦ AI 建议：确认截止时间', '• 周五前完成内部验收'], ['仅在需要时', '✦ AI 建议：记录待办', '• 产品团队跟进验收']], assist: [['发现重点', '✦ AI 建议：重要决策', '• 下周一开始小范围发布'], ['发现重点', '✦ AI 建议：行动项', '• 开发团队周四交付测试版']], auto: [['自动整理', '✦ AI 正在整理会议内容', '## 会议结论\n- 周五完成验收'], ['自动整理', '✦ AI 正在归纳待办', '## 下一步\n- 准备测试版本']] } }, finish: '完成', skip: '暂不启用' },
-  en: { title: 'Enable AI assist', intro: 'Let AI surface key points, extract action items, and organize your notes during meetings.', wayTitle: 'How should AI run?', builtin: 'Download built-in AI', builtinHint: 'Runs on this device. Audio and text never leave it.', online: 'Use online AI', onlineHint: 'Use your own API key. Only text is sent, never audio.', configureOnline: 'Configure online service', proactivityTitle: 'How should AI help you take notes?', levels: [['quiet', 'Only when I ask', 'Appears only when you click AI, select text, or ask directly.'], ['assist', 'Notify me of key points', 'Lightly notifies you about conclusions, decisions, actions, and key figures.'], ['auto', 'Organize for me automatically', 'Automatically summarizes conclusions and organizes the meeting.']], demo: { recording: 'Recording', meeting: 'Meeting 20260820', transcript: 'Live transcript', transcriptText: '“We’ll complete acceptance on Friday.”', notes: 'My notes', scenes: { quiet: [['When needed', '✦ AI suggestion: confirm deadline', '• Finish internal acceptance by Friday'], ['When needed', '✦ AI suggestion: capture action', '• Product team follows up on acceptance']], assist: [['Key point found', '✦ AI suggestion: key decision', '• Start a limited rollout next Monday'], ['Key point found', '✦ AI suggestion: action item', '• Engineering delivers a test build Thursday']], auto: [['Auto organize', '✦ AI is organizing the meeting', '## Decision\n- Complete acceptance Friday'], ['Auto organize', '✦ AI is grouping actions', '## Next step\n- Prepare a test build']] } }, finish: 'Done', skip: 'Not now' },
-  es: { title: 'Activar asistencia IA', intro: 'Deja que la IA detecte puntos clave, extraiga tareas y organice tus notas durante la reunión.', wayTitle: '¿Cómo debe ejecutarse la IA?', builtin: 'Descargar IA integrada', builtinHint: 'Se ejecuta en este dispositivo. El audio y el texto nunca salen de él.', online: 'Usar IA en línea', onlineHint: 'Usa tu propia API Key. Solo se envía texto, nunca audio.', configureOnline: 'Configurar servicio en línea', proactivityTitle: '¿Cómo quieres que la IA te ayude a tomar notas?', levels: [['quiet', 'Solo cuando lo pida', 'Aparece solo cuando haces clic en IA, seleccionas texto o lo pides.'], ['assist', 'Avisarme de puntos clave', 'Avisa de conclusiones, decisiones, tareas y cifras clave.'], ['auto', 'Organizar automáticamente', 'Resume conclusiones y organiza la reunión automáticamente.']], finish: 'Listo', skip: 'Ahora no' },
-  ja: { title: 'AI アシストを有効にする', intro: '会議中に AI が要点の発見・ToDo の抽出・メモ整理を支援します。', wayTitle: 'AI の実行方法', builtin: '内蔵 AI をダウンロード', builtinHint: 'このデバイス上で実行。音声とテキストは端末から出ません。', online: 'オンライン AI を使う', onlineHint: '自分の API キーを使います。送信するのはテキストのみで音声は送りません。', configureOnline: 'オンラインサービスを設定', proactivityTitle: 'AI にどのようにメモを手伝ってほしいですか？', levels: [['quiet', '必要なときだけ', 'クリックや選択、直接依頼したときだけ表示。'], ['assist', '要点を知らせる', '結論・決定・ToDo・重要な数字を適度に知らせます。'], ['auto', '自動で整理する', '結論をまとめ、会議内容を自動整理します。']], finish: '完了', skip: 'あとで' },
-  ko: { title: 'AI 어시스트 사용', intro: '회의 중 AI가 핵심 포인트 발견, 할 일 추출, 메모 정리를 돕습니다.', wayTitle: 'AI 실행 방식', builtin: '내장 AI 다운로드', builtinHint: '이 기기에서 실행됩니다. 오디오와 텍스트는 기기를 벗어나지 않습니다.', online: '온라인 AI 사용', onlineHint: '자신의 API 키를 사용합니다. 텍스트만 전송하고 오디오는 전송하지 않습니다.', configureOnline: '온라인 서비스 구성', proactivityTitle: 'AI가 메모를 어떻게 도와주길 원하시나요?', levels: [['quiet', '필요할 때만', '클릭, 선택 또는 직접 요청할 때만 표시됩니다.'], ['assist', '핵심 포인트 알림', '결론·결정·할 일·중요 수치를 적절히 알립니다.'], ['auto', '자동으로 정리', '결론을 요약하고 회의를 자동 정리합니다.']], finish: '완료', skip: '나중에' },
-  fr: { title: "Activer l'assistance IA", intro: "Laissez l'IA repérer les points clés, extraire les tâches et organiser vos notes pendant la réunion.", wayTitle: "Comment l'IA doit-elle s'exécuter ?", builtin: "Télécharger l'IA intégrée", builtinHint: "S'exécute sur cet appareil. L'audio et le texte n'en sortent jamais.", online: "Utiliser une IA en ligne", onlineHint: 'Utilisez votre propre clé API. Seul le texte est envoyé, jamais l’audio.', configureOnline: 'Configurer le service en ligne', proactivityTitle: "Comment l'IA doit-elle vous aider à prendre des notes ?", levels: [['quiet', 'Seulement quand je demande', "N'apparaît que lorsque vous cliquez, sélectionnez du texte ou demandez."], ['assist', "M'alerter des points clés", 'Alerte sur les conclusions, décisions, tâches et chiffres clés.'], ['auto', 'Organiser automatiquement', 'Résume les conclusions et organise la réunion automatiquement.']], finish: 'Terminé', skip: 'Pas maintenant' },
-  de: { title: 'KI-Assistenz aktivieren', intro: 'Lassen Sie die KI während der Besprechung Kernpunkte finden, Aufgaben extrahieren und Notizen ordnen.', wayTitle: 'Wie soll die KI laufen?', builtin: 'Integrierte KI herunterladen', builtinHint: 'Läuft auf diesem Gerät. Audio und Text verlassen es nie.', online: 'Online-KI verwenden', onlineHint: 'Verwenden Sie Ihren eigenen API-Schlüssel. Es wird nur Text gesendet, nie Audio.', configureOnline: 'Onlinedienst konfigurieren', proactivityTitle: 'Wie soll die KI beim Mitschreiben helfen?', levels: [['quiet', 'Nur wenn ich frage', 'Erscheint nur beim Klicken, Auswählen oder direkter Anfrage.'], ['assist', 'Über Kernpunkte informieren', 'Hinweise auf Schlussfolgerungen, Entscheidungen, Aufgaben und Zahlen.'], ['auto', 'Automatisch ordnen', 'Fasst Schlussfolgerungen zusammen und ordnet die Besprechung automatisch.']], finish: 'Fertig', skip: 'Später' },
-  ru: { title: 'Включить ИИ-помощника', intro: 'Позвольте ИИ находить ключевые моменты, извлекать задачи и упорядочивать заметки во время встречи.', wayTitle: 'Как должен работать ИИ?', builtin: 'Скачать встроенный ИИ', builtinHint: 'Работает на этом устройстве. Аудио и текст не покидают его.', online: 'Использовать онлайн-ИИ', onlineHint: 'Используйте свой ключ API. Отправляется только текст, никогда аудио.', configureOnline: 'Настроить онлайн-сервис', proactivityTitle: 'Как ИИ должен помогать вести заметки?', levels: [['quiet', 'Только когда попрошу', 'Появляется только при клике, выборе текста или прямой просьбе.'], ['assist', 'Сообщать о ключевых моментах', 'Сообщает о выводах, решениях, задачах и важных цифрах.'], ['auto', 'Упорядочивать автоматически', 'Автоматически резюмирует выводы и упорядочивает встречу.']], finish: 'Готово', skip: 'Не сейчас' },
+  zh: { title: '启用 AI 功能', intro: '言录提供两项可独立开启的 AI 能力：会后生成会议纪要，以及会中实时协助记录。', meetingNotesTitle: 'AI 会议纪要', meetingNotesDesc: '会议结束后，AI 自动把整场对话整理成一份纪要。', meetingNotesConsequence: '不生成纪要也能正常录制与出字幕；之后可在「AI 会议总结」设置里随时开启。', wayTitle: '会议纪要使用哪种 AI？', wayHint: '内置 AI 在本机运行；在线 AI 使用你的 API Key。', builtin: '内置 AI', builtinHint: '免费、离线，数据更私密；会占用电脑性能，分析速度取决于本机性能。首次下载约 1–2 GB。', online: '在线 AI 供应商', onlineHint: '使用你自己的 API Key；对电脑性能占用更小，分析速度取决于网络状况。', configureOnline: '配置在线服务', liveNotesTitle: 'AI 笔记', liveNotesDesc: '在会议中，AI 实时提示重点、决策与待办，辅助记录笔记。', liveNotesConsequence: '不开 AI 笔记，仍会得到 AI 会议纪要；只是会中没有实时建议。', enableLiveNotes: '启用 AI 笔记', proactivityTitle: 'AI 笔记如何协助记录？', proactivityHint: '选得越主动，AI 介入越多；随时可在「AI 笔记」设置里调整。', offEmpty: '已选择暂不开启 AI 笔记，会中不会出现实时建议；会议结束后仍会生成 AI 会议纪要。', levels: [['off', '暂不开启 AI 笔记', '仅使用会后 AI 会议纪要，会中不产生实时建议。'], ['quiet', '只在我需要时', '只有你点击 AI、选中文字或主动要求时才出现。'], ['assist', '发现重点时提醒我', '发现结论、决策、待办、重要数字时适度提醒。'], ['auto', '自动帮我整理', '自动归纳结论、收集待办并整理会议内容。']], demo: { recording: '正在录制', meeting: '会议 ', transcript: '实时字幕', transcriptText: '“我们周五完成验收。”', notes: '我的笔记', scenes: { quiet: [['仅在需要时', '✦ AI 建议：确认截止时间', '• 周五前完成内部验收'], ['仅在需要时', '✦ AI 建议：记录待办', '• 产品团队跟进验收']], assist: [['发现重点', '✦ AI 建议：重要决策', '• 下周一开始小范围发布'], ['发现重点', '✦ AI 建议：行动项', '• 开发团队周四交付测试版']], auto: [['自动整理', '✦ AI 正在整理会议内容', '会议结论\n周五完成验收'], ['自动整理', '✦ AI 正在归纳待办', '下一步\n准备测试版本']] } }, finish: '完成', skip: '暂不启用' },
+  en: { title: 'Set up AI features', intro: 'Brevia has two AI features for different purposes. You can turn each on or off:', meetingNotesTitle: 'AI meeting summary', meetingNotesDesc: 'After the meeting, AI automatically distills the whole conversation into a summary (conclusions, actions, risks). It runs once, so it works smoothly even on low-end devices.', meetingNotesConsequence: 'Recording and captions work fine without a summary; you can turn it on anytime in the AI meeting summary settings.', wayTitle: 'Which AI for the meeting summary?', wayHint: 'Built-in AI: free, offline, more private, downloads about 1–2 GB once. Online AI: uses your own API key, faster but needs internet and may cost money.', builtin: 'Built-in AI', builtinHint: 'Free, offline, most private. Downloads about 1–2 GB once.', online: 'Online AI', onlineHint: 'Uses your own API key online, faster, may cost money; only text is sent.', configureOnline: 'Configure online service', liveNotesTitle: 'AI notes (real-time suggestions)', liveNotesDesc: 'During the meeting, AI suggests key points, decisions, and actions in real time. It keeps using resources, so we suggest turning it off on low-end devices.', liveNotesConsequence: 'Without AI notes you still get the AI meeting summary; you just won’t get in-meeting suggestions.', enableLiveNotes: 'Enable AI notes', proactivityTitle: 'How should AI notes help?', proactivityHint: 'The more proactive, the more AI chimes in. You can adjust this anytime in the AI notes settings.', offEmpty: 'AI notes are off for now, so you won’t see in-meeting suggestions; you’ll still get the post-meeting AI summary.', levels: [['off', 'Don’t enable AI notes yet', 'Only use the post-meeting AI summary; no in-meeting suggestions.'], ['quiet', 'Only when I ask', 'Appears only when you click AI, select text, or ask directly.'], ['assist', 'Notify me of key points', 'Lightly notifies you about conclusions, decisions, actions, and key figures.'], ['auto', 'Organize for me automatically', 'Automatically summarizes conclusions and organizes the meeting.']], demo: { recording: 'Recording', meeting: 'Meeting ', transcript: 'Live transcript', transcriptText: '“We’ll complete acceptance on Friday.”', notes: 'My notes', scenes: { quiet: [['When needed', '✦ AI suggestion: confirm deadline', '• Finish internal acceptance by Friday'], ['When needed', '✦ AI suggestion: capture action', '• Product team follows up on acceptance']], assist: [['Key point found', '✦ AI suggestion: key decision', '• Start a limited rollout next Monday'], ['Key point found', '✦ AI suggestion: action item', '• Engineering delivers a test build Thursday']], auto: [['Auto organize', '✦ AI is organizing the meeting', '## Decision\n- Complete acceptance Friday'], ['Auto organize', '✦ AI is grouping actions', '## Next step\n- Prepare a test build']] } }, finish: 'Done', skip: 'Not now' },
+  es: { title: 'Activar funciones de IA', intro: 'Brevia tiene dos funciones de IA con distintos fines. Puedes activar cada una por separado:', meetingNotesTitle: 'Resumen de reunión con IA', meetingNotesDesc: 'Tras la reunión, la IA resume toda la conversación en una nota de reunión.', meetingNotesConsequence: 'La grabación y los subtítulos funcionan sin resumen; puedes activarlo cuando quieras en los ajustes de resumen.', wayTitle: '¿Qué IA para el resumen?', wayHint: 'IA integrada: gratis, sin conexión y más privada; descarga una vez unos 1–2 GB. IA en línea: usa tu propia clave API, más rápida pero requiere conexión y puede costar.', builtin: 'IA integrada', builtinHint: 'Gratis, sin conexión, más privada. Descarga una vez ~1–2 GB.', online: 'IA en línea', onlineHint: 'Usa tu clave API en línea, más rápida, puede costar; solo texto.', configureOnline: 'Configurar servicio en línea', liveNotesTitle: 'Notas IA', liveNotesDesc: 'Durante la reunión, la IA sugiere puntos clave, decisiones y tareas en tiempo real para ayudarte a tomar notas.', liveNotesConsequence: 'Sin notas IA sigues teniendo el resumen de la reunión; solo pierdes las sugerencias en directo.', enableLiveNotes: 'Activar notas IA', proactivityTitle: '¿Cómo deben ayudar las notas IA?', proactivityHint: 'Cuanto más proactiva, más interviene la IA. Puedes ajustarlo cuando quieras en los ajustes de notas IA.', offEmpty: 'Has elegido no activar las notas IA por ahora; no verás sugerencias en tiempo real y seguirás teniendo el resumen tras la reunión.', levels: [['off', 'No activar notas IA todavía', 'Usar solo el resumen con IA; sin sugerencias en la reunión.'], ['quiet', 'Solo cuando lo pida', 'Aparece solo cuando haces clic en IA, seleccionas texto o lo pides.'], ['assist', 'Avisarme de puntos clave', 'Avisa de conclusiones, decisiones, tareas y cifras clave.'], ['auto', 'Organizar automáticamente', 'Resume conclusiones y organiza la reunión automáticamente.']], finish: 'Listo', skip: 'Ahora no' },
+  ja: { title: 'AI 機能を有効にする', intro: 'Brevia には用途の異なる 2 つの AI 機能があります。それぞれ個別にオン/オフできます：', meetingNotesTitle: 'AI 会議要約', meetingNotesDesc: '会議後に AI が会話全体を会議メモにまとめます。', meetingNotesConsequence: '要約なしでも録音・字幕は正常に動作します。後からいつでも「AI 会議要約」設定で有効にできます。', wayTitle: '会議要約にはどの AI を使いますか？', wayHint: '内蔵 AI：無料・オフライン・よりプライベート。初回に約 1〜2 GB をダウンロード。オンライン AI：自分の API キーを使用。より速いが接続と費用がかかる場合があります。', builtin: '内蔵 AI', builtinHint: '無料・オフライン・よりプライベート。初回約 1〜2 GB。', online: 'オンライン AI', onlineHint: '自分の API キーで接続。より速いが費用の可能性。テキストのみ送信。', configureOnline: 'オンラインサービスを設定', liveNotesTitle: 'AI メモ', liveNotesDesc: '会議中に AI が要点・決定・タスクをリアルタイムで提示し、メモ取りを支援します。', liveNotesConsequence: 'AI メモをオフにしても AI 会議要約は得られます。会議中のリアルタイム提案だけがなくなります。', enableLiveNotes: 'AI メモを有効にする', proactivityTitle: 'AI メモはどのように手伝いますか？', proactivityHint: 'より積極的に設定するほど、AI の介入が増えます。あとでいつでも「AIメモ」設定で変更できます。', offEmpty: 'AI メモをまだ有効にしていないため、会議中のリアルタイム提案はありません。会議後も AI 会議要約は生成されます。', levels: [['off', 'AI メモはまだ使わない', '会後の AI 会議要約のみ使用。会議中の提案はありません。'], ['quiet', '必要なときだけ', 'クリックや選択、直接依頼したときだけ表示。'], ['assist', '要点を知らせる', '結論・決定・ToDo・重要な数字を適度に知らせます。'], ['auto', '自動で整理する', '結論をまとめ、会議内容を自動整理します。']], finish: '完了', skip: 'あとで' },
+  ko: { title: 'AI 기능 사용', intro: 'Brevia에는 용도가 다른 두 가지 AI 기능이 있습니다. 각각 따로 켜고 끌 수 있습니다:', meetingNotesTitle: 'AI 회의 요약', meetingNotesDesc: '회의가 끝나면 AI가 전체 대화를 회의 요약으로 정리합니다.', meetingNotesConsequence: '요약이 없어도 녹음과 자막은 정상 작동합니다. 나중에 언제든 "AI 회의 요약" 설정에서 켤 수 있습니다.', wayTitle: '회의 요약에 어떤 AI를 쓸까요?', builtin: '내장 AI', builtinHint: '무료·오프라인·더 사적. 처음 약 1~2GB.', online: '온라인 AI', onlineHint: '자신의 API 키로 연결. 더 빠르고 비용 가능. 텍스트만 전송.', configureOnline: '온라인 서비스 구성', liveNotesTitle: 'AI 메모', liveNotesDesc: '회의 중 AI가 핵심·결정·할 일을 실시간으로 제안해 메모 작성을 돕습니다.', liveNotesConsequence: 'AI 메모를 꺼도 AI 회의 요약은 받습니다. 회의 중 실시간 제안만 사라집니다.', enableLiveNotes: 'AI 메모 사용', proactivityTitle: 'AI 메모는 어떻게 도와줄까요?', offEmpty: 'AI 메모를 아직 켜지 않아 회의 중 실시간 제안이 없습니다. 회의 후에도 AI 회의 요약은 생성됩니다.', levels: [['off', 'AI 메모 아직 사용 안 함', '회의 후 AI 요약만 사용합니다. 회의 중 제안은 없습니다.'], ['quiet', '필요할 때만', '클릭, 선택 또는 직접 요청할 때만 표시됩니다.'], ['assist', '핵심 포인트 알림', '결론·결정·할 일·중요 수치를 적절히 알립니다.'], ['auto', '자동으로 정리', '결론을 요약하고 회의를 자동 정리합니다.']], finish: '완료', skip: '나중에' },
+  fr: { title: "Activer les fonctions IA", intro: "Brevia a deux fonctions IA à des fins différentes. Vous pouvez activer chacune séparément :", meetingNotesTitle: "Résumé de réunion IA", meetingNotesDesc: "Après la réunion, l'IA résume toute la conversation en une note de réunion.", meetingNotesConsequence: "L'enregistrement et les sous-titres fonctionnent sans résumé ; vous pourrez l'activer à tout moment dans les réglages du résumé.", wayTitle: "Quelle IA pour le résumé ?", wayHint: "IA intégrée : gratuite, hors ligne et plus privée ; télécharge environ 1–2 Go une fois. IA en ligne : utilise votre propre clé API, plus rapide mais nécessite internet et peut coûter.", builtin: "IA intégrée", builtinHint: "Gratuite, hors ligne, plus privée. ~1–2 Go une fois.", online: "IA en ligne", onlineHint: "Votre clé API en ligne, plus rapide, peut coûter ; texte seul.", configureOnline: 'Configurer le service en ligne', liveNotesTitle: "Notes IA", liveNotesDesc: "Pendant la réunion, l'IA suggère points clés, décisions et tâches en temps réel pour vous aider à prendre des notes.", liveNotesConsequence: "Sans notes IA, vous avez toujours le résumé de réunion ; seules les suggestions en direct disparaissent.", enableLiveNotes: "Activer les notes IA", proactivityTitle: "Comment les notes IA doivent-elles aider ?", proactivityHint: "Plus c'est proactif, plus l'IA intervient. Ajustable à tout moment dans les réglages des notes IA.", offEmpty: "Vous avez choisi de ne pas activer les notes IA pour l'instant : aucune suggestion en temps réel, mais vous aurez toujours le résumé IA après la réunion.", levels: [['off', "Ne pas activer les notes IA pour l'instant", "Utiliser uniquement le résumé IA après réunion ; aucune suggestion en direct."], ['quiet', 'Seulement quand je demande', "N'apparaît que lorsque vous cliquez, sélectionnez du texte ou demandez."], ['assist', "M'alerter des points clés", 'Alerte sur les conclusions, décisions, tâches et chiffres clés.'], ['auto', 'Organiser automatiquement', 'Résume les conclusions et organise la réunion automatiquement.']], finish: 'Terminé', skip: 'Pas maintenant' },
+  de: { title: 'KI-Funktionen aktivieren', intro: 'Brevia hat zwei KI-Funktionen für unterschiedliche Zwecke. Sie können jede einzeln an- oder ausschalten:', meetingNotesTitle: 'KI-Besprechungszusammenfassung', meetingNotesDesc: 'Nach der Besprechung fasst die KI das ganze Gespräch in einer Zusammenfassung zusammen.', meetingNotesConsequence: 'Aufnahme und Untertitel funktionieren auch ohne Zusammenfassung; Sie können sie jederzeit in den Einstellungen aktivieren.', wayTitle: 'Welche KI für die Zusammenfassung?', wayHint: 'Integrierte KI: kostenlos, offline und am privatesten; einmaliger Download von ca. 1–2 GB. Online-KI: eigener API-Schlüssel, schneller, benötigt aber Internet und kann kosten.', builtin: 'Integrierte KI', builtinHint: 'Kostenlos, offline, am privatesten. Einmal ca. 1–2 GB.', online: 'Online-KI', onlineHint: 'Eigener API-Schlüssel online, schneller, kann kosten; nur Text.', configureOnline: 'Onlinedienst konfigurieren', liveNotesTitle: 'KI-Notizen', liveNotesDesc: 'Während der Besprechung schlägt die KI Punkte, Entscheidungen und Aufgaben in Echtzeit vor und hilft beim Mitschreiben.', liveNotesConsequence: 'Ohne KI-Notizen erhalten Sie weiterhin die Zusammenfassung; nur die Echtzeit-Vorschläge entfallen.', enableLiveNotes: 'KI-Notizen aktivieren', proactivityTitle: 'Wie sollen KI-Notizen helfen?', proactivityHint: 'Je proaktiver, desto mehr greift die KI ein. Sie können dies jederzeit in den KI-Notizen-Einstellungen anpassen.', offEmpty: 'KI-Notizen sind vorerst deaktiviert, daher keine Echtzeit-Vorschläge; die KI-Zusammenfassung nach der Besprechung erhalten Sie trotzdem.', levels: [['off', 'KI-Notizen noch nicht aktivieren', 'Nur die KI-Zusammenfassung nach der Besprechung; keine Echtzeit-Vorschläge.'], ['quiet', 'Nur wenn ich frage', 'Erscheint nur beim Klicken, Auswählen oder direkter Anfrage.'], ['assist', 'Über Kernpunkte informieren', 'Hinweise auf Schlussfolgerungen, Entscheidungen, Aufgaben und Zahlen.'], ['auto', 'Automatisch ordnen', 'Fasst Schlussfolgerungen zusammen und ordnet die Besprechung automatisch.']], finish: 'Fertig', skip: 'Später' },
+  ru: { title: 'Включить функции ИИ', intro: 'В Brevia есть две функции ИИ для разных целей. Каждую можно включать отдельно:', meetingNotesTitle: 'ИИ-сводка встречи', meetingNotesDesc: 'После встречи ИИ сводит весь разговор в сводку встречи.', meetingNotesConsequence: 'Запись и субтитры работают и без сводки; её можно включить в любой момент в настройках ИИ-сводки.', wayTitle: 'Какой ИИ для сводки?', wayHint: 'Встроенный ИИ: бесплатно, офлайн и максимально приватно; одноразовое скачивание около 1–2 ГБ. Онлайн-ИИ: свой ключ API, быстрее, но нужен интернет и возможны расходы.', builtin: 'Встроенный ИИ', builtinHint: 'Бесплатно, офлайн, приватно. Один раз ~1–2 ГБ.', online: 'Онлайн-ИИ', onlineHint: 'Свой ключ API онлайн, быстрее, может стоить; только текст.', configureOnline: 'Настроить онлайн-сервис', liveNotesTitle: 'ИИ-заметки', liveNotesDesc: 'Во время встречи ИИ в реальном времени подсказывает ключевые моменты, решения и задачи, помогая вести заметки.', liveNotesConsequence: 'Без ИИ-заметок вы всё равно получите ИИ-сводку встречи; пропадут лишь подсказки во время встречи.', enableLiveNotes: 'Включить ИИ-заметки', proactivityTitle: 'Как ИИ-заметки должны помогать?', proactivityHint: 'Чем активнее, тем больше вмешивается ИИ. Это можно изменить в любой момент в настройках ИИ-заметок.', offEmpty: 'Вы пока не включили ИИ-заметки, поэтому во время встречи подсказок не будет; ИИ-сводку после встречи вы всё равно получите.', levels: [['off', 'Пока не включать ИИ-заметки', 'Только ИИ-сводка после встречи; без подсказок во время встречи.'], ['quiet', 'Только когда попрошу', 'Появляется только при клике, выборе текста или прямой просьбе.'], ['assist', 'Сообщать о ключевых моментах', 'Сообщает о выводах, решениях, задачах и важных цифрах.'], ['auto', 'Упорядочивать автоматически', 'Автоматически резюмирует выводы и упорядочивает встречу.']], finish: 'Готово', skip: 'Не сейчас' },
 };
 const aiOnboardingDemoCopy = {
-  es: { recording: 'Grabando', meeting: 'Reunión 20260820', transcript: 'Transcripción en vivo', transcriptText: '“Terminaremos la aceptación el viernes.”', notes: 'Mis notas', scenes: { quiet: [['Cuando sea necesario', '✦ Sugerencia de IA: confirmar plazo', '• Terminar la aceptación interna el viernes'], ['Cuando sea necesario', '✦ Sugerencia de IA: registrar tarea', '• Producto da seguimiento a la aceptación']], assist: [['Punto clave detectado', '✦ Sugerencia de IA: decisión clave', '• Iniciar despliegue limitado el lunes'], ['Punto clave detectado', '✦ Sugerencia de IA: tarea', '• Ingeniería entrega una versión de prueba el jueves']], auto: [['Organización automática', '✦ La IA organiza la reunión', '## Decisión\n- Completar la aceptación el viernes'], ['Organización automática', '✦ La IA agrupa las tareas', '## Siguiente paso\n- Preparar una versión de prueba']] } },
-  ja: { recording: '録音中', meeting: '会議 20260820', transcript: 'ライブ字幕', transcriptText: '「金曜日に受け入れを完了します。」', notes: '自分のメモ', scenes: { quiet: [['必要なとき', '✦ AI の提案：期限を確認', '• 金曜日までに社内受け入れを完了'], ['必要なとき', '✦ AI の提案：タスクを記録', '• プロダクトチームが受け入れをフォロー']], assist: [['要点を発見', '✦ AI の提案：重要な決定', '• 来週月曜に限定公開を開始'], ['要点を発見', '✦ AI の提案：アクション', '• 開発チームが木曜にテスト版を納品']], auto: [['自動整理', '✦ AI が会議を整理中', '## 決定事項\n- 金曜日に受け入れを完了'], ['自動整理', '✦ AI がタスクを整理中', '## 次の手順\n- テスト版を準備']] } },
-  ko: { recording: '녹음 중', meeting: '회의 20260820', transcript: '실시간 자막', transcriptText: '“금요일에 검수를 완료하겠습니다.”', notes: '내 메모', scenes: { quiet: [['필요할 때', '✦ AI 제안: 마감일 확인', '• 금요일까지 내부 검수 완료'], ['필요할 때', '✦ AI 제안: 할 일 기록', '• 제품팀이 검수를 후속 처리']], assist: [['핵심 포인트 발견', '✦ AI 제안: 주요 결정', '• 다음 주 월요일 제한 배포 시작'], ['핵심 포인트 발견', '✦ AI 제안: 실행 항목', '• 개발팀이 목요일 테스트 빌드 제공']], auto: [['자동 정리', '✦ AI가 회의를 정리 중', '## 결정\n- 금요일에 검수 완료'], ['자동 정리', '✦ AI가 할 일을 정리 중', '## 다음 단계\n- 테스트 빌드 준비']] } },
-  fr: { recording: 'Enregistrement', meeting: 'Réunion 20260820', transcript: 'Transcription en direct', transcriptText: '« Nous terminerons la recette vendredi. »', notes: 'Mes notes', scenes: { quiet: [['Au besoin', '✦ Suggestion IA : confirmer l’échéance', '• Terminer la recette interne vendredi'], ['Au besoin', '✦ Suggestion IA : noter une tâche', '• L’équipe produit suit la recette']], assist: [['Point clé détecté', '✦ Suggestion IA : décision clé', '• Lancement limité lundi prochain'], ['Point clé détecté', '✦ Suggestion IA : action', '• L’équipe technique livre une version de test jeudi']], auto: [['Organisation auto', '✦ L’IA organise la réunion', '## Décision\n- Terminer la recette vendredi'], ['Organisation auto', '✦ L’IA regroupe les actions', '## Prochaine étape\n- Préparer une version de test']] } },
-  de: { recording: 'Aufnahme läuft', meeting: 'Besprechung 20260820', transcript: 'Live-Transkript', transcriptText: '„Wir schließen die Abnahme am Freitag ab.“', notes: 'Meine Notizen', scenes: { quiet: [['Bei Bedarf', '✦ KI-Vorschlag: Frist bestätigen', '• Interne Abnahme bis Freitag abschließen'], ['Bei Bedarf', '✦ KI-Vorschlag: Aufgabe erfassen', '• Produktteam begleitet die Abnahme']], assist: [['Kernpunkt erkannt', '✦ KI-Vorschlag: wichtige Entscheidung', '• Begrenzten Rollout nächsten Montag starten'], ['Kernpunkt erkannt', '✦ KI-Vorschlag: Aktion', '• Entwicklung liefert Donnerstag einen Test-Build']], auto: [['Automatisch ordnen', '✦ KI ordnet die Besprechung', '## Entscheidung\n- Abnahme am Freitag abschließen'], ['Automatisch ordnen', '✦ KI bündelt Aufgaben', '## Nächster Schritt\n- Test-Build vorbereiten']] } },
-  ru: { recording: 'Идёт запись', meeting: 'Встреча 20260820', transcript: 'Субтитры в реальном времени', transcriptText: '«Мы завершим приёмку в пятницу.»', notes: 'Мои заметки', scenes: { quiet: [['По запросу', '✦ Совет ИИ: подтвердить срок', '• Завершить внутреннюю приёмку к пятнице'], ['По запросу', '✦ Совет ИИ: записать задачу', '• Команда продукта сопровождает приёмку']], assist: [['Найден ключевой момент', '✦ Совет ИИ: важное решение', '• Начать ограниченный запуск в следующий понедельник'], ['Найден ключевой момент', '✦ Совет ИИ: задача', '• Разработка сдаёт тестовую сборку в четверг']], auto: [['Автоупорядочивание', '✦ ИИ упорядочивает встречу', '## Решение\n- Завершить приёмку в пятницу'], ['Автоупорядочивание', '✦ ИИ группирует задачи', '## Следующий шаг\n- Подготовить тестовую сборку']] } },
+  es: { recording: 'Grabando', meeting: 'Reunión ', transcript: 'Transcripción en vivo', transcriptText: '“Terminaremos la aceptación el viernes.”', notes: 'Mis notas', scenes: { quiet: [['Cuando sea necesario', '✦ Sugerencia de IA: confirmar plazo', '• Terminar la aceptación interna el viernes'], ['Cuando sea necesario', '✦ Sugerencia de IA: registrar tarea', '• Producto da seguimiento a la aceptación']], assist: [['Punto clave detectado', '✦ Sugerencia de IA: decisión clave', '• Iniciar despliegue limitado el lunes'], ['Punto clave detectado', '✦ Sugerencia de IA: tarea', '• Ingeniería entrega una versión de prueba el jueves']], auto: [['Organización automática', '✦ La IA organiza la reunión', '## Decisión\n- Completar la aceptación el viernes'], ['Organización automática', '✦ La IA agrupa las tareas', '## Siguiente paso\n- Preparar una versión de prueba']] } },
+  ja: { recording: '録音中', meeting: '会議 ', transcript: 'ライブ字幕', transcriptText: '「金曜日に受け入れを完了します。」', notes: '自分のメモ', scenes: { quiet: [['必要なとき', '✦ AI の提案：期限を確認', '• 金曜日までに社内受け入れを完了'], ['必要なとき', '✦ AI の提案：タスクを記録', '• プロダクトチームが受け入れをフォロー']], assist: [['要点を発見', '✦ AI の提案：重要な決定', '• 来週月曜に限定公開を開始'], ['要点を発見', '✦ AI の提案：アクション', '• 開発チームが木曜にテスト版を納品']], auto: [['自動整理', '✦ AI が会議を整理中', '## 決定事項\n- 金曜日に受け入れを完了'], ['自動整理', '✦ AI がタスクを整理中', '## 次の手順\n- テスト版を準備']] } },
+  ko: { recording: '녹음 중', meeting: '회의 ', transcript: '실시간 자막', transcriptText: '“금요일에 검수를 완료하겠습니다.”', notes: '내 메모', scenes: { quiet: [['필요할 때', '✦ AI 제안: 마감일 확인', '• 금요일까지 내부 검수 완료'], ['필요할 때', '✦ AI 제안: 할 일 기록', '• 제품팀이 검수를 후속 처리']], assist: [['핵심 포인트 발견', '✦ AI 제안: 주요 결정', '• 다음 주 월요일 제한 배포 시작'], ['핵심 포인트 발견', '✦ AI 제안: 실행 항목', '• 개발팀이 목요일 테스트 빌드 제공']], auto: [['자동 정리', '✦ AI가 회의를 정리 중', '## 결정\n- 금요일에 검수 완료'], ['자동 정리', '✦ AI가 할 일을 정리 중', '## 다음 단계\n- 테스트 빌드 준비']] } },
+  fr: { recording: 'Enregistrement', meeting: 'Réunion ', transcript: 'Transcription en direct', transcriptText: '« Nous terminerons la recette vendredi. »', notes: 'Mes notes', scenes: { quiet: [['Au besoin', '✦ Suggestion IA : confirmer l’échéance', '• Terminer la recette interne vendredi'], ['Au besoin', '✦ Suggestion IA : noter une tâche', '• L’équipe produit suit la recette']], assist: [['Point clé détecté', '✦ Suggestion IA : décision clé', '• Lancement limité lundi prochain'], ['Point clé détecté', '✦ Suggestion IA : action', '• L’équipe technique livre une version de test jeudi']], auto: [['Organisation auto', '✦ L’IA organise la réunion', '## Décision\n- Terminer la recette vendredi'], ['Organisation auto', '✦ L’IA regroupe les actions', '## Prochaine étape\n- Préparer une version de test']] } },
+  de: { recording: 'Aufnahme läuft', meeting: 'Besprechung ', transcript: 'Live-Transkript', transcriptText: '„Wir schließen die Abnahme am Freitag ab.“', notes: 'Meine Notizen', scenes: { quiet: [['Bei Bedarf', '✦ KI-Vorschlag: Frist bestätigen', '• Interne Abnahme bis Freitag abschließen'], ['Bei Bedarf', '✦ KI-Vorschlag: Aufgabe erfassen', '• Produktteam begleitet die Abnahme']], assist: [['Kernpunkt erkannt', '✦ KI-Vorschlag: wichtige Entscheidung', '• Begrenzten Rollout nächsten Montag starten'], ['Kernpunkt erkannt', '✦ KI-Vorschlag: Aktion', '• Entwicklung liefert Donnerstag einen Test-Build']], auto: [['Automatisch ordnen', '✦ KI ordnet die Besprechung', '## Entscheidung\n- Abnahme am Freitag abschließen'], ['Automatisch ordnen', '✦ KI bündelt Aufgaben', '## Nächster Schritt\n- Test-Build vorbereiten']] } },
+  ru: { recording: 'Идёт запись', meeting: 'Встреча ', transcript: 'Субтитры в реальном времени', transcriptText: '«Мы завершим приёмку в пятницу.»', notes: 'Мои заметки', scenes: { quiet: [['По запросу', '✦ Совет ИИ: подтвердить срок', '• Завершить внутреннюю приёмку к пятнице'], ['По запросу', '✦ Совет ИИ: записать задачу', '• Команда продукта сопровождает приёмку']], assist: [['Найден ключевой момент', '✦ Совет ИИ: важное решение', '• Начать ограниченный запуск в следующий понедельник'], ['Найден ключевой момент', '✦ Совет ИИ: задача', '• Разработка сдаёт тестовую сборку в четверг']], auto: [['Автоупорядочивание', '✦ ИИ упорядочивает встречу', '## Решение\n- Завершить приёмку в пятницу'], ['Автоупорядочивание', '✦ ИИ группирует задачи', '## Следующий шаг\n- Подготовить тестовую сборку']] } },
+};
+// AI 会议纪要演示：会后左下角出现任务卡片（进度条），随后显示整理好的纪要。
+const aiOnboardingSummaryDemoCopy = {
+  zh: { windowTitle: '会议', task: '生成会议纪要', progress: '正在整理结论与待办…', heading: 'AI 会议纪要', decision: '本周五前完成内部验收，风险点由李娜统一整理。', actions: ['产品团队跟进验收', '开发下周一同步进展'] },
+  en: { windowTitle: 'Meeting', task: 'Generating meeting summary', progress: 'Distilling conclusions and to-dos…', heading: 'AI meeting summary', decision: 'Complete internal acceptance by Friday; Mia consolidates the risks.', actions: ['Product team to follow up on acceptance', 'Engineering syncs progress Monday'] },
+  es: { windowTitle: 'Reunión', task: 'Generando resumen de reunión', progress: 'Resumiendo conclusiones y tareas…', heading: 'Resumen de reunión con IA', decision: 'Completar la aceptación interna el viernes; Mía consolida los riesgos.', actions: ['El equipo de producto da seguimiento', 'Ingeniería sincroniza el lunes'] },
+  ja: { windowTitle: '会議', task: '会議要約を生成中', progress: '結論とタスクを整理中…', heading: 'AI 会議要約', decision: '金曜までに社内受け入れを完了し、リスクは鈴木が整理します。', actions: ['プロダクトチームが受け入れをフォロー', '開発は月曜に同期'] },
+  ko: { windowTitle: '회의', task: '회의 요약 생성 중', progress: '결론과 할 일을 정리 중…', heading: 'AI 회의 요약', decision: '금요일까지 내부 검수를 완료하고 리스크는 이나가 정리합니다.', actions: ['제품팀이 검수를 후속 처리', '개발팀은 월요일 동기화'] },
+  fr: { windowTitle: 'Réunion', task: 'Génération du résumé', progress: 'Synthèse des conclusions…', heading: 'Résumé de réunion IA', decision: 'Terminer la recette interne vendredi ; Mía consolide les risques.', actions: ["L'équipe produit suit la recette", 'L’ingénierie synchronise lundi'] },
+  de: { windowTitle: 'Besprechung', task: 'Zusammenfassung wird erstellt', progress: 'Schlussfolgerungen werden zusammengefasst…', heading: 'KI-Besprechungszusammenfassung', decision: 'Interne Abnahme bis Freitag abschließen; Mia bündelt die Risiken.', actions: ['Produktteam begleitet die Abnahme', 'Entwicklung synchronisiert Montag'] },
+  ru: { windowTitle: 'Встреча', task: 'Создание сводки встречи', progress: 'Собираем выводы и задачи…', heading: 'ИИ-сводка встречи', decision: 'Завершить внутреннюю приёмку к пятнице; Миа собирает риски.', actions: ['Команда продукта сопровождает приёмку', 'Разработка синхронизируется в понедельник'] },
 };
 // 首次引导功能演示（tour）文案。
 const tourCopy = {
@@ -2023,9 +2189,13 @@ const tourCopy = {
 };
 function openOnboardingAi() {
   const copy = aiOnboardingCopy[locale] || aiOnboardingCopy.en;
-  const levels = copy.levels.map(([value, title, detail], index) => `<label class="onboarding-ai-level${index === 1 ? ' is-selected' : ''}"><input type="radio" name="onboarding-ai-proactivity" value="${value}"${index === 1 ? ' checked' : ''} /><span><b>${escapeHtml(title)}</b><small>${escapeHtml(detail)}</small></span></label>`).join('');
-  showOnboardingPage('setup', `<section class="onboarding-setup-page onboarding-ai-setup-page"><button class="onboarding-back" data-onboarding-back-language type="button" aria-label="${t('返回')}">←</button><header><img class="onboarding-brand" src="./assets/brevia-logo.svg" alt="Brevia" /><h1>${escapeHtml(copy.title)}</h1><div class="onboarding-intro"><p>${escapeHtml(copy.intro)}</p></div></header><section class="onboarding-section"><h2>${escapeHtml(copy.wayTitle)}</h2><div class="onboarding-ai-ways"><label><input type="radio" name="onboarding-ai-way" value="built-in" /><span><b>${escapeHtml(copy.builtin)}</b><small>${escapeHtml(copy.builtinHint)}</small></span></label><label><input type="radio" name="onboarding-ai-way" value="online" /><span><b>${escapeHtml(copy.online)}</b><small>${escapeHtml(copy.onlineHint)}</small></span></label></div></section><section class="onboarding-section"><h2>${escapeHtml(copy.proactivityTitle)}</h2><aside class="onboarding-ai-demo" data-onboarding-ai-demo></aside><div class="onboarding-ai-levels">${levels}</div></section><div class="onboarding-actions"><button class="modal-action" data-onboarding-ai-finish type="button">${escapeHtml(copy.finish)}</button><button class="secondary" data-onboarding-ai-skip type="button">${escapeHtml(copy.skip)}</button></div></section>`);
+  // 低配设备默认「暂不开启」实时 AI 笔记（太耗资源），仅保留会后一次性的 AI 会议纪要。
+  const defaultProactivity = deviceIsWeak() ? 'off' : 'assist';
+  const levels = copy.levels.map(([value, title, detail]) => `<label class="onboarding-ai-level${value === defaultProactivity ? ' is-selected' : ''}"><input type="radio" name="onboarding-ai-proactivity" value="${value}"${value === defaultProactivity ? ' checked' : ''} /><span><b>${escapeHtml(title)}</b><small>${escapeHtml(detail)}</small></span></label>`).join('');
+  const brand = locale === 'zh' ? '<div class="onboarding-brand-name"><span>言</span><b>言录</b></div>' : '<img class="onboarding-brand" src="./assets/brevia-logo.svg" alt="Brevia" />';
+  showOnboardingPage('setup', `<section class="onboarding-setup-page onboarding-ai-setup-page"><button class="onboarding-back" data-onboarding-back-language type="button" aria-label="${t('返回')}">←</button><header>${brand}<h1>${escapeHtml(copy.title)}</h1><div class="onboarding-intro"><p>${escapeHtml(copy.intro)}</p></div></header>${deviceIsWeak() ? `<p class="onboarding-weak-note">⚠ ${escapeHtml(t('本机性能有限，建议只保留会后 AI 会议纪要，并关闭会中实时 AI 笔记以获得更流畅的体验。'))}</p>` : ''}<section class="onboarding-section onboarding-ai-feature onboarding-ai-row"><div class="onboarding-ai-copy"><h2>${escapeHtml(copy.meetingNotesTitle)}</h2><p class="onboarding-ai-feature-desc">${escapeHtml(copy.meetingNotesDesc)}</p><p class="onboarding-ai-way-title">${escapeHtml(copy.wayTitle)}</p><div class="onboarding-ai-ways"><label><input type="radio" name="onboarding-ai-way" value="built-in" /><span><b>${escapeHtml(copy.builtin)}</b><small>${escapeHtml(copy.builtinHint)}</small></span></label><label><input type="radio" name="onboarding-ai-way" value="online" /><span><b>${escapeHtml(copy.online)}</b><small>${escapeHtml(copy.onlineHint)}</small></span></label></div></div><div class="onboarding-ai-frame" data-onboarding-summary-demo></div></section><section class="onboarding-section onboarding-ai-feature onboarding-ai-row"><div class="onboarding-ai-copy"><h2>${escapeHtml(copy.liveNotesTitle)}</h2><p class="onboarding-ai-feature-desc">${escapeHtml(copy.liveNotesDesc)}</p><p class="onboarding-ai-way-title">${escapeHtml(copy.proactivityTitle)}</p><div class="onboarding-ai-levels">${levels}</div></div><div class="onboarding-ai-frame"><aside class="onboarding-ai-demo" data-onboarding-ai-demo></aside></div></section><div class="onboarding-actions"><button class="modal-action" data-onboarding-ai-finish type="button">${escapeHtml(copy.finish)}</button><button class="secondary" data-onboarding-ai-skip type="button">${escapeHtml(copy.skip)}</button></div></section>`);
   renderOnboardingAiDemo();
+  renderOnboardingSummaryDemo();
   onboardingPage.addEventListener('change', (event) => {
     if (event.target.matches('[name="onboarding-ai-proactivity"]')) {
       onboardingPage.querySelectorAll('.onboarding-ai-level').forEach((level) => level.classList.toggle('is-selected', level.querySelector('input').checked));
@@ -2040,17 +2210,42 @@ function openOnboardingAi() {
       return;
     }
     if (event.target.closest('[data-onboarding-back-language]')) { dismissOnboardingPage(openOnboardingSetup); return; }
-    if (event.target.closest('[data-onboarding-ai-finish]')) { void finishAiOnboarding(true); return; }
+    if (event.target.closest('[data-onboarding-ai-finish]')) { void finishAiOnboarding(); return; }
     if (event.target.closest('[data-onboarding-ai-skip]')) { void finishAiOnboarding(false); return; }
   });
 }
-async function finishAiOnboarding(enabled) {
-  const proactivity = onboardingPage.querySelector('[name="onboarding-ai-proactivity"]:checked')?.value || 'assist';
+async function finishAiOnboarding(forceEnabled) {
+  const proactivity = onboardingPage.querySelector('[name="onboarding-ai-proactivity"]:checked')?.value || 'off';
+  const enabled = typeof forceEnabled === 'boolean' ? forceEnabled : proactivity !== 'off';
   aiAssistConfig.enabled = enabled;
   aiAssistConfig.proactivity = ['quiet', 'assist', 'auto'].includes(proactivity) ? proactivity : 'assist';
   aiAssistConfigRevision += 1;
   await persistAiAssistConfig().catch(() => {});
-  dismissOnboardingPage(openOnboardingTour);
+  // AI 功能配置完成后进入独立的「性能模式」引导页，二者不在同一页。
+  dismissOnboardingPage(openOnboardingPerformance);
+}
+
+function openOnboardingPerformance() {
+  const perfMode = getPerformanceMode();
+  const performanceModes = [
+    ['standard', '性能模式', '标准模式：开启实时降噪与实时精修，体验最佳，适合性能较强的设备。'],
+    ['efficiency', '效率模式', '效率模式：关闭实时降噪与实时精修，降低内置 AI 笔记频率，让字幕更实时。'],
+  ].map(([value, title, detail]) => `<label class="onboarding-ai-level${perfMode === value ? ' is-selected' : ''}"><input type="radio" name="onboarding-performance-mode" value="${value}"${perfMode === value ? ' checked' : ''} /><span><b>${escapeHtml(t(title))}</b><small>${escapeHtml(t(detail))}</small></span></label>`).join('');
+  showOnboardingPage('setup', `<section class="onboarding-setup-page onboarding-ai-setup-page"><button class="onboarding-back" data-onboarding-back-ai type="button" aria-label="${t('返回')}">←</button><header><img class="onboarding-brand" src="./assets/brevia-logo.svg" alt="Brevia" /><h1>${escapeHtml(t('性能模式'))}</h1><div class="onboarding-intro"><p>${escapeHtml(t('标准模式 / 效率模式。性能偏低的机器可开启效率模式提升字幕实时性。'))}</p></div></header>${deviceIsWeak() ? `<p class="onboarding-weak-note">⚠ ${escapeHtml(t('本机性能有限，建议只保留会后 AI 会议纪要，并关闭会中实时 AI 笔记以获得更流畅的体验。'))}</p>` : ''}<section class="onboarding-section"><div class="onboarding-ai-levels">${performanceModes}</div></section><div class="onboarding-actions"><button class="modal-action" data-onboarding-performance-finish type="button">${escapeHtml(t('继续'))}</button></div></section>`);
+  onboardingPage.addEventListener('change', (event) => {
+    if (event.target.matches('[name="onboarding-performance-mode"]')) {
+      onboardingPage.querySelectorAll('.onboarding-ai-level').forEach((level) => level.classList.toggle('is-selected', level.querySelector('input').checked));
+    }
+  });
+  onboardingPage.addEventListener('click', (event) => {
+    if (event.target.closest('[data-onboarding-back-ai]')) { dismissOnboardingPage(openOnboardingAi); return; }
+    if (event.target.closest('[data-onboarding-performance-finish]')) {
+      const perfMode = onboardingPage.querySelector('[name="onboarding-performance-mode"]:checked')?.value;
+      if (perfMode === 'efficiency' || perfMode === 'standard') setPerformanceMode(perfMode);
+      dismissOnboardingPage(openOnboardingTour);
+      return;
+    }
+  });
 }
 
 function openOnboardingPermissions() {
@@ -2170,9 +2365,6 @@ async function reconfigureLive(changes) {
     showToast(error.message);
   }
 }
-async function setLivePowerSaving(enabled) {
-  await reconfigureLive({ power_saving: enabled });
-}
 renderModelControls();
 settingsModal.addEventListener('click', async (event) => {
   if (event.target.closest('[data-download-onboarding-selected]')) {
@@ -2187,8 +2379,15 @@ settingsModal.addEventListener('click', async (event) => {
   }
   if (event.target === settingsModal || event.target.closest('.modal-close')) { closeModal(); return; }
   if (event.target.closest('[data-cancel-confirmation]')) { confirmationAction = undefined; closeModal(); return; }
+  if (event.target.closest('[data-use-ai-2b]')) {
+    // switchAiAssistTo2B 自带成功/失败 toast。仅当是从「AI 笔记」或「性能」设置框
+    // 进入时重渲染该框；从会中瓶颈弹窗进入（activeModal 为空）则保持弹窗不跳走。
+    await switchAiAssistTo2B();
+    if (activeModal === 'ai-assist' || activeModal === 'performance') renderModal(activeModal);
+    return;
+  }
+  if (event.target.closest('[data-disable-ai-assist]')) { temporarilyDisableAiAssist(); closeModal(); return; }
   if (event.target.closest('[data-reset-advanced-settings]')) { advancedSettings.settings = advancedSettings.defaults; renderModal('advanced-settings'); return; }
-  if (event.target.closest('[data-open-summary-model]')) { openModal('summary-model'); return; }
   const openPermission = event.target.closest('[data-open-permission-settings]');
   if (openPermission) {
     try { await (openPermission.dataset.openPermissionSettings === 'screen' ? window.brevia.permissions.openScreenSettings() : window.brevia.permissions.openMicrophoneSettings()); }
@@ -2302,9 +2501,12 @@ settingsModal.addEventListener('click', async (event) => {
 
     // 切换供应商只改当前选择；每个供应商已填的字段留在 providers 里，切回来仍在。
     if (choiceName === 'provider' && summaryProviders.includes(value)) {
-      summaryConfig.provider = value;
-      selectedBuiltinModel = '';
-      renderModal('summary-model');
+      const aiForm = selectChoice.closest('.ai-assist-config-form');
+      const config = aiForm ? aiAssistConfigDraft : summaryConfigDraft;
+      config.provider = value;
+      if (aiForm) selectedAiAssistBuiltinModel = '';
+      else selectedBuiltinModel = '';
+      renderModal(activeModal === 'ai-assist' ? 'ai-assist' : 'summary-model');
       return;
     }
     return;
@@ -2313,10 +2515,11 @@ settingsModal.addEventListener('click', async (event) => {
   const builtinModelItem = event.target.closest('[data-builtin-model-id]');
   if (builtinModelItem) {
     const modelId = builtinModelItem.dataset.builtinModelId;
-    const form = builtinModelItem.closest('.summary-model-form');
+    const form = builtinModelItem.closest('.summary-model-form, .ai-assist-config-form');
     if (form) form.querySelector('[name="model"]').value = modelId;
-    selectedBuiltinModel = modelId;
-    renderModal('summary-model');
+    if (form?.matches('.ai-assist-config-form')) selectedAiAssistBuiltinModel = modelId;
+    else selectedBuiltinModel = modelId;
+    renderModal(activeModal === 'ai-assist' ? 'ai-assist' : 'summary-model');
     return;
   }
   // 内置纪要模型（llama-chat）不在通用模型库里，只能从这里下载。
@@ -2324,14 +2527,14 @@ settingsModal.addEventListener('click', async (event) => {
   if (downloadSummaryModel) {
     const modelId = downloadSummaryModel.dataset.downloadSummaryModel;
     modelDownloads.set(modelId, { received: 0, total: 0 });
-    renderModal('summary-model');
+    renderModal(activeModal === 'ai-assist' ? 'ai-assist' : 'summary-model');
     renderModelDownloadQueue();
     try {
       if (window.brevia) await window.brevia.models.download(modelDownloadPayload(modelId));
     } catch (error) {
       modelDownloads.delete(modelId);
       showToast(error.message);
-      renderModal('summary-model');
+      renderModal(activeModal === 'ai-assist' ? 'ai-assist' : 'summary-model');
     }
     return;
   }
@@ -2440,10 +2643,6 @@ settingsModal.addEventListener('click', async (event) => {
 });
 settingsModal.addEventListener('change', (event) => {
   if (event.target.matches('[data-china-model-source]')) { localStorage.setItem('brevia-china-model-source', event.target.checked); return; }
-  if (event.target.matches('[data-ai-assist-enable]')) {
-    settingsModal.querySelector('.ai-assist-proactivity').hidden = !event.target.checked;
-    return;
-  }
   if (event.target.matches('.ai-assist-level input[type=radio]')) {
     settingsModal.querySelectorAll('.ai-assist-level').forEach((level) => level.classList.toggle('is-selected', level.querySelector('input[type=radio]').checked));
     return;
@@ -2461,6 +2660,31 @@ settingsModal.addEventListener('dblclick', (event) => {
   renderModal('speaker-profiles');
   settingsModal.querySelector('.speaker-profile-rename-form input')?.select();
 });
+async function saveModelConfig(form, config, keyPrefix) {
+  const isAiNoteForm = form.matches('.ai-assist-config-form');
+  const modelMissingMessage = isAiNoteForm ? t('请先选择或填写 AI 笔记模型。') : t('请先选择或填写纪要模型。');
+  const values = Object.fromEntries(new FormData(form));
+  const provider = summaryProviders.includes(values.provider) ? values.provider : config.provider;
+  const preset = summaryProviderPresets[provider];
+  const previous = providerEntry(config, provider);
+  const entry = { model: (values.model || '').trim() };
+  if (!entry.model) { showToast(modelMissingMessage); return false; }
+  if (preset.needsEndpoint) {
+    entry.endpoint = (values.endpoint || '').trim();
+    if (!entry.endpoint) { showToast(t('请填写请求地址。')); return false; }
+  }
+  if (preset.needsKey) {
+    entry.keyReference = previous.keyReference || `${keyPrefix}-${crypto.randomUUID()}`;
+    if (values.apiKey && window.brevia) {
+      entry.keyLength = values.apiKey.length;
+      await window.brevia.secret.set({ reference: entry.keyReference, value: values.apiKey });
+    } else if (previous.keyLength) entry.keyLength = previous.keyLength;
+    else { showToast(t('请填写 API Key。')); return false; }
+  }
+  config.provider = provider;
+  config.providers = { ...config.providers, [provider]: entry };
+  return true;
+}
 settingsModal.addEventListener('submit', async (event) => {
   if (event.target.matches('.advanced-settings-form')) {
     event.preventDefault();
@@ -2486,12 +2710,32 @@ settingsModal.addEventListener('submit', async (event) => {
     renderModal('speaker-profiles');
     return;
   }
-  if (event.target.matches('.ai-assist-form')) {
+  if (event.target.matches('.ai-assist-form') && event.target.querySelector('[name="performance-mode"]')) {
     event.preventDefault();
     const values = Object.fromEntries(new FormData(event.target));
-    aiAssistConfig.enabled = values.enabled === 'on';
+    if (values['performance-mode'] === 'efficiency' || values['performance-mode'] === 'standard') {
+      setPerformanceMode(values['performance-mode']);
+    }
+    closeModal();
+    renderPrepareSelects();
+    showToast(t('性能模式已保存'));
+    return;
+  }
+  if (event.target.matches('.ai-assist-config-form')) {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.target));
+    const enabled = values.proactivity !== 'off';
+    if (enabled && !await saveModelConfig(event.target, aiAssistConfigDraft, 'ai-assist')) return;
+    if (enabled) {
+      aiAssistConfig.provider = aiAssistConfigDraft.provider;
+      aiAssistConfig.providers = aiAssistConfigDraft.providers;
+    }
+    aiAssistConfig.enabled = enabled;
+    aiAssistTemporarilyDisabled = false;
     if (['quiet', 'assist', 'auto'].includes(values.proactivity)) aiAssistConfig.proactivity = values.proactivity;
     aiAssistConfigRevision += 1;
+    selectedAiAssistBuiltinModel = '';
+    aiAssistConfigDraft = structuredClone(aiAssistConfig);
     await persistAiAssistConfig();
     closeModal();
     renderAiAssistToggle();
@@ -2501,36 +2745,20 @@ settingsModal.addEventListener('submit', async (event) => {
       else stopAiNoteForMeeting(meetingId);
     }
     renderAiAssistEmptyState();
-    showToast(t('AI 辅助已保存'));
+    showToast(t('AI 笔记已保存'));
     return;
   }
   if (event.target.matches('.summary-model-form')) {
     event.preventDefault();
-    const values = Object.fromEntries(new FormData(event.target));
-    const provider = summaryProviders.includes(values.provider) ? values.provider : summaryConfig.provider;
-    const preset = summaryProviderPresets[provider];
-    const previous = summaryProviderEntry(provider);
-    const entry = { model: (values.model || '').trim() };
-    if (!entry.model) { showToast(t('请先选择或填写纪要模型。')); return; }
-    if (preset.needsEndpoint) {
-      entry.endpoint = (values.endpoint || '').trim();
-      if (!entry.endpoint) { showToast(t('请填写请求地址。')); return; }
-    }
-    if (preset.needsKey) {
-      entry.keyReference = previous.keyReference || `summary-${crypto.randomUUID()}`;
-      if (values.apiKey && window.brevia) {
-        entry.keyLength = values.apiKey.length;
-        await window.brevia.secret.set({ reference: entry.keyReference, value: values.apiKey });
-      } else if (previous.keyLength) entry.keyLength = previous.keyLength;
-      else if (!values.apiKey) { showToast(t('请填写 API Key。')); return; }
-    }
-    summaryConfig.provider = provider;
-    summaryConfig.providers = { ...summaryConfig.providers, [provider]: entry };
+    if (!await saveModelConfig(event.target, summaryConfigDraft, 'summary')) return;
+    summaryConfig.provider = summaryConfigDraft.provider;
+    summaryConfig.providers = summaryConfigDraft.providers;
     summaryConfigRevision += 1;
     selectedBuiltinModel = '';
+    summaryConfigDraft = structuredClone(summaryConfig);
     await persistSummaryConfig();
     dismissTaskCard(document.querySelector('#summary-config-required'));
-    renderModal('summary-model');
+    closeModal();
     showToast(t('纪要模型已保存'));
     return;
   }
@@ -2620,6 +2848,7 @@ function applyLanguage(nextLocale, animate = false) {
   locale = nextLocale;
   localStorage.setItem('brevia-language', locale);
   document.documentElement.lang = locale === 'zh' ? 'zh-CN' : locale;
+  document.title = t('Brevia');
   languageToggle.title = t('切换语言');
   languageToggle.setAttribute('aria-label', t('切换语言'));
   applyTheme(theme);
@@ -2650,7 +2879,8 @@ function applyLanguage(nextLocale, animate = false) {
     renderPauseButton();
     document.querySelector('#end-meeting').textContent = t('结束会议');
     renderSettingsView();
-    document.querySelector('#settings-view .settings-grid').append(speakerProfileCard, updateCard);
+    document.querySelector('#advanced-settings').before(speakerProfileCard);
+    document.querySelector('#settings-view .settings-grid').append(updateCard);
     renderDefaultMeetingTitle();
     renderDateFilter();
     renderMeetingList();
@@ -2900,21 +3130,6 @@ function renderPlaybackFloatingCaptionToggle() {
   toggle.textContent = t('字幕');
 }
 function nextFloatingCaptionMode(mode) { return floatingCaptionMode === mode ? null : mode; }
-let powerStatusTimer;
-let lowPowerHintShown = false;
-async function checkPowerSavingSuggestion() {
-  if (!meetingActive || liveConfig.power_saving || lowPowerHintShown) return;
-  const status = await window.brevia?.power.status().catch(() => null);
-  if (!status?.low_battery) return;
-  lowPowerHintShown = true;
-  showToast(t('电量较低，开启省电模式可延长会议时长。'), { label: t('开启省电模式'), run: () => void setLivePowerSaving(true) });
-}
-function startPowerStatusChecks() {
-  clearInterval(powerStatusTimer);
-  lowPowerHintShown = false;
-  void checkPowerSavingSuggestion();
-  powerStatusTimer = setInterval(() => void checkPowerSavingSuggestion(), 300000);
-}
 function activateMeeting(meeting, payload) {
   const { title, workspace_id: workspaceId, language, streaming_model_id: streamingModelId, speaker_segmentation_model_id: segmentationModelId, refined_model_id: refinedModelId } = meeting || payload;
   const streamingModelName = prepareModelChoices['active-streaming-model'].find(([id]) => id === streamingModelId)?.[1] || t('自动匹配');
@@ -2950,7 +3165,6 @@ function activateMeeting(meeting, payload) {
   miniMeeting.hidden = true;
   showView('live');
   startTimer();
-  startPowerStatusChecks();
 }
 document.querySelector('#meeting-form').addEventListener('submit', async (event) => {
   event.preventDefault();
@@ -2970,9 +3184,8 @@ document.querySelector('#meeting-form').addEventListener('submit', async (event)
   const payload = {
     title, language, target_language: targetLanguage, streaming_model_id: streamingModelId, refined_model_id: DEFAULT_REFINED_MODEL_ID,
     speaker_segmentation_model_id: segmentationModelId,
-    vad_model_id: prepareForm.dataset.vadModel || 'silero-vad', num_speakers: Number(form.get('num-speakers') || -1), power_saving: form.has('power-saving'), workspace_id: form.get('meeting-workspace') || null,
+    vad_model_id: prepareForm.dataset.vadModel || 'silero-vad', num_speakers: Number(form.get('num-speakers') || -1), power_saving: getPerformanceMode() === 'efficiency', workspace_id: form.get('meeting-workspace') || null,
   };
-  localStorage.setItem('brevia-power-saving', String(payload.power_saving));
   const inputs = { mic: form.has('capture-mic'), system: form.has('capture-system') };
   try {
     const meeting = breviaClient ? await breviaClient.start(payload, inputs) : { id: null };
@@ -3060,7 +3273,6 @@ document.querySelector('#end-meeting').addEventListener('click', async (event) =
     }
     const meeting = breviaClient ? await breviaClient.stop(seconds * 1000) : null;
     meetingActive = false;
-    clearInterval(powerStatusTimer);
     miniMeeting.hidden = true;
     if (meeting) {
       breviaClient.state.selectedMeetingId = meeting.id;
@@ -3213,9 +3425,9 @@ let aiNoteTypingTimer;
 let aiNoteUserTyping = false;
 let aiSuggestionAutoFadeTimer;
 function aiSuggestionRoot() { return document.querySelector('[data-ai-suggestion]'); }
-/** 组装 AI 辅助的连接信息，复用纪要配置；未配置返回 null。@returns {object|null} */
+/** 组装 AI 辅助的独立连接信息；未配置返回 null。@returns {object|null} */
 function aiNoteConnection() {
-  const config = summaryRequestConfig();
+  const config = requestConfig(aiAssistConfig);
   if (!config) return null;
   return {
     provider: config.provider,
@@ -3232,6 +3444,10 @@ async function startAiNoteForMeeting(meetingId) {
   if (!connection) return;
   try {
     await window.brevia.aiNote.start({ meeting_id: meetingId, ...connection, proactivity: aiAssistConfig.proactivity, language: locale, prompt: aiNotePromptCopy[locale] || aiNotePromptCopy.en });
+    // 效率模式 + 内置模型时，启动即调低 AI 笔记频率（在线 LLM 无需调低）。
+    if (getPerformanceMode() === 'efficiency' && aiAssistIsBuiltIn()) {
+      await window.brevia.aiNote.reconfigure({ meeting_id: meetingId, min_interval_seconds: 120 }).catch(() => {});
+    }
   } catch { /* Best Effort：AI 辅助启动失败不影响录音与字幕主链路 */ }
 }
 function stopAiNoteForMeeting(meetingId) {
@@ -4244,7 +4460,7 @@ if (window.brevia) {
   });
   if (window.BreviaOnboarding.isFirstLaunch()) openOnboardingLanguage();
   void loadSummaryConfig().catch((error) => showToast(`${t('纪要配置加载失败')}: ${error.message}`));
-  void loadAiAssistConfig().catch((error) => showToast(`${t('AI 辅助配置加载失败')}: ${error.message}`));
+  void loadAiAssistConfig().catch((error) => showToast(`${t('AI 笔记配置加载失败')}: ${error.message}`));
   initializationPromise = breviaClient.initialize().then((result) => {
     modelCatalog = result.models;
     setPrepareModel('active-refined-model', document.querySelector('#active-refined-model').dataset.model);
@@ -4262,7 +4478,8 @@ if (window.brevia) {
       installedModelNames.add(model.name.replace(' 0.6B int8', ''));
       if (model.path) modelPaths.set(model.id, model.path);
     });
-    document.querySelector('#active-device').textContent = result.device.backend.toUpperCase();
+    deviceReport = result.device || null;
+    document.querySelector('#active-device').textContent = result.device?.backend?.toUpperCase?.() || 'CPU';
     renderSpeakerProfileCard();
     renderMeetingList();
     void window.brevia.maintain();
@@ -4364,6 +4581,13 @@ if (window.brevia) {
     document.querySelector('#active-streaming-model').textContent = prepareModelChoices['active-streaming-model'].find(([id]) => id === meeting.streaming_model_id)?.[1] || t('自动匹配');
     document.querySelector('#active-refined-model').textContent = refinedModelName(meeting.refined_model_id);
   });
+  window.brevia.on('live.performance', ({ meeting_id: meetingId, bottleneck }) => {
+    if (!meetingActive || !bottleneck) return;
+    if (getPerformanceMode() === 'efficiency') return; // 已在效率模式，无需再提示
+    if (perfBottleneckShownForMeeting === meetingId) return; // 每场会议只提示一次
+    perfBottleneckShownForMeeting = meetingId;
+    openPerformanceBottleneckDialog(meetingId);
+  });
   window.brevia.on('meeting.stopped', async ({ meeting }) => {
     if (floatingCaptionMode === 'live' && window.brevia?.floatingCaption) {
       window.brevia.floatingCaption.close();
@@ -4393,7 +4617,6 @@ if (window.brevia) {
     if (!meetingActive || meetingId !== breviaClient?.state.meeting?.id) return;
     meetingActive = false;
     clearInterval(timer);
-    clearInterval(powerStatusTimer);
     resetAiNoteSuggestions();
     miniMeeting.hidden = true;
     if (breviaClient?.capture) await breviaClient.capture.stop();
@@ -4517,7 +4740,7 @@ if (window.brevia) {
     if (!modelDownloads.has(model_id)) return;
     modelDownloads.set(model_id, { ...modelDownloads.get(model_id), received, total, paused: false });
     if (activeModal === 'models') renderModal('models');
-    if (activeModal === 'summary-model') renderModal('summary-model');
+    if (activeModal === 'summary-model' || activeModal === 'ai-assist') renderModal(activeModal);
     scheduleRequiredModelsCardRender();
   });
   window.brevia.on('model.status', ({ model_id, status, error }) => {
@@ -4538,7 +4761,7 @@ if (window.brevia) {
         const model = models.find((item) => item.id === model_id);
         if (model?.path) modelPaths.set(model_id, model.path);
         if (activeModal === 'models') renderModal('models');
-        if (activeModal === 'summary-model') renderModal('summary-model');
+        if (activeModal === 'summary-model' || activeModal === 'ai-assist') renderModal(activeModal);
         renderRequiredModelsCard();
         void resumeReadyModelTasks();
       }).catch(() => {});
@@ -4551,10 +4774,10 @@ if (window.brevia) {
     else if (status === 'failed' && modelDownloads.has(model_id)) modelDownloads.set(model_id, { error });
     else if (status === 'not_installed') modelPaths.delete(model_id);
     if (activeModal === 'models') renderModal('models');
-    if (activeModal === 'summary-model') renderModal('summary-model');
+    if (activeModal === 'summary-model' || activeModal === 'ai-assist') renderModal(activeModal);
     renderRequiredModelsCard();
   });
-  window.brevia.on('worker.warning', ({ message: warning }) => showToast(warning));
+  window.brevia.on('worker.warning', ({ code, message: warning }) => showToast(code === 'live_refinement_degraded' ? t('实时精修已自动降级以保持字幕实时。') : warning));
   window.brevia.on('worker.error', ({ message: error }) => showToast(error));
   window.brevia.on('update.download-progress', (progress) => {
     updateDownloadProgress = progress;

@@ -398,7 +398,10 @@ class RefinementWorkerMixin:
             {"meeting_id": meeting["id"], "completed": 0, "total": 0, "stage": "分析说话人"},
         )
         recognizer = RefinedASR(
-            self.models, refined_model_id, language=meeting.get("language")
+            self.models,
+            refined_model_id,
+            language=meeting.get("language"),
+            threads=self.models.device()["threads"],
         )
         locked_ids = {
             speaker["id"] for speaker in meeting["speakers"] if speaker["locked"]
@@ -597,7 +600,6 @@ class RefinementWorkerMixin:
             )
             speech = vad.process(samples, sample_rate)
             turns = [{**turn, "speaker": "local-user"} for turn in speech]
-            self.store.rename_speaker(meeting["id"], "local-user", "Local user")
         else:
             vad = OfflineVAD(
                 self.models,

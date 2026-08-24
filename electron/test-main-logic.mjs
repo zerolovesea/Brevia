@@ -83,7 +83,8 @@ assert.equal(stopContext.worker.active, null, 'a confirmed stop clears the activ
 
 const configDir = await mkdtemp(path.join(tmpdir(), 'brevia-summary-config-'));
 const configFile = path.join(configDir, 'summary-models.json');
-const configContext = { z, readFile, summaryConfigPath: () => configFile };
+const aiConfigFile = path.join(configDir, 'ai-assist.json');
+const configContext = { z, readFile, summaryConfigPath: () => configFile, aiAssistConfigPath: () => aiConfigFile };
 runInNewContext([
   oneLine('const summaryProviderIds = '),
   schemaBlock('const summaryProviderEntry = '),
@@ -108,6 +109,18 @@ await writeConfig({ version: 2, provider: 'ollama', providers: {} });
 assert.equal(await readConfig(), null, 'a removed provider id is rejected');
 await writeConfig({ version: 2, provider: 'built-in', providers: {} });
 assert.deepEqual(await readConfig(), { version: 2, provider: 'built-in', providers: {} }, 'built-in needs no provider entry');
+runInNewContext([
+  schemaBlock('const aiAssistConfig = '),
+  schemaBlock('const aiAssistConfigV1 = '),
+  asyncFn('readAiAssistConfig'),
+  'this.readAiAssistConfig = readAiAssistConfig;',
+].join('\n'), configContext);
+await writeFile(aiConfigFile, JSON.stringify({ version: 1, enabled: true, proactivity: 'assist' }));
+assert.deepEqual(JSON.parse(JSON.stringify(await configContext.readAiAssistConfig())), { version: 2, enabled: true, proactivity: 'assist', provider: 'built-in', providers: {} }, 'AI assist v1 keeps its switch and proactivity after migration');
+// v1 复用纪要配置；迁移时若纪要用的是在线供应商，AI 笔记应继承它而非被切到内置模型。
+await writeConfig({ version: 2, provider: 'custom-claude', providers: { 'custom-claude': { model: 'x', endpoint: 'https://example.com/v1', keyReference: 'summary-1', keyLength: 8 } } });
+await writeFile(aiConfigFile, JSON.stringify({ version: 1, enabled: true, proactivity: 'auto' }));
+assert.deepEqual(JSON.parse(JSON.stringify(await configContext.readAiAssistConfig())), { version: 2, enabled: true, proactivity: 'auto', provider: 'custom-claude', providers: { 'custom-claude': { model: 'x', endpoint: 'https://example.com/v1', keyReference: 'summary-1', keyLength: 8 } } }, 'AI assist v1 migration carries over the online summary provider');
 await rm(configDir, { recursive: true, force: true });
 
 // share.open-external 只放行社交网页(https)与邮件(mailto),其余 scheme 一律拒绝,

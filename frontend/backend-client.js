@@ -282,7 +282,7 @@ window.breviaClient = window.brevia ? {
         if (permissions.systemAudioSupported === false) throw new Error('当前系统不支持直接录制系统音频，请仅使用麦克风');
       }
       await this.capture.prepare(inputs);
-      meeting = await window.brevia.meeting.start(payload);
+      meeting = await window.brevia.meeting.start({ ...payload, audio_tracks: Object.keys(inputs).filter((track) => inputs[track]) });
       if (meeting?.model_required) {
         await this.capture.stop();
         this.capture = null;

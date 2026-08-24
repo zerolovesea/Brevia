@@ -232,7 +232,11 @@ function showNewWorkspaceDialog(assignMeetingId, onCreated) {
     backdrop.querySelector('input[name="name"]').focus();
   }, 100);
 
-  const closeDialog = () => closeWorkspaceDialog(backdrop);
+  let escHandler;
+  const closeDialog = () => {
+    document.removeEventListener('keydown', escHandler);
+    closeWorkspaceDialog(backdrop);
+  };
 
   // 关闭按钮事件
   backdrop.querySelectorAll('[data-close-modal]').forEach(btn => {
@@ -248,7 +252,7 @@ function showNewWorkspaceDialog(assignMeetingId, onCreated) {
   });
 
   // ESC 键关闭
-  const escHandler = (e) => {
+  escHandler = (e) => {
     if (e.key === 'Escape') {
       closeDialog();
       document.removeEventListener('keydown', escHandler);
@@ -335,7 +339,11 @@ function showEditWorkspaceDialog(workspaceId) {
     backdrop.querySelector('input[name="name"]').focus();
   }, 100);
 
-  const closeDialog = () => closeWorkspaceDialog(backdrop);
+  let escHandler;
+  const closeDialog = () => {
+    document.removeEventListener('keydown', escHandler);
+    closeWorkspaceDialog(backdrop);
+  };
 
   // 关闭按钮事件
   backdrop.querySelectorAll('[data-close-modal]').forEach(btn => {
@@ -351,7 +359,7 @@ function showEditWorkspaceDialog(workspaceId) {
   });
 
   // ESC 键关闭
-  const escHandler = (e) => {
+  escHandler = (e) => {
     if (e.key === 'Escape') {
       closeDialog();
       document.removeEventListener('keydown', escHandler);

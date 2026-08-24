@@ -10,6 +10,7 @@
     "live_pin_seconds": 20,
     "live_pin_max_seconds": 40,
     "refined_window_seconds": 15,
+    "live_refine_max_pending": 3,
     "auto_english_model_id": "zipformer-en-streaming-int8"
   },
   "live_asr": {
