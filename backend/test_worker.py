@@ -16,7 +16,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, call, patch
 
-from .asr import DownloadCancelled, ChinesePunctuation, EnglishPunctuation, ModelManager, OfflineVAD, RefinedASR, SpeakerTracker
+from .asr import DownloadCancelled, ChinesePunctuation, EnglishPunctuation, ModelManager, OfflineVAD, RefinedASR, SpeakerTracker, StreamingASR
 from .audio_io import ensure_wav_duration
 from .config import DEFAULT_SETTINGS, SETTINGS, runtime_settings, save_runtime_settings
 from .llm_client import complete
@@ -63,6 +63,51 @@ class WorkerTest(unittest.TestCase):
         for patcher in patchers:
             patcher.start()
         self.addCleanup(lambda: [p.stop() for p in patchers])
+
+    def test_efficiency_uses_streaming_model_as_live_second_pass(self):
+        with patch("backend.worker_session.StreamingASR") as streaming:
+            refiner = self.worker._create_live_refiner("streaming", "zh", streaming=True)
+        self.assertIs(refiner, streaming.return_value)
+        streaming.assert_called_once_with(self.worker.models, "streaming", language="zh")
+
+    def test_native_punctuation_streaming_refinement_keeps_full_segment(self):
+        refiner = object.__new__(StreamingASR)
+        refiner.model = {"punctuated": True}
+        refiner.decode = Mock(return_value="原生标点。")
+        self.worker.punctuation = Mock()
+        self.assertEqual(
+            self.worker._refine_live_audio(refiner, array("f", [0]) * (16 * 16000), 16000),
+            "原生标点。",
+        )
+        refiner.decode.assert_called_once()
+        self.worker.punctuation.apply.assert_not_called()
+
+    def test_live_refinement_uses_context_across_decoder_windows(self):
+        class Refiner:
+            def __init__(self):
+                self.lengths = []
+
+            def decode(self, samples, _):
+                self.lengths.append(len(samples))
+                return ("第一段末尾啊", "段末尾啊后续")[len(self.lengths) - 1]
+
+        refiner = Refiner()
+        with patch.dict(SETTINGS["asr"], {"refined_window_seconds": 15}):
+            text = self.worker._refine_live_audio(refiner, array("f", [0]) * 30, 1)
+        self.assertEqual(refiner.lengths, [15, 16])
+        self.assertEqual(text, "第一段末尾啊后续")
+
+    def test_pinned_refinement_keeps_unfinished_tail(self):
+        self.worker.store.save_segment = Mock(return_value=True)
+        updated = {
+            "meeting_id": "m", "segment_id": "system-5", "revision": 1,
+            "pinned": True, "text": "完整句。未说完的尾巴",
+        }
+        self.worker._emit_refined_segment(updated)
+        self.assertEqual(
+            self.worker.store.save_segment.call_args.args[0]["text"],
+            "完整句。未说完的尾巴",
+        )
 
     def test_remote_refiner_sends_before_waiting_for_a_reply(self):
         refiner = RemoteRefiner.__new__(RemoteRefiner)
@@ -147,7 +192,7 @@ class WorkerTest(unittest.TestCase):
             stop=[],
         )
 
-    def test_ai_note_and_summary_share_the_16k_sidecar(self):
+    def test_ai_note_uses_a_small_context_while_summary_keeps_16k(self):
         self.worker.llama_generate = Mock(return_value="notes")
         self.assertEqual(
             self.worker.llama_sidecar_complete({"model": "qwen3.5-2b-q4km"}, "summary"),
@@ -171,7 +216,7 @@ class WorkerTest(unittest.TestCase):
         self.worker._get_sidecar = Mock(return_value=sidecar)
         self.worker.llama_generate_realtime("qwen3.5-2b-q4km", "assist")
         self.worker._get_sidecar.assert_called_once_with(ASSISTANT_SIDECAR)
-        self.assertEqual(sidecar.request.call_args.args[0]["context_size"], 16384)
+        self.assertEqual(sidecar.request.call_args.args[0]["context_size"], 4096)
 
     def test_stopping_an_idle_ai_note_keeps_the_shared_sidecar_warm(self):
         session = _AiNoteSession("meeting", {}, "assist", "zh")
@@ -664,6 +709,34 @@ class WorkerTest(unittest.TestCase):
         self.assertEqual(self.worker.asr.accept.call_args.args[0], "mix")
         final = next(event for event in self.events if event["type"] == "transcript.final")
         self.assertEqual(final["payload"]["track"], "mix")
+
+    def test_dual_track_keeps_leading_audio_when_tracks_start_at_different_times(self):
+        meeting = self.worker.start(
+            {
+                "title": "双轨延迟启动",
+                "language": "zh",
+                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
+                "refined_model_id": "qwen3-asr-0.6b-int8",
+                "audio_tracks": ["mic", "system"],
+            }
+        )
+        self.worker.asr = Mock()
+        self.worker.asr.accept.return_value = (SimpleNamespace(text="开头内容"), True)
+        self.worker.punctuation = None
+        self.worker.live_refiner = None
+        system_pcm = (3000).to_bytes(2, "little", signed=True) * 1600
+        mic_pcm = (1000).to_bytes(2, "little", signed=True) * 1600
+        for track, pcm, start_ms in (("system", system_pcm, 0), ("mic", mic_pcm, 1000)):
+            self.worker.audio(
+                {
+                    "meeting_id": meeting["id"], "track": track,
+                    "pcm": base64.b64encode(pcm).decode(),
+                    "sample_rate": 16000, "start_ms": start_ms,
+                }
+            )
+        self.worker.asr.accept.assert_called_once()
+        self.assertEqual(self.worker.asr.accept.call_args.args[0], "mix")
+        self.assertAlmostEqual(self.worker.asr.accept.call_args.args[1][0], 3000 / 32768)
 
     def test_dual_track_falls_back_to_single_track_when_peer_stalls(self):
         # 双轨会议中一轨停流（另一轨持续有数据超过 MAX_MIX_BUFFER_MS）时，
@@ -2578,6 +2651,14 @@ class WorkerTest(unittest.TestCase):
         self.assertEqual(self.worker._join_utterance_text("hello", "world"), "hello world")
         self.assertEqual(self.worker._join_utterance_text("", "内容"), "内容")
 
+    def test_live_caption_overlap_trims_the_repeated_opening(self):
+        self.assertEqual(
+            self.worker._trim_refinement_overlap(
+                "我们确认下周的发布计划", "发布计划和负责人明天同步"
+            ),
+            "和负责人明天同步",
+        )
+
 
     def test_profile_assignment_requires_a_clear_best_match(self):
         self.assertTrue(self.worker._is_confident_profile_match({"score": 0.82, "runner_up_score": 0.71}))
@@ -2741,6 +2822,23 @@ class WorkerTest(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "Stop the active meeting"):
             self.worker.clear_storage({"partition": "meetings"})
+
+    def test_cleanup_unused_storage_keeps_unmanaged_paths(self):
+        retired = self.worker.models.root / "retired-model"
+        retired.mkdir()
+        (retired / ".brevia.json").write_text('{"id":"retired"}')
+        user_model = self.worker.models.root / "user-files"
+        user_model.mkdir()
+        orphan = self.worker.store.meetings_dir / "orphan"
+        orphan.mkdir()
+        (orphan / "manifest.json").write_text('{"meeting_id":"orphan"}')
+        user_meeting = self.worker.store.meetings_dir / "user-files"
+        user_meeting.mkdir()
+        result = self.worker.cleanup_unused_storage({})
+        self.assertEqual(result["items"], 2)
+        self.assertGreaterEqual(result["freed_bytes"], 0)
+        self.assertTrue(user_model.exists())
+        self.assertTrue(user_meeting.exists())
 
     def test_advanced_settings_are_saved_outside_the_default_template(self):
         settings = json.loads(json.dumps(DEFAULT_SETTINGS))
@@ -3014,6 +3112,8 @@ class WorkerTest(unittest.TestCase):
             self.assertFalse(ModelManager.device()["weak"])
         with patch("backend.asr.platform.machine", return_value="arm64"), patch("backend.asr.os.cpu_count", return_value=4):
             self.assertFalse(ModelManager.device()["weak"])
+        with patch("backend.asr.platform.machine", return_value="AMD64"), patch("backend.asr.os.cpu_count", return_value=8):
+            self.assertTrue(ModelManager.device()["weak"])
 
     def test_whisper_large_v3_manifest_uses_the_archive_file_names(self):
         self.assertEqual(
@@ -3438,6 +3538,34 @@ class WorkerTest(unittest.TestCase):
             [],
         )
         self.worker.asr.force_endpoint.assert_not_called()
+
+    def test_live_refinement_receives_the_soft_pin_carry_audio(self):
+        meeting = self.worker.start(
+            {
+                "title": "软钉精修交接",
+                "language": "zh",
+                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
+                "refined_model_id": "qwen3-asr-0.6b-int8",
+            }
+        )
+        self.worker.asr = Mock()
+        self.worker.asr.accept.return_value = (SimpleNamespace(text="续句"), True)
+        self.worker.punctuation = None
+        self.worker.live_refiner = object()
+        queued = []
+        self.worker.live_postprocessing = Mock()
+        self.worker.live_postprocessing.submit.side_effect = (
+            lambda function, *args: queued.append(args)
+        )
+        self.worker.stream_state["mic"]["carry_audio"] = [array("f", [0.25])]
+        self.worker.audio(
+            {
+                "meeting_id": meeting["id"], "track": "mic",
+                "pcm": base64.b64encode(b"\x00\x40").decode(),
+                "sample_rate": 16000, "start_ms": 0,
+            }
+        )
+        self.assertEqual(queued[0][5].tolist(), [0.25, 0.5])
 
     def test_async_punctuation_defers_when_executor_present(self):
         meeting = self.worker.start(

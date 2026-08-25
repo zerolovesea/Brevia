@@ -238,11 +238,17 @@ class RecordingSessionMixin:
                 return None
 
         def build_live_refiner():
-            if not self.power_saving and self.models.is_ready(meeting["refined_model_id"]):
+            model_id = (
+                meeting["streaming_model_id"]
+                if self.power_saving
+                else meeting["refined_model_id"]
+            )
+            if self.models.is_ready(model_id):
                 try:
                     return self._create_live_refiner(
-                        meeting["refined_model_id"],
+                        model_id,
                         language=meeting.get("language"),
+                        streaming=self.power_saving,
                     )
                 except RuntimeError as error:
                     self.emit(
@@ -312,13 +318,15 @@ class RecordingSessionMixin:
         self._active(payload["meeting_id"])
         return {"paused": bool(payload["paused"])}
 
-    def _create_live_refiner(self, model_id, language=None):
+    def _create_live_refiner(self, model_id, language=None, streaming=False):
         """创建实时精修器。
 
         ``BREVIA_LIVE_REFINE_SIDECAR=1`` 时把 RefinedASR 放入独立子进程
         （见 ``refine_sidecar``），隔离崩溃并避免抢占流式 ASR；失败自动回退到
         进程内精修。默认进程内精修（已用低线程预算让出 CPU）。
         """
+        if streaming:
+            return StreamingASR(self.models, model_id, language=language)
         if os.environ.get("BREVIA_LIVE_REFINE_SIDECAR", "") == "1":
             return RemoteRefiner(self.models, model_id, language=language)
         return RefinedASR(self.models, model_id, language=language)
@@ -382,9 +390,12 @@ class RecordingSessionMixin:
             return meeting
 
         # 先校验所有目标模型已安装，缺失即抛错（不做任何替换），让上层弹出下载。
+        required_models = (streaming_model_id,) if power_saving else (
+            streaming_model_id, refined_model_id
+        )
         missing = [
             model_id
-            for model_id in (streaming_model_id, refined_model_id)
+            for model_id in required_models
             if not self.models.is_ready(model_id)
         ]
         if missing:
@@ -400,7 +411,11 @@ class RecordingSessionMixin:
         new_refiner = self.live_refiner
         new_postprocessing = self.live_postprocessing
         if power_saving:
-            new_denoiser = new_refiner = None
+            new_denoiser = None
+            if power_saving_changed or streaming_changed or language_changed:
+                new_refiner = self._create_live_refiner(
+                    streaming_model_id, language=language, streaming=True
+                )
         else:
             if power_saving_changed:
                 denoiser_id = SETTINGS["live_asr"]["denoiser_model_id"]
@@ -536,9 +551,24 @@ class RecordingSessionMixin:
             return None
         import numpy
 
-        # 每次只输出双方都有数据的重叠区间；较早的非重叠部分是启动抖动，直接丢弃。
+        # 双轨启动并不总是同步。较早轨道的内容若直接丢弃，会造成会议开头
+        # 缺字幕；先把它送进同一条 mix 流，等两轨时间重叠后再混音。
         while mic and system:
             start_ms = max(mic[0][0], system[0][0])
+            earlier = mic if mic[0][0] < system[0][0] else system
+            if earlier[0][0] < start_ms:
+                chunk_start, chunk = earlier[0]
+                count = min(
+                    len(chunk),
+                    round((start_ms - chunk_start) * sample_rate / 1000),
+                )
+                if count:
+                    leading = chunk[:count]
+                    if count == len(chunk):
+                        earlier.popleft()
+                    else:
+                        earlier[0] = [start_ms, chunk[count:]]
+                    return leading, round(chunk_start)
             for queue in (mic, system):
                 chunk_start, chunk = queue[0]
                 skip = round((start_ms - chunk_start) * sample_rate / 1000)
@@ -725,11 +755,7 @@ class RecordingSessionMixin:
                 if elapsed_ms >= pin_max_seconds * 1000:
                     pin_ready = True
                 else:
-                    check_text = (
-                        self.punctuation.apply(raw_text)
-                        if self.punctuation
-                        else raw_text
-                    )
+                    check_text = self._apply_live_punctuation(raw_text)
                     stripped = (check_text or "").strip()
                     # 标点模型对未说完的文本也总会补一个句末标点，先剥掉末尾「伪句末」；
                     # 只有中间还残留语义切点才切，避免把短语从中间切开。
@@ -765,19 +791,24 @@ class RecordingSessionMixin:
                 state["pending_pin"] = False
         raw_changed = raw_text != state["last_raw_text"]
         state["last_raw_text"] = raw_text
-        if raw_changed and self.punctuation and self.live_punctuation and not final:
+        needs_punctuation = self.punctuation and self.asr.model.get("punctuated") is not True
+        if raw_changed and needs_punctuation and self.live_punctuation and not final:
             # 异步标点：先发裸文本，标点由后台补发，避免 CT-Transformer 阻塞录音锁。
             text = raw_text
-        elif raw_changed and self.punctuation:
-            text = self.punctuation.apply(raw_text)
+        elif raw_changed and needs_punctuation:
+            text = self._apply_live_punctuation(raw_text)
         elif raw_changed:
             text = raw_text
         else:
             text = state["last_text"]
             # 异步模式下 partial 是裸文本；句末若仍无标点则补一次（final 是一次性事件，
             # 代价可忽略），避免 final 沿用了未标点的裸文本。
-            if final and self.punctuation and raw_text and text == raw_text:
-                text = self.punctuation.apply(raw_text)
+            if final and needs_punctuation and raw_text and text == raw_text:
+                text = self._apply_live_punctuation(raw_text)
+        if final and text and state["last_final_text"]:
+            # Endpoint windows can re-decode their opening audio. Reuse the
+            # post-processing overlap logic before persisting the next caption.
+            text = self._trim_refinement_overlap(state["last_final_text"], text)
         if text and (text != state["last_text"] or final):
             state["revision"] += 1
             segment_id = f"{payload['track']}-{state['segment']}"
@@ -824,7 +855,7 @@ class RecordingSessionMixin:
                 if self._is_duplicate_final(event):
                     self.emit(
                         "transcript.discarded",
-                        {"meeting_id": self.active, "segment_id": segment_id},
+                        {"meeting_id": self.active, "segment_id": event["segment_id"]},
                     )
                 else:
                     self.store.save_segment(event)
@@ -843,7 +874,7 @@ class RecordingSessionMixin:
             elif not final:
                 self.store.save_segment(event)
                 self.emit("transcript.partial", event)
-                if raw_changed and self.punctuation and self.live_punctuation:
+                if raw_changed and needs_punctuation and self.live_punctuation:
                     self.live_punctuation.submit(
                         self._punctuate_partial_later,
                         event.copy(),
@@ -984,12 +1015,12 @@ class RecordingSessionMixin:
     def _punctuate_partial_later(self, event, raw_text, epoch):
         """在后台为 partial 补标点；若该句已 final 则丢弃（精修会补齐标点）。"""
         try:
-            if not self.punctuation:
+            if not self.punctuation or self.asr.model.get("punctuated") is True:
                 return
             state = self.stream_state.get(event["track"])
             if state is None or state.get("punctuation_epoch", 0) != epoch:
                 return
-            punctuated = self.punctuation.apply(raw_text)
+            punctuated = self._apply_live_punctuation(raw_text)
             if not punctuated or punctuated == raw_text:
                 return
             updated = {**event, "text": punctuated, "revision": event["revision"] + 1}
@@ -1064,45 +1095,38 @@ class RecordingSessionMixin:
         切窗逐段解码再拼接，避免溢出，同时保持「原地精修、不跨段」。
         """
         window_samples = int(SETTINGS["asr"]["refined_window_seconds"] * sample_rate)
-        if len(audio) <= window_samples:
-            return self._clean_live_text(refiner.decode(audio, sample_rate))
-        result = ""
-        for start in range(0, len(audio), window_samples):
-            chunk = audio[start : start + window_samples]
-            part = self._clean_live_text(refiner.decode(chunk, sample_rate))
-            if part:
-                result = self._join_utterance_text(result, part)
+        if isinstance(refiner, StreamingASR) or len(audio) <= window_samples:
+            result = self._clean_live_text(refiner.decode(audio, sample_rate))
+        else:
+            result = ""
+            context_samples = sample_rate
+            for start in range(0, len(audio), window_samples):
+                # 离线 ASR 在窗口首尾容易吞掉半个词；给后续窗一秒上下文，
+                # 再用已有的字幕去重保留真正的新内容。
+                chunk = audio[max(0, start - context_samples) : start + window_samples]
+                part = self._clean_live_text(refiner.decode(chunk, sample_rate))
+                if part:
+                    result = self._join_utterance_text(
+                        result, self._trim_refinement_overlap(result, part)
+                    )
+        if result and isinstance(refiner, StreamingASR) and refiner.model.get("punctuated") is not True and self.punctuation:
+            result = self._clean_live_text(self.punctuation.apply(result))
         return result
+
+    def _apply_live_punctuation(self, text):
+        """保留流式模型原生标点，其他模型才走 CT-Transformer。"""
+        if self.asr and self.asr.model.get("punctuated") is True:
+            return text
+        return self.punctuation.apply(text) if self.punctuation else text
 
     def _emit_refined_segment(self, updated):
         """发射精修段：原地替换当前段的文本与说话人，不跨段合并。
 
-        实时字幕保持「流式输出 → 精修原地覆盖」：精修只更新同一条 segment 的内容，
-        软钉切出的段先截到最后一个完整句末，丢掉未说完的尾巴，避免位置偏移。
+        实时字幕保持「流式输出 → 精修原地覆盖」：精修只更新同一条 segment 的内容。
+        软钉未能切出 carry 音频时，保留末尾残句，不能在精修阶段静默删字。
         """
-        if updated.get("pinned") and updated.get("text"):
-            updated["text"] = self._truncate_punctuated_tail(updated["text"])
-            if not updated["text"]:
-                self.store.delete_segment(updated["meeting_id"], updated["segment_id"])
-                self.emit(
-                    "transcript.discarded",
-                    {"meeting_id": updated["meeting_id"], "segment_id": updated["segment_id"]},
-                )
-                return
         if self.store.save_segment(updated):
             self.emit("transcript.refined", updated)
-
-    @staticmethod
-    def _truncate_punctuated_tail(text):
-        """把已加标点文本截断到最后一个完整句末，丢掉未说完的尾巴（如「……」「半句话」）。"""
-        stripped = (text or "").strip()
-        last = max(
-            (index for index, ch in enumerate(stripped) if ch in "。！？.!?"),
-            default=-1,
-        )
-        if last < 0:
-            return text
-        return stripped[: last + 1].strip()
 
     def _sentence_boundary(self, raw_text):
         """返回 ``(截断后的原文, 边界比例)``。
@@ -1114,7 +1138,7 @@ class RecordingSessionMixin:
         """
         if not raw_text or not self.punctuation:
             return raw_text, 1.0
-        punctuated = self.punctuation.apply(raw_text)
+        punctuated = self._apply_live_punctuation(raw_text)
         stripped = (punctuated or "").strip()
         if not stripped or stripped[-1] not in "。！？.!?":
             return raw_text, 1.0

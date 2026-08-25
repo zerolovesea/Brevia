@@ -94,7 +94,7 @@ function revealTaskCard(card) {
   card.hidden = false;
   if (wasHidden || wasLeaving) { taskCards.append(card); enterTaskCard(card); }
 }
-const { catalog, streamingModelOptionTags, aiNotePromptCopy, appCopy: { stageLabels, themeLabels, updateLabels, modalCopy, modelLabels, summaryModelCopy, speakerProfileCopy, voiceFeaturesCopy, aiAssistCopy } } = window.BreviaLocaleData;
+const { catalog, streamingModelOptionTags, aiNotePromptCopy, storageCleanupCopy, appCopy: { stageLabels, themeLabels, updateLabels, modalCopy, modelLabels, summaryModelCopy, speakerProfileCopy, voiceFeaturesCopy, aiAssistCopy } } = window.BreviaLocaleData;
 if (new URLSearchParams(location.search).has('resetOnboarding')) localStorage.removeItem('brevia-onboarding-complete');
 let locale = localStorage.getItem('brevia-language') || 'zh';
 let theme = localStorage.getItem('brevia-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
@@ -127,7 +127,9 @@ let deviceReport = null;
 let perfBottleneckShownForMeeting = null; // 记录已提示过瓶颈弹窗的会议 id
 /** 读取用户性能模式（标准 / 效率）。@returns {'standard'|'efficiency'} */
 function getPerformanceMode() {
-  return localStorage.getItem(PERFORMANCE_MODE_KEY) === 'efficiency' ? 'efficiency' : 'standard';
+  const saved = localStorage.getItem(PERFORMANCE_MODE_KEY);
+  if (saved === 'efficiency' || saved === 'standard') return saved;
+  return deviceIsWeak() ? 'efficiency' : 'standard';
 }
 /** 保存性能模式。@param {'standard'|'efficiency'} mode 目标模式。@returns {void} */
 function setPerformanceMode(mode) {
@@ -219,6 +221,7 @@ const modelRatings = {
   'pyannote-segmentation-3.0': { quality: 2, speed: 3 },
   'eres2net-base-3dspeaker-zh': { quality: 2, speed: 3 },
   'zipformer-zh-xlarge-streaming-int8': { quality: 3, speed: 1 },
+  'x-asr-zh-en-streaming-480ms-int8': { quality: 2, speed: 3 },
   'gtcrn-live-denoiser': { quality: 2, speed: 3 },
   // Built-in summary (llama-chat) models.
   'qwen3.5-4b-q4km': { quality: 3, speed: 1 },
@@ -319,6 +322,7 @@ function renderUpdateButton() {
 }
 const modelIds = [
   'zipformer-zh-xlarge-streaming-int8',
+  'x-asr-zh-en-streaming-480ms-int8',
   'zipformer-en-streaming-int8',
   'zipformer-ko-streaming-int8',
   'zipformer-fr-streaming-int8',
@@ -635,7 +639,7 @@ function selectCurrentWorkspaceForMeeting() {
   renderPrepareSelects();
 }
 const prepareModelChoices = {
-  'active-streaming-model': [['', null], ['zipformer-zh-xlarge-streaming-int8', 'Streaming Zipformer Chinese XLarge'], ['zipformer-en-streaming-int8', 'Streaming Zipformer English'], ['zipformer-ko-streaming-int8', 'Streaming Zipformer Korean'], ['zipformer-fr-streaming-int8', 'Streaming Zipformer French'], ['nemotron-3.5-asr-streaming-0.6b-560ms-int8', 'Nemotron 3.5 ASR Streaming 0.6B (560ms)']],
+  'active-streaming-model': [['', null], ['zipformer-zh-xlarge-streaming-int8', 'Streaming Zipformer Chinese XLarge'], ['x-asr-zh-en-streaming-480ms-int8', 'X-ASR Streaming Chinese and English (480ms)'], ['zipformer-en-streaming-int8', 'Streaming Zipformer English'], ['zipformer-ko-streaming-int8', 'Streaming Zipformer Korean'], ['zipformer-fr-streaming-int8', 'Streaming Zipformer French'], ['nemotron-3.5-asr-streaming-0.6b-560ms-int8', 'Nemotron 3.5 ASR Streaming 0.6B (560ms)']],
   'active-diarization-model': [['', null], ['pyannote-segmentation-3.0', 'Pyannote + 3D-Speaker']],
   'active-vad-model': [['silero-vad', 'Silero VAD']],
 };
@@ -663,7 +667,12 @@ const languageModelDefaults = {
   auto: { streaming: 'nemotron-3.5-asr-streaming-0.6b-560ms-int8', refined: DEFAULT_REFINED_MODEL_ID, segmentation: 'pyannote-segmentation-3.0' },
   default: { streaming: 'nemotron-3.5-asr-streaming-0.6b-560ms-int8', refined: DEFAULT_REFINED_MODEL_ID, segmentation: 'pyannote-segmentation-3.0' },
 };
-const preferredModelsForLanguage = (language) => languageModelDefaults[language] || languageModelDefaults.default;
+const preferredModelsForLanguage = (language) => {
+  const models = languageModelDefaults[language] || languageModelDefaults.default;
+  return getPerformanceMode() === 'efficiency' && ['zh', 'en'].includes(language)
+    ? { ...models, streaming: 'x-asr-zh-en-streaming-480ms-int8' }
+    : models;
+};
 const requiredModelsForLanguage = (language) => {
   const { streaming, refined, segmentation } = preferredModelsForLanguage(language);
   const punctuation = language === 'en' ? 'online-punct-en-int8' : ['zh', 'yue', 'auto'].includes(language) ? 'punct-ct-transformer-zh-en-int8' : undefined;
@@ -761,7 +770,9 @@ async function previewMicrophone() {
     await breviaClient.previewMic();
     setSourceBadge(document.querySelector('#mic-input-label'), document.querySelector('#mic-source-hint'), { ok: true, text: t('输入良好') });
   } catch (error) {
-    setSourceBadge(document.querySelector('#mic-input-label'), document.querySelector('#mic-source-hint'), { ok: false, text: error.message, hint: t('需要麦克风权限') });
+    // Keep the status column short; the actionable explanation belongs in the
+    // source hint, where it can wrap without collapsing the microphone label.
+    setSourceBadge(document.querySelector('#mic-input-label'), document.querySelector('#mic-source-hint'), { ok: false, text: t('未就绪'), hint: error.message });
   }
 }
 prepareForm.querySelector('[name="capture-mic"]').addEventListener('change', (event) => {
@@ -1269,7 +1280,7 @@ function renderPerformanceModal() {
     ? `<p class="performance-weak-note">⚠ ${escapeHtml(t('本机性能有限，建议使用更小的内置模型（如 2B）或在线 LLM API，以获得更流畅的实时体验。'))}</p>`
     : '';
   const modeRow = (value, title, detail) => `<label class="ai-assist-level${mode === value ? ' is-selected' : ''}"><input type="radio" name="performance-mode" value="${value}"${mode === value ? ' checked' : ''} /><span><b>${escapeHtml(t(title))}</b><small>${escapeHtml(t(detail))}</small></span></label>`;
-  settingsModal.querySelector('.modal-body').innerHTML = `<form class="ai-assist-form">${weakNote}<section class="ai-assist-proactivity performance-mode-options"><p>${escapeHtml(t('性能模式'))}</p><div class="ai-assist-levels">${modeRow('standard', '性能模式', '标准模式：开启实时降噪与实时精修，体验最佳，适合性能较强的设备。')}${modeRow('efficiency', '效率模式', '效率模式：关闭实时降噪与实时精修，降低内置 AI 笔记频率，让字幕更实时。')}</div></section><div class="modal-form-actions"><button class="modal-action" type="submit">${escapeHtml(t('保存'))}</button></div></form>`;
+  settingsModal.querySelector('.modal-body').innerHTML = `<form class="ai-assist-form">${weakNote}<section class="ai-assist-proactivity performance-mode-options"><p>${escapeHtml(t('性能模式'))}</p><div class="ai-assist-levels">${modeRow('standard', '性能模式', '标准模式：开启实时降噪与实时精修，体验最佳，适合性能较强的设备。')}${modeRow('efficiency', '效率模式', '关闭实时降噪，使用轻量模型二次精修')}</div></section><div class="modal-form-actions"><button class="modal-action" type="submit">${escapeHtml(t('保存'))}</button></div></form>`;
 }
 /** 会中检测到性能瓶颈时，弹出是否临时降低到效率模式的对话框。@returns {void} */
 function openPerformanceBottleneckDialog(meetingId) {
@@ -1315,12 +1326,18 @@ function temporarilyDisableAiAssist() {
   renderAiAssistEmptyState();
   showToast(t('AI 笔记已暂时停用。'));
 }
-/** 会中临时切换到效率模式：关实时降噪+精修，内置 AI 辅助降频。@param {string} meetingId 会议 id。@returns {Promise<boolean>} */
+/** 会中临时切换到效率模式：关实时降噪，以轻量流式模型做二阶段精修。@param {string} meetingId 会议 id。@returns {Promise<boolean>} */
 async function applyLiveEfficiency(meetingId) {
   const meetingIdSafe = meetingId || breviaClient?.state.meeting?.id;
   if (!meetingIdSafe || !window.brevia) return false;
   try {
-    await reconfigureLive({ power_saving: true });
+    const language = breviaClient?.state.meeting?.language;
+    await reconfigureLive({
+      power_saving: true,
+      ...(['zh', 'en'].includes(language)
+        ? { streaming_model_id: 'x-asr-zh-en-streaming-480ms-int8' }
+        : {}),
+    });
     if (aiAssistEnabled() && aiAssistIsBuiltIn() && window.brevia.aiNote) {
       await window.brevia.aiNote.reconfigure({ meeting_id: meetingIdSafe, min_interval_seconds: 120 }).catch(() => {});
       showToast(t('已降低 AI 笔记频率（内置模型）。'));
@@ -1579,9 +1596,10 @@ function renderModal(kind) {
   if (kind === 'summary-detail') { renderSummaryDetailModal(); return; }
   const copy = (modalCopy[locale] || modalCopy.en)[kind];
   if (kind === 'storage') {
+    const cleanup = storageCleanupCopy[locale] || storageCleanupCopy.en;
     settingsModal.querySelector('h2').textContent = t('存储与隐私');
     settingsModal.querySelector('.modal-title p').textContent = t('查看和管理保存在此 Mac 上的会议资料、模型与导出文件。');
-    settingsModal.querySelector('.modal-body').innerHTML = `<div class="storage-list">${copy.items.map(([name, size], index) => `<section><span><b>${escapeHtml(name)}</b><small>${escapeHtml(size)}</small></span><span><button class="secondary" data-open-storage="${['meetings', 'models', 'exports'][index]}" type="button">${t('从文件夹打开')}</button><button class="model-delete" data-clear-storage="${['meetings', 'models', 'exports'][index]}" type="button">${t('清空数据')}</button></span></section>`).join('')}</div>`;
+    settingsModal.querySelector('.modal-body').innerHTML = `<div class="storage-list">${copy.items.map(([name, size], index) => `<section><span><b>${escapeHtml(name)}</b><small>${escapeHtml(size)}</small></span><span><button class="secondary" data-open-storage="${['meetings', 'models', 'exports'][index]}" type="button">${t('从文件夹打开')}</button><button class="model-delete" data-clear-storage="${['meetings', 'models', 'exports'][index]}" type="button">${t('清空数据')}</button></span></section>`).join('')}</div><div class="modal-form-actions"><button class="secondary" data-cleanup-storage type="button">${cleanup.button}</button><small>${cleanup.detail}</small></div>`;
     return;
   }
   const modelStageOrder = new Map();
@@ -2028,9 +2046,16 @@ async function openOnboardingSetup() {
   const securityHint = onboardingSecurityCopy[locale] || onboardingSecurityCopy.en;
   const choices = ['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru'];
   const defaults = new Set(window.BreviaOnboarding.defaultMeetingLanguages(locale));
-  showOnboardingPage('setup', `<section class="onboarding-setup-page"><button class="onboarding-back" data-onboarding-back-language type="button" aria-label="${t('返回')}">←</button><header><img class="onboarding-brand" src="./assets/brevia-logo.svg" alt="Brevia" /><h1>${copy.modelsTitle}</h1><div class="onboarding-intro"><p>${copy.meetingHint} ${copy.modelsHint}</p><small>${securityHint}</small></div></header><section class="onboarding-section"><h2>${copy.meetingTitle}</h2><div class="onboarding-language-selection"><div class="onboarding-check-grid">${choices.map((code) => `<label><input type="checkbox" name="onboarding-language" value="${code}"${defaults.has(code) ? ' checked' : ''} /><span>${new Intl.DisplayNames([locale], { type: 'language' }).of(code)}</span></label>`).join('')}</div><aside class="onboarding-model-preview"><strong>${modelListLabels[0]}</strong><ul data-onboarding-language-models></ul></aside></div></section><section class="onboarding-section"><h2>${t('离线功能')}</h2><div class="onboarding-language-selection onboarding-feature-selection"><div class="onboarding-feature-grid">${copy.capabilities.slice(-1).map((capability) => `<label><input type="checkbox" name="onboarding-denoiser" checked /><span>${capability}</span></label>`).join('')}<label><input type="checkbox" name="onboarding-translation" checked /><span>${copy.translation}</span></label></div><aside class="onboarding-model-preview"><strong>${modelListLabels[1]}</strong><ul data-onboarding-feature-models></ul></aside></div></section><section class="onboarding-model-summary"><strong>${copy.estimate}: <span data-onboarding-estimate></span></strong>${chinaModelSourceToggle()}</section><div class="onboarding-actions"><button class="modal-action" data-download-onboarding-models type="button">${copy.download}</button><button class="secondary" data-customize-onboarding-models type="button">${copy.customize}</button><button class="secondary" data-finish-onboarding type="button">${copy.later}</button></div></section>`);
+  const perfMode = getPerformanceMode();
+  const performanceModes = [['standard', '性能模式', '标准模式：开启实时降噪与实时精修，体验最佳，适合性能较强的设备。'], ['efficiency', '效率模式', '关闭实时降噪，使用轻量模型二次精修']].map(([value, title, detail]) => `<label class="onboarding-ai-level${perfMode === value ? ' is-selected' : ''}"><input type="radio" name="onboarding-performance-mode" value="${value}"${perfMode === value ? ' checked' : ''} /><span><b>${escapeHtml(t(title))}</b><small>${escapeHtml(t(detail))}</small></span></label>`).join('');
+  showOnboardingPage('setup', `<section class="onboarding-setup-page"><button class="onboarding-back" data-onboarding-back-language type="button" aria-label="${t('返回')}">←</button><header><img class="onboarding-brand" src="./assets/brevia-logo.svg" alt="Brevia" /><h1>${copy.modelsTitle}</h1><div class="onboarding-intro"><p>${copy.meetingHint} ${copy.modelsHint}</p><small>${securityHint}</small></div></header><section class="onboarding-section"><h2>${t('性能模式')}</h2>${deviceIsWeak() ? `<p class="onboarding-weak-note">⚠ ${escapeHtml(t('标准模式 / 效率模式。性能偏低的机器可开启效率模式提升字幕实时性。'))}</p>` : ''}<div class="onboarding-ai-levels">${performanceModes}</div></section><section class="onboarding-section"><h2>${copy.meetingTitle}</h2><div class="onboarding-language-selection"><div class="onboarding-check-grid">${choices.map((code) => `<label><input type="checkbox" name="onboarding-language" value="${code}"${defaults.has(code) ? ' checked' : ''} /><span>${new Intl.DisplayNames([locale], { type: 'language' }).of(code)}</span></label>`).join('')}</div><aside class="onboarding-model-preview"><strong>${modelListLabels[0]}</strong><ul data-onboarding-language-models></ul></aside></div></section><section class="onboarding-section"><h2>${t('离线功能')}</h2><div class="onboarding-language-selection onboarding-feature-selection"><div class="onboarding-feature-grid">${copy.capabilities.slice(-1).map((capability) => `<label><input type="checkbox" name="onboarding-denoiser" checked /><span>${capability}</span></label>`).join('')}<label><input type="checkbox" name="onboarding-translation" checked /><span>${copy.translation}</span></label></div><aside class="onboarding-model-preview"><strong>${modelListLabels[1]}</strong><ul data-onboarding-feature-models></ul></aside></div></section><section class="onboarding-model-summary"><strong>${copy.estimate}: <span data-onboarding-estimate></span></strong>${chinaModelSourceToggle()}</section><div class="onboarding-actions"><button class="modal-action" data-download-onboarding-models type="button">${copy.download}</button><button class="secondary" data-customize-onboarding-models type="button">${copy.customize}</button><button class="secondary" data-finish-onboarding type="button">${copy.later}</button></div></section>`);
   updateOnboardingSetup();
   onboardingPage.addEventListener('change', (event) => {
+    if (event.target.matches('[name="onboarding-performance-mode"]')) {
+      setPerformanceMode(event.target.value);
+      onboardingPage.querySelectorAll('.onboarding-ai-level').forEach((level) => level.classList.toggle('is-selected', level.querySelector('input').checked));
+      updateOnboardingSetup();
+    }
     if (event.target.matches('[name="onboarding-language"], [name="onboarding-denoiser"], [name="onboarding-translation"]')) updateOnboardingSetup();
     if (event.target.matches('[data-china-model-source]')) localStorage.setItem('brevia-china-model-source', event.target.checked);
   });
@@ -2221,31 +2246,7 @@ async function finishAiOnboarding(forceEnabled) {
   aiAssistConfig.proactivity = ['quiet', 'assist', 'auto'].includes(proactivity) ? proactivity : 'assist';
   aiAssistConfigRevision += 1;
   await persistAiAssistConfig().catch(() => {});
-  // AI 功能配置完成后进入独立的「性能模式」引导页，二者不在同一页。
-  dismissOnboardingPage(openOnboardingPerformance);
-}
-
-function openOnboardingPerformance() {
-  const perfMode = getPerformanceMode();
-  const performanceModes = [
-    ['standard', '性能模式', '标准模式：开启实时降噪与实时精修，体验最佳，适合性能较强的设备。'],
-    ['efficiency', '效率模式', '效率模式：关闭实时降噪与实时精修，降低内置 AI 笔记频率，让字幕更实时。'],
-  ].map(([value, title, detail]) => `<label class="onboarding-ai-level${perfMode === value ? ' is-selected' : ''}"><input type="radio" name="onboarding-performance-mode" value="${value}"${perfMode === value ? ' checked' : ''} /><span><b>${escapeHtml(t(title))}</b><small>${escapeHtml(t(detail))}</small></span></label>`).join('');
-  showOnboardingPage('setup', `<section class="onboarding-setup-page onboarding-ai-setup-page"><button class="onboarding-back" data-onboarding-back-ai type="button" aria-label="${t('返回')}">←</button><header><img class="onboarding-brand" src="./assets/brevia-logo.svg" alt="Brevia" /><h1>${escapeHtml(t('性能模式'))}</h1><div class="onboarding-intro"><p>${escapeHtml(t('标准模式 / 效率模式。性能偏低的机器可开启效率模式提升字幕实时性。'))}</p></div></header>${deviceIsWeak() ? `<p class="onboarding-weak-note">⚠ ${escapeHtml(t('本机性能有限，建议只保留会后 AI 会议纪要，并关闭会中实时 AI 笔记以获得更流畅的体验。'))}</p>` : ''}<section class="onboarding-section"><div class="onboarding-ai-levels">${performanceModes}</div></section><div class="onboarding-actions"><button class="modal-action" data-onboarding-performance-finish type="button">${escapeHtml(t('继续'))}</button></div></section>`);
-  onboardingPage.addEventListener('change', (event) => {
-    if (event.target.matches('[name="onboarding-performance-mode"]')) {
-      onboardingPage.querySelectorAll('.onboarding-ai-level').forEach((level) => level.classList.toggle('is-selected', level.querySelector('input').checked));
-    }
-  });
-  onboardingPage.addEventListener('click', (event) => {
-    if (event.target.closest('[data-onboarding-back-ai]')) { dismissOnboardingPage(openOnboardingAi); return; }
-    if (event.target.closest('[data-onboarding-performance-finish]')) {
-      const perfMode = onboardingPage.querySelector('[name="onboarding-performance-mode"]:checked')?.value;
-      if (perfMode === 'efficiency' || perfMode === 'standard') setPerformanceMode(perfMode);
-      dismissOnboardingPage(openOnboardingTour);
-      return;
-    }
-  });
+  dismissOnboardingPage(openOnboardingTour);
 }
 
 function openOnboardingPermissions() {
@@ -2417,6 +2418,15 @@ settingsModal.addEventListener('click', async (event) => {
     openConfirmation(t('清空数据'), t('此操作不可恢复。'), async () => {
       try { await window.brevia?.storage.clear({ partition }); renderModal('storage'); showToast(t('已清空')); } catch (error) { showToast(error.message); }
     });
+    return;
+  }
+  if (event.target.closest('[data-cleanup-storage]')) {
+    try {
+      const result = await window.brevia?.storage.cleanup();
+      renderModal('storage');
+      const copy = storageCleanupCopy[locale] || storageCleanupCopy.en;
+      showToast(copy.done.replace('{size}', formatBytes(result.freed_bytes)));
+    } catch (error) { showToast(error.message); }
     return;
   }
   if (event.target.closest('[data-regenerate-summary]')) { closeModal(); void generateMeetingSummary(); return; }

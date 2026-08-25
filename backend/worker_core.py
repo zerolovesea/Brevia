@@ -188,6 +188,7 @@ class WorkerCore:
                 value["profile_id"], value["name"]
             ),
             "storage.clear": self.clear_storage,
+            "storage.cleanup": self.cleanup_unused_storage,
             "settings.advanced.get": lambda _: {
                 "settings": SETTINGS,
                 "defaults": DEFAULT_SETTINGS,

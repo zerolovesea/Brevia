@@ -15,6 +15,10 @@ assert.match(text(audioProcessor), /data\?\.type !== 'flush'/);
 assert.match(text(audioProcessor), /this\.buffer\.slice\(0, count\)/);
 assert.match(text(backendClient), /sources\.map\(\(resource\) => this\.flush\(resource\)\)/);
 assert.match(text(app), /const DEFAULT_REFINED_MODEL_ID = 'funasr-nano-int8';/);
+assert.match(text(app), /getPerformanceMode\(\) === 'efficiency' && \['zh', 'en'\]\.includes\(language\)/);
+assert.equal(modelManifest.find((model) => model.id === 'x-asr-zh-en-streaming-480ms-int8')?.archive_sha256, 'fa5f63d618e5a01526e275a358bb7772e403f84808a4769fba52cffd8160bf74');
+assert.match(text(app), /text: t\('未就绪'\), hint: error\.message/);
+assert.match(text(css), /\.choice\{[^}]*grid-template-columns:auto minmax\(0,1fr\) auto/);
 assert.match(text(app), /auto: \{ streaming: 'nemotron-3\.5-asr-streaming-0\.6b-560ms-int8'/);
 assert.match(text(app), /default: \{ streaming: 'nemotron-3\.5-asr-streaming-0\.6b-560ms-int8'/);
 assert.match(text(app), /window\.brevia\.on\('meeting\.interrupted'/);
@@ -127,9 +131,9 @@ for (const [code, stage, allLanguages] of [['ja', 'ライブ字幕', 'すべて�
   assert.equal(items[0][0], stage);
   assert.equal(items.find(([, name]) => name === 'Silero VAD')[2], allLanguages);
 }
-assert.deepEqual(Array.from(localeContext.window.BreviaLocaleData.appCopy.modalCopy.zh.models.items.slice(8, 12), ([, name]) => name), ['Qwen3-ASR', 'FunASR Nano int8', 'Whisper Large v3', 'Pyannote Segmentation 3.0']);
+assert.deepEqual(Array.from(localeContext.window.BreviaLocaleData.appCopy.modalCopy.zh.models.items.slice(9, 13), ([, name]) => name), ['Qwen3-ASR', 'FunASR Nano int8', 'Whisper Large v3', 'Pyannote Segmentation 3.0']);
 assert.equal(localeContext.window.BreviaLocaleData.appCopy.modalCopy.zh.models.items.find(([, name]) => name === '3D-Speaker ERes2Net Base')[2], '语言无关');
-for (const id of ['vits-mimic3-ko-kss-low', 'vits-piper-fr-siwis-medium-int8', 'vits-piper-de-thorsten-medium-int8', 'vits-piper-es-sharvard-medium-int8', 'vits-piper-ru-irina-medium-int8', 'zipformer-zh-streaming-int8', 'paraformer-zh-en-int8', 'whisper-turbo', 'fire-red-asr2-ctc-zh-en-int8', 'nemo-titanet-small-en', 'campplus-zh-en']) {
+for (const id of ['vits-mimic3-ko-kss-low', 'vits-piper-fr-siwis-medium-int8', 'vits-piper-de-thorsten-medium-int8', 'vits-piper-es-sharvard-medium-int8', 'vits-piper-ru-irina-medium-int8', 'zipformer-zh-streaming-int8', 'zipformer-ctc-zh-streaming-int8', 'paraformer-zh-en-int8', 'whisper-turbo', 'fire-red-asr2-ctc-zh-en-int8', 'nemo-titanet-small-en', 'campplus-zh-en']) {
   assert.equal(modelManifest.find((entry) => entry.id === id), undefined, `pruned model ${id} still in manifest`);
   assert.doesNotMatch(text(js), new RegExp(`'${id}'`), `pruned model ${id} still referenced in app js`);
 }
@@ -743,9 +747,14 @@ assert.match(text(js), /if \(window\.BreviaOnboarding\.isFirstLaunch\(\)\) openO
 assert.match(text(js), /if \(initializationPromise\) await initializationPromise;[\s\S]{0,160}openOnboardingPermissions\(\); return;/);
 assert.match(text(js), /window\.brevia\.on\('app\.maintenance'/);
 assert.match(text(js), /void window\.brevia\.maintain\(\)/);
+assert.match(text(js), /data-cleanup-storage/);
 assert.match(text(js), /void loadSummaryConfig\(\)\.catch/);
 assert.match(text(js), /updateOnboardingLanguageCopy/);
 assert.match(text(js), /function openOnboardingSetup/);
+assert.match(text(js), /name="onboarding-performance-mode"/);
+assert.match(text(js), /getPerformanceMode\(\) === 'efficiency' && \['zh', 'en'\]\.includes\(language\)/);
+assert.doesNotMatch(text(js), /'zipformer-ctc-zh-streaming-int8'/);
+assert.match(text(js), /'x-asr-zh-en-streaming-480ms-int8'/);
 assert.match(text(js), /new Set\(window\.BreviaOnboarding\.defaultMeetingLanguages\(locale\)\)/);
 assert.match(text(js), /className = 'onboarding-page onboarding-active'/);
 assert.match(text(js), /onboarding-page onboarding-active onboarding-\$\{kind\}-overlay/);

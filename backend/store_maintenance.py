@@ -75,3 +75,22 @@ class MaintenanceStoreMixin:
         else:
             raise ValueError("Unknown storage partition")
         return self.usage()
+
+    def cleanup_orphan_meeting_dirs(self):
+        """只删除带匹配 Brevia manifest、但数据库不存在的会议目录。"""
+        with self.connect() as db:
+            meeting_ids = {row["id"] for row in db.execute("SELECT id FROM meetings")}
+        removed, freed_bytes = [], 0
+        for path in self.meetings_dir.iterdir():
+            manifest = path / "manifest.json"
+            if not path.is_dir() or path.name in meeting_ids or not manifest.is_file():
+                continue
+            try:
+                if json.loads(manifest.read_text(encoding="utf-8")).get("meeting_id") != path.name:
+                    continue
+            except (OSError, json.JSONDecodeError):
+                continue
+            freed_bytes += sum(item.stat().st_size for item in path.rglob("*") if item.is_file())
+            shutil.rmtree(path)
+            removed.append(path.name)
+        return {"removed": removed, "freed_bytes": freed_bytes}

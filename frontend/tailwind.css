@@ -177,15 +177,16 @@
   .form-grid { @apply grid grid-cols-2 gap-6; }
   fieldset { @apply m-0 border border-[#e5e5e5] px-6 py-3; }
   legend { @apply px-1 text-[13px] text-[#404040]; }
-  .choice { @apply grid grid-cols-[auto_1fr_auto] items-center gap-3 py-2; }
+  .choice { @apply grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3 py-2; }
   input[type=checkbox] { appearance: none; width: 16px; height: 16px; margin: 0; border: 1px solid #000; border-radius: 0; background: #fff; cursor: pointer; transition: background-color .3s ease, border-color .3s ease; }
   input[type=checkbox]:checked { background-color: #000; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='m3.5 8 2.7 2.7L12.5 4.5' fill='none' stroke='white' stroke-width='1.75' stroke-linecap='square'/%3E%3C/svg%3E"); background-size: 100% 100%; }
   input[type=checkbox]:focus-visible { outline: 2px solid #0066ff; outline-offset: 2px; }
   .choice input { @apply size-4; }
   .choice b, .choice small { @apply block; }
-  .choice small { @apply mt-1 text-[11px] text-[#999]; }
+  .choice > span { @apply min-w-0; }
+  .choice small { @apply mt-1 text-[11px] text-[#999]; overflow-wrap: anywhere; }
   .choice strong { @apply text-[11px] font-normal text-[#666]; }
-  .choice .input-state { @apply flex items-center gap-2; }
+  .choice .input-state { @apply flex items-center gap-2 self-start; }
   .input-state [data-tone="ok"] { @apply text-[#16803c]; }
   .input-state [data-tone="warn"] { @apply text-[#a05a00]; }
   .input-meter { @apply relative block h-1 w-9 bg-[#e5e5e5]; }

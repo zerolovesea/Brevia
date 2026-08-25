@@ -29,6 +29,24 @@
     "kind": "transducer"
   },
   {
+    "id": "x-asr-zh-en-streaming-480ms-int8",
+    "name": "X-ASR Streaming Chinese and English (480ms)",
+    "runtime": "sherpa-onnx==1.13.5",
+    "revision": "asr-models/2026-06-05",
+    "stages": ["streaming"],
+    "languages": ["zh", "en"],
+    "backend": ["cpu", "cuda"],
+    "speaker": false,
+    "size_bytes": 133895136,
+    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-x-asr-480ms-streaming-zipformer-transducer-zh-en-punct-int8-2026-06-05.tar.bz2",
+    "china_url": "https://modelscope.cn/models/zyaztec/sherpa-onnx-x-asr-480ms-streaming-zipformer-transducer-zh-en-punct-int8-2026-06-05/resolve/master/sherpa-onnx-x-asr-480ms-streaming-zipformer-transducer-zh-en-punct-int8-2026-06-05.tar.bz2",
+    "archive_sha256": "fa5f63d618e5a01526e275a358bb7772e403f84808a4769fba52cffd8160bf74",
+    "directory": "sherpa-onnx-x-asr-480ms-streaming-zipformer-transducer-zh-en-punct-int8-2026-06-05",
+    "files": ["encoder.int8.onnx", "decoder.onnx", "joiner.int8.onnx", "tokens.txt"],
+    "kind": "transducer",
+    "punctuated": true
+  },
+  {
     "id": "zipformer-en-streaming-int8",
     "name": "Streaming Zipformer English",
     "runtime": "sherpa-onnx==1.13.2",

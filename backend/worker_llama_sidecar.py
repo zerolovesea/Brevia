@@ -258,7 +258,9 @@ class LlamaSidecarMixin:
             "model_path": str(model_file),
             "prompt": prompt,
             "max_tokens": REALTIME_MAX_TOKENS,
-            "context_size": 16384,
+            # Live notes retain < 1K tokens of prompt context.  A 16K KV cache wastes
+            # hundreds of MB on CPU-only laptops and competes with streaming ASR.
+            "context_size": 4096,
             "temperature": 0.2,
             "top_k": 40,
             "top_p": 0.95,

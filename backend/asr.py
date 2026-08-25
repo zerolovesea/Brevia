@@ -79,6 +79,23 @@ class ModelManager:
             if path.is_dir() and path.name.startswith(DEPRECATED_MODEL_PREFIXES):
                 shutil.rmtree(path, ignore_errors=True)
 
+    def cleanup_unlisted(self):
+        """仅删除带 Brevia 元数据、但已不在当前模型清单的本地模型。"""
+        removed, freed_bytes = [], 0
+        for path in self.root.iterdir():
+            marker = path / ".brevia.json"
+            if not path.is_dir() or not marker.is_file():
+                continue
+            try:
+                model_id = json.loads(marker.read_text(encoding="utf-8")).get("id")
+            except (OSError, json.JSONDecodeError):
+                continue
+            if model_id and model_id not in self.catalog:
+                freed_bytes += sum(item.stat().st_size for item in path.rglob("*") if item.is_file())
+                shutil.rmtree(path)
+                removed.append(path.name)
+        return {"removed": removed, "freed_bytes": freed_bytes}
+
     def list(self):
         """返回模型清单，并补充本机安装状态和安装路径。"""
         return [
@@ -360,7 +377,10 @@ class ModelManager:
             "cores": os.cpu_count() or 2,
             # Apple Silicon 的语音模型虽走 CPU provider，但仍可使用 Metal 跑本地 LLM；
             # 不应仅因 ASR provider 是 CPU 而被误判为弱机。
-            "weak": backend == "cpu" and platform.machine().lower() not in {"arm64", "aarch64"} and (os.cpu_count() or 2) <= 4,
+            # Windows commonly reports logical processors: a 4C/8T mobile CPU is still
+            # too small for CPU-only live ASR plus a local LLM.  Treat that class as weak
+            # so the UI picks the responsive path instead of the quality-first default.
+            "weak": backend == "cpu" and platform.machine().lower() not in {"arm64", "aarch64"} and (os.cpu_count() or 2) <= 8,
         }
 
     @staticmethod
@@ -424,13 +444,18 @@ class StreamingASR:
                 SETTINGS["asr"]["maximum_utterance_seconds"],
             ),
         }
-        files = [name for name in self.model["files"] if name.endswith(".onnx")]
-        common.update(
-            encoder=str(path / files[0]),
-            decoder=str(path / files[1]),
-            joiner=str(path / files[2]),
-        )
-        self.recognizer = sherpa_onnx.OnlineRecognizer.from_transducer(**common)
+        if self.model["kind"] == "zipformer-ctc":
+            self.recognizer = sherpa_onnx.OnlineRecognizer.from_zipformer2_ctc(
+                model=str(path / "model.int8.onnx"), **common
+            )
+        else:
+            files = [name for name in self.model["files"] if name.endswith(".onnx")]
+            common.update(
+                encoder=str(path / files[0]),
+                decoder=str(path / files[1]),
+                joiner=str(path / files[2]),
+            )
+            self.recognizer = sherpa_onnx.OnlineRecognizer.from_transducer(**common)
         self.streams = {}
         self.lock = threading.Lock()
 
@@ -488,6 +513,19 @@ class StreamingASR:
             if track not in self.streams:
                 return ""
             return self._finalize(track)
+
+    def decode(self, samples, sample_rate=16000):
+        """用独立流重解已确认片段，供实时二阶段原地覆盖。"""
+        with self.lock:
+            stream = self.recognizer.create_stream()
+            if self.model["kind"] == "nemotron":
+                stream.set_option("language", self.language)
+            stream.accept_waveform(sample_rate, samples)
+            stream.input_finished()
+            while self.recognizer.is_ready(stream):
+                self.recognizer.decode_stream(stream)
+            result = self.recognizer.get_result(stream)
+            return result if isinstance(result, str) else result.text
 
 
 class LiveDenoiser:

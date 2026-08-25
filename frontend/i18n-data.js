@@ -285,7 +285,7 @@ const appCopy = {
     'AI 笔记已保存': { zh: 'AI 笔记已保存', en: 'AI notes saved', es: 'Notas IA guardadas', ja: 'AIメモを保存しました', ko: 'AI 메모를 저장했습니다', fr: 'Notes IA enregistrées', de: 'KI-Notizen gespeichert', ru: 'ИИ-заметки сохранены' },
     'AI 笔记配置加载失败': { zh: 'AI 笔记配置加载失败', en: 'Failed to load AI-notes configuration', es: 'No se pudo cargar la configuración de notas IA', ja: 'AIメモ設定を読み込めませんでした', ko: 'AI 메모 설정을 불러오지 못했습니다', fr: 'Échec du chargement de la configuration des notes IA', de: 'KI-Notizkonfiguration konnte nicht geladen werden', ru: 'Не удалось загрузить настройки ИИ-заметок' },
     '保存配置': { zh: '保存配置', en: 'Save configuration', es: 'Guardar configuración', ja: '設定を保存', ko: '설정 저장', fr: 'Enregistrer la configuration', de: 'Konfiguration speichern', ru: 'Сохранить настройки' },
-    '效率模式：关闭实时降噪与实时精修，降低内置 AI 笔记频率，让字幕更实时。': { zh: '效率模式：关闭实时降噪与实时精修，降低内置 AI 笔记频率，让字幕更实时。', en: 'Efficiency: turns off live denoising and live refinement and lowers the built-in AI-notes frequency so captions stay realtime.', es: 'Eficiencia: desactiva la reducción de ruido y el refinamiento en vivo, y reduce la frecuencia de las notas IA integradas para mantener los subtítulos en tiempo real.', ja: '効率：リアルタイムノイズ除去と高精度化を無効にし、内蔵 AIメモの頻度を下げて字幕のリアルタイム性を保ちます。', ko: '효율: 실시간 잡음 제거와 정교화를 끄고 내장 AI 메모 빈도를 낮춰 자막 실시간성을 유지합니다.', fr: 'Efficacité : désactive le débruitage et l’affinage en direct et réduit la fréquence des notes IA intégrées pour garder les sous-titres en temps réel.', de: 'Effizienz: deaktiviert Live-Entrauschung/-Nachbearbeitung und senkt die Frequenz integrierter KI-Notizen, damit Untertitel in Echtzeit bleiben.', ru: 'Эффективность: отключает шумоподавление и обработку в реальном времени и снижает частоту встроенных ИИ-заметок, чтобы субтитры оставались синхронными.' },
+    '关闭实时降噪，使用轻量模型二次精修': { zh: '关闭实时降噪，使用轻量模型二次精修', en: 'Disables live denoising and uses a lightweight model for second-pass refinement.', es: 'Desactiva la reducción de ruido en vivo y usa un modelo ligero para un segundo refinamiento.', ja: 'リアルタイムノイズ除去を無効にし、軽量モデルで二段階補正します。', ko: '실시간 잡음 제거를 끄고 경량 모델로 2단계 보정합니다.', fr: 'Désactive le débruitage en direct et utilise un modèle léger pour un second affinage.', de: 'Deaktiviert die Live-Entrauschung und nutzt ein schlankes Modell für die zweite Nachbearbeitung.', ru: 'Отключает шумоподавление в реальном времени и использует лёгкую модель для второго прохода обработки.' },
     'AI 笔记模型已保存': { zh: 'AI 笔记模型已保存', en: 'AI-notes model saved', es: 'Modelo de notas IA guardado', ja: 'AIメモモデルを保存しました', ko: 'AI 메모 모델을 저장했습니다', fr: 'Modèle de notes IA enregistré', de: 'KI-Notizmodell gespeichert', ru: 'Модель ИИ-заметок сохранена' },
     'AI 笔记模型': { zh: 'AI 笔记模型', en: 'AI-notes model', es: 'Modelo de notas IA', ja: 'AIメモモデル', ko: 'AI 메모 모델', fr: 'Modèle de notes IA', de: 'KI-Notizmodell', ru: 'Модель ИИ-заметок' },
     '请先选择或填写 AI 笔记模型。': { zh: '请先选择或填写 AI 笔记模型。', en: 'Choose or enter an AI-notes model first.', es: 'Elige o introduce primero un modelo de notas IA.', ja: '先に AIメモモデルを選択または入力してください。', ko: '먼저 AI 메모 모델을 선택하거나 입력하세요.', fr: 'Choisissez ou saisissez d’abord un modèle de notes IA.', de: 'Wählen oder geben Sie zuerst ein KI-Notizmodell ein.', ru: 'Сначала выберите или укажите модель ИИ-заметок.' },
@@ -705,6 +705,21 @@ Object.entries(appCopy.modalCopy).forEach(([code, copy]) => {
     ? [item[0], 'Streaming Zipformer Chinese XLarge', zipformerChineseLanguages[code] || zipformerChineseLanguages.en, item[3], item[4]]
     : item);
 });
+const xAsrCopy = {
+  zh: ['中文 / 英语', '低负载中英实时识别，内置标点，适合效率模式。'],
+  en: ['Chinese / English', 'Low-load Chinese and English live transcription with built-in punctuation for efficiency mode.'],
+  es: ['Chino / inglés', 'Transcripción china e inglesa de baja carga con puntuación integrada para el modo eficiencia.'],
+  ja: ['中国語 / 英語', '効率モード向けの、句読点内蔵・低負荷な中国語／英語ライブ文字起こし。'],
+  ko: ['중국어 / 영어', '효율 모드용 내장 문장 부호 저부하 중국어·영어 실시간 전사입니다.'],
+  fr: ['Chinois / anglais', 'Transcription chinoise et anglaise légère avec ponctuation intégrée pour le mode efficacité.'],
+  de: ['Chinesisch / Englisch', 'Ressourcenschonende chinesisch-englische Live-Transkription mit integrierter Zeichensetzung für den Effizienzmodus.'],
+  ru: ['Китайский / английский', 'Низкоресурсная потоковая расшифровка китайской и английской речи со встроенной пунктуацией для экономичного режима.'],
+};
+Object.entries(appCopy.modalCopy).forEach(([code, copy]) => {
+  const [languages, intro] = xAsrCopy[code] || xAsrCopy.en;
+  const index = copy.models.items.findIndex(([, name]) => name === 'Streaming Zipformer Chinese XLarge');
+  copy.models.items.splice(index + 1, 0, [copy.models.items[index][0], 'X-ASR Streaming Chinese and English (480ms)', languages, intro, 'X']);
+});
 
 const micErrorLabels = {
   zh: {
@@ -879,5 +894,16 @@ const aiNotePromptCopy = {
   ru: { instructions: 'Вы — помощник по ведению заметок встречи в реальном времени. По <recent_transcript> и <meeting_state> выберите до 3 коротких сведений, достойных записи, и верните компактный JSON.\nИспользуйте только явно сказанное; не додумывайте, не дополняйте и не повторяйте уже имеющиеся пункты состояния. Значение text должно быть на русском языке.\nТипы: conclusion | decision | action | number | date | question | risk | topic | supplement. При ясной теме выберите конкретный заголовок topic; number/date должны быть явно произнесены, а number должен включать предмет и контекст.\nВерните {"suggestions":[{"type":"...","text":"одно короткое предложение","importance":"high|medium"}]}; если ценного нет, верните {"suggestions":[]}. Верните только JSON.', state_labels: ['Текущая тема', 'Факты', 'Подтверждённые решения', 'Действия', 'Открытые вопросы'] },
 };
 
-window.BreviaLocaleData = { catalog, appCopy, aiNotePromptCopy, refinedModelOptionTags, streamingModelOptionTags };
+const storageCleanupCopy = {
+  zh: { button: '清理过期本地文件', detail: '移除已下架模型和无对应会议记录的残留文件。', done: '已释放 {size}' },
+  en: { button: 'Clean expired local files', detail: 'Removes retired models and orphaned files.', done: 'Freed {size}' },
+  es: { button: 'Limpiar archivos locales obsoletos', detail: 'Elimina modelos retirados y archivos huérfanos.', done: 'Se liberaron {size}' },
+  ja: { button: '期限切れのローカルファイルを整理', detail: '廃止モデルと孤立ファイルを削除します。', done: '{size} を解放しました' },
+  ko: { button: '만료된 로컬 파일 정리', detail: '제거된 모델과 고아 파일을 삭제합니다.', done: '{size} 확보됨' },
+  fr: { button: 'Nettoyer les fichiers locaux obsolètes', detail: 'Supprime les modèles retirés et les fichiers orphelins.', done: '{size} libérés' },
+  de: { button: 'Veraltete lokale Dateien bereinigen', detail: 'Entfernt ausgemusterte Modelle und verwaiste Dateien.', done: '{size} freigegeben' },
+  ru: { button: 'Очистить устаревшие локальные файлы', detail: 'Удаляет снятые с поддержки модели и осиротевшие файлы.', done: 'Освобождено {size}' },
+};
+
+window.BreviaLocaleData = { catalog, appCopy, aiNotePromptCopy, storageCleanupCopy, refinedModelOptionTags, streamingModelOptionTags };
 })();

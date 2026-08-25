@@ -698,6 +698,7 @@ function registerIpc() {
   handle('speaker-profile.rename', z.object({ profile_id: z.string().uuid(), name: z.string().trim().min(1).max(32) }), 'speaker-profile.rename');
   handle('speaker-profile.sample-delete', z.object({ profile_id: z.string().uuid(), sample_id: z.string().uuid() }), 'speaker-profile.sample-delete');
   handle('storage.clear', z.object({ partition: z.enum(['meetings', 'models', 'exports']) }), 'storage.clear');
+  handle('storage.cleanup', z.object({}), 'storage.cleanup');
   handle('settings.advanced.get', z.object({}), 'settings.advanced.get');
   handle('settings.advanced.save', z.object({ settings: z.record(z.string(), z.unknown()) }), 'settings.advanced.save');
   ipcMain.handle('metrics.record', async (_, payload) => {

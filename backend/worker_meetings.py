@@ -45,6 +45,17 @@ class MeetingCommandMixin:
             raise ValueError("Wait for background tasks to finish before clearing meeting data")
         return self.store.clear_storage_partition(payload["partition"])
 
+    def cleanup_unused_storage(self, _):
+        """清理已下架模型和没有会议记录的 Brevia 会议目录。"""
+        if self.active or self.tasks.has_any():
+            raise ValueError("Stop the active meeting and wait for background tasks")
+        models = self.models.cleanup_unlisted()
+        meetings = self.store.cleanup_orphan_meeting_dirs()
+        return {
+            "items": len(models["removed"]) + len(meetings["removed"]),
+            "freed_bytes": models["freed_bytes"] + meetings["freed_bytes"],
+        }
+
     def restore_meeting(self, payload):
         """恢复软删除会议并返回完整详情。"""
         require(payload, "meeting_id")
