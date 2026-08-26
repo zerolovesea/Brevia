@@ -40,6 +40,7 @@
   .app-shell.is-live-meeting .new-meeting-icon { margin: 0; font-size: 20px; }
   .app-shell.is-live-meeting .new-meeting-label { max-width: 0; opacity: 0; }
   .app-shell.is-live-meeting .workspace-container, .app-shell.is-live-meeting .task-cards { display: none; }
+  .app-shell.is-live-meeting .sidebar:has(.task-cards > :not([hidden]))::after { content: ''; width: 22px; height: 22px; margin: auto auto 0; background: center / 20px no-repeat url("data:image/svg+xml,%3Csvg viewBox='0 0 16 16' fill='none' stroke='%23666' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' xmlns='http://www.w3.org/2000/svg'%3E%3Crect x='2.5' y='2' width='11' height='12' rx='1'/%3E%3Cpath d='M5 6h6M5 9h6M5 12h3'/%3E%3C/svg%3E"); }
   .app-shell.is-live-meeting .nav-item { padding-inline: 0; text-align: center; font-size: 0; }
   .app-shell.is-live-meeting .nav-item span { width: auto; margin: 0; font-size: 18px; }
   .app-shell.is-live-meeting:has(.sidebar:hover) .sidebar, .app-shell.is-live-meeting:has(.sidebar:focus-within) .sidebar { padding-inline: 24px; }
@@ -50,6 +51,7 @@
   .app-shell.is-live-meeting:has(.sidebar:hover) .new-meeting-icon, .app-shell.is-live-meeting:has(.sidebar:focus-within) .new-meeting-icon { margin-right: 8px; font-size: 18px; }
   .app-shell.is-live-meeting:has(.sidebar:hover) .new-meeting-label, .app-shell.is-live-meeting:has(.sidebar:focus-within) .new-meeting-label { max-width: 120px; opacity: 1; }
   .app-shell.is-live-meeting:has(.sidebar:hover) .workspace-container, .app-shell.is-live-meeting:has(.sidebar:hover) .task-cards, .app-shell.is-live-meeting:has(.sidebar:focus-within) .workspace-container, .app-shell.is-live-meeting:has(.sidebar:focus-within) .task-cards { display: block; }
+  .app-shell.is-live-meeting:has(.sidebar:hover) .sidebar::after, .app-shell.is-live-meeting:has(.sidebar:focus-within) .sidebar::after { display: none; }
   .app-shell.is-live-meeting:has(.sidebar:hover) .nav-item, .app-shell.is-live-meeting:has(.sidebar:focus-within) .nav-item { padding-inline: 12px; text-align: left; font-size: 14px; }
   .app-shell.is-live-meeting:has(.sidebar:hover) .nav-item span, .app-shell.is-live-meeting:has(.sidebar:focus-within) .nav-item span { width: 24px; margin-right: 8px; font-size: 18px; }
   .task-cards { @apply mt-auto grid min-w-0 gap-3 overflow-visible; padding-bottom: calc(var(--task-card-back-count, 0) * 2rem); }

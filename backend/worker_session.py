@@ -2,11 +2,13 @@
 
 import base64
 import os
+import re
 import sys
 import threading
 from array import array
 from concurrent.futures import ThreadPoolExecutor
 from collections import deque
+from difflib import SequenceMatcher
 from pathlib import Path
 
 from .asr import (
@@ -157,6 +159,7 @@ class RecordingSessionMixin:
                 "startup_audio": [],
                 "carry_audio": [],
                 "carry_raw_audio": [],
+                "carry_text": "",
                 "carry_ms": 0,
             }
             for track in ("mic", "system", "mix")
@@ -243,24 +246,22 @@ class RecordingSessionMixin:
                 )
                 return None
 
-        def build_live_refiner():
-            model_id = (
-                meeting["streaming_model_id"]
-                if self.power_saving
-                else meeting["refined_model_id"]
+        def build_live_refiner(streaming_asr=None):
+            model_id, streaming = self._live_refiner_choice(
+                meeting["streaming_model_id"],
+                meeting["refined_model_id"],
+                meeting["language"],
+                self.power_saving,
             )
             if not self.models.is_ready(model_id):
                 return None
-            # 效率模式：流式模型已内置标点（如 X-ASR）时，二阶段用同一模型重解收益
-            # 很小，却要再加载一份模型并付出重解 CPU；直接跳过，首阶段输出即最终字幕，
-            # 显著压低低端机的内存与功耗（准确度与断句由流式模型内置标点保证）。
-            if self.power_saving and self._streaming_is_punctuated(model_id):
-                return None
+            if streaming:
+                return streaming_asr
             try:
                 return self._create_live_refiner(
                     model_id,
                     language=meeting.get("language"),
-                    streaming=self.power_saving,
+                    streaming=streaming,
                 )
             except RuntimeError as error:
                 self.emit(
@@ -297,7 +298,7 @@ class RecordingSessionMixin:
         def load_remaining():
             asr = build_asr()
             language_identifier = build_language_identifier()
-            live_refiner = build_live_refiner()
+            live_refiner = build_live_refiner(asr)
             with self.state.lock:
                 # 若会议已停止或被 reconfigure 接管，则不覆盖运行态，避免泄漏线程。
                 if self.state.active != meeting_id:
@@ -349,6 +350,30 @@ class RecordingSessionMixin:
         if os.environ.get("BREVIA_LIVE_REFINE_SIDECAR", "") == "1":
             return RemoteRefiner(self.models, model_id, language=language)
         return RefinedASR(self.models, model_id, language=language)
+
+    def _live_refiner_choice(
+        self, streaming_model_id, refined_model_id, language, power_saving
+    ):
+        """统一选择实时二阶段模型；不支持当前语言时回退到流式模型。"""
+        if power_saving:
+            return streaming_model_id, True
+        refined = self.models.get(refined_model_id)
+        if (
+            (language == "auto" or language in refined.get("languages", []))
+            and self.models.is_ready(refined_model_id)
+        ):
+            return refined_model_id, False
+        compatible = next(
+            (
+                model["id"]
+                for model in self.models.catalog.values()
+                if "refined" in model.get("stages", [])
+                and language in model.get("languages", [])
+                and self.models.is_ready(model["id"])
+            ),
+            None,
+        )
+        return (compatible, False) if compatible else (streaming_model_id, True)
 
     def _build_live_punctuation(self, language, meeting_id):
         """按语言构建实时标点模型；不可用时发告警并返回 None。"""
@@ -408,10 +433,13 @@ class RecordingSessionMixin:
         if not (language_changed or streaming_changed or target_language_changed or power_saving_changed):
             return meeting
 
-        # 先校验所有目标模型已安装，缺失即抛错（不做任何替换），让上层弹出下载。
-        required_models = (streaming_model_id,) if power_saving else (
-            streaming_model_id, refined_model_id
+        # 先校验实际会加载的模型；配置中的精修模型不支持当前语言时，校验兼容替代。
+        live_refiner_model_id, live_refiner_streaming = self._live_refiner_choice(
+            streaming_model_id, refined_model_id, language, power_saving
         )
+        required_models = (streaming_model_id,)
+        if live_refiner_model_id != streaming_model_id:
+            required_models += (live_refiner_model_id,)
         missing = [
             model_id
             for model_id in required_models
@@ -433,10 +461,10 @@ class RecordingSessionMixin:
             new_denoiser = None
             if power_saving_changed or streaming_changed or language_changed:
                 new_refiner = (
-                    None
-                    if self._streaming_is_punctuated(streaming_model_id)
+                    new_asr
+                    if live_refiner_streaming
                     else self._create_live_refiner(
-                        streaming_model_id, language=language, streaming=True
+                        live_refiner_model_id, language=language
                     )
                 )
         else:
@@ -447,9 +475,13 @@ class RecordingSessionMixin:
                     if self.models.is_ready(denoiser_id)
                     else None
                 )
-            if power_saving_changed:
-                new_refiner = self._create_live_refiner(
-                    refined_model_id, language=language
+            if power_saving_changed or streaming_changed or language_changed:
+                new_refiner = (
+                    new_asr
+                    if live_refiner_streaming
+                    else self._create_live_refiner(
+                        live_refiner_model_id, language=language
+                    )
                 )
             if new_refiner is not None and new_postprocessing is None:
                 new_postprocessing = ThreadPoolExecutor(
@@ -726,8 +758,10 @@ class RecordingSessionMixin:
             bool(payload.get("flush")),
         )
         text = self._clean_live_text(result if isinstance(result, str) else result.text)
+        if state["carry_text"] and text:
+            text = self._merge_carry_text(state["carry_text"], text)
         if final and not text:
-            text = state["last_raw_text"]
+            text = state["last_raw_text"] or state["carry_text"]
         if self.meeting_language == "auto" and not self.detected_language:
             context = numpy.concatenate(state["audio"]) if state["audio"] else samples
             detected = (
@@ -768,6 +802,7 @@ class RecordingSessionMixin:
             payload["start_ms"] + len(samples) * 1000 / int(payload["sample_rate"])
         )
         pinned = False
+        next_carry_text = ""
         # 语义软钉：无尾静音但单句已持续 live_pin_seconds 时，等到句末/逗号等语义
         # 切点再切，把「还没说完的尾巴」音频带到下一段重识别，避免从词中间硬切；
         # 超过 live_pin_max_seconds 则硬切兜底。只切分、不跨段合并，字幕原地精修。
@@ -801,6 +836,16 @@ class RecordingSessionMixin:
                             ch in "，," for ch in stripped
                         ):
                             pin_ready = True
+                if pin_ready and elapsed_ms < pin_max_seconds * 1000:
+                    # 边界后的 carry 先积累足够声学上下文，再重启流式解码；
+                    # 否则「那么理由呢」这类短语容易在新流开头被吞掉。
+                    _, boundary_ratio = self._sentence_boundary(raw_text)
+                    tail_ms = elapsed_ms * (1 - boundary_ratio)
+                    minimum_tail_ms = (
+                        SETTINGS["diarization"]["boundary_tail_seconds"] * 1000
+                    )
+                    if 0 < tail_ms < minimum_tail_ms:
+                        pin_ready = False
         if pin_ready and not final and raw_text:
             pinned_result = self.asr.force_endpoint(payload["track"])
             pinned_raw = self._clean_live_text(
@@ -808,7 +853,12 @@ class RecordingSessionMixin:
                 if isinstance(pinned_result, str)
                 else getattr(pinned_result, "text", "")
             )
+            # ``force_endpoint`` 已重置识别流；某些模型会在此返回空结果，必须保留
+            # 当前 partial，否则这段已识别文本会随流状态一起丢失。
+            pinned_raw = pinned_raw or raw_text or state["last_raw_text"] or state["carry_text"]
             if pinned_raw:
+                if state["carry_text"]:
+                    pinned_raw = self._merge_carry_text(state["carry_text"], pinned_raw)
                 # 截断到最后一个完整语义切点，并把尾部音频带到下一段重识别，边界不丢字。
                 raw_text, boundary_ratio = self._sentence_boundary(pinned_raw)
                 if boundary_ratio < 1.0 and state["audio"]:
@@ -823,6 +873,9 @@ class RecordingSessionMixin:
                         state["refine_audio"] = [full_asr[:asr_split]]
                     state["carry_ms"] = round(
                         len(full_raw[split:]) * 1000 / int(payload["sample_rate"])
+                    )
+                    next_carry_text = pinned_raw[len(raw_text) :].lstrip(
+                        " \t,。.;:!?，；：！？"
                     )
                 pinned = True
                 final = True
@@ -843,10 +896,11 @@ class RecordingSessionMixin:
             # 代价可忽略），避免 final 沿用了未标点的裸文本。
             if final and needs_punctuation and raw_text and text == raw_text:
                 text = self._apply_live_punctuation(raw_text)
-        if final and text and state["last_final_text"]:
+        previous_final_text = state["last_final_text"] if final else ""
+        if final and text and previous_final_text:
             # Endpoint windows can re-decode their opening audio. Reuse the
             # post-processing overlap logic before persisting the next caption.
-            text = self._trim_refinement_overlap(state["last_final_text"], text)
+            text = self._trim_refinement_overlap(previous_final_text, text)
         if text and (text != state["last_text"] or final):
             state["revision"] += 1
             segment_id = f"{payload['track']}-{state['segment']}"
@@ -904,7 +958,12 @@ class RecordingSessionMixin:
                         # AI 辅助笔记失败绝不能影响字幕/保存主链路。
                         pass
                     self._postprocess_live_segment_later(
-                        event,
+                        {
+                            **event,
+                            "_previous_final_text": previous_final_text,
+                            "_carry_in_text": state["carry_text"],
+                            "_carry_out_text": next_carry_text,
+                        },
                         segment_audio,
                         segment_refine_audio,
                         int(payload["sample_rate"]),
@@ -930,6 +989,7 @@ class RecordingSessionMixin:
                     refine_audio=[],
                     pending_pin=False,
                     carry_ms=0,
+                    carry_text=next_carry_text,
                 )
         elif final:
             state["last_final_text"] = ""
@@ -943,6 +1003,7 @@ class RecordingSessionMixin:
                 audio=[],
                 pending_pin=False,
                 carry_ms=0,
+                carry_text="",
             )
         return {"samples": samples_total, "text": text, "final": final}
 
@@ -1085,6 +1146,9 @@ class RecordingSessionMixin:
     def _postprocess_live_segment(self, tracker, refiner, event, samples, refine_samples, sample_rate):
         """合并异步声纹与文本结果；存储层保护用户编辑。"""
         updated = event.copy()
+        previous_final_text = updated.pop("_previous_final_text", "")
+        carry_in_text = updated.pop("_carry_in_text", "")
+        carry_out_text = updated.pop("_carry_out_text", "")
         if tracker and samples is not None:
             try:
                 speaker, speaker_name = self._identify_speaker(
@@ -1112,6 +1176,25 @@ class RecordingSessionMixin:
                     refiner, audio, sample_rate, original_text=event.get("text", "")
                 )
                 if text:
+                    text = self._restore_missing_head(text, event.get("text", ""))
+                    if carry_in_text:
+                        carry_norm = self._normalized_transcript(carry_in_text)
+                        refined_norm = self._normalized_transcript(text)
+                        opening = SequenceMatcher(
+                            None, carry_norm, refined_norm
+                        ).find_longest_match()
+                        # 精修包含 carry 开头时直接信任精修；否则补回开头。
+                        if (
+                            (opening.a != 0 or opening.size < 4)
+                            and SequenceMatcher(None, carry_norm, refined_norm).ratio()
+                            < 0.5
+                        ):
+                            text = self._merge_carry_text(carry_in_text, text)
+                    text = self._trim_refined_extension(text, event.get("text", ""))
+                    if carry_out_text:
+                        text = self._trim_carry_prefix(text, carry_out_text)
+                    if previous_final_text:
+                        text = self._trim_refinement_overlap(previous_final_text, text)
                     updated["text"] = text
             except Exception as error:
                 self.emit(
@@ -1144,6 +1227,16 @@ class RecordingSessionMixin:
             result = self._clean_live_text(refiner.decode(audio, sample_rate))
             if result and original_text:
                 result = self._preserve_streaming_tail(result, original_text)
+                if isinstance(refiner, StreamingASR):
+                    original_words = re.findall(r"\w+", original_text.casefold())
+                    refined_words = re.findall(r"\w+", result.casefold())
+                    width = len(original_words)
+                    contains_original = any(
+                        refined_words[index : index + width] == original_words
+                        for index in range(len(refined_words) - width + 1)
+                    )
+                    if not contains_original:
+                        result = original_text
         else:
             result = ""
             context_samples = sample_rate
@@ -1170,8 +1263,6 @@ class RecordingSessionMixin:
         """
         if not refined or not original:
             return refined
-        if refined.rstrip() and refined.rstrip()[-1] in "。！？.!?；;":
-            return refined
         refined_norm = (refined or "").translate(_NORMALIZE_TABLE)
         original_norm = (original or "").translate(_NORMALIZE_TABLE)
         if len(refined_norm) < len(original_norm) and original_norm.startswith(refined_norm):
@@ -1183,8 +1274,43 @@ class RecordingSessionMixin:
         if self.asr and self.asr.model.get("punctuated") is True:
             return text
         result = self.punctuation.apply(text) if self.punctuation else text
+        result = self._restore_missing_tail(result, text)
         # CT-Transformer 对短/未说完文本偶发在句首补出标点，去掉句首标点。
         return result.lstrip("，。！？、；：,.!?;:… ") if result else result
+
+    def _restore_missing_tail(self, transformed, original):
+        """标点模型若只吞掉原文尾部，保留标点结果并补回缺失内容。"""
+        transformed_norm = (transformed or "").translate(_NORMALIZE_TABLE).casefold()
+        original_norm = (original or "").translate(_NORMALIZE_TABLE).casefold()
+        if not transformed_norm or not original_norm.startswith(transformed_norm):
+            return transformed
+        if len(transformed_norm) >= len(original_norm):
+            return transformed
+        count = 0
+        for index, char in enumerate(original):
+            if char.translate(_NORMALIZE_TABLE):
+                count += 1
+                if count == len(transformed_norm):
+                    suffix = original[index + 1 :].lstrip(" \t,。.;:!?，；：！？")
+                    return self._join_utterance_text(
+                        transformed.rstrip(" 	。.!?；;！？"), suffix
+                    )
+        return transformed
+
+    def _restore_missing_head(self, transformed, original):
+        """精修若从原文中段开始，补回被吞掉的段首。"""
+        transformed_norm = self._normalized_transcript(transformed)
+        original_norm = self._normalized_transcript(original)
+        match = SequenceMatcher(None, original_norm, transformed_norm).find_longest_match()
+        if match.b != 0 or match.a == 0 or match.size < 4:
+            return transformed
+        count = 0
+        for index, char in enumerate(original):
+            if char.translate(_NORMALIZE_TABLE):
+                if count == match.a:
+                    return self._join_utterance_text(original[:index].rstrip(), transformed)
+                count += 1
+        return transformed
 
     def _emit_refined_segment(self, updated):
         """发射精修段：原地替换当前段的文本与说话人，不跨段合并。
@@ -1247,8 +1373,80 @@ class RecordingSessionMixin:
             # 需要按内容字符数映射回 raw，才能对齐音频比例与截断位置。
             content_count = sum(1 for ch in search[: last + 1] if ch not in punctuation)
             ratio = min(1.0, content_count / total_chars) if total_chars else 1.0
-            truncated = raw_text[:content_count].rstrip("，。！？、；：,.!?;: ")
+            raw_cut = 0
+            seen = 0
+            for raw_cut, ch in enumerate(raw_text, 1):
+                if ch not in punctuation:
+                    seen += 1
+                    if seen == content_count:
+                        break
+            truncated = raw_text[:raw_cut].rstrip("，。！？、；：,.!?;: ")
         return (truncated if truncated else raw_text), ratio
+
+    def _merge_carry_text(self, carry, text):
+        """保留已识别的 carry 开头，移除新流对同一段音频的重复识别。"""
+        carry_norm = self._normalized_transcript(carry)
+        text_norm = self._normalized_transcript(text)
+        minimum_overlap = 2 if carry.rstrip()[-1:].isascii() else 4
+        overlap = next(
+            (
+                (length, text_norm.find(carry_norm[-length:]))
+                for length in range(
+                    min(len(carry_norm), len(text_norm)), minimum_overlap - 1, -1
+                )
+                if carry_norm[-length:] in text_norm
+            ),
+            None,
+        )
+        if overlap is None:
+            return self._join_utterance_text(carry, text)
+        length, offset = overlap
+        count = 0
+        for index, char in enumerate(text):
+            if char.isalnum():
+                count += 1
+                if count == offset + length:
+                    rest = text[index + 1 :]
+                    if rest and rest[0].isalnum():
+                        return carry + rest
+                    return self._join_utterance_text(
+                        carry, rest.lstrip(" \t,。.;:!?，；：！？")
+                    )
+        return carry
+
+    def _trim_carry_prefix(self, text, carry):
+        """移除精修跨过软钉边界多识别的下一段开头。"""
+        text_norm = self._normalized_transcript(text)
+        carry_norm = self._normalized_transcript(carry)
+        for length in range(min(len(text_norm), len(carry_norm)), 1, -1):
+            if not text_norm.endswith(carry_norm[:length]):
+                continue
+            count = 0
+            for index in range(len(text) - 1, -1, -1):
+                if text[index].isalnum():
+                    count += 1
+                    if count == length:
+                        return text[:index].rstrip(" \t,。.;:!?，；：！？")
+        return text
+
+    def _trim_refined_extension(self, refined, original):
+        """精修若在原始段落的完整尾部之后继续输出，移除越界文本。"""
+        refined_norm = self._normalized_transcript(refined)
+        original_norm = self._normalized_transcript(original)
+        for length in range(min(len(refined_norm), len(original_norm)), 3, -1):
+            suffix = original_norm[-length:]
+            offset = refined_norm.rfind(suffix)
+            if offset < 0:
+                continue
+            if offset + length == len(refined_norm):
+                return refined
+            count = 0
+            for index, char in enumerate(refined):
+                if char.isalnum():
+                    count += 1
+                    if count == offset + length:
+                        return refined[: index + 1].rstrip(" \t,。.;:!?，；：！？")
+        return refined
 
     def _identify_speaker(self, meeting_id, tracker, samples, sample_rate):
         """优先匹配声纹库，未命中时分配会议内临时说话人。

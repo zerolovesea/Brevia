@@ -69,6 +69,44 @@ class WorkerTest(unittest.TestCase):
             refiner = self.worker._create_live_refiner("streaming", "zh", streaming=True)
         self.assertIs(refiner, streaming.return_value)
         streaming.assert_called_once_with(self.worker.models, "streaming", language="zh")
+        self.worker.models.is_ready = lambda model_id: model_id == "qwen3-asr-0.6b-int8"
+        self.assertEqual(
+            self.worker._live_refiner_choice(
+                "nemotron-3.5-asr-streaming-0.6b-560ms-int8",
+                "funasr-nano-int8",
+                "es",
+                False,
+            ),
+            ("qwen3-asr-0.6b-int8", False),
+        )
+        self.assertEqual(
+            self.worker._live_refiner_choice(
+                "nemotron-3.5-asr-streaming-0.6b-560ms-int8",
+                "funasr-nano-int8",
+                "es",
+                True,
+            ),
+            ("nemotron-3.5-asr-streaming-0.6b-560ms-int8", True),
+        )
+        self.assertEqual(
+            self.worker._preserve_streaming_tail("hola.", "hola mundo"),
+            "hola mundo",
+        )
+
+    def test_streaming_endpoint_keeps_partial_when_finalize_is_empty(self):
+        stream = Mock()
+        recognizer = Mock()
+        recognizer.is_ready.return_value = False
+        recognizer.get_result.return_value = SimpleNamespace(text="No, espérate")
+        recognizer.is_endpoint.return_value = True
+        asr = object.__new__(StreamingASR)
+        asr.lock = threading.Lock()
+        asr.streams = {"system": stream}
+        asr.recognizer = recognizer
+        asr._finalize = Mock(return_value=SimpleNamespace(text=""))
+        result, final = asr.accept("system", [0.0], 16000)
+        self.assertTrue(final)
+        self.assertEqual(result.text, "No, espérate")
 
     def test_native_punctuation_streaming_refinement_keeps_full_segment(self):
         refiner = object.__new__(StreamingASR)
@@ -81,6 +119,14 @@ class WorkerTest(unittest.TestCase):
         )
         refiner.decode.assert_called_once()
         self.worker.punctuation.apply.assert_not_called()
+
+        refiner.decode.return_value = "Chola"
+        self.assertEqual(
+            self.worker._refine_live_audio(
+                refiner, array("f", [0]) * 16000, 16000, original_text="Hola"
+            ),
+            "Hola",
+        )
 
     def test_live_refinement_uses_context_across_decoder_windows(self):
         class Refiner:
@@ -895,6 +941,25 @@ class WorkerTest(unittest.TestCase):
             if event.get("type") in {"summary.started", "summary.progress"}
         ]
         self.assertEqual(progress, [10, 60, 100])
+
+    def test_builtin_summary_uses_full_output_budget(self):
+        meeting = self.worker.start(
+            {
+                "title": "完整纪要", "language": "zh",
+                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
+                "refined_model_id": "qwen3-asr-0.6b-int8",
+            }
+        )
+        self.worker.store.save_segment(
+            {"meeting_id": meeting["id"], "segment_id": "mic-0", "text": "讨论完成",
+             "start_ms": 0, "end_ms": 1000, "speaker": "spk-1"}
+        )
+        self.worker.llama_sidecar_complete = Mock(return_value="# **完整纪要**")
+        self.worker.active = None
+        self.worker.summarize(
+            {"meeting_id": meeting["id"], "provider": "built-in", "model": "qwen3.5-4b-q4km", "consent": True}
+        )
+        self.assertEqual(self.worker.llama_sidecar_complete.call_args.args[0]["max_tokens"], 2048)
 
     def test_summary_rejects_while_a_meeting_is_active(self):
         self.worker.active = "recording-meeting"
@@ -3232,7 +3297,9 @@ class WorkerTest(unittest.TestCase):
             streaming.call_args.args,
             (self.worker.models, "zipformer-en-streaming-int8", "en"),
         )
-        refiner.assert_not_called()
+        refiner.assert_called_once_with(
+            self.worker.models, "qwen3-asr-0.6b-int8", language="en"
+        )
         reconfigured = [
             event for event in self.events if event["type"] == "meeting.reconfigured"
         ]
@@ -3295,9 +3362,9 @@ class WorkerTest(unittest.TestCase):
         self.assertEqual(updated["power_saving"], 0)
         self.assertFalse(self.worker.power_saving)
 
-    def test_power_saving_does_not_reload_refiner_on_model_change(self):
+    def test_power_saving_uses_only_the_streaming_model_for_second_pass(self):
         self.worker.models.is_ready = lambda _: True
-        with patch("backend.worker_session.StreamingASR"), patch(
+        with patch("backend.worker_session.StreamingASR") as streaming, patch(
             "backend.worker_session.RefinedASR"
         ) as refiner, patch.object(self.worker, "_build_live_punctuation"):
             meeting = self.worker.start(
@@ -3309,12 +3376,14 @@ class WorkerTest(unittest.TestCase):
                     "power_saving": True,
                 }
             )
+            self.worker._wait_prepare()
             self.worker.reconfigure(
                 {"meeting_id": meeting["id"], "refined_model_id": "whisper-large-v3"}
             )
         refiner.assert_not_called()
-        self.assertIsNone(self.worker.live_refiner)
-        self.assertIsNone(self.worker.live_postprocessing)
+        self.assertIs(self.worker.live_refiner, streaming.return_value)
+        self.assertEqual(streaming.call_count, 1)
+        self.assertIsNotNone(self.worker.live_postprocessing)
 
     def test_failed_power_saving_reconfigure_keeps_runtime_and_database(self):
         self.worker.models.is_ready = lambda _: True
@@ -3509,6 +3578,42 @@ class WorkerTest(unittest.TestCase):
         self.assertTrue(final["payload"]["pinned"])
         self.worker.asr.force_endpoint.assert_called_once_with("mic")
 
+    def test_live_pin_keeps_partial_when_force_endpoint_is_empty(self):
+        meeting = self.worker.start(
+            {
+                "title": "空端点保底",
+                "language": "zh",
+                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
+                "refined_model_id": "qwen3-asr-0.6b-int8",
+            }
+        )
+        self.worker.asr = Mock()
+        self.worker.asr.accept.return_value = (SimpleNamespace(text="第一句。第二句"), False)
+        self.worker.asr.force_endpoint.return_value = SimpleNamespace(text="")
+        self.worker.punctuation = Mock()
+        self.worker.punctuation.apply.return_value = "第一句。第二句。"
+        self.worker.live_refiner = None
+        with patch.dict(SETTINGS["asr"], {"live_pin_seconds": 0.05, "live_pin_max_seconds": 0.08}):
+            self.worker.audio(
+                {
+                    "meeting_id": meeting["id"],
+                    "track": "mic",
+                    "pcm": base64.b64encode(b"\x01\x00" * 1600).decode(),
+                    "sample_rate": 16000,
+                    "start_ms": 0,
+                }
+            )
+        final = next(event for event in self.events if event["type"] == "transcript.final")
+        self.assertEqual(final["payload"]["text"], "第一句。第二句。")
+
+    def test_only_one_summary_task_can_run(self):
+        control = self.worker.tasks.begin("summary.generate", "first-meeting")
+        try:
+            with self.assertRaisesRegex(ValueError, "summary is already running"):
+                self.worker.tasks.begin("summary.generate", "second-meeting")
+        finally:
+            self.worker.tasks.finish("summary.generate", "first-meeting", control)
+
     def test_live_pin_does_not_cut_mid_phrase(self):
         meeting = self.worker.start(
             {
@@ -3539,6 +3644,134 @@ class WorkerTest(unittest.TestCase):
         )
         self.worker.asr.force_endpoint.assert_not_called()
 
+    def test_sentence_boundary_finds_running_tail(self):
+        self.worker.asr = Mock()
+        self.worker.asr.model = {"punctuated": True}
+        self.worker.punctuation = None
+        raw = "这个游戏应该定价两百美元。那么理由呢是笨认为 gta 六可能是"
+        text, ratio = self.worker._sentence_boundary(raw)
+        self.assertEqual(text, "这个游戏应该定价两百美元")
+        self.assertLess(ratio, 1.0)
+
+    def test_live_pin_waits_for_enough_tail_audio_context(self):
+        meeting = self.worker.start(
+            {
+                "title": "软钉尾部上下文",
+                "language": "zh",
+                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
+                "refined_model_id": "qwen3-asr-0.6b-int8",
+            }
+        )
+        self.worker.asr = Mock()
+        self.worker.asr.model = {"punctuated": True}
+        self.worker.asr.accept.return_value = (
+            SimpleNamespace(text="这是第一句话。那么理由呢"),
+            False,
+        )
+        self.worker.punctuation = None
+        with patch.dict(
+            SETTINGS["asr"], {"live_pin_seconds": 0.05, "live_pin_max_seconds": 40}
+        ):
+            self.worker.audio(
+                {
+                    "meeting_id": meeting["id"],
+                    "track": "mic",
+                    "pcm": base64.b64encode(b"\x01\x00" * 1600).decode(),
+                    "sample_rate": 16000,
+                    "start_ms": 0,
+                }
+            )
+        self.assertTrue(self.worker.stream_state["mic"]["pending_pin"])
+        self.worker.asr.force_endpoint.assert_not_called()
+
+    def test_sentence_boundary_still_cuts_short_partial_tail(self):
+        """边界之后只有很短的残句尾巴时，仍正常切分、交给下一段 carry。"""
+        self.worker.asr = Mock()
+        self.worker.asr.model = {"punctuated": True}
+        self.worker.punctuation = None
+        raw = "这是第一句话。这是第二句话的开"
+        text, ratio = self.worker._sentence_boundary(raw)
+        self.assertEqual(text, "这是第一句话")
+        self.assertLess(ratio, 1.0)
+
+    def test_sentence_boundary_cuts_when_tail_has_no_residue(self):
+        """切点之后没有残留内容时，正常切在句末。"""
+        self.worker.asr = Mock()
+        self.worker.asr.model = {"punctuated": True}
+        self.worker.punctuation = None
+        text, ratio = self.worker._sentence_boundary("第一句话。第二句话。")
+        self.assertEqual(text, "第一句话")
+        self.assertLess(ratio, 1.0)
+
+    def test_sentence_boundary_maps_punctuation_content_across_english_spaces(self):
+        self.worker.asr = Mock()
+        self.worker.asr.model = {"punctuated": False}
+        self.worker.punctuation = Mock()
+        self.worker.punctuation.apply.return_value = "HELLO WORLD. THIS CONTINUES."
+        text, ratio = self.worker._sentence_boundary("HELLO WORLD THIS CONTINUES")
+        self.assertEqual(text, "HELLO WORLD")
+        self.assertLess(ratio, 1.0)
+        self.assertEqual(
+            self.worker._restore_missing_tail(
+                "What it might actually.", "WHAT IT MIGHT ACTUALLY BE"
+            ),
+            "What it might actually BE",
+        )
+
+    def test_carry_text_aligns_redecoded_audio_after_a_changed_prefix(self):
+        self.assertEqual(
+            self.worker._merge_carry_text(
+                "那么理由呢是笨认为 gta 六可能是最后一款好",
+                "是奔认为 gta 六可能是最后一款好游戏",
+            ),
+            "那么理由呢是笨认为 gta 六可能是最后一款好游戏",
+        )
+        self.assertEqual(
+            self.worker._trim_carry_prefix("定价太低了。我觉。", "我觉得这些普通的声音"),
+            "定价太低了",
+        )
+        self.assertEqual(
+            self.worker._merge_carry_text(
+                "ONCE WE GET THERE AND HAVE TO TELL YOU SHANE WAS REMARKABLY IMPA",
+                "WAS REMARKABLY IMPACTED OVER THE COMING DECADE",
+            ),
+            "ONCE WE GET THERE AND HAVE TO TELL YOU SHANE WAS REMARKABLY IMPACTED OVER THE COMING DECADE",
+        )
+        self.assertEqual(
+            self.worker._trim_carry_prefix(
+                "WHAT THE WORLD LOOKS LIKE ONCE WE GET THERE AND HAVE TO",
+                "ONCE WE GET THERE AND HAVE TO TELL YOU SHANE",
+            ),
+            "WHAT THE WORLD LOOKS LIKE",
+        )
+        self.assertEqual(
+            self.worker._merge_carry_text(
+                "DO WE END UP WITH A NEW KIND OF ECONOMY A NEW ROUTE TO A G EYE",
+                "AND HOW KIND OF ECONOMY A NEW ROUTE TO AGY EYE AND HOW ON EARTH",
+            ),
+            "DO WE END UP WITH A NEW KIND OF ECONOMY A NEW ROUTE TO A G EYE AND HOW ON EARTH",
+        )
+        self.assertEqual(
+            self.worker._trim_refined_extension(
+                "倾注了无数的血汗与泪水。并且他说。",
+                "倾注了无数的血汗与泪水",
+            ),
+            "倾注了无数的血汗与泪水",
+        )
+        self.assertEqual(
+            self.worker._restore_missing_head(
+                "说呢，虽然我可能不玩这款游戏",
+                "并且他说呢虽然我可能不玩这款游戏",
+            ),
+            "并且他说呢，虽然我可能不玩这款游戏",
+        )
+        self.assertEqual(
+            self.worker._trim_refinement_overlap(
+                "nunca, nunca jamás hemos", "y hemos terminado una conversación"
+            ),
+            "terminado una conversación",
+        )
+
     def test_live_refinement_receives_the_soft_pin_carry_audio(self):
         meeting = self.worker.start(
             {
@@ -3549,7 +3782,10 @@ class WorkerTest(unittest.TestCase):
             }
         )
         self.worker.asr = Mock()
-        self.worker.asr.accept.return_value = (SimpleNamespace(text="续句"), True)
+        self.worker.asr.accept.return_value = (
+            SimpleNamespace(text="那么理由呢是因为续句"),
+            True,
+        )
         self.worker.punctuation = None
         self.worker.live_refiner = object()
         queued = []
@@ -3558,6 +3794,7 @@ class WorkerTest(unittest.TestCase):
             lambda function, *args: queued.append(args)
         )
         self.worker.stream_state["mic"]["carry_audio"] = [array("f", [0.25])]
+        self.worker.stream_state["mic"]["carry_text"] = "那么理由呢"
         self.worker.audio(
             {
                 "meeting_id": meeting["id"], "track": "mic",
@@ -3566,6 +3803,8 @@ class WorkerTest(unittest.TestCase):
             }
         )
         self.assertEqual(queued[0][5].tolist(), [0.25, 0.5])
+        final = next(event for event in self.events if event["type"] == "transcript.final")
+        self.assertEqual(final["payload"]["text"], "那么理由呢是因为续句")
 
     def test_async_punctuation_defers_when_executor_present(self):
         meeting = self.worker.start(

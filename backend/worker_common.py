@@ -92,6 +92,10 @@ class TaskRegistry:
         """启动任务并返回其暂停控制事件；已运行时抛出异常。"""
         key = (task, meeting_id)
         with self._lock:
+            if task == "summary.generate" and any(
+                running_task == task for running_task, _meeting_id in self._controls
+            ):
+                raise ValueError("A meeting summary is already running")
             if key in self._controls:
                 raise ValueError("Task is already running")
             control = TaskControl()

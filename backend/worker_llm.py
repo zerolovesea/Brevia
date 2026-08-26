@@ -20,9 +20,8 @@ SUMMARY_CHUNK_MAX_TOKENS = 768
 MAX_MERGE_INPUT_CHARS = 12000
 # 内置纪要模型单次生成的输出 token 上限。内置模型在本地 CPU/GPU 上逐 token 生成，
 # 输出越长耗时线性增长。摘要走聊天模板（抑制思维链）后正文不再被 <think> 挤占预算，
-# 1200 token 足够覆盖常规会议的完整纪要结构（若仍触顶会走 finish_reason=length，
-# 但相比 900 大幅降低截断概率）。
-SUMMARY_MAX_TOKENS = 1200
+# 2048 token 仍在 16k 上下文预算内，并覆盖包含多个议题的中文纪要，避免正文在末尾截断。
+SUMMARY_MAX_TOKENS = 2048
 
 
 def clean_summary_markdown(markdown):

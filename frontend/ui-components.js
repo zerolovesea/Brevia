@@ -389,9 +389,9 @@ function cleanSummaryMarkdown(markdown) {
   return heading > 0 ? text.slice(heading) : text;
 }
 /** 渲染详情侧边栏中的会议纪要：标题行（会议纪要 + 生成/重新生成）+ 内容。@param {{markdown?: string, hasFull?: boolean}} summary 摘要数据。@returns {string} 摘要标记。 */
-function renderMeetingSummary({ markdown, hasFull = false, blocked = false }) {
+function renderMeetingSummary({ markdown, hasFull = false, blocked = false, generating = false }) {
   const actionName = markdown ? t('重新生成') : `${t('生成')} →`;
-  const action = `<button class="text-button" ${markdown ? 'data-regenerate-summary' : 'data-generate-summary'}${blocked ? ` disabled title="${escapeHtml(t('实时会议中，结束后再生成会议纪要。'))}"` : ''}>${actionName}</button>`;
+  const action = generating ? '' : `<button class="text-button" ${markdown ? 'data-regenerate-summary' : 'data-generate-summary'}${blocked ? ` disabled title="${escapeHtml(t('实时会议中，结束后再生成会议纪要。'))}"` : ''}>${actionName}</button>`;
   return `<div class="summary-preview"><div class="summary-head"><p class="eyebrow">${t('会议纪要')}</p>${action}</div>${markdown ? `<div class="summary-body markdown-content">${renderMarkdown(cleanSummaryMarkdown(markdown))}</div><button class="text-button" data-view-full-summary>${t('查看完整内容')} →</button>` : `<p class="summary-empty">${t('尚未生成')}</p>`}</div>`;
 }
 /** 在页面外壳可用后填充所有数据驱动的静态区域。@returns {void} */

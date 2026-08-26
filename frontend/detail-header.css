@@ -1,0 +1,70 @@
+/* ===== Sticky Auto-hide Header（会议详情页）=====
+   用户滚动字幕/纪要内容时，顶部的标题、导出操作与播放条会“扁平化”收窄，
+   把垂直空间让给笔记区和右侧会议纪要区。
+   #detail-view 是 grid，行模板为 `auto auto auto minmax(0,1fr)`，
+   前两行（.detail-head 与 .player）高度由内容撑起，收窄后第四行 .detail-layout
+   会自动增长——这正是“内容区变大”的来源。 */
+
+#detail-view .detail-head,
+#detail-view .detail-title,
+#detail-view .detail-head h1,
+#detail-view .detail-head .eyebrow,
+#detail-view .detail-head .detail-meta,
+#detail-view .detail-actions,
+#detail-view .player {
+  transition:
+    padding 0.22s cubic-bezier(0.4, 0, 0.2, 1),
+    margin 0.22s cubic-bezier(0.4, 0, 0.2, 1),
+    gap 0.22s cubic-bezier(0.4, 0, 0.2, 1),
+    font-size 0.22s cubic-bezier(0.4, 0, 0.2, 1),
+    line-height 0.22s cubic-bezier(0.4, 0, 0.2, 1),
+    max-height 0.22s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.18s ease,
+    align-self 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 关闭内容区的滚动锚定：收起/展开时高度变化不会把内容“顶”回去造成抖动 */
+#detail-view .transcript-body,
+#detail-view .detail-notes-panel {
+  overflow-anchor: none;
+}
+
+/* 让这两个可被 max-height 从大值平滑收敛到 0（配合 overflow:hidden） */
+#detail-view .detail-head .eyebrow,
+#detail-view .detail-head .detail-meta {
+  max-height: 80px;
+  overflow: hidden;
+}
+
+/* —— 收起态：收紧行间距 —— */
+#detail-view.is-header-collapsed {
+  gap: calc(var(--spacing) * 3);
+}
+
+/* 标题区压扁：隐藏眉题与元信息，标题字号收窄，操作按钮垂直居中 */
+#detail-view.is-header-collapsed .detail-head {
+  padding-block: 0;
+}
+#detail-view.is-header-collapsed .detail-head .eyebrow,
+#detail-view.is-header-collapsed .detail-head .detail-meta {
+  max-height: 0;
+  margin: 0;
+  opacity: 0;
+}
+#detail-view.is-header-collapsed .detail-head h1 {
+  font-size: clamp(20px, 2vw, 28px);
+  line-height: 1.2;
+}
+#detail-view.is-header-collapsed .detail-actions {
+  align-self: center;
+}
+
+/* 播放条压扁：减少内边距，隐藏跳转与录音来源标签，重排为紧凑列 */
+#detail-view.is-header-collapsed .player {
+  padding-block: calc(var(--spacing) * 2);
+  grid-template-columns: 40px auto 1fr auto;
+}
+#detail-view.is-header-collapsed .player .skip,
+#detail-view.is-header-collapsed .player > span:not(.player-time) {
+  display: none;
+}

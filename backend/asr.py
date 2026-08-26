@@ -494,7 +494,7 @@ class StreamingASR:
             句末由 sherpa-onnx 的内置端点检测决定：尾静音（rule1/rule2）触发，
             连续语音则靠 rule3（``maximum_utterance_seconds``）兜底强制结束，
             或 ``flush`` 时结束。实时字幕保持「流式输出 → 精修原地覆盖」的
-            单阶段体验，不再在 worker 里做软钉切分。
+            单阶段体验；worker 在连续长语音时仍会按语义软钉切分。
         """
         with self.lock:
             stream = self._stream(track)
@@ -504,7 +504,14 @@ class StreamingASR:
             result = self.recognizer.get_result(stream)
             endpoint = flush or self.recognizer.is_endpoint(stream)
             if endpoint:
-                result = self._finalize(track)
+                finalized = self._finalize(track)
+                final_text = (
+                    finalized
+                    if isinstance(finalized, str)
+                    else getattr(finalized, "text", "")
+                )
+                if final_text:
+                    result = finalized
         return result, endpoint
 
     def force_endpoint(self, track):

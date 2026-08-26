@@ -42,6 +42,7 @@
           "!build/**",
           "!test_*.py",
           "!diagnose_*.py",
+          "!bench_*.py",
           "!*.spec",
           "!brevia-worker",
           "!brevia-worker.exe"

@@ -49,7 +49,8 @@ function applyBackendDetail(meeting) {
   if (!sameDetail || !uiData.detail.notesEditing) uiData.detail.notes = meeting.notes || '';
   const summary = meeting.summary?.data;
   const summaryBlocked = meetingActive;
-  uiData.detail.summary = summary?.markdown ? { markdown: summary.markdown, hasFull: true, blocked: summaryBlocked } : { title: '', sections: [], empty: true, blocked: summaryBlocked };
+  const summaryGenerating = summaryGeneratingMeetingId === meeting.id;
+  uiData.detail.summary = summary?.markdown ? { markdown: summary.markdown, hasFull: true, blocked: summaryBlocked, generating: summaryGenerating } : { title: '', sections: [], empty: true, blocked: summaryBlocked, generating: summaryGenerating };
   document.querySelector('#detail-view .detail-head h1').textContent = meeting.title;
   const metaParts = [];
   if (meeting.created_at) {

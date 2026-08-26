@@ -947,6 +947,7 @@ const summaryContext = {
   settingsModal: { querySelector: (selector) => summaryNodes[selector] },
 };
 runInNewContext(`${text(components)}\nthis.escapeHtml = escapeHtml;`, summaryContext);
+assert.doesNotMatch(summaryContext.renderMeetingSummary({ generating: true }), /data-generate-summary/);
 runInNewContext(`${summaryConst('const summaryProviders = ')}${summaryConst('const summaryProviderPresets = ', true)}\n${summaryFn('summaryProviderLabel')}${summaryFn('providerEntry')}${summaryFn('renderBuiltinSummaryModels')}${summaryFn('renderModelConfigFields')}${summaryFn('renderModelConfigForm')}${summaryFn('renderSummaryModelForm')}${summaryFn('renderSummaryModelModal')}`, summaryContext);
 const summaryCatalogModels = [{ id: 'qwen3.5-2b-q4km', name: 'Qwen 3.5 2B', kind: 'llama-chat', size_bytes: 100 }, { id: 'qwen3.5-4b-q4km', name: 'Qwen 3.5 4B', kind: 'llama-chat' }, { id: 'whisper-large-v3', name: 'Whisper', kind: 'asr' }];
 const renderSummaryModal = (provider, { providers = {}, installed = [] } = {}) => {
@@ -1091,8 +1092,12 @@ assert.doesNotMatch(text(app), /function organizeNotes|function factCheckNotes|f
 assert.doesNotMatch(text(html), /data-ai-actions|data-ai-action/);
 assert.match(text(html), /class="brand-mark"[^>]*>言/);
 assert.match(text(html), /class="new-meeting-label">开始会议/);
-assert.match(text(app), /classList\.toggle\('is-live-meeting', name === 'live' && meetingActive\)/);
+assert.match(text(app), /classList\.toggle\('is-live-meeting', \(name === 'live' && meetingActive\) \|\| name === 'detail'\)/);
 assert.match(text(tailwind), /\.app-shell\.is-live-meeting:has\(\.sidebar:hover\)/);
+assert.match(text(tailwind), /\.sidebar:has\(\.task-cards > :not\(\[hidden\]\)\)::after/);
+assert.match(text(tailwind), /data:image\/svg\+xml/);
+assert.match(text(meetingDetail), /summaryGeneratingMeetingId === meeting\.id/);
+assert.match(text(components), /const action = generating \? '' :/);
 assert.match(text(app), /const refresh = window\.brevia \? refreshBackendMeetings\(includeDeleted\) : Promise\.resolve\(\);/);
 // AI 辅助笔记（阶段 6 Onboarding AI 配置页）。
 assert.match(text(app), /function openOnboardingAi/);

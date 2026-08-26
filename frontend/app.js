@@ -645,17 +645,18 @@ const prepareModelChoices = {
   'active-vad-model': [['silero-vad', 'Silero VAD']],
 };
 const DEFAULT_REFINED_MODEL_ID = 'funasr-nano-int8';
+const MULTILINGUAL_REFINED_MODEL_ID = 'qwen3-asr-0.6b-int8';
 // Qwen3-ASR 1.7B 在当前 sherpa-onnx 下不支持语言强制，暂不提供此模型。
 const removedRefinedModelIds = new Set(['qwen3-asr-1.7b-int8']);
 const refinedModelName = (id = DEFAULT_REFINED_MODEL_ID) => modelCatalog.find((model) => model.id === id)?.name || 'FunASR Nano int8';
 const languageModelDefaults = {
   zh: { streaming: 'zipformer-zh-xlarge-streaming-int8', refined: DEFAULT_REFINED_MODEL_ID, segmentation: 'pyannote-segmentation-3.0' },
   en: { streaming: 'zipformer-en-streaming-int8', refined: DEFAULT_REFINED_MODEL_ID, segmentation: 'pyannote-segmentation-3.0' },
-  ko: { streaming: 'zipformer-ko-streaming-int8', refined: DEFAULT_REFINED_MODEL_ID, segmentation: 'pyannote-segmentation-3.0' },
-  fr: { streaming: 'zipformer-fr-streaming-int8', refined: DEFAULT_REFINED_MODEL_ID, segmentation: 'pyannote-segmentation-3.0' },
-  es: { streaming: 'nemotron-3.5-asr-streaming-0.6b-560ms-int8', refined: DEFAULT_REFINED_MODEL_ID, segmentation: 'pyannote-segmentation-3.0' },
-  auto: { streaming: 'nemotron-3.5-asr-streaming-0.6b-560ms-int8', refined: DEFAULT_REFINED_MODEL_ID, segmentation: 'pyannote-segmentation-3.0' },
-  default: { streaming: 'nemotron-3.5-asr-streaming-0.6b-560ms-int8', refined: DEFAULT_REFINED_MODEL_ID, segmentation: 'pyannote-segmentation-3.0' },
+  ko: { streaming: 'zipformer-ko-streaming-int8', refined: MULTILINGUAL_REFINED_MODEL_ID, segmentation: 'pyannote-segmentation-3.0' },
+  fr: { streaming: 'zipformer-fr-streaming-int8', refined: MULTILINGUAL_REFINED_MODEL_ID, segmentation: 'pyannote-segmentation-3.0' },
+  es: { streaming: 'nemotron-3.5-asr-streaming-0.6b-560ms-int8', refined: MULTILINGUAL_REFINED_MODEL_ID, segmentation: 'pyannote-segmentation-3.0' },
+  auto: { streaming: 'nemotron-3.5-asr-streaming-0.6b-560ms-int8', refined: MULTILINGUAL_REFINED_MODEL_ID, segmentation: 'pyannote-segmentation-3.0' },
+  default: { streaming: 'nemotron-3.5-asr-streaming-0.6b-560ms-int8', refined: MULTILINGUAL_REFINED_MODEL_ID, segmentation: 'pyannote-segmentation-3.0' },
 };
 const preferredModelsForLanguage = (language) => {
   const models = languageModelDefaults[language] || languageModelDefaults.default;
@@ -682,7 +683,7 @@ function setPrepareModel(id, model) {
 function applyLanguageModelDefaults(language) {
   const models = preferredModelsForLanguage(language);
   setPrepareModel('active-streaming-model', models.streaming);
-  setPrepareModel('active-refined-model', DEFAULT_REFINED_MODEL_ID);
+  setPrepareModel('active-refined-model', models.refined);
   setPrepareModel('active-diarization-model', models.segmentation);
 }
 const prepareModelCard = document.querySelector('.model-card');
@@ -807,6 +808,7 @@ function hideRefinementProgress(dismissActiveTask = false) {
   dismissTaskCard(refinementCard, () => { refinementCard.hidden = true; refinementCard.classList.remove('task-card-leave'); });
 }
 let summaryDismissTimer;
+let summaryGeneratingMeetingId;
 const summaryTaskCopy = {
   zh: ['正在生成会议纪要', '准备生成纪要', '正在生成摘要', '正在保存纪要', '纪要已生成'],
   en: ['Generating meeting notes', 'Preparing meeting notes', 'Generating summary', 'Saving meeting notes', 'Meeting notes generated'],
@@ -833,6 +835,10 @@ function summaryTaskLabel(stage) {
 }
 function showSummaryProgress(completed = 0, total = 100, stage = 'summary.prepare', meetingId) {
   clearTimeout(summaryDismissTimer);
+  if (meetingId) {
+    summaryGeneratingMeetingId = meetingId;
+    if (meetingId === currentMeetingDetail?.id) applyBackendDetail(currentMeetingDetail);
+  }
   let card = document.querySelector('#summary-progress');
   if (!card) {
     card = document.createElement('aside');
@@ -850,7 +856,13 @@ function showSummaryProgress(completed = 0, total = 100, stage = 'summary.prepar
   Object.assign(card.dataset, { completed, total, stage });
   if (meetingId) setTaskCardTask(card, 'summary.generate', meetingId);
 }
-function hideSummaryProgress() { clearTimeout(summaryDismissTimer); dismissTaskCard(document.querySelector('#summary-progress')); }
+function hideSummaryProgress() {
+  clearTimeout(summaryDismissTimer);
+  const meetingId = summaryGeneratingMeetingId;
+  summaryGeneratingMeetingId = undefined;
+  if (meetingId === currentMeetingDetail?.id) applyBackendDetail(currentMeetingDetail);
+  dismissTaskCard(document.querySelector('#summary-progress'));
+}
 function showSummaryComplete() {
   showSummaryProgress(100, 100, 'summary.complete');
   finishTaskCard(document.querySelector('#summary-progress'));
@@ -872,6 +884,7 @@ function refreshLocalizedTaskCards() {
 }
 async function generateMeetingSummary(meetingId = breviaClient?.state.selectedMeetingId) {
   if (meetingActive) { showToast(t('实时会议中，结束后再生成会议纪要。')); return; }
+  if (summaryGeneratingMeetingId) { showToast(t('已有会议纪要正在生成，请稍候。')); return; }
   const config = summaryRequestConfig();
   if (!config || !meetingId) { showSummaryConfigCard(); return; }
   showSummaryProgress(0, 100, 'summary.prepare', meetingId);
@@ -890,13 +903,15 @@ async function generateMeetingSummary(meetingId = breviaClient?.state.selectedMe
     if (summary?.cancelled) { hideSummaryProgress(); return; }
     const meeting = await window.brevia.meeting.get({ meeting_id: meetingId });
     meeting.summary = { data: summary };
+    summaryGeneratingMeetingId = undefined;
     if (meetingId === breviaClient.state.selectedMeetingId) applyBackendDetail(meeting);
     dismissTaskCard(document.querySelector('#summary-config-required'));
     showSummaryComplete();
     showToast(t('会议纪要已生成'));
   } catch (error) {
     hideSummaryProgress();
-    if (isSummaryAuthenticationError(error)) showSummaryConfigCard(error);
+    if (error.message === 'A meeting summary is already running') showToast(t('已有会议纪要正在生成，请稍候。'));
+    else if (isSummaryAuthenticationError(error)) showSummaryConfigCard(error);
     else if (error.message === summaryEmptyTranscriptCopy.zh) showToast(summaryEmptyTranscriptCopy[locale] || summaryEmptyTranscriptCopy.en);
     else if (/Summary response was empty|Summary generation failed/.test(String(error.message || ''))) showToast(t('纪要生成失败：模型未返回有效内容，请稍后重试。'));
     else showToast(error.message);
@@ -2956,15 +2971,53 @@ const showView = async (name) => {
   const next = document.querySelector(`#${name}-view`);
   await transitionPage(current, next, () => {
     activeView = name;
-    document.querySelector('.app-shell').classList.toggle('is-live-meeting', name === 'live' && meetingActive);
+    // 侧边栏“收起”态（is-live-meeting 在该应用里只承担侧边栏折叠样式）：
+    // 会议进行中，以及进入会议详情页时都默认收起；悬浮/聚焦时才展开。
+    document.querySelector('.app-shell').classList.toggle('is-live-meeting', (name === 'live' && meetingActive) || name === 'detail');
     crumb.textContent = catalog[locale].views[name];
     if (name === 'home') selectLibraryNav(activeLibraryNav);
     else document.querySelectorAll('.nav-item').forEach((item) => item.classList.toggle('active', item.dataset.view === name));
+    if (name === 'detail') resetDetailHeaderCollapse();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   });
   if (name === 'prepare') { requestAnimationFrame(fitPrepareLayout); void previewMicrophone(); void refreshPrepareAudioSources(); }
   renderMiniPlayback();
 };
+
+/* ===== Sticky Auto-hide Header（会议详情页）=====
+   规则：只有内容滚动到最顶部时，标题、导出操作与播放条才完整显示；
+   只要离开顶部（向下滚了哪怕一点），头部就收起压扁，把空间让给内容区。
+   用防抖延迟触发，避免每次 scroll 事件都启动一次布局过渡——那会抖动闪烁。 */
+let detailHeaderCollapsed = false;
+const detailHeaderDebounceMs = 120; // 滚动停顿 120ms 后才执行一次过渡
+let detailHeaderScrollTimer = null;
+/** 读取内容面板滚动位置，一次性切换详情页头部收起态。@returns {void} */
+function evaluateDetailHeaderCollapse() {
+  const detailView = document.querySelector('#detail-view');
+  if (!detailView) return;
+  let maxScroll = 0;
+  detailView.querySelectorAll('.transcript-body, .detail-notes-panel').forEach((panel) => {
+    if (panel.scrollTop > maxScroll) maxScroll = panel.scrollTop;
+  });
+  // 只在“严格位于顶部”时展开；一旦滚离顶部即收起（纯二进制状态，不会交替）。
+  const next = maxScroll > 0;
+  if (next === detailHeaderCollapsed) return;
+  detailHeaderCollapsed = next;
+  detailView.classList.toggle('is-header-collapsed', next);
+}
+/** 滚动中的节流入口：重置防抖计时器，滚动停顿后只评估一次。@returns {void} */
+function updateDetailHeaderCollapse() {
+  clearTimeout(detailHeaderScrollTimer);
+  detailHeaderScrollTimer = setTimeout(evaluateDetailHeaderCollapse, detailHeaderDebounceMs);
+}
+/** 强制展开详情页头部（进入详情视图或内容面板重建时调用）。@returns {void} */
+function resetDetailHeaderCollapse() {
+  clearTimeout(detailHeaderScrollTimer);
+  detailHeaderCollapsed = false;
+  document.querySelector('#detail-view')?.classList.remove('is-header-collapsed');
+}
+// scroll 事件不冒泡，但会经过捕获阶段；挂到视图根上即可覆盖动态重建的内部面板。
+document.querySelector('#detail-view')?.addEventListener('scroll', updateDetailHeaderCollapse, true);
 /** 使用与顶级视图相同的页面淡出/淡入时序切换会议库源。*/
 async function showLibraryNav(id) {
   const includeDeleted = id === 'recently-deleted';
@@ -3126,7 +3179,7 @@ document.querySelector('#meeting-form').addEventListener('submit', async (event)
   const streamingModelId = prepareForm.dataset.streamingModel || defaults.streaming;
   const segmentationModelId = prepareForm.dataset.segmentationModel || defaults.segmentation;
   const payload = {
-    title, language, target_language: targetLanguage, streaming_model_id: streamingModelId, refined_model_id: DEFAULT_REFINED_MODEL_ID,
+    title, language, target_language: targetLanguage, streaming_model_id: streamingModelId, refined_model_id: defaults.refined,
     speaker_segmentation_model_id: segmentationModelId,
     vad_model_id: prepareForm.dataset.vadModel || 'silero-vad', num_speakers: Number(form.get('num-speakers') || -1), power_saving: getPerformanceMode() === 'efficiency', workspace_id: form.get('meeting-workspace') || null,
   };
@@ -3160,7 +3213,7 @@ importRecording.addEventListener('click', async () => {
   try {
     const meeting = window.brevia && await window.brevia.meeting.import({
       title, language, target_language: form.get('translation-target') || null,
-      streaming_model_id: prepareForm.dataset.streamingModel || defaults.streaming, refined_model_id: DEFAULT_REFINED_MODEL_ID,
+      streaming_model_id: prepareForm.dataset.streamingModel || defaults.streaming, refined_model_id: defaults.refined,
       speaker_segmentation_model_id: prepareForm.dataset.segmentationModel || defaults.segmentation,
       num_speakers: Number(form.get('num-speakers') || -1), workspace_id: form.get('meeting-workspace') || null, path: 'selected-by-electron',
     });
@@ -4256,7 +4309,7 @@ finalTranscript.addEventListener('click', (event) => {
   }
   const refineNow = event.target.closest('[data-refine-now]');
   if (refineNow) {
-    startRefinement(DEFAULT_REFINED_MODEL_ID);
+    startRefinement(currentMeetingDetail?.refined_model_id || preferredModelsForLanguage(currentMeetingDetail?.language || 'auto').refined);
     return;
   }
   const more = event.target.closest('[data-refine-more]');
@@ -4284,7 +4337,7 @@ finalTranscript.addEventListener('click', (event) => {
     }
     if (refineAction.dataset.refineAction === 're-refine') {
       if (menu) menu.hidden = true;
-      startRefinement(DEFAULT_REFINED_MODEL_ID, refineNumSpeakers());
+      startRefinement(currentMeetingDetail?.refined_model_id || preferredModelsForLanguage(currentMeetingDetail?.language || 'auto').refined, refineNumSpeakers());
       return;
     }
     if (refineAction.dataset.refineAction === 'model') {
