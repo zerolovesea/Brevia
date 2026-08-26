@@ -30,7 +30,7 @@ const micMessage = (key) => {
 // 将 getUserMedia DOMException 转换为可操作的消息。NotFoundError 表示操作系统未暴露
 // 输入设备（在 Windows 上，通常是麦克风隐私开关关闭）；NotAllowedError 表示访问被拒绝。
 function describeMicError(error) {
-  if (error?.name === 'NotFoundError' || error?.name === 'DevicesNotFoundError') return micMessage('未检测到麦克风设备，请在系统设置中开启麦克风访问权限并确认已连接麦克风后重试');
+  if (error?.name === 'NotFoundError' || error?.name === 'DevicesNotFoundError') return micMessage('未检测到麦克风设备，请在系统设置中开启麦克风访问权限');
   if (error?.name === 'NotAllowedError' || error?.name === 'PermissionDeniedError') return micMessage('麦克风访问被拒绝，请在系统设置中允许应用使用麦克风后重试');
   if (error?.name === 'NotReadableError') return micMessage('麦克风被其他程序占用，请关闭占用麦克风的程序后重试');
   return error?.message || micMessage('无法获取麦克风');
@@ -230,13 +230,22 @@ class AudioCapture {
 
   resample(input, sourceRate) {
     if (sourceRate === 16000) return input;
-    const output = new Float32Array(Math.round(input.length * 16000 / sourceRate));
+    // 用「积分窗口（box filter）」低通后再抽取，抑制降采样混叠。旧实现用线性插值，
+    // 在 48k→16k 这类整数倍时会退化成「每 3 个样本取 1 个」，完全没有抗混叠，
+    // 高于 8kHz 的内容折回可听频段，造成录音发闷/发毛的「爆音」。
     const ratio = sourceRate / 16000;
+    const output = new Float32Array(Math.max(1, Math.round(input.length / ratio)));
     for (let index = 0; index < output.length; index += 1) {
-      const position = index * ratio;
-      const before = Math.floor(position);
-      const after = Math.min(before + 1, input.length - 1);
-      output[index] = input[before] + (input[after] - input[before]) * (position - before);
+      const start = index * ratio;
+      const end = Math.min(input.length, start + ratio);
+      let sum = 0;
+      let weight = 0;
+      for (let j = Math.floor(start); j < Math.ceil(end); j += 1) {
+        const span = Math.min(j + 1, end) - Math.max(j, start);
+        sum += input[j] * span;
+        weight += span;
+      }
+      output[index] = weight ? sum / weight : 0;
     }
     return output;
   }

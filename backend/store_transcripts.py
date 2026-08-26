@@ -5,6 +5,24 @@ import json
 from .store_base import utc_now
 
 
+def _segment_row(payload):
+    """把段落负载序列化为 segments 表的一行（实时保存与精修批量替换共用）。"""
+    return (
+        payload["segment_id"],
+        payload["meeting_id"],
+        int(payload.get("revision", 0)),
+        payload.get("version", "live"),
+        payload.get("track", "mic"),
+        int(payload["start_ms"]),
+        int(payload["end_ms"]),
+        payload.get("speaker", "spk-1"),
+        payload["text"].strip(),
+        json.dumps(payload.get("word_timestamps"), ensure_ascii=False) if payload.get("word_timestamps") else None,
+        payload.get("translation"),
+        int(payload.get("user_edited", False)),
+    )
+
+
 class TranscriptStoreMixin:
     def save_segment(self, payload):
         """插入或更新一段逐字稿。
@@ -15,20 +33,6 @@ class TranscriptStoreMixin:
 
         已标记 ``user_edited`` 的同版本记录不会被自动识别结果覆盖。
         """
-        values = (
-            payload["segment_id"],
-            payload["meeting_id"],
-            int(payload.get("revision", 0)),
-            payload.get("version", "live"),
-            payload.get("track", "mic"),
-            int(payload["start_ms"]),
-            int(payload["end_ms"]),
-            payload.get("speaker", "spk-1"),
-            payload["text"].strip(),
-            json.dumps(payload.get("word_timestamps"), ensure_ascii=False) if payload.get("word_timestamps") else None,
-            payload.get("translation"),
-            int(payload.get("user_edited", False)),
-        )
         with self.connect() as db:
             cursor = db.execute(
                 """INSERT INTO segments
@@ -38,7 +42,7 @@ class TranscriptStoreMixin:
                     revision=excluded.revision,end_ms=excluded.end_ms,speaker=excluded.speaker,
                     text=excluded.text,word_timestamps=excluded.word_timestamps,translation=excluded.translation
                     WHERE segments.user_edited=0""",
-                values,
+                _segment_row(payload),
             )
             return cursor.rowcount > 0
 
@@ -69,8 +73,10 @@ class TranscriptStoreMixin:
                     {
                         **item,
                         "segment_id": segment_id,
+                        "meeting_id": meeting_id,
                         "version": version,
                         "revision": revision,
+                        "user_edited": 0,
                     }
                 )
             db.execute(
@@ -81,33 +87,9 @@ class TranscriptStoreMixin:
                 """INSERT INTO segments
                     (id,meeting_id,revision,version,track,start_ms,end_ms,speaker,text,word_timestamps,translation,user_edited)
                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
-                [
-                    (
-                        item["segment_id"],
-                        meeting_id,
-                        item["revision"],
-                        version,
-                        item["track"],
-                        int(item["start_ms"]),
-                        int(item["end_ms"]),
-                        item["speaker"],
-                        item["text"].strip(),
-                        json.dumps(item.get("word_timestamps"), ensure_ascii=False) if item.get("word_timestamps") else None,
-                        item.get("translation"),
-                        0,
-                    )
-                    for item in normalized
-                ],
+                [_segment_row(item) for item in normalized],
             )
         return normalized
-
-    def delete_segment(self, meeting_id, segment_id, version="live"):
-        """删除单个段落；用户编辑过的段落不会被自动结果删除。"""
-        with self.connect() as db:
-            db.execute(
-                "DELETE FROM segments WHERE meeting_id=? AND id=? AND version=? AND user_edited=0",
-                (meeting_id, segment_id, version),
-            )
 
     def save_translation(self, meeting_id, segment_id, translation):
         """为会议中同一段落的所有版本保存译文。"""

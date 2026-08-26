@@ -573,37 +573,6 @@ class LiveDenoiser:
         return numpy.concatenate(output) if output else samples
 
 
-class OfflineDenoiser:
-    """在会后精修前清理整段录音，不改写原始音频文件。"""
-
-    def __init__(self, manager, model_id):
-        """初始化离线降噪器。
-
-        Args:
-            manager: 已初始化的 ModelManager。
-            model_id: 已安装的降噪模型 ID。
-        """
-        if not manager.is_ready(model_id):
-            raise RuntimeError(f"Model {model_id} is not installed")
-        import sherpa_onnx
-
-        config = sherpa_onnx.OfflineSpeechDenoiserConfig()
-        config.model.gtcrn.model = str(manager.path(model_id) / "gtcrn_simple.onnx")
-        config.model.num_threads = manager.thread_budget("denoiser_offline")
-        config.model.provider = manager.device()["backend"]
-        if not config.validate():
-            raise RuntimeError("Invalid offline denoiser configuration")
-        self.engine = sherpa_onnx.OfflineSpeechDenoiser(config)
-
-    def process(self, samples, sample_rate):
-        """处理音频样本并返回降噪后的波形。"""
-        import numpy
-
-        return numpy.asarray(
-            self.engine(samples, sample_rate).samples, dtype=numpy.float32
-        )
-
-
 class LanguageIdentifier:
     """使用 Whisper 的原生语言识别替代文本启发式判断。"""
 

@@ -1600,6 +1600,8 @@ class RefinementWorkerMixin:
         text = re.sub(r"\*\*(.*?)\*\*", r"\1", text)
         text = re.sub(r"language\s*=?\s*[A-Za-z]+", "", text, flags=re.IGNORECASE)
         text = re.sub(r"\s+", " ", text).strip()
+        # 流式/标点模型偶发在句首补出标点（如开头一个「。」），统一去掉，避免字幕以句号开头。
+        text = re.sub(r"^[，。！？、；：,.!?;:…]+", "", text).strip()
         # 清理后只剩标点/空白（幻觉内容被移除），按空文本处理。
         if not re.search(r"[A-Za-z0-9\u4e00-\u9fff]", text):
             return ""

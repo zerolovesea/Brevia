@@ -24,12 +24,12 @@ def main():
     args = parser.parse_args()
 
     from .storage import Store
-    from .asr import ModelManager, OfflineVAD, SpeakerTracker
+    from .asr import ModelManager, SpeakerTracker
     from .audio_io import read_mono_wav
 
     source = Store(args.source_root)
-    src = source.get_meeting(args.meeting)
-    manifest = source.read_manifest(args.meeting)
+    # 验证会议存在，在读取音频前给出明确错误。
+    source.get_meeting(args.meeting)
     path = source.meetings_dir / args.meeting / "audio" / "playback-system.wav"
     if not path.exists():
         path = source.meetings_dir / args.meeting / "audio" / "playback-mic.wav"

@@ -8,8 +8,6 @@ const { pathToFileURL } = require('node:url');
 const { z } = require('zod');
 const { configureMacUpdater, createDisplayMediaHandler, isNewerVersion, registerScreenPermission, systemAudioSupported } = require('./main-logic');
 
-const releasesUrl = 'https://github.com/zerolovesea/Brevia/releases/latest';
-
 if (process.platform === 'darwin') app.commandLine.appendSwitch('disable-features', 'MacCatapLoopbackAudioForScreenShare');
 if (!app.requestSingleInstanceLock()) app.quit();
 app.on('second-instance', () => {

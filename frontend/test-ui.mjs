@@ -144,7 +144,6 @@ componentContext.editingMeetingIndex = null;
 componentContext.categories = [];
 assert.doesNotMatch(componentContext.renderMeetingRow({ id: 'active', tone: 'violet', title: 'Active', meta: '', tags: [], status: { tone: 'processing' } }, 0), /data-meeting-action="delete"/);
 assert.match(componentContext.renderMeetingRow({ id: 'drag-me', tone: 'violet', title: 'Meeting', meta: '', tags: [], status: {} }, 0), /draggable="true"/);
-assert.doesNotMatch(componentContext.renderStatusList([{ label: 'Status', value: '<script>' }]), /<script>/);
 assert.doesNotMatch(componentContext.renderTranscriptSegment({ time: '00:00', speaker: { name: 'A' }, text: '<img src=x onerror=alert(1)>' }), /<img/);
 assert.match(componentContext.renderTranscriptSegment({ time: '00:00', speaker: { name: 'A', overlapNames: ['A', 'B'] }, text: 'test' }), /重叠说话：A、B/);
 assert.doesNotMatch(componentContext.renderMeetingSummary({ title: '<script>alert(1)</script>', sections: [{ title: 'Note', text: '<img src=x>' }] }), /<script>|<img/);
@@ -302,9 +301,7 @@ assert.match(text(components), /function flowSelect/);
 assert.match(text(js), /renderMeetingDetail\(\);/);
 assert.match(text(js), /function saveInlineSegmentSpeaker/);
 assert.match(text(components), /function renderMeetingRow/);
-assert.match(text(components), /function renderModelRow/);
 assert.match(text(components), /function renderSettingsCard/);
-assert.match(text(components), /function renderStatusList/);
 assert.match(text(js), /renderStaticViews\(\);/);
 assert.match(text(js), /function renderPrepareSelects/);
 assert.match(text(js), /function selectCurrentWorkspaceForMeeting/);
@@ -687,7 +684,6 @@ assert.ok(packageManifest.build.mac.extendInfo.NSMicrophoneUsageDescription);
 assert.match(text(electronMain), /MacCatapLoopbackAudioForScreenShare/);
 assert.match(text(electronMain), /autoUpdater\.downloadUpdate\(\)/);
 assert.match(text(electronMain), /autoUpdater\.quitAndInstall\(\)/);
-assert.match(text(electronMain), /releases\/latest/);
 assert.match(text(js), /navigator\.mediaDevices\.getUserMedia\(\{ audio: true \}\)/);
 assert.match(text(js), /window\.brevia\.permissions\.requestMicrophone\(\)/);
 assert.match(text(js), /window\.brevia\?\.update\?\.check/);
@@ -947,10 +943,11 @@ const summaryContext = {
   structuredClone,
   modelDownloads: new Map(),
   summaryConfigDraft: null,
+  onboardingOnlineProvider: false,
   settingsModal: { querySelector: (selector) => summaryNodes[selector] },
 };
 runInNewContext(`${text(components)}\nthis.escapeHtml = escapeHtml;`, summaryContext);
-runInNewContext(`${summaryConst('const summaryProviders = ')}${summaryConst('const summaryProviderPresets = ', true)}\n${summaryFn('summaryProviderLabel')}${summaryFn('summaryProviderEntry')}${summaryFn('providerEntry')}${summaryFn('renderBuiltinSummaryModels')}${summaryFn('renderModelConfigFields')}${summaryFn('renderModelConfigForm')}${summaryFn('renderSummaryModelForm')}${summaryFn('renderSummaryModelModal')}`, summaryContext);
+runInNewContext(`${summaryConst('const summaryProviders = ')}${summaryConst('const summaryProviderPresets = ', true)}\n${summaryFn('summaryProviderLabel')}${summaryFn('providerEntry')}${summaryFn('renderBuiltinSummaryModels')}${summaryFn('renderModelConfigFields')}${summaryFn('renderModelConfigForm')}${summaryFn('renderSummaryModelForm')}${summaryFn('renderSummaryModelModal')}`, summaryContext);
 const summaryCatalogModels = [{ id: 'qwen3.5-2b-q4km', name: 'Qwen 3.5 2B', kind: 'llama-chat', size_bytes: 100 }, { id: 'qwen3.5-4b-q4km', name: 'Qwen 3.5 4B', kind: 'llama-chat' }, { id: 'whisper-large-v3', name: 'Whisper', kind: 'asr' }];
 const renderSummaryModal = (provider, { providers = {}, installed = [] } = {}) => {
   summaryContext.modelCatalog = summaryCatalogModels;

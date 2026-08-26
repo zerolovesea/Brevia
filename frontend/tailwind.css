@@ -472,7 +472,7 @@
   .onboarding-setup-page header { @apply grid justify-items-center gap-5 text-center; }
   .onboarding-intro { @apply grid w-full justify-items-center gap-3 text-center; }
   .onboarding-intro small { @apply whitespace-pre-line text-[11px] leading-5 text-[#666]; }
-  .onboarding-weak-note, .performance-weak-note { @apply w-full max-w-lg rounded-lg bg-[#fff7e6] px-4 py-2.5 text-center text-[12.5px] leading-5 text-[#8a6d1a]; }
+  .onboarding-weak-note, .performance-weak-note { @apply w-full max-w-lg rounded-lg border border-[#f0e2bd] bg-[#fff7e6] px-4 py-2.5 text-center text-[12.5px] leading-5 text-[#8a6d1a]; }
   .performance-weak-note { @apply mx-auto mb-1 text-left; }
   .model-source-switch { @apply grid justify-items-center gap-2 text-center; }
   .model-source-switch label { @apply flex items-center gap-3 text-[13px] text-[#1a1a1a]; }
@@ -505,6 +505,8 @@
   .onboarding-ai-ways input, .onboarding-ai-level input { width: 15px; height: 15px; margin-top: 3px; accent-color: #000; flex-shrink: 0; }
   .onboarding-ai-ways b, .onboarding-ai-level b { display: block; font-size: 14px; font-weight: 500; color: #1a1a1a; }
   .onboarding-ai-ways small, .onboarding-ai-level small { display: block; margin-top: 4px; font-size: 12px; color: #666; line-height: 1.6; }
+  .model-library-tags.recommend-tags { display: inline-flex; margin-left: 8px; vertical-align: 2px; }
+
   .onboarding-setup-content:has(.onboarding-ai-setup-page) { position: relative; }
   .onboarding-ai-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(250px, 340px); gap: 22px; align-items: center; }
   .onboarding-ai-copy { min-width: 0; }

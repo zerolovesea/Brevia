@@ -271,7 +271,6 @@ const appCopy = {
     '效率模式': { zh: '效率模式', en: 'Efficiency', es: 'Eficiencia', ja: '効率', ko: '효율', fr: 'Efficacité', de: 'Effizienz', ru: 'Эффективность' },
     '标准模式：开启实时降噪与实时精修，体验最佳，适合性能较强的设备。': { zh: '标准模式：开启实时降噪与实时精修，体验最佳，适合性能较强的设备。', en: 'Standard: keeps live denoising and live refinement on for the best experience. Best on capable hardware.', es: 'Estándar: mantiene la reducción de ruido y el refinamiento en vivo. Ideal en equipos potentes.', ja: '標準：リアルタイムノイズ除去と高精度化を有効化。性能の高い端末向け。', ko: '표준: 실시간 잡음 제거와 정교화를 유지합니다. 성능이 좋은 기기용.', fr: 'Standard : conserve le débruitage et l’affinage en direct. Idéal sur matériel performant.', de: 'Standard: behält Live-Entrauschung und -Nachbearbeitung bei. Ideal auf leistungsfähiger Hardware.', ru: 'Стандартный: сохраняет шумоподавление и обработку в реальном времени. Для мощных устройств.' },
     '本机性能有限，建议使用更小的内置模型（如 2B）或在线 LLM API，以获得更流畅的实时体验。': { zh: '本机性能有限，建议使用更小的内置模型（如 2B）或在线 LLM API，以获得更流畅的实时体验。', en: 'This device has limited performance. Consider a smaller built-in model (e.g. 2B) or an online LLM API for a smoother real-time experience.', es: 'Este equipo tiene rendimiento limitado. Considera un modelo integrado más pequeño (p. ej. 2B) o una API LLM en línea.', ja: 'この端末は性能が限られています。より小さい内蔵モデル（例：2B）やオンライン LLM API の利用をお勧めします。', ko: '이 기기의 성능이 제한적입니다. 더 작은 내장 모델(예: 2B)이나 온라인 LLM API를 권장합니다.', fr: 'Appareil aux performances limitées. Envisagez un modèle intégré plus petit (ex. 2B) ou une API LLM en ligne.', de: 'Dieses Gerät hat begrenzte Leistung. Erwägen Sie ein kleineres integriertes Modell (z. B. 2B) oder eine Online-LLM-API.', ru: 'Ограниченная производительность устройства. Рекомендуется меньшая встроенная модель (напр. 2B) или онлайн-LLM API.' },
-    '本机性能有限，建议只保留会后 AI 会议纪要，并关闭会中实时 AI 笔记以获得更流畅的体验。': { zh: '本机性能有限，建议只保留会后 AI 会议纪要，并关闭会中实时 AI 笔记以获得更流畅的体验。', en: 'This device has limited performance. We suggest keeping only the post-meeting AI summary and turning off real-time AI notes for a smoother experience.', es: 'Este equipo tiene rendimiento limitado. Te sugerimos conservar solo el resumen con IA y desactivar las notas IA en tiempo real para una experiencia más fluida.', ja: 'この端末は性能が限られています。より快適にするため、会後の AI 会議要約だけを残し、会議中のリアルタイム AI メモはオフにすることをお勧めします。', ko: '이 기기의 성능이 제한적입니다. 더 원활한 사용을 위해 회의 후 AI 요약만 남기고 회의 중 실시간 AI 메모는 끄는 것을 권장합니다.', fr: 'Appareil aux performances limitées. Nous conseillons de ne garder que le résumé IA après réunion et d’éteindre les notes IA en temps réel pour une expérience plus fluide.', de: 'Dieses Gerät hat begrenzte Leistung. Wir empfehlen, nur die KI-Zusammenfassung nach der Besprechung zu behalten und die Echtzeit-KI-Notizen auszuschalten, für ein flüssigeres Erlebnis.', ru: 'Ограниченная производительность устройства. Рекомендуем оставить только ИИ-сводку после встречи и отключить ИИ-заметки в реальном времени для более плавной работы.' },
     '检测到实时性能瓶颈': { zh: '检测到实时性能瓶颈', en: 'Realtime performance bottleneck detected', es: 'Cuello de botella en tiempo real detectado', ja: 'リアルタイムの性能ボトルネックを検出', ko: '실시간 성능 병목이 감지되었습니다', fr: 'Goulot d’étranglement temps réel détecté', de: 'Echtzeit-Leistungsengpass erkannt', ru: 'Обнаружено узкое место производительности' },
     '实时字幕精修长期积压，字幕出现延迟。是否临时降低到效率模式？': { zh: '实时字幕精修长期积压，字幕出现延迟。是否临时降低到效率模式？', en: 'Realtime refinement is falling behind and captions are lagging. Switch to Efficiency mode for this meeting?', es: 'El refinamiento en vivo va con retraso y los subtítulos se retrasan. ¿Cambiar a modo Eficiencia?', ja: 'リアルタイム高精度化が遅れて字幕が遅延しています。この会議を効率モードにしますか？', ko: '실시간 정교화가 지연되어 자막이 밀립니다. 이 회의를 효율 모드로 전환할까요?', fr: 'L’affinage en direct prend du retard et les sous-titres traînent. Passer en mode Efficacité ?', de: 'Die Echtzeit-Nachbearbeitung hinkt hinterher, Untertitel verzögern sich. In Effizienzmodus wechseln?', ru: 'Обработка в реальном времени отстаёт, субтитры задерживаются. Переключить в режим эффективности?' },
     '降低到效率模式': { zh: '降低到效率模式', en: 'Switch to Efficiency', es: 'Cambiar a Eficiencia', ja: '効率モードに切替', ko: '효율 모드로 전환', fr: 'Passer en Efficacité', de: 'Zu Effizienz wechseln', ru: 'Переключить на эффективность' },
@@ -301,7 +300,6 @@ const appCopy = {
     '尚未配置': { zh: '尚未配置', en: 'Not configured', es: 'Sin configurar', ja: '未設定', ko: '구성되지 않음', fr: 'Non configuré', de: 'Nicht konfiguriert', ru: 'Не настроено' },
     '已切换到效率模式，实时字幕更实时；会后精修仍可用。': { zh: '已切换到效率模式，实时字幕更实时；会后精修仍可用。', en: 'Switched to Efficiency mode — captions are more realtime; post-meeting refinement still applies.', es: 'Cambiado a modo Eficiencia: los subtítulos son más en tiempo real; el refinamiento posterior sigue disponible.', ja: '効率モードに切り替えました。字幕がよりリアルタイムになり、会議後の高精度化はそのまま使えます。', ko: '효율 모드로 전환했습니다. 자막이 더 실시간이며 회의 후 정교화는 그대로 사용됩니다.', fr: 'Mode Efficacité activé — sous-titres plus temps réel ; l’affinage après réunion reste disponible.', de: 'Effizienzmodus aktiviert — Untertitel sind echter; Nachbearbeitung bleibt verfügbar.', ru: 'Режим эффективности включён — субтитры синхроннее; обработка после встречи по-прежнему доступна.' },
     '实时精修已自动降级以保持字幕实时。': { zh: '实时精修已自动降级以保持字幕实时。', en: 'Live refinement was reduced to keep captions realtime.', es: 'El refinamiento en vivo se redujo para mantener los subtítulos en tiempo real.', ja: '字幕のリアルタイム性を保つため、リアルタイム高精度化を自動的に抑えました。', ko: '자막의 실시간성을 유지하기 위해 실시간 정교화를 자동으로 낮췄습니다.', fr: 'L’affinage en direct a été réduit pour préserver la réactivité des sous-titres.', de: 'Die Live-Nachbearbeitung wurde reduziert, damit Untertitel in Echtzeit bleiben.', ru: 'Обработка в реальном времени снижена, чтобы субтитры оставались синхронными.' },
-    '标准模式 / 效率模式。性能偏低的机器可开启效率模式提升字幕实时性。': { zh: '标准模式 / 效率模式。性能偏低的机器可开启效率模式提升字幕实时性。', en: 'Standard or Efficiency mode. On lower-performance machines, Efficiency keeps captions more realtime.', es: 'Modo estándar o eficiencia. En equipos de menor rendimiento, Eficiencia mantiene los subtítulos más en tiempo real.', ja: '標準／効率モード。性能が低めの端末では効率モードで字幕がよりリアルタイムになります。', ko: '표준/효율 모드. 성능이 낮은 기기에서는 효율 모드가 자막 실시간성을 높입니다.', fr: 'Mode standard ou efficacité. Sur les machines moins performantes, Efficacité garde des sous-titres plus temps réel.', de: 'Standard- oder Effizienzmodus. Auf Rechnern mit geringerer Leistung hält Effizienz Untertitel echter. ', ru: 'Стандартный или режим эффективности. На менее производительных устройствах эффективность делает субтитры синхроннее.' },
     '选择性能或效率模式，在音频效果与字幕实时性之间取舍。': { zh: '选择性能或效率模式，在音频效果与字幕实时性之间取舍。', en: 'Choose Performance or Efficiency mode to balance audio quality and caption responsiveness.', es: 'Elige Rendimiento o Eficiencia para equilibrar el audio y la rapidez de los subtítulos.', ja: '音声品質と字幕のリアルタイム性のバランスを、性能または効率モードで選びます。', ko: '성능 또는 효율 모드로 음질과 자막 실시간성의 균형을 맞춥니다.', fr: 'Choisissez le mode Performance ou Efficacité pour équilibrer le son et la réactivité des sous-titres.', de: 'Wählen Sie Leistung oder Effizienz, um Audioqualität und Echtzeit-Untertitel abzuwägen.', ru: 'Выберите режим производительности или эффективности для баланса качества звука и скорости субтитров.' },
     '下载和管理本地语音识别模型，为字幕、精修和说话人识别提供能力。': { zh: '下载和管理本地语音识别模型，为字幕、精修和说话人识别提供能力。', en: 'Download and manage local speech models for captions, refinement, and speaker recognition.', es: 'Descarga y gestiona modelos locales para subtítulos, refinamiento y reconocimiento de hablantes.', ja: '字幕・高精度化・話者認識に使うローカル音声モデルをダウンロード・管理します。', ko: '자막, 정교화, 화자 인식에 쓰는 로컬 음성 모델을 다운로드하고 관리합니다.', fr: 'Téléchargez et gérez les modèles vocaux locaux pour les sous-titres, l’affinage et la reconnaissance des locuteurs.', de: 'Lokale Sprachmodelle für Untertitel, Nachbearbeitung und Sprechererkennung herunterladen und verwalten.', ru: 'Скачивайте и управляйте локальными речевыми моделями для субтитров, обработки и распознавания говорящих.' },
     '让 AI 在会议中帮你发现重点、提取待办并整理笔记。': { zh: '让 AI 在会议中帮你发现重点、提取待办并整理笔记。', en: 'Let AI surface key points, extract action items, and organize notes during a meeting.', es: 'Deja que la IA detecte puntos clave, extraiga tareas y organice notas durante la reunión.', ja: '会議中に AI が要点の発見、ToDo の抽出、メモ整理を支援します。', ko: '회의 중 AI가 핵심 포인트를 찾고 할 일을 추출해 메모를 정리합니다.', fr: 'L’IA repère les points clés, extrait les actions et organise les notes pendant la réunion.', de: 'KI erkennt in der Besprechung Kernpunkte, extrahiert Aufgaben und ordnet Notizen.', ru: 'ИИ выделяет ключевые моменты, извлекает задачи и упорядочивает заметки во время встречи.' },
@@ -311,6 +309,7 @@ const appCopy = {
     '配置性能模式': { zh: '配置性能模式', en: 'Configure performance mode', es: 'Configurar modo de rendimiento', ja: 'パフォーマンスモードを設定', ko: '성능 모드 설정', fr: 'Configurer le mode de performance', de: 'Leistungsmodus konfigurieren', ru: 'Настроить режим производительности' },
     '性能模式已保存': { zh: '性能模式已保存', en: 'Performance mode saved', es: 'Modo de rendimiento guardado', ja: 'パフォーマンスモードを保存しました', ko: '성능 모드가 저장되었습니다', fr: 'Mode de performance enregistré', de: 'Leistungsmodus gespeichert', ru: 'Режим производительности сохранён' },
     '推荐': { zh: '推荐', en: 'Recommended', es: 'Recomendado', ja: 'おすすめ', ko: '추천', fr: 'Recommandé', de: 'Empfohlen', ru: 'Рекомендуется' },
+    '当前机器的推荐设置': { zh: '当前机器的推荐设置', en: 'Recommended for this device', es: 'Recomendado para este equipo', ja: 'この端末に合わせたおすすめ設定', ko: '이 기기에 맞는 추천 설정', fr: 'Recommandé pour cet appareil', de: 'Für dieses Gerät empfohlen', ru: 'Рекомендовано для этого устройства' },
     '选择一个已下载的内置 AI 笔记模型。未下载的模型可在此直接下载。': { zh: '选择一个已下载的内置 AI 笔记模型。未下载的模型可在此直接下载。', en: 'Choose a downloaded built-in AI-notes model. Models that are not installed yet can be downloaded here.', es: 'Elige un modelo integrado de notas IA ya descargado. Los modelos sin instalar se pueden descargar aquí.', ja: 'ダウンロード済みの内蔵 AIメモ モデルを選択してください。未インストールのモデルはここでダウンロードできます。', ko: '다운로드한 내장 AI 메모 모델을 선택하세요. 설치되지 않은 모델은 여기서 다운로드할 수 있습니다.', fr: 'Choisissez un modèle de notes IA intégré déjà téléchargé. Les modèles non installés peuvent être téléchargés ici.', de: 'Wählen Sie ein bereits geladenes integriertes KI-Notizmodell. Noch nicht installierte Modelle können Sie hier herunterladen.', ru: 'Выберите уже загруженную встроенную модель ИИ-заметок. Модели, которые ещё не установлены, можно загрузить здесь.' } },
   themeLabels: { zh: { light: '切换至浅色主题', dark: '切换至深色主题' }, en: { light: 'Switch to light theme', dark: 'Switch to dark theme' }, es: { light: 'Cambiar al tema claro', dark: 'Cambiar al tema oscuro' } },
   updateLabels: { zh: { title: '软件更新', description: '当前版本 0.1.0', action: '检查更新', checking: '正在检查…', available: '发现新版本 0.2.0', update: '更新至 0.2.0', floating: '更新言录', updating: '正在更新…', downloading: '正在下载', current: '已是最新版本' }, en: { title: 'Software updates', description: 'Current version 0.1.0', action: 'Check for updates', checking: 'Checking…', available: 'Version 0.2.0 is available', update: 'Update to 0.2.0', floating: 'Update Brevia', updating: 'Updating…', downloading: 'Downloading', current: 'Up to date' }, es: { title: 'Actualizaciones', description: 'Versión actual 0.1.0', action: 'Buscar actualizaciones', checking: 'Comprobando…', available: 'La versión 0.2.0 está disponible', update: 'Actualizar a 0.2.0', floating: 'Actualizar Brevia', updating: 'Actualizando…', downloading: 'Descargando', current: 'Ya está actualizado' } },
@@ -723,7 +722,7 @@ Object.entries(appCopy.modalCopy).forEach(([code, copy]) => {
 
 const micErrorLabels = {
   zh: {
-    '未检测到麦克风设备，请在系统设置中开启麦克风访问权限并确认已连接麦克风后重试': '未检测到麦克风设备，请在系统设置中开启麦克风访问权限并确认已连接麦克风后重试',
+    '未检测到麦克风设备，请在系统设置中开启麦克风访问权限': '未检测到麦克风设备，请在系统设置中开启麦克风访问权限',
     '麦克风访问被拒绝，请在系统设置中允许应用使用麦克风后重试': '麦克风访问被拒绝，请在系统设置中允许应用使用麦克风后重试',
     '麦克风被其他程序占用，请关闭占用麦克风的程序后重试': '麦克风被其他程序占用，请关闭占用麦克风的程序后重试',
     '无法获取麦克风': '无法获取麦克风',
@@ -735,7 +734,7 @@ const micErrorLabels = {
     '麦克风未产生音频数据': '麦克风未产生音频数据',
   },
   en: {
-    '未检测到麦克风设备，请在系统设置中开启麦克风访问权限并确认已连接麦克风后重试': 'No microphone was detected. Enable microphone access in System Settings, make sure a microphone is connected, then try again.',
+    '未检测到麦克风设备，请在系统设置中开启麦克风访问权限': 'No microphone was detected. Enable microphone access in System Settings.',
     '麦克风访问被拒绝，请在系统设置中允许应用使用麦克风后重试': 'Microphone access was denied. Allow the app to use the microphone in System Settings, then try again.',
     '麦克风被其他程序占用，请关闭占用麦克风的程序后重试': 'The microphone is in use by another app. Close that app, then try again.',
     '无法获取麦克风': 'Unable to access the microphone',
@@ -747,7 +746,7 @@ const micErrorLabels = {
     '麦克风未产生音频数据': 'The microphone produced no audio data',
   },
   es: {
-    '未检测到麦克风设备，请在系统设置中开启麦克风访问权限并确认已连接麦克风后重试': 'No se detectó ningún micrófono. Habilita el acceso al micrófono en Ajustes del Sistema, confirma que hay uno conectado y vuelve a intentarlo.',
+    '未检测到麦克风设备，请在系统设置中开启麦克风访问权限': 'No se detectó ningún micrófono. Habilita el acceso al micrófono en Ajustes del Sistema.',
     '麦克风访问被拒绝，请在系统设置中允许应用使用麦克风后重试': 'Se denegó el acceso al micrófono. Permite que la app use el micrófono en Ajustes del Sistema y vuelve a intentarlo.',
     '麦克风被其他程序占用，请关闭占用麦克风的程序后重试': 'El micrófono está en uso por otra app. Ciérrala y vuelve a intentarlo.',
     '无法获取麦克风': 'No se pudo acceder al micrófono',
@@ -759,7 +758,7 @@ const micErrorLabels = {
     '麦克风未产生音频数据': 'El micrófono no produjo datos de audio',
   },
   ja: {
-    '未检测到麦克风设备，请在系统设置中开启麦克风访问权限并确认已连接麦克风后重试': 'マイクが検出されませんでした。システム設定でマイクへのアクセスを許可し、マイクが接続されていることを確認してから再試行してください。',
+    '未检测到麦克风设备，请在系统设置中开启麦克风访问权限': 'マイクが検出されませんでした。システム設定でマイクへのアクセスを許可してください。',
     '麦克风访问被拒绝，请在系统设置中允许应用使用麦克风后重试': 'マイクへのアクセスが拒否されました。システム設定でアプリのマイク使用を許可してから再試行してください。',
     '麦克风被其他程序占用，请关闭占用麦克风的程序后重试': 'マイクが他のプログラムで使用されています。使用中のプログラムを閉じてから再試行してください。',
     '无法获取麦克风': 'マイクを取得できません',
@@ -771,7 +770,7 @@ const micErrorLabels = {
     '麦克风未产生音频数据': 'マイクから音声データが生成されませんでした',
   },
   ko: {
-    '未检测到麦克风设备，请在系统设置中开启麦克风访问权限并确认已连接麦克风后重试': '마이크를 감지하지 못했습니다. 시스템 설정에서 마이크 접근을 허용하고 마이크가 연결되어 있는지 확인한 후 다시 시도하세요.',
+    '未检测到麦克风设备，请在系统设置中开启麦克风访问权限': '마이크를 감지하지 못했습니다. 시스템 설정에서 마이크 접근을 허용하세요.',
     '麦克风访问被拒绝，请在系统设置中允许应用使用麦克风后重试': '마이크 접근이 거부되었습니다. 시스템 설정에서 앱의 마이크 사용을 허용한 후 다시 시도하세요.',
     '麦克风被其他程序占用，请关闭占用麦克风的程序后重试': '마이크를 다른 프로그램이 사용 중입니다. 해당 프로그램을 닫은 후 다시 시도하세요.',
     '无法获取麦克风': '마이크를 가져올 수 없습니다',
@@ -783,7 +782,7 @@ const micErrorLabels = {
     '麦克风未产生音频数据': '마이크에서 오디오 데이터가 생성되지 않았습니다',
   },
   fr: {
-    '未检测到麦克风设备，请在系统设置中开启麦克风访问权限并确认已连接麦克风后重试': 'Aucun microphone détecté. Autorisez l’accès au microphone dans Réglages Système, vérifiez qu’un microphone est connecté, puis réessayez.',
+    '未检测到麦克风设备，请在系统设置中开启麦克风访问权限': 'Aucun microphone détecté. Autorisez l’accès au microphone dans Réglages Système.',
     '麦克风访问被拒绝，请在系统设置中允许应用使用麦克风后重试': 'L’accès au microphone a été refusé. Autorisez l’application à utiliser le microphone dans Réglages Système, puis réessayez.',
     '麦克风被其他程序占用，请关闭占用麦克风的程序后重试': 'Le microphone est utilisé par un autre programme. Fermez ce programme, puis réessayez.',
     '无法获取麦克风': 'Impossible d’accéder au microphone',
@@ -795,7 +794,7 @@ const micErrorLabels = {
     '麦克风未产生音频数据': 'Le microphone n’a produit aucune donnée audio',
   },
   de: {
-    '未检测到麦克风设备，请在系统设置中开启麦克风访问权限并确认已连接麦克风后重试': 'Kein Mikrofon erkannt. Erlauben Sie in den Systemeinstellungen den Mikrofonzugriff, stellen Sie sicher, dass ein Mikrofon angeschlossen ist, und versuchen Sie es erneut.',
+    '未检测到麦克风设备，请在系统设置中开启麦克风访问权限': 'Kein Mikrofon erkannt. Erlauben Sie in den Systemeinstellungen den Mikrofonzugriff.',
     '麦克风访问被拒绝，请在系统设置中允许应用使用麦克风后重试': 'Der Mikrofonzugriff wurde verweigert. Erlauben Sie der App in den Systemeinstellungen die Verwendung des Mikrofons und versuchen Sie es erneut.',
     '麦克风被其他程序占用，请关闭占用麦克风的程序后重试': 'Das Mikrofon wird von einem anderen Programm verwendet. Schließen Sie dieses Programm und versuchen Sie es erneut.',
     '无法获取麦克风': 'Mikrofon nicht verfügbar',
@@ -807,7 +806,7 @@ const micErrorLabels = {
     '麦克风未产生音频数据': 'Das Mikrofon hat keine Audiodaten erzeugt',
   },
   ru: {
-    '未检测到麦克风设备，请在系统设置中开启麦克风访问权限并确认已连接麦克风后重试': 'Микрофон не обнаружен. Разрешите доступ к микрофону в системных настройках, убедитесь, что он подключён, и повторите попытку.',
+    '未检测到麦克风设备，请在系统设置中开启麦克风访问权限': 'Микрофон не обнаружен. Разрешите доступ к микрофону в системных настройках.',
     '麦克风访问被拒绝，请在系统设置中允许应用使用麦克风后重试': 'Доступ к микрофону отклонён. Разрешите приложению использовать микрофон в системных настройках и повторите попытку.',
     '麦克风被其他程序占用，请关闭占用麦克风的程序后重试': 'Микрофон занят другой программой. Закройте её и повторите попытку.',
     '无法获取麦克风': 'Не удалось получить доступ к микрофону',

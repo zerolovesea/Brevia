@@ -147,10 +147,6 @@ class DemoEngine {
    * Cubic bezier calculation
    */
   cubicBezier(t, p1x, p1y, p2x, p2y) {
-    const cx = 3 * p1x;
-    const bx = 3 * (p2x - p1x) - cx;
-    const ax = 1 - cx - bx;
-
     const cy = 3 * p1y;
     const by = 3 * (p2y - p1y) - cy;
     const ay = 1 - cy - by;

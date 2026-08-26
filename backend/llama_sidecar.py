@@ -18,6 +18,23 @@ try:
 except ImportError:
     Llama = None
 
+# 原生运行时崩溃的典型特征。llama.cpp 在损坏/不兼容的安装上会在 ``llama_backend_init``
+# 或推理过程中以空指针访问崩溃，Windows 侧被转成 ``OSError: exception: access violation``。
+_NATIVE_CRASH_HINTS = ("access violation", "segmentation fault", "illegal instruction")
+
+
+def _describe_load_error(error):
+    """把原生崩溃翻译成可操作的错误，避免用户只看到晦涩的访问冲突。"""
+    message = str(error)
+    if any(hint in message.lower() for hint in _NATIVE_CRASH_HINTS):
+        return (
+            "本地 AI 运行时（llama.cpp）初始化时崩溃"
+            f"（{message}）。这通常是 llama-cpp-python 安装损坏或与本机不兼容导致的："
+            "请重新安装该依赖（pip install --force-reinstall 'llama-cpp-python>=0.3.2,<0.3.35'），"
+            "或在设置中改用在线 LLM 服务生成纪要。"
+        )
+    return message
+
 
 class LlamaSidecar:
     """管理单个 llama.cpp 模型实例，支持懒加载。"""
@@ -54,16 +71,18 @@ class LlamaSidecar:
         # 自动降级为纯 CPU 重试一次，而不是直接把错误抛给上层。
         try:
             self.model = create(n_gpu_layers)
-        except Exception:
+        except Exception as error:
             if n_gpu_layers != 0:
                 try:
                     self.model = create(0)
-                except Exception:
+                except Exception as fallback_error:
                     self.model = None
-                    raise
+                    raise RuntimeError(
+                        _describe_load_error(fallback_error)
+                    ) from fallback_error
             else:
                 self.model = None
-                raise
+                raise RuntimeError(_describe_load_error(error)) from error
         self.model_path = path
         self.context_size = context_size
 
@@ -202,7 +221,7 @@ class LlamaSidecar:
                 return {"type": "response", "text": text, "error": None}
 
             except Exception as e:
-                return {"type": "error", "message": str(e)}
+                return {"type": "error", "message": _describe_load_error(e)}
 
         if req_type == "shutdown":
             return {"type": "goodbye"}

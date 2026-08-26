@@ -29,6 +29,9 @@ from .worker_common import require, synchronized_recording
 # 常把句号降级成逗号，若只认句号会一直等、最后从词中间硬切）。
 _SENTENCE_FINAL = "。！？.!?；;"
 
+# 比较流式重解与原文时去掉的标点/空白字符（用于判断重解是否丢了句尾）。
+_NORMALIZE_TABLE = str.maketrans("", "", " \t\r\n，。！？、；：,.!?;:…'\"「」（）()")
+
 # 实时双轨混音缓冲的时间跨度上限（毫秒）。单轨停帧时另一轨缓冲会无限增长，这里
 # 限制跨度，超出即丢弃最旧帧，避免内存增长与恢复后的一次性爆量对齐。
 MAX_MIX_BUFFER_MS = 5000
@@ -36,7 +39,6 @@ MAX_MIX_BUFFER_MS = 5000
 # ``_mix_live_audio`` 的标记值：单轨已停流超过 MAX_MIX_BUFFER_MS，应回退为该轨
 # 独立转写（而非继续空等导致整场 live 字幕空白）。
 _MIX_STALL = object()
-_PIN_BOUNDARY = "。！？.!?；;，,"
 
 
 class RecordingSessionMixin:
@@ -219,6 +221,10 @@ class RecordingSessionMixin:
                 return None
 
         def build_punctuation():
+            # 流式模型已内置标点（如 X-ASR）时，CT-Transformer 不会被用到，跳过加载，
+            # 省约 75MB 内存与加载时间，也避免弱机上多一份推理算力。
+            if self._streaming_is_punctuated(meeting["streaming_model_id"]):
+                return None
             return self._build_live_punctuation(meeting["language"], meeting_id)
 
         def build_speaker_tracker():
@@ -243,22 +249,28 @@ class RecordingSessionMixin:
                 if self.power_saving
                 else meeting["refined_model_id"]
             )
-            if self.models.is_ready(model_id):
-                try:
-                    return self._create_live_refiner(
-                        model_id,
-                        language=meeting.get("language"),
-                        streaming=self.power_saving,
-                    )
-                except RuntimeError as error:
-                    self.emit(
-                        "worker.warning",
-                        {
-                            "meeting_id": meeting_id,
-                            "code": "live_refinement_unavailable",
-                            "message": str(error),
-                        },
-                    )
+            if not self.models.is_ready(model_id):
+                return None
+            # 效率模式：流式模型已内置标点（如 X-ASR）时，二阶段用同一模型重解收益
+            # 很小，却要再加载一份模型并付出重解 CPU；直接跳过，首阶段输出即最终字幕，
+            # 显著压低低端机的内存与功耗（准确度与断句由流式模型内置标点保证）。
+            if self.power_saving and self._streaming_is_punctuated(model_id):
+                return None
+            try:
+                return self._create_live_refiner(
+                    model_id,
+                    language=meeting.get("language"),
+                    streaming=self.power_saving,
+                )
+            except RuntimeError as error:
+                self.emit(
+                    "worker.warning",
+                    {
+                        "meeting_id": meeting_id,
+                        "code": "live_refinement_unavailable",
+                        "message": str(error),
+                    },
+                )
             return None
 
         # 流式 ASR、降噪、标点、声纹是实时字幕的关键路径且加载快：同步加载，
@@ -317,6 +329,13 @@ class RecordingSessionMixin:
         require(payload, "meeting_id", "paused")
         self._active(payload["meeting_id"])
         return {"paused": bool(payload["paused"])}
+
+    def _streaming_is_punctuated(self, model_id):
+        """流式模型是否自带标点（无需再加载 CT-Transformer / 二阶段重解）。"""
+        try:
+            return bool(self.models.get(model_id).get("punctuated"))
+        except ValueError:
+            return False
 
     def _create_live_refiner(self, model_id, language=None, streaming=False):
         """创建实时精修器。
@@ -413,8 +432,12 @@ class RecordingSessionMixin:
         if power_saving:
             new_denoiser = None
             if power_saving_changed or streaming_changed or language_changed:
-                new_refiner = self._create_live_refiner(
-                    streaming_model_id, language=language, streaming=True
+                new_refiner = (
+                    None
+                    if self._streaming_is_punctuated(streaming_model_id)
+                    else self._create_live_refiner(
+                        streaming_model_id, language=language, streaming=True
+                    )
                 )
         else:
             if power_saving_changed:
@@ -437,7 +460,11 @@ class RecordingSessionMixin:
         new_punctuation_executor = self.live_punctuation
         new_language_identifier = self.language_identifier
         if language_changed:
-            new_punctuation = self._build_live_punctuation(language, self.active)
+            new_punctuation = (
+                None
+                if self._streaming_is_punctuated(streaming_model_id)
+                else self._build_live_punctuation(language, self.active)
+            )
             if new_punctuation is not None and new_punctuation_executor is None:
                 new_punctuation_executor = ThreadPoolExecutor(
                     max_workers=1, thread_name_prefix="brevia-live-punctuation"
@@ -761,8 +788,19 @@ class RecordingSessionMixin:
                     # 只有中间还残留语义切点才切，避免把短语从中间切开。
                     if stripped and stripped[-1] in "。！？.!?":
                         stripped = stripped[:-1]
-                    if any(ch in _PIN_BOUNDARY for ch in stripped):
+                    # 分档切点：句末标点（。！？；等）优先；逗号只在接近硬切上限时才
+                    # 作为兜底切点。否则刚过 live_pin_seconds 就命中一个句中逗号，
+                    # 把还没说完的句子从中间截断，造成「语义软钉分得不够好」。
+                    if any(ch in _SENTENCE_FINAL for ch in stripped):
                         pin_ready = True
+                    else:
+                        comma_ready_ms = (
+                            pin_seconds + (pin_max_seconds - pin_seconds) * 0.5
+                        ) * 1000
+                        if elapsed_ms >= comma_ready_ms and any(
+                            ch in "，," for ch in stripped
+                        ):
+                            pin_ready = True
         if pin_ready and not final and raw_text:
             pinned_result = self.asr.force_endpoint(payload["track"])
             pinned_raw = self._clean_live_text(
@@ -1070,7 +1108,9 @@ class RecordingSessionMixin:
             if audio is None:
                 return
             try:
-                text = self._refine_live_audio(refiner, audio, sample_rate)
+                text = self._refine_live_audio(
+                    refiner, audio, sample_rate, original_text=event.get("text", "")
+                )
                 if text:
                     updated["text"] = text
             except Exception as error:
@@ -1087,16 +1127,23 @@ class RecordingSessionMixin:
         updated["revision"] = event["revision"] + 1
         self._emit_refined_segment(updated)
 
-    def _refine_live_audio(self, refiner, audio, sample_rate):
+    def _refine_live_audio(self, refiner, audio, sample_rate, original_text=""):
         """把一段音频精修为文本；超长段落切成 ≤15s 窗口逐段精修后拼接。
 
         funasr-nano 等精修模型的 KV 容量有限（约 20s），去掉 utterance 硬切后单条
         字幕可能长达 30~90s，直接整段解码会溢出丢字。这里按 ``refined_window_seconds``
         切窗逐段解码再拼接，避免溢出，同时保持「原地精修、不跨段」。
+
+        ``original_text`` 是流式第一阶段的原文。效率模式用同一流式模型做第二阶段
+        重解，输入是软钉边界处切掉尾巴的音频（末尾无静音），transducer 最后一个
+        partial 可能未 commit 而被丢弃，造成「句尾内容消失」；重解明显短于原文时
+        回退到原文，保住句尾。
         """
         window_samples = int(SETTINGS["asr"]["refined_window_seconds"] * sample_rate)
         if isinstance(refiner, StreamingASR) or len(audio) <= window_samples:
             result = self._clean_live_text(refiner.decode(audio, sample_rate))
+            if result and original_text:
+                result = self._preserve_streaming_tail(result, original_text)
         else:
             result = ""
             context_samples = sample_rate
@@ -1113,11 +1160,31 @@ class RecordingSessionMixin:
             result = self._clean_live_text(self.punctuation.apply(result))
         return result
 
+    @staticmethod
+    def _preserve_streaming_tail(refined, original):
+        """流式重解若丢掉未说完的句尾，则回退到原文。
+
+        判断标准：重解结果以句末标点收尾则视为语义完整，直接采用；否则把重解与原文
+        去掉标点/空白后比较，若重解是原文的严格前缀且更短，说明句尾在重解时丢失，
+        用含句尾的原文覆盖，避免「句尾内容消失」。
+        """
+        if not refined or not original:
+            return refined
+        if refined.rstrip() and refined.rstrip()[-1] in "。！？.!?；;":
+            return refined
+        refined_norm = (refined or "").translate(_NORMALIZE_TABLE)
+        original_norm = (original or "").translate(_NORMALIZE_TABLE)
+        if len(refined_norm) < len(original_norm) and original_norm.startswith(refined_norm):
+            return original
+        return refined
+
     def _apply_live_punctuation(self, text):
         """保留流式模型原生标点，其他模型才走 CT-Transformer。"""
         if self.asr and self.asr.model.get("punctuated") is True:
             return text
-        return self.punctuation.apply(text) if self.punctuation else text
+        result = self.punctuation.apply(text) if self.punctuation else text
+        # CT-Transformer 对短/未说完文本偶发在句首补出标点，去掉句首标点。
+        return result.lstrip("，。！？、；：,.!?;:… ") if result else result
 
     def _emit_refined_segment(self, updated):
         """发射精修段：原地替换当前段的文本与说话人，不跨段合并。
@@ -1136,31 +1203,51 @@ class RecordingSessionMixin:
         把音频缓冲也按同一位置切开，把「还没说完的尾巴」带到下一段重识别。没有
         完整切点时比例返回 1.0（不截断、不 carry）。
         """
-        if not raw_text or not self.punctuation:
+        if not raw_text:
+            return raw_text, 1.0
+        # 语义切点依赖标点：内置标点模型（X-ASR）自带标点，未加载 CT-Transformer
+        # 也可切；其余模型必须已加载标点模型才切。
+        if not self.punctuation and not (self.asr and self.asr.model.get("punctuated")):
             return raw_text, 1.0
         punctuated = self._apply_live_punctuation(raw_text)
         stripped = (punctuated or "").strip()
-        if not stripped or stripped[-1] not in "。！？.!?":
+        if not stripped:
             return raw_text, 1.0
-        stripped = stripped[:-1]
+        # 末尾的句末/逗号通常是「伪句末」（标点模型对未说完的文本也会补一个），剥掉后
+        # 在剩余文本里找最后一个真实切点。若末尾本就是残句（无标点），直接在整个文本
+        # 里找——软钉应始终切在中间的语义边界、把未说完的尾巴带到下一段，而不是只在
+        # 末尾恰好带标点时才切，否则「不是马爷」这类残句会留在本段，下一段从半句开始。
+        search = stripped
+        if search[-1] in "。！？.!?；;，,":
+            search = search[:-1]
         # 优先切在句末标点；只有当中间没有句末标点时才用逗号兜底，避免把标点模型
         # 临时补的逗号当成切点。
         last = max(
-            (index for index, ch in enumerate(stripped) if ch in _SENTENCE_FINAL),
+            (index for index, ch in enumerate(search) if ch in _SENTENCE_FINAL),
             default=-1,
         )
         if last < 0:
             last = max(
-                (index for index, ch in enumerate(stripped) if ch in "，,；;"),
+                (index for index, ch in enumerate(search) if ch in "，,；;"),
                 default=-1,
             )
         if last < 0:
             return raw_text, 1.0
         punctuation = set("，。！？、；：,.!?;:…'\"「」（）() \t")
-        content_count = sum(1 for ch in stripped[: last + 1] if ch not in punctuation)
         total_chars = sum(1 for ch in raw_text if ch not in " \t")
-        ratio = min(1.0, content_count / total_chars) if total_chars else 1.0
-        truncated = raw_text[:content_count].rstrip("，。！？、；：,.!?;: ")
+        if punctuated == raw_text:
+            # 内置标点模型（如 X-ASR）：punctuated 就是 raw。ratio 用「非空白字符数」
+            # 而非 raw 下标（raw 里标点后常跟空格，raw 下标会虚高），否则音频按比例
+            # 切过头、把下一句开头一并截掉。文本截断仍按 raw 下标 raw_text[:last]。
+            cut = sum(1 for ch in raw_text[:last] if ch not in " \t")
+            ratio = min(1.0, cut / total_chars) if total_chars else 1.0
+            truncated = raw_text[:last].rstrip("，。！？、；：,.!?;: ")
+        else:
+            # 标点模型增补标点（CT-Transformer）：punctuated 比 raw 多了标点字符，
+            # 需要按内容字符数映射回 raw，才能对齐音频比例与截断位置。
+            content_count = sum(1 for ch in search[: last + 1] if ch not in punctuation)
+            ratio = min(1.0, content_count / total_chars) if total_chars else 1.0
+            truncated = raw_text[:content_count].rstrip("，。！？、；：,.!?;: ")
         return (truncated if truncated else raw_text), ratio
 
     def _identify_speaker(self, meeting_id, tracker, samples, sample_rate):

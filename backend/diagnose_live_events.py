@@ -13,18 +13,10 @@
 
 import argparse
 import base64
-import time
-import wave
-from pathlib import Path
+
+from .audio_io import read_wav_pcm
 
 FRAME_SAMPLES = 2730
-
-
-def read_wav_pcm(path):
-    with wave.open(str(path)) as recording:
-        if recording.getnchannels() != 1 or recording.getsampwidth() != 2:
-            raise ValueError(f"{path} 不是单声道 PCM16")
-        return recording.readframes(recording.getnframes())
 
 
 def main():

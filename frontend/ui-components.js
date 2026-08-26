@@ -51,10 +51,6 @@ function renderMeetingRow({ id, tone, title, meta, tags, status, deleted = false
   const workspaceBadge = workspace ? `<div class="workspace-badge"><span class="workspace-icon">◆</span>${escapeHtml(workspace.name)}</div>` : '';
   return `<article class="meeting-row" data-meeting-index="${index}" data-selection-key="${escapeHtml(id || String(index))}" tabindex="0" aria-selected="false"${id ? ` data-meeting-id="${escapeHtml(id)}"` : ''}${!deleted && id ? ' draggable="true"' : ''}><div class="meeting-main">${heading}<p>${escapeHtml(meta)}</p><div class="meeting-tags">${workspaceBadge}${tags.map((tag) => `<div class="tag">${escapeHtml(tag)}</div>`).join('')}</div></div><div class="meeting-status"><span class="status ${status.tone}">${escapeHtml(t(status.label))}</span><small>${escapeHtml(t(status.detail))}</small></div><div class="meeting-actions"><button class="more" data-meeting-menu="${index}" aria-label="${t('更多操作')}" aria-expanded="false">•••</button><div class="meeting-menu" hidden>${menu}</div></div></article>`;
 }
-/** 渲染模型行，用于模型库和新下载的模型。@param {{icon: string, name: string, detail: string, intro?: string}} model 模型数据。@returns {string} 行标记。 */
-function renderModelRow({ icon, name, detail, intro = '' }) {
-  return `<div class="model-row"><span class="model-icon">${icon}</span><div><b>${name}</b><small>${t(detail)}</small>${intro ? `<small>${t(intro)}</small>` : ''}</div><span class="status complete">${t('可用')}</span></div>`;
-}
 /** 渲染设置卡片及其模态框操作。@param {{title: string, description: string, action: string, modal: string}} card 卡片数据。@returns {string} 卡片标记。 */
 function renderSettingsCard({ title, description, action, modal }) {
   return `<section class="settings-card" id="${modal}"><h2>${t(title)}</h2><p>${t(description)}</p><button class="secondary" data-settings-modal="${modal}">${t(action)}</button></section>`;
@@ -63,8 +59,6 @@ function renderSettingsCard({ title, description, action, modal }) {
 function renderSettingsView() {
   document.querySelector('#settings-view .settings-grid').innerHTML = `<section class="settings-card" id="performance-mode-card"><h2>${t('性能')}</h2><p>${t('选择性能或效率模式，在音频效果与字幕实时性之间取舍。')}</p><button class="secondary" data-settings-modal="performance">${t('配置性能模式')}</button></section><section class="settings-card" id="installed-models"><h2>${t('模型库')}</h2><p>${t('下载和管理本地语音识别模型，为字幕、精修和说话人识别提供能力。')}</p><button class="secondary" data-settings-modal="models">${t('管理模型库')}</button></section>${uiData.settings.cards.map(renderSettingsCard).join('')}`;
 }
-/** 渲染紧凑的标签/值列表。@param {Array<{label: string, value: string}>} items 状态条目。@returns {string} 定义列表标记。 */
-function renderStatusList(items) { return `<dl>${items.map(({ label, value }) => `<div><dt>${escapeHtml(t(label))}</dt><dd>${escapeHtml(value)}</dd></div>`).join('')}</dl>`; }
 /** 仅允许安全协议的链接/图片地址，阻止 javascript: 等注入。@param {string} url 原始地址。@returns {string} 安全地址。 */
 function sanitizeUrl(url = '') {
   return /^(https?:|mailto:|data:image\/)/i.test(url.trim()) ? url.trim() : '#';

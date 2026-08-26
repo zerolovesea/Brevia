@@ -668,13 +668,13 @@ class WorkerTest(unittest.TestCase):
             mixed.frombytes(recording.readframes(1))
             self.assertEqual(mixed[0], 24)
         exported = self.worker.export({"meeting_id": meeting["id"], "format": "srt"})
-        self.assertIn("这是联调测试", Path(exported["path"]).read_text())
+        self.assertIn("这是联调测试", Path(exported["path"]).read_text(encoding="utf-8"))
         docx = self.worker.export({"meeting_id": meeting["id"], "format": "docx"})
         with zipfile.ZipFile(docx["path"]) as archive:
             self.assertIn("这是联调测试", archive.read("word/document.xml").decode())
         pdf = self.worker.export({"meeting_id": meeting["id"], "format": "pdf"})
         self.assertTrue(pdf["print_pdf"])
-        self.assertIn("这是联调测试", Path(pdf["path"]).read_text())
+        self.assertIn("这是联调测试", Path(pdf["path"]).read_text(encoding="utf-8"))
         bundle = self.worker.bundle({"meeting_id": meeting["id"]})
         with zipfile.ZipFile(bundle["path"]) as archive:
             self.assertEqual(
@@ -1357,11 +1357,11 @@ class WorkerTest(unittest.TestCase):
                     "format": export_format,
                 }
             )
-            self.assertIn("准备报告", Path(exported["path"]).read_text())
+            self.assertIn("准备报告", Path(exported["path"]).read_text(encoding="utf-8"))
         pdf = self.worker.export(
             {"meeting_id": meeting["id"], "content": "notes", "format": "pdf"}
         )
-        printed = Path(pdf["path"]).read_text()
+        printed = Path(pdf["path"]).read_text(encoding="utf-8")
         self.assertNotIn("print-brand", printed)
         self.assertIn("<h2>行动项</h2>", printed)
         self.assertNotIn("## **行动项**", printed)
@@ -1386,11 +1386,11 @@ class WorkerTest(unittest.TestCase):
                     "format": export_format,
                 }
             )
-            self.assertIn("发布计划", Path(exported["path"]).read_text())
+            self.assertIn("发布计划", Path(exported["path"]).read_text(encoding="utf-8"))
         pdf = self.worker.export(
             {"meeting_id": meeting["id"], "content": "mynotes", "format": "pdf"}
         )
-        printed = Path(pdf["path"]).read_text()
+        printed = Path(pdf["path"]).read_text(encoding="utf-8")
         self.assertIn("<h1>要点</h1>", printed)
         # 没有笔记时给出可读错误。
         self.worker.store.update_meeting(meeting["id"], {"notes": ""})
@@ -2853,7 +2853,7 @@ class WorkerTest(unittest.TestCase):
         settings["diarization"]["embedding_model_id"] = "campplus-zh-en"
         save_runtime_settings(self.temp.name, settings)
         self.assertNotIn("embedding_model_id", runtime_settings(self.temp.name)["diarization"])
-        models = json.loads(Path(__file__).with_name("models.json").read_text())
+        models = json.loads(Path(__file__).with_name("models.json").read_text(encoding="utf-8"))
         self.assertEqual(
             [model["id"] for model in models if model["kind"] == "speaker-embedding"],
             ["eres2net-base-3dspeaker-zh"],

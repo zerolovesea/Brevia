@@ -12,21 +12,13 @@
 
 import argparse
 import base64
-import os
 import time
-import wave
 from pathlib import Path
+
+from .audio_io import read_wav_pcm
 
 # 与前端 AudioCaptureProcessor 一致：8192 帧 @48k 降采样到 16k 后约 2730 样本/帧。
 FRAME_SAMPLES = 2730
-
-
-def read_wav_pcm(path):
-    """读取单声道 PCM16 WAV，返回原始小端字节。"""
-    with wave.open(str(path)) as recording:
-        if recording.getnchannels() != 1 or recording.getsampwidth() != 2:
-            raise ValueError(f"{path} 不是单声道 PCM16")
-        return recording.readframes(recording.getnframes())
 
 
 def replay(

@@ -68,12 +68,12 @@ def read_mono_wav(path, maximum_seconds=None):
         return samples.astype(numpy.float32) / 32768.0, recording.getframerate()
 
 
-def mono_wav_meta(path):
-    """返回单声道 PCM16 WAV 的 ``(sample_rate, num_frames)``，不载入波形。"""
+def read_wav_pcm(path):
+    """读取单声道 PCM16 WAV，返回原始小端字节（回放/诊断工具共用）。"""
     with wave.open(str(path)) as recording:
         if recording.getnchannels() != 1 or recording.getsampwidth() != 2:
             raise ValueError("This operation requires mono PCM16 WAV audio")
-        return recording.getframerate(), recording.getnframes()
+        return recording.readframes(recording.getnframes())
 
 
 def read_mono_wav_window(path, start_ms, end_ms):

@@ -159,6 +159,8 @@ let floatingCaptionLocale = locale;
 const t = (key) => stageLabels[key]?.[locale] || stageLabels[key]?.en || catalog[locale].labels[key] || key;
 /** 解析当前语言环境的临时消息。@param {string} key 消息标识符。@returns {string} 本地化后的消息。*/
 const message = (key) => catalog[locale].messages[key];
+/** 当前机器的推荐设置 tag 标记。@param {boolean} show 是否显示。@returns {string} */
+const recommendTag = (show) => show ? `<span class="model-library-tags recommend-tags"><span class="model-library-installed">${escapeHtml(t('当前机器的推荐设置'))}</span></span>` : '';
 function formatBytes(bytes = 0) { return bytes >= 1024 ** 3 ? `${(bytes / 1024 ** 3).toFixed(2)} GB` : bytes >= 1024 ** 2 ? `${(bytes / 1024 ** 2).toFixed(1)} MB` : `${Math.round(bytes / 1024)} KB`; }
 function formatMeetingTime(milliseconds = 0) { const seconds = Math.max(0, Math.floor(milliseconds / 1000)); return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`; }
 renderStaticViews();
@@ -361,10 +363,9 @@ let summaryConfigDraft = null;
 // 内置供应商在表单里待选的模型。重新渲染（下载/删除/选择）时存活，切换供应商时重置。
 let selectedBuiltinModel = '';
 let selectedAiAssistBuiltinModel = '';
-/** 返回当前供应商的已存字段。@returns {object} 供应商条目。*/
-function summaryProviderEntry(provider = summaryConfig.provider) {
-  return summaryConfig.providers[provider] || {};
-}
+// onboarding 里选了「在线 AI 供应商」后，供应商下拉不再列出「内置 AI」，
+// 避免在线配置流程里混入本地内置选项。关闭模态框时复位。
+let onboardingOnlineProvider = false;
 function providerEntry(config, provider = config.provider) {
   return config.providers[provider] || {};
 }
@@ -647,17 +648,6 @@ const DEFAULT_REFINED_MODEL_ID = 'funasr-nano-int8';
 // Qwen3-ASR 1.7B 在当前 sherpa-onnx 下不支持语言强制，暂不提供此模型。
 const removedRefinedModelIds = new Set(['qwen3-asr-1.7b-int8']);
 const refinedModelName = (id = DEFAULT_REFINED_MODEL_ID) => modelCatalog.find((model) => model.id === id)?.name || 'FunASR Nano int8';
-function flowSelectWithTags(name, value, options, tagsFor) {
-  const selected = options.find(([option]) => option === value) || options[0] || ['', ''];
-  const disabled = options.length === 0;
-  const choices = options.map(([option, label]) => {
-    const tags = tagsFor(option) || [];
-    const tagMarkup = tags.length ? `<span class="model-library-tags">${tags.map((tag) => `<span>${escapeHtml(tag)}</span>`).join('')}</span>` : '';
-    return `<button type="button" data-flow-select-choice="${name}" data-value="${escapeHtml(option)}" data-label="${escapeHtml(label)}"${disabled ? ' disabled' : ''}><b>${escapeHtml(label)}</b>${tagMarkup}</button>`;
-  }).join('');
-  return `<div class="flow-select"><button class="flow-select-toggle" data-flow-select-toggle type="button" aria-expanded="false"${disabled ? ' disabled' : ''}>${escapeHtml(selected[1])}<span>⌄</span></button><input type="hidden" name="${name}" value="${escapeHtml(selected[0])}" /><div class="flow-select-options" hidden>${choices}</div></div>`;
-}
-const modelTagsFor = (tags) => (id) => tags[locale]?.[id] || tags.en?.[id] || [];
 const languageModelDefaults = {
   zh: { streaming: 'zipformer-zh-xlarge-streaming-int8', refined: DEFAULT_REFINED_MODEL_ID, segmentation: 'pyannote-segmentation-3.0' },
   en: { streaming: 'zipformer-en-streaming-int8', refined: DEFAULT_REFINED_MODEL_ID, segmentation: 'pyannote-segmentation-3.0' },
@@ -678,10 +668,6 @@ const requiredModelsForLanguage = (language) => {
   const punctuation = language === 'en' ? 'online-punct-en-int8' : ['zh', 'yue', 'auto'].includes(language) ? 'punct-ct-transformer-zh-en-int8' : undefined;
   return [streaming, 'silero-vad', punctuation, refined, segmentation, 'eres2net-base-3dspeaker-zh', 'gtcrn-live-denoiser'];
 };
-function requiredModelDetails(language) {
-  const [streaming, vad, punctuation, refined, segmentation, embedding, denoiser] = requiredModelsForLanguage(language);
-  return [[streaming, 0], [vad, 1], [punctuation, 2], [refined, 3], [segmentation, 4], [embedding, 5], [denoiser, 6]];
-}
 const compatibleStreamingModels = () => prepareModelChoices['active-streaming-model'];
 function setPrepareModel(id, model) {
   const value = document.querySelector(`#${id}`);
@@ -945,26 +931,6 @@ const onboardingSecurityCopy = {
   de: 'Modelle stammen aus vertrauenswürdigen Quellen und werden auf Integrität geprüft.\nIhre Audiodaten werden nie in die Cloud hochgeladen.',
   ru: 'Модели получены из надёжных источников и проходят проверку целостности.\nВаши аудиоданные никогда не загружаются в облако.',
 };
-const onboardingWelcome = {
-  zh: ['让每一次对话都有记录', '实时字幕、自动纪要和本地语音处理。', '开始设置'],
-  en: ['Make every conversation count', 'Live transcription, automatic meeting notes, and private on-device processing.', 'Start setup'],
-  es: ['Haz que cada conversación cuente', 'Transcripción en vivo, notas automáticas y procesamiento privado en el dispositivo.', 'Comenzar'],
-  ja: ['すべての会話を記録に残す', 'ライブ文字起こし、自動議事録、デバイス内の音声処理。', '設定を始める'],
-  ko: ['모든 대화를 기록으로 남기세요', '실시간 전사, 자동 회의록 및 기기 내 음성 처리.', '설정 시작'],
-  fr: ['Donnez de l’importance à chaque conversation', 'Transcription en direct, notes automatiques et traitement privé sur l’appareil.', 'Commencer'],
-  de: ['Jedes Gespräch zählt', 'Live-Transkription, automatische Besprechungsnotizen und private Verarbeitung auf dem Gerät.', 'Einrichtung starten'],
-  ru: ['Сохраняйте каждую беседу', 'Расшифровка в реальном времени, автоматические заметки и приватная обработка на устройстве.', 'Начать настройку'],
-};
-const onboardingWelcomeFeatures = {
-  zh: [['实时字幕', '以低延迟持续呈现当前发言，便于随时回看语境。'], ['自动纪要', '从完整逐字稿提炼结论、风险与待办，而非只生成摘要。'], ['说话人识别', '结合语音分段与声纹嵌入，还原讨论中的参与者脉络。'], ['会后精修', '利用完整音频进行二次校正，提升正式记录的可读性。'], ['本地处理', '识别、模型与原始音频默认保留在本机。'], ['可检索会议库', '按会议、逐字稿和标签快速回到关键讨论。']],
-  en: [['Live transcription', 'Low-latency captions preserve the context of every discussion.'], ['Automatic notes', 'Derive decisions, risks, and actions from the complete transcript.'], ['Speaker intelligence', 'Segmentation and voiceprints keep participant context intact.'], ['Post-meeting refinement', 'A second pass over the complete recording improves the final record.'], ['Private by default', 'Audio, models, and source recordings remain on your device.'], ['Searchable library', 'Return to important discussions through meetings, transcripts, and tags.']],
-  es: [['Transcripción en vivo', 'Ve cada punto importante mientras se dice.'], ['Notas automáticas', 'Conserva decisiones, tareas y contexto juntos.'], ['Privado por defecto', 'El audio y los modelos permanecen en tu dispositivo.']],
-  ja: [['ライブ文字起こし', '重要な発言をその場で確認できます。'], ['自動議事録', '決定、タスク、文脈をまとめて残します。'], ['プライベート処理', '音声とモデルはデバイス内に保存されます。']],
-  ko: [['실시간 전사', '중요한 내용을 말하는 즉시 확인합니다.'], ['자동 회의록', '결정, 할 일, 맥락을 함께 보관합니다.'], ['기본 비공개', '오디오와 모델은 기기에 보관됩니다.']],
-  fr: [['Transcription en direct', 'Voyez les points importants au moment où ils sont prononcés.'], ['Notes automatiques', 'Gardez décisions, actions et contexte au même endroit.'], ['Privé par défaut', 'L’audio et les modèles restent sur votre appareil.']],
-  de: [['Live-Transkription', 'Wichtige Punkte werden sofort sichtbar.'], ['Automatische Notizen', 'Entscheidungen, Aufgaben und Kontext bleiben zusammen.'], ['Privat standardmäßig', 'Audio und Modelle bleiben auf Ihrem Gerät.']],
-  ru: [['Расшифровка в реальном времени', 'Важные моменты видны сразу после произнесения.'], ['Автоматические заметки', 'Сохраняйте решения, задачи и контекст вместе.'], ['Конфиденциальность по умолчанию', 'Аудио и модели остаются на устройстве.']],
-};
 const onboardingModelListLabel = { zh: ['会议语言模型', '离线功能模型'], en: ['Meeting language models', 'Offline feature models'], es: ['Modelos de idioma de reunión', 'Modelos de funciones sin conexión'], ja: ['会議言語モデル', 'オフライン機能モデル'], ko: ['회의 언어 모델', '오프라인 기능 모델'], fr: ['Modèles de langue de réunion', 'Modèles de fonctions hors ligne'], de: ['Besprechungssprachmodelle', 'Offline-Funktionsmodelle'], ru: ['Модели языков встречи', 'Модели автономных функций'] };
 const onboardingLanguageCopy = {
   zh: ['选择你的语言', '选择言录的界面语言。', '继续'],
@@ -1221,7 +1187,10 @@ function renderModelConfigFields(config, selectedModel, { required = true, hint 
   const entry = providerEntry(config, provider);
   const isBuiltin = provider === 'built-in';
 
-  const providerField = `<label class="config-select-field">${copy.provider}${flowSelect('provider', provider, summaryProviders.map((id) => [id, summaryProviderLabel(id)]))}</label>`;
+  const providerOptions = summaryProviders
+    .filter((id) => !onboardingOnlineProvider || id !== 'built-in')
+    .map((id) => [id, summaryProviderLabel(id)]);
+  const providerField = `<label class="config-select-field">${copy.provider}${flowSelect('provider', provider, providerOptions)}</label>`;
   let fields = '';
   let builtinModelList = '';
   let currentModelId = '';
@@ -1264,7 +1233,7 @@ function renderAiAssistModal() {
   settingsModal.querySelector('h2').textContent = t('AI 笔记');
   settingsModal.querySelector('.modal-title p').textContent = t('让 AI 在会议中帮你发现重点、提取待办并整理笔记。');
   const proactivity = aiAssistConfig.enabled ? aiAssistConfig.proactivity : 'off';
-  const levels = (aiOnboardingCopy[locale] || aiOnboardingCopy.en).levels.map(([value, title, detail]) => `<label class="ai-assist-level${proactivity === value ? ' is-selected' : ''}"><input type="radio" name="proactivity" value="${escapeHtml(value)}"${proactivity === value ? ' checked' : ''} /><span><b>${escapeHtml(title)}</b><small>${escapeHtml(detail)}</small></span></label>`).join('');
+  const levels = (aiOnboardingCopy[locale] || aiOnboardingCopy.en).levels.map(([value, title, detail]) => `<label class="ai-assist-level${proactivity === value ? ' is-selected' : ''}"><input type="radio" name="proactivity" value="${escapeHtml(value)}"${proactivity === value ? ' checked' : ''} /><span><b>${escapeHtml(title)}${recommendTag(value === 'off' && deviceIsWeak())}</b><small>${escapeHtml(detail)}</small></span></label>`).join('');
   const warning = (deviceIsWeak() && config.provider === 'built-in' && /4b/i.test(providerEntry(config).model || ''))
     ? `<p class="performance-weak-note">⚠ ${escapeHtml(t('本机性能有限，建议使用更小的内置模型（如 2B）或在线 LLM API，以获得更流畅的实时体验。'))}<br><button class="secondary" data-use-ai-2b type="button">${escapeHtml(t('改用 2B AI 笔记模型'))}</button>${meetingActive ? ` <button class="secondary" data-disable-ai-assist type="button">${escapeHtml(t('暂时停用 AI 笔记'))}</button>` : ''}</p>` : '';
   const modelFields = renderModelConfigFields(config, selectedAiAssistBuiltinModel, { required: proactivity !== 'off', hint: t('选择一个已下载的内置 AI 笔记模型。未下载的模型可在此直接下载。') });
@@ -1276,11 +1245,8 @@ function renderPerformanceModal() {
   settingsModal.querySelector('h2').textContent = t('性能');
   settingsModal.querySelector('.modal-title p').textContent = t('选择性能或效率模式，在音频效果与字幕实时性之间取舍。');
   const mode = getPerformanceMode();
-  const weakNote = deviceIsWeak()
-    ? `<p class="performance-weak-note">⚠ ${escapeHtml(t('本机性能有限，建议使用更小的内置模型（如 2B）或在线 LLM API，以获得更流畅的实时体验。'))}</p>`
-    : '';
-  const modeRow = (value, title, detail) => `<label class="ai-assist-level${mode === value ? ' is-selected' : ''}"><input type="radio" name="performance-mode" value="${value}"${mode === value ? ' checked' : ''} /><span><b>${escapeHtml(t(title))}</b><small>${escapeHtml(t(detail))}</small></span></label>`;
-  settingsModal.querySelector('.modal-body').innerHTML = `<form class="ai-assist-form">${weakNote}<section class="ai-assist-proactivity performance-mode-options"><p>${escapeHtml(t('性能模式'))}</p><div class="ai-assist-levels">${modeRow('standard', '性能模式', '标准模式：开启实时降噪与实时精修，体验最佳，适合性能较强的设备。')}${modeRow('efficiency', '效率模式', '关闭实时降噪，使用轻量模型二次精修')}</div></section><div class="modal-form-actions"><button class="modal-action" type="submit">${escapeHtml(t('保存'))}</button></div></form>`;
+  const modeRow = (value, title, detail) => `<label class="ai-assist-level${mode === value ? ' is-selected' : ''}"><input type="radio" name="performance-mode" value="${value}"${mode === value ? ' checked' : ''} /><span><b>${escapeHtml(t(title))}${recommendTag(value === 'standard' ? !deviceIsWeak() : deviceIsWeak())}</b><small>${escapeHtml(t(detail))}</small></span></label>`;
+  settingsModal.querySelector('.modal-body').innerHTML = `<form class="ai-assist-form"><section class="ai-assist-proactivity performance-mode-options"><p>${escapeHtml(t('性能模式'))}</p><div class="ai-assist-levels">${modeRow('standard', '性能模式', '标准模式：开启实时降噪与实时精修，体验最佳，适合性能较强的设备。')}${modeRow('efficiency', '效率模式', '关闭实时降噪，使用轻量模型二次精修')}</div></section><div class="modal-form-actions"><button class="modal-action" type="submit">${escapeHtml(t('保存'))}</button></div></form>`;
 }
 /** 会中检测到性能瓶颈时，弹出是否临时降低到效率模式的对话框。@returns {void} */
 function openPerformanceBottleneckDialog(meetingId) {
@@ -1289,13 +1255,7 @@ function openPerformanceBottleneckDialog(meetingId) {
   const aiActions = aiAssistEnabled()
     ? `<button class="secondary" data-use-ai-2b type="button">${escapeHtml(t('改用 2B AI 笔记模型'))}</button><button class="secondary" data-disable-ai-assist type="button">${escapeHtml(t('暂时停用 AI 笔记'))}</button>` : '';
   settingsModal.querySelector('.modal-body').innerHTML = `<div class="confirmation-actions"><p>${escapeHtml(t('实时字幕精修长期积压，字幕出现延迟。是否临时降低到效率模式？'))}</p><button class="modal-action" data-confirm-perf-lower type="button">${escapeHtml(t('降低到效率模式'))}</button>${aiActions}<button class="secondary" data-cancel-confirmation type="button">${escapeHtml(t('保持当前设置'))}</button></div>`;
-  settingsModal.classList.remove('modal-leave');
-  settingsModal.style.zIndex = '40';
-  settingsModal.hidden = false;
-  requestAnimationFrame(() => settingsModal.classList.add('modal-enter'));
-  document.body.classList.add('modal-open');
-  const keep = settingsModal.querySelector('[data-cancel-confirmation]');
-  if (keep) keep.focus();
+  showSettingsModal('[data-cancel-confirmation]');
   const lower = settingsModal.querySelector('[data-confirm-perf-lower]');
   if (lower) {
     lower.addEventListener('click', async () => {
@@ -1634,6 +1594,15 @@ function renderModal(kind) {
     return `${heading}<div class="${kind === 'models' ? 'model-library-item' : ''}"><span>${nameRow}${downloadProgress}${kind === 'models' ? `${ratings}${intro ? `<p>${escapeHtml(intro)}</p>` : ''}` : `<small>${escapeHtml(detail)}</small>${size}${intro ? `<small>${escapeHtml(intro)}</small>` : ''}`}</span>${actions}</div>`;
   }).join('')}</div>${selectingOnboardingModels ? `<div class="modal-form-actions"><button class="modal-action" data-download-onboarding-selected type="button"${onboardingModelSelection?.size ? '' : ' disabled'}>${(onboardingCopy[locale] || onboardingCopy.en).download}</button></div>` : ''}`;
 }
+/** 显示设置模态框并播放进入动画；可选聚焦内部元素。@param {string} [focusSelector] 打开后聚焦的模态框内元素。@returns {void} */
+function showSettingsModal(focusSelector) {
+  settingsModal.classList.remove('modal-leave');
+  settingsModal.style.zIndex = '40';
+  settingsModal.hidden = false;
+  requestAnimationFrame(() => settingsModal.classList.add('modal-enter'));
+  document.body.classList.add('modal-open');
+  if (focusSelector) settingsModal.querySelector(focusSelector)?.focus();
+}
 /** Opens and focuses a settings modal. @param {'models'|'storage'|'summary-model'} kind Requested modal. @returns {void} */
 let modalDismissTimer;
 let confirmationAction;
@@ -1643,30 +1612,7 @@ function openConfirmation(title, detail, action) {
   settingsModal.querySelector('h2').textContent = title;
   settingsModal.querySelector('.modal-title p').textContent = detail;
   settingsModal.querySelector('.modal-body').innerHTML = `<div class="confirmation-actions"><p>${escapeHtml(detail)}</p><button class="modal-action modal-danger" data-confirm-action type="button">${t('确认')}</button><button class="secondary" data-cancel-confirmation type="button">${t('取消')}</button></div>`;
-  settingsModal.classList.remove('modal-leave');
-  settingsModal.style.zIndex = '40';
-  settingsModal.hidden = false;
-  requestAnimationFrame(() => settingsModal.classList.add('modal-enter'));
-  document.body.classList.add('modal-open');
-  settingsModal.querySelector('[data-cancel-confirmation]').focus();
-}
-/** 弹出带输入框的轻量对话框；确认时把输入值传给 action（取消则 closeModal）。 */
-function openPrompt(title, detail, placeholder, action) {
-  confirmationAction = (value) => action(value);
-  activeModal = 'prompt';
-  settingsModal.querySelector('h2').textContent = title;
-  settingsModal.querySelector('.modal-title p').textContent = detail;
-  settingsModal.querySelector('.modal-body').innerHTML = `<div class="confirmation-actions"><p>${escapeHtml(detail)}</p><input class="prompt-input" data-prompt-input type="number" min="1" step="1" inputmode="numeric" placeholder="${escapeHtml(placeholder)}" /><button class="modal-action" data-confirm-action type="button">${t('继续精修')}</button><button class="secondary" data-cancel-confirmation type="button">${t('取消')}</button></div>`;
-  settingsModal.classList.remove('modal-leave');
-  settingsModal.style.zIndex = '40';
-  settingsModal.hidden = false;
-  requestAnimationFrame(() => settingsModal.classList.add('modal-enter'));
-  document.body.classList.add('modal-open');
-  const input = settingsModal.querySelector('[data-prompt-input]');
-  input.focus();
-  input.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') { event.preventDefault(); settingsModal.querySelector('[data-confirm-action]').click(); }
-  });
+  showSettingsModal('[data-cancel-confirmation]');
 }
 async function openModal(kind) {
   clearTimeout(modalDismissTimer);
@@ -1679,11 +1625,7 @@ async function openModal(kind) {
   }
   activeModal = kind;
   renderModal(kind);
-  settingsModal.classList.remove('modal-leave');
-  settingsModal.hidden = false;
-  requestAnimationFrame(() => settingsModal.classList.add('modal-enter'));
-  document.body.classList.add('modal-open');
-  settingsModal.querySelector('.modal-close').focus();
+  showSettingsModal('.modal-close');
   if (kind === 'advanced-settings') startPermissionPoll();
 }
 /** 在高级设置模态框打开时轮询系统权限状态，并仅在更改时重新渲染该部分。@returns {void} */
@@ -1705,6 +1647,7 @@ function closeModal() {
   window.clearInterval(permissionPollTimer);
   summaryConfigDraft = null;
   aiAssistConfigDraft = null;
+  onboardingOnlineProvider = false;
   activeModal = undefined;
   settingsModal.style.zIndex = '';
   settingsModal.classList.remove('modal-enter');
@@ -2047,8 +1990,8 @@ async function openOnboardingSetup() {
   const choices = ['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru'];
   const defaults = new Set(window.BreviaOnboarding.defaultMeetingLanguages(locale));
   const perfMode = getPerformanceMode();
-  const performanceModes = [['standard', '性能模式', '标准模式：开启实时降噪与实时精修，体验最佳，适合性能较强的设备。'], ['efficiency', '效率模式', '关闭实时降噪，使用轻量模型二次精修']].map(([value, title, detail]) => `<label class="onboarding-ai-level${perfMode === value ? ' is-selected' : ''}"><input type="radio" name="onboarding-performance-mode" value="${value}"${perfMode === value ? ' checked' : ''} /><span><b>${escapeHtml(t(title))}</b><small>${escapeHtml(t(detail))}</small></span></label>`).join('');
-  showOnboardingPage('setup', `<section class="onboarding-setup-page"><button class="onboarding-back" data-onboarding-back-language type="button" aria-label="${t('返回')}">←</button><header><img class="onboarding-brand" src="./assets/brevia-logo.svg" alt="Brevia" /><h1>${copy.modelsTitle}</h1><div class="onboarding-intro"><p>${copy.meetingHint} ${copy.modelsHint}</p><small>${securityHint}</small></div></header><section class="onboarding-section"><h2>${t('性能模式')}</h2>${deviceIsWeak() ? `<p class="onboarding-weak-note">⚠ ${escapeHtml(t('标准模式 / 效率模式。性能偏低的机器可开启效率模式提升字幕实时性。'))}</p>` : ''}<div class="onboarding-ai-levels">${performanceModes}</div></section><section class="onboarding-section"><h2>${copy.meetingTitle}</h2><div class="onboarding-language-selection"><div class="onboarding-check-grid">${choices.map((code) => `<label><input type="checkbox" name="onboarding-language" value="${code}"${defaults.has(code) ? ' checked' : ''} /><span>${new Intl.DisplayNames([locale], { type: 'language' }).of(code)}</span></label>`).join('')}</div><aside class="onboarding-model-preview"><strong>${modelListLabels[0]}</strong><ul data-onboarding-language-models></ul></aside></div></section><section class="onboarding-section"><h2>${t('离线功能')}</h2><div class="onboarding-language-selection onboarding-feature-selection"><div class="onboarding-feature-grid">${copy.capabilities.slice(-1).map((capability) => `<label><input type="checkbox" name="onboarding-denoiser" checked /><span>${capability}</span></label>`).join('')}<label><input type="checkbox" name="onboarding-translation" checked /><span>${copy.translation}</span></label></div><aside class="onboarding-model-preview"><strong>${modelListLabels[1]}</strong><ul data-onboarding-feature-models></ul></aside></div></section><section class="onboarding-model-summary"><strong>${copy.estimate}: <span data-onboarding-estimate></span></strong>${chinaModelSourceToggle()}</section><div class="onboarding-actions"><button class="modal-action" data-download-onboarding-models type="button">${copy.download}</button><button class="secondary" data-customize-onboarding-models type="button">${copy.customize}</button><button class="secondary" data-finish-onboarding type="button">${copy.later}</button></div></section>`);
+  const performanceModes = [['standard', '性能模式', '标准模式：开启实时降噪与实时精修，体验最佳，适合性能较强的设备。'], ['efficiency', '效率模式', '关闭实时降噪，使用轻量模型二次精修']].map(([value, title, detail]) => `<label class="onboarding-ai-level${perfMode === value ? ' is-selected' : ''}"><input type="radio" name="onboarding-performance-mode" value="${value}"${perfMode === value ? ' checked' : ''} /><span><b>${escapeHtml(t(title))}${recommendTag(value === 'standard' ? !deviceIsWeak() : deviceIsWeak())}</b><small>${escapeHtml(t(detail))}</small></span></label>`).join('');
+  showOnboardingPage('setup', `<section class="onboarding-setup-page"><button class="onboarding-back" data-onboarding-back-language type="button" aria-label="${t('返回')}">←</button><header><img class="onboarding-brand" src="./assets/brevia-logo.svg" alt="Brevia" /><h1>${copy.modelsTitle}</h1><div class="onboarding-intro"><p>${copy.meetingHint} ${copy.modelsHint}</p><small>${securityHint}</small></div></header><section class="onboarding-section"><h2>${t('性能模式')}</h2><div class="onboarding-ai-levels">${performanceModes}</div></section><section class="onboarding-section"><h2>${copy.meetingTitle}</h2><div class="onboarding-language-selection"><div class="onboarding-check-grid">${choices.map((code) => `<label><input type="checkbox" name="onboarding-language" value="${code}"${defaults.has(code) ? ' checked' : ''} /><span>${new Intl.DisplayNames([locale], { type: 'language' }).of(code)}</span></label>`).join('')}</div><aside class="onboarding-model-preview"><strong>${modelListLabels[0]}</strong><ul data-onboarding-language-models></ul></aside></div></section><section class="onboarding-section"><h2>${t('离线功能')}</h2><div class="onboarding-language-selection onboarding-feature-selection"><div class="onboarding-feature-grid">${copy.capabilities.slice(-1).map((capability) => `<label><input type="checkbox" name="onboarding-denoiser" checked /><span>${capability}</span></label>`).join('')}<label><input type="checkbox" name="onboarding-translation" checked /><span>${copy.translation}</span></label></div><aside class="onboarding-model-preview"><strong>${modelListLabels[1]}</strong><ul data-onboarding-feature-models></ul></aside></div></section><section class="onboarding-model-summary"><strong>${copy.estimate}: <span data-onboarding-estimate></span></strong>${chinaModelSourceToggle()}</section><div class="onboarding-actions"><button class="modal-action" data-download-onboarding-models type="button">${copy.download}</button><button class="secondary" data-customize-onboarding-models type="button">${copy.customize}</button><button class="secondary" data-finish-onboarding type="button">${copy.later}</button></div></section>`);
   updateOnboardingSetup();
   onboardingPage.addEventListener('change', (event) => {
     if (event.target.matches('[name="onboarding-performance-mode"]')) {
@@ -2216,9 +2159,9 @@ function openOnboardingAi() {
   const copy = aiOnboardingCopy[locale] || aiOnboardingCopy.en;
   // 低配设备默认「暂不开启」实时 AI 笔记（太耗资源），仅保留会后一次性的 AI 会议纪要。
   const defaultProactivity = deviceIsWeak() ? 'off' : 'assist';
-  const levels = copy.levels.map(([value, title, detail]) => `<label class="onboarding-ai-level${value === defaultProactivity ? ' is-selected' : ''}"><input type="radio" name="onboarding-ai-proactivity" value="${value}"${value === defaultProactivity ? ' checked' : ''} /><span><b>${escapeHtml(title)}</b><small>${escapeHtml(detail)}</small></span></label>`).join('');
+  const levels = copy.levels.map(([value, title, detail]) => `<label class="onboarding-ai-level${value === defaultProactivity ? ' is-selected' : ''}"><input type="radio" name="onboarding-ai-proactivity" value="${value}"${value === defaultProactivity ? ' checked' : ''} /><span><b>${escapeHtml(title)}${recommendTag(value === 'off' && deviceIsWeak())}</b><small>${escapeHtml(detail)}</small></span></label>`).join('');
   const brand = locale === 'zh' ? '<div class="onboarding-brand-name"><span>言</span><b>言录</b></div>' : '<img class="onboarding-brand" src="./assets/brevia-logo.svg" alt="Brevia" />';
-  showOnboardingPage('setup', `<section class="onboarding-setup-page onboarding-ai-setup-page"><button class="onboarding-back" data-onboarding-back-language type="button" aria-label="${t('返回')}">←</button><header>${brand}<h1>${escapeHtml(copy.title)}</h1><div class="onboarding-intro"><p>${escapeHtml(copy.intro)}</p></div></header>${deviceIsWeak() ? `<p class="onboarding-weak-note">⚠ ${escapeHtml(t('本机性能有限，建议只保留会后 AI 会议纪要，并关闭会中实时 AI 笔记以获得更流畅的体验。'))}</p>` : ''}<section class="onboarding-section onboarding-ai-feature onboarding-ai-row"><div class="onboarding-ai-copy"><h2>${escapeHtml(copy.meetingNotesTitle)}</h2><p class="onboarding-ai-feature-desc">${escapeHtml(copy.meetingNotesDesc)}</p><p class="onboarding-ai-way-title">${escapeHtml(copy.wayTitle)}</p><div class="onboarding-ai-ways"><label><input type="radio" name="onboarding-ai-way" value="built-in" /><span><b>${escapeHtml(copy.builtin)}</b><small>${escapeHtml(copy.builtinHint)}</small></span></label><label><input type="radio" name="onboarding-ai-way" value="online" /><span><b>${escapeHtml(copy.online)}</b><small>${escapeHtml(copy.onlineHint)}</small></span></label></div></div><div class="onboarding-ai-frame" data-onboarding-summary-demo></div></section><section class="onboarding-section onboarding-ai-feature onboarding-ai-row"><div class="onboarding-ai-copy"><h2>${escapeHtml(copy.liveNotesTitle)}</h2><p class="onboarding-ai-feature-desc">${escapeHtml(copy.liveNotesDesc)}</p><p class="onboarding-ai-way-title">${escapeHtml(copy.proactivityTitle)}</p><div class="onboarding-ai-levels">${levels}</div></div><div class="onboarding-ai-frame"><aside class="onboarding-ai-demo" data-onboarding-ai-demo></aside></div></section><div class="onboarding-actions"><button class="modal-action" data-onboarding-ai-finish type="button">${escapeHtml(copy.finish)}</button><button class="secondary" data-onboarding-ai-skip type="button">${escapeHtml(copy.skip)}</button></div></section>`);
+  showOnboardingPage('setup', `<section class="onboarding-setup-page onboarding-ai-setup-page"><button class="onboarding-back" data-onboarding-back-language type="button" aria-label="${t('返回')}">←</button><header>${brand}<h1>${escapeHtml(copy.title)}</h1><div class="onboarding-intro"><p>${escapeHtml(copy.intro)}</p></div></header><section class="onboarding-section onboarding-ai-feature onboarding-ai-row"><div class="onboarding-ai-copy"><h2>${escapeHtml(copy.meetingNotesTitle)}</h2><p class="onboarding-ai-feature-desc">${escapeHtml(copy.meetingNotesDesc)}</p><p class="onboarding-ai-way-title">${escapeHtml(copy.wayTitle)}</p><div class="onboarding-ai-ways"><label><input type="radio" name="onboarding-ai-way" value="built-in" /><span><b>${escapeHtml(copy.builtin)}</b><small>${escapeHtml(copy.builtinHint)}</small></span></label><label><input type="radio" name="onboarding-ai-way" value="online" /><span><b>${escapeHtml(copy.online)}${recommendTag(deviceIsWeak())}</b><small>${escapeHtml(copy.onlineHint)}</small></span></label></div></div><div class="onboarding-ai-frame" data-onboarding-summary-demo></div></section><section class="onboarding-section onboarding-ai-feature onboarding-ai-row"><div class="onboarding-ai-copy"><h2>${escapeHtml(copy.liveNotesTitle)}</h2><p class="onboarding-ai-feature-desc">${escapeHtml(copy.liveNotesDesc)}</p><p class="onboarding-ai-way-title">${escapeHtml(copy.proactivityTitle)}</p><div class="onboarding-ai-levels">${levels}</div></div><div class="onboarding-ai-frame"><aside class="onboarding-ai-demo" data-onboarding-ai-demo></aside></div></section><div class="onboarding-actions"><button class="modal-action" data-onboarding-ai-finish type="button">${escapeHtml(copy.finish)}</button><button class="secondary" data-onboarding-ai-skip type="button">${escapeHtml(copy.skip)}</button></div></section>`);
   renderOnboardingAiDemo();
   renderOnboardingSummaryDemo();
   onboardingPage.addEventListener('change', (event) => {
@@ -2230,6 +2173,7 @@ function openOnboardingAi() {
   onboardingPage.addEventListener('click', (event) => {
     const aiWay = event.target.closest('.onboarding-ai-ways label');
     if (aiWay) {
+      onboardingOnlineProvider = !aiWay.querySelector('[value="built-in"]');
       summaryConfig = { ...summaryConfig, provider: aiWay.querySelector('[value="built-in"]') ? 'built-in' : 'openai' };
       openModal('summary-model');
       return;
@@ -2339,16 +2283,6 @@ function installModel(model) {
   if (isModelInstalled(model.name)) return;
   installedModelNames.add(model.name);
 }
-/** 为活动语言构建实时流式模型选项，始终保留当前模型。@param {string} language 会议语言。@returns {Array<[string, string]>} 值/标签对。*/
-function liveStreamingModelOptions(language) {
-  const options = compatibleStreamingModels(language).filter(([id]) => id);
-  const current = liveConfig.streaming_model_id;
-  if (current && !options.some(([id]) => id === current)) {
-    const label = prepareModelChoices['active-streaming-model'].find(([id]) => id === current)?.[1] || current;
-    options.unshift([current, label]);
-  }
-  return options;
-}
 /** 热切换当前会议的实时配置（语言/流式模型）。@param {object} changes 部分配置。@returns {Promise<void>} */
 async function reconfigureLive(changes) {
   const meetingId = breviaClient?.state.meeting?.id;
@@ -2407,7 +2341,7 @@ settingsModal.addEventListener('click', async (event) => {
     if (section) section.outerHTML = renderPermissionSettings();
     return;
   }
-  if (event.target.closest('[data-confirm-action]')) { const action = confirmationAction; confirmationAction = undefined; const value = settingsModal.querySelector('[data-prompt-input]')?.value; closeModal(); await action?.(value); return; }
+  if (event.target.closest('[data-confirm-action]')) { const action = confirmationAction; confirmationAction = undefined; closeModal(); await action?.(); return; }
   const batchExportFormat = event.target.closest('[data-batch-export-format]');
   if (batchExportFormat) { closeModal(); void exportSelectedMeetings(batchExportFormat.dataset.batchExportFormat); return; }
   const openStorage = event.target.closest('[data-open-storage]');
@@ -3303,30 +3237,6 @@ document.querySelector('#end-meeting').addEventListener('click', async (event) =
   }
 });
 miniMeeting.addEventListener('click', () => { miniMeeting.hidden = true; showView('live'); });
-/** 用内联编辑器替换说话人标签并传播保存的名称。@param {HTMLElement} label 说话人名称元素。@returns {void} */
-function editSpeakerName(label) {
-  const speaker = label.dataset.speaker;
-  const input = document.createElement('input');
-  input.className = 'speaker-name-input';
-  input.value = label.textContent;
-  input.maxLength = 32;
-  const commit = () => {
-    const name = input.value.trim() || `${t('说话人')} ${speaker}`;
-    const nextLabel = document.createElement('b');
-    nextLabel.dataset.speaker = speaker;
-    nextLabel.title = '双击修改名称';
-    nextLabel.textContent = name;
-    input.replaceWith(nextLabel);
-    document.querySelectorAll(`[data-speaker="${speaker}"]`).forEach((node) => { node.textContent = name; });
-    const meetingId = breviaClient?.state.meeting?.id || breviaClient?.state.selectedMeetingId;
-    if (window.brevia && meetingId) window.brevia.speaker.rename({ meeting_id: meetingId, speaker_id: speaker, name, locked: true }).catch((error) => showToast(error.message));
-  };
-  input.addEventListener('blur', commit, { once: true });
-  input.addEventListener('keydown', (event) => { if (event.key === 'Enter') input.blur(); if (event.key === 'Escape') { input.value = label.textContent; input.blur(); } });
-  label.replaceWith(input);
-  input.focus();
-  input.select();
-}
 /** 切换会议主区域布局：'notes'（笔记模式，默认）或 'caption'（字幕展开模式）。@param {'notes'|'caption'} mode 目标模式。@returns {void} */
 function setLiveLayoutMode(mode) {
   const layout = document.querySelector('.live-layout');
@@ -3771,11 +3681,7 @@ function openBatchExport() {
   settingsModal.querySelector('h2').textContent = t('选择导出格式');
   settingsModal.querySelector('.modal-title p').textContent = BreviaI18n.selectionOverview(locale, selectedMeetings().length);
   settingsModal.querySelector('.modal-body').innerHTML = `<div class="export-options">${batchExportFormats.map((format) => `<button type="button" data-batch-export-format="${format}"><span><b>${format.toUpperCase()}</b></span><strong>.${format}</strong></button>`).join('')}</div>`;
-  settingsModal.classList.remove('modal-leave');
-  settingsModal.style.zIndex = '40';
-  settingsModal.hidden = false;
-  requestAnimationFrame(() => settingsModal.classList.add('modal-enter'));
-  document.body.classList.add('modal-open');
+  showSettingsModal();
 }
 async function exportSelectedMeetings(format) {
   const meetings = selectedMeetings();
@@ -4002,7 +3908,7 @@ const updatePlayerControl = () => {
   renderMiniPlayback();
 };
 /** 将音频进度控件格式化为 mm:ss 显示。@returns {void} */
-const renderPlayerTime = () => { const value = Number(progress.value); playerTime.textContent = `${String(Math.floor(value / 60)).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}`; };
+const renderPlayerTime = () => { playerTime.textContent = formatMeetingTime(Number(progress.value) * 1000); };
 /** 突出显示当前播放时间的转录段落，并使其在自己的滚动器中居中。*/
 function syncPlaybackTranscript() {
   syncPlaybackFloatingCaption();

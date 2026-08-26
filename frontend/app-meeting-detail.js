@@ -2,7 +2,7 @@
 function renderSegmentData(segment, editable, speakerNames) {
   const overlapSpeakers = [...new Set((segment.word_timestamps || []).flatMap((word) => word.overlap_speakers || []))];
   return {
-    time: `${String(Math.floor(segment.start_ms / 60000)).padStart(2, '0')}:${String(Math.floor(segment.start_ms / 1000) % 60).padStart(2, '0')}`,
+    time: formatMeetingTime(segment.start_ms),
     seconds: Math.floor(segment.start_ms / 1000),
     startSeconds: segment.start_ms / 1000,
     endSeconds: segment.end_ms / 1000,

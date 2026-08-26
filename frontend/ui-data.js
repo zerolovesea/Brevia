@@ -9,8 +9,7 @@ const uiData = {
       { time: '09:41', speaker: { id: '1', name: '说话人 1' }, text: '我们下周先完成试点，把客服和销售两个场景跑通。', translation: 'Next week, we will complete the pilot for customer support and sales.' },
       { time: '09:42', speaker: { id: '2', name: '说话人 2' }, text: '预算部分我会在周五前补一版，重点说明模型的本地部署成本。', translation: 'I will update the budget by Friday, focusing on local deployment costs.' },
       { time: '09:43', speaker: { id: '1', name: '说话人 1' }, text: '还有一个需要确认的是...', translation: 'One thing we still need to confirm is...', partial: true }
-    ],
-    participants: []
+    ]
   },
   detail: {
     transcript: [

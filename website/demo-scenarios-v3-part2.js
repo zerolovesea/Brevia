@@ -149,43 +149,6 @@ DemoScenariosV3.prototype.setupPrepareUI = function() {
   return html;
 };
 
-// The real app's live panel is identical for every meeting (renderLivePanel in
-// frontend/app.js): 模型与设置 with three selectors plus the power-saving choice.
-// Shared here so the transcription and voiceprint demos render the same panel.
-DemoScenariosV3.prototype.getLiveSettingsMarkup = function() {
-  return String.raw`
-    <section class="live-settings">
-      <p class="eyebrow">模型与设置</p>
-
-      <label class="config-select-field">
-        会议语言
-        <div class="flow-select">
-          <button class="flow-select-toggle" type="button" aria-expanded="false">自动检测<span>⌄</span></button>
-        </div>
-      </label>
-
-      <label class="config-select-field">
-        实时识别模型
-        <div class="flow-select">
-          <button class="flow-select-toggle" type="button" aria-expanded="false">Streaming Zipformer Multilingual<span>⌄</span></button>
-        </div>
-      </label>
-
-      <label class="config-select-field">
-        精修模型
-        <div class="flow-select">
-          <button class="flow-select-toggle" type="button" aria-expanded="false">Qwen3-ASR 1.7B int8<span>⌄</span></button>
-        </div>
-      </label>
-
-      <label class="choice live-power-saving">
-        <input type="checkbox" />
-        <span><b>省电模式</b><small>关闭实时降噪和精修，降低字幕更新频率；会后精修保持可用。</small></span>
-      </label>
-    </section>
-  `;
-};
-
 // The real notes editor toolbar (1:1 with createNotesEditor in frontend/ui-components.js).
 // Buttons: bold, italic, h1–h3, ul/ol (SVG), quote, link, image, code, todo, highlight, mode-toggle.
 DemoScenariosV3.prototype.notesToolbarHtml = function () {
@@ -384,11 +347,6 @@ DemoScenariosV3.prototype.enableTranslation = function() {
       translationEl.style.display = 'block';
     }
   });
-};
-
-DemoScenariosV3.prototype.updateLiveCaption = function(text, translation) {
-  // Caption elements removed - this method is now a no-op
-  // Kept for compatibility with existing demo step sequences
 };
 
 DemoScenariosV3.prototype.getParticipantSourceLabel = function() {

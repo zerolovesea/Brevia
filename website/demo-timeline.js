@@ -204,7 +204,6 @@ class DemoTimeline {
    * Jump to a specific step index
    */
   async jumpTo(stepIndex) {
-    const wasRunning = this.isRunning;
     this.stop();
 
     if (stepIndex >= 0 && stepIndex < this.steps.length) {

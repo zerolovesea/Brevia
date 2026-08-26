@@ -20,7 +20,6 @@ from pathlib import Path
 
 from .asr import ModelManager, RefinedASR
 from .audio_io import read_mono_wav_window
-from .config import SETTINGS
 from .worker_refinement import RefinementWorkerMixin
 
 ARTIFACT_RE = re.compile(r"```|`\(|language\s*=?\s*[A-Za-z]+|\*\*")

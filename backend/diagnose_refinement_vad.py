@@ -79,7 +79,7 @@ def main():
     for label, params in (("default", default_params), ("zh", zh_params)):
         vad = OfflineVAD(manager, "silero-vad", vad_params=params)
         speech = vad.process(samples, sample_rate)
-        durations = summarize(label, speech, sample_rate)
+        summarize(label, speech, sample_rate)
 
         # 模拟 mic/local-user 单说话人路径的稳定化与窗口组装。
         turns = [{**turn, "speaker": "local-user"} for turn in speech]
