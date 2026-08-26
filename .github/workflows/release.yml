@@ -6,6 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: write
   contents: write
 
 jobs:
@@ -131,3 +132,4 @@ jobs:
           git add website/index-zh.html website/index-en.html
           git diff --cached --quiet || git commit -m "chore: update download links for $GITHUB_REF_NAME"
           git push origin main
+          gh workflow run deploy-pages.yml --ref main
