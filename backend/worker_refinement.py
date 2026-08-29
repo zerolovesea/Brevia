@@ -1627,6 +1627,24 @@ class RefinementWorkerMixin:
             None,
         ):
             text = f"{text[:match.start()]}{match.group('phrase')}{text[match.end():]}"
+        # 流式英文模型偶尔以全大写写出整段或句首的一长串词。只处理连续三个
+        # 以上的大写词，避免改动正常句中的专有名词；常见技术缩写保持大写。
+        def sentence_case(value):
+            value = value.lower().capitalize()
+            return re.sub(
+                r"\b(?:ai|api|asr|cpu|gpu|http|https|llm|url)\b",
+                lambda match: match.group().upper(),
+                value,
+            )
+
+        text = re.sub(
+            r"(?:\b[A-Z][A-Z'’-]*\b(?:[\s,;:.!?]+|$)){3,}",
+            lambda match: sentence_case(match.group()),
+            text,
+        )
+        letters = "".join(re.findall(r"[A-Za-z]", text))
+        if len(letters) >= 4 and letters.isupper():
+            text = sentence_case(text)
         return _normalize_numbers(text)
 
     def _is_duplicate_final(self, event):

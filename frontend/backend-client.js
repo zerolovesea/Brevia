@@ -46,13 +46,39 @@ class AudioCapture {
     this.paused = false;
     this.stopping = false;
     this.stopPromise = null;
+    // 用户显式选择的麦克风设备 id(来自枚举);空串表示使用系统默认设备。
+    // Windows 上「默认通信设备」可能被设成已拔出的耳机麦克风,导致拔掉耳机后收不到声音,
+    // 因此允许用户固定选择内置麦克风,绕开有问题的系统默认。
+    this.micDeviceId = '';
+  }
+
+  // 构造 getUserMedia 的音频约束,把所选设备固化为 exact deviceId。
+  micConstraints() {
+    const audio = { autoGainControl: true, echoCancellation: true, noiseSuppression: true };
+    if (this.micDeviceId) audio.deviceId = { exact: this.micDeviceId };
+    return audio;
+  }
+
+  // 尝试打开麦克风轨道。若显式选择的设备已断开(例如拔出耳机),回退到系统默认并记录 micFellBack,
+  // 避免录音直接失败;调用方可通过读取 micFellBack 同步 UI。
+  async openMicStream() {
+    try {
+      return await navigator.mediaDevices.getUserMedia({ audio: this.micConstraints() });
+    } catch (error) {
+      if (this.micDeviceId && (error?.name === 'NotFoundError' || error?.name === 'DevicesNotFoundError')) {
+        this.micDeviceId = '';
+        this.micFellBack = true;
+        return navigator.mediaDevices.getUserMedia({ audio: this.micConstraints() });
+      }
+      throw error;
+    }
   }
 
   async requestTrack(track) {
     let stream;
     try {
       stream = track === 'mic'
-        ? await navigator.mediaDevices.getUserMedia({ audio: { autoGainControl: true, echoCancellation: true, noiseSuppression: true } })
+        ? await this.openMicStream()
         : await navigator.mediaDevices.getDisplayMedia({ video: true, audio: { systemAudio: 'include', suppressLocalAudioPlayback: false } });
     } catch (error) {
       if (track === 'mic') throw new Error(describeMicError(error));
@@ -84,10 +110,11 @@ class AudioCapture {
   }
 
   async previewMic() {
-    if (this.preview) return;
+    if (this.preview) return false;
+    this.micFellBack = false;
     let stream;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: { autoGainControl: true, echoCancellation: true, noiseSuppression: true } });
+      stream = await this.openMicStream();
     } catch (error) {
       throw new Error(describeMicError(error));
     }
@@ -113,6 +140,7 @@ class AudioCapture {
       await this.release(resource);
       throw error;
     }
+    return this.micFellBack;
   }
 
   async stopPreview() {
@@ -276,14 +304,33 @@ window.breviaClient = window.brevia ? {
   capture: null,
   preview: null,
   onLevel: null,
+  micDeviceId: '',
+  // 设置要使用的麦克风设备(空串表示系统默认)。同时应用到现有与后续创建的采集实例。
+  setMicDevice(deviceId) {
+    this.micDeviceId = deviceId || '';
+    if (this.capture) this.capture.micDeviceId = this.micDeviceId;
+    if (this.preview) this.preview.micDeviceId = this.micDeviceId;
+  },
+  // 枚举系统可用的麦克风输入设备,供录制前页的下拉选择。
+  async listMicrophones() {
+    if (!navigator.mediaDevices?.enumerateDevices) return [];
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      return devices
+        .filter((device) => device.kind === 'audioinput')
+        .filter((device) => device.deviceId && device.deviceId !== 'default' && device.deviceId !== 'communications')
+        .map((device) => ({ deviceId: device.deviceId, label: device.label || '' }));
+    } catch { return []; }
+  },
   async initialize() {
     const result = await window.brevia.initialize();
     this.state.initialized = result;
     return result;
   },
-  async start(payload, inputs) {
+  async start(payload, inputs, micDeviceId) {
     await this.stopPreview();
     this.capture = new AudioCapture(window.brevia.meeting.audio, this.onLevel);
+    this.capture.micDeviceId = micDeviceId ?? this.micDeviceId;
     let meeting;
     try {
       if (inputs.system) {
@@ -310,7 +357,10 @@ window.breviaClient = window.brevia ? {
     return meeting;
   },
   async previewMic() {
-    if (!this.preview) this.preview = new AudioCapture(null, this.onLevel);
+    if (!this.preview) {
+      this.preview = new AudioCapture(null, this.onLevel);
+      this.preview.micDeviceId = this.micDeviceId;
+    }
     return this.preview.previewMic();
   },
   async stopPreview() {

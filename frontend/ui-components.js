@@ -2,6 +2,33 @@
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character]);
 /** 统一的勾选 SVG 图标（线框风格，颜色跟随 currentColor，由各状态的绿色类控制）。@type {string} */
 const checkIconSvg = '<svg class="check-icon" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3 8.5 3.2 3.2L13 4.5" /></svg>';
+let pageTooltip;
+/** 将所有悬浮说明挂到 body，避免被任意视图或滚动区裁切。 */
+function showPageTooltip(anchor, text) {
+  if (typeof document === 'undefined') return;
+  pageTooltip ||= Object.assign(document.createElement('div'), { className: 'page-tooltip', role: 'tooltip' });
+  if (!pageTooltip.parentNode) document.body.append(pageTooltip);
+  pageTooltip.textContent = text || '';
+  if (!pageTooltip.textContent) return;
+  pageTooltip.hidden = false;
+  pageTooltip.style.visibility = 'hidden';
+  const rect = anchor.getBoundingClientRect();
+  const box = pageTooltip.getBoundingClientRect();
+  pageTooltip.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - box.width - 8))}px`;
+  pageTooltip.style.top = `${Math.max(8, Math.min(rect.top - box.height - 8, window.innerHeight - box.height - 8))}px`;
+  pageTooltip.style.visibility = '';
+}
+function hidePageTooltip() { if (pageTooltip) pageTooltip.hidden = true; }
+if (typeof document !== 'undefined') {
+  document.addEventListener('pointerover', (event) => {
+    const anchor = event.target.closest?.('.notes-toolbar button[data-tooltip]');
+    if (anchor) showPageTooltip(anchor, anchor.dataset.tooltip);
+  });
+  document.addEventListener('pointerout', (event) => {
+    const anchor = event.target.closest?.('.notes-toolbar button[data-tooltip]');
+    if (anchor && !anchor.contains(event.relatedTarget)) hidePageTooltip();
+  });
+}
 /** 格式化说话人名称，支持多语言。@param {object|string} speaker 说话人对象或名称字符串。@returns {string} 格式化的说话人名称。 */
 function formatSpeakerName(speaker) {
   const name = typeof speaker === 'string' ? speaker : speaker?.name;
@@ -34,10 +61,10 @@ function detectCaptionSignals(text) {
   return signals;
 }
 /** 渲染一条逐字稿条目，用于实时会议或已完成的会议。@param {{time: string, startSeconds?: number, endSeconds?: number, speaker: object, text: string, translation?: string, partial?: boolean}} entry 逐字稿数据。@returns {string} 条目标记。 */
-function renderTranscriptSegment({ time, startSeconds, endSeconds, speaker, text, translation, partial = false }) {
+function renderTranscriptSegment({ time, startSeconds, endSeconds, speaker, text, translation, partial = false, showSpeaker = true }) {
   const timing = Number.isFinite(startSeconds) && Number.isFinite(endSeconds) ? ` data-start="${startSeconds}" data-end="${endSeconds}"` : '';
-  const label = speaker.editing ? `<form class="inline-segment-speaker-form" data-segment-id="${speaker.segmentId}"><input class="speaker-name-input" data-segment-speaker-input name="name" value="${escapeHtml(speaker.name)}" maxlength="32" /></form>` : `<button class="segment-speaker"${speaker.segmentId ? ` data-segment-speaker="${escapeHtml(speaker.segmentId)}"` : ''}${speaker.id ? ` data-speaker="${escapeHtml(speaker.id)}"` : ''}>${escapeHtml(speaker.name)}</button>`;
-  const overlap = speaker.overlapNames?.length ? `<small class="overlap-speakers">${t('重叠说话')}：${escapeHtml(speaker.overlapNames.join('、'))}</small>` : '';
+  const label = showSpeaker ? (speaker.editing ? `<form class="inline-segment-speaker-form" data-segment-id="${speaker.segmentId}"><input class="speaker-name-input" data-segment-speaker-input name="name" value="${escapeHtml(speaker.name)}" maxlength="32" /></form>` : `<button class="segment-speaker"${speaker.segmentId ? ` data-segment-speaker="${escapeHtml(speaker.segmentId)}"` : ''}${speaker.id ? ` data-speaker="${escapeHtml(speaker.id)}"` : ''}>${escapeHtml(speaker.name)}</button>`) : '';
+  const overlap = showSpeaker && speaker.overlapNames?.length ? `<small class="overlap-speakers">${t('重叠说话')}：${escapeHtml(speaker.overlapNames.join('、'))}</small>` : '';
   const signalBadge = !partial ? (() => { const signals = detectCaptionSignals(text); return signals.length ? `<small class="caption-signals" style="white-space:nowrap;flex:none" aria-label="${signals.map((signal) => t(signal)).join('、')}">${signals.map((signal) => t(signal)).join(' · ')}</small>` : ''; })() : '';
   return `<article class="segment${partial ? ' partial' : ''}"${partial ? ' id="partial-segment"' : ''}${speaker.segmentId ? ` data-segment-id="${escapeHtml(speaker.segmentId)}"` : ''}${timing}><div class="segment-meta"><time>${escapeHtml(time)}</time>${label}${overlap}${signalBadge}</div><div class="segment-copy"><p>${escapeHtml(text)}</p>${translation ? `<p class="translation">${escapeHtml(translation)}</p>` : ''}</div></article>`;
 }
@@ -61,7 +88,7 @@ function renderSettingsView() {
 }
 /** 仅允许安全协议的链接/图片地址，阻止 javascript: 等注入。@param {string} url 原始地址。@returns {string} 安全地址。 */
 function sanitizeUrl(url = '') {
-  return /^(https?:|mailto:|data:image\/)/i.test(url.trim()) ? url.trim() : '#';
+  return /^(https?:|mailto:|data:image\/|brevia-note:\/\/)/i.test(url.trim()) ? url.trim() : '#';
 }
 /** 把富文本编辑器的 DOM 子树转换为 Markdown（支持粗体/斜体/代码/链接/图片/标题/列表/引用/表格）。@param {Node} root 根节点。@returns {string} Markdown 文本。 */
 function htmlToMarkdown(root) {
@@ -132,38 +159,42 @@ function wrapInlineCode(editor) {
 }
 /** 创建所见即所得 Markdown 笔记编辑器（富文本默认，可切 Markdown 源码），live 视图与详情页共用。
  * @param {HTMLElement} root 容器，编辑器 DOM 将追加到其中。
- * @param {{onInput?: () => void}} options 输入回调（用于自动保存）。
+ * @param {{onInput?: Function, ariaLabel?: string, getMeetingId?: Function}} options 输入回调、编辑器标签与图片归属会议。
  * @returns {{setMarkdown: Function, getMarkdown: Function, setMode: Function, focus: Function}} 编辑器 API。 */
 function createNotesEditor(root, options = {}) {
-  const { onInput = null } = options;
+  const { onInput = null, ariaLabel = t('我的笔记'), getMeetingId = () => null } = options;
   const toolbarButtons = [
-    ['bold', t('加粗'), '<b>B</b>'],
-    ['italic', t('斜体'), '<i>I</i>'],
-    ['h1', t('标题 1'), 'H1'],
-    ['h2', t('标题 2'), 'H2'],
-    ['h3', t('标题 3'), 'H3'],
-    ['ul', t('列表'), '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="3" cy="4" r="1.1" fill="currentColor" stroke="none"/><circle cx="3" cy="8" r="1.1" fill="currentColor" stroke="none"/><circle cx="3" cy="12" r="1.1" fill="currentColor" stroke="none"/><path d="M7 4h6M7 8h6M7 12h6"/></svg>'],
-    ['ol', t('编号列表'), '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><text x="1.5" y="5" font-size="6.5" fill="currentColor" stroke="none">1</text><text x="1.5" y="9.5" font-size="6.5" fill="currentColor" stroke="none">2</text><text x="1.5" y="14" font-size="6.5" fill="currentColor" stroke="none">3</text><path d="M7 4h6M7 8.5h6M7 13h6"/></svg>'],
-    ['quote', t('引用'), '❝'],
-    ['link', t('插入链接'), '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6.2 9.8 3.6-3.6" /><path d="M7.2 11.4 5.6 13a2.6 2.6 0 0 1-3.6-3.6l1.6-1.6a2.6 2.6 0 0 1 3.6 0" /><path d="M8.8 4.6l1.6-1.6a2.6 2.6 0 0 1 3.6 3.6l-1.6 1.6a2.6 2.6 0 0 1-3.6 0" /></svg>'],
-    ['image', t('插入图片'), '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="2.5" width="13" height="11" rx="1" /><circle cx="5.5" cy="6.2" r="1.4" /><path d="m1.5 11 3.6-3.6L11 12.8" /></svg>'],
-    ['table', t('插入表格'), '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.25"><rect x="2" y="2" width="12" height="12"/><path d="M2 6h12M2 10h12M6 2v12M10 2v12"/></svg>'],
-    ['code', t('行内代码'), '&lt;/&gt;'],
-    ['todo', t('待办'), '☐'],
-    ['highlight', t('重点'), '★'],
-    ['mode-toggle', t('富文本'), '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3.5 3h9M8 3v10"/></svg>'],
+    ['bold', '加粗', '<b>B</b>'],
+    ['italic', '斜体', '<i>I</i>'],
+    ['h1', '标题 1', 'H1'],
+    ['h2', '标题 2', 'H2'],
+    ['h3', '标题 3', 'H3'],
+    ['ul', '列表', '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="3" cy="4" r="1.1" fill="currentColor" stroke="none"/><circle cx="3" cy="8" r="1.1" fill="currentColor" stroke="none"/><circle cx="3" cy="12" r="1.1" fill="currentColor" stroke="none"/><path d="M7 4h6M7 8h6M7 12h6"/></svg>'],
+    ['ol', '编号列表', '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><text x="1.5" y="5" font-size="6.5" fill="currentColor" stroke="none">1</text><text x="1.5" y="9.5" font-size="6.5" fill="currentColor" stroke="none">2</text><text x="1.5" y="14" font-size="6.5" fill="currentColor" stroke="none">3</text><path d="M7 4h6M7 8.5h6M7 13h6"/></svg>'],
+    ['quote', '引用', '❝'],
+    ['link', '插入链接', '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6.2 9.8 3.6-3.6" /><path d="M7.2 11.4 5.6 13a2.6 2.6 0 0 1-3.6-3.6l1.6-1.6a2.6 2.6 0 0 1 3.6 0" /><path d="M8.8 4.6l1.6-1.6a2.6 2.6 0 0 1 3.6 3.6l-1.6 1.6a2.6 2.6 0 0 1-3.6 0" /></svg>'],
+    ['image', '插入图片', '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="2.5" width="13" height="11" rx="1" /><circle cx="5.5" cy="6.2" r="1.4" /><path d="m1.5 11 3.6-3.6L11 12.8" /></svg>'],
+    ['table', '插入表格', '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.25"><rect x="2" y="2" width="12" height="12"/><path d="M2 6h12M2 10h12M6 2v12M10 2v12"/></svg>'],
+    ['code', '行内代码', '&lt;/&gt;'],
+    ['todo', '待办', '☐'],
+    ['highlight', '重点', '★'],
+    ['mode-toggle', '富文本', '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3.5 3h9M8 3v10"/></svg>'],
   ];
   const toolbar = document.createElement('div');
   toolbar.className = 'notes-toolbar';
-  toolbar.innerHTML = toolbarButtons.map(([command, label, html]) => `<button type="button" data-notes-command="${command}" title="${label}" aria-label="${label}">${html}</button>`).join('');
+  toolbar.innerHTML = toolbarButtons.map(([command, key, html]) => `<button type="button" data-notes-command="${command}" data-tooltip-key="${key}" data-tooltip="${t(key)}" aria-label="${t(key)}">${html}</button>`).join('');
   const urlPop = document.createElement('div');
   urlPop.className = 'notes-url-pop';
   urlPop.hidden = true;
   urlPop.innerHTML = `<input type="text" placeholder="https://…" spellcheck="false" /><button class="notes-url-ok" data-notes-url-ok type="button">${t('确定')}</button><button class="text-button" data-notes-url-cancel type="button">${t('取消')}</button>`;
+  const findPop = document.createElement('div');
+  findPop.className = 'notes-find-pop';
+  findPop.hidden = true;
+  findPop.innerHTML = `<input data-notes-find placeholder="${t('查找')}" /><input data-notes-replace placeholder="${t('替换为')}" /><button type="button" data-notes-find-prev aria-label="${t('上一个')}">↑</button><button type="button" data-notes-find-next aria-label="${t('下一个')}">↓</button><button type="button" data-notes-replace-all>${t('全部替换')}</button><button type="button" data-notes-find-close aria-label="${t('关闭')}">×</button>`;
   const editor = document.createElement('div');
   editor.className = 'notes-editor';
   editor.setAttribute('contenteditable', 'true');
-  editor.setAttribute('aria-label', t('我的笔记'));
+  editor.setAttribute('aria-label', ariaLabel);
   editor.spellcheck = false;
   const input = document.createElement('textarea');
   input.className = 'notes-input';
@@ -175,12 +206,15 @@ function createNotesEditor(root, options = {}) {
   imageInput.accept = 'image/*';
   imageInput.hidden = true;
   const suggestion = root.querySelector('[data-ai-suggestion]');
-  root.append(toolbar, urlPop, ...(suggestion ? [suggestion] : []), editor, input, imageInput);
+  root.append(toolbar, urlPop, findPop, ...(suggestion ? [suggestion] : []), editor, input, imageInput);
   // 回车产生 <p>，让富文本编辑器的 DOM 结构规范、便于转回 Markdown。
   document.execCommand('defaultParagraphSeparator', false, 'p');
   let urlTarget = null;
   let mode = 'rich';
+  let findMatchIndex = -1;
   const urlInput = urlPop.querySelector('input');
+  const findInput = findPop.querySelector('[data-notes-find]');
+  const replaceInput = findPop.querySelector('[data-notes-replace]');
   function insertText(text) {
     if (mode === 'markdown') {
       const start = input.selectionStart ?? input.value.length;
@@ -204,6 +238,47 @@ function createNotesEditor(root, options = {}) {
     urlInput.focus();
   }
   function closeUrlPop() { urlPop.hidden = true; urlTarget = null; }
+  function openFind() { findPop.hidden = false; findInput.focus(); findInput.select(); }
+  function richMatches(query) {
+    const nodes = [];
+    const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT);
+    let text = ''; let node;
+    while ((node = walker.nextNode())) { nodes.push({ node, start: text.length }); text += node.textContent; }
+    const matches = []; const needle = query.toLocaleLowerCase(); const haystack = text.toLocaleLowerCase();
+    for (let index = haystack.indexOf(needle); index >= 0; index = haystack.indexOf(needle, index + needle.length)) matches.push({ start: index, end: index + needle.length });
+    return { nodes, matches };
+  }
+  function selectFindMatch(step = 1) {
+    const query = findInput.value;
+    if (!query) return;
+    if (mode === 'markdown') {
+      const haystack = input.value.toLocaleLowerCase(); const needle = query.toLocaleLowerCase();
+      const startFrom = step > 0 ? (input.selectionEnd || 0) : Math.max(0, (input.selectionStart || input.value.length) - 1);
+      let index = step > 0 ? haystack.indexOf(needle, startFrom) : haystack.lastIndexOf(needle, startFrom);
+      if (index < 0) index = step > 0 ? haystack.indexOf(needle) : haystack.lastIndexOf(needle);
+      if (index >= 0) { input.focus(); input.setSelectionRange(index, index + query.length); }
+      return;
+    }
+    const { nodes, matches } = richMatches(query);
+    if (!matches.length) return;
+    findMatchIndex = (findMatchIndex + step + matches.length) % matches.length;
+    const match = matches[findMatchIndex];
+    const locate = (position) => nodes.find((item) => position >= item.start && position <= item.start + item.node.textContent.length);
+    const start = locate(match.start); const end = locate(match.end);
+    if (!start || !end) return;
+    const range = document.createRange();
+    range.setStart(start.node, match.start - start.start); range.setEnd(end.node, match.end - end.start);
+    const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range); editor.focus();
+  }
+  function replaceAll() {
+    const query = findInput.value;
+    if (!query) return;
+    const source = mode === 'rich' ? htmlToMarkdown(editor) : input.value;
+    const next = source.split(query).join(replaceInput.value);
+    if (next === source) return;
+    input.value = next; editor.innerHTML = renderMarkdown(next); findMatchIndex = -1;
+    if (onInput) onInput({ programmatic: true });
+  }
   /** 切换富文本 / Markdown 模式：工具栏始终可见，Markdown 模式下仅禁用依赖 execCommand 的格式按钮。 */
   function setMode(nextMode) {
     mode = nextMode === 'markdown' ? 'markdown' : 'rich';
@@ -213,8 +288,8 @@ function createNotesEditor(root, options = {}) {
       if (command === 'mode-toggle') {
         const showingMarkdown = mode === 'markdown';
         button.classList.toggle('is-active', showingMarkdown);
-        button.title = showingMarkdown ? t('切换到富文本') : t('切换到 Markdown');
-        button.setAttribute('aria-label', button.title);
+        button.dataset.tooltip = showingMarkdown ? t('切换到富文本') : t('切换到 Markdown');
+        button.setAttribute('aria-label', button.dataset.tooltip);
         button.innerHTML = showingMarkdown
           ? '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="m5.5 4.5-3.5 3.5 3.5 3.5"/><path d="m10.5 4.5 3.5 3.5-3.5 3.5"/></svg>'
           : '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3.5 3h9M8 3v10"/></svg>';
@@ -267,13 +342,14 @@ function createNotesEditor(root, options = {}) {
     const [file] = imageInput.files;
     imageInput.value = '';
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const source = String(reader.result || '');
-      if (mode === 'markdown') insertText(`![](${source})`);
-      else { editor.focus(); document.execCommand('insertImage', false, source); if (onInput) onInput(); }
-    };
-    reader.readAsDataURL(file);
+    const meetingId = getMeetingId();
+    if (!meetingId || !window.brevia?.meeting?.noteImage?.save) return;
+    file.arrayBuffer().then((bytes) => window.brevia.meeting.noteImage.save({ meeting_id: meetingId, mime_type: file.type, bytes }))
+      .then(({ url }) => {
+        if (mode === 'markdown') insertText(`![](${url})`);
+        else { editor.focus(); document.execCommand('insertImage', false, url); if (onInput) onInput(); }
+      })
+      .catch((error) => console.error('Unable to save note image', error));
   });
   urlPop.querySelector('[data-notes-url-ok]').addEventListener('click', () => {
     const url = urlInput.value.trim();
@@ -289,8 +365,20 @@ function createNotesEditor(root, options = {}) {
     if (event.key === 'Enter') { event.preventDefault(); urlPop.querySelector('[data-notes-url-ok]').click(); }
     if (event.key === 'Escape') closeUrlPop();
   });
+  findPop.addEventListener('click', (event) => {
+    if (event.target.closest('[data-notes-find-prev]')) selectFindMatch(-1);
+    if (event.target.closest('[data-notes-find-next]')) selectFindMatch(1);
+    if (event.target.closest('[data-notes-replace-all]')) replaceAll();
+    if (event.target.closest('[data-notes-find-close]')) findPop.hidden = true;
+  });
+  findInput.addEventListener('input', () => { findMatchIndex = -1; selectFindMatch(1); });
+  findInput.addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); selectFindMatch(event.shiftKey ? -1 : 1); } if (event.key === 'Escape') findPop.hidden = true; });
+  [editor, input].forEach((surface) => surface.addEventListener('keydown', (event) => {
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f') { event.preventDefault(); openFind(); }
+  }));
   editor.addEventListener('input', () => {
-    const block = window.getSelection()?.anchorNode?.parentElement?.closest('p, div');
+    const anchor = window.getSelection()?.anchorNode;
+    let block = (anchor?.nodeType === Node.ELEMENT_NODE ? anchor : anchor?.parentElement)?.closest('p, li, h1, h2, h3, blockquote');
     const ordered = /^\d+\.\s$/.test(block?.textContent || '');
     if (ordered || /^[-*]\s$/.test(block?.textContent || '')) {
       const list = document.createElement(ordered ? 'ol' : 'ul');
@@ -298,6 +386,7 @@ function createNotesEditor(root, options = {}) {
       list.append(item);
       if (block === editor) editor.replaceChildren(list);
       else block.replaceWith(list);
+      block = item;
       const range = document.createRange();
       range.selectNodeContents(item);
       range.collapse(true);
@@ -305,7 +394,7 @@ function createNotesEditor(root, options = {}) {
       selection.removeAllRanges();
       selection.addRange(range);
     }
-    if (onInput) onInput();
+    if (onInput) onInput({ block });
   });
   input.addEventListener('input', () => { if (onInput) onInput(); });
   return {
@@ -403,7 +492,7 @@ function renderStaticViews() {
 /** 渲染详情页 tabbar 右侧的精修状态控件（未精修 → 按钮；精修中 → 文案；已精修 → ✓ + ··· 菜单）。@param {object} d 详情数据。@returns {string} 标记。 */
 function renderRefineStatus(d) {
   if (d.refineState === 'refining') return `<span class="refine-state">${t('正在精修')}</span>`;
-  if (!d.hasRefined) return `<button class="secondary refine-now" data-refine-now type="button">${t('精修字幕')}</button>`;
+  if (!d.hasRefined) return `<span class="refine-wrap"><button class="secondary refine-now" data-refine-now type="button">${t('精修字幕')}</button><div class="refine-menu" hidden><label class="refine-menu-speakers"><span>${t('会议人数')}</span><input type="number" min="1" step="1" inputmode="numeric" data-refine-num-speakers placeholder="${t('留空自动识别')}" /></label><button type="button" data-refine-action="start">${t('开始精修')}</button></div></span>`;
   const modelOptions = modelCatalog
     .filter((model) => model.stages?.includes('refined') && !removedRefinedModelIds.has(model.id))
     .map((model) => `<button type="button" data-refine-model="${escapeHtml(model.id)}">${escapeHtml(model.name)}</button>`)
@@ -432,7 +521,7 @@ function renderMeetingDetail() {
   if (d.notesEditing) {
     const root = document.querySelector('[data-detail-notes-root]');
     if (root) {
-      detailNotesEditor = createNotesEditor(root, { onInput: scheduleDetailNotesSave });
+      detailNotesEditor = createNotesEditor(root, { onInput: scheduleDetailNotesSave, getMeetingId: () => currentMeetingDetail?.id });
       detailNotesEditor.setMarkdown(d.notes);
       detailNotesEditor.focus();
     }

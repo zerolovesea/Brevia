@@ -336,19 +336,26 @@ const appCopy = {
     en: { models: { title: 'Model library', intro: 'All transcription models run locally. Your private data is never uploaded to the network.', languages: 'Recommended languages', items: [['Live captions', 'Streaming Zipformer Chinese XLarge', 'Chinese / English / Cantonese', 'Native streaming recognition that continuously updates the active caption.', '⌁'], ['Live captions', 'Streaming Zipformer English', 'English', 'Native streaming recognition for English.', 'Z'], ['Punctuation restoration', 'English Punctuation and Casing', 'English', 'Restores English punctuation and casing.', '·'], ['Punctuation restoration', 'Chinese and English Punctuation', 'Chinese / English / Cantonese', 'Adds commas, full stops, and question marks to live captions.', '·'], ['Post-meeting refinement', 'Qwen3-ASR', 'Multilingual', 'Creates a high-accuracy revision from the complete recording.', 'Q'], ['Speaker diarization', 'Pyannote Segmentation 3.0', 'Language independent', 'Detects regions of speech in a single-track recording.', 'P'], ['Speaker diarization', '3D-Speaker ERes2Net Base', 'Chinese', 'Extracts speaker embeddings for offline clustering.', '3D']] }, terms: { title: 'Manage terms', intro: 'Terms support meeting preparation, search, and notes. Only supported models use them in transcription.', items: [['Brevia', 'Product name'], ['Vector database', 'Technical term'], ['ERes2Net', 'Speaker model']], add: 'Add term', edit: 'Edit', save: 'Save', cancel: 'Cancel', remove: 'Delete', placeholder: 'Enter a term or phrase' }, storage: { title: 'Local storage', intro: 'All meeting data stays on this device.', items: [['Meetings and recordings', '8.4 GB'], ['Model files', '1.7 GB'], ['Exports', '240 MB']] }, close: 'Close', download: 'Download' },
     es: { models: { title: 'Biblioteca de modelos', intro: 'Todos los modelos de transcripción se ejecutan localmente. Tus datos privados nunca se suben a la red.', languages: 'Idiomas recomendados', items: [['Subtítulos en vivo', 'Streaming Zipformer Chinese XLarge', 'Chino / inglés / cantonés', 'Reconocimiento nativo en streaming que actualiza el subtítulo activo.', '⌁'], ['Subtítulos en vivo', 'Streaming Zipformer English', 'Inglés', 'Reconocimiento nativo para inglés.', 'Z'], ['Restauración de puntuación', 'English Punctuation and Casing', 'Inglés', 'Restaura puntuación y mayúsculas.', '·'], ['Restauración de puntuación', 'Puntuación chino-inglés', 'Chino / inglés / cantonés', 'Añade comas, puntos y signos de interrogación a los subtítulos en vivo.', '·'], ['Refinamiento posterior', 'Qwen3-ASR', 'Multilingüe', 'Crea una revisión precisa a partir de la grabación completa.', 'Q'], ['Separación de hablantes', 'Pyannote Segmentation 3.0', 'Independiente del idioma', 'Detecta regiones de habla en una grabación de una pista.', 'P'], ['Separación de hablantes', '3D-Speaker ERes2Net Base', 'Chino', 'Extrae huellas de voz para agrupar hablantes sin conexión.', '3D']] }, terms: { title: 'Gestionar términos', intro: 'Los términos sirven para preparar reuniones, buscar y crear notas. Solo los modelos compatibles los usan al transcribir.', items: [['Brevia', 'Nombre del producto'], ['Base de datos vectorial', 'Término técnico'], ['ERes2Net', 'Modelo de hablantes']], add: 'Añadir término', edit: 'Editar', save: 'Guardar', cancel: 'Cancelar', remove: 'Eliminar', placeholder: 'Escribe un término o frase' }, storage: { title: 'Almacenamiento local', intro: 'Todos los datos de reuniones permanecen en este dispositivo.', items: [['Reuniones y grabaciones', '8.4 GB'], ['Archivos de modelos', '1.7 GB'], ['Exportaciones', '240 MB']] }, close: 'Cerrar', download: 'Descargar' },
   },
+  // “更新日志”功能使用的界面文案（title/intro/view/分组标签）。日志内容见底部 whatsNewLog。
+  whatsNewCopy: {
+    zh: { title: '更新日志', intro: '每次版本更新，这里会记录言录的变化。', view: '查看更新日志', what: '新增', fixed: '修复', improved: '改进', changes: '其他', date: '日期', current: '当前版本', empty: '暂无更新日志' },
+    en: { title: 'What’s new', intro: 'See what changed in each release of Brevia.', view: 'View changelog', what: 'New', fixed: 'Fixed', improved: 'Improved', changes: 'Other', date: 'Date', current: 'Current version', empty: 'No changelog yet' },
+    es: { title: 'Novedades', intro: 'Consulta qué cambió en cada versión de Brevia.', view: 'Ver historial de cambios', what: 'Novedades', fixed: 'Correcciones', improved: 'Mejoras', changes: 'Otros', date: 'Fecha', current: 'Versión actual', empty: 'Aún no hay historial de cambios' },
+  },
 };
 const appCopyLocales = {
-  ja: { theme: { light: 'ライトテーマに切り替え', dark: 'ダークテーマに切り替え' }, update: { title: 'ソフトウェアアップデート', description: '現在のバージョン 0.1.0', action: 'アップデートを確認', checking: '確認中…', available: 'バージョン 0.2.0 を利用できます', update: '0.2.0 に更新', floating: 'Brevia を更新', updating: '更新中…', downloading: 'ダウンロード中', current: '最新です' }, model: { manage: 'モデルライブラリを管理', download: 'ダウンロード', downloading: 'ダウンロード中…', installed: 'インストール済み', remove: '削除' }, summary: { title: '会議の要約を管理', intro: 'すべての設定はこのデバイスにのみ保存され、アップロードされません。', provider: 'プロバイダー', key: 'API キー', endpoint: 'リクエスト URL', model: 'モデル', save: '設定を保存', builtinHint: 'ダウンロード済みの内蔵モデルを議事録用に選択します。未インストールのモデルはここからダウンロードできます。', endpointPlaceholder: 'https://example.com/v1/chat/completions', providers: { 'built-in': '内蔵 AI', claude: 'Claude', openai: 'OpenAI', openrouter: 'OpenRouter', 'custom-openai': 'カスタムサービス（OpenAI 形式）', 'custom-claude': 'カスタムサービス（Claude 形式）' } }, modal: { models: { title: 'モデルライブラリ', intro: 'すべての文字起こしモデルはローカルで実行され、個人データがネットワークに送信されることはありません。', languages: '推奨言語' }, terms: { title: '用語集を管理', intro: '用語は会議準備、検索、メモに使用されます。対応モデルだけが文字起こしに利用します。', add: '用語を追加', edit: '編集', save: '保存', cancel: 'キャンセル', remove: '削除', placeholder: '用語またはフレーズを入力' }, storage: { title: 'ローカルストレージ', intro: 'すべての会議データはこのデバイスに保存されます。' }, close: '閉じる', download: 'ダウンロード' } },
-  ko: { theme: { light: '라이트 테마로 전환', dark: '다크 테마로 전환' }, update: { title: '소프트웨어 업데이트', description: '현재 버전 0.1.0', action: '업데이트 확인', checking: '확인 중…', available: '버전 0.2.0을 사용할 수 있습니다', update: '0.2.0으로 업데이트', floating: 'Brevia 업데이트', updating: '업데이트 중…', downloading: '다운로드 중', current: '최신 버전입니다' }, model: { manage: '모델 라이브러리 관리', download: '다운로드', downloading: '다운로드 중…', installed: '설치됨', remove: '삭제' }, summary: { title: '회의 요약 관리', intro: '모든 설정은 이 기기에만 저장되며 업로드되지 않습니다.', provider: '제공자', key: 'API 키', endpoint: '요청 URL', model: '모델', save: '구성 저장', builtinHint: '다운로드한 내장 모델을 회의록 모델로 선택하세요. 설치되지 않은 모델은 여기에서 바로 내려받을 수 있습니다.', endpointPlaceholder: 'https://example.com/v1/chat/completions', providers: { 'built-in': '내장 AI', claude: 'Claude', openai: 'OpenAI', openrouter: 'OpenRouter', 'custom-openai': '사용자 지정 서비스(OpenAI 형식)', 'custom-claude': '사용자 지정 서비스(Claude 형식)' } }, modal: { models: { title: '모델 라이브러리', intro: '모든 전사 모델은 로컬에서 실행되며 개인 데이터가 네트워크로 업로드되지 않습니다.', languages: '권장 언어' }, terms: { title: '용어집 관리', intro: '용어는 회의 준비, 검색 및 회의록에 사용됩니다. 지원 모델만 전사에 사용합니다.', add: '용어 추가', edit: '편집', save: '저장', cancel: '취소', remove: '삭제', placeholder: '용어 또는 문구 입력' }, storage: { title: '로컬 저장소', intro: '모든 회의 데이터는 이 기기에 저장됩니다.' }, close: '닫기', download: '다운로드' } },
-  fr: { theme: { light: 'Passer au thème clair', dark: 'Passer au thème sombre' }, update: { title: 'Mises à jour logicielles', description: 'Version actuelle 0.1.0', action: 'Rechercher des mises à jour', checking: 'Recherche…', available: 'La version 0.2.0 est disponible', update: 'Mettre à jour vers 0.2.0', floating: 'Mettre à jour Brevia', updating: 'Mise à jour…', downloading: 'Téléchargement…', current: 'À jour' }, model: { manage: 'Gérer la bibliothèque de modèles', download: 'Télécharger', downloading: 'Téléchargement…', installed: 'Installé', remove: 'Supprimer' }, summary: { title: 'Gérer le résumé de la réunion', intro: 'Toute la configuration reste sur cet appareil et n’est jamais envoyée.', provider: 'Fournisseur', key: 'Clé API', endpoint: 'URL de requête', model: 'Modèle', save: 'Enregistrer la configuration', builtinHint: 'Choisissez un modèle intégré déjà téléchargé pour les notes. Les modèles non installés peuvent être téléchargés ici.', endpointPlaceholder: 'https://example.com/v1/chat/completions', providers: { 'built-in': 'IA intégrée', claude: 'Claude', openai: 'OpenAI', openrouter: 'OpenRouter', 'custom-openai': 'Service personnalisé (format OpenAI)', 'custom-claude': 'Service personnalisé (format Claude)' } }, modal: { models: { title: 'Bibliothèque de modèles', intro: 'Tous les modèles de transcription s’exécutent localement. Vos données ne sont jamais envoyées sur le réseau.', languages: 'Langues recommandées' }, terms: { title: 'Gérer le glossaire', intro: 'Les termes servent à préparer les réunions, rechercher et créer des notes. Seuls les modèles compatibles les utilisent.', add: 'Ajouter un terme', edit: 'Modifier', save: 'Enregistrer', cancel: 'Annuler', remove: 'Supprimer', placeholder: 'Saisir un terme ou une expression' }, storage: { title: 'Stockage local', intro: 'Toutes les données de réunion restent sur cet appareil.' }, close: 'Fermer', download: 'Télécharger' } },
-  de: { theme: { light: 'Zum hellen Design wechseln', dark: 'Zum dunklen Design wechseln' }, update: { title: 'Softwareupdates', description: 'Aktuelle Version 0.1.0', action: 'Nach Updates suchen', checking: 'Suche läuft…', available: 'Version 0.2.0 ist verfügbar', update: 'Auf 0.2.0 aktualisieren', floating: 'Brevia aktualisieren', updating: 'Aktualisierung läuft…', downloading: 'Wird heruntergeladen…', current: 'Aktuell' }, model: { manage: 'Modellbibliothek verwalten', download: 'Herunterladen', downloading: 'Wird heruntergeladen…', installed: 'Installiert', remove: 'Löschen' }, summary: { title: 'Besprechungszusammenfassung verwalten', intro: 'Alle Einstellungen bleiben auf diesem Gerät und werden nie hochgeladen.', provider: 'Anbieter', key: 'API-Schlüssel', endpoint: 'Anfrage-URL', model: 'Modell', save: 'Konfiguration speichern', builtinHint: 'Wählen Sie ein heruntergeladenes integriertes Modell für die Notizen. Nicht installierte Modelle können hier geladen werden.', endpointPlaceholder: 'https://example.com/v1/chat/completions', providers: { 'built-in': 'Integrierte KI', claude: 'Claude', openai: 'OpenAI', openrouter: 'OpenRouter', 'custom-openai': 'Eigener Dienst (OpenAI-Format)', 'custom-claude': 'Eigener Dienst (Claude-Format)' } }, modal: { models: { title: 'Modellbibliothek', intro: 'Alle Transkriptionsmodelle laufen lokal. Ihre privaten Daten werden nie ins Netzwerk übertragen.', languages: 'Empfohlene Sprachen' }, terms: { title: 'Glossar verwalten', intro: 'Begriffe werden für Besprechungsvorbereitung, Suche und Notizen verwendet. Nur unterstützte Modelle verwenden sie bei der Transkription.', add: 'Begriff hinzufügen', edit: 'Bearbeiten', save: 'Speichern', cancel: 'Abbrechen', remove: 'Löschen', placeholder: 'Begriff oder Ausdruck eingeben' }, storage: { title: 'Lokaler Speicher', intro: 'Alle Besprechungsdaten bleiben auf diesem Gerät.' }, close: 'Schließen', download: 'Herunterladen' } },
-  ru: { theme: { light: 'Светлая тема', dark: 'Тёмная тема' }, update: { title: 'Обновления ПО', description: 'Текущая версия 0.1.0', action: 'Проверить обновления', checking: 'Проверка…', available: 'Доступна версия 0.2.0', update: 'Обновить до 0.2.0', floating: 'Обновить Brevia', updating: 'Обновление…', downloading: 'Скачивание…', current: 'Установлена последняя версия' }, model: { manage: 'Управление библиотекой моделей', download: 'Скачать', downloading: 'Скачивание…', installed: 'Установлено', remove: 'Удалить' }, summary: { title: 'Управление сводкой встречи', intro: 'Все настройки хранятся только на этом устройстве и не загружаются.', provider: 'Поставщик', key: 'Ключ API', endpoint: 'URL запроса', model: 'Модель', save: 'Сохранить конфигурацию', builtinHint: 'Выберите загруженную встроенную модель для заметок. Неустановленные модели можно скачать здесь.', endpointPlaceholder: 'https://example.com/v1/chat/completions', providers: { 'built-in': 'Встроенный ИИ', claude: 'Claude', openai: 'OpenAI', openrouter: 'OpenRouter', 'custom-openai': 'Свой сервис (формат OpenAI)', 'custom-claude': 'Свой сервис (формат Claude)' } }, modal: { models: { title: 'Библиотека моделей', intro: 'Все модели расшифровки работают локально. Ваши данные никогда не передаются в сеть.', languages: 'Рекомендуемые языки' }, terms: { title: 'Управление глоссарием', intro: 'Термины используются для подготовки встреч, поиска и заметок. При расшифровке их используют только поддерживаемые модели.', add: 'Добавить термин', edit: 'Изменить', save: 'Сохранить', cancel: 'Отмена', remove: 'Удалить', placeholder: 'Введите термин или фразу' }, storage: { title: 'Локальное хранилище', intro: 'Все данные встреч остаются на этом устройстве.' }, close: 'Закрыть', download: 'Скачать' } },
+  ja: { theme: { light: 'ライトテーマに切り替え', dark: 'ダークテーマに切り替え' }, update: { title: 'ソフトウェアアップデート', description: '現在のバージョン 0.1.0', action: 'アップデートを確認', checking: '確認中…', available: 'バージョン 0.2.0 を利用できます', update: '0.2.0 に更新', floating: 'Brevia を更新', updating: '更新中…', downloading: 'ダウンロード中', current: '最新です' }, model: { manage: 'モデルライブラリを管理', download: 'ダウンロード', downloading: 'ダウンロード中…', installed: 'インストール済み', remove: '削除' }, summary: { title: '会議の要約を管理', intro: 'すべての設定はこのデバイスにのみ保存され、アップロードされません。', provider: 'プロバイダー', key: 'API キー', endpoint: 'リクエスト URL', model: 'モデル', save: '設定を保存', builtinHint: 'ダウンロード済みの内蔵モデルを議事録用に選択します。未インストールのモデルはここからダウンロードできます。', endpointPlaceholder: 'https://example.com/v1/chat/completions', providers: { 'built-in': '内蔵 AI', claude: 'Claude', openai: 'OpenAI', openrouter: 'OpenRouter', 'custom-openai': 'カスタムサービス（OpenAI 形式）', 'custom-claude': 'カスタムサービス（Claude 形式）' } }, modal: { models: { title: 'モデルライブラリ', intro: 'すべての文字起こしモデルはローカルで実行され、個人データがネットワークに送信されることはありません。', languages: '推奨言語' }, terms: { title: '用語集を管理', intro: '用語は会議準備、検索、メモに使用されます。対応モデルだけが文字起こしに利用します。', add: '用語を追加', edit: '編集', save: '保存', cancel: 'キャンセル', remove: '削除', placeholder: '用語またはフレーズを入力' }, storage: { title: 'ローカルストレージ', intro: 'すべての会議データはこのデバイスに保存されます。' }, close: '閉じる', download: 'ダウンロード' }, whatsNew: { title: '更新履歴', intro: '各バージョンの変更点を確認できます。', view: '更新履歴を見る', what: '新機能', fixed: '修正', improved: '改善', changes: 'その他', date: '日付', current: '現在のバージョン', empty: '更新履歴はまだありません' } },
+  ko: { theme: { light: '라이트 테마로 전환', dark: '다크 테마로 전환' }, update: { title: '소프트웨어 업데이트', description: '현재 버전 0.1.0', action: '업데이트 확인', checking: '확인 중…', available: '버전 0.2.0을 사용할 수 있습니다', update: '0.2.0으로 업데이트', floating: 'Brevia 업데이트', updating: '업데이트 중…', downloading: '다운로드 중', current: '최신 버전입니다' }, model: { manage: '모델 라이브러리 관리', download: '다운로드', downloading: '다운로드 중…', installed: '설치됨', remove: '삭제' }, summary: { title: '회의 요약 관리', intro: '모든 설정은 이 기기에만 저장되며 업로드되지 않습니다.', provider: '제공자', key: 'API 키', endpoint: '요청 URL', model: '모델', save: '구성 저장', builtinHint: '다운로드한 내장 모델을 회의록 모델로 선택하세요. 설치되지 않은 모델은 여기에서 바로 내려받을 수 있습니다.', endpointPlaceholder: 'https://example.com/v1/chat/completions', providers: { 'built-in': '내장 AI', claude: 'Claude', openai: 'OpenAI', openrouter: 'OpenRouter', 'custom-openai': '사용자 지정 서비스(OpenAI 형식)', 'custom-claude': '사용자 지정 서비스(Claude 형식)' } }, modal: { models: { title: '모델 라이브러리', intro: '모든 전사 모델은 로컬에서 실행되며 개인 데이터가 네트워크로 업로드되지 않습니다.', languages: '권장 언어' }, terms: { title: '용어집 관리', intro: '용어는 회의 준비, 검색 및 회의록에 사용됩니다. 지원 모델만 전사에 사용합니다.', add: '용어 추가', edit: '편집', save: '저장', cancel: '취소', remove: '삭제', placeholder: '용어 또는 문구 입력' }, storage: { title: '로컬 저장소', intro: '모든 회의 데이터는 이 기기에 저장됩니다.' }, close: '닫기', download: '다운로드' }, whatsNew: { title: '새로운 기능', intro: '각 버전에서 변경된 사항을 확인할 수 있습니다.', view: '업데이트 기록 보기', what: '새 기능', fixed: '수정', improved: '개선', changes: '기타', date: '날짜', current: '현재 버전', empty: '아직 업데이트 기록이 없습니다' } },
+  fr: { theme: { light: 'Passer au thème clair', dark: 'Passer au thème sombre' }, update: { title: 'Mises à jour logicielles', description: 'Version actuelle 0.1.0', action: 'Rechercher des mises à jour', checking: 'Recherche…', available: 'La version 0.2.0 est disponible', update: 'Mettre à jour vers 0.2.0', floating: 'Mettre à jour Brevia', updating: 'Mise à jour…', downloading: 'Téléchargement…', current: 'À jour' }, model: { manage: 'Gérer la bibliothèque de modèles', download: 'Télécharger', downloading: 'Téléchargement…', installed: 'Installé', remove: 'Supprimer' }, summary: { title: 'Gérer le résumé de la réunion', intro: 'Toute la configuration reste sur cet appareil et n’est jamais envoyée.', provider: 'Fournisseur', key: 'Clé API', endpoint: 'URL de requête', model: 'Modèle', save: 'Enregistrer la configuration', builtinHint: 'Choisissez un modèle intégré déjà téléchargé pour les notes. Les modèles non installés peuvent être téléchargés ici.', endpointPlaceholder: 'https://example.com/v1/chat/completions', providers: { 'built-in': 'IA intégrée', claude: 'Claude', openai: 'OpenAI', openrouter: 'OpenRouter', 'custom-openai': 'Service personnalisé (format OpenAI)', 'custom-claude': 'Service personnalisé (format Claude)' } }, modal: { models: { title: 'Bibliothèque de modèles', intro: 'Tous les modèles de transcription s’exécutent localement. Vos données ne sont jamais envoyées sur le réseau.', languages: 'Langues recommandées' }, terms: { title: 'Gérer le glossaire', intro: 'Les termes servent à préparer les réunions, rechercher et créer des notes. Seuls les modèles compatibles les utilisent.', add: 'Ajouter un terme', edit: 'Modifier', save: 'Enregistrer', cancel: 'Annuler', remove: 'Supprimer', placeholder: 'Saisir un terme ou une expression' }, storage: { title: 'Stockage local', intro: 'Toutes les données de réunion restent sur cet appareil.' }, close: 'Fermer', download: 'Télécharger' }, whatsNew: { title: 'Nouveautés', intro: 'Découvrez ce qui a changé dans chaque version de Brevia.', view: 'Voir le journal des versions', what: 'Nouveautés', fixed: 'Correctifs', improved: 'Améliorations', changes: 'Autres', date: 'Date', current: 'Version actuelle', empty: 'Pas encore de journal des versions' } },
+  de: { theme: { light: 'Zum hellen Design wechseln', dark: 'Zum dunklen Design wechseln' }, update: { title: 'Softwareupdates', description: 'Aktuelle Version 0.1.0', action: 'Nach Updates suchen', checking: 'Suche läuft…', available: 'Version 0.2.0 ist verfügbar', update: 'Auf 0.2.0 aktualisieren', floating: 'Brevia aktualisieren', updating: 'Aktualisierung läuft…', downloading: 'Wird heruntergeladen…', current: 'Aktuell' }, model: { manage: 'Modellbibliothek verwalten', download: 'Herunterladen', downloading: 'Wird heruntergeladen…', installed: 'Installiert', remove: 'Löschen' }, summary: { title: 'Besprechungszusammenfassung verwalten', intro: 'Alle Einstellungen bleiben auf diesem Gerät und werden nie hochgeladen.', provider: 'Anbieter', key: 'API-Schlüssel', endpoint: 'Anfrage-URL', model: 'Modell', save: 'Konfiguration speichern', builtinHint: 'Wählen Sie ein heruntergeladenes integriertes Modell für die Notizen. Nicht installierte Modelle können hier geladen werden.', endpointPlaceholder: 'https://example.com/v1/chat/completions', providers: { 'built-in': 'Integrierte KI', claude: 'Claude', openai: 'OpenAI', openrouter: 'OpenRouter', 'custom-openai': 'Eigener Dienst (OpenAI-Format)', 'custom-claude': 'Eigener Dienst (Claude-Format)' } }, modal: { models: { title: 'Modellbibliothek', intro: 'Alle Transkriptionsmodelle laufen lokal. Ihre privaten Daten werden nie ins Netzwerk übertragen.', languages: 'Empfohlene Sprachen' }, terms: { title: 'Glossar verwalten', intro: 'Begriffe werden für Besprechungsvorbereitung, Suche und Notizen verwendet. Nur unterstützte Modelle verwenden sie bei der Transkription.', add: 'Begriff hinzufügen', edit: 'Bearbeiten', save: 'Speichern', cancel: 'Abbrechen', remove: 'Löschen', placeholder: 'Begriff oder Ausdruck eingeben' }, storage: { title: 'Lokaler Speicher', intro: 'Alle Besprechungsdaten bleiben auf diesem Gerät.' }, close: 'Schließen', download: 'Herunterladen' }, whatsNew: { title: 'Neuerungen', intro: 'Erfahren Sie, was sich in jeder Version von Brevia geändert hat.', view: 'Änderungsprotokoll ansehen', what: 'Neu', fixed: 'Behoben', improved: 'Verbessert', changes: 'Sonstiges', date: 'Datum', current: 'Aktuelle Version', empty: 'Noch kein Änderungsprotokoll' } },
+  ru: { theme: { light: 'Светлая тема', dark: 'Тёмная тема' }, update: { title: 'Обновления ПО', description: 'Текущая версия 0.1.0', action: 'Проверить обновления', checking: 'Проверка…', available: 'Доступна версия 0.2.0', update: 'Обновить до 0.2.0', floating: 'Обновить Brevia', updating: 'Обновление…', downloading: 'Скачивание…', current: 'Установлена последняя версия' }, model: { manage: 'Управление библиотекой моделей', download: 'Скачать', downloading: 'Скачивание…', installed: 'Установлено', remove: 'Удалить' }, summary: { title: 'Управление сводкой встречи', intro: 'Все настройки хранятся только на этом устройстве и не загружаются.', provider: 'Поставщик', key: 'Ключ API', endpoint: 'URL запроса', model: 'Модель', save: 'Сохранить конфигурацию', builtinHint: 'Выберите загруженную встроенную модель для заметок. Неустановленные модели можно скачать здесь.', endpointPlaceholder: 'https://example.com/v1/chat/completions', providers: { 'built-in': 'Встроенный ИИ', claude: 'Claude', openai: 'OpenAI', openrouter: 'OpenRouter', 'custom-openai': 'Свой сервис (формат OpenAI)', 'custom-claude': 'Свой сервис (формат Claude)' } }, modal: { models: { title: 'Библиотека моделей', intro: 'Все модели расшифровки работают локально. Ваши данные никогда не передаются в сеть.', languages: 'Рекомендуемые языки' }, terms: { title: 'Управление глоссарием', intro: 'Термины используются для подготовки встреч, поиска и заметок. При расшифровке их используют только поддерживаемые модели.', add: 'Добавить термин', edit: 'Изменить', save: 'Сохранить', cancel: 'Отмена', remove: 'Удалить', placeholder: 'Введите термин или фразу' }, storage: { title: 'Локальное хранилище', intro: 'Все данные встреч остаются на этом устройстве.' }, close: 'Закрыть', download: 'Скачать' }, whatsNew: { title: 'Что нового', intro: 'Узнайте, что изменилось в каждой версии Brevia.', view: 'Просмотреть журнал версий', what: 'Новое', fixed: 'Исправлено', improved: 'Улучшено', changes: 'Прочее', date: 'Дата', current: 'Текущая версия', empty: 'Журнал версий пока пуст' } },
 };
 Object.entries(appCopyLocales).forEach(([code, copy]) => {
   appCopy.themeLabels[code] = copy.theme;
   appCopy.updateLabels[code] = copy.update;
   appCopy.modelLabels[code] = copy.model;
   appCopy.summaryModelCopy[code] = copy.summary;
+  if (copy.whatsNew) appCopy.whatsNewCopy[code] = copy.whatsNew;
   appCopy.modalCopy[code] = {
     ...appCopy.modalCopy.en,
     ...copy.modal,
@@ -823,7 +830,8 @@ Object.entries(micErrorLabels).forEach(([code, labels]) => Object.assign(catalog
 
 // AI 辅助笔记（阶段 2 无需 AI 本地规则）：字幕加入笔记 / 时间戳 / 信号检测文案。
 Object.assign(catalog.zh.labels, { '加入笔记': '加入笔记', '标记当前时间点': '标记当前时间点', '已加入笔记': '已加入笔记', '数字': '数字', '日期': '日期', '问句': '问句', '暂无字幕可插入': '暂无字幕可插入', '无法获取字幕内容': '无法获取字幕内容' });
-Object.assign(catalog.en.labels, { '加入笔记': 'Add to notes', '标记当前时间点': 'Insert timestamp', '已加入笔记': 'Added to notes', 'AI 辅助已保存': 'AI assist saved', 'AI 辅助配置加载失败': 'Failed to load AI assist configuration', '数字': 'Number', '日期': 'Date', '问句': 'Question', '暂无字幕可插入': 'No caption to insert yet', '无法获取字幕内容': 'Caption text unavailable' });
+Object.assign(catalog.zh.labels, { '笔记已达容量上限，超出部分未保存。': '笔记已达容量上限，超出部分未保存。' });
+Object.assign(catalog.en.labels, { '笔记已达容量上限，超出部分未保存。': 'Notes reached the size limit; the rest was not saved.', '加入笔记': 'Add to notes', '标记当前时间点': 'Insert timestamp', '已加入笔记': 'Added to notes', 'AI 辅助已保存': 'AI assist saved', 'AI 辅助配置加载失败': 'Failed to load AI assist configuration', '数字': 'Number', '日期': 'Date', '问句': 'Question', '暂无字幕可插入': 'No caption to insert yet', '无法获取字幕内容': 'Caption text unavailable' });
 Object.assign(catalog.es.labels, { '加入笔记': 'Añadir a notas', '标记当前时间点': 'Insertar marca de tiempo', '已加入笔记': 'Añadido a notas', 'AI 辅助已保存': 'Asistencia de IA guardada', 'AI 辅助配置加载失败': 'No se pudo cargar la configuración de asistencia de IA', '数字': 'Número', '日期': 'Fecha', '问句': 'Pregunta', '暂无字幕可插入': 'Aún no hay subtítulos que insertar', '无法获取字幕内容': 'Texto del subtítulo no disponible' });
 
 // AI 辅助笔记（阶段 4 建议 UI）：建议类型标签与操作。
@@ -842,7 +850,7 @@ Object.assign(catalog.en.labels, { '问 AI': 'Ask AI', '问当前会议': 'Ask a
 Object.assign(catalog.es.labels, { '问 AI': 'Preguntar a la IA', '问当前会议': 'Preguntar sobre esta reunión', '输入你的问题': 'Escribe tu pregunta', '提问': 'Preguntar', '正在思考…': 'Pensando…', '未获得回答': 'No se obtuvo respuesta', '搜索字幕…': 'Buscar subtítulos…', '重点': 'Destacar' });
 
 // AI 辅助笔记（阶段 7 关键 UI 文案补齐 ja/ko/fr/de/ru）。
-Object.assign(catalog.ja.labels, { '加入笔记': 'メモに追加', '标记当前时间点': '現在時刻を記録', '已加入笔记': 'メモに追加しました', '暂无字幕可插入': '追加できる字幕はまだありません', '无法获取字幕内容': '字幕テキストを取得できません', 'AI 辅助已保存': 'AI アシストを保存しました', 'AI 辅助配置加载失败': 'AI アシスト設定を読み込めませんでした', '数字': '数字', '日期': '日付', '问句': '質問', '可能是一个结论': '結論かも', '可能的决策': '決定かも', '可能的待办': 'ToDo かも', '重要数字': '重要な数字', '重要日期': '重要な日付', '待确认事项': '要確認', '可能的风险': 'リスクかも', '新话题': '新しい議題', '补充': '補足', '忽略': '無視', '1 条建议': '1 件の提案', 'AI 检测到新话题：': 'AI が新しい議題を検出：', '整理笔记': 'メモを整理', '校对': '校正', '关联历史': '関連履歴', '整理一下？': '整理しますか？', '替换原内容': '置き換え', '插入整理版': '整理版を挿入', '修正': '修正', '保持原文': '原文のまま', '查看原会议': '元の会議を開く', '和之前内容有关': '以前の内容に関連', '和会议原文可能存在差异': '会議の原文と異なる可能性', '字幕中说的是：': '字幕では：', '问 AI': 'AI に質問', '问当前会议': 'この会議について質問', '输入你的问题': '質問を入力', '提问': '質問する', '搜索字幕…': '字幕を検索…', '重点': '重要' });
+Object.assign(catalog.ja.labels, { '笔记已达容量上限，超出部分未保存。': 'メモが容量上限に達したため、超過分は保存されませんでした。', '加入笔记': 'メモに追加', '标记当前时间点': '現在時刻を記録', '已加入笔记': 'メモに追加しました', '暂无字幕可插入': '追加できる字幕はまだありません', '无法获取字幕内容': '字幕テキストを取得できません', 'AI 辅助已保存': 'AI アシストを保存しました', 'AI 辅助配置加载失败': 'AI アシスト設定を読み込めませんでした', '数字': '数字', '日期': '日付', '问句': '質問', '可能是一个结论': '結論かも', '可能的决策': '決定かも', '可能的待办': 'ToDo かも', '重要数字': '重要な数字', '重要日期': '重要な日付', '待确认事项': '要確認', '可能的风险': 'リスクかも', '新话题': '新しい議題', '补充': '補足', '忽略': '無視', '1 条建议': '1 件の提案', 'AI 检测到新话题：': 'AI が新しい議題を検出：', '整理笔记': 'メモを整理', '校对': '校正', '关联历史': '関連履歴', '整理一下？': '整理しますか？', '替换原内容': '置き換え', '插入整理版': '整理版を挿入', '修正': '修正', '保持原文': '原文のまま', '查看原会议': '元の会議を開く', '和之前内容有关': '以前の内容に関連', '和会议原文可能存在差异': '会議の原文と異なる可能性', '字幕中说的是：': '字幕では：', '问 AI': 'AI に質問', '问当前会议': 'この会議について質問', '输入你的问题': '質問を入力', '提问': '質問する', '搜索字幕…': '字幕を検索…', '重点': '重要' });
 Object.assign(catalog.ko.labels, { '加入笔记': '메모에 추가', '标记当前时间点': '현재 시각 기록', '已加入笔记': '메모에 추가됨', '暂无字幕可插入': '추가할 자막이 아직 없습니다', '无法获取字幕内容': '자막 내용을 가져올 수 없습니다', 'AI 辅助已保存': 'AI 도우미를 저장했습니다', 'AI 辅助配置加载失败': 'AI 도우미 설정을 불러오지 못했습니다', '数字': '숫자', '日期': '날짜', '问句': '질문', '可能是一个结论': '결론일 수 있음', '可能的决策': '결정일 수 있음', '可能的待办': '할 일일 수 있음', '重要数字': '중요 수치', '重要日期': '중요 날짜', '待确认事项': '확인 필요', '可能的风险': '위험일 수 있음', '新话题': '새 주제', '补充': '보충', '忽略': '무시', '1 条建议': '제안 1개', 'AI 检测到新话题：': 'AI가 새 주제를 감지: ', '整理笔记': '메모 정리', '校对': '교정', '关联历史': '관련 기록', '整理一下？': '정리할까요?', '替换原内容': '바꾸기', '插入整理版': '정리본 삽입', '修正': '수정', '保持原文': '원문 유지', '查看原会议': '원래 회의 열기', '和之前内容有关': '이전 내용과 관련', '和会议原文可能存在差异': '회의 원문과 다를 수 있음', '字幕中说的是：': '자막 내용:', '问 AI': 'AI에 묻기', '问当前会议': '이 회의에 대해 묻기', '输入你的问题': '질문 입력', '提问': '묻기', '搜索字幕…': '자막 검색…', '重点': '중요' });
 Object.assign(catalog.fr.labels, { '加入笔记': 'Ajouter aux notes', '标记当前时间点': 'Insérer l’horodatage', '已加入笔记': 'Ajouté aux notes', '暂无字幕可插入': 'Aucun sous-titre à insérer pour le moment', '无法获取字幕内容': 'Texte du sous-titre indisponible', 'AI 辅助已保存': 'Assistant IA enregistré', 'AI 辅助配置加载失败': 'Échec du chargement de la configuration de l’assistant IA', '数字': 'Nombre', '日期': 'Date', '问句': 'Question', '可能是一个结论': 'Conclusion possible', '可能的决策': 'Décision possible', '可能的待办': 'Tâche possible', '重要数字': 'Chiffre clé', '重要日期': 'Date clé', '待确认事项': 'À confirmer', '可能的风险': 'Risque possible', '新话题': 'Nouveau sujet', '补充': 'Compléter', '忽略': 'Ignorer', '1 条建议': '1 suggestion', 'AI 检测到新话题：': 'L’IA a détecté un nouveau sujet : ', '整理笔记': 'Organiser les notes', '校对': 'Vérifier', '关联历史': 'Historique lié', '整理一下？': 'Organiser les notes ?', '替换原内容': 'Remplacer', '插入整理版': 'Insérer la version organisée', '修正': 'Corriger', '保持原文': 'Conserver', '查看原会议': 'Ouvrir la réunion', '和之前内容有关': 'Lié à un contenu antérieur', '和会议原文可能存在差异': 'Possible différence avec la transcription', '字幕中说的是：': 'La transcription indique :', '问 AI': 'Demander à l’IA', '问当前会议': 'Demander sur cette réunion', '输入你的问题': 'Saisissez votre question', '提问': 'Demander', '搜索字幕…': 'Rechercher les sous-titres…', '重点': 'Important' });
 Object.assign(catalog.de.labels, { '加入笔记': 'Zu Notizen hinzufügen', '标记当前时间点': 'Zeitstempel einfügen', '已加入笔记': 'Zu den Notizen hinzugefügt', '暂无字幕可插入': 'Noch keine Untertitel zum Einfügen', '无法获取字幕内容': 'Untertiteltext nicht verfügbar', 'AI 辅助已保存': 'KI-Assistent gespeichert', 'AI 辅助配置加载失败': 'KI-Assistent-Konfiguration konnte nicht geladen werden', '数字': 'Zahl', '日期': 'Datum', '问句': 'Frage', '可能是一个结论': 'Mögliche Schlussfolgerung', '可能的决策': 'Mögliche Entscheidung', '可能的待办': 'Mögliche Aufgabe', '重要数字': 'Wichtige Zahl', '重要日期': 'Wichtiges Datum', '待确认事项': 'Zu bestätigen', '可能的风险': 'Mögliches Risiko', '新话题': 'Neues Thema', '补充': 'Ergänzen', '忽略': 'Ignorieren', '1 条建议': '1 Vorschlag', 'AI 检测到新话题：': 'KI hat ein neues Thema erkannt: ', '整理笔记': 'Notizen ordnen', '校对': 'Prüfen', '关联历史': 'Verknüpfter Verlauf', '整理一下？': 'Notizen ordnen?', '替换原内容': 'Ersetzen', '插入整理版': 'Geordnete Version einfügen', '修正': 'Korrigieren', '保持原文': 'Beibehalten', '查看原会议': 'Besprechung öffnen', '和之前内容有关': 'Bezug zu früherem Inhalt', '和会议原文可能存在差异': 'Mögliche Abweichung vom Transkript', '字幕中说的是：': 'Im Transkript steht:', '问 AI': 'KI fragen', '问当前会议': 'Zu dieser Besprechung fragen', '输入你的问题': 'Frage eingeben', '提问': 'Fragen', '搜索字幕…': 'Untertitel durchsuchen…', '重点': 'Wichtig' });
@@ -882,6 +890,14 @@ Object.assign(catalog.ru.labels, {
   '插入表格': 'Вставить таблицу', '切换到富文本': 'Переключить на форматированный текст', '切换到 Markdown': 'Переключить на Markdown',
   '列 1': 'Столбец 1', '列 2': 'Столбец 2', '内容': 'Содержимое', '重点：': 'Важно: ', '原始转写': 'Исходная расшифровка',
 });
+Object.assign(catalog.zh.labels, { '系统默认': '系统默认', '麦克风设备': '麦克风设备', '刷新设备': '刷新设备' });
+Object.assign(catalog.en.labels, { '系统默认': 'System default', '麦克风设备': 'Microphone device', '刷新设备': 'Refresh devices' });
+Object.assign(catalog.es.labels, { '系统默认': 'Predeterminado', '麦克风设备': 'Dispositivo de micrófono', '刷新设备': 'Actualizar dispositivos' });
+Object.assign(catalog.ja.labels, { '系统默认': 'システム既定', '麦克风设备': 'マイクデバイス', '刷新设备': 'デバイスを更新' });
+Object.assign(catalog.ko.labels, { '系统默认': '시스템 기본', '麦克风设备': '마이크 장치', '刷新设备': '장치 새로고침' });
+Object.assign(catalog.fr.labels, { '系统默认': 'Par défaut', '麦克风设备': 'Périphérique de microphone', '刷新设备': 'Actualiser les périphériques' });
+Object.assign(catalog.de.labels, { '系统默认': 'Systemstandard', '麦克风设备': 'Mikrofon-Gerät', '刷新设备': 'Geräte aktualisieren' });
+Object.assign(catalog.ru.labels, { '系统默认': 'По умолчанию', '麦克风设备': 'Устройство микрофона', '刷新设备': 'Обновить устройства' });
 
 const aiNotePromptCopy = {
   zh: { instructions: '你是会议实时笔记助手。从 <recent_transcript> 和 <meeting_state> 中挑最多3条值得记录的短信息，输出极短 JSON。\n只使用明确说出的内容，不补全、不推测、不重复已有状态。text 必须使用中文。\n类型：conclusion观点 | decision决定 | action待办 | number关键数据 | date关键日期 | question待确认 | risk风险 | topic新议题/标题 | supplement重点。整体议题明确时优先给具体 topic 标题；number/date 必须原文出现，number 要有主语和背景。\n输出 {"suggestions":[{"type":"...","text":"8-40字","importance":"high|medium"}]}；无价值则输出 {"suggestions":[]}。只输出 JSON。', state_labels: ['当前议题', '事实', '已确认决定', '行动项', '待确认'] },
@@ -893,6 +909,17 @@ const aiNotePromptCopy = {
   de: { instructions: 'Du bist ein Assistent für Echtzeit-Meetingnotizen. Wähle aus <recent_transcript> und <meeting_state> bis zu 3 kurze, notierenswerte Informationen und gib kompaktes JSON aus.\nVerwende nur ausdrücklich Gesagtes; erfinde nichts, fülle nichts auf und wiederhole keine bestehenden Statuspunkte. Der Wert text muss auf Deutsch sein.\nTypen: conclusion | decision | action | number | date | question | risk | topic | supplement. Bevorzuge bei klarem Thema einen konkreten topic-Titel; number/date müssen ausdrücklich vorkommen und number braucht Thema und Kontext.\nGib {"suggestions":[{"type":"...","text":"ein kurzer Satz","importance":"high|medium"}]} aus; wenn nichts wertvoll ist, gib {"suggestions":[]} aus. Gib nur JSON aus.', state_labels: ['Aktuelles Thema', 'Fakten', 'Bestätigte Entscheidungen', 'Aufgaben', 'Offene Fragen'] },
   ru: { instructions: 'Вы — помощник по ведению заметок встречи в реальном времени. По <recent_transcript> и <meeting_state> выберите до 3 коротких сведений, достойных записи, и верните компактный JSON.\nИспользуйте только явно сказанное; не додумывайте, не дополняйте и не повторяйте уже имеющиеся пункты состояния. Значение text должно быть на русском языке.\nТипы: conclusion | decision | action | number | date | question | risk | topic | supplement. При ясной теме выберите конкретный заголовок topic; number/date должны быть явно произнесены, а number должен включать предмет и контекст.\nВерните {"suggestions":[{"type":"...","text":"одно короткое предложение","importance":"high|medium"}]}; если ценного нет, верните {"suggestions":[]}. Верните только JSON.', state_labels: ['Текущая тема', 'Факты', 'Подтверждённые решения', 'Действия', 'Открытые вопросы'] },
 };
+const aiNoteAtomicInstructions = {
+  zh: '每条 text 只能是一个可独立验证的观点、决定或行动；不要用“以及”“并且”等串联多个观点。先检查 <accepted_claims>：相同观点不再输出。每项 evidence 必须从 <recent_transcript> 中方括号内的时间原样选择 1–2 个。输出 {"suggestions":[{"type":"...","text":"...","evidence":["00:00"],"importance":"high|medium"}]}。',
+  en: 'Each text must contain one independently verifiable claim, decision, or action; do not join multiple ideas. Check <accepted_claims> first and do not output the same claim again. For each evidence, copy one or two timestamps exactly from brackets in <recent_transcript>. Output {"suggestions":[{"type":"...","text":"...","evidence":["00:00"],"importance":"high|medium"}]}.',
+  es: 'Cada text debe contener una sola afirmación, decisión o acción verificable; no unas varias ideas. Revisa primero <accepted_claims> y no repitas la misma afirmación. En evidence copia uno o dos tiempos exactamente de los corchetes de <recent_transcript>. Devuelve {"suggestions":[{"type":"...","text":"...","evidence":["00:00"],"importance":"high|medium"}]}.',
+  ja: '各 text は、検証可能な見解・決定・行動を一つだけ含め、複数の考えを結合しないでください。まず <accepted_claims> を確認し、同じ見解は出力しません。evidence には <recent_transcript> の角括弧内の時刻をそのまま 1～2 件入れてください。{"suggestions":[{"type":"...","text":"...","evidence":["00:00"],"importance":"high|medium"}]} を出力してください。',
+  ko: '각 text에는 검증 가능한 관점·결정·행동 하나만 담고 여러 생각을 합치지 마세요. 먼저 <accepted_claims>를 확인하고 같은 관점은 다시 출력하지 마세요. evidence에는 <recent_transcript> 대괄호 안의 시간을 그대로 1~2개 넣으세요. {"suggestions":[{"type":"...","text":"...","evidence":["00:00"],"importance":"high|medium"}]}을 출력하세요.',
+  fr: 'Chaque text doit contenir une seule affirmation, décision ou action vérifiable ; ne fusionnez pas plusieurs idées. Vérifiez d’abord <accepted_claims> et ne répétez pas la même affirmation. Dans evidence, copiez exactement un ou deux horodatages entre crochets de <recent_transcript>. Renvoyez {"suggestions":[{"type":"...","text":"...","evidence":["00:00"],"importance":"high|medium"}]}.',
+  de: 'Jeder text darf nur eine eigenständig überprüfbare Aussage, Entscheidung oder Aktion enthalten; verbinde keine mehreren Ideen. Prüfe zuerst <accepted_claims> und gib dieselbe Aussage nicht erneut aus. Übernimm für evidence ein oder zwei Zeitstempel exakt aus den Klammern in <recent_transcript>. Gib {"suggestions":[{"type":"...","text":"...","evidence":["00:00"],"importance":"high|medium"}]} aus.',
+  ru: 'Каждый text должен содержать только одно проверяемое утверждение, решение или действие; не объединяйте несколько идей. Сначала проверьте <accepted_claims> и не повторяйте то же утверждение. В evidence скопируйте один или два времени точно из квадратных скобок в <recent_transcript>. Верните {"suggestions":[{"type":"...","text":"...","evidence":["00:00"],"importance":"high|medium"}]}.',
+};
+Object.entries(aiNotePromptCopy).forEach(([code, copy]) => { copy.instructions += `\n${aiNoteAtomicInstructions[code] || aiNoteAtomicInstructions.en}`; });
 
 const storageCleanupCopy = {
   zh: { button: '清理过期本地文件', detail: '移除已下架模型和无对应会议记录的残留文件。', done: '已释放 {size}' },
@@ -905,5 +932,187 @@ const storageCleanupCopy = {
   ru: { button: 'Очистить устаревшие локальные файлы', detail: 'Удаляет снятые с поддержки модели и осиротевшие файлы.', done: 'Освобождено {size}' },
 };
 
-window.BreviaLocaleData = { catalog, appCopy, aiNotePromptCopy, storageCleanupCopy, refinedModelOptionTags, streamingModelOptionTags };
+/**
+ * 更新日志内容（每个版本一条，按版本从新到旧）。
+ * 每条可提供任意语言的 { what | fixed | improved | changes } 数组；渲染时优先取当前语言，
+ * 其次回退到 en，再回退到 zh。`current: true` 标记当前版本（用于“查看更新日志”时高亮）。
+ * 注意：以下为随功能首发的示例内容，正式发布前请按实际改动逐条维护。
+ */
+const whatsNewLog = [
+  {
+    version: '1.1.5', date: '2026-08-26', current: true,
+    zh: { improved: ['提升实时字幕的稳定性，降低识别过程中的中断与抖动。', '优化实时识别状态反馈，字幕延迟更低。'], fixed: ['修复直播转录中偶发的字幕停滞问题。'] },
+    en: { improved: ['Improved live-caption stability and reduced interruptions during recognition.', 'Optimized realtime recognition feedback for lower caption latency.'], fixed: ['Fixed an occasional caption stall during live transcription.'] },
+  },
+  {
+    version: '1.1.4', date: '2026-08-22',
+    zh: { improved: ['多项性能优化，界面操作更流畅。'] },
+    en: { improved: ['Multiple performance optimizations for a smoother experience.'] },
+  },
+  {
+    version: '1.1.3', date: '2026-08-18',
+    zh: { improved: ['改进会后精修字幕的准确度与排版。'], fixed: ['修复若干精修相关的边界问题。'] },
+    en: { improved: ['Better accuracy and formatting for post-meeting refined transcripts.'], fixed: ['Fixed several edge cases around refinement.'] },
+  },
+  {
+    version: '1.1.2', date: '2026-08-12',
+    zh: { improved: ['改进应用内更新流程与发布通道，升级更顺畅。'] },
+    en: { improved: ['Improved the in-app update flow and release channel for smoother upgrades.'] },
+  },
+  {
+    version: '1.1.1', date: '2026-08-05',
+    zh: { what: ['新增 AI 会议总结与 AI 笔记，可自动发现重点、提取待办。'], improved: ['支持内置本地模型与在线 LLM 两种纪要方式。'] },
+    en: { what: ['Added AI meeting summaries and AI notes that surface key points and action items.'], improved: ['Support both built-in local models and online LLMs for summaries.'] },
+  },
+  {
+    version: '1.1.0', date: '2026-07-30',
+    zh: { what: ['首个 1.1 版本：本地会议录制、实时字幕、说话人识别与工作区组织。'] },
+    en: { what: ['First 1.1 release: local meeting recording, live captions, speaker recognition, and workspace organization.'] },
+  },
+];
+
+Object.assign(catalog.es.labels, { '笔记已达容量上限，超出部分未保存。': 'Las notas alcanzaron el límite de tamaño; el resto no se guardó.' });
+Object.assign(catalog.ko.labels, { '笔记已达容量上限，超出部分未保存。': '메모가 용량 한도에 도달해 나머지는 저장되지 않았습니다.' });
+Object.assign(catalog.fr.labels, { '笔记已达容量上限，超出部分未保存。': 'Les notes ont atteint la limite de taille ; le reste n’a pas été enregistré.' });
+Object.assign(catalog.de.labels, { '笔记已达容量上限，超出部分未保存。': 'Die Notizen haben das Größenlimit erreicht; der Rest wurde nicht gespeichert.' });
+Object.assign(catalog.ru.labels, { '笔记已达容量上限，超出部分未保存。': 'Заметки достигли лимита размера; остальное не сохранено.' });
+Object.assign(catalog.zh.labels, { '导出会议资料': '导出会议资料', '笔记': '笔记', '会议录音': '会议录音', '混音录音': '混音录音', '传送到应用': '传送到应用', '在文件夹中显示': '在文件夹中显示', '暂无笔记可导出': '暂无笔记可导出', '查找': '查找', '替换为': '替换为', '上一个': '上一个', '下一个': '下一个', '全部替换': '全部替换' });
+Object.assign(catalog.en.labels, { '导出会议资料': 'Export meeting files', '笔记': 'Notes', '会议录音': 'Meeting recording', '混音录音': 'Mixed recording', '传送到应用': 'Send to app', '在文件夹中显示': 'Show in folder', '暂无笔记可导出': 'No notes to export', '查找': 'Find', '替换为': 'Replace with', '上一个': 'Previous', '下一个': 'Next', '全部替换': 'Replace all' });
+Object.assign(catalog.es.labels, { '导出会议资料': 'Exportar archivos de reunión', '笔记': 'Notas', '会议录音': 'Grabación de reunión', '混音录音': 'Grabación mezclada', '传送到应用': 'Enviar a una app', '在文件夹中显示': 'Mostrar en carpeta', '暂无笔记可导出': 'No hay notas para exportar', '查找': 'Buscar', '替换为': 'Reemplazar por', '上一个': 'Anterior', '下一个': 'Siguiente', '全部替换': 'Reemplazar todo' });
+Object.assign(catalog.ja.labels, { '导出会议资料': '会議ファイルを書き出す', '笔记': 'メモ', '会议录音': '会議録音', '混音录音': 'ミックス録音', '传送到应用': 'アプリに送る', '在文件夹中显示': 'フォルダに表示', '暂无笔记可导出': '書き出すメモがありません', '查找': '検索', '替换为': '置換後', '上一个': '前へ', '下一个': '次へ', '全部替换': 'すべて置換' });
+Object.assign(catalog.ko.labels, { '导出会议资料': '회의 파일 내보내기', '笔记': '메모', '会议录音': '회의 녹음', '混音录音': '믹스 녹음', '传送到应用': '앱으로 보내기', '在文件夹中显示': '폴더에서 보기', '暂无笔记可导出': '내보낼 메모가 없습니다', '查找': '찾기', '替换为': '바꾸기', '上一个': '이전', '下一个': '다음', '全部替换': '모두 바꾸기' });
+Object.assign(catalog.fr.labels, { '导出会议资料': 'Exporter les fichiers de réunion', '笔记': 'Notes', '会议录音': 'Enregistrement de réunion', '混音录音': 'Enregistrement mixé', '传送到应用': 'Envoyer vers une app', '在文件夹中显示': 'Afficher dans le dossier', '暂无笔记可导出': 'Aucune note à exporter', '查找': 'Rechercher', '替换为': 'Remplacer par', '上一个': 'Précédent', '下一个': 'Suivant', '全部替换': 'Tout remplacer' });
+Object.assign(catalog.de.labels, { '导出会议资料': 'Besprechungsdateien exportieren', '笔记': 'Notizen', '会议录音': 'Besprechungsaufnahme', '混音录音': 'Gemischte Aufnahme', '传送到应用': 'An App senden', '在文件夹中显示': 'Im Ordner anzeigen', '暂无笔记可导出': 'Keine Notizen zum Exportieren', '查找': 'Suchen', '替换为': 'Ersetzen durch', '上一个': 'Zurück', '下一个': 'Weiter', '全部替换': 'Alle ersetzen' });
+Object.assign(catalog.ru.labels, { '导出会议资料': 'Экспорт файлов встречи', '笔记': 'Заметки', '会议录音': 'Запись встречи', '混音录音': 'Смешанная запись', '传送到应用': 'Отправить в приложение', '在文件夹中显示': 'Показать в папке', '暂无笔记可导出': 'Нет заметок для экспорта', '查找': 'Найти', '替换为': 'Заменить на', '上一个': 'Предыдущее', '下一个': 'Следующее', '全部替换': 'Заменить всё' });
+Object.entries({ zh: '导出与分享', en: 'Export & share', es: 'Exportar y compartir', ja: 'エクスポートと共有', ko: '내보내기 및 공유', fr: 'Exporter et partager', de: 'Exportieren und teilen', ru: 'Экспорт и отправка' }).forEach(([code, label]) => { catalog[code].labels['导出与分享'] = label; });
+Object.entries({ zh: '请先选择要导出的内容', en: 'Select what to export first', es: 'Selecciona qué exportar primero', ja: '先に書き出す内容を選択してください', ko: '먼저 내보낼 내용을 선택하세요', fr: 'Sélectionnez d’abord ce qu’il faut exporter', de: 'Wählen Sie zuerst aus, was exportiert werden soll', ru: 'Сначала выберите, что экспортировать' }).forEach(([code, label]) => { catalog[code].labels['请先选择要导出的内容'] = label; });
+Object.entries({ zh: '依据 {count} 段字幕', en: 'Based on {count} captions', es: 'Basado en {count} subtítulos', ja: '{count} 件の字幕に基づく', ko: '{count}개 자막 기반', fr: 'Basé sur {count} sous-titres', de: 'Basiert auf {count} Untertiteln', ru: 'На основе {count} субтитров' }).forEach(([code, label]) => { catalog[code].labels['依据 {count} 段字幕'] = label; });
+const exportHubCopy = {
+  zh: {
+    title: '导出与分享', what: '选择内容', files: '导出文件', shareTo: '分享到',
+    save: '导出所选', txt: '纯文本',
+    shareHint: '文字渠道只能携带标题与摘要；文件请用「导出所选」或系统分享面板。',
+    empty: '没有可导出的内容', emptySummary: '尚未选择任何内容',
+    summaryOne: '将导出 1 个文件', summaryMany: '将导出 {n} 项内容，打包为一个 zip',
+    savedBundle: '已导出打包文件', revealed: '文件已导出并在文件夹中显示',
+    desc: { notes: '完整结构化会议纪要', mynotes: '会议中手动记录的笔记', transcript: '带时间轴与说话人的逐字稿', audio: '未修改的会议混音' },
+    platform: {
+      system: ['系统分享面板', '转发到 AirDrop、微信、邮件等'], copy: ['复制到剪贴板', '复制所选内容'], email: ['邮件', '打开默认邮件客户端'],
+      wechat: ['微信', '导出文件并在文件夹中定位'], whatsapp: ['WhatsApp', '打开网页分享'], telegram: ['Telegram', '打开网页分享'],
+      x: ['X', '打开网页分享'], weibo: ['微博', '打开网页分享'],
+    },
+  },
+  en: {
+    title: 'Export & share', what: 'What to include', files: 'Export files', shareTo: 'Share to',
+    save: 'Export selected', txt: 'Plain text',
+    shareHint: 'Text channels carry only the title and an excerpt; use “Export selected” or the system share sheet for files.',
+    empty: 'Nothing to export', emptySummary: 'Nothing selected yet',
+    summaryOne: 'Will export 1 file', summaryMany: 'Will export {n} items as a zip',
+    savedBundle: 'Bundle exported', revealed: 'Files exported and revealed in folder',
+    desc: { notes: 'Complete structured meeting notes', mynotes: 'Notes you took during the meeting', transcript: 'Transcript with timeline and speakers', audio: 'Unmodified meeting mix' },
+    platform: {
+      system: ['Share sheet', 'Forward to AirDrop, WeChat, email…'], copy: ['Copy to clipboard', 'Copy selected text'], email: ['Email', 'Open your mail client'],
+      wechat: ['WeChat', 'Export files and reveal them'], whatsapp: ['WhatsApp', 'Open web share'], telegram: ['Telegram', 'Open web share'],
+      x: ['X', 'Open web share'], weibo: ['Weibo', 'Open web share'],
+    },
+  },
+  es: {
+    title: 'Exportar y compartir', what: 'Qué incluir', files: 'Exportar archivos', shareTo: 'Compartir en',
+    save: 'Exportar selección', txt: 'Texto sin formato',
+    shareHint: 'Los canales de texto solo llevan el título y un extracto; usa «Exportar selección» o el panel del sistema para archivos.',
+    empty: 'Nada que exportar', emptySummary: 'Aún no hay nada seleccionado',
+    summaryOne: 'Se exportará 1 archivo', summaryMany: 'Se exportarán {n} elementos en un zip',
+    savedBundle: 'Paquete exportado', revealed: 'Archivos exportados y mostrados en la carpeta',
+    desc: { notes: 'Notas de reunión estructuradas completas', mynotes: 'Notas tomadas durante la reunión', transcript: 'Transcripción con línea temporal y hablantes', audio: 'Mezcla de reunión sin modificar' },
+    platform: {
+      system: ['Panel de compartir', 'Reenviar a AirDrop, WeChat, correo…'], copy: ['Copiar al portapapeles', 'Copiar el texto seleccionado'], email: ['Correo', 'Abrir tu cliente de correo'],
+      wechat: ['WeChat', 'Exportar archivos y mostrarlos'], whatsapp: ['WhatsApp', 'Abrir compartir web'], telegram: ['Telegram', 'Abrir compartir web'],
+      x: ['X', 'Abrir compartir web'], weibo: ['Weibo', 'Abrir compartir web'],
+    },
+  },
+  ja: {
+    title: 'エクスポートと共有', what: '含める内容', files: 'ファイルを書き出す', shareTo: '共有先',
+    save: '選択分を書き出し', txt: 'プレーンテキスト',
+    shareHint: 'テキスト系の共有先にはタイトルと抜粋のみ送れます。ファイルは「選択分を書き出し」かシステム共有パネルで。',
+    empty: '書き出せる内容がありません', emptySummary: 'まだ選択されていません',
+    summaryOne: '1 ファイルを書き出します', summaryMany: '{n} 件を zip にまとめて書き出します',
+    savedBundle: 'パッケージを書き出しました', revealed: 'ファイルを書き出してフォルダに表示しました',
+    desc: { notes: '完全な構造化会議メモ', mynotes: '会議中に記録したメモ', transcript: '時刻と話者付きの文字起こし', audio: '未変更の会議ミックス' },
+    platform: {
+      system: ['共有パネル', 'AirDrop・WeChat・メールなどに転送'], copy: ['クリップボードにコピー', '選択したテキストをコピー'], email: ['メール', '既定のメールアプリを開く'],
+      wechat: ['WeChat', 'ファイルを書き出して表示'], whatsapp: ['WhatsApp', 'ウェブ共有を開く'], telegram: ['Telegram', 'ウェブ共有を開く'],
+      x: ['X', 'ウェブ共有を開く'], weibo: ['Weibo', 'ウェブ共有を開く'],
+    },
+  },
+  ko: {
+    title: '내보내기 및 공유', what: '포함할 내용', files: '파일 내보내기', shareTo: '공유 대상',
+    save: '선택 항목 내보내기', txt: '일반 텍스트',
+    shareHint: '텍스트 채널에는 제목과 발췌만 담을 수 있습니다. 파일은 「선택 항목 내보내기」나 시스템 공유 패널을 이용하세요.',
+    empty: '내보낼 내용이 없습니다', emptySummary: '아직 선택되지 않았습니다',
+    summaryOne: '파일 1개를 내보냅니다', summaryMany: '{n}개 항목을 zip으로 묶어 내보냅니다',
+    savedBundle: '패키지 내보냄', revealed: '파일을 내보내고 폴더에 표시했습니다',
+    desc: { notes: '완전한 구조화 회의록', mynotes: '회의 중 작성한 메모', transcript: '시간과 화자가 포함된 녹취', audio: '수정하지 않은 회의 믹스' },
+    platform: {
+      system: ['공유 패널', 'AirDrop·WeChat·메일 등으로 전달'], copy: ['클립보드에 복사', '선택한 텍스트 복사'], email: ['이메일', '기본 메일 앱 열기'],
+      wechat: ['위챗', '파일을 내보내고 표시'], whatsapp: ['WhatsApp', '웹 공유 열기'], telegram: ['Telegram', '웹 공유 열기'],
+      x: ['X', '웹 공유 열기'], weibo: ['웨이보', '웹 공유 열기'],
+    },
+  },
+  fr: {
+    title: 'Exporter et partager', what: 'Contenu à inclure', files: 'Exporter des fichiers', shareTo: 'Partager vers',
+    save: 'Exporter la sélection', txt: 'Texte brut',
+    shareHint: 'Les canaux de texte ne portent que le titre et un extrait ; utilisez « Exporter la sélection » ou le panneau système pour les fichiers.',
+    empty: 'Rien à exporter', emptySummary: 'Rien de sélectionné pour l’instant',
+    summaryOne: '1 fichier sera exporté', summaryMany: '{n} éléments seront exportés en un zip',
+    savedBundle: 'Paquet exporté', revealed: 'Fichiers exportés et affichés dans le dossier',
+    desc: { notes: 'Notes de réunion structurées complètes', mynotes: 'Notes prises pendant la réunion', transcript: 'Transcription avec chronologie et locuteurs', audio: 'Mixage de réunion non modifié' },
+    platform: {
+      system: ['Panneau de partage', 'Transférer vers AirDrop, WeChat, e-mail…'], copy: ['Copier dans le presse-papiers', 'Copier le texte sélectionné'], email: ['E-mail', 'Ouvrir votre client de messagerie'],
+      wechat: ['WeChat', 'Exporter et afficher les fichiers'], whatsapp: ['WhatsApp', 'Ouvrir le partage web'], telegram: ['Telegram', 'Ouvrir le partage web'],
+      x: ['X', 'Ouvrir le partage web'], weibo: ['Weibo', 'Ouvrir le partage web'],
+    },
+  },
+  de: {
+    title: 'Exportieren und teilen', what: 'Was einfügen', files: 'Dateien exportieren', shareTo: 'Teilen über',
+    save: 'Auswahl exportieren', txt: 'Klartext',
+    shareHint: 'Textkanäle übertragen nur Titel und Auszug; für Dateien nutzen Sie „Auswahl exportieren“ oder das Systemfreigabe-Panel.',
+    empty: 'Nichts zu exportieren', emptySummary: 'Noch nichts ausgewählt',
+    summaryOne: '1 Datei wird exportiert', summaryMany: '{n} Elemente werden als ZIP exportiert',
+    savedBundle: 'Paket exportiert', revealed: 'Dateien exportiert und im Ordner angezeigt',
+    desc: { notes: 'Vollständige strukturierte Besprechungsnotizen', mynotes: 'Notizen aus der Besprechung', transcript: 'Transkript mit Zeitachse und Sprechern', audio: 'Unveränderter Besprechungsmix' },
+    platform: {
+      system: ['Freigabe-Panel', 'An AirDrop, WeChat, E-Mail usw. senden'], copy: ['In Zwischenablage kopieren', 'Ausgewählten Text kopieren'], email: ['E-Mail', 'Standard-Mailprogramm öffnen'],
+      wechat: ['WeChat', 'Dateien exportieren und anzeigen'], whatsapp: ['WhatsApp', 'Web-Freigabe öffnen'], telegram: ['Telegram', 'Web-Freigabe öffnen'],
+      x: ['X', 'Web-Freigabe öffnen'], weibo: ['Weibo', 'Web-Freigabe öffnen'],
+    },
+  },
+  ru: {
+    title: 'Экспорт и отправка', what: 'Что включить', files: 'Экспорт файлов', shareTo: 'Отправить в',
+    save: 'Экспортировать выбранное', txt: 'Простой текст',
+    shareHint: 'Текстовые каналы несут только заголовок и выдержку; для файлов используйте «Экспортировать выбранное» или системную панель.',
+    empty: 'Нечего экспортировать', emptySummary: 'Пока ничего не выбрано',
+    summaryOne: 'Будет экспортирован 1 файл', summaryMany: 'Будет экспортировано {n} элементов в zip',
+    savedBundle: 'Пакет экспортирован', revealed: 'Файлы экспортированы и показаны в папке',
+    desc: { notes: 'Полные структурированные заметки встречи', mynotes: 'Заметки, сделанные во время встречи', transcript: 'Расшифровка с временной шкалой и говорящими', audio: 'Неизменённый микс встречи' },
+    platform: {
+      system: ['Панель отправки', 'Переслать в AirDrop, WeChat, почту…'], copy: ['Копировать в буфер обмена', 'Скопировать выбранный текст'], email: ['Эл. почта', 'Открыть почтовый клиент'],
+      wechat: ['WeChat', 'Экспортировать и показать файлы'], whatsapp: ['WhatsApp', 'Открыть веб-отправку'], telegram: ['Telegram', 'Открыть веб-отправку'],
+      x: ['X', 'Открыть веб-отправку'], weibo: ['Weibo', 'Открыть веб-отправку'],
+    },
+  },
+};
+
+// 会后精修菜单里的「开始精修」文案。
+Object.entries({
+  zh: { '开始精修': '开始精修' },
+  en: { '开始精修': 'Start refinement' },
+  es: { '开始精修': 'Iniciar refinamiento' },
+  ja: { '开始精修': '精修を開始' },
+  ko: { '开始精修': '정교화 시작' },
+  fr: { '开始精修': 'Lancer le raffinage' },
+  de: { '开始精修': 'Verfeinerung starten' },
+  ru: { '开始精修': 'Начать обработку' },
+}).forEach(([code, labels]) => { Object.assign(catalog[code].labels, labels); });
+
+window.BreviaLocaleData = { catalog, appCopy, aiNotePromptCopy, storageCleanupCopy, exportHubCopy, refinedModelOptionTags, streamingModelOptionTags, whatsNewLog };
 })();

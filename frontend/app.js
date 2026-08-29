@@ -94,7 +94,7 @@ function revealTaskCard(card) {
   card.hidden = false;
   if (wasHidden || wasLeaving) { taskCards.append(card); enterTaskCard(card); }
 }
-const { catalog, streamingModelOptionTags, aiNotePromptCopy, storageCleanupCopy, appCopy: { stageLabels, themeLabels, updateLabels, modalCopy, modelLabels, summaryModelCopy, speakerProfileCopy, voiceFeaturesCopy, aiAssistCopy } } = window.BreviaLocaleData;
+const { catalog, streamingModelOptionTags, aiNotePromptCopy, storageCleanupCopy, exportHubCopy, whatsNewLog, appCopy: { stageLabels, themeLabels, updateLabels, modalCopy, modelLabels, summaryModelCopy, speakerProfileCopy, voiceFeaturesCopy, aiAssistCopy, whatsNewCopy } } = window.BreviaLocaleData;
 if (new URLSearchParams(location.search).has('resetOnboarding')) localStorage.removeItem('brevia-onboarding-complete');
 let locale = localStorage.getItem('brevia-language') || 'zh';
 let theme = localStorage.getItem('brevia-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
@@ -112,7 +112,7 @@ document.addEventListener('scroll', (event) => {
 let activeLibraryNav = 'all-meetings';
 const liveSegments = new Map();
 const liveSegmentRevisions = new Map();
-// 实时字幕段落元数据（text/start_ms/speaker），供「加入笔记 / 标记时间点」等本地规则辅助读取。
+// 实时字幕段落元数据（text/start_ms/speaker），供「加入笔记」等本地规则辅助读取。
 const liveSegmentData = new Map();
 const maxLiveSegments = 500;
 let followLiveTranscript = true;
@@ -170,11 +170,12 @@ speakerProfileCard.innerHTML = '<h2></h2><p></p><button class="secondary" type="
 document.querySelector('#advanced-settings').before(speakerProfileCard);
 const updateCard = document.createElement('section');
 updateCard.className = 'update-card';
-updateCard.innerHTML = '<div><h2></h2><p></p></div><button class="update-button" type="button"></button>';
+updateCard.innerHTML = '<div><h2></h2><p></p></div><span class="update-actions"><button class="update-notes" data-open-whats-new type="button"></button><button class="update-button" type="button"></button></span>';
 document.querySelector('#settings-view .settings-grid').append(updateCard);
 const updateTitle = updateCard.querySelector('h2');
 const updateDescription = updateCard.querySelector('p');
-const updateButton = updateCard.querySelector('button');
+const updateButton = updateCard.querySelector('button.update-button');
+const updateNotesButton = updateCard.querySelector('[data-open-whats-new]');
 const updateNotice = document.createElement('aside');
 updateNotice.className = 'software-update-notice';
 updateNotice.hidden = true;
@@ -311,6 +312,7 @@ function renderUpdateNotice() {
 function renderUpdateButton() {
   const copy = updateCopy();
   updateTitle.textContent = copy.title;
+  updateNotesButton.textContent = (whatsNewCopy[locale] || whatsNewCopy.en).view;
   if (updateDownloadProgress) {
     const percent = Math.round(updateDownloadProgress.percent);
     const transferred = formatBytes(updateDownloadProgress.transferred);
@@ -459,6 +461,8 @@ settingsModal.hidden = true;
 settingsModal.innerHTML = '<section class="modal-panel" role="dialog" aria-modal="true"><header class="modal-head"><div class="modal-title"><h2></h2><p></p></div><button class="modal-close" type="button" aria-label="Close">×</button></header><div class="modal-body"></div></section>';
 document.body.append(settingsModal);
 let activeModal;
+let summaryEditing = false;
+let summaryEditor = null;
 let editingSegmentSpeakerId;
 let advancedSettings;
 let permissionStatus;
@@ -624,14 +628,9 @@ function renderPrepareSelects() {
     ['__new_workspace__', `+ ${t('新建工作区')}`],
   ];
   const workspaceValue = values['meeting-workspace'] === '__new_workspace__' ? activeWorkspaceId : values['meeting-workspace'] ?? activeWorkspaceId;
-  prepareForm.querySelector('.form-grid').innerHTML = `<label>${t('会议语言')}${flowSelect('meeting-language', values['meeting-language'] || locale, BreviaI18n.languageOptions(locale, t, true))}</label><label>${t('译文目标')}${flowSelect('translation-target', values['translation-target'] || '', BreviaI18n.languageOptions(locale, t))}</label><label>${t('预期说话人数')}<input name="num-speakers" type="number" min="1" step="1" value="${values['num-speakers'] || ''}" placeholder="${t('留空自动匹配')}" /></label><label>${t('工作区')}${flowSelect('meeting-workspace', workspaceValue, workspaceOptions)}</label>`;
+  prepareForm.querySelector('.form-grid').innerHTML = `<label>${t('会议语言')}${flowSelect('meeting-language', values['meeting-language'] || locale, BreviaI18n.languageOptions(locale, t, true))}</label><label>${t('译文目标')}${flowSelect('translation-target', values['translation-target'] || '', BreviaI18n.languageOptions(locale, t))}</label><label>${t('工作区')}${flowSelect('meeting-workspace', workspaceValue, workspaceOptions)}</label>`;
   prepareForm.querySelector('.primary-action').firstChild.nodeValue = `${t('开始录制')} `;
   importRecording.textContent = t('导入录音');
-  prepareModelCard.querySelector('#active-vad-model').previousElementSibling.textContent = t('VAD 模型');
-  // 右侧摘要只显示当前性能模式。
-  const languageName = values['meeting-language'] === 'auto' ? t('自动检测') : new Intl.DisplayNames([locale], { type: 'language' }).of(values['meeting-language'] || locale);
-  prepareModelCard.querySelector('#active-meeting-language').textContent = languageName;
-  prepareModelCard.querySelector('#active-meeting-mode').textContent = getPerformanceMode() === 'efficiency' ? t('效率模式') : t('性能模式');
   requestAnimationFrame(fitPrepareLayout);
 }
 function selectCurrentWorkspaceForMeeting() {
@@ -639,11 +638,6 @@ function selectCurrentWorkspaceForMeeting() {
   if (workspace) workspace.value = activeWorkspaceId;
   renderPrepareSelects();
 }
-const prepareModelChoices = {
-  'active-streaming-model': [['', null], ['zipformer-zh-xlarge-streaming-int8', 'Streaming Zipformer Chinese XLarge'], ['x-asr-zh-en-streaming-480ms-int8', 'X-ASR Streaming Chinese and English (480ms)'], ['zipformer-en-streaming-int8', 'Streaming Zipformer English'], ['zipformer-ko-streaming-int8', 'Streaming Zipformer Korean'], ['zipformer-fr-streaming-int8', 'Streaming Zipformer French'], ['nemotron-3.5-asr-streaming-0.6b-560ms-int8', 'Nemotron 3.5 ASR Streaming 0.6B (560ms)']],
-  'active-diarization-model': [['', null], ['pyannote-segmentation-3.0', 'Pyannote + 3D-Speaker']],
-  'active-vad-model': [['silero-vad', 'Silero VAD']],
-};
 const DEFAULT_REFINED_MODEL_ID = 'funasr-nano-int8';
 const MULTILINGUAL_REFINED_MODEL_ID = 'qwen3-asr-0.6b-int8';
 // Qwen3-ASR 1.7B 在当前 sherpa-onnx 下不支持语言强制，暂不提供此模型。
@@ -669,51 +663,17 @@ const requiredModelsForLanguage = (language) => {
   const punctuation = language === 'en' ? 'online-punct-en-int8' : ['zh', 'yue', 'auto'].includes(language) ? 'punct-ct-transformer-zh-en-int8' : undefined;
   return [streaming, 'silero-vad', punctuation, refined, segmentation, 'eres2net-base-3dspeaker-zh', 'gtcrn-live-denoiser'];
 };
-const compatibleStreamingModels = () => prepareModelChoices['active-streaming-model'];
-function setPrepareModel(id, model) {
-  const value = document.querySelector(`#${id}`);
-  if (id === 'active-streaming-model') prepareForm.dataset.streamingModel = model;
-  if (id === 'active-diarization-model') prepareForm.dataset.segmentationModel = model;
-  if (id === 'active-vad-model') prepareForm.dataset.vadModel = model;
-  value.dataset.model = model;
-  value.textContent = id === 'active-refined-model'
-    ? refinedModelName(model)
-    : prepareModelChoices[id]?.find(([choice]) => choice === model)?.[1] || t('自动匹配');
-}
 function applyLanguageModelDefaults(language) {
   const models = preferredModelsForLanguage(language);
-  setPrepareModel('active-streaming-model', models.streaming);
-  setPrepareModel('active-refined-model', models.refined);
-  setPrepareModel('active-diarization-model', models.segmentation);
+  Object.assign(prepareForm.dataset, { streamingModel: models.streaming, segmentationModel: models.segmentation, vadModel: 'silero-vad' });
 }
-const prepareModelCard = document.querySelector('.model-card');
-prepareModelCard.querySelector('.model-detail-list').insertAdjacentHTML('beforeend', `<div><dt>${t('VAD 模型')}</dt><dd id="active-vad-model" data-model="silero-vad">Silero VAD</dd></div>`);
-const modelPicker = document.createElement('div');
-modelPicker.className = 'flow-select-options model-picker';
-modelPicker.hidden = true;
-prepareModelCard.append(modelPicker);
-prepareModelCard.addEventListener('click', (event) => {
-  const choice = event.target.closest('[data-model-picker-choice]');
-  if (!choice) return;
-  setPrepareModel(choice.dataset.modelPickerChoice, choice.dataset.value);
-  modelPicker.hidden = true;
-});
-prepareModelCard.addEventListener('dblclick', (event) => {
-  const value = event.target.closest('dd[id]');
-  const language = new FormData(prepareForm).get('meeting-language') || 'auto';
-  if (value?.id === 'active-refined-model') return;
-  const choices = value && (value.id === 'active-streaming-model' ? compatibleStreamingModels(language) : prepareModelChoices[value.id]);
-  if (!choices) return;
-  modelPicker.innerHTML = choices.map(([id, name]) => `<button type="button" data-model-picker-choice="${value.id}" data-value="${id}">${name || t('自动匹配')}</button>`).join('');
-  modelPicker.style.top = `${value.offsetTop + value.offsetHeight + 4}px`;
-  modelPicker.hidden = false;
-});
-document.addEventListener('click', (event) => { if (!event.target.closest('.model-card')) modelPicker.hidden = true; });
 if (breviaClient) {
   breviaClient.onLevel = (track, level) => {
     if (track !== 'mic') return;
     document.querySelectorAll('#mic-level, [data-onboarding-mic-level]').forEach((meter) => meter.style.setProperty('--level', Math.max(.04, level)));
   };
+  // 恢复用户上次选择的麦克风设备(若有)。
+  if (savedMicDeviceId()) breviaClient.setMicDevice(savedMicDeviceId());
 }
 /** 设置录音源状态徽标：授权正常显示勾选图标与状态，异常显示 — 并把解释放回提示行。@returns {void} */
 function setSourceBadge(labelEl, hintEl, { ok, text, hint }) {
@@ -742,6 +702,7 @@ function renderPrepareAudioSources() {
   else setSourceBadge(micLabel, micHint, { ok: false, text: t('未就绪'), hint: micDenied ? t('请在系统设置中开启此权限') : t('需要麦克风权限') });
   if (screenGranted && !screenUnsupported) setSourceBadge(systemLabel, systemHint, { ok: true, text: t('已连接') });
   else setSourceBadge(systemLabel, systemHint, { ok: false, text: t('未就绪'), hint: screenUnsupported ? t('当前系统不支持直接录制系统音频，请仅使用麦克风') : (status.screen === 'denied' ? t('请在系统设置中开启此权限') : t('需要授予屏幕与系统音频权限')) });
+  renderMicDeviceOptions();
 }
 /** 拉取最新权限状态并刷新录音前页的录音源显示。@returns {Promise<void>} */
 async function refreshPrepareAudioSources() {
@@ -750,11 +711,17 @@ async function refreshPrepareAudioSources() {
     if (status) permissionStatus = status;
   }
   renderPrepareAudioSources();
+  if (permissionStatus?.microphone === 'granted') await refreshMicDevices();
 }
 async function previewMicrophone() {
   if (!breviaClient || !prepareForm.querySelector('[name="capture-mic"]').checked) return;
   try {
-    await breviaClient.previewMic();
+    const fellBack = await breviaClient.previewMic();
+    if (fellBack) {
+      // 所选设备在预览时已断开(如拔出耳机),已回退到系统默认。
+      // 重新枚举并同步下拉、持久化与后端采集,避免继续指向已失效的设备。
+      await refreshMicDevices();
+    }
     setSourceBadge(document.querySelector('#mic-input-label'), document.querySelector('#mic-source-hint'), { ok: true, text: t('输入良好') });
   } catch (error) {
     // Keep the status column short; the actionable explanation belongs in the
@@ -763,9 +730,56 @@ async function previewMicrophone() {
   }
 }
 prepareForm.querySelector('[name="capture-mic"]').addEventListener('change', (event) => {
-  if (event.target.checked) void previewMicrophone();
+  if (event.target.checked) { void refreshMicDevices(); void previewMicrophone(); }
   else void breviaClient?.stopPreview();
 });
+const MIC_DEVICE_KEY = 'brevia-mic-device';
+/** 读取用户保存的麦克风设备 id(空串表示系统默认)。@returns {string} */
+function savedMicDeviceId() { try { return localStorage.getItem(MIC_DEVICE_KEY) || ''; } catch { return ''; } }
+/** 持久化所选麦克风设备 id。@param {string} deviceId 设备 id 或空串表示系统默认。@returns {void} */
+function saveMicDeviceId(deviceId) { try { localStorage.setItem(MIC_DEVICE_KEY, deviceId || ''); } catch { /* 忽略存储失败。 */ } }
+/** 录制前页当前选中的麦克风设备 id(空串表示系统默认),来自自定义 flow-select 的隐藏字段。@returns {string} */
+function selectedMicDeviceId() { return prepareForm.querySelector('[name="mic-device"]')?.value || ''; }
+/** 缓存的麦克风设备列表,用于重建下拉选项。@type {Array<{deviceId:string,label:string}>} */
+let cachedMicDevices = [];
+/** 构建麦克风设备下拉的选项数组(首个为「系统默认」)。@returns {Array<[string,string]>} */
+function micDeviceOptions() {
+  return [['', t('系统默认')], ...cachedMicDevices.map((device) => [device.deviceId, device.label || t('麦克风设备')])];
+}
+/** 就地重建麦克风设备下拉:更新选项与选中标签,保留展开/收起状态;若已选设备断开则回退到系统默认。@returns {void} */
+function renderMicDeviceOptions() {
+  const mount = prepareForm.querySelector('#mic-device-mount');
+  if (!mount) return;
+  const saved = savedMicDeviceId();
+  const present = new Set(cachedMicDevices.map((device) => device.deviceId));
+  if (saved && !present.has(saved)) saveMicDeviceId('');
+  const options = micDeviceOptions();
+  const flow = mount.querySelector('.flow-select');
+  if (!flow) {
+    mount.innerHTML = flowSelect('mic-device', savedMicDeviceId(), options);
+  } else {
+    flow.querySelector('.flow-select-options').innerHTML = options
+      .map(([value, label]) => `<button type="button" data-flow-select-choice="mic-device" data-value="${escapeHtml(value)}">${escapeHtml(label)}</button>`).join('');
+    const current = flow.querySelector('input').value || savedMicDeviceId();
+    const label = options.find(([value]) => value === current)?.[1] || options[0][1];
+    flow.querySelector('.flow-select-toggle').firstChild.nodeValue = label;
+    flow.querySelector('input').value = current;
+  }
+  breviaClient?.setMicDevice(savedMicDeviceId());
+}
+/** 重新枚举系统麦克风设备并重建下拉。@returns {Promise<void>} */
+async function refreshMicDevices() {
+  cachedMicDevices = (await breviaClient?.listMicrophones().catch(() => [])) || [];
+  renderMicDeviceOptions();
+}
+/** 用户切换麦克风设备后:持久化选择,停止旧预览并立即用新设备重测。@returns {Promise<void>} */
+async function onMicDeviceChange() {
+  const deviceId = selectedMicDeviceId();
+  saveMicDeviceId(deviceId);
+  breviaClient?.setMicDevice(deviceId);
+  await breviaClient?.stopPreview();
+  if (prepareForm.querySelector('[name="capture-mic"]').checked) await previewMicrophone();
+}
 let refinementMeetingTitle = '';
 let refinementCardDismissed = false;
 function refinementTitle(meetingId) {
@@ -1151,6 +1165,8 @@ prepareForm.addEventListener('click', (event) => {
   if (toggle) {
     const options = toggle.parentElement.querySelector('.flow-select-options');
     const opening = options.hidden;
+    // 打开麦克风设备下拉前刷新设备列表(插拔后保持最新),就地更新不会打断展开状态。
+    if (opening && toggle.closest('#mic-device-mount')) void refreshMicDevices();
     prepareForm.querySelectorAll('.flow-select-options').forEach((list) => { list.hidden = true; list.previousElementSibling.previousElementSibling.setAttribute('aria-expanded', 'false'); });
     options.hidden = !opening;
     toggle.setAttribute('aria-expanded', String(opening));
@@ -1173,6 +1189,7 @@ prepareForm.addEventListener('click', (event) => {
   select.querySelector('.flow-select-options').hidden = true;
   select.querySelector('.flow-select-toggle').setAttribute('aria-expanded', 'false');
   if (choice.dataset.flowSelectChoice === 'meeting-language') applyLanguageModelDefaults(choice.dataset.value);
+  if (choice.dataset.flowSelectChoice === 'mic-device') void onMicDeviceChange();
 });
 /** 渲染内置纪要模型清单，含未安装模型的下载入口。@returns {string} 清单标记。*/
 function renderBuiltinSummaryModels(currentModelId, hint) {
@@ -1345,12 +1362,28 @@ const shareSocialUrls = {
   telegram: { limit: 1500, url: (text) => `https://t.me/share/url?url=&text=${encodeURIComponent(text)}` },
   whatsapp: { limit: 1500, url: (text) => `https://wa.me/?text=${encodeURIComponent(text)}` },
 };
-// 每个分享上下文对应的「导出文件」按钮与「微信/文件分享」所导出的文件类型。
-const shareContexts = {
-  notes: { file: { content: 'notes', format: 'pdf' } },
-  transcript: { file: { content: 'transcript', format: 'md' } },
-  meeting: { file: { kind: 'bundle' } },
+// ===== 导出与分享（统一面板）=====
+// 导出内容清单：仅包含当前会议实际可用的内容。exportSelection 记录「已勾选内容 -> 所选格式」。
+let exportSelection = {};
+const exportContentFormats = {
+  notes: ['md', 'pdf', 'docx', 'txt'],
+  mynotes: ['md', 'pdf', 'docx', 'txt'],
+  transcript: ['srt', 'md', 'txt', 'json'],
+  audio: ['m4a', 'wav', 'flac'],
 };
+const exportDefaultFormat = { notes: 'md', mynotes: 'md', transcript: 'srt', audio: 'm4a' };
+const exportTrack = { audio: 'mix' };
+const exportContentLabel = { notes: () => t('会议纪要'), mynotes: () => t('我的笔记'), transcript: () => t('字幕'), audio: () => t('会议录音') };
+function exportContentMeta() {
+  const meeting = currentMeetingDetail || {};
+  const playback = meeting?.audio?.playback || {};
+  const meta = [];
+  if (meeting?.summary?.data?.markdown) meta.push({ content: 'notes' });
+  if (String(meeting?.notes || '').trim()) meta.push({ content: 'mynotes' });
+  if ((uiData.detail.transcript || []).length) meta.push({ content: 'transcript' });
+  if (playback.mix || playback.mic || playback.system) meta.push({ content: 'audio' });
+  return meta;
+}
 // 把 Markdown 纪要转成便于粘贴的纯文本(去标题井号、加粗、行内代码、列表符与表格竖线)。
 function markdownToPlainText(markdown) {
   return String(markdown || '')
@@ -1366,28 +1399,6 @@ function markdownToPlainText(markdown) {
 function shareTranscriptText() {
   return (uiData.detail.transcript || []).map((row) => `[${row.time}] ${row.speaker.name}: ${row.text}`).join('\n');
 }
-// 完整分享文本:剪贴板与邮件用。逐字稿上下文优先逐字稿,其余优先纪要,互相回退。
-function shareFullText(context) {
-  const markdown = currentMeetingDetail?.summary?.data?.markdown;
-  const notes = markdown ? markdownToPlainText(markdown) : '';
-  const transcript = shareTranscriptText();
-  return context === 'transcript' ? transcript || notes : notes || transcript;
-}
-// 社交平台摘要:标题 + 正文开头,按平台字数上限截断。CJK 经 URL 编码会膨胀约 9 倍,
-// 因此再按「编码后长度」二次截断,避免最终 URL 超过主进程 8000 字符上限。
-function shareExcerpt(context, limit) {
-  const title = currentMeetingDetail?.title || '';
-  const body = shareFullText(context);
-  const combined = title && body ? `${title}\n\n${body}` : title || body;
-  if (!combined) return '';
-  let text = combined.length > limit ? `${combined.slice(0, Math.max(1, limit - 1)).trimEnd()}…` : combined;
-  const maxEncoded = 7000;
-  while (text && encodeURIComponent(text).length > maxEncoded) {
-    text = text.slice(0, Math.max(1, Math.floor(text.length * 0.9)));
-  }
-  if (text && text.length < combined.length) text = `${text.trimEnd()}…`;
-  return text;
-}
 // mailto: 正文经 URL 编码后 CJK 字符会膨胀约 9 倍;邮件客户端与主进程都对 URL 长度有上限。
 // 按「编码后长度」而非字符数截断,保证最终 URL 稳定落在安全范围(远低于 8000)。整篇正文
 // 应通过附件或「复制到剪贴板」传递,mailto 只带开头。
@@ -1400,142 +1411,146 @@ function buildMailto(subject, body, maxEncodedBody = 1600) {
   if (text && text.length < (body || '').length) text = `${text.trimEnd()}…`;
   return `mailto:?subject=${encodeURIComponent(subject || '')}&body=${encodeURIComponent(text)}`;
 }
+// 通用截断：先按字符数,再按「URL 编码后长度」二次截断,避免 CJK 编码膨胀后超过主进程 URL 上限。
+function makeExcerpt(text, limit) {
+  if (!text) return '';
+  let value = text.length > limit ? `${text.slice(0, Math.max(1, limit - 1)).trimEnd()}…` : text;
+  const maxEncoded = 7000;
+  while (value && encodeURIComponent(value).length > maxEncoded) value = value.slice(0, Math.max(1, Math.floor(value.length * 0.9)));
+  if (value && value.length < text.length) value = `${value.trimEnd()}…`;
+  return value;
+}
+// 把当前勾选的内容项交给主进程导出/打包/分享。mode: save 保存对话框, reveal 在文件夹中显示, system 系统分享面板。
+async function runExportBundle(mode, anchor) {
+  const items = selectedExportItems();
+  if (!items.length) throw new Error(t('请先选择要导出的内容'));
+  const result = await window.brevia?.meeting.exportBundle({
+    meeting_id: breviaClient.state.selectedMeetingId,
+    items,
+    mode,
+    ...(anchor ? { anchor } : {}),
+  });
+  return { ...(result || {}), count: result ? items.length : null };
+}
+// 格式显示名：Markdown 与各容器格式为通用名，纯文本按语言显示（txt 使用 copy.txt）。
+const exportFormatDisplay = {
+  md: 'Markdown', pdf: 'PDF', docx: 'DOCX', txt: null, srt: 'SRT', json: 'JSON', m4a: 'M4A', wav: 'WAV', flac: 'FLAC',
+};
+// 分享/转发渠道的轻量内联图标。
+function sharePlatformIcon(id) {
+  const common = 'viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"';
+  const paths = {
+    system: '<path d="M14 6l4 4-4 4"/><path d="M18 10H9"/><path d="M12 3H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h8"/>',
+    copy: '<rect x="6" y="6" width="10" height="11" rx="1.5"/><path d="M13 3H5a2 2 0 0 0-2 2v9"/>',
+    email: '<rect x="3" y="4.5" width="14" height="11" rx="1.5"/><path d="m3.5 6 6.5 5 6.5-5"/>',
+    wechat: '<path d="M13 7.5c2.7.2 4 1.9 4 3.6 0 1.9-1.7 3.6-4.3 3.9"/><path d="M3.5 7.6C3.5 5.6 5.6 4 8.2 4s4.7 1.6 4.7 3.6c0 1.4-.9 2.6-2.3 3.3"/><path d="M6.5 14.5c-1.3-.2-2.3-.8-3-1.6"/><circle cx="6.6" cy="9.2" r=".7"/><circle cx="9.7" cy="9.2" r=".7"/>',
+    whatsapp: '<path d="M10 3a7 7 0 0 0-6 10.5L3 17l3.6-1A7 7 0 1 0 10 3Z"/><path d="M7.5 7.5c0 3 2.5 5.5 5.5 5.5l.6-1.4-1.6-.8-.6.6a4.6 4.6 0 0 1-1.8-1.8l.6-.6-.8-1.6L7.5 7.5Z"/>',
+    telegram: '<path d="M17.5 3.5 3 9.2l4.2 1.6 1.7 5 2.5-1.7 3 2.4 3.1-12Z"/><path d="m7.2 10.8 6.8-4.3"/>',
+    x: '<path d="m4 4 12 12M16 4 4 16"/>',
+    weibo: '<path d="M8 12c1-1 3.5-2.5 4.5-1.5 1 .8-1 2-3 2-1.2 0-1.8-.3-1.5-.5Z"/><path d="M13.5 14.5c.5-.8-.8-2.4-1.5-3M7 4c-1.5 2-1.5 6 .5 8 1.6 1.7 4.6 2 6.7.8C16 12 16.5 9.5 15 8c-1-.8-2-.6-2.4-1.5"/>',
+  };
+  return `<svg ${common}>${paths[id] || paths.copy}</svg>`;
+}
+// 收集本次选择的内容项（仅限当前会议可用且已勾选的项），带各自格式与音轨。
+function selectedExportItems() {
+  return exportContentMeta()
+    .filter(({ content }) => exportSelection[content])
+    .map(({ content }) => ({
+      content,
+      format: exportSelection[content],
+      label: exportContentLabel[content](),
+      ...(exportTrack[content] ? { track: exportTrack[content] } : {}),
+    }));
+}
+// 需要文本能力（复制 / 邮件 / 社交网页分享）时，从所选内容中挑正文：纪要优先，其次我的笔记，再逐字稿。
+function exportShareText() {
+  if (exportSelection.notes) {
+    const markdown = currentMeetingDetail?.summary?.data?.markdown;
+    if (markdown) return markdownToPlainText(markdown);
+  }
+  if (exportSelection.mynotes) {
+    const notes = String(currentMeetingDetail?.notes || '').trim();
+    if (notes) return notes;
+  }
+  if (exportSelection.transcript) return shareTranscriptText();
+  return '';
+}
 function renderExportModal() {
-  const copy = shareCopy[locale] || shareCopy.en;
-  settingsModal.querySelector('h2').textContent = copy.contexts.transcript;
+  const copy = exportHubCopy[locale] || exportHubCopy.en;
+  settingsModal.querySelector('h2').textContent = copy.title;
   settingsModal.querySelector('.modal-title p').textContent = currentMeetingDetail?.title || '';
-  settingsModal.querySelector('.modal-body').innerHTML = sharePanelHtml('transcript');
+  exportSelection = {};
+  exportContentMeta().forEach(({ content }) => { exportSelection[content] = exportDefaultFormat[content]; });
+  settingsModal.querySelector('.modal-body').innerHTML = exportHubHtml();
+  updateExportBuilderState();
 }
-function renderShareModal() {
-  const copy = shareCopy[locale] || shareCopy.en;
-  settingsModal.querySelector('h2').textContent = copy.contexts.meeting;
-  settingsModal.querySelector('.modal-title p').textContent = currentMeetingDetail?.title || '';
-  settingsModal.querySelector('.modal-body').innerHTML = sharePanelHtml('meeting');
-}
-// 生成分享面板:上半为平台按钮,下半为按上下文变化的导出文件按钮。三处入口共用。
-function sharePanelHtml(context) {
-  const copy = shareCopy[locale] || shareCopy.en;
-  // 系统原生分享面板仅 macOS 提供(NSSharingServicePicker);放在首位,可一键转发到微信等 App。
-  const order = [...(window.brevia?.platform === 'darwin' ? ['system'] : []), 'copy', 'email', 'wechat', 'weibo', 'x', 'telegram', 'whatsapp'];
-  const platforms = order.map((id) => {
-    const [label, desc] = copy.platforms[id];
-    const attrs = id === 'wechat' ? `data-share-file data-context="${context}"` : `data-share-platform="${id}" data-context="${context}"`;
-    return `<button type="button" class="share-platform" ${attrs}><b>${escapeHtml(label)}</b><small>${escapeHtml(desc)}</small></button>`;
+// 统一「导出与分享」面板。作为独立弹窗主体，也复用在「会议纪要详情」底部。
+function exportHubHtml() {
+  const copy = exportHubCopy[locale] || exportHubCopy.en;
+  const meta = exportContentMeta();
+  meta.forEach(({ content }) => { if (!(content in exportSelection)) exportSelection[content] = exportDefaultFormat[content]; });
+  const txt = copy.txt;
+  const rows = meta.map(({ content }) => {
+    const label = exportContentLabel[content]();
+    const desc = copy.desc[content] || '';
+    const current = exportSelection[content] || exportDefaultFormat[content];
+    const currentDisplay = exportFormatDisplay[current] || txt;
+    const formatOptions = (exportContentFormats[content] || []).map((format) => {
+      const display = exportFormatDisplay[format] || txt;
+      return `<button type="button" data-flow-select-choice="export-format-${content}" data-value="${format}">${escapeHtml(display)}</button>`;
+    }).join('');
+    return `<label class="export-content-row${exportSelection[content] ? ' is-checked' : ''}">
+      <input type="checkbox" data-export-item="${content}"${exportSelection[content] ? ' checked' : ''}>
+      <span class="export-content-name"><b>${escapeHtml(label)}</b><small>${escapeHtml(desc)}</small></span>
+      <span class="export-format-wrap flow-select">
+        <button class="flow-select-toggle" type="button" data-flow-select-toggle aria-expanded="false">${escapeHtml(currentDisplay)}<span>⌄</span></button>
+        <input type="hidden" data-export-format="${content}" value="${current}" />
+        <div class="flow-select-options" hidden>${formatOptions}</div>
+      </span>
+    </label>`;
   }).join('');
-  return `<section class="modal-subsection share-section"><h3>${copy.shareTo}</h3><p>${copy.shareHint}</p><div class="share-platforms">${platforms}</div></section>`
-    + `<section class="modal-subsection"><h3>${copy.exportFiles}</h3>${exportOptionsHtml(context)}</section>`;
-}
-// 每个上下文的「导出文件」按钮列表,复用现有 .export-options 样式。
-// 已「瘦身」:只保留分享(复制/邮件/社交)覆盖不到的产物——音频、SRT 字幕、
-// 完整 zip,以及无法用复制粘贴还原的格式化 PDF。纯文本 md/txt 交给复制与邮件。
-function exportOptionsHtml(context) {
-  const copy = shareCopy[locale] || shareCopy.en;
-  const hasMyNotes = Boolean(String(currentMeetingDetail?.notes || '').trim());
-  const myNotesButtons = hasMyNotes ? `<button type="button" data-share-export data-content="mynotes" data-format="md"><span><b>${escapeHtml(copy.myNotesMd[0])}</b><small>${escapeHtml(copy.myNotesMd[1])}</small></span><strong>.md</strong></button><button type="button" data-share-export data-content="mynotes" data-format="pdf"><span><b>${escapeHtml(copy.myNotesPdf[0])}</b><small>${escapeHtml(copy.myNotesPdf[1])}</small></span><strong>.pdf</strong></button>` : '';
-  if (context === 'notes') {
-    // 纪要的 md/txt 已被复制/邮件覆盖;仅保留归档用的 PDF,同时提供我的笔记导出。
-    return `<div class="export-options"><button type="button" data-share-export data-content="notes" data-format="pdf"><span><b>${escapeHtml(copy.notesPdf[0])}</b><small>${escapeHtml(copy.notesPdf[1])}</small></span><strong>.pdf</strong></button>${myNotesButtons}</div>`;
-  }
-  if (context === 'meeting') {
-    const hasNotes = Boolean(currentMeetingDetail?.summary?.data?.markdown);
-    return `<div class="export-options"><button type="button" data-share-export data-kind="bundle" data-format="zip"><span><b>${escapeHtml(copy.bundle[0])}</b><small>${escapeHtml(copy.bundle[1])}</small></span><strong>.zip</strong></button>${hasNotes ? `<button type="button" data-share-export data-content="notes" data-format="pdf"><span><b>${escapeHtml(copy.notesPdf[0])}</b><small>${escapeHtml(copy.notesPdf[1])}</small></span><strong>.pdf</strong></button>` : ''}${myNotesButtons}</div>`;
-  }
-  return `<div class="export-options">
-    <button type="button" data-share-export data-content="transcript" data-format="srt"><span><b>${t('字幕文件')}</b><small>${t('标准时间轴字幕')}</small></span><strong>.srt</strong></button>
-    <button type="button" data-share-export data-content="audio" data-format="wav" data-track="mix"><span><b>${t('原录音')}</b><small>${t('未修改的会议混音')}</small></span><strong>.wav</strong></button>
-    ${myNotesButtons}
+  const channels = [];
+  if (window.brevia?.platform === 'darwin') channels.push({ id: 'system', kind: 'file' });
+  channels.push({ id: 'copy', kind: 'text' }, { id: 'email', kind: 'text' }, { id: 'wechat', kind: 'file' },
+    { id: 'whatsapp', kind: 'text' }, { id: 'telegram', kind: 'text' }, { id: 'x', kind: 'text' }, { id: 'weibo', kind: 'text' });
+  const platforms = channels.map(({ id, kind }) => {
+    const [label, desc] = copy.platform[id];
+    return `<button type="button" class="share-platform" data-share-target="${id}" data-share-kind="${kind}">${sharePlatformIcon(id)}<b>${escapeHtml(label)}</b><small>${escapeHtml(desc)}</small></button>`;
+  }).join('');
+  return `<div class="export-builder">
+    <section class="export-builder-section">
+      <h3>${copy.what}</h3>
+      <div class="export-content-list">${rows || `<p class="export-empty">${copy.empty}</p>`}</div>
+      <p class="export-selection-summary" data-export-summary>${copy.emptySummary}</p>
+    </section>
+    <section class="export-builder-section">
+      <h3>${copy.files}</h3>
+      <div class="export-actions">
+        <button type="button" class="modal-action" data-export-save>${copy.save}</button>
+      </div>
+    </section>
+    <section class="export-builder-section">
+      <h3>${copy.shareTo}</h3>
+      <p class="share-hint">${copy.shareHint}</p>
+      <div class="share-platforms">${platforms}</div>
+    </section>
   </div>`;
 }
-const shareCopy = {
-  zh: {
-    contexts: { transcript: '导出与分享', meeting: '分享会议', notes: '分享会议纪要' },
-    shareTo: '分享到', shareHint: '社交平台仅能携带标题与摘要开头;微信等需先导出文件再手动发送。',
-    exportFiles: '导出文件',
-    platforms: {
-      system: ['分享到…', '用系统面板转发到 AirDrop、微信等'], copy: ['复制到剪贴板', '复制全文,自行粘贴'], email: ['邮件', '用默认邮件客户端发送'],
-      wechat: ['微信', '导出文件并在文件夹中定位'], weibo: ['微博', '打开网页分享'],
-      x: ['X', '打开网页分享'], telegram: ['Telegram', '打开网页分享'], whatsapp: ['WhatsApp', '打开网页分享'],
-    },
-    bundle: ['完整压缩包', '录音 + 逐字稿 (Markdown / 纯文本)'], notesPdf: ['会议纪要 PDF', '适合归档与分享'], myNotesMd: ['我的笔记 Markdown', '导出会议中手动记录的笔记'], myNotesPdf: ['我的笔记 PDF', '适合归档与分享'],
-  },
-  en: {
-    contexts: { transcript: 'Export & share', meeting: 'Share meeting', notes: 'Share meeting notes' },
-    shareTo: 'Share to', shareHint: 'Social platforms carry only the title and an excerpt; WeChat and similar need a file exported first.',
-    exportFiles: 'Export files',
-    platforms: {
-      system: ['Share to…', 'Use the system panel: AirDrop, Messages, WeChat…'], copy: ['Copy to clipboard', 'Copy full text to paste anywhere'], email: ['Email', 'Open your default mail client'],
-      wechat: ['WeChat', 'Export a file and reveal it'], weibo: ['Weibo', 'Open web share'],
-      x: ['X', 'Open web share'], telegram: ['Telegram', 'Open web share'], whatsapp: ['WhatsApp', 'Open web share'],
-    },
-    bundle: ['Full bundle', 'Recording + transcript (Markdown / plain text)'], notesPdf: ['Notes PDF', 'Good for archiving and sharing'], myNotesMd: ['My notes (Markdown)', 'Export the notes you took during the meeting'], myNotesPdf: ['My notes PDF', 'Good for archiving and sharing'],
-  },
-  es: {
-    contexts: { transcript: 'Exportar y compartir', meeting: 'Compartir reunión', notes: 'Compartir notas' },
-    shareTo: 'Compartir en', shareHint: 'Las redes sociales solo llevan el título y un extracto; WeChat y similares requieren exportar un archivo primero.',
-    exportFiles: 'Exportar archivos',
-    platforms: {
-      system: ['Compartir en…', 'Usar el panel del sistema: AirDrop, Mensajes, WeChat…'], copy: ['Copiar al portapapeles', 'Copiar todo el texto para pegar'], email: ['Correo', 'Abrir tu cliente de correo'],
-      wechat: ['WeChat', 'Exportar un archivo y localizarlo'], weibo: ['Weibo', 'Abrir compartir web'],
-      x: ['X', 'Abrir compartir web'], telegram: ['Telegram', 'Abrir compartir web'], whatsapp: ['WhatsApp', 'Abrir compartir web'],
-    },
-    bundle: ['Paquete completo', 'Grabación + transcripción (Markdown / texto)'], notesPdf: ['Notas PDF', 'Ideal para archivar y compartir'], myNotesMd: ['Mis notas (Markdown)', 'Exportar las notas tomadas durante la reunión'], myNotesPdf: ['Mis notas PDF', 'Ideal para archivar y compartir'],
-  },
-  ja: {
-    contexts: { transcript: 'エクスポートと共有', meeting: '会議を共有', notes: '会議メモを共有' },
-    shareTo: '共有先', shareHint: 'SNS はタイトルと抜粋のみを送れます。WeChat などは先にファイルを書き出してください。',
-    exportFiles: 'ファイルを書き出す',
-    platforms: {
-      system: ['共有…', 'システムパネルで AirDrop・メッセージ・WeChat などに転送'], copy: ['クリップボードにコピー', '全文をコピーして貼り付け'], email: ['メール', '既定のメールアプリで開く'],
-      wechat: ['WeChat', 'ファイルを書き出して表示'], weibo: ['Weibo', 'ウェブ共有を開く'],
-      x: ['X', 'ウェブ共有を開く'], telegram: ['Telegram', 'ウェブ共有を開く'], whatsapp: ['WhatsApp', 'ウェブ共有を開く'],
-    },
-    bundle: ['完全パッケージ', '録音 + 文字起こし (Markdown / テキスト)'], notesPdf: ['会議メモ PDF', 'アーカイブと共有に最適'], myNotesMd: ['私のメモ（Markdown）', '会議中に記録したメモを書き出し'], myNotesPdf: ['私のメモ PDF', '保存・共有に最適'],
-  },
-  ko: {
-    contexts: { transcript: '내보내기 및 공유', meeting: '회의 공유', notes: '회의록 공유' },
-    shareTo: '공유 대상', shareHint: 'SNS는 제목과 발췌만 담을 수 있습니다. 위챗 등은 먼저 파일을 내보내세요.',
-    exportFiles: '파일 내보내기',
-    platforms: {
-      system: ['공유…', '시스템 패널로 AirDrop·메시지·WeChat 등에 전달'], copy: ['클립보드에 복사', '전체 텍스트를 복사해 붙여넣기'], email: ['이메일', '기본 메일 앱 열기'],
-      wechat: ['위챗', '파일을 내보내고 위치 표시'], weibo: ['웨이보', '웹 공유 열기'],
-      x: ['X', '웹 공유 열기'], telegram: ['Telegram', '웹 공유 열기'], whatsapp: ['WhatsApp', '웹 공유 열기'],
-    },
-    bundle: ['전체 패키지', '녹음 + 녹취 (Markdown / 텍스트)'], notesPdf: ['회의록 PDF', '보관 및 공유에 적합'], myNotesMd: ['내 메모 (Markdown)', '회의 중 작성한 메모 내보내기'], myNotesPdf: ['내 메모 PDF', '보관·공유에 적합'],
-  },
-  fr: {
-    contexts: { transcript: 'Exporter et partager', meeting: 'Partager la réunion', notes: 'Partager les notes' },
-    shareTo: 'Partager sur', shareHint: 'Les réseaux ne portent que le titre et un extrait ; WeChat et similaires exigent d’exporter un fichier.',
-    exportFiles: 'Exporter des fichiers',
-    platforms: {
-      system: ['Partager vers…', 'Panneau système : AirDrop, Messages, WeChat…'], copy: ['Copier dans le presse-papiers', 'Copier tout le texte à coller'], email: ['E-mail', 'Ouvrir votre client de messagerie'],
-      wechat: ['WeChat', 'Exporter un fichier et le localiser'], weibo: ['Weibo', 'Ouvrir le partage web'],
-      x: ['X', 'Ouvrir le partage web'], telegram: ['Telegram', 'Ouvrir le partage web'], whatsapp: ['WhatsApp', 'Ouvrir le partage web'],
-    },
-    bundle: ['Paquet complet', 'Enregistrement + transcription (Markdown / texte)'], notesPdf: ['Notes PDF', 'Adapté à l’archivage et au partage'], myNotesMd: ['Mes notes (Markdown)', 'Exporter les notes prises pendant la réunion'], myNotesPdf: ['Mes notes PDF', 'Idéal pour archiver et partager'],
-  },
-  de: {
-    contexts: { transcript: 'Exportieren und teilen', meeting: 'Besprechung teilen', notes: 'Notizen teilen' },
-    shareTo: 'Teilen auf', shareHint: 'Soziale Netzwerke übertragen nur Titel und Auszug; WeChat u. Ä. benötigen zuerst eine exportierte Datei.',
-    exportFiles: 'Dateien exportieren',
-    platforms: {
-      system: ['Teilen an…', 'Systempanel: AirDrop, Nachrichten, WeChat…'], copy: ['In Zwischenablage kopieren', 'Gesamten Text zum Einfügen kopieren'], email: ['E-Mail', 'Standard-Mailprogramm öffnen'],
-      wechat: ['WeChat', 'Datei exportieren und anzeigen'], weibo: ['Weibo', 'Web-Freigabe öffnen'],
-      x: ['X', 'Web-Freigabe öffnen'], telegram: ['Telegram', 'Web-Freigabe öffnen'], whatsapp: ['WhatsApp', 'Web-Freigabe öffnen'],
-    },
-    bundle: ['Vollständiges Paket', 'Aufnahme + Transkript (Markdown / Text)'], notesPdf: ['Notizen-PDF', 'Zum Archivieren und Teilen geeignet'], myNotesMd: ['Meine Notizen (Markdown)', 'Während der Besprechung erfasste Notizen exportieren'], myNotesPdf: ['Meine Notizen PDF', 'Gut zum Archivieren und Teilen'],
-  },
-  ru: {
-    contexts: { transcript: 'Экспорт и отправка', meeting: 'Поделиться встречей', notes: 'Поделиться заметками' },
-    shareTo: 'Поделиться в', shareHint: 'Соцсети несут только заголовок и фрагмент; для WeChat и подобных сначала экспортируйте файл.',
-    exportFiles: 'Экспорт файлов',
-    platforms: {
-      system: ['Поделиться…', 'Системная панель: AirDrop, Сообщения, WeChat…'], copy: ['Копировать в буфер обмена', 'Скопировать весь текст для вставки'], email: ['Эл. почта', 'Открыть почтовый клиент'],
-      wechat: ['WeChat', 'Экспортировать файл и показать его'], weibo: ['Weibo', 'Открыть веб-отправку'],
-      x: ['X', 'Открыть веб-отправку'], telegram: ['Telegram', 'Открыть веб-отправку'], whatsapp: ['WhatsApp', 'Открыть веб-отправку'],
-    },
-    bundle: ['Полный пакет', 'Запись + расшифровка (Markdown / текст)'], notesPdf: ['PDF заметок', 'Подходит для архивации и обмена'], myNotesMd: ['Мои заметки (Markdown)', 'Экспорт заметок, сделанных на встрече'], myNotesPdf: ['Мои заметки PDF', 'Подходит для архива и обмена'],
-  },
-};
+// 勾选 / 换格式后刷新摘要与各按钮可用状态。
+function updateExportBuilderState() {
+  const copy = exportHubCopy[locale] || exportHubCopy.en;
+  const meta = exportContentMeta();
+  const selected = meta.filter(({ content }) => exportSelection[content]);
+  const count = selected.length;
+  const summaryEl = settingsModal.querySelector('[data-export-summary]');
+  if (summaryEl) summaryEl.textContent = count === 0 ? copy.emptySummary : count === 1 ? copy.summaryOne : copy.summaryMany.replace('{n}', String(count));
+  const hasText = selected.some(({ content }) => content !== 'audio');
+  settingsModal.querySelectorAll('[data-export-save]').forEach((btn) => { btn.disabled = count === 0; });
+  settingsModal.querySelectorAll('[data-share-target]').forEach((btn) => {
+    const kind = btn.dataset.shareKind;
+    btn.disabled = count === 0 || (kind === 'text' && !hasText);
+  });
+}
 const summaryDetailCopy = {
   zh: ['完整会议纪要', '重新生成', '导出会议纪要', '完整结构化会议纪要', '纯文本会议纪要', '适合归档与分享'],
   en: ['Full meeting notes', 'Regenerate', 'Export meeting notes', 'Complete structured meeting notes', 'Plain-text meeting notes', 'Suitable for archiving and sharing'],
@@ -1546,13 +1561,31 @@ const summaryDetailCopy = {
   de: ['Vollständige Besprechungsnotizen', 'Neu erstellen', 'Besprechungsnotizen exportieren', 'Vollständige strukturierte Besprechungsnotizen', 'Besprechungsnotizen als Klartext', 'Zum Archivieren und Teilen geeignet'],
   ru: ['Полные заметки встречи', 'Создать заново', 'Экспортировать заметки встречи', 'Полные структурированные заметки встречи', 'Заметки встречи в виде простого текста', 'Подходит для архивации и обмена'],
 };
+const summaryActionIcons = {
+  edit: '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m3 11.8 8.3-8.3 1.7 1.7-8.3 8.3L3 13z"/><path d="m10.3 4.5 1.7 1.7"/></svg>',
+  refresh: '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 6.5A5 5 0 1 0 14 10"/><path d="M13 2.5v4h-4"/></svg>',
+  save: '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 2.5h8l2 2v9H3z"/><path d="M5 2.5v4h6v-4M5.5 12h5"/></svg>',
+  cancel: '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m4 4 8 8m0-8-8 8"/></svg>',
+};
+function summaryActionBar(editing) {
+  const button = (action, label, icon) => `<button type="button" class="summary-action-icon" data-${action} title="${label}" aria-label="${label}">${summaryActionIcons[icon]}</button>`;
+  return `<div class="summary-action-bar">${editing ? `${button('cancel-summary-edit', t('取消'), 'cancel')}${button('save-summary', t('保存'), 'save')}` : `${button('edit-summary', t('编辑'), 'edit')}${button('regenerate-summary', t('重新生成'), 'refresh')}`}</div>`;
+}
 function renderSummaryDetailModal() {
   const markdown = currentMeetingDetail?.summary?.data?.markdown;
   if (!markdown) { closeModal(); return; }
   const copy = summaryDetailCopy[locale] || summaryDetailCopy.en;
   settingsModal.querySelector('h2').textContent = copy[0];
   settingsModal.querySelector('.modal-title p').textContent = currentMeetingDetail.title;
-  settingsModal.querySelector('.modal-body').innerHTML = `<article class="markdown-content">${renderMarkdown(cleanSummaryMarkdown(markdown))}</article><div class="modal-form-actions"><button class="secondary" type="button" data-regenerate-summary>${copy[1]}</button></div>${sharePanelHtml('notes')}`;
+  settingsModal.querySelector('.modal-body').innerHTML = summaryEditing
+    ? `${summaryActionBar(true)}<div data-summary-editor></div>`
+    : `${summaryActionBar(false)}<article class="markdown-content summary-modal-document">${renderMarkdown(cleanSummaryMarkdown(markdown))}</article>${exportHubHtml()}`;
+  if (!summaryEditing) updateExportBuilderState();
+  if (summaryEditing) {
+    summaryEditor = createNotesEditor(settingsModal.querySelector('[data-summary-editor]'), { ariaLabel: t('会议纪要'), getMeetingId: () => currentMeetingDetail?.id });
+    summaryEditor.setMarkdown(markdown);
+    summaryEditor.focus();
+  }
 }
 /** 渲染一个设置模态框。@param {'models'|'storage'|'summary-model'} kind 请求的模态框。@returns {void} */
 function renderModal(kind) {
@@ -1566,9 +1599,9 @@ function renderModal(kind) {
   if (kind === 'ai-assist') { renderAiAssistModal(); return; }
   if (kind === 'performance') { renderPerformanceModal(); return; }
   if (kind === 'speaker-profiles') { renderSpeakerProfileModal(); return; }
-  if (kind === 'export') { renderExportModal(); return; }
-  if (kind === 'share') { renderShareModal(); return; }
+  if (kind === 'export' || kind === 'share') { renderExportModal(); return; }
   if (kind === 'summary-detail') { renderSummaryDetailModal(); return; }
+  if (kind === 'whats-new') { renderWhatsNewModal(); return; }
   const copy = (modalCopy[locale] || modalCopy.en)[kind];
   if (kind === 'storage') {
     const cleanup = storageCleanupCopy[locale] || storageCleanupCopy.en;
@@ -1609,6 +1642,32 @@ function renderModal(kind) {
     return `${heading}<div class="${kind === 'models' ? 'model-library-item' : ''}"><span>${nameRow}${downloadProgress}${kind === 'models' ? `${ratings}${intro ? `<p>${escapeHtml(intro)}</p>` : ''}` : `<small>${escapeHtml(detail)}</small>${size}${intro ? `<small>${escapeHtml(intro)}</small>` : ''}`}</span>${actions}</div>`;
   }).join('')}</div>${selectingOnboardingModels ? `<div class="modal-form-actions"><button class="modal-action" data-download-onboarding-selected type="button"${onboardingModelSelection?.size ? '' : ' disabled'}>${(onboardingCopy[locale] || onboardingCopy.en).download}</button></div>` : ''}`;
 }
+/** 渲染“更新日志”弹窗：标题 + 按版本倒序的内容列表。@returns {void} */
+function renderWhatsNewModal() {
+  const copy = whatsNewCopy[locale] || whatsNewCopy.en;
+  settingsModal.querySelector('h2').textContent = copy.title;
+  settingsModal.querySelector('.modal-title p').textContent = copy.intro;
+  settingsModal.querySelector('.modal-close').setAttribute('aria-label', (modalCopy[locale] || modalCopy.en).close);
+  settingsModal.querySelector('.modal-body').innerHTML = renderWhatsNewList();
+}
+/** 渲染更新日志列表。@returns {string} 弹窗主体 HTML。 */
+function renderWhatsNewList() {
+  const copy = whatsNewCopy[locale] || whatsNewCopy.en;
+  if (!whatsNewLog || !whatsNewLog.length) return `<p class="whatsnew-empty">${escapeHtml(copy.empty)}</p>`;
+  const localized = (entry) => entry[locale] || entry.en || entry.zh || {};
+  return `<div class="whatsnew-list">${whatsNewLog.map((entry) => {
+    const { version, date, current } = entry;
+    const content = localized(entry);
+    const sections = [['what', copy.what], ['fixed', copy.fixed], ['improved', copy.improved], ['changes', copy.changes]]
+      .map(([key, label]) => {
+        const items = content[key];
+        if (!items || !items.length) return '';
+        return `<section><h4>${escapeHtml(label)}</h4><ul>${items.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul></section>`;
+      })
+      .join('');
+    return `<article class="whatsnew-entry${current ? ' is-current' : ''}"><header><h3>v${escapeHtml(version)}${current ? `<em>${escapeHtml(copy.current)}</em>` : ''}</h3>${date ? `<time>${escapeHtml(date)}</time>` : ''}</header>${sections}</article>`;
+  }).join('')}</div>`;
+}
 /** 显示设置模态框并播放进入动画；可选聚焦内部元素。@param {string} [focusSelector] 打开后聚焦的模态框内元素。@returns {void} */
 function showSettingsModal(focusSelector) {
   settingsModal.classList.remove('modal-leave');
@@ -1631,6 +1690,7 @@ function openConfirmation(title, detail, action) {
 }
 async function openModal(kind) {
   clearTimeout(modalDismissTimer);
+  if (kind === 'summary-detail') { summaryEditing = false; summaryEditor = null; }
   if (kind === 'advanced-settings') {
     try {
       const [settings, status] = await Promise.all([window.brevia?.advancedSettings.get(), window.brevia?.permissions.status().catch(() => undefined)]);
@@ -1659,9 +1719,12 @@ function startPermissionPoll() {
 /** 关闭活动的设置模态框并恢复页面滚动。@returns {void} */
 function closeModal() {
   if (settingsModal.hidden) return;
+  if (activeModal === 'whats-new') markWhatsNewSeen();
   window.clearInterval(permissionPollTimer);
   summaryConfigDraft = null;
   aiAssistConfigDraft = null;
+  summaryEditing = false;
+  summaryEditor = null;
   onboardingOnlineProvider = false;
   activeModal = undefined;
   settingsModal.style.zIndex = '';
@@ -1882,7 +1945,8 @@ function tourView(index, demo) {
   const aiSuggestionLabel = tourAiSuggestionFallback[locale] || 'AI';
   const aiToggleLabel = (aiAssistCopy[locale] || aiAssistCopy.en).toggleOff;
   const liveHeader = (time) => `<header class="live-header tour-anim" style="--tour-delay:0ms"><div class="live-title"><strong>${escapeHtml(meetingName)}</strong><div class="live-status"><span class="recording"><i></i>${escapeHtml(t('正在录制'))}</span><time>${time}</time><span class="save-state"><svg class="check-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3 8.5 3.2 3.2L13 4.5" /></svg>${escapeHtml(t('已保存'))}</span></div></div><div class="live-caption-controls"><button class="floating-caption-toggle">${escapeHtml(t('悬浮字幕'))}</button><button class="translation-toggle">${escapeHtml(t('译文: 关'))}</button></div><button class="pause-button">Ⅱ ${escapeHtml(t('暂停'))}</button><button class="end-button">${escapeHtml(t('结束会议'))}</button></header>`;
-  const captionsPanel = (segments) => `<section class="live-captions tour-anim" style="--tour-delay:160ms"><header class="live-section-head"><p class="eyebrow">${escapeHtml(t('实时字幕'))}</p><button class="live-mode-toggle" data-toggle-live-mode="notes">← ${escapeHtml(t('返回笔记'))}</button></header><div class="transcript-scroll">${segments}</div></section>`;
+  const liveModeIcon = (path) => `<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="${path}"/></svg>`;
+  const captionsPanel = (segments) => `<section class="live-captions tour-anim" style="--tour-delay:160ms"><header class="live-section-head"><p class="eyebrow">${escapeHtml(t('实时字幕'))}</p><button class="live-mode-toggle" data-toggle-live-mode="notes" aria-label="${escapeHtml(t('返回笔记'))}" title="${escapeHtml(t('返回笔记'))}">${liveModeIcon('m10 3-5 5 5 5')}</button></header><div class="transcript-scroll">${segments}</div></section>`;
   const segment = (time, speaker, text, delay = 220) => `<div class="segment tour-anim" style="--tour-delay:${delay}ms"><div class="segment-meta"><time>${time}</time><button class="segment-speaker">${escapeHtml(speaker)}</button></div><div class="segment-copy"><p>${escapeHtml(text)}</p></div></div>`;
   switch (index) {
     case 0: {
@@ -1890,16 +1954,16 @@ function tourView(index, demo) {
       return `<section class="view active" id="home-view"><div class="page-head"><div><button class="eyebrow tour-anim" type="button">${escapeHtml(t('会议库'))}</button><h1 class="tour-anim" style="--tour-delay:70ms">${escapeHtml(t('每一场对话，都留有依据。'))}</h1></div></div><div class="library-toolbar tour-anim" style="--tour-delay:110ms"><label class="search"><span>⌕</span><input type="search" placeholder="${escapeHtml(t('搜索会议…'))}" /></label><div class="filter"><span class="flow-select-toggle">${escapeHtml(t('最近 30 天'))} <span>⌄</span></span></div></div><section class="meeting-list">${rows}</section></section>`;
     }
     case 1:
-      return `<section class="view active" id="prepare-view"><button class="back tour-anim">← ${escapeHtml(t('返回会议库'))}</button><div class="prepare-layout"><div class="tour-anim" style="--tour-delay:60ms"><p class="eyebrow">${escapeHtml(t('准备录制'))}</p><h1>${escapeHtml(t('开始一场会议'))}</h1><form><label>${escapeHtml(t('会议名称'))}<input value="${escapeHtml(demo.name)}" /></label><div class="form-grid"><label>${escapeHtml(t('会议语言'))}<input value="${escapeHtml(demo.language)}" /></label><label>${escapeHtml(t('译文目标'))}<input value="${escapeHtml(demo.translation || t('不需要翻译'))}" /></label></div><fieldset><legend>${escapeHtml(t('录制音频'))}</legend><label class="choice"><input type="checkbox" checked /><span><b>${escapeHtml(t('我的麦克风'))}</b><small>${escapeHtml(t('系统默认麦克风'))}</small></span><strong class="input-state"><i class="input-meter" style="--level:.72"></i><span>${escapeHtml(t('输入良好'))}</span></strong></label><label class="choice"><input type="checkbox" checked /><span><b>${escapeHtml(t('系统音频'))}</b><small>${escapeHtml(t('需要授予屏幕与系统音频权限'))}</small></span><strong class="input-state"><span>${escapeHtml(t('已就绪'))}</span></strong></label></fieldset><button class="primary-action wide tour-anim" style="--tour-delay:200ms">${escapeHtml(t('开始录制'))} <span>→</span></button></form></div><aside class="model-card tour-anim" style="--tour-delay:140ms"><div class="model-icon">⌁</div><dl><div><dt>${escapeHtml(t('计算设备'))}</dt><dd>${escapeHtml(demo.device)}</dd></div><div><dt>${escapeHtml(t('会议语言'))}</dt><dd>${escapeHtml(demo.language)}</dd></div><div><dt>${escapeHtml(t('会议模式'))}</dt><dd>${escapeHtml(demo.mode)}</dd></div></dl><button class="text-button">${escapeHtml(t('管理模型与术语'))} →</button></aside></div></section>`;
+      return `<section class="view active" id="prepare-view"><button class="back tour-anim">← ${escapeHtml(t('返回会议库'))}</button><div class="prepare-layout"><div class="tour-anim" style="--tour-delay:60ms"><p class="eyebrow">${escapeHtml(t('准备录制'))}</p><h1>${escapeHtml(t('开始一场会议'))}</h1><form><label>${escapeHtml(t('会议名称'))}<input value="${escapeHtml(demo.name)}" /></label><div class="form-grid"><label>${escapeHtml(t('会议语言'))}<input value="${escapeHtml(demo.language)}" /></label><label>${escapeHtml(t('译文目标'))}<input value="${escapeHtml(demo.translation || t('不需要翻译'))}" /></label></div><fieldset><legend>${escapeHtml(t('录制音频'))}</legend><label class="choice"><input type="checkbox" checked /><span><b>${escapeHtml(t('我的麦克风'))}</b><small>${escapeHtml(t('系统默认麦克风'))}</small></span><strong class="input-state"><i class="input-meter" style="--level:.72"></i><span>${escapeHtml(t('输入良好'))}</span></strong></label><label class="choice"><input type="checkbox" checked /><span><b>${escapeHtml(t('系统音频'))}</b><small>${escapeHtml(t('需要授予屏幕与系统音频权限'))}</small></span><strong class="input-state"><span>${escapeHtml(t('已就绪'))}</span></strong></label></fieldset><button class="primary-action wide tour-anim" style="--tour-delay:200ms">${escapeHtml(t('开始录制'))} <span>→</span></button></form></div></div></section>`;
     case 2: {
       const segments = demo.segments.map(([speaker, text], i) => segment(`${String((i * 3) + 2).padStart(2, '0')}:00`, speaker, text, 240 + i * 130)).join('');
-      return `<section class="view active" id="live-view">${liveHeader('04:23')}<div class="live-layout"><section class="live-notes tour-anim" style="--tour-delay:120ms"><header class="live-section-head"><p class="eyebrow">${escapeHtml(t('我的笔记'))}</p><button class="ai-assist-toggle"><span class="ai-assist-toggle-star">✦</span> ${escapeHtml(aiToggleLabel)}</button><button class="live-mode-toggle" data-toggle-live-mode="caption">${escapeHtml(t('展开字幕'))} →</button></header><div class="notes-editor">${(demo.notes || []).map((line) => `<p>${escapeHtml(line)}</p>`).join('')}</div></section>${captionsPanel(segments)}</div></section>`;
+      return `<section class="view active" id="live-view">${liveHeader('04:23')}<div class="live-layout"><section class="live-notes tour-anim" style="--tour-delay:120ms"><header class="live-section-head"><p class="eyebrow">${escapeHtml(t('我的笔记'))}</p><button class="ai-assist-toggle"><span class="ai-assist-toggle-star">✦</span> ${escapeHtml(aiToggleLabel)}</button><button class="live-mode-toggle" data-toggle-live-mode="caption" aria-label="${escapeHtml(t('展开字幕'))}" title="${escapeHtml(t('展开字幕'))}">${liveModeIcon('m6 3 5 5-5 5')}</button></header><div class="notes-editor">${(demo.notes || []).map((line) => `<p>${escapeHtml(line)}</p>`).join('')}</div></section>${captionsPanel(segments)}</div></section>`;
     }
     case 3: {
       // AI 纪要步骤的 demo 只含 decision/actions，无字幕；回退到上一步（实时字幕）的片段，
       // 避免渲染出空说话人 + 空文本的字幕行。
       const live = demo.live || demo.segments?.[0] || (tourCopy[locale] || tourCopy.en).steps[2].demo.segments?.[0] || [];
-      return `<section class="view active" id="live-view">${liveHeader('07:41')}<div class="live-layout"><section class="live-notes tour-anim" style="--tour-delay:120ms"><header class="live-section-head"><p class="eyebrow">${escapeHtml(t('我的笔记'))}</p><button class="ai-assist-toggle is-enabled"><span class="ai-assist-toggle-star">✦</span> ${escapeHtml(aiToggleLabel)}</button><button class="live-mode-toggle" data-toggle-live-mode="caption">${escapeHtml(t('展开字幕'))} →</button></header><div class="ai-suggestion tour-anim" style="--tour-delay:220ms"><div class="ai-suggestion-card"><div class="ai-suggestion-head"><span class="ai-suggestion-star">✦</span><span class="ai-suggestion-type">${escapeHtml(aiSuggestionLabel)}</span></div><p class="ai-suggestion-text">${escapeHtml(demo.decision)}</p></div></div><div class="notes-editor tour-anim" style="--tour-delay:320ms">${(demo.actions || []).map((action) => `<p>• ${escapeHtml(action)}</p>`).join('')}</div></section>${captionsPanel(segment('00:02', live[0] || '', live[1] || '', 300))}</div></section>`;
+      return `<section class="view active" id="live-view">${liveHeader('07:41')}<div class="live-layout"><section class="live-notes tour-anim" style="--tour-delay:120ms"><header class="live-section-head"><p class="eyebrow">${escapeHtml(t('我的笔记'))}</p><button class="ai-assist-toggle is-enabled"><span class="ai-assist-toggle-star">✦</span> ${escapeHtml(aiToggleLabel)}</button><button class="live-mode-toggle" data-toggle-live-mode="caption" aria-label="${escapeHtml(t('展开字幕'))}" title="${escapeHtml(t('展开字幕'))}">${liveModeIcon('m6 3 5 5-5 5')}</button></header><div class="ai-suggestion tour-anim" style="--tour-delay:220ms"><div class="ai-suggestion-card"><div class="ai-suggestion-head"><span class="ai-suggestion-star">✦</span><span class="ai-suggestion-type">${escapeHtml(aiSuggestionLabel)}</span></div><p class="ai-suggestion-text">${escapeHtml(demo.decision)}</p></div></div><div class="notes-editor tour-anim" style="--tour-delay:320ms">${(demo.actions || []).map((action) => `<p>• ${escapeHtml(action)}</p>`).join('')}</div></section>${captionsPanel(segment('00:02', live[0] || '', live[1] || '', 300))}</div></section>`;
     }
     case 4: {
       const meta = demo.meta || (tourCopy[locale] || tourCopy.en).steps[0].demo.meetings[0]?.[1] || '';
@@ -2279,6 +2343,7 @@ function openOnboardingPermissions() {
 document.querySelector('#settings-view .settings-grid').addEventListener('click', (event) => {
   const button = event.target.closest('[data-settings-modal]');
   if (button) openModal(button.dataset.settingsModal);
+  if (event.target.closest('[data-open-whats-new]')) openModal('whats-new');
 });
 let modelAction = document.querySelector('[data-settings-modal="models"]');
 speakerProfileCard.querySelector('button').addEventListener('click', () => openModal('speaker-profiles'));
@@ -2301,7 +2366,7 @@ function installModel(model) {
 /** 热切换当前会议的实时配置（语言/流式模型）。@param {object} changes 部分配置。@returns {Promise<void>} */
 async function reconfigureLive(changes) {
   const meetingId = breviaClient?.state.meeting?.id;
-  if (!window.brevia || !meetingId) return;
+  if (!window.brevia || !meetingId) return false;
   // 乐观应用，以便控件感觉即时；meeting.reconfigured 事件确认它。
   const previous = { ...liveConfig };
   liveConfig = { ...liveConfig, ...changes };
@@ -2309,10 +2374,13 @@ async function reconfigureLive(changes) {
     const result = await window.brevia.meeting.reconfigure({ meeting_id: meetingId, ...changes });
     if (result?.model_required) {
       liveConfig = previous;
+      return false;
     }
+    return true;
   } catch (error) {
     liveConfig = previous;
     showToast(error.message);
+    return false;
   }
 }
 renderModelControls();
@@ -2378,65 +2446,74 @@ settingsModal.addEventListener('click', async (event) => {
     } catch (error) { showToast(error.message); }
     return;
   }
+  if (event.target.closest('[data-edit-summary]')) { summaryEditing = true; renderModal('summary-detail'); return; }
+  if (event.target.closest('[data-cancel-summary-edit]')) { summaryEditing = false; summaryEditor = null; renderModal('summary-detail'); return; }
+  if (event.target.closest('[data-save-summary]')) {
+    const markdown = summaryEditor?.getMarkdown() || '';
+    const meetingId = currentMeetingDetail?.id;
+    if (!meetingId || !window.brevia?.summary?.save) return;
+    try {
+      await window.brevia.summary.save({ meeting_id: meetingId, markdown });
+      currentMeetingDetail.summary = { data: { markdown } };
+      summaryEditing = false;
+      summaryEditor = null;
+      renderModal('summary-detail');
+      renderMeetingDetail();
+      showToast(t('已保存'));
+    } catch (error) { showToast(error.message); }
+    return;
+  }
   if (event.target.closest('[data-regenerate-summary]')) { closeModal(); void generateMeetingSummary(); return; }
-  const sharePlatform = event.target.closest('[data-share-platform]');
-  if (sharePlatform) {
-    const { sharePlatform: platform, context } = sharePlatform.dataset;
-    sharePlatform.disabled = true;
+  const exportSave = event.target.closest('[data-export-save]');
+  if (exportSave) {
+    exportSave.disabled = true;
     try {
-      if (platform === 'system') {
-        // 系统面板分享文件(与微信一致的产物),让用户转发到 AirDrop / 信息 / 微信等任意 App。
-        // 传点击坐标(相对窗口内容区),让原生弹窗锚定在光标处——与系统右键菜单一致。
-        // 注意:不关闭分享面板——原生弹窗要贴着按钮显示,面板关掉就会让弹窗孤立浮现。
-        await window.brevia?.share.system({
-          anchor: { x: Math.round(event.clientX), y: Math.round(event.clientY) },
-          file: { meeting_id: breviaClient.state.selectedMeetingId, ...(shareContexts[context]?.file || shareContexts.transcript.file) },
-        });
-        sharePlatform.disabled = false;
-      } else if (platform === 'copy') {
-        const text = shareFullText(context);
-        if (!text) throw new Error(t('暂无可分享的内容'));
-        await window.brevia?.share.copyText({ text });
-        closeModal(); showToast(t('已复制到剪贴板'));
-      } else if (platform === 'email') {
-        const subject = currentMeetingDetail?.title || '';
-        const body = shareFullText(context);
-        if (!subject && !body) throw new Error(t('暂无可分享的内容'));
-        await window.brevia?.share.openExternal({ url: buildMailto(subject, body) });
+      const result = await runExportBundle('save');
+      if (result && result.count !== null) {
         closeModal();
+        const copy = exportHubCopy[locale] || exportHubCopy.en;
+        showToast(result.count > 1 ? copy.savedBundle : t('已导出「{title}」').replace('{title}', currentMeetingDetail?.title || ''));
+      } else exportSave.disabled = false;
+    } catch (error) { exportSave.disabled = false; showToast(error.message); }
+    return;
+  }
+  const shareTarget = event.target.closest('[data-share-target]');
+  if (shareTarget) {
+    const target = shareTarget.dataset.shareTarget;
+    shareTarget.disabled = true;
+    try {
+      const copy = exportHubCopy[locale] || exportHubCopy.en;
+      if (target === 'system') {
+        // 原生分享面板:把所选文件(多项时打包)交给系统,可转发到 AirDrop / 微信 / 邮件等任意 App。
+        // 传点击坐标让弹窗锚定在按钮处;不关闭面板,否则原生弹窗会孤立浮现。
+        await runExportBundle('system', { x: Math.round(event.clientX), y: Math.round(event.clientY) });
+        shareTarget.disabled = false;
+      } else if (target === 'wechat') {
+        // 微信无公开分享 API:导出所选文件并在文件夹中定位,便于手动发送。
+        const result = await runExportBundle('reveal');
+        if (result && result.count !== null) { closeModal(); showToast(copy.revealed); }
+        else shareTarget.disabled = false;
       } else {
-        const spec = shareSocialUrls[platform];
-        const text = shareExcerpt(context, spec.limit);
+        const text = exportShareText();
         if (!text) throw new Error(t('暂无可分享的内容'));
-        await window.brevia?.share.openExternal({ url: spec.url(text) });
-        closeModal();
+        if (target === 'copy') {
+          await window.brevia?.share.copyText({ text });
+          closeModal(); showToast(t('已复制到剪贴板'));
+        } else if (target === 'email') {
+          const subject = currentMeetingDetail?.title || '';
+          await window.brevia?.share.openExternal({ url: buildMailto(subject, text) });
+          closeModal();
+        } else {
+          const spec = shareSocialUrls[target];
+          const title = currentMeetingDetail?.title || '';
+          const combined = title && text ? `${title}\n\n${text}` : title || text;
+          const excerpt = makeExcerpt(combined, spec.limit);
+          if (!excerpt) throw new Error(t('暂无可分享的内容'));
+          await window.brevia?.share.openExternal({ url: spec.url(excerpt) });
+          closeModal();
+        }
       }
-    } catch (error) { sharePlatform.disabled = false; showToast(error.message); }
-    return;
-  }
-  const shareFile = event.target.closest('[data-share-file]');
-  if (shareFile) {
-    shareFile.disabled = true;
-    try {
-      const result = await window.brevia?.share.file({ meeting_id: breviaClient.state.selectedMeetingId, ...(shareContexts[shareFile.dataset.context]?.file || shareContexts.transcript.file) });
-      if (result) { closeModal(); showToast(t('文件已导出并在文件夹中显示')); }
-    } catch (error) { shareFile.disabled = false; showToast(error.message); }
-    return;
-  }
-  const shareExport = event.target.closest('[data-share-export]');
-  if (shareExport) {
-    shareExport.disabled = true;
-    try {
-      const result = shareExport.dataset.kind === 'bundle'
-        ? await window.brevia?.meeting.share({ meeting_id: breviaClient.state.selectedMeetingId })
-        : await window.brevia?.meeting.export({
-          meeting_id: breviaClient.state.selectedMeetingId,
-          content: shareExport.dataset.content,
-          format: shareExport.dataset.format,
-          ...(shareExport.dataset.track ? { track: shareExport.dataset.track } : {}),
-        });
-      if (result) { closeModal(); showToast(t('导出完成')); }
-    } catch (error) { shareExport.disabled = false; showToast(error.message); }
+    } catch (error) { shareTarget.disabled = false; showToast(error.message); }
     return;
   }
   const selectToggle = event.target.closest('[data-flow-select-toggle]');
@@ -2466,6 +2543,11 @@ settingsModal.addEventListener('click', async (event) => {
       if (aiForm) selectedAiAssistBuiltinModel = '';
       else selectedBuiltinModel = '';
       renderModal(activeModal === 'ai-assist' ? 'ai-assist' : 'summary-model');
+      return;
+    }
+    // 导出与分享面板里的格式选择。
+    if (choiceName.startsWith('export-format-')) {
+      exportSelection[choiceName.slice('export-format-'.length)] = value;
       return;
     }
     return;
@@ -2607,10 +2689,21 @@ settingsModal.addEventListener('change', (event) => {
     return;
   }
   const selection = event.target.closest('[data-onboarding-model-selection]');
-  if (!selection) return;
-  if (selection.checked) onboardingModelSelection.add(selection.value);
-  else onboardingModelSelection.delete(selection.value);
-  renderModal('models');
+  if (selection) {
+    if (selection.checked) onboardingModelSelection.add(selection.value);
+    else onboardingModelSelection.delete(selection.value);
+    renderModal('models');
+    return;
+  }
+  const exportItem = event.target.closest('[data-export-item]');
+  if (exportItem) {
+    const content = exportItem.dataset.exportItem;
+    if (exportItem.checked) { if (!(content in exportSelection)) exportSelection[content] = exportDefaultFormat[content]; }
+    else delete exportSelection[content];
+    exportItem.closest('.export-content-row')?.classList.toggle('is-checked', exportItem.checked);
+    updateExportBuilderState();
+    return;
+  }
 });
 settingsModal.addEventListener('dblclick', (event) => {
   const profile = event.target.closest('[data-rename-speaker-profile]');
@@ -2858,6 +2951,11 @@ function applyLanguage(nextLocale, animate = false) {
     renderFloatingCaptionToggle();
     setLiveTranslationEnabled(translationAllowed);
     renderPlaybackFloatingCaptionToggle();
+    document.querySelectorAll('[data-tooltip-key]').forEach((button) => {
+      const label = t(button.dataset.tooltipKey);
+      button.dataset.tooltip = label;
+      button.setAttribute('aria-label', label);
+    });
     // 更新浮动字幕按钮工具提示
     document.querySelectorAll('#floating-caption-toggle, #playback-floating-caption-toggle').forEach((floatingCaptionToggle) => {
       floatingCaptionToggle.title = t('悬浮字幕');
@@ -3045,13 +3143,45 @@ applyTheme(theme);
 async function loadInstalledAppVersion() {
   try {
     const version = await window.brevia?.appInfo?.version?.();
-    if (version) { installedAppVersion = version; appVersion.textContent = `v${version}`; renderUpdateButton(); return; }
+    if (version) { applyInstalledVersion(version); return; }
   } catch { /* Fall through to the packaged manifest. */ }
   try {
     const response = await fetch('../package.json');
     const { version } = await response.json();
-    if (response.ok && version) { installedAppVersion = version; appVersion.textContent = `v${version}`; renderUpdateButton(); }
+    if (response.ok && version) applyInstalledVersion(version);
   } catch { /* Keep the unavailable marker when neither source can be read. */ }
+}
+/** 记录已安装版本并触发“本次更新”弹窗判定。@param {string} version 已安装的应用版本。@returns {void} */
+function applyInstalledVersion(version) {
+  installedAppVersion = version;
+  appVersion.textContent = `v${version}`;
+  renderUpdateButton();
+  maybeShowWhatsNew();
+}
+/** 按点号分段、逐段数值比较两个 semver 版本号。@param {string} a @param {string} b @returns {number} a<b → 负数，a>b → 正数。 */
+function compareVersions(a, b) {
+  const left = String(a).split('.').map((part) => parseInt(part, 10) || 0);
+  const right = String(b).split('.').map((part) => parseInt(part, 10) || 0);
+  const length = Math.max(left.length, right.length);
+  for (let i = 0; i < length; i += 1) {
+    const diff = (left[i] || 0) - (right[i] || 0);
+    if (diff) return diff;
+  }
+  return 0;
+}
+/** 仅在升级后自动弹出一次“更新日志”；首次安装只记录版本、不弹窗。@returns {void} */
+function maybeShowWhatsNew() {
+  if (!installedAppVersion || installedAppVersion === '—') return;
+  try {
+    const seen = localStorage.getItem('brevia-whatsnew-seen');
+    if (!seen) { localStorage.setItem('brevia-whatsnew-seen', installedAppVersion); return; }
+    if (compareVersions(seen, installedAppVersion) < 0) openModal('whats-new');
+  } catch { /* Ignore storage errors and never block startup. */ }
+}
+/** 记录当前版本已查看，避免下次启动重复弹窗。@returns {void} */
+function markWhatsNewSeen() {
+  if (!installedAppVersion || installedAppVersion === '—') return;
+  try { localStorage.setItem('brevia-whatsnew-seen', installedAppVersion); } catch { /* ignore */ }
 }
 void loadInstalledAppVersion();
 async function checkForUpdates({ silent = false } = {}) {
@@ -3112,6 +3242,8 @@ function setLiveTranslationEnabled(enabled) {
   const toggle = document.querySelector('#translation-toggle');
   toggle.dataset.enabled = String(enabled);
   toggle.textContent = t(enabled ? '译文: 开' : '译文: 关');
+  document.querySelector('#translation-options').innerHTML = BreviaI18n.languageOptions(locale, t)
+    .map(([value, label]) => `<button type="button" data-live-translation="${escapeHtml(value)}">${escapeHtml(label)}</button>`).join('');
   if (!enabled) document.querySelectorAll('.translation').forEach((line) => { line.hidden = true; });
 }
 function renderFloatingCaptionToggle() {
@@ -3128,12 +3260,8 @@ function renderPlaybackFloatingCaptionToggle() {
 }
 function nextFloatingCaptionMode(mode) { return floatingCaptionMode === mode ? null : mode; }
 function activateMeeting(meeting, payload) {
-  const { title, workspace_id: workspaceId, language, streaming_model_id: streamingModelId, speaker_segmentation_model_id: segmentationModelId, refined_model_id: refinedModelId } = meeting || payload;
-  const streamingModelName = prepareModelChoices['active-streaming-model'].find(([id]) => id === streamingModelId)?.[1] || t('自动匹配');
-  document.querySelector('#active-streaming-model').textContent = streamingModelName;
+  const { title, workspace_id: workspaceId, language, streaming_model_id: streamingModelId, refined_model_id: refinedModelId } = meeting || payload;
   liveConfig = { language: language || 'auto', streaming_model_id: streamingModelId || '', refined_model_id: refinedModelId || '', target_language: payload.target_language || null, power_saving: Boolean(payload.power_saving) };
-  document.querySelector('#active-diarization-model').textContent = prepareModelChoices['active-diarization-model'].find(([id]) => id === (segmentationModelId || ''))?.[1] || t('自动匹配');
-  document.querySelector('#active-refined-model').textContent = refinedModelName(refinedModelId);
   document.querySelector('#live-name').textContent = title;
   uiData.meetings.unshift({ id: meeting.id, tone: 'violet', title, meta: `${t('刚刚')} · 0 ${t('分钟')}`, workspaceId: workspaceId || '', workspace: workspaceId ? { name: getWorkspaceName(workspaceId) } : null, tags: [], status: { tone: 'processing', label: t('正在录制'), detail: t('本地保存') } });
   document.querySelector('#transcript-scroll').innerHTML = '';
@@ -3181,11 +3309,11 @@ document.querySelector('#meeting-form').addEventListener('submit', async (event)
   const payload = {
     title, language, target_language: targetLanguage, streaming_model_id: streamingModelId, refined_model_id: defaults.refined,
     speaker_segmentation_model_id: segmentationModelId,
-    vad_model_id: prepareForm.dataset.vadModel || 'silero-vad', num_speakers: Number(form.get('num-speakers') || -1), power_saving: getPerformanceMode() === 'efficiency', workspace_id: form.get('meeting-workspace') || null,
+    vad_model_id: prepareForm.dataset.vadModel || 'silero-vad', power_saving: getPerformanceMode() === 'efficiency', workspace_id: form.get('meeting-workspace') || null,
   };
   const inputs = { mic: form.has('capture-mic'), system: form.has('capture-system') };
   try {
-    const meeting = breviaClient ? await breviaClient.start(payload, inputs) : { id: null };
+    const meeting = breviaClient ? await breviaClient.start(payload, inputs, selectedMicDeviceId()) : { id: null };
     if (meeting?.model_required) {
       queueModelTask('meeting.start', { ...payload, inputs }, meeting.model_required);
       downloadRequiredModels(meeting.model_required);
@@ -3215,13 +3343,13 @@ importRecording.addEventListener('click', async () => {
       title, language, target_language: form.get('translation-target') || null,
       streaming_model_id: prepareForm.dataset.streamingModel || defaults.streaming, refined_model_id: defaults.refined,
       speaker_segmentation_model_id: prepareForm.dataset.segmentationModel || defaults.segmentation,
-      num_speakers: Number(form.get('num-speakers') || -1), workspace_id: form.get('meeting-workspace') || null, path: 'selected-by-electron',
+      workspace_id: form.get('meeting-workspace') || null, path: 'selected-by-electron',
     });
     if (!meeting) return;
     applyBackendDetail(meeting);
     await refreshBackendMeetings();
     showView('detail');
-    void window.brevia.meeting.refine({ meeting_id: meeting.id }).catch((error) => { hideRefinementProgress(); showToast(error.message); });
+    // 导入后不自动精修：详情页的「精修字幕」会以内联菜单询问会议人数后再精修。
   } catch (error) { showToast(error.message); } finally { importRecording.disabled = false; }
 });
 let seconds = 0;
@@ -3311,12 +3439,13 @@ const liveNotesEditor = createNotesEditor(liveNotesRoot, {
   onInput: (opts) => {
     scheduleNotesSave(liveNotesSaveTimer, currentNotesMarkdown, () => breviaClient?.state.meeting?.id);
     hideAiAssistEmptyState();
-    // 程序化写入（AI 落笔/插入字幕/时间戳）不算用户打字，避免触发 4 秒静默窗口。
+    // 程序化写入（AI 落笔/插入字幕）不算用户打字，避免触发 4 秒静默窗口。
     if (opts?.programmatic) return;
     signalAiNoteTyping(true);
     clearTimeout(aiNoteTypingTimer);
     aiNoteTypingTimer = setTimeout(() => signalAiNoteTyping(false), 4000);
   },
+  getMeetingId: () => breviaClient?.state.meeting?.id,
 });
 // —— AI 辅助：header 开关、空态引导、未启用 Popover ——
 function aiAssistEmptyRoot() { return document.querySelector('[data-ai-assist-empty]'); }
@@ -3343,10 +3472,10 @@ function renderAiAssistEmptyState() {
   const hasNotes = Boolean(currentNotesMarkdown().trim());
   if (hasNotes || !meetingActive) { root.hidden = true; root.innerHTML = ''; return; }
   const hasAi = aiAssistEnabled();
-  const disabledActions = ['insert-latest', 'insert-time'];
+  const disabledActions = ['insert-latest'];
   const tags = hasAi
     ? copy.emptyEnabledTags.map((tag) => `<span>${escapeHtml(tag)}</span>`).join('')
-    : copy.emptyDisabledTags.map((tag, index) => `<button type="button" data-ai-empty-action="${disabledActions[index] || ''}">${escapeHtml(tag)}</button>`).join('');
+    : copy.emptyDisabledTags.slice(0, 1).map((tag, index) => `<button type="button" data-ai-empty-action="${disabledActions[index]}">${escapeHtml(tag)}</button>`).join('');
   root.innerHTML = `<div class="ai-assist-empty-inner"><strong>${escapeHtml(hasAi ? copy.emptyEnabledTitle : copy.emptyDisabledTitle)}</strong><p>${escapeHtml(hasAi ? copy.emptyEnabledBody : copy.emptyDisabledBody)}</p><div class="ai-assist-empty-tags">${tags}</div></div>`;
   root.hidden = false;
 }
@@ -3378,16 +3507,13 @@ document.querySelector('[data-ai-assist-toggle]')?.addEventListener('click', () 
   if (aiAssistEnabled()) { openModal('ai-assist'); return; }
   openAiAssistPopover(button);
 });
-// 空态引导中的快捷操作（无需 AI）：插入当前字幕 / 记录当前时间点。
+// 空态引导中的快捷操作（无需 AI）：插入当前字幕。
 document.addEventListener('click', (event) => {
   const action = event.target.closest('[data-ai-empty-action]');
   if (!action || !meetingActive) return;
-  if (action.dataset.aiEmptyAction === 'insert-time') {
-    liveNotesEditor.appendMarkdown(`**[${formatMeetingTime(seconds * 1000)}]**`);
-    showToast(t('已加入笔记'));
-  } else if (action.dataset.aiEmptyAction === 'insert-latest') {
+  if (action.dataset.aiEmptyAction === 'insert-latest') {
     const info = liveSegmentData.get(latestLiveSegmentId);
-    if (info) { liveNotesEditor.appendMarkdown(`${segmentTimestampMarkdown(info.start_ms)} ${info.text}`); showToast(t('已加入笔记')); }
+    if (info) { liveNotesEditor.appendMarkdown(info.text); showToast(t('已加入笔记')); }
     else showToast(t('暂无字幕可插入'));
   }
 });
@@ -3433,12 +3559,12 @@ function signalAiNoteTyping(typing) {
   if (!typing) flushAutoSuggestions();
   renderAiSuggestion();
   if (!meetingId || !aiAssistEnabled() || !window.brevia?.aiNote) return;
-  window.brevia.aiNote.typing({ meeting_id: meetingId, typing, ...(typing ? {} : { notes: currentNotesMarkdown() }) }).catch(() => {});
+  window.brevia.aiNote.typing({ meeting_id: meetingId, typing, ...(typing ? {} : { notes: currentNotesMarkdown().slice(-20000) }) }).catch(() => {});
 }
 function requestAiSuggestion() {
   const meetingId = breviaClient?.state.meeting?.id;
   if (!meetingId || !aiAssistEnabled() || aiAssistConfig.proactivity !== 'quiet') return;
-  window.brevia?.aiNote?.request({ meeting_id: meetingId, notes: currentNotesMarkdown() }).catch(() => {});
+  window.brevia?.aiNote?.request({ meeting_id: meetingId, notes: currentNotesMarkdown().slice(-20000) }).catch(() => {});
 }
 document.querySelector('[data-ai-request]')?.addEventListener('click', requestAiSuggestion);
 const pendingAutoSuggestions = [];
@@ -3470,6 +3596,14 @@ if (window.brevia?.on) window.brevia.on('ai-note.suggestion', (payload) => {
   aiSuggestionQueue.push(payload);
   if (aiSuggestionQueue.length > 5) aiSuggestionQueue.shift();
   if (!latestAiSuggestion) showNextAiSuggestion();
+});
+if (window.brevia?.on) window.brevia.on('ai-note.evidence', (payload) => {
+  if (!meetingActive || payload.meeting_id !== breviaClient?.state.meeting?.id) return;
+  const mergeEvidence = (suggestion) => suggestion?.id === payload.id ? { ...suggestion, evidence: payload.evidence } : suggestion;
+  latestAiSuggestion = mergeEvidence(latestAiSuggestion);
+  aiSuggestionQueue = aiSuggestionQueue.map(mergeEvidence);
+  pendingAutoSuggestions = pendingAutoSuggestions.map(mergeEvidence);
+  renderAiSuggestion();
 });
 /** 展示队列里的下一条建议（没有则回到空状态）。@returns {void} */
 function showNextAiSuggestion() {
@@ -3505,7 +3639,9 @@ function renderAiSuggestion() {
   }
   const label = t(aiSuggestionTypeKey(suggestion.type));
   const actionLabel = suggestion.type === 'supplement' ? t('补充') : t('加入笔记');
-  root.innerHTML = `<div class="ai-suggestion-card"><div class="ai-suggestion-head"><span class="ai-suggestion-star">✦</span> <span class="ai-suggestion-type">${escapeHtml(label)}</span></div><p class="ai-suggestion-text">${escapeHtml(suggestion.text)}</p><div class="ai-suggestion-actions"><button type="button" class="ai-suggestion-accept" data-ai-accept>＋ ${escapeHtml(actionLabel)}</button><button type="button" class="ai-suggestion-ignore" data-ai-ignore>${t('忽略')}</button></div></div>`;
+  const evidence = Array.isArray(suggestion.evidence) ? suggestion.evidence : [];
+  const evidenceLabel = evidence.length ? `<span class="ai-suggestion-evidence" title="${escapeHtml(evidence.join('、'))}">${escapeHtml(t('依据 {count} 段字幕').replace('{count}', evidence.length))}</span>` : '';
+  root.innerHTML = `<div class="ai-suggestion-card"><div class="ai-suggestion-head"><span class="ai-suggestion-star">✦</span> <span class="ai-suggestion-type">${escapeHtml(label)}</span>${evidenceLabel}</div><p class="ai-suggestion-text">${escapeHtml(suggestion.text)}</p><div class="ai-suggestion-actions"><button type="button" class="ai-suggestion-accept" data-ai-accept>＋ ${escapeHtml(actionLabel)}</button><button type="button" class="ai-suggestion-ignore" data-ai-ignore>${t('忽略')}</button></div></div>`;
   root.hidden = false;
   scheduleAiSuggestionAutoFade();
 }
@@ -3554,8 +3690,8 @@ document.addEventListener('click', (event) => {
 function currentNotesMarkdown() {
   return liveNotesEditor.getMarkdown();
 }
-/** 笔记存储上限（与后端及 IPC 校验一致）。 */
-const MAX_NOTES_CHARS = 20000;
+/** 笔记存储上限（与后端及 IPC 校验一致，足以容纳几张内联图片）。 */
+const MAX_NOTES_CHARS = 5 * 1024 * 1024;
 let notesLimitNotified = false;
 /** 立即把笔记写入后端；超出上限时截断到存储上限并提示一次。@param {string|undefined} meetingId 会议 id。@param {string} notes Markdown 文本。@returns {Promise<void>} */
 function persistNotes(meetingId, notes) {
@@ -3565,7 +3701,7 @@ function persistNotes(meetingId, notes) {
     text = text.slice(0, MAX_NOTES_CHARS);
     if (!notesLimitNotified) {
       notesLimitNotified = true;
-      showToast(t('笔记已达 20000 字符上限，超出部分未保存。'));
+      showToast(t('笔记已达容量上限，超出部分未保存。'));
     }
   }
   return window.brevia.meeting.update({ meeting_id: meetingId, updates: { notes: text } }).catch(() => {});
@@ -3579,29 +3715,27 @@ function scheduleNotesSave(timer, getNotes, getMeetingId) {
 }
 const liveNotesSaveTimer = { current: undefined };
 const detailNotesSaveTimer = { current: undefined };
-document.querySelector('#translation-toggle').addEventListener('click', (event) => {
-  const enabled = !translationAllowed;
-  if (enabled && window.brevia) {
-    const targetLanguage = breviaClient?.state.meeting?.target_language;
-    if (!targetLanguage) { showToast(t('请先在"模型与设置"中选择译文目标语言')); return; }
+document.querySelector('.translation-menu').addEventListener('click', async (event) => {
+  const options = document.querySelector('#translation-options');
+  if (event.target.closest('#translation-toggle')) {
+    options.hidden = !options.hidden;
+    document.querySelector('#translation-toggle').setAttribute('aria-expanded', String(!options.hidden));
+    return;
   }
-  setLiveTranslationEnabled(enabled);
-  document.querySelectorAll('.translation').forEach((line) => { line.hidden = !enabled; });
-  // Update floating caption if enabled
-  if (floatingCaptionMode === 'live' && window.brevia?.floatingCaption) {
-    const translation = liveSegments.get(latestLiveSegmentId)?.querySelector('.translation')?.textContent;
-    if (enabled && translation) {
-      window.brevia.floatingCaption.update({
-        segmentId: latestLiveSegmentId,
-        translation,
-      });
-    } else {
-      window.brevia.floatingCaption.update({
-        segmentId: latestLiveSegmentId,
-        translation: null,
-      });
-    }
+  const choice = event.target.closest('[data-live-translation]');
+  if (!choice) return;
+  const targetLanguage = choice.dataset.liveTranslation || null;
+  const changed = targetLanguage !== liveConfig.target_language;
+  options.hidden = true;
+  document.querySelector('#translation-toggle').setAttribute('aria-expanded', 'false');
+  if (await reconfigureLive({ target_language: targetLanguage }) && changed) {
+    document.querySelectorAll('.translation').forEach((line) => { line.remove(); });
   }
+});
+document.addEventListener('click', (event) => {
+  if (event.target.closest('.translation-menu')) return;
+  document.querySelector('#translation-options').hidden = true;
+  document.querySelector('#translation-toggle').setAttribute('aria-expanded', 'false');
 });
 document.querySelector('#floating-caption-toggle').addEventListener('click', async () => {
   floatingCaptionMode = nextFloatingCaptionMode('live');
@@ -4133,15 +4267,11 @@ function openSegmentContextMenu(meetingId, segmentId, x, y, segmentInfo) {
   contextSegment = segmentInfo || null;
   const profiles = speakerProfiles.map((profile) => `<button type="button" data-add-segment-profile-sample="${profile.id}">${escapeHtml(speakerProfileName(profile))}</button>`).join('');
   const createProfile = `<div class="segment-context-submenu"><button type="button" data-open-segment-profile-create><span class="segment-context-label">${t('新增声纹')}</span><span class="segment-context-arrow" aria-hidden="true">›</span></button><form class="segment-context-options segment-context-name-form" data-create-segment-profile><label>${t('声纹名称')}<input name="name" maxlength="32" required autocomplete="off" /></label><button type="submit">${t('确定')}</button></form></div>`;
-  segmentContextMenu.innerHTML = `<div class="segment-context-submenu"><button type="button" data-add-segment-note><span class="segment-context-label">${t('加入笔记')}</span></button><button type="button" data-add-segment-time><span class="segment-context-label">${t('标记当前时间点')}</span></button></div><div class="segment-context-submenu"><button type="button" data-open-segment-profile-menu><span class="segment-context-label">${t('添加录音到声纹库')}</span><span class="segment-context-arrow" aria-hidden="true">›</span></button><div class="segment-context-options">${profiles || `<span>${t('暂无已注册声纹')}</span>`}${createProfile}</div></div>`;
+  segmentContextMenu.innerHTML = `<div class="segment-context-submenu"><button type="button" data-add-segment-note><span class="segment-context-label">${t('加入笔记')}</span></button></div><div class="segment-context-submenu"><button type="button" data-open-segment-profile-menu><span class="segment-context-label">${t('添加录音到声纹库')}</span><span class="segment-context-arrow" aria-hidden="true">›</span></button><div class="segment-context-options">${profiles || `<span>${t('暂无已注册声纹')}</span>`}${createProfile}</div></div>`;
   segmentContextMenu.style.visibility = 'hidden';
   segmentContextMenu.hidden = false;
   positionFloating(segmentContextMenu, { left: x, right: x, top: y, bottom: y });
   segmentContextMenu.style.visibility = '';
-}
-/** 把某段字幕的起始时间格式化为可写入笔记的时间戳引用。@param {number} startMs 起始毫秒。@returns {string} Markdown 时间戳。 */
-function segmentTimestampMarkdown(startMs) {
-  return `**[${formatMeetingTime(startMs)}]**`;
 }
 /** 把文本追加到当前活跃的笔记编辑器（live 视图或详情页编辑态）。@param {string} markdown 追加的 Markdown。@param {string} [meetingId] 目标会议 id（live 视图判定用）。@returns {void} */
 function appendTextToActiveNotes(markdown, meetingId) {
@@ -4171,15 +4301,7 @@ segmentContextMenu.addEventListener('click', async (event) => {
     const info = contextSegment;
     const meetingId = contextMeetingId;
     closeSegmentContextMenu();
-    if (info) { appendTextToActiveNotes(`${segmentTimestampMarkdown(info.start_ms)} ${info.text}`, meetingId); showToast(t('已加入笔记')); }
-    else showToast(t('无法获取字幕内容'));
-    return;
-  }
-  if (event.target.closest('[data-add-segment-time]')) {
-    const info = contextSegment;
-    const meetingId = contextMeetingId;
-    closeSegmentContextMenu();
-    if (info) { appendTextToActiveNotes(segmentTimestampMarkdown(info.start_ms), meetingId); showToast(t('已加入笔记')); }
+    if (info) { appendTextToActiveNotes(info.text, meetingId); showToast(t('已加入笔记')); }
     else showToast(t('无法获取字幕内容'));
     return;
   }
@@ -4260,6 +4382,8 @@ const startRefinement = (refinedModelId, numSpeakers) => {
     showToast(error.message);
   });
 };
+/** 首次精修待确认的模型 id（内联人数菜单确认后使用）。@type {string|undefined} */
+let pendingRefineModelId;
 finalTranscript.addEventListener('click', (event) => {
   // 点击字幕段的时间戳/说话人区域 → 定位播放该段。
   const segmentMeta = event.target.closest('.segment-meta');
@@ -4309,7 +4433,11 @@ finalTranscript.addEventListener('click', (event) => {
   }
   const refineNow = event.target.closest('[data-refine-now]');
   if (refineNow) {
-    startRefinement(currentMeetingDetail?.refined_model_id || preferredModelsForLanguage(currentMeetingDetail?.language || 'auto').refined);
+    pendingRefineModelId = currentMeetingDetail?.refined_model_id || preferredModelsForLanguage(currentMeetingDetail?.language || 'auto').refined;
+    const menu = refineNow.nextElementSibling;
+    document.querySelectorAll('.refine-menu').forEach((other) => { if (other !== menu) other.hidden = true; });
+    menu.hidden = !menu.hidden;
+    refineNow.setAttribute('aria-expanded', String(!menu.hidden));
     return;
   }
   const more = event.target.closest('[data-refine-more]');
@@ -4340,6 +4468,11 @@ finalTranscript.addEventListener('click', (event) => {
       startRefinement(currentMeetingDetail?.refined_model_id || preferredModelsForLanguage(currentMeetingDetail?.language || 'auto').refined, refineNumSpeakers());
       return;
     }
+    if (refineAction.dataset.refineAction === 'start') {
+      if (menu) menu.hidden = true;
+      startRefinement(pendingRefineModelId || currentMeetingDetail?.refined_model_id || preferredModelsForLanguage(currentMeetingDetail?.language || 'auto').refined, refineNumSpeakers());
+      return;
+    }
     if (refineAction.dataset.refineAction === 'model') {
       const list = refineAction.nextElementSibling;
       if (list) list.hidden = !list.hidden;
@@ -4361,9 +4494,14 @@ finalTranscript.addEventListener('click', (event) => {
   finalTranscript.querySelectorAll('[data-detail-panel]').forEach((panel) => { panel.hidden = panel.dataset.detailPanel !== target; });
 });
 document.addEventListener('click', (event) => {
-  if (event.target.closest('.refine-menu, [data-refine-more]')) return;
+  if (event.target.closest('.refine-wrap, .refine-menu, [data-refine-more]')) return;
   document.querySelectorAll('.refine-menu').forEach((menu) => { menu.hidden = true; });
   document.querySelectorAll('[data-refine-more]').forEach((button) => button.setAttribute('aria-expanded', 'false'));
+});
+settingsModal.addEventListener('dblclick', (event) => {
+  if (activeModal !== 'summary-detail' || summaryEditing || !event.target.closest('.summary-modal-document')) return;
+  summaryEditing = true;
+  renderModal('summary-detail');
 });
 /** 详情页富文本笔记编辑器实例（编辑模式下由 renderMeetingDetail 创建）。@type {object|null} */
 let detailNotesEditor = null;
@@ -4432,7 +4570,6 @@ if (window.brevia) {
   void loadAiAssistConfig().catch((error) => showToast(`${t('AI 笔记配置加载失败')}: ${error.message}`));
   initializationPromise = breviaClient.initialize().then((result) => {
     modelCatalog = result.models;
-    setPrepareModel('active-refined-model', document.querySelector('#active-refined-model').dataset.model);
     uiData.meetings = result.meetings.map(backendMeeting);
     // 初始化工作区
     if (typeof initializeWorkspaces === 'function') {
@@ -4448,7 +4585,6 @@ if (window.brevia) {
       if (model.path) modelPaths.set(model.id, model.path);
     });
     deviceReport = result.device || null;
-    document.querySelector('#active-device').textContent = result.device?.backend?.toUpperCase?.() || 'CPU';
     renderSpeakerProfileCard();
     renderMeetingList();
     void window.brevia.maintain();
@@ -4500,6 +4636,7 @@ if (window.brevia) {
       text: payload.text,
       translation,
       partial,
+      showSpeaker: false,
     };
     latestLiveSegmentId = payload.segment_id;
     // Update floating caption if enabled
@@ -4544,11 +4681,11 @@ if (window.brevia) {
   window.brevia.on('meeting.reconfigured', ({ meeting }) => {
     syncBackendMeeting(meeting);
     if (!meeting || meeting.id !== breviaClient?.state.meeting?.id) return;
+    const targetChanged = meeting.target_language !== liveConfig.target_language;
     breviaClient.state.meeting = { ...breviaClient.state.meeting, ...meeting };
     liveConfig = { language: meeting.language || 'auto', streaming_model_id: meeting.streaming_model_id || '', refined_model_id: meeting.refined_model_id || '', target_language: meeting.target_language || null, power_saving: Boolean(meeting.power_saving) };
+    if (targetChanged) document.querySelectorAll('.translation').forEach((line) => { line.remove(); });
     setLiveTranslationEnabled(Boolean(liveConfig.target_language));
-    document.querySelector('#active-streaming-model').textContent = prepareModelChoices['active-streaming-model'].find(([id]) => id === meeting.streaming_model_id)?.[1] || t('自动匹配');
-    document.querySelector('#active-refined-model').textContent = refinedModelName(meeting.refined_model_id);
   });
   window.brevia.on('live.performance', ({ meeting_id: meetingId, bottleneck }) => {
     if (!meetingActive || !bottleneck) return;
@@ -4639,8 +4776,11 @@ if (window.brevia) {
         clearCurrentIfMatch: true,
       });
     }
-    // Translate only after refinement completes, so caption and translation
-    // always match the final refined text.
+  });
+  window.brevia.on('transcript.final', (payload) => {
+    renderLiveEvent(payload, false);
+  });
+  window.brevia.on('transcript.settled', async (payload) => {
     if (!translationAllowed) return;
     if (floatingCaptionMode === 'live' && window.brevia?.floatingCaption) {
       window.brevia.floatingCaption.update({ segmentId: payload.segment_id, translationPending: true });
@@ -4648,10 +4788,6 @@ if (window.brevia) {
     try {
       await generateSegmentTranslation(payload, liveConfig.target_language);
     } catch (error) { showToast(`${t('翻译失败')}: ${error.message}`); }
-  });
-  window.brevia.on('transcript.final', (payload) => {
-    renderLiveEvent(payload, false);
-    // Wait for refinement to translate — see the transcript.refined handler.
   });
   window.brevia.on('transcript.discarded', ({ segment_id }) => {
     liveSegments.get(segment_id)?.remove();
@@ -4806,14 +4942,13 @@ if (window.brevia) {
     if (event.target.closest('[data-generate-summary]')) void generateMeetingSummary();
     if (event.target.closest('[data-regenerate-summary]')) void generateMeetingSummary();
   });
+  document.addEventListener('dblclick', (event) => {
+    if (!event.target.closest('.summary-preview .summary-body')) return;
+    void openModal('summary-detail').then(() => { summaryEditing = true; renderModal('summary-detail'); });
+  });
 
   document.querySelector('[data-export-detail]').addEventListener('click', async () => {
     if (!breviaClient.state.selectedMeetingId) return;
     openModal('export');
-  });
-
-  document.querySelector('[data-share-detail]').addEventListener('click', () => {
-    if (!breviaClient.state.selectedMeetingId) return;
-    openModal('share');
   });
 }

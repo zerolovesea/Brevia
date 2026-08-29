@@ -386,6 +386,64 @@ class WorkerTest(unittest.TestCase):
             self.worker._fuzzy_duplicate(norms, "女主角色塑造问题急躁暴躁难以共情")
         )
 
+    def test_ai_note_fuzzy_dedup_suppresses_rephrased_english_fact(self):
+        self.assertTrue(
+            self.worker._fuzzy_duplicate(
+                ["calibratedprobabilitiesprediction70raindaysactualrain"],
+                "calibrationmeanspredicted70raindaysactuallyrain",
+            )
+        )
+
+    def test_ai_note_merges_evidence_for_one_atomic_claim(self):
+        session = _AiNoteSession(
+            "meeting", {}, "assist", "en", {"instructions": "", "state_labels": ["topic", "facts", "decisions", "actions", "questions"]},
+        )
+        session.recent_segments = [
+            {"text": "First source", "start_ms": 1000},
+            {"text": "Second source", "start_ms": 2000},
+        ]
+        self.worker._ai_note_complete = lambda *_: json.dumps(
+            {"suggestions": [
+                {"type": "conclusion", "text": "A 70% forecast should rain 70% of the time.", "evidence": ["00:01"]},
+                {"type": "conclusion", "text": "A 70% forecast should rain 70% of the time.", "evidence": ["00:02"]},
+            ]}
+        )
+        batch = self.worker._analyze_realtime(session, 0)
+        self.assertEqual(len(batch), 1)
+        self.assertEqual(batch[0]["evidence"], ["00:01", "00:02"])
+        self.assertIn(batch[0]["text"], self.worker._realtime_prompt(session))
+
+    def test_ai_note_exact_duplicate_across_types_is_suppressed(self):
+        """同一观点被模型以不同 type 重复报出时只保留第一条（跨类型精确去重）。"""
+        session = _AiNoteSession(
+            "meeting", {}, "assist", "zh", {"instructions": "", "state_labels": ["topic", "facts", "decisions", "actions", "questions"]},
+        )
+        session.recent_segments = [{"text": "会议决定下季度发布", "start_ms": 1000}]
+        self.worker._ai_note_complete = lambda *_: json.dumps(
+            {"suggestions": [
+                {"type": "conclusion", "text": "下季度发布新版本", "evidence": ["00:01"]},
+                {"type": "action", "text": "下季度发布新版本", "evidence": ["00:01"]},
+            ]}
+        )
+        batch = self.worker._analyze_realtime(session, 0)
+        self.assertEqual(len(batch), 1, "跨类型同文本只应保留一条")
+        self.assertEqual(batch[0]["type"], "conclusion")
+
+    def test_ai_note_chinese_fuzzy_does_not_merge_distinct_claims(self):
+        """中文下仅靠字词相近不应判为重复（trigram 启发式对 CJK 关闭）。"""
+        session = _AiNoteSession(
+            "meeting", {}, "assist", "zh", {"instructions": "", "state_labels": ["topic", "facts", "decisions", "actions", "questions"]},
+        )
+        session.recent_segments = [{"text": "讨论预算与排期", "start_ms": 1000}]
+        self.worker._ai_note_complete = lambda *_: json.dumps(
+            {"suggestions": [
+                {"type": "conclusion", "text": "讨论预算分配与时间安排", "evidence": ["00:01"]},
+                {"type": "action", "text": "提醒大家确认预算审批进度", "evidence": ["00:01"]},
+            ]}
+        )
+        batch = self.worker._analyze_realtime(session, 0)
+        self.assertEqual(len(batch), 2, "中文语义不同但字词相近的笔记不应被合并")
+
     def test_ai_note_new_content_during_run_is_not_skipped(self):
         """调度器不打断在飞任务：运行期间到达的新内容应在下一轮被分析。"""
         meeting_id = "55555555-5555-5555-5555-555555555555"
@@ -850,7 +908,7 @@ class WorkerTest(unittest.TestCase):
     def test_start_requires_selected_models_when_requested(self):
         with self.assertRaisesRegex(
             RuntimeError,
-            "Models zipformer-zh-xlarge-streaming-int8, qwen3-asr-0.6b-int8, eres2net-base-3dspeaker-zh are not installed",
+            "Models zipformer-zh-xlarge-streaming-int8, qwen3-asr-0.6b-int8 are not installed",
         ):
             self.worker.start(
                 {
@@ -863,10 +921,21 @@ class WorkerTest(unittest.TestCase):
             )
         self.assertEqual([], self.worker.store.list_meetings())
 
+    def test_live_recording_skips_speaker_tracker(self):
+        self.worker.start(
+            {
+                "title": "实时不分离说话人",
+                "language": "zh",
+                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
+                "refined_model_id": "qwen3-asr-0.6b-int8",
+            }
+        )
+        self.assertIsNone(self.worker.speaker_tracker)
+
     def test_start_requires_translation_model_when_translation_is_selected(self):
         with self.assertRaisesRegex(
             RuntimeError,
-            "Models zipformer-zh-xlarge-streaming-int8, qwen3-asr-0.6b-int8, eres2net-base-3dspeaker-zh, hy-mt2-1.8b-q4km are not installed",
+            "Models zipformer-zh-xlarge-streaming-int8, qwen3-asr-0.6b-int8, hy-mt2-1.8b-q4km are not installed",
         ):
             self.worker.start(
                 {
@@ -898,6 +967,27 @@ class WorkerTest(unittest.TestCase):
             "# Meeting notes\n\nDone",
         )
         self.assertEqual(strip_reasoning("Thinking Process:\n1. Plan"), "")
+
+    def test_notes_keep_complete_inline_image_and_edited_summary(self):
+        meeting = self.worker.start(
+            {
+                "title": "可编辑纪要",
+                "language": "zh",
+                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
+                "refined_model_id": "qwen3-asr-0.6b-int8",
+            }
+        )
+        image = "![](data:image/png;base64," + "A" * 25000 + ")"
+        self.worker.update_meeting({"meeting_id": meeting["id"], "updates": {"notes": image}})
+        self.assertEqual(self.worker.store.get_meeting(meeting["id"])["notes"], image)
+        self.assertEqual(
+            self.worker.save_summary({"meeting_id": meeting["id"], "markdown": "# 已编辑"}),
+            {"markdown": "# 已编辑"},
+        )
+        self.assertEqual(
+            self.worker.store.get_meeting(meeting["id"])["summary"]["data"]["markdown"],
+            "# 已编辑",
+        )
 
     def test_summary_appends_transcript_to_custom_prompt_and_parses_code_fence(self):
         meeting = self.worker.start(
@@ -1364,7 +1454,7 @@ class WorkerTest(unittest.TestCase):
         self.assertEqual(fetched["notes"], notes)
         # 超长笔记应被截断到存储上限。
         truncated = self.worker.store.update_meeting(meeting["id"], {"notes": "字" * 30000})
-        self.assertLessEqual(len(truncated["notes"]), 20000)
+        self.assertLessEqual(len(truncated["notes"]), 5 * 1024 * 1024)
 
     def test_summary_authentication_error_remains_actionable(self):
         meeting = self.worker.start(
@@ -1564,6 +1654,14 @@ class WorkerTest(unittest.TestCase):
 
     def test_live_text_removes_model_markers_and_repeating_tail(self):
         self.assertEqual(
+            Worker._clean_live_text("AH WE TRAIN A GIANT AI MODEL."),
+            "Ah we train a giant AI model.",
+        )
+        self.assertEqual(
+            Worker._clean_live_text("AH WE TRAIN A GIANT MODEL and then continue."),
+            "Ah we train a giant model and then continue.",
+        )
+        self.assertEqual(
             Worker._clean_live_text("language English<asr_text>Thought we would reinvent it."),
             "Thought we would reinvent it.",
         )
@@ -1687,13 +1785,13 @@ class WorkerTest(unittest.TestCase):
             def decode(self, _, __):
                 return "这是直播识别。"
 
-        self.worker._postprocess_live_segment(None, Refiner(), event, None, [0.1], 16000)
+        self.worker._postprocess_live_segment(Refiner(), event, None, [0.1], 16000)
         segment = self.worker.store.get_meeting(meeting["id"])["segments"][0]
         self.assertEqual((segment["text"], segment["revision"]), ("这是直播识别。", 3))
         self.assertEqual(self.events[-1]["type"], "transcript.refined")
         with self.worker.store.connect() as db:
             db.execute("UPDATE segments SET user_edited=1 WHERE id=?", ("mic-0",))
-        self.worker._postprocess_live_segment(None, Refiner(), event, None, [0.1], 16000)
+        self.worker._postprocess_live_segment(Refiner(), event, None, [0.1], 16000)
         self.assertEqual(
             self.worker.store.get_meeting(meeting["id"])["segments"][0]["text"],
             "这是直播识别。",
@@ -1730,6 +1828,10 @@ class WorkerTest(unittest.TestCase):
             and ev["payload"].get("code") == "live_refinement_degraded"
         )
         self.assertIsNotNone(warning)
+        self.assertIn(
+            event,
+            [item["payload"] for item in self.events if item["type"] == "transcript.settled"],
+        )
 
     def test_live_revision_releases_slot_after_processing(self):
         # 精修完成后名额应归还，使后续段可继续被实时精修。
@@ -1746,6 +1848,7 @@ class WorkerTest(unittest.TestCase):
         function, args = queued[0]
         function(*args)  # 运行精修（内部无实际模型，仅走兜底）
         self.assertEqual(self.worker._live_refine_outstanding, 0)
+        self.assertTrue(any(item["type"] == "transcript.settled" for item in self.events))
 
     def test_old_live_refinement_cannot_release_a_new_meeting_slot(self):
         self.worker.live_postprocessing = executor = Mock()
@@ -3247,7 +3350,7 @@ class WorkerTest(unittest.TestCase):
         self.assertEqual(english["refined_model_id"], "whisper-large-v3")
 
     def test_reconfigure_hot_switches_language_and_models(self):
-        ready = {"zipformer-zh-xlarge-streaming-int8", "qwen3-asr-0.6b-int8"}
+        ready = {"zipformer-zh-xlarge-streaming-int8", "qwen3-asr-0.6b-int8", "hy-mt2-1.8b-q4km"}
         self.worker.models.is_ready = lambda model_id: model_id in ready
         with (
             patch("backend.worker_session.StreamingASR") as streaming,
@@ -3328,7 +3431,7 @@ class WorkerTest(unittest.TestCase):
                 self.worker.reconfigure(
                     {
                         "meeting_id": meeting["id"],
-                        "streaming_model_id": "zipformer-en-streaming-int8",
+                        "target_language": "en",
                     }
                 )
         self.assertIs(self.worker.asr, running_asr)
@@ -3471,10 +3574,14 @@ class WorkerTest(unittest.TestCase):
         final = next(event for event in self.events if event["type"] == "transcript.final")
         self.assertEqual(final["payload"]["speaker"], "local-user")
 
-    def test_live_microphone_distinguishes_speakers_with_voiceprints(self):
+    def test_live_recording_does_not_identify_speakers(self):
+        """实时会议不识别说话人：声纹 tracker 不再参与实时字幕的说话人标注。
+
+        说话人识别已移至会后精修；即便注入 tracker，实时路径也不会再调用它。
+        """
         meeting = self.worker.start(
             {
-                "title": "实时多人声纹",
+                "title": "实时不分离说话人",
                 "language": "zh",
                 "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
@@ -3490,11 +3597,7 @@ class WorkerTest(unittest.TestCase):
         self.worker.speaker_tracker = Mock(last_speaker=None)
         self.worker.speaker_tracker.embedding.side_effect = ([1, 0], [0, 1])
         self.worker.speaker_tracker.assign_embedding.side_effect = ("spk-1", "spk-2")
-        queued = []
         self.worker.live_postprocessing = Mock()
-        self.worker.live_postprocessing.submit.side_effect = (
-            lambda function, *args: queued.append((function, args))
-        )
         payload = {
             "meeting_id": meeting["id"],
             "track": "mic",
@@ -3511,15 +3614,9 @@ class WorkerTest(unittest.TestCase):
             if event["type"] == "transcript.final"
         ]
         self.assertEqual(final_speakers, ["local-user", "local-user"])
+        # 实时路径不再把 tracker 传给精修，声纹 embedding 永远不会被调用。
         self.worker.speaker_tracker.embedding.assert_not_called()
-        for function, args in queued:
-            function(*args)
-        refined_speakers = [
-            event["payload"]["speaker"]
-            for event in self.events
-            if event["type"] == "transcript.refined"
-        ]
-        self.assertEqual(refined_speakers, ["spk-1", "spk-2"])
+        self.worker.live_postprocessing.submit.assert_not_called()
 
     def test_live_pin_forces_endpoint_without_trailing_silence(self):
         meeting = self.worker.start(
@@ -3802,7 +3899,7 @@ class WorkerTest(unittest.TestCase):
                 "sample_rate": 16000, "start_ms": 0,
             }
         )
-        self.assertEqual(queued[0][5].tolist(), [0.25, 0.5])
+        self.assertEqual(queued[0][4].tolist(), [0.25, 0.5])
         final = next(event for event in self.events if event["type"] == "transcript.final")
         self.assertEqual(final["payload"]["text"], "那么理由呢是因为续句")
 

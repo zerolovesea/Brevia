@@ -18,11 +18,10 @@ from .asr import (
     LanguageIdentifier,
     LiveDenoiser,
     RefinedASR,
-    SpeakerTracker,
     StreamingASR,
 )
 from .audio_io import convert_to_pcm_wav
-from .config import SETTINGS, SPEAKER_EMBEDDING_MODEL_ID
+from .config import SETTINGS
 from .refine_sidecar import RemoteRefiner
 from .worker_llm import TRANSLATION_MODEL_ID
 from .worker_common import require, synchronized_recording
@@ -67,7 +66,6 @@ class RecordingSessionMixin:
                 "vad_model_id",
             )
         ]
-        required_models.append(SPEAKER_EMBEDDING_MODEL_ID)
         if payload.get("target_language"):
             required_models.append(TRANSLATION_MODEL_ID)
         missing_models = [
@@ -169,6 +167,7 @@ class RecordingSessionMixin:
         self.recent_finals = []
         denoiser_id = SETTINGS["live_asr"]["denoiser_model_id"]
         self.denoiser = None
+        self.speaker_tracker = None
 
         # 各加载闭包在工作线程中运行，绝不能访问 self.active——它是受 state.lock 保护
         # 的属性，而本方法已在该锁内运行，跨线程再次获取会死锁。改用本地会议 ID。
@@ -230,22 +229,6 @@ class RecordingSessionMixin:
                 return None
             return self._build_live_punctuation(meeting["language"], meeting_id)
 
-        def build_speaker_tracker():
-            try:
-                return SpeakerTracker(
-                    self.models, max_speakers=meeting.get("num_speakers")
-                )
-            except RuntimeError as error:
-                self.emit(
-                    "worker.warning",
-                    {
-                        "meeting_id": meeting_id,
-                        "code": "speaker_unavailable",
-                        "message": str(error),
-                    },
-                )
-                return None
-
         def build_live_refiner(streaming_asr=None):
             model_id, streaming = self._live_refiner_choice(
                 meeting["streaming_model_id"],
@@ -274,25 +257,21 @@ class RecordingSessionMixin:
                 )
             return None
 
-        # 流式 ASR、降噪、标点、声纹是实时字幕的关键路径且加载快：同步加载，
-        # start() 返回后首帧音频即可带标点/声纹转写。语言识别（whisper-large-v3）
+        # 流式 ASR、降噪、标点是实时字幕的关键路径且加载快：同步加载。
+        # 说话人分离只在会后精修执行；逐段在线聚类会把同一人裂成大量临时标签，
+        # 也会与实时精修争用 CPU。语言识别（whisper-large-v3）
         # 与实时精修模型较重，在后台按序加载，避免原生初始化竞争，同时显著缩短
         # 「准备中」等待；加载完成前语言回退到文本启发式，精修回退到流式文本。
-        # 只同步加载「快」模型（降噪/标点/声纹）；流式 ASR（zipformer 等大模型
+        # 只同步加载「快」模型（降噪/标点）；流式 ASR（zipformer 等大模型
         # 加载需数秒）与语言识别、精修模型一起放到后台加载。start() 因此能立刻
         # 返回进入录制界面，加载完成前音频会被缓冲，不丢字。
         self.denoiser = build_denoiser()
         self.punctuation = build_punctuation()
-        self.speaker_tracker = build_speaker_tracker()
         # 标点补发与精修各用一个单线程执行器：精修（RefinedASR）较慢，若与标点
         # 共用执行器会把快速的部分标点堵在队列里，导致字幕卡顿。
         if self.punctuation:
             self.live_punctuation = ThreadPoolExecutor(
                 max_workers=1, thread_name_prefix="brevia-live-punctuation"
-            )
-        if self.speaker_tracker:
-            self.live_postprocessing = ThreadPoolExecutor(
-                max_workers=1, thread_name_prefix="brevia-live-postprocess"
             )
 
         def load_remaining():
@@ -440,6 +419,8 @@ class RecordingSessionMixin:
         required_models = (streaming_model_id,)
         if live_refiner_model_id != streaming_model_id:
             required_models += (live_refiner_model_id,)
+        if target_language:
+            required_models += (TRANSLATION_MODEL_ID,)
         missing = [
             model_id
             for model_id in required_models
@@ -904,17 +885,13 @@ class RecordingSessionMixin:
         if text and (text != state["last_text"] or final):
             state["revision"] += 1
             segment_id = f"{payload['track']}-{state['segment']}"
-            speaker = "local-user" if payload["track"] == "mic" else (
-                self.speaker_tracker.last_speaker
-                if self.speaker_tracker and self.speaker_tracker.last_speaker
-                else "spk-1"
-            )
+            speaker = "local-user" if payload["track"] == "mic" else "spk-1"
             speaker_name = None
             segment_audio = (
                 numpy.concatenate(state["audio"])
                 if final
                 and state["audio"]
-                and (self.speaker_tracker or self.live_refiner)
+                and self.live_refiner
                 else None
             )
             segment_refine_audio = (
@@ -1020,19 +997,20 @@ class RecordingSessionMixin:
         """
         if not (
             self.live_postprocessing
-            and (self.speaker_tracker or self.live_refiner)
+            and self.live_refiner
             and (samples is not None or refine_samples is not None)
         ):
+            self.emit("transcript.settled", event)
             return
         reservation = self._live_refine_try_reserve()
         if reservation is None:
             self._warn_live_refine_degraded(event)
             self._live_refine_dropped(event.get("meeting_id"))
+            self.emit("transcript.settled", event)
             return
         self.live_postprocessing.submit(
             self._refine_live_utterance_with_release,
             reservation,
-            self.speaker_tracker,
             self.live_refiner,
             event.copy(),
             samples.copy() if samples is not None else None,
@@ -1083,15 +1061,17 @@ class RecordingSessionMixin:
             )
 
     def _refine_live_utterance_with_release(
-        self, reservation, tracker, refiner, event, samples, refine_samples, sample_rate
+        self, reservation, refiner, event, samples, refine_samples, sample_rate
     ):
         """在限流名额内执行单段精修；无论结果如何都释放名额。"""
         meeting_id = event.get("meeting_id")
+        settled = event
         try:
-            self._refine_live_utterance(
-                tracker, refiner, event, samples, refine_samples, sample_rate
+            settled = self._refine_live_utterance(
+                refiner, event, samples, refine_samples, sample_rate
             )
         finally:
+            self.emit("transcript.settled", settled)
             self._live_refine_release(reservation, meeting_id)
 
     def _warn_live_refine_degraded(self, event):
@@ -1135,42 +1115,27 @@ class RecordingSessionMixin:
                 },
             )
 
-    def _refine_live_utterance(self, tracker, refiner, event, samples, refine_samples, sample_rate):
+    def _refine_live_utterance(self, refiner, event, samples, refine_samples, sample_rate):
         """对单个 live final 做整段精修。
 
-        单阶段字幕：整段用 RefinedASR 转写、用 SpeakerTracker 给一个说话人标签，
-        然后原地覆盖当前段的文本，不跨段拆分/合并。
+        单阶段字幕：整段用 RefinedASR 转写，然后原地覆盖当前段的文本，
+        不跨段拆分/合并。
         """
-        self._postprocess_live_segment(tracker, refiner, event, samples, refine_samples, sample_rate)
+        return self._postprocess_live_segment(refiner, event, samples, refine_samples, sample_rate)
 
-    def _postprocess_live_segment(self, tracker, refiner, event, samples, refine_samples, sample_rate):
-        """合并异步声纹与文本结果；存储层保护用户编辑。"""
+    def _postprocess_live_segment(self, refiner, event, samples, refine_samples, sample_rate):
+        """合并异步文本精修结果；存储层保护用户编辑。
+
+        实时说话人识别已移至会后精修，此处只负责文本精修。
+        """
         updated = event.copy()
         previous_final_text = updated.pop("_previous_final_text", "")
         carry_in_text = updated.pop("_carry_in_text", "")
         carry_out_text = updated.pop("_carry_out_text", "")
-        if tracker and samples is not None:
-            try:
-                speaker, speaker_name = self._identify_speaker(
-                    event["meeting_id"],
-                    tracker,
-                    samples,
-                    sample_rate,
-                )
-                updated.update(speaker=speaker, speaker_name=speaker_name)
-            except Exception as error:
-                self.emit(
-                    "worker.warning",
-                    {
-                        "meeting_id": event["meeting_id"],
-                        "code": "live_speaker_identification_failed",
-                        "message": str(error),
-                    },
-                )
         if refiner:
             audio = refine_samples if refine_samples is not None else samples
             if audio is None:
-                return
+                return event
             try:
                 text = self._refine_live_audio(
                     refiner, audio, sample_rate, original_text=event.get("text", "")
@@ -1206,9 +1171,9 @@ class RecordingSessionMixin:
                     },
                 )
         if all(updated.get(key) == event.get(key) for key in ("speaker", "speaker_name", "text")):
-            return
+            return event
         updated["revision"] = event["revision"] + 1
-        self._emit_refined_segment(updated)
+        return self._emit_refined_segment(updated) or event
 
     def _refine_live_audio(self, refiner, audio, sample_rate, original_text=""):
         """把一段音频精修为文本；超长段落切成 ≤15s 窗口逐段精修后拼接。
@@ -1320,6 +1285,8 @@ class RecordingSessionMixin:
         """
         if self.store.save_segment(updated):
             self.emit("transcript.refined", updated)
+            return updated
+        return None
 
     def _sentence_boundary(self, raw_text):
         """返回 ``(截断后的原文, 边界比例)``。
@@ -1447,30 +1414,6 @@ class RecordingSessionMixin:
                     if count == offset + length:
                         return refined[: index + 1].rstrip(" \t,。.;:!?，；：！？")
         return refined
-
-    def _identify_speaker(self, meeting_id, tracker, samples, sample_rate):
-        """优先匹配声纹库，未命中时分配会议内临时说话人。
-
-        去掉 utterance 硬切后单条字幕可能包含多个说话人（连续/抢话场景），整段声纹
-        会是多人的混合，容易把不同人聚到一起。这里取段落前 15s 的声纹（更可能还是
-        同一说话人），提升聚类稳定性。
-        """
-        window = sample_rate * 15
-        if len(samples) > window:
-            samples = samples[:window]
-        embedding = tracker.embedding(samples, sample_rate)
-        if embedding is None:
-            return tracker.last_speaker or "spk-1", None
-        profile = self.store.match_speaker_profile(
-            embedding, SETTINGS["diarization"]["voiceprint_similarity_threshold"]
-        )
-        if profile:
-            speaker_id = f"profile-{profile['id']}"
-            self.store.rename_speaker(
-                meeting_id, speaker_id, profile["name"], profile_id=profile["id"]
-            )
-            return speaker_id, profile["name"]
-        return tracker.assign_embedding(embedding), None
 
     @synchronized_recording
     def stop(self, payload):

@@ -362,7 +362,7 @@ class MeetingStoreMixin:
             if not fields["title"]:
                 raise ValueError("Title cannot be empty")
         if "notes" in fields:
-            fields["notes"] = str(fields["notes"] or "")[:20000]
+            fields["notes"] = str(fields["notes"] or "")[: 5 * 1024 * 1024]
         if "tags" in fields:
             fields["tags"] = json.dumps(fields["tags"], ensure_ascii=False)
         with self.connect() as db:

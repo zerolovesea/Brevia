@@ -173,6 +173,7 @@ class _AiNoteSession:
         self.thread = None
         # 去重 / 质量
         self.recent_norms = []
+        self.recent_claims = []
         self.seen_topic_norms = set()
         self.dismissed_norms = set()
 
@@ -420,13 +421,26 @@ class AiNoteWorkerMixin:
             return []
         accepted = []
         for item in self._parse_suggestions(raw):
+            item["evidence"] = self._valid_evidence(session, item.get("evidence"))
+            duplicate = self._duplicate_claim(session, item)
+            if duplicate:
+                duplicate["evidence"] = list(dict.fromkeys(duplicate["evidence"] + item["evidence"]))
+                if duplicate.get("emitted"):
+                    self.emit(
+                        "ai-note.evidence",
+                        {"meeting_id": session.meeting_id, "id": duplicate["id"], "evidence": duplicate["evidence"]},
+                    )
+                continue
             if not self._accept_suggestion(session, item):
                 continue
             norm = _normalize(item["text"])
+            item.update(id=str(uuid4()), norm=norm, emitted=False)
             if item["type"] == "topic":
                 session.seen_topic_norms.add(norm)
             session.recent_norms.append(norm)
             session.recent_norms = session.recent_norms[-MAX_SUGGESTION_HISTORY:]
+            session.recent_claims.append(item)
+            session.recent_claims = session.recent_claims[-MAX_SUGGESTION_HISTORY:]
             accepted.append(item)
         return accepted
 
@@ -449,13 +463,31 @@ class AiNoteWorkerMixin:
         norm = _normalize(text)
         if not norm:
             return False
-        if norm in session.recent_norms or norm in session.dismissed_norms:
+        if norm in session.dismissed_norms:
             return False
-        if self._fuzzy_duplicate(session.recent_norms, norm):
+        # 跨类型精确去重：同一观点被模型以不同 type 重复报出时，只保留第一条。
+        # （近义改写仍由 _duplicate_claim 按同类型拦截，避免过度合并。）
+        if norm in session.recent_norms:
             return False
         if item["type"] == "topic" and norm in session.seen_topic_norms:
             return False
         return True
+
+    def _duplicate_claim(self, session, item):
+        """返回同类型的既有原子观点；同一观点只累积来源，不再新增笔记。"""
+        norm = _normalize(item.get("text"))
+        for claim in session.recent_claims:
+            if claim["type"] == item["type"] and self._fuzzy_duplicate([claim["norm"]], norm):
+                return claim
+        return None
+
+    @staticmethod
+    def _valid_evidence(session, evidence):
+        """只接受当前字幕窗口中已有的时间戳，杜绝模型虚构来源。"""
+        allowed = [clock(segment["start_ms"]) for segment in session.recent_segments[-8:]]
+        requested = evidence if isinstance(evidence, list) else [evidence]
+        valid = [str(value) for value in requested if str(value) in allowed]
+        return list(dict.fromkeys(valid))[:2] or allowed[-1:]
 
     @staticmethod
     def _fuzzy_duplicate(norms, norm):
@@ -464,7 +496,25 @@ class AiNoteWorkerMixin:
             # ponytail: 字符相似度只拦截改写；若误拦截可改用语义模型重排。
             if SequenceMatcher(None, previous, norm).ratio() >= 0.70:
                 return True
+            # 字符三元组只对非 CJK（拉丁）改写启用。CJK 文本共享大量高频汉字，
+            # 三元组重叠会误判语义不同的中文笔记为重复，故中文只走整句相似度。
+            if self._is_cjk(previous) or self._is_cjk(norm):
+                continue
+            previous_words = {previous[index:index + 3] for index in range(len(previous) - 2)}
+            words = {norm[index:index + 3] for index in range(len(norm) - 2)}
+            if (
+                len(previous_words) >= 3
+                and len(words) >= 3
+                and len(previous_words & words) >= 3
+                and len(previous_words & words) / min(len(previous_words), len(words)) >= 0.60
+            ):
+                return True
         return False
+
+    @staticmethod
+    def _is_cjk(text):
+        """是否包含 CJK 表意文字（汉字）；含任一汉字即按中文处理去重。"""
+        return any("\u3400" <= char <= "\u9fff" or "\uf900" <= char <= "\ufaff" for char in text)
 
     def _matches_state(self, session, text):
         """建议内容是否已几乎原样落在会议状态里（模型偷懒复述状态时丢弃）。"""
@@ -485,10 +535,12 @@ class AiNoteWorkerMixin:
             for segment in session.recent_segments[-REALTIME_RECENT_SEGMENTS[lang]:]
         )[:RECENT_TRANSCRIPT_CHARS[lang]]
         user = session.user_paragraph[:USER_PARAGRAPH_CHARS]
+        claims = "\n".join(f"- {claim['text']}" for claim in session.recent_claims[-6:])
         instructions = session.prompt_copy["instructions"]
         return (
             f"{instructions}\n\n"
             f"<meeting_state>\n{state or '(empty)'}\n</meeting_state>\n\n"
+            f"<accepted_claims>\n{claims or '(empty)'}\n</accepted_claims>\n\n"
             f"<recent_transcript>\n{recent or '(empty)'}\n</recent_transcript>\n\n"
             f"<user_note>\n{user or '(empty)'}\n</user_note>"
         )
@@ -534,6 +586,7 @@ class AiNoteWorkerMixin:
                     "type": suggestion_type,
                     "text": suggestion_text[:64],
                     "importance": str(item.get("importance") or "medium"),
+                    "evidence": item.get("evidence"),
                 }
             )
         return result
@@ -553,12 +606,14 @@ class AiNoteWorkerMixin:
             "ai-note.suggestion",
             {
                 "meeting_id": session.meeting_id,
-                "id": str(uuid4()),
+                "id": suggestion["id"],
                 "type": suggestion["type"],
                 "text": suggestion["text"],
                 "importance": suggestion.get("importance", "medium"),
+                "evidence": suggestion["evidence"],
             },
         )
+        suggestion["emitted"] = True
 
     @staticmethod
     def _lightweight_trigger(session):

@@ -1,10 +1,12 @@
-const { app, BrowserWindow, clipboard, desktopCapturer, dialog, ipcMain, Menu, powerMonitor, screen, session, ShareMenu, shell, systemPreferences } = require('electron');
+const { app, BrowserWindow, clipboard, desktopCapturer, dialog, ipcMain, Menu, powerMonitor, protocol, screen, session, ShareMenu, shell, systemPreferences } = require('electron');
 const { execFile, spawn } = require('node:child_process');
 const { appendFile, copyFile, mkdir, readFile, rename, rm, writeFile } = require('node:fs/promises');
+const zlib = require('node:zlib');
 const { existsSync } = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
+const { randomUUID } = require('node:crypto');
 const { z } = require('zod');
 const { configureMacUpdater, createDisplayMediaHandler, isNewerVersion, registerScreenPermission, systemAudioSupported } = require('./main-logic');
 
@@ -31,6 +33,7 @@ const workerRequestTimeouts = new Map([
 ]);
 const resetOnboarding = process.argv.includes('--reset-onboarding');
 const dataDir = () => process.env.BREVIA_DATA_DIR || path.join(app.getPath('home'), 'brevia');
+const noteImagesDir = (meetingId) => path.join(dataDir(), 'meetings', meetingId, 'notes');
 const legacyDataDir = () => app.getPath('userData');
 const logsDir = () => path.join(dataDir(), 'logs');
 const logFile = () => path.join(logsDir(), 'brevia.log');
@@ -78,9 +81,9 @@ const workerEvent = z.object({
     'meeting.stopped', 'model.progress', 'model.status', 'refinement.cancelled', 'refinement.progress',
     'refinement.ready', 'refinement.started', 'speaker-profile.deleted', 'speaker-profile.updated',
     'summary.progress', 'summary.ready', 'summary.started', 'task.status',
-    'transcript.discarded', 'transcript.final', 'transcript.partial', 'transcript.refined',
+    'transcript.discarded', 'transcript.final', 'transcript.partial', 'transcript.refined', 'transcript.settled',
     'translation.ready', 'worker.error', 'worker.warning',
-    'ai-note.suggestion', 'ai-note.analyzing',
+    'ai-note.suggestion', 'ai-note.evidence', 'ai-note.analyzing',
   ]),
   schema_version: z.literal(1),
   payload: z.record(z.string(), z.unknown()),
@@ -109,12 +112,13 @@ const audio = z.object({
   flush: z.boolean().optional(),
 });
 const id = z.object({ meeting_id: z.string().uuid() });
+const noteImage = id.extend({ mime_type: z.enum(['image/png', 'image/jpeg', 'image/gif', 'image/webp']), bytes: z.instanceof(ArrayBuffer) });
 const meetingUpdates = z.object({
   title: z.string().trim().min(1).max(120),
   tags: z.array(z.string().max(32)).max(20),
   archived_at: z.string().max(64).nullable(),
   refined_model_id: z.string().min(1).max(128),
-  notes: z.string().max(20000),
+  notes: z.string().max(5 * 1024 * 1024),
 }).partial();
 const meetingReconfigure = id.extend({
   language: z.string().min(2).max(16).optional(),
@@ -180,6 +184,32 @@ const aiNoteReconfigure = z.object({
   meeting_id: z.string().uuid(),
   min_interval_seconds: z.number().min(1).max(86400).nullable().optional(),
 });
+
+async function saveNoteImage({ meeting_id, mime_type, bytes }) {
+  const image = Buffer.from(bytes);
+  if (!image.length || image.length > 10 * 1024 * 1024) throw new Error('Image must be smaller than 10 MB');
+  const extension = mime_type === 'image/jpeg' ? 'jpg' : mime_type.slice('image/'.length);
+  const filename = `${randomUUID()}.${extension}`;
+  await mkdir(noteImagesDir(meeting_id), { recursive: true });
+  await writeFile(path.join(noteImagesDir(meeting_id), filename), image, { mode: 0o600 });
+  return { url: `brevia-note://${meeting_id}/${filename}` };
+}
+
+function registerNoteImageProtocol() {
+  protocol.handle('brevia-note', async (request) => {
+    try {
+      const url = new URL(request.url);
+      const meetingId = url.hostname;
+      const filename = decodeURIComponent(url.pathname.slice(1));
+      if (!/^[0-9a-f-]{36}$/i.test(meetingId) || !/^[0-9a-f-]{36}\.(png|jpe?g|gif|webp)$/i.test(filename)) throw new Error('Invalid note image');
+      const image = await readFile(path.join(noteImagesDir(meetingId), filename));
+      const type = filename.endsWith('.jpg') || filename.endsWith('.jpeg') ? 'image/jpeg' : `image/${filename.split('.').pop()}`;
+      return new Response(image, { headers: { 'content-type': type } });
+    } catch {
+      return new Response(null, { status: 404 });
+    }
+  });
+}
 
 class WorkerClient {
   constructor({ refinement = false } = {}) {
@@ -579,6 +609,84 @@ async function prepareExport(value) {
   }
 }
 
+// 最小化 ZIP 写入器（仅 store / deflate 两种压缩方法）。不引入第三方依赖，
+// 使用 Node 内置 zlib 的 deflateRawSync + crc32，标准 local-header / central-directory / EOCD 布局。
+async function writeZipArchive(targetZip, files) {
+  // files: [{ path, name }] —— name 为归档内文件名（UTF-8）。
+  const { deflateRawSync, crc32 } = zlib;
+  const encoder = new TextEncoder();
+  const localParts = [];
+  const centralParts = [];
+  let offset = 0;
+  for (const file of files) {
+    const data = await readFile(file.path);
+    const name = encoder.encode(file.name);
+    const crc = crc32(data);
+    const deflated = deflateRawSync(data);
+    const store = deflated.length >= data.length;
+    const method = store ? 0 : 8;
+    const payload = store ? data : deflated;
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(20, 4); // version needed
+    local.writeUInt16LE(0x0800, 6); // UTF-8 file name flag
+    local.writeUInt16LE(method, 8);
+    local.writeUInt16LE(0, 10); // mod time
+    local.writeUInt16LE(0, 12); // mod date
+    local.writeUInt32LE(crc, 14);
+    local.writeUInt32LE(payload.length, 18);
+    local.writeUInt32LE(data.length, 22);
+    local.writeUInt16LE(name.length, 26);
+    local.writeUInt16LE(0, 28); // extra length
+    const localEntry = Buffer.concat([local, name, payload]);
+    localParts.push(localEntry);
+    const central = Buffer.alloc(46);
+    central.writeUInt32LE(0x02014b50, 0);
+    central.writeUInt16LE(20, 4); // version made by
+    central.writeUInt16LE(20, 6); // version needed
+    central.writeUInt16LE(0x0800, 8);
+    central.writeUInt16LE(method, 10);
+    central.writeUInt16LE(0, 12);
+    central.writeUInt16LE(0, 14);
+    central.writeUInt32LE(crc, 16);
+    central.writeUInt32LE(payload.length, 20);
+    central.writeUInt32LE(data.length, 24);
+    central.writeUInt16LE(name.length, 28);
+    central.writeUInt16LE(0, 30); // extra
+    central.writeUInt16LE(0, 32); // comment
+    central.writeUInt16LE(0, 34); // disk number
+    central.writeUInt16LE(0, 36); // internal attrs
+    central.writeUInt32LE(0, 38); // external attrs
+    central.writeUInt32LE(offset, 42); // local header offset
+    centralParts.push(Buffer.concat([central, name]));
+    offset += localEntry.length;
+  }
+  const central = Buffer.concat(centralParts);
+  const eocd = Buffer.alloc(22);
+  eocd.writeUInt32LE(0x06054b50, 0);
+  eocd.writeUInt16LE(0, 4); // disk number
+  eocd.writeUInt16LE(0, 6); // disk with central dir
+  eocd.writeUInt16LE(files.length, 8); // entries on this disk
+  eocd.writeUInt16LE(files.length, 10); // total entries
+  eocd.writeUInt32LE(central.length, 12);
+  eocd.writeUInt32LE(offset, 16);
+  eocd.writeUInt16LE(0, 20); // comment length
+  await writeFile(targetZip, Buffer.concat([...localParts, central, eocd]));
+}
+
+// 把若干已准备好的导出文件打包成一个 zip，归档文件名按会议名加内容标签命名。
+async function buildSelectedBundle(prepared) {
+  const base = path.parse(prepared[0].path).name; // 同一会议的所有导出共享会议名基础
+  const zipPath = path.join(path.dirname(prepared[0].path), `${base}.zip`);
+  const safe = (value) => String(value || '').replace(/[<>:"/\\|?*]+/g, '-').trim() || 'item';
+  const files = prepared.map((entry) => ({
+    path: entry.path,
+    name: `${base}-${safe(entry.label)}${path.extname(entry.path)}`,
+  }));
+  await writeZipArchive(zipPath, files);
+  return zipPath;
+}
+
 function registerIpc() {
   ipcMain.handle('app.version', () => app.getVersion());
   ipcMain.handle('update.check', () => checkForUpdate());
@@ -669,6 +777,7 @@ function registerIpc() {
   handle('meeting.restore', id, 'meeting.restore');
   handle('meeting.purge', id, 'meeting.purge');
   ipcMain.handle('meeting.refine', (_, payload) => handleRefinement(payload));
+  ipcMain.handle('meeting.note-image.save', async (_, payload) => saveNoteImage(noteImage.parse(payload)));
   handle('workspace.list', z.object({}), 'workspace.list');
   handle('workspace.get', z.object({ workspace_id: z.string() }), 'workspace.get');
   handle('workspace.create', z.object({ name: z.string().trim().min(1).max(50), description: z.string().max(200).optional() }), 'workspace.create');
@@ -756,6 +865,7 @@ function registerIpc() {
     if (!api_key && !isBuiltInProvider(value.provider)) return { configuration_required: true };
     return worker.request('summary.generate', { ...value, api_key });
   });
+  ipcMain.handle('summary.save', async (_, payload) => worker.request('summary.save', id.extend({ markdown: z.string().max(5 * 1024 * 1024) }).parse(payload)));
   ipcMain.handle('translation.generate', async (_, payload) => {
     const value = id.extend({
       segment_id: z.string(),
@@ -812,6 +922,58 @@ function registerIpc() {
     if (destination.canceled) return null;
     await copyFile(exported.path, destination.filePath);
     return { ...exported, path: destination.filePath };
+  });
+  // 通用「导出与分享」入口：按用户勾选的内容项导出（逐字稿/纪要/我的笔记/录音，
+  // 每项可选格式）。单项直接交付该文件；多项打包为一个 zip。mode 决定交付方式：
+  // save —— 弹出保存对话框；reveal —— 在文件夹中定位；system —— 弹出系统分享面板。
+  ipcMain.handle('meeting.export-bundle', async (event, payload) => {
+    const value = z.object({
+      meeting_id: z.string().uuid(),
+      items: z.array(z.object({
+        content: z.enum(['transcript', 'notes', 'mynotes', 'audio']),
+        format: z.enum(['md', 'txt', 'json', 'srt', 'docx', 'pdf', 'flac', 'wav', 'm4a']),
+        track: z.enum(['mix', 'mic', 'system', 'vocals', 'accompaniment']).optional(),
+        label: z.string().min(1).max(60).optional(),
+      })).min(1).max(8),
+      mode: z.enum(['save', 'reveal', 'system']).default('save'),
+      anchor: z.object({ x: z.number().int().min(0).max(100000), y: z.number().int().min(0).max(100000) }).optional(),
+    }).parse(payload);
+    // 1. 依次准备每项（prepareExport 会处理 PDF 渲染）。
+    const prepared = [];
+    for (const item of value.items) {
+      const exported = await prepareExport({
+        meeting_id: value.meeting_id,
+        content: item.content,
+        format: item.format,
+        ...(item.track ? { track: item.track } : {}),
+      });
+      prepared.push({ path: exported.path, format: exported.format, label: item.label || item.content });
+    }
+    // 2. 多项时打包为一个 zip；单项直接交付。
+    let deliver = prepared;
+    if (prepared.length > 1) {
+      const zipPath = await buildSelectedBundle(prepared);
+      deliver = [{ path: zipPath, format: 'zip', label: 'bundle' }];
+    }
+    const file = deliver[0];
+    if (value.mode === 'save') {
+      const destination = await dialog.showSaveDialog({ defaultPath: path.basename(file.path) });
+      if (destination.canceled) return null;
+      await copyFile(file.path, destination.filePath);
+      return { paths: [destination.filePath], format: file.format, count: prepared.length };
+    }
+    if (value.mode === 'reveal') {
+      shell.showItemInFolder(file.path);
+      return { paths: [file.path], format: file.format, revealed: true, count: prepared.length };
+    }
+    if (value.mode === 'system') {
+      if (process.platform !== 'darwin' || typeof ShareMenu !== 'function') throw new Error('System share is only available on macOS');
+      const window = BrowserWindow.fromWebContents(event.sender) || BrowserWindow.getAllWindows()[0];
+      if (!window) throw new Error('No window to anchor the share menu');
+      new ShareMenu({ filePaths: deliver.map((entry) => entry.path) }).popup({ window, ...(value.anchor ? { x: value.anchor.x, y: value.anchor.y } : {}) });
+      return { shared: true, format: file.format, count: prepared.length };
+    }
+    return null;
   });
   ipcMain.handle('share.copy-text', (_, payload) => {
     const value = z.object({ text: z.string().min(1).max(200000) }).parse(payload);
@@ -1258,6 +1420,7 @@ function closeFloatingCaption() {
 app.whenReady().then(async () => {
   if (process.platform === 'win32') Menu.setApplicationMenu(null);
   await migrateDataDir().catch((error) => writeLog('WARNING', `data migration: ${logText(error)}`));
+  registerNoteImageProtocol();
   session.defaultSession.setPermissionCheckHandler((_, permission) => permission === 'media' || permission === 'display-capture');
   session.defaultSession.setPermissionRequestHandler((_, permission, callback) => callback(permission === 'media' || permission === 'display-capture'));
   session.defaultSession.setDisplayMediaRequestHandler(createDisplayMediaHandler(desktopCapturer, writeLog));

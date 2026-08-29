@@ -246,6 +246,14 @@ def merge_summary_prompt(chunk_summaries, title, language):
 
 
 class LLMWorkerMixin:
+    def save_summary(self, payload):
+        """保存用户编辑后的 Markdown 纪要，供后续导出直接复用。"""
+        require(payload, "meeting_id", "markdown")
+        markdown = str(payload["markdown"])
+        if not self.store.save_summary(payload["meeting_id"], {"markdown": markdown}, markdown):
+            raise ValueError("Meeting not found")
+        return {"markdown": markdown}
+
     def _complete(self, payload, prompt):
         """将补全路由到内置 llama sidecar 或 HTTP 端点。
 

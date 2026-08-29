@@ -214,6 +214,7 @@ class WorkerCore:
             "meeting.refinement-recover": self.recover_refinement,
             "meeting.refine": self.refine,
             "summary.generate": self.summarize,
+            "summary.save": self.save_summary,
             "translation.generate": self.translate,
             "ai-note.start": self.ai_note_start,
             "ai-note.stop": self.ai_note_stop,

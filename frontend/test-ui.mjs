@@ -22,6 +22,7 @@ assert.match(text(css), /\.choice\{[^}]*grid-template-columns:auto minmax\(0,1fr
 assert.match(text(app), /auto: \{ streaming: 'nemotron-3\.5-asr-streaming-0\.6b-560ms-int8'/);
 assert.match(text(app), /default: \{ streaming: 'nemotron-3\.5-asr-streaming-0\.6b-560ms-int8'/);
 assert.match(text(app), /window\.brevia\.on\('meeting\.interrupted'/);
+assert.match(text(app), /window\.brevia\.on\('transcript\.settled'/);
 const workletMessages = [];
 const workletContext = {
   AudioWorkletProcessor: class {
@@ -68,6 +69,31 @@ await systemCapture.prepare({ mic: false, system: true });
 assert.equal(displayConstraints.audio.systemAudio, 'include');
 assert.equal(systemCapture.pendingStreams[0].track, 'system');
 await systemCapture.stop();
+// Mic device selection: explicit deviceId is passed through as an exact constraint.
+let micConstraints;
+mediaContext.navigator.mediaDevices.getUserMedia = async (constraints) => {
+  micConstraints = constraints;
+  if (constraints.audio?.deviceId?.exact === 'dead-device') { const err = new Error('gone'); err.name = 'NotFoundError'; throw err; }
+  return { getVideoTracks: () => [], getAudioTracks: () => [{ readyState: 'live', stop() {} }] };
+};
+const micCapture = new mediaContext.AudioCapture(() => {}, () => {});
+micCapture.micDeviceId = 'builtin-mic-id';
+await micCapture.requestTrack('mic');
+assert.equal(micConstraints.audio.deviceId.exact, 'builtin-mic-id', 'selected mic is pinned via exact deviceId');
+// A selected device that disappears (e.g. headset unplugged) falls back to the system default.
+micCapture.micDeviceId = 'dead-device';
+await micCapture.requestTrack('mic');
+assert.equal(micCapture.micDeviceId, '', 'falls back to default device');
+assert.equal(micConstraints.audio.deviceId, undefined, 'fallback uses no deviceId');
+assert.equal(micCapture.micFellBack, true, 'records the fallback');
+// previewMic reports a fallback so the UI can resync the picker.
+const mockNode = () => ({ connect() {}, disconnect() {}, port: { onmessage: null, close() {} } });
+mediaContext.AudioContext = class { constructor() { this.audioWorklet = { addModule: async () => {} }; this.state = 'suspended'; } createMediaStreamSource() { return mockNode(); } async resume() { this.state = 'running'; } async close() {} };
+mediaContext.AudioWorkletNode = function AudioWorkletNode() { return mockNode(); };
+micCapture.micDeviceId = 'dead-device';
+const previewFellBack = await micCapture.previewMic();
+assert.equal(previewFellBack, true, 'preview reports device fallback');
+await micCapture.stopPreview();
 const pauseCapture = new mediaContext.AudioCapture();
 const contextStates = [];
 pauseCapture.sources = [{ context: {
@@ -146,6 +172,7 @@ assert.doesNotMatch(componentContext.renderMeetingRow({ id: 'active', tone: 'vio
 assert.match(componentContext.renderMeetingRow({ id: 'drag-me', tone: 'violet', title: 'Meeting', meta: '', tags: [], status: {} }, 0), /draggable="true"/);
 assert.doesNotMatch(componentContext.renderTranscriptSegment({ time: '00:00', speaker: { name: 'A' }, text: '<img src=x onerror=alert(1)>' }), /<img/);
 assert.match(componentContext.renderTranscriptSegment({ time: '00:00', speaker: { name: 'A', overlapNames: ['A', 'B'] }, text: 'test' }), /重叠说话：A、B/);
+assert.doesNotMatch(componentContext.renderTranscriptSegment({ time: '00:00', speaker: { name: 'Speaker 1' }, text: 'test', showSpeaker: false }), /Speaker 1/);
 assert.doesNotMatch(componentContext.renderMeetingSummary({ title: '<script>alert(1)</script>', sections: [{ title: 'Note', text: '<img src=x>' }] }), /<script>|<img/);
 
 for (const id of ['home-view', 'prepare-view', 'live-view', 'detail-view', 'settings-view', 'meeting-form', 'end-meeting']) {
@@ -171,6 +198,11 @@ assert.match(text(app), /refineState = 'refining'/);
 assert.match(text(tailwind), /segment-context-name-form input \{ @apply h-8 min-w-0.*text-\[12px\] leading-5/);
 assert.match(text(tailwind), /segment-context-submenu\.is-positioned > \.segment-context-options/);
 assert.match(text(tailwind), /segment-context-options \{ @apply invisible fixed hidden min-w-44/);
+assert.match(text(components), /data-tooltip-key="\$\{key\}"/);
+assert.match(text(app), /document\.querySelectorAll\('\[data-tooltip-key\]'\)/);
+assert.match(text(components), /document\.body\.append\(pageTooltip\)/);
+assert.match(text(tailwind), /\.page-tooltip \{ position: fixed; z-index: 100/);
+assert.match(text(tailwind), /\.page-tooltip \{[^}]*width: max-content; max-width: min\(360px, calc\(100vw - 16px\)\)/);
 assert.match(text(js), /function positionFloating/);
 assert.match(text(js), /placements\.map\(\(placement\) => positions\[placement\]\)\.find/);
 assert.match(text(js), /Math\.max\(8, Math\.min\(position\.left, window\.innerWidth - width - 8\)\)/);
@@ -192,7 +224,7 @@ assert.match(text(app), /\['Enter', ' '\]\.includes\(event\.key\)/);
 assert.match(text(electronMain), /ipcMain\.handle\('app\.maintain'[\s\S]{0,300}if \(app\.isQuitting\) return \{\}/);
 assert.match(text(css), /\.required-models-card ul\{[^}]*max-height:min\(36vh,18rem\)[^}]*overflow:hidden auto/);
 assert.match(text(css), /#prepare-view\.active\{[^}]*overflow:hidden/);
-assert.match(text(css), /\.prepare-layout\{[^}]*grid-template-columns:minmax\(0,2fr\) minmax\(12\.5rem,1fr\)/);
+assert.match(text(css), /\.prepare-layout\{[^}]*grid-template-columns:minmax\(0,34rem\)/);
 assert.match(text(css), /\.prepare-layout\{[^}]*transform:scale\(var\(--prepare-scale,1\)\)/);
 assert.match(text(css), /#import-recording\{[^}]*margin-top:0/);
 assert.match(text(js), /function fitPrepareLayout/);
@@ -213,8 +245,9 @@ assert.match(text(js), /miniPlaybackSeek\.addEventListener\('pointerdown'/);
 assert.match(text(js), /let contextMeetingId;/);
 assert.match(text(js), /openSegmentContextMenu\(meetingId, segmentId, x, y, segmentInfo\)/);
 assert.match(text(js), /followPlaybackTranscript = false/);
-assert.match(text(workerSession), /self\._identify_speaker/);
-assert.match(text(workerSession), /tracker\.assign_embedding/);
+assert.doesNotMatch(text(workerSession), /_identify_speaker/);
+assert.doesNotMatch(text(workerSession), /tracker\.assign_embedding/);
+assert.match(text(workerSession), /self\.speaker_tracker = None/);
 assert.doesNotMatch(text(js), /name="num-speakers"[^>]*max="20"/);
 assert.match(text(js), /styles\.paddingTop.*styles\.paddingBottom/);
 assert.match(text(js), /new ResizeObserver\(\(\) => requestAnimationFrame\(fitPrepareLayout\)\)/);
@@ -225,6 +258,9 @@ assert.match(text(tailwind), /\.window-actions \{ @apply ml-auto flex items-cent
 assert.match(text(js), /showView\('live'\)/);
 assert.match(text(js), /function setLiveTranslationEnabled/);
 assert.match(text(js), /setLiveTranslationEnabled\(Boolean\(payload\.target_language\)\)/);
+assert.match(text(html), /translation-menu flow-select[\s\S]*id="translation-options"/);
+assert.match(text(js), /data-live-translation/);
+assert.match(text(js), /reconfigureLive\(\{ target_language: targetLanguage \}\)/);
 assert.match(text(js), /showView\('detail'\)/);
 assert.match(text(html), /id="language-toggle"/);
 assert.match(text(html), /href="https:\/\/github\.com\/zerolovesea\/Brevia"/);
@@ -406,12 +442,10 @@ assert.match(text(i18nData), /实时字幕/);
 assert.match(text(i18nData), /会后精修/);
 assert.match(text(js), /const languageModelDefaults/);
 assert.match(text(js), /const DEFAULT_REFINED_MODEL_ID = 'funasr-nano-int8';/);
-assert.match(text(html), /id="active-refined-model" data-model="funasr-nano-int8">FunASR Nano int8/);
 assert.match(text(electronMain), /path\.join\(app\.getPath\('home'\), 'brevia'\)/);
 assert.match(text(electronMain), /appendFile\(logFile\(\), line, 'utf8'\)/);
 assert.match(text(electronMain), /await migrateDataDir\(\)/);
 assert.match(text(js), /en: \{ streaming: 'zipformer-en-streaming-int8', refined: DEFAULT_REFINED_MODEL_ID/);
-assert.match(text(js), /const compatibleStreamingModels/);
 assert.match(text(html), /src="\.\/i18n\.js"/);
 assert.match(text(js), /BreviaI18n\.languageOptions\(locale, t/);
 assert.match(text(js), /Object\.values\(modalCopy\)\.forEach/);
@@ -428,8 +462,6 @@ assert.match(text(js), /data-download-model/);
 assert.match(text(js), /const downloadInFlight = progress && !progress\.error && !progress\.cancelled/);
 assert.match(text(js), /\$\{downloadInFlight \? ' disabled' : ''\}/);
 assert.match(text(js), /if \(card\?\.id === 'model-download-queue'\) \{[\s\S]*?if \(progress\.cancelled \|\| progress\.error\) \{ modelDownloads\.delete\(modelId\); requiredModelIds\.delete\(modelId\); \}/);
-assert.match(text(js), /prepareModelChoices/);
-assert.match(text(js), /t\('VAD 模型'\)/);
 assert.match(text(js), /function renderPrepareSelects\(\) \{[\s\S]*?importRecording\.textContent = t\('导入录音'\);/);
 assert.match(text(components), /t\('查看完整内容'\)/);
 assert.match(text(js), /function renderPauseButton/);
@@ -459,10 +491,8 @@ for (const id of ['whisper-large-v3', 'zipformer-zh-xlarge-streaming-int8', 'sil
 }
 assert.match(text(js), /qualityTiers: \['标准', '高', '极高'\]/);
 assert.match(text(js), /speedTiers: \['较慢', '均衡', '快'\]/);
-assert.match(text(js), /active-diarization-model/);
 assert.doesNotMatch(text(html), /id="active-model-name"/);
 assert.doesNotMatch(text(js), /createElement\('select'\)/);
-assert.match(text(js), /modelPicker/);
 assert.match(text(logo), /<svg/);
 assert.equal(revealGif.readUInt16LE(6), 2400);
 assert.equal(revealGif.readUInt16LE(8), 1520);
@@ -490,11 +520,11 @@ assert.match(text(packWorker), /resource\("fixtures", "backend\/fixtures"\)/);
 assert.match(text(packWorker), /"--onedir"/);
 assert.doesNotMatch(text(packWorker), /"--onefile"/);
 assert.match(text(css), /\.confirmation-actions \.secondary\{margin-top:0/);
-assert.match(text(css), /\.model-card \.model-picker\{/);
-assert.match(text(js), /prepareModelCard\.addEventListener\('dblclick'/);
 assert.match(text(i18nData), /管理语言识别模型的下载、删除与版本信息/);
 assert.match(text(i18nData), /Bibliothèque de modèles/);
-assert.match(text(html), /data-model="zipformer-zh-xlarge-streaming-int8"/);
+assert.doesNotMatch(text(html), /class="model-card"/);
+assert.doesNotMatch(text(html), /active-(device|meeting-language|meeting-mode|streaming-model|diarization-model|refined-model)/);
+assert.doesNotMatch(text(js), /prepareModelCard|prepareModelChoices|modelPicker/);
 assert.match(text(js), /model\.progress/);
 assert.match(text(js), /model-download-progress/);
 assert.match(text(js), /function formatBytes\(bytes = 0\)/);
@@ -580,9 +610,15 @@ assert.match(text(js), /pendingModelTasks/);
 assert.doesNotMatch(text(js), /将逐字稿发送到所选模型供应商以生成纪要/);
 assert.match(text(js), /openModal\('summary-model'\)/);
 assert.match(text(js), /renderSummaryDetailModal/);
-assert.match(text(js), /sharePanelHtml\('notes'\)/);
-assert.match(text(js), /data-format="pdf"/);
+assert.match(text(js), /exportHubHtml\(\)/);
+assert.match(text(js), /data-export-format=/);
+assert.match(text(js), /data-flow-select-choice="export-format-/);
 assert.match(text(js), /data-regenerate-summary/);
+assert.match(text(app), /summaryActionBar\(editing\)/);
+assert.match(text(app), /settingsModal\.addEventListener\('dblclick'/);
+assert.match(text(app), /summary-preview \.summary-body/);
+assert.match(text(app), /data-export-save/);
+assert.doesNotMatch(text(app), /data-export-reveal/);
 assert.match(text(js), /data-regenerate-summary\]'\)\) void generateMeetingSummary\(\)/);
 const stoppedListeners = text(app).match(/window\.brevia\.on\('meeting\.stopped'/g) || [];
 assert.equal(stoppedListeners.length, 1);
@@ -594,29 +630,31 @@ assert.match(text(js), /function availableUpdateActionLabel\(\) \{ return update
 assert.match(text(js), /updateAvailable \? availableUpdateActionLabel\(\) : copy\.action/);
 assert.match(text(js), /#all-meetings'\)\.addEventListener\('click', async \(event\) => \{\s+const button = event\.currentTarget;/);
 assert.match(text(js), /const collapsed = workspaceNav\.classList\.toggle\('is-collapsed'\);\s+workspaceNav\.setAttribute\('aria-hidden', String\(collapsed\)\);\s+button\.setAttribute/);
-assert.match(text(js), /data-content="notes"/);
-// 统一分享面板:三处入口共用平台按钮 + 导出文件按钮。
-assert.match(text(js), /function sharePanelHtml/);
-assert.match(text(js), /data-share-platform/);
-assert.match(text(js), /data-share-file/);
-assert.match(text(js), /data-share-export/);
+assert.match(text(js), /content: 'notes'/);
+// 统一「导出与分享」面板:内容勾选 + 每项格式 + 导出文件 + 分享到。
+assert.match(text(js), /function exportHubHtml/);
+assert.match(text(js), /function updateExportBuilderState/);
+assert.match(text(js), /function runExportBundle/);
+assert.match(text(js), /data-export-item/);
+assert.match(text(js), /data-share-target/);
 assert.match(text(js), /share\.copyText/);
 assert.match(text(js), /share\.openExternal/);
-assert.match(text(js), /share\.file/);
+assert.match(text(js), /meeting\.exportBundle/);
 // 社交分享只带摘要,邮件/剪贴板带全文。
-assert.match(text(js), /function shareExcerpt/);
+assert.match(text(js), /function makeExcerpt/);
 assert.match(text(js), /function markdownToPlainText/);
 // mailto 正文按编码后长度截断,避免 CJK 膨胀撑爆主进程 URL 上限。
 assert.match(text(js), /function buildMailto/);
 assert.match(text(js), /encodeURIComponent\(text\)\.length > maxEncodedBody/);
-assert.match(text(js), /share\.openExternal\(\{ url: buildMailto\(subject, body\) \}\)/);
-// macOS 系统原生分享面板:仅在 darwin 上出现,分享文件走 share.system。
+assert.match(text(js), /share\.openExternal\(\{ url: buildMailto\(subject, text\) \}\)/);
+// 文本渠道可跨平台;系统分享面板仅在 darwin 上出现,文件经 meeting.export-bundle(mode: system) 走原生面板。
 assert.match(text(js), /window\.brevia\?\.platform === 'darwin'/);
-assert.match(text(js), /window\.brevia\?\.share\.system/);
-assert.match(text(preload), /system: invoke\('share\.system'\)/);
+assert.match(text(js), /runExportBundle\('system'/);
+assert.match(text(preload), /exportBundle: invoke\('meeting\.export-bundle'\)/);
 assert.match(text(preload), /platform: process\.platform/);
 assert.match(text(electronMain), /new ShareMenu\(sharingItem\)\.popup/);
 assert.match(text(electronMain), /System share is only available on macOS/);
+assert.match(text(electronMain), /ipcMain\.handle\('meeting\.export-bundle'/);
 // 详情页「转发」改为打开分享面板,不再直接打包。
 assert.doesNotMatch(text(js), /data-share-detail'\)\.addEventListener\('click', async/);
 // preload 暴露 share API;主进程只放行 https 与 mailto。
@@ -672,7 +710,9 @@ assert.match(text(backendClient), /async previewMic\(\)/);
 assert.match(text(backendClient), /async stopPreview\(\)/);
 assert.match(text(js), /async function previewMicrophone/);
 assert.match(text(js), /transcript\.discarded/);
-assert.match(text(js), /window\.brevia\.meeting\.refine\(\{ meeting_id: meeting\.id \}\)/);
+assert.match(text(app), /refineAction\.dataset\.refineAction === 'start'/);
+assert.match(text(components), /refine-wrap/);
+assert.match(text(app), /closest\('\.refine-wrap, \.refine-menu/);
 assert.match(text(backendClient), /await this\.capture\.prepare\(inputs\)[\s\S]*window\.brevia\.meeting\.start\(\{ \.\.\.payload, audio_tracks:/);
 assert.match(text(backendClient), /系统音频.*未产生音频数据/);
 assert.match(text(backendClient), /this\.state\.meeting\?\.id \|\| this\.capture\?\.meetingId/);
@@ -846,7 +886,7 @@ assert.match(text(js), /while \(liveSegments\.size > maxLiveSegments\)/);
 assert.match(text(js), /liveConfig = \{ language: language \|\| 'auto', streaming_model_id: streamingModelId \|\| '', refined_model_id: refinedModelId \|\| '', target_language: payload\.target_language \|\| null, power_saving: Boolean\(payload\.power_saving\) \}/);
 assert.match(text(js), /await window\.brevia\.meeting\.reconfigure\(\{ meeting_id: meetingId, \.\.\.changes \}\)/);
 assert.doesNotMatch(text(js), /function setLivePowerSaving\(enabled\)/);
-assert.match(text(js), /笔记已达 20000 字符上限/);
+assert.match(text(js), /const MAX_NOTES_CHARS = 5 \* 1024 \* 1024/);
 assert.doesNotMatch(text(js), /function checkPowerSavingSuggestion\(\)/);
 assert.match(text(js), /纪要生成失败：模型未返回有效内容，请稍后重试。/);
 assert.doesNotMatch(text(js), /paraformer-zh-en-int8/);
@@ -868,7 +908,8 @@ assert.match(text(js), /function syncPlaybackTranscript/);
 assert.match(text(js), /function syncPlaybackFloatingCaption/);
 assert.match(text(js), /translation: segment\?\.translation \|\| null/);
 assert.match(text(js), /function renderPlaybackFloatingCaptionToggle\(\)/);
-assert.match(text(html), /detail-head[\s\S]*data-share-detail[\s\S]*data-export-detail/);
+assert.match(text(html), /detail-head[\s\S]*data-export-detail[\s\S]*<\/div><\/header>/);
+assert.doesNotMatch(text(html), /data-share-detail/);
 assert.match(text(js), /if \(floatingCaptionMode === 'playback'\) \{[\s\S]{0,300}floatingCaption\?\.close/);
 assert.match(text(floatingCaption), /function renderCaptionText\(text, streaming\)/);
 assert.match(text(floatingCaption), /text\.startsWith\(renderedCaptionText\)/);
@@ -1014,7 +1055,6 @@ summaryContext.summaryConfig = { version: 2, provider: 'built-in', providers: {}
 summaryContext.renderSummaryModelModal();
 assert.doesNotMatch(summaryNodes['.modal-body'].innerHTML, /<img|<script>/);
 assert.doesNotMatch(text(html), /管理模型与术语/);
-assert.match(text(html), /管理模型 →/);
 // AI 辅助笔记（阶段 0/1）：配置 IPC、入口、空态、设置项与八语种文案。
 assert.match(text(electronMain), /ai-assist\.config\.(get|save)/);
 assert.match(text(preload), /aiAssist:\s*\{ config: \{ get: invoke\('ai-assist\.config\.get'\)/);
@@ -1033,24 +1073,26 @@ assert.match(text(tailwind), /\.ai-assist-popover/);
 assert.match(text(i18nData), /aiAssistCopy/);
 assert.match(text(i18nData), /aiAssistCopyLocales/);
 assert.match(text(i18nData), /aiAssistRequestLabels/);
+assert.match(text(i18nData), /aiNoteAtomicInstructions/);
 assert.match(text(i18nData), /toggleOn: 'AI 笔记 开'/);
 assert.deepEqual(Object.keys(localeContext.window.BreviaLocaleData.aiNotePromptCopy), ['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']);
 Object.values(localeContext.window.BreviaLocaleData.aiNotePromptCopy).forEach((copy) => {
   assert.ok(copy.instructions.length > 0);
   assert.equal(copy.state_labels.length, 5);
 });
-// AI 辅助笔记（阶段 2 无需 AI 本地规则）：加入笔记 / 时间戳 / 信号检测。
+// AI 辅助笔记（阶段 2 无需 AI 本地规则）：加入笔记 / 信号检测。
 assert.match(text(components), /appendMarkdown\(markdown\)/);
 assert.match(text(components), /\^\[-\*\]\\s\$/);
 assert.match(text(components), /function detectCaptionSignals/);
 assert.match(text(app), /data-add-segment-note/);
-assert.match(text(app), /data-add-segment-time/);
+assert.doesNotMatch(text(app), /data-add-segment-time/);
 assert.match(text(app), /function segmentInfoFor/);
 assert.match(text(app), /data-ai-empty-action/);
 assert.match(text(app), /function appendTextToActiveNotes/);
 assert.match(text(tailwind), /\.caption-signals/);
 // AI 辅助笔记（阶段 3 实时引擎）：IPC、事件白名单、前端启动/停止/输入信号接线。
 assert.match(text(electronMain), /ai-note\.suggestion/);
+assert.match(text(electronMain), /ai-note\.evidence/);
 assert.match(text(electronMain), /ai-note\.analyzing/);
 assert.match(text(electronMain), /ipcMain\.handle\('ai-note\.start'/);
 assert.match(text(preload), /aiNote: \{ start: invoke\('ai-note\.start'\)/);
@@ -1067,6 +1109,7 @@ assert.match(text(app), /function flushAutoSuggestions\(\)/);
 assert.match(text(app), /function resetAiNoteSuggestions\(\)[\s\S]*pendingAutoSuggestions\.length = 0/);
 assert.ok((text(app).match(/resetAiNoteSuggestions\(\);/g) || []).length >= 3);
 assert.match(text(app), /window\.brevia\.on\('ai-note\.suggestion'/);
+assert.match(text(app), /window\.brevia\.on\('ai-note\.evidence'/);
 assert.match(text(app), /renderOnboardingAiDemo/);
 // AI 辅助笔记（阶段 4 建议 UI + 输入状态机）：三种 UI 形态与操作。
 assert.match(text(html), /data-ai-suggestion/);
@@ -1095,7 +1138,11 @@ assert.match(text(html), /class="new-meeting-label">开始会议/);
 assert.match(text(app), /classList\.toggle\('is-live-meeting', \(name === 'live' && meetingActive\) \|\| name === 'detail'\)/);
 assert.match(text(tailwind), /\.app-shell\.is-live-meeting:has\(\.sidebar:hover\)/);
 assert.match(text(tailwind), /\.sidebar:has\(\.task-cards > :not\(\[hidden\]\)\)::after/);
-assert.match(text(tailwind), /data:image\/svg\+xml/);
+assert.match(text(tailwind), /task-working/);
+assert.match(text(tailwind), /conic-gradient/);
+assert.doesNotMatch(text(tailwind), /live-note-reference/);
+assert.doesNotMatch(text(app), /bindLiveNoteReference|noteReferenceMarkdown|segmentTimestampMarkdown|data-add-segment-time/);
+assert.doesNotMatch(text(app), /renderLiveNoteReference|liveNoteReference/);
 assert.match(text(meetingDetail), /summaryGeneratingMeetingId === meeting\.id/);
 assert.match(text(components), /const action = generating \? '' :/);
 assert.match(text(app), /const refresh = window\.brevia \? refreshBackendMeetings\(includeDeleted\) : Promise\.resolve\(\);/);
@@ -1122,8 +1169,16 @@ assert.match(text(components), /getMode\(\) \{ return mode; \}/);
 assert.match(text(components), /urlPop\.style\.position = 'fixed'/);
 assert.match(text(components), /openUrlPop\(command, button\)/);
 assert.match(text(components), /imageInput\.accept = 'image\/\*'/);
-assert.match(text(components), /reader\.readAsDataURL\(file\)/);
-assert.match(text(components), /\['table', t\('插入表格'\)/);
+assert.match(text(components), /file\.arrayBuffer\(\)/);
+assert.doesNotMatch(text(components), /readAsDataURL|data_url/);
+assert.match(text(components), /meeting\.noteImage\.save\(\{ meeting_id: meetingId, mime_type: file\.type, bytes \}/);
+assert.match(text(components), /sanitizeUrl\(url = ''\)[\s\S]{0,180}brevia-note/);
+assert.match(text(electronMain), /function saveNoteImage\([\s\S]{0,700}Image must be smaller than 10 MB/);
+assert.match(text(electronMain), /protocol\.handle\('brevia-note'/);
+assert.match(text(preload), /noteImage: \{ save: invoke\('meeting\.note-image\.save'\) \}/);
+assert.match(text(html), /img-src 'self' data: brevia-note:/);
+assert.doesNotMatch(text(components), /note-reference|syncNoteReferenceRail/);
+assert.match(text(components), /\['table', '插入表格'/);
 assert.match(text(components), /tag === 'table'/);
 assert.match(text(tailwind), /\.notes-url-pop \{[^}]*display: flex/);
 assert.doesNotMatch(text(components), /class="jump"/);

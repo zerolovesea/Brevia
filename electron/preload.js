@@ -35,7 +35,9 @@ contextBridge.exposeInMainWorld('brevia', {
     refine: invoke('meeting.refine'),
     export: invoke('meeting.export'),
     exportMany: invoke('meeting.export-many'),
+    exportBundle: invoke('meeting.export-bundle'),
     share: invoke('meeting.share'),
+    noteImage: { save: invoke('meeting.note-image.save') },
   },
   share: {
     copyText: invoke('share.copy-text'),
@@ -73,7 +75,7 @@ contextBridge.exposeInMainWorld('brevia', {
     delete: invoke('models.delete'),
   },
   task: { pause: invoke('task.pause'), resume: invoke('task.resume'), cancel: invoke('task.cancel') },
-  summary: { generate: invoke('summary.generate'), config: { get: invoke('summary.config.get'), save: invoke('summary.config.save') } },
+  summary: { generate: invoke('summary.generate'), save: invoke('summary.save'), config: { get: invoke('summary.config.get'), save: invoke('summary.config.save') } },
   aiAssist: { config: { get: invoke('ai-assist.config.get'), save: invoke('ai-assist.config.save') } },
   aiNote: { start: invoke('ai-note.start'), stop: invoke('ai-note.stop'), typing: invoke('ai-note.typing'), request: invoke('ai-note.request'), dismiss: invoke('ai-note.dismiss'), reconfigure: invoke('ai-note.reconfigure') },
   translation: { generate: invoke('translation.generate') },
