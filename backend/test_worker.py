@@ -3984,6 +3984,53 @@ class WorkerTest(unittest.TestCase):
         quiet = Samples([0.001, -0.001])
         self.assertEqual(self.worker._enhance_live_microphone(quiet), quiet)
 
+    def test_live_denoise_bypasses_faint_speech(self):
+        # 偏弱/远端人声应跳过实时降噪，避免 GTCRN 把人声当噪声压掉导致「录音有声、
+        # 实时无字幕」；正常音量的片段仍走降噪。
+        import numpy
+
+        with patch.dict(SETTINGS["live_asr"], {"denoise_minimum_rms": 0.03}):
+            loud = numpy.full(1600, 0.05, dtype=numpy.float32)
+            self.assertFalse(self.worker._should_bypass_denoise(loud))
+            faint = numpy.full(1600, 0.005, dtype=numpy.float32)
+            self.assertTrue(self.worker._should_bypass_denoise(faint))
+
+    def test_live_denoiser_disabled_by_setting(self):
+        # ``denoiser_enabled=0`` 时即使降噪模型就绪也不创建 LiveDenoiser。
+        def ready_for(model_id):
+            return model_id == SETTINGS["live_asr"]["denoiser_model_id"]
+
+        with patch.dict(SETTINGS["live_asr"], {"denoiser_enabled": 0}):
+            with (
+                patch.object(self.worker.models, "is_ready", side_effect=ready_for),
+                patch("backend.worker_session.LiveDenoiser") as denoiser_cls,
+            ):
+                self.worker.start(
+                    {
+                        "title": "降噪关闭",
+                        "language": "zh",
+                        "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
+                        "refined_model_id": "qwen3-asr-0.6b-int8",
+                    }
+                )
+        denoiser_cls.assert_not_called()
+        self.assertIsNone(self.worker.denoiser)
+
+    def test_dual_track_mix_preserves_volume_when_peer_is_silent(self):
+        # 双轨混音不应再 (mic+system)*0.5 把单轨音量压低 6dB：系统轨接近静音时
+        # 混音应保留 mic 的音量，否则偏弱人声再叠加降噪更容易被抑制。
+        import numpy
+        from collections import deque
+
+        self.worker.live_mix_buffers = {"mic": deque(), "system": deque()}
+        silence = numpy.zeros(1600, dtype=numpy.float32)
+        speech = numpy.full(1600, 0.1, dtype=numpy.float32)
+        self.assertIsNone(self.worker._mix_live_audio("system", silence, 0, 16000))
+        mixed = self.worker._mix_live_audio("mic", speech, 0, 16000)
+        self.assertIsNotNone(mixed)
+        result, _start_ms = mixed
+        self.assertAlmostEqual(float(result[0]), 0.1, places=6)
+
     def test_speaker_profile_aggregates_samples_and_matches_known_voice(self):
         first = self.worker.store.save_speaker_profile_sample(
             "王琳", [1, 0, 0], "voice-1"

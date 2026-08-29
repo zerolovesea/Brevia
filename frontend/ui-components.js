@@ -2,6 +2,13 @@
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character]);
 /** 统一的勾选 SVG 图标（线框风格，颜色跟随 currentColor，由各状态的绿色类控制）。@type {string} */
 const checkIconSvg = '<svg class="check-icon" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3 8.5 3.2 3.2L13 4.5" /></svg>';
+/** 会议纪要操作共用图标。 */
+const summaryActionIcons = {
+  edit: '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m3 11.8 8.3-8.3 1.7 1.7-8.3 8.3L3 13z"/><path d="m10.3 4.5 1.7 1.7"/></svg>',
+  refresh: '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 6.5A5 5 0 1 0 14 10"/><path d="M13 2.5v4h-4"/></svg>',
+  save: '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 2.5h8l2 2v9H3z"/><path d="M5 2.5v4h6v-4M5.5 12h5"/></svg>',
+  cancel: '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m4 4 8 8m0-8-8 8"/></svg>',
+};
 let pageTooltip;
 /** 将所有悬浮说明挂到 body，避免被任意视图或滚动区裁切。 */
 function showPageTooltip(anchor, text) {
@@ -479,8 +486,10 @@ function cleanSummaryMarkdown(markdown) {
 }
 /** 渲染详情侧边栏中的会议纪要：标题行（会议纪要 + 生成/重新生成）+ 内容。@param {{markdown?: string, hasFull?: boolean}} summary 摘要数据。@returns {string} 摘要标记。 */
 function renderMeetingSummary({ markdown, hasFull = false, blocked = false, generating = false }) {
-  const actionName = markdown ? t('重新生成') : `${t('生成')} →`;
-  const action = generating ? '' : `<button class="text-button" ${markdown ? 'data-regenerate-summary' : 'data-generate-summary'}${blocked ? ` disabled title="${escapeHtml(t('实时会议中，结束后再生成会议纪要。'))}"` : ''}>${actionName}</button>`;
+  const blockedAttrs = blocked ? ` disabled title="${escapeHtml(t('实时会议中，结束后再生成会议纪要。'))}"` : '';
+  const action = generating ? '' : markdown
+    ? `<button class="summary-action-icon" data-regenerate-summary title="${escapeHtml(t('重新生成'))}" aria-label="${escapeHtml(t('重新生成'))}"${blockedAttrs}>${summaryActionIcons.refresh}</button>`
+    : `<button class="text-button" data-generate-summary${blockedAttrs}>${t('生成')} →</button>`;
   return `<div class="summary-preview"><div class="summary-head"><p class="eyebrow">${t('会议纪要')}</p>${action}</div>${markdown ? `<div class="summary-body markdown-content">${renderMarkdown(cleanSummaryMarkdown(markdown))}</div><button class="text-button" data-view-full-summary>${t('查看完整内容')} →</button>` : `<p class="summary-empty">${t('尚未生成')}</p>`}</div>`;
 }
 /** 在页面外壳可用后填充所有数据驱动的静态区域。@returns {void} */

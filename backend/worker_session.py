@@ -177,7 +177,11 @@ class RecordingSessionMixin:
         # 初始化相互竞争导致 worker 直接退出。构建闭包返回模型，由调用方决定
         # 何时/在哪个线程做赋值。
         def build_denoiser():
-            if not self.power_saving and self.models.is_ready(denoiser_id):
+            if (
+                not self.power_saving
+                and SETTINGS["live_asr"].get("denoiser_enabled", 1)
+                and self.models.is_ready(denoiser_id)
+            ):
                 try:
                     return LiveDenoiser(self.models, denoiser_id)
                 except RuntimeError as error:
@@ -454,6 +458,7 @@ class RecordingSessionMixin:
                 new_denoiser = (
                     LiveDenoiser(self.models, denoiser_id)
                     if self.models.is_ready(denoiser_id)
+                    and SETTINGS["live_asr"].get("denoiser_enabled", 1)
                     else None
                 )
             if power_saving_changed or streaming_changed or language_changed:
@@ -564,6 +569,24 @@ class RecordingSessionMixin:
             gain = min(gain, config["microphone_peak"] / peak)
         return samples if gain <= 1 else samples * gain
 
+    def _should_bypass_denoise(self, samples):
+        """偏弱/远端人声跳过实时降噪，避免 GTCRN 把人声当噪声整体压掉。
+
+        落盘录音保留原始人声，而实时 ASR 只消费「增益+降噪」后的信号。线下会议室里
+        说话人离麦克风较远、信号偏弱时，GTCRN 这类面向近讲场景的降噪器更容易把这段
+        带房间混响的人声当作噪声一起衰减，结果就是「录音有声、实时字幕空白」。此时
+        跳过降噪，把已增益的原始信号直接交给 ASR，反而更稳。
+
+        用与增益一致的 RMS 度量，并把阈值取在实时增益目标（``microphone_target_rms``）
+        的下方：正常说话（增益后被抬到目标附近）仍走降噪，只有确实偏弱的片段才旁路。
+        """
+        if not len(samples):
+            return True
+        rms = (
+            sum(float(sample) * float(sample) for sample in samples) / len(samples)
+        ) ** 0.5
+        return rms < SETTINGS["live_asr"].get("denoise_minimum_rms", 0.03)
+
     def _mix_live_audio(self, track, samples, start_ms, sample_rate):
         """按时间对齐双轨 PCM，供实时字幕使用；原始双轨仍分别落盘。"""
         if not len(samples):
@@ -619,7 +642,14 @@ class RecordingSessionMixin:
             if not mic or not system:
                 return None
             count = min(len(mic[0][1]), len(system[0][1]))
-            mixed = (mic[0][1][:count] + system[0][1][:count]) * 0.5
+            # 相加而非先除以 2：双轨都有人声时，若直接 (mic+system)*0.5 会把每条
+            # 轨压到 -6dB，偏弱人声再叠加降噪就更容易被抑制。改为先求和，仅当峰值
+            # 超过 1 时按峰值软限幅（保真度高于硬 clip），既保留较大一轨的音量，
+            # 又避免近满幅双轨叠加削顶失真。
+            mixed = mic[0][1][:count] + system[0][1][:count]
+            peak = float(numpy.abs(mixed).max()) if count else 0.0
+            if peak > 1.0:
+                mixed = mixed / peak
             next_start = start_ms + count * 1000 / sample_rate
             for queue in (mic, system):
                 chunk_start, chunk = queue[0]
@@ -627,7 +657,7 @@ class RecordingSessionMixin:
                     queue.popleft()
                 else:
                     queue[0] = [next_start, chunk[count:]]
-            return numpy.clip(mixed, -1, 1), round(start_ms)
+            return mixed, round(start_ms)
         return None
 
     @synchronized_recording
@@ -699,12 +729,15 @@ class RecordingSessionMixin:
             else samples
         )
         if payload["track"] in ("mic", "mix") and self.denoiser:
-            asr_samples = self.denoiser.accept(
-                payload["track"],
-                asr_samples,
-                int(payload["sample_rate"]),
-                bool(payload.get("flush")),
-            )
+            # 偏弱/远端人声直接跳过降噪，避免 GTCRN 把人声当噪声压掉导致「录音有声、
+            # 实时无字幕」（见 ``_should_bypass_denoise``）。
+            if not self._should_bypass_denoise(asr_samples):
+                asr_samples = self.denoiser.accept(
+                    payload["track"],
+                    asr_samples,
+                    int(payload["sample_rate"]),
+                    bool(payload.get("flush")),
+                )
         # 上一段软钉截断后带过来的尾巴（已降噪），先并入本段流式识别，避免边界丢字。
         if state["carry_audio"]:
             carried = numpy.concatenate(state["carry_audio"])

@@ -271,6 +271,18 @@ Yes. Import audio files from the meeting library and Brevia will transcribe them
 Voice embeddings (a small float vector) and reference audio live in the local SQLite database and filesystem. Nothing leaves the device, and deleting a profile removes the associated data.
 </details>
 
+<details>
+<summary><strong>The recording has sound, but live captions are empty in an in-person meeting</strong></summary>
+
+Live captions consume a separately processed audio path (mic gain + real-time GTCRN denoising), while the recording saves the raw audio. If a speaker is a bit far from the laptop mic, the denoiser can over-suppress their faint speech and leave the live recognizer with near-silence — even though the recording is audible. This is more likely in a live room with echo/ambience.
+
+Workarounds:
+- **Performance mode → Efficiency mode** turns off live denoising.
+- **Settings → Advanced** set `live_asr.denoiser_enabled` to `0` to disable real-time denoising, or lower `live_asr.denoise_minimum_rms` so more faint speech bypasses the denoiser.
+
+The recording and post-meeting refinement are unaffected, so you won't lose the transcript.
+</details>
+
 ## Feedback and contributing
 
 ### Report an issue
