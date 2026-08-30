@@ -27,6 +27,7 @@ from .worker_common import TaskCancelled
 from .worker_core import WorkerCore
 from .llama_sidecar import LlamaSidecar
 from .refine_sidecar import REFINE_SIDECAR_TIMEOUT_SECONDS, RemoteRefiner
+from .worker_refinement import _diarization_chunk_ms
 from .worker_llama_sidecar import ASSISTANT_SIDECAR, _Sidecar, strip_reasoning
 
 
@@ -2276,6 +2277,10 @@ class WorkerTest(unittest.TestCase):
 
         self.assertEqual(calls, [False, True, True, True])
         self.assertEqual(turns, [{"start_ms": 0, "end_ms": 15_000, "speaker": "spk-1", "_embedding": None}])
+
+    def test_windows_diarization_uses_larger_chunks(self):
+        with patch("backend.worker_refinement.sys.platform", "win32"):
+            self.assertEqual(_diarization_chunk_ms(), 60_000)
 
     def test_offline_vad_drains_long_audio_without_losing_timestamps(self):
         class Detector:

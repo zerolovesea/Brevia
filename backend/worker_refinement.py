@@ -2,6 +2,7 @@
 
 import os
 import re
+import sys
 from difflib import SequenceMatcher
 
 from .asr import (
@@ -142,6 +143,12 @@ def _normalize_numbers(text):
 def _refinement(key):
     """读取可被 advanced-settings 覆盖的精修/聚类参数。"""
     return SETTINGS["refinement"][key]
+
+
+def _diarization_chunk_ms():
+    """Windows 减少昂贵的 spawn + 模型加载次数。"""
+    chunk_ms = _refinement("diarization_chunk_ms")
+    return max(chunk_ms, 60_000) if sys.platform == "win32" else chunk_ms
 
 
 def _diarize_chunk_process(connection, payload):
@@ -700,9 +707,10 @@ class RefinementWorkerMixin:
         context = multiprocessing.get_context("spawn")
         turns = []
         native_broken = False  # 首次原生崩溃后整轨熔断（升级 Sherpa 后可删除）
-        for core_start in range(0, duration_ms, _refinement("diarization_chunk_ms")):
+        chunk_ms = _diarization_chunk_ms()
+        for core_start in range(0, duration_ms, chunk_ms):
             self.wait_task(control)
-            core_end = min(duration_ms, core_start + _refinement("diarization_chunk_ms"))
+            core_end = min(duration_ms, core_start + chunk_ms)
             window_start = max(0, core_start - _refinement("diarization_overlap_ms"))
             window_end = min(duration_ms, core_end + _refinement("diarization_overlap_ms"))
             window_speech = [
