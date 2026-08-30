@@ -28,6 +28,10 @@ _HAS_SUMMARY_SQL = (
 )
 
 
+def _like_pattern(value):
+    return "%" + value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+
+
 def example_note(example):
     """返回与界面语言一致的示例会议纪要。"""
     notes = {
@@ -134,10 +138,10 @@ class MeetingStoreMixin:
         )
         if query:
             clauses.append(
-                "(m.title LIKE ? OR m.tags LIKE ? OR m.id IN "
-                "(SELECT meeting_id FROM segments WHERE text LIKE ?))"
+                "(m.title LIKE ? ESCAPE '\\' OR m.tags LIKE ? ESCAPE '\\' OR m.id IN "
+                "(SELECT meeting_id FROM segments WHERE text LIKE ? ESCAPE '\\'))"
             )
-            like = f"%{query}%"
+            like = _like_pattern(query)
             params.extend([like, like, like])
         with self.connect() as db:
             rows = db.execute(
@@ -164,7 +168,7 @@ class MeetingStoreMixin:
         q = (query or "").strip()
         if not q:
             return []
-        like = f"%{q}%"
+        like = _like_pattern(q)
         with self.connect() as db:
             rows = db.execute(
                 f"""SELECT m.*,
@@ -172,13 +176,13 @@ class MeetingStoreMixin:
                     {_HAS_SUMMARY_SQL} AS has_summary
                     FROM meetings m
                     WHERE m.deleted_at IS NULL AND (
-                        m.title LIKE ?
-                        OR m.tags LIKE ?
-                        OR m.id IN (SELECT meeting_id FROM segments WHERE text LIKE ?)
+                        m.title LIKE ? ESCAPE '\\'
+                        OR m.tags LIKE ? ESCAPE '\\'
+                        OR m.id IN (SELECT meeting_id FROM segments WHERE text LIKE ? ESCAPE '\\')
                         OR m.id IN (
                             SELECT s.meeting_id FROM segments s
                             JOIN speakers p ON p.meeting_id=s.meeting_id AND p.id=s.speaker
-                            WHERE p.name LIKE ?
+                            WHERE p.name LIKE ? ESCAPE '\\'
                         )
                     )
                     ORDER BY m.created_at DESC""",
@@ -194,7 +198,7 @@ class MeetingStoreMixin:
                                   COALESCE(p.name, s.speaker) AS speaker_name, s.text
                            FROM segments s LEFT JOIN speakers p
                            ON p.meeting_id=s.meeting_id AND p.id=s.speaker
-                           WHERE s.meeting_id=? AND (s.text LIKE ? OR COALESCE(p.name,'') LIKE ?)
+                           WHERE s.meeting_id=? AND (s.text LIKE ? ESCAPE '\\' OR COALESCE(p.name,'') LIKE ? ESCAPE '\\')
                            ORDER BY s.start_ms LIMIT 3""",
                         (row["id"], like, like),
                     ).fetchall()

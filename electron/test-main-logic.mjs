@@ -41,6 +41,11 @@ assert.equal(isNewerVersion('1.0.4', '1.0.5'), false);
 // 纪要配置只认 version 2：旧的 {models, active, sequence} 结构不再迁移，一律当作未配置。
 const { z } = require('zod');
 const mainSource = (await readFile(new URL('./main.js', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
+const workerEventBlock = mainSource.slice(mainSource.indexOf('const workerEvent ='), mainSource.indexOf('const workerMessage ='));
+for (const source of ['../backend/worker_core.py', '../backend/worker_session.py', '../backend/worker_refinement.py', '../backend/worker_models.py', '../backend/worker_speakers.py', '../backend/worker_llm.py', '../backend/worker_ai_note.py', '../backend/worker_llama_sidecar.py']) {
+  const workerSource = await readFile(new URL(source, import.meta.url), 'utf8');
+  for (const [, type] of workerSource.matchAll(/self\.emit\(\s*['"]([^'"]+)/g)) assert.match(workerEventBlock, new RegExp(`['"]${type}['"]`), `${type} emitted by ${source} must be accepted by Electron`);
+}
 assert.match(mainSource, /process\.platform === 'win32'\) Menu\.setApplicationMenu\(null\)/);
 assert.match(mainSource, /screen\.getDisplayMatching\(mainWindow\.getBounds\(\)\)/, 'floating captions open on the main window display');
 assert.match(mainSource, /const captionWindow = floatingCaptionWindow = new BrowserWindow/, 'caption callbacks keep ownership of their own window');

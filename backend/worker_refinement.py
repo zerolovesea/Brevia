@@ -1644,21 +1644,23 @@ class RefinementWorkerMixin:
         # 流式英文模型偶尔以全大写写出整段或句首的一长串词。只处理连续三个
         # 以上的大写词，避免改动正常句中的专有名词；常见技术缩写保持大写。
         def sentence_case(value):
-            value = value.lower().capitalize()
+            prefix = value[: len(value) - len(value.lstrip())]
+            value = prefix + value.lstrip().lower().capitalize()
             return re.sub(
-                r"\b(?:ai|api|asr|cpu|gpu|http|https|llm|url)\b",
+                r"\b(?:ai|api|asr|cpu|fbi|gpu|html|http|https|llm|nasa|ny|url|ii)\b",
                 lambda match: match.group().upper(),
                 value,
+                flags=re.IGNORECASE,
             )
 
         text = re.sub(
-            r"(?:\b[A-Z][A-Z'’-]*\b(?:[\s,;:.!?]+|$)){3,}",
+            r"(?:\b[A-Z][A-Z'’-]*\b(?:[ \t,;:]+|(?=[.!?]|$))){3,}",
             lambda match: sentence_case(match.group()),
             text,
         )
         letters = "".join(re.findall(r"[A-Za-z]", text))
         if len(letters) >= 4 and letters.isupper():
-            text = sentence_case(text)
+            text = re.sub(r"[^.!?]+", lambda match: sentence_case(match.group()), text)
         return _normalize_numbers(text)
 
     def _is_duplicate_final(self, event):

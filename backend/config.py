@@ -45,6 +45,7 @@ def runtime_settings(root):
     if path.is_file():
         _deep_update(value, json.loads(path.read_text(encoding="utf-8")))
     value.get("diarization", {}).pop("embedding_model_id", None)
+    value.get("live_asr", {}).pop("always_record_system_audio", None)
     _validate(value, DEFAULT_SETTINGS)
     SETTINGS.clear()
     SETTINGS.update(value)
@@ -55,6 +56,7 @@ def save_runtime_settings(root, value):
     """保存用户本地覆盖配置到 advanced-settings.json。"""
     value = json.loads(json.dumps(value))
     value.get("diarization", {}).pop("embedding_model_id", None)
+    value.get("live_asr", {}).pop("always_record_system_audio", None)
     _validate(value, DEFAULT_SETTINGS)
     path = Path(root) / "advanced-settings.json"
     path.write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -93,7 +95,6 @@ def _validate(value, template):
                     "microphone_peak",
                     "denoiser_enabled",
                     "denoise_minimum_rms",
-                    "always_record_system_audio",
                     "threshold",
                 }
                 and not 0 <= current <= 1

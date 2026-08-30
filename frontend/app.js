@@ -624,9 +624,52 @@ function renderPrepareSelects() {
   ];
   const workspaceValue = values['meeting-workspace'] === '__new_workspace__' ? activeWorkspaceId : values['meeting-workspace'] ?? activeWorkspaceId;
   prepareForm.querySelector('.form-grid').innerHTML = `<label>${t('会议语言')}${flowSelect('meeting-language', values['meeting-language'] || locale, BreviaI18n.languageOptions(locale, t, true))}</label><label>${t('译文目标')}${flowSelect('translation-target', values['translation-target'] || '', BreviaI18n.languageOptions(locale, t))}</label><label>${t('工作区')}${flowSelect('meeting-workspace', workspaceValue, workspaceOptions)}</label>`;
+  renderCaptureMode(values['capture-mode'] || savedCaptureMode());
   prepareForm.querySelector('.primary-action').firstChild.nodeValue = `${t('开始录制')} `;
   importRecording.textContent = t('导入录音');
   requestAnimationFrame(fitPrepareLayout);
+}
+const CAPTURE_MODE_KEY = 'brevia-capture-mode';
+const LAST_CAPTURE_MODE_KEY = 'brevia-last-capture-mode';
+const CAPTURE_MODES = new Set(['auto', 'mic', 'system', 'both']);
+function savedCaptureMode() {
+  try {
+    const value = localStorage.getItem(CAPTURE_MODE_KEY);
+    return CAPTURE_MODES.has(value) ? value : 'both';
+  } catch { return 'both'; }
+}
+function lastCaptureMode() {
+  try {
+    const value = localStorage.getItem(LAST_CAPTURE_MODE_KEY);
+    return ['mic', 'system', 'both'].includes(value) ? value : 'both';
+  } catch { return 'both'; }
+}
+function captureModeInputs(mode = savedCaptureMode()) {
+  const effective = mode === 'auto' ? lastCaptureMode() : mode;
+  return { mic: effective === 'mic' || effective === 'both', system: effective === 'system' || effective === 'both' };
+}
+function captureModeSelect(value) {
+  const options = [
+    ['auto', t('自动（记住上次）'), t('沿用上次成功录制的方式')],
+    ['mic', t('仅麦克风'), t('适合线下会议场景')],
+    ['system', t('仅系统音频'), t('适合网课、视频场景')],
+    ['both', t('麦克风 + 系统音频'), t('适合线上会议场景')],
+  ];
+  const selected = options.find(([mode]) => mode === value) || options[0];
+  return `<div class="flow-select capture-mode-select"><button class="flow-select-toggle" data-flow-select-toggle type="button" aria-expanded="false">${escapeHtml(selected[1])}<span>⌄</span></button><input type="hidden" name="capture-mode" value="${escapeHtml(selected[0])}" /><div class="flow-select-options" hidden>${options.map(([mode, label, scene]) => `<button type="button" data-flow-select-choice="capture-mode" data-value="${mode}" data-label="${escapeHtml(label)}"><b>${escapeHtml(label)}</b><small>${escapeHtml(scene)}</small></button>`).join('')}</div></div>`;
+}
+function renderCaptureMode(value = savedCaptureMode()) {
+  const mount = prepareForm.querySelector('#capture-mode-mount');
+  if (!mount) return;
+  mount.innerHTML = captureModeSelect(value);
+  const inputs = captureModeInputs(value);
+  const micSetting = prepareForm.querySelector('#mic-device-setting');
+  if (micSetting) micSetting.hidden = !inputs.mic;
+  const hint = prepareForm.querySelector('#capture-mode-hint');
+  if (hint) hint.textContent = '';
+  renderPrepareAudioSources();
+  if (inputs.mic) { void refreshMicDevices(); void previewMicrophone(); }
+  else void breviaClient?.stopPreview();
 }
 function selectCurrentWorkspaceForMeeting() {
   const workspace = prepareForm.querySelector('[name="meeting-workspace"]');
@@ -670,10 +713,9 @@ if (breviaClient) {
   // 恢复用户上次选择的麦克风设备(若有)。
   if (savedMicDeviceId()) breviaClient.setMicDevice(savedMicDeviceId());
 }
-/** 设置录音源状态徽标：授权正常显示勾选图标与状态，异常显示 — 并把解释放回提示行。@returns {void} */
 function setSourceBadge(labelEl, hintEl, { ok, text, hint }) {
   if (labelEl) {
-    labelEl.innerHTML = `${ok ? checkIconSvg : '— '}${escapeHtml(text)}`;
+    labelEl.textContent = text;
     labelEl.dataset.tone = ok ? 'ok' : 'warn';
   }
   if (hintEl) {
@@ -683,20 +725,12 @@ function setSourceBadge(labelEl, hintEl, { ok, text, hint }) {
 }
 /** 根据系统权限状态刷新录制前页的录音源（麦克风 / 系统音频）状态。@returns {void} */
 function renderPrepareAudioSources() {
-  if (!permissionStatus) return; // 尚未取得权限状态时保留静态默认文案
   const status = permissionStatus || {};
-  const micGranted = status.microphone === 'granted';
-  const micDenied = status.microphone === 'denied';
-  const screenUnsupported = !status.systemAudioSupported;
-  const screenGranted = status.screen === 'granted';
-  const micLabel = document.querySelector('#mic-input-label');
-  const micHint = document.querySelector('#mic-source-hint');
-  const systemLabel = document.querySelector('#system-input-label');
-  const systemHint = document.querySelector('#system-source-hint');
-  if (micGranted) setSourceBadge(micLabel, micHint, { ok: true, text: t('输入良好') });
-  else setSourceBadge(micLabel, micHint, { ok: false, text: t('未就绪'), hint: micDenied ? t('请在系统设置中开启此权限') : t('需要麦克风权限') });
-  if (screenGranted && !screenUnsupported) setSourceBadge(systemLabel, systemHint, { ok: true, text: t('已连接') });
-  else setSourceBadge(systemLabel, systemHint, { ok: false, text: t('未就绪'), hint: screenUnsupported ? t('当前系统不支持直接录制系统音频，请仅使用麦克风') : (status.screen === 'denied' ? t('请在系统设置中开启此权限') : t('需要授予屏幕与系统音频权限')) });
+  const inputs = captureModeInputs();
+  const micReady = status.microphone === 'granted';
+  const systemReady = status.systemAudioSupported !== false && status.screen === 'granted';
+  setSourceBadge(document.querySelector('#mic-input-label'), null, { ok: micReady && inputs.mic, text: inputs.mic ? (micReady ? t('输入良好') : t('未就绪')) : t('未启用') });
+  setSourceBadge(document.querySelector('#system-input-label'), null, { ok: systemReady && inputs.system, text: inputs.system ? (systemReady ? t('已连接') : t('未就绪')) : t('未启用') });
   renderMicDeviceOptions();
 }
 /** 拉取最新权限状态并刷新录音前页的录音源显示。@returns {Promise<void>} */
@@ -706,25 +740,10 @@ async function refreshPrepareAudioSources() {
     if (status) permissionStatus = status;
   }
   renderPrepareAudioSources();
-  if (permissionStatus?.microphone === 'granted') await refreshMicDevices();
+  if (permissionStatus?.microphone === 'granted' && captureModeInputs().mic) await refreshMicDevices();
 }
-// 恢复上次的采集偏好（仅麦克风 / 麦克风 + 系统音频），免去每次手动选择。
-function restoreCapturePreference() {
-  let saved = null;
-  try { saved = JSON.parse(localStorage.getItem('brevia-capture-inputs') || 'null'); } catch { saved = null; }
-  if (!saved) return;
-  const mic = prepareForm.querySelector('[name="capture-mic"]');
-  const system = prepareForm.querySelector('[name="capture-system"]');
-  if (!mic || !system) return;
-  if (saved.mic === true) mic.checked = true;
-  if (saved.system === true) system.checked = true;
-  // 上次只勾了麦克风 → 默认不勾系统；反之亦然。
-  if (saved.mic === false) mic.checked = false;
-  if (saved.system === false) system.checked = false;
-}
-restoreCapturePreference();
 async function previewMicrophone() {
-  if (!breviaClient || !prepareForm.querySelector('[name="capture-mic"]').checked) return;
+  if (!breviaClient || !captureModeInputs().mic) return;
   try {
     const fellBack = await breviaClient.previewMic();
     if (fellBack) {
@@ -732,17 +751,11 @@ async function previewMicrophone() {
       // 重新枚举并同步下拉、持久化与后端采集,避免继续指向已失效的设备。
       await refreshMicDevices();
     }
-    setSourceBadge(document.querySelector('#mic-input-label'), document.querySelector('#mic-source-hint'), { ok: true, text: t('输入良好') });
   } catch (error) {
-    // Keep the status column short; the actionable explanation belongs in the
-    // source hint, where it can wrap without collapsing the microphone label.
-    setSourceBadge(document.querySelector('#mic-input-label'), document.querySelector('#mic-source-hint'), { ok: false, text: t('未就绪'), hint: error.message });
+    const hint = prepareForm.querySelector('#capture-mode-hint');
+    if (hint) hint.textContent = error.message;
   }
 }
-prepareForm.querySelector('[name="capture-mic"]').addEventListener('change', (event) => {
-  if (event.target.checked) { void refreshMicDevices(); void previewMicrophone(); }
-  else void breviaClient?.stopPreview();
-});
 const MIC_DEVICE_KEY = 'brevia-mic-device';
 /** 读取用户保存的麦克风设备 id(空串表示系统默认)。@returns {string} */
 function savedMicDeviceId() { try { return localStorage.getItem(MIC_DEVICE_KEY) || ''; } catch { return ''; } }
@@ -788,7 +801,7 @@ async function onMicDeviceChange() {
   saveMicDeviceId(deviceId);
   breviaClient?.setMicDevice(deviceId);
   await breviaClient?.stopPreview();
-  if (prepareForm.querySelector('[name="capture-mic"]').checked) await previewMicrophone();
+  if (captureModeInputs().mic) await previewMicrophone();
 }
 let refinementMeetingTitle = '';
 let refinementCardDismissed = false;
@@ -1195,10 +1208,14 @@ prepareForm.addEventListener('click', (event) => {
     return;
   }
   select.querySelector('input').value = choice.dataset.value;
-  select.querySelector('.flow-select-toggle').firstChild.nodeValue = choice.textContent;
+  select.querySelector('.flow-select-toggle').firstChild.nodeValue = choice.dataset.label || choice.textContent;
   select.querySelector('.flow-select-options').hidden = true;
   select.querySelector('.flow-select-toggle').setAttribute('aria-expanded', 'false');
   if (choice.dataset.flowSelectChoice === 'meeting-language') applyLanguageModelDefaults(choice.dataset.value);
+  if (choice.dataset.flowSelectChoice === 'capture-mode') {
+    try { localStorage.setItem(CAPTURE_MODE_KEY, choice.dataset.value); } catch { /* 忽略存储失败。 */ }
+    renderCaptureMode(choice.dataset.value);
+  }
   if (choice.dataset.flowSelectChoice === 'mic-device') void onMicDeviceChange();
 });
 /** 渲染内置纪要模型清单，含未安装模型的下载入口。@returns {string} 清单标记。*/
@@ -2451,12 +2468,14 @@ settingsModal.addEventListener('click', async (event) => {
   if (event.target.closest('[data-edit-summary]')) { summaryEditing = true; renderModal('summary-detail'); return; }
   if (event.target.closest('[data-cancel-summary-edit]')) { summaryEditing = false; summaryEditor = null; renderModal('summary-detail'); return; }
   if (event.target.closest('[data-save-summary]')) {
-    const markdown = summaryEditor?.getMarkdown() || '';
+    const markdown = (summaryEditor?.getMarkdown() || '').trim();
     const meetingId = currentMeetingDetail?.id;
     if (!meetingId || !window.brevia?.summary?.save) return;
+    if (!markdown) { showToast(t('纪要不能为空')); return; }
     try {
       await window.brevia.summary.save({ meeting_id: meetingId, markdown });
       currentMeetingDetail.summary = { data: { markdown } };
+      uiData.detail.summary = { markdown, hasFull: true, blocked: meetingActive, generating: false };
       summaryEditing = false;
       summaryEditor = null;
       renderModal('summary-detail');
@@ -3073,7 +3092,7 @@ const showView = async (name) => {
     if (name === 'detail') resetDetailHeaderCollapse();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   });
-  if (name === 'prepare') { requestAnimationFrame(fitPrepareLayout); void previewMicrophone(); void refreshPrepareAudioSources(); }
+  if (name === 'prepare') { requestAnimationFrame(fitPrepareLayout); renderCaptureMode(); void refreshPrepareAudioSources(); }
   renderMiniPlayback();
 };
 
@@ -3301,20 +3320,15 @@ document.querySelector('#meeting-form').addEventListener('submit', async (event)
   const targetLanguage = form.get('translation-target') || null;
   const streamingModelId = prepareForm.dataset.streamingModel || defaults.streaming;
   const segmentationModelId = prepareForm.dataset.segmentationModel || defaults.segmentation;
-  const inputs = { mic: form.has('capture-mic'), system: form.has('capture-system') };
-  // 同时勾选麦克风+系统时，系统音轨默认「自动待命」（检测到声音才录制）；可被
-  // 「始终录制系统音频」设置覆盖。
-  const autoSource = inputs.mic && inputs.system;
+  const captureMode = form.get('capture-mode') || savedCaptureMode();
+  const inputs = captureModeInputs(captureMode);
   const payload = {
     title, language, target_language: targetLanguage, streaming_model_id: streamingModelId, refined_model_id: defaults.refined,
     speaker_segmentation_model_id: segmentationModelId,
     vad_model_id: prepareForm.dataset.vadModel || 'silero-vad', power_saving: getPerformanceMode() === 'efficiency', workspace_id: form.get('meeting-workspace') || null,
-    auto_source: autoSource,
   };
   try {
-    // 记住本次采集偏好，下次默认用上次选择。
-    try { localStorage.setItem('brevia-capture-inputs', JSON.stringify(inputs)); } catch { /* 忽略存储失败。 */ }
-    const meeting = breviaClient ? await breviaClient.start(payload, inputs, selectedMicDeviceId(), autoSource) : { id: null };
+    const meeting = breviaClient ? await breviaClient.start(payload, inputs, selectedMicDeviceId()) : { id: null };
     if (meeting?.model_required) {
       queueModelTask('meeting.start', { ...payload, inputs }, meeting.model_required);
       downloadRequiredModels(meeting.model_required);
@@ -3322,6 +3336,7 @@ document.querySelector('#meeting-form').addEventListener('submit', async (event)
       showToast(t('正在下载会议所需模型，完成后会自动开始录制'));
       return;
     }
+    try { localStorage.setItem(LAST_CAPTURE_MODE_KEY, inputs.mic && inputs.system ? 'both' : inputs.mic ? 'mic' : 'system'); } catch { /* 忽略存储失败。 */ }
     activateMeeting(meeting, payload);
   } catch (error) {
     showToast(error.message);
@@ -4746,21 +4761,6 @@ if (window.brevia) {
     liveConfig = { language: meeting.language || 'auto', streaming_model_id: meeting.streaming_model_id || '', refined_model_id: meeting.refined_model_id || '', target_language: meeting.target_language || null, power_saving: Boolean(meeting.power_saving) };
     if (targetChanged) document.querySelectorAll('.translation').forEach((line) => { line.remove(); });
     setLiveTranslationEnabled(Boolean(liveConfig.target_language));
-  });
-  window.brevia.on('audio_source.auto', ({ active, muted }) => {
-    const badge = document.getElementById('auto-source-badge');
-    if (!badge) return;
-    const has = (track) => active.includes(track);
-    let label = '';
-    let show = false;
-    if (has('mic') && !has('system')) { label = t('自动 · 仅麦克风'); show = true; }
-    else if (has('system') && !has('mic')) { label = t('自动 · 仅系统音频'); show = true; }
-    else if (!has('mic') && !has('system')) { label = t('自动音源'); show = true; }
-    badge.textContent = label;
-    badge.hidden = !show;
-    badge.style.cssText = show
-      ? 'margin-left:.5em;font-size:.72em;line-height:1;padding:.14em .55em;border:1px solid currentColor;border-radius:999px;opacity:.75;white-space:nowrap'
-      : '';
   });
   window.brevia.on('live.performance', ({ meeting_id: meetingId, bottleneck }) => {    if (!meetingActive || !bottleneck) return;
     if (getPerformanceMode() === 'efficiency') return; // 已在效率模式，无需再提示

@@ -23,7 +23,6 @@ contextBridge.exposeInMainWorld('brevia', {
     start: invoke('meeting.start'),
     import: invoke('meeting.import'),
     audio: invoke('meeting.audio'),
-    audioSource: invoke('meeting.audio-source'),
     pause: invoke('meeting.pause'),
     reconfigure: invoke('meeting.reconfigure'),
     stop: invoke('meeting.stop'),

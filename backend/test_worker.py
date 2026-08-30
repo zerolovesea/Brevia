@@ -1662,6 +1662,12 @@ class WorkerTest(unittest.TestCase):
 
     def test_live_text_removes_model_markers_and_repeating_tail(self):
         self.assertEqual(
+            Worker._clean_live_text("THIS IS A TEST. AND ANOTHER ONE."),
+            "This is a test. And another one.",
+        )
+        self.assertEqual(Worker._clean_live_text("NASA AND FBI USE HTML."), "NASA and FBI use HTML.")
+        self.assertEqual(Worker._clean_live_text("WORLD WAR II."), "World war II.")
+        self.assertEqual(
             Worker._clean_live_text("AH WE TRAIN A GIANT AI MODEL."),
             "Ah we train a giant AI model.",
         )
@@ -3028,6 +3034,12 @@ class WorkerTest(unittest.TestCase):
             runtime_settings(self.temp.name)["asr"]["endpoint_rule2_silence"], 0.9
         )
 
+    def test_advanced_settings_drop_retired_system_audio_gate(self):
+        settings = json.loads(json.dumps(DEFAULT_SETTINGS))
+        settings["live_asr"]["always_record_system_audio"] = 1
+        (Path(self.temp.name) / "advanced-settings.json").write_text(json.dumps(settings))
+        self.assertNotIn("always_record_system_audio", runtime_settings(self.temp.name)["live_asr"])
+
     def test_voiceprint_model_is_fixed_to_eres2net(self):
         settings = json.loads(json.dumps(DEFAULT_SETTINGS))
         settings["diarization"]["embedding_model_id"] = "campplus-zh-en"
@@ -4007,6 +4019,28 @@ class WorkerTest(unittest.TestCase):
             faint = numpy.full(1600, 0.005, dtype=numpy.float32)
             self.assertTrue(self.worker._should_bypass_denoise(faint))
 
+    def test_live_denoise_flushes_empty_tail(self):
+        meeting = self.worker.start({"title": "flush", "language": "zh", "streaming_model_id": "zipformer-zh-xlarge-streaming-int8", "refined_model_id": "qwen3-asr-0.6b-int8"})
+        self.worker.asr = Mock()
+        self.worker.asr.accept.return_value = ("", False)
+        self.worker.denoiser = Mock()
+        self.worker.denoiser.accept.return_value = []
+        self.worker.audio({"meeting_id": meeting["id"], "track": "mic", "pcm": "", "sample_rate": 16000, "start_ms": 0, "flush": True})
+        track, samples, sample_rate, flush = self.worker.denoiser.accept.call_args.args
+        self.assertEqual((track, len(samples), sample_rate, flush), ("mic", 0, 16000, True))
+
+    def test_live_mix_discards_stale_peer_audio(self):
+        import numpy
+        from collections import deque
+        from backend.worker_session import MAX_MIX_BUFFER_MS
+
+        self.worker.live_mix_buffers = {
+            "mic": deque(),
+            "system": deque([[0, numpy.full(1600, 0.1, dtype=numpy.float32)]]),
+        }
+        self.assertIsNone(self.worker._mix_live_audio("mic", numpy.full(1600, 0.1, dtype=numpy.float32), MAX_MIX_BUFFER_MS + 1, 16000))
+        self.assertFalse(self.worker.live_mix_buffers["system"])
+
     def test_live_denoiser_disabled_by_setting(self):
         # ``denoiser_enabled=0`` 时即使降噪模型就绪也不创建 LiveDenoiser。
         def ready_for(model_id):
@@ -4042,61 +4076,6 @@ class WorkerTest(unittest.TestCase):
         self.assertIsNotNone(mixed)
         result, _start_ms = mixed
         self.assertAlmostEqual(float(result[0]), 0.1, places=6)
-    def test_set_audio_source_switches_dual_track_mixing(self):
-        # 前端驱动的活跃音轨：后端据此切换双轨混音/单轨转写，并广播决定。
-        meeting = self.worker.start(
-            {
-                "title": "自动音源",
-                "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
-                "refined_model_id": "qwen3-asr-0.6b-int8",
-                "audio_tracks": ["mic", "system"],
-            }
-        )
-        self.worker.asr = Mock()
-        self.worker.asr.accept.return_value = (SimpleNamespace(text="字幕"), False)
-        self.worker.punctuation = None
-        self.worker.live_refiner = None
-        result = self.worker.set_audio_source(
-            {"meeting_id": meeting["id"], "active": ["mic"]}
-        )
-        self.assertEqual(result["active"], ["mic"])
-        self.assertEqual(self.worker.live_tracks, {"mic"})
-        auto_event = next(
-            (ev for ev in self.events if ev["type"] == "audio_source.auto"), None
-        )
-        self.assertEqual(auto_event["payload"]["muted"], ["system"])
-        result = self.worker.set_audio_source(
-            {"meeting_id": meeting["id"], "active": ["mic", "system"]}
-        )
-        self.assertEqual(self.worker.live_tracks, {"mic", "system"})
-        self.assertEqual(
-            next(
-                ev
-                for ev in reversed(self.events)
-                if ev["type"] == "audio_source.auto"
-            )["payload"]["muted"],
-            [],
-        )
-
-    def test_set_audio_source_clears_stale_mix_buffer_on_deactivation(self):
-        import numpy
-        from collections import deque
-
-        self.worker.live_mix_buffers = {"mic": deque(), "system": deque()}
-        self.worker.live_tracks = {"mic", "system"}
-        self.worker.live_mix_buffers["system"].append([0, numpy.zeros(1600)])
-        meeting = self.worker.start(
-            {
-                "title": "自动音源清缓冲",
-                "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
-                "refined_model_id": "qwen3-asr-0.6b-int8",
-                "audio_tracks": ["mic", "system"],
-            }
-        )
-        self.worker.set_audio_source({"meeting_id": meeting["id"], "active": ["mic"]})
-        self.assertEqual(len(self.worker.live_mix_buffers["system"]), 0)
     def test_speaker_profile_aggregates_samples_and_matches_known_voice(self):
         first = self.worker.store.save_speaker_profile_sample(
             "王琳", [1, 0, 0], "voice-1"
@@ -4652,6 +4631,15 @@ class WorkerTest(unittest.TestCase):
                 [item["id"] for item in self.worker.store.list_meetings(query=query)],
                 [meeting["id"]],
             )
+
+    def test_meeting_search_treats_like_wildcards_as_text(self):
+        literal = self.worker.start({"title": "完成 100%", "language": "zh", "streaming_model_id": "zipformer-zh-xlarge-streaming-int8", "refined_model_id": "qwen3-asr-0.6b-int8"})
+        self.worker.stop({"meeting_id": literal["id"], "duration_ms": 0})
+        other = self.worker.start({"title": "完成 100x", "language": "zh", "streaming_model_id": "zipformer-zh-xlarge-streaming-int8", "refined_model_id": "qwen3-asr-0.6b-int8"})
+        self.worker.stop({"meeting_id": other["id"], "duration_ms": 0})
+        self.assertEqual([item["id"] for item in self.worker.store.list_meetings(query="100%")], [literal["id"]])
+        self.assertEqual([item["id"] for item in self.worker.store.search_meetings("100%")], [literal["id"]])
+        self.assertNotEqual(literal["id"], other["id"])
 
     def test_translation_is_explicit_and_persisted(self):
         meeting = self.worker.start(

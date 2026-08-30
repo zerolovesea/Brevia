@@ -91,6 +91,17 @@ const missedInterfaceLabels = {
   ru: { '公开工作区': 'Общее рабочее пространство', '导入录音': 'Импортировать запись', '语音对话': 'Голосовой чат', '请先在声纹库注册可用声音': 'Перед отправкой речи зарегистрируйте голосовой отпечаток', '录制权限': 'Разрешения на запись', '首次使用时完成设置': 'Завершите настройку при первом использовании', '言录需要麦克风、屏幕与系统音频权限，才能录制会议并生成实时字幕。': 'Brevia нужны разрешения на микрофон, экран и системный звук для записи встреч и создания субтитров в реальном времени.', '录制你的发言。': 'Записывает вашу речь.', '录制屏幕共享中的系统声音。': 'Записывает системный звук при демонстрации экрана.', '稍后': 'Позже' },
 };
 Object.entries(missedInterfaceLabels).forEach(([code, labels]) => Object.assign(catalog[code].labels, labels));
+const runtimeErrorLabels = {
+  zh: { '纪要不能为空': '纪要不能为空', '当前没有正在进行的会议': '当前没有正在进行的会议' },
+  en: { '纪要不能为空': 'Meeting notes cannot be empty.', '当前没有正在进行的会议': 'There is no meeting in progress.' },
+  es: { '纪要不能为空': 'Las notas de la reunión no pueden estar vacías.', '当前没有正在进行的会议': 'No hay ninguna reunión en curso.' },
+  ja: { '纪要不能为空': '会議メモを空にすることはできません。', '当前没有正在进行的会议': '進行中の会議はありません。' },
+  ko: { '纪要不能为空': '회의 메모는 비워 둘 수 없습니다.', '当前没有正在进行的会议': '진행 중인 회의가 없습니다.' },
+  fr: { '纪要不能为空': 'Les notes de réunion ne peuvent pas être vides.', '当前没有正在进行的会议': 'Aucune réunion n’est en cours.' },
+  de: { '纪要不能为空': 'Besprechungsnotizen dürfen nicht leer sein.', '当前没有正在进行的会议': 'Keine Besprechung läuft.' },
+  ru: { '纪要不能为空': 'Заметки встречи не могут быть пустыми.', '当前没有正在进行的会议': 'Нет активной встречи.' },
+};
+Object.entries(runtimeErrorLabels).forEach(([code, labels]) => Object.assign(catalog[code].labels, labels));
 const workspaceLabels = {
   zh: { '移至工作区': '移至工作区', '已移至': '已移至', '展开': '展开' },
   en: { '移至工作区': 'Move to workspace', '已移至': 'Moved to', '展开': 'Expand' },
@@ -987,6 +998,7 @@ Object.assign(catalog.ru.labels, { '导出会议资料': 'Экспорт фай�
 Object.entries({ zh: '导出与分享', en: 'Export & share', es: 'Exportar y compartir', ja: 'エクスポートと共有', ko: '내보내기 및 공유', fr: 'Exporter et partager', de: 'Exportieren und teilen', ru: 'Экспорт и отправка' }).forEach(([code, label]) => { catalog[code].labels['导出与分享'] = label; });
 Object.entries({ zh: '请先选择要导出的内容', en: 'Select what to export first', es: 'Selecciona qué exportar primero', ja: '先に書き出す内容を選択してください', ko: '먼저 내보낼 내용을 선택하세요', fr: 'Sélectionnez d’abord ce qu’il faut exporter', de: 'Wählen Sie zuerst aus, was exportiert werden soll', ru: 'Сначала выберите, что экспортировать' }).forEach(([code, label]) => { catalog[code].labels['请先选择要导出的内容'] = label; });
 Object.entries({ zh: '依据 {count} 段字幕', en: 'Based on {count} captions', es: 'Basado en {count} subtítulos', ja: '{count} 件の字幕に基づく', ko: '{count}개 자막 기반', fr: 'Basé sur {count} sous-titres', de: 'Basiert auf {count} Untertiteln', ru: 'На основе {count} субтитров' }).forEach(([code, label]) => { catalog[code].labels['依据 {count} 段字幕'] = label; });
+Object.entries({ zh: '图片必须是 PNG、JPEG、GIF 或 WebP，且不超过 10 MB。', en: 'Image must be PNG, JPEG, GIF, or WebP and smaller than 10 MB.', es: 'La imagen debe ser PNG, JPEG, GIF o WebP y tener menos de 10 MB.', ja: '画像は PNG、JPEG、GIF、WebP のいずれかで、10 MB 未満にしてください。', ko: '이미지는 PNG, JPEG, GIF 또는 WebP 형식이며 10MB 미만이어야 합니다.', fr: 'L’image doit être au format PNG, JPEG, GIF ou WebP et faire moins de 10 Mo.', de: 'Das Bild muss PNG, JPEG, GIF oder WebP sein und kleiner als 10 MB sein.', ru: 'Изображение должно быть в формате PNG, JPEG, GIF или WebP и меньше 10 МБ.' }).forEach(([code, label]) => { catalog[code].labels['图片必须是 PNG、JPEG、GIF 或 WebP，且不超过 10 MB。'] = label; });
 Object.entries({ zh: '未找到匹配的会议', en: 'No matching meetings', es: 'No se encontraron reuniones', ja: '一致する会議がありません', ko: '일치하는 회의가 없습니다', fr: 'Aucune réunion correspondante', de: 'Keine passenden Besprechungen', ru: 'Совпадений не найдено' }).forEach(([code, label]) => { catalog[code].labels['未找到匹配的会议'] = label; });
 Object.entries({ zh: '{count} 条结果', en: '{count} results', es: '{count} resultados', ja: '{count} 件の結果', ko: '{count}개 결과', fr: '{count} résultats', de: '{count} Ergebnisse', ru: '{count} результатов' }).forEach(([code, label]) => { catalog[code].labels['{count} 条结果'] = label; });
 Object.entries({ zh: '标题匹配', en: 'Title match', es: 'Coincide con el título', ja: 'タイトル一致', ko: '제목 일치', fr: 'Correspond au titre', de: 'Titeltreffer', ru: 'Совпадение по названию' }).forEach(([code, label]) => { catalog[code].labels['标题匹配'] = label; });
@@ -1108,14 +1120,25 @@ const exportHubCopy = {
 
 // 会后精修菜单里的「开始精修」文案。
 Object.entries({
-  zh: { '开始精修': '开始精修' },
-  en: { '开始精修': 'Start refinement' },
-  es: { '开始精修': 'Iniciar refinamiento' },
-  ja: { '开始精修': '精修を開始' },
-  ko: { '开始精修': '정교화 시작' },
-  fr: { '开始精修': 'Lancer le raffinage' },
-  de: { '开始精修': 'Verfeinerung starten' },
-  ru: { '开始精修': 'Начать обработку' },
+  zh: { '开始精修': '开始精修', '录制方式': '录制方式', '麦克风设备': '麦克风设备', '自动（记住上次）': '自动（记住上次）', '仅麦克风': '仅麦克风', '仅系统音频': '仅系统音频', '麦克风 + 系统音频': '麦克风 + 系统音频', '适合线下会议场景': '适合线下会议场景', '适合网课、视频场景': '适合网课、视频场景', '适合线上会议场景': '适合线上会议场景' },
+  en: { '开始精修': 'Start refinement', '录制方式': 'Recording mode', '麦克风设备': 'Microphone', '自动（记住上次）': 'Auto (remember last)', '仅麦克风': 'Microphone only', '仅系统音频': 'System audio only', '麦克风 + 系统音频': 'Microphone + system audio', '适合线下会议场景': 'For in-person meetings', '适合网课、视频场景': 'For classes and video', '适合线上会议场景': 'For online meetings' },
+  es: { '开始精修': 'Iniciar refinamiento', '录制方式': 'Modo de grabación', '麦克风设备': 'Micrófono', '自动（记住上次）': 'Auto (recordar último)', '仅麦克风': 'Solo micrófono', '仅系统音频': 'Solo audio del sistema', '麦克风 + 系统音频': 'Micrófono + audio del sistema', '适合线下会议场景': 'Para reuniones presenciales', '适合网课、视频场景': 'Para clases y vídeo', '适合线上会议场景': 'Para reuniones en línea' },
+  ja: { '开始精修': '精修を開始', '录制方式': '録音モード', '麦克风设备': 'マイク', '自动（记住上次）': '自動（前回を記憶）', '仅麦克风': 'マイクのみ', '仅系统音频': 'システム音声のみ', '麦克风 + 系统音频': 'マイク + システム音声', '适合线下会议场景': '対面会議向け', '适合网课、视频场景': '授業・動画向け', '适合线上会议场景': 'オンライン会議向け' },
+  ko: { '开始精修': '정교화 시작', '录制方式': '녹음 모드', '麦克风设备': '마이크', '自动（记住上次）': '자동(지난 설정 기억)', '仅麦克风': '마이크만', '仅系统音频': '시스템 오디오만', '麦克风 + 系统音频': '마이크 + 시스템 오디오', '适合线下会议场景': '대면 회의용', '适合网课、视频场景': '수업·영상용', '适合线上会议场景': '온라인 회의용' },
+  fr: { '开始精修': 'Lancer le raffinage', '录制方式': 'Mode d’enregistrement', '麦克风设备': 'Microphone', '自动（记住上次）': 'Auto (mémoriser le dernier)', '仅麦克风': 'Microphone uniquement', '仅系统音频': 'Audio système uniquement', '麦克风 + 系统音频': 'Microphone + audio système', '适合线下会议场景': 'Pour les réunions en personne', '适合网课、视频场景': 'Pour les cours et vidéos', '适合线上会议场景': 'Pour les réunions en ligne' },
+  de: { '开始精修': 'Verfeinerung starten', '录制方式': 'Aufnahmemodus', '麦克风设备': 'Mikrofon', '自动（记住上次）': 'Automatisch (letzte Auswahl merken)', '仅麦克风': 'Nur Mikrofon', '仅系统音频': 'Nur Systemaudio', '麦克风 + 系统音频': 'Mikrofon + Systemaudio', '适合线下会议场景': 'Für Präsenzbesprechungen', '适合网课、视频场景': 'Für Unterricht und Videos', '适合线上会议场景': 'Für Online-Besprechungen' },
+  ru: { '开始精修': 'Начать обработку', '录制方式': 'Режим записи', '麦克风设备': 'Микрофон', '自动（记住上次）': 'Авто (запомнить последнее)', '仅麦克风': 'Только микрофон', '仅系统音频': 'Только системный звук', '麦克风 + 系统音频': 'Микрофон + системный звук', '适合线下会议场景': 'Для очных встреч', '适合网课、视频场景': 'Для занятий и видео', '适合线上会议场景': 'Для онлайн-встреч' },
+}).forEach(([code, labels]) => { Object.assign(catalog[code].labels, labels); });
+
+Object.entries({
+  zh: { '录制来源': '录制来源', '采集模式': '采集模式', '沿用上次成功录制的方式': '沿用上次成功录制的方式', '未启用': '未启用' },
+  en: { '录制来源': 'Recording sources', '采集模式': 'Capture mode', '沿用上次成功录制的方式': 'Use the last successful mode', '未启用': 'Not enabled' },
+  es: { '录制来源': 'Fuentes de grabación', '采集模式': 'Modo de captura', '沿用上次成功录制的方式': 'Usar el último modo correcto', '未启用': 'No activado' },
+  ja: { '录制来源': '録音ソース', '采集模式': '収音モード', '沿用上次成功录制的方式': '前回正常に録音した方式を使用', '未启用': '未使用' },
+  ko: { '录制来源': '녹음 소스', '采集模式': '수집 모드', '沿用上次成功录制的方式': '마지막으로 성공한 녹음 방식 사용', '未启用': '사용 안 함' },
+  fr: { '录制来源': 'Sources d’enregistrement', '采集模式': 'Mode de capture', '沿用上次成功录制的方式': 'Utiliser le dernier mode réussi', '未启用': 'Non activé' },
+  de: { '录制来源': 'Aufnahmequellen', '采集模式': 'Erfassungsmodus', '沿用上次成功录制的方式': 'Letzten erfolgreichen Modus verwenden', '未启用': 'Nicht aktiviert' },
+  ru: { '录制来源': 'Источники записи', '采集模式': 'Режим захвата', '沿用上次成功录制的方式': 'Использовать последний успешный режим', '未启用': 'Не включено' },
 }).forEach(([code, labels]) => { Object.assign(catalog[code].labels, labels); });
 
 window.BreviaLocaleData = { catalog, appCopy, aiNotePromptCopy, storageCleanupCopy, exportHubCopy, refinedModelOptionTags, streamingModelOptionTags, whatsNewLog };

@@ -17,8 +17,8 @@ assert.match(text(backendClient), /sources\.map\(\(resource\) => this\.flush\(re
 assert.match(text(app), /const DEFAULT_REFINED_MODEL_ID = 'funasr-nano-int8';/);
 assert.match(text(app), /getPerformanceMode\(\) === 'efficiency' && \['zh', 'en'\]\.includes\(language\)/);
 assert.equal(modelManifest.find((model) => model.id === 'x-asr-zh-en-streaming-480ms-int8')?.archive_sha256, 'fa5f63d618e5a01526e275a358bb7772e403f84808a4769fba52cffd8160bf74');
-assert.match(text(app), /text: t\('未就绪'\), hint: error\.message/);
-assert.match(text(css), /\.choice\{[^}]*grid-template-columns:auto minmax\(0,1fr\) auto/);
+assert.match(text(app), /hint\.textContent = error\.message/);
+assert.match(text(css), /\.capture-settings\{[^}]*grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
 assert.match(text(app), /auto: \{ streaming: 'nemotron-3\.5-asr-streaming-0\.6b-560ms-int8'/);
 assert.match(text(app), /default: \{ streaming: 'nemotron-3\.5-asr-streaming-0\.6b-560ms-int8'/);
 assert.match(text(app), /window\.brevia\.on\('meeting\.interrupted'/);
@@ -124,34 +124,6 @@ const secondAudio = Buffer.from(sentAudio[1].pcm, 'base64');
 assert.deepEqual([secondAudio.readInt16LE(0), secondAudio.readInt16LE(2)], [3, 4]);
 mediaContext.navigator.mediaDevices.getDisplayMedia = async () => ({ getAudioTracks: () => [], getVideoTracks: () => [{ readyState: 'live', stop() {} }] });
 await assert.rejects(new mediaContext.AudioCapture().prepare({ mic: false, system: true }), /未检测到系统音频/);
-// 系统音轨门控：待命不推流；激活时预缓冲（含当前帧）恰好各发一次，无重复帧。
-{
-  const gateCapture = new mediaContext.AudioCapture(() => {}, () => {});
-  gateCapture.meetingId = 'gated';
-  const sent = [];
-  const resource = { inFlight: null };
-  const onSendBuffered = (samples, startMs) => { sent.push(startMs); };
-  const activeSamples = () => { const a = new Float32Array(1600); a.fill(0.3); return a; };
-  const silentSamples = () => new Float32Array(1600);
-  assert.equal(gateCapture._gateSystem(silentSamples(), 0, 170, resource, onSendBuffered), 'drop');
-  assert.equal(sent.length, 0, '待命期不应推送任何帧');
-  // 激活检测用全新实例（预缓冲从空开始）。
-  const gateCapture2 = new mediaContext.AudioCapture(() => {}, () => {});
-  gateCapture2.meetingId = 'gated';
-  const sent2 = [];
-  const resource2 = { inFlight: null };
-  const onSendBuffered2 = (samples, startMs) => { sent2.push(startMs); };
-  let decision;
-  let activationIndex = -1;
-  for (let i = 0; i < 20; i += 1) {
-    decision = gateCapture2._gateSystem(activeSamples(), i * 170, 170, resource2, onSendBuffered2);
-    if (decision === 'flush') { activationIndex = i; break; }
-  }
-  assert.equal(decision, 'flush');
-  // 激活帧所在帧号 0..i 全部在预缓冲中，恰好各发一次（无重复）。
-  assert.equal(sent2.length, activationIndex + 1);
-  assert.equal(gateCapture2._gateSystem(activeSamples(), 5000, 170, resource2, onSendBuffered2), 'send');
-}
 const localeContext = { window: {} };
 runInNewContext(text(i18nData), localeContext);
 const i18nStaticKeys = new Set([text(app), text(meetings), text(meetingDetail), text(workspaces), text(components)].flatMap((source) => [...source.matchAll(/\bt\('([^']+)'\)/g)].map((match) => match[1])));
@@ -314,8 +286,8 @@ assert.doesNotMatch(text(html), /id="mini-playback-seek" type="range"/);
 assert.match(text(html), /id="refinement-progress"/);
 assert.match(text(html), /data-pause-task/);
 assert.doesNotMatch(text(html), /原版逐字稿仍可查看|data-refine-meeting/);
-assert.match(text(html), /id="mic-level"/);
-assert.match(text(html), /id="mic-input-state"/);
+assert.match(text(html), /id="capture-mode-mount"/);
+assert.match(text(html), /id="mic-device-setting"/);
 assert.match(text(html), /id="playback-rate"/);
 assert.match(text(i18nData), /catalog\s*=\s*{/);
 assert.match(text(js), /window\.BreviaLocaleData/);
@@ -539,7 +511,12 @@ assert.match(text(electronMain), /BREVIA_FFMPEG: ffmpeg/);
 assert.equal(packageManifest.dependencies['@ffmpeg-installer/ffmpeg'], '1.1.0');
 assert.deepEqual(packageManifest.build.asarUnpack, ['node_modules/@ffmpeg-installer/**']);
 assert.doesNotMatch(text(backendClient), /setTrackEnabled\(/);
-assert.match(text(backendClient), /if \(track === 'system'\) \{[\s\S]*_gateSystem\(data\.samples, startMs, frameMs, resource, sendRaw\)[\s\S]*sendRaw\(data\.samples, startMs\)/);
+assert.doesNotMatch(text(backendClient), /_gateSystem|alwaysRecordSystem|audioSource/);
+assert.match(text(js), /const CAPTURE_MODES = new Set\(\['auto', 'mic', 'system', 'both'\]\)/);
+assert.match(text(js), /function captureModeInputs\(mode = savedCaptureMode\(\)\)/);
+assert.match(text(js), /return CAPTURE_MODES\.has\(value\) \? value : 'both';/);
+assert.match(text(js), /function captureModeSelect\(value\)/);
+assert.match(text(js), /localStorage\.setItem\(LAST_CAPTURE_MODE_KEY/);
 assert.match(text(backendClient), /this\.startedAt = performance\.now\(\)/);
 assert.match(text(electronMain), /setWindowOpenHandler/);
 assert.match(text(electronMain), /will-navigate/);
@@ -1225,12 +1202,14 @@ assert.doesNotMatch(text(components), /mode-markdown/);
 assert.match(text(components), /getMode\(\) \{ return mode; \}/);
 assert.match(text(components), /urlPop\.style\.position = 'fixed'/);
 assert.match(text(components), /openUrlPop\(command, button\)/);
-assert.match(text(components), /imageInput\.accept = 'image\/\*'/);
+assert.match(text(components), /imageInput\.accept = 'image\/png,image\/jpeg,image\/gif,image\/webp'/);
+assert.match(text(components), /file\.size > 10 \* 1024 \* 1024/);
 assert.match(text(components), /file\.arrayBuffer\(\)/);
 assert.doesNotMatch(text(components), /readAsDataURL|data_url/);
 assert.match(text(components), /meeting\.noteImage\.save\(\{ meeting_id: meetingId, mime_type: file\.type, bytes \}/);
 assert.match(text(components), /sanitizeUrl\(url = ''\)[\s\S]{0,180}brevia-note/);
-assert.match(text(electronMain), /function saveNoteImage\([\s\S]{0,700}Image must be smaller than 10 MB/);
+assert.match(text(electronMain), /function saveNoteImage\([\s\S]{0,700}Image must be 10 MB or smaller/);
+assert.match(text(electronMain), /meeting\.note-image\.save[\s\S]{0,300}worker\.request\('meeting\.get'/);
 assert.match(text(electronMain), /protocol\.handle\('brevia-note'/);
 assert.match(text(preload), /noteImage: \{ save: invoke\('meeting\.note-image\.save'\) \}/);
 assert.match(text(html), /img-src 'self' data: brevia-note:/);

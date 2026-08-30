@@ -221,7 +221,7 @@ function createNotesEditor(root, options = {}) {
   input.spellcheck = false;
   const imageInput = document.createElement('input');
   imageInput.type = 'file';
-  imageInput.accept = 'image/*';
+  imageInput.accept = 'image/png,image/jpeg,image/gif,image/webp';
   imageInput.hidden = true;
   const suggestion = root.querySelector('[data-ai-suggestion]');
   root.append(toolbar, urlPop, findPop, ...(suggestion ? [suggestion] : []), editor, input, imageInput);
@@ -360,6 +360,10 @@ function createNotesEditor(root, options = {}) {
     const [file] = imageInput.files;
     imageInput.value = '';
     if (!file) return;
+    if (!['image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(file.type) || file.size > 10 * 1024 * 1024) {
+      showToast(t('图片必须是 PNG、JPEG、GIF 或 WebP，且不超过 10 MB。'));
+      return;
+    }
     const meetingId = getMeetingId();
     if (!meetingId || !window.brevia?.meeting?.noteImage?.save) return;
     file.arrayBuffer().then((bytes) => window.brevia.meeting.noteImage.save({ meeting_id: meetingId, mime_type: file.type, bytes }))
@@ -367,7 +371,7 @@ function createNotesEditor(root, options = {}) {
         if (mode === 'markdown') insertText(`![](${url})`);
         else { editor.focus(); document.execCommand('insertImage', false, url); if (onInput) onInput(); }
       })
-      .catch((error) => console.error('Unable to save note image', error));
+      .catch((error) => showToast(error.message));
   });
   urlPop.querySelector('[data-notes-url-ok]').addEventListener('click', () => {
     const url = urlInput.value.trim();

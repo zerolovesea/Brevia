@@ -83,7 +83,7 @@ const workerEvent = z.object({
     'summary.progress', 'summary.ready', 'summary.started', 'task.status',
     'transcript.discarded', 'transcript.final', 'transcript.partial', 'transcript.refined', 'transcript.settled',
     'translation.ready', 'worker.error', 'worker.warning',
-    'ai-note.suggestion', 'ai-note.evidence', 'ai-note.analyzing',
+    'ai-note.suggestion', 'ai-note.evidence', 'ai-note.analyzing', 'live.performance',
   ]),
   schema_version: z.literal(1),
   payload: z.record(z.string(), z.unknown()),
@@ -187,7 +187,7 @@ const aiNoteReconfigure = z.object({
 
 async function saveNoteImage({ meeting_id, mime_type, bytes }) {
   const image = Buffer.from(bytes);
-  if (!image.length || image.length > 10 * 1024 * 1024) throw new Error('Image must be smaller than 10 MB');
+  if (!image.length || image.length > 10 * 1024 * 1024) throw new Error('Image must be 10 MB or smaller');
   const extension = mime_type === 'image/jpeg' ? 'jpg' : mime_type.slice('image/'.length);
   const filename = `${randomUUID()}.${extension}`;
   await mkdir(noteImagesDir(meeting_id), { recursive: true });
@@ -761,7 +761,6 @@ function registerIpc() {
     if (stoppingForSleep || worker.active?.meeting_id !== value.meeting_id) return { dropped: true };
     return worker.request('meeting.audio', value);
   });
-  ipcMain.handle('meeting.audio-source', (_, payload) => worker.request('meeting.audio-source', payload));
   handle('meeting.pause', id.extend({ paused: z.boolean() }), 'meeting.pause');
   handleModelRequirement('meeting.reconfigure', meetingReconfigure, 'meeting.reconfigure');
   ipcMain.handle('meeting.stop', async (_, payload) => {
@@ -779,7 +778,11 @@ function registerIpc() {
   handle('meeting.restore', id, 'meeting.restore');
   handle('meeting.purge', id, 'meeting.purge');
   ipcMain.handle('meeting.refine', (_, payload) => handleRefinement(payload));
-  ipcMain.handle('meeting.note-image.save', async (_, payload) => saveNoteImage(noteImage.parse(payload)));
+  ipcMain.handle('meeting.note-image.save', async (_, payload) => {
+    const value = noteImage.parse(payload);
+    await worker.request('meeting.get', { meeting_id: value.meeting_id });
+    return saveNoteImage(value);
+  });
   handle('workspace.list', z.object({}), 'workspace.list');
   handle('workspace.get', z.object({ workspace_id: z.string() }), 'workspace.get');
   handle('workspace.create', z.object({ name: z.string().trim().min(1).max(50), description: z.string().max(200).optional() }), 'workspace.create');

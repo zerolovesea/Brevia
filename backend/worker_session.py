@@ -83,7 +83,6 @@ class RecordingSessionMixin:
         self._prepare_active(
             meeting,
             audio_tracks=payload.get("audio_tracks"),
-            auto_source=bool(payload.get("auto_source")),
         )
         self.emit("meeting.started", {"meeting_id": self.active, "meeting": meeting})
         return meeting
@@ -140,13 +139,12 @@ class RecordingSessionMixin:
         self.emit("meeting.recovered", {"meeting_id": self.active, "meeting": meeting})
         return meeting
 
-    def _prepare_active(self, meeting, start_ms=0, audio_tracks=None, auto_source=False):
+    def _prepare_active(self, meeting, start_ms=0, audio_tracks=None):
         """建立活动会议的双轨识别状态；模型不可用时仍允许安全录音。"""
         self.active = meeting["id"]
         self.meeting_language = meeting["language"]
         self.detected_language = None
         self.power_saving = bool(meeting.get("power_saving"))
-        self.auto_source = bool(auto_source)
         self.stream_state = {
             track: {
                 "start_ms": start_ms,
@@ -603,11 +601,13 @@ class RecordingSessionMixin:
         # 防止对轨恢复后的一次性爆量对齐。实时字幕优先最新内容，丢弃旧帧可接受。
         while buffer and start_ms - buffer[0][0] > MAX_MIX_BUFFER_MS:
             buffer.popleft()
+        peer = "system" if track == "mic" else "mic"
+        while buffers[peer] and start_ms - buffers[peer][0][0] > MAX_MIX_BUFFER_MS:
+            buffers[peer].popleft()
         # 麦克风轨进混音前先做增益均衡，避免人声忽大忽小（与单轨时的增强一致）。
         if track == "mic":
             samples = self._enhance_live_microphone(samples)
         buffer.append([float(start_ms), samples])
-        peer = "system" if track == "mic" else "mic"
         # 对轨停流检测：本轨已有超过 MAX_MIX_BUFFER_MS 的数据但从未遇到对轨，判定
         # 对轨停流。此时回退为本轨独立转写，避免整场 live 字幕空白（原始音频仍落盘，
         # 会后精修可恢复）。对轨恢复后由下一帧重新进入双轨混音。
@@ -664,34 +664,6 @@ class RecordingSessionMixin:
                     queue[0] = [next_start, chunk[count:]]
             return mixed, round(start_ms)
         return None
-
-    @synchronized_recording
-    def set_audio_source(self, payload):
-        """由前端设置当前应采集/转写的活跃音轨。
-
-        自动音源的门控（待命/激活）由前端在采集层完成，后端不再依据固定 RMS 丢帧；
-        前端在音轨激活状态变化时调用本方法，后端据此切换双轨混音/单轨转写，并广播
-        决定供 UI 展示。
-        """
-        require(payload, "meeting_id", "active")
-        self._active(payload["meeting_id"])
-        active = set(payload["active"]) & {"mic", "system"}
-        removed = self.live_tracks - active
-        added = active - self.live_tracks
-        if removed:
-            for track in removed:
-                self.live_mix_buffers[track].clear()
-        self.live_tracks = active
-        if removed or added:
-            self.emit(
-                "audio_source.auto",
-                {
-                    "meeting_id": self.active,
-                    "active": sorted(self.live_tracks),
-                    "muted": sorted({"mic", "system"} - self.live_tracks),
-                },
-            )
-        return {"active": sorted(self.live_tracks)}
 
     @synchronized_recording
     def audio(self, payload):
@@ -764,7 +736,7 @@ class RecordingSessionMixin:
         if payload["track"] in ("mic", "mix") and self.denoiser:
             # 偏弱/远端人声直接跳过降噪，避免 GTCRN 把人声当噪声压掉导致「录音有声、
             # 实时无字幕」（见 ``_should_bypass_denoise``）。
-            if not self._should_bypass_denoise(asr_samples):
+            if payload.get("flush") or not self._should_bypass_denoise(asr_samples):
                 asr_samples = self.denoiser.accept(
                     payload["track"],
                     asr_samples,
@@ -1547,7 +1519,6 @@ class RecordingSessionMixin:
         ) = None, None, None, None, None
         self.speaker_tracker, self.stream_state, self.recent_finals = None, {}, []
         self.live_tracks, self.live_mix_buffers = set(), {"mic": deque(), "system": deque()}
-        self.auto_source = False
         self.meeting_language, self.detected_language = None, None
         self.live_refiner = None
         self.power_saving = False

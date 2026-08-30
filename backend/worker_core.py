@@ -168,7 +168,6 @@ class WorkerCore:
             "meeting.pause": self.pause,
             "meeting.reconfigure": self.reconfigure,
             "meeting.audio": self.audio,
-            "meeting.audio-source": self.set_audio_source,
             "meeting.stop": self.stop,
             "meeting.list": lambda value: self.store.list_meetings(**value),
             "meeting.search": lambda value: self.store.search_meetings(value.get("query", "")),
