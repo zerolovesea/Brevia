@@ -17,7 +17,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, call, patch
 
 from .asr import DownloadCancelled, ChinesePunctuation, EnglishPunctuation, ModelManager, OfflineVAD, RefinedASR, SpeakerTracker, StreamingASR
-from .audio_io import ensure_wav_duration
+from .audio_io import convert_to_pcm_wav, ensure_wav_duration
 from .config import DEFAULT_SETTINGS, SETTINGS, runtime_settings, save_runtime_settings
 from .llm_client import complete
 from .storage import Store
@@ -40,6 +40,13 @@ class WorkerTest(unittest.TestCase):
     def tearDown(self):
         self.worker.store.close_audio_sessions()
         self.temp.cleanup()
+
+    def test_audio_import_does_not_read_worker_stdin(self):
+        with patch("backend.audio_io.subprocess.run") as run:
+            convert_to_pcm_wav("source.mp3", "destination.wav")
+        command = run.call_args.args[0]
+        self.assertIn("-nostdin", command)
+        self.assertIs(run.call_args.kwargs["stdin"], __import__("subprocess").DEVNULL)
 
     def _wait_ai_suggestions(self, count=1, timeout=5.0):
         """等待出现至少 count 条 ai-note.suggestion 事件。"""

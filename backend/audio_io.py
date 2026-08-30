@@ -27,6 +27,7 @@ def convert_to_pcm_wav(source, destination, sample_rate=16000, channels=1):
         [
             ffmpeg_path(),
             "-y",
+            "-nostdin",
             "-loglevel",
             "error",
             "-i",
@@ -40,6 +41,7 @@ def convert_to_pcm_wav(source, destination, sample_rate=16000, channels=1):
             str(destination),
         ],
         check=True,
+        stdin=subprocess.DEVNULL,
         timeout=PROCESS_TIMEOUT_SECONDS,
     )
 
@@ -113,4 +115,3 @@ def write_mono_wav(path, samples, sample_rate):
         recording.setsampwidth(2)
         recording.setframerate(sample_rate)
         recording.writeframes((values * 32767).astype("<i2").tobytes())
-
