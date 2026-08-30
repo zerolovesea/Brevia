@@ -951,7 +951,12 @@ const storageCleanupCopy = {
  */
 const whatsNewLog = [
   {
-    version: '1.1.5', date: '2026-08-26', current: true,
+    version: '1.1.6', date: '2026-08-30', current: true,
+    zh: { what: ['新增会议资料导出与分享中心，支持逐字稿、纪要、笔记和录音按需导出或打包。', '支持在会议笔记中插入图片，并可保存编辑后的 AI 纪要。'], improved: ['自动音源会根据实际声音在麦克风与系统音频间切换，减少不必要的系统录音。', '优化会议搜索、实时字幕和精修性能，弱性能设备上会自动优先保证字幕实时性。'], fixed: ['修复 Windows 上导入音频及上传相关的兼容性问题。'] },
+    en: { what: ['Added an export and sharing hub for transcripts, notes, personal notes, and recordings, with optional ZIP bundles.', 'Meeting notes can now include images, and edited AI meeting notes can be saved.'], improved: ['Auto audio source now switches between microphone and system audio based on detected sound, avoiding unnecessary system recording.', 'Improved meeting search, live-caption, and refinement performance; slower devices now prioritize keeping captions live.'], fixed: ['Fixed Windows compatibility issues when importing audio and uploading audio data.'] },
+  },
+  {
+    version: '1.1.5', date: '2026-08-26',
     zh: { improved: ['提升实时字幕的稳定性，降低识别过程中的中断与抖动。', '优化实时识别状态反馈，字幕延迟更低。'], fixed: ['修复直播转录中偶发的字幕停滞问题。'] },
     en: { improved: ['Improved live-caption stability and reduced interruptions during recognition.', 'Optimized realtime recognition feedback for lower caption latency.'], fixed: ['Fixed an occasional caption stall during live transcription.'] },
   },
