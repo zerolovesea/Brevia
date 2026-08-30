@@ -2271,7 +2271,10 @@ class WorkerTest(unittest.TestCase):
                 raise RuntimeError("native crash")
             return []
 
-        with patch.object(self.worker, "_run_diarization_process", side_effect=diarize):
+        with (
+            patch("backend.worker_refinement._diarization_chunk_ms", return_value=15_000),
+            patch.object(self.worker, "_run_diarization_process", side_effect=diarize),
+        ):
             turns = self.worker._diarize_long_track(
                 "audio.wav",
                 45_000,
