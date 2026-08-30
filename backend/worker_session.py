@@ -80,7 +80,11 @@ class RecordingSessionMixin:
                 f"{label} {', '.join(missing_models)} {verb} not installed"
             )
         meeting = self.store.create_meeting(payload)
-        self._prepare_active(meeting, audio_tracks=payload.get("audio_tracks"))
+        self._prepare_active(
+            meeting,
+            audio_tracks=payload.get("audio_tracks"),
+            auto_source=bool(payload.get("auto_source")),
+        )
         self.emit("meeting.started", {"meeting_id": self.active, "meeting": meeting})
         return meeting
 
@@ -136,12 +140,13 @@ class RecordingSessionMixin:
         self.emit("meeting.recovered", {"meeting_id": self.active, "meeting": meeting})
         return meeting
 
-    def _prepare_active(self, meeting, start_ms=0, audio_tracks=None):
+    def _prepare_active(self, meeting, start_ms=0, audio_tracks=None, auto_source=False):
         """建立活动会议的双轨识别状态；模型不可用时仍允许安全录音。"""
         self.active = meeting["id"]
         self.meeting_language = meeting["language"]
         self.detected_language = None
         self.power_saving = bool(meeting.get("power_saving"))
+        self.auto_source = bool(auto_source)
         self.stream_state = {
             track: {
                 "start_ms": start_ms,
@@ -661,6 +666,34 @@ class RecordingSessionMixin:
         return None
 
     @synchronized_recording
+    def set_audio_source(self, payload):
+        """由前端设置当前应采集/转写的活跃音轨。
+
+        自动音源的门控（待命/激活）由前端在采集层完成，后端不再依据固定 RMS 丢帧；
+        前端在音轨激活状态变化时调用本方法，后端据此切换双轨混音/单轨转写，并广播
+        决定供 UI 展示。
+        """
+        require(payload, "meeting_id", "active")
+        self._active(payload["meeting_id"])
+        active = set(payload["active"]) & {"mic", "system"}
+        removed = self.live_tracks - active
+        added = active - self.live_tracks
+        if removed:
+            for track in removed:
+                self.live_mix_buffers[track].clear()
+        self.live_tracks = active
+        if removed or added:
+            self.emit(
+                "audio_source.auto",
+                {
+                    "meeting_id": self.active,
+                    "active": sorted(self.live_tracks),
+                    "muted": sorted({"mic", "system"} - self.live_tracks),
+                },
+            )
+        return {"active": sorted(self.live_tracks)}
+
+    @synchronized_recording
     def audio(self, payload):
         """持久化一帧音频，并在模型可用时推进实时转写。
 
@@ -678,13 +711,6 @@ class RecordingSessionMixin:
         self._active(payload["meeting_id"])
         pcm = base64.b64decode(payload["pcm"], validate=True)
         source_track = payload["track"]
-        samples_total = 0 if source_track == "mix" else self.store.append_audio(
-            self.active,
-            source_track,
-            pcm,
-            int(payload["sample_rate"]),
-            int(payload["start_ms"]),
-        )
         values = array("h")
         values.frombytes(pcm)
         if sys.byteorder != "little":
@@ -692,6 +718,13 @@ class RecordingSessionMixin:
         import numpy
 
         samples = numpy.asarray(values, dtype=numpy.float32) / 32768.0
+        samples_total = 0 if source_track == "mix" else self.store.append_audio(
+            self.active,
+            source_track,
+            pcm,
+            int(payload["sample_rate"]),
+            int(payload["start_ms"]),
+        )
         mixed_from_dual_track = False
         if self.live_tracks == {"mic", "system"} and source_track != "mix":
             mixed = self._mix_live_audio(source_track, samples, payload["start_ms"], int(payload["sample_rate"]))
@@ -1514,6 +1547,7 @@ class RecordingSessionMixin:
         ) = None, None, None, None, None
         self.speaker_tracker, self.stream_state, self.recent_finals = None, {}, []
         self.live_tracks, self.live_mix_buffers = set(), {"mic": deque(), "system": deque()}
+        self.auto_source = False
         self.meeting_language, self.detected_language = None, None
         self.live_refiner = None
         self.power_saving = False

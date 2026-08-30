@@ -24,7 +24,7 @@ try {
 } catch { localStorage.removeItem(meetingCacheKey); }
 
 function cacheMeetingList() {
-  if (!window.brevia || activeLibraryNav !== 'all-meetings' || meetingSearch.value.trim()) return;
+  if (!window.brevia || activeLibraryNav !== 'all-meetings') return;
   try { localStorage.setItem(meetingCacheKey, JSON.stringify({ savedAt: Date.now(), meetings: uiData.meetings.filter(({ deleted }) => !deleted) })); }
   catch { /* 当浏览器存储不可用或已满时，以后端数据为准。 */ }
 }
@@ -47,7 +47,7 @@ function syncBackendMeeting(item) {
 let meetingListRequest = 0;
 async function refreshBackendMeetings(includeDeleted = activeLibraryNav === 'recently-deleted') {
   const request = ++meetingListRequest;
-  const meetings = await window.brevia.meeting.list({ include_deleted: includeDeleted, query: meetingSearch.value.trim() });
+  const meetings = await window.brevia.meeting.list({ include_deleted: includeDeleted });
   if (request !== meetingListRequest) return;
   uiData.meetings = meetings.map(backendMeeting);
   renderMeetingList();

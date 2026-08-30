@@ -468,8 +468,8 @@ let advancedSettings;
 let permissionStatus;
 let permissionPollTimer;
 const advancedSettingCopy = {
-  zh: { sections: { audio: '音频', asr: '识别与端点检测', live_asr: '实时识别', punctuation: '标点恢复', diarization: '说话人分离', voice_profiles: '声纹库', meetings: '会议', llm: '纪要模型' }, fields: { sample_rate: '采样率（Hz）', chunk_seconds: '音频分块时长（秒）', endpoint_rule1_silence: '端点规则 1 静音时长（秒）', endpoint_rule2_silence: '端点规则 2 静音时长（秒）', maximum_utterance_seconds: '单句最长时长（秒）', refined_window_seconds: '精修窗口时长（秒）', auto_english_model_id: '英文识别模型', denoiser_model_id: '实时降噪模型', denoiser_enabled: '实时降噪开关（0 关 1 开）', denoise_minimum_rms: '实时降噪最小响度', microphone_target_rms: '麦克风目标响度', microphone_minimum_rms: '麦克风最小响度', microphone_max_gain: '麦克风最大增益', microphone_peak: '麦克风峰值限制', english_model_id: '英文标点模型', chinese_model_id: '中英文标点模型', segmentation_model_id: '说话区间模型', cluster_threshold: '聚类阈值', online_similarity_threshold: '在线匹配阈值', minimum_embedding_seconds: '最短声纹语音（秒）', num_speakers: '固定说话人数（-1 为自动）', min_duration_on: '最短说话时长（秒）', min_duration_off: '最短静音间隔（秒）', max_samples: '每人最大录音条数', max_total_seconds: '每人最大录音时长（秒）', deleted_retention_days: '删除记录保留天数', timeout_seconds: '模型请求超时（秒）' }, hint: '用于本地运行配置。' },
-  en: { sections: { audio: 'Audio', asr: 'Recognition and endpointing', live_asr: 'Live recognition', punctuation: 'Punctuation', diarization: 'Speaker diarization', voice_profiles: 'Voiceprints', meetings: 'Meetings', llm: 'Summary model' }, fields: { sample_rate: 'Sample rate (Hz)', chunk_seconds: 'Audio chunk duration (s)', endpoint_rule1_silence: 'Endpoint rule 1 silence (s)', endpoint_rule2_silence: 'Endpoint rule 2 silence (s)', maximum_utterance_seconds: 'Maximum utterance duration (s)', refined_window_seconds: 'Refinement window (s)', auto_english_model_id: 'English recognition model', denoiser_model_id: 'Live denoiser model', denoiser_enabled: 'Live denoiser (0 off, 1 on)', denoise_minimum_rms: 'Live denoiser min loudness', microphone_target_rms: 'Microphone target loudness', microphone_minimum_rms: 'Microphone minimum loudness', microphone_max_gain: 'Microphone maximum gain', microphone_peak: 'Microphone peak limit', english_model_id: 'English punctuation model', chinese_model_id: 'Chinese-English punctuation model', segmentation_model_id: 'Speech-segmentation model', cluster_threshold: 'Clustering threshold', online_similarity_threshold: 'Online matching threshold', minimum_embedding_seconds: 'Minimum voiceprint audio (s)', num_speakers: 'Fixed speaker count (-1 = auto)', min_duration_on: 'Minimum speech duration (s)', min_duration_off: 'Minimum silence gap (s)', max_samples: 'Maximum recordings per person', max_total_seconds: 'Maximum recording duration per person (s)', deleted_retention_days: 'Deleted-record retention (days)', timeout_seconds: 'Model request timeout (s)' }, hint: 'Used by the local runtime.' },
+  zh: { sections: { audio: '音频', asr: '识别与端点检测', live_asr: '实时识别', punctuation: '标点恢复', diarization: '说话人分离', voice_profiles: '声纹库', meetings: '会议', llm: '纪要模型' }, fields: { sample_rate: '采样率（Hz）', chunk_seconds: '音频分块时长（秒）', endpoint_rule1_silence: '端点规则 1 静音时长（秒）', endpoint_rule2_silence: '端点规则 2 静音时长（秒）', maximum_utterance_seconds: '单句最长时长（秒）', refined_window_seconds: '精修窗口时长（秒）', auto_english_model_id: '英文识别模型', denoiser_model_id: '实时降噪模型', denoiser_enabled: '实时降噪开关（0 关 1 开）', denoise_minimum_rms: '实时降噪最小响度', always_record_system_audio: '始终录制系统音频（0 自动待命 1 始终录制）', microphone_target_rms: '麦克风目标响度', microphone_minimum_rms: '麦克风最小响度', microphone_max_gain: '麦克风最大增益', microphone_peak: '麦克风峰值限制', english_model_id: '英文标点模型', chinese_model_id: '中英文标点模型', segmentation_model_id: '说话区间模型', cluster_threshold: '聚类阈值', online_similarity_threshold: '在线匹配阈值', minimum_embedding_seconds: '最短声纹语音（秒）', num_speakers: '固定说话人数（-1 为自动）', min_duration_on: '最短说话时长（秒）', min_duration_off: '最短静音间隔（秒）', max_samples: '每人最大录音条数', max_total_seconds: '每人最大录音时长（秒）', deleted_retention_days: '删除记录保留天数', timeout_seconds: '模型请求超时（秒）' }, hint: '用于本地运行配置。' },
+  en: { sections: { audio: 'Audio', asr: 'Recognition and endpointing', live_asr: 'Live recognition', punctuation: 'Punctuation', diarization: 'Speaker diarization', voice_profiles: 'Voiceprints', meetings: 'Meetings', llm: 'Summary model' }, fields: { sample_rate: 'Sample rate (Hz)', chunk_seconds: 'Audio chunk duration (s)', endpoint_rule1_silence: 'Endpoint rule 1 silence (s)', endpoint_rule2_silence: 'Endpoint rule 2 silence (s)', maximum_utterance_seconds: 'Maximum utterance duration (s)', refined_window_seconds: 'Refinement window (s)', auto_english_model_id: 'English recognition model', denoiser_model_id: 'Live denoiser model', denoiser_enabled: 'Live denoiser (0 off, 1 on)', denoise_minimum_rms: 'Live denoiser min loudness', always_record_system_audio: 'Always record system audio (0 auto-standby, 1 always)', microphone_target_rms: 'Microphone target loudness', microphone_minimum_rms: 'Microphone minimum loudness', microphone_max_gain: 'Microphone maximum gain', microphone_peak: 'Microphone peak limit', english_model_id: 'English punctuation model', chinese_model_id: 'Chinese-English punctuation model', segmentation_model_id: 'Speech-segmentation model', cluster_threshold: 'Clustering threshold', online_similarity_threshold: 'Online matching threshold', minimum_embedding_seconds: 'Minimum voiceprint audio (s)', num_speakers: 'Fixed speaker count (-1 = auto)', min_duration_on: 'Minimum speech duration (s)', min_duration_off: 'Minimum silence gap (s)', max_samples: 'Maximum recordings per person', max_total_seconds: 'Maximum recording duration per person (s)', deleted_retention_days: 'Deleted-record retention (days)', timeout_seconds: 'Model request timeout (s)' }, hint: 'Used by the local runtime.' },
   es: { sections: { audio: 'Audio', asr: 'Reconocimiento y detección de final', live_asr: 'Reconocimiento en vivo', punctuation: 'Puntuación', diarization: 'Separación de hablantes', voice_profiles: 'Huellas de voz', meetings: 'Reuniones', llm: 'Modelo de resumen' }, fields: { sample_rate: 'Frecuencia de muestreo (Hz)', chunk_seconds: 'Duración del bloque de audio (s)', endpoint_rule1_silence: 'Silencio de regla de final 1 (s)', endpoint_rule2_silence: 'Silencio de regla de final 2 (s)', maximum_utterance_seconds: 'Duración máxima de intervención (s)', refined_window_seconds: 'Ventana de refinamiento (s)', auto_english_model_id: 'Modelo de reconocimiento en inglés', denoiser_model_id: 'Modelo de reducción de ruido en vivo', microphone_target_rms: 'Volumen objetivo del micrófono', microphone_minimum_rms: 'Volumen mínimo del micrófono', microphone_max_gain: 'Ganancia máxima del micrófono', microphone_peak: 'Límite de pico del micrófono', english_model_id: 'Modelo de puntuación en inglés', chinese_model_id: 'Modelo de puntuación chino-inglés', segmentation_model_id: 'Modelo de segmentación de voz', cluster_threshold: 'Umbral de agrupación', online_similarity_threshold: 'Umbral de coincidencia en línea', minimum_embedding_seconds: 'Audio mínimo para huella de voz (s)', num_speakers: 'Número fijo de hablantes (-1 = auto)', min_duration_on: 'Duración mínima de habla (s)', min_duration_off: 'Pausa mínima (s)', max_samples: 'Máximas grabaciones por persona', max_total_seconds: 'Duración máxima por persona (s)', deleted_retention_days: 'Retención de eliminados (días)', timeout_seconds: 'Tiempo de espera de solicitud (s)' }, hint: 'Se usa en la ejecución local.' },
   ja: { sections: { audio: '音声', asr: '認識と終端検出', live_asr: 'ライブ認識', punctuation: '句読点', diarization: '話者分離', voice_profiles: '声紋', meetings: '会議', llm: '要約モデル' }, fields: { sample_rate: 'サンプリングレート（Hz）', chunk_seconds: '音声チャンク長（秒）', endpoint_rule1_silence: '終端ルール 1 の無音（秒）', endpoint_rule2_silence: '終端ルール 2 の無音（秒）', maximum_utterance_seconds: '発話の最大長（秒）', refined_window_seconds: '高精度化ウィンドウ（秒）', auto_english_model_id: '英語認識モデル', denoiser_model_id: 'ライブノイズ除去モデル', microphone_target_rms: 'マイク目標音量', microphone_minimum_rms: 'マイク最小音量', microphone_max_gain: 'マイク最大ゲイン', microphone_peak: 'マイクピーク上限', english_model_id: '英語句読点モデル', chinese_model_id: '中英句読点モデル', segmentation_model_id: '音声区間モデル', cluster_threshold: 'クラスタリング閾値', online_similarity_threshold: 'オンライン一致閾値', minimum_embedding_seconds: '声紋用の最短音声（秒）', num_speakers: '固定話者数（-1 = 自動）', min_duration_on: '最短発話時間（秒）', min_duration_off: '最短無音間隔（秒）', max_samples: '1 人あたりの最大録音数', max_total_seconds: '1 人あたりの最大録音時間（秒）', deleted_retention_days: '削除済み記録の保持日数', timeout_seconds: 'モデル要求タイムアウト（秒）' }, hint: 'ローカル実行に使用します。' },
   ko: { sections: { audio: '오디오', asr: '인식 및 종점 감지', live_asr: '실시간 인식', punctuation: '문장 부호', diarization: '화자 분리', voice_profiles: '음성 지문', meetings: '회의', llm: '요약 모델' }, fields: { sample_rate: '샘플링 레이트(Hz)', chunk_seconds: '오디오 청크 길이(초)', endpoint_rule1_silence: '종점 규칙 1 무음(초)', endpoint_rule2_silence: '종점 규칙 2 무음(초)', maximum_utterance_seconds: '최대 발화 길이(초)', refined_window_seconds: '정교화 창(초)', auto_english_model_id: '영어 인식 모델', denoiser_model_id: '실시간 잡음 제거 모델', microphone_target_rms: '마이크 목표 음량', microphone_minimum_rms: '마이크 최소 음량', microphone_max_gain: '마이크 최대 게인', microphone_peak: '마이크 피크 제한', english_model_id: '영어 문장 부호 모델', chinese_model_id: '중영 문장 부호 모델', segmentation_model_id: '음성 구간 모델', cluster_threshold: '클러스터링 임계값', online_similarity_threshold: '온라인 일치 임계값', minimum_embedding_seconds: '최소 음성 지문 오디오(초)', num_speakers: '고정 화자 수(-1 = 자동)', min_duration_on: '최소 발화 시간(초)', min_duration_off: '최소 무음 간격(초)', max_samples: '1인당 최대 녹음 수', max_total_seconds: '1인당 최대 녹음 시간(초)', deleted_retention_days: '삭제 기록 보관 기간(일)', timeout_seconds: '모델 요청 시간 제한(초)' }, hint: '로컬 실행에 사용됩니다.' },
@@ -502,10 +502,12 @@ function renderPermissionSettings() {
   return `<section class="advanced-settings-section permission-settings-section" data-permission-settings><h3>${t('系统权限')}</h3>${rows}</section>`;
 }
 const modelDownloads = new Map();
-let activeDateRange = '30';
-const dateFilter = document.querySelector('#date-filter');
 const libraryToolbar = document.querySelector('.library-toolbar');
 const meetingSearch = document.querySelector('#meeting-search');
+const meetingSearchClear = document.querySelector('#meeting-search-clear');
+const searchResultsPanel = document.querySelector('#search-results');
+let searchDebounceTimer = 0;
+let searchRequestId = 0;
 const selectedMeetingKeys = new Set();
 const batchToolbar = document.createElement('section');
 batchToolbar.className = 'batch-toolbar';
@@ -544,18 +546,12 @@ function syncMeetingSelection(updateToolbar = true) {
 }
 const selectedMeetings = () => uiData.meetings.filter((meeting, index) => selectedMeetingKeys.has(meeting.id || String(index)));
 function clearMeetingSelection() { selectedMeetingKeys.clear(); syncMeetingSelection(); }
-function renderDateFilter() { dateFilter.innerHTML = flowSelect('library-date', activeDateRange, [['30', t('最近 30 天')], ['7', t('最近 7 天')], ['90', t('最近 90 天')], ['all', t('全部时间')]]); }
-/** 将活动工作区、日期和文本查询应用于会议库。@returns {void} */
+/** 将活动工作区过滤应用于会议库列表（搜索已改为独立浮窗，不再过滤列表）。@returns {void} */
 function filterMeetings() {
-  const query = meetingSearch.value.trim().toLowerCase();
-  const cutoff = Date.now() - Number(activeDateRange) * 86_400_000;
   document.querySelectorAll('.meeting-row').forEach((row) => {
     const meeting = uiData.meetings[Number(row.dataset.meetingIndex)];
-
     const workspaceMatch = activeWorkspaceId === '' ? !meeting.workspaceId : meeting.workspaceId === activeWorkspaceId;
-
-    const dateMatch = activeDateRange === 'all' || !meeting.createdAt || Date.parse(meeting.createdAt) >= cutoff;
-    row.hidden = !workspaceMatch || !dateMatch || (!window.brevia && !row.textContent.toLowerCase().includes(query));
+    row.hidden = !workspaceMatch;
   });
 }
 /** 使用当前界面语言格式化后端会议元数据。@param {object} meeting 存储的 UI 会议。@returns {object} 显示就绪的会议。*/
@@ -581,7 +577,6 @@ function meetingSecondaryInfo(meeting) {
 }
 /** 仅重新渲染会议列表，保留设置模态框事件绑定。@returns {void} */
 function renderMeetingList() { document.querySelector('.meeting-list').innerHTML = uiData.meetings.map((meeting, index) => !meeting.isExample || meeting.exampleLocale === locale ? renderMeetingRow(localizeMeeting(meeting), index) : '').join(''); filterMeetings(); syncMeetingSelection(); cacheMeetingList(); }
-renderDateFilter();
 const prepareForm = document.querySelector('#meeting-form');
 const prepareView = document.querySelector('#prepare-view');
 const prepareLayout = prepareView.querySelector('.prepare-layout');
@@ -713,6 +708,21 @@ async function refreshPrepareAudioSources() {
   renderPrepareAudioSources();
   if (permissionStatus?.microphone === 'granted') await refreshMicDevices();
 }
+// 恢复上次的采集偏好（仅麦克风 / 麦克风 + 系统音频），免去每次手动选择。
+function restoreCapturePreference() {
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem('brevia-capture-inputs') || 'null'); } catch { saved = null; }
+  if (!saved) return;
+  const mic = prepareForm.querySelector('[name="capture-mic"]');
+  const system = prepareForm.querySelector('[name="capture-system"]');
+  if (!mic || !system) return;
+  if (saved.mic === true) mic.checked = true;
+  if (saved.system === true) system.checked = true;
+  // 上次只勾了麦克风 → 默认不勾系统；反之亦然。
+  if (saved.mic === false) mic.checked = false;
+  if (saved.system === false) system.checked = false;
+}
+restoreCapturePreference();
 async function previewMicrophone() {
   if (!breviaClient || !prepareForm.querySelector('[name="capture-mic"]').checked) return;
   try {
@@ -1483,7 +1493,7 @@ function renderExportModal() {
   settingsModal.querySelector('.modal-body').innerHTML = exportHubHtml();
   updateExportBuilderState();
 }
-// 统一「导出与分享」面板。作为独立弹窗主体，也复用在「会议纪要详情」底部。
+// 统一「导出与分享」面板。
 function exportHubHtml() {
   const copy = exportHubCopy[locale] || exportHubCopy.en;
   const meta = exportContentMeta();
@@ -1572,8 +1582,7 @@ function renderSummaryDetailModal() {
   settingsModal.querySelector('.modal-title p').textContent = currentMeetingDetail.title;
   settingsModal.querySelector('.modal-body').innerHTML = summaryEditing
     ? `${summaryActionBar(true)}<div data-summary-editor></div>`
-    : `${summaryActionBar(false)}<article class="markdown-content summary-modal-document">${renderMarkdown(cleanSummaryMarkdown(markdown))}</article>${exportHubHtml()}`;
-  if (!summaryEditing) updateExportBuilderState();
+    : `${summaryActionBar(false)}<article class="markdown-content summary-modal-document">${renderMarkdown(cleanSummaryMarkdown(markdown))}</article>`;
   if (summaryEditing) {
     summaryEditor = createNotesEditor(settingsModal.querySelector('[data-summary-editor]'), { ariaLabel: t('会议纪要'), getMeetingId: () => currentMeetingDetail?.id });
     summaryEditor.setMarkdown(markdown);
@@ -1664,7 +1673,7 @@ function renderWhatsNewList() {
 /** 显示设置模态框并播放进入动画；可选聚焦内部元素。@param {string} [focusSelector] 打开后聚焦的模态框内元素。@returns {void} */
 function showSettingsModal(focusSelector) {
   settingsModal.classList.remove('modal-leave');
-  settingsModal.style.zIndex = '40';
+  settingsModal.style.zIndex = '60';
   settingsModal.hidden = false;
   requestAnimationFrame(() => settingsModal.classList.add('modal-enter'));
   document.body.classList.add('modal-open');
@@ -1813,56 +1822,56 @@ const tourAiSuggestionFallback = { zh: 'AI 建议', en: 'AI suggestion', es: 'Su
 const tourHowtoLabel = { zh: '如何使用', en: 'How to use', es: 'Cómo usarlo', ja: '使い方', ko: '사용 방법', fr: 'Comment l’utiliser', de: 'So verwenden', ru: 'Как использовать' };
 const tourHowto = {
   zh: {
-    0: ['在搜索框输入关键词，查找会议、逐字稿或标签。', '点击日期筛选，缩小到需要的时段。', '勾选多条记录，可批量删除或导出。'],
+    0: ['在搜索框输入关键词，可搜索会议标题、字幕内容或说话人。', '搜索结果以浮窗展示，并高亮命中的关键词。', '点击某条结果即可打开该会议。'],
     1: ['输入会议名称，并选择会议语言与译文目标。', '勾选要录制的音频来源（麦克风 / 系统音频）。', '点击「开始录制」，模型加载后会自动开录。'],
     2: ['录制时，右侧实时字幕会持续滚动更新。', '每条字幕带时间与说话人，点击可回放定位。', '点击「展开字幕」，把字幕切到主视图。'],
     3: ['点击「AI 笔记」开启实时纪要。', 'AI 会自动提炼结论、风险与待办到笔记区。', '可将当前字幕片段一键加入笔记。'],
     4: ['会后自动生成精修逐字稿与纪要。', '拖动播放条回听，字幕会随之高亮。', '点击「导出」或「分享」，保存或发送纪要。'],
   },
   en: {
-    0: ['Type keywords to find meetings, transcripts, or tags.', 'Use the date filter to narrow the time range.', 'Select multiple rows to batch delete or export.'],
+    0: ['Type keywords to search meeting titles, captions, or speakers.', 'Results appear in a popover with the query highlighted.', 'Click a result to open that meeting.'],
     1: ['Enter a meeting title, then choose the language and translation target.', 'Check which audio sources to record (mic / system audio).', 'Hit Start recording; models load before recording begins.'],
     2: ['Live captions scroll continuously on the right while recording.', 'Each caption carries a time and speaker; click to jump playback.', 'Expand captions to bring them to the main view.'],
     3: ['Enable AI notes to start real-time notes.', 'AI surfaces decisions, risks, and actions into your notes.', 'Add the current caption segment to your notes in one click.'],
     4: ['A refined transcript and notes are generated automatically.', 'Drag the playback bar to listen; captions highlight in sync.', 'Export or share the notes when you are done.'],
   },
   es: {
-    0: ['Escribe palabras clave para buscar reuniones, transcripciones o etiquetas.', 'Usa el filtro de fechas para acotar el periodo.', 'Selecciona varias filas para borrar o exportar en lote.'],
+    0: ['Escribe palabras clave para buscar títulos, subtítulos o hablantes.', 'Los resultados aparecen en una ventana flotante con la búsqueda resaltada.', 'Haz clic en un resultado para abrir esa reunión.'],
     1: ['Escribe un título y elige el idioma y la traducción.', 'Marca qué fuentes de audio grabar (micrófono / sistema).', 'Pulsa Iniciar grabación; los modelos cargan antes.'],
     2: ['Los subtítulos en vivo se desplazan a la derecha al grabar.', 'Cada subtítulo tiene hora y hablante; pulsa para saltar.', 'Amplía los subtítulos para llevarlos a la vista principal.'],
     3: ['Activa la IA para notas en tiempo real.', 'La IA extrae conclusiones, riesgos y tareas a tus notas.', 'Añade el segmento actual a tus notas con un clic.'],
     4: ['Se genera automáticamente una transcripción refinada y notas.', 'Arrastra la barra para escuchar; los subtítulos se resaltan.', 'Exporta o comparte las notas al terminar.'],
   },
   ja: {
-    0: ['キーワードを入力して会議・文字起こし・タグを検索。', '日付フィルターで期間を絞り込み。', '複数行を選択して一括削除・エクスポート。'],
+    0: ['キーワードで会議タイトル・字幕・話者を検索。', '結果は浮遊ウィンドウで表示され、キーワードがハイライト。', '結果をクリックすると会議が開きます。'],
     1: ['会議名を入力し、言語と翻訳先を選択。', '録音する音声ソース（マイク/システム）を選択。', '「録音を開始」でモデル読み込み後に開始。'],
     2: ['録音中、右側にライブ字幕が流れます。', '各字幕に時間と話者が付き、クリックで再生位置へ。', '「字幕を展開」で字幕をメイン表示に。'],
     3: ['「AIメモ」を有効にしてリアルタイムメモ。', 'AI が結論・リスク・ToDo をメモに抽出。', '現在の字幕をワンクリックでメモに追加。'],
     4: ['終了後に精修済みの文字起こしとメモを自動生成。', 'バーをドラッグして再生、字幕が連動ハイライト。', '「エクスポート」「共有」で保存・送信。'],
   },
   ko: {
-    0: ['키워드로 회의·녹취·태그를 검색하세요.', '날짜 필터로 기간을 좁히세요.', '여러 행을 선택해 일괄 삭제·내보내기.'],
+    0: ['키워드로 회의 제목·자막·화자를 검색하세요.', '결과는 플로팅 창에 표시되며 키워드가 강조됩니다.', '결과를 클릭하면 회의가 열립니다.'],
     1: ['회의 이름을 입력하고 언어·번역 대상을 선택하세요.', '녹음할 오디오 소스(마이크/시스템)를 선택하세요.', '「녹음 시작」을 누르면 모델 로드 후 시작됩니다.'],
     2: ['녹음 중 오른쪽에 실시간 자막이 흐릅니다.', '각 자막에 시간·화자가 표시되며 클릭으로 이동.', '「자막 확대」로 자막을 메인 화면에.'],
     3: ['「AI 메모」를 켜서 실시간 메모를 시작하세요.', 'AI가 결론·리스크·할 일을 메모로 추출합니다.', '현재 자막을 한 번에 메모에 추가하세요.'],
     4: ['종료 후 정제된 녹취와 메모를 자동 생성합니다.', '바를 드래그해 재생하면 자막이 연동됩니다.', '「내보내기」「공유」로 저장·전송하세요.'],
   },
   fr: {
-    0: ['Saisissez des mots-clés pour chercher réunions, transcriptions ou étiquettes.', 'Utilisez le filtre de dates pour restreindre la période.', 'Sélectionnez plusieurs lignes pour supprimer ou exporter en lot.'],
+    0: ['Saisissez des mots-clés pour chercher titres, sous-titres ou locuteurs.', 'Les résultats s’affichent dans une fenêtre flottante avec la recherche surlignée.', 'Cliquez sur un résultat pour ouvrir cette réunion.'],
     1: ['Saisissez un titre, puis choisissez la langue et la traduction.', 'Cochez les sources audio à enregistrer (micro / système).', 'Cliquez sur Démarrer ; les modèles se chargent avant.'],
     2: ['Les sous-titres défilent à droite pendant l’enregistrement.', 'Chaque sous-titre a une heure et un locuteur ; cliquez pour sauter.', 'Agrandissez les sous-titres pour les mettre en premier plan.'],
     3: ['Activez les notes IA pour les notes en temps réel.', 'L’IA extrait conclusions, risques et tâches dans vos notes.', 'Ajoutez le segment courant à vos notes en un clic.'],
     4: ['Une transcription affinée et des notes sont générées automatiquement.', 'Faites glisser la barre pour écouter ; les sous-titres se surlignent.', 'Exportez ou partagez les notes à la fin.'],
   },
   de: {
-    0: ['Geben Sie Schlüsselwörter ein, um Besprechungen, Transkripte oder Tags zu finden.', 'Mit dem Datumsfilter eingrenzen.', 'Mehrere Zeilen auswählen, um in Stapeln zu löschen oder zu exportieren.'],
+    0: ['Geben Sie Schlüsselwörter ein, um Titel, Untertitel oder Sprecher zu suchen.', 'Die Ergebnisse erscheinen in einem Popover mit hervorgehobener Suche.', 'Klicken Sie auf ein Ergebnis, um die Besprechung zu öffnen.'],
     1: ['Titel eingeben, Sprache und Übersetzungsziel wählen.', 'Audioquellen (Mikrofon/System) zum Aufnehmen auswählen.', '„Aufnahme starten“; die Modelle laden vor dem Start.'],
     2: ['Live-Untertitel laufen rechts während der Aufnahme.', 'Jeder Untertitel hat Zeit und Sprecher; klicken zum Springen.', 'Untertitel vergrößern, um sie in die Hauptansicht zu bringen.'],
     3: ['KI-Notizen für Notizen in Echtzeit aktivieren.', 'KI zieht Schlussfolgerungen, Risiken und Aufgaben in Ihre Notizen.', 'Aktuelles Segment mit einem Klick zu Notizen hinzufügen.'],
     4: ['Ein bearbeitetes Transkript und Notizen werden automatisch erstellt.', 'Balken ziehen zum Anhören; Untertitel werden synchron hervorgehoben.', 'Notizen am Ende exportieren oder teilen.'],
   },
   ru: {
-    0: ['Введите ключевые слова, чтобы найти встречи, расшифровки или теги.', 'Используйте фильтр дат, чтобы сузить период.', 'Выберите несколько строк для массового удаления или экспорта.'],
+    0: ['Введите ключевые слова для поиска названий, субтитров или говорящих.', 'Результаты появляются во всплывающем окне с подсветкой запроса.', 'Нажмите на результат, чтобы открыть встречу.'],
     1: ['Введите название, затем выберите язык и перевод.', 'Отметьте источники звука для записи (микрофон/система).', 'Нажмите «Начать запись»; модели загрузятся заранее.'],
     2: ['Субтитры прокручиваются справа во время записи.', 'У каждого субтитра есть время и говорящий; клик для перехода.', 'Разверните субтитры, чтобы показать их на главном экране.'],
     3: ['Включите ИИ-заметки для заметок в реальном времени.', 'ИИ извлекает выводы, риски и задачи в ваши заметки.', 'Добавьте текущий фрагмент в заметки одним кликом.'],
@@ -1944,7 +1953,7 @@ function tourView(index, demo) {
   switch (index) {
     case 0: {
       const rows = demo.meetings.map(([title, meta, tags], i) => `<article class="meeting-row tour-anim" style="--tour-delay:${160 + i * 110}ms"><div class="meeting-main"><h2>${escapeHtml(title)}</h2><p>${escapeHtml(meta)}</p><div class="meeting-tags">${(tags || []).map((tag) => `<div class="tag">${escapeHtml(tag)}</div>`).join('')}</div></div><div class="meeting-status"><span class="status">${escapeHtml(t('已精修'))}</span><small>${escapeHtml(demo.time || '14:20')}</small></div><div class="meeting-actions"><button class="more">•••</button></div></article>`).join('');
-      return `<section class="view active" id="home-view"><div class="page-head"><div><button class="eyebrow tour-anim" type="button">${escapeHtml(t('会议库'))}</button><h1 class="tour-anim" style="--tour-delay:70ms">${escapeHtml(t('每一场对话，都留有依据。'))}</h1></div></div><div class="library-toolbar tour-anim" style="--tour-delay:110ms"><label class="search"><span>⌕</span><input type="search" placeholder="${escapeHtml(t('搜索会议…'))}" /></label><div class="filter"><span class="flow-select-toggle">${escapeHtml(t('最近 30 天'))} <span>⌄</span></span></div></div><section class="meeting-list">${rows}</section></section>`;
+      return `<section class="view active" id="home-view"><div class="page-head"><div><button class="eyebrow tour-anim" type="button">${escapeHtml(t('会议库'))}</button><h1 class="tour-anim" style="--tour-delay:70ms">${escapeHtml(t('每一场对话，都留有依据。'))}</h1></div></div><div class="library-toolbar tour-anim" style="--tour-delay:110ms"><div class="library-search"><label class="search"><span>⌕</span><input type="search" placeholder="${escapeHtml(t('搜索会议、字幕或说话人…'))}" /></label></div></div><section class="meeting-list">${rows}</section></section>`;
     }
     case 1:
       return `<section class="view active" id="prepare-view"><button class="back tour-anim">← ${escapeHtml(t('返回会议库'))}</button><div class="prepare-layout"><div class="tour-anim" style="--tour-delay:60ms"><p class="eyebrow">${escapeHtml(t('准备录制'))}</p><h1>${escapeHtml(t('开始一场会议'))}</h1><form><label>${escapeHtml(t('会议名称'))}<input value="${escapeHtml(demo.name)}" /></label><div class="form-grid"><label>${escapeHtml(t('会议语言'))}<input value="${escapeHtml(demo.language)}" /></label><label>${escapeHtml(t('译文目标'))}<input value="${escapeHtml(demo.translation || t('不需要翻译'))}" /></label></div><fieldset><legend>${escapeHtml(t('录制音频'))}</legend><label class="choice"><input type="checkbox" checked /><span><b>${escapeHtml(t('我的麦克风'))}</b><small>${escapeHtml(t('系统默认麦克风'))}</small></span><strong class="input-state"><i class="input-meter" style="--level:.72"></i><span>${escapeHtml(t('输入良好'))}</span></strong></label><label class="choice"><input type="checkbox" checked /><span><b>${escapeHtml(t('系统音频'))}</b><small>${escapeHtml(t('需要授予屏幕与系统音频权限'))}</small></span><strong class="input-state"><span>${escapeHtml(t('已就绪'))}</span></strong></label></fieldset><button class="primary-action wide tour-anim" style="--tour-delay:200ms">${escapeHtml(t('开始录制'))} <span>→</span></button></form></div></div></section>`;
@@ -2921,7 +2930,6 @@ function applyLanguage(nextLocale, animate = false) {
     document.querySelector('#advanced-settings').before(speakerProfileCard);
     document.querySelector('#settings-view .settings-grid').append(updateCard);
     renderDefaultMeetingTitle();
-    renderDateFilter();
     renderMeetingList();
     renderWorkspaceNav();
     renderMeetingDetail();
@@ -3293,14 +3301,20 @@ document.querySelector('#meeting-form').addEventListener('submit', async (event)
   const targetLanguage = form.get('translation-target') || null;
   const streamingModelId = prepareForm.dataset.streamingModel || defaults.streaming;
   const segmentationModelId = prepareForm.dataset.segmentationModel || defaults.segmentation;
+  const inputs = { mic: form.has('capture-mic'), system: form.has('capture-system') };
+  // 同时勾选麦克风+系统时，系统音轨默认「自动待命」（检测到声音才录制）；可被
+  // 「始终录制系统音频」设置覆盖。
+  const autoSource = inputs.mic && inputs.system;
   const payload = {
     title, language, target_language: targetLanguage, streaming_model_id: streamingModelId, refined_model_id: defaults.refined,
     speaker_segmentation_model_id: segmentationModelId,
     vad_model_id: prepareForm.dataset.vadModel || 'silero-vad', power_saving: getPerformanceMode() === 'efficiency', workspace_id: form.get('meeting-workspace') || null,
+    auto_source: autoSource,
   };
-  const inputs = { mic: form.has('capture-mic'), system: form.has('capture-system') };
   try {
-    const meeting = breviaClient ? await breviaClient.start(payload, inputs, selectedMicDeviceId()) : { id: null };
+    // 记住本次采集偏好，下次默认用上次选择。
+    try { localStorage.setItem('brevia-capture-inputs', JSON.stringify(inputs)); } catch { /* 忽略存储失败。 */ }
+    const meeting = breviaClient ? await breviaClient.start(payload, inputs, selectedMicDeviceId(), autoSource) : { id: null };
     if (meeting?.model_required) {
       queueModelTask('meeting.start', { ...payload, inputs }, meeting.model_required);
       downloadRequiredModels(meeting.model_required);
@@ -3761,20 +3775,78 @@ document.querySelector('#floating-caption-toggle').addEventListener('click', asy
     await window.brevia?.floatingCaption?.close();
   }
 });
-meetingSearch.addEventListener('input', () => { if (window.brevia) refreshBackendMeetings().catch((error) => showToast(error.message)); else filterMeetings(); });
-libraryToolbar.addEventListener('click', (event) => {
-  const toggle = event.target.closest('[data-flow-select-toggle]');
-  if (toggle) { const options = toggle.parentElement.querySelector('.flow-select-options'); const opening = options.hidden; libraryToolbar.querySelectorAll('.flow-select-options').forEach((list) => { list.hidden = true; list.previousElementSibling.previousElementSibling.setAttribute('aria-expanded', 'false'); }); options.hidden = !opening; toggle.setAttribute('aria-expanded', String(opening)); return; }
-  const choice = event.target.closest('[data-flow-select-choice]');
-  if (!choice) return;
-  const select = choice.closest('.flow-select');
-  select.querySelector('input').value = choice.dataset.value;
-  select.querySelector('.flow-select-toggle').firstChild.nodeValue = choice.textContent;
-  select.querySelector('.flow-select-options').hidden = true;
-  select.querySelector('.flow-select-toggle').setAttribute('aria-expanded', 'false');
-  activeDateRange = choice.dataset.value;
-  filterMeetings();
+meetingSearch.addEventListener('input', () => { scheduleMeetingSearch(); });
+meetingSearchClear.addEventListener('click', () => { meetingSearch.value = ''; meetingSearchClear.hidden = true; meetingSearch.focus(); updateSearchPopup(); });
+meetingSearch.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') { closeSearchPopup(); meetingSearch.blur(); }
 });
+document.addEventListener('pointerdown', (event) => { if (!event.target.closest('.library-search')) closeSearchPopup(); });
+meetingSearch.addEventListener('focus', () => { if (meetingSearch.value.trim()) updateSearchPopup(); });
+searchResultsPanel.addEventListener('click', async (event) => {
+  const result = event.target.closest('[data-search-result]');
+  if (!result) return;
+  const meetingId = result.dataset.searchResult;
+  closeSearchPopup();
+  meetingSearch.value = '';
+  meetingSearchClear.hidden = true;
+  if (!meetingId || !window.brevia) { showView('detail'); return; }
+  try {
+    const meeting = await window.brevia.meeting.get({ meeting_id: meetingId });
+    breviaClient.state.selectedMeetingId = meetingId;
+    applyBackendDetail(meeting);
+    showView('detail');
+  } catch (error) { showToast(error.message); }
+});
+/** 对搜索结果文本进行安全高亮。@param {string} text 原文。@param {string} query 关键词。@returns {string} 带 <mark> 高亮的 HTML。 */
+function highlightSearchMatch(text, query) {
+  const source = String(text || '');
+  const needle = query.trim();
+  if (!needle) return escapeHtml(source);
+  const lower = source.toLowerCase();
+  const q = needle.toLowerCase();
+  let out = ''; let i = 0;
+  while (i < source.length) {
+    const hit = lower.indexOf(q, i);
+    if (hit === -1) { out += escapeHtml(source.slice(i)); break; }
+    if (hit > i) out += escapeHtml(source.slice(i, hit));
+    out += `<mark>${escapeHtml(source.slice(hit, hit + q.length))}</mark>`;
+    i = hit + q.length;
+  }
+  return out;
+}
+/** 搜索输入变化后（带防抖）刷新结果浮窗。@returns {void} */
+function scheduleMeetingSearch() {
+  const query = meetingSearch.value;
+  meetingSearchClear.hidden = !query.trim();
+  window.clearTimeout(searchDebounceTimer);
+  searchDebounceTimer = window.setTimeout(updateSearchPopup, 160);
+}
+/** 渲染搜索结果浮窗。@returns {Promise<void>} */
+async function updateSearchPopup() {
+  const query = meetingSearch.value.trim();
+  if (!query) { closeSearchPopup(); return; }
+  const requestId = ++searchRequestId;
+  let meetings;
+  try {
+    meetings = window.brevia ? await window.brevia.meeting.search({ query }) : [];
+  } catch (error) { closeSearchPopup(); showToast(error.message); return; }
+  if (requestId !== searchRequestId) return;
+  if (!meetings.length) {
+    searchResultsPanel.innerHTML = `<div class="search-results-empty">${escapeHtml(t('未找到匹配的会议'))}</div>`;
+  } else {
+    searchResultsPanel.innerHTML = `<div class="search-results-head">${escapeHtml(query)}<small>${t('{count} 条结果').replace('{count}', String(meetings.length))}</small></div>${meetings.map((meeting) => {
+      const created = (meeting.created_at || meeting.createdAt) ? new Date(meeting.created_at || meeting.createdAt).toLocaleDateString(BreviaI18n.localeTag(locale), { month: 'short', day: 'numeric' }) : '';
+      const durationMs = meeting.duration_ms != null ? meeting.duration_ms : meeting.durationMs;
+      const duration = durationMs ? `${Math.round(durationMs / 60000)} ${t('分钟')}` : '';
+      const snippet = meeting.snippets && meeting.snippets.length
+        ? `<p class="search-snippet"><b>${highlightSearchMatch(meeting.snippets[0].speaker_name, query)}</b><span>${highlightSearchMatch(meeting.snippets[0].text, query)}</span></p>`
+        : `<p class="search-snippet search-snippet-title"><span>${escapeHtml(t('标题匹配'))}</span></p>`;
+      return `<button type="button" class="search-result" role="option" data-search-result="${escapeHtml(meeting.id)}"><strong>${highlightSearchMatch(meeting.title, query)}</strong><small>${escapeHtml([created, duration].filter(Boolean).join(' · '))}</small>${snippet}</button>`;
+    }).join('')}`;
+  }
+  searchResultsPanel.hidden = false;
+}
+function closeSearchPopup() { searchResultsPanel.hidden = true; searchResultsPanel.innerHTML = ''; }
 const meetingList = document.querySelector('.meeting-list');
 const meetingSelectionSurface = document.querySelector('#home-view');
 let dragSelection;
@@ -4674,8 +4746,22 @@ if (window.brevia) {
     if (targetChanged) document.querySelectorAll('.translation').forEach((line) => { line.remove(); });
     setLiveTranslationEnabled(Boolean(liveConfig.target_language));
   });
-  window.brevia.on('live.performance', ({ meeting_id: meetingId, bottleneck }) => {
-    if (!meetingActive || !bottleneck) return;
+  window.brevia.on('audio_source.auto', ({ active, muted }) => {
+    const badge = document.getElementById('auto-source-badge');
+    if (!badge) return;
+    const has = (track) => active.includes(track);
+    let label = '';
+    let show = false;
+    if (has('mic') && !has('system')) { label = t('自动 · 仅麦克风'); show = true; }
+    else if (has('system') && !has('mic')) { label = t('自动 · 仅系统音频'); show = true; }
+    else if (!has('mic') && !has('system')) { label = t('自动音源'); show = true; }
+    badge.textContent = label;
+    badge.hidden = !show;
+    badge.style.cssText = show
+      ? 'margin-left:.5em;font-size:.72em;line-height:1;padding:.14em .55em;border:1px solid currentColor;border-radius:999px;opacity:.75;white-space:nowrap'
+      : '';
+  });
+  window.brevia.on('live.performance', ({ meeting_id: meetingId, bottleneck }) => {    if (!meetingActive || !bottleneck) return;
     if (getPerformanceMode() === 'efficiency') return; // 已在效率模式，无需再提示
     if (perfBottleneckShownForMeeting === meetingId) return; // 每场会议只提示一次
     perfBottleneckShownForMeeting = meetingId;
@@ -4926,6 +5012,7 @@ if (window.brevia) {
 
   document.addEventListener('click', (event) => {
     if (event.target.closest('[data-view-full-summary]')) { openModal('summary-detail'); return; }
+    if (event.target.closest('[data-open-summary-edit]')) { void openModal('summary-detail').then(() => { summaryEditing = true; renderModal('summary-detail'); }); return; }
     if (event.target.closest('[data-generate-summary]')) void generateMeetingSummary();
     if (event.target.closest('[data-regenerate-summary]')) void generateMeetingSummary();
   });

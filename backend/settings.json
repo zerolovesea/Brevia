@@ -17,6 +17,7 @@
     "denoiser_model_id": "gtcrn-live-denoiser",
     "denoiser_enabled": 1,
     "denoise_minimum_rms": 0.03,
+    "always_record_system_audio": 0,
     "microphone_target_rms": 0.08,
     "microphone_minimum_rms": 0.003,
     "microphone_max_gain": 4,

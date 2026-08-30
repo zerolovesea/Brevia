@@ -100,14 +100,15 @@ function sanitizeUrl(url = '') {
 /** 把富文本编辑器的 DOM 子树转换为 Markdown（支持粗体/斜体/代码/链接/图片/标题/列表/引用/表格）。@param {Node} root 根节点。@returns {string} Markdown 文本。 */
 function htmlToMarkdown(root) {
   const lines = [];
-  const inline = (node) => {
+  const inlineNodes = (children) => {
     let out = '';
-    for (const child of node.childNodes) {
+    for (const child of children) {
       if (child.nodeType === Node.TEXT_NODE) { out += child.textContent; continue; }
       if (child.nodeType !== Node.ELEMENT_NODE) continue;
       const tag = child.tagName.toLowerCase();
       if (tag === 'br') { out += '\n'; continue; }
-      const inner = inline(child);
+      if (tag === 'ul' || tag === 'ol') continue;
+      const inner = inlineNodes(child.childNodes);
       if (tag === 'b' || tag === 'strong') out += `**${inner}**`;
       else if (tag === 'i' || tag === 'em') out += `*${inner}*`;
       else if (tag === 'code') out += `\`${inner}\``;
@@ -117,6 +118,21 @@ function htmlToMarkdown(root) {
     }
     return out;
   };
+  const inline = (node) => inlineNodes(node.childNodes);
+  const list = (node, depth = 0) => {
+    let index = 1;
+    for (const child of node.children) {
+      const tag = child.tagName.toLowerCase();
+      if (tag === 'li') {
+        lines.push(`${'  '.repeat(depth)}${node.tagName.toLowerCase() === 'ol' ? `${index}.` : '-'} ${inlineNodes(child.childNodes)}`);
+        [...child.children].filter((nested) => /^(ul|ol)$/i.test(nested.tagName)).forEach((nested) => list(nested, depth + 1));
+        index += 1;
+      } else if (tag === 'ul' || tag === 'ol') {
+        // Chromium 在 Tab 缩进时会把嵌套列表放在前一个 <li> 的同级。
+        list(child, depth + 1);
+      }
+    }
+  };
   const walk = (node) => {
     for (const child of node.childNodes) {
       if (child.nodeType === Node.TEXT_NODE) { if (child.textContent.trim()) lines.push(child.textContent); continue; }
@@ -125,12 +141,7 @@ function htmlToMarkdown(root) {
       if (tag === 'p' || tag === 'div') { lines.push(inline(child)); lines.push(''); }
       else if (/^h[1-3]$/.test(tag)) { lines.push(`${'#'.repeat(Number(tag[1]))} ${inline(child)}`); lines.push(''); }
       else if (tag === 'ul' || tag === 'ol') {
-        let index = 1;
-        for (const li of child.children) {
-          if (li.tagName.toLowerCase() !== 'li') continue;
-          lines.push(`${tag === 'ol' ? `${index}.` : '-'} ${inline(li)}`);
-          index += 1;
-        }
+        list(child);
         lines.push('');
       } else if (tag === 'blockquote') { lines.push(`> ${inline(child)}`); lines.push(''); }
       else if (tag === 'hr') { lines.push('---'); lines.push(''); }
@@ -275,7 +286,7 @@ function createNotesEditor(root, options = {}) {
     if (!start || !end) return;
     const range = document.createRange();
     range.setStart(start.node, match.start - start.start); range.setEnd(end.node, match.end - end.start);
-    const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range); editor.focus();
+    const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
   }
   function replaceAll() {
     const query = findInput.value;
@@ -378,10 +389,35 @@ function createNotesEditor(root, options = {}) {
     if (event.target.closest('[data-notes-replace-all]')) replaceAll();
     if (event.target.closest('[data-notes-find-close]')) findPop.hidden = true;
   });
+  findPop.addEventListener('mousedown', (event) => {
+    if (event.target.closest('button')) event.preventDefault();
+  });
   findInput.addEventListener('input', () => { findMatchIndex = -1; selectFindMatch(1); });
   findInput.addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); selectFindMatch(event.shiftKey ? -1 : 1); } if (event.key === 'Escape') findPop.hidden = true; });
+  const closeFindOnOutsidePointer = (event) => {
+    if (!findPop.isConnected) { document.removeEventListener('pointerdown', closeFindOnOutsidePointer); return; }
+    if (!findPop.hidden && !findPop.contains(event.target)) findPop.hidden = true;
+  };
+  document.addEventListener('pointerdown', closeFindOnOutsidePointer);
   [editor, input].forEach((surface) => surface.addEventListener('keydown', (event) => {
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f') { event.preventDefault(); openFind(); }
+    if (event.key !== 'Tab') return;
+    const listItem = (window.getSelection()?.anchorNode?.parentElement || editor).closest('li');
+    if (mode === 'rich' && listItem) {
+      event.preventDefault();
+      document.execCommand(event.shiftKey ? 'outdent' : 'indent');
+      if (onInput) onInput();
+      return;
+    }
+    if (mode !== 'markdown') return;
+    const start = input.selectionStart;
+    const lineStart = input.value.lastIndexOf('\n', start - 1) + 1;
+    const indent = input.value.slice(lineStart).match(/^(\s*)(?=(?:[-*]|\d+\.)\s+)/)?.[1];
+    if (indent === undefined) return;
+    event.preventDefault();
+    if (event.shiftKey) input.setRangeText(indent.slice(0, Math.max(0, indent.length - 2)), lineStart, lineStart + indent.length, 'preserve');
+    else input.setRangeText('  ', lineStart, lineStart, 'preserve');
+    if (onInput) onInput();
   }));
   editor.addEventListener('input', () => {
     const anchor = window.getSelection()?.anchorNode;
@@ -436,6 +472,30 @@ function renderMarkdown(markdown) {
     .replace(/\*([^*]+)\*/g, '<em>$1</em>');
   const lines = String(markdown || '').replace(/\r/g, '').split('\n');
   const html = [];
+  const listLine = (value) => value.match(/^(\s*)([-*]|\d+\.)\s+(.+)$/);
+  const renderList = (start) => {
+    const first = listLine(lines[start]);
+    const indent = first[1].length;
+    const ordered = /\d+\.$/.test(first[2]);
+    const tag = ordered ? 'ol' : 'ul';
+    const items = [];
+    let index = start;
+    while (index < lines.length) {
+      const item = listLine(lines[index]);
+      if (!item || item[1].length !== indent || (/\d+\.$/.test(item[2])) !== ordered) break;
+      index += 1;
+      let nested = '';
+      while (index < lines.length) {
+        const child = listLine(lines[index]);
+        if (!child || child[1].length <= indent) break;
+        const rendered = renderList(index);
+        nested += rendered.html;
+        index = rendered.index;
+      }
+      items.push(`<li>${inline(item[3])}${nested}</li>`);
+    }
+    return { html: `<${tag}>${items.join('')}</${tag}>`, index };
+  };
   for (let index = 0; index < lines.length;) {
     const line = lines[index];
     if (!line.trim()) { index += 1; continue; }
@@ -454,11 +514,6 @@ function renderMarkdown(markdown) {
       while (index < lines.length && /^>\s?/.test(lines[index])) items.push(inline(lines[index++].replace(/^>\s?/, '')));
       html.push(`<blockquote>${items.join('<br />')}</blockquote>`); continue;
     }
-    if (/^\d+\.\s+/.test(line)) {
-      const items = [];
-      while (index < lines.length && /^\d+\.\s+/.test(lines[index])) items.push(`<li>${inline(lines[index++].replace(/^\d+\.\s+/, ''))}</li>`);
-      html.push(`<ol>${items.join('')}</ol>`); continue;
-    }
     if (/^[-*]\s*\[[ xX]\]\s*/.test(line)) {
       const items = [];
       while (index < lines.length && /^[-*]\s*\[[ xX]\]\s*/.test(lines[index])) {
@@ -467,10 +522,9 @@ function renderMarkdown(markdown) {
       }
       html.push(`<ul>${items.join('')}</ul>`); continue;
     }
-    if (/^[-*]\s+/.test(line)) {
-      const items = [];
-      while (index < lines.length && /^[-*]\s+/.test(lines[index])) items.push(`<li>${inline(lines[index++].replace(/^[-*]\s+/, ''))}</li>`);
-      html.push(`<ul>${items.join('')}</ul>`); continue;
+    if (listLine(line)) {
+      const rendered = renderList(index);
+      html.push(rendered.html); index = rendered.index; continue;
     }
     const paragraph = [];
     while (index < lines.length && lines[index].trim() && !/^(#{1,3}\s+|\||[-*]\s*(?:\[[ xX]\]\s*|\s)|\d+\.\s+|>\s?|---|\*\*\*|___)/.test(lines[index])) paragraph.push(lines[index++]);
@@ -488,7 +542,7 @@ function cleanSummaryMarkdown(markdown) {
 function renderMeetingSummary({ markdown, hasFull = false, blocked = false, generating = false }) {
   const blockedAttrs = blocked ? ` disabled title="${escapeHtml(t('实时会议中，结束后再生成会议纪要。'))}"` : '';
   const action = generating ? '' : markdown
-    ? `<button class="summary-action-icon" data-regenerate-summary title="${escapeHtml(t('重新生成'))}" aria-label="${escapeHtml(t('重新生成'))}"${blockedAttrs}>${summaryActionIcons.refresh}</button>`
+    ? `<span class="summary-actions"><button class="summary-action-icon" data-open-summary-edit title="${escapeHtml(t('编辑'))}" aria-label="${escapeHtml(t('编辑'))}">${summaryActionIcons.edit}</button><button class="summary-action-icon" data-regenerate-summary title="${escapeHtml(t('重新生成'))}" aria-label="${escapeHtml(t('重新生成'))}"${blockedAttrs}>${summaryActionIcons.refresh}</button></span>`
     : `<button class="text-button" data-generate-summary${blockedAttrs}>${t('生成')} →</button>`;
   return `<div class="summary-preview"><div class="summary-head"><p class="eyebrow">${t('会议纪要')}</p>${action}</div>${markdown ? `<div class="summary-body markdown-content">${renderMarkdown(cleanSummaryMarkdown(markdown))}</div><button class="text-button" data-view-full-summary>${t('查看完整内容')} →</button>` : `<p class="summary-empty">${t('尚未生成')}</p>`}</div>`;
 }

@@ -93,6 +93,7 @@ def _validate(value, template):
                     "microphone_peak",
                     "denoiser_enabled",
                     "denoise_minimum_rms",
+                    "always_record_system_audio",
                     "threshold",
                 }
                 and not 0 <= current <= 1

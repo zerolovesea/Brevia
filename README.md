@@ -283,6 +283,20 @@ Workarounds:
 The recording and post-meeting refinement are unaffected, so you won't lose the transcript.
 </details>
 
+<details>
+<summary><strong>Does Brevia auto-choose between mic and system audio?</strong></summary>
+
+Brevia remembers your last capture choice (mic only, or mic + system audio), so you don't have to pick every time.
+
+When **mic + system** is enabled, system audio starts in a low-power **standby**: it only monitors levels and keeps a short pre-buffer. It activates quickly once it detects audio (~0.5–0.8 s) and flushes that pre-buffer so the start of remote speech isn't lost, and returns to standby only after ~30 s of silence. This means:
+
+- In-person meeting → only mic is sent (silent system track stays in standby)
+- Watching an online course → system audio activates and is recorded
+- Hybrid meeting → both are recorded and mixed
+
+During recording a small badge (e.g. "Auto · Mic only") shows which source is active. If you need system audio recorded unconditionally (courses, low-volume material, or compliance), set **Settings → Advanced → `live_asr.always_record_system_audio`** to `1` to disable auto-standby.
+</details>
+
 ## Feedback and contributing
 
 ### Report an issue

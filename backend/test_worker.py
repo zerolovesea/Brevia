@@ -4030,7 +4030,61 @@ class WorkerTest(unittest.TestCase):
         self.assertIsNotNone(mixed)
         result, _start_ms = mixed
         self.assertAlmostEqual(float(result[0]), 0.1, places=6)
+    def test_set_audio_source_switches_dual_track_mixing(self):
+        # 前端驱动的活跃音轨：后端据此切换双轨混音/单轨转写，并广播决定。
+        meeting = self.worker.start(
+            {
+                "title": "自动音源",
+                "language": "zh",
+                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
+                "refined_model_id": "qwen3-asr-0.6b-int8",
+                "audio_tracks": ["mic", "system"],
+            }
+        )
+        self.worker.asr = Mock()
+        self.worker.asr.accept.return_value = (SimpleNamespace(text="字幕"), False)
+        self.worker.punctuation = None
+        self.worker.live_refiner = None
+        result = self.worker.set_audio_source(
+            {"meeting_id": meeting["id"], "active": ["mic"]}
+        )
+        self.assertEqual(result["active"], ["mic"])
+        self.assertEqual(self.worker.live_tracks, {"mic"})
+        auto_event = next(
+            (ev for ev in self.events if ev["type"] == "audio_source.auto"), None
+        )
+        self.assertEqual(auto_event["payload"]["muted"], ["system"])
+        result = self.worker.set_audio_source(
+            {"meeting_id": meeting["id"], "active": ["mic", "system"]}
+        )
+        self.assertEqual(self.worker.live_tracks, {"mic", "system"})
+        self.assertEqual(
+            next(
+                ev
+                for ev in reversed(self.events)
+                if ev["type"] == "audio_source.auto"
+            )["payload"]["muted"],
+            [],
+        )
 
+    def test_set_audio_source_clears_stale_mix_buffer_on_deactivation(self):
+        import numpy
+        from collections import deque
+
+        self.worker.live_mix_buffers = {"mic": deque(), "system": deque()}
+        self.worker.live_tracks = {"mic", "system"}
+        self.worker.live_mix_buffers["system"].append([0, numpy.zeros(1600)])
+        meeting = self.worker.start(
+            {
+                "title": "自动音源清缓冲",
+                "language": "zh",
+                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
+                "refined_model_id": "qwen3-asr-0.6b-int8",
+                "audio_tracks": ["mic", "system"],
+            }
+        )
+        self.worker.set_audio_source({"meeting_id": meeting["id"], "active": ["mic"]})
+        self.assertEqual(len(self.worker.live_mix_buffers["system"]), 0)
     def test_speaker_profile_aggregates_samples_and_matches_known_voice(self):
         first = self.worker.store.save_speaker_profile_sample(
             "王琳", [1, 0, 0], "voice-1"

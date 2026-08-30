@@ -761,6 +761,7 @@ function registerIpc() {
     if (stoppingForSleep || worker.active?.meeting_id !== value.meeting_id) return { dropped: true };
     return worker.request('meeting.audio', value);
   });
+  ipcMain.handle('meeting.audio-source', (_, payload) => worker.request('meeting.audio-source', payload));
   handle('meeting.pause', id.extend({ paused: z.boolean() }), 'meeting.pause');
   handleModelRequirement('meeting.reconfigure', meetingReconfigure, 'meeting.reconfigure');
   ipcMain.handle('meeting.stop', async (_, payload) => {
@@ -771,6 +772,7 @@ function registerIpc() {
     return result;
   });
   handle('meeting.list', z.object({ include_deleted: z.boolean().optional(), query: z.string().max(120).optional() }), 'meeting.list');
+  handle('meeting.search', z.object({ query: z.string().max(120) }), 'meeting.search');
   handle('meeting.get', id, 'meeting.get');
   handle('meeting.update', id.extend({ updates: meetingUpdates }), 'meeting.update');
   handle('meeting.delete', id, 'meeting.delete');

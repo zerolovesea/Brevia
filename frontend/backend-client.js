@@ -50,6 +50,31 @@ class AudioCapture {
     // Windows 上「默认通信设备」可能被设成已拔出的耳机麦克风,导致拔掉耳机后收不到声音,
     // 因此允许用户固定选择内置麦克风,绕开有问题的系统默认。
     this.micDeviceId = '';
+    // 系统音轨门控（自动识别音源）：默认把 system 置于「待命」，只算电平、保留预缓冲，
+    // 不重采样/不 Base64/不 IPC/不推流；检测到有效音频后快速激活并补发预缓冲，
+    // 长时间无有效音频则缓慢回到待命。「始终录制系统音频」可禁用门控。
+    this.alwaysRecordSystem = false;
+    this.systemActive = false;
+    this.micActive = false;
+    this.systemGate = {
+      state: 'standby', // 'standby' | 'active'
+      noiseFloor: 0.0,
+      threshold: 0.0,
+      aboveMs: 0,
+      lastActiveAt: 0,
+      prebuffer: [], // [{ pcm, startMs }]
+    };
+  }
+
+  // 系统音轨门控参数。
+  static get SYSTEM_GATE() {
+    return {
+      PREBUFFER_MS: 2500,    // 待命时保留的预缓冲时长
+      ACTIVATE_MS: 700,      // 高于噪声底持续多久即激活（激活要快）
+      DEACTIVATE_MS: 30000,  // 激活后无有效音频多久回到待命（停用要慢）
+      FLOOR_FACTOR: 3,       // 激活阈值 = max(自适应噪声底 * 系数, ABS_MIN)
+      ABS_MIN: 0.01,         // 绝对 RMS 下限（约 -40 dBFS）
+    };
   }
 
   // 构造 getUserMedia 的音频约束,把所选设备固化为 exact deviceId。
@@ -156,7 +181,13 @@ class AudioCapture {
     this.startedAt = performance.now();
     const streams = this.pendingStreams;
     this.pendingStreams = [];
+    this.micActive = streams.some((item) => item.track === 'mic');
+    // 系统音轨默认待命；「始终录制系统音频」时一开始就激活。
+    this.systemActive = this.alwaysRecordSystem && streams.some((item) => item.track === 'system');
+    // 先通知后端初始活跃集，避免开头几帧因双轨缓冲未就绪而暂停转写。
+    this._signalAudioSource();
     await Promise.all(streams.map(({ track, stream }) => this.connect(track, stream)));
+    this._signalAudioSource();
   }
 
   async setPaused(paused) {
@@ -180,6 +211,15 @@ class AudioCapture {
       ready = () => { clearTimeout(readyTimer); resolve(); };
       readyTimer = setTimeout(() => reject(new Error(micMessage(track === 'system' ? '系统音频未产生音频数据' : '麦克风未产生音频数据'))), 3000);
     });
+    // 把一帧原始 Float32 采样重采样成 16k PCM 并推流（门控待命时不调用，省重采样）。
+    const sendRaw = (rawSamples, startMs) => {
+      const samples = this.resample(rawSamples, context.sampleRate);
+      const pcm = new Int16Array(samples.length);
+      for (let i = 0; i < samples.length; i += 1) {
+        pcm[i] = Math.max(-1, Math.min(1, samples[i])) * 0x7fff;
+      }
+      this.enqueue(resource, pcm, startMs);
+    };
     try {
       await loadAudioWorklet(context);
       resource.source = context.createMediaStreamSource(stream);
@@ -196,12 +236,15 @@ class AudioCapture {
         if (track === 'mic' && this.onLevel) {
           this.onLevel(track, data.level);
         }
-        const samples = this.resample(data.samples, context.sampleRate);
-        const offset = sampleOffset;
-        sampleOffset += samples.length;
-        const pcm = new Int16Array(samples.length);
-        samples.forEach((sample, index) => { pcm[index] = Math.max(-1, Math.min(1, sample)) * 0x7fff; });
-        this.enqueue(resource, pcm, resource.startMs + Math.round(offset / 16));
+        const startMs = resource.startMs + Math.round(sampleOffset / 16);
+        sampleOffset += Math.round(data.samples.length * 16000 / context.sampleRate);
+        // 系统音轨门控在原始采样上判断：待命时不重采样/不转 PCM/不推流。
+        if (track === 'system') {
+          const frameMs = Math.round(data.samples.length / context.sampleRate * 1000);
+          const decision = this._gateSystem(data.samples, startMs, frameMs, resource, sendRaw);
+          if (decision === 'drop' || decision === 'flush') return;
+        }
+        sendRaw(data.samples, startMs);
       };
       resource.source.connect(resource.processor);
       resource.processor.connect(context.destination);
@@ -228,6 +271,83 @@ class AudioCapture {
       } catch (error) { console.error('Audio frame failed', error); }
     };
     resource.inFlight = resource.inFlight ? resource.inFlight.then(send) : send();
+  }
+
+  // 计算 Float32 原始样本的归一化 RMS（0..1），用于门控的「检测到音频」判断。
+  // 直接在原始采样上算，避免待命态也做重采样/PCM 转换。
+  _rmsRaw(samples) {
+    if (!samples.length) return 0;
+    let sum = 0;
+    for (let i = 0; i < samples.length; i += 1) sum += samples[i] * samples[i];
+    return Math.sqrt(sum / samples.length);
+  }
+
+  // 系统音轨门控。返回决策：
+  //   'drop'  — 待命，当前帧不推（也不重采样/转 PCM）；
+  //   'flush' — 刚激活，预缓冲（已含当前帧）已补发，当前帧不再重复推；
+  //   'send'  — 激活态，正常推当前帧。
+  // 激活时先把预缓冲交给 onSendBuffered（此时才做重采样+PCM），并按顺序通知后端。
+  _gateSystem(samples, startMs, frameMs, resource, onSendBuffered) {
+    const params = AudioCapture.SYSTEM_GATE;
+    if (this.alwaysRecordSystem) {
+      if (!this.systemActive) { this.systemActive = true; this._signalAudioSource(resource); }
+      return 'send';
+    }
+    const g = this.systemGate;
+    const rms = this._rmsRaw(samples);
+    if (g.state === 'standby') {
+      // 用低于阈值的帧更新自适应噪声底。
+      if (rms < g.threshold) g.noiseFloor = g.noiseFloor * 0.9 + rms * 0.1;
+      g.threshold = Math.max(g.noiseFloor * params.FLOOR_FACTOR, params.ABS_MIN);
+      // 保留原始采样的预缓冲（避免待命态做重采样/PCM），激活时再补发。
+      g.prebuffer.push({ samples: samples.slice(), startMs, ms: frameMs });
+      let bufMs = 0;
+      for (const frame of g.prebuffer) bufMs += frame.ms;
+      while (bufMs > params.PREBUFFER_MS && g.prebuffer.length > 1) {
+        bufMs -= g.prebuffer.shift().ms;
+      }
+      // 激活要快：高于噪声底持续约 500–800ms 就激活。
+      g.aboveMs = rms >= g.threshold ? g.aboveMs + frameMs : 0;
+      if (g.aboveMs >= params.ACTIVATE_MS) {
+        g.state = 'active';
+        g.lastActiveAt = performance.now();
+        this.systemActive = true;
+        this._signalAudioSource(resource);
+        // 补发预缓冲（含当前帧，故本帧不再由调用方推）。
+        for (const frame of g.prebuffer) onSendBuffered(frame.samples, frame.startMs);
+        g.prebuffer = [];
+        return 'flush';
+      }
+      return 'drop';
+    }
+    // active：停用要慢——持续 DEACTIVATE_MS 无有效音频才回到待命。
+    if (rms >= g.threshold) g.lastActiveAt = performance.now();
+    if (performance.now() - g.lastActiveAt > params.DEACTIVATE_MS) {
+      g.state = 'standby';
+      g.aboveMs = 0;
+      g.prebuffer = [];
+      this.systemActive = false;
+      this._signalAudioSource(resource);
+      return 'drop';
+    }
+    return 'send';
+  }
+
+  // 把当前活跃音轨集合通知后端，驱动其双轨混音/单轨转写。
+  // 返回 Promise，并（传入 resource 时）链入该轨的推送队列，确保「切换状态」先于
+  // 其后的音频帧到达后端，避免音轨切换与音频推送之间的竞态。
+  _signalAudioSource(resource) {
+    const signal = () => {
+      if (!this.meetingId || !window.brevia?.meeting?.audioSource) return Promise.resolve();
+      const active = [];
+      if (this.micActive) active.push('mic');
+      if (this.systemActive) active.push('system');
+      return window.brevia.meeting.audioSource({ meeting_id: this.meetingId, active })
+        .catch((error) => console.error('audio-source failed', error));
+    };
+    if (!resource) return signal();
+    resource.inFlight = (resource.inFlight || Promise.resolve()).then(signal);
+    return resource.inFlight;
   }
 
   flush(resource) {
@@ -327,10 +447,16 @@ window.breviaClient = window.brevia ? {
     this.state.initialized = result;
     return result;
   },
-  async start(payload, inputs, micDeviceId) {
+  async start(payload, inputs, micDeviceId, autoSource, alwaysRecordSystem) {
     await this.stopPreview();
     this.capture = new AudioCapture(window.brevia.meeting.audio, this.onLevel);
     this.capture.micDeviceId = micDeviceId ?? this.micDeviceId;
+    // 「始终录制系统音频」是全局设置：未显式传入时读取，确保模型下载后的重启动也不丢。
+    if (alwaysRecordSystem === undefined) {
+      const advanced = await window.brevia.advancedSettings.get().catch(() => null);
+      alwaysRecordSystem = advanced?.settings?.live_asr?.always_record_system_audio;
+    }
+    this.capture.alwaysRecordSystem = Boolean(alwaysRecordSystem);
     let meeting;
     try {
       if (inputs.system) {
@@ -338,7 +464,12 @@ window.breviaClient = window.brevia ? {
         if (permissions.systemAudioSupported === false) throw new Error('当前系统不支持直接录制系统音频，请仅使用麦克风');
       }
       await this.capture.prepare(inputs);
-      meeting = await window.brevia.meeting.start({ ...payload, audio_tracks: Object.keys(inputs).filter((track) => inputs[track]) });
+      const startPayload = {
+        ...payload,
+        audio_tracks: Object.keys(inputs).filter((track) => inputs[track]),
+        auto_source: autoSource === undefined ? Boolean(payload.auto_source) : Boolean(autoSource),
+      };
+      meeting = await window.brevia.meeting.start(startPayload);
       if (meeting?.model_required) {
         await this.capture.stop();
         this.capture = null;

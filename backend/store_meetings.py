@@ -149,6 +149,59 @@ class MeetingStoreMixin:
             ).fetchall()
         return [self._meeting(row) for row in rows]
 
+    def search_meetings(self, query=""):
+        """搜索会议标题、标签、字幕内容与说话人姓名。
+
+        与 ``list_meetings`` 不同的是，它为每个命中会议附带匹配的字幕片段
+        （含说话人姓名与起止毫秒），供前端在搜索结果浮窗中高亮展示。
+
+        Args:
+            query: 搜索关键词，匹配标题、标签、字幕文本或说话人姓名。
+
+        Returns:
+            按创建时间倒序的会议列表，每项含 ``snippets`` 字段（命中的字幕片段）。
+        """
+        q = (query or "").strip()
+        if not q:
+            return []
+        like = f"%{q}%"
+        with self.connect() as db:
+            rows = db.execute(
+                f"""SELECT m.*,
+                    {_SPEAKER_COUNT_SQL} AS speaker_count,
+                    {_HAS_SUMMARY_SQL} AS has_summary
+                    FROM meetings m
+                    WHERE m.deleted_at IS NULL AND (
+                        m.title LIKE ?
+                        OR m.tags LIKE ?
+                        OR m.id IN (SELECT meeting_id FROM segments WHERE text LIKE ?)
+                        OR m.id IN (
+                            SELECT s.meeting_id FROM segments s
+                            JOIN speakers p ON p.meeting_id=s.meeting_id AND p.id=s.speaker
+                            WHERE p.name LIKE ?
+                        )
+                    )
+                    ORDER BY m.created_at DESC""",
+                (like, like, like, like),
+            ).fetchall()
+            results = []
+            for row in rows:
+                meeting = self._meeting(row)
+                meeting["snippets"] = [
+                    dict(snippet)
+                    for snippet in db.execute(
+                        """SELECT s.start_ms, s.end_ms,
+                                  COALESCE(p.name, s.speaker) AS speaker_name, s.text
+                           FROM segments s LEFT JOIN speakers p
+                           ON p.meeting_id=s.meeting_id AND p.id=s.speaker
+                           WHERE s.meeting_id=? AND (s.text LIKE ? OR COALESCE(p.name,'') LIKE ?)
+                           ORDER BY s.start_ms LIMIT 3""",
+                        (row["id"], like, like),
+                    ).fetchall()
+                ]
+                results.append(meeting)
+        return results
+
     def seed_examples(self):
         """按版本写入所有界面语言的示例会议和录音。
 
