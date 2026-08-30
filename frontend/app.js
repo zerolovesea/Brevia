@@ -3347,10 +3347,11 @@ importRecording.addEventListener('click', async () => {
       workspace_id: form.get('meeting-workspace') || null, path: 'selected-by-electron',
     });
     if (!meeting) return;
+    breviaClient.state.selectedMeetingId = meeting.id;
     applyBackendDetail(meeting);
     await refreshBackendMeetings();
     showView('detail');
-    // 导入后不自动精修：详情页的「精修字幕」会以内联菜单询问会议人数后再精修。
+    startRefinement(meeting.refined_model_id);
   } catch (error) { showToast(error.message); } finally { importRecording.disabled = false; }
 });
 let seconds = 0;

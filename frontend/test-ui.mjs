@@ -926,6 +926,7 @@ assert.match(text(app), /const startRefinement[\s\S]{0,600}window\.brevia\.meeti
 assert.match(text(app), /num_speakers: numSpeakers/);
 assert.match(text(components), /refine-menu-speakers[\s\S]{0,200}data-refine-num-speakers/);
 assert.match(text(app), /function refineNumSpeakers/);
+assert.match(text(app), /if \(!meeting\) return;\s*breviaClient\.state\.selectedMeetingId = meeting\.id;[\s\S]{0,300}startRefinement\(meeting\.refined_model_id\);/);
 assert.match(text(js), /let followLiveTranscript = true/);
 assert.match(text(js), /meetingActive = true;\s*seconds = 0;\s*const pauseButton = document\.querySelector\('#pause'\);\s*pauseButton\.dataset\.paused = 'false';\s*renderPauseButton\(\);/);
 assert.match(text(js), /transcript\.scrollTop = transcript\.scrollHeight/);
