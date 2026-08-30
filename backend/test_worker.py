@@ -43,7 +43,7 @@ class WorkerTest(unittest.TestCase):
         self.temp.cleanup()
 
     def test_audio_import_does_not_read_worker_stdin(self):
-        with patch("backend.audio_io.subprocess.run") as run:
+        with patch("backend.audio_io.ffmpeg_path", return_value="ffmpeg"), patch("backend.audio_io.subprocess.run") as run:
             convert_to_pcm_wav("source.mp3", "destination.wav")
         command = run.call_args.args[0]
         self.assertIn("-nostdin", command)
