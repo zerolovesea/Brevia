@@ -224,7 +224,7 @@ DemoScenariosV3.prototype.setupLiveUI = function(meetingTitle) {
               <header class="live-section-head">
                 <p class="eyebrow">我的笔记</p>
                 <button class="ai-assist-toggle" type="button"><span class="ai-assist-toggle-star">✦</span> <span>AI 辅助</span></button>
-                <button class="live-mode-toggle" data-toggle-live-mode="caption" type="button"><span>展开字幕</span> →</button>
+                <button class="live-mode-toggle" data-toggle-live-mode="caption" type="button" aria-label="展开字幕" title="展开字幕"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 3 5 5-5 5"/></svg></button>
               </header>
               <div data-live-notes-root>
                 <div class="ai-assist-empty">
@@ -246,7 +246,7 @@ DemoScenariosV3.prototype.setupLiveUI = function(meetingTitle) {
             <section class="live-captions">
               <header class="live-section-head">
                 <p class="eyebrow">实时字幕</p>
-                <button class="live-mode-toggle" data-toggle-live-mode="notes" type="button"><span>返回笔记</span> ←</button>
+                <button class="live-mode-toggle" data-toggle-live-mode="notes" type="button" aria-label="返回笔记" title="返回笔记"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m10 3-5 5 5 5"/></svg></button>
               </header>
               <div class="transcript-scroll" data-demo-id="transcript-scroll"></div>
               <button class="back-to-latest" type="button" hidden><span>↓</span> <span>回到最新</span></button>
@@ -740,7 +740,7 @@ DemoScenariosV3.prototype.setupVoiceprintUI = function() {
               <header class="live-section-head">
                 <p class="eyebrow">我的笔记</p>
                 <button class="ai-assist-toggle is-enabled" type="button"><span class="ai-assist-toggle-star">✦</span> <span>AI 辅助</span></button>
-                <button class="live-mode-toggle" data-toggle-live-mode="caption" type="button"><span>展开字幕</span> →</button>
+                <button class="live-mode-toggle" data-toggle-live-mode="caption" type="button" aria-label="展开字幕" title="展开字幕"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 3 5 5-5 5"/></svg></button>
               </header>
               <div data-live-notes-root>
                 <div class="ai-assist-empty">
@@ -763,7 +763,7 @@ DemoScenariosV3.prototype.setupVoiceprintUI = function() {
             <section class="live-captions">
               <header class="live-section-head">
                 <p class="eyebrow">实时字幕</p>
-                <button class="live-mode-toggle" data-toggle-live-mode="notes" type="button"><span>返回笔记</span> ←</button>
+                <button class="live-mode-toggle" data-toggle-live-mode="notes" type="button" aria-label="返回笔记" title="返回笔记"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m10 3-5 5 5 5"/></svg></button>
               </header>
               <div class="transcript-scroll" id="transcript-scroll"></div>
               <button class="back-to-latest" type="button" hidden><span>↓</span> <span>回到最新</span></button>

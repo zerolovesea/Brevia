@@ -655,6 +655,7 @@
 .onboarding-tour-stage { position: relative; width: 100%; }
 .onboarding-tour-window { position: relative; margin-inline: auto; overflow: hidden; width: var(--tour-w, 980px); height: var(--tour-h, 548px); border: 1px solid #dcdcdc; background: #fff; box-shadow: 0 18px 44px rgba(0,0,0,.10); animation: tour-window-in 320ms ease both; }
 .onboarding-tour-replica { width: 1180px; height: 660px; display: grid; grid-template-columns: 264px minmax(0,1fr); min-height: 0; transform: scale(var(--tour-scale, .83)); transform-origin: top left; }
+.onboarding-tour-replica, .onboarding-tour-replica .window-bar { background: #fbfaf7; }
 .onboarding-tour-replica .sidebar { position: static; height: 100%; padding: 34px 20px; }
 .onboarding-tour-replica .brand-mark { display: none; }
 .onboarding-tour-replica .new-meeting { margin-top: 24px; padding: 10px 14px; }

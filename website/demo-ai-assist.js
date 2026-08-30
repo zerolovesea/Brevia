@@ -163,7 +163,7 @@
               <header class="live-section-head">
                 <p class="eyebrow">${c.notesLabel}</p>
                 <button class="ai-assist-toggle is-enabled" type="button"><span class="ai-assist-toggle-star">✦</span> <span>${c.aiAssistLabel}</span></button>
-                <button class="live-mode-toggle" type="button"><span>${c.expandCaptions}</span> →</button>
+                <button class="live-mode-toggle" data-toggle-live-mode="caption" type="button" aria-label="${c.expandCaptions}" title="${c.expandCaptions}"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 3 5 5-5 5"/></svg></button>
               </header>
               <div data-live-notes-root>
                 <div class="notes-toolbar">${toolbarHtml()}</div>
@@ -176,7 +176,7 @@
             <section class="live-captions">
               <header class="live-section-head">
                 <p class="eyebrow">${c.captionsLabel}</p>
-                <button class="live-mode-toggle" type="button"><span>${c.backToNotes}</span> ←</button>
+                <button class="live-mode-toggle" data-toggle-live-mode="notes" type="button" aria-label="${c.backToNotes}" title="${c.backToNotes}"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m10 3-5 5 5 5"/></svg></button>
               </header>
               <div class="transcript-scroll" data-demo-transcript></div>
               <button class="back-to-latest" type="button" hidden><span>↓</span> <span>回到最新</span></button>
