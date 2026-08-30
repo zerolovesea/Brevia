@@ -181,7 +181,9 @@ def _diarize_chunk_process(connection, payload):
             samples[cursor:start] = 0
             cursor = max(cursor, end)
         samples[cursor:] = 0
-        tracker = SpeakerTracker(manager)
+        # 会后离线精修独占 CPU：用满 device() 线程数，而非实时路径的 2 线程预算。
+        diarization_threads = manager.device()["threads"]
+        tracker = SpeakerTracker(manager, threads=diarization_threads)
         turns = []
         if payload.get("vad_fallback"):
             diarized = [
@@ -202,6 +204,7 @@ def _diarize_chunk_process(connection, payload):
                 -1,
                 payload["threshold"],
                 payload["segmentation_id"],
+                threads=diarization_threads,
             )
             diarized = diarizer.process(samples, sample_rate)
         for turn in diarized:
@@ -649,6 +652,7 @@ class RefinementWorkerMixin:
                     -1,
                     threshold,
                     meeting.get("speaker_segmentation_model_id"),
+                    threads=self.models.device()["threads"],
                 )
                 turns = (
                     [dict(turn) for turn in diarizer.process(samples, sample_rate)]
@@ -661,7 +665,9 @@ class RefinementWorkerMixin:
                 turns = [{**turn, "speaker": "spk-1"} for turn in speech]
             if duration_ms <= _refinement("diarization_chunk_ms") and turns:
                 try:
-                    tracker = SpeakerTracker(self.models)
+                    tracker = SpeakerTracker(
+                        self.models, threads=self.models.device()["threads"]
+                    )
                 except RuntimeError:
                     tracker = None
                 turns = self._split_long_turns(turns, _refinement("embedding_window_ms"))

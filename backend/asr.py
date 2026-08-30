@@ -955,6 +955,7 @@ class OfflineDiarizer:
         num_speakers=None,
         threshold=None,
         segmentation_id=None,
+        threads=None,
     ):
         """创建离线说话人分离器。
 
@@ -962,8 +963,13 @@ class OfflineDiarizer:
             manager: 提供 segmentation 与 embedding 模型路径的模型管理器。
             num_speakers: 已知人数；``None`` 使用配置，``-1`` 表示自动估计。
             threshold: 聚类阈值；``None`` 使用 ``settings.json`` 的默认值。
+            threads: 推理线程数；``None`` 使用 ``thread_budget("diarization")``
+                的低预算（让核给实时流式 ASR）。会后离线精修（独占 CPU）应显式
+                传 ``manager.device()["threads"]`` 获得满线程，避免本就不快的
+                Pyannote 分割推理被压到 2 线程而拖慢「准备精修」。
         """
         config = SETTINGS["diarization"]
+        diarization_threads = threads or manager.thread_budget("diarization")
         segmentation_id = segmentation_id or config["segmentation_model_id"]
         embedding_id = SPEAKER_EMBEDDING_MODEL_ID
         if not all(
@@ -985,12 +991,12 @@ class OfflineDiarizer:
                 pyannote=sherpa_onnx.OfflineSpeakerSegmentationPyannoteModelConfig(
                     model=str(segmentation)
                 ),
-                num_threads=manager.thread_budget("diarization"),
+                num_threads=diarization_threads,
                 provider=manager.device()["backend"],
             ),
             embedding=sherpa_onnx.SpeakerEmbeddingExtractorConfig(
                 model=str(embedding),
-                num_threads=manager.thread_budget("diarization"),
+                num_threads=diarization_threads,
                 provider=manager.device()["backend"],
             ),
             clustering=sherpa_onnx.FastClusteringConfig(
