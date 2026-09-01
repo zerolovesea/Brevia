@@ -23,6 +23,17 @@ assert.match(text(app), /auto: \{ streaming: 'nemotron-3\.5-asr-streaming-0\.6b-
 assert.match(text(app), /default: \{ streaming: 'nemotron-3\.5-asr-streaming-0\.6b-560ms-int8'/);
 assert.match(text(app), /window\.brevia\.on\('meeting\.interrupted'/);
 assert.match(text(app), /window\.brevia\.on\('transcript\.settled'/);
+assert.match(text(app), /function setDetailLayoutMode\(mode\)/, 'meeting details can swap their primary panel');
+assert.match(text(html), /data-toggle-detail-mode="summary"/, 'meeting details expose the swap control');
+assert.match(text(html), /data-toggle-detail-mode="transcript"/, 'meeting details expose the return control');
+assert.match(text(tailwind), /\.detail-layout\.is-summary-mode > \.notes/, 'summary mode expands the meeting summary panel');
+assert.match(text(tailwind), /left: calc\(100% - 353px\)/, 'swap control is centered on the panel divider');
+assert.match(text(tailwind), /\.final-transcript \.tabbar-extra \{ margin-right: 40px;/, 'refinement menu stays clear of the swap control');
+assert.match(text(tailwind), /\.tab \{ @apply border-b border-transparent pb-4 text-\[13px\] text-\[#6b655f\]; white-space: nowrap;/, 'narrow transcript tabs do not wrap per character');
+assert.match(text(components), /data-edit-notes type="button" aria-label=/, 'edit action uses an accessible icon button');
+assert.match(text(tailwind), /\.detail-notes-panel:has\(\.detail-notes-edit\) \{ display: flex; overflow: hidden;/, 'detail editor toolbar stays outside the scrolling surface');
+assert.match(text(components), /data-inline-summary-editor/, 'summary editor renders in the detail panel');
+assert.match(text(app), /data-save-inline-summary/, 'inline summary edits save through the existing summary API');
 const workletMessages = [];
 const workletContext = {
   AudioWorkletProcessor: class {
@@ -637,10 +648,9 @@ assert.match(text(tailwind), /\.share-platform svg \{ @apply row-span-2 h-5 w-5 
 assert.match(text(components), /data-regenerate-summary[^]*summaryActionIcons\.refresh/);
 assert.match(text(components), /data-open-summary-edit[^]*summaryActionIcons\.edit/);
 assert.match(text(js), /data-regenerate-summary/);
-assert.match(text(app), /data-open-summary-edit[^]*openModal\('summary-detail'\)/);
+assert.match(text(app), /data-open-summary-edit[^]*uiData\.detail\.summaryEditing = true; renderMeetingDetail\(\)/);
 assert.match(text(app), /summaryActionBar\(editing\)/);
-assert.match(text(app), /settingsModal\.addEventListener\('dblclick'/);
-assert.match(text(app), /summary-preview \.summary-body/);
+assert.doesNotMatch(text(app), /summary-modal-document\) return;/);
 assert.match(text(app), /data-export-save/);
 assert.doesNotMatch(text(app), /data-export-reveal/);
 assert.match(text(js), /data-regenerate-summary\]'\)\) void generateMeetingSummary\(\)/);
@@ -1172,7 +1182,7 @@ assert.doesNotMatch(text(tailwind), /live-note-reference/);
 assert.doesNotMatch(text(app), /bindLiveNoteReference|noteReferenceMarkdown|segmentTimestampMarkdown|data-add-segment-time/);
 assert.doesNotMatch(text(app), /renderLiveNoteReference|liveNoteReference/);
 assert.match(text(meetingDetail), /summaryGeneratingMeetingId === meeting\.id/);
-assert.match(text(components), /const action = generating \? '' :/);
+assert.match(text(components), /const action = editing/);
 assert.match(text(app), /const refresh = window\.brevia \? refreshBackendMeetings\(includeDeleted\) : Promise\.resolve\(\);/);
 // AI 辅助笔记（阶段 6 Onboarding AI 配置页）。
 assert.match(text(app), /function openOnboardingAi/);

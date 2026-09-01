@@ -62,7 +62,10 @@ class WorkerCore:
         if os.environ.get("BREVIA_RECOVER_INTERRUPTED", "1") == "1":
             self.store.recover_interrupted_meetings()
         runtime_settings(self.store.root)
-        self.models = ModelManager(self.store.models_dir, self.emit)
+        self.models = ModelManager(
+            os.environ.get("BREVIA_MODELS_DIR") or self.store.models_dir,
+            self.emit,
+        )
         # 服务按存储/模型依赖构造；它们不持有实时会议状态，便于单独测试。
         self.voice_profiles = VoiceProfileService(self.store, self.models)
         # 可替换边界让集成测试无需连接外部 LLM，也集中保留用户同意后的唯一出口。

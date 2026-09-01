@@ -463,6 +463,7 @@ document.body.append(settingsModal);
 let activeModal;
 let summaryEditing = false;
 let summaryEditor = null;
+let inlineSummaryEditor = null;
 let editingSegmentSpeakerId;
 let advancedSettings;
 let permissionStatus;
@@ -668,6 +669,8 @@ function renderCaptureMode(value = savedCaptureMode()) {
   const hint = prepareForm.querySelector('#capture-mode-hint');
   if (hint) hint.textContent = '';
   renderPrepareAudioSources();
+  // 仅在准备页内预览麦克风；启动或首页重绘（applyLanguage 会调用本函数）不应采集声音。
+  if (activeView !== 'prepare') return;
   if (inputs.mic) { void refreshMicDevices(); void previewMicrophone(); }
   else void breviaClient?.stopPreview();
 }
@@ -1589,7 +1592,7 @@ const summaryDetailCopy = {
 };
 function summaryActionBar(editing) {
   const button = (action, label, icon) => `<button type="button" class="summary-action-icon" data-${action} title="${label}" aria-label="${label}">${summaryActionIcons[icon]}</button>`;
-  return `<div class="summary-action-bar">${editing ? `${button('cancel-summary-edit', t('取消'), 'cancel')}${button('save-summary', t('保存'), 'save')}` : `${button('edit-summary', t('编辑'), 'edit')}${button('regenerate-summary', t('重新生成'), 'refresh')}`}</div>`;
+  return `<div class="summary-action-bar">${editing ? `${button('cancel-summary-edit', t('取消'), 'cancel')}${button('save-summary', t('保存'), 'save')}` : button('regenerate-summary', t('重新生成'), 'refresh')}</div>`;
 }
 function renderSummaryDetailModal() {
   const markdown = currentMeetingDetail?.summary?.data?.markdown;
@@ -3108,7 +3111,7 @@ function evaluateDetailHeaderCollapse() {
   const detailView = document.querySelector('#detail-view');
   if (!detailView) return;
   let maxScroll = 0;
-  detailView.querySelectorAll('.transcript-body, .detail-notes-panel').forEach((panel) => {
+  detailView.querySelectorAll('.transcript-body, .detail-notes-panel, .notes-editor, .notes-input').forEach((panel) => {
     if (panel.scrollTop > maxScroll) maxScroll = panel.scrollTop;
   });
   // 只在“严格位于顶部”时展开；一旦滚离顶部即收起（纯二进制状态，不会交替）。
@@ -3448,6 +3451,17 @@ function setLiveLayoutMode(mode) {
 }
 document.querySelectorAll('[data-toggle-live-mode]').forEach((button) => {
   button.addEventListener('click', () => setLiveLayoutMode(button.dataset.toggleLiveMode));
+});
+/** 交换详情页的逐字稿与会议纪要主次分区。@param {'summary'|'transcript'} mode 要展开的分区。@returns {void} */
+function setDetailLayoutMode(mode) {
+  const layout = document.querySelector('.detail-layout');
+  if (!layout) return;
+  layout.classList.toggle('is-summary-mode', mode === 'summary');
+  layout.dataset.detailMode = mode;
+}
+document.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-toggle-detail-mode]');
+  if (button) setDetailLayoutMode(button.dataset.toggleDetailMode);
 });
 const liveNotesRoot = document.querySelector('[data-live-notes-root]');
 const aiSuggestionHost = document.querySelector('[data-ai-suggestion]');
@@ -4573,11 +4587,6 @@ document.addEventListener('click', (event) => {
   document.querySelectorAll('.refine-menu').forEach((menu) => { menu.hidden = true; });
   document.querySelectorAll('[data-refine-more]').forEach((button) => button.setAttribute('aria-expanded', 'false'));
 });
-settingsModal.addEventListener('dblclick', (event) => {
-  if (activeModal !== 'summary-detail' || summaryEditing || !event.target.closest('.summary-modal-document')) return;
-  summaryEditing = true;
-  renderModal('summary-detail');
-});
 /** 详情页富文本笔记编辑器实例（编辑模式下由 renderMeetingDetail 创建）。@type {object|null} */
 let detailNotesEditor = null;
 /** 详情页笔记防抖自动保存（800ms）；输入时即时同步到 uiData，避免重建面板丢失草稿。@returns {void} */
@@ -5013,13 +5022,25 @@ if (window.brevia) {
 
   document.addEventListener('click', (event) => {
     if (event.target.closest('[data-view-full-summary]')) { openModal('summary-detail'); return; }
-    if (event.target.closest('[data-open-summary-edit]')) { void openModal('summary-detail').then(() => { summaryEditing = true; renderModal('summary-detail'); }); return; }
+    if (event.target.closest('[data-open-summary-edit]')) { uiData.detail.summaryEditing = true; renderMeetingDetail(); return; }
+    if (event.target.closest('[data-cancel-inline-summary-edit]')) { inlineSummaryEditor = null; uiData.detail.summaryEditing = false; renderMeetingDetail(); return; }
+    if (event.target.closest('[data-save-inline-summary]')) {
+      const markdown = (inlineSummaryEditor?.getMarkdown() || '').trim();
+      const meetingId = currentMeetingDetail?.id;
+      if (!meetingId || !window.brevia?.summary?.save) return;
+      if (!markdown) { showToast(t('纪要不能为空')); return; }
+      void window.brevia.summary.save({ meeting_id: meetingId, markdown }).then(() => {
+        currentMeetingDetail.summary = { data: { markdown } };
+        uiData.detail.summary = { markdown, hasFull: true, blocked: meetingActive, generating: false };
+        inlineSummaryEditor = null;
+        uiData.detail.summaryEditing = false;
+        renderMeetingDetail();
+        showToast(t('已保存'));
+      }).catch((error) => showToast(error.message));
+      return;
+    }
     if (event.target.closest('[data-generate-summary]')) void generateMeetingSummary();
     if (event.target.closest('[data-regenerate-summary]')) void generateMeetingSummary();
-  });
-  document.addEventListener('dblclick', (event) => {
-    if (!event.target.closest('.summary-preview .summary-body')) return;
-    void openModal('summary-detail').then(() => { summaryEditing = true; renderModal('summary-detail'); });
   });
 
   document.querySelector('[data-export-detail]').addEventListener('click', async () => {

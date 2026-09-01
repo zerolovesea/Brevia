@@ -3,6 +3,7 @@
 import os
 import re
 import sys
+import wave
 from difflib import SequenceMatcher
 
 from .asr import (
@@ -599,30 +600,32 @@ class RefinementWorkerMixin:
             {"meeting_id": meeting["id"], "completed": 0, "total": 0, "stage": "准备精修"},
         )
         ensure_wav_duration(path, _refinement("max_refine_seconds"), "refine")
-        samples, sample_rate = read_mono_wav(path)
-        duration_ms = len(samples) * 1000 // sample_rate
+        with wave.open(str(path)) as audio:
+            sample_rate = audio.getframerate()
+            duration_ms = audio.getnframes() * 1000 // sample_rate
         vad_params = self._vad_params_for(meeting.get("language"))
-        if track not in diarized_tracks:
-            vad = OfflineVAD(
-                self.models,
-                meeting.get("vad_model_id") or "silero-vad",
-                vad_params=vad_params,
-            )
+        vad = OfflineVAD(
+            self.models,
+            meeting.get("vad_model_id") or "silero-vad",
+            vad_params=vad_params,
+        )
+        # 长录音的 VAD 只需保留跨块状态，不需整段波形。后续长轨分离与识别本就
+        # 按磁盘窗口读取，避免 Windows 在“准备精修”阶段因大数组和 VAD 缓冲分页。
+        is_long_track = duration_ms > _refinement("diarization_chunk_ms")
+        samples = None
+        if is_long_track:
+            speech = vad.process_wav(path)
+        else:
+            samples, sample_rate = read_mono_wav(path)
             speech = vad.process(samples, sample_rate)
+        if track not in diarized_tracks:
             turns = [{**turn, "speaker": "local-user"} for turn in speech]
         else:
-            vad = OfflineVAD(
-                self.models,
-                meeting.get("vad_model_id") or "silero-vad",
-                vad_params=vad_params,
-            )
-            speech = vad.process(samples, sample_rate)
-
             self.emit(
                 "refinement.progress",
                 {"meeting_id": meeting["id"], "completed": 0, "total": 0, "stage": "分析说话人"},
             )
-            if duration_ms > _refinement("diarization_chunk_ms"):
+            if is_long_track:
                 turns = self._diarize_long_track(
                     path,
                     duration_ms,

@@ -28,6 +28,8 @@ function applyBackendDetail(meeting) {
     uiData.detail.refineState = 'idle';
     uiData.detail.notesEditing = false;
     detailNotesEditor = null;
+    inlineSummaryEditor = null;
+    uiData.detail.summaryEditing = false;
     detailActiveTab = 'notes';
     detailTranscriptView = 'refined';
   }

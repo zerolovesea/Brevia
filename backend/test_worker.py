@@ -2188,7 +2188,13 @@ class WorkerTest(unittest.TestCase):
     def test_fixed_speaker_refinement_matches_profiles(self):
         import numpy
 
-        meeting = {"id": "meeting", "audio": {"playback": {"mic": "audio.wav"}}}
+        audio_path = Path(self.temp.name) / "audio.wav"
+        with wave.open(str(audio_path), "wb") as audio:
+            audio.setnchannels(1)
+            audio.setsampwidth(2)
+            audio.setframerate(16000)
+            audio.writeframes(b"\0\0" * 16000)
+        meeting = {"id": "meeting", "audio": {"playback": {"mic": str(audio_path)}}}
         with (
             patch("backend.worker_refinement.ensure_wav_duration"),
             patch("backend.worker_refinement.read_mono_wav", return_value=(numpy.zeros(16000), 16000)),
@@ -2209,7 +2215,13 @@ class WorkerTest(unittest.TestCase):
         import numpy
 
         samples = numpy.ones(16000)
-        meeting = {"id": "meeting", "audio": {"playback": {"mic": "audio.wav"}}}
+        audio_path = Path(self.temp.name) / "audio.wav"
+        with wave.open(str(audio_path), "wb") as audio:
+            audio.setnchannels(1)
+            audio.setsampwidth(2)
+            audio.setframerate(16000)
+            audio.writeframes(b"\0\0" * 16000)
+        meeting = {"id": "meeting", "audio": {"playback": {"mic": str(audio_path)}}}
         with (
             patch("backend.worker_refinement.ensure_wav_duration"),
             patch("backend.worker_refinement.read_mono_wav", return_value=(samples, 16000)),
@@ -2226,7 +2238,13 @@ class WorkerTest(unittest.TestCase):
         self.assertEqual(samples[13000], 0)
 
     def test_long_refinement_isolates_native_diarization(self):
-        meeting = {"id": "meeting", "audio": {"playback": {"mic": "audio.wav"}}}
+        audio_path = Path(self.temp.name) / "audio.wav"
+        with wave.open(str(audio_path), "wb") as audio:
+            audio.setnchannels(1)
+            audio.setsampwidth(2)
+            audio.setframerate(1)
+            audio.writeframes(b"\0\0" * 16_001)
+        meeting = {"id": "meeting", "audio": {"playback": {"mic": str(audio_path)}}}
         control = SimpleNamespace(
             paused=threading.Event(), cancelled=threading.Event()
         )
@@ -2330,6 +2348,22 @@ class WorkerTest(unittest.TestCase):
         self.assertEqual(vad.sherpa_onnx.VoiceActivityDetector.last_buffer_seconds, 100)
         vad.process([0.1] * 1600001)
         self.assertEqual(vad.sherpa_onnx.VoiceActivityDetector.last_buffer_seconds, 102)
+
+        wav_path = Path(self.temp.name) / "streamed-vad.wav"
+        with wave.open(str(wav_path), "wb") as audio:
+            audio.setnchannels(1)
+            audio.setsampwidth(2)
+            audio.setframerate(16000)
+            audio.writeframes(b"\0\0" * 400000)
+        self.assertEqual(
+            vad.process_wav(wav_path),
+            [
+                {"start_ms": 0, "end_ms": 10000},
+                {"start_ms": 10000, "end_ms": 20000},
+                {"start_ms": 20000, "end_ms": 25000},
+            ],
+        )
+        self.assertEqual(vad.sherpa_onnx.VoiceActivityDetector.last_buffer_seconds, 60)
 
     def test_refinement_decode_range_adds_context_without_crossing_speakers(self):
         turn = {"start_ms": 1000, "end_ms": 1200, "speaker": "spk-1"}

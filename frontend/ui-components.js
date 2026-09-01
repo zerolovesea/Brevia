@@ -543,12 +543,14 @@ function cleanSummaryMarkdown(markdown) {
   return heading > 0 ? text.slice(heading) : text;
 }
 /** 渲染详情侧边栏中的会议纪要：标题行（会议纪要 + 生成/重新生成）+ 内容。@param {{markdown?: string, hasFull?: boolean}} summary 摘要数据。@returns {string} 摘要标记。 */
-function renderMeetingSummary({ markdown, hasFull = false, blocked = false, generating = false }) {
+function renderMeetingSummary({ markdown, hasFull = false, blocked = false, generating = false, editing = false }) {
   const blockedAttrs = blocked ? ` disabled title="${escapeHtml(t('实时会议中，结束后再生成会议纪要。'))}"` : '';
-  const action = generating ? '' : markdown
+  const action = editing
+    ? `<span class="summary-actions"><button class="summary-action-icon" data-cancel-inline-summary-edit title="${escapeHtml(t('取消'))}" aria-label="${escapeHtml(t('取消'))}">${summaryActionIcons.cancel}</button><button class="summary-action-icon" data-save-inline-summary title="${escapeHtml(t('保存'))}" aria-label="${escapeHtml(t('保存'))}">${summaryActionIcons.save}</button></span>`
+    : generating ? '' : markdown
     ? `<span class="summary-actions"><button class="summary-action-icon" data-open-summary-edit title="${escapeHtml(t('编辑'))}" aria-label="${escapeHtml(t('编辑'))}">${summaryActionIcons.edit}</button><button class="summary-action-icon" data-regenerate-summary title="${escapeHtml(t('重新生成'))}" aria-label="${escapeHtml(t('重新生成'))}"${blockedAttrs}>${summaryActionIcons.refresh}</button></span>`
     : `<button class="text-button" data-generate-summary${blockedAttrs}>${t('生成')} →</button>`;
-  return `<div class="summary-preview"><div class="summary-head"><p class="eyebrow">${t('会议纪要')}</p>${action}</div>${markdown ? `<div class="summary-body markdown-content">${renderMarkdown(cleanSummaryMarkdown(markdown))}</div><button class="text-button" data-view-full-summary>${t('查看完整内容')} →</button>` : `<p class="summary-empty">${t('尚未生成')}</p>`}</div>`;
+  return `<div class="summary-preview"><div class="summary-head"><p class="eyebrow">${t('会议纪要')}</p>${action}</div>${editing ? `<div class="summary-inline-edit"><div data-inline-summary-editor></div></div>` : markdown ? `<div class="summary-body markdown-content">${renderMarkdown(cleanSummaryMarkdown(markdown))}</div><button class="text-button" data-view-full-summary>${t('查看完整内容')} →</button>` : `<p class="summary-empty">${t('尚未生成')}</p>`}</div>`;
 }
 /** 在页面外壳可用后填充所有数据驱动的静态区域。@returns {void} */
 function renderStaticViews() {
@@ -573,8 +575,8 @@ function renderMeetingDetail() {
     ? `<div class="detail-notes-edit"><div data-detail-notes-root></div></div>`
     : `<div class="detail-notes-view">${d.notes && String(d.notes).trim() ? `<div class="detail-notes-content markdown-content">${renderMarkdown(d.notes)}</div>` : `<p class="detail-notes-empty">${t('会议中没有记录笔记。')}</p>`}</div>`;
   const notesTabAction = d.notesEditing
-    ? `<button class="tabbar-action" data-notes-cancel type="button">${t('取消')}</button><button class="tabbar-action is-save" data-notes-save type="button">${t('保存')}</button>`
-    : detailActiveTab === 'notes' ? `<button class="tabbar-action" data-edit-notes type="button">${t('编辑')}</button>` : '';
+    ? `<button class="tabbar-action" data-notes-cancel type="button" aria-label="${t('取消')}" title="${t('取消')}"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="m4 4 8 8m0-8-8 8"/></svg></button><button class="tabbar-action is-save" data-notes-save type="button" aria-label="${t('保存')}" title="${t('保存')}"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3 8 3 3 7-7"/></svg></button>`
+    : detailActiveTab === 'notes' ? `<button class="tabbar-action" data-edit-notes type="button" aria-label="${t('编辑')}" title="${t('编辑')}"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3 11.5 8.6-8.6 1.9 1.9-8.6 8.6L3 13.5z"/><path d="m10.5 4 1.9 1.9"/></svg></button>` : '';
   const hasRefined = Boolean(d.hasRefined && d.refinedTranscript.length);
   const fulltextMode = hasRefined && d.refinedMode === 'fulltext';
   const showingRefined = hasRefined && d.refinedMode === 'timestamps' && detailTranscriptView !== 'original';
@@ -584,7 +586,7 @@ function renderMeetingDetail() {
   } else {
     transcriptBody = (showingRefined ? d.refinedTranscript : d.transcript).map(renderTranscriptSegment).join('');
   }
-  document.querySelector('.final-transcript').innerHTML = `<div class="tabbar"><div class="tabbar-tabs"><button class="tab${detailActiveTab === 'notes' ? ' active' : ''}" data-detail-tab="notes">${t('我的笔记')}</button><button class="tab${detailActiveTab === 'transcript' ? ' active' : ''}" data-detail-tab="transcript">${t('字幕')}</button>${notesTabAction}</div><div class="tabbar-extra">${renderRefineStatus(d)}</div></div><div class="detail-notes-panel" data-detail-panel="notes"${detailActiveTab !== 'notes' ? ' hidden' : ''}>${notesPanel}</div><div class="transcript-panel" data-detail-panel="transcript"${detailActiveTab !== 'transcript' ? ' hidden' : ''}><div class="transcript-body">${transcriptBody}</div></div>`;
+  document.querySelector('.final-transcript').innerHTML = `<div class="tabbar"><div class="tabbar-tabs"><button class="tab${detailActiveTab === 'notes' ? ' active' : ''}" data-detail-tab="notes">${t('我的笔记')}</button><button class="tab${detailActiveTab === 'transcript' ? ' active' : ''}" data-detail-tab="transcript">${t('字幕')}</button></div><div class="tabbar-extra">${notesTabAction}${renderRefineStatus(d)}</div></div><div class="detail-notes-panel" data-detail-panel="notes"${detailActiveTab !== 'notes' ? ' hidden' : ''}>${notesPanel}</div><div class="transcript-panel" data-detail-panel="transcript"${detailActiveTab !== 'transcript' ? ' hidden' : ''}><div class="transcript-body">${transcriptBody}</div></div>`;
   if (d.notesEditing) {
     const root = document.querySelector('[data-detail-notes-root]');
     if (root) {
@@ -593,5 +595,13 @@ function renderMeetingDetail() {
       detailNotesEditor.focus();
     }
   }
-  document.querySelector('.notes').innerHTML = renderMeetingSummary(d.summary);
+  document.querySelector('.notes').innerHTML = renderMeetingSummary({ ...d.summary, editing: d.summaryEditing });
+  if (d.summaryEditing) {
+    const root = document.querySelector('[data-inline-summary-editor]');
+    if (root) {
+      inlineSummaryEditor = createNotesEditor(root, { ariaLabel: t('会议纪要'), getMeetingId: () => currentMeetingDetail?.id });
+      inlineSummaryEditor.setMarkdown(d.summary.markdown);
+      inlineSummaryEditor.focus();
+    }
+  }
 }

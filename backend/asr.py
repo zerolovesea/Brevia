@@ -11,6 +11,7 @@ import tempfile
 import threading
 import time
 import urllib.request
+import wave
 from pathlib import Path
 
 from .config import SETTINGS, SPEAKER_EMBEDDING_MODEL_ID
@@ -660,6 +661,38 @@ class OfflineVAD:
             raise ValueError(f"VAD requires {self.config.sample_rate} Hz audio")
         # 检测器在此缓冲区中保留未完成的语音段。按输入大小分配，而不是在连续会议音频上反复增长。
         buffer_seconds = max(100, (len(samples) + sample_rate - 1) // sample_rate + 1)
+        return self._process_chunks(
+            (
+                samples[start : start + sample_rate * 10]
+                for start in range(0, len(samples), sample_rate * 10)
+            ),
+            sample_rate,
+            buffer_seconds,
+        )
+
+    def process_wav(self, path, chunk_seconds=10):
+        """按块读取 PCM WAV 并保持 VAD 状态，避免长录音整段驻留内存。"""
+        import numpy
+
+        with wave.open(str(path)) as recording:
+            if recording.getnchannels() != 1 or recording.getsampwidth() != 2:
+                raise ValueError("This operation requires mono PCM16 WAV audio")
+            sample_rate = recording.getframerate()
+            if sample_rate != self.config.sample_rate:
+                raise ValueError(f"VAD requires {self.config.sample_rate} Hz audio")
+            chunk_frames = sample_rate * chunk_seconds
+
+            def chunks():
+                while frames := recording.readframes(chunk_frames):
+                    yield numpy.frombuffer(frames, dtype="<i2").astype(numpy.float32) / 32768.0
+
+            return self._process_chunks(
+                chunks(),
+                sample_rate,
+                60,
+            )
+
+    def _process_chunks(self, chunks, sample_rate, buffer_seconds):
         detector = self.sherpa_onnx.VoiceActivityDetector(self.config, buffer_seconds)
         segments = []
 
@@ -676,8 +709,8 @@ class OfflineVAD:
                 )
                 detector.pop()
 
-        for start in range(0, len(samples), sample_rate * 10):
-            detector.accept_waveform(samples[start : start + sample_rate * 10])
+        for samples in chunks:
+            detector.accept_waveform(samples)
             drain()
         detector.flush()
         drain()

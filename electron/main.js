@@ -10,8 +10,20 @@ const { randomUUID } = require('node:crypto');
 const { z } = require('zod');
 const { configureMacUpdater, createDisplayMediaHandler, isNewerVersion, registerScreenPermission, systemAudioSupported } = require('./main-logic');
 
+const benchmarkRefinement = process.argv.includes('--bench-refinement');
+const commandArgument = (name, fallback = null) => {
+  const index = process.argv.indexOf(name);
+  return index >= 0 && process.argv[index + 1] ? process.argv[index + 1] : fallback;
+};
+if (benchmarkRefinement) {
+  const benchmarkDataDir = commandArgument('--data-root');
+  const benchmarkModelsDir = commandArgument('--models-root');
+  if (benchmarkDataDir) process.env.BREVIA_DATA_DIR = benchmarkDataDir;
+  if (benchmarkModelsDir) process.env.BREVIA_MODELS_DIR = benchmarkModelsDir;
+}
+
 if (process.platform === 'darwin') app.commandLine.appendSwitch('disable-features', 'MacCatapLoopbackAudioForScreenShare');
-if (!app.requestSingleInstanceLock()) app.quit();
+if (!benchmarkRefinement && !app.requestSingleInstanceLock()) app.quit();
 app.on('second-instance', () => {
   const [window] = BrowserWindow.getAllWindows();
   if (window?.isMinimized()) window.restore();
@@ -488,6 +500,30 @@ function handleRefinement(payload) {
     refinementWorker.recycle();
   });
   return active.promise;
+}
+
+async function runRefinementBenchmark() {
+  const source = commandArgument('--wav');
+  const refinedModel = commandArgument('--refined-model', 'funasr-nano-int8');
+  if (!source) throw new Error('--bench-refinement requires --wav');
+  const imported = await worker.request('meeting.import', {
+    title: '[benchmark]',
+    language: commandArgument('--language', 'zh'),
+    streaming_model_id: commandArgument('--streaming-model', 'zipformer-en-streaming-int8'),
+    refined_model_id: refinedModel,
+    speaker_segmentation_model_id: commandArgument('--segmentation-model', 'pyannote-segmentation-3.0'),
+    path: source,
+  });
+  const started = performance.now();
+  await handleRefinement({ meeting_id: imported.id, refined_model_id: refinedModel });
+  const elapsedSeconds = (performance.now() - started) / 1000;
+  const audioSeconds = imported.duration_ms / 1000;
+  console.log(JSON.stringify({
+    benchmark: 'electron-main-worker-ipc',
+    audio_seconds: audioSeconds,
+    elapsed_seconds: elapsedSeconds,
+    rtf: elapsedSeconds / Math.max(audioSeconds, 1e-9),
+  }));
 }
 
 function handleTaskControl(channel, schema) {
@@ -1431,6 +1467,18 @@ app.whenReady().then(async () => {
   session.defaultSession.setDisplayMediaRequestHandler(createDisplayMediaHandler(desktopCapturer, writeLog));
   worker.start();
   registerIpc();
+  if (benchmarkRefinement) {
+    try {
+      await initializeWorker();
+      await runRefinementBenchmark();
+    } catch (error) {
+      console.error(error);
+      process.exitCode = 1;
+    } finally {
+      app.quit();
+    }
+    return;
+  }
   void initializeWorker().catch((error) => reportMainError(error));
   createWindow();
   app.on('activate', () => {
