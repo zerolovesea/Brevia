@@ -3362,6 +3362,7 @@ importRecording.addEventListener('click', async () => {
       title, language, target_language: form.get('translation-target') || null,
       streaming_model_id: prepareForm.dataset.streamingModel || defaults.streaming, refined_model_id: defaults.refined,
       speaker_segmentation_model_id: prepareForm.dataset.segmentationModel || defaults.segmentation,
+      power_saving: getPerformanceMode() === 'efficiency',
       workspace_id: form.get('meeting-workspace') || null, path: 'selected-by-electron',
     });
     if (!meeting) return;

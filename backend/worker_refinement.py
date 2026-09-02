@@ -304,10 +304,19 @@ class RefinementWorkerMixin:
         is_imported_audio = manifest.get("source") == "audio_import" or (
             not manifest.get("tracks") and set(tracks) == {"mic"}
         )
+        # 效率模式 + 导入录音：默认不分离说话人。离线 pyannote 说话人分割在这类
+        # 低核机型上是「准备精修」的绝对大头（实测 60s 窗口约 24s，全片可达数分钟），
+        # 且并行/复用子进程几乎不缩放（4 物理核上并行仅 ~1.18x）。效率模式直接跳过
+        # 分割，只做 VAD、全部标成 local-user，把准备阶段从数分钟压到几秒。
+        efficiency_import_flat = (
+            bool(meeting.get("power_saving")) and is_imported_audio
+        )
         # 系统音频（远端）与导入的麦克风必须聚类；实时麦克风只要声纹模型就绪也
         # 一起聚类，让本机说话人同样接受声纹库匹配，而不再一律标成 local-user。
+        # 效率模式的导入录音例外：不聚类。
         required_diarized = (
-            {"system"} | ({"mic"} if is_imported_audio else set())
+            {"system"}
+            | ({"mic"} if (is_imported_audio and not efficiency_import_flat) else set())
         ) & set(tracks)
         required_models = [
             refined_model_id,
@@ -340,7 +349,7 @@ class RefinementWorkerMixin:
             segmentation_id
         ) and self.models.is_ready(embedding_id)
         diarized_tracks = set(required_diarized)
-        if speaker_models_ready:
+        if speaker_models_ready and not efficiency_import_flat:
             diarized_tracks |= set(tracks)
         # 多个轨道同时聚类时，未命中声纹库的 spk-N 需按轨道命名，避免麦克风与系统
         # 音频各自的 spk-1 在按时间戳合并后串成同一个人。

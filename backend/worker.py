@@ -64,6 +64,12 @@ def install_global_error_handlers(worker):
 
 def main():
     """运行 stdin/stdout JSONL 循环；单个命令失败不会停止 worker。"""
+    # Windows 上首次 import 原生包（numpy/sherpa_onnx 的 .pyd）会被实时杀软
+    # 逐个扫描，可能阻塞数十秒。若让它们在「准备精修」阶段才首次导入，准备阶段
+    # 会看起来卡死（faulthandler 实测卡在 numpy 导入 >25s）。这里在 worker 启动
+    # 时即预热，把这一性开销移到 App 启动，而不是精修时。
+    import numpy  # noqa: F401
+    import sherpa_onnx  # noqa: F401
     # Windows 上管道 stdio 默认按系统 ANSI 代码页解码（中文区域为 GBK），与主进程
     # 写入的 UTF-8 字节不一致，会把非 ASCII 文本（如会议名称）解成乱码。这里显式
     # 固定为 UTF-8，不依赖 PYTHONIOENCODING/PYTHONUTF8 环境变量是否生效。
