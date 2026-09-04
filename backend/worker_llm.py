@@ -15,13 +15,13 @@ MAX_SUMMARY_TRANSCRIPT_CHARS = 10000
 SUMMARY_CHUNK_CHARS = 9000
 MAX_SUMMARY_CHUNKS = 6
 # 块级摘要的输出 token 上限：控制合并阶段输入规模，避免合并 prompt 超出上下文。
-SUMMARY_CHUNK_MAX_TOKENS = 768
+SUMMARY_CHUNK_MAX_TOKENS = 512
 # 合并阶段输入的字符上限（中文约等于 token 数）：超出后截断并提示。
-MAX_MERGE_INPUT_CHARS = 12000
+MAX_MERGE_INPUT_CHARS = 16000
 # 内置纪要模型单次生成的输出 token 上限。内置模型在本地 CPU/GPU 上逐 token 生成，
 # 输出越长耗时线性增长。摘要走聊天模板（抑制思维链）后正文不再被 <think> 挤占预算，
-# 2048 token 仍在 16k 上下文预算内，并覆盖包含多个议题的中文纪要，避免正文在末尾截断。
-SUMMARY_MAX_TOKENS = 2048
+# 3072 token 为完整纪要留出空间；分段摘要更短，确保合并阶段保留所有分段内容。
+SUMMARY_MAX_TOKENS = 3072
 
 
 def clean_summary_markdown(markdown):

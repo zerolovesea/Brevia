@@ -1057,7 +1057,7 @@ class WorkerTest(unittest.TestCase):
         self.worker.summarize(
             {"meeting_id": meeting["id"], "provider": "built-in", "model": "qwen3.5-4b-q4km", "consent": True}
         )
-        self.assertEqual(self.worker.llama_sidecar_complete.call_args.args[0]["max_tokens"], 2048)
+        self.assertEqual(self.worker.llama_sidecar_complete.call_args.args[0]["max_tokens"], 3072)
 
     def test_summary_rejects_while_a_meeting_is_active(self):
         self.worker.active = "recording-meeting"

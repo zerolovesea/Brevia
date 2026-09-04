@@ -1579,24 +1579,6 @@ function updateExportBuilderState() {
     btn.disabled = count === 0 || (kind === 'text' && !hasText);
   });
 }
-const summaryDetailCopy = {
-  zh: ['完整会议纪要', '重新生成', '导出会议纪要', '完整结构化会议纪要', '纯文本会议纪要', '适合归档与分享'],
-  en: ['Full meeting notes', 'Regenerate', 'Export meeting notes', 'Complete structured meeting notes', 'Plain-text meeting notes', 'Suitable for archiving and sharing'],
-  es: ['Notas completas de la reunión', 'Regenerar', 'Exportar notas de reunión', 'Notas de reunión estructuradas completas', 'Notas de reunión en texto sin formato', 'Adecuado para archivar y compartir'],
-  ja: ['完全な会議メモ', '再生成', '会議メモをエクスポート', '完全な構造化会議メモ', 'プレーンテキストの会議メモ', 'アーカイブと共有に適しています'],
-  ko: ['전체 회의록', '다시 생성', '회의록 내보내기', '완전한 구조화 회의록', '일반 텍스트 회의록', '보관 및 공유에 적합'],
-  fr: ['Notes de réunion complètes', 'Régénérer', 'Exporter les notes de réunion', 'Notes de réunion structurées complètes', 'Notes de réunion en texte brut', 'Adapté à l’archivage et au partage'],
-  de: ['Vollständige Besprechungsnotizen', 'Neu erstellen', 'Besprechungsnotizen exportieren', 'Vollständige strukturierte Besprechungsnotizen', 'Besprechungsnotizen als Klartext', 'Zum Archivieren und Teilen geeignet'],
-  ru: ['Полные заметки встречи', 'Создать заново', 'Экспортировать заметки встречи', 'Полные структурированные заметки встречи', 'Заметки встречи в виде простого текста', 'Подходит для архивации и обмена'],
-};
-function renderSummaryDetailModal() {
-  const markdown = currentMeetingDetail?.summary?.data?.markdown;
-  if (!markdown) { closeModal(); return; }
-  const copy = summaryDetailCopy[locale] || summaryDetailCopy.en;
-  settingsModal.querySelector('h2').textContent = copy[0];
-  settingsModal.querySelector('.modal-title p').textContent = currentMeetingDetail.title;
-  settingsModal.querySelector('.modal-body').innerHTML = `<article class="markdown-content summary-modal-document">${renderMarkdown(cleanSummaryMarkdown(markdown))}</article>`;
-}
 /** 渲染一个设置模态框。@param {'models'|'storage'|'summary-model'} kind 请求的模态框。@returns {void} */
 function renderModal(kind) {
   if (kind === 'advanced-settings') {
@@ -1610,7 +1592,6 @@ function renderModal(kind) {
   if (kind === 'performance') { renderPerformanceModal(); return; }
   if (kind === 'speaker-profiles') { renderSpeakerProfileModal(); return; }
   if (kind === 'export' || kind === 'share') { renderExportModal(); return; }
-  if (kind === 'summary-detail') { renderSummaryDetailModal(); return; }
   if (kind === 'whats-new') { renderWhatsNewModal(); return; }
   const copy = (modalCopy[locale] || modalCopy.en)[kind];
   if (kind === 'storage') {
@@ -4988,7 +4969,6 @@ if (window.brevia) {
   });
 
   document.addEventListener('click', (event) => {
-    if (event.target.closest('[data-view-full-summary]')) { openModal('summary-detail'); return; }
     if (event.target.closest('[data-copy-summary]')) {
       const markdown = currentMeetingDetail?.summary?.data?.markdown;
       if (markdown) void window.brevia?.share.copyText({ text: markdown }).then(() => showToast(t('已复制到剪贴板'))).catch((error) => showToast(error.message));

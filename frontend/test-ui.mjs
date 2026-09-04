@@ -178,7 +178,6 @@ for (const code of ['en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']) assert.notEqual(l
 for (const code of ['en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']) assert.notEqual(localeContext.window.BreviaLocaleData.catalog[code].labels['清空数据'], '清空数据');
 for (const code of ['en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']) {
   assert.notEqual(localeContext.window.BreviaLocaleData.catalog[code].labels['VAD 模型'], 'VAD 模型');
-  assert.notEqual(localeContext.window.BreviaLocaleData.catalog[code].labels['查看完整内容'], '查看完整内容');
   assert.notEqual(localeContext.window.BreviaLocaleData.catalog[code].labels['确认'], '确认');
 }
 for (const [code, stage, allLanguages] of [['ja', 'ライブ字幕', 'すべての言語'], ['ko', '실시간 자막', '모든 언어'], ['de', 'Live-Untertitel', 'Alle Sprachen'], ['ru', 'Субтитры в реальном времени', 'Все языки']]) {
@@ -496,7 +495,7 @@ assert.match(text(js), /const downloadInFlight = progress && !progress\.error &&
 assert.match(text(js), /\$\{downloadInFlight \? ' disabled' : ''\}/);
 assert.match(text(js), /if \(card\?\.id === 'model-download-queue'\) \{[\s\S]*?if \(progress\.cancelled \|\| progress\.error\) \{ modelDownloads\.delete\(modelId\); requiredModelIds\.delete\(modelId\); \}/);
 assert.match(text(js), /function renderPrepareSelects\(\) \{[\s\S]*?importRecording\.textContent = t\('导入录音'\);/);
-assert.match(text(components), /t\('查看完整内容'\)/);
+assert.doesNotMatch(text(components), /查看完整内容/);
 assert.match(text(js), /function renderPauseButton/);
 assert.match(text(js), /const translation = payload\.translation \|\| previous\?\.querySelector\('\.translation'\)\?\.textContent;/);
 assert.match(text(js), /'silero-vad',\s*'online-punct-en-int8'/);
@@ -637,8 +636,7 @@ assert.match(text(app), /\[data-detail-tab\]/);
 assert.match(text(app), /closest\('\.segment-meta'\)[\s\S]{0,400}playerAudio\.currentTime = start/);
 assert.doesNotMatch(text(app), /finalTranscript\.addEventListener\('dblclick',[\s\S]{0,500}\[data-detail-tab\]/);
 assert.doesNotMatch(text(components), /双轨录音/);
-assert.match(text(components), /data-view-full-summary/);
-assert.match(text(components), /查看完整内容/);
+assert.doesNotMatch(text(components), /data-view-full-summary|查看完整内容/);
 assert.match(text(js), /function showSummaryConfigCard/);
 assert.match(text(js), /isSummaryAuthenticationError/);
 assert.match(text(js), /summary\?\.configuration_required/);
@@ -647,10 +645,7 @@ assert.match(text(js), /summary\.started/);
 assert.match(text(js), /pendingModelTasks/);
 assert.doesNotMatch(text(js), /将逐字稿发送到所选模型供应商以生成纪要/);
 assert.match(text(js), /openModal\('summary-model'\)/);
-assert.match(text(js), /renderSummaryDetailModal/);
 assert.match(text(js), /exportHubHtml\(\)/);
-const summaryDetailModal = text(app).match(/function renderSummaryDetailModal\(\)[\s\S]*?\n}\n\/\*\* 渲染一个设置模态框/)[0];
-assert.doesNotMatch(summaryDetailModal, /exportHubHtml/, 'full meeting notes should not include the export hub');
 assert.match(text(js), /data-export-format=/);
 assert.match(text(js), /data-flow-select-choice="export-format-/);
 assert.doesNotMatch(text(app), /id: 'wechat'/);

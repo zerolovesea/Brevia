@@ -489,8 +489,7 @@ class AiNoteWorkerMixin:
         valid = [str(value) for value in requested if str(value) in allowed]
         return list(dict.fromkeys(valid))[:2] or allowed[-1:]
 
-    @staticmethod
-    def _fuzzy_duplicate(norms, norm):
+    def _fuzzy_duplicate(self, norms, norm):
         """近义重复检测：与最近建议的归一化文本相似度过高则视为重复。"""
         for previous in norms[-12:]:
             # ponytail: 字符相似度只拦截改写；若误拦截可改用语义模型重排。

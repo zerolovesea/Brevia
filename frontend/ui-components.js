@@ -551,7 +551,7 @@ function renderMeetingSummary({ markdown, hasFull = false, blocked = false, gene
     : generating ? '' : markdown
     ? `<span class="summary-actions"><button class="summary-action-icon" data-open-summary-edit title="${escapeHtml(t('编辑'))}" aria-label="${escapeHtml(t('编辑'))}">${summaryActionIcons.edit}</button><button class="summary-action-icon" data-copy-summary title="${escapeHtml(t('复制会议纪要'))}" aria-label="${escapeHtml(t('复制会议纪要'))}">${summaryActionIcons.copy}</button><button class="summary-action-icon" data-regenerate-summary title="${escapeHtml(t('重新生成'))}" aria-label="${escapeHtml(t('重新生成'))}"${blockedAttrs}>${summaryActionIcons.refresh}</button></span>`
     : `<button class="text-button" data-generate-summary${blockedAttrs}>${t('生成')} →</button>`;
-  return `<div class="summary-preview"><div class="summary-head"><p class="eyebrow">${t('会议纪要')}</p>${action}</div>${editing ? `<div class="summary-inline-edit"><div data-inline-summary-editor></div></div>` : markdown ? `<div class="summary-body markdown-content">${renderMarkdown(cleanSummaryMarkdown(markdown))}</div><button class="text-button" data-view-full-summary>${t('查看完整内容')} →</button>` : `<p class="summary-empty">${t('尚未生成')}</p>`}</div>`;
+  return `<div class="summary-preview"><div class="summary-head"><p class="eyebrow">${t('会议纪要')}</p>${action}</div>${editing ? `<div class="summary-inline-edit"><div data-inline-summary-editor></div></div>` : markdown ? `<div class="summary-body markdown-content">${renderMarkdown(cleanSummaryMarkdown(markdown))}</div>` : `<p class="summary-empty">${t('尚未生成')}</p>`}</div>`;
 }
 /** 在页面外壳可用后填充所有数据驱动的静态区域。@returns {void} */
 function renderStaticViews() {
