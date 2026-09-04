@@ -69,6 +69,8 @@ Modelos descargables que cubren ASR en streaming, refinamiento offline, restaura
 - **Importación de audio** — trae grabaciones existentes para transcribirlas offline con el mismo pipeline.
 - **Exportaciones versátiles** — transcripciones y notas en Markdown, TXT, JSON, SRT, DOCX o PDF; audio en FLAC, WAV o M4A.
 - **Notas revisables** — escribe en texto enriquecido o Markdown y acepta solo las sugerencias de IA que te sirvan.
+- **Biblioteca y espacios de trabajo** — busca títulos, transcripciones, hablantes y etiquetas; organiza las reuniones en espacios y restaura las eliminadas durante 30 días.
+- **Vista centrada** — temas claro y oscuro, edición en línea de transcripciones y resúmenes, y una ventana opcional de subtítulos flotantes mantienen despejada la reunión.
 - **Interfaz multilingüe** — inglés, chino simplificado, español, japonés, coreano, francés, alemán y ruso.
 
 ## Instalación

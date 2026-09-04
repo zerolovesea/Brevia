@@ -69,6 +69,8 @@ Downloadable models cover streaming ASR, offline refinement, punctuation restora
 - **Audio import** — bring in existing recordings for offline transcription through the same speech pipeline.
 - **Rich exports** — transcript and notes as Markdown, TXT, JSON, SRT, DOCX, or PDF; audio as FLAC, WAV, or M4A.
 - **Reviewable notes** — write in rich text or Markdown, then accept only the AI suggestions that help.
+- **Meeting library and workspaces** — search titles, transcripts, speakers, and tags; organize work into workspaces and restore recently deleted meetings for 30 days.
+- **Focused viewing** — light and dark themes, inline transcript/summary editing, and an optional floating-caption window keep the meeting view uncluttered.
 - **Multilingual UI** — English, Simplified Chinese, Spanish, Japanese, Korean, French, German, and Russian.
 
 ## Install
@@ -281,20 +283,6 @@ Workarounds:
 - **Settings → Advanced** set `live_asr.denoiser_enabled` to `0` to disable real-time denoising, or lower `live_asr.denoise_minimum_rms` so more faint speech bypasses the denoiser.
 
 The recording and post-meeting refinement are unaffected, so you won't lose the transcript.
-</details>
-
-<details>
-<summary><strong>Does Brevia auto-choose between mic and system audio?</strong></summary>
-
-Brevia remembers your last capture choice (mic only, or mic + system audio), so you don't have to pick every time.
-
-When **mic + system** is enabled, system audio starts in a low-power **standby**: it only monitors levels and keeps a short pre-buffer. It activates quickly once it detects audio (~0.5–0.8 s) and flushes that pre-buffer so the start of remote speech isn't lost, and returns to standby only after ~30 s of silence. This means:
-
-- In-person meeting → only mic is sent (silent system track stays in standby)
-- Watching an online course → system audio activates and is recorded
-- Hybrid meeting → both are recorded and mixed
-
-During recording a small badge (e.g. "Auto · Mic only") shows which source is active. If you need system audio recorded unconditionally (courses, low-volume material, or compliance), set **Settings → Advanced → `live_asr.always_record_system_audio`** to `1` to disable auto-standby.
 </details>
 
 ## Feedback and contributing

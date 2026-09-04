@@ -14,6 +14,9 @@ assert.match(text(audioProcessor), /const BLOCK_SIZE = 8192;/);
 assert.match(text(audioProcessor), /data\?\.type !== 'flush'/);
 assert.match(text(audioProcessor), /this\.buffer\.slice\(0, count\)/);
 assert.match(text(backendClient), /sources\.map\(\(resource\) => this\.flush\(resource\)\)/);
+assert.match(text(backendClient), /resampler: null/, 'audio capture retains resampling state across worklet blocks');
+assert.match(text(backendClient), /state\.nextOutput \* ratio/, 'resampling advances on one cumulative output clock');
+assert.doesNotMatch(text(backendClient), /sampleOffset/, 'per-frame resample rounding must not accumulate into timestamps');
 assert.match(text(app), /const DEFAULT_REFINED_MODEL_ID = 'funasr-nano-int8';/);
 assert.match(text(app), /getPerformanceMode\(\) === 'efficiency' && \['zh', 'en'\]\.includes\(language\)/);
 assert.equal(modelManifest.find((model) => model.id === 'x-asr-zh-en-streaming-480ms-int8')?.archive_sha256, 'fa5f63d618e5a01526e275a358bb7772e403f84808a4769fba52cffd8160bf74');
@@ -71,6 +74,18 @@ assert.deepEqual(stoppedTracks, ['video', 'audio']);
 const microphone = { readyState: 'live', stop() { stoppedTracks.push('mic'); } };
 mediaContext.stopMediaStream({ getVideoTracks: () => [], getAudioTracks: () => [microphone] });
 assert.deepEqual(stoppedTracks, ['video', 'audio', 'mic']);
+// 48 kHz input blocks do not divide evenly into 16 kHz samples. Keep the
+// resampling window continuous so a block boundary neither skips nor repeats audio.
+const resampleCapture = new mediaContext.AudioCapture(() => {}, () => {});
+const resampleResource = { resampler: null };
+const resampled = [];
+for (let block = 0; block < 3; block += 1) {
+  const input = Float32Array.from({ length: 8192 }, (_, index) => block * 8192 + index);
+  resampled.push(...resampleCapture.resample(resampleResource, input, 48000).samples);
+}
+resampled.push(...resampleCapture.resample(resampleResource, new Float32Array(), 48000, true).samples);
+assert.equal(resampled.length, 8192, 'resampling preserves the cumulative 48 kHz duration');
+assert.deepEqual(resampled.slice(5458, 5463), [16375, 16378, 16381, 16384, 16387], 'resampling remains continuous across 8192-sample blocks');
 let displayConstraints;
 const capturedAudio = { readyState: 'live', stop() {} };
 const capturedVideo = { readyState: 'live', stop() {} };
@@ -331,7 +346,7 @@ assert.match(text(i18nData), /const refinementStageLabels =/);
 for (const locale of ['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']) {
   assert.match(text(i18nData), new RegExp(`${locale}: \\{[^}]*'转写中 · 校正说话人'`));
 }
-assert.match(text(js), /activeLibraryNav === 'recently-deleted' \? t\('最近删除'\)/);
+assert.match(text(js), /activeLibraryNav === 'recently-deleted' \? BreviaI18n\.trashCopy\(locale\)\.slogan/);
 assert.match(text(js), /if \(name === 'home'\) selectLibraryNav\(activeLibraryNav\)/);
 assert.match(text(js), /async function showLibraryNav/);
 assert.match(text(js), /async function transitionPage/);
@@ -646,10 +661,12 @@ for (const code of ['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']) {
 }
 assert.match(text(tailwind), /\.share-platform svg \{ @apply row-span-2 h-5 w-5 shrink-0/);
 assert.match(text(components), /data-regenerate-summary[^]*summaryActionIcons\.refresh/);
+assert.match(text(components), /data-copy-summary[^]*summaryActionIcons\.copy/);
+assert.match(text(app), /data-copy-summary[\s\S]{0,300}share\.copyText/);
+assert.match(text(app), /trashCopy\(locale\)\.slogan/);
 assert.match(text(components), /data-open-summary-edit[^]*summaryActionIcons\.edit/);
 assert.match(text(js), /data-regenerate-summary/);
 assert.match(text(app), /data-open-summary-edit[^]*uiData\.detail\.summaryEditing = true; renderMeetingDetail\(\)/);
-assert.match(text(app), /summaryActionBar\(editing\)/);
 assert.doesNotMatch(text(app), /summary-modal-document\) return;/);
 assert.match(text(app), /data-export-save/);
 assert.doesNotMatch(text(app), /data-export-reveal/);
@@ -675,6 +692,8 @@ assert.match(text(js), /data-share-target/);
 assert.match(text(js), /share\.copyText/);
 assert.match(text(js), /share\.openExternal/);
 assert.match(text(js), /meeting\.exportBundle/);
+assert.match(text(js), /filename_prefix: `\[\$\{exportContentLabel\[content\]\(\)\}\]`/);
+assert.match(text(js), /t\('会议录音'\)/);
 // 社交分享只带摘要,邮件/剪贴板带全文。
 assert.match(text(js), /function makeExcerpt/);
 assert.match(text(js), /function markdownToPlainText/);
@@ -690,6 +709,7 @@ assert.match(text(preload), /platform: process\.platform/);
 assert.match(text(electronMain), /new ShareMenu\(sharingItem\)\.popup/);
 assert.match(text(electronMain), /System share is only available on macOS/);
 assert.match(text(electronMain), /ipcMain\.handle\('meeting\.export-bundle'/);
+assert.match(text(electronMain), /filename_prefix: z\.string\(\)\.max\(60\)\.optional\(\)/);
 // 详情页「转发」改为打开分享面板,不再直接打包。
 assert.doesNotMatch(text(js), /data-share-detail'\)\.addEventListener\('click', async/);
 // preload 暴露 share API;主进程只放行 https 与 mailto。
@@ -1202,7 +1222,6 @@ assert.doesNotMatch(text(html), /data-transcript-search/);
 assert.doesNotMatch(text(app), /data-transcript-search/);
 assert.match(text(tailwind), /\.notes-find-pop \{ position: absolute;[^}]*top: 64px;[^}]*width: min\(26rem/, 'find and replace should overlay the editor content instead of taking a row');
 assert.match(text(tailwind), /\.notes-find-pop input \{ min-width: 0; height: 28px;/, 'find and replace inputs should stay compact');
-assert.match(text(tailwind), /\[data-summary-editor\] \{ position: relative; display: flex; height: min\(62vh/, 'summary Markdown editor needs a usable height');
 assert.doesNotMatch(text(components), /selection\.addRange\(range\); editor\.focus\(\);/, 'find highlighting must not move focus from the find input');
 assert.match(text(components), /document\.addEventListener\('pointerdown', closeFindOnOutsidePointer\)/, 'clicking outside closes the find popover');
 assert.match(text(components), /document\.execCommand\(event\.shiftKey \? 'outdent' : 'indent'\)/, 'rich-text lists support nesting');

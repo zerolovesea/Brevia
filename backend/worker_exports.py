@@ -32,7 +32,15 @@ class ExportWorkerMixin:
         safe_title = (
             re.sub(r'[<>:"/\\|?*]+', "-", meeting["title"]).strip() or meeting["id"]
         )
-        path = directory / f"{safe_title}.{export_format}"
+        prefix = payload.get("filename_prefix") or {
+            "transcript": "[字幕]",
+            "notes": "[会议纪要]",
+            "mynotes": "[我的笔记]",
+            "audio": "[会议录音]",
+        }.get(content_type, "")
+        prefix = re.sub(r'[<>:"/\\|?*]+', "-", str(prefix))
+        stem = self._available_export_stem(directory, f"{prefix}{safe_title}", export_format)
+        path = directory / f"{stem}.{export_format}"
         if content_type == "audio":
             return self._export_audio(
                 meeting, path, export_format, payload.get("track", "mix")
@@ -79,11 +87,11 @@ class ExportWorkerMixin:
                 else "\n".join(lines)
             )
         if export_format == "docx":
-            path = self._write_docx(directory, safe_title, content)
+            path = self._write_docx(directory, stem, content)
         elif export_format == "pdf":
             path = self._write_print_html(
                 directory,
-                safe_title,
+                stem,
                 content,
                 markdown=content_type in {"notes", "mynotes"},
             )
@@ -94,6 +102,16 @@ class ExportWorkerMixin:
             "format": "html" if export_format == "pdf" else export_format,
             "print_pdf": export_format == "pdf",
         }
+
+    @staticmethod
+    def _available_export_stem(directory, stem, export_format):
+        """为临时导出文件保留不会覆盖已有结果的名字。"""
+        directory.mkdir(parents=True, exist_ok=True)
+        for index in range(10000):
+            candidate = f"{stem}{'' if index == 0 else f'({index})'}"
+            if not (directory / f"{candidate}.{export_format}").exists():
+                return candidate
+        raise ValueError("Too many exports with the same name")
 
     def bundle(self, payload):
         """打包本地录音与 Markdown、TXT 逐字稿。"""

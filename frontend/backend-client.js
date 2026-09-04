@@ -170,10 +170,9 @@ class AudioCapture {
   async connect(track, stream) {
     const resource = {
       track, stream, context: new AudioContext(), startMs: Math.round(performance.now() - this.startedAt),
-      inFlight: null, flushResolve: null,
+      inFlight: null, flushResolve: null, resampler: null,
     };
     const { context } = resource;
-    let sampleOffset = 0;
     let ready;
     let readyTimer;
     const started = new Promise((resolve, reject) => {
@@ -181,13 +180,13 @@ class AudioCapture {
       readyTimer = setTimeout(() => reject(new Error(micMessage(track === 'system' ? '系统音频未产生音频数据' : '麦克风未产生音频数据'))), 3000);
     });
     // 把一帧原始 Float32 采样重采样成 16k PCM 并推流（门控待命时不调用，省重采样）。
-    const sendRaw = (rawSamples, startMs) => {
-      const samples = this.resample(rawSamples, context.sampleRate);
+    const sendRaw = (rawSamples, final = false) => {
+      const { samples, outputStart } = this.resample(resource, rawSamples, context.sampleRate, final);
       const pcm = new Int16Array(samples.length);
       for (let i = 0; i < samples.length; i += 1) {
         pcm[i] = Math.max(-1, Math.min(1, samples[i])) * 0x7fff;
       }
-      this.enqueue(resource, pcm, startMs);
+      this.enqueue(resource, pcm, resource.startMs + Math.round(outputStart * 1000 / 16000));
     };
     try {
       await loadAudioWorklet(context);
@@ -196,6 +195,7 @@ class AudioCapture {
       // worklet 累积样本并回传主线程,在此处理暂停/静音逻辑并推流到后端。
       resource.processor.port.onmessage = ({ data }) => {
         if (data.flushed) {
+          sendRaw(new Float32Array(), true);
           resource.flushResolve?.();
           resource.flushResolve = null;
           return;
@@ -205,9 +205,7 @@ class AudioCapture {
         if (track === 'mic' && this.onLevel) {
           this.onLevel(track, data.level);
         }
-        const startMs = resource.startMs + Math.round(sampleOffset / 16);
-        sampleOffset += Math.round(data.samples.length * 16000 / context.sampleRate);
-        sendRaw(data.samples, startMs);
+        sendRaw(data.samples);
       };
       resource.source.connect(resource.processor);
       resource.processor.connect(context.destination);
@@ -262,26 +260,44 @@ class AudioCapture {
     }
   }
 
-  resample(input, sourceRate) {
-    if (sourceRate === 16000) return input;
+  resample(resource, input, sourceRate, final = false) {
+    const state = resource.resampler ||= { samples: new Float32Array(), sourceStart: 0, nextOutput: 0 };
+    const sourceEnd = state.sourceStart + state.samples.length + input.length;
+    const combined = new Float32Array(state.samples.length + input.length);
+    combined.set(state.samples);
+    combined.set(input, state.samples.length);
+    state.samples = combined;
+    const outputStart = state.nextOutput;
+    if (sourceRate === 16000) {
+      const samples = state.samples;
+      state.sourceStart = sourceEnd;
+      state.samples = new Float32Array();
+      state.nextOutput += samples.length;
+      return { samples, outputStart };
+    }
     // 用「积分窗口（box filter）」低通后再抽取，抑制降采样混叠。旧实现用线性插值，
     // 在 48k→16k 这类整数倍时会退化成「每 3 个样本取 1 个」，完全没有抗混叠，
     // 高于 8kHz 的内容折回可听频段，造成录音发闷/发毛的「爆音」。
     const ratio = sourceRate / 16000;
-    const output = new Float32Array(Math.max(1, Math.round(input.length / ratio)));
-    for (let index = 0; index < output.length; index += 1) {
-      const start = index * ratio;
-      const end = Math.min(input.length, start + ratio);
+    const values = [];
+    const outputLimit = final ? Math.round(sourceEnd / ratio) : Infinity;
+    while ((state.nextOutput + 1) * ratio <= sourceEnd || (final && state.nextOutput < outputLimit)) {
+      const start = state.nextOutput * ratio - state.sourceStart;
+      const end = Math.min(state.samples.length, (state.nextOutput + 1) * ratio - state.sourceStart);
       let sum = 0;
       let weight = 0;
       for (let j = Math.floor(start); j < Math.ceil(end); j += 1) {
         const span = Math.min(j + 1, end) - Math.max(j, start);
-        sum += input[j] * span;
+        sum += state.samples[j] * span;
         weight += span;
       }
-      output[index] = weight ? sum / weight : 0;
+      values.push(weight ? sum / weight : 0);
+      state.nextOutput += 1;
     }
-    return output;
+    const discard = Math.floor(state.nextOutput * ratio) - state.sourceStart;
+    state.samples = state.samples.slice(Math.max(0, discard));
+    state.sourceStart += Math.max(0, discard);
+    return { samples: Float32Array.from(values), outputStart };
   }
 
   async stop() {

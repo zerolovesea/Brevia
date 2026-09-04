@@ -54,37 +54,38 @@ SUMMARY_PROMPTS = {
 5. Preserve important names, organizations, projects, amounts, dates, IDs, and technical parameters.
 6. Develop each topic fully: capture the background, each party's views and reasoning, proposals raised, points of agreement and disagreement, and supporting examples or data. Merge identical topics, but never drop detail for the sake of brevity.
 7. Cover every substantive topic raised, not just a few. Keep background, arguments, examples, and data under the relevant topic.
-8. Omit irrelevant sections. Output Markdown only, never explanation or JSON.
+8. Extract every explicit follow-up action individually, including requests, assignments, follow-ups, submissions, completions, and deadlines. Keep it as an action item even when its owner or due date is unknown, and mark those fields “To confirm”.
+9. Omit irrelevant sections, but never omit Action Items when any explicit follow-up action exists. Output Markdown only, never explanation or JSON.
 
 Use: # **{title}**; Meeting Summary (one or two paragraphs); Key Conclusions; Topic Discussion (repeat a subsection per topic with Discussion / Current conclusion / Risks / To confirm); Confirmed Decisions; Action Items (Task | Owner | Due date | Status); Open Items; Key Data.""",
     "es": """Eres un asistente profesional de notas de reunión. A partir de la transcripción limpia, crea Markdown preciso, conciso y estructurado.
 
-Usa solo información explícita; diferencia discusión, opiniones, sugerencias, decisiones confirmadas, tareas y asuntos pendientes. No presentes sugerencias como decisiones ni inventes responsables o fechas (usa «Por confirmar» o «No especificado»). Conserva nombres, organizaciones, proyectos, importes, fechas, IDs y parámetros técnicos; agrupa temas iguales y omite secciones irrelevantes. Devuelve solo Markdown.
+Usa solo información explícita; diferencia discusión, opiniones, sugerencias, decisiones confirmadas, tareas y asuntos pendientes. No presentes sugerencias como decisiones ni inventes responsables o fechas (usa «Por confirmar» o «No especificado»). Extrae cada acción de seguimiento explícita —solicitudes, asignaciones, seguimientos, entregas, finalizaciones y plazos— aunque falte responsable o fecha; no omitas la sección de acciones si existe alguna. Conserva nombres, organizaciones, proyectos, importes, fechas, IDs y parámetros técnicos; agrupa temas iguales y omite secciones irrelevantes. Devuelve solo Markdown.
 
 Usa: # **{title}**; Resumen de la reunión; Conclusiones clave; Discusión de temas; Decisiones confirmadas; Acciones (Tarea | Responsable | Fecha límite | Estado); Pendientes; Datos clave.""",
     "ja": """あなたは専門的な会議議事録アシスタントです。清掃済み文字起こしから、正確で簡潔かつ構造化された Markdown を作成してください。
 
-入力に明示された情報だけを使用し、議論・個人意見・提案・確認済み決定・アクション項目・未確認事項を区別します。提案を最終決定にせず、担当者や期限を捏造しません（未確認・未明記と記載）。重要な名称、金額、日付、番号、技術パラメータを残し、同じ議題を統合して無関係な節は省略します。Markdown のみを出力します。
+入力に明示された情報だけを使用し、議論・個人意見・提案・確認済み決定・アクション項目・未確認事項を区別します。提案を最終決定にせず、担当者や期限を捏造しません（未確認・未明記と記載）。依頼・割り当て・フォローアップ・提出・完了・期限など、明確な後続アクションを一つずつ抽出し、担当者や期限が不明でも残してください。明確な後続アクションがあればアクション項目の節を省略しません。重要な名称、金額、日付、番号、技術パラメータを残し、同じ議題を統合して無関係な節は省略します。Markdown のみを出力します。
 
 形式: # **{title}**、会議概要、主要結論、議題別の議論、確認済み決定、アクション項目（タスク | 担当者 | 期限 | 状態）、確認事項、主要データ。""",
     "ko": """당신은 전문 회의록 도우미입니다. 정리된 전사를 바탕으로 정확하고 간결하며 구조화된 Markdown을 작성하세요.
 
-입력에 명시된 정보만 사용하고, 논의·개인 의견·제안·확정 결정·실행 항목·확인 필요 사항을 구분합니다. 제안을 최종 결정으로 쓰지 말고 담당자나 마감일을 만들지 마세요(미확정 또는 미기재). 중요한 이름, 조직, 프로젝트, 금액, 날짜, ID, 기술 매개변수를 보존하고 같은 주제는 통합하며 관련 없는 절은 생략합니다. Markdown만 출력합니다.
+입력에 명시된 정보만 사용하고, 논의·개인 의견·제안·확정 결정·실행 항목·확인 필요 사항을 구분합니다. 제안을 최종 결정으로 쓰지 말고 담당자나 마감일을 만들지 마세요(미확정 또는 미기재). 요청·배정·후속 조치·제출·완료·기한 등 명시적인 후속 작업을 하나씩 추출하고, 담당자나 마감일이 없어도 보존하세요. 명시적인 후속 작업이 있으면 실행 항목 절을 생략하지 마세요. 중요한 이름, 조직, 프로젝트, 금액, 날짜, ID, 기술 매개변수를 보존하고 같은 주제는 통합하며 관련 없는 절은 생략합니다. Markdown만 출력합니다.
 
 형식: # **{title}**, 회의 요약, 핵심 결론, 안건 논의, 확정 결정, 실행 항목(작업 | 담당자 | 마감일 | 상태), 확인 필요 사항, 핵심 데이터.""",
     "fr": """Vous êtes un assistant professionnel de compte rendu. À partir de la transcription nettoyée, produisez un Markdown exact, concis et structuré.
 
-N'utilisez que les informations explicites. Distinguez discussion, opinions, suggestions, décisions confirmées, actions et points à confirmer. Ne présentez pas une suggestion comme une décision et n'inventez ni responsable ni échéance (« À confirmer » ou « Non précisé »). Conservez noms, organisations, projets, montants, dates, identifiants et paramètres techniques; regroupez les thèmes identiques et omettez les sections inutiles. Markdown uniquement.
+N'utilisez que les informations explicites. Distinguez discussion, opinions, suggestions, décisions confirmées, actions et points à confirmer. Ne présentez pas une suggestion comme une décision et n'inventez ni responsable ni échéance (« À confirmer » ou « Non précisé »). Extrayez chaque action de suivi explicite — demande, attribution, suivi, remise, finalisation ou échéance — même sans responsable ni date, et n'omettez pas la section des actions si elle en contient une. Conservez noms, organisations, projets, montants, dates, identifiants et paramètres techniques; regroupez les thèmes identiques et omettez les sections inutiles. Markdown uniquement.
 
 Format : # **{title}** ; Résumé de la réunion ; Conclusions clés ; Discussion des sujets ; Décisions confirmées ; Actions (Tâche | Responsable | Échéance | Statut) ; Points à confirmer ; Données clés.""",
     "de": """Sie sind ein professioneller Assistent für Besprechungsnotizen. Erstellen Sie aus dem bereinigten Transkript präzises, knappes und strukturiertes Markdown.
 
-Verwenden Sie nur ausdrücklich genannte Informationen. Unterscheiden Sie Diskussion, persönliche Meinung, Vorschlag, bestätigte Entscheidung, Aufgabe und offenen Punkt. Stellen Sie Vorschläge nicht als Entscheidung dar und erfinden Sie weder Verantwortliche noch Fristen („Zu bestätigen“ oder „Nicht angegeben“). Bewahren Sie wichtige Namen, Organisationen, Projekte, Beträge, Daten, IDs und technische Parameter; fassen Sie gleiche Themen zusammen und lassen Sie irrelevante Abschnitte weg. Nur Markdown ausgeben.
+Verwenden Sie nur ausdrücklich genannte Informationen. Unterscheiden Sie Diskussion, persönliche Meinung, Vorschlag, bestätigte Entscheidung, Aufgabe und offenen Punkt. Stellen Sie Vorschläge nicht als Entscheidung dar und erfinden Sie weder Verantwortliche noch Fristen („Zu bestätigen“ oder „Nicht angegeben“). Extrahieren Sie jede ausdrücklich genannte Folgemaßnahme — Bitte, Zuweisung, Nachverfolgung, Einreichung, Abschluss oder Frist — auch ohne Verantwortliche oder Termin; lassen Sie den Aufgabenabschnitt nicht weg, wenn eine solche Maßnahme vorhanden ist. Bewahren Sie wichtige Namen, Organisationen, Projekte, Beträge, Daten, IDs und technische Parameter; fassen Sie gleiche Themen zusammen und lassen Sie irrelevante Abschnitte weg. Nur Markdown ausgeben.
 
 Format: # **{title}**; Besprechungszusammenfassung; Kernergebnisse; Themenbesprechung; Bestätigte Entscheidungen; Aufgaben (Aufgabe | Verantwortlich | Frist | Status); Offene Punkte; Wichtige Daten.""",
     "ru": """Вы профессиональный помощник по протоколам встреч. На основе очищенной расшифровки создайте точный, краткий и структурированный Markdown.
 
-Используйте только явно указанную информацию. Различайте обсуждение, личное мнение, предложение, подтверждённое решение, задачу и требующий уточнения вопрос. Не выдавайте предложение за решение и не придумывайте ответственного или срок («Требует уточнения» или «Не указано»). Сохраняйте важные имена, организации, проекты, суммы, даты, идентификаторы и технические параметры; объединяйте одинаковые темы и опускайте нерелевантные разделы. Выводите только Markdown.
+Используйте только явно указанную информацию. Различайте обсуждение, личное мнение, предложение, подтверждённое решение, задачу и требующий уточнения вопрос. Не выдавайте предложение за решение и не придумывайте ответственного или срок («Требует уточнения» или «Не указано»). Извлекайте каждое явно сформулированное последующее действие — просьбу, назначение, контроль, отправку, завершение или срок — даже без ответственного или даты; не пропускайте раздел задач, если такое действие есть. Сохраняйте важные имена, организации, проекты, суммы, даты, идентификаторы и технические параметры; объединяйте одинаковые темы и опускайте нерелевантные разделы. Выводите только Markdown.
 
 Формат: # **{title}**; Резюме встречи; Ключевые выводы; Обсуждение тем; Подтверждённые решения; Задачи (Задача | Ответственный | Срок | Статус); Вопросы к уточнению; Ключевые данные.""",
 }
@@ -104,8 +105,9 @@ def summary_prompt(transcript, title, language):
 5. 保留重要的人名、公司名、项目名、金额、日期、编号和技术参数。
 6. 每个议题都要充分展开：完整记录讨论背景、各方观点与理由、提出的方案、达成或未达成的共识，以及分歧点。相同议题合并整理，但不要为了简短而丢失细节。
 7. 覆盖会议中出现的全部实质性议题，不要只挑选少数几个。逐句复述之外的信息（背景、论据、举例、数据）都应保留在相应议题下。
-8. 没有相关内容的章节可以省略。
-9. 只输出 Markdown，不输出解释或 JSON。
+8. 必须逐条提取明确的后续动作，包括“请/需/需要/须/安排/跟进/提交/完成/在…前”等表述；即使负责人或截止时间未说清，也要保留为行动项并标注“待确认”。
+9. 没有相关内容的章节可以省略，但“行动项”只要存在任何明确后续动作就不得省略。
+10. 只输出 Markdown，不输出解释或 JSON。
 
 输出格式：
 
@@ -201,8 +203,9 @@ def chunk_summary_prompt(transcript, title, language):
 2. 区分讨论、个人观点、建议、已确认决定、行动项和待确认事项。
 3. 保留重要的人名、公司名、项目名、金额、日期、编号和技术参数。
 4. 保留实质内容与数据，省略寒暄、重复和无关闲聊。
-5. 输出结构：## **议题讨论**（各议题要点）、## **已确认决定**、## **行动项**（任务 | 负责人 | 截止时间 | 状态）、## **待确认事项**、## **关键数据**。没有内容的章节省略。
-6. 只输出 Markdown，不输出解释或 JSON。"""
+5. 逐条提取明确的后续动作（如“请/需/需要/须/安排/跟进/提交/完成/在…前”）；负责人或截止时间不明确时仍保留，并写“待确认”。
+6. 输出结构：## **议题讨论**（各议题要点）、## **已确认决定**、## **行动项**（任务 | 负责人 | 截止时间 | 状态）、## **待确认事项**、## **关键数据**。只要存在行动项就不得省略该章节。
+7. 只输出 Markdown，不输出解释或 JSON。"""
     else:
         instructions = (
             "You are a professional meeting-notes assistant. Extract the key information from the "
@@ -210,7 +213,9 @@ def chunk_summary_prompt(transcript, title, language):
             "merging into complete meeting notes. Use only explicitly stated information; distinguish "
             "discussion, opinions, proposals, confirmed decisions, action items, and open questions; "
             "keep important names, organizations, projects, amounts, dates, IDs, and technical "
-            "parameters; keep substantive content and data, omit pleasantries and repetition. Output "
+            "parameters; extract every explicit follow-up action even when its owner or due date is "
+            "unknown (mark it TBD), and do not omit Action items when any exist; keep substantive "
+            "content and data, omit pleasantries and repetition. Output "
             "sections: ## **Topics discussed**, ## **Confirmed decisions**, ## **Action items** "
             "(task | owner | due | status), ## **Open questions**, ## **Key data** (omit empty "
             "sections). Output only Markdown."
@@ -228,8 +233,9 @@ def merge_summary_prompt(chunk_summaries, title, language):
 2. 合并相同议题与重复内容，覆盖所有分段纪要中的实质性内容。
 3. 区分已确认决定、建议、行动项和待确认事项；行动项未明确负责人或截止时间时写“待确认”。
 4. 保留所有重要人名、公司名、项目名、金额、日期、编号和技术参数。
-5. 输出格式：# **{title}**；## **会议摘要**（概括整体）；## **核心结论**；## **议题讨论**；## **已确认决定**；## **行动项**（表格）；## **待确认事项**；## **关键数据**。
-6. 只输出 Markdown。""".format(title=title)
+5. 不得遗漏任一分段中已提取的行动项；合并重复项，但保留最具体的任务、负责人和截止时间。
+6. 输出格式：# **{title}**；## **会议摘要**（概括整体）；## **核心结论**；## **议题讨论**；## **已确认决定**；## **行动项**（表格）；## **待确认事项**；## **关键数据**。
+7. 只输出 Markdown。""".format(title=title)
     else:
         instructions = (
             "You are a professional meeting-notes assistant. Merge the partial meeting summaries "
@@ -237,7 +243,9 @@ def merge_summary_prompt(chunk_summaries, title, language):
             "Markdown meeting note. Merge identical topics and remove duplication while covering all "
             "substantive content; distinguish confirmed decisions, proposals, action items, and open "
             "questions (mark unknown owners/due dates as \"TBD\"); keep all important names, "
-            "organizations, projects, amounts, dates, IDs, and technical parameters. Format: "
+            "organizations, projects, amounts, dates, IDs, and technical parameters; do not omit any "
+            "action item from the partial summaries, merging duplicates while retaining the most "
+            "specific task, owner, and due date. Format: "
             "# **{title}**; ## **Summary**; ## **Key takeaways**; ## **Topics discussed**; "
             "## **Confirmed decisions**; ## **Action items** (table); ## **Open questions**; "
             "## **Key data**. Output only Markdown."

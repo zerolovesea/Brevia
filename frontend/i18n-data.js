@@ -229,6 +229,7 @@ const detailPageLabels = {
   ru: { '分享': 'Поделиться', '精修字幕': 'Уточнить субтитры', '已精修': 'Обработано', '查看原始转写': 'Показать исходную расшифровку', '查看精修字幕': 'Показать обработанные субтитры', '精修全文': 'Полный обработанный текст', '经过会后模型整理后的完整转写文本。由于当前模型不提供时间戳，该版本不支持逐句音频定位。': 'Сплошной текст расшифровки, обработанный моделью после встречи. Поскольку эта модель не даёт временных меток, поиск по аудио по фрагментам не поддерживается.', '会议中没有记录笔记。': 'Во время встречи заметки не велись.', '位参与者': 'участников', '重新精修': 'Обработать заново', '更换精修模型': 'Сменить модель обработки', '尚未生成': 'Ещё не создано', '生成纪要': 'Создать заметки', '更多': 'Ещё', '会议纪要': 'Протокол встречи', '新建会议': 'Новая встреча', '已生成纪要': 'Заметки созданы', '完成': 'Готово', '生成': 'Создать', '重新生成': 'Пересоздать', '笔记已达 20000 字符上限，超出部分未保存。': 'Заметки ограничены 20 000 символами; остальное не сохранено.', '编辑': 'Изменить', '搜索会议…': 'Поиск встреч…' },
 };
 Object.entries(detailPageLabels).forEach(([code, labels]) => Object.assign(catalog[code].labels, labels));
+Object.entries({ zh: '复制会议纪要', en: 'Copy meeting notes', es: 'Copiar notas de reunión', ja: '議事録をコピー', ko: '회의록 복사', fr: 'Copier les notes de réunion', de: 'Besprechungsnotizen kopieren', ru: 'Скопировать заметки встречи' }).forEach(([code, label]) => { catalog[code].labels['复制会议纪要'] = label; });
 Object.entries(liveSourceLabels).forEach(([code, labels]) => Object.assign(catalog[code].labels, labels));
 const settingsLabels = {
   ja: { '会议摘要': '会議の要約', '尚未生成会议摘要': '会議の要約はまだありません', '生成完整会议纪要': '会議メモを生成', '转发': '共有', '已整理': '完了', '已完成': '完了', '处理中': '処理中', '纪要模型': '要約モデル', '管理纪要模型': '要約モデルを管理', '配置用于生成会议纪要的 API。所有配置信息仅保存在本地，不会上传。': '会議メモを生成する API を設定します。すべての設定はローカルに保存されます。', '会议资料保存在此 Mac。外部 LLM 需要在发送逐字稿前明确确认。': '会議データはこの Mac に保存されます。外部 LLM への送信には明示的な確認が必要です。', '返回会议库': 'ライブラリに戻る', '暂无术语': '用語はありません', '软件更新': 'ソフトウェアアップデート', '当前版本 0.1.0': '現在のバージョン 0.1.0', '检查更新': 'アップデートを確認' },
@@ -952,7 +953,12 @@ const storageCleanupCopy = {
  */
 const whatsNewLog = [
   {
-    version: '1.1.7', date: '2026-09-02', current: true,
+    version: '1.1.8', date: '2026-09-04', current: true,
+    zh: { what: ['会议纪要支持一键复制；导出的文件会按内容类型自动命名。'], improved: ['音频采样在连续分块间保持精确时间轴，降低长时间录音出现时间漂移的可能。', '会议纪要会更完整地保留明确提出的后续行动项。'], fixed: ['清理已不再使用的摘要弹窗编辑逻辑，统一使用详情页内联编辑。'] },
+    en: { what: ['Meeting notes can now be copied with one click, and exported files are named by content type.'], improved: ['Audio sampling now keeps a precise timeline across consecutive blocks, reducing the risk of drift in long recordings.', 'Meeting notes more reliably retain explicitly stated follow-up actions.'], fixed: ['Removed the unused summary-dialog editor so editing consistently happens inline in meeting details.'] },
+  },
+  {
+    version: '1.1.7', date: '2026-09-02',
     zh: { what: ['会议详情中的纪要现可直接编辑，无需打开单独窗口。'], improved: ['优化长录音与导入录音的会后精修，降低内存占用并缩短准备时间。', '效率模式下导入录音会跳过发言者区分，以更快完成会后精修。'], fixed: ['修复 Windows 上首次加载音频处理组件可能导致精修准备长时间无响应的问题。'] },
     en: { what: ['Meeting summaries can now be edited directly from the meeting details view.'], improved: ['Optimized post-meeting refinement for long and imported recordings to reduce memory use and shorten preparation time.', 'In Efficiency mode, imported recordings skip speaker distinction so post-meeting refinement finishes faster.'], fixed: ['Fixed an issue where the first Windows load of audio-processing components could leave refinement preparation unresponsive for an extended time.'] },
   },

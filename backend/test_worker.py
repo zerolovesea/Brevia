@@ -1529,6 +1529,26 @@ class WorkerTest(unittest.TestCase):
         self.assertIn("<h2>行动项</h2>", printed)
         self.assertNotIn("## **行动项**", printed)
 
+    def test_exports_use_content_prefixes_and_keep_each_format(self):
+        meeting = self.worker.start(
+            {
+                "title": "同名导出",
+                "language": "zh",
+                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
+                "refined_model_id": "qwen3-asr-0.6b-int8",
+            }
+        )
+        self.worker.store.save_summary(meeting["id"], {"markdown": "# 纪要"}, "raw")
+        self.worker.store.update_meeting(meeting["id"], {"notes": "# 笔记"})
+        transcript = self.worker.export({"meeting_id": meeting["id"], "content": "transcript", "format": "md"})
+        summary = self.worker.export({"meeting_id": meeting["id"], "content": "notes", "format": "md"})
+        notes = self.worker.export({"meeting_id": meeting["id"], "content": "mynotes", "format": "md"})
+        repeated = self.worker.export({"meeting_id": meeting["id"], "content": "transcript", "format": "md"})
+        self.assertEqual(
+            [Path(item["path"]).name for item in (transcript, summary, notes, repeated)],
+            ["[字幕]同名导出.md", "[会议纪要]同名导出.md", "[我的笔记]同名导出.md", "[字幕]同名导出(1).md"],
+        )
+
     def test_mynotes_exports_markdown_and_pdf(self):
         meeting = self.worker.start(
             {
@@ -1704,6 +1724,30 @@ class WorkerTest(unittest.TestCase):
             Worker._clean_live_text(f"开场。{repeated * 4}继续讨论。"),
             f"开场。{repeated}继续讨论。",
         )
+
+    def test_offline_refinement_reuses_decoder_loop_cleanup(self):
+        # 导入音频和实时字幕必须一致丢弃 LLM ASR 的语言标签与重复解码。
+        raw = "language Chinese。" + "都被" * 12 + "请项目组在周五前提交方案。"
+        self.assertEqual(
+            self.worker._trim_refinement_repeats(Worker._clean_live_text(raw)),
+            "都被请项目组在周五前提交方案。",
+        )
+
+    def test_summary_prompts_require_explicit_action_items(self):
+        from .worker_llm import chunk_summary_prompt, merge_summary_prompt, summary_prompt
+
+        markers = {
+            "zh": "不得省略", "en": "every explicit follow-up action",
+            "es": "cada acción de seguimiento explícita", "ja": "明確な後続アクションを一つずつ",
+            "ko": "명시적인 후속 작업을 하나씩", "fr": "chaque action de suivi explicite",
+            "de": "jede ausdrücklich genannte Folgemaßnahme", "ru": "каждое явно сформулированное последующее действие",
+        }
+        for language, marker in markers.items():
+            self.assertIn(marker, summary_prompt("请跟进", "会议", language))
+        self.assertIn("逐条提取", chunk_summary_prompt("请跟进", "会议", "zh"))
+        self.assertIn("every explicit follow-up action", chunk_summary_prompt("follow up", "Meeting", "en"))
+        self.assertIn("不得遗漏", merge_summary_prompt(["行动项"], "会议", "zh"))
+        self.assertIn("do not omit any action item", merge_summary_prompt(["Action items"], "Meeting", "en"))
 
     def test_live_text_removes_qwen3_hallucinated_artifacts(self):
         # Qwen3-ASR 在静音/低信噪窗口会幻听出代码围栏、"language <语言>" 标签等。

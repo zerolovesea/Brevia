@@ -461,8 +461,6 @@ settingsModal.hidden = true;
 settingsModal.innerHTML = '<section class="modal-panel" role="dialog" aria-modal="true"><header class="modal-head"><div class="modal-title"><h2></h2><p></p></div><button class="modal-close" type="button" aria-label="Close">×</button></header><div class="modal-body"></div></section>';
 document.body.append(settingsModal);
 let activeModal;
-let summaryEditing = false;
-let summaryEditor = null;
 let inlineSummaryEditor = null;
 let editingSegmentSpeakerId;
 let advancedSettings;
@@ -1488,6 +1486,7 @@ function selectedExportItems() {
       content,
       format: exportSelection[content],
       label: exportContentLabel[content](),
+      filename_prefix: `[${exportContentLabel[content]()}]`,
       ...(exportTrack[content] ? { track: exportTrack[content] } : {}),
     }));
 }
@@ -1590,24 +1589,13 @@ const summaryDetailCopy = {
   de: ['Vollständige Besprechungsnotizen', 'Neu erstellen', 'Besprechungsnotizen exportieren', 'Vollständige strukturierte Besprechungsnotizen', 'Besprechungsnotizen als Klartext', 'Zum Archivieren und Teilen geeignet'],
   ru: ['Полные заметки встречи', 'Создать заново', 'Экспортировать заметки встречи', 'Полные структурированные заметки встречи', 'Заметки встречи в виде простого текста', 'Подходит для архивации и обмена'],
 };
-function summaryActionBar(editing) {
-  const button = (action, label, icon) => `<button type="button" class="summary-action-icon" data-${action} title="${label}" aria-label="${label}">${summaryActionIcons[icon]}</button>`;
-  return `<div class="summary-action-bar">${editing ? `${button('cancel-summary-edit', t('取消'), 'cancel')}${button('save-summary', t('保存'), 'save')}` : button('regenerate-summary', t('重新生成'), 'refresh')}</div>`;
-}
 function renderSummaryDetailModal() {
   const markdown = currentMeetingDetail?.summary?.data?.markdown;
   if (!markdown) { closeModal(); return; }
   const copy = summaryDetailCopy[locale] || summaryDetailCopy.en;
   settingsModal.querySelector('h2').textContent = copy[0];
   settingsModal.querySelector('.modal-title p').textContent = currentMeetingDetail.title;
-  settingsModal.querySelector('.modal-body').innerHTML = summaryEditing
-    ? `${summaryActionBar(true)}<div data-summary-editor></div>`
-    : `${summaryActionBar(false)}<article class="markdown-content summary-modal-document">${renderMarkdown(cleanSummaryMarkdown(markdown))}</article>`;
-  if (summaryEditing) {
-    summaryEditor = createNotesEditor(settingsModal.querySelector('[data-summary-editor]'), { ariaLabel: t('会议纪要'), getMeetingId: () => currentMeetingDetail?.id });
-    summaryEditor.setMarkdown(markdown);
-    summaryEditor.focus();
-  }
+  settingsModal.querySelector('.modal-body').innerHTML = `<article class="markdown-content summary-modal-document">${renderMarkdown(cleanSummaryMarkdown(markdown))}</article>`;
 }
 /** 渲染一个设置模态框。@param {'models'|'storage'|'summary-model'} kind 请求的模态框。@returns {void} */
 function renderModal(kind) {
@@ -1712,7 +1700,6 @@ function openConfirmation(title, detail, action) {
 }
 async function openModal(kind) {
   clearTimeout(modalDismissTimer);
-  if (kind === 'summary-detail') { summaryEditing = false; summaryEditor = null; }
   if (kind === 'advanced-settings') {
     try {
       const [settings, status] = await Promise.all([window.brevia?.advancedSettings.get(), window.brevia?.permissions.status().catch(() => undefined)]);
@@ -1745,8 +1732,6 @@ function closeModal() {
   window.clearInterval(permissionPollTimer);
   summaryConfigDraft = null;
   aiAssistConfigDraft = null;
-  summaryEditing = false;
-  summaryEditor = null;
   onboardingOnlineProvider = false;
   activeModal = undefined;
   settingsModal.style.zIndex = '';
@@ -2468,25 +2453,6 @@ settingsModal.addEventListener('click', async (event) => {
     } catch (error) { showToast(error.message); }
     return;
   }
-  if (event.target.closest('[data-edit-summary]')) { summaryEditing = true; renderModal('summary-detail'); return; }
-  if (event.target.closest('[data-cancel-summary-edit]')) { summaryEditing = false; summaryEditor = null; renderModal('summary-detail'); return; }
-  if (event.target.closest('[data-save-summary]')) {
-    const markdown = (summaryEditor?.getMarkdown() || '').trim();
-    const meetingId = currentMeetingDetail?.id;
-    if (!meetingId || !window.brevia?.summary?.save) return;
-    if (!markdown) { showToast(t('纪要不能为空')); return; }
-    try {
-      await window.brevia.summary.save({ meeting_id: meetingId, markdown });
-      currentMeetingDetail.summary = { data: { markdown } };
-      uiData.detail.summary = { markdown, hasFull: true, blocked: meetingActive, generating: false };
-      summaryEditing = false;
-      summaryEditor = null;
-      renderModal('summary-detail');
-      renderMeetingDetail();
-      showToast(t('已保存'));
-    } catch (error) { showToast(error.message); }
-    return;
-  }
   if (event.target.closest('[data-regenerate-summary]')) { closeModal(); void generateMeetingSummary(); return; }
   const exportSave = event.target.closest('[data-export-save]');
   if (exportSave) {
@@ -2871,7 +2837,7 @@ function activeWorkspaceDescription() {
 function renderSlogan(animate = false) {
   const workspaceDescription = activeWorkspaceDescription();
   const update = () => {
-    homeSlogan.textContent = activeLibraryNav === 'recently-deleted' ? t('最近删除') : workspaceDescription || (slogans[locale] || slogans.en)[sloganIndex];
+    homeSlogan.textContent = activeLibraryNav === 'recently-deleted' ? BreviaI18n.trashCopy(locale).slogan : workspaceDescription || (slogans[locale] || slogans.en)[sloganIndex];
     if (animate) {
       homeSlogan.classList.remove('slogan-out');
       homeSlogan.classList.add('slogan-in');
@@ -3965,7 +3931,7 @@ async function exportSelectedMeetings(format) {
   if (!meetings.length || !format) return;
   try {
     const result = window.brevia
-      ? await window.brevia.meeting.exportMany({ meeting_ids: meetings.map(({ id }) => id).filter(Boolean), format })
+      ? await window.brevia.meeting.exportMany({ meeting_ids: meetings.map(({ id }) => id).filter(Boolean), format, filename_prefix: `[${['flac', 'wav', 'm4a'].includes(format) ? t('会议录音') : t('字幕')}]` })
       : { paths: meetings.map(({ title }) => `${title}.${format}`) };
     if (result) showToast(`${t('导出')}: ${BreviaI18n.selectionOverview(locale, meetings.length)}`);
   } catch (error) { showToast(error.message); }
@@ -4075,7 +4041,7 @@ meetingList.addEventListener('click', async (event) => {
       closeMeetingMenus();
       return;
     }
-    if (action.dataset.meetingAction === 'export') { closeMeetingMenus(); if (window.brevia && meeting.id) window.brevia.meeting.export({ meeting_id: meeting.id, format: 'md' }).then((value) => value && showToast(t('已导出「{title}」').replace('{title}', meeting.title))).catch((error) => showToast(error.message)); else showToast(t('已导出「{title}」').replace('{title}', meeting.title)); return; }
+    if (action.dataset.meetingAction === 'export') { closeMeetingMenus(); if (window.brevia && meeting.id) window.brevia.meeting.export({ meeting_id: meeting.id, content: 'transcript', format: 'md', filename_prefix: `[${t('字幕')}]` }).then((value) => value && showToast(t('已导出「{title}」').replace('{title}', meeting.title))).catch((error) => showToast(error.message)); else showToast(t('已导出「{title}」').replace('{title}', meeting.title)); return; }
     if (action.dataset.meetingAction === 'delete') {
       openConfirmation(t('删除'), `「${meeting.title}」`, async () => {
         try { await mutateMeetings('delete', [meeting]); showToast(t(meeting.isExample ? '示例会议及录音已删除' : '会议已移至最近删除')); } catch (error) { showToast(error.message); }
@@ -5023,6 +4989,11 @@ if (window.brevia) {
 
   document.addEventListener('click', (event) => {
     if (event.target.closest('[data-view-full-summary]')) { openModal('summary-detail'); return; }
+    if (event.target.closest('[data-copy-summary]')) {
+      const markdown = currentMeetingDetail?.summary?.data?.markdown;
+      if (markdown) void window.brevia?.share.copyText({ text: markdown }).then(() => showToast(t('已复制到剪贴板'))).catch((error) => showToast(error.message));
+      return;
+    }
     if (event.target.closest('[data-open-summary-edit]')) { uiData.detail.summaryEditing = true; renderMeetingDetail(); return; }
     if (event.target.closest('[data-cancel-inline-summary-edit]')) { inlineSummaryEditor = null; uiData.detail.summaryEditing = false; renderMeetingDetail(); return; }
     if (event.target.closest('[data-save-inline-summary]')) {

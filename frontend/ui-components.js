@@ -5,6 +5,7 @@ const checkIconSvg = '<svg class="check-icon" viewBox="0 0 16 16" aria-hidden="t
 /** 会议纪要操作共用图标。 */
 const summaryActionIcons = {
   edit: '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m3 11.8 8.3-8.3 1.7 1.7-8.3 8.3L3 13z"/><path d="m10.3 4.5 1.7 1.7"/></svg>',
+  copy: '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5.5" y="5.5" width="7" height="8" rx="1"/><path d="M10.5 5.5V3.5a1 1 0 0 0-1-1h-5a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h1"/></svg>',
   refresh: '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 6.5A5 5 0 1 0 14 10"/><path d="M13 2.5v4h-4"/></svg>',
   save: '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 2.5h8l2 2v9H3z"/><path d="M5 2.5v4h6v-4M5.5 12h5"/></svg>',
   cancel: '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m4 4 8 8m0-8-8 8"/></svg>',
@@ -548,7 +549,7 @@ function renderMeetingSummary({ markdown, hasFull = false, blocked = false, gene
   const action = editing
     ? `<span class="summary-actions"><button class="summary-action-icon" data-cancel-inline-summary-edit title="${escapeHtml(t('取消'))}" aria-label="${escapeHtml(t('取消'))}">${summaryActionIcons.cancel}</button><button class="summary-action-icon" data-save-inline-summary title="${escapeHtml(t('保存'))}" aria-label="${escapeHtml(t('保存'))}">${summaryActionIcons.save}</button></span>`
     : generating ? '' : markdown
-    ? `<span class="summary-actions"><button class="summary-action-icon" data-open-summary-edit title="${escapeHtml(t('编辑'))}" aria-label="${escapeHtml(t('编辑'))}">${summaryActionIcons.edit}</button><button class="summary-action-icon" data-regenerate-summary title="${escapeHtml(t('重新生成'))}" aria-label="${escapeHtml(t('重新生成'))}"${blockedAttrs}>${summaryActionIcons.refresh}</button></span>`
+    ? `<span class="summary-actions"><button class="summary-action-icon" data-open-summary-edit title="${escapeHtml(t('编辑'))}" aria-label="${escapeHtml(t('编辑'))}">${summaryActionIcons.edit}</button><button class="summary-action-icon" data-copy-summary title="${escapeHtml(t('复制会议纪要'))}" aria-label="${escapeHtml(t('复制会议纪要'))}">${summaryActionIcons.copy}</button><button class="summary-action-icon" data-regenerate-summary title="${escapeHtml(t('重新生成'))}" aria-label="${escapeHtml(t('重新生成'))}"${blockedAttrs}>${summaryActionIcons.refresh}</button></span>`
     : `<button class="text-button" data-generate-summary${blockedAttrs}>${t('生成')} →</button>`;
   return `<div class="summary-preview"><div class="summary-head"><p class="eyebrow">${t('会议纪要')}</p>${action}</div>${editing ? `<div class="summary-inline-edit"><div data-inline-summary-editor></div></div>` : markdown ? `<div class="summary-body markdown-content">${renderMarkdown(cleanSummaryMarkdown(markdown))}</div><button class="text-button" data-view-full-summary>${t('查看完整内容')} →</button>` : `<p class="summary-empty">${t('尚未生成')}</p>`}</div>`;
 }

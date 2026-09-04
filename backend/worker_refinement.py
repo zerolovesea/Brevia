@@ -474,9 +474,12 @@ class RefinementWorkerMixin:
                     )
                     raw_text, words = recognizer.decode_words(current, sample_rate)
                     # 音频窗口只提供识别上下文；重复在 ASR 返回的字幕文本层裁切。
-                    raw_text = re.split(r"<\|endoftext\|>", str(raw_text or ""), flags=re.IGNORECASE)[0]
-                    raw_text = re.sub(r"<\|[^|>]+\|>", " ", raw_text).strip()
-                    raw_text = self._trim_refinement_repeats(raw_text)
+                    # 会后精修以前只移除了 token 标记，漏掉了实时链路已经处理过的
+                    # 解码空转（整句/短语循环）和语言标签。导入录音最容易把这些原样
+                    # 写入最终逐字稿，进而污染纪要；两条链路必须使用同一份清洗规则。
+                    raw_text = self._trim_refinement_repeats(
+                        self._clean_live_text(raw_text)
+                    )
                     speaker_key = (track, turn["speaker"])
                     text, continued = self._trim_refinement_overlap_detailed(
                         previous_text.get(speaker_key, ""), raw_text

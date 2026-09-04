@@ -935,6 +935,7 @@ function registerIpc() {
       content: z.enum(['transcript', 'notes', 'mynotes', 'audio']).optional(),
       format: z.enum(['md', 'txt', 'json', 'srt', 'docx', 'pdf', 'flac', 'wav', 'm4a']),
       track: z.enum(['mix', 'mic', 'system', 'vocals', 'accompaniment']).optional(),
+      filename_prefix: z.string().max(60).optional(),
     }).parse(payload);
     const exported = await prepareExport(value);
     const destination = await dialog.showSaveDialog({ defaultPath: path.basename(exported.path) });
@@ -943,12 +944,12 @@ function registerIpc() {
     return { ...exported, path: destination.filePath };
   });
   ipcMain.handle('meeting.export-many', async (_, payload) => {
-    const value = z.object({ meeting_ids: z.array(z.string().uuid()).min(1).max(200), format: z.enum(['md', 'txt', 'json', 'srt', 'docx', 'pdf', 'flac', 'wav', 'm4a']).default('md') }).parse(payload);
+    const value = z.object({ meeting_ids: z.array(z.string().uuid()).min(1).max(200), format: z.enum(['md', 'txt', 'json', 'srt', 'docx', 'pdf', 'flac', 'wav', 'm4a']).default('md'), filename_prefix: z.string().max(60).optional() }).parse(payload);
     const destination = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] });
     if (destination.canceled) return null;
     const paths = [];
     for (const meetingId of value.meeting_ids) {
-      const exported = await prepareExport({ meeting_id: meetingId, content: ['flac', 'wav', 'm4a'].includes(value.format) ? 'audio' : 'transcript', format: value.format });
+      const exported = await prepareExport({ meeting_id: meetingId, content: ['flac', 'wav', 'm4a'].includes(value.format) ? 'audio' : 'transcript', format: value.format, ...(value.filename_prefix ? { filename_prefix: value.filename_prefix } : {}) });
       const parsed = path.parse(exported.path);
       let target = path.join(destination.filePaths[0], parsed.base);
       for (let copy = 2; existsSync(target); copy += 1) target = path.join(destination.filePaths[0], `${parsed.name}-${copy}${parsed.ext}`);
@@ -975,6 +976,7 @@ function registerIpc() {
         format: z.enum(['md', 'txt', 'json', 'srt', 'docx', 'pdf', 'flac', 'wav', 'm4a']),
         track: z.enum(['mix', 'mic', 'system', 'vocals', 'accompaniment']).optional(),
         label: z.string().min(1).max(60).optional(),
+        filename_prefix: z.string().max(60).optional(),
       })).min(1).max(8),
       mode: z.enum(['save', 'reveal', 'system']).default('save'),
       anchor: z.object({ x: z.number().int().min(0).max(100000), y: z.number().int().min(0).max(100000) }).optional(),
@@ -987,6 +989,7 @@ function registerIpc() {
         content: item.content,
         format: item.format,
         ...(item.track ? { track: item.track } : {}),
+        ...(item.filename_prefix ? { filename_prefix: item.filename_prefix } : {}),
       });
       prepared.push({ path: exported.path, format: exported.format, label: item.label || item.content });
     }
