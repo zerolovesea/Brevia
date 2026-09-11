@@ -72,7 +72,7 @@ class MeetingStoreMixin:
         """创建录制中的会议及其音频、导出目录。
 
         Args:
-            payload: 会议标题、语言、实时模型和精修模型；可选工作区、标签与固定 ID。
+            payload: 会议标题、语言与识别模型；可选工作区、标签与固定 ID。
 
         Returns:
             可直接返回给前端的完整会议详情。
@@ -84,7 +84,6 @@ class MeetingStoreMixin:
             payload["title"].strip(),
             payload["language"],
             payload.get("target_language"),
-            payload["streaming_model_id"],
             payload["refined_model_id"],
             payload.get("speaker_segmentation_model_id"),
             payload.get("vad_model_id", "silero-vad"),
@@ -112,9 +111,9 @@ class MeetingStoreMixin:
                     raise ValueError("Workspace not found")
                 db.execute(
                     """INSERT INTO meetings
-                        (id,title,language,target_language,streaming_model_id,refined_model_id,
+                        (id,title,language,target_language,refined_model_id,
                          speaker_segmentation_model_id,vad_model_id,num_speakers,power_saving,workspace_id,tags,status,created_at,started_at)
-                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                     values,
                 )
         except Exception:
@@ -243,10 +242,10 @@ class MeetingStoreMixin:
                 )
                 db.execute(
                     """INSERT OR IGNORE INTO meetings
-                        (id,title,language,target_language,streaming_model_id,refined_model_id,
+                        (id,title,language,target_language,refined_model_id,
                          tags,status,created_at,started_at,ended_at,duration_ms,
                          is_example,example_locale)
-                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
                         ON CONFLICT(id) DO UPDATE SET
                         title=excluded.title,language=excluded.language,
                         target_language=excluded.target_language,
@@ -257,7 +256,6 @@ class MeetingStoreMixin:
                         example["title"],
                         example.get("language", example["locale"]),
                         example.get("target_language", "en" if example["locale"] == "zh" else "zh"),
-                        "zipformer-zh-xlarge-streaming-int8",
                         "funasr-nano-int8",
                         json.dumps(example["tags"], ensure_ascii=False),
                         "refined",
@@ -397,8 +395,8 @@ class MeetingStoreMixin:
     def update_meeting(self, meeting_id, updates):
         """更新允许用户编辑的会议字段并返回最新详情。
 
-        ``updates`` 只接受标题、标签、归档时间以及会中可热切换的语言与实时/精修
-        模型；其他键会被忽略。
+        ``updates`` 只接受标题、标签、归档时间以及会中可热切换的语言与识别模型；
+        其他键会被忽略。
         """
         allowed = {
             "title",
@@ -407,7 +405,6 @@ class MeetingStoreMixin:
             "refined_model_id",
             "language",
             "target_language",
-            "streaming_model_id",
             "power_saving",
             "notes",
         }

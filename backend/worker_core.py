@@ -73,33 +73,11 @@ class WorkerCore:
         self.active = None
         self.asr = None
         self.denoiser = None
-        self.language_identifier = None
-        self.punctuation = None
-        self.speaker_tracker = None
+        self.vad = None
         self.stream_state = {}
         self.recent_finals = []
         self.meeting_language = None
-        self.detected_language = None
-        self.asr_warning_sent = False
-        self.live_refiner = None
         self.live_postprocessing = None
-        self.live_punctuation = None
-        # 实时精修的有界积压控制：弱 CPU 上精修慢于实时时，同时最多允许
-        # ``live_refine_max_pending`` 个在飞+排队任务，超出即跳过本段实时精修
-        # (保留流式原文，会后精修再覆盖)，避免精修队列无限积压导致字幕延迟。
-        self._live_refine_lock = threading.Lock()
-        # 每次释放会话都递增。后台任务携带其 reservation，旧会议的完成回调
-        # 不得影响下一场会议的积压计数。
-        self._live_refine_generation = 0
-        self._live_refine_outstanding = 0
-        self._live_refine_max = int(
-            SETTINGS["asr"].get("live_refine_max_pending", 3)
-        )
-        self._live_refine_degraded_warned = False
-        # 会中性能瓶颈检测：连续跳过实时精修达到阈值时发 ``live.performance``
-        # 事件，供前端弹出「是否降低性能」；队列恢复排空后再发恢复事件。
-        self._live_refine_drops = 0
-        self._live_perf_bottleneck = False
         self.power_saving = False
         # 继续协作初始化链，使兄弟 mixin（如 llama sidecar 管理器）的 __init__ 也能
         # 运行——否则 _sidecars_lock 等属性永远不会被创建。
@@ -204,6 +182,7 @@ class WorkerCore:
                 value.get("app_duration_ms", 0)
             ),
             "segment.speaker": self.assign_segment_speaker,
+            "segment.text": self.save_segment_texts,
             "segment.speaker-profile-sample": self.add_segment_speaker_profile_sample,
             "models.list": lambda _: self.models.list(),
             "models.download": self.download_model,

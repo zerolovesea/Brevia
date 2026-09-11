@@ -67,7 +67,7 @@ contextBridge.exposeInMainWorld('brevia', {
   storage: { clear: invoke('storage.clear'), cleanup: invoke('storage.cleanup'), open: invoke('storage.open') },
   advancedSettings: { get: invoke('settings.advanced.get'), save: invoke('settings.advanced.save') },
   metrics: { record: invoke('metrics.record') },
-  segment: { speaker: invoke('segment.speaker'), addProfileSample: invoke('segment.speaker-profile-sample') },
+  segment: { speaker: invoke('segment.speaker'), saveText: invoke('segment.text'), addProfileSample: invoke('segment.speaker-profile-sample') },
   models: {
     list: invoke('models.list'),
     download: invoke('models.download'),

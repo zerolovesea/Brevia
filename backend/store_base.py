@@ -17,7 +17,6 @@ CREATE TABLE IF NOT EXISTS meetings (
   title TEXT NOT NULL,
   language TEXT NOT NULL,
   target_language TEXT,
-  streaming_model_id TEXT NOT NULL,
   refined_model_id TEXT NOT NULL,
   speaker_segmentation_model_id TEXT,
   vad_model_id TEXT,
@@ -155,14 +154,16 @@ class StoreBase:
         with self.connect() as db:
             db.executescript(SCHEMA)
             self._migrate_schema(db)
-            # 示例会议始终属于公开区：数据级防御清理，每次启动保持（依赖用户数据状态）。
+            # 下架功能的列与示例工作区都按「当前实际结构/数据」判断，每次启动都跑：
+            # 版本号只用来跳过重型重建，不能用来跳过这类幂等修复。
+            self._drop_retired_columns(db)
             self._clear_example_workspaces(db)
 
     def _migrate_schema(self, db):
         """执行 user_version 控制的一次性结构迁移；达到目标版本后直接跳过。
 
-        历史列补丁与 segments 主键重建只在版本落后时运行一次，避免每次启动
-        重复 PRAGMA 元数据检查；数据级清理（示例工作区等）仍在 __init__ 按需执行。
+        仅用于重建表这类不能每次启动都跑的重活；补列、删列等幂等修复放在
+        ``_drop_retired_columns``，按实际结构判断。
         """
         version = db.execute("PRAGMA user_version").fetchone()[0]
         if version >= CURRENT_SCHEMA_VERSION:
@@ -170,6 +171,17 @@ class StoreBase:
         if version < 1:
             self._migrate_v1(db)
         db.execute(f"PRAGMA user_version = {CURRENT_SCHEMA_VERSION}")
+
+    def _drop_retired_columns(self, db):
+        """删除已下架功能的列。
+
+        必须按「列是否存在」而不是版本号判断：版本号一旦被写高（例如运行过中途的
+        开发版），基于版本的迁移会永久跳过，留下 NOT NULL 的历史列让新代码的
+        INSERT 直接失败。
+        """
+        columns = {row["name"] for row in db.execute("PRAGMA table_info(meetings)")}
+        if "streaming_model_id" in columns:
+            db.execute("ALTER TABLE meetings DROP COLUMN streaming_model_id")
 
     def _migrate_v1(self, db):
         """v0 → v1：segments 主键并入 meeting_id、各表补列、旧分类迁移到工作区。"""
@@ -228,6 +240,10 @@ class StoreBase:
             )
         if "vad_model_id" not in columns:
             db.execute("ALTER TABLE meetings ADD COLUMN vad_model_id TEXT")
+        # 流式识别已下线：会议只保留一个识别模型（refined_model_id），旧列直接移除，
+        # 不再为老客户端保留占位字段。
+        if "streaming_model_id" in columns:
+            db.execute("ALTER TABLE meetings DROP COLUMN streaming_model_id")
         segment_columns = {row["name"] for row in db.execute("PRAGMA table_info(segments)")}
         if "word_timestamps" not in segment_columns:
             db.execute("ALTER TABLE segments ADD COLUMN word_timestamps TEXT")

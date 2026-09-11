@@ -31,7 +31,7 @@
     languageCodes,
     localeTag: (locale) => localeTags[locale] || localeTags.en,
     languageName: (locale, code) => new Intl.DisplayNames([locale], { type: 'language' }).of(code),
-    languageOptions: (locale, translate, includeAuto = false) => [[includeAuto ? 'auto' : '', translate(includeAuto ? '自动检测' : '不需要翻译')], ...languageCodes.map((code) => [code, new Intl.DisplayNames([locale], { type: 'language' }).of(code)])],
+    languageOptions: (locale, translate, includeAuto = false) => [[includeAuto ? 'auto' : '', translate(includeAuto ? '多语言混说' : '不需要翻译')], ...languageCodes.map((code) => [code, new Intl.DisplayNames([locale], { type: 'language' }).of(code)])],
     defaultMeetingTitle: (locale, date = new Date()) => `${defaultMeetingNames[locale] || defaultMeetingNames.en} ${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}`,
     selectionOverview: (locale, count) => (selectionOverview[locale] || selectionOverview.en)(count),
     slogans,

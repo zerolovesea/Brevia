@@ -2,7 +2,7 @@
 const catalog = {
   zh: {
     views: { home: '所有会议', prepare: '准备录制', live: '正在录制', detail: '会议详情', settings: '设置' },
-    labels: { '所有会议': '所有会议', '最近删除': '最近删除', '设置': '设置', '开始会议': '开始会议', '会议库': '会议库', '准备录制': '准备录制', '实时字幕': '实时字幕', '会议详情': '会议详情', '本地优先': '本地优先', '音频与文本仅保存在此设备': '音频与文本仅保存在此设备', '每一场对话，都留有依据。': '每一场对话，都留有依据。', '录音、逐字稿和纪要只在你明确操作时导出或发送。': '录音、逐字稿和纪要只在你明确操作时导出或发送。', '搜索会议、逐字稿或标签': '搜索会议、逐字稿或标签', '所有分类': '所有分类', '最近 30 天': '最近 30 天', '返回会议库': '返回会议库', '开始一场会议': '开始一场会议', '先确认语言与音频输入。模型会在开始前加载，录制过程不会因网络状态中断。': '先确认语言与音频输入。模型会在开始前加载，录制过程不会因网络状态中断。', '录制音频': '录制音频', '会议名称': '会议名称', '会议语言': '会议语言', '译文目标': '译文目标', '我的麦克风': '我的麦克风', '系统音频': '系统音频', '输入良好': '输入良好', '已就绪': '已就绪', '当前模型': '当前模型', '中文确认文本与说话人分离': '中文确认文本与说话人分离', '管理模型与术语': '管理模型与术语', '正在录制': '正在录制', '暂停': '暂停', '继续': '继续', '结束会议': '结束会议', '保持在当下': '保持在当下', '译文: 开': '译文: 开', '译文: 关': '译文: 关', '回到最新': '回到最新', '参与者': '参与者', '本场状态': '本场状态', '我': '我', '麦克风': '麦克风', '系统音频': '系统音频', '打开会议面板': '打开会议面板', '导出': '导出', '逐字稿': '逐字稿', '摘要': '摘要', '纪要与待办': '纪要与待办', '播放此段': '播放此段', '生成完整会议纪要': '生成完整会议纪要', '模型与本地数据': '模型与本地数据', '已安装模型': '已安装模型', '下载更多模型': '下载更多模型', '术语库': '术语库', '12 个词条可用于会议准备、搜索和纪要。仅支持的模型会将其用于转写。': '12 个词条可用于会议准备、搜索和纪要。仅支持的模型会将其用于转写。', '管理术语库': '管理术语库', '存储与隐私': '存储与隐私', '会议资料保存在此 Mac。外部 LLM 需要在发送逐字稿前明确确认。': '会议资料保存在此 Mac。外部 LLM 需要在发送逐字稿前明确确认。', '查看本地存储': '查看本地存储', '中文': '中文', '英语': '英语', '不需要翻译': '不需要翻译', '自动 · 仅麦克风': '自动 · 仅麦克风', '自动 · 仅系统音频': '自动 · 仅系统音频', '自动音源': '自动音源', '自动检测': '自动检测', '切换语言': '切换语言', '切换主题': '切换主题', 'Brevia': '言录', '向量数据库': '向量数据库', 'ERes2Net': 'ERes2Net', '最小化': '最小化', '关闭': '关闭', '取消': '取消', '返回': '返回' },
+    labels: { '所有会议': '所有会议', '最近删除': '最近删除', '设置': '设置', '开始会议': '开始会议', '会议库': '会议库', '准备录制': '准备录制', '实时字幕': '实时字幕', '会议详情': '会议详情',   '每一场对话，都留有依据。': '每一场对话，都留有依据。',     '返回会议库': '返回会议库', '开始一场会议': '开始一场会议',   '会议名称': '会议名称', '会议语言': '会议语言', '译文目标': '译文目标',  '系统音频': '系统音频', '输入良好': '输入良好',  '当前模型': '当前模型',  '管理模型与术语': '管理模型与术语', '正在录制': '正在录制', '暂停': '暂停', '继续': '继续', '结束会议': '结束会议',  '译文: 开': '译文: 开', '译文: 关': '译文: 关', '回到最新': '回到最新', '参与者': '参与者',  '我': '我', '麦克风': '麦克风', '系统音频': '系统音频',  '导出': '导出', '逐字稿': '逐字稿', '摘要': '摘要', '纪要与待办': '纪要与待办',   '模型与本地数据': '模型与本地数据', '已安装模型': '已安装模型',     '存储与隐私': '存储与隐私',  '查看本地存储': '查看本地存储', '中文': '中文',  '不需要翻译': '不需要翻译',     '切换语言': '切换语言', '切换主题': '切换主题', 'Brevia': '言录',  'ERes2Net': 'ERes2Net', '最小化': '最小化', '关闭': '关闭', '取消': '取消', '返回': '返回' },
     messages: { recordingSaved: '录音已安全保存，正在整理逐字稿', located: '已定位到对应音频片段', playing: '正在播放混音轨道', paused: '播放已暂停' }
   },
   en: {
@@ -20,8 +20,7 @@ Object.assign(catalog.zh.labels, { '播放此段': '播放' });
 Object.assign(catalog.en.labels, { '播放此段': 'Play' });
 Object.assign(catalog.es.labels, { '播放此段': 'Reproducir' });
 Object.assign(catalog.zh.labels, {
-  '开始录制': '开始录制', '继续会议': '继续会议', '我 · 麦克风': '我 · 麦克风', '计算设备': '计算设备', '预计空间': '预计空间', '识别模型': '识别模型', '已应用术语': '已应用术语', '12 个词条': '12 个词条', '可用': '可用', '已完成精修': '已完成精修', '中文确认文本 · 1.2 GB': '中文确认文本 · 1.2 GB', '英文与其他语言 · 466 MB': '英文与其他语言 · 466 MB', '+ 9': '+ 9', '模型库': '模型库', '管理模型库': '管理模型库', '纪要模型': '纪要模型', '配置用于生成会议纪要的 API。所有配置信息仅保存在本地，不会上传。': '配置用于生成会议纪要的 API。所有配置信息仅保存在本地，不会上传。', '管理纪要模型': '管理纪要模型', '总结提示词': '总结提示词', '编辑提示词': '编辑提示词', '配置 JSON': '配置 JSON', '当前启用的纪要模型配置。': '当前启用的纪要模型配置。'
-});
+  '开始录制': '开始录制', '继续会议': '继续会议',    '识别模型': '识别模型',   '可用': '可用',     '模型库': '模型库', '管理模型库': '管理模型库', '纪要模型': '纪要模型',      });
 Object.assign(catalog.en.labels, {
   '开始录制': 'Start recording', '继续会议': 'Resume meeting', '我 · 麦克风': 'Me · Microphone', '计算设备': 'Compute device', '预计空间': 'Estimated storage', '识别模型': 'Recognition model', '已应用术语': 'Applied terms', '12 个词条': '12 terms', '可用': 'Available', '已完成精修': 'Refinement complete', '中文确认文本 · 1.2 GB': 'Chinese final transcription · 1.2 GB', '英文与其他语言 · 466 MB': 'English and other languages · 466 MB', '+ 9': '+ 9', '模型库': 'Model library', '管理模型库': 'Manage model library', '纪要模型': 'Summary models', '配置用于生成会议纪要的 API。所有配置信息仅保存在本地，不会上传。': 'Configure APIs for meeting notes. All configuration stays local and is never uploaded.', '管理纪要模型': 'Manage summary models', '总结提示词': 'Summary prompt', '编辑提示词': 'Edit prompt', '配置 JSON': 'Configuration JSON', '当前启用的纪要模型配置。': 'The active summary model configuration.'
 });
@@ -30,14 +29,13 @@ Object.assign(catalog.es.labels, {
 });
 Object.assign(catalog.zh.labels, {
   '分钟': '分钟', '本地录音': '本地录音', '本地保存': '本地保存', '本地会议': '本地会议',
-  '检查音频': '检查音频', '降噪音频': '降噪音频', '检测语音': '检测语音', '识别说话人': '识别说话人', '重新聚类说话人': '重新聚类说话人', '匹配声纹': '匹配声纹', '整理说话人': '整理说话人',
-  '← 返回会议库': '← 返回会议库', '说话人分离': '说话人分离', '自定义术语': '自定义术语', '暂无术语': '暂无术语',
-  '说话人': '说话人', '等待识别说话人': '等待识别说话人',
-  '会议摘要': '会议摘要', '尚未生成会议摘要': '尚未生成会议摘要', '转发': '转发',
-  '会后精修': '会后精修', '精修': '精修', '精修字稿': '精修字稿', '完成精修后，这里会显示不带时间戳的校对稿。': '完成精修后，这里会显示不带时间戳的校对稿。', '正在精修…': '正在精修…',
+  '检查音频': '检查音频',      
+  '← 返回会议库': '← 返回会议库', '说话人分离': '说话人分离',  
+  '说话人': '说话人', 
+    '转发': '转发',
+  '会后精修': '会后精修', '精修': '精修',   
   '会后精修已完成': '会后精修已完成', '已整理': '已整理', '决定': '决定', '待办': '待办',
-  '悬浮字幕': '悬浮字幕', '悬浮字幕：开': '悬浮字幕：开', '⌖ 开': '⌖ 开'
-});
+  '悬浮字幕': '悬浮字幕',  });
 Object.assign(catalog.en.labels, {
   '分钟': 'min', '本地录音': 'Local recording', '本地保存': 'Saved locally', '本地会议': 'Local meeting',
   '检查音频': 'Checking audio', '降噪音频': 'Denoising audio', '检测语音': 'Detecting speech', '识别说话人': 'Identifying speakers', '重新聚类说话人': 'Reclustering speakers', '匹配声纹': 'Matching voiceprints', '整理说话人': 'Preparing speaker timeline',
@@ -70,7 +68,7 @@ Object.entries(localeCopies).forEach(([code, copy]) => {
   catalog[code] = { views: { home, prepare, live, detail, settings }, labels: { ...catalog.en.labels, ...copy.labels }, messages: copy.messages };
 });
 const interfaceLabels = {
-  zh: { '最近 7 天': '最近 7 天', '最近 90 天': '最近 90 天', '全部时间': '全部时间', '系统默认麦克风': '系统默认麦克风', '需要授予屏幕与系统音频权限': '需要授予屏幕与系统音频权限', '流式模型': '流式模型', '中文 / 英语': '中文 / 英语', '管理模型与术语': '管理模型与术语', '更多操作': '更多操作', '恢复': '恢复', '重命名': '重命名', '删除': '删除', '取消': '取消', '保存': '保存', '添加': '添加', '开始录制': '开始录制', '本地录音': '本地录音', '中文实时字幕 · sherpa-onnx': '中文实时字幕 · sherpa-onnx', '英文实时字幕 · sherpa-onnx': '英文实时字幕 · sherpa-onnx', '会后精修 · sherpa-onnx · CUDA': '会后精修 · sherpa-onnx · CUDA', '端点检测与说话人分配 · sherpa-onnx': '端点检测与说话人分配 · sherpa-onnx', '实时字幕 · 中文 / 英语 / 粤语': '实时字幕 · 中文 / 英语 / 粤语', '原生流式识别，持续更新当前字幕。': '原生流式识别，持续更新当前字幕。', '会后精修 · 多语种': '会后精修 · 多语种', '基于完整录音生成高精度修订版本。': '基于完整录音生成高精度修订版本。' },
+  zh: {        '管理模型与术语': '管理模型与术语', '更多操作': '更多操作', '恢复': '恢复', '重命名': '重命名', '删除': '删除', '取消': '取消', '保存': '保存', '添加': '添加', '开始录制': '开始录制', '本地录音': '本地录音',      '原生流式识别，持续更新当前字幕。': '原生流式识别，持续更新当前字幕。', '会后精修 · 多语种': '会后精修 · 多语种', '基于完整录音生成高精度修订版本。': '基于完整录音生成高精度修订版本。' },
   en: { '最近 7 天': 'Last 7 days', '最近 90 天': 'Last 90 days', '全部时间': 'All time', '系统默认麦克风': 'System default microphone', '需要授予屏幕与系统音频权限': 'Screen and system-audio permission required', '流式模型': 'Streaming model', '中文 / 英语': 'Chinese / English', '管理模型与术语': 'Manage models and terms', '更多操作': 'More actions', '恢复': 'Restore', '重命名': 'Rename', '删除': 'Delete', '取消': 'Cancel', '保存': 'Save', '添加': 'Add', '开始录制': 'Start recording', '本地录音': 'Local recording', '中文实时字幕 · sherpa-onnx': 'Chinese live captions · sherpa-onnx', '英文实时字幕 · sherpa-onnx': 'English live captions · sherpa-onnx', '会后精修 · sherpa-onnx · CUDA': 'Post-meeting refinement · sherpa-onnx · CUDA', '端点检测与说话人分配 · sherpa-onnx': 'Endpoint detection and speaker assignment · sherpa-onnx', '实时字幕 · 中文 / 英语 / 粤语': 'Live captions · Chinese / English / Cantonese', '原生流式识别，持续更新当前字幕。': 'Native streaming recognition that continuously updates the active caption.', '会后精修 · 多语种': 'Post-meeting refinement · Multilingual', '基于完整录音生成高精度修订版本。': 'Creates a high-accuracy revision from the complete recording.' },
   es: { '最近 7 天': 'Últimos 7 días', '最近 90 天': 'Últimos 90 días', '全部时间': 'Todo el tiempo', '系统默认麦克风': 'Micrófono predeterminado del sistema', '需要授予屏幕与系统音频权限': 'Se requiere permiso para pantalla y audio del sistema', '流式模型': 'Modelo en streaming', '中文 / 英语': 'Chino / inglés', '管理模型与术语': 'Gestionar modelos y términos', '更多操作': 'Más acciones', '恢复': 'Restaurar', '重命名': 'Renombrar', '删除': 'Eliminar', '取消': 'Cancelar', '保存': 'Guardar', '添加': 'Añadir', '开始录制': 'Iniciar grabación', '本地录音': 'Grabación local' },
   ja: { '最近 7 天': '過去7日間', '最近 90 天': '過去90日間', '全部时间': 'すべての期間', '系统默认麦克风': 'システムのデフォルトマイク', '需要授予屏幕与系统音频权限': '画面とシステム音声のアクセス許可が必要です', '流式模型': 'ストリーミングモデル', '中文 / 英语': '中国語 / 英語', '管理模型与术语': 'モデルと用語を管理', '更多操作': 'その他の操作', '恢复': '復元', '重命名': '名前を変更', '删除': '削除', '取消': 'キャンセル', '保存': '保存', '添加': '追加', '开始录制': '録音を開始', '本地录音': 'ローカル録音' },
@@ -81,7 +79,7 @@ const interfaceLabels = {
 };
 Object.entries(interfaceLabels).forEach(([code, labels]) => Object.assign(catalog[code].labels, labels));
 const missedInterfaceLabels = {
-  zh: { '公开工作区': '公开工作区', '导入录音': '导入录音', '语音对话': '语音对话', '请先在声纹库注册可用声音': '请先在声纹库注册可用声音', '录制权限': '录制权限', '首次使用时完成设置': '首次使用时完成设置', '言录需要麦克风、屏幕与系统音频权限，才能录制会议并生成实时字幕。': '言录需要麦克风、屏幕与系统音频权限，才能录制会议并生成实时字幕。', '录制你的发言。': '录制你的发言。', '录制屏幕共享中的系统声音。': '录制屏幕共享中的系统声音。', '稍后': '稍后' },
+  zh: { '公开工作区': '公开工作区', '导入录音': '导入录音',   '录制权限': '录制权限',  '言录需要麦克风、屏幕与系统音频权限，才能录制会议并生成实时字幕。': '言录需要麦克风、屏幕与系统音频权限，才能录制会议并生成实时字幕。', '录制你的发言。': '录制你的发言。', '录制屏幕共享中的系统声音。': '录制屏幕共享中的系统声音。', '稍后': '稍后' },
   en: { '公开工作区': 'Public workspace', '导入录音': 'Import recording', '语音对话': 'Voice conversation', '请先在声纹库注册可用声音': 'Register a voiceprint before sending speech', '录制权限': 'Recording permissions', '首次使用时完成设置': 'Complete setup on first use', '言录需要麦克风、屏幕与系统音频权限，才能录制会议并生成实时字幕。': 'Brevia needs microphone, screen, and system-audio permission to record meetings and create live captions.', '录制你的发言。': 'Records your speech.', '录制屏幕共享中的系统声音。': 'Records system audio from screen sharing.', '稍后': 'Later' },
   es: { '公开工作区': 'Espacio de trabajo público', '导入录音': 'Importar grabación', '语音对话': 'Chat de voz', '请先在声纹库注册可用声音': 'Registra una voz antes de enviar audio', '录制权限': 'Permisos de grabación', '首次使用时完成设置': 'Completa la configuración al usarla por primera vez', '言录需要麦克风、屏幕与系统音频权限，才能录制会议并生成实时字幕。': 'Brevia necesita permisos de micrófono, pantalla y audio del sistema para grabar reuniones y crear transcripciones en directo.', '录制你的发言。': 'Graba tu voz.', '录制屏幕共享中的系统声音。': 'Graba el audio del sistema al compartir pantalla.', '稍后': 'Más tarde' },
   ja: { '公开工作区': '公開ワークスペース', '导入录音': '録音を読み込む', '语音对话': '音声チャット', '请先在声纹库注册可用声音': '音声を送信する前に声紋を登録してください', '录制权限': '録音の権限', '首次使用时完成设置': '初回使用時に設定を完了', '言录需要麦克风、屏幕与系统音频权限，才能录制会议并生成实时字幕。': 'Brevia は会議の録音とライブ字幕のために、マイク、画面、システム音声へのアクセスを必要とします。', '录制你的发言。': 'あなたの発言を録音します。', '录制屏幕共享中的系统声音。': '画面共有中のシステム音声を録音します。', '稍后': 'あとで' },
@@ -92,7 +90,7 @@ const missedInterfaceLabels = {
 };
 Object.entries(missedInterfaceLabels).forEach(([code, labels]) => Object.assign(catalog[code].labels, labels));
 const runtimeErrorLabels = {
-  zh: { '纪要不能为空': '纪要不能为空', '当前没有正在进行的会议': '当前没有正在进行的会议' },
+  zh: { '纪要不能为空': '纪要不能为空', },
   en: { '纪要不能为空': 'Meeting notes cannot be empty.', '当前没有正在进行的会议': 'There is no meeting in progress.' },
   es: { '纪要不能为空': 'Las notas de la reunión no pueden estar vacías.', '当前没有正在进行的会议': 'No hay ninguna reunión en curso.' },
   ja: { '纪要不能为空': '会議メモを空にすることはできません。', '当前没有正在进行的会议': '進行中の会議はありません。' },
@@ -114,7 +112,7 @@ const workspaceLabels = {
 };
 Object.entries(workspaceLabels).forEach(([code, labels]) => Object.assign(catalog[code].labels, labels));
 const onboardingPermissionLabels = {
-  zh: { '屏幕与系统音频': '屏幕与系统音频', '允许': '允许', '已允许': '已允许', '请在系统设置中允许': '请在系统设置中批准 言录 的屏幕与系统音频权限。', '已准备就绪': '已准备就绪', '检测系统音频': '检测系统音频', '请检测系统音频': '请检测系统音频', '正在检测麦克风': '正在检测麦克风', '当前系统不支持直接录制系统音频，请仅使用麦克风': '当前系统不支持直接录制系统音频，请仅使用麦克风', '未检测到系统音频，请在系统设置中允许屏幕与系统音频录制后重试。': '未检测到系统音频，请在系统设置中允许屏幕与系统音频录制后重试。' },
+  zh: { '屏幕与系统音频': '屏幕与系统音频', '允许': '允许', '已允许': '已允许', '请在系统设置中允许': '请在系统设置中批准 言录 的屏幕与系统音频权限。', '已准备就绪': '已准备就绪',    '当前系统不支持直接录制系统音频，请仅使用麦克风': '当前系统不支持直接录制系统音频，请仅使用麦克风', },
   en: { '屏幕与系统音频': 'Screen and system audio', '允许': 'Allow', '已允许': 'Allowed', '请在系统设置中允许': 'Approve Brevia for screen and system-audio access in System Settings.', '已准备就绪': 'Ready', '检测系统音频': 'Check system audio', '请检测系统音频': 'Check system audio to continue', '正在检测麦克风': 'Checking microphone', '当前系统不支持直接录制系统音频，请仅使用麦克风': 'Direct system-audio capture is unavailable. Use the microphone only.', '未检测到系统音频，请在系统设置中允许屏幕与系统音频录制后重试。': 'No system-audio track was detected. Allow screen and system-audio recording in System Settings, then try again.' },
   es: { '屏幕与系统音频': 'Pantalla y audio del sistema', '允许': 'Permitir', '已允许': 'Permitido', '请在系统设置中允许': 'Aprueba el acceso de Brevia a la pantalla y al audio del sistema en Ajustes del Sistema.', '已准备就绪': 'Listo' },
   ja: { '屏幕与系统音频': '画面とシステム音声', '允许': '許可する', '已允许': '許可済み', '请在系统设置中允许': 'システム設定で、Brevia に画面とシステム音声へのアクセスを許可してください。', '已准备就绪': '準備完了' },
@@ -157,7 +155,7 @@ const refinementStatusLabels = {
 };
 Object.entries(refinementStatusLabels).forEach(([code, labels]) => Object.assign(catalog[code].labels, labels));
 const runtimeLabels = {
-  zh: { '软件更新': '软件更新', '检查更新': '检查更新', '会议纪要已生成': '会议纪要已生成', '正在播放': '正在播放', '操作失败': '操作失败', '应用错误': '应用错误', '会后精修失败': '会后精修失败', '发现可恢复录音': '发现 {count} 场可恢复录音', '离线功能': '离线功能', '请选择声音': '请选择声音', '请先配置翻译模型': '请先配置翻译模型', '纪要服务拒绝了请求': '纪要服务拒绝了请求', '纪要模型需要配置': '纪要模型需要配置', '请检查 API 地址、密钥和服务商访问策略。': '请检查 API 地址、密钥和服务商访问策略。', 'API Key 未配置、已失效或不匹配当前服务。': 'API Key 未配置、已失效或不匹配当前服务。', '配置纪要模型': '配置纪要模型', '内置纪要模型未配置': '内置纪要模型未配置', '请选择并下载一个内置纪要模型，之后即可完全离线生成纪要。': '请选择并下载一个内置纪要模型，之后即可完全离线生成纪要。', '选择纪要模型': '选择纪要模型', '刚刚': '刚刚', '请先选择译文目标并配置纪要模型': '请先选择译文目标并配置纪要模型', '将确认字幕发送到 {provider} 生成译文。是否继续？': '将确认字幕发送到 {provider} 生成译文。是否继续？', '选择格式：md / txt / json / srt / docx / pdf / flac / wav / m4a': '选择格式：md / txt / json / srt / docx / pdf / flac / wav / m4a', '已导出「{title}」': '已导出「{title}」', '示例会议及录音已删除': '示例会议及录音已删除', '会议已移至最近删除': '会议已移至最近删除', '暂停录音': '暂停录音', '这场会议没有可播放的录音': '这场会议没有可播放的录音', '纪要配置加载失败': '纪要配置加载失败', '配置或后端启动失败': '配置或后端启动失败', '翻译失败': '翻译失败', '压缩包已导出': '压缩包已导出', '未找到录音，已导出逐字稿压缩包': '未找到录音，已导出逐字稿压缩包' },
+  zh: { '软件更新': '软件更新', '检查更新': '检查更新', '会议纪要已生成': '会议纪要已生成', '正在播放': '正在播放', '操作失败': '操作失败', '应用错误': '应用错误',  '发现可恢复录音': '发现 {count} 场可恢复录音', '离线功能': '离线功能', '请选择声音': '请选择声音', '请先配置翻译模型': '请先配置翻译模型', '纪要服务拒绝了请求': '纪要服务拒绝了请求', '纪要模型需要配置': '纪要模型需要配置', '请检查 API 地址、密钥和服务商访问策略。': '请检查 API 地址、密钥和服务商访问策略。', 'API Key 未配置、已失效或不匹配当前服务。': 'API Key 未配置、已失效或不匹配当前服务。', '配置纪要模型': '配置纪要模型', '内置纪要模型未配置': '内置纪要模型未配置',   '刚刚': '刚刚', '请先选择译文目标并配置纪要模型': '请先选择译文目标并配置纪要模型', '将确认字幕发送到 {provider} 生成译文。是否继续？': '将确认字幕发送到 {provider} 生成译文。是否继续？', '选择格式：md / txt / json / srt / docx / pdf / flac / wav / m4a': '选择格式：md / txt / json / srt / docx / pdf / flac / wav / m4a', '已导出「{title}」': '已导出「{title}」', '示例会议及录音已删除': '示例会议及录音已删除', '会议已移至最近删除': '会议已移至最近删除', '暂停录音': '暂停录音', '这场会议没有可播放的录音': '这场会议没有可播放的录音', '纪要配置加载失败': '纪要配置加载失败', '配置或后端启动失败': '配置或后端启动失败', '翻译失败': '翻译失败', '压缩包已导出': '压缩包已导出', '未找到录音，已导出逐字稿压缩包': '未找到录音，已导出逐字稿压缩包' },
   en: { '软件更新': 'Software updates', '检查更新': 'Check for updates', '会议纪要已生成': 'Meeting notes generated', '正在播放': 'Playing', '操作失败': 'Action failed', '应用错误': 'Application error', '会后精修失败': 'Post-meeting refinement failed', '发现可恢复录音': 'Found {count} recoverable recording(s)', '离线功能': 'Offline features', '请选择声音': 'Select a voice first', '请先配置翻译模型': 'Configure a translation model first', '纪要服务拒绝了请求': 'Summary provider rejected the request', '纪要模型需要配置': 'Configure summary model', '请检查 API 地址、密钥和服务商访问策略。': 'Check the API URL, key, and provider access policy.', 'API Key 未配置、已失效或不匹配当前服务。': 'The API key is missing, invalid, or rejected by this provider.', '配置纪要模型': 'Configure model', '内置纪要模型未配置': 'Built-in summary model not configured', '请选择并下载一个内置纪要模型，之后即可完全离线生成纪要。': 'Choose and download a built-in summary model to generate meeting notes fully offline.', '选择纪要模型': 'Choose model', '刚刚': 'Just now', '请先选择译文目标并配置纪要模型': 'Choose a translation target and configure a summary model first', '将确认字幕发送到 {provider} 生成译文。是否继续？': 'Send confirmed captions to {provider} for translation?', '选择格式：md / txt / json / srt / docx / pdf / flac / wav / m4a': 'Choose format: md / txt / json / srt / docx / pdf / flac / wav / m4a', '已导出「{title}」': 'Exported “{title}”', '示例会议及录音已删除': 'Example meeting and recording deleted', '会议已移至最近删除': 'Meeting moved to Recently Deleted', '暂停录音': 'Pause recording', '这场会议没有可播放的录音': 'This meeting has no playable recording', '纪要配置加载失败': 'Failed to load summary configuration', '配置或后端启动失败': 'Configuration or backend startup failed', '翻译失败': 'Translation failed', '压缩包已导出': 'Archive exported', '未找到录音，已导出逐字稿压缩包': 'No recording found; transcript archive exported' },
   es: { '软件更新': 'Actualizaciones', '检查更新': 'Buscar actualizaciones', '会议纪要已生成': 'Notas de reunión generadas', '正在播放': 'Reproduciendo', '操作失败': 'Operación fallida', '应用错误': 'Error de la aplicación', '会后精修失败': 'Falló el refinamiento posterior', '发现可恢复录音': 'Se encontraron {count} grabación(es) recuperable(s)', '离线功能': 'Funciones sin conexión', '请选择声音': 'Seleccione primero una voz', '请先配置翻译模型': 'Configure primero un modelo de traducción', '纪要服务拒绝了请求': 'El proveedor de resúmenes rechazó la solicitud', '纪要模型需要配置': 'Configure el modelo de resumen', '请检查 API 地址、密钥和服务商访问策略。': 'Revise la URL de la API, la clave y la política de acceso del proveedor.', 'API Key 未配置、已失效或不匹配当前服务。': 'La clave API falta, no es válida o fue rechazada por este proveedor.', '配置纪要模型': 'Configurar modelo', '内置纪要模型未配置': 'Modelo de resumen integrado no configurado', '请选择并下载一个内置纪要模型，之后即可完全离线生成纪要。': 'Elija y descargue un modelo de resumen integrado para generar notas de reunión totalmente sin conexión.', '选择纪要模型': 'Elegir modelo', '刚刚': 'Ahora mismo', '请先选择译文目标并配置纪要模型': 'Elija un idioma de traducción y configure primero un modelo de resumen', '将确认字幕发送到 {provider} 生成译文。是否继续？': '¿Enviar los subtítulos confirmados a {provider} para traducirlos?', '选择格式：md / txt / json / srt / docx / pdf / flac / wav / m4a': 'Elija formato: md / txt / json / srt / docx / pdf / flac / wav / m4a', '已导出「{title}」': 'Se exportó “{title}”', '示例会议及录音已删除': 'Se eliminaron la reunión y grabación de ejemplo', '会议已移至最近删除': 'La reunión se movió a Eliminadas recientemente', '暂停录音': 'Pausar grabación', '这场会议没有可播放的录音': 'Esta reunión no tiene una grabación reproducible', '纪要配置加载失败': 'No se pudo cargar la configuración del resumen', '配置或后端启动失败': 'Falló la configuración o el inicio del backend', '翻译失败': 'Error de traducción', '压缩包已导出': 'Archivo exportado', '未找到录音，已导出逐字稿压缩包': 'No se encontró grabación; se exportó el archivo de transcripción' },
   ja: { '软件更新': 'ソフトウェアアップデート', '检查更新': 'アップデートを確認', '会议纪要已生成': '会議メモを生成しました', '正在播放': '再生中', '操作失败': '操作に失敗しました', '应用错误': 'アプリケーションエラー', '会后精修失败': '会議後の高精度化に失敗しました', '发现可恢复录音': '復元可能な録音が {count} 件見つかりました', '离线功能': 'オフライン機能', '请选择声音': '先に声を選択してください', '请先配置翻译模型': '先に翻訳モデルを設定してください', '纪要服务拒绝了请求': '要約プロバイダーがリクエストを拒否しました', '纪要模型需要配置': '要約モデルを設定してください', '请检查 API 地址、密钥和服务商访问策略。': 'API URL、キー、プロバイダーのアクセス方針を確認してください。', 'API Key 未配置、已失效或不匹配当前服务。': 'API キーが未設定、無効、またはこのプロバイダーで拒否されています。', '配置纪要模型': 'モデルを設定', '内置纪要模型未配置': '内蔵要約モデルが未設定です', '请选择并下载一个内置纪要模型，之后即可完全离线生成纪要。': '内蔵の要約モデルを選択してダウンロードすると、完全オフラインで会議メモを生成できます。', '选择纪要模型': 'モデルを選択', '刚刚': 'たった今', '请先选择译文目标并配置纪要模型': '先に翻訳先を選択して要約モデルを設定してください', '将确认字幕发送到 {provider} 生成译文。是否继续？': '確認済み字幕を {provider} に送信して翻訳しますか？', '选择格式：md / txt / json / srt / docx / pdf / flac / wav / m4a': '形式を選択: md / txt / json / srt / docx / pdf / flac / wav / m4a', '已导出「{title}」': '「{title}」をエクスポートしました', '示例会议及录音已删除': 'サンプル会議と録音を削除しました', '会议已移至最近删除': '会議を最近削除した項目に移動しました', '暂停录音': '録音を一時停止', '这场会议没有可播放的录音': 'この会議には再生可能な録音がありません', '纪要配置加载失败': '要約設定の読み込みに失敗しました', '配置或后端启动失败': '設定またはバックエンドの起動に失敗しました', '翻译失败': '翻訳に失敗しました', '压缩包已导出': 'アーカイブをエクスポートしました', '未找到录音，已导出逐字稿压缩包': '録音が見つからなかったため、文字起こしアーカイブをエクスポートしました' },
@@ -167,6 +165,17 @@ const runtimeLabels = {
   ru: { '软件更新': 'Обновления ПО', '检查更新': 'Проверить обновления', '会议纪要已生成': 'Заметки встречи созданы', '正在播放': 'Воспроизведение', '操作失败': 'Не удалось выполнить действие', '应用错误': 'Ошибка приложения', '会后精修失败': 'Не удалось обработать запись встречи', '发现可恢复录音': 'Найдено восстанавливаемых записей: {count}', '离线功能': 'Автономные функции', '请选择声音': 'Сначала выберите голос', '请先配置翻译模型': 'Сначала настройте модель перевода', '纪要服务拒绝了请求': 'Поставщик сводки отклонил запрос', '纪要模型需要配置': 'Настройте модель сводки', '请检查 API 地址、密钥和服务商访问策略。': 'Проверьте URL API, ключ и политику доступа поставщика.', 'API Key 未配置、已失效或不匹配当前服务。': 'Ключ API отсутствует, недействителен или отклонён этим поставщиком.', '配置纪要模型': 'Настроить модель', '内置纪要模型未配置': 'Встроенная модель сводки не настроена', '请选择并下载一个内置纪要模型，之后即可完全离线生成纪要。': 'Выберите и загрузите встроенную модель сводки, чтобы создавать заметки встречи полностью офлайн.', '选择纪要模型': 'Выбрать модель', '刚刚': 'Только что', '请先选择译文目标并配置纪要模型': 'Сначала выберите язык перевода и настройте модель сводки', '将确认字幕发送到 {provider} 生成译文。是否继续？': 'Отправить подтверждённые субтитры в {provider} для перевода?', '选择格式：md / txt / json / srt / docx / pdf / flac / wav / m4a': 'Выберите формат: md / txt / json / srt / docx / pdf / flac / wav / m4a', '已导出「{title}」': '«{title}» экспортировано', '示例会议及录音已删除': 'Пример встречи и запись удалены', '会议已移至最近删除': 'Встреча перемещена в Недавно удалённые', '暂停录音': 'Приостановить запись', '这场会议没有可播放的录音': 'У этой встречи нет доступной для воспроизведения записи', '纪要配置加载失败': 'Не удалось загрузить конфигурацию сводки', '配置或后端启动失败': 'Не удалось запустить конфигурацию или серверную часть', '翻译失败': 'Не удалось перевести', '压缩包已导出': 'Архив экспортирован', '未找到录音，已导出逐字稿压缩包': 'Запись не найдена; архив расшифровки экспортирован' },
 };
 Object.entries(runtimeLabels).forEach(([code, labels]) => Object.assign(catalog[code].labels, labels));
+Object.entries({
+  zh: '请前往「设置」>「AI 会议总结」，选择并下载内置纪要模型。',
+  en: 'Go to Settings > AI meeting summary to choose and download a built-in summary model.',
+  es: 'Ve a Configuración > Resumen de reunión con IA para elegir y descargar un modelo integrado.',
+  ja: '「設定」>「AI 会議要約」で内蔵要約モデルを選択してダウンロードしてください。',
+  ko: '설정 > AI 회의 요약에서 내장 요약 모델을 선택하고 다운로드하세요.',
+  fr: 'Accédez à Réglages > Résumé de réunion IA pour choisir et télécharger un modèle intégré.',
+  de: 'Gehen Sie zu Einstellungen > KI-Besprechungszusammenfassung, um ein integriertes Modell auszuwählen und herunterzuladen.',
+  ru: 'Перейдите в «Настройки» > «ИИ-сводка встречи», чтобы выбрать и скачать встроенную модель.',
+}).forEach(([code, label]) => { catalog[code].labels['请前往「设置」>「AI 会议总结」，选择并下载内置纪要模型。'] = label; });
+Object.entries({ zh: '前往 AI 会议总结', en: 'Go to AI meeting summary', es: 'Ir al resumen de IA', ja: 'AI 会議要約を開く', ko: 'AI 회의 요약으로 이동', fr: 'Accéder au résumé IA', de: 'Zur KI-Zusammenfassung', ru: 'К ИИ-сводке встречи' }).forEach(([code, label]) => { catalog[code].labels['前往 AI 会议总结'] = label; });
 const timeoutLabels = {
   zh: '操作超时，请稍后重试',
   en: 'The operation timed out. Please try again.',
@@ -181,7 +190,7 @@ Object.entries(timeoutLabels).forEach(([code, label]) => { catalog[code].labels[
 Object.entries({ zh: '实时会议中，结束后再生成会议纪要。', en: 'Live meeting in progress. Finish it before generating the meeting notes.', es: 'Reunión en directo en curso. Finalízala antes de generar las notas de la reunión.', ja: 'ライブ会議中です。終了後に会議メモを生成できます。', ko: '실시간 회의 중입니다. 종료 후 회의록을 생성하세요.', fr: 'Réunion en direct en cours. Terminez-la avant de générer les notes de la réunion.', de: 'Live-Besprechung läuft. Beenden Sie sie, bevor Sie die Besprechungsnotizen erstellen.', ru: 'Идёт встреча в реальном времени. Завершите её перед созданием заметок встречи.' }).forEach(([code, label]) => { catalog[code].labels['实时会议中，结束后再生成会议纪要。'] = label; });
 Object.entries({ zh: '已有会议纪要正在生成，请稍候。', en: 'A meeting summary is already being generated. Please wait.', es: 'Ya se está generando un resumen de reunión. Espera un momento.', ja: '別の会議メモを生成中です。しばらくお待ちください。', ko: '다른 회의록을 생성하고 있습니다. 잠시만 기다려 주세요.', fr: 'Un compte rendu est déjà en cours de génération. Veuillez patienter.', de: 'Eine Besprechungsnotiz wird bereits erstellt. Bitte warten Sie.', ru: 'Заметки для другой встречи уже создаются. Пожалуйста, подождите.' }).forEach(([code, label]) => { catalog[code].labels['已有会议纪要正在生成，请稍候。'] = label; });
 const powerSavingLabels = {
-  zh: { '会议模式': '会议模式', '纪要服务暂时不可用，请检查网络或稍后重试。': '纪要服务暂时不可用，请检查网络或稍后重试。' },
+  zh: {  '纪要服务暂时不可用，请检查网络或稍后重试。': '纪要服务暂时不可用，请检查网络或稍后重试。' },
   en: { '会议模式': 'Meeting mode', '纪要服务暂时不可用，请检查网络或稍后重试。': 'The meeting-notes service is temporarily unavailable. Check your network or try again later.' },
   es: { '会议模式': 'Modo de reunión', '纪要服务暂时不可用，请检查网络或稍后重试。': 'El servicio de notas no está disponible temporalmente. Comprueba la red o inténtalo más tarde.' },
   ja: { '会议模式': '会議モード', '纪要服务暂时不可用，请检查网络或稍后重试。': '議事録サービスは一時的に利用できません。ネットワークを確認して、しばらくしてから再試行してください。' },
@@ -208,7 +217,7 @@ const translationToggleLabels = {
 Object.entries(translationToggleLabels).forEach(([code, [on, off]]) => Object.assign(catalog[code].labels, { '译文: 开': on, '译文: 关': off }));
 // 录制前页录音源新增的轻量状态文案（异常/未授权时显示，正常时隐藏解释）。
 const liveSourceLabels = {
-  zh: { '已连接': '已连接', '未就绪': '未就绪', '需要麦克风权限': '需要麦克风权限', '标准模式': '标准模式', '我的笔记': '我的笔记', '展开字幕': '展开字幕', '返回笔记': '返回笔记', '预览': '预览', '记录笔记（支持 Markdown）': '记录笔记（支持 Markdown）', '回到最新': '回到最新', '纪要生成失败：模型未返回有效内容，请稍后重试。': '纪要生成失败：模型未返回有效内容，请稍后重试。', '富文本': '富文本', '加粗': '加粗', '斜体': '斜体', '标题 1': '标题 1', '标题 2': '标题 2', '标题 3': '标题 3', '列表': '列表', '编号列表': '编号列表', '引用': '引用', '插入链接': '插入链接', '插入图片': '插入图片', '行内代码': '行内代码', '代码': '代码' },
+  zh: { '已连接': '已连接', '未就绪': '未就绪',  '标准模式': '标准模式', '我的笔记': '我的笔记', '展开字幕': '展开字幕', '返回笔记': '返回笔记', '预览': '预览',  '回到最新': '回到最新', '纪要生成失败：模型未返回有效内容，请稍后重试。': '纪要生成失败：模型未返回有效内容，请稍后重试。', '富文本': '富文本', '加粗': '加粗', '斜体': '斜体', '标题 1': '标题 1', '标题 2': '标题 2', '标题 3': '标题 3', '列表': '列表', '编号列表': '编号列表', '引用': '引用', '插入链接': '插入链接', '插入图片': '插入图片', '行内代码': '行内代码', '代码': '代码' },
   en: { '已连接': 'Connected', '未就绪': 'Not ready', '需要麦克风权限': 'Microphone permission required', '标准模式': 'Standard mode', '我的笔记': 'My notes', '展开字幕': 'Expand captions', '返回笔记': 'Back to notes', '预览': 'Preview', '记录笔记（支持 Markdown）': 'Take notes here. Markdown supported.', '回到最新': 'Back to latest', '纪要生成失败：模型未返回有效内容，请稍后重试。': 'Meeting notes failed: the model returned no content. Please try again.', '富文本': 'Rich text', '加粗': 'Bold', '斜体': 'Italic', '标题 1': 'Heading 1', '标题 2': 'Heading 2', '标题 3': 'Heading 3', '列表': 'List', '编号列表': 'Numbered list', '引用': 'Quote', '插入链接': 'Insert link', '插入图片': 'Insert image', '行内代码': 'Inline code', '代码': 'Code' },
   es: { '已连接': 'Conectado', '未就绪': 'No listo', '需要麦克风权限': 'Se requiere permiso de micrófono', '标准模式': 'Modo estándar', '我的笔记': 'Mis notas', '展开字幕': 'Ampliar subtítulos', '返回笔记': 'Volver a notas', '预览': 'Vista previa', '记录笔记（支持 Markdown）': 'Toma notas aquí. Markdown compatible.', '回到最新': 'Volver a lo último', '纪要生成失败：模型未返回有效内容，请稍后重试。': 'No se pudieron generar las notas: el modelo no devolvió contenido. Inténtalo de nuevo.', '富文本': 'Texto enriquecido', '加粗': 'Negrita', '斜体': 'Cursiva', '标题 1': 'Título 1', '标题 2': 'Título 2', '标题 3': 'Título 3', '列表': 'Lista', '编号列表': 'Lista numerada', '引用': 'Cita', '插入链接': 'Insertar enlace', '插入图片': 'Insertar imagen', '行内代码': 'Código en línea', '代码': 'Código' },
   ja: { '已连接': '接続済み', '未就绪': '未準備', '需要麦克风权限': 'マイクのアクセス許可が必要です', '标准模式': '標準モード', '我的笔记': '私のメモ', '展开字幕': '字幕を拡大', '返回笔记': 'メモに戻る', '预览': 'プレビュー', '记录笔记（支持 Markdown）': 'ここにメモを記録（Markdown 対応）', '回到最新': '最新へ戻る', '纪要生成失败：模型未返回有效内容，请稍后重试。': '議事録の生成に失敗しました：モデルが内容を返しませんでした。後でもう一度お試しください。', '富文本': 'リッチテキスト', '加粗': '太字', '斜体': '斜体', '标题 1': '見出し 1', '标题 2': '見出し 2', '标题 3': '見出し 3', '列表': 'リスト', '编号列表': '番号付きリスト', '引用': '引用', '插入链接': 'リンクを挿入', '插入图片': '画像を挿入', '行内代码': 'インラインコード', '代码': 'コード' },
@@ -219,7 +228,7 @@ const liveSourceLabels = {
 };
 // 会议详情页（会后视图）的界面文案。
 const detailPageLabels = {
-  zh: { '分享': '分享', '精修字幕': '精修字幕', '已精修': '已精修', '查看原始转写': '查看原始转写', '查看精修字幕': '查看精修字幕', '精修全文': '精修全文', '经过会后模型整理后的完整转写文本。由于当前模型不提供时间戳，该版本不支持逐句音频定位。': '经过会后模型整理后的完整转写文本。由于当前模型不提供时间戳，该版本不支持逐句音频定位。', '会议中没有记录笔记。': '会议中没有记录笔记。', '位参与者': '位参与者', '重新精修': '重新精修', '更换精修模型': '更换精修模型', '尚未生成': '尚未生成', '生成纪要': '生成纪要', '更多': '更多', '会议纪要': '会议纪要', '新建会议': '新建会议', '已生成纪要': '已生成纪要', '完成': '完成', '生成': '生成', '重新生成': '重新生成', '笔记已达 20000 字符上限，超出部分未保存。': '笔记已达 20000 字符上限，超出部分未保存。', '编辑': '编辑', '搜索会议…': '搜索会议…' },
+  zh: { '分享': '分享', '精修字幕': '精修字幕', '已精修': '已精修',   '精修全文': '精修全文', '经过会后模型整理后的完整转写文本。由于当前模型不提供时间戳，该版本不支持逐句音频定位。': '经过会后模型整理后的完整转写文本。由于当前模型不提供时间戳，该版本不支持逐句音频定位。', '会议中没有记录笔记。': '会议中没有记录笔记。', '位参与者': '位参与者', '重新精修': '重新精修',  '尚未生成': '尚未生成', '生成纪要': '生成纪要', '更多': '更多', '会议纪要': '会议纪要',  '已生成纪要': '已生成纪要', '完成': '完成', '生成': '生成', '重新生成': '重新生成',  '编辑': '编辑', },
   en: { '分享': 'Share', '精修字幕': 'Refine captions', '已精修': 'Refined', '查看原始转写': 'View original transcript', '查看精修字幕': 'View refined captions', '精修全文': 'Full refined transcript', '经过会后模型整理后的完整转写文本。由于当前模型不提供时间戳，该版本不支持逐句音频定位。': 'A continuous transcript reworked by the post-meeting model. Because this model provides no timestamps, per-segment audio seeking is not supported.', '会议中没有记录笔记。': 'No notes were taken during the meeting.', '位参与者': 'participants', '重新精修': 'Re-refine', '更换精修模型': 'Change refine model', '尚未生成': 'Not generated yet', '生成纪要': 'Generate notes', '更多': 'More', '会议纪要': 'Meeting notes', '新建会议': 'New meeting', '已生成纪要': 'Notes generated', '完成': 'Done', '生成': 'Generate', '重新生成': 'Regenerate', '笔记已达 20000 字符上限，超出部分未保存。': 'Notes are limited to 20,000 characters; the rest was not saved.', '编辑': 'Edit', '搜索会议…': 'Search meetings…' },
   es: { '分享': 'Compartir', '精修字幕': 'Refinar subtítulos', '已精修': 'Refinado', '查看原始转写': 'Ver transcripción original', '查看精修字幕': 'Ver subtítulos refinados', '精修全文': 'Transcripción refinada completa', '经过会后模型整理后的完整转写文本。由于当前模型不提供时间戳，该版本不支持逐句音频定位。': 'Una transcripción completa revisada por el modelo posterior a la reunión. Como este modelo no proporciona marcas de tiempo, no se admite la búsqueda de audio por segmento.', '会议中没有记录笔记。': 'No se tomaron notas durante la reunión.', '位参与者': 'participantes', '重新精修': 'Refinar de nuevo', '更换精修模型': 'Cambiar modelo de refinado', '尚未生成': 'Aún no generado', '生成纪要': 'Generar notas', '更多': 'Más', '会议纪要': 'Notas de reunión', '新建会议': 'Nueva reunión', '已生成纪要': 'Notas generadas', '完成': 'Listo', '生成': 'Generar', '重新生成': 'Regenerar', '笔记已达 20000 字符上限，超出部分未保存。': 'Las notas se limitan a 20.000 caracteres; el resto no se guardó.', '编辑': 'Editar', '搜索会议…': 'Buscar reuniones…' },
   ja: { '分享': '共有', '精修字幕': '字幕を精修', '已精修': '精修済み', '查看原始转写': '元の文字起こしを見る', '查看精修字幕': '精修後の字幕を見る', '精修全文': '精修済み全文', '经过会后模型整理后的完整转写文本。由于当前模型不提供时间戳，该版本不支持逐句音频定位。': '会議後にモデルが整理した連続した文字起こしです。このモデルはタイムスタンプを提供しないため、文ごとの音声位置指定はできません。', '会议中没有记录笔记。': '会議中にメモはありませんでした。', '位参与者': '人の参加者', '重新精修': '再精修', '更换精修模型': '精修モデルを変更', '尚未生成': '未生成', '生成纪要': '議事録を生成', '更多': 'その他', '会议纪要': '議事録', '新建会议': '新しい会議', '已生成纪要': '議事録生成済み', '完成': '完了', '生成': '生成', '重新生成': '再生成', '笔记已达 20000 字符上限，超出部分未保存。': 'メモは 20,000 文字までです。超過分は保存されませんでした。', '编辑': '編集', '搜索会议…': '会議を検索…' },
@@ -241,7 +250,7 @@ const settingsLabels = {
 Object.entries(settingsLabels).forEach(([code, labels]) => Object.assign(catalog[code].labels, labels));
 // “会议总结”设置分区（原“纪要模型”）的标题与操作按钮多语言文案。
 const summarySectionLabels = {
-  zh: { '会议总结': '会议总结', '管理会议总结': '管理会议总结', 'AI 笔记与会议总结': 'AI 笔记与会议总结', '配置用于生成会议总结和 AI 笔记的服务。所有配置信息仅保存在本地，不会上传。': '配置用于生成会议总结和 AI 笔记的服务。所有配置信息仅保存在本地，不会上传。', '配置 AI 笔记与会议总结': '配置 AI 笔记与会议总结' },
+  zh: { '会议总结': '会议总结',    },
   en: { '会议总结': 'Meeting summary', '管理会议总结': 'Manage meeting summary', 'AI 笔记与会议总结': 'AI notes and meeting summary', '配置用于生成会议总结和 AI 笔记的服务。所有配置信息仅保存在本地，不会上传。': 'Configure the service used for meeting summaries and AI notes. All configuration stays on this device.', '配置 AI 笔记与会议总结': 'Configure AI notes and meeting summary' },
   es: { '会议总结': 'Resumen de la reunión', '管理会议总结': 'Gestionar el resumen de la reunión', 'AI 笔记与会议总结': 'Notas de IA y resumen de la reunión', '配置用于生成会议总结和 AI 笔记的服务。所有配置信息仅保存在本地，不会上传。': 'Configura el servicio para los resúmenes de reuniones y las notas de IA. La configuración se guarda en este dispositivo.', '配置 AI 笔记与会议总结': 'Configurar notas de IA y resumen' },
   ja: { '会议总结': '会議の要約', '管理会议总结': '会議の要約を管理', 'AI 笔记与会议总结': 'AI メモと会議要約', '配置用于生成会议总结和 AI 笔记的服务。所有配置信息仅保存在本地，不会上传。': '会議要約と AI メモに使うサービスを設定します。設定はこの端末だけに保存されます。', '配置 AI 笔记与会议总结': 'AI メモと会議要約を設定' },
@@ -252,7 +261,7 @@ const summarySectionLabels = {
 };
 Object.entries(summarySectionLabels).forEach(([code, labels]) => Object.assign(catalog[code].labels, labels));
 const modelLibraryLabels = {
-  zh: { '模型库': '模型库', '管理模型库': '管理模型库', '管理语言识别模型的下载、删除与版本信息。': '管理语言识别模型的下载、删除与版本信息。' },
+  zh: { '模型库': '模型库', '管理模型库': '管理模型库', },
   en: { '模型库': 'Model library', '管理模型库': 'Manage model library', '管理语言识别模型的下载、删除与版本信息。': 'Manage downloads, removal, and version details for speech-recognition models.' },
   es: { '模型库': 'Biblioteca de modelos', '管理模型库': 'Gestionar la biblioteca de modelos', '管理语言识别模型的下载、删除与版本信息。': 'Gestiona las descargas, eliminaciones y versiones de los modelos de reconocimiento de voz.' },
   ja: { '模型库': 'モデルライブラリ', '管理模型库': 'モデルライブラリを管理', '管理语言识别模型的下载、删除与版本信息。': '音声認識モデルのダウンロード、削除、バージョン情報を管理します。' },
@@ -263,7 +272,7 @@ const modelLibraryLabels = {
 };
 Object.entries(modelLibraryLabels).forEach(([code, labels]) => Object.assign(catalog[code].labels, labels));
 const dynamicInterfaceLabels = {
-  zh: { 'VAD 模型': 'VAD 模型', '查看完整内容': '查看完整内容', '会议人数': '会议人数', '继续精修': '继续精修', '留空自动识别': '留空自动识别', '选择导出格式': '选择导出格式' },
+  zh: { 'VAD 模型': 'VAD 模型', '查看完整内容': '查看完整内容', '会议人数': '会议人数',  '留空自动识别': '留空自动识别', '选择导出格式': '选择导出格式' },
   en: { 'VAD 模型': 'VAD model', '查看完整内容': 'View full content', '会议人数': 'Participants', '继续精修': 'Continue refinement', '留空自动识别': 'Leave blank for auto-detection', '选择导出格式': 'Choose export format' },
   es: { 'VAD 模型': 'Modelo VAD', '查看完整内容': 'Ver contenido completo', '会议人数': 'Participantes', '继续精修': 'Continuar refinamiento', '留空自动识别': 'Déjalo vacío para auto-detección', '选择导出格式': 'Elegir formato de exportación' },
   ja: { 'VAD 模型': 'VAD モデル', '查看完整内容': 'すべて表示', '会议人数': '会議の人数', '继续精修': '高精度化を続ける', '留空自动识别': '空欄なら自動検出', '选择导出格式': 'エクスポート形式を選択' },
@@ -282,11 +291,10 @@ const appCopy = {
     '性能模式': { zh: '性能模式', en: 'Performance mode', es: 'Modo de rendimiento', ja: 'パフォーマンスモード', ko: '성능 모드', fr: 'Mode de performance', de: 'Leistungsmodus', ru: 'Режим производительности' },
     '标准模式': { zh: '标准模式', en: 'Standard', es: 'Estándar', ja: '標準', ko: '표준', fr: 'Standard', de: 'Standard', ru: 'Стандартный' },
     '效率模式': { zh: '效率模式', en: 'Efficiency', es: 'Eficiencia', ja: '効率', ko: '효율', fr: 'Efficacité', de: 'Effizienz', ru: 'Эффективность' },
-    '标准模式：开启实时降噪与实时精修，体验最佳，适合性能较强的设备。': { zh: '标准模式：开启实时降噪与实时精修，体验最佳，适合性能较强的设备。', en: 'Standard: keeps live denoising and live refinement on for the best experience. Best on capable hardware.', es: 'Estándar: mantiene la reducción de ruido y el refinamiento en vivo. Ideal en equipos potentes.', ja: '標準：リアルタイムノイズ除去と高精度化を有効化。性能の高い端末向け。', ko: '표준: 실시간 잡음 제거와 정교화를 유지합니다. 성능이 좋은 기기용.', fr: 'Standard : conserve le débruitage et l’affinage en direct. Idéal sur matériel performant.', de: 'Standard: behält Live-Entrauschung und -Nachbearbeitung bei. Ideal auf leistungsfähiger Hardware.', ru: 'Стандартный: сохраняет шумоподавление и обработку в реальном времени. Для мощных устройств.' },
     '关闭实时降噪，使用轻量模型二次精修；导入录音时，会后精修不会区分不同发言者。': { zh: '关闭实时降噪，使用轻量模型二次精修；导入录音时，会后精修不会区分不同发言者。', en: 'Turns off live denoising and uses a lighter second pass. For imported audio, post-meeting refinement does not distinguish different speakers.', es: 'Desactiva la reducción de ruido en vivo y usa una segunda pasada más ligera. Para audio importado, el refinamiento posterior no distingue a los distintos interlocutores.', ja: 'リアルタイムノイズ除去をオフにし、軽量な二次高精度化を使います。インポートした音声では、会議後高精度化で発言者を区別しません。', ko: '실시간 잡음 제거를 끄고 가벼운 2차 정교화를 사용합니다. 가져온 오디오는 회의 후 정교화에서 발언자를 구분하지 않습니다.', fr: 'Désactive le débruitage en direct et utilise une seconde passe plus légère. Pour les audios importés, l’affinage après réunion ne distingue pas les différents intervenants.', de: 'Deaktiviert die Live-Entrauschung und verwendet eine leichtere zweite Verarbeitung. Bei importierten Audiodateien unterscheidet die Nachbearbeitung nicht zwischen verschiedenen Sprechern.', ru: 'Отключает шумоподавление в реальном времени и использует облегчённую вторую обработку. Для импортированного аудио обработка после встречи не различает разных участников.' },
     '本机性能有限，建议使用更小的内置模型（如 2B）或在线 LLM API，以获得更流畅的实时体验。': { zh: '本机性能有限，建议使用更小的内置模型（如 2B）或在线 LLM API，以获得更流畅的实时体验。', en: 'This device has limited performance. Consider a smaller built-in model (e.g. 2B) or an online LLM API for a smoother real-time experience.', es: 'Este equipo tiene rendimiento limitado. Considera un modelo integrado más pequeño (p. ej. 2B) o una API LLM en línea.', ja: 'この端末は性能が限られています。より小さい内蔵モデル（例：2B）やオンライン LLM API の利用をお勧めします。', ko: '이 기기의 성능이 제한적입니다. 더 작은 내장 모델(예: 2B)이나 온라인 LLM API를 권장합니다.', fr: 'Appareil aux performances limitées. Envisagez un modèle intégré plus petit (ex. 2B) ou une API LLM en ligne.', de: 'Dieses Gerät hat begrenzte Leistung. Erwägen Sie ein kleineres integriertes Modell (z. B. 2B) oder eine Online-LLM-API.', ru: 'Ограниченная производительность устройства. Рекомендуется меньшая встроенная модель (напр. 2B) или онлайн-LLM API.' },
     '检测到实时性能瓶颈': { zh: '检测到实时性能瓶颈', en: 'Realtime performance bottleneck detected', es: 'Cuello de botella en tiempo real detectado', ja: 'リアルタイムの性能ボトルネックを検出', ko: '실시간 성능 병목이 감지되었습니다', fr: 'Goulot d’étranglement temps réel détecté', de: 'Echtzeit-Leistungsengpass erkannt', ru: 'Обнаружено узкое место производительности' },
-    '实时字幕精修长期积压，字幕出现延迟。是否临时降低到效率模式？': { zh: '实时字幕精修长期积压，字幕出现延迟。是否临时降低到效率模式？', en: 'Realtime refinement is falling behind and captions are lagging. Switch to Efficiency mode for this meeting?', es: 'El refinamiento en vivo va con retraso y los subtítulos se retrasan. ¿Cambiar a modo Eficiencia?', ja: 'リアルタイム高精度化が遅れて字幕が遅延しています。この会議を効率モードにしますか？', ko: '실시간 정교화가 지연되어 자막이 밀립니다. 이 회의를 효율 모드로 전환할까요?', fr: 'L’affinage en direct prend du retard et les sous-titres traînent. Passer en mode Efficacité ?', de: 'Die Echtzeit-Nachbearbeitung hinkt hinterher, Untertitel verzögern sich. In Effizienzmodus wechseln?', ru: 'Обработка в реальном времени отстаёт, субтитры задерживаются. Переключить в режим эффективности?' },
+    '实时字幕识别积压，字幕出现延迟。是否临时降低到效率模式？': { zh: '实时字幕识别积压，字幕出现延迟。是否临时降低到效率模式？', en: 'Realtime transcription is falling behind and captions are lagging. Switch to Efficiency mode for this meeting?', es: 'El refinamiento en vivo va con retraso y los subtítulos se retrasan. ¿Cambiar a modo Eficiencia?', ja: 'リアルタイム高精度化が遅れて字幕が遅延しています。この会議を効率モードにしますか？', ko: '실시간 정교화가 지연되어 자막이 밀립니다. 이 회의를 효율 모드로 전환할까요?', fr: 'L’affinage en direct prend du retard et les sous-titres traînent. Passer en mode Efficacité ?', de: 'Die Echtzeit-Nachbearbeitung hinkt hinterher, Untertitel verzögern sich. In Effizienzmodus wechseln?', ru: 'Обработка в реальном времени отстаёт, субтитры задерживаются. Переключить в режим эффективности?' },
     '降低到效率模式': { zh: '降低到效率模式', en: 'Switch to Efficiency', es: 'Cambiar a Eficiencia', ja: '効率モードに切替', ko: '효율 모드로 전환', fr: 'Passer en Efficacité', de: 'Zu Effizienz wechseln', ru: 'Переключить на эффективность' },
     '保持当前设置': { zh: '保持当前设置', en: 'Keep current settings', es: 'Mantener configuración', ja: '現在の設定を維持', ko: '현재 설정 유지', fr: 'Garder la configuration actuelle', de: 'Aktuelle Einstellungen beibehalten', ru: 'Сохранить текущие настройки' },
     '改用 2B AI 笔记模型': { zh: '改用 2B AI 笔记模型', en: 'Use the 2B AI-notes model', es: 'Usar el modelo 2B para notas IA', ja: '2B AIメモモデルを使用', ko: '2B AI 메모 모델 사용', fr: 'Utiliser le modèle 2B pour les notes IA', de: '2B-Modell für KI-Notizen verwenden', ru: 'Использовать 2B-модель для ИИ-заметок' },
@@ -313,7 +321,6 @@ const appCopy = {
     '仅用于会后生成总结，不影响实时字幕。': { zh: '仅用于会后生成总结，不影响实时字幕。', en: 'Used only for post-meeting summaries; it does not affect live captions.', es: 'Solo se usa para resúmenes posteriores; no afecta los subtítulos en vivo.', ja: '会議後の要約にのみ使用し、ライブ字幕には影響しません。', ko: '회의 후 요약에만 사용하며 실시간 자막에는 영향을 주지 않습니다.', fr: 'Utilisé uniquement pour les résumés après la réunion ; sans effet sur les sous-titres en direct.', de: 'Nur für Zusammenfassungen nach der Besprechung; Live-Untertitel bleiben unbeeinflusst.', ru: 'Используется только для итогов после встречи и не влияет на субтитры.' },
     '尚未配置': { zh: '尚未配置', en: 'Not configured', es: 'Sin configurar', ja: '未設定', ko: '구성되지 않음', fr: 'Non configuré', de: 'Nicht konfiguriert', ru: 'Не настроено' },
     '已切换到效率模式，实时字幕更实时；会后精修仍可用。': { zh: '已切换到效率模式，实时字幕更实时；会后精修仍可用。', en: 'Switched to Efficiency mode — captions are more realtime; post-meeting refinement still applies.', es: 'Cambiado a modo Eficiencia: los subtítulos son más en tiempo real; el refinamiento posterior sigue disponible.', ja: '効率モードに切り替えました。字幕がよりリアルタイムになり、会議後の高精度化はそのまま使えます。', ko: '효율 모드로 전환했습니다. 자막이 더 실시간이며 회의 후 정교화는 그대로 사용됩니다.', fr: 'Mode Efficacité activé — sous-titres plus temps réel ; l’affinage après réunion reste disponible.', de: 'Effizienzmodus aktiviert — Untertitel sind echter; Nachbearbeitung bleibt verfügbar.', ru: 'Режим эффективности включён — субтитры синхроннее; обработка после встречи по-прежнему доступна.' },
-    '实时精修已自动降级以保持字幕实时。': { zh: '实时精修已自动降级以保持字幕实时。', en: 'Live refinement was reduced to keep captions realtime.', es: 'El refinamiento en vivo se redujo para mantener los subtítulos en tiempo real.', ja: '字幕のリアルタイム性を保つため、リアルタイム高精度化を自動的に抑えました。', ko: '자막의 실시간성을 유지하기 위해 실시간 정교화를 자동으로 낮췄습니다.', fr: 'L’affinage en direct a été réduit pour préserver la réactivité des sous-titres.', de: 'Die Live-Nachbearbeitung wurde reduziert, damit Untertitel in Echtzeit bleiben.', ru: 'Обработка в реальном времени снижена, чтобы субтитры оставались синхронными.' },
     '选择性能或效率模式，在音频效果与字幕实时性之间取舍。': { zh: '选择性能或效率模式，在音频效果与字幕实时性之间取舍。', en: 'Choose Performance or Efficiency mode to balance audio quality and caption responsiveness.', es: 'Elige Rendimiento o Eficiencia para equilibrar el audio y la rapidez de los subtítulos.', ja: '音声品質と字幕のリアルタイム性のバランスを、性能または効率モードで選びます。', ko: '성능 또는 효율 모드로 음질과 자막 실시간성의 균형을 맞춥니다.', fr: 'Choisissez le mode Performance ou Efficacité pour équilibrer le son et la réactivité des sous-titres.', de: 'Wählen Sie Leistung oder Effizienz, um Audioqualität und Echtzeit-Untertitel abzuwägen.', ru: 'Выберите режим производительности или эффективности для баланса качества звука и скорости субтитров.' },
     '下载和管理本地语音识别模型，为字幕、精修和说话人识别提供能力。': { zh: '下载和管理本地语音识别模型，为字幕、精修和说话人识别提供能力。', en: 'Download and manage local speech models for captions, refinement, and speaker recognition.', es: 'Descarga y gestiona modelos locales para subtítulos, refinamiento y reconocimiento de hablantes.', ja: '字幕・高精度化・話者認識に使うローカル音声モデルをダウンロード・管理します。', ko: '자막, 정교화, 화자 인식에 쓰는 로컬 음성 모델을 다운로드하고 관리합니다.', fr: 'Téléchargez et gérez les modèles vocaux locaux pour les sous-titres, l’affinage et la reconnaissance des locuteurs.', de: 'Lokale Sprachmodelle für Untertitel, Nachbearbeitung und Sprechererkennung herunterladen und verwalten.', ru: 'Скачивайте и управляйте локальными речевыми моделями для субтитров, обработки и распознавания говорящих.' },
     '让 AI 在会议中帮你发现重点、提取待办并整理笔记。': { zh: '让 AI 在会议中帮你发现重点、提取待办并整理笔记。', en: 'Let AI surface key points, extract action items, and organize notes during a meeting.', es: 'Deja que la IA detecte puntos clave, extraiga tareas y organice notas durante la reunión.', ja: '会議中に AI が要点の発見、ToDo の抽出、メモ整理を支援します。', ko: '회의 중 AI가 핵심 포인트를 찾고 할 일을 추출해 메모를 정리합니다.', fr: 'L’IA repère les points clés, extrait les actions et organise les notes pendant la réunion.', de: 'KI erkennt in der Besprechung Kernpunkte, extrahiert Aufgaben und ordnet Notizen.', ru: 'ИИ выделяет ключевые моменты, извлекает задачи и упорядочивает заметки во время встречи.' },
@@ -547,7 +554,7 @@ Object.entries(appCopy.modalCopy).forEach(([code, copy]) => {
   copy.models.items.splice(index < 0 ? copy.models.items.length : index, 0, [copy.models.items[0][0], 'Nemotron 3.5 ASR Streaming 0.6B (560ms)', languages, intro, 'N']);
 });
 const prepareModelLabels = {
-  zh: { '实时字幕模型': '实时字幕模型', '说话人分离模型': '说话人分离模型', '会后精修模型': '会后精修模型' },
+  zh: {   },
   en: { '实时字幕模型': 'Live caption model', '说话人分离模型': 'Speaker diarization model', '会后精修模型': 'Post-meeting refinement model' },
   es: { '实时字幕模型': 'Modelo de subtítulos en vivo', '说话人分离模型': 'Modelo de separación de hablantes', '会后精修模型': 'Modelo de refinamiento posterior' },
   ja: { '实时字幕模型': 'ライブ字幕モデル', '说话人分离模型': '話者分離モデル', '会后精修模型': '会議後の高精度化モデル' },
@@ -558,7 +565,7 @@ const prepareModelLabels = {
 };
 Object.entries(prepareModelLabels).forEach(([code, labels]) => Object.assign(catalog[code].labels, labels));
 const livePanelLabels = {
-  zh: { '模型与设置': '模型与设置', '实时识别模型': '实时识别模型', '精修模型': '精修模型', '麦克风': '麦克风' },
+  zh: {   '精修模型': '精修模型', '麦克风': '麦克风' },
   en: { '模型与设置': 'Models & settings', '实时识别模型': 'Live recognition model', '精修模型': 'Refinement model', '麦克风': 'Microphone' },
   es: { '模型与设置': 'Modelos y ajustes', '实时识别模型': 'Modelo de reconocimiento en vivo', '精修模型': 'Modelo de refinamiento', '麦克风': 'Micrófono' },
   ja: { '模型与设置': 'モデルと設定', '实时识别模型': 'リアルタイム認識モデル', '精修模型': '高精度化モデル', '麦克风': 'マイク' },
@@ -569,11 +576,7 @@ const livePanelLabels = {
 };
 Object.entries(livePanelLabels).forEach(([code, labels]) => Object.assign(catalog[code].labels, labels));
 Object.entries({
-  zh: '管理模型 →', en: 'Manage models →', es: 'Gestionar modelos →', ja: 'モデルを管理 →',
-  ko: '모델 관리 →', fr: 'Gérer les modèles →', de: 'Modelle verwalten →', ru: 'Управление моделями →',
-}).forEach(([code, label]) => { catalog[code].labels['管理模型 →'] = label; });
-Object.entries({
-  zh: { '从文件夹打开': '从文件夹打开', '清空数据': '清空数据', '此操作不可恢复。': '此操作不可恢复。', '已清空': '已清空', '未找到录音文件': '未找到录音文件', '未找到模型文件': '未找到模型文件', '准备中': '准备中', '需要下载以下模型': '需要下载以下模型：', '模型下载队列': '模型下载队列', '下载失败': '下载失败，请检查网络', '重试': '重试', '前往模型库': '前往模型库', '精修': '精修' },
+  zh: { '从文件夹打开': '从文件夹打开', '清空数据': '清空数据', '此操作不可恢复。': '此操作不可恢复。', '已清空': '已清空', '未找到录音文件': '未找到录音文件', '未找到模型文件': '未找到模型文件', '准备中': '准备中', '需要下载以下模型': '需要下载以下模型：', '模型下载队列': '模型下载队列', '下载失败': '下载失败，请检查网络', '重试': '重试',  '精修': '精修' },
   en: { '从文件夹打开': 'Open in folder', '清空数据': 'Clear data', '此操作不可恢复。': 'This action cannot be undone.', '已清空': 'Data cleared', '未找到录音文件': 'Recording file not found', '未找到模型文件': 'Model files not found', '准备中': 'Preparing', '需要下载以下模型': 'Download required models:', '模型下载队列': 'Model download queue', '下载失败': 'Download failed. Check your connection.', '重试': 'Retry', '前往模型库': 'Go to model library', '精修': 'Refine' },
   es: { '从文件夹打开': 'Abrir en la carpeta', '清空数据': 'Borrar datos', '此操作不可恢复。': 'Esta acción no se puede deshacer.', '已清空': 'Datos borrados', '未找到录音文件': 'No se encontró el archivo de grabación', '未找到模型文件': 'No se encontraron archivos del modelo', '准备中': 'Preparando', '需要下载以下模型': 'Descarga los modelos necesarios:', '模型下载队列': 'Cola de descargas de modelos', '前往模型库': 'Ir a la biblioteca de modelos', '精修': 'Refinar' },
   ja: { '从文件夹打开': 'フォルダで開く', '清空数据': 'データを消去', '此操作不可恢复。': 'この操作は元に戻せません。', '已清空': 'データを消去しました', '未找到录音文件': '録音ファイルが見つかりません', '未找到模型文件': 'モデルファイルが見つかりません', '准备中': '準備中', '需要下载以下模型': '次のモデルをダウンロードしてください：', '模型下载队列': 'モデルダウンロードキュー', '前往模型库': 'モデルライブラリへ', '精修': '再調整' },
@@ -595,7 +598,7 @@ Object.entries({
   de: 'Die für diese Besprechung benötigten Modelle werden heruntergeladen. Die Aufnahme beginnt automatisch, sobald alles bereit ist.', ru: 'Загружаются модели для этой встречи. Запись начнётся автоматически, когда всё будет готово.',
 }).forEach(([code, value]) => { catalog[code].labels['正在下载会议所需模型，完成后会自动开始录制'] = value; });
 Object.entries({
-  zh: { '当前系统不支持直接录制系统音频，请仅使用麦克风': '当前系统不支持直接录制系统音频，请仅使用麦克风', '预期说话人数': '预期说话人数', '留空自动匹配': '留空自动匹配', '工作区': '工作区', '自动匹配': '自动匹配', '正在精修': '正在精修', '音量': '音量', '请先在"模型与设置"中选择译文目标语言': '请先在“模型与设置”中选择译文目标语言', '未知工作区': '未知工作区', '工作区会议': '工作区会议', '创建一个新的工作区来组织会议': '创建一个新的工作区来组织会议', '工作区名称': '工作区名称', '描述': '描述', '（可选）': '（可选）', '创建工作区': '创建工作区', '工作区已创建': '工作区已创建', '编辑工作区': '编辑工作区', '保存更改': '保存更改', '删除工作区': '删除工作区', '工作区内的会议将移至最近删除。恢复会议时将还原原工作区。此操作不能撤销。': '工作区内的会议将移至最近删除。恢复会议时将还原原工作区。此操作不能撤销。', '工作区已删除': '工作区已删除', '工作区已更新': '工作区已更新' },
+  zh: { '当前系统不支持直接录制系统音频，请仅使用麦克风': '当前系统不支持直接录制系统音频，请仅使用麦克风',   '工作区': '工作区',  '正在精修': '正在精修', '音量': '音量',  '未知工作区': '未知工作区', '工作区会议': '工作区会议', '创建一个新的工作区来组织会议': '创建一个新的工作区来组织会议', '工作区名称': '工作区名称', '描述': '描述', '（可选）': '（可选）', '创建工作区': '创建工作区', '工作区已创建': '工作区已创建', '编辑工作区': '编辑工作区', '保存更改': '保存更改', '删除工作区': '删除工作区', '工作区内的会议将移至最近删除。恢复会议时将还原原工作区。此操作不能撤销。': '工作区内的会议将移至最近删除。恢复会议时将还原原工作区。此操作不能撤销。', '工作区已删除': '工作区已删除', '工作区已更新': '工作区已更新' },
   en: { '当前系统不支持直接录制系统音频，请仅使用麦克风': 'Direct system-audio recording is not supported on this system. Use only the microphone.', '预期说话人数': 'Expected speakers', '留空自动匹配': 'Leave blank to auto-match', '工作区': 'Workspace', '自动匹配': 'Auto-match', '正在精修': 'Refining', '音量': 'Volume', '请先在"模型与设置"中选择译文目标语言': 'Choose a target language in “Models & settings” first.', '未知工作区': 'Unknown workspace', '工作区会议': 'Workspace meetings', '创建一个新的工作区来组织会议': 'Create a workspace to organize meetings.', '工作区名称': 'Workspace name', '描述': 'Description', '（可选）': '(Optional)', '创建工作区': 'Create workspace', '工作区已创建': 'Workspace created', '编辑工作区': 'Edit workspace', '保存更改': 'Save changes', '删除工作区': 'Delete workspace', '工作区内的会议将移至最近删除。恢复会议时将还原原工作区。此操作不能撤销。': 'Meetings in this workspace will move to Recently Deleted. Restoring a meeting also restores its original workspace. This cannot be undone.', '工作区已删除': 'Workspace deleted', '工作区已更新': 'Workspace updated' },
   es: { '当前系统不支持直接录制系统音频，请仅使用麦克风': 'Este sistema no admite la grabación directa del audio del sistema. Usa solo el micrófono.', '预期说话人数': 'Número previsto de hablantes', '留空自动匹配': 'Déjalo vacío para la selección automática', '工作区': 'Espacio de trabajo', '自动匹配': 'Selección automática', '正在精修': 'Refinando', '音量': 'Volumen', '请先在"模型与设置"中选择译文目标语言': 'Primero elige un idioma de destino en «Modelos y ajustes».', '未知工作区': 'Espacio de trabajo desconocido', '工作区会议': 'Reuniones del espacio de trabajo', '创建一个新的工作区来组织会议': 'Crea un espacio de trabajo para organizar reuniones.', '工作区名称': 'Nombre del espacio de trabajo', '描述': 'Descripción', '（可选）': '(Opcional)', '创建工作区': 'Crear espacio de trabajo', '工作区已创建': 'Espacio de trabajo creado', '编辑工作区': 'Editar espacio de trabajo', '保存更改': 'Guardar cambios', '删除工作区': 'Eliminar espacio de trabajo', '工作区内的会议将移至最近删除。恢复会议时将还原原工作区。此操作不能撤销。': 'Las reuniones de este espacio se moverán a Eliminadas recientemente. Al restaurarlas se recuperará su espacio original. Esta acción no se puede deshacer.', '工作区已删除': 'Espacio de trabajo eliminado', '工作区已更新': 'Espacio de trabajo actualizado' },
   ja: { '当前系统不支持直接录制系统音频，请仅使用麦克风': 'このシステムではシステム音声を直接録音できません。マイクのみを使用してください。', '预期说话人数': '想定する話者数', '留空自动匹配': '空欄で自動選択', '工作区': 'ワークスペース', '自动匹配': '自動選択', '正在精修': '精密化中', '音量': '音量', '请先在"模型与设置"中选择译文目标语言': '先に「モデルと設定」で翻訳先の言語を選択してください。', '未知工作区': '不明なワークスペース', '工作区会议': 'ワークスペースの会議', '创建一个新的工作区来组织会议': '会議を整理する新しいワークスペースを作成します。', '工作区名称': 'ワークスペース名', '描述': '説明', '（可选）': '（任意）', '创建工作区': 'ワークスペースを作成', '工作区已创建': 'ワークスペースを作成しました', '编辑工作区': 'ワークスペースを編集', '保存更改': '変更を保存', '删除工作区': 'ワークスペースを削除', '工作区内的会议将移至最近删除。恢复会议时将还原原工作区。此操作不能撤销。': 'このワークスペースの会議は最近削除した項目に移動します。復元すると元のワークスペースも復元されます。この操作は取り消せません。', '工作区已删除': 'ワークスペースを削除しました', '工作区已更新': 'ワークスペースを更新しました' },
@@ -615,13 +618,13 @@ Object.entries({
   ru: 'Настройте распознавание, определение конца фразы, разделение говорящих и параметры локальных моделей.',
 }).forEach(([code, value]) => { catalog[code].labels['调整识别、端点检测、说话人分离和本地模型运行参数。'] = value; });
 const workflowLabels = {
-  '下载': 'Download', '下载中': 'Downloading', '全部下载': 'Download all',
-  '导出会议': 'Export meeting', '导出完成': 'Export complete', '字幕文件': 'Subtitle file',
-  '原录音': 'Original recording', '带说话人和时间戳的逐字稿': 'Transcript with speakers and timestamps',
-  '标准时间轴字幕': 'Standard timed subtitles', '未修改的会议混音': 'Unmodified meeting mix',
+  '下载': 'Download', '下载中': 'Downloading', 
+    
+   
+   
   '内置': 'Built in', '查看录音': 'View recordings', '收起': 'Collapse',
-  '选择录音并添加': 'Choose recording and add', '播放录音': 'Play recording', '未填写文本': 'No transcript',
-  '已复制到剪贴板': 'Copied to clipboard', '文件已导出并在文件夹中显示': 'File exported and revealed in folder', '暂无可分享的内容': 'Nothing to share yet',
+  '选择录音并添加': 'Choose recording and add', '播放录音': 'Play recording', 
+  '已复制到剪贴板': 'Copied to clipboard',  '暂无可分享的内容': 'Nothing to share yet',
 };
 Object.assign(catalog.en.labels, workflowLabels);
 Object.assign(catalog.zh.labels, Object.fromEntries(Object.keys(workflowLabels).map((key) => [key, key])));
@@ -634,7 +637,7 @@ Object.entries({
   ru: { '下载':'Скачать','下载中':'Скачивание','全部下载':'Скачать всё','导出会议':'Экспортировать встречу','导出完成':'Экспорт завершён','字幕文件':'Файл субтитров','原录音':'Исходная запись','带说话人和时间戳的逐字稿':'Расшифровка с говорящими и метками времени','标准时间轴字幕':'Стандартные субтитры по времени','未修改的会议混音':'Неизменённый микс встречи','内置':'Встроено','查看录音':'Просмотреть записи','收起':'Свернуть','选择录音并添加':'Выбрать и добавить запись','播放录音':'Воспроизвести запись','未填写文本':'Нет расшифровки','已复制到剪贴板':'Скопировано в буфер обмена','文件已导出并在文件夹中显示':'Файл экспортирован и показан в папке','暂无可分享的内容':'Пока нечем поделиться' },
 }).forEach(([code, labels]) => Object.assign(catalog[code].labels, labels));
 Object.entries({
-  zh: { '进阶设置':'进阶设置','配置进阶设置':'配置进阶设置','恢复默认':'恢复默认','确定':'确定','已保存':'已保存','标记说话人':'标记说话人','选择已注册声纹或新建说话人。':'选择已注册声纹或新建说话人。','已注册声纹':'已注册声纹','新建说话人':'新建说话人','说话人名称':'说话人名称','可修改模型、端点静音、说话人分离及 sherpa-onnx 运行参数。':'可修改模型、端点静音、说话人分离及 sherpa-onnx 运行参数。','修改后会立即应用于下一次会议与精修。':'修改后会立即应用于下一次会议与精修。' },
+  zh: { '进阶设置':'进阶设置','配置进阶设置':'配置进阶设置','恢复默认':'恢复默认','确定':'确定','已保存':'已保存','已注册声纹':'已注册声纹','说话人名称':'说话人名称','可修改模型、端点静音、说话人分离及 sherpa-onnx 运行参数。':'可修改模型、端点静音、说话人分离及 sherpa-onnx 运行参数。',},
   en: { '进阶设置':'Advanced settings','配置进阶设置':'Configure advanced settings','恢复默认':'Restore defaults','确定':'Confirm','已保存':'Saved','标记说话人':'Assign speaker','选择已注册声纹或新建说话人。':'Choose a registered voiceprint or create a speaker.','已注册声纹':'Registered voiceprint','新建说话人':'New speaker','说话人名称':'Speaker name','可修改模型、端点静音、说话人分离及 sherpa-onnx 运行参数。':'Configure model, endpoint, diarization, and sherpa-onnx runtime parameters.','修改后会立即应用于下一次会议与精修。':'Changes apply to the next meeting and refinement.' }
   , es: { '进阶设置':'Configuración avanzada','配置进阶设置':'Configurar opciones avanzadas','恢复默认':'Restaurar valores predeterminados','确定':'Confirmar','已保存':'Guardado','标记说话人':'Asignar hablante','选择已注册声纹或新建说话人。':'Elige una huella de voz registrada o crea un hablante.','已注册声纹':'Huella de voz registrada','新建说话人':'Nuevo hablante','说话人名称':'Nombre del hablante','可修改模型、端点静音、说话人分离及 sherpa-onnx 运行参数。':'Configura modelos, detección de final, separación de hablantes y parámetros de sherpa-onnx.','修改后会立即应用于下一次会议与精修。':'Los cambios se aplican a la próxima reunión y refinamiento.' }
   , ja: { '进阶设置':'詳細設定','配置进阶设置':'詳細設定を構成','恢复默认':'既定値に戻す','确定':'確認','已保存':'保存しました','标记说话人':'話者を割り当て','选择已注册声纹或新建说话人。':'登録済みの声紋を選択するか、話者を新規作成します。','已注册声纹':'登録済みの声紋','新建说话人':'新しい話者','说话人名称':'話者名','可修改模型、端点静音、说话人分离及 sherpa-onnx 运行参数。':'モデル、終端の無音、話者分離、sherpa-onnx の実行パラメーターを設定します。','修改后会立即应用于下一次会议与精修。':'変更は次回の会議と高精度化に適用されます。' }
@@ -684,7 +687,7 @@ const accessibilityLabels = {
 Object.entries(accessibilityLabels).forEach(([code, labels]) => Object.assign(catalog[code].labels, labels));
 
 const refinementStageLabels = {
-  zh: { '准备精修': '准备精修', '分析说话人': '分析说话人', '转写中 · 校正说话人': '转写中 · 校正说话人', '校正说话人': '校正说话人', '整理结果': '整理结果' },
+  zh: {   '转写中 · 校正说话人': '转写中 · 校正说话人', '校正说话人': '校正说话人', },
   en: { '准备精修': 'Preparing refinement', '分析说话人': 'Analyzing speakers', '转写中 · 校正说话人': 'Transcribing · Correcting speakers', '校正说话人': 'Correcting speakers', '整理结果': 'Finalizing results' },
   es: { '准备精修': 'Preparando el refinamiento', '分析说话人': 'Analizando hablantes', '转写中 · 校正说话人': 'Transcribiendo · Corrigiendo hablantes', '校正说话人': 'Corrigiendo hablantes', '整理结果': 'Finalizando resultados' },
   ja: { '准备精修': '高精度化を準備中', '分析说话人': '話者を分析中', '转写中 · 校正说话人': '文字起こし中 · 話者を修正中', '校正说话人': '話者を修正中', '整理结果': '結果を整理中' },
@@ -706,53 +709,18 @@ const refinedModelOptionTags = {
   ru: { 'qwen3-asr-0.6b-int8': ['Многоязычный', 'Китайский и английский', 'Среднее потребление ресурсов'], 'funasr-nano-int8': ['Китайский / английский / кантонский', 'Быстрый'], 'whisper-large-v3': ['Многоязычный', 'Широкая совместимость', 'Медленнее'] },
 };
 
-const streamingModelOptionTags = {
-  zh: { 'zipformer-zh-xlarge-streaming-int8': ['中文'], 'zipformer-en-streaming-int8': ['英语'], 'zipformer-ko-streaming-int8': ['韩语'], 'zipformer-fr-streaming-int8': ['法语'], 'nemotron-3.5-asr-streaming-0.6b-560ms-int8': ['多语言'] },
-  en: { 'zipformer-zh-xlarge-streaming-int8': ['Chinese'], 'zipformer-en-streaming-int8': ['English'], 'zipformer-ko-streaming-int8': ['Korean'], 'zipformer-fr-streaming-int8': ['French'], 'nemotron-3.5-asr-streaming-0.6b-560ms-int8': ['Multilingual'] },
-  es: { 'zipformer-zh-xlarge-streaming-int8': ['Chino'], 'zipformer-en-streaming-int8': ['Inglés'], 'zipformer-ko-streaming-int8': ['Coreano'], 'zipformer-fr-streaming-int8': ['Francés'], 'nemotron-3.5-asr-streaming-0.6b-560ms-int8': ['Multilingüe'] },
-  ja: { 'zipformer-zh-xlarge-streaming-int8': ['中国語'], 'zipformer-en-streaming-int8': ['英語'], 'zipformer-ko-streaming-int8': ['韓国語'], 'zipformer-fr-streaming-int8': ['フランス語'], 'nemotron-3.5-asr-streaming-0.6b-560ms-int8': ['多言語'] },
-  ko: { 'zipformer-zh-xlarge-streaming-int8': ['중국어'], 'zipformer-en-streaming-int8': ['영어'], 'zipformer-ko-streaming-int8': ['한국어'], 'zipformer-fr-streaming-int8': ['프랑스어'], 'nemotron-3.5-asr-streaming-0.6b-560ms-int8': ['다국어'] },
-  fr: { 'zipformer-zh-xlarge-streaming-int8': ['Chinois'], 'zipformer-en-streaming-int8': ['Anglais'], 'zipformer-ko-streaming-int8': ['Coréen'], 'zipformer-fr-streaming-int8': ['Français'], 'nemotron-3.5-asr-streaming-0.6b-560ms-int8': ['Multilingue'] },
-  de: { 'zipformer-zh-xlarge-streaming-int8': ['Chinesisch'], 'zipformer-en-streaming-int8': ['Englisch'], 'zipformer-ko-streaming-int8': ['Koreanisch'], 'zipformer-fr-streaming-int8': ['Französisch'], 'nemotron-3.5-asr-streaming-0.6b-560ms-int8': ['Mehrsprachig'] },
-  ru: { 'zipformer-zh-xlarge-streaming-int8': ['Китайский'], 'zipformer-en-streaming-int8': ['Английский'], 'zipformer-ko-streaming-int8': ['Корейский'], 'zipformer-fr-streaming-int8': ['Французский'], 'nemotron-3.5-asr-streaming-0.6b-560ms-int8': ['Многоязычный'] },
-};
-
-const zipformerChineseLanguages = {
-  zh: '中文', en: 'Chinese', es: 'Chino', ja: '中国語', ko: '중국어', fr: 'Chinois', de: 'Chinesisch', ru: 'Китайский',
-};
-Object.entries(appCopy.modalCopy).forEach(([code, copy]) => {
-  copy.models.items = copy.models.items.map((item) => item[1] === 'Streaming Zipformer Chinese XLarge'
-    ? [item[0], 'Streaming Zipformer Chinese XLarge', zipformerChineseLanguages[code] || zipformerChineseLanguages.en, item[3], item[4]]
-    : item);
-});
-const xAsrCopy = {
-  zh: ['中文 / 英语', '低负载中英实时识别，内置标点，适合效率模式。'],
-  en: ['Chinese / English', 'Low-load Chinese and English live transcription with built-in punctuation for efficiency mode.'],
-  es: ['Chino / inglés', 'Transcripción china e inglesa de baja carga con puntuación integrada para el modo eficiencia.'],
-  ja: ['中国語 / 英語', '効率モード向けの、句読点内蔵・低負荷な中国語／英語ライブ文字起こし。'],
-  ko: ['중국어 / 영어', '효율 모드용 내장 문장 부호 저부하 중국어·영어 실시간 전사입니다.'],
-  fr: ['Chinois / anglais', 'Transcription chinoise et anglaise légère avec ponctuation intégrée pour le mode efficacité.'],
-  de: ['Chinesisch / Englisch', 'Ressourcenschonende chinesisch-englische Live-Transkription mit integrierter Zeichensetzung für den Effizienzmodus.'],
-  ru: ['Китайский / английский', 'Низкоресурсная потоковая расшифровка китайской и английской речи со встроенной пунктуацией для экономичного режима.'],
-};
-Object.entries(appCopy.modalCopy).forEach(([code, copy]) => {
-  const [languages, intro] = xAsrCopy[code] || xAsrCopy.en;
-  const index = copy.models.items.findIndex(([, name]) => name === 'Streaming Zipformer Chinese XLarge');
-  copy.models.items.splice(index + 1, 0, [copy.models.items[index][0], 'X-ASR Streaming Chinese and English (480ms)', languages, intro, 'X']);
-});
-
 const micErrorLabels = {
   zh: {
-    '未检测到麦克风设备，请在系统设置中开启麦克风访问权限': '未检测到麦克风设备，请在系统设置中开启麦克风访问权限',
-    '麦克风访问被拒绝，请在系统设置中允许应用使用麦克风后重试': '麦克风访问被拒绝，请在系统设置中允许应用使用麦克风后重试',
-    '麦克风被其他程序占用，请关闭占用麦克风的程序后重试': '麦克风被其他程序占用，请关闭占用麦克风的程序后重试',
-    '无法获取麦克风': '无法获取麦克风',
-    '无法获取系统音频，请检查系统权限后重试': '无法获取系统音频，请检查系统权限后重试',
-    '未检测到系统音频，请在系统设置中允许屏幕与系统音频录制后重试': '未检测到系统音频，请在系统设置中允许屏幕与系统音频录制后重试',
-    '麦克风没有可用的音频轨道': '麦克风没有可用的音频轨道',
-    '至少选择一个音频输入': '至少选择一个音频输入',
-    '系统音频未产生音频数据': '系统音频未产生音频数据',
-    '麦克风未产生音频数据': '麦克风未产生音频数据',
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
   },
   en: {
     '未检测到麦克风设备，请在系统设置中开启麦克风访问权限': 'No microphone was detected. Enable microphone access in System Settings.',
@@ -842,9 +810,9 @@ const micErrorLabels = {
 Object.entries(micErrorLabels).forEach(([code, labels]) => Object.assign(catalog[code].labels, labels));
 
 // AI 辅助笔记（阶段 2 无需 AI 本地规则）：字幕加入笔记 / 时间戳 / 信号检测文案。
-Object.assign(catalog.zh.labels, { '加入笔记': '加入笔记', '标记当前时间点': '标记当前时间点', '已加入笔记': '已加入笔记', '数字': '数字', '日期': '日期', '问句': '问句', '暂无字幕可插入': '暂无字幕可插入', '无法获取字幕内容': '无法获取字幕内容' });
+Object.assign(catalog.zh.labels, { '加入笔记': '加入笔记',  '已加入笔记': '已加入笔记', '数字': '数字', '日期': '日期', '问句': '问句', '暂无字幕可插入': '暂无字幕可插入', '无法获取字幕内容': '无法获取字幕内容' });
 Object.assign(catalog.zh.labels, { '笔记已达容量上限，超出部分未保存。': '笔记已达容量上限，超出部分未保存。' });
-Object.assign(catalog.en.labels, { '笔记已达容量上限，超出部分未保存。': 'Notes reached the size limit; the rest was not saved.', '加入笔记': 'Add to notes', '标记当前时间点': 'Insert timestamp', '已加入笔记': 'Added to notes', 'AI 辅助已保存': 'AI assist saved', 'AI 辅助配置加载失败': 'Failed to load AI assist configuration', '数字': 'Number', '日期': 'Date', '问句': 'Question', '暂无字幕可插入': 'No caption to insert yet', '无法获取字幕内容': 'Caption text unavailable' });
+Object.assign(catalog.en.labels, { '笔记已达容量上限，超出部分未保存。': 'Notes reached the size limit; the rest was not saved.', '加入笔记': 'Add to notes', '标记当前时间点': 'Insert timestamp', '已加入笔记': 'Added to notes',   '数字': 'Number', '日期': 'Date', '问句': 'Question', '暂无字幕可插入': 'No caption to insert yet', '无法获取字幕内容': 'Caption text unavailable' });
 Object.assign(catalog.es.labels, { '加入笔记': 'Añadir a notas', '标记当前时间点': 'Insertar marca de tiempo', '已加入笔记': 'Añadido a notas', 'AI 辅助已保存': 'Asistencia de IA guardada', 'AI 辅助配置加载失败': 'No se pudo cargar la configuración de asistencia de IA', '数字': 'Número', '日期': 'Fecha', '问句': 'Pregunta', '暂无字幕可插入': 'Aún no hay subtítulos que insertar', '无法获取字幕内容': 'Texto del subtítulo no disponible' });
 
 // AI 辅助笔记（阶段 4 建议 UI）：建议类型标签与操作。
@@ -853,12 +821,12 @@ Object.assign(catalog.en.labels, { '可能是一个结论': 'Possible conclusion
 Object.assign(catalog.es.labels, { '可能是一个结论': 'Posible conclusión', '可能的决策': 'Posible decisión', '可能的待办': 'Posible tarea', '重要数字': 'Cifra clave', '重要日期': 'Fecha clave', '待确认事项': 'Por confirmar', '可能的风险': 'Posible riesgo', '新话题': 'Nuevo tema', '补充': 'Añadir', '忽略': 'Ignorar', '1 条建议': '1 sugerencia', 'AI 检测到新话题：': 'La IA detectó un nuevo tema: ' });
 
 // AI 辅助笔记（阶段 5 第二层动作）：整理 / 校对 / 关联历史。
-Object.assign(catalog.zh.labels, { '整理笔记': '整理笔记', '校对': '校对', '关联历史': '关联历史', '整理一下？': '整理一下？', '替换原内容': '替换原内容', '插入整理版': '插入整理版', '暂无笔记可整理': '暂无笔记可整理', '暂无笔记可校对': '暂无笔记可校对', '未发现明显差异': '未发现明显差异', '和会议原文可能存在差异': '和会议原文可能存在差异', '字幕中说的是：': '字幕中说的是：', '修正': '修正', '保持原文': '保持原文', '查看原会议': '查看原会议', '和之前内容有关': '和之前内容有关', '未找到相关历史内容': '未找到相关历史内容', '已替换': '已替换', '已插入': '已插入', '已加入校对参考': '已加入校对参考', '整理失败，请稍后重试': '整理失败，请稍后重试' });
+Object.assign(catalog.zh.labels, { '整理笔记': '整理笔记', '校对': '校对',          '修正': '修正',        });
 Object.assign(catalog.en.labels, { '整理笔记': 'Organize notes', '校对': 'Fact-check', '关联历史': 'Related history', '整理一下？': 'Organize notes?', '替换原内容': 'Replace', '插入整理版': 'Insert organized version', '暂无笔记可整理': 'No notes to organize yet', '暂无笔记可校对': 'No notes to fact-check yet', '未发现明显差异': 'No clear discrepancy found', '和会议原文可能存在差异': 'Possible discrepancy with the transcript', '字幕中说的是：': 'The transcript says:', '修正': 'Fix', '保持原文': 'Keep as is', '查看原会议': 'Open meeting', '和之前内容有关': 'Related to earlier content', '未找到相关历史内容': 'No related history found', '已替换': 'Replaced', '已插入': 'Inserted', '已加入校对参考': 'Fact-check reference added', '整理失败，请稍后重试': 'Could not organize, please retry' });
 Object.assign(catalog.es.labels, { '整理笔记': 'Organizar notas', '校对': 'Verificar', '关联历史': 'Historial relacionado', '整理一下？': '¿Organizar notas?', '替换原内容': 'Reemplazar', '插入整理版': 'Insertar versión organizada', '暂无笔记可整理': 'Aún no hay notas que organizar', '暂无笔记可校对': 'Aún no hay notas que verificar', '未发现明显差异': 'No se encontraron diferencias claras', '和会议原文可能存在差异': 'Posible diferencia con la transcripción', '字幕中说的是：': 'La transcripción dice:', '修正': 'Corregir', '保持原文': 'Mantener', '查看原会议': 'Abrir reunión', '和之前内容有关': 'Relacionado con contenido anterior', '未找到相关历史内容': 'No se encontró historial relacionado', '已替换': 'Reemplazado', '已插入': 'Insertado', '已加入校对参考': 'Referencia de verificación añadida', '整理失败，请稍后重试': 'No se pudo organizar, inténtalo de nuevo' });
 
 // AI 辅助笔记（阶段 7 问会议 + 搜索 + 快速标记）。
-Object.assign(catalog.zh.labels, { '问 AI': '问 AI', '问当前会议': '问当前会议', '输入你的问题': '输入你的问题', '提问': '提问', '正在思考…': '正在思考…', '未获得回答': '未获得回答', '搜索字幕…': '搜索字幕…', '重点': '重点' });
+Object.assign(catalog.zh.labels, {    '提问': '提问',    '重点': '重点' });
 Object.assign(catalog.en.labels, { '问 AI': 'Ask AI', '问当前会议': 'Ask about this meeting', '输入你的问题': 'Type your question', '提问': 'Ask', '正在思考…': 'Thinking…', '未获得回答': 'No answer returned', '搜索字幕…': 'Search captions…', '重点': 'Highlight' });
 Object.assign(catalog.es.labels, { '问 AI': 'Preguntar a la IA', '问当前会议': 'Preguntar sobre esta reunión', '输入你的问题': 'Escribe tu pregunta', '提问': 'Preguntar', '正在思考…': 'Pensando…', '未获得回答': 'No se obtuvo respuesta', '搜索字幕…': 'Buscar subtítulos…', '重点': 'Destacar' });
 
@@ -903,6 +871,39 @@ Object.assign(catalog.ru.labels, {
   '插入表格': 'Вставить таблицу', '切换到富文本': 'Переключить на форматированный текст', '切换到 Markdown': 'Переключить на Markdown',
   '列 1': 'Столбец 1', '列 2': 'Столбец 2', '内容': 'Содержимое', '重点：': 'Важно: ', '原始转写': 'Исходная расшифровка',
 });
+// 表格行列选择器与录制暂停状态（发版前补齐 8 语种，避免非中文用户看到中文）。
+Object.assign(catalog.zh.labels, {
+  '列 {n}': '列 {n}', '选择行列数': '选择行列数', '行数': '行数', '列数': '列数', '插入': '插入',
+  '已暂停': '已暂停',
+});
+Object.assign(catalog.en.labels, {
+  '列 {n}': 'Column {n}', '选择行列数': 'Choose table size', '行数': 'Rows', '列数': 'Columns', '插入': 'Insert',
+  '已暂停': 'Paused',
+});
+Object.assign(catalog.es.labels, {
+  '列 {n}': 'Columna {n}', '选择行列数': 'Elegir tamaño de tabla', '行数': 'Filas', '列数': 'Columnas', '插入': 'Insertar',
+  '已暂停': 'En pausa',
+});
+Object.assign(catalog.ja.labels, {
+  '列 {n}': '列 {n}', '选择行列数': '表のサイズを選択', '行数': '行数', '列数': '列数', '插入': '挿入',
+  '已暂停': '一時停止中',
+});
+Object.assign(catalog.ko.labels, {
+  '列 {n}': '열 {n}', '选择行列数': '표 크기 선택', '行数': '행 수', '列数': '열 수', '插入': '삽입',
+  '已暂停': '일시정지됨',
+});
+Object.assign(catalog.fr.labels, {
+  '列 {n}': 'Colonne {n}', '选择行列数': 'Choisir la taille du tableau', '行数': 'Lignes', '列数': 'Colonnes', '插入': 'Insérer',
+  '已暂停': 'En pause',
+});
+Object.assign(catalog.de.labels, {
+  '列 {n}': 'Spalte {n}', '选择行列数': 'Tabellengröße wählen', '行数': 'Zeilen', '列数': 'Spalten', '插入': 'Einfügen',
+  '已暂停': 'Pausiert',
+});
+Object.assign(catalog.ru.labels, {
+  '列 {n}': 'Столбец {n}', '选择行列数': 'Выбрать размер таблицы', '行数': 'Строк', '列数': 'Столбцов', '插入': 'Вставить',
+  '已暂停': 'Пауза',
+});
 Object.assign(catalog.zh.labels, { '系统默认': '系统默认', '麦克风设备': '麦克风设备', '刷新设备': '刷新设备' });
 Object.assign(catalog.en.labels, { '系统默认': 'System default', '麦克风设备': 'Microphone device', '刷新设备': 'Refresh devices' });
 Object.assign(catalog.es.labels, { '系统默认': 'Predeterminado', '麦克风设备': 'Dispositivo de micrófono', '刷新设备': 'Actualizar dispositivos' });
@@ -932,7 +933,7 @@ const aiNoteAtomicInstructions = {
   de: 'Jeder text darf nur eine eigenständig überprüfbare Aussage, Entscheidung oder Aktion enthalten; verbinde keine mehreren Ideen. Prüfe zuerst <accepted_claims> und gib dieselbe Aussage nicht erneut aus. Übernimm für evidence ein oder zwei Zeitstempel exakt aus den Klammern in <recent_transcript>. Gib {"suggestions":[{"type":"...","text":"...","evidence":["00:00"],"importance":"high|medium"}]} aus.',
   ru: 'Каждый text должен содержать только одно проверяемое утверждение, решение или действие; не объединяйте несколько идей. Сначала проверьте <accepted_claims> и не повторяйте то же утверждение. В evidence скопируйте один или два времени точно из квадратных скобок в <recent_transcript>. Верните {"suggestions":[{"type":"...","text":"...","evidence":["00:00"],"importance":"high|medium"}]}.',
 };
-Object.entries(aiNotePromptCopy).forEach(([code, copy]) => { copy.instructions += `\n${aiNoteAtomicInstructions[code] || aiNoteAtomicInstructions.en}`; });
+Object.entries(aiNotePromptCopy).forEach(([code, copy]) => { copy.instructions += `\n${aiNoteAtomicInstructions[code] || aiNoteAtomicInstructions.en}\nReturn at most one suggestion.`; });
 
 const storageCleanupCopy = {
   zh: { button: '清理过期本地文件', detail: '移除已下架模型和无对应会议记录的残留文件。', done: '已释放 {size}' },
@@ -953,7 +954,48 @@ const storageCleanupCopy = {
  */
 const whatsNewLog = [
   {
-    version: '1.1.8', date: '2026-09-04', current: true,
+    version: '1.2.0', date: '2026-09-10', current: true,
+    zh: {
+      what: [
+        '识别链路改为「VAD 分段 → 单次高精度识别」：每次说完停顿即出整句字幕，不再有半句闪烁。',
+        '会议详情里的字幕支持逐句修改并保存；暂停录制时界面会明确显示已暂停。',
+        '模型库精简为整句识别、会后精修、语音检测、说话人分离等必需模型。',
+      ],
+      improved: [
+        '字幕按段落聚合：相邻句子攒到约 110 字（上限 150 字）才成一段，短句不再单独成段；段落边界只看真正的长停顿（≥1.2 秒），不按 VAD 端点切。',
+        '同一段样例音频的转写 CPU 时间下降约 74%–82%，进程峰值内存下降约 18%–28%。',
+        '识别、翻译与 AI 笔记共用同一份已确认字幕，会中不再出现重复或互相覆盖的文本。',
+        '进阶设置补齐了会后精修与语音检测的参数说明。',
+      ],
+      fixed: [
+        '修复连续语音切点上的丢字：下一段解码会回看切点前 400 毫秒，被切在词中间的字重新带上完整上下文识别，重复部分按接缝对齐去掉。',
+        '修复连续独白在硬切处丢字、接缝重复与句末标点错位的问题。',
+        '修复段首回补被当成秒导致重复解码整段历史音频的问题。',
+        '修复长会议逐句翻译时反复重写会议记录带来的卡顿。',
+      ],
+    },
+    en: {
+      what: [
+        'Recognition now runs as VAD segmentation → one high-accuracy decode, so a finished sentence appears right after each pause instead of a flickering half-line.',
+        'Subtitles in meeting details can be edited sentence by sentence and saved; pausing a recording is now clearly shown.',
+        'The model library is trimmed to what the pipeline needs: sentence transcription, post-meeting refinement, voice detection, and diarization.',
+      ],
+      improved: [
+        'Captions are now paragraph-sized: neighbouring sentences are coalesced up to roughly 110 Chinese characters (150 max) instead of standing alone one sentence at a time; a paragraph breaks only on a genuine long pause, not on every voice-detection endpoint.',
+        'Transcription CPU time drops by roughly 74–82% and peak memory by 18–28% on the same sample audio.',
+        'Recognition, translation, and AI notes all read the same confirmed captions, so text no longer duplicates or overwrites itself mid-meeting.',
+        'Advanced settings now label the post-meeting refinement and voice-detection options.',
+      ],
+      fixed: [
+        'Fixed characters lost where continuous speech was cut: the next decode now reaches 400 ms back before the cut, so a word split across it is recognised again with full context, and the repeated part is aligned away at the seam.',
+        'Fixed dropped words, duplicated seams, and misplaced sentence punctuation at hard cuts in continuous speech.',
+        'Fixed speech padding being read as seconds, which re-decoded the whole audio history for every segment.',
+        'Fixed repeated meeting writes that made sentence-by-sentence translation stutter on long meetings.',
+      ],
+    },
+  },
+  {
+    version: '1.1.8', date: '2026-09-04',
     zh: { what: ['会议纪要支持一键复制；导出的文件会按内容类型自动命名。'], improved: ['音频采样在连续分块间保持精确时间轴，降低长时间录音出现时间漂移的可能。', '会议纪要会更完整地保留明确提出的后续行动项。'], fixed: ['清理已不再使用的摘要弹窗编辑逻辑，统一使用详情页内联编辑。'] },
     en: { what: ['Meeting notes can now be copied with one click, and exported files are named by content type.'], improved: ['Audio sampling now keeps a precise timeline across consecutive blocks, reducing the risk of drift in long recordings.', 'Meeting notes more reliably retain explicitly stated follow-up actions.'], fixed: ['Removed the unused summary-dialog editor so editing consistently happens inline in meeting details.'] },
   },
@@ -1004,7 +1046,7 @@ Object.assign(catalog.ko.labels, { '笔记已达容量上限，超出部分未�
 Object.assign(catalog.fr.labels, { '笔记已达容量上限，超出部分未保存。': 'Les notes ont atteint la limite de taille ; le reste n’a pas été enregistré.' });
 Object.assign(catalog.de.labels, { '笔记已达容量上限，超出部分未保存。': 'Die Notizen haben das Größenlimit erreicht; der Rest wurde nicht gespeichert.' });
 Object.assign(catalog.ru.labels, { '笔记已达容量上限，超出部分未保存。': 'Заметки достигли лимита размера; остальное не сохранено.' });
-Object.assign(catalog.zh.labels, { '导出会议资料': '导出会议资料', '笔记': '笔记', '会议录音': '会议录音', '混音录音': '混音录音', '传送到应用': '传送到应用', '在文件夹中显示': '在文件夹中显示', '暂无笔记可导出': '暂无笔记可导出', '查找': '查找', '替换为': '替换为', '上一个': '上一个', '下一个': '下一个', '全部替换': '全部替换' });
+Object.assign(catalog.zh.labels, {  '笔记': '笔记', '会议录音': '会议录音',   '在文件夹中显示': '在文件夹中显示',  '查找': '查找', '替换为': '替换为', '上一个': '上一个', '下一个': '下一个', '全部替换': '全部替换' });
 Object.assign(catalog.en.labels, { '导出会议资料': 'Export meeting files', '笔记': 'Notes', '会议录音': 'Meeting recording', '混音录音': 'Mixed recording', '传送到应用': 'Send to app', '在文件夹中显示': 'Show in folder', '暂无笔记可导出': 'No notes to export', '查找': 'Find', '替换为': 'Replace with', '上一个': 'Previous', '下一个': 'Next', '全部替换': 'Replace all' });
 Object.assign(catalog.es.labels, { '导出会议资料': 'Exportar archivos de reunión', '笔记': 'Notas', '会议录音': 'Grabación de reunión', '混音录音': 'Grabación mezclada', '传送到应用': 'Enviar a una app', '在文件夹中显示': 'Mostrar en carpeta', '暂无笔记可导出': 'No hay notas para exportar', '查找': 'Buscar', '替换为': 'Reemplazar por', '上一个': 'Anterior', '下一个': 'Siguiente', '全部替换': 'Reemplazar todo' });
 Object.assign(catalog.ja.labels, { '导出会议资料': '会議ファイルを書き出す', '笔记': 'メモ', '会议录音': '会議録音', '混音录音': 'ミックス録音', '传送到应用': 'アプリに送る', '在文件夹中显示': 'フォルダに表示', '暂无笔记可导出': '書き出すメモがありません', '查找': '検索', '替换为': '置換後', '上一个': '前へ', '下一个': '次へ', '全部替换': 'すべて置換' });
@@ -1137,7 +1179,7 @@ const exportHubCopy = {
 
 // 会后精修菜单里的「开始精修」文案。
 Object.entries({
-  zh: { '开始精修': '开始精修', '录制方式': '录制方式', '麦克风设备': '麦克风设备', '自动（记住上次）': '自动（记住上次）', '仅麦克风': '仅麦克风', '仅系统音频': '仅系统音频', '麦克风 + 系统音频': '麦克风 + 系统音频', '适合线下会议场景': '适合线下会议场景', '适合网课、视频场景': '适合网课、视频场景', '适合线上会议场景': '适合线上会议场景' },
+  zh: { '开始精修': '开始精修',  '麦克风设备': '麦克风设备', '自动（记住上次）': '自动（记住上次）', '仅麦克风': '仅麦克风', '仅系统音频': '仅系统音频', '麦克风 + 系统音频': '麦克风 + 系统音频', '适合线下会议场景': '适合线下会议场景', '适合网课、视频场景': '适合网课、视频场景', '适合线上会议场景': '适合线上会议场景' },
   en: { '开始精修': 'Start refinement', '录制方式': 'Recording mode', '麦克风设备': 'Microphone', '自动（记住上次）': 'Auto (remember last)', '仅麦克风': 'Microphone only', '仅系统音频': 'System audio only', '麦克风 + 系统音频': 'Microphone + system audio', '适合线下会议场景': 'For in-person meetings', '适合网课、视频场景': 'For classes and video', '适合线上会议场景': 'For online meetings' },
   es: { '开始精修': 'Iniciar refinamiento', '录制方式': 'Modo de grabación', '麦克风设备': 'Micrófono', '自动（记住上次）': 'Auto (recordar último)', '仅麦克风': 'Solo micrófono', '仅系统音频': 'Solo audio del sistema', '麦克风 + 系统音频': 'Micrófono + audio del sistema', '适合线下会议场景': 'Para reuniones presenciales', '适合网课、视频场景': 'Para clases y vídeo', '适合线上会议场景': 'Para reuniones en línea' },
   ja: { '开始精修': '精修を開始', '录制方式': '録音モード', '麦克风设备': 'マイク', '自动（记住上次）': '自動（前回を記憶）', '仅麦克风': 'マイクのみ', '仅系统音频': 'システム音声のみ', '麦克风 + 系统音频': 'マイク + システム音声', '适合线下会议场景': '対面会議向け', '适合网课、视频场景': '授業・動画向け', '适合线上会议场景': 'オンライン会議向け' },
@@ -1158,5 +1200,55 @@ Object.entries({
   ru: { '录制来源': 'Источники записи', '采集模式': 'Режим захвата', '沿用上次成功录制的方式': 'Использовать последний успешный режим', '未启用': 'Не включено' },
 }).forEach(([code, labels]) => { Object.assign(catalog[code].labels, labels); });
 
-window.BreviaLocaleData = { catalog, appCopy, aiNotePromptCopy, storageCleanupCopy, exportHubCopy, refinedModelOptionTags, streamingModelOptionTags, whatsNewLog };
+const removedSpeechModels = new Set(["Streaming Zipformer Chinese XLarge", "X-ASR Streaming Chinese and English (480ms)", "Streaming Zipformer English", "Streaming Zipformer Korean", "Streaming Zipformer French", "Nemotron 3.5 ASR Streaming 0.6B (560ms)", "English Punctuation and Casing", "Chinese and English Punctuation", "中英文标点恢复", "Puntuación chino-inglés"]);
+Object.values(appCopy.modalCopy).forEach((copy) => {
+  copy.models.items = copy.models.items.filter((item) => !removedSpeechModels.has(item[1]));
+});
+
+
+catalog["en"].labels["标准模式：VAD 分句后统一识别，并开启语音降噪。"] = "Standard: transcribes complete speech segments with noise reduction.";
+catalog["es"].labels["标准模式：VAD 分句后统一识别，并开启语音降噪。"] = "Estándar: transcribe segmentos completos con reducción de ruido.";
+catalog["ja"].labels["标准模式：VAD 分句后统一识别，并开启语音降噪。"] = "標準：発話区間ごとに文字起こしし、ノイズを低減します。";
+catalog["ko"].labels["标准模式：VAD 分句后统一识别，并开启语音降噪。"] = "표준: 완성된 발화 구간을 전사하고 잡음을 줄입니다.";
+catalog["fr"].labels["标准模式：VAD 分句后统一识别，并开启语音降噪。"] = "Standard : transcrit les segments complets avec réduction du bruit.";
+catalog["de"].labels["标准模式：VAD 分句后统一识别，并开启语音降噪。"] = "Standard: Transkribiert vollständige Sprachabschnitte mit Rauschunterdrückung.";
+catalog["ru"].labels["标准模式：VAD 分句后统一识别，并开启语音降噪。"] = "Стандартный: расшифровка завершённых фрагментов с шумоподавлением.";
+catalog["en"].labels["关闭语音降噪，保留整句识别；会后精修不区分不同发言者。"] = "Disables noise reduction and keeps sentence transcription; post-meeting refinement skips speaker separation.";
+catalog["es"].labels["关闭语音降噪，保留整句识别；会后精修不区分不同发言者。"] = "Desactiva la reducción de ruido y mantiene la transcripción por frases; el refinamiento posterior omite separar hablantes.";
+catalog["ja"].labels["关闭语音降噪，保留整句识别；会后精修不区分不同发言者。"] = "ノイズ低減を無効にし、発話ごとの文字起こしを続けます。会議後の処理では話者を分離しません。";
+catalog["ko"].labels["关闭语音降噪，保留整句识别；会后精修不区分不同发言者。"] = "잡음 제거를 끄고 문장 전사를 유지합니다. 회의 후 정제에서는 화자를 구분하지 않습니다.";
+catalog["fr"].labels["关闭语音降噪，保留整句识别；会后精修不区分不同发言者。"] = "Désactive la réduction du bruit et conserve la transcription par phrases ; l’affinage ignore la séparation des locuteurs.";
+catalog["de"].labels["关闭语音降噪，保留整句识别；会后精修不区分不同发言者。"] = "Deaktiviert die Rauschunterdrückung; Satztranskription bleibt aktiv, die Nachbearbeitung trennt keine Sprecher.";
+catalog["ru"].labels["关闭语音降噪，保留整句识别；会后精修不区分不同发言者。"] = "Отключает шумоподавление, сохраняя расшифровку фраз; последующая обработка не разделяет говорящих.";
+
+Object.entries({
+  zh: '多语言混说',
+  en: 'Mixed languages',
+  es: 'Idiomas mixtos',
+  ja: '複数言語',
+  ko: '혼합 언어',
+  fr: 'Langues mixtes',
+  de: 'Gemischte Sprachen',
+  ru: 'Смешанные языки',
+}).forEach(([code, label]) => { catalog[code].labels['多语言混说'] = label; });
+
+Object.entries({
+  zh: ['翻译', '正在翻译字幕'], en: ['Translate', 'Translating subtitles'], es: ['Traducir', 'Traduciendo subtítulos'],
+  ja: ['翻訳', '字幕を翻訳中'], ko: ['번역', '자막 번역 중'], fr: ['Traduire', 'Traduction des sous-titres'],
+  de: ['Übersetzen', 'Untertitel werden übersetzt'], ru: ['Перевод', 'Перевод субтитров'],
+}).forEach(([code, [translate, translating]]) => Object.assign(catalog[code].labels, { '翻译': translate, '正在翻译字幕': translating }));
+
+// 字幕逐句编辑（详情页「字幕」tab 的铅笔按钮）。
+Object.entries({
+  zh: { '字幕文本': '字幕文本', '字幕已保存': '字幕已保存', '字幕内容不能为空': '字幕内容不能为空', '保存失败': '保存失败' },
+  en: { '字幕文本': 'Subtitle text', '字幕已保存': 'Subtitles saved', '字幕内容不能为空': 'Subtitle text cannot be empty', '保存失败': 'Could not save' },
+  es: { '字幕文本': 'Texto del subtítulo', '字幕已保存': 'Subtítulos guardados', '字幕内容不能为空': 'El texto del subtítulo no puede estar vacío', '保存失败': 'No se pudo guardar' },
+  ja: { '字幕文本': '字幕テキスト', '字幕已保存': '字幕を保存しました', '字幕内容不能为空': '字幕テキストを空にはできません', '保存失败': '保存に失敗しました' },
+  ko: { '字幕文本': '자막 텍스트', '字幕已保存': '자막을 저장했습니다', '字幕内容不能为空': '자막 내용은 비워 둘 수 없습니다', '保存失败': '저장하지 못했습니다' },
+  fr: { '字幕文本': 'Texte du sous-titre', '字幕已保存': 'Sous-titres enregistrés', '字幕内容不能为空': 'Le texte du sous-titre ne peut pas être vide', '保存失败': 'Échec de l’enregistrement' },
+  de: { '字幕文本': 'Untertiteltext', '字幕已保存': 'Untertitel gespeichert', '字幕内容不能为空': 'Untertiteltext darf nicht leer sein', '保存失败': 'Speichern fehlgeschlagen' },
+  ru: { '字幕文本': 'Текст субтитра', '字幕已保存': 'Субтитры сохранены', '字幕内容不能为空': 'Текст субтитра не может быть пустым', '保存失败': 'Не удалось сохранить' },
+}).forEach(([code, labels]) => Object.assign(catalog[code].labels, labels));
+
+window.BreviaLocaleData = { catalog, appCopy, aiNotePromptCopy, storageCleanupCopy, exportHubCopy, refinedModelOptionTags, whatsNewLog };
 })();

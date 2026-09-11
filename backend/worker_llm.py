@@ -438,7 +438,10 @@ class LLMWorkerMixin:
         return merge_summary_prompt([blocks], title, language), truncated
 
     def translate(self, payload):
-        """翻译一个已落库段落，并把结果写回所有同 ID 版本。
+        """翻译一段字幕，并把译文写在同 ID 的所有版本上。
+
+        段落在渲染器侧可能还没落库（final 事件先到）：此时用命令随带的段落内容建行，
+        保证这句译文不会因为竞态被丢掉。
 
         Returns:
             可直接作为 ``translation.ready`` 事件发送的字典。
@@ -453,16 +456,10 @@ class LLMWorkerMixin:
         if not payload["consent"]:
             raise ValueError("Transcript sharing was not confirmed")
         meeting = self.store.get_meeting(payload["meeting_id"])
-        segment = next(
-            (
-                item
-                for item in meeting["segments"]
-                if item["id"] == payload["segment_id"]
-            ),
-            None,
-        )
+        stored_segment = next((item for item in meeting["segments"] if item["id"] == payload["segment_id"]), None)
+        segment = {"id": payload["segment_id"], **payload["segment"]} if payload.get("segment") else stored_segment
         # 最终事件可能在重叠任务提交其段落之前到达渲染器；保留该事件而不是丢弃翻译。
-        if not segment and payload.get("segment"):
+        if not stored_segment and payload.get("segment"):
             self.store.save_segment(
                 {
                     "meeting_id": meeting["id"],
@@ -471,14 +468,8 @@ class LLMWorkerMixin:
                 }
             )
             meeting = self.store.get_meeting(meeting["id"])
-            segment = next(
-                (
-                    item
-                    for item in meeting["segments"]
-                    if item["id"] == payload["segment_id"]
-                ),
-                None,
-            )
+            if not segment:
+                segment = next((item for item in meeting["segments"] if item["id"] == payload["segment_id"]), None)
         if not segment:
             raise ValueError("Transcript segment not found")
         target = LANGUAGE_NAMES.get(payload["target_language"], payload["target_language"])
@@ -496,6 +487,10 @@ class LLMWorkerMixin:
             stop_tokens=["<|im_end|>", "<|endoftext|>"],
         ).strip()
         self.store.save_translation(meeting["id"], segment["id"], translation)
+        # 一段会议可能被逐句翻成上百条：只在目标语言变化时写一次会议记录，
+        # 否则每句都会触发一次 UPDATE + 整场逐字稿重读。
+        if meeting.get("target_language") != payload["target_language"]:
+            self.store.update_meeting(meeting["id"], {"target_language": payload["target_language"]})
         event = {
             "meeting_id": meeting["id"],
             "segment_id": segment["id"],

@@ -1,0 +1,47 @@
+{
+  "platform": "macOS-26.6.2-arm64-arm-64bit",
+  "python": "3.12.7",
+  "language": "zh",
+  "model": "funasr-nano-int8",
+  "legacy": true,
+  "gaps": false,
+  "silence": false,
+  "paced": true,
+  "max_speech": null,
+  "audio_sha256": "2d8927df539ec0925bf23026c9b0c842fb83201fb8dec7dcd10d595d8109ea04",
+  "source_seconds": 14.582125,
+  "fed_seconds": 16.582125,
+  "load_seconds": 6.116075916972477,
+  "wall_seconds": 17.212723749980796,
+  "cpu_seconds": 15.791077000000001,
+  "cpu_per_source_second": 1.0829064351046231,
+  "peak_rss_mb": 3078.609375,
+  "stop_seconds": 0.22528670798055828,
+  "audio_call_p95_ms": 46.05458403239027,
+  "events": {
+    "transcript.partial": 82,
+    "transcript.final": 1,
+    "transcript.refined": 1,
+    "worker.warning": 0
+  },
+  "error_metric": "CER",
+  "error_rate": 0.046153846153846156,
+  "text": "给大家早上好，今天我们确认新用户引导的上限范围。设计稿已经完成，开发团队周四可以交付测试版本。好的，那九周五前完成内部验收，下周一开始小范围发布",
+  "emissions": [
+    {
+      "type": "transcript.final",
+      "wall_seconds": 15.58051424997393,
+      "start_ms": 0,
+      "end_ms": 15526,
+      "text": "给大家早上好，今天我们确认新用户引导的上限范围设计翰已经完成开发团队，周四可以叫复测试版本。好的，那九州五千完成内部验收，下周一开始小范围发布。"
+    },
+    {
+      "type": "transcript.refined",
+      "wall_seconds": 16.9873956249794,
+      "start_ms": 0,
+      "end_ms": 15526,
+      "text": "给大家早上好，今天我们确认新用户引导的上限范围。设计稿已经完成，开发团队周四可以交付测试版本。好的，那九周五前完成内部验收，下周一开始小范围发布"
+    }
+  ],
+  "warnings": []
+}

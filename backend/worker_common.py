@@ -6,6 +6,17 @@ from functools import wraps
 
 SCHEMA_VERSION = 1
 
+# 能承担「多语言混说」的模型类型：只有这两类按整段音频判断语言，逐语言微调的模型
+# 在混说输入上会串语言。整句识别的语言校验与精修选模型共用同一判断。
+MULTILINGUAL_MODEL_KINDS = {"qwen3", "whisper"}
+
+
+def model_supports_language(model, language):
+    """模型能否承担该语言的整句识别。"""
+    if language == "auto":
+        return model["kind"] in MULTILINGUAL_MODEL_KINDS
+    return bool({language, "all", "multilingual"} & set(model.get("languages", [])))
+
 
 class TaskCancelled(Exception):
     """任务在安全检查点收到取消请求。"""

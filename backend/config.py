@@ -10,6 +10,14 @@ DEFAULT_SETTINGS = json.loads(
 )
 SETTINGS = json.loads(json.dumps(DEFAULT_SETTINGS))
 SPEAKER_EMBEDDING_MODEL_ID = "eres2net-base-3dspeaker-zh"
+# 随安装包出厂的基础模型（VAD、说话人分割、声纹嵌入）；整句识别模型由首次启动
+# 引导按语言下载。这里的 id 必须存在于 models.json，否则打包会在下载步骤直接失败
+# （test_bundled_models_exist_in_the_catalog 守住这一点）。
+BUNDLED_MODEL_IDS = (
+    "silero-vad",
+    "pyannote-segmentation-3.0",
+    SPEAKER_EMBEDDING_MODEL_ID,
+)
 
 
 def validate_num_speakers(value):
@@ -38,14 +46,28 @@ def _deep_update(base, override):
     return base
 
 
+def _prune_to_template(value, template):
+    """递归丢弃模板里已不存在的键。
+
+    用户覆盖文件会深合并进默认模板；模板中下架过的键若留在值里，末端的键集校验会
+    失败并让 worker 无法启动。这里统一以模板为准，删掉任何多余的键，因此以后从
+    settings.json 移除配置项不需要再维护一份「已下架键」清单。
+    """
+    for key in list(value):
+        if key not in template:
+            value.pop(key)
+        elif isinstance(value[key], dict) and isinstance(template[key], dict):
+            _prune_to_template(value[key], template[key])
+    return value
+
+
 def runtime_settings(root):
     """加载用户本地覆盖项，保留模块共享的 SETTINGS 引用。"""
     path = Path(root) / "advanced-settings.json"
     value = json.loads(json.dumps(DEFAULT_SETTINGS))
     if path.is_file():
         _deep_update(value, json.loads(path.read_text(encoding="utf-8")))
-    value.get("diarization", {}).pop("embedding_model_id", None)
-    value.get("live_asr", {}).pop("always_record_system_audio", None)
+    _prune_to_template(value, DEFAULT_SETTINGS)
     _validate(value, DEFAULT_SETTINGS)
     SETTINGS.clear()
     SETTINGS.update(value)
@@ -54,9 +76,7 @@ def runtime_settings(root):
 
 def save_runtime_settings(root, value):
     """保存用户本地覆盖配置到 advanced-settings.json。"""
-    value = json.loads(json.dumps(value))
-    value.get("diarization", {}).pop("embedding_model_id", None)
-    value.get("live_asr", {}).pop("always_record_system_audio", None)
+    value = _prune_to_template(json.loads(json.dumps(value)), DEFAULT_SETTINGS)
     _validate(value, DEFAULT_SETTINGS)
     path = Path(root) / "advanced-settings.json"
     path.write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -105,9 +125,7 @@ def _validate(value, template):
                 in {
                     "sample_rate",
                     "chunk_seconds",
-                    "maximum_utterance_seconds",
-                    "live_pin_seconds",
-                    "live_pin_max_seconds",
+                    "max_speech_duration",
                     "refined_window_seconds",
                     "boundary_tail_seconds",
                     "microphone_max_gain",
@@ -126,14 +144,11 @@ def _validate(value, template):
             if (
                 key
                 in {
-                    "endpoint_rule1_silence",
-                    "endpoint_rule2_silence",
                     "minimum_embedding_seconds",
                     "min_duration_on",
                     "min_duration_off",
                     "min_silence_duration",
                     "min_speech_duration",
-                    "max_speech_duration",
                     "deleted_retention_days",
                     "diarization_overlap_ms",
                     "min_auto_speaker_duration_ms",

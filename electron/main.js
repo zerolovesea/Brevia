@@ -93,7 +93,7 @@ const workerEvent = z.object({
     'meeting.stopped', 'model.progress', 'model.status', 'refinement.cancelled', 'refinement.progress',
     'refinement.ready', 'refinement.started', 'speaker-profile.deleted', 'speaker-profile.updated',
     'summary.progress', 'summary.ready', 'summary.started', 'task.status',
-    'transcript.discarded', 'transcript.final', 'transcript.partial', 'transcript.refined', 'transcript.settled',
+    'transcript.discarded', 'transcript.draft', 'transcript.final', 'transcript.partial', 'transcript.refined', 'transcript.settled',
     'translation.ready', 'worker.error', 'worker.warning',
     'ai-note.suggestion', 'ai-note.evidence', 'ai-note.analyzing', 'live.performance',
   ]),
@@ -103,9 +103,9 @@ const workerEvent = z.object({
 const workerMessage = z.union([workerResponse, workerEvent]);
 const meetingStart = z.object({
   title: z.string().trim().min(1).max(120),
-  language: z.string().min(2).max(16),
-  target_language: z.string().max(16).nullable().optional(),
-  streaming_model_id: z.string().min(1),
+  // 语言由后端按空值兜底成 auto；这里不接受 ''/null，避免两端对同一个语义有两种判断。
+  language: z.string().min(2).max(16).optional(),
+  target_language: z.string().min(2).max(16).nullable().optional(),
   refined_model_id: z.string().min(1),
   speaker_segmentation_model_id: z.string().min(1).optional(),
   vad_model_id: z.string().min(1).optional(),
@@ -134,8 +134,7 @@ const meetingUpdates = z.object({
 }).partial();
 const meetingReconfigure = id.extend({
   language: z.string().min(2).max(16).optional(),
-  target_language: z.string().max(16).nullable().optional(),
-  streaming_model_id: z.string().min(1).max(128).optional(),
+  target_language: z.string().min(2).max(16).nullable().optional(),
   refined_model_id: z.string().min(1).max(128).optional(),
   power_saving: z.boolean().optional(),
 });
@@ -479,6 +478,8 @@ function handleModelRequirement(channel, schema, type = channel) {
 
 function handleRefinement(payload) {
   const value = id.extend({
+    language: z.string().min(2).max(16).optional(),
+    target_language: z.string().min(2).max(16).nullable().optional(),
     refined_model_id: z.string().min(1).optional(),
     num_speakers: z.number().int().refine((count) => count === -1 || count >= 1).optional(),
     cluster_threshold: z.number().min(0).max(2).optional(),
@@ -505,17 +506,17 @@ function handleRefinement(payload) {
 async function runRefinementBenchmark() {
   const source = commandArgument('--wav');
   const refinedModel = commandArgument('--refined-model', 'funasr-nano-int8');
+  const language = commandArgument('--language', 'zh');
   if (!source) throw new Error('--bench-refinement requires --wav');
   const imported = await worker.request('meeting.import', {
     title: '[benchmark]',
-    language: commandArgument('--language', 'zh'),
-    streaming_model_id: commandArgument('--streaming-model', 'zipformer-en-streaming-int8'),
+    language,
     refined_model_id: refinedModel,
     speaker_segmentation_model_id: commandArgument('--segmentation-model', 'pyannote-segmentation-3.0'),
     path: source,
   });
   const started = performance.now();
-  await handleRefinement({ meeting_id: imported.id, refined_model_id: refinedModel });
+  await handleRefinement({ meeting_id: imported.id, refined_model_id: refinedModel, language });
   const elapsedSeconds = (performance.now() - started) / 1000;
   const audioSeconds = imported.duration_ms / 1000;
   console.log(JSON.stringify({
@@ -858,7 +859,21 @@ function registerIpc() {
       throw error;
     }
   });
-  handle('segment.speaker', id.extend({ segment_id: z.string().min(1), name: z.string().trim().min(1).max(32), enroll: z.boolean().optional() }), 'segment.speaker');
+  handle('segment.speaker', id.extend({ segment_id: z.string().min(1), name: z.string().trim().min(1).max(32), enroll: z.boolean().optional() }));
+  // 上限同时受 worker 单条命令 1 MiB 限制约束：非 ASCII 在 IPC 中按 \uXXXX 展开成
+  // 6 倍长度，因此按「总字符数」而不是「条数」设闸，避免整批命令被 worker 拒绝。
+  handle(
+    'segment.text',
+    id.extend({
+      segments: z
+        .array(z.object({ segment_id: z.string().min(1), text: z.string().max(4000) }))
+        .min(1)
+        .max(500)
+        .refine((edits) => edits.reduce((total, edit) => total + edit.text.length, 0) <= 60000, {
+          message: 'Too many subtitle edits in one save',
+        }),
+    }),
+  );
   ipcMain.handle('segment.speaker-profile-sample', async (_, payload) => {
     const value = id.extend({ segment_id: z.string().min(1), profile_id: z.string().uuid() }).parse(payload);
     return worker.request('segment.speaker-profile-sample', value).finally(() => worker.recycle());
@@ -914,7 +929,7 @@ function registerIpc() {
         text: z.string().trim().min(1), start_ms: z.number().nonnegative(), end_ms: z.number().nonnegative(),
         speaker: z.string().trim().min(1).max(128), track: z.string().trim().min(1).max(32), revision: z.number().int().nonnegative(),
       }).optional(),
-      target_language: z.string().min(2).max(32),
+      target_language: z.string().min(2).max(16),
       consent: z.literal(true),
     }).parse(payload);
     return worker.request('translation.generate', value);

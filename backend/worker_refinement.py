@@ -12,6 +12,7 @@ from .asr import (
     OfflineDiarizer,
     RefinedASR,
     SpeakerTracker,
+    recover_speech_gaps,
 )
 from .audio_io import (
     ensure_wav_duration,
@@ -19,11 +20,21 @@ from .audio_io import (
     read_mono_wav_window,
 )
 from .config import SETTINGS, SPEAKER_EMBEDDING_MODEL_ID, validate_num_speakers
-from .worker_common import TaskCancelled, managed_task, require
+from .worker_common import TaskCancelled, managed_task, model_supports_language, require
 
 # 该值在 diarization 子进程内使用；子进程不加载用户覆盖，故经 payload 传入，
 # 这里仅作缺失时的回退默认值。较长窗口让声纹更稳定，避免把同一个人聚成多人。
 EMBEDDING_WINDOW_MS = 15_000
+
+# 说话人轮次整理参数。「自动」（多语言混说）没有可靠的语法停顿，只能靠更长的
+# 时长门槛与静音吸收区间把碎句并回同一说话人；单语会议可用更紧的值保留短应答。
+AUTO_TURN_MINIMUM_MS = 2500
+AUTO_TURN_ABSORB_GAP_MS = 1000
+TURN_MINIMUM_MS = 1000
+TURN_ABSORB_GAP_MS = 200
+# 混说时把切分窗口按较宽松的间隔合并：同一段话常被切成多个短窗，合并后才有
+# 足够的上下文供识别模型判断语言。单语不需要合并。
+AUTO_WINDOW_MERGE_GAP_MS = 2000
 
 _CN_NUM = {
     "零": 0, "〇": 0, "一": 1, "二": 2, "两": 2, "三": 3, "四": 4,
@@ -271,14 +282,28 @@ class RefinementWorkerMixin:
         meeting = self.store.get_meeting(payload["meeting_id"])
         if meeting["status"] == "recording":
             raise ValueError("Stop the meeting before refinement")
-        refined_model_id = payload.get(
-            "refined_model_id", meeting["refined_model_id"]
-        )
+        # 未指定语言时沿用会议已记录的语言，而不是退回「多语言混说」：后者会把识别
+        # 模型换成 Qwen3-ASR（可能没装），并丢掉该语言的 VAD 参数与识别语言提示。
+        language = payload.get("language") or meeting["language"]
+        if "target_language" in payload:
+            meeting = self.store.update_meeting(
+                meeting["id"], {"target_language": payload["target_language"]}
+            )
+        refined_model_id = payload.get("refined_model_id") or meeting["refined_model_id"]
+        # 存量模型已下架时换成默认模型；调用方没点名模型、而存量模型带不动这门语言时
+        # 同样换成本语言的默认模型。显式点名的不兼容模型交给 _sentence_payload 报错。
+        if not self.models.is_known(refined_model_id) or (
+            "refined_model_id" not in payload
+            and not model_supports_language(self.models.get(refined_model_id), language)
+        ):
+            refined_model_id = self._default_refined_model(language)
+        self._sentence_payload({"language": language, "refined_model_id": refined_model_id})
         if refined_model_id != meeting["refined_model_id"]:
             self.models.get(refined_model_id)
             meeting = self.store.update_meeting(
                 meeting["id"], {"refined_model_id": refined_model_id}
             )
+        meeting = {**meeting, "language": language}
         num_speakers = int(
             payload.get(
                 "num_speakers",
@@ -323,12 +348,7 @@ class RefinementWorkerMixin:
             meeting.get("vad_model_id") or "silero-vad",
         ]
         if required_diarized:
-            required_models.extend(
-                [
-                    meeting.get("speaker_segmentation_model_id"),
-                    SPEAKER_EMBEDDING_MODEL_ID,
-                ]
-            )
+            required_models.extend([meeting.get("speaker_segmentation_model_id"), SPEAKER_EMBEDDING_MODEL_ID])
         missing_models = [
             model_id
             for model_id in required_models
@@ -345,9 +365,9 @@ class RefinementWorkerMixin:
             or SETTINGS["diarization"]["segmentation_model_id"]
         )
         embedding_id = SPEAKER_EMBEDDING_MODEL_ID
-        speaker_models_ready = self.models.is_ready(
-            segmentation_id
-        ) and self.models.is_ready(embedding_id)
+        speaker_models_ready = self._speaker_models_ready(
+            refined_model_id, segmentation_id, embedding_id
+        )
         diarized_tracks = set(required_diarized)
         if speaker_models_ready and not efficiency_import_flat:
             diarized_tracks |= set(tracks)
@@ -437,6 +457,7 @@ class RefinementWorkerMixin:
                 turns_by_track[track],
                 sources[track]["duration_ms"],
                 window_size,
+                merge_gap_ms=AUTO_WINDOW_MERGE_GAP_MS if meeting.get("language") == "auto" else 0,
             )
             for track in tracks
         }
@@ -568,6 +589,16 @@ class RefinementWorkerMixin:
             key=lambda item: (item["track"], item["start_ms"], item["end_ms"])
         )
         refined_segments = self._assemble_utterances(refined_segments)
+        # 识别窗口和展示段落分开：保留多句上下文，最终按翻译所需长度切段。
+        paragraphs = []
+        for event in refined_segments:
+            for paragraph in self._sentence_subtitles(event, event["text"]):
+                paragraph["word_timestamps"] = [
+                    word for word in event.get("word_timestamps", [])
+                    if paragraph["start_ms"] <= word["start_ms"] < paragraph["end_ms"]
+                ]
+                paragraphs.append(paragraph)
+        refined_segments = paragraphs
         version, revision = self.store.next_refinement_version(meeting["id"])
         refined_segments = self.store.replace_segments(
             meeting["id"], refined_segments, version, revision
@@ -648,6 +679,8 @@ class RefinementWorkerMixin:
                     control,
                 )
             else:
+                if samples is None:
+                    samples, sample_rate = read_mono_wav(path)
                 # 短音频直接处理；长音频由短生命子进程回收 Sherpa 原生内存。
                 cursor = 0
                 for turn in speech:
@@ -678,7 +711,7 @@ class RefinementWorkerMixin:
             if speech and not turns:
                 # diarizer 失败时 fallback 到单说话人
                 turns = [{**turn, "speaker": "spk-1"} for turn in speech]
-            if duration_ms <= _refinement("diarization_chunk_ms") and turns:
+            if turns and duration_ms <= _refinement("diarization_chunk_ms"):
                 try:
                     tracker = SpeakerTracker(
                         self.models, threads=self.models.device()["threads"]
@@ -713,11 +746,89 @@ class RefinementWorkerMixin:
             "sample_rate": sample_rate,
             "duration_ms": duration_ms,
         }
-        stable_turns = self._stabilize_speaker_turns(turns)
+        # ponytail: 短应答可能归入邻近说话人；精确归属需词级对齐，原始 turns 仍保留。
+        auto_language = meeting.get("language") == "auto"
+        stable_turns = self._stabilize_speaker_turns(
+            turns,
+            minimum_ms=AUTO_TURN_MINIMUM_MS if auto_language else TURN_MINIMUM_MS,
+            absorb_gap_ms=AUTO_TURN_ABSORB_GAP_MS if auto_language else TURN_ABSORB_GAP_MS,
+        )
         stable_turns = self._deoverlap_speaker_turns(stable_turns)
+        # De-overlap can itself leave a few-millisecond tail at a speaker
+        # boundary.  Never send that fragment to ASR: decoder loops turn it
+        # into hundreds of copies of one token (e.g. "tenemos").
+        stable_turns = self._stabilize_speaker_turns(
+            stable_turns,
+            minimum_ms=AUTO_TURN_MINIMUM_MS if auto_language else TURN_MINIMUM_MS,
+            absorb_gap_ms=AUTO_TURN_ABSORB_GAP_MS if auto_language else TURN_ABSORB_GAP_MS,
+        )
+        # 检测器整段漏判的安静语音（音乐里的轻声、电话音）不在 stable_turns 里，
+        # 但会后精修是最终逐字稿，不能让这段内容无声消失。作为独立窗口补进去，
+        # 放在稳定化之后：这些窗口不能被吸收进相邻的正常音量段落。
+        quiet_turns = self._recover_quiet_turns(stable_turns, path, samples, sample_rate)
+        if quiet_turns:
+            turns = sorted([*turns, *quiet_turns], key=lambda turn: (turn["start_ms"], turn["end_ms"]))
+            stable_turns = sorted(
+                [*stable_turns, *quiet_turns], key=lambda turn: (turn["start_ms"], turn["end_ms"])
+            )
         # 精修识别阶段改为逐窗从磁盘读取，这里立即释放整段波形。
         del samples
         return track, source, turns, stable_turns
+
+    def _recover_quiet_turns(self, stable_turns, path, samples, sample_rate):
+        """把检测器漏判的安静语音空洞补成独立的识别窗口。
+
+        这些窗口单独识别、不带上下文（见 :meth:`_decode_range`）：相邻的正常音量语音
+        会把整句话的语言带偏——实测日文台词夹在中文旁白之间会被识别成中文。说话人沿用
+        前面最近的一段；空洞若已被现有段落覆盖则跳过（同一段音频不重复识别）。
+        """
+        settings = SETTINGS.get("live_asr", {})
+        if not stable_turns or not settings.get("quiet_speech_recovery", 1):
+            return []
+        speech = [{"start_ms": turn["start_ms"], "end_ms": turn["end_ms"]} for turn in stable_turns]
+        if samples is not None:
+            def read_window(start_ms, end_ms):
+                return samples[
+                    round(start_ms * sample_rate / 1000) : round(end_ms * sample_rate / 1000)
+                ]
+
+        else:
+            def read_window(start_ms, end_ms):
+                return read_mono_wav_window(path, start_ms, end_ms)[0]
+
+        recovered = recover_speech_gaps(
+            speech,
+            read_window,
+            float(settings.get("quiet_speech_min_seconds", 1.0)),
+            float(settings.get("quiet_speech_max_seconds", 20.0)),
+            float(settings.get("quiet_speech_level_ratio", 0.08)),
+        )
+        turns = []
+        for region in recovered:
+            middle = (region["start_ms"] + region["end_ms"]) // 2
+            if any(turn["start_ms"] <= middle < turn["end_ms"] for turn in stable_turns):
+                continue
+            speaker = next(
+                (turn["speaker"] for turn in reversed(stable_turns) if turn["start_ms"] < region["start_ms"]),
+                stable_turns[0]["speaker"],
+            )
+            turns.append(
+                {
+                    "start_ms": region["start_ms"],
+                    "end_ms": region["end_ms"],
+                    "speaker": speaker,
+                    "_quiet": True,
+                }
+            )
+        return turns
+
+    def _speaker_models_ready(self, refined_model_id, segmentation_id, embedding_id):
+        """判断 sherpa-onnx 离线说话人分离所需的模型是否就绪。"""
+        return all(
+            self.models.is_ready(model_id)
+            for model_id in (segmentation_id, embedding_id)
+            if model_id
+        )
 
     def _diarize_long_track(
         self, path, duration_ms, speech, segmentation_id, threshold, control
@@ -886,17 +997,34 @@ class RefinementWorkerMixin:
         return turns
 
     @staticmethod
-    def _refinement_turns(turns, duration_ms, maximum_ms):
-        """按离线说话人边界拆分精修窗口，且单段不超过模型上限。"""
-        return [
-            {
-                "start_ms": start,
-                "end_ms": min(start + maximum_ms, turn["end_ms"]),
-                "speaker": turn["speaker"],
-            }
-            for turn in turns
-            for start in range(turn["start_ms"], turn["end_ms"], maximum_ms)
-        ]
+    def _refinement_turns(turns, duration_ms, maximum_ms, merge_gap_ms=0):
+        """识别前合并同说话人的短停顿，均分长段，避免留下亚秒尾窗。"""
+        merged = []
+        for turn in turns:
+            if (
+                merged
+                and turn["speaker"] == merged[-1]["speaker"]
+                and 0 <= turn["start_ms"] - merged[-1]["end_ms"] <= merge_gap_ms
+                and not turn.get("_quiet")
+                and not merged[-1].get("_quiet")
+            ):
+                merged[-1]["end_ms"] = max(merged[-1]["end_ms"], turn["end_ms"])
+            else:
+                merged.append(dict(turn))
+        windows = []
+        for turn in merged:
+            start, end = max(0, turn["start_ms"]), min(duration_ms, turn["end_ms"])
+            length = end - start
+            if length <= 0:
+                continue
+            count = (length + maximum_ms - 1) // maximum_ms
+            for index in range(count):
+                windows.append({"start_ms": start + length * index // count,
+                                "end_ms": start + length * (index + 1) // count,
+                                "speaker": turn["speaker"],
+                                # 安静语音兜底窗口要单独识别、不带上下文（见 _decode_range）。
+                                "_quiet": bool(turn.get("_quiet"))})
+        return windows
 
     @staticmethod
     def _assemble_utterances(segments):
@@ -1261,11 +1389,22 @@ class RefinementWorkerMixin:
     def _decode_range(turn, before, after, duration_ms, context_ms=800):
         """为快速语音保留窗口首尾上下文，但不跨越其他说话人。"""
         start_ms, end_ms = turn["start_ms"], turn["end_ms"]
+        if turn.get("_quiet"):
+            # 兜底找回的安静语音不能借用上下文：相邻的正常音量语音会把整句话的语言带偏。
+            context_ms = 0
         decode_start_ms = max(0, start_ms - context_ms)
         decode_end_ms = min(duration_ms, end_ms + context_ms)
-        if before and before["speaker"] != turn["speaker"]:
+
+        def separated(other):
+            return (
+                other["speaker"] != turn["speaker"]
+                or bool(other.get("_quiet"))
+                or bool(turn.get("_quiet"))
+            )
+
+        if before and separated(before):
             decode_start_ms = max(decode_start_ms, min(start_ms, before["end_ms"]))
-        if after and after["speaker"] != turn["speaker"]:
+        if after and separated(after):
             decode_end_ms = min(decode_end_ms, max(end_ms, after["start_ms"]))
         return decode_start_ms, decode_end_ms
 
@@ -1482,7 +1621,7 @@ class RefinementWorkerMixin:
         ].tolist()
 
     @staticmethod
-    def _stabilize_speaker_turns(turns, minimum_ms=1000, merge_gap_ms=600):
+    def _stabilize_speaker_turns(turns, minimum_ms=1000, merge_gap_ms=600, absorb_gap_ms=200):
         """合并同一说话人，并把相邻的亚秒聚类抖动吸收到较长 turn。
 
         ``merge_gap_ms`` 控制同一说话人两段之间可跨越的最大静默，需要在两个
@@ -1551,7 +1690,7 @@ class RefinementWorkerMixin:
                 break
             gap, _, index, neighbor_index = min(candidates)
             turn = stable[index]
-            if gap > 200:
+            if gap > absorb_gap_ms:
                 break
             neighbor = stable[neighbor_index]
             neighbor["start_ms"] = min(neighbor["start_ms"], turn["start_ms"])
@@ -1712,17 +1851,6 @@ class RefinementWorkerMixin:
                 }
             )
         return duplicate
-
-    @staticmethod
-    def _detect_language(text):
-        """根据首段识别文本选择中文或英文流式模型。"""
-        latin = sum(character.isascii() and character.isalpha() for character in text)
-        han = sum("\u4e00" <= character <= "\u9fff" for character in text)
-        if latin >= 12 and latin > han * 2:
-            return "en"
-        if han:
-            return "zh"
-        return None
 
     @staticmethod
     def _speaker_for(start_ms, end_ms, intervals):

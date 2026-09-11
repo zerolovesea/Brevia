@@ -12,7 +12,6 @@ import json
 import os
 import shutil
 import subprocess
-import sys
 import tempfile
 import time
 import wave
@@ -139,7 +138,6 @@ def benchmark_python_pipeline(path, model_id, language, models_root, data_root):
         meeting = worker.store.create_meeting({
             "title": "[benchmark]",
             "language": language,
-            "streaming_model_id": "zipformer-en-streaming-int8",
             "refined_model_id": model_id,
             "speaker_segmentation_model_id": "pyannote-segmentation-3.0",
         })
@@ -147,7 +145,7 @@ def benchmark_python_pipeline(path, model_id, language, models_root, data_root):
         shutil.copyfile(path, destination)
         worker.store.finish_imported_meeting(meeting["id"], round(wav_duration_seconds(path) * 1000))
         started = time.perf_counter()
-        worker.refine({"meeting_id": meeting["id"], "refined_model_id": model_id})
+        worker.refine({"meeting_id": meeting["id"], "refined_model_id": model_id, "language": language})
         return result("python-refinement-pipeline", wav_duration_seconds(path), started)
     finally:
         if previous_models_root is None:

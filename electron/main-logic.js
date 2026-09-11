@@ -7,13 +7,22 @@ function configureMacUpdater(updater) {
 
 function createDisplayMediaHandler(desktopCapturer, writeLog) {
   return async (_, callback) => {
+    let source;
     try {
-      const [source] = await desktopCapturer.getSources({ types: ['screen'] });
-      callback(source ? { video: source, audio: 'loopback' } : {});
+      [source] = await desktopCapturer.getSources({ types: ['screen'] });
     } catch (error) {
       writeLog('ERROR', error);
       callback({});
+      return;
     }
+    if (!source) {
+      writeLog('WARNING', 'No screen source available for system audio capture');
+      callback({});
+      return;
+    }
+    // Electron may throw while validating this callback.  It was already called,
+    // so it must never be retried from a catch block.
+    callback({ video: source, audio: 'loopback' });
   };
 }
 

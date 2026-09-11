@@ -1,8 +1,8 @@
 """用本地已有会议录音回放，验证实时链路改动。
 
 按前端真实节奏（约 170ms 一帧）把某个会议的 ``system`` 或 ``mic`` 音轨回放到
-一条全新的实时会议里，收集 partial/final/refined/discarded 事件与最终段落，用于
-观察软钉、句间去重、段内说话人切分与异步标点是否按预期工作。
+一条全新的实时会议里，收集 final/settled 事件与最终段落，用于
+观察 VAD 分段、整句识别及时间戳是否按预期工作。
 
 用法:
     BREVIA_MODELS_DIR=~/brevia/models \
@@ -49,7 +49,6 @@ def replay(
         {
             "title": f"[回放] {src['title']}",
             "language": src.get("language") or "auto",
-            "streaming_model_id": streaming_model_override or src["streaming_model_id"],
             "refined_model_id": refined_model_override or src["refined_model_id"],
             "speaker_segmentation_model_id": src.get("speaker_segmentation_model_id"),
             "vad_model_id": src.get("vad_model_id") or "silero-vad",
@@ -60,9 +59,8 @@ def replay(
             ),
         }
     )
-    worker._wait_prepare(60)
     if worker.asr is None:
-        raise RuntimeError("Streaming ASR did not become ready")
+        raise RuntimeError("Sentence ASR did not become ready")
 
     start_ms = 0
     fed_seconds = 0.0
@@ -92,17 +90,6 @@ def replay(
         if max_seconds and fed_seconds >= max_seconds:
             break
     wall_elapsed = time.time() - wall_start
-
-    # 回放比实时快很多时，后台精修队列会积压；stop() 的 cancel_futures 会丢弃尚未
-    # 执行的精修任务。这里先等队列排空，让所有 final 都完成精修后再停止。
-    executor = getattr(worker, "live_postprocessing", None)
-    if executor is not None:
-        while True:
-            queue = getattr(executor, "_work_queue", None)
-            pending = queue.qsize() if queue is not None else 0
-            if pending == 0:
-                break
-            time.sleep(0.2)
 
     worker.stop({"meeting_id": meeting["id"], "duration_ms": int(fed_seconds * 1000)})
     result = worker.store.get_meeting(meeting["id"])

@@ -9,7 +9,7 @@
     "test": "npm run test:electron && npm run test:ui && npm run test:backend",
     "test:electron": "node electron/test-main-logic.mjs",
     "test:ui": "cd frontend && node ./test-ui.mjs",
-    "test:backend": "python -m unittest backend.test_worker",
+    "test:backend": "python -m unittest backend.test_worker backend.test_sentence",
     "test:model": ".venv/bin/python -m backend.diagnose_model --models-dir .models",
     "test:diarization": ".venv/bin/python -m backend.diagnose_diarization --models-dir .models --download",
     "bench:electron": "electron . --bench-refinement",
@@ -19,7 +19,8 @@
     "package:win": "npm run build && electron-builder --win nsis --x64 --publish never",
     "dist:mac": "npm run pack:backend && npm run package:mac",
     "dist:win": "npm run pack:backend && npm run package:win",
-    "release:offline": "npm run build && npm run pack:backend && env -u APPLE_ID -u APPLE_APP_SPECIFIC_PASSWORD -u APPLE_TEAM_ID electron-builder --mac dmg --arm64 --publish never && electron-builder --win nsis --x64 --publish never"
+    "release:offline": "npm run build && npm run pack:backend && env -u APPLE_ID -u APPLE_APP_SPECIFIC_PASSWORD -u APPLE_TEAM_ID electron-builder --mac dmg --arm64 --publish never && electron-builder --win nsis --x64 --publish never",
+    "bench:live": ".venv/bin/python backend/bench_live.py"
   },
   "build": {
     "appId": "com.brevia.app",

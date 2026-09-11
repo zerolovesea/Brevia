@@ -16,6 +16,7 @@ from .worker_models import ModelTaskWorkerMixin
 from .worker_refinement import RefinementWorkerMixin
 from .worker_session import RecordingSessionMixin
 from .worker_speakers import SpeakerCommandMixin
+from .worker_transcripts import TranscriptCommandMixin
 from .worker_ai_note import AiNoteWorkerMixin
 
 
@@ -27,6 +28,7 @@ class Worker(
     RecordingSessionMixin,
     MeetingCommandMixin,
     SpeakerCommandMixin,
+    TranscriptCommandMixin,
     ModelTaskWorkerMixin,
     ExportWorkerMixin,
     RefinementWorkerMixin,
@@ -65,9 +67,9 @@ def install_global_error_handlers(worker):
 def main():
     """运行 stdin/stdout JSONL 循环；单个命令失败不会停止 worker。"""
     # Windows 上首次 import 原生包（numpy/sherpa_onnx 的 .pyd）会被实时杀软
-    # 逐个扫描，可能阻塞数十秒。若让它们在「准备精修」阶段才首次导入，准备阶段
-    # 会看起来卡死（faulthandler 实测卡在 numpy 导入 >25s）。这里在 worker 启动
-    # 时即预热，把这一性开销移到 App 启动，而不是精修时。
+    # 逐个扫描，可能阻塞数十秒。若让它们在「准备精修」或第一次识别时才首次导入，
+    # 那段过程会看起来卡死（faulthandler 实测卡在 numpy 导入 >25s）。这里在 worker
+    # 启动时即预热，把这一开销移到 App 启动，而不是用户点「开始录音」时。
     import numpy  # noqa: F401
     import sherpa_onnx  # noqa: F401
     # Windows 上管道 stdio 默认按系统 ANSI 代码页解码（中文区域为 GBK），与主进程
@@ -122,6 +124,7 @@ def main():
             "speaker-profile.verify",
             "speaker.rename",
             "segment.speaker",
+            "segment.text",
             "segment.speaker-profile-sample",
             "meeting.export",
             "meeting.bundle",
@@ -130,6 +133,7 @@ def main():
         else:
             respond(command)
 
+    worker.shutdown_active_session()
     worker.shutdown_ai_note()
     worker.shutdown_sidecars()
     worker.store.close_audio_sessions()

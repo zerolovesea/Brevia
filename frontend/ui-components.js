@@ -68,13 +68,20 @@ function detectCaptionSignals(text) {
   if (/[?？]/.test(value) || /为什么|怎么|是否/.test(value)) signals.push('问句');
   return signals;
 }
-/** 渲染一条逐字稿条目，用于实时会议或已完成的会议。@param {{time: string, startSeconds?: number, endSeconds?: number, speaker: object, text: string, translation?: string, partial?: boolean}} entry 逐字稿数据。@returns {string} 条目标记。 */
-function renderTranscriptSegment({ time, startSeconds, endSeconds, speaker, text, translation, partial = false, showSpeaker = true }) {
+/** 渲染一条逐字稿条目，用于实时会议或已完成的会议。@param {{time: string, startSeconds?: number, endSeconds?: number, speaker: object, text: string, translation?: string, segmentId?: string, textEditable?: boolean}} entry 逐字稿数据。@returns {string} 条目标记。 */
+function renderTranscriptSegment({ time, startSeconds, endSeconds, speaker, text, translation, showSpeaker = true, segmentId, textEditable = false }) {
   const timing = Number.isFinite(startSeconds) && Number.isFinite(endSeconds) ? ` data-start="${startSeconds}" data-end="${endSeconds}"` : '';
   const label = showSpeaker ? (speaker.editing ? `<form class="inline-segment-speaker-form" data-segment-id="${speaker.segmentId}"><input class="speaker-name-input" data-segment-speaker-input name="name" value="${escapeHtml(speaker.name)}" maxlength="32" /></form>` : `<button class="segment-speaker"${speaker.segmentId ? ` data-segment-speaker="${escapeHtml(speaker.segmentId)}"` : ''}${speaker.id ? ` data-speaker="${escapeHtml(speaker.id)}"` : ''}>${escapeHtml(speaker.name)}</button>`) : '';
   const overlap = showSpeaker && speaker.overlapNames?.length ? `<small class="overlap-speakers">${t('重叠说话')}：${escapeHtml(speaker.overlapNames.join('、'))}</small>` : '';
-  const signalBadge = !partial ? (() => { const signals = detectCaptionSignals(text); return signals.length ? `<small class="caption-signals" style="white-space:nowrap;flex:none" aria-label="${signals.map((signal) => t(signal)).join('、')}">${signals.map((signal) => t(signal)).join(' · ')}</small>` : ''; })() : '';
-  return `<article class="segment${partial ? ' partial' : ''}"${partial ? ' id="partial-segment"' : ''}${speaker.segmentId ? ` data-segment-id="${escapeHtml(speaker.segmentId)}"` : ''}${timing}><div class="segment-meta"><time>${escapeHtml(time)}</time>${label}${overlap}${signalBadge}</div><div class="segment-copy"><p>${escapeHtml(text)}</p>${translation ? `<p class="translation">${escapeHtml(translation)}</p>` : ''}</div></article>`;
+  // 人工编辑态下原文本正在被改写，依赖文本的信号徽标会立刻过期，因此只在只读态显示。
+  const signalBadge = !textEditable ? (() => { const signals = detectCaptionSignals(text); return signals.length ? `<small class="caption-signals" style="white-space:nowrap;flex:none" aria-label="${signals.map((signal) => t(signal)).join('、')}">${signals.map((signal) => t(signal)).join(' · ')}</small>` : ''; })() : '';
+  const translationLine = translation ? `<p class="translation">${escapeHtml(translation)}</p>` : '';
+  // 编辑框与 electron/main.js 的 segment.text schema 同界（单句 4000 字符）；
+  // 保存时后端会把换行折成空格，因此这里不需要限制成单行输入。
+  const copy = textEditable && segmentId
+    ? `<div class="segment-copy"><textarea class="segment-text-input" data-segment-text="${escapeHtml(segmentId)}" rows="2" maxlength="4000" aria-label="${escapeHtml(t('字幕文本'))}">${escapeHtml(text)}</textarea>${translationLine}</div>`
+    : `<div class="segment-copy"><p>${escapeHtml(text)}</p>${translationLine}</div>`;
+  return `<article class="segment"${speaker.segmentId ? ` data-segment-id="${escapeHtml(speaker.segmentId)}"` : ''}${timing}><div class="segment-meta"><time>${escapeHtml(time)}</time>${label}${overlap}${signalBadge}</div>${copy}</article>`;
 }
 /** 渲染会议库中的一行。@param {{tone: string, title: string, meta: string, tags: string[], status: object}} meeting 会议数据。@param {number} index 会议索引。@returns {string} 行标记。 */
 function renderMeetingRow({ id, tone, title, meta, tags, status, deleted = false, workspaceId, workspace }, index) {
@@ -84,7 +91,7 @@ function renderMeetingRow({ id, tone, title, meta, tags, status, deleted = false
   const menu = deleted ? `<button data-meeting-action="restore" data-meeting-index="${index}">${t('恢复')}</button><button class="meeting-menu-danger" data-meeting-action="purge" data-meeting-index="${index}">${BreviaI18n.trashCopy(locale).purge}</button>` : `<button data-meeting-action="rename" data-meeting-index="${index}">${t('重命名')}</button>${workspaceMenu}<button data-meeting-action="open-folder" data-meeting-index="${index}">${t('从文件夹打开')}</button><button data-meeting-action="export" data-meeting-index="${index}">${t('导出')}</button>${status?.tone === 'processing' ? '' : `<button class="meeting-menu-danger" data-meeting-action="delete" data-meeting-index="${index}">${t('删除')}</button>`}`;
   const heading = editingMeetingIndex === index ? `<form class="meeting-title-rename" data-rename-meeting data-meeting-index="${index}"><input name="title" value="${escapeHtml(title)}" maxlength="120" required aria-label="${t('重命名')}" /></form>` : `<h2>${escapeHtml(title)}</h2>`;
   const workspaceBadge = workspace ? `<div class="workspace-badge"><span class="workspace-icon">◆</span>${escapeHtml(workspace.name)}</div>` : '';
-  return `<article class="meeting-row" data-meeting-index="${index}" data-selection-key="${escapeHtml(id || String(index))}" tabindex="0" aria-selected="false"${id ? ` data-meeting-id="${escapeHtml(id)}"` : ''}${!deleted && id ? ' draggable="true"' : ''}><div class="meeting-main">${heading}<p>${escapeHtml(meta)}</p><div class="meeting-tags">${workspaceBadge}${tags.map((tag) => `<div class="tag">${escapeHtml(tag)}</div>`).join('')}</div></div><div class="meeting-status"><span class="status ${status.tone}">${escapeHtml(t(status.label))}</span><small>${escapeHtml(t(status.detail))}</small></div><div class="meeting-actions"><button class="more" data-meeting-menu="${index}" aria-label="${t('更多操作')}" aria-expanded="false">•••</button><div class="meeting-menu" hidden>${menu}</div></div></article>`;
+  return `<article class="meeting-row" data-meeting-index="${index}" data-selection-key="${escapeHtml(id || String(index))}" tabindex="0" aria-selected="false"${id ? ` data-meeting-id="${escapeHtml(id)}"` : ''}${!deleted && id ? ' draggable="true"' : ''}><div class="meeting-main">${heading}<p>${escapeHtml(meta)}</p><div class="meeting-tags">${workspaceBadge}${tags.map((tag) => `<div class="tag">${escapeHtml(tag)}</div>`).join('')}</div></div><div class="meeting-status"><span class="status ${status.tone}${status.paused ? ' is-paused' : ''}">${escapeHtml(t(status.label))}</span><small>${escapeHtml(status.detail)}</small></div><div class="meeting-actions"><button class="more" data-meeting-menu="${index}" aria-label="${t('更多操作')}" aria-expanded="false">•••</button><div class="meeting-menu" hidden>${menu}</div></div></article>`;
 }
 /** 渲染设置卡片及其模态框操作。@param {{title: string, description: string, action: string, modal: string}} card 卡片数据。@returns {string} 卡片标记。 */
 function renderSettingsCard({ title, description, action, modal }) {
@@ -176,6 +183,75 @@ function wrapInlineCode(editor) {
   selection.removeAllRanges();
   selection.addRange(range);
 }
+/** 笔记表格允许的行列上限，以及「插入表格」选择器的网格尺寸。 */
+const NOTE_TABLE_LIMITS = { columns: 20, rows: 50, gridColumns: 10, gridRows: 8 };
+/** 把任意来源的行列数收敛到合法区间，非法输入按 1 处理。@param {*} value 目标行列数。@param {number} max 该维度的上限。@returns {number} 合法行列数。 */
+function clampTableSize(value, max) {
+  const number = Math.round(Number(value));
+  return Number.isFinite(number) ? Math.min(max, Math.max(1, number)) : 1;
+}
+/** 第 N 列的表头占位文案（8 语种模板）。@param {number} index 从 1 开始的列序号。@returns {string} 本地化表头。 */
+function tableColumnLabel(index) { return t('列 {n}').replace('{n}', String(index)); }
+/** 生成富文本编辑器插入的表格标记。@param {{columns: number, rows: number}} size 列数与总行数（含表头行）。@returns {string} 表格标记，末尾补一个空段落便于继续输入。 */
+function noteTableHtml({ columns, rows }) {
+  const cols = clampTableSize(columns, NOTE_TABLE_LIMITS.columns);
+  const total = clampTableSize(rows, NOTE_TABLE_LIMITS.rows);
+  const head = Array.from({ length: cols }, (_, index) => `<th>${escapeHtml(tableColumnLabel(index + 1))}</th>`).join('');
+  const body = Array.from({ length: total - 1 }, () => `<tr>${Array.from({ length: cols }, () => `<td>${escapeHtml(t('内容'))}</td>`).join('')}</tr>`).join('');
+  return `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table><p><br></p>`;
+}
+/** 生成 Markdown 模式的表格文本。@param {{columns: number, rows: number}} size 列数与总行数（含表头行）。@returns {string} Markdown 表格。 */
+function noteTableMarkdown({ columns, rows }) {
+  const cols = clampTableSize(columns, NOTE_TABLE_LIMITS.columns);
+  const total = clampTableSize(rows, NOTE_TABLE_LIMITS.rows);
+  const head = Array.from({ length: cols }, (_, index) => tableColumnLabel(index + 1));
+  const line = (cells) => `| ${cells.join(' | ')} |`;
+  return [line(head), line(head.map(() => '---')), ...Array.from({ length: total - 1 }, () => line(Array.from({ length: cols }, () => t('内容'))))].join('\n');
+}
+/** 选区所在的块级元素，用于判断引用、标题等块格式的开关状态。@param {HTMLElement} editor contenteditable 区域。@returns {HTMLElement|null} 块级元素。 */
+function selectionBlock(editor) {
+  const anchor = window.getSelection()?.anchorNode;
+  const element = anchor?.nodeType === Node.ELEMENT_NODE ? anchor : anchor?.parentElement;
+  if (!element || !editor.contains(element)) return null;
+  return element.closest('p, li, h1, h2, h3, blockquote') || null;
+}
+/** 当前选区生效的块格式命令，用于把工具栏按钮标记为按下状态。@param {HTMLElement} editor contenteditable 区域。@returns {string|null} 命令名。 */
+function activeBlockCommand(editor) {
+  const block = selectionBlock(editor);
+  if (!block) return null;
+  if (block.closest('blockquote')) return 'quote';
+  const tag = block.tagName.toLowerCase();
+  if (/^h[1-3]$/.test(tag)) return tag;
+  const list = block.closest('ul, ol');
+  return list ? list.tagName.toLowerCase() : null;
+}
+/** 把块元素换成另一种标签，保留内部内容。@param {HTMLElement} block 原块元素。@param {string} tagName 目标标签。@returns {HTMLElement} 新块元素。 */
+function retagBlock(block, tagName) {
+  const replacement = document.createElement(tagName);
+  while (block.firstChild) replacement.append(block.firstChild);
+  if (!replacement.firstChild) replacement.append(document.createElement('br'));
+  block.replaceWith(replacement);
+  return replacement;
+}
+/** 退出引用块：把引用内容还原成普通段落，拆开引用里的块级子元素，空引用不会留下空壳。@param {HTMLElement} quote 要退出的 blockquote。@returns {HTMLElement} 还原后的块元素。 */
+function unwrapBlockquote(quote) {
+  const blocks = [...quote.children].filter((child) => /^(p|div|h[1-6]|ul|ol|blockquote)$/.test(child.tagName.toLowerCase()));
+  if (blocks.length) {
+    quote.replaceWith(...blocks);
+    return blocks[0];
+  }
+  return retagBlock(quote, 'p');
+}
+/** 把光标放到元素末尾，让退出引用/标题后可以继续输入。@param {HTMLElement} element 目标元素。@returns {void} */
+function placeCaretAtEnd(element) {
+  if (!element) return;
+  const range = document.createRange();
+  range.selectNodeContents(element);
+  range.collapse(false);
+  const selection = window.getSelection();
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
 /** 创建所见即所得 Markdown 笔记编辑器（富文本默认，可切 Markdown 源码），live 视图与详情页共用。
  * @param {HTMLElement} root 容器，编辑器 DOM 将追加到其中。
  * @param {{onInput?: Function, ariaLabel?: string, getMeetingId?: Function}} options 输入回调、编辑器标签与图片归属会议。
@@ -210,6 +286,11 @@ function createNotesEditor(root, options = {}) {
   findPop.className = 'notes-find-pop';
   findPop.hidden = true;
   findPop.innerHTML = `<input data-notes-find placeholder="${t('查找')}" /><input data-notes-replace placeholder="${t('替换为')}" /><button type="button" data-notes-find-prev aria-label="${t('上一个')}">↑</button><button type="button" data-notes-find-next aria-label="${t('下一个')}">↓</button><button type="button" data-notes-replace-all>${t('全部替换')}</button><button type="button" data-notes-find-close aria-label="${t('关闭')}">×</button>`;
+  const tablePop = document.createElement('div');
+  tablePop.className = 'notes-table-pop';
+  tablePop.hidden = true;
+  const tableGrid = Array.from({ length: NOTE_TABLE_LIMITS.gridRows }, (_, row) => `<div class="notes-table-row">${Array.from({ length: NOTE_TABLE_LIMITS.gridColumns }, (_, column) => `<button type="button" data-notes-table-cell="${column + 1}:${row + 1}" aria-label="${column + 1} × ${row + 1}"></button>`).join('')}</div>`).join('');
+  tablePop.innerHTML = `<div class="notes-table-grid" role="group" aria-label="${t('选择行列数')}">${tableGrid}</div><p class="notes-table-size" data-notes-table-size></p><div class="notes-table-fields"><label>${t('行数')}<input type="number" inputmode="numeric" min="1" max="${NOTE_TABLE_LIMITS.rows}" value="2" data-notes-table-rows /></label><label>${t('列数')}<input type="number" inputmode="numeric" min="1" max="${NOTE_TABLE_LIMITS.columns}" value="2" data-notes-table-columns /></label><button type="button" data-notes-table-insert>${t('插入')}</button></div>`;
   const editor = document.createElement('div');
   editor.className = 'notes-editor';
   editor.setAttribute('contenteditable', 'true');
@@ -225,15 +306,20 @@ function createNotesEditor(root, options = {}) {
   imageInput.accept = 'image/png,image/jpeg,image/gif,image/webp';
   imageInput.hidden = true;
   const suggestion = root.querySelector('[data-ai-suggestion]');
-  root.append(toolbar, urlPop, findPop, ...(suggestion ? [suggestion] : []), editor, input, imageInput);
+  root.append(toolbar, urlPop, findPop, tablePop, ...(suggestion ? [suggestion] : []), editor, input, imageInput);
   // 回车产生 <p>，让富文本编辑器的 DOM 结构规范、便于转回 Markdown。
   document.execCommand('defaultParagraphSeparator', false, 'p');
   let urlTarget = null;
   let mode = 'rich';
   let findMatchIndex = -1;
+  let tableSize = { columns: 2, rows: 2 };
+  let savedRange = null;
   const urlInput = urlPop.querySelector('input');
   const findInput = findPop.querySelector('[data-notes-find]');
   const replaceInput = findPop.querySelector('[data-notes-replace]');
+  const tableSizeLabel = tablePop.querySelector('[data-notes-table-size]');
+  const tableRowsInput = tablePop.querySelector('[data-notes-table-rows]');
+  const tableColumnsInput = tablePop.querySelector('[data-notes-table-columns]');
   function insertText(text) {
     if (mode === 'markdown') {
       const start = input.selectionStart ?? input.value.length;
@@ -258,6 +344,44 @@ function createNotesEditor(root, options = {}) {
   }
   function closeUrlPop() { urlPop.hidden = true; urlTarget = null; }
   function openFind() { findPop.hidden = false; findInput.focus(); findInput.select(); }
+  /** 把选择器里的行列数同步到网格高亮、计数文案与输入框。@param {{columns: *, rows: *}} next 目标行列数。@param {boolean} syncFields 是否回写数字输入框（用户正在输入时保持原样）。@returns {void} */
+  function applyTableSize(next, syncFields = true) {
+    tableSize = { columns: clampTableSize(next.columns, NOTE_TABLE_LIMITS.columns), rows: clampTableSize(next.rows, NOTE_TABLE_LIMITS.rows) };
+    if (syncFields) {
+      tableColumnsInput.value = String(tableSize.columns);
+      tableRowsInput.value = String(tableSize.rows);
+    }
+    tableSizeLabel.textContent = `${tableSize.columns} × ${tableSize.rows}`;
+    tablePop.querySelectorAll('[data-notes-table-cell]').forEach((cell) => {
+      const [column, row] = cell.dataset.notesTableCell.split(':').map(Number);
+      cell.classList.toggle('is-on', column <= tableSize.columns && row <= tableSize.rows);
+    });
+  }
+  // 打开选择器时记住光标位置：点数字输入框会让编辑器失焦，插入前需要还原。
+  function openTablePop(anchor) {
+    const selection = window.getSelection();
+    savedRange = selection?.rangeCount && editor.contains(selection.anchorNode) ? selection.getRangeAt(0).cloneRange() : null;
+    applyTableSize({ columns: 2, rows: 2 });
+    tablePop.hidden = false;
+    const rect = anchor.getBoundingClientRect();
+    tablePop.style.position = 'fixed';
+    tablePop.style.top = `${Math.max(12, Math.min(rect.bottom + 6, window.innerHeight - tablePop.offsetHeight - 12))}px`;
+    tablePop.style.left = `${Math.max(12, Math.min(rect.left, window.innerWidth - tablePop.offsetWidth - 12))}px`;
+  }
+  function closeTablePop() { tablePop.hidden = true; }
+  /** 按当前行列数插入表格（富文本插入 HTML，Markdown 模式插入源码），随后关闭选择器。@param {{columns: *, rows: *}} size 目标行列数。@returns {void} */
+  function insertTable(size) {
+    closeTablePop();
+    if (mode === 'markdown') { insertText(`${noteTableMarkdown(size)}\n`); return; }
+    if (savedRange && editor.contains(savedRange.startContainer)) {
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(savedRange);
+    }
+    editor.focus();
+    document.execCommand('insertHTML', false, noteTableHtml(size));
+    if (onInput) onInput();
+  }
   function richMatches(query) {
     const nodes = [];
     const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT);
@@ -318,11 +442,16 @@ function createNotesEditor(root, options = {}) {
       }
     });
     if (mode === 'markdown') {
+      // Markdown 源码模式没有块格式，清掉富文本遗留的高亮，只保留模式切换按钮。
+      toolbar.querySelectorAll('[data-notes-command].is-active').forEach((button) => {
+        if (button.dataset.notesCommand !== 'mode-toggle') button.classList.remove('is-active');
+      });
       input.value = htmlToMarkdown(editor);
       editor.hidden = true;
       input.hidden = false;
       toolbar.hidden = false;
       urlPop.hidden = true;
+      tablePop.hidden = true;
     } else {
       editor.innerHTML = renderMarkdown(input.value);
       editor.hidden = false;
@@ -330,6 +459,22 @@ function createNotesEditor(root, options = {}) {
       toolbar.hidden = false;
     }
   }
+  /** 把当前选区的块格式标到工具栏上，让「引用」「标题」等开关状态可见（可再次点击关闭）。@returns {void} */
+  function syncToolbarState() {
+    if (!toolbar.isConnected) { document.removeEventListener('selectionchange', syncToolbarState); return; }
+    const anchor = window.getSelection()?.anchorNode;
+    if (!anchor || !editor.contains(anchor)) return;
+    const block = mode === 'rich' ? activeBlockCommand(editor) : null;
+    const pressed = (command) => { try { return document.queryCommandState(command); } catch { return false; } };
+    toolbar.querySelectorAll('[data-notes-command]').forEach((button) => {
+      const command = button.dataset.notesCommand;
+      if (command === 'mode-toggle') return;
+      const active = command === 'bold' || command === 'italic' ? mode === 'rich' && pressed(command) : command === block;
+      button.classList.toggle('is-active', active);
+      if (active) button.setAttribute('aria-pressed', 'true'); else button.removeAttribute('aria-pressed');
+    });
+  }
+  document.addEventListener('selectionchange', syncToolbarState);
   toolbar.addEventListener('mousedown', (event) => event.preventDefault());
   toolbar.addEventListener('click', (event) => {
     const button = event.target.closest('[data-notes-command]');
@@ -339,15 +484,22 @@ function createNotesEditor(root, options = {}) {
     editor.focus();
     if (command === 'bold') document.execCommand('bold');
     else if (command === 'italic') document.execCommand('italic');
-    else if (command === 'h1' || command === 'h2' || command === 'h3') document.execCommand('formatBlock', false, command.toUpperCase());
+    else if (command === 'h1' || command === 'h2' || command === 'h3') {
+      // 再点一次同一个标题级别就退回正文，避免用户被标题格式困住。
+      const block = selectionBlock(editor);
+      if (block && block.tagName.toLowerCase() === command) { placeCaretAtEnd(retagBlock(block, 'p')); if (onInput) onInput(); }
+      else document.execCommand('formatBlock', false, command.toUpperCase());
+    }
     else if (command === 'ul') document.execCommand('insertUnorderedList');
     else if (command === 'ol') document.execCommand('insertOrderedList');
-    else if (command === 'quote') document.execCommand('formatBlock', false, 'BLOCKQUOTE');
-    else if (command === 'code') wrapInlineCode(editor);
-    else if (command === 'table') {
-      if (mode === 'markdown') insertText(`| ${t('列 1')} | ${t('列 2')} |\n| --- | --- |\n| ${t('内容')} | ${t('内容')} |`);
-      else document.execCommand('insertHTML', false, `<table><thead><tr><th>${t('列 1')}</th><th>${t('列 2')}</th></tr></thead><tbody><tr><td>${t('内容')}</td><td>${t('内容')}</td></tr></tbody></table><p><br></p>`);
+    else if (command === 'quote') {
+      // 引用是可切换的块格式：已在引用中时把它还原成普通段落。
+      const quote = selectionBlock(editor)?.closest('blockquote');
+      if (quote) { placeCaretAtEnd(unwrapBlockquote(quote)); if (onInput) onInput(); }
+      else document.execCommand('formatBlock', false, 'BLOCKQUOTE');
     }
+    else if (command === 'code') wrapInlineCode(editor);
+    else if (command === 'table') openTablePop(button);
     else if (command === 'todo') insertText(mode === 'markdown' ? '- [ ] ' : '☐ ');
     else if (command === 'highlight') {
       const prefix = t('重点：');
@@ -356,6 +508,7 @@ function createNotesEditor(root, options = {}) {
     }
     else if (command === 'link') openUrlPop(command, button);
     else if (command === 'image') imageInput.click();
+    syncToolbarState();
   });
   imageInput.addEventListener('change', () => {
     const [file] = imageInput.files;
@@ -388,6 +541,31 @@ function createNotesEditor(root, options = {}) {
     if (event.key === 'Enter') { event.preventDefault(); urlPop.querySelector('[data-notes-url-ok]').click(); }
     if (event.key === 'Escape') closeUrlPop();
   });
+  // 除数字输入框外不改焦点，否则富文本里的插入位置会在点选行列时丢失。
+  tablePop.addEventListener('mousedown', (event) => { if (!event.target.closest('input')) event.preventDefault(); });
+  tablePop.addEventListener('mouseover', (event) => {
+    const cell = event.target.closest('[data-notes-table-cell]');
+    if (!cell) return;
+    const [column, row] = cell.dataset.notesTableCell.split(':').map(Number);
+    applyTableSize({ columns: column, rows: row });
+  });
+  tablePop.addEventListener('click', (event) => {
+    const cell = event.target.closest('[data-notes-table-cell]');
+    if (cell) {
+      const [column, row] = cell.dataset.notesTableCell.split(':').map(Number);
+      insertTable({ columns: column, rows: row });
+      return;
+    }
+    if (event.target.closest('[data-notes-table-insert]')) insertTable(tableSize);
+  });
+  [tableRowsInput, tableColumnsInput].forEach((field) => {
+    field.addEventListener('input', () => applyTableSize({ columns: tableColumnsInput.value, rows: tableRowsInput.value }, false));
+    field.addEventListener('blur', () => applyTableSize(tableSize));
+  });
+  tablePop.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' && event.target.closest('input')) { event.preventDefault(); insertTable(tableSize); }
+    if (event.key === 'Escape') closeTablePop();
+  });
   findPop.addEventListener('click', (event) => {
     if (event.target.closest('[data-notes-find-prev]')) selectFindMatch(-1);
     if (event.target.closest('[data-notes-find-next]')) selectFindMatch(1);
@@ -404,8 +582,16 @@ function createNotesEditor(root, options = {}) {
     if (!findPop.hidden && !findPop.contains(event.target)) findPop.hidden = true;
   };
   document.addEventListener('pointerdown', closeFindOnOutsidePointer);
+  // 点击工具栏以外的任何位置都收起行列选择器，避免弹窗停留在编辑器上。
+  const closeTablePopOnOutsidePointer = (event) => {
+    if (!tablePop.isConnected) { document.removeEventListener('pointerdown', closeTablePopOnOutsidePointer); return; }
+    if (!tablePop.hidden && !tablePop.contains(event.target) && !toolbar.contains(event.target)) closeTablePop();
+  };
+  document.addEventListener('pointerdown', closeTablePopOnOutsidePointer);
   [editor, input].forEach((surface) => surface.addEventListener('keydown', (event) => {
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f') { event.preventDefault(); openFind(); }
+    // 光标仍留在编辑器里时，Esc 也要能收起行列选择器。
+    if (event.key === 'Escape' && !tablePop.hidden) { closeTablePop(); return; }
     if (event.key !== 'Tab') return;
     const listItem = (window.getSelection()?.anchorNode?.parentElement || editor).closest('li');
     if (mode === 'rich' && listItem) {
@@ -562,12 +748,34 @@ function renderStaticViews() {
 /** 渲染详情页 tabbar 右侧的精修状态控件（未精修 → 按钮；精修中 → 文案；已精修 → ✓ + ··· 菜单）。@param {object} d 详情数据。@returns {string} 标记。 */
 function renderRefineStatus(d) {
   if (d.refineState === 'refining') return `<span class="refine-state">${t('正在精修')}</span>`;
-  if (!d.hasRefined) return `<span class="refine-wrap"><button class="secondary refine-now" data-refine-now type="button">${t('精修字幕')}</button><div class="refine-menu" hidden><label class="refine-menu-speakers"><span>${t('会议人数')}</span><input type="number" min="1" step="1" inputmode="numeric" data-refine-num-speakers placeholder="${t('留空自动识别')}" /></label><button type="button" data-refine-action="start">${t('开始精修')}</button></div></span>`;
-  const modelOptions = modelCatalog
-    .filter((model) => model.stages?.includes('refined') && !removedRefinedModelIds.has(model.id))
-    .map((model) => `<button type="button" data-refine-model="${escapeHtml(model.id)}">${escapeHtml(model.name)}</button>`)
-    .join('');
-  return `<span class="refine-state is-done">${checkIconSvg} ${t('已精修')}</span><button class="refine-more" data-refine-more type="button" aria-label="${t('更多')}" aria-expanded="false">···</button><div class="refine-menu" hidden><button type="button" data-refine-action="original">${detailTranscriptView === 'original' ? t('查看精修字幕') : t('查看原始转写')}</button><button type="button" data-refine-action="re-refine">${t('重新精修')}</button><label class="refine-menu-speakers"><span>${t('会议人数')}</span><input type="number" min="1" step="1" inputmode="numeric" data-refine-num-speakers placeholder="${t('留空自动识别')}" /></label><button type="button" data-refine-action="model">${t('更换精修模型')} <span>›</span></button><div class="refine-model-list" data-refine-model-list hidden>${modelOptions}</div></div>`;
+  const languageSelect = `<label class="refine-menu-speakers"><span>${t('会议语言')}</span>${flowSelect('refine-language', d.language || 'auto', BreviaI18n.languageOptions(locale, t, true))}</label>`;
+  const translationLabel = d.translationTarget ? BreviaI18n.languageName(locale, d.translationTarget) : t('译文目标');
+  const translationSelect = `<label class="refine-menu-speakers"><span>${t('翻译')}</span><div class="detail-translation-menu flow-select"><button class="flow-select-toggle" data-detail-translation-toggle type="button" aria-expanded="false"${d.translationPending ? ' disabled' : ''}>${escapeHtml(translationLabel)}<span>⌄</span></button><div class="flow-select-options" hidden>${BreviaI18n.languageOptions(locale, t).slice(1).map(([code, name]) => `<button type="button" data-detail-translation="${escapeHtml(code)}">${escapeHtml(name)}</button>`).join('')}</div></div></label>`;
+  const refineTranslationSelect = `<label class="refine-menu-speakers"><span>${t('翻译')}</span><div class="detail-translation-menu flow-select"><button class="flow-select-toggle" data-detail-translation-toggle type="button" aria-expanded="false">${escapeHtml(translationLabel)}<span>⌄</span></button><div class="flow-select-options" hidden>${BreviaI18n.languageOptions(locale, t).slice(1).map(([code, name]) => `<button type="button" data-refine-translation="${escapeHtml(code)}">${escapeHtml(name)}</button>`).join('')}</div></div></label>`;
+  if (!d.hasRefined) return `<span class="refine-wrap"><button class="secondary refine-now" data-refine-now type="button">${t('精修字幕')}</button><div class="refine-menu" hidden>${languageSelect}<label class="refine-menu-speakers"><span>${t('会议人数')}</span><input type="number" min="1" step="1" inputmode="numeric" data-refine-num-speakers placeholder="${t('留空自动识别')}" /></label>${refineTranslationSelect}<button type="button" data-refine-action="start">${t('开始精修')}</button></div></span>`;
+  return `<span class="refine-state is-done">${checkIconSvg} ${t('已精修')}</span><button class="refine-more" data-refine-more type="button" aria-label="${t('更多')}" aria-expanded="false">···</button><div class="refine-menu" hidden>${languageSelect}<label class="refine-menu-speakers"><span>${t('会议人数')}</span><input type="number" min="1" step="1" inputmode="numeric" data-refine-num-speakers placeholder="${t('留空自动识别')}" /></label>${translationSelect}<button type="button" data-refine-action="re-refine">${t('重新精修')}</button></div>`;
+}
+/** 渲染详情页 tabbar：两个内容 tab、随激活 tab 变化的编辑动作，以及精修状态控件。
+ *
+ * tabbar 单独成函数，是因为切换 tab 只换面板、不整体重绘：编辑按钮的含义取决于当前
+ * 激活的 tab，切换后必须同步替换，否则「字幕」页上的铅笔会去编辑笔记。
+ * @returns {string} tabbar 标记。
+ */
+function renderDetailTabbar() {
+  const d = uiData.detail;
+  const notesActions = `<button class="tabbar-action" data-notes-cancel type="button" aria-label="${t('取消')}" title="${t('取消')}"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="m4 4 8 8m0-8-8 8"/></svg></button><button class="tabbar-action is-save" data-notes-save type="button" aria-label="${t('保存')}" title="${t('保存')}"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3 8 3 3 7-7"/></svg></button>`;
+  const transcriptActions = `<button class="tabbar-action" data-transcript-cancel type="button" aria-label="${t('取消')}" title="${t('取消')}">${summaryActionIcons.cancel}</button><button class="tabbar-action is-save" data-transcript-save type="button" aria-label="${t('保存')}" title="${t('保存')}">${summaryActionIcons.save}</button>`;
+  const editNotes = `<button class="tabbar-action" data-edit-notes type="button" aria-label="${t('编辑')}" title="${t('编辑')}"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3 11.5 8.6-8.6 1.9 1.9-8.6 8.6L3 13.5z"/><path d="m10.5 4 1.9 1.9"/></svg></button>`;
+  const editTranscript = `<button class="tabbar-action" data-edit-transcript type="button" aria-label="${t('编辑')}" title="${t('编辑')}">${summaryActionIcons.edit}</button>`;
+  let action = '';
+  if (d.notesEditing) action = notesActions;
+  else if (d.transcriptEditing) action = transcriptActions;
+  else if (detailActiveTab === 'notes') action = editNotes;
+  // 精修进行中不开放编辑：即将落地的精修结果会按新的窗口重建段落，此时写入的修正会被它取代。
+  // 「精修全文」模式没有逐句段落（整篇是一段文本），同样不提供逐句编辑。
+  else if (detailActiveTab === 'transcript' && d.transcriptEditable && d.refinedMode !== 'fulltext' && d.refineState !== 'refining') action = editTranscript;
+  // 编辑期间收起精修入口：精修会按新的窗口重建段落 id，未保存的修改会失去归属。
+  return `<div class="tabbar"><div class="tabbar-tabs"><button class="tab${detailActiveTab === 'notes' ? ' active' : ''}" data-detail-tab="notes">${t('我的笔记')}</button><button class="tab${detailActiveTab === 'transcript' ? ' active' : ''}" data-detail-tab="transcript">${t('字幕')}</button></div><div class="tabbar-extra">${action}${d.transcriptEditing ? '' : renderRefineStatus(d)}</div></div>`;
 }
 /** 刷新选定会议的逐字稿、笔记和摘要面板。@returns {void} */
 function renderMeetingDetail() {
@@ -575,19 +783,30 @@ function renderMeetingDetail() {
   const notesPanel = d.notesEditing
     ? `<div class="detail-notes-edit"><div data-detail-notes-root></div></div>`
     : `<div class="detail-notes-view">${d.notes && String(d.notes).trim() ? `<div class="detail-notes-content markdown-content">${renderMarkdown(d.notes)}</div>` : `<p class="detail-notes-empty">${t('会议中没有记录笔记。')}</p>`}</div>`;
-  const notesTabAction = d.notesEditing
-    ? `<button class="tabbar-action" data-notes-cancel type="button" aria-label="${t('取消')}" title="${t('取消')}"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="m4 4 8 8m0-8-8 8"/></svg></button><button class="tabbar-action is-save" data-notes-save type="button" aria-label="${t('保存')}" title="${t('保存')}"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3 8 3 3 7-7"/></svg></button>`
-    : detailActiveTab === 'notes' ? `<button class="tabbar-action" data-edit-notes type="button" aria-label="${t('编辑')}" title="${t('编辑')}"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3 11.5 8.6-8.6 1.9 1.9-8.6 8.6L3 13.5z"/><path d="m10.5 4 1.9 1.9"/></svg></button>` : '';
   const hasRefined = Boolean(d.hasRefined && d.refinedTranscript.length);
   const fulltextMode = hasRefined && d.refinedMode === 'fulltext';
-  const showingRefined = hasRefined && d.refinedMode === 'timestamps' && detailTranscriptView !== 'original';
+  const showingRefined = hasRefined && d.refinedMode === 'timestamps';
   let transcriptBody;
   if (fulltextMode) {
     transcriptBody = `<div class="refined-fulltext"><p class="eyebrow">${t('精修全文')}</p><p class="refined-fulltext-hint">${t('经过会后模型整理后的完整转写文本。由于当前模型不提供时间戳，该版本不支持逐句音频定位。')}</p><div class="refined-fulltext-body">${escapeHtml(d.refinedFulltext)}</div></div>`;
   } else {
-    transcriptBody = (showingRefined ? d.refinedTranscript : d.transcript).map(renderTranscriptSegment).join('');
+    // 编辑态下用草稿覆盖后端文本，使并发刷新不会吞掉尚未保存的输入。
+    const draft = d.transcriptEditing ? d.transcriptDraft || {} : {};
+    transcriptBody = (showingRefined ? d.refinedTranscript : d.transcript).map((entry) => ({
+      ...entry,
+      text: draft[entry.segmentId] ?? entry.text,
+      textEditable: Boolean(d.transcriptEditing),
+    })).map(renderTranscriptSegment).join('');
   }
-  document.querySelector('.final-transcript').innerHTML = `<div class="tabbar"><div class="tabbar-tabs"><button class="tab${detailActiveTab === 'notes' ? ' active' : ''}" data-detail-tab="notes">${t('我的笔记')}</button><button class="tab${detailActiveTab === 'transcript' ? ' active' : ''}" data-detail-tab="transcript">${t('字幕')}</button></div><div class="tabbar-extra">${notesTabAction}${renderRefineStatus(d)}</div></div><div class="detail-notes-panel" data-detail-panel="notes"${detailActiveTab !== 'notes' ? ' hidden' : ''}>${notesPanel}</div><div class="transcript-panel" data-detail-panel="transcript"${detailActiveTab !== 'transcript' ? ' hidden' : ''}><div class="transcript-body">${transcriptBody}</div></div>`;
+  const focusedField = document.activeElement?.closest?.('[data-segment-text]');
+  const focusState = d.transcriptEditing && focusedField
+    ? { id: focusedField.dataset.segmentText, start: focusedField.selectionStart, end: focusedField.selectionEnd }
+    : null;
+  document.querySelector('.final-transcript').innerHTML = `${renderDetailTabbar()}<div class="detail-notes-panel" data-detail-panel="notes"${detailActiveTab !== 'notes' ? ' hidden' : ''}>${notesPanel}</div><div class="transcript-panel" data-detail-panel="transcript"${detailActiveTab !== 'transcript' ? ' hidden' : ''}><div class="transcript-body">${transcriptBody}</div></div>`;
+  if (focusState) {
+    const restored = [...document.querySelectorAll('[data-segment-text]')].find((field) => field.dataset.segmentText === focusState.id);
+    if (restored) { restored.focus(); restored.setSelectionRange(focusState.start, focusState.end); }
+  }
   if (d.notesEditing) {
     const root = document.querySelector('[data-detail-notes-root]');
     if (root) {

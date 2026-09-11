@@ -4,14 +4,7 @@
     "chunk_seconds": 30
   },
   "asr": {
-    "endpoint_rule1_silence": 1.5,
-    "endpoint_rule2_silence": 0.8,
-    "maximum_utterance_seconds": 3600,
-    "live_pin_seconds": 20,
-    "live_pin_max_seconds": 40,
-    "refined_window_seconds": 15,
-    "live_refine_max_pending": 3,
-    "auto_english_model_id": "zipformer-en-streaming-int8"
+    "refined_window_seconds": 15
   },
   "live_asr": {
     "denoiser_model_id": "gtcrn-live-denoiser",
@@ -21,13 +14,10 @@
     "microphone_minimum_rms": 0.003,
     "microphone_max_gain": 4,
     "microphone_peak": 0.92,
-    "merge_gap_ms": 3000,
-    "backchannel_max_ms": 2500,
-    "max_merge_ms": 45000
-  },
-  "punctuation": {
-    "english_model_id": "online-punct-en-int8",
-    "chinese_model_id": "punct-ct-transformer-zh-en-int8"
+    "quiet_speech_recovery": 1,
+    "quiet_speech_min_seconds": 1.0,
+    "quiet_speech_max_seconds": 20.0,
+    "quiet_speech_level_ratio": 0.08
   },
   "diarization": {
     "segmentation_model_id": "pyannote-segmentation-3.0",
@@ -54,7 +44,7 @@
   "vad": {
     "default": {
       "threshold": 0.5,
-      "min_silence_duration": 0.5,
+      "min_silence_duration": 0.8,
       "min_speech_duration": 0.25,
       "max_speech_duration": 20.0
     },

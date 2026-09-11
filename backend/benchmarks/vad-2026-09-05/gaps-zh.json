@@ -1,0 +1,54 @@
+{
+  "platform": "macOS-26.6.2-arm64-arm-64bit",
+  "python": "3.12.7",
+  "language": "zh",
+  "model": "funasr-nano-int8",
+  "legacy": false,
+  "gaps": true,
+  "silence": false,
+  "paced": true,
+  "max_speech": null,
+  "audio_sha256": "b3cbd3bf45ec8c381d3c5ec4d528433dc93649152607c3cf985d12f18a7807e8",
+  "source_seconds": 14.582125,
+  "fed_seconds": 19.582125,
+  "load_seconds": 2.075457458035089,
+  "wall_seconds": 19.724792875000276,
+  "cpu_seconds": 2.9918060000000004,
+  "cpu_per_source_second": 0.2051694111797835,
+  "peak_rss_mb": 2491.28125,
+  "stop_seconds": 0.13527745800092816,
+  "audio_call_p95_ms": 7.052415981888771,
+  "events": {
+    "transcript.partial": 0,
+    "transcript.final": 3,
+    "transcript.refined": 0,
+    "worker.warning": 0
+  },
+  "error_metric": "CER",
+  "error_rate": 0.12307692307692308,
+  "text": "大家早上好，今天我们确认新用户阴道的上限范围。 设计稿已经完成，开发团队周四可以交付测试版本。 好的，那九周务签完成内部演售，下周一开始小范围发布。",
+  "emissions": [
+    {
+      "type": "transcript.final",
+      "wall_seconds": 6.224978625017684,
+      "start_ms": 140,
+      "end_ms": 5060,
+      "text": "大家早上好，今天我们确认新用户阴道的上限范围。"
+    },
+    {
+      "type": "transcript.final",
+      "wall_seconds": 11.300240124983247,
+      "start_ms": 6060,
+      "end_ms": 10148,
+      "text": "设计稿已经完成，开发团队周四可以交付测试版本。"
+    },
+    {
+      "type": "transcript.final",
+      "wall_seconds": 17.88214737502858,
+      "start_ms": 11276,
+      "end_ms": 16612,
+      "text": "好的，那九周务签完成内部演售，下周一开始小范围发布。"
+    }
+  ],
+  "warnings": []
+}

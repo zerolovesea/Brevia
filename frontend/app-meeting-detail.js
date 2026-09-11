@@ -14,7 +14,21 @@ function renderSegmentData(segment, editable, speakerNames) {
     },
     text: segment.text,
     translation: segment.translation,
+    // 逐句编辑按段落 id 定位：保存时以该 id 写入用户版本，覆盖自动识别结果。
+    segmentId: segment.id,
   };
+}
+
+/** 返回当前可见的最新字幕：优先最新精修版本，并以手工编辑版本覆盖。
+ * @param {object} meeting 会议详情。
+ * @param {{ignoreRefined?: boolean}} [options] 忽略精修结果（识别模型已下架时按未精修处理）。 */
+function latestTranscriptSegments(meeting, { ignoreRefined = false } = {}) {
+  const refined = ignoreRefined ? [] : meeting.segments.filter((segment) => segment.version.startsWith('postprocess'));
+  const revision = refined.length ? Math.max(...refined.map((segment) => segment.revision)) : null;
+  const base = revision === null ? meeting.segments.filter((segment) => segment.version === 'live') : refined.filter((segment) => segment.revision === revision);
+  const latest = new Map();
+  [...base, ...meeting.segments.filter((segment) => segment.version === 'user')].forEach((segment) => { if (!latest.has(segment.id) || segment.version === 'user') latest.set(segment.id, segment); });
+  return { revision, segments: [...latest.values()].sort((a, b) => a.start_ms - b.start_ms) };
 }
 
 function applyBackendDetail(meeting) {
@@ -30,23 +44,30 @@ function applyBackendDetail(meeting) {
     detailNotesEditor = null;
     inlineSummaryEditor = null;
     uiData.detail.summaryEditing = false;
+    uiData.detail.transcriptEditing = false;
+    uiData.detail.transcriptDraft = {};
     detailActiveTab = 'notes';
-    detailTranscriptView = 'refined';
+    uiData.detail.translationTarget = meeting.target_language || '';
   }
-  const refined = meeting.segments.filter((segment) => segment.version.startsWith('postprocess'));
-  const revision = refined.length ? Math.max(...refined.map((segment) => segment.revision)) : null;
-  const base = revision === null ? meeting.segments.filter((segment) => segment.version === 'live') : refined.filter((segment) => segment.revision === revision);
-  const latest = new Map();
-  [...base, ...meeting.segments.filter((segment) => segment.version === 'user')].forEach((segment) => { if (!latest.has(segment.id) || segment.version === 'user') latest.set(segment.id, segment); });
+  // 产出这场精修稿的识别模型已下架（旧版本允许选后来移除的模型）：精修结果不再可信，
+  // 按「未精修」展示实时版本，等用户手动重新精修一次。
+  const modelRetired = Boolean(meeting.refined_model_id)
+    && modelCatalog.length > 0
+    && !modelCatalog.some((model) => model.id === meeting.refined_model_id);
+  const { revision, segments: ordered } = latestTranscriptSegments(meeting, { ignoreRefined: modelRetired });
   const speakerNames = new Map(meeting.speakers.map((speaker) => [speaker.id, speaker.name]));
-  const ordered = [...latest.values()].sort((a, b) => a.start_ms - b.start_ms);
   uiData.detail.transcript = ordered.map((segment) => renderSegmentData(segment, true, speakerNames));
   uiData.detail.refinedTranscript = revision === null ? [] : ordered.map((segment) => renderSegmentData(segment, false, speakerNames));
   uiData.detail.refinedFulltext = revision === null ? '' : ordered.map((segment) => `${formatSpeakerName(segment.speaker_name)}：${segment.text}`).join('\n\n');
   uiData.detail.refinedMode = revision === null ? null : refinedModelSupportsTimestamps(meeting.refined_model_id) ? 'timestamps' : 'fulltext';
   uiData.detail.hasRefined = revision !== null;
-  uiData.detail.refinedModelId = meeting.refined_model_id || '';
+  // 保存后的字幕才可人工修正：录制中的会议仍在写入实时段落，此时不开放编辑入口。
+  const liveMeetingId = meetingActive ? breviaClient?.state.meeting?.id : null;
+  uiData.detail.transcriptEditable = meeting.id !== liveMeetingId && ordered.length > 0;
+  // 仅切换会议时用会议语言播种：同一会议的后台刷新不得覆盖用户已选的精修语言。
+  if (!sameDetail) uiData.detail.language = meeting.language || 'auto';
   uiData.detail.numSpeakers = meeting.num_speakers || null;
+  uiData.detail.translationPending = false;
   // 编辑中的笔记以本地草稿为准，不覆盖；非编辑状态同步服务器最新值。
   if (!sameDetail || !uiData.detail.notesEditing) uiData.detail.notes = meeting.notes || '';
   const summary = meeting.summary?.data;

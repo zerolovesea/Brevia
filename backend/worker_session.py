@@ -1,71 +1,62 @@
-"""聚焦的 worker 职责组件。"""
+"""录音落盘 → Silero VAD 分段 → 单次高精度识别 → 完整句字幕。"""
 
 import base64
-import os
 import re
 import sys
-import threading
+import tempfile
+import time
 from array import array
 from concurrent.futures import ThreadPoolExecutor
 from collections import deque
 from difflib import SequenceMatcher
 from pathlib import Path
 
-from .asr import (
-    DEFAULT_REFINED_MODEL_ID,
-    ChinesePunctuation,
-    EnglishPunctuation,
-    LanguageIdentifier,
-    LiveDenoiser,
-    RefinedASR,
-    StreamingASR,
-)
+from .asr import DEFAULT_REFINED_MODEL_ID, LiveDenoiser, RefinedASR, SentenceVAD
 from .audio_io import convert_to_pcm_wav
 from .config import SETTINGS
-from .refine_sidecar import RemoteRefiner
 from .worker_llm import TRANSLATION_MODEL_ID
-from .worker_common import require, synchronized_recording
+from .worker_common import model_supports_language, require, synchronized_recording
 
-# 语义软钉可接受的切点：句末标点优先，逗号/分号作为次优切点（连续语音里标点模型
-# 常把句号降级成逗号，若只认句号会一直等、最后从词中间硬切）。
-_SENTENCE_FINAL = "。！？.!?；;"
-
-# 比较流式重解与原文时去掉的标点/空白字符（用于判断重解是否丢了句尾）。
-_NORMALIZE_TABLE = str.maketrans("", "", " \t\r\n，。！？、；：,.!?;:…'\"「」（）()")
-
-# 实时双轨混音缓冲的时间跨度上限（毫秒）。单轨停帧时另一轨缓冲会无限增长，这里
-# 限制跨度，超出即丢弃最旧帧，避免内存增长与恢复后的一次性爆量对齐。
 MAX_MIX_BUFFER_MS = 5000
-
-# ``_mix_live_audio`` 的标记值：单轨已停流超过 MAX_MIX_BUFFER_MS，应回退为该轨
-# 独立转写（而非继续空等导致整场 live 字幕空白）。
 _MIX_STALL = object()
+
+# 一条字幕的（下限、目标、上限）。目标决定什么时候可以提交，上限决定还能并进多少；
+# 下限用来避免把一句话单独发成一段。中文按字数、拉丁按字符数，两者对应的时间跨度
+# 大致相当（中文约 5 字/秒，英文约 13 字符/秒）。
+SUBTITLE_LENGTHS = {"cjk": (60, 110, 150), "latin": (150, 280, 380)}
+# 上一段押住的尾句与下一段之间的最大时间缝：超过它说明中间已经有别的段落提交过，
+# 不能再把两句接成一句。切点回看会让下一段的起点比上一段终点更早，因此容差要算上。
+SUBTITLE_JOIN_GAP_MS = 700
+# 段落之间的最小静音：只有真正的长停顿才另起一段。实测真实会议里 VAD 端点之后的静音
+# 中位数只有 30–50 ms、p75 300–500 ms，把端点当段落边界会切出平均 24 字的碎片段；
+# 上界取 1.2 s（远高于 p75，又低于"人真的停下来了"的量级）。
+SUBTITLE_PARAGRAPH_GAP_MS = 1200
+# 不足目标的段落最多滞留多久再兜底提交。按**结果到达的间隔**（墙钟）衡量，而不是
+# 音频时钟：识别一旦落后 L 秒，段落的 end_ms 就落后当前音频位置 L 秒，用音频时钟会让
+# 慢机器上的每个段落一生成就被冲掉，碎片化重现。语义上要问的是「说话人还在继续说
+# 吗」，而「还有没有新的识别结果到来」正好回答它。必须大于连续语音里相邻片段的到达
+# 间隔（实测音频间隔 p99 约 1.4 s、解码结果墙钟到达间隔 p90 约 6.5 s），又要小到说话人
+# 停下后字幕不至于长时间空着。实测扫描：2s→22 段、3s→16 段、8s→5 段、12s 以上与
+# 「只用长停顿规则」等价，因此取 8 s。
+SUBTITLE_PARAGRAPH_HOLD_SECONDS = 8.0
 
 
 class RecordingSessionMixin:
     @synchronized_recording
     def start(self, payload):
-        """创建会议并启动流式识别。
+        """创建会议并启动 VAD 分句识别。
 
         Args:
-            payload: 标题、语言及实时/精修模型 ID，可附带分类和标签。
+            payload: 标题、语言及识别模型 ID，可附带分类和标签。
 
         Returns:
             新会议详情；同时发布 ``meeting.started``。
         """
-        require(payload, "title", "language", "streaming_model_id")
-        payload = {"refined_model_id": DEFAULT_REFINED_MODEL_ID, **payload}
+        require(payload, "title")
+        payload = self._sentence_payload(payload)
         if self.active:
             raise ValueError("A meeting is already active")
-        required_models = [
-            payload.get(key)
-            for key in (
-                "streaming_model_id",
-                "refined_model_id",
-                "speaker_segmentation_model_id",
-                "vad_model_id",
-            )
-        ]
+        required_models = [payload["refined_model_id"], payload["vad_model_id"]]
         if payload.get("target_language"):
             required_models.append(TRANSLATION_MODEL_ID)
         missing_models = [
@@ -92,11 +83,9 @@ class RecordingSessionMixin:
         require(
             payload,
             "title",
-            "language",
-            "streaming_model_id",
             "path",
         )
-        payload = {"refined_model_id": DEFAULT_REFINED_MODEL_ID, **payload}
+        payload = self._sentence_payload(payload)
         source = Path(payload["path"])
         if not source.is_file():
             raise ValueError("Audio file not found")
@@ -139,421 +128,107 @@ class RecordingSessionMixin:
         self.emit("meeting.recovered", {"meeting_id": self.active, "meeting": meeting})
         return meeting
 
+    def _sentence_payload(self, payload):
+        payload = {**payload, "language": payload.get("language") or "auto"}
+        model_id = payload.get("refined_model_id") or self._default_refined_model(payload["language"])
+        model = self.models.get(model_id)
+        if "refined" not in model.get("stages", []):
+            raise ValueError("Sentence transcription requires an offline ASR model")
+        if not model_supports_language(model, payload["language"]):
+            if payload["language"] == "auto":
+                raise ValueError("Automatic multilingual transcription requires Qwen3-ASR or multilingual Whisper")
+            raise ValueError(f"Model {model_id} does not support {payload['language']}")
+        return {**payload, "refined_model_id": model_id,
+                "vad_model_id": payload.get("vad_model_id") or "silero-vad"}
+
+    def _default_refined_model(self, language):
+        return DEFAULT_REFINED_MODEL_ID if language in {"zh", "en", "yue"} else "qwen3-asr-0.6b-int8"
+
     def _prepare_active(self, meeting, start_ms=0, audio_tracks=None):
-        """建立活动会议的双轨识别状态；模型不可用时仍允许安全录音。"""
         self.active = meeting["id"]
         self.meeting_language = meeting["language"]
-        self.detected_language = None
         self.power_saving = bool(meeting.get("power_saving"))
-        self.stream_state = {
-            track: {
-                "start_ms": start_ms,
-                "revision": 0,
-                "segment": start_ms,
-                "last_text": "",
-                "last_raw_text": "",
-                "last_final_text": "",
-                "punctuation_epoch": 0,
-                "pending_pin": False,
-                "audio": [],
-                "refine_audio": [],
-                "startup_audio": [],
-                "carry_audio": [],
-                "carry_raw_audio": [],
-                "carry_text": "",
-                "carry_ms": 0,
-            }
-            for track in ("mic", "system", "mix")
-        }
+        self.stream_state = {}
         self.live_tracks = set(audio_tracks or ())
         self.live_mix_buffers = {"mic": deque(), "system": deque()}
         self.recent_finals = []
-        denoiser_id = SETTINGS["live_asr"]["denoiser_model_id"]
+        self.pending_subtitles, self.pending_join = {}, {}
+        self.pending_paragraphs = {}
+        self.subtitle_expiry_ms = 0
+        self.vad = None
+        self.asr = None
         self.denoiser = None
-        self.speaker_tracker = None
-
-        # 各加载闭包在工作线程中运行，绝不能访问 self.active——它是受 state.lock 保护
-        # 的属性，而本方法已在该锁内运行，跨线程再次获取会死锁。改用本地会议 ID。
-        meeting_id = meeting["id"]
-
-        # sherpa-onnx 模型初始化会进入原生运行时；按序加载避免不同模型的原生
-        # 初始化相互竞争导致 worker 直接退出。构建闭包返回模型，由调用方决定
-        # 何时/在哪个线程做赋值。
-        def build_denoiser():
-            if (
-                not self.power_saving
-                and SETTINGS["live_asr"].get("denoiser_enabled", 1)
-                and self.models.is_ready(denoiser_id)
-            ):
-                try:
-                    return LiveDenoiser(self.models, denoiser_id)
-                except RuntimeError as error:
-                    self.emit(
-                        "worker.warning",
-                        {
-                            "meeting_id": meeting_id,
-                            "code": "denoiser_unavailable",
-                            "message": str(error),
-                        },
-                    )
-            return None
-
-        def build_language_identifier():
-            if meeting["language"] == "auto" and self.models.is_ready("whisper-large-v3"):
-                try:
-                    return LanguageIdentifier(self.models)
-                except RuntimeError as error:
-                    self.emit(
-                        "worker.warning",
-                        {
-                            "meeting_id": meeting_id,
-                            "code": "language_identifier_unavailable",
-                            "message": str(error),
-                        },
-                    )
-            return None
-
-        def build_asr():
-            try:
-                return StreamingASR(
-                    self.models, meeting["streaming_model_id"], meeting["language"]
-                )
-            except RuntimeError as error:
-                self.emit(
-                    "worker.warning",
-                    {
-                        "meeting_id": meeting_id,
-                        "code": "asr_unavailable",
-                        "message": str(error),
-                    },
-                )
-                return None
-
-        def build_punctuation():
-            # 流式模型已内置标点（如 X-ASR）时，CT-Transformer 不会被用到，跳过加载，
-            # 省约 75MB 内存与加载时间，也避免弱机上多一份推理算力。
-            if self._streaming_is_punctuated(meeting["streaming_model_id"]):
-                return None
-            return self._build_live_punctuation(meeting["language"], meeting_id)
-
-        def build_live_refiner(streaming_asr=None):
-            model_id, streaming = self._live_refiner_choice(
-                meeting["streaming_model_id"],
-                meeting["refined_model_id"],
+        self.live_postprocessing = None
+        try:
+            self.asr = RefinedASR(self.models, meeting["refined_model_id"], language=meeting["language"])
+            # 连续语音硬上限取「语言配置」与识别模型容量（如 FunASR Nano ~22 s）的
+            # 较小值：超过模型 KV 容量的长段会整段解码为空，单人播客场景会漏识别。
+            self.vad = SentenceVAD(
+                self.models,
+                meeting.get("vad_model_id") or "silero-vad",
                 meeting["language"],
-                self.power_saving,
+                max_speech_duration=self.asr.max_speech_seconds,
             )
-            if not self.models.is_ready(model_id):
-                return None
-            if streaming:
-                return streaming_asr
+            self.live_postprocessing = ThreadPoolExecutor(max_workers=1, thread_name_prefix="brevia-sentence")
+        except (RuntimeError, ValueError) as error:
+            self.emit("worker.warning", {"meeting_id": self.active, "code": "asr_unavailable", "message": str(error)})
+        denoiser_id = SETTINGS["live_asr"]["denoiser_model_id"]
+        if not self.power_saving and SETTINGS["live_asr"]["denoiser_enabled"] and self.models.is_ready(denoiser_id):
             try:
-                return self._create_live_refiner(
-                    model_id,
-                    language=meeting.get("language"),
-                    streaming=streaming,
-                )
+                self.denoiser = LiveDenoiser(self.models, denoiser_id)
             except RuntimeError as error:
-                self.emit(
-                    "worker.warning",
-                    {
-                        "meeting_id": meeting_id,
-                        "code": "live_refinement_unavailable",
-                        "message": str(error),
-                    },
-                )
-            return None
-
-        # 流式 ASR、降噪、标点是实时字幕的关键路径且加载快：同步加载。
-        # 说话人分离只在会后精修执行；逐段在线聚类会把同一人裂成大量临时标签，
-        # 也会与实时精修争用 CPU。语言识别（whisper-large-v3）
-        # 与实时精修模型较重，在后台按序加载，避免原生初始化竞争，同时显著缩短
-        # 「准备中」等待；加载完成前语言回退到文本启发式，精修回退到流式文本。
-        # 只同步加载「快」模型（降噪/标点）；流式 ASR（zipformer 等大模型
-        # 加载需数秒）与语言识别、精修模型一起放到后台加载。start() 因此能立刻
-        # 返回进入录制界面，加载完成前音频会被缓冲，不丢字。
-        self.denoiser = build_denoiser()
-        self.punctuation = build_punctuation()
-        # 标点补发与精修各用一个单线程执行器：精修（RefinedASR）较慢，若与标点
-        # 共用执行器会把快速的部分标点堵在队列里，导致字幕卡顿。
-        if self.punctuation:
-            self.live_punctuation = ThreadPoolExecutor(
-                max_workers=1, thread_name_prefix="brevia-live-punctuation"
-            )
-
-        def load_remaining():
-            asr = build_asr()
-            language_identifier = build_language_identifier()
-            live_refiner = build_live_refiner(asr)
-            with self.state.lock:
-                # 若会议已停止或被 reconfigure 接管，则不覆盖运行态，避免泄漏线程。
-                if self.state.active != meeting_id:
-                    return
-                # 只填充尚未就绪的模型：若 reconfigure 或测试已提前注入，则不覆盖。
-                if self.asr is None:
-                    self.asr = asr
-                if self.language_identifier is None:
-                    self.language_identifier = language_identifier
-                if self.live_refiner is None:
-                    self.live_refiner = live_refiner
-                if live_refiner and self.live_postprocessing is None:
-                    self.live_postprocessing = ThreadPoolExecutor(
-                        max_workers=1, thread_name_prefix="brevia-live-postprocess"
-                    )
-
-        self._prepare_thread = threading.Thread(target=load_remaining, daemon=True)
-        self._prepare_thread.start()
-
-    def _wait_prepare(self, timeout=10):
-        """等待后台模型加载线程结束（测试/诊断用），不阻塞正常启动流程。"""
-        thread = getattr(self, "_prepare_thread", None)
-        if thread and thread.is_alive():
-            thread.join(timeout)
+                self.emit("worker.warning", {"meeting_id": self.active, "code": "denoiser_unavailable", "message": str(error)})
 
     @synchronized_recording
     def pause(self, payload):
-        """确认目标是当前会议；音频停送由前端负责。"""
         require(payload, "meeting_id", "paused")
         self._active(payload["meeting_id"])
+        if payload["paused"]:
+            self._flush_sentences()
         return {"paused": bool(payload["paused"])}
-
-    def _streaming_is_punctuated(self, model_id):
-        """流式模型是否自带标点（无需再加载 CT-Transformer / 二阶段重解）。"""
-        try:
-            return bool(self.models.get(model_id).get("punctuated"))
-        except ValueError:
-            return False
-
-    def _create_live_refiner(self, model_id, language=None, streaming=False):
-        """创建实时精修器。
-
-        ``BREVIA_LIVE_REFINE_SIDECAR=1`` 时把 RefinedASR 放入独立子进程
-        （见 ``refine_sidecar``），隔离崩溃并避免抢占流式 ASR；失败自动回退到
-        进程内精修。默认进程内精修（已用低线程预算让出 CPU）。
-        """
-        if streaming:
-            return StreamingASR(self.models, model_id, language=language)
-        if os.environ.get("BREVIA_LIVE_REFINE_SIDECAR", "") == "1":
-            return RemoteRefiner(self.models, model_id, language=language)
-        return RefinedASR(self.models, model_id, language=language)
-
-    def _live_refiner_choice(
-        self, streaming_model_id, refined_model_id, language, power_saving
-    ):
-        """统一选择实时二阶段模型；不支持当前语言时回退到流式模型。"""
-        if power_saving:
-            return streaming_model_id, True
-        refined = self.models.get(refined_model_id)
-        if (
-            (language == "auto" or language in refined.get("languages", []))
-            and self.models.is_ready(refined_model_id)
-        ):
-            return refined_model_id, False
-        compatible = next(
-            (
-                model["id"]
-                for model in self.models.catalog.values()
-                if "refined" in model.get("stages", [])
-                and language in model.get("languages", [])
-                and self.models.is_ready(model["id"])
-            ),
-            None,
-        )
-        return (compatible, False) if compatible else (streaming_model_id, True)
-
-    def _build_live_punctuation(self, language, meeting_id):
-        """按语言构建实时标点模型；不可用时发告警并返回 None。"""
-        if language == "en":
-            builder = EnglishPunctuation, SETTINGS["punctuation"]["english_model_id"]
-        elif language in {"zh", "yue", "auto"}:
-            builder = ChinesePunctuation, SETTINGS["punctuation"]["chinese_model_id"]
-        else:
-            return None
-        cls, model_id = builder
-        try:
-            return cls(self.models, model_id)
-        except RuntimeError as error:
-            self.emit(
-                "worker.warning",
-                {
-                    "meeting_id": meeting_id,
-                    "code": "punctuation_unavailable",
-                    "message": str(error),
-                },
-            )
-            return None
 
     @synchronized_recording
     def reconfigure(self, payload):
-        """会中热切换语言与实时模型，对当前录音立即生效。
-
-        仅重建受影响的组件：改语言会同时重建实时识别与标点；改实时模型只重建识别。
-        新模型先构建到局部变量，全部成功后再原子替换，任一步骤失败都不会破坏正在
-        运行的识别流。缺失模型会以 ``not installed`` 抛出，交由上层触发下载流程。
-
-        Args:
-            payload: ``meeting_id`` 必填；``language``、``streaming_model_id``、
-                ``target_language`` 至少提供一项。
-
-        Returns:
-            持久化后的会议详情；同时发布 ``meeting.reconfigured``。
-        """
+        """先构建新模型，切换前提交旧语言的末句；排队段保留自己的模型。"""
         require(payload, "meeting_id")
         self._active(payload["meeting_id"])
-        meeting = self.store.get_meeting(self.active)
-        language = payload.get("language") or meeting["language"]
-        streaming_model_id = (
-            payload.get("streaming_model_id") or meeting["streaming_model_id"]
-        )
-        refined_model_id = meeting["refined_model_id"]
-        target_language = (
-            payload.get("target_language")
-            if "target_language" in payload
-            else meeting["target_language"]
-        )
-        language_changed = language != meeting["language"]
-        streaming_changed = streaming_model_id != meeting["streaming_model_id"]
-        target_language_changed = target_language != meeting["target_language"]
-        power_saving = bool(payload.get("power_saving", self.power_saving))
-        power_saving_changed = power_saving != self.power_saving
-        if not (language_changed or streaming_changed or target_language_changed or power_saving_changed):
-            return meeting
-
-        # 先校验实际会加载的模型；配置中的精修模型不支持当前语言时，校验兼容替代。
-        live_refiner_model_id, live_refiner_streaming = self._live_refiner_choice(
-            streaming_model_id, refined_model_id, language, power_saving
-        )
-        required_models = (streaming_model_id,)
-        if live_refiner_model_id != streaming_model_id:
-            required_models += (live_refiner_model_id,)
-        if target_language:
-            required_models += (TRANSLATION_MODEL_ID,)
-        missing = [
-            model_id
-            for model_id in required_models
-            if not self.models.is_ready(model_id)
-        ]
-        if missing:
-            label = "Model" if len(missing) == 1 else "Models"
-            verb = "is" if len(missing) == 1 else "are"
-            raise RuntimeError(f"{label} {', '.join(missing)} {verb} not installed")
-
-        # 全部构建到局部变量并先持久化，成功后再一次性替换运行态。
-        new_asr = self.asr
-        if streaming_changed or language_changed:
-            new_asr = StreamingASR(self.models, streaming_model_id, language)
-        new_denoiser = self.denoiser
-        new_refiner = self.live_refiner
-        new_postprocessing = self.live_postprocessing
+        previous = self.store.get_meeting(self.active)
+        changes = {key: payload[key] for key in ("language", "refined_model_id", "target_language", "power_saving") if key in payload}
+        if "language" in changes and "refined_model_id" not in changes:
+            # 换语言后原模型可能带不动新语言：换成该语言的默认模型（规则只有一处实现）。
+            model = self.models.get(previous["refined_model_id"])
+            if not model_supports_language(model, changes["language"]):
+                changes["refined_model_id"] = self._sentence_payload({"language": changes["language"]})["refined_model_id"]
+        updated = self._sentence_payload({**previous, **changes})
+        changed_asr = self.asr is None or any(updated[key] != previous[key] for key in ("language", "refined_model_id"))
+        asr, vad = self.asr, self.vad
+        if changed_asr:
+            asr = RefinedASR(self.models, updated["refined_model_id"], language=updated["language"])
+            vad = SentenceVAD(
+                self.models,
+                updated["vad_model_id"],
+                updated["language"],
+                max_speech_duration=asr.max_speech_seconds,
+            )
+        if updated.get("target_language") and not self.models.is_ready(TRANSLATION_MODEL_ID):
+            raise RuntimeError(f"Model {TRANSLATION_MODEL_ID} is not installed")
+        denoiser = self.denoiser
+        power_saving = bool(updated.get("power_saving"))
         if power_saving:
-            new_denoiser = None
-            if power_saving_changed or streaming_changed or language_changed:
-                new_refiner = (
-                    new_asr
-                    if live_refiner_streaming
-                    else self._create_live_refiner(
-                        live_refiner_model_id, language=language
-                    )
-                )
-        else:
-            if power_saving_changed:
-                denoiser_id = SETTINGS["live_asr"]["denoiser_model_id"]
-                new_denoiser = (
-                    LiveDenoiser(self.models, denoiser_id)
-                    if self.models.is_ready(denoiser_id)
-                    and SETTINGS["live_asr"].get("denoiser_enabled", 1)
-                    else None
-                )
-            if power_saving_changed or streaming_changed or language_changed:
-                new_refiner = (
-                    new_asr
-                    if live_refiner_streaming
-                    else self._create_live_refiner(
-                        live_refiner_model_id, language=language
-                    )
-                )
-            if new_refiner is not None and new_postprocessing is None:
-                new_postprocessing = ThreadPoolExecutor(
-                    max_workers=1, thread_name_prefix="brevia-live-postprocess"
-                )
-
-        new_punctuation = self.punctuation
-        new_punctuation_executor = self.live_punctuation
-        new_language_identifier = self.language_identifier
-        if language_changed:
-            new_punctuation = (
-                None
-                if self._streaming_is_punctuated(streaming_model_id)
-                else self._build_live_punctuation(language, self.active)
-            )
-            if new_punctuation is not None and new_punctuation_executor is None:
-                new_punctuation_executor = ThreadPoolExecutor(
-                    max_workers=1, thread_name_prefix="brevia-live-punctuation"
-                )
-            new_language_identifier = None
-            if language == "auto" and self.models.is_ready("whisper-large-v3"):
-                try:
-                    new_language_identifier = LanguageIdentifier(self.models)
-                except RuntimeError as error:
-                    self.emit(
-                        "worker.warning",
-                        {
-                            "meeting_id": self.active,
-                            "code": "language_identifier_unavailable",
-                            "message": str(error),
-                        },
-                    )
-
-        try:
-            meeting = self.store.update_meeting(
-                self.active,
-                {
-                    "language": language,
-                    "streaming_model_id": streaming_model_id,
-                    "refined_model_id": refined_model_id,
-                    "target_language": target_language,
-                    "power_saving": int(power_saving),
-                },
-            )
-        except Exception:
-            if new_postprocessing is not self.live_postprocessing and new_postprocessing:
-                new_postprocessing.shutdown(wait=False, cancel_futures=True)
-            if (
-                new_punctuation_executor is not self.live_punctuation
-                and new_punctuation_executor
-            ):
-                new_punctuation_executor.shutdown(wait=False, cancel_futures=True)
-            raise
-
-        old_postprocessing = self.live_postprocessing
-        old_punctuation_executor = self.live_punctuation
-        old_refiner = self.live_refiner
-        self.asr = new_asr
-        self.denoiser = new_denoiser
-        self.live_refiner = new_refiner
-        self.live_postprocessing = new_postprocessing
+            denoiser = None
+        elif self.power_saving and SETTINGS["live_asr"]["denoiser_enabled"]:
+            model_id = SETTINGS["live_asr"]["denoiser_model_id"]
+            denoiser = LiveDenoiser(self.models, model_id) if self.models.is_ready(model_id) else None
+        if changed_asr:
+            self._flush_sentences()
+        meeting = self.store.update_meeting(self.active, {key: updated[key] for key in (
+            "language", "refined_model_id", "target_language", "power_saving")})
+        if self.live_postprocessing is None and asr is not None:
+            self.live_postprocessing = ThreadPoolExecutor(max_workers=1, thread_name_prefix="brevia-sentence")
+        self.asr, self.vad, self.denoiser = asr, vad, denoiser
+        self.meeting_language = updated["language"]
         self.power_saving = power_saving
-        # 替换远程精修器时回收其子进程，避免泄漏。
-        if old_refiner is not new_refiner and isinstance(
-            old_refiner, RemoteRefiner
-        ):
-            old_refiner.shutdown()
-        if language_changed:
-            self.meeting_language = language
-            self.detected_language = None
-            self.punctuation = new_punctuation
-            self.language_identifier = new_language_identifier
-            self.live_punctuation = new_punctuation_executor
-        if old_postprocessing is not new_postprocessing and old_postprocessing:
-            old_postprocessing.shutdown(wait=False, cancel_futures=True)
-        if (
-            old_punctuation_executor is not new_punctuation_executor
-            and old_punctuation_executor
-        ):
-            old_punctuation_executor.shutdown(wait=False, cancel_futures=True)
-        self.emit(
-            "meeting.reconfigured", {"meeting_id": self.active, "meeting": meeting}
-        )
+        self.emit("meeting.reconfigured", {"meeting_id": self.active, "meeting": meeting})
         return meeting
 
     def _enhance_live_microphone(self, samples):
@@ -596,24 +271,14 @@ class RecordingSessionMixin:
             return None
         buffers = self.live_mix_buffers
         buffer = buffers[track]
-        # 单轨停帧保护：若本轨一直有数据而对轨停流，本轨缓冲会无限增长。把缓冲
-        # 跨度限制在 MAX_MIX_BUFFER_MS 内，超出即从最旧丢弃，既避免内存增长，也
-        # 防止对轨恢复后的一次性爆量对齐。实时字幕优先最新内容，丢弃旧帧可接受。
-        while buffer and start_ms - buffer[0][0] > MAX_MIX_BUFFER_MS:
-            buffer.popleft()
         peer = "system" if track == "mic" else "mic"
-        while buffers[peer] and start_ms - buffers[peer][0][0] > MAX_MIX_BUFFER_MS:
-            buffers[peer].popleft()
-        # 麦克风轨进混音前先做增益均衡，避免人声忽大忽小（与单轨时的增强一致）。
         if track == "mic":
             samples = self._enhance_live_microphone(samples)
         buffer.append([float(start_ms), samples])
-        # 对轨停流检测：本轨已有超过 MAX_MIX_BUFFER_MS 的数据但从未遇到对轨，判定
-        # 对轨停流。此时回退为本轨独立转写，避免整场 live 字幕空白（原始音频仍落盘，
-        # 会后精修可恢复）。对轨恢复后由下一帧重新进入双轨混音。
-        if not buffers[peer] and buffer and start_ms - buffer[0][0] >= MAX_MIX_BUFFER_MS:
-            buffer.clear()
+        if not buffers[peer] and start_ms - buffer[0][0] >= MAX_MIX_BUFFER_MS:
             return _MIX_STALL
+        while buffers[peer] and start_ms - buffers[peer][0][0] > MAX_MIX_BUFFER_MS:
+            buffers[peer].popleft()
         mic, system = buffers["mic"], buffers["system"]
         if not mic or not system:
             return None
@@ -667,815 +332,483 @@ class RecordingSessionMixin:
 
     @synchronized_recording
     def audio(self, payload):
-        """持久化一帧音频，并在模型可用时推进实时转写。
-
-        Args:
-            payload: 会议 ID、音轨、base64 PCM16、样本率和本帧开始时间；
-                ``flush`` 可强制结束当前句。
-
-        Returns:
-            累计样本数，以及模型可用时的当前文本和句末状态。
-
-        Notes:
-            partial 只通过事件发送；句末文本才写入数据库。
-        """
+        """先保存原始 PCM；采集线程只做 VAD，识别在单独线程串行执行。"""
         require(payload, "meeting_id", "track", "pcm", "sample_rate", "start_ms")
         self._active(payload["meeting_id"])
+        track = payload["track"]
+        sample_rate = int(payload["sample_rate"])
+        start_ms = int(payload["start_ms"])
+        if track not in {"mic", "system", "mix"} or sample_rate != 16000 or start_ms < 0:
+            raise ValueError("Sentence transcription requires a valid track, 16 kHz PCM and nonnegative timestamp")
         pcm = base64.b64decode(payload["pcm"], validate=True)
-        source_track = payload["track"]
         values = array("h")
         values.frombytes(pcm)
         if sys.byteorder != "little":
             values.byteswap()
         import numpy
-
         samples = numpy.asarray(values, dtype=numpy.float32) / 32768.0
-        samples_total = 0 if source_track == "mix" else self.store.append_audio(
-            self.active,
-            source_track,
-            pcm,
-            int(payload["sample_rate"]),
-            int(payload["start_ms"]),
-        )
-        mixed_from_dual_track = False
-        if self.live_tracks == {"mic", "system"} and source_track != "mix":
-            mixed = self._mix_live_audio(source_track, samples, payload["start_ms"], int(payload["sample_rate"]))
+        total = 0 if track == "mix" or not pcm else self.store.append_audio(self.active, track, pcm, sample_rate, start_ms)
+        if self.live_tracks == {"mic", "system"} and track != "mix":
+            mixed = self._mix_live_audio(track, samples, start_ms, sample_rate)
             if mixed is _MIX_STALL:
-                # 对轨停流：回退为本轨独立转写，保持实时字幕不空白。
-                self.live_tracks = {source_track}
-                payload = {**payload, "track": source_track}
+                self._flush_sentences()
+                self.live_tracks = {track}
+                return {"samples": total}
             elif mixed is None:
-                return {"samples": samples_total}
+                return {"samples": total}
             else:
-                samples, mixed_start_ms = mixed
-                payload = {**payload, "track": "mix", "start_ms": mixed_start_ms}
-                mixed_from_dual_track = True
-        state = self.stream_state[payload["track"]]
-        # mix 流的 state["start_ms"] 初值为会议起点；若某轨领先导致首段混音从较晚的
-        # 对齐点开始，懒初始化首段时间戳，避免首段 start_ms 被错误地前移。仅当本次
-        # 确实由双轨混音产出（而非 stop() 直接 flush 的 mix 空帧）时进行。
-        if (
-            mixed_from_dual_track
-            and payload["track"] == "mix"
-            and not state["audio"]
-            and not state["carry_raw_audio"]
-        ):
-            state["start_ms"] = mixed_start_ms
-            state["segment"] = mixed_start_ms
-        # 上一段软钉截断后带过来的尾巴（原始音频），先并入本段音频缓冲。
-        if state["carry_raw_audio"]:
-            state["audio"].extend(state["carry_raw_audio"])
-            state["carry_raw_audio"] = []
-        if len(samples):
-            state["audio"].append(samples)
-        asr_samples = (
-            self._enhance_live_microphone(samples)
-            if payload["track"] == "mic"
-            else samples
-        )
-        if payload["track"] in ("mic", "mix") and self.denoiser:
-            # 偏弱/远端人声直接跳过降噪，避免 GTCRN 把人声当噪声压掉导致「录音有声、
-            # 实时无字幕」（见 ``_should_bypass_denoise``）。
-            if payload.get("flush") or not self._should_bypass_denoise(asr_samples):
-                asr_samples = self.denoiser.accept(
-                    payload["track"],
-                    asr_samples,
-                    int(payload["sample_rate"]),
-                    bool(payload.get("flush")),
-                )
-        # 上一段软钉截断后带过来的尾巴（已降噪），先并入本段流式识别，避免边界丢字。
-        if state["carry_audio"]:
-            carried = numpy.concatenate(state["carry_audio"])
-            state["carry_audio"] = []
-            asr_samples = (
-                numpy.concatenate([carried, asr_samples])
-                if len(asr_samples)
-                else carried
-            )
-        # 精修与实时字幕共用同一份「增益+降噪」后的音频，避免精修解码原始（更安静/更嘈杂）
-        # 音频而漏字。声纹识别仍用 state["audio"] 的原始音频，保留说话人特征。
-        if len(asr_samples):
-            state["refine_audio"].append(asr_samples)
-        # 流式 ASR 尚未加载完成：缓冲已增益+降噪的样本，加载后由后续帧统一送入，
-        # 避免「准备中」期间的开头几秒音频丢字。
-        if self.asr is None:
-            if len(asr_samples):
-                state["startup_audio"].append(asr_samples)
-            return {"samples": samples_total}
-        if state["startup_audio"]:
-            buffered = numpy.concatenate(state["startup_audio"])
-            state["startup_audio"] = []
-            asr_samples = (
-                numpy.concatenate([buffered, asr_samples])
-                if len(asr_samples)
-                else buffered
-            )
-        result, final = self.asr.accept(
-            payload["track"],
-            asr_samples,
-            int(payload["sample_rate"]),
-            bool(payload.get("flush")),
-        )
-        text = self._clean_live_text(result if isinstance(result, str) else result.text)
-        if state["carry_text"] and text:
-            text = self._merge_carry_text(state["carry_text"], text)
-        if final and not text:
-            text = state["last_raw_text"] or state["carry_text"]
-        if self.meeting_language == "auto" and not self.detected_language:
-            context = numpy.concatenate(state["audio"]) if state["audio"] else samples
-            detected = (
-                self.language_identifier.identify(context, int(payload["sample_rate"]))
-                if self.language_identifier
-                and len(context) >= int(payload["sample_rate"])
-                else self._detect_language(text)
-            )
-            if detected:
-                self.detected_language = detected
-                if detected == "en":
-                    try:
-                        self.asr = StreamingASR(
-                            self.models, SETTINGS["asr"]["auto_english_model_id"], "en"
-                        )
-                        self.punctuation = EnglishPunctuation(
-                            self.models, SETTINGS["punctuation"]["english_model_id"]
-                        )
-                        result, _ = self.asr.accept(
-                            payload["track"],
-                            numpy.concatenate(state["audio"]),
-                            int(payload["sample_rate"]),
-                        )
-                        text = self._clean_live_text(
-                            result if isinstance(result, str) else result.text
-                        )
-                    except RuntimeError as error:
-                        self.emit(
-                            "worker.warning",
-                            {
-                                "meeting_id": self.active,
-                                "code": "auto_model_unavailable",
-                                "message": str(error),
-                            },
-                        )
-        raw_text = text
-        end_ms = int(
-            payload["start_ms"] + len(samples) * 1000 / int(payload["sample_rate"])
-        )
-        pinned = False
-        next_carry_text = ""
-        # 语义软钉：无尾静音但单句已持续 live_pin_seconds 时，等到句末/逗号等语义
-        # 切点再切，把「还没说完的尾巴」音频带到下一段重识别，避免从词中间硬切；
-        # 超过 live_pin_max_seconds 则硬切兜底。只切分、不跨段合并，字幕原地精修。
-        pin_seconds = SETTINGS["asr"].get("live_pin_seconds", 20)
-        pin_max_seconds = SETTINGS["asr"].get("live_pin_max_seconds", 40)
-        pin_ready = False
-        if not final and pin_seconds > 0 and raw_text:
-            elapsed_ms = end_ms - state["start_ms"]
-            if elapsed_ms >= pin_seconds * 1000:
-                state["pending_pin"] = True
-            if state.get("pending_pin"):
-                if elapsed_ms >= pin_max_seconds * 1000:
-                    pin_ready = True
-                else:
-                    check_text = self._apply_live_punctuation(raw_text)
-                    stripped = (check_text or "").strip()
-                    # 标点模型对未说完的文本也总会补一个句末标点，先剥掉末尾「伪句末」；
-                    # 只有中间还残留语义切点才切，避免把短语从中间切开。
-                    if stripped and stripped[-1] in "。！？.!?":
-                        stripped = stripped[:-1]
-                    # 分档切点：句末标点（。！？；等）优先；逗号只在接近硬切上限时才
-                    # 作为兜底切点。否则刚过 live_pin_seconds 就命中一个句中逗号，
-                    # 把还没说完的句子从中间截断，造成「语义软钉分得不够好」。
-                    if any(ch in _SENTENCE_FINAL for ch in stripped):
-                        pin_ready = True
-                    else:
-                        comma_ready_ms = (
-                            pin_seconds + (pin_max_seconds - pin_seconds) * 0.5
-                        ) * 1000
-                        if elapsed_ms >= comma_ready_ms and any(
-                            ch in "，," for ch in stripped
-                        ):
-                            pin_ready = True
-                if pin_ready and elapsed_ms < pin_max_seconds * 1000:
-                    # 边界后的 carry 先积累足够声学上下文，再重启流式解码；
-                    # 否则「那么理由呢」这类短语容易在新流开头被吞掉。
-                    _, boundary_ratio = self._sentence_boundary(raw_text)
-                    tail_ms = elapsed_ms * (1 - boundary_ratio)
-                    minimum_tail_ms = (
-                        SETTINGS["diarization"]["boundary_tail_seconds"] * 1000
-                    )
-                    if 0 < tail_ms < minimum_tail_ms:
-                        pin_ready = False
-        if pin_ready and not final and raw_text:
-            pinned_result = self.asr.force_endpoint(payload["track"])
-            pinned_raw = self._clean_live_text(
-                pinned_result
-                if isinstance(pinned_result, str)
-                else getattr(pinned_result, "text", "")
-            )
-            # ``force_endpoint`` 已重置识别流；某些模型会在此返回空结果，必须保留
-            # 当前 partial，否则这段已识别文本会随流状态一起丢失。
-            pinned_raw = pinned_raw or raw_text or state["last_raw_text"] or state["carry_text"]
-            if pinned_raw:
-                if state["carry_text"]:
-                    pinned_raw = self._merge_carry_text(state["carry_text"], pinned_raw)
-                # 截断到最后一个完整语义切点，并把尾部音频带到下一段重识别，边界不丢字。
-                raw_text, boundary_ratio = self._sentence_boundary(pinned_raw)
-                if boundary_ratio < 1.0 and state["audio"]:
-                    full_raw = numpy.concatenate(state["audio"])
-                    split = max(1, int(len(full_raw) * boundary_ratio))
-                    state["carry_raw_audio"] = [full_raw[split:]]
-                    state["audio"] = [full_raw[:split]]
-                    if state["refine_audio"]:
-                        full_asr = numpy.concatenate(state["refine_audio"])
-                        asr_split = max(1, int(len(full_asr) * boundary_ratio))
-                        state["carry_audio"] = [full_asr[asr_split:]]
-                        state["refine_audio"] = [full_asr[:asr_split]]
-                    state["carry_ms"] = round(
-                        len(full_raw[split:]) * 1000 / int(payload["sample_rate"])
-                    )
-                    next_carry_text = pinned_raw[len(raw_text) :].lstrip(
-                        " \t,。.;:!?，；：！？"
-                    )
-                pinned = True
-                final = True
-                state["pending_pin"] = False
-        raw_changed = raw_text != state["last_raw_text"]
-        state["last_raw_text"] = raw_text
-        needs_punctuation = self.punctuation and self.asr.model.get("punctuated") is not True
-        if raw_changed and needs_punctuation and self.live_punctuation and not final:
-            # 异步标点：先发裸文本，标点由后台补发，避免 CT-Transformer 阻塞录音锁。
-            text = raw_text
-        elif raw_changed and needs_punctuation:
-            text = self._apply_live_punctuation(raw_text)
-        elif raw_changed:
-            text = raw_text
-        else:
-            text = state["last_text"]
-            # 异步模式下 partial 是裸文本；句末若仍无标点则补一次（final 是一次性事件，
-            # 代价可忽略），避免 final 沿用了未标点的裸文本。
-            if final and needs_punctuation and raw_text and text == raw_text:
-                text = self._apply_live_punctuation(raw_text)
-        previous_final_text = state["last_final_text"] if final else ""
-        if final and text and previous_final_text:
-            # Endpoint windows can re-decode their opening audio. Reuse the
-            # post-processing overlap logic before persisting the next caption.
-            text = self._trim_refinement_overlap(previous_final_text, text)
-        if text and (text != state["last_text"] or final):
-            state["revision"] += 1
-            segment_id = f"{payload['track']}-{state['segment']}"
-            speaker = "local-user" if payload["track"] == "mic" else "spk-1"
-            speaker_name = None
-            segment_audio = (
-                numpy.concatenate(state["audio"])
-                if final
-                and state["audio"]
-                and self.live_refiner
-                else None
-            )
-            segment_refine_audio = (
-                numpy.concatenate(state["refine_audio"])
-                if final
-                and state["refine_audio"]
-                and self.live_refiner
-                else None
-            )
-            # 软钉截断时，段落尾时间要扣掉被 carry 的尾巴，否则字幕时间戳与下一段重叠。
-            segment_end_ms = (
-                end_ms - state.get("carry_ms", 0) if pinned else end_ms
-            )
-            event = {
-                "meeting_id": self.active,
-                "segment_id": segment_id,
-                "revision": state["revision"],
-                "text": text,
-                "start_ms": state["start_ms"],
-                "end_ms": segment_end_ms,
-                "speaker": speaker,
-                "speaker_name": speaker_name,
-                "track": payload["track"],
-                "pinned": pinned,
-            }
-            state["last_text"] = text
-            if final:
-                state["last_final_text"] = text
-                state["punctuation_epoch"] = state.get("punctuation_epoch", 0) + 1
-                if self._is_duplicate_final(event):
-                    self.emit(
-                        "transcript.discarded",
-                        {"meeting_id": self.active, "segment_id": event["segment_id"]},
-                    )
-                else:
-                    self.store.save_segment(event)
-                    self.emit("transcript.final", event)
-                    try:
-                        self.ai_note_on_segment(event)
-                    except Exception:
-                        # AI 辅助笔记失败绝不能影响字幕/保存主链路。
-                        pass
-                    self._postprocess_live_segment_later(
-                        {
-                            **event,
-                            "_previous_final_text": previous_final_text,
-                            "_carry_in_text": state["carry_text"],
-                            "_carry_out_text": next_carry_text,
-                        },
-                        segment_audio,
-                        segment_refine_audio,
-                        int(payload["sample_rate"]),
-                    )
-            elif not final:
-                self.store.save_segment(event)
-                self.emit("transcript.partial", event)
-                if raw_changed and needs_punctuation and self.live_punctuation:
-                    self.live_punctuation.submit(
-                        self._punctuate_partial_later,
-                        event.copy(),
-                        raw_text,
-                        state.get("punctuation_epoch", 0),
-                    )
-            if final:
-                state.update(
-                    start_ms=end_ms - state.get("carry_ms", 0),
-                    revision=0,
-                    segment=state["segment"] + 1,
-                    last_text="",
-                    last_raw_text="",
-                    audio=[],
-                    refine_audio=[],
-                    pending_pin=False,
-                    carry_ms=0,
-                    carry_text=next_carry_text,
-                )
-        elif final:
-            state["last_final_text"] = ""
-            state["punctuation_epoch"] = state.get("punctuation_epoch", 0) + 1
-            state.update(
-                start_ms=end_ms,
-                revision=0,
-                segment=state["segment"] + 1,
-                last_text="",
-                last_raw_text="",
-                audio=[],
-                pending_pin=False,
-                carry_ms=0,
-                carry_text="",
-            )
-        return {"samples": samples_total, "text": text, "final": final}
-
-    def _postprocess_live_segment_later(self, event, samples, refine_samples, sample_rate):
-        """异步更新最终段的说话人与精修文本，不阻塞音频处理。
-
-        ``samples`` 是原始音频（用于声纹），``refine_samples`` 是增益+降噪后的音频
-        （用于精修转写），二者不一致时以 refiner 是否可用为准。
-
-        实时精修采用「有界积压」：弱 CPU 上 RefinedASR 可能慢于实时语音。若每个
-        final 都压进单线程执行器且不设上限，积压会无限增长，精修字幕延迟达数分钟。
-        这里限流——在飞+排队超过 ``live_refine_max_pending`` 时跳过本段实时精修
-        （保留其流式原文，会后精修会再覆盖），把延迟压到有界范围内，并自动恢复。
-        """
-        if not (
-            self.live_postprocessing
-            and self.live_refiner
-            and (samples is not None or refine_samples is not None)
-        ):
-            self.emit("transcript.settled", event)
-            return
-        reservation = self._live_refine_try_reserve()
-        if reservation is None:
-            self._warn_live_refine_degraded(event)
-            self._live_refine_dropped(event.get("meeting_id"))
-            self.emit("transcript.settled", event)
-            return
-        self.live_postprocessing.submit(
-            self._refine_live_utterance_with_release,
-            reservation,
-            self.live_refiner,
-            event.copy(),
-            samples.copy() if samples is not None else None,
-            refine_samples.copy() if refine_samples is not None else None,
-            sample_rate,
-        )
-
-    def _live_refine_try_reserve(self):
-        """占用一个精修名额；返回会话 reservation，满载时返回 ``None``。"""
-        with self._live_refine_lock:
-            if self._live_refine_outstanding >= self._live_refine_max:
-                return None
-            self._live_refine_outstanding += 1
-            # 连续积压已恢复：清空掉段计数（若已进入瓶颈，交 release 发恢复事件）。
-            self._live_refine_drops = 0
-            return self._live_refine_generation
-
-    def _live_refine_release(self, reservation, meeting_id=None):
-        """精修完成（含异常）后归还名额，并在积压排空后发恢复事件。"""
-        with self._live_refine_lock:
-            if reservation != self._live_refine_generation:
-                return
-            self._live_refine_outstanding = max(0, self._live_refine_outstanding - 1)
-            recovered = (
-                self._live_perf_bottleneck
-                and self._live_refine_outstanding == 0
-                and self._live_refine_drops == 0
-            )
-            if recovered:
-                self._live_perf_bottleneck = False
-        if recovered and meeting_id:
-            self.emit(
-                "live.performance",
-                {"meeting_id": meeting_id, "bottleneck": False},
-            )
-
-    def _live_refine_dropped(self, meeting_id):
-        """记录一次被跳过的实时精修；连续达到阈值时发瓶颈事件。"""
-        with self._live_refine_lock:
-            self._live_refine_drops += 1
-            trigger = self._live_refine_drops >= 3 and not self._live_perf_bottleneck
-            if trigger:
-                self._live_perf_bottleneck = True
-        if trigger and meeting_id:
-            self.emit(
-                "live.performance",
-                {"meeting_id": meeting_id, "bottleneck": True},
-            )
-
-    def _refine_live_utterance_with_release(
-        self, reservation, refiner, event, samples, refine_samples, sample_rate
-    ):
-        """在限流名额内执行单段精修；无论结果如何都释放名额。"""
-        meeting_id = event.get("meeting_id")
-        settled = event
-        try:
-            settled = self._refine_live_utterance(
-                refiner, event, samples, refine_samples, sample_rate
-            )
-        finally:
-            self.emit("transcript.settled", settled)
-            self._live_refine_release(reservation, meeting_id)
-
-    def _warn_live_refine_degraded(self, event):
-        """积压过载导致跳过实时精修时，仅首次告警，避免刷屏。"""
-        with self._live_refine_lock:
-            if self._live_refine_degraded_warned:
-                return
-            self._live_refine_degraded_warned = True
-        self.emit(
-            "worker.warning",
-            {
-                "meeting_id": event.get("meeting_id"),
-                "code": "live_refinement_degraded",
-                "message": (
-                    "实时精修已自动降级以保持字幕实时。"
-                ),
-            },
-        )
-
-    def _punctuate_partial_later(self, event, raw_text, epoch):
-        """在后台为 partial 补标点；若该句已 final 则丢弃（精修会补齐标点）。"""
-        try:
-            if not self.punctuation or self.asr.model.get("punctuated") is True:
-                return
-            state = self.stream_state.get(event["track"])
-            if state is None or state.get("punctuation_epoch", 0) != epoch:
-                return
-            punctuated = self._apply_live_punctuation(raw_text)
-            if not punctuated or punctuated == raw_text:
-                return
-            updated = {**event, "text": punctuated, "revision": event["revision"] + 1}
-            if self.store.save_segment(updated):
-                self.emit("transcript.partial", updated)
-        except Exception as error:
-            self.emit(
-                "worker.warning",
-                {
-                    "meeting_id": event.get("meeting_id"),
-                    "code": "live_punctuation_failed",
-                    "message": str(error),
-                },
-            )
-
-    def _refine_live_utterance(self, refiner, event, samples, refine_samples, sample_rate):
-        """对单个 live final 做整段精修。
-
-        单阶段字幕：整段用 RefinedASR 转写，然后原地覆盖当前段的文本，
-        不跨段拆分/合并。
-        """
-        return self._postprocess_live_segment(refiner, event, samples, refine_samples, sample_rate)
-
-    def _postprocess_live_segment(self, refiner, event, samples, refine_samples, sample_rate):
-        """合并异步文本精修结果；存储层保护用户编辑。
-
-        实时说话人识别已移至会后精修，此处只负责文本精修。
-        """
-        updated = event.copy()
-        previous_final_text = updated.pop("_previous_final_text", "")
-        carry_in_text = updated.pop("_carry_in_text", "")
-        carry_out_text = updated.pop("_carry_out_text", "")
-        if refiner:
-            audio = refine_samples if refine_samples is not None else samples
-            if audio is None:
-                return event
+                samples, start_ms = mixed
+                track = "mix"
+        elif track == "mic":
+            samples = self._enhance_live_microphone(samples)
+        # 系统轨通常已是应用输出；DeepFilterNet 会把其中的远端人声误当背景音，
+        # 只在麦克风（或已混音）上于 VAD 前降噪，避免短句被切成单字。
+        if self.denoiser and track in {"mic", "mix"} and not self._should_bypass_denoise(samples):
             try:
-                text = self._refine_live_audio(
-                    refiner, audio, sample_rate, original_text=event.get("text", "")
-                )
-                if text:
-                    text = self._restore_missing_head(text, event.get("text", ""))
-                    if carry_in_text:
-                        carry_norm = self._normalized_transcript(carry_in_text)
-                        refined_norm = self._normalized_transcript(text)
-                        opening = SequenceMatcher(
-                            None, carry_norm, refined_norm
-                        ).find_longest_match()
-                        # 精修包含 carry 开头时直接信任精修；否则补回开头。
-                        if (
-                            (opening.a != 0 or opening.size < 4)
-                            and SequenceMatcher(None, carry_norm, refined_norm).ratio()
-                            < 0.5
-                        ):
-                            text = self._merge_carry_text(carry_in_text, text)
-                    text = self._trim_refined_extension(text, event.get("text", ""))
-                    if carry_out_text:
-                        text = self._trim_carry_prefix(text, carry_out_text)
-                    if previous_final_text:
-                        text = self._trim_refinement_overlap(previous_final_text, text)
-                    updated["text"] = text
+                samples = self.denoiser.accept(track, samples, sample_rate)
             except Exception as error:
-                self.emit(
-                    "worker.warning",
-                    {
-                        "meeting_id": event["meeting_id"],
-                        "code": "live_refinement_failed",
-                        "message": str(error),
-                    },
-                )
-        if all(updated.get(key) == event.get(key) for key in ("speaker", "speaker_name", "text")):
-            return event
-        updated["revision"] = event["revision"] + 1
-        return self._emit_refined_segment(updated) or event
+                self.emit("worker.warning", {"meeting_id": self.active, "code": "denoiser_failed", "message": str(error)})
+        if self.vad and self.asr:
+            for segment in self.vad.accept(track, samples, start_ms):
+                self._queue_sentence(track, segment)
+        if self.live_postprocessing and start_ms >= self.subtitle_expiry_ms:
+            self.subtitle_expiry_ms = start_ms + 1000
+            self.live_postprocessing.submit(self._flush_subtitle_tails, start_ms)
+        if payload.get("flush"):
+            self._flush_sentences()
+        return {"samples": total}
 
-    def _refine_live_audio(self, refiner, audio, sample_rate, original_text=""):
-        """把一段音频精修为文本；超长段落切成 ≤15s 窗口逐段精修后拼接。
+    def _flush_sentences(self):
+        if not (self.vad and self.asr):
+            return
+        # 双轨最后一帧可能还在等待对轨；按原时间轴送完后再 flush。
+        for queue in self.live_mix_buffers.values():
+            while queue:
+                start_ms, samples = queue.popleft()
+                for segment in self.vad.accept("mix", samples, start_ms):
+                    self._queue_sentence("mix", segment)
+        for track in list(self.vad.tracks):
+            for segment in self.vad.flush(track):
+                self._queue_sentence(track, segment)
+        if self.live_postprocessing:
+            self.live_postprocessing.submit(self._flush_subtitle_tails)
+            # 排空后临时行必须跟着撤下，否则界面上会留一条内容已经进正式段落的残留行。
+            # 只通知真的提交过段落的音轨，避免为从未出现的音轨发空事件。
+            for track in list(self.stream_state):
+                self.live_postprocessing.submit(self._emit_draft, track, self.active)
 
-        funasr-nano 等精修模型的 KV 容量有限（约 20s），去掉 utterance 硬切后单条
-        字幕可能长达 30~90s，直接整段解码会溢出丢字。这里按 ``refined_window_seconds``
-        切窗逐段解码再拼接，避免溢出，同时保持「原地精修、不跨段」。
+    def _queue_sentence(self, track, segment):
+        # VAD/Smart Turn is the sole endpoint authority. Holding an endpoint here
+        # to merge a possible next one makes live captions arrive in bursts.
+        boundary = segment[3] if len(segment) > 3 else "endpoint"
+        self._submit_sentence(track, segment[0], segment[1], segment[2], boundary)
 
-        ``original_text`` 是流式第一阶段的原文。效率模式用同一流式模型做第二阶段
-        重解，输入是软钉边界处切掉尾巴的音频（末尾无静音），transducer 最后一个
-        partial 可能未 commit 而被丢弃，造成「句尾内容消失」；重解明显短于原文时
-        回退到原文，保住句尾。
+    def _submit_sentence(self, track, start_ms, end_ms, samples, boundary="endpoint"):
+        import numpy
+        sequence = self.stream_state.get(track, 0)
+        self.stream_state[track] = sequence + 1
+        event = {"meeting_id": self.active, "segment_id": f"{track}-{start_ms}-{sequence}",
+                 "revision": 1, "start_ms": start_ms, "end_ms": end_ms, "boundary": boundary,
+                 # 实时段落只区分「本机用户」与远端整轨：说话人细分交给会后精修。
+                 "speaker": "local-user" if track == "mic" else "spk-1",
+                 "speaker_name": None, "track": track}
+        # 队列只持有路径，慢设备积压时不把整场语音留在内存。原录音始终独立保留。
+        directory = self.store.meetings_dir / self.active / "audio"
+        with tempfile.NamedTemporaryFile(dir=directory, prefix="sentence-", suffix=".npy", delete=False) as file:
+            numpy.save(file, samples, allow_pickle=False)
+            path = Path(file.name)
+        try:
+            self.live_postprocessing.submit(self._decode_sentence, self.asr, event, path)
+        except Exception:
+            path.unlink(missing_ok=True)
+            raise
+
+    def _decode_sentence(self, asr, event, path):
+        """每段只提交一次 final；不读活动会话锁，stop 可安全等待队列排空。"""
+        import numpy
+        try:
+            samples = numpy.load(path, allow_pickle=False)
+            text = self._clean_live_text(asr.decode(samples, 16000))
+            if not text:
+                return
+            for subtitle in self._chunk_subtitles(event, text):
+                self._emit_subtitle(subtitle)
+            self._emit_draft(event["track"], event["meeting_id"])
+        except Exception as error:
+            self.emit("worker.warning", {"meeting_id": event["meeting_id"], "code": "sentence_transcription_failed",
+                       "message": str(error), "start_ms": event["start_ms"], "end_ms": event["end_ms"]})
+        finally:
+            path.unlink(missing_ok=True)
+
+    def _chunk_subtitles(self, event, text):
+        """把一段识别结果切成字幕，并与上一段押住的悬空尾句接上。
+
+        连续语音（播客、视频音轨、没人停顿的会议）里没有可用的停顿，段落只能按目标
+        长度或硬上限切开，切点落在一句话中间。识别器看不到切点之后的内容，会给截断
+        音频补一个句号，于是「约翰就算改变了这个世界。／也拯救不了……」。这里按句号
+        先把这一段切成句子，只把**最后一句**押住：前面的完整句子交给
+        :meth:`_coalesce_subtitles` 攒成段落，下一段到达时再由 :meth:`_join_pending`
+        决定用逗号还是直接相接。
         """
-        window_samples = int(SETTINGS["asr"]["refined_window_seconds"] * sample_rate)
-        if isinstance(refiner, StreamingASR) or len(audio) <= window_samples:
-            result = self._clean_live_text(refiner.decode(audio, sample_rate))
-            if result and original_text:
-                result = self._preserve_streaming_tail(result, original_text)
-                if isinstance(refiner, StreamingASR):
-                    original_words = re.findall(r"\w+", original_text.casefold())
-                    refined_words = re.findall(r"\w+", result.casefold())
-                    width = len(original_words)
-                    contains_original = any(
-                        refined_words[index : index + width] == original_words
-                        for index in range(len(refined_words) - width + 1)
-                    )
-                    if not contains_original:
-                        result = original_text
+        track = event["track"]
+        sentences = self._attach_leading_closers(
+            [sentence for sentence in self._split_sentences(text) if sentence.strip()]
+        )
+        if not sentences:
+            return
+        pending = self.pending_subtitles.pop(track, None)
+        total = sum(len(sentence) for sentence in sentences) or 1
+        duration = event["end_ms"] - event["start_ms"]
+        offset = 0
+        windows = []
+        for sentence in sentences:
+            start = event["start_ms"] + round(duration * offset / total)
+            offset += len(sentence)
+            windows.append((start, event["start_ms"] + round(duration * offset / total), sentence))
+        limit = self._length_limits(text)[2]
+        pieces = []
+        overlap_ms = self._vad_overlap_ms()
+        body_from = windows[0][0]
+        style = self.pending_join.pop(track, None)
+        if pending:
+            gap = windows[0][0] - pending["end_ms"]
+            # 起点早于上一段终点说明两段音频重叠（切点回看）。重叠区的字符数按本段
+            # 自己的语速换算——这是接缝对齐唯一需要的先验，比固定字数可靠。
+            overlap_chars = self._overlap_chars(text, duration, -gap if gap < 0 else 0)
+            joined = self._join_pending(
+                pending["text"], windows[0][2], style, overlap_chars
+            )
+            # 段间时间必须相接（切点是连续的），太远说明中间已经有别的段落提交过；
+            # 切点回看会让本段起点早于上一段终点，这时同样算相接，重复的字交给去重。
+            contiguous = -overlap_ms <= gap <= SUBTITLE_JOIN_GAP_MS
+            if joined and contiguous and len(joined) <= limit:
+                pieces.append({**pending, "text": joined, "end_ms": windows[0][1]})
+                windows.pop(0)
+                body_from = windows[0][0] if windows else event["end_ms"]
+            else:
+                pieces.append(pending)
+        # 切在停顿上或硬上限上的段落，末尾标点不可信；语义端点上也可能是识别器
+        # 自己断在半句话上（尾字是虚词），同样押住等下一段确认（见 _unfinished_subtitle）。
+        tail = None
+        if windows and (self._cut_boundary(event) or self._unfinished_subtitle(windows[-1][2])):
+            start, _, text_of_tail = windows.pop()
+            tail = {**event, "segment_id": f"{event['segment_id']}-tail",
+                    "start_ms": start, "end_ms": event["end_ms"], "text": text_of_tail}
+            body_until = start
         else:
-            result = ""
-            context_samples = sample_rate
-            for start in range(0, len(audio), window_samples):
-                # 离线 ASR 在窗口首尾容易吞掉半个词；给后续窗一秒上下文，
-                # 再用已有的字幕去重保留真正的新内容。
-                chunk = audio[max(0, start - context_samples) : start + window_samples]
-                part = self._clean_live_text(refiner.decode(chunk, sample_rate))
-                if part:
-                    result = self._join_utterance_text(
-                        result, self._trim_refinement_overlap(result, part)
-                    )
-        if result and isinstance(refiner, StreamingASR) and refiner.model.get("punctuated") is not True and self.punctuation:
-            result = self._clean_live_text(self.punctuation.apply(result))
-        return result
+            body_until = event["end_ms"]
+        if windows:
+            body = "".join(sentence for _, _, sentence in windows)
+            pieces.extend(self._sentence_subtitles(
+                {**event, "start_ms": body_from, "end_ms": body_until}, body))
+        if tail:
+            self.pending_subtitles[track] = tail
+            self.pending_join[track] = "comma" if event.get("boundary") == "pause" else None
+        yield from self._coalesce_subtitles(track, pieces)
+
+    def _coalesce_subtitles(self, track, pieces):
+        """把候选字幕攒成段落再提交，避免一句话一段。
+
+        段落边界只有三种：攒够目标长度、遇到明显长停顿（``SUBTITLE_PARAGRAPH_GAP_MS``）、
+        再并进去就超过上限。**不用 VAD 端点当段落边界**——实测真实会议里端点之后的
+        静音中位数只有 30–50 ms，按端点切会得到平均 24 字、四分之一不足 20 字的碎片
+        段（见 ``SUBTITLE_PARAGRAPH_GAP_MS`` 的注释）。端点只说明「这句的话末标点可信」，
+        与段落多长无关。
+
+        合并只在「并进去还不超过上限」时进行；但当前段落本身短于下限时宁可略微超限
+        也要并，否则会留下一条只有十几个字的字幕。不足目标的段落由
+        :meth:`_flush_subtitle_tails` 的滞留上限兜底提交，实时字幕不会无限等下去。
+        """
+        touched_at = time.monotonic()
+        paragraph = self.pending_paragraphs.pop(track, None)
+        for piece in pieces:
+            if paragraph is None:
+                paragraph = {**piece, "touched_at": touched_at}
+                continue
+            held = len(paragraph["text"])
+            minimum, target, limit = self._length_limits(paragraph["text"] + piece["text"])
+            long_pause = piece["start_ms"] - paragraph["end_ms"] >= SUBTITLE_PARAGRAPH_GAP_MS
+            if not long_pause and held < target and (held + len(piece["text"]) <= limit or held < minimum):
+                paragraph = {**paragraph, "text": self._join_text(paragraph["text"], piece["text"]),
+                             "end_ms": piece["end_ms"], "touched_at": time.monotonic()}
+                continue
+            yield paragraph
+            paragraph = {**piece, "touched_at": touched_at}
+        if paragraph is None:
+            return
+        if len(paragraph["text"]) >= self._length_limits(paragraph["text"])[1]:
+            yield paragraph
+        else:
+            self.pending_paragraphs[track] = paragraph
+
+    def _vad_overlap_ms(self):
+        """切点回看长度（见 ``asr.CUT_OVERLAP_MS``）；自定义 VAD 没有该属性时按 0。"""
+        overlap = getattr(self.vad, "cut_overlap_ms", 0)
+        return overlap if isinstance(overlap, (int, float)) and not isinstance(overlap, bool) else 0
 
     @staticmethod
-    def _preserve_streaming_tail(refined, original):
-        """流式重解若丢掉未说完的句尾，则回退到原文。
+    def _overlap_chars(text, duration_ms, overlap_ms):
+        """重叠的那段音频大约对应本段开头的多少个字。
 
-        判断标准：重解结果以句末标点收尾则视为语义完整，直接采用；否则把重解与原文
-        去掉标点/空白后比较，若重解是原文的严格前缀且更短，说明句尾在重解时丢失，
-        用含句尾的原文覆盖，避免「句尾内容消失」。
+        接缝对齐只需要一个搜索窗口，窗口大小就取「重叠时长 × 本段语速」。语速从本段
+        自己的字数与时长算出，因此和 :meth:`_sentence_subtitles` 估句时间轴用的是
+        同一个尺度，不会两头各估一次。
         """
-        if not refined or not original:
-            return refined
-        refined_norm = (refined or "").translate(_NORMALIZE_TABLE)
-        original_norm = (original or "").translate(_NORMALIZE_TABLE)
-        if len(refined_norm) < len(original_norm) and original_norm.startswith(refined_norm):
-            return original
-        return refined
+        if overlap_ms <= 0 or duration_ms <= 0:
+            return 0
+        per_ms = len(text) / duration_ms
+        return max(2, min(8, round(overlap_ms * per_ms)))
 
-    def _apply_live_punctuation(self, text):
-        """保留流式模型原生标点，其他模型才走 CT-Transformer。"""
-        if self.asr and self.asr.model.get("punctuated") is True:
-            return text
-        result = self.punctuation.apply(text) if self.punctuation else text
-        result = self._restore_missing_tail(result, text)
-        # CT-Transformer 对短/未说完文本偶发在句首补出标点，去掉句首标点。
-        return result.lstrip("，。！？、；：,.!?;:… ") if result else result
+    @staticmethod
+    def _cut_boundary(event):
+        """段落是被连续语音硬上限切出来的（末尾句号不可信），而不是语义端点。"""
+        return event.get("boundary") in {"pause", "cut"}
 
-    def _restore_missing_tail(self, transformed, original):
-        """标点模型若只吞掉原文尾部，保留标点结果并补回缺失内容。"""
-        transformed_norm = (transformed or "").translate(_NORMALIZE_TABLE).casefold()
-        original_norm = (original or "").translate(_NORMALIZE_TABLE).casefold()
-        if not transformed_norm or not original_norm.startswith(transformed_norm):
-            return transformed
-        if len(transformed_norm) >= len(original_norm):
-            return transformed
-        count = 0
-        for index, char in enumerate(original):
-            if char.translate(_NORMALIZE_TABLE):
-                count += 1
-                if count == len(transformed_norm):
-                    suffix = original[index + 1 :].lstrip(" \t,。.;:!?，；：！？")
-                    return self._join_utterance_text(
-                        transformed.rstrip(" 	。.!?；;！？"), suffix
-                    )
-        return transformed
+    @classmethod
+    def _join_pending(cls, previous, current, style, overlap_chars=0):
+        """把押着的悬空尾句与下一段的首句接起来；不该接时返回 ``None``。
 
-    def _restore_missing_head(self, transformed, original):
-        """精修若从原文中段开始，补回被吞掉的段首。"""
-        transformed_norm = self._normalized_transcript(transformed)
-        original_norm = self._normalized_transcript(original)
-        match = SequenceMatcher(None, original_norm, transformed_norm).find_longest_match()
-        if match.b != 0 or match.a == 0 or match.size < 4:
-            return transformed
-        count = 0
-        for index, char in enumerate(original):
-            if char.translate(_NORMALIZE_TABLE):
-                if count == match.a:
-                    return self._join_utterance_text(original[:index].rstrip(), transformed)
-                count += 1
-        return transformed
+        这正是流式识别里的 LocalAgreement 原则在本链路的落地：切点附近那段音频被
+        解码了两次，**两次都认同的部分才算数**。上一段押住的尾句就是第一次假设，
+        本段首句是第二次假设（它有切点左侧上下文，切点上的字只有它听得对）。
 
-    def _emit_refined_segment(self, updated):
-        """发射精修段：原地替换当前段的文本与说话人，不跨段合并。
+        接法按证据强弱分两档，两档都会去掉那个为截断音频补出来的句号：
 
-        实时字幕保持「流式输出 → 精修原地覆盖」：精修只更新同一条 segment 的内容。
-        软钉未能切出 carry 音频时，保留末尾残句，不能在精修阶段静默删字。
+        1. 两段在接缝上共享字面（硬上限把「未来」切成「…未来。」+「来，有些网友…」）
+           ——去掉重叠后直接相接；
+        2. 字面没完全对上（「…放电现象只会。」+「则会停止。」），但在重叠窗口内能找到
+           共同字并对齐——接点之前保留上一段的说法，之后改用下一段的说法。
+
+        另外，尾句以虚词/连接词结尾（的、在、因为、落在了……）时直接相接：这正是
+        :meth:`_chunk_subtitles` 押住该尾句的理由本身，不接回来等于白押。
+
+        ``style`` 为 ``"comma"`` 表示上一段切在停顿上（能量低谷也算）：VAD 确实听到了
+        停顿，但句末句号是识别器对截断音频的补全，两段在字面上对不上时改用逗号连接，
+        表示语义上这句还没说完。
+
+        以上都不成立，说明本段开头与上一段尾句描述的不是同一段音频（例如日文台词后面
+        接中文旁白，或中间已经有别的段落提交过）：返回 ``None``，让调用方原样提交，
+        不发明标点把它们粘成一句。
         """
-        if self.store.save_segment(updated):
-            self.emit("transcript.refined", updated)
-            return updated
-        return None
+        previous = (previous or "").strip()
+        current = (current or "").strip()
+        if not previous:
+            return current
+        if not current:
+            return previous
+        deduped = cls._dedupe_seam(previous, current, overlap_chars)
+        if deduped != current or cls._unfinished_subtitle(previous):
+            return previous.rstrip("。.") + deduped
+        spliced = cls._anchor_splice(previous, current, overlap_chars)
+        if spliced:
+            return spliced
+        if style != "comma":
+            return None
+        head = previous.rstrip("。！？.!?；;，,、 ")
+        tail = current.lstrip("，,、 ")
+        return f"{head}，{tail}" if head and tail else head + tail
 
-    def _sentence_boundary(self, raw_text):
-        """返回 ``(截断后的原文, 边界比例)``。
+    @staticmethod
+    def _dedupe_seam(previous, current, overlap_chars=0):
+        """去掉接缝两边重复识别的字词；没有重叠时原样返回。
 
-        流式标点模型对未说完的文本也会在末尾补一个句号，所以先把末尾句号剥掉，
-        找中间最后一个语义切点（句末优先、逗号兜底），把原始文本截到那里。比例用于
-        把音频缓冲也按同一位置切开，把「还没说完的尾巴」带到下一段重识别。没有
-        完整切点时比例返回 1.0（不截断、不 carry）。
+        硬上限把「未来」切成两段时，前一段解码成「…以此改变未来。」、后一段解码成
+        「来，有些网友……」，直接相接会出现「未来来」。搜索长度取切点回看换算出的
+        字符数（``_overlap_chars``）——重复只可能发生在被解码两遍的那段音频里，窗口
+        之外的相同字是巧合，不能当重叠删掉。去掉重叠后新段不能为空，否则宁可保留重复。
         """
-        if not raw_text:
-            return raw_text, 1.0
-        # 语义切点依赖标点：内置标点模型（X-ASR）自带标点，未加载 CT-Transformer
-        # 也可切；其余模型必须已加载标点模型才切。
-        if not self.punctuation and not (self.asr and self.asr.model.get("punctuated")):
-            return raw_text, 1.0
-        punctuated = self._apply_live_punctuation(raw_text)
-        stripped = (punctuated or "").strip()
-        if not stripped:
-            return raw_text, 1.0
-        # 末尾的句末/逗号通常是「伪句末」（标点模型对未说完的文本也会补一个），剥掉后
-        # 在剩余文本里找最后一个真实切点。若末尾本就是残句（无标点），直接在整个文本
-        # 里找——软钉应始终切在中间的语义边界、把未说完的尾巴带到下一段，而不是只在
-        # 末尾恰好带标点时才切，否则「不是马爷」这类残句会留在本段，下一段从半句开始。
-        search = stripped
-        if search[-1] in "。！？.!?；;，,":
-            search = search[:-1]
-        # 优先切在句末标点；只有当中间没有句末标点时才用逗号兜底，避免把标点模型
-        # 临时补的逗号当成切点。
-        last = max(
-            (index for index, ch in enumerate(search) if ch in _SENTENCE_FINAL),
-            default=-1,
+        head = current.lstrip("，,、 ")
+        tail = previous.rstrip("。！？.!?；;，,、 ")
+        window = max(12, overlap_chars)
+        for length in range(min(len(tail), len(head), window), 0, -1):
+            if tail[-length:] == head[:length] and len(head) > length:
+                return head[length:]
+        return current
+
+    @staticmethod
+    def _anchor_splice(previous, current, overlap_chars=0):
+        """按共同字对齐接缝上重复识别的区间；找不到可信的共同字时返回 ``None``。
+
+        切点回看让相邻两段音频重叠，重叠的那几百毫秒被识别了两次。识别器在切点附近
+        本来就不稳——前一段只拿到截断的音频，后一段从半个字开始——两次结果可能只有
+        个别字对得上（「…放电现象只会。」＋「则会停止。」，真相是「则会停止」）。逐字
+        比对会漏掉这种情况，重复的字就原样留在字幕里（「放电现象只会，则会停止」）。
+        这里在接缝两侧各取一小段找最长公共子串，接点之前保留上一段的说法，接点之后
+        改用下一段的说法：下一段有完整上下文，切点上的字只有它听得对。
+
+        搜索窗口取切点回看换算出的字符数（``_overlap_chars``），重叠只可能发生在这
+        一小段里。只有共同子串同时落在上一段的**结尾**和本段的**开头**才算重叠的
+        证据——否则只是「，」这类标点在两段里各出现一次，按它对齐会整段吞掉中间的字。
+        """
+        window = min(len(previous), len(current), max(12, overlap_chars))
+        if window < 2:
+            return None
+        tail = previous[-window:].rstrip("。！？.!?；;，,、 ")
+        head = current[:window]
+        if len(tail) < 2 or len(head) < 2:
+            return None
+        match = SequenceMatcher(None, tail, head, autojunk=False).find_longest_match(
+            0, len(tail), 0, len(head)
         )
-        if last < 0:
-            last = max(
-                (index for index, ch in enumerate(search) if ch in "，,；;"),
-                default=-1,
-            )
-        if last < 0:
-            return raw_text, 1.0
-        punctuation = set("，。！？、；：,.!?;:…'\"「」（）() \t")
-        total_chars = sum(1 for ch in raw_text if ch not in " \t")
-        if punctuated == raw_text:
-            # 内置标点模型（如 X-ASR）：punctuated 就是 raw。ratio 用「非空白字符数」
-            # 而非 raw 下标（raw 里标点后常跟空格，raw 下标会虚高），否则音频按比例
-            # 切过头、把下一句开头一并截掉。文本截断仍按 raw 下标 raw_text[:last]。
-            cut = sum(1 for ch in raw_text[:last] if ch not in " \t")
-            ratio = min(1.0, cut / total_chars) if total_chars else 1.0
-            truncated = raw_text[:last].rstrip("，。！？、；：,.!?;: ")
-        else:
-            # 标点模型增补标点（CT-Transformer）：punctuated 比 raw 多了标点字符，
-            # 需要按内容字符数映射回 raw，才能对齐音频比例与截断位置。
-            content_count = sum(1 for ch in search[: last + 1] if ch not in punctuation)
-            ratio = min(1.0, content_count / total_chars) if total_chars else 1.0
-            raw_cut = 0
-            seen = 0
-            for raw_cut, ch in enumerate(raw_text, 1):
-                if ch not in punctuation:
-                    seen += 1
-                    if seen == content_count:
-                        break
-            truncated = raw_text[:raw_cut].rstrip("，。！？、；：,.!?;: ")
-        return (truncated if truncated else raw_text), ratio
+        if not match.size or match.a + match.size < len(tail) - 1 or match.b > 1:
+            return None
+        if not re.search(r"[^\W_]", tail[match.a : match.a + match.size]):
+            return None
+        return previous[: len(previous) - window + match.a] + current[match.b:]
 
-    def _merge_carry_text(self, carry, text):
-        """保留已识别的 carry 开头，移除新流对同一段音频的重复识别。"""
-        carry_norm = self._normalized_transcript(carry)
-        text_norm = self._normalized_transcript(text)
-        minimum_overlap = 2 if carry.rstrip()[-1:].isascii() else 4
-        overlap = next(
-            (
-                (length, text_norm.find(carry_norm[-length:]))
-                for length in range(
-                    min(len(carry_norm), len(text_norm)), minimum_overlap - 1, -1
-                )
-                if carry_norm[-length:] in text_norm
-            ),
-            None,
-        )
-        if overlap is None:
-            return self._join_utterance_text(carry, text)
-        length, offset = overlap
-        count = 0
-        for index, char in enumerate(text):
-            if char.isalnum():
-                count += 1
-                if count == offset + length:
-                    rest = text[index + 1 :]
-                    if rest and rest[0].isalnum():
-                        return carry + rest
-                    return self._join_utterance_text(
-                        carry, rest.lstrip(" \t,。.;:!?，；：！？")
-                    )
-        return carry
+    @staticmethod
+    def _attach_leading_closers(sentences):
+        """把落在下一句开头的右引号/右括号并回上一句。
 
-    def _trim_carry_prefix(self, text, carry):
-        """移除精修跨过软钉边界多识别的下一段开头。"""
-        text_norm = self._normalized_transcript(text)
-        carry_norm = self._normalized_transcript(carry)
-        for length in range(min(len(text_norm), len(carry_norm)), 1, -1):
-            if not text_norm.endswith(carry_norm[:length]):
-                continue
-            count = 0
-            for index in range(len(text) - 1, -1, -1):
-                if text[index].isalnum():
-                    count += 1
-                    if count == length:
-                        return text[:index].rstrip(" \t,。.;:!?，；：！？")
-        return text
+        识别器常把句号写在右引号之前（``……变动率的。”数值会发生改变。``），按句末标点
+        切句就会把孤零零的 ``”`` 留在下一句开头，字幕里多出一条 ``”，数值会……``。
+        """
+        merged = []
+        for sentence in sentences:
+            head = ""
+            while sentence and sentence[0] in "”’」』）】〉»" and merged:
+                head += sentence[0]
+                sentence = sentence[1:]
+            if head:
+                merged[-1] += head
+            if sentence:
+                merged.append(sentence)
+        return merged
 
-    def _trim_refined_extension(self, refined, original):
-        """精修若在原始段落的完整尾部之后继续输出，移除越界文本。"""
-        refined_norm = self._normalized_transcript(refined)
-        original_norm = self._normalized_transcript(original)
-        for length in range(min(len(refined_norm), len(original_norm)), 3, -1):
-            suffix = original_norm[-length:]
-            offset = refined_norm.rfind(suffix)
-            if offset < 0:
-                continue
-            if offset + length == len(refined_norm):
-                return refined
-            count = 0
-            for index, char in enumerate(refined):
-                if char.isalnum():
-                    count += 1
-                    if count == offset + length:
-                        return refined[: index + 1].rstrip(" \t,。.;:!?，；：！？")
-        return refined
+    def _tail_hold_ms(self):
+        """悬空尾句最多押多久（音频时间）；必须撑过一次切段才可能接上下一段。"""
+        cap = getattr(self.vad, "max_speech_seconds", None)
+        seconds = float(cap) + 2.0 if isinstance(cap, (int, float)) else 12.0
+        return int(max(6.0, seconds) * 1000)
+
+    def _emit_subtitle(self, event):
+        if self.store.save_segment(event):
+            self.emit("transcript.final", event)
+            self.emit("transcript.settled", event)
+            try:
+                self.ai_note_on_segment(event)
+            except Exception:
+                pass
+
+    def _emit_draft(self, track, meeting_id):
+        """把「正在攒的段落」作为临时行发给界面。
+
+        它与被下线的流式 partial 不是一回事：内容来自一次**已经完成**的整句识别，
+        只是还没攒够提交条件（见 :meth:`_coalesce_subtitles`）。所以它不逐字改写，
+        只在下一段解码到达时增长；押住的尾句被 :meth:`_join_pending` 接缝对齐修正时
+        会有小幅增减。正式段落提交后由空文本撤下。
+
+        ``meeting_id`` 由调用方传入：本方法在识别线程上运行，而 ``self.active`` 受
+        录音锁保护——stop/pause 正持着那把锁等本线程排空，读它就会死锁。
+        """
+        parts = [item for item in (self.pending_paragraphs.get(track),
+                                   self.pending_subtitles.get(track)) if item]
+        if not parts:
+            self.emit("transcript.draft", {"meeting_id": meeting_id, "track": track,
+                                           "segment_id": f"draft-{track}", "text": "",
+                                           "start_ms": 0, "end_ms": 0, "speaker": None})
+            return
+        text = parts[0]["text"]
+        for item in parts[1:]:
+            text = self._join_text(text, item["text"])
+        self.emit("transcript.draft", {
+            "meeting_id": meeting_id, "track": track, "segment_id": f"draft-{track}",
+            "start_ms": parts[0]["start_ms"], "end_ms": parts[-1]["end_ms"],
+            "speaker": "local-user" if track == "mic" else "spk-1", "text": text,
+        })
+
+    def _flush_subtitle_tails(self, now_ms=None):
+        # 每轨最多暂存一个未攒够的段落和一个悬空尾句。两者用途不同，滞留上限也不同：
+        # 段落等的是「还有话要接着说」（SUBTITLE_PARAGRAPH_HOLD_SECONDS），尾句等的是
+        # 「下一段解码到达」（_tail_hold_ms）。暂停/停止立即排空。
+        # 段落覆盖的时间更早，先提交。
+        for track, paragraph in list(self.pending_paragraphs.items()):
+            if now_ms is None or time.monotonic() - paragraph.get("touched_at", 0.0) >= SUBTITLE_PARAGRAPH_HOLD_SECONDS:
+                self._emit_subtitle(paragraph)
+                del self.pending_paragraphs[track]
+        for track, subtitle in list(self.pending_subtitles.items()):
+            if now_ms is None or subtitle["end_ms"] <= now_ms - self._tail_hold_ms():
+                self._emit_subtitle(subtitle)
+                del self.pending_subtitles[track]
+                self.pending_join.pop(track, None)
+
+    @staticmethod
+    def _unfinished_subtitle(text):
+        # ponytail: 只续接明确悬空的中文连接词；完整语义判断需额外语言模型。
+        return bool(re.search(r"(?:是|的|把|被|与|及|从|例如|比如|包括|在于|落在了|以外)[。.]?$", text))
+
+    @staticmethod
+    def _join_text(left, right):
+        """拼接两段识别文本：拉丁词之间补一个空格，中日韩直接相接。
+
+        片段的边界一般落在句末，上一段结尾的标点后面不会再带空格，直接相接会得到
+        ``you?Muy`` 这种粘在一起的句子。
+        """
+        if not left:
+            return right
+        if not right:
+            return left
+        if left[-1].isspace() or right[0].isspace():
+            return left + right
+        if left[-1].isascii() and right[0].isascii() and right[0].isalnum():
+            return f"{left} {right}"
+        return left + right
+
+    @staticmethod
+    def _length_limits(text):
+        """按文本主体语言给出字幕的（下限、目标、上限）；中文按字，拉丁按字符。"""
+        chinese_chars = len(re.findall(r"[\u3400-\u9fff]", text))
+        chinese = chinese_chars > 0 and chinese_chars * 3 >= len(re.findall(r"[A-Za-z]", text))
+        return SUBTITLE_LENGTHS["cjk" if chinese else "latin"]
+
+    def _sentence_subtitles(self, event, text):
+        """按目标长度聚合多句；过长时优先在完整句子、分句或单词边界切开。"""
+        minimum, target, limit = self._length_limits(text)
+        sentences = []
+        for sentence in self._split_sentences(text):
+            if sentences and self._unfinished_subtitle(sentences[-1]):
+                sentences[-1] = sentences[-1].rstrip("。.") + sentence.strip()
+            else:
+                sentences.append(sentence)
+        remaining = "".join(sentences).strip()
+        parts = []
+        # 句号只是候选边界；长度合适的多个句子一起提交为一条字幕。
+        while len(remaining) > limit:
+            upper = min(limit, len(remaining) - minimum)
+            boundaries, offset = [], 0
+            for sentence in self._split_sentences(remaining):
+                offset += len(sentence)
+                if minimum <= offset <= upper:
+                    boundaries.append(offset)
+            if not boundaries:
+                boundaries = [match.end() for match in re.finditer(r"[，、：:;；]|(?<!\d),(?!\d)|\s+", remaining[:upper])
+                              if minimum <= match.end() <= upper]
+            cut = min(boundaries, key=lambda end: abs(end - target)) if boundaries else min(target, upper)
+            # 不切开英文单词或数字；极长无分隔 token 保持原样。
+            if not boundaries and remaining[cut - 1].isascii() and remaining[cut - 1].isalnum():
+                while cut < len(remaining) and remaining[cut].isascii() and remaining[cut].isalnum():
+                    cut += 1
+            parts.append(remaining[:cut].strip())
+            remaining = remaining[cut:].strip()
+        if remaining:
+            parts.append(remaining)
+        # ponytail: Nano 无词时间戳，句内按字数估时；需要精确卡字时再引入对齐器。
+        total = sum(map(len, parts))
+        offset = 0
+        duration = event["end_ms"] - event["start_ms"]
+        for index, part in enumerate(parts):
+            start = event["start_ms"] + round(duration * offset / total)
+            offset += len(part)
+            yield {**event, "segment_id": event["segment_id"] if index == 0 else f"{event['segment_id']}-s{index}",
+                   "start_ms": start, "end_ms": event["start_ms"] + round(duration * offset / total), "text": part}
 
     @synchronized_recording
     def stop(self, payload):
-        """flush 所有识别流、合成播放文件并结束活动会议。
-
-        Returns:
-            状态为 ``ready`` 的会议详情。
-        """
         require(payload, "meeting_id", "duration_ms")
         self._active(payload["meeting_id"])
         meeting_id = self.active
         try:
-            if self.asr:
-                for track in (("mix",) if self.live_tracks == {"mic", "system"} else ("mic", "system")):
-                    self.audio(
-                        {
-                            "meeting_id": meeting_id,
-                            "track": track,
-                            "pcm": "",
-                            "sample_rate": 16000,
-                            "start_ms": int(payload["duration_ms"]),
-                            "flush": True,
-                        }
-                    )
+            self._flush_sentences()
         finally:
             self._release_active_session()
         meeting = self.store.finish_meeting(meeting_id, payload["duration_ms"])
@@ -1484,45 +817,32 @@ class RecordingSessionMixin:
         return meeting
 
     def _release_active_session(self):
-        """在持久化停止状态前释放模型和执行器资源。
-
-        精修/标点执行器用 ``wait=False`` 关闭：结束会议不应干等排队的精修跑完
-        （弱 CPU 上可能拖到数分钟）。在飞任务保留流式原文，会议结束后由
-        ``meeting.refine`` 统一完整精修。
-        """
-        meeting_id = self.active
-        if meeting_id and hasattr(self, "ai_note_stop"):
-            self.ai_note_stop({"meeting_id": meeting_id})
-        postprocessing = self.live_postprocessing
-        punctuation = self.live_punctuation
+        # 这已是唯一识别结果，不能像旧二阶段精修那样取消排队任务。
+        if self.live_postprocessing:
+            self.live_postprocessing.shutdown(wait=True)
+        if self.active and hasattr(self, "ai_note_stop"):
+            self.ai_note_stop({"meeting_id": self.active})
         self.live_postprocessing = None
-        self.live_punctuation = None
-        with self._live_refine_lock:
-            self._live_refine_generation += 1
-            self._live_refine_outstanding = 0
-            self._live_refine_degraded_warned = False
-            self._live_refine_drops = 0
-            self._live_perf_bottleneck = False
-        if postprocessing:
-            postprocessing.shutdown(wait=False, cancel_futures=True)
-        if punctuation:
-            punctuation.shutdown(wait=False, cancel_futures=True)
-        # 远程精修器需要显式回收其子进程。
-        if isinstance(self.live_refiner, RemoteRefiner):
-            self.live_refiner.shutdown()
-        (
-            self.active,
-            self.asr,
-            self.punctuation,
-            self.denoiser,
-            self.language_identifier,
-        ) = None, None, None, None, None
-        self.speaker_tracker, self.stream_state, self.recent_finals = None, {}, []
+        self.active = self.asr = self.vad = self.denoiser = None
+        self.stream_state = {}
+        # recent_finals 去重窗口属于单场会议：这里必须清空，否则下一场会议会拿上一场
+        # 的句子做重复判定。
+        self.recent_finals = []
+        self.pending_subtitles, self.pending_join = {}, {}
+        self.pending_paragraphs = {}
         self.live_tracks, self.live_mix_buffers = set(), {"mic": deque(), "system": deque()}
-        self.meeting_language, self.detected_language = None, None
-        self.live_refiner = None
+        self.meeting_language = None
         self.power_saving = False
 
+    @synchronized_recording
+    def shutdown_active_session(self):
+        """进程退出前收尾活动会议：与 stop 相同的刷新 + 释放，走同一把录音锁。"""
+        if not self.active:
+            return
+        try:
+            self._flush_sentences()
+        finally:
+            self._release_active_session()
+
     def _active(self, meeting_id):
-        """确认命令指向当前活动会议，无返回值。"""
         self.state.require(meeting_id)

@@ -19,6 +19,13 @@ assert.deepEqual(selected, {});
 assert.equal(logged[0], 'ERROR');
 assert.equal(logged[1].message, 'denied');
 
+let calls = 0;
+await assert.rejects(
+  createDisplayMediaHandler({ getSources: async () => [screen] }, assert.fail)(null, () => { calls += 1; throw new Error('Electron rejected stream'); }),
+  /Electron rejected stream/,
+);
+assert.equal(calls, 1, 'a rejected callback must not be retried');
+
 let permissionRequest;
 await registerScreenPermission({ getSources: async (options) => { permissionRequest = options; } }, assert.fail);
 assert.deepEqual(permissionRequest, { types: ['screen'], thumbnailSize: { width: 1, height: 1 } });

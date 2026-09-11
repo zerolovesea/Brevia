@@ -6,7 +6,7 @@ import time
 import wave
 import numpy
 
-from .asr import ModelManager, RefinedASR, StreamingASR
+from .asr import ModelManager, RefinedASR
 from .config import SETTINGS
 
 
@@ -17,10 +17,10 @@ def main():
     输出识别文本、音频时长、耗时和 RTF 的 JSON；空结果以非零状态退出。
     """
     parser = argparse.ArgumentParser(
-        description="Download and diagnose a Brevia streaming model"
+        description="Download and diagnose a Brevia sentence model"
     )
     parser.add_argument("--models-dir", required=True)
-    parser.add_argument("--model-id", default="zipformer-zh-xlarge-streaming-int8")
+    parser.add_argument("--model-id", default="funasr-nano-int8")
     parser.add_argument("--download", action="store_true")
     args = parser.parse_args()
     manager = ModelManager(args.models_dir)
@@ -36,24 +36,8 @@ def main():
             / 32768
         )
     started = time.perf_counter()
-    finals = []
-    if "refined" in manager.get(args.model_id)["stages"]:
-        samples = samples[: sample_rate * SETTINGS["asr"]["refined_window_seconds"]]
-        finals.append(RefinedASR(manager, args.model_id).decode(samples, sample_rate))
-    else:
-        recognizer = StreamingASR(manager, args.model_id)
-        step = int(sample_rate * 0.6)
-        for offset in range(0, len(samples), step):
-            text, final = recognizer.accept(
-                "diagnostic", samples[offset : offset + step], sample_rate
-            )
-            if final and text:
-                finals.append(text)
-        text, _ = recognizer.accept(
-            "diagnostic", numpy.empty(0, dtype=numpy.float32), sample_rate, True
-        )
-        if text:
-            finals.append(text)
+    samples = samples[: sample_rate * SETTINGS["asr"]["refined_window_seconds"]]
+    finals = [RefinedASR(manager, args.model_id).decode(samples, sample_rate)]
     elapsed = time.perf_counter() - started
     result = {
         "model_id": args.model_id,

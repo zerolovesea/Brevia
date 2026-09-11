@@ -1,239 +1,224 @@
-"""实时链路压测与模型基准（开发用，不随应用发布）。
-
-对一条本地 WAV 录音做「实时节奏回放」，测量流式 ASR / 精修的真实 RTF 与整机 CPU
-占用，并对比效率模式（power_saving，流式模型做二阶段）与性能模式（精修模型做二阶段）
-的最终字幕，用于在低端 Windows 机器上选型。
-
-用法::
-
-    python -m backend.bench_live \
-        --wav C:/Users/<you>/brevia/meetings/<id>/audio/playback-system.wav \
-        --language zh --max-seconds 60
-
-可选: --streaming-model / --refined-model / --power-saving 0|1 / --bench streaming|refined|replay
-"""
-
+"""以真实采集节奏回放示例，测量整句链路；每次运行使用独立进程和临时会议。"""
 import argparse
 import base64
-import os
-import statistics
+import hashlib
+import json
+import platform
+import resource
+import sqlite3
+import sys
+import tempfile
 import time
 import wave
 from pathlib import Path
 
-import numpy
 
-FRAME_SAMPLES = 2730  # 与前端 8192@48k 降采样到 16k 后每帧样本数一致
-
-# 开发/沙箱下，工作区外的「缺失文件」的 stat 会被转成 PermissionError，导致
-# ModelManager.is_ready 对未下载模型抛错。真实 App 不会命中，这里加一层容错以
-# 便本工具在未下载 denoiser/refined 模型时也能回放。
-from .asr import ModelManager
-from .audio_io import read_wav_pcm
-
-_orig_is_ready = ModelManager.is_ready
-
-
-def _safe_is_ready(self, model_id):
-    try:
-        return _orig_is_ready(self, model_id)
-    except PermissionError:
-        return False
-
-
-ModelManager.is_ready = _safe_is_ready
-
-
-def cpu_load_snapshot(pid=None):
-    """返回当前进程的 CPU 百分比与 RSS（MB）；psutil 缺失时返回 None。
-
-    ``psutil.Process.cpu_percent`` 首次调用为基线值 0.0，故先空采一次建立基线。
-    """
-    try:
-        import psutil
-
-        proc = psutil.Process(pid or os.getpid())
-        proc.cpu_percent(interval=None)
-        return {
-            "cpu_percent": proc.cpu_percent(interval=0.1),
-            "rss_mb": round(proc.memory_info().rss / 1e6, 1),
-        }
-    except Exception:
-        return None
-
-
-def replay(wav_path, language, max_seconds, data_root, models_root,
-           streaming_model="x-asr-zh-en-streaming-480ms-int8",
-           refined_model="qwen3-asr-0.6b-int8",
-           power_saving=True):
-    from .worker import Worker
-
-    pcm = read_wav_pcm(wav_path)
-    total_samples = len(pcm) // 2
-    sample_rate = 16000
-    events = []
-    worker = Worker(data_root, events.append)
-    meeting = worker.start(
-        {
-            "title": f"[bench] {Path(wav_path).name}",
-            "language": language,
-            "streaming_model_id": streaming_model,
-            "refined_model_id": refined_model,
-            "speaker_segmentation_model_id": "pyannote-segmentation-3.0",
-            "vad_model_id": "silero-vad",
-            "num_speakers": -1,
-            "power_saving": bool(power_saving),
-        }
-    )
-    worker._wait_prepare(60)
-    if worker.asr is None:
-        raise RuntimeError("Streaming ASR did not become ready")
-
-    fed_samples = 0
-    cpu_samples = []
-    wall_start = time.time()
-    start_ms = 0
-    offset = 0
-    while offset < total_samples and (not max_seconds or fed_samples < max_seconds * sample_rate):
-        frame = pcm[offset * 2:(offset + FRAME_SAMPLES) * 2]
-        if not frame:
-            break
-        worker.audio(
-            {
-                "meeting_id": meeting["id"],
-                "track": "system",
-                "pcm": base64.b64encode(frame).decode(),
-                "sample_rate": sample_rate,
-                "start_ms": start_ms,
-            }
-        )
-        offset += len(frame) // 2
-        fed_samples = offset
-        start_ms = fed_samples * 1000 // sample_rate
-        if len(cpu_samples) < 40:
-            snap = cpu_load_snapshot()
-            if snap:
-                cpu_samples.append(snap["cpu_percent"])
-    wall_elapsed = time.time() - wall_start
-
-    executor = getattr(worker, "live_postprocessing", None)
-    if executor is not None:
-        while True:
-            queue = getattr(executor, "_work_queue", None)
-            if queue is None or queue.qsize() == 0:
-                break
-            time.sleep(0.2)
-
-    worker.stop({"meeting_id": meeting["id"], "duration_ms": fed_samples * 1000 // sample_rate})
-    segments = worker.store.get_meeting(meeting["id"])["segments"]
-    return {
-        "fed_seconds": round(fed_samples / sample_rate, 1),
-        "wall_seconds": round(wall_elapsed, 1),
-        "speedup": round(fed_samples / sample_rate / max(wall_elapsed, 1e-9), 1),
-        "cpu_percent": round(statistics.mean(cpu_samples), 1) if cpu_samples else None,
-        "events": events,
-        "segments": segments,
-    }
-
-
-def benchmark_streaming(wav_path, model_id, language, max_seconds, models_root):
-    from .asr import ModelManager, StreamingASR
-
-    manager = ModelManager(models_root)
-    pcm = read_wav_pcm(wav_path)
-    total = len(pcm) // 2
-    sample_rate = 16000
-    limit = min(total, int(max_seconds * sample_rate)) if max_seconds else total
-    recognizer = StreamingASR(manager, model_id, language)
-    finals = []
-    t0 = time.time()
-    for start in range(0, limit, FRAME_SAMPLES):
-        frame = pcm[start * 2:(start + FRAME_SAMPLES) * 2]
-        samples = numpy.frombuffer(frame, dtype=numpy.int16).astype(numpy.float32) / 32768
-        result, final = recognizer.accept("system", samples, sample_rate)
-        text = result if isinstance(result, str) else getattr(result, "text", "")
-        if final and text:
-            finals.append(text)
-    tail, _ = recognizer.accept("system", numpy.empty(0, dtype=numpy.float32), sample_rate, True)
-    if tail:
-        finals.append(tail if isinstance(tail, str) else getattr(tail, "text", ""))
-    elapsed = time.time() - t0
-    return {
-        "audio_seconds": round(limit / sample_rate, 2),
-        "elapsed_seconds": round(elapsed, 2),
-        "rtf": round(elapsed / (limit / sample_rate), 3),
-        "text": "".join(finals),
-    }
-
-
-def benchmark_refined(wav_path, model_id, language, max_seconds, models_root, window=15):
-    from .asr import ModelManager, RefinedASR
-    from .audio_io import read_mono_wav_window
-
-    manager = ModelManager(models_root)
-    with wave.open(str(wav_path)) as w:
-        duration_ms = w.getnframes() * 1000 // w.getframerate()
-    limit_ms = min(duration_ms, int(max_seconds * 1000)) if max_seconds else duration_ms
-    recognizer = RefinedASR(manager, model_id, language=language)
-    times = []
-    texts = []
-    for start in range(0, limit_ms, window * 1000):
-        end = min(start + window * 1000, limit_ms)
-        samples, sr = read_mono_wav_window(wav_path, start, end)
-        t0 = time.time()
-        text = recognizer.decode(samples, sr)
-        elapsed = time.time() - t0
-        times.append(elapsed)
-        texts.append(text)
-    return {
-        "windows": len(times),
-        "avg_seconds_per_window": round(statistics.mean(times), 2) if times else 0,
-        "rtf": round(sum(times) / max(limit_ms / 1000, 1e-9), 3),
-        "text": "".join(texts),
-    }
+def error_rate(reference, hypothesis, language):
+    def normalize(text):
+        text = ''.join(c.lower() if c.isalnum() else ' ' for c in text)
+        return list(''.join(text.split())) if language == 'zh' else text.split()
+    expected, actual = normalize(reference), normalize(hypothesis)
+    row = list(range(len(actual) + 1))
+    for i, left in enumerate(expected, 1):
+        previous, row = row, [i]
+        for j, right in enumerate(actual, 1):
+            row.append(min(row[-1] + 1, previous[j] + 1, previous[j - 1] + (left != right)))
+    return row[-1] / max(1, len(expected))
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--wav", required=True)
-    parser.add_argument("--language", default="zh")
-    parser.add_argument("--max-seconds", type=float, default=60.0)
-    parser.add_argument("--streaming-model", default="x-asr-zh-en-streaming-480ms-int8")
-    parser.add_argument("--refined-model", default="qwen3-asr-0.6b-int8")
-    parser.add_argument("--power-saving", type=int, default=1, choices=(0, 1))
-    parser.add_argument("--models-root", default=os.environ.get("BREVIA_MODELS_DIR") or str(Path.home() / "brevia" / "models"))
-    parser.add_argument("--data-root", default=str(Path(__file__).resolve().parents[1] / ".bench-data"))
-    parser.add_argument("--bench", default="all", choices=("all", "streaming", "refined", "replay"))
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--project-root', type=Path, default=Path(__file__).resolve().parents[1])
+    parser.add_argument('--models-root', type=Path, default=Path.home() / 'brevia/models')
+    parser.add_argument('--language', choices=('auto', 'zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru'), help='覆盖会议识别语言；不指定时沿用源会议')
+    parser.add_argument('--model', default='funasr-nano-int8')
+    parser.add_argument('--legacy', action='store_true', help='对归档旧版本使用原流式模型')
+    parser.add_argument('--gaps', action='store_true', help='在示例标注的句间插入 1 秒静音')
+    parser.add_argument('--silence', action='store_true', help='以等长纯静音验证误触发')
+    parser.add_argument('--max-speech', type=float, help='覆盖 VAD 最长语音时长以验证持续发言切段')
+    parser.add_argument('--unpaced', action='store_true', help='尽快喂音频；只用于测量吞吐，不用于字幕延迟')
+    parser.add_argument('--translate-to', help='转写后用现有本地模型逐段翻译，并单独计时')
+    parser.add_argument('--meeting', help='只读回放已有会议 ID；结果写入临时目录')
+    parser.add_argument('--source-root', type=Path, default=Path.home() / 'brevia')
+    parser.add_argument('--start-seconds', type=float, default=0, help='源录音回放起点')
+    parser.add_argument('--max-seconds', type=float, help='仅回放指定长度，便于验证长会议片段')
+    parser.add_argument('--output', type=Path)
     args = parser.parse_args()
+    if args.start_seconds < 0 or (args.max_seconds is not None and args.max_seconds <= 0):
+        parser.error('Invalid replay time range')
+    # 直接执行此文件时，也可以对 git archive 的旧版执行完全相同的测量。
+    sys.path.insert(0, str(args.project_root.resolve()))
+    import os
+    os.environ['BREVIA_MODELS_DIR'] = str(args.models_root.resolve())
+    from backend.worker import Worker
+    from backend.config import SETTINGS
 
-    if args.bench in ("all", "streaming"):
-        result = benchmark_streaming(args.wav, args.streaming_model, args.language, args.max_seconds, args.models_root)
-        print(f"[streaming {args.streaming_model}] rtf={result['rtf']} "
-              f"({result['elapsed_seconds']}s / {result['audio_seconds']}s)")
-        print("  text:", result["text"][:160])
+    reference = None
+    if args.meeting:
+        if args.gaps:
+            parser.error('--gaps requires the annotated example')
+        with sqlite3.connect(f"file:{args.source_root.resolve() / 'brevia.db'}?mode=ro", uri=True) as db:
+            row = db.execute('SELECT language FROM meetings WHERE id=?', (args.meeting,)).fetchone()
+        if row is None:
+            parser.error('Meeting not found')
+        args.language = args.language or row[0]
+        directory = args.source_root / 'meetings' / args.meeting
+        tracks = json.loads((directory / 'manifest.json').read_text())['tracks']
+        track = 'system' if 'system' in tracks else 'mic'
+        sources = [directory / 'audio' / name for name in tracks[track]['chunks']]
+    else:
+        args.language = args.language or 'zh'
+        if args.language not in {'zh', 'en', 'es'}:
+            parser.error('Use --meeting for this language')
+        example = next(x for x in json.loads((args.project_root / 'backend/examples.json').read_text()) if x['locale'] == args.language)
+        sources = [args.project_root / 'backend/fixtures' / example['audio']]
+        reference = ' '.join(segment[3] for segment in example['segments'])
+        track = 'system'
+    blocks = []
+    for source in sources:
+        with wave.open(str(source)) as recording:
+            assert recording.getframerate() == 16000 and recording.getnchannels() == 1 and recording.getsampwidth() == 2
+            blocks.append(recording.readframes(recording.getnframes()))
+    pcm = b''.join(blocks)
+    if args.start_seconds or args.max_seconds is not None:
+        if args.gaps:
+            parser.error('--gaps cannot be combined with a time range')
+        start = round(args.start_seconds * 16000) * 2
+        end = start + round(args.max_seconds * 16000) * 2 if args.max_seconds is not None else len(pcm)
+        pcm, reference = pcm[start:end], None
+        if not pcm:
+            parser.error('Replay range contains no audio')
+    source_seconds = len(pcm) / 32000
+    if args.gaps:
+        chunks, offset = [], 0
+        for index, segment in enumerate(example['segments']):
+            end = round(segment[1] * 16) if index < len(example['segments']) - 1 else len(pcm) // 2
+            chunks.append(pcm[offset * 2:end * 2])
+            chunks.append(bytes(32000))
+            offset = end
+        pcm = b''.join(chunks)
+    if args.silence:
+        pcm, reference = bytes(len(pcm)), ''
+    # 两秒尾静音让正常端点有机会触发，stop 仍负责剩余语音与排队任务。
+    pcm += bytes(64000)
+    events = []
+    def emit(event):
+        events.append({**event, 'wall': time.perf_counter()})
+    with tempfile.TemporaryDirectory(prefix='brevia-benchmark-') as data:
+        worker = Worker(data, emit)
+        if args.max_speech:
+            for parameters in SETTINGS['vad'].values():
+                parameters['max_speech_duration'] = args.max_speech
+        started = time.perf_counter()
+        meeting = worker.start({
+            'title': 'Sentence benchmark', 'language': args.language,
+            'refined_model_id': args.model, 'vad_model_id': 'silero-vad', 'audio_tracks': [track],
+        })
+        if worker.asr is None:
+            raise RuntimeError('ASR failed to load')
+        load_seconds = time.perf_counter() - started
+        loaded_peak_rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        started, cpu_started = time.perf_counter(), time.process_time()
+        call_times = []
+        decode_seconds = []
+        decode_timings, audio_windows = [], []
+        if not args.legacy:
+            decode = worker.asr.decode
+            def measured_decode(samples, sample_rate):
+                decode_seconds.append(len(samples) / sample_rate)
+                began = time.perf_counter()
+                try:
+                    return decode(samples, sample_rate)
+                finally:
+                    decode_timings.append({'start_wall_seconds': began - started,
+                                           'inference_seconds': time.perf_counter() - began})
+            worker.asr.decode = measured_decode
+            queue_sentence = worker._queue_sentence
+            def measured_queue(track, segment):
+                audio_windows.append({'start_ms': segment[0], 'end_ms': segment[1],
+                                      'queued_wall_seconds': time.perf_counter() - started})
+                return queue_sentence(track, segment)
+            worker._queue_sentence = measured_queue
+        for offset in range(0, len(pcm) // 2, 2730):
+            frame = pcm[offset * 2:(offset + 2730) * 2]
+            if not args.unpaced:
+                time.sleep(max(0, started + (offset + len(frame) // 2) / 16000 - time.perf_counter()))
+            before = time.perf_counter()
+            worker.audio({'meeting_id': meeting['id'], 'track': track, 'pcm': base64.b64encode(frame).decode(), 'sample_rate': 16000, 'start_ms': round(offset / 16)})
+            call_times.append(time.perf_counter() - before)
+        # 旧版 stop 会取消二阶段工作；先排空以比较实际精修结果，避免人为劣化基线。
+        if args.legacy and worker.live_postprocessing:
+            worker.live_postprocessing.submit(lambda: None).result(timeout=180)
+        before = time.perf_counter()
+        meeting = worker.stop({'meeting_id': meeting['id'], 'duration_ms': round(len(pcm) / 32)})
+        finished = time.perf_counter()
+        cpu_seconds = time.process_time() - cpu_started
+        text = ' '.join(segment['text'] for segment in meeting['segments'])
+        transcript_events = [e for e in events if e['type'] in {'transcript.final', 'transcript.refined'}]
+        counts = {kind: sum(e['type'] == kind for e in events) for kind in ['transcript.partial', 'transcript.final', 'transcript.refined', 'worker.warning']}
+        result = {
+            'platform': platform.platform(), 'python': platform.python_version(),
+            'language': args.language, 'model': args.model, 'legacy': args.legacy,
+            'gaps': args.gaps, 'silence': args.silence, 'paced': not args.unpaced,
+            'max_speech': args.max_speech, 'audio_sha256': hashlib.sha256(pcm).hexdigest(),
+            'source_seconds': source_seconds, 'fed_seconds': len(pcm) / 32000,
+            'load_seconds': load_seconds,
+            'loaded_peak_rss_mb': loaded_peak_rss / (1024 ** 2 if sys.platform == 'darwin' else 1024),
+            'wall_seconds': finished - started,
+            'cpu_seconds': cpu_seconds, 'cpu_per_source_second': cpu_seconds / source_seconds,
+            'peak_rss_mb': resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / (1024 ** 2 if sys.platform == 'darwin' else 1024),
+            'stop_seconds': finished - before,
+            'audio_call_p95_ms': sorted(call_times)[int(.95 * (len(call_times) - 1))] * 1000,
+            'events': counts, 'error_metric': 'CER' if args.language == 'zh' else 'WER',
+            'error_rate': error_rate(reference, text, args.language) if reference is not None else None, 'text': text,
+            'meeting_id': args.meeting, 'source_start_seconds': args.start_seconds, 'decode_audio_seconds': decode_seconds,
+            'audio_windows': audio_windows, 'decode_timings': decode_timings,
+            'max_subtitle_chars': max((len(s['text']) for s in meeting['segments']), default=0),
+            'overlapping_segments': sum(a['end_ms'] > b['start_ms'] for a, b in zip(meeting['segments'], meeting['segments'][1:])),
+            'emissions': [{'type': e['type'], 'wall_seconds': e['wall'] - started,
+                           'start_ms': e['payload']['start_ms'], 'end_ms': e['payload']['end_ms'],
+                           'text': e['payload']['text']} for e in transcript_events],
+            'warnings': [e['payload'] for e in events if e['type'] == 'worker.warning'],
+        }
+        if not args.unpaced and transcript_events:
+            end_delays = sorted(e['wall'] - started - e['payload']['end_ms'] / 1000 for e in transcript_events)
+            start_delays = sorted(e['wall'] - started - e['payload']['start_ms'] / 1000 for e in transcript_events)
+            result['latency_seconds'] = {
+                'from_end_p50': end_delays[len(end_delays) // 2],
+                'from_end_max': max(end_delays),
+                'from_start_p50': start_delays[len(start_delays) // 2],
+                'from_start_max': max(start_delays),
+                'first_from_speech_start': transcript_events[0]['wall'] - started - audio_windows[0]['start_ms'] / 1000 if audio_windows else None,
+            }
+        if args.translate_to:
+            translation_started = time.perf_counter()
+            children_before = resource.getrusage(resource.RUSAGE_CHILDREN)
+            try:
+                translations = [worker.translate({
+                    'meeting_id': meeting['id'], 'segment_id': segment['id'],
+                    'target_language': args.translate_to, 'consent': True,
+                })['translation'] for segment in meeting['segments']]
+            finally:
+                worker.shutdown_sidecars()
+            children_after = resource.getrusage(resource.RUSAGE_CHILDREN)
+            result['translation'] = {
+                'target': args.translate_to, 'wall_seconds': time.perf_counter() - translation_started,
+                'cpu_seconds': children_after.ru_utime + children_after.ru_stime - children_before.ru_utime - children_before.ru_stime,
+                'texts': translations,
+            }
+            assert all(translations), 'Empty translation'
+        if not args.legacy:
+            assert counts['transcript.partial'] == counts['transcript.refined'] == 0
+            assert not list(Path(data).rglob('sentence-*.npy'))
+        if args.silence:
+            assert not text, 'Silence produced a transcript'
+        output = json.dumps(result, ensure_ascii=False, indent=2) + '\n'
+        if args.output:
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            args.output.write_text(output)
+        print(output)
+        worker.store.close_audio_sessions()
 
-    if args.bench in ("all", "refined"):
-        result = benchmark_refined(args.wav, args.refined_model, args.language, args.max_seconds, args.models_root)
-        print(f"[refined {args.refined_model}] rtf={result['rtf']} "
-              f"({result['avg_seconds_per_window']}s/窗 x {result['windows']})")
-        print("  text:", result["text"][:160])
 
-    if args.bench in ("all", "replay"):
-        result = replay(
-            args.wav, args.language, args.max_seconds, args.data_root, args.models_root,
-            args.streaming_model, args.refined_model, bool(args.power_saving),
-        )
-        counts = {}
-        for event in result["events"]:
-            counts[event["type"]] = counts.get(event["type"], 0) + 1
-        print(f"[replay power_saving={args.power_saving}] 回放 {result['fed_seconds']}s 音频 "
-              f"耗时 {result['wall_seconds']}s (加速 {result['speedup']}x) "
-              f"CPU≈{result['cpu_percent']}%")
-        print("  事件:", counts)
-        for segment in result["segments"]:
-            clock = f"{segment['start_ms'] // 60000:02d}:{segment['start_ms'] % 60000 // 1000:02d}"
-            print(f"  [{clock}] {segment.get('speaker','?')}: {segment['text'][:120]}")
-
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

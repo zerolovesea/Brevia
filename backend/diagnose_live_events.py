@@ -1,6 +1,6 @@
-"""回放已有会议并逐条打印 partial/final/refined/discarded 事件（开发诊断用）。
+"""回放已有会议并逐条打印 final/settled 事件（开发诊断用）。
 
-用于观察句间重复、软钉边界、句末精修与说话人标签。相比 diagnose_live_replay
+用于观察 VAD 端点、整句字幕与说话人标签。相比 diagnose_live_replay
 只打印最终段落，这里完整打印事件序列（含 revision 与 speaker），便于定位
 「上一句尾出现在下一句头」的重复来源。
 
@@ -44,7 +44,6 @@ def main():
         {
             "title": f"[回放] {src['title']}",
             "language": src.get("language") or "auto",
-            "streaming_model_id": src["streaming_model_id"],
             "refined_model_id": src["refined_model_id"],
             "speaker_segmentation_model_id": src.get("speaker_segmentation_model_id"),
             "vad_model_id": src.get("vad_model_id") or "silero-vad",
@@ -53,9 +52,6 @@ def main():
     )
 
     fed_samples = 0
-    # 等待后台模型加载完成（流式 ASR + 精修），模拟真实节奏，避免快速回放把
-    # 「模型尚未就绪」的错误状态放大成回归。
-    worker._wait_prepare(timeout=20)
     for name in track_meta["chunks"]:
         pcm = read_wav_pcm(source.meetings_dir / args.meeting / "audio" / name)
         total = len(pcm) // 2

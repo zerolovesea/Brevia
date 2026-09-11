@@ -132,11 +132,11 @@ class ModelTaskWorkerMixin:
                 )
 
     def delete_model(self, payload):
-        """删除模型；活动会议正在使用的实时模型不可删除。"""
+        """删除模型；活动会议正在使用的识别模型不可删除。"""
         require(payload, "model_id")
         if (
             self.active
-            and self.store.get_meeting(self.active)["streaming_model_id"]
+            and self.store.get_meeting(self.active)["refined_model_id"]
             == payload["model_id"]
         ):
             raise ValueError("Cannot delete the model used by the active meeting")

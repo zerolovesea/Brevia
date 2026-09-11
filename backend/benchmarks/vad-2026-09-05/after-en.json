@@ -1,0 +1,40 @@
+{
+  "platform": "macOS-26.6.2-arm64-arm-64bit",
+  "python": "3.12.7",
+  "language": "en",
+  "model": "funasr-nano-int8",
+  "legacy": false,
+  "gaps": false,
+  "silence": false,
+  "paced": true,
+  "max_speech": null,
+  "audio_sha256": "9d8be5a0fc8c5d56c79c132d4f3574c71752c960c9f78ed90932692a56d69179",
+  "source_seconds": 14.8143125,
+  "fed_seconds": 16.8143125,
+  "load_seconds": 2.3104114169836976,
+  "wall_seconds": 16.94468379096361,
+  "cpu_seconds": 3.324285,
+  "cpu_per_source_second": 0.2243968459555582,
+  "peak_rss_mb": 2336.75,
+  "stop_seconds": 0.12409116595517844,
+  "audio_call_p95_ms": 6.020749977324158,
+  "events": {
+    "transcript.partial": 0,
+    "transcript.final": 1,
+    "transcript.refined": 0,
+    "worker.warning": 0
+  },
+  "error_metric": "WER",
+  "error_rate": 0.0,
+  "text": "Good morning. Today we need to confirm the launch scope for the new user onboarding flow. The design is ready and the engineering team can deliver a test build on Thursday. Great. We will finish internal acceptance by Friday and begin a limited rollout next Monday.",
+  "emissions": [
+    {
+      "type": "transcript.final",
+      "wall_seconds": 16.63473933300702,
+      "start_ms": 62,
+      "end_ms": 14540,
+      "text": "Good morning. Today we need to confirm the launch scope for the new user onboarding flow. The design is ready and the engineering team can deliver a test build on Thursday. Great. We will finish internal acceptance by Friday and begin a limited rollout next Monday."
+    }
+  ],
+  "warnings": []
+}

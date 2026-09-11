@@ -18,14 +18,14 @@ assert.match(text(backendClient), /resampler: null/, 'audio capture retains resa
 assert.match(text(backendClient), /state\.nextOutput \* ratio/, 'resampling advances on one cumulative output clock');
 assert.doesNotMatch(text(backendClient), /sampleOffset/, 'per-frame resample rounding must not accumulate into timestamps');
 assert.match(text(app), /const DEFAULT_REFINED_MODEL_ID = 'funasr-nano-int8';/);
-assert.match(text(app), /getPerformanceMode\(\) === 'efficiency' && \['zh', 'en'\]\.includes\(language\)/);
-assert.equal(modelManifest.find((model) => model.id === 'x-asr-zh-en-streaming-480ms-int8')?.archive_sha256, 'fa5f63d618e5a01526e275a358bb7772e403f84808a4769fba52cffd8160bf74');
 assert.match(text(app), /hint\.textContent = error\.message/);
 assert.match(text(css), /\.capture-settings\{[^}]*grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
-assert.match(text(app), /auto: \{ streaming: 'nemotron-3\.5-asr-streaming-0\.6b-560ms-int8'/);
-assert.match(text(app), /default: \{ streaming: 'nemotron-3\.5-asr-streaming-0\.6b-560ms-int8'/);
 assert.match(text(app), /window\.brevia\.on\('meeting\.interrupted'/);
 assert.match(text(app), /window\.brevia\.on\('transcript\.settled'/);
+assert.match(text(app), /window\.brevia\.on\('transcript\.draft'/, 'the in-progress paragraph gets its own line');
+assert.match(text(app), /clearDraftSegments\(\);/, 'leaving a meeting drops the in-progress line');
+assert.match(text(app), /transcript\.appendChild\(element\)/, 'the in-progress line is pinned to the bottom, below confirmed subtitles');
+assert.match(text(css), /\.segment\.is-draft/, 'the in-progress line is styled apart from confirmed subtitles');
 assert.match(text(app), /function setDetailLayoutMode\(mode\)/, 'meeting details can swap their primary panel');
 assert.match(text(html), /data-toggle-detail-mode="summary"/, 'meeting details expose the swap control');
 assert.match(text(html), /data-toggle-detail-mode="transcript"/, 'meeting details expose the return control');
@@ -34,6 +34,24 @@ assert.match(text(tailwind), /left: calc\(100% - 353px\)/, 'swap control is cent
 assert.match(text(tailwind), /\.final-transcript \.tabbar-extra \{ margin-right: 40px;/, 'refinement menu stays clear of the swap control');
 assert.match(text(tailwind), /\.tab \{ @apply border-b border-transparent pb-4 text-\[13px\] text-\[#6b655f\]; white-space: nowrap;/, 'narrow transcript tabs do not wrap per character');
 assert.match(text(components), /data-edit-notes type="button" aria-label=/, 'edit action uses an accessible icon button');
+// 「字幕」tab 的铅笔必须编辑字幕本身：tabbar 随激活 tab 重建，保存走 segment.text 命令。
+assert.match(text(components), /data-edit-transcript type="button" aria-label=/, 'the subtitle tab exposes its own edit action');
+assert.match(text(components), /data-transcript-cancel[^]*data-transcript-save type="button" aria-label=/, 'subtitle edits can be cancelled or saved');
+assert.match(text(components), /function renderDetailTabbar\(\)/, 'the tabbar is rendered on its own so its action can follow the active tab');
+assert.match(text(components), /detailActiveTab === 'transcript' && d\.transcriptEditable && d\.refinedMode !== 'fulltext' && d\.refineState !== 'refining'/, 'subtitle editing waits for a settled per-segment transcript');
+assert.match(text(app), /holder\.innerHTML = renderDetailTabbar\(\);/, 'switching tabs refreshes the tabbar action');
+assert.match(text(app), /if \(tabbar\) \{\n\s+const holder = document\.createElement\('div'\);/, 'tab switching tolerates a missing tabbar');
+assert.match(text(app), /function saveDetailTranscriptEdits\(\)/);
+assert.match(text(app), /window\.brevia\.segment\.saveText\(\{ meeting_id: meeting\.id, segments: edits \}\)/, 'subtitle edits are saved in one batch request');
+assert.match(text(app), /uiData\.detail\.transcriptDraft\[field\.dataset\.segmentText\] = field\.value/, 'typed text is kept as a draft until save');
+assert.match(text(meetingDetail), /segmentId: segment\.id/, 'transcript entries carry the segment id used by inline editing');
+assert.match(text(meetingDetail), /uiData\.detail\.transcriptEditable = meeting\.id !== liveMeetingId/, 'a recording meeting cannot be edited while it is still being written');
+assert.match(text(tailwind), /\.segment-text-input \{ @apply w-full/, 'the inline editor is styled');
+assert.match(text(preload), /saveText: invoke\('segment\.text'\)/);
+assert.match(text(electronMain), /handle\(\s*'segment\.text'/, 'the desktop bridge validates subtitle edits');
+assert.match(text(electronMain), /'segment\.text',\s*\n?\s*id\.extend/, 'the bridge forwards segment.text to the worker');
+assert.match(text(electronMain), /edit\.text\.length, 0\) <= 60000/, 'one save stays inside the single-command transport limit');
+assert.match(text(tailwind), /html\[data-theme=dark\] #detail-view \.final-transcript \.segment-text-input/, 'the inline editor is readable in dark mode');
 assert.match(text(tailwind), /\.detail-notes-panel:has\(\.detail-notes-edit\) \{ display: flex; overflow: hidden;/, 'detail editor toolbar stays outside the scrolling surface');
 assert.match(text(components), /data-inline-summary-editor/, 'summary editor renders in the detail panel');
 assert.match(text(app), /data-save-inline-summary/, 'inline summary edits save through the existing summary API');
@@ -54,7 +72,7 @@ assert.equal(workletMessages[1].flushed, true);
 const onboardingContext = { window: {}, localStorage: { getItem: () => null, setItem() {} }, navigator: { language: 'zh-CN' } };
 runInNewContext(text(onboarding), onboardingContext);
 assert.deepEqual(Array.from(onboardingContext.window.BreviaOnboarding.defaultMeetingLanguages('zh')), ['zh']);
-assert.deepEqual(Array.from(onboardingContext.window.BreviaOnboarding.defaultMeetingLanguages('en')), ['en']);
+assert.deepEqual(Array.from(onboardingContext.window.BreviaOnboarding.defaultMeetingLanguages('en')), ['auto']);
 assert.match(text(app), /name="onboarding-denoiser" checked/);
 assert.match(text(app), /name="onboarding-translation" checked/);
 const componentContext = {};
@@ -174,6 +192,16 @@ const advancedDescription = '调整识别、端点检测、说话人分离和本
 for (const code of ['en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']) assert.notEqual(localeContext.window.BreviaLocaleData.catalog[code].labels[advancedDescription], advancedDescription);
 const runtimeI18nKeys = ['离线功能', '请选择声音', '请先配置翻译模型', '纪要服务拒绝了请求', '纪要模型需要配置', '请先选择译文目标并配置纪要模型', '将确认字幕发送到 {provider} 生成译文。是否继续？', '选择格式：md / txt / json / srt / docx / pdf / flac / wav / m4a', '刚刚', '已导出「{title}」', '示例会议及录音已删除', '会议已移至最近删除', '暂停录音', '播放录音', '这场会议没有可播放的录音', '纪要配置加载失败', '配置或后端启动失败', '翻译失败', '压缩包已导出', '未找到录音，已导出逐字稿压缩包', '内置纪要模型清单暂不可用。', '请先选择或填写纪要模型。', '请填写请求地址。', '请填写 API Key。', '纪要模型已保存', '结束中'];
 for (const code of ['en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']) for (const key of runtimeI18nKeys) assert.notEqual(localeContext.window.BreviaLocaleData.catalog[code].labels[key], key);
+for (const code of ['en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']) {
+  // ja 的「行数 / 列数」与中文同形，因此只校验键存在，另有英文差异校验兜底。
+  for (const key of ['已暂停', '行数', '列数', '插入', '选择行列数', '列 {n}']) {
+    assert.ok(localeContext.window.BreviaLocaleData.catalog[code].labels[key], `missing ${code} translation for ${key}`);
+  }
+  assert.match(localeContext.window.BreviaLocaleData.catalog[code].labels['列 {n}'], /\{n\}/, `${code} column label keeps the number placeholder`);
+}
+for (const key of ['已暂停', '行数', '列数', '插入', '选择行列数']) {
+  assert.notEqual(localeContext.window.BreviaLocaleData.catalog.en.labels[key], localeContext.window.BreviaLocaleData.catalog.zh.labels[key], `en must localize ${key}`);
+}
 for (const code of ['en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']) assert.notEqual(localeContext.window.BreviaLocaleData.catalog[code].labels['添加录音到声纹库'], '添加录音到声纹库');
 for (const code of ['en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']) assert.notEqual(localeContext.window.BreviaLocaleData.catalog[code].labels['清空数据'], '清空数据');
 for (const code of ['en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']) {
@@ -182,10 +210,10 @@ for (const code of ['en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']) {
 }
 for (const [code, stage, allLanguages] of [['ja', 'ライブ字幕', 'すべての言語'], ['ko', '실시간 자막', '모든 언어'], ['de', 'Live-Untertitel', 'Alle Sprachen'], ['ru', 'Субтитры в реальном времени', 'Все языки']]) {
   const items = localeContext.window.BreviaLocaleData.appCopy.modalCopy[code].models.items;
-  assert.equal(items[0][0], stage);
+  assert.ok(items.every((item) => item[0] !== stage));
   assert.equal(items.find(([, name]) => name === 'Silero VAD')[2], allLanguages);
 }
-assert.deepEqual(Array.from(localeContext.window.BreviaLocaleData.appCopy.modalCopy.zh.models.items.slice(9, 13), ([, name]) => name), ['Qwen3-ASR', 'FunASR Nano int8', 'Whisper Large v3', 'Pyannote Segmentation 3.0']);
+assert.deepEqual(Array.from(localeContext.window.BreviaLocaleData.appCopy.modalCopy.zh.models.items.slice(1, 5), ([, name]) => name), ['Qwen3-ASR', 'FunASR Nano int8', 'Whisper Large v3', 'Pyannote Segmentation 3.0']);
 assert.equal(localeContext.window.BreviaLocaleData.appCopy.modalCopy.zh.models.items.find(([, name]) => name === '3D-Speaker ERes2Net Base')[2], '语言无关');
 for (const id of ['vits-mimic3-ko-kss-low', 'vits-piper-fr-siwis-medium-int8', 'vits-piper-de-thorsten-medium-int8', 'vits-piper-es-sharvard-medium-int8', 'vits-piper-ru-irina-medium-int8', 'zipformer-zh-streaming-int8', 'zipformer-ctc-zh-streaming-int8', 'paraformer-zh-en-int8', 'whisper-turbo', 'fire-red-asr2-ctc-zh-en-int8', 'nemo-titanet-small-en', 'campplus-zh-en']) {
   assert.equal(modelManifest.find((entry) => entry.id === id), undefined, `pruned model ${id} still in manifest`);
@@ -201,6 +229,42 @@ assert.match(componentContext.renderMeetingRow({ id: 'drag-me', tone: 'violet', 
 assert.doesNotMatch(componentContext.renderTranscriptSegment({ time: '00:00', speaker: { name: 'A' }, text: '<img src=x onerror=alert(1)>' }), /<img/);
 assert.match(componentContext.renderTranscriptSegment({ time: '00:00', speaker: { name: 'A', overlapNames: ['A', 'B'] }, text: 'test' }), /重叠说话：A、B/);
 assert.doesNotMatch(componentContext.renderTranscriptSegment({ time: '00:00', speaker: { name: 'Speaker 1' }, text: 'test', showSpeaker: false }), /Speaker 1/);
+// 逐句编辑只替换正文：读态是 <p>，编辑态是可输入的文本域，两者都按 id 定位段落。
+const readonlySegment = componentContext.renderTranscriptSegment({ time: '00:00', speaker: { name: 'A' }, text: '第一句', segmentId: 'seg-1' });
+assert.doesNotMatch(readonlySegment, /<textarea/, 'a read-only subtitle stays plain text');
+const editingSegment = componentContext.renderTranscriptSegment({ time: '00:00', startSeconds: 12, endSeconds: 18, speaker: { name: 'A' }, text: '第一句', segmentId: 'seg-1', textEditable: true });
+assert.match(editingSegment, /<textarea[^>]*data-segment-text="seg-1"[^>]*>第一句<\/textarea>/, 'the edit action turns the subtitle into an editable field');
+assert.match(editingSegment, /data-start=|data-end=/, 'editing keeps playback alignment');
+assert.doesNotMatch(componentContext.renderTranscriptSegment({ time: '00:00', speaker: { name: 'A' }, text: 'test', textEditable: true }), /<textarea/, 'live captions without a stored segment cannot be edited');
+assert.doesNotMatch(componentContext.renderTranscriptSegment({ time: '00:00', speaker: { name: 'A' }, text: '2026 的问题？', segmentId: 'seg-1', textEditable: true }), /caption-signals/, 'stale signal badges are hidden while the text is being rewritten');
+// tabbar 的铅笔跟随激活 tab：笔记页编辑笔记，字幕页编辑字幕，录制中 / 精修中不提供入口。
+const detailTabbarContext = {
+  uiData: { detail: { hasRefined: false, refineState: 'idle', transcriptEditable: true } },
+  detailActiveTab: 'notes',
+  locale: 'zh',
+  t: (value) => value,
+  BreviaI18n: { languageOptions: () => [['auto', '多语言混说']], languageName: (_locale, code) => code },
+};
+runInNewContext(text(components), detailTabbarContext);
+assert.match(detailTabbarContext.renderDetailTabbar(), /data-edit-notes type=/, 'the notes tab offers the notes editor');
+detailTabbarContext.detailActiveTab = 'transcript';
+assert.match(detailTabbarContext.renderDetailTabbar(), /data-edit-transcript type=/, 'the subtitle tab offers the subtitle editor');
+assert.match(detailTabbarContext.renderDetailTabbar(), /refine-wrap/, 'the subtitle tab keeps the refinement entry point');
+assert.doesNotMatch(detailTabbarContext.renderDetailTabbar(), /data-edit-notes/, 'the notes action gives way to the subtitle action');
+detailTabbarContext.uiData.detail.transcriptEditable = false;
+assert.doesNotMatch(detailTabbarContext.renderDetailTabbar(), /data-edit-transcript/, 'a recording meeting cannot be edited');
+detailTabbarContext.uiData.detail.transcriptEditable = true;
+detailTabbarContext.uiData.detail.refineState = 'refining';
+assert.doesNotMatch(detailTabbarContext.renderDetailTabbar(), /data-edit-transcript/, 'a running refinement blocks subtitle edits');
+detailTabbarContext.uiData.detail.refineState = 'idle';
+detailTabbarContext.uiData.detail.transcriptEditing = true;
+assert.match(detailTabbarContext.renderDetailTabbar(), /data-transcript-save type="button" aria-label="保存"/, 'editing subtitles swaps in the save action');
+assert.doesNotMatch(detailTabbarContext.renderDetailTabbar(), /refine-wrap/, 'editing subtitles retires the refinement entry point so unsaved drafts cannot be replaced');
+assert.match(text(app), /detailActiveTab = 'transcript';\n    renderMeetingDetail\(\);/, 'leaving subtitle editing returns to the subtitle panel');
+detailTabbarContext.uiData.detail.transcriptEditing = false;
+detailTabbarContext.uiData.detail.refinedMode = 'fulltext';
+detailTabbarContext.uiData.detail.hasRefined = true;
+assert.doesNotMatch(detailTabbarContext.renderDetailTabbar(), /data-edit-transcript/, 'a full-text refinement has no per-sentence subtitles to edit');
 assert.doesNotMatch(componentContext.renderMeetingSummary({ title: '<script>alert(1)</script>', sections: [{ title: 'Note', text: '<img src=x>' }] }), /<script>|<img/);
 
 for (const id of ['home-view', 'prepare-view', 'live-view', 'detail-view', 'settings-view', 'meeting-form', 'end-meeting']) {
@@ -213,7 +277,8 @@ assert.match(text(electronMain), /printToPDF\(\{\s*printBackground: true,\s*disp
 assert.match(text(css), /prefers-reduced-motion:\s*reduce/);
 assert.match(text(css), /\.window-bar\{[^}]*-webkit-app-region:drag/);
 assert.match(text(css), /\.window-bar\{[^}]*position:sticky/);
-assert.match(text(css), /\.refine-menu-speakers input\{[^}]*width:72px/);
+assert.match(text(css), /\.task-card-stack-item\{[^}]*grid-area:1\/1/);
+assert.match(text(css), /\.refine-menu-speakers input:not\(\[type=checkbox\]\):not\(\[type=range\]\):not\(\[type=radio\]\),\.refine-menu-speakers \.flow-select-toggle\{[^}]*width:144px/);
 assert.match(text(css), /\.refine-menu-speakers input:focus\{[^}]*border-color:#000/);
 assert.match(text(i18nData), /const refinedModelOptionTags/);
 assert.match(text(i18nData), /Chinese-English mixed/);
@@ -242,8 +307,9 @@ assert.match(text(tailwind), /#settings-view \.settings-card \{ @apply p-4/);
 assert.match(text(tailwind), /#settings-view \.settings-grid \{[^}]*grid-auto-rows: max-content/);
 assert.match(text(tailwind), /\.update-card \{ @apply col-span-12 flex items-center justify-between gap-6/);
 assert.match(text(css), /\.task-cards\{(?=[^}]*display:grid)(?=[^}]*overflow:visible)(?=[^}]*--task-card-back-count)/);
-assert.match(text(tailwind), /\.task-card-stack-item \{ @apply relative col-start-1 row-start-1/);
+assert.match(text(tailwind), /\.task-card-stack-item \{ @apply relative; grid-area: 1 \/ 1/);
 assert.match(text(app), /stackableTaskCardSelector = '[^']*\.mini-meeting[^']*\.mini-playback/);
+assert.match(text(app), /\[\.\.\.taskCards\.children\]\.filter\(\(card\) => card\.matches\(stackableTaskCardSelector\)\)/);
 assert.match(text(app), /--task-card-index/);
 assert.match(text(app), /--task-card-depth/);
 assert.match(text(tailwind), /\.task-cards > \.task-card-stack-item \{[^}]*width: calc\(100% - var\(--task-card-depth/);
@@ -251,7 +317,7 @@ assert.match(text(tailwind), /\.task-cards > \.is-task-card-back \{[^}]*box-shad
 assert.match(text(app), /function activateTaskCard\(card\)/);
 assert.match(text(app), /\['Enter', ' '\]\.includes\(event\.key\)/);
 assert.match(text(electronMain), /ipcMain\.handle\('app\.maintain'[\s\S]{0,300}if \(app\.isQuitting\) return \{\}/);
-assert.match(text(css), /\.required-models-card ul\{[^}]*max-height:min\(36vh,18rem\)[^}]*overflow:hidden auto/);
+assert.match(text(css), /\.required-models-card ul\{(?=[^}]*max-height:min\(28vh,14rem\))(?=[^}]*overflow:hidden auto)(?=[^}]*overscroll-behavior:contain)/);
 assert.match(text(css), /#prepare-view\.active\{[^}]*overflow:hidden/);
 assert.match(text(css), /\.prepare-layout\{[^}]*grid-template-columns:minmax\(0,34rem\)/);
 assert.match(text(css), /\.prepare-layout\{[^}]*transform:scale\(var\(--prepare-scale,1\)\)/);
@@ -276,7 +342,7 @@ assert.match(text(js), /openSegmentContextMenu\(meetingId, segmentId, x, y, segm
 assert.match(text(js), /followPlaybackTranscript = false/);
 assert.doesNotMatch(text(workerSession), /_identify_speaker/);
 assert.doesNotMatch(text(workerSession), /tracker\.assign_embedding/);
-assert.match(text(workerSession), /self\.speaker_tracker = None/);
+assert.doesNotMatch(text(workerSession), /SpeakerTracker/);
 assert.doesNotMatch(text(js), /name="num-speakers"[^>]*max="20"/);
 assert.match(text(js), /styles\.paddingTop.*styles\.paddingBottom/);
 assert.match(text(js), /new ResizeObserver\(\(\) => requestAnimationFrame\(fitPrepareLayout\)\)/);
@@ -304,7 +370,8 @@ assert.match(text(html), /id="home-slogan"/);
 assert.match(text(html), /id="home-eyebrow"[^>]*disabled/);
 assert.match(text(js), /function activeWorkspaceDescription\(\)/);
 assert.match(text(js), /activeLibraryNav === 'recently-deleted' \|\| activeWorkspaceDescription\(\)/);
-assert.match(text(js), /flowSelect\('meeting-language', values\['meeting-language'\] \|\| locale,/);
+assert.match(text(js), /flowSelect\('meeting-language', values\['meeting-language'\] \|\| defaultMeetingLanguage\(\),/);
+assert.match(text(js), /const defaultMeetingLanguage = \(\) => locale === 'zh' \? 'zh' : 'auto';/);
 assert.match(text(html), /id="mini-meeting"/);
 assert.match(text(html), /id="mini-playback-seek" role="slider"/);
 assert.doesNotMatch(text(html), /id="mini-playback-seek" type="range"/);
@@ -409,7 +476,7 @@ assert.match(text(electronMain), /return current\.success \? current\.data : nul
 assert.doesNotMatch(text(electronMain), /legacySummaryConfig|migrateSummaryConfig/);
 assert.doesNotMatch(text(js), /migrateSummaryConfig|inferSummaryProvider/);
 assert.doesNotMatch(text(electronMain), /ollama/i);
-assert.match(text(electronMain), /ipcMain\.handle\('translation\.generate',[\s\S]{0,700}target_language: z\.string\(\)\.min\(2\)\.max\(32\),[\s\S]{0,100}consent: z\.literal\(true\)/);
+assert.match(text(electronMain), /ipcMain\.handle\('translation\.generate',[\s\S]{0,700}target_language: z\.string\(\)\.min\(2\)\.max\(16\),[\s\S]{0,100}consent: z\.literal\(true\)/);
 assert.doesNotMatch(text(electronMain), /ipcMain\.handle\('translation\.generate',[\s\S]{0,700}provider: z\.string\(\)/);
 assert.match(text(electronMain), /const startupAnimationMs = 1700;/);
 assert.match(text(electronMain), /const startupDataWaitMs = 2200;/);
@@ -460,15 +527,15 @@ assert.doesNotMatch(text(js), /data-new-meeting-category/);
 assert.match(text(js), /event\.target\.matches\('input, textarea'\)\) return/);
 assert.doesNotMatch(text(js), /meeting-category/);
 assert.match(text(uiData), /const uiData/);
-assert.match(text(uiData), /Streaming Zipformer Chinese XLarge/);
-assert.match(text(uiData), /Qwen3-ASR/);
+assert.match(text(uiData), /FunASR Nano int8/);
+assert.doesNotMatch(text(uiData), /Streaming|流式/, 'demo data must not mention the retired streaming pipeline');
 assert.doesNotMatch(text(i18nData), /Qwen3-ASR 1\.7B int8/);
 assert.doesNotMatch(text(uiData), /VAD \+ Speaker/);
 assert.doesNotMatch(text(uiData), /SenseVoice Small|Whisper Small/);
 assert.match(text(i18nData), /所有转写模型都在本地运行，不会将您的隐私上传到网络/);
 assert.match(text(i18nData), /Réunions et enregistrements/);
 assert.match(text(i18nData), /Modèle de sous-titres en direct/);
-assert.match(text(i18nData), /Gérer les modèles →/);
+assert.match(text(i18nData), /Gérer les modèles et les termes/);
 assert.match(text(js), /whisper-large-v3/);
 assert.match(text(i18nData), /实时字幕/);
 assert.match(text(i18nData), /会后精修/);
@@ -477,11 +544,16 @@ assert.match(text(js), /const DEFAULT_REFINED_MODEL_ID = 'funasr-nano-int8';/);
 assert.match(text(electronMain), /path\.join\(app\.getPath\('home'\), 'brevia'\)/);
 assert.match(text(electronMain), /appendFile\(logFile\(\), line, 'utf8'\)/);
 assert.match(text(electronMain), /await migrateDataDir\(\)/);
-assert.match(text(js), /en: \{ streaming: 'zipformer-en-streaming-int8', refined: DEFAULT_REFINED_MODEL_ID/);
+assert.match(text(js), /en: \{ refined: DEFAULT_REFINED_MODEL_ID/);
 assert.match(text(html), /src="\.\/i18n\.js"/);
 assert.match(text(js), /BreviaI18n\.languageOptions\(locale, t/);
 assert.match(text(js), /Object\.values\(modalCopy\)\.forEach/);
 assert.match(text(i18n), /new Intl\.DisplayNames/);
+const meetingLanguages = { window: {}, Intl };
+runInNewContext(text(i18n), meetingLanguages);
+assert.deepEqual(Array.from(meetingLanguages.window.BreviaI18n.languageOptions('en', (key) => key, true)[0]), ['auto', '多语言混说']);
+assert.equal(meetingLanguages.window.BreviaI18n.languageOptions('en', (key) => key, false)[0][0], '');
+assert.match(text(app), /values\['meeting-language'\] \|\| defaultMeetingLanguage\(\)/);
 assert.match(text(i18n), /defaultMeetingTitle/);
 assert.match(text(i18n), /selectionOverview/);
 assert.match(text(js), /renderDefaultMeetingTitle\(\)/);
@@ -498,7 +570,6 @@ assert.match(text(js), /function renderPrepareSelects\(\) \{[\s\S]*?importRecord
 assert.doesNotMatch(text(components), /查看完整内容/);
 assert.match(text(js), /function renderPauseButton/);
 assert.match(text(js), /const translation = payload\.translation \|\| previous\?\.querySelector\('\.translation'\)\?\.textContent;/);
-assert.match(text(js), /'silero-vad',\s*'online-punct-en-int8'/);
 assert.doesNotMatch(text(js), /ten-vad|TEN-VAD/);
 assert.doesNotMatch(text(asr), /ten_vad/);
 // The download size rides in the tag row as its own tag; the compute/runtime tag was dropped.
@@ -518,7 +589,7 @@ assert.match(text(js), /model-library-modelname/);
 assert.match(text(js), /function renderModelLibraryTags\(model, installed, name\)/);
 assert.match(text(js), /class="model-library-modelname">\$\{escapeHtml\(name\)\}/);
 // Every catalogued model must carry a rating so no card renders a blank ratings row.
-for (const id of ['whisper-large-v3', 'zipformer-zh-xlarge-streaming-int8', 'silero-vad']) {
+for (const id of ['whisper-large-v3', 'funasr-nano-int8', 'silero-vad']) {
   assert.match(text(js), new RegExp(`'${id.replace(/[.]/g, '\\.')}':\\s*\\{ quality:`));
 }
 assert.match(text(js), /qualityTiers: \['标准', '高', '极高'\]/);
@@ -721,14 +792,17 @@ assert.match(text(electronMain), /meeting\.bundle/);
 assert.match(text(electronMain), /error\.code === 'ENOENT'/);
 assert.match(text(electronMain), /configuration_required: true/);
 assert.match(text(electronMain), /summary\.config\.save/);
-assert.match(text(js), /punct-ct-transformer-zh-en-int8/);
-assert.match(text(js), /online-punct-en-int8/);
 assert.match(text(js), /当前会议暂无逐字稿内容，请先完成转写后再生成会议纪要/);
 assert.match(text(js), /This meeting has no transcript yet/);
 assert.doesNotMatch(text(js), /const modelSizes/);
 assert.match(text(js), /const modelSize = \(modelId\) => modelCatalog\.find/);
 const frontendModelIds = [...text(js).match(/const modelIds = \[([\s\S]*?)\];/)[1].matchAll(/'([^']+)'/g)].map(([, id]) => id);
 assert.equal(frontendModelIds.length, new Set(frontendModelIds).size, 'model library IDs must be unique');
+assert.deepEqual(
+  [...localeContext.window.BreviaLocaleData.appCopy.modalCopy.zh.models.items.map(([, name]) => name)],
+  ['Silero VAD', 'Qwen3-ASR', 'FunASR Nano int8', 'Whisper Large v3', 'Pyannote Segmentation 3.0', '3D-Speaker ERes2Net Base', 'GTCRN Live Denoiser', 'Tencent Hy-MT2 1.8B'],
+  'model copy order must match model IDs',
+);
 for (const code of ['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']) {
   assert.equal(localeContext.window.BreviaLocaleData.appCopy.modalCopy[code].models.items.length, frontendModelIds.length, `${code} model copy must align with model IDs`);
 }
@@ -756,6 +830,11 @@ assert.match(text(js), /updateNoticeProgressBar\.style\.transform/);
 assert.match(text(js), /renderUpdateNotice\(\);/);
 assert.match(text(tailwind), /\.software-update-notice > i/);
 assert.match(text(js), /taskCards\.append\(updateNotice\)/);
+assert.match(text(js), /stackableTaskCardSelector = '[^']*\.software-update-notice/);
+assert.match(text(tailwind), /\.task-cards > \.software-update-notice \{ @apply relative bottom-auto left-auto z-auto w-full max-w-full/);
+assert.match(text(tailwind), /\.summary-model-modal \.modal-body \{ overflow: visible/);
+assert.match(text(js), /showView\('settings'\)\.then\(\(\) => openModal\('summary-model'\)\)/);
+assert.match(text(i18nData), /前往 AI 会议总结/);
 assert.match(text(backendClient), /async prepare\(\{ mic, system \}\)/);
 assert.match(text(backendClient), /async previewMic\(\)/);
 assert.match(text(backendClient), /async stopPreview\(\)/);
@@ -800,8 +879,7 @@ assert.match(text(electronMain), /createDisplayMediaHandler\(desktopCapturer, wr
 assert.match(text(js), /window\.brevia\.on\('startup\.ready', \(\) => \{\s+const reveal = \(\) => \{/);
 assert.match(text(js), /splashGifDurationMs = 1500/);
 assert.match(text(js), /if \(!silent\) showToast\(error\.message\)/);
-assert.match(text(js), /const requiredModelsForLanguage/);
-assert.match(text(js), /const punctuation = language === 'en' \? 'online-punct-en-int8'/);
+assert.match(text(js), /const preferredModelsForLanguage = \(language\) =>/);
 assert.match(text(js), /onboardingModelIds = models\.filter\(\(modelId\) => !modelPaths\.has\(modelId\)\)/);
 assert.match(text(js), /modelPaths\.has\(modelId\) \? \(modelLabels\[locale\] \|\| modelLabels\.en\)\.installed/);
 assert.match(text(js), /function downloadRequiredModels/);
@@ -840,9 +918,7 @@ assert.match(text(js), /void loadSummaryConfig\(\)\.catch/);
 assert.match(text(js), /updateOnboardingLanguageCopy/);
 assert.match(text(js), /function openOnboardingSetup/);
 assert.match(text(js), /name="onboarding-performance-mode"/);
-assert.match(text(js), /getPerformanceMode\(\) === 'efficiency' && \['zh', 'en'\]\.includes\(language\)/);
 assert.doesNotMatch(text(js), /'zipformer-ctc-zh-streaming-int8'/);
-assert.match(text(js), /'x-asr-zh-en-streaming-480ms-int8'/);
 assert.match(text(js), /new Set\(window\.BreviaOnboarding\.defaultMeetingLanguages\(locale\)\)/);
 assert.match(text(js), /className = 'onboarding-page onboarding-active'/);
 assert.match(text(js), /onboarding-page onboarding-active onboarding-\$\{kind\}-overlay/);
@@ -924,11 +1000,16 @@ assert.doesNotMatch(text(js), /await breviaClient\.pause\(!paused\)[\s\S]{0,200}
 assert.doesNotMatch(text(app), /document\.querySelector\('#end-meeting'\)[\s\S]{0,800}meeting\.refine/);
 assert.match(text(app), /const buttonLabel = button\.innerHTML;[\s\S]{0,300}button\.innerHTML = `<i class="button-spinner" aria-hidden="true"><\/i>\$\{t\('结束中'\)\}`/);
 assert.match(text(app), /data-refine-num-speakers/);
-assert.match(text(app), /const startRefinement[\s\S]{0,600}window\.brevia\.meeting\.refine/);
+assert.match(text(app), /const startRefinement[\s\S]*?window\.brevia\.meeting\.refine/);
 assert.match(text(app), /num_speakers: numSpeakers/);
 assert.match(text(components), /refine-menu-speakers[\s\S]{0,200}data-refine-num-speakers/);
 assert.match(text(app), /function refineNumSpeakers/);
-assert.match(text(app), /if \(!meeting\) return;\s*breviaClient\.state\.selectedMeetingId = meeting\.id;[\s\S]{0,300}startRefinement\(meeting\.refined_model_id\);/);
+assert.match(text(app), /async function translateLatestTranscript\(targetLanguage\)/);
+assert.match(text(components), /data-detail-translation/);
+assert.match(text(components), /<span>\$\{t\('翻译'\)\}<\/span>/, 'translation uses the same labeled option row as refinement settings');
+assert.match(text(app), /function showTranslationProgress\(completed, total, targetLanguage\)/, 'subtitle translation exposes task-card progress');
+assert.match(text(app), /if \(!meeting\) return;\s*breviaClient\.state\.selectedMeetingId = meeting\.id;[\s\S]{0,300}startRefinement\(\);/);
+assert.doesNotMatch(text(app), /refine\(\{[\s\S]{0,200}?refined_model_id/, 'the refinement model is chosen once, on the backend');
 assert.match(text(js), /let followLiveTranscript = true/);
 assert.match(text(js), /meetingActive = true;\s*seconds = 0;\s*const pauseButton = document\.querySelector\('#pause'\);\s*pauseButton\.dataset\.paused = 'false';\s*renderPauseButton\(\);/);
 assert.match(text(js), /transcript\.scrollTop = transcript\.scrollHeight/);
@@ -936,7 +1017,7 @@ assert.doesNotMatch(text(js), /segment\.offsetTop - \(transcript\.clientHeight -
 assert.match(text(js), /liveSegments\.set\(payload\.segment_id, element\)/);
 assert.match(text(js), /const maxLiveSegments = 500/);
 assert.match(text(js), /while \(liveSegments\.size > maxLiveSegments\)/);
-assert.match(text(js), /liveConfig = \{ language: language \|\| 'auto', streaming_model_id: streamingModelId \|\| '', refined_model_id: refinedModelId \|\| '', target_language: payload\.target_language \|\| null, power_saving: Boolean\(payload\.power_saving\) \}/);
+assert.match(text(js), /liveConfig = \{ language: language \|\| 'auto', target_language: payload\.target_language \|\| null, power_saving: Boolean\(payload\.power_saving\) \}/);
 assert.match(text(js), /await window\.brevia\.meeting\.reconfigure\(\{ meeting_id: meetingId, \.\.\.changes \}\)/);
 assert.doesNotMatch(text(js), /function setLivePowerSaving\(enabled\)/);
 assert.match(text(js), /const MAX_NOTES_CHARS = 5 \* 1024 \* 1024/);
@@ -1151,7 +1232,7 @@ assert.match(text(electronMain), /ipcMain\.handle\('ai-note\.start'/);
 assert.match(text(preload), /aiNote: \{ start: invoke\('ai-note\.start'\)/);
 assert.match(text(preload), /request: invoke\('ai-note\.request'\)/);
 assert.match(text(workerSession), /self\.ai_note_on_segment\(event\)/);
-assert.match(text(workerSession), /self\.ai_note_stop\(\{"meeting_id": meeting_id\}\)/);
+assert.match(text(workerSession), /self\.ai_note_stop\(\{"meeting_id": self\.active\}\)/);
 assert.match(text(app), /function startAiNoteForMeeting/);
 assert.match(text(app), /prompt: aiNotePromptCopy\[locale\] \|\| aiNotePromptCopy\.en/);
 assert.match(text(app), /function signalAiNoteTyping/);
@@ -1241,9 +1322,108 @@ assert.doesNotMatch(text(components), /note-reference|syncNoteReferenceRail/);
 assert.match(text(components), /\['table', '插入表格'/);
 assert.match(text(components), /tag === 'table'/);
 assert.match(text(tailwind), /\.notes-url-pop \{[^}]*display: flex/);
+// 表格可以自选行列数：默认仍是 2×2，选择器同时提供网格快选与数字精确输入。
+assert.match(text(components), /const NOTE_TABLE_LIMITS = \{ columns: 20, rows: 50, gridColumns: 10, gridRows: 8 \}/);
+assert.match(text(components), /data-notes-table-rows/, 'table picker exposes a row count field');
+assert.match(text(components), /data-notes-table-columns/, 'table picker exposes a column count field');
+assert.match(text(components), /data-notes-table-cell="\$\{column \+ 1\}:\$\{row \+ 1\}"/, 'table picker grid reports the hovered size');
+assert.match(text(components), /command === 'table'\) openTablePop\(button\)/, 'the table button opens the size picker');
+assert.match(text(components), /document\.addEventListener\('pointerdown', closeTablePopOnOutsidePointer\)/, 'clicking outside closes the table picker');
+assert.match(text(components), /tablePop\.hidden = true;[\s\S]{0,80}\}/, 'switching editor mode closes the table picker');
+assert.match(text(tailwind), /\.notes-table-pop \{[^}]*display: grid/);
+assert.match(text(tailwind), /\.notes-table-grid button\.is-on/);
+assert.match(text(tailwind), /\.notes-table-fields input \{[^}]*width: 56px/);
+assert.equal(componentContext.clampTableSize('7', 20), 7);
+assert.equal(componentContext.clampTableSize('', 50), 1, 'an empty field falls back to one row');
+assert.equal(componentContext.clampTableSize(999, 20), 20, 'column count is capped');
+assert.equal(componentContext.clampTableSize(-3, 50), 1);
+assert.equal(
+  componentContext.noteTableHtml({ columns: 3, rows: 3 }),
+  '<table><thead><tr><th>列 1</th><th>列 2</th><th>列 3</th></tr></thead><tbody><tr><td>内容</td><td>内容</td><td>内容</td></tr><tr><td>内容</td><td>内容</td><td>内容</td></tr></tbody></table><p><br></p>',
+  'rich text inserts the requested number of columns and rows',
+);
+assert.equal(
+  componentContext.noteTableMarkdown({ columns: 2, rows: 2 }),
+  '| 列 1 | 列 2 |\n| --- | --- |\n| 内容 | 内容 |',
+  'markdown keeps the previous 2×2 default',
+);
+assert.equal(componentContext.noteTableMarkdown({ columns: 2, rows: 4 }).split('\n').length, 5, 'markdown emits the header, separator and one line per body row');
+assert.match(text(components), /Array\.from\(\{ length: NOTE_TABLE_LIMITS\.gridRows \}/);
+// 引用（blockquote）与标题都是可切换的块格式，再次点击回到正文。
+assert.match(text(components), /if \(quote\) \{ placeCaretAtEnd\(unwrapBlockquote\(quote\)\)/, 'quote can be turned off again');
+assert.doesNotMatch(text(components), /command === 'quote'\) document\.execCommand/, 'the quote button must not always re-apply the blockquote');
+assert.match(text(components), /block\.tagName\.toLowerCase\(\) === command\) \{ placeCaretAtEnd\(retagBlock\(block, 'p'\)\)/, 'headings can be turned off again');
+assert.match(text(components), /const blocks = \[\.\.\.quote\.children\]\.filter/, 'exiting a quote preserves its inner blocks');
+assert.match(text(components), /function syncToolbarState\(\)/);
+assert.match(text(components), /document\.addEventListener\('selectionchange', syncToolbarState\)/, 'active block formats are reflected on the toolbar');
+assert.match(text(components), /button\.classList\.toggle\('is-active', active\)/);
 assert.doesNotMatch(text(components), /class="jump"/);
 assert.match(text(components), /white-space:nowrap;flex:none/);
 assert.match(text(app), /event\.key !== '\/'/);
 assert.match(text(app), /editor\.setMode\(editor\.getMode\(\)/);
 assert.match(text(tailwind), /notes-toolbar button\.is-active/);
+// 暂停录制后界面必须显示已暂停：实时页 header、迷你控件与会议列表三处同步。
+assert.match(text(html), /<span class="recording" id="live-recording-state">/, 'the live header recording pill is addressable');
+assert.match(text(app), /function renderRecordingState\(paused\) \{/);
+assert.match(text(app), /'#live-recording-state', '#mini-meeting \.mini-recording'/, 'pause state reaches both live indicators');
+assert.match(text(app), /\['#live-recording-state', '#mini-meeting \.mini-recording'\]\.forEach[\s\S]{0,320}badge\.classList\.toggle\('is-paused', paused\)/);
+assert.match(text(app), /const label = paused \? '已暂停' : '正在录制';/);
+assert.match(text(app), /label: paused \? '已暂停' : '正在录制', paused/, 're-rendering from backend data keeps a paused meeting paused');
+assert.match(text(app), /active\.status = \{ \.\.\.active\.status, label, paused \};[\s\S]{0,80}renderMeetingList\(\)/, 'the meeting list row follows the pause state');
+assert.match(text(app), /button\.textContent = `\$\{paused \? '▶' : 'Ⅱ'\} \$\{t\(paused \? '继续' : '暂停'\)\}`;\s*renderRecordingState\(paused\);/, 'the pause button also refreshes the recording state');
+assert.match(text(components), /class="status \$\{status\.tone\}\$\{status\.paused \? ' is-paused' : ''\}"/, 'paused meetings are marked in the library list');
+assert.match(text(tailwind), /\.recording\.is-paused \{ @apply text-\[#a05a00\]/, 'paused stops using the recording red');
+assert.match(text(tailwind), /\.mini-recording\.is-paused/);
+assert.match(text(tailwind), /\.meeting-status \.status\.is-paused/);
+
+assert.ok(modelManifest.every((model) => !model.stages.some((stage) => ['streaming', 'punctuation'].includes(stage))));
+
+for (const copy of Object.values(localeContext.window.BreviaLocaleData.appCopy.modalCopy)) {
+  assert.equal(copy.models.items.length, frontendModelIds.length, 'localized model cards must align with model IDs');
+}
+assert.doesNotMatch(text(app), /streamingModelId/);
+assert.match(text(app), /isRefined: true,\s*updateFinalized: true,\s*clearCurrentIfMatch: true/);
+
+// 会议记录里的识别模型已下架时，精修结果作废：按未精修展示实时版本，等用户重新精修。
+assert.match(text(meetingDetail), /const modelRetired = Boolean\(meeting\.refined_model_id\)/, 'a retired recognition model is detected from the meeting record');
+assert.match(text(meetingDetail), /latestTranscriptSegments\(meeting, \{ ignoreRefined: modelRetired \}\)/, 'a retired model falls back to the live transcript');
+assert.match(text(meetingDetail), /modelCatalog\.length > 0/, 'the retired check must not fire before the model catalog is loaded');
+assert.match(text(app), /function refinedModelSupportsTimestamps\(modelId\) \{ return timestampAlignedRefinedModels\.has\(modelId\); \}/, 'the display mode still follows the model, not the data');
+assert.match(text(app), /language: uiData\.detail\.language \|\| 'auto',\n\s+target_language: uiData\.detail\.translationTarget/, 'refinement sends language only; the model is chosen on the backend');
+
+// 进阶设置表单必须覆盖 settings.json 的每个字段，并把两层配置渲染成可保存的路径。
+const advancedContext = { locale: 'zh', escapeHtml: (value) => String(value ?? '') };
+runInNewContext(
+  `${summaryConst('const advancedSettingCopy = ', true)}${summaryFn('renderAdvancedSettings')}\nthis.advancedSettingCopy = advancedSettingCopy; this.renderAdvancedSettings = renderAdvancedSettings;`,
+  advancedContext,
+);
+const advancedSettings = JSON.parse(await readFile('../backend/settings.json', 'utf8'));
+const advancedMarkup = advancedContext.renderAdvancedSettings(advancedSettings);
+const advancedPaths = [...advancedMarkup.matchAll(/name="([^"]+)"/g)].map((match) => match[1]);
+const leafPaths = (node, prefix = '') => Object.entries(node).flatMap(([key, value]) => (value && typeof value === 'object' ? leafPaths(value, `${prefix}${key}.`) : [`${prefix}${key}`]));
+assert.deepEqual(advancedPaths.sort(), leafPaths(advancedSettings).sort(), 'every advanced setting is rendered exactly once');
+assert.match(advancedMarkup, /name="vad\.zh\.threshold"/, 'nested voice detection settings keep their full path');
+assert.match(advancedMarkup, /advanced-settings-subgroup/, 'nested settings get their own subheading');
+for (const key of Object.keys(advancedContext.advancedSettingCopy.zh.fields)) {
+  for (const code of ['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']) {
+    assert.ok(advancedContext.advancedSettingCopy[code].fields[key], `missing ${code} label for ${key}`);
+  }
+}
+assert.doesNotMatch(JSON.stringify(advancedContext.advancedSettingCopy), /punctuation|endpoint_rule/, 'labels for removed settings are gone');
+
+// Both first refinement and retry expose automatic mixed-language recognition.
+summaryContext.BreviaI18n = meetingLanguages.window.BreviaI18n;
+summaryContext.modelCatalog = [];
+for (const hasRefined of [false, true]) {
+  const markup = summaryContext.renderRefineStatus({ hasRefined, refineState: 'idle', language: 'zh' });
+  assert.match(markup, /data-flow-select-choice="refine-language" data-value="zh"/);
+  assert.match(markup, /data-flow-select-choice="refine-language" data-value="auto"/);
+  assert.match(markup, /data-flow-select-choice="refine-language" data-value="es"/);
+  assert.doesNotMatch(markup, /<select/);
+  if (hasRefined) {
+    assert.doesNotMatch(markup, /data-refine-action="original"/);
+    assert.doesNotMatch(markup, /data-refine-action="model"|data-refine-model/);
+  }
+}
+assert.match(text(css), /\.refine-menu-speakers input:not\(\[type=checkbox\]\):not\(\[type=range\]\):not\(\[type=radio\]\),\.refine-menu-speakers \.flow-select-toggle\{[^}]*height:32px/);
 console.log('UI structure checks passed.');

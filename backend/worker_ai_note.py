@@ -1,4 +1,4 @@
-"""实时 AI 辅助笔记引擎：紧凑会议状态、本地轻量检测、单飞去抖调度与批量建议生成。
+"""实时 AI 辅助笔记引擎：紧凑会议状态、单飞调度与单条建议生成。
 
 设计约束：
 
@@ -7,8 +7,7 @@
   关闭思维链，让 2B~4B 内置模型在 CPU 上也能在超时内稳定产出 JSON；
 - 单飞去抖：一次只运行一个推理；新内容不会打断在飞任务（在飞结果照常使用），
   只在最小间隔后合并触发下一轮，避免「新触发覆盖旧任务」导致的空跑浪费；
-- 批量建议：一次推理最多产出 3 条建议，覆盖标题/议题、观点、关键数据、待办等类型，
-  再逐个去重、价值门控后发出；
+- 单条建议：每次推理只产出一条最值得记录的信息，避免集中刷屏；
 - 新鲜度优先：任务超时/取消/会话停止后，旧结果直接丢弃；
 - Meeting State 与 Raw Transcript 分离：事实校对仍以原始字幕为准。
 """
@@ -35,14 +34,13 @@ REALTIME_RECENT_SEGMENTS = {"zh": 5, "en": 8}
 USER_PARAGRAPH_CHARS = 80
 MAX_RECENT_SEGMENTS = 200
 MAX_SUGGESTION_HISTORY = 24
-MAX_SUGGESTIONS_PER_CALL = 3
+MAX_SUGGESTIONS_PER_CALL = 1
 
-# —— 分析节奏（频次降低、质量保证）——
-ANALYSIS_MIN_INTERVAL_AUTO = 16.0      # 「自动」档：两次分析的最短间隔
-ANALYSIS_MIN_INTERVAL_ASSIST = 30.0    # 「辅助」档：两次分析的最短间隔
-ASSIST_MIN_NEW_CHARS = 90              # 辅助档：无关键词时也触发的新增字数
-AUTO_MIN_NEW_CHARS = 20                # 自动档：触发所需的最少新增字数
-SUGGESTION_EMIT_GAP_SECONDS = 0.6      # 同批建议逐条发出时的间隔
+# —— 分析节奏 ——
+# 两种主动性共用同一节奏：间隔到点或有足够新内容才触发。会话中可用
+# ``ai-note.reconfigure`` 覆盖间隔（检测到性能瓶颈时前端会调低频率）。
+ANALYSIS_MIN_INTERVAL_SECONDS = 60.0
+MIN_NEW_CHARS = 240
 _STATE_ENTRY_MAX = 34                  # 会议状态单条的最长长度（折叠压缩用）
 
 # —— 轻量检测触发信号（不依赖 LLM）——
@@ -167,7 +165,7 @@ class _AiNoteSession:
         self.content_version = 0       # 新内容版本号（每段字幕/停笔 +1）
         self.analyzed_version = 0      # 已覆盖的内容版本（分析开始时快照）
         self.pending_chars = 0         # 自上次分析以来新增的字数
-        self.last_run_at = 0.0         # 上次分析开始时间（monotonic）
+        self.last_run_at = time.monotonic()  # 本轮开始起按 1 分钟/新增量触发
         self.typing_trigger = False    # 停笔触发的分析（quiet 档也允许）
         self.min_interval_override = None  # 会中热调的最小间隔覆盖（秒），None 用默认
         self.thread = None
@@ -394,20 +392,12 @@ class AiNoteWorkerMixin:
             return session.typing_trigger
         # 运行期可被 ``ai-note.reconfigure`` 热调的最小间隔：会中检测到性能瓶颈时，
         # 前端会调低内置模型的辅助频率（在线 LLM 通常无需调低）。
-        if session.min_interval_override is not None:
-            interval = session.min_interval_override
-        else:
-            interval = (
-                ANALYSIS_MIN_INTERVAL_AUTO
-                if session.proactivity == "auto"
-                else ANALYSIS_MIN_INTERVAL_ASSIST
-            )
-        if time.monotonic() - session.last_run_at < interval:
-            return False
-        if session.proactivity == "auto":
-            return session.pending_chars >= AUTO_MIN_NEW_CHARS
-        # 辅助档：轻量关键词命中，或积累了足够的新内容（长独白播客也能触发）。
-        return self._lightweight_trigger(session) or session.pending_chars >= ASSIST_MIN_NEW_CHARS
+        interval = (
+            session.min_interval_override
+            if session.min_interval_override is not None
+            else ANALYSIS_MIN_INTERVAL_SECONDS
+        )
+        return time.monotonic() - session.last_run_at >= interval or session.pending_chars >= MIN_NEW_CHARS
 
     def _analyze_realtime(self, session, task_generation):
         """执行一次实时分析；超时/取消/过期都返回空列表。"""
@@ -555,7 +545,7 @@ class AiNoteWorkerMixin:
         )
 
     def _parse_suggestions(self, raw):
-        """解析模型输出为规范化建议列表（支持批量 JSON 与旧版单条 JSON）。"""
+        """解析模型输出为一条规范化建议（兼容旧版数组格式）。"""
         text = str(raw or "").strip()
         data = _extract_json(text)
         if isinstance(data, dict):
@@ -591,14 +581,9 @@ class AiNoteWorkerMixin:
         return result
 
     def _emit_suggestions(self, session, batch):
-        """逐条发出批量建议（会话已停止则中断）。"""
-        for index, suggestion in enumerate(batch):
-            with session.cond:
-                if session.stopped:
-                    break
-            if index:
-                time.sleep(SUGGESTION_EMIT_GAP_SECONDS)
-            self._emit_suggestion(session, suggestion)
+        """发出本轮唯一建议。"""
+        if batch:
+            self._emit_suggestion(session, batch[0])
 
     def _emit_suggestion(self, session, suggestion):
         self.emit(
@@ -613,30 +598,6 @@ class AiNoteWorkerMixin:
             },
         )
         suggestion["emitted"] = True
-
-    @staticmethod
-    def _lightweight_trigger(session):
-        """本地规则判断新到内容是否值得调用 LLM（关键词命中）。"""
-        recent = session.recent_segments[-4:]
-        if not recent:
-            return False
-        text = " ".join(segment["text"] for segment in recent)
-        lowered = text.lower()
-        if _NUMBER_RE.search(text) or _DATE_RE.search(text):
-            return True
-        if any(word.lower() in lowered for word in _DECISION_WORDS):
-            return True
-        if any(word.lower() in lowered for word in _ACTION_WORDS):
-            return True
-        if any(word.lower() in lowered for word in _RISK_WORDS):
-            return True
-        if any(word.lower() in lowered for word in _QUESTION_WORDS):
-            return True
-        if any(marker.lower() in lowered for marker in _TOPIC_MARKERS):
-            return True
-        if any(marker.lower() in lowered for marker in _INTRO_MARKERS):
-            return True
-        return False
 
     @staticmethod
     def _compress_entry(text):

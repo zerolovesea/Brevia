@@ -23,7 +23,74 @@ def _segment_row(payload):
     )
 
 
+def _user_edit_base(rows):
+    """挑出人工编辑的基准行：用户版本优先，其次精修最新一轮，最后实时识别。"""
+    return max(
+        rows,
+        key=lambda row: (
+            row["version"] == "user",
+            row["version"].startswith("postprocess"),
+            row["revision"],
+        ),
+    )
+
+
 class TranscriptStoreMixin:
+    def save_segment_texts(self, meeting_id, edits):
+        """保存人工修正后的字幕文本，写在用户当前看到的那一版上。
+
+        Args:
+            edits: ``{"segment_id", "text"}`` 列表。界面一次保存可能改动多句，
+                批量写入保证提交是原子的。
+
+        写入位置取决于基准行：已精修时另建 ``version='user'`` 覆盖行，读取路径
+        （``latest_segments`` 与压缩会议详情）按「用户版本优先」合并，因此修正会
+        覆盖精修结果；只有实时版本时直接改写实时行并标记 ``user_edited``。
+
+        实时与精修使用两套段落 id（``track-start-seq`` 与 ``track-start``），若给
+        实时段落另建覆盖行，精修落地后它会变成一条找不到基线的孤儿行，界面上表现为
+        同一句话出现两次；改写实时行则让精修结果正常接管（重新识别本就以新结果为准）。
+
+        Raises:
+            ValueError: 段落不存在，或修正后的文本为空。
+        """
+        normalized = []
+        for edit in edits:
+            text = " ".join(str(edit.get("text") or "").split())
+            if not text:
+                raise ValueError("Subtitle text cannot be empty")
+            normalized.append((edit["segment_id"], text))
+        with self.connect() as db:
+            for segment_id, text in normalized:
+                rows = db.execute(
+                    "SELECT * FROM segments WHERE meeting_id=? AND id=?",
+                    (meeting_id, segment_id),
+                ).fetchall()
+                if not rows:
+                    raise ValueError(f"Segment not found: {segment_id}")
+                base = _user_edit_base(rows)
+                version = "live" if base["version"] == "live" else "user"
+                db.execute(
+                    """INSERT INTO segments
+                        (id,meeting_id,revision,version,track,start_ms,end_ms,speaker,text,word_timestamps,translation,user_edited)
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?,1)
+                        ON CONFLICT(meeting_id,id,version) DO UPDATE SET
+                        text=excluded.text,user_edited=1""",
+                    (
+                        base["id"],
+                        meeting_id,
+                        base["revision"],
+                        version,
+                        base["track"],
+                        base["start_ms"],
+                        base["end_ms"],
+                        base["speaker"],
+                        text,
+                        base["word_timestamps"],
+                        base["translation"],
+                    ),
+                )
+
     def save_segment(self, payload):
         """插入或更新一段逐字稿。
 

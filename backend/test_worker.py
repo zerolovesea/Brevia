@@ -14,24 +14,91 @@ from array import array
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import Mock, call, patch
+from unittest.mock import Mock, patch
 
-from .asr import DownloadCancelled, ChinesePunctuation, EnglishPunctuation, ModelManager, OfflineVAD, RefinedASR, SpeakerTracker, StreamingASR
+from .asr import DownloadCancelled, ModelManager, OfflineVAD, RefinedASR, SpeakerTracker
 from .audio_io import convert_to_pcm_wav, ensure_wav_duration
-from .config import DEFAULT_SETTINGS, SETTINGS, runtime_settings, save_runtime_settings
+from .config import (
+    BUNDLED_MODEL_IDS,
+    DEFAULT_SETTINGS,
+    SETTINGS,
+    runtime_settings,
+    save_runtime_settings,
+)
 from .llm_client import complete
 from .storage import Store
+from .transcript import latest_segments
 from .worker import Worker, install_global_error_handlers, main
 from .worker_ai_note import _AiNoteSession, _extract_json
 from .worker_common import TaskCancelled
 from .worker_core import WorkerCore
 from .llama_sidecar import LlamaSidecar
-from .refine_sidecar import REFINE_SIDECAR_TIMEOUT_SECONDS, RemoteRefiner
 from .worker_refinement import _diarization_chunk_ms
 from .worker_llama_sidecar import ASSISTANT_SIDECAR, _Sidecar, strip_reasoning
 
 
 class WorkerTest(unittest.TestCase):
+    def test_bundled_models_exist_in_the_catalog(self):
+        """打包出厂的基础模型必须仍在模型清单里。
+
+        ``backend/pack_worker.py`` 在导入时就逐个下载这些模型；清单里下架某个
+        模型却忘记同步这里，会让 ``npm run dist:mac`` / CI 在打包开始即失败。
+        """
+        catalog = {item["id"] for item in self.worker.models.catalog.values()}
+        missing = [model_id for model_id in BUNDLED_MODEL_IDS if model_id not in catalog]
+        self.assertEqual(missing, [], "BUNDLED_MODEL_IDS must stay in sync with models.json")
+
+    def test_retired_model_is_left_alone_until_the_user_refines_again(self):
+        """已下架的识别模型不做任何自动替换：老会议保持原样，重新精修时才换模型。"""
+        meeting = self.worker.start({"title": "旧模型", "language": "zh", "refined_model_id": "qwen3-asr-0.6b-int8"})
+        self.worker.stop({"meeting_id": meeting["id"], "duration_ms": 0})
+        self.worker.models.catalog.pop("qwen3-asr-0.6b-int8")
+        with patch.object(self.worker, "download_model"):
+            self.worker.initialize({})
+        self.assertEqual(
+            self.worker.store.get_meeting(meeting["id"])["refined_model_id"],
+            "qwen3-asr-0.6b-int8",
+            "首屏初始化不得改写会议记录",
+        )
+        # 续录时模型缺失只发警告，不崩、也不改写记录。
+        self.worker._prepare_active(self.worker.store.get_meeting(meeting["id"]))
+        self.assertIsNone(self.worker.asr)
+        warnings = [event for event in self.events if event.get("type") == "worker.warning"]
+        self.assertTrue(any(event["payload"].get("code") == "asr_unavailable" for event in warnings))
+        self.assertEqual(
+            self.worker.store.get_meeting(meeting["id"])["refined_model_id"],
+            "qwen3-asr-0.6b-int8",
+            "续录也不得偷偷换模型",
+        )
+
+    def test_refinement_falls_back_when_an_old_model_id_is_unknown(self):
+        meeting = self.worker.store.create_meeting({
+            "title": "旧模型", "language": "zh",
+            "refined_model_id": "retired-model",
+        })
+        self.worker.store.finish_meeting(meeting["id"], 0)
+        original_get = self.worker.models.get
+        with patch.object(self.worker, "_default_refined_model", return_value="qwen3-asr-0.6b-int8"), patch.object(self.worker.models, "is_ready", return_value=True), patch.object(
+            self.worker.models, "get", side_effect=lambda model_id: (_ for _ in ()).throw(ValueError("Unknown model")) if model_id == "retired-model" else original_get(model_id)
+        ):
+            with self.assertRaisesRegex(ValueError, "no audio"):
+                self.worker.refine({"meeting_id": meeting["id"], "refined_model_id": "retired-model"})
+        self.assertEqual(self.worker.store.get_meeting(meeting["id"])["refined_model_id"], "qwen3-asr-0.6b-int8")
+
+    def test_assemble_utterances_splits_at_sentence_boundary_when_overlong(self):
+        # 第二句跨窗口：窗口 2 以半句话结尾，句末在窗口 3 中。超长时应在
+        # 第一个完整句末处拆分，而不是从窗口边界（半句话）硬切。
+        assembled = self.worker._assemble_utterances([
+            {"track": "system", "start_ms": 0, "end_ms": 15000, "speaker": "system-spk-1", "text": "第一句话。", "word_timestamps": [{"text": "a", "start_ms": 0, "end_ms": 1000}]},
+            {"track": "system", "start_ms": 15000, "end_ms": 30000, "speaker": "system-spk-1", "text": "第二句话还没", "word_timestamps": [{"text": "b", "start_ms": 15000, "end_ms": 16000}]},
+            {"track": "system", "start_ms": 30000, "end_ms": 45000, "speaker": "system-spk-1", "text": "讲完。第三句话。", "word_timestamps": [{"text": "c", "start_ms": 30000, "end_ms": 31000}]},
+        ])
+        self.assertEqual(
+            [(item["text"]) for item in assembled],
+            ["第一句话。", "第二句话还没讲完。第三句话。"],
+        )
+
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.events = []
@@ -63,126 +130,10 @@ class WorkerTest(unittest.TestCase):
         """把调度节奏调成近乎即时，便于测试去重/门控等逻辑本身。"""
         import backend.worker_ai_note as ai_note
 
-        patchers = [
-            patch.object(ai_note, "ANALYSIS_MIN_INTERVAL_AUTO", 0.0),
-            patch.object(ai_note, "ANALYSIS_MIN_INTERVAL_ASSIST", 0.0),
-            patch.object(ai_note, "SUGGESTION_EMIT_GAP_SECONDS", 0.0),
-        ]
-        for patcher in patchers:
-            patcher.start()
-        self.addCleanup(lambda: [p.stop() for p in patchers])
+        patcher = patch.object(ai_note, "ANALYSIS_MIN_INTERVAL_SECONDS", 0.0)
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
-    def test_efficiency_uses_streaming_model_as_live_second_pass(self):
-        with patch("backend.worker_session.StreamingASR") as streaming:
-            refiner = self.worker._create_live_refiner("streaming", "zh", streaming=True)
-        self.assertIs(refiner, streaming.return_value)
-        streaming.assert_called_once_with(self.worker.models, "streaming", language="zh")
-        self.worker.models.is_ready = lambda model_id: model_id == "qwen3-asr-0.6b-int8"
-        self.assertEqual(
-            self.worker._live_refiner_choice(
-                "nemotron-3.5-asr-streaming-0.6b-560ms-int8",
-                "funasr-nano-int8",
-                "es",
-                False,
-            ),
-            ("qwen3-asr-0.6b-int8", False),
-        )
-        self.assertEqual(
-            self.worker._live_refiner_choice(
-                "nemotron-3.5-asr-streaming-0.6b-560ms-int8",
-                "funasr-nano-int8",
-                "es",
-                True,
-            ),
-            ("nemotron-3.5-asr-streaming-0.6b-560ms-int8", True),
-        )
-        self.assertEqual(
-            self.worker._preserve_streaming_tail("hola.", "hola mundo"),
-            "hola mundo",
-        )
-
-    def test_streaming_endpoint_keeps_partial_when_finalize_is_empty(self):
-        stream = Mock()
-        recognizer = Mock()
-        recognizer.is_ready.return_value = False
-        recognizer.get_result.return_value = SimpleNamespace(text="No, espérate")
-        recognizer.is_endpoint.return_value = True
-        asr = object.__new__(StreamingASR)
-        asr.lock = threading.Lock()
-        asr.streams = {"system": stream}
-        asr.recognizer = recognizer
-        asr._finalize = Mock(return_value=SimpleNamespace(text=""))
-        result, final = asr.accept("system", [0.0], 16000)
-        self.assertTrue(final)
-        self.assertEqual(result.text, "No, espérate")
-
-    def test_native_punctuation_streaming_refinement_keeps_full_segment(self):
-        refiner = object.__new__(StreamingASR)
-        refiner.model = {"punctuated": True}
-        refiner.decode = Mock(return_value="原生标点。")
-        self.worker.punctuation = Mock()
-        self.assertEqual(
-            self.worker._refine_live_audio(refiner, array("f", [0]) * (16 * 16000), 16000),
-            "原生标点。",
-        )
-        refiner.decode.assert_called_once()
-        self.worker.punctuation.apply.assert_not_called()
-
-        refiner.decode.return_value = "Chola"
-        self.assertEqual(
-            self.worker._refine_live_audio(
-                refiner, array("f", [0]) * 16000, 16000, original_text="Hola"
-            ),
-            "Hola",
-        )
-
-    def test_live_refinement_uses_context_across_decoder_windows(self):
-        class Refiner:
-            def __init__(self):
-                self.lengths = []
-
-            def decode(self, samples, _):
-                self.lengths.append(len(samples))
-                return ("第一段末尾啊", "段末尾啊后续")[len(self.lengths) - 1]
-
-        refiner = Refiner()
-        with patch.dict(SETTINGS["asr"], {"refined_window_seconds": 15}):
-            text = self.worker._refine_live_audio(refiner, array("f", [0]) * 30, 1)
-        self.assertEqual(refiner.lengths, [15, 16])
-        self.assertEqual(text, "第一段末尾啊后续")
-
-    def test_pinned_refinement_keeps_unfinished_tail(self):
-        self.worker.store.save_segment = Mock(return_value=True)
-        updated = {
-            "meeting_id": "m", "segment_id": "system-5", "revision": 1,
-            "pinned": True, "text": "完整句。未说完的尾巴",
-        }
-        self.worker._emit_refined_segment(updated)
-        self.assertEqual(
-            self.worker.store.save_segment.call_args.args[0]["text"],
-            "完整句。未说完的尾巴",
-        )
-
-    def test_remote_refiner_sends_before_waiting_for_a_reply(self):
-        refiner = RemoteRefiner.__new__(RemoteRefiner)
-        refiner._closed = False
-        refiner._fallback_locked = False
-        refiner._consecutive_failures = 0
-        refiner._process = Mock()
-        refiner._process.is_alive.return_value = True
-        refiner._conn = Mock()
-        refiner._conn.poll.return_value = True
-        refiner._conn.recv.return_value = ("text", "refined")
-
-        self.assertEqual(refiner.decode([0.1], 16000), "refined")
-        self.assertEqual(
-            refiner._conn.method_calls,
-            [
-                call.send(("decode", [0.1], 16000)),
-                call.poll(timeout=REFINE_SIDECAR_TIMEOUT_SECONDS),
-                call.recv(),
-            ],
-        )
 
     def test_ai_note_extracts_json_surrounded_by_model_text(self):
         self.assertEqual(
@@ -190,44 +141,7 @@ class WorkerTest(unittest.TestCase):
             {"type": "action", "text": "Follow up"},
         )
 
-    def test_remote_refiner_shutdown_drops_inflight_work_without_local_fallback(self):
-        refiner = RemoteRefiner.__new__(RemoteRefiner)
-        refiner._closed = False
-        refiner._fallback_locked = False
-        refiner._conn = Mock()
-        process = refiner._process = Mock()
-        process.is_alive.return_value = True
 
-        refiner.shutdown()
-
-        self.assertEqual(refiner.decode([0.1], 16000), "")
-        process.terminate.assert_called_once_with()
-
-    def test_remote_refiner_locks_into_fallback_after_repeated_failures(self):
-        # 弱机上 sidecar 解码反复失败时，应在达到阈值后永久锁定进程内回退，
-        # 不再反复重建子进程或每段加载第二份模型（粘性降级）。
-        refiner = RemoteRefiner.__new__(RemoteRefiner)
-        refiner._closed = False
-        refiner._fallback = Mock()
-        refiner._fallback.decode.return_value = "local"
-        refiner._consecutive_failures = 0
-        refiner._fallback_locked = False
-        refiner._process = Mock()
-        refiner._process.is_alive.return_value = True
-        refiner._conn = Mock()
-        refiner._conn.poll.return_value = False  # 每次都超时
-        refiner._close = Mock()
-
-        self.assertEqual(refiner.decode([0.1], 16000), "local")
-        self.assertFalse(refiner._fallback_locked, "首次失败不应立即锁定")
-        self.assertEqual(refiner.decode([0.1], 16000), "local")
-        self.assertTrue(refiner._fallback_locked, "连续失败达阈值后应锁定回退")
-        refiner._close.assert_called_once_with()
-
-        # 锁定后直接走进程内回退，不再触碰 sidecar。
-        refiner._conn.send.reset_mock()
-        self.assertEqual(refiner.decode([0.1], 16000), "local")
-        refiner._conn.send.assert_not_called()
 
     def test_llama_sidecar_chat_generation_uses_chat_template(self):
         sidecar = LlamaSidecar()
@@ -317,8 +231,8 @@ class WorkerTest(unittest.TestCase):
         self.assertEqual(count, 1, "duplicate suggestion should be suppressed")
         self.worker.ai_note_stop({"meeting_id": meeting_id})
 
-    def test_ai_note_emits_batch_suggestions(self):
-        """一次分析产出多条建议时应逐条发出（前端队列逐条展示）。"""
+    def test_ai_note_emits_one_suggestion_per_analysis(self):
+        """一次分析只交付最优建议，避免集中刷屏。"""
         meeting_id = "22222222-2222-2222-2222-222222222222"
         self._patch_ai_note_cadence()
         batch = {
@@ -331,10 +245,9 @@ class WorkerTest(unittest.TestCase):
         self.worker.llama_generate_realtime = lambda model_id, prompt: json.dumps(batch, ensure_ascii=False)
         self.worker.ai_note_start({"meeting_id": meeting_id, "provider": "built-in", "model": "qwen3.5-2b", "proactivity": "assist", "language": "zh"})
         self.worker.ai_note_on_segment({"meeting_id": meeting_id, "text": "2026 年全国企业就业人员每周平均工作 48.2 小时，家具制造业利润只有 5.36%。", "start_ms": 5000, "speaker": "spk-1"})
-        suggestions = self._wait_ai_suggestions(count=3)
-        self.assertEqual(len(suggestions), 3, "expected 3 suggestion events from one batch")
-        types = [e["payload"]["type"] for e in suggestions]
-        self.assertEqual(types, ["number", "topic", "action"])
+        suggestions = self._wait_ai_suggestions()
+        self.assertEqual(len(suggestions), 1)
+        self.assertEqual(suggestions[0]["payload"]["type"], "number")
         self.worker.ai_note_stop({"meeting_id": meeting_id})
 
     def test_ai_note_drops_generic_and_typo_suggestions(self):
@@ -402,7 +315,7 @@ class WorkerTest(unittest.TestCase):
             )
         )
 
-    def test_ai_note_merges_evidence_for_one_atomic_claim(self):
+    def test_ai_note_uses_the_first_suggestion_only(self):
         session = _AiNoteSession(
             "meeting", {}, "assist", "en", {"instructions": "", "state_labels": ["topic", "facts", "decisions", "actions", "questions"]},
         )
@@ -418,7 +331,7 @@ class WorkerTest(unittest.TestCase):
         )
         batch = self.worker._analyze_realtime(session, 0)
         self.assertEqual(len(batch), 1)
-        self.assertEqual(batch[0]["evidence"], ["00:01", "00:02"])
+        self.assertEqual(batch[0]["evidence"], ["00:01"])
         self.assertIn(batch[0]["text"], self.worker._realtime_prompt(session))
 
     def test_ai_note_exact_duplicate_across_types_is_suppressed(self):
@@ -450,7 +363,7 @@ class WorkerTest(unittest.TestCase):
             ]}
         )
         batch = self.worker._analyze_realtime(session, 0)
-        self.assertEqual(len(batch), 2, "中文语义不同但字词相近的笔记不应被合并")
+        self.assertEqual(len(batch), 1)
 
     def test_ai_note_new_content_during_run_is_not_skipped(self):
         """调度器不打断在飞任务：运行期间到达的新内容应在下一轮被分析。"""
@@ -485,6 +398,19 @@ class WorkerTest(unittest.TestCase):
             time.sleep(0.05)
         self.assertGreaterEqual(len(calls), 2, "content arriving during the run should trigger a follow-up analysis")
         self.worker.ai_note_stop({"meeting_id": meeting_id})
+
+    def test_ai_note_runs_after_a_minute_or_enough_new_transcript(self):
+        session = _AiNoteSession(
+            "meeting", {}, "assist", "zh", {"instructions": "", "state_labels": ["topic", "facts", "decisions", "actions", "questions"]},
+        )
+        session.content_version = 1
+        session.pending_chars = 239
+        self.assertFalse(self.worker._should_analyze(session))
+        session.pending_chars = 240
+        self.assertTrue(self.worker._should_analyze(session))
+        session.pending_chars = 1
+        session.last_run_at = time.monotonic() - 60
+        self.assertTrue(self.worker._should_analyze(session))
 
     def test_ai_note_quiet_mode_requires_explicit_request(self):
         """安静档：字幕和停笔均不触发，只有显式请求才运行。"""
@@ -538,7 +464,7 @@ class WorkerTest(unittest.TestCase):
         self.assertEqual(json.loads(output.value), {"title": "예시"})
 
     def test_meeting_get_compacts_superseded_word_timestamps(self):
-        meeting = self.worker.start({"title": "compact", "language": "zh", "streaming_model_id": "zipformer-zh-xlarge-streaming-int8", "refined_model_id": "qwen3-asr-0.6b-int8"})
+        meeting = self.worker.start({"title": "compact", "language": "zh", "refined_model_id": "qwen3-asr-0.6b-int8"})
         for version, revision, text in (("live", 0, "live"), ("postprocess", 0, "old"), ("postprocess-1", 1, "current")):
             self.worker.store.save_segment({"meeting_id": meeting["id"], "segment_id": version, "version": version, "revision": revision, "start_ms": 0, "end_ms": 1000, "speaker": "spk-1", "text": text, "word_timestamps": [{"text": "word", "overlap_speakers": ["spk-1", "spk-2"]}]})
         result = self.worker.handle({"id": "compact-get", "type": "meeting.get", "payload": {"meeting_id": meeting["id"]}})
@@ -553,7 +479,6 @@ class WorkerTest(unittest.TestCase):
                 "payload": {
                     "title": "\ud800会议 😀",
                     "language": "zh",
-                    "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                     "refined_model_id": "qwen3-asr-0.6b-int8",
                 },
             }
@@ -573,7 +498,7 @@ class WorkerTest(unittest.TestCase):
             WorkerCore(self.temp.name).handle({"id": "deep", "type": "unknown", "payload": payload})
 
     def test_workspace_delete_restores_meeting_and_workspace_together(self):
-        meeting = self.worker.start({"title": "workspace", "language": "zh", "streaming_model_id": "zipformer-zh-xlarge-streaming-int8", "refined_model_id": "qwen3-asr-0.6b-int8"})
+        meeting = self.worker.start({"title": "workspace", "language": "zh", "refined_model_id": "qwen3-asr-0.6b-int8"})
         workspace = self.worker.store.create_workspace({"name": "Test"})
         self.worker.store.assign_meeting_to_workspace(meeting["id"], workspace["id"])
         self.worker.store.delete_workspace(workspace["id"])
@@ -584,11 +509,11 @@ class WorkerTest(unittest.TestCase):
 
     def test_meeting_can_start_in_a_workspace(self):
         workspace = self.worker.store.create_workspace({"name": "Team"})
-        meeting = self.worker.start({"title": "workspace", "language": "zh", "streaming_model_id": "zipformer-zh-xlarge-streaming-int8", "refined_model_id": "qwen3-asr-0.6b-int8", "workspace_id": workspace["id"]})
+        meeting = self.worker.start({"title": "workspace", "language": "zh", "refined_model_id": "qwen3-asr-0.6b-int8", "workspace_id": workspace["id"]})
         self.assertEqual(meeting["workspace_id"], workspace["id"])
 
     def test_legacy_category_migrates_once_to_workspace_id(self):
-        meeting = self.worker.start({"title": "legacy", "language": "zh", "streaming_model_id": "zipformer-zh-xlarge-streaming-int8", "refined_model_id": "qwen3-asr-0.6b-int8"})
+        meeting = self.worker.start({"title": "legacy", "language": "zh", "refined_model_id": "qwen3-asr-0.6b-int8"})
         with self.worker.store.connect() as db:
             db.execute("UPDATE meetings SET category='Legacy', workspace_id=NULL WHERE id=?", (meeting["id"],))
             # 模拟旧版数据库：user_version 为 0，下一次初始化应执行一次性结构迁移。
@@ -599,7 +524,9 @@ class WorkerTest(unittest.TestCase):
 
     def test_schema_migration_runs_once_and_is_idempotent(self):
         """结构迁移按 user_version 只执行一次：升级库迁移、已迁移库跳过。"""
-        meeting = self.worker.start({"title": "migrate", "language": "zh", "streaming_model_id": "zipformer-zh-xlarge-streaming-int8", "refined_model_id": "qwen3-asr-0.6b-int8"})
+        from .store_base import CURRENT_SCHEMA_VERSION
+
+        meeting = self.worker.start({"title": "migrate", "language": "zh", "refined_model_id": "qwen3-asr-0.6b-int8"})
         with self.worker.store.connect() as db:
             db.execute("UPDATE meetings SET category='Old', workspace_id=NULL WHERE id=?", (meeting["id"],))
         with Store(self.temp.name).connect() as db:
@@ -608,7 +535,7 @@ class WorkerTest(unittest.TestCase):
         store = Store(self.temp.name)
         self.assertEqual(store.get_meeting(meeting["id"])["category"], "")
         with store.connect() as db:
-            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 1)
+            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], CURRENT_SCHEMA_VERSION)
         # 已迁移到目标版本后，再次初始化不再触碰 category 残留（一次性迁移语义）。
         with store.connect() as db:
             db.execute("UPDATE meetings SET category='Stale' WHERE id=?", (meeting["id"],))
@@ -617,7 +544,7 @@ class WorkerTest(unittest.TestCase):
 
     def test_example_workspace_is_not_shown_as_a_real_workspace(self):
         workspace = self.worker.store.create_workspace({"name": "Example"})
-        meeting = self.worker.start({"title": "example", "language": "en", "streaming_model_id": "zipformer-zh-xlarge-streaming-int8", "refined_model_id": "qwen3-asr-0.6b-int8"})
+        meeting = self.worker.start({"title": "example", "language": "en", "refined_model_id": "qwen3-asr-0.6b-int8"})
         with self.worker.store.connect() as db:
             db.execute("UPDATE meetings SET is_example=1, workspace_id=? WHERE id=?", (workspace["id"], meeting["id"]))
         Store(self.temp.name)
@@ -637,7 +564,7 @@ class WorkerTest(unittest.TestCase):
 
     def test_cancelling_refinement_task_preserves_completed_turns(self):
         meeting = self.worker.start(
-            {"title": "cancel", "language": "zh", "streaming_model_id": "zipformer-zh-xlarge-streaming-int8", "refined_model_id": "qwen3-asr-0.6b-int8"}
+            {"title": "cancel", "language": "zh", "refined_model_id": "qwen3-asr-0.6b-int8"}
         )
         self.worker.store.replace_speaker_turns(
             meeting["id"], [{"start_ms": 0, "end_ms": 1000, "speaker": "spk-1"}]
@@ -660,7 +587,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "translation lock",
                 "language": "en",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -699,7 +625,7 @@ class WorkerTest(unittest.TestCase):
 
     def test_delete_and_purge_do_not_wait_for_recording_lock(self):
         meeting = self.worker.start(
-            {"title": "fast delete", "language": "zh", "streaming_model_id": "zipformer-zh-xlarge-streaming-int8", "refined_model_id": "qwen3-asr-0.6b-int8"}
+            {"title": "fast delete", "language": "zh", "refined_model_id": "qwen3-asr-0.6b-int8"}
         )
         self.worker.stop({"meeting_id": meeting["id"], "duration_ms": 0})
 
@@ -746,7 +672,6 @@ class WorkerTest(unittest.TestCase):
                 "title": "接口联调",
                 "language": "zh",
                 "target_language": None,
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -800,13 +725,13 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "双轨混音",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
                 "audio_tracks": ["mic", "system"],
             }
         )
         self.worker.asr = Mock()
-        self.worker.asr.accept.return_value = (SimpleNamespace(text="同一条字幕"), True)
+        self.worker.vad = Mock(tracks={})
+        self.worker.vad.accept.return_value = []
         self.worker.punctuation = None
         self.worker.live_refiner = None
         for track, value in (("mic", 1000), ("system", 3000)):
@@ -817,23 +742,21 @@ class WorkerTest(unittest.TestCase):
                     "sample_rate": 16000, "start_ms": 0,
                 }
             )
-        self.worker.asr.accept.assert_called_once()
-        self.assertEqual(self.worker.asr.accept.call_args.args[0], "mix")
-        final = next(event for event in self.events if event["type"] == "transcript.final")
-        self.assertEqual(final["payload"]["track"], "mix")
+        self.worker.vad.accept.assert_called_once()
+        self.assertEqual(self.worker.vad.accept.call_args.args[0], "mix")
 
     def test_dual_track_keeps_leading_audio_when_tracks_start_at_different_times(self):
         meeting = self.worker.start(
             {
                 "title": "双轨延迟启动",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
                 "audio_tracks": ["mic", "system"],
             }
         )
         self.worker.asr = Mock()
-        self.worker.asr.accept.return_value = (SimpleNamespace(text="开头内容"), True)
+        self.worker.vad = Mock(tracks={})
+        self.worker.vad.accept.return_value = []
         self.worker.punctuation = None
         self.worker.live_refiner = None
         system_pcm = (3000).to_bytes(2, "little", signed=True) * 1600
@@ -846,9 +769,9 @@ class WorkerTest(unittest.TestCase):
                     "sample_rate": 16000, "start_ms": start_ms,
                 }
             )
-        self.worker.asr.accept.assert_called_once()
-        self.assertEqual(self.worker.asr.accept.call_args.args[0], "mix")
-        self.assertAlmostEqual(self.worker.asr.accept.call_args.args[1][0], 3000 / 32768)
+        self.worker.vad.accept.assert_called_once()
+        self.assertEqual(self.worker.vad.accept.call_args.args[0], "mix")
+        self.assertAlmostEqual(self.worker.vad.accept.call_args.args[1][0], 3000 / 32768)
 
     def test_dual_track_falls_back_to_single_track_when_peer_stalls(self):
         # 双轨会议中一轨停流（另一轨持续有数据超过 MAX_MIX_BUFFER_MS）时，
@@ -857,17 +780,17 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "单轨停流回退",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
                 "audio_tracks": ["mic", "system"],
             }
         )
         self.worker.asr = Mock()
-        self.worker.asr.accept.return_value = (SimpleNamespace(text="独立字幕"), True)
+        self.worker.vad = Mock(tracks={})
+        self.worker.vad.accept.return_value = []
         self.worker.punctuation = None
         self.worker.live_refiner = None
         # 只送 mic 轨，间隔超过 MAX_MIX_BUFFER_MS；system 轨始终无数据。
-        for start_ms in (0, 3000, 8000):
+        for start_ms in (0, 3000, 8000, 8100):
             self.worker.audio(
                 {
                     "meeting_id": meeting["id"], "track": "mic",
@@ -876,18 +799,14 @@ class WorkerTest(unittest.TestCase):
                 }
             )
         # 应回退为 mic 独立流（不再混音），并产出 mic 轨字幕。
-        tracks = [call.args[0] for call in self.worker.asr.accept.call_args_list]
+        tracks = [call.args[0] for call in self.worker.vad.accept.call_args_list]
         self.assertIn("mic", tracks)
-        finals = [ev for ev in self.events if ev["type"] == "transcript.final"]
-        self.assertTrue(finals)
-        self.assertEqual(finals[-1]["payload"]["track"], "mic")
 
     def test_audio_started_mid_meeting_is_padded_with_silence(self):
         meeting = self.worker.start(
             {
                 "title": "late track",
                 "language": "en",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -901,7 +820,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "audio checkpoint",
                 "language": "en",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -916,13 +834,12 @@ class WorkerTest(unittest.TestCase):
     def test_start_requires_selected_models_when_requested(self):
         with self.assertRaisesRegex(
             RuntimeError,
-            "Models zipformer-zh-xlarge-streaming-int8, qwen3-asr-0.6b-int8 are not installed",
+            "Models qwen3-asr-0.6b-int8, silero-vad are not installed",
         ):
             self.worker.start(
                 {
                     "title": "缺模型",
                     "language": "zh",
-                    "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                     "refined_model_id": "qwen3-asr-0.6b-int8",
                     "require_models": True,
                 }
@@ -934,23 +851,21 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "实时不分离说话人",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
-        self.assertIsNone(self.worker.speaker_tracker)
+        self.assertFalse(hasattr(self.worker, "speaker_tracker"))
 
     def test_start_requires_translation_model_when_translation_is_selected(self):
         with self.assertRaisesRegex(
             RuntimeError,
-            "Models zipformer-zh-xlarge-streaming-int8, qwen3-asr-0.6b-int8, hy-mt2-1.8b-q4km are not installed",
+            "Models qwen3-asr-0.6b-int8, silero-vad, hy-mt2-1.8b-q4km are not installed",
         ):
             self.worker.start(
                 {
                     "title": "缺翻译模型",
                     "language": "zh",
                     "target_language": "en",
-                    "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                     "refined_model_id": "qwen3-asr-0.6b-int8",
                     "require_models": True,
                 }
@@ -981,7 +896,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "可编辑纪要",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -1002,7 +916,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "纪要联调",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -1044,7 +957,6 @@ class WorkerTest(unittest.TestCase):
         meeting = self.worker.start(
             {
                 "title": "完整纪要", "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -1077,7 +989,6 @@ class WorkerTest(unittest.TestCase):
         meeting = self.worker.start(
             {
                 "title": "控制标记", "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -1097,7 +1008,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "复用清洗稿",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -1137,7 +1047,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "实时逐字稿",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -1182,7 +1091,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "取消纪要",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -1206,7 +1114,6 @@ class WorkerTest(unittest.TestCase):
         meeting = self.worker.start(
             {
                 "title": "删除纪要", "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -1218,7 +1125,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "空会议",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -1240,7 +1146,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "失败后重试",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -1284,7 +1189,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "空响应重试",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -1325,7 +1229,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "超长转录分段",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -1372,7 +1275,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "超长转录截断提示",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -1414,7 +1316,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "参与者统计",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -1451,7 +1352,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "笔记持久化",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -1469,7 +1369,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "鉴权失败",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -1506,7 +1405,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "纪要导出",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -1534,7 +1432,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "同名导出",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -1554,7 +1451,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "我的笔记导出",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -1818,127 +1714,6 @@ class WorkerTest(unittest.TestCase):
         # 已是阿拉伯百分比则原样保留。
         self.assertEqual(Worker._clean_live_text("利润仅5.36%"), "利润仅5.36%")
 
-    def test_live_qwen_refinement_replaces_unedited_final_only(self):
-        meeting = self.worker.start(
-            {
-                "title": "实时精修",
-                "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
-                "refined_model_id": "qwen3-asr-0.6b-int8",
-            }
-        )
-        event = {
-            "meeting_id": meeting["id"],
-            "segment_id": "mic-0",
-            "revision": 2,
-            "text": "这是直 播识别",
-            "start_ms": 0,
-            "end_ms": 1000,
-            "speaker": "spk-1",
-            "track": "mic",
-        }
-        self.worker.store.save_segment(event)
-
-        class Refiner:
-            def decode(self, _, __):
-                return "这是直播识别。"
-
-        self.worker._postprocess_live_segment(Refiner(), event, None, [0.1], 16000)
-        segment = self.worker.store.get_meeting(meeting["id"])["segments"][0]
-        self.assertEqual((segment["text"], segment["revision"]), ("这是直播识别。", 3))
-        self.assertEqual(self.events[-1]["type"], "transcript.refined")
-        with self.worker.store.connect() as db:
-            db.execute("UPDATE segments SET user_edited=1 WHERE id=?", ("mic-0",))
-        self.worker._postprocess_live_segment(Refiner(), event, None, [0.1], 16000)
-        self.assertEqual(
-            self.worker.store.get_meeting(meeting["id"])["segments"][0]["text"],
-            "这是直播识别。",
-        )
-
-    def test_live_revision_layer_runs_for_every_language(self):
-        self.worker.meeting_language = "en"
-        event = {"meeting_id": "meeting", "segment_id": "system-0", "text": "fast"}
-        executor = self.worker.live_postprocessing = Mock()
-        self.worker.live_refiner = object()
-        self.worker._postprocess_live_segment_later(event, [0.1], [0.1], 16000)
-        executor.submit.assert_called_once()
-
-    def test_live_revision_queues_work_when_the_single_slot_is_busy(self):
-        self.worker.live_postprocessing = executor = Mock()
-        self.worker.live_refiner = object()
-        event = {"meeting_id": "meeting", "segment_id": "system-0", "text": "fast"}
-        self.worker._postprocess_live_segment_later(event, [0.1], [0.1], 16000)
-        self.worker._postprocess_live_segment_later(event, [0.2], [0.2], 16000)
-        self.assertEqual(executor.submit.call_count, 2)
-
-    def test_live_revision_drops_when_refinement_backlog_is_full(self):
-        # 弱 CPU 上精修慢于实时时，积压达到上限应跳过本段实时精修（保留流式原文），
-        # 而不是无限排队拖慢字幕。
-        self.worker.live_postprocessing = executor = Mock()
-        self.worker.live_refiner = object()
-        self.worker._live_refine_max = 2
-        self.worker._live_refine_outstanding = 2  # 已达到上限
-        event = {"meeting_id": "meeting", "segment_id": "system-0", "text": "fast"}
-        self.worker._postprocess_live_segment_later(event, [0.1], [0.1], 16000)
-        executor.submit.assert_not_called()
-        warning = next(
-            ev for ev in self.events if ev["type"] == "worker.warning"
-            and ev["payload"].get("code") == "live_refinement_degraded"
-        )
-        self.assertIsNotNone(warning)
-        self.assertIn(
-            event,
-            [item["payload"] for item in self.events if item["type"] == "transcript.settled"],
-        )
-
-    def test_live_revision_releases_slot_after_processing(self):
-        # 精修完成后名额应归还，使后续段可继续被实时精修。
-        queued = []
-        self.worker.live_postprocessing = Mock()
-        self.worker.live_postprocessing.submit.side_effect = (
-            lambda function, *args: queued.append((function, args))
-        )
-        self.worker.live_refiner = object()
-        self.worker._live_refine_max = 1
-        event = {"meeting_id": "meeting", "segment_id": "system-0", "text": "fast"}
-        self.worker._postprocess_live_segment_later(event, [0.1], [0.1], 16000)
-        self.assertEqual(self.worker._live_refine_outstanding, 1)
-        function, args = queued[0]
-        function(*args)  # 运行精修（内部无实际模型，仅走兜底）
-        self.assertEqual(self.worker._live_refine_outstanding, 0)
-        self.assertTrue(any(item["type"] == "transcript.settled" for item in self.events))
-
-    def test_old_live_refinement_cannot_release_a_new_meeting_slot(self):
-        self.worker.live_postprocessing = executor = Mock()
-        self.worker.live_refiner = object()
-        queued = []
-        executor.submit.side_effect = lambda function, *args: queued.append((function, args))
-        event = {"meeting_id": "first", "segment_id": "system-0", "text": "first"}
-        self.worker._postprocess_live_segment_later(event, [0.1], [0.1], 16000)
-        stale_function, stale_args = queued.pop()
-        self.worker._release_active_session()
-
-        self.worker.live_postprocessing = executor
-        self.worker.live_refiner = object()
-        current = {"meeting_id": "second", "segment_id": "system-1", "text": "second"}
-        self.worker._postprocess_live_segment_later(current, [0.2], [0.2], 16000)
-        self.assertEqual(self.worker._live_refine_outstanding, 1)
-
-        stale_function(*stale_args)
-        self.assertEqual(self.worker._live_refine_outstanding, 1)
-
-    def test_live_performance_emits_bottleneck_after_repeated_drops(self):
-        # 弱 CPU 上精修连续跟不上时，应发出 live.performance 瓶颈事件（前端据此弹窗）。
-        self.worker.live_postprocessing = Mock()
-        self.worker.live_refiner = object()
-        self.worker._live_refine_max = 0  # 每次都跳过
-        event = {"meeting_id": "meeting", "segment_id": "system-0", "text": "fast"}
-        for _ in range(3):
-            self.worker._postprocess_live_segment_later(event, [0.1], [0.1], 16000)
-        perf = [ev for ev in self.events if ev.get("type") == "live.performance"]
-        self.assertEqual(len(perf), 1)
-        self.assertTrue(perf[0]["payload"]["bottleneck"])
-
     def test_ai_note_reconfigure_tunes_interval(self):
         meeting_id = "11111111-1111-1111-1111-111111111111"
         self.worker.ai_note_start({"meeting_id": meeting_id, "provider": "built-in", "model": "qwen3.5-2b", "proactivity": "assist", "language": "zh"})
@@ -1956,7 +1731,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "双轨精修",
                 "language": "en",
-                "streaming_model_id": "zipformer-en-streaming-int8",
                 "refined_model_id": "whisper-large-v3",
             }
         )
@@ -1971,6 +1745,7 @@ class WorkerTest(unittest.TestCase):
                 }
             )
         self.worker.stop({"meeting_id": meeting["id"], "duration_ms": 2000})
+        self.worker.store.update_meeting(meeting["id"], {"refined_model_id": "funasr-nano-int8"})
 
         numpy = type(
             "Numpy",
@@ -2014,6 +1789,14 @@ class WorkerTest(unittest.TestCase):
                 else ("remote slow", [{"text": "remote slow", "start_ms": 0, "end_ms": 1000}])
             )
             self.worker.refine({"meeting_id": meeting["id"]})
+            # 不带语言时沿用会议语言（en），而不是退回多语言混说。
+            self.assertEqual(refined.call_args.args[1], "funasr-nano-int8")
+            self.assertEqual(refined.call_args.kwargs["language"], "en")
+            self.assertEqual(self.worker.store.get_meeting(meeting["id"])["language"], "en")
+            with self.assertRaisesRegex(ValueError, "Automatic multilingual"):
+                self.worker.refine({"meeting_id": meeting["id"], "language": "auto", "refined_model_id": "funasr-nano-int8"})
+            self.worker.refine({"meeting_id": meeting["id"], "language": "es", "refined_model_id": "whisper-large-v3"})
+            self.assertEqual(refined.call_args.kwargs["language"], "es")
 
         latest = [
             segment
@@ -2034,7 +1817,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "远端会",
                 "language": "en",
-                "streaming_model_id": "zipformer-en-streaming-int8",
                 "refined_model_id": "whisper-large-v3",
             }
         )
@@ -2126,7 +1908,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "导入录音",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -2170,7 +1951,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "降噪精修",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -2425,6 +2205,16 @@ class WorkerTest(unittest.TestCase):
         )
 
     def test_refinement_turns_preserve_speaker_boundaries(self):
+        stable = self.worker._stabilize_speaker_turns([
+            {"start_ms": 0, "end_ms": 6000, "speaker": "a"},
+            {"start_ms": 6300, "end_ms": 7500, "speaker": "b"},
+            {"start_ms": 7800, "end_ms": 15000, "speaker": "a"},
+            {"start_ms": 15300, "end_ms": 22000, "speaker": "b"},
+        ], minimum_ms=2500, absorb_gap_ms=1000)
+        self.assertEqual(stable, [
+            {"start_ms": 0, "end_ms": 15000, "speaker": "a"},
+            {"start_ms": 15300, "end_ms": 22000, "speaker": "b"},
+        ])
         turns = self.worker._refinement_turns(
             [
                 {"start_ms": 0, "end_ms": 18000, "speaker": "spk-1"},
@@ -2435,11 +2225,30 @@ class WorkerTest(unittest.TestCase):
         )
         self.assertEqual(
             [(turn["start_ms"], turn["end_ms"], turn["speaker"]) for turn in turns],
-            [(0, 15000, "spk-1"), (15000, 18000, "spk-1"), (18000, 21000, "spk-2")],
+            [(0, 9000, "spk-1"), (9000, 18000, "spk-1"), (18000, 21000, "spk-2")],
         )
         self.assertEqual(
             [turn["speaker"] for turn in turns], ["spk-1", "spk-1", "spk-2"]
         )
+        self.assertEqual(self.worker._refinement_turns([
+            {"start_ms": 0, "end_ms": 7000, "speaker": "a"},
+            {"start_ms": 8000, "end_ms": 16000, "speaker": "a"},
+            {"start_ms": 16000, "end_ms": 19000, "speaker": "b"},
+        ], 19000, 15000, merge_gap_ms=2000), [
+            {"start_ms": 0, "end_ms": 8000, "speaker": "a", "_quiet": False},
+            {"start_ms": 8000, "end_ms": 16000, "speaker": "a", "_quiet": False},
+            {"start_ms": 16000, "end_ms": 19000, "speaker": "b", "_quiet": False},
+        ])
+        # 安静语音兜底窗口自成一段，不被相邻窗口按 merge_gap 合并进去。
+        self.assertEqual(self.worker._refinement_turns([
+            {"start_ms": 0, "end_ms": 7000, "speaker": "a"},
+            {"start_ms": 7500, "end_ms": 11000, "speaker": "a", "_quiet": True},
+            {"start_ms": 11500, "end_ms": 19000, "speaker": "a"},
+        ], 19000, 15000, merge_gap_ms=2000), [
+            {"start_ms": 0, "end_ms": 7000, "speaker": "a", "_quiet": False},
+            {"start_ms": 7500, "end_ms": 11000, "speaker": "a", "_quiet": True},
+            {"start_ms": 11500, "end_ms": 19000, "speaker": "a", "_quiet": False},
+        ])
 
     def test_refinement_overlap_removes_repeated_prefix(self):
         self.assertEqual(
@@ -2900,18 +2709,15 @@ class WorkerTest(unittest.TestCase):
         self.assertEqual(len(assembled), 2)
         self.assertEqual([item["track"] for item in assembled], ["mic", "system"])
 
-    def test_assemble_utterances_splits_at_sentence_boundary_when_overlong(self):
-        # 第二句跨窗口：窗口 2 以半句话结尾，句末在窗口 3 中。超长时应在
-        # 第一个完整句末处拆分，而不是从窗口边界（半句话）硬切。
-        assembled = self.worker._assemble_utterances([
-            {"track": "system", "start_ms": 0, "end_ms": 15000, "speaker": "system-spk-1", "text": "第一句话。", "word_timestamps": [{"text": "a", "start_ms": 0, "end_ms": 1000}]},
-            {"track": "system", "start_ms": 15000, "end_ms": 30000, "speaker": "system-spk-1", "text": "第二句话还没", "word_timestamps": [{"text": "b", "start_ms": 15000, "end_ms": 16000}]},
-            {"track": "system", "start_ms": 30000, "end_ms": 45000, "speaker": "system-spk-1", "text": "讲完。第三句话。", "word_timestamps": [{"text": "c", "start_ms": 30000, "end_ms": 31000}]},
+    def test_deoverlap_tails_are_absorbed_before_refinement(self):
+        # 分离器边界重叠会留下 25ms 的 spk-2 尾巴；它不能单独进入 ASR。
+        turns = self.worker._deoverlap_speaker_turns([
+            {"start_ms": 0, "end_ms": 1000, "speaker": "spk-1"},
+            {"start_ms": 990, "end_ms": 1020, "speaker": "spk-2"},
         ])
-        self.assertEqual(
-            [(item["text"]) for item in assembled],
-            ["第一句话。", "第二句话还没讲完。第三句话。"],
-        )
+        stable = self.worker._stabilize_speaker_turns(turns, minimum_ms=1000, absorb_gap_ms=200)
+        self.assertEqual(stable, [{"start_ms": 0, "end_ms": 1020, "speaker": "spk-1"}])
+
 
     def test_join_utterance_text_preserves_cjk_and_adds_latin_space(self):
         self.assertEqual(self.worker._join_utterance_text("我们看", "一下"), "我们看一下")
@@ -2943,7 +2749,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "再次精修",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -2986,12 +2791,39 @@ class WorkerTest(unittest.TestCase):
             ["postprocess", "postprocess-1"],
         )
 
+    def test_retired_streaming_column_is_dropped_whatever_the_schema_version(self):
+        """下架列按结构判断删除：版本号偏高（跑过中途开发版）时也必须修好。"""
+        import sqlite3
+
+        for version in (0, 1, 2):
+            with self.subTest(user_version=version), tempfile.TemporaryDirectory() as root:
+                store = Store(root)
+                db_path = store.db_path
+                store.close_audio_sessions()
+                with sqlite3.connect(db_path) as db:
+                    db.execute("ALTER TABLE meetings ADD COLUMN streaming_model_id TEXT NOT NULL DEFAULT ''")
+                    db.execute(
+                        "INSERT INTO meetings (id,title,language,refined_model_id,tags,status,created_at,started_at)"
+                        " VALUES ('legacy','标题','zh','funasr-nano-int8','[]','refined','2026-01-01','2026-01-01')"
+                    )
+                    db.execute(f"PRAGMA user_version = {version}")
+                upgraded = Store(root)
+                created = upgraded.create_meeting(
+                    {"title": "新会议", "language": "zh", "refined_model_id": "funasr-nano-int8"}
+                )
+                upgraded.close_audio_sessions()
+                with sqlite3.connect(db_path) as db:
+                    columns = {row[1] for row in db.execute("PRAGMA table_info(meetings)")}
+                    row = db.execute("SELECT id,refined_model_id FROM meetings WHERE id='legacy'").fetchone()
+                self.assertNotIn("streaming_model_id", columns)
+                self.assertEqual(row, ("legacy", "funasr-nano-int8"))
+                self.assertTrue(created["id"], "删除历史列后必须还能建会议")
+
     def test_replace_segments_normalizes_duplicate_ids(self):
         meeting = self.worker.start(
             {
                 "title": "重叠精修",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -3025,7 +2857,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "第一场",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -3034,7 +2865,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "第二场",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -3071,7 +2901,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "待清理",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -3083,7 +2912,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "录制中",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -3109,10 +2937,10 @@ class WorkerTest(unittest.TestCase):
 
     def test_advanced_settings_are_saved_outside_the_default_template(self):
         settings = json.loads(json.dumps(DEFAULT_SETTINGS))
-        settings["asr"]["endpoint_rule2_silence"] = 0.9
+        settings["vad"]["default"]["min_silence_duration"] = 0.9
         save_runtime_settings(self.temp.name, settings)
         self.assertEqual(
-            runtime_settings(self.temp.name)["asr"]["endpoint_rule2_silence"], 0.9
+            runtime_settings(self.temp.name)["vad"]["default"]["min_silence_duration"], 0.9
         )
 
     def test_advanced_settings_drop_retired_system_audio_gate(self):
@@ -3132,7 +2960,7 @@ class WorkerTest(unittest.TestCase):
             ["eres2net-base-3dspeaker-zh"],
         )
         meeting = self.worker.start(
-            {"title": "ERes2Net", "language": "zh", "streaming_model_id": "zipformer-zh-xlarge-streaming-int8", "refined_model_id": "qwen3-asr-0.6b-int8"}
+            {"title": "ERes2Net", "language": "zh", "refined_model_id": "qwen3-asr-0.6b-int8"}
         )
         self.assertNotIn("speaker_embedding_model_id", meeting)
         with self.worker.store.connect() as db:
@@ -3155,7 +2983,6 @@ class WorkerTest(unittest.TestCase):
         payload = {
             "title": "人数必须为整数",
             "language": "zh",
-            "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
             "refined_model_id": "qwen3-asr-0.6b-int8",
         }
         with self.assertRaisesRegex(ValueError, "must be an integer"):
@@ -3172,7 +2999,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "大型会议",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
                 "num_speakers": 21,
             }
@@ -3184,7 +3010,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "可恢复",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -3211,7 +3036,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "恢复时间轴",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -3226,7 +3050,7 @@ class WorkerTest(unittest.TestCase):
         )
         self.worker.active = None
         self.worker.resume({"meeting_id": meeting["id"], "start_ms": 999_999})
-        self.assertEqual(self.worker.stream_state["mic"]["start_ms"], 500)
+        self.assertEqual(self.worker.store.recorded_duration_ms(meeting["id"]), 500)
 
     def test_resume_restores_dual_track_mixing_from_manifest(self):
         # 恢复录音时必须从 manifest 推导 audio_tracks，否则双轨会议退回 mic/system
@@ -3235,7 +3059,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "恢复双轨混音",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
                 "audio_tracks": ["mic", "system"],
             }
@@ -3257,7 +3080,8 @@ class WorkerTest(unittest.TestCase):
         self.assertEqual(self.worker.live_tracks, {"mic", "system"})
         # 恢复后的混音应再次把两轨合成一条 mix 流送入 ASR。
         self.worker.asr = Mock()
-        self.worker.asr.accept.return_value = (SimpleNamespace(text="同一条字幕"), True)
+        self.worker.vad = Mock(tracks={})
+        self.worker.vad.accept.return_value = []
         self.worker.punctuation = None
         self.worker.live_refiner = None
         self.worker.audio(
@@ -3274,8 +3098,8 @@ class WorkerTest(unittest.TestCase):
                 "sample_rate": 16000, "start_ms": 500,
             }
         )
-        self.worker.asr.accept.assert_called_once()
-        self.assertEqual(self.worker.asr.accept.call_args.args[0], "mix")
+        self.worker.vad.accept.assert_called_once()
+        self.assertEqual(self.worker.vad.accept.call_args.args[0], "mix")
 
     def test_corrupt_recovery_manifest_does_not_break_startup(self):
         path = self.worker.store.meetings_dir / "broken" / "manifest.json"
@@ -3283,11 +3107,6 @@ class WorkerTest(unittest.TestCase):
         path.write_text("{broken", encoding="utf-8")
         self.assertEqual(self.worker.store.recoverable_meetings(), [])
 
-    def test_zipformer_xlarge_manifest_uses_the_archive_decoder_name(self):
-        self.assertIn(
-            "decoder.onnx",
-            self.worker.models.get("zipformer-zh-xlarge-streaming-int8")["files"],
-        )
 
     def test_model_downloads_have_checksums(self):
         for model in self.worker.models.catalog.values():
@@ -3410,36 +3229,12 @@ class WorkerTest(unittest.TestCase):
         recognizer.recognizer = Recognizer()
         self.assertEqual(recognizer.decode_words([0.0] * 16000), ("hola mundo", []))
 
-    def test_nemotron_manifest_uses_the_archive_file_names(self):
-        model = self.worker.models.get("nemotron-3.5-asr-streaming-0.6b-560ms-int8")
-        self.assertEqual(
-            model["files"],
-            ["encoder.int8.onnx", "decoder.int8.onnx", "joiner.int8.onnx", "tokens.txt"],
-        )
-        self.assertEqual(model["runtime"], "sherpa-onnx==1.13.5")
-
-    def test_streaming_transducer_starts_without_extra_terms(self):
-        with patch("backend.worker_session.StreamingASR") as streaming:
-            self.worker.start(
-                {
-                    "title": "本地会议",
-                    "language": "zh",
-                    "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
-                    "refined_model_id": "qwen3-asr-0.6b-int8",
-                }
-            )
-        self.assertEqual(
-            streaming.call_args.args,
-            (self.worker.models, "zipformer-zh-xlarge-streaming-int8", "zh"),
-        )
-
     def test_start_defaults_refined_model_without_overwriting_explicit_model(self):
         # 应用不提供模型选择；省略时使用 Qwen，但 worker 不应静默改写调用方值。
         chinese = self.worker.start(
             {
                 "title": "中文会议",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
             }
         )
         self.assertEqual(chinese["refined_model_id"], "funasr-nano-int8")
@@ -3448,181 +3243,16 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "English meeting",
                 "language": "en",
-                "streaming_model_id": "zipformer-en-streaming-int8",
                 "refined_model_id": "whisper-large-v3",
             }
         )
         self.assertEqual(english["refined_model_id"], "whisper-large-v3")
-
-    def test_reconfigure_hot_switches_language_and_models(self):
-        ready = {"zipformer-zh-xlarge-streaming-int8", "qwen3-asr-0.6b-int8", "hy-mt2-1.8b-q4km"}
-        self.worker.models.is_ready = lambda model_id: model_id in ready
-        with (
-            patch("backend.worker_session.StreamingASR") as streaming,
-            patch("backend.worker_session.RefinedASR") as refiner,
-        ):
-            meeting = self.worker.start(
-                {
-                    "title": "热切换",
-                    "language": "zh",
-                    "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
-                    "refined_model_id": "qwen3-asr-0.6b-int8",
-                }
-            )
-            ready.add("zipformer-en-streaming-int8")
-            streaming.reset_mock()
-            refiner.reset_mock()
-            self.events.clear()
-            updated = self.worker.reconfigure(
-                {
-                    "meeting_id": meeting["id"],
-                    "language": "en",
-                    "target_language": "zh",
-                    "streaming_model_id": "zipformer-en-streaming-int8",
-                    "refined_model_id": "qwen3-asr-1.7b-int8",
-                }
-            )
-        self.assertEqual(
-            (
-                updated["language"],
-                updated["target_language"],
-                updated["streaming_model_id"],
-                updated["refined_model_id"],
-            ),
-            ("en", "zh", "zipformer-en-streaming-int8", "qwen3-asr-0.6b-int8"),
-        )
-        stored = self.worker.store.get_meeting(meeting["id"])
-        self.assertEqual(
-            (
-                stored["language"],
-                stored["target_language"],
-                stored["streaming_model_id"],
-                stored["refined_model_id"],
-            ),
-            ("en", "zh", "zipformer-en-streaming-int8", "qwen3-asr-0.6b-int8"),
-        )
-        self.assertEqual(
-            streaming.call_args.args,
-            (self.worker.models, "zipformer-en-streaming-int8", "en"),
-        )
-        refiner.assert_called_once_with(
-            self.worker.models, "qwen3-asr-0.6b-int8", language="en"
-        )
-        reconfigured = [
-            event for event in self.events if event["type"] == "meeting.reconfigured"
-        ]
-        self.assertEqual(len(reconfigured), 1)
-        self.assertEqual(reconfigured[0]["payload"]["meeting"]["language"], "en")
-
-    def test_reconfigure_rejects_missing_models_without_touching_the_session(self):
-        ready = {"zipformer-zh-xlarge-streaming-int8", "qwen3-asr-0.6b-int8"}
-        self.worker.models.is_ready = lambda model_id: model_id in ready
-        with (
-            patch("backend.worker_session.StreamingASR"),
-            patch("backend.worker_session.RefinedASR"),
-        ):
-            meeting = self.worker.start(
-                {
-                    "title": "缺模型",
-                    "language": "zh",
-                    "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
-                    "refined_model_id": "qwen3-asr-0.6b-int8",
-                }
-            )
-            self.worker._wait_prepare()
-            running_asr = self.worker.asr
-            self.events.clear()
-            with self.assertRaisesRegex(RuntimeError, "not installed"):
-                self.worker.reconfigure(
-                    {
-                        "meeting_id": meeting["id"],
-                        "target_language": "en",
-                    }
-                )
-        self.assertIs(self.worker.asr, running_asr)
-        stored = self.worker.store.get_meeting(meeting["id"])
-        self.assertEqual(stored["streaming_model_id"], "zipformer-zh-xlarge-streaming-int8")
-        self.assertFalse(
-            [event for event in self.events if event["type"] == "meeting.reconfigured"]
-        )
-
-    def test_power_saving_is_stored_and_reconfigured(self):
-        self.worker.models.is_ready = lambda model_id: model_id in {
-            "zipformer-zh-xlarge-streaming-int8",
-            "qwen3-asr-0.6b-int8",
-        }
-        with patch("backend.worker_session.StreamingASR"), patch(
-            "backend.worker_session.RefinedASR"
-        ), patch.object(self.worker, "_build_live_punctuation"):
-            meeting = self.worker.start(
-                {
-                    "title": "省电",
-                    "language": "zh",
-                    "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
-                    "refined_model_id": "qwen3-asr-0.6b-int8",
-                    "power_saving": True,
-                }
-            )
-            self.assertEqual(meeting["power_saving"], 1)
-            updated = self.worker.reconfigure(
-                {"meeting_id": meeting["id"], "power_saving": False}
-            )
-        self.assertEqual(updated["power_saving"], 0)
-        self.assertFalse(self.worker.power_saving)
-
-    def test_power_saving_uses_only_the_streaming_model_for_second_pass(self):
-        self.worker.models.is_ready = lambda _: True
-        with patch("backend.worker_session.StreamingASR") as streaming, patch(
-            "backend.worker_session.RefinedASR"
-        ) as refiner, patch.object(self.worker, "_build_live_punctuation"):
-            meeting = self.worker.start(
-                {
-                    "title": "省电切模型",
-                    "language": "zh",
-                    "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
-                    "refined_model_id": "qwen3-asr-0.6b-int8",
-                    "power_saving": True,
-                }
-            )
-            self.worker._wait_prepare()
-            self.worker.reconfigure(
-                {"meeting_id": meeting["id"], "refined_model_id": "whisper-large-v3"}
-            )
-        refiner.assert_not_called()
-        self.assertIs(self.worker.live_refiner, streaming.return_value)
-        self.assertEqual(streaming.call_count, 1)
-        self.assertIsNotNone(self.worker.live_postprocessing)
-
-    def test_failed_power_saving_reconfigure_keeps_runtime_and_database(self):
-        self.worker.models.is_ready = lambda _: True
-        with patch("backend.worker_session.StreamingASR"), patch.object(
-            self.worker, "_build_live_punctuation"
-        ):
-            meeting = self.worker.start(
-                {
-                    "title": "省电失败",
-                    "language": "zh",
-                    "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
-                    "refined_model_id": "qwen3-asr-0.6b-int8",
-                    "power_saving": True,
-                }
-            )
-        with patch(
-            "backend.worker_session.LiveDenoiser", side_effect=RuntimeError("load failed")
-        ):
-            with self.assertRaisesRegex(RuntimeError, "load failed"):
-                self.worker.reconfigure(
-                    {"meeting_id": meeting["id"], "power_saving": False}
-                )
-        self.assertTrue(self.worker.power_saving)
-        self.assertEqual(self.worker.store.get_meeting(meeting["id"])["power_saving"], 1)
 
     def test_refinement_recovery_preserves_completed_turns(self):
         meeting = self.worker.start(
             {
                 "title": "恢复精修",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -3654,160 +3284,6 @@ class WorkerTest(unittest.TestCase):
             ["gtcrn-live-denoiser"],
         )
 
-    def test_live_microphone_uses_track_identity_without_native_voiceprint(self):
-        meeting = self.worker.start(
-            {
-                "title": "实时声纹",
-                "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
-                "refined_model_id": "qwen3-asr-0.6b-int8",
-            }
-        )
-        self.worker.asr = Mock()
-        self.worker.asr.accept.return_value = (SimpleNamespace(text="测试"), True)
-        self.worker.punctuation = None
-        self.worker.live_refiner = None
-        self.worker.audio(
-            {
-                "meeting_id": meeting["id"],
-                "track": "mic",
-                "pcm": base64.b64encode(b"\x01\x00" * 1600).decode(),
-                "sample_rate": 16000,
-                "start_ms": 0,
-            }
-        )
-        final = next(event for event in self.events if event["type"] == "transcript.final")
-        self.assertEqual(final["payload"]["speaker"], "local-user")
-
-    def test_live_recording_does_not_identify_speakers(self):
-        """实时会议不识别说话人：声纹 tracker 不再参与实时字幕的说话人标注。
-
-        说话人识别已移至会后精修；即便注入 tracker，实时路径也不会再调用它。
-        """
-        meeting = self.worker.start(
-            {
-                "title": "实时不分离说话人",
-                "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
-                "refined_model_id": "qwen3-asr-0.6b-int8",
-            }
-        )
-        self.worker.asr = Mock()
-        self.worker.asr.accept.side_effect = [
-            (SimpleNamespace(text="这是第一位发言"), True),
-            (SimpleNamespace(text="这是第二位发言"), True),
-        ]
-        self.worker.punctuation = None
-        self.worker.live_refiner = None
-        self.worker.speaker_tracker = Mock(last_speaker=None)
-        self.worker.speaker_tracker.embedding.side_effect = ([1, 0], [0, 1])
-        self.worker.speaker_tracker.assign_embedding.side_effect = ("spk-1", "spk-2")
-        self.worker.live_postprocessing = Mock()
-        payload = {
-            "meeting_id": meeting["id"],
-            "track": "mic",
-            # 用 3 秒音频，让每段超过短插话阈值，避免被跨说话人并入主线。
-            "pcm": base64.b64encode(b"\x01\x00" * 48000).decode(),
-            "sample_rate": 16000,
-            "start_ms": 0,
-        }
-        self.worker.audio(payload)
-        self.worker.audio({**payload, "start_ms": 3000})
-        final_speakers = [
-            event["payload"]["speaker"]
-            for event in self.events
-            if event["type"] == "transcript.final"
-        ]
-        self.assertEqual(final_speakers, ["local-user", "local-user"])
-        # 实时路径不再把 tracker 传给精修，声纹 embedding 永远不会被调用。
-        self.worker.speaker_tracker.embedding.assert_not_called()
-        self.worker.live_postprocessing.submit.assert_not_called()
-
-    def test_live_pin_forces_endpoint_without_trailing_silence(self):
-        meeting = self.worker.start(
-            {
-                "title": "软钉",
-                "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
-                "refined_model_id": "qwen3-asr-0.6b-int8",
-            }
-        )
-        self.worker.asr = Mock()
-        self.worker.asr.accept.return_value = (SimpleNamespace(text="一句很长的话"), False)
-        self.worker.asr.force_endpoint.return_value = SimpleNamespace(text="一句很长的话。")
-        self.worker.punctuation = None
-        self.worker.live_refiner = None
-        # 语义软钉：无标点时靠硬上限兜底触发
-        with patch.dict(SETTINGS["asr"], {"live_pin_seconds": 0.05, "live_pin_max_seconds": 0.05}):
-            self.worker.audio(
-                {
-                    "meeting_id": meeting["id"],
-                    "track": "mic",
-                    "pcm": base64.b64encode(b"\x01\x00" * 1600).decode(),
-                    "sample_rate": 16000,
-                    "start_ms": 0,
-                }
-            )
-        final = next(event for event in self.events if event["type"] == "transcript.final")
-        self.assertTrue(final["payload"]["pinned"])
-        self.worker.asr.force_endpoint.assert_called_once_with("mic")
-
-    def test_live_pin_cuts_at_middle_sentence_boundary(self):
-        meeting = self.worker.start(
-            {
-                "title": "语义软钉",
-                "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
-                "refined_model_id": "qwen3-asr-0.6b-int8",
-            }
-        )
-        self.worker.asr = Mock()
-        self.worker.asr.accept.return_value = (SimpleNamespace(text="一句很长的话"), False)
-        self.worker.asr.force_endpoint.return_value = SimpleNamespace(text="一句很长的话。")
-        self.worker.punctuation = Mock()
-        # 标点模型总会在末尾补句末；只有中间还有句末才说明真的跨过了一句话。
-        self.worker.punctuation.apply.return_value = "一句很长的话。然后呢。"
-        self.worker.live_refiner = None
-        payload = {
-            "meeting_id": meeting["id"],
-            "track": "mic",
-            "pcm": base64.b64encode(b"\x01\x00" * 1600).decode(),
-            "sample_rate": 16000,
-        }
-        with patch.dict(SETTINGS["asr"], {"live_pin_seconds": 0.05, "live_pin_max_seconds": 40}):
-            self.worker.audio({**payload, "start_ms": 0})
-        final = next(event for event in self.events if event["type"] == "transcript.final")
-        self.assertTrue(final["payload"]["pinned"])
-        self.worker.asr.force_endpoint.assert_called_once_with("mic")
-
-    def test_live_pin_keeps_partial_when_force_endpoint_is_empty(self):
-        meeting = self.worker.start(
-            {
-                "title": "空端点保底",
-                "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
-                "refined_model_id": "qwen3-asr-0.6b-int8",
-            }
-        )
-        self.worker.asr = Mock()
-        self.worker.asr.accept.return_value = (SimpleNamespace(text="第一句。第二句"), False)
-        self.worker.asr.force_endpoint.return_value = SimpleNamespace(text="")
-        self.worker.punctuation = Mock()
-        self.worker.punctuation.apply.return_value = "第一句。第二句。"
-        self.worker.live_refiner = None
-        with patch.dict(SETTINGS["asr"], {"live_pin_seconds": 0.05, "live_pin_max_seconds": 0.08}):
-            self.worker.audio(
-                {
-                    "meeting_id": meeting["id"],
-                    "track": "mic",
-                    "pcm": base64.b64encode(b"\x01\x00" * 1600).decode(),
-                    "sample_rate": 16000,
-                    "start_ms": 0,
-                }
-            )
-        final = next(event for event in self.events if event["type"] == "transcript.final")
-        self.assertEqual(final["payload"]["text"], "第一句。第二句。")
-
     def test_only_one_summary_task_can_run(self):
         control = self.worker.tasks.begin("summary.generate", "first-meeting")
         try:
@@ -3815,252 +3291,6 @@ class WorkerTest(unittest.TestCase):
                 self.worker.tasks.begin("summary.generate", "second-meeting")
         finally:
             self.worker.tasks.finish("summary.generate", "first-meeting", control)
-
-    def test_live_pin_does_not_cut_mid_phrase(self):
-        meeting = self.worker.start(
-            {
-                "title": "语义软钉",
-                "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
-                "refined_model_id": "qwen3-asr-0.6b-int8",
-            }
-        )
-        self.worker.asr = Mock()
-        self.worker.asr.accept.return_value = (SimpleNamespace(text="调控起来简单"), False)
-        self.worker.asr.force_endpoint.return_value = SimpleNamespace(text="调控起来简单")
-        self.worker.punctuation = Mock()
-        # 末尾只有一个「伪句末」，中间没有真句末 → 不应切（「简单直接」不能拆）。
-        self.worker.punctuation.apply.return_value = "调控起来简单。"
-        self.worker.live_refiner = None
-        payload = {
-            "meeting_id": meeting["id"],
-            "track": "mic",
-            "pcm": base64.b64encode(b"\x01\x00" * 1600).decode(),
-            "sample_rate": 16000,
-        }
-        with patch.dict(SETTINGS["asr"], {"live_pin_seconds": 0.05, "live_pin_max_seconds": 40}):
-            self.worker.audio({**payload, "start_ms": 0})
-        self.assertEqual(
-            [event["type"] for event in self.events if event["type"] == "transcript.final"],
-            [],
-        )
-        self.worker.asr.force_endpoint.assert_not_called()
-
-    def test_sentence_boundary_finds_running_tail(self):
-        self.worker.asr = Mock()
-        self.worker.asr.model = {"punctuated": True}
-        self.worker.punctuation = None
-        raw = "这个游戏应该定价两百美元。那么理由呢是笨认为 gta 六可能是"
-        text, ratio = self.worker._sentence_boundary(raw)
-        self.assertEqual(text, "这个游戏应该定价两百美元")
-        self.assertLess(ratio, 1.0)
-
-    def test_live_pin_waits_for_enough_tail_audio_context(self):
-        meeting = self.worker.start(
-            {
-                "title": "软钉尾部上下文",
-                "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
-                "refined_model_id": "qwen3-asr-0.6b-int8",
-            }
-        )
-        self.worker.asr = Mock()
-        self.worker.asr.model = {"punctuated": True}
-        self.worker.asr.accept.return_value = (
-            SimpleNamespace(text="这是第一句话。那么理由呢"),
-            False,
-        )
-        self.worker.punctuation = None
-        with patch.dict(
-            SETTINGS["asr"], {"live_pin_seconds": 0.05, "live_pin_max_seconds": 40}
-        ):
-            self.worker.audio(
-                {
-                    "meeting_id": meeting["id"],
-                    "track": "mic",
-                    "pcm": base64.b64encode(b"\x01\x00" * 1600).decode(),
-                    "sample_rate": 16000,
-                    "start_ms": 0,
-                }
-            )
-        self.assertTrue(self.worker.stream_state["mic"]["pending_pin"])
-        self.worker.asr.force_endpoint.assert_not_called()
-
-    def test_sentence_boundary_still_cuts_short_partial_tail(self):
-        """边界之后只有很短的残句尾巴时，仍正常切分、交给下一段 carry。"""
-        self.worker.asr = Mock()
-        self.worker.asr.model = {"punctuated": True}
-        self.worker.punctuation = None
-        raw = "这是第一句话。这是第二句话的开"
-        text, ratio = self.worker._sentence_boundary(raw)
-        self.assertEqual(text, "这是第一句话")
-        self.assertLess(ratio, 1.0)
-
-    def test_sentence_boundary_cuts_when_tail_has_no_residue(self):
-        """切点之后没有残留内容时，正常切在句末。"""
-        self.worker.asr = Mock()
-        self.worker.asr.model = {"punctuated": True}
-        self.worker.punctuation = None
-        text, ratio = self.worker._sentence_boundary("第一句话。第二句话。")
-        self.assertEqual(text, "第一句话")
-        self.assertLess(ratio, 1.0)
-
-    def test_sentence_boundary_maps_punctuation_content_across_english_spaces(self):
-        self.worker.asr = Mock()
-        self.worker.asr.model = {"punctuated": False}
-        self.worker.punctuation = Mock()
-        self.worker.punctuation.apply.return_value = "HELLO WORLD. THIS CONTINUES."
-        text, ratio = self.worker._sentence_boundary("HELLO WORLD THIS CONTINUES")
-        self.assertEqual(text, "HELLO WORLD")
-        self.assertLess(ratio, 1.0)
-        self.assertEqual(
-            self.worker._restore_missing_tail(
-                "What it might actually.", "WHAT IT MIGHT ACTUALLY BE"
-            ),
-            "What it might actually BE",
-        )
-
-    def test_carry_text_aligns_redecoded_audio_after_a_changed_prefix(self):
-        self.assertEqual(
-            self.worker._merge_carry_text(
-                "那么理由呢是笨认为 gta 六可能是最后一款好",
-                "是奔认为 gta 六可能是最后一款好游戏",
-            ),
-            "那么理由呢是笨认为 gta 六可能是最后一款好游戏",
-        )
-        self.assertEqual(
-            self.worker._trim_carry_prefix("定价太低了。我觉。", "我觉得这些普通的声音"),
-            "定价太低了",
-        )
-        self.assertEqual(
-            self.worker._merge_carry_text(
-                "ONCE WE GET THERE AND HAVE TO TELL YOU SHANE WAS REMARKABLY IMPA",
-                "WAS REMARKABLY IMPACTED OVER THE COMING DECADE",
-            ),
-            "ONCE WE GET THERE AND HAVE TO TELL YOU SHANE WAS REMARKABLY IMPACTED OVER THE COMING DECADE",
-        )
-        self.assertEqual(
-            self.worker._trim_carry_prefix(
-                "WHAT THE WORLD LOOKS LIKE ONCE WE GET THERE AND HAVE TO",
-                "ONCE WE GET THERE AND HAVE TO TELL YOU SHANE",
-            ),
-            "WHAT THE WORLD LOOKS LIKE",
-        )
-        self.assertEqual(
-            self.worker._merge_carry_text(
-                "DO WE END UP WITH A NEW KIND OF ECONOMY A NEW ROUTE TO A G EYE",
-                "AND HOW KIND OF ECONOMY A NEW ROUTE TO AGY EYE AND HOW ON EARTH",
-            ),
-            "DO WE END UP WITH A NEW KIND OF ECONOMY A NEW ROUTE TO A G EYE AND HOW ON EARTH",
-        )
-        self.assertEqual(
-            self.worker._trim_refined_extension(
-                "倾注了无数的血汗与泪水。并且他说。",
-                "倾注了无数的血汗与泪水",
-            ),
-            "倾注了无数的血汗与泪水",
-        )
-        self.assertEqual(
-            self.worker._restore_missing_head(
-                "说呢，虽然我可能不玩这款游戏",
-                "并且他说呢虽然我可能不玩这款游戏",
-            ),
-            "并且他说呢，虽然我可能不玩这款游戏",
-        )
-        self.assertEqual(
-            self.worker._trim_refinement_overlap(
-                "nunca, nunca jamás hemos", "y hemos terminado una conversación"
-            ),
-            "terminado una conversación",
-        )
-
-    def test_live_refinement_receives_the_soft_pin_carry_audio(self):
-        meeting = self.worker.start(
-            {
-                "title": "软钉精修交接",
-                "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
-                "refined_model_id": "qwen3-asr-0.6b-int8",
-            }
-        )
-        self.worker.asr = Mock()
-        self.worker.asr.accept.return_value = (
-            SimpleNamespace(text="那么理由呢是因为续句"),
-            True,
-        )
-        self.worker.punctuation = None
-        self.worker.live_refiner = object()
-        queued = []
-        self.worker.live_postprocessing = Mock()
-        self.worker.live_postprocessing.submit.side_effect = (
-            lambda function, *args: queued.append(args)
-        )
-        self.worker.stream_state["mic"]["carry_audio"] = [array("f", [0.25])]
-        self.worker.stream_state["mic"]["carry_text"] = "那么理由呢"
-        self.worker.audio(
-            {
-                "meeting_id": meeting["id"], "track": "mic",
-                "pcm": base64.b64encode(b"\x00\x40").decode(),
-                "sample_rate": 16000, "start_ms": 0,
-            }
-        )
-        self.assertEqual(queued[0][4].tolist(), [0.25, 0.5])
-        final = next(event for event in self.events if event["type"] == "transcript.final")
-        self.assertEqual(final["payload"]["text"], "那么理由呢是因为续句")
-
-    def test_async_punctuation_defers_when_executor_present(self):
-        meeting = self.worker.start(
-            {
-                "title": "异步标点",
-                "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
-                "refined_model_id": "qwen3-asr-0.6b-int8",
-            }
-        )
-        self.worker.asr = Mock()
-        self.worker.asr.accept.return_value = (SimpleNamespace(text="测试"), False)
-        self.worker.punctuation = Mock()
-        self.worker.punctuation.apply.return_value = "测试。"
-        executor = self.worker.live_punctuation = Mock()
-        self.worker.audio(
-            {
-                "meeting_id": meeting["id"],
-                "track": "mic",
-                "pcm": base64.b64encode(b"\x01\x00" * 1600).decode(),
-                "sample_rate": 16000,
-                "start_ms": 0,
-            }
-        )
-        partial = next(event for event in self.events if event["type"] == "transcript.partial")
-        self.assertEqual(partial["payload"]["text"], "测试")
-        self.worker.punctuation.apply.assert_not_called()
-        executor.submit.assert_called_once()
-
-    def test_unchanged_partial_does_not_repeat_punctuation_inference(self):
-        meeting = self.worker.start(
-            {
-                "title": "标点去重",
-                "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
-                "refined_model_id": "qwen3-asr-0.6b-int8",
-            }
-        )
-        self.worker.asr = Mock()
-        self.worker.asr.accept.return_value = (SimpleNamespace(text="测试"), False)
-        self.worker.punctuation = Mock()
-        self.worker.punctuation.apply.return_value = "测试。"
-        payload = {
-            "meeting_id": meeting["id"],
-            "track": "mic",
-            "pcm": base64.b64encode(b"\x01\x00" * 1600).decode(),
-            "sample_rate": 16000,
-            "start_ms": 0,
-        }
-        self.worker.audio(payload)
-        self.worker.audio({**payload, "start_ms": 100})
-        self.worker.asr.accept.return_value = (SimpleNamespace(text="测试"), True)
-        self.worker.audio({**payload, "start_ms": 200})
-        self.worker.punctuation.apply.assert_called_once_with("测试")
 
     def test_initialize_defers_maintenance_from_the_first_response(self):
         with (
@@ -4100,15 +3330,6 @@ class WorkerTest(unittest.TestCase):
             faint = numpy.full(1600, 0.005, dtype=numpy.float32)
             self.assertTrue(self.worker._should_bypass_denoise(faint))
 
-    def test_live_denoise_flushes_empty_tail(self):
-        meeting = self.worker.start({"title": "flush", "language": "zh", "streaming_model_id": "zipformer-zh-xlarge-streaming-int8", "refined_model_id": "qwen3-asr-0.6b-int8"})
-        self.worker.asr = Mock()
-        self.worker.asr.accept.return_value = ("", False)
-        self.worker.denoiser = Mock()
-        self.worker.denoiser.accept.return_value = []
-        self.worker.audio({"meeting_id": meeting["id"], "track": "mic", "pcm": "", "sample_rate": 16000, "start_ms": 0, "flush": True})
-        track, samples, sample_rate, flush = self.worker.denoiser.accept.call_args.args
-        self.assertEqual((track, len(samples), sample_rate, flush), ("mic", 0, 16000, True))
 
     def test_live_mix_discards_stale_peer_audio(self):
         import numpy
@@ -4136,7 +3357,6 @@ class WorkerTest(unittest.TestCase):
                     {
                         "title": "降噪关闭",
                         "language": "zh",
-                        "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                         "refined_model_id": "qwen3-asr-0.6b-int8",
                     }
                 )
@@ -4174,7 +3394,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "声纹绑定",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -4207,7 +3426,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "显式 Enrollment",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -4239,12 +3457,165 @@ class WorkerTest(unittest.TestCase):
         self.assertEqual(result["segments"][-1]["speaker_name"], "小王")
         learn.assert_called_once()
 
+    def _meeting_with_a_saved_subtitle(self, segment_id="mic-0-1"):
+        """建一场已结束的会议，并写入一句实时字幕（后台无模型，仅验证存储路径）。
+
+        段落 id 用实时链路的 ``track-start-seq`` 形式，与精修链路的 ``track-start``
+        区分开，便于验证两套命名不会互相留下孤儿行。
+        """
+        meeting = self.worker.start(
+            {
+                "title": "修正字幕",
+                "language": "zh",
+                "refined_model_id": "qwen3-asr-0.6b-int8",
+            }
+        )
+        self.worker.store.save_segment(
+            {
+                "meeting_id": meeting["id"],
+                "segment_id": segment_id,
+                "version": "live",
+                "revision": 0,
+                "text": "原始识别文本",
+                "start_ms": 0,
+                "end_ms": 1000,
+                "speaker": "spk-1",
+            }
+        )
+        self.worker.stop({"meeting_id": meeting["id"], "duration_ms": 1000})
+        return meeting
+
+    def test_editing_a_subtitle_before_refinement_rewrites_the_live_row(self):
+        """只做过实时识别的会议：修正直接改写实时行，不另建覆盖行。
+
+        实时与精修的段落 id 是两套命名（``track-start-seq`` 与 ``track-start``），
+        若给实时段落另建 ``user`` 行，精修落地后它会成为找不到基线的孤儿行，
+        同一句话会显示两次。
+        """
+        meeting = self._meeting_with_a_saved_subtitle()
+        updated = self.worker.handle(
+            {
+                "id": "edit-subtitle",
+                "type": "segment.text",
+                "payload": {
+                    "meeting_id": meeting["id"],
+                    "segments": [{"segment_id": "mic-0-1", "text": "  人工修正后的文本  "}],
+                },
+            }
+        )
+        self.assertEqual(
+            [(item["version"], item["text"], item["user_edited"]) for item in updated["segments"]],
+            [("live", "人工修正后的文本", 1)],
+        )
+        self.worker.store.save_segment(
+            {
+                "meeting_id": meeting["id"],
+                "segment_id": "mic-0-1",
+                "version": "live",
+                "revision": 0,
+                "text": "迟到的自动识别结果",
+                "start_ms": 0,
+                "end_ms": 1000,
+                "speaker": "spk-1",
+            }
+        )
+        stored = self.worker.store.get_meeting(meeting["id"])
+        self.assertEqual(
+            [item["text"] for item in latest_segments(stored["segments"])],
+            ["人工修正后的文本"],
+            "a later automatic result must not overwrite the manual fix",
+        )
+        # 精修按新的窗口重建段落（id 变成 track-start 形式）：以新的识别结果为准，
+        # 且不得残留读不到基线的孤儿行而让同一段语音出现两条字幕。
+        self.worker.store.replace_segments(
+            meeting["id"],
+            [
+                {
+                    "segment_id": "mic-0",
+                    "text": "精修后的文本",
+                    "start_ms": 0,
+                    "end_ms": 1000,
+                    "speaker": "spk-1",
+                    "track": "mic",
+                }
+            ],
+            version="postprocess-1",
+            revision=1,
+        )
+        refined = self.worker.store.get_meeting(meeting["id"])
+        self.assertEqual(
+            [item["text"] for item in latest_segments(refined["segments"])],
+            ["精修后的文本"],
+        )
+
+    def test_editing_a_refined_subtitle_overrides_it_and_survives_a_re_refinement(self):
+        """已精修的会议：修正写成用户版本，覆盖精修结果并跟随同一 id 保留。"""
+        meeting = self._meeting_with_a_saved_subtitle()
+        refined_segment = {
+            "segment_id": "mic-0",
+            "text": "精修后的文本",
+            "start_ms": 0,
+            "end_ms": 1000,
+            "speaker": "spk-1",
+            "track": "mic",
+        }
+        self.worker.store.replace_segments(meeting["id"], [refined_segment], version="postprocess", revision=0)
+        updated = self.worker.handle(
+            {
+                "id": "edit-refined-subtitle",
+                "type": "segment.text",
+                "payload": {
+                    "meeting_id": meeting["id"],
+                    "segments": [{"segment_id": "mic-0", "text": "人工修正后的文本"}],
+                },
+            }
+        )
+        self.assertEqual(
+            [item["text"] for item in latest_segments(updated["segments"])],
+            ["人工修正后的文本"],
+        )
+        # 重新精修复用同一 id（窗口起点不变）时，人工修正继续生效。
+        self.worker.store.replace_segments(meeting["id"], [refined_segment], version="postprocess-1", revision=1)
+        refined = self.worker.store.get_meeting(meeting["id"])
+        self.assertEqual(
+            [item["text"] for item in latest_segments(refined["segments"])],
+            ["人工修正后的文本"],
+        )
+
+    def test_editing_a_subtitle_rejects_an_empty_or_unknown_segment(self):
+        meeting = self._meeting_with_a_saved_subtitle()
+        with self.assertRaisesRegex(ValueError, "cannot be empty"):
+            self.worker.handle(
+                {
+                    "id": "edit-empty",
+                    "type": "segment.text",
+                    "payload": {"meeting_id": meeting["id"], "segments": [{"segment_id": "mic-0", "text": "   "}]},
+                }
+            )
+        # 批量写入是原子的：一句话非法时，同批次的合法修改也不得落库。
+        with self.assertRaisesRegex(ValueError, "Segment not found"):
+            self.worker.handle(
+                {
+                    "id": "edit-unknown",
+                    "type": "segment.text",
+                    "payload": {
+                        "meeting_id": meeting["id"],
+                        "segments": [
+                            {"segment_id": "mic-0", "text": "不该保存的修改"},
+                            {"segment_id": "mic-404", "text": "并不存在的段落"},
+                        ],
+                    },
+                }
+            )
+        stored = self.worker.store.get_meeting(meeting["id"])["segments"]
+        self.assertEqual([item["text"] for item in stored], ["原始识别文本"])
+        self.assertNotIn("user", [item["version"] for item in stored])
+
     def test_renaming_a_live_speaker_does_not_enroll_audio(self):
         meeting = self.worker.start(
             {
                 "title": "只改名",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -4261,7 +3632,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "手动补充声纹",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -4299,7 +3669,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "不自动采样",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -4319,7 +3688,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "默认说话人",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -4558,7 +3926,6 @@ class WorkerTest(unittest.TestCase):
                         {
                             "title": title,
                             "language": "zh",
-                            "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                             "refined_model_id": "qwen3-asr-0.6b-int8",
                         }
                     )["id"]
@@ -4583,7 +3950,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "并发写入",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -4635,7 +4001,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "无录音",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -4643,56 +4008,12 @@ class WorkerTest(unittest.TestCase):
         bundle = self.worker.bundle({"meeting_id": meeting["id"]})
         self.assertFalse(bundle["recording_included"])
 
-    def test_stop_persists_the_last_partial_transcript(self):
-        meeting = self.worker.start(
-            {
-                "title": "收尾保存",
-                "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
-                "refined_model_id": "qwen3-asr-0.6b-int8",
-            }
-        )
-
-        class PartialOnlyASR:
-            def accept(self, _track, samples, _sample_rate, flush=False):
-                return ("", True) if flush else ("停止前的实时字幕", False)
-
-        self.worker.asr = PartialOnlyASR()
-
-        class Samples(list):
-            def __truediv__(self, _value):
-                return self
-
-        numpy = type(
-            "Numpy",
-            (),
-            {
-                "float32": float,
-                "asarray": staticmethod(lambda values, dtype: Samples(values)),
-            },
-        )
-        with patch.dict("sys.modules", {"numpy": numpy}):
-            self.worker.audio(
-                {
-                    "meeting_id": meeting["id"],
-                    "track": "mic",
-                    "pcm": base64.b64encode(b"\x10\x00" * 1600).decode(),
-                    "sample_rate": 16000,
-                    "start_ms": 0,
-                }
-            )
-            self.worker.stop({"meeting_id": meeting["id"], "duration_ms": 100})
-        segments = self.worker.store.get_meeting(meeting["id"])["segments"]
-        self.assertEqual(
-            [segment["text"] for segment in segments], ["停止前的实时字幕"]
-        )
 
     def test_meeting_search_matches_title_tags_and_transcript(self):
         meeting = self.worker.start(
             {
                 "title": "季度路线图",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
                 "tags": ["客户反馈"],
             }
@@ -4714,9 +4035,9 @@ class WorkerTest(unittest.TestCase):
             )
 
     def test_meeting_search_treats_like_wildcards_as_text(self):
-        literal = self.worker.start({"title": "完成 100%", "language": "zh", "streaming_model_id": "zipformer-zh-xlarge-streaming-int8", "refined_model_id": "qwen3-asr-0.6b-int8"})
+        literal = self.worker.start({"title": "完成 100%", "language": "zh", "refined_model_id": "qwen3-asr-0.6b-int8"})
         self.worker.stop({"meeting_id": literal["id"], "duration_ms": 0})
-        other = self.worker.start({"title": "完成 100x", "language": "zh", "streaming_model_id": "zipformer-zh-xlarge-streaming-int8", "refined_model_id": "qwen3-asr-0.6b-int8"})
+        other = self.worker.start({"title": "完成 100x", "language": "zh", "refined_model_id": "qwen3-asr-0.6b-int8"})
         self.worker.stop({"meeting_id": other["id"], "duration_ms": 0})
         self.assertEqual([item["id"] for item in self.worker.store.list_meetings(query="100%")], [literal["id"]])
         self.assertEqual([item["id"] for item in self.worker.store.search_meetings("100%")], [literal["id"]])
@@ -4727,7 +4048,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "翻译联调",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -4755,6 +4075,7 @@ class WorkerTest(unittest.TestCase):
             self.worker.store.get_meeting(meeting["id"])["segments"][0]["translation"],
             "Hello",
         )
+        self.assertEqual(self.worker.store.get_meeting(meeting["id"])["target_language"], "en")
 
     def test_background_commands_do_not_block_the_command_loop(self):
         commands = "".join(
@@ -4768,6 +4089,7 @@ class WorkerTest(unittest.TestCase):
                 "speaker-profile.sample-delete",
                 "speaker.rename",
                 "segment.speaker",
+                "segment.text",
                 "meeting.export",
                 "meeting.bundle",
             )
@@ -4795,6 +4117,7 @@ class WorkerTest(unittest.TestCase):
                 "speaker-profile.sample-delete",
                 "speaker.rename",
                 "segment.speaker",
+                "segment.text",
                 "meeting.export",
                 "meeting.bundle",
             ],
@@ -4805,7 +4128,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "翻译补写",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -4837,7 +4159,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "第一场",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -4845,7 +4166,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "第二场",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -4872,7 +4192,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "声纹聚类",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -4914,24 +4233,12 @@ class WorkerTest(unittest.TestCase):
         tracker.assign_embedding = lambda _: "spk-1"
         self.assertEqual(tracker.assign([], 16000), "spk-1")
 
-    def test_english_punctuation_normalizes_model_text(self):
-        formatter = EnglishPunctuation.__new__(EnglishPunctuation)
-
-        class Engine:
-            def add_punctuation_with_case(self, text):
-                self.text = text
-                return "How are you?"
-
-        formatter.engine = Engine()
-        self.assertEqual(formatter.apply("HOW ARE YOU"), "How are you?")
-        self.assertEqual(formatter.engine.text, "how are you")
 
     def test_stop_with_auto_language_and_no_audio_is_safe(self):
         meeting = self.worker.start(
             {
                 "title": "空录音",
                 "language": "auto",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -4965,7 +4272,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "清理顺序",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -4985,28 +4291,9 @@ class WorkerTest(unittest.TestCase):
         self.assertEqual(order, ["cleanup", "database"])
         self.assertIsNone(self.worker.active)
         self.assertIsNone(self.worker.live_postprocessing)
-        # 结束会议不应等待在飞精修排空（弱 CPU 上会拖到数分钟）；改用 wait=False，
-        # 保留流式原文，会后精修再完整覆盖。
-        postprocessing.shutdown.assert_called_once_with(wait=False, cancel_futures=True)
+        # 整句识别是唯一结果，必须排空后才结束会议。
+        postprocessing.shutdown.assert_called_once_with(wait=True)
 
-    def test_chinese_punctuation_preserves_model_sentence_boundaries(self):
-        formatter = ChinesePunctuation.__new__(ChinesePunctuation)
-
-        class Engine:
-            def add_punctuation(self, text):
-                self.text = text
-                return "我们都是木头人，不会说话不会动。"
-
-        formatter.engine = Engine()
-        self.assertEqual(
-            formatter.apply("我们都是木头人不会说话不会动"),
-            "我们都是木头人，不会说话不会动。",
-        )
-        self.assertEqual(formatter.engine.text, "我们都是木头人不会说话不会动")
-
-    def test_auto_language_detection(self):
-        self.assertEqual(Worker._detect_language("how are you doing today"), "en")
-        self.assertEqual(Worker._detect_language("我们今天讨论产品计划"), "zh")
 
     def test_voiceprint_sample_audio_is_removed_with_profile(self):
         profile = self.worker.store.save_speaker_profile_sample(
@@ -5049,7 +4336,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "精修状态",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -5064,7 +4350,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "录制中",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -5075,7 +4360,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "精修中",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -5091,7 +4375,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "仍在精修",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -5106,7 +4389,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "串行任务",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
@@ -5159,7 +4441,6 @@ class WorkerTest(unittest.TestCase):
             {
                 "title": "回收站测试",
                 "language": "zh",
-                "streaming_model_id": "zipformer-zh-xlarge-streaming-int8",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )

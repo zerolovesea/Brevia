@@ -35,11 +35,11 @@ Configure AI Notes and AI Meeting Summary independently: each can use its own pr
 
 ### Performance modes for CPU devices
 
-Settings → Performance offers Standard and Efficiency modes. Efficiency disables live denoising and refinement, then lowers built-in AI Notes frequency to keep captions responsive; post-meeting refinement remains available. If live refinement repeatedly falls behind, Brevia offers the same switch during the meeting. Prefer a 2B local model or an online provider on lower-performance machines.
+Settings → Performance offers Standard and Efficiency modes. Efficiency disables live denoising and lowers built-in AI Notes frequency to keep captions responsive; sentence transcription and post-meeting refinement remain available. If transcription repeatedly falls behind, Brevia offers the same switch during the meeting. Prefer a 2B local model or an online provider on lower-performance machines.
 
 ### A quiet meeting screen with live transcription and translation
 
-Open it, press record, watch the captions appear. Brevia captures your microphone and system audio at once, so both sides of a remote call land in the same transcript. Optional live translation renders next to the caption stream for cross-language conversations.
+Open it, press record, see complete captions after each speech pause. Brevia captures your microphone and system audio at once, so both sides of a remote call land in the same transcript. Optional live translation renders next to the caption stream for cross-language conversations.
 
 ![Live meeting and translation](docs/assets/tour/en/%E5%AE%9E%E6%97%B6%E4%BC%9A%E8%AE%AE%E5%92%8C%E7%BF%BB%E8%AF%91.png)
 
@@ -59,7 +59,7 @@ Powered by Pyannote segmentation plus speaker-embedding models, all running on-d
 
 ### A curated local model library
 
-Downloadable models cover streaming ASR, offline refinement, punctuation restoration, voice activity detection, speaker diarization, speaker embedding, and source separation. Mix and match by language and precision — everything runs on your device.
+Downloadable models cover sentence transcription, offline refinement, voice activity detection, speaker diarization, speaker embedding, and source separation. Mix and match by language and precision — everything runs on your device.
 
 ![Model library](docs/assets/tour/en/%E6%A8%A1%E5%9E%8B%E5%BA%93.png)
 
@@ -91,7 +91,7 @@ On first launch, grant microphone and screen-recording permissions, then open **
 flowchart LR
   A[Electron renderer<br/>HTML · Tailwind · JS] <-->|IPC + Zod validation| B[Electron main process]
   B <-->|JSONL stdin/stdout| C[Python worker<br/>bundled runtime]
-  C --> D[sherpa-onnx<br/>ASR · VAD · speakers · punctuation]
+  C --> D[sherpa-onnx<br/>VAD → sentence ASR · speakers]
   C --> E[Local storage<br/>SQLite · audio · exports]
   C -. explicit consent .-> F[Optional cloud API<br/>AI Assist · summaries · translation]
 ```
@@ -121,9 +121,7 @@ Every model is downloaded on demand from **Settings → Model Library**. The man
 
 | Category | Representative models | Languages |
 | --- | --- | --- |
-| Streaming ASR | Zipformer (zh / en / fr / ko / multilingual), Nemotron 3.5 | 30+ |
-| Refinement ASR | Qwen3-ASR 0.6B / 1.7B, Whisper Large v3, FunASR Nano | Multilingual |
-| Punctuation | CT-Transformer zh+en, Online Punct English casing | zh / en |
+| Sentence / refinement ASR | Qwen3-ASR 0.6B, Whisper Large v3, FunASR Nano | Multilingual |
 | Voice activity detection | Silero VAD | Universal |
 | Speech enhancement | GTCRN Live Denoiser | Universal |
 | Speaker diarization | Pyannote Segmentation 3.0, Reverb Diarization v1 | Universal |
@@ -165,47 +163,40 @@ BREVIA_FFMPEG=/path/to/ffmpeg       # ffmpeg binary (if not on PATH)
 BREVIA_ASR_BACKEND=cpu              # cpu, cuda, or coreml; mps safely maps to cpu
 BREVIA_LLAMA_THREADS=2              # Cap llama.cpp CPU threads (default: min(4, cores/2))
 BREVIA_GPU_LAYERS=0                 # Force all llama.cpp layers to CPU
-BREVIA_LIVE_REFINE_SIDECAR=1        # Run live refinement in a separate subprocess
 
 BREVIA_DATA_DIR=~/brevia-dev BREVIA_MODELS_DIR=~/brevia-models npm start
 ```
 
-#### Performance on low-power machines
+#### Sentence transcription
 
-On 4-core / 8 GB machines without a usable GPU (e.g. Intel i5 "U-series" laptops),
-live transcription plus the real-time second-pass refinement and the built-in
-AI-assist model compete for the same cores, which causes lagging captions and slow
-meeting start/stop. In order of impact:
+Recording uses **Silero VAD → one offline ASR decode → one final caption**.
+FunASR Nano is the default for Chinese, English and Cantonese; Qwen3-ASR 0.6B
+covers other languages and automatic language selection. Punctuation and casing
+come from the recognizer. There is no streaming recognizer, punctuation model,
+or second live refinement pass.
 
-1. **Enable Settings → 性能 → 效率模式 / Efficiency.** It disables live
-   noise-reduction and live refinement during the call; post-meeting refinement stays
-   available. This is the single biggest lever.
-2. Prefer a **smaller realtime AI-assist model** (e.g. a 1.5B–2B GGUF) and reserve the
-   4B model for the end-of-meeting summary.
-3. Cap concurrent inference threads if CPU is still oversubscribed:
-   `BREVIA_LLAMA_THREADS=2` limits the llama helper; the worker already budgets its
-   sherpa-onnx models by role (realtime ASR keeps priority, refinement/voiceprint yield).
-4. Set `BREVIA_LIVE_REFINE_SIDECAR=1` to move live refinement into a separate
-   subprocess, isolating it from the streaming ASR. It falls back to in-process
-   refinement automatically on any failure, so it is safe to try.
+VAD waits for a speech pause (Chinese: 0.7 seconds; other languages: 0.8 seconds).
+Continuous speech is capped at 30 / 20 seconds respectively. A VAD segment may
+contain more than one grammatical sentence, and neighbouring sentences are
+coalesced into one caption: roughly 110 Chinese characters (150 max) or 280
+Latin characters (380 max) per caption, so a single short sentence never stands
+alone. A VAD endpoint is **not** a paragraph boundary — in real meetings the
+silence after one has a median of 30–50 ms, which would cut 24-character
+fragments; only a genuine long pause (≥1.2 s) starts a new paragraph, and a
+paragraph below the target is submitted after at most 8 seconds. When continuous speech is cut, the next decode reaches 400 ms back
+before the cut so a word split across it is recognised again with context; the
+repeated part is aligned away at the seam. These limits are adjustable under
+`vad` in advanced settings. Recognition runs on a separate serial executor;
+queued speech stays on disk. Pause flushes the current segment, and stop drains
+all recognition work before marking the meeting ready. Original audio is kept
+if recognition fails, and a warning identifies the affected interval.
 
-Brevia also surfaces performance controls in the UI:
+Efficiency mode disables denoising while retaining sentence recognition. A
+smaller built-in AI-notes model can reduce competition for CPU. Post-meeting
+refinement and speaker identification remain available.
 
-- **Settings → 性能 / Performance** offers a **性能模式 / Performance mode** with
-  two levels: **Standard** (live denoising + refinement on) and **Efficiency**
-  (turns off live denoising/refinement and lowers the built-in AI-notes frequency —
-  the lowest-power setting). It takes effect for subsequently started meetings and
-  lowers built-in AI-notes frequency when a meeting starts.
-- During a live meeting, if the realtime refinement queue repeatedly falls behind,
-  Brevia emits a bottleneck signal and shows a one-time dialog asking whether to
-  switch to Efficiency mode for this meeting (hot-updates via `reconfigure`). If the
-  AI-assist model is online (not built-in), its frequency is left untouched.
-- On low-power devices (CPU inference with ≤4 cores), the onboarding **AI-assist**
-  step and the Performance settings show a hint recommending a smaller built-in
-  model (e.g. 2B) or an online LLM API.
+See [benchmark methodology and results](backend/benchmarks/vad-2026-09-05/REPORT.md).
 
-Backend behavior is tunable via `advanced-settings.json` in the data dir; the
-realtime-refinement backlog cap is `asr.live_refine_max_pending` (default `3`).
 ### Build installers
 
 ```bash
@@ -252,7 +243,7 @@ No. Speech recognition and diarization run locally. Only LLM summaries and trans
 <details>
 <summary><strong>How much disk space do models need?</strong></summary>
 
-Depends on which you install. A typical setup (streaming + refinement + diarization) is 1–2 GB. Compact streaming models start around 80 MB; larger models exceed 1 GB.
+Depends on which you install. Install one sentence recognizer and Silero VAD; optional speaker and AI models add to disk usage. Use the model library’s size estimates for your selection.
 </details>
 
 <details>
@@ -315,6 +306,6 @@ Brevia is released under the [ISC License](LICENSE). Model files and third-party
 
 ## Acknowledgments
 
-- [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) — the local runtime powering ASR, VAD, punctuation, and speaker processing. Licensed under [Apache-2.0](https://github.com/k2-fsa/sherpa-onnx/blob/master/LICENSE).
+- [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) — the local runtime powering ASR, VAD, and speaker processing. Licensed under [Apache-2.0](https://github.com/k2-fsa/sherpa-onnx/blob/master/LICENSE).
 - Thanks to the model authors and maintainers whose downloadable artifacts are declared in [`backend/models.json`](backend/models.json), including Zipformer, Whisper, Qwen3-ASR, FunASR, Pyannote, 3D-Speaker, Silero, Spleeter, and Tencent Hy-MT2.
 - Electron, ONNX Runtime, Python, and the open-source speech community make this local-first workflow possible.
