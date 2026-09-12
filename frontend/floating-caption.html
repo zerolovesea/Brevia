@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Floating Caption</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        background: transparent;
+        color: #fff;
+        overflow: hidden;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+
+      .caption-shell {
+        position: relative;
+      }
+
+      .caption-container {
+        padding: 16px 44px 16px 20px;
+        min-height: 116px;
+        position: relative;
+        background: rgba(10, 15, 24, 0.88);
+        backdrop-filter: blur(24px) saturate(1.2);
+        -webkit-backdrop-filter: blur(24px) saturate(1.2);
+        border: 1px solid rgba(255, 255, 255, 0.28);
+        border-radius: 12px;
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.46), inset 0 1px rgba(255, 255, 255, 0.12);
+        max-height: 220px;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        scrollbar-color: rgba(255, 255, 255, 0.48) transparent;
+        transition: background 0.2s ease;
+        cursor: move;
+      }
+
+      .caption-container::-webkit-scrollbar {
+        width: 8px;
+      }
+
+      .caption-container::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.48);
+        border: 2px solid transparent;
+        border-radius: 999px;
+        background-clip: padding-box;
+      }
+
+      .caption-container:hover {
+        background: rgba(10, 15, 24, 0.96);
+      }
+
+      .caption-controls {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        z-index: 1;
+        display: flex;
+        gap: 8px;
+        -webkit-app-region: no-drag;
+        opacity: 1;
+        transition: opacity 0.2s ease;
+      }
+
+      .caption-shell:hover .caption-controls {
+        opacity: 1;
+      }
+
+      .close-btn {
+        position: relative;
+        width: 20px;
+        height: 20px;
+        border: none;
+        background: transparent;
+        color: rgba(255, 255, 255, 0.72);
+        cursor: pointer;
+        font-size: 0;
+        line-height: 1;
+        display: grid;
+        place-items: center;
+        transition: opacity 0.2s ease;
+        padding: 0;
+      }
+
+      .close-btn:hover {
+        opacity: 0.6;
+      }
+
+      .close-btn::before,
+      .close-btn::after {
+        content: '';
+        position: absolute;
+        width: 12px;
+        height: 1px;
+        background: currentColor;
+      }
+
+      .close-btn::before {
+        transform: rotate(45deg);
+      }
+
+      .close-btn::after {
+        transform: rotate(-45deg);
+      }
+
+      .caption-text {
+        font-size: clamp(20px, 2vw, 32px);
+        line-height: 1.5;
+        font-weight: normal;
+        color: #fff;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+        letter-spacing: -0.035em;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+        transition: opacity 0.2s ease;
+      }
+
+      .caption-fade {
+        animation: caption-fade 160ms ease-out;
+      }
+
+      .caption-finalized {
+        font-size: clamp(16px, 1.6vw, 24px);
+        line-height: 1.4;
+        font-weight: normal;
+        color: rgba(255, 255, 255, 0.82);
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+        letter-spacing: -0.035em;
+        transition: opacity 0.2s ease;
+      }
+
+      .caption-finalized.hidden {
+        display: none;
+      }
+
+      .caption-translation {
+        font-size: clamp(15px, 1.5vw, 22px);
+        line-height: 1.4;
+        color: #b9d5ff;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+        margin-top: 8px;
+        margin-bottom: 14px;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+        transition: opacity 0.2s ease;
+      }
+
+      .caption-translation.hidden {
+        display: none;
+      }
+
+      .caption-translation.dimmed {
+        opacity: 0.5;
+      }
+
+      /* Translation loading dots */
+      .translation-loading {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        height: 1.4em;
+      }
+
+      .translation-loading span {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: currentColor;
+        opacity: 0.4;
+        animation: translation-dot 1.4s infinite ease-in-out both;
+      }
+
+      .translation-loading span:nth-child(1) { animation-delay: -0.32s; }
+      .translation-loading span:nth-child(2) { animation-delay: -0.16s; }
+      .translation-loading span:nth-child(3) { animation-delay: 0s; }
+
+      @keyframes translation-dot {
+        0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+        40% { transform: scale(1); opacity: 1; }
+      }
+
+      @keyframes caption-fade {
+        from { opacity: 0.65; }
+        to { opacity: 1; }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .caption-fade { animation: none; }
+      }
+
+    </style>
+  </head>
+  <body>
+    <div class="caption-shell">
+      <div class="caption-controls">
+        <button class="close-btn" id="close-btn" title="Close" aria-label="关闭">×</button>
+      </div>
+      <div class="caption-container" id="caption-container">
+      <div class="caption-finalized hidden" id="caption-finalized"></div>
+      <div class="caption-text" id="caption-text"></div>
+      <div class="caption-translation hidden" id="caption-translation"></div>
+      </div>
+    </div>
+
+    <script src="./floating-caption.js"></script>
+  </body>
+</html>

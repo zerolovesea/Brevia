@@ -1,0 +1,21 @@
+body {
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+body.is-ready { opacity: 1; }
+body.is-leaving { opacity: 0; }
+.lang-menu {
+  opacity: 0;
+  transform: translateY(-6px);
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.lang-menu.is-open {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+[data-lang-toggle][aria-expanded='true'] [data-lang-caret] { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) {
+  body { opacity: 1; transition: none; }
+}
