@@ -9,6 +9,7 @@ from pathlib import Path
 from .audio_io import convert_to_pcm_wav, read_mono_wav, write_mono_wav
 from .asr import SpeakerTracker
 from .config import SETTINGS
+from .transcript import subtitle_time_at_offset
 
 
 class VoiceProfileService:
@@ -117,8 +118,9 @@ class VoiceProfileService:
                 continue
             cached.setdefault(path, read_mono_wav(path))
             samples, rate = cached[path]
-            sentences = self._sentences(segment["text"])
-            characters = sum(len(sentence) for sentence in sentences)
+            text = segment["text"] or ""
+            sentences = self._sentences(text)
+            boundaries = self._sentence_boundaries(segment, text, sentences)
             cursor = segment["start_ms"]
             segment_clip = samples[
                 round(segment["start_ms"] * rate / 1000) : round(
@@ -127,16 +129,7 @@ class VoiceProfileService:
             ]
             fallback_embedding = tracker.embedding(segment_clip, rate)
             for index, sentence in enumerate(sentences):
-                end_ms = (
-                    segment["end_ms"]
-                    if index == len(sentences) - 1
-                    else cursor
-                    + round(
-                        (segment["end_ms"] - segment["start_ms"])
-                        * len(sentence)
-                        / characters
-                    )
-                )
+                end_ms = boundaries[index]
                 source_key = f"meeting:{meeting['id']}:{source_id or speaker_id}:{segment['id']}:{index}"
                 duration_ms = max(0, end_ms - cursor)
                 if source_key in existing:
@@ -188,6 +181,46 @@ class VoiceProfileService:
             for part in re.split(r"(?<=[。！？.!?])\s*", text.strip())
             if part.strip()
         ]
+
+    @classmethod
+    def _sentence_boundaries(cls, segment, text, sentences):
+        """每句样本在音频时间轴上的结束点（含句末标点），与句子一一对应。
+
+        有词级时间戳、且句子能在原文里顺序定位时，句间切点取自真实的发音时刻（与字幕
+        切分共用 :func:`transcript.subtitle_time_at_offset` 的锚点映射）；否则退回按句子字数比例
+        估时。整段的起止两端始终取自 ``segment``，不受影响。
+        """
+        if not sentences:
+            return []
+        start_ms, end_ms = segment["start_ms"], segment["end_ms"]
+        total = sum(len(sentence) for sentence in sentences)
+        if not total:
+            return [end_ms] * len(sentences)
+        # 兜底：累计字数比例，逐句 round 后累加——与引入词级对齐前的取值完全一致。
+        fallback, cursor = [], start_ms
+        for sentence in sentences[:-1]:
+            cursor += round((end_ms - start_ms) * len(sentence) / total)
+            fallback.append(cursor)
+        fallback.append(end_ms)
+        if not segment.get("word_timestamps"):
+            return fallback
+        offsets, position, located = [], 0, True
+        for sentence in sentences[:-1]:
+            index = text.find(sentence, position)
+            if index < 0:
+                located = False
+                break
+            position = index + len(sentence)
+            offsets.append(position)
+        if not located:
+            return fallback
+        boundaries, previous = [], start_ms
+        for offset in offsets:
+            time = max(previous, min(subtitle_time_at_offset(segment, text, offset), end_ms))
+            boundaries.append(time)
+            previous = time
+        boundaries.append(end_ms)
+        return boundaries
 
     @staticmethod
     def _samples(source):

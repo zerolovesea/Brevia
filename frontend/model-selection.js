@@ -76,18 +76,21 @@
    */
   function defaultRefinedModelId({ catalog, language, installed, preferredId, fallbackId }) {
     const isInstalled = (modelId) => Boolean(installed && installed.has(modelId));
-    const chosen = preferredId && modelSupportsLanguage(
-      (catalog || []).find((model) => model.id === preferredId),
-      language,
-    ) ? preferredId : null;
-    const preferred = chosen
-      || declaredDefaultModelId(catalog, language)
-      || fallbackId;
-    if (!preferred) return undefined;
-    if (isInstalled(preferred)) return preferred;
+    // ① 用户偏好优先，且**即便尚未安装也照样返回**：偏好只在准备页显式改选时写入，
+    // 用「已安装回退」把它盖掉等于静默丢弃用户的选择；用户仍可在下拉里改回去。
+    const preferredModel = preferredId
+      ? (catalog || []).find((model) => model.id === preferredId)
+      : null;
+    if (preferredModel && !preferredModel.retired && modelSupportsLanguage(preferredModel, language)) {
+      return preferredId;
+    }
+    // ② 清单声明的默认；没装时才回退到已安装的同语言模型（见函数头注释第 ③ 步）。
+    const declared = declaredDefaultModelId(catalog, language) || fallbackId;
+    if (!declared) return undefined;
+    if (isInstalled(declared)) return declared;
     const fallback = refinedModelsForLanguage(catalog, language)
       .find((model) => isInstalled(model.id));
-    return fallback?.id || preferred;
+    return fallback?.id || declared;
   }
 
   /** 组装识别模型下拉选项：未安装的把体积写进标签，让用户知道选了会触发下载。

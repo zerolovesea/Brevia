@@ -62,6 +62,9 @@ function applyBackendDetail(meeting) {
   const modelRetired = Boolean(meeting.refined_model_id)
     && modelCatalog.length > 0
     && (!producedBy || Boolean(producedBy.retired));
+  // 展示用的段落集合与保存用的必须是同一份：精修模型退役时这里按实时版本展示，
+  // 若保存时又去查精修版本，段落 id 对不上，用户的逐句修改会被静默丢弃。
+  uiData.detail.ignoreRefined = modelRetired;
   const { revision, segments: ordered } = latestTranscriptSegments(meeting, { ignoreRefined: modelRetired });
   const speakerNames = new Map(meeting.speakers.map((speaker) => [speaker.id, speaker.name]));
   uiData.detail.transcript = ordered.map((segment) => renderSegmentData(segment, true, speakerNames));

@@ -256,6 +256,44 @@ class SentenceTest(unittest.TestCase):
         mixed = "电力需求。 There is demand. More power is needed."
         self.assertEqual([item["text"] for item in self.worker._sentence_subtitles(event, mixed)], [mixed])
 
+    def test_subtitle_split_snaps_to_word_timestamps(self):
+        # 切口必须落在词时间戳上：段内停顿让「电」在第 11s 才开口，按字数平摊会算成约 7.5s。
+        text = "供" * 60 + "，" + "电" * 90 + "。" + "需" * 10 + "。"
+        words = (
+            [{"text": "供", "start_ms": index * 100, "end_ms": index * 100 + 100} for index in range(60)]
+            + [{"text": "电", "start_ms": 11000 + index * 50, "end_ms": 11000 + index * 50 + 50} for index in range(90)]
+            + [{"text": "需", "start_ms": 17000 + index * 100, "end_ms": 17000 + index * 100 + 100} for index in range(10)]
+        )
+        event = {"segment_id": "aligned", "start_ms": 0, "end_ms": 20000, "word_timestamps": words}
+        parts = list(self.worker._sentence_subtitles(event, text))
+        self.assertEqual([item["text"] for item in parts], ["供" * 60 + "，", "电" * 90 + "。" + "需" * 10 + "。"])
+        self.assertEqual((parts[0]["start_ms"], parts[0]["end_ms"]), (0, 11000))
+        self.assertEqual(parts[1]["end_ms"], 20000)
+        self.assertEqual(parts[0]["end_ms"], parts[1]["start_ms"])
+        # 模型不给词时间戳时退回按字数比例估时，与引入词级对齐前的行为一致。
+        plain = {"segment_id": "plain", "start_ms": 0, "end_ms": 20000}
+        unaligned = list(self.worker._sentence_subtitles(plain, text))
+        self.assertEqual(unaligned[0]["end_ms"], round(20000 * 61 / len(text)))
+        self.assertEqual(unaligned[0]["end_ms"], unaligned[1]["start_ms"])
+
+    def test_utterance_sentence_split_snaps_to_word_timestamps(self):
+        text = "甲" * 20 + "。" + "乙" * 20 + "。"
+        segment = {
+            "segment_id": "utterance",
+            "start_ms": 0,
+            "end_ms": 10000,
+            "text": text,
+            "word_timestamps": (
+                [{"text": "甲", "start_ms": index * 100, "end_ms": index * 100 + 100} for index in range(20)]
+                + [{"text": "乙", "start_ms": 6000 + index * 100, "end_ms": 6000 + index * 100 + 100} for index in range(20)]
+            ),
+        }
+        head, tail = self.worker._split_utterance_at_sentence(segment)
+        self.assertEqual(head["end_ms"], 6000)
+        self.assertEqual(tail["start_ms"], 6000)
+        self.assertEqual(head["word_timestamps"][-1]["text"], "甲")
+        self.assertEqual(tail["word_timestamps"][0]["text"], "乙")
+
     def test_overlap_window_comes_from_the_cut_lookback_not_a_fixed_width(self):
         # 接缝对齐的搜索窗口 = 切点回看时长 × 本段语速；语速从本段自己的字数与时长算，
         # 与估句时间轴同源，因此不会两头各估一次。
@@ -274,6 +312,43 @@ class SentenceTest(unittest.TestCase):
         # 有重叠但字面完全对不上、又没有虚词线索时，不发明标点去粘：交给调用方原样提交。
         self.assertIsNone(
             self.worker._join_pending("ジョン大佐って誰ぞ。", "约翰·提托并未出现。", None, 3)
+        )
+
+    def test_seam_without_audio_overlap_never_drops_a_coincidental_character(self):
+        # 停顿边界（style="comma"）没有音频重叠：共享的一个字只是巧合，
+        # 「会议的主题。」+「题目还没定。」不得被裁成「…主题目…」。
+        self.assertEqual(self.worker._dedupe_seam("会议的主题。", "题目还没定。", 0), "题目还没定。")
+        self.assertEqual(
+            self.worker._join_pending("会议的主题。", "题目还没定。", "comma", 0),
+            "会议的主题，题目还没定。",
+        )
+        # 硬切边界（style=None）上后段真的可能把切点上的字又解码一遍，仍按最小窗口去重；
+        # 有切点回看（overlap>0）时同样去重。
+        self.assertEqual(
+            self.worker._join_pending("以此改变未来。", "来，有些网友说。", None, 0),
+            "以此改变未来，有些网友说。",
+        )
+        self.assertEqual(
+            self.worker._dedupe_seam("以此改变未来。", "来，有些网友说。", 3),
+            "，有些网友说。",
+        )
+
+    def test_refined_text_keeps_its_sentence_boundaries(self):
+        # 实时链路会把以悬空连接词结尾的句号去掉、接上下一句；离线精修拿到的是完整
+        # 音频，句号就是句号，不能粘成「他是我们是。」。
+        event = {"segment_id": "refine", "start_ms": 0, "end_ms": 1000}
+        self.assertEqual(
+            [item["text"] for item in self.worker._sentence_subtitles(event, "他是。我们是。")],
+            ["他是我们是。"],
+        )
+        self.assertEqual(
+            [item["text"] for item in self.worker._sentence_subtitles(event, "他是。我们是。", merge_unfinished=False)],
+            ["他是。我们是。"],
+        )
+        self.assertEqual(
+            [item["text"] for item in self.worker._sentence_subtitles(
+                event, "这个方案是我的。下一项是预算。", merge_unfinished=False)],
+            ["这个方案是我的。下一项是预算。"],
         )
 
     def test_draft_event_shows_the_paragraph_being_collected(self):

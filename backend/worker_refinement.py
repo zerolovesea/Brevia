@@ -28,6 +28,7 @@ from .worker_common import (
     model_supports_language,
     require,
 )
+from .transcript import subtitle_time_at_offset
 
 # 该值在 diarization 子进程内使用；子进程不加载用户覆盖，故经 payload 传入，
 # 这里仅作缺失时的回退默认值。较长窗口让声纹更稳定，避免把同一个人聚成多人。
@@ -602,9 +603,11 @@ class RefinementWorkerMixin:
         )
         refined_segments = self._assemble_utterances(refined_segments)
         # 识别窗口和展示段落分开：保留多句上下文，最终按翻译所需长度切段。
+        # 离线精修拿到的是完整音频，句号就是句号，不能再按实时链路的「悬空连接词」规则
+        # 把相邻句子粘起来（那会把「他是。我们是。」变成「他是我们是。」）。
         paragraphs = []
         for event in refined_segments:
-            for paragraph in self._sentence_subtitles(event, event["text"]):
+            for paragraph in self._sentence_subtitles(event, event["text"], merge_unfinished=False):
                 paragraph["word_timestamps"] = [
                     word for word in event.get("word_timestamps", [])
                     if paragraph["start_ms"] <= word["start_ms"] < paragraph["end_ms"]
@@ -1283,7 +1286,9 @@ class RefinementWorkerMixin:
                 continue
             start_ms = segment["start_ms"]
             end_ms = segment["end_ms"]
-            split_ms = start_ms + round((end_ms - start_ms) * (last + 1) / len(text))
+            # 切点优先吸附到词级时间戳（有则用真实发音时刻），没有词时间戳才按字符比例估。
+            split_ms = subtitle_time_at_offset(segment, text, last + 1)
+            split_ms = max(start_ms, min(split_ms, end_ms))
             words = segment.get("word_timestamps", []) or []
             head_words = [word for word in words if word["start_ms"] < split_ms]
             tail_words = [word for word in words if word["start_ms"] >= split_ms]

@@ -86,7 +86,9 @@ function renderTranscriptSegment({ time, startSeconds, endSeconds, speaker, text
   const copy = textEditable && segmentId
     ? `<div class="segment-copy"><textarea class="segment-text-input" data-segment-text="${escapeHtml(segmentId)}" rows="2" maxlength="4000" aria-label="${escapeHtml(t('字幕文本'))}">${escapeHtml(text)}</textarea>${translationLine}</div>`
     : `<div class="segment-copy"><p>${escapeHtml(text)}</p>${translationLine}</div>`;
-  return `<article class="segment"${speaker.segmentId ? ` data-segment-id="${escapeHtml(speaker.segmentId)}"` : ''}${timing}><div class="segment-meta"><time>${escapeHtml(time)}</time>${label}${overlap}${signalBadge}</div>${copy}</article>`;
+  // 右键菜单按段落 id 定位：详情页（原始/精修稿）只带顶层 segmentId，实时条目只带 speaker.segmentId。
+  const contextSegmentId = segmentId || speaker.segmentId;
+  return `<article class="segment"${contextSegmentId ? ` data-segment-id="${escapeHtml(contextSegmentId)}"` : ''}${timing}><div class="segment-meta"><time>${escapeHtml(time)}</time>${label}${overlap}${signalBadge}</div>${copy}</article>`;
 }
 /** 渲染会议库中的一行。@param {{tone: string, title: string, meta: string, tags: string[], status: object}} meeting 会议数据。@param {number} index 会议索引。@returns {string} 行标记。 */
 function renderMeetingRow({ id, tone, title, meta, tags, status, deleted = false, workspaceId, workspace }, index) {

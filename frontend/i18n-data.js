@@ -200,10 +200,10 @@ const workspaceButtonLabels = {
 };
 Object.entries(workspaceButtonLabels).forEach(([code, label]) => { catalog[code].labels['新建工作区'] = label; });
 const translationToggleLabels = {
-  zh: ['译文：开', '译文：关'], en: ['Translation: On', 'Translation: Off'], es: ['Traducción: Sí', 'Traducción: No'], ja: ['翻訳：オン', '翻訳：オフ'],
+  zh: ['翻译：开', '翻译：关'], en: ['Translation: On', 'Translation: Off'], es: ['Traducción: Sí', 'Traducción: No'], ja: ['翻訳：オン', '翻訳：オフ'],
   ko: ['번역: 켬', '번역: 끔'], fr: ['Traduction : Oui', 'Traduction : Non'], de: ['Übersetzung: An', 'Übersetzung: Aus'], ru: ['Перевод: Вкл.', 'Перевод: Выкл.'],
 };
-Object.entries(translationToggleLabels).forEach(([code, [on, off]]) => Object.assign(catalog[code].labels, { '译文: 开': on, '译文: 关': off }));
+Object.entries(translationToggleLabels).forEach(([code, [on, off]]) => Object.assign(catalog[code].labels, { '翻译：开': on, '翻译：关': off }));
 // 录制前页录音源新增的轻量状态文案（异常/未授权时显示，正常时隐藏解释）。
 const liveSourceLabels = {
   zh: { '已连接': '已连接', '未就绪': '未就绪',  '标准模式': '标准模式', '我的笔记': '我的笔记', '展开字幕': '展开字幕', '返回笔记': '返回笔记', '预览': '预览',  '回到最新': '回到最新', '纪要生成失败：模型未返回有效内容，请稍后重试。': '纪要生成失败：模型未返回有效内容，请稍后重试。', '富文本': '富文本', '加粗': '加粗', '斜体': '斜体', '标题 1': '标题 1', '标题 2': '标题 2', '标题 3': '标题 3', '列表': '列表', '编号列表': '编号列表', '引用': '引用', '插入链接': '插入链接', '插入图片': '插入图片', '行内代码': '行内代码', '代码': '代码' },
@@ -833,7 +833,8 @@ const whatsNewLog = [
         '准备页新增「识别模型」下拉，实时页也有同一个切换器，会中即可换模型。',
       ],
       improved: [
-        '字幕按段落聚合：相邻句子攒到约 110 字（上限 150 字）才成一段，短句不再单独成段；段落边界只看真正的长停顿（≥1.2 秒），不按 VAD 端点切。',
+        '字幕按段落聚合：相邻句子攒到约 110 字（拉丁 280 字符）才成一段，上限 150 字 / 380 字符，短句不再单独成段；段落边界只看真正的长停顿（≥1.2 秒），不按 VAD 端点切，超过 8 秒没有新结果也会兜底提交。',
+        '精修字幕的时间戳、以及加入声纹库时保存的音频片段，改为按识别器给出的词级时间戳对齐，不再把一段时长按字数平摊，播放定位与声纹取样因此落在真正说话的那一句上。',
         '同一段样例音频的转写 CPU 时间下降约 74%–82%，进程峰值内存下降约 18%–28%。',
         '识别、翻译与 AI 笔记共用同一份已确认字幕，会中不再出现重复或互相覆盖的文本。',
         '进阶设置补齐了会后精修与语音检测的参数说明，以及实时段长上限。',
@@ -851,6 +852,12 @@ const whatsNewLog = [
         '修复下载队列把内置 AI 模型的内部 id（如 qwen3.5-2b-q4km）显示给用户的问题。',
         '修复暗色模式下首启模型卡片与实时识别模型切换器文字不可读的问题。',
         '修复恢复录音时识别链路起不来却仍报告恢复成功、结果整场没有字幕的问题。',
+        '修复低音量语音被漏识的问题：两个已检测语音区间之间的音频现在也会转写（音乐下的人声、电话音、轻声发言），实时字幕与会后精修一致。',
+        '修复手动修订字幕后再精修会让同一句显示两次的问题。',
+        '修复精修稿把「他是。我们是。」粘成「他是我们是。」的问题：会后精修不再套用实时字幕的悬空连接词拼接规则。',
+        '修复精修模型已下架/退役的会议里，逐句修改字幕会被静默丢弃的问题。',
+        '修复精修字幕上右键不弹出菜单（加入笔记 / 添加录音到声纹库）的问题。',
+        '修复两段字幕的音频并不重叠、只是恰好共享一个字时会被误删一个字的问题。',
       ],
     },
     en: {
@@ -862,7 +869,8 @@ const whatsNewLog = [
         'Meeting setup gained a recognition-model selector, and the live screen has the same one, so the model can be switched mid-meeting.',
       ],
       improved: [
-        'Captions are now paragraph-sized: neighbouring sentences are coalesced up to roughly 110 Chinese characters (150 max) instead of standing alone one sentence at a time; a paragraph breaks only on a genuine long pause, not on every voice-detection endpoint.',
+        'Captions are now paragraph-sized: neighbouring sentences are coalesced up to roughly 110 Chinese characters (280 Latin) with a hard ceiling of 150 / 380, instead of standing alone one sentence at a time; a paragraph breaks only on a genuine long pause, not on every voice-detection endpoint, and a paragraph is submitted anyway after 8 seconds without new results.',
+        'Refined subtitle timestamps — and the audio clips saved when you add a line to a voiceprint — now follow the recognizer’s word timestamps instead of spreading each speech window evenly by character count, so a refined line starts and ends where it was actually spoken.',
         'Transcription CPU time drops by roughly 74–82% and peak memory by 18–28% on the same sample audio.',
         'Recognition, translation, and AI notes all read the same confirmed captions, so text no longer duplicates or overwrites itself mid-meeting.',
         'Advanced settings now label the post-meeting refinement and voice-detection options, plus the live segment cap.',
@@ -880,6 +888,12 @@ const whatsNewLog = [
         'Fixed the download queue showing an internal model id (for example qwen3.5-2b-q4km) instead of the model name for built-in AI models.',
         'Fixed unreadable text in dark mode on the first-run model cards and the live recognition-model selector.',
         'Fixed a restored recording reporting success even when recognition could not start, which left the meeting with no captions at all.',
+        'Fixed quiet speech that voice detection missed entirely: audio between two detected speech regions is now transcribed in live captions and in post-meeting refinement alike.',
+        'Fixed a refined transcript showing the same sentence twice after a manual correction followed by a re-refinement.',
+        'Fixed refined transcripts joining two complete sentences into one when the first ended in a connective (“他是。我们是。” became “他是我们是。”).',
+        'Fixed per-sentence subtitle edits being silently discarded for a meeting whose refinement model is no longer offered.',
+        'Fixed the segment context menu (add to notes, add this audio to a voiceprint) not opening on refined subtitles.',
+        'Fixed a character being dropped where two captions met when they happened to share a character but their audio did not overlap.',
       ],
     },
   },

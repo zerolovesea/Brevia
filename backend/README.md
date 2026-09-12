@@ -21,8 +21,9 @@ Pyannote segmentation + 3D-Speaker ERes2Net 完成本地说话人聚类，参数
 
 录音链路：原始 PCM 落盘 → `SentenceVAD` → 磁盘暂存语音段 → 单线程
 `RefinedASR` → `transcript.final` + `transcript.settled`（翻译入口）。不再产生
-`transcript.partial` / `transcript.refined`。旧数据库的 `streaming_model_id`
-列保留兼容，新会议写入当前离线识别模型 ID，不再作为下载要求。
+`transcript.partial` / `transcript.refined`。升级时会删除旧数据库的
+`streaming_model_id` 与 `power_saving` 列（见 `store_base.py` 的
+`_drop_retired_columns`），会议只保留 `refined_model_id`。
 
 暂停和语言切换提交末句；停止等待队列排空再更新会议状态。队列只持有音频路径，
 成功或失败均清理临时段文件，原始录音始终保留。失败会报告具体时间区间，

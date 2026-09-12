@@ -14,14 +14,14 @@ AST 里看不到任何调用点，报出来全是误报（曾占全部输出的 
 import ast
 import glob
 import re
-import sys
 from collections import defaultdict
+from pathlib import Path
 
 BACKEND = "backend"
 ALL_FILES = [
     path
     for path in sorted(glob.glob("backend/*.py")) + sorted(glob.glob("scripts/*.py"))
-    if not path.rsplit("/", 1)[-1].startswith("test_")
+    if not Path(path).name.startswith("test_")
 ]
 # Files that are entry points / harnesses and may legitimately reference things
 # only via strings (dispatch tables).
@@ -51,7 +51,7 @@ def collect_definitions():
             tree = ast.parse(open(path, encoding="utf-8").read(), path)
         except SyntaxError:
             continue
-        base = path.split("\\")[-1].replace(".py", "")
+        base = Path(path).stem
         for name, kind in iter_names(tree):
             modules[base][name] = kind
         # methods of classes

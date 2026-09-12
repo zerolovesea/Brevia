@@ -14,6 +14,7 @@ from pathlib import Path
 from .asr import DEFAULT_REFINED_MODEL_ID, RefinedASR, SentenceVAD
 from .audio_io import convert_to_pcm_wav
 from .config import SETTINGS
+from .transcript import subtitle_time_at_offset
 from .worker_llm import TRANSLATION_MODEL_ID
 from .worker_common import (
     ModelNotInstalled,
@@ -645,10 +646,14 @@ class RecordingSessionMixin:
             return current
         if not current:
             return previous
-        deduped = cls._dedupe_seam(previous, current, overlap_chars)
+        # 硬切/端点边界（style 不为 "comma"）上，后一段可能把切点上的字又解码了一遍，
+        # 即便没有切点回看也要按最小窗口对齐；**停顿边界**上两段之间是真的静音，
+        # 共享的字只是巧合，按它裁切会吃掉一个真实的字，所以不去重也不拼接。
+        window = overlap_chars if overlap_chars > 0 else (0 if style == "comma" else 2)
+        deduped = cls._dedupe_seam(previous, current, window)
         if deduped != current or cls._unfinished_subtitle(previous):
             return previous.rstrip("。.") + deduped
-        spliced = cls._anchor_splice(previous, current, overlap_chars)
+        spliced = cls._anchor_splice(previous, current, window)
         if spliced:
             return spliced
         if style != "comma":
@@ -668,10 +673,11 @@ class RecordingSessionMixin:
         """
         head = current.lstrip("，,、 ")
         tail = previous.rstrip("。！？.!?；;，,、 ")
-        # 窗口取切点回看换算出的字符数（`_overlap_chars` 已夹在 2..8）——重复只可能发生在
-        # 被解码两遍的那段音频里，窗口之外的相同字是巧合，不能当重叠删掉。原先这里还有
-        # 一个 `max(12, ...)` 下限，使上面这个换算彻底失效、两处拼接永远搜 12 字。
-        window = max(2, overlap_chars)
+        # 传入的是**有效搜索窗口**（见 _join_pending）：0 表示没有重叠证据，直接原样返回；
+        # 否则窗口只可能落在被解码两遍的那段音频里，窗口之外的相同字是巧合，不能当重叠删掉。
+        if overlap_chars <= 0:
+            return current
+        window = overlap_chars
         for length in range(min(len(tail), len(head), window), 0, -1):
             if tail[-length:] == head[:length] and len(head) > length:
                 return head[length:]
@@ -691,8 +697,11 @@ class RecordingSessionMixin:
         搜索窗口取切点回看换算出的字符数（``_overlap_chars``），重叠只可能发生在这
         一小段里。只有共同子串同时落在上一段的**结尾**和本段的**开头**才算重叠的
         证据——否则只是「，」这类标点在两段里各出现一次，按它对齐会整段吞掉中间的字。
+        没有重叠（``overlap_chars <= 0``）时直接返回 ``None``：没有证据就不拼接。
         """
-        window = min(len(previous), len(current), max(2, overlap_chars))
+        if overlap_chars <= 0:
+            return None
+        window = min(len(previous), len(current), overlap_chars)
         if window < 2:
             return None
         tail = previous[-window:].rstrip("。！？.!?；;，,、 ")
@@ -818,12 +827,20 @@ class RecordingSessionMixin:
         cjk = cjk_chars > 0 and cjk_chars * 3 >= len(re.findall(r"[A-Za-z]", text))
         return SUBTITLE_LENGTHS["cjk" if cjk else "latin"]
 
-    def _sentence_subtitles(self, event, text):
-        """按目标长度聚合多句；过长时优先在完整句子、分句或单词边界切开。"""
+    def _sentence_subtitles(self, event, text, merge_unfinished=True):
+        """按目标长度聚合多句；过长时优先在完整句子、分句或单词边界切开。
+
+        切好的片段落到时间轴时优先用词级时间戳对齐（见 :func:`transcript.subtitle_time_at_offset`），
+        只有模型不给词时间戳时才按字数估时。段落首尾始终取自 ``event`` 的起止时间。
+
+        ``merge_unfinished`` 专给实时链路：流式解码在截断音频上补的句号不可信，尾字是
+        悬空连接词时要把下一句接回来。会后精修拿到的是完整音频，句号就是句号，因此
+        ``refine`` 传 ``False``，否则「他是。我们是。」会被粘成「他是我们是。」。
+        """
         minimum, target, limit = self._length_limits(text)
         sentences = []
         for sentence in self._split_sentences(text):
-            if sentences and self._unfinished_subtitle(sentences[-1]):
+            if merge_unfinished and sentences and self._unfinished_subtitle(sentences[-1]):
                 sentences[-1] = sentences[-1].rstrip("。.") + sentence.strip()
             else:
                 sentences.append(sentence)
@@ -849,15 +866,46 @@ class RecordingSessionMixin:
             remaining = remaining[cut:].strip()
         if remaining:
             parts.append(remaining)
-        # ponytail: Nano 无词时间戳，句内按字数估时；需要精确卡字时再引入对齐器。
-        total = sum(map(len, parts))
-        offset = 0
-        duration = event["end_ms"] - event["start_ms"]
+        yield from self._subtitle_parts(event, text, parts)
+
+    def _subtitle_parts(self, event, source, parts):
+        """给切好的文本片段分配段落 id 与时间轴，保证首尾精确、相邻段落相接。"""
+        times = self._subtitle_part_times(event, source, parts)
         for index, part in enumerate(parts):
-            start = event["start_ms"] + round(duration * offset / total)
-            offset += len(part)
             yield {**event, "segment_id": event["segment_id"] if index == 0 else f"{event['segment_id']}-s{index}",
-                   "start_ms": start, "end_ms": event["start_ms"] + round(duration * offset / total), "text": part}
+                   "start_ms": times[index], "end_ms": times[index + 1], "text": part}
+
+    def _subtitle_part_times(self, event, source, parts):
+        """每个片段在音频时间轴上的边界。
+
+        能按顺序在原文里定位到片段时，边界用词级时间戳 → 偏移的锚点插值；否则（模型不
+        给词时间戳，或片段被接缝改写后在原文里找不到）退回按字数比例估时——只估内部
+        切点，首尾仍取段落的真实起止。
+        """
+        start_ms, end_ms = event["start_ms"], event["end_ms"]
+        total = sum(map(len, parts))
+        offsets, cursor, located = [], 0, True
+        for part in parts[:-1]:
+            index = source.find(part, cursor)
+            if index < 0:
+                located = False
+                break
+            cursor = index + len(part)
+            offsets.append(cursor)
+        if located and offsets and event.get("word_timestamps"):
+            times, previous = [start_ms], start_ms
+            for offset in offsets:
+                time = max(previous, min(subtitle_time_at_offset(event, source, offset), end_ms))
+                times.append(time)
+                previous = time
+            times.append(end_ms)
+            return times
+        times, consumed = [start_ms], 0
+        for part in parts[:-1]:
+            consumed += len(part)
+            times.append(start_ms + round((end_ms - start_ms) * consumed / total) if total else start_ms)
+        times.append(end_ms)
+        return times
 
     @synchronized_recording
     def stop(self, payload):

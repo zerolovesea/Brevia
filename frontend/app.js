@@ -2147,7 +2147,7 @@ function tourView(index, demo) {
   const meetingName = demo.meeting || tourMeetingFallback[locale] || 'Meeting';
   const aiSuggestionLabel = tourAiSuggestionFallback[locale] || 'AI';
   const aiToggleLabel = (aiAssistCopy[locale] || aiAssistCopy.en).toggleOff;
-  const liveHeader = (time) => `<header class="live-header tour-anim" style="--tour-delay:0ms"><div class="live-title"><strong>${escapeHtml(meetingName)}</strong><div class="live-status"><span class="recording"><i></i>${escapeHtml(t('正在录制'))}</span><time>${time}</time><span class="save-state"><svg class="check-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3 8.5 3.2 3.2L13 4.5" /></svg>${escapeHtml(t('已保存'))}</span></div></div><div class="live-caption-controls"><button class="floating-caption-toggle">${escapeHtml(t('悬浮字幕'))}</button><button class="translation-toggle">${escapeHtml(t('译文: 关'))}</button></div><button class="pause-button">Ⅱ ${escapeHtml(t('暂停'))}</button><button class="end-button">${escapeHtml(t('结束会议'))}</button></header>`;
+  const liveHeader = (time) => `<header class="live-header tour-anim" style="--tour-delay:0ms"><div class="live-title"><strong>${escapeHtml(meetingName)}</strong><div class="live-status"><span class="recording"><i></i>${escapeHtml(t('正在录制'))}</span><time>${time}</time><span class="save-state"><svg class="check-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3 8.5 3.2 3.2L13 4.5" /></svg>${escapeHtml(t('已保存'))}</span></div></div><div class="live-caption-controls"><button class="floating-caption-toggle">${escapeHtml(t('悬浮字幕'))}</button><button class="translation-toggle">${escapeHtml(t('翻译：关'))}</button></div><button class="pause-button">Ⅱ ${escapeHtml(t('暂停'))}</button><button class="end-button">${escapeHtml(t('结束会议'))}</button></header>`;
   const liveModeIcon = (path) => `<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="${path}"/></svg>`;
   const captionsPanel = (segments) => `<section class="live-captions tour-anim" style="--tour-delay:160ms"><header class="live-section-head"><p class="eyebrow">${escapeHtml(t('实时字幕'))}</p><button class="live-mode-toggle" data-toggle-live-mode="notes" aria-label="${escapeHtml(t('返回笔记'))}" title="${escapeHtml(t('返回笔记'))}">${liveModeIcon('m10 3-5 5 5 5')}</button></header><div class="transcript-scroll">${segments}</div></section>`;
   const segment = (time, speaker, text, delay = 220) => `<div class="segment tour-anim" style="--tour-delay:${delay}ms"><div class="segment-meta"><time>${time}</time><button class="segment-speaker">${escapeHtml(speaker)}</button></div><div class="segment-copy"><p>${escapeHtml(text)}</p></div></div>`;
@@ -3234,6 +3234,9 @@ const MODEL_DOWNLOAD_FAILURES = [
 function userFacingError(content) {
   const text = String(content);
   if (/\b(?:worker request |operation )timed out\b/i.test(text)) return t('操作超时，请稍后重试');
+  // 在线纪要/AI 笔记的网络失败也带 timeout/SSL/CERTIFICATE 字样，但它们不是模型下载
+  // 失败，套上下载文案会把用户引到错误的方向。
+  if (/LLM request failed/i.test(text)) return content;
   for (const { pattern, key } of MODEL_DOWNLOAD_FAILURES) {
     if (pattern.test(text)) return t(key);
   }
@@ -3472,7 +3475,7 @@ function setLiveTranslationEnabled(enabled) {
   translationAllowed = enabled;
   const toggle = document.querySelector('#translation-toggle');
   toggle.dataset.enabled = String(enabled);
-  toggle.textContent = t(enabled ? '译文: 开' : '译文: 关');
+  toggle.textContent = t(enabled ? '翻译：开' : '翻译：关');
   document.querySelector('#translation-options').innerHTML = BreviaI18n.languageOptions(locale, t)
     .map(([value, label]) => `<button type="button" data-live-translation="${escapeHtml(value)}">${escapeHtml(label)}</button>`).join('');
   if (!enabled) document.querySelectorAll('.translation').forEach((line) => { line.hidden = true; });
@@ -4845,7 +4848,9 @@ async function saveDetailTranscriptEdits() {
     return;
   }
   const draft = uiData.detail.transcriptDraft || {};
-  const original = new Map((latestTranscriptSegments(meeting).segments || []).map((segment) => [segment.id, String(segment.text).trim()]));
+  // 与展示口径保持一致（精修模型退役时展示的是实时版本，见 applyBackendDetail）：
+  // 用同一份段落集合取原文，否则草稿 id 全部对不上，修改会被整体静默跳过。
+  const original = new Map((latestTranscriptSegments(meeting, { ignoreRefined: uiData.detail.ignoreRefined }).segments || []).map((segment) => [segment.id, String(segment.text).trim()]));
   const edits = [];
   for (const [segmentId, value] of Object.entries(draft)) {
     if (!original.has(segmentId)) continue;

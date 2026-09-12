@@ -57,6 +57,7 @@ DEPRECATED_MODEL_PREFIXES = (
     "fire-red-asr2-ctc-zh-en-int8-",
     "nemo-titanet-small-en-",
     "paraformer-zh-en-int8-",
+    "qwen3-asr-1.7b-",
     "vits-mimic3-ko-kss-low-",
     "vits-piper-de-thorsten-medium-int8-",
     "vits-piper-es-sharvard-medium-int8-",
@@ -115,6 +116,33 @@ def sha256_file(path):
     return digest.hexdigest()
 
 
+def load_model_catalog(path=None):
+    """读取按当前平台过滤后的模型清单。
+
+    纯读取、无副作用：打包前置校验（``backend/preflight_package.py``）要在不触碰磁盘
+    的前提下算出随包模型的目录名，不能走 ``ModelManager.__init__``——那里会顺手删掉
+    退役模型的本地副本，正好会把校验要发现的残留提前抹掉。
+    """
+    path = Path(path) if path else Path(__file__).with_name("models.json")
+    system = platform.system().lower()
+    return {
+        item["id"]: item
+        for item in json.loads(path.read_text(encoding="utf-8"))
+        if not item.get("platforms") or system in item["platforms"]
+    }
+
+
+def model_directory_name(model_id, revision):
+    """模型在本地/随包目录里的版本化目录名。"""
+    return f"{model_id}-{revision.replace('/', '-')}"
+
+
+def model_files_present(model, path):
+    """模型目录里清单声明的文件是否齐全（纯检查，不创建也不下载）。"""
+    path = Path(path)
+    return path.is_dir() and all((path / name).exists() for name in model["files"])
+
+
 class ModelManager:
     """按模型清单管理本地文件，并向 Worker 上报下载状态。"""
 
@@ -130,13 +158,7 @@ class ModelManager:
         bundled_root = bundled_root or os.environ.get("BREVIA_BUNDLED_MODELS_DIR")
         self.bundled_root = Path(bundled_root) if bundled_root else None
         self.event = event
-        self.catalog = {
-            item["id"]: item
-            for item in json.loads(
-                Path(__file__).with_name("models.json").read_text(encoding="utf-8")
-            )
-            if not item.get("platforms") or platform.system().lower() in item["platforms"]
-        }
+        self.catalog = load_model_catalog()
         self.remove_deprecated_models()
 
     def remove_deprecated_models(self):
@@ -188,14 +210,14 @@ class ModelManager:
     def local_path(self, model_id):
         """返回指定模型的可写版本化目录，不检查目录是否存在。"""
         model = self.get(model_id)
-        return self.root / f"{model_id}-{model['revision'].replace('/', '-')}"
+        return self.root / model_directory_name(model_id, model["revision"])
 
     def bundled_path(self, model_id):
         """返回随安装包提供的模型路径；开发环境可能不存在。"""
         if not self.bundled_root:
             return None
         model = self.get(model_id)
-        return self.bundled_root / f"{model_id}-{model['revision'].replace('/', '-')}"
+        return self.bundled_root / model_directory_name(model_id, model["revision"])
 
     def path(self, model_id):
         """返回可用模型路径，优先用户下载的版本。"""
@@ -213,8 +235,7 @@ class ModelManager:
             raise ValueError("Unknown model") from error
 
     def _is_ready(self, model_id, path):
-        model = self.get(model_id)
-        return path.is_dir() and all((path / name).exists() for name in model["files"])
+        return model_files_present(self.get(model_id), path)
 
     def is_bundled(self, model_id):
         """检查模型是否可直接从安装包使用。"""

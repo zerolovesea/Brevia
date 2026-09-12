@@ -53,6 +53,7 @@ assert.match(text(tailwind), /\.capture-mode-select\.opens-upward \.flow-select-
 assert.match(text(app), /options\.getBoundingClientRect\(\)\.bottom > window\.innerHeight/, 'capture mode menu checks available viewport space');
 assert.match(text(tailwind), /\.live-caption-controls \{ @apply col-span-2 flex flex-col items-end justify-center gap-1\.5; \}/, 'live controls keep each option on its own line');
 assert.match(text(tailwind), /\.secondary \{ @apply mt-7 appearance-none bg-transparent/, 'secondary actions do not fall back to a native light button in dark mode');
+assert.match(text(tailwind), /html\[data-theme="dark"\] \.modal-danger \{ border-color: var\(--color-danger\); background: var\(--color-danger\); color: #fff; \}/, 'dark destructive actions retain a visible danger background');
 assert.match(text(app), /window\.brevia\.on\('meeting\.interrupted'/);
 assert.match(text(app), /window\.brevia\.on\('transcript\.settled'/);
 assert.match(text(app), /window\.brevia\.on\('transcript\.draft'/, 'the in-progress paragraph gets its own line');
@@ -595,6 +596,8 @@ assert.match(text(js), /function modelSizeSummary\(model\) \{\s*return modelSele
 assert.match(text(js), /disk_size_bytes/);
 // 下载失败要按原因分类，而不是压成一句话（§6.3）。
 assert.match(text(js), /MODEL_DOWNLOAD_FAILURES/);
+// 在线纪要/AI 笔记的网络失败不能被改写成「模型下载失败」的文案。
+assert.match(text(app), /if \(\/LLM request failed\/i\.test\(text\)\) return content;/);
 assert.match(text(js), /Insufficient disk space/);
 assert.match(text(js), /checksum mismatch/);
 assert.match(text(electronMain), /BREVIA_MODELS_DIR: process\.env\.BREVIA_MODELS_DIR \|\| path\.join\(dataDir\(\), 'models'\)/);
@@ -1036,7 +1039,8 @@ assert.match(text(js), /transcript\.scrollTop = transcript\.scrollHeight/);
 assert.match(text(js), /const isAtLiveBottom = \(\) => transcript\.scrollHeight - transcript\.clientHeight - transcript\.scrollTop <= 32/);
 assert.doesNotMatch(text(html), /current-caption|id="live-caption/);
 assert.doesNotMatch(text(js), /#live-caption|caption-increment/);
-assert.match(text(html), /live-header[\s\S]*live-caption-controls[\s\S]*floating-caption-toggle[\s\S]*translation-toggle/);
+assert.match(text(html), /live-caption-controls[^]*floating-caption-toggle[^]*translation-toggle[^]*live-model-menu/, 'live controls are captions, translation, then model');
+assert.match(text(app), /enabled \? '翻译：开' : '翻译：关'/, 'live translation toggle uses the current Chinese label');
 assert.doesNotMatch(text(html), /data-meeting-power-saving/);
 assert.match(text(html), /live-status[\s\S]*recording[\s\S]*id="timer"/);
 assert.match(text(i18nData), /captionButtonLabels/);
@@ -1263,6 +1267,20 @@ assert.equal(
   MS.defaultRefinedModelId({ catalog: [], language: 'zh', installed: new Set(), fallbackId: 'last-resort' }),
   'last-resort',
   '清单为空时由调用方的兜底常量接手',
+);
+assert.equal(
+  MS.defaultRefinedModelId({
+    catalog: syntheticCatalog, language: 'zh', installed: new Set(['multi']), preferredId: 'zh-fast',
+  }),
+  'zh-fast',
+  '偏好模型尚未安装时也必须压过已安装回退，否则等于静默丢弃用户的选择',
+);
+assert.equal(
+  MS.defaultRefinedModelId({
+    catalog: syntheticCatalog, language: 'zh', installed: new Set(['multi']), preferredId: 'shadow-retired',
+  }),
+  'multi',
+  '已退役模型不接受的偏好必须回落到清单默认/已安装模型',
 );
 
 // 下拉选项：未安装的带体积，推荐角标只给声明的默认。
@@ -1768,6 +1786,13 @@ assert.match(text(js), /showOfflineTranscriptionReady/);
 // 会议开始时可按语言挑选识别模型，并能在实时页热切换。
 assert.match(text(js), /modelSelection\.refinedModelsForLanguage/, '语言过滤必须在模块里');
 assert.match(text(js), /modelSelection\.defaultRefinedModelId/, '默认模型选择必须在模块里');
+// 逐句字幕保存必须用与展示同一份段落集合，否则「精修模型退役」的会议里
+// 展示的是实时段落、保存查的是精修段落，草稿会整体对不上并被静默丢弃。
+assert.match(
+  text(js),
+  /latestTranscriptSegments\(meeting, \{ ignoreRefined: uiData\.detail\.ignoreRefined \}\)/,
+  '保存逐句字幕必须沿用展示时的 ignoreRefined 口径',
+);
 assert.match(text(js), /flowSelect\('refined-model', refinedModel, modelOptions\)/);
 assert.match(text(js), /const modelLabel = prepareModelControl\(language, refinedModel, modelOptions\);/);
 // 识别模型的「推荐」角标直接标在下拉选项上，不再在「会议语言」下面写一段解释文字。
@@ -1917,6 +1942,9 @@ assert.match(text(js), /Object\.values\(modalCopy\)\.forEach/);
 assert.match(text(components), /class="transcript-body"/);
 assert.match(text(components), /data-start=/);
 assert.match(text(components), /data-segment-id=/);
+// 详情页精修稿只带顶层 segmentId（speaker.segmentId 在精修稿里是 undefined），
+// 右键注册声纹依赖 article 上的 data-segment-id，必须保留这个兜底。
+assert.match(text(components), /segmentId \|\| speaker\.segmentId/);
 assert.match(text(components), /class="segment-copy"/);
 assert.match(text(js), /segmentContextMenu/);
 assert.match(text(js), /addProfileSample/);

@@ -10,20 +10,22 @@
     "test:dead": "node scripts/check_dead_code.mjs",
     "test:electron": "node electron/test-main-logic.mjs",
     "test:ui": "cd frontend && node ./test-ui.mjs",
-    "test:backend": "python -m unittest backend.test_worker backend.test_sentence",
+    "test:backend": "python -m unittest backend.test_worker backend.test_sentence backend.test_packaging",
     "test:model": ".venv/bin/python -m backend.diagnose_model --models-dir .models",
     "test:diarization": ".venv/bin/python -m backend.diagnose_diarization --models-dir .models --download",
     "bench:electron": "electron . --bench-refinement",
     "pack:backend": "python backend/pack_worker.py && python backend/pack_llama_sidecar.py",
     "dist": "npm run dist:mac",
-    "package:mac": "npm run build && electron-builder --mac dmg zip --arm64 --publish never",
-    "package:win": "npm run build && electron-builder --win nsis --x64 --publish never",
+    "package:mac": "python backend/preflight_package.py && npm run build && electron-builder --mac dmg zip --arm64 --publish never",
+    "package:win": "python backend/preflight_package.py && npm run build && electron-builder --win nsis --x64 --publish never",
     "dist:mac": "npm run pack:backend && npm run package:mac",
     "dist:win": "npm run pack:backend && npm run package:win",
     "release:offline": "npm run build && npm run pack:backend && env -u APPLE_ID -u APPLE_APP_SPECIFIC_PASSWORD -u APPLE_TEAM_ID electron-builder --mac dmg --arm64 --publish never && electron-builder --win nsis --x64 --publish never",
     "bench:live": ".venv/bin/python backend/bench_live.py",
     "test:e2e": "node electron/test-e2e.mjs",
-    "css:fingerprint": "node scripts/verify-css-tokens.mjs"
+    "css:fingerprint": "node scripts/verify-css-tokens.mjs",
+    "clean": "node scripts/clean-build.mjs",
+    "clean:dist": "node scripts/clean-build.mjs dist"
   },
   "build": {
     "appId": "com.brevia.app",
@@ -44,6 +46,7 @@
           "**/*",
           "!__pycache__/**",
           "!*.pyc",
+          "!.pytest_cache/**",
           "!build/**",
           "!test_*.py",
           "!diagnose_*.py",
@@ -56,7 +59,12 @@
       },
       {
         "from": "frontend",
-        "to": "frontend"
+        "to": "frontend",
+        "filter": [
+          "**/*",
+          "!test-*.mjs",
+          "!tailwind.css"
+        ]
       }
     ],
     "mac": {

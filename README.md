@@ -129,7 +129,7 @@ Brevia follows a strict local-first design:
 | Build & packaging | electron-builder, PyInstaller (bundled Python runtime) |
 ## Supported models
 
-Every model is downloaded on demand from **Settings → Model Library**. The manifest lives in [`backend/models.json`](backend/models.json).
+Sentence transcription, post-meeting refinement, AI notes, and caption translation models are downloaded on demand from **Settings → Model Library**; voice activity detection, speaker diarization, and speaker-embedding models ship with the app. The manifest lives in [`backend/models.json`](backend/models.json).
 
 | Category | Representative models | Languages |
 | --- | --- | --- |
@@ -222,7 +222,7 @@ npm run dist:mac   # macOS ARM64 DMG
 npm run dist:win   # Windows x64 EXE
 ```
 
-Artifacts land in `dist/`. Each platform build bundles a native Python worker; models are not bundled — they remain on-demand downloads.
+Artifacts land in `dist/`. Each platform build bundles a native Python worker; voice detection, diarization, and voiceprint models ship inside it, while the recognition, refinement, AI-note, and translation models remain on-demand downloads.
 
 ## FAQ
 
@@ -258,7 +258,7 @@ No. Speech recognition and diarization run locally. Only LLM summaries and trans
 <details>
 <summary><strong>How much disk space do models need?</strong></summary>
 
-Depends on which you install. Install one sentence recognizer and Silero VAD; optional speaker and AI models add to disk usage. Use the model library’s size estimates for your selection.
+Depends on which you install. A sentence recognizer is the main download; voice detection, speaker diarization, and voiceprint models are bundled, and optional AI-note models add to disk usage. Use the model library’s size estimates for your selection.
 </details>
 
 <details>

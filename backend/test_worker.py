@@ -3530,6 +3530,35 @@ class WorkerTest(unittest.TestCase):
         self.assertEqual(result["segments"][-1]["speaker_name"], "小王")
         learn.assert_called_once()
 
+    def test_voiceprint_sample_boundaries_snap_to_word_timestamps(self):
+        # 声纹样本逐句取样：句间切点必须落在词时间戳上（「乙」第 6s 才开口），
+        # 按字数平摊会算成 5s。
+        text = "甲" * 20 + "。" + "乙" * 20 + "。"
+        segment = {
+            "start_ms": 0,
+            "end_ms": 10000,
+            "text": text,
+            "word_timestamps": (
+                [{"text": "甲", "start_ms": index * 100, "end_ms": index * 100 + 100} for index in range(20)]
+                + [{"text": "乙", "start_ms": 6000 + index * 100, "end_ms": 6000 + index * 100 + 100} for index in range(20)]
+            ),
+        }
+        sentences = self.worker.voice_profiles._sentences(text)
+        self.assertEqual(
+            self.worker.voice_profiles._sentence_boundaries(segment, text, sentences),
+            [6000, 10000],
+        )
+        # 模型不给词时间戳时退回累计字数比例，与旧行为逐位一致。
+        plain = {"start_ms": 0, "end_ms": 10000, "text": text}
+        self.assertEqual(
+            self.worker.voice_profiles._sentence_boundaries(plain, text, sentences),
+            [5000, 10000],
+        )
+        self.assertEqual(
+            self.worker.voice_profiles._sentence_boundaries(plain, "", []),
+            [],
+        )
+
     def _meeting_with_a_saved_subtitle(self, segment_id="mic-0-1"):
         """建一场已结束的会议，并写入一句实时字幕（后台无模型，仅验证存储路径）。
 
