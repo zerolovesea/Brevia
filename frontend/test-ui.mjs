@@ -1089,7 +1089,7 @@ assert.match(text(components), /data-detail-panel="notes"/);
 assert.match(text(components), /class="detail-notes-empty"/);
 assert.match(text(meetingDetail), /uiData\.detail\.refinedTranscript = revision === null \? \[\]/);
 assert.match(text(app), /finalTranscript\.addEventListener\('click',/);
-assert.match(text(app), /\[data-refine-now\]/);
+assert.match(text(app), /\[data-refine-more\]/);
 assert.match(text(app), /\[data-detail-tab\]/);
 // 点击字幕段的时间戳/说话人区域即可定位播放。
 assert.match(text(app), /closest\('\.segment-meta'\)[\s\S]{0,400}playerAudio\.currentTime = start/);
@@ -1849,7 +1849,8 @@ assert.match(text(components), /refine-menu-speakers[\s\S]{0,200}data-refine-num
 assert.match(text(app), /function refineNumSpeakers/);
 assert.match(text(app), /async function translateLatestTranscript\(targetLanguage\)/);
 assert.match(text(components), /data-detail-translation/);
-assert.match(text(components), /<span>\$\{t\('翻译'\)\}<\/span>/, 'translation uses the same labeled option row as refinement settings');
+assert.match(text(components), /data-detail-translation-toggle[^]*<svg viewBox="0 0 16 16"/, 'translation uses an accessible SVG action');
+assert.doesNotMatch(text(components), /data-refine-translation/, 'refinement options never select a translation target');
 assert.match(text(app), /function showTranslationProgress\(completed, total, targetLanguage\)/, 'subtitle translation exposes task-card progress');
 assert.match(text(app), /if \(!meeting\) return;\s*breviaClient\.state\.selectedMeetingId = meeting\.id;[\s\S]{0,300}startRefinement\(\);/);
 assert.doesNotMatch(text(app), /refine\(\{[\s\S]{0,200}?refined_model_id/, 'the refinement model is chosen once, on the backend');
@@ -2186,7 +2187,8 @@ assert.match(text(html), /class="new-meeting-label">开始会议/);
 assert.match(text(app), /classList\.toggle\('is-live-meeting', \(name === 'live' && meetingActive\) \|\| name === 'detail'\)/);
 assert.match(text(tailwind), /\.app-shell\.is-live-meeting:has\(\.sidebar:hover\)/);
 assert.match(text(tailwind), /\.sidebar:has\(\.task-cards > :not\(\[hidden\]\)\)::after/);
-assert.match(text(tailwind), /task-working/);
+assert.match(text(tailwind), /--task-progress/);
+assert.doesNotMatch(text(tailwind), /task-working/);
 assert.match(text(tailwind), /conic-gradient/);
 assert.doesNotMatch(text(tailwind), /live-note-reference/);
 assert.doesNotMatch(text(app), /bindLiveNoteReference|noteReferenceMarkdown|segmentTimestampMarkdown|data-add-segment-time/);
@@ -2304,7 +2306,7 @@ assert.match(text(meetingDetail), /modelCatalog\.length > 0/, 'the retired check
 // 分流，而不是跟着数据里有没有时间戳字段走。
 assert.match(text(components), /d\.refinedMode === 'fulltext'/);
 assert.match(text(components), /d\.refinedMode === 'timestamps'/);
-assert.match(text(app), /language: uiData\.detail\.language \|\| 'auto',\n\s+target_language: uiData\.detail\.translationTarget/, 'refinement sends language only; the model is chosen on the backend');
+assert.match(text(app), /language: uiData\.detail\.language \|\| 'auto',\n\s+\.\.\.\(numSpeakers/, 'refinement sends its own settings without a translation target');
 
 // 进阶设置表单必须覆盖 settings.json 的每个字段，并把两层配置渲染成可保存的路径。
 const advancedContext = { locale: 'zh', escapeHtml: (value) => String(value ?? '') };

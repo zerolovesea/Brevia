@@ -19,6 +19,9 @@ const stackableTaskCardSelector = ':is(.processing-card, .mini-meeting, .mini-pl
 function syncTaskCardStack(active) {
   const cards = [...taskCards.children].filter((card) => card.matches(stackableTaskCardSelector));
   active ||= cards.at(-1);
+  const completed = Number(active?.dataset.completed);
+  const total = Number(active?.dataset.total);
+  document.querySelector('.app-shell')?.style.setProperty('--task-progress', total > 0 ? Math.min(1, Math.max(0, completed / total)) : 0);
   taskCards.style.setProperty('--task-card-back-count', Math.max(0, cards.length - 1));
   cards.forEach((card, index) => {
     const isBack = card !== active;
@@ -947,6 +950,7 @@ function showRefinementProgress(completed = 0, total = 0, meetingTitle = refinem
   refinementPercent.textContent = total ? `${copy.waiting} · ${Math.round(ratio * 100)}%` : copy.waiting;
   refinementBar.style.transform = `scaleX(${ratio})`;
   Object.assign(refinementCard.dataset, { completed, total, stage: stage || '', complete: 'false' });
+  syncTaskCardStack(refinementCard);
   if (meetingId) setTaskCardTask(refinementCard, 'meeting.refine', meetingId);
 }
 let refinementDismissTimer;
@@ -962,6 +966,7 @@ function showRefinementComplete() {
   refinementPercent.textContent = '100%';
   refinementBar.style.transform = 'scaleX(1)';
   Object.assign(refinementCard.dataset, { completed: 100, total: 100, complete: 'true' });
+  syncTaskCardStack(refinementCard);
   finishTaskCard(refinementCard);
   refinementDismissTimer = setTimeout(hideRefinementProgress, 10000);
 }
@@ -987,6 +992,8 @@ function showTranslationProgress(completed, total, targetLanguage) {
   card.querySelector('p').textContent = t('正在翻译字幕');
   card.querySelector('strong').textContent = `${BreviaI18n.languageName(locale, targetLanguage)} · ${Math.round(ratio * 100)}%`;
   card.querySelector('i').style.transform = `scaleX(${ratio})`;
+  Object.assign(card.dataset, { completed, total });
+  syncTaskCardStack(card);
   if (completed === total) translationDismissTimer = setTimeout(() => dismissTaskCard(card), 10000);
 }
 const summaryTaskCopy = {
@@ -1034,6 +1041,7 @@ function showSummaryProgress(completed = 0, total = 100, stage = 'summary.prepar
   card.querySelector('strong').textContent = `${summaryTaskLabel(stage)}${total ? ` · ${Math.round(ratio * 100)}%` : ''}`;
   card.querySelector('i').style.transform = `scaleX(${ratio})`;
   Object.assign(card.dataset, { completed, total, stage });
+  syncTaskCardStack(card);
   if (meetingId) setTaskCardTask(card, 'summary.generate', meetingId);
 }
 function hideSummaryProgress() {
@@ -4789,7 +4797,6 @@ const startRefinement = (numSpeakers, modelId) => {
   void window.brevia.meeting.refine({
     meeting_id: breviaClient.state.selectedMeetingId,
     language: uiData.detail.language || 'auto',
-    target_language: uiData.detail.translationTarget || null,
     ...(numSpeakers ? { num_speakers: numSpeakers } : {}),
     // 没点名时保留后端「模型不可用就回落到该语言默认模型」的既有行为；点了名就要用点名
     // 的那个（后端对显式点名的模型不做静默替换，缺文件时回 model_required 走下载队列）。
@@ -4989,6 +4996,7 @@ finalTranscript.addEventListener('click', (event) => {
   if (detailTranslationToggle) {
     const options = detailTranslationToggle.nextElementSibling;
     const opening = options.hidden;
+    if (opening) finalTranscript.querySelectorAll('.refine-menu').forEach((menu) => { menu.hidden = true; });
     options.hidden = !opening;
     detailTranslationToggle.setAttribute('aria-expanded', String(opening));
     return;
@@ -4997,13 +5005,6 @@ finalTranscript.addEventListener('click', (event) => {
   if (detailTranslation) {
     detailTranslation.closest('.flow-select-options').hidden = true;
     void translateLatestTranscript(detailTranslation.dataset.detailTranslation);
-    return;
-  }
-  const refineTranslation = event.target.closest('[data-refine-translation]');
-  if (refineTranslation) {
-    uiData.detail.translationTarget = refineTranslation.dataset.refineTranslation;
-    refineTranslation.closest('.flow-select-options').hidden = true;
-    renderMeetingDetail();
     return;
   }
   const refineLanguageToggle = event.target.closest('.refine-menu [data-flow-select-toggle]');
@@ -5053,17 +5054,9 @@ finalTranscript.addEventListener('click', (event) => {
     uiData.detail.refinedModelPinned = true;
     return;
   }
-  const refineNow = event.target.closest('[data-refine-now]');
-  if (refineNow) {
-    const menu = refineNow.nextElementSibling;
-    document.querySelectorAll('.refine-menu').forEach((other) => { if (other !== menu) other.hidden = true; });
-    menu.hidden = !menu.hidden;
-    refineNow.setAttribute('aria-expanded', String(!menu.hidden));
-    return;
-  }
   const more = event.target.closest('[data-refine-more]');
   if (more) {
-    const menu = more.nextElementSibling;
+    const menu = more.parentElement.querySelector('.refine-menu');
     finalTranscript.querySelectorAll('.refine-menu').forEach((other) => { if (other !== menu) other.hidden = true; });
     const opening = menu.hidden;
     menu.hidden = !opening;
@@ -5105,9 +5098,11 @@ finalTranscript.addEventListener('click', (event) => {
   finalTranscript.querySelectorAll('[data-detail-panel]').forEach((panel) => { panel.hidden = panel.dataset.detailPanel !== target; });
 });
 document.addEventListener('click', (event) => {
-  if (event.target.closest('.refine-wrap, .refine-menu, [data-refine-more]')) return;
+  if (event.target.closest('.refine-wrap, .refine-menu, .detail-translation-action')) return;
   document.querySelectorAll('.refine-menu').forEach((menu) => { menu.hidden = true; });
+  document.querySelectorAll('.detail-translation-menu').forEach((menu) => { menu.hidden = true; });
   document.querySelectorAll('[data-refine-more]').forEach((button) => button.setAttribute('aria-expanded', 'false'));
+  document.querySelectorAll('[data-detail-translation-toggle]').forEach((button) => button.setAttribute('aria-expanded', 'false'));
 });
 /** 详情页富文本笔记编辑器实例（编辑模式下由 renderMeetingDetail 创建）。@type {object|null} */
 /** 详情页笔记防抖自动保存（800ms）；输入时即时同步到 uiData，避免重建面板丢失草稿。@returns {void} */

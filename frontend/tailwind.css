@@ -79,7 +79,7 @@
   .app-shell.is-live-meeting .new-meeting-icon { margin: 0; font-size: 20px; }
   .app-shell.is-live-meeting .new-meeting-label { max-width: 0; opacity: 0; }
   .app-shell.is-live-meeting .workspace-container, .app-shell.is-live-meeting .task-cards { display: none; }
-  .app-shell.is-live-meeting .sidebar:has(.task-cards > :not([hidden]))::after { content: ''; width: 18px; height: 18px; margin: auto auto 2px; border-radius: 999px; background: conic-gradient(from 12deg, #111 0 26deg, transparent 26deg 120deg, #111 120deg 146deg, transparent 146deg 240deg, #111 240deg 266deg, transparent 266deg); mask: radial-gradient(transparent 0 48%, #000 51%); animation: task-working 1.05s linear infinite; }
+  .app-shell.is-live-meeting .sidebar:has(.task-cards > :not([hidden]))::after { content: ''; width: 18px; height: 18px; margin: auto auto 2px; border-radius: 999px; background: conic-gradient(#26221e calc(var(--task-progress, 0) * 1turn), #d6d2ca 0); mask: radial-gradient(transparent 0 48%, #000 51%); transition: background .25s ease; }
   .app-shell.is-live-meeting .nav-item { padding-inline: 0; text-align: center; font-size: 0; }
   .app-shell.is-live-meeting .nav-item span { width: auto; margin: 0; font-size: 18px; }
   .app-shell.is-live-meeting:has(.sidebar:hover) .sidebar, .app-shell.is-live-meeting:has(.sidebar:focus-within) .sidebar { padding-inline: 24px; }
@@ -464,13 +464,15 @@ html[data-theme="dark"] .notes-find-pop{border-color: #454545; }
   .tabbar-action.is-save { color: var(--color-link); }
   .tabbar-action.is-save:hover { opacity: .7; color: var(--color-link); }.tab { @apply border-b border-transparent pb-4 text-[13px] text-[#6b655f]; white-space: nowrap; }.tab.active { @apply border-black text-black; }.transcript-body { @apply min-h-0 flex-1 overflow-y-auto scroll-smooth pt-5 pr-4 text-[16px]; }.final-transcript .segment { @apply mb-6 py-4 pr-4 transition-colors duration-200; }.final-transcript .segment.is-active { @apply bg-[#f2f2ed]; }
   .tabbar-extra { position: relative; display: flex; align-items: center; gap: 10px; }#detail-view .final-transcript .tabbar-extra { margin-right: 40px; }
-  .tabbar-extra .refine-now { margin-top: 0; padding: 5px 10px; font-size: 12px; }
-  .refine-menu .detail-translation-menu { width: 144px; }
-  .refine-menu .detail-translation-menu .flow-select-options { z-index: 80; }
   .refine-state { @apply text-[12px] text-[#8b857e]; white-space: nowrap; }
   .refine-state.is-done { @apply text-(--color-success); }
-  .refine-more { padding: 0 4px; color: var(--color-text-subtle); font-size: 14px; line-height: 1; letter-spacing: 2px; transition: color .3s ease; }
-  .refine-more:hover { color: var(--color-text); }
+  .detail-icon-action { display: grid; width: 26px; height: 26px; place-items: center; color: var(--color-text-subtle); border: 1px solid #e6e2d8; transition: color .2s ease, border-color .2s ease, background-color .2s ease; }
+  .detail-icon-action svg { width: 15px; height: 15px; }
+  .detail-icon-action:hover { color: var(--color-text); border-color: var(--color-text); background: #f1eee8; }
+  .detail-translation-action { position: relative; }
+  .detail-translation-menu { position: absolute; top: calc(100% + 6px); right: 0; z-index: 60; display: grid; min-width: 144px; border: 1px solid #e6e2d8; background: var(--color-surface); padding: 4px; box-shadow: 0 4px 16px #00000014; }
+  .detail-translation-menu button { width: 100%; padding: 8px 10px; color: #4d4944; text-align: left; font-size: 13px; transition: background-color .2s ease; }
+  .detail-translation-menu button:hover { background: #f1eee8; }
   .refine-menu { position: absolute; top: calc(100% + 8px); right: 0; z-index: 60; display: grid; min-width: 220px; border: 1px solid #e6e2d8; background: var(--color-surface); padding: 4px; box-shadow: 0 4px 16px #00000014; }
   .refine-menu > button { display: flex; width: 100%; align-items: center; justify-content: space-between; margin-top: 4px; padding: 8px 10px; text-align: left; font-size: 13px; color: #4d4944; transition: background-color .2s ease; }
   .refine-menu > button:hover { background: #f1eee8; }
@@ -997,7 +999,6 @@ body.modal-open { overflow: hidden; }
 .modal-backdrop.modal-leave { animation: overlay-out 200ms ease-in both; }
 @keyframes surface-in { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes surface-out { from { opacity: 1; transform: translateY(0) scale(1); } to { opacity: 0; transform: translateY(8px) scale(.98); } }
-@keyframes task-working { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .app-shell.is-live-meeting .sidebar:has(.task-cards > :not([hidden]))::after { animation: none; } }
 @keyframes overlay-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes overlay-out { from { opacity: 1; } to { opacity: 0; } }
