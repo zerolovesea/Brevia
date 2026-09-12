@@ -8,7 +8,7 @@
 | 位置 | 内容 | 谁负责 |
 | --- | --- | --- |
 | `package.json` / `package-lock.json` | `version` | 自动：`release.sh` 里的 `npm version` |
-| `frontend/i18n-data.js` 的 `whatsNewLog` | 新增一条 `{ version, date, current: true }`，并把上一条的 `current: true` 去掉 | **手动，没有任何工具校验** |
+| `frontend/i18n-data.js` 的 `whatsNewLog` | 新增一条 `{ version, date, current: true }`，并把上一条的 `current: true` 去掉 | 手动；`test-ui.mjs` 只守住「恰好一条 current 且它是最新一条」，条目的增补仍需人工 |
 | `docs/releases/v<version>.md` | GitHub Release Notes | 手动，缺文件 `release.sh` 会直接退出 |
 
 `whatsNewLog` 漏更新的后果：应用内「更新日志」把上一个版本标成当前版本。
@@ -42,7 +42,7 @@
 ## 4. 验证
 
 ```bash
-npm test              # 死代码门禁 + Electron 逻辑 + UI 结构 + E2E 冒烟 + 后端 259 项用例
+npm test              # 死代码门禁 + Electron 逻辑 + UI 结构 + E2E 冒烟 + 后端用例
 ruff check backend/   # 必须 All checks passed
 npm run build         # tailwind.css → styles.css，构建后 styles.css 应无额外差异
 ```

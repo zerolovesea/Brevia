@@ -133,7 +133,7 @@ Consulta la [metodología y los resultados del benchmark](../backend/benchmarks/
 | Build y empaquetado | electron-builder, PyInstaller (runtime Python incluido) |
 ## Modelos soportados
 
-Cada modelo se descarga bajo demanda desde **Settings → Model Library**. El manifiesto está en [`backend/models.json`](../backend/models.json).
+La transcripción por frases, el refinamiento, las notas de IA y la traducción de subtítulos se descargan bajo demanda desde **Settings → Model Library**; la detección de actividad vocal, la separación de hablantes y las huellas de voz vienen incluidas. El manifiesto está en [`backend/models.json`](../backend/models.json).
 
 | Tipo | Modelos representativos | Idiomas |
 | --- | --- | --- |
@@ -190,7 +190,7 @@ npm run dist:mac   # DMG ARM64 macOS
 npm run dist:win   # EXE x64 Windows
 ```
 
-Los artefactos salen a `dist/`. Cada build de plataforma incluye un worker Python nativo; los modelos no se empaquetan — se descargan bajo demanda.
+Los artefactos salen a `dist/`. Cada build de plataforma incluye un worker Python nativo con detección de actividad vocal, separación de hablantes y huellas de voz; los modelos de reconocimiento, refinamiento, notas de IA y traducción se descargan bajo demanda.
 
 ## Preguntas frecuentes
 
@@ -226,7 +226,7 @@ No. Reconocimiento de voz y diarización se ejecutan localmente. Solo los resúm
 <details>
 <summary><strong>¿Cuánto espacio en disco requieren los modelos?</strong></summary>
 
-Depende de cuáles instales. Una configuración típica (transcripción por frases + refinamiento + separación de hablantes) ronda 1–2 GB. El modelo de reconocimiento más pequeño ocupa ~487 MB; los grandes superan 1 GB.
+Depende de cuáles instales. Una configuración típica (transcripción por frases + refinamiento) ronda 1–2 GB; la detección de actividad vocal, la separación de hablantes y las huellas de voz vienen incluidas. El modelo de reconocimiento más pequeño ocupa ~487 MB; los grandes superan 1 GB.
 </details>
 
 <details>

@@ -133,7 +133,7 @@ Siehe [Benchmark-Methodik und Ergebnisse](../backend/benchmarks/vad-2026-09-05/R
 | Build & Paketierung | electron-builder, PyInstaller (Python-Runtime gebundelt) |
 ## Unterstuetzte Modelle
 
-Jedes Modell wird bei Bedarf aus **Einstellungen → Modellbibliothek** heruntergeladen. Das Manifest liegt in [`backend/models.json`](../backend/models.json).
+Satztranskription, Nachbearbeitung, KI-Notizen und Untertiteluebersetzung werden bei Bedarf aus **Einstellungen → Modellbibliothek** heruntergeladen; Sprachaktivitaetserkennung, Sprechertrennung und Stimmabdruck sind mitgeliefert. Das Manifest liegt in [`backend/models.json`](../backend/models.json).
 
 | Kategorie | Repraesentative Modelle | Sprachen |
 | --- | --- | --- |
@@ -190,7 +190,7 @@ npm run dist:mac   # macOS ARM64 DMG
 npm run dist:win   # Windows x64 EXE
 ```
 
-Die Artefakte landen in `dist/`. Jeder Plattform-Build bundelt einen nativen Python-Worker; Modelle sind nicht enthalten und bleiben On-Demand-Downloads.
+Die Artefakte landen in `dist/`. Jeder Plattform-Build bundelt einen nativen Python-Worker mit Sprachaktivitaetserkennung, Sprechertrennung und Stimmabdruck; die Erkennungs-, Nachbearbeitungs-, KI-Notiz- und Uebersetzungsmodelle bleiben On-Demand-Downloads.
 
 ## FAQ
 
@@ -226,7 +226,7 @@ Nein. Spracherkennung und Diarisierung laufen komplett lokal. Nur LLM-Zusammenfa
 <details>
 <summary><strong>Wie viel Speicherplatz benoetigen die Modelle?</strong></summary>
 
-Haengt davon ab, welche du installierst. Eine typische Zusammenstellung (Satzerkennung + Nachbearbeitung + Sprechertrennung) liegt bei 1–2 GB. Das kleinste Erkennungsmodell belegt ca. 487 MB; groessere Modelle uebersteigen 1 GB.
+Haengt davon ab, welche du installierst. Eine typische Zusammenstellung (Satzerkennung + Nachbearbeitung) liegt bei 1–2 GB; Sprachaktivitaetserkennung, Sprechertrennung und Stimmabdruck sind mitgeliefert. Das kleinste Erkennungsmodell belegt ca. 487 MB; groessere Modelle uebersteigen 1 GB.
 </details>
 
 <details>

@@ -135,7 +135,7 @@ flowchart LR
 
 ## 支持的模型
 
-所有模型都可在应用内 **设置 → 模型库** 按需下载。模型清单声明在 [`backend/models.json`](../backend/models.json)。
+整句识别、会后精修、AI 笔记与字幕翻译模型可在应用内 **设置 → 模型库** 按需下载；语音活动检测、说话人分离与声纹模型随应用安装。模型清单声明在 [`backend/models.json`](../backend/models.json)。
 
 | 类型 | 代表模型 | 语言 |
 | --- | --- | --- |
@@ -198,7 +198,7 @@ npm run dist:mac   # macOS ARM64 DMG
 npm run dist:win   # Windows x64 EXE
 ```
 
-产物输出到 `dist/`。每个平台构建都会打包原生 Python Worker；模型不包含在安装包中，由应用按需下载。
+产物输出到 `dist/`。每个平台构建都会打包原生 Python Worker（内含语音活动检测、说话人分离与声纹模型）；识别、精修、AI 笔记与翻译模型由应用按需下载。
 
 ## 常见问题
 
@@ -235,7 +235,7 @@ npm run dist:win   # Windows x64 EXE
 <details>
 <summary><strong>模型需要多少磁盘空间？</strong></summary>
 
-取决于所选模型。录音需要一个整句识别模型和 Silero VAD，可另外安装说话人和 AI 模型；具体大小以模型库显示为准。
+取决于所选模型。整句识别模型是主要占用；语音活动检测、说话人分离与声纹模型随应用安装，可按需另装 AI 笔记模型；具体大小以模型库显示为准。
 </details>
 
 <details>

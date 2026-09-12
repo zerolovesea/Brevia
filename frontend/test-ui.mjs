@@ -1933,6 +1933,14 @@ assert.match(text(js), /segment\.is-active/);
 assert.match(text(js), /body\.scrollTo/);
 assert.match(text(i18nData), /Aún no se ha generado el resumen/);
 assert.match(text(i18nData), /Speaker diarization/);
+// 更新日志的版本簿记是手动维护的（RELEASING.md §1）：只允许一条 current，且它必须是
+// 列表第一条（版本从新到旧），否则应用内「更新日志」会把上一版标成当前版本。
+assert.equal((text(i18nData).match(/current: true,/g) || []).length, 1, 'whatsNewLog must have exactly one current entry');
+assert.match(
+  text(i18nData),
+  /const whatsNewLog = \[\s*\{\s*version: '\d+\.\d+\.\d+', date: '\d{4}-\d{2}-\d{2}', current: true,/,
+  'the newest whatsNewLog entry must be the current one and carry a date',
+);
 for (const copy of ['ローカル会議', '로컬 회의', 'Réunion locale', 'Lokale Besprechung', 'Локальная встреча']) assert.match(text(i18nData), new RegExp(copy));
 assert.doesNotMatch(text(css), /\.status\.complete:before/);
 assert.match(text(css), /\.page-head>div\{[^}]*min-height:/);

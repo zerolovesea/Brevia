@@ -133,7 +133,7 @@ Brevia 는 엄격한 로컬 우선 설계를 따릅니다:
 | 빌드 및 패키징 | electron-builder, PyInstaller (Python 런타임 포함) |
 ## 지원 모델
 
-모든 모델은 **설정 → 모델 라이브러리** 에서 요청 시 다운로드됩니다. 매니페스트는 [`backend/models.json`](../backend/models.json) 에 있습니다.
+문장 인식·정제·AI 메모·자막 번역 모델은 **설정 → 모델 라이브러리** 에서 요청 시 다운로드됩니다. 음성 활동 감지·화자 분리·성문 모델은 앱에 포함되어 있습니다. 매니페스트는 [`backend/models.json`](../backend/models.json) 에 있습니다.
 
 | 종류 | 대표 모델 | 언어 |
 | --- | --- | --- |
@@ -190,7 +190,7 @@ npm run dist:mac   # macOS ARM64 DMG
 npm run dist:win   # Windows x64 EXE
 ```
 
-산출물은 `dist/` 에 생성됩니다. 각 플랫폼 빌드는 네이티브 Python 워커를 포함하지만 모델은 포함하지 않으며 요청 시 다운로드됩니다.
+산출물은 `dist/` 에 생성됩니다. 각 플랫폼 빌드는 음성 활동 감지·화자 분리·성문 모델을 포함한 네이티브 Python 워커를 포함하며, 인식·정제·AI 메모·번역 모델은 요청 시 다운로드됩니다.
 
 ## FAQ
 
@@ -226,7 +226,7 @@ npm run dist:win   # Windows x64 EXE
 <details>
 <summary><strong>모델은 얼마나 많은 디스크 공간을 필요로 하나요?</strong></summary>
 
-설치하는 모델에 따라 다릅니다. 일반적인 구성 (문장 인식 + 정제 + 화자 분리) 은 1–2 GB. 가장 작은 인식 모델은 약 487 MB, 대형 모델은 1 GB 이상.
+설치하는 모델에 따라 다릅니다. 일반적인 구성 (문장 인식 + 정제) 은 1–2 GB이며, 음성 활동 감지·화자 분리·성문 모델은 앱에 포함되어 있습니다. 가장 작은 인식 모델은 약 487 MB, 대형 모델은 1 GB 이상.
 </details>
 
 <details>

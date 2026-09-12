@@ -133,7 +133,7 @@ Voir la [methodologie et les resultats du benchmark](../backend/benchmarks/vad-2
 | Build et empaquetage | electron-builder, PyInstaller (runtime Python integre) |
 ## Modeles pris en charge
 
-Chaque modele est telecharge a la demande depuis **Reglages → Bibliotheque de modeles**. Le manifeste est dans [`backend/models.json`](../backend/models.json).
+La transcription par phrases, l'affinage, les notes IA et la traduction des sous-titres se telechargent a la demande depuis **Reglages → Bibliotheque de modeles** ; la detection d'activite vocale, la separation des locuteurs et les empreintes vocales sont fournies. Le manifeste est dans [`backend/models.json`](../backend/models.json).
 
 | Categorie | Modeles representatifs | Langues |
 | --- | --- | --- |
@@ -190,7 +190,7 @@ npm run dist:mac   # DMG ARM64 macOS
 npm run dist:win   # EXE x64 Windows
 ```
 
-Les artefacts arrivent dans `dist/`. Chaque build de plateforme integre un worker Python natif ; les modeles ne sont pas integres — ils restent des telechargements a la demande.
+Les artefacts arrivent dans `dist/`. Chaque build de plateforme integre un worker Python natif avec detection d'activite vocale, separation des locuteurs et empreintes vocales ; les modeles de reconnaissance, d'affinage, de notes IA et de traduction restent des telechargements a la demande.
 
 ## FAQ
 
@@ -226,7 +226,7 @@ Non. La reconnaissance vocale et la diarisation s'executent toutes en local. Seu
 <details>
 <summary><strong>Quel espace disque les modeles necessitent-ils ?</strong></summary>
 
-Cela depend de ceux que vous installez. Une configuration typique (transcription par phrases + affinage + separation des locuteurs) fait 1–2 Go. Le plus petit modele de reconnaissance occupe environ 487 Mo ; les plus grands depassent 1 Go.
+Cela depend de ceux que vous installez. Une configuration typique (transcription par phrases + affinage) fait 1–2 Go ; la detection d'activite vocale, la separation des locuteurs et les empreintes vocales sont fournies. Le plus petit modele de reconnaissance occupe environ 487 Mo ; les plus grands depassent 1 Go.
 </details>
 
 <details>
