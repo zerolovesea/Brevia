@@ -33,9 +33,22 @@ AI 메모와 AI 회의 요약은 공급자, 모델, API Key를 각각 설정할 
 
 ![AI Assist Notes](assets/tour/en/AI%20Assist%20Notes.png)
 
-### CPU 기기를 위한 성능 모드
+### 인식 모델 선택
 
-설정 → 성능에서 표준 또는 효율 모드를 선택할 수 있습니다. 효율 모드는 실시간 노이즈 제거와 정교화를 끄고 내장 AI 메모 빈도를 낮춰 자막 반응성을 유지합니다. 회의 후 정교화는 계속 사용할 수 있습니다. 실시간 정교화가 계속 밀리면 회의 중에도 같은 전환을 제안합니다. 성능이 낮은 기기에서는 2B 로컬 모델이나 온라인 공급자를 권장합니다.
+첫 실행 설정은 내려받을 수 있는 음성 모델을 나열하고 **인터페이스 언어**에 맞는 권장 모델을 미리 선택합니다(Silero VAD, 화자 분리, 성문 모델은 앱에 포함되어 항상 설치되어 있습니다). 나머지는 내려받기 전에 해제할 수 있습니다.
+
+이후에는 회의마다 **회의 언어**를 기준으로 기본 인식 모델을 고릅니다. 대응 관계는 `backend/models.json`에 선언되어 있습니다.
+
+| 회의 언어 | 기본 인식 모델 | 이유 |
+| --- | --- | --- |
+| 중국어, 광둥어 | FunASR Nano int8 | 중국어와 그 방언에서 정확도가 가장 높음 |
+| 일본어, 한국어 | Qwen3-ASR 0.6B int8 | 선택 가능한 모델 중 일·한을 모두 지원하는 유일한 모델 |
+| 영어, 스페인어, 프랑스어, 독일어, 러시아어, 혼합 언어 | Parakeet TDT 0.6B v3 | 유럽 25개 언어를 한 모델로 지원하고 문장 부호와 타임스탬프도 생성 |
+| 그 밖의 언어 | Qwen3-ASR 0.6B int8 | 나머지 모델 중 언어 범위가 가장 넓음 |
+
+선언된 기본 모델이 아직 없으면 다른 모델을 내려받게 하는 대신 **이미 설치되어 있고 그 언어를 지원하는** 모델을 사용합니다. 준비 화면에는 '인식 모델' 선택기가 있고(미설치 모델도 용량과 함께 표시), 회의 중에도 같은 선택기로 `meeting.reconfigure`를 통해 모델을 바꿀 수 있습니다. **설정 → 고급 → 실시간 인식**의 `live_asr.max_speech_seconds`는 자막 세그먼트가 늘어날 수 있는 상한을 지정합니다. 실제 적용값은 이 설정, 언어별 VAD 설정, 모델 자체 용량 중 가장 작은 값입니다.
+
+성능이 낮은 기기에서는 2B 로컬 AI 메모 모델이나 온라인 공급자를 권장합니다.
 
 ### 조용한 회의 화면에서의 실시간 전사와 번역
 
@@ -59,13 +72,12 @@ Pyannote 분할 + 화자 임베딩 모델을 사용하며 모두 기기에서 �
 
 ### 정선된 로컬 모델 라이브러리
 
-스트리밍 ASR, 오프라인 정제, 구두점 복원, 음성 활동 감지, 화자 다이어라이제이션, 화자 임베딩, 소스 분리를 아우르는 다운로드 가능한 모델. 언어와 정밀도에 따라 자유롭게 조합 — 모두 기기에서 실행됩니다.
+문장 인식, 회의 후 정제, 음성 활동 감지, 화자 분리, 성문, AI 메모와 회의록, 자막 번역을 아우르는 다운로드 가능한 모델. 언어와 정밀도에 따라 자유롭게 조합 — 모두 기기에서 실행됩니다.
 
 ![모델 라이브러리](assets/tour/en/%E6%A8%A1%E5%9E%8B%E5%BA%93.png)
 
 ### 그 외
 
-- **소스 분리** — Spleeter 가 녹음을 보컬과 비보컬 트랙으로 분할해 후처리에 활용.
 - **오디오 가져오기** — 기존 녹음을 같은 음성 파이프라인으로 오프라인 전사.
 - **다양한 내보내기** — 전사와 메모를 Markdown, TXT, JSON, SRT, DOCX, PDF 로; 오디오를 FLAC, WAV, M4A 로.
 - **검토 가능한 메모** — 서식 있는 텍스트 또는 Markdown으로 작성하고 유용한 AI 제안만 반영.
@@ -103,6 +115,10 @@ Brevia 는 엄격한 로컬 우선 설계를 따릅니다:
 - **데이터는 기본적으로 `~/brevia`** 에 저장됩니다 — SQLite, 원본 오디오, 내보내기, 캐시된 모델, 성문 프로필.
 - **클라우드 호출은 옵트인**입니다. LLM 요약과 번역은 사용자가 명시적으로 공급자를 구성해야만 활성화되며, 텍스트만 전송됩니다.
 
+녹음은 **Silero VAD 분할 → 한 번의 오프라인 인식 → 완성된 자막** 흐름으로 동작합니다. 말이 멈출 때마다(중국어 0.7초, 그 밖의 언어 0.8초) 문장이 확정되고, 연속 발화는 30 / 20초에서 잘립니다(`vad`에서 조정). VAD 한 구간에 여러 문장이 들어갈 수 있으며, 인접한 문장은 하나의 문단으로 묶습니다(중국어 약 110자·최대 150자, 라틴 문자 약 280자·최대 380자). VAD 끝점은 문단 경계가 **아닙니다** — 실제로 긴 무음(1.2초 이상)만 새 문단을 시작하고, 목표에 못 미치는 문단은 최대 8초 뒤 확정됩니다. 잘린 지점에서는 다음 디코딩이 400밀리초를 되돌아가 이음새의 중복을 제거합니다. 정지하면 마지막 문장까지 처리하며, 인식이 실패해도 원본 오디오는 유지됩니다.
+
+[벤치마크 방법과 결과](../backend/benchmarks/vad-2026-09-05/REPORT.md)를 참고하세요.
+
 ## 기술 스택
 
 | 계층 | 기술 |
@@ -119,16 +135,14 @@ Brevia 는 엄격한 로컬 우선 설계를 따릅니다:
 
 모든 모델은 **설정 → 모델 라이브러리** 에서 요청 시 다운로드됩니다. 매니페스트는 [`backend/models.json`](../backend/models.json) 에 있습니다.
 
-| 분류 | 대표 모델 | 언어 |
+| 종류 | 대표 모델 | 언어 |
 | --- | --- | --- |
-| 스트리밍 ASR | Zipformer (zh / en / fr / ko / 다국어), Nemotron 3.5 | 30+ |
-| 정제 ASR | Qwen3-ASR 0.6B / 1.7B, Whisper Large v3, FunASR Nano | 다국어 |
-| 구두점 | CT-Transformer zh+en, Online Punct 영어 대소문자 | zh / en |
+| 문장 인식 / 회의 후 정제 | FunASR Nano int8, Qwen3-ASR 0.6B, Parakeet TDT 0.6B v3 | 중국어 / 다국어 / 유럽 25개 언어 |
 | 음성 활동 감지 | Silero VAD | 범용 |
-| 음성 향상 | GTCRN Live Denoiser | 범용 |
-| 화자 다이어라이제이션 | Pyannote Segmentation 3.0, Reverb Diarization v1 | 범용 |
-| 화자 임베딩 | 3D-Speaker ERes2Net Base | 범용 |
-| 소스 분리 | Spleeter 2 Stems | 범용 |
+| 화자 분리 | Pyannote Segmentation 3.0 | 범용 |
+| 화자 임베딩 | 3D-Speaker ERes2Net Base | 중국어 |
+| AI 메모 및 회의록 | Qwen 3.5 2B, Qwen 3.5 4B | 중국어 / 영어 |
+| 자막 번역 | Tencent Hy-MT2 1.8B | 33개 언어 |
 
 LLM 요약에서는 **내장 AI**를 선택해 번들 GGUF 모델(Qwen 3.5 2B / 4B)을 로컬에서 실행할 수 있고, Claude, OpenAI, OpenRouter 또는 OpenAI Chat Completions / Anthropic Messages를 지원하는 자체 서비스(Gemini의 OpenAI 호환 엔드포인트, DeepSeek, Kimi, Qwen 등)를 연결할 수도 있습니다.
 
@@ -149,7 +163,8 @@ npm start
 ### 자주 쓰는 스크립트
 
 ```bash
-npm test                    # UI + 백엔드 테스트
+npm test                    # 데드 코드 게이트 + Electron 동작 + UI + E2E 스모크 + 백엔드 테스트
+npm run test:e2e            # 실제 앱을 실행하고 CDP 로 검증
 npm run build               # Tailwind CSS 빌드
 npm run test:model          # ASR 모델 진단
 npm run test:diarization    # 화자 다이어라이제이션 진단
@@ -211,7 +226,7 @@ npm run dist:win   # Windows x64 EXE
 <details>
 <summary><strong>모델은 얼마나 많은 디스크 공간을 필요로 하나요?</strong></summary>
 
-설치하는 모델에 따라 다릅니다. 일반적인 구성 (스트리밍 + 정제 + 다이어라이제이션) 은 1–2 GB. 작은 스트리밍 모델은 약 80 MB 부터, 대형 모델은 1 GB 이상.
+설치하는 모델에 따라 다릅니다. 일반적인 구성 (문장 인식 + 정제 + 화자 분리) 은 1–2 GB. 가장 작은 인식 모델은 약 487 MB, 대형 모델은 1 GB 이상.
 </details>
 
 <details>
@@ -263,5 +278,5 @@ Brevia 는 [ISC License](../LICENSE) 하에 배포됩니다. 모델 파일과 �
 ## 감사의 말
 
 - [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) — ASR, VAD, 구두점, 화자 처리를 지원하는 로컬 런타임. [Apache-2.0](https://github.com/k2-fsa/sherpa-onnx/blob/master/LICENSE) 라이선스로 배포.
-- [`backend/models.json`](../backend/models.json) 에 선언된 다운로드 가능한 산출물의 모델 작성자와 메인테이너 여러분께 감사드립니다 — Zipformer, Whisper, Qwen3-ASR, FunASR, Pyannote, 3D-Speaker, Silero, Spleeter, Tencent Hy-MT2 등.
+- [`backend/models.json`](../backend/models.json) 에 선언된 다운로드 가능한 산출물의 모델 작성자와 메인테이너 여러분께 감사드립니다 — Qwen3-ASR, FunASR, Parakeet (NeMo), Pyannote, 3D-Speaker, Silero, Tencent Hy-MT2 등.
 - Electron, ONNX Runtime, Python, 그리고 오픈 소스 음성 커뮤니티 덕분에 이 로컬 우선 워크플로가 가능해졌습니다.

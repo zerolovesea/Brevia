@@ -28,8 +28,6 @@
     '预期说话人数': 'Expected Speakers',
     '分类标签': 'Category',
     '工作区': 'Workspace',
-    '会议模式': 'Meeting mode',
-    '标准模式': 'Standard mode',
     '录制音频': 'Record Audio',
     '我的麦克风': 'My Microphone',
     '系统音频': 'System Audio',
@@ -76,7 +74,7 @@
 
     // Model Info
     '计算设备': 'Computing Device',
-    '实时字幕模型': 'Live Caption Model',
+    '识别模型': 'Recognition model',
     '说话人分离模型': 'Speaker Diarization Model',
     '会后精修模型': 'Post-meeting Refinement Model',
     '实时识别模型': 'Live Recognition Model',
@@ -201,8 +199,6 @@
     '声纹识别': 'Voiceprint Recognition',
     '实时会议': 'Live Meeting',
     '团队周会': 'Team Weekly Meeting',
-    '省电模式': 'Power saving',
-    '关闭实时降噪和精修，降低字幕更新频率；会后精修保持可用。': 'Disables live denoising and refinement and updates captions less often. Post-meeting refinement remains available.',
     '项目经理': 'Project Manager',
     '前端工程师': 'Frontend Engineer',
     '后端工程师': 'Backend Engineer',
@@ -385,13 +381,14 @@
         downloadLabel: 'Download',
         installedLabel: 'Installed',
         items: [
-          { stage: 'Live captions', name: 'Streaming Zipformer Chinese XLarge', language: 'Chinese / English / Cantonese', intro: 'Native streaming recognition that continuously updates the active caption.', quality: 3, speed: 1, installed: true, size: '1.1 GB' },
-          { stage: 'Live captions', name: 'Streaming Zipformer English', language: 'English', intro: 'Native streaming recognition for English.', quality: 2, speed: 3, installed: false, size: '520 MB' },
-          { stage: 'Punctuation restoration', name: 'English Punctuation and Casing', language: 'English', intro: 'Restores English punctuation and casing.', quality: 1, speed: 3, installed: false, size: '280 MB' },
-          { stage: 'Punctuation restoration', name: 'Chinese and English Punctuation', language: 'Chinese / English / Cantonese', intro: 'Adds commas, full stops, and question marks to live captions.', quality: 2, speed: 3, installed: true, size: '290 MB' },
-          { stage: 'Post-meeting refinement', name: 'Qwen3-ASR', language: 'Multilingual', intro: 'Creates a high-accuracy revision from the complete recording.', quality: 2, speed: 3, installed: false, size: '1.9 GB' },
-          { stage: 'Speaker diarization', name: 'Pyannote Segmentation 3.0', language: 'Language independent', intro: 'Detects regions of speech in a single-track recording.', quality: 2, speed: 3, installed: true, size: '90 MB' },
-          { stage: 'Speaker diarization', name: '3D-Speaker ERes2Net Base', language: 'Chinese', intro: 'Extracts speaker embeddings for offline clustering.', quality: 2, speed: 3, installed: false, size: '210 MB' }
+          { stage: 'Sentence transcription', name: 'FunASR Nano int8', language: 'Chinese / English / Cantonese', intro: 'Best for Chinese meetings: high accuracy on Chinese, with Cantonese and other dialects covered; English works too.', quality: 2, speed: 2, installed: true, size: '842 MB' },
+          { stage: 'Sentence transcription', name: 'Qwen3-ASR 0.6B int8', language: 'Multilingual', intro: 'Covers 30 languages and 22 Chinese dialects with automatic language detection; the default for Japanese and Korean.', quality: 2, speed: 2, installed: false, size: '879 MB' },
+          { stage: 'Sentence transcription', name: 'Parakeet TDT 0.6B v3', language: '25 European languages', intro: 'The default for English and other European languages, with automatic language detection, punctuation, and casing.', quality: 2, speed: 3, installed: false, size: '487 MB' },
+          { stage: 'Voice activity detection', name: 'Silero VAD', language: 'Language independent', intro: 'Decides whether someone is speaking right now, which splits caption segments; included with the app.', quality: 3, speed: 3, installed: true, size: '2 MB' },
+          { stage: 'Speaker diarization', name: 'Pyannote Segmentation 3.0', language: 'Language independent', intro: 'Finds speech regions in a single-track recording to anchor speaker diarization; included with the app.', quality: 2, speed: 3, installed: true, size: '7 MB' },
+          { stage: 'Speaker embedding', name: '3D-Speaker ERes2Net Base', language: 'Chinese', intro: 'Extracts voiceprints and clusters speakers offline; included with the app.', quality: 2, speed: 3, installed: true, size: '40 MB' },
+          { stage: 'AI notes & summary', name: 'Qwen 3.5 2B', language: 'Chinese / English', intro: 'Generates in-meeting suggestions and meeting summaries locally.', quality: 3, speed: 2, installed: false, size: '1.3 GB' },
+          { stage: 'Caption translation', name: 'Tencent Hy-MT2 1.8B', language: '33 languages', intro: 'Translates captions into the target language, all on your device.', quality: 3, speed: 3, installed: false, size: '1.13 GB' }
         ]
       };
     };

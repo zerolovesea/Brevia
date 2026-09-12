@@ -3,7 +3,7 @@
 import re
 
 from .transcript import clock, latest_segments
-from .worker_common import TaskCancelled, managed_task, require
+from .worker_common import ModelNotInstalled, TaskCancelled, managed_task, require
 
 # 内置翻译在本地运行捆绑的 Hy-MT2 GGUF 模型。
 TRANSLATION_MODEL_ID = "hy-mt2-1.8b-q4km"
@@ -340,6 +340,12 @@ class LLMWorkerMixin:
                 raise ValueError("Summary response was empty")
         except TaskCancelled:
             return {"cancelled": True}
+        except ModelNotInstalled:
+            # 结构化错误必须原样上抛：下面那个笼统的 except 会把它压成普通 ValueError，
+            # error_code/error_models 到不了协议层，内置纪要模型缺失就触发不了
+            # 「先下载再重试」。旧行为会把失败文本写进纪要；这里不写，让下载后的重试
+            # 生成真正的纪要，而不是留下一条错误记录。
+            raise
         except Exception as error:
             if not self.store.save_summary(meeting["id"], None, markdown or str(error)):
                 return {"cancelled": True}

@@ -49,11 +49,19 @@ function applyBackendDetail(meeting) {
     detailActiveTab = 'notes';
     uiData.detail.translationTarget = meeting.target_language || '';
   }
-  // 产出这场精修稿的识别模型已下架（旧版本允许选后来移除的模型）：精修结果不再可信，
-  // 按「未精修」展示实时版本，等用户手动重新精修一次。
+  // 产出这场精修稿的识别模型已不可用（已退役，或来自更早版本、已从清单里移除）：
+  // 精修结果不再可信，按「未精修」展示实时版本，等用户手动重新精修一次。
+  //
+  // 退役模型**仍然留在** modelCatalog 里——清单保留它的条目是为了让历史会议的
+  // refined_model_id 还能被解析（见 ModelManager.remove_deprecated_models）。所以判据
+  // 必须是「在清单里但标了 retired」，不能是「不在清单里」：后者只覆盖"被删除"这条老
+  // 路径，对 retired 永远为假，这句降级就再也不会触发。
+  const producedBy = meeting.refined_model_id
+    ? modelCatalog.find((model) => model.id === meeting.refined_model_id)
+    : undefined;
   const modelRetired = Boolean(meeting.refined_model_id)
     && modelCatalog.length > 0
-    && !modelCatalog.some((model) => model.id === meeting.refined_model_id);
+    && (!producedBy || Boolean(producedBy.retired));
   const { revision, segments: ordered } = latestTranscriptSegments(meeting, { ignoreRefined: modelRetired });
   const speakerNames = new Map(meeting.speakers.map((speaker) => [speaker.id, speaker.name]));
   uiData.detail.transcript = ordered.map((segment) => renderSegmentData(segment, true, speakerNames));
@@ -87,9 +95,9 @@ function applyBackendDetail(meeting) {
   if (!sameMeeting) {
     followPlaybackTranscript = true;
     playbackStarted = false;
-    playerAudio.pause(); playerAudio.currentTime = 0; progress.value = 0; updatePlayerControl(); renderPlayerTime();
+    playerAudio.pause(); playerAudio.currentTime = 0; progress.value = 0; appActions.updatePlayerControl(); appActions.renderPlayerTime();
     if (audioPath) window.brevia.audioUrl(audioPath).then((url) => { playerAudio.src = url; }); else { playerAudio.removeAttribute('src'); playerAudio.load(); }
-  } else { progress.value = playerAudio.currentTime; renderPlayerTime(); }
+  } else { progress.value = playerAudio.currentTime; appActions.renderPlayerTime(); }
   renderMeetingDetail();
   if (transcriptScrollTop !== undefined) document.querySelector('.transcript-body')?.scrollTo({ top: transcriptScrollTop, behavior: 'instant' });
 }

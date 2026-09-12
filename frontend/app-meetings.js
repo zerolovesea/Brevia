@@ -36,12 +36,12 @@ function syncBackendMeeting(item) {
   const visible = activeLibraryNav === 'recently-deleted' ? meeting.deleted : !meeting.deleted;
   if (!visible) {
     if (index >= 0) uiData.meetings.splice(index, 1);
-    renderMeetingList();
+    appActions.renderMeetingList();
     return;
   }
   if (index < 0) uiData.meetings.unshift(meeting);
   else uiData.meetings[index] = meeting;
-  renderMeetingList();
+  appActions.renderMeetingList();
 }
 
 let meetingListRequest = 0;
@@ -50,5 +50,5 @@ async function refreshBackendMeetings(includeDeleted = activeLibraryNav === 'rec
   const meetings = await window.brevia.meeting.list({ include_deleted: includeDeleted });
   if (request !== meetingListRequest) return;
   uiData.meetings = meetings.map(backendMeeting);
-  renderMeetingList();
+  appActions.renderMeetingList();
 }

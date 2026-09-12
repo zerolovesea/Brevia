@@ -2,7 +2,6 @@
 import base64
 import tempfile
 import threading
-from array import array
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -10,7 +9,15 @@ from unittest.mock import Mock, patch
 
 import numpy as np
 
-from .asr import CUT_OVERLAP_MS, SentenceVAD, recover_speech_gaps, trim_quiet_speech
+from .asr import (
+    CUT_OVERLAP_MS,
+    DEFAULT_LIVE_MAX_SPEECH_SECONDS,
+    SentenceVAD,
+    recover_speech_gaps,
+    trim_quiet_speech,
+)
+from .config import SETTINGS
+from .worker_common import MULTILINGUAL_MODEL_KINDS, model_supports_language
 from .worker_session import SUBTITLE_PARAGRAPH_GAP_MS
 from .worker import Worker
 
@@ -53,18 +60,30 @@ class SentenceTest(unittest.TestCase):
             manual = SentenceVAD(self.worker.models, language="en")
         self.assertEqual(automatic.sentence_gap_ms, 2000)
         self.assertLess(manual.sentence_gap_ms, automatic.sentence_gap_ms)
-        self.assertEqual(automatic.max_speech_seconds, 12)
+        # 段长上限不再是一个写死的常数：它取「语言级配置」与「实时配置上限」的较小
+        # 值。曾经的 12.0 硬上限让所有模型都被多切 2–4 倍（见 asr.py 注释）。
+        self.assertEqual(
+            automatic.max_speech_seconds,
+            min(SETTINGS["vad"]["default"]["max_speech_duration"], DEFAULT_LIVE_MAX_SPEECH_SECONDS),
+        )
         self.assertEqual(automatic.target_seconds, manual.target_seconds)
+        # auto（多语言混说）默认落在 parakeet-tdt-0.6b-v3-int8：清单的 default_for_languages
+        # 声明。演进过程：曾为 qwen3-asr-0.6b-int8（实测英语会议 14% 窗口输出中文幻觉，
+        # 41/287），后为 whisper-large-v3，最终换成 Parakeet TDT——Whisper 在代码转换基准里
+        # 排名垫底，因为它会把外语翻译成英语而不是转写（西语仅 1/287 窗口保留）。
+        # 见 docs/asr-model-selection-design.md §2.4 / §2.5 / §2.8。
         payload = self.worker._sentence_payload({"title": "mixed"})
-        self.assertEqual((payload["language"], payload["refined_model_id"]), ("auto", "qwen3-asr-0.6b-int8"))
+        self.assertEqual((payload["language"], payload["refined_model_id"]), ("auto", "parakeet-tdt-0.6b-v3-int8"))
         with self.assertRaisesRegex(ValueError, "Automatic multilingual"):
             self.worker._sentence_payload({"language": "auto", "refined_model_id": "funasr-nano-int8"})
-        whisper = self.worker._sentence_payload({"language": "auto", "refined_model_id": "whisper-large-v3"})
-        self.assertEqual(whisper["refined_model_id"], "whisper-large-v3")
+        qwen3 = self.worker._sentence_payload({"language": "auto", "refined_model_id": "qwen3-asr-0.6b-int8"})
+        self.assertEqual(qwen3["refined_model_id"], "qwen3-asr-0.6b-int8",
+                         "auto 仍须允许显式指定 Qwen3-ASR（多语种模型都可用于混说）")
         with patch("backend.worker_session.RefinedASR", return_value=self.asr) as builder:
             self.worker.reconfigure({"meeting_id": self.meeting["id"], "language": "auto"})
-        self.assertEqual(builder.call_args.args[1], "qwen3-asr-0.6b-int8")
+        self.assertEqual(builder.call_args.args[1], "parakeet-tdt-0.6b-v3-int8")
         self.assertEqual(builder.call_args.kwargs["language"], "auto")
+        # 混合语种的三段：各自解码一次，再按无长停顿合并成同一段。
         self.asr.decode.side_effect = ["Hello, how are you?", "Muy bien, gracias.", "Let's continue."]
         self.vad.accept.return_value = [(i * 1700, i * 1700 + 1000, np.ones(16000, dtype=np.float32)) for i in range(3)]
         self.feed()
@@ -74,6 +93,104 @@ class SentenceTest(unittest.TestCase):
         self.assertEqual([s["text"] for s in result["segments"]],
                          ["Hello, how are you? Muy bien, gracias. Let's continue."])
         self.assertEqual(self.asr.decode.call_count, 3)
+
+    def test_default_refined_model_follows_manifest_language_ownership(self):
+        """语言 → 默认模型必须由 models.json 的 default_for_languages 决定。
+
+        这条规则过去在后端 `_default_refined_model` 与前端 `languageModelDefaults` 各写
+        一份硬编码，改语言归属要同时改两处。现在只有清单一处实现，前端读同一字段。
+        """
+        models = self.worker.models
+        for language, expected in (
+            ("zh", "funasr-nano-int8"),
+            ("yue", "funasr-nano-int8"),
+            # 英西混说场景：Parakeet TDT 取代 Whisper（混说基准明确优于垫底的 Whisper，
+            # 且不会把外语翻译成英语）。设计文档 §2.8。
+            ("en", "parakeet-tdt-0.6b-v3-int8"),
+            ("es", "parakeet-tdt-0.6b-v3-int8"),
+            ("fr", "parakeet-tdt-0.6b-v3-int8"),
+            ("de", "parakeet-tdt-0.6b-v3-int8"),
+            ("ru", "parakeet-tdt-0.6b-v3-int8"),
+            ("auto", "parakeet-tdt-0.6b-v3-int8"),
+            ("ja", "qwen3-asr-0.6b-int8"),
+            ("ko", "qwen3-asr-0.6b-int8"),
+        ):
+            self.assertEqual(self.worker._default_refined_model(language), expected,
+                             f"unexpected default model for {language}")
+        # 未在清单里声明的语言要回落，而不是抛错。
+        fallback = self.worker._default_refined_model("xx")
+        self.assertIn(fallback, {"funasr-nano-int8", "qwen3-asr-0.6b-int8",
+                                 "parakeet-tdt-0.6b-v3-int8"})
+        # 退役模型不再参与选型：清单里留着条目只是为了能解析历史 id，本地文件已在启动时清掉。
+        for model in models.catalog.values():
+            if model.get("retired"):
+                for language in ("zh", "en", "es", "ja", "ko", "auto", "xx"):
+                    self.assertNotEqual(self.worker._default_refined_model(language), model["id"],
+                                        f"retired model {model['id']} must never be selected")
+        # 清单里声明的每一项都必须真的支持该语言，否则会推荐出无法使用的模型。
+        for model in models.catalog.values():
+            for language in model.get("default_for_languages") or []:
+                self.assertTrue(
+                    model_supports_language(model, language),
+                    f"{model['id']} is declared default for unsupported language {language}",
+                )
+        # auto 下不得把逐语言微调的模型推荐出去。
+        self.assertNotEqual(self.worker._default_refined_model("auto"), "funasr-nano-int8")
+
+    def test_language_coverage_matches_manifest_without_wildcards(self):
+        """语言覆盖必须与 languages 严格一致，且 multilingual 不能当通配符。
+
+        踩过的坑：给 Parakeet（25 种欧洲语言、不含中日韩）的 languages 里加了
+        ``multilingual``，结果 ``model_supports_language`` 判它支持中文——前端于是把
+        Parakeet 列进中文会议的识别模型下拉，用户选得出、结果全是垃圾。
+        """
+        catalog = self.worker.models.catalog
+        parakeet = catalog["parakeet-tdt-0.6b-v3-int8"]
+        whisper = catalog["whisper-large-v3"]
+
+        for language in ("en", "es", "fr", "de", "ru"):
+            self.assertTrue(model_supports_language(parakeet, language), language)
+        for language in ("zh", "ja", "ko", "yue"):
+            self.assertFalse(model_supports_language(parakeet, language),
+                             f"Parakeet must not claim {language}")
+        # auto 由 kind 决定，而不是由 languages 里的通配符决定。
+        self.assertTrue(model_supports_language(parakeet, "auto"))
+        self.assertIn(parakeet["kind"], MULTILINGUAL_MODEL_KINDS)
+
+        # multilingual 通配符不得出现在 languages 里，否则「不支持」无法表达。
+        for model in catalog.values():
+            self.assertNotIn(
+                "multilingual", model.get("languages") or [],
+                f"{model['id']} must list concrete language codes, not the 'multilingual' wildcard",
+            )
+
+        # Whisper 仍可被选中（用户可自行下载），所以必须声明真实覆盖的语言。
+        for language in ("en", "zh", "es", "ja", "ru"):
+            self.assertTrue(model_supports_language(whisper, language), language)
+
+        # 每个界面可选的语言都必须能解析出默认模型——否则准备页会出现空的模型下拉。
+        for language in ("zh", "yue", "en", "es", "fr", "de", "ru", "ja", "ko", "auto"):
+            chosen = self.worker._default_refined_model(language)
+            self.assertTrue(model_supports_language(catalog[chosen], language),
+                            f"default {chosen} does not support {language}")
+
+    def test_live_segment_cap_never_exceeds_configured_limit(self):
+        # 模型容量比配置上限更长时，按配置上限切（实时延迟优先）；模型容量更短时
+        # 按模型容量切（否则会越过 KV 容量整段解码为空）。两条都不能反过来。
+        with patch("backend.asr._vad_config"):
+            tight = SentenceVAD(self.worker.models, language="zh", max_speech_duration=8.0)
+            generous = SentenceVAD(self.worker.models, language="zh", max_speech_duration=999.0)
+        # 两者都不得越过实时配置上限。
+        self.assertLessEqual(tight.max_speech_seconds, DEFAULT_LIVE_MAX_SPEECH_SECONDS)
+        self.assertLessEqual(generous.max_speech_seconds, DEFAULT_LIVE_MAX_SPEECH_SECONDS)
+        # 模型容量更紧时以模型容量为准（这是 12.0 硬上限当初破坏的语义）。
+        self.assertEqual(tight.max_speech_seconds, 8.0)
+        self.assertEqual(generous.max_speech_seconds, DEFAULT_LIVE_MAX_SPEECH_SECONDS)
+        # 即使语言级配置放宽，也不会超过实时配置上限。
+        loose = {**SETTINGS, "vad": {**SETTINGS["vad"], "default": {**SETTINGS["vad"]["default"], "max_speech_duration": 60.0}}}
+        with patch("backend.asr._vad_config"), patch("backend.asr.SETTINGS", loose):
+            wide = SentenceVAD(self.worker.models, language="zh", max_speech_duration=999.0)
+        self.assertEqual(wide.max_speech_seconds, DEFAULT_LIVE_MAX_SPEECH_SECONDS)
 
     def test_no_partial_then_one_final_per_endpoint(self):
         self.feed()
@@ -222,6 +339,14 @@ class SentenceTest(unittest.TestCase):
                          "电话微波炉的原理和LHC类似。")
         self.assertEqual(self.worker._join_text("", "只有右边。"), "只有右边。")
 
+    def test_length_limits_treat_hangul_and_kana_as_cjk(self):
+        """日/韩默认走 qwen3-asr；只统计汉字会把它们的段落上限放大到 280/380。"""
+        cjk = (60, 110, 150)
+        self.assertEqual(self.worker._length_limits("这是一句中文测试。"), cjk)
+        self.assertEqual(self.worker._length_limits("こんにちは、これはテストです。"), cjk)
+        self.assertEqual(self.worker._length_limits("안녕하세요 여러분 반갑습니다."), cjk)
+        self.assertEqual(self.worker._length_limits("This is an English sentence."), (150, 280, 380))
+
     def test_unfinished_tail_joins_next_sentence_and_stop_flushes(self):
         # 尾句押住等下一段确认；押住的只是最后一句。整段不足目标长度也没有长停顿，
         # 因此三句并成同一段，在 stop 时一次性提交（文本必须逐字无损）。
@@ -361,34 +486,6 @@ class SentenceTest(unittest.TestCase):
         self.assertTrue(any(e["payload"].get("code") == "sentence_transcription_failed" for e in self.events))
         self.assertFalse(list(Path(self.temp.name).rglob("sentence-*.npy")))
 
-    def test_optional_denoise_failure_still_transcribes_original_segment(self):
-        self.worker.denoiser = Mock(engines={})
-        self.worker.denoiser.accept.side_effect = RuntimeError("denoiser failed")
-        self.vad.accept.return_value = [(0, 100, np.ones(1600, dtype=np.float32))]
-        self.feed()
-        self.worker.live_postprocessing.submit(lambda: None).result(2)
-        self.assertEqual(len(self.finals()), 1)
-        self.asr.decode.assert_called_once()
-        self.assertEqual(self.worker.denoiser.engines, {})
-
-    def test_denoise_runs_before_vad(self):
-        self.worker.denoiser = Mock()
-        self.worker.denoiser.accept.side_effect = lambda _track, samples, _rate: samples
-        self.vad.accept.return_value = []
-        pcm = base64.b64encode(array("h", [4000] * 1600).tobytes()).decode()
-        self.worker.audio({"meeting_id": self.meeting["id"], "track": "mic", "pcm": pcm,
-                           "sample_rate": 16000, "start_ms": 0})
-        self.worker.denoiser.accept.assert_called_once()
-        self.vad.accept.assert_called_once()
-
-    def test_system_audio_bypasses_live_denoise(self):
-        self.worker.denoiser = Mock()
-        self.vad.accept.return_value = []
-        pcm = base64.b64encode(array("h", [4000] * 1600).tobytes()).decode()
-        self.worker.audio({"meeting_id": self.meeting["id"], "track": "system", "pcm": pcm,
-                           "sample_rate": 16000, "start_ms": 0})
-        self.worker.denoiser.accept.assert_not_called()
-
     def test_flush_payload_processes_its_audio_before_flushing(self):
         self.feed(flush=True)
         self.vad.accept.assert_called_once()
@@ -457,12 +554,6 @@ class SentenceTest(unittest.TestCase):
         self.assertIs(self.worker.asr, self.asr)
         self.assertEqual(self.worker.store.get_meeting(self.meeting["id"])["language"], "zh")
         self.vad.flush.assert_not_called()
-
-    def test_efficiency_keeps_single_recognizer(self):
-        self.worker.reconfigure({"meeting_id": self.meeting["id"], "power_saving": True})
-        self.assertIs(self.worker.asr, self.asr)
-        self.assertIsNone(self.worker.denoiser)
-        self.assertTrue(self.worker.power_saving)
 
     def test_retired_models_are_not_required(self):
         self.assertTrue(self.worker.models.is_known(self.meeting["refined_model_id"]))

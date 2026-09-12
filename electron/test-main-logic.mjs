@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 const require = createRequire(import.meta.url);
-const { configureMacUpdater, createDisplayMediaHandler, isNewerVersion, registerScreenPermission, systemAudioSupported } = require('./main-logic');
+const { configureMacUpdater, createDisplayMediaHandler, isNewerVersion, registerScreenPermission, requiredModelsFrom, systemAudioSupported, workerError } = require('./main-logic');
 
 const screen = { id: 'screen:0:0' };
 let selected;
@@ -147,3 +147,40 @@ for (const blocked of ['file:///etc/passwd', 'http://insecure.example', 'javascr
 }
 
 console.log('Electron behavior tests passed');
+
+// ── worker 错误 → 结构化判定 ────────────────────────────────────────────────────
+// 「模型没装」由 error_code/error_models 决定，不再正则解析文本。这条同时证明：
+// 无论报文里的 error 文案怎么写，判定都不受影响（改文案不会破坏下载链路）。
+const structured = workerError({
+  error: 'Model qwen3-asr-0.6b-int8 is not installed',
+  error_code: 'model_not_installed',
+  error_models: ['qwen3-asr-0.6b-int8'],
+});
+assert.equal(structured.message, 'Model qwen3-asr-0.6b-int8 is not installed');
+assert.equal(structured.code, 'model_not_installed');
+assert.deepEqual(requiredModelsFrom(structured), ['qwen3-asr-0.6b-int8']);
+
+// 同一组模型、完全不同的文案：判定结果必须一致。
+const reworded = workerError({
+  error: '该模型尚未下载，请先下载后重试。',
+  error_code: 'model_not_installed',
+  error_models: ['qwen3-asr-0.6b-int8'],
+});
+assert.deepEqual(requiredModelsFrom(reworded), ['qwen3-asr-0.6b-int8'], '判定不得依赖文案');
+
+// 多模型缺失。
+assert.deepEqual(
+  requiredModelsFrom(workerError({ error: 'x', error_code: 'model_not_installed', error_models: ['a', 'b'] })),
+  ['a', 'b'],
+);
+
+// 普通错误不能误触发下载流程——即使文案里恰好出现了 "not installed"。
+assert.equal(requiredModelsFrom(new Error('sherpa-onnx is not installed')), null, '普通错误不得被当成模型缺失');
+assert.equal(requiredModelsFrom(workerError({ error: 'boom' })), null);
+assert.equal(requiredModelsFrom(workerError({ error: 'boom', error_code: 'model_not_installed' })), null, '没有模型列表时不触发下载');
+assert.equal(requiredModelsFrom(workerError({ error: 'boom', error_code: 'model_not_installed', error_models: [] })), null);
+assert.equal(requiredModelsFrom(undefined), null);
+// 非字符串 / 非数组的脏字段被过滤掉，避免把非法 id 传给下载接口。
+const dirty = workerError({ error: 'x', error_code: 'model_not_installed', error_models: ['ok', 7, null] });
+assert.deepEqual(requiredModelsFrom(dirty), ['ok']);
+assert.equal(workerError({ error: 'x' }).code, undefined);

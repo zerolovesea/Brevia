@@ -106,25 +106,25 @@ function renderWorkspaceNav() {
  */
 async function switchWorkspace(workspaceId) {
   if (workspaceId === activeWorkspaceId && activeLibraryNav === 'all-meetings' && activeView === 'home') return;
-  if (activeView === 'live' && meetingActive) minimizeMeeting();
+  if (activeView === 'live' && meetingActive) appActions.minimizeMeeting();
   const applyWorkspace = async () => {
     activeWorkspaceId = workspaceId;
     localStorage.setItem('brevia-active-workspace', workspaceId);
-    selectLibraryNav('all-meetings');
+    appActions.selectLibraryNav('all-meetings');
     if (window.brevia) {
       try { await refreshBackendMeetings(false); }
-      catch (error) { showToast(error.message); }
+      catch (error) { appActions.showToast(error.message); }
     }
     renderWorkspaceNav();
     updateHomeViewTitle();
-    filterMeetings();
+    appActions.filterMeetings();
   };
   if (activeView !== 'home') {
-    await showView('home');
+    await appActions.showView('home');
     await applyWorkspace();
     return;
   }
-  await transitionPage(document.querySelector('#home-view'), document.querySelector('#home-view'), applyWorkspace);
+  await appActions.transitionPage(document.querySelector('#home-view'), document.querySelector('#home-view'), applyWorkspace);
 }
 
 const clearWorkspaceDropTarget = () => document.querySelectorAll('.workspace-item.is-drop-target').forEach((item) => item.classList.remove('is-drop-target'));
@@ -158,9 +158,9 @@ document.addEventListener('drop', async (event) => {
     meeting.workspaceId = workspaceId;
     meeting.workspace = workspaceId ? { name: getWorkspaceName(workspaceId) } : null;
     renderWorkspaceNav();
-    renderMeetingList();
+    appActions.renderMeetingList();
   } catch (error) {
-    showToast(error.message);
+    appActions.showToast(error.message);
   }
 });
 
@@ -278,9 +278,9 @@ function showNewWorkspaceDialog(assignMeetingId, onCreated) {
       renderWorkspaceNav();
       closeDialog();
       document.removeEventListener('keydown', escHandler);
-      showToast(t('工作区已创建'));
+      appActions.showToast(t('工作区已创建'));
     } catch (error) {
-      showToast(error.message);
+      appActions.showToast(error.message);
     }
   });
 }
@@ -369,19 +369,19 @@ function showEditWorkspaceDialog(workspaceId) {
 
   // 删除工作区
   backdrop.querySelector('[data-delete-workspace]').addEventListener('click', async () => {
-    openConfirmation(t('删除工作区'), t('工作区内的会议将移至最近删除。恢复会议时将还原原工作区。此操作不能撤销。'), async () => {
+    appActions.openConfirmation(t('删除工作区'), t('工作区内的会议将移至最近删除。恢复会议时将还原原工作区。此操作不能撤销。'), async () => {
       try {
         await window.brevia.workspace.delete({ workspace_id: workspaceId });
         workspaces = workspaces.filter(w => w.id !== workspaceId);
         if (activeWorkspaceId === workspaceId) void switchWorkspace('');
         uiData.meetings = uiData.meetings.filter((meeting) => meeting.workspaceId !== workspaceId);
         renderWorkspaceNav();
-        renderMeetingList();
+        appActions.renderMeetingList();
         closeDialog();
         document.removeEventListener('keydown', escHandler);
-        showToast(t('工作区已删除'));
+        appActions.showToast(t('工作区已删除'));
       } catch (error) {
-        showToast(error.message);
+        appActions.showToast(error.message);
       }
     });
   });
@@ -403,9 +403,9 @@ function showEditWorkspaceDialog(workspaceId) {
       updateHomeViewTitle();
       closeDialog();
       document.removeEventListener('keydown', escHandler);
-      showToast(t('工作区已更新'));
+      appActions.showToast(t('工作区已更新'));
     } catch (error) {
-      showToast(error.message);
+      appActions.showToast(error.message);
     }
   });
 }
@@ -481,9 +481,9 @@ async function assignMeetingToWorkspace(meetingId, workspaceId) {
     }
 
     renderWorkspaceNav();
-    renderMeetingList();
-    showToast(t('已移至') + ' ' + getWorkspaceName(workspaceId));
+    appActions.renderMeetingList();
+    appActions.showToast(t('已移至') + ' ' + getWorkspaceName(workspaceId));
   } catch (error) {
-    showToast(error.message);
+    appActions.showToast(error.message);
   }
 }

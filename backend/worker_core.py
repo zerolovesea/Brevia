@@ -3,6 +3,7 @@
 import json
 import os
 import re
+import logging
 import threading
 import time
 from collections import deque
@@ -35,6 +36,9 @@ def sanitize_unicode(value, depth=0):
     if isinstance(value, dict):
         return {sanitize_unicode(key, depth + 1): sanitize_unicode(item, depth + 1) for key, item in value.items()}
     return value
+
+
+logger = logging.getLogger(__name__)
 
 
 class WorkerCore:
@@ -72,13 +76,10 @@ class WorkerCore:
         self.llm_complete = complete
         self.active = None
         self.asr = None
-        self.denoiser = None
         self.vad = None
         self.stream_state = {}
-        self.recent_finals = []
         self.meeting_language = None
         self.live_postprocessing = None
-        self.power_saving = False
         # 继续协作初始化链，使兄弟 mixin（如 llama sidecar 管理器）的 __init__ 也能
         # 运行——否则 _sidecars_lock 等属性永远不会被创建。
         super().__init__()
@@ -111,9 +112,24 @@ class WorkerCore:
             )
 
     def response(self, command_id, result=None, error=None):
-        """写出一条命令响应；错误只返回安全的字符串表示。"""
+        """写出一条命令响应。
+
+        错误除了人类可读的文本，还会带上 ``error_code`` 与可选的结构化字段——
+        ``ModelNotInstalled`` 带的 ``error_models`` 让主进程能直接触发"先下载再重试"，
+        而不必去正则解析文本。文本仍然保留：它进日志，也是没有结构化字段的普通错误的
+        唯一载体。
+        """
         value = {"id": command_id, "ok": error is None}
-        value["error" if error else "result"] = str(error) if error else result
+        if error is None:
+            value["result"] = result
+        else:
+            value["error"] = str(error)
+            code = getattr(error, "code", None)
+            if code:
+                value["error_code"] = code
+            models = getattr(error, "models", None)
+            if models:
+                value["error_models"] = list(models)
         with self.output_lock:
             self.output(value)
 
@@ -224,9 +240,6 @@ class WorkerCore:
     def initialize(self, _):
         """返回首屏状态，并把可延后的启动维护放入后台。"""
         seeded_examples = self.store.seed_examples()
-        for model_id in (SETTINGS["live_asr"]["denoiser_model_id"],):
-            if not self.models.is_ready(model_id):
-                self.download_model({"model_id": model_id})
         return {
             "meetings": self.store.list_meetings(),
             "workspaces": self.store.list_workspaces(),
@@ -247,6 +260,23 @@ class WorkerCore:
     def _startup_maintenance(self):
         """完成不影响首屏的清理与磁盘统计。"""
         purged = self.store.purge_expired()
+        # 会议引用的识别模型一次性收敛：退役/已下架/带不动该语言的 id 统一改写成该语言
+        # 当前的默认模型。以前这件事散在 resume / reconfigure / refine 三条运行路径里各做
+        # 一次（漏一条就表现为"某条路径加载不了模型"），这里在启动时统一收敛一次。
+        # 单行坏数据不能让整个维护线程中断——后面的 app.maintenance 事件还要照常发出。
+        try:
+            repaired = self.converge_refined_models()
+        except Exception:
+            logger.exception("refined-model convergence failed")
+            repaired = []
+        if repaired:
+            # 改写用户数据必须留痕：用户升级后发现某场会议的识别模型变了，日志要能解释
+            # 为什么。前端从同一事件的 meetings 里已经能拿到收敛后的值，不再单列字段。
+            logger.info(
+                "converged refined_model_id for %d meeting(s): %s",
+                len(repaired),
+                ", ".join(repaired),
+            )
         for profile in self.store.list_speaker_profiles():
             if self._is_default_speaker_name(profile["name"]):
                 self.store.delete_speaker_profile(profile["id"])

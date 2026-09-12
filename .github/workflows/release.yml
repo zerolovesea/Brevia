@@ -44,6 +44,10 @@ jobs:
       - run: npm ci
       - run: python -m pip install -r backend/requirements-build.txt
       - run: npm test
+        env:
+          # e2e 会真实启动 Electron 并通过 CDP 断言渲染进程；Windows runner 无法可靠地
+          # 无头启动它，因此只在 macOS 上跑，Windows 侧跳过（跳过会打印原因并以 0 退出）。
+          BREVIA_SKIP_E2E: ${{ matrix.os == 'windows-latest' && '1' || '0' }}
       - name: Bundle Python runtime and dependencies
         run: python backend/pack_worker.py
       - name: Bundle llama sidecar

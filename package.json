@@ -6,7 +6,8 @@
     "build": "cd frontend && npx @tailwindcss/cli -i ./tailwind.css -o ./styles.css --minify",
     "start": "electron .",
     "start:fresh": "electron . --reset-onboarding",
-    "test": "npm run test:electron && npm run test:ui && npm run test:backend",
+    "test": "npm run test:dead && npm run test:electron && npm run test:ui && npm run test:e2e && npm run test:backend",
+    "test:dead": "node scripts/check_dead_code.mjs",
     "test:electron": "node electron/test-main-logic.mjs",
     "test:ui": "cd frontend && node ./test-ui.mjs",
     "test:backend": "python -m unittest backend.test_worker backend.test_sentence",
@@ -20,7 +21,9 @@
     "dist:mac": "npm run pack:backend && npm run package:mac",
     "dist:win": "npm run pack:backend && npm run package:win",
     "release:offline": "npm run build && npm run pack:backend && env -u APPLE_ID -u APPLE_APP_SPECIFIC_PASSWORD -u APPLE_TEAM_ID electron-builder --mac dmg --arm64 --publish never && electron-builder --win nsis --x64 --publish never",
-    "bench:live": ".venv/bin/python backend/bench_live.py"
+    "bench:live": ".venv/bin/python backend/bench_live.py",
+    "test:e2e": "node electron/test-e2e.mjs",
+    "css:fingerprint": "node scripts/verify-css-tokens.mjs"
   },
   "build": {
     "appId": "com.brevia.app",

@@ -8,7 +8,7 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { randomUUID } = require('node:crypto');
 const { z } = require('zod');
-const { configureMacUpdater, createDisplayMediaHandler, isNewerVersion, registerScreenPermission, systemAudioSupported } = require('./main-logic');
+const { configureMacUpdater, createDisplayMediaHandler, isNewerVersion, registerScreenPermission, requiredModelsFrom, systemAudioSupported, workerError } = require('./main-logic');
 
 const benchmarkRefinement = process.argv.includes('--bench-refinement');
 const commandArgument = (name, fallback = null) => {
@@ -84,7 +84,15 @@ app.setAppLogsPath(logsDir());
 const command = z.object({ type: z.string().min(1), payload: z.record(z.string(), z.unknown()).default({}) });
 const workerResponse = z.discriminatedUnion('ok', [
   z.object({ id: z.string().min(1), ok: z.literal(true), result: z.unknown() }).strict(),
-  z.object({ id: z.string().min(1), ok: z.literal(false), error: z.string() }).strict(),
+  // 结构化错误字段：后端把 ModelNotInstalled 序列化成 error_code/error_models，主进程据此
+  // 决定「先下载再重试」，不再正则解析 error 文本（见 main-logic.js 的 workerError）。
+  z.object({
+    id: z.string().min(1),
+    ok: z.literal(false),
+    error: z.string(),
+    error_code: z.string().max(64).optional(),
+    error_models: z.array(z.string().min(1).max(128)).max(8).optional(),
+  }).strict(),
 ]);
 const workerEvent = z.object({
   type: z.enum([
@@ -93,9 +101,9 @@ const workerEvent = z.object({
     'meeting.stopped', 'model.progress', 'model.status', 'refinement.cancelled', 'refinement.progress',
     'refinement.ready', 'refinement.started', 'speaker-profile.deleted', 'speaker-profile.updated',
     'summary.progress', 'summary.ready', 'summary.started', 'task.status',
-    'transcript.discarded', 'transcript.draft', 'transcript.final', 'transcript.partial', 'transcript.refined', 'transcript.settled',
+    'transcript.draft', 'transcript.final', 'transcript.partial', 'transcript.refined', 'transcript.settled',
     'translation.ready', 'worker.error', 'worker.warning',
-    'ai-note.suggestion', 'ai-note.evidence', 'ai-note.analyzing', 'live.performance',
+    'ai-note.suggestion', 'ai-note.evidence', 'ai-note.analyzing',
   ]),
   schema_version: z.literal(1),
   payload: z.record(z.string(), z.unknown()),
@@ -110,7 +118,6 @@ const meetingStart = z.object({
   speaker_segmentation_model_id: z.string().min(1).optional(),
   vad_model_id: z.string().min(1).optional(),
   num_speakers: z.number().int().refine((value) => value === -1 || value >= 1).optional(),
-  power_saving: z.boolean().optional(),
   audio_tracks: z.array(z.enum(['mic', 'system'])).min(1).max(2).optional(),
   workspace_id: z.string().uuid().nullable().optional(),
   tags: z.array(z.string().max(32)).max(20).optional(),
@@ -136,7 +143,6 @@ const meetingReconfigure = id.extend({
   language: z.string().min(2).max(16).optional(),
   target_language: z.string().min(2).max(16).nullable().optional(),
   refined_model_id: z.string().min(1).max(128).optional(),
-  power_saving: z.boolean().optional(),
 });
 // 纪要供应商固定为这六项；只有 built-in 在本地运行，因此其余都必须带请求地址。
 const summaryProviderIds = ['built-in', 'claude', 'openai', 'openrouter', 'custom-openai', 'custom-claude'];
@@ -304,7 +310,7 @@ class WorkerClient {
       if (!pending) return;
       this.pending.delete(message.id);
       clearTimeout(pending.timer);
-      message.ok ? pending.resolve(message.result) : pending.reject(new Error(message.error));
+      message.ok ? pending.resolve(message.result) : pending.reject(workerError(message));
       this.recycleIfIdle();
       return;
     }
@@ -457,10 +463,9 @@ function handle(channel, schema, type = channel) {
   });
 }
 
-function requiredModels(error) {
-  const match = String(error.message).match(/Models? ([a-z0-9.-]+(?:, [a-z0-9.-]+)*) (?:is|are) not installed/i);
-  return match ? match[1].split(', ') : null;
-}
+// 判定"模型没装"一律读结构化字段（error_code / error_models），不再正则解析报错文本：
+// 那种耦合会在改文案时静默破坏下载链路。映射逻辑在 main-logic.js 里单测覆盖。
+const requiredModels = (error) => requiredModelsFrom(error);
 
 function handleModelRequirement(channel, schema, type = channel) {
   ipcMain.handle(channel, async (_, payload = {}) => {

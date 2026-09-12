@@ -20,11 +20,25 @@ from .audio_io import (
     read_mono_wav_window,
 )
 from .config import SETTINGS, SPEAKER_EMBEDDING_MODEL_ID, validate_num_speakers
-from .worker_common import TaskCancelled, managed_task, model_supports_language, require
+from .worker_common import (
+    ModelNotInstalled,
+    TaskCancelled,
+    managed_task,
+    missing_models,
+    model_supports_language,
+    require,
+)
 
 # 该值在 diarization 子进程内使用；子进程不加载用户覆盖，故经 payload 传入，
 # 这里仅作缺失时的回退默认值。较长窗口让声纹更稳定，避免把同一个人聚成多人。
 EMBEDDING_WINDOW_MS = 15_000
+
+# 导入录音的说话人分离预算。「准备精修」阶段离线 pyannote 分割的开销按 4 物理核上
+# 约 0.4x 实时估算（60 s 窗口约 24 s），并按核数折算；估计超过预算就跳过分割，只把
+# 整条音轨标成 local-user，先出逐字稿，而不是让用户盯着进度条等十几分钟。
+IMPORT_DIARIZATION_BUDGET_SECONDS = 300
+IMPORT_DIARIZATION_SECONDS_PER_AUDIO_SECOND = 0.4
+IMPORT_DIARIZATION_REFERENCE_CORES = 4
 
 # 说话人轮次整理参数。「自动」（多语言混说）没有可靠的语法停顿，只能靠更长的
 # 时长门槛与静音吸收区间把碎句并回同一说话人；单语会议可用更紧的值保留短应答。
@@ -290,12 +304,21 @@ class RefinementWorkerMixin:
                 meeting["id"], {"target_language": payload["target_language"]}
             )
         refined_model_id = payload.get("refined_model_id") or meeting["refined_model_id"]
-        # 存量模型已下架时换成默认模型；调用方没点名模型、而存量模型带不动这门语言时
-        # 同样换成本语言的默认模型。显式点名的不兼容模型交给 _sentence_payload 报错。
-        if not self.models.is_known(refined_model_id) or (
-            "refined_model_id" not in payload
-            and not model_supports_language(self.models.get(refined_model_id), language)
-        ):
+        # 存量模型不可用（已下架 / 退役 / 与会议语言不匹配）时换成该语言的默认模型。
+        # 调用方没点名模型、而存量模型的**本地文件已不存在**时同样换：那种情况下让
+        # model_required 带着这个 id 回去，只会让用户为一个自己从没选过的模型白下几 GB，
+        # 而前端在同一条路径上会回落到已安装的模型——两端必须给出同一个答案
+        # （见 default_refined_model_for_language 的 is_ready 兜底）。
+        # 退役模型按「不可用」处理：清单里保留条目只是为了能解析出历史 id，它的本地副本
+        # 已在启动时清掉（ModelManager.remove_deprecated_models）。显式点名的模型仍交给
+        # _sentence_payload 校验，不在这里静默替换。
+        named = "refined_model_id" in payload
+        model = self.models.get(refined_model_id) if self.models.is_known(refined_model_id) else None
+        if (model is None
+                or model.get("retired")
+                or (not named
+                    and (not model_supports_language(model, language)
+                         or not self.models.is_ready(refined_model_id)))):
             refined_model_id = self._default_refined_model(language)
         self._sentence_payload({"language": language, "refined_model_id": refined_model_id})
         if refined_model_id != meeting["refined_model_id"]:
@@ -329,19 +352,19 @@ class RefinementWorkerMixin:
         is_imported_audio = manifest.get("source") == "audio_import" or (
             not manifest.get("tracks") and set(tracks) == {"mic"}
         )
-        # 效率模式 + 导入录音：默认不分离说话人。离线 pyannote 说话人分割在这类
-        # 低核机型上是「准备精修」的绝对大头（实测 60s 窗口约 24s，全片可达数分钟），
-        # 且并行/复用子进程几乎不缩放（4 物理核上并行仅 ~1.18x）。效率模式直接跳过
-        # 分割，只做 VAD、全部标成 local-user，把准备阶段从数分钟压到几秒。
-        efficiency_import_flat = (
-            bool(meeting.get("power_saving")) and is_imported_audio
+        # 导入录音的说话人分离按「设备能力 + 录音长度」自动取舍。离线 pyannote 分割是
+        # 「准备精修」的绝对大头（实测 60 s 窗口约 24 s，全片可达数分钟），且并行/复用
+        # 子进程几乎不缩放（4 物理核上并行仅 ~1.18x）。估计准备时间超出预算时只做 VAD、
+        # 全部标成 local-user，让逐字稿先出来；预算内仍正常区分说话人。
+        flat_import = is_imported_audio and self._import_diarization_too_slow(
+            meeting, tracks
         )
         # 系统音频（远端）与导入的麦克风必须聚类；实时麦克风只要声纹模型就绪也
         # 一起聚类，让本机说话人同样接受声纹库匹配，而不再一律标成 local-user。
-        # 效率模式的导入录音例外：不聚类。
+        # 超出预算的导入录音例外：不聚类。
         required_diarized = (
             {"system"}
-            | ({"mic"} if (is_imported_audio and not efficiency_import_flat) else set())
+            | ({"mic"} if (is_imported_audio and not flat_import) else set())
         ) & set(tracks)
         required_models = [
             refined_model_id,
@@ -349,27 +372,17 @@ class RefinementWorkerMixin:
         ]
         if required_diarized:
             required_models.extend([meeting.get("speaker_segmentation_model_id"), SPEAKER_EMBEDDING_MODEL_ID])
-        missing_models = [
-            model_id
-            for model_id in required_models
-            if model_id and not self.models.is_ready(model_id)
-        ]
-        if missing_models:
-            label = "Model" if len(missing_models) == 1 else "Models"
-            verb = "is" if len(missing_models) == 1 else "are"
-            raise RuntimeError(
-                f"{label} {', '.join(missing_models)} {verb} not installed"
-            )
+        missing = missing_models(self.models, required_models)
+        if missing:
+            raise ModelNotInstalled(missing)
         segmentation_id = (
             meeting.get("speaker_segmentation_model_id")
             or SETTINGS["diarization"]["segmentation_model_id"]
         )
         embedding_id = SPEAKER_EMBEDDING_MODEL_ID
-        speaker_models_ready = self._speaker_models_ready(
-            refined_model_id, segmentation_id, embedding_id
-        )
+        speaker_models_ready = self._speaker_models_ready(segmentation_id, embedding_id)
         diarized_tracks = set(required_diarized)
-        if speaker_models_ready and not efficiency_import_flat:
+        if speaker_models_ready and not flat_import:
             diarized_tracks |= set(tracks)
         # 多个轨道同时聚类时，未命中声纹库的 spk-N 需按轨道命名，避免麦克风与系统
         # 音频各自的 spk-1 在按时间戳合并后串成同一个人。
@@ -384,7 +397,7 @@ class RefinementWorkerMixin:
             self.emit("refinement.cancelled", {"meeting_id": meeting["id"]})
             return self.store.get_meeting(meeting["id"])
 
-        sources, turns_by_track, raw_turns_by_track = {}, {}, {}
+        sources, turns_by_track = {}, {}
         def prepare(track):
             return self._prepare_track(
                 track,
@@ -421,9 +434,8 @@ class RefinementWorkerMixin:
             self.wait_task(control)
         except TaskCancelled:
             return cancel_refinement()
-        for track, source, raw_turns, stable_turns in prepared:
+        for track, source, _raw_turns, stable_turns in prepared:
             sources[track] = source
-            raw_turns_by_track[track] = raw_turns
             turns_by_track[track] = stable_turns
         turns = sorted(
             (turn for track_turns in turns_by_track.values() for turn in track_turns),
@@ -682,19 +694,23 @@ class RefinementWorkerMixin:
                 if samples is None:
                     samples, sample_rate = read_mono_wav(path)
                 # 短音频直接处理；长音频由短生命子进程回收 Sherpa 原生内存。
+                # 在副本上把非语音区间清零再交给分离器；`samples` 原件必须保留——
+                # 后面的 `_recover_quiet_turns` 要读那些被检测器漏判的安静空洞，清零后
+                # 它只会读到静音，短轨的安静语音找回（quiet_speech_recovery）就永远不会触发。
+                diarization_samples = samples.copy()
                 cursor = 0
                 for turn in speech:
                     start = round(turn["start_ms"] * sample_rate / 1000)
                     end = round(turn["end_ms"] * sample_rate / 1000)
                     try:
-                        samples[cursor:start] = 0
+                        diarization_samples[cursor:start] = 0
                     except TypeError:
-                        samples[cursor:start] = [0] * (start - cursor)
+                        diarization_samples[cursor:start] = [0] * (start - cursor)
                     cursor = end
                 try:
-                    samples[cursor:] = 0
+                    diarization_samples[cursor:] = 0
                 except TypeError:
-                    samples[cursor:] = [0] * (len(samples) - cursor)
+                    diarization_samples[cursor:] = [0] * (len(diarization_samples) - cursor)
                 diarizer = OfflineDiarizer(
                     self.models,
                     -1,
@@ -703,7 +719,7 @@ class RefinementWorkerMixin:
                     threads=self.models.device()["threads"],
                 )
                 turns = (
-                    [dict(turn) for turn in diarizer.process(samples, sample_rate)]
+                    [dict(turn) for turn in diarizer.process(diarization_samples, sample_rate)]
                     if speech
                     else []
                 )
@@ -822,13 +838,47 @@ class RefinementWorkerMixin:
             )
         return turns
 
-    def _speaker_models_ready(self, refined_model_id, segmentation_id, embedding_id):
+    def _speaker_models_ready(self, segmentation_id, embedding_id):
         """判断 sherpa-onnx 离线说话人分离所需的模型是否就绪。"""
         return all(
             self.models.is_ready(model_id)
             for model_id in (segmentation_id, embedding_id)
             if model_id
         )
+
+    def _import_diarization_too_slow(self, meeting, tracks):
+        """估算导入录音的说话人分离耗时，超过预算则返回 True。
+
+        经验公式来自 bench 记录：4 物理核上 60 s 音频窗口约需 24 s（约 0.4x 实时），
+        并按核数线性折算。这里必须用**物理核**——超线程不提供实测到的线性加速，而
+        ``os.cpu_count()`` 返回逻辑核；在 4C/8T 机器上拿逻辑核做除数会把估时砍掉一半，
+        于是「预计要等太久」的判断被推迟一倍，正好违背这条启发式的目的。
+
+        读不到音频长度时按「不跳过」处理（照常分离说话人），保持原有行为；单条轨道读
+        失败不影响其它轨道，长度取所有可读轨道的最大值。
+
+        这是自动取舍，没有手动开关：要么按估算跳过、要么照常分离。
+        """
+        duration_ms = 0
+        for track in tracks:
+            try:
+                with wave.open(str(meeting["audio"]["playback"][track])) as audio:
+                    frame_rate = max(1, audio.getframerate())
+                    duration_ms = max(duration_ms, audio.getnframes() * 1000 // frame_rate)
+            except (OSError, wave.Error, KeyError, TypeError):
+                continue
+        if not duration_ms:
+            return False
+        device = self.models.device()
+        cores = max(1, int(device.get("physical_cores") or device.get("cores") or os.cpu_count() or 2))
+        estimated_seconds = (
+            duration_ms
+            / 1000
+            * IMPORT_DIARIZATION_SECONDS_PER_AUDIO_SECOND
+            * IMPORT_DIARIZATION_REFERENCE_CORES
+            / cores
+        )
+        return estimated_seconds > IMPORT_DIARIZATION_BUDGET_SECONDS
 
     def _diarize_long_track(
         self, path, duration_ms, speech, segmentation_id, threshold, control
@@ -1816,41 +1866,6 @@ class RefinementWorkerMixin:
         if len(letters) >= 4 and letters.isupper():
             text = re.sub(r"[^.!?]+", lambda match: sentence_case(match.group()), text)
         return _normalize_numbers(text)
-
-    def _is_duplicate_final(self, event):
-        """过滤麦克风与系统音频对同一句话的重复识别。"""
-        text = self._normalized_transcript(event["text"])
-        if len(text) < 8:
-            return False
-        start_ms, end_ms = event["start_ms"], event["end_ms"]
-        self.recent_finals = [
-            item
-            for item in self.recent_finals
-            if item["end_ms"] >= start_ms - 2000 and item["start_ms"] <= end_ms + 2000
-        ]
-        # ponytail: text/timing heuristic; add audio fingerprinting if false matches become measurable.
-        duplicate = any(
-            (
-                item["track"] != event["track"]
-                and SequenceMatcher(None, text, item["text"]).ratio() >= 0.75
-            )
-            or (
-                item["track"] == event["track"]
-                and item["end_ms"] >= start_ms - 800
-                and SequenceMatcher(None, text, item["text"]).ratio() >= 0.92
-            )
-            for item in self.recent_finals
-        )
-        if not duplicate:
-            self.recent_finals.append(
-                {
-                    "track": event["track"],
-                    "text": text,
-                    "start_ms": start_ms,
-                    "end_ms": end_ms,
-                }
-            )
-        return duplicate
 
     @staticmethod
     def _speaker_for(start_ms, end_ms, intervals):

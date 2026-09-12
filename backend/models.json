@@ -1,34 +1,5 @@
 [
   {
-    "id": "gtcrn-live-denoiser",
-    "name": "GTCRN Live Denoiser",
-    "runtime": "sherpa-onnx==1.13.2",
-    "revision": "speech-enhancement-models/gtcrn-simple",
-    "stages": [
-      "speech-enhancement"
-    ],
-    "languages": [
-      "all"
-    ],
-    "backend": [
-      "cpu",
-      "cuda"
-    ],
-    "speaker": false,
-    "size_bytes": 535638,
-    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speech-enhancement-models/gtcrn_simple.onnx",
-    "china_url": "https://modelscope.cn/models/zyaztec/sherpa-onnx-gtcrn-simple/resolve/master/gtcrn_simple.onnx",
-    "archive_sha256": "e77603ac0c23dac3227dd2d7135b3a585cbee2679048aecfa886657d3ae1b534",
-    "files": [
-      "gtcrn_simple.onnx"
-    ],
-    "kind": "speech-denoiser",
-    "platforms": [
-      "win32",
-      "linux"
-    ]
-  },
-  {
     "id": "silero-vad",
     "name": "Silero VAD",
     "runtime": "sherpa-onnx==1.13.2",
@@ -57,7 +28,11 @@
     "files": [
       "silero_vad.onnx"
     ],
-    "kind": "vad"
+    "kind": "vad",
+    "quality": 3,
+    "speed": 3,
+    "disk_size_bytes": 2318336,
+    "memory_floor_bytes": 52428800
   },
   {
     "id": "qwen3-asr-0.6b-int8",
@@ -146,7 +121,83 @@
       "decoder.int8.onnx",
       "tokenizer"
     ],
-    "kind": "qwen3"
+    "kind": "qwen3",
+    "asr_role": "multilingual",
+    "default_for_languages": [
+      "ja",
+      "ko"
+    ],
+    "refined_priority": 2,
+    "quality": 2,
+    "speed": 2,
+    "disk_size_bytes": 987033600,
+    "memory_floor_bytes": 2321547264
+  },
+  {
+    "id": "parakeet-tdt-0.6b-v3-int8",
+    "name": "Parakeet TDT 0.6B v3",
+    "runtime": "sherpa-onnx==1.13.2",
+    "revision": "asr-models/2026-08-16",
+    "stages": [
+      "refined"
+    ],
+    "languages": [
+      "bg",
+      "hr",
+      "cs",
+      "da",
+      "nl",
+      "en",
+      "et",
+      "fi",
+      "fr",
+      "de",
+      "el",
+      "hu",
+      "it",
+      "lv",
+      "lt",
+      "mt",
+      "pl",
+      "pt",
+      "ro",
+      "sk",
+      "sl",
+      "es",
+      "sv",
+      "ru",
+      "uk"
+    ],
+    "backend": [
+      "cpu",
+      "cuda"
+    ],
+    "speaker": false,
+    "size_bytes": 487170055,
+    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8.tar.bz2",
+    "directory": "sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8",
+    "files": [
+      "encoder.int8.onnx",
+      "decoder.int8.onnx",
+      "joiner.int8.onnx",
+      "tokens.txt"
+    ],
+    "kind": "nemo-transducer",
+    "asr_role": "western",
+    "default_for_languages": [
+      "en",
+      "es",
+      "fr",
+      "de",
+      "ru",
+      "auto"
+    ],
+    "refined_priority": 3,
+    "quality": 2,
+    "speed": 3,
+    "archive_sha256": "5793d0fd397c5778d2cf2126994d58e9d56b1be7c04d13c7a15bb1b4eafb16bf",
+    "disk_size_bytes": 674263040,
+    "memory_floor_bytes": 1991245824
   },
   {
     "id": "whisper-large-v3",
@@ -157,7 +208,15 @@
       "refined"
     ],
     "languages": [
-      "multilingual"
+      "en",
+      "zh",
+      "yue",
+      "es",
+      "ja",
+      "ko",
+      "fr",
+      "de",
+      "ru"
     ],
     "backend": [
       "cpu",
@@ -190,7 +249,14 @@
       "large-v3-decoder.int8.onnx",
       "large-v3-tokens.txt"
     ],
-    "kind": "whisper"
+    "kind": "whisper",
+    "retired": true,
+    "asr_role": "multilingual",
+    "quality": 3,
+    "speed": 1,
+    "default_for_languages": [],
+    "disk_size_bytes": 1798291456,
+    "memory_floor_bytes": 4482662400
   },
   {
     "id": "funasr-nano-int8",
@@ -221,7 +287,17 @@
       "embedding.int8.onnx",
       "Qwen3-0.6B/tokenizer.json"
     ],
-    "kind": "funasr-nano"
+    "kind": "funasr-nano",
+    "asr_role": "zh-optimized",
+    "default_for_languages": [
+      "zh",
+      "yue"
+    ],
+    "refined_priority": 1,
+    "quality": 2,
+    "speed": 2,
+    "disk_size_bytes": 1018757120,
+    "memory_floor_bytes": 2301624320
   },
   {
     "id": "pyannote-segmentation-3.0",
@@ -253,7 +329,9 @@
     "files": [
       "model.onnx"
     ],
-    "kind": "speaker-segmentation"
+    "kind": "speaker-segmentation",
+    "quality": 2,
+    "speed": 3
   },
   {
     "id": "eres2net-base-3dspeaker-zh",
@@ -261,6 +339,7 @@
     "runtime": "sherpa-onnx==1.13.2",
     "revision": "speaker-recongition-models",
     "stages": [
+      "speaker-embedding",
       "diarization"
     ],
     "languages": [
@@ -278,7 +357,9 @@
     "files": [
       "3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx"
     ],
-    "kind": "speaker-embedding"
+    "kind": "speaker-embedding",
+    "quality": 2,
+    "speed": 3
   },
   {
     "id": "qwen3.5-2b-q4km",
@@ -306,8 +387,8 @@
     ],
     "kind": "llama-chat",
     "context_size": 32768,
-    "speed": 4,
-    "quality": 4,
+    "speed": 2,
+    "quality": 3,
     "tier": "balanced"
   },
   {
@@ -336,8 +417,8 @@
     ],
     "kind": "llama-chat",
     "context_size": 32768,
-    "speed": 2,
-    "quality": 5,
+    "speed": 1,
+    "quality": 3,
     "tier": "quality"
   },
   {
@@ -365,8 +446,10 @@
     ],
     "kind": "llama-translation",
     "context_size": 4096,
-    "speed": 4,
-    "quality": 4,
-    "tier": "fast"
+    "speed": 3,
+    "quality": 3,
+    "tier": "fast",
+    "disk_size_bytes": 1133084672,
+    "memory_floor_bytes": 1258291200
   }
 ]

@@ -33,9 +33,22 @@ AI 笔记与 AI 会议总结可分别配置供应商、模型和 API Key。使�
 
 ![AI 笔记](assets/tour/zh/AI辅助笔记.png)
 
-### 面向 CPU 设备的性能模式
+### 识别模型怎么选
 
-在“设置 → 性能”中可选择性能模式或效率模式。效率模式会关闭语音降噪，并降低内置 AI 笔记频率；整句识别和会后精修仍然可用。性能较低的设备建议使用 2B 本地模型或在线服务。
+首次引导会列出可下载的语音模型，并按界面语言预勾选建议项（Silero VAD、说话人分离与声纹模型随包安装，无需选择）；下载前可以自行取消其余模型。
+
+之后每场会议，言录按**会议语言**选默认识别模型，归属关系声明在 `backend/models.json` 里：
+
+| 会议语言 | 默认识别模型 | 说明 |
+| --- | --- | --- |
+| 中文、粤语 | FunASR Nano int8 | 中文及中文方言准确率最高 |
+| 日语、韩语 | Qwen3-ASR 0.6B int8 | 可选模型里唯一同时覆盖日韩的一个 |
+| 英语、西班牙语、法语、德语、俄语、多语言混说 | Parakeet TDT 0.6B v3 | 一个模型覆盖 25 种欧洲语言，自带标点与时间戳 |
+| 其他语言 | Qwen3-ASR 0.6B int8 | 其余模型里覆盖语言最广的一个 |
+
+若声明的默认模型尚未下载，言录会改用**已安装且支持该语言**的模型，而不是让你再下一个。准备页提供「识别模型」下拉（未下载的模型也会列出体积），实时页是同一个切换器，会中即可通过 `meeting.reconfigure` 热切换。**设置 → 进阶 → 实时识别**里的 `live_asr.max_speech_seconds` 可以限制单段实时字幕最长能攒到多少秒；实际生效值始终是该值、语言级 VAD 配置与模型自身容量三者的最小值。
+
+性能较低的设备建议使用 2B 内置 AI 笔记模型或在线服务。
 
 ### 极简的会议界面，实时转写和翻译
 
@@ -59,13 +72,12 @@ AI 笔记与 AI 会议总结可分别配置供应商、模型和 API Key。使�
 
 ### 丰富的本地模型库
 
-可下载模型覆盖整句转写、离线精修、语音活动检测、说话人分离、声纹嵌入和人声分离。可以按语言和精度自由组合，全部在设备上运行。
+可下载模型覆盖整句转写、离线精修、语音活动检测、说话人分离、声纹嵌入、AI 笔记与会议纪要，以及字幕翻译。可以按语言和精度自由组合，全部在设备上运行。
 
 ![模型库](assets/tour/zh/%E6%A8%A1%E5%9E%8B%E5%BA%93.png)
 
 ### 更多能力
 
-- **人声分离** — Spleeter 把录音拆成人声与非人声两轨，方便二次剪辑。
 - **音频导入** — 已有的会议录音可直接导入离线转写，共用同一套语音管线。
 - **多格式导出** — 逐字稿 / 笔记支持 Markdown、TXT、JSON、SRT、DOCX、PDF；音频支持 FLAC、WAV、M4A。
 - **可审阅笔记** — 富文本或 Markdown 自由编辑，只采纳真正有用的 AI 建议。
@@ -127,12 +139,12 @@ flowchart LR
 
 | 类型 | 代表模型 | 语言 |
 | --- | --- | --- |
-| 整句识别 / 精修 ASR | Qwen3-ASR 0.6B、Whisper Large v3、FunASR Nano | 多语言 |
+| 整句识别 / 会后精修 | FunASR Nano int8、Qwen3-ASR 0.6B、Parakeet TDT 0.6B v3 | 中文 / 多语言 / 25 种欧洲语言 |
 | 语音活动检测 | Silero VAD | 通用 |
-| 语音增强 | GTCRN Live Denoiser | 通用 |
-| 说话人分离 | Pyannote Segmentation 3.0、Reverb Diarization v1 | 通用 |
-| 声纹嵌入 | 3D-Speaker ERes2Net Base | 通用 |
-| 人声分离 | Spleeter 2 Stems | 通用 |
+| 说话人分离 | Pyannote Segmentation 3.0 | 通用 |
+| 声纹嵌入 | 3D-Speaker ERes2Net Base | 中文 |
+| AI 笔记与会议纪要 | Qwen 3.5 2B、Qwen 3.5 4B | 中文 / 英语 |
+| 字幕翻译 | Tencent Hy-MT2 1.8B | 33 种语言 |
 
 LLM 摘要可以选「内置 AI」在本机运行捆绑的 GGUF 模型（Qwen 3.5 2B / 4B），也可以接入 Claude、OpenAI、OpenRouter，或任意兼容 OpenAI Chat Completions / Anthropic Messages 的自建服务——例如 Gemini（OpenAI 兼容端点）、DeepSeek、Kimi、通义千问等。
 
@@ -153,7 +165,8 @@ npm start
 ### 常用脚本
 
 ```bash
-npm test                    # UI + 后端测试
+npm test                    # 死代码门禁 + Electron 行为 + UI + E2E 冒烟 + 后端测试
+npm run test:e2e            # 启动真实应用并通过 CDP 断言
 npm run build               # 构建 Tailwind CSS
 npm run test:model          # ASR 模型诊断
 npm run test:diarization    # 说话人分离诊断
@@ -274,5 +287,5 @@ npm run dist:win   # Windows x64 EXE
 ## 致谢
 
 - [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) — 本地 ASR、VAD、标点和说话人处理的核心运行时，采用 [Apache-2.0](https://github.com/k2-fsa/sherpa-onnx/blob/master/LICENSE) 许可。
-- 感谢 [`backend/models.json`](../backend/models.json) 中声明的所有模型作者与维护者，包括 Zipformer、Whisper、Qwen3-ASR、FunASR、Pyannote、3D-Speaker、Silero、Spleeter 和 Tencent Hy-MT2。
+- 感谢 [`backend/models.json`](../backend/models.json) 中声明的所有模型作者与维护者，包括 Qwen3-ASR、FunASR、Parakeet（NeMo）、Pyannote、3D-Speaker、Silero、Qwen 和 Tencent Hy-MT2。
 - Electron、ONNX Runtime、Python 以及整个开源语音社区，让本地优先的会议工作流成为可能。

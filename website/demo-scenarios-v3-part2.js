@@ -120,15 +120,11 @@ DemoScenariosV3.prototype.setupPrepareUI = function() {
                   <dt>会议语言</dt>
                   <dd>中文</dd>
                 </div>
-                <div>
-                  <dt>会议模式</dt>
-                  <dd>标准模式</dd>
-                </div>
               </dl>
               <dl class="model-detail-list" hidden>
                 <div>
-                  <dt>实时字幕模型</dt>
-                  <dd>Streaming Zipformer Chinese XLarge</dd>
+                  <dt>识别模型</dt>
+                  <dd>FunASR Nano int8</dd>
                 </div>
                 <div>
                   <dt>说话人分离模型</dt>
@@ -917,13 +913,14 @@ DemoScenariosV3.prototype.getModelLibraryData = function () {
     downloadLabel: '下载',
     installedLabel: '已安装',
     items: [
-      { stage: '实时字幕', name: 'Streaming Zipformer Chinese XLarge', language: '中文 / 英语 / 粤语', intro: '原生流式识别，持续更新当前字幕。', quality: 3, speed: 1, installed: true, size: '1.1 GB' },
-      { stage: '实时字幕', name: 'Streaming Zipformer English', language: '英语', intro: '英语原生流式识别。', quality: 2, speed: 3, installed: false, size: '520 MB' },
-      { stage: '标点恢复', name: 'English Punctuation and Casing', language: '英语', intro: '恢复英文标点与大小写。', quality: 1, speed: 3, installed: false, size: '280 MB' },
-      { stage: '标点恢复', name: '中英文标点恢复', language: '中文 / 英语 / 粤语', intro: '为实时字幕补全逗号、句号和问号。', quality: 2, speed: 3, installed: true, size: '290 MB' },
-      { stage: '会后精修', name: 'Qwen3-ASR', language: '多语种', intro: '基于完整录音生成高精度修订版本。', quality: 2, speed: 3, installed: false, size: '1.9 GB' },
-      { stage: '说话人分离', name: 'Pyannote Segmentation 3.0', language: '语言无关', intro: '检测单轨录音中的说话区间。', quality: 2, speed: 3, installed: true, size: '90 MB' },
-      { stage: '说话人分离', name: '3D-Speaker ERes2Net Base', language: '中文', intro: '提取声纹并离线聚类说话人。', quality: 2, speed: 3, installed: false, size: '210 MB' }
+      { stage: '整句识别', name: 'FunASR Nano int8', language: '中文 / 英语 / 粤语', intro: '中文会议首选：中文准确率高，覆盖粤语等方言，也能识别英语。', quality: 2, speed: 2, installed: true, size: '842 MB' },
+      { stage: '整句识别', name: 'Qwen3-ASR 0.6B int8', language: '多语种', intro: '覆盖 30 种语言和 22 种中文方言并自动判断语种；日韩会议的默认模型。', quality: 2, speed: 2, installed: false, size: '879 MB' },
+      { stage: '整句识别', name: 'Parakeet TDT 0.6B v3', language: '欧洲 25 种语言', intro: '英语与欧洲语言的默认模型，自动判断语种，自带标点与大小写。', quality: 2, speed: 3, installed: false, size: '487 MB' },
+      { stage: '语音活动检测', name: 'Silero VAD', language: '语言无关', intro: '判断此刻是否有人说话，用于切分句子边界；随应用安装。', quality: 3, speed: 3, installed: true, size: '2 MB' },
+      { stage: '说话人分离', name: 'Pyannote Segmentation 3.0', language: '语言无关', intro: '检测单轨录音中的说话区间，为说话人分离提供边界；随应用安装。', quality: 2, speed: 3, installed: true, size: '7 MB' },
+      { stage: '声纹嵌入', name: '3D-Speaker ERes2Net Base', language: '中文', intro: '提取声纹并离线聚类说话人；随应用安装。', quality: 2, speed: 3, installed: true, size: '40 MB' },
+      { stage: 'AI 笔记与会议纪要', name: 'Qwen 3.5 2B', language: '中文 / 英语', intro: '在本机生成会中建议与会议纪要。', quality: 3, speed: 2, installed: false, size: '1.3 GB' },
+      { stage: '字幕翻译', name: 'Tencent Hy-MT2 1.8B', language: '33 种语言', intro: '把字幕翻译为目标语言，全部在本机运行。', quality: 3, speed: 3, installed: false, size: '1.13 GB' }
     ]
   };
 };

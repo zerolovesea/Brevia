@@ -1,11 +1,14 @@
 """本地模型管理，以及跨平台语音引擎的兼容边界。"""
 
+import functools
 import hashlib
 import http.client
 import json
 import os
 import platform
 import shutil
+import subprocess
+import sys
 import tarfile
 import tempfile
 import time
@@ -14,6 +17,7 @@ import wave
 from pathlib import Path
 
 from .config import SETTINGS, SPEAKER_EMBEDDING_MODEL_ID
+from .worker_common import ModelNotInstalled
 
 
 DOWNLOAD_TIMEOUT_SECONDS = 30
@@ -37,7 +41,17 @@ REFINED_MODEL_MAX_SPEECH_SECONDS = {
     "qwen3": 50.0,
     "whisper": 30.0,
     "fire-red-asr-ctc": 25.0,
+    # Parakeet TDT 的 sherpa-onnx 导出按 10 s 编码窗口发布（官方 QNN 版即
+    # ...-10s-transducer），转写质量以此窗口最优。取 20 s 留出余量但仍然避免
+    # 整段独白塞进一次编码——具体上限需要实测确认，见设计文档 §2.8 待办。
+    "nemo-transducer": 20.0,
 }
+# 实时整句链路的默认段长上限（秒）。这是「用户可调的下压阀门」，不是模型容量表：
+# 有效上限始终取三者的最小值——``vad[语言].max_speech_duration``、识别模型的
+# ``REFINED_MODEL_MAX_SPEECH_SECONDS``、以及本设置。因此本值调**大**没有效果（它只会
+# 被前面两者夹住），调小才会真的缩短实时段长；真正的模型容量由模型表独立保证，
+# 不会因为用户改这里而越过 KV 容量。
+DEFAULT_LIVE_MAX_SPEECH_SECONDS = 22.0
 DEPRECATED_MODEL_PREFIXES = (
     "campplus-zh-en-",
     "fire-red-asr2-ctc-zh-en-int8-",
@@ -56,6 +70,40 @@ DEPRECATED_MODEL_PREFIXES = (
 
 class DownloadCancelled(Exception):
     """用于中止由下载进度回调驱动的模型下载。"""
+
+
+def _sysctl_physical_cores():
+    """macOS：读 ``hw.physicalcpu``；失败时返回 ``None``。"""
+    try:
+        result = subprocess.run(
+            ["sysctl", "-n", "hw.physicalcpu"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+            check=False,
+        )
+        value = int(result.stdout.strip())
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None
+    return value if value > 0 else None
+
+
+def _proc_cpuinfo_physical_cores():
+    """Linux：按 ``physical id`` + ``core id`` 去重得到物理核数；失败时返回 ``None``。"""
+    try:
+        blocks = Path("/proc/cpuinfo").read_text(encoding="utf-8").split("\n\n")
+    except OSError:
+        return None
+    pairs = set()
+    for block in blocks:
+        fields = {}
+        for line in block.splitlines():
+            key, _, value = line.partition(":")
+            fields[key.strip()] = value.strip()
+        physical, core = fields.get("physical id"), fields.get("core id")
+        if physical is not None and core is not None:
+            pairs.add((physical, core))
+    return len(pairs) or None
 
 
 def sha256_file(path):
@@ -92,10 +140,19 @@ class ModelManager:
         self.remove_deprecated_models()
 
     def remove_deprecated_models(self):
-        """删除已从清单移除、且应用不再提供删除入口的旧模型。"""
+        """删除已从清单移除、且应用不再提供删除入口的旧模型。
+
+        分两类：(1) 名字前缀命中 ``DEPRECATED_MODEL_PREFIXES`` 的历史遗留；
+        (2) 清单里标了 ``retired: true`` 的模型——它仍然留在清单里（历史会议的
+        ``refined_model_id`` 可能指向它，``get()`` 必须还能解析），但界面已经不显示、
+        也不再提供删除入口。留着本地副本只会变成用户看不见也删不掉的几 GB 占用。
+        """
         for path in self.root.iterdir():
             if path.is_dir() and path.name.startswith(DEPRECATED_MODEL_PREFIXES):
                 shutil.rmtree(path, ignore_errors=True)
+        for model in self.catalog.values():
+            if model.get("retired"):
+                shutil.rmtree(self.local_path(model["id"]), ignore_errors=True)
 
     def cleanup_unlisted(self):
         """仅删除带 Brevia 元数据、但已不在当前模型清单的本地模型。"""
@@ -252,6 +309,12 @@ class ModelManager:
                 raise DownloadCancelled()
 
         model = self.get(model_id)
+        # 退役模型不接受下载。清单里保留它的条目只是为了让历史会议的 id 仍能解析；
+        # 界面已经不提供入口，但 ``model_required`` 错误链会把旧会议的 id 原样带回来，
+        # 于是用户为已下线的模型白下几 GB——而 ``remove_deprecated_models`` 会在下次
+        # 启动/下个分离分块子进程里再删掉它，形成下载—删除循环。
+        if model.get("retired"):
+            raise ValueError(f"Model {model_id} is no longer offered")
         if self.is_ready(model_id):
             self.event("model.status", {"model_id": model_id, "status": "ready"})
             return self.path(model_id)
@@ -375,6 +438,26 @@ class ModelManager:
         )
 
     @staticmethod
+    @functools.lru_cache(maxsize=1)
+    def physical_cores():
+        """探测物理核数，探测不到时回落到逻辑核数。
+
+        按核数折算耗时的场景必须用物理核：超线程不提供实测到的线性加速，而
+        ``os.cpu_count()`` 返回逻辑核。在 4C/8T 机器上直接拿逻辑核做除数，会把估算
+        时间砍掉一半，于是「预计要等太久」的判断被推迟一倍。
+
+        Returns:
+            物理核数（探测失败时为 ``os.cpu_count()``，再失败为 2）。
+        """
+        fallback = os.cpu_count() or 2
+        detected = None
+        if sys.platform == "darwin":
+            detected = _sysctl_physical_cores()
+        elif sys.platform.startswith("linux"):
+            detected = _proc_cpuinfo_physical_cores()
+        return detected if detected and detected > 0 else fallback
+
+    @staticmethod
     def device():
         """探测 ONNX Runtime 执行后端，并给出保守的推理线程数。"""
         requested = os.environ.get("BREVIA_ASR_BACKEND", "").lower()
@@ -403,6 +486,9 @@ class ModelManager:
             "backend": backend,
             "threads": max(1, min(4, (os.cpu_count() or 2) // 2)),
             "cores": os.cpu_count() or 2,
+            # 耗时代价按物理核折算（见 ModelManager.physical_cores）。与 cores 分开暴露：
+            # cores 表示调度意义上的并行度，physical_cores 表示真实吞吐量上限。
+            "physical_cores": ModelManager.physical_cores(),
             # Apple Silicon 的语音模型虽走 CPU provider，但仍可使用 Metal 跑本地 LLM；
             # 不应仅因 ASR provider 是 CPU 而被误判为弱机。
             # Windows commonly reports logical processors: a 4C/8T mobile CPU is still
@@ -412,63 +498,16 @@ class ModelManager:
         }
 
     @staticmethod
-    def thread_budget(role):
+    def thread_budget():
         """整句识别保持低线程预算，给采集和 AI 笔记留出 CPU。"""
         total = os.cpu_count() or 2
-        if role == "denoiser":
-            return max(1, min(4, total // 2))
         return max(1, min(2, total // 4))
-
-
-class LiveDenoiser:
-    """用 Sherpa-onnx 在线 GTCRN 降噪后再交给实时识别。"""
-
-    def __init__(self, manager, model_id):
-        """初始化在线降噪器。
-
-        Args:
-            manager: 已初始化的 ModelManager。
-            model_id: 已安装的降噪模型 ID。
-        """
-        if not manager.is_ready(model_id):
-            raise RuntimeError(f"Model {model_id} is not installed")
-        import sherpa_onnx
-
-        config = sherpa_onnx.OnlineSpeechDenoiserConfig()
-        config.model.gtcrn.model = str(manager.path(model_id) / "gtcrn_simple.onnx")
-        config.model.num_threads = manager.thread_budget("denoiser")
-        config.model.provider = manager.device()["backend"]
-        if not config.validate():
-            raise RuntimeError("Invalid live denoiser configuration")
-        self.config = config
-        self.engines = {}
-
-    def accept(self, track, samples, sample_rate, flush=False):
-        """按模型帧长处理一条音轨，并在结束时输出缓存尾音。"""
-        import numpy
-        import sherpa_onnx
-
-        engine = self.engines.setdefault(
-            track, sherpa_onnx.OnlineSpeechDenoiser(self.config)
-        )
-        output = [
-            numpy.asarray(
-                engine(
-                    samples[start : start + engine.frame_shift_in_samples], sample_rate
-                ).samples,
-                dtype=numpy.float32,
-            )
-            for start in range(0, len(samples), engine.frame_shift_in_samples)
-        ]
-        if flush:
-            output.append(numpy.asarray(engine.flush().samples, dtype=numpy.float32))
-        return numpy.concatenate(output) if output else samples
 
 
 def _vad_config(manager, model_id, vad_params=None):
     """创建实时与离线流程共用的 VAD 配置，可覆盖 Silero 阈值/时长参数。"""
     if not manager.is_ready(model_id):
-        raise RuntimeError(f"Model {model_id} is not installed")
+        raise ModelNotInstalled([model_id])
     import sherpa_onnx
 
     config = sherpa_onnx.VadModelConfig()
@@ -532,7 +571,17 @@ class SentenceVAD:
         # 段首因此会多补一点原始音频（只会让句首更完整），但绝不会越过已经交付的
         # 水位——``_history_prefix`` 会把它夹在 ``delivered_until`` 之内。
         self.cut_overlap_ms = max(self.speech_pad_ms, CUT_OVERLAP_MS)
-        self.max_speech_seconds = min(params["max_speech_duration"], 12.0)
+        # 实时整句链路的硬上限：取「模型能承载的最长段」与「用户配置上限」的较小值。
+        # 这里以前把 12.0 写死，等于把上面那张按模型实测出来的容量表整个作废——
+        # FunASR Nano（22 s）、Parakeet（20 s）、Qwen3-ASR（50 s）在实时链路上
+        # 一律被切成 12 s，连续独白被多切 2–4 倍，实时率白白变差。
+        # 现在由 live_asr.max_speech_seconds 配置。注意它只是「下压阀门」：
+        # 有效值 = min(vad 语言配置, 模型容量, 本设置)，所以调大不生效、调小才生效，
+        # 模型 KV 容量永远由 REFINED_MODEL_MAX_SPEECH_SECONDS 独立兜住。
+        configured_cap = float(
+            SETTINGS.get("live_asr", {}).get("max_speech_seconds") or DEFAULT_LIVE_MAX_SPEECH_SECONDS
+        )
+        self.max_speech_seconds = min(params["max_speech_duration"], configured_cap)
         # 回补与最后一个 512 样本块也计入模型上限，不能在切完后额外超出。
         params["max_speech_duration"] = max(0.1, self.max_speech_seconds - self.cut_overlap_ms / 1000 - 512 / 16000)
         self.config = _vad_config(manager, model_id, params)
@@ -986,7 +1035,7 @@ class SpeakerTracker:
         config = SETTINGS["diarization"]
         model_id = SPEAKER_EMBEDDING_MODEL_ID
         if not manager.is_ready(model_id):
-            raise RuntimeError(f"Model {model_id} is not installed")
+            raise ModelNotInstalled([model_id])
         try:
             import sherpa_onnx
         except ImportError as error:
@@ -994,7 +1043,7 @@ class SpeakerTracker:
         model = manager.path(model_id) / manager.get(model_id)["files"][0]
         extractor_config = sherpa_onnx.SpeakerEmbeddingExtractorConfig(
             model=str(model),
-            num_threads=threads or manager.thread_budget("speaker"),
+            num_threads=threads or manager.thread_budget(),
             provider=manager.device()["backend"],
         )
         if not extractor_config.validate():
@@ -1008,11 +1057,6 @@ class SpeakerTracker:
         self.centers = []
         self.counts = []
         self.last_speaker = None
-
-    @property
-    def speaker_ids(self):
-        """返回当前已发现的说话人 ID。"""
-        return [f"spk-{index + 1}" for index in range(len(self.centers))]
 
     def assign(self, samples, sample_rate=16000):
         """提取一段语音的声纹并返回稳定的 ``spk-N``；过短片段沿用上一人。"""
@@ -1102,17 +1146,18 @@ class RefinedASR:
         if model["kind"] not in {
             "qwen3",
             "whisper",
+            "nemo-transducer",
             "fire-red-asr-ctc",
             "funasr-nano",
         } or not manager.is_ready(model_id):
-            raise RuntimeError(f"Model {model_id} is not installed")
+            raise ModelNotInstalled([model_id])
         try:
             import sherpa_onnx
         except ImportError as error:
             raise RuntimeError("sherpa-onnx is not installed") from error
         path = manager.path(model_id)
         common = dict(
-            num_threads=threads or manager.thread_budget("refine"),
+            num_threads=threads or manager.thread_budget(),
             provider=manager.device()["backend"],
         )
         if model["kind"] == "fire-red-asr-ctc":
@@ -1136,6 +1181,19 @@ class RefinedASR:
                 decoder=str(path / model["files"][1]),
                 tokens=str(path / model["files"][2]),
                 language=self._whisper_language(language),
+                **common,
+            )
+        elif model["kind"] == "nemo-transducer":
+            # Parakeet TDT：25 种欧洲语言联合训练，官方支持自动检测语言、无需提示——
+            # 这正是英西混说需要的，也是它取代 Whisper 的原因（Whisper 在混说音频上
+            # 会把外语翻译成英语而不是转写，见 docs/asr-model-selection-design.md §2.8）。
+            # 不解码语言参数：模型自行判断，传了反而可能限制它。
+            self.recognizer = sherpa_onnx.OfflineRecognizer.from_transducer(
+                encoder=str(path / model["files"][0]),
+                decoder=str(path / model["files"][1]),
+                joiner=str(path / model["files"][2]),
+                tokens=str(path / model["files"][3]),
+                model_type="nemo_transducer",
                 **common,
             )
         else:
@@ -1216,15 +1274,13 @@ class OfflineDiarizer:
                 Pyannote 分割推理被压到 2 线程而拖慢「准备精修」。
         """
         config = SETTINGS["diarization"]
-        diarization_threads = threads or manager.thread_budget("diarization")
+        diarization_threads = threads or manager.thread_budget()
         segmentation_id = segmentation_id or config["segmentation_model_id"]
         embedding_id = SPEAKER_EMBEDDING_MODEL_ID
         if not all(
             manager.is_ready(model_id) for model_id in (segmentation_id, embedding_id)
         ):
-            raise RuntimeError(
-                f"Models {segmentation_id}, {embedding_id} are not installed"
-            )
+            raise ModelNotInstalled([segmentation_id, embedding_id])
         try:
             import sherpa_onnx
         except ImportError as error:

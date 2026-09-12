@@ -28,7 +28,6 @@ def replay(
     max_seconds,
     data_root,
     num_speakers_override=None,
-    streaming_model_override=None,
     refined_model_override=None,
 ):
     from .storage import Store
@@ -130,7 +129,6 @@ def main():
     parser.add_argument("--track", default="system", choices=("mic", "system"))
     parser.add_argument("--max-seconds", type=float, default=90.0)
     parser.add_argument("--num-speakers", type=int, default=None)
-    parser.add_argument("--streaming-model", default=None)
     parser.add_argument("--refined-model", default=None)
     parser.add_argument("--source-root", default=str(Path.home() / "brevia"))
     parser.add_argument("--data-root", default=str(Path.home() / "brevia-replay-test"))
@@ -143,7 +141,6 @@ def main():
         args.max_seconds,
         args.data_root,
         args.num_speakers,
-        args.streaming_model,
         args.refined_model,
     )
     summarize(outcome)

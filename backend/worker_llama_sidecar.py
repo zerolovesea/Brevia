@@ -13,6 +13,8 @@ import threading
 from pathlib import Path
 from typing import Optional
 
+from .worker_common import ModelNotInstalled
+
 
 # 推理模型（Qwen3.5 等）将思维链包装在 <think>...</think> 中。即使思考实际关闭，
 # 它们也会发出一个空块，因此在到达摘要/翻译管道之前从每次内置补全中剥离它。
@@ -174,7 +176,7 @@ class LlamaSidecarMixin:
         """解析已下载模型的磁盘 .gguf 路径。"""
         model_path = self.models.path(model_id)
         if not model_path.exists():
-            raise ValueError(f"Model {model_id} is not installed")
+            raise ModelNotInstalled([model_id])
         gguf_files = list(model_path.glob("*.gguf"))
         if not gguf_files:
             raise ValueError(f"No .gguf file found in {model_path}")

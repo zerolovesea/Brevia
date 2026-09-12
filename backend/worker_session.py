@@ -11,11 +11,18 @@ from collections import deque
 from difflib import SequenceMatcher
 from pathlib import Path
 
-from .asr import DEFAULT_REFINED_MODEL_ID, LiveDenoiser, RefinedASR, SentenceVAD
+from .asr import DEFAULT_REFINED_MODEL_ID, RefinedASR, SentenceVAD
 from .audio_io import convert_to_pcm_wav
 from .config import SETTINGS
 from .worker_llm import TRANSLATION_MODEL_ID
-from .worker_common import model_supports_language, require, synchronized_recording
+from .worker_common import (
+    ModelNotInstalled,
+    missing_models,
+    default_refined_model_for_language,
+    model_supports_language,
+    require,
+    synchronized_recording,
+)
 
 MAX_MIX_BUFFER_MS = 5000
 _MIX_STALL = object()
@@ -59,17 +66,9 @@ class RecordingSessionMixin:
         required_models = [payload["refined_model_id"], payload["vad_model_id"]]
         if payload.get("target_language"):
             required_models.append(TRANSLATION_MODEL_ID)
-        missing_models = [
-            model_id
-            for model_id in required_models
-            if model_id and not self.models.is_ready(model_id)
-        ]
-        if payload.get("require_models") and missing_models:
-            label = "Model" if len(missing_models) == 1 else "Models"
-            verb = "is" if len(missing_models) == 1 else "are"
-            raise RuntimeError(
-                f"{label} {', '.join(missing_models)} {verb} not installed"
-            )
+        missing = missing_models(self.models, required_models)
+        if payload.get("require_models") and missing:
+            raise ModelNotInstalled(missing)
         meeting = self.store.create_meeting(payload)
         self._prepare_active(
             meeting,
@@ -116,6 +115,10 @@ class RecordingSessionMixin:
         meeting = self.store.get_meeting(payload["meeting_id"])
         if meeting["status"] != "recording":
             raise ValueError("Only an unfinished recording can be resumed")
+        # 恢复入口以前不校验也不修复识别模型：加载失败会被 _prepare_active 吞成一条警告，
+        # 于是会议"恢复成功"却全程没有字幕。先修掉失效/退役的模型，再让加载失败向上抛，
+        # 由 main.js 明确告诉用户「录音仍在本地保留，但转写无法恢复」。
+        meeting = self._repair_refined_model(meeting)
         start_ms = self.store.recorded_duration_ms(meeting["id"])
         # 恢复时从录音 manifest 推导本场打开了哪些捕获轨道，以重建双轨混音。
         # ``audio_tracks`` 未落库，但原始双轨的落盘记录就是最可靠的来源：双轨会议
@@ -124,7 +127,7 @@ class RecordingSessionMixin:
         manifest = self.store.read_manifest(meeting["id"])
         recorded_tracks = set(manifest.get("tracks", {}))
         audio_tracks = [track for track in ("mic", "system") if track in recorded_tracks]
-        self._prepare_active(meeting, start_ms, audio_tracks=audio_tracks)
+        self._prepare_active(meeting, start_ms, audio_tracks=audio_tracks, require_asr=True)
         self.emit("meeting.recovered", {"meeting_id": self.active, "meeting": meeting})
         return meeting
 
@@ -136,28 +139,91 @@ class RecordingSessionMixin:
             raise ValueError("Sentence transcription requires an offline ASR model")
         if not model_supports_language(model, payload["language"]):
             if payload["language"] == "auto":
-                raise ValueError("Automatic multilingual transcription requires Qwen3-ASR or multilingual Whisper")
+                raise ValueError("Automatic multilingual transcription requires a multilingual model (Qwen3-ASR or Parakeet)")
             raise ValueError(f"Model {model_id} does not support {payload['language']}")
         return {**payload, "refined_model_id": model_id,
                 "vad_model_id": payload.get("vad_model_id") or "silero-vad"}
 
     def _default_refined_model(self, language):
-        return DEFAULT_REFINED_MODEL_ID if language in {"zh", "en", "yue"} else "qwen3-asr-0.6b-int8"
+        """按 ``models.json`` 的 ``default_for_languages`` 选该语言的默认识别模型。
 
-    def _prepare_active(self, meeting, start_ms=0, audio_tracks=None):
+        规则只有一处实现（``models.json`` 的 ``default_for_languages`` +
+        ``refined_priority``），前端读同一份字段，两端连「候选顺序」都一致。
+
+        这里传入 ``self.models.is_ready``：清单里声明的默认模型没装时改选一个已安装且
+        支持该语言的模型。不这样做的话，后端会把用户从没选过的模型当成默认值送给加载器
+        ——精修老会议时凭空弹出一个几 GB 的下载，而前端在同一条路径上会回落到已安装的
+        模型，两端对同一个语言给出不同的模型。
+
+        清单里没有模型支持该语言（旧会议记录的冷门语言码、或将来新增的语言）时回落到
+        ``DEFAULT_REFINED_MODEL_ID``，保证调用方拿到的是一个可用 id 而不是 None。
+        """
+        return (
+            default_refined_model_for_language(self.models, language, is_ready=self.models.is_ready)
+            or DEFAULT_REFINED_MODEL_ID
+        )
+
+    def _repair_refined_model(self, meeting, language=None):
+        """把会议指向的识别模型修成当前可用的，返回更新后的会议字典。
+
+        会议记录里的 ``refined_model_id`` 可能指向已退役的模型、已从清单移除的模型，或
+        用户已删除本地文件的模型。``ModelManager.remove_deprecated_models`` 会在启动时
+        把退役模型的本地副本清掉，因此这些 id 加载时必然失败。
+
+        ``start`` / ``import_audio`` / ``refine`` / ``reconfigure`` 都会重新校验模型，
+        但 ``resume``（进程崩溃后的自动恢复）以前既不校验也不修复：它直接进
+        ``_prepare_active``，加载失败被吞成一条 ``worker.warning``，于是整场会议照常
+        "恢复"却一条字幕都不出。这个入口现在也走同一修复。
+
+        Args:
+            meeting: 会议详情字典。
+            language: 覆盖会议语言（换语言时用），省略则用会议自身的语言。
+
+        Returns:
+            修复后的会议字典；无需修改时返回入参本身。未安装但型号合法的模型**不改动**
+            ——那是「用户还没下载」，应当由 ``model_required`` 提示下载，而不是静默换型号。
+        """
+        model_id = meeting.get("refined_model_id")
+        language = language or meeting.get("language") or "auto"
+        model = self.models.get(model_id) if model_id and self.models.is_known(model_id) else None
+        needs_repair = (
+            model is None
+            or model.get("retired")
+            or "refined" not in model.get("stages", [])
+            or not model_supports_language(model, language)
+        )
+        if not needs_repair:
+            return meeting
+        replacement = self._default_refined_model(language)
+        if replacement == model_id:
+            return meeting
+        return self.store.update_meeting(meeting["id"], {"refined_model_id": replacement})
+
+    def _prepare_active(self, meeting, start_ms=0, audio_tracks=None, require_asr=False):
+        """建立一场实时会话的识别链路。
+
+        Args:
+            meeting: 会议详情。
+            start_ms: 起始毫秒（恢复录制时用）。
+            audio_tracks: 本场打开的捕获轨道。
+            require_asr: 识别链路建不起来时是否上抛。录制入口（``start``）保持 False：
+                「识别失败也保住原始录音」是既有产品约定，失败只发一条
+                ``worker.warning``，音频照常落盘。恢复入口（``resume``）传 True——
+                那里报"恢复成功"却全程没有字幕是在骗用户，必须让调用方看到失败。
+
+        Raises:
+            RuntimeError: ``require_asr`` 为 True 且识别链路不可用时。
+        """
         self.active = meeting["id"]
         self.meeting_language = meeting["language"]
-        self.power_saving = bool(meeting.get("power_saving"))
         self.stream_state = {}
         self.live_tracks = set(audio_tracks or ())
         self.live_mix_buffers = {"mic": deque(), "system": deque()}
-        self.recent_finals = []
         self.pending_subtitles, self.pending_join = {}, {}
         self.pending_paragraphs = {}
         self.subtitle_expiry_ms = 0
         self.vad = None
         self.asr = None
-        self.denoiser = None
         self.live_postprocessing = None
         try:
             self.asr = RefinedASR(self.models, meeting["refined_model_id"], language=meeting["language"])
@@ -171,13 +237,29 @@ class RecordingSessionMixin:
             )
             self.live_postprocessing = ThreadPoolExecutor(max_workers=1, thread_name_prefix="brevia-sentence")
         except (RuntimeError, ValueError) as error:
-            self.emit("worker.warning", {"meeting_id": self.active, "code": "asr_unavailable", "message": str(error)})
-        denoiser_id = SETTINGS["live_asr"]["denoiser_model_id"]
-        if not self.power_saving and SETTINGS["live_asr"]["denoiser_enabled"] and self.models.is_ready(denoiser_id):
-            try:
-                self.denoiser = LiveDenoiser(self.models, denoiser_id)
-            except RuntimeError as error:
-                self.emit("worker.warning", {"meeting_id": self.active, "code": "denoiser_unavailable", "message": str(error)})
+            self.asr = None
+            self.vad = None
+            self.live_postprocessing = None
+            if require_asr:
+                # 恢复入口：由调用方（resume）把失败报给用户并中止恢复，这里不重复发警告，
+                # 否则用户会先收到一条"识别不可用"、再收到一条"无法恢复"。
+                #
+                # 但必须把刚写下的会话状态一并回滚：`self.active` 已在方法开头置位，
+                # 若原样上抛，下一次 start/resume 会撞上 "A meeting is already
+                # active"，录音被卡死到进程重启（主进程"先下载再重试 resume"也会
+                # 在重试时失败）。线程池与 AI 笔记此刻都还没建，只需清纯状态字段。
+                self._clear_active_session()
+                raise
+            # 录制入口：保住录音，但这一场永远不会有实时字幕。这条警告是**常驻卡片**的数据源
+            # （前端按 code 渲染，而不是一闪而过的 toast）——否则用户以为在记，其实只在录。
+            self.emit(
+                "worker.warning",
+                {
+                    "meeting_id": self.active,
+                    "code": "asr_unavailable",
+                    "message": str(error),
+                },
+            )
 
     @synchronized_recording
     def pause(self, payload):
@@ -193,13 +275,13 @@ class RecordingSessionMixin:
         require(payload, "meeting_id")
         self._active(payload["meeting_id"])
         previous = self.store.get_meeting(self.active)
-        changes = {key: payload[key] for key in ("language", "refined_model_id", "target_language", "power_saving") if key in payload}
-        if "language" in changes and "refined_model_id" not in changes:
-            # 换语言后原模型可能带不动新语言：换成该语言的默认模型（规则只有一处实现）。
-            model = self.models.get(previous["refined_model_id"])
-            if not model_supports_language(model, changes["language"]):
-                changes["refined_model_id"] = self._sentence_payload({"language": changes["language"]})["refined_model_id"]
-        updated = self._sentence_payload({**previous, **changes})
+        changes = {key: payload[key] for key in ("language", "refined_model_id", "target_language") if key in payload}
+        # 无论改哪一项都先修一次存量模型：退役、已下架、或带不动新语言的 id 都换成该语言
+        # 可用的默认模型。修复只针对「型号不可用」，不动「用户还没下载」的合法型号。
+        # 注意 ``previous`` 必须保持为会话启动时实际加载的那个会议记录，下面比较
+        # ``changed_asr`` 才有意义。
+        repaired = self._repair_refined_model(previous, language=changes.get("language"))
+        updated = self._sentence_payload({**repaired, **changes})
         changed_asr = self.asr is None or any(updated[key] != previous[key] for key in ("language", "refined_model_id"))
         asr, vad = self.asr, self.vad
         if changed_asr:
@@ -211,23 +293,15 @@ class RecordingSessionMixin:
                 max_speech_duration=asr.max_speech_seconds,
             )
         if updated.get("target_language") and not self.models.is_ready(TRANSLATION_MODEL_ID):
-            raise RuntimeError(f"Model {TRANSLATION_MODEL_ID} is not installed")
-        denoiser = self.denoiser
-        power_saving = bool(updated.get("power_saving"))
-        if power_saving:
-            denoiser = None
-        elif self.power_saving and SETTINGS["live_asr"]["denoiser_enabled"]:
-            model_id = SETTINGS["live_asr"]["denoiser_model_id"]
-            denoiser = LiveDenoiser(self.models, model_id) if self.models.is_ready(model_id) else None
+            raise ModelNotInstalled([TRANSLATION_MODEL_ID])
         if changed_asr:
             self._flush_sentences()
         meeting = self.store.update_meeting(self.active, {key: updated[key] for key in (
-            "language", "refined_model_id", "target_language", "power_saving")})
+            "language", "refined_model_id", "target_language")})
         if self.live_postprocessing is None and asr is not None:
             self.live_postprocessing = ThreadPoolExecutor(max_workers=1, thread_name_prefix="brevia-sentence")
-        self.asr, self.vad, self.denoiser = asr, vad, denoiser
+        self.asr, self.vad = asr, vad
         self.meeting_language = updated["language"]
-        self.power_saving = power_saving
         self.emit("meeting.reconfigured", {"meeting_id": self.active, "meeting": meeting})
         return meeting
 
@@ -246,24 +320,6 @@ class RecordingSessionMixin:
         if peak:
             gain = min(gain, config["microphone_peak"] / peak)
         return samples if gain <= 1 else samples * gain
-
-    def _should_bypass_denoise(self, samples):
-        """偏弱/远端人声跳过实时降噪，避免 GTCRN 把人声当噪声整体压掉。
-
-        落盘录音保留原始人声，而实时 ASR 只消费「增益+降噪」后的信号。线下会议室里
-        说话人离麦克风较远、信号偏弱时，GTCRN 这类面向近讲场景的降噪器更容易把这段
-        带房间混响的人声当作噪声一起衰减，结果就是「录音有声、实时字幕空白」。此时
-        跳过降噪，把已增益的原始信号直接交给 ASR，反而更稳。
-
-        用与增益一致的 RMS 度量，并把阈值取在实时增益目标（``microphone_target_rms``）
-        的下方：正常说话（增益后被抬到目标附近）仍走降噪，只有确实偏弱的片段才旁路。
-        """
-        if not len(samples):
-            return True
-        rms = (
-            sum(float(sample) * float(sample) for sample in samples) / len(samples)
-        ) ** 0.5
-        return rms < SETTINGS["live_asr"].get("denoise_minimum_rms", 0.03)
 
     def _mix_live_audio(self, track, samples, start_ms, sample_rate):
         """按时间对齐双轨 PCM，供实时字幕使用；原始双轨仍分别落盘。"""
@@ -361,13 +417,6 @@ class RecordingSessionMixin:
                 track = "mix"
         elif track == "mic":
             samples = self._enhance_live_microphone(samples)
-        # 系统轨通常已是应用输出；DeepFilterNet 会把其中的远端人声误当背景音，
-        # 只在麦克风（或已混音）上于 VAD 前降噪，避免短句被切成单字。
-        if self.denoiser and track in {"mic", "mix"} and not self._should_bypass_denoise(samples):
-            try:
-                samples = self.denoiser.accept(track, samples, sample_rate)
-            except Exception as error:
-                self.emit("worker.warning", {"meeting_id": self.active, "code": "denoiser_failed", "message": str(error)})
         if self.vad and self.asr:
             for segment in self.vad.accept(track, samples, start_ms):
                 self._queue_sentence(track, segment)
@@ -619,7 +668,10 @@ class RecordingSessionMixin:
         """
         head = current.lstrip("，,、 ")
         tail = previous.rstrip("。！？.!?；;，,、 ")
-        window = max(12, overlap_chars)
+        # 窗口取切点回看换算出的字符数（`_overlap_chars` 已夹在 2..8）——重复只可能发生在
+        # 被解码两遍的那段音频里，窗口之外的相同字是巧合，不能当重叠删掉。原先这里还有
+        # 一个 `max(12, ...)` 下限，使上面这个换算彻底失效、两处拼接永远搜 12 字。
+        window = max(2, overlap_chars)
         for length in range(min(len(tail), len(head), window), 0, -1):
             if tail[-length:] == head[:length] and len(head) > length:
                 return head[length:]
@@ -640,7 +692,7 @@ class RecordingSessionMixin:
         一小段里。只有共同子串同时落在上一段的**结尾**和本段的**开头**才算重叠的
         证据——否则只是「，」这类标点在两段里各出现一次，按它对齐会整段吞掉中间的字。
         """
-        window = min(len(previous), len(current), max(12, overlap_chars))
+        window = min(len(previous), len(current), max(2, overlap_chars))
         if window < 2:
             return None
         tail = previous[-window:].rstrip("。！？.!?；;，,、 ")
@@ -756,10 +808,15 @@ class RecordingSessionMixin:
 
     @staticmethod
     def _length_limits(text):
-        """按文本主体语言给出字幕的（下限、目标、上限）；中文按字，拉丁按字符。"""
-        chinese_chars = len(re.findall(r"[\u3400-\u9fff]", text))
-        chinese = chinese_chars > 0 and chinese_chars * 3 >= len(re.findall(r"[A-Za-z]", text))
-        return SUBTITLE_LENGTHS["cjk" if chinese else "latin"]
+        """按文本主体语言给出字幕的（下限、目标、上限）；表意文字按字，拉丁按字符。
+
+        「表意文字」必须涵盖**汉字、假名与谚文**：日/韩的默认识别模型是 qwen3-asr，
+        只统计汉字会把「안녕하세요」「こんにちは」这类无汉字文本判成拉丁，从而给它们
+        280/380 的上限——字幕段落会比中英会议长两三倍。
+        """
+        cjk_chars = len(re.findall(r"[\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af\u1100-\u11ff\u3130-\u318f]", text))
+        cjk = cjk_chars > 0 and cjk_chars * 3 >= len(re.findall(r"[A-Za-z]", text))
+        return SUBTITLE_LENGTHS["cjk" if cjk else "latin"]
 
     def _sentence_subtitles(self, event, text):
         """按目标长度聚合多句；过长时优先在完整句子、分句或单词边界切开。"""
@@ -816,6 +873,20 @@ class RecordingSessionMixin:
         self.emit("meeting.stopped", {"meeting_id": meeting_id, "meeting": meeting})
         return meeting
 
+    def _clear_active_session(self):
+        """清掉一场会话的纯状态字段，不触碰线程池与 AI 笔记。
+
+        `_release_active_session` 与 `_prepare_active` 的失败回滚共用这一份重置，
+        避免两处字段清单各自漂移（漏掉一个就会留下半初始化的会话）。
+        """
+        self.active = self.asr = self.vad = None
+        self.stream_state = {}
+        self.pending_subtitles, self.pending_join = {}, {}
+        self.pending_paragraphs = {}
+        self.live_tracks, self.live_mix_buffers = set(), {"mic": deque(), "system": deque()}
+        self.meeting_language = None
+        self.subtitle_expiry_ms = 0
+
     def _release_active_session(self):
         # 这已是唯一识别结果，不能像旧二阶段精修那样取消排队任务。
         if self.live_postprocessing:
@@ -823,16 +894,7 @@ class RecordingSessionMixin:
         if self.active and hasattr(self, "ai_note_stop"):
             self.ai_note_stop({"meeting_id": self.active})
         self.live_postprocessing = None
-        self.active = self.asr = self.vad = self.denoiser = None
-        self.stream_state = {}
-        # recent_finals 去重窗口属于单场会议：这里必须清空，否则下一场会议会拿上一场
-        # 的句子做重复判定。
-        self.recent_finals = []
-        self.pending_subtitles, self.pending_join = {}, {}
-        self.pending_paragraphs = {}
-        self.live_tracks, self.live_mix_buffers = set(), {"mic": deque(), "system": deque()}
-        self.meeting_language = None
-        self.power_saving = False
+        self._clear_active_session()
 
     @synchronized_recording
     def shutdown_active_session(self):

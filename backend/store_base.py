@@ -21,7 +21,6 @@ CREATE TABLE IF NOT EXISTS meetings (
   speaker_segmentation_model_id TEXT,
   vad_model_id TEXT,
   num_speakers INTEGER NOT NULL DEFAULT -1,
-  power_saving INTEGER NOT NULL DEFAULT 0,
   workspace_id TEXT REFERENCES workspaces(id) ON DELETE SET NULL,
   previous_workspace_id TEXT,
   category TEXT NOT NULL DEFAULT '',
@@ -178,10 +177,15 @@ class StoreBase:
         必须按「列是否存在」而不是版本号判断：版本号一旦被写高（例如运行过中途的
         开发版），基于版本的迁移会永久跳过，留下 NOT NULL 的历史列让新代码的
         INSERT 直接失败。
+
+        每下架一个功能就在这里加一条：``streaming_model_id``（流式识别）、
+        ``power_saving``（效率模式）都只保留一个识别模型 ``refined_model_id``，
+        不再为老客户端保留占位字段。
         """
         columns = {row["name"] for row in db.execute("PRAGMA table_info(meetings)")}
-        if "streaming_model_id" in columns:
-            db.execute("ALTER TABLE meetings DROP COLUMN streaming_model_id")
+        for retired in ("streaming_model_id", "power_saving"):
+            if retired in columns:
+                db.execute(f"ALTER TABLE meetings DROP COLUMN {retired}")
 
     def _migrate_v1(self, db):
         """v0 → v1：segments 主键并入 meeting_id、各表补列、旧分类迁移到工作区。"""
@@ -234,16 +238,8 @@ class StoreBase:
             db.execute(
                 "ALTER TABLE meetings ADD COLUMN num_speakers INTEGER NOT NULL DEFAULT -1"
             )
-        if "power_saving" not in columns:
-            db.execute(
-                "ALTER TABLE meetings ADD COLUMN power_saving INTEGER NOT NULL DEFAULT 0"
-            )
         if "vad_model_id" not in columns:
             db.execute("ALTER TABLE meetings ADD COLUMN vad_model_id TEXT")
-        # 流式识别已下线：会议只保留一个识别模型（refined_model_id），旧列直接移除，
-        # 不再为老客户端保留占位字段。
-        if "streaming_model_id" in columns:
-            db.execute("ALTER TABLE meetings DROP COLUMN streaming_model_id")
         segment_columns = {row["name"] for row in db.execute("PRAGMA table_info(segments)")}
         if "word_timestamps" not in segment_columns:
             db.execute("ALTER TABLE segments ADD COLUMN word_timestamps TEXT")

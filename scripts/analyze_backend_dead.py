@@ -5,6 +5,10 @@ Collects every module-level name and method defined in backend/*.py, then report
 names that are never referenced anywhere else in the package (or in scripts/,
 tests, electron/, frontend/ via string references). Output is a candidate list
 that still requires manual review.
+
+``test_*.py`` 模块整体排除：那些文件里的类与方法由 unittest 的**按名发现**机制引用，
+AST 里看不到任何调用点，报出来全是误报（曾占全部输出的 96%）。排除之后这个脚本的输出
+才是一条可用的门禁——``scripts/check_dead_code.mjs`` 就是按「输出必须为空」来接它的。
 """
 
 import ast
@@ -14,7 +18,11 @@ import sys
 from collections import defaultdict
 
 BACKEND = "backend"
-ALL_FILES = sorted(glob.glob("backend/*.py")) + sorted(glob.glob("scripts/*.py"))
+ALL_FILES = [
+    path
+    for path in sorted(glob.glob("backend/*.py")) + sorted(glob.glob("scripts/*.py"))
+    if not path.rsplit("/", 1)[-1].startswith("test_")
+]
 # Files that are entry points / harnesses and may legitimately reference things
 # only via strings (dispatch tables).
 STR_SOURCES = ["electron/main.js", "electron/main-logic.js", "frontend/backend-client.js"]

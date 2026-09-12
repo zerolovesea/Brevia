@@ -52,12 +52,17 @@ function formatSpeakerName(speaker) {
 }
 /** 判断两个视口矩形是否重叠。@param {object} first 第一个矩形。@param {object} second 第二个矩形。@returns {boolean} */
 function rectanglesIntersect(first, second) { return first.left <= second.right && first.right >= second.left && first.top <= second.bottom && first.bottom >= second.top; }
-/** 渲染共享的自定义选择控件。@param {string} name 提交的字段名称。@param {string} value 选中的值。@param {Array<[string, string]>} options 值/标签对。@param {boolean} activeModel 标记活动的摘要模型选择器。@returns {string} 选择框标记。 */
+/** 渲染共享的自定义选择控件。
+ *
+ * 选项是 `[值, 文案]` 或 `[值, 文案, 角标]`。角标只在展开选项中、模型名右侧显示；
+ * 选中态只保留模型名。
+ * @param {string} name 提交的字段名称。@param {string} value 选中的值。@param {Array<[string, string, string?]>} options 值/标签/角标三元组。@param {boolean} activeModel 标记活动的摘要模型选择器。@returns {string} 选择框标记。 */
 function flowSelect(name, value, options, activeModel = false, disabled = false) {
   // 回退到空白对，使空选项列表渲染为无害的占位符而不是抛出错误。
   const selected = options.find(([option]) => option === value) || options[0] || ['', ''];
+  const badge = (option) => (option?.[2] ? `<em class="flow-select-badge">${escapeHtml(option[2])}</em>` : '');
   disabled = disabled || options.length === 0;
-  return `<div class="flow-select"${activeModel ? ' data-active-summary-model' : ''}><button class="flow-select-toggle" data-flow-select-toggle type="button" aria-expanded="false"${disabled ? ' disabled' : ''}>${escapeHtml(selected[1])}<span>⌄</span></button><input type="hidden" name="${name}" value="${escapeHtml(selected[0])}" /><div class="flow-select-options" hidden>${options.map(([option, label]) => `<button type="button" data-flow-select-choice="${name}" data-value="${escapeHtml(option)}"${disabled ? ' disabled' : ''}>${escapeHtml(label)}</button>`).join('')}</div></div>`;
+  return `<div class="flow-select"${activeModel ? ' data-active-summary-model' : ''}><button class="flow-select-toggle" data-flow-select-toggle type="button" aria-expanded="false"${disabled ? ' disabled' : ''}>${escapeHtml(selected[1])}<span>⌄</span></button><input type="hidden" name="${name}" value="${escapeHtml(selected[0])}" /><div class="flow-select-options" hidden>${options.map((option) => `<button type="button" data-flow-select-choice="${name}" data-value="${escapeHtml(option[0])}" data-label="${escapeHtml(option[1])}"${disabled ? ' disabled' : ''}>${escapeHtml(option[1])}${badge(option)}</button>`).join('')}</div></div>`;
 }
 /** 基于本地规则检测字幕中的明显信号（数字/日期/问句），不依赖大模型。@param {string} text 字幕文本。@returns {string[]} 命中的信号键名。 */
 function detectCaptionSignals(text) {
@@ -74,7 +79,7 @@ function renderTranscriptSegment({ time, startSeconds, endSeconds, speaker, text
   const label = showSpeaker ? (speaker.editing ? `<form class="inline-segment-speaker-form" data-segment-id="${speaker.segmentId}"><input class="speaker-name-input" data-segment-speaker-input name="name" value="${escapeHtml(speaker.name)}" maxlength="32" /></form>` : `<button class="segment-speaker"${speaker.segmentId ? ` data-segment-speaker="${escapeHtml(speaker.segmentId)}"` : ''}${speaker.id ? ` data-speaker="${escapeHtml(speaker.id)}"` : ''}>${escapeHtml(speaker.name)}</button>`) : '';
   const overlap = showSpeaker && speaker.overlapNames?.length ? `<small class="overlap-speakers">${t('重叠说话')}：${escapeHtml(speaker.overlapNames.join('、'))}</small>` : '';
   // 人工编辑态下原文本正在被改写，依赖文本的信号徽标会立刻过期，因此只在只读态显示。
-  const signalBadge = !textEditable ? (() => { const signals = detectCaptionSignals(text); return signals.length ? `<small class="caption-signals" style="white-space:nowrap;flex:none" aria-label="${signals.map((signal) => t(signal)).join('、')}">${signals.map((signal) => t(signal)).join(' · ')}</small>` : ''; })() : '';
+  const signalBadge = !textEditable ? (() => { const signals = detectCaptionSignals(text); return signals.length ? `<small class="caption-signals" aria-label="${signals.map((signal) => t(signal)).join('、')}">${signals.map((signal) => t(signal)).join(' · ')}</small>` : ''; })() : '';
   const translationLine = translation ? `<p class="translation">${escapeHtml(translation)}</p>` : '';
   // 编辑框与 electron/main.js 的 segment.text schema 同界（单句 4000 字符）；
   // 保存时后端会把换行折成空格，因此这里不需要限制成单行输入。
@@ -91,7 +96,7 @@ function renderMeetingRow({ id, tone, title, meta, tags, status, deleted = false
   const menu = deleted ? `<button data-meeting-action="restore" data-meeting-index="${index}">${t('恢复')}</button><button class="meeting-menu-danger" data-meeting-action="purge" data-meeting-index="${index}">${BreviaI18n.trashCopy(locale).purge}</button>` : `<button data-meeting-action="rename" data-meeting-index="${index}">${t('重命名')}</button>${workspaceMenu}<button data-meeting-action="open-folder" data-meeting-index="${index}">${t('从文件夹打开')}</button><button data-meeting-action="export" data-meeting-index="${index}">${t('导出')}</button>${status?.tone === 'processing' ? '' : `<button class="meeting-menu-danger" data-meeting-action="delete" data-meeting-index="${index}">${t('删除')}</button>`}`;
   const heading = editingMeetingIndex === index ? `<form class="meeting-title-rename" data-rename-meeting data-meeting-index="${index}"><input name="title" value="${escapeHtml(title)}" maxlength="120" required aria-label="${t('重命名')}" /></form>` : `<h2>${escapeHtml(title)}</h2>`;
   const workspaceBadge = workspace ? `<div class="workspace-badge"><span class="workspace-icon">◆</span>${escapeHtml(workspace.name)}</div>` : '';
-  return `<article class="meeting-row" data-meeting-index="${index}" data-selection-key="${escapeHtml(id || String(index))}" tabindex="0" aria-selected="false"${id ? ` data-meeting-id="${escapeHtml(id)}"` : ''}${!deleted && id ? ' draggable="true"' : ''}><div class="meeting-main">${heading}<p>${escapeHtml(meta)}</p><div class="meeting-tags">${workspaceBadge}${tags.map((tag) => `<div class="tag">${escapeHtml(tag)}</div>`).join('')}</div></div><div class="meeting-status"><span class="status ${status.tone}${status.paused ? ' is-paused' : ''}">${escapeHtml(t(status.label))}</span><small>${escapeHtml(status.detail)}</small></div><div class="meeting-actions"><button class="more" data-meeting-menu="${index}" aria-label="${t('更多操作')}" aria-expanded="false">•••</button><div class="meeting-menu" hidden>${menu}</div></div></article>`;
+  return `<article class="meeting-row" data-meeting-index="${index}" data-selection-key="${escapeHtml(id || String(index))}" tabindex="0" aria-selected="false"${id ? ` data-meeting-id="${escapeHtml(id)}"` : ''}${!deleted && id ? ' draggable="true"' : ''}><div class="meeting-main">${heading}<p>${escapeHtml(meta)}</p><div class="meeting-tags">${workspaceBadge}${tags.map((tag) => `<div class="tag">${escapeHtml(tag)}</div>`).join('')}</div></div><div class="meeting-status"><span class="status ${status.tone}${status.paused ? ' is-paused' : ''}">${escapeHtml(t(status.label))}</span><small>${escapeHtml(t(status.detail))}</small></div><div class="meeting-actions"><button class="more" data-meeting-menu="${index}" aria-label="${t('更多操作')}" aria-expanded="false">•••</button><div class="meeting-menu" hidden>${menu}</div></div></article>`;
 }
 /** 渲染设置卡片及其模态框操作。@param {{title: string, description: string, action: string, modal: string}} card 卡片数据。@returns {string} 卡片标记。 */
 function renderSettingsCard({ title, description, action, modal }) {
@@ -99,7 +104,7 @@ function renderSettingsCard({ title, description, action, modal }) {
 }
 /** 渲染语言相关的设置卡片，不重置其他视图。 */
 function renderSettingsView() {
-  document.querySelector('#settings-view .settings-grid').innerHTML = `<section class="settings-card" id="performance-mode-card"><h2>${t('性能')}</h2><p>${t('选择性能或效率模式，在音频效果与字幕实时性之间取舍。')}</p><button class="secondary" data-settings-modal="performance">${t('配置性能模式')}</button></section><section class="settings-card" id="installed-models"><h2>${t('模型库')}</h2><p>${t('下载和管理本地语音识别模型，为字幕、精修和说话人识别提供能力。')}</p><button class="secondary" data-settings-modal="models">${t('管理模型库')}</button></section>${uiData.settings.cards.map(renderSettingsCard).join('')}`;
+  document.querySelector('#settings-view .settings-grid').innerHTML = `<section class="settings-card" id="installed-models"><h2>${t('模型库')}</h2><p>${t('下载和管理本地语音识别模型，为字幕、精修和说话人识别提供能力。')}</p><button class="secondary" data-settings-modal="models">${t('管理模型库')}</button></section>${uiData.settings.cards.map(renderSettingsCard).join('')}`;
 }
 /** 仅允许安全协议的链接/图片地址，阻止 javascript: 等注入。@param {string} url 原始地址。@returns {string} 安全地址。 */
 function sanitizeUrl(url = '') {
@@ -515,7 +520,7 @@ function createNotesEditor(root, options = {}) {
     imageInput.value = '';
     if (!file) return;
     if (!['image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(file.type) || file.size > 10 * 1024 * 1024) {
-      showToast(t('图片必须是 PNG、JPEG、GIF 或 WebP，且不超过 10 MB。'));
+      appActions.showToast(t('图片必须是 PNG、JPEG、GIF 或 WebP，且不超过 10 MB。'));
       return;
     }
     const meetingId = getMeetingId();
@@ -525,7 +530,7 @@ function createNotesEditor(root, options = {}) {
         if (mode === 'markdown') insertText(`![](${url})`);
         else { editor.focus(); document.execCommand('insertImage', false, url); if (onInput) onInput(); }
       })
-      .catch((error) => showToast(error.message));
+      .catch((error) => appActions.showToast(error.message));
   });
   urlPop.querySelector('[data-notes-url-ok]').addEventListener('click', () => {
     const url = urlInput.value.trim();
@@ -729,8 +734,8 @@ function cleanSummaryMarkdown(markdown) {
   const heading = text.search(/^#{1,6}\s+/m);
   return heading > 0 ? text.slice(heading) : text;
 }
-/** 渲染详情侧边栏中的会议纪要：标题行（会议纪要 + 生成/重新生成）+ 内容。@param {{markdown?: string, hasFull?: boolean}} summary 摘要数据。@returns {string} 摘要标记。 */
-function renderMeetingSummary({ markdown, hasFull = false, blocked = false, generating = false, editing = false }) {
+/** 渲染详情侧边栏中的会议纪要：标题行（会议纪要 + 生成/重新生成）+ 内容。@param {{markdown?: string}} summary 摘要数据。@returns {string} 摘要标记。 */
+function renderMeetingSummary({ markdown, blocked = false, generating = false, editing = false }) {
   const blockedAttrs = blocked ? ` disabled title="${escapeHtml(t('实时会议中，结束后再生成会议纪要。'))}"` : '';
   const action = editing
     ? `<span class="summary-actions"><button class="summary-action-icon" data-cancel-inline-summary-edit title="${escapeHtml(t('取消'))}" aria-label="${escapeHtml(t('取消'))}">${summaryActionIcons.cancel}</button><button class="summary-action-icon" data-save-inline-summary title="${escapeHtml(t('保存'))}" aria-label="${escapeHtml(t('保存'))}">${summaryActionIcons.save}</button></span>`
@@ -810,7 +815,7 @@ function renderMeetingDetail() {
   if (d.notesEditing) {
     const root = document.querySelector('[data-detail-notes-root]');
     if (root) {
-      detailNotesEditor = createNotesEditor(root, { onInput: scheduleDetailNotesSave, getMeetingId: () => currentMeetingDetail?.id });
+      detailNotesEditor = createNotesEditor(root, { onInput: (...args) => appActions.scheduleDetailNotesSave(...args), getMeetingId: () => currentMeetingDetail?.id });
       detailNotesEditor.setMarkdown(d.notes);
       detailNotesEditor.focus();
     }

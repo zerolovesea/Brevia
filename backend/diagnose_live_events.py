@@ -26,7 +26,6 @@ def main():
     parser.add_argument("--max-seconds", type=float, default=60.0)
     parser.add_argument("--source-root", default="/tmp/brevia-src")
     parser.add_argument("--data-root", default="/tmp/brevia-replay-events")
-    parser.add_argument("--show-partial", action="store_true")
     args = parser.parse_args()
 
     from .storage import Store
@@ -84,18 +83,13 @@ def main():
 
     for event in events:
         etype = event["type"]
-        if etype not in {"transcript.partial", "transcript.final", "transcript.refined", "transcript.discarded"}:
-            continue
-        if etype == "transcript.partial" and not args.show_partial:
+        # 整句链路只发 draft / final / settled；partial / refined / discarded 已随流式识别下线。
+        if etype not in {"transcript.draft", "transcript.final", "transcript.settled"}:
             continue
         payload = event["payload"]
-        if etype == "transcript.discarded":
-            print(f"{etype:22s} segment_id={payload.get('segment_id','?')}")
-            continue
         clock = f"{payload['start_ms'] // 60000:02d}:{payload['start_ms'] % 60000 // 1000:02d}"
-        pin = " [钉]" if payload.get("pinned") else ""
         rev = payload.get("revision", "?")
-        print(f"{etype:22s} rev={rev:>2} [{clock}] {payload.get('speaker','?')}{pin}: {payload.get('text','')}")
+        print(f"{etype:22s} rev={rev:>2} [{clock}] {payload.get('speaker','?')}: {payload.get('text','')}")
 
     result = worker.store.get_meeting(meeting["id"])
     print("\n=== 最终 live 段落 ===")

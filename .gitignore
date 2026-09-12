@@ -13,3 +13,15 @@ backend/runtime/
 backend/bundled-models/
 /release.sh
 /docs/RELEASING.local.md
+
+# 调研用的外部仓库克隆与报告（.research/model-download-ux-report.md 是产出，tmp/ 是可再生的克隆）
+.research/tmp/
+
+# 基准测试临时区：会议音频副本、模型软链、Whisper 下载、benchmark JSON
+.bench-tmp/
+
+# e2e 冒烟的 Electron 临时 user-data-dir（scripts 自动创建/清理）
+.e2e-tmp/
+
+# 计算样式指纹工具的 Electron 临时目录（脚本自动创建/清理）
+.css-fingerprint-tmp/

@@ -3,6 +3,7 @@
 
 import io
 import json
+import logging
 import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -81,6 +82,13 @@ def main():
                 stream.reconfigure(encoding="utf-8", errors="replace")
             except (AttributeError, io.UnsupportedOperation, ValueError):
                 pass
+    # 审计类日志（例如启动时收敛会议引用的识别模型）必须真的落地：默认没有 handler，
+    # logger.info 会被直接丢弃，而 Electron 主进程会把 worker 的 stderr 收进日志文件。
+    logging.basicConfig(
+        level=logging.INFO,
+        stream=sys.stderr,
+        format="[worker] %(levelname)s %(name)s: %(message)s",
+    )
     worker = Worker()
     install_global_error_handlers(worker)
 

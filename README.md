@@ -33,9 +33,22 @@ Configure AI Notes and AI Meeting Summary independently: each can use its own pr
 
 ![AI Notes](docs/assets/tour/en/AI%20Assist%20Notes.png)
 
-### Performance modes for CPU devices
+### Choosing the recognition model
 
-Settings → Performance offers Standard and Efficiency modes. Efficiency disables live denoising and lowers built-in AI Notes frequency to keep captions responsive; sentence transcription and post-meeting refinement remain available. If transcription repeatedly falls behind, Brevia offers the same switch during the meeting. Prefer a 2B local model or an online provider on lower-performance machines.
+The first-run setup lists the download-able speech models and pre-checks the one Brevia suggests for your interface language (Silero VAD, speaker diarization, and voiceprint models are bundled and always installed); you can uncheck the rest before downloading.
+
+For each meeting Brevia then picks a default recognition model from the **meeting language**, declared per model in `backend/models.json`:
+
+| Meeting language | Default recognition model | Why |
+| --- | --- | --- |
+| Chinese, Cantonese | FunASR Nano int8 | Highest accuracy on Chinese and its dialects |
+| Japanese, Korean | Qwen3-ASR 0.6B int8 | The only selectable model covering both |
+| English, Spanish, French, German, Russian, mixed languages | Parakeet TDT 0.6B v3 | 25 European languages in one model, adds punctuation and timestamps |
+| Anything else | Qwen3-ASR 0.6B int8 | Widest language coverage among the remaining models |
+
+If the declared default is not downloaded yet, Brevia uses an installed model that supports that language instead of asking you to download another one. The meeting setup screen shows a **recognition model** selector (including models you have not downloaded, listed with their size), and the same selector appears on the live screen and switches the model mid-meeting through `meeting.reconfigure`. `Settings → Advanced → Live recognition` (`live_asr.max_speech_seconds`) can cap how long a single live sentence segment may grow; the effective cap is always the smallest of that value, the per-language VAD setting, and the model's own capacity.
+
+On lower-performance machines, prefer a 2B local AI-notes model or an online provider.
 
 ### A quiet meeting screen with live transcription and translation
 
@@ -59,13 +72,12 @@ Powered by Pyannote segmentation plus speaker-embedding models, all running on-d
 
 ### A curated local model library
 
-Downloadable models cover sentence transcription, offline refinement, voice activity detection, speaker diarization, speaker embedding, and source separation. Mix and match by language and precision — everything runs on your device.
+Downloadable models cover sentence transcription, offline refinement, voice activity detection, speaker diarization, speaker embedding, AI notes and meeting summaries, and caption translation. Mix and match by language and precision — everything runs on your device.
 
 ![Model library](docs/assets/tour/en/%E6%A8%A1%E5%9E%8B%E5%BA%93.png)
 
 ### And more
 
-- **Source separation** — Spleeter splits recordings into vocal and non-vocal stems for post-processing.
 - **Audio import** — bring in existing recordings for offline transcription through the same speech pipeline.
 - **Rich exports** — transcript and notes as Markdown, TXT, JSON, SRT, DOCX, or PDF; audio as FLAC, WAV, or M4A.
 - **Reviewable notes** — write in rich text or Markdown, then accept only the AI suggestions that help.
@@ -121,12 +133,12 @@ Every model is downloaded on demand from **Settings → Model Library**. The man
 
 | Category | Representative models | Languages |
 | --- | --- | --- |
-| Sentence / refinement ASR | Qwen3-ASR 0.6B, Whisper Large v3, FunASR Nano | Multilingual |
+| Sentence transcription / post-meeting refinement | FunASR Nano int8, Qwen3-ASR 0.6B, Parakeet TDT 0.6B v3 | Chinese / multilingual / 25 European languages |
 | Voice activity detection | Silero VAD | Universal |
-| Speech enhancement | GTCRN Live Denoiser | Universal |
-| Speaker diarization | Pyannote Segmentation 3.0, Reverb Diarization v1 | Universal |
-| Speaker embeddings | 3D-Speaker ERes2Net Base | Universal |
-| Source separation | Spleeter 2 Stems | Universal |
+| Speaker diarization | Pyannote Segmentation 3.0 | Universal |
+| Speaker embeddings | 3D-Speaker ERes2Net Base | Chinese |
+| AI notes & meeting summary | Qwen 3.5 2B, Qwen 3.5 4B | Chinese / English |
+| Caption translation | Tencent Hy-MT2 1.8B | 33 languages |
 
 For LLM summaries, pick **Built-in AI** to run a bundled GGUF model locally (Qwen 3.5 2B / 4B), or point Brevia at Claude, OpenAI, OpenRouter, or any custom service that speaks OpenAI Chat Completions or Anthropic Messages — Gemini (OpenAI-compatible endpoint), DeepSeek, Kimi, Qwen, and more.
 
@@ -147,7 +159,8 @@ Grant microphone and screen-recording permissions on first launch, then download
 ### Common scripts
 
 ```bash
-npm test                    # Electron behavior + UI + backend tests
+npm test                    # Dead-code gate + Electron behavior + UI + E2E smoke + backend tests
+npm run test:e2e            # Launch the real app and assert through CDP
 npm run build               # Build Tailwind CSS
 npm run test:model          # ASR model diagnostics
 npm run test:diarization    # Speaker diarization diagnostics
@@ -170,8 +183,9 @@ BREVIA_DATA_DIR=~/brevia-dev BREVIA_MODELS_DIR=~/brevia-models npm start
 #### Sentence transcription
 
 Recording uses **Silero VAD → one offline ASR decode → one final caption**.
-FunASR Nano is the default for Chinese, English and Cantonese; Qwen3-ASR 0.6B
-covers other languages and automatic language selection. Punctuation and casing
+FunASR Nano is the default for Chinese and Cantonese, Qwen3-ASR 0.6B for Japanese
+and Korean, and Parakeet TDT 0.6B v3 for English, Spanish, French, German, Russian,
+and automatic language selection. Punctuation and casing
 come from the recognizer. There is no streaming recognizer, punctuation model,
 or second live refinement pass.
 
@@ -191,9 +205,10 @@ queued speech stays on disk. Pause flushes the current segment, and stop drains
 all recognition work before marking the meeting ready. Original audio is kept
 if recognition fails, and a warning identifies the affected interval.
 
-Efficiency mode disables denoising while retaining sentence recognition. A
-smaller built-in AI-notes model can reduce competition for CPU. Post-meeting
-refinement and speaker identification remain available.
+Imported recordings skip speaker diarization automatically when the estimated
+preparation time — audio length scaled by CPU cores — exceeds the budget, so a
+long import produces a transcript in seconds instead of making you wait
+minutes. A smaller built-in AI-notes model can reduce competition for CPU.
 
 See [benchmark methodology and results](backend/benchmarks/vad-2026-09-05/REPORT.md).
 
@@ -267,11 +282,15 @@ Voice embeddings (a small float vector) and reference audio live in the local SQ
 <details>
 <summary><strong>The recording has sound, but live captions are empty in an in-person meeting</strong></summary>
 
-Live captions consume a separately processed audio path (mic gain + real-time GTCRN denoising), while the recording saves the raw audio. If a speaker is a bit far from the laptop mic, the denoiser can over-suppress their faint speech and leave the live recognizer with near-silence — even though the recording is audible. This is more likely in a live room with echo/ambience.
+Live captions consume a separately processed audio path: the microphone signal is
+gain-compensated for the recognizer while the recording keeps the raw audio. Very
+faint or distant speech can therefore be too quiet for the live recognizer even
+though the recording is audible. This is more likely in a live room with
+echo/ambience.
 
-Workarounds:
-- **Performance mode → Efficiency mode** turns off live denoising.
-- **Settings → Advanced** set `live_asr.denoiser_enabled` to `0` to disable real-time denoising, or lower `live_asr.denoise_minimum_rms` so more faint speech bypasses the denoiser.
+Adjust the microphone compensation under **Settings → Advanced**
+(`live_asr.microphone_target_rms`, `microphone_minimum_rms`, `microphone_max_gain`),
+or move the microphone closer.
 
 The recording and post-meeting refinement are unaffected, so you won't lose the transcript.
 </details>
@@ -307,5 +326,5 @@ Brevia is released under the [ISC License](LICENSE). Model files and third-party
 ## Acknowledgments
 
 - [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) — the local runtime powering ASR, VAD, and speaker processing. Licensed under [Apache-2.0](https://github.com/k2-fsa/sherpa-onnx/blob/master/LICENSE).
-- Thanks to the model authors and maintainers whose downloadable artifacts are declared in [`backend/models.json`](backend/models.json), including Zipformer, Whisper, Qwen3-ASR, FunASR, Pyannote, 3D-Speaker, Silero, Spleeter, and Tencent Hy-MT2.
+- Thanks to the model authors and maintainers whose downloadable artifacts are declared in [`backend/models.json`](backend/models.json), including Qwen3-ASR, FunASR, Parakeet (NeMo), Pyannote, 3D-Speaker, Silero, Qwen, and Tencent Hy-MT2.
 - Electron, ONNX Runtime, Python, and the open-source speech community make this local-first workflow possible.

@@ -88,7 +88,6 @@ class MeetingStoreMixin:
             payload.get("speaker_segmentation_model_id"),
             payload.get("vad_model_id", "silero-vad"),
             validate_num_speakers(payload.get("num_speakers", -1)),
-            int(bool(payload.get("power_saving"))),
             payload.get("workspace_id"),
             json.dumps(payload.get("tags", []), ensure_ascii=False),
             "recording",
@@ -112,8 +111,8 @@ class MeetingStoreMixin:
                 db.execute(
                     """INSERT INTO meetings
                         (id,title,language,target_language,refined_model_id,
-                         speaker_segmentation_model_id,vad_model_id,num_speakers,power_saving,workspace_id,tags,status,created_at,started_at)
-                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                         speaker_segmentation_model_id,vad_model_id,num_speakers,workspace_id,tags,status,created_at,started_at)
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                     values,
                 )
         except Exception:
@@ -151,6 +150,25 @@ class MeetingStoreMixin:
                 params,
             ).fetchall()
         return [self._meeting(row) for row in rows]
+
+    def list_refined_model_assignments(self):
+        """列出每场会议引用的识别模型，**含已删除的会议**。
+
+        专供启动期的模型引用收敛使用：``list_meetings`` 按 ``deleted_at`` 分成两组，而
+        需要收敛的是全部行（删除的会议还可能被恢复，恢复后再修就晚了），且这里只需要
+        三个字段，不必构造完整摘要。
+
+        Returns:
+            ``[(meeting_id, language, refined_model_id), ...]``。
+        """
+        with self.connect() as db:
+            rows = db.execute(
+                "SELECT id, language, refined_model_id FROM meetings"
+            ).fetchall()
+        return [
+            (row["id"], row["language"] or "auto", row["refined_model_id"])
+            for row in rows
+        ]
 
     def search_meetings(self, query=""):
         """搜索会议标题、标签、字幕内容与说话人姓名。
@@ -405,7 +423,6 @@ class MeetingStoreMixin:
             "refined_model_id",
             "language",
             "target_language",
-            "power_saving",
             "notes",
         }
         fields = {key: value for key, value in updates.items() if key in allowed}

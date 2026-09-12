@@ -30,11 +30,25 @@ from .storage import Store
 from .transcript import latest_segments
 from .worker import Worker, install_global_error_handlers, main
 from .worker_ai_note import _AiNoteSession, _extract_json
-from .worker_common import TaskCancelled
+from .worker_common import ModelNotInstalled, TaskCancelled, missing_models
 from .worker_core import WorkerCore
 from .llama_sidecar import LlamaSidecar
 from .worker_refinement import _diarization_chunk_ms
 from .worker_llama_sidecar import ASSISTANT_SIDECAR, _Sidecar, strip_reasoning
+
+
+def _stub_asr_stack():
+    """把 ``_prepare_active`` 里的识别/端点检测构造替换成替身。
+
+    只用于那些真正想验证「会话已建立」而测试环境里没有任何模型的用例：真实模型的
+    构造需要下载，而 ``setUp`` 把 ``models.is_ready`` 固定为 False。
+    """
+    recognizer = Mock(max_speech_seconds=22.0)
+    return patch.multiple(
+        "backend.worker_session",
+        RefinedASR=Mock(return_value=recognizer),
+        SentenceVAD=Mock(return_value=Mock(tracks={}, cut_overlap_ms=400)),
+    )
 
 
 class WorkerTest(unittest.TestCase):
@@ -47,6 +61,26 @@ class WorkerTest(unittest.TestCase):
         catalog = {item["id"] for item in self.worker.models.catalog.values()}
         missing = [model_id for model_id in BUNDLED_MODEL_IDS if model_id not in catalog]
         self.assertEqual(missing, [], "BUNDLED_MODEL_IDS must stay in sync with models.json")
+
+    def test_bundled_models_are_actually_present_on_disk(self):
+        """随包模型必须真的在磁盘上，而不只是「id 在清单里」。
+
+        上一个测试只校验 ``BUNDLED_MODEL_IDS`` 与 ``models.json`` 同步；那只防住
+        「清单下架了模型」，防不住「文件没下载/被删了」。后者会让功能**静默**失效：
+        OpenWhispr #1057 就是 Windows 安装包漏了 VAD 模型，语音活动检测被静默禁用。
+        ``backend/pack_worker.py`` 的 ``prepare_bundled_models`` 现在会在打包时直接
+        失败；这里守住同一个不变量，让开发期（未打包时）也能立刻发现文件缺失。
+        """
+        bundled_dir = Path(__file__).with_name("bundled-models")
+        if not bundled_dir.is_dir():
+            self.skipTest("development bundled-models directory not present")
+        manager = ModelManager(bundled_dir)
+        missing = [model_id for model_id in BUNDLED_MODEL_IDS if not manager.is_ready(model_id)]
+        self.assertEqual(
+            missing, [],
+            "bundled model files are missing on disk; packaging would fail and the "
+            "feature would be silently disabled",
+        )
 
     def test_retired_model_is_left_alone_until_the_user_refines_again(self):
         """已下架的识别模型不做任何自动替换：老会议保持原样，重新精修时才换模型。"""
@@ -83,6 +117,20 @@ class WorkerTest(unittest.TestCase):
         ):
             with self.assertRaisesRegex(ValueError, "no audio"):
                 self.worker.refine({"meeting_id": meeting["id"], "refined_model_id": "retired-model"})
+        self.assertEqual(self.worker.store.get_meeting(meeting["id"])["refined_model_id"], "qwen3-asr-0.6b-int8")
+
+    def test_refinement_falls_back_when_the_stored_model_is_retired(self):
+        """点名一个退役模型时也要换成默认模型——它的本地副本已经在启动时清掉了。"""
+        retired_id = next(
+            model["id"] for model in self.worker.models.catalog.values() if model.get("retired")
+        )
+        meeting = self.worker.store.create_meeting({
+            "title": "退役模型", "language": "zh", "refined_model_id": retired_id,
+        })
+        self.worker.store.finish_meeting(meeting["id"], 0)
+        with patch.object(self.worker, "_default_refined_model", return_value="qwen3-asr-0.6b-int8"), patch.object(self.worker.models, "is_ready", return_value=True):
+            with self.assertRaisesRegex(ValueError, "no audio"):
+                self.worker.refine({"meeting_id": meeting["id"], "refined_model_id": retired_id})
         self.assertEqual(self.worker.store.get_meeting(meeting["id"])["refined_model_id"], "qwen3-asr-0.6b-int8")
 
     def test_assemble_utterances_splits_at_sentence_boundary_when_overlong(self):
@@ -832,10 +880,8 @@ class WorkerTest(unittest.TestCase):
             recovered.close_audio_sessions()
 
     def test_start_requires_selected_models_when_requested(self):
-        with self.assertRaisesRegex(
-            RuntimeError,
-            "Models qwen3-asr-0.6b-int8, silero-vad are not installed",
-        ):
+        # 断言结构化字段而不是报错文案：文案是给人看的，改它不该让测试变红。
+        with self.assertRaises(ModelNotInstalled) as raised:
             self.worker.start(
                 {
                     "title": "缺模型",
@@ -844,6 +890,10 @@ class WorkerTest(unittest.TestCase):
                     "require_models": True,
                 }
             )
+        self.assertEqual(raised.exception.code, "model_not_installed")
+        self.assertEqual(
+            raised.exception.models, ["qwen3-asr-0.6b-int8", "silero-vad"]
+        )
         self.assertEqual([], self.worker.store.list_meetings())
 
     def test_live_recording_skips_speaker_tracker(self):
@@ -857,10 +907,7 @@ class WorkerTest(unittest.TestCase):
         self.assertFalse(hasattr(self.worker, "speaker_tracker"))
 
     def test_start_requires_translation_model_when_translation_is_selected(self):
-        with self.assertRaisesRegex(
-            RuntimeError,
-            "Models qwen3-asr-0.6b-int8, silero-vad, hy-mt2-1.8b-q4km are not installed",
-        ):
+        with self.assertRaises(ModelNotInstalled) as raised:
             self.worker.start(
                 {
                     "title": "缺翻译模型",
@@ -870,6 +917,10 @@ class WorkerTest(unittest.TestCase):
                     "require_models": True,
                 }
             )
+        self.assertEqual(
+            raised.exception.models,
+            ["qwen3-asr-0.6b-int8", "silero-vad", "hy-mt2-1.8b-q4km"],
+        )
         self.assertEqual([], self.worker.store.list_meetings())
 
     def test_utf8_json_files_are_read_explicitly_as_utf8(self):
@@ -970,6 +1021,31 @@ class WorkerTest(unittest.TestCase):
             {"meeting_id": meeting["id"], "provider": "built-in", "model": "qwen3.5-4b-q4km", "consent": True}
         )
         self.assertEqual(self.worker.llama_sidecar_complete.call_args.args[0]["max_tokens"], 3072)
+
+    def test_builtin_summary_propagates_model_not_installed(self):
+        """内置模型没装时必须保留结构化错误，主进程才能「先下载再重试」。
+
+        以前笼统的 ``except Exception`` 把它压成普通 ValueError，error_code/error_models
+        到不了协议层，内置纪要模型缺失就只会得到一句 Summary generation failed。
+        """
+        meeting = self.worker.start(
+            {
+                "title": "纪要缺模型", "language": "zh",
+                "refined_model_id": "qwen3-asr-0.6b-int8",
+            }
+        )
+        self.worker.store.save_segment(
+            {"meeting_id": meeting["id"], "segment_id": "mic-0", "text": "讨论完成",
+             "start_ms": 0, "end_ms": 1000, "speaker": "spk-1"}
+        )
+        self.worker.active = None
+        self.worker.llama_sidecar_complete = Mock(side_effect=ModelNotInstalled(["qwen3.5-2b-q4km"]))
+        with self.assertRaises(ModelNotInstalled) as raised:
+            self.worker.summarize(
+                {"meeting_id": meeting["id"], "provider": "built-in", "model": "qwen3.5-2b-q4km", "consent": True}
+            )
+        self.assertEqual(raised.exception.code, "model_not_installed")
+        self.assertEqual(raised.exception.models, ["qwen3.5-2b-q4km"])
 
     def test_summary_rejects_while_a_meeting_is_active(self):
         self.worker.active = "recording-meeting"
@@ -1553,29 +1629,6 @@ class WorkerTest(unittest.TestCase):
             )
             self.assertNotIn("Authorization", dict(request.call_args.args[0].header_items()))
 
-    def test_cross_track_duplicate_finals_are_suppressed(self):
-        first = {
-            "track": "mic",
-            "text": "我们再一次完整地打一下这一场防疫",
-            "start_ms": 1000,
-            "end_ms": 4000,
-        }
-        duplicate = {
-            "track": "system",
-            "text": "我们再一次完整的打一下这一场防疫",
-            "start_ms": 1100,
-            "end_ms": 4100,
-        }
-        distinct = {
-            "track": "system",
-            "text": "接下来请产品团队介绍下一步安排",
-            "start_ms": 1100,
-            "end_ms": 4100,
-        }
-        self.assertFalse(self.worker._is_duplicate_final(first))
-        self.assertTrue(self.worker._is_duplicate_final(duplicate))
-        self.assertFalse(self.worker._is_duplicate_final(distinct))
-
     def test_live_text_removes_model_markers_and_repeating_tail(self):
         self.assertEqual(
             Worker._clean_live_text("THIS IS A TEST. AND ANOTHER ONE."),
@@ -1753,9 +1806,8 @@ class WorkerTest(unittest.TestCase):
             {"zeros_like": staticmethod(lambda samples: [0.0] * len(samples))},
         )
         audio = {"mic": ([0.0005] * 32000, 16000), "system": ([0.001] * 32000, 16000)}
-        self.worker.models.is_ready = lambda model_id: (
-            model_id != SETTINGS["live_asr"]["denoiser_model_id"]
-        )
+        # 这批用例只关心轨道合并/声纹匹配，与磁盘上是否真的装了模型无关，统一视为已就绪。
+        self.worker.models.is_ready = lambda _model_id: True
         with (
             patch(
                 "backend.worker_refinement.read_mono_wav",
@@ -1838,9 +1890,8 @@ class WorkerTest(unittest.TestCase):
             {"zeros_like": staticmethod(lambda samples: [0.0] * len(samples))},
         )
         audio = {"mic": ([0.0005] * 32000, 16000), "system": ([0.001] * 32000, 16000)}
-        self.worker.models.is_ready = lambda model_id: (
-            model_id != SETTINGS["live_asr"]["denoiser_model_id"]
-        )
+        # 这批用例只关心轨道合并/声纹匹配，与磁盘上是否真的装了模型无关，统一视为已就绪。
+        self.worker.models.is_ready = lambda _model_id: True
         with (
             patch(
                 "backend.worker_refinement.read_mono_wav",
@@ -2035,7 +2086,12 @@ class WorkerTest(unittest.TestCase):
             )
         match.assert_called_once()
 
-    def test_auto_speaker_refinement_reuses_the_audio_buffer(self):
+    def test_short_diarized_track_keeps_the_buffer_for_quiet_recovery(self):
+        """短轨分离前把非语音区间清零必须在副本上做。
+
+        以前就地清零 ``samples``，同一个数组随后又被 ``_recover_quiet_turns`` 读取，
+        安静空洞已经变成静音，``quiet_speech_recovery`` 对短轨就永远不触发。
+        """
         import numpy
 
         samples = numpy.ones(16000)
@@ -2051,15 +2107,20 @@ class WorkerTest(unittest.TestCase):
             patch("backend.worker_refinement.read_mono_wav", return_value=(samples, 16000)),
             patch("backend.worker_refinement.OfflineVAD") as vad,
             patch("backend.worker_refinement.OfflineDiarizer") as diarizer,
+            patch.object(self.worker, "_recover_quiet_turns", return_value=[]) as recover,
         ):
             vad.return_value.process.return_value = [{"start_ms": 250, "end_ms": 750}]
             diarizer.return_value.process.return_value = []
             self.worker._prepare_track(
                 "mic", meeting, SimpleNamespace(paused=threading.Event(), cancelled=threading.Event()), {"mic"}, False, -1, 0.35
             )
-        self.assertIs(diarizer.return_value.process.call_args.args[0], samples)
-        self.assertEqual(samples[0], 0)
-        self.assertEqual(samples[13000], 0)
+        processed = diarizer.return_value.process.call_args.args[0]
+        self.assertIsNot(processed, samples, "分离器必须拿到副本，不能就地改写原缓冲")
+        self.assertEqual(processed[0], 0)
+        self.assertEqual(processed[13000], 0)
+        self.assertEqual(samples[0], 1, "原缓冲必须保留，安静语音找回才能读到空洞")
+        self.assertEqual(samples[13000], 1)
+        self.assertIs(recover.call_args.args[2], samples)
 
     def test_long_refinement_isolates_native_diarization(self):
         audio_path = Path(self.temp.name) / "audio.wav"
@@ -3049,7 +3110,10 @@ class WorkerTest(unittest.TestCase):
             }
         )
         self.worker.active = None
-        self.worker.resume({"meeting_id": meeting["id"], "start_ms": 999_999})
+        # resume 现在要求识别链路真的建起来（见 _prepare_active 的 require_asr），而本用例
+        # 只关心时间轴，因此把模型构造替换成替身。
+        with _stub_asr_stack():
+            self.worker.resume({"meeting_id": meeting["id"], "start_ms": 999_999})
         self.assertEqual(self.worker.store.recorded_duration_ms(meeting["id"]), 500)
 
     def test_resume_restores_dual_track_mixing_from_manifest(self):
@@ -3076,7 +3140,8 @@ class WorkerTest(unittest.TestCase):
             set(self.worker.store.read_manifest(meeting["id"])["tracks"]), {"mic", "system"}
         )
         self.worker.active = None
-        self.worker.resume({"meeting_id": meeting["id"]})
+        with _stub_asr_stack():
+            self.worker.resume({"meeting_id": meeting["id"]})
         self.assertEqual(self.worker.live_tracks, {"mic", "system"})
         # 恢复后的混音应再次把两轨合成一条 mix 流送入 ASR。
         self.worker.asr = Mock()
@@ -3163,6 +3228,30 @@ class WorkerTest(unittest.TestCase):
 
         self.assertTrue(kept.exists())
         self.assertFalse(any(path.exists() for path in removed))
+
+    def test_retired_model_files_are_cleaned_up_on_startup(self):
+        """退役模型的本地副本要删掉：界面已经不显示它，用户没有任何入口删这几 GB。"""
+        root = Path(self.temp.name) / "models"
+        manager = ModelManager(root)
+        retired = [model["id"] for model in manager.catalog.values() if model.get("retired")]
+        self.assertTrue(retired, "清单里至少要有一个 retired 模型，否则这条测试等于没测")
+        kept = manager.local_path("funasr-nano-int8")
+        kept.mkdir(parents=True)
+        for model_id in retired:
+            manager.local_path(model_id).mkdir(parents=True)
+
+        ModelManager(root)
+
+        for model_id in retired:
+            self.assertFalse(manager.local_path(model_id).exists(), f"{model_id} 应被清理")
+        self.assertTrue(kept.exists(), "未退役模型的本地副本不得被删")
+
+    def test_retired_model_stays_in_the_catalog_so_history_can_be_resolved(self):
+        """删文件不等于删条目：历史会议的 refined_model_id 必须还能解析出模型元数据。"""
+        manager = ModelManager(Path(self.temp.name) / "models")
+        for model_id in [model["id"] for model in manager.catalog.values() if model.get("retired")]:
+            self.assertTrue(manager.is_known(model_id))
+            self.assertEqual(manager.get(model_id)["id"], model_id)
 
     def test_china_source_only_proxies_github_downloads(self):
         github = "https://github.com/k2-fsa/sherpa-onnx/releases/download/a/model.tar.bz2"
@@ -3273,17 +3362,6 @@ class WorkerTest(unittest.TestCase):
             [{"version": "postprocess", "start_ms": 0, "end_ms": 1000, "speaker": "spk-1"}],
         )
 
-    def test_initialize_downloads_default_live_models(self):
-        with (
-            patch.object(self.worker, "download_model") as download,
-            patch.object(self.worker, "_start_startup_maintenance"),
-        ):
-            self.worker.initialize({})
-        self.assertEqual(
-            [call.args[0]["model_id"] for call in download.call_args_list],
-            ["gtcrn-live-denoiser"],
-        )
-
     def test_only_one_summary_task_can_run(self):
         control = self.worker.tasks.begin("summary.generate", "first-meeting")
         try:
@@ -3319,17 +3397,32 @@ class WorkerTest(unittest.TestCase):
         quiet = Samples([0.001, -0.001])
         self.assertEqual(self.worker._enhance_live_microphone(quiet), quiet)
 
-    def test_live_denoise_bypasses_faint_speech(self):
-        # 偏弱/远端人声应跳过实时降噪，避免 GTCRN 把人声当噪声压掉导致「录音有声、
-        # 实时无字幕」；正常音量的片段仍走降噪。
-        import numpy
+    def test_import_diarization_skips_when_estimated_preparation_is_too_slow(self):
+        # 导入录音的说话人分离按「录音长度 × 设备核数」估算：超预算就跳过分割只做 VAD，
+        # 否则低核机型上十几分钟的录音要等好几分钟才能看到逐字稿。
+        path = Path(self.temp.name) / "import-duration.wav"
 
-        with patch.dict(SETTINGS["live_asr"], {"denoise_minimum_rms": 0.03}):
-            loud = numpy.full(1600, 0.05, dtype=numpy.float32)
-            self.assertFalse(self.worker._should_bypass_denoise(loud))
-            faint = numpy.full(1600, 0.005, dtype=numpy.float32)
-            self.assertTrue(self.worker._should_bypass_denoise(faint))
+        def write_seconds(seconds):
+            with wave.open(str(path), "wb") as audio:
+                audio.setnchannels(1)
+                audio.setsampwidth(1)
+                audio.setframerate(1)
+                audio.writeframes(bytes(seconds))
 
+        meeting = {"audio": {"playback": {"mic": str(path)}}}
+        write_seconds(600)
+        with patch.object(self.worker.models, "device", return_value={"cores": 4}):
+            self.assertFalse(self.worker._import_diarization_too_slow(meeting, ["mic"]))
+        with patch.object(self.worker.models, "device", return_value={"cores": 2}):
+            self.assertTrue(self.worker._import_diarization_too_slow(meeting, ["mic"]))
+        write_seconds(3600)
+        with patch.object(self.worker.models, "device", return_value={"cores": 4}):
+            self.assertTrue(self.worker._import_diarization_too_slow(meeting, ["mic"]))
+
+    def test_import_diarization_treats_unreadable_audio_as_affordable(self):
+        # 读不到长度时保持原有行为（照常分离说话人），不要因为一次读取失败就静默降级。
+        meeting = {"audio": {"playback": {"mic": str(Path(self.temp.name) / "missing.wav")}}}
+        self.assertFalse(self.worker._import_diarization_too_slow(meeting, ["mic"]))
 
     def test_live_mix_discards_stale_peer_audio(self):
         import numpy
@@ -3342,26 +3435,6 @@ class WorkerTest(unittest.TestCase):
         }
         self.assertIsNone(self.worker._mix_live_audio("mic", numpy.full(1600, 0.1, dtype=numpy.float32), MAX_MIX_BUFFER_MS + 1, 16000))
         self.assertFalse(self.worker.live_mix_buffers["system"])
-
-    def test_live_denoiser_disabled_by_setting(self):
-        # ``denoiser_enabled=0`` 时即使降噪模型就绪也不创建 LiveDenoiser。
-        def ready_for(model_id):
-            return model_id == SETTINGS["live_asr"]["denoiser_model_id"]
-
-        with patch.dict(SETTINGS["live_asr"], {"denoiser_enabled": 0}):
-            with (
-                patch.object(self.worker.models, "is_ready", side_effect=ready_for),
-                patch("backend.worker_session.LiveDenoiser") as denoiser_cls,
-            ):
-                self.worker.start(
-                    {
-                        "title": "降噪关闭",
-                        "language": "zh",
-                        "refined_model_id": "qwen3-asr-0.6b-int8",
-                    }
-                )
-        denoiser_cls.assert_not_called()
-        self.assertIsNone(self.worker.denoiser)
 
     def test_dual_track_mix_preserves_volume_when_peer_is_silent(self):
         # 双轨混音不应再 (mic+system)*0.5 把单轨音量压低 6dB：系统轨接近静音时
@@ -3892,29 +3965,73 @@ class WorkerTest(unittest.TestCase):
         )
 
     def test_task_pause_and_resume_control(self):
-        control = self.worker.begin_task("meeting.refine", "meeting-1")
+        """长时任务的注册、暂停、恢复、取消的对外契约。
+
+        生产路径不直接碰注册表：``@managed_task`` 负责 begin/finish，任务在安全检查点
+        调 ``wait_task``，而 ``wait_task`` **只在已暂停时阻塞**。所以要先用一个事件把任务
+        停在检查点之前，再暂停——否则任务早已跑完，测不到任何东西。
+        """
+        import threading
+
+        from backend.worker_common import managed_task
+
+        started = threading.Event()
+        proceed = threading.Event()
+
+        @managed_task("meeting.refine")
+        def sample_work(self, payload, control):
+            started.set()
+            proceed.wait(timeout=5)
+            self.wait_task(control)
+            return "done"
+
+        def run(meeting_id, sink):
+            try:
+                sink["value"] = sample_work(self.worker, {"meeting_id": meeting_id})
+            except Exception as error:  # noqa: BLE001 - 取消是预期结果，需要记录下来
+                sink["error"] = error
+
+        first = {}
+        runner = threading.Thread(target=run, args=("meeting-1", first), daemon=True)
+        runner.start()
+        self.assertTrue(started.wait(timeout=5), "任务必须先把注册记录建好")
+
+        # 同一个键不允许并发注册（否则 pause 作用到哪一个都无法确定）。
         with self.assertRaisesRegex(ValueError, "already running"):
-            self.worker.begin_task("meeting.refine", "meeting-1")
+            self.worker.tasks.begin("meeting.refine", "meeting-1")
+
+        # 暂停 → 放行到检查点 → 任务应停在 wait_task 里。
         self.assertEqual(
-            self.worker.pause_task(
-                {"task": "meeting.refine", "meeting_id": "meeting-1"}
-            )["status"],
+            self.worker.pause_task({"task": "meeting.refine", "meeting_id": "meeting-1"})["status"],
             "paused",
         )
-        self.assertTrue(control.paused.is_set())
+        proceed.set()
+        runner.join(timeout=0.5)
+        self.assertTrue(runner.is_alive(), "暂停中的任务不应越过检查点")
+
+        # 恢复 → 任务跑完 → 注册记录必须被释放。
         self.assertEqual(
-            self.worker.resume_task(
-                {"task": "meeting.refine", "meeting_id": "meeting-1"}
-            )["status"],
+            self.worker.resume_task({"task": "meeting.refine", "meeting_id": "meeting-1"})["status"],
             "running",
         )
-        self.assertFalse(control.paused.is_set())
-        self.worker.finish_task("meeting.refine", "meeting-1")
-        self.worker.finish_task(
-            "meeting.refine",
-            "meeting-1",
-            self.worker.begin_task("meeting.refine", "meeting-1"),
-        )
+        runner.join(timeout=5)
+        self.assertEqual(first.get("value"), "done")
+        self.assertFalse(self.worker.tasks.has_for_meeting("meeting-1"))
+
+        # 取消：暂停中取消必须以 TaskCancelled 退出，而不是静默继续。
+        second = {}
+        started.clear()
+        proceed.clear()
+        cancelled = threading.Thread(target=run, args=("meeting-2", second), daemon=True)
+        cancelled.start()
+        self.assertTrue(started.wait(timeout=5))
+        self.worker.pause_task({"task": "meeting.refine", "meeting_id": "meeting-2"})
+        self.worker.cancel_task({"task": "meeting.refine", "meeting_id": "meeting-2"})
+        proceed.set()
+        cancelled.join(timeout=5)
+        self.assertFalse(cancelled.is_alive())
+        self.assertIsInstance(second.get("error"), TaskCancelled)
+        self.assertFalse(self.worker.tasks.has_for_meeting("meeting-2"))
 
     def test_recording_state_rejects_concurrent_starts(self):
         results = []
@@ -4215,7 +4332,8 @@ class WorkerTest(unittest.TestCase):
         self.assertEqual(tracker.assign_embedding([0.9, 0.1]), "spk-1")
         self.assertEqual(tracker.assign_embedding([0.0, 1.0]), "spk-2")
         self.assertIn(tracker.assign_embedding([-1.0, 0.0]), {"spk-1", "spk-2"})
-        self.assertEqual(tracker.speaker_ids, ["spk-1", "spk-2"])
+        # 只断言对外可见的结果：这一串分配一共用到了两个 spk id，没有越界新开第三个。
+        self.assertEqual({f"spk-{index + 1}" for index in range(len(tracker.centers))}, {"spk-1", "spk-2"})
 
     def test_speaker_tracker_uses_first_temporary_speaker(self):
         tracker = SpeakerTracker.__new__(SpeakerTracker)
@@ -4466,6 +4584,297 @@ class WorkerTest(unittest.TestCase):
         self.assertFalse(meeting_dir.exists())
         with self.assertRaises(ValueError):
             self.worker.store.get_meeting(meeting["id"])
+
+    # —— 退役模型的可用性边界 ————————————————————————————————————————————
+    # 退役模型仍留在清单里（历史会议的 refined_model_id 要能解析），但它的本地副本会在
+    # 启动时被清掉、界面上也没有入口。下面三条守住「它可以被解析、不能被使用、不能被
+    # 重新下载」这三件事，否则会绕出一圈下载—删除循环。
+
+    def test_retired_model_cannot_be_downloaded_again(self):
+        retired = [
+            model["id"] for model in self.worker.models.catalog.values() if model.get("retired")
+        ]
+        self.assertTrue(retired, "清单里至少要有一个 retired 模型，否则这条测试等于没测")
+        for model_id in retired:
+            with self.assertRaisesRegex(ValueError, "no longer offered"):
+                self.worker.models.download(model_id)
+
+    def test_resume_repairs_a_retired_model_before_starting(self):
+        """恢复入口必须自己修模型，不能把加载失败吞掉后谎报恢复成功。"""
+        retired_id = next(
+            model["id"] for model in self.worker.models.catalog.values() if model.get("retired")
+        )
+        meeting = self.worker.start(
+            {"title": "恢复退役模型", "language": "zh", "refined_model_id": "qwen3-asr-0.6b-int8"}
+        )
+        self.worker.store.update_meeting(meeting["id"], {"refined_model_id": retired_id})
+        self.worker.active = None
+        with _stub_asr_stack():
+            self.worker.resume({"meeting_id": meeting["id"]})
+        # 会话里用的一定是修复后的模型，而不是那个会话根本加载不了的退役 id。
+        self.assertNotEqual(self.worker.store.get_meeting(meeting["id"])["refined_model_id"], retired_id)
+
+    def test_resume_reports_failure_instead_of_silently_recording_without_captions(self):
+        """识别链路建不起来时必须上抛，让 main.js 明确提示无法恢复。
+
+        ``start`` 保持宽容（「识别失败也保住原始录音」是既有约定），``resume`` 不行：
+        它如果照样返回成功，界面会显示"正在录制"，而整场会议一条字幕都不会出现。
+        """
+        meeting = self.worker.start(
+            {"title": "无法恢复", "language": "zh", "refined_model_id": "qwen3-asr-0.6b-int8"}
+        )
+        self.worker.active = None
+        with self.assertRaises(ModelNotInstalled):
+            self.worker.resume({"meeting_id": meeting["id"]})
+        # 失败后不该留下半开的会话状态。
+        self.assertIsNone(self.worker.asr)
+        self.assertIsNone(self.worker.vad)
+        # 尤其不能把会议留成「活动」：否则下一次 start/resume 会撞上
+        # "A meeting is already active"，录音卡死到进程重启。
+        self.assertIsNone(self.worker.active)
+        # 恢复失败后必须还能立刻开始新会议（同一个 worker 进程内）。
+        self.worker.start(
+            {"title": "恢复失败后重新开始", "language": "zh", "refined_model_id": "qwen3-asr-0.6b-int8"}
+        )
+        self.assertIsNotNone(self.worker.active)
+
+    def test_default_refined_model_prefers_an_installed_model(self):
+        """声明的默认模型没装时改用已安装且支持该语言的模型。
+
+        没有这条兜底，后端会把用户从没选过的模型当成默认值送给加载器——精修老会议时
+        凭空弹出一个几 GB 下载，而前端在同一条路径上会回落到已安装的模型。
+        """
+        from .worker_common import default_refined_model_for_language
+
+        catalog = self.worker.models.catalog
+        # 英语的声明默认是 Parakeet；只装 FunASR 时应回落到 FunASR（它也支持英语）。
+        only_funasr = lambda model_id: model_id == "funasr-nano-int8"  # noqa: E731
+        self.assertEqual(
+            default_refined_model_for_language(self.worker.models, "en", is_ready=only_funasr),
+            "funasr-nano-int8",
+        )
+        # 一个都不装时仍返回声明的默认，而不是抛错或返回 None。
+        self.assertEqual(
+            default_refined_model_for_language(self.worker.models, "en", is_ready=lambda _: False),
+            "parakeet-tdt-0.6b-v3-int8",
+        )
+        # 不传判据时保持纯清单语义（供构建期/无模型环境使用）。
+        self.assertEqual(
+            default_refined_model_for_language(self.worker.models, "en"),
+            "parakeet-tdt-0.6b-v3-int8",
+        )
+        # 混说只能由多语种模型承担：只装 FunASR 时不能回落到它。
+        self.assertEqual(
+            default_refined_model_for_language(self.worker.models, "auto", is_ready=only_funasr),
+            "parakeet-tdt-0.6b-v3-int8",
+        )
+        self.assertTrue(catalog)
+
+    def test_refined_priority_is_unique_across_selectable_models(self):
+        """前后端都按 refined_priority 排序，因此它必须存在且唯一。
+
+        缺字段或重号会让两端对同一个语言给出不同的回退模型——这正是这条字段要消除的问题。
+        """
+        selectable = [
+            model
+            for model in self.worker.models.catalog.values()
+            if "refined" in model.get("stages", []) and not model.get("retired")
+        ]
+        self.assertGreaterEqual(len(selectable), 2, "至少要两个可选识别模型才有排序问题")
+        priorities = [model.get("refined_priority") for model in selectable]
+        self.assertNotIn(None, priorities, "每个可选识别模型都必须声明 refined_priority")
+        self.assertEqual(
+            len(set(priorities)), len(priorities), f"refined_priority 不能重号：{priorities}"
+        )
+        # 声明的语言归属必须唯一：同一个语言被两个模型声明时，先后只由 refined_priority
+        # 决定，容易变成"改一处忘另一处"。
+        owners = {}
+        for model in selectable:
+            for language in model.get("default_for_languages") or []:
+                self.assertNotIn(
+                    language, owners, f"{language} 被 {owners.get(language)} 与 {model['id']} 同时声明"
+                )
+                owners[language] = model["id"]
+
+    def test_import_diarization_scales_by_physical_cores(self):
+        """按物理核折算：逻辑核对 4C/8T 这类机器会把估时砍半，判断迟到一倍。"""
+        path = Path(self.temp.name) / "physical-cores.wav"
+        with wave.open(str(path), "wb") as audio:
+            audio.setnchannels(1)
+            audio.setsampwidth(1)
+            audio.setframerate(1)
+            audio.writeframes(bytes(900))
+        meeting = {"audio": {"playback": {"mic": str(path)}}}
+        # 同一份 900 s 音频：按 4 物理核算 360 s（超预算）、按 8 逻辑核算 180 s（未超）。
+        # 也就是说只报逻辑核会漏掉这场本该跳过的分离。
+        with patch.object(
+            self.worker.models, "device", return_value={"cores": 8, "physical_cores": 4}
+        ):
+            self.assertTrue(self.worker._import_diarization_too_slow(meeting, ["mic"]))
+        with patch.object(
+            self.worker.models, "device", return_value={"cores": 8, "physical_cores": 8}
+        ):
+            self.assertFalse(self.worker._import_diarization_too_slow(meeting, ["mic"]))
+        # 设备信息里没有 physical_cores（老替身/老平台）时回落到 cores，不能崩。
+        with patch.object(self.worker.models, "device", return_value={"cores": 2}):
+            self.assertTrue(self.worker._import_diarization_too_slow(meeting, ["mic"]))
+
+    def test_import_diarization_averages_over_readable_tracks(self):
+        """一条轨道读不到不该放弃整次估算：长度取所有可读轨道的最大值。"""
+        good = Path(self.temp.name) / "readable.wav"
+        with wave.open(str(good), "wb") as audio:
+            audio.setnchannels(1)
+            audio.setsampwidth(1)
+            audio.setframerate(1)
+            audio.writeframes(bytes(3600))
+        meeting = {
+            "audio": {"playback": {"mic": str(Path(self.temp.name) / "missing.wav"), "system": str(good)}}
+        }
+        with patch.object(
+            self.worker.models, "device", return_value={"cores": 4, "physical_cores": 4}
+        ):
+            self.assertTrue(self.worker._import_diarization_too_slow(meeting, ["mic", "system"]))
+
+    def test_recording_keeps_going_when_recognition_cannot_start(self):
+        """识别链路建不起来时，录制入口必须继续录音，并把失败说清楚。
+
+        「识别失败也保住原始录音」是既有产品约定，所以 ``start`` 吞掉异常是**有意**的；
+        但它不能悄悄吞——整场会议一个字幕都不会有，用户以为在记、其实只在录。这里同时
+        守住两件事：音频照常写入，以及那条带 ``code`` 的警告被发出去（前端据此渲染常驻
+        卡片，而不是一闪而过的 toast）。
+        """
+        meeting = self.worker.start(
+            {"title": "无识别链路", "language": "zh", "refined_model_id": "qwen3-asr-0.6b-int8"}
+        )
+        self.assertIsNone(self.worker.asr)
+        self.assertIsNone(self.worker.vad)
+        warnings = [event for event in self.events if event.get("type") == "worker.warning"]
+        self.assertTrue(warnings, "必须发出一条警告，否则用户无从得知本场没有字幕")
+        payload = warnings[-1]["payload"]
+        self.assertEqual(payload["code"], "asr_unavailable")
+        self.assertEqual(payload["meeting_id"], meeting["id"])
+        self.assertTrue(payload["message"], "文本仍要留给日志与提示")
+
+        # 音频仍然逐帧落盘，会后精修才能补出完整逐字稿。
+        self.worker.audio(
+            {
+                "meeting_id": meeting["id"],
+                "track": "mic",
+                "pcm": base64.b64encode(b"\0\0" * 1600).decode(),
+                "sample_rate": 16000,
+                "start_ms": 0,
+            }
+        )
+        self.assertGreater(self.worker.store.recorded_duration_ms(meeting["id"]), 0)
+
+    def test_resume_reports_the_failure_instead_of_also_warning(self):
+        """恢复入口只报一次：失败向上抛，由调用方给出「无法恢复」，不再重复发警告。"""
+        meeting = self.worker.start(
+            {"title": "恢复不重复告警", "language": "zh", "refined_model_id": "qwen3-asr-0.6b-int8"}
+        )
+        self.worker.active = None
+        self.events.clear()
+        with self.assertRaises(ModelNotInstalled):
+            self.worker.resume({"meeting_id": meeting["id"]})
+        self.assertEqual(
+            [event for event in self.events if event.get("type") == "worker.warning"],
+            [],
+            "resume 的失败由 main.js 统一报给用户，这里不应再发一条 asr_unavailable",
+        )
+
+    def test_missing_models_are_reported_as_a_structured_error(self):
+        """「模型没装」必须带机器可读的字段，不能只给一句人类可读文本。
+
+        协议层以前把异常压成字符串，主进程只能正则反解模型 id —— 改一次文案就会静默
+        破坏"先下载再重试"。这条守住两端契约：``error_code`` 固定为
+        ``model_not_installed``，``error_models`` 是去重后的缺失 id。
+        """
+        response = {}
+        self.worker.output = lambda value: response.update(value)
+        self.worker.response("cmd-1", error=ModelNotInstalled(["qwen3-asr-0.6b-int8"]))
+        self.assertFalse(response["ok"])
+        self.assertEqual(response["error_code"], "model_not_installed")
+        self.assertEqual(response["error_models"], ["qwen3-asr-0.6b-int8"])
+        self.assertTrue(response["error"], "文本仍要留给日志与提示")
+
+        response.clear()
+        self.worker.response("cmd-2", error=ModelNotInstalled(["a-model", "b-model"]))
+        self.assertEqual(response["error_models"], ["a-model", "b-model"])
+        self.assertTrue(response["error"])
+
+        # 普通错误不带结构化字段：主进程据此走普通报错分支，而不是误触发下载。
+        response.clear()
+        self.worker.response("cmd-3", error=ValueError("something else"))
+        self.assertNotIn("error_code", response)
+        self.assertNotIn("error_models", response)
+
+        # missing_models 保持入参顺序并去重，空值被忽略。
+        self.worker.models.is_ready = lambda model_id: model_id == "ready-model"
+        self.assertEqual(
+            missing_models(self.worker.models, ["b-model", "ready-model", "b-model", ""]),
+            ["b-model"],
+        )
+
+    def test_startup_convergence_repairs_every_meeting_at_once(self):
+        """启动维护把全库失效的识别模型一次性收敛，而不是等某条运行路径撞上再修。
+
+        这里覆盖三种失效：指向退役模型、指向清单里不存在的模型、以及带不动该会议语言的
+        模型。可用模型必须原样保留——收敛只修"不可用"，不碰"用户还没下载"的合法型号。
+        """
+        retired_id = next(
+            model["id"] for model in self.worker.models.catalog.values() if model.get("retired")
+        )
+        # Parakeet 覆盖 25 种欧洲语言、不含中文 → 型号可用但带不动 zh，属于"语言不匹配"。
+        meetings = {
+            "retired": self.worker.store.create_meeting(
+                {"title": "退役", "language": "zh", "refined_model_id": retired_id}
+            ),
+            "unknown": self.worker.store.create_meeting(
+                {"title": "已下架", "language": "zh", "refined_model_id": "long-gone-model"}
+            ),
+            "mismatch": self.worker.store.create_meeting(
+                {"title": "语言不匹配", "language": "zh", "refined_model_id": "parakeet-tdt-0.6b-v3-int8"}
+            ),
+            "usable": self.worker.store.create_meeting(
+                {"title": "可用", "language": "zh", "refined_model_id": "funasr-nano-int8"}
+            ),
+        }
+        repaired = self.worker.converge_refined_models()
+
+        self.assertEqual(
+            sorted(repaired),
+            sorted(meetings[key]["id"] for key in ("retired", "unknown", "mismatch")),
+        )
+        for key in ("retired", "unknown", "mismatch"):
+            self.assertEqual(
+                self.worker.store.get_meeting(meetings[key]["id"])["refined_model_id"],
+                self.worker._default_refined_model("zh"),
+                f"{key} 应被收敛到该语言的默认识别模型",
+            )
+        # 可用的型号不得被动过。
+        self.assertEqual(
+            self.worker.store.get_meeting(meetings["usable"]["id"])["refined_model_id"],
+            "funasr-nano-int8",
+        )
+        # 幂等：再跑一次没有任何改写。
+        self.assertEqual(self.worker.converge_refined_models(), [])
+
+    def test_power_saving_column_is_dropped_on_upgrade(self):
+        """下架功能的列走 _drop_retired_columns，不只是从建表语句里删掉。
+
+        老用户库里已经存在这一列；只删建表语句会让它永久留下，与文件里「删列等幂等
+        修复放这里」的约定不符。
+        """
+        with self.worker.store.connect() as db:
+            db.execute("ALTER TABLE meetings ADD COLUMN power_saving INTEGER NOT NULL DEFAULT 0")
+            self.assertIn(
+                "power_saving",
+                {row["name"] for row in db.execute("PRAGMA table_info(meetings)")},
+            )
+        Store(self.temp.name)
+        with self.worker.store.connect() as db:
+            columns = {row["name"] for row in db.execute("PRAGMA table_info(meetings)")}
+        self.assertNotIn("power_saving", columns)
 
 
 if __name__ == "__main__":

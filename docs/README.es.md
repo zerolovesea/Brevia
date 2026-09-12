@@ -33,9 +33,22 @@ Configura por separado las notas de IA y el resumen de la reunión: cada uno pue
 
 ![Notas de AI Assist](assets/tour/en/AI%20Assist%20Notes.png)
 
-### Modos de rendimiento para equipos con CPU
+### Elegir el modelo de reconocimiento
 
-En Ajustes → Rendimiento puedes elegir entre los modos Estándar y Eficiencia. Eficiencia desactiva la reducción de ruido y el refinamiento en vivo, y reduce la frecuencia de las notas de IA integradas para mantener los subtítulos ágiles; el refinamiento posterior sigue disponible. Si el refinamiento en vivo se acumula, Brevia ofrece el mismo cambio durante la reunión. En equipos menos potentes, usa un modelo local 2B o un proveedor en línea.
+La configuración inicial lista los modelos de voz descargables y marca el que Brevia sugiere para el idioma de la interfaz (Silero VAD, la separación de hablantes y las huellas de voz vienen incluidos y siempre están instalados); puedes desmarcar el resto antes de descargar.
+
+Después, en cada reunión Brevia elige un modelo de reconocimiento predeterminado según el **idioma de la reunión**, declarado en `backend/models.json`:
+
+| Idioma de la reunión | Modelo predeterminado | Por qué |
+| --- | --- | --- |
+| Chino, cantonés | FunASR Nano int8 | Mayor precisión en chino y sus dialectos |
+| Japonés, coreano | Qwen3-ASR 0.6B int8 | El único modelo seleccionable que cubre ambos |
+| Inglés, español, francés, alemán, ruso, idiomas mezclados | Parakeet TDT 0.6B v3 | 25 lenguas europeas en un modelo, con puntuación y marcas de tiempo |
+| Cualquier otro idioma | Qwen3-ASR 0.6B int8 | La mayor cobertura entre los modelos restantes |
+
+Si el modelo predeterminado aún no está descargado, Brevia usa otro ya instalado que soporte ese idioma en lugar de pedirte otra descarga. La pantalla de preparación muestra un selector de **modelo de reconocimiento** (también lista los que no has descargado, con su tamaño), y el mismo selector aparece durante la reunión y cambia el modelo en caliente mediante `meeting.reconfigure`. En **Ajustes → Avanzado → Reconocimiento en vivo**, `live_asr.max_speech_seconds` limita cuánto puede crecer un segmento de subtítulo; el límite efectivo siempre es el menor entre ese valor, la configuración de VAD por idioma y la capacidad del propio modelo.
+
+En equipos menos potentes, usa un modelo local 2B de notas de IA o un proveedor en línea.
 
 ### Pantalla de reunión silenciosa con transcripción y traducción en vivo
 
@@ -59,13 +72,12 @@ Con segmentación Pyannote más modelos de embeddings de voz, todo ejecutándose
 
 ### Biblioteca local de modelos curada
 
-Modelos descargables que cubren ASR en streaming, refinamiento offline, restauración de puntuación, detección de actividad vocal, diarización, embeddings de hablante y separación de fuentes. Combínalos por idioma y precisión — todo corre en tu dispositivo.
+Modelos descargables que cubren transcripción por frases, refinamiento tras la reunión, detección de actividad vocal, separación de hablantes, huellas de voz, notas y resumen con IA, y traducción de subtítulos. Combínalos por idioma y precisión — todo corre en tu dispositivo.
 
 ![Biblioteca de modelos](assets/tour/en/%E6%A8%A1%E5%9E%8B%E5%BA%93.png)
 
 ### Y más
 
-- **Separación de fuentes** — Spleeter divide grabaciones en pistas vocales y no vocales para postproducción.
 - **Importación de audio** — trae grabaciones existentes para transcribirlas offline con el mismo pipeline.
 - **Exportaciones versátiles** — transcripciones y notas en Markdown, TXT, JSON, SRT, DOCX o PDF; audio en FLAC, WAV o M4A.
 - **Notas revisables** — escribe en texto enriquecido o Markdown y acepta solo las sugerencias de IA que te sirvan.
@@ -103,6 +115,10 @@ Brevia sigue un diseño estrictamente local:
 - **Los datos viven en `~/brevia`** por defecto — SQLite, audio crudo, exportaciones, modelos en caché y perfiles de voz.
 - **Las llamadas a la nube son opt-in.** Los resúmenes LLM y traducción requieren que el usuario configure un proveedor explícitamente, y solo se envía texto.
 
+La grabación funciona como **segmentación con Silero VAD → una única decodificación sin conexión → un subtítulo completo**. Tras cada pausa (chino 0,7 s; otros idiomas 0,8 s) aparece la frase; el habla continua se corta a los 30 / 20 s (ajustable en `vad`). Un segmento de VAD puede contener varias frases y las frases vecinas se agrupan en un párrafo (chino ~110 caracteres, máx. 150; latino ~280, máx. 380). Un punto final de VAD **no** es un límite de párrafo: solo una pausa larga real (≥1,2 s) abre uno nuevo, y un párrafo corto se entrega tras 8 s como máximo. En los cortes, la siguiente decodificación retrocede 400 ms y elimina las repeticiones en la unión. Al detener se procesa la última frase; si el reconocimiento falla, se conserva el audio original.
+
+Consulta la [metodología y los resultados del benchmark](../backend/benchmarks/vad-2026-09-05/REPORT.md).
+
 ## Stack tecnológico
 
 | Capa | Tecnología |
@@ -119,16 +135,14 @@ Brevia sigue un diseño estrictamente local:
 
 Cada modelo se descarga bajo demanda desde **Settings → Model Library**. El manifiesto está en [`backend/models.json`](../backend/models.json).
 
-| Categoría | Modelos representativos | Idiomas |
+| Tipo | Modelos representativos | Idiomas |
 | --- | --- | --- |
-| ASR streaming | Zipformer (zh / en / fr / ko / multilingüe), Nemotron 3.5 | 30+ |
-| ASR refinamiento | Qwen3-ASR 0.6B / 1.7B, Whisper Large v3, FunASR Nano | Multilingüe |
-| Puntuación | CT-Transformer zh+en, Online Punct English casing | zh / en |
+| Transcripción por frases / refinamiento | FunASR Nano int8, Qwen3-ASR 0.6B, Parakeet TDT 0.6B v3 | Chino / multilingüe / 25 lenguas europeas |
 | Detección de actividad vocal | Silero VAD | Universal |
-| Mejora de voz | GTCRN Live Denoiser | Universal |
-| Diarización | Pyannote Segmentation 3.0, Reverb Diarization v1 | Universal |
-| Embeddings de hablante | 3D-Speaker ERes2Net Base | Universal |
-| Separación de fuentes | Spleeter 2 Stems | Universal |
+| Separación de hablantes | Pyannote Segmentation 3.0 | Universal |
+| Embeddings de hablante | 3D-Speaker ERes2Net Base | Chino |
+| Notas de IA y resumen de reunión | Qwen 3.5 2B, Qwen 3.5 4B | Chino / inglés |
+| Traducción de subtítulos | Tencent Hy-MT2 1.8B | 33 idiomas |
 
 Para los resúmenes LLM, elige **IA integrada** para ejecutar en local un modelo GGUF incluido (Qwen 3.5 2B / 4B), o apunta Brevia a Claude, OpenAI, OpenRouter o cualquier servicio propio compatible con OpenAI Chat Completions o Anthropic Messages: Gemini (endpoint compatible con OpenAI), DeepSeek, Kimi, Qwen y más.
 
@@ -149,7 +163,8 @@ Concede permisos de micrófono y grabación de pantalla al primer arranque, lueg
 ### Scripts comunes
 
 ```bash
-npm test                    # Tests de UI + backend
+npm test                    # Puerta de codigo muerto + comportamiento Electron + UI + smoke E2E + backend
+npm run test:e2e            # Lanza la app real y verifica mediante CDP
 npm run build               # Build de Tailwind CSS
 npm run test:model          # Diagnóstico de modelos ASR
 npm run test:diarization    # Diagnóstico de diarización
@@ -211,7 +226,7 @@ No. Reconocimiento de voz y diarización se ejecutan localmente. Solo los resúm
 <details>
 <summary><strong>¿Cuánto espacio en disco requieren los modelos?</strong></summary>
 
-Depende de cuáles instales. Una configuración típica (streaming + refinamiento + diarización) ronda 1–2 GB. Los modelos compactos empiezan en ~80 MB; los grandes superan 1 GB.
+Depende de cuáles instales. Una configuración típica (transcripción por frases + refinamiento + separación de hablantes) ronda 1–2 GB. El modelo de reconocimiento más pequeño ocupa ~487 MB; los grandes superan 1 GB.
 </details>
 
 <details>
@@ -263,5 +278,5 @@ Brevia se publica bajo la [ISC License](../LICENSE). Los archivos de modelos y p
 ## Agradecimientos
 
 - [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) — el runtime local que impulsa ASR, VAD, puntuación y procesamiento de hablantes. Licenciado bajo [Apache-2.0](https://github.com/k2-fsa/sherpa-onnx/blob/master/LICENSE).
-- Gracias a los autores y mantenedores de modelos cuyos artefactos descargables se declaran en [`backend/models.json`](../backend/models.json), incluyendo Zipformer, Whisper, Qwen3-ASR, FunASR, Pyannote, 3D-Speaker, Silero, Spleeter y Tencent Hy-MT2.
+- Gracias a los autores y mantenedores de modelos cuyos artefactos descargables se declaran en [`backend/models.json`](../backend/models.json), incluyendo Qwen3-ASR, FunASR, Parakeet (NeMo), Pyannote, 3D-Speaker, Silero y Tencent Hy-MT2.
 - Electron, ONNX Runtime, Python y la comunidad open-source de voz hacen posible este flujo local.

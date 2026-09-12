@@ -33,9 +33,22 @@ KI-Notizen und KI-Meeting-Zusammenfassungen werden getrennt konfiguriert: jeweil
 
 ![AI-Assist-Notizen](assets/tour/en/AI%20Assist%20Notes.png)
 
-### Leistungsmodi fuer CPU-Geraete
+### Erkennungsmodell waehlen
 
-Unter Einstellungen → Leistung stehen Standard- und Effizienzmodus zur Verfuegung. Der Effizienzmodus deaktiviert Live-Entrauschung und -Nachbearbeitung und reduziert die Frequenz integrierter KI-Notizen, damit Untertitel reaktionsschnell bleiben; die Nachbearbeitung nach dem Meeting bleibt verfuegbar. Wenn die Live-Nachbearbeitung dauerhaft zurueckfaellt, bietet Brevia denselben Wechsel waehrend des Meetings an. Auf leistungsschwaecheren Rechnern empfiehlt sich ein lokales 2B-Modell oder ein Online-Anbieter.
+Die Ersteinrichtung listet die herunterladbaren Sprachmodelle auf und markiert das von Brevia empfohlene Modell fuer Ihre **Oberflaechensprache** (Silero VAD, Sprechertrennung und Stimmabdruck sind mitgeliefert und immer installiert); die uebrigen koennen Sie vor dem Download abwaehlen.
+
+Danach waehlt Brevia fuer jede Besprechung ein Standard-Erkennungsmodell anhand der **Besprechungssprache**. Die Zuordnung steht in `backend/models.json`:
+
+| Besprechungssprache | Standardmodell | Warum |
+| --- | --- | --- |
+| Chinesisch, Kantonesisch | FunASR Nano int8 | Hoechste Genauigkeit fuer Chinesisch und seine Dialekte |
+| Japanisch, Koreanisch | Qwen3-ASR 0.6B int8 | Das einzige waehlbare Modell, das beide abdeckt |
+| Englisch, Spanisch, Franzoesisch, Deutsch, Russisch, gemischte Sprachen | Parakeet TDT 0.6B v3 | 25 europaeische Sprachen in einem Modell, mit Zeichensetzung und Zeitstempeln |
+| Alle anderen Sprachen | Qwen3-ASR 0.6B int8 | Groesste Sprachabdeckung der uebrigen Modelle |
+
+Ist das Standardmodell noch nicht heruntergeladen, nutzt Brevia ein **bereits installiertes** Modell fuer diese Sprache, statt einen weiteren Download zu verlangen. Der Vorbereitungsbildschirm zeigt eine Auswahl fuer das **Erkennungsmodell** (auch nicht heruntergeladene, mit Groesse), und dieselbe Auswahl erscheint waehrend der Besprechung und wechselt das Modell ueber `meeting.reconfigure`. Unter **Einstellungen → Erweitert → Live-Erkennung** begrenzt `live_asr.max_speech_seconds`, wie lang ein Untertitel-Segment werden darf; wirksam ist immer der kleinste Wert aus dieser Einstellung, der sprachspezifischen VAD-Konfiguration und der Kapazitaet des Modells.
+
+Auf leistungsschwaecheren Rechnern empfiehlt sich ein lokales 2B-KI-Notizmodell oder ein Online-Anbieter.
 
 ### Eine ruhige Meeting-Oberflaeche mit Live-Transkription und -Uebersetzung
 
@@ -59,13 +72,12 @@ Angetrieben von Pyannote-Segmentierung plus Sprecher-Embedding-Modellen, alles a
 
 ### Eine kuratierte lokale Modellbibliothek
 
-Herunterladbare Modelle fuer Streaming-ASR, Offline-Verfeinerung, Zeichensetzung, Sprachaktivitaetserkennung, Sprecherdiarisierung, Sprecher-Embeddings und Quellentrennung. Kombiniere nach Sprache und Genauigkeit — alles laeuft auf deinem Geraet.
+Herunterladbare Modelle fuer Satzerkennung, Nachbearbeitung, Sprachaktivitaetserkennung, Sprechertrennung, Stimmabdruck, KI-Notizen und -Zusammenfassung sowie Untertiteluebersetzung. Kombiniere nach Sprache und Genauigkeit — alles laeuft auf deinem Geraet.
 
 ![Modellbibliothek](assets/tour/en/%E6%A8%A1%E5%9E%8B%E5%BA%93.png)
 
 ### Und mehr
 
-- **Quellentrennung** — Spleeter trennt Aufnahmen in Vokal- und Nicht-Vokal-Spuren fuer die Nachbearbeitung.
 - **Audio-Import** — bring bestehende Aufnahmen fuer die Offline-Transkription in die gleiche Sprachpipeline.
 - **Vielseitige Exporte** — Transkripte und Notizen als Markdown, TXT, JSON, SRT, DOCX oder PDF; Audio als FLAC, WAV oder M4A.
 - **Ueberpruefbare Notizen** — schreibe in Rich Text oder Markdown und uebernimm nur hilfreiche KI-Vorschlaege.
@@ -91,7 +103,7 @@ Erteile beim ersten Start die Berechtigungen fuer Mikrofon und Bildschirmaufnahm
 flowchart LR
   A[Electron-Renderer<br/>HTML · Tailwind · JS] <-->|IPC + Zod-Validierung| B[Electron-Hauptprozess]
   B <-->|JSONL stdin/stdout| C[Python-Worker<br/>gebundelte Runtime]
-  C --> D[sherpa-onnx<br/>ASR · VAD · Sprecher · Zeichensetzung]
+  C --> D[sherpa-onnx<br/>ASR · VAD · Sprecher]
   C --> E[Lokale Speicherung<br/>SQLite · Audio · Exporte]
   C -. ausdrueckliche Zustimmung .-> F[Optionale Cloud-API<br/>LLM-Zusammenfassung · Uebersetzung]
 ```
@@ -102,6 +114,10 @@ Brevia folgt einem strikt local-first Design:
 - **Der Hauptprozess ist eine duenne Huelle.** Er startet einen einzigen Python-Worker ueber JSONL stdin/stdout; der Worker uebernimmt Modellverwaltung, Audioverarbeitung, Sprecherprofile, lokale Speicherung und Exporte.
 - **Daten leben standardmaessig in `~/brevia`** — SQLite, Rohaudio, Exporte, zwischengespeicherte Modelle und Stimmprofile.
 - **Cloud-Aufrufe sind Opt-in.** LLM-Zusammenfassungen und Uebersetzungen erfordern, dass Nutzerinnen und Nutzer einen Anbieter explizit konfigurieren, und es wird nur Text gesendet.
+
+Die Aufnahme laeuft als **Silero-VAD-Segmentierung → eine einzige Offline-Erkennung → eine vollstaendige Untertitelzeile**. Nach jeder Sprechpause (Chinesisch 0,7 s, andere Sprachen 0,8 s) erscheint der Satz; kontinuierliche Rede wird bei 30 / 20 s geschnitten (einstellbar unter `vad`). Ein VAD-Segment kann mehrere Saetze enthalten; benachbarte Saetze werden zu einem Absatz gebuendelt (Chinesisch ca. 110 Zeichen, max. 150; Lateinisch ca. 280, max. 380). Ein VAD-Endpunkt ist **keine** Absatzgrenze — nur eine echte lange Pause (≥1,2 s) beginnt einen neuen Absatz, und ein zu kurzer Absatz wird nach spaetestens 8 s uebernommen. An Schnittstellen greift die naechste Dekodierung 400 ms zurueck und gleicht Wiederholungen an der Naht aus. Beim Stoppen wird der letzte Satz noch verarbeitet; schlaegt die Erkennung fehl, bleibt die Originalaufnahme erhalten.
+
+Siehe [Benchmark-Methodik und Ergebnisse](../backend/benchmarks/vad-2026-09-05/REPORT.md).
 
 ## Tech-Stack
 
@@ -121,14 +137,12 @@ Jedes Modell wird bei Bedarf aus **Einstellungen → Modellbibliothek** herunter
 
 | Kategorie | Repraesentative Modelle | Sprachen |
 | --- | --- | --- |
-| Streaming-ASR | Zipformer (zh / en / fr / ko / mehrsprachig), Nemotron 3.5 | 30+ |
-| Verfeinerungs-ASR | Qwen3-ASR 0.6B / 1.7B, Whisper Large v3, FunASR Nano | Mehrsprachig |
-| Zeichensetzung | CT-Transformer zh+en, Online Punct englische Grossschreibung | zh / en |
+| Satzerkennung / Nachbearbeitung | FunASR Nano int8, Qwen3-ASR 0.6B, Parakeet TDT 0.6B v3 | Chinesisch / mehrsprachig / 25 europaeische Sprachen |
 | Sprachaktivitaetserkennung | Silero VAD | Universell |
-| Sprachverbesserung | GTCRN Live Denoiser | Universell |
-| Sprecherdiarisierung | Pyannote Segmentation 3.0, Reverb Diarization v1 | Universell |
-| Sprecher-Embeddings | 3D-Speaker ERes2Net Base | Universell |
-| Quellentrennung | Spleeter 2 Stems | Universell |
+| Sprechertrennung | Pyannote Segmentation 3.0 | Universell |
+| Sprecher-Embeddings | 3D-Speaker ERes2Net Base | Chinesisch |
+| KI-Notizen und Besprechungszusammenfassung | Qwen 3.5 2B, Qwen 3.5 4B | Chinesisch / Englisch |
+| Untertiteluebersetzung | Tencent Hy-MT2 1.8B | 33 Sprachen |
 
 Fuer LLM-Zusammenfassungen waehlen Sie **Integrierte KI**, um ein mitgeliefertes GGUF-Modell lokal auszufuehren (Qwen 3.5 2B / 4B), oder verweisen Brevia auf Claude, OpenAI, OpenRouter bzw. einen eigenen Dienst, der OpenAI Chat Completions oder Anthropic Messages spricht — Gemini (OpenAI-kompatibler Endpoint), DeepSeek, Kimi, Qwen und mehr.
 
@@ -149,7 +163,8 @@ Erteile beim ersten Start die Berechtigungen fuer Mikrofon und Bildschirmaufnahm
 ### Haeufig verwendete Skripte
 
 ```bash
-npm test                    # UI- + Backend-Tests
+npm test                    # Dead-Code-Gate + Electron-Verhalten + UI + E2E-Smoke + Backend-Tests
+npm run test:e2e            # Startet die echte App und prueft sie ueber CDP
 npm run build               # Tailwind-CSS-Build
 npm run test:model          # ASR-Modell-Diagnose
 npm run test:diarization    # Sprecherdiarisierungs-Diagnose
@@ -211,7 +226,7 @@ Nein. Spracherkennung und Diarisierung laufen komplett lokal. Nur LLM-Zusammenfa
 <details>
 <summary><strong>Wie viel Speicherplatz benoetigen die Modelle?</strong></summary>
 
-Haengt davon ab, welche du installierst. Eine typische Zusammenstellung (Streaming + Verfeinerung + Diarisierung) liegt bei 1–2 GB. Kompakte Streaming-Modelle beginnen bei ca. 80 MB; groessere Modelle uebersteigen 1 GB.
+Haengt davon ab, welche du installierst. Eine typische Zusammenstellung (Satzerkennung + Nachbearbeitung + Sprechertrennung) liegt bei 1–2 GB. Das kleinste Erkennungsmodell belegt ca. 487 MB; groessere Modelle uebersteigen 1 GB.
 </details>
 
 <details>
@@ -263,5 +278,5 @@ Brevia wird unter der [ISC License](../LICENSE) veroeffentlicht. Modelldateien u
 ## Danksagungen
 
 - [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) — die lokale Runtime hinter ASR, VAD, Zeichensetzung und Sprecherverarbeitung. Lizenziert unter [Apache-2.0](https://github.com/k2-fsa/sherpa-onnx/blob/master/LICENSE).
-- Dank an die Modellautorinnen und -maintainer, deren herunterladbare Artefakte in [`backend/models.json`](../backend/models.json) deklariert sind, darunter Zipformer, Whisper, Qwen3-ASR, FunASR, Pyannote, 3D-Speaker, Silero, Spleeter und Tencent Hy-MT2.
+- Dank an die Modellautorinnen und -maintainer, deren herunterladbare Artefakte in [`backend/models.json`](../backend/models.json) deklariert sind, darunter Qwen3-ASR, FunASR, Parakeet (NeMo), Pyannote, 3D-Speaker, Silero und Tencent Hy-MT2.
 - Electron, ONNX Runtime, Python und die Open-Source-Sprach-Community machen diesen local-first Workflow moeglich.
