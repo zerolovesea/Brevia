@@ -671,7 +671,10 @@ let meetingTitleEdited = false;
 /** 仅在用户提供自己的标题之前刷新起始标题。@returns {void} */
 function renderDefaultMeetingTitle() { if (!meetingTitleEdited) meetingTitle.value = BreviaI18n.defaultMeetingTitle(locale); }
 meetingTitle.addEventListener('input', () => { meetingTitleEdited = true; });
-const defaultMeetingLanguage = () => locale === 'zh' ? 'zh' : 'auto';
+// 会议语言的默认值：界面语言本身就是可识别的会议语言时直接用它。
+// auto 的声明默认模型（Parakeet）不覆盖 zh/ja/ko，所以这三个界面必须给出显式语言，
+// 否则默认会议会被路由到不支持该语言的模型。
+const defaultMeetingLanguage = () => ({ zh: 'zh', ja: 'ja', ko: 'ko' }[locale] || 'auto');
 /** 在保留其提交值的同时重建会议语言选择器。@returns {void} */
 /** 渲染准备页的识别模型控件。 */
 function prepareModelControl(language, refinedModel, modelOptions) {

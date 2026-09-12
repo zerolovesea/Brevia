@@ -106,7 +106,13 @@ assert.equal(workletMessages[1].flushed, true);
 const onboardingContext = { window: {}, localStorage: { getItem: () => null, setItem() {} }, navigator: { language: 'zh-CN' } };
 runInNewContext(text(onboarding), onboardingContext);
 assert.deepEqual(Array.from(onboardingContext.window.BreviaOnboarding.defaultMeetingLanguages('zh')), ['zh']);
+assert.deepEqual(Array.from(onboardingContext.window.BreviaOnboarding.defaultMeetingLanguages('ja')), ['ja']);
+assert.deepEqual(Array.from(onboardingContext.window.BreviaOnboarding.defaultMeetingLanguages('ko')), ['ko']);
 assert.deepEqual(Array.from(onboardingContext.window.BreviaOnboarding.defaultMeetingLanguages('en')), ['auto']);
+// 「auto」的声明默认模型（Parakeet）不覆盖 zh/ja/ko：这三个界面必须给出显式会议语言，
+// 否则默认会议会被路由到不支持该语言的模型。app.js 与 onboarding.js 口径必须一致。
+assert.match(text(app), /\{ zh: 'zh', ja: 'ja', ko: 'ko' \}\[locale\] \|\| 'auto'/, 'app.js 会议语言默认值必须覆盖 zh/ja/ko');
+assert.match(text(onboarding), /\{ zh: 'zh', ja: 'ja', ko: 'ko' \}\[locale\] \|\| 'auto'/, 'onboarding.js 会议语言默认值必须与 app.js 一致');
 assert.match(text(app), /name="onboarding-model" value="\$\{escapeHtml\(model\.id\)\}"/);
 // 识别模型文案表：每个分组必须覆盖全部八个界面语言，且每个模型 id / asr_role 都有文案。
 // 缺一个语言就会在切换界面语言后掉进 undefined（或静默回落英文而没人发现）。
@@ -645,7 +651,7 @@ assert.match(text(html), /id="home-eyebrow"[^>]*disabled/);
 assert.match(text(js), /function activeWorkspaceDescription\(\)/);
 assert.match(text(js), /activeLibraryNav === 'recently-deleted' \|\| activeWorkspaceDescription\(\)/);
 assert.match(text(js), /flowSelect\('meeting-language', language, BreviaI18n\.languageOptions\(locale, t, true\)\)/);
-assert.match(text(js), /const defaultMeetingLanguage = \(\) => locale === 'zh' \? 'zh' : 'auto';/);
+assert.match(text(js), /\{ zh: 'zh', ja: 'ja', ko: 'ko' \}\[locale\] \|\| 'auto'/);
 assert.match(text(html), /id="mini-meeting"/);
 assert.match(text(html), /id="mini-playback-seek" role="slider"/);
 assert.doesNotMatch(text(html), /id="mini-playback-seek" type="range"/);

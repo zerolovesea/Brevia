@@ -3049,6 +3049,37 @@ class WorkerTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "must be an integer"):
             self.worker.start({**payload, "num_speakers": 1.5})
 
+    def test_advanced_settings_survive_a_javascript_number_round_trip(self):
+        """进阶设置保存必须容忍 JS 丢掉整数浮点的 .0。
+
+        渲染进程只有一个 number 类型：整数值的浮点默认项（如
+        ``live_asr.max_speech_seconds = 22.0``）经 ``JSON.stringify`` 会变成 ``22``。
+        严格比对 Python 类型会让整份设置永远存不进去（``Invalid setting``）。
+        """
+
+        def js_round_trip(node):
+            if isinstance(node, dict):
+                return {key: js_round_trip(item) for key, item in node.items()}
+            if isinstance(node, list):
+                return [js_round_trip(item) for item in node]
+            if isinstance(node, float) and node.is_integer():
+                return int(node)
+            return node
+
+        saved = save_runtime_settings(self.temp.name, js_round_trip(DEFAULT_SETTINGS))
+        self.assertEqual(saved["live_asr"]["max_speech_seconds"], 22)
+
+        # 整数配置仍拒绝小数，bool 也始终不算数值。
+        ints = json.loads(json.dumps(DEFAULT_SETTINGS))
+        ints["audio"]["chunk_seconds"] = 1.5
+        with self.assertRaisesRegex(ValueError, "chunk_seconds"):
+            save_runtime_settings(self.temp.name, ints)
+
+        booleans = json.loads(json.dumps(DEFAULT_SETTINGS))
+        booleans["audio"]["chunk_seconds"] = True
+        with self.assertRaisesRegex(ValueError, "chunk_seconds"):
+            save_runtime_settings(self.temp.name, booleans)
+
     def test_fixed_speaker_count_has_no_artificial_upper_bound(self):
         settings = json.loads(json.dumps(DEFAULT_SETTINGS))
         settings["diarization"]["num_speakers"] = 21

@@ -858,6 +858,8 @@ const whatsNewLog = [
         '修复精修模型已下架/退役的会议里，逐句修改字幕会被静默丢弃的问题。',
         '修复精修字幕上右键不弹出菜单（加入笔记 / 添加录音到声纹库）的问题。',
         '修复两段字幕的音频并不重叠、只是恰好共享一个字时会被误删一个字的问题。',
+        '修复进阶设置在含整数默认值（如 22 秒的段长上限）时保存必然报错「Invalid setting」的问题。',
+        '修复日文、韩文界面新建会议时默认语言为「自动」的问题：「自动」的默认模型不覆盖日韩语；现在中、日、韩三种界面都默认用界面语言开会。',
       ],
     },
     en: {
@@ -894,6 +896,8 @@ const whatsNewLog = [
         'Fixed per-sentence subtitle edits being silently discarded for a meeting whose refinement model is no longer offered.',
         'Fixed the segment context menu (add to notes, add this audio to a voiceprint) not opening on refined subtitles.',
         'Fixed a character being dropped where two captions met when they happened to share a character but their audio did not overlap.',
+        'Fixed advanced settings failing to save with “Invalid setting” whenever a whole-number default (for example the 22-second segment cap) was round-tripped through the interface.',
+        'Fixed Japanese and Korean interfaces defaulting a new meeting to “auto”, whose default model does not cover those languages; Chinese, Japanese, and Korean interfaces now default to the interface language.',
       ],
     },
   },

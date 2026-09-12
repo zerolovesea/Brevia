@@ -85,6 +85,22 @@ def save_runtime_settings(root, value):
     return value
 
 
+def _types_compatible(current, default):
+    """配置项类型是否可接受。
+
+    JSON 往返只丢整数浮点的 ``.0``：JS 只有一个 number 类型，``22.0`` 经
+    ``JSON.stringify`` 变成 ``22``。若严格比对 Python 类型，「进阶设置」里只要有一个
+    整数值的浮点默认项（如 ``live_asr.max_speech_seconds = 22.0``），保存就会永远报
+    ``Invalid setting``。因此浮点默认项接受整数；整数默认项仍拒绝小数（那才是真错误），
+    bool 始终不算数值。
+    """
+    if isinstance(current, bool):
+        return isinstance(default, bool)
+    if isinstance(default, float) and isinstance(current, int):
+        return True
+    return type(current) is type(default)
+
+
 def _validate(value, template):
     """递归验证配置项类型、值域和结构完整性。"""
     if not isinstance(value, dict) or set(value) != set(template):
@@ -96,7 +112,7 @@ def _validate(value, template):
         elif isinstance(default, bool):
             if not isinstance(current, bool):
                 raise ValueError(f"Invalid setting: {key}")
-        elif type(current) is not type(default):
+        elif not _types_compatible(current, default):
             raise ValueError(f"Invalid setting: {key}")
         elif isinstance(current, (int, float)):
             if not math.isfinite(current):
