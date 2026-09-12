@@ -493,6 +493,7 @@ const detailTabbarContext = {
 };
 runInNewContext(text(components), detailTabbarContext);
 assert.match(detailTabbarContext.renderDetailTabbar(), /data-edit-notes type=/, 'the notes tab offers the notes editor');
+assert.doesNotMatch(detailTabbarContext.renderDetailTabbar(), /refine-wrap|detail-translation-action|已精修/, 'notes keep refinement controls out of the tabbar');
 detailTabbarContext.detailActiveTab = 'transcript';
 assert.match(detailTabbarContext.renderDetailTabbar(), /data-edit-transcript type=/, 'the subtitle tab offers the subtitle editor');
 assert.match(detailTabbarContext.renderDetailTabbar(), /refine-wrap/, 'the subtitle tab keeps the refinement entry point');
@@ -1851,6 +1852,8 @@ assert.match(text(app), /async function translateLatestTranscript\(targetLanguag
 assert.match(text(components), /data-detail-translation/);
 assert.match(text(components), /data-detail-translation-toggle[^]*<svg viewBox="0 0 16 16"/, 'translation uses an accessible SVG action');
 assert.doesNotMatch(text(components), /data-refine-translation/, 'refinement options never select a translation target');
+assert.doesNotMatch(text(components), /detail-translation-menu flow-select-options/, 'translation menu stays out of the generic select handler');
+assert.match(text(app), /querySelectorAll\('\.detail-translation-menu'\)[\s\S]{0,160}aria-expanded/, 'opening refinement closes translation');
 assert.match(text(app), /function showTranslationProgress\(completed, total, targetLanguage\)/, 'subtitle translation exposes task-card progress');
 assert.match(text(app), /if \(!meeting\) return;\s*breviaClient\.state\.selectedMeetingId = meeting\.id;[\s\S]{0,300}startRefinement\(\);/);
 assert.doesNotMatch(text(app), /refine\(\{[\s\S]{0,200}?refined_model_id/, 'the refinement model is chosen once, on the backend');

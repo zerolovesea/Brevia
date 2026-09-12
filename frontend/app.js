@@ -5003,7 +5003,7 @@ finalTranscript.addEventListener('click', (event) => {
   }
   const detailTranslation = event.target.closest('[data-detail-translation]');
   if (detailTranslation) {
-    detailTranslation.closest('.flow-select-options').hidden = true;
+    detailTranslation.closest('.detail-translation-menu').hidden = true;
     void translateLatestTranscript(detailTranslation.dataset.detailTranslation);
     return;
   }
@@ -5059,6 +5059,10 @@ finalTranscript.addEventListener('click', (event) => {
     const menu = more.parentElement.querySelector('.refine-menu');
     finalTranscript.querySelectorAll('.refine-menu').forEach((other) => { if (other !== menu) other.hidden = true; });
     const opening = menu.hidden;
+    if (opening) {
+      finalTranscript.querySelectorAll('.detail-translation-menu').forEach((other) => { other.hidden = true; });
+      finalTranscript.querySelectorAll('[data-detail-translation-toggle]').forEach((button) => button.setAttribute('aria-expanded', 'false'));
+    }
     menu.hidden = !opening;
     more.setAttribute('aria-expanded', String(!menu.hidden));
     // 打开选单时预填当前会议已知的说话人数（自动则留空，提示手动输入）。
