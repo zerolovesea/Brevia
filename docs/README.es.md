@@ -148,7 +148,7 @@ Para los resúmenes LLM, elige **IA integrada** para ejecutar en local un modelo
 
 ## Desarrollo local
 
-Prerrequisitos: Node.js 18+, Python 3.10+, Git y ffmpeg (para importación de audio).
+Prerrequisitos: Node.js 22+, Python 3.10+, Git y ffmpeg (para importación de audio).
 
 ```bash
 git clone https://github.com/zerolovesea/Brevia.git

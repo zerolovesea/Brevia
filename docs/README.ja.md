@@ -148,7 +148,7 @@ LLM 要約では「内蔵 AI」を選ぶとバンドルされた GGUF モデル�
 
 ## ローカル開発
 
-前提条件：Node.js 18+、Python 3.10+、Git、ffmpeg（音声インポート用）。
+前提条件：Node.js 22+、Python 3.10+、Git、ffmpeg（音声インポート用）。
 
 ```bash
 git clone https://github.com/zerolovesea/Brevia.git

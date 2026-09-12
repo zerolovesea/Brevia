@@ -16,6 +16,14 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+// 全局 `WebSocket` 从 Node 22 起才默认可用（fetch 从 Node 18 起）。缺了它这里会以
+// 一句「WebSocket is not defined」失败，看不出是 Node 版本问题，因此显式说明要求。
+// CI（release.yml 的 node-version）与 README 的前置条件都是 Node 22+。
+if (typeof WebSocket === 'undefined') {
+  console.error(`E2E 需要 Node.js 22+（内置全局 WebSocket）；当前为 ${process.version}。`);
+  process.exit(1);
+}
+
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '..');
 

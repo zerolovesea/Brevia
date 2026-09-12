@@ -148,7 +148,7 @@ Pour les resumes LLM, choisissez **IA integree** pour executer localement un mod
 
 ## Developpement local
 
-Prerequis : Node.js 18+, Python 3.10+, Git et ffmpeg (pour l'import audio).
+Prerequis : Node.js 22+, Python 3.10+, Git et ffmpeg (pour l'import audio).
 
 ```bash
 git clone https://github.com/zerolovesea/Brevia.git

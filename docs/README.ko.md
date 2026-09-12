@@ -148,7 +148,7 @@ LLM 요약에서는 **내장 AI**를 선택해 번들 GGUF 모델(Qwen 3.5 2B / 
 
 ## 로컬 개발
 
-전제 조건: Node.js 18+, Python 3.10+, Git, ffmpeg (오디오 가져오기용).
+전제 조건: Node.js 22+, Python 3.10+, Git, ffmpeg (오디오 가져오기용).
 
 ```bash
 git clone https://github.com/zerolovesea/Brevia.git

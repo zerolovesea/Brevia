@@ -148,7 +148,7 @@ Brevia следует строгой local-first архитектуре:
 
 ## Локальная разработка
 
-Требования: Node.js 18+, Python 3.10+, Git и ffmpeg (для импорта аудио).
+Требования: Node.js 22+, Python 3.10+, Git и ffmpeg (для импорта аудио).
 
 ```bash
 git clone https://github.com/zerolovesea/Brevia.git

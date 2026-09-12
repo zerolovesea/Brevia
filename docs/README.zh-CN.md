@@ -150,7 +150,7 @@ LLM 摘要可以选「内置 AI」在本机运行捆绑的 GGUF 模型（Qwen 3.
 
 ## 本地开发
 
-前置依赖：Node.js 18+、Python 3.10+、Git、ffmpeg（用于音频导入）。
+前置依赖：Node.js 22+、Python 3.10+、Git、ffmpeg（用于音频导入）。
 
 ```bash
 git clone https://github.com/zerolovesea/Brevia.git

@@ -148,7 +148,7 @@ Fuer LLM-Zusammenfassungen waehlen Sie **Integrierte KI**, um ein mitgeliefertes
 
 ## Lokale Entwicklung
 
-Voraussetzungen: Node.js 18+, Python 3.10+, Git und ffmpeg (fuer Audio-Import).
+Voraussetzungen: Node.js 22+, Python 3.10+, Git und ffmpeg (fuer Audio-Import).
 
 ```bash
 git clone https://github.com/zerolovesea/Brevia.git

@@ -144,7 +144,7 @@ For LLM summaries, pick **Built-in AI** to run a bundled GGUF model locally (Qwe
 
 ## Local development
 
-Prerequisites: Node.js 18+, Python 3.10+, Git, and ffmpeg (for audio import).
+Prerequisites: Node.js 22+, Python 3.10+, Git, and ffmpeg (for audio import).
 
 ```bash
 git clone https://github.com/zerolovesea/Brevia.git
