@@ -11,6 +11,7 @@ import urllib.error
 import wave
 import zipfile
 from array import array
+from contextlib import closing
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -2861,7 +2862,10 @@ class WorkerTest(unittest.TestCase):
                 store = Store(root)
                 db_path = store.db_path
                 store.close_audio_sessions()
-                with sqlite3.connect(db_path) as db:
+                # 必须显式关闭连接：`with sqlite3.connect(...)` 只管事务，连接会留到
+                # 下一次垃圾回收；Windows 上未关闭的连接会锁住 brevia.db，让
+                # TemporaryDirectory.cleanup() 直接抛 WinError 32。
+                with closing(sqlite3.connect(db_path)) as db, db:
                     db.execute("ALTER TABLE meetings ADD COLUMN streaming_model_id TEXT NOT NULL DEFAULT ''")
                     db.execute(
                         "INSERT INTO meetings (id,title,language,refined_model_id,tags,status,created_at,started_at)"
@@ -2873,7 +2877,7 @@ class WorkerTest(unittest.TestCase):
                     {"title": "新会议", "language": "zh", "refined_model_id": "funasr-nano-int8"}
                 )
                 upgraded.close_audio_sessions()
-                with sqlite3.connect(db_path) as db:
+                with closing(sqlite3.connect(db_path)) as db, db:
                     columns = {row[1] for row in db.execute("PRAGMA table_info(meetings)")}
                     row = db.execute("SELECT id,refined_model_id FROM meetings WHERE id='legacy'").fetchone()
                 self.assertNotIn("streaming_model_id", columns)
