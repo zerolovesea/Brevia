@@ -4778,17 +4778,22 @@ function refineNumSpeakers() {
   const parsed = Number(String(input?.value ?? '').trim());
   return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
 }
-/** 触发会后精修并同步字幕面板状态。@param {number} [numSpeakers] 固定说话人数。@returns {void} */
-const startRefinement = (numSpeakers) => {
+/** 触发会后精修并同步字幕面板状态。
+ * @param {number} [numSpeakers] 固定说话人数。
+ * @param {string} [modelId] 只在用户于精修菜单里显式改过模型时传入。
+ * @returns {void} */
+const startRefinement = (numSpeakers, modelId) => {
   if (!window.brevia?.meeting?.refine || !breviaClient?.state?.selectedMeetingId) return;
   uiData.detail.refineState = 'refining';
   renderMeetingDetail();
-  // 识别模型由后端按语言决定（语言兼容规则只有一处实现），界面不再重复挑选。
   void window.brevia.meeting.refine({
     meeting_id: breviaClient.state.selectedMeetingId,
     language: uiData.detail.language || 'auto',
     target_language: uiData.detail.translationTarget || null,
     ...(numSpeakers ? { num_speakers: numSpeakers } : {}),
+    // 没点名时保留后端「模型不可用就回落到该语言默认模型」的既有行为；点了名就要用点名
+    // 的那个（后端对显式点名的模型不做静默替换，缺文件时回 model_required 走下载队列）。
+    ...(modelId ? { refined_model_id: modelId } : {}),
   }).catch((error) => {
     uiData.detail.refineState = 'idle';
     renderMeetingDetail();
@@ -4796,6 +4801,31 @@ const startRefinement = (numSpeakers) => {
     showToast(error.message);
   });
 };
+/** 用户在这次精修里显式选过的模型；没选过返回 undefined，让后端自己选。@returns {string|undefined} */
+function pinnedRefineModel() {
+  return uiData.detail.refinedModelPinned ? uiData.detail.refinedModelId : undefined;
+}
+/** 会议是否已有逐句人工修改。@returns {boolean} 有则为真。 */
+function meetingHasUserEdits() {
+  return Boolean(currentMeetingDetail?.segments?.some((segment) => segment.version === 'user'));
+}
+/** 按菜单里的选择发起精修。
+ *
+ * 换模型会按新模型重新分段，逐句人工修改依赖段落 id，可能对不上；因此**只在确实存在
+ * 人工修改且换了模型**时确认一次，其余情况直接开始。
+ * @param {number} [numSpeakers] 固定说话人数。@returns {void} */
+function refineWithSelectedModel(numSpeakers) {
+  const modelId = pinnedRefineModel();
+  if (modelId && modelId !== uiData.detail.refinedModelApplied && meetingHasUserEdits()) {
+    openConfirmation(
+      t('更换精修模型'),
+      t('该会议已有逐句修改。用新模型重新精修会按新模型重新分段，这些修改可能无法保留。'),
+      () => startRefinement(numSpeakers, modelId),
+    );
+    return;
+  }
+  startRefinement(numSpeakers, modelId);
+}
 /** 调用内置模型翻译一条已确认字幕。 */
 async function generateSegmentTranslation(payload, targetLanguage) {
   if (!targetLanguage) return;
@@ -4980,6 +5010,10 @@ finalTranscript.addEventListener('click', (event) => {
   if (refineLanguageToggle) {
     const options = refineLanguageToggle.parentElement.querySelector('.flow-select-options');
     const opening = options.hidden;
+    // 精修菜单里有「会议语言」和「识别模型」两个下拉：展开一个要收起另一个。
+    if (opening) {
+      refineLanguageToggle.closest('.refine-menu')?.querySelectorAll('.flow-select-options').forEach((other) => { if (other !== options) other.hidden = true; });
+    }
     options.hidden = !opening;
     refineLanguageToggle.setAttribute('aria-expanded', String(opening));
     return;
@@ -4993,6 +5027,30 @@ finalTranscript.addEventListener('click', (event) => {
     select.querySelector('.flow-select-toggle').setAttribute('aria-expanded', 'false');
     // 选择写进详情状态：否则后台刷新会用会议语言把用户刚选的精修语言覆盖回去。
     uiData.detail.language = refineLanguageChoice.dataset.value;
+    // 语言与识别模型是联动的：换语言后候选会变，仍支持新语言的选择保留，否则回到该语言的
+    // 默认模型（与准备页同一套规则），并就地替换模型行，免得用户还要重开菜单。
+    const candidates = refinedModelOptions(uiData.detail.language);
+    uiData.detail.refinedModelOptions = candidates;
+    if (!candidates.some(([id]) => id === uiData.detail.refinedModelId)) {
+      uiData.detail.refinedModelId = defaultRefinedModelId(uiData.detail.language);
+      uiData.detail.refinedModelPinned = false;
+    }
+    const modelRow = select.closest('.refine-menu')?.querySelector('[data-refine-model-row]');
+    if (modelRow) modelRow.outerHTML = renderRefineModelRow(candidates, uiData.detail.refinedModelId);
+    return;
+  }
+  const refineModelChoice = event.target.closest('[data-flow-select-choice="refine-model"]');
+  if (refineModelChoice) {
+    const select = refineModelChoice.closest('.flow-select');
+    select.querySelector('input').value = refineModelChoice.dataset.value;
+    // 用 data-label 而不是 textContent：模型选项还带「推荐」角标，textContent 会把角标
+    // 也拼进按钮文案。
+    select.querySelector('.flow-select-toggle').firstChild.nodeValue = refineModelChoice.dataset.label;
+    select.querySelector('.flow-select-options').hidden = true;
+    select.querySelector('.flow-select-toggle').setAttribute('aria-expanded', 'false');
+    // 只记录选择；未安装的模型到点「开始/重新精修」时才下载（见 refineWithSelectedModel）。
+    uiData.detail.refinedModelId = refineModelChoice.dataset.value;
+    uiData.detail.refinedModelPinned = true;
     return;
   }
   const refineNow = event.target.closest('[data-refine-now]');
@@ -5023,12 +5081,12 @@ finalTranscript.addEventListener('click', (event) => {
     const menu = refineAction.closest('.refine-menu');
     if (refineAction.dataset.refineAction === 're-refine') {
       if (menu) menu.hidden = true;
-      startRefinement(refineNumSpeakers());
+      refineWithSelectedModel(refineNumSpeakers());
       return;
     }
     if (refineAction.dataset.refineAction === 'start') {
       if (menu) menu.hidden = true;
-      startRefinement(refineNumSpeakers());
+      refineWithSelectedModel(refineNumSpeakers());
       return;
     }
   }

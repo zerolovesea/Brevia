@@ -72,11 +72,23 @@ function applyBackendDetail(meeting) {
   uiData.detail.refinedFulltext = revision === null ? '' : ordered.map((segment) => `${formatSpeakerName(segment.speaker_name)}：${segment.text}`).join('\n\n');
   uiData.detail.refinedMode = revision === null ? null : refinedModelSupportsTimestamps(meeting.refined_model_id) ? 'timestamps' : 'fulltext';
   uiData.detail.hasRefined = revision !== null;
+  // 精修模型：`refinedModelApplied` 是产出当前稿子的模型（精修完成后由后端写回会议记录），
+  // `refinedModelId` 是「下一次精修用哪个」的选择态，`refinedModelPinned` 表示用户在菜单里
+  // 显式改过。只在切换会议时播种选择，后台刷新不得覆盖用户刚改的选择。
+  uiData.detail.refinedModelApplied = meeting.refined_model_id || null;
+  if (!sameDetail) {
+    uiData.detail.refinedModelId = meeting.refined_model_id || defaultRefinedModelId(meeting.language || 'auto');
+    uiData.detail.refinedModelPinned = false;
+  }
   // 保存后的字幕才可人工修正：录制中的会议仍在写入实时段落，此时不开放编辑入口。
   const liveMeetingId = meetingActive ? breviaClient?.state.meeting?.id : null;
   uiData.detail.transcriptEditable = meeting.id !== liveMeetingId && ordered.length > 0;
   // 仅切换会议时用会议语言播种：同一会议的后台刷新不得覆盖用户已选的精修语言。
   if (!sameDetail) uiData.detail.language = meeting.language || 'auto';
+  // 精修菜单里「识别模型」的候选：与准备页同一个 refinedModelOptions，按当前精修语言算。
+  // 语言在菜单里被改动时会由 app.js 的 refine-language 分支重算，所以这里每次刷新都覆盖。
+  uiData.detail.refinedModelAppliedName = modelCatalog.find((model) => model.id === uiData.detail.refinedModelApplied)?.name || '';
+  uiData.detail.refinedModelOptions = refinedModelOptions(uiData.detail.language);
   uiData.detail.numSpeakers = meeting.num_speakers || null;
   uiData.detail.translationPending = false;
   // 编辑中的笔记以本地草稿为准，不覆盖；非编辑状态同步服务器最新值。

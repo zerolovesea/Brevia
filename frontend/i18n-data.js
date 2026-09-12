@@ -969,6 +969,19 @@ Object.entries({ zh: '未找到匹配的会议', en: 'No matching meetings', es:
 Object.entries({ zh: '{count} 条结果', en: '{count} results', es: '{count} resultados', ja: '{count} 件の結果', ko: '{count}개 결과', fr: '{count} résultats', de: '{count} Ergebnisse', ru: '{count} результатов' }).forEach(([code, label]) => { catalog[code].labels['{count} 条结果'] = label; });
 Object.entries({ zh: '标题匹配', en: 'Title match', es: 'Coincide con el título', ja: 'タイトル一致', ko: '제목 일치', fr: 'Correspond au titre', de: 'Titeltreffer', ru: 'Совпадение по названию' }).forEach(([code, label]) => { catalog[code].labels['标题匹配'] = label; });
 Object.entries({ zh: '搜索会议、字幕或说话人…', en: 'Search meetings, captions, or speakers…', es: 'Buscar reuniones, subtítulos o hablantes…', ja: '会議・字幕・話者を検索…', ko: '회의·자막·화자 검색…', fr: 'Rechercher réunions, sous-titres ou locuteurs…', de: 'Besprechungen, Untertitel oder Sprecher suchen…', ru: 'Поиск встреч, субтитров или говорящих…' }).forEach(([code, label]) => { catalog[code].labels['搜索会议、字幕或说话人…'] = label; });
+// 精修菜单里的「识别模型」选择：ja/ko/fr/de/ru 此前缺这条文案（会回退成中文），补上。
+Object.entries({ ja: '認識モデル', ko: '인식 모델', fr: 'Modèle de reconnaissance', de: 'Erkennungsmodell', ru: 'Модель распознавания' }).forEach(([code, label]) => { catalog[code].labels['识别模型'] = label; });
+Object.entries({ zh: '更换精修模型', en: 'Change refinement model', es: 'Cambiar el modelo de refinado', ja: '精修モデルを変更', ko: '정제 모델 변경', fr: 'Changer le modèle d’affinage', de: 'Nachbearbeitungsmodell ändern', ru: 'Сменить модель обработки' }).forEach(([code, label]) => { catalog[code].labels['更换精修模型'] = label; });
+Object.entries({
+  zh: '该会议已有逐句修改。用新模型重新精修会按新模型重新分段，这些修改可能无法保留。',
+  en: 'This meeting has per-sentence edits. Re-refining with a new model re-segments the transcript, so those edits may not be kept.',
+  es: 'Esta reunión tiene ediciones por frase. Volver a refinar con otro modelo vuelve a segmentar la transcripción, por lo que esas ediciones podrían no conservarse.',
+  ja: 'この会議には文単位の編集があります。別のモデルで再精修すると再分割されるため、その編集は保持されない可能性があります。',
+  ko: '이 회의에는 문장 단위 편집이 있습니다. 다른 모델로 다시 정제하면 다시 분할되므로 해당 편집이 유지되지 않을 수 있습니다.',
+  fr: 'Cette réunion contient des modifications phrase par phrase. Un nouvel affinage avec un autre modèle re-segmente la transcription ; ces modifications risquent de ne pas être conservées.',
+  de: 'Diese Besprechung enthält satzweise Änderungen. Eine erneute Nachbearbeitung mit einem anderen Modell segmentiert das Transkript neu; diese Änderungen bleiben möglicherweise nicht erhalten.',
+  ru: 'В этой встрече есть построчные правки. Повторная обработка другой моделью заново разобьёт транскрипт, поэтому эти правки могут не сохраниться.',
+}).forEach(([code, label]) => { catalog[code].labels['该会议已有逐句修改。用新模型重新精修会按新模型重新分段，这些修改可能无法保留。'] = label; });
 const exportHubCopy = {
   zh: {
     title: '导出与分享', what: '选择内容', files: '导出文件', shareTo: '分享到',

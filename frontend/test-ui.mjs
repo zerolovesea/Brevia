@@ -2326,19 +2326,57 @@ for (const key of Object.keys(advancedContext.advancedSettingCopy.zh.fields)) {
 }
 assert.doesNotMatch(JSON.stringify(advancedContext.advancedSettingCopy), /punctuation|endpoint_rule/, 'labels for removed settings are gone');
 
-// Both first refinement and retry expose automatic mixed-language recognition.
+// 首次精修与重新精修都要能改「会议语言」和「识别模型」。
 summaryContext.BreviaI18n = meetingLanguages.window.BreviaI18n;
-summaryContext.modelCatalog = [];
+const refineModelCandidates = [
+  ['funasr-nano-int8', 'FunASR Nano int8', ''],
+  ['qwen3-asr-0.6b-int8', 'Qwen3-ASR 0.6B · 838MB', 'Recommended'],
+];
 for (const hasRefined of [false, true]) {
-  const markup = summaryContext.renderRefineStatus({ hasRefined, refineState: 'idle', language: 'zh' });
+  const markup = summaryContext.renderRefineStatus({
+    hasRefined,
+    refineState: 'idle',
+    language: 'zh',
+    refinedModelId: 'funasr-nano-int8',
+    refinedModelAppliedName: 'FunASR Nano int8',
+    refinedModelOptions: refineModelCandidates,
+  });
   assert.match(markup, /data-flow-select-choice="refine-language" data-value="zh"/);
   assert.match(markup, /data-flow-select-choice="refine-language" data-value="auto"/);
   assert.match(markup, /data-flow-select-choice="refine-language" data-value="es"/);
   assert.doesNotMatch(markup, /<select/);
+  assert.match(markup, /data-refine-model-row/, 'both menus expose the refinement-model row');
+  assert.match(markup, /name="refine-model" value="funasr-nano-int8"/, 'the current model is pre-selected');
+  assert.match(markup, /data-flow-select-choice="refine-model" data-value="qwen3-asr-0.6b-int8"/, 'other candidates are offered');
+  assert.match(markup, /data-flow-select-choice="refine-model" data-value="qwen3-asr-0\.6b-int8"[^>]*>Qwen3-ASR 0\.6B · 838MB/, 'uninstalled candidates carry their size');
   if (hasRefined) {
     assert.doesNotMatch(markup, /data-refine-action="original"/);
-    assert.doesNotMatch(markup, /data-refine-action="model"|data-refine-model/);
+    assert.match(markup, /已精修 · FunASR Nano int8/, 'the refined label names the model that produced it');
+  } else {
+    assert.doesNotMatch(markup, /已精修 ·/, 'no applied-model suffix before the first refinement');
+    assert.match(markup, /data-refine-action="start"/);
   }
+}
+// 模型清单还没加载完（没有候选）时不能渲染一个空的模型选择框。
+assert.doesNotMatch(
+  summaryContext.renderRefineStatus({ hasRefined: false, refineState: 'idle', language: 'zh' }),
+  /data-refine-model-row/,
+);
+// 精修菜单的模型选择与「只在显式改过时才点名」的状态机，必须在 app.js 里接线。
+assert.match(text(app), /data-flow-select-choice="refine-model"/);
+assert.match(text(app), /uiData\.detail\.refinedModelPinned = true/);
+assert.match(text(app), /function pinnedRefineModel\(\)/);
+assert.match(text(app), /function meetingHasUserEdits\(\)/);
+assert.match(text(app), /function refineWithSelectedModel\(numSpeakers\)/);
+assert.match(text(app), /\.\.\.\(modelId \? \{ refined_model_id: modelId \} : \{\}\)/);
+assert.match(text(app), /refineWithSelectedModel\(refineNumSpeakers\(\)\)/);
+assert.match(text(meetingDetail), /refinedModelOptions = refinedModelOptions\(uiData\.detail\.language\)/);
+assert.match(text(meetingDetail), /refinedModelAppliedName/);
+assert.match(text(i18nData), /'识别模型'\] = label/);
+for (const copy of ['更换精修模型', 'Change refinement model', '精修モデルを変更', '정제 모델 변경',
+  '该会议已有逐句修改。用新模型重新精修会按新模型重新分段，这些修改可能无法保留。',
+  'Re-refining with a new model re-segments the transcript']) {
+  assert.ok(text(i18nData).includes(copy), `missing i18n copy: ${copy}`);
 }
 assert.match(text(css), /\.refine-menu-speakers input:not\(\[type=checkbox\]\):not\(\[type=range\]\):not\(\[type=radio\]\),\.refine-menu-speakers \.flow-select-toggle\{[^}]*height:32px/);
 console.log('UI structure checks passed.');

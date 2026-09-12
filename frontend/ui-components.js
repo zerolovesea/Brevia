@@ -752,6 +752,23 @@ function renderStaticViews() {
   document.querySelector('#transcript-scroll').innerHTML = uiData.live.transcript.map(renderTranscriptSegment).join('');
   renderSettingsView();
 }
+/** 渲染精修菜单里的「识别模型」行。
+ *
+ * 候选由调用方传入（app.js 用准备页同一个 `refinedModelOptions`：按 `refined_priority`
+ * 排序、排除退役模型、过滤掉不支持当前语言的模型，未安装的带体积和下载字样）。
+ * **这里只负责改选中项**，未安装的模型要到点「开始精修 / 重新精修」时才真正走下载队列。
+ * 没有候选（模型清单还没加载完）时返回空串。
+ * @param {Array<[string, string, string?]>} options 值/标签/角标三元组。@param {string} [selectedId] 当前选中的模型 id。
+ * @returns {string} 标记。
+ */
+function renderRefineModelRow(options, selectedId) {
+  if (!Array.isArray(options) || !options.length) return '';
+  return `<label class="refine-menu-speakers" data-refine-model-row><span>${escapeHtml(t('识别模型'))}</span>${flowSelect('refine-model', selectedId, options)}</label>`;
+}
+/** 「已精修」标签里的模型名后缀，让人一眼看出当前稿子由哪个模型产出。@param {object} d 详情数据。@returns {string} 后缀标记。 */
+function refineAppliedModelSuffix(d) {
+  return d.refinedModelAppliedName ? ` · ${escapeHtml(d.refinedModelAppliedName)}` : '';
+}
 /** 渲染详情页 tabbar 右侧的精修状态控件（未精修 → 按钮；精修中 → 文案；已精修 → ✓ + ··· 菜单）。@param {object} d 详情数据。@returns {string} 标记。 */
 function renderRefineStatus(d) {
   if (d.refineState === 'refining') return `<span class="refine-state">${t('正在精修')}</span>`;
@@ -759,8 +776,8 @@ function renderRefineStatus(d) {
   const translationLabel = d.translationTarget ? BreviaI18n.languageName(locale, d.translationTarget) : t('译文目标');
   const translationSelect = `<label class="refine-menu-speakers"><span>${t('翻译')}</span><div class="detail-translation-menu flow-select"><button class="flow-select-toggle" data-detail-translation-toggle type="button" aria-expanded="false"${d.translationPending ? ' disabled' : ''}>${escapeHtml(translationLabel)}<span>⌄</span></button><div class="flow-select-options" hidden>${BreviaI18n.languageOptions(locale, t).slice(1).map(([code, name]) => `<button type="button" data-detail-translation="${escapeHtml(code)}">${escapeHtml(name)}</button>`).join('')}</div></div></label>`;
   const refineTranslationSelect = `<label class="refine-menu-speakers"><span>${t('翻译')}</span><div class="detail-translation-menu flow-select"><button class="flow-select-toggle" data-detail-translation-toggle type="button" aria-expanded="false">${escapeHtml(translationLabel)}<span>⌄</span></button><div class="flow-select-options" hidden>${BreviaI18n.languageOptions(locale, t).slice(1).map(([code, name]) => `<button type="button" data-refine-translation="${escapeHtml(code)}">${escapeHtml(name)}</button>`).join('')}</div></div></label>`;
-  if (!d.hasRefined) return `<span class="refine-wrap"><button class="secondary refine-now" data-refine-now type="button">${t('精修字幕')}</button><div class="refine-menu" hidden>${languageSelect}<label class="refine-menu-speakers"><span>${t('会议人数')}</span><input type="number" min="1" step="1" inputmode="numeric" data-refine-num-speakers placeholder="${t('留空自动识别')}" /></label>${refineTranslationSelect}<button type="button" data-refine-action="start">${t('开始精修')}</button></div></span>`;
-  return `<span class="refine-state is-done">${checkIconSvg} ${t('已精修')}</span><button class="refine-more" data-refine-more type="button" aria-label="${t('更多')}" aria-expanded="false">···</button><div class="refine-menu" hidden>${languageSelect}<label class="refine-menu-speakers"><span>${t('会议人数')}</span><input type="number" min="1" step="1" inputmode="numeric" data-refine-num-speakers placeholder="${t('留空自动识别')}" /></label>${translationSelect}<button type="button" data-refine-action="re-refine">${t('重新精修')}</button></div>`;
+  if (!d.hasRefined) return `<span class="refine-wrap"><button class="secondary refine-now" data-refine-now type="button">${t('精修字幕')}</button><div class="refine-menu" hidden>${languageSelect}${renderRefineModelRow(d.refinedModelOptions, d.refinedModelId)}<label class="refine-menu-speakers"><span>${t('会议人数')}</span><input type="number" min="1" step="1" inputmode="numeric" data-refine-num-speakers placeholder="${t('留空自动识别')}" /></label>${refineTranslationSelect}<button type="button" data-refine-action="start">${t('开始精修')}</button></div></span>`;
+  return `<span class="refine-state is-done">${checkIconSvg} ${t('已精修')}${refineAppliedModelSuffix(d)}</span><button class="refine-more" data-refine-more type="button" aria-label="${t('更多')}" aria-expanded="false">···</button><div class="refine-menu" hidden>${languageSelect}${renderRefineModelRow(d.refinedModelOptions, d.refinedModelId)}<label class="refine-menu-speakers"><span>${t('会议人数')}</span><input type="number" min="1" step="1" inputmode="numeric" data-refine-num-speakers placeholder="${t('留空自动识别')}" /></label>${translationSelect}<button type="button" data-refine-action="re-refine">${t('重新精修')}</button></div>`;
 }
 /** 渲染详情页 tabbar：两个内容 tab、随激活 tab 变化的编辑动作，以及精修状态控件。
  *
