@@ -1,4 +1,4 @@
-sherpa-onnx==1.13.5
+sherpa-onnx==1.13.8
 numpy>=1.26,<2
 certifi>=2024.2.2
 # 0.3.35 的 Windows CPU wheel 在部分 Intel 机型上 llama_backend_init() 空指针崩溃

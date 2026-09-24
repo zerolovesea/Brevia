@@ -122,7 +122,7 @@ Brevia follows a strict local-first design:
 | Desktop shell | Electron 43 — preload bridge, context isolation, sandboxed renderer |
 | Frontend | Vanilla HTML/CSS/JS, Tailwind CSS 4, built-in i18n (8 locales) |
 | Backend | Python 3.10+, JSONL worker protocol, SQLite storage |
-| Speech engine | [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 1.13.2, ONNX Runtime |
+| Speech engine | [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 1.13.8, ONNX Runtime |
 | Speaker processing | Pyannote segmentation + 3D-Speaker ERes2Net Base embeddings |
 | LLM client | Built-in llama.cpp (GGUF) plus OpenAI- / Anthropic-compatible chat APIs |
 | Audio I/O | ffmpeg (bundled in releases) |

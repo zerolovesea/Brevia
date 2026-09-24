@@ -50,6 +50,22 @@ class PackagingAssetTest(unittest.TestCase):
 
 
 class BundledModelTest(PackagingAssetTest):
+    def test_sherpa_model_runtime_matches_worker_requirement(self):
+        requirement = next(
+            line.strip()
+            for line in Path(__file__)
+            .with_name("requirements.txt")
+            .read_text(encoding="utf-8")
+            .splitlines()
+            if line.startswith("sherpa-onnx==")
+        )
+        runtimes = {
+            model["runtime"]
+            for model in load_model_catalog().values()
+            if model["runtime"].startswith("sherpa-onnx==")
+        }
+        self.assertEqual(runtimes, {requirement})
+
     def test_unexpected_dirs_ignore_allowlisted_models_and_plain_files(self):
         expected = sorted(expected_bundled_model_names())
         (self.root / expected[0]).mkdir()

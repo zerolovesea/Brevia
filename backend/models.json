@@ -2,7 +2,7 @@
   {
     "id": "silero-vad",
     "name": "Silero VAD",
-    "runtime": "sherpa-onnx==1.13.2",
+    "runtime": "sherpa-onnx==1.13.8",
     "revision": "asr-models/v5",
     "stages": [
       "vad"
@@ -37,7 +37,7 @@
   {
     "id": "qwen3-asr-0.6b-int8",
     "name": "Qwen3-ASR 0.6B int8",
-    "runtime": "sherpa-onnx==1.13.2",
+    "runtime": "sherpa-onnx==1.13.8",
     "revision": "asr-models/2026-03-25",
     "stages": [
       "refined"
@@ -136,7 +136,7 @@
   {
     "id": "parakeet-tdt-0.6b-v3-int8",
     "name": "Parakeet TDT 0.6B v3",
-    "runtime": "sherpa-onnx==1.13.2",
+    "runtime": "sherpa-onnx==1.13.8",
     "revision": "asr-models/2026-08-16",
     "stages": [
       "refined"
@@ -202,7 +202,7 @@
   {
     "id": "whisper-large-v3",
     "name": "Whisper Large v3",
-    "runtime": "sherpa-onnx==1.13.2",
+    "runtime": "sherpa-onnx==1.13.8",
     "revision": "asr-models/whisper-large-v3",
     "stages": [
       "refined"
@@ -261,7 +261,7 @@
   {
     "id": "funasr-nano-int8",
     "name": "FunASR Nano int8",
-    "runtime": "sherpa-onnx==1.13.2",
+    "runtime": "sherpa-onnx==1.13.8",
     "revision": "asr-models/2025-12-30",
     "stages": [
       "refined"
@@ -302,7 +302,7 @@
   {
     "id": "pyannote-segmentation-3.0",
     "name": "Pyannote Segmentation 3.0",
-    "runtime": "sherpa-onnx==1.13.2",
+    "runtime": "sherpa-onnx==1.13.8",
     "revision": "speaker-segmentation-models",
     "stages": [
       "diarization"
@@ -336,7 +336,7 @@
   {
     "id": "eres2net-base-3dspeaker-zh",
     "name": "3D-Speaker ERes2Net Base",
-    "runtime": "sherpa-onnx==1.13.2",
+    "runtime": "sherpa-onnx==1.13.8",
     "revision": "speaker-recongition-models",
     "stages": [
       "speaker-embedding",

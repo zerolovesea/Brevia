@@ -126,7 +126,7 @@ Consulta la [metodología y los resultados del benchmark](../backend/benchmarks/
 | Shell de escritorio | Electron 43 — puente preload, aislamiento de contexto, renderer en sandbox |
 | Frontend | HTML/CSS/JS nativo, Tailwind CSS 4, i18n integrado (8 idiomas) |
 | Backend | Python 3.10+, protocolo worker JSONL, almacenamiento SQLite |
-| Motor de voz | [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 1.13.2, ONNX Runtime |
+| Motor de voz | [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 1.13.8, ONNX Runtime |
 | Procesamiento de hablantes | Segmentación Pyannote + embeddings 3D-Speaker ERes2Net Base |
 | Cliente LLM | llama.cpp integrado (GGUF) y APIs chat compatibles con OpenAI / Anthropic |
 | E/S de audio | ffmpeg (incluido en releases) |

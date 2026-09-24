@@ -126,7 +126,7 @@ Brevia следует строгой local-first архитектуре:
 | Настольная оболочка | Electron 43 — preload-мост, изоляция контекста, песочница рендерера |
 | Фронтенд | Ванильный HTML/CSS/JS, Tailwind CSS 4, встроенная i18n (8 локалей) |
 | Бэкенд | Python 3.10+, протокол воркера JSONL, хранилище SQLite |
-| Речевой движок | [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 1.13.2, ONNX Runtime |
+| Речевой движок | [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 1.13.8, ONNX Runtime |
 | Обработка говорящих | Сегментация Pyannote + эмбеддинги 3D-Speaker ERes2Net Base |
 | LLM-клиент | Встроенный llama.cpp (GGUF) и Chat-API, совместимые с OpenAI / Anthropic |
 | Ввод-вывод аудио | ffmpeg (входит в релизы) |

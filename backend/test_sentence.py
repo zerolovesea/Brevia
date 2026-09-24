@@ -276,23 +276,24 @@ class SentenceTest(unittest.TestCase):
         self.assertEqual(unaligned[0]["end_ms"], round(20000 * 61 / len(text)))
         self.assertEqual(unaligned[0]["end_ms"], unaligned[1]["start_ms"])
 
-    def test_utterance_sentence_split_snaps_to_word_timestamps(self):
-        text = "甲" * 20 + "。" + "乙" * 20 + "。"
+    def test_utterance_sentence_split_ignores_stale_word_timestamps(self):
+        text = "第一句。这个后续内容。"
         segment = {
             "segment_id": "utterance",
-            "start_ms": 0,
-            "end_ms": 10000,
+            "start_ms": 229472,
+            "end_ms": 376664,
             "text": text,
-            "word_timestamps": (
-                [{"text": "甲", "start_ms": index * 100, "end_ms": index * 100 + 100} for index in range(20)]
-                + [{"text": "乙", "start_ms": 6000 + index * 100, "end_ms": 6000 + index * 100 + 100} for index in range(20)]
-            ),
+            # 合并前的旧文本也有“这个”，但时间已不再对应合并后的字符位置。
+            "word_timestamps": [
+                {"text": "这个", "start_ms": 229472, "end_ms": 229800},
+                {"text": "旧词", "start_ms": 250000, "end_ms": 250300},
+            ],
         }
         head, tail = self.worker._split_utterance_at_sentence(segment)
-        self.assertEqual(head["end_ms"], 6000)
-        self.assertEqual(tail["start_ms"], 6000)
-        self.assertEqual(head["word_timestamps"][-1]["text"], "甲")
-        self.assertEqual(tail["word_timestamps"][0]["text"], "乙")
+        expected = 229472 + round((376664 - 229472) * 4 / len(text))
+        self.assertEqual(head["end_ms"], expected)
+        self.assertEqual(tail["start_ms"], expected)
+        self.assertGreater(tail["start_ms"], segment["start_ms"])
 
     def test_overlap_window_comes_from_the_cut_lookback_not_a_fixed_width(self):
         # 接缝对齐的搜索窗口 = 切点回看时长 × 本段语速；语速从本段自己的字数与时长算，

@@ -28,8 +28,6 @@ from .worker_common import (
     model_supports_language,
     require,
 )
-from .transcript import subtitle_time_at_offset
-
 # 该值在 diarization 子进程内使用；子进程不加载用户覆盖，故经 payload 传入，
 # 这里仅作缺失时的回退默认值。较长窗口让声纹更稳定，避免把同一个人聚成多人。
 EMBEDDING_WINDOW_MS = 15_000
@@ -891,7 +889,8 @@ class RefinementWorkerMixin:
 
         context = multiprocessing.get_context("spawn")
         turns = []
-        native_broken = False  # 首次原生崩溃后整轨熔断（升级 Sherpa 后可删除）
+        # 1.13.8 无对应的长轨原生崩溃修复；完成长会议回归后再删熔断。
+        native_broken = False
         chunk_ms = _diarization_chunk_ms()
         for core_start in range(0, duration_ms, chunk_ms):
             self.wait_task(control)
@@ -1286,8 +1285,9 @@ class RefinementWorkerMixin:
                 continue
             start_ms = segment["start_ms"]
             end_ms = segment["end_ms"]
-            # 切点优先吸附到词级时间戳（有则用真实发音时刻），没有词时间戳才按字符比例估。
-            split_ms = subtitle_time_at_offset(segment, text, last + 1)
+            # 合并时文本会去重/重写，词时间戳却仍是各原窗口的数据；
+            # 用它们对齐新文本会误命中常见词，把后文拉回旧时间。
+            split_ms = start_ms + round((end_ms - start_ms) * (last + 1) / len(text))
             split_ms = max(start_ms, min(split_ms, end_ms))
             words = segment.get("word_timestamps", []) or []
             head_words = [word for word in words if word["start_ms"] < split_ms]

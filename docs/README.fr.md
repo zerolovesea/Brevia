@@ -126,7 +126,7 @@ Voir la [methodologie et les resultats du benchmark](../backend/benchmarks/vad-2
 | Shell bureau | Electron 43 — pont preload, isolation de contexte, renderer sandbox |
 | Frontend | HTML/CSS/JS natif, Tailwind CSS 4, i18n integre (8 langues) |
 | Backend | Python 3.10+, protocole worker JSONL, stockage SQLite |
-| Moteur vocal | [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 1.13.2, ONNX Runtime |
+| Moteur vocal | [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 1.13.8, ONNX Runtime |
 | Traitement des locuteurs | Segmentation Pyannote + embeddings 3D-Speaker ERes2Net Base |
 | Client LLM | llama.cpp integre (GGUF) et APIs chat compatibles OpenAI / Anthropic |
 | I/O audio | ffmpeg (integre aux releases) |

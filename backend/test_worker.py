@@ -2747,6 +2747,36 @@ class WorkerTest(unittest.TestCase):
         self.assertEqual(RefinedASR._funasr_nano_language(None), "")
         self.assertEqual(RefinedASR._whisper_language("zh"), "zh")
         self.assertEqual(RefinedASR._whisper_language("auto"), "")
+        self.assertEqual(RefinedASR._qwen3_language("zh"), "Chinese")
+        self.assertEqual(RefinedASR._qwen3_language("auto"), "")
+
+    def test_qwen3_asr_sets_stream_language(self):
+        class Stream:
+            def __init__(self):
+                self.options = []
+
+            def set_option(self, key, value):
+                self.options.append((key, value))
+
+            def accept_waveform(self, *_):
+                pass
+
+        class Recognizer:
+            def __init__(self):
+                self.stream = Stream()
+
+            def create_stream(self):
+                return self.stream
+
+            def decode_stream(self, stream):
+                stream.result = SimpleNamespace(text="中文", tokens=[], timestamps=[])
+
+        recognizer = object.__new__(RefinedASR)
+        recognizer.recognizer = Recognizer()
+        recognizer.model_kind = "qwen3"
+        recognizer.language = "zh"
+        self.assertEqual(recognizer.decode_words([0.0] * 16000), ("中文", []))
+        self.assertEqual(recognizer.recognizer.stream.options, [("language", "Chinese")])
 
     def test_assemble_utterances_merges_adjacent_same_speaker_windows(self):
         assembled = self.worker._assemble_utterances([

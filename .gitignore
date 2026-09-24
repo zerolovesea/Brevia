@@ -14,6 +14,8 @@ backend/bundled-models/
 /release.sh
 /docs/RELEASING.local.md
 
+design.md
+
 # 调研用的外部仓库克隆与报告（.research/model-download-ux-report.md 是产出，tmp/ 是可再生的克隆）
 .research/tmp/
 

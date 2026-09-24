@@ -1148,6 +1148,18 @@ class RefinedASR:
         "es": "西班牙语",
         "ru": "俄语",
     }
+    # Qwen3-ASR 的语言在 stream 上设置，且接口要求自然语言名称而不是 ISO 代码。
+    QWEN3_LANGUAGE_HINTS = {
+        "zh": "Chinese",
+        "en": "English",
+        "yue": "Cantonese",
+        "ja": "Japanese",
+        "ko": "Korean",
+        "fr": "French",
+        "de": "German",
+        "es": "Spanish",
+        "ru": "Russian",
+    }
 
     def __init__(self, manager, model_id, language=None, threads=None):
         """加载 Qwen3-ASR 会后精修模型。
@@ -1164,6 +1176,8 @@ class RefinedASR:
         """
         model = manager.get(model_id)
         self.model_id = model_id
+        self.model_kind = model["kind"]
+        self.language = language
         if model["kind"] not in {
             "qwen3",
             "whisper",
@@ -1244,16 +1258,30 @@ class RefinedASR:
             return ""
         return language
 
+    @classmethod
+    def _qwen3_language(cls, language):
+        """返回 Qwen3-ASR stream 的语言选项；自动语言保持未设置。"""
+        if not language or language == "auto":
+            return ""
+        return cls.QWEN3_LANGUAGE_HINTS.get(language, "")
+
+    def _stream(self):
+        stream = self.recognizer.create_stream()
+        language = self._qwen3_language(getattr(self, "language", None))
+        if getattr(self, "model_kind", None) == "qwen3" and language:
+            stream.set_option("language", language)
+        return stream
+
     def decode(self, samples, sample_rate=16000):
         """返回文本；整句识别不需要词级时间轴。"""
-        stream = self.recognizer.create_stream()
+        stream = self._stream()
         stream.accept_waveform(sample_rate, samples)
         self.recognizer.decode_stream(stream)
         return stream.result.text.strip()
 
     def decode_words(self, samples, sample_rate=16000):
         """返回文本及模型提供的 token 级时间戳；没有时保留空列表。"""
-        stream = self.recognizer.create_stream()
+        stream = self._stream()
         stream.accept_waveform(sample_rate, samples)
         self.recognizer.decode_stream(stream)
         result = stream.result

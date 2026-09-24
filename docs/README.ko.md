@@ -126,7 +126,7 @@ Brevia 는 엄격한 로컬 우선 설계를 따릅니다:
 | 데스크톱 쉘 | Electron 43 — preload 브리지, 컨텍스트 격리, 샌드박스 렌더러 |
 | 프론트엔드 | 순수 HTML/CSS/JS, Tailwind CSS 4, 내장 i18n (8 로케일) |
 | 백엔드 | Python 3.10+, JSONL 워커 프로토콜, SQLite 스토리지 |
-| 음성 엔진 | [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 1.13.2, ONNX Runtime |
+| 음성 엔진 | [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 1.13.8, ONNX Runtime |
 | 화자 처리 | Pyannote 분할 + 3D-Speaker ERes2Net Base 임베딩 |
 | LLM 클라이언트 | 내장 llama.cpp(GGUF) + OpenAI / Anthropic 호환 채팅 API |
 | 오디오 I/O | ffmpeg (릴리스에 포함) |

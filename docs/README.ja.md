@@ -126,7 +126,7 @@ Brevia は厳密なローカルファースト設計に従います：
 | デスクトップシェル | Electron 43 — preload ブリッジ、コンテキスト分離、サンドボックス化されたレンダラー |
 | フロントエンド | 素の HTML/CSS/JS、Tailwind CSS 4、組み込み i18n（8 ロケール） |
 | バックエンド | Python 3.10+、JSONL ワーカープロトコル、SQLite ストレージ |
-| 音声エンジン | [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 1.13.2、ONNX Runtime |
+| 音声エンジン | [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 1.13.8、ONNX Runtime |
 | 話者処理 | Pyannote セグメンテーション + 3D-Speaker ERes2Net Base 埋め込み |
 | LLM クライアント | 内蔵 llama.cpp（GGUF）＋ OpenAI / Anthropic 互換チャット API |
 | 音声 I/O | ffmpeg（リリースに同梱） |

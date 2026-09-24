@@ -126,7 +126,7 @@ Siehe [Benchmark-Methodik und Ergebnisse](../backend/benchmarks/vad-2026-09-05/R
 | Desktop-Shell | Electron 43 — preload-Bruecke, Kontextisolation, gesandboxter Renderer |
 | Frontend | Vanilla HTML/CSS/JS, Tailwind CSS 4, eingebautes i18n (8 Sprachen) |
 | Backend | Python 3.10+, JSONL-Worker-Protokoll, SQLite-Speicher |
-| Sprach-Engine | [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 1.13.2, ONNX Runtime |
+| Sprach-Engine | [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 1.13.8, ONNX Runtime |
 | Sprecherverarbeitung | Pyannote-Segmentierung + 3D-Speaker ERes2Net Base Embeddings |
 | LLM-Client | Integriertes llama.cpp (GGUF) sowie OpenAI- / Anthropic-kompatible Chat-APIs |
 | Audio-I/O | ffmpeg (in Releases enthalten) |

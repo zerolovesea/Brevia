@@ -127,7 +127,7 @@ flowchart LR
 | 桌面外壳 | Electron 43 — preload 桥接、context isolation、渲染器沙箱 |
 | 前端 | 原生 HTML/CSS/JS、Tailwind CSS 4、内置 i18n（8 种语言） |
 | 后端 | Python 3.10+、JSONL Worker 协议、SQLite 存储 |
-| 语音引擎 | [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 1.13.2、ONNX Runtime |
+| 语音引擎 | [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 1.13.8、ONNX Runtime |
 | 说话人处理 | Pyannote 分段 + 3D-Speaker ERes2Net Base 声纹嵌入 |
 | LLM 客户端 | 内置 llama.cpp（GGUF）+ 兼容 OpenAI / Anthropic 的标准 API |
 | 音频 I/O | ffmpeg（发行版内置） |
