@@ -25,6 +25,7 @@ class AudioCaptureProcessor extends AudioWorkletProcessor {
 
     const samples = input[0]; // 取单声道
     for (let i = 0; i < samples.length; i += 1) {
+      if (!this.filled) this.startFrame = currentFrame + i;
       this.buffer[this.filled] = samples[i];
       this.filled += 1;
       if (this.filled === BLOCK_SIZE) this.flush();
@@ -40,7 +41,7 @@ class AudioCaptureProcessor extends AudioWorkletProcessor {
     const power = out.reduce((total, sample) => total + sample * sample, 0) / count;
     const level = Math.min(1, Math.sqrt(power) * 8);
     this.filled = 0;
-    this.port.postMessage({ samples: out, level }, [out.buffer]);
+    this.port.postMessage({ samples: out, level, startFrame: this.startFrame }, [out.buffer]);
   }
 }
 

@@ -154,6 +154,8 @@ class AudioCapture {
     this.meetingId = meetingId;
     this.stopping = false;
     this.startedAt = performance.now();
+    // 同一录音的两个输入共用 Web Audio 时钟，由浏览器重采样硬件时钟漂移。
+    this.context = new AudioContext();
     const streams = this.pendingStreams;
     this.pendingStreams = [];
     await Promise.all(streams.map(({ track, stream }) => this.connect(track, stream)));
@@ -161,7 +163,7 @@ class AudioCapture {
 
   async setPaused(paused) {
     this.paused = paused;
-    await Promise.allSettled(this.sources.map(async ({ context }) => {
+    await Promise.allSettled([...new Set(this.sources.map(({ context }) => context))].map(async (context) => {
       if (paused && context.state === 'running') await context.suspend();
       if (!paused && context.state === 'suspended') await context.resume();
     }));
@@ -169,7 +171,7 @@ class AudioCapture {
 
   async connect(track, stream) {
     const resource = {
-      track, stream, context: new AudioContext(), startMs: Math.round(performance.now() - this.startedAt),
+      track, stream, context: this.context, startMs: null,
       inFlight: null, flushResolve: null, resampler: null,
     };
     const { context } = resource;
@@ -202,6 +204,8 @@ class AudioCapture {
         }
         ready();
         if (this.paused || this.stopping) return;
+        // 音频线程的帧编号确定起点，避免 IPC 到达时间/模块加载速度造成两轨错位。
+        resource.startMs ??= Math.round(data.startFrame * 1000 / context.sampleRate);
         if (track === 'mic' && this.onLevel) {
           this.onLevel(track, data.level);
         }
@@ -281,7 +285,7 @@ class AudioCapture {
       try { node?.disconnect(); } catch { /* 可能尚未连接。 */ }
     }
     stopMediaStream(stream);
-    if (context && context.state !== 'closed') {
+    if (context && context !== this.context && context.state !== 'closed') {
       try { await context.close(); } catch (error) { console.error('Audio context cleanup failed', error); }
     }
   }
@@ -341,6 +345,8 @@ class AudioCapture {
         ...pendingStreams.map(({ stream }) => this.release({ stream })),
         ...[preview, ...sources].filter(Boolean).map((resource) => this.release(resource)),
       ]);
+      if (this.context && this.context.state !== 'closed') await this.context.close();
+      this.context = null;
       await Promise.allSettled(sources.map(({ pending }) => pending()));
     })();
     return this.stopPromise;

@@ -7,7 +7,7 @@ const path = require('node:path');
 const { fileURLToPath, pathToFileURL } = require('node:url');
 const { randomUUID } = require('node:crypto');
 const { z } = require('zod');
-const { audioFileURL, configureMacUpdater, createDisplayMediaHandler, isNewerVersion, migrateLegacyData, registerScreenPermission, requiredModelsFrom, systemAudioSupported, workerError, writeAtomicFile } = require('./main-logic');
+const { audioFileURL, configureMacUpdater, createDisplayMediaHandler, isNewerVersion, migrateLegacyData, registerScreenPermission, requiredModelsFrom, systemAudioSupported, workerError, workerLogLevel, writeAtomicFile } = require('./main-logic');
 const { applyPendingMove, currentDirectory, recordingsDirectory, setFirstRunDirectories } = require('./model-location');
 
 // Electron 不保留跨 IPC 抛出的 Error 自定义字段；使用统一的可序列化错误结果。
@@ -353,10 +353,17 @@ class WorkerClient {
       });
     });
     child.stderr.setEncoding('utf8');
+    let stderrBuffer = '';
     child.stderr.on('data', (message) => {
       if (child !== this.process) return;
-      writeLog('WARNING', message);
+      stderrBuffer += message;
+      const lines = stderrBuffer.split('\n');
+      stderrBuffer = lines.pop();
+      lines.filter((line) => line.trim()).forEach((line) => writeLog(workerLogLevel(line), line));
       this.sendEvent('worker:log', { message });
+    });
+    child.stderr.on('end', () => {
+      if (child === this.process && stderrBuffer.trim()) writeLog(workerLogLevel(stderrBuffer), stderrBuffer);
     });
     child.on('error', (error) => { if (child === this.process) this.fail(error); });
     child.stdin.on('error', (error) => { if (child === this.process) this.fail(error); });

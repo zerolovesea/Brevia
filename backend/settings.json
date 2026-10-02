@@ -7,6 +7,7 @@
     "refined_window_seconds": 15
   },
   "live_asr": {
+    "mix_max_delay_ms": 500,
     "max_speech_seconds": 22.0,
     "microphone_target_rms": 0.08,
     "microphone_minimum_rms": 0.003,
@@ -30,6 +31,7 @@
     "min_duration_off": 0.4
   },
   "refinement": {
+    "diarization_timeout_seconds": 120,
     "max_refine_seconds": 14400,
     "diarization_chunk_ms": 15000,
     "diarization_overlap_ms": 1000,

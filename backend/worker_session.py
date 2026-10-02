@@ -15,6 +15,7 @@ from uuid import uuid4
 
 from .asr import DEFAULT_REFINED_MODEL_ID, RefinedASR, SentenceVAD
 from .audio_io import convert_to_pcm_wav
+from .audio_mixer import AlignedAudioMixer
 from .config import SETTINGS
 from .transcript import subtitle_time_at_offset
 from .worker_llm import TRANSLATION_MODEL_ID
@@ -26,9 +27,6 @@ from .worker_common import (
     require,
     synchronized_recording,
 )
-
-MAX_MIX_BUFFER_MS = 5000
-_MIX_STALL = object()
 
 logger = logging.getLogger(__name__)
 
@@ -75,10 +73,7 @@ class RecordingSessionMixin:
         if payload.get("require_models") and missing:
             raise ModelNotInstalled(missing)
         meeting = self.store.create_meeting(payload)
-        self._prepare_active(
-            meeting,
-            audio_tracks=payload.get("audio_tracks"),
-        )
+        self._prepare_active(meeting, audio_tracks=payload.get("audio_tracks"))
         self.emit("meeting.started", {"meeting_id": self.active, "meeting": meeting})
         return meeting
 
@@ -127,14 +122,8 @@ class RecordingSessionMixin:
         # 由 main.js 明确告诉用户「录音仍在本地保留，但转写无法恢复」。
         meeting = self._repair_refined_model(meeting)
         start_ms = self.store.recorded_duration_ms(meeting["id"])
-        # 恢复时从录音 manifest 推导本场打开了哪些捕获轨道，以重建双轨混音。
-        # ``audio_tracks`` 未落库，但原始双轨的落盘记录就是最可靠的来源：双轨会议
-        # 的 manifest tracks 含 mic/system 两键，单轨只含其一。否则恢复的双轨会议会
-        # 退回 mic/system 分别转写，重现「同一人声两条字幕」的旧 bug。
-        manifest = self.store.read_manifest(meeting["id"])
-        recorded_tracks = set(manifest.get("tracks", {}))
-        audio_tracks = [track for track in ("mic", "system") if track in recorded_tracks]
-        self._prepare_active(meeting, start_ms, audio_tracks=audio_tracks, require_asr=True)
+        self._prepare_active(meeting, start_ms, require_asr=True,
+                             audio_tracks=self.store.read_manifest(meeting["id"]).get("tracks", {}))
         self.emit("meeting.recovered", {"meeting_id": self.active, "meeting": meeting})
         return meeting
 
@@ -212,7 +201,7 @@ class RecordingSessionMixin:
         Args:
             meeting: 会议详情。
             start_ms: 起始毫秒（恢复录制时用）。
-            audio_tracks: 本场打开的捕获轨道。
+            audio_tracks: 同时打开 mic/system 时启用对齐混音。
             require_asr: 识别链路建不起来时是否上抛。录制入口（``start``）保持 False：
                 「识别失败也保住原始录音」是既有产品约定，失败只发一条
                 ``worker.warning``，音频照常落盘。恢复入口（``resume``）传 True——
@@ -224,8 +213,10 @@ class RecordingSessionMixin:
         self.active = meeting["id"]
         self.meeting_language = meeting["language"]
         self.stream_state = {}
-        self.live_tracks = set(audio_tracks or ())
-        self.live_mix_buffers = {"mic": deque(), "system": deque()}
+        self.live_mixer = (
+            AlignedAudioMixer(max_delay_ms=SETTINGS["live_asr"]["mix_max_delay_ms"])
+            if set(audio_tracks or ()) == {"mic", "system"} else None
+        )
         self.pending_subtitles, self.pending_join = {}, {}
         self.pending_paragraphs = {}
         self.subtitle_expiry_ms = 0
@@ -335,71 +326,6 @@ class RecordingSessionMixin:
             gain = min(gain, config["microphone_peak"] / peak)
         return samples if gain <= 1 else samples * gain
 
-    def _mix_live_audio(self, track, samples, start_ms, sample_rate):
-        """按时间对齐双轨 PCM，供实时字幕使用；原始双轨仍分别落盘。"""
-        if not len(samples):
-            return None
-        buffers = self.live_mix_buffers
-        buffer = buffers[track]
-        peer = "system" if track == "mic" else "mic"
-        if track == "mic":
-            samples = self._enhance_live_microphone(samples)
-        buffer.append([float(start_ms), samples])
-        if not buffers[peer] and start_ms - buffer[0][0] >= MAX_MIX_BUFFER_MS:
-            return _MIX_STALL
-        while buffers[peer] and start_ms - buffers[peer][0][0] > MAX_MIX_BUFFER_MS:
-            buffers[peer].popleft()
-        mic, system = buffers["mic"], buffers["system"]
-        if not mic or not system:
-            return None
-        import numpy
-
-        # 双轨启动并不总是同步。较早轨道的内容若直接丢弃，会造成会议开头
-        # 缺字幕；先把它送进同一条 mix 流，等两轨时间重叠后再混音。
-        while mic and system:
-            start_ms = max(mic[0][0], system[0][0])
-            earlier = mic if mic[0][0] < system[0][0] else system
-            if earlier[0][0] < start_ms:
-                chunk_start, chunk = earlier[0]
-                count = min(
-                    len(chunk),
-                    round((start_ms - chunk_start) * sample_rate / 1000),
-                )
-                if count:
-                    leading = chunk[:count]
-                    if count == len(chunk):
-                        earlier.popleft()
-                    else:
-                        earlier[0] = [start_ms, chunk[count:]]
-                    return leading, round(chunk_start)
-            for queue in (mic, system):
-                chunk_start, chunk = queue[0]
-                skip = round((start_ms - chunk_start) * sample_rate / 1000)
-                if skip >= len(chunk):
-                    queue.popleft()
-                elif skip > 0:
-                    queue[0] = [start_ms, chunk[skip:]]
-            if not mic or not system:
-                return None
-            count = min(len(mic[0][1]), len(system[0][1]))
-            # 相加而非先除以 2：双轨都有人声时，若直接 (mic+system)*0.5 会把每条
-            # 轨压到 -6dB，偏弱人声再叠加降噪就更容易被抑制。改为先求和，仅当峰值
-            # 超过 1 时按峰值软限幅（保真度高于硬 clip），既保留较大一轨的音量，
-            # 又避免近满幅双轨叠加削顶失真。
-            mixed = mic[0][1][:count] + system[0][1][:count]
-            peak = float(numpy.abs(mixed).max()) if count else 0.0
-            if peak > 1.0:
-                mixed = mixed / peak
-            next_start = start_ms + count * 1000 / sample_rate
-            for queue in (mic, system):
-                chunk_start, chunk = queue[0]
-                if count == len(chunk):
-                    queue.popleft()
-                else:
-                    queue[0] = [next_start, chunk[count:]]
-            return mixed, round(start_ms)
-        return None
-
     @synchronized_recording
     def audio(self, payload):
         """先保存原始 PCM；采集线程只做 VAD，识别在单独线程串行执行。"""
@@ -418,22 +344,14 @@ class RecordingSessionMixin:
         import numpy
         samples = numpy.asarray(values, dtype=numpy.float32) / 32768.0
         total = 0 if track == "mix" or not pcm else self.store.append_audio(self.active, track, pcm, sample_rate, start_ms)
-        if self.live_tracks == {"mic", "system"} and track != "mix":
-            mixed = self._mix_live_audio(track, samples, start_ms, sample_rate)
-            if mixed is _MIX_STALL:
-                self._flush_sentences()
-                self.live_tracks = {track}
-                return {"samples": total}
-            elif mixed is None:
-                return {"samples": total}
-            else:
-                samples, start_ms = mixed
-                track = "mix"
-        elif track == "mic":
+        if track == "mic":
             samples = self._enhance_live_microphone(samples)
         if self.vad and self.asr:
-            for segment in self.vad.accept(track, samples, start_ms):
-                self._queue_sentence(track, segment)
+            windows = self.live_mixer.accept(track, samples, start_ms) if self.live_mixer and track != "mix" else [(samples, start_ms)]
+            output_track = "mix" if self.live_mixer else track
+            for window, start in windows:
+                for segment in self.vad.accept(output_track, window, start):
+                    self._queue_sentence(output_track, segment)
         if self.live_postprocessing and start_ms >= self.subtitle_expiry_ms:
             self.subtitle_expiry_ms = start_ms + 1000
             self._submit_live_task(self._flush_subtitle_tails, start_ms)
@@ -441,13 +359,11 @@ class RecordingSessionMixin:
             self._flush_sentences()
         return {"samples": total}
 
-    def _flush_sentences(self):
+    def _flush_sentences(self, final=False):
         if not (self.vad and self.asr):
             return
-        # 双轨最后一帧可能还在等待对轨；按原时间轴送完后再 flush。
-        for queue in self.live_mix_buffers.values():
-            while queue:
-                start_ms, samples = queue.popleft()
+        if self.live_mixer:
+            for samples, start_ms in self.live_mixer.flush(include_tail=final):
                 for segment in self.vad.accept("mix", samples, start_ms):
                     self._queue_sentence("mix", segment)
         for track in list(self.vad.tracks):
@@ -945,7 +861,7 @@ class RecordingSessionMixin:
         meeting_id = self.active
         try:
             try:
-                self._flush_sentences()
+                self._flush_sentences(final=True)
             finally:
                 self._release_active_session()
             meeting = self.store.finish_meeting(meeting_id, payload["duration_ms"])
@@ -967,7 +883,7 @@ class RecordingSessionMixin:
         self.stream_state = {}
         self.pending_subtitles, self.pending_join = {}, {}
         self.pending_paragraphs = {}
-        self.live_tracks, self.live_mix_buffers = set(), {"mic": deque(), "system": deque()}
+        self.live_mixer = None
         self.meeting_language = None
         self.subtitle_expiry_ms = 0
 

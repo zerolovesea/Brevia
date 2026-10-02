@@ -93,6 +93,7 @@ assert.match(text(components), /data-inline-summary-editor/, 'summary editor ren
 assert.match(text(app), /data-save-inline-summary/, 'inline summary edits save through the existing summary API');
 const workletMessages = [];
 const workletContext = {
+  currentFrame: 4800,
   AudioWorkletProcessor: class {
     constructor() { this.port = { onmessage: null, postMessage: (data) => workletMessages.push(data) }; }
   },
@@ -104,6 +105,7 @@ const processor = new workletContext.Processor();
 processor.process([[new Float32Array([0.1, 0.2, 0.3])]]);
 processor.port.onmessage({ data: { type: 'flush' } });
 assert.equal(workletMessages[0].samples.length, 3, 'stop flush preserves the partial audio block');
+assert.equal(workletMessages[0].startFrame, 4800, 'audio timestamps come from the shared audio clock');
 assert.equal(workletMessages[1].flushed, true);
 const onboardingContext = { window: {}, localStorage: { getItem: () => null, setItem() {} }, navigator: { language: 'zh-CN' } };
 runInNewContext(text(onboarding), onboardingContext);
@@ -395,6 +397,37 @@ pauseCapture.sources = [{ context: {
 await pauseCapture.setPaused(true);
 await pauseCapture.setPaused(false);
 assert.deepEqual(contextStates, ['suspend', 'resume']);
+let audioContexts = 0, closedAudioContexts = 0;
+const sharedProcessors = [];
+mediaContext.AudioContext = class {
+  constructor() { audioContexts += 1; this.sampleRate = 48000; this.state = 'suspended'; this.audioWorklet = { addModule: async () => {} }; }
+  createMediaStreamSource() { return mockNode(); }
+  async resume() {
+    this.state = 'running';
+    for (const node of sharedProcessors) if (!node.sent) {
+      node.sent = true;
+      node.port.onmessage({ data: { samples: new Float32Array(8192), level: 0, startFrame: 48000 } });
+    }
+  }
+  async close() { this.state = 'closed'; closedAudioContexts += 1; }
+};
+mediaContext.AudioWorkletNode = function AudioWorkletNode() {
+  const node = mockNode();
+  node.port.postMessage = () => node.port.onmessage({ data: { flushed: true } });
+  sharedProcessors.push(node);
+  return node;
+};
+const clockFrames = [];
+const clockCapture = new mediaContext.AudioCapture(async (frame) => clockFrames.push(frame));
+clockCapture.pendingStreams = ['mic', 'system'].map((track) => ({ track, stream: {
+  getAudioTracks: () => [{ readyState: 'live', stop() {} }], getVideoTracks: () => [],
+} }));
+await clockCapture.start('clock-meeting');
+assert.equal(audioContexts, 1, 'both capture streams share one Web Audio clock');
+assert.equal(clockCapture.sources[0].context, clockCapture.sources[1].context);
+assert.deepEqual(clockFrames.map((frame) => frame.start_ms), [1000, 1000], 'IPC scheduling cannot change audio start times');
+await clockCapture.stop();
+assert.equal(closedAudioContexts, 1, 'the shared context closes exactly once');
 let releaseFirstAudio;
 const sentAudio = [];
 const batchingCapture = new mediaContext.AudioCapture((payload) => {
@@ -1981,6 +2014,7 @@ assert.match(text(js), /refinementTitle\(meeting_id\), meeting_id, stage/);
 assert.match(text(js), /\$\{copy\.title\} - \$\{refinementMeetingTitle\}/);
 assert.match(text(js), /\$\{copy\.waiting\} · \$\{Math\.round\(ratio \* 100\)\}%/);
 assert.equal(localeContext.window.BreviaLocaleData.catalog.en.labels['转写中 · 校正说话人'], 'Transcribing · Correcting speakers');
+
 assert.match(text(js), /segment\.version\.startsWith\('postprocess'\)/);
 assert.match(text(meetingDetail), /playback\?\.mix \|\| meeting\?\.audio\?\.playback\?\.mic/);
 assert.match(text(js), /segment\.is-active/);
@@ -2037,6 +2071,37 @@ const changelogContext = {
     en: { summary: 'English summary', what: [{ text: 'New feature', commit: '4b1f51e' }] },
     contributors: [{ login: 'Sousukes', pr: 4 }] }, { version: '1.2.1', en: { fixed: ['Legacy entry'] } }],
 };
+const refinementProgressContext = {
+  refinementCard: { dataset: {}, querySelector: () => ({ textContent: '' }) },
+  refinementPercent: { textContent: '' }, refinementBar: { style: {} },
+  refinementMeetingTitle: '', refinementCardDismissed: false, refinementDismissTimer: null,
+  clearTimeout() {}, t: (label) => label, revealTaskCard() {}, syncTaskCardStack() {},
+  setTaskCardTask(card, _task, meetingId) { card.dataset.meetingId = meetingId; },
+};
+runInNewContext(summaryFn('showRefinementProgress'), refinementProgressContext);
+refinementProgressContext.showRefinementProgress(0, 0, 'Meeting', 'one', '准备精修');
+let lastRefinementRatio = 0;
+for (const percent of [10, 40, 20, 95, 100]) {
+  refinementProgressContext.showRefinementProgress(percent, 100, 'Meeting', undefined, '分析说话人');
+  const ratio = Number(refinementProgressContext.refinementCard.dataset.completed) / 100;
+  assert.ok(ratio >= lastRefinementRatio && ratio < 1, 'progress never goes backwards or finishes before refinement.ready');
+  lastRefinementRatio = ratio;
+}
+refinementProgressContext.showRefinementProgress(0, 0, 'Next', 'two', '准备精修');
+assert.equal(refinementProgressContext.refinementBar.style.transform, 'scaleX(0)', 'a new refinement resets progress');
+const refinementHandlers = {}, refinementActions = [];
+const refinementEventsContext = {
+  window: { brevia: { on: (type, handler) => { refinementHandlers[type] = handler; }, meeting: { get: async ({ meeting_id }) => ({ id: meeting_id }) } } },
+  refinementCard: { dataset: { meetingId: 'current' } }, refinementMeetingTitle: '',
+  breviaClient: { state: { selectedMeetingId: 'none' } },
+  showRefinementProgress() { refinementActions.push('progress'); }, hideRefinementProgress() { refinementActions.push('cancel'); },
+  showRefinementComplete() { refinementActions.push('ready'); }, syncBackendMeeting() {}, refreshBackendMeetings() {},
+};
+runInNewContext(summaryAppSource.slice(summaryAppSource.indexOf("  window.brevia.on('refinement.progress'"), summaryAppSource.indexOf("  window.brevia.on('summary.started'")), refinementEventsContext);
+for (const type of ['progress', 'cancelled', 'ready']) await refinementHandlers[`refinement.${type}`]({ meeting_id: 'old' });
+assert.deepEqual(refinementActions, [], 'late events from another meeting cannot change the progress card');
+for (const type of ['progress', 'cancelled', 'ready']) await refinementHandlers[`refinement.${type}`]({ meeting_id: 'current' });
+assert.deepEqual(refinementActions, ['progress', 'cancel', 'ready'], 'the current meeting still updates and completes');
 runInNewContext(summaryFn('renderWhatsNewList'), changelogContext);
 for (const code of ['zh', 'en']) {
   changelogContext.locale = code;

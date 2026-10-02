@@ -54,6 +54,32 @@ class SentenceTest(unittest.TestCase):
     def finals(self):
         return [event["payload"] for event in self.events if event["type"] == "transcript.final"]
 
+    def test_dual_track_sends_one_aligned_waveform_to_asr(self):
+        from backend.audio_mixer import AlignedAudioMixer
+        self.worker.live_mixer = AlignedAudioMixer()
+        self.vad.accept.side_effect = lambda track, samples, start: [(start, start + round(len(samples) / 16), samples)] if len(samples) >= 16000 else []
+        heard = []
+        duplicate = "Perdona, al final podemos sacar ideas o cosas."
+
+        def decode(samples, _):
+            heard.append(samples.copy())
+            return duplicate
+
+        self.asr.decode.side_effect = decode
+        system = np.random.default_rng(1).normal(0, 0.1, 32000).astype(np.float32)
+        mic = np.concatenate((np.zeros(1920), -system[:-1920]))
+        for track, samples in [("system", system), ("mic", mic)]:
+            pcm = (samples * 32767).astype("<i2").tobytes()
+            self.worker.audio({"meeting_id": self.meeting["id"], "track": track,
+                               "pcm": base64.b64encode(pcm).decode(), "sample_rate": 16000,
+                               "start_ms": 0})
+        result = self.worker.stop({"meeting_id": self.meeting["id"], "duration_ms": 2000})
+        self.assertEqual(len(heard), 1)
+        self.assertGreater(np.linalg.norm(heard[0]), 10)
+        text = " ".join(segment["text"] for segment in result["segments"])
+        self.assertEqual(text.count(duplicate), 1)
+        self.assertEqual({segment["track"] for segment in result["segments"]}, {"mix"})
+
     def test_auto_multilingual_defaults_and_model_compatibility(self):
         with patch("backend.asr._vad_config"):
             automatic = SentenceVAD(self.worker.models, language="auto")

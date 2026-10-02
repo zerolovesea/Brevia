@@ -166,6 +166,11 @@ function workerError(message) {
   return error;
 }
 
+function workerLogLevel(message) {
+  try { return JSON.parse(message).type === 'log' ? 'INFO' : 'WARNING'; }
+  catch { return 'WARNING'; }
+}
+
 /** 该错误是否表示「模型没装」，是则返回缺失的模型 id 列表，否则返回 null。
  *
  * 只认结构化字段：`error_code === 'model_not_installed'` 且 `error_models` 非空。
@@ -187,6 +192,7 @@ module.exports = {
   requiredModelsFrom,
   systemAudioSupported,
   workerError,
+  workerLogLevel,
   writeAtomicFile,
   migrateLegacyData,
 };

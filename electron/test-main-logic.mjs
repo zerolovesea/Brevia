@@ -112,7 +112,10 @@ try {
 } finally {
   await rm(modelLocationRoot, { recursive: true, force: true });
 }
-const { audioFileURL, configureMacUpdater, createDisplayMediaHandler, isNewerVersion, registerScreenPermission, requiredModelsFrom, systemAudioSupported, workerError, writeAtomicFile, migrateLegacyData } = require('./main-logic');
+const { audioFileURL, configureMacUpdater, createDisplayMediaHandler, isNewerVersion, registerScreenPermission, requiredModelsFrom, systemAudioSupported, workerError, workerLogLevel, writeAtomicFile, migrateLegacyData } = require('./main-logic');
+assert.equal(workerLogLevel('{"type":"log","message":"Model loaded: model.gguf"}'), 'INFO');
+assert.equal(workerLogLevel('Overflow! Original data is copied. No data loss!'), 'WARNING');
+assert.equal(workerLogLevel('{"type":"worker.warning","message":"No speakers found"}'), 'WARNING');
 
 const audioRoot = await mkdtemp(path.join(tmpdir(), 'brevia-audio-'));
 try {

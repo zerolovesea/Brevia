@@ -175,6 +175,7 @@ def _validate(value, template):
                     "max_samples",
                     "max_total_seconds",
                     "timeout_seconds",
+                    "diarization_timeout_seconds",
                     "max_refine_seconds",
                     "diarization_chunk_ms",
                     "embedding_window_ms",
@@ -194,6 +195,7 @@ def _validate(value, template):
                     "min_speech_duration",
                     "deleted_retention_days",
                     "diarization_overlap_ms",
+                    "mix_max_delay_ms",
                     "min_auto_speaker_duration_ms",
                     "auto_cluster_score_tolerance",
                 }

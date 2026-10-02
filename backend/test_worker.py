@@ -1042,7 +1042,7 @@ class WorkerTest(unittest.TestCase):
         with wave.open(result["audio"]["playback"]["mix"]) as recording:
             mixed = array("h")
             mixed.frombytes(recording.readframes(1))
-            self.assertEqual(mixed[0], 24)
+            self.assertEqual(mixed[0], 47)
         audio_export = self.worker.export({"meeting_id": meeting["id"], "content": "audio", "format": "wav"})
         self.assertEqual(Path(audio_export["path"]).read_bytes(), Path(result["audio"]["playback"]["mix"]).read_bytes())
         with self.assertRaisesRegex(ValueError, "saved WAV format"):
@@ -1063,7 +1063,7 @@ class WorkerTest(unittest.TestCase):
             )
         self.assertTrue(self.worker.store.read_manifest(meeting["id"])["closed"])
 
-    def test_dual_track_live_transcription_uses_one_mixed_stream(self):
+    def test_dual_track_live_transcription_uses_one_mix_stream(self):
         meeting = self.worker.start(
             {
                 "title": "双轨混音",
@@ -1085,8 +1085,49 @@ class WorkerTest(unittest.TestCase):
                     "sample_rate": 16000, "start_ms": 0,
                 }
             )
-        self.worker.vad.accept.assert_called_once()
-        self.assertEqual(self.worker.vad.accept.call_args.args[0], "mix")
+        self.worker._flush_sentences()
+        self.assertEqual([call.args[0] for call in self.worker.vad.accept.call_args_list], ["mix"])
+
+    def test_aligned_mixer_tracks_drift_preserves_double_talk_and_drains_the_tail(self):
+        import numpy as np
+        from .audio_mixer import AlignedAudioMixer, mix_wav_files
+        from .audio_io import write_mono_wav
+        random = np.random.default_rng(7)
+        system = random.normal(0, 0.08, 96000).astype(np.float32)
+        local = random.normal(0, 0.025, len(system)).astype(np.float32)
+        mic = local.copy()
+        for start, delay in [(0, 320), (32000, 960), (64000, 1920)]:
+            index = np.arange(start, start + 32000) - delay
+            mic[start:start + 32000] -= 0.7 * np.where(index >= 0, system[np.maximum(index, 0)], 0)
+        mixer, output = AlignedAudioMixer(), []
+        for start in range(0, len(mic), 2731):
+            for track, data in (("mic", mic), ("system", system)):
+                output.extend(mixer.accept(track, data[start:start + 2731], start / 16))
+                self.assertLessEqual(len(mixer.buffers[track]), mixer.window + mixer.limit + 2731)
+        output.extend(mixer.flush())
+        self.assertEqual(mixer.delay, 1920)
+        self.assertEqual(sum(len(samples) for samples, _ in output), len(system) + 1920)
+        last = output[2][0]
+        reference = system[64000 - 1920:96000 - 1920]
+        # 系统声只剩一份，本机同时发言的幅度保持；不是整轨静音/ducking。
+        self.assertAlmostEqual(float(np.dot(last - reference, local[64000:]) / np.dot(local[64000:], local[64000:])), 1, places=2)
+        self.assertGreater(np.corrcoef(last, reference)[0, 1], 0.9)
+
+        # 大批次到达不能提前输出单边音频；暂停排空也不应吞掉恢复后的样本。
+        burst = AlignedAudioMixer()
+        self.assertEqual(burst.accept("mic", mic, 0), [])
+        batched = burst.accept("system", system, 0)
+        self.assertEqual(burst.flush(include_tail=False), [])
+        batched.extend(burst.flush())
+        np.testing.assert_allclose(np.concatenate([a for a, _ in batched]), np.concatenate([a for a, _ in output]))
+
+        # 会后与实时共用算法，WAV 读取块大小不同也应给出同一波形。
+        mic_path, system_path, mixed_path = [Path(self.temp.name) / name for name in ("mic.wav", "system.wav", "mix.wav")]
+        write_mono_wav(mic_path, mic, 16000)
+        write_mono_wav(system_path, system, 16000)
+        mix_wav_files(mic_path, system_path, mixed_path)
+        mixed, _ = read_mono_wav(mixed_path)
+        np.testing.assert_allclose(mixed, np.concatenate([a for a, _ in output]), atol=0.0002)
 
     def test_dual_track_keeps_leading_audio_when_tracks_start_at_different_times(self):
         meeting = self.worker.start(
@@ -1112,13 +1153,15 @@ class WorkerTest(unittest.TestCase):
                     "sample_rate": 16000, "start_ms": start_ms,
                 }
             )
-        self.worker.vad.accept.assert_called_once()
-        self.assertEqual(self.worker.vad.accept.call_args.args[0], "mix")
-        self.assertAlmostEqual(self.worker.vad.accept.call_args.args[1][0], 3000 / 32768)
+        self.worker._flush_sentences()
+        calls = self.worker.vad.accept.call_args_list
+        self.assertEqual([call.args[0] for call in calls], ["mix"])
+        self.assertEqual([call.args[2] for call in calls], [0])
+        self.assertAlmostEqual(calls[0].args[1][0], 3000 / 32768)
+        self.assertGreater(calls[0].args[1][16000], 0)
 
-    def test_dual_track_falls_back_to_single_track_when_peer_stalls(self):
-        # 双轨会议中一轨停流（另一轨持续有数据超过 MAX_MIX_BUFFER_MS）时，
-        # 应回退为该轨独立转写，而不是整场 live 字幕空白。
+    def test_dual_track_continues_when_peer_stalls(self):
+        # 任意一轨实际停流后按静音补齐，仍只交付 mix，缓冲不无限增长。
         meeting = self.worker.start(
             {
                 "title": "单轨停流回退",
@@ -1132,18 +1175,20 @@ class WorkerTest(unittest.TestCase):
         self.worker.vad.accept.return_value = []
         self.worker.punctuation = None
         self.worker.live_refiner = None
-        # 只送 mic 轨，间隔超过 MAX_MIX_BUFFER_MS；system 轨始终无数据。
+        # system 轨始终无数据。
         for start_ms in (0, 3000, 8000, 8100):
-            self.worker.audio(
-                {
-                    "meeting_id": meeting["id"], "track": "mic",
-                    "pcm": base64.b64encode((1000).to_bytes(2, "little", signed=True) * 1600).decode(),
-                    "sample_rate": 16000, "start_ms": start_ms,
-                }
-            )
-        # 应回退为 mic 独立流（不再混音），并产出 mic 轨字幕。
+            with patch("backend.audio_mixer.time.monotonic", return_value=time.monotonic() + start_ms / 1000):
+                self.worker.audio(
+                    {
+                        "meeting_id": meeting["id"], "track": "mic",
+                        "pcm": base64.b64encode((1000).to_bytes(2, "little", signed=True) * 1600).decode(),
+                        "sample_rate": 16000, "start_ms": start_ms,
+                    }
+                )
+        self.worker._flush_sentences()
         tracks = [call.args[0] for call in self.worker.vad.accept.call_args_list]
-        self.assertIn("mic", tracks)
+        self.assertTrue(tracks and set(tracks) == {"mix"})
+        self.assertLess(len(self.worker.live_mixer.buffers["mic"]), 16000)
 
     def test_audio_started_mid_meeting_is_padded_with_silence(self):
         meeting = self.worker.start(
@@ -2077,7 +2122,7 @@ class WorkerTest(unittest.TestCase):
         self.assertIsNone(result["min_interval_seconds"])
         self.assertIsNone(session.min_interval_override)
 
-    def test_refinement_keeps_tracks_separate_and_merges_by_timestamp(self):
+    def test_refinement_transcribes_aligned_mix_once_with_monotonic_progress(self):
         meeting = self.worker.start(
             {
                 "title": "双轨精修",
@@ -2124,7 +2169,7 @@ class WorkerTest(unittest.TestCase):
             patch("backend.worker_refinement.SpeakerTracker") as tracker,
             patch("backend.worker_refinement.RefinedASR") as refined,
         ):
-            vad.return_value.process.side_effect = lambda samples, _rate: (
+            vad.return_value.process.side_effect = lambda samples, _rate, **kwargs: (
                 [{"start_ms": 1000, "end_ms": 2000}]
                 if samples[0] < 0.0007
                 else [{"start_ms": 0, "end_ms": 1000}]
@@ -2139,6 +2184,10 @@ class WorkerTest(unittest.TestCase):
                 else ("remote slow", [{"text": "remote slow", "start_ms": 0, "end_ms": 1000}])
             )
             self.worker.refine({"meeting_id": meeting["id"]})
+            self.assertEqual(refined.return_value.decode_words.call_count, 1)
+            progress = [event["payload"]["completed"] for event in self.events if event["type"] == "refinement.progress"]
+            self.assertEqual(progress, sorted(progress))
+            self.assertLess(progress[-1], 100)
             # 不带语言时沿用会议语言（en），而不是退回多语言混说。
             self.assertEqual(refined.call_args.args[1], "funasr-nano-int8")
             self.assertEqual(refined.call_args.kwargs["language"], "en")
@@ -2155,13 +2204,9 @@ class WorkerTest(unittest.TestCase):
         ]
         self.assertEqual(
             [(item["track"], item["text"], item["speaker"]) for item in latest],
-            [
-                ("mic", "local slow", "mic-spk-1"),
-                ("system", "remote slow", "system-spk-1"),
-            ],
+            [("mix", "remote slow", "spk-1")],
         )
-        self.assertNotIn("mix", {item["track"] for item in latest})
-        self.assertEqual(latest[0]["word_timestamps"][0]["speaker"], "mic-spk-1")
+        self.assertEqual(latest[0]["word_timestamps"][0]["speaker"], "spk-1")
     def test_mic_track_matches_registered_voiceprint_on_refine(self):
         meeting = self.worker.start(
             {
@@ -2170,7 +2215,7 @@ class WorkerTest(unittest.TestCase):
                 "refined_model_id": "whisper-large-v3",
             }
         )
-        for track, value in (("mic", 16), ("system", 32)):
+        for track, value in (("mic", 16),):
             self.worker.audio(
                 {
                     "meeting_id": meeting["id"],
@@ -2246,10 +2291,7 @@ class WorkerTest(unittest.TestCase):
         ]
         self.assertEqual(
             latest,
-            [
-                ("mic", "profile-p1", "李雷"),
-                ("system", "system-spk-1", "system-spk-1"),
-            ],
+            [("mic", "profile-p1", "李雷")],
         )
 
     def test_imported_audio_is_diarized(self):
@@ -2499,10 +2541,13 @@ class WorkerTest(unittest.TestCase):
                 self.queue, self.position = [], 0
 
             def accept_waveform(self, samples):
-                self.queue.append(
-                    type("Segment", (), {"start": self.position, "samples": samples})()
-                )
+                # A 10-second accept hides pauses in Sherpa's window OR.
+                assert len(samples) <= 512
+                self.queue.append(SimpleNamespace(start=self.position, samples=samples))
                 self.position += len(samples)
+
+            def is_speech_detected(self):
+                return False
 
             def flush(self):
                 pass
@@ -2518,19 +2563,16 @@ class WorkerTest(unittest.TestCase):
                 self.queue.pop(0)
 
         vad = OfflineVAD.__new__(OfflineVAD)
-        vad.config = type("Config", (), {"sample_rate": 16000})()
-        vad.sherpa_onnx = type("Sherpa", (), {"VoiceActivityDetector": Detector})
-        self.assertEqual(
-            vad.process([0.1] * 400000),
-            [
-                {"start_ms": 0, "end_ms": 10000},
-                {"start_ms": 10000, "end_ms": 20000},
-                {"start_ms": 20000, "end_ms": 25000},
-            ],
-        )
-        self.assertEqual(vad.sherpa_onnx.VoiceActivityDetector.last_buffer_seconds, 100)
+        vad.config = SimpleNamespace(sample_rate=16000, silero_vad=SimpleNamespace(max_speech_duration=20))
+        vad.sherpa_onnx = SimpleNamespace(VoiceActivityDetector=Detector)
+        progress = Mock()
+        segments = vad.process([0.1] * 400000, progress=progress)
+        self.assertEqual((segments[0]["start_ms"], segments[-1]["end_ms"]), (0, 25000))
+        self.assertTrue(all(a["end_ms"] == b["start_ms"] for a, b in zip(segments, segments[1:])))
+        progress.assert_called_with(400000, 400000)
+        self.assertEqual(Detector.last_buffer_seconds, 60)
         vad.process([0.1] * 1600001)
-        self.assertEqual(vad.sherpa_onnx.VoiceActivityDetector.last_buffer_seconds, 102)
+        self.assertEqual(Detector.last_buffer_seconds, 60)
 
         wav_path = Path(self.temp.name) / "streamed-vad.wav"
         with wave.open(str(wav_path), "wb") as audio:
@@ -2538,15 +2580,83 @@ class WorkerTest(unittest.TestCase):
             audio.setsampwidth(2)
             audio.setframerate(16000)
             audio.writeframes(b"\0\0" * 400000)
-        self.assertEqual(
-            vad.process_wav(wav_path),
-            [
-                {"start_ms": 0, "end_ms": 10000},
-                {"start_ms": 10000, "end_ms": 20000},
-                {"start_ms": 20000, "end_ms": 25000},
-            ],
-        )
-        self.assertEqual(vad.sherpa_onnx.VoiceActivityDetector.last_buffer_seconds, 60)
+        self.assertEqual(vad.process_wav(wav_path), segments)
+
+        class ContinuousDetector(Detector):
+            def accept_waveform(self, samples):
+                assert len(samples) == 512
+                self.position += len(samples)
+
+            def is_speech_detected(self):
+                return True
+
+            current_segment = SimpleNamespace(start=0)
+
+            def flush(self):
+                if self.position:
+                    self.queue.append(SimpleNamespace(start=0, samples=range(self.position)))
+
+            def reset(self):
+                self.position = 0
+
+        vad.sherpa_onnx.VoiceActivityDetector = ContinuousDetector
+        segments = vad.process([0.1] * 1123456)
+        self.assertEqual(segments, [
+            {"start_ms": 0, "end_ms": 20000},
+            {"start_ms": 20000, "end_ms": 40000},
+            {"start_ms": 40000, "end_ms": 60000},
+            {"start_ms": 60000, "end_ms": 70216},
+        ])
+
+    def test_diarization_timeout_terminates_the_child(self):
+        context = Mock()
+        receiver, sender, process = Mock(), Mock(), Mock()
+        context.Pipe.return_value = receiver, sender
+        context.Process.return_value = process
+        receiver.poll.return_value = False
+        process.is_alive.return_value = True
+        payload = {"core_start_ms": 0, "core_end_ms": 15000}
+        with patch("backend.worker_refinement.time.monotonic", side_effect=[0, 121]):
+            with self.assertRaisesRegex(RuntimeError, "Diarization timed out"):
+                self.worker._run_diarization_process(context, payload, None)
+        process.terminate.assert_called_once()
+        process.join.assert_called_once()
+        receiver.close.assert_called_once()
+
+    def test_diarization_reports_progress_while_waiting_for_a_child(self):
+        context = Mock()
+        receiver, sender, process = Mock(), Mock(), Mock()
+        context.Pipe.return_value = receiver, sender
+        context.Process.return_value = process
+        receiver.poll.side_effect = [False, True]
+        receiver.recv.return_value = (True, [])
+        process.is_alive.side_effect = [True, False, False]
+        payload = {"meeting_id": "meeting", "core_start_ms": 15000, "core_end_ms": 30000,
+                   "duration_ms": 60000}
+        with patch("backend.worker_refinement.time.monotonic", side_effect=[0, 6, 6]):
+            self.assertEqual(self.worker._run_diarization_process(context, payload, SimpleNamespace(paused=threading.Event(), cancelled=threading.Event())), [])
+        progress = [e["payload"] for e in self.events if e["type"] == "refinement.progress"]
+        self.assertEqual(progress[-1]["meeting_id"], "meeting")
+        self.assertEqual((progress[-1]["completed"], progress[-1]["total"]), (22.5, 100))
+
+    def test_empty_diarization_keeps_confirmed_speech(self):
+        import numpy
+        from backend.worker_refinement import _diarize_chunk_process
+        connection = Mock()
+        payload = {"models_root": "models", "path": "audio.wav", "threshold": 0.35,
+                   "segmentation_id": "segmentation", "window_start_ms": 0, "window_end_ms": 2000,
+                   "core_start_ms": 0, "core_end_ms": 2000,
+                   "speech": [{"start_ms": 500, "end_ms": 1500}]}
+        with (patch("backend.worker_refinement.ModelManager") as manager,
+              patch("backend.worker_refinement.read_mono_wav_window", return_value=(numpy.ones(32000), 16000)),
+              patch("backend.worker_refinement.OfflineDiarizer") as diarizer,
+              patch("backend.worker_refinement.SpeakerTracker") as tracker):
+            manager.return_value.device.return_value = {"threads": 2}
+            diarizer.return_value.process.return_value = []
+            tracker.return_value.embedding.return_value = None
+            _diarize_chunk_process(connection, payload)
+        connection.send.assert_called_once_with((True, [{"start_ms": 500, "end_ms": 1500,
+                                                        "speaker": "spk-1", "_embedding": None}]))
 
     def test_refinement_decode_range_adds_context_without_crossing_speakers(self):
         turn = {"start_ms": 1000, "end_ms": 1200, "speaker": "spk-1"}
@@ -3568,12 +3678,11 @@ class WorkerTest(unittest.TestCase):
             self.worker.resume({"meeting_id": meeting["id"], "start_ms": 999_999})
         self.assertEqual(self.worker.store.recorded_duration_ms(meeting["id"]), 500)
 
-    def test_resume_restores_dual_track_mixing_from_manifest(self):
-        # 恢复录音时必须从 manifest 推导 audio_tracks，否则双轨会议退回 mic/system
-        # 分别转写，重现「同一人声两条字幕」的旧 bug。
+    def test_resume_restores_aligned_mixer_from_manifest(self):
+        # 恢复录音后，重建同一套对齐混音，仍只向 ASR 交付一轨。
         meeting = self.worker.start(
             {
-                "title": "恢复双轨混音",
+                "title": "恢复双轨识别",
                 "language": "zh",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
                 "audio_tracks": ["mic", "system"],
@@ -3594,8 +3703,6 @@ class WorkerTest(unittest.TestCase):
         self.worker.active = None
         with _stub_asr_stack():
             self.worker.resume({"meeting_id": meeting["id"]})
-        self.assertEqual(self.worker.live_tracks, {"mic", "system"})
-        # 恢复后的混音应再次把两轨合成一条 mix 流送入 ASR。
         self.worker.asr = Mock()
         self.worker.vad = Mock(tracks={})
         self.worker.vad.accept.return_value = []
@@ -3615,8 +3722,8 @@ class WorkerTest(unittest.TestCase):
                 "sample_rate": 16000, "start_ms": 500,
             }
         )
-        self.worker.vad.accept.assert_called_once()
-        self.assertEqual(self.worker.vad.accept.call_args.args[0], "mix")
+        self.worker._flush_sentences()
+        self.assertEqual([call.args[0] for call in self.worker.vad.accept.call_args_list], ["mix"])
 
     def test_corrupt_recovery_manifest_does_not_break_startup(self):
         path = self.worker.store.meetings_dir / "broken" / "manifest.json"
@@ -3873,32 +3980,6 @@ class WorkerTest(unittest.TestCase):
         meeting = {"audio": {"playback": {"mic": str(Path(self.temp.name) / "missing.wav")}}}
         self.assertFalse(self.worker._import_diarization_too_slow(meeting, ["mic"]))
 
-    def test_live_mix_discards_stale_peer_audio(self):
-        import numpy
-        from collections import deque
-        from backend.worker_session import MAX_MIX_BUFFER_MS
-
-        self.worker.live_mix_buffers = {
-            "mic": deque(),
-            "system": deque([[0, numpy.full(1600, 0.1, dtype=numpy.float32)]]),
-        }
-        self.assertIsNone(self.worker._mix_live_audio("mic", numpy.full(1600, 0.1, dtype=numpy.float32), MAX_MIX_BUFFER_MS + 1, 16000))
-        self.assertFalse(self.worker.live_mix_buffers["system"])
-
-    def test_dual_track_mix_preserves_volume_when_peer_is_silent(self):
-        # 双轨混音不应再 (mic+system)*0.5 把单轨音量压低 6dB：系统轨接近静音时
-        # 混音应保留 mic 的音量，否则偏弱人声再叠加降噪更容易被抑制。
-        import numpy
-        from collections import deque
-
-        self.worker.live_mix_buffers = {"mic": deque(), "system": deque()}
-        silence = numpy.zeros(1600, dtype=numpy.float32)
-        speech = numpy.full(1600, 0.1, dtype=numpy.float32)
-        self.assertIsNone(self.worker._mix_live_audio("system", silence, 0, 16000))
-        mixed = self.worker._mix_live_audio("mic", speech, 0, 16000)
-        self.assertIsNotNone(mixed)
-        result, _start_ms = mixed
-        self.assertAlmostEqual(float(result[0]), 0.1, places=6)
     def test_speaker_profile_aggregates_samples_and_matches_known_voice(self):
         first = self.worker.store.save_speaker_profile_sample(
             "王琳", [1, 0, 0], "voice-1"

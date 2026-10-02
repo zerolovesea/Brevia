@@ -993,21 +993,20 @@ class OfflineVAD:
         self.sherpa_onnx = sherpa_onnx
         self.config = _vad_config(manager, model_id, vad_params)
 
-    def process(self, samples, sample_rate=16000):
+    def process(self, samples, sample_rate=16000, progress=None):
         if sample_rate != self.config.sample_rate:
             raise ValueError(f"VAD requires {self.config.sample_rate} Hz audio")
-        # 检测器在此缓冲区中保留未完成的语音段。按输入大小分配，而不是在连续会议音频上反复增长。
-        buffer_seconds = max(100, (len(samples) + sample_rate - 1) // sample_rate + 1)
         return self._process_chunks(
             (
                 samples[start : start + sample_rate * 10]
                 for start in range(0, len(samples), sample_rate * 10)
             ),
             sample_rate,
-            buffer_seconds,
+            progress,
+            len(samples),
         )
 
-    def process_wav(self, path, chunk_seconds=10):
+    def process_wav(self, path, chunk_seconds=10, progress=None):
         """按块读取 PCM WAV 并保持 VAD 状态，避免长录音整段驻留内存。"""
         import numpy
 
@@ -1026,29 +1025,62 @@ class OfflineVAD:
             return self._process_chunks(
                 chunks(),
                 sample_rate,
-                60,
+                progress,
+                recording.getnframes(),
             )
 
-    def _process_chunks(self, chunks, sample_rate, buffer_seconds):
-        detector = self.sherpa_onnx.VoiceActivityDetector(self.config, buffer_seconds)
+    def _process_chunks(self, chunks, sample_rate, progress=None, total_samples=0):
+        import numpy
+
+        # Sherpa 1.13.8 对一次 accept 中的所有窗口做 OR；喂 10 秒会把短静音
+        # 吞掉，连续语音不结束、环形缓冲不断翻倍。按模型窗口喂入并及时排空。
+        config = self.config.silero_vad
+        maximum = max(512, round(config.max_speech_duration * sample_rate))
+        detector = self.sherpa_onnx.VoiceActivityDetector(self.config, max(60, maximum / sample_rate + 2))
         segments = []
+        origin = position = 0
+        speech_start = None
+        pending = numpy.empty(0, dtype=numpy.float32)
 
         def drain():
             while not detector.empty():
                 segment = detector.front
                 segments.append(
                     {
-                        "start_ms": round(segment.start * 1000 / sample_rate),
-                        "end_ms": round(
-                            (segment.start + len(segment.samples)) * 1000 / sample_rate
-                        ),
+                        "start_ms": round((origin + segment.start) * 1000 / sample_rate),
+                        "end_ms": round(min(total_samples, origin + segment.start + len(segment.samples)) * 1000 / sample_rate),
                     }
                 )
                 detector.pop()
 
-        for samples in chunks:
-            detector.accept_waveform(samples)
+        def accept(block):
+            nonlocal origin, position, speech_start
+            detector.accept_waveform(block)
+            position += len(block)
             drain()
+            if not detector.is_speech_detected():
+                speech_start = None
+            elif speech_start is None:
+                speech_start = max(0, detector.current_segment.start)
+            if speech_start is not None and position - speech_start >= maximum:
+                detector.flush()
+                drain()
+                detector.reset()
+                origin += position
+                position = 0
+                speech_start = None
+
+        for samples in chunks:
+            samples = numpy.concatenate((pending, samples))
+            count = len(samples) // 512 * 512
+            for offset in range(0, count, 512):
+                accept(samples[offset:offset + 512])
+            pending = samples[count:]
+            if progress:
+                progress(origin + position + len(pending), total_samples)
+        # 不丢 WAV 最后不足一个模型窗口的样本；补零只用于判断，时间戳夹回原长度。
+        if len(pending):
+            accept(numpy.pad(pending, (0, 512 - len(pending))))
         detector.flush()
         drain()
         return segments

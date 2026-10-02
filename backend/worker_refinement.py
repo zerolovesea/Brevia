@@ -4,6 +4,7 @@ import logging
 import os
 import re
 import sys
+import time
 import wave
 from difflib import SequenceMatcher
 
@@ -219,19 +220,20 @@ def _diarize_chunk_process(connection, payload):
         diarization_threads = manager.device()["threads"]
         tracker = SpeakerTracker(manager, threads=diarization_threads)
         turns = []
+        fallback_turns = [
+            {
+                "start_ms": max(
+                    payload["window_start_ms"], speech["start_ms"]
+                )
+                - payload["window_start_ms"],
+                "end_ms": min(payload["window_end_ms"], speech["end_ms"])
+                - payload["window_start_ms"],
+                "speaker": "spk-1",
+            }
+            for speech in payload["speech"]
+        ]
         if payload.get("vad_fallback"):
-            diarized = [
-                {
-                    "start_ms": max(
-                        payload["window_start_ms"], speech["start_ms"]
-                    )
-                    - payload["window_start_ms"],
-                    "end_ms": min(payload["window_end_ms"], speech["end_ms"])
-                    - payload["window_start_ms"],
-                    "speaker": "spk-1",
-                }
-                for speech in payload["speech"]
-            ]
+            diarized = fallback_turns
         else:
             diarizer = OfflineDiarizer(
                 manager,
@@ -240,7 +242,8 @@ def _diarize_chunk_process(connection, payload):
                 payload["segmentation_id"],
                 threads=diarization_threads,
             )
-            diarized = diarizer.process(samples, sample_rate)
+            # 分离器在低音量片段可能找不到人；VAD 已确认的内容仍需转写。
+            diarized = diarizer.process(samples, sample_rate) or fallback_turns
         for turn in diarized:
             start_ms = max(
                 payload["core_start_ms"],
@@ -278,6 +281,19 @@ def _diarize_chunk_process(connection, payload):
 
 
 class RefinementWorkerMixin:
+    def _refinement_progress(self, payload):
+        """统一阶段权重，VAD/分离器的局部 100% 不再被当作整场完成。"""
+        start, span = {
+            "对齐音频": (0, 10),
+            "准备精修": (10, 5),
+            "分析说话人": (15, 30),
+            "转写中 · 校正说话人": (45, 50),
+            "校正说话人": (95, 3),
+            "整理结果": (98, 1),
+        }[payload["stage"]]
+        ratio = min(1, max(0, payload.get("completed", 0) / payload["total"])) if payload.get("total") else 0
+        self.emit("refinement.progress", {**payload, "completed": start + span * ratio, "total": 100})
+
     def recover_refinement(self, payload):
         """将异常退出的精修恢复为可重试状态。"""
         require(payload, "meeting_id")
@@ -351,6 +367,13 @@ class RefinementWorkerMixin:
         ]
         if not tracks:
             raise UserFacingError("error.refinement.no_audio", "The meeting has no audio to refine")
+        merge_tracks = set(tracks) == {"mic", "system"}
+        if merge_tracks:
+            tracks = ["mix"]
+            meeting = {**meeting, "audio": {**meeting["audio"], "playback": {
+                **meeting["audio"]["playback"],
+                "mix": str(self.store.meeting_dir(meeting["id"]) / "audio" / "playback-mix.wav"),
+            }}}
         manifest = self.store.read_manifest(meeting["id"])
         is_imported_audio = manifest.get("source") == "audio_import" or (
             not manifest.get("tracks") and set(tracks) == {"mic"}
@@ -366,7 +389,7 @@ class RefinementWorkerMixin:
         # 一起聚类，让本机说话人同样接受声纹库匹配，而不再一律标成 local-user。
         # 超出预算的导入录音例外：不聚类。
         required_diarized = (
-            {"system"}
+            {"system", "mix"}
             | ({"mic"} if (is_imported_audio and not flat_import) else set())
         ) & set(tracks)
         required_models = [
@@ -439,25 +462,24 @@ class RefinementWorkerMixin:
                 threshold,
             )
 
-        # 每条轨道会使用 ModelManager.device() 规定的线程数；只有 CPU 预算足够
-        # 时才并行，避免双轨在低核设备上互相争抢而让准备阶段更慢。
+        # 双轨先对齐为 mix，VAD/说话人分离/ASR 只跑一遍。
         try:
-            device = self.models.device()
-            workers = (
-                min(
-                    len(tracks),
-                    (os.cpu_count() or 1) // max(1, device["threads"]),
-                )
-                if device["backend"] == "cpu"
-                else 1
-            )
-            if workers > 1:
-                from concurrent.futures import ThreadPoolExecutor
+            if merge_tracks:
+                last_mix_progress = 0.0
 
-                with ThreadPoolExecutor(max_workers=workers) as pool:
-                    prepared = list(pool.map(prepare, tracks))
-            else:
-                prepared = [prepare(track) for track in tracks]
+                def mixing_progress(completed, total):
+                    nonlocal last_mix_progress
+                    self.wait_task(control)
+                    now = time.monotonic()
+                    if now - last_mix_progress >= 1 or completed == total:
+                        self._refinement_progress({"meeting_id": meeting["id"],
+                            "completed": completed, "total": total, "stage": "对齐音频"})
+                        last_mix_progress = now
+
+                for track in ("mic", "system"):
+                    ensure_wav_duration(meeting["audio"]["playback"][track], _refinement("max_refine_seconds"), "refine")
+                self.store._build_mix(meeting["id"], progress=mixing_progress)
+            prepared = [prepare(track) for track in tracks]
         except TaskCancelled:
             return cancel_refinement()
         except Exception as error:
@@ -477,9 +499,8 @@ class RefinementWorkerMixin:
             self.wait_task(control)
         except TaskCancelled:
             return cancel_refinement()
-        self.emit(
-            "refinement.progress",
-            {"meeting_id": meeting["id"], "completed": 0, "total": 0, "stage": "分析说话人"},
+        self._refinement_progress(
+            {"meeting_id": meeting["id"], "completed": 0, "total": 0, "stage": "转写中 · 校正说话人"},
         )
         recognizer = RefinedASR(
             self.models,
@@ -512,8 +533,7 @@ class RefinementWorkerMixin:
         refined_segment_ids = set()
         context_ms = 800
         self.store.set_status(meeting["id"], "refining")
-        self.emit(
-            "refinement.progress",
+        self._refinement_progress(
             {"meeting_id": meeting["id"], "completed": 0, "total": total, "stage": "转写中 · 校正说话人"},
         )
         try:
@@ -554,8 +574,7 @@ class RefinementWorkerMixin:
                     text = _normalize_numbers(text)
                     previous_text[speaker_key] = raw_text
                     completed += 1
-                    self.emit(
-                        "refinement.progress",
+                    self._refinement_progress(
                         {
                             "meeting_id": meeting["id"],
                             "completed": completed,
@@ -572,7 +591,7 @@ class RefinementWorkerMixin:
                             [
                                 segment
                                 for segment in locked_segments
-                                if segment["track"] == track
+                                if track == "mix" or segment["track"] == track
                             ],
                         )
                         or turn["speaker"]
@@ -611,12 +630,10 @@ class RefinementWorkerMixin:
                         )
                         word["overlap"] = len(word["overlap_speakers"]) > 1
                     refined_segments.append(event)
-            self.emit(
-                "refinement.progress",
+            self._refinement_progress(
                 {"meeting_id": meeting["id"], "completed": total, "total": total, "stage": "校正说话人"},
             )
-            self.emit(
-                "refinement.progress",
+            self._refinement_progress(
                 {"meeting_id": meeting["id"], "completed": total, "total": total, "stage": "整理结果"},
             )
             self.wait_task(control)
@@ -684,8 +701,7 @@ class RefinementWorkerMixin:
         """
         self.wait_task(control)
         path = meeting["audio"]["playback"][track]
-        self.emit(
-            "refinement.progress",
+        self._refinement_progress(
             {"meeting_id": meeting["id"], "completed": 0, "total": 0, "stage": "准备精修"},
         )
         ensure_wav_duration(path, _refinement("max_refine_seconds"), "refine")
@@ -702,16 +718,28 @@ class RefinementWorkerMixin:
         # 按磁盘窗口读取，避免 Windows 在“准备精修”阶段因大数组和 VAD 缓冲分页。
         is_long_track = duration_ms > _refinement("diarization_chunk_ms")
         samples = None
+        last_progress = 0.0
+
+        def vad_progress(completed, total):
+            nonlocal last_progress
+            self.wait_task(control)
+            now = time.monotonic()
+            if now - last_progress >= 1 or completed >= total:
+                self._refinement_progress({
+                    "meeting_id": meeting["id"], "completed": completed // sample_rate,
+                    "total": max(1, (total + sample_rate - 1) // sample_rate), "stage": "准备精修",
+                })
+                last_progress = now
+
         if is_long_track:
-            speech = vad.process_wav(path)
+            speech = vad.process_wav(path, progress=vad_progress)
         else:
             samples, sample_rate = read_mono_wav(path)
-            speech = vad.process(samples, sample_rate)
+            speech = vad.process(samples, sample_rate, progress=vad_progress)
         if track not in diarized_tracks:
             turns = [{**turn, "speaker": "local-user"} for turn in speech]
         else:
-            self.emit(
-                "refinement.progress",
+            self._refinement_progress(
                 {"meeting_id": meeting["id"], "completed": 0, "total": 0, "stage": "分析说话人"},
             )
             if is_long_track:
@@ -723,6 +751,7 @@ class RefinementWorkerMixin:
                     or SETTINGS["diarization"]["segmentation_model_id"],
                     threshold,
                     control,
+                    meeting_id=meeting["id"],
                 )
             else:
                 if samples is None:
@@ -915,7 +944,7 @@ class RefinementWorkerMixin:
         return estimated_seconds > IMPORT_DIARIZATION_BUDGET_SECONDS
 
     def _diarize_long_track(
-        self, path, duration_ms, speech, segmentation_id, threshold, control
+        self, path, duration_ms, speech, segmentation_id, threshold, control, meeting_id=None
     ):
         """分块隔离 Sherpa 原生推理，防止长音频缓冲在 worker 内累积。"""
         import multiprocessing
@@ -928,6 +957,11 @@ class RefinementWorkerMixin:
         for core_start in range(0, duration_ms, chunk_ms):
             self.wait_task(control)
             core_end = min(duration_ms, core_start + chunk_ms)
+            self._refinement_progress({
+                "meeting_id": meeting_id,
+                "completed": core_start // 1000, "total": max(1, duration_ms // 1000),
+                "stage": "分析说话人",
+            })
             window_start = max(0, core_start - _refinement("diarization_overlap_ms"))
             window_end = min(duration_ms, core_end + _refinement("diarization_overlap_ms"))
             window_speech = [
@@ -940,6 +974,8 @@ class RefinementWorkerMixin:
                 continue
             payload = {
                 "path": str(path),
+                "meeting_id": meeting_id,
+                "duration_ms": duration_ms,
                 "models_root": str(self.models.root),
                 "bundled_models_root": str(self.models.bundled_root)
                 if self.models.bundled_root
@@ -1015,9 +1051,25 @@ class RefinementWorkerMixin:
         )
         process.start()
         sender.close()
+        elapsed = 0.0
+        last_check = last_progress = time.monotonic()
         try:
             while process.is_alive() and not receiver.poll(0.1):
+                now = time.monotonic()
+                elapsed += now - last_check
+                if elapsed >= _refinement("diarization_timeout_seconds"):
+                    raise RuntimeError(f"Diarization timed out at {payload['core_start_ms']} ms")
+                if now - last_progress >= 5:
+                    self._refinement_progress({
+                        "meeting_id": payload.get("meeting_id"),
+                        "completed": payload["core_start_ms"] // 1000,
+                        "total": max(1, payload.get("duration_ms", payload["core_end_ms"]) // 1000),
+                        "stage": "分析说话人",
+                    })
+                    last_progress = now
                 self.wait_task(control)
+                # 用户暂停的时间不计入子进程无响应期限。
+                last_check = time.monotonic()
             if not receiver.poll():
                 raise RuntimeError(
                     f"Diarization subprocess exited with code {process.exitcode} "

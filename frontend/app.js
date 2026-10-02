@@ -904,12 +904,14 @@ function showRefinementProgress(completed = 0, total = 0, meetingTitle = refinem
   if (refinementCardDismissed) return;
   refinementMeetingTitle = meetingTitle;
   const copy = { title: t('正在精修'), waiting: t(stage || '准备中') };
-  const ratio = total ? Math.min(1, completed / total) : 0;
+  const previous = !meetingId && refinementCard.dataset.complete !== 'true'
+    ? Number(refinementCard.dataset.completed || 0) / Math.max(1, Number(refinementCard.dataset.total || 0)) : 0;
+  const ratio = Math.max(previous, total ? Math.min(0.99, Math.max(0, completed / total)) : 0);
   revealTaskCard(refinementCard);
   refinementCard.querySelector('p').textContent = refinementMeetingTitle ? `${copy.title} - ${refinementMeetingTitle}` : copy.title;
   refinementPercent.textContent = total ? `${copy.waiting} · ${Math.round(ratio * 100)}%` : copy.waiting;
   refinementBar.style.transform = `scaleX(${ratio})`;
-  Object.assign(refinementCard.dataset, { completed, total, stage: stage || '', complete: 'false' });
+  Object.assign(refinementCard.dataset, { completed: ratio * 100, total: 100, stage: stage || '', complete: 'false' });
   syncTaskCardStack(refinementCard);
   if (meetingId) setTaskCardTask(refinementCard, 'meeting.refine', meetingId);
 }
@@ -5494,9 +5496,12 @@ if (window.brevia) {
       renderMeetingDetail();
     }
   });
-  window.brevia.on('refinement.progress', ({ completed, total, stage }) => showRefinementProgress(completed, total, refinementMeetingTitle, undefined, stage));
-  window.brevia.on('refinement.cancelled', async ({ meeting }) => {
-    hideRefinementProgress();
+  window.brevia.on('refinement.progress', ({ meeting_id, completed, total, stage }) => {
+    if (meeting_id !== refinementCard.dataset.meetingId) return;
+    showRefinementProgress(completed, total, refinementMeetingTitle, undefined, stage);
+  });
+  window.brevia.on('refinement.cancelled', async ({ meeting_id, meeting }) => {
+    if (meeting_id === refinementCard.dataset.meetingId) hideRefinementProgress();
     if (meeting?.id === breviaClient.state.selectedMeetingId) {
       uiData.detail.refineState = 'idle';
       applyBackendDetail(meeting);
@@ -5506,7 +5511,7 @@ if (window.brevia) {
   window.brevia.on('refinement.ready', async ({ meeting_id }) => {
     const meeting = await window.brevia.meeting.get({ meeting_id });
     syncBackendMeeting(meeting);
-    showRefinementComplete();
+    if (meeting_id === refinementCard.dataset.meetingId) showRefinementComplete();
     if (meeting.id === breviaClient.state.selectedMeetingId) {
       uiData.detail.refineState = 'idle';
       applyBackendDetail(meeting);
