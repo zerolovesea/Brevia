@@ -465,7 +465,7 @@ function aiAssistEnabled() {
 const settingsModal = document.createElement('div');
 settingsModal.className = 'modal-backdrop';
 settingsModal.hidden = true;
-settingsModal.innerHTML = '<section class="modal-panel" role="dialog" aria-modal="true"><header class="modal-head"><div class="modal-title"><h2></h2><p></p></div><button class="modal-close" type="button" aria-label="Close">×</button></header><div class="modal-body"></div></section>';
+settingsModal.innerHTML = '<section class="modal-panel" role="dialog" aria-modal="true"><header class="modal-head"><div class="modal-title"><h2></h2><p></p></div><button class="modal-close" type="button" aria-label="关闭">×</button></header><div class="modal-body"></div></section>';
 document.body.append(settingsModal);
 let activeModal;
 let modelsReturnTo = null;
@@ -475,16 +475,19 @@ let advancedSettings;
 let permissionStatus;
 let permissionPollTimer;
 const advancedSettingCopy = window.BreviaLocaleData.appCopy.advancedSettingCopy;
-function renderAdvancedSettings(settings) {
+function renderAdvancedSettings(settings, metadata = {}) {
   const copy = advancedSettingCopy[locale] || advancedSettingCopy.en;
   // 配置里只有 vad 是分语言的两层结构（default / zh）：子分组各有一个小标题，
   // 字段名用完整路径，保存时按路径写回，避免把子对象整体当成一个输入框。
   const rows = (path, values) => Object.entries(values).map(([key, value]) => {
     const fieldPath = `${path}.${key}`;
+    if (metadata.inactive_fields?.includes(key)) return "";
     if (value && typeof value === 'object') {
       return `<h4 class="advanced-settings-subgroup">${escapeHtml(copy.subgroups?.[key] || key)}</h4>${rows(fieldPath, value)}`;
     }
-    return `<label><span><b>${escapeHtml(copy.fields[key] || key)}</b><small>${escapeHtml(copy.hint)}</small></span><input name="${escapeHtml(fieldPath)}" type="${typeof value === 'number' ? 'number' : 'text'}" step="any" value="${escapeHtml(String(value))}" /></label>`;
+    const capMinimum = key === 'max_speech_seconds' ? metadata.speech_cap_minimum : null;
+    const range = capMinimum ? `0 / ≥ ${capMinimum} s` : copy.hint;
+    return `<label><span><b>${escapeHtml(copy.fields[key] || key)}</b><small>${escapeHtml(range)}</small></span><input ${capMinimum ? 'min="0"' : ''} name="${escapeHtml(fieldPath)}" type="${typeof value === 'number' ? 'number' : 'text'}" step="any" value="${escapeHtml(String(value))}" /></label>`;
   }).join('');
   return Object.entries(settings).map(([section, values]) => `<section class="advanced-settings-section"><h3>${escapeHtml(copy.sections[section] || section)}</h3>${rows(section, values)}</section>`).join('');
 }
@@ -1646,7 +1649,7 @@ function renderModal(kind) {
   if (kind === 'advanced-settings') {
     settingsModal.querySelector('h2').textContent = t('进阶设置');
     settingsModal.querySelector('.modal-title p').textContent = t('为特定会议环境微调识别、端点检测、说话人分离和本地模型。');
-    settingsModal.querySelector('.modal-body').innerHTML = `${renderPermissionSettings()}<form class="advanced-settings-form"><p>${t('可修改模型、端点静音、说话人分离及 sherpa-onnx 运行参数。')}</p>${renderAdvancedSettings(advancedSettings?.settings || {})}<div class="modal-form-actions"><button class="modal-action" type="submit">${t('确定')}</button><button class="secondary" data-reset-advanced-settings type="button">${t('恢复默认')}</button></div></form>`;
+    settingsModal.querySelector('.modal-body').innerHTML = `${renderPermissionSettings()}<form class="advanced-settings-form">${renderAdvancedSettings(advancedSettings?.settings || {}, advancedSettings || {})}<div class="modal-form-actions"><button class="modal-action" type="submit">${t('确定')}</button><button class="secondary" data-reset-advanced-settings type="button">${t('恢复默认')}</button></div></form>`;
     return;
   }
   if (kind === 'summary-model') { renderSummaryModelModal(); return; }
@@ -1667,7 +1670,6 @@ function renderModal(kind) {
   (copy.items || []).forEach(([stage], index) => { if (!modelStageOrder.has(stage)) modelStageOrder.set(stage, index); });
   settingsModal.querySelector('h2').textContent = copy.title;
   settingsModal.querySelector('.modal-title p').textContent = copy.intro;
-  settingsModal.querySelector('.modal-close').setAttribute('aria-label', (modalCopy[locale] || modalCopy.en).close);
   settingsModal.querySelector('.modal-body').innerHTML = `<div class="modal-list">${copy.items.map((item, index) => {
     const [name, detail] = item;
     const label = `<b>${escapeHtml(name)}</b>`;
@@ -1702,7 +1704,7 @@ const MODEL_LIBRARY_STAGE_GROUPS = {
 /** 模型库要展示的模型：退役模型一律不显示（清单保留条目只为解析历史 id）。
  * @returns {object[]} 可展示模型。 */
 function visibleModels() {
-  return modelSelection.visibleModels(modelCatalog);
+  return modelSelection.visibleModels(modelCatalog, locale);
 }
 /** 该模型在模型库里属于哪一组。@param {object} model 清单项。@returns {string|undefined} */
 function modelLibraryGroup(model) {
@@ -1730,7 +1732,6 @@ function renderModelLibrary() {
 
   settingsModal.querySelector('h2').textContent = (modalCopy[locale] || modalCopy.en).models?.title || t('模型库');
   settingsModal.querySelector('.modal-title p').textContent = t('下载和管理本地语音识别模型，为字幕、精修和说话人识别提供能力。');
-  settingsModal.querySelector('.modal-close').setAttribute('aria-label', (modalCopy[locale] || modalCopy.en).close);
 
   const rows = MODEL_LIBRARY_GROUPS.map(({ key, stage }) => {
     const models = visibleModels().filter((model) => modelLibraryGroup(model) === key);
@@ -1789,7 +1790,6 @@ function renderWhatsNewModal() {
   const copy = whatsNewCopy[locale] || whatsNewCopy.en;
   settingsModal.querySelector('h2').textContent = copy.title;
   settingsModal.querySelector('.modal-title p').textContent = copy.intro;
-  settingsModal.querySelector('.modal-close').setAttribute('aria-label', (modalCopy[locale] || modalCopy.en).close);
   settingsModal.querySelector('.modal-body').innerHTML = renderWhatsNewList();
 }
 /** 当前版本展开、历史版本折叠；分类条目附提交引用与首次贡献者。 */
@@ -1822,6 +1822,7 @@ function renderWhatsNewList() {
 }
 /** 显示设置模态框并播放进入动画；可选聚焦内部元素。@param {string} [focusSelector] 打开后聚焦的模态框内元素。@returns {void} */
 function showSettingsModal(focusSelector) {
+  settingsModal.querySelector('.modal-close').setAttribute('aria-label', (modalCopy[locale] || modalCopy.en).close);
   settingsModal.classList.remove('modal-leave');
   settingsModal.style.zIndex = '60';
   settingsModal.hidden = false;
@@ -1938,7 +1939,7 @@ function openOnboardingLanguage(initialLocale = onboardingSelectedLocale || wind
   const wheelItems = Array.from({ length: 5 }, (_, round) => choices.map(([code, label]) => `<button type="button" data-language-wheel-value="${code}" role="option" aria-selected="${code === defaultLocale}"${round === 2 ? '' : ' tabindex="-1"'}>${label}</button>`).join('')).join('');
   onboardingPage = document.createElement('main');
   onboardingPage.className = 'onboarding-page onboarding-active';
-  onboardingPage.innerHTML = `<form class="onboarding-page-content onboarding-language-page" data-onboarding-language><img class="onboarding-brand" src="./assets/brevia-logo.svg" alt="Brevia" /><div class="onboarding-page-copy"><h1></h1><p></p></div><input name="locale" type="hidden" value="${defaultLocale}" /><div class="language-wheel" role="listbox" aria-label="Choose your language">${wheelItems}</div><small class="onboarding-page-copy"></small><div class="onboarding-actions onboarding-page-copy"><button class="modal-action" type="submit"></button></div></form>`;
+  onboardingPage.innerHTML = `<form class="onboarding-page-content onboarding-language-page" data-onboarding-language><img class="onboarding-brand" src="./assets/brevia-logo.svg" alt="Brevia" /><div class="onboarding-page-copy"><h1></h1><p></p></div><input name="locale" type="hidden" value="${defaultLocale}" /><div class="language-wheel" role="listbox" aria-label="${escapeHtml(t('切换语言'))}">${wheelItems}</div><small class="onboarding-page-copy"></small><div class="onboarding-actions onboarding-page-copy"><button class="modal-action" type="submit"></button></div></form>`;
   document.body.append(onboardingPage);
   updateOnboardingLanguageCopy(defaultLocale);
   requestAnimationFrame(() => onboardingPage.classList.add('onboarding-page-enter'));
@@ -2186,6 +2187,7 @@ function updateOnboardingLanguageCopy(nextLocale) {
   nodes.forEach((node) => node.classList.add('locale-out'));
   window.setTimeout(() => {
     onboardingPage.querySelector('h1').textContent = title;
+    onboardingPage.querySelector('.language-wheel').setAttribute('aria-label', prompt);
     onboardingPage.querySelector('.onboarding-page-copy p').textContent = prompt;
     onboardingPage.querySelector('small').textContent = copy.languageHint;
     onboardingPage.querySelector('[type="submit"]').textContent = continueLabel;
@@ -2980,8 +2982,8 @@ settingsModal.addEventListener('submit', async (event) => {
         const parent = keys.reduce((node, key) => node[key], settings);
         parent[leaf] = typeof parent[leaf] === 'number' ? Number(value) : value;
       });
+      await window.brevia?.advancedSettings.save({ settings });
       advancedSettings.settings = settings;
-      await window.brevia?.advancedSettings.save({ settings: advancedSettings.settings });
       closeModal();
       showToast(t('已保存'));
     } catch (error) { showToast(error.message); }

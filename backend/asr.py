@@ -16,14 +16,14 @@ import urllib.request
 import wave
 from pathlib import Path
 
-from .config import SETTINGS, SPEAKER_EMBEDDING_MODEL_ID
+from .config import SETTINGS, SPEAKER_EMBEDDING_MODEL_ID, CUT_OVERLAP_MS, live_speech_cap
 from .worker_common import ModelNotInstalled
 
 
 DOWNLOAD_TIMEOUT_SECONDS = 30
 DOWNLOAD_RETRIES = 5
 DOWNLOAD_FREE_SPACE_MULTIPLIER = 2
-DEFAULT_REFINED_MODEL_ID = "funasr-nano-int8"
+DEFAULT_REFINED_MODEL_ID = "funasr-nano-mlx" if sys.platform == "darwin" else "funasr-nano-int8"
 # 参照 Meetily 的 pre_speech_pad：每个语音段在检测到的起点前再补一段刚喂入的
 # 原始音频，抵消端点检测/采集的句首抖动，避免独白首字/首词被切掉。
 DEFAULT_SPEECH_PAD_MS = 300
@@ -31,7 +31,6 @@ DEFAULT_SPEECH_PAD_MS = 300
 # 两段都听不全——前一段音频被截断，识别器给补个句号；后一段从半个字开始，识别器
 # 干脆丢掉它。把「已交付水位」退到切点之前，下一段的首字回补就能越过切点，让边界字
 # 在新的上下文里被完整识别（重复的部分由接缝去重消掉）。
-CUT_OVERLAP_MS = 400
 # 离线识别器能稳定承载的最长语音段（秒）。实时整句链路用它与语言级
 # max_speech_duration 配置取较小值：FunASR Nano 的 KV 容量约 512，实测音频
 # 超过 ~28 s 后输出开始截断、约 29.5 s 起整段解码为空——连续独白一旦按 30 s
@@ -46,12 +45,6 @@ REFINED_MODEL_MAX_SPEECH_SECONDS = {
     # 整段独白塞进一次编码——具体上限需要实测确认，见设计文档 §2.8 待办。
     "nemo-transducer": 20.0,
 }
-# 实时整句链路的默认段长上限（秒）。这是「用户可调的下压阀门」，不是模型容量表：
-# 有效上限始终取三者的最小值——``vad[语言].max_speech_duration``、识别模型的
-# ``REFINED_MODEL_MAX_SPEECH_SECONDS``、以及本设置。因此本值调**大**没有效果（它只会
-# 被前面两者夹住），调小才会真的缩短实时段长；真正的模型容量由模型表独立保证，
-# 不会因为用户改这里而越过 KV 容量。
-DEFAULT_LIVE_MAX_SPEECH_SECONDS = 22.0
 DEPRECATED_MODEL_PREFIXES = (
     "campplus-zh-en-",
     "fire-red-asr2-ctc-zh-en-int8-",
@@ -183,6 +176,10 @@ class ModelManager:
     def cleanup_unlisted(self):
         """仅删除带 Brevia 元数据、但已不在当前模型清单的本地模型。"""
         removed, freed_bytes = [], 0
+        # A platform migration must not garbage-collect another platform's
+        # managed weights; users can still move their library back to Windows.
+        known_ids = {model["id"] for model in json.loads(
+            Path(__file__).with_name("models.json").read_text(encoding="utf-8"))}
         for path in self.root.iterdir():
             marker = path / ".brevia.json"
             if not path.is_dir() or not marker.is_file():
@@ -191,7 +188,7 @@ class ModelManager:
                 model_id = json.loads(marker.read_text(encoding="utf-8")).get("id")
             except (OSError, json.JSONDecodeError):
                 continue
-            if model_id and model_id not in self.catalog:
+            if model_id and model_id not in known_ids:
                 freed_bytes += sum(item.stat().st_size for item in path.rglob("*") if item.is_file())
                 shutil.rmtree(path)
                 removed.append(path.name)
@@ -509,6 +506,7 @@ class ModelManager:
             backend = "cuda" if "CUDAExecutionProvider" in providers else "cpu"
         return {
             "architecture": platform.machine(),
+            "asr_backend": "mlx-metal" if platform.system() == "Darwin" else backend,
             "providers": providers,
             "backend": backend,
             "threads": max(1, min(4, (os.cpu_count() or 2) // 2)),
@@ -568,6 +566,12 @@ class SentenceVAD:
     - ``cut``：到连续语音硬上限被切开，或检测器漏判的安静语音兜底段，末尾同样不可信。
     """
 
+    def __new__(cls, manager=None, model_id="silero-vad", *args, **kwargs):
+        if manager is not None and manager.get(model_id).get("runtime") == "mlx-audio":
+            from .mlx_asr import MLXVAD
+            return MLXVAD(manager, model_id, *args, **kwargs)
+        return super().__new__(cls)
+
     def __init__(
         self,
         manager,
@@ -605,10 +609,7 @@ class SentenceVAD:
         # 现在由 live_asr.max_speech_seconds 配置。注意它只是「下压阀门」：
         # 有效值 = min(vad 语言配置, 模型容量, 本设置)，所以调大不生效、调小才生效，
         # 模型 KV 容量永远由 REFINED_MODEL_MAX_SPEECH_SECONDS 独立兜住。
-        configured_cap = float(
-            SETTINGS.get("live_asr", {}).get("max_speech_seconds") or DEFAULT_LIVE_MAX_SPEECH_SECONDS
-        )
-        self.max_speech_seconds = min(params["max_speech_duration"], configured_cap)
+        self.max_speech_seconds = live_speech_cap(params, params["max_speech_duration"], self.cut_overlap_ms)
         # 回补与最后一个 512 样本块也计入模型上限，不能在切完后额外超出。
         params["max_speech_duration"] = max(0.1, self.max_speech_seconds - self.cut_overlap_ms / 1000 - 512 / 16000)
         self.config = _vad_config(manager, model_id, params)
@@ -980,6 +981,12 @@ def _neighbour_speech_level(read_window, previous, following, seconds=1.0):
 class OfflineVAD:
     """用会议选择的 VAD 模型生成保留原时间轴的语音区间。"""
 
+    def __new__(cls, manager=None, model_id="silero-vad", vad_params=None):
+        if manager is not None and manager.get(model_id).get("runtime") == "mlx-audio":
+            from .mlx_asr import MLXVAD
+            return MLXVAD(manager, model_id, vad_params=vad_params, offline=True)
+        return super().__new__(cls)
+
     def __init__(self, manager, model_id="silero-vad", vad_params=None):
         """初始化离线 VAD 检测器。
 
@@ -1198,6 +1205,12 @@ class RefinedASR:
         "es": "Spanish",
         "ru": "Russian",
     }
+
+    def __new__(cls, manager=None, model_id=None, *args, **kwargs):
+        if manager is not None and manager.get(model_id).get("runtime") == "mlx-audio":
+            from .mlx_asr import MLXASR
+            return MLXASR(manager, model_id, *args, **kwargs)
+        return super().__new__(cls)
 
     def __init__(self, manager, model_id, language=None, threads=None):
         """加载 Qwen3-ASR 会后精修模型。

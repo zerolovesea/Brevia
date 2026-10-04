@@ -287,7 +287,7 @@ class RefinementWorkerMixin:
             "对齐音频": (0, 10),
             "准备精修": (10, 5),
             "分析说话人": (15, 30),
-            "转写中 · 校正说话人": (45, 50),
+            "转写中": (45, 50),
             "校正说话人": (95, 3),
             "整理结果": (98, 1),
         }[payload["stage"]]
@@ -313,8 +313,8 @@ class RefinementWorkerMixin:
             状态更新为 ``refined`` 的会议详情。
 
         Notes:
-            麦克风与系统音频始终独立执行 VAD/识别，再按时间戳合并。麦克风
-            直接归属本地用户；系统音频才执行远端说话人分离与 Enrollment 匹配。
+            双轨音频按时间对齐混合后统一执行 VAD、识别与说话人分离。
+            说话人归属由聚类和 Enrollment 匹配决定，不按物理音轨推定。
         """
         require(payload, "meeting_id")
         meeting = self.store.get_meeting(payload["meeting_id"])
@@ -500,7 +500,7 @@ class RefinementWorkerMixin:
         except TaskCancelled:
             return cancel_refinement()
         self._refinement_progress(
-            {"meeting_id": meeting["id"], "completed": 0, "total": 0, "stage": "转写中 · 校正说话人"},
+            {"meeting_id": meeting["id"], "completed": 0, "total": 0, "stage": "转写中"},
         )
         recognizer = RefinedASR(
             self.models,
@@ -534,7 +534,7 @@ class RefinementWorkerMixin:
         context_ms = 800
         self.store.set_status(meeting["id"], "refining")
         self._refinement_progress(
-            {"meeting_id": meeting["id"], "completed": 0, "total": total, "stage": "转写中 · 校正说话人"},
+            {"meeting_id": meeting["id"], "completed": 0, "total": total, "stage": "转写中"},
         )
         try:
             for track in tracks:
@@ -579,7 +579,7 @@ class RefinementWorkerMixin:
                             "meeting_id": meeting["id"],
                             "completed": completed,
                             "total": total,
-                            "stage": "转写中 · 校正说话人",
+                            "stage": "转写中",
                         },
                     )
                     if not text:
@@ -844,7 +844,9 @@ class RefinementWorkerMixin:
         # 检测器整段漏判的安静语音（音乐里的轻声、电话音）不在 stable_turns 里，
         # 但会后精修是最终逐字稿，不能让这段内容无声消失。作为独立窗口补进去，
         # 放在稳定化之后：这些窗口不能被吸收进相邻的正常音量段落。
-        quiet_turns = self._recover_quiet_turns(stable_turns, path, samples, sample_rate)
+        # 能量兜底针对 Sherpa VAD 调整；MLX 保留自身判断，避免把噪声补成语音。
+        mlx_vad = self.models.get(meeting.get("vad_model_id") or "silero-vad").get("runtime") == "mlx-audio"
+        quiet_turns = [] if mlx_vad else self._recover_quiet_turns(stable_turns, path, samples, sample_rate)
         if quiet_turns:
             turns = sorted([*turns, *quiet_turns], key=lambda turn: (turn["start_ms"], turn["end_ms"]))
             stable_turns = sorted(

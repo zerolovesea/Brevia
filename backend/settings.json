@@ -7,7 +7,7 @@
     "refined_window_seconds": 15
   },
   "live_asr": {
-    "mix_max_delay_ms": 500,
+    "mix_max_delay_ms": 1500,
     "max_speech_seconds": 22.0,
     "microphone_target_rms": 0.08,
     "microphone_minimum_rms": 0.003,

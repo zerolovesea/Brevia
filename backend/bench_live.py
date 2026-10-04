@@ -123,16 +123,17 @@ def main():
         decode_seconds = []
         decode_timings, audio_windows = [], []
         if not args.legacy:
-            decode = worker.asr.decode
-            def measured_decode(samples, sample_rate):
+            method = "decode_stream" if callable(getattr(type(worker.asr), "decode_stream", None)) else "decode"
+            decode = getattr(worker.asr, method)
+            def measured_decode(samples, sample_rate, *extra):
                 decode_seconds.append(len(samples) / sample_rate)
                 began = time.perf_counter()
                 try:
-                    return decode(samples, sample_rate)
+                    return decode(samples, sample_rate, *extra)
                 finally:
                     decode_timings.append({'start_wall_seconds': began - started,
                                            'inference_seconds': time.perf_counter() - began})
-            worker.asr.decode = measured_decode
+            setattr(worker.asr, method, measured_decode)
             queue_sentence = worker._queue_sentence
             def measured_queue(track, segment):
                 audio_windows.append({'start_ms': segment[0], 'end_ms': segment[1],

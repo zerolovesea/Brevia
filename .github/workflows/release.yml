@@ -52,6 +52,9 @@ jobs:
         run: python backend/pack_worker.py
       - name: Bundle llama sidecar
         run: python backend/pack_llama_sidecar.py
+      - name: Verify frozen Windows runtime
+        if: matrix.os == 'windows-latest'
+        run: python backend/diagnose_windows_bundle.py --runtime backend/runtime
       - name: Configure Apple signing and notarization
         if: matrix.os == 'macos-14'
         shell: bash
@@ -78,6 +81,9 @@ jobs:
           # 未配置时保持未签名构建，不会导致流程失败。
           CSC_LINK: ${{ secrets.WIN_CERTIFICATE_P12_BASE64 }}
           CSC_KEY_PASSWORD: ${{ secrets.WIN_CERTIFICATE_PASSWORD }}
+      - name: Verify packaged Windows runtime
+        if: matrix.os == 'windows-latest'
+        run: python backend/diagnose_windows_bundle.py --runtime dist/win-unpacked/resources/backend/runtime --packaged
       - name: Verify macOS signature and notarization
         if: matrix.os == 'macos-14'
         shell: bash

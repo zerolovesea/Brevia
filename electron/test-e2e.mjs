@@ -410,6 +410,28 @@ try {
     return failures;
   })()`, awaitPromise: true, returnByValue: true });
   check(Array.isArray(detailLayout.result?.value) && detailLayout.result.value.length === 0, `多语言/主题布局回归：${JSON.stringify(detailLayout)}`);
+  const refineModelLayout = await client.send('Runtime.evaluate', { expression: `(() => {
+    const host = document.createElement('div');
+    host.className = 'refine-menu';
+    host.innerHTML = renderRefineModelRow([
+      ['qwen', 'Qwen3-ASR 0.6B 8bit · 下载 960MB', '推荐'],
+      ['fire', 'FireRedASR2-AED · 下载 4.25GB', ''],
+      ['long', 'ASR'.repeat(40), ''],
+    ], 'qwen');
+    document.body.append(host);
+    host.querySelector('.flow-select-options').hidden = false;
+    const fits = () => [...host.querySelectorAll('.flow-select-toggle, .flow-select-options, .flow-select-options button')]
+      .every(element => element.scrollWidth <= element.clientWidth + 1);
+    const initial = fits();
+    const toggle = host.querySelector('.flow-select-toggle');
+    toggle.firstChild.nodeValue = 'ASR'.repeat(40);
+    const changed = fits();
+    const arrow = toggle.querySelector('span').getBoundingClientRect();
+    const bounds = toggle.getBoundingClientRect();
+    host.remove();
+    return initial && changed && arrow.right <= bounds.right && arrow.left >= bounds.left;
+  })()`, returnByValue: true });
+  check(refineModelLayout.result?.value === true, `识别模型长文本布局回归：${JSON.stringify(refineModelLayout)}`);
   const editingRegression = await client.send('Runtime.evaluate', { expression: `(async () => {
     await initializationPromise;
     const meeting = await window.brevia.meeting.get({ meeting_id: breviaClient.state.initialized.meetings[0].id });

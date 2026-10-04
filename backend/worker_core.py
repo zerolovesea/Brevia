@@ -11,7 +11,7 @@ from pathlib import Path
 from .asr import (
     ModelManager,
 )
-from .config import DEFAULT_SETTINGS, SETTINGS, runtime_settings, save_runtime_settings
+from .config import DEFAULT_SETTINGS, SETTINGS, runtime_settings, save_runtime_settings, minimum_speech_cap
 from .llm_client import complete
 from .storage import Store
 from .voice_profiles import VoiceProfileService
@@ -80,6 +80,7 @@ class WorkerCore:
         self.stream_state = {}
         self.meeting_language = None
         self.live_postprocessing = None
+        self.live_overloaded = False
         # 继续协作初始化链，使兄弟 mixin（如 llama sidecar 管理器）的 __init__ 也能
         # 运行——否则 _sidecars_lock 等属性永远不会被创建。
         super().__init__()
@@ -202,6 +203,9 @@ class WorkerCore:
                 "settings.advanced.get": lambda _: {
                     "settings": SETTINGS,
                     "defaults": DEFAULT_SETTINGS,
+                    "speech_cap_minimum": max(minimum_speech_cap(params) for params in SETTINGS["vad"].values()),
+                    "inactive_fields": (["quiet_speech_min_seconds", "quiet_speech_max_seconds", "quiet_speech_level_ratio"]
+                                        if self.models.get("silero-vad").get("runtime") == "mlx-audio" else []),
                 },
                 "settings.advanced.save": lambda value: save_runtime_settings(
                     self.store.root, value["settings"]

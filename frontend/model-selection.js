@@ -120,10 +120,16 @@
    * 退役意味着产品已不再提供它（不再出现在首启选型页、不再参与默认模型推导）。清单里保留
    * 条目仍然必要——历史会议的 refined_model_id 要能解析——但显示出来只会让用户把淘汰的
    * 模型重新下回来。
-   * @param {object[]} catalog 模型清单。@returns {object[]} 可展示模型。
+   * 默认识别模型按界面语言置顶，其余识别模型按清单优先级排列；其他组保留清单顺序。
+   * @param {object[]} catalog 模型清单。@param {string} language 界面语言。
+   * @returns {object[]} 可展示模型。
    */
-  function visibleModels(catalog) {
-    return (catalog || []).filter((model) => !model.retired);
+  function visibleModels(catalog, language) {
+    const defaultId = language ? declaredDefaultModelId(catalog, language) : undefined;
+    return (catalog || []).filter((model) => !model.retired).sort((first, second) =>
+      Number(second.id === defaultId) - Number(first.id === defaultId)
+      || (first.refined_priority ?? DEFAULT_REFINED_PRIORITY)
+        - (second.refined_priority ?? DEFAULT_REFINED_PRIORITY));
   }
 
   /** 该模型在模型库里属于哪一组。

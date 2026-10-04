@@ -22,7 +22,7 @@ from backend.bundled_models import missing_bundled_model_ids, unexpected_bundled
 
 
 BACKEND = ROOT / "backend"
-# worker 运行时由这些二进制承载；两个都是 `pack:backend` 的产物，任一过期都要拦。
+# macOS 使用两个二进制；Windows 的 worker 还承担独立侧车入口，只校验该二进制。
 WORKER_BINARIES = ("brevia-worker", "brevia-llama-helper")
 # 构建产物目录，不是源码；比较新鲜度时必须跳过。
 GENERATED_PARTS = {"build", "runtime", "bundled-models", "__pycache__", ".pytest_cache"}
@@ -113,9 +113,10 @@ def bundled_model_problems(models_root=BACKEND / "bundled-models"):
 
 def package_problems(root=BACKEND, models_root=None, platform=None):
     """打包前必须全部为空的问题列表。"""
+    binaries = ("brevia-worker",) if (platform or sys.platform) == "win32" else WORKER_BINARIES
     problems = [
         problem
-        for problem in (worker_problem(name, root, platform) for name in WORKER_BINARIES)
+        for problem in (worker_problem(name, root, platform) for name in binaries)
         if problem
     ]
     problems.extend(bundled_model_problems(models_root or root / "bundled-models"))

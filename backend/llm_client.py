@@ -6,9 +6,32 @@
 
 import json
 import urllib.error
+import urllib.parse
 import urllib.request
 
 from .config import SETTINGS
+
+
+class _SameOriginRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Keep credentials and meeting content within the configured HTTP origin."""
+
+    @staticmethod
+    def _origin(url):
+        parsed = urllib.parse.urlsplit(url)
+        port = parsed.port if parsed.port is not None else {"http": 80, "https": 443}.get(parsed.scheme)
+        return parsed.scheme, parsed.hostname, port
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        # Scheme changes include HTTPS downgrades; hostname or port changes
+        # cross a trust boundary even when no API key is configured.
+        if self._origin(req.full_url) != self._origin(newurl):
+            if fp is not None:
+                fp.close()
+            raise urllib.error.URLError("Cross-origin LLM redirects are not allowed")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+_HTTP_OPENER = urllib.request.build_opener(_SameOriginRedirectHandler())
 
 
 def complete(payload, prompt, json_mode=False):
@@ -55,7 +78,7 @@ def complete(payload, prompt, json_mode=False):
         request = urllib.request.Request(
             endpoint, json.dumps(body).encode(), headers=headers, method="POST"
         )
-        with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
+        with _HTTP_OPENER.open(request, timeout=timeout_seconds) as response:
             data = json.loads(response.read())
     except urllib.error.HTTPError as error:
         detail = error.read().decode("utf-8", "replace")

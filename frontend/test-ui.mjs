@@ -765,7 +765,7 @@ assert.match(text(app), /refinement\.progress'.*stage.*showRefinementProgress/s)
 assert.equal(localeContext.window.BreviaLocaleData.catalog.en.labels['检查音频'], 'Checking audio');
 assert.doesNotMatch(text(i18nData), /Object\.assign|catalog\.[a-z]+\.labels\[/, 'locale tables have no runtime overrides');
 for (const locale of ['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']) {
-  assert.ok(localeContext.window.BreviaLocaleData.catalog[locale].labels['转写中 · 校正说话人']);
+  assert.ok(localeContext.window.BreviaLocaleData.catalog[locale].labels['转写中']);
 }
 assert.match(text(js), /activeLibraryNav === 'recently-deleted' \? BreviaI18n\.trashCopy\(locale\)\.slogan/);
 assert.match(text(js), /if \(activeView === 'home'\) selectLibraryNav\(activeLibraryNav\)/);
@@ -1387,6 +1387,21 @@ assert.deepEqual(
 assert.deepEqual(MS.visibleModels(syntheticCatalog).map((model) => model.id),
   ['zh-fast', 'multi', 'western', 'vad']);
 assert.deepEqual(MS.visibleModels(undefined), []);
+// 默认模型随界面语言置顶，其他识别模型按优先级排列，且不改写原清单。
+const reversedCatalog = [...syntheticCatalog].reverse();
+for (const [language, expected] of [
+  ['zh', ['zh-fast', 'multi', 'western', 'vad']],
+  ['ja', ['multi', 'zh-fast', 'western', 'vad']],
+  ['en', ['western', 'zh-fast', 'multi', 'vad']],
+]) {
+  assert.deepEqual(MS.visibleModels(reversedCatalog, language).map((model) => model.id), expected);
+}
+assert.equal(reversedCatalog[0].id, 'vad', '显示排序不得改写原清单');
+const macModels = modelManifest.filter((model) => !model.platforms || model.platforms.includes('darwin'));
+assert.deepEqual(
+  MS.visibleModels(macModels, 'zh').filter((model) => model.stages.includes('refined')).map((model) => model.id),
+  ['funasr-nano-mlx', 'qwen3-asr-0.6b-mlx', 'parakeet-tdt-0.6b-v3-mlx'],
+);
 
 // 分组映射必须显式：按前缀匹配会把 speaker-segmentation 同时归进声纹组。
 const STAGE_GROUPS = { refined: 'refined', vad: 'vad', diarization: 'diarization',
@@ -1461,18 +1476,17 @@ for (const model of modelManifest) {
 }
 // 前端展示顺序与后端回退顺序共用清单里的 refined_priority：缺字段或重号会让两端对同一个
 // 语言选出不同的回退模型，而「语言 → 默认模型」本该只有一处定义。
-const priorities = selectableRefined.map(({ refined_priority: priority }) => priority);
-assert.ok(priorities.every((priority) => Number.isInteger(priority)), 'every selectable refined model needs refined_priority');
-assert.equal(new Set(priorities).size, priorities.length, `refined_priority must be unique: ${priorities}`);
-assert.match(text(app), /refined_priority/, 'app.js must derive the candidate order from the manifest');
-const declaredLanguages = selectableRefined.flatMap(({ id, default_for_languages: langs }) => (langs || []).map((lang) => [lang, id]));
-for (const [lang] of declaredLanguages) {
-  assert.equal(
-    declaredLanguages.filter(([other]) => other === lang).length,
-    1,
-    `${lang} must be declared as the default by exactly one model`,
-  );
+for (const platform of ['darwin', 'windows', 'linux']) {
+  const available = selectableRefined.filter((model) => !model.platforms || model.platforms.includes(platform));
+  const priorities = available.map(({ refined_priority: priority }) => priority);
+  assert.ok(priorities.every(Number.isInteger), 'every selectable refined model needs refined_priority');
+  assert.equal(new Set(priorities).size, priorities.length, `${platform}: priorities must be unique`);
+  const languages = available.flatMap((model) => model.default_for_languages || []);
+  assert.equal(new Set(languages).size, languages.length, `${platform}: language defaults must be unique`);
+  assert.equal(MS.declaredDefaultModelId(available, 'zh'), platform === 'darwin' ? 'funasr-nano-mlx' : 'funasr-nano-int8');
+  assert.equal(MS.declaredDefaultModelId(available, 'en'), platform === 'darwin' ? 'parakeet-tdt-0.6b-v3-mlx' : 'parakeet-tdt-0.6b-v3-int8');
 }
+assert.match(text(app), /refined_priority/, 'app.js must derive the candidate order from the manifest');
 // 时间戳对齐集合必须与清单保持同步：漏登记新模型会让精修稿被当成「无时间戳全文」渲染，
 // 顺带关掉逐句编辑（见 ui-components.js 的 refinedMode 分支）。
 // 用**行为**断言，而不是解析集合源码：清单里每个可选用的整句识别模型都必须被判为
@@ -2013,7 +2027,7 @@ assert.match(text(js), /function refinementTitle\(meetingId\)/);
 assert.match(text(js), /refinementTitle\(meeting_id\), meeting_id, stage/);
 assert.match(text(js), /\$\{copy\.title\} - \$\{refinementMeetingTitle\}/);
 assert.match(text(js), /\$\{copy\.waiting\} · \$\{Math\.round\(ratio \* 100\)\}%/);
-assert.equal(localeContext.window.BreviaLocaleData.catalog.en.labels['转写中 · 校正说话人'], 'Transcribing · Correcting speakers');
+assert.equal(localeContext.window.BreviaLocaleData.catalog.en.labels['转写中'], 'Transcribing');
 
 assert.match(text(js), /segment\.version\.startsWith\('postprocess'\)/);
 assert.match(text(meetingDetail), /playback\?\.mix \|\| meeting\?\.audio\?\.playback\?\.mic/);
@@ -2451,6 +2465,11 @@ runInNewContext(
 );
 const advancedSettings = JSON.parse(await readFile('../backend/settings.json', 'utf8'));
 const advancedMarkup = advancedContext.renderAdvancedSettings(advancedSettings);
+const mlxAdvanced = advancedContext.renderAdvancedSettings(advancedSettings, { speech_cap_minimum: 1, inactive_fields: ['quiet_speech_min_seconds', 'quiet_speech_max_seconds', 'quiet_speech_level_ratio'] });
+assert.match(mlxAdvanced, /min="0" name="live_asr.max_speech_seconds"/);
+assert.match(mlxAdvanced, /0 \/ ≥ 1 s/);
+assert.doesNotMatch(mlxAdvanced, /name="live_asr.quiet_speech_min_seconds"/);
+assert.match(mlxAdvanced, /name="live_asr.quiet_speech_recovery"/);
 const advancedPaths = [...advancedMarkup.matchAll(/name="([^"]+)"/g)].map((match) => match[1]);
 const leafPaths = (node, prefix = '') => Object.entries(node).flatMap(([key, value]) => (value && typeof value === 'object' ? leafPaths(value, `${prefix}${key}.`) : [`${prefix}${key}`]));
 assert.deepEqual(advancedPaths.sort(), leafPaths(advancedSettings).sort(), 'every advanced setting is rendered exactly once');

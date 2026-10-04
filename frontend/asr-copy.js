@@ -105,6 +105,24 @@
     },
   };
 
+  const mlxDescriptions = {
+    zh: ['日语和韩语会议的默认模型，支持多语种转写并自动生成标点。', '适合中文会议转写，也支持粤语和英语。', '中文和粤语会议的默认模型，也支持英语与日语。'],
+    en: ['Default for Japanese and Korean meetings. Supports multilingual transcription with automatic punctuation.', 'Suited to Chinese meeting transcription, with support for Cantonese and English.', 'Default for Mandarin and Cantonese meetings. Also supports English and Japanese.'],
+    es: ['Modelo predeterminado para reuniones en japonés y coreano. Transcripción multilingüe con puntuación automática.', 'Adecuado para transcribir reuniones en chino; también admite cantonés e inglés.', 'Modelo predeterminado para reuniones en mandarín y cantonés. También admite inglés y japonés.'],
+    ja: ['日本語・韓国語の会議の既定モデル。多言語の文字起こしと句読点の自動挿入に対応します。', '中国語の会議の文字起こしに適しています。広東語と英語にも対応します。', '標準中国語・広東語の会議の既定モデル。英語と日本語にも対応します。'],
+    ko: ['일본어·한국어 회의의 기본 모델. 다국어 전사와 자동 문장 부호를 지원합니다.', '중국어 회의 전사에 적합하며 광둥어와 영어도 지원합니다.', '표준 중국어·광둥어 회의의 기본 모델. 영어와 일본어도 지원합니다.'],
+    fr: ['Modèle par défaut pour les réunions en japonais et coréen. Transcription multilingue avec ponctuation automatique.', 'Adapté à la transcription des réunions en chinois, avec prise en charge du cantonais et de l’anglais.', 'Modèle par défaut pour les réunions en mandarin et cantonais. Prend aussi en charge l’anglais et le japonais.'],
+    de: ['Standardmodell für Besprechungen auf Japanisch und Koreanisch. Mehrsprachige Transkription mit automatischer Zeichensetzung.', 'Geeignet für die Transkription chinesischer Besprechungen; unterstützt auch Kantonesisch und Englisch.', 'Standardmodell für Besprechungen auf Mandarin und Kantonesisch. Unterstützt auch Englisch und Japanisch.'],
+    ru: ['Модель по умолчанию для встреч на японском и корейском. Многоязычная транскрипция с автоматической пунктуацией.', 'Подходит для транскрипции встреч на китайском; также поддерживает кантонский и английский.', 'Модель по умолчанию для встреч на путунхуа и кантонском. Также поддерживает английский и японский.'],
+  };
+  for (const locale of LOCALES) {
+    model[locale]['funasr-nano-mlx'] = { tagline: mlxDescriptions[locale][2] };
+    model[locale]['qwen3-asr-0.6b-mlx'] = { tagline: mlxDescriptions[locale][0] };
+    model[locale]['fireredasr2-aed-mlx'] = { tagline: mlxDescriptions[locale][1] };
+    model[locale]['parakeet-tdt-0.6b-v3-mlx'] =
+      model[locale]['parakeet-tdt-0.6b-v3-int8'];
+  }
+
   // 推荐角标。用户在首启第 ① 步刚选过界面语言，「按界面语言推荐」是自明的，
   // 所以只需要一个短角标，不需要再配一段解释文字。
   const recommended = {

@@ -4,3 +4,13 @@ certifi>=2024.2.2
 # 0.3.35 的 Windows CPU wheel 在部分 Intel 机型上 llama_backend_init() 空指针崩溃
 # （access violation reading 0x0），故先封顶在该版本以下。
 llama-cpp-python>=0.3.2,<0.3.35
+
+# Pin the inspected streaming/VAD interfaces; no server or MLX LLM dependency.
+mlx-audio[stt] @ git+https://github.com/Blaizzy/mlx-audio.git@94c7716212b2228f178d2f9c7619a591fd1b0b78 ; sys_platform == "darwin" and platform_machine == "arm64"
+
+# Use the macOS 14 Metal wheel even on newer build hosts. The auto-selected
+# macOS 26 wheel cannot run on older supported Macs.
+mlx==0.32.3 ; sys_platform == "darwin" and platform_machine == "arm64"
+mlx-metal @ https://files.pythonhosted.org/packages/f8/ed/8510985bcb24a6eae359a5441ce4cedcee13b84258a010cd0e515e9fb0bc/mlx_metal-0.32.3-py3-none-macosx_14_0_arm64.whl#sha256=fdba88ed9131448cf163be2c7ad6374746d8818205f28657aa91b6c69050f691 ; sys_platform == "darwin" and platform_machine == "arm64"
+mlx @ https://files.pythonhosted.org/packages/26/8c/2f8b796885b4c02ab9644916bebf656cd1d6d366df94d174b046903ea250/mlx-0.32.3-cp312-cp312-macosx_14_0_arm64.whl#sha256=7aecc3d4a904279492dae58e28378a3c4bec4533e7066e64ae5c78c7a5511f22 ; sys_platform == "darwin" and platform_machine == "arm64" and python_version == "3.12"
+transformers==5.18.0 ; sys_platform == "darwin" and platform_machine == "arm64"

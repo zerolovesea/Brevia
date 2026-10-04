@@ -32,7 +32,11 @@
     "quality": 3,
     "speed": 3,
     "disk_size_bytes": 2318336,
-    "memory_floor_bytes": 52428800
+    "memory_floor_bytes": 52428800,
+    "platforms": [
+      "windows",
+      "linux"
+    ]
   },
   {
     "id": "qwen3-asr-0.6b-int8",
@@ -131,7 +135,11 @@
     "quality": 2,
     "speed": 2,
     "disk_size_bytes": 987033600,
-    "memory_floor_bytes": 2321547264
+    "memory_floor_bytes": 2321547264,
+    "platforms": [
+      "windows",
+      "linux"
+    ]
   },
   {
     "id": "parakeet-tdt-0.6b-v3-int8",
@@ -197,7 +205,11 @@
     "speed": 3,
     "archive_sha256": "5793d0fd397c5778d2cf2126994d58e9d56b1be7c04d13c7a15bb1b4eafb16bf",
     "disk_size_bytes": 674263040,
-    "memory_floor_bytes": 1991245824
+    "memory_floor_bytes": 1991245824,
+    "platforms": [
+      "windows",
+      "linux"
+    ]
   },
   {
     "id": "whisper-large-v3",
@@ -256,7 +268,11 @@
     "speed": 1,
     "default_for_languages": [],
     "disk_size_bytes": 1798291456,
-    "memory_floor_bytes": 4482662400
+    "memory_floor_bytes": 4482662400,
+    "platforms": [
+      "windows",
+      "linux"
+    ]
   },
   {
     "id": "funasr-nano-int8",
@@ -297,7 +313,11 @@
     "quality": 2,
     "speed": 2,
     "disk_size_bytes": 1018757120,
-    "memory_floor_bytes": 2301624320
+    "memory_floor_bytes": 2301624320,
+    "platforms": [
+      "windows",
+      "linux"
+    ]
   },
   {
     "id": "pyannote-segmentation-3.0",
@@ -454,5 +474,424 @@
     "tier": "fast",
     "disk_size_bytes": 1133084672,
     "memory_floor_bytes": 1258291200
+  },
+  {
+    "id": "silero-vad",
+    "name": "Silero VAD",
+    "runtime": "mlx-audio",
+    "revision": "7bc17f22d3c0451bd3a6cd71e759b009271ff49a",
+    "platforms": [
+      "darwin"
+    ],
+    "stages": [
+      "vad"
+    ],
+    "languages": [
+      "all"
+    ],
+    "backend": [
+      "metal"
+    ],
+    "speaker": false,
+    "size_bytes": 2180003,
+    "downloads": [
+      {
+        "path": "config.json",
+        "url": "https://huggingface.co/mlx-community/silero-vad/resolve/7bc17f22d3c0451bd3a6cd71e759b009271ff49a/config.json",
+        "sha256": "f411ebae77d635372a636645fca4a4bb574b2da73e49b21bfef9685ae90e31bc"
+      },
+      {
+        "path": "model.safetensors",
+        "url": "https://huggingface.co/mlx-community/silero-vad/resolve/7bc17f22d3c0451bd3a6cd71e759b009271ff49a/model.safetensors",
+        "sha256": "185e0bc3ee2c48ce425a37209fe917a1aca22ab6b85799430dd1b4894087a8b8"
+      }
+    ],
+    "files": [
+      "config.json",
+      "model.safetensors"
+    ],
+    "kind": "vad",
+    "quality": 3,
+    "speed": 3
+  },
+  {
+    "id": "fireredasr2-aed-mlx",
+    "name": "FireRedASR2-AED",
+    "retired": true,
+    "runtime": "mlx-audio",
+    "revision": "f3212eacfa49b851130b97c63653c8e06ee09bdb",
+    "platforms": [
+      "darwin"
+    ],
+    "stages": [
+      "refined"
+    ],
+    "languages": [
+      "zh",
+      "en",
+      "yue"
+    ],
+    "backend": [
+      "metal"
+    ],
+    "speaker": false,
+    "size_bytes": 4566118175,
+    "downloads": [
+      {
+        "path": "cmvn.json",
+        "url": "https://huggingface.co/mlx-community/FireRedASR2-AED-mlx/resolve/f3212eacfa49b851130b97c63653c8e06ee09bdb/cmvn.json",
+        "sha256": "3f702336649609864b8a7c91ec3d25ae36be15f2d70f37cb35afeebf178be584"
+      },
+      {
+        "path": "config.json",
+        "url": "https://huggingface.co/mlx-community/FireRedASR2-AED-mlx/resolve/f3212eacfa49b851130b97c63653c8e06ee09bdb/config.json",
+        "sha256": "ef3be4345675bf62b873de2b256b60e92fcfe44f95b3d9d810cb90a29ea69e91"
+      },
+      {
+        "path": "dict.txt",
+        "url": "https://huggingface.co/mlx-community/FireRedASR2-AED-mlx/resolve/f3212eacfa49b851130b97c63653c8e06ee09bdb/dict.txt",
+        "sha256": "1bc613de2112d257e61a349c3e72d1b1a9cf19c33d3ca954197ad2171e5ea07b"
+      },
+      {
+        "path": "model.safetensors",
+        "url": "https://huggingface.co/mlx-community/FireRedASR2-AED-mlx/resolve/f3212eacfa49b851130b97c63653c8e06ee09bdb/model.safetensors",
+        "sha256": "e91fa08c58f07accd1803c8f0a9ffce24f4b3952c9fbc8ea476a82873e0386d4"
+      },
+      {
+        "path": "train_bpe1000.model",
+        "url": "https://huggingface.co/mlx-community/FireRedASR2-AED-mlx/resolve/f3212eacfa49b851130b97c63653c8e06ee09bdb/train_bpe1000.model",
+        "sha256": "473bbc157cb4eade2059b30a3c877a1c29bd50cadbfbed869ae36eeade7fee07"
+      }
+    ],
+    "files": [
+      "cmvn.json",
+      "config.json",
+      "dict.txt",
+      "model.safetensors",
+      "train_bpe1000.model"
+    ],
+    "kind": "fireredasr2",
+    "quality": 3,
+    "speed": 3,
+    "asr_role": "zh-optimized",
+    "default_for_languages": [],
+    "refined_priority": 3
+  },
+  {
+    "id": "qwen3-asr-0.6b-mlx",
+    "name": "Qwen3-ASR 0.6B 8bit",
+    "runtime": "mlx-audio",
+    "revision": "89e96d92ba34aca20b3e29fb10cc284097d1219f",
+    "platforms": [
+      "darwin"
+    ],
+    "stages": [
+      "refined"
+    ],
+    "languages": [
+      "zh",
+      "en",
+      "yue",
+      "ar",
+      "de",
+      "fr",
+      "es",
+      "pt",
+      "id",
+      "it",
+      "ko",
+      "ru",
+      "th",
+      "vi",
+      "ja",
+      "tr",
+      "hi",
+      "ms",
+      "nl",
+      "sv",
+      "da",
+      "fi",
+      "pl",
+      "cs",
+      "fil",
+      "fa",
+      "el",
+      "hu",
+      "mk",
+      "ro"
+    ],
+    "backend": [
+      "metal"
+    ],
+    "speaker": false,
+    "size_bytes": 1010771234,
+    "downloads": [
+      {
+        "path": "chat_template.json",
+        "url": "https://huggingface.co/mlx-community/Qwen3-ASR-0.6B-8bit/resolve/89e96d92ba34aca20b3e29fb10cc284097d1219f/chat_template.json",
+        "sha256": "75a8cfca24f00de72d796fbfed6858fc9614ef3dabd8696684cc3bc03a9c58ff"
+      },
+      {
+        "path": "config.json",
+        "url": "https://huggingface.co/mlx-community/Qwen3-ASR-0.6B-8bit/resolve/89e96d92ba34aca20b3e29fb10cc284097d1219f/config.json",
+        "sha256": "5d104a945fed08728ab010f12bf3ce5ab4d0794bba276d81bff5bd83ae9d2be0"
+      },
+      {
+        "path": "generation_config.json",
+        "url": "https://huggingface.co/mlx-community/Qwen3-ASR-0.6B-8bit/resolve/89e96d92ba34aca20b3e29fb10cc284097d1219f/generation_config.json",
+        "sha256": "1da527824d81e07118facff437e03f2e24a23311e3bdeb2368973fe77e5f275c"
+      },
+      {
+        "path": "merges.txt",
+        "url": "https://huggingface.co/mlx-community/Qwen3-ASR-0.6B-8bit/resolve/89e96d92ba34aca20b3e29fb10cc284097d1219f/merges.txt",
+        "sha256": "8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5"
+      },
+      {
+        "path": "model.safetensors",
+        "url": "https://huggingface.co/mlx-community/Qwen3-ASR-0.6B-8bit/resolve/89e96d92ba34aca20b3e29fb10cc284097d1219f/model.safetensors",
+        "sha256": "b5bfe4abc1b4c6e58b633096682ec2b6297298add1527119936107d211adf0e8"
+      },
+      {
+        "path": "model.safetensors.index.json",
+        "url": "https://huggingface.co/mlx-community/Qwen3-ASR-0.6B-8bit/resolve/89e96d92ba34aca20b3e29fb10cc284097d1219f/model.safetensors.index.json",
+        "sha256": "caa32ece76c395ba241533eb4aceb0efbc72488ef3d8d2fd3c677ce068dad57d"
+      },
+      {
+        "path": "preprocessor_config.json",
+        "url": "https://huggingface.co/mlx-community/Qwen3-ASR-0.6B-8bit/resolve/89e96d92ba34aca20b3e29fb10cc284097d1219f/preprocessor_config.json",
+        "sha256": "45e120a4eda2c20c5d7f2ea9354e63536bf35e27aa573fb7cdf78017b378770d"
+      },
+      {
+        "path": "tokenizer_config.json",
+        "url": "https://huggingface.co/mlx-community/Qwen3-ASR-0.6B-8bit/resolve/89e96d92ba34aca20b3e29fb10cc284097d1219f/tokenizer_config.json",
+        "sha256": "4942d005604266809309cabc9f4e9cb89ce855d59b14681fdc0e1cc62ea26c4c"
+      },
+      {
+        "path": "vocab.json",
+        "url": "https://huggingface.co/mlx-community/Qwen3-ASR-0.6B-8bit/resolve/89e96d92ba34aca20b3e29fb10cc284097d1219f/vocab.json",
+        "sha256": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910"
+      }
+    ],
+    "files": [
+      "chat_template.json",
+      "config.json",
+      "generation_config.json",
+      "merges.txt",
+      "model.safetensors",
+      "model.safetensors.index.json",
+      "preprocessor_config.json",
+      "tokenizer_config.json",
+      "vocab.json"
+    ],
+    "kind": "qwen3",
+    "quality": 3,
+    "speed": 3,
+    "asr_role": "multilingual",
+    "default_for_languages": [
+      "ja",
+      "ko"
+    ],
+    "refined_priority": 2
+  },
+  {
+    "id": "parakeet-tdt-0.6b-v3-mlx",
+    "name": "Parakeet TDT 0.6B v3",
+    "runtime": "mlx-audio",
+    "revision": "ed2b7e8c15f9aaa0b5772e2efb986255eaef7e15",
+    "platforms": [
+      "darwin"
+    ],
+    "stages": [
+      "refined"
+    ],
+    "languages": [
+      "bg",
+      "hr",
+      "cs",
+      "da",
+      "nl",
+      "en",
+      "et",
+      "fi",
+      "fr",
+      "de",
+      "el",
+      "hu",
+      "it",
+      "lv",
+      "lt",
+      "mt",
+      "pl",
+      "pt",
+      "ro",
+      "sk",
+      "sl",
+      "es",
+      "sv",
+      "ru",
+      "uk"
+    ],
+    "backend": [
+      "metal"
+    ],
+    "speaker": false,
+    "size_bytes": 2509041541,
+    "downloads": [
+      {
+        "path": "config.json",
+        "url": "https://huggingface.co/mlx-community/parakeet-tdt-0.6b-v3/resolve/ed2b7e8c15f9aaa0b5772e2efb986255eaef7e15/config.json",
+        "sha256": "f320f1292511f34ec47f513755fe20fd01dbfc09a925d42730e66059a6e1ef4c"
+      },
+      {
+        "path": "model.safetensors",
+        "url": "https://huggingface.co/mlx-community/parakeet-tdt-0.6b-v3/resolve/ed2b7e8c15f9aaa0b5772e2efb986255eaef7e15/model.safetensors",
+        "sha256": "05e01c7f396c298cf7d23f61da7b504adeab698f0aaeafd9c82d198625464592"
+      },
+      {
+        "path": "tokenizer.model",
+        "url": "https://huggingface.co/mlx-community/parakeet-tdt-0.6b-v3/resolve/ed2b7e8c15f9aaa0b5772e2efb986255eaef7e15/tokenizer.model",
+        "sha256": "eacec2b0a77f336d4a2ca4a25a7047575d3c2b74de47e997f4c205126ed3135e"
+      },
+      {
+        "path": "tokenizer.vocab",
+        "url": "https://huggingface.co/mlx-community/parakeet-tdt-0.6b-v3/resolve/ed2b7e8c15f9aaa0b5772e2efb986255eaef7e15/tokenizer.vocab",
+        "sha256": "41130ff456706304a1adec782ccc9e003c4d417e8e324353d281be958cac4e17"
+      },
+      {
+        "path": "vocab.txt",
+        "url": "https://huggingface.co/mlx-community/parakeet-tdt-0.6b-v3/resolve/ed2b7e8c15f9aaa0b5772e2efb986255eaef7e15/vocab.txt",
+        "sha256": "3cde1409fd78783a79b29ed4d32da57c746993856f7c8263bcb905d2e5839db7"
+      }
+    ],
+    "files": [
+      "config.json",
+      "model.safetensors",
+      "tokenizer.model",
+      "tokenizer.vocab",
+      "vocab.txt"
+    ],
+    "kind": "nemo-transducer",
+    "quality": 3,
+    "speed": 3,
+    "asr_role": "western",
+    "default_for_languages": [
+      "bg",
+      "hr",
+      "cs",
+      "da",
+      "nl",
+      "en",
+      "et",
+      "fi",
+      "fr",
+      "de",
+      "el",
+      "hu",
+      "it",
+      "lv",
+      "lt",
+      "mt",
+      "pl",
+      "pt",
+      "ro",
+      "sk",
+      "sl",
+      "es",
+      "sv",
+      "ru",
+      "uk",
+      "auto"
+    ],
+    "refined_priority": 4
+  },
+  {
+    "id": "funasr-nano-mlx",
+    "name": "Fun-ASR-Nano",
+    "runtime": "mlx-audio",
+    "revision": "a7bc96fceaafce39ed6748e0c0fa9a9508b67f86",
+    "platforms": [
+      "darwin"
+    ],
+    "stages": [
+      "refined"
+    ],
+    "languages": [
+      "zh",
+      "yue",
+      "wuu",
+      "nan",
+      "hak",
+      "gan",
+      "hsn",
+      "cjy",
+      "en",
+      "ja"
+    ],
+    "backend": [
+      "metal"
+    ],
+    "speaker": false,
+    "size_bytes": 1675618453,
+    "downloads": [
+      {
+        "path": "Qwen3-0.6B/config.json",
+        "url": "https://huggingface.co/mlx-community/Fun-ASR-Nano-2512/resolve/a7bc96fceaafce39ed6748e0c0fa9a9508b67f86/Qwen3-0.6B/config.json",
+        "sha256": "660db3b73d788119c04535e48cf9be5f55bc3100841a718637ae695b442f27dd"
+      },
+      {
+        "path": "Qwen3-0.6B/generation_config.json",
+        "url": "https://huggingface.co/mlx-community/Fun-ASR-Nano-2512/resolve/a7bc96fceaafce39ed6748e0c0fa9a9508b67f86/Qwen3-0.6B/generation_config.json",
+        "sha256": "2325da0f15bb848e018c5ae071b7943332e9f871d6b60e2ed22ca97d4cb993d2"
+      },
+      {
+        "path": "Qwen3-0.6B/merges.txt",
+        "url": "https://huggingface.co/mlx-community/Fun-ASR-Nano-2512/resolve/a7bc96fceaafce39ed6748e0c0fa9a9508b67f86/Qwen3-0.6B/merges.txt",
+        "sha256": "8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5"
+      },
+      {
+        "path": "Qwen3-0.6B/tokenizer.json",
+        "url": "https://huggingface.co/mlx-community/Fun-ASR-Nano-2512/resolve/a7bc96fceaafce39ed6748e0c0fa9a9508b67f86/Qwen3-0.6B/tokenizer.json",
+        "sha256": "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4"
+      },
+      {
+        "path": "Qwen3-0.6B/tokenizer_config.json",
+        "url": "https://huggingface.co/mlx-community/Fun-ASR-Nano-2512/resolve/a7bc96fceaafce39ed6748e0c0fa9a9508b67f86/Qwen3-0.6B/tokenizer_config.json",
+        "sha256": "d5d09f07b48c3086c508b30d1c9114bd1189145b74e982a265350c923acd8101"
+      },
+      {
+        "path": "Qwen3-0.6B/vocab.json",
+        "url": "https://huggingface.co/mlx-community/Fun-ASR-Nano-2512/resolve/a7bc96fceaafce39ed6748e0c0fa9a9508b67f86/Qwen3-0.6B/vocab.json",
+        "sha256": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910"
+      },
+      {
+        "path": "config.json",
+        "url": "https://huggingface.co/mlx-community/Fun-ASR-Nano-2512/resolve/a7bc96fceaafce39ed6748e0c0fa9a9508b67f86/config.json",
+        "sha256": "4df3d9ff5b222b7a0be5dcf3f815dba995f37c6fbefe387436072303670c0ad8"
+      },
+      {
+        "path": "model.safetensors",
+        "url": "https://huggingface.co/mlx-community/Fun-ASR-Nano-2512/resolve/a7bc96fceaafce39ed6748e0c0fa9a9508b67f86/model.safetensors",
+        "sha256": "2e2ba5e2591f75f63b25ee5b53a895d3cd5afcc642c3db4482d3ee27b0a00449"
+      }
+    ],
+    "files": [
+      "Qwen3-0.6B/config.json",
+      "Qwen3-0.6B/generation_config.json",
+      "Qwen3-0.6B/merges.txt",
+      "Qwen3-0.6B/tokenizer.json",
+      "Qwen3-0.6B/tokenizer_config.json",
+      "Qwen3-0.6B/vocab.json",
+      "config.json",
+      "model.safetensors"
+    ],
+    "kind": "funasr-nano",
+    "quality": 3,
+    "speed": 3,
+    "asr_role": "zh-optimized",
+    "default_for_languages": [
+      "zh",
+      "yue"
+    ],
+    "refined_priority": 1
   }
 ]

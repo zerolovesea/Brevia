@@ -40,6 +40,33 @@ from .worker_refinement import _diarization_chunk_ms
 from .worker_llama_sidecar import ASSISTANT_SIDECAR, _Sidecar, strip_reasoning
 
 
+class SpeechSettingsTest(unittest.TestCase):
+    def test_cap_validation_and_migration_preserve_other_settings(self):
+        original = json.loads(json.dumps(SETTINGS))
+        self.addCleanup(lambda: (SETTINGS.clear(), SETTINGS.update(original)))
+        with tempfile.TemporaryDirectory() as directory:
+            for cap in (.1, .2, .5, .999):
+                value = json.loads(json.dumps(DEFAULT_SETTINGS))
+                value["live_asr"]["max_speech_seconds"] = cap
+                value["vad"]["zh"]["threshold"] = .6
+                with self.subTest(cap=cap):
+                    with self.assertRaises(ValueError):
+                        save_runtime_settings(directory, value)
+                    path = Path(directory) / "advanced-settings.json"
+                    path.write_text(json.dumps(value))
+                    loaded = runtime_settings(directory)
+                    self.assertEqual(loaded["vad"]["zh"]["threshold"], .6)
+                    self.assertEqual(loaded["live_asr"]["max_speech_seconds"], 22)
+                    self.assertTrue(path.exists())
+            for cap in (0, 1, 22):
+                value["live_asr"]["max_speech_seconds"] = cap
+                save_runtime_settings(directory, value)
+            value["vad"]["zh"]["min_speech_duration"] = 2.0
+            value["live_asr"]["max_speech_seconds"] = 1.0
+            with self.assertRaises(ValueError):
+                save_runtime_settings(directory, value)
+
+
 def _stub_asr_stack():
     """把 ``_prepare_active`` 里的识别/端点检测构造替换成替身。
 
@@ -69,7 +96,7 @@ class WorkerTest(unittest.TestCase):
         ``backend/pack_worker.py`` 在导入时就逐个下载这些模型；清单里下架某个
         模型却忘记同步这里，会让 ``npm run dist:mac`` / CI 在打包开始即失败。
         """
-        catalog = {item["id"] for item in self.worker.models.catalog.values()}
+        catalog = {item["id"] for item in json.loads(Path(__file__).with_name("models.json").read_text())}
         missing = [model_id for model_id in BUNDLED_MODEL_IDS if model_id not in catalog]
         self.assertEqual(missing, [], "BUNDLED_MODEL_IDS must stay in sync with models.json")
 
@@ -85,7 +112,8 @@ class WorkerTest(unittest.TestCase):
         bundled_dir = Path(__file__).with_name("bundled-models")
         if not bundled_dir.is_dir():
             self.skipTest("development bundled-models directory not present")
-        manager = ModelManager(bundled_dir)
+        with patch("backend.asr.platform.system", return_value={"darwin": "Darwin", "win32": "Windows"}.get(sys.platform, "Linux")):
+            manager = ModelManager(bundled_dir)
         missing = [model_id for model_id in BUNDLED_MODEL_IDS if not manager.is_ready(model_id)]
         self.assertEqual(
             missing, [],
@@ -159,6 +187,10 @@ class WorkerTest(unittest.TestCase):
 
 
     def setUp(self):
+        # Existing ONNX regressions exercise the unchanged Windows catalog.
+        catalog_platform = patch("backend.asr.platform.system", return_value="Windows")
+        catalog_platform.start()
+        self.addCleanup(catalog_platform.stop)
         self.temp = tempfile.TemporaryDirectory()
         self.events = []
         self.worker = Worker(self.temp.name, self.events.append)
@@ -1103,12 +1135,12 @@ class WorkerTest(unittest.TestCase):
         for start in range(0, len(mic), 2731):
             for track, data in (("mic", mic), ("system", system)):
                 output.extend(mixer.accept(track, data[start:start + 2731], start / 16))
-                self.assertLessEqual(len(mixer.buffers[track]), mixer.window + mixer.limit + 2731)
+                self.assertLessEqual(len(mixer.buffers[track]), mixer.window + mixer.limit + mixer.lookahead + 2731)
         output.extend(mixer.flush())
         self.assertEqual(mixer.delay, 1920)
-        self.assertEqual(sum(len(samples) for samples, _ in output), len(system) + 1920)
-        last = output[2][0]
-        reference = system[64000 - 1920:96000 - 1920]
+        self.assertEqual(sum(len(samples) for samples, _ in output), len(system))
+        last = np.concatenate([samples for samples, _ in output])[64000:96000]
+        reference = system[64000:96000]
         # 系统声只剩一份，本机同时发言的幅度保持；不是整轨静音/ducking。
         self.assertAlmostEqual(float(np.dot(last - reference, local[64000:]) / np.dot(local[64000:], local[64000:])), 1, places=2)
         self.assertGreater(np.corrcoef(last, reference)[0, 1], 0.9)
@@ -1117,8 +1149,8 @@ class WorkerTest(unittest.TestCase):
         burst = AlignedAudioMixer()
         self.assertEqual(burst.accept("mic", mic, 0), [])
         batched = burst.accept("system", system, 0)
-        self.assertEqual(burst.flush(include_tail=False), [])
         batched.extend(burst.flush())
+        self.assertEqual(burst.flush(), [])
         np.testing.assert_allclose(np.concatenate([a for a, _ in batched]), np.concatenate([a for a, _ in output]))
 
         # 会后与实时共用算法，WAV 读取块大小不同也应给出同一波形。
@@ -1912,7 +1944,7 @@ class WorkerTest(unittest.TestCase):
                 return self.data
 
         with patch(
-            "backend.llm_client.urllib.request.urlopen",
+            "backend.llm_client._HTTP_OPENER.open",
             return_value=Response({"choices": [{"message": {"content": "openai"}}]}),
         ) as request:
             self.assertEqual(
@@ -1935,7 +1967,7 @@ class WorkerTest(unittest.TestCase):
             self.assertEqual(dict(sent.header_items())["Authorization"], "Bearer token")
             self.assertEqual(dict(sent.header_items())["User-agent"], "Brevia/1.0")
         with patch(
-            "backend.llm_client.urllib.request.urlopen",
+            "backend.llm_client._HTTP_OPENER.open",
             return_value=Response({"content": [{"type": "text", "text": "anthropic"}]}),
         ) as request:
             self.assertEqual(
@@ -1957,13 +1989,13 @@ class WorkerTest(unittest.TestCase):
             self.assertEqual(json.loads(sent.data)["max_tokens"], 2048)
             self.assertEqual(dict(sent.header_items())["X-api-key"], "token")
         with patch(
-            "backend.llm_client.urllib.request.urlopen",
+            "backend.llm_client._HTTP_OPENER.open",
             return_value=Response({"content": [{"type": "tool_use", "name": "EnterPlanMode", "input": {}}]}),
         ):
             with self.assertRaisesRegex(ValueError, "tool call instead of text: EnterPlanMode"):
                 complete({"endpoint": "https://example.test/anthropic", "model": "claude", "format": "claude"}, "hello")
         with patch(
-            "backend.llm_client.urllib.request.urlopen",
+            "backend.llm_client._HTTP_OPENER.open",
             return_value=Response({"choices": [{"message": {"content": "custom"}}]}),
         ) as request:
             self.assertEqual(
@@ -3579,6 +3611,17 @@ class WorkerTest(unittest.TestCase):
         }
         with self.assertRaisesRegex(ValueError, "must be an integer"):
             self.worker.start({**payload, "num_speakers": 1.5})
+
+    def test_live_speech_cap_preserves_zero_and_rejects_negative_values(self):
+        settings = json.loads(json.dumps(DEFAULT_SETTINGS))
+        settings['live_asr']['max_speech_seconds'] = 0
+        saved = save_runtime_settings(self.temp.name, settings)
+        self.assertEqual(saved['live_asr']['max_speech_seconds'], 0)
+        self.assertEqual(runtime_settings(self.temp.name)['live_asr']['max_speech_seconds'], 0)
+        settings['live_asr']['max_speech_seconds'] = -1
+        with self.assertRaisesRegex(ValueError, 'max_speech_seconds'):
+            save_runtime_settings(self.temp.name, settings)
+        self.assertEqual(runtime_settings(self.temp.name)['live_asr']['max_speech_seconds'], 0)
 
     def test_advanced_settings_survive_a_javascript_number_round_trip(self):
         """进阶设置保存必须容忍 JS 丢掉整数浮点的 .0。
@@ -5554,6 +5597,77 @@ class WorkerTest(unittest.TestCase):
         with self.worker.store.connect() as db:
             columns = {row["name"] for row in db.execute("PRAGMA table_info(meetings)")}
         self.assertNotIn("power_saving", columns)
+
+
+class LLMRedirectTests(unittest.TestCase):
+    def test_cross_origin_redirects_never_reach_destination(self):
+        from http.server import BaseHTTPRequestHandler, HTTPServer
+
+        received = []
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_POST(self):
+                self.rfile.read(int(self.headers.get('Content-Length', 0)))
+                self.send_response(302)
+                self.send_header('Location', self.server.destination)
+                self.send_header('Content-Length', '0')
+                self.end_headers()
+
+            def do_GET(self):
+                received.append((self.server.server_port,
+                                 self.headers.get('Authorization'), self.headers.get('x-api-key')))
+                body = b'{"output_text":"ok"}'
+                self.send_response(200)
+                self.send_header('Content-Length', str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *_):
+                pass
+
+        with HTTPServer(('127.0.0.1', 0), Handler) as source, HTTPServer(('127.0.0.1', 0), Handler) as sink:
+            threads = [threading.Thread(target=server.serve_forever, daemon=True)
+                       for server in (source, sink)]
+            for thread in threads:
+                thread.start()
+            try:
+                origin = f'http://127.0.0.1:{source.server_port}'
+                for api_format, key in [('openai', 'fake-key'), ('anthropic', 'fake-key'), ('openai', '')]:
+                    with self.subTest(api_format=api_format, authenticated=bool(key)):
+                        payload = dict(endpoint=origin, model='test', format=api_format, api_key=key)
+                        source.destination = origin + '/result'
+                        self.assertEqual(complete(payload, 'synthetic meeting'), 'ok')
+                        self.assertEqual(received[-1], (source.server_port,
+                            'Bearer fake-key' if key and api_format == 'openai' else None,
+                            key if api_format == 'anthropic' else None))
+                        count = len(received)
+                        for destination in (f'http://127.0.0.1:{sink.server_port}/result',
+                                            f'http://localhost:{sink.server_port}/result'):
+                            source.destination = destination
+                            with self.assertRaisesRegex(ValueError, 'Cross-origin LLM redirects'):
+                                complete(payload, 'synthetic meeting')
+                            self.assertEqual(len(received), count)
+            finally:
+                for server in (source, sink):
+                    server.shutdown()
+                for thread in threads:
+                    thread.join(timeout=5)
+
+    def test_redirects_reject_downgrades_and_normalize_default_ports(self):
+        from urllib.request import Request
+        from .llm_client import _SameOriginRedirectHandler
+
+        handler = _SameOriginRedirectHandler()
+        request = Request('https://EXAMPLE.test/start', headers={'Authorization': 'Bearer fake-key'})
+        allowed = handler.redirect_request(request, None, 302, 'Found', {}, 'https://example.test:443/end')
+        self.assertEqual(allowed.get_header('Authorization'), 'Bearer fake-key')
+        for status in (301, 302, 303, 307, 308):
+            for destination in ('http://example.test/end', 'https://example.test:444/end', 'https://other.test/end'):
+                with self.subTest(status=status, destination=destination):
+                    response = io.BytesIO(b'redirect')
+                    with self.assertRaisesRegex(urllib.error.URLError, 'Cross-origin LLM redirects'):
+                        handler.redirect_request(request, response, status, 'Redirect', {}, destination)
+                    self.assertTrue(response.closed)
 
 
 if __name__ == "__main__":

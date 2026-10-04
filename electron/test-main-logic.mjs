@@ -522,3 +522,32 @@ event.sender.mainFrame = {};
 assert.ok((await ipcHandlers.get('floating-caption.close')(event)).__brevia_error);
 
 console.log('Electron behavior tests passed');
+
+{
+  const { createLineBuffer } = require('./main-logic');
+  const lines = [];
+  const buffer = createLineBuffer(line => lines.push(line), 16);
+  buffer.push('first');
+  buffer.push(' line\n' + 'x'.repeat(100000));
+  buffer.push('tail');
+  buffer.end();
+  buffer.end();
+  assert.ok(lines.every(line => line.length <= 16));
+  assert.equal(lines[0], 'first line');
+  assert.equal(lines.slice(1).join(''), 'x'.repeat(100000) + 'tail');
+}
+
+{
+  const source = await readFile(new URL('../scripts/release-offline.cjs', import.meta.url), 'utf8');
+  for (const [platform, target] of [['darwin', 'mac'], ['win32', 'win']]) {
+    const calls = [];
+    runInNewContext(source, {
+      process: { platform, env: { APPLE_ID: 'test', PATH: '/tools' } },
+      require: () => ({ spawnSync: (command, args, options) => { calls.push({ command, args: Array.from(args), options }); return { status: 0 }; } }),
+    });
+    assert.deepEqual(calls.map(call => call.args[1]), ['pack:backend', `package:${target}`]);
+    assert.equal(calls[0].options.env.APPLE_ID, undefined);
+    if (platform === 'darwin') assert.ok(calls[1].args.includes('--config.mac.notarize=false'));
+  }
+  assert.throws(() => runInNewContext(source, { process: { platform: 'linux' } , require: () => ({}) }), /requires macOS or Windows/);
+}

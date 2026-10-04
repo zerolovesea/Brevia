@@ -21,5 +21,8 @@ const timestampAlignedRefinedModels = new Set([
   'qwen3-asr-0.6b-int8',
   'funasr-nano-int8',
   'parakeet-tdt-0.6b-v3-int8',
+  'qwen3-asr-0.6b-mlx',
+  'funasr-nano-mlx',
+  'parakeet-tdt-0.6b-v3-mlx',
 ]);
 function refinedModelSupportsTimestamps(modelId) { return timestampAlignedRefinedModels.has(modelId); }

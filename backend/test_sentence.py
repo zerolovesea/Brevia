@@ -11,12 +11,11 @@ import numpy as np
 
 from .asr import (
     CUT_OVERLAP_MS,
-    DEFAULT_LIVE_MAX_SPEECH_SECONDS,
     SentenceVAD,
     recover_speech_gaps,
     trim_quiet_speech,
 )
-from .config import SETTINGS
+from .config import DEFAULT_SETTINGS, SETTINGS
 from .worker_common import MULTILINGUAL_MODEL_KINDS, model_supports_language
 from .worker_session import SUBTITLE_PARAGRAPH_GAP_MS
 from .worker import Worker
@@ -24,6 +23,10 @@ from .worker import Worker
 
 class SentenceTest(unittest.TestCase):
     def setUp(self):
+        # Existing ONNX regressions exercise the unchanged Windows catalog.
+        catalog_platform = patch("backend.asr.platform.system", return_value="Windows")
+        catalog_platform.start()
+        self.addCleanup(catalog_platform.stop)
         self.temp = tempfile.TemporaryDirectory()
         self.events = []
         self.worker = Worker(self.temp.name, self.events.append)
@@ -53,6 +56,38 @@ class SentenceTest(unittest.TestCase):
 
     def finals(self):
         return [event["payload"] for event in self.events if event["type"] == "transcript.final"]
+
+    def test_saturated_recognition_keeps_raw_audio_and_drains_files(self):
+        from .worker_session import LiveExecutor
+        self.worker.live_postprocessing.shutdown(wait=True)
+        self.worker.live_postprocessing = LiveExecutor(capacity=2)
+        release = threading.Event()
+        entered = threading.Event()
+
+        def decode(*_):
+            entered.set()
+            release.wait(5)
+            return "完整的一句话。"
+
+        self.asr.decode.side_effect = decode
+        try:
+            for index in range(5):
+                self.worker._submit_sentence("mic", index * 1000, (index + 1) * 1000, np.ones(16000, np.float32))
+            self.assertTrue(entered.wait(1))
+            self.assertTrue(self.worker.live_overloaded)
+            self.assertLessEqual(len(list(self.worker.store.meeting_dir(self.meeting["id"]).rglob("sentence-*.npy"))), 2)
+            self.feed(flush=False)
+            self.feed(start=100, flush=False)
+            warnings = [e for e in self.events if e["type"] == "worker.warning" and e["payload"]["code"] == "asr_unavailable"]
+            self.assertEqual(len(warnings), 1)
+        finally:
+            release.set()
+        self.worker.stop({"meeting_id": self.meeting["id"], "duration_ms": 200})
+        self.assertEqual(self.asr.decode.call_count, 2)
+        directory = self.worker.store.meeting_dir(self.meeting["id"])
+        self.assertEqual(list(directory.rglob("sentence-*.npy")), [])
+        self.assertTrue(self.finals())
+        self.assertTrue(any(p.stat().st_size >= 6400 for p in (directory / "audio").iterdir()))
 
     def test_dual_track_sends_one_aligned_waveform_to_asr(self):
         from backend.audio_mixer import AlignedAudioMixer
@@ -90,7 +125,7 @@ class SentenceTest(unittest.TestCase):
         # 值。曾经的 12.0 硬上限让所有模型都被多切 2–4 倍（见 asr.py 注释）。
         self.assertEqual(
             automatic.max_speech_seconds,
-            min(SETTINGS["vad"]["default"]["max_speech_duration"], DEFAULT_LIVE_MAX_SPEECH_SECONDS),
+            min(SETTINGS["vad"]["default"]["max_speech_duration"], DEFAULT_SETTINGS["live_asr"]["max_speech_seconds"]),
         )
         self.assertEqual(automatic.target_seconds, manual.target_seconds)
         # auto（多语言混说）默认落在 parakeet-tdt-0.6b-v3-int8：清单的 default_for_languages
@@ -207,16 +242,16 @@ class SentenceTest(unittest.TestCase):
             tight = SentenceVAD(self.worker.models, language="zh", max_speech_duration=8.0)
             generous = SentenceVAD(self.worker.models, language="zh", max_speech_duration=999.0)
         # 两者都不得越过实时配置上限。
-        self.assertLessEqual(tight.max_speech_seconds, DEFAULT_LIVE_MAX_SPEECH_SECONDS)
-        self.assertLessEqual(generous.max_speech_seconds, DEFAULT_LIVE_MAX_SPEECH_SECONDS)
+        self.assertLessEqual(tight.max_speech_seconds, DEFAULT_SETTINGS["live_asr"]["max_speech_seconds"])
+        self.assertLessEqual(generous.max_speech_seconds, DEFAULT_SETTINGS["live_asr"]["max_speech_seconds"])
         # 模型容量更紧时以模型容量为准（这是 12.0 硬上限当初破坏的语义）。
         self.assertEqual(tight.max_speech_seconds, 8.0)
-        self.assertEqual(generous.max_speech_seconds, DEFAULT_LIVE_MAX_SPEECH_SECONDS)
+        self.assertEqual(generous.max_speech_seconds, DEFAULT_SETTINGS["live_asr"]["max_speech_seconds"])
         # 即使语言级配置放宽，也不会超过实时配置上限。
         loose = {**SETTINGS, "vad": {**SETTINGS["vad"], "default": {**SETTINGS["vad"]["default"], "max_speech_duration": 60.0}}}
         with patch("backend.asr._vad_config"), patch("backend.asr.SETTINGS", loose):
             wide = SentenceVAD(self.worker.models, language="zh", max_speech_duration=999.0)
-        self.assertEqual(wide.max_speech_seconds, DEFAULT_LIVE_MAX_SPEECH_SECONDS)
+        self.assertEqual(wide.max_speech_seconds, DEFAULT_SETTINGS["live_asr"]["max_speech_seconds"])
 
     def test_no_partial_then_one_final_per_endpoint(self):
         self.feed()

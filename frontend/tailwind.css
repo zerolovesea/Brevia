@@ -536,6 +536,9 @@ html[data-theme="dark"] .notes-find-pop{border-color: #454545; }
   .refine-menu-speakers .flow-select-toggle { white-space: nowrap; }
   .refine-menu-speakers .flow-select-toggle span { font-size: 12px; }
   .refine-menu-speakers .flow-select-options { z-index: 80; min-width: max-content; }
+  [data-refine-model-row] .flow-select-toggle { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; height: auto; min-height: 32px; padding: 6px 10px; line-height: 18px; white-space: normal; overflow-wrap: anywhere; }
+  [data-refine-model-row] .flow-select-options { min-width: 0; }
+  [data-refine-model-row] .flow-select-options button { white-space: normal; overflow-wrap: anywhere; }
   .refine-wrap { position: relative; }
   .refine-wrap .refine-menu { position: absolute; top: calc(100% + 6px); right: 0; }
   .detail-notes-panel { @apply min-h-0 flex-1 overflow-y-auto pt-5 pr-4 text-[15px] leading-7; }

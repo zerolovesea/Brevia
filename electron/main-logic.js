@@ -183,7 +183,39 @@ function requiredModelsFrom(error) {
   return models.length ? models : null;
 }
 
+// Keep partial dependency log lines bounded, including output without newlines.
+function createLineBuffer(onLine, limit = 64 * 1024) {
+  let pending = '';
+  return {
+    push(chunk) {
+      let offset = 0;
+      while (offset < chunk.length) {
+        const end = Math.min(chunk.length, offset + limit - pending.length);
+        const part = chunk.slice(offset, end);
+        const newline = part.indexOf('\n');
+        if (newline >= 0) {
+          onLine(pending + part.slice(0, newline));
+          pending = '';
+          offset += newline + 1;
+        } else {
+          pending += part;
+          offset = end;
+          if (pending.length === limit) {
+            onLine(pending);
+            pending = '';
+          }
+        }
+      }
+    },
+    end() {
+      if (pending) onLine(pending);
+      pending = '';
+    },
+  };
+}
+
 module.exports = {
+  createLineBuffer,
   audioFileURL,
   configureMacUpdater,
   createDisplayMediaHandler,

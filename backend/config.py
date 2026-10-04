@@ -24,6 +24,43 @@ BUNDLED_MODEL_IDS = (
 )
 
 
+# Both VAD engines consume 512-sample windows at 16 kHz. A live cut must
+# leave room for overlap, a complete minimum utterance and window rounding.
+VAD_WINDOW_SECONDS = 512 / 16000
+CUT_OVERLAP_MS = 400
+
+
+def minimum_speech_cap(params, overlap_ms=CUT_OVERLAP_MS):
+    return max(1.0, math.ceil((params["min_speech_duration"] + overlap_ms / 1000
+                             + 2 * VAD_WINDOW_SECONDS) / VAD_WINDOW_SECONDS) * VAD_WINDOW_SECONDS)
+
+
+def live_speech_cap(params, model_limit, overlap_ms=CUT_OVERLAP_MS):
+    configured = SETTINGS["live_asr"]["max_speech_seconds"] or DEFAULT_SETTINGS["live_asr"]["max_speech_seconds"]
+    maximum = min(params["max_speech_duration"], model_limit, configured)
+    if maximum < minimum_speech_cap(params, overlap_ms):
+        raise ValueError("Speech cap must accommodate minimum speech duration and overlap")
+    return maximum
+
+
+def validate_speech_settings(value, *, migrate=False):
+    """Validate related settings together; migrate only unsafe legacy caps."""
+    for language, params in value["vad"].items():
+        minimum = minimum_speech_cap(params)
+        if params["max_speech_duration"] < minimum:
+            if not migrate:
+                raise ValueError(f"vad.{language}.max_speech_duration must be >= {minimum:g}")
+            params["max_speech_duration"] = max(minimum, DEFAULT_SETTINGS["vad"][language]["max_speech_duration"])
+            logging.getLogger(__name__).warning("Migrated unsafe VAD cap for %s", language)
+    minimum = max(minimum_speech_cap(params) for params in value["vad"].values())
+    cap = value["live_asr"]["max_speech_seconds"] or DEFAULT_SETTINGS["live_asr"]["max_speech_seconds"]
+    if cap < minimum:
+        if not migrate:
+            raise ValueError(f"live_asr.max_speech_seconds must be 0 (default) or >= {minimum:g}")
+        value["live_asr"]["max_speech_seconds"] = max(minimum, DEFAULT_SETTINGS["live_asr"]["max_speech_seconds"])
+        logging.getLogger(__name__).warning("Migrated unsafe live speech cap")
+
+
 def validate_num_speakers(value):
     """接受自动模式 ``-1`` 或受资源上限保护的固定人数。"""
     if isinstance(value, bool):
@@ -77,6 +114,7 @@ def runtime_settings(root):
             _deep_update(value, override)
             _prune_to_template(value, DEFAULT_SETTINGS)
             _validate(value, DEFAULT_SETTINGS)
+            validate_speech_settings(value, migrate=True)
         except (OSError, ValueError, TypeError, UnicodeError) as error:
             backup = path.with_name(f"{path.name}.corrupt-{uuid4().hex}")
             try:
@@ -96,6 +134,7 @@ def save_runtime_settings(root, value):
     """保存用户本地覆盖配置到 advanced-settings.json。"""
     value = _prune_to_template(json.loads(json.dumps(value)), DEFAULT_SETTINGS)
     _validate(value, DEFAULT_SETTINGS)
+    validate_speech_settings(value)
     path = Path(root) / "advanced-settings.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = None
@@ -196,6 +235,7 @@ def _validate(value, template):
                     "deleted_retention_days",
                     "diarization_overlap_ms",
                     "mix_max_delay_ms",
+                    "max_speech_seconds",
                     "min_auto_speaker_duration_ms",
                     "auto_cluster_score_tolerance",
                 }

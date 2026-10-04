@@ -185,6 +185,8 @@ class LlamaSidecarMixin:
         if os.environ.get("BREVIA_LLAMA_HELPER", "").lower() in {"module", "dev", "python"}:
             return [sys.executable, "-m", "backend.llama_sidecar"]
         if getattr(sys, "frozen", False):
+            if sys.platform == "win32":
+                return [sys.executable, "--llama-sidecar"]
             bundle_dir = Path(sys._MEIPASS)
             runtime_dir = bundle_dir.parent.parent / "brevia-llama-helper"
         else:

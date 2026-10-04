@@ -7,10 +7,13 @@ import numpy as np
 
 
 class AlignedAudioMixer:
-    def __init__(self, sample_rate=16000, max_delay_ms=500):
+    def __init__(self, sample_rate=16000, max_delay_ms=1500):
         self.rate = sample_rate
         self.limit = round(max_delay_ms * sample_rate / 1000)
-        self.window = sample_rate * 2
+        self.lookahead = min(self.limit, sample_rate // 2)
+        # 1.5 s batches + at most 0.5 s lookahead preserve the previous 2 s
+        # startup budget while supporting either sign of capture offset.
+        self.window = sample_rate * 3 // 2
         self.buffers = {track: np.empty(0, np.float32) for track in ("mic", "system")}
         self.starts = {track: 0 for track in self.buffers}
         self.ends = {track: None for track in self.buffers}
@@ -19,6 +22,7 @@ class AlignedAudioMixer:
         self.emitted = False
         self.delay = 0
         self.echo = False
+        self.paths = []
 
     def accept(self, track, samples, start_ms):
         samples = np.asarray(samples, dtype=np.float32)
@@ -57,22 +61,53 @@ class AlignedAudioMixer:
             result[lo:hi] = self.buffers[track][offset + lo:offset + hi]
         return result
 
-    def _estimate(self, mic, system):
-        power = float(np.linalg.norm(mic) * np.linalg.norm(system))
-        if power < len(mic) * 1e-6:
-            self.echo = False
-            return
-        size = 1 << (2 * len(mic) - 1).bit_length()
-        correlation = np.fft.irfft(np.fft.rfft(mic, size) * np.fft.rfft(system, size).conj(), size)
-        limit = min(self.limit, len(mic) // 3)
-        lags = np.arange(-limit, limit + 1)
-        scores = np.abs(correlation[lags % size]) / power
-        best = int(np.argmax(scores))
-        self.echo = bool(scores[best] >= 0.35)
-        if self.echo:
-            self.delay = int(lags[best])
+    def _cancel_echo(self, mic, start):
+        """Subtract correlated acoustic paths without moving either dry track.
 
-    def _drain(self, final=False, include_tail=True):
+        Reference history handles acoustic delay; bounded lookahead handles
+        system capture arriving behind the microphone. At most three
+        significant paths are removed; uncorrelated near-end speech remains.
+        """
+        count = len(mic)
+        # A tiny final buffer has too little evidence for a wide delay search.
+        # Use the last verified paths instead of fitting random correlations.
+        if count < self.rate // 10:
+            residual = mic.copy()
+            for delay, gain in self.paths:
+                residual -= gain * self._read("system", start - delay, count)
+            return residual
+        self.paths = []
+        if float(np.var(mic)) < 1e-7:
+            self.echo = False
+            return mic
+        reference = self._read("system", start - self.limit, count + self.limit + self.lookahead)
+        sums = np.concatenate(([0.0], np.cumsum(reference.astype(np.float64) ** 2)))
+        energies = sums[count:] - sums[:-count]
+        size = 1 << (len(reference) + count - 1).bit_length()
+        spectrum = np.fft.rfft(reference, size)
+        residual = mic.copy()
+        self.echo = False
+        for path in range(3):
+            power = float(np.dot(residual, residual))
+            if power < count * 1e-6:
+                break
+            correlation = np.fft.irfft(spectrum * np.fft.rfft(residual, size).conj(), size)[:len(energies)]
+            scores = np.abs(correlation) / np.sqrt(np.maximum(energies * power, 1e-20))
+            scores[energies < count * 1e-6] = 0
+            best = int(np.argmax(scores))
+            if scores[best] < 0.35:
+                break
+            gain = float(correlation[best] / energies[best])
+            if abs(gain) > 4:
+                break
+            if path == 0:
+                self.delay = self.limit - best
+                self.echo = True
+            self.paths.append((self.limit - best, gain))
+            residual -= gain * reference[best:best + count]
+        return residual
+
+    def _drain(self, final=False):
         result = []
         if self.cursor is None:
             return result
@@ -84,32 +119,18 @@ class AlignedAudioMixer:
         # 突发 IPC 批次也要等对轨；仅实际停流或超过采集端 15 秒队列上限才补零。
         if final or (stalled and newest - available > self.window) or newest - available > self.rate * 15:
             available = newest
-        if final and include_tail:
-            available = max(
-                (self.ends["mic"] or newest) + max(0, -self.delay),
-                (self.ends["system"] or newest) + max(0, self.delay),
-            )
+        if not final:
+            available -= self.lookahead
         while available - self.cursor >= self.window or (final and available > self.cursor):
             count = min(self.window, available - self.cursor)
             mic = self._read("mic", self.cursor, count)
             system = self._read("system", self.cursor, count)
-            if count >= self.rate:
-                self._estimate(mic, system)
-            if final and include_tail:
-                available = max(
-                    (self.ends["mic"] or newest) + max(0, -self.delay),
-                    (self.ends["system"] or newest) + max(0, self.delay),
-                )
-            # 只延迟较早的一轨，不提前切掉本机发言；历史参考保留一个最大延迟。
-            mic = self._read("mic", self.cursor - max(0, -self.delay), count)
-            system = self._read("system", self.cursor - max(0, self.delay), count)
-            if self.echo:
-                energy = float(np.dot(system, system))
-                if energy > count * 1e-6:
-                    gain = float(np.dot(mic, system)) / energy
-                    # ponytail: 对齐后的单抽头回声削减；复杂房间混响需 WebRTC AEC。
-                    # 减掉系统参考的投影，保留不相关的本机发言，避免反相人声抵消。
-                    mic = mic - np.clip(gain, -4, 4) * system
+            # Follow changing room paths at 500 ms resolution, but preserve
+            # the original playback clock. Delay updates never repeat/skip PCM.
+            block = max(1, self.rate // 2)
+            for offset in range(0, count, block):
+                mic[offset:offset + block] = self._cancel_echo(
+                    mic[offset:offset + block], self.cursor + offset)
             mixed = mic + system
             peak = float(np.abs(mixed).max()) if count else 0
             if peak > 1:
@@ -118,16 +139,17 @@ class AlignedAudioMixer:
             self.emitted = True
             self.cursor += count
             for track in self.buffers:
-                remove = max(0, min(len(self.buffers[track]), self.cursor - self.limit - self.starts[track]))
+                history = self.limit if track == "system" else 0
+                remove = max(0, min(len(self.buffers[track]), self.cursor - history - self.starts[track]))
                 self.buffers[track] = self.buffers[track][remove:]
                 self.starts[track] += remove
         return result
 
-    def flush(self, include_tail=True):
-        return self._drain(final=True, include_tail=include_tail)
+    def flush(self):
+        return self._drain(final=True)
 
 
-def mix_wav_files(mic_path, system_path, destination, max_delay_ms=500, progress=None):
+def mix_wav_files(mic_path, system_path, destination, max_delay_ms=1500, progress=None):
     """流式生成对齐后的派生 WAV，原始音轨不改写。"""
     with wave.open(str(mic_path)) as mic, wave.open(str(system_path)) as system:
         if mic.getparams()[:3] != system.getparams()[:3] or mic.getnchannels() != 1 or mic.getsampwidth() != 2:

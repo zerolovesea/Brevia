@@ -4,6 +4,7 @@
 import io
 import json
 import logging
+import os
 import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -65,7 +66,18 @@ def install_global_error_handlers(worker):
     sys.excepthook = process_error
 
 
-def main():
+def protocol_output():
+    # Reserve the protocol pipe once, process-wide. redirect_stdout around MLX
+    # would also capture JSON emitted by other threads; dup2 catches native logs.
+    protocol = os.fdopen(os.dup(sys.stdout.fileno()), "w", encoding="utf-8", buffering=1)
+    sys.stdout.flush()
+    os.dup2(sys.stderr.fileno(), sys.stdout.fileno())
+    sys.stdout = sys.stderr
+
+    return protocol
+
+
+def main(protocol=None):
     """运行 stdin/stdout JSONL 循环；单个命令失败不会停止 worker。"""
     # Windows 上首次 import 原生包（numpy/sherpa_onnx 的 .pyd）会被实时杀软
     # 逐个扫描，可能阻塞数十秒。若让它们在「准备精修」或第一次识别时才首次导入，
@@ -89,7 +101,7 @@ def main():
         stream=sys.stderr,
         format="[worker] %(levelname)s %(name)s: %(message)s",
     )
-    worker = Worker()
+    worker = Worker(output=lambda value: print(json.dumps(value), file=protocol, flush=True)) if protocol else Worker()
     install_global_error_handlers(worker)
 
     def respond(command):
@@ -153,4 +165,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main(protocol_output())
