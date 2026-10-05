@@ -66,13 +66,13 @@ La IA integrada ejecuta un modelo incluido en tu propio equipo, o puedes conecta
 
 ![Meeting notes](assets/tour/en/多语言支持与会议纪要.png)
 
-### Registro de voz e identificación de hablantes entre reuniones
+### Identificación de hablantes después de la reunión
 
-Registra una muestra corta de voz por compañero y Brevia lo reconocerá por su nombre en cada reunión futura — no como "Hablante 1, Hablante 2", sino como las personas que realmente son. El reconocimiento funciona entre grabaciones, así que buscar "¿qué dijo Alicia?" en las reuniones de la semana pasada es un clic.
+Graba una breve muestra de voz de cada participante. Una vez terminada la reunión, Brevia distingue a los hablantes durante el refinamiento y los compara con los perfiles de voz guardados para añadir sus nombres a la transcripción. Los subtítulos en directo no distinguen a los hablantes. Los perfiles de voz se pueden reutilizar en otras reuniones.
 
 Con segmentación Pyannote más modelos de embeddings de voz, todo ejecutándose en el dispositivo.
 
-![Registro de voz](assets/tour/en/%E6%B3%A8%E5%86%8C%E5%A3%B0%E7%BA%B9%E8%AF%86%E5%88%AB.png)
+![Identificación de hablantes después de la reunión](assets/tour/en/%E6%B3%A8%E5%86%8C%E5%A3%B0%E7%BA%B9%E8%AF%86%E5%88%AB.png)
 
 ### Biblioteca local de modelos curada
 

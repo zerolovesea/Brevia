@@ -79,7 +79,12 @@ app.whenReady().then(async () => {
           await win.webContents.executeJavaScript("document.querySelector('.summary-preview').scrollTop = 0");
         }
         if (name === 'transcription') assert.equal(result.segments, 6);
-        if (name === 'voiceprint') assert.equal(result.segments, 4);
+        if (name === 'voiceprint') {
+          assert.equal(result.segments, 4);
+          assert.equal(await win.webContents.executeJavaScript("!!document.querySelector('#detail-view') && !document.querySelector('#live-view')"), true);
+          assert.equal(await win.webContents.executeJavaScript("document.querySelectorAll('.speaker-name:not(.provisional)').length"), 4);
+        }
+        if (['transcription', 'caption-bar'].includes(name)) assert.equal(await win.webContents.executeJavaScript("document.querySelectorAll('.segment-meta b, .segment-speaker').length"), 0);
         if (record) {
           const files = { transcription: '实时会议和翻译.png', summary: '多语言支持与会议纪要.png', voiceprint: '注册声纹识别.png', 'model-library': '模型库.png' };
           if (name === 'model-library') await win.webContents.executeJavaScript("document.querySelector('.modal-body').scrollTop = 0");
@@ -89,7 +94,7 @@ app.whenReady().then(async () => {
       }
       await load('ai-assist', locale);
       assert.equal(await win.webContents.executeJavaScript("document.querySelectorAll('.live-control-bar').length"), 1);
-      assert.equal(await win.webContents.executeJavaScript("document.querySelectorAll('.live-header .end-button').length"), 0);
+      assert.equal(await win.webContents.executeJavaScript("document.querySelectorAll('.live-header .end-button, .segment-speaker').length"), 0);
       if (record) {
         const frames = join(temp, locale);
         mkdirSync(frames);
@@ -105,6 +110,9 @@ app.whenReady().then(async () => {
           '-loop', '0', join(root, 'docs/assets/demo', `ai-assist-${locale}.gif`)], { encoding: 'utf8' });
         assert.equal(encoded.status, 0, encoded.stderr);
       }
+      if (!record) await wait(1800);
+      assert.ok(await win.webContents.executeJavaScript("document.querySelectorAll('.segment').length > 0"));
+      assert.equal(await win.webContents.executeJavaScript("document.querySelectorAll('.segment-speaker').length"), 0);
       console.log(`PASS ${locale}/ai-assist`);
     }
     win.webContents.debugger.attach('1.3');

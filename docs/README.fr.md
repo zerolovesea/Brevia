@@ -66,13 +66,13 @@ L'IA integree execute un modele fourni directement sur votre machine, ou vous po
 
 ![Meeting notes](assets/tour/en/多语言支持与会议纪要.png)
 
-### Enregistrement d'empreinte vocale et identification des locuteurs entre reunions
+### Identification des intervenants après la réunion
 
-Enregistrez un court echantillon vocal par coequipier et Brevia les reconnaitra par leur nom dans toutes les reunions futures — pas comme « Locuteur 1, Locuteur 2 », mais comme les personnes qu'ils sont. La reconnaissance fonctionne entre enregistrements, donc parcourir les reunions de la semaine passee pour trouver « qu'a dit Alice ? » se fait en un clic.
+Enregistrez un court échantillon vocal pour chaque membre. Après la réunion, Brevia distingue les intervenants lors de la révision de la transcription et les associe aux profils vocaux enregistrés pour afficher leurs noms. Les sous-titres en direct ne distinguent pas les intervenants. Les profils vocaux sont réutilisables entre les réunions.
 
 Propulse par la segmentation Pyannote plus les modeles d'embeddings de locuteur, le tout s'executant sur l'appareil.
 
-![Enregistrement d'empreinte vocale](assets/tour/en/%E6%B3%A8%E5%86%8C%E5%A3%B0%E7%BA%B9%E8%AF%86%E5%88%AB.png)
+![Identification des intervenants après la réunion](assets/tour/en/%E6%B3%A8%E5%86%8C%E5%A3%B0%E7%BA%B9%E8%AF%86%E5%88%AB.png)
 
 ### Une bibliotheque locale de modeles selectionnee
 

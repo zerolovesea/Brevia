@@ -361,7 +361,6 @@ DemoScenariosV3.prototype.createSegmentHTML = function(segment, withTranslation 
     <div class="segment" data-translation="${segment.translation || ''}" style="padding: 16px 0;">
       <div class="segment-meta" style="gap: 4px;">
         <time>${segment.time}</time>
-        <b>${segment.speaker}</b>
       </div>
       <div class="segment-copy">
         <p style="font-size: 18px; line-height: 1.8; margin: 0;">${segment.text}</p>
@@ -386,7 +385,7 @@ DemoScenariosV3.prototype.setupSummaryUI = function() {
   return this.setupHomeUI();
 };
 
-DemoScenariosV3.prototype.showSummaryDetail = function() {
+DemoScenariosV3.prototype.setupSummaryDetailUI = function() {
   const html = String.raw`
     <main class="app-shell">
       ${this.sidebarHtml()}
@@ -504,79 +503,28 @@ DemoScenariosV3.prototype.showSummaryDetail = function() {
       </section>
     </main>
   `;
-  return this._fadeSwapContent(html);
+  return html;
+};
+
+DemoScenariosV3.prototype.showSummaryDetail = function() {
+  return this._fadeSwapContent(this.setupSummaryDetailUI());
 };
 
 // Voiceprint demo UI setup
 DemoScenariosV3.prototype.setupVoiceprintUI = function() {
-  // 声纹演示：切换到字幕模式（点击「展开字幕」一次后）——实时字幕在左（宽），笔记在右（窄）。
-  const notesToolbar = this.notesToolbarHtml();
-  const html = String.raw`
-    <main class="app-shell is-live-meeting">
-      ${this.sidebarHtml()}
-
-      <section class="workspace">
-        <header class="window-bar">
-          <div class="traffic"><i></i><i></i><i></i></div>
-          <span>正在录制</span>
-          <div class="window-actions">
-            <button class="icon-button">文</button>
-            <button class="icon-button">◐</button>
-          </div>
-        </header>
-
-        <section class="view active" id="live-view">
-          <header class="live-header">
-            <div class="live-title">
-              <strong>团队周会</strong>
-              <div class="live-status">
-                <span class="recording"><i></i> 正在录制</span>
-                <time data-demo-id="timer">00:15:23</time>
-                <span class="save-state"><svg class="check-icon" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3 8.5 3.2 3.2L13 4.5" /></svg> <span>已保存</span></span>
-              </div>
-            </div>
-          </header>
-
-          <div class="live-layout is-caption-mode">
-            <section class="live-notes">
-              <header class="live-section-head">
-                <p class="eyebrow">我的笔记</p>
-                <button class="ai-assist-toggle is-enabled" type="button"><span class="ai-assist-toggle-star">✦</span> <span>AI 笔记</span></button>
-                <button class="live-mode-toggle" data-toggle-live-mode="caption" type="button" aria-label="展开字幕" title="展开字幕"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 3 5 5-5 5"/></svg></button>
-              </header>
-              <div data-live-notes-root>
-                <div class="ai-assist-empty">
-                  <div class="ai-assist-empty-inner">
-                    <strong>开始记录吧</strong>
-                    <p>AI 会自动发现关键结论、待办和重要信息。</p>
-                    <div class="ai-assist-empty-tags">
-                      <span>记录重点</span>
-                      <span>自动整理</span>
-                      <span>关联工作区</span>
-                    </div>
-                  </div>
-                </div>
-                ${notesToolbar}
-                <div class="notes-editor" data-demo-id="notes-editor" contenteditable="false" aria-label="我的笔记" spellcheck="false"></div>
-                <textarea class="notes-input" hidden></textarea>
-              </div>
-            </section>
-
-            <section class="live-captions">
-              <header class="live-section-head">
-                <p class="eyebrow">实时字幕</p>
-                <button class="live-mode-toggle" data-toggle-live-mode="notes" type="button" aria-label="返回笔记" title="返回笔记"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m10 3-5 5 5 5"/></svg></button>
-              </header>
-              <div class="transcript-scroll" id="transcript-scroll"></div>
-              <button class="back-to-latest" type="button" hidden><span>↓</span> <span>回到最新</span></button>
-            </section>
-          </div>
-          ${this.liveControlsHtml()}
-        </section>
-      </section>
-    </main>
-  `;
-  return html;
+  const template = document.createElement('template');
+  template.innerHTML = this.setupSummaryDetailUI();
+  const root = template.content;
+  root.querySelector('[data-detail-panel="notes"]').hidden = true;
+  root.querySelector('[data-detail-panel="transcript"]').hidden = false;
+  root.querySelectorAll('[data-detail-tab]').forEach(button => {
+    button.classList.toggle('active', button.dataset.detailTab === 'transcript');
+  });
+  const transcript = root.querySelector('.transcript-body');
+  transcript.id = 'transcript-scroll';
+  transcript.innerHTML = '';
+  root.querySelector('.tabbar-extra').innerHTML = '<button class="text-button" data-demo-id="refine-speakers">开始精修</button>';
+  return template.innerHTML;
 };
 
 DemoScenariosV3.prototype.generateVoiceprintSegmentSteps = function(segments) {
@@ -874,7 +822,7 @@ DemoScenariosV3.prototype.setupCaptionUI = function () {
   // Pre-populate the transcript so the live view reads as an active meeting.
   const transcript = this.getCaptionTranscript().map((segment) => String.raw`
     <div class="segment" style="padding: 16px 0;">
-      <div class="segment-meta" style="gap: 4px;"><time>${segment.time}</time><b>${segment.speaker}</b></div>
+      <div class="segment-meta" style="gap: 4px;"><time>${segment.time}</time></div>
       <div class="segment-copy"><p style="font-size: 18px; line-height: 1.8; margin: 0;">${segment.text}</p></div>
     </div>
   `).join('');

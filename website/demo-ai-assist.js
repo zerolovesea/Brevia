@@ -195,7 +195,7 @@
       : '';
     return String.raw`
     <article class="segment">
-      <div class="segment-meta"><time>${seg.time}</time><button class="segment-speaker">${seg.speaker}</button>${signals}</div>
+      <div class="segment-meta"><time>${seg.time}</time>${signals}</div>
       <div class="segment-copy"><p>${seg.text}</p></div>
     </article>`;
   }

@@ -66,13 +66,13 @@ Built-in AI runs a bundled model on your own machine, or plug in Claude, OpenAI,
 
 ![Meeting notes](docs/assets/tour/en/多语言支持与会议纪要.png)
 
-### Voiceprint enrollment and cross-meeting speaker identification
+### Post-meeting speaker identification
 
-Enroll a short voice sample per teammate and Brevia will recognize them by name in every future meeting — not as "Speaker 1, Speaker 2," but as the people they are. Recognition works across recordings, so browsing back through last week's meetings to find "what did Alice say?" is a single click.
+Enroll a short voice sample per teammate. After a meeting ends, Brevia separates speakers during post-meeting refinement and matches them to saved voiceprints to label the transcript with their names. Live captions do not distinguish speakers. Voiceprint profiles can be reused across meetings.
 
 Powered by Pyannote segmentation plus speaker-embedding models, all running on-device.
 
-![Voiceprint enrollment](docs/assets/tour/en/%E6%B3%A8%E5%86%8C%E5%A3%B0%E7%BA%B9%E8%AF%86%E5%88%AB.png)
+![Post-meeting speaker identification](docs/assets/tour/en/%E6%B3%A8%E5%86%8C%E5%A3%B0%E7%BA%B9%E8%AF%86%E5%88%AB.png)
 
 ### A curated local model library
 

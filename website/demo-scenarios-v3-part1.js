@@ -385,10 +385,20 @@ class DemoScenariosV3 {
       steps: [
         { action: 'wait', duration: 800 },
 
-        // 显示声纹识别的转录内容
+        { action: 'moveCursor', target: '[data-demo-id="refine-speakers"]', duration: 800 },
+        { action: 'click', duration: 300 },
+        { action: 'setState', handler: () => {
+          this.engine.viewport.querySelector('[data-demo-id="refine-speakers"]').textContent = document.documentElement.lang.startsWith('zh') ? '正在精修…' : 'Refining…';
+        } },
+        // 会后精修产出带说话人的转录，随后匹配已保存的声纹。
         ...this.generateVoiceprintSegmentSteps(segments),
 
-        { action: 'wait', duration: 2000 }
+        { action: 'setState', handler: () => {
+          const status = this.engine.viewport.querySelector('[data-demo-id="refine-speakers"]');
+          status.textContent = document.documentElement.lang.startsWith('zh') ? '✓ 已精修' : '✓ Refined';
+          status.className = 'refine-state is-done';
+        } },
+        { action: 'wait', duration: 2400 }
       ]
     };
   }

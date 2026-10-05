@@ -6,6 +6,7 @@
 
 (function () {
   const translations = {
+    '开始精修': 'Refine transcript',
     '公开工作区': 'Public workspace',
     '新建工作区': 'New workspace',
     '录制来源': 'Audio source',

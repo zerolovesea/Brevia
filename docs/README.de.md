@@ -66,13 +66,13 @@ Die integrierte KI fuehrt ein mitgeliefertes Modell auf dem eigenen Rechner aus.
 
 ![Meeting notes](assets/tour/en/多语言支持与会议纪要.png)
 
-### Stimmprofil-Registrierung und meetinguebergreifende Sprechererkennung
+### Sprechererkennung bei der Nachbearbeitung
 
-Nimm pro Teammitglied eine kurze Sprachprobe auf, und Brevia erkennt sie in allen kuenftigen Meetings namentlich — nicht als „Sprecher 1, Sprecher 2", sondern als die Personen, die sie sind. Die Erkennung funktioniert aufnahmeuebergreifend, sodass die Frage „was hat Alice gesagt?" in den Meetings der letzten Woche mit einem Klick beantwortet ist.
+Nimm pro Teammitglied eine kurze Sprachprobe auf. Nach dem Meeting trennt Brevia bei der Nachbearbeitung die Sprecher und gleicht sie mit gespeicherten Stimmprofilen ab, um das Transkript mit Namen zu versehen. Live-Untertitel unterscheiden keine Sprecher. Stimmprofile lassen sich in weiteren Meetings wiederverwenden.
 
 Angetrieben von Pyannote-Segmentierung plus Sprecher-Embedding-Modellen, alles auf dem Geraet.
 
-![Stimmprofil-Registrierung](assets/tour/en/%E6%B3%A8%E5%86%8C%E5%A3%B0%E7%BA%B9%E8%AF%86%E5%88%AB.png)
+![Sprechererkennung bei der Nachbearbeitung](assets/tour/en/%E6%B3%A8%E5%86%8C%E5%A3%B0%E7%BA%B9%E8%AF%86%E5%88%AB.png)
 
 ### Eine kuratierte lokale Modellbibliothek
 
