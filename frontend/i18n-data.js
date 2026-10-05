@@ -8964,9 +8964,129 @@ const exportHubCopy = {
 
 const whatsNewLog = [
   {
+    "version": "1.2.3",
+    "date": "2026-10-05",
+    "current": true,
+    "previousVersion": "1.2.2",
+    "contributors": [],
+    "zh": {
+      "summary": "本次更新带来 Apple 芯片 Mac 的 MLX 本地识别、统一的 AI 功能设置，并改善双轨录音与转写稳定性。",
+      "what": [
+        {
+          "text": "Apple 芯片 Mac 使用 mlx-audio/MLX 运行 FunASR Nano、Qwen3-ASR、Parakeet 和 Silero VAD；FunASR 与 Qwen 支持识别过程中的草稿字幕。",
+          "commit": "8049d36b260e231e67e529688b04027a43553917"
+        },
+        {
+          "text": "设置页新增统一的 AI 功能面板，集中配置实时 AI 笔记与会后总结；首次设置可直接下载所选本地总结模型。",
+          "commit": "4e4015f7cbf7e212446bfd6b7ae08a546f58c857"
+        }
+      ],
+      "improved": [
+        {
+          "text": "麦克风与系统音频按时间对齐后统一混音，实时字幕与会后精修复用处理逻辑，减少回声导致的重复转写。",
+          "commit": "148177e01a9a199af48aec784f864fd97bdd89cf"
+        },
+        {
+          "text": "统一模型介绍与多语言文案，简化模型库大小信息和存储设置，改善模型下载进度、失败重试与设置页交互。",
+          "commit": "4e4015f7cbf7e212446bfd6b7ae08a546f58c857"
+        }
+      ],
+      "fixed": [
+        {
+          "text": "修复慢 MLX 推理阻塞后续录音写入的问题；实时识别积压时保留原始录音，并正确排空暂停、模型切换和结束时的任务。",
+          "commit": "4e4015f7cbf7e212446bfd6b7ae08a546f58c857"
+        },
+        {
+          "text": "修复长时间重叠发言的说话人信息被识别窗口覆盖的问题；保留重叠标记，同时避免对同一段混音重复转写。",
+          "commit": "4e4015f7cbf7e212446bfd6b7ae08a546f58c857"
+        },
+        {
+          "text": "改善双轨缓冲、单轨暂时无数据和安静麦克风输入的处理，减少音频不同步与轻声遗漏。",
+          "commit": "8049d36b260e231e67e529688b04027a43553917"
+        },
+        {
+          "text": "校验连续语音切段上限并修复不安全的旧配置，避免过短切段造成识别异常；加强 Windows 冻结及安装包运行时检查。",
+          "commit": "8049d36b260e231e67e529688b04027a43553917"
+        }
+      ],
+      "security": [
+        {
+          "text": "阻止外部 AI 服务请求跨来源重定向，避免 API 凭据或会议文本被转发到配置之外的服务。",
+          "commit": "8049d36b260e231e67e529688b04027a43553917"
+        }
+      ],
+      "changes": [
+        {
+          "text": "Mac 升级后需下载对应的 MLX 识别模型；Windows 继续使用 Sherpa ONNX。已有录音与历史逐字稿仍保留。",
+          "commit": "8049d36b260e231e67e529688b04027a43553917"
+        },
+        {
+          "text": "重新精修会生成新的当前稿；旧稿中的人工修改不会自动迁移到新稿。",
+          "commit": "148177e01a9a199af48aec784f864fd97bdd89cf"
+        }
+      ]
+    },
+    "en": {
+      "summary": "This release brings local MLX recognition to Apple Silicon Macs, unified AI settings, and more reliable dual-track recording and transcription.",
+      "what": [
+        {
+          "text": "Apple Silicon Macs now run FunASR Nano, Qwen3-ASR, Parakeet and Silero VAD through mlx-audio/MLX; FunASR and Qwen show draft captions while decoding.",
+          "commit": "8049d36b260e231e67e529688b04027a43553917"
+        },
+        {
+          "text": "A unified AI features panel brings live AI notes and meeting summaries together; first-run setup can download the selected local summary model directly.",
+          "commit": "4e4015f7cbf7e212446bfd6b7ae08a546f58c857"
+        }
+      ],
+      "improved": [
+        {
+          "text": "Microphone and system audio are aligned and mixed through a shared pipeline for live captions and refinement, reducing duplicate transcription from echo.",
+          "commit": "148177e01a9a199af48aec784f864fd97bdd89cf"
+        },
+        {
+          "text": "Unified model descriptions and localized copy, simplified model-size and storage displays, and improved download progress, retry handling and settings interactions.",
+          "commit": "4e4015f7cbf7e212446bfd6b7ae08a546f58c857"
+        }
+      ],
+      "fixed": [
+        {
+          "text": "Fixed slow MLX inference blocking subsequent audio writes; raw recording continues when live recognition falls behind, with ordered draining on pause, model changes and stop.",
+          "commit": "4e4015f7cbf7e212446bfd6b7ae08a546f58c857"
+        },
+        {
+          "text": "Fixed sustained speaker overlap being erased by transcription windows; overlap metadata is preserved without transcribing the same mixed interval twice.",
+          "commit": "4e4015f7cbf7e212446bfd6b7ae08a546f58c857"
+        },
+        {
+          "text": "Improved dual-track buffering, temporary gaps in either input and quiet microphone handling to reduce misalignment and missed quiet speech.",
+          "commit": "8049d36b260e231e67e529688b04027a43553917"
+        },
+        {
+          "text": "Validated speech-segment limits and repaired unsafe saved settings to prevent invalid short cuts, with stronger frozen and packaged Windows runtime checks.",
+          "commit": "8049d36b260e231e67e529688b04027a43553917"
+        }
+      ],
+      "security": [
+        {
+          "text": "Blocked cross-origin redirects for external AI requests to keep API credentials and meeting text within the configured service.",
+          "commit": "8049d36b260e231e67e529688b04027a43553917"
+        }
+      ],
+      "changes": [
+        {
+          "text": "After upgrading a Mac, download the corresponding MLX recognition model; Windows continues to use Sherpa ONNX. Existing recordings and historical transcripts remain available.",
+          "commit": "8049d36b260e231e67e529688b04027a43553917"
+        },
+        {
+          "text": "Running refinement again creates a new current transcript; manual edits to the previous transcript are not automatically carried over.",
+          "commit": "148177e01a9a199af48aec784f864fd97bdd89cf"
+        }
+      ]
+    }
+  },
+  {
     "version": "1.2.2",
     "date": "2026-10-02",
-    "current": true,
     "previousVersion": "1.2.1",
     "contributors": [
       {
