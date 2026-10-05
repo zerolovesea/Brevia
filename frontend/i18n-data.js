@@ -9011,6 +9011,10 @@ const whatsNewLog = [
         {
           "text": "校验连续语音切段上限并修复不安全的旧配置，避免过短切段造成识别异常；加强 Windows 冻结及安装包运行时检查。",
           "commit": "8049d36b260e231e67e529688b04027a43553917"
+        },
+        {
+          "text": "修复 macOS 运行时去重破坏 Python.framework 签名结构的问题，保留 framework 内的可执行文件与元数据，并增加实际签名验证。",
+          "commit": "9061a5a8f41706f5e0bc285de751409da883b10a"
         }
       ],
       "security": [
@@ -9072,6 +9076,10 @@ const whatsNewLog = [
         {
           "text": "Validated speech-segment limits and repaired unsafe saved settings to prevent invalid short cuts, with stronger frozen and packaged Windows runtime checks.",
           "commit": "8049d36b260e231e67e529688b04027a43553917"
+        },
+        {
+          "text": "Fixed runtime deduplication breaking Python.framework code signing on macOS by preserving framework executables and metadata, with an actual signing regression check.",
+          "commit": "9061a5a8f41706f5e0bc285de751409da883b10a"
         }
       ],
       "security": [
