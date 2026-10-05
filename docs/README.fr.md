@@ -64,6 +64,8 @@ Brevia transcrit la parole dans plus de 30 langues — anglais, chinois, japonai
 
 L'IA integree execute un modele fourni directement sur votre machine, ou vous pouvez brancher Claude, OpenAI, OpenRouter ou tout service compatible avec le format chat OpenAI ou Anthropic. Seul le texte est envoye, jamais l'audio.
 
+![Meeting notes](assets/tour/en/多语言支持与会议纪要.png)
+
 ### Enregistrement d'empreinte vocale et identification des locuteurs entre reunions
 
 Enregistrez un court echantillon vocal par coequipier et Brevia les reconnaitra par leur nom dans toutes les reunions futures — pas comme « Locuteur 1, Locuteur 2 », mais comme les personnes qu'ils sont. La reconnaissance fonctionne entre enregistrements, donc parcourir les reunions de la semaine passee pour trouver « qu'a dit Alice ? » se fait en un clic.

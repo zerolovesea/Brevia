@@ -64,6 +64,8 @@ Brevia transcribe voz en más de 30 idiomas — inglés, chino, japonés, corean
 
 La IA integrada ejecuta un modelo incluido en tu propio equipo, o puedes conectar Claude, OpenAI, OpenRouter o cualquier servicio compatible con el formato chat de OpenAI o Anthropic. Solo se envía texto, nunca audio.
 
+![Meeting notes](assets/tour/en/多语言支持与会议纪要.png)
+
 ### Registro de voz e identificación de hablantes entre reuniones
 
 Registra una muestra corta de voz por compañero y Brevia lo reconocerá por su nombre en cada reunión futura — no como "Hablante 1, Hablante 2", sino como las personas que realmente son. El reconocimiento funciona entre grabaciones, así que buscar "¿qué dijo Alicia?" en las reuniones de la semana pasada es un clic.

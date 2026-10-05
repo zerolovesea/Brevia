@@ -26,7 +26,7 @@
 
     // Initialize timeline
     timeline = new DemoTimeline(engine);
-    timeline.setLoop(true, 2000);
+    timeline.setLoop(!engine.reducedMotion, 2000);
 
     // Initialize the current scenarios, with the original demo as a fallback.
     if (window.DemoScenariosV3) {
@@ -154,6 +154,7 @@
 
       // Load timeline steps and start
       timeline.setSteps(demoConfig.steps);
+      timeline.onRestart = () => scenarios._fadeSwapContent(demoConfig.setupUI());
       engine.reset();
       setTimeout(() => {
         timeline.run();
@@ -162,9 +163,9 @@
   }
 
   function calculateScale(viewport, content) {
-    // Assuming the design is based on 1440px width
-    const designWidth = 1440;
-    const designHeight = 900;
+    // Match the single-feature demo canvas.
+    const designWidth = 1200;
+    const designHeight = 750;
 
     const viewportRect = viewport.getBoundingClientRect();
     const scaleX = viewportRect.width / designWidth;

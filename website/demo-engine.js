@@ -4,6 +4,7 @@
 
 class DemoEngine {
   constructor() {
+    this.reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     this.cursor = null;
     this.cursorRipple = null;
     this.viewport = null;
@@ -27,6 +28,7 @@ class DemoEngine {
    * @param {String} easing - cubic-bezier easing
    */
   async moveCursor(target, duration = 800, easing = 'cubic-bezier(0.4, 0, 0.2, 1)') {
+    if (this.reducedMotion) return;
     const targetPos = this.resolvePosition(target);
     if (!targetPos) return;
 
@@ -74,6 +76,7 @@ class DemoEngine {
    * Click animation at current cursor position
    */
   async click(duration = 300) {
+    if (this.reducedMotion) return;
     this.cursorRipple.classList.add('active');
 
     // Scale down cursor slightly
@@ -92,6 +95,7 @@ class DemoEngine {
    * Hover effect at current position
    */
   async hover(duration = 500) {
+    if (this.reducedMotion) return;
     this.cursor.style.transform = 'translate(-50%, -50%) scale(1.1)';
     await this.wait(duration);
     this.cursor.style.transform = 'translate(-50%, -50%) scale(1)';
@@ -161,6 +165,7 @@ class DemoEngine {
    * Wait for specified duration
    */
   wait(ms) {
+    if (this.reducedMotion) return Promise.resolve();
     return new Promise((resolve) => {
       const startTime = Date.now();
       const check = () => {
@@ -271,6 +276,7 @@ class DemoEngine {
    * Scroll element to bottom smoothly
    */
   async scrollToBottom(element, duration = 400) {
+    if (this.reducedMotion) { element.scrollTop = element.scrollHeight; return; }
     const start = element.scrollTop;
     const end = element.scrollHeight - element.clientHeight;
     const distance = end - start;

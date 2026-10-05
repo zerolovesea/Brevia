@@ -10,6 +10,25 @@ class DemoScenariosV3 {
     this.mockData = this.initMockData();
   }
 
+  sidebarHtml(active = 'home') {
+    return String.raw`<aside class="sidebar" aria-label="主导航">
+        <button class="brand" data-view="home" aria-label="Brevia 首页"><span class="brand-mark" aria-hidden="true">言</span><img src="../frontend/assets/brevia-logo.svg" alt="brevia" /></button>
+        <button class="new-meeting" data-demo-id="new-meeting-btn" data-view="prepare" data-prepare-mode="record"><span class="new-meeting-icon">+</span><span class="new-meeting-label">开始会议</span></button>
+        <button class="import-recording" id="import-recording" data-view="prepare" data-prepare-mode="import" type="button"><span class="import-recording-icon" aria-hidden="true">↥</span><span class="import-recording-label">导入录音</span></button>
+        <nav>
+
+          <button class="nav-item ${active === 'home' ? 'active' : ''}" id="all-meetings" data-view="home" aria-expanded="true"><span>⌂</span> 所有会议</button>
+          <div class="workspace-subnav"><div class="workspace-subnav-content"><button class="workspace-item active"><span class="workspace-label">公开工作区</span><span class="workspace-count">3</span></button><button class="new-workspace">+ 新建工作区</button></div></div>
+          <button class="nav-item" id="recently-deleted" data-view="home"><span>◷</span> 最近删除</button>
+          <button class="nav-item ${active === 'settings' ? 'active' : ''}" data-view="settings"><span>⚙</span> 设置</button>
+        </nav>
+        </aside>`;
+  }
+
+  liveControlsHtml() {
+    return String.raw`<div class="floating-control-bar live-control-bar"><div class="control-source"><svg viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="7" y="2" width="6" height="11" rx="3"/><path d="M4.5 9.5a5.5 5.5 0 0 0 11 0M10 15v3m-3 0h6"/></svg><i class="input-meter" style="--level: .65" data-live-mic-level aria-hidden="true"></i><span id="live-input-label">输入良好</span></div><div class="control-primary"><button class="pause-button" id="pause">Ⅱ 暂停</button><button class="end-button" id="end-meeting">结束会议</button></div><div class="control-secondary"><button class="mark-button" id="mark-important" type="button" title="重点"><svg viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M5 3h10v14l-5-3-5 3z"/></svg><span>重点</span></button><div class="live-more"><button class="live-more-toggle" id="live-more-toggle" type="button" aria-label="更多" title="更多" aria-controls="live-more-panel" aria-expanded="false">•••</button><div class="live-more-panel" id="live-more-panel" hidden><div class="live-caption-controls"><button class="floating-caption-toggle" id="floating-caption-toggle" data-demo-id="caption-toggle" data-enabled="false" title="悬浮字幕">字幕</button><div class="translation-menu flow-select"><button class="translation-toggle" id="translation-toggle" data-demo-id="translation-toggle" data-enabled="false" aria-expanded="false">翻译：关</button><div class="flow-select-options" id="translation-options" hidden></div></div><div class="live-model-menu flow-select" id="live-model-menu" hidden><button class="live-model-toggle" id="live-model-toggle" aria-expanded="false">识别模型</button><div class="flow-select-options" id="live-model-options" hidden></div></div></div></div></div></div></div>`;
+  }
+
   initMockData() {
     return {
       transcription: {
@@ -101,6 +120,12 @@ class DemoScenariosV3 {
 
         { action: 'wait', duration: 800 },
 
+        // 从底部控制条的更多菜单开启翻译。
+        { action: 'moveCursor', target: '#live-more-toggle', duration: 700 },
+        { action: 'click', duration: 300 },
+        { action: 'setState', handler: () => {
+          this.engine.viewport.querySelector('#live-more-panel').hidden = false;
+        } },
         // 开启翻译
         {
           action: 'moveCursor',
@@ -145,15 +170,8 @@ class DemoScenariosV3 {
   typeNoteIntoEditor(text) {
     const editor = this.engine.viewport.querySelector('[data-demo-id="notes-editor"]');
     if (!editor) return;
-    const chars = text.split('');
-    const typeChar = (i) => {
-      if (!this.timeline || !this.timeline.isRunning || this.engine.isPaused) return;
-      if (i >= chars.length) return;
-      editor.textContent += chars[i];
-      editor.scrollTop = editor.scrollHeight;
-      setTimeout(() => typeChar(i + 1), 55);
-    };
-    typeChar(0);
+    editor.parentElement.querySelector('.ai-assist-empty')?.remove();
+    return this.engine.typeText(editor, text, 1, 55);
   }
 
   // ===== UI Setup Methods =====
@@ -162,26 +180,7 @@ class DemoScenariosV3 {
     // 精确还原新版主页：无 page-head 主操作按钮，搜索“搜索会议…”，会议行无麦克风图标
     const html = String.raw`
       <main class="app-shell">
-        <aside class="sidebar" aria-label="主导航">
-          <button class="brand" data-view="home" aria-label="Brevia 首页">
-            <span class="brand-mark" aria-hidden="true">言</span>
-            <img src="../frontend/assets/brevia-logo.svg" alt="brevia" />
-          </button>
-          <button class="new-meeting" data-demo-id="new-meeting-btn" data-view="prepare">
-            <span class="new-meeting-icon">+</span><span class="new-meeting-label">开始会议</span>
-          </button>
-          <nav>
-            <button class="nav-item active" id="all-meetings" data-view="home">
-              <span>⌂</span> 所有会议
-            </button>
-            <button class="nav-item" id="recently-deleted" data-view="home">
-              <span>◷</span> 最近删除
-            </button>
-            <button class="nav-item" data-view="settings">
-              <span>⚙</span> 设置
-            </button>
-          </nav>
-        </aside>
+        ${this.sidebarHtml()}
 
         <section class="workspace">
           <header class="window-bar">
@@ -207,17 +206,10 @@ class DemoScenariosV3 {
             </div>
 
             <div class="library-toolbar">
-              <label class="search">
+              <div class="library-search"><label class="search">
                 <span>⌕</span>
-                <input type="search" placeholder="搜索会议…" />
-              </label>
-              <div class="filter" id="date-filter">
-                <div class="flow-select">
-                  <button class="flow-select-toggle" type="button">
-                    最近 30 天 <span>⌄</span>
-                  </button>
-                </div>
-              </div>
+                <input type="search" placeholder="搜索会议、字幕或说话人…" />
+              </label></div>
               <button class="meeting-select-all" id="meeting-select-all" type="button" hidden>全选</button>
             </div>
 
@@ -334,34 +326,44 @@ class DemoScenariosV3 {
 
         { action: 'wait', duration: 1000 },
 
-        // 移动到"查看完整内容"按钮
+        // 展开纪要，与应用内的双栏切换一致。
         {
           action: 'moveCursor',
-          target: '[data-demo-id="view-full-summary"]',
+          target: '[data-toggle-detail-mode="summary"]',
           duration: 600,
           delay: 400
         },
         { action: 'hover', duration: 400 },
         { action: 'click', duration: 300 },
 
-        // 弹出完整纪要弹窗
+        // 将纪要切换到主栏。
         {
           action: 'setState',
-          handler: () => this.openSummaryModal(),
+          handler: () => this.engine.viewport.querySelector('.detail-layout').classList.add('is-summary-mode'),
           delay: 300
         },
 
         { action: 'wait', duration: 1200 },
 
+        { action: 'setState', handler: () => this.engine.viewport.querySelector('#detail-view').classList.add('is-header-collapsed') },
         // 滚动浏览完整内容
         {
           action: 'scrollToBottom',
-          target: '[data-demo-id="summary-modal-body"]',
-          duration: 6000,
+          target: '.summary-preview',
+          duration: 3500,
           delay: 200
         },
 
-        { action: 'wait', duration: 2000 }
+        { action: 'setState', handler: () => { this.engine.viewport.querySelector('.summary-preview').scrollTop = 0; } },
+        { action: 'wait', duration: 500 },
+        { action: 'moveCursor', target: '[data-copy-summary]', duration: 700 },
+        { action: 'click', duration: 300 },
+        { action: 'setState', handler: () => {
+          const button = this.engine.viewport.querySelector('[data-copy-summary]');
+          button.textContent = '✓';
+        } },
+        { action: 'hideCursor' },
+        { action: 'wait', duration: 2200 }
       ]
     };
   }

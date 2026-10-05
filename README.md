@@ -64,6 +64,8 @@ Brevia transcribes speech in 30+ languages — including English, Chinese, Japan
 
 Built-in AI runs a bundled model on your own machine, or plug in Claude, OpenAI, OpenRouter, or any service that speaks the OpenAI or Anthropic chat format. Only text is sent, never audio.
 
+![Meeting notes](docs/assets/tour/en/多语言支持与会议纪要.png)
+
 ### Voiceprint enrollment and cross-meeting speaker identification
 
 Enroll a short voice sample per teammate and Brevia will recognize them by name in every future meeting — not as "Speaker 1, Speaker 2," but as the people they are. Recognition works across recordings, so browsing back through last week's meetings to find "what did Alice say?" is a single click.

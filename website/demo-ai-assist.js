@@ -11,7 +11,7 @@
     saved: '已保存',
     captionsLabel: '实时字幕',
     notesLabel: '我的笔记',
-    aiAssistLabel: 'AI 辅助',
+    aiAssistLabel: 'AI 笔记',
     expandCaptions: '展开字幕',
     backToNotes: '返回笔记',
     captionsBtn: '字幕',
@@ -43,7 +43,7 @@
     saved: 'Saved',
     captionsLabel: 'Live captions',
     notesLabel: 'My notes',
-    aiAssistLabel: 'AI assist',
+    aiAssistLabel: 'AI notes',
     expandCaptions: 'Expand captions',
     backToNotes: 'Back to notes',
     captionsBtn: 'Captions',
@@ -108,6 +108,7 @@
       ['quote', t.quote, '❝'],
       ['link', t.link, link],
       ['image', t.image, image],
+      ['table', chinese ? '插入表格' : 'Insert table', '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.25"><rect x="2" y="2" width="12" height="12"/><path d="M2 6h12M2 10h12M6 2v12M10 2v12"/></svg>'],
       ['code', t.code, '&lt;/&gt;'],
       ['todo', t.todo, '☐'],
       ['highlight', t.highlight, '★'],
@@ -123,15 +124,7 @@
     var c = copy;
     return String.raw`
     <main class="app-shell is-live-meeting">
-      <aside class="sidebar" aria-label="主导航">
-        <button class="brand"><span class="brand-mark" aria-hidden="true">言</span><img src="../frontend/assets/brevia-logo.svg" alt="brevia" /></button>
-        <button class="new-meeting"><span class="new-meeting-icon">+</span><span class="new-meeting-label">开始会议</span></button>
-        <nav>
-          <button class="nav-item active"><span>⌂</span> 所有会议</button>
-          <button class="nav-item"><span>◷</span> 最近删除</button>
-          <button class="nav-item"><span>⚙</span> 设置</button>
-        </nav>
-      </aside>
+      ${new DemoScenariosV3().sidebarHtml()}
       <section class="workspace">
         <header class="window-bar">
           <div class="traffic"><i></i><i></i><i></i></div>
@@ -151,12 +144,6 @@
                 <span class="save-state"><svg class="check-icon" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3 8.5 3.2 3.2L13 4.5" /></svg> <span>${c.saved}</span></span>
               </div>
             </div>
-            <div class="live-caption-controls">
-              <button class="floating-caption-toggle" data-enabled="false" type="button" title="悬浮字幕">${c.captionsBtn}</button>
-              <button class="translation-toggle" data-enabled="false" type="button">${c.translationBtn}</button>
-            </div>
-            <button class="pause-button" type="button">${c.pauseBtn}</button>
-            <button class="end-button" type="button">${c.endBtn}</button>
           </header>
           <div class="live-layout">
             <section class="live-notes">
@@ -165,10 +152,10 @@
                 <button class="ai-assist-toggle is-enabled" type="button"><span class="ai-assist-toggle-star">✦</span> <span>${c.aiAssistLabel}</span></button>
                 <button class="live-mode-toggle" data-toggle-live-mode="caption" type="button" aria-label="${c.expandCaptions}" title="${c.expandCaptions}"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 3 5 5-5 5"/></svg></button>
               </header>
+              <div class="ai-suggestion" data-demo-ai-suggestion></div>
               <div data-live-notes-root>
                 <div class="notes-toolbar">${toolbarHtml()}</div>
                 <div class="notes-url-pop" hidden><input type="text" placeholder="https://…" spellcheck="false" /></div>
-                <div class="ai-suggestion" data-demo-ai-suggestion></div>
                 <div class="notes-editor" contenteditable="false" aria-label="${c.notesLabel}" spellcheck="false" data-demo-notes-editor>${notesHtml()}</div>
                 <textarea class="notes-input" hidden></textarea>
               </div>
@@ -182,6 +169,7 @@
               <button class="back-to-latest" type="button" hidden><span>↓</span> <span>回到最新</span></button>
             </section>
           </div>
+          ${new DemoScenariosV3().liveControlsHtml()}
         </section>
       </section>
     </main>`;
@@ -240,7 +228,8 @@
   // Tick the recording timer.
   var baseSeconds = 12 * 60 + 45;
   var timerSeconds = baseSeconds;
-  window.setInterval(function () {
+  if (!reducedMotion) window.setInterval(function () {
+    if (engine.isPaused) return;
     timerSeconds += 1;
     var h = Math.floor(timerSeconds / 3600).toString().padStart(2, '0');
     var m = Math.floor((timerSeconds % 3600) / 60).toString().padStart(2, '0');
@@ -331,6 +320,9 @@
     renderStatic();
     return;
   }
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) engine.pause(); else engine.resume();
+  });
   engine.reset();
   playLoop();
 }());

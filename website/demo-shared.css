@@ -77,8 +77,15 @@
   min-height: 100%;
 }
 
-.demo-viewport .workspace {
-  padding-bottom: 32px;
+.demo-viewport .app-shell.is-live-meeting .workspace-subnav {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .demo-viewport *, .demo-viewport *::before, .demo-viewport *::after {
+    animation: none !important;
+    transition: none !important;
+  }
 }
 
 /* Smooth appearing animations */

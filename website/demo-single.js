@@ -74,7 +74,7 @@
     engine.init(viewport, cursor, ripple);
 
     timeline = new DemoTimeline(engine);
-    timeline.setLoop(true, 2000);
+    timeline.setLoop(!engine.reducedMotion, 2000);
 
     scenarios = new DemoScenariosV3(engine, timeline);
 
@@ -93,7 +93,7 @@
     timeline.setSteps(demoConfig.steps);
     timeline.onRestart = renderInitialUI;
     engine.reset();
-    setTimeout(() => timeline.run(), 400);
+    if (!new URLSearchParams(location.search).has('manual')) setTimeout(() => timeline.run(), 400);
 
     // Pause when tab hidden, resume when visible
     document.addEventListener('visibilitychange', () => {

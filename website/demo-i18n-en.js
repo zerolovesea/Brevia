@@ -6,6 +6,23 @@
 
 (function () {
   const translations = {
+    '公开工作区': 'Public workspace',
+    '新建工作区': 'New workspace',
+    '录制来源': 'Audio source',
+    '采集模式': 'Capture mode',
+    '自动（记住上次）': 'Auto (remember last)',
+    '麦克风设备': 'Microphone device',
+    '系统默认': 'System default',
+    '已连接': 'Connected',
+    '搜索会议、字幕或说话人…': 'Search meetings, captions or speakers…',
+    '导出与分享': 'Export & share',
+    '复制会议纪要': 'Copy meeting notes',
+    '展开会议纪要': 'Expand meeting notes',
+    'AI 笔记': 'AI notes',
+    '编辑': 'Edit',
+    '重点': 'Mark',
+    '翻译：关': 'Translation: Off',
+    '插入表格': 'Insert table',
     // Navigation & Buttons
     '开始会议': 'Start Meeting',
     '所有会议': 'All Meetings',
@@ -258,12 +275,6 @@
     return originalFadeSwapContent.call(this, translateHTML(html), callback);
   };
 
-  const originalOpenSummaryModal = DemoScenariosV3.prototype.openSummaryModal;
-  DemoScenariosV3.prototype.openSummaryModal = function () {
-    originalOpenSummaryModal.call(this);
-    const modal = this.engine.viewport.querySelector('.summary-modal');
-    if (modal) modal.innerHTML = translateHTML(modal.innerHTML);
-  };
 
   const originalEnableTranslation = DemoScenariosV3.prototype.enableTranslation;
   DemoScenariosV3.prototype.enableTranslation = function () {
@@ -335,6 +346,17 @@
     return translations[text] || text;
   }
 
+  for (const name of ['sidebarHtml', 'liveControlsHtml']) {
+    const original = DemoScenariosV3.prototype[name];
+    DemoScenariosV3.prototype[name] = function (...args) { return translateHTML(original.apply(this, args)); };
+  }
+
+  DemoScenariosV3.prototype.typeNoteIntoEditor = function () {
+    const editor = this.engine.viewport.querySelector('[data-demo-id="notes-editor"]');
+    editor.parentElement.querySelector('.ai-assist-empty')?.remove();
+    return this.engine.typeText(editor, 'Action: update the local deployment budget by Friday.', 1, 35);
+  };
+
   // Patch mock data to English
   const originalInitMockData = DemoScenariosV3.prototype.initMockData;
   DemoScenariosV3.prototype.initMockData = function () {
@@ -358,12 +380,13 @@
         crumb: 'Settings',
         back: '← Back to Library',
         eyebrow: 'Settings',
-        h1: 'Models and local data',
+        h1: 'App settings',
         cards: [
-          { id: 'manage-models', title: 'Model library', desc: 'Manage downloads, deletion, and version details for speech recognition models.', button: 'Manage model library' },
-          { id: 'terms', title: 'Term library', desc: '12 terms are available for meeting preparation, search, and notes. Only supported models use them during transcription.', button: 'Manage terms' },
-          { id: 'storage', title: 'Storage and privacy', desc: 'Meeting data stays on this device. External LLMs require explicit confirmation before receiving a transcript.', button: 'View local storage' },
-          { id: 'speaker', title: 'Speaker recognition', desc: 'Only explicitly submitted single-speaker audio is saved for identifying and naming meeting speakers.', button: 'Manage speakers' }
+      { id: 'manage-models', title: 'Model library', desc: 'Download and manage local speech models for captions, refinement, and speaker recognition.', button: 'Manage model library' },
+      { id: 'ai', title: 'AI features', desc: 'Configure AI models for meeting summaries and intelligent notes.', button: 'Configure AI features' },
+      { id: 'speaker', title: 'Speaker recognition', desc: 'Manage enrolled voice samples and speaker names.', button: 'Manage speakers' },
+      { id: 'advanced', title: 'Advanced settings', desc: 'Tune recognition, endpoint detection, diarization, and local models.', button: 'Configure advanced settings' },
+      { id: 'storage', title: 'Storage and privacy', desc: 'Manage meeting recordings, notes, and models stored on this device.', button: 'View local storage' }
         ]
       };
     };
@@ -381,12 +404,12 @@
         downloadLabel: 'Download',
         installedLabel: 'Installed',
         items: [
-          { stage: 'Sentence transcription', name: 'FunASR Nano int8', language: 'Chinese / English / Cantonese', intro: 'Best for Chinese meetings: high accuracy on Chinese, with Cantonese and other dialects covered; English works too.', quality: 2, speed: 2, installed: true, size: '842 MB' },
-          { stage: 'Sentence transcription', name: 'Qwen3-ASR 0.6B int8', language: 'Multilingual', intro: 'Covers 30 languages and 22 Chinese dialects with automatic language detection; the default for Japanese and Korean.', quality: 2, speed: 2, installed: false, size: '879 MB' },
-          { stage: 'Sentence transcription', name: 'Parakeet TDT 0.6B v3', language: '25 European languages', intro: 'The default for English and other European languages, with automatic language detection, punctuation, and casing.', quality: 2, speed: 3, installed: false, size: '487 MB' },
-          { stage: 'Voice activity detection', name: 'Silero VAD', language: 'Language independent', intro: 'Decides whether someone is speaking right now, which splits caption segments; included with the app.', quality: 3, speed: 3, installed: true, size: '2 MB' },
-          { stage: 'Speaker diarization', name: 'Pyannote Segmentation 3.0', language: 'Language independent', intro: 'Finds speech regions in a single-track recording to anchor speaker diarization; included with the app.', quality: 2, speed: 3, installed: true, size: '7 MB' },
-          { stage: 'Speaker embedding', name: '3D-Speaker ERes2Net Base', language: 'Chinese', intro: 'Extracts voiceprints and clusters speakers offline; included with the app.', quality: 2, speed: 3, installed: true, size: '40 MB' },
+          { stage: 'Sentence transcription', name: 'Fun-ASR-Nano', language: 'Chinese / English / Cantonese', intro: 'Best for Chinese meetings: high accuracy on Chinese, with Cantonese and other dialects covered; English works too.', quality: 3, speed: 3, installed: true, size: '1.68 GB' },
+          { stage: 'Sentence transcription', name: 'Qwen3-ASR 0.6B 8bit', language: 'Multilingual', intro: 'Covers 30 languages and 22 Chinese dialects with automatic language detection; the default for Japanese and Korean.', quality: 3, speed: 3, installed: false, size: '1.01 GB' },
+          { stage: 'Sentence transcription', name: 'Parakeet TDT 0.6B v3', language: '25 European languages', intro: 'The default for English and other European languages, with automatic language detection, punctuation, and casing.', quality: 3, speed: 3, installed: false, size: '2.51 GB' },
+          { stage: 'Included with the app', name: 'Silero VAD', language: 'Language independent', intro: 'Decides whether someone is speaking right now, which splits caption segments; included with the app.', quality: 3, speed: 3, installed: true, bundled: true, size: '2 MB' },
+          { stage: 'Included with the app', name: 'Pyannote Segmentation 3.0', language: 'Language independent', intro: 'Finds speech regions in a single-track recording to anchor speaker diarization; included with the app.', quality: 2, speed: 3, installed: true, bundled: true, size: '7 MB' },
+          { stage: 'Included with the app', name: '3D-Speaker ERes2Net Base', language: 'Chinese', intro: 'Extracts voiceprints and clusters speakers offline; included with the app.', quality: 2, speed: 3, installed: true, bundled: true, size: '40 MB' },
           { stage: 'AI notes & summary', name: 'Qwen 3.5 2B', language: 'Chinese / English', intro: 'Generates in-meeting suggestions and meeting summaries locally.', quality: 3, speed: 2, installed: false, size: '1.3 GB' },
           { stage: 'Caption translation', name: 'Tencent Hy-MT2 1.8B', language: '33 languages', intro: 'Translates captions into the target language, all on your device.', quality: 3, speed: 3, installed: false, size: '1.13 GB' }
         ]
@@ -399,7 +422,7 @@
     DemoScenariosV3.prototype.renderModelLibraryItems = function () {
       // Data is already English; still run the delete/download action words.
       return originalRenderModelLibraryItems.call(this)
-        .replace(/>删除</g, '>Delete<');
+        .replace(/>删除</g, '>Delete<').replace(/随应用安装/g, 'Included with the app').replace(/必需/g, 'Required').replace(/从文件夹打开/g, 'Open folder');
     };
   }
 

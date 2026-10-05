@@ -64,6 +64,8 @@ Brevia transkribiert Sprache in mehr als 30 Sprachen — Englisch, Chinesisch, J
 
 Die integrierte KI fuehrt ein mitgeliefertes Modell auf dem eigenen Rechner aus. Alternativ lassen sich Claude, OpenAI, OpenRouter oder jeder Dienst anbinden, der das Chat-Format von OpenAI oder Anthropic spricht. Es wird nur Text gesendet, niemals Audio.
 
+![Meeting notes](assets/tour/en/多语言支持与会议纪要.png)
+
 ### Stimmprofil-Registrierung und meetinguebergreifende Sprechererkennung
 
 Nimm pro Teammitglied eine kurze Sprachprobe auf, und Brevia erkennt sie in allen kuenftigen Meetings namentlich — nicht als „Sprecher 1, Sprecher 2", sondern als die Personen, die sie sind. Die Erkennung funktioniert aufnahmeuebergreifend, sodass die Frage „was hat Alice gesagt?" in den Meetings der letzten Woche mit einem Klick beantwortet ist.

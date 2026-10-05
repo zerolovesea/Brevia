@@ -8,15 +8,7 @@ DemoScenariosV3.prototype.setupPrepareUI = function() {
   // 精确还原准备页面（基于第二张截图）
   const html = String.raw`
     <main class="app-shell">
-      <aside class="sidebar">
-        <button class="brand"><img src="../frontend/assets/brevia-logo.svg" alt="brevia" /></button>
-        <button class="new-meeting"><span>+</span> 开始会议</button>
-        <nav>
-          <button class="nav-item active"><span>⌂</span> 所有会议</button>
-          <button class="nav-item"><span>◷</span> 最近删除</button>
-          <button class="nav-item"><span>⚙</span> 设置</button>
-        </nav>
-      </aside>
+      ${this.sidebarHtml()}
 
       <section class="workspace">
         <header class="window-bar">
@@ -61,82 +53,27 @@ DemoScenariosV3.prototype.setupPrepareUI = function() {
                     </div>
                   </label>
 
-                  <label>
-                    预期说话人数
-                    <input data-demo-id="speaker-count" type="text" placeholder="留空自动匹配" />
-                  </label>
+                  <label class="prepare-model-select">识别模型<div class="flow-select"><button class="flow-select-toggle" type="button">Qwen3-ASR 0.6B <span>⌄</span></button></div></label>
 
                   <label>
                     工作区
                     <div class="flow-select">
                       <button class="flow-select-toggle" data-demo-id="category" type="button">
-                        未分类 <span>⌄</span>
+                        公开工作区 <span>⌄</span>
                       </button>
                     </div>
                   </label>
                 </div>
 
-                <fieldset>
-                  <legend>录制音频</legend>
-                  <label class="choice">
-                    <input name="capture-mic" type="checkbox" checked />
-                    <span>
-                      <b>我的麦克风</b>
-                      <small>系统默认麦克风</small>
-                    </span>
-                    <strong class="input-state">
-                      <i class="input-meter" style="--level: 0.65;" aria-hidden="true"></i>
-                      输入良好
-                    </strong>
-                  </label>
-                  <label class="choice">
-                    <input name="capture-system" type="checkbox" checked />
-                    <span>
-                      <b>系统音频</b>
-                      <small>需要授予屏幕与系统音频权限</small>
-                    </span>
-                    <strong>已就绪</strong>
-                  </label>
-                </fieldset>
+                <fieldset><legend>录制来源</legend><div class="capture-settings"><label>采集模式<div class="flow-select capture-mode-select"><button class="flow-select-toggle" type="button">自动（记住上次）<span>⌄</span></button></div></label><label>麦克风设备<div class="flow-select"><button class="flow-select-toggle" type="button">系统默认<span>⌄</span></button></div></label></div><div class="capture-status"><span><b>麦克风</b><strong><i class="input-meter" style="--level:.65"></i><span>输入良好</span></strong></span><span><b>系统音频</b><strong>已连接</strong></span></div></fieldset>
 
                 <button class="primary-action wide" data-demo-id="start-recording" type="button">
                   开始录制 <span>→</span>
                 </button>
               </form>
 
-              <div style="margin-top: 32px; padding-top: 32px; border-top: 1px solid #e5e5e5;">
-                <button class="text-button">导入录音 →</button>
-              </div>
             </div>
 
-            <aside class="model-card">
-              <div class="model-icon">⌁</div>
-              <dl>
-                <div>
-                  <dt>计算设备</dt>
-                  <dd>CPU</dd>
-                </div>
-                <div>
-                  <dt>会议语言</dt>
-                  <dd>中文</dd>
-                </div>
-              </dl>
-              <dl class="model-detail-list" hidden>
-                <div>
-                  <dt>识别模型</dt>
-                  <dd>FunASR Nano int8</dd>
-                </div>
-                <div>
-                  <dt>说话人分离模型</dt>
-                  <dd>Pyannote + 3D-Speaker ERes2Net</dd>
-                </div>
-                <div>
-                  <dt>会后精修模型</dt>
-                  <dd>FunASR Nano int8</dd>
-                </div>
-              </dl>
-              <button class="text-button" style="margin-top: 24px;">管理模型 →</button>
-            </aside>
           </div>
         </section>
       </section>
@@ -164,6 +101,7 @@ DemoScenariosV3.prototype.notesToolbarHtml = function () {
     ['quote', '引用', '❝'],
     ['link', '插入链接', link],
     ['image', '插入图片', image],
+    ['table', '插入表格', '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.25"><rect x="2" y="2" width="12" height="12"/><path d="M2 6h12M2 10h12M6 2v12M10 2v12"/></svg>'],
     ['code', '行内代码', '&lt;/&gt;'],
     ['todo', '待办', '☐'],
     ['highlight', '重点', '★'],
@@ -177,15 +115,7 @@ DemoScenariosV3.prototype.setupLiveUI = function(meetingTitle) {
   const notesToolbar = this.notesToolbarHtml();
   const html = String.raw`
     <main class="app-shell is-live-meeting">
-      <aside class="sidebar" aria-label="主导航">
-        <button class="brand"><span class="brand-mark" aria-hidden="true">言</span><img src="../frontend/assets/brevia-logo.svg" alt="brevia" /></button>
-        <button class="new-meeting"><span class="new-meeting-icon">+</span><span class="new-meeting-label">开始会议</span></button>
-        <nav>
-          <button class="nav-item active"><span>⌂</span> 所有会议</button>
-          <button class="nav-item"><span>◷</span> 最近删除</button>
-          <button class="nav-item"><span>⚙</span> 设置</button>
-        </nav>
-      </aside>
+      ${this.sidebarHtml()}
 
       <section class="workspace">
         <header class="window-bar">
@@ -207,19 +137,13 @@ DemoScenariosV3.prototype.setupLiveUI = function(meetingTitle) {
                 <span class="save-state"><svg class="check-icon" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3 8.5 3.2 3.2L13 4.5" /></svg> <span>已保存</span></span>
               </div>
             </div>
-            <div class="live-caption-controls">
-              <button class="floating-caption-toggle" data-demo-id="caption-toggle" data-enabled="false" type="button" title="悬浮字幕">字幕</button>
-              <button class="translation-toggle" data-demo-id="translation-toggle" data-enabled="false" type="button">译文: 关</button>
-            </div>
-            <button class="pause-button">Ⅱ 暂停</button>
-            <button class="end-button">结束会议</button>
           </header>
 
           <div class="live-layout">
             <section class="live-notes">
               <header class="live-section-head">
                 <p class="eyebrow">我的笔记</p>
-                <button class="ai-assist-toggle" type="button"><span class="ai-assist-toggle-star">✦</span> <span>AI 辅助</span></button>
+                <button class="ai-assist-toggle" type="button"><span class="ai-assist-toggle-star">✦</span> <span>AI 笔记</span></button>
                 <button class="live-mode-toggle" data-toggle-live-mode="caption" type="button" aria-label="展开字幕" title="展开字幕"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 3 5 5-5 5"/></svg></button>
               </header>
               <div data-live-notes-root>
@@ -248,6 +172,7 @@ DemoScenariosV3.prototype.setupLiveUI = function(meetingTitle) {
               <button class="back-to-latest" type="button" hidden><span>↓</span> <span>回到最新</span></button>
             </section>
           </div>
+          ${this.liveControlsHtml()}
         </section>
       </section>
     </main>
@@ -263,7 +188,7 @@ DemoScenariosV3.prototype._fadeSwapContent = function(newHtml, callback) {
   content.style.transition = 'opacity 0.2s ease';
   content.style.opacity = '0';
 
-  setTimeout(() => {
+  return new Promise((resolve) => setTimeout(() => {
     content.innerHTML = newHtml;
 
     // Re-apply scale
@@ -279,6 +204,7 @@ DemoScenariosV3.prototype._fadeSwapContent = function(newHtml, callback) {
     }
 
     if (callback) callback();
+    resolve();
 
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
@@ -286,11 +212,11 @@ DemoScenariosV3.prototype._fadeSwapContent = function(newHtml, callback) {
         setTimeout(() => { content.style.transition = ''; }, 300);
       });
     });
-  }, 200);
+  }, this.engine.reducedMotion ? 0 : 200));
 };
 
 DemoScenariosV3.prototype.showPrepareView = function() {
-  this._fadeSwapContent(this.setupPrepareUI());
+  return this._fadeSwapContent(this.setupPrepareUI());
 };
 
 DemoScenariosV3.prototype.fillMeetingTitle = function(title) {
@@ -302,7 +228,7 @@ DemoScenariosV3.prototype.fillMeetingTitle = function(title) {
 };
 
 DemoScenariosV3.prototype.showLiveView = function(meetingTitle) {
-  this._fadeSwapContent(this.setupLiveUI(meetingTitle), () => {
+  return this._fadeSwapContent(this.setupLiveUI(meetingTitle), () => {
     this.startTimer();
   });
 };
@@ -327,6 +253,7 @@ DemoScenariosV3.prototype.startTimer = function() {
 };
 
 DemoScenariosV3.prototype.enableTranslation = function() {
+  this.engine.viewport.querySelector('#live-more-panel').hidden = true;
   // Enable translation toggle button
   const translationToggle = this.engine.viewport.querySelector('[data-demo-id="translation-toggle"]');
   if (translationToggle) {
@@ -462,15 +389,7 @@ DemoScenariosV3.prototype.setupSummaryUI = function() {
 DemoScenariosV3.prototype.showSummaryDetail = function() {
   const html = String.raw`
     <main class="app-shell">
-      <aside class="sidebar">
-        <button class="brand"><img src="../frontend/assets/brevia-logo.svg" alt="brevia" /></button>
-        <button class="new-meeting"><span>+</span> 开始会议</button>
-        <nav>
-          <button class="nav-item active"><span>⌂</span> 所有会议</button>
-          <button class="nav-item"><span>◷</span> 最近删除</button>
-          <button class="nav-item"><span>⚙</span> 设置</button>
-        </nav>
-      </aside>
+      ${this.sidebarHtml()}
 
       <section class="workspace">
         <header class="window-bar">
@@ -490,22 +409,10 @@ DemoScenariosV3.prototype.showSummaryDetail = function() {
               <p class="detail-meta">2026年8月7日 · 45 分钟 · 3 位参与者 · 已生成纪要</p>
             </div>
             <div class="detail-actions">
-              <button class="secondary">分享</button>
-              <button class="primary-action">导出 <span>↓</span></button>
+              <button class="primary-action" data-export-detail>导出与分享</button>
             </div>
           </header>
 
-          <section class="player">
-            <button class="play">▶</button>
-            <button class="skip">↶ 15</button>
-            <button class="skip">15 ↷</button>
-            <span class="player-time">18:32</span>
-            <input type="range" min="0" max="100" value="42" />
-            <span>本地录音</span>
-            <div class="player-speed flow-select">
-              <button class="flow-select-toggle" type="button">1×<span>⌄</span></button>
-            </div>
-          </section>
 
           <div class="detail-layout">
             <section class="final-transcript">
@@ -571,7 +478,7 @@ DemoScenariosV3.prototype.showSummaryDetail = function() {
               <div class="summary-preview">
                 <div class="summary-head">
                   <p class="eyebrow">会议纪要</p>
-                  <button class="text-button">重新生成</button>
+                  <span class="summary-actions"><button class="summary-action-icon" data-open-summary-edit title="编辑" aria-label="编辑"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m3 11.8 8.3-8.3 1.7 1.7-8.3 8.3L3 13z"/><path d="m10.3 4.5 1.7 1.7"/></svg></button><button class="summary-action-icon" data-copy-summary title="复制会议纪要" aria-label="复制会议纪要"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5.5" y="5.5" width="7" height="8" rx="1"/><path d="M10.5 5.5V3.5a1 1 0 0 0-1-1h-5a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h1"/></svg></button><button class="summary-action-icon" data-regenerate-summary title="重新生成" aria-label="重新生成"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 6.5A5 5 0 1 0 14 10"/><path d="M13 2.5v4h-4"/></svg></button></span>
                 </div>
                 <div class="summary-body markdown-content">
                   <h2>摘要</h2>
@@ -588,103 +495,16 @@ DemoScenariosV3.prototype.showSummaryDetail = function() {
                     <li>制定发布前的灰度测试方案 <small>张伟 · 8月22日</small></li>
                   </ul>
                 </div>
-                <button class="text-button" data-demo-id="view-full-summary" style="margin-top: 12px;">查看完整内容 →</button>
               </div>
             </aside>
+            <button class="detail-mode-toggle" data-toggle-detail-mode="summary" type="button" aria-label="展开会议纪要" title="展开会议纪要"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 3 5 5-5 5"/></svg></button><button class="detail-mode-toggle" data-toggle-detail-mode="transcript" type="button" aria-label="展开字幕" title="展开字幕"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m10 3-5 5 5 5"/></svg></button>
           </div>
+          <section class="player floating-control-bar"><div class="player-source"><svg viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8v4h3l4 3V5L6 8H3z"/><path d="M13 7a4 4 0 0 1 0 6m2-9a8 8 0 0 1 0 12"/></svg><span>本地录音</span><span class="player-time" id="player-time">18:32</span></div><div class="player-actions"><button class="skip" type="button" aria-label="后退 15 秒">↶ 15</button><button class="play" id="play" aria-label="播放录音">▶</button><button class="skip" type="button" aria-label="前进 15 秒">15 ↷</button></div><div class="player-meta"><span class="player-duration" id="player-duration">45:00</span><div class="player-speed flow-select"><button class="flow-select-toggle" data-flow-select-toggle type="button" aria-expanded="false">1×<span>⌄</span></button><input id="playback-rate" type="hidden" value="1" /><div class="flow-select-options" hidden><button type="button" data-playback-rate="1">1×</button><button type="button" data-playback-rate="1.25">1.25×</button><button type="button" data-playback-rate="1.5">1.5×</button><button type="button" data-playback-rate="2">2×</button></div></div></div><div class="player-track"><input id="progress" type="range" min="0" max="2700" value="1112" aria-label="播放进度" /></div></section>
         </section>
       </section>
     </main>
   `;
-  this._fadeSwapContent(html);
-};
-
-DemoScenariosV3.prototype.openSummaryModal = function() {
-  const shell = this.engine.viewport.querySelector('.app-shell');
-  if (!shell) return;
-
-  // 移除已有弹窗
-  const existing = shell.querySelector('.summary-modal-overlay');
-  if (existing) existing.remove();
-
-  const overlay = document.createElement('div');
-  overlay.className = 'summary-modal-overlay';
-  overlay.style.cssText = 'position: absolute; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 100; opacity: 0; transition: opacity 0.3s ease;';
-
-  overlay.innerHTML = String.raw`
-    <div class="summary-modal" style="width: 760px; max-width: 90%; max-height: 82%; background: #fff; border-radius: 12px; box-shadow: 0 24px 64px rgba(0,0,0,0.25); display: flex; flex-direction: column; overflow: hidden; transform: scale(0.96); transition: transform 0.3s ease;">
-      <header style="display: flex; align-items: center; justify-content: space-between; padding: 20px 28px; border-bottom: 1px solid #eee; flex-shrink: 0;">
-        <div>
-          <h1 style="font-size: 20px; font-weight: 600; margin: 0;">Q3 产品评审会议</h1>
-          <p style="color: #999; font-size: 13px; margin: 4px 0 0;">2026年8月7日 · 45分钟 · AI 会议纪要</p>
-        </div>
-        <button class="icon-button" style="font-size: 18px;">✕</button>
-      </header>
-
-      <div class="summary-modal-body" data-demo-id="summary-modal-body" style="padding: 28px; overflow-y: auto; line-height: 1.8; color: #404040;">
-        <section style="margin-bottom: 32px;">
-          <h2 style="font-size: 18px; font-weight: 600; margin-bottom: 12px;">会议摘要</h2>
-          <p style="font-size: 15px; margin: 0;">
-            本次会议评审了第三季度的产品进展，重点包括实时转录引擎的性能优化、多语言支持的扩展以及新版界面的设计方向。实时转录延迟已优化至 300 毫秒以内，多语言支持覆盖 30 多种语种，主流语言识别准确率超过 95%。团队确认了新版界面将于本季度末发布，并明确了发布前的测试计划和责任分工。
-          </p>
-        </section>
-
-        <section style="margin-bottom: 32px;">
-          <h2 style="font-size: 18px; font-weight: 600; margin-bottom: 12px;">核心结论</h2>
-          <ul style="font-size: 15px; padding-left: 24px; margin: 0;">
-            <li style="margin-bottom: 12px;">实时转录引擎性能优化完成，端到端延迟从 800ms 降至 300ms 以内</li>
-            <li style="margin-bottom: 12px;">多语言支持已覆盖 30+ 语种，主流语言识别准确率超过 95%</li>
-            <li style="margin-bottom: 12px;">新版用户界面确定于本季度末（9 月）正式发布</li>
-            <li style="margin-bottom: 12px;">发布前需完成一轮完整的性能与兼容性测试</li>
-          </ul>
-        </section>
-
-        <section style="margin-bottom: 32px;">
-          <h2 style="font-size: 18px; font-weight: 600; margin-bottom: 12px;">关键决策</h2>
-          <ul style="font-size: 15px; padding-left: 24px; margin: 0;">
-            <li style="margin-bottom: 12px;"><b>性能优先：</b>转录延迟作为本季度核心指标，持续跟进并保持在 300ms 以内 <small style="color: #999;">— 李娜</small></li>
-            <li style="margin-bottom: 12px;"><b>多语言策略：</b>优先保障主流语种的准确率，长尾语种逐步迭代 <small style="color: #999;">— 张伟</small></li>
-            <li style="margin-bottom: 12px;"><b>界面改版：</b>新版界面需与现有功能保持兼容，分阶段灰度发布</li>
-          </ul>
-        </section>
-
-        <section style="margin-bottom: 32px;">
-          <h2 style="font-size: 18px; font-weight: 600; margin-bottom: 12px;">行动项</h2>
-          <ul style="font-size: 15px; padding-left: 24px; margin: 0;">
-            <li style="margin-bottom: 12px;">完成实时转录引擎的性能压测 <small style="color: #999;">负责人：李娜 · 截止：8月20日</small></li>
-            <li style="margin-bottom: 12px;">补充长尾语种的测试语料 <small style="color: #999;">负责人：王强 · 截止：8月25日</small></li>
-            <li style="margin-bottom: 12px;">完成新版界面的高保真原型 <small style="color: #999;">负责人：设计团队 · 截止：8月18日</small></li>
-            <li style="margin-bottom: 12px;">制定发布前的灰度测试方案 <small style="color: #999;">负责人：张伟 · 截止：8月22日</small></li>
-          </ul>
-        </section>
-
-        <section style="margin-bottom: 32px;">
-          <h2 style="font-size: 18px; font-weight: 600; margin-bottom: 12px;">风险与挑战</h2>
-          <ul style="font-size: 15px; padding-left: 24px; margin: 0;">
-            <li style="margin-bottom: 12px;">多语言模型的内存占用可能影响低配设备的性能</li>
-            <li style="margin-bottom: 12px;">新版界面改版需要与现有功能保持兼容</li>
-            <li style="margin-bottom: 12px;">发布时间较紧，测试周期需要额外的资源支持</li>
-          </ul>
-        </section>
-
-        <section>
-          <h2 style="font-size: 18px; font-weight: 600; margin-bottom: 12px;">下次会议</h2>
-          <p style="font-size: 15px; margin: 0;">
-            2026年8月14日下午2点，继续跟进各项行动项的进展与发布前准备情况。
-          </p>
-        </section>
-      </div>
-    </div>
-  `;
-
-  shell.appendChild(overlay);
-
-  // 触发过渡动画
-  requestAnimationFrame(() => {
-    overlay.style.opacity = '1';
-    const modal = overlay.querySelector('.summary-modal');
-    if (modal) modal.style.transform = 'scale(1)';
-  });
+  return this._fadeSwapContent(html);
 };
 
 // Voiceprint demo UI setup
@@ -693,15 +513,7 @@ DemoScenariosV3.prototype.setupVoiceprintUI = function() {
   const notesToolbar = this.notesToolbarHtml();
   const html = String.raw`
     <main class="app-shell is-live-meeting">
-      <aside class="sidebar" aria-label="主导航">
-        <button class="brand"><span class="brand-mark" aria-hidden="true">言</span><img src="../frontend/assets/brevia-logo.svg" alt="brevia" /></button>
-        <button class="new-meeting"><span class="new-meeting-icon">+</span><span class="new-meeting-label">开始会议</span></button>
-        <nav>
-          <button class="nav-item active"><span>⌂</span> 所有会议</button>
-          <button class="nav-item"><span>◷</span> 最近删除</button>
-          <button class="nav-item"><span>⚙</span> 设置</button>
-        </nav>
-      </aside>
+      ${this.sidebarHtml()}
 
       <section class="workspace">
         <header class="window-bar">
@@ -723,19 +535,13 @@ DemoScenariosV3.prototype.setupVoiceprintUI = function() {
                 <span class="save-state"><svg class="check-icon" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3 8.5 3.2 3.2L13 4.5" /></svg> <span>已保存</span></span>
               </div>
             </div>
-            <div class="live-caption-controls">
-              <button class="floating-caption-toggle" data-enabled="false" type="button" title="悬浮字幕">字幕</button>
-              <button class="translation-toggle" data-enabled="false" type="button">译文: 关</button>
-            </div>
-            <button class="pause-button">Ⅱ 暂停</button>
-            <button class="end-button">结束会议</button>
           </header>
 
           <div class="live-layout is-caption-mode">
             <section class="live-notes">
               <header class="live-section-head">
                 <p class="eyebrow">我的笔记</p>
-                <button class="ai-assist-toggle is-enabled" type="button"><span class="ai-assist-toggle-star">✦</span> <span>AI 辅助</span></button>
+                <button class="ai-assist-toggle is-enabled" type="button"><span class="ai-assist-toggle-star">✦</span> <span>AI 笔记</span></button>
                 <button class="live-mode-toggle" data-toggle-live-mode="caption" type="button" aria-label="展开字幕" title="展开字幕"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 3 5 5-5 5"/></svg></button>
               </header>
               <div data-live-notes-root>
@@ -765,6 +571,7 @@ DemoScenariosV3.prototype.setupVoiceprintUI = function() {
               <button class="back-to-latest" type="button" hidden><span>↓</span> <span>回到最新</span></button>
             </section>
           </div>
+          ${this.liveControlsHtml()}
         </section>
       </section>
     </main>
@@ -890,12 +697,13 @@ DemoScenariosV3.prototype.getSettingsCopy = function () {
     crumb: '设置',
     back: '← 返回会议库',
     eyebrow: '设置',
-    h1: '模型与本地数据',
+    h1: '应用设置',
     cards: [
-      { id: 'manage-models', title: '模型库', desc: '管理语言识别模型的下载、删除与版本信息。', button: '管理模型库' },
-      { id: 'terms', title: '术语库', desc: '12 个词条可用于会议准备、搜索和纪要。仅支持的模型会将其用于转写。', button: '管理术语库' },
-      { id: 'storage', title: '存储与隐私', desc: '会议资料保存在此设备。外部 LLM 需要在发送逐字稿前明确确认。', button: '查看本地存储' },
-      { id: 'speaker', title: '说话人识别', desc: '仅保存用户明确提交的单人语音，用于会议片段的说话人识别与命名。', button: '管理说话人' }
+      { id: 'manage-models', title: '模型库', desc: '下载和管理本地语音识别模型，为字幕、精修和说话人识别提供能力。', button: '管理模型库' },
+      { id: 'ai', title: 'AI 功能', desc: '配置 AI 模型会议纪要，以及智能笔记。', button: '配置 AI 功能' },
+      { id: 'speaker', title: '说话人识别', desc: '管理已注册的声纹与说话人名称。', button: '管理说话人' },
+      { id: 'advanced', title: '进阶设置', desc: '为特定会议环境微调识别、端点检测、说话人分离和本地模型。', button: '配置进阶设置' },
+      { id: 'storage', title: '存储与隐私', desc: '查看和管理保存在此设备上的会议录音、会议纪要与模型。', button: '查看本地存储' }
     ]
   };
 };
@@ -913,12 +721,12 @@ DemoScenariosV3.prototype.getModelLibraryData = function () {
     downloadLabel: '下载',
     installedLabel: '已安装',
     items: [
-      { stage: '整句识别', name: 'FunASR Nano int8', language: '中文 / 英语 / 粤语', intro: '中文会议首选：中文准确率高，覆盖粤语等方言，也能识别英语。', quality: 2, speed: 2, installed: true, size: '842 MB' },
-      { stage: '整句识别', name: 'Qwen3-ASR 0.6B int8', language: '多语种', intro: '覆盖 30 种语言和 22 种中文方言并自动判断语种；日韩会议的默认模型。', quality: 2, speed: 2, installed: false, size: '879 MB' },
-      { stage: '整句识别', name: 'Parakeet TDT 0.6B v3', language: '欧洲 25 种语言', intro: '英语与欧洲语言的默认模型，自动判断语种，自带标点与大小写。', quality: 2, speed: 3, installed: false, size: '487 MB' },
-      { stage: '语音活动检测', name: 'Silero VAD', language: '语言无关', intro: '判断此刻是否有人说话，用于切分句子边界；随应用安装。', quality: 3, speed: 3, installed: true, size: '2 MB' },
-      { stage: '说话人分离', name: 'Pyannote Segmentation 3.0', language: '语言无关', intro: '检测单轨录音中的说话区间，为说话人分离提供边界；随应用安装。', quality: 2, speed: 3, installed: true, size: '7 MB' },
-      { stage: '声纹嵌入', name: '3D-Speaker ERes2Net Base', language: '中文', intro: '提取声纹并离线聚类说话人；随应用安装。', quality: 2, speed: 3, installed: true, size: '40 MB' },
+      { stage: '整句识别', name: 'Fun-ASR-Nano', language: '中文 / 英语 / 粤语', intro: '中文会议首选：中文准确率高，覆盖粤语等方言，也能识别英语。', quality: 3, speed: 3, installed: true, size: '1.68 GB' },
+      { stage: '整句识别', name: 'Qwen3-ASR 0.6B 8bit', language: '多语种', intro: '覆盖 30 种语言和 22 种中文方言并自动判断语种；日韩会议的默认模型。', quality: 3, speed: 3, installed: false, size: '1.01 GB' },
+      { stage: '整句识别', name: 'Parakeet TDT 0.6B v3', language: '欧洲 25 种语言', intro: '英语与欧洲语言的默认模型，自动判断语种，自带标点与大小写。', quality: 3, speed: 3, installed: false, size: '2.51 GB' },
+      { stage: '随应用安装', name: 'Silero VAD', language: '语言无关', intro: '判断此刻是否有人说话，用于切分句子边界；随应用安装。', quality: 3, speed: 3, installed: true, bundled: true, size: '2 MB' },
+      { stage: '随应用安装', name: 'Pyannote Segmentation 3.0', language: '语言无关', intro: '检测单轨录音中的说话区间，为说话人分离提供边界；随应用安装。', quality: 2, speed: 3, installed: true, bundled: true, size: '7 MB' },
+      { stage: '随应用安装', name: '3D-Speaker ERes2Net Base', language: '中文', intro: '提取声纹并离线聚类说话人；随应用安装。', quality: 2, speed: 3, installed: true, bundled: true, size: '40 MB' },
       { stage: 'AI 笔记与会议纪要', name: 'Qwen 3.5 2B', language: '中文 / 英语', intro: '在本机生成会中建议与会议纪要。', quality: 3, speed: 2, installed: false, size: '1.3 GB' },
       { stage: '字幕翻译', name: 'Tencent Hy-MT2 1.8B', language: '33 种语言', intro: '把字幕翻译为目标语言，全部在本机运行。', quality: 3, speed: 3, installed: false, size: '1.13 GB' }
     ]
@@ -936,15 +744,7 @@ DemoScenariosV3.prototype.setupSettingsUI = function () {
 
   return String.raw`
     <main class="app-shell">
-      <aside class="sidebar">
-        <button class="brand"><img src="../frontend/assets/brevia-logo.svg" alt="brevia" /></button>
-        <button class="new-meeting"><span>+</span> 开始会议</button>
-        <nav>
-          <button class="nav-item"><span>⌂</span> 所有会议</button>
-          <button class="nav-item"><span>◷</span> 最近删除</button>
-          <button class="nav-item active"><span>⚙</span> 设置</button>
-        </nav>
-      </aside>
+      ${this.sidebarHtml('settings')}
 
       <section class="workspace">
         <header class="window-bar">
@@ -980,17 +780,17 @@ DemoScenariosV3.prototype.renderModelLibraryItems = function () {
         <span class="model-library-rating"><small>${data.qualityLabel}</small><b>${data.qualityTiers[item.quality - 1]}</b><span class="rating-scale" aria-hidden="true">${dots(item.quality)}</span></span>
         <span class="model-library-rating"><small>${data.speedLabel}</small><b>${data.speedTiers[item.speed - 1]}</b><span class="rating-scale" aria-hidden="true">${dots(item.speed)}</span></span>
       </div>`;
-    const tags = String.raw`<div class="model-library-tags">${item.installed ? `<span class="model-library-installed">${data.installedLabel}</span>` : ''}<span>${item.language}</span><span class="model-library-size">${item.size}</span><span class="model-library-modelname">${item.name}</span></div>`;
-    const action = item.installed
-      ? `<button class="modal-action modal-danger" type="button">删除</button>`
+    const tags = `<div class="model-library-tags">${item.bundled ? '<span class="model-library-installed">随应用安装</span>' : item.installed ? `<span class="model-library-installed">${data.installedLabel}</span>` : ''}</div>`;
+    const action = item.bundled ? '<span class="model-library-readonly">必需</span>' : item.installed
+      ? '<button class="secondary" type="button">从文件夹打开</button><button class="modal-action modal-danger" type="button">删除</button>'
       : `<button class="modal-action" type="button">${data.downloadLabel}</button>`;
     return String.raw`
       ${heading}
       <div class="model-library-item">
         <span>
-          <div class="model-library-name"><b class="model-library-headline">${item.language}</b>${tags}</div>
+          <div class="model-library-name"><b class="model-library-headline">${item.name}</b>${tags}</div>
           ${ratings}
-          <p>${item.intro}</p>
+          <p>${item.intro}</p><small class="model-library-size">${item.size}</small>
         </span>
         <span class="model-actions">${action}</span>
       </div>`;
@@ -1035,7 +835,7 @@ DemoScenariosV3.prototype.getModelLibraryDemo = function () {
         { action: 'click', duration: 300 },
         { action: 'setState', handler: () => this.openModelLibraryModal(), delay: 300 },
         { action: 'wait', duration: 1400 },
-        { action: 'moveCursor', target: '[data-demo-id="model-library-body"] .model-library-item:first-child .model-actions button', duration: 900, delay: 300 },
+        { action: 'moveCursor', target: '[data-demo-id="model-library-body"] .model-library-item .model-actions button', duration: 900, delay: 300 },
         { action: 'wait', duration: 900 },
         { action: 'scrollToBottom', target: '[data-demo-id="model-library-body"]', duration: 5000, delay: 200 },
         { action: 'wait', duration: 2200 }
@@ -1170,7 +970,12 @@ DemoScenariosV3.prototype.getCaptionBarDemo = function () {
       setupUI: () => this.setupCaptionUI(),
       steps: [
         { action: 'wait', duration: 700 },
-        // Enable the floating-caption toggle in the live header.
+        // Open the bottom control bar's More menu before enabling captions.
+        { action: 'moveCursor', target: '#live-more-toggle', duration: 700 },
+        { action: 'click', duration: 300 },
+        { action: 'setState', handler: () => {
+          this.engine.viewport.querySelector('#live-more-panel').hidden = false;
+        } },
         { action: 'moveCursor', target: '[data-demo-id="caption-toggle"]', duration: 1000, delay: 300 },
         { action: 'hover', duration: 300 },
         { action: 'click', duration: 300 },
@@ -1179,6 +984,7 @@ DemoScenariosV3.prototype.getCaptionBarDemo = function () {
           if (toggle) toggle.setAttribute('data-enabled', 'true');
           const overlay = this.engine.viewport.querySelector('[data-demo-id="caption-overlay"]');
           if (overlay) overlay.classList.add('is-visible');
+          this.engine.viewport.querySelector('#live-more-panel').hidden = true;
         }, delay: 200 },
         { action: 'wait', duration: 600 },
         ...this.generateCaptionSteps(),
