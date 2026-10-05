@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
+const { execFileSync } = require('node:child_process');
 const { default: afterPack, deduplicateRuntime, prepareWindowsRuntime } = require('./deduplicate-runtime.cjs');
 
 (async () => {
@@ -36,6 +37,17 @@ const { default: afterPack, deduplicateRuntime, prepareWindowsRuntime } = requir
       await fs.mkdir(path.join(directory, 'lib'), { recursive: true });
       await fs.writeFile(path.join(directory, 'lib', 'same'), 'shared');
       await fs.writeFile(path.join(directory, 'different'), directory === worker ? 'one' : 'two');
+      const framework = path.join(directory, 'Python.framework');
+      const version = path.join(framework, 'Versions', 'A');
+      await fs.mkdir(path.join(version, 'Resources'), { recursive: true });
+      await fs.copyFile('/usr/bin/true', path.join(version, 'Python'));
+      await fs.writeFile(path.join(version, 'Resources', 'Info.plist'), `<?xml version="1.0" encoding="UTF-8"?>
+<plist version="1.0"><dict><key>CFBundleExecutable</key><string>Python</string>
+<key>CFBundleIdentifier</key><string>org.brevia.test.python</string>
+<key>CFBundlePackageType</key><string>FMWK</string></dict></plist>`);
+      await fs.symlink('A', path.join(framework, 'Versions', 'Current'));
+      await fs.symlink('Versions/Current/Python', path.join(framework, 'Python'));
+      await fs.symlink('Versions/Current/Resources', path.join(framework, 'Resources'));
     }
     await fs.writeFile(path.join(helper, 'unique'), 'helper only');
     await fs.symlink('lib/same', path.join(helper, 'existing-link'));
@@ -45,6 +57,13 @@ const { default: afterPack, deduplicateRuntime, prepareWindowsRuntime } = requir
     assert.equal((await fs.lstat(path.join(helper, 'different'))).isSymbolicLink(), false);
     assert.equal(await fs.readFile(path.join(helper, 'unique'), 'utf8'), 'helper only');
     assert.equal(await deduplicateRuntime(temp), 0);
+    // Reproduce the python.org framework layout used by GitHub's macOS runner.
+    const framework = path.join(helper, 'Python.framework');
+    for (const file of ['Python', 'Resources/Info.plist']) {
+      assert.equal((await fs.lstat(path.join(framework, 'Versions', 'A', file))).isFile(), true);
+    }
+    execFileSync('codesign', ['--force', '--sign', '-', framework], { stdio: 'pipe' });
+    execFileSync('codesign', ['--verify', '--deep', '--strict', framework], { stdio: 'pipe' });
     // Relative links must remain valid after moving the installed app.
     await fs.rename(temp, `${temp}-moved`);
     assert.equal(await fs.readFile(path.join(`${temp}-moved`, 'brevia-llama-helper', '_internal', 'existing-link'), 'utf8'), 'shared');

@@ -12,6 +12,9 @@ async function deduplicateRuntime(runtime) {
     for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
       const file = path.join(directory, entry.name);
       if (entry.isDirectory()) {
+        // codesign requires a framework's versioned executable and Info.plist
+        // to be regular files. Preserve each bundle rather than linking its contents.
+        if (entry.name.endsWith('.framework')) continue;
         await visit(file);
       } else if (entry.isFile()) {
         const original = path.join(worker, path.relative(helper, file));
