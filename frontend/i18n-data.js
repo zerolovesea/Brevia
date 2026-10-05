@@ -8983,6 +8983,10 @@ const whatsNewLog = [
       ],
       "improved": [
         {
+          "text": "升级 MLX 后端后，本机 Apple M4 Pro 对同一批各 45 秒的中英文会议片段实测：FunASR Nano 与 Parakeet 的纯解码速度分别约为 v1.2.2 的 3.7 倍和 4.0 倍（不含模型加载时间；实际收益因设备、模型和音频而异）。",
+          "commit": "8049d36b260e231e67e529688b04027a43553917"
+        },
+        {
           "text": "麦克风与系统音频按时间对齐后统一混音，实时字幕与会后精修复用处理逻辑，减少回声导致的重复转写。",
           "commit": "148177e01a9a199af48aec784f864fd97bdd89cf"
         },
@@ -9039,6 +9043,10 @@ const whatsNewLog = [
         }
       ],
       "improved": [
+        {
+          "text": "With the MLX backend, tests on an Apple M4 Pro using the same 45 seconds of Chinese and 45 seconds of English meeting audio measured FunASR Nano and Parakeet decoding at about 3.7× and 4.0× their v1.2.2 speed, respectively (excluding model loading; results vary by device, model and audio).",
+          "commit": "8049d36b260e231e67e529688b04027a43553917"
+        },
         {
           "text": "Microphone and system audio are aligned and mixed through a shared pipeline for live captions and refinement, reducing duplicate transcription from echo.",
           "commit": "148177e01a9a199af48aec784f864fd97bdd89cf"
