@@ -184,30 +184,9 @@ const asrCopy = window.BreviaAsrCopy || {};
 // 清单直接跑边界。
 const modelSelection = window.BreviaModelSelection || {};
 const modelLibraryMetaCopy = window.BreviaLocaleData.appCopy.modelLibraryMetaCopy;
-// 内置纪要模型的编辑性单行描述，取自每个模型的公开
-// 定位（参数、优势、硬件适配）。按模型 id 索引，然后按语言环境索引。
-const builtinModelIntro = {
-  'qwen3.5-4b-q4km': {
-    zh: 'Qwen3.5 系列旗舰小模型，4B 参数即可媲美更大模型，中英文纪要质量最高，适合性能较强的设备。',
-    en: 'Flagship of the Qwen3.5 small series. At 4B it rivals much larger models, giving the best Chinese/English notes. Best on a capable machine.',
-    es: 'Buque insignia de la serie Qwen3.5. Con 4B rivaliza con modelos más grandes y ofrece las mejores notas en chino/inglés. Ideal para equipos potentes.',
-    ja: 'Qwen3.5 小型シリーズの旗艦。4B ながら大型モデルに匹敵し、中英の議事録品質は最高。高性能な端末向け。',
-    ko: 'Qwen3.5 소형 시리즈의 플래그십. 4B로도 더 큰 모델에 필적하며 중국어/영어 회의록 품질이 가장 높습니다. 고성능 기기에 적합.',
-    fr: 'Fleuron de la série Qwen3.5. À 4B, il rivalise avec des modèles bien plus grands et offre les meilleures notes en chinois/anglais. Idéal sur une machine puissante.',
-    de: 'Flaggschiff der Qwen3.5-Kleinserie. Mit 4B misst es sich mit viel größeren Modellen und liefert die besten Notizen auf Chinesisch/Englisch. Ideal für leistungsstarke Geräte.',
-    ru: 'Флагман малой серии Qwen3.5. При 4B соперничает с гораздо более крупными моделями и даёт лучшие заметки на китайском/английском. Лучше на мощном устройстве.',
-  },
-  'qwen3.5-2b-q4km': {
-    zh: 'Qwen3.5 2B 参数，质量与速度均衡，中英文纪要表现出色，适合大多数设备日常使用。',
-    en: 'Qwen3.5 at 2B. A balance of quality and speed with strong Chinese/English notes. A solid everyday choice for most machines.',
-    es: 'Qwen3.5 de 2B. Equilibrio entre calidad y velocidad con buenas notas en chino/inglés. Buena opción diaria para la mayoría de equipos.',
-    ja: 'Qwen3.5 2B。品質と速度のバランスが良く、中英の議事録も優秀。ほとんどの端末で日常使いに最適。',
-    ko: 'Qwen3.5 2B. 품질과 속도의 균형이 좋고 중국어/영어 회의록이 뛰어납니다. 대부분의 기기에서 일상용으로 적합.',
-    fr: 'Qwen3.5 en 2B. Équilibre entre qualité et vitesse avec de bonnes notes en chinois/anglais. Un bon choix quotidien pour la plupart des machines.',
-    de: 'Qwen3.5 mit 2B. Ausgewogen zwischen Qualität und Geschwindigkeit mit starken Notizen auf Chinesisch/Englisch. Solide Alltagswahl für die meisten Geräte.',
-    ru: 'Qwen3.5 на 2B. Баланс качества и скорости с хорошими заметками на китайском/английском. Надёжный повседневный выбор для большинства устройств.',
-  },
-};
+// 内置纪要模型介绍：团队背景、会议用途与本地运行要求。
+// 按模型 id 与语言环境索引，与模型库共用。
+const builtinModelIntro = window.BreviaLocaleData.appCopy.builtinModelIntro;
 /** 渲染一个评级维度的 3 级质量/速度刻度。@param {string} label 本地化的维度标签。@param {number} level 等级 1-3。@param {string} tierWord 本地化的等级名称。@returns {string} */
 function ratingScale(label, level, tierWord) {
   const dots = [1, 2, 3].map((step) => `<i${step <= level ? ' class="on"' : ''}></i>`).join('');
@@ -231,74 +210,10 @@ function renderModelLibraryRatings(model) {
 // 模型说明只陈述事实：谁发布、什么时候、覆盖哪些语言、体积与速度特点。不做
 // 「适合作为…」「日常选择」这类推荐性判断——模型选择由用户在模型库和会议设置里
 // 自己做，界面文字只负责把差异讲清楚。
-const modelLibraryBackground = {
-  zh: {
-    'silero-vad': 'Silero 团队于 2020 年发布、2021 年提供 ONNX 版本的语音活动检测模型。只判断“此刻是否有人说话”，用于切分句子边界，体积 2 MB。',
-    'qwen3-asr-0.6b-int8': '阿里云 Qwen 团队于 2026 年 1 月发布的 Qwen3-ASR 0.6B int8 版，基于 Qwen3-Omni 的音频理解能力，覆盖 30 种语言和 22 种中文方言，体积 879 MB。',
-    'funasr-nano-int8': 'FunAudioLLM 团队于 2025 年 12 月发布的 Fun-ASR-Nano int8 版，覆盖中文、英语、粤语，体积 842 MB。',
-    'pyannote-segmentation-3.0': 'pyannoteAI 于 2023 年 9 月发布的说话区间分割模型，检测说话、重叠说话和非语音区间，为说话人分离提供边界，体积 7 MB。',
-    'eres2net-base-3dspeaker-zh': '阿里达摩院于 2023 年 11 月发布的 3D-Speaker ERes2Net Base 声纹模型，训练于 20 万标注中文说话人数据。把语音转成可比较的说话人特征用于离线聚类，不参与语音转写，体积 40 MB。',
-    'hy-mt2-1.8b-q4km': '腾讯混元团队于 2025 年 12 月开源的 Hy-MT 1.8B 翻译模型本地量化版，用于字幕翻译，覆盖 33 种语言及多种方言，体积 1.13 GB。',
-  },
-  en: {
-    'silero-vad': 'Voice-activity detector released by the Silero team in 2020, with an ONNX build since 2021. It only decides whether someone is speaking right now, which is what splits caption segments. 2 MB.',
-    'qwen3-asr-0.6b-int8': 'Qwen3-ASR 0.6B int8, released by Alibaba Cloud’s Qwen team in January 2026. Covers 30 languages and 22 Chinese dialects. 879 MB.',
-    'funasr-nano-int8': 'Fun-ASR-Nano int8, released by FunAudioLLM in December 2025. Covers Chinese, English, and Cantonese. 842 MB.',
-    'pyannote-segmentation-3.0': 'Speech-region segmentation model released by pyannoteAI in September 2023. It finds speech, overlap, and non-speech boundaries for speaker diarization. 7 MB.',
-    'eres2net-base-3dspeaker-zh': '3D-Speaker ERes2Net Base voiceprint model released by Alibaba DAMO Academy in November 2023, trained on 200,000 labeled Mandarin speakers. It turns speech into comparable speaker embeddings for offline clustering and does not transcribe. 40 MB.',
-    'hy-mt2-1.8b-q4km': 'Quantized local build of Tencent Hunyuan’s 1.8B Hy-MT translation model, open-sourced in December 2025 and used for caption translation across 33 languages. 1.13 GB.',
-  },
-  es: {
-    'silero-vad': 'Detector de actividad de voz publicado por el equipo de Silero en 2020, con versión ONNX desde 2021. Solo decide si alguien está hablando en ese momento, que es lo que divide los segmentos de subtítulos. 2 MB.',
-    'qwen3-asr-0.6b-int8': 'Qwen3-ASR 0.6B int8, publicado por el equipo Qwen de Alibaba Cloud en enero de 2026. Cubre 30 idiomas y 22 dialectos del chino. 879 MB.',
-    'funasr-nano-int8': 'Fun-ASR-Nano int8, publicado por FunAudioLLM en diciembre de 2025. Cubre chino, inglés y cantonés. 842 MB.',
-    'pyannote-segmentation-3.0': 'Modelo de segmentación de regiones de voz publicado por pyannoteAI en septiembre de 2023. Detecta los límites de voz, solapamiento y no voz para la separación de hablantes. 7 MB.',
-    'eres2net-base-3dspeaker-zh': 'Modelo de huella de voz 3D-Speaker ERes2Net Base, publicado por Alibaba DAMO Academy en noviembre de 2023 y entrenado con 200.000 hablantes de mandarín etiquetados. Convierte la voz en representaciones comparables para la agrupación sin conexión; no transcribe. 40 MB.',
-    'hy-mt2-1.8b-q4km': 'Versión local cuantizada del modelo de traducción Hy-MT 1.8B de Tencent Hunyuan, publicado en diciembre de 2025 y usado para traducir subtítulos en 33 idiomas. 1,13 GB.',
-  },
-  ja: {
-    'silero-vad': 'Silero チームが 2020 年に公開し、2021 年から ONNX 版が提供されている音声活動検出モデル。その瞬間に誰かが話しているかだけを判定し、字幕の区間分割に使います。2 MB。',
-    'qwen3-asr-0.6b-int8': 'Alibaba Cloud の Qwen チームが 2026 年 1 月に公開した Qwen3-ASR 0.6B int8。30 言語と 22 の中国語方言に対応。879 MB。',
-    'funasr-nano-int8': 'FunAudioLLM が 2025 年 12 月に公開した Fun-ASR-Nano int8。中国語・英語・広東語に対応。842 MB。',
-    'pyannote-segmentation-3.0': 'pyannoteAI が 2023 年 9 月に公開した音声区間分割モデル。話者分離のために、発話・重なり・非発話の境界を検出します。7 MB。',
-    'eres2net-base-3dspeaker-zh': 'Alibaba DAMO Academy が 2023 年 11 月に公開した 3D-Speaker ERes2Net Base 声紋モデル。20 万件のラベル付き北京語話者で学習。音声を比較可能な話者埋め込みに変換し、オフラインのクラスタリングに使います（文字起こしは行いません）。40 MB。',
-    'hy-mt2-1.8b-q4km': 'Tencent Hunyuan の 1.8B Hy-MT 翻訳モデルのローカル量子化版。2025 年 12 月にオープンソース化され、33 言語の字幕翻訳に使います。1.13 GB。',
-  },
-  ko: {
-    'silero-vad': 'Silero 팀이 2020년에 공개하고 2021년부터 ONNX 버전을 제공하는 음성 활동 감지 모델입니다. 지금 말하는 사람이 있는지만 판단하며, 자막 구간을 나누는 데 사용합니다. 2 MB.',
-    'qwen3-asr-0.6b-int8': 'Alibaba Cloud의 Qwen 팀이 2026년 1월에 공개한 Qwen3-ASR 0.6B int8입니다. 30개 언어와 22개 중국어 방언을 지원합니다. 879 MB.',
-    'funasr-nano-int8': 'FunAudioLLM이 2025년 12월에 공개한 Fun-ASR-Nano int8입니다. 중국어, 영어, 광둥어를 지원합니다. 842 MB.',
-    'pyannote-segmentation-3.0': 'pyannoteAI가 2023년 9월에 공개한 음성 구간 분할 모델입니다. 화자 분리를 위해 발화, 겹침, 비발화 경계를 찾습니다. 7 MB.',
-    'eres2net-base-3dspeaker-zh': 'Alibaba DAMO Academy가 2023년 11월에 공개한 3D-Speaker ERes2Net Base 성문 모델로, 라벨이 지정된 중국어(보통화) 화자 20만 명으로 학습했습니다. 음성을 비교 가능한 화자 임베딩으로 바꿔 오프라인 군집화에 사용하며, 전사에는 관여하지 않습니다. 40 MB.',
-    'hy-mt2-1.8b-q4km': 'Tencent Hunyuan의 1.8B Hy-MT 번역 모델을 로컬에서 양자화한 버전입니다. 2025년 12월에 오픈소스로 공개되었고 33개 언어 자막 번역에 사용합니다. 1.13 GB.',
-  },
-  fr: {
-    'silero-vad': 'Détecteur d’activité vocale publié par l’équipe Silero en 2020, avec une version ONNX depuis 2021. Il détermine uniquement si quelqu’un parle à l’instant, ce qui sert à découper les segments de sous-titres. 2 Mo.',
-    'qwen3-asr-0.6b-int8': 'Qwen3-ASR 0.6B int8, publié par l’équipe Qwen d’Alibaba Cloud en janvier 2026. Couvre 30 langues et 22 dialectes chinois. 879 Mo.',
-    'funasr-nano-int8': 'Fun-ASR-Nano int8, publié par FunAudioLLM en décembre 2025. Couvre le chinois, l’anglais et le cantonais. 842 Mo.',
-    'pyannote-segmentation-3.0': 'Modèle de segmentation des régions vocales publié par pyannoteAI en septembre 2023. Il détecte les frontières de parole, de chevauchement et de non-parole pour la séparation des locuteurs. 7 Mo.',
-    'eres2net-base-3dspeaker-zh': 'Modèle d’empreinte vocale 3D-Speaker ERes2Net Base publié par Alibaba DAMO Academy en novembre 2023, entraîné sur 200 000 locuteurs mandarins annotés. Il transforme la parole en représentations comparables pour le regroupement hors ligne ; il ne transcrit pas. 40 Mo.',
-    'hy-mt2-1.8b-q4km': 'Version locale quantifiée du modèle de traduction Hy-MT 1,8 B de Tencent Hunyuan, open source depuis décembre 2025 et utilisée pour traduire les sous-titres en 33 langues. 1,13 Go.',
-  },
-  de: {
-    'silero-vad': 'Sprachaktivitätsdetektor, veröffentlicht vom Silero-Team 2020, mit ONNX-Version seit 2021. Er entscheidet nur, ob gerade jemand spricht – das teilt die Untertitel in Abschnitte. 2 MB.',
-    'qwen3-asr-0.6b-int8': 'Qwen3-ASR 0.6B int8, veröffentlicht vom Qwen-Team von Alibaba Cloud im Januar 2026. Deckt 30 Sprachen und 22 chinesische Dialekte ab. 879 MB.',
-    'funasr-nano-int8': 'Fun-ASR-Nano int8, veröffentlicht von FunAudioLLM im Dezember 2025. Deckt Chinesisch, Englisch und Kantonesisch ab. 842 MB.',
-    'pyannote-segmentation-3.0': 'Modell zur Segmentierung von Sprachbereichen, veröffentlicht von pyannoteAI im September 2023. Es findet Sprach-, Überlappungs- und Nicht-Sprach-Grenzen für die Sprechertrennung. 7 MB.',
-    'eres2net-base-3dspeaker-zh': 'Stimmabdruck-Modell 3D-Speaker ERes2Net Base, veröffentlicht von Alibaba DAMO Academy im November 2023 und mit 200.000 annotierten Mandarin-Sprechern trainiert. Es wandelt Sprache in vergleichbare Sprecher-Embeddings für das Offline-Clustering um und transkribiert nicht. 40 MB.',
-    'hy-mt2-1.8b-q4km': 'Lokal quantisierte Version des 1,8B-Hy-MT-Übersetzungsmodells von Tencent Hunyuan, seit Dezember 2025 Open Source und für die Untertitelübersetzung in 33 Sprachen. 1,13 GB.',
-  },
-  ru: {
-    'silero-vad': 'Детектор речевой активности, выпущенный командой Silero в 2020 году; с 2021 года доступна ONNX-версия. Он лишь определяет, говорит ли кто-то в данный момент, и по нему нарезаются сегменты субтитров. 2 МБ.',
-    'qwen3-asr-0.6b-int8': 'Qwen3-ASR 0.6B int8, выпущен командой Qwen (Alibaba Cloud) в январе 2026 года. Поддерживает 30 языков и 22 китайских диалекта. 879 МБ.',
-    'funasr-nano-int8': 'Fun-ASR-Nano int8, выпущен FunAudioLLM в декабре 2025 года. Поддерживает китайский, английский и кантонский. 842 МБ.',
-    'pyannote-segmentation-3.0': 'Модель сегментации речевых областей, выпущена pyannoteAI в сентябре 2023 года. Определяет границы речи, перекрытия и отсутствия речи для разделения говорящих. 7 МБ.',
-    'eres2net-base-3dspeaker-zh': 'Модель голосового отпечатка 3D-Speaker ERes2Net Base, выпущена Alibaba DAMO Academy в ноябре 2023 года и обучена на 200 000 размеченных носителях путунхуа. Превращает речь в сравнимые эмбеддинги говорящего для офлайн-кластеризации и не выполняет транскрипцию. 40 МБ.',
-    'hy-mt2-1.8b-q4km': 'Локальная квантованная версия модели перевода Hy-MT 1.8B от Tencent Hunyuan, открытая в декабре 2025 года и используемая для перевода субтитров на 33 языка. 1,13 ГБ.',
-  },
-};
+const modelLibraryBackground = window.BreviaLocaleData.appCopy.modelLibraryBackground;
 function modelLibraryDescription(model, fallback) {
-  return modelLibraryBackground[locale]?.[model?.id] || modelLibraryBackground.en[model?.id] || fallback;
+  return builtinModelIntro[model?.id]?.[locale] || builtinModelIntro[model?.id]?.en
+    || modelLibraryBackground[locale]?.[model?.id] || modelLibraryBackground.en[model?.id] || fallback;
 }
 let expandedSpeakerProfileId = null;
 let addingSampleProfileId = null;
@@ -316,7 +231,7 @@ function renderSpeakerProfileCard() {
 }
 /** 根据当前语言环境和可用性状态渲染浮动更新通知。@returns {void} */
 function updateCopy() { return updateLabels[locale] || { ...updateLabels.en, title: t('软件更新'), action: t('检查更新') }; }
-function currentVersionLabel() { return ({ zh: '当前版本', en: 'Current version', es: 'Versión actual', ja: '現在のバージョン', ko: '현재 버전', fr: 'Version actuelle', de: 'Aktuelle Version', ru: 'Текущая версия' })[locale] || 'Current version'; }
+function currentVersionLabel() { const labels = window.BreviaLocaleData.appCopy.currentVersionLabels; return labels[locale] || labels.en; }
 function availableUpdateLabel() { return updateVersion ? updateCopy().available.replace('0.2.0', updateVersion) : updateCopy().available; }
 function availableUpdateActionLabel() { return updateVersion ? updateCopy().update.replace('0.2.0', updateVersion) : updateCopy().update; }
 function renderUpdateNotice() {
@@ -373,6 +288,7 @@ let selectedAiAssistBuiltinModel = '';
 // onboarding 里选了「在线 AI 供应商」后，供应商下拉不再列出「内置 AI」，
 // 避免在线配置流程里混入本地内置选项。关闭模态框时复位。
 let onboardingOnlineProvider = false;
+let onboardingBuiltinProvider = false;
 function providerEntry(config, provider = config.provider) {
   return config.providers[provider] || {};
 }
@@ -1059,7 +975,7 @@ let onboardingModelReady = false;
 let initializationPromise;
 const useChinaModelSource = () => locale === 'zh' && localStorage.getItem('brevia-china-model-source') === 'true';
 const modelDownloadPayload = (modelId) => ({ model_id: modelId, ...(useChinaModelSource() ? { source: 'china' } : {}) });
-const chinaModelSourceToggle = () => locale === 'zh' ? `<p class="model-source-switch"><label><input type="checkbox" data-china-model-source${useChinaModelSource() ? ' checked' : ''} /><span>您是否身处中国大陆？</span></label><small>选择后将会使用大陆镜像源进行下载提速。</small></p>` : '';
+const chinaModelSourceToggle = () => locale === 'zh' ? `<p class="model-source-switch"><label><input type="checkbox" data-china-model-source${useChinaModelSource() ? ' checked' : ''} /><span>${escapeHtml(window.BreviaLocaleData.chinaModelSourceLabel)}</span></label></p>` : '';
 const onboardingCopy = window.BreviaLocaleData.appCopy.onboardingCopy;
 const onboardingSecurityCopy = window.BreviaLocaleData.appCopy.onboardingSecurityCopy;
 const onboardingLanguageCopy = window.BreviaLocaleData.appCopy.onboardingLanguageCopy;
@@ -1313,13 +1229,11 @@ prepareForm.addEventListener('click', (event) => {
 });
 /** 内置纪要模型的推荐项。与模型库、首启页一样只推荐一个，避免三处口径漂移。 */
 const RECOMMENDED_BUILTIN_MODEL_ID = 'qwen3.5-2b-q4km';
-/** 渲染内置纪要模型的选择器。**只列已安装的模型**。
- *
- * 安装与删除归模型库（`renderModelLibrary`，唯一能删模型的地方）。功能设置里再放一份下载
- * 入口会有两个后果：同一份清单要有第二套渲染实现，而且能力变成「能装不能卸」。
- * 模型一个都没装时不留死路——给一行说明 + 一个直接打开模型库的按钮。
- * @param {string} currentModelId 当前选中的模型 id。@param {object[]} installed 已安装的内置模型。@param {string} [hint] 覆盖默认说明文案。@returns {string} 选择器标记。 */
-function builtinModelPicker(currentModelId, installed, hint) {
+/** 渲染内置纪要模型选择器。设置页仅列已安装模型；首启允许选择和下载。
+ * @param {string} currentModelId 当前模型 id。@param {object[]} installed 候选模型。
+ * @param {string} [hint] 说明文案。@param {boolean} [allowDownload] 是否提供首启下载入口。
+ * @returns {string} 选择器标记。 */
+function builtinModelPicker(currentModelId, installed, hint, allowDownload = false) {
   const copy = summaryModelCopy[locale] || summaryModelCopy.en;
   const recommendedWord = (asrCopy.recommended || {})[locale] || (asrCopy.recommended || {}).en || '';
   const options = installed.map((model) => [
@@ -1328,12 +1242,19 @@ function builtinModelPicker(currentModelId, installed, hint) {
     model.id === RECOMMENDED_BUILTIN_MODEL_ID ? recommendedWord : '',
   ]);
   const selected = installed.find((model) => model.id === currentModelId) || installed[0];
+  const progress = modelDownloads.get(selected.id);
+  const inFlight = progress && !progress.error && !progress.cancelled;
+  const labels = modelLabels[locale] || modelLabels.en;
+  const downloadAction = allowDownload && !modelPaths.has(selected.id)
+    ? `<button class="modal-action" type="button" data-download-model="${escapeHtml(selected.id)}"${inFlight ? ' disabled' : ''}>${escapeHtml(inFlight ? labels.downloading : labels.download)} · ${formatBytes(selected.size_bytes || 0)}</button>`
+      + (progress?.error ? `<p class="summary-model-hint">${escapeHtml(progress.error)}</p>` : inFlight && progress.total ? `<p class="summary-model-hint">${Math.round(Math.min(1, progress.received / progress.total) * 100)}%</p>` : '')
+    : '';
   const intro = builtinModelIntro[selected.id]?.[locale] || builtinModelIntro[selected.id]?.en || '';
   return `<div class="model-picker">${flowSelect('model', selected.id, options)}`
     + (intro ? `<p class="model-picker-intro">${escapeHtml(intro)}</p>` : '')
     + `<div class="model-picker-foot">${renderModelLibraryRatings(selected)}`
-    + `<button class="text-button" type="button" data-open-models-from-config>${escapeHtml(t('管理模型库'))}</button></div></div>`
-    + `<p class="summary-model-hint">${escapeHtml(hint || copy.builtinHint)}</p>`;
+    + (allowDownload ? downloadAction : `<button class="text-button" type="button" data-open-models-from-config>${escapeHtml(t('管理模型库'))}</button>`) + '</div></div>'
+    + (allowDownload ? '' : `<p class="summary-model-hint">${escapeHtml(hint || copy.builtinHint)}</p>`);
 }
 /** 一个内置模型都没装时的空状态：不留死路，直接给去模型库的路。@param {string} storedModelId 配置里记着的模型 id（回填用，可能未安装）。@returns {string} 空状态标记。 */
 function builtinModelEmptyState(storedModelId) {
@@ -1354,15 +1275,15 @@ function renderModelConfigFields(config, selectedModel, { required = true, hint 
   const providerOptions = summaryProviders
     .filter((id) => !onboardingOnlineProvider || id !== 'built-in')
     .map((id) => [id, summaryProviderLabel(id)]);
-  const providerField = `<label class="config-select-field">${copy.provider}${flowSelect('provider', provider, providerOptions)}</label>`;
+  const providerField = onboardingBuiltinProvider ? '<input type="hidden" name="provider" value="built-in" />' : `<label class="config-select-field">${copy.provider}${flowSelect('provider', provider, providerOptions)}</label>`;
   let fields = '';
   let builtinModelList = '';
   let currentModelId = '';
   if (isBuiltin) {
-    const installed = modelCatalog.filter((model) => model.kind === 'llama-chat' && modelPaths.has(model.id));
+    const installed = modelCatalog.filter((model) => model.kind === 'llama-chat' && (onboardingBuiltinProvider || modelPaths.has(model.id)));
     const stored = modelPaths.has(entry.model) ? entry.model : '';
-    currentModelId = installed.some((model) => model.id === selectedModel) ? selectedModel : (stored || installed[0]?.id || '');
-    builtinModelList = installed.length ? builtinModelPicker(currentModelId, installed, hint) : builtinModelEmptyState(stored);
+    currentModelId = installed.some((model) => model.id === selectedModel) ? selectedModel : (stored || (onboardingBuiltinProvider && installed.find((model) => model.id === RECOMMENDED_BUILTIN_MODEL_ID)?.id) || installed[0]?.id || '');
+    builtinModelList = installed.length ? builtinModelPicker(currentModelId, installed, hint, onboardingBuiltinProvider) : builtinModelEmptyState(stored);
   } else {
     // 固定供应商的请求地址由代码派生，只有自定义供应商才让用户填写。
     const requiredAttr = required ? ' required' : '';
@@ -1386,9 +1307,9 @@ function renderSummaryModelForm() { return renderModelConfigForm(summaryConfigDr
 function renderSummaryModelModal() {
   summaryConfigDraft ||= structuredClone(summaryConfig);
   const copy = summaryModelCopy[locale] || summaryModelCopy.en;
-  settingsModal.querySelector('h2').textContent = t('AI 会议总结');
+  settingsModal.querySelector('h2').textContent = copy.title;
   settingsModal.querySelector('.modal-title p').textContent = copy.featureIntro || summaryModelCopy.en.featureIntro;
-  settingsModal.querySelector('.modal-body').innerHTML = `<label class="summary-enabled-control"><input type="checkbox" data-summary-enabled${summaryConfig.enabled ? ' checked' : ''} />${escapeHtml(t('AI 会议总结'))}</label>${renderSummaryModelForm()}`;
+  settingsModal.querySelector('.modal-body').innerHTML = `${onboardingBuiltinProvider || onboardingOnlineProvider ? '' : `<label class="summary-enabled-control"><input type="checkbox" data-summary-enabled${summaryConfig.enabled ? ' checked' : ''} />${escapeHtml(t('AI 会议总结'))}</label>`}${renderSummaryModelForm()}`;
 }
 /** 渲染「AI 笔记」设置模态框：开关、主动性与独立模型连接。@returns {void} */
 function renderAiAssistModal() {
@@ -1661,8 +1582,8 @@ function renderModal(kind) {
   if (kind === 'storage') {
     const cleanup = storageCleanupCopy[locale] || storageCleanupCopy.en;
     settingsModal.querySelector('h2').textContent = t('存储与隐私');
-    settingsModal.querySelector('.modal-title p').textContent = t('查看和管理保存在此 Mac 上的会议资料、模型与导出文件。');
-    settingsModal.querySelector('.modal-body').innerHTML = `<div class="storage-list">${copy.items.map(([name, size], index) => `<section><span><b>${escapeHtml(name)}</b><small>${escapeHtml(size)}</small></span><span><button class="secondary" data-open-storage="${['meetings', 'models', 'exports'][index]}" type="button">${t('从文件夹打开')}</button><button class="model-delete" data-clear-storage="${['meetings', 'models', 'exports'][index]}" type="button">${t('清空数据')}</button></span></section>`).join('')}</div><div class="modal-form-actions"><button class="secondary" data-cleanup-storage type="button">${cleanup.button}</button><small>${cleanup.detail}</small></div>`;
+    settingsModal.querySelector('.modal-title p').textContent = t('查看和管理保存在此设备上的会议录音、会议纪要与模型。');
+    settingsModal.querySelector('.modal-body').innerHTML = `<div class="storage-list">${copy.items.map(([name, size], index) => `<section><span><b>${escapeHtml(name)}</b><small>${escapeHtml(size)}</small></span><span><button class="secondary" data-open-storage="${['meetings', 'models'][index]}" type="button">${t('从文件夹打开')}</button><button class="model-delete" data-clear-storage="${['meetings', 'models'][index]}" type="button">${t('清空数据')}</button></span></section>`).join('')}</div><div class="modal-form-actions storage-cleanup"><button class="model-delete" data-cleanup-storage type="button">${cleanup.button}</button></div>`;
     return;
   }
   if (kind === 'models') { renderModelLibrary(); return; }
@@ -1710,11 +1631,11 @@ function visibleModels() {
 function modelLibraryGroup(model) {
   return modelSelection.modelLibraryGroup(model, MODEL_LIBRARY_STAGE_GROUPS);
 }
-/** 模型库一行的「下载 / 占用 / 内存」摘要。@param {object} model 清单项。@returns {string} */
+/** 模型库一行的下载大小。@param {object} model 清单项。@returns {string} */
 function modelSizeSummary(model) {
   return modelSelection.modelSizeSummary(
     model,
-    { download: t('下载'), disk: t('占用'), memory: t('内存') },
+    { download: t('下载') },
     formatBytes,
   );
 }
@@ -1727,8 +1648,6 @@ function renderModelLibrary() {
   const roleWords = (asrCopy.asrRole || {})[locale] || (asrCopy.asrRole || {}).en || {};
   const modelWords = (asrCopy.model || {})[locale] || (asrCopy.model || {}).en || {};
   const labels = modelLabels[locale] || modelLabels.en;
-  const installed = visibleModels().filter((model) => modelPaths.has(model.id) || model.bundled);
-  const installedBytes = installed.reduce((total, model) => total + (model.disk_size_bytes || 0), 0);
 
   settingsModal.querySelector('h2').textContent = (modalCopy[locale] || modalCopy.en).models?.title || t('模型库');
   settingsModal.querySelector('.modal-title p').textContent = t('下载和管理本地语音识别模型，为字幕、精修和说话人识别提供能力。');
@@ -1781,8 +1700,7 @@ function renderModelLibrary() {
   }).join('');
 
   settingsModal.querySelector('.modal-body').innerHTML = chinaModelSourceToggle()
-    + `<div class="modal-list model-library-list">${rows}</div>`
-    + `<p class="model-library-total">${escapeHtml(t('已安装'))} ${installed.length} · ${escapeHtml(formatBytes(installedBytes))}</p>`;
+    + `<div class="modal-list model-library-list">${rows}</div>`;
 }
 
 /** 渲染“更新日志”弹窗：标题 + 按版本倒序的内容列表。@returns {void} */
@@ -1822,6 +1740,7 @@ function renderWhatsNewList() {
 }
 /** 显示设置模态框并播放进入动画；可选聚焦内部元素。@param {string} [focusSelector] 打开后聚焦的模态框内元素。@returns {void} */
 function showSettingsModal(focusSelector) {
+  settingsModal.querySelector('.modal-title p').hidden = activeView === 'settings';
   settingsModal.querySelector('.modal-close').setAttribute('aria-label', (modalCopy[locale] || modalCopy.en).close);
   settingsModal.classList.remove('modal-leave');
   settingsModal.style.zIndex = '60';
@@ -1843,6 +1762,7 @@ function openConfirmation(title, detail, action) {
 }
 async function openModal(kind) {
   clearTimeout(modalDismissTimer);
+  if (kind === 'ai-features') { openOnboardingAi(true); return; }
   if (kind === 'advanced-settings') {
     try {
       const [settings, status] = await Promise.all([window.brevia?.advancedSettings.get(), window.brevia?.permissions.status().catch(() => undefined)]);
@@ -1876,6 +1796,7 @@ function closeModal() {
   summaryConfigDraft = null;
   aiAssistConfigDraft = null;
   onboardingOnlineProvider = false;
+  onboardingBuiltinProvider = false;
   // 关掉弹窗就作废「装完跳回功能设置」的意图，否则下次在模型库里随便下一个
   // llama-chat 模型会被莫名其妙地弹回纪要设置页。
   modelsReturnTo = null;
@@ -1888,7 +1809,7 @@ function closeModal() {
     if (!settingsModal.classList.contains('modal-leave')) return;
     settingsModal.hidden = true;
     settingsModal.classList.remove('modal-leave');
-    document.body.classList.remove('modal-open');
+    if (onboardingPage?.dataset.aiSettings !== 'true') document.body.classList.remove('modal-open');
   }, 220);
 }
 
@@ -1904,7 +1825,12 @@ function renderOnboardingAiDemo() {
   const mode = onboardingPage?.querySelector('[name="onboarding-ai-enabled"]')?.checked
     ? onboardingPage.querySelector('[name="onboarding-ai-proactivity"]')?.value || 'assist' : 'off';
   if (!demo) return;
-  onboardingPage.querySelector('[name="onboarding-ai-proactivity"]').disabled = mode === 'off';
+  const select = onboardingPage.querySelector('[name="onboarding-ai-proactivity"]').closest('.flow-select');
+  select.querySelectorAll('button, input').forEach(control => { control.disabled = mode === 'off'; });
+  if (mode === 'off') {
+    select.querySelector('.flow-select-options').hidden = true;
+    select.querySelector('.flow-select-toggle').setAttribute('aria-expanded', 'false');
+  }
   const copy = aiOnboardingCopy[locale] || aiOnboardingCopy.en;
   const demoCopy = aiOnboardingDemoCopy[locale] || aiOnboardingDemoCopy.en;
   const speaker = t('说话人');
@@ -1939,7 +1865,7 @@ function openOnboardingLanguage(initialLocale = onboardingSelectedLocale || wind
   const wheelItems = Array.from({ length: 5 }, (_, round) => choices.map(([code, label]) => `<button type="button" data-language-wheel-value="${code}" role="option" aria-selected="${code === defaultLocale}"${round === 2 ? '' : ' tabindex="-1"'}>${label}</button>`).join('')).join('');
   onboardingPage = document.createElement('main');
   onboardingPage.className = 'onboarding-page onboarding-active';
-  onboardingPage.innerHTML = `<form class="onboarding-page-content onboarding-language-page" data-onboarding-language><img class="onboarding-brand" src="./assets/brevia-logo.svg" alt="Brevia" /><div class="onboarding-page-copy"><h1></h1><p></p></div><input name="locale" type="hidden" value="${defaultLocale}" /><div class="language-wheel" role="listbox" aria-label="${escapeHtml(t('切换语言'))}">${wheelItems}</div><small class="onboarding-page-copy"></small><div class="onboarding-actions onboarding-page-copy"><button class="modal-action" type="submit"></button></div></form>`;
+  onboardingPage.innerHTML = `<form class="onboarding-page-content onboarding-language-page" data-onboarding-language><img class="onboarding-brand" src="./assets/brevia-logo.svg" alt="Brevia" /><div class="onboarding-page-copy"><h1></h1><p></p></div><input name="locale" type="hidden" value="${defaultLocale}" /><div class="language-wheel" role="listbox" aria-label="${escapeHtml(t('切换语言'))}">${wheelItems}</div><div class="onboarding-actions onboarding-page-copy"><button class="modal-action" type="submit"></button></div></form>`;
   document.body.append(onboardingPage);
   updateOnboardingLanguageCopy(defaultLocale);
   requestAnimationFrame(() => onboardingPage.classList.add('onboarding-page-enter'));
@@ -2018,67 +1944,10 @@ async function refreshSettingsFolderRows() {
 renderSettingsFolderRows();
 
 // 首次引导：功能演示（tour）。在设置完成后，以 1:1 复刻的应用界面逐一展示言录的核心能力。
-const tourMeetingFallback = { zh: '会议', en: 'Meeting', es: 'Reunión', ja: '会議', ko: '회의', fr: 'Réunion', de: 'Besprechung', ru: 'Встреча' };
-const tourAiSuggestionFallback = { zh: 'AI 建议', en: 'AI suggestion', es: 'Sugerencia de IA', ja: 'AI 提案', ko: 'AI 제안', fr: 'Suggestion IA', de: 'KI-Vorschlag', ru: 'Совет ИИ' };
-const tourHowtoLabel = { zh: '如何使用', en: 'How to use', es: 'Cómo usarlo', ja: '使い方', ko: '사용 방법', fr: 'Comment l’utiliser', de: 'So verwenden', ru: 'Как использовать' };
-const tourHowto = {
-  zh: {
-    0: ['在搜索框输入关键词，可搜索会议标题、字幕内容或说话人。', '搜索结果以浮窗展示，并高亮命中的关键词。', '点击某条结果即可打开该会议。'],
-    1: ['输入会议名称，并选择会议语言与译文目标。', '勾选要录制的音频来源（麦克风 / 系统音频）。', '点击「开始录制」，模型加载后会自动开录。'],
-    2: ['录制时，右侧实时字幕会持续滚动更新。', '每条字幕带时间与说话人，点击可回放定位。', '点击「展开字幕」，把字幕切到主视图。'],
-    3: ['点击「AI 笔记」开启实时纪要。', 'AI 会自动提炼结论、风险与待办到笔记区。', '可将当前字幕片段一键加入笔记。'],
-    4: ['会后自动生成精修逐字稿与纪要。', '拖动播放条回听，字幕会随之高亮。', '点击「导出」或「分享」，保存或发送纪要。'],
-  },
-  en: {
-    0: ['Type keywords to search meeting titles, captions, or speakers.', 'Results appear in a popover with the query highlighted.', 'Click a result to open that meeting.'],
-    1: ['Enter a meeting title, then choose the language and translation target.', 'Check which audio sources to record (mic / system audio).', 'Hit Start recording; models load before recording begins.'],
-    2: ['Live captions scroll continuously on the right while recording.', 'Each caption carries a time and speaker; click to jump playback.', 'Expand captions to bring them to the main view.'],
-    3: ['Enable AI notes to start real-time notes.', 'AI surfaces decisions, risks, and actions into your notes.', 'Add the current caption segment to your notes in one click.'],
-    4: ['A refined transcript and notes are generated automatically.', 'Drag the playback bar to listen; captions highlight in sync.', 'Export or share the notes when you are done.'],
-  },
-  es: {
-    0: ['Escribe palabras clave para buscar títulos, subtítulos o hablantes.', 'Los resultados aparecen en una ventana flotante con la búsqueda resaltada.', 'Haz clic en un resultado para abrir esa reunión.'],
-    1: ['Escribe un título y elige el idioma y la traducción.', 'Marca qué fuentes de audio grabar (micrófono / sistema).', 'Pulsa Iniciar grabación; los modelos cargan antes.'],
-    2: ['Los subtítulos en vivo se desplazan a la derecha al grabar.', 'Cada subtítulo tiene hora y hablante; pulsa para saltar.', 'Amplía los subtítulos para llevarlos a la vista principal.'],
-    3: ['Activa la IA para notas en tiempo real.', 'La IA extrae conclusiones, riesgos y tareas a tus notas.', 'Añade el segmento actual a tus notas con un clic.'],
-    4: ['Se genera automáticamente una transcripción refinada y notas.', 'Arrastra la barra para escuchar; los subtítulos se resaltan.', 'Exporta o comparte las notas al terminar.'],
-  },
-  ja: {
-    0: ['キーワードで会議タイトル・字幕・話者を検索。', '結果は浮遊ウィンドウで表示され、キーワードがハイライト。', '結果をクリックすると会議が開きます。'],
-    1: ['会議名を入力し、言語と翻訳先を選択。', '録音する音声ソース（マイク/システム）を選択。', '「録音を開始」でモデル読み込み後に開始。'],
-    2: ['録音中、右側にライブ字幕が流れます。', '各字幕に時間と話者が付き、クリックで再生位置へ。', '「字幕を展開」で字幕をメイン表示に。'],
-    3: ['「AIメモ」を有効にしてリアルタイムメモ。', 'AI が結論・リスク・ToDo をメモに抽出。', '現在の字幕をワンクリックでメモに追加。'],
-    4: ['終了後に精修済みの文字起こしとメモを自動生成。', 'バーをドラッグして再生、字幕が連動ハイライト。', '「エクスポート」「共有」で保存・送信。'],
-  },
-  ko: {
-    0: ['키워드로 회의 제목·자막·화자를 검색하세요.', '결과는 플로팅 창에 표시되며 키워드가 강조됩니다.', '결과를 클릭하면 회의가 열립니다.'],
-    1: ['회의 이름을 입력하고 언어·번역 대상을 선택하세요.', '녹음할 오디오 소스(마이크/시스템)를 선택하세요.', '「녹음 시작」을 누르면 모델 로드 후 시작됩니다.'],
-    2: ['녹음 중 오른쪽에 실시간 자막이 흐릅니다.', '각 자막에 시간·화자가 표시되며 클릭으로 이동.', '「자막 확대」로 자막을 메인 화면에.'],
-    3: ['「AI 메모」를 켜서 실시간 메모를 시작하세요.', 'AI가 결론·리스크·할 일을 메모로 추출합니다.', '현재 자막을 한 번에 메모에 추가하세요.'],
-    4: ['종료 후 정제된 녹취와 메모를 자동 생성합니다.', '바를 드래그해 재생하면 자막이 연동됩니다.', '「내보내기」「공유」로 저장·전송하세요.'],
-  },
-  fr: {
-    0: ['Saisissez des mots-clés pour chercher titres, sous-titres ou locuteurs.', 'Les résultats s’affichent dans une fenêtre flottante avec la recherche surlignée.', 'Cliquez sur un résultat pour ouvrir cette réunion.'],
-    1: ['Saisissez un titre, puis choisissez la langue et la traduction.', 'Cochez les sources audio à enregistrer (micro / système).', 'Cliquez sur Démarrer ; les modèles se chargent avant.'],
-    2: ['Les sous-titres défilent à droite pendant l’enregistrement.', 'Chaque sous-titre a une heure et un locuteur ; cliquez pour sauter.', 'Agrandissez les sous-titres pour les mettre en premier plan.'],
-    3: ['Activez les notes IA pour les notes en temps réel.', 'L’IA extrait conclusions, risques et tâches dans vos notes.', 'Ajoutez le segment courant à vos notes en un clic.'],
-    4: ['Une transcription affinée et des notes sont générées automatiquement.', 'Faites glisser la barre pour écouter ; les sous-titres se surlignent.', 'Exportez ou partagez les notes à la fin.'],
-  },
-  de: {
-    0: ['Geben Sie Schlüsselwörter ein, um Titel, Untertitel oder Sprecher zu suchen.', 'Die Ergebnisse erscheinen in einem Popover mit hervorgehobener Suche.', 'Klicken Sie auf ein Ergebnis, um die Besprechung zu öffnen.'],
-    1: ['Titel eingeben, Sprache und Übersetzungsziel wählen.', 'Audioquellen (Mikrofon/System) zum Aufnehmen auswählen.', '„Aufnahme starten“; die Modelle laden vor dem Start.'],
-    2: ['Live-Untertitel laufen rechts während der Aufnahme.', 'Jeder Untertitel hat Zeit und Sprecher; klicken zum Springen.', 'Untertitel vergrößern, um sie in die Hauptansicht zu bringen.'],
-    3: ['KI-Notizen für Notizen in Echtzeit aktivieren.', 'KI zieht Schlussfolgerungen, Risiken und Aufgaben in Ihre Notizen.', 'Aktuelles Segment mit einem Klick zu Notizen hinzufügen.'],
-    4: ['Ein bearbeitetes Transkript und Notizen werden automatisch erstellt.', 'Balken ziehen zum Anhören; Untertitel werden synchron hervorgehoben.', 'Notizen am Ende exportieren oder teilen.'],
-  },
-  ru: {
-    0: ['Введите ключевые слова для поиска названий, субтитров или говорящих.', 'Результаты появляются во всплывающем окне с подсветкой запроса.', 'Нажмите на результат, чтобы открыть встречу.'],
-    1: ['Введите название, затем выберите язык и перевод.', 'Отметьте источники звука для записи (микрофон/система).', 'Нажмите «Начать запись»; модели загрузятся заранее.'],
-    2: ['Субтитры прокручиваются справа во время записи.', 'У каждого субтитра есть время и говорящий; клик для перехода.', 'Разверните субтитры, чтобы показать их на главном экране.'],
-    3: ['Включите ИИ-заметки для заметок в реальном времени.', 'ИИ извлекает выводы, риски и задачи в ваши заметки.', 'Добавьте текущий фрагмент в заметки одним кликом.'],
-    4: ['Обработанная расшифровка и заметки создаются автоматически.', 'Перетащите полосу для прослушивания; субтитры подсвечиваются.', 'Экспортируйте или поделитесь заметками в конце.'],
-  },
-};
+const tourMeetingFallback = window.BreviaLocaleData.appCopy.tourMeetingFallback;
+const tourAiSuggestionFallback = window.BreviaLocaleData.appCopy.tourAiSuggestionFallback;
+const tourHowtoLabel = window.BreviaLocaleData.appCopy.tourHowtoLabel;
+const tourHowto = window.BreviaLocaleData.appCopy.tourHowto;
 function openOnboardingTour() {
   const copy = tourCopy[locale] || tourCopy.en;
   onboardingTourIndex = 0;
@@ -2182,14 +2051,12 @@ function updateOnboardingLanguageCopy(nextLocale) {
   onboardingPreviewLocale = nextLocale;
   onboardingSelectedLocale = nextLocale;
   const [title, prompt, continueLabel] = onboardingLanguageCopy[nextLocale] || onboardingLanguageCopy.en;
-  const copy = onboardingCopy[nextLocale] || onboardingCopy.en;
   const nodes = onboardingPage.querySelectorAll('.onboarding-page-copy');
   nodes.forEach((node) => node.classList.add('locale-out'));
   window.setTimeout(() => {
     onboardingPage.querySelector('h1').textContent = title;
     onboardingPage.querySelector('.language-wheel').setAttribute('aria-label', prompt);
     onboardingPage.querySelector('.onboarding-page-copy p').textContent = prompt;
-    onboardingPage.querySelector('small').textContent = copy.languageHint;
     onboardingPage.querySelector('[type="submit"]').textContent = continueLabel;
     onboardingPage.lang = nextLocale;
     nodes.forEach((node) => { node.classList.remove('locale-out'); node.classList.add('locale-in'); });
@@ -2260,10 +2127,12 @@ function dismissOnboardingPage(next) {
   window.removeEventListener('resize', fitTourWindow);
   page.classList.remove('onboarding-page-enter');
   page.classList.add('onboarding-page-leave');
+  if (page.dataset.aiSettings === 'true') { page.classList.remove('modal-enter'); page.classList.add('modal-leave'); }
   window.setTimeout(() => {
     page.remove();
     if (onboardingPage !== page) return;
     onboardingPage = undefined;
+    if (page.dataset.aiSettings === 'true' && settingsModal.hidden) document.body.classList.remove('modal-open');
     next?.();
   }, 260);
 }
@@ -2427,17 +2296,17 @@ const aiOnboardingDemoCopy = window.BreviaLocaleData.appCopy.aiOnboardingDemoCop
 const aiOnboardingSummaryDemoCopy = window.BreviaLocaleData.appCopy.aiOnboardingSummaryDemoCopy;
 // 首次引导功能演示（tour）文案。
 const tourCopy = window.BreviaLocaleData.appCopy.tourCopy;
-function openOnboardingAi() {
+function openOnboardingAi(settingsMode = false) {
   const copy = aiOnboardingCopy[locale] || aiOnboardingCopy.en;
   // 低配设备默认「暂不开启」实时 AI 笔记（太耗资源），仅保留会后一次性的 AI 会议纪要。
-  const defaultProactivity = deviceIsWeak() ? 'off' : 'assist';
-  const levels = copy.levels.filter(([value]) => ['assist', 'auto'].includes(value)).map(([value, title]) => `<option value="${value}"${value === defaultProactivity ? ' selected' : ''}>${escapeHtml(title)}</option>`).join('');
+  const defaultProactivity = settingsMode ? aiAssistConfig.proactivity : (deviceIsWeak() ? 'off' : 'assist');
+  const levels = copy.levels.filter(([value]) => ['assist', 'auto'].includes(value) || (settingsMode && value === 'quiet')).map(([value, title]) => [value, title]);
   const brand = locale === 'zh' ? '<div class="onboarding-brand-name"><span>言</span><b>言录</b></div>' : '<img class="onboarding-brand" src="./assets/brevia-logo.svg" alt="Brevia" />';
   const summaryIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 11h6M9 15h6M9 19h4"/></svg>';
   const notesIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h11a2 2 0 0 1 2 2v6M5 4v16h9M8 9h7M8 13h5"/><path d="m16 17 1.5-3 1.5 3 3 1.5-3 1.5-1.5 3-1.5-3-3-1.5z"/></svg>';
-  showOnboardingPage('setup', `<section class="onboarding-setup-page onboarding-ai-setup-page">
-    <button class="onboarding-back" data-onboarding-back-language type="button" aria-label="${t('返回')}">←</button>
-    <header>${brand}<h1>${escapeHtml(copy.title)}</h1><div class="onboarding-intro"><p>${escapeHtml(copy.intro)}</p></div></header>
+  const content = `<section class="${settingsMode ? 'ai-features-content' : 'onboarding-setup-page'} onboarding-ai-setup-page">
+    ${settingsMode ? '' : `<button class="onboarding-back" data-onboarding-back-language type="button" aria-label="${t('返回')}">←</button>
+    <header>${brand}<h1>${escapeHtml(copy.title)}</h1>${copy.intro ? `<div class="onboarding-intro"><p>${escapeHtml(copy.intro)}</p></div>` : ''}</header>`}
     <section class="onboarding-section onboarding-ai-feature onboarding-ai-row">
       <div class="onboarding-ai-copy">
         <div class="onboarding-ai-feature-head"><span class="onboarding-ai-icon">${summaryIcon}</span><h2>${escapeHtml(copy.meetingNotesTitle)}</h2><label class="onboarding-ai-switch"><input type="checkbox" name="onboarding-summary-enabled" aria-label="${escapeHtml(copy.meetingNotesTitle)}"${summaryConfig.enabled ? ' checked' : ''} /></label></div>
@@ -2448,15 +2317,28 @@ function openOnboardingAi() {
     </section>
     <section class="onboarding-section onboarding-ai-feature onboarding-ai-row">
       <div class="onboarding-ai-copy">
-        <div class="onboarding-ai-feature-head"><span class="onboarding-ai-icon">${notesIcon}</span><h2>${escapeHtml(copy.liveNotesTitle)}</h2><label class="onboarding-ai-switch"><input type="checkbox" name="onboarding-ai-enabled" aria-label="${escapeHtml(copy.enableLiveNotes)}"${defaultProactivity !== 'off' ? ' checked' : ''} /></label></div>
+        <div class="onboarding-ai-feature-head"><span class="onboarding-ai-icon">${notesIcon}</span><h2>${escapeHtml(copy.liveNotesTitle)}</h2><label class="onboarding-ai-switch"><input type="checkbox" name="onboarding-ai-enabled" aria-label="${escapeHtml(copy.enableLiveNotes)}"${(settingsMode ? aiAssistConfig.enabled : defaultProactivity !== 'off') ? ' checked' : ''} /></label></div>
         <p class="onboarding-ai-feature-desc">${escapeHtml(copy.liveNotesDesc)}</p>
         <label class="onboarding-ai-way-title" for="onboarding-ai-proactivity">${escapeHtml(copy.proactivityTitle)}</label>
-        <div class="onboarding-ai-levels"><select id="onboarding-ai-proactivity" name="onboarding-ai-proactivity">${levels}</select></div>
-        <small class="onboarding-ai-feature-hint">${escapeHtml(copy.proactivityHint || '')}</small>
+        <div class="onboarding-ai-levels">${flowSelect('onboarding-ai-proactivity', defaultProactivity, levels)}</div>
+        ${copy.proactivityHint ? `<small class="onboarding-ai-feature-hint">${escapeHtml(copy.proactivityHint)}</small>` : ''}
+        ${settingsMode ? `<button class="secondary" data-configure-ai-notes type="button">${escapeHtml(t('配置 AI 笔记'))}</button>` : ''}
       </div><div class="onboarding-ai-frame"><aside class="onboarding-ai-demo" data-onboarding-ai-demo></aside></div>
     </section>
-    <div class="onboarding-actions"><button class="secondary" data-onboarding-ai-skip type="button">${escapeHtml(copy.skip)}</button><button class="modal-action" data-onboarding-ai-finish type="button">${escapeHtml(copy.finish)}</button></div>
-  </section>`);
+    <div class="onboarding-actions"><button class="secondary" data-onboarding-ai-skip type="button">${escapeHtml(settingsMode ? t('取消') : copy.skip)}</button><button class="modal-action" data-onboarding-ai-finish type="button">${escapeHtml(settingsMode ? t('保存配置') : copy.finish)}</button></div>
+  </section>`;
+  if (settingsMode) {
+    onboardingPage = document.createElement('div');
+    onboardingPage.className = 'modal-backdrop ai-features-modal';
+    onboardingPage.innerHTML = `<section class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="ai-features-title"><header class="modal-head"><div class="modal-title"><h2 id="ai-features-title">${escapeHtml(t('AI 功能'))}</h2></div><button class="modal-close" data-close-ai-features type="button" aria-label="${escapeHtml(t('关闭'))}">×</button></header><div class="modal-body">${content}</div></section>`;
+    document.body.append(onboardingPage);
+    document.body.classList.add('modal-open');
+    const page = onboardingPage;
+    requestAnimationFrame(() => page.classList.add('modal-enter'));
+    page.querySelector('[data-close-ai-features]').focus();
+  } else showOnboardingPage('setup', content);
+  onboardingPage.dataset.aiSettings = String(settingsMode);
+  onboardingPage.querySelector('.onboarding-ai-levels .flow-select-toggle').id = 'onboarding-ai-proactivity';
   renderOnboardingAiDemo();
   renderOnboardingSummaryDemo();
   const syncSummarySwitch = () => {
@@ -2472,31 +2354,84 @@ function openOnboardingAi() {
     }
   });
   onboardingPage.addEventListener('click', (event) => {
+    if (settingsMode && (event.target === onboardingPage || event.target.closest('[data-close-ai-features]'))) { dismissOnboardingPage(); return; }
+    const toggle = event.target.closest('.onboarding-ai-levels [data-flow-select-toggle]');
+    if (toggle) {
+      if (toggle.disabled) return;
+      const options = toggle.parentElement.querySelector('.flow-select-options');
+      options.hidden = !options.hidden;
+      toggle.setAttribute('aria-expanded', String(!options.hidden));
+      return;
+    }
+    const choice = event.target.closest('[data-flow-select-choice="onboarding-ai-proactivity"]');
+    if (choice) {
+      if (choice.disabled) return;
+      const select = choice.closest('.flow-select');
+      const input = select.querySelector('input');
+      input.value = choice.dataset.value;
+      select.querySelector('.flow-select-toggle').firstChild.nodeValue = choice.dataset.label;
+      select.querySelector('.flow-select-options').hidden = true;
+      select.querySelector('.flow-select-toggle').setAttribute('aria-expanded', 'false');
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      return;
+    }
     const aiWay = event.target.closest('.onboarding-ai-ways label');
     if (aiWay) {
       if (!onboardingPage.querySelector('[name="onboarding-summary-enabled"]').checked) return;
       onboardingOnlineProvider = !aiWay.querySelector('[value="built-in"]');
+      onboardingBuiltinProvider = !onboardingOnlineProvider;
       summaryConfigDraft = structuredClone(summaryConfig);
       summaryConfigDraft.provider = onboardingOnlineProvider ? (summaryConfig.provider === 'built-in' ? 'openai' : summaryConfig.provider) : 'built-in';
       openModal('summary-model');
       return;
     }
-    if (event.target.closest('[data-onboarding-back-language]')) { dismissOnboardingPage(openOnboardingSetup); return; }
-    if (event.target.closest('[data-onboarding-ai-finish]')) { void finishAiOnboarding(); return; }
-    if (event.target.closest('[data-onboarding-ai-skip]')) { void finishAiOnboarding(false); return; }
+    if (event.target.closest('[data-configure-ai-notes]')) {
+      aiAssistConfigDraft = structuredClone(aiAssistConfig);
+      aiAssistConfigDraft.enabled = onboardingPage.querySelector('[name="onboarding-ai-enabled"]').checked;
+      aiAssistConfigDraft.proactivity = onboardingPage.querySelector('[name="onboarding-ai-proactivity"]').value || 'assist';
+      openModal('ai-assist');
+      return;
+    }
+    if (event.target.closest('[data-onboarding-back-language]')) { dismissOnboardingPage(settingsMode ? undefined : openOnboardingSetup); return; }
+    if (event.target.closest('[data-onboarding-ai-finish]')) { void finishAiOnboarding(undefined, settingsMode); return; }
+    if (event.target.closest('[data-onboarding-ai-skip]')) {
+      if (settingsMode) dismissOnboardingPage();
+      else void finishAiOnboarding(false);
+      return;
+    }
   });
 }
-async function finishAiOnboarding(forceEnabled) {
+async function finishAiOnboarding(forceEnabled, settingsMode = false) {
   const proactivity = onboardingPage.querySelector('[name="onboarding-ai-proactivity"]')?.value || 'assist';
   const enabled = typeof forceEnabled === 'boolean' ? forceEnabled : onboardingPage.querySelector('[name="onboarding-ai-enabled"]')?.checked;
-  summaryConfig.enabled = forceEnabled === false ? false : Boolean(onboardingPage.querySelector('[name="onboarding-summary-enabled"]')?.checked);
+  const summaryEnabled = forceEnabled === false ? false : Boolean(onboardingPage.querySelector('[name="onboarding-summary-enabled"]')?.checked);
+  if (settingsMode) {
+    const ready = (config) => {
+      const connection = requestConfig(config);
+      return connection && (connection.provider !== 'built-in' || modelPaths.has(connection.model));
+    };
+    if (summaryEnabled && !ready(summaryConfig)) { showToast(t('请先选择或填写纪要模型。')); return; }
+    if (enabled && !ready(aiAssistConfig)) { showToast(t('请先选择或填写 AI 笔记模型。')); return; }
+  }
+  summaryConfig.enabled = summaryEnabled;
   summaryConfigRevision += 1;
   aiAssistConfig.enabled = enabled;
   aiAssistConfig.proactivity = ['quiet', 'assist', 'auto'].includes(proactivity) ? proactivity : 'assist';
   aiAssistConfigRevision += 1;
   try { await Promise.all([persistSummaryConfig(), persistAiAssistConfig()]); }
   catch (error) { showToast(error.message); return; }
-  dismissOnboardingPage(openOnboardingTour);
+  if (settingsMode) {
+    aiAssistTemporarilyDisabled = false;
+    renderAiAssistToggle();
+    renderAiAssistEmptyState();
+    const meetingId = breviaClient?.state.meeting?.id;
+    if (meetingActive && meetingId) {
+      if (aiAssistEnabled()) void startAiNoteForMeeting(meetingId);
+      else stopAiNoteForMeeting(meetingId);
+    }
+    dismissOnboardingPage();
+    showToast(t('已保存'));
+  } else dismissOnboardingPage(openOnboardingTour);
 }
 
 function openOnboardingPermissions() {
@@ -2867,15 +2802,16 @@ settingsModal.addEventListener('click', async (event) => {
   if (download) {
     const modelId = download.dataset.downloadModel;
     const model = modelCatalog.find((item) => item.id === modelId);
-    if (!model) return;
+    if (!model || download.disabled || modelPaths.has(modelId)) return;
     modelDownloads.set(modelId, { received: 0, total: 0 });
-    renderModal('models');
+    const downloadModal = activeModal;
+    renderModal(downloadModal);
     renderModelDownloadQueue();
     try {
       if (window.brevia) await window.brevia.models.download(modelDownloadPayload(modelId));
       else modelDownloads.delete(modelId);
-    } catch (error) { showToast(error.message); }
-    renderModal('models');
+    } catch (error) { modelDownloads.set(modelId, { error: error.message }); showToast(error.message); }
+    if (activeModal === downloadModal) renderModal(downloadModal);
     return;
   }
   const deleteModel = event.target.closest('[data-delete-model]');
@@ -3015,6 +2951,13 @@ settingsModal.addEventListener('submit', async (event) => {
     aiAssistConfigDraft = structuredClone(aiAssistConfig);
     await persistAiAssistConfig();
     closeModal();
+    if (onboardingPage?.dataset.aiSettings === 'true') {
+      onboardingPage.querySelector('[name="onboarding-ai-enabled"]').checked = aiAssistConfig.enabled;
+      onboardingPage.querySelector('[name="onboarding-ai-proactivity"]').value = aiAssistConfig.proactivity;
+      const select = onboardingPage.querySelector('.onboarding-ai-levels .flow-select');
+      select.querySelector('.flow-select-toggle').firstChild.nodeValue = select.querySelector(`[data-value="${aiAssistConfig.proactivity}"]`).dataset.label;
+      renderOnboardingAiDemo();
+    }
     renderAiAssistToggle();
     const meetingId = breviaClient?.state.meeting?.id;
     if (meetingActive && meetingId) {
@@ -3479,7 +3422,7 @@ languageOptions.addEventListener('click', (event) => {
   applyLanguage(option.dataset.language, true);
 });
 document.addEventListener('click', (event) => { if (!event.target.closest('.language-menu')) closeLanguageMenu(); });
-document.addEventListener('keydown', (event) => { if (event.key === 'Escape') { if (activeModal) closeModal(); else { closeLanguageMenu(); languageToggle.focus(); } } });
+document.addEventListener('keydown', (event) => { if (event.key === 'Escape') { if (activeModal) closeModal(); else if (onboardingPage?.dataset.aiSettings === 'true') dismissOnboardingPage(); else { closeLanguageMenu(); languageToggle.focus(); } } });
 // Command+/ 或 Ctrl+/：切换富文本 / Markdown 编辑模式。
 document.addEventListener('keydown', (event) => {
   if (!(event.metaKey || event.ctrlKey) || event.key !== '/') return;
@@ -5404,7 +5347,7 @@ if (window.brevia) {
   window.brevia.on('app.maintenance', ({ meetings, speaker_profiles: profiles, storage, recoverable }) => {
     uiData.meetings = meetings.map(backendMeeting);
     speakerProfiles = profiles;
-    const storageSizes = [storage.meetings, storage.models, storage.exports].map(formatBytes);
+    const storageSizes = [storage.meetings, storage.models].map(formatBytes);
     Object.values(modalCopy).forEach((copy) => copy.storage.items.forEach((item, index) => { item[1] = storageSizes[index]; }));
     renderSpeakerProfileCard();
     renderMeetingList();

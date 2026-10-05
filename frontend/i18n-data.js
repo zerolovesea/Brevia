@@ -4169,6 +4169,9 @@ const catalog = {
 
 const appCopy = {
   "stageLabels": {
+    "AI 功能": {"zh": "AI 功能", "en": "AI features", "es": "Funciones de IA", "ja": "AI 機能", "ko": "AI 기능", "fr": "Fonctions IA", "de": "KI-Funktionen", "ru": "Функции ИИ"},
+    "配置 AI 功能": {"zh": "配置 AI 功能", "en": "Configure AI features", "es": "Configurar funciones de IA", "ja": "AI 機能を設定", "ko": "AI 기능 설정", "fr": "Configurer les fonctions IA", "de": "KI-Funktionen konfigurieren", "ru": "Настроить функции ИИ"},
+    "配置 AI 模型会议纪要，以及智能笔记。": {"zh": "配置 AI 模型会议纪要，以及智能笔记。", "en": "Configure AI models for meeting notes and smart notes.", "es": "Configura modelos de IA para actas de reuniones y notas inteligentes.", "ja": "議事録とスマートメモに使う AI モデルを設定します。", "ko": "회의록과 스마트 노트에 사용할 AI 모델을 설정하세요.", "fr": "Configurez les modèles IA pour les comptes rendus et les notes intelligentes.", "de": "KI-Modelle für Besprechungsprotokolle und intelligente Notizen konfigurieren.", "ru": "Настройте ИИ-модели для протоколов встреч и умных заметок."},
     "性能": {
       "zh": "性能",
       "en": "Performance",
@@ -4459,8 +4462,8 @@ const appCopy = {
       "de": "KI erkennt in der Besprechung Kernpunkte, extrahiert Aufgaben und ordnet Notizen.",
       "ru": "ИИ выделяет ключевые моменты, извлекает задачи и упорядочивает заметки во время встречи."
     },
-    "会议结束后，AI 会将逐字稿整理为结构化纪要与待办。": {
-      "zh": "会议结束后，AI 会将逐字稿整理为结构化纪要与待办。",
+    "会议结束后，AI 自动把整场对话整理成会议纪要及待办事项。": {
+      "zh": "会议结束后，AI 自动把整场对话整理成会议纪要及待办事项。",
       "en": "After a meeting, AI turns the transcript into structured notes and action items.",
       "es": "Al terminar la reunión, la IA convierte la transcripción en notas y tareas estructuradas.",
       "ja": "会議後、AI が文字起こしを構造化された議事録と ToDo にまとめます。",
@@ -4479,15 +4482,15 @@ const appCopy = {
       "de": "Erkennung, Endpunkterkennung, Sprechertrennung und lokale Modelle an Ihre Umgebung anpassen.",
       "ru": "Настройте распознавание, определение конца фразы, разделение говорящих и локальные модели."
     },
-    "查看和管理保存在此 Mac 上的会议资料、模型与导出文件。": {
-      "zh": "查看和管理保存在此 Mac 上的会议资料、模型与导出文件。",
-      "en": "View and manage meeting data, models, and exports stored on this Mac.",
-      "es": "Consulta y gestiona los datos de reuniones, modelos y exportaciones guardados en este Mac.",
-      "ja": "この Mac に保存された会議データ、モデル、書き出しファイルを確認・管理します。",
-      "ko": "이 Mac에 저장된 회의 자료, 모델 및 내보내기 파일을 확인하고 관리합니다.",
-      "fr": "Consultez et gérez les données de réunion, modèles et exports enregistrés sur ce Mac.",
-      "de": "Auf diesem Mac gespeicherte Besprechungsdaten, Modelle und Exporte anzeigen und verwalten.",
-      "ru": "Просматривайте и управляйте данными встреч, моделями и экспортами на этом Mac."
+    "查看和管理保存在此设备上的会议录音、会议纪要与模型。": {
+      "zh": "查看和管理保存在此设备上的会议录音、会议纪要与模型。",
+      "en": "View and manage meeting recordings, meeting notes, and models stored on this device.",
+      "es": "Consulta y gestiona las grabaciones, actas de reuniones y modelos guardados en este dispositivo.",
+      "ja": "このデバイスに保存された会議の録音、議事録、モデルを確認・管理します。",
+      "ko": "이 기기에 저장된 회의 녹음, 회의록 및 모델을 확인하고 관리합니다.",
+      "fr": "Consultez et gérez les enregistrements, comptes rendus de réunion et modèles stockés sur cet appareil.",
+      "de": "Auf diesem Gerät gespeicherte Besprechungsaufnahmen, Protokolle und Modelle anzeigen und verwalten.",
+      "ru": "Просматривайте записи встреч, протоколы и модели, сохранённые на этом устройстве, и управляйте ими."
     },
     "推荐": {
       "zh": "推荐",
@@ -4702,9 +4705,9 @@ const appCopy = {
   },
   "summaryModelCopy": {
     "zh": {
-      "title": "管理会议总结",
+      "title": "AI 会议纪要",
       "intro": "所有配置信息仅保存在本地，不会上传。",
-      "featureIntro": "会议结束后，AI 会将逐字稿整理为结构化纪要与待办。",
+      "featureIntro": "会议结束后，AI 自动把整场对话整理成会议纪要及待办事项。",
       "provider": "供应商",
       "key": "API Key",
       "endpoint": "请求地址",
@@ -5291,7 +5294,7 @@ const appCopy = {
   "speakerProfileCopy": {
     "zh": {
       "title": "说话人识别",
-      "intro": "仅保存用户明确提交的单人语音，用于会议片段的说话人识别与命名。",
+      "intro": "录入不同说话人的声音片段，以在会议后识别不同的说话人片段。",
       "name": "人员姓名",
       "add": "从语音添加",
       "addSample": "补充语音样本",
@@ -5301,7 +5304,7 @@ const appCopy = {
     },
     "en": {
       "title": "Speaker recognition",
-      "intro": "Only explicitly submitted single-speaker audio is saved for identifying and naming meeting speakers.",
+      "intro": "Add voice samples from different speakers to identify their segments after the meeting.",
       "name": "Name",
       "add": "Add from audio",
       "addSample": "Add voice sample",
@@ -5311,7 +5314,7 @@ const appCopy = {
     },
     "es": {
       "title": "Reconocimiento de hablantes",
-      "intro": "Solo se guarda audio de una persona enviado expresamente para identificar y nombrar a los hablantes de la reunión.",
+      "intro": "Añade muestras de voz de distintos hablantes para identificar sus intervenciones después de la reunión.",
       "name": "Nombre",
       "add": "Añadir desde audio",
       "addSample": "Añadir muestra de voz",
@@ -5321,7 +5324,7 @@ const appCopy = {
     },
     "ja": {
       "title": "話者認識",
-      "intro": "明示的に送信した単一話者の音声だけを保存し、会議中の話者の識別と命名に使用します。",
+      "intro": "複数の話者の音声サンプルを登録し、会議後に各話者の発言区間を識別します。",
       "name": "名前",
       "add": "音声から追加",
       "addSample": "音声サンプルを追加",
@@ -5331,7 +5334,7 @@ const appCopy = {
     },
     "ko": {
       "title": "화자 인식",
-      "intro": "명시적으로 제출한 1인 음성만 저장하며, 회의 화자를 식별하고 이름을 지정하는 데 사용합니다.",
+      "intro": "여러 화자의 음성 샘플을 등록하여 회의 후 각 화자의 발언 구간을 식별합니다.",
       "name": "이름",
       "add": "오디오에서 추가",
       "addSample": "음성 샘플 추가",
@@ -5341,7 +5344,7 @@ const appCopy = {
     },
     "fr": {
       "title": "Reconnaissance du locuteur",
-      "intro": "Seuls les audios à un seul locuteur soumis explicitement sont enregistrés pour identifier et nommer les locuteurs de la réunion.",
+      "intro": "Ajoutez des échantillons vocaux de différents intervenants pour identifier leurs passages après la réunion.",
       "name": "Nom",
       "add": "Ajouter depuis un audio",
       "addSample": "Ajouter un échantillon vocal",
@@ -5351,7 +5354,7 @@ const appCopy = {
     },
     "de": {
       "title": "Sprechererkennung",
-      "intro": "Nur ausdrücklich übermittelte Einzelsprecher-Aufnahmen werden gespeichert, um Besprechungssprecher zu erkennen und zu benennen.",
+      "intro": "Stimmproben verschiedener Sprecher hinzufügen, um ihre Abschnitte nach der Besprechung zu erkennen.",
       "name": "Name",
       "add": "Aus Audio hinzufügen",
       "addSample": "Sprachprobe hinzufügen",
@@ -5361,7 +5364,7 @@ const appCopy = {
     },
     "ru": {
       "title": "Распознавание говорящих",
-      "intro": "Сохраняются только явно отправленные записи одного человека для распознавания и именования говорящих на встрече.",
+      "intro": "Добавьте образцы голоса разных участников, чтобы определять их фрагменты после встречи.",
       "name": "Имя",
       "add": "Добавить из аудио",
       "addSample": "Добавить образец голоса",
@@ -5410,10 +5413,6 @@ const appCopy = {
           [
             "模型文件",
             "1.7 GB"
-          ],
-          [
-            "导出文件",
-            "240 MB"
           ]
         ]
       },
@@ -5459,10 +5458,6 @@ const appCopy = {
           [
             "Model files",
             "1.7 GB"
-          ],
-          [
-            "Exports",
-            "240 MB"
           ]
         ]
       },
@@ -5508,10 +5503,6 @@ const appCopy = {
           [
             "Archivos de modelos",
             "1.7 GB"
-          ],
-          [
-            "Exportaciones",
-            "240 MB"
           ]
         ]
       },
@@ -5557,10 +5548,6 @@ const appCopy = {
           [
             "モデルファイル",
             "1.7 GB"
-          ],
-          [
-            "エクスポート",
-            "240 MB"
           ]
         ]
       },
@@ -5606,10 +5593,6 @@ const appCopy = {
           [
             "모델 파일",
             "1.7 GB"
-          ],
-          [
-            "내보내기",
-            "240 MB"
           ]
         ]
       },
@@ -5655,10 +5638,6 @@ const appCopy = {
           [
             "Fichiers de modèles",
             "1.7 GB"
-          ],
-          [
-            "Exportations",
-            "240 MB"
           ]
         ]
       },
@@ -5704,10 +5683,6 @@ const appCopy = {
           [
             "Modelldateien",
             "1.7 GB"
-          ],
-          [
-            "Exporte",
-            "240 MB"
           ]
         ]
       },
@@ -5753,10 +5728,6 @@ const appCopy = {
           [
             "Файлы моделей",
             "1.7 GB"
-          ],
-          [
-            "Экспорты",
-            "240 MB"
           ]
         ]
       },
@@ -5927,7 +5898,7 @@ const appCopy = {
         "均衡",
         "快"
       ],
-      "refined": "整句识别 / 会后精修",
+      "refined": "语音识别",
       "vad": "语音检测",
       "diarization": "说话人分离",
       "voiceprint": "声纹识别",
@@ -5948,7 +5919,7 @@ const appCopy = {
         "Balanced",
         "Fast"
       ],
-      "refined": "Sentence transcription / refinement",
+      "refined": "Speech recognition",
       "vad": "Voice detection",
       "diarization": "Speaker diarization",
       "voiceprint": "Voiceprint recognition",
@@ -5969,7 +5940,7 @@ const appCopy = {
         "Equilibrado",
         "Rápido"
       ],
-      "refined": "Refinamiento posterior",
+      "refined": "Reconocimiento de voz",
       "vad": "Detección de voz",
       "diarization": "Separación de hablantes",
       "voiceprint": "Reconocimiento de voz",
@@ -5990,7 +5961,7 @@ const appCopy = {
         "バランス",
         "高速"
       ],
-      "refined": "会議後の高精度化",
+      "refined": "音声認識",
       "vad": "音声検出",
       "diarization": "話者分離",
       "voiceprint": "声紋認識",
@@ -6011,7 +5982,7 @@ const appCopy = {
         "균형",
         "빠름"
       ],
-      "refined": "회의 후 정제",
+      "refined": "음성 인식",
       "vad": "음성 감지",
       "diarization": "화자 분리",
       "voiceprint": "음성 지문 인식",
@@ -6032,7 +6003,7 @@ const appCopy = {
         "Équilibré",
         "Rapide"
       ],
-      "refined": "Affinage après réunion",
+      "refined": "Reconnaissance vocale",
       "vad": "Détection vocale",
       "diarization": "Séparation des locuteurs",
       "voiceprint": "Reconnaissance vocale",
@@ -6053,7 +6024,7 @@ const appCopy = {
         "Ausgewogen",
         "Schnell"
       ],
-      "refined": "Nachbearbeitung",
+      "refined": "Spracherkennung",
       "vad": "Spracherkennung",
       "diarization": "Sprechertrennung",
       "voiceprint": "Stimmabdruck-Erkennung",
@@ -6074,7 +6045,7 @@ const appCopy = {
         "Сбалансированно",
         "Быстро"
       ],
-      "refined": "Обработка после встречи",
+      "refined": "Распознавание речи",
       "vad": "Обнаружение речи",
       "diarization": "Разделение говорящих",
       "voiceprint": "Распознавание голоса",
@@ -6624,7 +6595,7 @@ const appCopy = {
   },
   "onboardingCopy": {
     "zh": {
-      "languageHint": "之后你可以随时修改界面语言。",
+      "languageHint": "",
       "later": "稍后设置",
       "ready": "功能已准备就绪"
     },
@@ -6665,7 +6636,7 @@ const appCopy = {
     }
   },
   "onboardingSecurityCopy": {
-    "zh": "模型资源来自可信来源，并经过完整性校验。\n您的音频数据不会上传至云端。",
+    "zh": "模型资源来自可信来源，您的音频数据不会上传。",
     "en": "Models come from trusted sources and pass integrity checks.\nYour audio is never uploaded to the cloud.",
     "es": "Los modelos provienen de fuentes confiables y pasan comprobaciones de integridad.\nTu audio nunca se sube a la nube.",
     "ja": "モデルは信頼できる提供元から取得し、完全性を検証しています。\n音声データがクラウドにアップロードされることはありません。",
@@ -6719,22 +6690,22 @@ const appCopy = {
   "aiOnboardingCopy": {
     "zh": {
       "title": "启用 AI 功能",
-      "intro": "言录提供两项可独立开启的 AI 能力：会后生成会议纪要，以及会中实时协助记录。",
+      "intro": "",
       "meetingNotesTitle": "AI 会议纪要",
-      "meetingNotesDesc": "会议结束后，AI 自动把整场对话整理成一份纪要。",
+      "meetingNotesDesc": "会议结束后，AI 自动把整场对话整理成会议纪要及待办事项。",
       "meetingNotesConsequence": "不生成纪要也能正常录制与出字幕；之后可在「AI 会议总结」设置里随时开启。",
       "wayTitle": "会议纪要使用哪种 AI？",
       "builtin": "内置 AI",
-      "builtinHint": "免费、离线，数据更私密；会占用电脑性能，分析速度取决于本机性能。首次下载约 1–2 GB。",
+      "builtinHint": "使用本地部署的 AI 模型进行分析，首次使用需要下载模型，将会占用一定的电脑性能。",
       "online": "在线 AI 供应商",
-      "onlineHint": "使用你自己的 API Key；对电脑性能占用更小，分析速度取决于网络状况。",
+      "onlineHint": "使用 AI 云供应商的 API Key 进行分析，对电脑性能占用更小，消耗的 token 数量取决于会议长度。",
       "configureOnline": "配置在线服务",
       "liveNotesTitle": "AI 笔记",
       "liveNotesDesc": "在会议中，AI 实时提示重点、决策与待办，辅助记录笔记。",
       "liveNotesConsequence": "不开 AI 笔记，仍会得到 AI 会议纪要；只是会中没有实时建议。",
       "enableLiveNotes": "启用 AI 笔记",
-      "proactivityTitle": "AI 笔记如何协助记录？",
-      "proactivityHint": "选得越主动，AI 介入越多；随时可在「AI 笔记」设置里调整。",
+      "proactivityTitle": "AI 笔记如何协助记录笔记？",
+      "proactivityHint": "",
       "offEmpty": "已选择暂不开启 AI 笔记，会中不会出现实时建议；会议结束后仍会生成 AI 会议纪要。",
       "levels": [
         [
@@ -8548,42 +8519,34 @@ const aiNotePromptCopy = {
 const storageCleanupCopy = {
   "zh": {
     "button": "清理过期本地文件",
-    "detail": "移除已下架模型和无对应会议记录的残留文件。",
     "done": "已释放 {size}"
   },
   "en": {
     "button": "Clean expired local files",
-    "detail": "Removes retired models and orphaned files.",
     "done": "Freed {size}"
   },
   "es": {
     "button": "Limpiar archivos locales obsoletos",
-    "detail": "Elimina modelos retirados y archivos huérfanos.",
     "done": "Se liberaron {size}"
   },
   "ja": {
     "button": "期限切れのローカルファイルを整理",
-    "detail": "廃止モデルと孤立ファイルを削除します。",
     "done": "{size} を解放しました"
   },
   "ko": {
     "button": "만료된 로컬 파일 정리",
-    "detail": "제거된 모델과 고아 파일을 삭제합니다.",
     "done": "{size} 확보됨"
   },
   "fr": {
     "button": "Nettoyer les fichiers locaux obsolètes",
-    "detail": "Supprime les modèles retirés et les fichiers orphelins.",
     "done": "{size} libérés"
   },
   "de": {
     "button": "Veraltete lokale Dateien bereinigen",
-    "detail": "Entfernt ausgemusterte Modelle und verwaiste Dateien.",
     "done": "{size} freigegeben"
   },
   "ru": {
     "button": "Очистить устаревшие локальные файлы",
-    "detail": "Удаляет снятые с поддержки модели и осиротевшие файлы.",
     "done": "Освобождено {size}"
   }
 };
@@ -9476,7 +9439,384 @@ const whatsNewLog = [
   }
 ];
 
-const data = { onboardingStorageCopy, catalog, appCopy, aiNotePromptCopy, storageCleanupCopy, exportHubCopy, whatsNewLog };
+  const asrCopy = (() => {
+    const LOCALES = ['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru'];
+
+    // 角标：按清单里的 asr_role 枚举取值。说明「这个模型擅长什么」。
+    // 三档共用同一个词根（多语种 / 多语种（欧洲）），只在地域范围上收窄——
+    // 否则「多语种」和「欧洲语言」并列出现时，用户无法判断哪个覆盖更广。
+    const asrRole = {
+      zh: { 'zh-optimized': '中文优化', multilingual: '多语种', western: '欧洲多语种' },
+      en: { 'zh-optimized': 'Chinese-optimized', multilingual: 'Multilingual', western: 'European multilingual' },
+      es: { 'zh-optimized': 'Optimizado para chino', multilingual: 'Multilingüe', western: 'Multilingüe europeo' },
+      ja: { 'zh-optimized': '中国語に最適化', multilingual: '多言語', western: '欧州の多言語' },
+      ko: { 'zh-optimized': '중국어 최적화', multilingual: '다국어', western: '유럽 다국어' },
+      fr: { 'zh-optimized': 'Optimisé pour le chinois', multilingual: 'Multilingue', western: 'Multilingue européen' },
+      de: { 'zh-optimized': 'Für Chinesisch optimiert', multilingual: 'Mehrsprachig', western: 'Mehrsprachig (Europa)' },
+      ru: { 'zh-optimized': 'Оптимизировано для китайского', multilingual: 'Многоязычная', western: 'Многоязычная (Европа)' },
+    };
+
+    // 三档刻度文案。speed/quality 的档位由 models.json 提供（1..3），这里只负责本地化。
+    const tiers = {
+      zh: { speed: ['慢', '适中', '快'], quality: ['一般', '好', '很好'], speedLabel: '速度', qualityLabel: '准确度', memoryLabel: '内存需求' },
+      en: { speed: ['Slow', 'Medium', 'Fast'], quality: ['Fair', 'Good', 'Very good'], speedLabel: 'Speed', qualityLabel: 'Accuracy', memoryLabel: 'Memory needed' },
+      es: { speed: ['Lenta', 'Media', 'Rápida'], quality: ['Aceptable', 'Buena', 'Muy buena'], speedLabel: 'Velocidad', qualityLabel: 'Precisión', memoryLabel: 'Memoria necesaria' },
+      ja: { speed: ['遅い', '普通', '速い'], quality: ['ふつう', '高い', 'とても高い'], speedLabel: '速度', qualityLabel: '精度', memoryLabel: '必要メモリ' },
+      ko: { speed: ['느림', '보통', '빠름'], quality: ['보통', '좋음', '매우 좋음'], speedLabel: '속도', qualityLabel: '정확도', memoryLabel: '필요 메모리' },
+      fr: { speed: ['Lente', 'Moyenne', 'Rapide'], quality: ['Correcte', 'Bonne', 'Très bonne'], speedLabel: 'Vitesse', qualityLabel: 'Précision', memoryLabel: 'Mémoire requise' },
+      de: { speed: ['Langsam', 'Mittel', 'Schnell'], quality: ['Ordentlich', 'Gut', 'Sehr gut'], speedLabel: 'Geschwindigkeit', qualityLabel: 'Genauigkeit', memoryLabel: 'Benötigter Speicher' },
+      ru: { speed: ['Медленно', 'Средне', 'Быстро'], quality: ['Обычная', 'Хорошая', 'Очень хорошая'], speedLabel: 'Скорость', qualityLabel: 'Точность', memoryLabel: 'Нужная память' },
+    };
+
+    // 模型介绍：发布团队与规模、实际语言覆盖、会议用途和运行特点。
+    // 首启与模型库共用；不同运行版本按清单能力描述。
+    //
+    // 写这几句时必须守两条：
+    //  1. **不单列「不适合什么」。** 早先版本给每个模型配了一行 `caveat`
+    //     （「遇到西班牙语会识别失败」「不支持中文」），等于把缺点摊到用户脸上，
+    //     首启页看起来像在劝退。语言范围写进定位短句即可——「25 种欧洲语言」
+    //     本身就说明了它不含中文，用户自己推得出来。
+    //  2. **不写「某某混说最稳」。** 这几个模型都不是为某组混说语言专门训练的，
+    //     把「中英夹杂」「英西混说」写成卖点会让人以为模型是按语言对定制的。
+    //     有实测依据的差异（速度、内存）交给 speed/quality 刻度和体积去表达。
+    const model = {
+      zh: {
+        'funasr-nano-int8': { tagline: "通义实验室推出的轻量语音识别模型，约 8 亿参数，面向中文语音场景。支持普通话、粤语和英语，可识别多种中文方言与地方口音，适合中文会议、访谈和日常讨论。采用量化版本在本机离线运行，兼顾识别效果与资源占用。" },
+        'qwen3-asr-0.6b-int8': { tagline: "阿里云 Qwen 团队推出的多语种语音识别模型，约 6 亿参数。支持中、英、日、韩等 30 种语言及 22 种中文方言，覆盖多种地区口音，适合国际会议、跨语言沟通与多语种内容记录。" },
+        'parakeet-tdt-0.6b-v3-int8': { tagline: "NVIDIA 推出的高效语音识别模型，约 6 亿参数，支持英语、西班牙语、法语、德语、俄语等 25 种欧洲语言。可自动识别语种，生成标点与英文大小写，适合英语及欧洲语言会议、访谈和长录音转写。" },
+      },
+      en: {
+        'funasr-nano-int8': { tagline: "Best for Chinese meetings. High accuracy on Chinese, covering Cantonese, other Chinese dialects, regional accents, and English." },
+        'qwen3-asr-0.6b-int8': { tagline: "Best for Japanese and Korean meetings. Covers 30 languages and 22 Chinese dialects." },
+        'parakeet-tdt-0.6b-v3-int8': { tagline: "Best for English and other European-language meetings. Covers 25 languages including English, Spanish, French, German, and Russian." },
+      },
+      es: {
+        'funasr-nano-int8': { tagline: "Ideal para reuniones en chino. Alta precisión en chino; cubre el cantonés, otros dialectos chinos, acentos regionales y el inglés." },
+        'qwen3-asr-0.6b-int8': { tagline: "Ideal para reuniones en japonés y coreano. Cubre 30 idiomas y 22 dialectos del chino." },
+        'parakeet-tdt-0.6b-v3-int8': { tagline: "Ideal para reuniones en inglés y otras lenguas europeas. Cubre 25 idiomas, entre ellos inglés, español, francés, alemán y ruso." },
+      },
+      ja: {
+        'funasr-nano-int8': { tagline: "中国語の会議に最適。中国語の精度が高く、広東語などの中国語方言、各地のなまり、英語に対応します。" },
+        'qwen3-asr-0.6b-int8': { tagline: "日本語・韓国語の会議に最適。30 言語と 22 の中国語方言に対応します。" },
+        'parakeet-tdt-0.6b-v3-int8': { tagline: "英語・欧州言語の会議に最適。英語・スペイン語・フランス語・ドイツ語・ロシア語など 25 言語に対応します。" },
+      },
+      ko: {
+        'funasr-nano-int8': { tagline: "중국어 회의에 최적. 중국어 인식 정확도가 높고 광둥어 등 중국어 방언, 지역 억양, 영어를 지원합니다." },
+        'qwen3-asr-0.6b-int8': { tagline: "일본어·한국어 회의에 최적. 30개 언어와 22개 중국어 방언을 지원합니다." },
+        'parakeet-tdt-0.6b-v3-int8': { tagline: "영어·유럽 언어 회의에 최적. 영어, 스페인어, 프랑스어, 독일어, 러시아어 등 25개 언어를 지원합니다." },
+      },
+      fr: {
+        'funasr-nano-int8': { tagline: "Idéal pour les réunions en chinois. Grande précision en chinois ; couvre le cantonais, d’autres dialectes chinois, les accents régionaux et l’anglais." },
+        'qwen3-asr-0.6b-int8': { tagline: "Idéal pour les réunions en japonais et en coréen. Couvre 30 langues et 22 dialectes chinois." },
+        'parakeet-tdt-0.6b-v3-int8': { tagline: "Idéal pour les réunions en anglais et dans les autres langues européennes. Couvre 25 langues dont l’anglais, l’espagnol, le français, l’allemand et le russe." },
+      },
+      de: {
+        'funasr-nano-int8': { tagline: "Ideal für chinesische Besprechungen. Hohe Genauigkeit bei Chinesisch; deckt Kantonesisch, weitere chinesische Dialekte, regionale Akzente und Englisch ab." },
+        'qwen3-asr-0.6b-int8': { tagline: "Ideal für japanische und koreanische Besprechungen. Deckt 30 Sprachen und 22 chinesische Dialekte ab." },
+        'parakeet-tdt-0.6b-v3-int8': { tagline: "Ideal für englische und andere europäische Besprechungen. Deckt 25 Sprachen ab, darunter Englisch, Spanisch, Französisch, Deutsch und Russisch." },
+      },
+      ru: {
+        'funasr-nano-int8': { tagline: "Оптимально для встреч на китайском. Высокая точность для китайского; поддерживает кантонский и другие китайские диалекты, региональные акценты и английский." },
+        'qwen3-asr-0.6b-int8': { tagline: "Оптимально для встреч на японском и корейском. Поддерживает 30 языков и 22 китайских диалекта." },
+        'parakeet-tdt-0.6b-v3-int8': { tagline: "Оптимально для встреч на английском и других европейских языках. Поддерживает 25 языков, включая английский, испанский, французский, немецкий и русский." },
+      },
+    };
+
+    const mlxDescriptions = {
+      zh: ['阿里云 Qwen 团队推出的多语种语音识别模型，约 6 亿参数。支持中、英、日、韩等 30 种语言及 22 种中文方言，覆盖多种地区口音，适合国际会议、跨语言沟通与多语种内容记录。', '适合中文会议转写，也支持粤语和英语。', '通义实验室推出的轻量语音识别模型，约 8 亿参数，面向中文语音场景。支持中文、英语和日语，覆盖粤语、吴语等 7 种中文方言及 26 种地方口音，适合中文会议、访谈和日常讨论。'],
+      en: ['Default for Japanese and Korean meetings. Supports multilingual transcription with automatic punctuation.', 'Suited to Chinese meeting transcription, with support for Cantonese and English.', 'Default for Mandarin and Cantonese meetings. Also supports English and Japanese.'],
+      es: ['Modelo predeterminado para reuniones en japonés y coreano. Transcripción multilingüe con puntuación automática.', 'Adecuado para transcribir reuniones en chino; también admite cantonés e inglés.', 'Modelo predeterminado para reuniones en mandarín y cantonés. También admite inglés y japonés.'],
+      ja: ['日本語・韓国語の会議の既定モデル。多言語の文字起こしと句読点の自動挿入に対応します。', '中国語の会議の文字起こしに適しています。広東語と英語にも対応します。', '標準中国語・広東語の会議の既定モデル。英語と日本語にも対応します。'],
+      ko: ['일본어·한국어 회의의 기본 모델. 다국어 전사와 자동 문장 부호를 지원합니다.', '중국어 회의 전사에 적합하며 광둥어와 영어도 지원합니다.', '표준 중국어·광둥어 회의의 기본 모델. 영어와 일본어도 지원합니다.'],
+      fr: ['Modèle par défaut pour les réunions en japonais et coréen. Transcription multilingue avec ponctuation automatique.', 'Adapté à la transcription des réunions en chinois, avec prise en charge du cantonais et de l’anglais.', 'Modèle par défaut pour les réunions en mandarin et cantonais. Prend aussi en charge l’anglais et le japonais.'],
+      de: ['Standardmodell für Besprechungen auf Japanisch und Koreanisch. Mehrsprachige Transkription mit automatischer Zeichensetzung.', 'Geeignet für die Transkription chinesischer Besprechungen; unterstützt auch Kantonesisch und Englisch.', 'Standardmodell für Besprechungen auf Mandarin und Kantonesisch. Unterstützt auch Englisch und Japanisch.'],
+      ru: ['Модель по умолчанию для встреч на японском и корейском. Многоязычная транскрипция с автоматической пунктуацией.', 'Подходит для транскрипции встреч на китайском; также поддерживает кантонский и английский.', 'Модель по умолчанию для встреч на путунхуа и кантонском. Также поддерживает английский и японский.'],
+    };
+    for (const locale of LOCALES) {
+      model[locale]['funasr-nano-mlx'] = { tagline: mlxDescriptions[locale][2] };
+      model[locale]['qwen3-asr-0.6b-mlx'] = { tagline: mlxDescriptions[locale][0] };
+      model[locale]['fireredasr2-aed-mlx'] = { tagline: mlxDescriptions[locale][1] };
+      model[locale]['parakeet-tdt-0.6b-v3-mlx'] =
+        model[locale]['parakeet-tdt-0.6b-v3-int8'];
+    }
+
+    // 推荐角标。用户在首启第 ① 步刚选过界面语言，「按界面语言推荐」是自明的，
+    // 所以只需要一个短角标，不需要再配一段解释文字。
+    const recommended = {
+      zh: '推荐', en: 'Recommended', es: 'Recomendado', ja: 'おすすめ',
+      ko: '추천', fr: 'Recommandé', de: 'Empfohlen', ru: 'Рекомендуем',
+    };
+
+    // 首启第 ③ 步页面文案。
+    const setup = {
+      zh: {
+        title: '选择语音识别模型',
+        pickHint: '按需选择要下载的模型',
+        bundledTitle: '已随应用安装', bundledDetail: '语音活动检测 · 说话人分离 · 声纹识别',
+        atLeastOne: '至少要选一个识别模型，否则无法生成字幕。',
+        download: '下载并继续', later: '稍后设置', estimate: '本次下载', total: '合计',
+      },
+      en: {
+        title: 'Choose speech recognition models',
+        pickHint: 'Pick the models you need',
+        bundledTitle: 'Included with the app', bundledDetail: 'Voice activity detection · Speaker diarization · Voiceprint',
+        atLeastOne: 'Pick at least one recognition model, otherwise captions cannot be generated.',
+        download: 'Download and continue', later: 'Set up later', estimate: 'Download', total: 'Total',
+      },
+      es: {
+        title: 'Elige modelos de reconocimiento de voz',
+        pickHint: 'Elige los modelos que necesites',
+        bundledTitle: 'Incluido con la aplicación', bundledDetail: 'Detección de voz · Separación de hablantes · Huella de voz',
+        atLeastOne: 'Elige al menos un modelo de reconocimiento; si no, no se pueden generar subtítulos.',
+        download: 'Descargar y continuar', later: 'Configurar más tarde', estimate: 'Descarga', total: 'Total',
+      },
+      ja: {
+        title: '音声認識モデルを選択',
+        pickHint: '必要なモデルを選んでください',
+        bundledTitle: 'アプリに同梱済み', bundledDetail: '音声活動検出 · 話者分離 · 声紋',
+        atLeastOne: '認識モデルを 1 つ以上選んでください。選ばないと字幕を生成できません。',
+        download: 'ダウンロードして続ける', later: 'あとで設定', estimate: 'ダウンロード', total: '合計',
+      },
+      ko: {
+        title: '음성 인식 모델 선택',
+        pickHint: '필요한 모델을 선택하세요',
+        bundledTitle: '앱에 포함됨', bundledDetail: '음성 활동 감지 · 화자 분리 · 성문',
+        atLeastOne: '인식 모델을 하나 이상 선택하세요. 선택하지 않으면 자막을 만들 수 없습니다.',
+        download: '다운로드하고 계속', later: '나중에 설정', estimate: '다운로드', total: '합계',
+      },
+      fr: {
+        title: 'Choisir les modèles de reconnaissance vocale',
+        pickHint: 'Choisissez les modèles dont vous avez besoin',
+        bundledTitle: 'Inclus avec l’application', bundledDetail: 'Détection vocale · Séparation des locuteurs · Empreinte vocale',
+        atLeastOne: 'Choisissez au moins un modèle de reconnaissance, sinon aucun sous-titre ne peut être généré.',
+        download: 'Télécharger et continuer', later: 'Configurer plus tard', estimate: 'Téléchargement', total: 'Total',
+      },
+      de: {
+        title: 'Spracherkennungsmodelle wählen',
+        pickHint: 'Wählen Sie die Modelle, die Sie brauchen',
+        bundledTitle: 'In der App enthalten', bundledDetail: 'Sprachaktivitätserkennung · Sprechertrennung · Stimmabdruck',
+        atLeastOne: 'Wählen Sie mindestens ein Erkennungsmodell, sonst können keine Untertitel erzeugt werden.',
+        download: 'Herunterladen und fortfahren', later: 'Später einrichten', estimate: 'Download', total: 'Gesamt',
+      },
+      ru: {
+        title: 'Выбор моделей распознавания речи',
+        pickHint: 'Выберите нужные модели',
+        bundledTitle: 'Входит в приложение', bundledDetail: 'Детекция речи · Разделение говорящих · Голосовой отпечаток',
+        atLeastOne: 'Выберите хотя бы одну модель распознавания, иначе субтитры создать нельзя.',
+        download: 'Скачать и продолжить', later: 'Настроить позже', estimate: 'Загрузка', total: 'Всего',
+      },
+    };
+
+    // 准备页标签。语言仍是显式设置（它同时影响端点检测参数与翻译目标）。
+    const prepare = {
+      zh: { modelLabel: '识别模型' }, en: { modelLabel: 'Recognition model' },
+      es: { modelLabel: 'Modelo de reconocimiento' }, ja: { modelLabel: '認識モデル' },
+      ko: { modelLabel: '인식 모델' }, fr: { modelLabel: 'Modèle de reconnaissance' },
+      de: { modelLabel: 'Erkennungsmodell' }, ru: { modelLabel: 'Модель распознавания' },
+    };
+
+    return { LOCALES, asrRole, tiers, model, recommended, setup, prepare };
+  })();
+
+  const builtinModelIntro = {
+    'qwen3.5-4b-q4km': {
+      zh: '阿里云 Qwen 团队推出的语言模型，约 40 亿参数，定位于质量优先的会议纪要生成。可根据中英文会议内容归纳议题、串联讨论脉络，提炼关键决策与待办事项，适合内容较多、讨论较复杂的会议。采用本地量化版本，运行时需要较多内存与计算资源，适合性能较强的设备；分析过程在本机完成。',
+      en: 'Flagship of the Qwen3.5 small series. At 4B it rivals much larger models, giving the best Chinese/English notes. Best on a capable machine.',
+      es: 'Buque insignia de la serie Qwen3.5. Con 4B rivaliza con modelos más grandes y ofrece las mejores notas en chino/inglés. Ideal para equipos potentes.',
+      ja: 'Qwen3.5 小型シリーズの旗艦。4B ながら大型モデルに匹敵し、中英の議事録品質は最高。高性能な端末向け。',
+      ko: 'Qwen3.5 소형 시리즈의 플래그십. 4B로도 더 큰 모델에 필적하며 중국어/영어 회의록 품질이 가장 높습니다. 고성능 기기에 적합.',
+      fr: 'Fleuron de la série Qwen3.5. À 4B, il rivalise avec des modèles bien plus grands et offre les meilleures notes en chinois/anglais. Idéal sur une machine puissante.',
+      de: 'Flaggschiff der Qwen3.5-Kleinserie. Mit 4B misst es sich mit viel größeren Modellen und liefert die besten Notizen auf Chinesisch/Englisch. Ideal für leistungsstarke Geräte.',
+      ru: 'Флагман малой серии Qwen3.5. При 4B соперничает с гораздо более крупными моделями и даёт лучшие заметки на китайском/английском. Лучше на мощном устройстве.',
+    },
+    'qwen3.5-2b-q4km': {
+      zh: '阿里云 Qwen 团队推出的轻量语言模型，约 20 亿参数，是日常会议纪要的均衡选择。可根据中英文会议内容梳理议题、提炼重点与决策，并整理待办事项。采用本地量化版本，兼顾分析速度与资源占用，适合例会、项目同步和日常讨论；首次使用需下载模型，分析过程在本机完成。',
+      en: 'Qwen3.5 at 2B. A balance of quality and speed with strong Chinese/English notes. A solid everyday choice for most machines.',
+      es: 'Qwen3.5 de 2B. Equilibrio entre calidad y velocidad con buenas notas en chino/inglés. Buena opción diaria para la mayoría de equipos.',
+      ja: 'Qwen3.5 2B。品質と速度のバランスが良く、中英の議事録も優秀。ほとんどの端末で日常使いに最適。',
+      ko: 'Qwen3.5 2B. 품질과 속도의 균형이 좋고 중국어/영어 회의록이 뛰어납니다. 대부분의 기기에서 일상용으로 적합.',
+      fr: 'Qwen3.5 en 2B. Équilibre entre qualité et vitesse avec de bonnes notes en chinois/anglais. Un bon choix quotidien pour la plupart des machines.',
+      de: 'Qwen3.5 mit 2B. Ausgewogen zwischen Qualität und Geschwindigkeit mit starken Notizen auf Chinesisch/Englisch. Solide Alltagswahl für die meisten Geräte.',
+      ru: 'Qwen3.5 на 2B. Баланс качества и скорости с хорошими заметками на китайском/английском. Надёжный повседневный выбор для большинства устройств.',
+    },
+  };
+  appCopy.builtinModelIntro = builtinModelIntro;
+
+  const modelLibraryBackground = {
+    zh: {
+      'silero-vad': 'Silero 团队于 2020 年发布、2021 年提供 ONNX 版本的语音活动检测模型。只判断“此刻是否有人说话”，用于切分句子边界。',
+      'qwen3-asr-0.6b-int8': '阿里云 Qwen 团队于 2026 年 1 月发布的 Qwen3-ASR 0.6B int8 版，基于 Qwen3-Omni 的音频理解能力，覆盖 30 种语言和 22 种中文方言。',
+      'funasr-nano-int8': 'FunAudioLLM 团队于 2025 年 12 月发布的 Fun-ASR-Nano int8 版，覆盖中文、英语、粤语。',
+      'pyannote-segmentation-3.0': 'pyannoteAI 于 2023 年 9 月发布的说话区间分割模型，检测说话、重叠说话和非语音区间，为说话人分离提供边界。',
+      'eres2net-base-3dspeaker-zh': '阿里达摩院于 2023 年 11 月发布的 3D-Speaker ERes2Net Base 声纹模型，训练于 20 万标注中文说话人数据。把语音转成可比较的说话人特征用于离线聚类，不参与语音转写。',
+      'hy-mt2-1.8b-q4km': '腾讯混元团队于 2025 年 12 月开源的 Hy-MT 1.8B 翻译模型本地量化版，用于字幕翻译，覆盖 33 种语言及多种方言。',
+    },
+    en: {
+      'silero-vad': 'Voice-activity detector released by the Silero team in 2020, with an ONNX build since 2021. It only decides whether someone is speaking right now, which is what splits caption segments.',
+      'qwen3-asr-0.6b-int8': 'Qwen3-ASR 0.6B int8, released by Alibaba Cloud’s Qwen team in January 2026. Covers 30 languages and 22 Chinese dialects.',
+      'funasr-nano-int8': 'Fun-ASR-Nano int8, released by FunAudioLLM in December 2025. Covers Chinese, English, and Cantonese.',
+      'pyannote-segmentation-3.0': 'Speech-region segmentation model released by pyannoteAI in September 2023. It finds speech, overlap, and non-speech boundaries for speaker diarization.',
+      'eres2net-base-3dspeaker-zh': '3D-Speaker ERes2Net Base voiceprint model released by Alibaba DAMO Academy in November 2023, trained on 200,000 labeled Mandarin speakers. It turns speech into comparable speaker embeddings for offline clustering and does not transcribe.',
+      'hy-mt2-1.8b-q4km': 'Quantized local build of Tencent Hunyuan’s 1.8B Hy-MT translation model, open-sourced in December 2025 and used for caption translation across 33 languages.',
+    },
+    es: {
+      'silero-vad': 'Detector de actividad de voz publicado por el equipo de Silero en 2020, con versión ONNX desde 2021. Solo decide si alguien está hablando en ese momento, que es lo que divide los segmentos de subtítulos.',
+      'qwen3-asr-0.6b-int8': 'Qwen3-ASR 0.6B int8, publicado por el equipo Qwen de Alibaba Cloud en enero de 2026. Cubre 30 idiomas y 22 dialectos del chino.',
+      'funasr-nano-int8': 'Fun-ASR-Nano int8, publicado por FunAudioLLM en diciembre de 2025. Cubre chino, inglés y cantonés.',
+      'pyannote-segmentation-3.0': 'Modelo de segmentación de regiones de voz publicado por pyannoteAI en septiembre de 2023. Detecta los límites de voz, solapamiento y no voz para la separación de hablantes.',
+      'eres2net-base-3dspeaker-zh': 'Modelo de huella de voz 3D-Speaker ERes2Net Base, publicado por Alibaba DAMO Academy en noviembre de 2023 y entrenado con 200.000 hablantes de mandarín etiquetados. Convierte la voz en representaciones comparables para la agrupación sin conexión; no transcribe.',
+      'hy-mt2-1.8b-q4km': 'Versión local cuantizada del modelo de traducción Hy-MT 1.8B de Tencent Hunyuan, publicado en diciembre de 2025 y usado para traducir subtítulos en 33 idiomas.',
+    },
+    ja: {
+      'silero-vad': 'Silero チームが 2020 年に公開し、2021 年から ONNX 版が提供されている音声活動検出モデル。その瞬間に誰かが話しているかだけを判定し、字幕の区間分割に使います。',
+      'qwen3-asr-0.6b-int8': 'Alibaba Cloud の Qwen チームが 2026 年 1 月に公開した Qwen3-ASR 0.6B int8。30 言語と 22 の中国語方言に対応。',
+      'funasr-nano-int8': 'FunAudioLLM が 2025 年 12 月に公開した Fun-ASR-Nano int8。中国語・英語・広東語に対応。',
+      'pyannote-segmentation-3.0': 'pyannoteAI が 2023 年 9 月に公開した音声区間分割モデル。話者分離のために、発話・重なり・非発話の境界を検出します。',
+      'eres2net-base-3dspeaker-zh': 'Alibaba DAMO Academy が 2023 年 11 月に公開した 3D-Speaker ERes2Net Base 声紋モデル。20 万件のラベル付き北京語話者で学習。音声を比較可能な話者埋め込みに変換し、オフラインのクラスタリングに使います（文字起こしは行いません）。',
+      'hy-mt2-1.8b-q4km': 'Tencent Hunyuan の 1.8B Hy-MT 翻訳モデルのローカル量子化版。2025 年 12 月にオープンソース化され、33 言語の字幕翻訳に使います。',
+    },
+    ko: {
+      'silero-vad': 'Silero 팀이 2020년에 공개하고 2021년부터 ONNX 버전을 제공하는 음성 활동 감지 모델입니다. 지금 말하는 사람이 있는지만 판단하며, 자막 구간을 나누는 데 사용합니다.',
+      'qwen3-asr-0.6b-int8': 'Alibaba Cloud의 Qwen 팀이 2026년 1월에 공개한 Qwen3-ASR 0.6B int8입니다. 30개 언어와 22개 중국어 방언을 지원합니다.',
+      'funasr-nano-int8': 'FunAudioLLM이 2025년 12월에 공개한 Fun-ASR-Nano int8입니다. 중국어, 영어, 광둥어를 지원합니다.',
+      'pyannote-segmentation-3.0': 'pyannoteAI가 2023년 9월에 공개한 음성 구간 분할 모델입니다. 화자 분리를 위해 발화, 겹침, 비발화 경계를 찾습니다.',
+      'eres2net-base-3dspeaker-zh': 'Alibaba DAMO Academy가 2023년 11월에 공개한 3D-Speaker ERes2Net Base 성문 모델로, 라벨이 지정된 중국어(보통화) 화자 20만 명으로 학습했습니다. 음성을 비교 가능한 화자 임베딩으로 바꿔 오프라인 군집화에 사용하며, 전사에는 관여하지 않습니다.',
+      'hy-mt2-1.8b-q4km': 'Tencent Hunyuan의 1.8B Hy-MT 번역 모델을 로컬에서 양자화한 버전입니다. 2025년 12월에 오픈소스로 공개되었고 33개 언어 자막 번역에 사용합니다.',
+    },
+    fr: {
+      'silero-vad': 'Détecteur d’activité vocale publié par l’équipe Silero en 2020, avec une version ONNX depuis 2021. Il détermine uniquement si quelqu’un parle à l’instant, ce qui sert à découper les segments de sous-titres.',
+      'qwen3-asr-0.6b-int8': 'Qwen3-ASR 0.6B int8, publié par l’équipe Qwen d’Alibaba Cloud en janvier 2026. Couvre 30 langues et 22 dialectes chinois.',
+      'funasr-nano-int8': 'Fun-ASR-Nano int8, publié par FunAudioLLM en décembre 2025. Couvre le chinois, l’anglais et le cantonais.',
+      'pyannote-segmentation-3.0': 'Modèle de segmentation des régions vocales publié par pyannoteAI en septembre 2023. Il détecte les frontières de parole, de chevauchement et de non-parole pour la séparation des locuteurs.',
+      'eres2net-base-3dspeaker-zh': 'Modèle d’empreinte vocale 3D-Speaker ERes2Net Base publié par Alibaba DAMO Academy en novembre 2023, entraîné sur 200 000 locuteurs mandarins annotés. Il transforme la parole en représentations comparables pour le regroupement hors ligne ; il ne transcrit pas.',
+      'hy-mt2-1.8b-q4km': 'Version locale quantifiée du modèle de traduction Hy-MT 1,8 B de Tencent Hunyuan, open source depuis décembre 2025 et utilisée pour traduire les sous-titres en 33 langues.',
+    },
+    de: {
+      'silero-vad': 'Sprachaktivitätsdetektor, veröffentlicht vom Silero-Team 2020, mit ONNX-Version seit 2021. Er entscheidet nur, ob gerade jemand spricht – das teilt die Untertitel in Abschnitte.',
+      'qwen3-asr-0.6b-int8': 'Qwen3-ASR 0.6B int8, veröffentlicht vom Qwen-Team von Alibaba Cloud im Januar 2026. Deckt 30 Sprachen und 22 chinesische Dialekte ab.',
+      'funasr-nano-int8': 'Fun-ASR-Nano int8, veröffentlicht von FunAudioLLM im Dezember 2025. Deckt Chinesisch, Englisch und Kantonesisch ab.',
+      'pyannote-segmentation-3.0': 'Modell zur Segmentierung von Sprachbereichen, veröffentlicht von pyannoteAI im September 2023. Es findet Sprach-, Überlappungs- und Nicht-Sprach-Grenzen für die Sprechertrennung.',
+      'eres2net-base-3dspeaker-zh': 'Stimmabdruck-Modell 3D-Speaker ERes2Net Base, veröffentlicht von Alibaba DAMO Academy im November 2023 und mit 200.000 annotierten Mandarin-Sprechern trainiert. Es wandelt Sprache in vergleichbare Sprecher-Embeddings für das Offline-Clustering um und transkribiert nicht.',
+      'hy-mt2-1.8b-q4km': 'Lokal quantisierte Version des 1,8B-Hy-MT-Übersetzungsmodells von Tencent Hunyuan, seit Dezember 2025 Open Source und für die Untertitelübersetzung in 33 Sprachen.',
+    },
+    ru: {
+      'silero-vad': 'Детектор речевой активности, выпущенный командой Silero в 2020 году; с 2021 года доступна ONNX-версия. Он лишь определяет, говорит ли кто-то в данный момент, и по нему нарезаются сегменты субтитров.',
+      'qwen3-asr-0.6b-int8': 'Qwen3-ASR 0.6B int8, выпущен командой Qwen (Alibaba Cloud) в январе 2026 года. Поддерживает 30 языков и 22 китайских диалекта.',
+      'funasr-nano-int8': 'Fun-ASR-Nano int8, выпущен FunAudioLLM в декабре 2025 года. Поддерживает китайский, английский и кантонский.',
+      'pyannote-segmentation-3.0': 'Модель сегментации речевых областей, выпущена pyannoteAI в сентябре 2023 года. Определяет границы речи, перекрытия и отсутствия речи для разделения говорящих.',
+      'eres2net-base-3dspeaker-zh': 'Модель голосового отпечатка 3D-Speaker ERes2Net Base, выпущена Alibaba DAMO Academy в ноябре 2023 года и обучена на 200 000 размеченных носителях путунхуа. Превращает речь в сравнимые эмбеддинги говорящего для офлайн-кластеризации и не выполняет транскрипцию.',
+      'hy-mt2-1.8b-q4km': 'Локальная квантованная версия модели перевода Hy-MT 1.8B от Tencent Hunyuan, открытая в декабре 2025 года и используемая для перевода субтитров на 33 языка.',
+    },
+  };
+  appCopy.modelLibraryBackground = modelLibraryBackground;
+
+  const tourMeetingFallback = { zh: '会议', en: 'Meeting', es: 'Reunión', ja: '会議', ko: '회의', fr: 'Réunion', de: 'Besprechung', ru: 'Встреча' };
+  appCopy.tourMeetingFallback = tourMeetingFallback;
+
+  const tourAiSuggestionFallback = { zh: 'AI 建议', en: 'AI suggestion', es: 'Sugerencia de IA', ja: 'AI 提案', ko: 'AI 제안', fr: 'Suggestion IA', de: 'KI-Vorschlag', ru: 'Совет ИИ' };
+  appCopy.tourAiSuggestionFallback = tourAiSuggestionFallback;
+
+  const tourHowtoLabel = { zh: '如何使用', en: 'How to use', es: 'Cómo usarlo', ja: '使い方', ko: '사용 방법', fr: 'Comment l’utiliser', de: 'So verwenden', ru: 'Как использовать' };
+  appCopy.tourHowtoLabel = tourHowtoLabel;
+
+  const tourHowto = {
+    zh: {
+      0: ['在搜索框输入关键词，可搜索会议标题、字幕内容或说话人。', '搜索结果以浮窗展示，并高亮命中的关键词。', '点击某条结果即可打开该会议。'],
+      1: ['输入会议名称，并选择会议语言与译文目标。', '勾选要录制的音频来源（麦克风 / 系统音频）。', '点击「开始录制」，模型加载后会自动开录。'],
+      2: ['录制时，右侧实时字幕会持续滚动更新。', '每条字幕带时间与说话人，点击可回放定位。', '点击「展开字幕」，把字幕切到主视图。'],
+      3: ['点击「AI 笔记」开启实时纪要。', 'AI 会自动提炼结论、风险与待办到笔记区。', '可将当前字幕片段一键加入笔记。'],
+      4: ['会后自动生成精修逐字稿与纪要。', '拖动播放条回听，字幕会随之高亮。', '点击「导出」或「分享」，保存或发送纪要。'],
+    },
+    en: {
+      0: ['Type keywords to search meeting titles, captions, or speakers.', 'Results appear in a popover with the query highlighted.', 'Click a result to open that meeting.'],
+      1: ['Enter a meeting title, then choose the language and translation target.', 'Check which audio sources to record (mic / system audio).', 'Hit Start recording; models load before recording begins.'],
+      2: ['Live captions scroll continuously on the right while recording.', 'Each caption carries a time and speaker; click to jump playback.', 'Expand captions to bring them to the main view.'],
+      3: ['Enable AI notes to start real-time notes.', 'AI surfaces decisions, risks, and actions into your notes.', 'Add the current caption segment to your notes in one click.'],
+      4: ['A refined transcript and notes are generated automatically.', 'Drag the playback bar to listen; captions highlight in sync.', 'Export or share the notes when you are done.'],
+    },
+    es: {
+      0: ['Escribe palabras clave para buscar títulos, subtítulos o hablantes.', 'Los resultados aparecen en una ventana flotante con la búsqueda resaltada.', 'Haz clic en un resultado para abrir esa reunión.'],
+      1: ['Escribe un título y elige el idioma y la traducción.', 'Marca qué fuentes de audio grabar (micrófono / sistema).', 'Pulsa Iniciar grabación; los modelos cargan antes.'],
+      2: ['Los subtítulos en vivo se desplazan a la derecha al grabar.', 'Cada subtítulo tiene hora y hablante; pulsa para saltar.', 'Amplía los subtítulos para llevarlos a la vista principal.'],
+      3: ['Activa la IA para notas en tiempo real.', 'La IA extrae conclusiones, riesgos y tareas a tus notas.', 'Añade el segmento actual a tus notas con un clic.'],
+      4: ['Se genera automáticamente una transcripción refinada y notas.', 'Arrastra la barra para escuchar; los subtítulos se resaltan.', 'Exporta o comparte las notas al terminar.'],
+    },
+    ja: {
+      0: ['キーワードで会議タイトル・字幕・話者を検索。', '結果は浮遊ウィンドウで表示され、キーワードがハイライト。', '結果をクリックすると会議が開きます。'],
+      1: ['会議名を入力し、言語と翻訳先を選択。', '録音する音声ソース（マイク/システム）を選択。', '「録音を開始」でモデル読み込み後に開始。'],
+      2: ['録音中、右側にライブ字幕が流れます。', '各字幕に時間と話者が付き、クリックで再生位置へ。', '「字幕を展開」で字幕をメイン表示に。'],
+      3: ['「AIメモ」を有効にしてリアルタイムメモ。', 'AI が結論・リスク・ToDo をメモに抽出。', '現在の字幕をワンクリックでメモに追加。'],
+      4: ['終了後に精修済みの文字起こしとメモを自動生成。', 'バーをドラッグして再生、字幕が連動ハイライト。', '「エクスポート」「共有」で保存・送信。'],
+    },
+    ko: {
+      0: ['키워드로 회의 제목·자막·화자를 검색하세요.', '결과는 플로팅 창에 표시되며 키워드가 강조됩니다.', '결과를 클릭하면 회의가 열립니다.'],
+      1: ['회의 이름을 입력하고 언어·번역 대상을 선택하세요.', '녹음할 오디오 소스(마이크/시스템)를 선택하세요.', '「녹음 시작」을 누르면 모델 로드 후 시작됩니다.'],
+      2: ['녹음 중 오른쪽에 실시간 자막이 흐릅니다.', '각 자막에 시간·화자가 표시되며 클릭으로 이동.', '「자막 확대」로 자막을 메인 화면에.'],
+      3: ['「AI 메모」를 켜서 실시간 메모를 시작하세요.', 'AI가 결론·리스크·할 일을 메모로 추출합니다.', '현재 자막을 한 번에 메모에 추가하세요.'],
+      4: ['종료 후 정제된 녹취와 메모를 자동 생성합니다.', '바를 드래그해 재생하면 자막이 연동됩니다.', '「내보내기」「공유」로 저장·전송하세요.'],
+    },
+    fr: {
+      0: ['Saisissez des mots-clés pour chercher titres, sous-titres ou locuteurs.', 'Les résultats s’affichent dans une fenêtre flottante avec la recherche surlignée.', 'Cliquez sur un résultat pour ouvrir cette réunion.'],
+      1: ['Saisissez un titre, puis choisissez la langue et la traduction.', 'Cochez les sources audio à enregistrer (micro / système).', 'Cliquez sur Démarrer ; les modèles se chargent avant.'],
+      2: ['Les sous-titres défilent à droite pendant l’enregistrement.', 'Chaque sous-titre a une heure et un locuteur ; cliquez pour sauter.', 'Agrandissez les sous-titres pour les mettre en premier plan.'],
+      3: ['Activez les notes IA pour les notes en temps réel.', 'L’IA extrait conclusions, risques et tâches dans vos notes.', 'Ajoutez le segment courant à vos notes en un clic.'],
+      4: ['Une transcription affinée et des notes sont générées automatiquement.', 'Faites glisser la barre pour écouter ; les sous-titres se surlignent.', 'Exportez ou partagez les notes à la fin.'],
+    },
+    de: {
+      0: ['Geben Sie Schlüsselwörter ein, um Titel, Untertitel oder Sprecher zu suchen.', 'Die Ergebnisse erscheinen in einem Popover mit hervorgehobener Suche.', 'Klicken Sie auf ein Ergebnis, um die Besprechung zu öffnen.'],
+      1: ['Titel eingeben, Sprache und Übersetzungsziel wählen.', 'Audioquellen (Mikrofon/System) zum Aufnehmen auswählen.', '„Aufnahme starten“; die Modelle laden vor dem Start.'],
+      2: ['Live-Untertitel laufen rechts während der Aufnahme.', 'Jeder Untertitel hat Zeit und Sprecher; klicken zum Springen.', 'Untertitel vergrößern, um sie in die Hauptansicht zu bringen.'],
+      3: ['KI-Notizen für Notizen in Echtzeit aktivieren.', 'KI zieht Schlussfolgerungen, Risiken und Aufgaben in Ihre Notizen.', 'Aktuelles Segment mit einem Klick zu Notizen hinzufügen.'],
+      4: ['Ein bearbeitetes Transkript und Notizen werden automatisch erstellt.', 'Balken ziehen zum Anhören; Untertitel werden synchron hervorgehoben.', 'Notizen am Ende exportieren oder teilen.'],
+    },
+    ru: {
+      0: ['Введите ключевые слова для поиска названий, субтитров или говорящих.', 'Результаты появляются во всплывающем окне с подсветкой запроса.', 'Нажмите на результат, чтобы открыть встречу.'],
+      1: ['Введите название, затем выберите язык и перевод.', 'Отметьте источники звука для записи (микрофон/система).', 'Нажмите «Начать запись»; модели загрузятся заранее.'],
+      2: ['Субтитры прокручиваются справа во время записи.', 'У каждого субтитра есть время и говорящий; клик для перехода.', 'Разверните субтитры, чтобы показать их на главном экране.'],
+      3: ['Включите ИИ-заметки для заметок в реальном времени.', 'ИИ извлекает выводы, риски и задачи в ваши заметки.', 'Добавьте текущий фрагмент в заметки одним кликом.'],
+      4: ['Обработанная расшифровка и заметки создаются автоматически.', 'Перетащите полосу для прослушивания; субтитры подсвечиваются.', 'Экспортируйте или поделитесь заметками в конце.'],
+    },
+  };
+  appCopy.tourHowto = tourHowto;
+
+  const currentVersionLabels = { zh: '当前版本', en: 'Current version', es: 'Versión actual', ja: '現在のバージョン', ko: '현재 버전', fr: 'Version actuelle', de: 'Aktuelle Version', ru: 'Текущая версия' };
+  appCopy.currentVersionLabels = currentVersionLabels;
+
+  const localeHelpers = (() => {
+    const languageCodes = ['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru'];
+    const localeTags = { zh: 'zh-CN', en: 'en-US', es: 'es-ES', ja: 'ja-JP', ko: 'ko-KR', fr: 'fr-FR', de: 'de-DE', ru: 'ru-RU' };
+    const slogans = {
+      zh: ['每一场对话，都留有依据。', '让重要讨论，不再散落。', '从声音开始，留下清晰结论。', '记录发生的事，推进接下来的事。', '把会议留在掌控之中。'],
+      en: ['Every conversation leaves a traceable record.', 'Keep important discussions in one place.', 'Start with sound. End with clear decisions.', 'Record what happened. Move the work forward.', 'Keep every meeting within reach.'],
+      es: ['Cada conversación conserva un registro verificable.', 'Mantén las conversaciones importantes en un solo lugar.', 'Empieza con la voz. Termina con decisiones claras.', 'Registra lo que ocurrió. Haz avanzar el trabajo.', 'Mantén cada reunión bajo control.'],
+      ja: ['すべての会話に、確かな記録を。', '大切な議論を、一か所に。', '音声から始め、明確な決定へ。', '起きたことを記録し、仕事を前へ進める。', 'すべての会議を手の届く場所に。'],
+      ko: ['모든 대화에 추적 가능한 기록을 남깁니다.', '중요한 논의를 한곳에 모으세요.', '소리로 시작해 명확한 결정으로 마무리하세요.', '일어난 일을 기록하고 업무를 앞으로 나아가게 하세요.', '모든 회의를 가까이 두세요.'],
+      fr: ['Chaque conversation laisse une trace vérifiable.', 'Gardez les discussions importantes au même endroit.', 'Commencez par le son. Terminez par des décisions claires.', 'Consignez ce qui s’est passé. Faites avancer le travail.', 'Gardez chaque réunion à portée de main.'],
+      de: ['Jedes Gespräch hinterlässt eine nachvollziehbare Aufzeichnung.', 'Halten Sie wichtige Gespräche an einem Ort fest.', 'Mit Ton beginnen. Mit klaren Entscheidungen enden.', 'Dokumentieren Sie das Geschehene und bringen Sie die Arbeit voran.', 'Behalten Sie jede Besprechung im Blick.'],
+      ru: ['Каждый разговор оставляет проверяемую запись.', 'Храните важные обсуждения в одном месте.', 'Начните со звука. Завершите ясными решениями.', 'Записывайте произошедшее и двигайте работу вперёд.', 'Держите каждую встречу под рукой.']
+    };
+    const trashCopy = {
+      zh: { slogan: '删除的会议将在 30 天后永久清理。', back: '← 返回会议库', purge: '永久删除' },
+      en: { slogan: 'Deleted meetings are permanently removed after 30 days.', back: '← Back to library', purge: 'Delete permanently' },
+      es: { slogan: 'Las reuniones eliminadas se borran permanentemente después de 30 días.', back: '← Volver a la biblioteca', purge: 'Eliminar definitivamente' },
+      ja: { slogan: '削除した会議は30日後に完全に消去されます。', back: '← ライブラリに戻る', purge: '完全に削除' },
+      ko: { slogan: '삭제된 회의는 30일 후 영구적으로 삭제됩니다.', back: '← 라이브러리로 돌아가기', purge: '영구 삭제' },
+      fr: { slogan: 'Les réunions supprimées sont effacées définitivement après 30 jours.', back: '← Retour à la bibliothèque', purge: 'Supprimer définitivement' },
+      de: { slogan: 'Gelöschte Besprechungen werden nach 30 Tagen endgültig entfernt.', back: '← Zurück zur Bibliothek', purge: 'Endgültig löschen' },
+      ru: { slogan: 'Удалённые встречи безвозвратно удаляются через 30 дней.', back: '← Вернуться в библиотеку', purge: 'Удалить навсегда' }
+    };
+    const defaultMeetingNames = { zh: '会议', en: 'Meeting', es: 'Reunión', ja: '会議', ko: '회의', fr: 'Réunion', de: 'Meeting', ru: 'Встреча' };
+    const selectionOverview = {
+      zh: (count) => `已选择 ${count} 个会议`, en: (count) => `${count} meeting${count === 1 ? '' : 's'} selected`, es: (count) => `${count} ${count === 1 ? 'reunión seleccionada' : 'reuniones seleccionadas'}`,
+      ja: (count) => `${count} 件の会議を選択中`, ko: (count) => `회의 ${count}개 선택됨`, fr: (count) => `${count} réunion${count === 1 ? '' : 's'} sélectionnée${count === 1 ? '' : 's'}`, de: (count) => `${count} Besprechung${count === 1 ? '' : 'en'} ausgewählt`, ru: (count) => `Выбрано встреч: ${count}`
+    };
+
+    return { languageCodes, localeTags, slogans, trashCopy, defaultMeetingNames, selectionOverview };
+  })();
+
+  const chinaModelSourceLabel = '是否使用中国大陆镜像源进行下载加速';
+
+const data = { onboardingStorageCopy, catalog, appCopy, aiNotePromptCopy, storageCleanupCopy, exportHubCopy, whatsNewLog, asrCopy, localeHelpers, chinaModelSourceLabel };
 if (typeof module === "object" && module.exports) module.exports = data;
 else window.BreviaLocaleData = data;
 })();

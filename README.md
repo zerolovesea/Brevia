@@ -41,10 +41,12 @@ For each meeting Brevia then picks a default recognition model from the **meetin
 
 | Meeting language | Default recognition model | Why |
 | --- | --- | --- |
-| Chinese, Cantonese | FunASR Nano int8 | Highest accuracy on Chinese and its dialects |
-| Japanese, Korean | Qwen3-ASR 0.6B int8 | The only selectable model covering both |
+| Chinese, Cantonese | FunASR Nano | Highest accuracy on Chinese and its dialects |
+| Japanese, Korean | Qwen3-ASR 0.6B | The only selectable model covering both |
 | English, Spanish, French, German, Russian, mixed languages | Parakeet TDT 0.6B v3 | 25 European languages in one model, adds punctuation and timestamps |
-| Anything else | Qwen3-ASR 0.6B int8 | Widest language coverage among the remaining models |
+| Anything else | Qwen3-ASR 0.6B | Widest language coverage among the remaining models |
+
+On Apple Silicon Macs, speech recognition and Silero VAD use mlx-audio/MLX; Windows keeps Sherpa ONNX. Speaker diarization and voiceprints use Sherpa on both platforms. Upgrading a Mac requires downloading the corresponding MLX recognition model; existing recordings remain available. The segment cap is the smallest of the live setting, the language-specific VAD limit and the model capacity (20 seconds for the macOS MLX models). Automatic language detection waits for at least 2 seconds of silence.
 
 If the declared default is not downloaded yet, Brevia uses an installed model that supports that language instead of asking you to download another one. The meeting setup screen shows a **recognition model** selector (including models you have not downloaded, listed with their size), and the same selector appears on the live screen and switches the model mid-meeting through `meeting.reconfigure`. `Settings → Advanced → Live recognition` (`live_asr.max_speech_seconds`) can cap how long a single live sentence segment may grow; the effective cap is always the smallest of that value, the per-language VAD setting, and the model's own capacity.
 
@@ -103,7 +105,7 @@ On first launch, grant microphone and screen-recording permissions, then open **
 flowchart LR
   A[Electron renderer<br/>HTML · Tailwind · JS] <-->|IPC + Zod validation| B[Electron main process]
   B <-->|JSONL stdin/stdout| C[Python worker<br/>bundled runtime]
-  C --> D[sherpa-onnx<br/>VAD → sentence ASR · speakers]
+  C --> D[mlx-audio / sherpa-onnx<br/>VAD → sentence ASR · speakers]
   C --> E[Local storage<br/>SQLite · audio · exports]
   C -. explicit consent .-> F[Optional cloud API<br/>AI Assist · summaries · translation]
 ```
@@ -122,7 +124,7 @@ Brevia follows a strict local-first design:
 | Desktop shell | Electron 43 — preload bridge, context isolation, sandboxed renderer |
 | Frontend | Vanilla HTML/CSS/JS, Tailwind CSS 4, built-in i18n (8 locales) |
 | Backend | Python 3.10+, JSONL worker protocol, SQLite storage |
-| Speech engine | [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 1.13.8, ONNX Runtime |
+| Speech engine | [mlx-audio](https://github.com/Blaizzy/mlx-audio) / MLX (macOS); [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 1.13.8 (Windows), ONNX Runtime |
 | Speaker processing | Pyannote segmentation + 3D-Speaker ERes2Net Base embeddings |
 | LLM client | Built-in llama.cpp (GGUF) plus OpenAI- / Anthropic-compatible chat APIs |
 | Audio I/O | ffmpeg (bundled in releases) |
@@ -133,7 +135,7 @@ Sentence transcription, post-meeting refinement, AI notes, and caption translati
 
 | Category | Representative models | Languages |
 | --- | --- | --- |
-| Sentence transcription / post-meeting refinement | FunASR Nano int8, Qwen3-ASR 0.6B, Parakeet TDT 0.6B v3 | Chinese / multilingual / 25 European languages |
+| Sentence transcription / post-meeting refinement | FunASR Nano, Qwen3-ASR 0.6B, Parakeet TDT 0.6B v3 | Chinese / multilingual / 25 European languages |
 | Voice activity detection | Silero VAD | Universal |
 | Speaker diarization | Pyannote Segmentation 3.0 | Universal |
 | Speaker embeddings | 3D-Speaker ERes2Net Base | Chinese |
@@ -187,18 +189,18 @@ Recording uses **Silero VAD → one offline ASR decode → one final caption**.
 FunASR Nano is the default for Chinese and Cantonese, Qwen3-ASR 0.6B for Japanese
 and Korean, and Parakeet TDT 0.6B v3 for English, Spanish, French, German, Russian,
 and automatic language selection. Punctuation and casing
-come from the recognizer. There is no streaming recognizer, punctuation model,
-or second live refinement pass.
+come from the recognizer. MLX FunASR and Qwen also display draft text while decoding a completed segment.
+There is no separate punctuation model or second live refinement pass.
 
 VAD waits for a speech pause (Chinese: 0.7 seconds; other languages: 0.8 seconds).
-Continuous speech is capped at 30 / 20 seconds respectively. A VAD segment may
+Continuous speech is capped by the live setting, the language-specific VAD limit and the model capacity. A VAD segment may
 contain more than one grammatical sentence, and neighbouring sentences are
 coalesced into one caption: roughly 110 Chinese characters (150 max) or 280
 Latin characters (380 max) per caption, so a single short sentence never stands
 alone. A VAD endpoint is **not** a paragraph boundary — in real meetings the
 silence after one has a median of 30–50 ms, which would cut 24-character
 fragments; only a genuine long pause (≥1.2 s) starts a new paragraph, and a
-paragraph below the target is submitted after at most 8 seconds. When continuous speech is cut, the next decode reaches 400 ms back
+paragraph below the target is submitted after at most 8 seconds. When continuous speech is cut, the next decode reaches ~400 ms back
 before the cut so a word split across it is recognised again with context; the
 repeated part is aligned away at the seam. These limits are adjustable under
 `vad` in advanced settings. Recognition runs on a separate serial executor;

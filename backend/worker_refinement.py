@@ -450,7 +450,7 @@ class RefinementWorkerMixin:
             )
             raise error
 
-        sources, turns_by_track = {}, {}
+        sources, turns_by_track, speaker_turns_by_track = {}, {}, {}
         def prepare(track):
             return self._prepare_track(
                 track,
@@ -488,11 +488,12 @@ class RefinementWorkerMixin:
             self.wait_task(control)
         except TaskCancelled:
             return cancel_refinement()
-        for track, source, _raw_turns, stable_turns in prepared:
+        for track, source, speaker_turns, stable_turns in prepared:
             sources[track] = source
             turns_by_track[track] = stable_turns
+            speaker_turns_by_track[track] = speaker_turns
         turns = sorted(
-            (turn for track_turns in turns_by_track.values() for turn in track_turns),
+            (turn for track_turns in speaker_turns_by_track.values() for turn in track_turns),
             key=lambda turn: (turn["start_ms"], turn["end_ms"]),
         )
         try:
@@ -626,7 +627,7 @@ class RefinementWorkerMixin:
                     }
                     for word in event["word_timestamps"]:
                         word["overlap_speakers"] = self._overlap_speakers(
-                            word["start_ms"], word["end_ms"], turns_by_track[track]
+                            word["start_ms"], word["end_ms"], speaker_turns_by_track[track]
                         )
                         word["overlap"] = len(word["overlap_speakers"]) > 1
                     refined_segments.append(event)
@@ -693,11 +694,11 @@ class RefinementWorkerMixin:
         num_speakers,
         threshold,
     ):
-        """对单条轨道执行 VAD/聚类/声纹提取，返回稳定化前后的说话人时间段。
+        """对单条轨道执行 VAD/聚类/声纹提取，返回说话人时间段与互斥识别窗口。
 
         每次调用创建独立的 VAD/Diarizer/SpeakerTracker 实例，因此可安全地在
         线程池中并行运行多条轨道；共享的 ``self.store``/``self.emit`` 均已在各自
-        实现里加锁。返回 ``(track, source, raw_turns, stable_turns)``。
+        实现里加锁。返回 ``(track, source, speaker_turns, stable_turns)``。
         """
         self.wait_task(control)
         path = meeting["audio"]["playback"][track]
@@ -832,6 +833,9 @@ class RefinementWorkerMixin:
             minimum_ms=AUTO_TURN_MINIMUM_MS if auto_language else TURN_MINIMUM_MS,
             absorb_gap_ms=AUTO_TURN_ABSORB_GAP_MS if auto_language else TURN_ABSORB_GAP_MS,
         )
+        # ASR gets exclusive windows so mixed speech is decoded only once.
+        # Metadata keeps substantial overlap; it is not proof of source separation.
+        turns = self._deoverlap_speaker_turns(stable_turns, maximum_overlap_ms=TURN_MINIMUM_MS)
         stable_turns = self._deoverlap_speaker_turns(stable_turns)
         # De-overlap can itself leave a few-millisecond tail at a speaker
         # boundary.  Never send that fragment to ASR: decoder loops turn it
@@ -1840,16 +1844,11 @@ class RefinementWorkerMixin:
         return stable
 
     @staticmethod
-    def _deoverlap_speaker_turns(turns):
-        """消除不同说话人 turn 之间的时间重叠，避免被误判成两人同时说话。
+    def _deoverlap_speaker_turns(turns, maximum_overlap_ms=None):
+        """为单次混音识别分配互斥窗口；元数据只消除短边界重叠。
 
-        pyannote 分段在说话人切换处常产生重叠边界（相邻 turn 有几百毫秒到几秒的
-        交叠），这些交叠是 diarization 的边界噪声，并非真实的同时说话。这里按重叠
-        区中点切分，让同一时刻只归属一位说话人，从而去掉 UI 上大量虚假的「重叠说话」。
-
-        必须与**所有**已输出、说话人不同的 turn 比对，而不是只看最后一个：中间若夹着
-        同说话人的 turn（如 Q(0-1000) 与 R(5-10) 同为 spk-1，随后 Y(20-30) 是 spk-2），
-        只比 R 会漏掉 Y 与 Q 的交叠，UI 上就会出现同一时刻两人在说。
+        maximum_overlap_ms 非空时保留超过阈值的重叠，避免把持续的插话
+        当成边界噪声。短重叠仍是启发式判断，不代表检测到了真实同时发言。
         """
         turns = sorted(turns, key=lambda turn: (turn["start_ms"], turn["end_ms"]))
         deoverlapped, active = [], []
@@ -1862,6 +1861,9 @@ class RefinementWorkerMixin:
                 if previous["speaker"] == current["speaker"]:
                     continue
                 if current["start_ms"] >= previous["end_ms"]:
+                    continue
+                overlap = min(current["end_ms"], previous["end_ms"]) - current["start_ms"]
+                if maximum_overlap_ms is not None and overlap > maximum_overlap_ms:
                     continue
                 # 完全被已输出 turn 包含的碎片（如 1ms 的 diarization 噪声）直接丢弃。
                 if current["end_ms"] <= previous["end_ms"]:

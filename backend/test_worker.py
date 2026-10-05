@@ -2228,6 +2228,21 @@ class WorkerTest(unittest.TestCase):
                 self.worker.refine({"meeting_id": meeting["id"], "language": "auto", "refined_model_id": "funasr-nano-int8"})
             self.worker.refine({"meeting_id": meeting["id"], "language": "es", "refined_model_id": "whisper-large-v3"})
             self.assertEqual(refined.call_args.kwargs["language"], "es")
+            # Preserve speaker metadata without decoding the mixed interruption twice.
+            overlap = [{"start_ms": 0, "end_ms": 2000, "speaker": "spk-1"},
+                       {"start_ms": 300, "end_ms": 1700, "speaker": "spk-2"}]
+            refined.return_value.decode_words.side_effect = None
+            refined.return_value.decode_words.return_value = (
+                "remote slow", [{"text": "remote slow", "start_ms": 500, "end_ms": 1000}])
+            calls = refined.return_value.decode_words.call_count
+            with patch.object(self.worker, "_cluster_speaker_turns", return_value=overlap):
+                self.worker.refine({"meeting_id": meeting["id"]})
+            self.assertEqual(refined.return_value.decode_words.call_count, calls + 1)
+            result = self.worker.store.get_meeting(meeting["id"])
+            self.assertEqual(len(result["speaker_turns"]), 2)
+            word = latest_segments(result["segments"])[0]["word_timestamps"][0]
+            self.assertTrue(word["overlap"])
+            self.assertEqual(word["overlap_speakers"], ["spk-1", "spk-2"])
 
         latest = [
             segment
@@ -3166,6 +3181,20 @@ class WorkerTest(unittest.TestCase):
             {"start_ms": 950, "end_ms": 2000, "speaker": "spk-2"},
         ])
         self.assertEqual(turns, original)
+
+    def test_overlap_metadata_preserves_interruption_without_duplicate_asr_windows(self):
+        turns = [
+            {"start_ms": 0, "end_ms": 10000, "speaker": "remote"},
+            {"start_ms": 2000, "end_ms": 6000, "speaker": "local"},
+            {"start_ms": 9900, "end_ms": 12000, "speaker": "other"},
+        ]
+        metadata = self.worker._deoverlap_speaker_turns(turns, maximum_overlap_ms=1000)
+        windows = self.worker._deoverlap_speaker_turns(turns)
+        self.assertEqual(self.worker._overlap_speakers(3000, 3500, metadata), ["remote", "local"])
+        self.assertEqual(self.worker._overlap_speakers(9900, 10000, metadata), [])
+        self.assertEqual(sum(t["end_ms"] - t["start_ms"] for t in windows), 12000)
+        self.assertEqual(len(windows), 2)
+        self.assertEqual(turns[0]["end_ms"], 10000)
 
     def test_deoverlap_speaker_turns_keeps_same_speaker_overlap(self):
         deoverlapped = self.worker._deoverlap_speaker_turns([

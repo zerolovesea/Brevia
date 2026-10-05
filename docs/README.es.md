@@ -41,10 +41,12 @@ Después, en cada reunión Brevia elige un modelo de reconocimiento predetermina
 
 | Idioma de la reunión | Modelo predeterminado | Por qué |
 | --- | --- | --- |
-| Chino, cantonés | FunASR Nano int8 | Mayor precisión en chino y sus dialectos |
-| Japonés, coreano | Qwen3-ASR 0.6B int8 | El único modelo seleccionable que cubre ambos |
+| Chino, cantonés | FunASR Nano | Mayor precisión en chino y sus dialectos |
+| Japonés, coreano | Qwen3-ASR 0.6B | El único modelo seleccionable que cubre ambos |
 | Inglés, español, francés, alemán, ruso, idiomas mezclados | Parakeet TDT 0.6B v3 | 25 lenguas europeas en un modelo, con puntuación y marcas de tiempo |
-| Cualquier otro idioma | Qwen3-ASR 0.6B int8 | La mayor cobertura entre los modelos restantes |
+| Cualquier otro idioma | Qwen3-ASR 0.6B | La mayor cobertura entre los modelos restantes |
+
+En los Mac con Apple Silicon, el reconocimiento y Silero VAD usan mlx-audio/MLX; Windows mantiene Sherpa ONNX. La separación de hablantes y las huellas de voz usan Sherpa en ambas plataformas. Tras actualizar un Mac, hay que descargar el modelo de reconocimiento MLX correspondiente; las grabaciones existentes siguen disponibles. El límite real es el menor entre el ajuste en directo, el límite VAD del idioma y la capacidad del modelo (20 s en los modelos MLX de macOS). La detección automática de idioma espera al menos 2 s de silencio.
 
 Si el modelo predeterminado aún no está descargado, Brevia usa otro ya instalado que soporte ese idioma en lugar de pedirte otra descarga. La pantalla de preparación muestra un selector de **modelo de reconocimiento** (también lista los que no has descargado, con su tamaño), y el mismo selector aparece durante la reunión y cambia el modelo en caliente mediante `meeting.reconfigure`. En **Ajustes → Avanzado → Reconocimiento en vivo**, `live_asr.max_speech_seconds` limita cuánto puede crecer un segmento de subtítulo; el límite efectivo siempre es el menor entre ese valor, la configuración de VAD por idioma y la capacidad del propio modelo.
 
@@ -103,7 +105,7 @@ En el primer arranque, concede permisos de micrófono y grabación de pantalla, 
 flowchart LR
   A[Renderer Electron<br/>HTML · Tailwind · JS] <-->|IPC + validación Zod| B[Proceso principal Electron]
   B <-->|JSONL stdin/stdout| C[Worker Python<br/>runtime incluido]
-  C --> D[sherpa-onnx<br/>ASR · VAD · hablantes · puntuación]
+  C --> D[mlx-audio / sherpa-onnx<br/>ASR · VAD · hablantes · puntuación]
   C --> E[Almacenamiento local<br/>SQLite · audio · exportaciones]
   C -. consentimiento explícito .-> F[API cloud opcional<br/>resumen LLM · traducción]
 ```
@@ -115,7 +117,7 @@ Brevia sigue un diseño estrictamente local:
 - **Los datos viven en `~/brevia`** por defecto — SQLite, audio crudo, exportaciones, modelos en caché y perfiles de voz.
 - **Las llamadas a la nube son opt-in.** Los resúmenes LLM y traducción requieren que el usuario configure un proveedor explícitamente, y solo se envía texto.
 
-La grabación funciona como **segmentación con Silero VAD → una única decodificación sin conexión → un subtítulo completo**. Tras cada pausa (chino 0,7 s; otros idiomas 0,8 s) aparece la frase; el habla continua se corta a los 30 / 20 s (ajustable en `vad`). Un segmento de VAD puede contener varias frases y las frases vecinas se agrupan en un párrafo (chino ~110 caracteres, máx. 150; latino ~280, máx. 380). Un punto final de VAD **no** es un límite de párrafo: solo una pausa larga real (≥1,2 s) abre uno nuevo, y un párrafo corto se entrega tras 8 s como máximo. En los cortes, la siguiente decodificación retrocede 400 ms y elimina las repeticiones en la unión. Al detener se procesa la última frase; si el reconocimiento falla, se conserva el audio original.
+La grabación funciona como **segmentación con Silero VAD → una única decodificación sin conexión → un subtítulo completo**. Tras cada pausa (chino 0,7 s; otros idiomas 0,8 s) aparece la frase; el habla continua se corta según el menor límite de los ajustes en directo, VAD y el modelo. Un segmento de VAD puede contener varias frases y las frases vecinas se agrupan en un párrafo (chino ~110 caracteres, máx. 150; latino ~280, máx. 380). Un punto final de VAD **no** es un límite de párrafo: solo una pausa larga real (≥1,2 s) abre uno nuevo, y un párrafo corto se entrega tras 8 s como máximo. En los cortes, la siguiente decodificación retrocede ~400 ms y elimina las repeticiones en la unión. Al detener se procesa la última frase; si el reconocimiento falla, se conserva el audio original.
 
 Consulta la [metodología y los resultados del benchmark](../backend/benchmarks/vad-2026-09-05/REPORT.md).
 
@@ -126,7 +128,7 @@ Consulta la [metodología y los resultados del benchmark](../backend/benchmarks/
 | Shell de escritorio | Electron 43 — puente preload, aislamiento de contexto, renderer en sandbox |
 | Frontend | HTML/CSS/JS nativo, Tailwind CSS 4, i18n integrado (8 idiomas) |
 | Backend | Python 3.10+, protocolo worker JSONL, almacenamiento SQLite |
-| Motor de voz | [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 1.13.8, ONNX Runtime |
+| Motor de voz | [mlx-audio](https://github.com/Blaizzy/mlx-audio) / MLX (macOS); [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 1.13.8 (Windows), ONNX Runtime |
 | Procesamiento de hablantes | Segmentación Pyannote + embeddings 3D-Speaker ERes2Net Base |
 | Cliente LLM | llama.cpp integrado (GGUF) y APIs chat compatibles con OpenAI / Anthropic |
 | E/S de audio | ffmpeg (incluido en releases) |
@@ -137,7 +139,7 @@ La transcripción por frases, el refinamiento, las notas de IA y la traducción 
 
 | Tipo | Modelos representativos | Idiomas |
 | --- | --- | --- |
-| Transcripción por frases / refinamiento | FunASR Nano int8, Qwen3-ASR 0.6B, Parakeet TDT 0.6B v3 | Chino / multilingüe / 25 lenguas europeas |
+| Transcripción por frases / refinamiento | FunASR Nano, Qwen3-ASR 0.6B, Parakeet TDT 0.6B v3 | Chino / multilingüe / 25 lenguas europeas |
 | Detección de actividad vocal | Silero VAD | Universal |
 | Separación de hablantes | Pyannote Segmentation 3.0 | Universal |
 | Embeddings de hablante | 3D-Speaker ERes2Net Base | Chino |

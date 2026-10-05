@@ -135,10 +135,10 @@ def main():
                                            'inference_seconds': time.perf_counter() - began})
             setattr(worker.asr, method, measured_decode)
             queue_sentence = worker._queue_sentence
-            def measured_queue(track, segment):
+            def measured_queue(track, segment, **kwargs):
                 audio_windows.append({'start_ms': segment[0], 'end_ms': segment[1],
                                       'queued_wall_seconds': time.perf_counter() - started})
-                return queue_sentence(track, segment)
+                return queue_sentence(track, segment, **kwargs)
             worker._queue_sentence = measured_queue
         for offset in range(0, len(pcm) // 2, 2730):
             frame = pcm[offset * 2:(offset + 2730) * 2]

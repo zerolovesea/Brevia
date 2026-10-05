@@ -79,6 +79,8 @@ class WorkerCore:
         self.vad = None
         self.stream_state = {}
         self.meeting_language = None
+        self.live_preprocessing = None
+        self.live_preprocessing_tail = None
         self.live_postprocessing = None
         self.live_overloaded = False
         # 继续协作初始化链，使兄弟 mixin（如 llama sidecar 管理器）的 __init__ 也能

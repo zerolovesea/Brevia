@@ -41,10 +41,12 @@ AI 笔记与 AI 会议总结可分别配置供应商、模型和 API Key。使�
 
 | 会议语言 | 默认识别模型 | 说明 |
 | --- | --- | --- |
-| 中文、粤语 | FunASR Nano int8 | 中文及中文方言准确率最高 |
-| 日语、韩语 | Qwen3-ASR 0.6B int8 | 可选模型里唯一同时覆盖日韩的一个 |
+| 中文、粤语 | FunASR Nano | 中文及中文方言准确率最高 |
+| 日语、韩语 | Qwen3-ASR 0.6B | 可选模型里唯一同时覆盖日韩的一个 |
 | 英语、西班牙语、法语、德语、俄语、多语言混说 | Parakeet TDT 0.6B v3 | 一个模型覆盖 25 种欧洲语言，自带标点与时间戳 |
-| 其他语言 | Qwen3-ASR 0.6B int8 | 其余模型里覆盖语言最广的一个 |
+| 其他语言 | Qwen3-ASR 0.6B | 其余模型里覆盖语言最广的一个 |
+
+Apple 芯片 Mac 的语音识别与 Silero VAD 使用 mlx-audio/MLX；Windows 继续使用 Sherpa ONNX。两端的说话人分离与声纹仍使用 Sherpa。Mac 升级后需下载对应的 MLX 识别模型，已有录音仍可使用。 实际切段上限取实时设置、语言 VAD 配置和模型容量的最小值（macOS MLX 模型为 20 秒）；自动语言检测至少等待 2 秒静音。
 
 若声明的默认模型尚未下载，言录会改用**已安装且支持该语言**的模型，而不是让你再下一个。准备页提供「识别模型」下拉（未下载的模型也会列出体积），实时页是同一个切换器，会中即可通过 `meeting.reconfigure` 热切换。**设置 → 进阶 → 实时识别**里的 `live_asr.max_speech_seconds` 可以限制单段实时字幕最长能攒到多少秒；实际生效值始终是该值、语言级 VAD 配置与模型自身容量三者的最小值。
 
@@ -104,7 +106,7 @@ AI 笔记与 AI 会议总结可分别配置供应商、模型和 API Key。使�
 flowchart LR
   A[Electron 渲染进程<br/>HTML · Tailwind · JS] <-->|IPC + Zod 校验| B[Electron 主进程]
   B <-->|JSONL stdin/stdout| C[Python Worker<br/>内置运行时]
-  C --> D[sherpa-onnx<br/>VAD → 整句 ASR · 说话人]
+  C --> D[mlx-audio / sherpa-onnx<br/>VAD → 整句 ASR · 说话人]
   C --> E[本地存储<br/>SQLite · 音频 · 导出]
   C -. 显式授权 .-> F[可选云端 API<br/>LLM 摘要 · 翻译]
 ```
@@ -116,7 +118,7 @@ flowchart LR
 - **数据默认存放在 `~/brevia`**，包括 SQLite 数据库、原始音频、导出文件、模型缓存和声纹档案。
 - **云端调用是可选的**，仅用于 LLM 摘要和翻译，需要用户显式配置服务商并授权后才启用，且只发送文本。
 
-录音链路采用 **Silero VAD 分段 → 单次高精度识别 → 完整字幕**。中文停顿 0.7 秒、其他语言停顿 0.8 秒后触发；连续发言最长 30 / 20 秒切段，可在高级设置 `vad` 调整。VAD 按声音停顿分段，一段可能含多个语法句，字幕再把相邻的句子攒成段落：中文约 110 字（上限 150 字）、英文约 280 字符（上限 380 字符）为一段，短句不会单独成段。**VAD 端点不作为段落边界**——实测真实会议里端点之后的静音中位数只有 30–50 毫秒，按端点切会得到平均 24 字的碎片段；只有真正的长停顿（≥1.2 秒）才另起一段，不足目标的段落最多滞留 8 秒后兜底提交。连续语音被切开时，下一段解码会回看切点前 400 毫秒，让切在词中间的字在新的上下文里被完整识别，重复部分按接缝对齐去重。停止录音会处理完末句，识别失败仍保留原始录音。
+录音链路采用 **Silero VAD 分段 → 单次高精度识别 → 完整字幕**。中文停顿 0.7 秒、其他语言停顿 0.8 秒后触发；连续发言按实时设置、语言配置和模型容量中的最小上限切段。VAD 按声音停顿分段，一段可能含多个语法句，字幕再把相邻的句子攒成段落：中文约 110 字（上限 150 字）、英文约 280 字符（上限 380 字符）为一段，短句不会单独成段。**VAD 端点不作为段落边界**——实测真实会议里端点之后的静音中位数只有 30–50 毫秒，按端点切会得到平均 24 字的碎片段；只有真正的长停顿（≥1.2 秒）才另起一段，不足目标的段落最多滞留 8 秒后兜底提交。连续语音被切开时，下一段解码会回看切点前约 400 毫秒，让切在词中间的字在新的上下文里被完整识别，重复部分按接缝对齐去重。停止录音会处理完末句，识别失败仍保留原始录音。
 
 参见[基准测试报告](../backend/benchmarks/vad-2026-09-05/REPORT.md)。
 
@@ -127,7 +129,7 @@ flowchart LR
 | 桌面外壳 | Electron 43 — preload 桥接、context isolation、渲染器沙箱 |
 | 前端 | 原生 HTML/CSS/JS、Tailwind CSS 4、内置 i18n（8 种语言） |
 | 后端 | Python 3.10+、JSONL Worker 协议、SQLite 存储 |
-| 语音引擎 | [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 1.13.8、ONNX Runtime |
+| 语音引擎 | [mlx-audio](https://github.com/Blaizzy/mlx-audio) / MLX (macOS); [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 1.13.8 (Windows)、ONNX Runtime |
 | 说话人处理 | Pyannote 分段 + 3D-Speaker ERes2Net Base 声纹嵌入 |
 | LLM 客户端 | 内置 llama.cpp（GGUF）+ 兼容 OpenAI / Anthropic 的标准 API |
 | 音频 I/O | ffmpeg（发行版内置） |
@@ -139,7 +141,7 @@ flowchart LR
 
 | 类型 | 代表模型 | 语言 |
 | --- | --- | --- |
-| 整句识别 / 会后精修 | FunASR Nano int8、Qwen3-ASR 0.6B、Parakeet TDT 0.6B v3 | 中文 / 多语言 / 25 种欧洲语言 |
+| 整句识别 / 会后精修 | FunASR Nano、Qwen3-ASR 0.6B、Parakeet TDT 0.6B v3 | 中文 / 多语言 / 25 种欧洲语言 |
 | 语音活动检测 | Silero VAD | 通用 |
 | 说话人分离 | Pyannote Segmentation 3.0 | 通用 |
 | 声纹嵌入 | 3D-Speaker ERes2Net Base | 中文 |

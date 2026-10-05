@@ -146,18 +146,11 @@
     return undefined;
   }
 
-  /** 模型库一行的「下载 / 占用 / 内存」摘要。
-   *
-   * 归档体积与磁盘占用差距不小（Whisper 1.07 GB → 1.71 GB），只报一个会误导；内存下限是
-   * 本地推理最容易踩的坑，也一并写出来。
-   * @param {object} model 清单项。@param {object} words 三个词条。@param {Function} formatSize。
-   * @returns {string} 摘要文本。
-   */
+  /** 模型库仅显示下载大小。@param {object} model 清单项。
+   * @param {object} words 下载词条。@param {Function} formatSize 大小格式化函数。
+   * @returns {string} 下载大小文本。 */
   function modelSizeSummary(model, words, formatSize) {
-    const parts = [`${words.download} ${formatSize(model.size_bytes || 0)}`];
-    if (model.disk_size_bytes) parts.push(`${words.disk} ${formatSize(model.disk_size_bytes)}`);
-    if (model.memory_floor_bytes) parts.push(`${words.memory} ${formatSize(model.memory_floor_bytes)}`);
-    return parts.join(' · ');
+    return `${words.download} ${formatSize(model.size_bytes || 0)}`;
   }
 
   window.BreviaModelSelection = {

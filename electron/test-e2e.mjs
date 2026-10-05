@@ -64,8 +64,8 @@ const moduleProbes = [
   ['app-utils.js', 'formatBytes'],
   ['backend-client.js', 'workletContexts'],
   ['ui-data.js', 'uiData'],
-  ['i18n.js', 'window.BreviaI18n'],
   ['i18n-data.js', 'window.BreviaLocaleData'],
+  ['i18n.js', 'window.BreviaI18n'],
   ['i18n-runtime.js', 't'],
   ['model-selection.js', 'window.BreviaModelSelection'],
   ['asr-copy.js', 'window.BreviaAsrCopy'],
@@ -325,6 +325,45 @@ try {
     return before === demo.innerHTML;
   })()`, awaitPromise: true, returnByValue: true });
   check(disabledDemo.result?.value === true, '关闭 AI 演示后旧定时器不能继续更新内容');
+  const builtinOnboarding = await client.send('Runtime.evaluate', { expression: `(() => {
+    const savedPaths = new Map(modelPaths);
+    const savedSelection = selectedBuiltinModel;
+    const candidates = modelCatalog.filter((model) => model.kind === 'llama-chat');
+    const toggle = onboardingPage.querySelector('[name="onboarding-summary-enabled"]');
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event('change', { bubbles: true }));
+    candidates.forEach((model) => modelPaths.delete(model.id));
+    selectedBuiltinModel = '';
+    onboardingPage.querySelector('[name="onboarding-ai-way"][value="built-in"]').closest('label').click();
+    const body = settingsModal.querySelector('.modal-body');
+    const previousSource = localStorage.getItem('brevia-china-model-source');
+    localStorage.setItem('brevia-china-model-source', 'true');
+    const inheritsSource = modelDownloadPayload(candidates[0].id).source === 'china';
+    if (previousSource === null) localStorage.removeItem('brevia-china-model-source');
+    else localStorage.setItem('brevia-china-model-source', previousSource);
+    const fixedProvider = inheritsSource && body.querySelector('[name="provider"]').value === 'built-in'
+      && !body.querySelector('[data-flow-select-choice="provider"]') && !body.querySelector('[data-summary-enabled]')
+      && !body.querySelector('[data-china-model-source]') && settingsModal.querySelector('h2').textContent === 'AI 会议纪要';
+    const offered = body.querySelectorAll('[data-flow-select-choice="model"]').length === candidates.length;
+    const initialDownload = body.querySelector('[data-download-model]');
+    const downloadAvailable = Boolean(initialDownload) && body.querySelector('[type="submit"]').disabled;
+    const next = candidates.find((model) => model.id !== initialDownload?.dataset.downloadModel);
+    body.querySelector('[data-flow-select-choice="model"][data-value="' + next.id + '"]').click();
+    const switched = body.querySelector('[data-download-model]').dataset.downloadModel === next.id;
+    modelDownloads.set(next.id, { received: 50, total: 100 });
+    refreshModelConfigModels();
+    const progressVisible = body.textContent.includes('50%') && body.querySelector('[data-download-model]').disabled;
+    modelDownloads.delete(next.id);
+    modelPaths.set(next.id, '/tmp/test-installed-model');
+    refreshModelConfigModels();
+    const ready = !body.querySelector('[data-download-model]') && !body.querySelector('[type="submit"]').disabled;
+    modelPaths.clear(); savedPaths.forEach((value, key) => modelPaths.set(key, value));
+    selectedBuiltinModel = savedSelection;
+    closeModal();
+    return { fixedProvider, offered, downloadAvailable, switched, progressVisible, ready };
+  })()`, returnByValue: true });
+  check(Object.values(builtinOnboarding.result?.value || {}).length === 6 && Object.values(builtinOnboarding.result?.value || {}).every(Boolean),
+    `内置 AI 引导应固定供应商，支持模型选择、下载进度及安装后保存：${JSON.stringify(builtinOnboarding.result?.value || builtinOnboarding.exceptionDetails)}`);
   const cancelledProvider = await client.send('Runtime.evaluate', { expression: `(() => {
     const previous = summaryConfig.provider;
     onboardingPage.querySelector('[name="onboarding-ai-way"][value="online"]').closest('label').click();
@@ -376,8 +415,8 @@ try {
     return homeIsActive();
   })()`, awaitPromise: true, returnByValue: true });
   check(rapidNavigation.result?.value === true, '快速连续导航必须到达最后一个目标，且只保留一个活动页面');
-  const aiOptions = await client.send('Runtime.evaluate', { expression: `(async () => { const page = document.querySelector('.onboarding-ai-setup-page'); const options = [...page.querySelector('[name="onboarding-ai-proactivity"]').options].map((option) => option.value); const icons = page.querySelectorAll('.onboarding-ai-icon svg').length; const toggle = page.querySelector('[name="onboarding-summary-enabled"]'); toggle.checked = false; toggle.dispatchEvent(new Event('change', { bubbles: true })); const disabled = [...page.querySelectorAll('[name="onboarding-ai-way"]')].every((option) => option.disabled); await finishAiOnboarding(); const saved = await window.brevia.summary.config.get(); return { options, icons, disabled, saved: saved.enabled }; })()`, awaitPromise: true, returnByValue: true });
-  check(JSON.stringify(aiOptions.result?.value?.options) === '["assist","auto"]' && aiOptions.result?.value?.icons === 2 && aiOptions.result?.value?.disabled && aiOptions.result?.value?.saved === false, `AI 开关、图标或档位未正确保存：${JSON.stringify(aiOptions.result?.value)}`);
+  const aiOptions = await client.send('Runtime.evaluate', { expression: `(async () => { const page = document.querySelector('.onboarding-ai-setup-page'); const options = [...page.querySelectorAll('[data-flow-select-choice="onboarding-ai-proactivity"]')].map((option) => option.dataset.value); const icons = page.querySelectorAll('.onboarding-ai-icon svg').length; const toggle = page.querySelector('[name="onboarding-summary-enabled"]'); toggle.checked = false; toggle.dispatchEvent(new Event('change', { bubbles: true })); const disabled = [...page.querySelectorAll('[name="onboarding-ai-way"]')].every((option) => option.disabled); await finishAiOnboarding(); const saved = await window.brevia.summary.config.get(); return { options, icons, disabled, saved: saved.enabled }; })()`, awaitPromise: true, returnByValue: true });
+  check(JSON.stringify(aiOptions.result?.value?.options) === '["assist","auto"]' && aiOptions.result?.value?.icons === 2 && aiOptions.result?.value?.disabled && aiOptions.result?.value?.saved === false, `AI 开关、图标或档位未正确保存：${JSON.stringify(aiOptions)}`);
   const floatingBars = await client.send('Runtime.evaluate', { expression: `(() => { const live = document.querySelector('#live-view .floating-control-bar'); const player = document.querySelector('#detail-view .floating-control-bar'); const toggle = document.querySelector('#live-more-toggle'); toggle.click(); const menuOpen = !document.querySelector('#live-more-panel').hidden && toggle.getAttribute('aria-expanded') === 'true'; document.body.click(); const menuClosed = document.querySelector('#live-more-panel').hidden; const wasActive = meetingActive, wasSeconds = seconds; meetingActive = true; seconds = 57; document.querySelector('#mark-important').click(); const note = currentNotesMarkdown(); meetingActive = wasActive; seconds = wasSeconds; return { live: getComputedStyle(live).position, player: getComputedStyle(player).position, menuOpen, menuClosed, note }; })()`, returnByValue: true });
   check(floatingBars.result?.value?.live === 'absolute' && floatingBars.result?.value?.player === 'relative' && floatingBars.result?.value?.menuOpen && floatingBars.result?.value?.menuClosed && floatingBars.result?.value?.note?.includes('重点 · 00:57'), `悬浮控制栏操作不正确：${JSON.stringify(floatingBars.result?.value)}`);
   const detailLayout = await client.send('Runtime.evaluate', { expression: `(async () => {
@@ -498,6 +537,94 @@ try {
   })()`, awaitPromise: true, returnByValue: true });
   check(Array.isArray(changelog.result?.value) && changelog.result.value.length === 0, `双语更新日志布局或链接异常：${JSON.stringify(changelog)}`);
   await client.send('Emulation.clearDeviceMetricsOverride');
+  const mergedAiSettings = await client.send('Runtime.evaluate', { expression: `(async () => {
+    meetingActive = false;
+    summaryConfig.enabled = false;
+    aiAssistConfig.enabled = false;
+    aiAssistConfig.proactivity = 'quiet';
+    await Promise.all([persistSummaryConfig(), persistAiAssistConfig()]);
+    await showView('settings');
+    const cards = [...document.querySelectorAll('[data-settings-modal]')].map(button => button.dataset.settingsModal);
+    document.querySelector('[data-settings-modal="ai-features"]').click();
+    const page = onboardingPage;
+    const initial = page.dataset.aiSettings === 'true' && page.querySelector('#ai-features-title').textContent === 'AI 功能'
+      && page.classList.contains('modal-backdrop') && !page.classList.contains('onboarding-page')
+      && getComputedStyle(document.querySelector('.app-shell')).display !== 'none'
+      && !page.querySelector('[name="onboarding-summary-enabled"]').checked
+      && !page.querySelector('[name="onboarding-ai-enabled"]').checked
+      && page.querySelector('[name="onboarding-ai-proactivity"]').value === 'quiet';
+    page.querySelector('[name="onboarding-summary-enabled"]').checked = true;
+    page.querySelector('[name="onboarding-ai-enabled"]').checked = true;
+    page.querySelector('[data-onboarding-ai-skip]').click();
+    await new Promise(resolve => setTimeout(resolve, 350));
+    const cancelled = !onboardingPage && !summaryConfig.enabled && !aiAssistConfig.enabled;
+    document.querySelector('[data-settings-modal="ai-features"]').click();
+    onboardingPage.querySelector('[data-configure-ai-notes]').click();
+    const notesConfig = !!settingsModal.querySelector('.ai-assist-config-form');
+    closeModal();
+    const enableNotes = onboardingPage.querySelector('[name="onboarding-ai-enabled"]');
+    enableNotes.checked = true;
+    enableNotes.dispatchEvent(new Event('change', { bubbles: true }));
+    onboardingPage.querySelector('.onboarding-ai-levels .flow-select-toggle').click();
+    const opened = !onboardingPage.querySelector('.onboarding-ai-levels .flow-select-options').hidden;
+    onboardingPage.querySelector('[data-flow-select-choice="onboarding-ai-proactivity"][data-value="auto"]').click();
+    const selected = opened && onboardingPage.querySelector('[name="onboarding-ai-proactivity"]').value === 'auto'
+      && onboardingPage.querySelector('.onboarding-ai-levels .flow-select-options').hidden;
+    enableNotes.checked = false;
+    enableNotes.dispatchEvent(new Event('change', { bubbles: true }));
+    await finishAiOnboarding(undefined, true);
+    await new Promise(resolve => setTimeout(resolve, 350));
+    const summary = await window.brevia.summary.config.get();
+    const notes = await window.brevia.aiAssist.config.get();
+    const saved = !summary.enabled && !notes.enabled && notes.proactivity === 'auto' && !onboardingPage;
+    const model = modelCatalog.find(item => item.kind === 'llama-chat').id;
+    modelPaths.set(model, '/tmp/e2e-ai-model');
+    summaryConfig.provider = 'built-in';
+    summaryConfig.providers = { 'built-in': { model } };
+    aiAssistConfig.provider = 'built-in';
+    aiAssistConfig.providers = { 'built-in': { model } };
+    document.querySelector('[data-settings-modal="ai-features"]').click();
+    onboardingPage.querySelector('[name="onboarding-summary-enabled"]').checked = true;
+    await finishAiOnboarding(undefined, true);
+    await new Promise(resolve => setTimeout(resolve, 350));
+    const summaryOnly = summaryConfig.enabled && !aiAssistConfig.enabled;
+    document.querySelector('[data-settings-modal="ai-features"]').click();
+    const restored = onboardingPage.querySelector('[name="onboarding-summary-enabled"]').checked
+      && !onboardingPage.querySelector('[name="onboarding-ai-enabled"]').checked
+      && onboardingPage.querySelector('[name="onboarding-ai-proactivity"]').value === 'auto';
+    onboardingPage.querySelector('[name="onboarding-summary-enabled"]').checked = false;
+    onboardingPage.querySelector('[name="onboarding-ai-enabled"]').checked = true;
+    await finishAiOnboarding(undefined, true);
+    await new Promise(resolve => setTimeout(resolve, 350));
+    const independent = summaryOnly && restored && !(await window.brevia.summary.config.get()).enabled
+      && (await window.brevia.aiAssist.config.get()).enabled;
+    let dismissible = true;
+    for (const close of ['button', 'backdrop', 'escape']) {
+      document.querySelector('[data-settings-modal="ai-features"]').click();
+      if (close === 'button') onboardingPage.querySelector('[data-close-ai-features]').click();
+      else if (close === 'backdrop') onboardingPage.click();
+      else document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      await new Promise(resolve => setTimeout(resolve, 350));
+      dismissible = dismissible && !onboardingPage && !document.body.classList.contains('modal-open');
+    }
+    return { cards, initial, cancelled, notesConfig, saved, selected, independent, dismissible, closed: !onboardingPage };
+  })()`, awaitPromise: true, returnByValue: true });
+  const merged = mergedAiSettings.result?.value;
+  check(merged?.cards.includes('ai-features') && !merged.cards.includes('ai-assist') && !merged.cards.includes('summary-model') && merged.initial && merged.cancelled && merged.notesConfig && merged.saved && merged.selected && merged.independent && merged.dismissible && merged.closed, `合并 AI 设置回归：${JSON.stringify(mergedAiSettings)}`);
+  const settingsModalDescriptions = await client.send('Runtime.evaluate', { expression: `(async () => {
+    await showView('settings');
+    const failures = [];
+    for (const kind of ['models', 'storage', 'advanced-settings', 'summary-model', 'ai-assist', 'whats-new']) {
+      await openModal(kind);
+      const description = settingsModal.querySelector('.modal-title p');
+      if (!description.hidden || getComputedStyle(description).display !== 'none') failures.push(kind);
+      if (!settingsModal.querySelector('h2').textContent) failures.push(kind + ': missing title');
+      closeModal();
+    }
+    await new Promise(resolve => setTimeout(resolve, 250));
+    return failures;
+  })()`, awaitPromise: true, returnByValue: true });
+  check(Array.isArray(settingsModalDescriptions.result?.value) && !settingsModalDescriptions.result.value.length, `设置浮窗说明仍可见：${JSON.stringify(settingsModalDescriptions)}`);
   check(pageErrors.length === 0, `交互期间渲染异常：${pageErrors.join('\n')}`);
 
   /* 应用自身把可预期的失败写进 console.error（例如临时数据目录里没有模型），

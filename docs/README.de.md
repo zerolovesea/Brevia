@@ -41,10 +41,12 @@ Danach waehlt Brevia fuer jede Besprechung ein Standard-Erkennungsmodell anhand 
 
 | Besprechungssprache | Standardmodell | Warum |
 | --- | --- | --- |
-| Chinesisch, Kantonesisch | FunASR Nano int8 | Hoechste Genauigkeit fuer Chinesisch und seine Dialekte |
-| Japanisch, Koreanisch | Qwen3-ASR 0.6B int8 | Das einzige waehlbare Modell, das beide abdeckt |
+| Chinesisch, Kantonesisch | FunASR Nano | Hoechste Genauigkeit fuer Chinesisch und seine Dialekte |
+| Japanisch, Koreanisch | Qwen3-ASR 0.6B | Das einzige waehlbare Modell, das beide abdeckt |
 | Englisch, Spanisch, Franzoesisch, Deutsch, Russisch, gemischte Sprachen | Parakeet TDT 0.6B v3 | 25 europaeische Sprachen in einem Modell, mit Zeichensetzung und Zeitstempeln |
-| Alle anderen Sprachen | Qwen3-ASR 0.6B int8 | Groesste Sprachabdeckung der uebrigen Modelle |
+| Alle anderen Sprachen | Qwen3-ASR 0.6B | Groesste Sprachabdeckung der uebrigen Modelle |
+
+Auf Macs mit Apple Silicon verwenden Spracherkennung und Silero VAD mlx-audio/MLX; Windows bleibt bei Sherpa ONNX. Sprechertrennung und Stimmprofile verwenden auf beiden Plattformen Sherpa. Nach dem Mac-Update muss das entsprechende MLX-Erkennungsmodell heruntergeladen werden; vorhandene Aufnahmen bleiben verfügbar. Die tatsächliche Grenze ist das Minimum aus Live-Einstellung, sprachabhängiger VAD-Grenze und Modellkapazität (20 s bei macOS-MLX-Modellen). Die automatische Spracherkennung wartet mindestens 2 s auf Stille.
 
 Ist das Standardmodell noch nicht heruntergeladen, nutzt Brevia ein **bereits installiertes** Modell fuer diese Sprache, statt einen weiteren Download zu verlangen. Der Vorbereitungsbildschirm zeigt eine Auswahl fuer das **Erkennungsmodell** (auch nicht heruntergeladene, mit Groesse), und dieselbe Auswahl erscheint waehrend der Besprechung und wechselt das Modell ueber `meeting.reconfigure`. Unter **Einstellungen → Erweitert → Live-Erkennung** begrenzt `live_asr.max_speech_seconds`, wie lang ein Untertitel-Segment werden darf; wirksam ist immer der kleinste Wert aus dieser Einstellung, der sprachspezifischen VAD-Konfiguration und der Kapazitaet des Modells.
 
@@ -103,7 +105,7 @@ Erteile beim ersten Start die Berechtigungen fuer Mikrofon und Bildschirmaufnahm
 flowchart LR
   A[Electron-Renderer<br/>HTML · Tailwind · JS] <-->|IPC + Zod-Validierung| B[Electron-Hauptprozess]
   B <-->|JSONL stdin/stdout| C[Python-Worker<br/>gebundelte Runtime]
-  C --> D[sherpa-onnx<br/>ASR · VAD · Sprecher]
+  C --> D[mlx-audio / sherpa-onnx<br/>ASR · VAD · Sprecher]
   C --> E[Lokale Speicherung<br/>SQLite · Audio · Exporte]
   C -. ausdrueckliche Zustimmung .-> F[Optionale Cloud-API<br/>LLM-Zusammenfassung · Uebersetzung]
 ```
@@ -115,7 +117,7 @@ Brevia folgt einem strikt local-first Design:
 - **Daten leben standardmaessig in `~/brevia`** — SQLite, Rohaudio, Exporte, zwischengespeicherte Modelle und Stimmprofile.
 - **Cloud-Aufrufe sind Opt-in.** LLM-Zusammenfassungen und Uebersetzungen erfordern, dass Nutzerinnen und Nutzer einen Anbieter explizit konfigurieren, und es wird nur Text gesendet.
 
-Die Aufnahme laeuft als **Silero-VAD-Segmentierung → eine einzige Offline-Erkennung → eine vollstaendige Untertitelzeile**. Nach jeder Sprechpause (Chinesisch 0,7 s, andere Sprachen 0,8 s) erscheint der Satz; kontinuierliche Rede wird bei 30 / 20 s geschnitten (einstellbar unter `vad`). Ein VAD-Segment kann mehrere Saetze enthalten; benachbarte Saetze werden zu einem Absatz gebuendelt (Chinesisch ca. 110 Zeichen, max. 150; Lateinisch ca. 280, max. 380). Ein VAD-Endpunkt ist **keine** Absatzgrenze — nur eine echte lange Pause (≥1,2 s) beginnt einen neuen Absatz, und ein zu kurzer Absatz wird nach spaetestens 8 s uebernommen. An Schnittstellen greift die naechste Dekodierung 400 ms zurueck und gleicht Wiederholungen an der Naht aus. Beim Stoppen wird der letzte Satz noch verarbeitet; schlaegt die Erkennung fehl, bleibt die Originalaufnahme erhalten.
+Die Aufnahme laeuft als **Silero-VAD-Segmentierung → eine einzige Offline-Erkennung → eine vollstaendige Untertitelzeile**. Nach jeder Sprechpause (Chinesisch 0,7 s, andere Sprachen 0,8 s) erscheint der Satz; kontinuierliche Rede wird durch das Minimum aus Live-Einstellung, VAD-Grenze und Modellkapazität begrenzt. Ein VAD-Segment kann mehrere Saetze enthalten; benachbarte Saetze werden zu einem Absatz gebuendelt (Chinesisch ca. 110 Zeichen, max. 150; Lateinisch ca. 280, max. 380). Ein VAD-Endpunkt ist **keine** Absatzgrenze — nur eine echte lange Pause (≥1,2 s) beginnt einen neuen Absatz, und ein zu kurzer Absatz wird nach spaetestens 8 s uebernommen. An Schnittstellen greift die naechste Dekodierung ~400 ms zurueck und gleicht Wiederholungen an der Naht aus. Beim Stoppen wird der letzte Satz noch verarbeitet; schlaegt die Erkennung fehl, bleibt die Originalaufnahme erhalten.
 
 Siehe [Benchmark-Methodik und Ergebnisse](../backend/benchmarks/vad-2026-09-05/REPORT.md).
 
@@ -126,7 +128,7 @@ Siehe [Benchmark-Methodik und Ergebnisse](../backend/benchmarks/vad-2026-09-05/R
 | Desktop-Shell | Electron 43 — preload-Bruecke, Kontextisolation, gesandboxter Renderer |
 | Frontend | Vanilla HTML/CSS/JS, Tailwind CSS 4, eingebautes i18n (8 Sprachen) |
 | Backend | Python 3.10+, JSONL-Worker-Protokoll, SQLite-Speicher |
-| Sprach-Engine | [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 1.13.8, ONNX Runtime |
+| Sprach-Engine | [mlx-audio](https://github.com/Blaizzy/mlx-audio) / MLX (macOS); [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 1.13.8 (Windows), ONNX Runtime |
 | Sprecherverarbeitung | Pyannote-Segmentierung + 3D-Speaker ERes2Net Base Embeddings |
 | LLM-Client | Integriertes llama.cpp (GGUF) sowie OpenAI- / Anthropic-kompatible Chat-APIs |
 | Audio-I/O | ffmpeg (in Releases enthalten) |
@@ -137,7 +139,7 @@ Satztranskription, Nachbearbeitung, KI-Notizen und Untertiteluebersetzung werden
 
 | Kategorie | Repraesentative Modelle | Sprachen |
 | --- | --- | --- |
-| Satzerkennung / Nachbearbeitung | FunASR Nano int8, Qwen3-ASR 0.6B, Parakeet TDT 0.6B v3 | Chinesisch / mehrsprachig / 25 europaeische Sprachen |
+| Satzerkennung / Nachbearbeitung | FunASR Nano, Qwen3-ASR 0.6B, Parakeet TDT 0.6B v3 | Chinesisch / mehrsprachig / 25 europaeische Sprachen |
 | Sprachaktivitaetserkennung | Silero VAD | Universell |
 | Sprechertrennung | Pyannote Segmentation 3.0 | Universell |
 | Sprecher-Embeddings | 3D-Speaker ERes2Net Base | Chinesisch |

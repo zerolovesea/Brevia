@@ -121,6 +121,7 @@ assert.match(text(app), /name="onboarding-model" value="\$\{escapeHtml\(model\.i
 // 识别模型文案表：每个分组必须覆盖全部八个界面语言，且每个模型 id / asr_role 都有文案。
 // 缺一个语言就会在切换界面语言后掉进 undefined（或静默回落英文而没人发现）。
 const asrCopyContext = { window: {} };
+runInNewContext(text(i18nData), asrCopyContext);
 runInNewContext(text(asrCopy), asrCopyContext);
 const asrCopyData = asrCopyContext.window.BreviaAsrCopy;
 const asrCopyLocales = asrCopyData.LOCALES;
@@ -156,9 +157,9 @@ for (const code of asrCopyLocales) {
     assert.equal(asrCopyData.tiers[code][axis].length, 3, `tiers.${code}.${axis} must have 3 levels`);
   }
 }
-assert.equal(asrCopyData.model.zh['funasr-nano-int8'].tagline, '中文会议首选。中文识别准确率高，覆盖粤语等多种中文方言与各地口音以及英语。');
-assert.equal(asrCopyData.model.zh['qwen3-asr-0.6b-int8'].tagline, '日语与韩语会议首选，覆盖 30 种语言和 22 种中文方言。');
-assert.equal(asrCopyData.model.zh['parakeet-tdt-0.6b-v3-int8'].tagline, '英语与欧洲语言会议首选。覆盖英语、西班牙语、法语、德语、俄语等 25 种语言。');
+assert.equal(asrCopyData.model.zh['funasr-nano-int8'].tagline, '通义实验室推出的轻量语音识别模型，约 8 亿参数，面向中文语音场景。支持普通话、粤语和英语，可识别多种中文方言与地方口音，适合中文会议、访谈和日常讨论。采用量化版本在本机离线运行，兼顾识别效果与资源占用。');
+assert.equal(asrCopyData.model.zh['qwen3-asr-0.6b-int8'].tagline, '阿里云 Qwen 团队推出的多语种语音识别模型，约 6 亿参数。支持中、英、日、韩等 30 种语言及 22 种中文方言，覆盖多种地区口音，适合国际会议、跨语言沟通与多语种内容记录。');
+assert.equal(asrCopyData.model.zh['parakeet-tdt-0.6b-v3-int8'].tagline, 'NVIDIA 推出的高效语音识别模型，约 6 亿参数，支持英语、西班牙语、法语、德语、俄语等 25 种欧洲语言。可自动识别语种，生成标点与英文大小写，适合英语及欧洲语言会议、访谈和长录音转写。');
 // 内层键集跨语种必须一致。某门语言少写一个字段时，渲染拿到的是 undefined 而不是
 // 回落英文——中文界面正常、该语种界面缺一块，这类缺漏只有逐语种比对结构才发现得了。
 // `recommended` 是扁平字符串表，不适用。
@@ -665,9 +666,9 @@ assert.doesNotMatch(text(js), /model\.retired && !isInstalled/);
 assert.doesNotMatch(text(js), /modelIds\[sourceIndex\]/);
 assert.match(text(js), /data-download-model="\$\{escapeHtml\(model\.id\)\}"/);
 assert.match(text(js), /data-delete-model="\$\{escapeHtml\(model\.id\)\}"/);
-// 下载体积 / 磁盘占用 / 内存需求三项都要给（§6.1）。
+// 模型库大小摘要仅显示下载大小。
 assert.match(text(js), /function modelSizeSummary\(model\) \{\s*return modelSelection\.modelSizeSummary/, '体积摘要必须是薄包装');
-assert.match(text(js), /disk_size_bytes/);
+assert.doesNotMatch(text(js), /model-library-total/);
 // 下载失败要按原因分类，而不是压成一句话（§6.3）。
 assert.match(text(js), /MODEL_DOWNLOAD_FAILURES/);
 // 在线纪要/AI 笔记的网络失败不能被改写成「模型下载失败」的文案。
@@ -775,8 +776,8 @@ assert.match(text(js), /transitionPage\(current, home/);
 assert.match(text(js), /minimizeMeeting/);
 assert.match(text(css), /page-in/);
 assert.match(text(css), /language-out/);
-assert.match(text(uiData), /title: 'AI 笔记'[\s\S]*modal: 'ai-assist'/);
-assert.match(text(uiData), /title: 'AI 会议总结'[\s\S]*modal: 'summary-model'/);
+assert.match(text(uiData), /title: 'AI 功能'[\s\S]*modal: 'ai-features'/);
+assert.doesNotMatch(text(uiData), /modal: '(?:ai-assist|summary-model)'/);
 assert.match(text(js), /summaryProviders/);
 assert.match(text(js), /persistSummaryConfig/);
 assert.match(text(components), /function renderTranscriptSegment/);
@@ -910,13 +911,15 @@ assert.doesNotMatch(text(js), /refined: DEFAULT_REFINED_MODEL_ID/);
 assert.match(ms, /default_for_languages \|\| \[\]\)\.includes\(language\)/);
 assert.doesNotMatch(text(js), /default_for_languages/, 'app.js 不得自己读该字段');
 assert.match(text(html), /src="\.\/i18n\.js"/);
+assert.match(text(html), /i18n-data\.js[\s\S]*i18n\.js/, 'locale data must load before its runtime helpers');
 assert.match(text(js), /BreviaI18n\.languageOptions\(locale, t/);
 assert.match(text(js), /Object\.values\(modalCopy\)\.forEach/);
 assert.match(text(i18n), /new Intl\.DisplayNames/);
 const meetingLanguages = { window: {}, Intl };
+runInNewContext(text(i18nData), meetingLanguages);
 runInNewContext(text(i18n), meetingLanguages);
 
-// ─── 词条完备门禁：i18n.js 的四张表 ──────────────────────────────────────────
+// ─── 词条完备门禁：集中数据中的四张表 ──────────────────────────────────────────
 //
 // `i18n-data.js` 的 catalog 有逐键完备检查，但 i18n.js 的四张表此前**完全没有**：
 // 访问器都带 `|| .en` 兜底，漏一门语言只会静默回落英文，不报错、也看不出来。
@@ -1412,11 +1415,11 @@ assert.equal(MS.modelLibraryGroup({ stages: ['refined'] }, STAGE_GROUPS), 'refin
 assert.equal(MS.modelLibraryGroup({ stages: ['unknown-stage'] }, STAGE_GROUPS), undefined);
 assert.equal(MS.modelLibraryGroup({}, STAGE_GROUPS), undefined);
 
-// 体积摘要：下载/占用/内存只在有值时出现。
+// 即使清单包含占用和内存字段，摘要也只显示下载大小。
 assert.equal(
   MS.modelSizeSummary({ size_bytes: 100, disk_size_bytes: 200, memory_floor_bytes: 300 },
     { download: 'D', disk: 'K', memory: 'M' }, (bytes) => `${bytes}B`),
-  'D 100B · K 200B · M 300B',
+  'D 100B',
 );
 assert.equal(
   MS.modelSizeSummary({ size_bytes: 100 }, { download: 'D', disk: 'K', memory: 'M' }, (bytes) => `${bytes}B`),
@@ -1823,7 +1826,7 @@ assert.doesNotMatch(text(js), /onboardingModelSelectionCopy/);
 assert.match(text(js), /onboarding-model-grid/);
 assert.match(text(js), /onboardingSecurityCopy/);
 assert.match(text(js), /src="\.\/assets\/brevia-logo\.svg"/);
-assert.match(text(asrCopy), /title: '选择语音识别模型'/, 'the setup page copy lives in asr-copy.js');
+assert.match(text(i18nData), /title: '选择语音识别模型'/, 'the setup page copy lives in i18n-data.js');
 assert.doesNotMatch(text(js), /name="onboarding-language"/);
 assert.match(text(js), /modelSize\(modelId\)/);
 assert.match(text(js), /class="onboarding-model-card\$\{isRecommended/);
@@ -2130,11 +2133,9 @@ for (const code of ['zh', 'en']) {
   assert.ok(rendered.includes('Legacy entry'));
   assert.ok(!rendered.includes('<新增>'));
 }
-// 模型库每个模型的长描述必须覆盖全部 8 种界面语言：它只认 `modelLibraryBackground[locale]`，
+// 模型库每个模型的长描述必须覆盖全部 8 种界面语言，统一从 i18n-data.js 读取，
 // 缺语种会静默回退英文（es 曾长期只有 zh/en）。
-const modelLibraryBackgroundContext = {};
-runInNewContext(`${summaryConst('const modelLibraryBackground = ', true)}\nthis.modelLibraryBackground = modelLibraryBackground;`, modelLibraryBackgroundContext);
-const modelLibraryBackground = modelLibraryBackgroundContext.modelLibraryBackground;
+const modelLibraryBackground = localeContext.window.BreviaLocaleData.appCopy.modelLibraryBackground;
 const modelLibraryDescriptionIds = ['eres2net-base-3dspeaker-zh', 'funasr-nano-int8', 'hy-mt2-1.8b-q4km', 'pyannote-segmentation-3.0', 'qwen3-asr-0.6b-int8', 'silero-vad'];
 assert.deepEqual(Object.keys(modelLibraryBackground).sort(), ['de', 'en', 'es', 'fr', 'ja', 'ko', 'ru', 'zh'], 'model library descriptions must cover all eight locales');
 for (const code of Object.keys(modelLibraryBackground)) {
@@ -2155,6 +2156,8 @@ const summaryContext = {
   summaryConfigDraft: null,
   modelConfigSecrets: new WeakMap(),
   onboardingOnlineProvider: false,
+  onboardingBuiltinProvider: false,
+  chinaModelSourceToggle: () => '<input data-china-model-source />',
   settingsModal: { querySelector: (selector) => summaryNodes[selector] },
 };
 runInNewContext(`${text(components)}\nthis.escapeHtml = escapeHtml;`, summaryContext);
@@ -2188,6 +2191,24 @@ const renderSummaryModal = (provider, { providers = {}, installed = [] } = {}) =
   summaryContext.renderSummaryModelModal();
   return summaryNodes['.modal-body'].innerHTML;
 };
+summaryContext.onboardingBuiltinProvider = true;
+let onboardingSummaryHtml = renderSummaryModal('built-in');
+assert.match(onboardingSummaryHtml, /name="provider" value="built-in"/);
+assert.doesNotMatch(onboardingSummaryHtml, /data-flow-select-choice="provider"|data-summary-enabled|data-china-model-source/);
+assert.equal(summaryNodes.h2.textContent, 'AI 会议纪要');
+assert.equal(summaryNodes['.modal-title p'].textContent, '会议结束后，AI 自动把整场对话整理成会议纪要及待办事项。');
+assert.match(onboardingSummaryHtml, /data-download-model="qwen3\.5-2b-q4km"/);
+assert.match(onboardingSummaryHtml, /data-flow-select-choice="model" data-value="qwen3\.5-4b-q4km"/);
+assert.match(onboardingSummaryHtml, /type="submit" disabled/);
+summaryContext.modelDownloads.set('qwen3.5-2b-q4km', { received: 50, total: 100 });
+onboardingSummaryHtml = renderSummaryModal('built-in');
+assert.match(onboardingSummaryHtml, /data-download-model="qwen3\.5-2b-q4km" disabled/);
+assert.match(onboardingSummaryHtml, /50%/);
+summaryContext.modelDownloads.clear();
+onboardingSummaryHtml = renderSummaryModal('built-in', { installed: ['qwen3.5-2b-q4km'] });
+assert.doesNotMatch(onboardingSummaryHtml, /type="submit" disabled/);
+assert.doesNotMatch(onboardingSummaryHtml, /data-download-model=/);
+summaryContext.onboardingBuiltinProvider = false;
 let summaryHtml = renderSummaryModal('built-in', { installed: ['qwen3.5-2b-q4km'] });
 // 只列已安装的模型：装了 2B 就只出现 2B，没装的 4B 不出现在选择器里。
 assert.match(summaryHtml, /data-flow-select-choice="model" data-value="qwen3\.5-2b-q4km"/);
@@ -2244,7 +2265,7 @@ for (const code of ['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']) {
   summaryHtml = renderSummaryModal('custom-openai');
   assert.ok(summaryHtml.includes(copy.providers['custom-openai']), `${code} is missing the custom-openai label`);
   assert.ok(summaryHtml.includes(copy.save), `${code} is missing the save label`);
-  assert.equal(summaryNodes.h2.textContent, summaryContext.t('AI 会议总结'));
+  assert.equal(summaryNodes.h2.textContent, copy.title);
 }
 summaryContext.locale = 'zh';
 summaryContext.modelCatalog = [{ id: '"><img src=x onerror=alert(1)>', name: '<script>alert(1)</script>', kind: 'llama-chat' }];
@@ -2265,7 +2286,7 @@ assert.match(text(app), /function openAiAssistPopover/);
 assert.match(text(app), /if \(kind === 'ai-assist'\) \{ renderAiAssistModal\(\); return; \}/);
 assert.match(text(html), /data-ai-assist-toggle/);
 assert.match(text(html), /data-ai-assist-empty/);
-assert.match(text(uiData), /modal: 'ai-assist'/);
+assert.match(text(uiData), /modal: 'ai-features'/);
 assert.match(text(tailwind), /\.ai-assist-toggle/);
 assert.match(text(tailwind), /\.ai-assist-popover/);
 assert.match(text(i18nData), /aiAssistCopy/);
@@ -2605,7 +2626,7 @@ for (const code of ['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']) {
   const data = localeContext.window.BreviaLocaleData;
   assert.ok(data.appCopy.summaryModelCopy[code].featureIntro);
   if (code !== 'en') for (const key of ['译文: 开', '已完成精修', '说话人', '悬浮字幕：开', '精修字稿']) assert.notEqual(data.catalog[code].labels[key], data.catalog.en.labels[key]);
-  assert.ok(data.appCopy.aiOnboardingCopy[code].proactivityHint);
+  if (code !== 'zh') assert.ok(data.appCopy.aiOnboardingCopy[code].proactivityHint);
   for (const key of ['error.audio_backpressure', 'error.worker_exited', 'error.worker_recovery', 'error.storage_recovery', 'error.storage_recovery_hint', 'error.storage_unavailable']) assert.ok(data.catalog[code].labels[key]);
 }
 const editsContext = { currentMeetingDetail: { segments: [{ version: 'live', user_edited: 1 }] } };
@@ -2656,7 +2677,7 @@ for (const [code, data] of Object.entries(localeContext.window.BreviaLocaleData.
 }
 const onboardingClasses = new Set();
 let onboardingNext = 0, onboardingTimer;
-const dismissal = { onboardingPage: { classList: { contains: (name) => onboardingClasses.has(name), remove: (name) => onboardingClasses.delete(name), add: (name) => onboardingClasses.add(name) }, remove() {} }, onboardingAiDemoTimer: null, clearInterval() {}, breviaClient: null, fitTourWindow() {}, window: { removeEventListener() {}, setTimeout(callback) { onboardingTimer = callback; } } };
+const dismissal = { onboardingPage: { dataset: {}, classList: { contains: (name) => onboardingClasses.has(name), remove: (name) => onboardingClasses.delete(name), add: (name) => onboardingClasses.add(name) }, remove() {} }, onboardingAiDemoTimer: null, clearInterval() {}, breviaClient: null, fitTourWindow() {}, window: { removeEventListener() {}, setTimeout(callback) { onboardingTimer = callback; } } };
 runInNewContext(summaryFn('dismissOnboardingPage'), dismissal);
 dismissal.dismissOnboardingPage(() => onboardingNext++);
 dismissal.dismissOnboardingPage(() => onboardingNext++);

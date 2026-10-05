@@ -259,6 +259,9 @@ class RecordingSessionMixin:
                 max_speech_duration=self.asr.max_speech_seconds,
             )
             self.live_postprocessing = LiveExecutor()
+            if self.models.get(meeting.get("vad_model_id") or "silero-vad").get("runtime") == "mlx-audio":
+                # ponytail: 64 pending PCM commands; saturation disables live ASR, not recording.
+                self.live_preprocessing = LiveExecutor()
             # 崩溃可能留下未清理的 sentence-*.npy（识别队列的临时切片）；开工前清一次，
             # 否则它们会一直躺在会议目录里累积。清理失败绝不能挡住录音开始。
             try:
@@ -330,6 +333,8 @@ class RecordingSessionMixin:
             "language", "refined_model_id", "target_language")})
         if self.live_postprocessing is None and asr is not None:
             self.live_postprocessing = LiveExecutor()
+        if self.live_preprocessing is None and asr is not None and self.models.get(updated["vad_model_id"]).get("runtime") == "mlx-audio":
+            self.live_preprocessing = LiveExecutor()
         self.asr, self.vad = asr, vad
         self.meeting_language = updated["language"]
         self.emit("meeting.reconfigured", {"meeting_id": self.active, "meeting": meeting})
@@ -353,7 +358,7 @@ class RecordingSessionMixin:
 
     @synchronized_recording
     def audio(self, payload):
-        """先保存原始 PCM；采集线程只做 VAD，识别在单独线程串行执行。"""
+        """先保存原始 PCM；MLX VAD 的推理锁等待留在有界后台队列。"""
         require(payload, "meeting_id", "track", "pcm", "sample_rate", "start_ms")
         self._active(payload["meeting_id"])
         track = payload["track"]
@@ -369,6 +374,18 @@ class RecordingSessionMixin:
         import numpy
         samples = numpy.asarray(values, dtype=numpy.float32) / 32768.0
         total = 0 if track == "mix" or not pcm else self.store.append_audio(self.active, track, pcm, sample_rate, start_ms)
+        if self.live_preprocessing:
+            future = self._submit_live_task(self._accept_live_audio, self.active, track, samples, start_ms,
+                                            executor=self.live_preprocessing)
+            if future is not None:
+                self.live_preprocessing_tail = future
+        else:
+            self._accept_live_audio(self.active, track, samples, start_ms)
+        if payload.get("flush"):
+            self._flush_sentences()
+        return {"samples": total}
+
+    def _accept_live_audio(self, meeting_id, track, samples, start_ms):
         if track == "mic":
             samples = self._enhance_live_microphone(samples)
         if self.vad and self.asr and not self.live_overloaded:
@@ -376,50 +393,64 @@ class RecordingSessionMixin:
             output_track = "mix" if self.live_mixer else track
             for window, start in windows:
                 for segment in self.vad.accept(output_track, window, start):
-                    self._queue_sentence(output_track, segment)
+                    self._queue_sentence(output_track, segment, meeting_id=meeting_id)
         if self.live_postprocessing and start_ms >= self.subtitle_expiry_ms:
             self.subtitle_expiry_ms = start_ms + 1000
-            self._submit_live_task(self._flush_subtitle_tails, start_ms)
-        if payload.get("flush"):
-            self._flush_sentences()
-        return {"samples": total}
+            self._submit_live_task(self._flush_subtitle_tails, start_ms, meeting_id=meeting_id)
 
     def _flush_sentences(self):
+        # Pause/reconfigure/stop must finish queued VAD before flushing or replacing it.
+        if self.live_preprocessing_tail is not None:
+            try:
+                self.live_preprocessing_tail.result()
+            except Exception:
+                pass  # _submit_live_task already emitted the processing warning.
+            self.live_preprocessing_tail = None
+        if self.live_preprocessing and not self.live_overloaded:
+            future = self._submit_live_task(self._flush_vad_sentences, self.active, executor=self.live_preprocessing)
+            if future is not None:
+                future.result()
+        else:
+            self._flush_vad_sentences(self.active)
+
+    def _flush_vad_sentences(self, meeting_id):
+        # MLX recurrent state must be evaluated on the same thread as accept().
         if self.live_overloaded or not (self.vad and self.asr):
             return
         if self.live_mixer:
             for samples, start_ms in self.live_mixer.flush():
                 for segment in self.vad.accept("mix", samples, start_ms):
-                    self._queue_sentence("mix", segment)
+                    self._queue_sentence("mix", segment, meeting_id=meeting_id)
         for track in list(self.vad.tracks):
             for segment in self.vad.flush(track):
-                self._queue_sentence(track, segment)
+                self._queue_sentence(track, segment, meeting_id=meeting_id)
         if self.live_postprocessing:
-            self._submit_live_task(self._flush_subtitle_tails)
+            self._submit_live_task(self._flush_subtitle_tails, meeting_id=meeting_id)
             # 排空后临时行必须跟着撤下，否则界面上会留一条内容已经进正式段落的残留行。
             # 只通知真的提交过段落的音轨，避免为从未出现的音轨发空事件。
             for track in list(self.stream_state):
-                self._submit_live_task(self._emit_draft, track, self.active)
+                self._submit_live_task(self._emit_draft, track, meeting_id, meeting_id=meeting_id)
 
-    def _queue_sentence(self, track, segment):
+    def _queue_sentence(self, track, segment, *, meeting_id=None):
         # VAD/Smart Turn is the sole endpoint authority. Holding an endpoint here
         # to merge a possible next one makes live captions arrive in bursts.
         if self.live_overloaded:
             return
         boundary = segment[3] if len(segment) > 3 else "endpoint"
-        self._submit_sentence(track, segment[0], segment[1], segment[2], boundary)
+        self._submit_sentence(track, segment[0], segment[1], segment[2], boundary, meeting_id=meeting_id)
 
-    def _submit_sentence(self, track, start_ms, end_ms, samples, boundary="endpoint"):
+    def _submit_sentence(self, track, start_ms, end_ms, samples, boundary="endpoint", *, meeting_id=None):
         import numpy
+        meeting_id = meeting_id or self.active
         sequence = self.stream_state.get(track, 0)
         self.stream_state[track] = sequence + 1
-        event = {"meeting_id": self.active, "segment_id": f"{track}-{start_ms}-{sequence}",
+        event = {"meeting_id": meeting_id, "segment_id": f"{track}-{start_ms}-{sequence}",
                  "revision": 1, "start_ms": start_ms, "end_ms": end_ms, "boundary": boundary,
                  # 实时段落只区分「本机用户」与远端整轨：说话人细分交给会后精修。
                  "speaker": "local-user" if track == "mic" else "spk-1",
                  "speaker_name": None, "track": track}
         # 队列只持有路径，慢设备积压时不把整场语音留在内存。原录音始终独立保留。
-        directory = self.store.meeting_dir(self.active) / "audio"
+        directory = self.store.meeting_dir(meeting_id) / "audio"
         path = None
         try:
             with tempfile.NamedTemporaryFile(dir=directory, prefix="sentence-", suffix=".npy", delete=False) as file:
@@ -431,23 +462,23 @@ class RecordingSessionMixin:
                 path.unlink(missing_ok=True)
             raise
         try:
-            if self._submit_live_task(self._decode_sentence, self.asr, event, path) is None:
+            if self._submit_live_task(self._decode_sentence, self.asr, event, path, meeting_id=meeting_id) is None:
                 path.unlink(missing_ok=True)
         except Exception:
             path.unlink(missing_ok=True)
             raise
 
-    def _submit_live_task(self, function, *args):
+    def _submit_live_task(self, function, *args, executor=None, meeting_id=None):
         if self.live_overloaded:
             return None
-        meeting_id = self.active
+        meeting_id = meeting_id or self.active
 
         def completed(future):
             if not future.cancelled() and (error := future.exception()) is not None:
                 self.emit("worker.warning", {"meeting_id": meeting_id, "code": "live_processing_failed", "message": str(error)})
 
         try:
-            future = self.live_postprocessing.submit(function, *args)
+            future = (executor or self.live_postprocessing).submit(function, *args)
         except LiveQueueFull as error:
             self.live_overloaded = True
             self.emit("worker.warning", {"meeting_id": meeting_id, "code": "asr_unavailable", "message": str(error)})
@@ -934,6 +965,9 @@ class RecordingSessionMixin:
         self.live_overloaded = False
 
     def _release_active_session(self):
+        if self.live_preprocessing:
+            self.live_preprocessing.shutdown(wait=True)
+        self.live_preprocessing = self.live_preprocessing_tail = None
         # 这已是唯一识别结果，不能像旧二阶段精修那样取消排队任务。
         if self.live_postprocessing:
             self.live_postprocessing.shutdown(wait=True)

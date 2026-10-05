@@ -89,6 +89,51 @@ class SentenceTest(unittest.TestCase):
         self.assertTrue(self.finals())
         self.assertTrue(any(p.stat().st_size >= 6400 for p in (directory / "audio").iterdir()))
 
+    def test_blocked_vad_keeps_recording_and_bounds_pending_pcm(self):
+        from .worker_session import LiveExecutor
+        self.worker.live_preprocessing = LiveExecutor(capacity=2)
+        entered, release = threading.Event(), threading.Event()
+
+        def accept(*_):
+            entered.set()
+            release.wait(5)
+            return []
+
+        self.vad.accept.side_effect = accept
+        try:
+            self.feed(flush=False)
+            self.assertTrue(entered.wait(1))
+            # Both writes must return while the first VAD still waits for ASR.
+            self.feed(start=100, flush=False)
+            self.feed(start=200, flush=False)
+            self.assertTrue(self.worker.live_overloaded)
+            self.assertEqual(self.vad.accept.call_count, 1)
+            self.assertEqual(self.worker.store.recorded_duration_ms(self.meeting["id"]), 300)
+        finally:
+            release.set()
+        self.worker.stop({"meeting_id": self.meeting["id"], "duration_ms": 300})
+        self.assertIsNone(self.worker.live_preprocessing)
+        self.assertEqual(len([e for e in self.events if e["type"] == "worker.warning"
+                              and e["payload"]["code"] == "asr_unavailable"]), 1)
+
+    def test_async_vad_flushes_before_model_switch(self):
+        from .worker_session import LiveExecutor
+        self.worker.live_preprocessing = LiveExecutor()
+        entered, release = threading.Event(), threading.Event()
+        def accept(track, samples, start):
+            entered.set()
+            release.wait(5)
+            return [(start, start + 100, samples)]
+        self.vad.accept.side_effect = accept
+        self.feed(flush=False)
+        self.assertTrue(entered.wait(1))
+        release.set()
+        self.worker.reconfigure({"meeting_id": self.meeting["id"], "language": "en",
+                                 "refined_model_id": "parakeet-tdt-0.6b-v3-int8"})
+        self.worker.stop({"meeting_id": self.meeting["id"], "duration_ms": 100})
+        self.assertEqual(self.asr.decode.call_count, 1)
+        self.assertEqual(list(self.worker.store.meeting_dir(self.meeting["id"]).rglob("sentence-*.npy")), [])
+
     def test_dual_track_sends_one_aligned_waveform_to_asr(self):
         from backend.audio_mixer import AlignedAudioMixer
         self.worker.live_mixer = AlignedAudioMixer()
