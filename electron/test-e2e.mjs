@@ -65,6 +65,7 @@ const moduleProbes = [
   ['backend-client.js', 'workletContexts'],
   ['ui-data.js', 'uiData'],
   ['i18n-data.js', 'window.BreviaLocaleData'],
+  ['changelog.js', 'window.BreviaChangelog'],
   ['i18n.js', 'window.BreviaI18n'],
   ['i18n-runtime.js', 't'],
   ['model-selection.js', 'window.BreviaModelSelection'],

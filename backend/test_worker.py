@@ -36,7 +36,7 @@ from .worker_ai_note import _AiNoteSession, _extract_json
 from .worker_common import ModelNotInstalled, TaskCancelled, missing_models
 from .worker_core import WorkerCore
 from .llama_sidecar import LlamaSidecar
-from .worker_refinement import _diarization_chunk_ms
+from .worker_refinement import DiarizationTimeout, _diarization_chunk_ms
 from .worker_llama_sidecar import ASSISTANT_SIDECAR, _Sidecar, strip_reasoning
 
 
@@ -2655,6 +2655,44 @@ class WorkerTest(unittest.TestCase):
             {"start_ms": 60000, "end_ms": 70216},
         ])
 
+    def test_diarization_timeout_retries_small_chunks_before_fallback(self):
+        payload = {"core_start_ms": 0, "core_end_ms": 60000,
+                   "window_start_ms": 0, "window_end_ms": 61000,
+                   "speech": [{"start_ms": 0, "end_ms": 60000}]}
+        calls = []
+
+        def run(context, part, control):
+            calls.append(part)
+            if part["core_end_ms"] - part["core_start_ms"] > 15000:
+                raise DiarizationTimeout("slow native inference")
+            return [{"start_ms": part["core_start_ms"], "end_ms": part["core_end_ms"]}]
+
+        with patch.object(self.worker, "_run_diarization_process", side_effect=run):
+            turns, broken = self.worker._diarize_chunk(None, payload, SimpleNamespace(paused=threading.Event(), cancelled=threading.Event()), True)
+        self.assertFalse(broken)
+        self.assertEqual([(t["start_ms"], t["end_ms"]) for t in turns],
+                         [(0, 15000), (15000, 30000), (30000, 45000), (45000, 60000)])
+        self.assertTrue(all(not part["vad_fallback"] for part in calls))
+        self.assertEqual(calls[2]["window_start_ms"], 14000)
+        with patch.object(self.worker, "_run_diarization_process", side_effect=DiarizationTimeout("slow")) as run:
+            turns, broken = self.worker._diarize_chunk(None, payload, SimpleNamespace(paused=threading.Event(), cancelled=threading.Event()), True)
+        self.assertTrue(broken)
+        self.assertEqual(len(turns), 4)
+        self.assertEqual(run.call_count, 6)  # one large attempt, one small native, four VAD attempts
+
+    def test_diarization_stage_messages_and_scaled_budget(self):
+        context = Mock()
+        receiver, sender, process = Mock(), Mock(), Mock()
+        context.Pipe.return_value = receiver, sender
+        context.Process.return_value = process
+        receiver.poll.side_effect = [True, False, True]
+        receiver.recv.side_effect = [(None, "diarization"), (True, [])]
+        process.is_alive.return_value = True
+        payload = {"core_start_ms": 0, "core_end_ms": 60000}
+        with patch("backend.worker_refinement.time.monotonic", side_effect=[0, 1, 1, 122, 122, 123]):
+            self.assertEqual(self.worker._run_diarization_process(context, payload, SimpleNamespace(paused=threading.Event(), cancelled=threading.Event())), [])
+        receiver.close.assert_called_once()
+
     def test_diarization_timeout_terminates_the_child(self):
         context = Mock()
         receiver, sender, process = Mock(), Mock(), Mock()
@@ -2665,7 +2703,31 @@ class WorkerTest(unittest.TestCase):
         payload = {"core_start_ms": 0, "core_end_ms": 15000}
         with patch("backend.worker_refinement.time.monotonic", side_effect=[0, 121]):
             with self.assertRaisesRegex(RuntimeError, "Diarization timed out"):
-                self.worker._run_diarization_process(context, payload, None)
+                self.worker._run_diarization_process(context, payload, SimpleNamespace(paused=threading.Event(), cancelled=threading.Event()))
+        process.terminate.assert_called_once()
+        process.join.assert_called_once()
+        receiver.close.assert_called_once()
+
+    def test_diarization_stage_does_not_reset_timeout_and_cancel_cleans_up(self):
+        control = SimpleNamespace(paused=threading.Event(), cancelled=threading.Event())
+        context = Mock()
+        receiver, sender, process = Mock(), Mock(), Mock()
+        context.Pipe.return_value = receiver, sender
+        context.Process.return_value = process
+        receiver.poll.side_effect = [True, False]
+        receiver.recv.return_value = (None, "extract_embeddings")
+        process.is_alive.return_value = True
+        payload = {"core_start_ms": 0, "core_end_ms": 15000}
+        with patch("backend.worker_refinement.time.monotonic", side_effect=[0, 100, 100, 121]):
+            with self.assertRaisesRegex(DiarizationTimeout, "stage=extract_embeddings.*elapsed=121.0"):
+                self.worker._run_diarization_process(context, payload, control)
+        process.terminate.assert_called_once()
+        process.join.assert_called_once()
+        context.reset_mock()
+        receiver.reset_mock()
+        control.cancelled.set()
+        with self.assertRaises(TaskCancelled):
+            self.worker._run_diarization_process(context, payload, control)
         process.terminate.assert_called_once()
         process.join.assert_called_once()
         receiver.close.assert_called_once()
@@ -2680,7 +2742,7 @@ class WorkerTest(unittest.TestCase):
         process.is_alive.side_effect = [True, False, False]
         payload = {"meeting_id": "meeting", "core_start_ms": 15000, "core_end_ms": 30000,
                    "duration_ms": 60000}
-        with patch("backend.worker_refinement.time.monotonic", side_effect=[0, 6, 6]):
+        with patch("backend.worker_refinement.time.monotonic", side_effect=[0, 6, 6, 6]):
             self.assertEqual(self.worker._run_diarization_process(context, payload, SimpleNamespace(paused=threading.Event(), cancelled=threading.Event())), [])
         progress = [e["payload"] for e in self.events if e["type"] == "refinement.progress"]
         self.assertEqual(progress[-1]["meeting_id"], "meeting")
@@ -2702,8 +2764,10 @@ class WorkerTest(unittest.TestCase):
             diarizer.return_value.process.return_value = []
             tracker.return_value.embedding.return_value = None
             _diarize_chunk_process(connection, payload)
-        connection.send.assert_called_once_with((True, [{"start_ms": 500, "end_ms": 1500,
-                                                        "speaker": "spk-1", "_embedding": None}]))
+        self.assertEqual(connection.send.call_args.args, ((True, [{"start_ms": 500, "end_ms": 1500,
+                                                        "speaker": "spk-1", "_embedding": None}]),))
+        self.assertEqual([call.args[0][1] for call in connection.send.call_args_list[:-1]],
+                         ["load_audio", "load_embedding_model", "load_diarization_models", "diarization", "extract_embeddings"])
 
     def test_refinement_decode_range_adds_context_without_crossing_speakers(self):
         turn = {"start_ms": 1000, "end_ms": 1200, "speaker": "spk-1"}

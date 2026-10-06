@@ -512,7 +512,19 @@
     ],
     "kind": "vad",
     "quality": 3,
-    "speed": 3
+    "speed": 3,
+    "china_downloads": [
+      {
+        "path": "config.json",
+        "url": "https://modelscope.cn/models/mlx-community/silero-vad/resolve/master/config.json",
+        "sha256": "f411ebae77d635372a636645fca4a4bb574b2da73e49b21bfef9685ae90e31bc"
+      },
+      {
+        "path": "model.safetensors",
+        "url": "https://modelscope.cn/models/mlx-community/silero-vad/resolve/master/model.safetensors",
+        "sha256": "185e0bc3ee2c48ce425a37209fe917a1aca22ab6b85799430dd1b4894087a8b8"
+      }
+    ]
   },
   {
     "id": "fireredasr2-aed-mlx",
@@ -691,7 +703,54 @@
       "ja",
       "ko"
     ],
-    "refined_priority": 2
+    "refined_priority": 2,
+    "china_downloads": [
+      {
+        "path": "chat_template.json",
+        "url": "https://modelscope.cn/models/mlx-community/Qwen3-ASR-0.6B-8bit/resolve/master/chat_template.json",
+        "sha256": "75a8cfca24f00de72d796fbfed6858fc9614ef3dabd8696684cc3bc03a9c58ff"
+      },
+      {
+        "path": "config.json",
+        "url": "https://modelscope.cn/models/mlx-community/Qwen3-ASR-0.6B-8bit/resolve/master/config.json",
+        "sha256": "5d104a945fed08728ab010f12bf3ce5ab4d0794bba276d81bff5bd83ae9d2be0"
+      },
+      {
+        "path": "generation_config.json",
+        "url": "https://modelscope.cn/models/mlx-community/Qwen3-ASR-0.6B-8bit/resolve/master/generation_config.json",
+        "sha256": "1da527824d81e07118facff437e03f2e24a23311e3bdeb2368973fe77e5f275c"
+      },
+      {
+        "path": "merges.txt",
+        "url": "https://modelscope.cn/models/mlx-community/Qwen3-ASR-0.6B-8bit/resolve/master/merges.txt",
+        "sha256": "8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5"
+      },
+      {
+        "path": "model.safetensors",
+        "url": "https://modelscope.cn/models/mlx-community/Qwen3-ASR-0.6B-8bit/resolve/master/model.safetensors",
+        "sha256": "b5bfe4abc1b4c6e58b633096682ec2b6297298add1527119936107d211adf0e8"
+      },
+      {
+        "path": "model.safetensors.index.json",
+        "url": "https://modelscope.cn/models/mlx-community/Qwen3-ASR-0.6B-8bit/resolve/master/model.safetensors.index.json",
+        "sha256": "caa32ece76c395ba241533eb4aceb0efbc72488ef3d8d2fd3c677ce068dad57d"
+      },
+      {
+        "path": "preprocessor_config.json",
+        "url": "https://modelscope.cn/models/mlx-community/Qwen3-ASR-0.6B-8bit/resolve/master/preprocessor_config.json",
+        "sha256": "45e120a4eda2c20c5d7f2ea9354e63536bf35e27aa573fb7cdf78017b378770d"
+      },
+      {
+        "path": "tokenizer_config.json",
+        "url": "https://modelscope.cn/models/mlx-community/Qwen3-ASR-0.6B-8bit/resolve/master/tokenizer_config.json",
+        "sha256": "4942d005604266809309cabc9f4e9cb89ce855d59b14681fdc0e1cc62ea26c4c"
+      },
+      {
+        "path": "vocab.json",
+        "url": "https://modelscope.cn/models/mlx-community/Qwen3-ASR-0.6B-8bit/resolve/master/vocab.json",
+        "sha256": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910"
+      }
+    ]
   },
   {
     "id": "parakeet-tdt-0.6b-v3-mlx",
@@ -802,7 +861,34 @@
       "uk",
       "auto"
     ],
-    "refined_priority": 4
+    "refined_priority": 4,
+    "china_downloads": [
+      {
+        "path": "config.json",
+        "url": "https://modelscope.cn/models/mlx-community/parakeet-tdt-0.6b-v3/resolve/master/config.json",
+        "sha256": "f320f1292511f34ec47f513755fe20fd01dbfc09a925d42730e66059a6e1ef4c"
+      },
+      {
+        "path": "model.safetensors",
+        "url": "https://modelscope.cn/models/mlx-community/parakeet-tdt-0.6b-v3/resolve/master/model.safetensors",
+        "sha256": "05e01c7f396c298cf7d23f61da7b504adeab698f0aaeafd9c82d198625464592"
+      },
+      {
+        "path": "tokenizer.model",
+        "url": "https://modelscope.cn/models/mlx-community/parakeet-tdt-0.6b-v3/resolve/master/tokenizer.model",
+        "sha256": "eacec2b0a77f336d4a2ca4a25a7047575d3c2b74de47e997f4c205126ed3135e"
+      },
+      {
+        "path": "tokenizer.vocab",
+        "url": "https://modelscope.cn/models/mlx-community/parakeet-tdt-0.6b-v3/resolve/master/tokenizer.vocab",
+        "sha256": "41130ff456706304a1adec782ccc9e003c4d417e8e324353d281be958cac4e17"
+      },
+      {
+        "path": "vocab.txt",
+        "url": "https://modelscope.cn/models/mlx-community/parakeet-tdt-0.6b-v3/resolve/master/vocab.txt",
+        "sha256": "3cde1409fd78783a79b29ed4d32da57c746993856f7c8263bcb905d2e5839db7"
+      }
+    ]
   },
   {
     "id": "funasr-nano-mlx",
@@ -892,6 +978,48 @@
       "zh",
       "yue"
     ],
-    "refined_priority": 1
+    "refined_priority": 1,
+    "china_downloads": [
+      {
+        "path": "Qwen3-0.6B/config.json",
+        "url": "https://modelscope.cn/models/mlx-community/Fun-ASR-Nano-2512/resolve/master/Qwen3-0.6B/config.json",
+        "sha256": "660db3b73d788119c04535e48cf9be5f55bc3100841a718637ae695b442f27dd"
+      },
+      {
+        "path": "Qwen3-0.6B/generation_config.json",
+        "url": "https://modelscope.cn/models/mlx-community/Fun-ASR-Nano-2512/resolve/master/Qwen3-0.6B/generation_config.json",
+        "sha256": "2325da0f15bb848e018c5ae071b7943332e9f871d6b60e2ed22ca97d4cb993d2"
+      },
+      {
+        "path": "Qwen3-0.6B/merges.txt",
+        "url": "https://modelscope.cn/models/mlx-community/Fun-ASR-Nano-2512/resolve/master/Qwen3-0.6B/merges.txt",
+        "sha256": "8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5"
+      },
+      {
+        "path": "Qwen3-0.6B/tokenizer.json",
+        "url": "https://modelscope.cn/models/mlx-community/Fun-ASR-Nano-2512/resolve/master/Qwen3-0.6B/tokenizer.json",
+        "sha256": "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4"
+      },
+      {
+        "path": "Qwen3-0.6B/tokenizer_config.json",
+        "url": "https://modelscope.cn/models/mlx-community/Fun-ASR-Nano-2512/resolve/master/Qwen3-0.6B/tokenizer_config.json",
+        "sha256": "d5d09f07b48c3086c508b30d1c9114bd1189145b74e982a265350c923acd8101"
+      },
+      {
+        "path": "Qwen3-0.6B/vocab.json",
+        "url": "https://modelscope.cn/models/mlx-community/Fun-ASR-Nano-2512/resolve/master/Qwen3-0.6B/vocab.json",
+        "sha256": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910"
+      },
+      {
+        "path": "config.json",
+        "url": "https://modelscope.cn/models/mlx-community/Fun-ASR-Nano-2512/resolve/master/config.json",
+        "sha256": "4df3d9ff5b222b7a0be5dcf3f815dba995f37c6fbefe387436072303670c0ad8"
+      },
+      {
+        "path": "model.safetensors",
+        "url": "https://modelscope.cn/models/mlx-community/Fun-ASR-Nano-2512/resolve/master/model.safetensors",
+        "sha256": "2e2ba5e2591f75f63b25ee5b53a895d3cd5afcc642c3db4482d3ee27b0a00449"
+      }
+    ]
   }
 ]

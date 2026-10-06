@@ -1,14 +1,65 @@
 """Waveform regressions: echo removal must never retime the playback signal."""
 import unittest
+import os
+import tempfile
+import wave
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 
 from .audio_io import read_mono_wav
 from .audio_mixer import AlignedAudioMixer
+from .store_audio import AudioStoreMixin
 
 
 class AudioMixerTest(unittest.TestCase):
+    def test_playback_mix_reuses_valid_file_and_rebuilds_invalid_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            audio = root / "audio"
+            audio.mkdir()
+            store = AudioStoreMixin()
+            store.meeting_dir = lambda _: root
+            destination = audio / "playback-mix.wav"
+
+            def write_wav(path, frames, rate=16000):
+                with wave.open(str(path), "wb") as output:
+                    output.setparams((1, 2, rate, 0, "NONE", "not compressed"))
+                    output.writeframes(b"\x10\x00" * frames)
+
+            write_wav(audio / "playback-mic.wav", 1600)
+            write_wav(audio / "playback-system.wav", 800)
+            store._build_mix("meeting")
+            original = destination.read_bytes()
+            modified = destination.stat().st_mtime_ns
+            # Simulate Windows denying replacement while the player holds the file.
+            with patch.object(Path, "replace", side_effect=PermissionError("in use")):
+                store._build_mix("meeting")
+            self.assertEqual(destination.read_bytes(), original)
+            self.assertEqual(destination.stat().st_mtime_ns, modified)
+
+            for invalid in ("missing", "header", "truncated", "frames", "format", "stale"):
+                with self.subTest(invalid=invalid):
+                    if invalid == "missing":
+                        destination.unlink()
+                    elif invalid == "header":
+                        destination.write_bytes(b"not a WAV")
+                    elif invalid == "truncated":
+                        destination.write_bytes(original[:-2])
+                    elif invalid == "frames":
+                        write_wav(destination, 100)
+                    elif invalid == "format":
+                        write_wav(destination, 1600, rate=8000)
+                    else:
+                        source_time = (audio / "playback-mic.wav").stat().st_mtime_ns
+                        os.utime(destination, ns=(source_time - 2_000_000_000,) * 2)
+                    store._build_mix("meeting")
+                    self.assertEqual(destination.read_bytes(), original)
+                    self.assertFalse(destination.with_suffix(".tmp.wav").exists())
+                    with patch.object(Path, "replace", side_effect=PermissionError("in use")):
+                        store._build_mix("meeting")
+
     @staticmethod
     def mix(mic, system, chunk=2731):
         mixer, output = AlignedAudioMixer(), []

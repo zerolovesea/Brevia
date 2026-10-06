@@ -183,9 +183,17 @@ def _diarization_chunk_ms():
     return max(chunk_ms, 60_000) if sys.platform == "win32" else chunk_ms
 
 
+class DiarizationTimeout(RuntimeError):
+    """子进程超过处理预算；可通过缩小分块重试。"""
+
+
 def _diarize_chunk_process(connection, payload):
     """在短生命进程内完成分段和声纹，让 OS 回收 Sherpa 原生缓冲。"""
+    def stage(name):
+        connection.send((None, name))
+
     try:
+        stage("load_audio")
         manager = ModelManager(
             payload["models_root"],
             bundled_root=payload.get("bundled_models_root"),
@@ -218,6 +226,7 @@ def _diarize_chunk_process(connection, payload):
         samples[cursor:] = 0
         # 会后离线精修独占 CPU：用满 device() 线程数，而非实时路径的 2 线程预算。
         diarization_threads = manager.device()["threads"]
+        stage("load_embedding_model")
         tracker = SpeakerTracker(manager, threads=diarization_threads)
         turns = []
         fallback_turns = [
@@ -235,6 +244,7 @@ def _diarize_chunk_process(connection, payload):
         if payload.get("vad_fallback"):
             diarized = fallback_turns
         else:
+            stage("load_diarization_models")
             diarizer = OfflineDiarizer(
                 manager,
                 -1,
@@ -243,7 +253,9 @@ def _diarize_chunk_process(connection, payload):
                 threads=diarization_threads,
             )
             # 分离器在低音量片段可能找不到人；VAD 已确认的内容仍需转写。
+            stage("diarization")
             diarized = diarizer.process(samples, sample_rate) or fallback_turns
+        stage("extract_embeddings")
         for turn in diarized:
             start_ms = max(
                 payload["core_start_ms"],
@@ -1003,7 +1015,7 @@ class RefinementWorkerMixin:
         return turns
 
     def _diarize_chunk(self, context, payload, control, try_native):
-        """单个分块的降级链：原生 → VAD-only → 单说话人。
+        """单个分块：原生超时先缩块重试，再降级为 VAD-only / 单说话人。
 
         返回 (turns, native_crashed)；native_crashed 供调用方决定是否整轨熔断。
         两种策略都失败时不抛异常，而是降级为 spk-1，保持轨道可用。
@@ -1021,6 +1033,32 @@ class RefinementWorkerMixin:
                 )
                 return result, native_crashed
             except RuntimeError as error:
+                if (strategy == "native" and isinstance(error, DiarizationTimeout)
+                        and payload["core_end_ms"] - payload["core_start_ms"] > 15_000):
+                    self.emit("worker.warning", {
+                        "code": "diarization_chunk_retry", "meeting_id": payload.get("meeting_id"),
+                        "start_ms": payload["core_start_ms"], "end_ms": payload["core_end_ms"],
+                        "message": str(error), "retry_chunk_ms": 15_000,
+                    })
+                    turns, broken = [], False
+                    for start in range(payload["core_start_ms"], payload["core_end_ms"], 15_000):
+                        self.wait_task(control)
+                        end = min(start + 15_000, payload["core_end_ms"])
+                        overlap = _refinement("diarization_overlap_ms")
+                        window_start = max(payload["window_start_ms"], start - overlap)
+                        window_end = min(payload["window_end_ms"], end + overlap)
+                        speech = [turn for turn in payload["speech"]
+                                  if turn["end_ms"] > window_start and turn["start_ms"] < window_end]
+                        if not speech:
+                            continue
+                        result, failed = self._diarize_chunk(context, {
+                            **payload, "core_start_ms": start, "core_end_ms": end,
+                            "window_start_ms": window_start, "window_end_ms": window_end,
+                            "speech": speech,
+                        }, control, try_native=not broken)
+                        turns.extend(result)
+                        broken = broken or failed
+                    return turns, broken
                 if strategy == "native":
                     native_crashed = True
                 self.emit(
@@ -1031,6 +1069,7 @@ class RefinementWorkerMixin:
                             if strategy == "native"
                             else "diarization_chunk_vad_only"
                         ),
+                        "meeting_id": payload.get("meeting_id"),
                         "start_ms": payload["core_start_ms"],
                         "end_ms": payload["core_end_ms"],
                         "error_type": type(error).__name__,
@@ -1058,40 +1097,54 @@ class RefinementWorkerMixin:
         process.start()
         sender.close()
         elapsed = 0.0
-        last_check = last_progress = time.monotonic()
+        last_progress = 0.0
+        stage, stage_started = "startup", 0.0
+        # 配置值是 <=30 秒分块的预算；Windows 的 60 秒块获得两倍预算。
+        timeout = _refinement("diarization_timeout_seconds") * max(
+            1, (payload["core_end_ms"] - payload["core_start_ms"]) / 30_000
+        )
         try:
-            while process.is_alive() and not receiver.poll(0.1):
+            while True:
+                self.wait_task(control)
+                # 暂停不计入预算；阶段消息不会重置整个分块的截止时间。
+                last_check = time.monotonic()
+                available = receiver.poll(0.1)
                 now = time.monotonic()
                 elapsed += now - last_check
-                if elapsed >= _refinement("diarization_timeout_seconds"):
-                    raise RuntimeError(f"Diarization timed out at {payload['core_start_ms']} ms")
-                if now - last_progress >= 5:
+                if available:
+                    try:
+                        ok, result = receiver.recv()
+                    except EOFError as error:
+                        raise RuntimeError(f"Diarization subprocess closed at {payload['core_start_ms']} ms") from error
+                    if ok is None:
+                        logger.info("diarization meeting=%s chunk=%s stage=%s seconds=%.2f elapsed=%.2f next=%s",
+                                    payload.get("meeting_id"), payload["core_start_ms"], stage,
+                                    elapsed - stage_started, elapsed, result)
+                        stage, stage_started = result, elapsed
+                    else:
+                        logger.info("diarization meeting=%s chunk=%s stage=%s seconds=%.2f elapsed=%.2f",
+                                    payload.get("meeting_id"), payload["core_start_ms"], stage,
+                                    elapsed - stage_started, elapsed)
+                        if not ok:
+                            raise RuntimeError(result)
+                        return result
+                elif not process.is_alive() and not receiver.poll():
+                    raise RuntimeError(f"Diarization subprocess exited with code {process.exitcode} "
+                                       f"at {payload['core_start_ms']} ms")
+                if elapsed >= timeout:
+                    raise DiarizationTimeout(
+                        f"Diarization timed out at {payload['core_start_ms']} ms "
+                        f"(stage={stage}, stage_seconds={elapsed - stage_started:.1f}, "
+                        f"elapsed={elapsed:.1f}, timeout={timeout:.1f})"
+                    )
+                if elapsed - last_progress >= 5:
                     self._refinement_progress({
                         "meeting_id": payload.get("meeting_id"),
                         "completed": payload["core_start_ms"] // 1000,
                         "total": max(1, payload.get("duration_ms", payload["core_end_ms"]) // 1000),
                         "stage": "分析说话人",
                     })
-                    last_progress = now
-                self.wait_task(control)
-                # 用户暂停的时间不计入子进程无响应期限。
-                last_check = time.monotonic()
-            if not receiver.poll():
-                raise RuntimeError(
-                    f"Diarization subprocess exited with code {process.exitcode} "
-                    f"at {payload['core_start_ms']} ms"
-                )
-            try:
-                ok, result = receiver.recv()
-            except EOFError as error:
-                process.join()
-                raise RuntimeError(
-                    f"Diarization subprocess exited with code {process.exitcode} "
-                    f"at {payload['core_start_ms']} ms"
-                ) from error
-            if not ok:
-                raise RuntimeError(result)
-            return result
+                    last_progress = elapsed
         finally:
             receiver.close()
             if process.is_alive():

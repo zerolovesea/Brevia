@@ -8,16 +8,16 @@
 | 位置 | 内容 | 谁负责 |
 | --- | --- | --- |
 | `package.json` / `package-lock.json` | `version` | 自动：`release.sh` 里的 `npm version` |
-| `frontend/i18n-data.js` 的 `whatsNewLog` | 新增一条 `{ version, date, current: true }`，并把上一条的 `current: true` 去掉 | 手动；`test-ui.mjs` 只守住「恰好一条 current 且它是最新一条」，条目的增补仍需人工 |
+| `frontend/changelog.js` 的 `releases` | 新增一条 `{ version, date, current: true }`，并把上一条的 `current: true` 去掉 | 手动；`test-ui.mjs` 只守住「恰好一条 current 且它是最新一条」，条目的增补仍需人工 |
 | `docs/releases/v<version>.md` | GitHub Release Notes | 手动，缺文件 `release.sh` 会直接退出 |
 
-`whatsNewLog` 漏更新的后果：应用内「更新日志」把上一个版本标成当前版本。
+`releases` 漏更新的后果：应用内「更新日志」把上一个版本标成当前版本。
 `current` 只能有一条，顺序按版本从新到旧。
 
 ## 2. 内容与文案
 
-- [ ] `whatsNewLog` 新条目按实际改动写 `summary` 与 `what` / `improved` / `fixed` / `security` / `changes`，至少 `zh` + `en`（其余语言回退到 `en`）。条目使用 `{ text, commit }`，引用已存在的真实提交；旧版字符串条目继续展示。
-- [ ] `docs/releases/v<version>.md` 与 `whatsNewLog` 口径一致；增加 `previousVersion` 完整对比链接，按 Git 历史核对首次贡献者后填写 `contributors: [{ login, pr }]`。当前版本展开、历史版本折叠。
+- [ ] `releases` 新条目按实际改动写 `summary` 与 `what` / `improved` / `fixed` / `security` / `changes`，至少 `zh` + `en`（其余语言回退到 `en`）。条目使用 `{ text, commit }`，引用已存在的真实提交；旧版字符串条目继续展示。
+- [ ] `docs/releases/v<version>.md` 与 `releases` 口径一致；增加 `previousVersion` 完整对比链接，按 Git 历史核对首次贡献者后填写 `contributors: [{ login, pr }]`。当前版本展开、历史版本折叠。
 - [ ] 用户可见行为变化同步到**所有** `README.md` 与 `docs/README.*.md`（例如停顿阈值、模型列表、识别模型选择说明）。
       只改 `README.md` + `docs/README.zh-CN.md` 会让其余语言继续描述已下线的功能——本清单以前就只写了这两个文件。
 - [ ] 面向访客的功能描述同步到 `website/index-zh.html` / `website/index-en.html`（下载链接由 CI 自动更新，正文不会）。

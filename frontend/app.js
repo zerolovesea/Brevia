@@ -97,7 +97,8 @@ function revealTaskCard(card) {
   card.hidden = false;
   if (wasHidden || wasLeaving) { taskCards.append(card); enterTaskCard(card); }
 }
-const { onboardingStorageCopy, aiNotePromptCopy, storageCleanupCopy, exportHubCopy, whatsNewLog, appCopy: { themeLabels, updateLabels, modalCopy, modelLabels, summaryModelCopy, speakerProfileCopy, voiceFeaturesCopy, aiAssistCopy, whatsNewCopy } } = window.BreviaLocaleData;
+const { onboardingStorageCopy, aiNotePromptCopy, storageCleanupCopy, exportHubCopy, appCopy: { themeLabels, updateLabels, modalCopy, modelLabels, summaryModelCopy, speakerProfileCopy, voiceFeaturesCopy, aiAssistCopy, whatsNewCopy } } = window.BreviaLocaleData;
+const whatsNewLog = window.BreviaChangelog;
 if (new URLSearchParams(location.search).has('resetOnboarding')) localStorage.removeItem('brevia-onboarding-complete');
 let theme = localStorage.getItem('brevia-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
 const appOpenedAt = Date.now();
@@ -811,6 +812,7 @@ async function onMicDeviceChange() {
   if (captureModeInputs().mic) await previewMicrophone();
 }
 let refinementMeetingTitle = '';
+let refinementBusyMeetingId = null;
 let refinementCardDismissed = false;
 function refinementTitle(meetingId) {
   return currentMeetingDetail?.id === meetingId ? currentMeetingDetail.title
@@ -986,11 +988,12 @@ function queueModelTask(task, payload, models) {
 async function resumeReadyModelTasks() {
   for (const [key, pending] of pendingModelTasks) {
     if (resumingModelTasks.has(key) || !pending.models.every((modelId) => modelPaths.has(modelId))) continue;
+    if (pending.task === 'meeting.refine' && refinementBusyMeetingId) continue;
     pendingModelTasks.delete(key);
     resumingModelTasks.add(key);
     try {
       if (pending.task === 'meeting.refine') {
-        await window.brevia.meeting.refine(pending.payload);
+        await requestRefinement(pending.payload);
       } else if (pending.task === 'meeting.reconfigure') {
         // 仅在此会议仍是实时会议时重试；已停止的会议无法重新配置。
         if (breviaClient?.state.meeting?.id === pending.payload.meeting_id) await window.brevia.meeting.reconfigure(pending.payload);
@@ -1001,7 +1004,7 @@ async function resumeReadyModelTasks() {
         else activateMeeting(meeting, payload);
       }
     } catch (error) {
-      hideRefinementProgress();
+      if (pending.task === 'meeting.refine' && refinementCard.dataset.meetingId === pending.payload.meeting_id) hideRefinementProgress();
       showToast(error.message);
     } finally { resumingModelTasks.delete(key); }
   }
@@ -4778,25 +4781,42 @@ function refineNumSpeakers() {
   const parsed = Number(String(input?.value ?? '').trim());
   return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
 }
+/** 所有 UI 精修入口共用占用状态，包括模型下载后的自动重试。 */
+async function requestRefinement(payload) {
+  if (refinementBusyMeetingId) throw new Error(t('error.tasks.running'));
+  refinementBusyMeetingId = payload.meeting_id;
+  try {
+    renderMeetingDetail();
+    return await window.brevia.meeting.refine(payload);
+  } finally {
+    refinementBusyMeetingId = null;
+    renderMeetingDetail();
+    void resumeReadyModelTasks();
+  }
+}
 /** 触发会后精修并同步字幕面板状态。
  * @param {number} [numSpeakers] 固定说话人数。
  * @param {string} [modelId] 只在用户于精修菜单里显式改过模型时传入。
  * @returns {void} */
 const startRefinement = (numSpeakers, modelId) => {
   if (!window.brevia?.meeting?.refine || !breviaClient?.state?.selectedMeetingId) return;
+  if (refinementBusyMeetingId) { showToast(t('error.tasks.running')); return; }
+  const meetingId = breviaClient.state.selectedMeetingId;
   uiData.detail.refineState = 'refining';
   renderMeetingDetail();
-  void window.brevia.meeting.refine({
-    meeting_id: breviaClient.state.selectedMeetingId,
+  void requestRefinement({
+    meeting_id: meetingId,
     language: uiData.detail.language || 'auto',
     ...(numSpeakers ? { num_speakers: numSpeakers } : {}),
     // 没点名时保留后端「模型不可用就回落到该语言默认模型」的既有行为；点了名就要用点名
     // 的那个（后端对显式点名的模型不做静默替换，缺文件时回 model_required 走下载队列）。
     ...(modelId ? { refined_model_id: modelId } : {}),
   }).catch((error) => {
-    uiData.detail.refineState = 'idle';
-    renderMeetingDetail();
-    hideRefinementProgress();
+    if (breviaClient.state.selectedMeetingId === meetingId) {
+      uiData.detail.refineState = 'idle';
+      renderMeetingDetail();
+    }
+    if (refinementCard.dataset.meetingId === meetingId) hideRefinementProgress();
     showToast(error.message);
   });
 };
@@ -5532,7 +5552,7 @@ if (window.brevia) {
     setTaskCardPaused(card, status === 'paused');
   });
   window.brevia.on('model.required', ({ models, task, payload }) => {
-    if (task === 'meeting.refine') {
+    if (task === 'meeting.refine' && payload?.meeting_id === breviaClient.state.selectedMeetingId) {
       // 精修被模型缺失阻塞：复位精修状态，避免详情页停留在“正在精修”；
       // 模型下载完成后 resumeReadyModelTasks 会自动重试精修。
       uiData.detail.refineState = 'idle';

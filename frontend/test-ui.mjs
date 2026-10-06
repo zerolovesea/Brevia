@@ -1938,7 +1938,7 @@ assert.doesNotMatch(text(js), /await breviaClient\.pause\(!paused\)[\s\S]{0,200}
 assert.doesNotMatch(text(app), /document\.querySelector\('#end-meeting'\)[\s\S]{0,800}meeting\.refine/);
 assert.match(text(app), /const buttonLabel = button\.innerHTML;[\s\S]{0,300}button\.innerHTML = `<i class="button-spinner" aria-hidden="true"><\/i>\$\{t\('结束中'\)\}`/);
 assert.match(text(app), /data-refine-num-speakers/);
-assert.match(text(app), /const startRefinement[\s\S]*?window\.brevia\.meeting\.refine/);
+assert.match(text(app), /const startRefinement[\s\S]*?requestRefinement/);
 assert.match(text(app), /num_speakers: numSpeakers/);
 assert.match(text(components), /refine-menu-speakers[\s\S]{0,200}data-refine-num-speakers/);
 assert.match(text(app), /function refineNumSpeakers/);
@@ -2040,7 +2040,10 @@ assert.match(text(i18nData), /Aún no se ha generado el resumen/);
 assert.match(text(i18nData), /Speaker diarization/);
 // 更新日志的版本簿记是手动维护的（RELEASING.md §1）：只允许一条 current，且它必须是
 // 列表第一条（版本从新到旧），否则应用内「更新日志」会把上一版标成当前版本。
-const releaseEntries = localeContext.window.BreviaLocaleData.whatsNewLog;
+runInNewContext(text(await readFile('changelog.js')), localeContext);
+assert.equal(localeContext.window.BreviaLocaleData.whatsNewLog, undefined);
+assert.match(text(html), /changelog\.js[\s\S]*app\.js/);
+const releaseEntries = localeContext.window.BreviaChangelog;
 assert.equal(releaseEntries.filter((entry) => entry.current).length, 1);
 assert.equal(releaseEntries[0].current, true);
 assert.match(releaseEntries[0].version, /^\d+\.\d+\.\d+$/);
@@ -2686,3 +2689,45 @@ assert.equal(onboardingNext, 1, 'repeated clicks must not create duplicate onboa
 dismissal.dismissOnboardingPage(() => onboardingNext++);
 assert.equal(onboardingNext, 1);
 console.log('UI structure and behavior checks passed.');
+
+// A second meeting cannot launch or clear the first meeting's progress.
+const refineRequests = [];
+let finishRefinement;
+const refineRequestContext = {
+  refinementBusyMeetingId: null, renderMeetingDetail() {}, resumeReadyModelTasks() {}, t: (key) => key,
+  window: { brevia: { meeting: { refine(payload) {
+    refineRequests.push(payload.meeting_id);
+    return new Promise((resolve) => { finishRefinement = resolve; });
+  } } } },
+};
+runInNewContext('async ' + summaryFn('requestRefinement'), refineRequestContext);
+const firstRefinement = refineRequestContext.requestRefinement({ meeting_id: 'first' });
+await assert.rejects(refineRequestContext.requestRefinement({ meeting_id: 'second' }), /error.tasks.running/);
+assert.equal(refineRequestContext.refinementBusyMeetingId, 'first');
+assert.deepEqual(refineRequests, ['first']);
+finishRefinement({});
+await firstRefinement;
+assert.equal(refineRequestContext.refinementBusyMeetingId, null);
+summaryContext.refinementBusyMeetingId = 'another';
+const busyRefineMarkup = summaryContext.renderRefineStatus({ refineState: 'idle', language: 'zh' });
+assert.doesNotMatch(busyRefineMarkup, /data-refine-action/);
+assert.ok(busyRefineMarkup.includes(summaryContext.t('error.tasks.running')));
+
+const refinementFailureActions = [];
+let rejectRefinement;
+const startRefinementContext = {
+  window: { brevia: { meeting: { refine() {} } } },
+  breviaClient: { state: { selectedMeetingId: 'first' } }, refinementBusyMeetingId: null,
+  uiData: { detail: { language: 'zh', refineState: 'idle' } },
+  refinementCard: { dataset: { meetingId: 'second' } },
+  requestRefinement: () => new Promise((_, reject) => { rejectRefinement = reject; }),
+  renderMeetingDetail() {}, hideRefinementProgress() { refinementFailureActions.push('hidden'); },
+  showToast() {}, t: (key) => key,
+};
+const startRefinementSource = summaryAppSource.slice(summaryAppSource.indexOf('const startRefinement ='), summaryAppSource.indexOf('/** 用户在这次精修里'));
+runInNewContext(startRefinementSource + '\nstartRefinement();', startRefinementContext);
+startRefinementContext.breviaClient.state.selectedMeetingId = 'second';
+rejectRefinement(new Error('busy'));
+await Promise.resolve();
+assert.deepEqual(refinementFailureActions, [], 'a rejected request cannot hide another meeting’s progress');
+assert.equal(startRefinementContext.uiData.detail.refineState, 'refining', 'a late failure cannot reset another meeting’s state');

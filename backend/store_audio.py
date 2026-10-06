@@ -5,6 +5,7 @@ import json
 import struct
 import time
 import wave
+from pathlib import Path
 
 from .config import SETTINGS
 from .audio_mixer import mix_wav_files
@@ -188,11 +189,32 @@ class AudioStoreMixin:
                     output.writeframes(recording.readframes(recording.getnframes()))
 
     def _build_mix(self, meeting_id, progress=None):
-        """生成与实时识别共用对齐算法的派生单轨，原录音保持完整。"""
+        """复用有效混音，否则生成派生单轨，原录音保持完整。"""
         playback = self.audio_files(meeting_id)["playback"]
         if not playback["mic"] or not playback["system"]:
             return
         destination = self.meeting_dir(meeting_id) / "audio" / "playback-mix.wav"
+        # 播放器可能持有此文件；Windows 不允许替换被占用的回放。
+        # 只读校验格式、长度和源文件时间，避免每次精修都重建同一份混音。
+        try:
+            if destination.stat().st_mtime_ns >= max(
+                Path(playback[track]).stat().st_mtime_ns for track in ("mic", "system")
+            ):
+                with (
+                    wave.open(playback["mic"]) as mic,
+                    wave.open(playback["system"]) as system,
+                    wave.open(str(destination)) as mixed,
+                ):
+                    frames = max(mic.getnframes(), system.getnframes())
+                    if (mixed.getparams()[:3] == mic.getparams()[:3] == system.getparams()[:3]
+                            and mixed.getnchannels() == 1 and mixed.getsampwidth() == 2
+                            and mixed.getnframes() == frames and frames > 0):
+                        # WAV 头部正确仍可能被截断；读取最后一帧确认数据完整。
+                        mixed.setpos(frames - 1)
+                        if len(mixed.readframes(1)) == 2:
+                            return
+        except (OSError, EOFError, wave.Error):
+            pass
         # 取消或写入失败不能损坏已有回放文件。
         temporary = destination.with_suffix(".tmp.wav")
         try:
