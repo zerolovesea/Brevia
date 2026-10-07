@@ -1,4 +1,5 @@
 """整句链路的生命周期回归；无需下载识别模型。"""
+
 import base64
 import tempfile
 import threading
@@ -36,8 +37,10 @@ class SentenceTest(unittest.TestCase):
         self.vad.flush.return_value = []
         self.asr = Mock()
         self.asr.decode.return_value = "完整的一句话。"
-        self.patches = [patch("backend.worker_session.SentenceVAD", return_value=self.vad),
-                        patch("backend.worker_session.RefinedASR", return_value=self.asr)]
+        self.patches = [
+            patch("backend.worker_session.SentenceVAD", return_value=self.vad),
+            patch("backend.worker_session.RefinedASR", return_value=self.asr),
+        ]
         for item in self.patches:
             item.start()
         self.meeting = self.worker.start({"title": "分句测试", "language": "zh"})
@@ -50,15 +53,23 @@ class SentenceTest(unittest.TestCase):
         self.temp.cleanup()
 
     def feed(self, start=0, flush=True):
-        return self.worker.audio({"meeting_id": self.meeting["id"], "track": "mic",
-                                  "pcm": base64.b64encode(bytes(3200)).decode(),
-                                  "sample_rate": 16000, "start_ms": start, "flush": flush})
+        return self.worker.audio(
+            {
+                "meeting_id": self.meeting["id"],
+                "track": "mic",
+                "pcm": base64.b64encode(bytes(3200)).decode(),
+                "sample_rate": 16000,
+                "start_ms": start,
+                "flush": flush,
+            }
+        )
 
     def finals(self):
         return [event["payload"] for event in self.events if event["type"] == "transcript.final"]
 
     def test_saturated_recognition_keeps_raw_audio_and_drains_files(self):
         from .worker_session import LiveExecutor
+
         self.worker.live_postprocessing.shutdown(wait=True)
         self.worker.live_postprocessing = LiveExecutor(capacity=2)
         release = threading.Event()
@@ -72,13 +83,24 @@ class SentenceTest(unittest.TestCase):
         self.asr.decode.side_effect = decode
         try:
             for index in range(5):
-                self.worker._submit_sentence("mic", index * 1000, (index + 1) * 1000, np.ones(16000, np.float32))
+                self.worker._submit_sentence(
+                    "mic", index * 1000, (index + 1) * 1000, np.ones(16000, np.float32)
+                )
             self.assertTrue(entered.wait(1))
             self.assertTrue(self.worker.live_overloaded)
-            self.assertLessEqual(len(list(self.worker.store.meeting_dir(self.meeting["id"]).rglob("sentence-*.npy"))), 2)
+            self.assertLessEqual(
+                len(
+                    list(self.worker.store.meeting_dir(self.meeting["id"]).rglob("sentence-*.npy"))
+                ),
+                2,
+            )
             self.feed(flush=False)
             self.feed(start=100, flush=False)
-            warnings = [e for e in self.events if e["type"] == "worker.warning" and e["payload"]["code"] == "asr_unavailable"]
+            warnings = [
+                e
+                for e in self.events
+                if e["type"] == "worker.warning" and e["payload"]["code"] == "asr_unavailable"
+            ]
             self.assertEqual(len(warnings), 1)
         finally:
             release.set()
@@ -91,6 +113,7 @@ class SentenceTest(unittest.TestCase):
 
     def test_blocked_vad_keeps_recording_and_bounds_pending_pcm(self):
         from .worker_session import LiveExecutor
+
         self.worker.live_preprocessing = LiveExecutor(capacity=2)
         entered, release = threading.Event(), threading.Event()
 
@@ -113,31 +136,52 @@ class SentenceTest(unittest.TestCase):
             release.set()
         self.worker.stop({"meeting_id": self.meeting["id"], "duration_ms": 300})
         self.assertIsNone(self.worker.live_preprocessing)
-        self.assertEqual(len([e for e in self.events if e["type"] == "worker.warning"
-                              and e["payload"]["code"] == "asr_unavailable"]), 1)
+        self.assertEqual(
+            len(
+                [
+                    e
+                    for e in self.events
+                    if e["type"] == "worker.warning" and e["payload"]["code"] == "asr_unavailable"
+                ]
+            ),
+            1,
+        )
 
     def test_async_vad_flushes_before_model_switch(self):
         from .worker_session import LiveExecutor
+
         self.worker.live_preprocessing = LiveExecutor()
         entered, release = threading.Event(), threading.Event()
+
         def accept(track, samples, start):
             entered.set()
             release.wait(5)
             return [(start, start + 100, samples)]
+
         self.vad.accept.side_effect = accept
         self.feed(flush=False)
         self.assertTrue(entered.wait(1))
         release.set()
-        self.worker.reconfigure({"meeting_id": self.meeting["id"], "language": "en",
-                                 "refined_model_id": "parakeet-tdt-0.6b-v3-int8"})
+        self.worker.reconfigure(
+            {
+                "meeting_id": self.meeting["id"],
+                "language": "en",
+                "refined_model_id": "parakeet-tdt-0.6b-v3-int8",
+            }
+        )
         self.worker.stop({"meeting_id": self.meeting["id"], "duration_ms": 100})
         self.assertEqual(self.asr.decode.call_count, 1)
-        self.assertEqual(list(self.worker.store.meeting_dir(self.meeting["id"]).rglob("sentence-*.npy")), [])
+        self.assertEqual(
+            list(self.worker.store.meeting_dir(self.meeting["id"]).rglob("sentence-*.npy")), []
+        )
 
     def test_dual_track_sends_one_aligned_waveform_to_asr(self):
         from backend.audio_mixer import AlignedAudioMixer
+
         self.worker.live_mixer = AlignedAudioMixer()
-        self.vad.accept.side_effect = lambda track, samples, start: [(start, start + round(len(samples) / 16), samples)] if len(samples) >= 16000 else []
+        self.vad.accept.side_effect = lambda track, samples, start: (
+            [(start, start + round(len(samples) / 16), samples)] if len(samples) >= 16000 else []
+        )
         heard = []
         duplicate = "Perdona, al final podemos sacar ideas o cosas."
 
@@ -150,9 +194,15 @@ class SentenceTest(unittest.TestCase):
         mic = np.concatenate((np.zeros(1920), -system[:-1920]))
         for track, samples in [("system", system), ("mic", mic)]:
             pcm = (samples * 32767).astype("<i2").tobytes()
-            self.worker.audio({"meeting_id": self.meeting["id"], "track": track,
-                               "pcm": base64.b64encode(pcm).decode(), "sample_rate": 16000,
-                               "start_ms": 0})
+            self.worker.audio(
+                {
+                    "meeting_id": self.meeting["id"],
+                    "track": track,
+                    "pcm": base64.b64encode(pcm).decode(),
+                    "sample_rate": 16000,
+                    "start_ms": 0,
+                }
+            )
         result = self.worker.stop({"meeting_id": self.meeting["id"], "duration_ms": 2000})
         self.assertEqual(len(heard), 1)
         self.assertGreater(np.linalg.norm(heard[0]), 10)
@@ -170,7 +220,10 @@ class SentenceTest(unittest.TestCase):
         # 值。曾经的 12.0 硬上限让所有模型都被多切 2–4 倍（见 asr.py 注释）。
         self.assertEqual(
             automatic.max_speech_seconds,
-            min(SETTINGS["vad"]["default"]["max_speech_duration"], DEFAULT_SETTINGS["live_asr"]["max_speech_seconds"]),
+            min(
+                SETTINGS["vad"]["default"]["max_speech_duration"],
+                DEFAULT_SETTINGS["live_asr"]["max_speech_seconds"],
+            ),
         )
         self.assertEqual(automatic.target_seconds, manual.target_seconds)
         # auto（多语言混说）默认落在 parakeet-tdt-0.6b-v3-int8：清单的 default_for_languages
@@ -179,25 +232,43 @@ class SentenceTest(unittest.TestCase):
         # 排名垫底，因为它会把外语翻译成英语而不是转写（西语仅 1/287 窗口保留）。
         # 见 docs/asr-model-selection-design.md §2.4 / §2.5 / §2.8。
         payload = self.worker._sentence_payload({"title": "mixed"})
-        self.assertEqual((payload["language"], payload["refined_model_id"]), ("auto", "parakeet-tdt-0.6b-v3-int8"))
+        self.assertEqual(
+            (payload["language"], payload["refined_model_id"]),
+            ("auto", "parakeet-tdt-0.6b-v3-int8"),
+        )
         with self.assertRaisesRegex(ValueError, "Automatic multilingual"):
-            self.worker._sentence_payload({"language": "auto", "refined_model_id": "funasr-nano-int8"})
-        qwen3 = self.worker._sentence_payload({"language": "auto", "refined_model_id": "qwen3-asr-0.6b-int8"})
-        self.assertEqual(qwen3["refined_model_id"], "qwen3-asr-0.6b-int8",
-                         "auto 仍须允许显式指定 Qwen3-ASR（多语种模型都可用于混说）")
+            self.worker._sentence_payload(
+                {"language": "auto", "refined_model_id": "funasr-nano-int8"}
+            )
+        qwen3 = self.worker._sentence_payload(
+            {"language": "auto", "refined_model_id": "qwen3-asr-0.6b-int8"}
+        )
+        self.assertEqual(
+            qwen3["refined_model_id"],
+            "qwen3-asr-0.6b-int8",
+            "auto 仍须允许显式指定 Qwen3-ASR（多语种模型都可用于混说）",
+        )
         with patch("backend.worker_session.RefinedASR", return_value=self.asr) as builder:
             self.worker.reconfigure({"meeting_id": self.meeting["id"], "language": "auto"})
         self.assertEqual(builder.call_args.args[1], "parakeet-tdt-0.6b-v3-int8")
         self.assertEqual(builder.call_args.kwargs["language"], "auto")
         # 混合语种的三段：各自解码一次，再按无长停顿合并成同一段。
-        self.asr.decode.side_effect = ["Hello, how are you?", "Muy bien, gracias.", "Let's continue."]
-        self.vad.accept.return_value = [(i * 1700, i * 1700 + 1000, np.ones(16000, dtype=np.float32)) for i in range(3)]
+        self.asr.decode.side_effect = [
+            "Hello, how are you?",
+            "Muy bien, gracias.",
+            "Let's continue.",
+        ]
+        self.vad.accept.return_value = [
+            (i * 1700, i * 1700 + 1000, np.ones(16000, dtype=np.float32)) for i in range(3)
+        ]
         self.feed()
         result = self.worker.stop({"meeting_id": self.meeting["id"], "duration_ms": 3000})
         self.assertEqual(result["language"], "auto")
         # 三段都短于目标长度，也没有长停顿，因此并成同一段；每段仍各自解码一次。
-        self.assertEqual([s["text"] for s in result["segments"]],
-                         ["Hello, how are you? Muy bien, gracias. Let's continue."])
+        self.assertEqual(
+            [s["text"] for s in result["segments"]],
+            ["Hello, how are you? Muy bien, gracias. Let's continue."],
+        )
         self.assertEqual(self.asr.decode.call_count, 3)
 
     def test_default_refined_model_follows_manifest_language_ownership(self):
@@ -221,18 +292,25 @@ class SentenceTest(unittest.TestCase):
             ("ja", "qwen3-asr-0.6b-int8"),
             ("ko", "qwen3-asr-0.6b-int8"),
         ):
-            self.assertEqual(self.worker._default_refined_model(language), expected,
-                             f"unexpected default model for {language}")
+            self.assertEqual(
+                self.worker._default_refined_model(language),
+                expected,
+                f"unexpected default model for {language}",
+            )
         # 未在清单里声明的语言要回落，而不是抛错。
         fallback = self.worker._default_refined_model("xx")
-        self.assertIn(fallback, {"funasr-nano-int8", "qwen3-asr-0.6b-int8",
-                                 "parakeet-tdt-0.6b-v3-int8"})
+        self.assertIn(
+            fallback, {"funasr-nano-int8", "qwen3-asr-0.6b-int8", "parakeet-tdt-0.6b-v3-int8"}
+        )
         # 退役模型不再参与选型：清单里留着条目只是为了能解析历史 id，本地文件已在启动时清掉。
         for model in models.catalog.values():
             if model.get("retired"):
                 for language in ("zh", "en", "es", "ja", "ko", "auto", "xx"):
-                    self.assertNotEqual(self.worker._default_refined_model(language), model["id"],
-                                        f"retired model {model['id']} must never be selected")
+                    self.assertNotEqual(
+                        self.worker._default_refined_model(language),
+                        model["id"],
+                        f"retired model {model['id']} must never be selected",
+                    )
         # 清单里声明的每一项都必须真的支持该语言，否则会推荐出无法使用的模型。
         for model in models.catalog.values():
             for language in model.get("default_for_languages") or []:
@@ -257,8 +335,9 @@ class SentenceTest(unittest.TestCase):
         for language in ("en", "es", "fr", "de", "ru"):
             self.assertTrue(model_supports_language(parakeet, language), language)
         for language in ("zh", "ja", "ko", "yue"):
-            self.assertFalse(model_supports_language(parakeet, language),
-                             f"Parakeet must not claim {language}")
+            self.assertFalse(
+                model_supports_language(parakeet, language), f"Parakeet must not claim {language}"
+            )
         # auto 由 kind 决定，而不是由 languages 里的通配符决定。
         self.assertTrue(model_supports_language(parakeet, "auto"))
         self.assertIn(parakeet["kind"], MULTILINGUAL_MODEL_KINDS)
@@ -266,7 +345,8 @@ class SentenceTest(unittest.TestCase):
         # multilingual 通配符不得出现在 languages 里，否则「不支持」无法表达。
         for model in catalog.values():
             self.assertNotIn(
-                "multilingual", model.get("languages") or [],
+                "multilingual",
+                model.get("languages") or [],
                 f"{model['id']} must list concrete language codes, not the 'multilingual' wildcard",
             )
 
@@ -277,8 +357,10 @@ class SentenceTest(unittest.TestCase):
         # 每个界面可选的语言都必须能解析出默认模型——否则准备页会出现空的模型下拉。
         for language in ("zh", "yue", "en", "es", "fr", "de", "ru", "ja", "ko", "auto"):
             chosen = self.worker._default_refined_model(language)
-            self.assertTrue(model_supports_language(catalog[chosen], language),
-                            f"default {chosen} does not support {language}")
+            self.assertTrue(
+                model_supports_language(catalog[chosen], language),
+                f"default {chosen} does not support {language}",
+            )
 
     def test_live_segment_cap_never_exceeds_configured_limit(self):
         # 模型容量比配置上限更长时，按配置上限切（实时延迟优先）；模型容量更短时
@@ -287,16 +369,30 @@ class SentenceTest(unittest.TestCase):
             tight = SentenceVAD(self.worker.models, language="zh", max_speech_duration=8.0)
             generous = SentenceVAD(self.worker.models, language="zh", max_speech_duration=999.0)
         # 两者都不得越过实时配置上限。
-        self.assertLessEqual(tight.max_speech_seconds, DEFAULT_SETTINGS["live_asr"]["max_speech_seconds"])
-        self.assertLessEqual(generous.max_speech_seconds, DEFAULT_SETTINGS["live_asr"]["max_speech_seconds"])
+        self.assertLessEqual(
+            tight.max_speech_seconds, DEFAULT_SETTINGS["live_asr"]["max_speech_seconds"]
+        )
+        self.assertLessEqual(
+            generous.max_speech_seconds, DEFAULT_SETTINGS["live_asr"]["max_speech_seconds"]
+        )
         # 模型容量更紧时以模型容量为准（这是 12.0 硬上限当初破坏的语义）。
         self.assertEqual(tight.max_speech_seconds, 8.0)
-        self.assertEqual(generous.max_speech_seconds, DEFAULT_SETTINGS["live_asr"]["max_speech_seconds"])
+        self.assertEqual(
+            generous.max_speech_seconds, DEFAULT_SETTINGS["live_asr"]["max_speech_seconds"]
+        )
         # 即使语言级配置放宽，也不会超过实时配置上限。
-        loose = {**SETTINGS, "vad": {**SETTINGS["vad"], "default": {**SETTINGS["vad"]["default"], "max_speech_duration": 60.0}}}
+        loose = {
+            **SETTINGS,
+            "vad": {
+                **SETTINGS["vad"],
+                "default": {**SETTINGS["vad"]["default"], "max_speech_duration": 60.0},
+            },
+        }
         with patch("backend.asr._vad_config"), patch("backend.asr.SETTINGS", loose):
             wide = SentenceVAD(self.worker.models, language="zh", max_speech_duration=999.0)
-        self.assertEqual(wide.max_speech_seconds, DEFAULT_SETTINGS["live_asr"]["max_speech_seconds"])
+        self.assertEqual(
+            wide.max_speech_seconds, DEFAULT_SETTINGS["live_asr"]["max_speech_seconds"]
+        )
 
     def test_no_partial_then_one_final_per_endpoint(self):
         self.feed()
@@ -308,7 +404,9 @@ class SentenceTest(unittest.TestCase):
         self.assertEqual(len(self.finals()), 1)
         self.assertEqual(self.finals()[0]["speaker"], "local-user")
         self.assertEqual(self.finals()[0]["text"], "完整的一句话。")
-        self.assertFalse(any(e["type"] in {"transcript.partial", "transcript.refined"} for e in self.events))
+        self.assertFalse(
+            any(e["type"] in {"transcript.partial", "transcript.refined"} for e in self.events)
+        )
         self.assertEqual(sum(e["type"] == "transcript.settled" for e in self.events), 1)
 
     def test_vad_endpoints_are_submitted_without_an_extra_merge_delay(self):
@@ -322,10 +420,30 @@ class SentenceTest(unittest.TestCase):
         self.feed(2700, flush=False)
         self.worker.live_postprocessing.submit(lambda: None).result(2)
         self.assertEqual(self.asr.decode.call_count, 2)
-        self.assertEqual([len(call.args[0]) for call in self.asr.decode.call_args_list], [16000, 16000])
+        self.assertEqual(
+            [len(call.args[0]) for call in self.asr.decode.call_args_list], [16000, 16000]
+        )
 
     def test_subtitles_split_once_and_preserve_text_and_timeline(self):
-        text = "收入为60.99亿元。" + "，".join(["如果企业需要扩大规模", "首先应当了解客户的需求", "再评估市场容量和现有产品", "同时考虑员工的工作时间", "合理安排生产计划与设备投入", "并对未来可能出现的风险做好准备", "通过改进技术和提高管理水平", "为客户提供更有价值的服务", "在经营收入持续稳定增长以后", "员工也应得到相应的回报", "这样才能形成健康的长期发展模式"]) + "。"
+        text = (
+            "收入为60.99亿元。"
+            + "，".join(
+                [
+                    "如果企业需要扩大规模",
+                    "首先应当了解客户的需求",
+                    "再评估市场容量和现有产品",
+                    "同时考虑员工的工作时间",
+                    "合理安排生产计划与设备投入",
+                    "并对未来可能出现的风险做好准备",
+                    "通过改进技术和提高管理水平",
+                    "为客户提供更有价值的服务",
+                    "在经营收入持续稳定增长以后",
+                    "员工也应得到相应的回报",
+                    "这样才能形成健康的长期发展模式",
+                ]
+            )
+            + "。"
+        )
         self.asr.decode.return_value = text
         self.vad.accept.return_value = [(1000, 21000, np.ones(320000, dtype=np.float32))]
         self.feed()
@@ -339,7 +457,9 @@ class SentenceTest(unittest.TestCase):
         self.assertEqual((finals[0]["start_ms"], finals[-1]["end_ms"]), (1000, 21000))
         self.assertTrue(all(a["end_ms"] == b["start_ms"] for a, b in zip(finals, finals[1:])))
         self.assertEqual(len({item["segment_id"] for item in finals}), len(finals))
-        self.assertEqual(len(self.worker.store.get_meeting(self.meeting["id"])["segments"]), len(finals))
+        self.assertEqual(
+            len(self.worker.store.get_meeting(self.meeting["id"])["segments"]), len(finals)
+        )
         event = {"segment_id": "english", "start_ms": 0, "end_ms": 20000}
         english = "We should preserve complete words and meaningful clauses, " * 10
         parts = list(self.worker._sentence_subtitles(event, english))
@@ -349,7 +469,10 @@ class SentenceTest(unittest.TestCase):
     def test_paragraphs_group_sentences_and_avoid_short_remainders(self):
         event = {"segment_id": "paragraph", "start_ms": 0, "end_ms": 20000}
         mostly_latin = "嗯。 " + "We can discuss the contract and the data model together. " * 3
-        self.assertEqual([part["text"] for part in self.worker._sentence_subtitles(event, mostly_latin)], [mostly_latin.strip()])
+        self.assertEqual(
+            [part["text"] for part in self.worker._sentence_subtitles(event, mostly_latin)],
+            [mostly_latin.strip()],
+        )
         text = "各种光伏基地，大风车拔地而起。十五五期间，光是国家电网就要再投四万个亿。哎，你们觉得缺电吗？你们家里多久没停电了？"
         parts = list(self.worker._sentence_subtitles(event, text))
         self.assertEqual([item["text"] for item in parts], [text])
@@ -358,21 +481,37 @@ class SentenceTest(unittest.TestCase):
         self.assertEqual("".join(item["text"] for item in parts), text)
         self.assertTrue(all(60 <= len(item["text"]) <= 150 for item in parts))
         english = "This is the first sentence. This is the second sentence."
-        self.assertEqual([item["text"] for item in self.worker._sentence_subtitles(event, english)], [english])
+        self.assertEqual(
+            [item["text"] for item in self.worker._sentence_subtitles(event, english)], [english]
+        )
         mixed = "电力需求。 There is demand. More power is needed."
-        self.assertEqual([item["text"] for item in self.worker._sentence_subtitles(event, mixed)], [mixed])
+        self.assertEqual(
+            [item["text"] for item in self.worker._sentence_subtitles(event, mixed)], [mixed]
+        )
 
     def test_subtitle_split_snaps_to_word_timestamps(self):
         # 切口必须落在词时间戳上：段内停顿让「电」在第 11s 才开口，按字数平摊会算成约 7.5s。
         text = "供" * 60 + "，" + "电" * 90 + "。" + "需" * 10 + "。"
         words = (
-            [{"text": "供", "start_ms": index * 100, "end_ms": index * 100 + 100} for index in range(60)]
-            + [{"text": "电", "start_ms": 11000 + index * 50, "end_ms": 11000 + index * 50 + 50} for index in range(90)]
-            + [{"text": "需", "start_ms": 17000 + index * 100, "end_ms": 17000 + index * 100 + 100} for index in range(10)]
+            [
+                {"text": "供", "start_ms": index * 100, "end_ms": index * 100 + 100}
+                for index in range(60)
+            ]
+            + [
+                {"text": "电", "start_ms": 11000 + index * 50, "end_ms": 11000 + index * 50 + 50}
+                for index in range(90)
+            ]
+            + [
+                {"text": "需", "start_ms": 17000 + index * 100, "end_ms": 17000 + index * 100 + 100}
+                for index in range(10)
+            ]
         )
         event = {"segment_id": "aligned", "start_ms": 0, "end_ms": 20000, "word_timestamps": words}
         parts = list(self.worker._sentence_subtitles(event, text))
-        self.assertEqual([item["text"] for item in parts], ["供" * 60 + "，", "电" * 90 + "。" + "需" * 10 + "。"])
+        self.assertEqual(
+            [item["text"] for item in parts],
+            ["供" * 60 + "，", "电" * 90 + "。" + "需" * 10 + "。"],
+        )
         self.assertEqual((parts[0]["start_ms"], parts[0]["end_ms"]), (0, 11000))
         self.assertEqual(parts[1]["end_ms"], 20000)
         self.assertEqual(parts[0]["end_ms"], parts[1]["start_ms"])
@@ -403,15 +542,21 @@ class SentenceTest(unittest.TestCase):
 
         # 同一公共映射也用于最终字幕分段，不能只在 utterance 路径绕过旧时间戳。
         from .transcript import subtitle_time_at_offset
+
         self.assertEqual(subtitle_time_at_offset(segment, text, 4), expected)
 
     def test_utterance_sentence_split_preserves_valid_word_timestamps(self):
         segment = {
-            "segment_id": "aligned", "start_ms": 0, "end_ms": 10000,
+            "segment_id": "aligned",
+            "start_ms": 0,
+            "end_ms": 10000,
             "text": "甲" * 20 + "。" + "乙" * 20 + "。",
             "word_timestamps": (
                 [{"text": "甲", "start_ms": i * 100, "end_ms": i * 100 + 100} for i in range(20)]
-                + [{"text": "乙", "start_ms": 6000 + i * 100, "end_ms": 6100 + i * 100} for i in range(20)]
+                + [
+                    {"text": "乙", "start_ms": 6000 + i * 100, "end_ms": 6100 + i * 100}
+                    for i in range(20)
+                ]
             ),
         }
         head, tail = self.worker._split_utterance_at_sentence(segment)
@@ -441,7 +586,9 @@ class SentenceTest(unittest.TestCase):
     def test_seam_without_audio_overlap_never_drops_a_coincidental_character(self):
         # 停顿边界（style="comma"）没有音频重叠：共享的一个字只是巧合，
         # 「会议的主题。」+「题目还没定。」不得被裁成「…主题目…」。
-        self.assertEqual(self.worker._dedupe_seam("会议的主题。", "题目还没定。", 0), "题目还没定。")
+        self.assertEqual(
+            self.worker._dedupe_seam("会议的主题。", "题目还没定。", 0), "题目还没定。"
+        )
         self.assertEqual(
             self.worker._join_pending("会议的主题。", "题目还没定。", "comma", 0),
             "会议的主题，题目还没定。",
@@ -466,12 +613,21 @@ class SentenceTest(unittest.TestCase):
             ["他是我们是。"],
         )
         self.assertEqual(
-            [item["text"] for item in self.worker._sentence_subtitles(event, "他是。我们是。", merge_unfinished=False)],
+            [
+                item["text"]
+                for item in self.worker._sentence_subtitles(
+                    event, "他是。我们是。", merge_unfinished=False
+                )
+            ],
             ["他是。我们是。"],
         )
         self.assertEqual(
-            [item["text"] for item in self.worker._sentence_subtitles(
-                event, "这个方案是我的。下一项是预算。", merge_unfinished=False)],
+            [
+                item["text"]
+                for item in self.worker._sentence_subtitles(
+                    event, "这个方案是我的。下一项是预算。", merge_unfinished=False
+                )
+            ],
             ["这个方案是我的。下一项是预算。"],
         )
 
@@ -497,26 +653,58 @@ class SentenceTest(unittest.TestCase):
         # 才提交。VAD 端点不是段落边界——实测真实会议端点后的静音中位数只有 30–50 ms。
         event = {"segment_id": "short", "track": "mic", "start_ms": 0, "end_ms": 3000}
         self.assertEqual(
-            list(self.worker._coalesce_subtitles("mic", [{**event, "text": "这毫无疑问是技术上的革新。"}])),
-            [],
-        )
-        self.assertEqual(self.worker.pending_paragraphs["mic"]["text"], "这毫无疑问是技术上的革新。")
-        self.assertEqual(
-            list(self.worker._coalesce_subtitles(
-                "mic", [{**event, "start_ms": 3000, "end_ms": 6000, "text": "所以我们要继续验证这条路线。"}])),
+            list(
+                self.worker._coalesce_subtitles(
+                    "mic", [{**event, "text": "这毫无疑问是技术上的革新。"}]
+                )
+            ),
             [],
         )
         self.assertEqual(
-            list(self.worker._coalesce_subtitles(
-                "mic", [{**event, "start_ms": 6000, "end_ms": 7000, "text": "这不是终点。"}])),
+            self.worker.pending_paragraphs["mic"]["text"], "这毫无疑问是技术上的革新。"
+        )
+        self.assertEqual(
+            list(
+                self.worker._coalesce_subtitles(
+                    "mic",
+                    [
+                        {
+                            **event,
+                            "start_ms": 3000,
+                            "end_ms": 6000,
+                            "text": "所以我们要继续验证这条路线。",
+                        }
+                    ],
+                )
+            ),
+            [],
+        )
+        self.assertEqual(
+            list(
+                self.worker._coalesce_subtitles(
+                    "mic", [{**event, "start_ms": 6000, "end_ms": 7000, "text": "这不是终点。"}]
+                )
+            ),
             [],
         )
         # 长停顿（≥ SUBTITLE_PARAGRAPH_GAP_MS）另起一段
-        emitted = list(self.worker._coalesce_subtitles(
-            "mic", [{**event, "start_ms": 7000 + SUBTITLE_PARAGRAPH_GAP_MS, "end_ms": 9000,
-                     "text": "后面这段另起。"}]))
-        self.assertEqual([item["text"] for item in emitted],
-                         ["这毫无疑问是技术上的革新。所以我们要继续验证这条路线。这不是终点。"])
+        emitted = list(
+            self.worker._coalesce_subtitles(
+                "mic",
+                [
+                    {
+                        **event,
+                        "start_ms": 7000 + SUBTITLE_PARAGRAPH_GAP_MS,
+                        "end_ms": 9000,
+                        "text": "后面这段另起。",
+                    }
+                ],
+            )
+        )
+        self.assertEqual(
+            [item["text"] for item in emitted],
+            ["这毫无疑问是技术上的革新。所以我们要继续验证这条路线。这不是终点。"],
+        )
         self.assertEqual(self.worker.pending_paragraphs["mic"]["text"], "后面这段另起。")
 
     def test_long_paragraph_is_submitted_once_it_reaches_the_target(self):
@@ -527,15 +715,20 @@ class SentenceTest(unittest.TestCase):
             list(self.worker._coalesce_subtitles("mic", [{**event, "text": first}])),
             [],
         )
-        emitted = list(self.worker._coalesce_subtitles("mic", [{**event, "start_ms": 3000, "text": second}]))
+        emitted = list(
+            self.worker._coalesce_subtitles("mic", [{**event, "start_ms": 3000, "text": second}])
+        )
         self.assertEqual([item["text"] for item in emitted], [first + second])
 
     def test_latin_fragments_keep_a_space_between_words(self):
         # 跨事件拼接时上一段结尾不会带空格，直接相连会得到 "you?Muy" 这种粘在一起的句子。
-        self.assertEqual(self.worker._join_text("Hello, how are you?", "Muy bien."),
-                         "Hello, how are you? Muy bien.")
-        self.assertEqual(self.worker._join_text("电话微波炉的原理", "和LHC类似。"),
-                         "电话微波炉的原理和LHC类似。")
+        self.assertEqual(
+            self.worker._join_text("Hello, how are you?", "Muy bien."),
+            "Hello, how are you? Muy bien.",
+        )
+        self.assertEqual(
+            self.worker._join_text("电话微波炉的原理", "和LHC类似。"), "电话微波炉的原理和LHC类似。"
+        )
         self.assertEqual(self.worker._join_text("", "只有右边。"), "只有右边。")
 
     def test_length_limits_treat_hangul_and_kana_as_cjk(self):
@@ -544,21 +737,33 @@ class SentenceTest(unittest.TestCase):
         self.assertEqual(self.worker._length_limits("这是一句中文测试。"), cjk)
         self.assertEqual(self.worker._length_limits("こんにちは、これはテストです。"), cjk)
         self.assertEqual(self.worker._length_limits("안녕하세요 여러분 반갑습니다."), cjk)
-        self.assertEqual(self.worker._length_limits("This is an English sentence."), (150, 280, 380))
+        self.assertEqual(
+            self.worker._length_limits("This is an English sentence."), (150, 280, 380)
+        )
 
     def test_unfinished_tail_joins_next_sentence_and_stop_flushes(self):
         # 尾句押住等下一段确认；押住的只是最后一句。整段不足目标长度也没有长停顿，
         # 因此三句并成同一段，在 stop 时一次性提交（文本必须逐字无损）。
-        self.asr.decode.side_effect = ["观点落在了。", "公司本质是骗局。它的模式是。", "多层次营销。"]
-        self.vad.accept.return_value = [(0, 1000, np.ones(16000, dtype=np.float32)),
-                                      (1700, 2700, np.ones(16000, dtype=np.float32)),
-                                      (3400, 4400, np.ones(16000, dtype=np.float32))]
+        self.asr.decode.side_effect = [
+            "观点落在了。",
+            "公司本质是骗局。它的模式是。",
+            "多层次营销。",
+        ]
+        self.vad.accept.return_value = [
+            (0, 1000, np.ones(16000, dtype=np.float32)),
+            (1700, 2700, np.ones(16000, dtype=np.float32)),
+            (3400, 4400, np.ones(16000, dtype=np.float32)),
+        ]
         self.feed()
         result = self.worker.stop({"meeting_id": self.meeting["id"], "duration_ms": 3000})
-        self.assertEqual([s["text"] for s in result["segments"]],
-                         ["观点落在了公司本质是骗局。它的模式是多层次营销。"])
-        self.assertEqual("".join(s["text"] for s in result["segments"]),
-                         "观点落在了公司本质是骗局。它的模式是多层次营销。")
+        self.assertEqual(
+            [s["text"] for s in result["segments"]],
+            ["观点落在了公司本质是骗局。它的模式是多层次营销。"],
+        )
+        self.assertEqual(
+            "".join(s["text"] for s in result["segments"]),
+            "观点落在了公司本质是骗局。它的模式是多层次营销。",
+        )
         self.assertEqual(self.asr.decode.call_count, 3)
         self.assertFalse(self.worker.pending_subtitles)
 
@@ -584,8 +789,10 @@ class SentenceTest(unittest.TestCase):
         vad.config = SimpleNamespace(silero_vad=SimpleNamespace(max_speech_duration=22))
         vad.target_seconds, vad.sentence_gap_ms = 8, 700
         state = {"pending": None}
+
         def segment(start, end):
             return (start, end, np.ones((end - start) * 16, dtype=np.float32))
+
         self.assertEqual(vad._collect(state, [segment(0, 4000)]), [])
         out = vad._collect(state, [segment(4100, 8500)])
         self.assertEqual(out[0][:2], (0, 8500))
@@ -601,24 +808,33 @@ class SentenceTest(unittest.TestCase):
         class Detector:
             def __init__(self, *_):
                 self.samples, self.ready = [], False
+
             def accept_waveform(self, samples):
                 self.samples.extend(samples)
+
             def is_speech_detected(self):
                 return bool(self.samples)
+
             def empty(self):
                 return not self.ready
+
             def flush(self):
                 self.ready = bool(self.samples)
+
             @property
             def current_segment(self):
                 return SimpleNamespace(start=0)
+
             @property
             def front(self):
                 return SimpleNamespace(start=0, samples=self.samples)
+
             def pop(self):
                 self.ready = False
+
             def reset(self):
                 self.samples = []
+
         vad = SentenceVAD.__new__(SentenceVAD)
         vad.config = SimpleNamespace(silero_vad=SimpleNamespace(max_speech_duration=0.668))
         vad.sherpa_onnx = SimpleNamespace(VoiceActivityDetector=Detector)
@@ -632,29 +848,40 @@ class SentenceTest(unittest.TestCase):
         self.assertTrue(all(len(item[2]) <= 16000 + pad for item in out))
         # 段与段之间只能重叠切点回看的那一段：不漏样本（负值）也不多交付。
         for previous, current in zip(out, out[1:]):
-            self.assertTrue(0 <= previous[1] - current[0] <= pad // 16,
-                            f"{previous[:2]} -> {current[:2]} 的重叠超出回看长度")
+            self.assertTrue(
+                0 <= previous[1] - current[0] <= pad // 16,
+                f"{previous[:2]} -> {current[:2]} 的重叠超出回看长度",
+            )
         # 把每段开头的回看重叠剪掉后，应当恰好还原原始音频（丢样本会在这里暴露）。
-        rebuilt = np.concatenate([
-            out[0][2],
-            *[item[2][(out[index][1] - item[0]) * 16:] for index, item in enumerate(out[1:])],
-        ])
+        rebuilt = np.concatenate(
+            [
+                out[0][2],
+                *[item[2][(out[index][1] - item[0]) * 16 :] for index, item in enumerate(out[1:])],
+            ]
+        )
         np.testing.assert_array_equal(rebuilt, samples)
 
     def test_vad_padding_cannot_repeat_previous_audio(self):
         vad = SentenceVAD.__new__(SentenceVAD)
-        state = {"pad_samples": 4800, "hist_total": 16000, "hist_from": 0,
-                 "hist": [np.arange(16000, dtype=np.float32)], "delivered_until": 8000}
+        state = {
+            "pad_samples": 4800,
+            "hist_total": 16000,
+            "hist_from": 0,
+            "hist": [np.arange(16000, dtype=np.float32)],
+            "delivered_until": 8000,
+        }
         np.testing.assert_array_equal(vad._history_prefix(state, 9000), np.arange(8000, 9000))
         self.assertIsNone(vad._history_prefix(state, 8000))
 
     def test_stop_drains_disk_queue_and_flushes_last_sentence(self):
         entered, release = threading.Event(), threading.Event()
+
         def decode(*_):
             entered.set()
             if not release.wait(5):
                 raise RuntimeError("test decode timed out")
             return "完整的一句话。"
+
         self.asr.decode.side_effect = decode
         self.vad.accept.return_value = [(0, 100, np.ones(1600, dtype=np.float32))]
         self.feed()
@@ -662,7 +889,11 @@ class SentenceTest(unittest.TestCase):
         self.vad.tracks = {"mic": {}}
         self.vad.flush.return_value = [(100, 200, np.ones(1600, dtype=np.float32))]
         results = []
-        stop = threading.Thread(target=lambda: results.append(self.worker.stop({"meeting_id": self.meeting["id"], "duration_ms": 200})))
+        stop = threading.Thread(
+            target=lambda: results.append(
+                self.worker.stop({"meeting_id": self.meeting["id"], "duration_ms": 200})
+            )
+        )
         stop.start()
         try:
             self.assertTrue(list(Path(self.temp.name).rglob("sentence-*.npy")))
@@ -677,12 +908,17 @@ class SentenceTest(unittest.TestCase):
 
     def test_decode_failure_keeps_audio_and_does_not_drop_following_sentence(self):
         self.asr.decode.side_effect = [RuntimeError("model failed"), "后一句。"]
-        self.vad.accept.return_value = [(0, 50, np.ones(800, dtype=np.float32)), (700, 750, np.ones(800, dtype=np.float32))]
+        self.vad.accept.return_value = [
+            (0, 50, np.ones(800, dtype=np.float32)),
+            (700, 750, np.ones(800, dtype=np.float32)),
+        ]
         self.feed(flush=False)
         result = self.worker.stop({"meeting_id": self.meeting["id"], "duration_ms": 100})
         self.assertEqual([s["text"] for s in result["segments"]], ["后一句。"])
         self.assertTrue(result["audio"]["mic"])
-        self.assertTrue(any(e["payload"].get("code") == "sentence_transcription_failed" for e in self.events))
+        self.assertTrue(
+            any(e["payload"].get("code") == "sentence_transcription_failed" for e in self.events)
+        )
         self.assertFalse(list(Path(self.temp.name).rglob("sentence-*.npy")))
 
     def test_flush_payload_processes_its_audio_before_flushing(self):
@@ -704,8 +940,9 @@ class SentenceTest(unittest.TestCase):
         self.worker.live_postprocessing.submit(lambda: None).result(2)
         self.assertFalse(self.worker.pending_subtitles)
         self.assertFalse(self.worker.pending_paragraphs)
-        self.assertEqual([item["text"] for item in self.finals()],
-                         ["前面的完整句子。", "后面这句还没说完。"])
+        self.assertEqual(
+            [item["text"] for item in self.finals()], ["前面的完整句子。", "后面这句还没说完。"]
+        )
         drafts = [e["payload"] for e in self.events if e["type"] == "transcript.draft"]
         self.assertEqual(drafts[-1]["text"], "")
 
@@ -756,11 +993,24 @@ class SentenceTest(unittest.TestCase):
 
     def test_retired_models_are_not_required(self):
         self.assertTrue(self.worker.models.is_known(self.meeting["refined_model_id"]))
-        self.assertFalse(any(set(m["stages"]) & {"streaming", "punctuation"} for m in self.worker.models.catalog.values()))
+        self.assertFalse(
+            any(
+                set(m["stages"]) & {"streaming", "punctuation"}
+                for m in self.worker.models.catalog.values()
+            )
+        )
 
     def test_invalid_audio_is_rejected_before_persistence(self):
         with self.assertRaisesRegex(ValueError, "16 kHz"):
-            self.worker.audio({"meeting_id": self.meeting["id"], "track": "mic", "pcm": "", "sample_rate": 8000, "start_ms": 0})
+            self.worker.audio(
+                {
+                    "meeting_id": self.meeting["id"],
+                    "track": "mic",
+                    "pcm": "",
+                    "sample_rate": 8000,
+                    "start_ms": 0,
+                }
+            )
         self.assertFalse(self.worker.store.read_manifest(self.meeting["id"])["tracks"])
 
     def test_vad_discontinuity_and_flush_keep_absolute_timestamps(self):
@@ -768,19 +1018,26 @@ class SentenceTest(unittest.TestCase):
             def __init__(self, *_):
                 self.samples = []
                 self.ready = False
+
             def accept_waveform(self, samples):
                 self.samples.extend(samples)
+
             def is_speech_detected(self):
                 return False
+
             def empty(self):
                 return not self.ready
+
             def flush(self):
                 self.ready = bool(self.samples)
+
             @property
             def front(self):
                 return SimpleNamespace(start=0, samples=self.samples)
+
             def pop(self):
                 self.ready = False
+
         vad = SentenceVAD.__new__(SentenceVAD)
         vad.config = SimpleNamespace(silero_vad=SimpleNamespace(max_speech_duration=20))
         vad.sherpa_onnx = SimpleNamespace(VoiceActivityDetector=Detector)
@@ -794,6 +1051,7 @@ class SentenceTest(unittest.TestCase):
         self.assertEqual(vad.flush("mic")[0][:2], (9000, 9100))
         self.assertEqual(vad.flush("mic"), [])
         # sherpa 的原生最大时长是软端点；外层硬上限不能丢样本或破坏时钟。
+
     def test_vad_speech_cap_tracks_recognizer_ceiling(self):
         # 语言级 30 s 上限超过 FunASR Nano 容量时，会话按识别模型上限切段，
         # 避免连续独白切出的长段超过 KV 容量整段解码为空（漏识别）。
@@ -817,9 +1075,7 @@ class SentenceTest(unittest.TestCase):
                 self.fed += len(samples)
                 if self.fed >= 16384 and self.segment is None:
                     audio = np.concatenate(self.parts)
-                    self.segment = SimpleNamespace(
-                        start=8192, samples=audio[8192:16384].copy()
-                    )
+                    self.segment = SimpleNamespace(start=8192, samples=audio[8192:16384].copy())
 
             def is_speech_detected(self):
                 return False
@@ -859,14 +1115,16 @@ class SentenceTest(unittest.TestCase):
             back = min(effective * 16, 8192)
             self.assertEqual((start_ms, end_ms), ((8192 - back) // 16, 1024))
             self.assertEqual(len(samples), 8192 + back)
-            np.testing.assert_array_equal(samples[:back], fed[8192 - back:8192])
+            np.testing.assert_array_equal(samples[:back], fed[8192 - back : 8192])
             np.testing.assert_array_equal(samples[back:], fed[8192:16384])
-
 
     def test_cut_boundary_defers_the_period_until_the_next_segment(self):
         # 硬上限切出来的段落，末尾句号只是临时判断：押着不提交，下一段接上来时
         # 改成逗号连接（VAD 确实听到停顿，但这句话没说完）。
-        self.asr.decode.side_effect = ["一五年的财政收入下降了百分之四十。", "G D P的增速逐年放缓。"]
+        self.asr.decode.side_effect = [
+            "一五年的财政收入下降了百分之四十。",
+            "G D P的增速逐年放缓。",
+        ]
         self.vad.accept.side_effect = [
             [(0, 1000, np.ones(16000, dtype=np.float32), "pause")],
             [(1000, 2000, np.ones(16000, dtype=np.float32), "endpoint")],
@@ -915,8 +1173,10 @@ class SentenceTest(unittest.TestCase):
         self.feed(2000, flush=False)
         self.worker.live_postprocessing.submit(lambda: None).result(2)
         self.worker._flush_subtitle_tails()
-        self.assertEqual([item["text"] for item in self.finals()],
-                         ["绝望乡。约翰乘坐时间机器来到2010年，目的是改变未来。"])
+        self.assertEqual(
+            [item["text"] for item in self.finals()],
+            ["绝望乡。约翰乘坐时间机器来到2010年，目的是改变未来。"],
+        )
 
     def test_cut_seam_drops_the_word_decoded_twice(self):
         # 硬上限把「未来」切成两段：前段补了一个句号，后段从「来」重新开始。
@@ -929,8 +1189,9 @@ class SentenceTest(unittest.TestCase):
         self.feed(1000, flush=False)
         self.worker.live_postprocessing.submit(lambda: None).result(2)
         self.worker._flush_subtitle_tails()
-        self.assertEqual([item["text"] for item in self.finals()],
-                         ["以此改变未来，有些网友不理解。"])
+        self.assertEqual(
+            [item["text"] for item in self.finals()], ["以此改变未来，有些网友不理解。"]
+        )
 
     def test_cross_language_seam_keeps_its_own_sentence(self):
         # 兜底识别的日文台词后面接中文旁白：两句话各自成立，不能连成一句。
@@ -944,8 +1205,9 @@ class SentenceTest(unittest.TestCase):
         self.feed(60900, flush=False)
         self.worker.live_postprocessing.submit(lambda: None).result(2)
         self.worker._flush_subtitle_tails()
-        self.assertEqual([item["text"] for item in self.finals()],
-                         ["ジョン大佐って誰ぞ。约翰·提托并未出现。"])
+        self.assertEqual(
+            [item["text"] for item in self.finals()], ["ジョン大佐って誰ぞ。约翰·提托并未出现。"]
+        )
 
 
 class QuietSpeechRecoveryTest(unittest.TestCase):
@@ -958,9 +1220,16 @@ class QuietSpeechRecoveryTest(unittest.TestCase):
         self.vad.recover_min_seconds = 1.0
         self.vad.recover_max_seconds = 20.0
         self.vad.recover_level_ratio = 0.08
-        self.state = {"origin_ms": 0, "samples": 0, "speech_start": None,
-                      "speech_seen": False, "speech_level": 0.0, "idle": [], "idle_total": 0,
-                      "idle_after_speech": False}
+        self.state = {
+            "origin_ms": 0,
+            "samples": 0,
+            "speech_start": None,
+            "speech_seen": False,
+            "speech_level": 0.0,
+            "idle": [],
+            "idle_total": 0,
+            "idle_after_speech": False,
+        }
         self.completed = []
         self.speech = np.full(512, 0.2, dtype=np.float32)
         self.quiet = np.full(512, 0.02, dtype=np.float32)
@@ -1037,7 +1306,9 @@ class OfflineQuietSpeechRecoveryTest(unittest.TestCase):
         self.assertEqual(recovered, [{"start_ms": 4000, "end_ms": 5700}])
 
     def test_hole_without_energy_or_without_length_is_ignored(self):
-        self.samples = np.concatenate([self.audio(4, 0.2), self.audio(2, 0.0005), self.audio(4, 0.2)])
+        self.samples = np.concatenate(
+            [self.audio(4, 0.2), self.audio(2, 0.0005), self.audio(4, 0.2)]
+        )
         self.assertEqual(
             recover_speech_gaps(
                 [{"start_ms": 0, "end_ms": 4000}, {"start_ms": 6000, "end_ms": 10000}],
@@ -1059,7 +1330,9 @@ class OfflineQuietSpeechRecoveryTest(unittest.TestCase):
         )
 
     def test_trim_quiet_speech_keeps_a_margin_around_the_speech(self):
-        samples = np.concatenate([self.audio(1, 0.0005), self.audio(2, 0.02), self.audio(1, 0.0005)])
+        samples = np.concatenate(
+            [self.audio(1, 0.0005), self.audio(2, 0.02), self.audio(1, 0.0005)]
+        )
         start_ms, end_ms, audio = trim_quiet_speech(samples, 0, 4000, 0.2, 1.0, 0.08)
         self.assertAlmostEqual(start_ms, 900, delta=70)
         self.assertAlmostEqual(end_ms, 3100, delta=70)

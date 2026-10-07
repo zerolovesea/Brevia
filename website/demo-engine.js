@@ -37,7 +37,7 @@ class DemoEngine {
     return new Promise((resolve) => {
       const startPos = {
         x: parseFloat(this.cursor.style.left) || 0,
-        y: parseFloat(this.cursor.style.top) || 0
+        y: parseFloat(this.cursor.style.top) || 0,
       };
 
       const startTime = performance.now();
@@ -127,7 +127,7 @@ class DemoEngine {
 
     return {
       x: elementRect.left - viewportRect.left + elementRect.width / 2,
-      y: elementRect.top - viewportRect.top + elementRect.height / 2
+      y: elementRect.top - viewportRect.top + elementRect.height / 2,
     };
   }
 
@@ -276,7 +276,10 @@ class DemoEngine {
    * Scroll element to bottom smoothly
    */
   async scrollToBottom(element, duration = 400) {
-    if (this.reducedMotion) { element.scrollTop = element.scrollHeight; return; }
+    if (this.reducedMotion) {
+      element.scrollTop = element.scrollHeight;
+      return;
+    }
     const start = element.scrollTop;
     const end = element.scrollHeight - element.clientHeight;
     const distance = end - start;

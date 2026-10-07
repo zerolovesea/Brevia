@@ -43,7 +43,7 @@ class AlignedAudioMixer:
                 return result + self.accept(track, samples, start_ms)
             samples = np.concatenate((np.zeros(gap, np.float32), samples))
         elif gap < -self.rate // 1000:
-            samples = samples[min(len(samples), -gap):]
+            samples = samples[min(len(samples), -gap) :]
         self.buffers[track] = np.concatenate((self.buffers[track], samples))
         self.ends[track] = end + len(samples)
         self.last_seen[track] = time.monotonic()
@@ -58,7 +58,7 @@ class AlignedAudioMixer:
         offset = start - self.starts[track]
         lo, hi = max(0, -offset), min(count, len(self.buffers[track]) - offset)
         if hi > lo:
-            result[lo:hi] = self.buffers[track][offset + lo:offset + hi]
+            result[lo:hi] = self.buffers[track][offset + lo : offset + hi]
         return result
 
     def _cancel_echo(self, mic, start):
@@ -91,7 +91,9 @@ class AlignedAudioMixer:
             power = float(np.dot(residual, residual))
             if power < count * 1e-6:
                 break
-            correlation = np.fft.irfft(spectrum * np.fft.rfft(residual, size).conj(), size)[:len(energies)]
+            correlation = np.fft.irfft(spectrum * np.fft.rfft(residual, size).conj(), size)[
+                : len(energies)
+            ]
             scores = np.abs(correlation) / np.sqrt(np.maximum(energies * power, 1e-20))
             scores[energies < count * 1e-6] = 0
             best = int(np.argmax(scores))
@@ -104,7 +106,7 @@ class AlignedAudioMixer:
                 self.delay = self.limit - best
                 self.echo = True
             self.paths.append((self.limit - best, gain))
-            residual -= gain * reference[best:best + count]
+            residual -= gain * reference[best : best + count]
         return residual
 
     def _drain(self, final=False):
@@ -117,7 +119,11 @@ class AlignedAudioMixer:
         # 一轨停流超过两秒就按静音补齐，始终只输出 mix，恢复后仍能参与混音。
         stalled = time.monotonic() - min(self.last_seen.values()) > 2
         # 突发 IPC 批次也要等对轨；仅实际停流或超过采集端 15 秒队列上限才补零。
-        if final or (stalled and newest - available > self.window) or newest - available > self.rate * 15:
+        if (
+            final
+            or (stalled and newest - available > self.window)
+            or newest - available > self.rate * 15
+        ):
             available = newest
         if not final:
             available -= self.lookahead
@@ -129,8 +135,9 @@ class AlignedAudioMixer:
             # the original playback clock. Delay updates never repeat/skip PCM.
             block = max(1, self.rate // 2)
             for offset in range(0, count, block):
-                mic[offset:offset + block] = self._cancel_echo(
-                    mic[offset:offset + block], self.cursor + offset)
+                mic[offset : offset + block] = self._cancel_echo(
+                    mic[offset : offset + block], self.cursor + offset
+                )
             mixed = mic + system
             peak = float(np.abs(mixed).max()) if count else 0
             if peak > 1:
@@ -140,7 +147,9 @@ class AlignedAudioMixer:
             self.cursor += count
             for track in self.buffers:
                 history = self.limit if track == "system" else 0
-                remove = max(0, min(len(self.buffers[track]), self.cursor - history - self.starts[track]))
+                remove = max(
+                    0, min(len(self.buffers[track]), self.cursor - history - self.starts[track])
+                )
                 self.buffers[track] = self.buffers[track][remove:]
                 self.starts[track] += remove
         return result
@@ -152,7 +161,11 @@ class AlignedAudioMixer:
 def mix_wav_files(mic_path, system_path, destination, max_delay_ms=1500, progress=None):
     """流式生成对齐后的派生 WAV，原始音轨不改写。"""
     with wave.open(str(mic_path)) as mic, wave.open(str(system_path)) as system:
-        if mic.getparams()[:3] != system.getparams()[:3] or mic.getnchannels() != 1 or mic.getsampwidth() != 2:
+        if (
+            mic.getparams()[:3] != system.getparams()[:3]
+            or mic.getnchannels() != 1
+            or mic.getsampwidth() != 2
+        ):
             raise ValueError("Audio track format mismatch")
         rate = mic.getframerate()
         total = max(mic.getnframes(), system.getnframes())
@@ -168,7 +181,10 @@ def mix_wav_files(mic_path, system_path, destination, max_delay_ms=1500, progres
 
             for offset in range(0, total, rate):
                 for track, recording in (("mic", mic), ("system", system)):
-                    data = np.frombuffer(recording.readframes(rate), dtype="<i2").astype(np.float32) / 32768
+                    data = (
+                        np.frombuffer(recording.readframes(rate), dtype="<i2").astype(np.float32)
+                        / 32768
+                    )
                     write(mixer.accept(track, data, offset * 1000 / rate))
                 if progress:
                     progress(min(total, offset + rate), total)

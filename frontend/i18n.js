@@ -1,13 +1,22 @@
 (() => {
-  const { languageCodes, localeTags, slogans, trashCopy, defaultMeetingNames, selectionOverview } = window.BreviaLocaleData.localeHelpers;
+  const { languageCodes, localeTags, slogans, trashCopy, defaultMeetingNames, selectionOverview } =
+    window.BreviaLocaleData.localeHelpers;
 
   window.BreviaI18n = {
     languageCodes,
     localeTag: (locale) => localeTags[locale] || localeTags.en,
     languageName: (locale, code) => new Intl.DisplayNames([locale], { type: 'language' }).of(code),
-    languageOptions: (locale, translate, includeAuto = false) => [[includeAuto ? 'auto' : '', translate(includeAuto ? '多语言混说' : '不需要翻译')], ...languageCodes.map((code) => [code, new Intl.DisplayNames([locale], { type: 'language' }).of(code)])],
-    defaultMeetingTitle: (locale, date = new Date()) => `${defaultMeetingNames[locale] || defaultMeetingNames.en} ${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}`,
-    selectionOverview: (locale, count) => (selectionOverview[locale] || selectionOverview.en)(count),
+    languageOptions: (locale, translate, includeAuto = false) => [
+      [includeAuto ? 'auto' : '', translate(includeAuto ? '多语言混说' : '不需要翻译')],
+      ...languageCodes.map((code) => [
+        code,
+        new Intl.DisplayNames([locale], { type: 'language' }).of(code),
+      ]),
+    ],
+    defaultMeetingTitle: (locale, date = new Date()) =>
+      `${defaultMeetingNames[locale] || defaultMeetingNames.en} ${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}`,
+    selectionOverview: (locale, count) =>
+      (selectionOverview[locale] || selectionOverview.en)(count),
     slogans,
     trashCopy: (locale) => trashCopy[locale] || trashCopy.en,
     // 原始词条表。上面的访问器都带 `|| .en` 兜底：缺一门语言时静默回落英文。

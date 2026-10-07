@@ -7,6 +7,7 @@ from importlib import import_module
 
 import certifi
 
+
 def main():
     multiprocessing.freeze_support()
     os.environ.setdefault("SSL_CERT_FILE", certifi.where())
@@ -19,6 +20,7 @@ def main():
         import_module("backend.check_windows_runtime").main()
     else:
         from backend.worker import main as worker_main, protocol_output
+
         worker_main(protocol_output())
 
 

@@ -5,7 +5,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const files = ['main.js', 'main-logic.js', 'preload.js'].map((f) => path.join(__dirname, '..', 'electron', f));
+const files = ['main.js', 'main-logic.js', 'preload.js'].map((f) =>
+  path.join(__dirname, '..', 'electron', f),
+);
 
 const body = new Map();
 const decls = new Map();

@@ -1,0 +1,45 @@
+def connect_key
+  app_store_connect_api_key(
+    key_id: ENV.fetch('ASC_KEY_ID'),
+    issuer_id: ENV.fetch('ASC_ISSUER_ID'),
+    key_content: ENV.fetch('ASC_KEY_P8_BASE64'),
+    is_key_content_base64: true
+  )
+end
+
+lane :beta do
+  upload_to_testflight(
+    api_key: connect_key,
+    app_identifier: 'com.brevia.breviaMobile',
+    ipa: File.expand_path('../build/ios/ipa/Brevia.ipa', __dir__),
+    groups: ['Brevia 内部测试'],
+    distribute_external: false,
+    submit_beta_review: false,
+    skip_waiting_for_build_processing: false,
+    wait_processing_timeout_duration: 2400,
+    # Standard TLS; current internal testing excludes France. Reassess before expanding distribution.
+    uses_non_exempt_encryption: false,
+    changelog: ENV.fetch('TESTFLIGHT_CHANGELOG') { "内部测试 #{ENV.fetch('BUILD_NUMBER')} · #{ENV.fetch('GITHUB_SHA')[0, 7]}。请验证局域网配对、锁屏录音、断线补传及会后回看。" }
+  )
+end
+
+# Promote an already tested binary. Store metadata/compliance must be completed in App Store Connect.
+lane :promote do
+  version = ENV.fetch('RELEASE_VERSION')
+  build = ENV.fetch('RELEASE_BUILD')
+  UI.user_error!('Use a version such as 1.0.0 and a numeric TestFlight build number') unless
+    version.match?(/\A\d+\.\d+\.\d+\z/) && build.match?(/\A[1-9]\d*\z/)
+  upload_to_app_store(
+    api_key: connect_key,
+    app_identifier: 'com.brevia.breviaMobile',
+    app_version: version,
+    build_number: build,
+    skip_binary_upload: true,
+    skip_metadata: true,
+    skip_screenshots: true,
+    submit_for_review: true,
+    automatic_release: false,
+    precheck_include_in_app_purchases: false,
+    force: true
+  )
+end

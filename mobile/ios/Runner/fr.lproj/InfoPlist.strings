@@ -1,0 +1,3 @@
+NSMicrophoneUsageDescription = "Brevia enregistre les réunions avec le microphone. La transcription est effectuée par votre ordinateur associé.";
+NSCameraUsageDescription = "Scannez le code QR de Brevia affiché sur votre ordinateur.";
+NSLocalNetworkUsageDescription = "Connectez-vous à un ordinateur du même réseau local pour transmettre le son et recevoir les transcriptions et les notes.";

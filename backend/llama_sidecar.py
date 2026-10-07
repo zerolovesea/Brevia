@@ -83,9 +83,7 @@ class LlamaSidecar:
                     self.model = create(0)
                 except Exception as fallback_error:
                     self.model = None
-                    raise RuntimeError(
-                        _describe_load_error(fallback_error)
-                    ) from fallback_error
+                    raise RuntimeError(_describe_load_error(fallback_error)) from fallback_error
             else:
                 self.model = None
                 raise RuntimeError(_describe_load_error(error)) from error
@@ -93,10 +91,12 @@ class LlamaSidecar:
         self.context_size = context_size
 
         print(
-            json.dumps({
-                "type": "log",
-                "message": f"Model loaded: {path.name}, ctx={context_size}, gpu_layers={n_gpu_layers}"
-            }),
+            json.dumps(
+                {
+                    "type": "log",
+                    "message": f"Model loaded: {path.name}, ctx={context_size}, gpu_layers={n_gpu_layers}",
+                }
+            ),
             flush=True,
             file=sys.stderr,
         )
@@ -126,6 +126,7 @@ class LlamaSidecar:
         try:
             # 尝试检测 Metal (macOS)
             import platform
+
             if platform.system() == "Darwin":
                 # Apple Silicon - 将所有层卸载到 Metal
                 return -1  # -1 表示"所有层"
@@ -138,6 +139,7 @@ class LlamaSidecar:
         # 只要构建支持 GPU 卸载（CUDA/ROCm/Vulkan 等）就先试全量卸载。
         try:
             import llama_cpp
+
             if llama_cpp.llama_supports_gpu_offload():
                 return -1  # 尝试将所有层卸载到 GPU
         except Exception:
@@ -240,7 +242,11 @@ def main():
     # 与主 worker 相同：Windows 上管道 stdio 默认按系统 ANSI 代码页解码，
     # 这里显式固定为 UTF-8，避免 JSON 行中的非 ASCII 内容被 GBK 等代码页破坏。
     for stream in (sys.stdin, sys.stdout, sys.stderr):
-        if stream is not None and stream.encoding and stream.encoding.lower() not in {"utf-8", "utf8"}:
+        if (
+            stream is not None
+            and stream.encoding
+            and stream.encoding.lower() not in {"utf-8", "utf8"}
+        ):
             try:
                 stream.reconfigure(encoding="utf-8", errors="replace")
             except (AttributeError, io.UnsupportedOperation, ValueError):

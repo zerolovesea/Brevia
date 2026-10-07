@@ -11,7 +11,13 @@ from pathlib import Path
 from .asr import (
     ModelManager,
 )
-from .config import DEFAULT_SETTINGS, SETTINGS, runtime_settings, save_runtime_settings, minimum_speech_cap
+from .config import (
+    DEFAULT_SETTINGS,
+    SETTINGS,
+    runtime_settings,
+    save_runtime_settings,
+    minimum_speech_cap,
+)
 from .llm_client import complete
 from .storage import Store
 from .voice_profiles import VoiceProfileService
@@ -33,10 +39,11 @@ def sanitize_unicode(value, depth=0):
     if isinstance(value, list):
         return [sanitize_unicode(item, depth + 1) for item in value]
     if isinstance(value, dict):
-        return {sanitize_unicode(key, depth + 1): sanitize_unicode(item, depth + 1) for key, item in value.items()}
+        return {
+            sanitize_unicode(key, depth + 1): sanitize_unicode(item, depth + 1)
+            for key, item in value.items()
+        }
     return value
-
-
 
 
 class WorkerCore:
@@ -177,21 +184,27 @@ class WorkerCore:
                 "meeting.start": self.start,
                 "meeting.import": self.import_audio,
                 "meeting.resume": self.resume,
+                "mobile.apply": self.mobile_apply,
+                "mobile.options": self.mobile_options,
+                "mobile.translate": self.mobile_translate,
+                "mobile.prepare": self.mobile_prepare,
                 "meeting.pause": self.pause,
                 "meeting.reconfigure": self.reconfigure,
                 "meeting.audio": self.audio,
                 "meeting.stop": self.stop,
                 "meeting.list": lambda value: self.store.list_meetings(**value),
                 "meeting.search": lambda value: self.store.search_meetings(value.get("query", "")),
-                "meeting.get": lambda value: self.store.get_meeting(value["meeting_id"], compact=True),
+                "meeting.get": lambda value: self.store.get_meeting(
+                    value["meeting_id"], compact=True
+                ),
                 "meeting.update": self.update_meeting,
                 "meeting.delete": self.delete_meeting,
                 "meeting.restore": self.restore_meeting,
                 "meeting.purge": self.purge_meeting,
                 "speaker.rename": self.rename_speaker,
                 "speaker-profile.list": lambda _: self.store.list_speaker_profiles(),
-                "speaker-profile.samples": lambda value: (
-                    self.store.list_speaker_profile_samples(value["profile_id"])
+                "speaker-profile.samples": lambda value: self.store.list_speaker_profile_samples(
+                    value["profile_id"]
                 ),
                 "speaker-profile.enroll": self.enroll_speaker_profile,
                 "speaker-profile.verify": self.verify_speaker_profile,
@@ -205,16 +218,23 @@ class WorkerCore:
                 "settings.advanced.get": lambda _: {
                     "settings": SETTINGS,
                     "defaults": DEFAULT_SETTINGS,
-                    "speech_cap_minimum": max(minimum_speech_cap(params) for params in SETTINGS["vad"].values()),
-                    "inactive_fields": (["quiet_speech_min_seconds", "quiet_speech_max_seconds", "quiet_speech_level_ratio"]
-                                        if self.models.get("silero-vad").get("runtime") == "mlx-audio" else []),
+                    "speech_cap_minimum": max(
+                        minimum_speech_cap(params) for params in SETTINGS["vad"].values()
+                    ),
+                    "inactive_fields": (
+                        [
+                            "quiet_speech_min_seconds",
+                            "quiet_speech_max_seconds",
+                            "quiet_speech_level_ratio",
+                        ]
+                        if self.models.get("silero-vad").get("runtime") == "mlx-audio"
+                        else []
+                    ),
                 },
                 "settings.advanced.save": lambda value: save_runtime_settings(
                     self.store.root, value["settings"]
                 ),
-                "metrics.record": lambda value: self.store.metrics(
-                    value.get("app_duration_ms", 0)
-                ),
+                "metrics.record": lambda value: self.store.metrics(value.get("app_duration_ms", 0)),
                 "segment.speaker": self.assign_segment_speaker,
                 "segment.text": self.save_segment_texts,
                 "segment.speaker-profile-sample": self.add_segment_speaker_profile_sample,
@@ -248,7 +268,9 @@ class WorkerCore:
                     value["workspace_id"], value["updates"]
                 ),
                 "workspace.delete": self.delete_workspace,
-                "workspace.reorder": lambda value: self.store.reorder_workspaces(value["workspace_ids"]),
+                "workspace.reorder": lambda value: self.store.reorder_workspaces(
+                    value["workspace_ids"]
+                ),
                 "workspace.assign": lambda value: self.store.assign_meeting_to_workspace(
                     value["meeting_id"], value["workspace_id"]
                 ),

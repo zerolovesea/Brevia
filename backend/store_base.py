@@ -167,7 +167,9 @@ class StoreBase:
         """
         self.root = Path(root).expanduser()
         self.root.mkdir(parents=True, exist_ok=True)
-        self.meetings_dir = Path(os.environ.get("BREVIA_MEETINGS_DIR", self.root / "meetings")).expanduser()
+        self.meetings_dir = Path(
+            os.environ.get("BREVIA_MEETINGS_DIR", self.root / "meetings")
+        ).expanduser()
         self.speaker_profiles_dir = self.root / "speaker-profiles"
         self.models_dir = Path(
             os.environ.get("BREVIA_MODELS_DIR", self.root / "models")
@@ -215,48 +217,31 @@ class StoreBase:
         if "previous_workspace_id" not in columns:
             db.execute("ALTER TABLE meetings ADD COLUMN previous_workspace_id TEXT")
         if "is_example" not in columns:
-            db.execute(
-                "ALTER TABLE meetings ADD COLUMN is_example INTEGER NOT NULL DEFAULT 0"
-            )
+            db.execute("ALTER TABLE meetings ADD COLUMN is_example INTEGER NOT NULL DEFAULT 0")
         if "example_locale" not in columns:
             db.execute("ALTER TABLE meetings ADD COLUMN example_locale TEXT")
         if "notes" not in columns:
-            db.execute(
-                "ALTER TABLE meetings ADD COLUMN notes TEXT NOT NULL DEFAULT ''"
-            )
+            db.execute("ALTER TABLE meetings ADD COLUMN notes TEXT NOT NULL DEFAULT ''")
         if "speaker_segmentation_model_id" not in columns:
-            db.execute(
-                "ALTER TABLE meetings ADD COLUMN speaker_segmentation_model_id TEXT"
-            )
+            db.execute("ALTER TABLE meetings ADD COLUMN speaker_segmentation_model_id TEXT")
         if "num_speakers" not in columns:
-            db.execute(
-                "ALTER TABLE meetings ADD COLUMN num_speakers INTEGER NOT NULL DEFAULT -1"
-            )
+            db.execute("ALTER TABLE meetings ADD COLUMN num_speakers INTEGER NOT NULL DEFAULT -1")
         if "vad_model_id" not in columns:
             db.execute("ALTER TABLE meetings ADD COLUMN vad_model_id TEXT")
-        workspace_columns = {
-            row["name"] for row in db.execute("PRAGMA table_info(workspaces)")
-        }
+        workspace_columns = {row["name"] for row in db.execute("PRAGMA table_info(workspaces)")}
         if "deleted_at" not in workspace_columns:
             db.execute("ALTER TABLE workspaces ADD COLUMN deleted_at TEXT")
-        segment_columns = {
-            row["name"] for row in db.execute("PRAGMA table_info(segments)")
-        }
+        segment_columns = {row["name"] for row in db.execute("PRAGMA table_info(segments)")}
         if "word_timestamps" not in segment_columns:
             db.execute("ALTER TABLE segments ADD COLUMN word_timestamps TEXT")
-        speaker_columns = {
-            row["name"] for row in db.execute("PRAGMA table_info(speakers)")
-        }
+        speaker_columns = {row["name"] for row in db.execute("PRAGMA table_info(speakers)")}
         if "profile_id" not in speaker_columns:
             db.execute("ALTER TABLE speakers ADD COLUMN profile_id TEXT")
         sample_columns = {
-            row["name"]
-            for row in db.execute("PRAGMA table_info(speaker_profile_samples)")
+            row["name"] for row in db.execute("PRAGMA table_info(speaker_profile_samples)")
         }
         if "audio_path" not in sample_columns:
-            db.execute(
-                "ALTER TABLE speaker_profile_samples ADD COLUMN audio_path TEXT"
-            )
+            db.execute("ALTER TABLE speaker_profile_samples ADD COLUMN audio_path TEXT")
         if "duration_ms" not in sample_columns:
             db.execute(
                 "ALTER TABLE speaker_profile_samples ADD COLUMN duration_ms INTEGER NOT NULL DEFAULT 0"

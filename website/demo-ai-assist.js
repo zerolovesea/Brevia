@@ -3,71 +3,137 @@
   var reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   // —— Copy (zh / en) ——
-  var copy = chinese ? {
-    meeting: '产品周例会',
-    crumb: '正在录制',
-    liveName: '产品周例会',
-    recording: '正在录制',
-    saved: '已保存',
-    captionsLabel: '实时字幕',
-    notesLabel: '我的笔记',
-    aiAssistLabel: 'AI 笔记',
-    expandCaptions: '展开字幕',
-    backToNotes: '返回笔记',
-    captionsBtn: '字幕',
-    translationBtn: '译文: 关',
-    pauseBtn: 'Ⅱ 暂停',
-    endBtn: '结束会议',
-    toolbar: { bold: '加粗', italic: '斜体', h1: '标题 1', h2: '标题 2', h3: '标题 3', ul: '列表', ol: '编号列表', quote: '引用', link: '插入链接', image: '插入图片', code: '行内代码', todo: '待办', highlight: '重点', mode: '富文本' },
-    accept: '＋ 加入笔记',
-    ignore: '忽略',
-    notesMarkdown: '## 本周重点\n\n- 移动端验收：本周完成\n- 测试版本：周五前提交',
-    captions: [
-      { time: '10:24', speaker: '产品负责人', text: '本周先完成移动端的验收，周五前给到测试版本。', signals: ['日期'] },
-      { time: '10:25', speaker: 'Maya', text: '测试范围我来整理，重点覆盖语音转写和笔记联动。' },
-      { time: '10:26', speaker: '产品负责人', text: '那就先把现有功能打磨稳定，不扩展新需求。' },
-      { time: '10:27', speaker: 'Maya', text: '验收范围我再和测试团队对齐一下。' },
-      { time: '10:28', speaker: '产品负责人', text: '好的，今天下班前把范围同步到群里。' },
-      { time: '10:29', speaker: 'Maya', text: '没问题，我会把时间点也标上。' }
-    ],
-    suggestions: [
-      { type: '可能的决策', text: '本周优先完成移动端，不扩展新需求。' },
-      { type: '行动项', text: 'Maya：周五前提交测试版本。' },
-      { type: '待确认', text: '移动端验收范围由产品和研发今天确认。' }
-    ]
-  } : {
-    meeting: 'Product weekly',
-    crumb: 'Recording',
-    liveName: 'Product weekly',
-    recording: 'Recording',
-    saved: 'Saved',
-    captionsLabel: 'Live captions',
-    notesLabel: 'My notes',
-    aiAssistLabel: 'AI notes',
-    expandCaptions: 'Expand captions',
-    backToNotes: 'Back to notes',
-    captionsBtn: 'Captions',
-    translationBtn: 'Translation: Off',
-    pauseBtn: 'Ⅱ Pause',
-    endBtn: 'End meeting',
-    toolbar: { bold: 'Bold', italic: 'Italic', h1: 'Heading 1', h2: 'Heading 2', h3: 'Heading 3', ul: 'List', ol: 'Numbered list', quote: 'Quote', link: 'Insert link', image: 'Insert image', code: 'Code', todo: 'Todo', highlight: 'Highlight', mode: 'Rich text' },
-    accept: '＋ Add to notes',
-    ignore: 'Dismiss',
-    notesMarkdown: '## This week\n\n- Mobile acceptance: this week\n- Test build: by Friday',
-    captions: [
-      { time: '10:24', speaker: 'Product lead', text: 'We will finish mobile acceptance this week and ship a test build by Friday.', signals: ['Date'] },
-      { time: '10:25', speaker: 'Maya', text: 'I will map the test scope, focusing on speech-to-text and notes sync.' },
-      { time: '10:26', speaker: 'Product lead', text: 'Then we keep the current features stable instead of adding new scope.' },
-      { time: '10:27', speaker: 'Maya', text: 'I will align the acceptance scope with the QA team.' },
-      { time: '10:28', speaker: 'Product lead', text: 'Good. Share the scope to the channel before EOD.' },
-      { time: '10:29', speaker: 'Maya', text: 'Sure, I will add the milestones too.' }
-    ],
-    suggestions: [
-      { type: 'Possible decision', text: 'Finish mobile first this week. No new scope.' },
-      { type: 'Action item', text: 'Maya: submit the test build by Friday.' },
-      { type: 'Open question', text: 'Confirm the mobile acceptance scope today.' }
-    ]
-  };
+  var copy = chinese
+    ? {
+        meeting: '产品周例会',
+        crumb: '正在录制',
+        liveName: '产品周例会',
+        recording: '正在录制',
+        saved: '已保存',
+        captionsLabel: '实时字幕',
+        notesLabel: '我的笔记',
+        aiAssistLabel: 'AI 笔记',
+        expandCaptions: '展开字幕',
+        backToNotes: '返回笔记',
+        captionsBtn: '字幕',
+        translationBtn: '译文: 关',
+        pauseBtn: 'Ⅱ 暂停',
+        endBtn: '结束会议',
+        toolbar: {
+          bold: '加粗',
+          italic: '斜体',
+          h1: '标题 1',
+          h2: '标题 2',
+          h3: '标题 3',
+          ul: '列表',
+          ol: '编号列表',
+          quote: '引用',
+          link: '插入链接',
+          image: '插入图片',
+          code: '行内代码',
+          todo: '待办',
+          highlight: '重点',
+          mode: '富文本',
+        },
+        accept: '＋ 加入笔记',
+        ignore: '忽略',
+        notesMarkdown: '## 本周重点\n\n- 移动端验收：本周完成\n- 测试版本：周五前提交',
+        captions: [
+          {
+            time: '10:24',
+            speaker: '产品负责人',
+            text: '本周先完成移动端的验收，周五前给到测试版本。',
+            signals: ['日期'],
+          },
+          {
+            time: '10:25',
+            speaker: 'Maya',
+            text: '测试范围我来整理，重点覆盖语音转写和笔记联动。',
+          },
+          {
+            time: '10:26',
+            speaker: '产品负责人',
+            text: '那就先把现有功能打磨稳定，不扩展新需求。',
+          },
+          { time: '10:27', speaker: 'Maya', text: '验收范围我再和测试团队对齐一下。' },
+          { time: '10:28', speaker: '产品负责人', text: '好的，今天下班前把范围同步到群里。' },
+          { time: '10:29', speaker: 'Maya', text: '没问题，我会把时间点也标上。' },
+        ],
+        suggestions: [
+          { type: '可能的决策', text: '本周优先完成移动端，不扩展新需求。' },
+          { type: '行动项', text: 'Maya：周五前提交测试版本。' },
+          { type: '待确认', text: '移动端验收范围由产品和研发今天确认。' },
+        ],
+      }
+    : {
+        meeting: 'Product weekly',
+        crumb: 'Recording',
+        liveName: 'Product weekly',
+        recording: 'Recording',
+        saved: 'Saved',
+        captionsLabel: 'Live captions',
+        notesLabel: 'My notes',
+        aiAssistLabel: 'AI notes',
+        expandCaptions: 'Expand captions',
+        backToNotes: 'Back to notes',
+        captionsBtn: 'Captions',
+        translationBtn: 'Translation: Off',
+        pauseBtn: 'Ⅱ Pause',
+        endBtn: 'End meeting',
+        toolbar: {
+          bold: 'Bold',
+          italic: 'Italic',
+          h1: 'Heading 1',
+          h2: 'Heading 2',
+          h3: 'Heading 3',
+          ul: 'List',
+          ol: 'Numbered list',
+          quote: 'Quote',
+          link: 'Insert link',
+          image: 'Insert image',
+          code: 'Code',
+          todo: 'Todo',
+          highlight: 'Highlight',
+          mode: 'Rich text',
+        },
+        accept: '＋ Add to notes',
+        ignore: 'Dismiss',
+        notesMarkdown: '## This week\n\n- Mobile acceptance: this week\n- Test build: by Friday',
+        captions: [
+          {
+            time: '10:24',
+            speaker: 'Product lead',
+            text: 'We will finish mobile acceptance this week and ship a test build by Friday.',
+            signals: ['Date'],
+          },
+          {
+            time: '10:25',
+            speaker: 'Maya',
+            text: 'I will map the test scope, focusing on speech-to-text and notes sync.',
+          },
+          {
+            time: '10:26',
+            speaker: 'Product lead',
+            text: 'Then we keep the current features stable instead of adding new scope.',
+          },
+          {
+            time: '10:27',
+            speaker: 'Maya',
+            text: 'I will align the acceptance scope with the QA team.',
+          },
+          {
+            time: '10:28',
+            speaker: 'Product lead',
+            text: 'Good. Share the scope to the channel before EOD.',
+          },
+          { time: '10:29', speaker: 'Maya', text: 'Sure, I will add the milestones too.' },
+        ],
+        suggestions: [
+          { type: 'Possible decision', text: 'Finish mobile first this week. No new scope.' },
+          { type: 'Action item', text: 'Maya: submit the test build by Friday.' },
+          { type: 'Open question', text: 'Confirm the mobile acceptance scope today.' },
+        ],
+      };
 
   // —— Notes editor initial content (mirrors the app's rendered Markdown) ——
   function notesHtml() {
@@ -77,10 +143,16 @@
     lines.forEach(function (line) {
       var trimmed = line.trim();
       if (/^-\s+/.test(trimmed)) {
-        if (!inList) { body += '<ul>'; inList = true; }
+        if (!inList) {
+          body += '<ul>';
+          inList = true;
+        }
         body += '<li>' + trimmed.replace(/^-\s+/, '') + '</li>';
       } else {
-        if (inList) { body += '</ul>'; inList = false; }
+        if (inList) {
+          body += '</ul>';
+          inList = false;
+        }
         if (/^##\s+/.test(trimmed)) body += '<h2>' + trimmed.replace(/^##\s+/, '') + '</h2>';
         else if (trimmed) body += '<p>' + trimmed + '</p>';
       }
@@ -92,11 +164,16 @@
   // —— Static toolbar markup, 1:1 with the real notes editor toolbar ——
   function toolbarHtml() {
     var t = copy.toolbar;
-    var ul = '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="3" cy="4" r="1.1" fill="currentColor" stroke="none"/><circle cx="3" cy="8" r="1.1" fill="currentColor" stroke="none"/><circle cx="3" cy="12" r="1.1" fill="currentColor" stroke="none"/><path d="M7 4h6M7 8h6M7 12h6"/></svg>';
-    var ol = '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><text x="1.5" y="5" font-size="6.5" fill="currentColor" stroke="none">1</text><text x="1.5" y="9.5" font-size="6.5" fill="currentColor" stroke="none">2</text><text x="1.5" y="14" font-size="6.5" fill="currentColor" stroke="none">3</text><path d="M7 4h6M7 8.5h6M7 13h6"/></svg>';
-    var link = '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6.2 9.8 3.6-3.6" /><path d="M7.2 11.4 5.6 13a2.6 2.6 0 0 1-3.6-3.6l1.6-1.6a2.6 2.6 0 0 1 3.6 0" /><path d="M8.8 4.6l1.6-1.6a2.6 2.6 0 0 1 3.6 3.6l-1.6 1.6a2.6 2.6 0 0 1-3.6 0" /></svg>';
-    var image = '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="2.5" width="13" height="11" rx="1" /><circle cx="5.5" cy="6.2" r="1.4" /><path d="m1.5 11 3.6-3.6L11 12.8" /></svg>';
-    var mode = '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3.5 3h9M8 3v10"/></svg>';
+    var ul =
+      '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="3" cy="4" r="1.1" fill="currentColor" stroke="none"/><circle cx="3" cy="8" r="1.1" fill="currentColor" stroke="none"/><circle cx="3" cy="12" r="1.1" fill="currentColor" stroke="none"/><path d="M7 4h6M7 8h6M7 12h6"/></svg>';
+    var ol =
+      '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><text x="1.5" y="5" font-size="6.5" fill="currentColor" stroke="none">1</text><text x="1.5" y="9.5" font-size="6.5" fill="currentColor" stroke="none">2</text><text x="1.5" y="14" font-size="6.5" fill="currentColor" stroke="none">3</text><path d="M7 4h6M7 8.5h6M7 13h6"/></svg>';
+    var link =
+      '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6.2 9.8 3.6-3.6" /><path d="M7.2 11.4 5.6 13a2.6 2.6 0 0 1-3.6-3.6l1.6-1.6a2.6 2.6 0 0 1 3.6 0" /><path d="M8.8 4.6l1.6-1.6a2.6 2.6 0 0 1 3.6 3.6l-1.6 1.6a2.6 2.6 0 0 1-3.6 0" /></svg>';
+    var image =
+      '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="2.5" width="13" height="11" rx="1" /><circle cx="5.5" cy="6.2" r="1.4" /><path d="m1.5 11 3.6-3.6L11 12.8" /></svg>';
+    var mode =
+      '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3.5 3h9M8 3v10"/></svg>';
     var btns = [
       ['bold', t.bold, '<b>B</b>'],
       ['italic', t.italic, '<i>I</i>'],
@@ -108,15 +185,31 @@
       ['quote', t.quote, '❝'],
       ['link', t.link, link],
       ['image', t.image, image],
-      ['table', chinese ? '插入表格' : 'Insert table', '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.25"><rect x="2" y="2" width="12" height="12"/><path d="M2 6h12M2 10h12M6 2v12M10 2v12"/></svg>'],
+      [
+        'table',
+        chinese ? '插入表格' : 'Insert table',
+        '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.25"><rect x="2" y="2" width="12" height="12"/><path d="M2 6h12M2 10h12M6 2v12M10 2v12"/></svg>',
+      ],
       ['code', t.code, '&lt;/&gt;'],
       ['todo', t.todo, '☐'],
       ['highlight', t.highlight, '★'],
-      ['mode-toggle', t.mode, mode]
+      ['mode-toggle', t.mode, mode],
     ];
-    return btns.map(function (b) {
-      return '<button type="button" data-notes-command="' + b[0] + '" title="' + b[1] + '" aria-label="' + b[1] + '">' + b[2] + '</button>';
-    }).join('');
+    return btns
+      .map(function (b) {
+        return (
+          '<button type="button" data-notes-command="' +
+          b[0] +
+          '" title="' +
+          b[1] +
+          '" aria-label="' +
+          b[1] +
+          '">' +
+          b[2] +
+          '</button>'
+        );
+      })
+      .join('');
   }
 
   // —— Live-view shell, 1:1 with the real app (frontend/index.html #live-view) ——
@@ -190,9 +283,10 @@
 
   // —— Segment markup, 1:1 with renderTranscriptSegment ——
   function segmentHtml(seg) {
-    var signals = seg.signals && seg.signals.length
-      ? '<small class="caption-signals">' + seg.signals.join(' · ') + '</small>'
-      : '';
+    var signals =
+      seg.signals && seg.signals.length
+        ? '<small class="caption-signals">' + seg.signals.join(' · ') + '</small>'
+        : '';
     return String.raw`
     <article class="segment">
       <div class="segment-meta"><time>${seg.time}</time>${signals}</div>
@@ -218,7 +312,11 @@
   window.addEventListener('resize', applyScale);
 
   var engine = new DemoEngine();
-  engine.init(viewport, document.getElementById('virtual-cursor'), document.getElementById('cursor-ripple'));
+  engine.init(
+    viewport,
+    document.getElementById('virtual-cursor'),
+    document.getElementById('cursor-ripple'),
+  );
 
   var transcript = root.querySelector('[data-demo-transcript]');
   var suggestionRoot = root.querySelector('[data-demo-ai-suggestion]');
@@ -228,14 +326,19 @@
   // Tick the recording timer.
   var baseSeconds = 12 * 60 + 45;
   var timerSeconds = baseSeconds;
-  if (!reducedMotion) window.setInterval(function () {
-    if (engine.isPaused) return;
-    timerSeconds += 1;
-    var h = Math.floor(timerSeconds / 3600).toString().padStart(2, '0');
-    var m = Math.floor((timerSeconds % 3600) / 60).toString().padStart(2, '0');
-    var s = (timerSeconds % 60).toString().padStart(2, '0');
-    if (timerEl) timerEl.textContent = h + ':' + m + ':' + s;
-  }, 1000);
+  if (!reducedMotion)
+    window.setInterval(function () {
+      if (engine.isPaused) return;
+      timerSeconds += 1;
+      var h = Math.floor(timerSeconds / 3600)
+        .toString()
+        .padStart(2, '0');
+      var m = Math.floor((timerSeconds % 3600) / 60)
+        .toString()
+        .padStart(2, '0');
+      var s = (timerSeconds % 60).toString().padStart(2, '0');
+      if (timerEl) timerEl.textContent = h + ':' + m + ':' + s;
+    }, 1000);
 
   function appendNote(text) {
     var li = document.createElement('li');
@@ -321,8 +424,9 @@
     return;
   }
   document.addEventListener('visibilitychange', function () {
-    if (document.hidden) engine.pause(); else engine.resume();
+    if (document.hidden) engine.pause();
+    else engine.resume();
   });
   engine.reset();
   playLoop();
-}());
+})();

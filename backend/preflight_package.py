@@ -106,7 +106,8 @@ def bundled_model_problems(models_root=BACKEND / "bundled-models"):
     missing = missing_bundled_model_ids(models_root)
     if missing:
         problems.append(
-            "bundled-models 缺少必须随包的模型（先跑 `npm run pack:backend`）：" + "、".join(missing)
+            "bundled-models 缺少必须随包的模型（先跑 `npm run pack:backend`）："
+            + "、".join(missing)
         )
     return problems
 

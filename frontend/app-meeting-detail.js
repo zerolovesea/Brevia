@@ -1,6 +1,8 @@
 /** 把 segment 转为可渲染数据（保留时间戳，供播放定位与逐句显示）。@param {object} segment 后端段落。@param {boolean} editable 是否允许改名。@param {Map} speakerNames 说话人名称表。@returns {object} 渲染数据。 */
 function renderSegmentData(segment, editable, speakerNames) {
-  const overlapSpeakers = [...new Set((segment.word_timestamps || []).flatMap((word) => word.overlap_speakers || []))];
+  const overlapSpeakers = [
+    ...new Set((segment.word_timestamps || []).flatMap((word) => word.overlap_speakers || [])),
+  ];
   return {
     time: formatMeetingTime(segment.start_ms),
     seconds: Math.floor(segment.start_ms / 1000),
@@ -10,7 +12,12 @@ function renderSegmentData(segment, editable, speakerNames) {
       name: formatSpeakerName(segment.speaker_name),
       segmentId: editable ? segment.id : undefined,
       editing: editable && segment.id === editingSegmentSpeakerId,
-      overlapNames: overlapSpeakers.length > 1 ? overlapSpeakers.map((speaker) => formatSpeakerName(speakerNames.get(speaker) || speaker)) : [],
+      overlapNames:
+        overlapSpeakers.length > 1
+          ? overlapSpeakers.map((speaker) =>
+              formatSpeakerName(speakerNames.get(speaker) || speaker),
+            )
+          : [],
     },
     text: segment.text,
     translation: segment.translation,
@@ -21,18 +28,32 @@ function renderSegmentData(segment, editable, speakerNames) {
 
 /** 展示、编辑和翻译均使用后端选定的当前逐字稿。 */
 function latestTranscriptSegments(meeting) {
-  return { revision: meeting.transcript_revision ?? null, segments: meeting.current_segments || meeting.segments };
+  return {
+    revision: meeting.transcript_revision ?? null,
+    segments: meeting.current_segments || meeting.segments,
+  };
 }
 
 function meetingPlaybackPath(meeting) {
-  return meeting?.audio?.playback?.mix || meeting?.audio?.playback?.mic || meeting?.audio?.playback?.system;
+  return (
+    meeting?.audio?.playback?.mix ||
+    meeting?.audio?.playback?.mic ||
+    meeting?.audio?.playback?.system
+  );
 }
 
 function applyBackendDetail(meeting) {
+  document.querySelector('#detail-view .detail-title .eyebrow').textContent =
+    meeting.tags?.includes('手机录音') ? '手机录音' : t('本地会议');
   const audioPath = meetingPlaybackPath(meeting);
   const sameDetail = currentMeetingDetail?.id === meeting.id;
-  const transcriptScrollTop = sameDetail ? document.querySelector('.transcript-body')?.scrollTop : undefined;
-  const sameMeeting = sameDetail && Boolean(playerAudio.src) && meetingPlaybackPath(currentMeetingDetail) === audioPath;
+  const transcriptScrollTop = sameDetail
+    ? document.querySelector('.transcript-body')?.scrollTop
+    : undefined;
+  const sameMeeting =
+    sameDetail &&
+    Boolean(playerAudio.src) &&
+    meetingPlaybackPath(currentMeetingDetail) === audioPath;
   currentMeetingDetail = meeting;
   // 仅在切换会议时重置详情页交互状态（激活 tab、精修状态、笔记编辑）；
   // 同一会议的后端刷新不得覆盖用户正在进行的操作。
@@ -52,10 +73,25 @@ function applyBackendDetail(meeting) {
   }
   const { revision, segments: ordered } = latestTranscriptSegments(meeting);
   const speakerNames = new Map(meeting.speakers.map((speaker) => [speaker.id, speaker.name]));
-  uiData.detail.transcript = ordered.map((segment) => renderSegmentData(segment, true, speakerNames));
-  uiData.detail.refinedTranscript = revision === null ? [] : ordered.map((segment) => renderSegmentData(segment, false, speakerNames));
-  uiData.detail.refinedFulltext = revision === null ? '' : ordered.map((segment) => `${formatSpeakerName(segment.speaker_name)}：${segment.text}`).join('\n\n');
-  uiData.detail.refinedMode = revision === null ? null : refinedModelSupportsTimestamps(meeting.transcript_model_id) ? 'timestamps' : 'fulltext';
+  uiData.detail.transcript = ordered.map((segment) =>
+    renderSegmentData(segment, true, speakerNames),
+  );
+  uiData.detail.refinedTranscript =
+    revision === null
+      ? []
+      : ordered.map((segment) => renderSegmentData(segment, false, speakerNames));
+  uiData.detail.refinedFulltext =
+    revision === null
+      ? ''
+      : ordered
+          .map((segment) => `${formatSpeakerName(segment.speaker_name)}：${segment.text}`)
+          .join('\n\n');
+  uiData.detail.refinedMode =
+    revision === null
+      ? null
+      : refinedModelSupportsTimestamps(meeting.transcript_model_id)
+        ? 'timestamps'
+        : 'fulltext';
   uiData.detail.hasRefined = revision !== null;
   // 精修模型：`refinedModelApplied` 是产出当前稿子的模型（精修完成后由后端写回会议记录），
   // `refinedModelId` 是「下一次精修用哪个」的选择态，`refinedModelPinned` 表示用户在菜单里
@@ -64,7 +100,8 @@ function applyBackendDetail(meeting) {
   if (!sameDetail) {
     const options = refinedModelOptions(meeting.language || 'auto');
     uiData.detail.refinedModelId = options.some(([id]) => id === meeting.refined_model_id)
-      ? meeting.refined_model_id : defaultRefinedModelId(meeting.language || 'auto');
+      ? meeting.refined_model_id
+      : defaultRefinedModelId(meeting.language || 'auto');
     uiData.detail.refinedModelPinned = false;
   }
   // 保存后的字幕才可人工修正：录制中的会议仍在写入实时段落，此时不开放编辑入口。
@@ -74,7 +111,8 @@ function applyBackendDetail(meeting) {
   if (!sameDetail) uiData.detail.language = meeting.language || 'auto';
   // 精修菜单里「识别模型」的候选：与准备页同一个 refinedModelOptions，按当前精修语言算。
   // 语言在菜单里被改动时会由 app.js 的 refine-language 分支重算，所以这里每次刷新都覆盖。
-  uiData.detail.refinedModelAppliedName = modelCatalog.find((model) => model.id === uiData.detail.refinedModelApplied)?.name || '';
+  uiData.detail.refinedModelAppliedName =
+    modelCatalog.find((model) => model.id === uiData.detail.refinedModelApplied)?.name || '';
   uiData.detail.refinedModelOptions = refinedModelOptions(uiData.detail.language);
   uiData.detail.numSpeakers = meeting.num_speakers || null;
   uiData.detail.translationPending = false;
@@ -83,11 +121,30 @@ function applyBackendDetail(meeting) {
   const summary = meeting.summary?.data;
   const summaryBlocked = meetingActive;
   const summaryGenerating = summaryGeneratingMeetingId === meeting.id;
-  uiData.detail.summary = summary?.markdown ? { markdown: summary.markdown, hasFull: true, blocked: summaryBlocked, generating: summaryGenerating } : { title: '', sections: [], empty: true, blocked: summaryBlocked, generating: summaryGenerating };
+  uiData.detail.summary = summary?.markdown
+    ? {
+        markdown: summary.markdown,
+        hasFull: true,
+        blocked: summaryBlocked,
+        generating: summaryGenerating,
+      }
+    : {
+        title: '',
+        sections: [],
+        empty: true,
+        blocked: summaryBlocked,
+        generating: summaryGenerating,
+      };
   document.querySelector('#detail-view .detail-head h1').textContent = meeting.title;
   const metaParts = [];
   if (meeting.created_at) {
-    metaParts.push(new Date(meeting.created_at).toLocaleDateString(BreviaI18n.localeTag(locale), { year: 'numeric', month: '2-digit', day: '2-digit' }));
+    metaParts.push(
+      new Date(meeting.created_at).toLocaleDateString(BreviaI18n.localeTag(locale), {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }),
+    );
   }
   metaParts.push(`${Math.max(1, Math.round((meeting.duration_ms || 0) / 60000))} ${t('分钟')}`);
   metaParts.push(`${Number(meeting.speaker_count || 0)} ${t('位参与者')}`);
@@ -96,15 +153,34 @@ function applyBackendDetail(meeting) {
   if (!sameMeeting) {
     followPlaybackTranscript = true;
     playbackStarted = false;
-    playerAudio.pause(); playerAudio.currentTime = 0; progress.value = 0; appActions.updatePlayerControl(); appActions.renderPlayerTime();
-    playerAudio.removeAttribute('src'); playerAudio.load();
-    if (audioPath) window.brevia.audioUrl(audioPath).then((url) => {
-      if (currentMeetingDetail?.id !== meeting.id || meetingPlaybackPath(currentMeetingDetail) !== audioPath) return;
-      playerAudio.src = url;
-    }).catch((error) => {
-      if (currentMeetingDetail?.id === meeting.id) appActions.showToast(error.message);
-    });
-  } else { progress.value = playerAudio.currentTime; appActions.renderPlayerTime(); }
+    playerAudio.pause();
+    playerAudio.currentTime = 0;
+    progress.value = 0;
+    appActions.updatePlayerControl();
+    appActions.renderPlayerTime();
+    playerAudio.removeAttribute('src');
+    playerAudio.load();
+    if (audioPath)
+      window.brevia
+        .audioUrl(audioPath)
+        .then((url) => {
+          if (
+            currentMeetingDetail?.id !== meeting.id ||
+            meetingPlaybackPath(currentMeetingDetail) !== audioPath
+          )
+            return;
+          playerAudio.src = url;
+        })
+        .catch((error) => {
+          if (currentMeetingDetail?.id === meeting.id) appActions.showToast(error.message);
+        });
+  } else {
+    progress.value = playerAudio.currentTime;
+    appActions.renderPlayerTime();
+  }
   renderMeetingDetail();
-  if (transcriptScrollTop !== undefined) document.querySelector('.transcript-body')?.scrollTo({ top: transcriptScrollTop, behavior: 'instant' });
+  if (transcriptScrollTop !== undefined)
+    document
+      .querySelector('.transcript-body')
+      ?.scrollTo({ top: transcriptScrollTop, behavior: 'instant' });
 }

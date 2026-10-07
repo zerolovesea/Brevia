@@ -82,7 +82,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .demo-viewport *, .demo-viewport *::before, .demo-viewport *::after {
+  .demo-viewport *,
+  .demo-viewport *::before,
+  .demo-viewport *::after {
     animation: none !important;
     transition: none !important;
   }
@@ -200,7 +202,9 @@
   z-index: 200;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.32s ease, transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+  transition:
+    opacity 0.32s ease,
+    transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .demo-caption-overlay.is-visible {
@@ -210,7 +214,8 @@
 
 .demo-caption-overlay .caption-shell {
   position: relative;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   color: #fff;
 }
 
@@ -223,7 +228,9 @@
   -webkit-backdrop-filter: blur(24px) saturate(1.2);
   border: 1px solid rgba(255, 255, 255, 0.28);
   border-radius: 12px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.46), inset 0 1px rgba(255, 255, 255, 0.12);
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.46),
+    inset 0 1px rgba(255, 255, 255, 0.12);
 }
 
 .demo-caption-overlay .caption-controls {
@@ -252,15 +259,19 @@
 
 .demo-caption-overlay .close-btn::before,
 .demo-caption-overlay .close-btn::after {
-  content: '';
+  content: "";
   position: absolute;
   width: 12px;
   height: 1px;
   background: currentColor;
 }
 
-.demo-caption-overlay .close-btn::before { transform: rotate(45deg); }
-.demo-caption-overlay .close-btn::after { transform: rotate(-45deg); }
+.demo-caption-overlay .close-btn::before {
+  transform: rotate(45deg);
+}
+.demo-caption-overlay .close-btn::after {
+  transform: rotate(-45deg);
+}
 
 .demo-caption-overlay .caption-text {
   font-size: clamp(20px, 2vw, 32px);

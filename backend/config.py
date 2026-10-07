@@ -9,9 +9,7 @@ from pathlib import Path
 from uuid import uuid4
 
 
-DEFAULT_SETTINGS = json.loads(
-    Path(__file__).with_name("settings.json").read_text(encoding="utf-8")
-)
+DEFAULT_SETTINGS = json.loads(Path(__file__).with_name("settings.json").read_text(encoding="utf-8"))
 SETTINGS = json.loads(json.dumps(DEFAULT_SETTINGS))
 SPEAKER_EMBEDDING_MODEL_ID = "eres2net-base-3dspeaker-zh"
 # 随安装包出厂的基础模型（VAD、说话人分割、声纹嵌入）；整句识别模型由首次启动
@@ -31,12 +29,21 @@ CUT_OVERLAP_MS = 400
 
 
 def minimum_speech_cap(params, overlap_ms=CUT_OVERLAP_MS):
-    return max(1.0, math.ceil((params["min_speech_duration"] + overlap_ms / 1000
-                             + 2 * VAD_WINDOW_SECONDS) / VAD_WINDOW_SECONDS) * VAD_WINDOW_SECONDS)
+    return max(
+        1.0,
+        math.ceil(
+            (params["min_speech_duration"] + overlap_ms / 1000 + 2 * VAD_WINDOW_SECONDS)
+            / VAD_WINDOW_SECONDS
+        )
+        * VAD_WINDOW_SECONDS,
+    )
 
 
 def live_speech_cap(params, model_limit, overlap_ms=CUT_OVERLAP_MS):
-    configured = SETTINGS["live_asr"]["max_speech_seconds"] or DEFAULT_SETTINGS["live_asr"]["max_speech_seconds"]
+    configured = (
+        SETTINGS["live_asr"]["max_speech_seconds"]
+        or DEFAULT_SETTINGS["live_asr"]["max_speech_seconds"]
+    )
     maximum = min(params["max_speech_duration"], model_limit, configured)
     if maximum < minimum_speech_cap(params, overlap_ms):
         raise ValueError("Speech cap must accommodate minimum speech duration and overlap")
@@ -50,14 +57,21 @@ def validate_speech_settings(value, *, migrate=False):
         if params["max_speech_duration"] < minimum:
             if not migrate:
                 raise ValueError(f"vad.{language}.max_speech_duration must be >= {minimum:g}")
-            params["max_speech_duration"] = max(minimum, DEFAULT_SETTINGS["vad"][language]["max_speech_duration"])
+            params["max_speech_duration"] = max(
+                minimum, DEFAULT_SETTINGS["vad"][language]["max_speech_duration"]
+            )
             logging.getLogger(__name__).warning("Migrated unsafe VAD cap for %s", language)
     minimum = max(minimum_speech_cap(params) for params in value["vad"].values())
-    cap = value["live_asr"]["max_speech_seconds"] or DEFAULT_SETTINGS["live_asr"]["max_speech_seconds"]
+    cap = (
+        value["live_asr"]["max_speech_seconds"]
+        or DEFAULT_SETTINGS["live_asr"]["max_speech_seconds"]
+    )
     if cap < minimum:
         if not migrate:
             raise ValueError(f"live_asr.max_speech_seconds must be 0 (default) or >= {minimum:g}")
-        value["live_asr"]["max_speech_seconds"] = max(minimum, DEFAULT_SETTINGS["live_asr"]["max_speech_seconds"])
+        value["live_asr"]["max_speech_seconds"] = max(
+            minimum, DEFAULT_SETTINGS["live_asr"]["max_speech_seconds"]
+        )
         logging.getLogger(__name__).warning("Migrated unsafe live speech cap")
 
 
@@ -120,8 +134,12 @@ def runtime_settings(root):
             try:
                 path.rename(backup)
             except OSError:
-                logging.getLogger(__name__).exception("Could not preserve invalid advanced settings %s", path)
-            logging.getLogger(__name__).warning("Invalid advanced settings; using defaults: %s", error)
+                logging.getLogger(__name__).exception(
+                    "Could not preserve invalid advanced settings %s", path
+                )
+            logging.getLogger(__name__).warning(
+                "Invalid advanced settings; using defaults: %s", error
+            )
             value = json.loads(json.dumps(DEFAULT_SETTINGS))
     _prune_to_template(value, DEFAULT_SETTINGS)
     _validate(value, DEFAULT_SETTINGS)
@@ -139,7 +157,9 @@ def save_runtime_settings(root, value):
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = None
     try:
-        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent, prefix=f".{path.name}-", delete=False) as output:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=path.parent, prefix=f".{path.name}-", delete=False
+        ) as output:
             temporary = Path(output.name)
             json.dump(value, output, ensure_ascii=False, indent=2)
             output.flush()

@@ -14,11 +14,7 @@ class SpeakerCommandMixin:
         meeting = self.store.get_meeting(payload["meeting_id"])
         if not payload.get("enroll"):
             segment = next(
-                (
-                    item
-                    for item in meeting["segments"]
-                    if item["id"] == payload["segment_id"]
-                ),
+                (item for item in meeting["segments"] if item["id"] == payload["segment_id"]),
                 None,
             )
             if not segment:

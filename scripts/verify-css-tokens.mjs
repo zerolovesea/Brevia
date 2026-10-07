@@ -30,9 +30,15 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
 
 const COLOUR_PROPS = [
-  'color', 'background-color', 'border-top-color', 'border-right-color',
-  'border-bottom-color', 'border-left-color', 'outline-color',
-  'text-decoration-color', 'accent-color',
+  'color',
+  'background-color',
+  'border-top-color',
+  'border-right-color',
+  'border-bottom-color',
+  'border-left-color',
+  'outline-color',
+  'text-decoration-color',
+  'accent-color',
 ];
 
 /** 把两份指纹按 (标签, id) 分组、忽略瞬时 class 后比较，返回每个主题的差异元素组。 */
@@ -55,18 +61,24 @@ function diff(beforePath, afterPath) {
     const a = group(before[theme] || []);
     const b = group(after[theme] || []);
     const keys = new Set([...a.keys(), ...b.keys()]);
-    const changed = [...keys].filter((key) => JSON.stringify(a.get(key)) !== JSON.stringify(b.get(key)));
+    const changed = [...keys].filter(
+      (key) => JSON.stringify(a.get(key)) !== JSON.stringify(b.get(key)),
+    );
     console.log(`${theme}: ${a.size} -> ${b.size} 个元素组，差异 ${changed.length}`);
     for (const key of changed.sort()) {
       clean = false;
       console.log(`  * ${key}`);
-      for (const value of a.get(key) || []) if (!(b.get(key) || []).includes(value)) console.log(`      only before: ${value}`);
-      for (const value of b.get(key) || []) if (!(a.get(key) || []).includes(value)) console.log(`      only after:  ${value}`);
+      for (const value of a.get(key) || [])
+        if (!(b.get(key) || []).includes(value)) console.log(`      only before: ${value}`);
+      for (const value of b.get(key) || [])
+        if (!(a.get(key) || []).includes(value)) console.log(`      only after:  ${value}`);
     }
   }
-  console.log(clean
-    ? '\n两组指纹在计算样式层面一致。'
-    : '\n存在差异：先确认它是否落在运行间噪声基线内（见文件头说明），再判断是否为真回归。');
+  console.log(
+    clean
+      ? '\n两组指纹在计算样式层面一致。'
+      : '\n存在差异：先确认它是否落在运行间噪声基线内（见文件头说明），再判断是否为真回归。',
+  );
 }
 
 if (args[0] === '--diff') {
@@ -76,7 +88,9 @@ if (args[0] === '--diff') {
 
 const output = args[0];
 if (!output) {
-  console.error('用法：node scripts/verify-css-tokens.mjs <out.json> | --diff <before.json> <after.json>');
+  console.error(
+    '用法：node scripts/verify-css-tokens.mjs <out.json> | --diff <before.json> <after.json>',
+  );
   process.exit(2);
 }
 const scratch = path.join(root, '.css-fingerprint-tmp');
@@ -86,22 +100,47 @@ mkdirSync(path.join(scratch, 'userdata'), { recursive: true });
 
 const port = await new Promise((resolve) => {
   const server = createServer();
-  server.listen(0, '127.0.0.1', () => { const { port: p } = server.address(); server.close(() => resolve(p)); });
+  server.listen(0, '127.0.0.1', () => {
+    const { port: p } = server.address();
+    server.close(() => resolve(p));
+  });
 });
 // 与 electron/test-e2e.mjs 同样的约束：临时目录必须在工作区内，Chromium 才写得进
 // user-data-dir；--no-sandbox 让 Electron 子进程能在这个沙箱下启动。
-const child = spawn(path.join(root, 'node_modules', '.bin', 'electron'), [
-  '.', '--no-sandbox', `--user-data-dir=${path.join(scratch, 'userdata')}`, `--remote-debugging-port=${port}`,
-], { cwd: root, env: { ...process.env, BREVIA_DATA_DIR: path.join(scratch, 'data') }, stdio: 'ignore', detached: true });
-const stop = () => { try { process.kill(-child.pid, 'SIGTERM'); } catch { /* 已退出。 */ } };
+const child = spawn(
+  path.join(root, 'node_modules', '.bin', 'electron'),
+  [
+    '.',
+    '--no-sandbox',
+    `--user-data-dir=${path.join(scratch, 'userdata')}`,
+    `--remote-debugging-port=${port}`,
+  ],
+  {
+    cwd: root,
+    env: { ...process.env, BREVIA_DATA_DIR: path.join(scratch, 'data') },
+    stdio: 'ignore',
+    detached: true,
+  },
+);
+const stop = () => {
+  try {
+    process.kill(-child.pid, 'SIGTERM');
+  } catch {
+    /* 已退出。 */
+  }
+};
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 let socketUrl = null;
 for (let attempt = 0; attempt < 200 && !socketUrl; attempt += 1) {
   try {
     const targets = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
-    socketUrl = targets.find((target) => target.type === 'page' && target.webSocketDebuggerUrl)?.webSocketDebuggerUrl ?? null;
-  } catch { /* 调试端口还没起来。 */ }
+    socketUrl =
+      targets.find((target) => target.type === 'page' && target.webSocketDebuggerUrl)
+        ?.webSocketDebuggerUrl ?? null;
+  } catch {
+    /* 调试端口还没起来。 */
+  }
   if (!socketUrl) await delay(150);
 }
 if (!socketUrl) {
@@ -115,18 +154,25 @@ const pending = new Map();
 let nextId = 1;
 socket.addEventListener('message', (event) => {
   const message = JSON.parse(event.data);
-  if (message.id && pending.has(message.id)) { pending.get(message.id)(message.result); pending.delete(message.id); }
+  if (message.id && pending.has(message.id)) {
+    pending.get(message.id)(message.result);
+    pending.delete(message.id);
+  }
 });
 await new Promise((resolve) => socket.addEventListener('open', resolve));
-const send = (method, params = {}) => new Promise((resolve) => {
-  const id = nextId += 1;
-  pending.set(id, resolve);
-  socket.send(JSON.stringify({ id, method, params }));
-});
+const send = (method, params = {}) =>
+  new Promise((resolve) => {
+    const id = (nextId += 1);
+    pending.set(id, resolve);
+    socket.send(JSON.stringify({ id, method, params }));
+  });
 
 await send('Runtime.enable');
 for (let attempt = 0; attempt < 60; attempt += 1) {
-  const state = await send('Runtime.evaluate', { expression: 'document.readyState', returnByValue: true });
+  const state = await send('Runtime.evaluate', {
+    expression: 'document.readyState',
+    returnByValue: true,
+  });
   if (state.result?.value === 'complete') break;
   await delay(200);
 }
@@ -146,7 +192,9 @@ const probe = (theme) => `(() => {
 
 const fingerprint = {};
 for (const theme of ['light', 'dark']) {
-  fingerprint[theme] = (await send('Runtime.evaluate', { expression: probe(theme), returnByValue: true })).result.value;
+  fingerprint[theme] = (
+    await send('Runtime.evaluate', { expression: probe(theme), returnByValue: true })
+  ).result.value;
 }
 writeFileSync(output, JSON.stringify(fingerprint));
 console.log(`${output}: light ${fingerprint.light.length} 行 / dark ${fingerprint.dark.length} 行`);

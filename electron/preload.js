@@ -1,13 +1,15 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
-const invoke = (channel) => async (payload = {}) => {
-  const result = await ipcRenderer.invoke(channel, payload);
-  if (result?.__brevia_error) {
-    // 普通对象能完整穿过 contextBridge；Error 的额外字段会丢失。
-    throw { message: result.__brevia_error.code, ...result.__brevia_error };
-  }
-  return result;
-};
+const invoke =
+  (channel) =>
+  async (payload = {}) => {
+    const result = await ipcRenderer.invoke(channel, payload);
+    if (result?.__brevia_error) {
+      // 普通对象能完整穿过 contextBridge；Error 的额外字段会丢失。
+      throw { message: result.__brevia_error.code, ...result.__brevia_error };
+    }
+    return result;
+  };
 
 // 单一共享分发器：一个 ipcRenderer 监听器将事件分发到每种类型的处理器集合
 // 这避免了每次 window.brevia.on() 调用时累积新的 'brevia:event' 监听器
@@ -29,11 +31,25 @@ ipcRenderer.on('brevia:event', (_, event) => {
 
 contextBridge.exposeInMainWorld('brevia', {
   platform: process.platform,
+  mobile: {
+    stop: invoke('mobile.stop'),
+    approve: invoke('mobile.approve'),
+    status: invoke('mobile.status'),
+    pair: invoke('mobile.pair'),
+    closePairing: invoke('mobile.close-pairing'),
+    disable: invoke('mobile.disable'),
+    revoke: invoke('mobile.revoke'),
+  },
   initialize: invoke('app.initialize'),
   maintain: invoke('app.maintain'),
   appInfo: { version: invoke('app.version') },
   update: { check: invoke('update.check'), install: invoke('update.install') },
-  permissions: { status: invoke('permissions.status'), requestMicrophone: invoke('permissions.request-microphone'), openMicrophoneSettings: invoke('permissions.open-microphone-settings'), openScreenSettings: invoke('permissions.open-screen-settings') },
+  permissions: {
+    status: invoke('permissions.status'),
+    requestMicrophone: invoke('permissions.request-microphone'),
+    openMicrophoneSettings: invoke('permissions.open-microphone-settings'),
+    openScreenSettings: invoke('permissions.open-screen-settings'),
+  },
   meeting: {
     start: invoke('meeting.start'),
     import: invoke('meeting.import'),
@@ -79,10 +95,24 @@ contextBridge.exposeInMainWorld('brevia', {
     delete: invoke('speaker-profile.delete'),
     rename: invoke('speaker-profile.rename'),
   },
-  storage: { clear: invoke('storage.clear'), cleanup: invoke('storage.cleanup'), open: invoke('storage.open'), locations: invoke('storage.locations'), chooseFolder: invoke('storage.choose-folder'), setupLocations: invoke('storage.setup-locations') },
-  advancedSettings: { get: invoke('settings.advanced.get'), save: invoke('settings.advanced.save') },
+  storage: {
+    clear: invoke('storage.clear'),
+    cleanup: invoke('storage.cleanup'),
+    open: invoke('storage.open'),
+    locations: invoke('storage.locations'),
+    chooseFolder: invoke('storage.choose-folder'),
+    setupLocations: invoke('storage.setup-locations'),
+  },
+  advancedSettings: {
+    get: invoke('settings.advanced.get'),
+    save: invoke('settings.advanced.save'),
+  },
   metrics: { record: invoke('metrics.record') },
-  segment: { speaker: invoke('segment.speaker'), saveText: invoke('segment.text'), addProfileSample: invoke('segment.speaker-profile-sample') },
+  segment: {
+    speaker: invoke('segment.speaker'),
+    saveText: invoke('segment.text'),
+    addProfileSample: invoke('segment.speaker-profile-sample'),
+  },
   models: {
     list: invoke('models.list'),
     download: invoke('models.download'),
@@ -90,10 +120,27 @@ contextBridge.exposeInMainWorld('brevia', {
     cancel: invoke('models.cancel'),
     delete: invoke('models.delete'),
   },
-  task: { pause: invoke('task.pause'), resume: invoke('task.resume'), cancel: invoke('task.cancel') },
-  summary: { generate: invoke('summary.generate'), save: invoke('summary.save'), config: { get: invoke('summary.config.get'), save: invoke('summary.config.save') } },
-  aiAssist: { config: { get: invoke('ai-assist.config.get'), save: invoke('ai-assist.config.save') } },
-  aiNote: { start: invoke('ai-note.start'), stop: invoke('ai-note.stop'), typing: invoke('ai-note.typing'), request: invoke('ai-note.request'), dismiss: invoke('ai-note.dismiss'), reconfigure: invoke('ai-note.reconfigure') },
+  task: {
+    pause: invoke('task.pause'),
+    resume: invoke('task.resume'),
+    cancel: invoke('task.cancel'),
+  },
+  summary: {
+    generate: invoke('summary.generate'),
+    save: invoke('summary.save'),
+    config: { get: invoke('summary.config.get'), save: invoke('summary.config.save') },
+  },
+  aiAssist: {
+    config: { get: invoke('ai-assist.config.get'), save: invoke('ai-assist.config.save') },
+  },
+  aiNote: {
+    start: invoke('ai-note.start'),
+    stop: invoke('ai-note.stop'),
+    typing: invoke('ai-note.typing'),
+    request: invoke('ai-note.request'),
+    dismiss: invoke('ai-note.dismiss'),
+    reconfigure: invoke('ai-note.reconfigure'),
+  },
   translation: { generate: invoke('translation.generate') },
   secret: { set: invoke('secret.set') },
   showItem: invoke('shell.showItem'),

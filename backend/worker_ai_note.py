@@ -28,7 +28,7 @@ REALTIME_MAX_TOKENS = 160
 REALTIME_TIMEOUT_SECONDS = 40.0
 # 中文约 1.8 字符/token、英文约 4 字符/token：窗口按语言分别收紧，
 # 让内置模型（2B~4B）在 CPU 上的单次分析保持在数秒到十余秒量级。
-MEETING_STATE_MAX_CHARS = 420          # 压缩会议状态（长记忆）
+MEETING_STATE_MAX_CHARS = 420  # 压缩会议状态（长记忆）
 RECENT_TRANSCRIPT_CHARS = {"zh": 450, "en": 900}
 REALTIME_RECENT_SEGMENTS = {"zh": 5, "en": 8}
 USER_PARAGRAPH_CHARS = 80
@@ -41,25 +41,87 @@ MAX_SUGGESTIONS_PER_CALL = 1
 # ``ai-note.reconfigure`` 覆盖间隔（检测到性能瓶颈时前端会调低频率）。
 ANALYSIS_MIN_INTERVAL_SECONDS = 60.0
 MIN_NEW_CHARS = 240
-_STATE_ENTRY_MAX = 34                  # 会议状态单条的最长长度（折叠压缩用）
+_STATE_ENTRY_MAX = 34  # 会议状态单条的最长长度（折叠压缩用）
 
 # —— 轻量检测触发信号（不依赖 LLM）——
 _DECISION_WORDS = (
-    "决定", "确认", "定了", "结论", "敲定", "就这么", "拍板", "一致同意",
-    "finaliz", "decided", "decide", "confirm", "agreed", "decision",
+    "决定",
+    "确认",
+    "定了",
+    "结论",
+    "敲定",
+    "就这么",
+    "拍板",
+    "一致同意",
+    "finaliz",
+    "decided",
+    "decide",
+    "confirm",
+    "agreed",
+    "decision",
 )
 _ACTION_WORDS = (
-    "下一步", "负责", "跟进", "待办", "行动", "分配", "安排", "落实",
-    "action", "todo", "assigned", "owner", "due", "follow up", "follow-up",
+    "下一步",
+    "负责",
+    "跟进",
+    "待办",
+    "行动",
+    "分配",
+    "安排",
+    "落实",
+    "action",
+    "todo",
+    "assigned",
+    "owner",
+    "due",
+    "follow up",
+    "follow-up",
 )
-_QUESTION_WORDS = ("?", "？", "怎么", "为什么", "是否", "什么时候", "多少", "能不能", "何时", "如何", "how", "why", "when", "whether")
+_QUESTION_WORDS = (
+    "?",
+    "？",
+    "怎么",
+    "为什么",
+    "是否",
+    "什么时候",
+    "多少",
+    "能不能",
+    "何时",
+    "如何",
+    "how",
+    "why",
+    "when",
+    "whether",
+)
 _TOPIC_MARKERS = (
-    "接下来", "我们换", "下一个议题", "回到", "先看", "现在讨论", "下一个", "下面",
-    "move on", "next topic", "switch", "next",
+    "接下来",
+    "我们换",
+    "下一个议题",
+    "回到",
+    "先看",
+    "现在讨论",
+    "下一个",
+    "下面",
+    "move on",
+    "next topic",
+    "switch",
+    "next",
 )
 _INTRO_MARKERS = (
-    "本期", "这期", "今天", "欢迎收听", "欢迎来到", "我们来聊", "我们聊聊", "我们讨论",
-    "welcome", "in this episode", "today we", "let's talk", "we're going to", "we are going to",
+    "本期",
+    "这期",
+    "今天",
+    "欢迎收听",
+    "欢迎来到",
+    "我们来聊",
+    "我们聊聊",
+    "我们讨论",
+    "welcome",
+    "in this episode",
+    "today we",
+    "let's talk",
+    "we're going to",
+    "we are going to",
 )
 _NUMBER_RE = re.compile(
     r"\d+(?:\.\d+)?%?"
@@ -70,23 +132,72 @@ _DATE_RE = re.compile(r"\d{1,4}[年/.\-]\d{1,2}(?:[月/.\-]\d{1,2})?|周[一二�
 
 # 模型输出里需要规范化的类型别名，统一映射到前端可识别的 type。
 _TYPE_ALIASES = {
-    "conclusion": "conclusion", "结论": "conclusion", "观点": "conclusion",
-    "decision": "decision", "决策": "decision", "决定": "decision",
-    "action": "action", "action_item": "action", "todo": "action", "待办": "action", "行动": "action",
-    "number": "number", "数字": "number", "数据": "number",
-    "date": "date", "日期": "date",
-    "question": "question", "待确认": "question", "疑问": "question",
-    "risk": "risk", "风险": "risk",
-    "topic": "topic", "议题": "topic", "标题": "topic", "新话题": "topic",
-    "supplement": "supplement", "补充": "supplement", "重点": "supplement",
+    "conclusion": "conclusion",
+    "结论": "conclusion",
+    "观点": "conclusion",
+    "decision": "decision",
+    "决策": "decision",
+    "决定": "decision",
+    "action": "action",
+    "action_item": "action",
+    "todo": "action",
+    "待办": "action",
+    "行动": "action",
+    "number": "number",
+    "数字": "number",
+    "数据": "number",
+    "date": "date",
+    "日期": "date",
+    "question": "question",
+    "待确认": "question",
+    "疑问": "question",
+    "risk": "risk",
+    "风险": "risk",
+    "topic": "topic",
+    "议题": "topic",
+    "标题": "topic",
+    "新话题": "topic",
+    "supplement": "supplement",
+    "补充": "supplement",
+    "重点": "supplement",
 }
-_ALLOWED_TYPES = {"conclusion", "decision", "action", "number", "date", "question", "risk", "topic", "supplement"}
+_ALLOWED_TYPES = {
+    "conclusion",
+    "decision",
+    "action",
+    "number",
+    "date",
+    "question",
+    "risk",
+    "topic",
+    "supplement",
+}
 
 # 低价值/泛泛文本的启发式过滤。
 _META_WORDS = (
-    "本期", "这期", "本次", "本场", "播客", "节目", "会议", "讨论", "话题",
-    "聊聊", "聊了", "讲述了", "主题是", "相关", "内容", "问题",
-    "episode", "podcast", "discussion", "talk about", "topic", "show", "conversation about",
+    "本期",
+    "这期",
+    "本次",
+    "本场",
+    "播客",
+    "节目",
+    "会议",
+    "讨论",
+    "话题",
+    "聊聊",
+    "聊了",
+    "讲述了",
+    "主题是",
+    "相关",
+    "内容",
+    "问题",
+    "episode",
+    "podcast",
+    "discussion",
+    "talk about",
+    "topic",
+    "show",
+    "conversation about",
 )
 _TOPIC_GENERIC_RE = re.compile(
     r"^(?:本期|这期|本次|本场|今天|关于|on|about|in this|the (?:topic|subject) of)\b"
@@ -120,8 +231,12 @@ class MeetingState:
         """返回全部条目（用于「不重复已记录内容」的去重检查）。"""
         with self.lock:
             return (
-                [self.topic] if self.topic else []
-            ) + self.facts + self.decisions + self.actions + self.open_questions
+                ([self.topic] if self.topic else [])
+                + self.facts
+                + self.decisions
+                + self.actions
+                + self.open_questions
+            )
 
     def to_prompt(self, labels):
         snapshot = self.snapshot()
@@ -158,12 +273,12 @@ class _AiNoteSession:
         self.stopped = False
         self.running = False
         self.cancellation = threading.Event()
-        self.generation = 0            # 仅在取消/停止时递增：让在飞结果过期
-        self.content_version = 0       # 新内容版本号（每段字幕/停笔 +1）
-        self.analyzed_version = 0      # 已覆盖的内容版本（分析开始时快照）
-        self.pending_chars = 0         # 自上次分析以来新增的字数
+        self.generation = 0  # 仅在取消/停止时递增：让在飞结果过期
+        self.content_version = 0  # 新内容版本号（每段字幕/停笔 +1）
+        self.analyzed_version = 0  # 已覆盖的内容版本（分析开始时快照）
+        self.pending_chars = 0  # 自上次分析以来新增的字数
         self.last_run_at = time.monotonic()  # 本轮开始起按 1 分钟/新增量触发
-        self.typing_trigger = False    # 停笔触发的分析（quiet 档也允许）
+        self.typing_trigger = False  # 停笔触发的分析（quiet 档也允许）
         self.min_interval_override = None  # 会中热调的最小间隔覆盖（秒），None 用默认
         self.thread = None
         # 去重 / 质量
@@ -399,7 +514,10 @@ class AiNoteWorkerMixin:
             if session.min_interval_override is not None
             else ANALYSIS_MIN_INTERVAL_SECONDS
         )
-        return time.monotonic() - session.last_run_at >= interval or session.pending_chars >= MIN_NEW_CHARS
+        return (
+            time.monotonic() - session.last_run_at >= interval
+            or session.pending_chars >= MIN_NEW_CHARS
+        )
 
     def _analyze_realtime(self, session, task_generation):
         """执行一次实时分析；超时/取消/过期都返回空列表。"""
@@ -416,11 +534,17 @@ class AiNoteWorkerMixin:
             item["evidence"] = self._valid_evidence(session, item.get("evidence"))
             duplicate = self._duplicate_claim(session, item)
             if duplicate:
-                duplicate["evidence"] = list(dict.fromkeys(duplicate["evidence"] + item["evidence"]))
+                duplicate["evidence"] = list(
+                    dict.fromkeys(duplicate["evidence"] + item["evidence"])
+                )
                 if duplicate.get("emitted"):
                     self.emit(
                         "ai-note.evidence",
-                        {"meeting_id": session.meeting_id, "id": duplicate["id"], "evidence": duplicate["evidence"]},
+                        {
+                            "meeting_id": session.meeting_id,
+                            "id": duplicate["id"],
+                            "evidence": duplicate["evidence"],
+                        },
                     )
                 continue
             if not self._accept_suggestion(session, item):
@@ -491,8 +615,8 @@ class AiNoteWorkerMixin:
             # 三元组重叠会误判语义不同的中文笔记为重复，故中文只走整句相似度。
             if self._is_cjk(previous) or self._is_cjk(norm):
                 continue
-            previous_words = {previous[index:index + 3] for index in range(len(previous) - 2)}
-            words = {norm[index:index + 3] for index in range(len(norm) - 2)}
+            previous_words = {previous[index : index + 3] for index in range(len(previous) - 2)}
+            words = {norm[index : index + 3] for index in range(len(norm) - 2)}
             if (
                 len(previous_words) >= 3
                 and len(words) >= 3
@@ -519,12 +643,14 @@ class AiNoteWorkerMixin:
         return False
 
     def _realtime_prompt(self, session):
-        state = session.meeting_state.to_prompt(session.prompt_copy["state_labels"])[:MEETING_STATE_MAX_CHARS]
+        state = session.meeting_state.to_prompt(session.prompt_copy["state_labels"])[
+            :MEETING_STATE_MAX_CHARS
+        ]
         lang = session.language if session.language in RECENT_TRANSCRIPT_CHARS else "en"
         recent = "\n".join(
             f"[{clock(segment['start_ms'])}] {segment['text']}"
-            for segment in session.recent_segments[-REALTIME_RECENT_SEGMENTS[lang]:]
-        )[:RECENT_TRANSCRIPT_CHARS[lang]]
+            for segment in session.recent_segments[-REALTIME_RECENT_SEGMENTS[lang] :]
+        )[: RECENT_TRANSCRIPT_CHARS[lang]]
         user = session.user_paragraph[:USER_PARAGRAPH_CHARS]
         claims = "\n".join(f"- {claim['text']}" for claim in session.recent_claims[-6:])
         instructions = session.prompt_copy["instructions"]
@@ -540,7 +666,9 @@ class AiNoteWorkerMixin:
         """把补全路由到内置 ``ai-note`` sidecar 或共享 HTTP 客户端。"""
         payload = session.connection
         if (payload.get("provider") or "").lower() in {"built-in", "builtin"}:
-            return self.llama_generate_realtime(payload["model"], prompt, cancellation=session.cancellation)
+            return self.llama_generate_realtime(
+                payload["model"], prompt, cancellation=session.cancellation
+            )
         return self.llm_complete(
             {**payload, "timeout": int(REALTIME_TIMEOUT_SECONDS)},
             prompt,
@@ -647,6 +775,7 @@ class AiNoteWorkerMixin:
             state.decisions = state.decisions[-3:]
             state.actions = state.actions[-3:]
             state.open_questions = state.open_questions[-3:]
+
 
 def _is_generic_text(text):
     """泛泛/空话文本检测：含 >=2 个元词，或整句没有具体内容。"""

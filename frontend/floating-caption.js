@@ -38,7 +38,11 @@ captionContainer.addEventListener('pointerdown', (event) => {
     startY: event.screenY,
   };
   dragPointerId = event.pointerId;
-  try { captionContainer.setPointerCapture(event.pointerId); } catch { /* 某些环境不支持指针捕获。 */ }
+  try {
+    captionContainer.setPointerCapture(event.pointerId);
+  } catch {
+    /* 某些环境不支持指针捕获。 */
+  }
 });
 
 captionContainer.addEventListener('pointermove', (event) => {
@@ -59,7 +63,11 @@ const endDrag = (event) => {
   if (!dragState || (event && event.pointerId !== dragPointerId)) return;
   dragState = null;
   if (dragPointerId !== null) {
-    try { captionContainer.releasePointerCapture(dragPointerId); } catch { /* 捕获可能已释放。 */ }
+    try {
+      captionContainer.releasePointerCapture(dragPointerId);
+    } catch {
+      /* 捕获可能已释放。 */
+    }
     dragPointerId = null;
   }
 };
@@ -68,7 +76,9 @@ captionContainer.addEventListener('pointercancel', endDrag);
 
 captionContainer.addEventListener('scroll', () => {
   if (autoScrolling) return;
-  followLiveCaption = captionContainer.scrollHeight - captionContainer.clientHeight - captionContainer.scrollTop <= 24;
+  followLiveCaption =
+    captionContainer.scrollHeight - captionContainer.clientHeight - captionContainer.scrollTop <=
+    24;
 });
 
 function restartAnimation(element, className) {
@@ -122,19 +132,23 @@ function render() {
   const hasFinalized = Boolean(state.lastFinalized.text);
   if (hasFinalized) {
     translationText = state.lastFinalized.translation;
-    if (captionTranslation.previousElementSibling !== captionFinalized) captionFinalized.after(captionTranslation);
+    if (captionTranslation.previousElementSibling !== captionFinalized)
+      captionFinalized.after(captionTranslation);
   } else if (state.current.isRefined) {
     translationText = state.current.translation;
-    if (captionTranslation.previousElementSibling !== captionText) captionText.after(captionTranslation);
+    if (captionTranslation.previousElementSibling !== captionText)
+      captionText.after(captionTranslation);
   }
 
   // 仅为上一段定稿字幕显示翻译中的状态。
   const pendingId = state.translationPending?.segmentId;
-  const showLoading = hasFinalized && !translationText && pendingId === state.lastFinalized.segmentId;
+  const showLoading =
+    hasFinalized && !translationText && pendingId === state.lastFinalized.segmentId;
 
   if (showLoading) {
     if (!showingTranslationLoading) {
-      captionTranslation.innerHTML = '<span class="translation-loading"><span></span><span></span><span></span></span>';
+      captionTranslation.innerHTML =
+        '<span class="translation-loading"><span></span><span></span><span></span></span>';
       renderedTranslationText = '';
       captionTranslation.classList.remove('hidden');
       captionTranslation.classList.add('dimmed');
@@ -151,7 +165,9 @@ function render() {
     if (shouldFollow) {
       autoScrolling = true;
       captionContainer.scrollTop = captionContainer.scrollHeight;
-      requestAnimationFrame(() => { autoScrolling = false; });
+      requestAnimationFrame(() => {
+        autoScrolling = false;
+      });
     }
   });
 }
@@ -161,7 +177,9 @@ function setupListener() {
   if (window.brevia?.onFloatingCaptionUpdate) {
     window.brevia.onFloatingCaptionUpdate((data) => {
       if (data.locale) {
-        const labels = (window.BreviaLocaleData.catalog[data.locale] || window.BreviaLocaleData.catalog.en).labels;
+        const labels = (
+          window.BreviaLocaleData.catalog[data.locale] || window.BreviaLocaleData.catalog.en
+        ).labels;
         closeBtn.title = labels['关闭'];
         closeBtn.setAttribute('aria-label', labels['关闭']);
         document.documentElement.lang = data.locale;
@@ -172,7 +190,8 @@ function setupListener() {
         state.lastFinalized = data.lastFinalized;
         state.current = data.current;
         state.pendingTranslation = data.pendingTranslation;
-        if (data.translationPending !== undefined) state.translationPending = data.translationPending;
+        if (data.translationPending !== undefined)
+          state.translationPending = data.translationPending;
         if (!state.lastFinalized.text && !state.current.text) followLiveCaption = true;
         render();
         return;

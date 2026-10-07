@@ -33,7 +33,9 @@ async function directorySize(target) {
 const requested = process.argv.slice(2);
 const unknown = requested.filter((name) => !TARGETS[name]);
 if (unknown.length) {
-  console.error(`unknown clean target: ${unknown.join(', ')} (expected: ${Object.keys(TARGETS).join(', ')})`);
+  console.error(
+    `unknown clean target: ${unknown.join(', ')} (expected: ${Object.keys(TARGETS).join(', ')})`,
+  );
   process.exit(1);
 }
 

@@ -67,7 +67,9 @@
     const ripple = document.getElementById('cursor-ripple');
 
     if (!viewport || !cursor || !ripple) {
-      console.error('demo-single: missing required DOM (#demo-viewport / #virtual-cursor / #cursor-ripple)');
+      console.error(
+        'demo-single: missing required DOM (#demo-viewport / #virtual-cursor / #cursor-ripple)',
+      );
       return;
     }
 
@@ -116,7 +118,7 @@
       engine,
       timeline,
       scenarios,
-      restart: () => timeline.restart()
+      restart: () => timeline.restart(),
     };
   }
 

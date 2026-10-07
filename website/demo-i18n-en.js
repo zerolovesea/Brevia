@@ -141,11 +141,13 @@
     '重点': 'Highlight',
     '富文本': 'Rich text',
     '开始记录会议重点': 'Start taking meeting notes',
-    '你可以直接输入，也可以从右侧实时字幕中将重要内容加入笔记。': 'Type directly, or add important moments from the live transcript on the right.',
+    '你可以直接输入，也可以从右侧实时字幕中将重要内容加入笔记。':
+      'Type directly, or add important moments from the live transcript on the right.',
     '插入当前字幕': 'Insert current caption',
     '记录当前时间点': 'Insert timestamp',
     '开始记录吧': 'Start taking notes',
-    'AI 会自动发现关键结论、待办和重要信息。': 'AI will automatically surface key conclusions, action items, and important information.',
+    'AI 会自动发现关键结论、待办和重要信息。':
+      'AI will automatically surface key conclusions, action items, and important information.',
     '记录重点': 'Capture key points',
     '自动整理': 'Organize automatically',
     '关联工作区': 'Link workspace',
@@ -160,7 +162,8 @@
     '本地会议': 'Local Meeting',
     'Q3 产品评审会议': 'Q3 Product Review',
     '2026年8月7日 · 45分钟': 'Aug 7, 2026 · 45 min',
-    '2026年8月7日 · 45 分钟 · 3 位参与者 · 已生成纪要': 'Aug 7, 2026 · 45 min · 3 participants · Notes generated',
+    '2026年8月7日 · 45 分钟 · 3 位参与者 · 已生成纪要':
+      'Aug 7, 2026 · 45 min · 3 participants · Notes generated',
     '精修': 'Refine',
     '声源分离': 'Separate Audio',
     '转发': 'Share',
@@ -178,37 +181,52 @@
     '转录延迟优化至 300ms 以内': 'Transcription latency under 300 ms',
     '完成实时转录引擎的性能压测': 'Complete load testing for the live transcription engine',
     '制定发布前的灰度测试方案': 'Prepare the staged release test plan',
-    '先同步一下工程进度，实时转录引擎的性能优化基本完成了，延迟从原来的八百毫秒降到了三百毫秒以内。': 'First, an engineering update: performance work on the live transcription engine is nearly complete, reducing latency from 800 ms to under 300 ms.',
-    '很好。多语言支持这块进展怎么样？我们这次要覆盖多少种语言？': 'Great. How is multilingual support progressing? How many languages will we cover this time?',
-    '目前已经支持三十多种语言，主流语种的识别准确率都在百分之九十五以上。': 'We now support more than 30 languages, with over 95% recognition accuracy for major languages.',
-    '本次会议评审了第三季度的产品进展，重点包括实时转录引擎的性能优化、多语言支持的扩展以及新版界面的设计方向。团队确认了发布时间节点和后续的测试计划。': 'This meeting reviewed third-quarter product progress, including live transcription performance, expanded multilingual support, and the direction for the new interface. The team confirmed release timing and the follow-up test plan.',
+    '先同步一下工程进度，实时转录引擎的性能优化基本完成了，延迟从原来的八百毫秒降到了三百毫秒以内。':
+      'First, an engineering update: performance work on the live transcription engine is nearly complete, reducing latency from 800 ms to under 300 ms.',
+    '很好。多语言支持这块进展怎么样？我们这次要覆盖多少种语言？':
+      'Great. How is multilingual support progressing? How many languages will we cover this time?',
+    '目前已经支持三十多种语言，主流语种的识别准确率都在百分之九十五以上。':
+      'We now support more than 30 languages, with over 95% recognition accuracy for major languages.',
+    '本次会议评审了第三季度的产品进展，重点包括实时转录引擎的性能优化、多语言支持的扩展以及新版界面的设计方向。团队确认了发布时间节点和后续的测试计划。':
+      'This meeting reviewed third-quarter product progress, including live transcription performance, expanded multilingual support, and the direction for the new interface. The team confirmed release timing and the follow-up test plan.',
     '核心结论': 'Key Takeaways',
     '实时转录延迟优化至 300 毫秒以内': 'Live transcription latency reduced to under 300 ms',
     '多语言支持已覆盖 30+ 语种': 'Multilingual support now covers 30+ languages',
     '新版界面将于本季度末发布': 'The new interface will launch at the end of this quarter',
     '2026年8月7日 · 45分钟 · AI 会议纪要': 'Aug 7, 2026 · 45 min · AI Meeting Notes',
-    '本次会议评审了第三季度的产品进展，重点包括实时转录引擎的性能优化、多语言支持的扩展以及新版界面的设计方向。实时转录延迟已优化至 300 毫秒以内，多语言支持覆盖 30 多种语种，主流语言识别准确率超过 95%。团队确认了新版界面将于本季度末发布，并明确了发布前的测试计划和责任分工。': 'This meeting reviewed third-quarter product progress, focusing on live transcription performance, expanded multilingual support, and the new interface. Live transcription latency is now under 300 ms, support covers more than 30 languages, and major-language accuracy exceeds 95%. The team confirmed a quarter-end launch with clear testing and ownership plans.',
-    '实时转录引擎性能优化完成，端到端延迟从 800ms 降至 300ms 以内': 'Live transcription optimization is complete, reducing end-to-end latency from 800 ms to under 300 ms',
-    '多语言支持已覆盖 30+ 语种，主流语言识别准确率超过 95%': 'Support covers 30+ languages, with over 95% accuracy for major languages',
-    '新版用户界面确定于本季度末（9 月）正式发布': 'The new interface will officially launch at the end of this quarter (September)',
-    '发布前需完成一轮完整的性能与兼容性测试': 'Complete a full performance and compatibility test cycle before release',
+    '本次会议评审了第三季度的产品进展，重点包括实时转录引擎的性能优化、多语言支持的扩展以及新版界面的设计方向。实时转录延迟已优化至 300 毫秒以内，多语言支持覆盖 30 多种语种，主流语言识别准确率超过 95%。团队确认了新版界面将于本季度末发布，并明确了发布前的测试计划和责任分工。':
+      'This meeting reviewed third-quarter product progress, focusing on live transcription performance, expanded multilingual support, and the new interface. Live transcription latency is now under 300 ms, support covers more than 30 languages, and major-language accuracy exceeds 95%. The team confirmed a quarter-end launch with clear testing and ownership plans.',
+    '实时转录引擎性能优化完成，端到端延迟从 800ms 降至 300ms 以内':
+      'Live transcription optimization is complete, reducing end-to-end latency from 800 ms to under 300 ms',
+    '多语言支持已覆盖 30+ 语种，主流语言识别准确率超过 95%':
+      'Support covers 30+ languages, with over 95% accuracy for major languages',
+    '新版用户界面确定于本季度末（9 月）正式发布':
+      'The new interface will officially launch at the end of this quarter (September)',
+    '发布前需完成一轮完整的性能与兼容性测试':
+      'Complete a full performance and compatibility test cycle before release',
     '关键决策': 'Key Decisions',
     '性能优先：': 'Performance First:',
-    '转录延迟作为本季度核心指标，持续跟进并保持在 300ms 以内': 'Keep transcription latency below 300 ms as a core quarterly metric',
+    '转录延迟作为本季度核心指标，持续跟进并保持在 300ms 以内':
+      'Keep transcription latency below 300 ms as a core quarterly metric',
     '多语言策略：': 'Multilingual Strategy:',
-    '优先保障主流语种的准确率，长尾语种逐步迭代': 'Prioritize accuracy for major languages and iterate on long-tail languages',
+    '优先保障主流语种的准确率，长尾语种逐步迭代':
+      'Prioritize accuracy for major languages and iterate on long-tail languages',
     '界面改版：': 'Interface Redesign:',
-    '新版界面需与现有功能保持兼容，分阶段灰度发布': 'Keep the new interface compatible with existing features and roll it out in stages',
+    '新版界面需与现有功能保持兼容，分阶段灰度发布':
+      'Keep the new interface compatible with existing features and roll it out in stages',
     '行动项': 'Action Items',
     '完成实时转录引擎的性能压测': 'Complete load testing for the live transcription engine',
     '补充长尾语种的测试语料': 'Add test corpora for long-tail languages',
     '完成新版界面的高保真原型': 'Complete the high-fidelity prototype for the new interface',
     '制定发布前的灰度测试方案': 'Prepare the staged release test plan',
     '风险与挑战': 'Risks & Challenges',
-    '多语言模型的内存占用可能影响低配设备的性能': 'Multilingual model memory use may affect lower-end devices',
-    '发布时间较紧，测试周期需要额外的资源支持': 'The release timeline is tight and testing needs additional resources',
+    '多语言模型的内存占用可能影响低配设备的性能':
+      'Multilingual model memory use may affect lower-end devices',
+    '发布时间较紧，测试周期需要额外的资源支持':
+      'The release timeline is tight and testing needs additional resources',
     '下次会议': 'Next Meeting',
-    '2026年8月14日下午2点，继续跟进各项行动项的进展与发布前准备情况。': 'Aug 14, 2026 at 2:00 PM, to review action-item progress and release readiness.',
+    '2026年8月14日下午2点，继续跟进各项行动项的进展与发布前准备情况。':
+      'Aug 14, 2026 at 2:00 PM, to review action-item progress and release readiness.',
 
     // Voiceprint
     '张伟': 'Alex Chen',
@@ -223,12 +241,13 @@
     '设计师': 'Designer',
     '大家好，我们开始今天的周会吧。': 'Good morning, everyone. Let’s start today’s weekly meeting.',
     '好的，我先汇报一下我这边的工作进展。': 'Sure. I’ll start with an update on my work.',
-    '上周遇到的技术问题已经解决了。': 'The technical issue we encountered last week has been resolved.',
+    '上周遇到的技术问题已经解决了。':
+      'The technical issue we encountered last week has been resolved.',
     '我这边的进度已经完成了百分之八十。': 'My work is now 80% complete.',
 
     // Settings view + model library + caption bar chrome
     '关闭': 'Close',
-    '字幕开关': 'Caption toggle'
+    '字幕开关': 'Caption toggle',
   };
 
   // Intercept DemoScenariosV3 methods to translate output
@@ -276,7 +295,6 @@
     return originalFadeSwapContent.call(this, translateHTML(html), callback);
   };
 
-
   const originalEnableTranslation = DemoScenariosV3.prototype.enableTranslation;
   DemoScenariosV3.prototype.enableTranslation = function () {
     originalEnableTranslation.call(this);
@@ -284,17 +302,22 @@
     if (toggle) toggle.textContent = 'Translation: On';
   };
 
-  const originalGenerateVoiceprintSegments = DemoScenariosV3.prototype.generateVoiceprintSegmentSteps;
+  const originalGenerateVoiceprintSegments =
+    DemoScenariosV3.prototype.generateVoiceprintSegmentSteps;
   DemoScenariosV3.prototype.generateVoiceprintSegmentSteps = function (segments) {
-    return originalGenerateVoiceprintSegments.call(this, segments.map(segment => ({
-      ...segment,
-      provisional: translateText(segment.provisional),
-      speaker: translateText(segment.speaker),
-      text: translateText(segment.text)
-    })));
+    return originalGenerateVoiceprintSegments.call(
+      this,
+      segments.map((segment) => ({
+        ...segment,
+        provisional: translateText(segment.provisional),
+        speaker: translateText(segment.speaker),
+        text: translateText(segment.text),
+      })),
+    );
   };
 
-  const originalUpdateVoiceprintParticipants = DemoScenariosV3.prototype.updateVoiceprintParticipants;
+  const originalUpdateVoiceprintParticipants =
+    DemoScenariosV3.prototype.updateVoiceprintParticipants;
   DemoScenariosV3.prototype.updateVoiceprintParticipants = function (speakers) {
     originalUpdateVoiceprintParticipants.call(this, speakers);
     const list = this.engine.viewport.querySelector('[data-demo-id="voiceprint-participants"]');
@@ -318,10 +341,14 @@
 
   // Label getters return Chinese and feed dynamic textContent; override to EN.
   if (DemoScenariosV3.prototype.getParticipantsLabel) {
-    DemoScenariosV3.prototype.getParticipantsLabel = function () { return 'Participants'; };
+    DemoScenariosV3.prototype.getParticipantsLabel = function () {
+      return 'Participants';
+    };
   }
   if (DemoScenariosV3.prototype.getParticipantSourceLabel) {
-    DemoScenariosV3.prototype.getParticipantSourceLabel = function () { return 'Microphone'; };
+    DemoScenariosV3.prototype.getParticipantSourceLabel = function () {
+      return 'Microphone';
+    };
   }
   if (DemoScenariosV3.prototype.getVoiceprintRoles) {
     DemoScenariosV3.prototype.getVoiceprintRoles = function () {
@@ -349,13 +376,20 @@
 
   for (const name of ['sidebarHtml', 'liveControlsHtml']) {
     const original = DemoScenariosV3.prototype[name];
-    DemoScenariosV3.prototype[name] = function (...args) { return translateHTML(original.apply(this, args)); };
+    DemoScenariosV3.prototype[name] = function (...args) {
+      return translateHTML(original.apply(this, args));
+    };
   }
 
   DemoScenariosV3.prototype.typeNoteIntoEditor = function () {
     const editor = this.engine.viewport.querySelector('[data-demo-id="notes-editor"]');
     editor.parentElement.querySelector('.ai-assist-empty')?.remove();
-    return this.engine.typeText(editor, 'Action: update the local deployment budget by Friday.', 1, 35);
+    return this.engine.typeText(
+      editor,
+      'Action: update the local deployment budget by Friday.',
+      1,
+      35,
+    );
   };
 
   // Patch mock data to English
@@ -383,12 +417,37 @@
         eyebrow: 'Settings',
         h1: 'App settings',
         cards: [
-      { id: 'manage-models', title: 'Model library', desc: 'Download and manage local speech models for captions, refinement, and speaker recognition.', button: 'Manage model library' },
-      { id: 'ai', title: 'AI features', desc: 'Configure AI models for meeting summaries and intelligent notes.', button: 'Configure AI features' },
-      { id: 'speaker', title: 'Speaker recognition', desc: 'Manage enrolled voice samples and speaker names.', button: 'Manage speakers' },
-      { id: 'advanced', title: 'Advanced settings', desc: 'Tune recognition, endpoint detection, diarization, and local models.', button: 'Configure advanced settings' },
-      { id: 'storage', title: 'Storage and privacy', desc: 'Manage meeting recordings, notes, and models stored on this device.', button: 'View local storage' }
-        ]
+          {
+            id: 'manage-models',
+            title: 'Model library',
+            desc: 'Download and manage local speech models for captions, refinement, and speaker recognition.',
+            button: 'Manage model library',
+          },
+          {
+            id: 'ai',
+            title: 'AI features',
+            desc: 'Configure AI models for meeting summaries and intelligent notes.',
+            button: 'Configure AI features',
+          },
+          {
+            id: 'speaker',
+            title: 'Speaker recognition',
+            desc: 'Manage enrolled voice samples and speaker names.',
+            button: 'Manage speakers',
+          },
+          {
+            id: 'advanced',
+            title: 'Advanced settings',
+            desc: 'Tune recognition, endpoint detection, diarization, and local models.',
+            button: 'Configure advanced settings',
+          },
+          {
+            id: 'storage',
+            title: 'Storage and privacy',
+            desc: 'Manage meeting recordings, notes, and models stored on this device.',
+            button: 'View local storage',
+          },
+        ],
       };
     };
   }
@@ -397,7 +456,8 @@
     DemoScenariosV3.prototype.getModelLibraryData = function () {
       return {
         title: 'Model library',
-        intro: 'All transcription models run locally. Your private data is never uploaded to the network.',
+        intro:
+          'All transcription models run locally. Your private data is never uploaded to the network.',
         qualityLabel: 'Quality',
         speedLabel: 'Speed',
         qualityTiers: ['Standard', 'High', 'Very high'],
@@ -405,15 +465,95 @@
         downloadLabel: 'Download',
         installedLabel: 'Installed',
         items: [
-          { stage: 'Sentence transcription', name: 'Fun-ASR-Nano', language: 'Chinese / English / Cantonese', intro: 'Best for Chinese meetings: high accuracy on Chinese, with Cantonese and other dialects covered; English works too.', quality: 3, speed: 3, installed: true, size: '1.68 GB' },
-          { stage: 'Sentence transcription', name: 'Qwen3-ASR 0.6B 8bit', language: 'Multilingual', intro: 'Covers 30 languages and 22 Chinese dialects with automatic language detection; the default for Japanese and Korean.', quality: 3, speed: 3, installed: false, size: '1.01 GB' },
-          { stage: 'Sentence transcription', name: 'Parakeet TDT 0.6B v3', language: '25 European languages', intro: 'The default for English and other European languages, with automatic language detection, punctuation, and casing.', quality: 3, speed: 3, installed: false, size: '2.51 GB' },
-          { stage: 'Included with the app', name: 'Silero VAD', language: 'Language independent', intro: 'Decides whether someone is speaking right now, which splits caption segments; included with the app.', quality: 3, speed: 3, installed: true, bundled: true, size: '2 MB' },
-          { stage: 'Included with the app', name: 'Pyannote Segmentation 3.0', language: 'Language independent', intro: 'Finds speech regions in a single-track recording to anchor speaker diarization; included with the app.', quality: 2, speed: 3, installed: true, bundled: true, size: '7 MB' },
-          { stage: 'Included with the app', name: '3D-Speaker ERes2Net Base', language: 'Chinese', intro: 'Extracts voiceprints and clusters speakers offline; included with the app.', quality: 2, speed: 3, installed: true, bundled: true, size: '40 MB' },
-          { stage: 'AI notes & summary', name: 'Qwen 3.5 2B', language: 'Chinese / English', intro: 'Generates in-meeting suggestions and meeting summaries locally.', quality: 3, speed: 2, installed: false, size: '1.3 GB' },
-          { stage: 'Caption translation', name: 'Tencent Hy-MT2 1.8B', language: '33 languages', intro: 'Translates captions into the target language, all on your device.', quality: 3, speed: 3, installed: false, size: '1.13 GB' }
-        ]
+          {
+            stage: 'Sentence transcription',
+            name: 'Fun-ASR-Nano',
+            language: 'Chinese / English / Cantonese',
+            intro:
+              'Best for Chinese meetings: high accuracy on Chinese, with Cantonese and other dialects covered; English works too.',
+            quality: 3,
+            speed: 3,
+            installed: true,
+            size: '1.68 GB',
+          },
+          {
+            stage: 'Sentence transcription',
+            name: 'Qwen3-ASR 0.6B 8bit',
+            language: 'Multilingual',
+            intro:
+              'Covers 30 languages and 22 Chinese dialects with automatic language detection; the default for Japanese and Korean.',
+            quality: 3,
+            speed: 3,
+            installed: false,
+            size: '1.01 GB',
+          },
+          {
+            stage: 'Sentence transcription',
+            name: 'Parakeet TDT 0.6B v3',
+            language: '25 European languages',
+            intro:
+              'The default for English and other European languages, with automatic language detection, punctuation, and casing.',
+            quality: 3,
+            speed: 3,
+            installed: false,
+            size: '2.51 GB',
+          },
+          {
+            stage: 'Included with the app',
+            name: 'Silero VAD',
+            language: 'Language independent',
+            intro:
+              'Decides whether someone is speaking right now, which splits caption segments; included with the app.',
+            quality: 3,
+            speed: 3,
+            installed: true,
+            bundled: true,
+            size: '2 MB',
+          },
+          {
+            stage: 'Included with the app',
+            name: 'Pyannote Segmentation 3.0',
+            language: 'Language independent',
+            intro:
+              'Finds speech regions in a single-track recording to anchor speaker diarization; included with the app.',
+            quality: 2,
+            speed: 3,
+            installed: true,
+            bundled: true,
+            size: '7 MB',
+          },
+          {
+            stage: 'Included with the app',
+            name: '3D-Speaker ERes2Net Base',
+            language: 'Chinese',
+            intro: 'Extracts voiceprints and clusters speakers offline; included with the app.',
+            quality: 2,
+            speed: 3,
+            installed: true,
+            bundled: true,
+            size: '40 MB',
+          },
+          {
+            stage: 'AI notes & summary',
+            name: 'Qwen 3.5 2B',
+            language: 'Chinese / English',
+            intro: 'Generates in-meeting suggestions and meeting summaries locally.',
+            quality: 3,
+            speed: 2,
+            installed: false,
+            size: '1.3 GB',
+          },
+          {
+            stage: 'Caption translation',
+            name: 'Tencent Hy-MT2 1.8B',
+            language: '33 languages',
+            intro: 'Translates captions into the target language, all on your device.',
+            quality: 3,
+            speed: 3,
+            installed: false,
+            size: '1.13 GB',
+          },
+        ],
       };
     };
   }
@@ -422,8 +562,12 @@
     const originalRenderModelLibraryItems = DemoScenariosV3.prototype.renderModelLibraryItems;
     DemoScenariosV3.prototype.renderModelLibraryItems = function () {
       // Data is already English; still run the delete/download action words.
-      return originalRenderModelLibraryItems.call(this)
-        .replace(/>删除</g, '>Delete<').replace(/随应用安装/g, 'Included with the app').replace(/必需/g, 'Required').replace(/从文件夹打开/g, 'Open folder');
+      return originalRenderModelLibraryItems
+        .call(this)
+        .replace(/>删除</g, '>Delete<')
+        .replace(/随应用安装/g, 'Included with the app')
+        .replace(/必需/g, 'Required')
+        .replace(/从文件夹打开/g, 'Open folder');
     };
   }
 
@@ -449,10 +593,19 @@
       return {
         meetingTitle: 'Product Review',
         lines: [
-          { text: "Let's start by reviewing the overall progress this quarter.", translation: '我们先过一下这个季度的整体进展。' },
-          { text: 'Live transcription latency is now under 300 milliseconds.', translation: '实时转录的延迟已经优化到三百毫秒以内。' },
-          { text: 'Multilingual support now covers more than 30 languages.', translation: '多语言支持这块也覆盖了三十多种语言。' }
-        ]
+          {
+            text: "Let's start by reviewing the overall progress this quarter.",
+            translation: '我们先过一下这个季度的整体进展。',
+          },
+          {
+            text: 'Live transcription latency is now under 300 milliseconds.',
+            translation: '实时转录的延迟已经优化到三百毫秒以内。',
+          },
+          {
+            text: 'Multilingual support now covers more than 30 languages.',
+            translation: '多语言支持这块也覆盖了三十多种语言。',
+          },
+        ],
       };
     };
   }
@@ -460,8 +613,16 @@
   if (DemoScenariosV3.prototype.getCaptionTranscript) {
     DemoScenariosV3.prototype.getCaptionTranscript = function () {
       return [
-        { time: '00:00:12', speaker: 'Host', text: 'Welcome everyone to this product review. Let’s follow the agenda.' },
-        { time: '00:00:24', speaker: 'Sarah Kim', text: 'Sure. First, an update on where we are this quarter.' }
+        {
+          time: '00:00:12',
+          speaker: 'Host',
+          text: 'Welcome everyone to this product review. Let’s follow the agenda.',
+        },
+        {
+          time: '00:00:24',
+          speaker: 'Sarah Kim',
+          text: 'Sure. First, an update on where we are this quarter.',
+        },
       ];
     };
   }

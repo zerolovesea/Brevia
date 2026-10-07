@@ -45,7 +45,9 @@ def clip_wav(source, destination, seconds):
 def windows(path, window_seconds):
     duration_ms = round(wav_duration_seconds(path) * 1000)
     for start_ms in range(0, duration_ms, window_seconds * 1000):
-        yield read_mono_wav_window(path, start_ms, min(start_ms + window_seconds * 1000, duration_ms))
+        yield read_mono_wav_window(
+            path, start_ms, min(start_ms + window_seconds * 1000, duration_ms)
+        )
 
 
 def result(name, audio_seconds, started):
@@ -61,7 +63,9 @@ def result(name, audio_seconds, started):
 def benchmark_sherpa(path, model_id, language, models_root, window_seconds):
     """Decode through the raw Sherpa recognizer after the app has built its config."""
     recognizer = RefinedASR(
-        ModelManager(models_root), model_id, language=language,
+        ModelManager(models_root),
+        model_id,
+        language=language,
         threads=ModelManager.device()["threads"],
     ).recognizer
     audio_seconds = wav_duration_seconds(path)
@@ -135,17 +139,23 @@ def benchmark_python_pipeline(path, model_id, language, models_root, data_root):
     os.environ["BREVIA_MODELS_DIR"] = str(models_root)
     try:
         worker = Worker(str(data_root), lambda *_: None)
-        meeting = worker.store.create_meeting({
-            "title": "[benchmark]",
-            "language": language,
-            "refined_model_id": model_id,
-            "speaker_segmentation_model_id": "pyannote-segmentation-3.0",
-        })
+        meeting = worker.store.create_meeting(
+            {
+                "title": "[benchmark]",
+                "language": language,
+                "refined_model_id": model_id,
+                "speaker_segmentation_model_id": "pyannote-segmentation-3.0",
+            }
+        )
         destination = worker.store.meetings_dir / meeting["id"] / "audio" / "playback-mic.wav"
         shutil.copyfile(path, destination)
-        worker.store.finish_imported_meeting(meeting["id"], round(wav_duration_seconds(path) * 1000))
+        worker.store.finish_imported_meeting(
+            meeting["id"], round(wav_duration_seconds(path) * 1000)
+        )
         started = time.perf_counter()
-        worker.refine({"meeting_id": meeting["id"], "refined_model_id": model_id, "language": language})
+        worker.refine(
+            {"meeting_id": meeting["id"], "refined_model_id": model_id, "language": language}
+        )
         return result("python-refinement-pipeline", wav_duration_seconds(path), started)
     finally:
         if previous_models_root is None:
@@ -157,9 +167,20 @@ def benchmark_python_pipeline(path, model_id, language, models_root, data_root):
 def benchmark_electron(path, model_id, language, models_root, data_root):
     npm = "npm.cmd" if os.name == "nt" else "npm"
     command = [
-        npm, "run", "bench:electron", "--", "--wav", str(path),
-        "--refined-model", model_id, "--language", language,
-        "--models-root", str(models_root), "--data-root", str(data_root),
+        npm,
+        "run",
+        "bench:electron",
+        "--",
+        "--wav",
+        str(path),
+        "--refined-model",
+        model_id,
+        "--language",
+        language,
+        "--models-root",
+        str(models_root),
+        "--data-root",
+        str(data_root),
     ]
     completed = subprocess.run(command, check=True, text=True, capture_output=True)
     for line in reversed(completed.stdout.splitlines()):
@@ -169,7 +190,9 @@ def benchmark_electron(path, model_id, language, models_root, data_root):
             continue
         if value.get("benchmark") == "electron-main-worker-ipc":
             return value
-    raise RuntimeError(f"Electron benchmark did not return JSON:\n{completed.stdout}\n{completed.stderr}")
+    raise RuntimeError(
+        f"Electron benchmark did not return JSON:\n{completed.stdout}\n{completed.stderr}"
+    )
 
 
 def main():
@@ -177,7 +200,10 @@ def main():
     parser.add_argument("--wav", type=Path, default=DEFAULT_WAV)
     parser.add_argument("--language", default="zh")
     parser.add_argument("--refined-model", default="funasr-nano-int8")
-    parser.add_argument("--models-root", default=os.environ.get("BREVIA_MODELS_DIR") or str(Path.home() / "brevia" / "models"))
+    parser.add_argument(
+        "--models-root",
+        default=os.environ.get("BREVIA_MODELS_DIR") or str(Path.home() / "brevia" / "models"),
+    )
     parser.add_argument("--max-seconds", type=float)
     parser.add_argument("--window-seconds", type=int, default=15)
     parser.add_argument("--electron", action="store_true")
@@ -192,12 +218,30 @@ def main():
         clip_wav(args.wav, wav_path, args.max_seconds)
         models_root = Path(args.models_root)
         results = [
-            benchmark_sherpa(wav_path, args.refined_model, args.language, models_root, args.window_seconds),
-            *benchmark_python_stages(wav_path, args.refined_model, args.language, models_root, args.window_seconds),
-            benchmark_python_pipeline(wav_path, args.refined_model, args.language, models_root, temporary_root / "python-data"),
+            benchmark_sherpa(
+                wav_path, args.refined_model, args.language, models_root, args.window_seconds
+            ),
+            *benchmark_python_stages(
+                wav_path, args.refined_model, args.language, models_root, args.window_seconds
+            ),
+            benchmark_python_pipeline(
+                wav_path,
+                args.refined_model,
+                args.language,
+                models_root,
+                temporary_root / "python-data",
+            ),
         ]
         if args.electron:
-            results.append(benchmark_electron(wav_path, args.refined_model, args.language, models_root, temporary_root / "electron-data"))
+            results.append(
+                benchmark_electron(
+                    wav_path,
+                    args.refined_model,
+                    args.language,
+                    models_root,
+                    temporary_root / "electron-data",
+                )
+            )
         for value in results:
             print(json.dumps(value, ensure_ascii=False))
 

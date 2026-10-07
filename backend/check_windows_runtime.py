@@ -1,4 +1,5 @@
 """Frozen Windows smoke check: native DLLs and bundled ONNX VAD, no downloads."""
+
 import json
 import sys
 from pathlib import Path
@@ -16,8 +17,12 @@ def main():
         raise RuntimeError('Windows catalog must use Sherpa ONNX, not MLX')
     model = catalog['silero-vad']
     backend = Path(sys.executable).resolve().parent.parent.parent
-    vad_path = (backend / 'bundled-models' /
-                model_directory_name('silero-vad', model['revision']) / model['files'][0])
+    vad_path = (
+        backend
+        / 'bundled-models'
+        / model_directory_name('silero-vad', model['revision'])
+        / model['files'][0]
+    )
     config = sherpa_onnx.VadModelConfig()
     config.silero_vad.model = str(vad_path)
     config.sample_rate = 16000

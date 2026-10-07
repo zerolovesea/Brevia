@@ -96,7 +96,9 @@ SPANISH_MARKERS = re.compile(
     r"español|castellano|hola|gracias|sí)\b",
     re.IGNORECASE,
 )
-ENGLISH_MARKERS = re.compile(r"\b(the|and|you|that|what|have|this|with|for|just|okay|yeah)\b", re.IGNORECASE)
+ENGLISH_MARKERS = re.compile(
+    r"\b(the|and|you|that|what|have|this|with|for|just|okay|yeah)\b", re.IGNORECASE
+)
 
 
 def spanish_ratio(text):
@@ -256,8 +258,11 @@ def summarize(model_id, items, cpu_total, wall_total, audio_total):
         "loops": sum(1 for i in items if i["loop"]),
         # 中文字符出现在英语/西语会议里即为错语言幻觉，是最伤信任的退化形态。
         "cjk_only_windows": sum(
-            1 for i in items
-            if i["chars"] and not re.search(r"[A-Za-z]", i["text"]) and re.search(r"[\u4e00-\u9fff]", i["text"])
+            1
+            for i in items
+            if i["chars"]
+            and not re.search(r"[A-Za-z]", i["text"])
+            and re.search(r"[\u4e00-\u9fff]", i["text"])
         ),
         "spanish_windows": sum(1 for i in items if i["spanish"] >= 0.5 and i["chars"]),
         "mean_chars": round(statistics.mean(i["chars"] for i in items), 1) if items else 0,
@@ -402,8 +407,10 @@ def main():
     print(f"样本   {expected} 段 · {source}")
     if windows:
         lengths = [(e - s) / 1000 for s, e in windows]
-        print(f"窗口   上限 {args.max_window_seconds:.0f} s，中位 {statistics.median(lengths):.1f} s，"
-              f"最长 {max(lengths):.1f} s，合计 {sum(lengths):.0f} s")
+        print(
+            f"窗口   上限 {args.max_window_seconds:.0f} s，中位 {statistics.median(lengths):.1f} s，"
+            f"最长 {max(lengths):.1f} s，合计 {sum(lengths):.0f} s"
+        )
     print(f"模型   {args.models}\n")
 
     header = (
@@ -413,13 +420,21 @@ def main():
     print(header)
     print("-" * len(header))
 
-    report = {"meeting": args.meeting, "track": args.track, "language": args.language,
-              "duration_seconds": round(duration, 2), "full": bool(args.full),
-              "window_seconds": args.window_seconds if args.full else None, "models": {}}
+    report = {
+        "meeting": args.meeting,
+        "track": args.track,
+        "language": args.language,
+        "duration_seconds": round(duration, 2),
+        "full": bool(args.full),
+        "window_seconds": args.window_seconds if args.full else None,
+        "models": {},
+    }
     for model_id in [m for m in args.models.split(",") if m]:
         try:
             result = (
-                evaluate_full(manager, model_id, args.language, merged, args.window_seconds, cleaner)
+                evaluate_full(
+                    manager, model_id, args.language, merged, args.window_seconds, cleaner
+                )
                 if args.full
                 else evaluate(manager, model_id, args.language, windows, merged, cleaner)
             )

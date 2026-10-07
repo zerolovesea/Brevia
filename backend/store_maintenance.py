@@ -43,9 +43,7 @@ class MaintenanceStoreMixin:
             "meetings": size(self.meetings_dir),
             "models": size(self.models_dir),
             "exports": sum(
-                _safe_size(path)
-                for path in self.meetings_dir.glob("*/exports/*")
-                if _is_file(path)
+                _safe_size(path) for path in self.meetings_dir.glob("*/exports/*") if _is_file(path)
             ),
             "root": str(self.root),
             "models_root": str(self.models_dir),
@@ -54,9 +52,7 @@ class MaintenanceStoreMixin:
     def metrics(self, app_duration_ms=0):
         """累计本地使用时长并返回会议内容统计。"""
         with self.connect() as db:
-            row = db.execute(
-                "SELECT value FROM app_meta WHERE key='metrics'"
-            ).fetchone()
+            row = db.execute("SELECT value FROM app_meta WHERE key='metrics'").fetchone()
             value = json.loads(row["value"]) if row else {"app_duration_ms": 0}
             value["app_duration_ms"] += max(0, int(app_duration_ms))
             db.execute(

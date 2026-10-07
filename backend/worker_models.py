@@ -19,9 +19,7 @@ class ModelTaskWorkerMixin:
             if existing:
                 if existing["paused"].is_set() and not existing["cancelled"].is_set():
                     existing["paused"].clear()
-                    self.emit(
-                        "model.status", {"model_id": model_id, "status": "downloading"}
-                    )
+                    self.emit("model.status", {"model_id": model_id, "status": "downloading"})
                 return {"model_id": model_id, "status": "downloading"}
             control = {"paused": threading.Event(), "cancelled": threading.Event()}
             task = threading.Thread(
@@ -72,9 +70,7 @@ class ModelTaskWorkerMixin:
         key = (payload["task"], payload["meeting_id"])
         self.tasks.set_paused(*key, paused)
         status = "paused" if paused else "running"
-        self.emit(
-            "task.status", {"task": key[0], "meeting_id": key[1], "status": status}
-        )
+        self.emit("task.status", {"task": key[0], "meeting_id": key[1], "status": status})
         return {"task": key[0], "meeting_id": key[1], "status": status}
 
     def pause_task(self, payload):
@@ -93,7 +89,11 @@ class ModelTaskWorkerMixin:
             "task.status",
             {"task": payload["task"], "meeting_id": payload["meeting_id"], "status": "cancelling"},
         )
-        return {"task": payload["task"], "meeting_id": payload["meeting_id"], "status": "cancelling"}
+        return {
+            "task": payload["task"],
+            "meeting_id": payload["meeting_id"],
+            "status": "cancelling",
+        }
 
     def _download_model(self, model_id, control, china_source=False):
         """下载模型并将最终状态作为异步事件发送。"""
@@ -119,17 +119,14 @@ class ModelTaskWorkerMixin:
             with self.model_downloads_lock:
                 self.model_downloads.pop(model_id, None)
             if control["cancelled"].is_set() and not completed:
-                self.emit(
-                    "model.status", {"model_id": model_id, "status": "cancelled"}
-                )
+                self.emit("model.status", {"model_id": model_id, "status": "cancelled"})
 
     def delete_model(self, payload):
         """删除模型；活动会议正在使用的识别模型不可删除。"""
         require(payload, "model_id")
         if (
             self.active
-            and self.store.get_meeting(self.active)["refined_model_id"]
-            == payload["model_id"]
+            and self.store.get_meeting(self.active)["refined_model_id"] == payload["model_id"]
         ):
             raise ValueError("Cannot delete the model used by the active meeting")
         if self.tasks.has_any() or payload["model_id"] in self.model_downloads:

@@ -52,7 +52,9 @@ def ensure_wav_duration(path, maximum_seconds, operation="process"):
     with wave.open(str(path)) as recording:
         if recording.getnframes() > recording.getframerate() * maximum_seconds:
             # ponytail: 完整波形上限；当长会议需要此操作时改用流式模型窗口。
-            raise UserFacingError("error.audio_too_long", f"Audio is too long to {operation} in memory")
+            raise UserFacingError(
+                "error.audio_too_long", f"Audio is too long to {operation} in memory"
+            )
 
 
 def read_mono_wav(path, maximum_seconds=None):
@@ -65,9 +67,7 @@ def read_mono_wav(path, maximum_seconds=None):
         if maximum_seconds and recording.getnframes() > recording.getframerate() * maximum_seconds:
             # ponytail: 内存中 ASR 上限；当长会议需要精修时改用流式模型窗口。
             raise UserFacingError("error.audio_too_long", "Audio is too long to process in memory")
-        samples = numpy.frombuffer(
-            recording.readframes(recording.getnframes()), dtype="<i2"
-        )
+        samples = numpy.frombuffer(recording.readframes(recording.getnframes()), dtype="<i2")
         return samples.astype(numpy.float32) / 32768.0, recording.getframerate()
 
 

@@ -188,9 +188,7 @@ class WorkspaceStoreMixin:
             ValueError: 会议或工作区不存在。
         """
         with self.connect() as db:
-            meeting = db.execute(
-                "SELECT id FROM meetings WHERE id = ?", (meeting_id,)
-            ).fetchone()
+            meeting = db.execute("SELECT id FROM meetings WHERE id = ?", (meeting_id,)).fetchone()
             if not meeting:
                 raise ValueError(f"Meeting '{meeting_id}' not found")
 

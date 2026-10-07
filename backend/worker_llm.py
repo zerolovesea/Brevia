@@ -28,7 +28,7 @@ def clean_summary_markdown(markdown):
     """丢弃模型在 Markdown 标题前泄漏的控制标记。"""
     text = str(markdown or "").strip()
     heading = re.search(r"(?m)^#{1,6}\s+", text)
-    return text[heading.start():] if heading else text
+    return text[heading.start() :] if heading else text
 
 
 # 将 UI 语言代码映射到 prompt 中的自然语言名称。
@@ -182,7 +182,7 @@ def _split_transcript(transcript, chunk_chars):
                 chunks.append("\n".join(current))
                 current, size = [], 0
             for start in range(0, len(line), chunk_chars):
-                chunks.append(line[start:start + chunk_chars])
+                chunks.append(line[start : start + chunk_chars])
             continue
         if current and size + len(line) + 1 > chunk_chars:
             chunks.append("\n".join(current))
@@ -284,12 +284,16 @@ class LLMWorkerMixin:
         """
         require(payload, "meeting_id", "provider", "model", "consent")
         if self.active:
-            raise UserFacingError("error.summary.live_meeting", "实时会议中，结束后再生成会议纪要。")
+            raise UserFacingError(
+                "error.summary.live_meeting", "实时会议中，结束后再生成会议纪要。"
+            )
         # Built-in 在本地运行捆绑的 GGUF；只有远程提供商需要端点。
         if (payload.get("provider") or "").lower() not in {"built-in", "builtin"}:
             require(payload, "endpoint")
         if not payload["consent"]:
-            raise UserFacingError("error.sharing_not_confirmed", "Transcript sharing was not confirmed")
+            raise UserFacingError(
+                "error.sharing_not_confirmed", "Transcript sharing was not confirmed"
+            )
         meeting = self.store.get_meeting(payload["meeting_id"])
         self.emit(
             "summary.started",
@@ -307,7 +311,10 @@ class LLMWorkerMixin:
             if str(item.get("text") or "").strip()
         )
         if not transcript:
-            raise UserFacingError("error.summary.no_transcript", "当前会议暂无逐字稿内容，请先完成转写后再生成会议纪要。")
+            raise UserFacingError(
+                "error.summary.no_transcript",
+                "当前会议暂无逐字稿内容，请先完成转写后再生成会议纪要。",
+            )
         language = payload.get("language", "en")
         markdown = ""
         try:
@@ -354,10 +361,14 @@ class LLMWorkerMixin:
                 str(error),
                 re.IGNORECASE,
             ):
-                raise UserFacingError("error.summary.authentication", "Summary authentication failed") from error
+                raise UserFacingError(
+                    "error.summary.authentication", "Summary authentication failed"
+                ) from error
             # 带上底层原因，避免 Windows 等环境下内置模型加载/超时/空响应
             # 被笼统的 “Summary generation failed” 掩盖，无法定位。
-            raise UserFacingError("error.summary.failed", f"Summary generation failed: {error}") from error
+            raise UserFacingError(
+                "error.summary.failed", f"Summary generation failed: {error}"
+            ) from error
         data = {"markdown": markdown}
         if not self.store.save_summary(meeting["id"], data, markdown):
             return {"cancelled": True}
@@ -439,7 +450,9 @@ class LLMWorkerMixin:
         blocks = "\n\n---\n\n".join(chunk_summaries)
         truncated = len(blocks) > MAX_MERGE_INPUT_CHARS
         if truncated:
-            marker = "（分段纪要过长，已截断）" if language == "zh" else "(partial summaries truncated)"
+            marker = (
+                "（分段纪要过长，已截断）" if language == "zh" else "(partial summaries truncated)"
+            )
             blocks = blocks[:MAX_MERGE_INPUT_CHARS] + f"\n\n{marker}"
         return merge_summary_prompt([blocks], title, language), truncated
 
@@ -461,10 +474,18 @@ class LLMWorkerMixin:
             "consent",
         )
         if not payload["consent"]:
-            raise UserFacingError("error.sharing_not_confirmed", "Transcript sharing was not confirmed")
+            raise UserFacingError(
+                "error.sharing_not_confirmed", "Transcript sharing was not confirmed"
+            )
         meeting = self.store.get_meeting(payload["meeting_id"])
-        stored_segment = next((item for item in meeting["segments"] if item["id"] == payload["segment_id"]), None)
-        segment = {"id": payload["segment_id"], **payload["segment"]} if payload.get("segment") else stored_segment
+        stored_segment = next(
+            (item for item in meeting["segments"] if item["id"] == payload["segment_id"]), None
+        )
+        segment = (
+            {"id": payload["segment_id"], **payload["segment"]}
+            if payload.get("segment")
+            else stored_segment
+        )
         # 最终事件可能在重叠任务提交其段落之前到达渲染器；保留该事件而不是丢弃翻译。
         if not stored_segment and payload.get("segment"):
             self.store.save_segment(
@@ -476,7 +497,10 @@ class LLMWorkerMixin:
             )
             meeting = self.store.get_meeting(meeting["id"])
             if not segment:
-                segment = next((item for item in meeting["segments"] if item["id"] == payload["segment_id"]), None)
+                segment = next(
+                    (item for item in meeting["segments"] if item["id"] == payload["segment_id"]),
+                    None,
+                )
         if not segment:
             raise UserFacingError("error.segment_not_found", "Transcript segment not found")
         target = LANGUAGE_NAMES.get(payload["target_language"], payload["target_language"])
@@ -497,7 +521,9 @@ class LLMWorkerMixin:
         # 一段会议可能被逐句翻成上百条：只在目标语言变化时写一次会议记录，
         # 否则每句都会触发一次 UPDATE + 整场逐字稿重读。
         if meeting.get("target_language") != payload["target_language"]:
-            self.store.update_meeting(meeting["id"], {"target_language": payload["target_language"]})
+            self.store.update_meeting(
+                meeting["id"], {"target_language": payload["target_language"]}
+            )
         event = {
             "meeting_id": meeting["id"],
             "segment_id": segment["id"],

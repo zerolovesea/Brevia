@@ -6,8 +6,17 @@
 //
 // 本文件在 index.html 里紧跟 app-state.js 加载，不依赖任何其它前端文件。
 
-function formatBytes(bytes = 0) { return bytes >= 1024 ** 3 ? `${(bytes / 1024 ** 3).toFixed(2)} GB` : bytes >= 1024 ** 2 ? `${(bytes / 1024 ** 2).toFixed(1)} MB` : `${Math.round(bytes / 1024)} KB`; }
-function formatMeetingTime(milliseconds = 0) { const seconds = Math.max(0, Math.floor(milliseconds / 1000)); return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`; }
+function formatBytes(bytes = 0) {
+  return bytes >= 1024 ** 3
+    ? `${(bytes / 1024 ** 3).toFixed(2)} GB`
+    : bytes >= 1024 ** 2
+      ? `${(bytes / 1024 ** 2).toFixed(1)} MB`
+      : `${Math.round(bytes / 1024)} KB`;
+}
+function formatMeetingTime(milliseconds = 0) {
+  const seconds = Math.max(0, Math.floor(milliseconds / 1000));
+  return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+}
 
 // 精修模型是否输出可对齐到原 segment 时间戳的结果。当前内置精修模型均为窗口式逐句精修
 // （继承原时间戳）；未来若接入整段式无时间戳输出的模型，不会出现在该集合中，将走“精修全文”展示。
@@ -25,4 +34,6 @@ const timestampAlignedRefinedModels = new Set([
   'funasr-nano-mlx',
   'parakeet-tdt-0.6b-v3-mlx',
 ]);
-function refinedModelSupportsTimestamps(modelId) { return timestampAlignedRefinedModels.has(modelId); }
+function refinedModelSupportsTimestamps(modelId) {
+  return timestampAlignedRefinedModels.has(modelId);
+}

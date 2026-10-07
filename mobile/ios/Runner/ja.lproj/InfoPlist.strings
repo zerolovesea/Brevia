@@ -1,0 +1,3 @@
+NSMicrophoneUsageDescription = "Brevia はマイクで会議を録音します。文字起こしはペアリングしたパソコンで行います。";
+NSCameraUsageDescription = "パソコンに表示された Brevia のペアリング用 QR コードを読み取ります。";
+NSLocalNetworkUsageDescription = "同じローカルネットワークのパソコンに接続し、音声を送信して文字起こしとノートを受信します。";

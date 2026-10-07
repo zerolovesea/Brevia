@@ -45,17 +45,17 @@ class SpeechSettingsTest(unittest.TestCase):
         original = json.loads(json.dumps(SETTINGS))
         self.addCleanup(lambda: (SETTINGS.clear(), SETTINGS.update(original)))
         with tempfile.TemporaryDirectory() as directory:
-            for cap in (.1, .2, .5, .999):
+            for cap in (0.1, 0.2, 0.5, 0.999):
                 value = json.loads(json.dumps(DEFAULT_SETTINGS))
                 value["live_asr"]["max_speech_seconds"] = cap
-                value["vad"]["zh"]["threshold"] = .6
+                value["vad"]["zh"]["threshold"] = 0.6
                 with self.subTest(cap=cap):
                     with self.assertRaises(ValueError):
                         save_runtime_settings(directory, value)
                     path = Path(directory) / "advanced-settings.json"
                     path.write_text(json.dumps(value))
                     loaded = runtime_settings(directory)
-                    self.assertEqual(loaded["vad"]["zh"]["threshold"], .6)
+                    self.assertEqual(loaded["vad"]["zh"]["threshold"], 0.6)
                     self.assertEqual(loaded["live_asr"]["max_speech_seconds"], 22)
                     self.assertTrue(path.exists())
             for cap in (0, 1, 22):
@@ -96,7 +96,9 @@ class WorkerTest(unittest.TestCase):
         ``backend/pack_worker.py`` 在导入时就逐个下载这些模型；清单里下架某个
         模型却忘记同步这里，会让 ``npm run dist:mac`` / CI 在打包开始即失败。
         """
-        catalog = {item["id"] for item in json.loads(Path(__file__).with_name("models.json").read_text())}
+        catalog = {
+            item["id"] for item in json.loads(Path(__file__).with_name("models.json").read_text())
+        }
         missing = [model_id for model_id in BUNDLED_MODEL_IDS if model_id not in catalog]
         self.assertEqual(missing, [], "BUNDLED_MODEL_IDS must stay in sync with models.json")
 
@@ -112,18 +114,24 @@ class WorkerTest(unittest.TestCase):
         bundled_dir = Path(__file__).with_name("bundled-models")
         if not bundled_dir.is_dir():
             self.skipTest("development bundled-models directory not present")
-        with patch("backend.asr.platform.system", return_value={"darwin": "Darwin", "win32": "Windows"}.get(sys.platform, "Linux")):
+        with patch(
+            "backend.asr.platform.system",
+            return_value={"darwin": "Darwin", "win32": "Windows"}.get(sys.platform, "Linux"),
+        ):
             manager = ModelManager(bundled_dir)
         missing = [model_id for model_id in BUNDLED_MODEL_IDS if not manager.is_ready(model_id)]
         self.assertEqual(
-            missing, [],
+            missing,
+            [],
             "bundled model files are missing on disk; packaging would fail and the "
             "feature would be silently disabled",
         )
 
     def test_retired_model_is_left_alone_until_the_user_refines_again(self):
         """已下架的识别模型不做任何自动替换：老会议保持原样，重新精修时才换模型。"""
-        meeting = self.worker.start({"title": "旧模型", "language": "zh", "refined_model_id": "qwen3-asr-0.6b-int8"})
+        meeting = self.worker.start(
+            {"title": "旧模型", "language": "zh", "refined_model_id": "qwen3-asr-0.6b-int8"}
+        )
         self.worker.stop({"meeting_id": meeting["id"], "duration_ms": 0})
         self.worker.models.catalog.pop("qwen3-asr-0.6b-int8")
         with patch.object(self.worker, "download_model"):
@@ -137,7 +145,9 @@ class WorkerTest(unittest.TestCase):
         self.worker._prepare_active(self.worker.store.get_meeting(meeting["id"]))
         self.assertIsNone(self.worker.asr)
         warnings = [event for event in self.events if event.get("type") == "worker.warning"]
-        self.assertTrue(any(event["payload"].get("code") == "asr_unavailable" for event in warnings))
+        self.assertTrue(
+            any(event["payload"].get("code") == "asr_unavailable" for event in warnings)
+        )
         self.assertEqual(
             self.worker.store.get_meeting(meeting["id"])["refined_model_id"],
             "qwen3-asr-0.6b-int8",
@@ -145,46 +155,96 @@ class WorkerTest(unittest.TestCase):
         )
 
     def test_refinement_falls_back_when_an_old_model_id_is_unknown(self):
-        meeting = self.worker.store.create_meeting({
-            "title": "旧模型", "language": "zh",
-            "refined_model_id": "retired-model",
-        })
+        meeting = self.worker.store.create_meeting(
+            {
+                "title": "旧模型",
+                "language": "zh",
+                "refined_model_id": "retired-model",
+            }
+        )
         self.worker.store.finish_meeting(meeting["id"], 0)
         original_get = self.worker.models.get
-        with patch.object(self.worker, "_default_refined_model", return_value="qwen3-asr-0.6b-int8"), patch.object(self.worker.models, "is_ready", return_value=True), patch.object(
-            self.worker.models, "get", side_effect=lambda model_id: (_ for _ in ()).throw(ValueError("Unknown model")) if model_id == "retired-model" else original_get(model_id)
+        with (
+            patch.object(self.worker, "_default_refined_model", return_value="qwen3-asr-0.6b-int8"),
+            patch.object(self.worker.models, "is_ready", return_value=True),
+            patch.object(
+                self.worker.models,
+                "get",
+                side_effect=lambda model_id: (
+                    (_ for _ in ()).throw(ValueError("Unknown model"))
+                    if model_id == "retired-model"
+                    else original_get(model_id)
+                ),
+            ),
         ):
             with self.assertRaisesRegex(ValueError, "no audio"):
-                self.worker.refine({"meeting_id": meeting["id"], "refined_model_id": "retired-model"})
-        self.assertEqual(self.worker.store.get_meeting(meeting["id"])["refined_model_id"], meeting["refined_model_id"])
+                self.worker.refine(
+                    {"meeting_id": meeting["id"], "refined_model_id": "retired-model"}
+                )
+        self.assertEqual(
+            self.worker.store.get_meeting(meeting["id"])["refined_model_id"],
+            meeting["refined_model_id"],
+        )
 
     def test_refinement_falls_back_when_the_stored_model_is_retired(self):
         """点名一个退役模型时也要换成默认模型——它的本地副本已经在启动时清掉了。"""
         retired_id = next(
             model["id"] for model in self.worker.models.catalog.values() if model.get("retired")
         )
-        meeting = self.worker.store.create_meeting({
-            "title": "退役模型", "language": "zh", "refined_model_id": retired_id,
-        })
+        meeting = self.worker.store.create_meeting(
+            {
+                "title": "退役模型",
+                "language": "zh",
+                "refined_model_id": retired_id,
+            }
+        )
         self.worker.store.finish_meeting(meeting["id"], 0)
-        with patch.object(self.worker, "_default_refined_model", return_value="qwen3-asr-0.6b-int8"), patch.object(self.worker.models, "is_ready", return_value=True):
+        with (
+            patch.object(self.worker, "_default_refined_model", return_value="qwen3-asr-0.6b-int8"),
+            patch.object(self.worker.models, "is_ready", return_value=True),
+        ):
             with self.assertRaisesRegex(ValueError, "no audio"):
                 self.worker.refine({"meeting_id": meeting["id"], "refined_model_id": retired_id})
-        self.assertEqual(self.worker.store.get_meeting(meeting["id"])["refined_model_id"], meeting["refined_model_id"])
+        self.assertEqual(
+            self.worker.store.get_meeting(meeting["id"])["refined_model_id"],
+            meeting["refined_model_id"],
+        )
 
     def test_assemble_utterances_splits_at_sentence_boundary_when_overlong(self):
         # 第二句跨窗口：窗口 2 以半句话结尾，句末在窗口 3 中。超长时应在
         # 第一个完整句末处拆分，而不是从窗口边界（半句话）硬切。
-        assembled = self.worker._assemble_utterances([
-            {"track": "system", "start_ms": 0, "end_ms": 15000, "speaker": "system-spk-1", "text": "第一句话。", "word_timestamps": [{"text": "a", "start_ms": 0, "end_ms": 1000}]},
-            {"track": "system", "start_ms": 15000, "end_ms": 30000, "speaker": "system-spk-1", "text": "第二句话还没", "word_timestamps": [{"text": "b", "start_ms": 15000, "end_ms": 16000}]},
-            {"track": "system", "start_ms": 30000, "end_ms": 45000, "speaker": "system-spk-1", "text": "讲完。第三句话。", "word_timestamps": [{"text": "c", "start_ms": 30000, "end_ms": 31000}]},
-        ])
+        assembled = self.worker._assemble_utterances(
+            [
+                {
+                    "track": "system",
+                    "start_ms": 0,
+                    "end_ms": 15000,
+                    "speaker": "system-spk-1",
+                    "text": "第一句话。",
+                    "word_timestamps": [{"text": "a", "start_ms": 0, "end_ms": 1000}],
+                },
+                {
+                    "track": "system",
+                    "start_ms": 15000,
+                    "end_ms": 30000,
+                    "speaker": "system-spk-1",
+                    "text": "第二句话还没",
+                    "word_timestamps": [{"text": "b", "start_ms": 15000, "end_ms": 16000}],
+                },
+                {
+                    "track": "system",
+                    "start_ms": 30000,
+                    "end_ms": 45000,
+                    "speaker": "system-spk-1",
+                    "text": "讲完。第三句话。",
+                    "word_timestamps": [{"text": "c", "start_ms": 30000, "end_ms": 31000}],
+                },
+            ]
+        )
         self.assertEqual(
             [(item["text"]) for item in assembled],
             ["第一句话。", "第二句话还没讲完。第三句话。"],
         )
-
 
     def setUp(self):
         # Existing ONNX regressions exercise the unchanged Windows catalog.
@@ -203,30 +263,51 @@ class WorkerTest(unittest.TestCase):
     def test_invalid_settings_survive_failed_backup(self):
         settings = Path(self.temp.name) / "advanced-settings.json"
         settings.write_text("{bad json", encoding="utf-8")
-        with patch.object(Path, "rename", side_effect=PermissionError("read-only drive")), self.assertLogs("backend.config", level="WARNING"):
+        with (
+            patch.object(Path, "rename", side_effect=PermissionError("read-only drive")),
+            self.assertLogs("backend.config", level="WARNING"),
+        ):
             self.assertEqual(runtime_settings(self.temp.name), DEFAULT_SETTINGS)
         self.assertEqual(settings.read_text(), "{bad json")
-        with patch.object(Path, "read_text", side_effect=OSError("offline drive")), self.assertLogs("backend.config", level="WARNING"):
+        with (
+            patch.object(Path, "read_text", side_effect=OSError("offline drive")),
+            self.assertLogs("backend.config", level="WARNING"),
+        ):
             self.assertEqual(runtime_settings(self.temp.name), DEFAULT_SETTINGS)
 
     def test_long_recording_closes_completed_chunks(self):
-        meeting = self.worker.store.create_meeting({"title": "long recording", "language": "en", "refined_model_id": "qwen3-asr-0.6b-int8"})
+        meeting = self.worker.store.create_meeting(
+            {"title": "long recording", "language": "en", "refined_model_id": "qwen3-asr-0.6b-int8"}
+        )
         chunk = SETTINGS["audio"]["chunk_seconds"] * 10
         for track in ("mic", "system"):
-            self.worker.store.append_audio(meeting["id"], track, b"\x01\x00" * (chunk * 6 + 7), sample_rate=10)
+            self.worker.store.append_audio(
+                meeting["id"], track, b"\x01\x00" * (chunk * 6 + 7), sample_rate=10
+            )
         session = self.worker.store._audio_sessions[meeting["id"]]
         self.assertEqual(len(session["writers"]), 2)
         self.worker.store.flush_audio(meeting["id"], force=True, close=True)
         recovered = Store(self.temp.name)
         try:
-            self.assertEqual(recovered.append_audio(meeting["id"], "mic", b"\x01\x00" * 3, sample_rate=10), chunk * 6 + 10)
+            self.assertEqual(
+                recovered.append_audio(meeting["id"], "mic", b"\x01\x00" * 3, sample_rate=10),
+                chunk * 6 + 10,
+            )
             files = recovered.meeting_dir(meeting["id"]) / "audio"
-            self.assertEqual(sum(recovered._wav_samples(p) for p in files.glob("mic-*.wav")), chunk * 6 + 10)
+            self.assertEqual(
+                sum(recovered._wav_samples(p) for p in files.glob("mic-*.wav")), chunk * 6 + 10
+            )
         finally:
             recovered.close_audio_sessions()
 
     def test_exports_reserve_names_without_overwriting_or_leaving_invalid_files(self):
-        meeting = self.worker.store.create_meeting({"title": "export regression", "language": "en", "refined_model_id": "qwen3-asr-0.6b-int8"})
+        meeting = self.worker.store.create_meeting(
+            {
+                "title": "export regression",
+                "language": "en",
+                "refined_model_id": "qwen3-asr-0.6b-int8",
+            }
+        )
         exported = Path(self.worker.export({"meeting_id": meeting["id"], "format": "pdf"})["path"])
         pdf = exported.with_name(exported.name.removesuffix(".print.html") + ".pdf")
         pdf.write_bytes(b"keep PDF")
@@ -242,9 +323,18 @@ class WorkerTest(unittest.TestCase):
             self.worker.export({"meeting_id": meeting["id"], "format": "wav", "content": "audio"})
         self.assertEqual(set(directory.iterdir()), before)
         with ThreadPoolExecutor(max_workers=4) as pool:
-            results = list(pool.map(lambda _: self.worker.export({"meeting_id": meeting["id"], "format": "txt"})["path"], range(8)))
+            results = list(
+                pool.map(
+                    lambda _: self.worker.export({"meeting_id": meeting["id"], "format": "txt"})[
+                        "path"
+                    ],
+                    range(8),
+                )
+            )
         self.assertEqual(len(set(results)), 8)
-        zipped = self.worker.bundle_files({"meeting_id": meeting["id"], "files": [{"path": results[0], "name": "字幕.txt"}]})
+        zipped = self.worker.bundle_files(
+            {"meeting_id": meeting["id"], "files": [{"path": results[0], "name": "字幕.txt"}]}
+        )
         with zipfile.ZipFile(zipped["path"]) as archive:
             self.assertEqual(archive.read("字幕.txt"), Path(results[0]).read_bytes())
         outside = Path(self.temp.name) / "private.txt"
@@ -252,21 +342,49 @@ class WorkerTest(unittest.TestCase):
         link = directory / "escape.txt"
         link.symlink_to(outside)
         with self.assertRaisesRegex(ValueError, "Invalid archive source"):
-            self.worker.bundle_files({"meeting_id": meeting["id"], "files": [{"path": str(link), "name": "escape.txt"}]})
+            self.worker.bundle_files(
+                {"meeting_id": meeting["id"], "files": [{"path": str(link), "name": "escape.txt"}]}
+            )
 
     def test_metrics_select_current_transcript_and_exclude_deleted_summaries(self):
-        meeting = self.worker.store.create_meeting({"title": "metrics", "language": "en", "refined_model_id": "qwen3-asr-0.6b-int8"})
-        for version, revision in (("live", 0), ("postprocess", 0), ("postprocess-1", 1), ("user", 1)):
-            self.worker.store.save_segment({"meeting_id": meeting["id"], "segment_id": "one", "version": version, "revision": revision, "text": "line one\nline two", "start_ms": 0, "end_ms": 100})
+        meeting = self.worker.store.create_meeting(
+            {"title": "metrics", "language": "en", "refined_model_id": "qwen3-asr-0.6b-int8"}
+        )
+        for version, revision in (
+            ("live", 0),
+            ("postprocess", 0),
+            ("postprocess-1", 1),
+            ("user", 1),
+        ):
+            self.worker.store.save_segment(
+                {
+                    "meeting_id": meeting["id"],
+                    "segment_id": "one",
+                    "version": version,
+                    "revision": revision,
+                    "text": "line one\nline two",
+                    "start_ms": 0,
+                    "end_ms": 100,
+                }
+            )
         self.worker.store.save_summary(meeting["id"], {"markdown": "summary"}, "summary")
         metrics = self.worker.store.metrics()
-        self.assertEqual((metrics["subtitle_count"], metrics["subtitle_lines"], metrics["summary_count"]), (1, 2, 1))
+        self.assertEqual(
+            (metrics["subtitle_count"], metrics["subtitle_lines"], metrics["summary_count"]),
+            (1, 2, 1),
+        )
         self.worker.store.soft_delete(meeting["id"])
         metrics = self.worker.store.metrics()
         self.assertEqual((metrics["subtitle_count"], metrics["summary_count"]), (0, 0))
 
     def test_recording_and_export_reject_symlink_destinations(self):
-        meeting = self.worker.store.create_meeting({"title": "safe destinations", "language": "en", "refined_model_id": "qwen3-asr-0.6b-int8"})
+        meeting = self.worker.store.create_meeting(
+            {
+                "title": "safe destinations",
+                "language": "en",
+                "refined_model_id": "qwen3-asr-0.6b-int8",
+            }
+        )
         directory = self.worker.store.meeting_dir(meeting["id"])
         outside = Path(self.temp.name) / "outside"
         outside.mkdir()
@@ -288,17 +406,26 @@ class WorkerTest(unittest.TestCase):
             db.execute("PRAGMA user_version=2")
         recovered = Store(self.temp.name)
         with recovered.connect() as db:
-            self.assertIn("transcript_model_id", {row["name"] for row in db.execute("PRAGMA table_info(meetings)")})
+            self.assertIn(
+                "transcript_model_id",
+                {row["name"] for row in db.execute("PRAGMA table_info(meetings)")},
+            )
 
     def test_nonobject_commands_do_not_kill_worker_loop(self):
         commands = b'null\n[]\n42\n{"id":"ok","type":"meeting.list"}\n'
-        with patch("backend.worker.Worker") as worker, patch("sys.stdin", SimpleNamespace(encoding="utf-8", buffer=io.BytesIO(commands))):
+        with (
+            patch("backend.worker.Worker") as worker,
+            patch("sys.stdin", SimpleNamespace(encoding="utf-8", buffer=io.BytesIO(commands))),
+        ):
             main()
         self.assertEqual(worker.return_value.handle.call_args.args[0]["id"], "ok")
         self.assertEqual(worker.return_value.response.call_count, 4)
 
     def test_audio_import_does_not_read_worker_stdin(self):
-        with patch("backend.audio_io.ffmpeg_path", return_value="ffmpeg"), patch("backend.audio_io.subprocess.run") as run:
+        with (
+            patch("backend.audio_io.ffmpeg_path", return_value="ffmpeg"),
+            patch("backend.audio_io.subprocess.run") as run,
+        ):
             convert_to_pcm_wav("source.mp3", "destination.wav")
         command = run.call_args.args[0]
         self.assertIn("-nostdin", command)
@@ -322,14 +449,11 @@ class WorkerTest(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
 
-
     def test_ai_note_extracts_json_surrounded_by_model_text(self):
         self.assertEqual(
             _extract_json('Here is the suggestion: {"type":"action","text":"Follow up"}'),
             {"type": "action", "text": "Follow up"},
         )
-
-
 
     def test_llama_sidecar_chat_generation_uses_chat_template(self):
         sidecar = LlamaSidecar()
@@ -338,7 +462,9 @@ class WorkerTest(unittest.TestCase):
             "choices": [{"message": {"content": "# Meeting notes"}}]
         }
 
-        self.assertEqual(sidecar.generate("Summarize this", max_tokens=1200, chat=True), "# Meeting notes")
+        self.assertEqual(
+            sidecar.generate("Summarize this", max_tokens=1200, chat=True), "# Meeting notes"
+        )
         sidecar.model.create_chat_completion.assert_called_once_with(
             messages=[{"role": "user", "content": "Summarize this"}],
             max_tokens=1200,
@@ -355,11 +481,13 @@ class WorkerTest(unittest.TestCase):
             model = Path(root) / 'model.gguf'
             model.touch()
             sidecar.model, sidecar.model_path, sidecar.context_size = old, model, 4096
+
             def create(**kwargs):
                 old.close.assert_called_once()
                 self.assertIsNone(sidecar.model)
                 self.assertEqual(kwargs['n_ctx'], 16384)
                 return replacement
+
             with patch('backend.llama_sidecar.Llama', side_effect=create) as constructor:
                 sidecar.load_model(str(model), context_size=4096)
                 constructor.assert_not_called()
@@ -417,7 +545,16 @@ class WorkerTest(unittest.TestCase):
             "ru": ("заметок встречи", "Текущая тема"),
         }
         for language, (instructions, topic_label) in expected.items():
-            session = _AiNoteSession("test", {}, "assist", language, {"instructions": instructions, "state_labels": [topic_label, "facts", "decisions", "actions", "questions"]})
+            session = _AiNoteSession(
+                "test",
+                {},
+                "assist",
+                language,
+                {
+                    "instructions": instructions,
+                    "state_labels": [topic_label, "facts", "decisions", "actions", "questions"],
+                },
+            )
             session.meeting_state.topic = "launch plan"
             prompt = self.worker._realtime_prompt(session)
             self.assertIn(instructions, prompt, language)
@@ -426,16 +563,42 @@ class WorkerTest(unittest.TestCase):
     def test_ai_note_emits_suggestion_and_dedups(self):
         meeting_id = "11111111-1111-1111-1111-111111111111"
         self._patch_ai_note_cadence()
-        self.worker.llm_complete = lambda payload, prompt: json.dumps({"type": "action", "text": "调研下一代主机发布节奏", "importance": "high"})
-        self.worker.llama_generate_realtime = lambda model_id, prompt, **kwargs: json.dumps({"type": "action", "text": "调研下一代主机发布节奏", "importance": "high"})
-        self.worker.ai_note_start({"meeting_id": meeting_id, "provider": "built-in", "model": "qwen3.5-2b", "proactivity": "assist", "language": "zh"})
-        self.worker.ai_note_on_segment({"meeting_id": meeting_id, "text": "下一步需要小王确认报价 160 万", "start_ms": 5000, "speaker": "spk-1"})
+        self.worker.llm_complete = lambda payload, prompt: json.dumps(
+            {"type": "action", "text": "调研下一代主机发布节奏", "importance": "high"}
+        )
+        self.worker.llama_generate_realtime = lambda model_id, prompt, **kwargs: json.dumps(
+            {"type": "action", "text": "调研下一代主机发布节奏", "importance": "high"}
+        )
+        self.worker.ai_note_start(
+            {
+                "meeting_id": meeting_id,
+                "provider": "built-in",
+                "model": "qwen3.5-2b",
+                "proactivity": "assist",
+                "language": "zh",
+            }
+        )
+        self.worker.ai_note_on_segment(
+            {
+                "meeting_id": meeting_id,
+                "text": "下一步需要小王确认报价 160 万",
+                "start_ms": 5000,
+                "speaker": "spk-1",
+            }
+        )
         suggestions = self._wait_ai_suggestions()
         self.assertTrue(suggestions, "expected an ai-note.suggestion event")
         self.assertEqual(suggestions[0]["payload"]["type"], "action")
         self.assertIn("调研", suggestions[0]["payload"]["text"])
         # 去重：模型再次输出同一建议时不应重复发出。
-        self.worker.ai_note_on_segment({"meeting_id": meeting_id, "text": "再次确认下一步需要小王确认报价 160 万", "start_ms": 9000, "speaker": "spk-1"})
+        self.worker.ai_note_on_segment(
+            {
+                "meeting_id": meeting_id,
+                "text": "再次确认下一步需要小王确认报价 160 万",
+                "start_ms": 9000,
+                "speaker": "spk-1",
+            }
+        )
         time.sleep(0.8)
         count = sum(1 for e in self.events if e.get("type") == "ai-note.suggestion")
         self.assertEqual(count, 1, "duplicate suggestion should be suppressed")
@@ -447,14 +610,39 @@ class WorkerTest(unittest.TestCase):
         self._patch_ai_note_cadence()
         batch = {
             "suggestions": [
-                {"type": "number", "text": "2026 年全国企业平均每周工作 48.2 小时", "importance": "high"},
+                {
+                    "type": "number",
+                    "text": "2026 年全国企业平均每周工作 48.2 小时",
+                    "importance": "high",
+                },
                 {"type": "topic", "text": "严格执行劳动法的影响", "importance": "high"},
-                {"type": "action", "text": "需要评估每周 40 小时对人力成本的影响", "importance": "medium"},
+                {
+                    "type": "action",
+                    "text": "需要评估每周 40 小时对人力成本的影响",
+                    "importance": "medium",
+                },
             ]
         }
-        self.worker.llama_generate_realtime = lambda model_id, prompt, **kwargs: json.dumps(batch, ensure_ascii=False)
-        self.worker.ai_note_start({"meeting_id": meeting_id, "provider": "built-in", "model": "qwen3.5-2b", "proactivity": "assist", "language": "zh"})
-        self.worker.ai_note_on_segment({"meeting_id": meeting_id, "text": "2026 年全国企业就业人员每周平均工作 48.2 小时，家具制造业利润只有 5.36%。", "start_ms": 5000, "speaker": "spk-1"})
+        self.worker.llama_generate_realtime = lambda model_id, prompt, **kwargs: json.dumps(
+            batch, ensure_ascii=False
+        )
+        self.worker.ai_note_start(
+            {
+                "meeting_id": meeting_id,
+                "provider": "built-in",
+                "model": "qwen3.5-2b",
+                "proactivity": "assist",
+                "language": "zh",
+            }
+        )
+        self.worker.ai_note_on_segment(
+            {
+                "meeting_id": meeting_id,
+                "text": "2026 年全国企业就业人员每周平均工作 48.2 小时，家具制造业利润只有 5.36%。",
+                "start_ms": 5000,
+                "speaker": "spk-1",
+            }
+        )
         suggestions = self._wait_ai_suggestions()
         self.assertEqual(len(suggestions), 1)
         self.assertEqual(suggestions[0]["payload"]["type"], "number")
@@ -471,8 +659,16 @@ class WorkerTest(unittest.TestCase):
             return json.dumps(
                 {
                     "suggestions": [
-                        {"type": "decision", "text": "企业严格执行劳动法需要增加两成人力", "importance": "high"},
-                        {"type": "supplement", "text": "本期播客讨论了劳动法的话题", "importance": "high"},
+                        {
+                            "type": "decision",
+                            "text": "企业严格执行劳动法需要增加两成人力",
+                            "importance": "high",
+                        },
+                        {
+                            "type": "supplement",
+                            "text": "本期播客讨论了劳动法的话题",
+                            "importance": "high",
+                        },
                         {"type": "number", "text": "生产效率", "importance": "high"},
                     ]
                 },
@@ -480,11 +676,28 @@ class WorkerTest(unittest.TestCase):
             )
 
         self.worker.llama_generate_realtime = fake
-        self.worker.ai_note_start({"meeting_id": meeting_id, "provider": "built-in", "model": "qwen3.5-2b", "proactivity": "assist", "language": "zh"})
-        self.worker.ai_note_on_segment({"meeting_id": meeting_id, "text": "严格执行劳动法，企业需要增加百分之二十的人力。", "start_ms": 5000, "speaker": "spk-1"})
+        self.worker.ai_note_start(
+            {
+                "meeting_id": meeting_id,
+                "provider": "built-in",
+                "model": "qwen3.5-2b",
+                "proactivity": "assist",
+                "language": "zh",
+            }
+        )
+        self.worker.ai_note_on_segment(
+            {
+                "meeting_id": meeting_id,
+                "text": "严格执行劳动法，企业需要增加百分之二十的人力。",
+                "start_ms": 5000,
+                "speaker": "spk-1",
+            }
+        )
         time.sleep(1.0)
         suggestions = [e for e in self.events if e.get("type") == "ai-note.suggestion"]
-        self.assertEqual(len(suggestions), 1, "only the decision suggestion should pass the value gate")
+        self.assertEqual(
+            len(suggestions), 1, "only the decision suggestion should pass the value gate"
+        )
         self.assertEqual(suggestions[0]["payload"]["type"], "decision")
         self.worker.ai_note_stop({"meeting_id": meeting_id})
 
@@ -495,16 +708,46 @@ class WorkerTest(unittest.TestCase):
 
         def fake(model_id, prompt, **kwargs):
             return json.dumps(
-                {"suggestions": [{"type": "number", "text": "2026 年全国企业平均每周工作 48.2 小时", "importance": "high"}]},
+                {
+                    "suggestions": [
+                        {
+                            "type": "number",
+                            "text": "2026 年全国企业平均每周工作 48.2 小时",
+                            "importance": "high",
+                        }
+                    ]
+                },
                 ensure_ascii=False,
             )
 
         self.worker.llama_generate_realtime = fake
-        self.worker.ai_note_start({"meeting_id": meeting_id, "provider": "built-in", "model": "qwen3.5-2b", "proactivity": "assist", "language": "zh"})
-        self.worker.ai_note_on_segment({"meeting_id": meeting_id, "text": "2026 年全国企业就业人员每周平均工作时间是 48.2 个小时。", "start_ms": 5000, "speaker": "spk-1"})
+        self.worker.ai_note_start(
+            {
+                "meeting_id": meeting_id,
+                "provider": "built-in",
+                "model": "qwen3.5-2b",
+                "proactivity": "assist",
+                "language": "zh",
+            }
+        )
+        self.worker.ai_note_on_segment(
+            {
+                "meeting_id": meeting_id,
+                "text": "2026 年全国企业就业人员每周平均工作时间是 48.2 个小时。",
+                "start_ms": 5000,
+                "speaker": "spk-1",
+            }
+        )
         self._wait_ai_suggestions(count=1)
         # 模型换了个说法重述同一条数据。
-        self.worker.ai_note_on_segment({"meeting_id": meeting_id, "text": "每周平均工作 48.2 小时这个数据很关键。", "start_ms": 9000, "speaker": "spk-1"})
+        self.worker.ai_note_on_segment(
+            {
+                "meeting_id": meeting_id,
+                "text": "每周平均工作 48.2 小时这个数据很关键。",
+                "start_ms": 9000,
+                "speaker": "spk-1",
+            }
+        )
         time.sleep(0.8)
         count = sum(1 for e in self.events if e.get("type") == "ai-note.suggestion")
         self.assertEqual(count, 1, "paraphrased duplicate should be suppressed")
@@ -513,9 +756,7 @@ class WorkerTest(unittest.TestCase):
     def test_ai_note_fuzzy_dedup_suppresses_rephrased_character_feedback(self):
         """角色评价的补充措辞不应变成多条建议。"""
         norms = ["女主角色塑造急躁暴躁对人敌意大让人难以共情"]
-        self.assertTrue(
-            self.worker._fuzzy_duplicate(norms, "女主角色塑造问题急躁暴躁难以共情")
-        )
+        self.assertTrue(self.worker._fuzzy_duplicate(norms, "女主角色塑造问题急躁暴躁难以共情"))
 
     def test_ai_note_fuzzy_dedup_suppresses_rephrased_english_fact(self):
         self.assertTrue(
@@ -527,17 +768,34 @@ class WorkerTest(unittest.TestCase):
 
     def test_ai_note_uses_the_first_suggestion_only(self):
         session = _AiNoteSession(
-            "meeting", {}, "assist", "en", {"instructions": "", "state_labels": ["topic", "facts", "decisions", "actions", "questions"]},
+            "meeting",
+            {},
+            "assist",
+            "en",
+            {
+                "instructions": "",
+                "state_labels": ["topic", "facts", "decisions", "actions", "questions"],
+            },
         )
         session.recent_segments = [
             {"text": "First source", "start_ms": 1000},
             {"text": "Second source", "start_ms": 2000},
         ]
         self.worker._ai_note_complete = lambda *_: json.dumps(
-            {"suggestions": [
-                {"type": "conclusion", "text": "A 70% forecast should rain 70% of the time.", "evidence": ["00:01"]},
-                {"type": "conclusion", "text": "A 70% forecast should rain 70% of the time.", "evidence": ["00:02"]},
-            ]}
+            {
+                "suggestions": [
+                    {
+                        "type": "conclusion",
+                        "text": "A 70% forecast should rain 70% of the time.",
+                        "evidence": ["00:01"],
+                    },
+                    {
+                        "type": "conclusion",
+                        "text": "A 70% forecast should rain 70% of the time.",
+                        "evidence": ["00:02"],
+                    },
+                ]
+            }
         )
         batch = self.worker._analyze_realtime(session, 0)
         self.assertEqual(len(batch), 1)
@@ -547,14 +805,23 @@ class WorkerTest(unittest.TestCase):
     def test_ai_note_exact_duplicate_across_types_is_suppressed(self):
         """同一观点被模型以不同 type 重复报出时只保留第一条（跨类型精确去重）。"""
         session = _AiNoteSession(
-            "meeting", {}, "assist", "zh", {"instructions": "", "state_labels": ["topic", "facts", "decisions", "actions", "questions"]},
+            "meeting",
+            {},
+            "assist",
+            "zh",
+            {
+                "instructions": "",
+                "state_labels": ["topic", "facts", "decisions", "actions", "questions"],
+            },
         )
         session.recent_segments = [{"text": "会议决定下季度发布", "start_ms": 1000}]
         self.worker._ai_note_complete = lambda *_: json.dumps(
-            {"suggestions": [
-                {"type": "conclusion", "text": "下季度发布新版本", "evidence": ["00:01"]},
-                {"type": "action", "text": "下季度发布新版本", "evidence": ["00:01"]},
-            ]}
+            {
+                "suggestions": [
+                    {"type": "conclusion", "text": "下季度发布新版本", "evidence": ["00:01"]},
+                    {"type": "action", "text": "下季度发布新版本", "evidence": ["00:01"]},
+                ]
+            }
         )
         batch = self.worker._analyze_realtime(session, 0)
         self.assertEqual(len(batch), 1, "跨类型同文本只应保留一条")
@@ -563,14 +830,23 @@ class WorkerTest(unittest.TestCase):
     def test_ai_note_chinese_fuzzy_does_not_merge_distinct_claims(self):
         """中文下仅靠字词相近不应判为重复（trigram 启发式对 CJK 关闭）。"""
         session = _AiNoteSession(
-            "meeting", {}, "assist", "zh", {"instructions": "", "state_labels": ["topic", "facts", "decisions", "actions", "questions"]},
+            "meeting",
+            {},
+            "assist",
+            "zh",
+            {
+                "instructions": "",
+                "state_labels": ["topic", "facts", "decisions", "actions", "questions"],
+            },
         )
         session.recent_segments = [{"text": "讨论预算与排期", "start_ms": 1000}]
         self.worker._ai_note_complete = lambda *_: json.dumps(
-            {"suggestions": [
-                {"type": "conclusion", "text": "讨论预算分配与时间安排", "evidence": ["00:01"]},
-                {"type": "action", "text": "提醒大家确认预算审批进度", "evidence": ["00:01"]},
-            ]}
+            {
+                "suggestions": [
+                    {"type": "conclusion", "text": "讨论预算分配与时间安排", "evidence": ["00:01"]},
+                    {"type": "action", "text": "提醒大家确认预算审批进度", "evidence": ["00:01"]},
+                ]
+            }
         )
         batch = self.worker._analyze_realtime(session, 0)
         self.assertEqual(len(batch), 1)
@@ -587,31 +863,66 @@ class WorkerTest(unittest.TestCase):
             if len(calls) == 1:
                 release.wait(timeout=5)  # 第一轮在飞时挂起
             return json.dumps(
-                {"suggestions": [{"type": "action", "text": f"行动项 {len(calls)}", "importance": "medium"}]},
+                {
+                    "suggestions": [
+                        {"type": "action", "text": f"行动项 {len(calls)}", "importance": "medium"}
+                    ]
+                },
                 ensure_ascii=False,
             )
 
         self.worker.llama_generate_realtime = fake
-        self.worker.ai_note_start({"meeting_id": meeting_id, "provider": "built-in", "model": "qwen3.5-2b", "proactivity": "auto", "language": "zh"})
-        self.worker.ai_note_on_segment({"meeting_id": meeting_id, "text": "第一步我们需要安排调研供应商资质和报价，确认交付时间", "start_ms": 5000, "speaker": "spk-1"})
+        self.worker.ai_note_start(
+            {
+                "meeting_id": meeting_id,
+                "provider": "built-in",
+                "model": "qwen3.5-2b",
+                "proactivity": "auto",
+                "language": "zh",
+            }
+        )
+        self.worker.ai_note_on_segment(
+            {
+                "meeting_id": meeting_id,
+                "text": "第一步我们需要安排调研供应商资质和报价，确认交付时间",
+                "start_ms": 5000,
+                "speaker": "spk-1",
+            }
+        )
         deadline = time.time() + 5
         while time.time() < deadline and not calls:
             time.sleep(0.05)
         self.assertTrue(calls, "first analysis should have started")
         # 在飞期间到达的新内容：不应取消第一轮，也不应被跳过。
-        self.worker.ai_note_on_segment({"meeting_id": meeting_id, "text": "第二步我们需要安排开发团队进场，评估排期风险", "start_ms": 9000, "speaker": "spk-1"})
+        self.worker.ai_note_on_segment(
+            {
+                "meeting_id": meeting_id,
+                "text": "第二步我们需要安排开发团队进场，评估排期风险",
+                "start_ms": 9000,
+                "speaker": "spk-1",
+            }
+        )
         time.sleep(0.4)
         self.assertEqual(len(calls), 1, "in-flight analysis must not be interrupted")
         release.set()
         deadline = time.time() + 5
         while time.time() < deadline and len(calls) < 2:
             time.sleep(0.05)
-        self.assertGreaterEqual(len(calls), 2, "content arriving during the run should trigger a follow-up analysis")
+        self.assertGreaterEqual(
+            len(calls), 2, "content arriving during the run should trigger a follow-up analysis"
+        )
         self.worker.ai_note_stop({"meeting_id": meeting_id})
 
     def test_ai_note_runs_after_a_minute_or_enough_new_transcript(self):
         session = _AiNoteSession(
-            "meeting", {}, "assist", "zh", {"instructions": "", "state_labels": ["topic", "facts", "decisions", "actions", "questions"]},
+            "meeting",
+            {},
+            "assist",
+            "zh",
+            {
+                "instructions": "",
+                "state_labels": ["topic", "facts", "decisions", "actions", "questions"],
+            },
         )
         session.content_version = 1
         session.pending_chars = 239
@@ -631,13 +942,32 @@ class WorkerTest(unittest.TestCase):
         def fake(model_id, prompt, **kwargs):
             calls.append(1)
             return json.dumps(
-                {"suggestions": [{"type": "decision", "text": "决定先做小范围灰度发布", "importance": "high"}]},
+                {
+                    "suggestions": [
+                        {"type": "decision", "text": "决定先做小范围灰度发布", "importance": "high"}
+                    ]
+                },
                 ensure_ascii=False,
             )
 
         self.worker.llama_generate_realtime = fake
-        self.worker.ai_note_start({"meeting_id": meeting_id, "provider": "built-in", "model": "qwen3.5-2b", "proactivity": "quiet", "language": "zh"})
-        self.worker.ai_note_on_segment({"meeting_id": meeting_id, "text": "下一步需要小王确认报价 160 万", "start_ms": 5000, "speaker": "spk-1"})
+        self.worker.ai_note_start(
+            {
+                "meeting_id": meeting_id,
+                "provider": "built-in",
+                "model": "qwen3.5-2b",
+                "proactivity": "quiet",
+                "language": "zh",
+            }
+        )
+        self.worker.ai_note_on_segment(
+            {
+                "meeting_id": meeting_id,
+                "text": "下一步需要小王确认报价 160 万",
+                "start_ms": 5000,
+                "speaker": "spk-1",
+            }
+        )
         time.sleep(0.6)
         self.assertEqual(len(calls), 0, "quiet mode must not analyze on segments alone")
         self.worker.ai_note_typing({"meeting_id": meeting_id, "typing": True})
@@ -674,12 +1004,34 @@ class WorkerTest(unittest.TestCase):
         self.assertEqual(json.loads(output.value), {"title": "예시"})
 
     def test_meeting_get_compacts_superseded_word_timestamps(self):
-        meeting = self.worker.start({"title": "compact", "language": "zh", "refined_model_id": "qwen3-asr-0.6b-int8"})
-        for version, revision, text in (("live", 0, "live"), ("postprocess", 0, "old"), ("postprocess-1", 1, "current")):
-            self.worker.store.save_segment({"meeting_id": meeting["id"], "segment_id": version, "version": version, "revision": revision, "start_ms": 0, "end_ms": 1000, "speaker": "spk-1", "text": text, "word_timestamps": [{"text": "word", "overlap_speakers": ["spk-1", "spk-2"]}]})
-        result = self.worker.handle({"id": "compact-get", "type": "meeting.get", "payload": {"meeting_id": meeting["id"]}})
+        meeting = self.worker.start(
+            {"title": "compact", "language": "zh", "refined_model_id": "qwen3-asr-0.6b-int8"}
+        )
+        for version, revision, text in (
+            ("live", 0, "live"),
+            ("postprocess", 0, "old"),
+            ("postprocess-1", 1, "current"),
+        ):
+            self.worker.store.save_segment(
+                {
+                    "meeting_id": meeting["id"],
+                    "segment_id": version,
+                    "version": version,
+                    "revision": revision,
+                    "start_ms": 0,
+                    "end_ms": 1000,
+                    "speaker": "spk-1",
+                    "text": text,
+                    "word_timestamps": [{"text": "word", "overlap_speakers": ["spk-1", "spk-2"]}],
+                }
+            )
+        result = self.worker.handle(
+            {"id": "compact-get", "type": "meeting.get", "payload": {"meeting_id": meeting["id"]}}
+        )
         self.assertEqual([segment["text"] for segment in result["segments"]], ["current"])
-        self.assertEqual(result["segments"][0]["word_timestamps"], [{"overlap_speakers": ["spk-1", "spk-2"]}])
+        self.assertEqual(
+            result["segments"][0]["word_timestamps"], [{"overlap_speakers": ["spk-1", "spk-2"]}]
+        )
 
     def test_worker_command_replaces_lone_surrogates_before_sqlite(self):
         meeting = self.worker.handle(
@@ -708,33 +1060,62 @@ class WorkerTest(unittest.TestCase):
             WorkerCore(self.temp.name).handle({"id": "deep", "type": "unknown", "payload": payload})
 
     def test_workspace_delete_restores_meeting_and_workspace_together(self):
-        meeting = self.worker.start({"title": "workspace", "language": "zh", "refined_model_id": "qwen3-asr-0.6b-int8"})
+        meeting = self.worker.start(
+            {"title": "workspace", "language": "zh", "refined_model_id": "qwen3-asr-0.6b-int8"}
+        )
         workspace = self.worker.store.create_workspace({"name": "Test"})
         self.worker.store.assign_meeting_to_workspace(meeting["id"], workspace["id"])
         self.worker.store.delete_workspace(workspace["id"])
-        self.assertEqual(self.worker.store.list_meetings(include_deleted=True)[0]["id"], meeting["id"])
+        self.assertEqual(
+            self.worker.store.list_meetings(include_deleted=True)[0]["id"], meeting["id"]
+        )
         self.worker.restore_meeting({"meeting_id": meeting["id"]})
-        self.assertEqual(self.worker.store.get_meeting(meeting["id"])["workspace_id"], workspace["id"])
+        self.assertEqual(
+            self.worker.store.get_meeting(meeting["id"])["workspace_id"], workspace["id"]
+        )
         self.assertEqual(self.worker.store.get_workspace(workspace["id"])["id"], workspace["id"])
 
     def test_direct_meeting_delete_restores_workspace_and_is_idempotent(self):
         workspace = self.worker.store.create_workspace({"name": "Team"})
-        meeting = self.worker.store.create_meeting({"title": "restore", "language": "en", "refined_model_id": "funasr-nano-int8", "workspace_id": workspace["id"]})
+        meeting = self.worker.store.create_meeting(
+            {
+                "title": "restore",
+                "language": "en",
+                "refined_model_id": "funasr-nano-int8",
+                "workspace_id": workspace["id"],
+            }
+        )
         for _ in range(2):
             self.worker.store.soft_delete(meeting["id"])
-        self.assertEqual(self.worker.store.get_meeting(meeting["id"])["workspace_id"], workspace["id"])
+        self.assertEqual(
+            self.worker.store.get_meeting(meeting["id"])["workspace_id"], workspace["id"]
+        )
         for _ in range(2):
             self.worker.store.soft_delete(meeting["id"], restore=True)
-        self.assertEqual(self.worker.store.get_meeting(meeting["id"])["workspace_id"], workspace["id"])
+        self.assertEqual(
+            self.worker.store.get_meeting(meeting["id"])["workspace_id"], workspace["id"]
+        )
         # 已经被旧版删除的会议没有 previous_workspace_id，仍需保留原归属。
         with self.worker.store.connect() as db:
-            db.execute("UPDATE meetings SET deleted_at='2026-09-30', previous_workspace_id=NULL WHERE id=?", (meeting["id"],))
+            db.execute(
+                "UPDATE meetings SET deleted_at='2026-09-30', previous_workspace_id=NULL WHERE id=?",
+                (meeting["id"],),
+            )
         self.worker.store.soft_delete(meeting["id"], restore=True)
-        self.assertEqual(self.worker.store.get_meeting(meeting["id"])["workspace_id"], workspace["id"])
+        self.assertEqual(
+            self.worker.store.get_meeting(meeting["id"])["workspace_id"], workspace["id"]
+        )
 
     def test_meeting_can_start_in_a_workspace(self):
         workspace = self.worker.store.create_workspace({"name": "Team"})
-        meeting = self.worker.start({"title": "workspace", "language": "zh", "refined_model_id": "qwen3-asr-0.6b-int8", "workspace_id": workspace["id"]})
+        meeting = self.worker.start(
+            {
+                "title": "workspace",
+                "language": "zh",
+                "refined_model_id": "qwen3-asr-0.6b-int8",
+                "workspace_id": workspace["id"],
+            }
+        )
         self.assertEqual(meeting["workspace_id"], workspace["id"])
 
     def test_recreate_deleted_workspace_returns_committed_row_and_positions_increase(self):
@@ -748,29 +1129,42 @@ class WorkerTest(unittest.TestCase):
         self.assertEqual(restored, self.worker.store.get_workspace(first["id"]))
 
     def test_legacy_category_migrates_once_to_workspace_id(self):
-        meeting = self.worker.start({"title": "legacy", "language": "zh", "refined_model_id": "qwen3-asr-0.6b-int8"})
+        meeting = self.worker.start(
+            {"title": "legacy", "language": "zh", "refined_model_id": "qwen3-asr-0.6b-int8"}
+        )
         with self.worker.store.connect() as db:
-            db.execute("UPDATE meetings SET category='Legacy', workspace_id=NULL WHERE id=?", (meeting["id"],))
+            db.execute(
+                "UPDATE meetings SET category='Legacy', workspace_id=NULL WHERE id=?",
+                (meeting["id"],),
+            )
             # 模拟旧版数据库：user_version 为 0，下一次初始化应执行一次性结构迁移。
             db.execute("PRAGMA user_version = 0")
         migrated = Store(self.temp.name).get_meeting(meeting["id"])
         self.assertEqual(migrated["category"], "")
-        self.assertEqual(Store(self.temp.name).get_workspace(migrated["workspace_id"])["name"], "Legacy")
+        self.assertEqual(
+            Store(self.temp.name).get_workspace(migrated["workspace_id"])["name"], "Legacy"
+        )
 
     def test_schema_migration_runs_once_and_is_idempotent(self):
         """结构迁移按 user_version 只执行一次：升级库迁移、已迁移库跳过。"""
         from .store_base import CURRENT_SCHEMA_VERSION
 
-        meeting = self.worker.start({"title": "migrate", "language": "zh", "refined_model_id": "qwen3-asr-0.6b-int8"})
+        meeting = self.worker.start(
+            {"title": "migrate", "language": "zh", "refined_model_id": "qwen3-asr-0.6b-int8"}
+        )
         with self.worker.store.connect() as db:
-            db.execute("UPDATE meetings SET category='Old', workspace_id=NULL WHERE id=?", (meeting["id"],))
+            db.execute(
+                "UPDATE meetings SET category='Old', workspace_id=NULL WHERE id=?", (meeting["id"],)
+            )
         with Store(self.temp.name).connect() as db:
             # 模拟旧版库：结构落后 + category 残留。
             db.execute("PRAGMA user_version = 0")
         store = Store(self.temp.name)
         self.assertEqual(store.get_meeting(meeting["id"])["category"], "")
         with store.connect() as db:
-            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], CURRENT_SCHEMA_VERSION)
+            self.assertEqual(
+                db.execute("PRAGMA user_version").fetchone()[0], CURRENT_SCHEMA_VERSION
+            )
         # 已迁移到目标版本后，再次初始化不再触碰 category 残留（一次性迁移语义）。
         with store.connect() as db:
             db.execute("UPDATE meetings SET category='Stale' WHERE id=?", (meeting["id"],))
@@ -779,9 +1173,14 @@ class WorkerTest(unittest.TestCase):
 
     def test_example_workspace_is_not_shown_as_a_real_workspace(self):
         workspace = self.worker.store.create_workspace({"name": "Example"})
-        meeting = self.worker.start({"title": "example", "language": "en", "refined_model_id": "qwen3-asr-0.6b-int8"})
+        meeting = self.worker.start(
+            {"title": "example", "language": "en", "refined_model_id": "qwen3-asr-0.6b-int8"}
+        )
         with self.worker.store.connect() as db:
-            db.execute("UPDATE meetings SET is_example=1, workspace_id=? WHERE id=?", (workspace["id"], meeting["id"]))
+            db.execute(
+                "UPDATE meetings SET is_example=1, workspace_id=? WHERE id=?",
+                (workspace["id"], meeting["id"]),
+            )
         Store(self.temp.name)
         self.assertIsNone(Store(self.temp.name).get_meeting(meeting["id"])["workspace_id"])
         self.assertIsNone(Store(self.temp.name).get_workspace(workspace["id"]))
@@ -796,7 +1195,11 @@ class WorkerTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "too long"):
             ensure_wav_duration(path, 1, "refine")
         ensure_wav_duration(path, 2, "refine")
-        with patch.object(wave.Wave_read, "readframes", side_effect=AssertionError("must reject before reading samples")):
+        with patch.object(
+            wave.Wave_read,
+            "readframes",
+            side_effect=AssertionError("must reject before reading samples"),
+        ):
             with self.assertRaisesRegex(ValueError, "too long") as error:
                 read_mono_wav(path, maximum_seconds=1)
             self.assertEqual(error.exception.code, "error.audio_too_long")
@@ -915,8 +1318,10 @@ class WorkerTest(unittest.TestCase):
         stalled = _Sidecar([sys.executable, '-u', '-c', 'import time; time.sleep(30)'], Mock())
         process = stalled._ensure()
         try:
-            self.assertEqual(stalled.request({'type': 'generate'}, timeout_seconds=0.05),
-                {'type': 'error', 'message': 'Sidecar request timed out'})
+            self.assertEqual(
+                stalled.request({'type': 'generate'}, timeout_seconds=0.05),
+                {'type': 'error', 'message': 'Sidecar request timed out'},
+            )
             self.assertIsNotNone(process.poll())
             self.assertTrue(process.stdin.closed and process.stdout.closed)
         finally:
@@ -936,8 +1341,15 @@ class WorkerTest(unittest.TestCase):
 
     def test_sidecar_protocol_failure_and_cancellation_reap_real_processes(self):
         for reply in ('invalid-json', '[]'):
-            sidecar = _Sidecar([sys.executable, '-u', '-c',
-                f'import sys,time; sys.stdin.readline(); print({reply!r}); time.sleep(30)'], Mock())
+            sidecar = _Sidecar(
+                [
+                    sys.executable,
+                    '-u',
+                    '-c',
+                    f'import sys,time; sys.stdin.readline(); print({reply!r}); time.sleep(30)',
+                ],
+                Mock(),
+            )
             child = sidecar._ensure()
             try:
                 self.assertEqual(sidecar.request({'type': 'generate'})['type'], 'error')
@@ -947,17 +1359,26 @@ class WorkerTest(unittest.TestCase):
             finally:
                 sidecar.shutdown()
 
-        sidecar = _Sidecar([sys.executable, '-u', '-c',
-            'import sys,json,time; '
-            '[print(json.dumps({"type":"response"}), flush=True) if json.loads(line).get("type") == "ping" '
-            'else time.sleep(30) for line in sys.stdin]'], Mock())
+        sidecar = _Sidecar(
+            [
+                sys.executable,
+                '-u',
+                '-c',
+                'import sys,json,time; '
+                '[print(json.dumps({"type":"response"}), flush=True) if json.loads(line).get("type") == "ping" '
+                'else time.sleep(30) for line in sys.stdin]',
+            ],
+            Mock(),
+        )
         child = sidecar._ensure()
         response = []
         started = threading.Event()
         cancellation = threading.Event()
+
         def request():
             started.set()
             response.append(sidecar.request({'type': 'generate'}, cancellation=cancellation))
+
         thread = threading.Thread(target=request)
         try:
             thread.start()
@@ -997,22 +1418,28 @@ class WorkerTest(unittest.TestCase):
                 release.unlink(missing_ok=True)
                 ready.unlink(missing_ok=True)
                 summary = []
-                thread = threading.Thread(target=lambda: summary.append(sidecar.request({'type': 'generate'})))
-                session = _AiNoteSession('meeting', {'provider': provider, 'model': 'test'}, 'assist', 'zh')
+                thread = threading.Thread(
+                    target=lambda: summary.append(sidecar.request({'type': 'generate'}))
+                )
+                session = _AiNoteSession(
+                    'meeting', {'provider': provider, 'model': 'test'}, 'assist', 'zh'
+                )
                 session.running = True
                 self.worker._ai_note_sessions['meeting'] = session
                 note_errors = []
+
                 def note():
                     try:
                         self.worker._ai_note_complete(session, 'note')
                     except RuntimeError as error:
                         note_errors.append(str(error))
+
                 queued = threading.Thread(target=note)
                 try:
                     thread.start()
                     deadline = time.monotonic() + 3
                     while not ready.exists() and time.monotonic() < deadline:
-                        time.sleep(.01)
+                        time.sleep(0.01)
                     self.assertTrue(ready.exists())
                     process = sidecar.process
                     if action == 'typing':
@@ -1020,7 +1447,9 @@ class WorkerTest(unittest.TestCase):
                         self.worker.ai_note_typing({'meeting_id': 'meeting', 'typing': True})
                     else:
                         self.worker.ai_note_stop({'meeting_id': 'meeting'})
-                    self.assertIsNone(process.poll(), 'cancelling notes must preserve the active summary')
+                    self.assertIsNone(
+                        process.poll(), 'cancelling notes must preserve the active summary'
+                    )
                     release.touch()
                     thread.join(3)
                     self.assertFalse(thread.is_alive())
@@ -1029,7 +1458,11 @@ class WorkerTest(unittest.TestCase):
                         queued.join(3)
                         self.assertFalse(queued.is_alive())
                         self.assertTrue(note_errors and 'cancelled' in note_errors[0])
-                    self.assertIs(sidecar.process, process, 'cancelled queued notes must not restart the model')
+                    self.assertIs(
+                        sidecar.process,
+                        process,
+                        'cancelled queued notes must not restart the model',
+                    )
                 finally:
                     release.touch()
                     thread.join(3)
@@ -1075,8 +1508,13 @@ class WorkerTest(unittest.TestCase):
             mixed = array("h")
             mixed.frombytes(recording.readframes(1))
             self.assertEqual(mixed[0], 47)
-        audio_export = self.worker.export({"meeting_id": meeting["id"], "content": "audio", "format": "wav"})
-        self.assertEqual(Path(audio_export["path"]).read_bytes(), Path(result["audio"]["playback"]["mix"]).read_bytes())
+        audio_export = self.worker.export(
+            {"meeting_id": meeting["id"], "content": "audio", "format": "wav"}
+        )
+        self.assertEqual(
+            Path(audio_export["path"]).read_bytes(),
+            Path(result["audio"]["playback"]["mix"]).read_bytes(),
+        )
         with self.assertRaisesRegex(ValueError, "saved WAV format"):
             self.worker.export({"meeting_id": meeting["id"], "content": "audio", "format": "m4a"})
         exported = self.worker.export({"meeting_id": meeting["id"], "format": "srt"})
@@ -1112,9 +1550,13 @@ class WorkerTest(unittest.TestCase):
         for track, value in (("mic", 1000), ("system", 3000)):
             self.worker.audio(
                 {
-                    "meeting_id": meeting["id"], "track": track,
-                    "pcm": base64.b64encode(value.to_bytes(2, "little", signed=True) * 1600).decode(),
-                    "sample_rate": 16000, "start_ms": 0,
+                    "meeting_id": meeting["id"],
+                    "track": track,
+                    "pcm": base64.b64encode(
+                        value.to_bytes(2, "little", signed=True) * 1600
+                    ).decode(),
+                    "sample_rate": 16000,
+                    "start_ms": 0,
                 }
             )
         self.worker._flush_sentences()
@@ -1124,25 +1566,34 @@ class WorkerTest(unittest.TestCase):
         import numpy as np
         from .audio_mixer import AlignedAudioMixer, mix_wav_files
         from .audio_io import write_mono_wav
+
         random = np.random.default_rng(7)
         system = random.normal(0, 0.08, 96000).astype(np.float32)
         local = random.normal(0, 0.025, len(system)).astype(np.float32)
         mic = local.copy()
         for start, delay in [(0, 320), (32000, 960), (64000, 1920)]:
             index = np.arange(start, start + 32000) - delay
-            mic[start:start + 32000] -= 0.7 * np.where(index >= 0, system[np.maximum(index, 0)], 0)
+            mic[start : start + 32000] -= 0.7 * np.where(
+                index >= 0, system[np.maximum(index, 0)], 0
+            )
         mixer, output = AlignedAudioMixer(), []
         for start in range(0, len(mic), 2731):
             for track, data in (("mic", mic), ("system", system)):
-                output.extend(mixer.accept(track, data[start:start + 2731], start / 16))
-                self.assertLessEqual(len(mixer.buffers[track]), mixer.window + mixer.limit + mixer.lookahead + 2731)
+                output.extend(mixer.accept(track, data[start : start + 2731], start / 16))
+                self.assertLessEqual(
+                    len(mixer.buffers[track]), mixer.window + mixer.limit + mixer.lookahead + 2731
+                )
         output.extend(mixer.flush())
         self.assertEqual(mixer.delay, 1920)
         self.assertEqual(sum(len(samples) for samples, _ in output), len(system))
         last = np.concatenate([samples for samples, _ in output])[64000:96000]
         reference = system[64000:96000]
         # 系统声只剩一份，本机同时发言的幅度保持；不是整轨静音/ducking。
-        self.assertAlmostEqual(float(np.dot(last - reference, local[64000:]) / np.dot(local[64000:], local[64000:])), 1, places=2)
+        self.assertAlmostEqual(
+            float(np.dot(last - reference, local[64000:]) / np.dot(local[64000:], local[64000:])),
+            1,
+            places=2,
+        )
         self.assertGreater(np.corrcoef(last, reference)[0, 1], 0.9)
 
         # 大批次到达不能提前输出单边音频；暂停排空也不应吞掉恢复后的样本。
@@ -1151,10 +1602,14 @@ class WorkerTest(unittest.TestCase):
         batched = burst.accept("system", system, 0)
         batched.extend(burst.flush())
         self.assertEqual(burst.flush(), [])
-        np.testing.assert_allclose(np.concatenate([a for a, _ in batched]), np.concatenate([a for a, _ in output]))
+        np.testing.assert_allclose(
+            np.concatenate([a for a, _ in batched]), np.concatenate([a for a, _ in output])
+        )
 
         # 会后与实时共用算法，WAV 读取块大小不同也应给出同一波形。
-        mic_path, system_path, mixed_path = [Path(self.temp.name) / name for name in ("mic.wav", "system.wav", "mix.wav")]
+        mic_path, system_path, mixed_path = [
+            Path(self.temp.name) / name for name in ("mic.wav", "system.wav", "mix.wav")
+        ]
         write_mono_wav(mic_path, mic, 16000)
         write_mono_wav(system_path, system, 16000)
         mix_wav_files(mic_path, system_path, mixed_path)
@@ -1180,9 +1635,11 @@ class WorkerTest(unittest.TestCase):
         for track, pcm, start_ms in (("system", system_pcm, 0), ("mic", mic_pcm, 1000)):
             self.worker.audio(
                 {
-                    "meeting_id": meeting["id"], "track": track,
+                    "meeting_id": meeting["id"],
+                    "track": track,
                     "pcm": base64.b64encode(pcm).decode(),
-                    "sample_rate": 16000, "start_ms": start_ms,
+                    "sample_rate": 16000,
+                    "start_ms": start_ms,
                 }
             )
         self.worker._flush_sentences()
@@ -1209,12 +1666,19 @@ class WorkerTest(unittest.TestCase):
         self.worker.live_refiner = None
         # system 轨始终无数据。
         for start_ms in (0, 3000, 8000, 8100):
-            with patch("backend.audio_mixer.time.monotonic", return_value=time.monotonic() + start_ms / 1000):
+            with patch(
+                "backend.audio_mixer.time.monotonic",
+                return_value=time.monotonic() + start_ms / 1000,
+            ):
                 self.worker.audio(
                     {
-                        "meeting_id": meeting["id"], "track": "mic",
-                        "pcm": base64.b64encode((1000).to_bytes(2, "little", signed=True) * 1600).decode(),
-                        "sample_rate": 16000, "start_ms": start_ms,
+                        "meeting_id": meeting["id"],
+                        "track": "mic",
+                        "pcm": base64.b64encode(
+                            (1000).to_bytes(2, "little", signed=True) * 1600
+                        ).decode(),
+                        "sample_rate": 16000,
+                        "start_ms": start_ms,
                     }
                 )
         self.worker._flush_sentences()
@@ -1233,7 +1697,9 @@ class WorkerTest(unittest.TestCase):
         self.worker.store.append_audio(
             meeting["id"], "system", base64.b64encode(b"\x01\x00" * 160).decode(), 16000, 100
         )
-        self.assertEqual(self.worker.store.read_manifest(meeting["id"])["tracks"]["system"]["samples"], 1760)
+        self.assertEqual(
+            self.worker.store.read_manifest(meeting["id"])["tracks"]["system"]["samples"], 1760
+        )
 
     def test_audio_resume_recovers_samples_after_a_deferred_manifest_checkpoint(self):
         meeting = self.worker.start(
@@ -1263,9 +1729,7 @@ class WorkerTest(unittest.TestCase):
                 }
             )
         self.assertEqual(raised.exception.code, "model_not_installed")
-        self.assertEqual(
-            raised.exception.models, ["qwen3-asr-0.6b-int8", "silero-vad"]
-        )
+        self.assertEqual(raised.exception.models, ["qwen3-asr-0.6b-int8", "silero-vad"])
         self.assertEqual([], self.worker.store.list_meetings())
 
     def test_live_recording_skips_speaker_tracker(self):
@@ -1301,10 +1765,7 @@ class WorkerTest(unittest.TestCase):
         ) as read_text:
             self.worker.store.seed_examples()
         self.assertTrue(
-            any(
-                call.kwargs.get("encoding") == "utf-8"
-                for call in read_text.call_args_list
-            )
+            any(call.kwargs.get("encoding") == "utf-8" for call in read_text.call_args_list)
         )
 
     def test_strip_reasoning_removes_plain_thinking_process(self):
@@ -1353,7 +1814,9 @@ class WorkerTest(unittest.TestCase):
             }
         )
         prompts = []
-        self.worker.llm_complete = lambda _payload, prompt, **_kwargs: (prompts.append(prompt) or "# **测试会议**\n\n## **行动项**\n\n- 周五完成验收")
+        self.worker.llm_complete = lambda _payload, prompt, **_kwargs: (
+            prompts.append(prompt) or "# **测试会议**\n\n## **行动项**\n\n- 周五完成验收"
+        )
         self.worker.active = None  # 纪要仅在会议结束后生成
         result = self.worker.summarize(
             {
@@ -1379,18 +1842,30 @@ class WorkerTest(unittest.TestCase):
     def test_builtin_summary_uses_full_output_budget(self):
         meeting = self.worker.start(
             {
-                "title": "完整纪要", "language": "zh",
+                "title": "完整纪要",
+                "language": "zh",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
         self.worker.store.save_segment(
-            {"meeting_id": meeting["id"], "segment_id": "mic-0", "text": "讨论完成",
-             "start_ms": 0, "end_ms": 1000, "speaker": "spk-1"}
+            {
+                "meeting_id": meeting["id"],
+                "segment_id": "mic-0",
+                "text": "讨论完成",
+                "start_ms": 0,
+                "end_ms": 1000,
+                "speaker": "spk-1",
+            }
         )
         self.worker.llama_sidecar_complete = Mock(return_value="# **完整纪要**")
         self.worker.active = None
         self.worker.summarize(
-            {"meeting_id": meeting["id"], "provider": "built-in", "model": "qwen3.5-4b-q4km", "consent": True}
+            {
+                "meeting_id": meeting["id"],
+                "provider": "built-in",
+                "model": "qwen3.5-4b-q4km",
+                "consent": True,
+            }
         )
         self.assertEqual(self.worker.llama_sidecar_complete.call_args.args[0]["max_tokens"], 3072)
 
@@ -1402,19 +1877,33 @@ class WorkerTest(unittest.TestCase):
         """
         meeting = self.worker.start(
             {
-                "title": "纪要缺模型", "language": "zh",
+                "title": "纪要缺模型",
+                "language": "zh",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
         self.worker.store.save_segment(
-            {"meeting_id": meeting["id"], "segment_id": "mic-0", "text": "讨论完成",
-             "start_ms": 0, "end_ms": 1000, "speaker": "spk-1"}
+            {
+                "meeting_id": meeting["id"],
+                "segment_id": "mic-0",
+                "text": "讨论完成",
+                "start_ms": 0,
+                "end_ms": 1000,
+                "speaker": "spk-1",
+            }
         )
         self.worker.active = None
-        self.worker.llama_sidecar_complete = Mock(side_effect=ModelNotInstalled(["qwen3.5-2b-q4km"]))
+        self.worker.llama_sidecar_complete = Mock(
+            side_effect=ModelNotInstalled(["qwen3.5-2b-q4km"])
+        )
         with self.assertRaises(ModelNotInstalled) as raised:
             self.worker.summarize(
-                {"meeting_id": meeting["id"], "provider": "built-in", "model": "qwen3.5-2b-q4km", "consent": True}
+                {
+                    "meeting_id": meeting["id"],
+                    "provider": "built-in",
+                    "model": "qwen3.5-2b-q4km",
+                    "consent": True,
+                }
             )
         self.assertEqual(raised.exception.code, "model_not_installed")
         self.assertEqual(raised.exception.models, ["qwen3.5-2b-q4km"])
@@ -1436,18 +1925,31 @@ class WorkerTest(unittest.TestCase):
     def test_summary_strips_model_control_marker_before_title(self):
         meeting = self.worker.start(
             {
-                "title": "控制标记", "language": "zh",
+                "title": "控制标记",
+                "language": "zh",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
         self.worker.store.save_segment(
-            {"meeting_id": meeting["id"], "segment_id": "mic-0", "text": "讨论完成",
-             "start_ms": 0, "end_ms": 1000, "speaker": "spk-1"}
+            {
+                "meeting_id": meeting["id"],
+                "segment_id": "mic-0",
+                "text": "讨论完成",
+                "start_ms": 0,
+                "end_ms": 1000,
+                "speaker": "spk-1",
+            }
         )
         self.worker.llm_complete = lambda *_args, **_kwargs: "_tag\n# **控制标记**\n\n内容"
         self.worker.active = None  # 纪要仅在会议结束后生成
         result = self.worker.summarize(
-            {"meeting_id": meeting["id"], "provider": "OpenAI", "endpoint": "https://example.test/chat", "model": "gpt", "consent": True}
+            {
+                "meeting_id": meeting["id"],
+                "provider": "OpenAI",
+                "endpoint": "https://example.test/chat",
+                "model": "gpt",
+                "consent": True,
+            }
         )
         self.assertEqual(result["markdown"], "# **控制标记**\n\n内容")
 
@@ -1484,7 +1986,14 @@ class WorkerTest(unittest.TestCase):
         )
         self.worker.active = None  # 纪要仅在会议结束后生成
         self.worker.summarize(
-            {"meeting_id": meeting["id"], "provider": "OpenAI", "endpoint": "https://example.test/chat", "model": "gpt", "consent": True, "language": "zh"}
+            {
+                "meeting_id": meeting["id"],
+                "provider": "OpenAI",
+                "endpoint": "https://example.test/chat",
+                "model": "gpt",
+                "consent": True,
+                "language": "zh",
+            }
         )
         self.assertEqual(len(prompts), 1)
         self.assertIn("已清洗的内容", prompts[0])
@@ -1520,7 +2029,9 @@ class WorkerTest(unittest.TestCase):
             }
         )
         prompts = []
-        self.worker.llm_complete = lambda _payload, prompt, **_kwargs: (prompts.append(prompt) or "# **实时逐字稿**")
+        self.worker.llm_complete = lambda _payload, prompt, **_kwargs: (
+            prompts.append(prompt) or "# **实时逐字稿**"
+        )
         self.worker.active = None  # 纪要仅在会议结束后生成
         self.worker.summarize(
             {
@@ -1544,16 +2055,27 @@ class WorkerTest(unittest.TestCase):
         )
         self.worker.store.save_segment(
             {
-                "meeting_id": meeting["id"], "segment_id": "mic-0", "text": "不要保存",
-                "start_ms": 0, "end_ms": 1000, "speaker": "spk-1",
+                "meeting_id": meeting["id"],
+                "segment_id": "mic-0",
+                "text": "不要保存",
+                "start_ms": 0,
+                "end_ms": 1000,
+                "speaker": "spk-1",
             }
         )
         self.worker.llm_complete = lambda *_args, **_kwargs: (
-            self.worker.tasks.cancel("summary.generate", meeting["id"]), "# 已取消"
+            self.worker.tasks.cancel("summary.generate", meeting["id"]),
+            "# 已取消",
         )[1]
         self.worker.active = None  # 纪要仅在会议结束后生成
         result = self.worker.summarize(
-            {"meeting_id": meeting["id"], "provider": "OpenAI", "endpoint": "https://example.test/chat", "model": "gpt", "consent": True}
+            {
+                "meeting_id": meeting["id"],
+                "provider": "OpenAI",
+                "endpoint": "https://example.test/chat",
+                "model": "gpt",
+                "consent": True,
+            }
         )
         self.assertEqual(result, {"cancelled": True})
         self.assertIsNone(self.worker.store.get_meeting(meeting["id"])["summary"])
@@ -1561,12 +2083,15 @@ class WorkerTest(unittest.TestCase):
     def test_deleted_meeting_rejects_late_summary_save(self):
         meeting = self.worker.start(
             {
-                "title": "删除纪要", "language": "zh",
+                "title": "删除纪要",
+                "language": "zh",
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
         self.worker.store.soft_delete(meeting["id"])
-        self.assertFalse(self.worker.store.save_summary(meeting["id"], {"markdown": "迟到"}, "迟到"))
+        self.assertFalse(
+            self.worker.store.save_summary(meeting["id"], {"markdown": "迟到"}, "迟到")
+        )
 
     def test_summary_without_transcript_returns_readable_error(self):
         meeting = self.worker.start(
@@ -1870,9 +2395,7 @@ class WorkerTest(unittest.TestCase):
                 }
             )
             self.assertIn("准备报告", Path(exported["path"]).read_text(encoding="utf-8"))
-        pdf = self.worker.export(
-            {"meeting_id": meeting["id"], "content": "notes", "format": "pdf"}
-        )
+        pdf = self.worker.export({"meeting_id": meeting["id"], "content": "notes", "format": "pdf"})
         printed = Path(pdf["path"]).read_text(encoding="utf-8")
         self.assertNotIn("print-brand", printed)
         self.assertIn("<h2>行动项</h2>", printed)
@@ -1888,13 +2411,26 @@ class WorkerTest(unittest.TestCase):
         )
         self.worker.store.save_summary(meeting["id"], {"markdown": "# 纪要"}, "raw")
         self.worker.store.update_meeting(meeting["id"], {"notes": "# 笔记"})
-        transcript = self.worker.export({"meeting_id": meeting["id"], "content": "transcript", "format": "md"})
-        summary = self.worker.export({"meeting_id": meeting["id"], "content": "notes", "format": "md"})
-        notes = self.worker.export({"meeting_id": meeting["id"], "content": "mynotes", "format": "md"})
-        repeated = self.worker.export({"meeting_id": meeting["id"], "content": "transcript", "format": "md"})
+        transcript = self.worker.export(
+            {"meeting_id": meeting["id"], "content": "transcript", "format": "md"}
+        )
+        summary = self.worker.export(
+            {"meeting_id": meeting["id"], "content": "notes", "format": "md"}
+        )
+        notes = self.worker.export(
+            {"meeting_id": meeting["id"], "content": "mynotes", "format": "md"}
+        )
+        repeated = self.worker.export(
+            {"meeting_id": meeting["id"], "content": "transcript", "format": "md"}
+        )
         self.assertEqual(
             [Path(item["path"]).name for item in (transcript, summary, notes, repeated)],
-            ["[字幕]同名导出.md", "[会议纪要]同名导出.md", "[我的笔记]同名导出.md", "[字幕]同名导出(1).md"],
+            [
+                "[字幕]同名导出.md",
+                "[会议纪要]同名导出.md",
+                "[我的笔记]同名导出.md",
+                "[字幕]同名导出(1).md",
+            ],
         )
 
     def test_mynotes_exports_markdown_and_pdf(self):
@@ -1925,9 +2461,7 @@ class WorkerTest(unittest.TestCase):
         # 没有笔记时给出可读错误。
         self.worker.store.update_meeting(meeting["id"], {"notes": ""})
         with self.assertRaisesRegex(ValueError, "会议中没有记录笔记"):
-            self.worker.export(
-                {"meeting_id": meeting["id"], "content": "mynotes", "format": "md"}
-            )
+            self.worker.export({"meeting_id": meeting["id"], "content": "mynotes", "format": "md"})
 
     def test_llm_client_supports_openai_and_anthropic_shapes(self):
         class Response:
@@ -1960,9 +2494,7 @@ class WorkerTest(unittest.TestCase):
                 "openai",
             )
             sent = request.call_args.args[0]
-            self.assertEqual(
-                json.loads(sent.data)["response_format"], {"type": "json_object"}
-            )
+            self.assertEqual(json.loads(sent.data)["response_format"], {"type": "json_object"})
             self.assertEqual(json.loads(sent.data)["tool_choice"], "none")
             self.assertEqual(dict(sent.header_items())["Authorization"], "Bearer token")
             self.assertEqual(dict(sent.header_items())["User-agent"], "Brevia/1.0")
@@ -1983,23 +2515,37 @@ class WorkerTest(unittest.TestCase):
                 "anthropic",
             )
             sent = request.call_args.args[0]
-            self.assertEqual(
-                sent.full_url, "https://example.test/anthropic/v1/messages"
-            )
+            self.assertEqual(sent.full_url, "https://example.test/anthropic/v1/messages")
             self.assertEqual(json.loads(sent.data)["max_tokens"], 2048)
             self.assertEqual(dict(sent.header_items())["X-api-key"], "token")
         with patch(
             "backend.llm_client._HTTP_OPENER.open",
-            return_value=Response({"content": [{"type": "tool_use", "name": "EnterPlanMode", "input": {}}]}),
+            return_value=Response(
+                {"content": [{"type": "tool_use", "name": "EnterPlanMode", "input": {}}]}
+            ),
         ):
             with self.assertRaisesRegex(ValueError, "tool call instead of text: EnterPlanMode"):
-                complete({"endpoint": "https://example.test/anthropic", "model": "claude", "format": "claude"}, "hello")
+                complete(
+                    {
+                        "endpoint": "https://example.test/anthropic",
+                        "model": "claude",
+                        "format": "claude",
+                    },
+                    "hello",
+                )
         with patch(
             "backend.llm_client._HTTP_OPENER.open",
             return_value=Response({"choices": [{"message": {"content": "custom"}}]}),
         ) as request:
             self.assertEqual(
-                complete({"provider": "custom-openai", "endpoint": "https://gateway.test/v1/chat/completions", "model": "local-model"}, "hello"),
+                complete(
+                    {
+                        "provider": "custom-openai",
+                        "endpoint": "https://gateway.test/v1/chat/completions",
+                        "model": "local-model",
+                    },
+                    "hello",
+                ),
                 "custom",
             )
             self.assertNotIn("Authorization", dict(request.call_args.args[0].header_items()))
@@ -2009,7 +2555,9 @@ class WorkerTest(unittest.TestCase):
             Worker._clean_live_text("THIS IS A TEST. AND ANOTHER ONE."),
             "This is a test. And another one.",
         )
-        self.assertEqual(Worker._clean_live_text("NASA AND FBI USE HTML."), "NASA and FBI use HTML.")
+        self.assertEqual(
+            Worker._clean_live_text("NASA AND FBI USE HTML."), "NASA and FBI use HTML."
+        )
         self.assertEqual(Worker._clean_live_text("WORLD WAR II."), "World war II.")
         self.assertEqual(
             Worker._clean_live_text("AH WE TRAIN A GIANT AI MODEL."),
@@ -2023,13 +2571,9 @@ class WorkerTest(unittest.TestCase):
             Worker._clean_live_text("language English<asr_text>Thought we would reinvent it."),
             "Thought we would reinvent it.",
         )
+        self.assertEqual(Worker._clean_live_text("<|endoftext|>Human / Computer Interaction"), "")
         self.assertEqual(
-            Worker._clean_live_text("<|endoftext|>Human / Computer Interaction"), ""
-        )
-        self.assertEqual(
-            Worker._clean_live_text(
-                "介绍一下 all, over, all, over, all, over, all, over"
-            ),
+            Worker._clean_live_text("介绍一下 all, over, all, over, all, over, all, over"),
             "介绍一下 all, over",
         )
         self.assertEqual(
@@ -2038,9 +2582,7 @@ class WorkerTest(unittest.TestCase):
         )
         # decoder 空转的重复片段可能出现在句中（后面仍接正常文字），而非仅句尾。
         self.assertEqual(
-            Worker._clean_live_text(
-                "隔了好久，就" + "就" * 29 + "。对，但是平常的吧"
-            ),
+            Worker._clean_live_text("隔了好久，就" + "就" * 29 + "。对，但是平常的吧"),
             "隔了好久，就。对，但是平常的吧",
         )
         repeated = "像你们存量的，比如说那家豪普营销的，"
@@ -2061,17 +2603,25 @@ class WorkerTest(unittest.TestCase):
         from .worker_llm import chunk_summary_prompt, merge_summary_prompt, summary_prompt
 
         markers = {
-            "zh": "不得省略", "en": "every explicit follow-up action",
-            "es": "cada acción de seguimiento explícita", "ja": "明確な後続アクションを一つずつ",
-            "ko": "명시적인 후속 작업을 하나씩", "fr": "chaque action de suivi explicite",
-            "de": "jede ausdrücklich genannte Folgemaßnahme", "ru": "каждое явно сформулированное последующее действие",
+            "zh": "不得省略",
+            "en": "every explicit follow-up action",
+            "es": "cada acción de seguimiento explícita",
+            "ja": "明確な後続アクションを一つずつ",
+            "ko": "명시적인 후속 작업을 하나씩",
+            "fr": "chaque action de suivi explicite",
+            "de": "jede ausdrücklich genannte Folgemaßnahme",
+            "ru": "каждое явно сформулированное последующее действие",
         }
         for language, marker in markers.items():
             self.assertIn(marker, summary_prompt("请跟进", "会议", language))
         self.assertIn("逐条提取", chunk_summary_prompt("请跟进", "会议", "zh"))
-        self.assertIn("every explicit follow-up action", chunk_summary_prompt("follow up", "Meeting", "en"))
+        self.assertIn(
+            "every explicit follow-up action", chunk_summary_prompt("follow up", "Meeting", "en")
+        )
         self.assertIn("不得遗漏", merge_summary_prompt(["行动项"], "会议", "zh"))
-        self.assertIn("do not omit any action item", merge_summary_prompt(["Action items"], "Meeting", "en"))
+        self.assertIn(
+            "do not omit any action item", merge_summary_prompt(["Action items"], "Meeting", "en")
+        )
 
     def test_live_text_removes_qwen3_hallucinated_artifacts(self):
         # Qwen3-ASR 在静音/低信噪窗口会幻听出代码围栏、"language <语言>" 标签等。
@@ -2115,12 +2665,9 @@ class WorkerTest(unittest.TestCase):
     def test_normalize_numbers_refined_style_forms(self):
         # 精修（qwen3-asr 全中文数字）也统一转阿拉伯，且不误伤成语。
         cases = {
-            "收盘总市值约三千四百多亿元，一家二零二五年收入十六点九九亿元的公司，为什么能够得到三千多亿元的市场估值？":
-                "收盘总市值约3400多亿元，一家2025年收入16.99亿元的公司，为什么能够得到3000多亿元的市场估值？",
-            "涨幅五百二十九点四四，A股一圈是五百股，纵移一圈需要支付七万五千四。按照开盘价计算，账面浮盈四十七万四千六百元。":
-                "涨幅529.44，A股一圈是五百股，纵移一圈需要支付七万五千四。按照开盘价计算，账面浮盈474600元。",
-            "二零二五年，十六点九九亿元，三千多万，四十七万四千六百元":
-                "2025年，16.99亿元，3000多万，474600元",
+            "收盘总市值约三千四百多亿元，一家二零二五年收入十六点九九亿元的公司，为什么能够得到三千多亿元的市场估值？": "收盘总市值约3400多亿元，一家2025年收入16.99亿元的公司，为什么能够得到3000多亿元的市场估值？",
+            "涨幅五百二十九点四四，A股一圈是五百股，纵移一圈需要支付七万五千四。按照开盘价计算，账面浮盈四十七万四千六百元。": "涨幅529.44，A股一圈是五百股，纵移一圈需要支付七万五千四。按照开盘价计算，账面浮盈474600元。",
+            "二零二五年，十六点九九亿元，三千多万，四十七万四千六百元": "2025年，16.99亿元，3000多万，474600元",
         }
         for source, expected in cases.items():
             self.assertEqual(Worker._clean_live_text(source), expected)
@@ -2144,13 +2691,25 @@ class WorkerTest(unittest.TestCase):
 
     def test_ai_note_reconfigure_tunes_interval(self):
         meeting_id = "11111111-1111-1111-1111-111111111111"
-        self.worker.ai_note_start({"meeting_id": meeting_id, "provider": "built-in", "model": "qwen3.5-2b", "proactivity": "assist", "language": "zh"})
-        result = self.worker.ai_note_reconfigure({"meeting_id": meeting_id, "min_interval_seconds": 120})
+        self.worker.ai_note_start(
+            {
+                "meeting_id": meeting_id,
+                "provider": "built-in",
+                "model": "qwen3.5-2b",
+                "proactivity": "assist",
+                "language": "zh",
+            }
+        )
+        result = self.worker.ai_note_reconfigure(
+            {"meeting_id": meeting_id, "min_interval_seconds": 120}
+        )
         self.assertEqual(result["min_interval_seconds"], 120.0)
         session = self.worker._ai_note_sessions[meeting_id]
         self.assertEqual(session.min_interval_override, 120.0)
         # 传 None 恢复默认。
-        result = self.worker.ai_note_reconfigure({"meeting_id": meeting_id, "min_interval_seconds": None})
+        result = self.worker.ai_note_reconfigure(
+            {"meeting_id": meeting_id, "min_interval_seconds": None}
+        )
         self.assertIsNone(result["min_interval_seconds"])
         self.assertIsNone(session.min_interval_override)
 
@@ -2217,7 +2776,11 @@ class WorkerTest(unittest.TestCase):
             )
             self.worker.refine({"meeting_id": meeting["id"]})
             self.assertEqual(refined.return_value.decode_words.call_count, 1)
-            progress = [event["payload"]["completed"] for event in self.events if event["type"] == "refinement.progress"]
+            progress = [
+                event["payload"]["completed"]
+                for event in self.events
+                if event["type"] == "refinement.progress"
+            ]
             self.assertEqual(progress, sorted(progress))
             self.assertLess(progress[-1], 100)
             # 不带语言时沿用会议语言（en），而不是退回多语言混说。
@@ -2225,15 +2788,31 @@ class WorkerTest(unittest.TestCase):
             self.assertEqual(refined.call_args.kwargs["language"], "en")
             self.assertEqual(self.worker.store.get_meeting(meeting["id"])["language"], "en")
             with self.assertRaisesRegex(ValueError, "Automatic multilingual"):
-                self.worker.refine({"meeting_id": meeting["id"], "language": "auto", "refined_model_id": "funasr-nano-int8"})
-            self.worker.refine({"meeting_id": meeting["id"], "language": "es", "refined_model_id": "whisper-large-v3"})
+                self.worker.refine(
+                    {
+                        "meeting_id": meeting["id"],
+                        "language": "auto",
+                        "refined_model_id": "funasr-nano-int8",
+                    }
+                )
+            self.worker.refine(
+                {
+                    "meeting_id": meeting["id"],
+                    "language": "es",
+                    "refined_model_id": "whisper-large-v3",
+                }
+            )
             self.assertEqual(refined.call_args.kwargs["language"], "es")
             # Preserve speaker metadata without decoding the mixed interruption twice.
-            overlap = [{"start_ms": 0, "end_ms": 2000, "speaker": "spk-1"},
-                       {"start_ms": 300, "end_ms": 1700, "speaker": "spk-2"}]
+            overlap = [
+                {"start_ms": 0, "end_ms": 2000, "speaker": "spk-1"},
+                {"start_ms": 300, "end_ms": 1700, "speaker": "spk-2"},
+            ]
             refined.return_value.decode_words.side_effect = None
             refined.return_value.decode_words.return_value = (
-                "remote slow", [{"text": "remote slow", "start_ms": 500, "end_ms": 1000}])
+                "remote slow",
+                [{"text": "remote slow", "start_ms": 500, "end_ms": 1000}],
+            )
             calls = refined.return_value.decode_words.call_count
             with patch.object(self.worker, "_cluster_speaker_turns", return_value=overlap):
                 self.worker.refine({"meeting_id": meeting["id"]})
@@ -2254,6 +2833,7 @@ class WorkerTest(unittest.TestCase):
             [("mix", "remote slow", "spk-1")],
         )
         self.assertEqual(latest[0]["word_timestamps"][0]["speaker"], "spk-1")
+
     def test_mic_track_matches_registered_voiceprint_on_refine(self):
         meeting = self.worker.start(
             {
@@ -2359,7 +2939,9 @@ class WorkerTest(unittest.TestCase):
             audio.writeframes(b"\0\0" * 16000)
         self.worker.store.finish_imported_meeting(meeting["id"], 1000)
         self.worker.models.is_ready = lambda _: True
-        numpy = type("Numpy", (), {"zeros_like": staticmethod(lambda samples: [0.0] * len(samples))})
+        numpy = type(
+            "Numpy", (), {"zeros_like": staticmethod(lambda samples: [0.0] * len(samples))}
+        )
         with (
             patch("backend.worker_refinement.read_mono_wav", return_value=([0.001] * 16000, 16000)),
             patch(
@@ -2373,9 +2955,14 @@ class WorkerTest(unittest.TestCase):
             patch("backend.worker_refinement.RefinedASR") as refined,
         ):
             vad.return_value.process.return_value = [{"start_ms": 0, "end_ms": 1000}]
-            diarizer.return_value.process.return_value = [{"start_ms": 0, "end_ms": 1000, "speaker": "spk-2"}]
+            diarizer.return_value.process.return_value = [
+                {"start_ms": 0, "end_ms": 1000, "speaker": "spk-2"}
+            ]
             tracker.return_value.embedding.return_value = None
-            refined.return_value.decode_words.return_value = ("导入内容", [{"text": "导入内容", "start_ms": 0, "end_ms": 1000}])
+            refined.return_value.decode_words.return_value = (
+                "导入内容",
+                [{"text": "导入内容", "start_ms": 0, "end_ms": 1000}],
+            )
             self.worker.refine({"meeting_id": meeting["id"]})
 
         diarizer.return_value.process.assert_called_once()
@@ -2400,10 +2987,15 @@ class WorkerTest(unittest.TestCase):
             audio.writeframes(b"\0\0" * 16000)
         self.worker.store.finish_imported_meeting(meeting["id"], 1000)
         self.worker.models.is_ready = lambda _: True
-        numpy = type("Numpy", (), {"zeros_like": staticmethod(lambda samples: [0.0] * len(samples))})
+        numpy = type(
+            "Numpy", (), {"zeros_like": staticmethod(lambda samples: [0.0] * len(samples))}
+        )
         with (
             patch("backend.worker_refinement.read_mono_wav", return_value=([0.001] * 16000, 16000)),
-            patch("backend.worker_refinement.read_mono_wav_window", return_value=([0.001] * 16000, 16000)) as read_window,
+            patch(
+                "backend.worker_refinement.read_mono_wav_window",
+                return_value=([0.001] * 16000, 16000),
+            ) as read_window,
             patch.dict("sys.modules", {"numpy": numpy}),
             patch("backend.worker_refinement.OfflineVAD") as vad,
             patch("backend.worker_refinement.OfflineDiarizer") as diarizer,
@@ -2411,17 +3003,20 @@ class WorkerTest(unittest.TestCase):
             patch("backend.worker_refinement.RefinedASR") as refined,
         ):
             vad.return_value.process.return_value = [{"start_ms": 0, "end_ms": 1000}]
-            diarizer.return_value.process.return_value = [{"start_ms": 0, "end_ms": 1000, "speaker": "spk-1"}]
+            diarizer.return_value.process.return_value = [
+                {"start_ms": 0, "end_ms": 1000, "speaker": "spk-1"}
+            ]
             tracker.return_value.embedding.return_value = None
-            refined.return_value.decode_words.return_value = ("内容", [{"text": "内容", "start_ms": 0, "end_ms": 1000}])
+            refined.return_value.decode_words.return_value = (
+                "内容",
+                [{"text": "内容", "start_ms": 0, "end_ms": 1000}],
+            )
             self.worker.refine({"meeting_id": meeting["id"]})
 
         self.assertEqual(read_window.call_args.args[0], str(audio_path))
 
     def test_auto_speaker_clustering_does_not_split_identical_embeddings(self):
-        labels = self.worker._auto_cluster_embeddings(
-            [[1.0, 0.0]] * 6, [2000] * 6
-        )
+        labels = self.worker._auto_cluster_embeddings([[1.0, 0.0]] * 6, [2000] * 6)
         self.assertEqual(labels, [0] * 6)
 
     def test_auto_speaker_clustering_keeps_supported_near_optimal_clusters(self):
@@ -2459,17 +3054,27 @@ class WorkerTest(unittest.TestCase):
         meeting = {"id": "meeting", "audio": {"playback": {"mic": str(audio_path)}}}
         with (
             patch("backend.worker_refinement.ensure_wav_duration"),
-            patch("backend.worker_refinement.read_mono_wav", return_value=(numpy.zeros(16000), 16000)),
+            patch(
+                "backend.worker_refinement.read_mono_wav", return_value=(numpy.zeros(16000), 16000)
+            ),
             patch("backend.worker_refinement.OfflineVAD") as vad,
             patch("backend.worker_refinement.OfflineDiarizer") as diarizer,
             patch("backend.worker_refinement.SpeakerTracker"),
             patch.object(self.worker, "_match_speaker_profiles") as match,
         ):
             vad.return_value.process.return_value = [{"start_ms": 0, "end_ms": 1000}]
-            diarizer.return_value.process.return_value = [{"start_ms": 0, "end_ms": 1000, "speaker": "spk-1"}]
+            diarizer.return_value.process.return_value = [
+                {"start_ms": 0, "end_ms": 1000, "speaker": "spk-1"}
+            ]
             self.worker.store.list_speaker_profiles = Mock(return_value=[{"id": "zhou"}])
             self.worker._prepare_track(
-                "mic", meeting, SimpleNamespace(paused=threading.Event(), cancelled=threading.Event()), {"mic"}, False, 2, 0.35
+                "mic",
+                meeting,
+                SimpleNamespace(paused=threading.Event(), cancelled=threading.Event()),
+                {"mic"},
+                False,
+                2,
+                0.35,
             )
         match.assert_called_once()
 
@@ -2499,7 +3104,13 @@ class WorkerTest(unittest.TestCase):
             vad.return_value.process.return_value = [{"start_ms": 250, "end_ms": 750}]
             diarizer.return_value.process.return_value = []
             self.worker._prepare_track(
-                "mic", meeting, SimpleNamespace(paused=threading.Event(), cancelled=threading.Event()), {"mic"}, False, -1, 0.35
+                "mic",
+                meeting,
+                SimpleNamespace(paused=threading.Event(), cancelled=threading.Event()),
+                {"mic"},
+                False,
+                -1,
+                0.35,
             )
         processed = diarizer.return_value.process.call_args.args[0]
         self.assertIsNot(processed, samples, "分离器必须拿到副本，不能就地改写原缓冲")
@@ -2517,9 +3128,7 @@ class WorkerTest(unittest.TestCase):
             audio.setframerate(1)
             audio.writeframes(b"\0\0" * 16_001)
         meeting = {"id": "meeting", "audio": {"playback": {"mic": str(audio_path)}}}
-        control = SimpleNamespace(
-            paused=threading.Event(), cancelled=threading.Event()
-        )
+        control = SimpleNamespace(paused=threading.Event(), cancelled=threading.Event())
         with (
             patch("backend.worker_refinement.ensure_wav_duration"),
             patch(
@@ -2541,9 +3150,7 @@ class WorkerTest(unittest.TestCase):
                 ],
             ) as isolated,
         ):
-            vad.return_value.process.return_value = [
-                {"start_ms": 0, "end_ms": 6000}
-            ]
+            vad.return_value.process.return_value = [{"start_ms": 0, "end_ms": 6000}]
             _, _, turns, _ = self.worker._prepare_track(
                 "mic", meeting, control, {"mic"}, False, -1, 0.35
             )
@@ -2575,7 +3182,9 @@ class WorkerTest(unittest.TestCase):
             )
 
         self.assertEqual(calls, [False, True, True, True])
-        self.assertEqual(turns, [{"start_ms": 0, "end_ms": 15_000, "speaker": "spk-1", "_embedding": None}])
+        self.assertEqual(
+            turns, [{"start_ms": 0, "end_ms": 15_000, "speaker": "spk-1", "_embedding": None}]
+        )
 
     def test_windows_diarization_uses_larger_chunks(self):
         with patch("backend.worker_refinement.sys.platform", "win32"):
@@ -2610,7 +3219,9 @@ class WorkerTest(unittest.TestCase):
                 self.queue.pop(0)
 
         vad = OfflineVAD.__new__(OfflineVAD)
-        vad.config = SimpleNamespace(sample_rate=16000, silero_vad=SimpleNamespace(max_speech_duration=20))
+        vad.config = SimpleNamespace(
+            sample_rate=16000, silero_vad=SimpleNamespace(max_speech_duration=20)
+        )
         vad.sherpa_onnx = SimpleNamespace(VoiceActivityDetector=Detector)
         progress = Mock()
         segments = vad.process([0.1] * 400000, progress=progress)
@@ -2648,17 +3259,24 @@ class WorkerTest(unittest.TestCase):
 
         vad.sherpa_onnx.VoiceActivityDetector = ContinuousDetector
         segments = vad.process([0.1] * 1123456)
-        self.assertEqual(segments, [
-            {"start_ms": 0, "end_ms": 20000},
-            {"start_ms": 20000, "end_ms": 40000},
-            {"start_ms": 40000, "end_ms": 60000},
-            {"start_ms": 60000, "end_ms": 70216},
-        ])
+        self.assertEqual(
+            segments,
+            [
+                {"start_ms": 0, "end_ms": 20000},
+                {"start_ms": 20000, "end_ms": 40000},
+                {"start_ms": 40000, "end_ms": 60000},
+                {"start_ms": 60000, "end_ms": 70216},
+            ],
+        )
 
     def test_diarization_timeout_retries_small_chunks_before_fallback(self):
-        payload = {"core_start_ms": 0, "core_end_ms": 60000,
-                   "window_start_ms": 0, "window_end_ms": 61000,
-                   "speech": [{"start_ms": 0, "end_ms": 60000}]}
+        payload = {
+            "core_start_ms": 0,
+            "core_end_ms": 60000,
+            "window_start_ms": 0,
+            "window_end_ms": 61000,
+            "speech": [{"start_ms": 0, "end_ms": 60000}],
+        }
         calls = []
 
         def run(context, part, control):
@@ -2668,17 +3286,33 @@ class WorkerTest(unittest.TestCase):
             return [{"start_ms": part["core_start_ms"], "end_ms": part["core_end_ms"]}]
 
         with patch.object(self.worker, "_run_diarization_process", side_effect=run):
-            turns, broken = self.worker._diarize_chunk(None, payload, SimpleNamespace(paused=threading.Event(), cancelled=threading.Event()), True)
+            turns, broken = self.worker._diarize_chunk(
+                None,
+                payload,
+                SimpleNamespace(paused=threading.Event(), cancelled=threading.Event()),
+                True,
+            )
         self.assertFalse(broken)
-        self.assertEqual([(t["start_ms"], t["end_ms"]) for t in turns],
-                         [(0, 15000), (15000, 30000), (30000, 45000), (45000, 60000)])
+        self.assertEqual(
+            [(t["start_ms"], t["end_ms"]) for t in turns],
+            [(0, 15000), (15000, 30000), (30000, 45000), (45000, 60000)],
+        )
         self.assertTrue(all(not part["vad_fallback"] for part in calls))
         self.assertEqual(calls[2]["window_start_ms"], 14000)
-        with patch.object(self.worker, "_run_diarization_process", side_effect=DiarizationTimeout("slow")) as run:
-            turns, broken = self.worker._diarize_chunk(None, payload, SimpleNamespace(paused=threading.Event(), cancelled=threading.Event()), True)
+        with patch.object(
+            self.worker, "_run_diarization_process", side_effect=DiarizationTimeout("slow")
+        ) as run:
+            turns, broken = self.worker._diarize_chunk(
+                None,
+                payload,
+                SimpleNamespace(paused=threading.Event(), cancelled=threading.Event()),
+                True,
+            )
         self.assertTrue(broken)
         self.assertEqual(len(turns), 4)
-        self.assertEqual(run.call_count, 6)  # one large attempt, one small native, four VAD attempts
+        self.assertEqual(
+            run.call_count, 6
+        )  # one large attempt, one small native, four VAD attempts
 
     def test_diarization_stage_messages_and_scaled_budget(self):
         context = Mock()
@@ -2689,8 +3323,17 @@ class WorkerTest(unittest.TestCase):
         receiver.recv.side_effect = [(None, "diarization"), (True, [])]
         process.is_alive.return_value = True
         payload = {"core_start_ms": 0, "core_end_ms": 60000}
-        with patch("backend.worker_refinement.time.monotonic", side_effect=[0, 1, 1, 122, 122, 123]):
-            self.assertEqual(self.worker._run_diarization_process(context, payload, SimpleNamespace(paused=threading.Event(), cancelled=threading.Event())), [])
+        with patch(
+            "backend.worker_refinement.time.monotonic", side_effect=[0, 1, 1, 122, 122, 123]
+        ):
+            self.assertEqual(
+                self.worker._run_diarization_process(
+                    context,
+                    payload,
+                    SimpleNamespace(paused=threading.Event(), cancelled=threading.Event()),
+                ),
+                [],
+            )
         receiver.close.assert_called_once()
 
     def test_diarization_timeout_terminates_the_child(self):
@@ -2703,7 +3346,11 @@ class WorkerTest(unittest.TestCase):
         payload = {"core_start_ms": 0, "core_end_ms": 15000}
         with patch("backend.worker_refinement.time.monotonic", side_effect=[0, 121]):
             with self.assertRaisesRegex(RuntimeError, "Diarization timed out"):
-                self.worker._run_diarization_process(context, payload, SimpleNamespace(paused=threading.Event(), cancelled=threading.Event()))
+                self.worker._run_diarization_process(
+                    context,
+                    payload,
+                    SimpleNamespace(paused=threading.Event(), cancelled=threading.Event()),
+                )
         process.terminate.assert_called_once()
         process.join.assert_called_once()
         receiver.close.assert_called_once()
@@ -2719,7 +3366,9 @@ class WorkerTest(unittest.TestCase):
         process.is_alive.return_value = True
         payload = {"core_start_ms": 0, "core_end_ms": 15000}
         with patch("backend.worker_refinement.time.monotonic", side_effect=[0, 100, 100, 121]):
-            with self.assertRaisesRegex(DiarizationTimeout, "stage=extract_embeddings.*elapsed=121.0"):
+            with self.assertRaisesRegex(
+                DiarizationTimeout, "stage=extract_embeddings.*elapsed=121.0"
+            ):
                 self.worker._run_diarization_process(context, payload, control)
         process.terminate.assert_called_once()
         process.join.assert_called_once()
@@ -2740,10 +3389,21 @@ class WorkerTest(unittest.TestCase):
         receiver.poll.side_effect = [False, True]
         receiver.recv.return_value = (True, [])
         process.is_alive.side_effect = [True, False, False]
-        payload = {"meeting_id": "meeting", "core_start_ms": 15000, "core_end_ms": 30000,
-                   "duration_ms": 60000}
+        payload = {
+            "meeting_id": "meeting",
+            "core_start_ms": 15000,
+            "core_end_ms": 30000,
+            "duration_ms": 60000,
+        }
         with patch("backend.worker_refinement.time.monotonic", side_effect=[0, 6, 6, 6]):
-            self.assertEqual(self.worker._run_diarization_process(context, payload, SimpleNamespace(paused=threading.Event(), cancelled=threading.Event())), [])
+            self.assertEqual(
+                self.worker._run_diarization_process(
+                    context,
+                    payload,
+                    SimpleNamespace(paused=threading.Event(), cancelled=threading.Event()),
+                ),
+                [],
+            )
         progress = [e["payload"] for e in self.events if e["type"] == "refinement.progress"]
         self.assertEqual(progress[-1]["meeting_id"], "meeting")
         self.assertEqual((progress[-1]["completed"], progress[-1]["total"]), (22.5, 100))
@@ -2751,29 +3411,50 @@ class WorkerTest(unittest.TestCase):
     def test_empty_diarization_keeps_confirmed_speech(self):
         import numpy
         from backend.worker_refinement import _diarize_chunk_process
+
         connection = Mock()
-        payload = {"models_root": "models", "path": "audio.wav", "threshold": 0.35,
-                   "segmentation_id": "segmentation", "window_start_ms": 0, "window_end_ms": 2000,
-                   "core_start_ms": 0, "core_end_ms": 2000,
-                   "speech": [{"start_ms": 500, "end_ms": 1500}]}
-        with (patch("backend.worker_refinement.ModelManager") as manager,
-              patch("backend.worker_refinement.read_mono_wav_window", return_value=(numpy.ones(32000), 16000)),
-              patch("backend.worker_refinement.OfflineDiarizer") as diarizer,
-              patch("backend.worker_refinement.SpeakerTracker") as tracker):
+        payload = {
+            "models_root": "models",
+            "path": "audio.wav",
+            "threshold": 0.35,
+            "segmentation_id": "segmentation",
+            "window_start_ms": 0,
+            "window_end_ms": 2000,
+            "core_start_ms": 0,
+            "core_end_ms": 2000,
+            "speech": [{"start_ms": 500, "end_ms": 1500}],
+        }
+        with (
+            patch("backend.worker_refinement.ModelManager") as manager,
+            patch(
+                "backend.worker_refinement.read_mono_wav_window",
+                return_value=(numpy.ones(32000), 16000),
+            ),
+            patch("backend.worker_refinement.OfflineDiarizer") as diarizer,
+            patch("backend.worker_refinement.SpeakerTracker") as tracker,
+        ):
             manager.return_value.device.return_value = {"threads": 2}
             diarizer.return_value.process.return_value = []
             tracker.return_value.embedding.return_value = None
             _diarize_chunk_process(connection, payload)
-        self.assertEqual(connection.send.call_args.args, ((True, [{"start_ms": 500, "end_ms": 1500,
-                                                        "speaker": "spk-1", "_embedding": None}]),))
-        self.assertEqual([call.args[0][1] for call in connection.send.call_args_list[:-1]],
-                         ["load_audio", "load_embedding_model", "load_diarization_models", "diarization", "extract_embeddings"])
+        self.assertEqual(
+            connection.send.call_args.args,
+            ((True, [{"start_ms": 500, "end_ms": 1500, "speaker": "spk-1", "_embedding": None}]),),
+        )
+        self.assertEqual(
+            [call.args[0][1] for call in connection.send.call_args_list[:-1]],
+            [
+                "load_audio",
+                "load_embedding_model",
+                "load_diarization_models",
+                "diarization",
+                "extract_embeddings",
+            ],
+        )
 
     def test_refinement_decode_range_adds_context_without_crossing_speakers(self):
         turn = {"start_ms": 1000, "end_ms": 1200, "speaker": "spk-1"}
-        self.assertEqual(
-            self.worker._decode_range(turn, None, None, 5000), (200, 2000)
-        )
+        self.assertEqual(self.worker._decode_range(turn, None, None, 5000), (200, 2000))
         self.assertEqual(
             self.worker._decode_range(
                 turn,
@@ -2785,16 +3466,23 @@ class WorkerTest(unittest.TestCase):
         )
 
     def test_refinement_turns_preserve_speaker_boundaries(self):
-        stable = self.worker._stabilize_speaker_turns([
-            {"start_ms": 0, "end_ms": 6000, "speaker": "a"},
-            {"start_ms": 6300, "end_ms": 7500, "speaker": "b"},
-            {"start_ms": 7800, "end_ms": 15000, "speaker": "a"},
-            {"start_ms": 15300, "end_ms": 22000, "speaker": "b"},
-        ], minimum_ms=2500, absorb_gap_ms=1000)
-        self.assertEqual(stable, [
-            {"start_ms": 0, "end_ms": 15000, "speaker": "a"},
-            {"start_ms": 15300, "end_ms": 22000, "speaker": "b"},
-        ])
+        stable = self.worker._stabilize_speaker_turns(
+            [
+                {"start_ms": 0, "end_ms": 6000, "speaker": "a"},
+                {"start_ms": 6300, "end_ms": 7500, "speaker": "b"},
+                {"start_ms": 7800, "end_ms": 15000, "speaker": "a"},
+                {"start_ms": 15300, "end_ms": 22000, "speaker": "b"},
+            ],
+            minimum_ms=2500,
+            absorb_gap_ms=1000,
+        )
+        self.assertEqual(
+            stable,
+            [
+                {"start_ms": 0, "end_ms": 15000, "speaker": "a"},
+                {"start_ms": 15300, "end_ms": 22000, "speaker": "b"},
+            ],
+        )
         turns = self.worker._refinement_turns(
             [
                 {"start_ms": 0, "end_ms": 18000, "speaker": "spk-1"},
@@ -2807,34 +3495,46 @@ class WorkerTest(unittest.TestCase):
             [(turn["start_ms"], turn["end_ms"], turn["speaker"]) for turn in turns],
             [(0, 9000, "spk-1"), (9000, 18000, "spk-1"), (18000, 21000, "spk-2")],
         )
+        self.assertEqual([turn["speaker"] for turn in turns], ["spk-1", "spk-1", "spk-2"])
         self.assertEqual(
-            [turn["speaker"] for turn in turns], ["spk-1", "spk-1", "spk-2"]
+            self.worker._refinement_turns(
+                [
+                    {"start_ms": 0, "end_ms": 7000, "speaker": "a"},
+                    {"start_ms": 8000, "end_ms": 16000, "speaker": "a"},
+                    {"start_ms": 16000, "end_ms": 19000, "speaker": "b"},
+                ],
+                19000,
+                15000,
+                merge_gap_ms=2000,
+            ),
+            [
+                {"start_ms": 0, "end_ms": 8000, "speaker": "a", "_quiet": False},
+                {"start_ms": 8000, "end_ms": 16000, "speaker": "a", "_quiet": False},
+                {"start_ms": 16000, "end_ms": 19000, "speaker": "b", "_quiet": False},
+            ],
         )
-        self.assertEqual(self.worker._refinement_turns([
-            {"start_ms": 0, "end_ms": 7000, "speaker": "a"},
-            {"start_ms": 8000, "end_ms": 16000, "speaker": "a"},
-            {"start_ms": 16000, "end_ms": 19000, "speaker": "b"},
-        ], 19000, 15000, merge_gap_ms=2000), [
-            {"start_ms": 0, "end_ms": 8000, "speaker": "a", "_quiet": False},
-            {"start_ms": 8000, "end_ms": 16000, "speaker": "a", "_quiet": False},
-            {"start_ms": 16000, "end_ms": 19000, "speaker": "b", "_quiet": False},
-        ])
         # 安静语音兜底窗口自成一段，不被相邻窗口按 merge_gap 合并进去。
-        self.assertEqual(self.worker._refinement_turns([
-            {"start_ms": 0, "end_ms": 7000, "speaker": "a"},
-            {"start_ms": 7500, "end_ms": 11000, "speaker": "a", "_quiet": True},
-            {"start_ms": 11500, "end_ms": 19000, "speaker": "a"},
-        ], 19000, 15000, merge_gap_ms=2000), [
-            {"start_ms": 0, "end_ms": 7000, "speaker": "a", "_quiet": False},
-            {"start_ms": 7500, "end_ms": 11000, "speaker": "a", "_quiet": True},
-            {"start_ms": 11500, "end_ms": 19000, "speaker": "a", "_quiet": False},
-        ])
+        self.assertEqual(
+            self.worker._refinement_turns(
+                [
+                    {"start_ms": 0, "end_ms": 7000, "speaker": "a"},
+                    {"start_ms": 7500, "end_ms": 11000, "speaker": "a", "_quiet": True},
+                    {"start_ms": 11500, "end_ms": 19000, "speaker": "a"},
+                ],
+                19000,
+                15000,
+                merge_gap_ms=2000,
+            ),
+            [
+                {"start_ms": 0, "end_ms": 7000, "speaker": "a", "_quiet": False},
+                {"start_ms": 7500, "end_ms": 11000, "speaker": "a", "_quiet": True},
+                {"start_ms": 11500, "end_ms": 19000, "speaker": "a", "_quiet": False},
+            ],
+        )
 
     def test_refinement_overlap_removes_repeated_prefix(self):
         self.assertEqual(
-            self.worker._trim_refinement_overlap(
-                "我们确认下周的发布计划", "发布计划和负责人"
-            ),
+            self.worker._trim_refinement_overlap("我们确认下周的发布计划", "发布计划和负责人"),
             "和负责人",
         )
         self.assertEqual(
@@ -2866,17 +3566,13 @@ class WorkerTest(unittest.TestCase):
         )
         # 不同的真实内容不能被误删。
         self.assertEqual(
-            self.worker._trim_refinement_overlap(
-                "……我们讨论完了。", "接下来我们看看下一个问题。"
-            ),
+            self.worker._trim_refinement_overlap("……我们讨论完了。", "接下来我们看看下一个问题。"),
             "接下来我们看看下一个问题。",
         )
 
     def test_refinement_trims_repeated_prefixes_within_one_asr_output(self):
         self.assertEqual(
-            self.worker._trim_refinement_repeats(
-                "这个故事得先从人形。 是得先从人形机器人说起。"
-            ),
+            self.worker._trim_refinement_repeats("这个故事得先从人形。 是得先从人形机器人说起。"),
             "这个故事得先从人形机器人说起。",
         )
         self.assertEqual(
@@ -2911,9 +3607,7 @@ class WorkerTest(unittest.TestCase):
         # 完全同前缀（如「今天我们讨论。」是「今天我们讨论季度目标。」的前缀）
         # 不是残片，与「互联网金融」一致保持原样。
         self.assertEqual(
-            self.worker._trim_refinement_repeats(
-                "今天我们讨论季度目标。 今天我们讨论。"
-            ),
+            self.worker._trim_refinement_repeats("今天我们讨论季度目标。 今天我们讨论。"),
             "今天我们讨论季度目标。 今天我们讨论。",
         )
 
@@ -2923,9 +3617,7 @@ class WorkerTest(unittest.TestCase):
             "到了收盘，股价回落到八百三十五元，一圈仍然浮。",
             "美元一圈仍然浮盈347100可如果有人在1100元开盘价买入500股呢？",
         )
-        self.assertEqual(
-            text, "盈347100可如果有人在1100元开盘价买入500股呢？"
-        )
+        self.assertEqual(text, "盈347100可如果有人在1100元开盘价买入500股呢？")
         self.assertTrue(continued)
         # 干净重复（offset 0）同样是句中截断续接：窗口边界落在句中，下一窗口
         # 把上下文完整重说了一遍，句首伪句号同样要去掉。
@@ -3024,9 +3716,7 @@ class WorkerTest(unittest.TestCase):
                 "start_ms": 15_000,
                 "end_ms": 20_000,
                 "text": "下一步又准备往哪里走？",
-                "word_timestamps": [
-                    {"start_ms": 15_100, "end_ms": 15_300, "word": "下一步"}
-                ],
+                "word_timestamps": [{"start_ms": 15_100, "end_ms": 15_300, "word": "下一步"}],
             },
         ]
         assembled = self.worker._assemble_utterances(segments)
@@ -3067,9 +3757,7 @@ class WorkerTest(unittest.TestCase):
         segments[1]["text"] = "我们接下来看市值。"
         segments[1]["continues_previous"] = False
         assembled = self.worker._assemble_utterances(segments)
-        self.assertEqual(
-            assembled[0]["text"], "这个量级即便在科创板。 我们接下来看市值。"
-        )
+        self.assertEqual(assembled[0]["text"], "这个量级即便在科创板。 我们接下来看市值。")
 
     def test_refinement_assembles_utterances_split_branch_joins_continuation(self):
         # 超长拆分的尾句是残句或续接窗口时，也要走与普通合并相同的拼接规则：
@@ -3086,7 +3774,12 @@ class WorkerTest(unittest.TestCase):
             }
 
         events = [
-            ev(16185, 41185, "五百二十九点四四，A股一圈是五百股。按照开盘价计算，账面浮盈四十七万四千六百元。到了收盘，股价回落到八百三十五元，一圈仍然浮。", False),
+            ev(
+                16185,
+                41185,
+                "五百二十九点四四，A股一圈是五百股。按照开盘价计算，账面浮盈四十七万四千六百元。到了收盘，股价回落到八百三十五元，一圈仍然浮。",
+                False,
+            ),
             ev(41185, 56185, "盈347100可如果有人在1100元开盘价买入500股呢？", True),
         ]
         assembled = self.worker._assemble_utterances(events)
@@ -3101,7 +3794,12 @@ class WorkerTest(unittest.TestCase):
         # 拆分出的尾句是截断残片、当前句是完整句时整体替换。
         events = [
             ev(101185, 116185, "还得分开来研究。今天我们就打开语。", True),
-            ev(116185, 131185, "今天我们就打开宇树的招股说明书，看看他已经把生意做到了什么程度。", False),
+            ev(
+                116185,
+                131185,
+                "今天我们就打开宇树的招股说明书，看看他已经把生意做到了什么程度。",
+                False,
+            ),
         ]
         assembled = self.worker._assemble_utterances(events)
         self.assertEqual(len(assembled), 1)
@@ -3161,9 +3859,7 @@ class WorkerTest(unittest.TestCase):
             self.worker._number_rephrase("我觉得这个方案可行。", "我觉得需要再讨论。")
         )
         self.assertIsNone(
-            self.worker._number_rephrase(
-                "我们讨论新项目A1。", "讨论新项目A2需要追加预算。"
-            )
+            self.worker._number_rephrase("我们讨论新项目A1。", "讨论新项目A2需要追加预算。")
         )
 
     def test_refinement_split_does_not_cut_decimal_points(self):
@@ -3202,30 +3898,40 @@ class WorkerTest(unittest.TestCase):
         )
 
     def test_speaker_turn_stabilization_and_word_overlap(self):
-        turns = self.worker._stabilize_speaker_turns([
-            {"start_ms": 0, "end_ms": 900, "speaker": "spk-1"},
-            {"start_ms": 900, "end_ms": 1100, "speaker": "spk-2"},
-            {"start_ms": 1100, "end_ms": 2000, "speaker": "spk-1"},
-        ])
+        turns = self.worker._stabilize_speaker_turns(
+            [
+                {"start_ms": 0, "end_ms": 900, "speaker": "spk-1"},
+                {"start_ms": 900, "end_ms": 1100, "speaker": "spk-2"},
+                {"start_ms": 1100, "end_ms": 2000, "speaker": "spk-1"},
+            ]
+        )
         self.assertEqual(turns, [{"start_ms": 0, "end_ms": 2000, "speaker": "spk-1"}])
-        turns = self.worker._stabilize_speaker_turns([
-            {"start_ms": 0, "end_ms": 3000, "speaker": "spk-1"},
-            {"start_ms": 2500, "end_ms": 2900, "speaker": "spk-2"},
-        ])
+        turns = self.worker._stabilize_speaker_turns(
+            [
+                {"start_ms": 0, "end_ms": 3000, "speaker": "spk-1"},
+                {"start_ms": 2500, "end_ms": 2900, "speaker": "spk-2"},
+            ]
+        )
         self.assertEqual(turns, [{"start_ms": 0, "end_ms": 3000, "speaker": "spk-1"}])
         self.assertEqual(
-            self.worker._overlap_speakers(750, 900, [
-                {"start_ms": 0, "end_ms": 1000, "speaker": "spk-1"},
-                {"start_ms": 700, "end_ms": 1200, "speaker": "spk-2"},
-            ]),
+            self.worker._overlap_speakers(
+                750,
+                900,
+                [
+                    {"start_ms": 0, "end_ms": 1000, "speaker": "spk-1"},
+                    {"start_ms": 700, "end_ms": 1200, "speaker": "spk-2"},
+                ],
+            ),
             ["spk-1", "spk-2"],
         )
 
     def test_deoverlap_speaker_turns_splits_overlapping_boundaries(self):
-        deoverlapped = self.worker._deoverlap_speaker_turns([
-            {"start_ms": 0, "end_ms": 1000, "speaker": "spk-1"},
-            {"start_ms": 900, "end_ms": 2000, "speaker": "spk-2"},
-        ])
+        deoverlapped = self.worker._deoverlap_speaker_turns(
+            [
+                {"start_ms": 0, "end_ms": 1000, "speaker": "spk-1"},
+                {"start_ms": 900, "end_ms": 2000, "speaker": "spk-2"},
+            ]
+        )
         self.assertEqual(
             [(turn["start_ms"], turn["end_ms"], turn["speaker"]) for turn in deoverlapped],
             [(0, 950, "spk-1"), (950, 2000, "spk-2")],
@@ -3239,11 +3945,14 @@ class WorkerTest(unittest.TestCase):
             {"start_ms": 900, "end_ms": 2000, "speaker": "spk-2"},
         ]
         original = [dict(turn) for turn in turns]
-        self.assertEqual(self.worker._deoverlap_speaker_turns(turns), [
-            {"start_ms": 0, "end_ms": 950, "speaker": "spk-1"},
-            {"start_ms": 5, "end_ms": 10, "speaker": "spk-1"},
-            {"start_ms": 950, "end_ms": 2000, "speaker": "spk-2"},
-        ])
+        self.assertEqual(
+            self.worker._deoverlap_speaker_turns(turns),
+            [
+                {"start_ms": 0, "end_ms": 950, "speaker": "spk-1"},
+                {"start_ms": 5, "end_ms": 10, "speaker": "spk-1"},
+                {"start_ms": 950, "end_ms": 2000, "speaker": "spk-2"},
+            ],
+        )
         self.assertEqual(turns, original)
 
     def test_overlap_metadata_preserves_interruption_without_duplicate_asr_windows(self):
@@ -3261,31 +3970,31 @@ class WorkerTest(unittest.TestCase):
         self.assertEqual(turns[0]["end_ms"], 10000)
 
     def test_deoverlap_speaker_turns_keeps_same_speaker_overlap(self):
-        deoverlapped = self.worker._deoverlap_speaker_turns([
-            {"start_ms": 0, "end_ms": 1000, "speaker": "spk-1"},
-            {"start_ms": 900, "end_ms": 2000, "speaker": "spk-1"},
-        ])
+        deoverlapped = self.worker._deoverlap_speaker_turns(
+            [
+                {"start_ms": 0, "end_ms": 1000, "speaker": "spk-1"},
+                {"start_ms": 900, "end_ms": 2000, "speaker": "spk-1"},
+            ]
+        )
         self.assertEqual(len(deoverlapped), 2)
 
     def test_overlap_speakers_ignores_boundary_noise(self):
         self.assertEqual(
-            self.worker._overlap_speakers(900, 1000, [
-                {"start_ms": 0, "end_ms": 950, "speaker": "spk-1"},
-                {"start_ms": 950, "end_ms": 2000, "speaker": "spk-2"},
-            ]),
+            self.worker._overlap_speakers(
+                900,
+                1000,
+                [
+                    {"start_ms": 0, "end_ms": 950, "speaker": "spk-1"},
+                    {"start_ms": 950, "end_ms": 2000, "speaker": "spk-2"},
+                ],
+            ),
             [],
         )
 
     def test_vad_params_for_language_falls_back_to_default(self):
-        self.assertEqual(
-            self.worker._vad_params_for("zh"), SETTINGS["vad"]["zh"]
-        )
-        self.assertEqual(
-            self.worker._vad_params_for("en"), SETTINGS["vad"]["default"]
-        )
-        self.assertEqual(
-            self.worker._vad_params_for("auto"), SETTINGS["vad"]["default"]
-        )
+        self.assertEqual(self.worker._vad_params_for("zh"), SETTINGS["vad"]["zh"])
+        self.assertEqual(self.worker._vad_params_for("en"), SETTINGS["vad"]["default"])
+        self.assertEqual(self.worker._vad_params_for("auto"), SETTINGS["vad"]["default"])
 
     def test_refined_asr_language_hints_force_chinese(self):
         self.assertEqual(RefinedASR._funasr_nano_language("zh"), "中文")
@@ -3326,13 +4035,39 @@ class WorkerTest(unittest.TestCase):
         self.assertEqual(recognizer.recognizer.stream.options, [("language", "Chinese")])
 
     def test_assemble_utterances_merges_adjacent_same_speaker_windows(self):
-        assembled = self.worker._assemble_utterances([
-            {"track": "mic", "start_ms": 0, "end_ms": 15000, "speaker": "mic-spk-1", "text": "我们来看一下", "word_timestamps": [{"text": "我", "start_ms": 0, "end_ms": 100}]},
-            {"track": "mic", "start_ms": 15000, "end_ms": 30000, "speaker": "mic-spk-1", "text": "这个数据的情况", "word_timestamps": [{"text": "这", "start_ms": 15000, "end_ms": 15100}]},
-            {"track": "mic", "start_ms": 30000, "end_ms": 45000, "speaker": "mic-spk-2", "text": "对，是这样的", "word_timestamps": []},
-        ])
+        assembled = self.worker._assemble_utterances(
+            [
+                {
+                    "track": "mic",
+                    "start_ms": 0,
+                    "end_ms": 15000,
+                    "speaker": "mic-spk-1",
+                    "text": "我们来看一下",
+                    "word_timestamps": [{"text": "我", "start_ms": 0, "end_ms": 100}],
+                },
+                {
+                    "track": "mic",
+                    "start_ms": 15000,
+                    "end_ms": 30000,
+                    "speaker": "mic-spk-1",
+                    "text": "这个数据的情况",
+                    "word_timestamps": [{"text": "这", "start_ms": 15000, "end_ms": 15100}],
+                },
+                {
+                    "track": "mic",
+                    "start_ms": 30000,
+                    "end_ms": 45000,
+                    "speaker": "mic-spk-2",
+                    "text": "对，是这样的",
+                    "word_timestamps": [],
+                },
+            ]
+        )
         self.assertEqual(
-            [(item["start_ms"], item["end_ms"], item["speaker"], item["text"]) for item in assembled],
+            [
+                (item["start_ms"], item["end_ms"], item["speaker"], item["text"])
+                for item in assembled
+            ],
             [
                 (0, 30000, "mic-spk-1", "我们来看一下这个数据的情况"),
                 (30000, 45000, "mic-spk-2", "对，是这样的"),
@@ -3341,22 +4076,39 @@ class WorkerTest(unittest.TestCase):
         self.assertEqual(len(assembled[0]["word_timestamps"]), 2)
 
     def test_assemble_utterances_keeps_tracks_and_speakers_separate(self):
-        assembled = self.worker._assemble_utterances([
-            {"track": "mic", "start_ms": 0, "end_ms": 1000, "speaker": "mic-spk-1", "text": "你好", "word_timestamps": []},
-            {"track": "system", "start_ms": 0, "end_ms": 1000, "speaker": "system-spk-1", "text": "hi", "word_timestamps": []},
-        ])
+        assembled = self.worker._assemble_utterances(
+            [
+                {
+                    "track": "mic",
+                    "start_ms": 0,
+                    "end_ms": 1000,
+                    "speaker": "mic-spk-1",
+                    "text": "你好",
+                    "word_timestamps": [],
+                },
+                {
+                    "track": "system",
+                    "start_ms": 0,
+                    "end_ms": 1000,
+                    "speaker": "system-spk-1",
+                    "text": "hi",
+                    "word_timestamps": [],
+                },
+            ]
+        )
         self.assertEqual(len(assembled), 2)
         self.assertEqual([item["track"] for item in assembled], ["mic", "system"])
 
     def test_deoverlap_tails_are_absorbed_before_refinement(self):
         # 分离器边界重叠会留下 25ms 的 spk-2 尾巴；它不能单独进入 ASR。
-        turns = self.worker._deoverlap_speaker_turns([
-            {"start_ms": 0, "end_ms": 1000, "speaker": "spk-1"},
-            {"start_ms": 990, "end_ms": 1020, "speaker": "spk-2"},
-        ])
+        turns = self.worker._deoverlap_speaker_turns(
+            [
+                {"start_ms": 0, "end_ms": 1000, "speaker": "spk-1"},
+                {"start_ms": 990, "end_ms": 1020, "speaker": "spk-2"},
+            ]
+        )
         stable = self.worker._stabilize_speaker_turns(turns, minimum_ms=1000, absorb_gap_ms=200)
         self.assertEqual(stable, [{"start_ms": 0, "end_ms": 1020, "speaker": "spk-1"}])
-
 
     def test_join_utterance_text_preserves_cjk_and_adds_latin_space(self):
         self.assertEqual(self.worker._join_utterance_text("我们看", "一下"), "我们看一下")
@@ -3371,17 +4123,18 @@ class WorkerTest(unittest.TestCase):
             "和负责人明天同步",
         )
 
-
     def test_profile_assignment_requires_a_clear_best_match(self):
-        self.assertTrue(self.worker._is_confident_profile_match({"score": 0.82, "runner_up_score": 0.71}))
-        self.assertFalse(self.worker._is_confident_profile_match({"score": 0.82, "runner_up_score": 0.76}))
+        self.assertTrue(
+            self.worker._is_confident_profile_match({"score": 0.82, "runner_up_score": 0.71})
+        )
+        self.assertFalse(
+            self.worker._is_confident_profile_match({"score": 0.82, "runner_up_score": 0.76})
+        )
 
     def test_refinement_segment_ids_remain_unique_for_overlapping_turns(self):
         ids = set()
         self.assertEqual(self.worker._refinement_segment_id("mix", 0, 0, ids), "mix-0")
-        self.assertEqual(
-            self.worker._refinement_segment_id("mix", 0, 1, ids), "mix-0-1"
-        )
+        self.assertEqual(self.worker._refinement_segment_id("mix", 0, 1, ids), "mix-0-1")
 
     def test_refinement_versions_preserve_prior_postprocess_segments(self):
         meeting = self.worker.start(
@@ -3422,9 +4175,7 @@ class WorkerTest(unittest.TestCase):
             *second,
         )
         segments = self.worker.store.get_meeting(meeting["id"])["segments"]
-        self.assertEqual(
-            [segment["text"] for segment in segments], ["旧结果", "新结果"]
-        )
+        self.assertEqual([segment["text"] for segment in segments], ["旧结果", "新结果"])
         self.assertEqual(
             [segment["version"] for segment in segments],
             ["postprocess", "postprocess-1"],
@@ -3443,7 +4194,9 @@ class WorkerTest(unittest.TestCase):
                 # 下一次垃圾回收；Windows 上未关闭的连接会锁住 brevia.db，让
                 # TemporaryDirectory.cleanup() 直接抛 WinError 32。
                 with closing(sqlite3.connect(db_path)) as db, db:
-                    db.execute("ALTER TABLE meetings ADD COLUMN streaming_model_id TEXT NOT NULL DEFAULT ''")
+                    db.execute(
+                        "ALTER TABLE meetings ADD COLUMN streaming_model_id TEXT NOT NULL DEFAULT ''"
+                    )
                     db.execute(
                         "INSERT INTO meetings (id,title,language,refined_model_id,tags,status,created_at,started_at)"
                         " VALUES ('legacy','标题','zh','funasr-nano-int8','[]','refined','2026-01-01','2026-01-01')"
@@ -3456,7 +4209,9 @@ class WorkerTest(unittest.TestCase):
                 upgraded.close_audio_sessions()
                 with closing(sqlite3.connect(db_path)) as db, db:
                     columns = {row[1] for row in db.execute("PRAGMA table_info(meetings)")}
-                    row = db.execute("SELECT id,refined_model_id FROM meetings WHERE id='legacy'").fetchone()
+                    row = db.execute(
+                        "SELECT id,refined_model_id FROM meetings WHERE id='legacy'"
+                    ).fetchone()
                 self.assertNotIn("streaming_model_id", columns)
                 self.assertEqual(row, ("legacy", "funasr-nano-int8"))
                 self.assertTrue(created["id"], "删除历史列后必须还能建会议")
@@ -3490,9 +4245,7 @@ class WorkerTest(unittest.TestCase):
                 },
             ],
         )
-        self.assertEqual(
-            [segment["segment_id"] for segment in segments], ["mix-0", "mix-0-1"]
-        )
+        self.assertEqual([segment["segment_id"] for segment in segments], ["mix-0", "mix-0-1"])
 
     def test_refinement_segment_ids_do_not_collide_across_meetings(self):
         first = self.worker.start(
@@ -3561,8 +4314,16 @@ class WorkerTest(unittest.TestCase):
                 wav.setparams((1, 2, 16000, 0, "NONE", "not compressed"))
                 wav.writeframes(b"\0\0" * 1600)
 
-        payload = {"title": "import", "path": str(source), "language": "zh", "refined_model_id": "qwen3-asr-0.6b-int8"}
-        with patch("backend.worker_session.convert_to_pcm_wav", side_effect=convert), ThreadPoolExecutor(max_workers=1) as pool:
+        payload = {
+            "title": "import",
+            "path": str(source),
+            "language": "zh",
+            "refined_model_id": "qwen3-asr-0.6b-int8",
+        }
+        with (
+            patch("backend.worker_session.convert_to_pcm_wav", side_effect=convert),
+            ThreadPoolExecutor(max_workers=1) as pool,
+        ):
             imported = pool.submit(self.worker.import_audio, payload)
             try:
                 self.assertTrue(started.wait(5))
@@ -3577,14 +4338,18 @@ class WorkerTest(unittest.TestCase):
                 release.set()
             self.assertEqual(imported.result()["duration_ms"], 100)
         self.assertFalse(self.worker.tasks.has_any())
-        with patch("backend.worker_session.convert_to_pcm_wav", side_effect=OSError("conversion failed")):
+        with patch(
+            "backend.worker_session.convert_to_pcm_wav", side_effect=OSError("conversion failed")
+        ):
             with self.assertRaisesRegex(OSError, "conversion failed"):
                 self.worker.import_audio(payload)
         self.assertFalse(self.worker.tasks.has_any())
         self.assertEqual(len(self.worker.store.list_meetings()), 1)
 
     def test_export_and_voice_processing_share_task_cleanup_guard(self):
-        meeting = self.worker.store.create_meeting({"title": "export", "language": "en", "refined_model_id": "funasr-nano-int8"})
+        meeting = self.worker.store.create_meeting(
+            {"title": "export", "language": "en", "refined_model_id": "funasr-nano-int8"}
+        )
 
         def assert_protected(*_args, **_kwargs):
             self.assertTrue(self.worker.tasks.has_any())
@@ -3644,7 +4409,9 @@ class WorkerTest(unittest.TestCase):
                 worker = Worker(self.temp.name, self.events.append)
             self.assertEqual(SETTINGS, DEFAULT_SETTINGS)
             self.assertFalse(path.exists())
-            self.assertIn(content, [p.read_text() for p in path.parent.glob(f"{path.name}.corrupt-*")])
+            self.assertIn(
+                content, [p.read_text() for p in path.parent.glob(f"{path.name}.corrupt-*")]
+            )
             worker.store.close_audio_sessions()
 
     def test_advanced_settings_failed_replace_preserves_previous_file_and_memory(self):
@@ -3772,23 +4539,15 @@ class WorkerTest(unittest.TestCase):
                 "refined_model_id": "qwen3-asr-0.6b-int8",
             }
         )
-        with patch.object(
-            self.worker.store, "_build_playback", side_effect=OSError("disk full")
-        ):
+        with patch.object(self.worker.store, "_build_playback", side_effect=OSError("disk full")):
             with self.assertRaisesRegex(OSError, "disk full"):
                 self.worker.store.finish_meeting(meeting["id"], 1000)
-        self.assertEqual(
-            self.worker.store.get_meeting(meeting["id"])["status"], "recording"
-        )
+        self.assertEqual(self.worker.store.get_meeting(meeting["id"])["status"], "recording")
         self.assertFalse(self.worker.store.read_manifest(meeting["id"])["closed"])
-        with patch.object(
-            self.worker.store, "write_manifest", side_effect=OSError("disk full")
-        ):
+        with patch.object(self.worker.store, "write_manifest", side_effect=OSError("disk full")):
             with self.assertRaisesRegex(OSError, "disk full"):
                 self.worker.store.finish_meeting(meeting["id"], 1000)
-        self.assertEqual(
-            self.worker.store.get_meeting(meeting["id"])["status"], "recording"
-        )
+        self.assertEqual(self.worker.store.get_meeting(meeting["id"])["status"], "recording")
 
     def test_resume_uses_persisted_audio_time_instead_of_wall_clock(self):
         meeting = self.worker.start(
@@ -3827,9 +4586,13 @@ class WorkerTest(unittest.TestCase):
         for track, value in (("mic", 1000), ("system", 3000)):
             self.worker.audio(
                 {
-                    "meeting_id": meeting["id"], "track": track,
-                    "pcm": base64.b64encode(value.to_bytes(2, "little", signed=True) * 1600).decode(),
-                    "sample_rate": 16000, "start_ms": 0,
+                    "meeting_id": meeting["id"],
+                    "track": track,
+                    "pcm": base64.b64encode(
+                        value.to_bytes(2, "little", signed=True) * 1600
+                    ).decode(),
+                    "sample_rate": 16000,
+                    "start_ms": 0,
                 }
             )
         # 原始双轨已写入 manifest，模拟一场崩溃后待恢复的双轨会议。
@@ -3846,16 +4609,20 @@ class WorkerTest(unittest.TestCase):
         self.worker.live_refiner = None
         self.worker.audio(
             {
-                "meeting_id": meeting["id"], "track": "mic",
+                "meeting_id": meeting["id"],
+                "track": "mic",
                 "pcm": base64.b64encode((1000).to_bytes(2, "little", signed=True) * 1600).decode(),
-                "sample_rate": 16000, "start_ms": 500,
+                "sample_rate": 16000,
+                "start_ms": 500,
             }
         )
         self.worker.audio(
             {
-                "meeting_id": meeting["id"], "track": "system",
+                "meeting_id": meeting["id"],
+                "track": "system",
                 "pcm": base64.b64encode((3000).to_bytes(2, "little", signed=True) * 1600).decode(),
-                "sample_rate": 16000, "start_ms": 500,
+                "sample_rate": 16000,
+                "start_ms": 500,
             }
         )
         self.worker._flush_sentences()
@@ -3866,7 +4633,6 @@ class WorkerTest(unittest.TestCase):
         path.parent.mkdir()
         path.write_text("{broken", encoding="utf-8")
         self.assertEqual(self.worker.store.recoverable_meetings(), [])
-
 
     def test_model_downloads_have_checksums(self):
         for model in self.worker.models.catalog.values():
@@ -3883,8 +4649,18 @@ class WorkerTest(unittest.TestCase):
             member.size = 1
             bundle.addfile(member, io.BytesIO(b"x"))
         manager = ModelManager(Path(self.temp.name) / "models")
-        manager.catalog["unsafe"] = {"id": "unsafe", "revision": "1", "url": "https://example.test/unsafe.tar.bz2", "size_bytes": archive.stat().st_size, "directory": "model", "files": ["model.onnx"]}
-        manager._download_file = lambda _url, destination, _control, progress: (destination.write_bytes(archive.read_bytes()), progress(archive.stat().st_size))
+        manager.catalog["unsafe"] = {
+            "id": "unsafe",
+            "revision": "1",
+            "url": "https://example.test/unsafe.tar.bz2",
+            "size_bytes": archive.stat().st_size,
+            "directory": "model",
+            "files": ["model.onnx"],
+        }
+        manager._download_file = lambda _url, destination, _control, progress: (
+            destination.write_bytes(archive.read_bytes()),
+            progress(archive.stat().st_size),
+        )
         with self.assertRaises(tarfile.FilterError):
             manager.download("unsafe")
         self.assertFalse((Path(self.temp.name) / "escaped").exists())
@@ -3948,20 +4724,30 @@ class WorkerTest(unittest.TestCase):
     def test_china_source_only_proxies_github_downloads(self):
         github = "https://github.com/k2-fsa/sherpa-onnx/releases/download/a/model.tar.bz2"
         self.assertEqual(ModelManager.download_url(github, True), f"https://gh-proxy.com/{github}")
-        self.assertEqual(ModelManager.download_url("https://modelscope.cn/model.onnx", True), "https://modelscope.cn/model.onnx")
+        self.assertEqual(
+            ModelManager.download_url("https://modelscope.cn/model.onnx", True),
+            "https://modelscope.cn/model.onnx",
+        )
 
     def test_china_source_prefers_modelscope_file_downloads(self):
         manager = ModelManager(Path(self.temp.name) / "models")
         manager.catalog["mirror"] = {
-            "id": "mirror", "revision": "1", "url": "https://example.test/model.tar.bz2",
-            "size_bytes": 5, "files": ["model.onnx"],
-            "china_downloads": [{"path": "model.onnx", "url": "https://modelscope.cn/example/model.onnx"}],
+            "id": "mirror",
+            "revision": "1",
+            "url": "https://example.test/model.tar.bz2",
+            "size_bytes": 5,
+            "files": ["model.onnx"],
+            "china_downloads": [
+                {"path": "model.onnx", "url": "https://modelscope.cn/example/model.onnx"}
+            ],
         }
         urls = []
+
         def download(url, destination, _control, progress):
             urls.append(url)
             destination.write_bytes(b"model")
             progress(5)
+
         manager._download_file = download
         manager.download("mirror", china_source=True)
         self.assertEqual(urls, ["https://modelscope.cn/example/model.onnx"])
@@ -3983,9 +4769,15 @@ class WorkerTest(unittest.TestCase):
         # CUDA 和 Apple Silicon 均不应因 CPU ASR provider 而被归类为弱机。
         with patch.dict("os.environ", {"BREVIA_ASR_BACKEND": "cuda"}):
             self.assertFalse(ModelManager.device()["weak"])
-        with patch("backend.asr.platform.machine", return_value="arm64"), patch("backend.asr.os.cpu_count", return_value=4):
+        with (
+            patch("backend.asr.platform.machine", return_value="arm64"),
+            patch("backend.asr.os.cpu_count", return_value=4),
+        ):
             self.assertFalse(ModelManager.device()["weak"])
-        with patch("backend.asr.platform.machine", return_value="AMD64"), patch("backend.asr.os.cpu_count", return_value=8):
+        with (
+            patch("backend.asr.platform.machine", return_value="AMD64"),
+            patch("backend.asr.os.cpu_count", return_value=8),
+        ):
             self.assertTrue(ModelManager.device()["weak"])
 
     def test_whisper_large_v3_manifest_uses_the_archive_file_names(self):
@@ -4117,9 +4909,7 @@ class WorkerTest(unittest.TestCase):
         self.assertFalse(self.worker._import_diarization_too_slow(meeting, ["mic"]))
 
     def test_speaker_profile_aggregates_samples_and_matches_known_voice(self):
-        first = self.worker.store.save_speaker_profile_sample(
-            "王琳", [1, 0, 0], "voice-1"
-        )
+        first = self.worker.store.save_speaker_profile_sample("王琳", [1, 0, 0], "voice-1")
         second = self.worker.store.save_speaker_profile_sample(
             "王琳", [0.9, 0.1, 0], "voice-2", first["id"]
         )
@@ -4205,8 +4995,18 @@ class WorkerTest(unittest.TestCase):
             "end_ms": 10000,
             "text": text,
             "word_timestamps": (
-                [{"text": "甲", "start_ms": index * 100, "end_ms": index * 100 + 100} for index in range(20)]
-                + [{"text": "乙", "start_ms": 6000 + index * 100, "end_ms": 6000 + index * 100 + 100} for index in range(20)]
+                [
+                    {"text": "甲", "start_ms": index * 100, "end_ms": index * 100 + 100}
+                    for index in range(20)
+                ]
+                + [
+                    {
+                        "text": "乙",
+                        "start_ms": 6000 + index * 100,
+                        "end_ms": 6000 + index * 100 + 100,
+                    }
+                    for index in range(20)
+                ]
             ),
         }
         sentences = self.worker.voice_profiles._sentences(text)
@@ -4327,7 +5127,9 @@ class WorkerTest(unittest.TestCase):
             "speaker": "spk-1",
             "track": "mic",
         }
-        self.worker.store.replace_segments(meeting["id"], [refined_segment], version="postprocess", revision=0)
+        self.worker.store.replace_segments(
+            meeting["id"], [refined_segment], version="postprocess", revision=0
+        )
         updated = self.worker.handle(
             {
                 "id": "edit-refined-subtitle",
@@ -4343,7 +5145,9 @@ class WorkerTest(unittest.TestCase):
             ["人工修正后的文本"],
         )
         # 重新精修复用同一 id（窗口起点不变）时，人工修正继续生效。
-        self.worker.store.replace_segments(meeting["id"], [refined_segment], version="postprocess-1", revision=1)
+        self.worker.store.replace_segments(
+            meeting["id"], [refined_segment], version="postprocess-1", revision=1
+        )
         refined = self.worker.store.get_meeting(meeting["id"])
         self.assertEqual(
             [item["text"] for item in latest_segments(refined["segments"])],
@@ -4357,7 +5161,10 @@ class WorkerTest(unittest.TestCase):
                 {
                     "id": "edit-empty",
                     "type": "segment.text",
-                    "payload": {"meeting_id": meeting["id"], "segments": [{"segment_id": "mic-0", "text": "   "}]},
+                    "payload": {
+                        "meeting_id": meeting["id"],
+                        "segments": [{"segment_id": "mic-0", "text": "   "}],
+                    },
                 }
             )
         # 批量写入是原子的：一句话非法时，同批次的合法修改也不得落库。
@@ -4501,9 +5308,7 @@ class WorkerTest(unittest.TestCase):
                 )
         samples = self.worker.store.list_speaker_profile_samples(profile["id"])
         self.worker.store.delete_speaker_profile_sample(profile["id"], samples[0]["id"])
-        self.assertEqual(
-            self.worker.store.speaker_profile(profile["id"])["sample_count"], 1
-        )
+        self.assertEqual(self.worker.store.speaker_profile(profile["id"])["sample_count"], 1)
 
     def test_model_downloads_run_in_parallel(self):
         started, third_started, release = threading.Event(), threading.Event(), threading.Event()
@@ -4519,13 +5324,13 @@ class WorkerTest(unittest.TestCase):
 
         self.worker.models.download = download
         self.assertEqual(
-            self.worker.download_model({"model_id": "zipformer-zh-xlarge-streaming-int8"})["status"],
+            self.worker.download_model({"model_id": "zipformer-zh-xlarge-streaming-int8"})[
+                "status"
+            ],
             "downloading",
         )
         self.assertEqual(
-            self.worker.download_model({"model_id": "zipformer-en-streaming-int8"})[
-                "status"
-            ],
+            self.worker.download_model({"model_id": "zipformer-en-streaming-int8"})["status"],
             "downloading",
         )
         self.assertTrue(started.wait(1))
@@ -4539,7 +5344,9 @@ class WorkerTest(unittest.TestCase):
             "paused",
         )
         self.assertEqual(
-            self.worker.download_model({"model_id": "zipformer-zh-xlarge-streaming-int8"})["status"],
+            self.worker.download_model({"model_id": "zipformer-zh-xlarge-streaming-int8"})[
+                "status"
+            ],
             "downloading",
         )
         release.set()
@@ -4623,10 +5430,14 @@ class WorkerTest(unittest.TestCase):
         resumed = io.BytesIO(b"def")
         resumed.getcode = lambda: 206
         with (
-            patch("backend.asr.urllib.request.urlopen", side_effect=[InterruptedResponse(), resumed]) as open_url,
+            patch(
+                "backend.asr.urllib.request.urlopen", side_effect=[InterruptedResponse(), resumed]
+            ) as open_url,
             patch("backend.asr.time.sleep"),
         ):
-            manager._download_file("https://example.test/model.bin", destination, lambda: None, lambda _: None)
+            manager._download_file(
+                "https://example.test/model.bin", destination, lambda: None, lambda _: None
+            )
         self.assertEqual(destination.read_bytes(), b"abcdef")
         self.assertEqual(open_url.call_args_list[1].args[0].get_header("Range"), "bytes=3-")
 
@@ -4706,7 +5517,9 @@ class WorkerTest(unittest.TestCase):
 
         # 恢复 → 任务跑完 → 注册记录必须被释放。
         self.assertEqual(
-            self.worker.resume_task({"task": "meeting.refine", "meeting_id": "meeting-1"})["status"],
+            self.worker.resume_task({"task": "meeting.refine", "meeting_id": "meeting-1"})[
+                "status"
+            ],
             "running",
         )
         runner.join(timeout=5)
@@ -4745,17 +5558,12 @@ class WorkerTest(unittest.TestCase):
             except ValueError as error:
                 results.append(str(error))
 
-        threads = [
-            threading.Thread(target=start, args=(title,))
-            for title in ("并发一", "并发二")
-        ]
+        threads = [threading.Thread(target=start, args=(title,)) for title in ("并发一", "并发二")]
         for thread in threads:
             thread.start()
         for thread in threads:
             thread.join()
-        self.assertEqual(
-            len([result for result in results if "already active" not in result]), 1
-        )
+        self.assertEqual(len([result for result in results if "already active" not in result]), 1)
 
     def test_store_serializes_concurrent_audio_appends(self):
         meeting = self.worker.store.create_meeting(
@@ -4820,7 +5628,6 @@ class WorkerTest(unittest.TestCase):
         bundle = self.worker.bundle({"meeting_id": meeting["id"]})
         self.assertFalse(bundle["recording_included"])
 
-
     def test_meeting_search_matches_title_tags_and_transcript(self):
         meeting = self.worker.start(
             {
@@ -4847,12 +5654,20 @@ class WorkerTest(unittest.TestCase):
             )
 
     def test_meeting_search_treats_like_wildcards_as_text(self):
-        literal = self.worker.start({"title": "完成 100%", "language": "zh", "refined_model_id": "qwen3-asr-0.6b-int8"})
+        literal = self.worker.start(
+            {"title": "完成 100%", "language": "zh", "refined_model_id": "qwen3-asr-0.6b-int8"}
+        )
         self.worker.stop({"meeting_id": literal["id"], "duration_ms": 0})
-        other = self.worker.start({"title": "完成 100x", "language": "zh", "refined_model_id": "qwen3-asr-0.6b-int8"})
+        other = self.worker.start(
+            {"title": "完成 100x", "language": "zh", "refined_model_id": "qwen3-asr-0.6b-int8"}
+        )
         self.worker.stop({"meeting_id": other["id"], "duration_ms": 0})
-        self.assertEqual([item["id"] for item in self.worker.store.list_meetings(query="100%")], [literal["id"]])
-        self.assertEqual([item["id"] for item in self.worker.store.search_meetings("100%")], [literal["id"]])
+        self.assertEqual(
+            [item["id"] for item in self.worker.store.list_meetings(query="100%")], [literal["id"]]
+        )
+        self.assertEqual(
+            [item["id"] for item in self.worker.store.search_meetings("100%")], [literal["id"]]
+        )
         self.assertNotEqual(literal["id"], other["id"])
 
     def test_translation_is_explicit_and_persisted(self):
@@ -4911,7 +5726,10 @@ class WorkerTest(unittest.TestCase):
             patch("backend.worker.Worker"),
             patch("backend.worker.threading.Thread") as thread,
             patch("backend.worker.ThreadPoolExecutor") as executor,
-            patch("sys.stdin", SimpleNamespace(encoding="utf-8", buffer=io.BytesIO(commands.encode("utf-8")))),
+            patch(
+                "sys.stdin",
+                SimpleNamespace(encoding="utf-8", buffer=io.BytesIO(commands.encode("utf-8"))),
+            ),
         ):
             main()
         # Translation is serialized through a single-worker executor; every other
@@ -5030,7 +5848,9 @@ class WorkerTest(unittest.TestCase):
         self.assertEqual(tracker.assign_embedding([0.0, 1.0]), "spk-2")
         self.assertIn(tracker.assign_embedding([-1.0, 0.0]), {"spk-1", "spk-2"})
         # 只断言对外可见的结果：这一串分配一共用到了两个 spk id，没有越界新开第三个。
-        self.assertEqual({f"spk-{index + 1}" for index in range(len(tracker.centers))}, {"spk-1", "spk-2"})
+        self.assertEqual(
+            {f"spk-{index + 1}" for index in range(len(tracker.centers))}, {"spk-1", "spk-2"}
+        )
 
     def test_speaker_tracker_uses_first_temporary_speaker(self):
         tracker = SpeakerTracker.__new__(SpeakerTracker)
@@ -5047,7 +5867,6 @@ class WorkerTest(unittest.TestCase):
         tracker.embedding = lambda *_: ArrayEmbedding()
         tracker.assign_embedding = lambda _: "spk-1"
         self.assertEqual(tracker.assign([], 16000), "spk-1")
-
 
     def test_stop_with_auto_language_and_no_audio_is_safe(self):
         meeting = self.worker.start(
@@ -5112,11 +5931,8 @@ class WorkerTest(unittest.TestCase):
         self.assertEqual(result["status"], "ready")
         self.assertIsNone(self.worker.active)
 
-
     def test_voiceprint_sample_audio_is_removed_with_profile(self):
-        profile = self.worker.store.save_speaker_profile_sample(
-            "测试人员", [1.0, 0.0], "sample-1"
-        )
+        profile = self.worker.store.save_speaker_profile_sample("测试人员", [1.0, 0.0], "sample-1")
         profile_dir = self.worker.store.speaker_profiles_dir / profile["id"]
         profile_dir.mkdir()
         reference = profile_dir / "reference.wav"
@@ -5134,9 +5950,7 @@ class WorkerTest(unittest.TestCase):
             str(reference),
         )
         self.worker.store.delete_speaker_profile(profile["id"])
-        self.assertFalse(
-            (self.worker.store.speaker_profiles_dir / profile["id"]).exists()
-        )
+        self.assertFalse((self.worker.store.speaker_profiles_dir / profile["id"]).exists())
 
     def test_voiceprint_paths_survive_relocation_and_cannot_escape_profile(self):
         store = self.worker.store
@@ -5145,15 +5959,29 @@ class WorkerTest(unittest.TestCase):
         directory.mkdir()
         audio = directory / "sample.wav"
         audio.write_bytes(b"audio")
-        store.save_speaker_profile_sample("Speaker", [1., 0.], "sample", profile["id"], str(audio), 100)
+        store.save_speaker_profile_sample(
+            "Speaker", [1.0, 0.0], "sample", profile["id"], str(audio), 100
+        )
         with store.connect() as db:
-            self.assertEqual(db.execute("SELECT audio_path FROM speaker_profile_samples").fetchone()[0], "sample.wav")
-            previous = store.root.parent / "previous" / "data" / "speaker-profiles" / profile["id"] / audio.name
+            self.assertEqual(
+                db.execute("SELECT audio_path FROM speaker_profile_samples").fetchone()[0],
+                "sample.wav",
+            )
+            previous = (
+                store.root.parent
+                / "previous"
+                / "data"
+                / "speaker-profiles"
+                / profile["id"]
+                / audio.name
+            )
             db.execute("UPDATE speaker_profile_samples SET audio_path=?", (str(previous),))
         sample = store.list_speaker_profile_samples(profile["id"])[0]
         self.assertEqual(sample["audio_path"], str(audio))
         # 同一文件从旧绝对路径转存为相对路径时不能被当作旧样本删掉。
-        store.save_speaker_profile_sample("Speaker", [1., 0.], "sample", profile["id"], str(audio), 100)
+        store.save_speaker_profile_sample(
+            "Speaker", [1.0, 0.0], "sample", profile["id"], str(audio), 100
+        )
         self.assertTrue(audio.exists())
         store.delete_speaker_profile_sample(profile["id"], sample["id"])
         self.assertFalse(audio.exists())
@@ -5162,7 +5990,9 @@ class WorkerTest(unittest.TestCase):
         audio.symlink_to(outside)
         for invalid in [str(outside), "../outside.wav", str(audio)]:
             with self.assertRaisesRegex(ValueError, "inside its profile directory"):
-                store.save_speaker_profile_sample("Speaker", [1., 0.], "bad", profile["id"], invalid)
+                store.save_speaker_profile_sample(
+                    "Speaker", [1.0, 0.0], "bad", profile["id"], invalid
+                )
             store._delete_sample_audio(profile["id"], invalid)
         self.assertEqual(outside.read_bytes(), b"keep")
 
@@ -5171,7 +6001,12 @@ class WorkerTest(unittest.TestCase):
         source.write_bytes(b"test")
         tracker = Mock()
         tracker.embedding.return_value = [1.0, 0.0]
-        with patch.object(self.worker.voice_profiles, "_samples", return_value=([0.1] * 1600, 16000)), patch("backend.voice_profiles.SpeakerTracker", return_value=tracker):
+        with (
+            patch.object(
+                self.worker.voice_profiles, "_samples", return_value=([0.1] * 1600, 16000)
+            ),
+            patch("backend.voice_profiles.SpeakerTracker", return_value=tracker),
+        ):
             payload = {"name": "Speaker", "path": str(source)}
             first = self.worker.voice_profiles.enroll(payload)
             payload["profile_id"] = first["id"]
@@ -5184,10 +6019,16 @@ class WorkerTest(unittest.TestCase):
             self.assertEqual(list(old.parent.glob("*.wav")), [Path(samples[0]["audio_path"])])
             other = self.worker.store.ensure_speaker_profile("Other")
             with self.assertRaisesRegex(ValueError, "another voiceprint"):
-                self.worker.voice_profiles.enroll({**payload, "name": "Other", "profile_id": other["id"]})
+                self.worker.voice_profiles.enroll(
+                    {**payload, "name": "Other", "profile_id": other["id"]}
+                )
             self.assertEqual(list(old.parent.glob("*.wav")), [Path(samples[0]["audio_path"])])
             self.assertEqual(list((old.parent.parent / other["id"]).glob("*.wav")), [])
-            with patch.object(self.worker.store, "save_speaker_profile_sample", side_effect=RuntimeError("test save failure")):
+            with patch.object(
+                self.worker.store,
+                "save_speaker_profile_sample",
+                side_effect=RuntimeError("test save failure"),
+            ):
                 with self.assertRaises(RuntimeError):
                     self.worker.voice_profiles.enroll(payload)
             self.assertEqual(list(old.parent.glob("*.wav")), [Path(samples[0]["audio_path"])])
@@ -5197,13 +6038,33 @@ class WorkerTest(unittest.TestCase):
         source.write_bytes(b"test")
         tracker = Mock()
         tracker.embedding.return_value = [1.0, 0.0]
-        meeting = {"id": "meeting", "audio": {"playback": {"mic": str(source)}}, "segments": [
-            {"id": f"s{index}", "speaker": "spk-1", "track": "mic", "version": "live", "text": "sentence.", "start_ms": index * 50, "end_ms": (index + 1) * 50}
-            for index in range(2)
-        ]}
-        with patch("backend.voice_profiles.SpeakerTracker", return_value=tracker), patch("backend.voice_profiles.read_mono_wav_window", return_value=([0.1] * 800, 16000)) as read:
+        meeting = {
+            "id": "meeting",
+            "audio": {"playback": {"mic": str(source)}},
+            "segments": [
+                {
+                    "id": f"s{index}",
+                    "speaker": "spk-1",
+                    "track": "mic",
+                    "version": "live",
+                    "text": "sentence.",
+                    "start_ms": index * 50,
+                    "end_ms": (index + 1) * 50,
+                }
+                for index in range(2)
+            ],
+        }
+        with (
+            patch("backend.voice_profiles.SpeakerTracker", return_value=tracker),
+            patch(
+                "backend.voice_profiles.read_mono_wav_window", return_value=([0.1] * 800, 16000)
+            ) as read,
+        ):
             self.worker.voice_profiles.learn_from_meeting(meeting, "spk-1", "Speaker")
-        self.assertEqual([call.args for call in read.call_args_list], [(str(source), 0, 50), (str(source), 50, 100)])
+        self.assertEqual(
+            [call.args for call in read.call_args_list],
+            [(str(source), 0, 50), (str(source), 50, 100)],
+        )
         self.assertTrue(all(len(call.args[0]) == 800 for call in tracker.embedding.call_args_list))
 
     def test_live_task_failures_are_reported_without_waiting_for_recording_lock(self):
@@ -5212,9 +6073,11 @@ class WorkerTest(unittest.TestCase):
         self.worker.live_postprocessing = pool
         finished = threading.Event()
         release = threading.Event()
+
         def fail():
             release.wait(2)
             raise RuntimeError("test flush failed")
+
         try:
             with self.worker.state.lock:
                 future = self.worker._submit_live_task(fail)
@@ -5222,7 +6085,14 @@ class WorkerTest(unittest.TestCase):
                 release.set()
                 self.assertTrue(finished.wait(2))
             warnings = [event for event in self.events if event.get("type") == "worker.warning"]
-            self.assertEqual(warnings[-1]["payload"], {"meeting_id": "meeting", "code": "live_processing_failed", "message": "test flush failed"})
+            self.assertEqual(
+                warnings[-1]["payload"],
+                {
+                    "meeting_id": "meeting",
+                    "code": "live_processing_failed",
+                    "message": "test flush failed",
+                },
+            )
         finally:
             pool.shutdown()
             self.worker.active = None
@@ -5301,9 +6171,11 @@ class WorkerTest(unittest.TestCase):
         )
         self.worker.stop({"meeting_id": meeting["id"], "duration_ms": 0})
         control = self.worker.tasks.begin("meeting.refine", meeting["id"])
+
         def finish_cancelled_task():
             control.cancelled.wait(2)
             self.worker.tasks.finish("meeting.refine", meeting["id"], control)
+
         task = threading.Thread(target=finish_cancelled_task)
         task.start()
         self.worker.delete_meeting({"meeting_id": meeting["id"]})
@@ -5315,35 +6187,32 @@ class WorkerTest(unittest.TestCase):
         self.assertTrue(self.worker.store.seed_examples())
         self.assertFalse(self.worker.store.seed_examples())
         examples = [
-            meeting
-            for meeting in self.worker.store.list_meetings()
-            if meeting["is_example"]
+            meeting for meeting in self.worker.store.list_meetings() if meeting["is_example"]
         ]
         self.assertEqual(
-            {meeting["example_locale"] for meeting in examples}, {"zh", "en", "es", "ja", "ko", "fr", "de", "ru"}
+            {meeting["example_locale"] for meeting in examples},
+            {"zh", "en", "es", "ja", "ko", "fr", "de", "ru"},
         )
         meeting = self.worker.store.get_meeting(examples[0]["id"])
         audio = Path(meeting["audio"]["playback"]["mic"])
         self.assertTrue(audio.exists())
         self.assertTrue(all(segment["translation"] for segment in meeting["segments"]))
-        self.assertTrue(all(
-            self.worker.store.get_meeting(item["id"])["summary"]["data"]["markdown"]
-            for item in examples
-        ))
+        self.assertTrue(
+            all(
+                self.worker.store.get_meeting(item["id"])["summary"]["data"]["markdown"]
+                for item in examples
+            )
+        )
         spanish = next(item for item in examples if item["example_locale"] == "es")
         self.assertEqual(spanish["language"], "en")
         self.assertEqual(spanish["target_language"], "es")
         self.worker.store.soft_delete(meeting["id"])
         self.assertFalse(audio.exists())
-        self.assertNotIn(
-            meeting["id"], {item["id"] for item in self.worker.store.list_meetings()}
-        )
+        self.assertNotIn(meeting["id"], {item["id"] for item in self.worker.store.list_meetings()})
         with self.worker.store.connect() as db:
             db.execute("DELETE FROM app_meta WHERE key LIKE 'examples_seeded_%'")
         self.assertTrue(self.worker.store.seed_examples())
-        self.assertNotIn(
-            meeting["id"], {item["id"] for item in self.worker.store.list_meetings()}
-        )
+        self.assertNotIn(meeting["id"], {item["id"] for item in self.worker.store.list_meetings()})
 
     def test_deleted_meetings_can_be_restored_or_purged_with_files(self):
         meeting = self.worker.start(
@@ -5403,7 +6272,9 @@ class WorkerTest(unittest.TestCase):
         with _stub_asr_stack():
             self.worker.resume({"meeting_id": meeting["id"]})
         # 会话里用的一定是修复后的模型，而不是那个会话根本加载不了的退役 id。
-        self.assertNotEqual(self.worker.store.get_meeting(meeting["id"])["refined_model_id"], retired_id)
+        self.assertNotEqual(
+            self.worker.store.get_meeting(meeting["id"])["refined_model_id"], retired_id
+        )
 
     def test_resume_reports_failure_instead_of_silently_recording_without_captions(self):
         """识别链路建不起来时必须上抛，让 main.js 明确提示无法恢复。
@@ -5425,7 +6296,11 @@ class WorkerTest(unittest.TestCase):
         self.assertIsNone(self.worker.active)
         # 恢复失败后必须还能立刻开始新会议（同一个 worker 进程内）。
         self.worker.start(
-            {"title": "恢复失败后重新开始", "language": "zh", "refined_model_id": "qwen3-asr-0.6b-int8"}
+            {
+                "title": "恢复失败后重新开始",
+                "language": "zh",
+                "refined_model_id": "qwen3-asr-0.6b-int8",
+            }
         )
         self.assertIsNotNone(self.worker.active)
 
@@ -5483,7 +6358,9 @@ class WorkerTest(unittest.TestCase):
         for model in selectable:
             for language in model.get("default_for_languages") or []:
                 self.assertNotIn(
-                    language, owners, f"{language} 被 {owners.get(language)} 与 {model['id']} 同时声明"
+                    language,
+                    owners,
+                    f"{language} 被 {owners.get(language)} 与 {model['id']} 同时声明",
                 )
                 owners[language] = model["id"]
 
@@ -5519,7 +6396,9 @@ class WorkerTest(unittest.TestCase):
             audio.setframerate(1)
             audio.writeframes(bytes(3600))
         meeting = {
-            "audio": {"playback": {"mic": str(Path(self.temp.name) / "missing.wav"), "system": str(good)}}
+            "audio": {
+                "playback": {"mic": str(Path(self.temp.name) / "missing.wav"), "system": str(good)}
+            }
         }
         with patch.object(
             self.worker.models, "device", return_value={"cores": 4, "physical_cores": 4}
@@ -5607,29 +6486,51 @@ class WorkerTest(unittest.TestCase):
         )
 
     def test_startup_maintenance_preserves_historical_model_assignments(self):
-        meeting = self.worker.store.create_meeting({
-            "title": "历史精修", "language": "zh", "refined_model_id": "retired-origin",
-        })
-        self.worker.store.replace_segments(meeting["id"], [{
-            "segment_id": "mic-0", "text": "旧稿", "start_ms": 0, "end_ms": 500,
-        }], model_id="retired-origin", language="zh")
+        meeting = self.worker.store.create_meeting(
+            {
+                "title": "历史精修",
+                "language": "zh",
+                "refined_model_id": "retired-origin",
+            }
+        )
+        self.worker.store.replace_segments(
+            meeting["id"],
+            [
+                {
+                    "segment_id": "mic-0",
+                    "text": "旧稿",
+                    "start_ms": 0,
+                    "end_ms": 500,
+                }
+            ],
+            model_id="retired-origin",
+            language="zh",
+        )
         self.worker._startup_maintenance()
         detail = self.worker.store.get_meeting(meeting["id"])
         self.assertEqual(detail["refined_model_id"], "retired-origin")
         self.assertEqual(detail["transcript_model_id"], "retired-origin")
         # 用户改下一次使用的模型不会改写当前稿子的来源。
         self.worker.store.update_meeting(meeting["id"], {"refined_model_id": "funasr-nano-int8"})
-        self.assertEqual(self.worker.store.get_meeting(meeting["id"])["transcript_model_id"], "retired-origin")
+        self.assertEqual(
+            self.worker.store.get_meeting(meeting["id"])["transcript_model_id"], "retired-origin"
+        )
 
     def test_legacy_segments_without_word_timestamps_migrate_without_data_loss(self):
-        meeting = self.worker.store.create_meeting({"title": "legacy", "language": "zh", "refined_model_id": "old-origin"})
+        meeting = self.worker.store.create_meeting(
+            {"title": "legacy", "language": "zh", "refined_model_id": "old-origin"}
+        )
         with self.worker.store.connect() as db:
             db.execute("DROP TABLE segments")
-            db.execute("CREATE TABLE segments (id TEXT, meeting_id TEXT, revision INTEGER DEFAULT 0, "
-                       "version TEXT, track TEXT, start_ms INTEGER, end_ms INTEGER, speaker TEXT, "
-                       "text TEXT, translation TEXT, user_edited INTEGER DEFAULT 0, PRIMARY KEY(id, version))")
-            db.execute("INSERT INTO segments VALUES(?,?,0,'postprocess','mic',0,500,'local-user','旧稿',NULL,0)",
-                       ("mic-0", meeting["id"]))
+            db.execute(
+                "CREATE TABLE segments (id TEXT, meeting_id TEXT, revision INTEGER DEFAULT 0, "
+                "version TEXT, track TEXT, start_ms INTEGER, end_ms INTEGER, speaker TEXT, "
+                "text TEXT, translation TEXT, user_edited INTEGER DEFAULT 0, PRIMARY KEY(id, version))"
+            )
+            db.execute(
+                "INSERT INTO segments VALUES(?,?,0,'postprocess','mic',0,500,'local-user','旧稿',NULL,0)",
+                ("mic-0", meeting["id"]),
+            )
             db.execute("ALTER TABLE meetings DROP COLUMN transcript_model_id")
             db.execute("PRAGMA user_version=0")
         upgraded = Store(self.temp.name)
@@ -5638,35 +6539,60 @@ class WorkerTest(unittest.TestCase):
         self.assertEqual(detail["segments"][0]["word_timestamps"], [])
         self.assertEqual(detail["transcript_model_id"], "old-origin")
         with upgraded.connect() as db:
-            self.assertEqual([row["name"] for row in db.execute("PRAGMA table_info(segments)") if row["pk"]],
-                             ["id", "meeting_id", "version"])
+            self.assertEqual(
+                [row["name"] for row in db.execute("PRAGMA table_info(segments)") if row["pk"]],
+                ["id", "meeting_id", "version"],
+            )
 
     def test_re_refinement_excludes_orphan_user_subtitles_in_all_views(self):
-        meeting = self.worker.store.create_meeting({"title": "revision", "language": "zh", "refined_model_id": "funasr-nano-int8"})
+        meeting = self.worker.store.create_meeting(
+            {"title": "revision", "language": "zh", "refined_model_id": "funasr-nano-int8"}
+        )
         old = {"segment_id": "mic-0", "text": "旧稿", "start_ms": 0, "end_ms": 500}
         self.worker.store.replace_segments(meeting["id"], [old])
-        self.worker.store.save_segment_texts(meeting["id"], [{"segment_id": "mic-0", "text": "人工稿"}])
+        self.worker.store.save_segment_texts(
+            meeting["id"], [{"segment_id": "mic-0", "text": "人工稿"}]
+        )
         new = {"segment_id": "mic-100", "text": "新稿", "start_ms": 100, "end_ms": 600}
-        self.worker.store.replace_segments(meeting["id"], [new], "postprocess-1", 1, model_id="new-origin", language="zh")
+        self.worker.store.replace_segments(
+            meeting["id"], [new], "postprocess-1", 1, model_id="new-origin", language="zh"
+        )
         full = self.worker.store.get_meeting(meeting["id"])
         compact = self.worker.store.get_meeting(meeting["id"], compact=True)
         self.assertTrue(any(item["version"] == "user" for item in full["segments"]), "keep history")
-        for segments in [latest_segments(full["segments"]), full["current_segments"], compact["segments"]]:
+        for segments in [
+            latest_segments(full["segments"]),
+            full["current_segments"],
+            compact["segments"],
+        ]:
             self.assertEqual([item["text"] for item in segments], ["新稿"])
         self.assertEqual(full["transcript_revision"], 1)
         self.assertEqual(full["transcript_model_id"], "new-origin")
 
     def test_jsonl_accepts_large_unicode_notes_and_preserves_request_id(self):
         notes = "会议" * 100000
-        commands = json.dumps({"id": "large-notes", "type": "meeting.update", "payload": {"notes": notes}}, ensure_ascii=True) + "\n"
-        with patch("backend.worker.Worker") as worker, patch("sys.stdin", SimpleNamespace(encoding="utf-8", buffer=io.BytesIO(commands.encode()))):
+        commands = (
+            json.dumps(
+                {"id": "large-notes", "type": "meeting.update", "payload": {"notes": notes}},
+                ensure_ascii=True,
+            )
+            + "\n"
+        )
+        with (
+            patch("backend.worker.Worker") as worker,
+            patch(
+                "sys.stdin", SimpleNamespace(encoding="utf-8", buffer=io.BytesIO(commands.encode()))
+            ),
+        ):
             main()
         worker.return_value.handle.assert_called_once()
         self.assertEqual(worker.return_value.handle.call_args.args[0]["payload"]["notes"], notes)
         self.assertEqual(worker.return_value.response.call_args.args[0], "large-notes")
 
     def test_delete_waits_for_task_cancellation_and_keeps_data_on_timeout(self):
-        meeting = self.worker.store.create_meeting({"title": "busy", "language": "zh", "refined_model_id": "funasr-nano-int8"})
+        meeting = self.worker.store.create_meeting(
+            {"title": "busy", "language": "zh", "refined_model_id": "funasr-nano-int8"}
+        )
         control = self.worker.tasks.begin("meeting.refine", meeting["id"])
         with self.assertRaisesRegex(ValueError, "Wait for background"):
             self.worker._cancel_meeting_tasks(meeting["id"], timeout=0)
@@ -5707,8 +6633,13 @@ class LLMRedirectTests(unittest.TestCase):
                 self.end_headers()
 
             def do_GET(self):
-                received.append((self.server.server_port,
-                                 self.headers.get('Authorization'), self.headers.get('x-api-key')))
+                received.append(
+                    (
+                        self.server.server_port,
+                        self.headers.get('Authorization'),
+                        self.headers.get('x-api-key'),
+                    )
+                )
                 body = b'{"output_text":"ok"}'
                 self.send_response(200)
                 self.send_header('Content-Length', str(len(body)))
@@ -5718,24 +6649,42 @@ class LLMRedirectTests(unittest.TestCase):
             def log_message(self, *_):
                 pass
 
-        with HTTPServer(('127.0.0.1', 0), Handler) as source, HTTPServer(('127.0.0.1', 0), Handler) as sink:
-            threads = [threading.Thread(target=server.serve_forever, daemon=True)
-                       for server in (source, sink)]
+        with (
+            HTTPServer(('127.0.0.1', 0), Handler) as source,
+            HTTPServer(('127.0.0.1', 0), Handler) as sink,
+        ):
+            threads = [
+                threading.Thread(target=server.serve_forever, daemon=True)
+                for server in (source, sink)
+            ]
             for thread in threads:
                 thread.start()
             try:
                 origin = f'http://127.0.0.1:{source.server_port}'
-                for api_format, key in [('openai', 'fake-key'), ('anthropic', 'fake-key'), ('openai', '')]:
+                for api_format, key in [
+                    ('openai', 'fake-key'),
+                    ('anthropic', 'fake-key'),
+                    ('openai', ''),
+                ]:
                     with self.subTest(api_format=api_format, authenticated=bool(key)):
-                        payload = dict(endpoint=origin, model='test', format=api_format, api_key=key)
+                        payload = dict(
+                            endpoint=origin, model='test', format=api_format, api_key=key
+                        )
                         source.destination = origin + '/result'
                         self.assertEqual(complete(payload, 'synthetic meeting'), 'ok')
-                        self.assertEqual(received[-1], (source.server_port,
-                            'Bearer fake-key' if key and api_format == 'openai' else None,
-                            key if api_format == 'anthropic' else None))
+                        self.assertEqual(
+                            received[-1],
+                            (
+                                source.server_port,
+                                'Bearer fake-key' if key and api_format == 'openai' else None,
+                                key if api_format == 'anthropic' else None,
+                            ),
+                        )
                         count = len(received)
-                        for destination in (f'http://127.0.0.1:{sink.server_port}/result',
-                                            f'http://localhost:{sink.server_port}/result'):
+                        for destination in (
+                            f'http://127.0.0.1:{sink.server_port}/result',
+                            f'http://localhost:{sink.server_port}/result',
+                        ):
                             source.destination = destination
                             with self.assertRaisesRegex(ValueError, 'Cross-origin LLM redirects'):
                                 complete(payload, 'synthetic meeting')
@@ -5751,15 +6700,27 @@ class LLMRedirectTests(unittest.TestCase):
         from .llm_client import _SameOriginRedirectHandler
 
         handler = _SameOriginRedirectHandler()
-        request = Request('https://EXAMPLE.test/start', headers={'Authorization': 'Bearer fake-key'})
-        allowed = handler.redirect_request(request, None, 302, 'Found', {}, 'https://example.test:443/end')
+        request = Request(
+            'https://EXAMPLE.test/start', headers={'Authorization': 'Bearer fake-key'}
+        )
+        allowed = handler.redirect_request(
+            request, None, 302, 'Found', {}, 'https://example.test:443/end'
+        )
         self.assertEqual(allowed.get_header('Authorization'), 'Bearer fake-key')
         for status in (301, 302, 303, 307, 308):
-            for destination in ('http://example.test/end', 'https://example.test:444/end', 'https://other.test/end'):
+            for destination in (
+                'http://example.test/end',
+                'https://example.test:444/end',
+                'https://other.test/end',
+            ):
                 with self.subTest(status=status, destination=destination):
                     response = io.BytesIO(b'redirect')
-                    with self.assertRaisesRegex(urllib.error.URLError, 'Cross-origin LLM redirects'):
-                        handler.redirect_request(request, response, status, 'Redirect', {}, destination)
+                    with self.assertRaisesRegex(
+                        urllib.error.URLError, 'Cross-origin LLM redirects'
+                    ):
+                        handler.redirect_request(
+                            request, response, status, 'Redirect', {}, destination
+                        )
                     self.assertTrue(response.closed)
 
 

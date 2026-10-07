@@ -108,8 +108,10 @@ def summarize(outcome):
         counts[event["type"]] = counts.get(event["type"], 0) + 1
         if event["type"] == "worker.warning":
             warnings.append(event["payload"])
-    print(f"回放 {outcome['fed_seconds']:.1f}s 音频耗时 {outcome['wall_seconds']:.1f}s "
-          f"(加速 {outcome['fed_seconds'] / max(outcome['wall_seconds'], 1e-9):.1f}x)")
+    print(
+        f"回放 {outcome['fed_seconds']:.1f}s 音频耗时 {outcome['wall_seconds']:.1f}s "
+        f"(加速 {outcome['fed_seconds'] / max(outcome['wall_seconds'], 1e-9):.1f}x)"
+    )
     print("事件计数:", counts)
     if warnings:
         print("警告:")

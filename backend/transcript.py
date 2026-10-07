@@ -3,12 +3,21 @@
 
 def latest_segments(segments):
     """选择展示/导出版本：精修覆盖实时，人工编辑始终优先。"""
-    refined = [item for item in segments if item["version"].startswith("postprocess")
-               and str(item.get("text") or "").strip()]
+    refined = [
+        item
+        for item in segments
+        if item["version"].startswith("postprocess") and str(item.get("text") or "").strip()
+    ]
     revision = max((item["revision"] for item in refined), default=None)
-    base = ([item for item in refined if item["revision"] == revision]
-            if revision is not None else [item for item in segments
-                if item["version"] == "live" and str(item.get("text") or "").strip()])
+    base = (
+        [item for item in refined if item["revision"] == revision]
+        if revision is not None
+        else [
+            item
+            for item in segments
+            if item["version"] == "live" and str(item.get("text") or "").strip()
+        ]
+    )
     # 已压缩的当前稿可能只包含用户行；保持选择操作幂等。
     if not base and all(item["version"] == "user" for item in segments):
         base = [item for item in segments if str(item.get("text") or "").strip()]

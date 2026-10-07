@@ -9,5 +9,9 @@
 
    `locale` 来自更早加载的 app-state.js，且在**调用时**才解析（不是加载时），所以这里的
    加载顺序是安全的：本文件只需保证 i18n-data.js 已执行完。 */
-const { catalog, appCopy: { stageLabels } } = window.BreviaLocaleData;
-const t = (key) => stageLabels[key]?.[locale] || stageLabels[key]?.en || catalog[locale].labels[key] || key;
+const {
+  catalog,
+  appCopy: { stageLabels },
+} = window.BreviaLocaleData;
+const t = (key) =>
+  stageLabels[key]?.[locale] || stageLabels[key]?.en || catalog[locale].labels[key] || key;

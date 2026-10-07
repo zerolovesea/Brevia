@@ -206,9 +206,13 @@ class AudioStoreMixin:
                     wave.open(str(destination)) as mixed,
                 ):
                     frames = max(mic.getnframes(), system.getnframes())
-                    if (mixed.getparams()[:3] == mic.getparams()[:3] == system.getparams()[:3]
-                            and mixed.getnchannels() == 1 and mixed.getsampwidth() == 2
-                            and mixed.getnframes() == frames and frames > 0):
+                    if (
+                        mixed.getparams()[:3] == mic.getparams()[:3] == system.getparams()[:3]
+                        and mixed.getnchannels() == 1
+                        and mixed.getsampwidth() == 2
+                        and mixed.getnframes() == frames
+                        and frames > 0
+                    ):
                         # WAV 头部正确仍可能被截断；读取最后一帧确认数据完整。
                         mixed.setpos(frames - 1)
                         if len(mixed.readframes(1)) == 2:
@@ -218,8 +222,13 @@ class AudioStoreMixin:
         # 取消或写入失败不能损坏已有回放文件。
         temporary = destination.with_suffix(".tmp.wav")
         try:
-            mix_wav_files(playback["mic"], playback["system"], temporary,
-                          SETTINGS["live_asr"]["mix_max_delay_ms"], progress)
+            mix_wav_files(
+                playback["mic"],
+                playback["system"],
+                temporary,
+                SETTINGS["live_asr"]["mix_max_delay_ms"],
+                progress,
+            )
             temporary.replace(destination)
         finally:
             temporary.unlink(missing_ok=True)
@@ -238,9 +247,7 @@ class AudioStoreMixin:
         """通过临时文件替换，原子地写入录音恢复清单。"""
         path = self.meeting_dir(meeting_id) / "manifest.json"
         temporary = path.with_suffix(".tmp")
-        temporary.write_text(
-            json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
+        temporary.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
         temporary.replace(path)
 
     @synchronized_storage_files

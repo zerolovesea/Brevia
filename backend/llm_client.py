@@ -18,7 +18,11 @@ class _SameOriginRedirectHandler(urllib.request.HTTPRedirectHandler):
     @staticmethod
     def _origin(url):
         parsed = urllib.parse.urlsplit(url)
-        port = parsed.port if parsed.port is not None else {"http": 80, "https": 443}.get(parsed.scheme)
+        port = (
+            parsed.port
+            if parsed.port is not None
+            else {"http": 80, "https": 443}.get(parsed.scheme)
+        )
         return parsed.scheme, parsed.hostname, port
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):
@@ -82,9 +86,7 @@ def complete(payload, prompt, json_mode=False):
             data = json.loads(response.read())
     except urllib.error.HTTPError as error:
         detail = error.read().decode("utf-8", "replace")
-        raise ValueError(
-            f"LLM request failed ({error.code}): {detail}"
-        ) from error
+        raise ValueError(f"LLM request failed ({error.code}): {detail}") from error
     except (urllib.error.URLError, OSError, ValueError) as error:
         raise ValueError(f"LLM request failed: {error}") from error
     content = data.get("message", {}).get("content")
@@ -98,9 +100,7 @@ def complete(payload, prompt, json_mode=False):
         content = data["content"]
     if isinstance(content, list):
         text = "".join(
-            item.get("text", "")
-            for item in content
-            if item.get("type", "text") == "text"
+            item.get("text", "") for item in content if item.get("type", "text") == "text"
         )
         tool_calls.extend(item for item in content if item.get("type") == "tool_use")
         if text:

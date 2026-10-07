@@ -12,33 +12,46 @@
    会抛出明确错误，而不是 undefined is not a function。 */
 const APP_ACTION_NAMES = [
   // ui-components.js
-  'updateDetailNotesDraft', 'showToast',
+  'updateDetailNotesDraft',
+  'showToast',
   // workspaces.js
-  'filterMeetings', 'renderMeetingList', 'openConfirmation', 'selectLibraryNav',
-  'transitionPage', 'minimizeMeeting', 'showView',
+  'filterMeetings',
+  'renderMeetingList',
+  'openConfirmation',
+  'selectLibraryNav',
+  'transitionPage',
+  'minimizeMeeting',
+  'showView',
   // app-meetings.js（renderMeetingList 已在上方声明，视图间共用同一个动作）
   // app-meeting-detail.js
-  'updatePlayerControl', 'renderPlayerTime',
+  'updatePlayerControl',
+  'renderPlayerTime',
 ];
 const registeredAppActions = new Map();
-const appActions = new Proxy({}, {
-  get(_target, name) {
-    if (typeof name !== 'string' || !APP_ACTION_NAMES.includes(name)) return undefined;
-    const implementation = registeredAppActions.get(name);
-    if (implementation) return implementation;
-    return () => {
-      throw new Error(`应用动作 ${name} 尚未注册：app.js 调用了 registerAppActions 之后才能使用`);
-    };
+const appActions = new Proxy(
+  {},
+  {
+    get(_target, name) {
+      if (typeof name !== 'string' || !APP_ACTION_NAMES.includes(name)) return undefined;
+      const implementation = registeredAppActions.get(name);
+      if (implementation) return implementation;
+      return () => {
+        throw new Error(`应用动作 ${name} 尚未注册：app.js 调用了 registerAppActions 之后才能使用`);
+      };
+    },
+    has: (_target, name) => registeredAppActions.has(name),
   },
-  has: (_target, name) => registeredAppActions.has(name),
-});
+);
 
 /** app.js 启动时把实现登记进来。重复注册或名字不在清单内都属于编程错误，直接抛出。 */
 function registerAppActions(source, implementations) {
   for (const [name, implementation] of Object.entries(implementations)) {
-    if (!APP_ACTION_NAMES.includes(name)) throw new Error(`registerAppActions(${source}): ${name} 不在 APP_ACTION_NAMES 清单中`);
-    if (typeof implementation !== 'function') throw new TypeError(`registerAppActions(${source}): ${name} 不是函数`);
-    if (registeredAppActions.has(name)) throw new Error(`registerAppActions(${source}): ${name} 已被重复注册`);
+    if (!APP_ACTION_NAMES.includes(name))
+      throw new Error(`registerAppActions(${source}): ${name} 不在 APP_ACTION_NAMES 清单中`);
+    if (typeof implementation !== 'function')
+      throw new TypeError(`registerAppActions(${source}): ${name} 不是函数`);
+    if (registeredAppActions.has(name))
+      throw new Error(`registerAppActions(${source}): ${name} 已被重复注册`);
     registeredAppActions.set(name, implementation);
   }
 }

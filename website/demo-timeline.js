@@ -70,7 +70,7 @@ class DemoTimeline {
         await this.engine.moveCursor(
           step.target,
           step.duration || 800,
-          step.easing || 'cubic-bezier(0.4, 0, 0.2, 1)'
+          step.easing || 'cubic-bezier(0.4, 0, 0.2, 1)',
         );
         break;
 
@@ -108,7 +108,7 @@ class DemoTimeline {
               element,
               step.text,
               step.charsPerFrame || 2,
-              step.frameDelay || 50
+              step.frameDelay || 50,
             );
           }
         }
@@ -118,11 +118,7 @@ class DemoTimeline {
         if (step.target && step.html) {
           const container = this.resolveElement(step.target);
           if (container) {
-            await this.engine.appendSegment(
-              container,
-              step.html,
-              step.duration || 300
-            );
+            await this.engine.appendSegment(container, step.html, step.duration || 300);
           }
         }
         break;

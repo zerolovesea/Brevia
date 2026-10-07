@@ -1,0 +1,14 @@
+node_modules/
+.venv/
+.models/
+.bench-tmp/
+.research/
+dist/
+build/
+backend/build/
+backend/runtime/
+backend/bundled-models/
+mobile/build/
+mobile/.dart_tool/
+frontend/styles.css
+package-lock.json

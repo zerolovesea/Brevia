@@ -39,12 +39,12 @@ AI 笔记与 AI 会议总结可分别配置供应商、模型和 API Key。使�
 
 之后每场会议，言录按**会议语言**选默认识别模型，归属关系声明在 `backend/models.json` 里：
 
-| 会议语言 | 默认识别模型 | 说明 |
-| --- | --- | --- |
-| 中文、粤语 | FunASR Nano | 中文及中文方言准确率最高 |
-| 日语、韩语 | Qwen3-ASR 0.6B | 可选模型里唯一同时覆盖日韩的一个 |
+| 会议语言                                     | 默认识别模型         | 说明                                         |
+| -------------------------------------------- | -------------------- | -------------------------------------------- |
+| 中文、粤语                                   | FunASR Nano          | 中文及中文方言准确率最高                     |
+| 日语、韩语                                   | Qwen3-ASR 0.6B       | 可选模型里唯一同时覆盖日韩的一个             |
 | 英语、西班牙语、法语、德语、俄语、多语言混说 | Parakeet TDT 0.6B v3 | 一个模型覆盖 25 种欧洲语言，自带标点与时间戳 |
-| 其他语言 | Qwen3-ASR 0.6B | 其余模型里覆盖语言最广的一个 |
+| 其他语言                                     | Qwen3-ASR 0.6B       | 其余模型里覆盖语言最广的一个                 |
 
 Apple 芯片 Mac 的语音识别与 Silero VAD 使用 mlx-audio/MLX；Windows 继续使用 Sherpa ONNX。两端的说话人分离与声纹仍使用 Sherpa。Mac 升级后需下载对应的 MLX 识别模型，已有录音仍可使用。 实际切段上限取实时设置、语言 VAD 配置和模型容量的最小值（macOS MLX 模型为 20 秒）；自动语言检测至少等待 2 秒静音。
 
@@ -93,10 +93,10 @@ Apple 芯片 Mac 的语音识别与 Silero VAD 使用 mlx-audio/MLX；Windows �
 
 从 [GitHub Releases](https://github.com/zerolovesea/Brevia/releases) 下载最新版本：
 
-| 平台 | 安装包 |
-| --- | --- |
-| macOS (Apple Silicon) | `Brevia-<version>-arm64.dmg` |
-| Windows (x64) | `Brevia-<version>-x64-setup.exe` |
+| 平台                  | 安装包                           |
+| --------------------- | -------------------------------- |
+| macOS (Apple Silicon) | `Brevia-<version>-arm64.dmg`     |
+| Windows (x64)         | `Brevia-<version>-x64-setup.exe` |
 
 > Windows 首次运行可能弹出 **Microsoft Defender SmartScreen** 提示。点击 **"更多信息" → "仍要运行"**，确认下载来源是官方 Releases 页面后继续即可。
 
@@ -126,29 +126,29 @@ flowchart LR
 
 ## 技术栈
 
-| 层级 | 技术 |
-| --- | --- |
-| 桌面外壳 | Electron 43 — preload 桥接、context isolation、渲染器沙箱 |
-| 前端 | 原生 HTML/CSS/JS、Tailwind CSS 4、内置 i18n（8 种语言） |
-| 后端 | Python 3.10+、JSONL Worker 协议、SQLite 存储 |
-| 语音引擎 | [mlx-audio](https://github.com/Blaizzy/mlx-audio) / MLX (macOS); [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 1.13.8 (Windows)、ONNX Runtime |
-| 说话人处理 | Pyannote 分段 + 3D-Speaker ERes2Net Base 声纹嵌入 |
-| LLM 客户端 | 内置 llama.cpp（GGUF）+ 兼容 OpenAI / Anthropic 的标准 API |
-| 音频 I/O | ffmpeg（发行版内置） |
-| 构建打包 | electron-builder、PyInstaller（打包原生 Python 运行时） |
+| 层级       | 技术                                                                                                                                                 |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 桌面外壳   | Electron 43 — preload 桥接、context isolation、渲染器沙箱                                                                                            |
+| 前端       | 原生 HTML/CSS/JS、Tailwind CSS 4、内置 i18n（8 种语言）                                                                                              |
+| 后端       | Python 3.10+、JSONL Worker 协议、SQLite 存储                                                                                                         |
+| 语音引擎   | [mlx-audio](https://github.com/Blaizzy/mlx-audio) / MLX (macOS); [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 1.13.8 (Windows)、ONNX Runtime |
+| 说话人处理 | Pyannote 分段 + 3D-Speaker ERes2Net Base 声纹嵌入                                                                                                    |
+| LLM 客户端 | 内置 llama.cpp（GGUF）+ 兼容 OpenAI / Anthropic 的标准 API                                                                                           |
+| 音频 I/O   | ffmpeg（发行版内置）                                                                                                                                 |
+| 构建打包   | electron-builder、PyInstaller（打包原生 Python 运行时）                                                                                              |
 
 ## 支持的模型
 
 整句识别、会后精修、AI 笔记与字幕翻译模型可在应用内 **设置 → 模型库** 按需下载；语音活动检测、说话人分离与声纹模型随应用安装。模型清单声明在 [`backend/models.json`](../backend/models.json)。
 
-| 类型 | 代表模型 | 语言 |
-| --- | --- | --- |
+| 类型                | 代表模型                                          | 语言                          |
+| ------------------- | ------------------------------------------------- | ----------------------------- |
 | 整句识别 / 会后精修 | FunASR Nano、Qwen3-ASR 0.6B、Parakeet TDT 0.6B v3 | 中文 / 多语言 / 25 种欧洲语言 |
-| 语音活动检测 | Silero VAD | 通用 |
-| 说话人分离 | Pyannote Segmentation 3.0 | 通用 |
-| 声纹嵌入 | 3D-Speaker ERes2Net Base | 中文 |
-| AI 笔记与会议纪要 | Qwen 3.5 2B、Qwen 3.5 4B | 中文 / 英语 |
-| 字幕翻译 | Tencent Hy-MT2 1.8B | 33 种语言 |
+| 语音活动检测        | Silero VAD                                        | 通用                          |
+| 说话人分离          | Pyannote Segmentation 3.0                         | 通用                          |
+| 声纹嵌入            | 3D-Speaker ERes2Net Base                          | 中文                          |
+| AI 笔记与会议纪要   | Qwen 3.5 2B、Qwen 3.5 4B                          | 中文 / 英语                   |
+| 字幕翻译            | Tencent Hy-MT2 1.8B                               | 33 种语言                     |
 
 LLM 摘要可以选「内置 AI」在本机运行捆绑的 GGUF 模型（Qwen 3.5 2B / 4B），也可以接入 Claude、OpenAI、OpenRouter，或任意兼容 OpenAI Chat Completions / Anthropic Messages 的自建服务——例如 Gemini（OpenAI 兼容端点）、DeepSeek、Kimi、通义千问等。
 
@@ -213,54 +213,63 @@ npm run dist:win   # Windows x64 EXE
 <summary><strong>Windows 打开时弹出 Microsoft Defender SmartScreen 警告</strong></summary>
 
 发布构建未做付费代码签名，SmartScreen 会对新出现的可执行文件默认拦截。点击 **"更多信息" → "仍要运行"**，确认下载来源是官方 [Releases](https://github.com/zerolovesea/Brevia/releases) 页面后继续即可。
+
 </details>
 
 <details>
 <summary><strong>需要单独安装 Python 吗？</strong></summary>
 
 不需要。发布版内置了 Python 运行时和所有依赖。只有从源码运行时才需要本机 Python 环境。
+
 </details>
 
 <details>
 <summary><strong>数据存储在哪里？</strong></summary>
 
 默认在 `~/brevia`。首次启动可为模型及录音与会议文件分别选择文件夹；SQLite 数据库和声纹档案仍在数据根目录。设置 `BREVIA_DATA_DIR` 可自定义数据根目录。
+
 </details>
 
 <details>
 <summary><strong>支持哪些语言的转写？</strong></summary>
 
 30+ 种语言，包括中文、英语、日语、韩语、法语、德语、西班牙语、俄语、阿拉伯语、泰语、越南语、印尼语等。在应用内「模型库」中选择对应语言的模型即可。
+
 </details>
 
 <details>
 <summary><strong>言录会把音频发送到云端吗？</strong></summary>
 
 不会。所有语音识别和说话人分离都在本机运行。只有 LLM 摘要 / 翻译需要联网，且必须由用户显式配置服务商——只发送文本，不上传音频。
+
 </details>
 
 <details>
 <summary><strong>模型需要多少磁盘空间？</strong></summary>
 
 取决于所选模型。整句识别模型是主要占用；语音活动检测、说话人分离与声纹模型随应用安装，可按需另装 AI 笔记模型；具体大小以模型库显示为准。
+
 </details>
 
 <details>
 <summary><strong>可以导入已有的会议录音吗？</strong></summary>
 
 可以。从左侧栏进入“导入录音”，设置会议名称、语言和模型后选择音频文件。言录会用同一套语音管线离线转写。需要系统 PATH 中有 `ffmpeg`（或设置 `BREVIA_FFMPEG`）。
+
 </details>
 
 <details>
 <summary><strong>如何切换界面语言？</strong></summary>
 
 **设置 → 通用 → 界面语言**。目前提供英语、简体中文、西班牙语、日语、韩语、法语、德语、俄语。
+
 </details>
 
 <details>
 <summary><strong>声纹样本是怎么存储的？</strong></summary>
 
 声纹嵌入向量（几百维浮点数组）和参考音频保存在本地 SQLite 与文件系统中，不会离开本机；删除档案时对应数据也会一并清除。
+
 </details>
 
 ## 反馈与贡献
@@ -278,6 +287,10 @@ npm run dist:win   # Windows x64 EXE
 安全类问题请**不要公开发 Issue**，请通过邮件联系维护者。
 
 ### 参与贡献
+
+开始修改前，请阅读全项目通用的[代码与格式规范](../CONTRIBUTING.md)。
+
+手机端开发请先阅读[日常开发与提交指南](../mobile/README.md#日常开发与提交)，涵盖分支、检查、PR、合并后的 TestFlight 分发、Android 安装包获取和失败处理。
 
 欢迎 PR。为了保持代码质量，请遵循几点约定：
 

@@ -2,7 +2,7 @@
  * Demo Main - Initialize and control demos
  */
 
-(function() {
+(function () {
   let engine;
   let timeline;
   let scenarios;
@@ -94,7 +94,7 @@
     }
 
     // Update button states
-    document.querySelectorAll('[data-demo]').forEach(btn => {
+    document.querySelectorAll('[data-demo]').forEach((btn) => {
       btn.classList.toggle('active', btn.dataset.demo === demoName);
     });
 
@@ -211,7 +211,7 @@
       const stage = event.data.stage;
 
       // Map stages to demo states
-      switch(stage) {
+      switch (stage) {
         case 'home':
           loadDemo('transcription');
           timeline.pause();
@@ -272,6 +272,6 @@
     resumeDemo: () => timeline.resume(),
     stopDemo: () => timeline.stop(),
     restartDemo: () => timeline.restart(),
-    loadDemo: (name) => loadDemo(name)
+    loadDemo: (name) => loadDemo(name),
   };
 })();

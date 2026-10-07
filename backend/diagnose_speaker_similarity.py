@@ -37,7 +37,7 @@ def main():
     manager = ModelManager(Path.home() / "brevia" / "models")
     samples, sample_rate = read_mono_wav(path)
     tracker = SpeakerTracker(manager)
-    print(f"音轨: {path}  时长 {len(samples)/sample_rate:.1f}s")
+    print(f"音轨: {path}  时长 {len(samples) / sample_rate:.1f}s")
 
     # 固定 5s 窗（3s 步进）提取声纹，观察随时间变化的相似度，定位说话人切换点。
     window_ms = 5000
@@ -63,20 +63,20 @@ def main():
     for i in range(1, len(embeds)):
         s0 = segs[i - 1]
         s1 = segs[i]
-        clock0 = f"{s0['start_ms']//60000:02d}:{s0['start_ms']%60000//1000:02d}"
-        clock1 = f"{s1['start_ms']//60000:02d}:{s1['start_ms']%60000//1000:02d}"
-        print(f"  [{clock0}]-[{clock1}]  {sim(embeds[i-1], embeds[i]):.3f}")
+        clock0 = f"{s0['start_ms'] // 60000:02d}:{s0['start_ms'] % 60000 // 1000:02d}"
+        clock1 = f"{s1['start_ms'] // 60000:02d}:{s1['start_ms'] % 60000 // 1000:02d}"
+        print(f"  [{clock0}]-[{clock1}]  {sim(embeds[i - 1], embeds[i]):.3f}")
 
     print("\n两两相似度统计:")
-    vals = [sim(a, b) for i, a in enumerate(embeds) for b in embeds[i + 1:]]
+    vals = [sim(a, b) for i, a in enumerate(embeds) for b in embeds[i + 1 :]]
     if vals:
-        print(f"  min={min(vals):.3f}  max={max(vals):.3f}  mean={sum(vals)/len(vals):.3f}")
+        print(f"  min={min(vals):.3f}  max={max(vals):.3f}  mean={sum(vals) / len(vals):.3f}")
         hist = [0, 0, 0, 0, 0]
         for v in vals:
             idx = min(4, int(v * 5))
             hist[idx] += 1
         for i, c in enumerate(hist):
-            print(f"  sim {i/5:.1f}-{(i+1)/5:.1f}: {c}")
+            print(f"  sim {i / 5:.1f}-{(i + 1) / 5:.1f}: {c}")
 
 
 if __name__ == "__main__":

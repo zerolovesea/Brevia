@@ -1,7 +1,8 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 
 const tag = process.env.VERSION;
-if (!/^v\d+(?:\.\d+)+$/.test(tag || '')) throw new Error('VERSION must be a release tag such as v1.1.2');
+if (!/^v\d+(?:\.\d+)+$/.test(tag || ''))
+  throw new Error('VERSION must be a release tag such as v1.1.2');
 
 const version = tag.slice(1);
 const updates = [

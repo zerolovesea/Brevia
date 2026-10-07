@@ -1,4 +1,19 @@
-const { app, BrowserWindow, clipboard, desktopCapturer, dialog, ipcMain, Menu, powerMonitor, protocol, screen, session, ShareMenu, shell, systemPreferences } = require('electron');
+const {
+  app,
+  BrowserWindow,
+  clipboard,
+  desktopCapturer,
+  dialog,
+  ipcMain,
+  Menu,
+  powerMonitor,
+  protocol,
+  screen,
+  session,
+  ShareMenu,
+  shell,
+  systemPreferences,
+} = require('electron');
 const { execFile, spawn } = require('node:child_process');
 const { appendFile, copyFile, mkdir, readFile, rm, writeFile } = require('node:fs/promises');
 const { existsSync } = require('node:fs');
@@ -7,8 +22,27 @@ const path = require('node:path');
 const { fileURLToPath, pathToFileURL } = require('node:url');
 const { randomUUID } = require('node:crypto');
 const { z } = require('zod');
-const { createLineBuffer, audioFileURL, configureMacUpdater, createDisplayMediaHandler, isNewerVersion, migrateLegacyData, registerScreenPermission, requiredModelsFrom, systemAudioSupported, workerError, workerLogLevel, writeAtomicFile } = require('./main-logic');
-const { applyPendingMove, currentDirectory, recordingsDirectory, setFirstRunDirectories } = require('./model-location');
+const { MobileServer } = require('./mobile-server');
+const {
+  createLineBuffer,
+  audioFileURL,
+  configureMacUpdater,
+  createDisplayMediaHandler,
+  isNewerVersion,
+  migrateLegacyData,
+  registerScreenPermission,
+  requiredModelsFrom,
+  systemAudioSupported,
+  workerError,
+  workerLogLevel,
+  writeAtomicFile,
+} = require('./main-logic');
+const {
+  applyPendingMove,
+  currentDirectory,
+  recordingsDirectory,
+  setFirstRunDirectories,
+} = require('./model-location');
 
 // Electron 不保留跨 IPC 抛出的 Error 自定义字段；使用统一的可序列化错误结果。
 function handleIpc(channel, callback) {
@@ -17,15 +51,28 @@ function handleIpc(channel, callback) {
       const event = args[0];
       const frame = event?.senderFrame;
       const mainPage = pathToFileURL(path.join(packagedRoot, 'frontend', 'index.html')).href;
-      const captionPage = pathToFileURL(path.join(packagedRoot, 'frontend', 'floating-caption.html')).href;
+      const captionPage = pathToFileURL(
+        path.join(packagedRoot, 'frontend', 'floating-caption.html'),
+      ).href;
       const page = frame?.url?.split(/[?#]/)[0];
-      if (!frame || frame !== event.sender.mainFrame || !(page === mainPage || (page === captionPage && ['floating-caption.close', 'floating-caption.move'].includes(channel)))) throw new Error('Untrusted IPC sender');
+      if (
+        !frame ||
+        frame !== event.sender.mainFrame ||
+        !(
+          page === mainPage ||
+          (page === captionPage &&
+            ['floating-caption.close', 'floating-caption.move'].includes(channel))
+        )
+      )
+        throw new Error('Untrusted IPC sender');
       return await callback(...args);
-    }
-    catch (error) {
+    } catch (error) {
       writeLog('ERROR', `${channel}: ${logText(error)}`);
-      const code = String(error.code || '').startsWith('error.') ? error.code
-        : /Worker request timed out/.test(error.message) ? 'error.timeout' : 'error.operation_failed';
+      const code = String(error.code || '').startsWith('error.')
+        ? error.code
+        : /Worker request timed out/.test(error.message)
+          ? 'error.timeout'
+          : 'error.operation_failed';
       return { __brevia_error: { code, detail: error.message } };
     }
   });
@@ -43,7 +90,8 @@ if (benchmarkRefinement) {
   if (benchmarkModelsDir) process.env.BREVIA_MODELS_DIR = benchmarkModelsDir;
 }
 
-if (process.platform === 'darwin') app.commandLine.appendSwitch('disable-features', 'MacCatapLoopbackAudioForScreenShare');
+if (process.platform === 'darwin')
+  app.commandLine.appendSwitch('disable-features', 'MacCatapLoopbackAudioForScreenShare');
 if (!benchmarkRefinement && !app.requestSingleInstanceLock()) app.quit();
 app.on('second-instance', () => {
   const [window] = BrowserWindow.getAllWindows();
@@ -62,18 +110,55 @@ const startupDataWaitMs = 2200;
 const workerLineLimit = 64 * 1024 * 1024;
 // 兼容 UTF-8 笔记与 JSON 转义后的最大文本，并保留命令元数据空间。
 const maximumCommandBytes = 32 * 1024 * 1024;
-const dataTaskCommands = new Set(['meeting.start', 'meeting.resume', 'meeting.import', 'meeting.refine', 'summary.generate', 'translation.generate', 'meeting.export', 'meeting.bundle', 'meeting.bundle-files', 'speaker-profile.enroll', 'speaker-profile.verify', 'speaker.rename', 'segment.speaker', 'segment.speaker-profile-sample', 'models.download']);
+const dataTaskCommands = new Set([
+  'meeting.start',
+  'meeting.resume',
+  'meeting.import',
+  'meeting.refine',
+  'summary.generate',
+  'translation.generate',
+  'mobile.translate',
+  'meeting.export',
+  'meeting.bundle',
+  'meeting.bundle-files',
+  'speaker-profile.enroll',
+  'speaker-profile.verify',
+  'speaker.rename',
+  'segment.speaker',
+  'segment.speaker-profile-sample',
+  'models.download',
+]);
 const workerRequestTimeouts = new Map([
   ['meeting.audio', 15000],
   ['meeting.get', 15000],
-  ['models.download', 15000], ['models.pause', 15000], ['models.cancel', 15000],
-  ['task.pause', 15000], ['task.resume', 15000], ['task.cancel', 15000],
-  ['app.initialize', 180000], ['meeting.start', 180000], ['meeting.resume', 180000], ['meeting.reconfigure', 180000],
+  ['models.download', 15000],
+  ['models.pause', 15000],
+  ['models.cancel', 15000],
+  ['task.pause', 15000],
+  ['task.resume', 15000],
+  ['task.cancel', 15000],
+  ['app.initialize', 180000],
+  ['meeting.start', 180000],
+  ['meeting.resume', 180000],
+  ['meeting.reconfigure', 180000],
   ['summary.generate', 900000],
   // 精修和纪要收到自己的进度事件时续期；长任务仍有有限的无响应期限。
-  ...['meeting.refine', 'translation.generate', 'meeting.import', 'meeting.stop', 'meeting.pause',
-    'meeting.export', 'meeting.bundle', 'meeting.bundle-files', 'speaker-profile.enroll', 'speaker-profile.verify', 'speaker.rename',
-    'segment.speaker', 'segment.speaker-profile-sample'].map((type) => [type, 600000]),
+  ...[
+    'meeting.refine',
+    'translation.generate',
+    'mobile.translate',
+    'meeting.import',
+    'meeting.stop',
+    'meeting.pause',
+    'meeting.export',
+    'meeting.bundle',
+    'meeting.bundle-files',
+    'speaker-profile.enroll',
+    'speaker-profile.verify',
+    'speaker.rename',
+    'segment.speaker',
+    'segment.speaker-profile-sample',
+  ].map((type) => [type, 600000]),
 ]);
 const resetOnboarding = process.argv.includes('--reset-onboarding');
 const dataDir = () => process.env.BREVIA_DATA_DIR || path.join(app.getPath('home'), 'brevia');
@@ -90,15 +175,28 @@ const isWithin = (root, target) => {
 const legacyDataDir = () => app.getPath('userData');
 const logsDir = () => path.join(dataDir(), 'logs');
 const logFile = () => path.join(logsDir(), 'brevia.log');
-const logText = (value) => value instanceof Error ? value.stack || value.message : typeof value === 'string' ? value : JSON.stringify(value);
+const logText = (value) =>
+  value instanceof Error
+    ? value.stack || value.message
+    : typeof value === 'string'
+      ? value
+      : JSON.stringify(value);
 const bundledFfmpegPath = () => {
   const base = app.isPackaged ? path.join(process.resourcesPath, 'app.asar.unpacked') : root;
-  const binary = path.join(base, 'node_modules', '@ffmpeg-installer', `${process.platform}-${process.arch}`, process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg');
+  const binary = path.join(
+    base,
+    'node_modules',
+    '@ffmpeg-installer',
+    `${process.platform}-${process.arch}`,
+    process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg',
+  );
   return existsSync(binary) ? binary : '';
 };
 const writeLog = (level, value) => {
   const line = `${new Date().toISOString()} [${level}] ${logText(value).trim()}\n`;
-  void mkdir(logsDir(), { recursive: true }).then(() => appendFile(logFile(), line, 'utf8')).catch((error) => console.error('Log write failed', error));
+  void mkdir(logsDir(), { recursive: true })
+    .then(() => appendFile(logFile(), line, 'utf8'))
+    .catch((error) => console.error('Log write failed', error));
 };
 const stoppingProcessGroups = new Set();
 const stopProcess = (child, graceMs = 5000) => {
@@ -111,13 +209,29 @@ const stopProcess = (child, graceMs = 5000) => {
   if (child.exitCode !== null || child.signalCode) return;
   // 杀掉整个进程组：worker 会派生 ffmpeg 与 llama sidecar，只 SIGTERM 父进程会留下孤儿进程。
   stoppingProcessGroups.add(child.pid);
-  try { process.kill(-child.pid, 'SIGTERM'); }
-  catch { try { child.kill(); } catch { /* 进程可能已退出。 */ } }
+  try {
+    process.kill(-child.pid, 'SIGTERM');
+  } catch {
+    try {
+      child.kill();
+    } catch {
+      /* 进程可能已退出。 */
+    }
+  }
   // worker 忽略 SIGTERM 时会残留孤儿进程：给一个宽限期后升级为 SIGKILL。
   const escalation = setTimeout(() => {
     if (!stoppingProcessGroups.delete(child.pid)) return;
-    try { process.kill(-child.pid, 'SIGKILL'); }
-    catch { if (child.exitCode === null && !child.signalCode) { try { child.kill('SIGKILL'); } catch { /* 已退出。 */ } } }
+    try {
+      process.kill(-child.pid, 'SIGKILL');
+    } catch {
+      if (child.exitCode === null && !child.signalCode) {
+        try {
+          child.kill('SIGKILL');
+        } catch {
+          /* 已退出。 */
+        }
+      }
+    }
   }, graceMs);
   escalation.unref?.();
 };
@@ -125,37 +239,70 @@ let storageMigrationInProgress = false;
 const migrateDataDir = async () => {
   if (process.env.BREVIA_DATA_DIR) return;
   // 先完成旧根目录中已经确认的迁移，避免遗留清理标记指向即将搬走的源。
-  if (existsSync(path.join(legacyDataDir(), 'brevia.db')) && !existsSync(path.join(dataDir(), 'brevia.db'))) await applyPendingMove(legacyDataDir());
+  if (
+    existsSync(path.join(legacyDataDir(), 'brevia.db')) &&
+    !existsSync(path.join(dataDir(), 'brevia.db'))
+  )
+    await applyPendingMove(legacyDataDir());
   await migrateLegacyData(legacyDataDir(), dataDir());
 };
 app.setAppLogsPath(logsDir());
-const command = z.object({ type: z.string().min(1), payload: z.record(z.string(), z.unknown()).default({}) });
+const command = z.object({
+  type: z.string().min(1),
+  payload: z.record(z.string(), z.unknown()).default({}),
+});
 const workerResponse = z.discriminatedUnion('ok', [
   z.object({ id: z.string().min(1), ok: z.literal(true), result: z.unknown() }).strict(),
   // 结构化错误字段：后端把 ModelNotInstalled 序列化成 error_code/error_models，主进程据此
   // 决定「先下载再重试」，不再正则解析 error 文本（见 main-logic.js 的 workerError）。
-  z.object({
-    id: z.string().min(1).nullable(),
-    ok: z.literal(false),
-    error: z.string(),
-    error_code: z.string().max(64).optional(),
-    error_models: z.array(z.string().min(1).max(128)).max(8).optional(),
-  }).strict(),
+  z
+    .object({
+      id: z.string().min(1).nullable(),
+      ok: z.literal(false),
+      error: z.string(),
+      error_code: z.string().max(64).optional(),
+      error_models: z.array(z.string().min(1).max(128)).max(8).optional(),
+    })
+    .strict(),
 ]);
-const workerEvent = z.object({
-  type: z.enum([
-    'app.maintenance', 'meeting.imported', 'meeting.reconfigured', 'meeting.recovered',
-    'meeting.interrupted', 'meeting.started',
-    'meeting.stopped', 'model.progress', 'model.status', 'refinement.cancelled', 'refinement.progress',
-    'refinement.ready', 'refinement.started', 'speaker-profile.deleted', 'speaker-profile.updated',
-    'summary.progress', 'summary.ready', 'summary.started', 'task.status',
-    'transcript.draft', 'transcript.final', 'transcript.partial', 'transcript.refined', 'transcript.settled',
-    'translation.ready', 'worker.error', 'worker.warning',
-    'ai-note.suggestion', 'ai-note.evidence', 'ai-note.analyzing',
-  ]),
-  schema_version: z.literal(1),
-  payload: z.record(z.string(), z.unknown()),
-}).strict();
+const workerEvent = z
+  .object({
+    type: z.enum([
+      'app.maintenance',
+      'meeting.imported',
+      'meeting.reconfigured',
+      'meeting.recovered',
+      'meeting.interrupted',
+      'meeting.started',
+      'meeting.stopped',
+      'model.progress',
+      'model.status',
+      'refinement.cancelled',
+      'refinement.progress',
+      'refinement.ready',
+      'refinement.started',
+      'speaker-profile.deleted',
+      'speaker-profile.updated',
+      'summary.progress',
+      'summary.ready',
+      'summary.started',
+      'task.status',
+      'transcript.draft',
+      'transcript.final',
+      'transcript.partial',
+      'transcript.refined',
+      'transcript.settled',
+      'translation.ready',
+      'worker.error',
+      'worker.warning',
+      'ai-note.suggestion',
+      'ai-note.evidence',
+      'ai-note.analyzing',
+    ]),
+    schema_version: z.literal(1),
+    payload: z.record(z.string(), z.unknown()),
+  })
+  .strict();
 const workerMessage = z.union([workerResponse, workerEvent]);
 const meetingStart = z.object({
   title: z.string().trim().min(1).max(120),
@@ -165,8 +312,16 @@ const meetingStart = z.object({
   refined_model_id: z.string().min(1),
   speaker_segmentation_model_id: z.string().min(1).optional(),
   vad_model_id: z.string().min(1).optional(),
-  num_speakers: z.number().int().refine((value) => value === -1 || value >= 1).optional(),
-  audio_tracks: z.array(z.enum(['mic', 'system'])).min(1).max(2).optional(),
+  num_speakers: z
+    .number()
+    .int()
+    .refine((value) => value === -1 || value >= 1)
+    .optional(),
+  audio_tracks: z
+    .array(z.enum(['mic', 'system']))
+    .min(1)
+    .max(2)
+    .optional(),
   workspace_id: z.string().uuid().nullable().optional(),
   tags: z.array(z.string().max(32)).max(20).optional(),
 });
@@ -179,35 +334,59 @@ const audio = z.object({
   flush: z.boolean().optional(),
 });
 const id = z.object({ meeting_id: z.string().uuid() });
-const noteImage = id.extend({ mime_type: z.enum(['image/png', 'image/jpeg', 'image/gif', 'image/webp']), bytes: z.instanceof(ArrayBuffer) });
-const meetingUpdates = z.object({
-  title: z.string().trim().min(1).max(120),
-  tags: z.array(z.string().max(32)).max(20),
-  archived_at: z.string().max(64).nullable(),
-  refined_model_id: z.string().min(1).max(128),
-  notes: z.string().max(5 * 1024 * 1024),
-}).partial();
+const noteImage = id.extend({
+  mime_type: z.enum(['image/png', 'image/jpeg', 'image/gif', 'image/webp']),
+  bytes: z.instanceof(ArrayBuffer),
+});
+const meetingUpdates = z
+  .object({
+    title: z.string().trim().min(1).max(120),
+    tags: z.array(z.string().max(32)).max(20),
+    archived_at: z.string().max(64).nullable(),
+    refined_model_id: z.string().min(1).max(128),
+    notes: z.string().max(5 * 1024 * 1024),
+  })
+  .partial();
 const meetingReconfigure = id.extend({
   language: z.string().min(2).max(16).optional(),
   target_language: z.string().min(2).max(16).nullable().optional(),
   refined_model_id: z.string().min(1).max(128).optional(),
 });
 // 纪要供应商固定为这六项；只有 built-in 在本地运行，因此其余都必须带请求地址。
-const summaryProviderIds = ['built-in', 'claude', 'openai', 'openrouter', 'custom-openai', 'custom-claude'];
+const summaryProviderIds = [
+  'built-in',
+  'claude',
+  'openai',
+  'openrouter',
+  'custom-openai',
+  'custom-claude',
+];
 const isBuiltInProvider = (provider) => provider.toLowerCase() === 'built-in';
 const requiresEndpoint = (provider) => !isBuiltInProvider(provider);
 const summaryProviderEntry = z.object({
   model: z.string().trim().min(1).max(128),
   endpoint: z.string().url().optional(),
-  keyReference: z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/).optional(),
+  keyReference: z
+    .string()
+    .regex(/^[a-zA-Z0-9_-]{1,64}$/)
+    .optional(),
   keyLength: z.number().int().positive().max(512).optional(),
 });
-const llmRequest = z.object({
-  provider: z.string().trim().min(1), endpoint: z.string().url().optional(), model: z.string().trim().min(1),
-  format: z.enum(['openai', 'claude']).optional(), key_reference: z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/).optional(),
-}).refine(({ provider, endpoint }) => !requiresEndpoint(provider) || Boolean(endpoint), {
-  message: 'Endpoint is required for remote providers', path: ['endpoint'],
-});
+const llmRequest = z
+  .object({
+    provider: z.string().trim().min(1),
+    endpoint: z.string().url().optional(),
+    model: z.string().trim().min(1),
+    format: z.enum(['openai', 'claude']).optional(),
+    key_reference: z
+      .string()
+      .regex(/^[a-zA-Z0-9_-]{1,64}$/)
+      .optional(),
+  })
+  .refine(({ provider, endpoint }) => !requiresEndpoint(provider) || Boolean(endpoint), {
+    message: 'Endpoint is required for remote providers',
+    path: ['endpoint'],
+  });
 // 单套生效配置，但每个供应商的模型/地址/密钥引用分别留存，切换供应商不会丢已填内容。
 const summaryConfig = z.object({
   version: z.literal(2),
@@ -217,22 +396,28 @@ const summaryConfig = z.object({
   providers: z.partialRecord(z.enum(summaryProviderIds), summaryProviderEntry),
 });
 // 实时 AI 辅助笔记：api_key 由 key_reference 在主进程解析。
-const aiNoteStart = z.object({
-  meeting_id: z.string().uuid(),
-  provider: z.string().trim().min(1),
-  endpoint: z.string().url().optional(),
-  model: z.string().trim().min(1),
-  format: z.enum(['openai', 'claude']).optional(),
-  key_reference: z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/).optional(),
-  proactivity: z.enum(['quiet', 'assist', 'auto']).default('assist'),
-  language: z.enum(['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']).default('zh'),
-  prompt: z.object({
-    instructions: z.string().trim().min(1).max(4000),
-    state_labels: z.array(z.string().trim().min(1).max(64)).length(5),
-  }),
-}).refine(({ provider, endpoint }) => !requiresEndpoint(provider) || Boolean(endpoint), {
-  message: 'Endpoint is required for remote providers', path: ['endpoint'],
-});
+const aiNoteStart = z
+  .object({
+    meeting_id: z.string().uuid(),
+    provider: z.string().trim().min(1),
+    endpoint: z.string().url().optional(),
+    model: z.string().trim().min(1),
+    format: z.enum(['openai', 'claude']).optional(),
+    key_reference: z
+      .string()
+      .regex(/^[a-zA-Z0-9_-]{1,64}$/)
+      .optional(),
+    proactivity: z.enum(['quiet', 'assist', 'auto']).default('assist'),
+    language: z.enum(['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']).default('zh'),
+    prompt: z.object({
+      instructions: z.string().trim().min(1).max(4000),
+      state_labels: z.array(z.string().trim().min(1).max(64)).length(5),
+    }),
+  })
+  .refine(({ provider, endpoint }) => !requiresEndpoint(provider) || Boolean(endpoint), {
+    message: 'Endpoint is required for remote providers',
+    path: ['endpoint'],
+  });
 const aiNoteTyping = z.object({
   meeting_id: z.string().uuid(),
   typing: z.boolean(),
@@ -253,7 +438,8 @@ const aiNoteReconfigure = z.object({
 
 async function saveNoteImage({ meeting_id, mime_type, bytes }) {
   const image = Buffer.from(bytes);
-  if (!image.length || image.length > 10 * 1024 * 1024) throw new Error('Image must be 10 MB or smaller');
+  if (!image.length || image.length > 10 * 1024 * 1024)
+    throw new Error('Image must be 10 MB or smaller');
   const extension = mime_type === 'image/jpeg' ? 'jpg' : mime_type.slice('image/'.length);
   const filename = `${randomUUID()}.${extension}`;
   await audioFileURL(path.join(recordingsDir(), meeting_id), [recordingsDir()]);
@@ -269,10 +455,19 @@ function registerNoteImageProtocol() {
       const url = new URL(request.url);
       const meetingId = url.hostname;
       const filename = decodeURIComponent(url.pathname.slice(1));
-      if (!/^[0-9a-f-]{36}$/i.test(meetingId) || !/^[0-9a-f-]{36}\.(png|jpe?g|gif|webp)$/i.test(filename)) throw new Error('Invalid note image');
-      const source = fileURLToPath(await audioFileURL(path.join(noteImagesDir(meetingId), filename), [recordingsDir()]));
+      if (
+        !/^[0-9a-f-]{36}$/i.test(meetingId) ||
+        !/^[0-9a-f-]{36}\.(png|jpe?g|gif|webp)$/i.test(filename)
+      )
+        throw new Error('Invalid note image');
+      const source = fileURLToPath(
+        await audioFileURL(path.join(noteImagesDir(meetingId), filename), [recordingsDir()]),
+      );
       const image = await readFile(source);
-      const type = filename.endsWith('.jpg') || filename.endsWith('.jpeg') ? 'image/jpeg' : `image/${filename.split('.').pop()}`;
+      const type =
+        filename.endsWith('.jpg') || filename.endsWith('.jpeg')
+          ? 'image/jpeg'
+          : `image/${filename.split('.').pop()}`;
       return new Response(image, { headers: { 'content-type': type } });
     } catch {
       return new Response(null, { status: 404 });
@@ -295,14 +490,26 @@ class WorkerClient {
   }
 
   start() {
-    if (this.process?.stdin && !this.process.stdin.destroyed && this.process.exitCode === null) return Promise.resolve();
+    if (this.process?.stdin && !this.process.stdin.destroyed && this.process.exitCode === null)
+      return Promise.resolve();
     if (this.stopping) return this.stopping.then(() => this.start());
     if (this.starting) return this.starting;
     const workerName = process.platform === 'win32' ? 'brevia-worker.exe' : 'brevia-worker';
     const bundled = path.join(packagedRoot, 'backend', 'runtime', 'brevia-worker', workerName);
     const useBundledWorker = app.isPackaged && !process.env.BREVIA_PYTHON && existsSync(bundled);
-    const projectPython = path.join(root, '.venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
-    const python = useBundledWorker ? bundled : (process.env.BREVIA_PYTHON || (existsSync(projectPython) ? projectPython : (process.platform === 'win32' ? 'python' : 'python3')));
+    const projectPython = path.join(
+      root,
+      '.venv',
+      process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python',
+    );
+    const python = useBundledWorker
+      ? bundled
+      : process.env.BREVIA_PYTHON ||
+        (existsSync(projectPython)
+          ? projectPython
+          : process.platform === 'win32'
+            ? 'python'
+            : 'python3');
     const args = useBundledWorker ? [] : ['-m', 'backend.worker'];
     const ffmpeg = process.env.BREVIA_FFMPEG || bundledFfmpegPath();
     const recoverInterrupted = !this.refinement && !this.hasSpawned;
@@ -325,9 +532,14 @@ class WorkerClient {
     this.process = child;
     this.writing = null;
     this.starting = new Promise((resolve, reject) => {
-      child.once('spawn', () => { this.hasSpawned = true; resolve(); });
+      child.once('spawn', () => {
+        this.hasSpawned = true;
+        resolve();
+      });
       child.once('error', reject);
-    }).finally(() => { this.starting = null; });
+    }).finally(() => {
+      this.starting = null;
+    });
     let buffer = '';
     child.stdout.setEncoding('utf8');
     child.stdout.on('data', (chunk) => {
@@ -344,8 +556,9 @@ class WorkerClient {
       const lines = buffer.split('\n');
       buffer = lines.pop();
       lines.filter(Boolean).forEach((line) => {
-        try { this.receive(workerMessage.parse(JSON.parse(line))); }
-        catch (error) {
+        try {
+          this.receive(workerMessage.parse(JSON.parse(line)));
+        } catch (error) {
           writeLog('ERROR', error);
           this.fail(error);
           this.sendEvent('worker:log', { message: `Invalid worker output: ${error.message}` });
@@ -364,16 +577,32 @@ class WorkerClient {
     child.stderr.on('end', () => {
       if (child === this.process) stderrBuffer.end();
     });
-    child.on('error', (error) => { if (child === this.process) this.fail(error); });
-    child.stdin.on('error', (error) => { if (child === this.process) this.fail(error); });
+    child.on('error', (error) => {
+      if (child === this.process) this.fail(error);
+    });
+    child.stdin.on('error', (error) => {
+      if (child === this.process) this.fail(error);
+    });
     child.on('exit', (code, signal) => this.closed(code, signal, child));
     return this.starting;
   }
 
   receive(message) {
-    if (message.id === null) { writeLog('WARNING', message.error); return; }
-    if (message.type === 'worker.error' || (message.type === 'model.status' && message.payload.status === 'failed')) writeLog('ERROR', message.payload);
+    if (message.id === null) {
+      writeLog('WARNING', message.error);
+      return;
+    }
+    if (
+      message.type === 'worker.error' ||
+      (message.type === 'model.status' && message.payload.status === 'failed')
+    )
+      writeLog('ERROR', message.payload);
     if (message.type === 'worker.warning') writeLog('WARNING', message.payload);
+    if (['worker.warning', 'worker.error'].includes(message.type)) {
+      const session = mobileServer?.sessions.get(message.payload?.meeting_id);
+      if (session)
+        session.processingWarning = message.payload.message || '电脑转写暂不可用，请在电脑检查模型';
+    }
     if (message.id) {
       const pending = this.pending.get(message.id);
       if (!pending) return;
@@ -390,9 +619,14 @@ class WorkerClient {
           pending.paused = message.payload.status === 'paused';
           this.armTimeout(requestId);
         }
-        if ((pending.type === 'meeting.refine' && message.type.startsWith('refinement.'))
-          || (pending.type === 'summary.generate' && message.type.startsWith('summary.'))
-          || (['meeting.stop', 'meeting.pause'].includes(pending.type) && message.type.startsWith('transcript.'))) this.armTimeout(requestId);
+        if (
+          (pending.type === 'mobile.translate' && message.type === 'translation.ready') ||
+          (pending.type === 'meeting.refine' && message.type.startsWith('refinement.')) ||
+          (pending.type === 'summary.generate' && message.type.startsWith('summary.')) ||
+          (['meeting.stop', 'meeting.pause'].includes(pending.type) &&
+            message.type.startsWith('transcript.'))
+        )
+          this.armTimeout(requestId);
       });
       this.sendEvent(message.type, message.payload);
     }
@@ -402,13 +636,16 @@ class WorkerClient {
     const pending = this.pending.get(requestId);
     clearTimeout(pending.timer);
     if (pending.paused) return;
-    pending.timer = setTimeout(() => {
-      if (!this.pending.delete(requestId)) return;
-      this.outbox = this.outbox.filter((entry) => entry.requestId !== requestId);
-      pending.reject(new Error(`Worker request timed out: ${pending.type}`));
-      this.recycleRequested = true;
-      this.recycleIfIdle();
-    }, workerRequestTimeouts.get(pending.type) ?? 60000);
+    pending.timer = setTimeout(
+      () => {
+        if (!this.pending.delete(requestId)) return;
+        this.outbox = this.outbox.filter((entry) => entry.requestId !== requestId);
+        pending.reject(new Error(`Worker request timed out: ${pending.type}`));
+        this.recycleRequested = true;
+        this.recycleIfIdle();
+      },
+      workerRequestTimeouts.get(pending.type) ?? 60000,
+    );
   }
 
   writeNext() {
@@ -424,25 +661,35 @@ class WorkerClient {
         if (error) this.fail(error);
         else this.writeNext();
       });
-    } catch (error) { this.fail(error); }
+    } catch (error) {
+      this.fail(error);
+    }
   }
 
   async request(type, payload = {}, duringMigration = false) {
-    if (storageMigrationInProgress && !duringMigration) throw new Error('Folders are being moved. Please wait.');
+    if (storageMigrationInProgress && !duringMigration)
+      throw new Error('Folders are being moved. Please wait.');
     const value = command.parse({ type, payload });
     if (!this.process?.stdin || this.process.stdin.destroyed || this.process.exitCode !== null) {
       if (app.isQuitting) return Promise.reject(new Error('Worker is shutting down'));
       await this.start();
     }
-    if (storageMigrationInProgress && !duringMigration) throw new Error('Folders are being moved. Please wait.');
-    if (destructiveOperationInProgress && dataTaskCommands.has(type)) throw Object.assign(new Error('Wait for data cleanup to finish'), { code: 'error.tasks.running' });
+    if (storageMigrationInProgress && !duringMigration)
+      throw new Error('Folders are being moved. Please wait.');
+    if (destructiveOperationInProgress && dataTaskCommands.has(type))
+      throw Object.assign(new Error('Wait for data cleanup to finish'), {
+        code: 'error.tasks.running',
+      });
     const requestId = `cmd-${++this.sequence}`;
     return new Promise((resolve, reject) => {
       this.pending.set(requestId, { resolve, reject, type, meetingId: payload.meeting_id });
       this.armTimeout(requestId);
       try {
         const line = `${JSON.stringify({ id: requestId, ...value })}\n`;
-        if (Buffer.byteLength(line, 'utf8') > maximumCommandBytes) throw Object.assign(new Error('Command is too large'), { code: 'error.command_too_large' });
+        if (Buffer.byteLength(line, 'utf8') > maximumCommandBytes)
+          throw Object.assign(new Error('Command is too large'), {
+            code: 'error.command_too_large',
+          });
         this.outbox.push({ requestId, line });
         this.writeNext();
       } catch (error) {
@@ -454,7 +701,9 @@ class WorkerClient {
   }
 
   sendEvent(type, payload) {
-    BrowserWindow.getAllWindows().forEach((window) => window.webContents.send('brevia:event', { type, payload }));
+    BrowserWindow.getAllWindows().forEach((window) =>
+      window.webContents.send('brevia:event', { type, payload }),
+    );
   }
 
   recycle() {
@@ -468,7 +717,9 @@ class WorkerClient {
     this.recycleRequested = false;
     if (!child) return;
     this.process = null;
-    this.stopping = new Promise((resolve) => child.once('exit', resolve)).finally(() => { this.stopping = null; });
+    this.stopping = new Promise((resolve) => child.once('exit', resolve)).finally(() => {
+      this.stopping = null;
+    });
     stopProcess(child);
   }
 
@@ -476,17 +727,25 @@ class WorkerClient {
     const child = this.process;
     if (!child && !this.stopping) return;
     let timer;
-    const timeout = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Worker did not stop before folder migration')), 10000); });
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(
+        () => reject(new Error('Worker did not stop before folder migration')),
+        10000,
+      );
+    });
     const stopped = child ? new Promise((resolve) => child.once('exit', resolve)) : this.stopping;
     if (child) {
       this.process = null;
       stopProcess(child);
     }
-    try { await Promise.race([stopped, timeout]); }
-    catch (error) {
+    try {
+      await Promise.race([stopped, timeout]);
+    } catch (error) {
       if (child && child.exitCode === null && !child.signalCode) this.process = child;
       throw error;
-    } finally { clearTimeout(timer); }
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   fail(error) {
@@ -516,9 +775,13 @@ class WorkerClient {
       this.sendEvent('worker.error', { code: 'error.worker_exited', message: reason });
       const meetingId = this.active?.meeting_id;
       this.active = null;
-      if (meetingId) void worker.request('meeting.refinement-recover', { meeting_id: meetingId })
-        .then((meeting) => this.sendEvent('refinement.cancelled', { meeting_id: meetingId, meeting }))
-        .catch((error) => writeLog('ERROR', `recover refinement: ${logText(error)}`));
+      if (meetingId)
+        void worker
+          .request('meeting.refinement-recover', { meeting_id: meetingId })
+          .then((meeting) =>
+            this.sendEvent('refinement.cancelled', { meeting_id: meetingId, meeting }),
+          )
+          .catch((error) => writeLog('ERROR', `recover refinement: ${logText(error)}`));
       return;
     }
     if (this.restarts >= 1) {
@@ -531,7 +794,16 @@ class WorkerClient {
     // 旧 worker 的过期结果，新进程也收不到 app.initialize（启动维护、模型引用收敛等）。
     startupInitialization = null;
     void this.start().catch((error) => writeLog('ERROR', `restart worker: ${logText(error)}`));
-    void initializeWorker().catch((error) => writeLog('ERROR', `re-initialize after restart: ${logText(error)}`));
+    void initializeWorker().catch((error) =>
+      writeLog('ERROR', `re-initialize after restart: ${logText(error)}`),
+    );
+    if (this.active?.mobile) {
+      const session = mobileServer?.sessions.get(this.active.meeting_id);
+      if (session)
+        session.processingWarning = '电脑处理进程曾重启，录音已保留；会后可在电脑精修补全转写';
+      this.restarts = 0;
+      return; // Durable mobile spool reopens and resumes through mobile.apply.
+    }
     if (!this.active) {
       this.sendEvent('worker.error', { code: 'error.worker_exited', message: reason });
       return;
@@ -552,6 +824,8 @@ class WorkerClient {
 }
 
 const worker = new WorkerClient();
+let mobileServer;
+let mobileApproval;
 // 精修会长时间占用 ONNX 线程；独立进程保证会议列表和详情查询不会被它饿死。
 const refinementWorker = new WorkerClient({ refinement: true });
 let startupInitialization;
@@ -561,7 +835,11 @@ function reportMainError(error, fatal = false) {
   const message = error instanceof Error ? error.message : String(error);
   writeLog('ERROR', error);
   console.error(error);
-  try { worker.sendEvent('worker.error', { message, fatal }); } catch { /* The app may not have a window yet. */ }
+  try {
+    worker.sendEvent('worker.error', { message, fatal });
+  } catch {
+    /* The app may not have a window yet. */
+  }
 }
 
 process.on('unhandledRejection', (error) => reportMainError(error));
@@ -580,16 +858,34 @@ function initializeWorker(duringMigration = false) {
 
 async function migrateStorageFolders(value) {
   if (storageMigrationInProgress) throw new Error('Folders are already being moved');
-  if ((process.env.BREVIA_MODELS_DIR && value.models !== modelsDir()) || (process.env.BREVIA_MEETINGS_DIR && value.recordings !== recordingsDir())) {
+  if ([...(mobileServer?.sessions.values() || [])].some((s) => !s.finished))
+    throw new Error('请先完成手机录音与补传，再移动文件夹');
+  if (
+    (process.env.BREVIA_MODELS_DIR && value.models !== modelsDir()) ||
+    (process.env.BREVIA_MEETINGS_DIR && value.recordings !== recordingsDir())
+  ) {
     throw new Error('Folder is controlled by an environment variable');
   }
   storageMigrationInProgress = true;
   let stopped = false;
   try {
-    if (worker.active || refinementWorker.active || worker.pending.size || refinementWorker.pending.size || worker.starting || refinementWorker.starting || !(await worker.request('models.can-relocate', {}, true))) {
-      throw new Error('Finish the current meeting, refinement and model downloads before changing folders');
+    if (
+      worker.active ||
+      refinementWorker.active ||
+      worker.pending.size ||
+      refinementWorker.pending.size ||
+      worker.starting ||
+      refinementWorker.starting ||
+      !(await worker.request('models.can-relocate', {}, true))
+    ) {
+      throw new Error(
+        'Finish the current meeting, refinement and model downloads before changing folders',
+      );
     }
-    const changed = await setFirstRunDirectories(dataDir(), value, { models: process.env.BREVIA_MODELS_DIR, recordings: process.env.BREVIA_MEETINGS_DIR });
+    const changed = await setFirstRunDirectories(dataDir(), value, {
+      models: process.env.BREVIA_MODELS_DIR,
+      recordings: process.env.BREVIA_MEETINGS_DIR,
+    });
     if (!changed) return { changed: false };
     startupInitialization = null;
     await Promise.all([worker.stopForMigration(), refinementWorker.stopForMigration()]);
@@ -601,7 +897,9 @@ async function migrateStorageFolders(value) {
   } catch (error) {
     if (stopped) {
       startupInitialization = null;
-      await initializeWorker(true).catch((restartError) => writeLog('ERROR', `storage migration worker restart: ${logText(restartError)}`));
+      await initializeWorker(true).catch((restartError) =>
+        writeLog('ERROR', `storage migration worker restart: ${logText(restartError)}`),
+      );
     }
     throw error;
   } finally {
@@ -616,22 +914,45 @@ function handle(channel, schema, type = channel) {
 }
 
 let destructiveOperationInProgress = false;
-const destructiveCommands = new Set(['meeting.delete', 'meeting.purge', 'workspace.delete', 'storage.clear', 'storage.cleanup', 'models.delete']);
+const destructiveCommands = new Set([
+  'meeting.delete',
+  'meeting.purge',
+  'workspace.delete',
+  'storage.clear',
+  'storage.cleanup',
+  'models.delete',
+]);
 async function requestWithTaskSafety(type, value) {
   if (!destructiveCommands.has(type)) return worker.request(type, value);
-  if (destructiveOperationInProgress) throw Object.assign(new Error('Wait for background tasks to finish before clearing data'), { code: 'error.tasks.running' });
+  if ([...(mobileServer?.sessions.values() || [])].some((s) => !s.finished))
+    throw new Error('请先完成手机录音与补传，再清理数据');
+  if (destructiveOperationInProgress)
+    throw Object.assign(new Error('Wait for background tasks to finish before clearing data'), {
+      code: 'error.tasks.running',
+    });
   destructiveOperationInProgress = true;
   try {
     const active = refinementWorker.active;
     // 包括仍在管道排队、尚未来得及在 Python 注册的任务。
-    if (['storage.clear', 'storage.cleanup', 'models.delete'].includes(type)
-      && (active || [...worker.pending.values()].some((pending) => dataTaskCommands.has(pending.type)))) {
-      throw Object.assign(new Error('Wait for background tasks to finish before clearing data'), { code: 'error.tasks.running' });
+    if (
+      ['storage.clear', 'storage.cleanup', 'models.delete'].includes(type) &&
+      (active || [...worker.pending.values()].some((pending) => dataTaskCommands.has(pending.type)))
+    ) {
+      throw Object.assign(new Error('Wait for background tasks to finish before clearing data'), {
+        code: 'error.tasks.running',
+      });
     }
-    const affected = active && (value.meeting_id === active.meeting_id || (type === 'workspace.delete'
-      && (await worker.request('meeting.get', { meeting_id: active.meeting_id })).workspace_id === value.workspace_id));
+    const affected =
+      active &&
+      (value.meeting_id === active.meeting_id ||
+        (type === 'workspace.delete' &&
+          (await worker.request('meeting.get', { meeting_id: active.meeting_id })).workspace_id ===
+            value.workspace_id));
     if (affected) {
-      await refinementWorker.request('task.cancel', { task: 'meeting.refine', meeting_id: active.meeting_id });
+      await refinementWorker.request('task.cancel', {
+        task: 'meeting.refine',
+        meeting_id: active.meeting_id,
+      });
       await active.promise.catch(() => {});
       // 等待进程退出，确保超时或异常路径也不会在删除后继续写入。
       if (refinementWorker.stopping) await refinementWorker.stopping;
@@ -661,30 +982,49 @@ function handleModelRequirement(channel, schema, type = channel) {
 }
 
 function handleRefinement(payload) {
-  if (destructiveOperationInProgress || storageMigrationInProgress) return Promise.reject(Object.assign(new Error('Wait for data cleanup to finish before refining'), { code: 'error.tasks.running' }));
-  const value = id.extend({
-    language: z.string().min(2).max(16).optional(),
-    target_language: z.string().min(2).max(16).nullable().optional(),
-    refined_model_id: z.string().min(1).optional(),
-    num_speakers: z.number().int().refine((count) => count === -1 || count >= 1).optional(),
-    cluster_threshold: z.number().min(0).max(2).optional(),
-  }).parse(payload);
+  if (destructiveOperationInProgress || storageMigrationInProgress)
+    return Promise.reject(
+      Object.assign(new Error('Wait for data cleanup to finish before refining'), {
+        code: 'error.tasks.running',
+      }),
+    );
+  const value = id
+    .extend({
+      language: z.string().min(2).max(16).optional(),
+      target_language: z.string().min(2).max(16).nullable().optional(),
+      refined_model_id: z.string().min(1).optional(),
+      num_speakers: z
+        .number()
+        .int()
+        .refine((count) => count === -1 || count >= 1)
+        .optional(),
+      cluster_threshold: z.number().min(0).max(2).optional(),
+    })
+    .parse(payload);
   if (refinementWorker.active) {
-    if (refinementWorker.active.meeting_id === value.meeting_id) return refinementWorker.active.promise;
-    return Promise.reject(Object.assign(new Error('Another meeting is already being refined'), { code: 'error.tasks.running' }));
+    if (refinementWorker.active.meeting_id === value.meeting_id)
+      return refinementWorker.active.promise;
+    return Promise.reject(
+      Object.assign(new Error('Another meeting is already being refined'), {
+        code: 'error.tasks.running',
+      }),
+    );
   }
   const active = { meeting_id: value.meeting_id, promise: null };
   refinementWorker.active = active;
-  active.promise = refinementWorker.request('meeting.refine', value).catch((error) => {
-    const models = requiredModels(error);
-    if (!models) throw error;
-    worker.sendEvent('model.required', { models, task: 'meeting.refine', payload: value });
-    return { model_required: models };
-  }).finally(() => {
-    if (refinementWorker.active !== active) return;
-    refinementWorker.active = null;
-    refinementWorker.recycle();
-  });
+  active.promise = refinementWorker
+    .request('meeting.refine', value)
+    .catch((error) => {
+      const models = requiredModels(error);
+      if (!models) throw error;
+      worker.sendEvent('model.required', { models, task: 'meeting.refine', payload: value });
+      return { model_required: models };
+    })
+    .finally(() => {
+      if (refinementWorker.active !== active) return;
+      refinementWorker.active = null;
+      refinementWorker.recycle();
+    });
   return active.promise;
 }
 
@@ -697,19 +1037,24 @@ async function runRefinementBenchmark() {
     title: '[benchmark]',
     language,
     refined_model_id: refinedModel,
-    speaker_segmentation_model_id: commandArgument('--segmentation-model', 'pyannote-segmentation-3.0'),
+    speaker_segmentation_model_id: commandArgument(
+      '--segmentation-model',
+      'pyannote-segmentation-3.0',
+    ),
     path: source,
   });
   const started = performance.now();
   await handleRefinement({ meeting_id: imported.id, refined_model_id: refinedModel, language });
   const elapsedSeconds = (performance.now() - started) / 1000;
   const audioSeconds = imported.duration_ms / 1000;
-  console.log(JSON.stringify({
-    benchmark: 'electron-main-worker-ipc',
-    audio_seconds: audioSeconds,
-    elapsed_seconds: elapsedSeconds,
-    rtf: elapsedSeconds / Math.max(audioSeconds, 1e-9),
-  }));
+  console.log(
+    JSON.stringify({
+      benchmark: 'electron-main-worker-ipc',
+      audio_seconds: audioSeconds,
+      elapsed_seconds: elapsedSeconds,
+      rtf: elapsedSeconds / Math.max(audioSeconds, 1e-9),
+    }),
+  );
 }
 
 function handleTaskControl(channel, schema) {
@@ -755,7 +1100,10 @@ async function readSummaryConfig() {
   }
 }
 async function writeSummaryConfig(config) {
-  await writeAtomicFile(summaryConfigPath(), `${JSON.stringify(summaryConfig.parse(config), null, 2)}\n`);
+  await writeAtomicFile(
+    summaryConfigPath(),
+    `${JSON.stringify(summaryConfig.parse(config), null, 2)}\n`,
+  );
 }
 
 const aiAssistConfig = z.object({
@@ -792,15 +1140,20 @@ async function readAiAssistConfig() {
     return {
       ...legacy.data,
       version: 2,
-      provider: summary && summaryProviderIds.includes(summary.provider) ? summary.provider : 'built-in',
-      providers: summary?.providers && typeof summary.providers === 'object' ? summary.providers : {},
+      provider:
+        summary && summaryProviderIds.includes(summary.provider) ? summary.provider : 'built-in',
+      providers:
+        summary?.providers && typeof summary.providers === 'object' ? summary.providers : {},
     };
   } catch {
     return null;
   }
 }
 async function writeAiAssistConfig(config) {
-  await writeAtomicFile(aiAssistConfigPath(), `${JSON.stringify(aiAssistConfig.parse(config), null, 2)}\n`);
+  await writeAtomicFile(
+    aiAssistConfigPath(),
+    `${JSON.stringify(aiAssistConfig.parse(config), null, 2)}\n`,
+  );
 }
 
 async function prepareExport(value) {
@@ -810,12 +1163,16 @@ async function prepareExport(value) {
   const pdfPath = exported.path.replace(/\.print\.html$/, '.pdf');
   try {
     await printWindow.loadFile(exported.path);
-    await writeAtomicFile(pdfPath, await printWindow.webContents.printToPDF({
-      printBackground: true,
-      displayHeaderFooter: true,
-      headerTemplate: '<div style="width:100%;text-align:center;opacity:.72"><svg width="98" height="28" viewBox="0 0 196 56" xmlns="http://www.w3.org/2000/svg" aria-label="Brevia"><rect width="56" height="56" fill="#000"/><text x="28" y="39" fill="#fff" font-family="PingFang SC,Hiragino Sans GB,Noto Sans CJK SC,sans-serif" font-size="28" font-weight="600" text-anchor="middle">言</text><text x="76" y="42" fill="#000" font-family="Arial,Helvetica,sans-serif" font-size="38" font-weight="700" letter-spacing="-2">brevia</text></svg></div>',
-      footerTemplate: '<div></div>',
-    }));
+    await writeAtomicFile(
+      pdfPath,
+      await printWindow.webContents.printToPDF({
+        printBackground: true,
+        displayHeaderFooter: true,
+        headerTemplate:
+          '<div style="width:100%;text-align:center;opacity:.72"><svg width="98" height="28" viewBox="0 0 196 56" xmlns="http://www.w3.org/2000/svg" aria-label="Brevia"><rect width="56" height="56" fill="#000"/><text x="28" y="39" fill="#fff" font-family="PingFang SC,Hiragino Sans GB,Noto Sans CJK SC,sans-serif" font-size="28" font-weight="600" text-anchor="middle">言</text><text x="76" y="42" fill="#000" font-family="Arial,Helvetica,sans-serif" font-size="38" font-weight="700" letter-spacing="-2">brevia</text></svg></div>',
+        footerTemplate: '<div></div>',
+      }),
+    );
     return { path: pdfPath, format: 'pdf' };
   } finally {
     if (!printWindow.isDestroyed()) printWindow.destroy();
@@ -826,38 +1183,92 @@ async function prepareExport(value) {
 // 把若干已准备好的导出文件打包成一个 zip，归档文件名按会议名加内容标签命名。
 async function buildSelectedBundle(meetingId, prepared) {
   const base = path.parse(prepared[0].path).name; // 同一会议的所有导出共享会议名基础
-  const safe = (value) => String(value || '').replace(/[<>:"/\\|?*]+/g, '-').trim() || 'item';
+  const safe = (value) =>
+    String(value || '')
+      .replace(/[<>:"/\\|?*]+/g, '-')
+      .trim() || 'item';
   const files = prepared.map((entry) => ({
     path: entry.path,
     name: `${base}-${safe(entry.label)}${path.extname(entry.path)}`,
   }));
-  return (await worker.request('meeting.bundle-files', { meeting_id: meetingId, name: base, files })).path;
+  return (
+    await worker.request('meeting.bundle-files', { meeting_id: meetingId, name: base, files })
+  ).path;
 }
 
 function registerIpc() {
+  handleIpc('mobile.status', () => ({
+    ...mobileServer.status(),
+    approval: mobileApproval && {
+      id: mobileApproval.id,
+      name: mobileApproval.name,
+      verification: mobileApproval.verification,
+    },
+  }));
+  handleIpc('mobile.approve', (_, payload) => {
+    const value = z.object({ id: z.string().uuid(), allowed: z.boolean() }).parse(payload);
+    if (mobileApproval?.id !== value.id) throw new Error('配对请求已过期');
+    mobileApproval.resolve(value.allowed);
+    return { saved: true };
+  });
+  handleIpc('mobile.stop', (_, payload) => mobileServer.requestStop(id.parse(payload).meeting_id));
+  handleIpc('mobile.pair', () => mobileServer.openPairing());
+  handleIpc('mobile.close-pairing', () => {
+    mobileServer.pairing = null;
+    return mobileServer.status();
+  });
+  handleIpc('mobile.disable', () => mobileServer.disable());
+  handleIpc('mobile.revoke', (_, value) =>
+    mobileServer.revoke(z.object({ id: z.string().regex(/^[a-f0-9]{32}$/) }).parse(value).id),
+  );
   handleIpc('app.version', () => app.getVersion());
   handleIpc('update.check', () => checkForUpdate());
   handleIpc('update.install', () => installUpdate());
   handleIpc('permissions.status', () => {
-    if (process.platform === 'darwin') return { microphone: systemPreferences.getMediaAccessStatus('microphone'), screen: systemPreferences.getMediaAccessStatus('screen'), systemAudioSupported: supportsSystemAudio() };
+    if (process.platform === 'darwin')
+      return {
+        microphone: systemPreferences.getMediaAccessStatus('microphone'),
+        screen: systemPreferences.getMediaAccessStatus('screen'),
+        systemAudioSupported: supportsSystemAudio(),
+      };
     // Windows reports the real microphone privacy state; screen capture is not gated the same way.
-    if (process.platform === 'win32') return { microphone: systemPreferences.getMediaAccessStatus('microphone'), screen: 'granted', systemAudioSupported: supportsSystemAudio() };
-    return { microphone: 'granted', screen: 'granted', systemAudioSupported: supportsSystemAudio() };
+    if (process.platform === 'win32')
+      return {
+        microphone: systemPreferences.getMediaAccessStatus('microphone'),
+        screen: 'granted',
+        systemAudioSupported: supportsSystemAudio(),
+      };
+    return {
+      microphone: 'granted',
+      screen: 'granted',
+      systemAudioSupported: supportsSystemAudio(),
+    };
   });
-  handleIpc('permissions.request-microphone', () => process.platform === 'darwin'
-    ? systemPreferences.askForMediaAccess('microphone')
-    // Windows has no runtime prompt; report whether the OS privacy toggle already allows access.
-    : process.platform !== 'win32' || systemPreferences.getMediaAccessStatus('microphone') === 'granted');
+  handleIpc('permissions.request-microphone', () =>
+    process.platform === 'darwin'
+      ? systemPreferences.askForMediaAccess('microphone')
+      : // Windows has no runtime prompt; report whether the OS privacy toggle already allows access.
+        process.platform !== 'win32' ||
+        systemPreferences.getMediaAccessStatus('microphone') === 'granted',
+  );
   handleIpc('permissions.open-screen-settings', async () => {
     if (process.platform !== 'darwin') return false;
     await registerScreenPermission(desktopCapturer, writeLog);
-    const settings = spawn('open', ['x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'], { detached: true, stdio: 'ignore' });
+    const settings = spawn(
+      'open',
+      ['x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'],
+      { detached: true, stdio: 'ignore' },
+    );
     settings.unref();
     return true;
   });
   handleIpc('permissions.open-microphone-settings', async () => {
     if (process.platform === 'darwin') {
-      const settings = spawn('open', ['x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone'], { detached: true, stdio: 'ignore' });
+      const settings = spawn(
+        'open',
+        ['x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone'],
+        { detached: true, stdio: 'ignore' },
+      );
       settings.unref();
       return true;
     }
@@ -879,6 +1290,8 @@ function registerIpc() {
     }
   });
   handleIpc('meeting.start', async (_, payload) => {
+    if ([...(mobileServer?.sessions.values() || [])].some((s) => !s.finished))
+      throw new Error('请先在手机结束录音并完成补传');
     const value = meetingStart.parse(payload);
     let result;
     try {
@@ -896,28 +1309,40 @@ function registerIpc() {
   });
   handleIpc('meeting.import', async (_, payload) => {
     const value = meetingStart.extend({ path: z.string().optional() }).parse(payload);
-    const selected = await dialog.showOpenDialog({ properties: ['openFile'], filters: [{ name: 'Audio', extensions: ['wav', 'mp3', 'm4a', 'flac', 'aac', 'ogg'] }] });
+    const selected = await dialog.showOpenDialog({
+      properties: ['openFile'],
+      filters: [{ name: 'Audio', extensions: ['wav', 'mp3', 'm4a', 'flac', 'aac', 'ogg'] }],
+    });
     if (selected.canceled) return null;
-    const result = await worker.request('meeting.import', { ...value, path: selected.filePaths[0] });
+    const result = await worker.request('meeting.import', {
+      ...value,
+      path: selected.filePaths[0],
+    });
     resetFloatingCaptionState();
     return result;
   });
   handleIpc('meeting.audio', (_, payload) => {
     const value = audio.parse(payload);
     // 熄屏停会不会先等渲染进程的音频队列；丢弃其尾帧，避免已停止的 worker 报错。
-    if (stoppingForSleep || worker.active?.meeting_id !== value.meeting_id) return { dropped: true };
+    if (stoppingForSleep || worker.active?.meeting_id !== value.meeting_id)
+      return { dropped: true };
     return worker.request('meeting.audio', value);
   });
   handle('meeting.pause', id.extend({ paused: z.boolean() }), 'meeting.pause');
   handleModelRequirement('meeting.reconfigure', meetingReconfigure, 'meeting.reconfigure');
   handleIpc('meeting.stop', async (_, payload) => {
+    if (worker.active?.mobile) throw new Error('请在手机结束本次录音');
     const value = id.extend({ duration_ms: z.number().nonnegative() }).parse(payload);
     const result = await worker.request('meeting.stop', value);
     worker.active = null;
     worker.recycle();
     return result;
   });
-  handle('meeting.list', z.object({ include_deleted: z.boolean().optional(), query: z.string().max(120).optional() }), 'meeting.list');
+  handle(
+    'meeting.list',
+    z.object({ include_deleted: z.boolean().optional(), query: z.string().max(120).optional() }),
+    'meeting.list',
+  );
   handle('meeting.search', z.object({ query: z.string().max(120) }), 'meeting.search');
   handle('meeting.get', id, 'meeting.get');
   handle('meeting.update', id.extend({ updates: meetingUpdates }), 'meeting.update');
@@ -932,44 +1357,117 @@ function registerIpc() {
   });
   handle('workspace.list', z.object({}), 'workspace.list');
   handle('workspace.get', z.object({ workspace_id: z.string() }), 'workspace.get');
-  handle('workspace.create', z.object({ name: z.string().trim().min(1).max(50), description: z.string().max(200).optional() }), 'workspace.create');
-  handle('workspace.update', z.object({ workspace_id: z.string(), updates: z.object({ name: z.string().trim().min(1).max(50).optional(), description: z.string().max(200).optional() }) }), 'workspace.update');
+  handle(
+    'workspace.create',
+    z.object({
+      name: z.string().trim().min(1).max(50),
+      description: z.string().max(200).optional(),
+    }),
+    'workspace.create',
+  );
+  handle(
+    'workspace.update',
+    z.object({
+      workspace_id: z.string(),
+      updates: z.object({
+        name: z.string().trim().min(1).max(50).optional(),
+        description: z.string().max(200).optional(),
+      }),
+    }),
+    'workspace.update',
+  );
   handle('workspace.delete', z.object({ workspace_id: z.string() }), 'workspace.delete');
-  handle('workspace.assign', z.object({ meeting_id: z.string().uuid(), workspace_id: z.string().uuid().nullable() }), 'workspace.assign');
-  handle('speaker.rename', id.extend({ speaker_id: z.string(), name: z.string().trim().min(1).max(32), locked: z.boolean().optional() }), 'speaker.rename');
+  handle(
+    'workspace.assign',
+    z.object({ meeting_id: z.string().uuid(), workspace_id: z.string().uuid().nullable() }),
+    'workspace.assign',
+  );
+  handle(
+    'speaker.rename',
+    id.extend({
+      speaker_id: z.string(),
+      name: z.string().trim().min(1).max(32),
+      locked: z.boolean().optional(),
+    }),
+    'speaker.rename',
+  );
   handle('speaker-profile.list', z.object({}), 'speaker-profile.list');
-  handle('speaker-profile.samples', z.object({ profile_id: z.string().uuid() }), 'speaker-profile.samples');
+  handle(
+    'speaker-profile.samples',
+    z.object({ profile_id: z.string().uuid() }),
+    'speaker-profile.samples',
+  );
   handleIpc('speaker-profile.enroll', async (_, payload) => {
-    const value = z.object({ profile_id: z.string().uuid().optional(), name: z.string().trim().min(1).max(32) }).parse(payload);
-    const selected = await dialog.showOpenDialog({ properties: ['openFile'], filters: [{ name: 'Audio', extensions: ['wav', 'mp3', 'm4a', 'flac', 'aac', 'ogg'] }] });
+    const value = z
+      .object({ profile_id: z.string().uuid().optional(), name: z.string().trim().min(1).max(32) })
+      .parse(payload);
+    const selected = await dialog.showOpenDialog({
+      properties: ['openFile'],
+      filters: [{ name: 'Audio', extensions: ['wav', 'mp3', 'm4a', 'flac', 'aac', 'ogg'] }],
+    });
     if (selected.canceled) return null;
-    return worker.request('speaker-profile.enroll', { ...value, path: selected.filePaths[0] })
+    return worker
+      .request('speaker-profile.enroll', { ...value, path: selected.filePaths[0] })
       .finally(() => worker.recycle());
   });
   handleIpc('speaker-profile.verify', async (_, payload) => {
     const value = z.object({ profile_id: z.string().uuid() }).parse(payload);
-    const selected = await dialog.showOpenDialog({ properties: ['openFile'], filters: [{ name: 'Audio', extensions: ['wav', 'mp3', 'm4a', 'flac', 'aac', 'ogg'] }] });
+    const selected = await dialog.showOpenDialog({
+      properties: ['openFile'],
+      filters: [{ name: 'Audio', extensions: ['wav', 'mp3', 'm4a', 'flac', 'aac', 'ogg'] }],
+    });
     if (selected.canceled) return null;
-    return worker.request('speaker-profile.verify', { ...value, path: selected.filePaths[0] })
+    return worker
+      .request('speaker-profile.verify', { ...value, path: selected.filePaths[0] })
       .finally(() => worker.recycle());
   });
-  handle('speaker-profile.delete', z.object({ profile_id: z.string().uuid() }), 'speaker-profile.delete');
-  handle('speaker-profile.rename', z.object({ profile_id: z.string().uuid(), name: z.string().trim().min(1).max(32) }), 'speaker-profile.rename');
-  handle('speaker-profile.sample-delete', z.object({ profile_id: z.string().uuid(), sample_id: z.string().uuid() }), 'speaker-profile.sample-delete');
-  handle('storage.clear', z.object({ partition: z.enum(['meetings', 'models', 'exports']) }), 'storage.clear');
+  handle(
+    'speaker-profile.delete',
+    z.object({ profile_id: z.string().uuid() }),
+    'speaker-profile.delete',
+  );
+  handle(
+    'speaker-profile.rename',
+    z.object({ profile_id: z.string().uuid(), name: z.string().trim().min(1).max(32) }),
+    'speaker-profile.rename',
+  );
+  handle(
+    'speaker-profile.sample-delete',
+    z.object({ profile_id: z.string().uuid(), sample_id: z.string().uuid() }),
+    'speaker-profile.sample-delete',
+  );
+  handle(
+    'storage.clear',
+    z.object({ partition: z.enum(['meetings', 'models', 'exports']) }),
+    'storage.clear',
+  );
   handle('storage.cleanup', z.object({}), 'storage.cleanup');
   handle('settings.advanced.get', z.object({}), 'settings.advanced.get');
-  handle('settings.advanced.save', z.object({ settings: z.record(z.string(), z.unknown()) }), 'settings.advanced.save');
+  handle(
+    'settings.advanced.save',
+    z.object({ settings: z.record(z.string(), z.unknown()) }),
+    'settings.advanced.save',
+  );
   handleIpc('metrics.record', async (_, payload) => {
     if (app.isQuitting) return null;
     try {
-      return await worker.request('metrics.record', z.object({ app_duration_ms: z.number().int().nonnegative().optional() }).parse(payload));
+      return await worker.request(
+        'metrics.record',
+        z.object({ app_duration_ms: z.number().int().nonnegative().optional() }).parse(payload),
+      );
     } catch (error) {
       if (error.code === 'EPIPE' || app.isQuitting) return null;
       throw error;
     }
   });
-  handle('segment.speaker', id.extend({ segment_id: z.string().min(1), name: z.string().trim().min(1).max(32), enroll: z.boolean().optional() }));
+  handle(
+    'segment.speaker',
+    id.extend({
+      segment_id: z.string().min(1),
+      name: z.string().trim().min(1).max(32),
+      enroll: z.boolean().optional(),
+    }),
+  );
   // 同时限制单句和整批字符数，避免编辑请求占满 worker 的 32 MiB 命令容量。
   handle(
     'segment.text',
@@ -984,7 +1482,9 @@ function registerIpc() {
     }),
   );
   handleIpc('segment.speaker-profile-sample', async (_, payload) => {
-    const value = id.extend({ segment_id: z.string().min(1), profile_id: z.string().uuid() }).parse(payload);
+    const value = id
+      .extend({ segment_id: z.string().min(1), profile_id: z.string().uuid() })
+      .parse(payload);
     return worker.request('segment.speaker-profile-sample', value).finally(() => worker.recycle());
   });
   handleIpc('storage.open', async (_, payload) => {
@@ -993,12 +1493,15 @@ function registerIpc() {
     return shell.openPath(directory);
   });
   handleIpc('storage.locations', () => ({
-    models: modelsDir(), recordings: recordingsDir(),
+    models: modelsDir(),
+    recordings: recordingsDir(),
     modelsManaged: !process.env.BREVIA_MODELS_DIR,
     recordingsManaged: !process.env.BREVIA_MEETINGS_DIR,
   }));
   handleIpc('storage.choose-folder', async () => {
-    const result = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] });
+    const result = await dialog.showOpenDialog({
+      properties: ['openDirectory', 'createDirectory'],
+    });
     return result.canceled ? null : result.filePaths[0];
   });
   handleIpc('storage.setup-locations', async (_, payload) => {
@@ -1006,16 +1509,25 @@ function registerIpc() {
     return migrateStorageFolders(value);
   });
   handle('models.list', z.object({}), 'models.list');
-  handle('models.download', z.object({ model_id: z.string(), source: z.enum(['default', 'china']).optional() }), 'models.download');
+  handle(
+    'models.download',
+    z.object({ model_id: z.string(), source: z.enum(['default', 'china']).optional() }),
+    'models.download',
+  );
   handle('models.pause', z.object({ model_id: z.string() }), 'models.pause');
   handle('models.cancel', z.object({ model_id: z.string() }), 'models.cancel');
   handle('models.delete', z.object({ model_id: z.string() }), 'models.delete');
-  const taskControl = z.object({ task: z.enum(['meeting.refine', 'summary.generate']), meeting_id: z.string() });
+  const taskControl = z.object({
+    task: z.enum(['meeting.refine', 'summary.generate']),
+    meeting_id: z.string(),
+  });
   handleTaskControl('task.pause', taskControl);
   handleTaskControl('task.resume', taskControl);
   handleTaskControl('task.cancel', taskControl);
   handleIpc('secret.set', async (_, payload) => {
-    const value = z.object({ reference: z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/), value: z.string().min(1) }).parse(payload);
+    const value = z
+      .object({ reference: z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/), value: z.string().min(1) })
+      .parse(payload);
     await setSecret(value.reference, value.value);
     return true;
   });
@@ -1032,27 +1544,45 @@ function registerIpc() {
     return config;
   });
   handleIpc('summary.generate', async (_, payload) => {
-    const value = id.extend({
-      ...llmRequest.shape,
-      language: z.enum(['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']).default('en'), consent: z.literal(true),
-    }).refine(({ provider, endpoint }) => !requiresEndpoint(provider) || Boolean(endpoint), {
-      message: 'Endpoint is required for remote providers', path: ['endpoint'],
-    }).parse(payload);
+    const value = id
+      .extend({
+        ...llmRequest.shape,
+        language: z.enum(['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']).default('en'),
+        consent: z.literal(true),
+      })
+      .refine(({ provider, endpoint }) => !requiresEndpoint(provider) || Boolean(endpoint), {
+        message: 'Endpoint is required for remote providers',
+        path: ['endpoint'],
+      })
+      .parse(payload);
     const api_key = await getSecret(value.key_reference);
     if (!api_key && !isBuiltInProvider(value.provider)) return { configuration_required: true };
     return worker.request('summary.generate', { ...value, api_key });
   });
-  handleIpc('summary.save', async (_, payload) => worker.request('summary.save', id.extend({ markdown: z.string().max(5 * 1024 * 1024) }).parse(payload)));
+  handleIpc('summary.save', async (_, payload) =>
+    worker.request(
+      'summary.save',
+      id.extend({ markdown: z.string().max(5 * 1024 * 1024) }).parse(payload),
+    ),
+  );
   handleIpc('translation.generate', async (_, payload) => {
-    const value = id.extend({
-      segment_id: z.string(),
-      segment: z.object({
-        text: z.string().trim().min(1), start_ms: z.number().nonnegative(), end_ms: z.number().nonnegative(),
-        speaker: z.string().trim().min(1).max(128), track: z.string().trim().min(1).max(32), revision: z.number().int().nonnegative(),
-      }).optional(),
-      target_language: z.string().min(2).max(16),
-      consent: z.literal(true),
-    }).parse(payload);
+    const value = id
+      .extend({
+        segment_id: z.string(),
+        segment: z
+          .object({
+            text: z.string().trim().min(1),
+            start_ms: z.number().nonnegative(),
+            end_ms: z.number().nonnegative(),
+            speaker: z.string().trim().min(1).max(128),
+            track: z.string().trim().min(1).max(32),
+            revision: z.number().int().nonnegative(),
+          })
+          .optional(),
+        target_language: z.string().min(2).max(16),
+        consent: z.literal(true),
+      })
+      .parse(payload);
     return worker.request('translation.generate', value);
   });
   handleIpc('ai-note.start', async (_, payload) => {
@@ -1062,17 +1592,27 @@ function registerIpc() {
     return worker.request('ai-note.start', { ...value, api_key });
   });
   handleIpc('ai-note.stop', (_, payload) => worker.request('ai-note.stop', id.parse(payload)));
-  handleIpc('ai-note.typing', (_, payload) => worker.request('ai-note.typing', aiNoteTyping.parse(payload)));
-  handleIpc('ai-note.request', (_, payload) => worker.request('ai-note.request', aiNoteRequest.parse(payload)));
-  handleIpc('ai-note.dismiss', (_, payload) => worker.request('ai-note.dismiss', aiNoteDismiss.parse(payload)));
-  handleIpc('ai-note.reconfigure', (_, payload) => worker.request('ai-note.reconfigure', aiNoteReconfigure.parse(payload)));
+  handleIpc('ai-note.typing', (_, payload) =>
+    worker.request('ai-note.typing', aiNoteTyping.parse(payload)),
+  );
+  handleIpc('ai-note.request', (_, payload) =>
+    worker.request('ai-note.request', aiNoteRequest.parse(payload)),
+  );
+  handleIpc('ai-note.dismiss', (_, payload) =>
+    worker.request('ai-note.dismiss', aiNoteDismiss.parse(payload)),
+  );
+  handleIpc('ai-note.reconfigure', (_, payload) =>
+    worker.request('ai-note.reconfigure', aiNoteReconfigure.parse(payload)),
+  );
   handleIpc('meeting.export', async (_, payload) => {
-    const value = id.extend({
-      content: z.enum(['transcript', 'notes', 'mynotes', 'audio']).optional(),
-      format: z.enum(['md', 'txt', 'json', 'srt', 'docx', 'pdf', 'wav']),
-      track: z.enum(['mix', 'mic', 'system']).optional(),
-      filename_prefix: z.string().max(60).optional(),
-    }).parse(payload);
+    const value = id
+      .extend({
+        content: z.enum(['transcript', 'notes', 'mynotes', 'audio']).optional(),
+        format: z.enum(['md', 'txt', 'json', 'srt', 'docx', 'pdf', 'wav']),
+        track: z.enum(['mix', 'mic', 'system']).optional(),
+        filename_prefix: z.string().max(60).optional(),
+      })
+      .parse(payload);
     const exported = await prepareExport(value);
     const destination = await dialog.showSaveDialog({ defaultPath: path.basename(exported.path) });
     if (destination.canceled) return null;
@@ -1080,15 +1620,29 @@ function registerIpc() {
     return { ...exported, path: destination.filePath };
   });
   handleIpc('meeting.export-many', async (_, payload) => {
-    const value = z.object({ meeting_ids: z.array(z.string().uuid()).min(1).max(200), format: z.enum(['md', 'txt', 'json', 'srt', 'docx', 'pdf', 'wav']).default('md'), filename_prefix: z.string().max(60).optional() }).parse(payload);
-    const destination = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] });
+    const value = z
+      .object({
+        meeting_ids: z.array(z.string().uuid()).min(1).max(200),
+        format: z.enum(['md', 'txt', 'json', 'srt', 'docx', 'pdf', 'wav']).default('md'),
+        filename_prefix: z.string().max(60).optional(),
+      })
+      .parse(payload);
+    const destination = await dialog.showOpenDialog({
+      properties: ['openDirectory', 'createDirectory'],
+    });
     if (destination.canceled) return null;
     const paths = [];
     for (const meetingId of value.meeting_ids) {
-      const exported = await prepareExport({ meeting_id: meetingId, content: value.format === 'wav' ? 'audio' : 'transcript', format: value.format, ...(value.filename_prefix ? { filename_prefix: value.filename_prefix } : {}) });
+      const exported = await prepareExport({
+        meeting_id: meetingId,
+        content: value.format === 'wav' ? 'audio' : 'transcript',
+        format: value.format,
+        ...(value.filename_prefix ? { filename_prefix: value.filename_prefix } : {}),
+      });
       const parsed = path.parse(exported.path);
       let target = path.join(destination.filePaths[0], parsed.base);
-      for (let copy = 2; existsSync(target); copy += 1) target = path.join(destination.filePaths[0], `${parsed.name}-${copy}${parsed.ext}`);
+      for (let copy = 2; existsSync(target); copy += 1)
+        target = path.join(destination.filePaths[0], `${parsed.name}-${copy}${parsed.ext}`);
       await copyFile(exported.path, target);
       paths.push(target);
     }
@@ -1105,18 +1659,30 @@ function registerIpc() {
   // 文本内容可选格式，录音使用默认 WAV）。单项直接交付该文件；多项打包为一个 zip。mode 决定交付方式：
   // save —— 弹出保存对话框；reveal —— 在文件夹中定位；system —— 弹出系统分享面板。
   handleIpc('meeting.export-bundle', async (event, payload) => {
-    const value = z.object({
-      meeting_id: z.string().uuid(),
-      items: z.array(z.object({
-        content: z.enum(['transcript', 'notes', 'mynotes', 'audio']),
-        format: z.enum(['md', 'txt', 'json', 'srt', 'docx', 'pdf', 'wav']),
-        track: z.enum(['mix', 'mic', 'system']).optional(),
-        label: z.string().min(1).max(60).optional(),
-        filename_prefix: z.string().max(60).optional(),
-      })).min(1).max(8),
-      mode: z.enum(['save', 'reveal', 'system']).default('save'),
-      anchor: z.object({ x: z.number().int().min(0).max(100000), y: z.number().int().min(0).max(100000) }).optional(),
-    }).parse(payload);
+    const value = z
+      .object({
+        meeting_id: z.string().uuid(),
+        items: z
+          .array(
+            z.object({
+              content: z.enum(['transcript', 'notes', 'mynotes', 'audio']),
+              format: z.enum(['md', 'txt', 'json', 'srt', 'docx', 'pdf', 'wav']),
+              track: z.enum(['mix', 'mic', 'system']).optional(),
+              label: z.string().min(1).max(60).optional(),
+              filename_prefix: z.string().max(60).optional(),
+            }),
+          )
+          .min(1)
+          .max(8),
+        mode: z.enum(['save', 'reveal', 'system']).default('save'),
+        anchor: z
+          .object({
+            x: z.number().int().min(0).max(100000),
+            y: z.number().int().min(0).max(100000),
+          })
+          .optional(),
+      })
+      .parse(payload);
     // 1. 依次准备每项（prepareExport 会处理 PDF 渲染）。
     const prepared = [];
     for (const item of value.items) {
@@ -1127,7 +1693,11 @@ function registerIpc() {
         ...(item.track ? { track: item.track } : {}),
         ...(item.filename_prefix ? { filename_prefix: item.filename_prefix } : {}),
       });
-      prepared.push({ path: exported.path, format: exported.format, label: item.label || item.content });
+      prepared.push({
+        path: exported.path,
+        format: exported.format,
+        label: item.label || item.content,
+      });
     }
     // 2. 多项时打包为一个 zip；单项直接交付。
     let deliver = prepared;
@@ -1147,10 +1717,15 @@ function registerIpc() {
       return { paths: [file.path], format: file.format, revealed: true, count: prepared.length };
     }
     if (value.mode === 'system') {
-      if (process.platform !== 'darwin' || typeof ShareMenu !== 'function') throw new Error('System share is only available on macOS');
-      const window = BrowserWindow.fromWebContents(event.sender) || BrowserWindow.getAllWindows()[0];
+      if (process.platform !== 'darwin' || typeof ShareMenu !== 'function')
+        throw new Error('System share is only available on macOS');
+      const window =
+        BrowserWindow.fromWebContents(event.sender) || BrowserWindow.getAllWindows()[0];
       if (!window) throw new Error('No window to anchor the share menu');
-      new ShareMenu({ filePaths: deliver.map((entry) => entry.path) }).popup({ window, ...(value.anchor ? { x: value.anchor.x, y: value.anchor.y } : {}) });
+      new ShareMenu({ filePaths: deliver.map((entry) => entry.path) }).popup({
+        window,
+        ...(value.anchor ? { x: value.anchor.x, y: value.anchor.y } : {}),
+      });
       return { shared: true, format: file.format, count: prepared.length };
     }
     return null;
@@ -1168,56 +1743,97 @@ function registerIpc() {
     return { opened: true };
   });
   handleIpc('share.file', async (_, payload) => {
-    const value = z.object({
-      meeting_id: z.string().uuid(),
-      kind: z.enum(['export', 'bundle']).default('export'),
-      content: z.enum(['transcript', 'notes', 'mynotes', 'audio']).optional(),
-      format: z.enum(['md', 'txt', 'json', 'srt', 'docx', 'pdf', 'wav']).optional(),
-      track: z.enum(['mix', 'mic', 'system']).optional(),
-    }).parse(payload);
+    const value = z
+      .object({
+        meeting_id: z.string().uuid(),
+        kind: z.enum(['export', 'bundle']).default('export'),
+        content: z.enum(['transcript', 'notes', 'mynotes', 'audio']).optional(),
+        format: z.enum(['md', 'txt', 'json', 'srt', 'docx', 'pdf', 'wav']).optional(),
+        track: z.enum(['mix', 'mic', 'system']).optional(),
+      })
+      .parse(payload);
     // 与「导出」不同:直接写入会议的 exports 目录并在文件管理器中高亮,供用户手动拖入微信等无 API 平台。
-    const exported = value.kind === 'bundle'
-      ? await worker.request('meeting.bundle', { meeting_id: value.meeting_id })
-      : await prepareExport({ meeting_id: value.meeting_id, content: value.content, format: value.format || (value.content === 'audio' ? 'wav' : 'md'), ...(value.track ? { track: value.track } : {}) });
+    const exported =
+      value.kind === 'bundle'
+        ? await worker.request('meeting.bundle', { meeting_id: value.meeting_id })
+        : await prepareExport({
+            meeting_id: value.meeting_id,
+            content: value.content,
+            format: value.format || (value.content === 'audio' ? 'wav' : 'md'),
+            ...(value.track ? { track: value.track } : {}),
+          });
     shell.showItemInFolder(exported.path);
     return { ...exported, revealed: true };
   });
   // 系统原生分享面板(NSSharingServicePicker)。仅 macOS 提供;可分享纯文本或先导出的文件,
   // 用户从面板选 AirDrop / 信息 / 邮件 / 备忘录,以及任何注册了分享扩展的 App(如微信)。
   handleIpc('share.system', async (event, payload) => {
-    if (process.platform !== 'darwin' || typeof ShareMenu !== 'function') throw new Error('System share is only available on macOS');
-    const value = z.object({
-      text: z.string().min(1).max(200000).optional(),
-      anchor: z.object({ x: z.number().int().min(0).max(100000), y: z.number().int().min(0).max(100000) }).optional(),
-      file: z.object({
-        meeting_id: z.string().uuid(),
-        kind: z.enum(['export', 'bundle']).default('export'),
-        content: z.enum(['transcript', 'notes', 'mynotes', 'audio']).optional(),
-        format: z.enum(['md', 'txt', 'json', 'srt', 'docx', 'pdf', 'wav']).optional(),
-        track: z.enum(['mix', 'mic', 'system']).optional(),
-      }).optional(),
-    }).refine((v) => v.text || v.file, { message: 'Nothing to share' }).parse(payload);
+    if (process.platform !== 'darwin' || typeof ShareMenu !== 'function')
+      throw new Error('System share is only available on macOS');
+    const value = z
+      .object({
+        text: z.string().min(1).max(200000).optional(),
+        anchor: z
+          .object({
+            x: z.number().int().min(0).max(100000),
+            y: z.number().int().min(0).max(100000),
+          })
+          .optional(),
+        file: z
+          .object({
+            meeting_id: z.string().uuid(),
+            kind: z.enum(['export', 'bundle']).default('export'),
+            content: z.enum(['transcript', 'notes', 'mynotes', 'audio']).optional(),
+            format: z.enum(['md', 'txt', 'json', 'srt', 'docx', 'pdf', 'wav']).optional(),
+            track: z.enum(['mix', 'mic', 'system']).optional(),
+          })
+          .optional(),
+      })
+      .refine((v) => v.text || v.file, { message: 'Nothing to share' })
+      .parse(payload);
     const sharingItem = {};
     if (value.text) sharingItem.texts = [value.text];
     if (value.file) {
-      const exported = value.file.kind === 'bundle'
-        ? await worker.request('meeting.bundle', { meeting_id: value.file.meeting_id })
-        : await prepareExport({ meeting_id: value.file.meeting_id, content: value.file.content, format: value.file.format || (value.file.content === 'audio' ? 'wav' : 'md'), ...(value.file.track ? { track: value.file.track } : {}) });
+      const exported =
+        value.file.kind === 'bundle'
+          ? await worker.request('meeting.bundle', { meeting_id: value.file.meeting_id })
+          : await prepareExport({
+              meeting_id: value.file.meeting_id,
+              content: value.file.content,
+              format: value.file.format || (value.file.content === 'audio' ? 'wav' : 'md'),
+              ...(value.file.track ? { track: value.file.track } : {}),
+            });
       sharingItem.filePaths = [exported.path];
     }
     const window = BrowserWindow.fromWebContents(event.sender) || BrowserWindow.getAllWindows()[0];
     if (!window) throw new Error('No window to anchor the share menu');
     // 传入按钮坐标(相对窗口内容区),弹窗锚定在按钮处;无坐标时回退到窗口默认位置。
-    new ShareMenu(sharingItem).popup({ window, ...(value.anchor ? { x: value.anchor.x, y: value.anchor.y } : {}) });
+    new ShareMenu(sharingItem).popup({
+      window,
+      ...(value.anchor ? { x: value.anchor.x, y: value.anchor.y } : {}),
+    });
     return { shared: true };
   });
   handleIpc('shell.showItem', (_, filePath) => {
     const resolved = path.resolve(z.string().parse(filePath));
-    if (![dataDir(), recordingsDir(), modelsDir()].some((root) => resolved === path.resolve(root) || isWithin(root, resolved))) throw new Error('Invalid path');
+    if (
+      ![dataDir(), recordingsDir(), modelsDir()].some(
+        (root) => resolved === path.resolve(root) || isWithin(root, resolved),
+      )
+    )
+      throw new Error('Invalid path');
     return shell.showItemInFolder(resolved);
   });
-  handleIpc('audio.url', (_, filePath) => audioFileURL(z.string().parse(filePath), [recordingsDir(), path.join(dataDir(), 'speaker-profiles')]));
-  handleIpc('floating-caption.show', () => { resetFloatingCaptionState(); return showFloatingCaption(); });
+  handleIpc('audio.url', (_, filePath) =>
+    audioFileURL(z.string().parse(filePath), [
+      recordingsDir(),
+      path.join(dataDir(), 'speaker-profiles'),
+    ]),
+  );
+  handleIpc('floating-caption.show', () => {
+    resetFloatingCaptionState();
+    return showFloatingCaption();
+  });
   handleIpc('floating-caption.close', () => closeFloatingCaption());
   handleIpc('floating-caption.update', (_, payload) => {
     const value = floatingCaptionPayload.parse(payload ?? {});
@@ -1229,22 +1845,41 @@ function registerIpc() {
         text: floatingCaptionState.current.text,
         translation: floatingCaptionState.current.translation || null,
       };
-      floatingCaptionState.current = { segmentId: null, text: '', isRefined: false, translation: null };
+      floatingCaptionState.current = {
+        segmentId: null,
+        text: '',
+        isRefined: false,
+        translation: null,
+      };
       sendFloatingCaptionState();
       return true;
     }
 
     // Handle updateFinalized: update the lastFinalized text directly (for refined segments)
     if (value.updateFinalized && value.text !== undefined) {
-      const pendingTranslation = floatingCaptionState.pendingTranslation.segmentId === value.segmentId
-        ? floatingCaptionState.pendingTranslation.text : null;
-      const existingTranslation = floatingCaptionState.lastFinalized.segmentId === value.segmentId
-        ? floatingCaptionState.lastFinalized.translation : null;
-      floatingCaptionState.lastFinalized = { segmentId: value.segmentId ?? null, text: value.text, translation: pendingTranslation || existingTranslation };
-      if (pendingTranslation) floatingCaptionState.pendingTranslation = { segmentId: null, text: null };
+      const pendingTranslation =
+        floatingCaptionState.pendingTranslation.segmentId === value.segmentId
+          ? floatingCaptionState.pendingTranslation.text
+          : null;
+      const existingTranslation =
+        floatingCaptionState.lastFinalized.segmentId === value.segmentId
+          ? floatingCaptionState.lastFinalized.translation
+          : null;
+      floatingCaptionState.lastFinalized = {
+        segmentId: value.segmentId ?? null,
+        text: value.text,
+        translation: pendingTranslation || existingTranslation,
+      };
+      if (pendingTranslation)
+        floatingCaptionState.pendingTranslation = { segmentId: null, text: null };
       // Clear current area only if it's showing the same segment that was just refined
       if (value.clearCurrentIfMatch && value.segmentId === floatingCaptionState.current.segmentId) {
-        floatingCaptionState.current = { segmentId: null, text: '', isRefined: false, translation: null };
+        floatingCaptionState.current = {
+          segmentId: null,
+          text: '',
+          isRefined: false,
+          translation: null,
+        };
       }
       sendFloatingCaptionState();
       return true;
@@ -1324,7 +1959,8 @@ let macUpdateCheck;
 
 function checkForUpdate() {
   if (!app.isPackaged) return Promise.resolve({ status: 'unsupported' });
-  if (!['darwin', 'win32'].includes(process.platform)) return Promise.resolve({ status: 'unsupported' });
+  if (!['darwin', 'win32'].includes(process.platform))
+    return Promise.resolve({ status: 'unsupported' });
   if (macUpdateCheck) return macUpdateCheck;
   const { autoUpdater } = require('electron-updater');
   configureMacUpdater(autoUpdater);
@@ -1339,15 +1975,23 @@ function checkForUpdate() {
       autoUpdater.removeListener('update-not-available', current);
       autoUpdater.removeListener('error', fail);
     };
-    const done = (result) => { cleanup(); resolve(result); };
-    const fail = (error) => { cleanup(); reject(error); };
+    const done = (result) => {
+      cleanup();
+      resolve(result);
+    };
+    const fail = (error) => {
+      cleanup();
+      reject(error);
+    };
     const available = (info) => done({ status: 'available', version: info.version });
     const current = () => done({ status: 'current' });
     autoUpdater.once('update-available', available);
     autoUpdater.once('update-not-available', current);
     autoUpdater.once('error', fail);
     autoUpdater.checkForUpdates().catch(fail);
-  }).finally(() => { macUpdateCheck = undefined; });
+  }).finally(() => {
+    macUpdateCheck = undefined;
+  });
   return macUpdateCheck;
 }
 
@@ -1423,7 +2067,14 @@ function createWindow() {
   let revealed = false;
   let reloadRevealTimer;
   const revealApp = () => {
-    if (!pageReady || !animationComplete || !initializationReady || revealed || window.isDestroyed()) return;
+    if (
+      !pageReady ||
+      !animationComplete ||
+      !initializationReady ||
+      revealed ||
+      window.isDestroyed()
+    )
+      return;
     revealed = true;
     window.webContents.send('brevia:event', { type: 'startup.ready' });
   };
@@ -1433,20 +2084,31 @@ function createWindow() {
     if (revealed) {
       clearTimeout(reloadRevealTimer);
       reloadRevealTimer = setTimeout(() => {
-        if (!window.isDestroyed()) window.webContents.send('brevia:event', { type: 'startup.ready' });
+        if (!window.isDestroyed())
+          window.webContents.send('brevia:event', { type: 'startup.ready' });
       }, startupAnimationMs);
-    }
-    else revealApp();
+    } else revealApp();
   });
-  window.loadFile(path.join(packagedRoot, 'frontend', 'index.html'), resetOnboarding ? { query: { resetOnboarding: '1' } } : undefined);
+  window.loadFile(
+    path.join(packagedRoot, 'frontend', 'index.html'),
+    resetOnboarding ? { query: { resetOnboarding: '1' } } : undefined,
+  );
   setTimeout(() => {
     animationComplete = true;
     revealApp();
   }, startupAnimationMs);
-  void Promise.race([initializeWorker(), new Promise((resolve) => setTimeout(resolve, startupDataWaitMs))])
+  void Promise.race([
+    initializeWorker(),
+    new Promise((resolve) => setTimeout(resolve, startupDataWaitMs)),
+  ])
     .catch((error) => reportMainError(error))
-    .then(() => { initializationReady = true; revealApp(); });
-  window.on('closed', () => { closeFloatingCaption(); });
+    .then(() => {
+      initializationReady = true;
+      revealApp();
+    });
+  window.on('closed', () => {
+    closeFloatingCaption();
+  });
   return window;
 }
 
@@ -1459,17 +2121,19 @@ const floatingCaptionState = {
   translationPending: { segmentId: null },
   locale: 'zh',
 };
-const floatingCaptionPayload = z.object({
-  segmentId: z.string().max(200).nullable().optional(),
-  text: z.string().max(4000).optional(),
-  translation: z.string().max(4000).nullable().optional(),
-  isRefined: z.boolean().optional(),
-  finalize: z.boolean().optional(),
-  updateFinalized: z.boolean().optional(),
-  clearCurrentIfMatch: z.boolean().optional(),
-  translationPending: z.boolean().optional(),
-  locale: z.string().max(16).optional(),
-}).strict();
+const floatingCaptionPayload = z
+  .object({
+    segmentId: z.string().max(200).nullable().optional(),
+    text: z.string().max(4000).optional(),
+    translation: z.string().max(4000).nullable().optional(),
+    isRefined: z.boolean().optional(),
+    finalize: z.boolean().optional(),
+    updateFinalized: z.boolean().optional(),
+    clearCurrentIfMatch: z.boolean().optional(),
+    translationPending: z.boolean().optional(),
+    locale: z.string().max(16).optional(),
+  })
+  .strict();
 
 function resetFloatingCaptionState() {
   floatingCaptionState.lastFinalized = { segmentId: null, text: '', translation: null };
@@ -1480,7 +2144,8 @@ function resetFloatingCaptionState() {
 }
 
 function sendFloatingCaptionState() {
-  if (!floatingCaptionWindow || floatingCaptionWindow.isDestroyed() || !floatingCaptionReady) return;
+  if (!floatingCaptionWindow || floatingCaptionWindow.isDestroyed() || !floatingCaptionReady)
+    return;
   // Send the entire state structure - the renderer knows how to handle it
   floatingCaptionWindow.webContents.send('floating-caption:update', {
     lastFinalized: floatingCaptionState.lastFinalized,
@@ -1507,19 +2172,26 @@ function showFloatingCaption() {
     floatingCaptionReady = false;
   }
 
-  const mainWindow = BrowserWindow.getAllWindows().find(window => window !== floatingCaptionWindow && !window.isDestroyed());
-  const display = mainWindow ? screen.getDisplayMatching(mainWindow.getBounds()) : screen.getPrimaryDisplay();
+  const mainWindow = BrowserWindow.getAllWindows().find(
+    (window) => window !== floatingCaptionWindow && !window.isDestroyed(),
+  );
+  const display = mainWindow
+    ? screen.getDisplayMatching(mainWindow.getBounds())
+    : screen.getPrimaryDisplay();
   const { workArea } = display;
   const width = Math.min(760, workArea.width - 80);
   const height = 220;
 
   // Restore saved position or use default centered position
-  const savedBounds = floatingCaptionBounds && screen.getDisplayMatching(floatingCaptionBounds).id === display.id ? floatingCaptionBounds : null;
+  const savedBounds =
+    floatingCaptionBounds && screen.getDisplayMatching(floatingCaptionBounds).id === display.id
+      ? floatingCaptionBounds
+      : null;
   const x = savedBounds?.x ?? Math.round(workArea.x + (workArea.width - width) / 2);
   const y = savedBounds?.y ?? Math.round(workArea.y + workArea.height - height - 60);
 
   floatingCaptionReady = false;
-  const captionWindow = floatingCaptionWindow = new BrowserWindow({
+  const captionWindow = (floatingCaptionWindow = new BrowserWindow({
     width,
     height,
     x,
@@ -1541,7 +2213,7 @@ function showFloatingCaption() {
       nodeIntegration: false,
       sandbox: true,
     },
-  });
+  }));
 
   // On macOS, explicitly show dock icon when floating caption is created
   // This ensures the main app stays accessible via dock
@@ -1558,7 +2230,9 @@ function showFloatingCaption() {
     if (!captionWindow.isDestroyed()) {
       captionWindow.show();
       // After showing floating caption, restore focus to main window
-      const mainWindow = BrowserWindow.getAllWindows().find(w => w !== captionWindow && !w.isDestroyed());
+      const mainWindow = BrowserWindow.getAllWindows().find(
+        (w) => w !== captionWindow && !w.isDestroyed(),
+      );
       if (mainWindow) {
         mainWindow.focus();
       }
@@ -1582,7 +2256,7 @@ function showFloatingCaption() {
       if (!window.isDestroyed()) {
         window.webContents.send('brevia:event', {
           type: 'floating-caption.closed',
-          payload: {}
+          payload: {},
         });
       }
     });
@@ -1596,15 +2270,27 @@ async function closeFloatingCaption() {
     // Save position before closing
     floatingCaptionBounds = floatingCaptionWindow.getBounds();
     const closing = floatingCaptionWindow;
-    await new Promise((resolve) => { closing.once('closed', resolve); closing.close(); });
+    await new Promise((resolve) => {
+      closing.once('closed', resolve);
+      closing.close();
+    });
   }
   return true;
 }
 
 app.whenReady().then(async () => {
   if (process.platform === 'win32') Menu.setApplicationMenu(null);
-  try { await migrateDataDir(); await applyPendingMove(dataDir()); }
-  catch (error) { dialog.showErrorBox(mainText('error.storage_recovery'), `${mainText('error.storage_recovery_hint')}\n\n${error.message}`); app.quit(); return; }
+  try {
+    await migrateDataDir();
+    await applyPendingMove(dataDir());
+  } catch (error) {
+    dialog.showErrorBox(
+      mainText('error.storage_recovery'),
+      `${mainText('error.storage_recovery_hint')}\n\n${error.message}`,
+    );
+    app.quit();
+    return;
+  }
   if (modelsDir() !== path.join(dataDir(), 'models') && !existsSync(modelsDir())) {
     dialog.showErrorBox(mainText('error.storage_unavailable'), modelsDir());
     app.quit();
@@ -1616,9 +2302,54 @@ app.whenReady().then(async () => {
     return;
   }
   registerNoteImageProtocol();
-  session.defaultSession.setPermissionCheckHandler((_, permission) => permission === 'media' || permission === 'display-capture');
-  session.defaultSession.setPermissionRequestHandler((_, permission, callback) => callback(permission === 'media' || permission === 'display-capture'));
-  session.defaultSession.setDisplayMediaRequestHandler(createDisplayMediaHandler(desktopCapturer, writeLog));
+  mobileServer = new MobileServer({
+    directory: path.join(dataDir(), 'mobile'),
+    active: () => worker.active,
+    discovered: () => worker.sendEvent('mobile.discovered', {}),
+    request: async (type, payload) => {
+      if (
+        ['mobile.apply', 'meeting.refine', 'mobile.translate', 'workspace.assign'].includes(type) &&
+        (storageMigrationInProgress || destructiveOperationInProgress)
+      )
+        throw new Error('电脑正在移动或清理数据，请稍后重试');
+      if (type === 'meeting.refine') return handleRefinement(payload);
+      const result = await worker.request(type, payload);
+      if (type === 'mobile.apply') {
+        if (payload.action === 'end') {
+          worker.active = null;
+          worker.recycle();
+        } else
+          worker.active = { meeting_id: payload.meeting_id, started_at: Date.now(), mobile: true };
+      }
+      return result;
+    },
+    approve: ({ name, verification }) =>
+      new Promise((resolve) => {
+        const id = randomUUID();
+        const timeout = setTimeout(() => finish(false), 120000);
+        function finish(allowed) {
+          clearTimeout(timeout);
+          if (mobileApproval?.id === id) mobileApproval = null;
+          resolve(allowed);
+        }
+        mobileApproval = { id, name, verification, resolve: finish };
+        worker.sendEvent('mobile.discovered', {});
+      }),
+  });
+  try {
+    await mobileServer.init();
+  } catch (error) {
+    writeLog('ERROR', `mobile service: ${error.message}`);
+  }
+  session.defaultSession.setPermissionCheckHandler(
+    (_, permission) => permission === 'media' || permission === 'display-capture',
+  );
+  session.defaultSession.setPermissionRequestHandler((_, permission, callback) =>
+    callback(permission === 'media' || permission === 'display-capture'),
+  );
+  session.defaultSession.setDisplayMediaRequestHandler(
+    createDisplayMediaHandler(desktopCapturer, writeLog),
+  );
   worker.start();
   registerIpc();
   if (benchmarkRefinement) {
@@ -1636,7 +2367,9 @@ app.whenReady().then(async () => {
   void initializeWorker().catch((error) => reportMainError(error));
   createWindow();
   app.on('activate', () => {
-    const mainWindow = BrowserWindow.getAllWindows().find(w => w !== floatingCaptionWindow && !w.isDestroyed());
+    const mainWindow = BrowserWindow.getAllWindows().find(
+      (w) => w !== floatingCaptionWindow && !w.isDestroyed(),
+    );
     if (mainWindow) {
       // Restore and focus main window when dock icon is clicked
       if (mainWindow.isMinimized()) {
@@ -1656,6 +2389,7 @@ let stoppingForSleep = false;
 async function stopActiveMeeting() {
   const active = worker.active;
   if (!active) return;
+  if (active.mobile) return; // Durable mobile spool is resumed after PC wake/restart.
   await worker.request('meeting.stop', {
     meeting_id: active.meeting_id,
     duration_ms: Math.max(0, Date.now() - active.started_at),
@@ -1673,7 +2407,9 @@ async function stopActiveMeetingForSleep() {
     stoppingForSleep = false;
   }
 }
-powerMonitor.on('suspend', () => { void stopActiveMeetingForSleep(); });
+powerMonitor.on('suspend', () => {
+  void stopActiveMeetingForSleep();
+});
 app.on('before-quit', (event) => {
   // 更新安装时立即退出：安装器已经启动，不能等待优雅停会（否则与卸载器争抢文件）。
   if (quittingAfterMeetingStop || installingUpdate) {
@@ -1681,16 +2417,21 @@ app.on('before-quit', (event) => {
     stopProcess(worker.process);
     stopProcess(refinementWorker.process);
     // Electron 退出后定时器不再运行；退出前收尾已发送 SIGTERM 的所有进程组。
-    for (const pid of stoppingProcessGroups) { try { process.kill(-pid, 'SIGKILL'); } catch { /* 已退出。 */ } }
+    for (const pid of stoppingProcessGroups) {
+      try {
+        process.kill(-pid, 'SIGKILL');
+      } catch {
+        /* 已退出。 */
+      }
+    }
     stoppingProcessGroups.clear();
     return;
   }
   event.preventDefault();
   quittingAfterMeetingStop = true;
-  void Promise.race([
-    stopActiveMeeting(),
-    new Promise((resolve) => setTimeout(resolve, 8000)),
-  ]).catch((error) => writeLog('WARNING', `stop meeting before quit: ${logText(error)}`)).finally(() => app.quit());
+  void Promise.race([stopActiveMeeting(), new Promise((resolve) => setTimeout(resolve, 8000))])
+    .catch((error) => writeLog('WARNING', `stop meeting before quit: ${logText(error)}`))
+    .finally(() => app.quit());
 });
 app.on('window-all-closed', () => {
   app.quit();

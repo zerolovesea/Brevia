@@ -16,6 +16,7 @@
 - 已安装内置模型 GGUF（默认 ~/brevia/models，可用 --models-dir 覆盖）；
 - 默认强制 CPU（BREVIA_GPU_LAYERS=0），用 --no-cpu 关闭。
 """
+
 import argparse
 import json
 import os
@@ -37,10 +38,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--meeting", choices=("zh", "en", "both"), default="both")
     parser.add_argument("--mode", choices=("assist", "auto"), default="assist")
-    parser.add_argument("--gap", type=float, default=None, help="段间墙钟间隔秒（默认 zh 3.0 / en 0.9）")
+    parser.add_argument(
+        "--gap", type=float, default=None, help="段间墙钟间隔秒（默认 zh 3.0 / en 0.9）"
+    )
     parser.add_argument("--model", default="qwen3.5-4b-q4km")
     parser.add_argument("--models-dir", default=str(Path.home() / "brevia" / "models"))
-    parser.add_argument("--cpu", action="store_true", default=True, help="强制 CPU（BREVIA_GPU_LAYERS=0）")
+    parser.add_argument(
+        "--cpu", action="store_true", default=True, help="强制 CPU（BREVIA_GPU_LAYERS=0）"
+    )
     parser.add_argument("--no-cpu", dest="cpu", action="store_false")
     parser.add_argument("--debug", action="store_true", help="打印每次分析的 prompt 与模型原始输出")
     args = parser.parse_args()
@@ -67,7 +72,9 @@ def run_podcast(meeting, args):
     segments = json.loads(fixture.read_text(encoding="utf-8"))
     gap = args.gap if args.gap is not None else (3.0 if meeting == "zh" else 0.9)
     language = "zh" if meeting == "zh" else "en"
-    min_interval = ANALYSIS_MIN_INTERVAL_AUTO if args.mode == "auto" else ANALYSIS_MIN_INTERVAL_ASSIST
+    min_interval = (
+        ANALYSIS_MIN_INTERVAL_AUTO if args.mode == "auto" else ANALYSIS_MIN_INTERVAL_ASSIST
+    )
 
     events = []
     root = tempfile.mkdtemp(prefix=f"brevia-ai-note-{meeting}-")
@@ -85,8 +92,10 @@ def run_podcast(meeting, args):
 
         worker.llama_generate_realtime = debug_generate
 
-    print(f"\n{'='*80}\n播客：{'如果中国严格执行劳动法（中文单人）' if meeting=='zh' else 'When millions of AI agents meet（英文双人）'}"
-          f"  mode={args.mode}  model={args.model}  段数={len(segments)}  段间隔={gap}s")
+    print(
+        f"\n{'=' * 80}\n播客：{'如果中国严格执行劳动法（中文单人）' if meeting == 'zh' else 'When millions of AI agents meet（英文双人）'}"
+        f"  mode={args.mode}  model={args.model}  段数={len(segments)}  段间隔={gap}s"
+    )
     print("=" * 80)
 
     meeting_id = "00000000-0000-4000-8000-0000000000ab"
@@ -112,7 +121,9 @@ def run_podcast(meeting, args):
             if etype == "ai-note.suggestion":
                 payload = event["payload"]
                 suggestion_log.append((time.monotonic() - start_wall, payload))
-                print(f"  [+{time.monotonic() - start_wall:6.1f}s] ✦ {payload['type']:<11} {payload['text']}")
+                print(
+                    f"  [+{time.monotonic() - start_wall:6.1f}s] ✦ {payload['type']:<11} {payload['text']}"
+                )
             elif etype == "ai-note.analyzing":
                 if event["payload"].get("active"):
                     state["seq"] += 1
@@ -162,12 +173,19 @@ def run_podcast(meeting, args):
 
     wall = time.monotonic() - start_wall
     print(f"\n—— {meeting} 结果 ——")
-    print(f"墙钟总时长: {wall:.1f}s（播客原始时长约 {segments[-1]['start_ms'] / 1000 / 60:.0f} 分钟，加速回放）")
-    print("每次分析耗时: " + ", ".join(f"#{seq}={dt:.1f}s" for seq, dt in analysis_times) or "（无）")
+    print(
+        f"墙钟总时长: {wall:.1f}s（播客原始时长约 {segments[-1]['start_ms'] / 1000 / 60:.0f} 分钟，加速回放）"
+    )
+    print(
+        "每次分析耗时: " + ", ".join(f"#{seq}={dt:.1f}s" for seq, dt in analysis_times) or "（无）"
+    )
     types = {}
     for _, payload in suggestion_log:
         types[payload["type"]] = types.get(payload["type"], 0) + 1
-    print(f"建议总数: {len(suggestion_log)}  类型分布: " + (", ".join(f"{k}×{v}" for k, v in sorted(types.items())) or "（无）"))
+    print(
+        f"建议总数: {len(suggestion_log)}  类型分布: "
+        + (", ".join(f"{k}×{v}" for k, v in sorted(types.items())) or "（无）")
+    )
     if suggestion_log:
         print("建议明细：")
         for offset, payload in suggestion_log:

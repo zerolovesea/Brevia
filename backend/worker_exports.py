@@ -27,9 +27,7 @@ class ExportWorkerMixin:
         export_format = payload["format"].lower()
         content_type = payload.get("content", "transcript")
         directory = self.store.meetings_dir / meeting["id"] / "exports"
-        safe_title = (
-            re.sub(r'[<>:"/\\|?*]+', "-", meeting["title"]).strip() or meeting["id"]
-        )
+        safe_title = re.sub(r'[<>:"/\\|?*]+', "-", meeting["title"]).strip() or meeting["id"]
         prefix = payload.get("filename_prefix") or {
             "transcript": "[字幕]",
             "notes": "[会议纪要]",
@@ -39,7 +37,11 @@ class ExportWorkerMixin:
         prefix = re.sub(r'[<>:"/\\|?*]+', "-", str(prefix))
         if content_type == "audio":
             return self._export_audio(
-                meeting, directory, f"{prefix}{safe_title}", export_format, payload.get("track", "mix")
+                meeting,
+                directory,
+                f"{prefix}{safe_title}",
+                export_format,
+                payload.get("track", "mix"),
             )
         if content_type not in {"transcript", "notes", "mynotes"}:
             raise ValueError("Export content must be transcript, notes, mynotes, or audio")
@@ -47,9 +49,7 @@ class ExportWorkerMixin:
             raise ValueError("Unsupported text export format")
         segments = latest_segments(meeting["segments"])
         if export_format == "json":
-            content = json.dumps(
-                {**meeting, "segments": segments}, ensure_ascii=False, indent=2
-            )
+            content = json.dumps({**meeting, "segments": segments}, ensure_ascii=False, indent=2)
         elif export_format == "srt":
             content = "\n\n".join(
                 f"{index}\n{srt_time(item['start_ms'])} --> {srt_time(item['end_ms'])}\n"
@@ -61,11 +61,7 @@ class ExportWorkerMixin:
             if not content.strip():
                 raise ValueError("会议中没有记录笔记。")
         elif content_type == "notes":
-            summary = (
-                meeting.get("summary", {}).get("data")
-                if meeting.get("summary")
-                else None
-            )
+            summary = meeting.get("summary", {}).get("data") if meeting.get("summary") else None
             if not summary:
                 raise ValueError("Generate meeting notes before exporting them")
             content = summary.get("markdown")
@@ -134,9 +130,7 @@ class ExportWorkerMixin:
         meeting = self.store.get_meeting(payload["meeting_id"])
         directory = self.store.meetings_dir / meeting["id"] / "exports"
         directory.mkdir(parents=True, exist_ok=True)
-        safe_title = (
-            re.sub(r'[<>:"/\\|?*]+', "-", meeting["title"]).strip() or meeting["id"]
-        )
+        safe_title = re.sub(r'[<>:"/\\|?*]+', "-", meeting["title"]).strip() or meeting["id"]
         audio = next(
             (
                 meeting["audio"]["playback"].get(track)
@@ -148,12 +142,19 @@ class ExportWorkerMixin:
         temporary = []
         try:
             for format in ("md", "txt"):
-                temporary.append(self.export({"meeting_id": meeting["id"], "format": format})["path"])
+                temporary.append(
+                    self.export({"meeting_id": meeting["id"], "format": format})["path"]
+                )
             files = [
                 *([{"path": audio, "name": f"{safe_title}.wav"}] if audio else []),
-                *[{"path": source, "name": f"{safe_title}.{Path(source).suffix.lstrip('.')}"} for source in temporary],
+                *[
+                    {"path": source, "name": f"{safe_title}.{Path(source).suffix.lstrip('.')}"}
+                    for source in temporary
+                ],
             ]
-            result = self.bundle_files({"meeting_id": meeting["id"], "name": safe_title, "files": files})
+            result = self.bundle_files(
+                {"meeting_id": meeting["id"], "name": safe_title, "files": files}
+            )
         finally:
             for source in temporary:
                 Path(source).unlink(missing_ok=True)
@@ -173,12 +174,20 @@ class ExportWorkerMixin:
         names = set()
         for item in files:
             source = Path(item["path"]).resolve()
-            if not source.is_relative_to(meeting_dir.resolve()) or not any(source.is_relative_to(root.resolve()) for root in (directory, meeting_dir / "audio")):
+            if not source.is_relative_to(meeting_dir.resolve()) or not any(
+                source.is_relative_to(root.resolve()) for root in (directory, meeting_dir / "audio")
+            ):
                 raise ValueError("Invalid archive source")
             if not source.is_file():
                 raise ValueError("Archive source is unavailable")
             name = item["name"]
-            if not isinstance(name, str) or not name or "/" in name or "\\" in name or name in {".", ".."}:
+            if (
+                not isinstance(name, str)
+                or not name
+                or "/" in name
+                or "\\" in name
+                or name in {".", ".."}
+            ):
                 raise ValueError("Invalid archive filename")
             if name in names:
                 raise ValueError("Duplicate archive filename")
@@ -192,7 +201,10 @@ class ExportWorkerMixin:
                 for source, name in checked:
                     self.wait_task(control)
                     # ZIP64 与分块复制由标准库负责；取消时也能及时释放文件。
-                    with source.open("rb") as input_file, archive.open(name, "w", force_zip64=True) as output:
+                    with (
+                        source.open("rb") as input_file,
+                        archive.open(name, "w", force_zip64=True) as output,
+                    ):
                         while chunk := input_file.read(1024 * 1024):
                             self.wait_task(control)
                             output.write(chunk)
@@ -217,7 +229,11 @@ class ExportWorkerMixin:
         )
         if not source:
             raise ValueError("The selected audio track is empty")
-        if not Path(source).resolve().is_relative_to(self.store.meeting_dir(meeting["id"]).resolve()):
+        if (
+            not Path(source)
+            .resolve()
+            .is_relative_to(self.store.meeting_dir(meeting["id"]).resolve())
+        ):
             raise ValueError("Invalid audio path")
         stem = self._available_export_stem(directory, title, export_format)
         path = directory / f"{stem}.{export_format}"
@@ -256,7 +272,11 @@ class ExportWorkerMixin:
     def _write_print_html(directory, title, content, markdown=False):
         """创建 Unicode 安全的 HTML，供 Electron 跨平台 PDF 渲染器使用。"""
         destination = directory / f"{title}.print.html"
-        body = ExportWorkerMixin._markdown_html(content) if markdown else f"<pre>{escape(content)}</pre>"
+        body = (
+            ExportWorkerMixin._markdown_html(content)
+            if markdown
+            else f"<pre>{escape(content)}</pre>"
+        )
         destination.write_text(
             "<!doctype html><meta charset='utf-8'><style>"
             "@page{margin:64px 44px 48px}"
@@ -306,10 +326,23 @@ class ExportWorkerMixin:
                     index += 1
                 if rows:
                     header, *body = rows
-                    html.append("<table><thead><tr>" + "".join(f"<th>{inline(cell)}</th>" for cell in header) + "</tr></thead><tbody>" + "".join("<tr>" + "".join(f"<td>{inline(cell)}</td>" for cell in row) + "</tr>" for row in body) + "</tbody></table>")
+                    html.append(
+                        "<table><thead><tr>"
+                        + "".join(f"<th>{inline(cell)}</th>" for cell in header)
+                        + "</tr></thead><tbody>"
+                        + "".join(
+                            "<tr>" + "".join(f"<td>{inline(cell)}</td>" for cell in row) + "</tr>"
+                            for row in body
+                        )
+                        + "</tbody></table>"
+                    )
                 continue
             paragraph = []
-            while index < len(lines) and lines[index].strip() and not re.match(r"^(#{1,3}\s+|[-*]\s+|\|)", lines[index]):
+            while (
+                index < len(lines)
+                and lines[index].strip()
+                and not re.match(r"^(#{1,3}\s+|[-*]\s+|\|)", lines[index])
+            ):
                 paragraph.append(lines[index])
                 index += 1
             html.append(f"<p>{inline(' '.join(paragraph))}</p>")

@@ -4,7 +4,10 @@ const { randomUUID } = require('node:crypto');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 
-const modelscopeUpdateFeed = Object.freeze({ provider: 'generic', url: 'https://modelscope.cn/models/zyaztec/brevia-release/resolve/master' });
+const modelscopeUpdateFeed = Object.freeze({
+  provider: 'generic',
+  url: 'https://modelscope.cn/models/zyaztec/brevia-release/resolve/master',
+});
 
 const pendingFileWrites = new Map();
 
@@ -18,32 +21,69 @@ async function writeAtomicFile(target, value) {
     const temporary = `${target}.${randomUUID()}.tmp`;
     try {
       const file = await open(temporary, 'wx', 0o600);
-      try { await file.writeFile(value, 'utf8'); await file.sync(); }
-      finally { await file.close(); }
+      try {
+        await file.writeFile(value, 'utf8');
+        await file.sync();
+      } finally {
+        await file.close();
+      }
       await rename(temporary, target);
-    } finally { await rm(temporary, { force: true }); }
+    } finally {
+      await rm(temporary, { force: true });
+    }
   })();
   pendingFileWrites.set(target, writing);
-  try { await writing; }
-  finally { if (pendingFileWrites.get(target) === writing) pendingFileWrites.delete(target); }
+  try {
+    await writing;
+  } finally {
+    if (pendingFileWrites.get(target) === writing) pendingFileWrites.delete(target);
+  }
 }
 
 async function migrateLegacyData(source, target) {
   if (path.resolve(source) === path.resolve(target)) return;
   const journal = path.join(target, '.brevia-data-migration.json');
   if (!existsSync(source) && !existsSync(journal)) return;
-  const names = ['advanced-settings.json', 'meetings', 'models', 'models-location.json', 'speaker-profiles', 'summary-models.json', 'ai-assist.json', 'secrets', 'logs', 'brevia.db-shm', 'brevia.db-wal', 'brevia.db'];
+  const names = [
+    'advanced-settings.json',
+    'meetings',
+    'models',
+    'models-location.json',
+    'speaker-profiles',
+    'summary-models.json',
+    'ai-assist.json',
+    'secrets',
+    'logs',
+    'brevia.db-shm',
+    'brevia.db-wal',
+    'brevia.db',
+  ];
   let state;
   if (existsSync(journal)) {
     state = JSON.parse(await readFile(journal, 'utf8'));
-    if (state.source !== source || !Array.isArray(state.names) || state.names.some((name) => !names.includes(name)) || !/^[0-9a-f-]{36}$/.test(state.id)) throw new Error('Invalid migration journal');
+    if (
+      state.source !== source ||
+      !Array.isArray(state.names) ||
+      state.names.some((name) => !names.includes(name)) ||
+      !/^[0-9a-f-]{36}$/.test(state.id)
+    )
+      throw new Error('Invalid migration journal');
   } else {
     // 两个完整数据库不能静默合并；没有源数据库的旧目录可为此前中断迁移的残留。
-    if (existsSync(path.join(source, 'brevia.db')) && existsSync(path.join(target, 'brevia.db'))) return;
+    if (existsSync(path.join(source, 'brevia.db')) && existsSync(path.join(target, 'brevia.db')))
+      return;
     for (const name of ['meetings', 'models', 'models-location.json']) {
-      if (existsSync(path.join(source, name)) && existsSync(path.join(target, name))) throw new Error(`Migration destination already exists: ${path.join(target, name)}`);
+      if (existsSync(path.join(source, name)) && existsSync(path.join(target, name)))
+        throw new Error(`Migration destination already exists: ${path.join(target, name)}`);
     }
-    state = { source, id: randomUUID(), names: names.filter((name) => existsSync(path.join(source, name)) && !existsSync(path.join(target, name))), publishing: null };
+    state = {
+      source,
+      id: randomUUID(),
+      names: names.filter(
+        (name) => existsSync(path.join(source, name)) && !existsSync(path.join(target, name)),
+      ),
+      publishing: null,
+    };
     if (!state.names.length) return;
     await writeAtomicFile(journal, JSON.stringify(state));
   }
@@ -59,8 +99,9 @@ async function migrateLegacyData(source, target) {
     }
     if (!existsSync(from)) continue;
     if (existsSync(to)) throw new Error(`Migration destination already exists: ${to}`);
-    try { await rename(from, to); }
-    catch (error) {
+    try {
+      await rename(from, to);
+    } catch (error) {
       if (error.code !== 'EXDEV') throw error;
       // 目标卷内先完成复制再原子发布；中断后重复制仍在源目录中的最新文件。
       await rm(staging, { recursive: true, force: true });
@@ -86,7 +127,13 @@ async function migrateLegacyData(source, target) {
     for (const key of ['current', 'recordings']) {
       if (!location[key]) continue;
       const relative = path.relative(source, location[key]);
-      if (['models', 'meetings'].some((name) => state.names.includes(name) && (relative === name || relative.startsWith(`${name}${path.sep}`)))) {
+      if (
+        ['models', 'meetings'].some(
+          (name) =>
+            state.names.includes(name) &&
+            (relative === name || relative.startsWith(`${name}${path.sep}`)),
+        )
+      ) {
         location[key] = path.join(target, relative);
         changed = true;
       }
@@ -100,10 +147,20 @@ async function audioFileURL(filePath, directories) {
   const resolved = await realpath(filePath);
   for (const directory of directories) {
     let parent;
-    try { parent = await realpath(directory); }
-    catch (error) { if (error.code === 'ENOENT') continue; throw error; }
+    try {
+      parent = await realpath(directory);
+    } catch (error) {
+      if (error.code === 'ENOENT') continue;
+      throw error;
+    }
     const relative = path.relative(parent, resolved);
-    if (relative && relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative)) return pathToFileURL(resolved).href;
+    if (
+      relative &&
+      relative !== '..' &&
+      !relative.startsWith(`..${path.sep}`) &&
+      !path.isAbsolute(relative)
+    )
+      return pathToFileURL(resolved).href;
   }
   throw new Error('Invalid audio path');
 }
@@ -135,19 +192,25 @@ function createDisplayMediaHandler(desktopCapturer, writeLog) {
 }
 
 async function registerScreenPermission(desktopCapturer, writeLog) {
-  try { await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 1, height: 1 } }); }
-  catch (error) { writeLog('WARNING', `screen permission registration: ${error.message}`); }
+  try {
+    await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 1, height: 1 } });
+  } catch (error) {
+    writeLog('WARNING', `screen permission registration: ${error.message}`);
+  }
 }
 
 function systemAudioSupported(platform, kernelRelease) {
-  return platform === 'win32' || (platform === 'darwin' && Number.parseInt(kernelRelease, 10) >= 22);
+  return (
+    platform === 'win32' || (platform === 'darwin' && Number.parseInt(kernelRelease, 10) >= 22)
+  );
 }
 
 const versionParts = (version) => version.replace(/^v/, '').split(/[.-]/).slice(0, 3).map(Number);
 function isNewerVersion(candidate, current) {
   const next = versionParts(candidate);
   const installed = versionParts(current);
-  for (let index = 0; index < 3; index += 1) if (next[index] !== installed[index]) return next[index] > installed[index];
+  for (let index = 0; index < 3; index += 1)
+    if (next[index] !== installed[index]) return next[index] > installed[index];
   return false;
 }
 
@@ -160,15 +223,21 @@ function isNewerVersion(candidate, current) {
 // 但那种情况只出现在开发期混用旧 runtime，判定条件写成"文本里出现 not installed"
 // 这种宽泛匹配反而会误判，所以宁可不回退——协议两端同版本发布。
 function workerError(message) {
-  const error = new Error(typeof message.error === 'string' ? message.error : String(message.error));
+  const error = new Error(
+    typeof message.error === 'string' ? message.error : String(message.error),
+  );
   if (typeof message.error_code === 'string') error.code = message.error_code;
-  if (Array.isArray(message.error_models)) error.models = message.error_models.filter((id) => typeof id === 'string');
+  if (Array.isArray(message.error_models))
+    error.models = message.error_models.filter((id) => typeof id === 'string');
   return error;
 }
 
 function workerLogLevel(message) {
-  try { return JSON.parse(message).type === 'log' ? 'INFO' : 'WARNING'; }
-  catch { return 'WARNING'; }
+  try {
+    return JSON.parse(message).type === 'log' ? 'INFO' : 'WARNING';
+  } catch {
+    return 'WARNING';
+  }
 }
 
 /** 该错误是否表示「模型没装」，是则返回缺失的模型 id 列表，否则返回 null。

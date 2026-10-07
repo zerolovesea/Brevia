@@ -1,0 +1,201 @@
+name: Mobile CI and distribution
+
+on:
+  pull_request:
+    paths: ['mobile/**', '.github/workflows/mobile.yml']
+  push:
+    branches: [main]
+    paths: ['mobile/**', '.github/workflows/mobile.yml']
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: 'TestFlight build, or submit an existing tested iOS build for App Store review'
+        type: choice
+        options: [testflight, appstore]
+        default: testflight
+      version:
+        description: 'App Store only: existing TestFlight version, e.g. 1.0.0'
+        type: string
+      build:
+        description: 'App Store only: existing TestFlight build number'
+        type: string
+
+permissions:
+  contents: read
+
+# Never interrupt an upload. Serialize releases across refs and channels.
+concurrency:
+  group: mobile-${{ github.event_name == 'pull_request' && github.ref || 'distribution' }}
+  cancel-in-progress: false
+
+env:
+  FLUTTER_VERSION: '3.47.6'
+  FASTLANE_SKIP_UPDATE_CHECK: '1'
+  FASTLANE_OPT_OUT_USAGE: '1'
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      build: ${{ steps.version.outputs.build }}
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - run: flutter pub get --enforce-lockfile
+      - run: dart format --output=none --set-exit-if-changed lib test
+      - run: flutter analyze
+      - run: flutter test
+      - run: ruby scripts/test-release.rb
+      - name: Allocate shared build number
+        id: version
+        # Seconds since 2026, within Android's versionCode limit. Re-run all jobs for a new number.
+        run: echo "build=$(( $(date +%s) - 1767225600 + 1000 ))" >> "$GITHUB_OUTPUT"
+
+  android:
+    needs: check
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && inputs.channel != 'appstore'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: mobile
+    env:
+      BUILD_NUMBER: ${{ needs.check.outputs.build }}
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require stable Android signing identity
+        run: |
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Missing GitHub Secret: $name (see mobile/README.md)"
+              exit 1
+            fi
+          done
+          umask 077
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/brevia.jks"
+          echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/brevia.jks" >> "$GITHUB_ENV"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - run: flutter pub get --enforce-lockfile
+      - run: flutter build apk --release --build-number="$BUILD_NUMBER"
+      - run: flutter build appbundle --release --build-number="$BUILD_NUMBER"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Brevia-android-${{ env.BUILD_NUMBER }}
+          path: |
+            mobile/build/app/outputs/flutter-apk/app-release.apk
+            mobile/build/app/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+      - name: Remove signing material
+        if: always()
+        run: rm -f "$RUNNER_TEMP/brevia.jks"
+
+  ios:
+    needs: check
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && inputs.channel != 'appstore'
+    runs-on: macos-26
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: mobile
+    env:
+      BUILD_NUMBER: ${{ needs.check.outputs.build }}
+      IOS_CERTIFICATE_P12_BASE64: ${{ secrets.IOS_CERTIFICATE_P12_BASE64 }}
+      IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+      IOS_PROFILE_BASE64: ${{ secrets.IOS_PROFILE_BASE64 }}
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8_BASE64: ${{ secrets.ASC_KEY_P8_BASE64 }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Import App Store signing material
+        run: bash scripts/ios-signing.sh
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+          working-directory: mobile
+      - run: flutter pub get --enforce-lockfile
+      - run: xcrun swift-format lint --strict ios/Runner/*.swift ios/RecordingActivity/*.swift ios/RunnerTests/*.swift
+      - run: flutter build ipa --release --no-codesign --build-number="$BUILD_NUMBER"
+      - name: Verify app extension versions
+        run: |
+          python3 - <<'PYCODE'
+          import pathlib, plistlib
+          app = pathlib.Path('build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app')
+          info = plistlib.loads((app / 'Info.plist').read_bytes())
+          extension = plistlib.loads((app / 'PlugIns/RecordingActivity.appex/Info.plist').read_bytes())
+          for key in ('CFBundleShortVersionString', 'CFBundleVersion'):
+              assert info[key] and extension.get(key) == info[key], f'Extension version mismatch: {key}'
+          PYCODE
+      - name: Export signed App Store IPA
+        run: |
+          xcodebuild -version
+          xcodebuild -exportArchive -archivePath build/ios/archive/Runner.xcarchive \
+            -exportPath build/ios/ipa -exportOptionsPlist "$RUNNER_TEMP/brevia-export.plist" \
+            -allowProvisioningUpdates -authenticationKeyPath "$RUNNER_TEMP/brevia-asc.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Brevia-ios-${{ env.BUILD_NUMBER }}
+          path: |
+            mobile/build/ios/ipa/*.ipa
+            mobile/build/ios/archive/Runner.xcarchive/dSYMs
+          if-no-files-found: error
+      - name: Upload and distribute to internal TestFlight group
+        run: bundle exec fastlane beta
+      - name: Remove signing material
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/brevia-signing.keychain-db" || true
+          if [[ -f "$RUNNER_TEMP/brevia-profile-path" ]]; then
+            rm -f "$(cat "$RUNNER_TEMP/brevia-profile-path")"
+          fi
+          rm -f "$RUNNER_TEMP/brevia-distribution.p12" "$RUNNER_TEMP/brevia.mobileprovision" "$RUNNER_TEMP/brevia-asc.p8"
+
+  appstore:
+    needs: check
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.channel == 'appstore'
+    # Configure required reviewers on this environment before the first production submission.
+    environment: mobile-production
+    runs-on: macos-26
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: mobile
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8_BASE64: ${{ secrets.ASC_KEY_P8_BASE64 }}
+      RELEASE_VERSION: ${{ inputs.version }}
+      RELEASE_BUILD: ${{ inputs.build }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+          working-directory: mobile
+      - name: Submit tested build for review; release manually after approval
+        run: bundle exec fastlane promote

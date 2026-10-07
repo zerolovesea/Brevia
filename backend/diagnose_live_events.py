@@ -55,7 +55,7 @@ def main():
         pcm = read_wav_pcm(source.meetings_dir / args.meeting / "audio" / name)
         total = len(pcm) // 2
         for offset in range(0, total, FRAME_SAMPLES):
-            frame = pcm[offset * 2:(offset + FRAME_SAMPLES) * 2]
+            frame = pcm[offset * 2 : (offset + FRAME_SAMPLES) * 2]
             if not frame:
                 continue
             worker.audio(
@@ -89,7 +89,9 @@ def main():
         payload = event["payload"]
         clock = f"{payload['start_ms'] // 60000:02d}:{payload['start_ms'] % 60000 // 1000:02d}"
         rev = payload.get("revision", "?")
-        print(f"{etype:22s} rev={rev:>2} [{clock}] {payload.get('speaker','?')}: {payload.get('text','')}")
+        print(
+            f"{etype:22s} rev={rev:>2} [{clock}] {payload.get('speaker', '?')}: {payload.get('text', '')}"
+        )
 
     result = worker.store.get_meeting(meeting["id"])
     print("\n=== 最终 live 段落 ===")
@@ -97,7 +99,7 @@ def main():
         if segment.get("version") != "live":
             continue
         clock = f"{segment['start_ms'] // 60000:02d}:{segment['start_ms'] % 60000 // 1000:02d}"
-        print(f"  [{clock}] {segment.get('speaker','?')}: {segment['text']}")
+        print(f"  [{clock}] {segment.get('speaker', '?')}: {segment['text']}")
 
 
 if __name__ == "__main__":

@@ -5,15 +5,15 @@
       'AI 辅助笔记，及时接住关键时刻。',
       '决策、待办与问题，不必等到会后。',
       '记录正在发生的事，推进接下来的事。',
-      '把每场会议，变成可行动的记录。'
+      '把每场会议，变成可行动的记录。',
     ],
     en: [
       'Hear the discussion. Keep the next step.',
       'AI Assist Notes catches the moments that matter.',
       'Decisions, actions, and questions before the meeting ends.',
       'Record what is happening. Move the work forward.',
-      'Turn every meeting into an actionable record.'
-    ]
+      'Turn every meeting into an actionable record.',
+    ],
   };
 
   function render() {

@@ -1,0 +1,32 @@
+name: brevia_mobile
+description: Brevia local-first mobile recorder for iOS and Android.
+publish_to: none
+version: 0.1.4+5
+environment:
+  sdk: ^3.10.0
+dependencies:
+  flutter_localizations:
+    sdk: flutter
+  flutter:
+    sdk: flutter
+  record: ^7.1.1
+  flutter_foreground_task: ^9.2.2
+  flutter_secure_storage: ^10.0.0
+  path_provider: ^2.1.5
+  crypto: ^3.0.6
+  uuid: ^4.5.1
+  mobile_scanner: ^7.2.0
+  flutter_markdown: ^0.7.7
+  share_plus: ^12.0.1
+  just_audio: ^0.10.5
+  permission_handler: ^12.0.1
+  shared_preferences: ^2.5.3
+  nsd: ^5.0.1
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/brevia-logo-reveal.gif

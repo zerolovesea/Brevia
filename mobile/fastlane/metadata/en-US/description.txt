@@ -1,0 +1,9 @@
+Brevia is a recording companion for the Brevia desktop app. It requires a computer running Brevia and cannot be used as a standalone meeting transcription or meeting notes app.
+
+Install and open Brevia on your computer, connect both devices to the same Wi-Fi or local network, then pair using the QR code or PIN in Device Connection. Remote connections over cellular networks are not supported in this version.
+
+Your phone captures audio while your computer handles speech recognition, transcription and notes. View the live transcript and notes returned by your computer, mark important moments and review synced meetings on your phone.
+
+Background recording and reconnection help keep your recording available. Audio is saved on your phone during a connection interruption and uploaded when your computer reconnects. If the system interrupts recording, return to the app to check and resume.
+
+Delete synced recordings from your phone without deleting the meetings on your computer. Microphone access is required to record, camera access to scan pairing codes, and local network access to connect. Obtain participants' consent before recording.

@@ -20,6 +20,7 @@ from .worker_session import RecordingSessionMixin
 from .worker_speakers import SpeakerCommandMixin
 from .worker_transcripts import TranscriptCommandMixin
 from .worker_ai_note import AiNoteWorkerMixin
+from .worker_mobile import MobileWorkerMixin
 
 
 MAXIMUM_COMMAND_BYTES = 32 * 1024 * 1024
@@ -37,6 +38,7 @@ class Worker(
     LLMWorkerMixin,
     LlamaSidecarMixin,
     AiNoteWorkerMixin,
+    MobileWorkerMixin,
 ):
     """从聚焦的 worker 服务组合而成的协议外观。"""
 
@@ -85,11 +87,16 @@ def main(protocol=None):
     # 启动时即预热，把这一开销移到 App 启动，而不是用户点「开始录音」时。
     import numpy  # noqa: F401
     import sherpa_onnx  # noqa: F401
+
     # Windows 上管道 stdio 默认按系统 ANSI 代码页解码（中文区域为 GBK），与主进程
     # 写入的 UTF-8 字节不一致，会把非 ASCII 文本（如会议名称）解成乱码。这里显式
     # 固定为 UTF-8，不依赖 PYTHONIOENCODING/PYTHONUTF8 环境变量是否生效。
     for stream in (sys.stdin, sys.stdout, sys.stderr):
-        if stream is not None and stream.encoding and stream.encoding.lower() not in {"utf-8", "utf8"}:
+        if (
+            stream is not None
+            and stream.encoding
+            and stream.encoding.lower() not in {"utf-8", "utf8"}
+        ):
             try:
                 stream.reconfigure(encoding="utf-8", errors="replace")
             except (AttributeError, io.UnsupportedOperation, ValueError):
@@ -101,7 +108,11 @@ def main(protocol=None):
         stream=sys.stderr,
         format="[worker] %(levelname)s %(name)s: %(message)s",
     )
-    worker = Worker(output=lambda value: print(json.dumps(value), file=protocol, flush=True)) if protocol else Worker()
+    worker = (
+        Worker(output=lambda value: print(json.dumps(value), file=protocol, flush=True))
+        if protocol
+        else Worker()
+    )
     install_global_error_handlers(worker)
 
     def respond(command):
@@ -134,7 +145,7 @@ def main(protocol=None):
         except Exception as error:
             worker.response(None, error=error)
             continue
-        if command.get("type") == "translation.generate":
+        if command.get("type") in {"translation.generate", "mobile.translate"}:
             translation_executor.submit(respond, command)
         elif command.get("type") in {
             "meeting.refine",

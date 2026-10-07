@@ -1,0 +1,3 @@
+NSMicrophoneUsageDescription = "Brevia nimmt Besprechungen über das Mikrofon auf. Der gekoppelte Computer erstellt die Transkription.";
+NSCameraUsageDescription = "Scanne den Brevia-QR-Code auf deinem Computer, um die Geräte zu koppeln.";
+NSLocalNetworkUsageDescription = "Verbinde dich mit einem Computer im selben lokalen Netzwerk, um Audio zu übertragen und Transkripte und Notizen zu empfangen.";

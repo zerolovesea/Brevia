@@ -38,14 +38,44 @@ class DemoScenariosV3 {
         participants: '留空自动匹配',
         category: '未分类',
         segments: [
-          { time: '00:03', speaker: 'Alex Chen', text: 'Good morning everyone, thanks for joining today\'s Q3 product review.', translation: '大家早上好，感谢参加今天的第三季度产品评审。' },
-          { time: '00:09', speaker: 'Sarah Kim', text: 'Thanks Alex. I\'ll start with the engineering update.', translation: '谢谢 Alex。我先介绍工程方面的更新。' },
-          { time: '00:14', speaker: 'Alex Chen', text: 'Perfect. We have about 30 minutes for this session.', translation: '很好。我们这次会议大约30分钟。' },
-          { time: '00:19', speaker: 'Sarah Kim', text: 'The new AI transcription features are on track for release.', translation: '新的AI转录功能按计划将要发布。' },
-          { time: '00:25', speaker: 'Mike Torres', text: 'The beta testing feedback has been excellent so far.', translation: '目前beta测试的反馈非常好。' },
-          { time: '00:31', speaker: 'Alex Chen', text: 'Great to hear. Let\'s discuss the timeline in detail.', translation: '很高兴听到这个消息。让我们详细讨论一下时间表。' }
-        ]
-      }
+          {
+            time: '00:03',
+            speaker: 'Alex Chen',
+            text: "Good morning everyone, thanks for joining today's Q3 product review.",
+            translation: '大家早上好，感谢参加今天的第三季度产品评审。',
+          },
+          {
+            time: '00:09',
+            speaker: 'Sarah Kim',
+            text: "Thanks Alex. I'll start with the engineering update.",
+            translation: '谢谢 Alex。我先介绍工程方面的更新。',
+          },
+          {
+            time: '00:14',
+            speaker: 'Alex Chen',
+            text: 'Perfect. We have about 30 minutes for this session.',
+            translation: '很好。我们这次会议大约30分钟。',
+          },
+          {
+            time: '00:19',
+            speaker: 'Sarah Kim',
+            text: 'The new AI transcription features are on track for release.',
+            translation: '新的AI转录功能按计划将要发布。',
+          },
+          {
+            time: '00:25',
+            speaker: 'Mike Torres',
+            text: 'The beta testing feedback has been excellent so far.',
+            translation: '目前beta测试的反馈非常好。',
+          },
+          {
+            time: '00:31',
+            speaker: 'Alex Chen',
+            text: "Great to hear. Let's discuss the timeline in detail.",
+            translation: '很高兴听到这个消息。让我们详细讨论一下时间表。',
+          },
+        ],
+      },
     };
   }
 
@@ -53,7 +83,8 @@ class DemoScenariosV3 {
    * Demo 1: 完整的实时转录流程
    */
   getTranscriptionDemo() {
-    const { meetingTitle, language, translateTo, participants, category, segments } = this.mockData.transcription;
+    const { meetingTitle, language, translateTo, participants, category, segments } =
+      this.mockData.transcription;
 
     return {
       name: 'transcription',
@@ -66,7 +97,7 @@ class DemoScenariosV3 {
           action: 'moveCursor',
           target: '[data-demo-id="new-meeting-btn"]',
           duration: 1200,
-          delay: 400
+          delay: 400,
         },
         { action: 'hover', duration: 400 },
         { action: 'click', duration: 300 },
@@ -75,7 +106,7 @@ class DemoScenariosV3 {
         {
           action: 'setState',
           handler: () => this.showPrepareView(),
-          delay: 300
+          delay: 300,
         },
 
         { action: 'wait', duration: 800 },
@@ -85,13 +116,13 @@ class DemoScenariosV3 {
           action: 'moveCursor',
           target: '[data-demo-id="meeting-title"]',
           duration: 900,
-          delay: 400
+          delay: 400,
         },
         { action: 'click', duration: 200 },
         {
           action: 'setState',
           handler: () => this.fillMeetingTitle(meetingTitle),
-          delay: 100
+          delay: 100,
         },
 
         { action: 'wait', duration: 600 },
@@ -101,7 +132,7 @@ class DemoScenariosV3 {
           action: 'moveCursor',
           target: '[data-demo-id="start-recording"]',
           duration: 1000,
-          delay: 400
+          delay: 400,
         },
         { action: 'hover', duration: 400 },
         { action: 'click', duration: 300 },
@@ -110,7 +141,7 @@ class DemoScenariosV3 {
         {
           action: 'setState',
           handler: () => this.showLiveView(meetingTitle),
-          delay: 400
+          delay: 400,
         },
 
         { action: 'wait', duration: 1000 },
@@ -123,15 +154,18 @@ class DemoScenariosV3 {
         // 从底部控制条的更多菜单开启翻译。
         { action: 'moveCursor', target: '#live-more-toggle', duration: 700 },
         { action: 'click', duration: 300 },
-        { action: 'setState', handler: () => {
-          this.engine.viewport.querySelector('#live-more-panel').hidden = false;
-        } },
+        {
+          action: 'setState',
+          handler: () => {
+            this.engine.viewport.querySelector('#live-more-panel').hidden = false;
+          },
+        },
         // 开启翻译
         {
           action: 'moveCursor',
           target: '[data-demo-id="translation-toggle"]',
           duration: 900,
-          delay: 400
+          delay: 400,
         },
         { action: 'hover', duration: 300 },
         { action: 'click', duration: 300 },
@@ -139,7 +173,7 @@ class DemoScenariosV3 {
         {
           action: 'setState',
           handler: () => this.enableTranslation(),
-          delay: 200
+          delay: 200,
         },
 
         { action: 'wait', duration: 600 },
@@ -153,17 +187,17 @@ class DemoScenariosV3 {
           action: 'moveCursor',
           target: '[data-demo-id="notes-editor"]',
           duration: 1000,
-          delay: 400
+          delay: 400,
         },
         { action: 'click', duration: 250 },
         {
           action: 'setState',
           handler: () => this.typeNoteIntoEditor('待办：周五前补一版本地部署预算。'),
-          delay: 150
+          delay: 150,
         },
 
-        { action: 'wait', duration: 2200 }
-      ]
+        { action: 'wait', duration: 2200 },
+      ],
     };
   }
 
@@ -302,7 +336,7 @@ class DemoScenariosV3 {
           action: 'moveCursor',
           target: '.meeting-row:first-child',
           duration: 1200,
-          delay: 400
+          delay: 400,
         },
         { action: 'hover', duration: 400 },
         { action: 'click', duration: 300 },
@@ -311,7 +345,7 @@ class DemoScenariosV3 {
         {
           action: 'setState',
           handler: () => this.showSummaryDetail(),
-          delay: 300
+          delay: 300,
         },
 
         { action: 'wait', duration: 1200 },
@@ -321,7 +355,7 @@ class DemoScenariosV3 {
           action: 'moveCursor',
           target: '.notes',
           duration: 800,
-          delay: 400
+          delay: 400,
         },
 
         { action: 'wait', duration: 1000 },
@@ -331,7 +365,7 @@ class DemoScenariosV3 {
           action: 'moveCursor',
           target: '[data-toggle-detail-mode="summary"]',
           duration: 600,
-          delay: 400
+          delay: 400,
         },
         { action: 'hover', duration: 400 },
         { action: 'click', duration: 300 },
@@ -339,32 +373,45 @@ class DemoScenariosV3 {
         // 将纪要切换到主栏。
         {
           action: 'setState',
-          handler: () => this.engine.viewport.querySelector('.detail-layout').classList.add('is-summary-mode'),
-          delay: 300
+          handler: () =>
+            this.engine.viewport.querySelector('.detail-layout').classList.add('is-summary-mode'),
+          delay: 300,
         },
 
         { action: 'wait', duration: 1200 },
 
-        { action: 'setState', handler: () => this.engine.viewport.querySelector('#detail-view').classList.add('is-header-collapsed') },
+        {
+          action: 'setState',
+          handler: () =>
+            this.engine.viewport.querySelector('#detail-view').classList.add('is-header-collapsed'),
+        },
         // 滚动浏览完整内容
         {
           action: 'scrollToBottom',
           target: '.summary-preview',
           duration: 3500,
-          delay: 200
+          delay: 200,
         },
 
-        { action: 'setState', handler: () => { this.engine.viewport.querySelector('.summary-preview').scrollTop = 0; } },
+        {
+          action: 'setState',
+          handler: () => {
+            this.engine.viewport.querySelector('.summary-preview').scrollTop = 0;
+          },
+        },
         { action: 'wait', duration: 500 },
         { action: 'moveCursor', target: '[data-copy-summary]', duration: 700 },
         { action: 'click', duration: 300 },
-        { action: 'setState', handler: () => {
-          const button = this.engine.viewport.querySelector('[data-copy-summary]');
-          button.textContent = '✓';
-        } },
+        {
+          action: 'setState',
+          handler: () => {
+            const button = this.engine.viewport.querySelector('[data-copy-summary]');
+            button.textContent = '✓';
+          },
+        },
         { action: 'hideCursor' },
-        { action: 'wait', duration: 2200 }
-      ]
+        { action: 'wait', duration: 2200 },
+      ],
     };
   }
 
@@ -373,10 +420,30 @@ class DemoScenariosV3 {
    */
   getVoiceprintDemo() {
     const segments = [
-      { time: '00:14:12', provisional: '说话人 1', speaker: '张伟', text: '大家好，我们开始今天的周会吧。' },
-      { time: '00:14:28', provisional: '说话人 2', speaker: '李娜', text: '好的，我先汇报一下我这边的工作进展。' },
-      { time: '00:14:45', provisional: '说话人 3', speaker: '王强', text: '上周遇到的技术问题已经解决了。' },
-      { time: '00:15:18', provisional: '说话人 2', speaker: '李娜', text: '我这边的进度已经完成了百分之八十。' }
+      {
+        time: '00:14:12',
+        provisional: '说话人 1',
+        speaker: '张伟',
+        text: '大家好，我们开始今天的周会吧。',
+      },
+      {
+        time: '00:14:28',
+        provisional: '说话人 2',
+        speaker: '李娜',
+        text: '好的，我先汇报一下我这边的工作进展。',
+      },
+      {
+        time: '00:14:45',
+        provisional: '说话人 3',
+        speaker: '王强',
+        text: '上周遇到的技术问题已经解决了。',
+      },
+      {
+        time: '00:15:18',
+        provisional: '说话人 2',
+        speaker: '李娜',
+        text: '我这边的进度已经完成了百分之八十。',
+      },
     ];
 
     return {
@@ -387,19 +454,28 @@ class DemoScenariosV3 {
 
         { action: 'moveCursor', target: '[data-demo-id="refine-speakers"]', duration: 800 },
         { action: 'click', duration: 300 },
-        { action: 'setState', handler: () => {
-          this.engine.viewport.querySelector('[data-demo-id="refine-speakers"]').textContent = document.documentElement.lang.startsWith('zh') ? '正在精修…' : 'Refining…';
-        } },
+        {
+          action: 'setState',
+          handler: () => {
+            this.engine.viewport.querySelector('[data-demo-id="refine-speakers"]').textContent =
+              document.documentElement.lang.startsWith('zh') ? '正在精修…' : 'Refining…';
+          },
+        },
         // 会后精修产出带说话人的转录，随后匹配已保存的声纹。
         ...this.generateVoiceprintSegmentSteps(segments),
 
-        { action: 'setState', handler: () => {
-          const status = this.engine.viewport.querySelector('[data-demo-id="refine-speakers"]');
-          status.textContent = document.documentElement.lang.startsWith('zh') ? '✓ 已精修' : '✓ Refined';
-          status.className = 'refine-state is-done';
-        } },
-        { action: 'wait', duration: 2400 }
-      ]
+        {
+          action: 'setState',
+          handler: () => {
+            const status = this.engine.viewport.querySelector('[data-demo-id="refine-speakers"]');
+            status.textContent = document.documentElement.lang.startsWith('zh')
+              ? '✓ 已精修'
+              : '✓ Refined';
+            status.className = 'refine-state is-done';
+          },
+        },
+        { action: 'wait', duration: 2400 },
+      ],
     };
   }
 

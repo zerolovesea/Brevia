@@ -39,12 +39,12 @@ AIメモと AI 会議要約は、プロバイダ・モデル・API Key をそれ
 
 その後は会議ごとに、**会議の言語**からデフォルトの認識モデルを選びます。対応関係は `backend/models.json` に宣言されています。
 
-| 会議の言語 | デフォルトの認識モデル | 理由 |
-| --- | --- | --- |
-| 中国語・広東語 | FunASR Nano | 中国語とその方言で最も高精度 |
-| 日本語・韓国語 | Qwen3-ASR 0.6B | 選択可能なモデルで日韓両方をカバーする唯一のもの |
-| 英語・スペイン語・フランス語・ドイツ語・ロシア語・混在言語 | Parakeet TDT 0.6B v3 | 25 の欧州言語を 1 モデルでカバーし、句読点とタイムスタンプも付与 |
-| その他の言語 | Qwen3-ASR 0.6B | 残りのモデルで最も広い言語カバレッジ |
+| 会議の言語                                                 | デフォルトの認識モデル | 理由                                                             |
+| ---------------------------------------------------------- | ---------------------- | ---------------------------------------------------------------- |
+| 中国語・広東語                                             | FunASR Nano            | 中国語とその方言で最も高精度                                     |
+| 日本語・韓国語                                             | Qwen3-ASR 0.6B         | 選択可能なモデルで日韓両方をカバーする唯一のもの                 |
+| 英語・スペイン語・フランス語・ドイツ語・ロシア語・混在言語 | Parakeet TDT 0.6B v3   | 25 の欧州言語を 1 モデルでカバーし、句読点とタイムスタンプも付与 |
+| その他の言語                                               | Qwen3-ASR 0.6B         | 残りのモデルで最も広い言語カバレッジ                             |
 
 Apple シリコン搭載 Mac の音声認識と Silero VAD は mlx-audio/MLX を使用し、Windows は Sherpa ONNX を継続します。話者分離と声紋は両方で Sherpa を使用します。Mac のアップグレード後は対応する MLX 認識モデルのダウンロードが必要です。既存の録音は引き続き利用できます。 実際の上限はリアルタイム設定、言語別 VAD 設定、モデル容量の最小値です（macOS MLX モデルは 20 秒）。自動言語検出では少なくとも 2 秒の無音を待ちます。
 
@@ -93,10 +93,11 @@ Pyannote のセグメンテーションと話者埋め込みモデルを組み�
 
 最新版を [GitHub Releases](https://github.com/zerolovesea/Brevia/releases) からダウンロードしてください：
 
-| プラットフォーム | インストーラ |
-| --- | --- |
-| macOS (Apple Silicon) | `Brevia-<version>-arm64.dmg` |
-| Windows (x64) | `Brevia-<version>-x64-setup.exe` |
+| プラットフォーム      | インストーラ                     |
+| --------------------- | -------------------------------- |
+| macOS (Apple Silicon) | `Brevia-<version>-arm64.dmg`     |
+| Windows (x64)         | `Brevia-<version>-x64-setup.exe` |
+
 > Windows では初回起動時に **Microsoft Defender SmartScreen** の警告が出る場合があります。**「詳細情報」→「実行」** をクリックし、ダウンロード元が公式 Releases ページであることを確認してから続けてください。
 
 初回起動時にマイクと画面録画の権限を付与し、**設定 → モデルライブラリ** で必要なモデルをダウンロードしてください。
@@ -125,28 +126,29 @@ Brevia は厳密なローカルファースト設計に従います：
 
 ## 技術スタック
 
-| レイヤ | 技術 |
-| --- | --- |
-| デスクトップシェル | Electron 43 — preload ブリッジ、コンテキスト分離、サンドボックス化されたレンダラー |
-| フロントエンド | 素の HTML/CSS/JS、Tailwind CSS 4、組み込み i18n（8 ロケール） |
-| バックエンド | Python 3.10+、JSONL ワーカープロトコル、SQLite ストレージ |
-| 音声エンジン | [mlx-audio](https://github.com/Blaizzy/mlx-audio) / MLX (macOS); [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 1.13.8 (Windows)、ONNX Runtime |
-| 話者処理 | Pyannote セグメンテーション + 3D-Speaker ERes2Net Base 埋め込み |
-| LLM クライアント | 内蔵 llama.cpp（GGUF）＋ OpenAI / Anthropic 互換チャット API |
-| 音声 I/O | ffmpeg（リリースに同梱） |
-| ビルドとパッケージ | electron-builder、PyInstaller（Python ランタイム同梱） |
+| レイヤ             | 技術                                                                                                                                                 |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| デスクトップシェル | Electron 43 — preload ブリッジ、コンテキスト分離、サンドボックス化されたレンダラー                                                                   |
+| フロントエンド     | 素の HTML/CSS/JS、Tailwind CSS 4、組み込み i18n（8 ロケール）                                                                                        |
+| バックエンド       | Python 3.10+、JSONL ワーカープロトコル、SQLite ストレージ                                                                                            |
+| 音声エンジン       | [mlx-audio](https://github.com/Blaizzy/mlx-audio) / MLX (macOS); [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 1.13.8 (Windows)、ONNX Runtime |
+| 話者処理           | Pyannote セグメンテーション + 3D-Speaker ERes2Net Base 埋め込み                                                                                      |
+| LLM クライアント   | 内蔵 llama.cpp（GGUF）＋ OpenAI / Anthropic 互換チャット API                                                                                         |
+| 音声 I/O           | ffmpeg（リリースに同梱）                                                                                                                             |
+| ビルドとパッケージ | electron-builder、PyInstaller（Python ランタイム同梱）                                                                                               |
+
 ## 対応モデル
 
 整句認識・高精度化・AI メモ・字幕翻訳のモデルは **設定 → モデルライブラリ** からオンデマンドでダウンロードされます；音声活動検出・話者分離・声紋モデルはアプリに同梱されています。マニフェストは [`backend/models.json`](../backend/models.json) にあります。
 
-| 種類 | 代表モデル | 言語 |
-| --- | --- | --- |
+| 種類                        | 代表モデル                                        | 言語                           |
+| --------------------------- | ------------------------------------------------- | ------------------------------ |
 | 整句認識 / 会議後の高精度化 | FunASR Nano、Qwen3-ASR 0.6B、Parakeet TDT 0.6B v3 | 中国語 / 多言語 / 欧州 25 言語 |
-| 音声活動検出 | Silero VAD | 汎用 |
-| 話者分離 | Pyannote Segmentation 3.0 | 汎用 |
-| 話者埋め込み | 3D-Speaker ERes2Net Base | 中国語 |
-| AIメモと議事録 | Qwen 3.5 2B、Qwen 3.5 4B | 中国語 / 英語 |
-| 字幕翻訳 | Tencent Hy-MT2 1.8B | 33 言語 |
+| 音声活動検出                | Silero VAD                                        | 汎用                           |
+| 話者分離                    | Pyannote Segmentation 3.0                         | 汎用                           |
+| 話者埋め込み                | 3D-Speaker ERes2Net Base                          | 中国語                         |
+| AIメモと議事録              | Qwen 3.5 2B、Qwen 3.5 4B                          | 中国語 / 英語                  |
+| 字幕翻訳                    | Tencent Hy-MT2 1.8B                               | 33 言語                        |
 
 LLM 要約では「内蔵 AI」を選ぶとバンドルされた GGUF モデル（Qwen 3.5 2B / 4B）をローカルで実行できます。Claude、OpenAI、OpenRouter、または OpenAI Chat Completions / Anthropic Messages に対応した独自サービス（Gemini の OpenAI 互換エンドポイント、DeepSeek、Kimi、Qwen など）も利用可能です。
 
@@ -185,6 +187,7 @@ BREVIA_FFMPEG=/path/to/ffmpeg       # ffmpeg バイナリ（PATH にない場合
 
 BREVIA_DATA_DIR=~/brevia-dev BREVIA_MODELS_DIR=~/brevia-models npm start
 ```
+
 ### インストーラのビルド
 
 ```bash
@@ -203,53 +206,62 @@ npm run dist:win   # Windows x64 EXE
 <summary><strong>Windows で Microsoft Defender SmartScreen の警告が表示される</strong></summary>
 
 リリースビルドは有料のコード署名証明書で署名されていないため、SmartScreen は新しく見る実行ファイルをデフォルトでブロックします。**「詳細情報」→「実行」** をクリックし、ダウンロード元が公式 [Releases](https://github.com/zerolovesea/Brevia/releases) ページであることを確認してから続けてください。
+
 </details>
 
 <details>
 <summary><strong>Python を別途インストールする必要はありますか？</strong></summary>
 
 いいえ。リリースビルドは Python ランタイムと必要な依存関係をすべて同梱しています。ソースから実行する場合のみ、別途 Python 環境が必要です。
+
 </details>
 
 <details>
 <summary><strong>データはどこに保存されますか？</strong></summary>
 
 既定の保存先は `~/brevia` です。モデルと録音・会議ファイルには別々の保存先を選択できます。SQLite と声紋プロファイルはデータルートに残ります。`BREVIA_DATA_DIR` でデータルートを指定できます。
+
 </details>
 
 <details>
 <summary><strong>どの言語の文字起こしに対応していますか？</strong></summary>
 
 中国語、英語、日本語、韓国語、フランス語、ドイツ語、スペイン語、ロシア語、アラビア語、タイ語、ベトナム語、インドネシア語など 30 以上の言語に対応。アプリ内のモデルライブラリで対応するモデルを選択してください。
+
 </details>
 <details>
 <summary><strong>Brevia は音声をクラウドに送信しますか？</strong></summary>
 
 送信しません。音声認識とダイアライゼーションはすべてローカルで実行されます。LLM 要約と翻訳のみがネットワークに接続しますが、プロバイダを設定した後のみ——テキストのみで、音声は決して送信しません。
+
 </details>
 
 <details>
 <summary><strong>モデルにはどれくらいのディスク容量が必要ですか？</strong></summary>
 
 インストールするモデルによります。典型的な構成（整句認識 + 高精度化）で 1–2 GB；音声活動検出・話者分離・声紋モデルは同梱済みです。最小の認識モデルは約 487 MB、大きなモデルは 1 GB 超。
+
 </details>
 
 <details>
 <summary><strong>既存の録音をインポートできますか？</strong></summary>
 
 できます。会議ライブラリから音声ファイルをインポートすると、Brevia は同じ音声パイプラインでオフライン文字起こしします。PATH に `ffmpeg` が必要（または `BREVIA_FFMPEG` を設定）。
+
 </details>
 
 <details>
 <summary><strong>UI 言語を切り替えるには？</strong></summary>
 
 **設定 → 一般 → 言語**。英語、簡体中国語、スペイン語、日本語、韓国語、フランス語、ドイツ語、ロシア語が利用可能。
+
 </details>
 
 <details>
 <summary><strong>声紋サンプルはどのように保存されますか？</strong></summary>
 
 声紋埋め込み（小さな浮動小数点ベクトル）と参考音声はローカルの SQLite データベースとファイルシステムに保存されます。端末から出ることはなく、プロファイルを削除すると関連データも削除されます。
+
 </details>
 
 ## フィードバックとコントリビュート

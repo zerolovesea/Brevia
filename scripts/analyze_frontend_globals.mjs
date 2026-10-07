@@ -22,7 +22,7 @@ const files = fs
 
 // Collect declaration lines per file per name.
 const decls = new Map(); // name -> [{file, line}]
-const body = new Map();  // file -> text
+const body = new Map(); // file -> text
 
 const DECL_RE = /(?:^|\n)(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(/g;
 const CONST_RE = /(?:^|\n)(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*[=:]/g;
@@ -107,8 +107,12 @@ for (const [name, sites] of decls) {
         const after = line.slice(match.index + name.length).trimStart();
         const before = line.slice(0, match.index).trimEnd();
         // 注意 `===` / `==` / `!==` / `>=` / `<=` 是**比较**（读），不是赋值。
-        const isAssign = /^(?:\+\+|--)|^(?:=(?!=)|\+=|-=|\*=|\/=|\?\?=|\|\|=|&&=)/.test(after.trimStart());
-        const isMutation = /^\.(add|delete|set|clear|push|pop|shift|unshift|splice|sort)\s*\(/.test(after);
+        const isAssign = /^(?:\+\+|--)|^(?:=(?!=)|\+=|-=|\*=|\/=|\?\?=|\|\|=|&&=)/.test(
+          after.trimStart(),
+        );
+        const isMutation = /^\.(add|delete|set|clear|push|pop|shift|unshift|splice|sort)\s*\(/.test(
+          after,
+        );
         const isDeclare = /^(const|let|var)$/.test(before.split(/[\s;({[,]+/).pop() || '');
         if (isDeclare) continue;
         if (isAssign || isMutation) writes += 1;

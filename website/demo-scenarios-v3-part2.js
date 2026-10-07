@@ -4,7 +4,7 @@
 
 // 继续 DemoScenariosV3 类的方法
 
-DemoScenariosV3.prototype.setupPrepareUI = function() {
+DemoScenariosV3.prototype.setupPrepareUI = function () {
   // 精确还原准备页面（基于第二张截图）
   const html = String.raw`
     <main class="app-shell">
@@ -85,11 +85,16 @@ DemoScenariosV3.prototype.setupPrepareUI = function() {
 // The real notes editor toolbar (1:1 with createNotesEditor in frontend/ui-components.js).
 // Buttons: bold, italic, h1–h3, ul/ol (SVG), quote, link, image, code, todo, highlight, mode-toggle.
 DemoScenariosV3.prototype.notesToolbarHtml = function () {
-  const ul = '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="3" cy="4" r="1.1" fill="currentColor" stroke="none"/><circle cx="3" cy="8" r="1.1" fill="currentColor" stroke="none"/><circle cx="3" cy="12" r="1.1" fill="currentColor" stroke="none"/><path d="M7 4h6M7 8h6M7 12h6"/></svg>';
-  const ol = '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><text x="1.5" y="5" font-size="6.5" fill="currentColor" stroke="none">1</text><text x="1.5" y="9.5" font-size="6.5" fill="currentColor" stroke="none">2</text><text x="1.5" y="14" font-size="6.5" fill="currentColor" stroke="none">3</text><path d="M7 4h6M7 8.5h6M7 13h6"/></svg>';
-  const link = '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6.2 9.8 3.6-3.6" /><path d="M7.2 11.4 5.6 13a2.6 2.6 0 0 1-3.6-3.6l1.6-1.6a2.6 2.6 0 0 1 3.6 0" /><path d="M8.8 4.6l1.6-1.6a2.6 2.6 0 0 1 3.6 3.6l-1.6 1.6a2.6 2.6 0 0 1-3.6 0" /></svg>';
-  const image = '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="2.5" width="13" height="11" rx="1" /><circle cx="5.5" cy="6.2" r="1.4" /><path d="m1.5 11 3.6-3.6L11 12.8" /></svg>';
-  const mode = '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3.5 3h9M8 3v10"/></svg>';
+  const ul =
+    '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="3" cy="4" r="1.1" fill="currentColor" stroke="none"/><circle cx="3" cy="8" r="1.1" fill="currentColor" stroke="none"/><circle cx="3" cy="12" r="1.1" fill="currentColor" stroke="none"/><path d="M7 4h6M7 8h6M7 12h6"/></svg>';
+  const ol =
+    '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><text x="1.5" y="5" font-size="6.5" fill="currentColor" stroke="none">1</text><text x="1.5" y="9.5" font-size="6.5" fill="currentColor" stroke="none">2</text><text x="1.5" y="14" font-size="6.5" fill="currentColor" stroke="none">3</text><path d="M7 4h6M7 8.5h6M7 13h6"/></svg>';
+  const link =
+    '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6.2 9.8 3.6-3.6" /><path d="M7.2 11.4 5.6 13a2.6 2.6 0 0 1-3.6-3.6l1.6-1.6a2.6 2.6 0 0 1 3.6 0" /><path d="M8.8 4.6l1.6-1.6a2.6 2.6 0 0 1 3.6 3.6l-1.6 1.6a2.6 2.6 0 0 1-3.6 0" /></svg>';
+  const image =
+    '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="2.5" width="13" height="11" rx="1" /><circle cx="5.5" cy="6.2" r="1.4" /><path d="m1.5 11 3.6-3.6L11 12.8" /></svg>';
+  const mode =
+    '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3.5 3h9M8 3v10"/></svg>';
   const btns = [
     ['bold', '加粗', '<b>B</b>'],
     ['italic', '斜体', '<i>I</i>'],
@@ -101,16 +106,29 @@ DemoScenariosV3.prototype.notesToolbarHtml = function () {
     ['quote', '引用', '❝'],
     ['link', '插入链接', link],
     ['image', '插入图片', image],
-    ['table', '插入表格', '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.25"><rect x="2" y="2" width="12" height="12"/><path d="M2 6h12M2 10h12M6 2v12M10 2v12"/></svg>'],
+    [
+      'table',
+      '插入表格',
+      '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.25"><rect x="2" y="2" width="12" height="12"/><path d="M2 6h12M2 10h12M6 2v12M10 2v12"/></svg>',
+    ],
     ['code', '行内代码', '&lt;/&gt;'],
     ['todo', '待办', '☐'],
     ['highlight', '重点', '★'],
-    ['mode-toggle', '富文本', mode]
+    ['mode-toggle', '富文本', mode],
   ];
-  return '<div class="notes-toolbar">' + btns.map(([command, label, html]) => `<button type="button" data-notes-command="${command}" title="${label}" aria-label="${label}">${html}</button>`).join('') + '</div>';
+  return (
+    '<div class="notes-toolbar">' +
+    btns
+      .map(
+        ([command, label, html]) =>
+          `<button type="button" data-notes-command="${command}" title="${label}" aria-label="${label}">${html}</button>`,
+      )
+      .join('') +
+    '</div>'
+  );
 };
 
-DemoScenariosV3.prototype.setupLiveUI = function(meetingTitle) {
+DemoScenariosV3.prototype.setupLiveUI = function (meetingTitle) {
   // 精确还原新版实时会议页面：左侧「我的笔记」（AI 辅助开关 + 编辑器），右侧「实时字幕」。
   const notesToolbar = this.notesToolbarHtml();
   const html = String.raw`
@@ -181,45 +199,52 @@ DemoScenariosV3.prototype.setupLiveUI = function(meetingTitle) {
 };
 
 // State management methods — shared fade-swap helper
-DemoScenariosV3.prototype._fadeSwapContent = function(newHtml, callback) {
+DemoScenariosV3.prototype._fadeSwapContent = function (newHtml, callback) {
   const content = document.getElementById('demo-content');
   if (!content) return;
 
   content.style.transition = 'opacity 0.2s ease';
   content.style.opacity = '0';
 
-  return new Promise((resolve) => setTimeout(() => {
-    content.innerHTML = newHtml;
+  return new Promise((resolve) =>
+    setTimeout(
+      () => {
+        content.innerHTML = newHtml;
 
-    // Re-apply scale
-    const viewport = document.getElementById('demo-viewport');
-    const appShell = content.querySelector('.app-shell');
-    if (appShell && viewport) {
-      const designWidth = 1200;
-      const designHeight = 750;
-      const rect = viewport.getBoundingClientRect();
-      const scale = Math.min(rect.width / designWidth, rect.height / designHeight, 1);
-      appShell.style.transform = `scale(${scale})`;
-      appShell.style.transformOrigin = 'top left';
-    }
+        // Re-apply scale
+        const viewport = document.getElementById('demo-viewport');
+        const appShell = content.querySelector('.app-shell');
+        if (appShell && viewport) {
+          const designWidth = 1200;
+          const designHeight = 750;
+          const rect = viewport.getBoundingClientRect();
+          const scale = Math.min(rect.width / designWidth, rect.height / designHeight, 1);
+          appShell.style.transform = `scale(${scale})`;
+          appShell.style.transformOrigin = 'top left';
+        }
 
-    if (callback) callback();
-    resolve();
+        if (callback) callback();
+        resolve();
 
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        content.style.opacity = '1';
-        setTimeout(() => { content.style.transition = ''; }, 300);
-      });
-    });
-  }, this.engine.reducedMotion ? 0 : 200));
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            content.style.opacity = '1';
+            setTimeout(() => {
+              content.style.transition = '';
+            }, 300);
+          });
+        });
+      },
+      this.engine.reducedMotion ? 0 : 200,
+    ),
+  );
 };
 
-DemoScenariosV3.prototype.showPrepareView = function() {
+DemoScenariosV3.prototype.showPrepareView = function () {
   return this._fadeSwapContent(this.setupPrepareUI());
 };
 
-DemoScenariosV3.prototype.fillMeetingTitle = function(title) {
+DemoScenariosV3.prototype.fillMeetingTitle = function (title) {
   const input = this.engine.viewport.querySelector('[data-demo-id="meeting-title"]');
   if (input) {
     input.value = title;
@@ -227,13 +252,13 @@ DemoScenariosV3.prototype.fillMeetingTitle = function(title) {
   }
 };
 
-DemoScenariosV3.prototype.showLiveView = function(meetingTitle) {
+DemoScenariosV3.prototype.showLiveView = function (meetingTitle) {
   return this._fadeSwapContent(this.setupLiveUI(meetingTitle), () => {
     this.startTimer();
   });
 };
 
-DemoScenariosV3.prototype.startTimer = function() {
+DemoScenariosV3.prototype.startTimer = function () {
   const timerEl = this.engine.viewport.querySelector('[data-demo-id="timer"]');
   if (!timerEl) return;
 
@@ -245,24 +270,30 @@ DemoScenariosV3.prototype.startTimer = function() {
     }
 
     seconds++;
-    const hrs = Math.floor(seconds / 3600).toString().padStart(2, '0');
-    const mins = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0');
+    const hrs = Math.floor(seconds / 3600)
+      .toString()
+      .padStart(2, '0');
+    const mins = Math.floor((seconds % 3600) / 60)
+      .toString()
+      .padStart(2, '0');
     const secs = (seconds % 60).toString().padStart(2, '0');
     timerEl.textContent = `${hrs}:${mins}:${secs}`;
   }, 1000);
 };
 
-DemoScenariosV3.prototype.enableTranslation = function() {
+DemoScenariosV3.prototype.enableTranslation = function () {
   this.engine.viewport.querySelector('#live-more-panel').hidden = true;
   // Enable translation toggle button
-  const translationToggle = this.engine.viewport.querySelector('[data-demo-id="translation-toggle"]');
+  const translationToggle = this.engine.viewport.querySelector(
+    '[data-demo-id="translation-toggle"]',
+  );
   if (translationToggle) {
     translationToggle.setAttribute('data-enabled', 'true');
   }
 
   // Show translations on existing segments
   const segments = this.engine.viewport.querySelectorAll('.segment[data-translation]');
-  segments.forEach(seg => {
+  segments.forEach((seg) => {
     const translation = seg.getAttribute('data-translation');
     const translationEl = seg.querySelector('.translation');
     if (translationEl && translation) {
@@ -272,11 +303,11 @@ DemoScenariosV3.prototype.enableTranslation = function() {
   });
 };
 
-DemoScenariosV3.prototype.getParticipantSourceLabel = function() {
+DemoScenariosV3.prototype.getParticipantSourceLabel = function () {
   return '麦克风';
 };
 
-DemoScenariosV3.prototype.updateParticipantList = function(speakers) {
+DemoScenariosV3.prototype.updateParticipantList = function (speakers) {
   const participantsList = this.engine.viewport.querySelector('[data-demo-id="participants-list"]');
   if (!participantsList) return;
 
@@ -293,7 +324,9 @@ DemoScenariosV3.prototype.updateParticipantList = function(speakers) {
 
   // Add participants using the real .person markup
   speakers.forEach((speaker, index) => {
-    const existing = Array.from(participantsList.querySelectorAll('.person b')).find(b => b.textContent === speaker);
+    const existing = Array.from(participantsList.querySelectorAll('.person b')).find(
+      (b) => b.textContent === speaker,
+    );
     if (!existing) {
       const initial = speaker.trim().charAt(0).toUpperCase();
       const tone = avatarTones[index % avatarTones.length];
@@ -305,11 +338,16 @@ DemoScenariosV3.prototype.updateParticipantList = function(speakers) {
   });
 };
 
-DemoScenariosV3.prototype.getParticipantsLabel = function() {
+DemoScenariosV3.prototype.getParticipantsLabel = function () {
   return '参与者';
 };
 
-DemoScenariosV3.prototype.generateLiveSegmentSteps = function(segments, start, end, withTranslation = false) {
+DemoScenariosV3.prototype.generateLiveSegmentSteps = function (
+  segments,
+  start,
+  end,
+  withTranslation = false,
+) {
   const steps = [];
   const uniqueSpeakers = new Set();
 
@@ -327,7 +365,7 @@ DemoScenariosV3.prototype.generateLiveSegmentSteps = function(segments, start, e
       target: '[data-demo-id="transcript-scroll"]',
       html: this.createSegmentHTML(segment, withTranslation),
       duration: 300,
-      delay: 200
+      delay: 200,
     });
 
     // Reveal the speaker in the participants panel in the same beat as their
@@ -335,7 +373,7 @@ DemoScenariosV3.prototype.generateLiveSegmentSteps = function(segments, start, e
     steps.push({
       action: 'setState',
       handler: () => this.updateParticipantList(speakersSoFar),
-      delay: 100
+      delay: 100,
     });
 
     // Scroll to bottom
@@ -343,20 +381,20 @@ DemoScenariosV3.prototype.generateLiveSegmentSteps = function(segments, start, e
       action: 'scrollToBottom',
       target: '[data-demo-id="transcript-scroll"]',
       duration: 400,
-      delay: 100
+      delay: 100,
     });
 
     // Wait before next segment
     steps.push({
       action: 'wait',
-      duration: 1200
+      duration: 1200,
     });
   }
 
   return steps;
 };
 
-DemoScenariosV3.prototype.createSegmentHTML = function(segment, withTranslation = false) {
+DemoScenariosV3.prototype.createSegmentHTML = function (segment, withTranslation = false) {
   let html = `
     <div class="segment" data-translation="${segment.translation || ''}" style="padding: 16px 0;">
       <div class="segment-meta" style="gap: 4px;">
@@ -380,12 +418,12 @@ DemoScenariosV3.prototype.createSegmentHTML = function(segment, withTranslation 
 };
 
 // Summary demo UI setup
-DemoScenariosV3.prototype.setupSummaryUI = function() {
+DemoScenariosV3.prototype.setupSummaryUI = function () {
   // 显示主页，准备点击会议进入详情
   return this.setupHomeUI();
 };
 
-DemoScenariosV3.prototype.setupSummaryDetailUI = function() {
+DemoScenariosV3.prototype.setupSummaryDetailUI = function () {
   const html = String.raw`
     <main class="app-shell">
       ${this.sidebarHtml()}
@@ -506,28 +544,29 @@ DemoScenariosV3.prototype.setupSummaryDetailUI = function() {
   return html;
 };
 
-DemoScenariosV3.prototype.showSummaryDetail = function() {
+DemoScenariosV3.prototype.showSummaryDetail = function () {
   return this._fadeSwapContent(this.setupSummaryDetailUI());
 };
 
 // Voiceprint demo UI setup
-DemoScenariosV3.prototype.setupVoiceprintUI = function() {
+DemoScenariosV3.prototype.setupVoiceprintUI = function () {
   const template = document.createElement('template');
   template.innerHTML = this.setupSummaryDetailUI();
   const root = template.content;
   root.querySelector('[data-detail-panel="notes"]').hidden = true;
   root.querySelector('[data-detail-panel="transcript"]').hidden = false;
-  root.querySelectorAll('[data-detail-tab]').forEach(button => {
+  root.querySelectorAll('[data-detail-tab]').forEach((button) => {
     button.classList.toggle('active', button.dataset.detailTab === 'transcript');
   });
   const transcript = root.querySelector('.transcript-body');
   transcript.id = 'transcript-scroll';
   transcript.innerHTML = '';
-  root.querySelector('.tabbar-extra').innerHTML = '<button class="text-button" data-demo-id="refine-speakers">开始精修</button>';
+  root.querySelector('.tabbar-extra').innerHTML =
+    '<button class="text-button" data-demo-id="refine-speakers">开始精修</button>';
   return template.innerHTML;
 };
 
-DemoScenariosV3.prototype.generateVoiceprintSegmentSteps = function(segments) {
+DemoScenariosV3.prototype.generateVoiceprintSegmentSteps = function (segments) {
   const steps = [];
   const speakers = new Set();
 
@@ -558,7 +597,7 @@ DemoScenariosV3.prototype.generateVoiceprintSegmentSteps = function(segments) {
         scroll.appendChild(segmentEl);
         scroll.scrollTop = scroll.scrollHeight;
       },
-      delay: 200
+      delay: 200,
     });
 
     // 逐字打出字幕（段落文本）
@@ -583,7 +622,7 @@ DemoScenariosV3.prototype.generateVoiceprintSegmentSteps = function(segments) {
           await this.engine.wait(60);
         }
       },
-      delay: 100
+      delay: 100,
     });
 
     // 短暂停顿后，声纹识别完成：切换到真实说话人并放大高亮
@@ -602,7 +641,7 @@ DemoScenariosV3.prototype.generateVoiceprintSegmentSteps = function(segments) {
         }
         this.updateVoiceprintParticipants(Array.from(speakers));
       },
-      delay: 100
+      delay: 100,
     });
 
     steps.push({ action: 'wait', duration: 1400 });
@@ -611,11 +650,11 @@ DemoScenariosV3.prototype.generateVoiceprintSegmentSteps = function(segments) {
   return steps;
 };
 
-DemoScenariosV3.prototype.getVoiceprintRoles = function() {
+DemoScenariosV3.prototype.getVoiceprintRoles = function () {
   return ['项目经理', '前端工程师', '后端工程师', '设计师'];
 };
 
-DemoScenariosV3.prototype.updateVoiceprintParticipants = function(speakers) {
+DemoScenariosV3.prototype.updateVoiceprintParticipants = function (speakers) {
   const list = this.engine.viewport.querySelector('[data-demo-id="voiceprint-participants"]');
   if (!list) return;
 
@@ -627,12 +666,14 @@ DemoScenariosV3.prototype.updateVoiceprintParticipants = function(speakers) {
   if (eyebrow) eyebrow.textContent = `${this.getParticipantsLabel()} · ${speakers.length}`;
 
   // Use the real .person markup: avatar + name/role + level meter.
-  list.innerHTML = speakers.map((speaker, index) => {
-    const initial = speaker.trim().charAt(0);
-    const color = colors[index % colors.length];
-    const role = roles[index % roles.length];
-    return `<div class="person"><span class="avatar ${color}">${initial}</span><div><b>${speaker}</b><small>${role}</small></div><i class="level"></i></div>`;
-  }).join('');
+  list.innerHTML = speakers
+    .map((speaker, index) => {
+      const initial = speaker.trim().charAt(0);
+      const color = colors[index % colors.length];
+      const role = roles[index % roles.length];
+      return `<div class="person"><span class="avatar ${color}">${initial}</span><div><b>${speaker}</b><small>${role}</small></div><i class="level"></i></div>`;
+    })
+    .join('');
 };
 
 // ============================================================================
@@ -647,12 +688,37 @@ DemoScenariosV3.prototype.getSettingsCopy = function () {
     eyebrow: '设置',
     h1: '应用设置',
     cards: [
-      { id: 'manage-models', title: '模型库', desc: '下载和管理本地语音识别模型，为字幕、精修和说话人识别提供能力。', button: '管理模型库' },
-      { id: 'ai', title: 'AI 功能', desc: '配置 AI 模型会议纪要，以及智能笔记。', button: '配置 AI 功能' },
-      { id: 'speaker', title: '说话人识别', desc: '管理已注册的声纹与说话人名称。', button: '管理说话人' },
-      { id: 'advanced', title: '进阶设置', desc: '为特定会议环境微调识别、端点检测、说话人分离和本地模型。', button: '配置进阶设置' },
-      { id: 'storage', title: '存储与隐私', desc: '查看和管理保存在此设备上的会议录音、会议纪要与模型。', button: '查看本地存储' }
-    ]
+      {
+        id: 'manage-models',
+        title: '模型库',
+        desc: '下载和管理本地语音识别模型，为字幕、精修和说话人识别提供能力。',
+        button: '管理模型库',
+      },
+      {
+        id: 'ai',
+        title: 'AI 功能',
+        desc: '配置 AI 模型会议纪要，以及智能笔记。',
+        button: '配置 AI 功能',
+      },
+      {
+        id: 'speaker',
+        title: '说话人识别',
+        desc: '管理已注册的声纹与说话人名称。',
+        button: '管理说话人',
+      },
+      {
+        id: 'advanced',
+        title: '进阶设置',
+        desc: '为特定会议环境微调识别、端点检测、说话人分离和本地模型。',
+        button: '配置进阶设置',
+      },
+      {
+        id: 'storage',
+        title: '存储与隐私',
+        desc: '查看和管理保存在此设备上的会议录音、会议纪要与模型。',
+        button: '查看本地存储',
+      },
+    ],
   };
 };
 
@@ -669,26 +735,105 @@ DemoScenariosV3.prototype.getModelLibraryData = function () {
     downloadLabel: '下载',
     installedLabel: '已安装',
     items: [
-      { stage: '整句识别', name: 'Fun-ASR-Nano', language: '中文 / 英语 / 粤语', intro: '中文会议首选：中文准确率高，覆盖粤语等方言，也能识别英语。', quality: 3, speed: 3, installed: true, size: '1.68 GB' },
-      { stage: '整句识别', name: 'Qwen3-ASR 0.6B 8bit', language: '多语种', intro: '覆盖 30 种语言和 22 种中文方言并自动判断语种；日韩会议的默认模型。', quality: 3, speed: 3, installed: false, size: '1.01 GB' },
-      { stage: '整句识别', name: 'Parakeet TDT 0.6B v3', language: '欧洲 25 种语言', intro: '英语与欧洲语言的默认模型，自动判断语种，自带标点与大小写。', quality: 3, speed: 3, installed: false, size: '2.51 GB' },
-      { stage: '随应用安装', name: 'Silero VAD', language: '语言无关', intro: '判断此刻是否有人说话，用于切分句子边界；随应用安装。', quality: 3, speed: 3, installed: true, bundled: true, size: '2 MB' },
-      { stage: '随应用安装', name: 'Pyannote Segmentation 3.0', language: '语言无关', intro: '检测单轨录音中的说话区间，为说话人分离提供边界；随应用安装。', quality: 2, speed: 3, installed: true, bundled: true, size: '7 MB' },
-      { stage: '随应用安装', name: '3D-Speaker ERes2Net Base', language: '中文', intro: '提取声纹并离线聚类说话人；随应用安装。', quality: 2, speed: 3, installed: true, bundled: true, size: '40 MB' },
-      { stage: 'AI 笔记与会议纪要', name: 'Qwen 3.5 2B', language: '中文 / 英语', intro: '在本机生成会中建议与会议纪要。', quality: 3, speed: 2, installed: false, size: '1.3 GB' },
-      { stage: '字幕翻译', name: 'Tencent Hy-MT2 1.8B', language: '33 种语言', intro: '把字幕翻译为目标语言，全部在本机运行。', quality: 3, speed: 3, installed: false, size: '1.13 GB' }
-    ]
+      {
+        stage: '整句识别',
+        name: 'Fun-ASR-Nano',
+        language: '中文 / 英语 / 粤语',
+        intro: '中文会议首选：中文准确率高，覆盖粤语等方言，也能识别英语。',
+        quality: 3,
+        speed: 3,
+        installed: true,
+        size: '1.68 GB',
+      },
+      {
+        stage: '整句识别',
+        name: 'Qwen3-ASR 0.6B 8bit',
+        language: '多语种',
+        intro: '覆盖 30 种语言和 22 种中文方言并自动判断语种；日韩会议的默认模型。',
+        quality: 3,
+        speed: 3,
+        installed: false,
+        size: '1.01 GB',
+      },
+      {
+        stage: '整句识别',
+        name: 'Parakeet TDT 0.6B v3',
+        language: '欧洲 25 种语言',
+        intro: '英语与欧洲语言的默认模型，自动判断语种，自带标点与大小写。',
+        quality: 3,
+        speed: 3,
+        installed: false,
+        size: '2.51 GB',
+      },
+      {
+        stage: '随应用安装',
+        name: 'Silero VAD',
+        language: '语言无关',
+        intro: '判断此刻是否有人说话，用于切分句子边界；随应用安装。',
+        quality: 3,
+        speed: 3,
+        installed: true,
+        bundled: true,
+        size: '2 MB',
+      },
+      {
+        stage: '随应用安装',
+        name: 'Pyannote Segmentation 3.0',
+        language: '语言无关',
+        intro: '检测单轨录音中的说话区间，为说话人分离提供边界；随应用安装。',
+        quality: 2,
+        speed: 3,
+        installed: true,
+        bundled: true,
+        size: '7 MB',
+      },
+      {
+        stage: '随应用安装',
+        name: '3D-Speaker ERes2Net Base',
+        language: '中文',
+        intro: '提取声纹并离线聚类说话人；随应用安装。',
+        quality: 2,
+        speed: 3,
+        installed: true,
+        bundled: true,
+        size: '40 MB',
+      },
+      {
+        stage: 'AI 笔记与会议纪要',
+        name: 'Qwen 3.5 2B',
+        language: '中文 / 英语',
+        intro: '在本机生成会中建议与会议纪要。',
+        quality: 3,
+        speed: 2,
+        installed: false,
+        size: '1.3 GB',
+      },
+      {
+        stage: '字幕翻译',
+        name: 'Tencent Hy-MT2 1.8B',
+        language: '33 种语言',
+        intro: '把字幕翻译为目标语言，全部在本机运行。',
+        quality: 3,
+        speed: 3,
+        installed: false,
+        size: '1.13 GB',
+      },
+    ],
   };
 };
 DemoScenariosV3.prototype.setupSettingsUI = function () {
   const copy = this.getSettingsCopy();
-  const cards = copy.cards.map((card, index) => String.raw`
+  const cards = copy.cards
+    .map(
+      (card, index) => String.raw`
     <section class="settings-card"${index === 0 ? ' data-demo-id="model-library-card"' : ''}>
       <h2>${card.title}</h2>
       <p>${card.desc}</p>
       <button class="secondary" type="button"${index === 0 ? ' data-demo-id="manage-models-btn"' : ''}>${card.button}</button>
     </section>
-  `).join('');
+  `,
+    )
+    .join('');
 
   return String.raw`
     <main class="app-shell">
@@ -719,20 +864,24 @@ DemoScenariosV3.prototype.setupSettingsUI = function () {
 DemoScenariosV3.prototype.renderModelLibraryItems = function () {
   const data = this.getModelLibraryData();
   let lastStage = null;
-  return data.items.map((item) => {
-    const heading = item.stage !== lastStage ? `<h3>${item.stage}</h3>` : '';
-    lastStage = item.stage;
-    const dots = (level) => [1, 2, 3].map((step) => `<i${step <= level ? ' class="on"' : ''}></i>`).join('');
-    const ratings = String.raw`
+  return data.items
+    .map((item) => {
+      const heading = item.stage !== lastStage ? `<h3>${item.stage}</h3>` : '';
+      lastStage = item.stage;
+      const dots = (level) =>
+        [1, 2, 3].map((step) => `<i${step <= level ? ' class="on"' : ''}></i>`).join('');
+      const ratings = String.raw`
       <div class="model-library-ratings">
         <span class="model-library-rating"><small>${data.qualityLabel}</small><b>${data.qualityTiers[item.quality - 1]}</b><span class="rating-scale" aria-hidden="true">${dots(item.quality)}</span></span>
         <span class="model-library-rating"><small>${data.speedLabel}</small><b>${data.speedTiers[item.speed - 1]}</b><span class="rating-scale" aria-hidden="true">${dots(item.speed)}</span></span>
       </div>`;
-    const tags = `<div class="model-library-tags">${item.bundled ? '<span class="model-library-installed">随应用安装</span>' : item.installed ? `<span class="model-library-installed">${data.installedLabel}</span>` : ''}</div>`;
-    const action = item.bundled ? '<span class="model-library-readonly">必需</span>' : item.installed
-      ? '<button class="secondary" type="button">从文件夹打开</button><button class="modal-action modal-danger" type="button">删除</button>'
-      : `<button class="modal-action" type="button">${data.downloadLabel}</button>`;
-    return String.raw`
+      const tags = `<div class="model-library-tags">${item.bundled ? '<span class="model-library-installed">随应用安装</span>' : item.installed ? `<span class="model-library-installed">${data.installedLabel}</span>` : ''}</div>`;
+      const action = item.bundled
+        ? '<span class="model-library-readonly">必需</span>'
+        : item.installed
+          ? '<button class="secondary" type="button">从文件夹打开</button><button class="modal-action modal-danger" type="button">删除</button>'
+          : `<button class="modal-action" type="button">${data.downloadLabel}</button>`;
+      return String.raw`
       ${heading}
       <div class="model-library-item">
         <span>
@@ -742,7 +891,8 @@ DemoScenariosV3.prototype.renderModelLibraryItems = function () {
         </span>
         <span class="model-actions">${action}</span>
       </div>`;
-  }).join('');
+    })
+    .join('');
 };
 
 DemoScenariosV3.prototype.openModelLibraryModal = function () {
@@ -773,23 +923,38 @@ DemoScenariosV3.prototype.openModelLibraryModal = function () {
 };
 
 DemoScenariosV3.prototype.getModelLibraryDemo = function () {
-    return {
-      name: 'model-library',
-      setupUI: () => this.setupSettingsUI(),
-      steps: [
-        { action: 'wait', duration: 900 },
-        { action: 'moveCursor', target: '[data-demo-id="manage-models-btn"]', duration: 1200, delay: 400 },
-        { action: 'hover', duration: 400 },
-        { action: 'click', duration: 300 },
-        { action: 'setState', handler: () => this.openModelLibraryModal(), delay: 300 },
-        { action: 'wait', duration: 1400 },
-        { action: 'moveCursor', target: '[data-demo-id="model-library-body"] .model-library-item .model-actions button', duration: 900, delay: 300 },
-        { action: 'wait', duration: 900 },
-        { action: 'scrollToBottom', target: '[data-demo-id="model-library-body"]', duration: 5000, delay: 200 },
-        { action: 'wait', duration: 2200 }
-      ]
-    };
+  return {
+    name: 'model-library',
+    setupUI: () => this.setupSettingsUI(),
+    steps: [
+      { action: 'wait', duration: 900 },
+      {
+        action: 'moveCursor',
+        target: '[data-demo-id="manage-models-btn"]',
+        duration: 1200,
+        delay: 400,
+      },
+      { action: 'hover', duration: 400 },
+      { action: 'click', duration: 300 },
+      { action: 'setState', handler: () => this.openModelLibraryModal(), delay: 300 },
+      { action: 'wait', duration: 1400 },
+      {
+        action: 'moveCursor',
+        target: '[data-demo-id="model-library-body"] .model-library-item .model-actions button',
+        duration: 900,
+        delay: 300,
+      },
+      { action: 'wait', duration: 900 },
+      {
+        action: 'scrollToBottom',
+        target: '[data-demo-id="model-library-body"]',
+        duration: 5000,
+        delay: 200,
+      },
+      { action: 'wait', duration: 2200 },
+    ],
   };
+};
 // ============================================================================
 // Floating Caption Bar demo — real live view + real floating-caption overlay
 // ============================================================================
@@ -800,17 +965,26 @@ DemoScenariosV3.prototype.getCaptionData = function () {
   return {
     meetingTitle: '产品评审会议',
     lines: [
-      { text: '我们先过一下这个季度的整体进展。', translation: "Let's start by reviewing the overall progress this quarter." },
-      { text: '实时转录的延迟已经优化到三百毫秒以内。', translation: 'Live transcription latency is now under 300 milliseconds.' },
-      { text: '多语言支持这块也覆盖了三十多种语言。', translation: 'Multilingual support now covers more than 30 languages.' }
-    ]
+      {
+        text: '我们先过一下这个季度的整体进展。',
+        translation: "Let's start by reviewing the overall progress this quarter.",
+      },
+      {
+        text: '实时转录的延迟已经优化到三百毫秒以内。',
+        translation: 'Live transcription latency is now under 300 milliseconds.',
+      },
+      {
+        text: '多语言支持这块也覆盖了三十多种语言。',
+        translation: 'Multilingual support now covers more than 30 languages.',
+      },
+    ],
   };
 };
 
 DemoScenariosV3.prototype.getCaptionTranscript = function () {
   return [
     { time: '00:00:12', speaker: '主持人', text: '欢迎大家参加这次产品评审，我们按议程开始。' },
-    { time: '00:00:24', speaker: '李娜', text: '好的，我先同步一下这个季度的整体情况。' }
+    { time: '00:00:24', speaker: '李娜', text: '好的，我先同步一下这个季度的整体情况。' },
   ];
 };
 
@@ -820,15 +994,19 @@ DemoScenariosV3.prototype.setupCaptionUI = function () {
   let liveHtml = this.setupLiveUI(meetingTitle);
 
   // Pre-populate the transcript so the live view reads as an active meeting.
-  const transcript = this.getCaptionTranscript().map((segment) => String.raw`
+  const transcript = this.getCaptionTranscript()
+    .map(
+      (segment) => String.raw`
     <div class="segment" style="padding: 16px 0;">
       <div class="segment-meta" style="gap: 4px;"><time>${segment.time}</time></div>
       <div class="segment-copy"><p style="font-size: 18px; line-height: 1.8; margin: 0;">${segment.text}</p></div>
     </div>
-  `).join('');
+  `,
+    )
+    .join('');
   liveHtml = liveHtml.replace(
     '<div class="transcript-scroll" data-demo-id="transcript-scroll"></div>',
-    `<div class="transcript-scroll" data-demo-id="transcript-scroll">${transcript}</div>`
+    `<div class="transcript-scroll" data-demo-id="transcript-scroll">${transcript}</div>`,
   );
 
   const overlay = String.raw`
@@ -860,17 +1038,24 @@ DemoScenariosV3.prototype.generateCaptionSteps = function () {
       steps.push({
         action: 'setState',
         handler: () => {
-          const finalized = this.engine.viewport.querySelector('[data-demo-id="caption-finalized"]');
-          const translation = this.engine.viewport.querySelector('[data-demo-id="caption-translation"]');
+          const finalized = this.engine.viewport.querySelector(
+            '[data-demo-id="caption-finalized"]',
+          );
+          const translation = this.engine.viewport.querySelector(
+            '[data-demo-id="caption-translation"]',
+          );
           const text = this.engine.viewport.querySelector('[data-demo-id="caption-text"]');
           if (finalized) {
             finalized.textContent = prev.text;
             finalized.classList.remove('hidden');
           }
-          if (translation) { translation.textContent = ''; translation.classList.add('hidden'); }
+          if (translation) {
+            translation.textContent = '';
+            translation.classList.add('hidden');
+          }
           if (text) text.textContent = '';
         },
-        delay: 100
+        delay: 100,
       });
     }
 
@@ -883,12 +1068,16 @@ DemoScenariosV3.prototype.generateCaptionSteps = function () {
         text.textContent = '';
         const chars = line.text.split('');
         for (let i = 0; i < chars.length; i++) {
-          if (this.engine.isPaused) { await this.engine.wait(100); i--; continue; }
+          if (this.engine.isPaused) {
+            await this.engine.wait(100);
+            i--;
+            continue;
+          }
           text.textContent += chars[i];
           await this.engine.wait(55);
         }
       },
-      delay: 200
+      delay: 200,
     });
 
     steps.push({ action: 'wait', duration: 500 });
@@ -897,13 +1086,15 @@ DemoScenariosV3.prototype.generateCaptionSteps = function () {
     steps.push({
       action: 'setState',
       handler: () => {
-        const translation = this.engine.viewport.querySelector('[data-demo-id="caption-translation"]');
+        const translation = this.engine.viewport.querySelector(
+          '[data-demo-id="caption-translation"]',
+        );
         if (translation) {
           translation.textContent = line.translation;
           translation.classList.remove('hidden');
         }
       },
-      delay: 100
+      delay: 100,
     });
 
     steps.push({ action: 'wait', duration: 1600 });
@@ -913,30 +1104,42 @@ DemoScenariosV3.prototype.generateCaptionSteps = function () {
 };
 
 DemoScenariosV3.prototype.getCaptionBarDemo = function () {
-    return {
-      name: 'caption-bar',
-      setupUI: () => this.setupCaptionUI(),
-      steps: [
-        { action: 'wait', duration: 700 },
-        // Open the bottom control bar's More menu before enabling captions.
-        { action: 'moveCursor', target: '#live-more-toggle', duration: 700 },
-        { action: 'click', duration: 300 },
-        { action: 'setState', handler: () => {
+  return {
+    name: 'caption-bar',
+    setupUI: () => this.setupCaptionUI(),
+    steps: [
+      { action: 'wait', duration: 700 },
+      // Open the bottom control bar's More menu before enabling captions.
+      { action: 'moveCursor', target: '#live-more-toggle', duration: 700 },
+      { action: 'click', duration: 300 },
+      {
+        action: 'setState',
+        handler: () => {
           this.engine.viewport.querySelector('#live-more-panel').hidden = false;
-        } },
-        { action: 'moveCursor', target: '[data-demo-id="caption-toggle"]', duration: 1000, delay: 300 },
-        { action: 'hover', duration: 300 },
-        { action: 'click', duration: 300 },
-        { action: 'setState', handler: () => {
+        },
+      },
+      {
+        action: 'moveCursor',
+        target: '[data-demo-id="caption-toggle"]',
+        duration: 1000,
+        delay: 300,
+      },
+      { action: 'hover', duration: 300 },
+      { action: 'click', duration: 300 },
+      {
+        action: 'setState',
+        handler: () => {
           const toggle = this.engine.viewport.querySelector('[data-demo-id="caption-toggle"]');
           if (toggle) toggle.setAttribute('data-enabled', 'true');
           const overlay = this.engine.viewport.querySelector('[data-demo-id="caption-overlay"]');
           if (overlay) overlay.classList.add('is-visible');
           this.engine.viewport.querySelector('#live-more-panel').hidden = true;
-        }, delay: 200 },
-        { action: 'wait', duration: 600 },
-        ...this.generateCaptionSteps(),
-        { action: 'wait', duration: 2000 }
-      ]
-    };
+        },
+        delay: 200,
+      },
+      { action: 'wait', duration: 600 },
+      ...this.generateCaptionSteps(),
+      { action: 'wait', duration: 2000 },
+    ],
   };
+};

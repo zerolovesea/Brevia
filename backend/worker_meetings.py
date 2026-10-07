@@ -22,7 +22,10 @@ class MeetingCommandMixin:
         while self.tasks.has_for_meeting(meeting_id) and time.monotonic() < deadline:
             time.sleep(0.05)
         if self.tasks.has_for_meeting(meeting_id):
-            raise UserFacingError("error.tasks.running", "Wait for background tasks to finish before deleting meeting data")
+            raise UserFacingError(
+                "error.tasks.running",
+                "Wait for background tasks to finish before deleting meeting data",
+            )
 
     def delete_meeting(self, payload):
         """删除非活动会议。
@@ -33,7 +36,9 @@ class MeetingCommandMixin:
         require(payload, "meeting_id")
         # 删除不能排在实时音频处理之后；读取活动 ID 不需要占用录音锁。
         if payload["meeting_id"] == self.state._active:
-            raise UserFacingError("error.meeting.active", "Stop the active meeting before deleting it")
+            raise UserFacingError(
+                "error.meeting.active", "Stop the active meeting before deleting it"
+            )
         if self.tasks.has_for_meeting(payload["meeting_id"]):
             self._cancel_meeting_tasks(payload["meeting_id"])
         self.store.soft_delete(payload["meeting_id"])
@@ -42,10 +47,15 @@ class MeetingCommandMixin:
     def delete_workspace(self, payload):
         """先停止工作区内会议的任务，再将工作区和会议移入最近删除。"""
         workspace_id = payload["workspace_id"]
-        meetings = [meeting for meeting in self.store.list_meetings()
-                    if meeting.get("workspace_id") == workspace_id]
+        meetings = [
+            meeting
+            for meeting in self.store.list_meetings()
+            if meeting.get("workspace_id") == workspace_id
+        ]
         if any(meeting["id"] == self.active for meeting in meetings):
-            raise UserFacingError("error.meeting.active", "Stop the active meeting before deleting it")
+            raise UserFacingError(
+                "error.meeting.active", "Stop the active meeting before deleting it"
+            )
         for meeting in meetings:
             self._cancel_meeting_tasks(meeting["id"])
         return self.store.delete_workspace(workspace_id)
@@ -53,15 +63,22 @@ class MeetingCommandMixin:
     def clear_storage(self, payload):
         """清理本地分区；录制期间保留会议文件以避免损坏当前会话。"""
         if payload["partition"] in {"meetings", "models"} and self.active:
-            raise UserFacingError("error.meeting.active", "Stop the active meeting before clearing meeting data")
+            raise UserFacingError(
+                "error.meeting.active", "Stop the active meeting before clearing meeting data"
+            )
         if self.tasks.has_any() or self.model_downloads:
-            raise UserFacingError("error.tasks.running", "Wait for background tasks to finish before clearing meeting data")
+            raise UserFacingError(
+                "error.tasks.running",
+                "Wait for background tasks to finish before clearing meeting data",
+            )
         return self.store.clear_storage_partition(payload["partition"])
 
     def cleanup_unused_storage(self, _):
         """清理已下架模型和没有会议记录的 Brevia 会议目录。"""
         if self.active or self.tasks.has_any() or self.model_downloads:
-            raise UserFacingError("error.tasks.running", "Stop the active meeting and wait for background tasks")
+            raise UserFacingError(
+                "error.tasks.running", "Stop the active meeting and wait for background tasks"
+            )
         models = self.models.cleanup_unlisted()
         meetings = self.store.cleanup_orphan_meeting_dirs()
         return {
@@ -80,7 +97,9 @@ class MeetingCommandMixin:
         require(payload, "meeting_id")
         # 同上：彻底删除也必须能立即取消目标会议的后台任务。
         if payload["meeting_id"] == self.state._active:
-            raise UserFacingError("error.meeting.active", "Stop the active meeting before deleting it")
+            raise UserFacingError(
+                "error.meeting.active", "Stop the active meeting before deleting it"
+            )
         if self.tasks.has_for_meeting(payload["meeting_id"]):
             self._cancel_meeting_tasks(payload["meeting_id"], timeout=5.0)
         self.store.permanent_delete(payload["meeting_id"])

@@ -5,6 +5,7 @@ Usage:
     BREVIA_GGUF=~/brevia/models/qwen3.5-4b-q4km-llama-models-2025-08/Qwen3.5-4B-Q4_K_M.gguf \
         .venv/bin/python scripts/bench_llm_cpu.py
 """
+
 import os
 import time
 from pathlib import Path
@@ -12,7 +13,10 @@ from pathlib import Path
 GGUF = Path(
     os.environ.get(
         "BREVIA_GGUF",
-        str(Path.home() / "brevia/models/qwen3.5-4b-q4km-llama-models-2025-08/Qwen3.5-4B-Q4_K_M.gguf"),
+        str(
+            Path.home()
+            / "brevia/models/qwen3.5-4b-q4km-llama-models-2025-08/Qwen3.5-4B-Q4_K_M.gguf"
+        ),
     )
 )
 
@@ -28,7 +32,11 @@ def main():
     zh_prompt = (
         "你是一名会议实时笔记助手。请从下面最近的会议字幕中提取一条明确、可核对的信息。\n"
         "<recent_transcript>\n"
-        + "\n".join(f"[{i:02d}:00] 说话人{1 + i % 2}: " + ("我们今天的主题是如果中国严格执行劳动法，会对企业和员工产生什么影响。" * 1) for i in range(30))
+        + "\n".join(
+            f"[{i:02d}:00] 说话人{1 + i % 2}: "
+            + ("我们今天的主题是如果中国严格执行劳动法，会对企业和员工产生什么影响。" * 1)
+            for i in range(30)
+        )
         + "\n</recent_transcript>\n"
         '输出极短 JSON：{"type":"conclusion|decision|action|number|date|question|risk|topic|supplement","text":"一句话","importance":"high|medium"}。只输出 JSON。'
     )
@@ -36,21 +44,31 @@ def main():
 
     for max_tokens in (64, 128):
         t0 = time.monotonic()
-        out = llm(zh_prompt, max_tokens=max_tokens, temperature=0.2, stop=["<|im_end|>", "<|endoftext|>"])
+        out = llm(
+            zh_prompt, max_tokens=max_tokens, temperature=0.2, stop=["<|im_end|>", "<|endoftext|>"]
+        )
         dt = time.monotonic() - t0
         text = out["choices"][0]["text"]
         usage = out.get("usage", {})
         pt = usage.get("prompt_tokens", 0)
         gt = usage.get("completion_tokens", 0)
         print(f"\nmax_tokens={max_tokens}: {dt:.1f}s  prompt_tokens={pt} completion_tokens={gt}")
-        print(f"  prompt proc: {pt / dt:.1f} tok/s  gen: {gt / max(dt - pt / max(40, pt / dt), 0.01):.1f} tok/s")
+        print(
+            f"  prompt proc: {pt / dt:.1f} tok/s  gen: {gt / max(dt - pt / max(40, pt / dt), 0.01):.1f} tok/s"
+        )
         print(f"  output: {text[:160]!r}")
 
     en_prompt = (
         "You are a realtime meeting-notes assistant. Decide whether the recent transcript "
         "contains one explicit piece of information worth capturing. "
         "<recent_transcript>\n"
-        + "\n".join(f"[{i:02d}:00] speaker {1 + i % 2}: " + ("We're discussing what happens when millions of AI agents meet, and the coordination costs involved.") for i in range(30))
+        + "\n".join(
+            f"[{i:02d}:00] speaker {1 + i % 2}: "
+            + (
+                "We're discussing what happens when millions of AI agents meet, and the coordination costs involved."
+            )
+            for i in range(30)
+        )
         + "\n</recent_transcript>\n"
         'Output a very short JSON: {"type":"conclusion|decision|action|number|date|question|risk|topic|supplement","text":"one short sentence","importance":"high|medium"}. Output only JSON.'
     )
@@ -60,7 +78,9 @@ def main():
     dt = time.monotonic() - t0
     text = out["choices"][0]["text"]
     usage = out.get("usage", {})
-    print(f"\nen: {dt:.1f}s prompt_tokens={usage.get('prompt_tokens')} completion_tokens={usage.get('completion_tokens')}")
+    print(
+        f"\nen: {dt:.1f}s prompt_tokens={usage.get('prompt_tokens')} completion_tokens={usage.get('completion_tokens')}"
+    )
     print(f"  output: {text[:160]!r}")
 
 

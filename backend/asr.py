@@ -178,8 +178,12 @@ class ModelManager:
         removed, freed_bytes = [], 0
         # A platform migration must not garbage-collect another platform's
         # managed weights; users can still move their library back to Windows.
-        known_ids = {model["id"] for model in json.loads(
-            Path(__file__).with_name("models.json").read_text(encoding="utf-8"))}
+        known_ids = {
+            model["id"]
+            for model in json.loads(
+                Path(__file__).with_name("models.json").read_text(encoding="utf-8")
+            )
+        }
         for path in self.root.iterdir():
             marker = path / ".brevia.json"
             if not path.is_dir() or not marker.is_file():
@@ -189,7 +193,9 @@ class ModelManager:
             except (OSError, json.JSONDecodeError):
                 continue
             if model_id and model_id not in known_ids:
-                freed_bytes += sum(item.stat().st_size for item in path.rglob("*") if item.is_file())
+                freed_bytes += sum(
+                    item.stat().st_size for item in path.rglob("*") if item.is_file()
+                )
                 shutil.rmtree(path)
                 removed.append(path.name)
         return {"removed": removed, "freed_bytes": freed_bytes}
@@ -201,9 +207,7 @@ class ModelManager:
                 **model,
                 "status": "ready" if self.is_ready(model["id"]) else "not_installed",
                 "bundled": self.is_bundled(model["id"]),
-                "path": str(self.path(model["id"]))
-                if self.is_ready(model["id"])
-                else None,
+                "path": str(self.path(model["id"])) if self.is_ready(model["id"]) else None,
             }
             for model in self.catalog.values()
         ]
@@ -303,7 +307,12 @@ class ModelManager:
                     raise
                 check_control()
                 time.sleep(2**attempt)
-            except (urllib.error.URLError, TimeoutError, ConnectionError, http.client.IncompleteRead):
+            except (
+                urllib.error.URLError,
+                TimeoutError,
+                ConnectionError,
+                http.client.IncompleteRead,
+            ):
                 if attempt == DOWNLOAD_RETRIES - 1:
                     raise
                 check_control()
@@ -390,9 +399,7 @@ class ModelManager:
                             bundle.extractall(extract_root, filter="data")
                         extracted = extract_root / item["directory"]
                         if not extracted.is_dir():
-                            raise ValueError(
-                                "Model archive is missing required directory"
-                            )
+                            raise ValueError("Model archive is missing required directory")
                         shutil.copytree(extracted, source, dirs_exist_ok=True)
                     received += destination.stat().st_size
                 digest = None
@@ -411,7 +418,11 @@ class ModelManager:
 
                 check_control()
                 # 优先使用 china_url（如果存在且启用了大陆镜像）
-                model_url = model.get("china_url") if china_source and model.get("china_url") else model["url"]
+                model_url = (
+                    model.get("china_url")
+                    if china_source and model.get("china_url")
+                    else model["url"]
+                )
                 self._download_file(
                     self.download_url(model_url, china_source),
                     archive,
@@ -458,7 +469,10 @@ class ModelManager:
             shutil.rmtree(path)
         self.event(
             "model.status",
-            {"model_id": model_id, "status": "ready" if self.is_bundled(model_id) else "not_installed"},
+            {
+                "model_id": model_id,
+                "status": "ready" if self.is_bundled(model_id) else "not_installed",
+            },
         )
 
     @staticmethod
@@ -519,7 +533,9 @@ class ModelManager:
             # Windows commonly reports logical processors: a 4C/8T mobile CPU is still
             # too small for CPU-only live ASR plus a local LLM.  Treat that class as weak
             # so the UI picks the responsive path instead of the quality-first default.
-            "weak": backend == "cpu" and platform.machine().lower() not in {"arm64", "aarch64"} and (os.cpu_count() or 2) <= 8,
+            "weak": backend == "cpu"
+            and platform.machine().lower() not in {"arm64", "aarch64"}
+            and (os.cpu_count() or 2) <= 8,
         }
 
     @staticmethod
@@ -569,6 +585,7 @@ class SentenceVAD:
     def __new__(cls, manager=None, model_id="silero-vad", *args, **kwargs):
         if manager is not None and manager.get(model_id).get("runtime") == "mlx-audio":
             from .mlx_asr import MLXVAD
+
             return MLXVAD(manager, model_id, *args, **kwargs)
         return super().__new__(cls)
 
@@ -596,7 +613,9 @@ class SentenceVAD:
             self.sentence_gap_ms = max(self.sentence_gap_ms, 2000)
         params["min_silence_duration"] = 0.1
         self.target_seconds = 8.0
-        self.speech_pad_ms = max(0, DEFAULT_SPEECH_PAD_MS if speech_pad_ms is None else int(speech_pad_ms))
+        self.speech_pad_ms = max(
+            0, DEFAULT_SPEECH_PAD_MS if speech_pad_ms is None else int(speech_pad_ms)
+        )
         # 段首回补与切点回看共用同一段历史缓冲、同一个上限（``_new_state`` 的
         # ``pad_samples``）：回看要够长才能救回切点上的字，所以取两者的较大值。
         # 段首因此会多补一点原始音频（只会让句首更完整），但绝不会越过已经交付的
@@ -609,9 +628,13 @@ class SentenceVAD:
         # 现在由 live_asr.max_speech_seconds 配置。注意它只是「下压阀门」：
         # 有效值 = min(vad 语言配置, 模型容量, 本设置)，所以调大不生效、调小才生效，
         # 模型 KV 容量永远由 REFINED_MODEL_MAX_SPEECH_SECONDS 独立兜住。
-        self.max_speech_seconds = live_speech_cap(params, params["max_speech_duration"], self.cut_overlap_ms)
+        self.max_speech_seconds = live_speech_cap(
+            params, params["max_speech_duration"], self.cut_overlap_ms
+        )
         # 回补与最后一个 512 样本块也计入模型上限，不能在切完后额外超出。
-        params["max_speech_duration"] = max(0.1, self.max_speech_seconds - self.cut_overlap_ms / 1000 - 512 / 16000)
+        params["max_speech_duration"] = max(
+            0.1, self.max_speech_seconds - self.cut_overlap_ms / 1000 - 512 / 16000
+        )
         self.config = _vad_config(manager, model_id, params)
         self.tracks = {}
         # 检测器漏判的安静语音兜底（见 ``_finish_idle_run``）：音乐里的轻声、
@@ -689,7 +712,7 @@ class SentenceVAD:
         if lo >= absolute_start:
             return None
         return numpy.concatenate(list(state["hist"]))[
-            lo - state["hist_from"]: absolute_start - state["hist_from"]
+            lo - state["hist_from"] : absolute_start - state["hist_from"]
         ]
 
     def accept(self, track, samples, start_ms):
@@ -702,7 +725,7 @@ class SentenceVAD:
             state = self.tracks[track] = self._new_state(start_ms)
         # 以短块喂入并及时排空；即使调用者回放大块音频也不撑爆原生环形缓冲。
         for offset in range(0, len(samples), 512):
-            chunk = samples[offset:offset + 512]
+            chunk = samples[offset : offset + 512]
             state["samples"] += len(chunk)
             self._remember(state, chunk)
             detector = state["detector"]
@@ -718,7 +741,9 @@ class SentenceVAD:
                 start = pending[0] if pending else state["origin_ms"] + state["speech_start"] / 16
                 elapsed = (state["origin_ms"] + state["samples"] / 16 - start) / 1000
                 hard_end = elapsed >= self.config.silero_vad.max_speech_duration
-                quiet_end = elapsed >= getattr(self, "target_seconds", 8) and self._at_quiet_boundary(state)
+                quiet_end = elapsed >= getattr(
+                    self, "target_seconds", 8
+                ) and self._at_quiet_boundary(state)
                 if hard_end or quiet_end:
                     # 到目标长度后在低能量停顿交付；背景声一直触发 VAD 时也不无限等。
                     boundary = "cut" if hard_end else "pause"
@@ -734,17 +759,22 @@ class SentenceVAD:
                     # （``_history_prefix``）因此能越过切点，把被切在词中间的那个字
                     # 连同左侧上下文一起交给识别器。切点上的重复内容由上层的接缝
                     # 去重消掉，不会重复出词。
-                    state["delivered_until"] = (
-                        round(state["origin_ms"] * 16) - state["pad_samples"]
-                    )
+                    state["delivered_until"] = round(state["origin_ms"] * 16) - state["pad_samples"]
                     state["idle"].clear()
                     state["idle_total"] = 0
                     state["speech_start"] = None
             pending = state["pending"]
-            if pending and not detector.is_speech_detected() and state["origin_ms"] + state["samples"] / 16 - pending[1] >= getattr(self, "sentence_gap_ms", 700):
+            if (
+                pending
+                and not detector.is_speech_detected()
+                and state["origin_ms"] + state["samples"] / 16 - pending[1]
+                >= getattr(self, "sentence_gap_ms", 700)
+            ):
                 completed.append((*pending, "endpoint"))
                 state["pending"] = None
-            self._track_quiet_audio(state, chunk, bool(segments) or detector.is_speech_detected(), completed)
+            self._track_quiet_audio(
+                state, chunk, bool(segments) or detector.is_speech_detected(), completed
+            )
         return completed
 
     def _track_quiet_audio(self, state, chunk, in_speech, completed):
@@ -802,13 +832,18 @@ class SentenceVAD:
         keep_ms = run_end_ms
         onset = state.get("speech_start")
         if onset is not None:
-            onset_ms = round(state["origin_ms"] + onset / 16) - round(getattr(self, "speech_pad_ms", 0))
+            onset_ms = round(state["origin_ms"] + onset / 16) - round(
+                getattr(self, "speech_pad_ms", 0)
+            )
             if onset_ms <= run_start_ms:
                 return
             keep_ms = onset_ms
             samples = samples[: round((keep_ms - run_start_ms) * 16)]
         trimmed = trim_quiet_speech(
-            samples, run_start_ms, keep_ms, state["speech_level"],
+            samples,
+            run_start_ms,
+            keep_ms,
+            state["speech_level"],
             getattr(self, "recover_min_seconds", 1.0),
             getattr(self, "recover_level_ratio", 0.08),
         )
@@ -837,15 +872,28 @@ class SentenceVAD:
         import numpy
 
         completed = []
-        maximum_ms = getattr(self, "max_speech_seconds", self.config.silero_vad.max_speech_duration) * 1000
+        maximum_ms = (
+            getattr(self, "max_speech_seconds", self.config.silero_vad.max_speech_duration) * 1000
+        )
         for segment in segments:
             pending = state["pending"]
             if pending:
                 gap = segment[0] - pending[1]
-                if gap < getattr(self, "sentence_gap_ms", 700) and segment[1] - pending[0] <= maximum_ms:
-                    segment = (pending[0], segment[1], numpy.concatenate([
-                        pending[2], numpy.zeros(max(0, round(gap * 16)), dtype=numpy.float32), segment[2]
-                    ]))
+                if (
+                    gap < getattr(self, "sentence_gap_ms", 700)
+                    and segment[1] - pending[0] <= maximum_ms
+                ):
+                    segment = (
+                        pending[0],
+                        segment[1],
+                        numpy.concatenate(
+                            [
+                                pending[2],
+                                numpy.zeros(max(0, round(gap * 16)), dtype=numpy.float32),
+                                segment[2],
+                            ]
+                        ),
+                    )
                 else:
                     completed.append((*pending, "endpoint"))
             state["pending"] = segment
@@ -875,7 +923,7 @@ class SentenceVAD:
             start = max(0, segment.start, state["delivered_until"] - round(state["origin_ms"] * 16))
             end = min(segment.start + len(segment.samples), state["samples"])
             samples = numpy.asarray(segment.samples, dtype=numpy.float32)[
-                start - segment.start:end - segment.start
+                start - segment.start : end - segment.start
             ].copy()
             if len(samples):
                 origin = state["origin_ms"]
@@ -892,7 +940,9 @@ class SentenceVAD:
         return segments
 
 
-def trim_quiet_speech(samples, start_ms, end_ms, speech_level, minimum_seconds=1.0, level_ratio=0.08):
+def trim_quiet_speech(
+    samples, start_ms, end_ms, speech_level, minimum_seconds=1.0, level_ratio=0.08
+):
     """在检测器未认领的音频里裁出值得识别的区间；不值得则返回 ``None``。
 
     返回 ``(start_ms, end_ms, samples)``：切掉首尾低于噪声门限的部分（各留 100ms），
@@ -920,7 +970,9 @@ def trim_quiet_speech(samples, start_ms, end_ms, speech_level, minimum_seconds=1
     )
 
 
-def recover_speech_gaps(regions, read_window, minimum_seconds=1.0, maximum_seconds=20.0, level_ratio=0.08):
+def recover_speech_gaps(
+    regions, read_window, minimum_seconds=1.0, maximum_seconds=20.0, level_ratio=0.08
+):
     """在已确认语音之间的空洞里找回检测器漏判的安静语音（会后精修用）。
 
     检测器（Silero）会把音乐里的轻声、电话音整段判成非语音，这段内容既不会出现在
@@ -947,8 +999,12 @@ def recover_speech_gaps(regions, read_window, minimum_seconds=1.0, maximum_secon
         # 否则识别器会把整段语言判成新段落那门语言。
         window_end = max(start_ms + 1, end_ms - DEFAULT_SPEECH_PAD_MS)
         trimmed = trim_quiet_speech(
-            read_window(start_ms, window_end), start_ms, window_end, level,
-            minimum_seconds, level_ratio,
+            read_window(start_ms, window_end),
+            start_ms,
+            window_end,
+            level,
+            minimum_seconds,
+            level_ratio,
         )
         if trimmed:
             recovered.append({"start_ms": trimmed[0], "end_ms": trimmed[1]})
@@ -984,6 +1040,7 @@ class OfflineVAD:
     def __new__(cls, manager=None, model_id="silero-vad", vad_params=None):
         if manager is not None and manager.get(model_id).get("runtime") == "mlx-audio":
             from .mlx_asr import MLXVAD
+
             return MLXVAD(manager, model_id, vad_params=vad_params, offline=True)
         return super().__new__(cls)
 
@@ -1043,7 +1100,9 @@ class OfflineVAD:
         # 吞掉，连续语音不结束、环形缓冲不断翻倍。按模型窗口喂入并及时排空。
         config = self.config.silero_vad
         maximum = max(512, round(config.max_speech_duration * sample_rate))
-        detector = self.sherpa_onnx.VoiceActivityDetector(self.config, max(60, maximum / sample_rate + 2))
+        detector = self.sherpa_onnx.VoiceActivityDetector(
+            self.config, max(60, maximum / sample_rate + 2)
+        )
         segments = []
         origin = position = 0
         speech_start = None
@@ -1055,7 +1114,11 @@ class OfflineVAD:
                 segments.append(
                     {
                         "start_ms": round((origin + segment.start) * 1000 / sample_rate),
-                        "end_ms": round(min(total_samples, origin + segment.start + len(segment.samples)) * 1000 / sample_rate),
+                        "end_ms": round(
+                            min(total_samples, origin + segment.start + len(segment.samples))
+                            * 1000
+                            / sample_rate
+                        ),
                     }
                 )
                 detector.pop()
@@ -1081,7 +1144,7 @@ class OfflineVAD:
             samples = numpy.concatenate((pending, samples))
             count = len(samples) // 512 * 512
             for offset in range(0, count, 512):
-                accept(samples[offset:offset + 512])
+                accept(samples[offset : offset + 512])
             pending = samples[count:]
             if progress:
                 progress(origin + position + len(pending), total_samples)
@@ -1115,9 +1178,7 @@ class SpeakerTracker:
         if not extractor_config.validate():
             raise RuntimeError("Invalid speaker embedding configuration")
         self.extractor = sherpa_onnx.SpeakerEmbeddingExtractor(extractor_config)
-        self.threshold = (
-            config["online_similarity_threshold"] if threshold is None else threshold
-        )
+        self.threshold = config["online_similarity_threshold"] if threshold is None else threshold
         self.minimum_seconds = config["minimum_embedding_seconds"]
         self.max_speakers = max_speakers if max_speakers and max_speakers > 0 else None
         self.centers = []
@@ -1209,6 +1270,7 @@ class RefinedASR:
     def __new__(cls, manager=None, model_id=None, *args, **kwargs):
         if manager is not None and manager.get(model_id).get("runtime") == "mlx-audio":
             from .mlx_asr import MLXASR
+
             return MLXASR(manager, model_id, *args, **kwargs)
         return super().__new__(cls)
 
@@ -1346,7 +1408,11 @@ class RefinedASR:
                 continue
             text = token.replace("▁", " ")
             start_ms = round(float(timestamps[index]) * 1000)
-            end_ms = round(float(timestamps[index + 1]) * 1000) if index + 1 < len(timestamps) else start_ms + 200
+            end_ms = (
+                round(float(timestamps[index + 1]) * 1000)
+                if index + 1 < len(timestamps)
+                else start_ms + 200
+            )
             words.append({"text": text, "start_ms": start_ms, "end_ms": max(start_ms + 1, end_ms)})
         return result.text.strip(), words
 
@@ -1377,17 +1443,13 @@ class OfflineDiarizer:
         diarization_threads = threads or manager.thread_budget()
         segmentation_id = segmentation_id or config["segmentation_model_id"]
         embedding_id = SPEAKER_EMBEDDING_MODEL_ID
-        if not all(
-            manager.is_ready(model_id) for model_id in (segmentation_id, embedding_id)
-        ):
+        if not all(manager.is_ready(model_id) for model_id in (segmentation_id, embedding_id)):
             raise ModelNotInstalled([segmentation_id, embedding_id])
         try:
             import sherpa_onnx
         except ImportError as error:
             raise RuntimeError("sherpa-onnx is not installed") from error
-        segmentation = (
-            manager.path(segmentation_id) / manager.get(segmentation_id)["files"][0]
-        )
+        segmentation = manager.path(segmentation_id) / manager.get(segmentation_id)["files"][0]
         embedding = manager.path(embedding_id) / manager.get(embedding_id)["files"][0]
         diarization_config = sherpa_onnx.OfflineSpeakerDiarizationConfig(
             segmentation=sherpa_onnx.OfflineSpeakerSegmentationModelConfig(
@@ -1403,12 +1465,8 @@ class OfflineDiarizer:
                 provider=manager.device()["backend"],
             ),
             clustering=sherpa_onnx.FastClusteringConfig(
-                num_clusters=config["num_speakers"]
-                if num_speakers is None
-                else num_speakers,
-                threshold=config["cluster_threshold"]
-                if threshold is None
-                else threshold,
+                num_clusters=config["num_speakers"] if num_speakers is None else num_speakers,
+                threshold=config["cluster_threshold"] if threshold is None else threshold,
             ),
             min_duration_on=config["min_duration_on"],
             min_duration_off=config["min_duration_off"],
@@ -1428,9 +1486,7 @@ class OfflineDiarizer:
             按开始时间排序的字典列表，每项包含毫秒时间戳和 ``spk-N``。
         """
         if sample_rate != self.diarizer.sample_rate:
-            raise ValueError(
-                f"Diarization requires {self.diarizer.sample_rate} Hz audio"
-            )
+            raise ValueError(f"Diarization requires {self.diarizer.sample_rate} Hz audio")
         return [
             {
                 "start_ms": round(segment.start * 1000),

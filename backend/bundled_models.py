@@ -32,9 +32,7 @@ def unexpected_bundled_model_dirs(models_root):
         return []
     expected = expected_bundled_model_names()
     return sorted(
-        path.name
-        for path in root.iterdir()
-        if path.is_dir() and path.name not in expected
+        path.name for path in root.iterdir() if path.is_dir() and path.name not in expected
     )
 
 

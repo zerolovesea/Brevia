@@ -81,6 +81,7 @@ def main():
 
     for path in paths:
         import wave
+
         with wave.open(str(path)) as w:
             duration_ms = w.getnframes() * 1000 // w.getframerate()
         windows = [

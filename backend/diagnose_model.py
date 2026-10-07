@@ -16,9 +16,7 @@ def main():
     入参来自 argparse：模型目录、模型 ID，以及是否允许下载。成功时向 stdout
     输出识别文本、音频时长、耗时和 RTF 的 JSON；空结果以非零状态退出。
     """
-    parser = argparse.ArgumentParser(
-        description="Download and diagnose a Brevia sentence model"
-    )
+    parser = argparse.ArgumentParser(description="Download and diagnose a Brevia sentence model")
     parser.add_argument("--models-dir", required=True)
     parser.add_argument("--model-id", default="funasr-nano-int8")
     parser.add_argument("--download", action="store_true")

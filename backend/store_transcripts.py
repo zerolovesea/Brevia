@@ -17,7 +17,9 @@ def _segment_row(payload):
         int(payload["end_ms"]),
         payload.get("speaker", "spk-1"),
         payload["text"].strip(),
-        json.dumps(payload.get("word_timestamps"), ensure_ascii=False) if payload.get("word_timestamps") else None,
+        json.dumps(payload.get("word_timestamps"), ensure_ascii=False)
+        if payload.get("word_timestamps")
+        else None,
         payload.get("translation"),
         int(payload.get("user_edited", False)),
     )
@@ -123,7 +125,16 @@ class TranscriptStoreMixin:
         revision = max((row["revision"] for row in rows), default=-1) + 1
         return ("postprocess" if revision == 0 else f"postprocess-{revision}", revision)
 
-    def replace_segments(self, meeting_id, segments, version="postprocess", revision=0, *, model_id=None, language=None):
+    def replace_segments(
+        self,
+        meeting_id,
+        segments,
+        version="postprocess",
+        revision=0,
+        *,
+        model_id=None,
+        language=None,
+    ):
         """原子替换一次精修生成的全部段落，保留用户编辑版本。"""
         with self.connect() as db:
             segment_ids = set()
@@ -171,9 +182,7 @@ class TranscriptStoreMixin:
                 (translation, meeting_id, segment_id),
             )
 
-    def rename_speaker(
-        self, meeting_id, speaker_id, name, locked=False, profile_id=None
-    ):
+    def rename_speaker(self, meeting_id, speaker_id, name, locked=False, profile_id=None):
         """保存会议内的说话人显示名。
 
         Args:

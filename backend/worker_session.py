@@ -28,6 +28,7 @@ from .worker_common import (
     synchronized_recording,
 )
 
+
 class LiveQueueFull(RuntimeError):
     """Live recognition cannot keep up; raw recording remains available."""
 
@@ -41,7 +42,9 @@ class LiveExecutor(ThreadPoolExecutor):
 
     def submit(self, function, *args, **kwargs):
         if not self.slots.acquire(blocking=False):
-            raise LiveQueueFull("Live transcription queue is full; recording continues for later refinement")
+            raise LiveQueueFull(
+                "Live transcription queue is full; recording continues for later refinement"
+            )
         try:
             future = super().submit(function, *args, **kwargs)
         except BaseException:
@@ -114,9 +117,7 @@ class RecordingSessionMixin:
         payload["meeting_id"] = payload.get("meeting_id") or str(uuid4())
         with self.tasks.running("meeting.import", payload["meeting_id"]):
             meeting = self.store.create_meeting(payload)
-            destination = (
-                self.store.meetings_dir / meeting["id"] / "audio" / "playback-mic.wav"
-            )
+            destination = self.store.meetings_dir / meeting["id"] / "audio" / "playback-mic.wav"
             try:
                 convert_to_pcm_wav(source, destination)
                 import wave
@@ -145,23 +146,34 @@ class RecordingSessionMixin:
         # 由 main.js 明确告诉用户「录音仍在本地保留，但转写无法恢复」。
         meeting = self._repair_refined_model(meeting)
         start_ms = self.store.recorded_duration_ms(meeting["id"])
-        self._prepare_active(meeting, start_ms, require_asr=True,
-                             audio_tracks=self.store.read_manifest(meeting["id"]).get("tracks", {}))
+        self._prepare_active(
+            meeting,
+            start_ms,
+            require_asr=True,
+            audio_tracks=self.store.read_manifest(meeting["id"]).get("tracks", {}),
+        )
         self.emit("meeting.recovered", {"meeting_id": self.active, "meeting": meeting})
         return meeting
 
     def _sentence_payload(self, payload):
         payload = {**payload, "language": payload.get("language") or "auto"}
-        model_id = payload.get("refined_model_id") or self._default_refined_model(payload["language"])
+        model_id = payload.get("refined_model_id") or self._default_refined_model(
+            payload["language"]
+        )
         model = self.models.get(model_id)
         if "refined" not in model.get("stages", []):
             raise ValueError("Sentence transcription requires an offline ASR model")
         if not model_supports_language(model, payload["language"]):
             if payload["language"] == "auto":
-                raise ValueError("Automatic multilingual transcription requires a multilingual model (Qwen3-ASR or Parakeet)")
+                raise ValueError(
+                    "Automatic multilingual transcription requires a multilingual model (Qwen3-ASR or Parakeet)"
+                )
             raise ValueError(f"Model {model_id} does not support {payload['language']}")
-        return {**payload, "refined_model_id": model_id,
-                "vad_model_id": payload.get("vad_model_id") or "silero-vad"}
+        return {
+            **payload,
+            "refined_model_id": model_id,
+            "vad_model_id": payload.get("vad_model_id") or "silero-vad",
+        }
 
     def _default_refined_model(self, language):
         """按 ``models.json`` 的 ``default_for_languages`` 选该语言的默认识别模型。
@@ -239,7 +251,8 @@ class RecordingSessionMixin:
         self.stream_state = {}
         self.live_mixer = (
             AlignedAudioMixer(max_delay_ms=SETTINGS["live_asr"]["mix_max_delay_ms"])
-            if set(audio_tracks or ()) == {"mic", "system"} else None
+            if set(audio_tracks or ()) == {"mic", "system"}
+            else None
         )
         self.pending_subtitles, self.pending_join = {}, {}
         self.pending_paragraphs = {}
@@ -249,7 +262,9 @@ class RecordingSessionMixin:
         self.asr = None
         self.live_postprocessing = None
         try:
-            self.asr = RefinedASR(self.models, meeting["refined_model_id"], language=meeting["language"])
+            self.asr = RefinedASR(
+                self.models, meeting["refined_model_id"], language=meeting["language"]
+            )
             # 连续语音硬上限取「语言配置」与识别模型容量（如 FunASR Nano ~22 s）的
             # 较小值：超过模型 KV 容量的长段会整段解码为空，单人播客场景会漏识别。
             self.vad = SentenceVAD(
@@ -259,7 +274,10 @@ class RecordingSessionMixin:
                 max_speech_duration=self.asr.max_speech_seconds,
             )
             self.live_postprocessing = LiveExecutor()
-            if self.models.get(meeting.get("vad_model_id") or "silero-vad").get("runtime") == "mlx-audio":
+            if (
+                self.models.get(meeting.get("vad_model_id") or "silero-vad").get("runtime")
+                == "mlx-audio"
+            ):
                 # ponytail: 64 pending PCM commands; saturation disables live ASR, not recording.
                 self.live_preprocessing = LiveExecutor()
             # 崩溃可能留下未清理的 sentence-*.npy（识别队列的临时切片）；开工前清一次，
@@ -308,14 +326,20 @@ class RecordingSessionMixin:
         require(payload, "meeting_id")
         self._active(payload["meeting_id"])
         previous = self.store.get_meeting(self.active)
-        changes = {key: payload[key] for key in ("language", "refined_model_id", "target_language") if key in payload}
+        changes = {
+            key: payload[key]
+            for key in ("language", "refined_model_id", "target_language")
+            if key in payload
+        }
         # 无论改哪一项都先修一次存量模型：退役、已下架、或带不动新语言的 id 都换成该语言
         # 可用的默认模型。修复只针对「型号不可用」，不动「用户还没下载」的合法型号。
         # 注意 ``previous`` 必须保持为会话启动时实际加载的那个会议记录，下面比较
         # ``changed_asr`` 才有意义。
         repaired = self._repair_refined_model(previous, language=changes.get("language"))
         updated = self._sentence_payload({**repaired, **changes})
-        changed_asr = self.asr is None or any(updated[key] != previous[key] for key in ("language", "refined_model_id"))
+        changed_asr = self.asr is None or any(
+            updated[key] != previous[key] for key in ("language", "refined_model_id")
+        )
         asr, vad = self.asr, self.vad
         if changed_asr:
             asr = RefinedASR(self.models, updated["refined_model_id"], language=updated["language"])
@@ -329,11 +353,17 @@ class RecordingSessionMixin:
             raise ModelNotInstalled([TRANSLATION_MODEL_ID])
         if changed_asr:
             self._flush_sentences()
-        meeting = self.store.update_meeting(self.active, {key: updated[key] for key in (
-            "language", "refined_model_id", "target_language")})
+        meeting = self.store.update_meeting(
+            self.active,
+            {key: updated[key] for key in ("language", "refined_model_id", "target_language")},
+        )
         if self.live_postprocessing is None and asr is not None:
             self.live_postprocessing = LiveExecutor()
-        if self.live_preprocessing is None and asr is not None and self.models.get(updated["vad_model_id"]).get("runtime") == "mlx-audio":
+        if (
+            self.live_preprocessing is None
+            and asr is not None
+            and self.models.get(updated["vad_model_id"]).get("runtime") == "mlx-audio"
+        ):
             self.live_preprocessing = LiveExecutor()
         self.asr, self.vad = asr, vad
         self.meeting_language = updated["language"]
@@ -345,9 +375,7 @@ class RecordingSessionMixin:
         config = SETTINGS["live_asr"]
         if not len(samples):
             return samples
-        rms = (
-            sum(float(sample) * float(sample) for sample in samples) / len(samples)
-        ) ** 0.5
+        rms = (sum(float(sample) * float(sample) for sample in samples) / len(samples)) ** 0.5
         if rms < config["microphone_minimum_rms"]:
             return samples
         gain = min(config["microphone_max_gain"], config["microphone_target_rms"] / rms)
@@ -365,18 +393,31 @@ class RecordingSessionMixin:
         sample_rate = int(payload["sample_rate"])
         start_ms = int(payload["start_ms"])
         if track not in {"mic", "system", "mix"} or sample_rate != 16000 or start_ms < 0:
-            raise ValueError("Sentence transcription requires a valid track, 16 kHz PCM and nonnegative timestamp")
+            raise ValueError(
+                "Sentence transcription requires a valid track, 16 kHz PCM and nonnegative timestamp"
+            )
         pcm = base64.b64decode(payload["pcm"], validate=True)
         values = array("h")
         values.frombytes(pcm)
         if sys.byteorder != "little":
             values.byteswap()
         import numpy
+
         samples = numpy.asarray(values, dtype=numpy.float32) / 32768.0
-        total = 0 if track == "mix" or not pcm else self.store.append_audio(self.active, track, pcm, sample_rate, start_ms)
+        total = (
+            0
+            if track == "mix" or not pcm
+            else self.store.append_audio(self.active, track, pcm, sample_rate, start_ms)
+        )
         if self.live_preprocessing:
-            future = self._submit_live_task(self._accept_live_audio, self.active, track, samples, start_ms,
-                                            executor=self.live_preprocessing)
+            future = self._submit_live_task(
+                self._accept_live_audio,
+                self.active,
+                track,
+                samples,
+                start_ms,
+                executor=self.live_preprocessing,
+            )
             if future is not None:
                 self.live_preprocessing_tail = future
         else:
@@ -389,7 +430,11 @@ class RecordingSessionMixin:
         if track == "mic":
             samples = self._enhance_live_microphone(samples)
         if self.vad and self.asr and not self.live_overloaded:
-            windows = self.live_mixer.accept(track, samples, start_ms) if self.live_mixer and track != "mix" else [(samples, start_ms)]
+            windows = (
+                self.live_mixer.accept(track, samples, start_ms)
+                if self.live_mixer and track != "mix"
+                else [(samples, start_ms)]
+            )
             output_track = "mix" if self.live_mixer else track
             for window, start in windows:
                 for segment in self.vad.accept(output_track, window, start):
@@ -407,7 +452,9 @@ class RecordingSessionMixin:
                 pass  # _submit_live_task already emitted the processing warning.
             self.live_preprocessing_tail = None
         if self.live_preprocessing and not self.live_overloaded:
-            future = self._submit_live_task(self._flush_vad_sentences, self.active, executor=self.live_preprocessing)
+            future = self._submit_live_task(
+                self._flush_vad_sentences, self.active, executor=self.live_preprocessing
+            )
             if future is not None:
                 future.result()
         else:
@@ -437,23 +484,37 @@ class RecordingSessionMixin:
         if self.live_overloaded:
             return
         boundary = segment[3] if len(segment) > 3 else "endpoint"
-        self._submit_sentence(track, segment[0], segment[1], segment[2], boundary, meeting_id=meeting_id)
+        self._submit_sentence(
+            track, segment[0], segment[1], segment[2], boundary, meeting_id=meeting_id
+        )
 
-    def _submit_sentence(self, track, start_ms, end_ms, samples, boundary="endpoint", *, meeting_id=None):
+    def _submit_sentence(
+        self, track, start_ms, end_ms, samples, boundary="endpoint", *, meeting_id=None
+    ):
         import numpy
+
         meeting_id = meeting_id or self.active
         sequence = self.stream_state.get(track, 0)
         self.stream_state[track] = sequence + 1
-        event = {"meeting_id": meeting_id, "segment_id": f"{track}-{start_ms}-{sequence}",
-                 "revision": 1, "start_ms": start_ms, "end_ms": end_ms, "boundary": boundary,
-                 # 实时段落只区分「本机用户」与远端整轨：说话人细分交给会后精修。
-                 "speaker": "local-user" if track == "mic" else "spk-1",
-                 "speaker_name": None, "track": track}
+        event = {
+            "meeting_id": meeting_id,
+            "segment_id": f"{track}-{start_ms}-{sequence}",
+            "revision": 1,
+            "start_ms": start_ms,
+            "end_ms": end_ms,
+            "boundary": boundary,
+            # 实时段落只区分「本机用户」与远端整轨：说话人细分交给会后精修。
+            "speaker": "local-user" if track == "mic" else "spk-1",
+            "speaker_name": None,
+            "track": track,
+        }
         # 队列只持有路径，慢设备积压时不把整场语音留在内存。原录音始终独立保留。
         directory = self.store.meeting_dir(meeting_id) / "audio"
         path = None
         try:
-            with tempfile.NamedTemporaryFile(dir=directory, prefix="sentence-", suffix=".npy", delete=False) as file:
+            with tempfile.NamedTemporaryFile(
+                dir=directory, prefix="sentence-", suffix=".npy", delete=False
+            ) as file:
                 path = Path(file.name)
                 numpy.save(file, samples, allow_pickle=False)
         except Exception:
@@ -462,7 +523,12 @@ class RecordingSessionMixin:
                 path.unlink(missing_ok=True)
             raise
         try:
-            if self._submit_live_task(self._decode_sentence, self.asr, event, path, meeting_id=meeting_id) is None:
+            if (
+                self._submit_live_task(
+                    self._decode_sentence, self.asr, event, path, meeting_id=meeting_id
+                )
+                is None
+            ):
                 path.unlink(missing_ok=True)
         except Exception:
             path.unlink(missing_ok=True)
@@ -475,13 +541,23 @@ class RecordingSessionMixin:
 
         def completed(future):
             if not future.cancelled() and (error := future.exception()) is not None:
-                self.emit("worker.warning", {"meeting_id": meeting_id, "code": "live_processing_failed", "message": str(error)})
+                self.emit(
+                    "worker.warning",
+                    {
+                        "meeting_id": meeting_id,
+                        "code": "live_processing_failed",
+                        "message": str(error),
+                    },
+                )
 
         try:
             future = (executor or self.live_postprocessing).submit(function, *args)
         except LiveQueueFull as error:
             self.live_overloaded = True
-            self.emit("worker.warning", {"meeting_id": meeting_id, "code": "asr_unavailable", "message": str(error)})
+            self.emit(
+                "worker.warning",
+                {"meeting_id": meeting_id, "code": "asr_unavailable", "message": str(error)},
+            )
             return None
         future.add_done_callback(completed)
         return future
@@ -489,16 +565,26 @@ class RecordingSessionMixin:
     def _decode_sentence(self, asr, event, path):
         """每段只提交一次 final；不读活动会话锁，stop 可安全等待队列排空。"""
         import numpy
+
         try:
             samples = numpy.load(path, allow_pickle=False)
             if callable(getattr(type(asr), "decode_stream", None)):
+
                 def partial(text):
-                    parts = [item["text"] for item in (
-                        self.pending_paragraphs.get(event["track"]),
-                        self.pending_subtitles.get(event["track"])) if item]
+                    parts = [
+                        item["text"]
+                        for item in (
+                            self.pending_paragraphs.get(event["track"]),
+                            self.pending_subtitles.get(event["track"]),
+                        )
+                        if item
+                    ]
                     parts.append(self._clean_live_text(text))
-                    self.emit("transcript.draft", {**event, "segment_id": f"draft-{event['track']}",
-                                                   "text": " ".join(parts)})
+                    self.emit(
+                        "transcript.draft",
+                        {**event, "segment_id": f"draft-{event['track']}", "text": " ".join(parts)},
+                    )
+
                 text = self._clean_live_text(asr.decode_stream(samples, 16000, partial))
             else:
                 text = self._clean_live_text(asr.decode(samples, 16000))
@@ -507,8 +593,16 @@ class RecordingSessionMixin:
             for subtitle in self._chunk_subtitles(event, text):
                 self._emit_subtitle(subtitle)
         except Exception as error:
-            self.emit("worker.warning", {"meeting_id": event["meeting_id"], "code": "sentence_transcription_failed",
-                       "message": str(error), "start_ms": event["start_ms"], "end_ms": event["end_ms"]})
+            self.emit(
+                "worker.warning",
+                {
+                    "meeting_id": event["meeting_id"],
+                    "code": "sentence_transcription_failed",
+                    "message": str(error),
+                    "start_ms": event["start_ms"],
+                    "end_ms": event["end_ms"],
+                },
+            )
         finally:
             self._emit_draft(event["track"], event["meeting_id"])
             path.unlink(missing_ok=True)
@@ -548,9 +642,7 @@ class RecordingSessionMixin:
             # 起点早于上一段终点说明两段音频重叠（切点回看）。重叠区的字符数按本段
             # 自己的语速换算——这是接缝对齐唯一需要的先验，比固定字数可靠。
             overlap_chars = self._overlap_chars(text, duration, -gap if gap < 0 else 0)
-            joined = self._join_pending(
-                pending["text"], windows[0][2], style, overlap_chars
-            )
+            joined = self._join_pending(pending["text"], windows[0][2], style, overlap_chars)
             # 段间时间必须相接（切点是连续的），太远说明中间已经有别的段落提交过；
             # 切点回看会让本段起点早于上一段终点，这时同样算相接，重复的字交给去重。
             contiguous = -overlap_ms <= gap <= SUBTITLE_JOIN_GAP_MS
@@ -565,15 +657,23 @@ class RecordingSessionMixin:
         tail = None
         if windows and (self._cut_boundary(event) or self._unfinished_subtitle(windows[-1][2])):
             start, _, text_of_tail = windows.pop()
-            tail = {**event, "segment_id": f"{event['segment_id']}-tail",
-                    "start_ms": start, "end_ms": event["end_ms"], "text": text_of_tail}
+            tail = {
+                **event,
+                "segment_id": f"{event['segment_id']}-tail",
+                "start_ms": start,
+                "end_ms": event["end_ms"],
+                "text": text_of_tail,
+            }
             body_until = start
         else:
             body_until = event["end_ms"]
         if windows:
             body = "".join(sentence for _, _, sentence in windows)
-            pieces.extend(self._sentence_subtitles(
-                {**event, "start_ms": body_from, "end_ms": body_until}, body))
+            pieces.extend(
+                self._sentence_subtitles(
+                    {**event, "start_ms": body_from, "end_ms": body_until}, body
+                )
+            )
         if tail:
             self.pending_subtitles[track] = tail
             self.pending_join[track] = "comma" if event.get("boundary") == "pause" else None
@@ -601,9 +701,17 @@ class RecordingSessionMixin:
             held = len(paragraph["text"])
             minimum, target, limit = self._length_limits(paragraph["text"] + piece["text"])
             long_pause = piece["start_ms"] - paragraph["end_ms"] >= SUBTITLE_PARAGRAPH_GAP_MS
-            if not long_pause and held < target and (held + len(piece["text"]) <= limit or held < minimum):
-                paragraph = {**paragraph, "text": self._join_text(paragraph["text"], piece["text"]),
-                             "end_ms": piece["end_ms"], "touched_at": time.monotonic()}
+            if (
+                not long_pause
+                and held < target
+                and (held + len(piece["text"]) <= limit or held < minimum)
+            ):
+                paragraph = {
+                    **paragraph,
+                    "text": self._join_text(paragraph["text"], piece["text"]),
+                    "end_ms": piece["end_ms"],
+                    "touched_at": time.monotonic(),
+                }
                 continue
             yield paragraph
             paragraph = {**piece, "touched_at": touched_at}
@@ -738,7 +846,7 @@ class RecordingSessionMixin:
             return None
         if not re.search(r"[^\W_]", tail[match.a : match.a + match.size]):
             return None
-        return previous[: len(previous) - window + match.a] + current[match.b:]
+        return previous[: len(previous) - window + match.a] + current[match.b :]
 
     @staticmethod
     def _attach_leading_closers(sentences):
@@ -785,21 +893,40 @@ class RecordingSessionMixin:
         ``meeting_id`` 由调用方传入：本方法在识别线程上运行，而 ``self.active`` 受
         录音锁保护——stop/pause 正持着那把锁等本线程排空，读它就会死锁。
         """
-        parts = [item for item in (self.pending_paragraphs.get(track),
-                                   self.pending_subtitles.get(track)) if item]
+        parts = [
+            item
+            for item in (self.pending_paragraphs.get(track), self.pending_subtitles.get(track))
+            if item
+        ]
         if not parts:
-            self.emit("transcript.draft", {"meeting_id": meeting_id, "track": track,
-                                           "segment_id": f"draft-{track}", "text": "",
-                                           "start_ms": 0, "end_ms": 0, "speaker": None})
+            self.emit(
+                "transcript.draft",
+                {
+                    "meeting_id": meeting_id,
+                    "track": track,
+                    "segment_id": f"draft-{track}",
+                    "text": "",
+                    "start_ms": 0,
+                    "end_ms": 0,
+                    "speaker": None,
+                },
+            )
             return
         text = parts[0]["text"]
         for item in parts[1:]:
             text = self._join_text(text, item["text"])
-        self.emit("transcript.draft", {
-            "meeting_id": meeting_id, "track": track, "segment_id": f"draft-{track}",
-            "start_ms": parts[0]["start_ms"], "end_ms": parts[-1]["end_ms"],
-            "speaker": "local-user" if track == "mic" else "spk-1", "text": text,
-        })
+        self.emit(
+            "transcript.draft",
+            {
+                "meeting_id": meeting_id,
+                "track": track,
+                "segment_id": f"draft-{track}",
+                "start_ms": parts[0]["start_ms"],
+                "end_ms": parts[-1]["end_ms"],
+                "speaker": "local-user" if track == "mic" else "spk-1",
+                "text": text,
+            },
+        )
 
     def _flush_subtitle_tails(self, now_ms=None):
         # 每轨最多暂存一个未攒够的段落和一个悬空尾句。两者用途不同，滞留上限也不同：
@@ -807,7 +934,11 @@ class RecordingSessionMixin:
         # 「下一段解码到达」（_tail_hold_ms）。暂停/停止立即排空。
         # 段落覆盖的时间更早，先提交。
         for track, paragraph in list(self.pending_paragraphs.items()):
-            if now_ms is None or time.monotonic() - paragraph.get("touched_at", 0.0) >= SUBTITLE_PARAGRAPH_HOLD_SECONDS:
+            if (
+                now_ms is None
+                or time.monotonic() - paragraph.get("touched_at", 0.0)
+                >= SUBTITLE_PARAGRAPH_HOLD_SECONDS
+            ):
                 self._emit_subtitle(paragraph)
                 del self.pending_paragraphs[track]
         for track, subtitle in list(self.pending_subtitles.items()):
@@ -819,7 +950,9 @@ class RecordingSessionMixin:
     @staticmethod
     def _unfinished_subtitle(text):
         # ponytail: 只续接明确悬空的中文连接词；完整语义判断需额外语言模型。
-        return bool(re.search(r"(?:是|的|把|被|与|及|从|例如|比如|包括|在于|落在了|以外)[。.]?$", text))
+        return bool(
+            re.search(r"(?:是|的|把|被|与|及|从|例如|比如|包括|在于|落在了|以外)[。.]?$", text)
+        )
 
     @staticmethod
     def _join_text(left, right):
@@ -846,7 +979,9 @@ class RecordingSessionMixin:
         只统计汉字会把「안녕하세요」「こんにちは」这类无汉字文本判成拉丁，从而给它们
         280/380 的上限——字幕段落会比中英会议长两三倍。
         """
-        cjk_chars = len(re.findall(r"[\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af\u1100-\u11ff\u3130-\u318f]", text))
+        cjk_chars = len(
+            re.findall(r"[\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af\u1100-\u11ff\u3130-\u318f]", text)
+        )
         cjk = cjk_chars > 0 and cjk_chars * 3 >= len(re.findall(r"[A-Za-z]", text))
         return SUBTITLE_LENGTHS["cjk" if cjk else "latin"]
 
@@ -878,12 +1013,21 @@ class RecordingSessionMixin:
                 if minimum <= offset <= upper:
                     boundaries.append(offset)
             if not boundaries:
-                boundaries = [match.end() for match in re.finditer(r"[，、：:;；]|(?<!\d),(?!\d)|\s+", remaining[:upper])
-                              if minimum <= match.end() <= upper]
-            cut = min(boundaries, key=lambda end: abs(end - target)) if boundaries else min(target, upper)
+                boundaries = [
+                    match.end()
+                    for match in re.finditer(r"[，、：:;；]|(?<!\d),(?!\d)|\s+", remaining[:upper])
+                    if minimum <= match.end() <= upper
+                ]
+            cut = (
+                min(boundaries, key=lambda end: abs(end - target))
+                if boundaries
+                else min(target, upper)
+            )
             # 不切开英文单词或数字；极长无分隔 token 保持原样。
             if not boundaries and remaining[cut - 1].isascii() and remaining[cut - 1].isalnum():
-                while cut < len(remaining) and remaining[cut].isascii() and remaining[cut].isalnum():
+                while (
+                    cut < len(remaining) and remaining[cut].isascii() and remaining[cut].isalnum()
+                ):
                     cut += 1
             parts.append(remaining[:cut].strip())
             remaining = remaining[cut:].strip()
@@ -895,8 +1039,15 @@ class RecordingSessionMixin:
         """给切好的文本片段分配段落 id 与时间轴，保证首尾精确、相邻段落相接。"""
         times = self._subtitle_part_times(event, source, parts)
         for index, part in enumerate(parts):
-            yield {**event, "segment_id": event["segment_id"] if index == 0 else f"{event['segment_id']}-s{index}",
-                   "start_ms": times[index], "end_ms": times[index + 1], "text": part}
+            yield {
+                **event,
+                "segment_id": event["segment_id"]
+                if index == 0
+                else f"{event['segment_id']}-s{index}",
+                "start_ms": times[index],
+                "end_ms": times[index + 1],
+                "text": part,
+            }
 
     def _subtitle_part_times(self, event, source, parts):
         """每个片段在音频时间轴上的边界。
@@ -926,7 +1077,9 @@ class RecordingSessionMixin:
         times, consumed = [start_ms], 0
         for part in parts[:-1]:
             consumed += len(part)
-            times.append(start_ms + round((end_ms - start_ms) * consumed / total) if total else start_ms)
+            times.append(
+                start_ms + round((end_ms - start_ms) * consumed / total) if total else start_ms
+            )
         times.append(end_ms)
         return times
 

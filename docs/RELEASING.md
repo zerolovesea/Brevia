@@ -5,11 +5,11 @@
 
 ## 1. 版本号（三处，只有一处是自动的）
 
-| 位置 | 内容 | 谁负责 |
-| --- | --- | --- |
-| `package.json` / `package-lock.json` | `version` | 自动：`release.sh` 里的 `npm version` |
+| 位置                                  | 内容                                                                           | 谁负责                                                                            |
+| ------------------------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| `package.json` / `package-lock.json`  | `version`                                                                      | 自动：`release.sh` 里的 `npm version`                                             |
 | `frontend/changelog.js` 的 `releases` | 新增一条 `{ version, date, current: true }`，并把上一条的 `current: true` 去掉 | 手动；`test-ui.mjs` 只守住「恰好一条 current 且它是最新一条」，条目的增补仍需人工 |
-| `docs/releases/v<version>.md` | GitHub Release Notes | 手动，缺文件 `release.sh` 会直接退出 |
+| `docs/releases/v<version>.md`         | GitHub Release Notes                                                           | 手动，缺文件 `release.sh` 会直接退出                                              |
 
 `releases` 漏更新的后果：应用内「更新日志」把上一个版本标成当前版本。
 `current` 只能有一条，顺序按版本从新到旧。

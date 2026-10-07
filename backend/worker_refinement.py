@@ -57,8 +57,18 @@ TURN_ABSORB_GAP_MS = 200
 AUTO_WINDOW_MERGE_GAP_MS = 2000
 
 _CN_NUM = {
-    "零": 0, "〇": 0, "一": 1, "二": 2, "两": 2, "三": 3, "四": 4,
-    "五": 5, "六": 6, "七": 7, "八": 8, "九": 9,
+    "零": 0,
+    "〇": 0,
+    "一": 1,
+    "二": 2,
+    "两": 2,
+    "三": 3,
+    "四": 4,
+    "五": 5,
+    "六": 6,
+    "七": 7,
+    "八": 8,
+    "九": 9,
 }
 _CN_UNIT = {"十": 10, "百": 100, "千": 1000}
 _CN_BIG_UNIT = {"万": 10000, "亿": 100000000}
@@ -189,6 +199,7 @@ class DiarizationTimeout(RuntimeError):
 
 def _diarize_chunk_process(connection, payload):
     """在短生命进程内完成分段和声纹，让 OS 回收 Sherpa 原生缓冲。"""
+
     def stage(name):
         connection.send((None, name))
 
@@ -207,19 +218,11 @@ def _diarize_chunk_process(connection, payload):
         for speech in payload["speech"]:
             start = max(
                 cursor,
-                round(
-                    (speech["start_ms"] - payload["window_start_ms"])
-                    * sample_rate
-                    / 1000
-                ),
+                round((speech["start_ms"] - payload["window_start_ms"]) * sample_rate / 1000),
             )
             end = min(
                 len(samples),
-                round(
-                    (speech["end_ms"] - payload["window_start_ms"])
-                    * sample_rate
-                    / 1000
-                ),
+                round((speech["end_ms"] - payload["window_start_ms"]) * sample_rate / 1000),
             )
             samples[cursor:start] = 0
             cursor = max(cursor, end)
@@ -231,9 +234,7 @@ def _diarize_chunk_process(connection, payload):
         turns = []
         fallback_turns = [
             {
-                "start_ms": max(
-                    payload["window_start_ms"], speech["start_ms"]
-                )
+                "start_ms": max(payload["window_start_ms"], speech["start_ms"])
                 - payload["window_start_ms"],
                 "end_ms": min(payload["window_end_ms"], speech["end_ms"])
                 - payload["window_start_ms"],
@@ -268,21 +269,15 @@ def _diarize_chunk_process(connection, payload):
             embedding_window_ms = payload.get("embedding_window_ms", EMBEDDING_WINDOW_MS)
             for part_start in range(start_ms, end_ms, embedding_window_ms):
                 part_end = min(part_start + embedding_window_ms, end_ms)
-                local_start = round(
-                    (part_start - payload["window_start_ms"]) * sample_rate / 1000
-                )
-                local_end = round(
-                    (part_end - payload["window_start_ms"]) * sample_rate / 1000
-                )
+                local_start = round((part_start - payload["window_start_ms"]) * sample_rate / 1000)
+                local_end = round((part_end - payload["window_start_ms"]) * sample_rate / 1000)
                 embedding = tracker.embedding(samples[local_start:local_end], sample_rate)
                 turns.append(
                     {
                         "start_ms": part_start,
                         "end_ms": part_end,
                         "speaker": turn["speaker"],
-                        "_embedding": embedding.tolist()
-                        if embedding is not None
-                        else None,
+                        "_embedding": embedding.tolist() if embedding is not None else None,
                     }
                 )
         connection.send((True, turns))
@@ -303,8 +298,14 @@ class RefinementWorkerMixin:
             "校正说话人": (95, 3),
             "整理结果": (98, 1),
         }[payload["stage"]]
-        ratio = min(1, max(0, payload.get("completed", 0) / payload["total"])) if payload.get("total") else 0
-        self.emit("refinement.progress", {**payload, "completed": start + span * ratio, "total": 100})
+        ratio = (
+            min(1, max(0, payload.get("completed", 0) / payload["total"]))
+            if payload.get("total")
+            else 0
+        )
+        self.emit(
+            "refinement.progress", {**payload, "completed": start + span * ratio, "total": 100}
+        )
 
     def recover_refinement(self, payload):
         """将异常退出的精修恢复为可重试状态。"""
@@ -349,12 +350,20 @@ class RefinementWorkerMixin:
         # 已在启动时清掉（ModelManager.remove_deprecated_models）。显式点名的模型仍交给
         # _sentence_payload 校验，不在这里静默替换。
         named = "refined_model_id" in payload
-        model = self.models.get(refined_model_id) if self.models.is_known(refined_model_id) else None
-        if (model is None
-                or model.get("retired")
-                or (not named
-                    and (not model_supports_language(model, language)
-                         or not self.models.is_ready(refined_model_id)))):
+        model = (
+            self.models.get(refined_model_id) if self.models.is_known(refined_model_id) else None
+        )
+        if (
+            model is None
+            or model.get("retired")
+            or (
+                not named
+                and (
+                    not model_supports_language(model, language)
+                    or not self.models.is_ready(refined_model_id)
+                )
+            )
+        ):
             refined_model_id = self._default_refined_model(language)
         self._sentence_payload({"language": language, "refined_model_id": refined_model_id})
         meeting = {**meeting, "language": language}
@@ -365,27 +374,29 @@ class RefinementWorkerMixin:
             )
         )
         threshold = float(
-            payload.get(
-                "cluster_threshold", SETTINGS["diarization"]["cluster_threshold"]
-            )
+            payload.get("cluster_threshold", SETTINGS["diarization"]["cluster_threshold"])
         )
         validate_num_speakers(num_speakers)
         if not 0 <= threshold <= 2:
             raise ValueError("cluster_threshold must be between 0 and 2")
-        tracks = [
-            track
-            for track in ("mic", "system")
-            if meeting["audio"]["playback"].get(track)
-        ]
+        tracks = [track for track in ("mic", "system") if meeting["audio"]["playback"].get(track)]
         if not tracks:
             raise UserFacingError("error.refinement.no_audio", "The meeting has no audio to refine")
         merge_tracks = set(tracks) == {"mic", "system"}
         if merge_tracks:
             tracks = ["mix"]
-            meeting = {**meeting, "audio": {**meeting["audio"], "playback": {
-                **meeting["audio"]["playback"],
-                "mix": str(self.store.meeting_dir(meeting["id"]) / "audio" / "playback-mix.wav"),
-            }}}
+            meeting = {
+                **meeting,
+                "audio": {
+                    **meeting["audio"],
+                    "playback": {
+                        **meeting["audio"]["playback"],
+                        "mix": str(
+                            self.store.meeting_dir(meeting["id"]) / "audio" / "playback-mix.wav"
+                        ),
+                    },
+                },
+            }
         manifest = self.store.read_manifest(meeting["id"])
         is_imported_audio = manifest.get("source") == "audio_import" or (
             not manifest.get("tracks") and set(tracks) == {"mic"}
@@ -394,22 +405,21 @@ class RefinementWorkerMixin:
         # 「准备精修」的绝对大头（实测 60 s 窗口约 24 s，全片可达数分钟），且并行/复用
         # 子进程几乎不缩放（4 物理核上并行仅 ~1.18x）。估计准备时间超出预算时只做 VAD、
         # 全部标成 local-user，让逐字稿先出来；预算内仍正常区分说话人。
-        flat_import = is_imported_audio and self._import_diarization_too_slow(
-            meeting, tracks
-        )
+        flat_import = is_imported_audio and self._import_diarization_too_slow(meeting, tracks)
         # 系统音频（远端）与导入的麦克风必须聚类；实时麦克风只要声纹模型就绪也
         # 一起聚类，让本机说话人同样接受声纹库匹配，而不再一律标成 local-user。
         # 超出预算的导入录音例外：不聚类。
         required_diarized = (
-            {"system", "mix"}
-            | ({"mic"} if (is_imported_audio and not flat_import) else set())
+            {"system", "mix"} | ({"mic"} if (is_imported_audio and not flat_import) else set())
         ) & set(tracks)
         required_models = [
             refined_model_id,
             meeting.get("vad_model_id") or "silero-vad",
         ]
         if required_diarized:
-            required_models.extend([meeting.get("speaker_segmentation_model_id"), SPEAKER_EMBEDDING_MODEL_ID])
+            required_models.extend(
+                [meeting.get("speaker_segmentation_model_id"), SPEAKER_EMBEDDING_MODEL_ID]
+            )
         missing = missing_models(self.models, required_models)
         if missing:
             raise ModelNotInstalled(missing)
@@ -463,6 +473,7 @@ class RefinementWorkerMixin:
             raise error
 
         sources, turns_by_track, speaker_turns_by_track = {}, {}, {}
+
         def prepare(track):
             return self._prepare_track(
                 track,
@@ -484,12 +495,22 @@ class RefinementWorkerMixin:
                     self.wait_task(control)
                     now = time.monotonic()
                     if now - last_mix_progress >= 1 or completed == total:
-                        self._refinement_progress({"meeting_id": meeting["id"],
-                            "completed": completed, "total": total, "stage": "对齐音频"})
+                        self._refinement_progress(
+                            {
+                                "meeting_id": meeting["id"],
+                                "completed": completed,
+                                "total": total,
+                                "stage": "对齐音频",
+                            }
+                        )
                         last_mix_progress = now
 
                 for track in ("mic", "system"):
-                    ensure_wav_duration(meeting["audio"]["playback"][track], _refinement("max_refine_seconds"), "refine")
+                    ensure_wav_duration(
+                        meeting["audio"]["playback"][track],
+                        _refinement("max_refine_seconds"),
+                        "refine",
+                    )
                 self.store._build_mix(meeting["id"], progress=mixing_progress)
             prepared = [prepare(track) for track in tracks]
         except TaskCancelled:
@@ -521,9 +542,7 @@ class RefinementWorkerMixin:
             language=meeting.get("language"),
             threads=self.models.device()["threads"],
         )
-        locked_ids = {
-            speaker["id"] for speaker in meeting["speakers"] if speaker["locked"]
-        }
+        locked_ids = {speaker["id"] for speaker in meeting["speakers"] if speaker["locked"]}
         locked_segments = [
             segment
             for segment in meeting["segments"]
@@ -575,9 +594,7 @@ class RefinementWorkerMixin:
                     # 会后精修以前只移除了 token 标记，漏掉了实时链路已经处理过的
                     # 解码空转（整句/短语循环）和语言标签。导入录音最容易把这些原样
                     # 写入最终逐字稿，进而污染纪要；两条链路必须使用同一份清洗规则。
-                    raw_text = self._trim_refinement_repeats(
-                        self._clean_live_text(raw_text)
-                    )
+                    raw_text = self._trim_refinement_repeats(self._clean_live_text(raw_text))
                     speaker_key = (track, turn["speaker"])
                     text, continued = self._trim_refinement_overlap_detailed(
                         previous_text.get(speaker_key, ""), raw_text
@@ -632,7 +649,8 @@ class RefinementWorkerMixin:
                                     word["start_ms"] + decode_start_ms,
                                     word["end_ms"] + decode_start_ms,
                                     turns_by_track[track],
-                                ) or speaker,
+                                )
+                                or speaker,
                             }
                             for word in words
                         ],
@@ -644,10 +662,20 @@ class RefinementWorkerMixin:
                         word["overlap"] = len(word["overlap_speakers"]) > 1
                     refined_segments.append(event)
             self._refinement_progress(
-                {"meeting_id": meeting["id"], "completed": total, "total": total, "stage": "校正说话人"},
+                {
+                    "meeting_id": meeting["id"],
+                    "completed": total,
+                    "total": total,
+                    "stage": "校正说话人",
+                },
             )
             self._refinement_progress(
-                {"meeting_id": meeting["id"], "completed": total, "total": total, "stage": "整理结果"},
+                {
+                    "meeting_id": meeting["id"],
+                    "completed": total,
+                    "total": total,
+                    "stage": "整理结果",
+                },
             )
             self.wait_task(control)
         except TaskCancelled:
@@ -658,9 +686,7 @@ class RefinementWorkerMixin:
             self.wait_task(control)
         except TaskCancelled:
             return cancel_refinement()
-        refined_segments.sort(
-            key=lambda item: (item["track"], item["start_ms"], item["end_ms"])
-        )
+        refined_segments.sort(key=lambda item: (item["track"], item["start_ms"], item["end_ms"]))
         refined_segments = self._assemble_utterances(refined_segments)
         # 识别窗口和展示段落分开：保留多句上下文，最终按翻译所需长度切段。
         # 离线精修拿到的是完整音频，句号就是句号，不能再按实时链路的「悬空连接词」规则
@@ -669,15 +695,20 @@ class RefinementWorkerMixin:
         for event in refined_segments:
             for paragraph in self._sentence_subtitles(event, event["text"], merge_unfinished=False):
                 paragraph["word_timestamps"] = [
-                    word for word in event.get("word_timestamps", [])
+                    word
+                    for word in event.get("word_timestamps", [])
                     if paragraph["start_ms"] <= word["start_ms"] < paragraph["end_ms"]
                 ]
                 paragraphs.append(paragraph)
         refined_segments = paragraphs
         version, revision = self.store.next_refinement_version(meeting["id"])
         refined_segments = self.store.replace_segments(
-            meeting["id"], refined_segments, version, revision,
-            model_id=refined_model_id, language=language,
+            meeting["id"],
+            refined_segments,
+            version,
+            revision,
+            model_id=refined_model_id,
+            language=language,
         )
         self.store.replace_speaker_turns(meeting["id"], turns)
         self.store.set_status(meeting["id"], "refined")
@@ -738,10 +769,14 @@ class RefinementWorkerMixin:
             self.wait_task(control)
             now = time.monotonic()
             if now - last_progress >= 1 or completed >= total:
-                self._refinement_progress({
-                    "meeting_id": meeting["id"], "completed": completed // sample_rate,
-                    "total": max(1, (total + sample_rate - 1) // sample_rate), "stage": "准备精修",
-                })
+                self._refinement_progress(
+                    {
+                        "meeting_id": meeting["id"],
+                        "completed": completed // sample_rate,
+                        "total": max(1, (total + sample_rate - 1) // sample_rate),
+                        "stage": "准备精修",
+                    }
+                )
                 last_progress = now
 
         if is_long_track:
@@ -805,9 +840,7 @@ class RefinementWorkerMixin:
                 turns = [{**turn, "speaker": "spk-1"} for turn in speech]
             if turns and duration_ms <= _refinement("diarization_chunk_ms"):
                 try:
-                    tracker = SpeakerTracker(
-                        self.models, threads=self.models.device()["threads"]
-                    )
+                    tracker = SpeakerTracker(self.models, threads=self.models.device()["threads"])
                 except RuntimeError:
                     tracker = None
                 turns = self._split_long_turns(turns, _refinement("embedding_window_ms"))
@@ -815,18 +848,12 @@ class RefinementWorkerMixin:
                     start = round(turn["start_ms"] * sample_rate / 1000)
                     end = round(turn["end_ms"] * sample_rate / 1000)
                     embedding = (
-                        tracker.embedding(samples[start:end], sample_rate)
-                        if tracker
-                        else None
+                        tracker.embedding(samples[start:end], sample_rate) if tracker else None
                     )
                     turn["_embedding"] = (
-                        embedding.tolist()
-                        if hasattr(embedding, "tolist")
-                        else embedding
+                        embedding.tolist() if hasattr(embedding, "tolist") else embedding
                     )
-            turns = self._cluster_speaker_turns(
-                meeting, turns, sample_rate, num_speakers
-            )
+            turns = self._cluster_speaker_turns(meeting, turns, sample_rate, num_speakers)
         if namespace_tracks:
             # 命中声纹库的 turn 已是全局 profile-{id}，跨轨道自然合并同一人；
             # 仅给未命中的 spk-N 加轨道前缀，避免不同轨道的 spk-1 混为一人。
@@ -861,10 +888,17 @@ class RefinementWorkerMixin:
         # 但会后精修是最终逐字稿，不能让这段内容无声消失。作为独立窗口补进去，
         # 放在稳定化之后：这些窗口不能被吸收进相邻的正常音量段落。
         # 能量兜底针对 Sherpa VAD 调整；MLX 保留自身判断，避免把噪声补成语音。
-        mlx_vad = self.models.get(meeting.get("vad_model_id") or "silero-vad").get("runtime") == "mlx-audio"
-        quiet_turns = [] if mlx_vad else self._recover_quiet_turns(stable_turns, path, samples, sample_rate)
+        mlx_vad = (
+            self.models.get(meeting.get("vad_model_id") or "silero-vad").get("runtime")
+            == "mlx-audio"
+        )
+        quiet_turns = (
+            [] if mlx_vad else self._recover_quiet_turns(stable_turns, path, samples, sample_rate)
+        )
         if quiet_turns:
-            turns = sorted([*turns, *quiet_turns], key=lambda turn: (turn["start_ms"], turn["end_ms"]))
+            turns = sorted(
+                [*turns, *quiet_turns], key=lambda turn: (turn["start_ms"], turn["end_ms"])
+            )
             stable_turns = sorted(
                 [*stable_turns, *quiet_turns], key=lambda turn: (turn["start_ms"], turn["end_ms"])
             )
@@ -884,12 +918,14 @@ class RefinementWorkerMixin:
             return []
         speech = [{"start_ms": turn["start_ms"], "end_ms": turn["end_ms"]} for turn in stable_turns]
         if samples is not None:
+
             def read_window(start_ms, end_ms):
                 return samples[
                     round(start_ms * sample_rate / 1000) : round(end_ms * sample_rate / 1000)
                 ]
 
         else:
+
             def read_window(start_ms, end_ms):
                 return read_mono_wav_window(path, start_ms, end_ms)[0]
 
@@ -906,7 +942,11 @@ class RefinementWorkerMixin:
             if any(turn["start_ms"] <= middle < turn["end_ms"] for turn in stable_turns):
                 continue
             speaker = next(
-                (turn["speaker"] for turn in reversed(stable_turns) if turn["start_ms"] < region["start_ms"]),
+                (
+                    turn["speaker"]
+                    for turn in reversed(stable_turns)
+                    if turn["start_ms"] < region["start_ms"]
+                ),
                 stable_turns[0]["speaker"],
             )
             turns.append(
@@ -951,7 +991,9 @@ class RefinementWorkerMixin:
         if not duration_ms:
             return False
         device = self.models.device()
-        cores = max(1, int(device.get("physical_cores") or device.get("cores") or os.cpu_count() or 2))
+        cores = max(
+            1, int(device.get("physical_cores") or device.get("cores") or os.cpu_count() or 2)
+        )
         estimated_seconds = (
             duration_ms
             / 1000
@@ -975,18 +1017,20 @@ class RefinementWorkerMixin:
         for core_start in range(0, duration_ms, chunk_ms):
             self.wait_task(control)
             core_end = min(duration_ms, core_start + chunk_ms)
-            self._refinement_progress({
-                "meeting_id": meeting_id,
-                "completed": core_start // 1000, "total": max(1, duration_ms // 1000),
-                "stage": "分析说话人",
-            })
+            self._refinement_progress(
+                {
+                    "meeting_id": meeting_id,
+                    "completed": core_start // 1000,
+                    "total": max(1, duration_ms // 1000),
+                    "stage": "分析说话人",
+                }
+            )
             window_start = max(0, core_start - _refinement("diarization_overlap_ms"))
             window_end = min(duration_ms, core_end + _refinement("diarization_overlap_ms"))
             window_speech = [
                 turn
                 for turn in speech
-                if turn["end_ms"] > window_start
-                and turn["start_ms"] < window_end
+                if turn["end_ms"] > window_start and turn["start_ms"] < window_end
             ]
             if not window_speech:
                 continue
@@ -1028,18 +1072,25 @@ class RefinementWorkerMixin:
         native_crashed = False
         for strategy, modified_payload in strategies:
             try:
-                result = self._run_diarization_process(
-                    context, modified_payload, control
-                )
+                result = self._run_diarization_process(context, modified_payload, control)
                 return result, native_crashed
             except RuntimeError as error:
-                if (strategy == "native" and isinstance(error, DiarizationTimeout)
-                        and payload["core_end_ms"] - payload["core_start_ms"] > 15_000):
-                    self.emit("worker.warning", {
-                        "code": "diarization_chunk_retry", "meeting_id": payload.get("meeting_id"),
-                        "start_ms": payload["core_start_ms"], "end_ms": payload["core_end_ms"],
-                        "message": str(error), "retry_chunk_ms": 15_000,
-                    })
+                if (
+                    strategy == "native"
+                    and isinstance(error, DiarizationTimeout)
+                    and payload["core_end_ms"] - payload["core_start_ms"] > 15_000
+                ):
+                    self.emit(
+                        "worker.warning",
+                        {
+                            "code": "diarization_chunk_retry",
+                            "meeting_id": payload.get("meeting_id"),
+                            "start_ms": payload["core_start_ms"],
+                            "end_ms": payload["core_end_ms"],
+                            "message": str(error),
+                            "retry_chunk_ms": 15_000,
+                        },
+                    )
                     turns, broken = [], False
                     for start in range(payload["core_start_ms"], payload["core_end_ms"], 15_000):
                         self.wait_task(control)
@@ -1047,15 +1098,26 @@ class RefinementWorkerMixin:
                         overlap = _refinement("diarization_overlap_ms")
                         window_start = max(payload["window_start_ms"], start - overlap)
                         window_end = min(payload["window_end_ms"], end + overlap)
-                        speech = [turn for turn in payload["speech"]
-                                  if turn["end_ms"] > window_start and turn["start_ms"] < window_end]
+                        speech = [
+                            turn
+                            for turn in payload["speech"]
+                            if turn["end_ms"] > window_start and turn["start_ms"] < window_end
+                        ]
                         if not speech:
                             continue
-                        result, failed = self._diarize_chunk(context, {
-                            **payload, "core_start_ms": start, "core_end_ms": end,
-                            "window_start_ms": window_start, "window_end_ms": window_end,
-                            "speech": speech,
-                        }, control, try_native=not broken)
+                        result, failed = self._diarize_chunk(
+                            context,
+                            {
+                                **payload,
+                                "core_start_ms": start,
+                                "core_end_ms": end,
+                                "window_start_ms": window_start,
+                                "window_end_ms": window_end,
+                                "speech": speech,
+                            },
+                            control,
+                            try_native=not broken,
+                        )
                         turns.extend(result)
                         broken = broken or failed
                     return turns, broken
@@ -1091,9 +1153,7 @@ class RefinementWorkerMixin:
 
     def _run_diarization_process(self, context, payload, control):
         receiver, sender = context.Pipe(duplex=False)
-        process = context.Process(
-            target=_diarize_chunk_process, args=(sender, payload)
-        )
+        process = context.Process(target=_diarize_chunk_process, args=(sender, payload))
         process.start()
         sender.close()
         elapsed = 0.0
@@ -1115,22 +1175,37 @@ class RefinementWorkerMixin:
                     try:
                         ok, result = receiver.recv()
                     except EOFError as error:
-                        raise RuntimeError(f"Diarization subprocess closed at {payload['core_start_ms']} ms") from error
+                        raise RuntimeError(
+                            f"Diarization subprocess closed at {payload['core_start_ms']} ms"
+                        ) from error
                     if ok is None:
-                        logger.info("diarization meeting=%s chunk=%s stage=%s seconds=%.2f elapsed=%.2f next=%s",
-                                    payload.get("meeting_id"), payload["core_start_ms"], stage,
-                                    elapsed - stage_started, elapsed, result)
+                        logger.info(
+                            "diarization meeting=%s chunk=%s stage=%s seconds=%.2f elapsed=%.2f next=%s",
+                            payload.get("meeting_id"),
+                            payload["core_start_ms"],
+                            stage,
+                            elapsed - stage_started,
+                            elapsed,
+                            result,
+                        )
                         stage, stage_started = result, elapsed
                     else:
-                        logger.info("diarization meeting=%s chunk=%s stage=%s seconds=%.2f elapsed=%.2f",
-                                    payload.get("meeting_id"), payload["core_start_ms"], stage,
-                                    elapsed - stage_started, elapsed)
+                        logger.info(
+                            "diarization meeting=%s chunk=%s stage=%s seconds=%.2f elapsed=%.2f",
+                            payload.get("meeting_id"),
+                            payload["core_start_ms"],
+                            stage,
+                            elapsed - stage_started,
+                            elapsed,
+                        )
                         if not ok:
                             raise RuntimeError(result)
                         return result
                 elif not process.is_alive() and not receiver.poll():
-                    raise RuntimeError(f"Diarization subprocess exited with code {process.exitcode} "
-                                       f"at {payload['core_start_ms']} ms")
+                    raise RuntimeError(
+                        f"Diarization subprocess exited with code {process.exitcode} "
+                        f"at {payload['core_start_ms']} ms"
+                    )
                 if elapsed >= timeout:
                     raise DiarizationTimeout(
                         f"Diarization timed out at {payload['core_start_ms']} ms "
@@ -1138,12 +1213,16 @@ class RefinementWorkerMixin:
                         f"elapsed={elapsed:.1f}, timeout={timeout:.1f})"
                     )
                 if elapsed - last_progress >= 5:
-                    self._refinement_progress({
-                        "meeting_id": payload.get("meeting_id"),
-                        "completed": payload["core_start_ms"] // 1000,
-                        "total": max(1, payload.get("duration_ms", payload["core_end_ms"]) // 1000),
-                        "stage": "分析说话人",
-                    })
+                    self._refinement_progress(
+                        {
+                            "meeting_id": payload.get("meeting_id"),
+                            "completed": payload["core_start_ms"] // 1000,
+                            "total": max(
+                                1, payload.get("duration_ms", payload["core_end_ms"]) // 1000
+                            ),
+                            "stage": "分析说话人",
+                        }
+                    )
                     last_progress = elapsed
         finally:
             receiver.close()
@@ -1151,9 +1230,7 @@ class RefinementWorkerMixin:
                 process.terminate()
             process.join()
 
-    def _cluster_speaker_turns(
-        self, meeting, turns, sample_rate, num_speakers=-1
-    ):
+    def _cluster_speaker_turns(self, meeting, turns, sample_rate, num_speakers=-1):
         """用子进程返回的声纹在全会议时间轴上统一聚类。"""
         known = [
             (index, turn["_embedding"])
@@ -1165,10 +1242,7 @@ class RefinementWorkerMixin:
             if len(known) < 2
             else self._auto_cluster_embeddings(
                 [embedding for _, embedding in known],
-                [
-                    turns[index]["end_ms"] - turns[index]["start_ms"]
-                    for index, _ in known
-                ],
+                [turns[index]["end_ms"] - turns[index]["start_ms"] for index, _ in known],
                 num_speakers,
             )
         )
@@ -1215,11 +1289,15 @@ class RefinementWorkerMixin:
                 continue
             count = (length + maximum_ms - 1) // maximum_ms
             for index in range(count):
-                windows.append({"start_ms": start + length * index // count,
-                                "end_ms": start + length * (index + 1) // count,
-                                "speaker": turn["speaker"],
-                                # 安静语音兜底窗口要单独识别、不带上下文（见 _decode_range）。
-                                "_quiet": bool(turn.get("_quiet"))})
+                windows.append(
+                    {
+                        "start_ms": start + length * index // count,
+                        "end_ms": start + length * (index + 1) // count,
+                        "speaker": turn["speaker"],
+                        # 安静语音兜底窗口要单独识别、不带上下文（见 _decode_range）。
+                        "_quiet": bool(turn.get("_quiet")),
+                    }
+                )
         return windows
 
     @staticmethod
@@ -1417,8 +1495,7 @@ class RefinementWorkerMixin:
         positions = [
             index
             for index, ch in enumerate(text)
-            if ch in "。！？.!?；;"
-            and not RefinementWorkerMixin._is_decimal_dot(text, index)
+            if ch in "。！？.!?；;" and not RefinementWorkerMixin._is_decimal_dot(text, index)
         ]
         for last in reversed(positions):
             if last + 1 >= len(text):
@@ -1532,22 +1609,20 @@ class RefinementWorkerMixin:
         招股说明书…」：前一句的最后一句「今天我们就打开语。」是「今天我们就打
         开宇树的招股说明书…」的截断残片，应丢弃并保留当前段。
         """
-        prev_chunks = [
-            chunk.strip()
-            for chunk in RefinementWorkerMixin._split_sentences(previous)
-        ]
-        cur_chunks = [
-            chunk.strip()
-            for chunk in RefinementWorkerMixin._split_sentences(current)
-        ]
+        prev_chunks = [chunk.strip() for chunk in RefinementWorkerMixin._split_sentences(previous)]
+        cur_chunks = [chunk.strip() for chunk in RefinementWorkerMixin._split_sentences(current)]
         if not prev_chunks or not cur_chunks:
             return None
 
         prev_last = prev_chunks[-1]
         cur_first = cur_chunks[0]
-        if RefinementWorkerMixin._is_fragment(prev_last, current) or RefinementWorkerMixin._is_fragment(prev_last, cur_first):
+        if RefinementWorkerMixin._is_fragment(
+            prev_last, current
+        ) or RefinementWorkerMixin._is_fragment(prev_last, cur_first):
             return "previous"
-        if RefinementWorkerMixin._is_fragment(cur_first, previous) or RefinementWorkerMixin._is_fragment(cur_first, prev_last):
+        if RefinementWorkerMixin._is_fragment(
+            cur_first, previous
+        ) or RefinementWorkerMixin._is_fragment(cur_first, prev_last):
             return "current"
         return None
 
@@ -1622,9 +1697,7 @@ class RefinementWorkerMixin:
         标点/大小写常有差异，纯字符串精确匹配会漏掉。这里先做「去标点 + 小写」的
         归一化，在归一化文本上找最长公共后缀/前缀，再映射回原文截断。
         """
-        trimmed, _ = RefinementWorkerMixin._trim_refinement_overlap_detailed(
-            previous, text
-        )
+        trimmed, _ = RefinementWorkerMixin._trim_refinement_overlap_detailed(previous, text)
         return trimmed
 
     @staticmethod
@@ -1662,9 +1735,13 @@ class RefinementWorkerMixin:
         # 长度不短才启用，降低误删风险。
         if best == 0:
             for length in range(max_len, 3, -1):
-                if length >= 4 and SequenceMatcher(
-                    None, prev_norm[-length:], text_norm[offset : offset + length]
-                ).ratio() >= 0.9:
+                if (
+                    length >= 4
+                    and SequenceMatcher(
+                        None, prev_norm[-length:], text_norm[offset : offset + length]
+                    ).ratio()
+                    >= 0.9
+                ):
                     best = length
                     break
         if best == 0:
@@ -1694,7 +1771,9 @@ class RefinementWorkerMixin:
             overlap = None
             if previous_norm and sentence_norm and sentence_norm[0] != previous_norm[0]:
                 for offset in range(1, min(4, len(sentence_norm))):
-                    for length in range(min(len(previous_norm), len(sentence_norm) - offset), 3, -1):
+                    for length in range(
+                        min(len(previous_norm), len(sentence_norm) - offset), 3, -1
+                    ):
                         if previous_norm[-length:] == sentence_norm[offset : offset + length]:
                             overlap = offset + length
                             break
@@ -1762,7 +1841,9 @@ class RefinementWorkerMixin:
         def cluster(count):
             centers = [vectors[numpy.argmax(weights)]]
             for _ in range(1, count):
-                centers.append(vectors[numpy.argmin(numpy.max(vectors @ numpy.asarray(centers).T, axis=1))])
+                centers.append(
+                    vectors[numpy.argmin(numpy.max(vectors @ numpy.asarray(centers).T, axis=1))]
+                )
             centers, labels = numpy.asarray(centers), None
             for _ in range(50):
                 updated = numpy.argmax(vectors @ centers.T, axis=1)
@@ -1805,7 +1886,13 @@ class RefinementWorkerMixin:
                     values.append(0)
                     continue
                 within = numpy.average(distances[index, same], weights=weights[same])
-                nearest = min(numpy.average(distances[index, labels == other], weights=weights[labels == other]) for other in set(labels) if other != label)
+                nearest = min(
+                    numpy.average(
+                        distances[index, labels == other], weights=weights[labels == other]
+                    )
+                    for other in set(labels)
+                    if other != label
+                )
                 values.append((nearest - within) / max(nearest, within, 1e-9))
             scores[count] = numpy.average(values, weights=weights)
         best = max(scores.values())
@@ -1839,20 +1926,14 @@ class RefinementWorkerMixin:
                     and turn["speaker"] == merged[-1]["speaker"]
                     and turn["start_ms"] <= merged[-1]["end_ms"] + merge_gap_ms
                 ):
-                    merged[-1]["end_ms"] = max(
-                        merged[-1]["end_ms"], turn["end_ms"]
-                    )
+                    merged[-1]["end_ms"] = max(merged[-1]["end_ms"], turn["end_ms"])
                 else:
                     merged.append(dict(turn))
             return merged
 
         stable = merge_same(
             sorted(
-                (
-                    turn
-                    for turn in turns
-                    if turn["end_ms"] > turn["start_ms"]
-                ),
+                (turn for turn in turns if turn["end_ms"] > turn["start_ms"]),
                 key=lambda turn: (turn["start_ms"], turn["end_ms"]),
             )
         )
@@ -1924,9 +2005,7 @@ class RefinementWorkerMixin:
                     break
                 boundary = (current["start_ms"] + previous["end_ms"]) // 2
                 previous["end_ms"] = max(previous["start_ms"] + 1, boundary)
-                current["start_ms"] = max(
-                    current["start_ms"], min(boundary, current["end_ms"] - 1)
-                )
+                current["start_ms"] = max(current["start_ms"], min(boundary, current["end_ms"] - 1))
             if dropped:
                 continue
             deoverlapped.append(current)
@@ -1990,8 +2069,7 @@ class RefinementWorkerMixin:
             cursor, repeats = len(words), 0
             while (
                 cursor >= width
-                and [word.group().casefold() for word in words[cursor - width : cursor]]
-                == tail
+                and [word.group().casefold() for word in words[cursor - width : cursor]] == tail
             ):
                 cursor, repeats = cursor - width, repeats + 1
             if repeats >= 4:
@@ -2002,7 +2080,8 @@ class RefinementWorkerMixin:
             re.finditer(r"(?P<phrase>.{8,80}?)(?P=phrase){2,}", text),
             None,
         ):
-            text = f"{text[:match.start()]}{match.group('phrase')}{text[match.end():]}"
+            text = f"{text[: match.start()]}{match.group('phrase')}{text[match.end() :]}"
+
         # 流式英文模型偶尔以全大写写出整段或句首的一长串词。只处理连续三个
         # 以上的大写词，避免改动正常句中的专有名词；常见技术缩写保持大写。
         def sentence_case(value):

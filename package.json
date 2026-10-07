@@ -8,9 +8,9 @@
     "start:fresh": "electron . --reset-onboarding",
     "test": "npm run test:dead && npm run test:electron && npm run test:ui && npm run test:e2e && npm run test:backend",
     "test:dead": "node scripts/check_dead_code.mjs",
-    "test:electron": "node electron/test-main-logic.mjs && node scripts/test-deduplicate-runtime.cjs",
+    "test:electron": "node electron/test-main-logic.mjs && node scripts/test-deduplicate-runtime.cjs && node electron/test-mobile-server.cjs",
     "test:ui": "cd frontend && node ./test-ui.mjs",
-    "test:backend": "python -m unittest backend.test_worker backend.test_sentence backend.test_packaging backend.test_mlx backend.test_audio_mixer",
+    "test:backend": "python -m unittest backend.test_worker backend.test_sentence backend.test_packaging backend.test_mlx backend.test_audio_mixer backend.test_mobile",
     "test:model": ".venv/bin/python -m backend.diagnose_model --models-dir .models",
     "test:diarization": ".venv/bin/python -m backend.diagnose_diarization --models-dir .models --download",
     "bench:electron": "electron . --bench-refinement",
@@ -25,7 +25,11 @@
     "test:e2e": "node electron/test-e2e.mjs",
     "css:fingerprint": "node scripts/verify-css-tokens.mjs",
     "clean": "node scripts/clean-build.mjs",
-    "clean:dist": "node scripts/clean-build.mjs dist"
+    "clean:dist": "node scripts/clean-build.mjs dist",
+    "format": "prettier --write \"{electron,frontend,website,scripts}/**/*.{js,mjs,cjs,css,html}\" \"*.{json,md,yml,yaml}\" \".github/workflows/*.{yml,yaml}\" \"docs/**/*.md\" \"mobile/*.{md,yaml}\" \"backend/*.md\"",
+    "format:check": "prettier --check \"{electron,frontend,website,scripts}/**/*.{js,mjs,cjs,css,html}\" \"*.{json,md,yml,yaml}\" \".github/workflows/*.{yml,yaml}\" \"docs/**/*.md\" \"mobile/*.{md,yaml}\" \"backend/*.md\"",
+    "format:python": "python -m ruff format .",
+    "lint:python": "python -m ruff check . && python -m ruff format --check ."
   },
   "build": {
     "afterPack": "scripts/deduplicate-runtime.cjs",
@@ -34,7 +38,8 @@
     "files": [
       "electron/**/*",
       "!electron/test-*.mjs",
-      "package.json"
+      "package.json",
+      "!electron/test-*.cjs"
     ],
     "asarUnpack": [
       "node_modules/@ffmpeg-installer/**"
@@ -72,6 +77,10 @@
       "compression": "maximum",
       "icon": "electron/assets/icon.icns",
       "extendInfo": {
+        "NSLocalNetworkUsageDescription": "Brevia discovers and connects to your phone on the local network for meeting recording.",
+        "NSBonjourServices": [
+          "_brevia._tcp"
+        ],
         "NSAudioCaptureUsageDescription": "Brevia captures system audio to transcribe meetings locally.",
         "NSMicrophoneUsageDescription": "Brevia captures microphone audio to transcribe meetings locally."
       },
@@ -144,11 +153,15 @@
     "@tailwindcss/cli": "^4.3.3",
     "electron": "^43.7.7",
     "electron-builder": "^26.15.3",
+    "prettier": "3.6.2",
     "tailwindcss": "^4.3.3"
   },
   "dependencies": {
     "@ffmpeg-installer/ffmpeg": "1.1.0",
+    "bonjour-service": "^1.4.4",
     "electron-updater": "6.8.9",
+    "qrcode": "^1.5.4",
+    "selfsigned": "^5.5.0",
     "zod": "^4.4.3"
   }
 }

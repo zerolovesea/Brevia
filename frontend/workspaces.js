@@ -23,7 +23,7 @@ function closeWorkspaceDialog(backdrop) {
 function initializeWorkspaces(workspaceList) {
   workspaces = workspaceList || [];
   const savedActiveId = localStorage.getItem('brevia-active-workspace');
-  if (savedActiveId === '' || workspaces.some(w => w.id === savedActiveId)) {
+  if (savedActiveId === '' || workspaces.some((w) => w.id === savedActiveId)) {
     activeWorkspaceId = savedActiveId || '';
   } else {
     activeWorkspaceId = '';
@@ -37,7 +37,7 @@ function initializeWorkspaces(workspaceList) {
  */
 function getWorkspaceName(workspaceId) {
   if (!workspaceId) return t('公开工作区');
-  const workspace = workspaces.find(w => w.id === workspaceId);
+  const workspace = workspaces.find((w) => w.id === workspaceId);
   return workspace?.name || t('未知工作区');
 }
 
@@ -49,7 +49,9 @@ function renderWorkspaceNav() {
   if (!nav) return;
 
   // 获取各工作区的会议数量
-  const visibleMeetings = (uiData.meetings || []).filter((meeting) => !meeting.deleted && (!meeting.isExample || meeting.exampleLocale === locale));
+  const visibleMeetings = (uiData.meetings || []).filter(
+    (meeting) => !meeting.deleted && (!meeting.isExample || meeting.exampleLocale === locale),
+  );
   const publicCount = visibleMeetings.filter((meeting) => !meeting.workspaceId).length;
 
   // 构建工作区子项 HTML
@@ -58,15 +60,19 @@ function renderWorkspaceNav() {
       <span class="workspace-label">${t('公开工作区')}</span>
       <span class="workspace-count">${publicCount}</span>
     </button>`,
-    ...workspaces.map(workspace => {
-      const count = visibleMeetings.filter((meeting) => meeting.workspaceId === workspace.id).length;
-      return `<button class="workspace-item ${activeWorkspaceId === workspace.id ? 'active' : ''}"
+    ...workspaces
+      .map((workspace) => {
+        const count = visibleMeetings.filter(
+          (meeting) => meeting.workspaceId === workspace.id,
+        ).length;
+        return `<button class="workspace-item ${activeWorkspaceId === workspace.id ? 'active' : ''}"
                 data-workspace-id="${escapeHtml(workspace.id)}"
                 data-workspace-name="${escapeHtml(workspace.name)}">
         <span class="workspace-label">${escapeHtml(workspace.name)}</span>
         <span class="workspace-count">${count}</span>
       </button>`;
-    }).join('')
+      })
+      .join(''),
   ].join('');
 
   // 查找"所有会议"导航项
@@ -97,7 +103,6 @@ function renderWorkspaceNav() {
       </button>
     </div>
   `;
-
 }
 
 /**
@@ -105,24 +110,40 @@ function renderWorkspaceNav() {
  * @param {string} workspaceId - 工作区 ID
  */
 async function switchWorkspace(workspaceId) {
-  if (workspaceId === activeWorkspaceId && activeLibraryNav === 'all-meetings' && activeView === 'home' && !pageTransition) return;
+  if (
+    workspaceId === activeWorkspaceId &&
+    activeLibraryNav === 'all-meetings' &&
+    activeView === 'home' &&
+    !pageTransition
+  )
+    return;
   if (activeView === 'live' && meetingActive) appActions.minimizeMeeting();
   const applyWorkspace = async () => {
     activeWorkspaceId = workspaceId;
     localStorage.setItem('brevia-active-workspace', workspaceId);
     appActions.selectLibraryNav('all-meetings');
     if (window.brevia) {
-      try { await refreshBackendMeetings(false); }
-      catch (error) { appActions.showToast(error.message); }
+      try {
+        await refreshBackendMeetings(false);
+      } catch (error) {
+        appActions.showToast(error.message);
+      }
     }
     renderWorkspaceNav();
     updateHomeViewTitle();
     appActions.filterMeetings();
   };
-  await appActions.transitionPage(document.querySelector(`#${activeView}-view`), document.querySelector('#home-view'), applyWorkspace);
+  await appActions.transitionPage(
+    document.querySelector(`#${activeView}-view`),
+    document.querySelector('#home-view'),
+    applyWorkspace,
+  );
 }
 
-const clearWorkspaceDropTarget = () => document.querySelectorAll('.workspace-item.is-drop-target').forEach((item) => item.classList.remove('is-drop-target'));
+const clearWorkspaceDropTarget = () =>
+  document
+    .querySelectorAll('.workspace-item.is-drop-target')
+    .forEach((item) => item.classList.remove('is-drop-target'));
 document.addEventListener('dragover', (event) => {
   const target = event.target.closest('.workspace-item');
   if (!target || !event.dataTransfer.types.includes('text/plain')) return;
@@ -145,10 +166,14 @@ document.addEventListener('drop', async (event) => {
   const workspaceId = target.dataset.workspaceId || '';
   if (meeting.workspaceId === workspaceId) return;
   try {
-    await window.brevia.workspace.assign({ meeting_id: meeting.id, workspace_id: workspaceId || null });
+    await window.brevia.workspace.assign({
+      meeting_id: meeting.id,
+      workspace_id: workspaceId || null,
+    });
     const previousWorkspace = workspaces.find(({ id }) => id === meeting.workspaceId);
     const nextWorkspace = workspaces.find(({ id }) => id === workspaceId);
-    if (previousWorkspace) previousWorkspace.meeting_count = Math.max(0, previousWorkspace.meeting_count - 1);
+    if (previousWorkspace)
+      previousWorkspace.meeting_count = Math.max(0, previousWorkspace.meeting_count - 1);
     if (nextWorkspace) nextWorkspace.meeting_count += 1;
     meeting.workspaceId = workspaceId;
     meeting.workspace = workspaceId ? { name: getWorkspaceName(workspaceId) } : null;
@@ -170,7 +195,7 @@ function updateHomeViewTitle() {
     if (eyebrow) eyebrow.textContent = t('会议库');
     if (slogan) slogan.textContent = t('每一场对话，都留有依据。');
   } else {
-    const workspace = workspaces.find(w => w.id === activeWorkspaceId);
+    const workspace = workspaces.find((w) => w.id === activeWorkspaceId);
     if (workspace) {
       if (eyebrow) eyebrow.textContent = `${t('会议库')} · ${workspace.name}`;
       if (slogan) slogan.textContent = workspace.description || t('工作区会议');
@@ -234,12 +259,14 @@ function showNewWorkspaceDialog(assignMeetingId, onCreated) {
   };
 
   // 关闭按钮事件
-  backdrop.querySelectorAll('[data-close-modal]').forEach(btn => {
+  backdrop.querySelectorAll('[data-close-modal]').forEach((btn) => {
     btn.addEventListener('click', closeDialog);
   });
 
   let backdropPointerDown = false;
-  backdrop.addEventListener('pointerdown', (e) => { backdropPointerDown = e.target === backdrop; });
+  backdrop.addEventListener('pointerdown', (e) => {
+    backdropPointerDown = e.target === backdrop;
+  });
   // 仅当按下与松开都在背景上才关闭，避免拖出弹窗时误关。
   backdrop.addEventListener('click', (e) => {
     if (backdropPointerDown && e.target === backdrop) closeDialog();
@@ -285,7 +312,7 @@ function showNewWorkspaceDialog(assignMeetingId, onCreated) {
  * @param {string} workspaceId - 工作区 ID
  */
 function showEditWorkspaceDialog(workspaceId) {
-  const workspace = workspaces.find(w => w.id === workspaceId);
+  const workspace = workspaces.find((w) => w.id === workspaceId);
   if (!workspace) return;
 
   const backdrop = document.createElement('div');
@@ -341,12 +368,14 @@ function showEditWorkspaceDialog(workspaceId) {
   };
 
   // 关闭按钮事件
-  backdrop.querySelectorAll('[data-close-modal]').forEach(btn => {
+  backdrop.querySelectorAll('[data-close-modal]').forEach((btn) => {
     btn.addEventListener('click', closeDialog);
   });
 
   let backdropPointerDown = false;
-  backdrop.addEventListener('pointerdown', (e) => { backdropPointerDown = e.target === backdrop; });
+  backdrop.addEventListener('pointerdown', (e) => {
+    backdropPointerDown = e.target === backdrop;
+  });
   // 仅当按下与松开都在背景上才关闭，避免拖出弹窗时误关。
   backdrop.addEventListener('click', (e) => {
     if (backdropPointerDown && e.target === backdrop) closeDialog();
@@ -364,21 +393,27 @@ function showEditWorkspaceDialog(workspaceId) {
 
   // 删除工作区
   backdrop.querySelector('[data-delete-workspace]').addEventListener('click', async () => {
-    appActions.openConfirmation(t('删除工作区'), t('工作区内的会议将移至最近删除。恢复会议时将还原原工作区。此操作不能撤销。'), async () => {
-      try {
-        await window.brevia.workspace.delete({ workspace_id: workspaceId });
-        workspaces = workspaces.filter(w => w.id !== workspaceId);
-        if (activeWorkspaceId === workspaceId) void switchWorkspace('');
-        uiData.meetings = uiData.meetings.filter((meeting) => meeting.workspaceId !== workspaceId);
-        renderWorkspaceNav();
-        appActions.renderMeetingList();
-        closeDialog();
-        document.removeEventListener('keydown', escHandler);
-        appActions.showToast(t('工作区已删除'));
-      } catch (error) {
-        appActions.showToast(error.message);
-      }
-    });
+    appActions.openConfirmation(
+      t('删除工作区'),
+      t('工作区内的会议将移至最近删除。恢复会议时将还原原工作区。此操作不能撤销。'),
+      async () => {
+        try {
+          await window.brevia.workspace.delete({ workspace_id: workspaceId });
+          workspaces = workspaces.filter((w) => w.id !== workspaceId);
+          if (activeWorkspaceId === workspaceId) void switchWorkspace('');
+          uiData.meetings = uiData.meetings.filter(
+            (meeting) => meeting.workspaceId !== workspaceId,
+          );
+          renderWorkspaceNav();
+          appActions.renderMeetingList();
+          closeDialog();
+          document.removeEventListener('keydown', escHandler);
+          appActions.showToast(t('工作区已删除'));
+        } catch (error) {
+          appActions.showToast(error.message);
+        }
+      },
+    );
   });
 
   // 提交表单
@@ -392,7 +427,7 @@ function showEditWorkspaceDialog(workspaceId) {
 
     try {
       const updated = await window.brevia.workspace.update({ workspace_id: workspaceId, updates });
-      const index = workspaces.findIndex(w => w.id === workspaceId);
+      const index = workspaces.findIndex((w) => w.id === workspaceId);
       if (index >= 0) workspaces[index] = updated;
       renderWorkspaceNav();
       updateHomeViewTitle();
@@ -418,10 +453,9 @@ function showWorkspaceAssignMenu(meetingIndex, anchorRect) {
   menu.className = 'meeting-workspace-menu';
   menu.innerHTML = `
     <div class="menu-section">
-      ${[
-        { id: '', name: t('公开工作区') },
-        ...workspaces
-      ].map(workspace => `
+      ${[{ id: '', name: t('公开工作区') }, ...workspaces]
+        .map(
+          (workspace) => `
         <button type="button"
                 data-assign-workspace="${escapeHtml(workspace.id)}"
                 data-meeting-index="${meetingIndex}"
@@ -430,7 +464,9 @@ function showWorkspaceAssignMenu(meetingIndex, anchorRect) {
           <span>${escapeHtml(workspace.name)}</span>
           ${meeting.workspaceId === workspace.id ? `<span class="check">${checkIconSvg}</span>` : ''}
         </button>
-      `).join('')}
+      `,
+        )
+        .join('')}
     </div>
     <div class="menu-separator"></div>
     <button type="button" data-new-workspace-assign data-meeting-index="${meetingIndex}" class="menu-item">
@@ -464,15 +500,20 @@ function showWorkspaceAssignMenu(meetingIndex, anchorRect) {
  */
 async function assignMeetingToWorkspace(meetingId, workspaceId) {
   try {
-    await window.brevia.workspace.assign({ meeting_id: meetingId, workspace_id: workspaceId || null });
+    await window.brevia.workspace.assign({
+      meeting_id: meetingId,
+      workspace_id: workspaceId || null,
+    });
 
     // 更新本地数据
-    const meeting = uiData.meetings.find(m => m.id === meetingId);
+    const meeting = uiData.meetings.find((m) => m.id === meetingId);
     if (meeting) {
       meeting.workspaceId = workspaceId;
-      meeting.workspace = workspaceId ? {
-        name: getWorkspaceName(workspaceId)
-      } : null;
+      meeting.workspace = workspaceId
+        ? {
+            name: getWorkspaceName(workspaceId),
+          }
+        : null;
     }
 
     renderWorkspaceNav();

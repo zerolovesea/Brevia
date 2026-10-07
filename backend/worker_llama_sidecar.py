@@ -35,11 +35,11 @@ def strip_reasoning(text: str) -> str:
     # 然后丢弃被截断（最大令牌）推理运行留下的任何孤立开放标签。
     lower = cleaned.lower()
     if "</think>" in lower:
-        cleaned = cleaned[lower.rindex("</think>") + len("</think>"):]
+        cleaned = cleaned[lower.rindex("</think>") + len("</think>") :]
     cleaned = re.sub(r"</?think>", "", cleaned, flags=re.IGNORECASE)
     if _THINKING_PROCESS.match(cleaned):
         final = re.search(r"(?m)^#\s+", cleaned)
-        cleaned = cleaned[final.start():] if final else ""
+        cleaned = cleaned[final.start() :] if final else ""
     return cleaned.strip()
 
 
@@ -312,7 +312,9 @@ class LlamaSidecarMixin:
             "stop_tokens": ["<|im_end|>", "<|endoftext|>"],
         }
         response = self._get_sidecar(ASSISTANT_SIDECAR).request(
-            request, timeout_seconds=REALTIME_TIMEOUT_SECONDS, cancellation=cancellation,
+            request,
+            timeout_seconds=REALTIME_TIMEOUT_SECONDS,
+            cancellation=cancellation,
         )
         if response.get("type") == "error":
             raise RuntimeError(f"Sidecar error: {response.get('message')}")

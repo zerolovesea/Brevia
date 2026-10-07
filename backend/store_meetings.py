@@ -109,9 +109,12 @@ class MeetingStoreMixin:
                 meeting_id, {"meeting_id": meeting_id, "closed": False, "tracks": {}}
             )
             with self.connect() as db:
-                if payload.get("workspace_id") and not db.execute(
-                    "SELECT 1 FROM workspaces WHERE id=?", (payload["workspace_id"],)
-                ).fetchone():
+                if (
+                    payload.get("workspace_id")
+                    and not db.execute(
+                        "SELECT 1 FROM workspaces WHERE id=?", (payload["workspace_id"],)
+                    ).fetchone()
+                ):
                     raise ValueError("Workspace not found")
                 db.execute(
                     """INSERT INTO meetings
@@ -136,9 +139,7 @@ class MeetingStoreMixin:
             按创建时间倒序排列的会议字典列表，不加载音频和逐字稿详情。
         """
         clauses, params = [], []
-        clauses.append(
-            "m.deleted_at IS NOT NULL" if include_deleted else "m.deleted_at IS NULL"
-        )
+        clauses.append("m.deleted_at IS NOT NULL" if include_deleted else "m.deleted_at IS NULL")
         if query:
             clauses.append(
                 "(m.title LIKE ? ESCAPE '\\' OR m.tags LIKE ? ESCAPE '\\' OR m.id IN "
@@ -155,7 +156,6 @@ class MeetingStoreMixin:
                 params,
             ).fetchall()
         return [self._meeting(row) for row in rows]
-
 
     def search_meetings(self, query=""):
         """搜索会议标题、标签、字幕内容与说话人姓名。
@@ -219,13 +219,9 @@ class MeetingStoreMixin:
             本次是否执行了种子写入；同一版本重复调用返回 ``False``。
         """
         fixture_root = Path(__file__).with_name("fixtures")
-        examples = json.loads(
-            Path(__file__).with_name("examples.json").read_text(encoding="utf-8")
-        )
+        examples = json.loads(Path(__file__).with_name("examples.json").read_text(encoding="utf-8"))
         with self.connect() as db:
-            if db.execute(
-                "SELECT 1 FROM app_meta WHERE key=?", (EXAMPLES_SEED_KEY,)
-            ).fetchone():
+            if db.execute("SELECT 1 FROM app_meta WHERE key=?", (EXAMPLES_SEED_KEY,)).fetchone():
                 return False
             now = utc_now()
             for example in examples:
@@ -311,7 +307,12 @@ class MeetingStoreMixin:
                     """INSERT INTO summaries(meeting_id,data,raw_response,created_at) VALUES(?,?,?,?)
                        ON CONFLICT(meeting_id) DO UPDATE SET
                        data=excluded.data,raw_response=excluded.raw_response,created_at=excluded.created_at""",
-                    (example["id"], json.dumps({"markdown": example_note(example)}, ensure_ascii=False), "example", now),
+                    (
+                        example["id"],
+                        json.dumps({"markdown": example_note(example)}, ensure_ascii=False),
+                        "example",
+                        now,
+                    ),
                 )
             db.execute(
                 "INSERT INTO app_meta(key,value) VALUES(?,?)",
@@ -377,13 +378,19 @@ class MeetingStoreMixin:
                 (meeting_id,),
             ).fetchall()
         segments = [dict(segment) for segment in segments]
-        refined = [segment for segment in segments if segment["version"].startswith("postprocess")
-                   and str(segment.get("text") or "").strip()]
+        refined = [
+            segment
+            for segment in segments
+            if segment["version"].startswith("postprocess")
+            and str(segment.get("text") or "").strip()
+        ]
         revision = max((segment["revision"] for segment in refined), default=None)
         current = latest_segments(segments)
 
         def segment_data(segment):
-            timestamps = json.loads(segment["word_timestamps"]) if segment["word_timestamps"] else []
+            timestamps = (
+                json.loads(segment["word_timestamps"]) if segment["word_timestamps"] else []
+            )
             if compact:
                 timestamps = [
                     {"overlap_speakers": word["overlap_speakers"]}
@@ -394,8 +401,7 @@ class MeetingStoreMixin:
 
         result = self._meeting(row)
         result["segments"] = [
-            segment_data(segment)
-            for segment in (current if compact else segments)
+            segment_data(segment) for segment in (current if compact else segments)
         ]
         result["transcript_revision"] = revision
         if not compact:
@@ -404,7 +410,11 @@ class MeetingStoreMixin:
         result["speaker_turns"] = [] if compact else [dict(turn) for turn in speaker_turns]
         result["summary"] = (
             {
-                **({key: value for key, value in dict(summary).items() if key != "raw_response"} if compact else dict(summary)),
+                **(
+                    {key: value for key, value in dict(summary).items() if key != "raw_response"}
+                    if compact
+                    else dict(summary)
+                ),
                 "data": json.loads(summary["data"]) if summary["data"] else None,
             }
             if summary
@@ -507,7 +517,8 @@ class MeetingStoreMixin:
         """
         with self.connect() as db:
             meeting = db.execute(
-                "SELECT is_example,deleted_at,workspace_id,previous_workspace_id FROM meetings WHERE id=?", (meeting_id,)
+                "SELECT is_example,deleted_at,workspace_id,previous_workspace_id FROM meetings WHERE id=?",
+                (meeting_id,),
             ).fetchone()
             if not meeting:
                 raise ValueError("Meeting not found")
@@ -524,11 +535,19 @@ class MeetingStoreMixin:
                     return
                 workspace_id = meeting["previous_workspace_id"] or meeting["workspace_id"]
                 if workspace_id:
-                    if not db.execute("UPDATE workspaces SET deleted_at=NULL WHERE id=?", (workspace_id,)).rowcount:
+                    if not db.execute(
+                        "UPDATE workspaces SET deleted_at=NULL WHERE id=?", (workspace_id,)
+                    ).rowcount:
                         workspace_id = None
-                db.execute("UPDATE meetings SET deleted_at=NULL, workspace_id=?, previous_workspace_id=NULL WHERE id=?", (workspace_id, meeting_id))
+                db.execute(
+                    "UPDATE meetings SET deleted_at=NULL, workspace_id=?, previous_workspace_id=NULL WHERE id=?",
+                    (workspace_id, meeting_id),
+                )
             else:
-                db.execute("UPDATE meetings SET deleted_at=?, previous_workspace_id=workspace_id WHERE id=? AND deleted_at IS NULL", (utc_now(), meeting_id))
+                db.execute(
+                    "UPDATE meetings SET deleted_at=?, previous_workspace_id=workspace_id WHERE id=? AND deleted_at IS NULL",
+                    (utc_now(), meeting_id),
+                )
 
     def purge_expired(self):
         """永久删除超过保留期的会议记录及其全部本地文件。"""

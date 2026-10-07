@@ -1,0 +1,3 @@
+NSMicrophoneUsageDescription = "Brevia는 마이크로 회의를 녹음합니다. 연결된 컴퓨터에서 음성을 텍스트로 변환합니다.";
+NSCameraUsageDescription = "컴퓨터에 표시된 Brevia 연결 QR 코드를 스캔합니다.";
+NSLocalNetworkUsageDescription = "같은 로컬 네트워크의 컴퓨터에 연결하여 오디오를 보내고 자막과 노트를 받습니다.";

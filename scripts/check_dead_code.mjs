@@ -40,7 +40,14 @@ for (const { name, command, args } of ANALYZERS) {
     failed = true;
     console.error(`[dead-code] ${name}: 分析器以退出码 ${result.status} 结束`);
     const detail = (result.stderr || result.stdout || '').trim();
-    if (detail) console.error(detail.split('\n').slice(-15).map((line) => `  ${line}`).join('\n'));
+    if (detail)
+      console.error(
+        detail
+          .split('\n')
+          .slice(-15)
+          .map((line) => `  ${line}`)
+          .join('\n'),
+      );
     continue;
   }
   const findings = result.stdout
@@ -58,8 +65,8 @@ for (const { name, command, args } of ANALYZERS) {
 
 if (failed) {
   console.error(
-    '\n死代码门禁未通过。若某条发现是刻意保留的（例如供外部调用的协议入口），'
-    + '应把它从分析器的判定范围里排除并写明理由，而不是留着一条绿灯的例外。',
+    '\n死代码门禁未通过。若某条发现是刻意保留的（例如供外部调用的协议入口），' +
+      '应把它从分析器的判定范围里排除并写明理由，而不是留着一条绿灯的例外。',
   );
   process.exit(1);
 }

@@ -55,9 +55,7 @@ class SpeakerProfileStoreMixin:
     def speaker_profile(self, profile_id):
         """根据 ID 获取单个人员档案详情。"""
         with self.connect() as db:
-            row = db.execute(
-                "SELECT * FROM speaker_profiles WHERE id=?", (profile_id,)
-            ).fetchone()
+            row = db.execute("SELECT * FROM speaker_profiles WHERE id=?", (profile_id,)).fetchone()
         if not row:
             raise ValueError("Speaker profile not found")
         return dict(row)
@@ -127,12 +125,10 @@ class SpeakerProfileStoreMixin:
                 profile = db.execute(
                     "SELECT * FROM speaker_profiles WHERE id=?", (profile_id,)
                 ).fetchone()
-            elif json.loads(profile["embedding"]) and len(
-                json.loads(profile["embedding"])
-            ) != len(normalized):
-                raise ValueError(
-                    "Voiceprint model does not match this person's registered samples"
-                )
+            elif json.loads(profile["embedding"]) and len(json.loads(profile["embedding"])) != len(
+                normalized
+            ):
+                raise ValueError("Voiceprint model does not match this person's registered samples")
             profile_id = profile["id"]
             if audio_path:
                 path = self._sample_audio_path(profile_id, audio_path)
@@ -145,7 +141,10 @@ class SpeakerProfileStoreMixin:
             ).fetchone()
             if existing:
                 if existing["profile_id"] != profile_id:
-                    raise UserFacingError("error.voice_sample_owned", "Recording already belongs to another voiceprint")
+                    raise UserFacingError(
+                        "error.voice_sample_owned",
+                        "Recording already belongs to another voiceprint",
+                    )
                 saved = False
                 if audio_path:
                     db.execute(
@@ -162,10 +161,7 @@ class SpeakerProfileStoreMixin:
                     raise ValueError(
                         f"A voiceprint can contain at most {limits['max_samples']} recordings"
                     )
-                if (
-                    usage["duration_ms"] + int(duration_ms)
-                    > limits["max_total_seconds"] * 1000
-                ):
+                if usage["duration_ms"] + int(duration_ms) > limits["max_total_seconds"] * 1000:
                     raise ValueError(
                         f"Voiceprint recordings can total at most {limits['max_total_seconds']} seconds"
                     )
@@ -196,7 +192,12 @@ class SpeakerProfileStoreMixin:
                     (json.dumps(center), len(samples), now, profile_id),
                 )
                 saved = True
-        if existing and audio_path and self._sample_audio_path(profile_id, existing["audio_path"]) != self._sample_audio_path(profile_id, audio_path):
+        if (
+            existing
+            and audio_path
+            and self._sample_audio_path(profile_id, existing["audio_path"])
+            != self._sample_audio_path(profile_id, audio_path)
+        ):
             self._delete_sample_audio(profile_id, existing["audio_path"])
         return {**self.speaker_profile(profile_id), "added": saved}
 
@@ -219,9 +220,7 @@ class SpeakerProfileStoreMixin:
                 )
             ]
             center = (
-                self._normalized_embedding(
-                    [sum(values) / len(samples) for values in zip(*samples)]
-                )
+                self._normalized_embedding([sum(values) / len(samples) for values in zip(*samples)])
                 if samples
                 else []
             )
@@ -276,9 +275,7 @@ class SpeakerProfileStoreMixin:
 
     def delete_speaker_profile(self, profile_id):
         """删除人员档案及其所有声纹样本和本地录音文件。"""
-        directory = safe_child(
-            self.speaker_profiles_dir, profile_id, label="speaker profile id"
-        )
+        directory = safe_child(self.speaker_profiles_dir, profile_id, label="speaker profile id")
         with self.connect() as db:
             db.execute("DELETE FROM speaker_profiles WHERE id=?", (profile_id,))
         shutil.rmtree(directory, ignore_errors=True)
@@ -294,9 +291,7 @@ class SpeakerProfileStoreMixin:
             self.delete_speaker_profile(row["profile_id"])
         return len(rows)
 
-    def set_segment_speaker(
-        self, meeting_id, segment_id, speaker, profile_id=None, name=None
-    ):
+    def set_segment_speaker(self, meeting_id, segment_id, speaker, profile_id=None, name=None):
         """设置段落的说话人并标记为用户编辑。"""
         with self.connect() as db:
             db.execute(

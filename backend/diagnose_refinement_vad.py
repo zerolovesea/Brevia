@@ -35,8 +35,7 @@ DEFAULT_TRACK = (
 def summarize(label, speech, sample_rate):
     durations = [turn["end_ms"] - turn["start_ms"] for turn in speech]
     gaps = [
-        speech[index + 1]["start_ms"] - speech[index]["end_ms"]
-        for index in range(len(speech) - 1)
+        speech[index + 1]["start_ms"] - speech[index]["end_ms"] for index in range(len(speech) - 1)
     ]
     total_speech = sum(durations)
     print(f"[{label}]")
@@ -61,7 +60,10 @@ def summarize(label, speech, sample_rate):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("wav", nargs="?", type=Path, default=DEFAULT_TRACK)
-    parser.add_argument("--models-dir", default=os.environ.get("BREVIA_MODELS_DIR") or str(Path.home() / "brevia" / "models"))
+    parser.add_argument(
+        "--models-dir",
+        default=os.environ.get("BREVIA_MODELS_DIR") or str(Path.home() / "brevia" / "models"),
+    )
     args = parser.parse_args()
 
     manager = ModelManager(args.models_dir)
@@ -85,7 +87,9 @@ def main():
         turns = [{**turn, "speaker": "local-user"} for turn in speech]
         stable = RefinementWorkerMixin._stabilize_speaker_turns(turns)
         windows = RefinementWorkerMixin._refinement_turns(
-            stable, len(samples) * 1000 // sample_rate, SETTINGS["asr"]["refined_window_seconds"] * 1000
+            stable,
+            len(samples) * 1000 // sample_rate,
+            SETTINGS["asr"]["refined_window_seconds"] * 1000,
         )
         print(f"  稳定化后 turn 数: {len(stable)}")
         print(f"  精修窗口数(最终段落数): {len(windows)}")

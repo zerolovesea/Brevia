@@ -44,15 +44,16 @@
       .filter((model) => (model.stages || []).includes('refined') && !model.retired)
       .sort(
         (first, second) =>
-          (first.refined_priority ?? DEFAULT_REFINED_PRIORITY)
-          - (second.refined_priority ?? DEFAULT_REFINED_PRIORITY),
+          (first.refined_priority ?? DEFAULT_REFINED_PRIORITY) -
+          (second.refined_priority ?? DEFAULT_REFINED_PRIORITY),
       );
   }
 
   /** 该语言可用（含未安装）的整句识别模型。@returns {object[]} */
   function refinedModelsForLanguage(catalog, language) {
     return selectableRefinedModels(catalog).filter((model) =>
-      modelSupportsLanguage(model, language || 'auto'));
+      modelSupportsLanguage(model, language || 'auto'),
+    );
   }
 
   /** 清单声明的该语言默认识别模型 id；没有声明则回落到第一个支持该语言的模型。
@@ -61,7 +62,8 @@
   function declaredDefaultModelId(catalog, language) {
     const candidates = selectableRefinedModels(catalog);
     const declared = candidates.find((model) =>
-      (model.default_for_languages || []).includes(language));
+      (model.default_for_languages || []).includes(language),
+    );
     if (declared) return declared.id;
     return candidates.find((model) => modelSupportsLanguage(model, language || 'auto'))?.id;
   }
@@ -81,15 +83,20 @@
     const preferredModel = preferredId
       ? (catalog || []).find((model) => model.id === preferredId)
       : null;
-    if (preferredModel && !preferredModel.retired && modelSupportsLanguage(preferredModel, language)) {
+    if (
+      preferredModel &&
+      !preferredModel.retired &&
+      modelSupportsLanguage(preferredModel, language)
+    ) {
       return preferredId;
     }
     // ② 清单声明的默认；没装时才回退到已安装的同语言模型（见函数头注释第 ③ 步）。
     const declared = declaredDefaultModelId(catalog, language) || fallbackId;
     if (!declared) return undefined;
     if (isInstalled(declared)) return declared;
-    const fallback = refinedModelsForLanguage(catalog, language)
-      .find((model) => isInstalled(model.id));
+    const fallback = refinedModelsForLanguage(catalog, language).find((model) =>
+      isInstalled(model.id),
+    );
     return fallback?.id || declared;
   }
 
@@ -101,8 +108,13 @@
    * @returns {Array<[string, string, string]>} [值, 文案, 角标]。
    */
   function refinedModelOptions({
-    catalog, language, installed, downloadWord = '', recommendedWord = '',
-    formatSize = (bytes) => String(bytes || 0), fallbackId,
+    catalog,
+    language,
+    installed,
+    downloadWord = '',
+    recommendedWord = '',
+    formatSize = (bytes) => String(bytes || 0),
+    fallbackId,
   }) {
     const isInstalled = (modelId) => Boolean(installed && installed.has(modelId));
     const recommendedId = declaredDefaultModelId(catalog, language);
@@ -126,10 +138,14 @@
    */
   function visibleModels(catalog, language) {
     const defaultId = language ? declaredDefaultModelId(catalog, language) : undefined;
-    return (catalog || []).filter((model) => !model.retired).sort((first, second) =>
-      Number(second.id === defaultId) - Number(first.id === defaultId)
-      || (first.refined_priority ?? DEFAULT_REFINED_PRIORITY)
-        - (second.refined_priority ?? DEFAULT_REFINED_PRIORITY));
+    return (catalog || [])
+      .filter((model) => !model.retired)
+      .sort(
+        (first, second) =>
+          Number(second.id === defaultId) - Number(first.id === defaultId) ||
+          (first.refined_priority ?? DEFAULT_REFINED_PRIORITY) -
+            (second.refined_priority ?? DEFAULT_REFINED_PRIORITY),
+      );
   }
 
   /** 该模型在模型库里属于哪一组。

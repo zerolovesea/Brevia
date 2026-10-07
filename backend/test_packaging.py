@@ -85,7 +85,9 @@ class BundledModelTest(PackagingAssetTest):
         (marked / "model.onnx").write_bytes(b"12345")
         unmarked = self.root / "not-managed-by-brevia"
         unmarked.mkdir()
-        self.assertEqual([name for name, _ in prune_stale_bundled_models(self.root)], ["stale-punct-model"])
+        self.assertEqual(
+            [name for name, _ in prune_stale_bundled_models(self.root)], ["stale-punct-model"]
+        )
         self.assertFalse(marked.exists())
         self.assertTrue(unmarked.exists())
         self.assertTrue((self.root / expected[0]).exists())
@@ -122,7 +124,12 @@ class PreflightTest(PackagingAssetTest):
     def test_dev_only_scripts_do_not_invalidate_a_built_worker(self):
         self.complete_models(self.root / "bundled-models")
         self.write_workers()
-        for name in ("test_packaging.py", "diagnose_model.py", "bench_live.py", "preflight_package.py"):
+        for name in (
+            "test_packaging.py",
+            "diagnose_model.py",
+            "bench_live.py",
+            "preflight_package.py",
+        ):
             path = self.root / name
             path.write_text("x = 1", encoding="utf-8")
             future = time.time() + 60
@@ -182,16 +189,24 @@ class WindowsRuntimeTest(PackagingAssetTest):
         entry = ModuleType('PyInstaller.__main__')
         entry.run = Mock()
         package.__main__ = entry
-        with patch.dict(sys.modules, {'PyInstaller': package, 'PyInstaller.__main__': entry}), \
-                patch.object(sys, 'platform', 'win32'), \
-                patch('backend.bundled_models.prepare_bundled_models'):
+        with (
+            patch.dict(sys.modules, {'PyInstaller': package, 'PyInstaller.__main__': entry}),
+            patch.object(sys, 'platform', 'win32'),
+            patch('backend.bundled_models.prepare_bundled_models'),
+        ):
             runpy.run_path(str(Path(__file__).with_name('pack_worker.py')))
         args = entry.run.call_args.args[0]
+
         def values(flag):
             return {args[i + 1] for i, value in enumerate(args[:-1]) if value == flag}
-        self.assertTrue({'backend.llama_sidecar', 'backend.check_windows_runtime'} <= values('--hidden-import'))
+
+        self.assertTrue(
+            {'backend.llama_sidecar', 'backend.check_windows_runtime'} <= values('--hidden-import')
+        )
         self.assertTrue({'sherpa_onnx', 'llama_cpp'} <= values('--collect-binaries'))
-        self.assertTrue({'backend.mlx_asr', 'mlx', 'mlx_audio', 'transformers'} <= values('--exclude-module'))
+        self.assertTrue(
+            {'backend.mlx_asr', 'mlx', 'mlx_audio', 'transformers'} <= values('--exclude-module')
+        )
         self.assertNotIn('sherpa_onnx', values('--exclude-module'))
 
     def test_windows_entry_dispatches_sidecar_without_starting_worker(self):
@@ -199,14 +214,18 @@ class WindowsRuntimeTest(PackagingAssetTest):
         from unittest.mock import Mock, patch
         from . import worker_entry
 
-        for flag, module in [('--llama-sidecar', 'backend.llama_sidecar'),
-                             ('--check-runtime', 'backend.check_windows_runtime')]:
+        for flag, module in [
+            ('--llama-sidecar', 'backend.llama_sidecar'),
+            ('--check-runtime', 'backend.check_windows_runtime'),
+        ]:
             target = Mock()
-            with patch.object(sys, 'platform', 'win32'), \
-                    patch.object(sys, 'argv', ['brevia-worker.exe', flag]), \
-                    patch.object(worker_entry.multiprocessing, 'freeze_support'), \
-                    patch.object(worker_entry, 'import_module', return_value=target) as load, \
-                    patch('backend.worker.main') as worker_main:
+            with (
+                patch.object(sys, 'platform', 'win32'),
+                patch.object(sys, 'argv', ['brevia-worker.exe', flag]),
+                patch.object(worker_entry.multiprocessing, 'freeze_support'),
+                patch.object(worker_entry, 'import_module', return_value=target) as load,
+                patch('backend.worker.main') as worker_main,
+            ):
                 worker_entry.main()
             load.assert_called_once_with(module)
             target.main.assert_called_once_with()
@@ -217,12 +236,16 @@ class WindowsRuntimeTest(PackagingAssetTest):
         from unittest.mock import patch
         from .worker_llama_sidecar import LlamaSidecarMixin
 
-        with patch.object(sys, 'frozen', True, create=True), \
-                patch.object(sys, 'platform', 'win32'), \
-                patch.object(sys, 'executable', 'C:/Brevia/brevia-worker.exe'), \
-                patch.dict(os.environ, {'BREVIA_LLAMA_HELPER': ''}):
-            self.assertEqual(LlamaSidecarMixin._sidecar_command(None),
-                             ['C:/Brevia/brevia-worker.exe', '--llama-sidecar'])
+        with (
+            patch.object(sys, 'frozen', True, create=True),
+            patch.object(sys, 'platform', 'win32'),
+            patch.object(sys, 'executable', 'C:/Brevia/brevia-worker.exe'),
+            patch.dict(os.environ, {'BREVIA_LLAMA_HELPER': ''}),
+        ):
+            self.assertEqual(
+                LlamaSidecarMixin._sidecar_command(None),
+                ['C:/Brevia/brevia-worker.exe', '--llama-sidecar'],
+            )
 
     def test_macos_still_uses_the_separate_sidecar_binary(self):
         import sys
@@ -233,10 +256,12 @@ class WindowsRuntimeTest(PackagingAssetTest):
         helper = internal.parent.parent / 'brevia-llama-helper' / 'brevia-llama-helper'
         helper.parent.mkdir(parents=True)
         helper.touch()
-        with patch.object(sys, 'frozen', True, create=True), \
-                patch.object(sys, '_MEIPASS', str(internal), create=True), \
-                patch.object(sys, 'platform', 'darwin'), \
-                patch.dict(os.environ, {'BREVIA_LLAMA_HELPER': ''}):
+        with (
+            patch.object(sys, 'frozen', True, create=True),
+            patch.object(sys, '_MEIPASS', str(internal), create=True),
+            patch.object(sys, 'platform', 'darwin'),
+            patch.dict(os.environ, {'BREVIA_LLAMA_HELPER': ''}),
+        ):
             self.assertEqual(LlamaSidecarMixin._sidecar_command(None), [str(helper)])
 
     def test_default_entry_still_starts_the_worker_on_both_platforms(self):
@@ -245,12 +270,14 @@ class WindowsRuntimeTest(PackagingAssetTest):
         from . import worker_entry
 
         for platform in ('darwin', 'win32'):
-            with patch.object(sys, 'platform', platform), \
-                    patch.object(sys, 'argv', ['brevia-worker']), \
-                    patch.object(worker_entry.multiprocessing, 'freeze_support'), \
-                    patch.object(worker_entry, 'import_module') as dynamic, \
-                    patch('backend.worker.protocol_output', return_value='protocol'), \
-                    patch('backend.worker.main') as worker_main:
+            with (
+                patch.object(sys, 'platform', platform),
+                patch.object(sys, 'argv', ['brevia-worker']),
+                patch.object(worker_entry.multiprocessing, 'freeze_support'),
+                patch.object(worker_entry, 'import_module') as dynamic,
+                patch('backend.worker.protocol_output', return_value='protocol'),
+                patch('backend.worker.main') as worker_main,
+            ):
                 worker_entry.main()
             worker_main.assert_called_once_with('protocol')
             dynamic.assert_not_called()

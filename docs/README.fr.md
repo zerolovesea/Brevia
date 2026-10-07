@@ -39,12 +39,12 @@ La configuration initiale liste les modèles de parole téléchargeables et coch
 
 Ensuite, pour chaque réunion, Brevia choisit un modèle de reconnaissance par défaut selon la **langue de la réunion**, déclarée dans `backend/models.json` :
 
-| Langue de la réunion | Modèle par défaut | Pourquoi |
-| --- | --- | --- |
-| Chinois, cantonais | FunASR Nano | Meilleure précision sur le chinois et ses dialectes |
-| Japonais, coréen | Qwen3-ASR 0.6B | Le seul modèle sélectionnable couvrant les deux |
+| Langue de la réunion                                            | Modèle par défaut    | Pourquoi                                                                    |
+| --------------------------------------------------------------- | -------------------- | --------------------------------------------------------------------------- |
+| Chinois, cantonais                                              | FunASR Nano          | Meilleure précision sur le chinois et ses dialectes                         |
+| Japonais, coréen                                                | Qwen3-ASR 0.6B       | Le seul modèle sélectionnable couvrant les deux                             |
 | Anglais, espagnol, français, allemand, russe, langues mélangées | Parakeet TDT 0.6B v3 | 25 langues européennes dans un seul modèle, avec ponctuation et horodatages |
-| Toute autre langue | Qwen3-ASR 0.6B | La couverture la plus large parmi les autres modèles |
+| Toute autre langue                                              | Qwen3-ASR 0.6B       | La couverture la plus large parmi les autres modèles                        |
 
 Sur les Mac Apple Silicon, la reconnaissance vocale et Silero VAD utilisent mlx-audio/MLX ; Windows conserve Sherpa ONNX. La séparation des locuteurs et les empreintes vocales utilisent Sherpa sur les deux plateformes. Après la mise à jour d’un Mac, téléchargez le modèle de reconnaissance MLX correspondant ; les enregistrements existants restent disponibles. La limite effective est le minimum entre le réglage en direct, la limite VAD de la langue et la capacité du modèle (20 s pour les modèles MLX de macOS). La détection automatique de langue attend au moins 2 s de silence.
 
@@ -93,10 +93,11 @@ Des modeles telechargeables couvrant la transcription par phrases, l'affinage ap
 
 Telechargez la derniere version depuis [GitHub Releases](https://github.com/zerolovesea/Brevia/releases) :
 
-| Plateforme | Installeur |
-| --- | --- |
-| macOS (Apple Silicon) | `Brevia-<version>-arm64.dmg` |
-| Windows (x64) | `Brevia-<version>-x64-setup.exe` |
+| Plateforme            | Installeur                       |
+| --------------------- | -------------------------------- |
+| macOS (Apple Silicon) | `Brevia-<version>-arm64.dmg`     |
+| Windows (x64)         | `Brevia-<version>-x64-setup.exe` |
+
 > Windows peut afficher un avertissement **Microsoft Defender SmartScreen** au premier lancement. Cliquez sur **« Informations complementaires » → « Executer quand meme »** apres avoir verifie que le telechargement provient de la page officielle Releases.
 
 Au premier lancement, accordez les permissions microphone et enregistrement d'ecran, puis ouvrez **Reglages → Bibliotheque de modeles** pour telecharger les modeles necessaires.
@@ -125,28 +126,29 @@ Voir la [methodologie et les resultats du benchmark](../backend/benchmarks/vad-2
 
 ## Stack technique
 
-| Couche | Technologie |
-| --- | --- |
-| Shell bureau | Electron 43 — pont preload, isolation de contexte, renderer sandbox |
-| Frontend | HTML/CSS/JS natif, Tailwind CSS 4, i18n integre (8 langues) |
-| Backend | Python 3.10+, protocole worker JSONL, stockage SQLite |
-| Moteur vocal | [mlx-audio](https://github.com/Blaizzy/mlx-audio) / MLX (macOS); [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 1.13.8 (Windows), ONNX Runtime |
-| Traitement des locuteurs | Segmentation Pyannote + embeddings 3D-Speaker ERes2Net Base |
-| Client LLM | llama.cpp integre (GGUF) et APIs chat compatibles OpenAI / Anthropic |
-| I/O audio | ffmpeg (integre aux releases) |
-| Build et empaquetage | electron-builder, PyInstaller (runtime Python integre) |
+| Couche                   | Technologie                                                                                                                                          |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Shell bureau             | Electron 43 — pont preload, isolation de contexte, renderer sandbox                                                                                  |
+| Frontend                 | HTML/CSS/JS natif, Tailwind CSS 4, i18n integre (8 langues)                                                                                          |
+| Backend                  | Python 3.10+, protocole worker JSONL, stockage SQLite                                                                                                |
+| Moteur vocal             | [mlx-audio](https://github.com/Blaizzy/mlx-audio) / MLX (macOS); [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 1.13.8 (Windows), ONNX Runtime |
+| Traitement des locuteurs | Segmentation Pyannote + embeddings 3D-Speaker ERes2Net Base                                                                                          |
+| Client LLM               | llama.cpp integre (GGUF) et APIs chat compatibles OpenAI / Anthropic                                                                                 |
+| I/O audio                | ffmpeg (integre aux releases)                                                                                                                        |
+| Build et empaquetage     | electron-builder, PyInstaller (runtime Python integre)                                                                                               |
+
 ## Modeles pris en charge
 
 La transcription par phrases, l'affinage, les notes IA et la traduction des sous-titres se telechargent a la demande depuis **Reglages → Bibliotheque de modeles** ; la detection d'activite vocale, la separation des locuteurs et les empreintes vocales sont fournies. Le manifeste est dans [`backend/models.json`](../backend/models.json).
 
-| Categorie | Modeles representatifs | Langues |
-| --- | --- | --- |
+| Categorie                            | Modeles representatifs                            | Langues                                        |
+| ------------------------------------ | ------------------------------------------------- | ---------------------------------------------- |
 | Transcription par phrases / affinage | FunASR Nano, Qwen3-ASR 0.6B, Parakeet TDT 0.6B v3 | Chinois / multilingue / 25 langues europeennes |
-| Detection d'activite vocale | Silero VAD | Universel |
-| Separation des locuteurs | Pyannote Segmentation 3.0 | Universel |
-| Empreintes vocales | 3D-Speaker ERes2Net Base | Chinois |
-| Notes IA et resume de reunion | Qwen 3.5 2B, Qwen 3.5 4B | Chinois / anglais |
-| Traduction des sous-titres | Tencent Hy-MT2 1.8B | 33 langues |
+| Detection d'activite vocale          | Silero VAD                                        | Universel                                      |
+| Separation des locuteurs             | Pyannote Segmentation 3.0                         | Universel                                      |
+| Empreintes vocales                   | 3D-Speaker ERes2Net Base                          | Chinois                                        |
+| Notes IA et resume de reunion        | Qwen 3.5 2B, Qwen 3.5 4B                          | Chinois / anglais                              |
+| Traduction des sous-titres           | Tencent Hy-MT2 1.8B                               | 33 langues                                     |
 
 Pour les resumes LLM, choisissez **IA integree** pour executer localement un modele GGUF fourni (Qwen 3.5 2B / 4B), ou pointez Brevia vers Claude, OpenAI, OpenRouter ou tout service personnalise compatible avec OpenAI Chat Completions ou Anthropic Messages : Gemini (endpoint compatible OpenAI), DeepSeek, Kimi, Qwen et plus.
 
@@ -185,6 +187,7 @@ BREVIA_FFMPEG=/path/to/ffmpeg       # Binaire ffmpeg (si absent du PATH)
 
 BREVIA_DATA_DIR=~/brevia-dev BREVIA_MODELS_DIR=~/brevia-models npm start
 ```
+
 ### Construire les installeurs
 
 ```bash
@@ -203,53 +206,62 @@ Les artefacts arrivent dans `dist/`. Chaque build de plateforme integre un worke
 <summary><strong>Windows affiche un avertissement Microsoft Defender SmartScreen</strong></summary>
 
 Les builds de release ne sont pas signes avec un certificat de signature de code payant, et SmartScreen bloque par defaut les executables recemment observes. Cliquez sur **« Informations complementaires » → « Executer quand meme »** apres avoir confirme que le telechargement provient de la page officielle [Releases](https://github.com/zerolovesea/Brevia/releases).
+
 </details>
 
 <details>
 <summary><strong>Dois-je installer Python separement ?</strong></summary>
 
 Non. Les builds de release integrent le runtime Python et toutes les dependances necessaires. Un environnement Python separe n'est requis que pour l'execution depuis les sources.
+
 </details>
 
 <details>
 <summary><strong>Ou sont stockees mes donnees ?</strong></summary>
 
 Par défaut dans `~/brevia`. Les modèles et les enregistrements peuvent avoir des dossiers distincts ; SQLite et les profils vocaux restent à la racine des données. `BREVIA_DATA_DIR` définit cette racine.
+
 </details>
 
 <details>
 <summary><strong>Quelles langues de transcription sont prises en charge ?</strong></summary>
 
 Plus de 30 langues incluant le chinois, l'anglais, le japonais, le coreen, le francais, l'allemand, l'espagnol, le russe, l'arabe, le thai, le vietnamien et l'indonesien. Choisissez le modele correspondant dans la Bibliotheque de modeles de l'application.
+
 </details>
 <details>
 <summary><strong>Brevia envoie-t-il de l'audio vers le cloud ?</strong></summary>
 
 Non. La reconnaissance vocale et la diarisation s'executent toutes en local. Seuls les resumes LLM et la traduction contactent le reseau, et uniquement apres que vous ayez configure un fournisseur — texte uniquement, jamais d'audio.
+
 </details>
 
 <details>
 <summary><strong>Quel espace disque les modeles necessitent-ils ?</strong></summary>
 
 Cela depend de ceux que vous installez. Une configuration typique (transcription par phrases + affinage) fait 1–2 Go ; la detection d'activite vocale, la separation des locuteurs et les empreintes vocales sont fournies. Le plus petit modele de reconnaissance occupe environ 487 Mo ; les plus grands depassent 1 Go.
+
 </details>
 
 <details>
 <summary><strong>Puis-je importer des enregistrements existants ?</strong></summary>
 
 Oui. Importez des fichiers audio depuis la bibliotheque de reunions et Brevia les transcrira hors ligne via le meme pipeline. Necessite `ffmpeg` dans le PATH (ou definir `BREVIA_FFMPEG`).
+
 </details>
 
 <details>
 <summary><strong>Comment changer la langue de l'interface ?</strong></summary>
 
 **Reglages → General → Langue de l'interface.** Anglais, chinois simplifie, espagnol, japonais, coreen, francais, allemand et russe sont disponibles.
+
 </details>
 
 <details>
 <summary><strong>Comment les echantillons d'empreinte vocale sont-ils stockes ?</strong></summary>
 
 Les embeddings vocaux (un petit vecteur de flottants) et l'audio de reference vivent dans la base SQLite locale et le systeme de fichiers. Rien ne quitte l'appareil, et supprimer un profil supprime les donnees associees.
+
 </details>
 
 ## Feedback et contributions
