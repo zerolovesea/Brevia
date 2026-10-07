@@ -1,6 +1,6 @@
 target-version = "py312"
 line-length = 100
-include = ["backend/**/*.py", "scripts/**/*.py"]
+include = ["backend/**/*.py", "scripts/**/*.py", "mobile/scripts/**/*.py"]
 extend-exclude = ["backend/build", "backend/runtime", "backend/bundled-models"]
 
 [lint]

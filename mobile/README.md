@@ -165,20 +165,21 @@ git push -u origin feature/mobile-transcript-layout
 
 ### 首次配置 Secrets
 
-已在仓库 Actions Secrets 配齐以下 10 项配置。App Store Connect API 使用“Brevia GitHub Actions”团队密钥（App Manager 权限），已通过 API 实测读取 Brevia 应用和“Brevia 内部测试”群组。云端构建及上传尚未实跑。现有电脑端 `APPLE_CERTIFICATE_*` 为 Developer ID 证书，不能用于 iOS。
+已在仓库 Actions Secrets 配齐以下 11 项配置。App Store Connect API 使用“Brevia GitHub Actions”团队密钥（App Manager 权限），已通过 API 实测读取 Brevia 应用和“Brevia 内部测试”群组。CI 导出使用主应用与实时活动扩展各自的描述文件进行手动签名，不依赖云签名权限。现有电脑端 `APPLE_CERTIFICATE_*` 为 Developer ID 证书，不能用于 iOS。
 
-| Secret                       | 内容                                                                                                   |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `IOS_CERTIFICATE_P12_BASE64` | Apple Distribution 证书及私钥导出的带密码 P12 的 Base64                                                |
-| `IOS_CERTIFICATE_PASSWORD`   | P12 密码                                                                                               |
-| `IOS_PROFILE_BASE64`         | App Store Connect 分发描述文件 Base64，应用 `com.brevia.breviaMobile`、团队 `4M64879BBM`，包含上述证书 |
-| `ASC_KEY_ID`                 | App Store Connect 团队 API Key ID                                                                      |
-| `ASC_ISSUER_ID`              | 对应 Issuer ID                                                                                         |
-| `ASC_KEY_P8_BASE64`          | API Key 的 P8 私钥 Base64，需要 App Manager 权限以分发和提交审核                                       |
-| `ANDROID_KEYSTORE_BASE64`    | 固定 Android release/upload keystore Base64                                                            |
-| `ANDROID_KEYSTORE_PASSWORD`  | keystore 密码                                                                                          |
-| `ANDROID_KEY_ALIAS`          | 签名条目别名                                                                                           |
-| `ANDROID_KEY_PASSWORD`       | 签名条目密码                                                                                           |
+| Secret                         | 内容                                                                                                                |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| `IOS_CERTIFICATE_P12_BASE64`   | Apple Distribution 证书及私钥导出的带密码 P12 的 Base64                                                             |
+| `IOS_CERTIFICATE_PASSWORD`     | P12 密码                                                                                                            |
+| `IOS_PROFILE_BASE64`           | 手动创建的 App Store Connect 分发描述文件 Base64，应用 `com.brevia.breviaMobile`、团队 `4M64879BBM`，包含上述证书   |
+| `IOS_EXTENSION_PROFILE_BASE64` | 扩展 `com.brevia.breviaMobile.RecordingActivity` 的手动创建 App Store 分发描述文件 Base64，与主应用使用同一分发证书 |
+| `ASC_KEY_ID`                   | App Store Connect 团队 API Key ID                                                                                   |
+| `ASC_ISSUER_ID`                | 对应 Issuer ID                                                                                                      |
+| `ASC_KEY_P8_BASE64`            | API Key 的 P8 私钥 Base64，需要 App Manager 权限以分发和提交审核                                                    |
+| `ANDROID_KEYSTORE_BASE64`      | 固定 Android release/upload keystore Base64                                                                         |
+| `ANDROID_KEYSTORE_PASSWORD`    | keystore 密码                                                                                                       |
+| `ANDROID_KEY_ALIAS`            | 签名条目别名                                                                                                        |
+| `ANDROID_KEY_PASSWORD`         | 签名条目密码                                                                                                        |
 
 iOS 私钥位于本机登录钥匙串。导出后通过 `gh secret set NAME < 文件` 或 GitHub Secret 页面设置；不要复用桌面证书，不要把凭据放进 issue、聊天或代码。安卓固定签名密钥已创建；本机签名备份保存在仓库外的 `~/.local/share/brevia-signing/`，目录仅当前用户可访问。API Key 已创建并备份到同一目录；私钥和密码未写入仓库。描述文件、证书到期或换证后更新 Secrets。CI 使用临时钥匙串，结束后清理签名文件。
 

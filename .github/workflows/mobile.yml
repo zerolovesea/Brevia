@@ -53,6 +53,7 @@ jobs:
       - run: flutter analyze
       - run: flutter test
       - run: ruby scripts/test-release.rb
+      - run: python3 scripts/test-ios-signing.py
       - name: Allocate shared build number
         id: version
         # Seconds since 2026, within Android's versionCode limit. Re-run all jobs for a new number.
@@ -120,6 +121,7 @@ jobs:
       IOS_CERTIFICATE_P12_BASE64: ${{ secrets.IOS_CERTIFICATE_P12_BASE64 }}
       IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
       IOS_PROFILE_BASE64: ${{ secrets.IOS_PROFILE_BASE64 }}
+      IOS_EXTENSION_PROFILE_BASE64: ${{ secrets.IOS_EXTENSION_PROFILE_BASE64 }}
       ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
       ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
       ASC_KEY_P8_BASE64: ${{ secrets.ASC_KEY_P8_BASE64 }}
@@ -153,9 +155,7 @@ jobs:
         run: |
           xcodebuild -version
           xcodebuild -exportArchive -archivePath build/ios/archive/Runner.xcarchive \
-            -exportPath build/ios/ipa -exportOptionsPlist "$RUNNER_TEMP/brevia-export.plist" \
-            -allowProvisioningUpdates -authenticationKeyPath "$RUNNER_TEMP/brevia-asc.p8" \
-            -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+            -exportPath build/ios/ipa -exportOptionsPlist "$RUNNER_TEMP/brevia-export.plist"
       - uses: actions/upload-artifact@v4
         with:
           name: Brevia-ios-${{ env.BUILD_NUMBER }}
@@ -169,10 +169,10 @@ jobs:
         if: always()
         run: |
           security delete-keychain "$RUNNER_TEMP/brevia-signing.keychain-db" || true
-          if [[ -f "$RUNNER_TEMP/brevia-profile-path" ]]; then
-            rm -f "$(cat "$RUNNER_TEMP/brevia-profile-path")"
+          if [[ -f "$RUNNER_TEMP/brevia-profile-paths" ]]; then
+            while IFS= read -r profile; do rm -f "$profile"; done < "$RUNNER_TEMP/brevia-profile-paths"
           fi
-          rm -f "$RUNNER_TEMP/brevia-distribution.p12" "$RUNNER_TEMP/brevia.mobileprovision" "$RUNNER_TEMP/brevia-asc.p8"
+          rm -f "$RUNNER_TEMP/brevia-distribution.p12" "$RUNNER_TEMP/com.brevia.breviaMobile.mobileprovision" "$RUNNER_TEMP/com.brevia.breviaMobile.RecordingActivity.mobileprovision" "$RUNNER_TEMP/brevia-asc.p8"
 
   appstore:
     needs: check
