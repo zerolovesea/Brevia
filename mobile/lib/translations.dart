@@ -1,6 +1,37 @@
 // Shared mobile UI, recording notifications and error messages. Keep placeholders consistent.
 const translations = {
   "en": {
+    "录音保留在手机，恢复连接后自动补传。":
+        "Recordings stay on your phone and upload automatically when reconnected.",
+    "首次配对需同一 Wi-Fi": "Use the same Wi-Fi for initial pairing",
+    "跨网连接需要先在电脑配置服务。":
+        "Set up the service on your computer to connect across networks.",
+    "已配置跨网连接，直连失败时通过加密中继连接。":
+        "Remote connection is configured. An encrypted relay is used if a direct connection fails.",
+    "正在重新连接": "Reconnecting",
+    "电脑已休眠或断开，等待开盖或恢复连接":
+        "Computer asleep or disconnected. Waiting for it to wake or reconnect.",
+    "上传到电脑": "Upload to computer",
+    "仅保存在手机": "Saved only on phone",
+    "参会人数": "Participants",
+    "可留空；已知人数用于电脑端说话人区分。":
+        "Optional. A known count helps distinguish speakers on the computer.",
+    "尚未上传": "Not uploaded",
+    "无需连接电脑。录音保存在本机，连接后由你主动上传。":
+        "No computer required. Recordings stay on this phone until you connect and choose to upload.",
+    "结束后由你选择电脑并上传，录音期间不传输音频。":
+        "Choose a computer and upload after recording. No audio is sent while recording.",
+    "自动识别": "Automatic",
+    "请先结束录音": "End the recording first",
+    "上传录音": "Upload recording",
+    "上传到这台电脑": "Upload to this computer",
+    "此录音仅保存在手机。请先导出需要保留的录音，删除后无法恢复。":
+        "This recording is only on your phone. Export anything you need before deleting. Deletion cannot be undone.",
+    "电脑上的会议已删除。本机可能是唯一副本，请先导出需要保留的录音。删除后无法恢复。":
+        "The meeting was deleted on the computer. This may be the only copy. Export any recording you need before deleting. Deletion cannot be undone.",
+    "录音操作尚未确认，请检查录音状态后重试":
+        "Recording has not been confirmed. Check its status and try again.",
+    "会议已在电脑永久删除": "This meeting was permanently deleted on the computer.",
     "电脑操作失败，请在电脑查看详情。":
         "Computer operation failed. Check details on the computer.",
     "中文": "Chinese",
@@ -55,7 +86,6 @@ const translations = {
     "前往系统设置": "Open system settings",
     "发言人": "Speaker",
     "取消信任此电脑": "Forget this computer",
-    "同一 Wi-Fi · 音频不经云端": "Same Wi-Fi · Audio stays off the cloud",
     "同步完成后可删除": "Delete after sync",
     "后台录音说明": "Background recording",
     "回听本机录音": "Play local audio",
@@ -157,7 +187,6 @@ const translations = {
     "重新精修会议？": "Refine meeting again?",
     "隐私与关于": "Privacy & about",
     "音频已传输": "Audio uploaded",
-    "首版仅支持局域网。": "Local network only in this version.",
     "麦克风权限": "Microphone permission",
     "界面语言": "App language",
     "状态待确认": "Check status",
@@ -207,8 +236,6 @@ const translations = {
     "点击“重点”记录值得回看的时刻。": "Tap Highlight to mark a moment for later.",
     "电脑将使用已有录音重新生成字幕，当前字幕可能被替换。":
         "Your computer will regenerate subtitles from the audio. Existing subtitles may be replaced.",
-    "电脑断开 · 音频保留在手机，恢复连接后补传。":
-        "Computer disconnected · Audio stays on your phone and uploads after reconnection.",
     "电脑暂无支持此语言的模型": "No model for this language on the computer",
     "电脑版协议不兼容": "Desktop protocol is incompatible",
     "电脑生成或保存笔记后会显示在这里。":
@@ -252,6 +279,37 @@ const translations = {
         "Recording can continue while locked. Calls, force-stop or system limits can interrupt it; check the status when you return.\n\nAndroid uses a microphone foreground service. Allow recording notifications. If battery restrictions stop the app, adjust system settings. Return to the app to resume after pausing.",
   },
   "es": {
+    "录音保留在手机，恢复连接后自动补传。":
+        "Las grabaciones se conservan en el teléfono y se envían automáticamente al reconectar.",
+    "首次配对需同一 Wi-Fi": "La misma Wi-Fi para el primer emparejamiento",
+    "跨网连接需要先在电脑配置服务。":
+        "Configura el servicio en el ordenador para conectar desde otras redes.",
+    "已配置跨网连接，直连失败时通过加密中继连接。":
+        "Conexión remota configurada. Si falla la conexión directa, se usa un relé cifrado.",
+    "正在重新连接": "Reconectando",
+    "电脑已休眠或断开，等待开盖或恢复连接":
+        "Ordenador en reposo o desconectado. Esperando a que se active o vuelva a conectarse.",
+    "上传到电脑": "Subir al ordenador",
+    "仅保存在手机": "Solo en el teléfono",
+    "参会人数": "Participantes",
+    "可留空；已知人数用于电脑端说话人区分。":
+        "Opcional. El número ayuda a distinguir hablantes en el ordenador.",
+    "尚未上传": "Sin subir",
+    "无需连接电脑。录音保存在本机，连接后由你主动上传。":
+        "No necesitas un ordenador. La grabación permanece en el teléfono hasta que te conectes y decidas subirla.",
+    "结束后由你选择电脑并上传，录音期间不传输音频。":
+        "Elige un ordenador y sube la grabación al terminar. No se envía audio durante la grabación.",
+    "自动识别": "Automático",
+    "请先结束录音": "Finaliza la grabación primero",
+    "上传录音": "Subir grabación",
+    "上传到这台电脑": "Subir a este ordenador",
+    "此录音仅保存在手机。请先导出需要保留的录音，删除后无法恢复。":
+        "Esta grabación solo está en el teléfono. Expórtala antes de eliminarla si quieres conservarla. La eliminación es irreversible.",
+    "电脑上的会议已删除。本机可能是唯一副本，请先导出需要保留的录音。删除后无法恢复。":
+        "La reunión se eliminó del ordenador. Esta puede ser la única copia. Exporta la grabación antes de eliminarla. La eliminación es irreversible.",
+    "录音操作尚未确认，请检查录音状态后重试":
+        "La operación de grabación no se ha confirmado. Comprueba su estado e inténtalo de nuevo.",
+    "会议已在电脑永久删除": "Esta reunión se eliminó permanentemente en el ordenador.",
     "电脑操作失败，请在电脑查看详情。": "Error en el ordenador. Consulta los detalles allí.",
     "中文": "Chino",
     "会议录音": "Grabación de reunión",
@@ -306,7 +364,6 @@ const translations = {
     "前往系统设置": "Abrir ajustes del sistema",
     "发言人": "Hablante",
     "取消信任此电脑": "Dejar de confiar",
-    "同一 Wi-Fi · 音频不经云端": "Mismo Wi-Fi · Audio sin nube",
     "同步完成后可删除": "Eliminar tras sincronizar",
     "后台录音说明": "Grabación en segundo plano",
     "回听本机录音": "Reproducir audio local",
@@ -408,7 +465,6 @@ const translations = {
     "重新精修会议？": "¿Refinar de nuevo?",
     "隐私与关于": "Privacidad e información",
     "音频已传输": "Audio enviado",
-    "首版仅支持局域网。": "Esta versión solo admite red local.",
     "麦克风权限": "Permiso de micrófono",
     "界面语言": "Idioma de la aplicación",
     "状态待确认": "Confirmar estado",
@@ -458,8 +514,6 @@ const translations = {
     "点击“重点”记录值得回看的时刻。": "Toca Momento para marcar un instante.",
     "电脑将使用已有录音重新生成字幕，当前字幕可能被替换。":
         "El ordenador regenerará los subtítulos del audio. Los actuales podrían reemplazarse.",
-    "电脑断开 · 音频保留在手机，恢复连接后补传。":
-        "Ordenador desconectado · El audio queda en el teléfono y se envía al reconectar.",
     "电脑暂无支持此语言的模型": "No hay modelo para este idioma",
     "电脑版协议不兼容": "Protocolo del ordenador incompatible",
     "电脑生成或保存笔记后会显示在这里。":
@@ -503,6 +557,29 @@ const translations = {
         "La grabación puede continuar con la pantalla bloqueada. Las llamadas, el cierre forzado o los límites del sistema pueden interrumpirla; comprueba el estado al volver.\n\nAndroid usa un servicio de micrófono en primer plano. Permite las notificaciones. Si el ahorro de batería cierra la app, ajusta el sistema. Vuelve a la app para continuar tras pausar.",
   },
   "ja": {
+    "录音保留在手机，恢复连接后自动补传。": "録音は端末に保存され、再接続後に自動で送信されます。",
+    "首次配对需同一 Wi-Fi": "初回ペアリングは同じ Wi-Fi で",
+    "跨网连接需要先在电脑配置服务。": "別のネットワークから接続するには、パソコンでサービスを設定してください。",
+    "已配置跨网连接，直连失败时通过加密中继连接。": "リモート接続を設定済みです。直接接続できない場合は暗号化された中継を使用します。",
+    "正在重新连接": "再接続中",
+    "电脑已休眠或断开，等待开盖或恢复连接": "パソコンがスリープ中か接続が切れています。復帰または再接続を待っています。",
+    "上传到电脑": "パソコンに送信",
+    "仅保存在手机": "スマートフォン内のみ",
+    "参会人数": "参加人数",
+    "可留空；已知人数用于电脑端说话人区分。": "任意。人数が分かるとパソコンでの話者識別に役立ちます。",
+    "尚未上传": "未送信",
+    "无需连接电脑。录音保存在本机，连接后由你主动上传。": "パソコンへの接続は不要です。録音は端末内に保存され、接続後に自分で送信できます。",
+    "结束后由你选择电脑并上传，录音期间不传输音频。": "録音後にパソコンを選んで送信します。録音中は音声を送信しません。",
+    "自动识别": "自動",
+    "请先结束录音": "先に録音を終了してください",
+    "上传录音": "録音を送信",
+    "上传到这台电脑": "このパソコンに送信",
+    "此录音仅保存在手机。请先导出需要保留的录音，删除后无法恢复。":
+        "この録音はスマートフォンにのみ保存されています。必要な録音を先に書き出してください。削除後は復元できません。",
+    "电脑上的会议已删除。本机可能是唯一副本，请先导出需要保留的录音。删除后无法恢复。":
+        "パソコンの会議は削除されています。この端末が唯一のコピーかもしれません。必要な録音を先に書き出してください。削除後は復元できません。",
+    "录音操作尚未确认，请检查录音状态后重试": "録音操作を確認できません。録音状態を確認して再試行してください。",
+    "会议已在电脑永久删除": "この会議はパソコンで完全に削除されました。",
     "电脑操作失败，请在电脑查看详情。": "パソコンでの操作に失敗しました。パソコンで詳細を確認してください。",
     "中文": "中国語",
     "会议录音": "会議録音",
@@ -556,7 +633,6 @@ const translations = {
     "前往系统设置": "システム設定を開く",
     "发言人": "話者",
     "取消信任此电脑": "このパソコンの信頼を解除",
-    "同一 Wi-Fi · 音频不经云端": "同じ Wi-Fi · 音声はクラウドを経由しません",
     "同步完成后可删除": "同期後に削除できます",
     "后台录音说明": "バックグラウンド録音",
     "回听本机录音": "端末の録音を再生",
@@ -658,7 +734,6 @@ const translations = {
     "重新精修会议？": "会議を再処理しますか？",
     "隐私与关于": "プライバシーと情報",
     "音频已传输": "音声を送信済み",
-    "首版仅支持局域网。": "このバージョンは LAN のみ対応です。",
     "麦克风权限": "マイクの権限",
     "界面语言": "アプリの言語",
     "状态待确认": "状態の確認が必要",
@@ -696,7 +771,6 @@ const translations = {
     "本机数据暂时无法读取，请重试。": "端末のデータを読み取れません。再試行してください。",
     "点击“重点”记录值得回看的时刻。": "「重要箇所」をタップして振り返りたい場面を記録します。",
     "电脑将使用已有录音重新生成字幕，当前字幕可能被替换。": "パソコンが録音から字幕を再生成します。現在の字幕が置き換わる場合があります。",
-    "电脑断开 · 音频保留在手机，恢复连接后补传。": "パソコンとの接続が切れました · 音声は端末に保存され、再接続後に送信されます。",
     "电脑暂无支持此语言的模型": "この言語に対応するモデルがパソコンにありません",
     "电脑版协议不兼容": "デスクトップの通信規約に互換性がありません",
     "电脑生成或保存笔记后会显示在这里。": "パソコンでノートを生成または保存すると、ここに表示されます。",
@@ -734,6 +808,30 @@ const translations = {
         "ロック中も録音できます。着信、強制終了、システム制限で中断される場合があるため、戻ったら状態を確認してください。\n\nAndroid はマイクのフォアグラウンドサービスを使用します。録音通知を許可してください。省電力設定でアプリが停止する場合はシステム設定を調整してください。一時停止後はアプリに戻って再開してください。",
   },
   "ko": {
+    "录音保留在手机，恢复连接后自动补传。": "녹음은 휴대폰에 보관되며 다시 연결되면 자동으로 전송됩니다.",
+    "首次配对需同一 Wi-Fi": "처음 페어링할 때는 같은 Wi-Fi 사용",
+    "跨网连接需要先在电脑配置服务。": "다른 네트워크에서 연결하려면 컴퓨터에서 서비스를 설정하세요.",
+    "已配置跨网连接，直连失败时通过加密中继连接。": "원격 연결이 설정되었습니다. 직접 연결이 안 되면 암호화된 중계를 사용합니다.",
+    "正在重新连接": "다시 연결 중",
+    "电脑已休眠或断开，等待开盖或恢复连接": "컴퓨터가 절전 상태이거나 연결이 끊겼습니다. 깨어나거나 다시 연결되기를 기다리는 중입니다.",
+    "上传到电脑": "컴퓨터로 업로드",
+    "仅保存在手机": "휴대폰에만 저장",
+    "参会人数": "참가자 수",
+    "可留空；已知人数用于电脑端说话人区分。": "선택 사항입니다. 인원 수는 컴퓨터에서 화자를 구분하는 데 사용됩니다.",
+    "尚未上传": "업로드 안 됨",
+    "无需连接电脑。录音保存在本机，连接后由你主动上传。":
+        "컴퓨터 연결 없이 녹음할 수 있습니다. 연결 후 직접 업로드할 때까지 휴대폰에만 저장됩니다.",
+    "结束后由你选择电脑并上传，录音期间不传输音频。": "녹음 후 컴퓨터를 선택해 업로드합니다. 녹음 중에는 오디오를 전송하지 않습니다.",
+    "自动识别": "자동",
+    "请先结束录音": "먼저 녹음을 종료하세요",
+    "上传录音": "녹음 업로드",
+    "上传到这台电脑": "이 컴퓨터로 업로드",
+    "此录音仅保存在手机。请先导出需要保留的录音，删除后无法恢复。":
+        "이 녹음은 휴대폰에만 있습니다. 필요한 녹음은 먼저 내보내세요. 삭제 후 복구할 수 없습니다.",
+    "电脑上的会议已删除。本机可能是唯一副本，请先导出需要保留的录音。删除后无法恢复。":
+        "컴퓨터의 회의가 삭제되었습니다. 이 기기에만 사본이 남아 있을 수 있습니다. 필요한 녹음은 먼저 내보내세요. 삭제 후 복구할 수 없습니다.",
+    "录音操作尚未确认，请检查录音状态后重试": "녹음 작업이 확인되지 않았습니다. 녹음 상태를 확인하고 다시 시도하세요.",
+    "会议已在电脑永久删除": "이 회의는 컴퓨터에서 영구 삭제되었습니다.",
     "电脑操作失败，请在电脑查看详情。": "컴퓨터 작업에 실패했습니다. 컴퓨터에서 자세한 내용을 확인하세요.",
     "中文": "중국어",
     "会议录音": "회의 녹음",
@@ -787,7 +885,6 @@ const translations = {
     "前往系统设置": "시스템 설정 열기",
     "发言人": "발언자",
     "取消信任此电脑": "이 컴퓨터 신뢰 해제",
-    "同一 Wi-Fi · 音频不经云端": "같은 Wi-Fi · 음성은 클라우드를 거치지 않음",
     "同步完成后可删除": "동기화 후 삭제 가능",
     "后台录音说明": "백그라운드 녹음 안내",
     "回听本机录音": "기기 녹음 재생",
@@ -889,7 +986,6 @@ const translations = {
     "重新精修会议？": "회의를 다시 정밀 처리할까요?",
     "隐私与关于": "개인정보 및 정보",
     "音频已传输": "오디오 전송됨",
-    "首版仅支持局域网。": "이 버전은 LAN만 지원합니다.",
     "麦克风权限": "마이크 권한",
     "界面语言": "앱 언어",
     "状态待确认": "상태 확인 필요",
@@ -927,7 +1023,6 @@ const translations = {
     "本机数据暂时无法读取，请重试。": "기기 데이터를 읽을 수 없습니다. 다시 시도하세요.",
     "点击“重点”记录值得回看的时刻。": "중요 지점을 눌러 다시 볼 순간을 표시하세요.",
     "电脑将使用已有录音重新生成字幕，当前字幕可能被替换。": "컴퓨터가 녹음으로 자막을 다시 생성합니다. 기존 자막이 대체될 수 있습니다.",
-    "电脑断开 · 音频保留在手机，恢复连接后补传。": "컴퓨터 연결 끊김 · 음성은 휴대폰에 보관되며 재연결 후 전송됩니다.",
     "电脑暂无支持此语言的模型": "컴퓨터에 이 언어용 모델이 없습니다",
     "电脑版协议不兼容": "데스크톱 프로토콜이 호환되지 않습니다",
     "电脑生成或保存笔记后会显示在这里。": "컴퓨터에서 노트를 생성하거나 저장하면 여기에 표시됩니다.",
@@ -965,6 +1060,38 @@ const translations = {
         "잠금 후에도 녹음할 수 있습니다. 통화, 강제 종료, 시스템 제한으로 중단될 수 있으니 돌아온 후 상태를 확인하세요.\n\nAndroid는 마이크 포그라운드 서비스를 사용합니다. 녹음 알림을 허용하세요. 절전 정책이 앱을 종료하면 시스템 설정을 조정하세요. 일시정지 후에는 앱에서 재개하세요.",
   },
   "fr": {
+    "录音保留在手机，恢复连接后自动补传。":
+        "Les enregistrements restent sur le téléphone et sont envoyés automatiquement à la reconnexion.",
+    "首次配对需同一 Wi-Fi": "Même Wi-Fi pour le premier jumelage",
+    "跨网连接需要先在电脑配置服务。":
+        "Configurez le service sur votre ordinateur pour vous connecter depuis un autre réseau.",
+    "已配置跨网连接，直连失败时通过加密中继连接。":
+        "Connexion distante configurée. Un relais chiffré est utilisé si la connexion directe échoue.",
+    "正在重新连接": "Reconnexion en cours",
+    "电脑已休眠或断开，等待开盖或恢复连接":
+        "Ordinateur en veille ou déconnecté. En attente du réveil ou de la reconnexion.",
+    "上传到电脑": "Envoyer à l’ordinateur",
+    "仅保存在手机": "Sur le téléphone uniquement",
+    "参会人数": "Participants",
+    "可留空；已知人数用于电脑端说话人区分。":
+        "Facultatif. Le nombre aide à distinguer les voix sur l’ordinateur.",
+    "尚未上传": "Non envoyé",
+    "无需连接电脑。录音保存在本机，连接后由你主动上传。":
+        "Aucun ordinateur requis. L’enregistrement reste sur le téléphone jusqu’à votre connexion et votre choix de l’envoyer.",
+    "结束后由你选择电脑并上传，录音期间不传输音频。":
+        "Choisissez un ordinateur après l’enregistrement. Aucun audio n’est envoyé pendant la capture.",
+    "自动识别": "Automatique",
+    "请先结束录音": "Terminez d’abord l’enregistrement",
+    "上传录音": "Envoyer l’enregistrement",
+    "上传到这台电脑": "Envoyer à cet ordinateur",
+    "此录音仅保存在手机。请先导出需要保留的录音，删除后无法恢复。":
+        "Cet enregistrement est uniquement sur votre téléphone. Exportez ce que vous souhaitez conserver. La suppression est irréversible.",
+    "电脑上的会议已删除。本机可能是唯一副本，请先导出需要保留的录音。删除后无法恢复。":
+        "La réunion a été supprimée sur l’ordinateur. Ceci peut être la seule copie. Exportez les enregistrements à conserver avant de supprimer. La suppression est irréversible.",
+    "录音操作尚未确认，请检查录音状态后重试":
+        "L’opération d’enregistrement n’a pas été confirmée. Vérifiez son état et réessayez.",
+    "会议已在电脑永久删除":
+        "Cette réunion a été définitivement supprimée sur l’ordinateur.",
     "电脑操作失败，请在电脑查看详情。":
         "Échec sur l’ordinateur. Consultez les détails sur celui-ci.",
     "中文": "Chinois",
@@ -1020,7 +1147,6 @@ const translations = {
     "前往系统设置": "Ouvrir les réglages système",
     "发言人": "Intervenant",
     "取消信任此电脑": "Ne plus faire confiance",
-    "同一 Wi-Fi · 音频不经云端": "Même Wi-Fi · Audio hors du cloud",
     "同步完成后可删除": "Suppression après synchronisation",
     "后台录音说明": "Enregistrement en arrière-plan",
     "回听本机录音": "Écouter l’audio local",
@@ -1122,7 +1248,6 @@ const translations = {
     "重新精修会议？": "Retraiter la réunion ?",
     "隐私与关于": "Confidentialité et à propos",
     "音频已传输": "Audio envoyé",
-    "首版仅支持局域网。": "Cette version utilise le réseau local uniquement.",
     "麦克风权限": "Autorisation du microphone",
     "界面语言": "Langue de l’application",
     "状态待确认": "État à vérifier",
@@ -1174,8 +1299,6 @@ const translations = {
     "点击“重点”记录值得回看的时刻。": "Touchez Repère pour marquer un moment.",
     "电脑将使用已有录音重新生成字幕，当前字幕可能被替换。":
         "L’ordinateur régénérera les sous-titres depuis l’audio. Les sous-titres actuels peuvent être remplacés.",
-    "电脑断开 · 音频保留在手机，恢复连接后补传。":
-        "Ordinateur déconnecté · L’audio reste sur le téléphone et sera envoyé après reconnexion.",
     "电脑暂无支持此语言的模型": "Aucun modèle pour cette langue sur l’ordinateur",
     "电脑版协议不兼容": "Protocole de bureau incompatible",
     "电脑生成或保存笔记后会显示在这里。":
@@ -1219,6 +1342,37 @@ const translations = {
         "L’enregistrement peut continuer écran verrouillé. Appels, arrêt forcé ou limites système peuvent l’interrompre ; vérifiez l’état au retour.\n\nAndroid utilise un service de microphone au premier plan. Autorisez les notifications. Si l’économie de batterie arrête l’app, ajustez les réglages système. Revenez dans l’app pour reprendre après une pause.",
   },
   "de": {
+    "录音保留在手机，恢复连接后自动补传。":
+        "Aufnahmen bleiben auf dem Telefon und werden nach der Wiederverbindung automatisch übertragen.",
+    "首次配对需同一 Wi-Fi": "Erste Kopplung im selben WLAN",
+    "跨网连接需要先在电脑配置服务。":
+        "Richten Sie den Dienst am Computer für Verbindungen über andere Netzwerke ein.",
+    "已配置跨网连接，直连失败时通过加密中继连接。":
+        "Fernverbindung eingerichtet. Schlägt die Direktverbindung fehl, wird ein verschlüsseltes Relais verwendet.",
+    "正在重新连接": "Verbindung wird wiederhergestellt",
+    "电脑已休眠或断开，等待开盖或恢复连接":
+        "Computer im Ruhezustand oder getrennt. Warte auf Aufwachen oder erneute Verbindung.",
+    "上传到电脑": "An Computer senden",
+    "仅保存在手机": "Nur auf dem Smartphone",
+    "参会人数": "Teilnehmerzahl",
+    "可留空；已知人数用于电脑端说话人区分。":
+        "Optional. Die bekannte Anzahl hilft bei der Sprechertrennung am Computer.",
+    "尚未上传": "Nicht übertragen",
+    "无需连接电脑。录音保存在本机，连接后由你主动上传。":
+        "Kein Computer nötig. Die Aufnahme bleibt auf diesem Gerät, bis Sie sich verbinden und sie ausdrücklich senden.",
+    "结束后由你选择电脑并上传，录音期间不传输音频。":
+        "Nach der Aufnahme Computer auswählen und senden. Während der Aufnahme wird kein Audio übertragen.",
+    "自动识别": "Automatisch",
+    "请先结束录音": "Beenden Sie zuerst die Aufnahme",
+    "上传录音": "Aufnahme senden",
+    "上传到这台电脑": "An diesen Computer senden",
+    "此录音仅保存在手机。请先导出需要保留的录音，删除后无法恢复。":
+        "Diese Aufnahme ist nur auf Ihrem Smartphone gespeichert. Exportieren Sie benötigte Aufnahmen vor dem Löschen. Das Löschen ist endgültig.",
+    "电脑上的会议已删除。本机可能是唯一副本，请先导出需要保留的录音。删除后无法恢复。":
+        "Das Meeting wurde auf dem Computer gelöscht. Dies könnte die einzige Kopie sein. Exportieren Sie benötigte Aufnahmen vor dem Löschen. Das Löschen ist endgültig.",
+    "录音操作尚未确认，请检查录音状态后重试":
+        "Der Aufnahmevorgang wurde nicht bestätigt. Prüfen Sie den Status und versuchen Sie es erneut.",
+    "会议已在电脑永久删除": "Dieses Meeting wurde auf dem Computer endgültig gelöscht.",
     "电脑操作失败，请在电脑查看详情。":
         "Vorgang am Computer fehlgeschlagen. Details dort prüfen.",
     "中文": "Chinesisch",
@@ -1273,7 +1427,6 @@ const translations = {
     "前往系统设置": "Systemeinstellungen öffnen",
     "发言人": "Sprecher",
     "取消信任此电脑": "Vertrauen aufheben",
-    "同一 Wi-Fi · 音频不经云端": "Gleiches WLAN · Audio ohne Cloud",
     "同步完成后可删除": "Nach Synchronisierung löschbar",
     "后台录音说明": "Hintergrundaufnahme",
     "回听本机录音": "Lokale Aufnahme anhören",
@@ -1375,7 +1528,6 @@ const translations = {
     "重新精修会议？": "Besprechung erneut verfeinern?",
     "隐私与关于": "Datenschutz und Info",
     "音频已传输": "Audio übertragen",
-    "首版仅支持局域网。": "Diese Version unterstützt nur lokale Netzwerke.",
     "麦克风权限": "Mikrofonberechtigung",
     "界面语言": "App-Sprache",
     "状态待确认": "Status prüfen",
@@ -1427,8 +1579,6 @@ const translations = {
     "点击“重点”记录值得回看的时刻。": "Mit Markierung einen wichtigen Moment festhalten.",
     "电脑将使用已有录音重新生成字幕，当前字幕可能被替换。":
         "Der Computer erstellt Untertitel aus dem Audio neu. Vorhandene Untertitel können ersetzt werden.",
-    "电脑断开 · 音频保留在手机，恢复连接后补传。":
-        "Computer getrennt · Audio bleibt auf dem Telefon und wird nach Wiederverbindung gesendet.",
     "电脑暂无支持此语言的模型": "Kein Modell für diese Sprache am Computer",
     "电脑版协议不兼容": "Desktop-Protokoll nicht kompatibel",
     "电脑生成或保存笔记后会显示在这里。":
@@ -1472,6 +1622,37 @@ const translations = {
         "Aufnahme ist bei gesperrtem Bildschirm möglich. Anrufe, erzwungenes Beenden oder Systemlimits können sie unterbrechen; prüfen Sie den Status nach der Rückkehr.\n\nAndroid verwendet einen Mikrofon-Vordergrunddienst. Aufnahmebenachrichtigungen erlauben. Bei Beendigung durch Energiesparregeln die Systemeinstellungen anpassen. Nach einer Pause in der App fortsetzen.",
   },
   "ru": {
+    "录音保留在手机，恢复连接后自动补传。":
+        "Записи сохраняются на телефоне и автоматически передаются после восстановления связи.",
+    "首次配对需同一 Wi-Fi": "Первое сопряжение — в одной сети Wi-Fi",
+    "跨网连接需要先在电脑配置服务。":
+        "Настройте службу на компьютере для подключения из других сетей.",
+    "已配置跨网连接，直连失败时通过加密中继连接。":
+        "Удалённое подключение настроено. Если прямое соединение недоступно, используется зашифрованная ретрансляция.",
+    "正在重新连接": "Повторное подключение",
+    "电脑已休眠或断开，等待开盖或恢复连接":
+        "Компьютер спит или отключён. Ожидаем пробуждения или восстановления связи.",
+    "上传到电脑": "Передать на компьютер",
+    "仅保存在手机": "Только на телефоне",
+    "参会人数": "Число участников",
+    "可留空；已知人数用于电脑端说话人区分。":
+        "Необязательно. Число помогает разделить голоса на компьютере.",
+    "尚未上传": "Не передано",
+    "无需连接电脑。录音保存在本机，连接后由你主动上传。":
+        "Компьютер не нужен. Запись остаётся на телефоне, пока вы не подключитесь и не выберете отправку.",
+    "结束后由你选择电脑并上传，录音期间不传输音频。":
+        "После записи выберите компьютер для передачи. Во время записи аудио не отправляется.",
+    "自动识别": "Автоматически",
+    "请先结束录音": "Сначала завершите запись",
+    "上传录音": "Передать запись",
+    "上传到这台电脑": "Передать на этот компьютер",
+    "此录音仅保存在手机。请先导出需要保留的录音，删除后无法恢复。":
+        "Эта запись есть только на телефоне. Сначала экспортируйте то, что нужно сохранить. Удаление необратимо.",
+    "电脑上的会议已删除。本机可能是唯一副本，请先导出需要保留的录音。删除后无法恢复。":
+        "Встреча удалена на компьютере. Это может быть единственная копия. Сначала экспортируйте нужную запись. Удаление необратимо.",
+    "录音操作尚未确认，请检查录音状态后重试":
+        "Операция записи не подтверждена. Проверьте её состояние и повторите попытку.",
+    "会议已在电脑永久删除": "Эта встреча окончательно удалена на компьютере.",
     "电脑操作失败，请在电脑查看详情。":
         "Ошибка операции на компьютере. Проверьте подробности на нём.",
     "中文": "Китайский",
@@ -1526,7 +1707,6 @@ const translations = {
     "前往系统设置": "Открыть настройки системы",
     "发言人": "Участник",
     "取消信任此电脑": "Отменить доверие",
-    "同一 Wi-Fi · 音频不经云端": "Один Wi-Fi · Аудио без облака",
     "同步完成后可删除": "Удаление после синхронизации",
     "后台录音说明": "Фоновая запись",
     "回听本机录音": "Слушать локальную запись",
@@ -1628,7 +1808,6 @@ const translations = {
     "重新精修会议？": "Повторно обработать встречу?",
     "隐私与关于": "Конфиденциальность и сведения",
     "音频已传输": "Аудио передано",
-    "首版仅支持局域网。": "Эта версия работает только в локальной сети.",
     "麦克风权限": "Разрешение микрофона",
     "界面语言": "Язык приложения",
     "状态待确认": "Проверьте состояние",
@@ -1680,8 +1859,6 @@ const translations = {
     "点击“重点”记录值得回看的时刻。": "Нажмите «Отметка», чтобы отметить важный момент.",
     "电脑将使用已有录音重新生成字幕，当前字幕可能被替换。":
         "Компьютер заново создаст субтитры из записи. Текущие субтитры могут быть заменены.",
-    "电脑断开 · 音频保留在手机，恢复连接后补传。":
-        "Компьютер отключён · Аудио сохранено на телефоне и будет передано после подключения.",
     "电脑暂无支持此语言的模型": "На компьютере нет модели для этого языка",
     "电脑版协议不兼容": "Протокол настольной версии несовместим",
     "电脑生成或保存笔记后会显示在这里。":

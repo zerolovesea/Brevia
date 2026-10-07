@@ -5984,6 +5984,9 @@ html[data-theme="dark"] .summary-action-icon {
   margin-left: 2px;
   animation: draft-caret 1.1s steps(1, end) infinite;
 }
+.transcript-scroll.is-finishing .segment.is-draft .segment-copy > p::after {
+  animation: none;
+}
 @keyframes draft-caret {
   50% {
     opacity: 0;
@@ -6025,6 +6028,9 @@ html[data-theme="dark"] .segment.is-draft {
 /* LAN phone pairing shares the desktop settings grid and its scroll container. */
 /* Mobile recording uses the same quiet surfaces and controls as desktop meetings. */
 .mobile-source-tag {
+  margin-left: 12px;
+  vertical-align: middle;
+  font-weight: 400;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -6046,10 +6052,6 @@ html[data-theme="dark"] .segment.is-draft {
 }
 .mobile-sidebar-card.is-connected #mobile-nav-dot {
   visibility: visible;
-}
-.mobile-nav svg {
-  display: inline-block;
-  vertical-align: middle;
 }
 #mobile-status {
   margin: 0 0 24px;
@@ -6096,11 +6098,6 @@ html[data-theme="dark"] .segment.is-draft {
 }
 #mobile-approval button + button {
   margin-left: 16px;
-}
-.mobile-source-tag {
-  margin-left: 12px;
-  vertical-align: middle;
-  font-weight: 400;
 }
 #mini-meeting .mobile-source-tag {
   margin: 8px 0;
@@ -6176,6 +6173,7 @@ html[data-theme="dark"] .segment.is-draft {
 }
 
 #mobile-dialog .mobile-device {
+  font-size: 14px;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -6219,9 +6217,6 @@ html[data-theme="dark"] .segment.is-draft {
 #mobile-dialog .mobile-device-facts dt,
 #mobile-dialog .mobile-device-facts dd {
   display: block;
-}
-#mobile-dialog .mobile-device {
-  font-size: 14px;
 }
 #mobile-dialog .mobile-device small {
   font-size: 12px;

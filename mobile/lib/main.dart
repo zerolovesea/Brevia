@@ -197,6 +197,45 @@ Future<void> report(
   }
 }
 
+Future<void> uploadRecording(BuildContext context, AppModel model, String id) =>
+    report(context, () async {
+      if (model.desktop == null) {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (ctx) => Scaffold(
+              appBar: AppBar(title: Text(tr("连接电脑"))),
+              body: SafeArea(
+                child: ConnectionPage(
+                  model: model,
+                  onConnected: () => Navigator.pop(ctx),
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+      if (!context.mounted || model.desktop == null) return;
+      final options = Map<String, dynamic>.from(
+        await model.desktop!.call('GET', '/options'),
+      );
+      if (!context.mounted) return;
+      final settings = await Navigator.push<Map<String, dynamic>>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PrepareMeetingPage(
+            options: options,
+            computer: model.desktop!.name,
+            initial: model.meeting(id) ?? {},
+            upload: true,
+          ),
+        ),
+      );
+      if (settings == null || !context.mounted) return;
+      settings.remove('offline');
+      await model.upload(id, settings);
+    });
+
 class Home extends StatefulWidget {
   final AppModel model;
   const Home({super.key, required this.model});
@@ -212,7 +251,6 @@ class _HomeState extends State<Home> {
   @override
   void initState() {
     super.initState();
-    if (model.desktop == null && model.meetings.isEmpty) tab = 1;
   }
 
   void openMeeting(String id) => Navigator.push(
@@ -222,32 +260,36 @@ class _HomeState extends State<Home> {
     ),
   );
   Future<void> prepare() async {
-    if (model.desktop == null) {
-      setState(() => tab = 1);
-      return;
-    }
     final active = model.live;
     if (active != null && active['state'] != 'ended') {
       openMeeting(active['id']);
       return;
     }
     await report(context, () async {
-      final options = Map<String, dynamic>.from(
-        await model.desktop!.call('GET', '/options'),
-      );
+      Map<String, dynamic> options = {};
+      if (model.desktop != null && model.connected) {
+        try {
+          options = Map<String, dynamic>.from(
+            await model.desktop!.call('GET', '/options'),
+          );
+        } catch (_) {
+          /* 电脑不可达时仍可准备本地录音。 */
+        }
+      }
       if (!mounted) return;
       final settings = await Navigator.push<Map<String, dynamic>>(
         context,
         MaterialPageRoute(
           builder: (_) => PrepareMeetingPage(
             options: options,
-            computer: model.desktop!.name,
+            computer: model.desktop?.name ?? '',
           ),
         ),
       );
       if (settings == null || !mounted) return;
       final id = await model.start(
         settings.remove('title'),
+        offline: settings.remove('offline') == true,
         settings: settings,
       );
       if (mounted) openMeeting(id);
@@ -259,7 +301,15 @@ class _HomeState extends State<Home> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(tr("删除本机记录？")),
-        content: Text(tr("删除手机上的录音、字幕与笔记缓存。电脑上的会议仍会保留。")),
+        content: Text(
+          tr(
+            m['localOnly'] == true
+                ? "此录音仅保存在手机。请先导出需要保留的录音，删除后无法恢复。"
+                : m['remoteDeleted'] == true
+                ? "电脑上的会议已删除。本机可能是唯一副本，请先导出需要保留的录音。删除后无法恢复。"
+                : "删除手机上的录音、字幕与笔记缓存。电脑上的会议仍会保留。",
+          ),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -330,7 +380,10 @@ class _HomeState extends State<Home> {
                 color: Theme.of(ctx).colorScheme.error,
               ),
               title: Text(tr("删除本机记录")),
-              enabled: ready,
+              enabled:
+                  ready ||
+                  (m['state'] == 'ended' &&
+                      (m['remoteDeleted'] == true || m['localOnly'] == true)),
               onTap: () => Navigator.pop(ctx, 'delete'),
             ),
           ],
@@ -506,7 +559,11 @@ class _HomeState extends State<Home> {
                       final m = model.meeting(values[i]['id']) ?? values[i];
                       final state = m['state'];
                       final task = m['snapshot']?['task'];
-                      final label = task?['state'] == 'running'
+                      final label = m['localOnly'] == true && state == 'ended'
+                          ? tr('仅保存在手机')
+                          : m['remoteDeleted'] == true
+                          ? tr('会议已在电脑永久删除')
+                          : task?['state'] == 'running'
                           ? tr("电脑处理中")
                           : task?['state'] == 'failed'
                           ? tr("处理失败 · 长按重试")
@@ -554,7 +611,9 @@ class _HomeState extends State<Home> {
                             ),
                           Dismissible(
                             key: ValueKey(m['id']),
-                            direction: m['finished'] == true
+                            direction:
+                                m['finished'] == true ||
+                                    m['remoteDeleted'] == true
                                 ? DismissDirection.startToEnd
                                 : DismissDirection.none,
                             background: Container(
@@ -681,40 +740,39 @@ class _HomeState extends State<Home> {
           ),
         ),
       ),
-      bottomNavigationBar: tab == 1 && model.desktop == null
-          ? null
-          : DecoratedBox(
-              decoration: BoxDecoration(
-                border: Border(
-                  top: BorderSide(color: Theme.of(context).dividerColor),
-                ),
-              ),
-              child: NavigationBar(
-                selectedIndex: tab,
-                onDestinationSelected: (v) => setState(() => tab = v),
-                destinations: [
-                  NavigationDestination(
-                    icon: Icon(Icons.article_outlined),
-                    label: tr("会议"),
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.laptop_outlined),
-                    label: tr("连接"),
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.settings_outlined),
-                    label: tr("设置"),
-                  ),
-                ],
-              ),
+      bottomNavigationBar: DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border(
+            top: BorderSide(color: Theme.of(context).dividerColor),
+          ),
+        ),
+        child: NavigationBar(
+          selectedIndex: tab,
+          onDestinationSelected: (v) => setState(() => tab = v),
+          destinations: [
+            NavigationDestination(
+              icon: Icon(Icons.article_outlined),
+              label: tr("会议"),
             ),
+            NavigationDestination(
+              icon: Icon(Icons.laptop_outlined),
+              label: tr("连接"),
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.settings_outlined),
+              label: tr("设置"),
+            ),
+          ],
+        ),
+      ),
     ),
   );
 }
 
 class ConnectionPage extends StatefulWidget {
   final AppModel model;
-  const ConnectionPage({super.key, required this.model});
+  final VoidCallback? onConnected;
+  const ConnectionPage({super.key, required this.model, this.onConnected});
   @override
   State<ConnectionPage> createState() => _ConnectionPageState();
 }
@@ -745,10 +803,16 @@ class _ConnectionPageState extends State<ConnectionPage> {
           await widget.model.updateAddress(endpoint.toString());
           if (mounted) {
             setState(() => result = tr("已恢复连接 {0}", [previous.name]));
+            widget.onConnected?.call();
           }
           return;
         } catch (_) {
-          if (widget.model.meetings.any((m) => m['finished'] != true)) {
+          if (widget.model.meetings.any(
+            (m) =>
+                m['localOnly'] != true &&
+                m['finished'] != true &&
+                m['remoteDeleted'] != true,
+          )) {
             throw StateError(tr("请确认地址属于原电脑且连接服务已打开。未完成补传前不能更换电脑。"));
           }
         }
@@ -774,11 +838,15 @@ class _ConnectionPageState extends State<ConnectionPage> {
         'code': qr?['secret'] ?? pin.text.trim(),
       });
       candidate.token = response['token'];
+      candidate.remote = response['remote'] == null
+          ? null
+          : Map<String, dynamic>.from(response['remote']);
       candidate.name = response['name'];
-      await candidate.save();
-      await widget.model.stopDiscovery();
-      widget.model.desktop = candidate;
-      await widget.model.refresh();
+      await widget.model.connect(candidate);
+      if (mounted && widget.onConnected != null) {
+        widget.onConnected!();
+        return;
+      }
       if (mounted) {
         setState(() {
           result = tr("已连接 {0}", [candidate.name]);
@@ -892,7 +960,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
                         ),
                         SizedBox(width: 8),
                         Text(
-                          tr("同一 Wi-Fi · 音频不经云端"),
+                          tr("首次配对需同一 Wi-Fi"),
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                       ],
@@ -1054,7 +1122,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
           ),
           SizedBox(height: 24),
           Text(
-            tr("同一 Wi-Fi · 音频不经云端"),
+            tr("首次配对需同一 Wi-Fi"),
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodySmall,
           ),
@@ -1105,6 +1173,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
                   ],
                 ),
               );
+              text.dispose();
               if (value != null && context.mounted) {
                 await report(context, () => widget.model.updateAddress(value));
               }
@@ -1119,7 +1188,14 @@ class _ConnectionPageState extends State<ConnectionPage> {
             ),
           ),
           SizedBox(height: 24),
-          Text(tr("首版仅支持局域网。"), textAlign: TextAlign.center),
+          Text(
+            tr(
+              computer.remote == null
+                  ? '跨网连接需要先在电脑配置服务。'
+                  : '已配置跨网连接，直连失败时通过加密中继连接。',
+            ),
+            textAlign: TextAlign.center,
+          ),
         ],
         if (result != null)
           Padding(
@@ -1271,6 +1347,7 @@ class _MeetingPageState extends State<MeetingPage> {
   void initState() {
     super.initState();
     if (meeting['state'] == 'ended') tab = 1;
+    widget.model.viewedMeetingId = widget.id;
     scroll.addListener(() {
       following =
           !scroll.hasClients ||
@@ -1280,6 +1357,9 @@ class _MeetingPageState extends State<MeetingPage> {
 
   @override
   void dispose() {
+    if (widget.model.viewedMeetingId == widget.id) {
+      widget.model.viewedMeetingId = null;
+    }
     scroll.dispose();
     unawaited(_player?.dispose());
     super.dispose();
@@ -1297,7 +1377,13 @@ class _MeetingPageState extends State<MeetingPage> {
           children: [
             Text(tr("结束本次录音？"), style: Theme.of(ctx).textTheme.headlineSmall),
             SizedBox(height: 24),
-            Text(tr("尚未传到电脑的音频会保留在手机，连接后继续补传。")),
+            Text(
+              tr(
+                meeting['localOnly'] == true
+                    ? "结束后由你选择电脑并上传，录音期间不传输音频。"
+                    : "尚未传到电脑的音频会保留在手机，连接后继续补传。",
+              ),
+            ),
             SizedBox(height: 24),
             FilledButton(
               onPressed: () => Navigator.pop(ctx, true),
@@ -1366,6 +1452,7 @@ class _MeetingPageState extends State<MeetingPage> {
         ),
       ),
     );
+    text.dispose();
     if (note != null) {
       await widget.model.command(widget.id, 'mark', note: note, sample: sample);
       HapticFeedback.selectionClick();
@@ -1567,7 +1654,15 @@ class _MeetingPageState extends State<MeetingPage> {
                   context: context,
                   builder: (ctx) => AlertDialog(
                     title: Text(tr("删除手机上的会议？")),
-                    content: Text(tr("将删除本机录音、转写与笔记缓存。电脑上的会议仍会保留。此操作无法撤销。")),
+                    content: Text(
+                      tr(
+                        m['localOnly'] == true
+                            ? "此录音仅保存在手机。请先导出需要保留的录音，删除后无法恢复。"
+                            : m['remoteDeleted'] == true
+                            ? "电脑上的会议已删除。本机可能是唯一副本，请先导出需要保留的录音。删除后无法恢复。"
+                            : "将删除本机录音、转写与笔记缓存。电脑上的会议仍会保留。此操作无法撤销。",
+                      ),
+                    ),
                     actions: [
                       TextButton(
                         onPressed: () => Navigator.pop(ctx, false),
@@ -1593,9 +1688,16 @@ class _MeetingPageState extends State<MeetingPage> {
                   PopupMenuItem(value: 'marks', child: Text(tr("查看已记重点"))),
                 PopupMenuItem(
                   value: 'delete',
-                  enabled: ended && m['finished'] == true,
+                  enabled:
+                      ended &&
+                      (m['finished'] == true ||
+                          m['remoteDeleted'] == true ||
+                          m['localOnly'] == true),
                   child: Text(
-                    ended && m['finished'] == true
+                    ended &&
+                            (m['finished'] == true ||
+                                m['remoteDeleted'] == true ||
+                                m['localOnly'] == true)
                         ? tr("删除本机记录")
                         : tr("同步完成后可删除"),
                   ),
@@ -1645,7 +1747,11 @@ class _MeetingPageState extends State<MeetingPage> {
                         Flexible(
                           child: Text(
                             ended
-                                ? '${durationText(m['samples'] ?? 0)} · ${m['finished'] == true ? tr("已同步") : tr("待补传")}'
+                                ? '${durationText(m['samples'] ?? 0)} · ${m['localOnly'] == true
+                                      ? tr("仅保存在手机")
+                                      : m['finished'] == true
+                                      ? tr("已同步")
+                                      : tr("待补传")}'
                                 : label,
                             style: TextStyle(
                               color: state == 'recording' && live
@@ -1677,24 +1783,41 @@ class _MeetingPageState extends State<MeetingPage> {
                         ],
                       ),
                     ],
-                    if (live && m['connected'] == false)
-                      Container(
-                        margin: EdgeInsets.only(top: 20),
-                        padding: EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).brightness == Brightness.dark
-                              ? Color(0xff40351f)
-                              : Color(0xfffff4df),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(tr("电脑断开 · 音频保留在手机，恢复连接后补传。")),
+                    if (m['localOnly'] == true)
+                      Padding(
+                        padding: EdgeInsets.only(top: 16),
+                        child: Text(tr('仅保存在手机')),
                       ),
-                    if (m['error'] != null || snapshot['error'] != null)
+                    if (ended && m['localOnly'] == true)
+                      Padding(
+                        padding: EdgeInsets.only(top: 16),
+                        child: FilledButton.icon(
+                          onPressed: widget.model.busy
+                              ? null
+                              : () => uploadRecording(
+                                  context,
+                                  widget.model,
+                                  widget.id,
+                                ),
+                          icon: Icon(Icons.upload_outlined),
+                          label: Text(tr('上传到电脑')),
+                        ),
+                      ),
+                    if (m['localOnly'] != true &&
+                        m['finished'] != true &&
+                        m['remoteDeleted'] != true &&
+                        m['connected'] == false)
+                      const ConnectionRecoveryNotice(),
+                    if (m['remoteDeleted'] == true ||
+                        m['error'] != null ||
+                        snapshot['error'] != null)
                       Padding(
                         padding: EdgeInsets.only(top: 16),
                         child: Text(
-                          m['error']?.toString() ??
-                              remoteError(snapshot['error'].toString()),
+                          m['remoteDeleted'] == true
+                              ? tr('会议已在电脑永久删除')
+                              : m['error']?.toString() ??
+                                    remoteError(snapshot['error'].toString()),
                           maxLines: 3,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -1920,6 +2043,8 @@ class _MeetingPageState extends State<MeetingPage> {
                           Text(
                             m['finished'] == true
                                 ? tr("电脑已完成处理")
+                                : m['localOnly'] == true
+                                ? tr("仅保存在手机")
                                 : tr("待补传或等待电脑处理，音频保留在手机"),
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
@@ -2242,10 +2367,14 @@ class SettingsPage extends StatelessWidget {
 class PrepareMeetingPage extends StatefulWidget {
   final Map<String, dynamic> options;
   final String computer;
+  final Map<String, dynamic> initial;
+  final bool upload;
   const PrepareMeetingPage({
     super.key,
     required this.options,
     required this.computer,
+    this.initial = const {},
+    this.upload = false,
   });
   @override
   State<PrepareMeetingPage> createState() => _PrepareMeetingPageState();
@@ -2254,6 +2383,8 @@ class PrepareMeetingPage extends StatefulWidget {
 class _PrepareMeetingPageState extends State<PrepareMeetingPage> {
   final title = TextEditingController(text: defaultMeetingTitle());
   String language = 'zh', translation = '', workspace = '', modelId = '';
+  late bool offline;
+  final participants = TextEditingController();
   static Map<String, String> get languages => {
     'zh': tr("中文"),
     'en': tr("英语"),
@@ -2265,10 +2396,11 @@ class _PrepareMeetingPageState extends State<PrepareMeetingPage> {
     'ru': tr("俄语"),
     'auto': tr("多语言混说"),
   };
-  List<Map<String, dynamic>> get models => (widget.options['models'] as List)
-      .map((m) => Map<String, dynamic>.from(m))
-      .where((m) => (m['languages'] as List).contains(language))
-      .toList();
+  List<Map<String, dynamic>> get models =>
+      (widget.options['models'] as List? ?? [])
+          .map((m) => Map<String, dynamic>.from(m))
+          .where((m) => (m['languages'] as List).contains(language))
+          .toList();
   void selectDefault() {
     final candidates = models;
     modelId =
@@ -2276,7 +2408,9 @@ class _PrepareMeetingPageState extends State<PrepareMeetingPage> {
             .where(
               (m) =>
                   m['status'] == 'ready' &&
-                  (m['default_for_languages'] as List).contains(language),
+                  (m['default_for_languages'] as List? ?? []).contains(
+                    language,
+                  ),
             )
             .firstOrNull?['id'] ??
         candidates.where((m) => m['status'] == 'ready').firstOrNull?['id'] ??
@@ -2287,12 +2421,18 @@ class _PrepareMeetingPageState extends State<PrepareMeetingPage> {
   @override
   void initState() {
     super.initState();
+    offline = !widget.upload && widget.options.isEmpty;
+    title.text = widget.initial['title'] ?? defaultMeetingTitle();
+    language = widget.initial['language'] ?? 'zh';
+    final count = widget.initial['num_speakers'] as int? ?? -1;
+    participants.text = count > 0 ? '$count' : '';
     selectDefault();
   }
 
   @override
   void dispose() {
     title.dispose();
+    participants.dispose();
     super.dispose();
   }
 
@@ -2323,15 +2463,15 @@ class _PrepareMeetingPageState extends State<PrepareMeetingPage> {
   );
   @override
   Widget build(BuildContext context) {
-    final ready = models.any(
-      (m) => m['id'] == modelId && m['status'] == 'ready',
-    );
+    final ready =
+        offline ||
+        models.any((m) => m['id'] == modelId && m['status'] == 'ready');
     return Scaffold(
       appBar: AppBar(
         centerTitle: false,
         toolbarHeight: 88,
         title: Text(
-          tr("准备录音"),
+          tr(widget.upload ? "上传录音" : "准备录音"),
           style: Theme.of(context).textTheme.headlineLarge,
         ),
       ),
@@ -2340,18 +2480,27 @@ class _PrepareMeetingPageState extends State<PrepareMeetingPage> {
         child: Padding(
           padding: EdgeInsets.fromLTRB(24, 12, 24, 20),
           child: FilledButton(
-            onPressed: ready
+            onPressed:
+                ready &&
+                    (participants.text.isEmpty ||
+                        (int.tryParse(participants.text) ?? 0) >= 1)
                 ? () => Navigator.pop(context, <String, dynamic>{
                     'title': title.text.trim().isEmpty
                         ? defaultMeetingTitle()
                         : title.text.trim(),
                     'language': language,
-                    'workspace_id': workspace.isEmpty ? null : workspace,
-                    'target_language': translation.isEmpty ? null : translation,
-                    'refined_model_id': modelId,
+                    'num_speakers': int.tryParse(participants.text) ?? -1,
+                    'offline': offline,
+                    if (!offline) ...{
+                      'workspace_id': workspace.isEmpty ? null : workspace,
+                      'target_language': translation.isEmpty
+                          ? null
+                          : translation,
+                      'refined_model_id': modelId,
+                    },
                   })
                 : null,
-            child: Text(tr("开始录音")),
+            child: Text(tr(widget.upload ? "上传到这台电脑" : "开始录音")),
           ),
         ),
       ),
@@ -2367,14 +2516,38 @@ class _PrepareMeetingPageState extends State<PrepareMeetingPage> {
               ),
               child: Row(
                 children: [
-                  Icon(Icons.laptop_outlined),
+                  Icon(
+                    offline
+                        ? Icons.phone_iphone_outlined
+                        : Icons.laptop_outlined,
+                  ),
                   SizedBox(width: 12),
-                  Expanded(child: Text(widget.computer)),
+                  Expanded(
+                    child: Text(offline ? tr("仅保存在手机") : widget.computer),
+                  ),
                   SizedBox(width: 12),
-                  Icon(Icons.check_circle, color: Color(0xff16803c), size: 20),
+                  if (!offline)
+                    Icon(
+                      Icons.check_circle,
+                      color: Color(0xff16803c),
+                      size: 20,
+                    ),
                 ],
               ),
             ),
+            if (!widget.upload && widget.options.isNotEmpty)
+              SwitchListTile.adaptive(
+                contentPadding: EdgeInsets.zero,
+                title: Text(tr("仅保存在手机")),
+                subtitle: Text(tr("结束后由你选择电脑并上传，录音期间不传输音频。")),
+                value: offline,
+                onChanged: (value) => setState(() => offline = value),
+              ),
+            if (offline)
+              Padding(
+                padding: EdgeInsets.only(top: 16),
+                child: Text(tr("无需连接电脑。录音保存在本机，连接后由你主动上传。")),
+              ),
             SizedBox(height: 32),
             TextField(
               controller: title,
@@ -2391,62 +2564,81 @@ class _PrepareMeetingPageState extends State<PrepareMeetingPage> {
               ),
             ),
             SizedBox(height: 24),
-            ListTile(
-              leading: Icon(Icons.mic_none),
-              title: Text(tr("手机内置麦克风")),
-              subtitle: Text(tr("手机采集音频，电脑完成转写")),
-            ),
-            Divider(),
-            ListTile(
-              leading: Icon(Icons.laptop_outlined),
-              title: Text(ready ? tr("电脑已就绪") : tr("电脑尚未就绪")),
-              trailing: Icon(
-                ready ? Icons.check_circle : Icons.info_outline,
-                color: ready
-                    ? Color(0xff16803c)
-                    : Theme.of(context).colorScheme.error,
-              ),
-            ),
-            Divider(),
-            ExpansionTile(
-              tilePadding: EdgeInsets.zero,
-              leading: Icon(Icons.tune),
-              title: Text(tr("录音选项")),
-              subtitle: Text(
-                '${languages[language]} · ${translation.isEmpty ? tr("不翻译") : languages[translation]}',
-              ),
-              children: [
-                SizedBox(height: 24),
-                select(tr("工作区"), workspace, {
-                  '': tr("不指定工作区"),
-                  for (final w in widget.options['workspaces'])
-                    w['id']: w['name'],
-                }, (v) => workspace = v),
-                select(tr("会议语言"), language, languages, (v) {
-                  language = v;
-                  selectDefault();
-                }),
-                select(
-                  tr("识别模型"),
-                  modelId,
-                  models.isEmpty
-                      ? {'': tr("电脑暂无支持此语言的模型")}
-                      : {
-                          for (final m in models)
-                            m['id']:
-                                '${m['name']}${m['status'] == 'ready' ? '' : tr(" · 未安装")}',
-                        },
-                  (v) => modelId = v,
-                ),
-                select(tr("翻译为"), translation, {
-                  '': tr("不翻译"),
-                  for (final e in languages.entries.where(
-                    (e) => e.key != 'auto',
-                  ))
-                    e.key: e.value,
-                }, (v) => translation = v),
+            select(tr("会议语言"), language, languages, (v) {
+              language = v;
+              selectDefault();
+            }),
+            TextField(
+              controller: participants,
+              keyboardType: TextInputType.number,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(3),
               ],
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                labelText: tr("参会人数"),
+                hintText: tr("自动识别"),
+                helperText: tr("可留空；已知人数用于电脑端说话人区分。"),
+                helperMaxLines: 3,
+              ),
             ),
+            SizedBox(height: 24),
+            if (!widget.upload)
+              ListTile(
+                leading: Icon(Icons.mic_none),
+                title: Text(tr("手机内置麦克风")),
+                subtitle: Text(tr(offline ? "仅保存在手机" : "手机采集音频，电脑完成转写")),
+              ),
+            Divider(),
+            if (!offline)
+              ListTile(
+                leading: Icon(Icons.laptop_outlined),
+                title: Text(ready ? tr("电脑已就绪") : tr("电脑尚未就绪")),
+                trailing: Icon(
+                  ready ? Icons.check_circle : Icons.info_outline,
+                  color: ready
+                      ? Color(0xff16803c)
+                      : Theme.of(context).colorScheme.error,
+                ),
+              ),
+            if (!offline) Divider(),
+            if (!offline)
+              ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                leading: Icon(Icons.tune),
+                title: Text(tr("录音选项")),
+                subtitle: Text(
+                  '${languages[language]} · ${translation.isEmpty ? tr("不翻译") : languages[translation]}',
+                ),
+                children: [
+                  SizedBox(height: 24),
+                  select(tr("工作区"), workspace, {
+                    '': tr("不指定工作区"),
+                    for (final w in widget.options['workspaces'])
+                      w['id']: w['name'],
+                  }, (v) => workspace = v),
+                  select(
+                    tr("识别模型"),
+                    modelId,
+                    models.isEmpty
+                        ? {'': tr("电脑暂无支持此语言的模型")}
+                        : {
+                            for (final m in models)
+                              m['id']:
+                                  '${m['name']}${m['status'] == 'ready' ? '' : tr(" · 未安装")}',
+                          },
+                    (v) => modelId = v,
+                  ),
+                  select(tr("翻译为"), translation, {
+                    '': tr("不翻译"),
+                    for (final e in languages.entries.where(
+                      (e) => e.key != 'auto',
+                    ))
+                      e.key: e.value,
+                  }, (v) => translation = v),
+                ],
+              ),
             SizedBox(height: 24),
             if (!ready)
               Padding(
@@ -2546,6 +2738,31 @@ class _PairingPainter extends CustomPainter {
   bool shouldRepaint(_PairingPainter old) => old.ink != ink || old.line != line;
 }
 
+class ConnectionRecoveryNotice extends StatelessWidget {
+  const ConnectionRecoveryNotice({super.key});
+  @override
+  Widget build(BuildContext context) => Container(
+    margin: EdgeInsets.only(top: 20),
+    padding: EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: Theme.of(context).brightness == Brightness.dark
+          ? Color(0xff40351f)
+          : Color(0xfffff4df),
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        LinearProgressIndicator(semanticsLabel: tr('正在重新连接')),
+        SizedBox(height: 12),
+        Text(tr('电脑已休眠或断开，等待开盖或恢复连接')),
+        SizedBox(height: 8),
+        Text(tr('录音保留在手机，恢复连接后自动补传。')),
+      ],
+    ),
+  );
+}
+
 class SavedMeetingPage extends StatelessWidget {
   final AppModel model;
   final String id;
@@ -2590,7 +2807,9 @@ class SavedMeetingPage extends StatelessWidget {
                 leading: Icon(Icons.laptop_outlined),
                 title: Text(tr("传到电脑")),
                 subtitle: Text(
-                  pending > 0
+                  m['localOnly'] == true
+                      ? tr("尚未上传")
+                      : pending > 0
                       ? tr("待补传 {0}", [durationText(pending)])
                       : tr("音频已传输"),
                 ),
@@ -2611,11 +2830,47 @@ class SavedMeetingPage extends StatelessWidget {
                 trailing: Icon(Icons.more_horiz),
               ),
               Divider(height: 1),
+              if (m['localOnly'] != true &&
+                  m['finished'] != true &&
+                  m['remoteDeleted'] != true &&
+                  m['connected'] == false)
+                const ConnectionRecoveryNotice(),
+              if (m['remoteDeleted'] == true ||
+                  m['error'] != null ||
+                  snapshot['error'] != null)
+                Padding(
+                  padding: EdgeInsets.only(top: 16),
+                  child: Text(
+                    m['remoteDeleted'] == true
+                        ? tr('会议已在电脑永久删除')
+                        : m['error']?.toString() ??
+                              remoteError(snapshot['error'].toString()),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ),
               SizedBox(height: 40),
-              FilledButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text(tr("返回会议列表")),
-              ),
+              if (m['localOnly'] == true) ...[
+                FilledButton.icon(
+                  onPressed: model.busy
+                      ? null
+                      : () => uploadRecording(context, model, id),
+                  icon: Icon(Icons.upload_outlined),
+                  label: Text(tr("上传到电脑")),
+                ),
+                SizedBox(height: 12),
+              ],
+              if (m['localOnly'] == true)
+                OutlinedButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text(tr("返回会议列表")),
+                )
+              else
+                FilledButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text(tr("返回会议列表")),
+                ),
               SizedBox(height: 12),
               TextButton(
                 onPressed: () => Navigator.pushReplacement(

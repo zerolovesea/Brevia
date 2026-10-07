@@ -1,10 +1,12 @@
 """聚焦存储职责的组件。"""
 
 import json
+import os
 import shutil
 from itertools import groupby
 
 from .transcript import latest_segments
+from .store_base import safe_child
 
 
 def _is_file(path):
@@ -24,6 +26,36 @@ def _safe_size(path):
 
 
 class MaintenanceStoreMixin:
+    def purge_mobile_recording(self, meeting_id):
+        """清除手机缓存，只保留无内容的删除标记，阻止离线手机重新上传已删除会议。"""
+        directory = safe_child(self.root / 'mobile', meeting_id, label='meeting id')
+        if not directory.exists():
+            return
+        manifest = directory / 'session.json'
+        try:
+            session = json.loads(manifest.read_text(encoding='utf-8'))
+        except (FileNotFoundError, json.JSONDecodeError):
+            session = {}
+        tombstone = {
+            'id': meeting_id,
+            'owner': session.get('owner'),
+            'deleted': True,
+            'finished': True,
+        }
+        temporary = directory / 'session.json.tmp'
+        with temporary.open('w', encoding='utf-8') as output:
+            json.dump(tombstone, output)
+            output.flush()
+            os.fsync(output.fileno())
+        temporary.replace(manifest)
+        for path in directory.iterdir():
+            if path == manifest:
+                continue
+            if path.is_dir() and not path.is_symlink():
+                shutil.rmtree(path)
+            else:
+                path.unlink()
+
     def usage(self):
         """统计会议、模型与导出文件占用的字节数及其根目录。"""
 
@@ -40,7 +72,8 @@ class MaintenanceStoreMixin:
             return total
 
         return {
-            "meetings": size(self.meetings_dir),
+            "meetings": size(self.meetings_dir)
+            + sum(size(path.parent) for path in (self.root / 'mobile').glob('*/session.json')),
             "models": size(self.models_dir),
             "exports": sum(
                 _safe_size(path) for path in self.meetings_dir.glob("*/exports/*") if _is_file(path)
@@ -89,6 +122,8 @@ class MaintenanceStoreMixin:
     def clear_storage_partition(self, partition):
         """清理一个明确的本地存储分区。"""
         if partition == "meetings":
+            for path in (self.root / 'mobile').glob('*/session.json'):
+                self.purge_mobile_recording(path.parent.name)
             with self.connect() as db:
                 db.execute("DELETE FROM meetings")
             shutil.rmtree(self.meetings_dir, ignore_errors=True)
@@ -108,6 +143,18 @@ class MaintenanceStoreMixin:
         with self.connect() as db:
             meeting_ids = {row["id"] for row in db.execute("SELECT id FROM meetings")}
         removed, freed_bytes = [], 0
+        for path in (self.root / 'mobile').glob('*/session.json'):
+            if path.parent.name in meeting_ids:
+                continue
+            try:
+                session = json.loads(path.read_text(encoding='utf-8'))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if session.get('finished') and not session.get('deleted'):
+                before = sum(_safe_size(item) for item in path.parent.rglob('*') if _is_file(item))
+                self.purge_mobile_recording(path.parent.name)
+                freed_bytes += max(0, before - path.stat().st_size)
+                removed.append(path.parent.name)
         for path in self.meetings_dir.iterdir():
             manifest = path / "manifest.json"
             if not path.is_dir() or path.name in meeting_ids or not manifest.is_file():

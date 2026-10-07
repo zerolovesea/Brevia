@@ -127,6 +127,12 @@ class MobileWorkerMixin:
                     'start_ms': recorded / 16,
                 }
             )
+        # 手机缓存可能以远快于实时的速度重放。先消费预处理和识别任务，再确认
+        # 处理进度；不能沿用实时采集的溢出降级，否则剩余缓存只有音频没有转写。
+        if self.live_preprocessing_tail is not None:
+            self.live_preprocessing_tail.result()
+        if self.live_postprocessing is not None:
+            self.live_postprocessing.submit(lambda: None).result()
         session = self.store._audio_sessions.get(meeting_id)
         if session:
             for output in session['writers'].values():

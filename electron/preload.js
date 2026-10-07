@@ -33,6 +33,7 @@ contextBridge.exposeInMainWorld('brevia', {
   platform: process.platform,
   mobile: {
     stop: invoke('mobile.stop'),
+    finishReceived: invoke('mobile.finish-received'),
     approve: invoke('mobile.approve'),
     status: invoke('mobile.status'),
     pair: invoke('mobile.pair'),

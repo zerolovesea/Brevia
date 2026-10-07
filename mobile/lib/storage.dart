@@ -1,7 +1,8 @@
-import 'i18n.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
+
+import 'i18n.dart';
 
 Future<void> writeJson(File file, Object value) async {
   final tmp = File('${file.path}.tmp');
@@ -50,17 +51,22 @@ class RecordingStore {
     await writeJson(File('${directory.path}/session.json'), meta);
   }
 
+  static Future<Map<String, dynamic>> metadata(Directory dir) async =>
+      jsonDecode(await File('${dir.path}/session.json').readAsString())
+          as Map<String, dynamic>;
+
   static Future<RecordingStore> load(Directory dir) async {
-    final meta =
-        jsonDecode(await File('${dir.path}/session.json').readAsString())
-            as Map<String, dynamic>;
+    final meta = await metadata(dir);
     final store = RecordingStore(dir, meta);
     await store.recover();
     return store;
   }
 
   Future<void> deleteLocal() async {
-    if (meta['state'] != 'ended' || meta['finished'] != true) {
+    if (meta['state'] != 'ended' ||
+        (meta['finished'] != true &&
+            meta['remoteDeleted'] != true &&
+            meta['localOnly'] != true)) {
       throw StateError(tr("请先结束录音并完成同步，以免丢失尚未传到电脑的音频"));
     }
     await directory.delete(recursive: true);

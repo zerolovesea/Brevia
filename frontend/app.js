@@ -4795,7 +4795,7 @@ function adoptMobileMeeting(meeting) {
   clearInterval(timer);
   document.querySelector('#pause').disabled = true;
   document.querySelector('#end-meeting').disabled = false;
-  document.querySelector('#pause').textContent = '在手机控制录音';
+  document.querySelector('#pause').textContent = t('在手机控制录音');
   const transcript = document.querySelector('#transcript-scroll');
   transcript.innerHTML = (meeting.segments || [])
     .map((segment) => renderTranscriptSegment(renderSegmentData(segment, false, new Map())))
@@ -4805,6 +4805,10 @@ function adoptMobileMeeting(meeting) {
 function activateMeeting(meeting, payload) {
   document.querySelector('#pause').disabled = false;
   document.querySelector('#end-meeting').disabled = false;
+  document.querySelector('#end-meeting').removeAttribute('data-awaiting-phone');
+  document.querySelector('#end-meeting').removeAttribute('aria-busy');
+  document.querySelector('#end-meeting').textContent = t('结束会议');
+  document.querySelector('#transcript-scroll').classList.remove('is-finishing');
   const { title, workspace_id: workspaceId, language } = meeting || payload;
   // 上一场遗留的「无实时字幕」卡片不能带到这一场；本场的卡片要保留（它的归属 id 与本次相同）。
   dismissLiveCaptionUnavailable(meeting?.id || payload?.id || breviaClient?.state.meeting?.id);
@@ -4819,7 +4823,7 @@ function activateMeeting(meeting, payload) {
     for (const anchor of [document.querySelector('#live-name'), miniMeeting]) {
       const tag = document.createElement('span');
       tag.className = 'mobile-source-tag';
-      tag.textContent = '手机录音';
+      tag.textContent = t('手机录音');
       anchor.after(tag);
       if (anchor === miniMeeting) anchor.append(tag);
     }
@@ -5064,7 +5068,9 @@ document.querySelector('#end-meeting').addEventListener('click', async (event) =
       const meetingId = breviaClient.state.meeting.id;
       clearTimeout(liveNotesSaveTimer.current);
       await persistNotes(meetingId, currentNotesMarkdown());
+      document.querySelector('#transcript-scroll').classList.add('is-finishing');
       await window.brevia.mobile.stop({ meeting_id: meetingId });
+      button.dataset.awaitingPhone = meetingId;
       showToast(t('已请求手机结束录音，等待保存与同步'));
       return;
     }
@@ -5096,10 +5102,17 @@ document.querySelector('#end-meeting').addEventListener('click', async (event) =
     renderPauseButton();
     document.querySelector('#pause').disabled = true;
   } finally {
-    button.disabled = false;
-    button.classList.remove('is-pending');
-    button.removeAttribute('aria-busy');
-    button.innerHTML = buttonLabel;
+    if (button.dataset.awaitingPhone) {
+      button.disabled = true;
+      button.classList.remove('is-pending');
+      button.innerHTML = t('结束中');
+    } else {
+      document.querySelector('#transcript-scroll').classList.remove('is-finishing');
+      button.disabled = false;
+      button.classList.remove('is-pending');
+      button.removeAttribute('aria-busy');
+      button.innerHTML = buttonLabel;
+    }
   }
 });
 miniMeeting.addEventListener('click', () => {
@@ -7343,23 +7356,23 @@ if (window.brevia) {
     },
   );
   window.brevia.on('transcript.final', (payload) => {
+    if (!meetingActive || payload.meeting_id !== breviaClient?.state.meeting?.id) return;
     renderLiveEvent(payload);
-    // 正式段落一旦覆盖到临时行预览的起点，那条临时行就已过期：这里主动让它退场，
-    // 不依赖随后到达的「空 draft」事件。暂停/停止排空时 final 与空 draft 几乎同时到，
-    // 顺序稍有偏差就会让临时行残留在列表里（看起来像「临时字幕没变成正式段落」）。
+    // 只有正式段落覆盖整个草稿才移除；包含后续尾句的预览等待就地更新。
     for (const [key, draft] of draftSegments) {
       // 只让同一条音轨的正式段落撤下临时行：双轨会议里 mic 的 final 不该清掉 system
       // 仍在攒的临时行，否则它会消失又在下一个 draft 事件里重新冒出来（闪烁 + 高亮错位）。
       if (String(draft.dataset.draftTrack || 'mix') !== String(payload.track || 'mix')) continue;
-      if (Number(draft.dataset.start) <= payload.start_ms / 1000) {
+      if (Number(draft.dataset.end) <= payload.end_ms / 1000) {
         draft.remove();
         draftSegments.delete(key);
       }
     }
   });
-  // 正在攒的段落：文本来自已完成的整句识别，只是还没攒够提交条件（可能再等几秒）。
-  // 显示成一条会被就地替换的临时行，并接手「当前」高亮；正式段落到达后退场，高亮交还。
+  // 同一条草稿同时承接流式识别和待提交段落，更新正文而不替换整行。
+  // 完整覆盖的正式段落或清空事件到达后，才移除预览并交还高亮。
   window.brevia.on('transcript.draft', (payload) => {
+    if (!meetingActive || payload.meeting_id !== breviaClient?.state.meeting?.id) return;
     const key = payload.track || 'mix';
     const existing = draftSegments.get(key);
     if (!payload.text) {
@@ -7382,23 +7395,33 @@ if (window.brevia) {
       text: payload.text,
       showSpeaker: false,
     };
-    const template = document.createElement('template');
-    template.innerHTML = renderTranscriptSegment(entry);
-    const element = template.content.firstElementChild;
-    element.classList.add('is-draft');
-    element.dataset.draftTrack = key;
-    // draft 预览的始终是最新（未提交）的段落，因此永远排在已确认段落之后。replaceWith
-    // 会继承旧行的 DOM 位置，而旧行对应的时间更早——必须重新 appendChild 把它钉到末尾，
-    // 否则临时行会停在列表上方，和「确认后的字幕从下刷新」的方向相反。
-    existing?.replaceWith(element);
-    transcript.appendChild(element);
-    draftSegments.set(key, element);
-    transcript.querySelectorAll('.segment.is-active').forEach((segment) => {
-      segment.classList.remove('is-active');
-      segment.removeAttribute('aria-current');
-    });
-    element.classList.add('is-active');
-    element.setAttribute('aria-current', 'true');
+    let element = existing;
+    if (!element) {
+      const template = document.createElement('template');
+      template.innerHTML = renderTranscriptSegment(entry);
+      element = template.content.firstElementChild;
+      element.classList.add('is-draft');
+      element.dataset.draftTrack = key;
+      element.querySelector('.caption-signals')?.remove();
+      draftSegments.set(key, element);
+    } else {
+      // 识别收尾时会密集发送草稿；保留节点、焦点和光标动画，不整行重建。
+      const text = element.querySelector('.segment-copy > p');
+      if (text.textContent !== payload.text) text.textContent = payload.text;
+      const time = element.querySelector('time');
+      if (time.textContent !== entry.time) time.textContent = entry.time;
+      element.dataset.start = String(entry.startSeconds);
+      element.dataset.end = String(entry.endSeconds);
+    }
+    if (transcript.lastElementChild !== element) transcript.appendChild(element);
+    if (!element.classList.contains('is-active')) {
+      transcript.querySelectorAll('.segment.is-active').forEach((segment) => {
+        segment.classList.remove('is-active');
+        segment.removeAttribute('aria-current');
+      });
+      element.classList.add('is-active');
+      element.setAttribute('aria-current', 'true');
+    }
     if (shouldFollow) scrollLiveToLatest(element);
   });
   window.brevia.on('transcript.settled', async (payload) => {

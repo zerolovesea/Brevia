@@ -1,15 +1,17 @@
 import 'dart:async';
-import 'i18n.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'dart:io';
-import 'package:flutter/services.dart';
+
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
+
 import 'connection.dart';
+import 'i18n.dart';
 import 'storage.dart';
 
 Future<Directory> recordingsRoot() async {
@@ -19,7 +21,7 @@ Future<Directory> recordingsRoot() async {
 
 class RecordingEngine {
   final RecordingStore store;
-  final DesktopConnection connection;
+  final DesktopConnection? connection;
   final void Function(Map<String, dynamic>) onChanged;
   AudioRecorder? _recorder;
   AudioRecorder get recorder => _recorder ??= AudioRecorder();
@@ -29,19 +31,31 @@ class RecordingEngine {
   StreamSubscription<Uint8List>? audio;
   StreamSubscription<RecordState>? states;
   Timer? timer;
+  StreamSubscription<bool>? connectionEvents;
   Future<void> disk = Future.value();
   List<int> pending = [];
   Map<String, dynamic> snapshot = {};
   bool syncing = false, closing = false, disposed = false, connected = false;
+  bool registered = false;
+  String? sentState;
   String? error;
   int failures = 0;
   DateTime retryAt = DateTime.fromMillisecondsSinceEpoch(0);
-  RecordingEngine(this.store, this.connection, this.onChanged);
+  RecordingEngine(this.store, this.connection, this.onChanged) {
+    connectionEvents = connection?.available.stream.listen((online) {
+      if (!online) {
+        connected = false;
+        publish();
+        return;
+      }
+      retryAt = DateTime.fromMillisecondsSinceEpoch(0);
+      unawaited(sync());
+    });
+  }
   Future<void> write(Future<void> Function() fn) {
     final next = disk.then((_) => fn());
     disk = next.catchError((Object e) {
       error = tr("本地保存失败：{0}", [e]);
-      store.meta['state'] = 'interrupted';
     });
     return next;
   }
@@ -73,7 +87,13 @@ class RecordingEngine {
               ? '录音已暂停'
               : '录音已中断',
         ),
-        'connectionLabel': tr(connected ? '已连接' : '等待电脑连接 · 录音保留在手机'),
+        'connectionLabel': tr(
+          connection == null
+              ? '仅保存在手机'
+              : connected
+              ? '已连接'
+              : '等待电脑连接 · 录音保留在手机',
+        ),
         'uploadedLabel': tr('已传到电脑 {0}', [
           durationText(snapshot['samples'] ?? 0),
         ]),
@@ -108,28 +128,39 @@ class RecordingEngine {
     if (await cached.exists()) {
       snapshot = jsonDecode(await cached.readAsString());
     }
-    states = recorder.onStateChanged().listen((state) {
-      if (!closing &&
-          state == RecordState.pause &&
-          store.meta['state'] == 'recording') {
-        unawaited(interrupted(tr("录音被系统中断，请回到应用继续")));
-      }
-      if (!closing &&
-          state == RecordState.stop &&
-          store.meta['state'] == 'recording') {
-        unawaited(interrupted(tr("麦克风已停止，请检查录音权限")));
-      }
-    });
     if (capture) {
-      await beginCapture();
-      await activity('start');
+      states = recorder.onStateChanged().listen((state) {
+        if (!closing &&
+            state == RecordState.pause &&
+            store.meta['state'] == 'recording') {
+          reportInterruption(tr("录音被系统中断，请回到应用继续"));
+        }
+        if (!closing &&
+            state == RecordState.stop &&
+            store.meta['state'] == 'recording') {
+          reportInterruption(tr("麦克风已停止，请检查录音权限"));
+        }
+      });
     }
     timer = Timer.periodic(Duration(seconds: 1), (_) {
       publish();
       unawaited(sync());
     });
+    if (capture) {
+      await beginCapture();
+      await activity('start');
+    }
     publish();
     unawaited(sync());
+  }
+
+  void reportInterruption(String reason) {
+    unawaited(
+      command({
+        'action': 'interrupt',
+        'reason': reason,
+      }).catchError((Object _) {}),
+    );
   }
 
   Future<void> beginCapture() async {
@@ -150,7 +181,8 @@ class RecordingEngine {
       store.meta['state'] = 'recording';
       error = null;
       await write(store.save);
-      audioDone = Completer<void>();
+      final done = Completer<void>();
+      audioDone = done;
       audio = stream.listen(
         (bytes) {
           // One ordered disk queue; transport never owns the microphone stream.
@@ -166,15 +198,18 @@ class RecordingEngine {
               await store.save();
               publish();
             }).catchError((Object e) {
-              unawaited(interrupted(tr("手机无法保存录音，请释放空间：{0}", [e])));
+              reportInterruption(tr("手机无法保存录音，请释放空间：{0}", [e]));
             }),
           );
         },
         onDone: () {
-          if (!audioDone!.isCompleted) audioDone!.complete();
+          if (!done.isCompleted) done.complete();
+          if (!closing && store.meta['state'] == 'recording') {
+            reportInterruption(tr("麦克风已停止，请检查录音权限"));
+          }
         },
         onError: (Object e) {
-          unawaited(interrupted(tr("麦克风中断：{0}", [e])));
+          reportInterruption(tr("麦克风中断：{0}", [e]));
         },
       );
     } catch (e) {
@@ -187,8 +222,11 @@ class RecordingEngine {
     if (pending.isNotEmpty) {
       // PCM16 buffers must end on a whole sample.
       if (pending.length.isOdd) throw FormatException(tr("麦克风返回了不完整的音频样本"));
-      await store.append(Uint8List.fromList(pending));
-      pending.clear();
+      while (pending.isNotEmpty) {
+        final length = pending.length.clamp(0, 32000);
+        await store.append(Uint8List.fromList(pending.sublist(0, length)));
+        pending = pending.sublist(length);
+      }
       await store.save();
     }
   });
@@ -212,19 +250,28 @@ class RecordingEngine {
   }
 
   Future<void> command(Map<String, dynamic> value) {
-    commands = commands.then((_) => applyCommand(value));
-    return commands;
+    final next = commands.then((_) => applyCommand(value));
+    // 对调用方保留失败，同时让下一次重试仍能进入控制队列。
+    commands = next.catchError((Object _) {});
+    return next;
   }
 
   Future<void> applyCommand(Map<String, dynamic> value) async {
     try {
       switch (value['action']) {
+        case 'interrupt':
+          if (store.meta['state'] == 'ended') return;
+          await interrupted(value['reason']);
         case 'ui-language':
           uiLanguage = value['language'];
           activityStatus = null;
+        case 'reconnect':
+          retryAt = DateTime.fromMillisecondsSinceEpoch(0);
+          await connection?.reconnect();
+          break;
         case 'address':
           DesktopConnection.endpoint(value['address']);
-          connection.address = value['address'];
+          connection?.address = value['address'];
           retryAt = DateTime.fromMillisecondsSinceEpoch(0);
         case 'pause':
           closing = true;
@@ -236,13 +283,23 @@ class RecordingEngine {
           closing = false;
         case 'resume':
           if (store.meta['state'] == 'ended') return;
-          await recorder.resume();
-          if (!await recorder.isRecording()) {
+          closing = true;
+          await disk;
+          await flush();
+          if (await recorder.isPaused()) {
+            await recorder.resume();
+          } else if (!await recorder.isRecording()) {
+            await audio?.cancel();
+            audio = null;
+            await beginCapture();
+          }
+          if (!await recorder.isRecording() || await recorder.isPaused()) {
             throw StateError(tr("麦克风不可用，请重新打开录音"));
           }
           store.meta['state'] = 'recording';
           error = null;
           await write(store.save);
+          closing = false;
         case 'end':
           closing = true;
           await recorder.stop();
@@ -252,6 +309,7 @@ class RecordingEngine {
           await flush();
           store.meta['state'] = 'ended';
           await write(store.save);
+          if (connection == null) timer?.cancel();
           closing = false;
         case 'mark':
           final marks = List<dynamic>.from(store.meta['marks'] ?? []);
@@ -268,36 +326,52 @@ class RecordingEngine {
       publish();
       unawaited(sync());
     } catch (e) {
+      if (['pause', 'resume', 'end'].contains(value['action'])) {
+        await interrupted(e.toString());
+      }
       closing = false;
       error = e.toString();
       publish();
+      rethrow;
     }
   }
 
   Future<void> sync() async {
-    if (syncing || disposed || DateTime.now().isBefore(retryAt)) return;
+    if (syncing ||
+        disposed ||
+        connection == null ||
+        store.meta['remoteDeleted'] == true ||
+        DateTime.now().isBefore(retryAt)) {
+      return;
+    }
     syncing = true;
     syncDone = Completer<void>();
     try {
       final id = store.meta['id'];
-      await connection.call('POST', '/meetings', {
-        'id': id,
-        'title': store.meta['title'],
-        for (final key in [
-          'language',
-          'target_language',
-          'workspace_id',
-          'refined_model_id',
-          'speaker_segmentation_model_id',
-          'vad_model_id',
-        ])
-          if (store.meta[key] != null) key: store.meta[key],
-      });
-      await connection.call('POST', '/meetings/$id/state', {
-        'state': store.meta['state'],
-      });
+      if (!registered) {
+        await connection!.call('POST', '/meetings', {
+          'id': id,
+          'title': store.meta['title'],
+          for (final key in [
+            'language',
+            'num_speakers',
+            'target_language',
+            'workspace_id',
+            'refined_model_id',
+            'speaker_segmentation_model_id',
+            'vad_model_id',
+          ])
+            if (store.meta[key] != null) key: store.meta[key],
+        });
+        registered = true;
+      }
+      final state = store.meta['state'] as String;
+      if (sentState != state) {
+        await connection!.call('POST', '/meetings/$id/state', {'state': state});
+        sentState = state;
+      }
       snapshot = Map<String, dynamic>.from(
-        await connection.call('GET', '/meetings/$id/snapshot'),
+        await connection!.call('GET', '/meetings/$id/snapshot'),
       );
       if (snapshot['stopRequested'] == true && store.meta['state'] != 'ended') {
         await command({'action': 'end'});
@@ -309,7 +383,7 @@ class RecordingEngine {
       // Small bounded batch allows controls and snapshots to stay responsive.
       for (var sent = 0; next < store.count && sent < 8; sent++) {
         final data = await store.chunk(next).readAsBytes();
-        final ack = await connection.call('PUT', '/meetings/$id/chunks', {
+        final ack = await connection!.call('PUT', '/meetings/$id/chunks', {
           'seq': next,
           'start_sample': store.offsets[next],
           'pcm': base64Encode(data),
@@ -317,10 +391,12 @@ class RecordingEngine {
         next = ack['next'];
         snapshot['next'] = next;
         snapshot['samples'] = ack['samples'];
+        snapshot['ended'] = false;
+        snapshot['finished'] = false;
       }
       final marks = List<dynamic>.from(store.meta['marks'] ?? []);
       for (final mark in marks.where((m) => m['synced'] != true)) {
-        await connection.call('POST', '/meetings/$id/marks', {
+        await connection!.call('POST', '/meetings/$id/marks', {
           'id': mark['id'],
           'sample': mark['sample'],
           'note': mark['note'],
@@ -330,7 +406,7 @@ class RecordingEngine {
       if (store.meta['state'] == 'ended' &&
           next == store.count &&
           snapshot['ended'] != true) {
-        await connection.call('POST', '/meetings/$id/end', {
+        await connection!.call('POST', '/meetings/$id/end', {
           'count': store.count,
           'samples': store.samples,
         });
@@ -338,7 +414,11 @@ class RecordingEngine {
       }
       await write(() async {
         store.meta['uploaded'] = next;
-        store.meta['finished'] = snapshot['finished'] == true;
+        store.meta['finished'] =
+            store.meta['state'] == 'ended' &&
+            next == store.count &&
+            snapshot['ended'] == true &&
+            snapshot['finished'] == true;
         await store.save();
         await writeJson(
           File('${store.directory.path}/snapshot.json'),
@@ -347,10 +427,23 @@ class RecordingEngine {
       });
       connected = true;
       failures = 0;
+      if (store.meta['finished'] == true) timer?.cancel();
       if (store.meta['state'] != 'interrupted') {
         error = snapshot['error'] == null
             ? null
             : remoteError(snapshot['error'].toString());
+      }
+    } on MeetingDeletedException catch (e) {
+      // 电脑已明确删除：停止重传但保留本机音频，交由用户导出或删除。
+      connected = true;
+      error = e.toString();
+      try {
+        if (store.meta['state'] != 'ended') await command({'action': 'end'});
+        store.meta['remoteDeleted'] = true;
+        await write(store.save);
+        timer?.cancel();
+      } catch (localError) {
+        error = localError.toString();
       }
     } catch (e) {
       connected = false;
@@ -358,7 +451,9 @@ class RecordingEngine {
       final delay = (1 << failures.clamp(0, 4)).clamp(1, 15);
       retryAt = DateTime.now().add(Duration(seconds: delay));
       if (store.meta['state'] != 'interrupted') {
-        error = tr("电脑连接中断，已有录音保留在手机。{0}", [e]);
+        error = e is SocketException || e is TimeoutException
+            ? null
+            : tr("电脑连接中断，已有录音保留在手机。{0}", [e]);
       }
     } finally {
       syncing = false;
@@ -368,20 +463,25 @@ class RecordingEngine {
   }
 
   Future<void> dispose() async {
+    if (disposed) return;
     timer?.cancel();
+    await connectionEvents?.cancel();
     disposed = true;
-    await commands;
-    await syncDone?.future;
-    closing = true;
-    if (_recorder != null) await recorder.stop();
-    await audioDone?.future.timeout(Duration(seconds: 5));
-    await audio?.cancel();
-    await states?.cancel();
-    await disk;
-    await flush();
-    await _recorder?.dispose();
-    await activity('end');
-    disposed = true;
+    try {
+      await commands;
+      await syncDone?.future;
+      closing = true;
+      if (_recorder != null) await recorder.stop();
+      await audioDone?.future.timeout(Duration(seconds: 5));
+      await audio?.cancel();
+      await disk;
+      await flush();
+    } finally {
+      await audio?.cancel();
+      await states?.cancel();
+      await _recorder?.dispose();
+      await activity('end');
+    }
   }
 }
 
@@ -404,9 +504,12 @@ class RecordingTask extends TaskHandler {
       final id = await FlutterForegroundTask.getData<String>(key: 'sessionId');
       final root = await recordingsRoot();
       final store = await RecordingStore.load(Directory('${root.path}/$id'));
-      final connection = await DesktopConnection.load();
-      if (connection == null ||
-          connection.fingerprint != store.meta['computer']) {
+      final connection = store.meta['localOnly'] == true
+          ? null
+          : await DesktopConnection.load();
+      if (store.meta['localOnly'] != true &&
+          (connection == null ||
+              connection.fingerprint != store.meta['computer'])) {
         throw StateError(tr("请连接原电脑"));
       }
       engine = RecordingEngine(store, connection, (value) {
@@ -431,7 +534,11 @@ class RecordingTask extends TaskHandler {
               ? tr("录音已暂停")
               : tr("录音已中断")}',
       notificationText:
-          '${durationText(e.store.samples)} · ${e.connected ? tr("已传到电脑 {0}", [durationText(e.snapshot['samples'] ?? 0)]) : tr("等待电脑连接 · 录音保留在手机")}',
+          '${durationText(e.store.samples)} · ${e.connection == null
+              ? tr("仅保存在手机")
+              : e.connected
+              ? tr("已传到电脑 {0}", [durationText(e.snapshot['samples'] ?? 0)])
+              : tr("等待电脑连接 · 录音保留在手机")}',
       notificationButtons: [
         if (e.store.meta['state'] == 'recording')
           NotificationButton(id: 'pause', text: tr("暂停")),
@@ -446,12 +553,27 @@ class RecordingTask extends TaskHandler {
   @override
   Future<void> onDestroy(DateTime timestamp, bool isTimeout) async {
     await engine?.dispose();
+    await engine?.connection?.dispose();
   }
 
   @override
   void onReceiveData(Object data) {
     if (data is Map) {
-      unawaited(engine?.command(Map<String, dynamic>.from(data)));
+      final value = Map<String, dynamic>.from(data);
+      unawaited(() async {
+        try {
+          if (engine == null) throw StateError(tr("麦克风不可用，请重新打开录音"));
+          await engine!.command(value);
+          FlutterForegroundTask.sendDataToMain({
+            'commandId': value['commandId'],
+          });
+        } catch (e) {
+          FlutterForegroundTask.sendDataToMain({
+            'commandId': value['commandId'],
+            'commandError': e.toString(),
+          });
+        }
+      }());
     }
   }
 
@@ -461,7 +583,8 @@ class RecordingTask extends TaskHandler {
       unawaited(
         engine
             ?.command({'action': 'pause'})
-            .then((_) => onRepeatEvent(DateTime.now())),
+            .then((_) => onRepeatEvent(DateTime.now()))
+            .catchError((Object _) {}),
       );
     } else if (id == 'return') {
       FlutterForegroundTask.launchApp();

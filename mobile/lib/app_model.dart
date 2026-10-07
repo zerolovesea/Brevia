@@ -1,16 +1,19 @@
 import 'dart:async';
-import 'i18n.dart';
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:flutter/widgets.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:nsd/nsd.dart' as nsd;
+import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
+
 import 'connection.dart';
+import 'i18n.dart';
 import 'recorder.dart';
 import 'storage.dart';
-import 'package:nsd/nsd.dart' as nsd;
 
 class AppModel extends ChangeNotifier with WidgetsBindingObserver {
   DesktopConnection? desktop;
@@ -18,6 +21,46 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
   Map<String, dynamic>? live;
   RecordingEngine? engine;
   Timer? timer;
+  bool disposed = false;
+  String? viewedMeetingId;
+  final Map<String, RecordingEngine> senders = {};
+  final Map<String, Completer<void>> pendingCommands = {};
+
+  @override
+  void notifyListeners() {
+    if (!disposed) super.notifyListeners();
+  }
+
+  Future<void> sendCommand(Map<String, dynamic> value) async {
+    final id = Uuid().v4();
+    final done = Completer<void>();
+    pendingCommands[id] = done;
+    try {
+      FlutterForegroundTask.sendDataToTask({...value, 'commandId': id});
+      await done.future.timeout(
+        Duration(seconds: 30),
+        onTimeout: () {
+          throw StateError(tr("录音操作尚未确认，请检查录音状态后重试"));
+        },
+      );
+    } finally {
+      pendingCommands.remove(id);
+    }
+  }
+
+  Future<void> releaseEngines() async {
+    final current = engine;
+    if (current != null) {
+      await current.dispose();
+      engine = null;
+    }
+    for (final sender in senders.values) {
+      await sender.dispose();
+    }
+    senders.clear();
+    live = null;
+  }
+
   bool serviceRunning = false, refreshing = false, busy = false;
   bool foreground = true;
   String? error;
@@ -41,6 +84,10 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
         '_brevia._tcp',
         ipLookupType: nsd.IpLookupType.v4,
       );
+      if (disposed || desktop != null) {
+        await stopDiscovery();
+        return;
+      }
       void found() {
         for (final service in discovery?.services ?? <nsd.Service>[]) {
           for (final ip in service.addresses ?? <InternetAddress>[]) {
@@ -119,15 +166,39 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
       ),
     );
     await refresh();
+    if (disposed) return;
     if (desktop == null) unawaited(discover());
     timer = Timer.periodic(Duration(seconds: 2), (_) {
-      if (foreground) unawaited(refresh());
+      if (foreground) {
+        if (serviceRunning) {
+          unawaited(
+            sendCommand({'action': 'reconnect'}).catchError((Object _) {}),
+          );
+        } else {
+          unawaited(desktop?.reconnect() ?? Future.value());
+        }
+        for (final sender in senders.values) {
+          sender.retryAt = DateTime.fromMillisecondsSinceEpoch(0);
+        }
+        unawaited(refresh());
+      }
     });
   }
 
   void receive(Object data) {
     if (data is! Map) return;
     final value = Map<String, dynamic>.from(data);
+    if (value.containsKey('commandId')) {
+      final done = pendingCommands[value['commandId']];
+      if (done != null && !done.isCompleted) {
+        if (value['commandError'] != null) {
+          done.completeError(StateError(value['commandError']));
+        } else {
+          done.complete();
+        }
+      }
+      return;
+    }
     if (value['fatal'] != null) {
       error = value['fatal'];
       live = null;
@@ -144,11 +215,19 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> refresh() async {
-    if (refreshing || busy) return;
+    if (refreshing || busy || disposed) return;
     refreshing = true;
     try {
       serviceRunning =
           Platform.isAndroid && await FlutterForegroundTask.isRunningService;
+      if (engine?.store.meta['finished'] == true ||
+          engine?.store.meta['remoteDeleted'] == true ||
+          (engine?.store.meta['localOnly'] == true &&
+              engine?.store.meta['state'] == 'ended')) {
+        await engine!.dispose();
+        engine = null;
+        live = null;
+      }
       if (desktop != null && !serviceRunning && engine == null) {
         try {
           await desktop!.call('GET', '/meetings');
@@ -164,10 +243,10 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
             !await File('${dir.path}/session.json').exists()) {
           continue;
         }
-        final store = await RecordingStore.load(dir);
+        final meta = await RecordingStore.metadata(dir);
         final cached = File('${dir.path}/snapshot.json');
         records.add({
-          ...store.meta,
+          ...meta,
           'snapshot': await cached.exists()
               ? jsonDecode(await cached.readAsString())
               : <String, dynamic>{},
@@ -176,11 +255,15 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
       records.sort(
         (a, b) => (b['created'] as String).compareTo(a['created'] as String),
       );
-      if (desktop != null) {
+      if (disposed) return;
+      if (desktop != null && !serviceRunning) {
         for (final record in records.where(
           (m) =>
               m['computer'] == desktop!.fingerprint &&
-              m['snapshot']?['task']?['state'] == 'running',
+              m['remoteDeleted'] != true &&
+              (m['snapshot']?['task']?['state'] == 'running' ||
+                  (m['id'] == viewedMeetingId && m['finished'] == true)) &&
+              m['id'] != engine?.store.meta['id'],
         )) {
           try {
             final snapshot = await desktop!.call(
@@ -192,6 +275,12 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
               File('${root.path}/${record['id']}/snapshot.json'),
               snapshot,
             );
+          } on MeetingDeletedException {
+            record['remoteDeleted'] = true;
+            await writeJson(
+              File('${root.path}/${record['id']}/session.json'),
+              {...record}..remove('snapshot'),
+            );
           } catch (_) {
             /* Keep cached task status until the original computer reconnects. */
           }
@@ -199,16 +288,38 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
       }
       meetings = records;
       if (!serviceRunning && engine == null) live = null;
-      // While foregrounded, retry ended recordings without acquiring the microphone.
-      if (!serviceRunning && engine == null && desktop != null) {
-        for (final record in meetings.where(
-          (m) => m['state'] == 'ended' && m['computer'] == desktop!.fingerprint,
-        )) {
-          final store = await RecordingStore.load(
-            Directory('${root.path}/${record['id']}'),
-          );
-          final sender = RecordingEngine(store, desktop!, (_) {});
+      // 仅为待补传会议保留发送器，复用恢复清单与重试退避；不遍历历史 PCM。
+      if (!serviceRunning && desktop != null) {
+        final pending = meetings
+            .where(
+              (m) =>
+                  m['state'] == 'ended' &&
+                  m['finished'] != true &&
+                  m['remoteDeleted'] != true &&
+                  m['computer'] == desktop!.fingerprint &&
+                  m['id'] != engine?.store.meta['id'],
+            )
+            .toList()
+            .reversed;
+        for (final record in pending) {
+          if (disposed) return;
+          final id = record['id'] as String;
+          var sender = senders[id];
+          if (sender == null) {
+            final store = await RecordingStore.load(
+              Directory('${root.path}/$id'),
+            );
+            sender = RecordingEngine(store, desktop!, (_) {});
+            senders[id] = sender;
+          }
           await sender.sync();
+          record.addAll(sender.view);
+          desktopOnline = sender.connected;
+          if (record['finished'] == true || record['remoteDeleted'] == true) {
+            await sender.dispose();
+            senders.remove(id);
+          }
+          if (!sender.connected) break;
         }
       }
     } catch (e) {
@@ -235,10 +346,15 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
 
   void updateRecordingLanguage() {
     if (serviceRunning) {
-      FlutterForegroundTask.sendDataToTask({
-        'action': 'ui-language',
-        'language': languageCode,
-      });
+      unawaited(
+        sendCommand({
+          'action': 'ui-language',
+          'language': languageCode,
+        }).catchError((Object e) {
+          error = e.toString();
+          notifyListeners();
+        }),
+      );
     }
   }
 
@@ -264,6 +380,7 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
   Future<String> start(
     String title, {
     String? existing,
+    bool offline = false,
     Map<String, dynamic> settings = const {},
   }) async {
     if (busy ||
@@ -271,13 +388,15 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
         (engine != null && engine!.store.meta['state'] != 'ended')) {
       throw StateError(tr("已有正在进行的录音"));
     }
-    if (desktop == null) throw StateError(tr("请先连接电脑"));
     if (meetings.any((m) => m['state'] != 'ended' && m['id'] != existing)) {
       throw StateError(tr("请先处理未完成的录音"));
     }
     busy = true;
     notifyListeners();
     try {
+      while (refreshing) {
+        await Future<void>.delayed(Duration(milliseconds: 50));
+      }
       final permissionRecorder = AudioRecorder();
       final allowed = await permissionRecorder.hasPermission();
       await permissionRecorder.dispose();
@@ -295,16 +414,21 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
       RecordingStore store;
       if (existing != null) {
         store = await RecordingStore.load(directory);
-        if (store.meta['computer'] != desktop!.fingerprint) {
+        offline = store.meta['localOnly'] == true;
+        if (!offline &&
+            (desktop == null ||
+                store.meta['computer'] != desktop!.fingerprint)) {
           throw StateError(tr("请连接这场会议原来的电脑"));
         }
         if (store.meta['state'] == 'ended') throw StateError(tr("这场录音已经结束"));
       } else {
+        if (!offline && desktop == null) throw StateError(tr("请先连接电脑"));
         store = RecordingStore(directory, {
           'id': id,
           'title': title.trim().isEmpty ? defaultMeetingTitle() : title.trim(),
           'created': DateTime.now().toIso8601String(),
-          'computer': desktop!.fingerprint,
+          'computer': offline ? null : desktop!.fingerprint,
+          'localOnly': offline,
           'state': 'starting',
           ...settings,
           'language': settings['language'] ?? 'zh',
@@ -317,9 +441,9 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
           ...settings,
           'language': settings['language'] ?? 'zh',
         };
-        await desktop!.call('POST', '/prepare', request);
+        if (!offline) await desktop!.call('POST', '/prepare', request);
         await store.save();
-        await desktop!.call('POST', '/meetings', request);
+        if (!offline) await desktop!.call('POST', '/meetings', request);
       }
       if (existing != null) {
         final gaps = List<dynamic>.from(store.meta['gaps'] ?? []);
@@ -332,6 +456,7 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
       }
       live = {...store.meta, 'samples': store.samples};
       if (Platform.isAndroid) {
+        await desktop?.dispose();
         await FlutterForegroundTask.saveData(key: 'sessionId', value: id);
         final result = await FlutterForegroundTask.startService(
           serviceId: 43187,
@@ -352,7 +477,7 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
         }
         serviceRunning = true;
       } else {
-        engine = RecordingEngine(store, desktop!, receive);
+        engine = RecordingEngine(store, offline ? null : desktop!, receive);
         await engine!.initialize();
       }
       return id;
@@ -374,7 +499,7 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
     if (live?['id'] == id && (serviceRunning || engine != null)) {
       final data = {'action': action, 'note': note, 'sample': sample};
       if (serviceRunning) {
-        FlutterForegroundTask.sendDataToTask(data);
+        await sendCommand(data);
       } else {
         await engine!.command(data);
       }
@@ -391,16 +516,63 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
     final current = desktop!;
     final candidate = DesktopConnection.fromJson(current.toJson())
       ..address = address;
-    await candidate.call('GET', '/meetings');
+    // 用户修改局域网地址时必须验证该地址，不能由远程回退掩盖错误。
+    await candidate.localCall('GET', '/meetings');
     current.address = address;
     await current.save();
     if (serviceRunning) {
-      FlutterForegroundTask.sendDataToTask({
-        'action': 'address',
-        'address': address,
-      });
+      await sendCommand({'action': 'address', 'address': address});
     } else if (engine != null) {
       await engine!.command({'action': 'address', 'address': address});
+    }
+    await refresh();
+  }
+
+  Future<void> upload(String id, Map<String, dynamic> settings) async {
+    if (busy ||
+        serviceRunning ||
+        (engine != null && engine!.store.meta['state'] != 'ended')) {
+      throw StateError(tr("请先结束录音"));
+    }
+    final connection = desktop;
+    if (connection == null) throw StateError(tr("请先连接电脑"));
+    busy = true;
+    notifyListeners();
+    try {
+      while (refreshing) {
+        await Future<void>.delayed(Duration(milliseconds: 50));
+      }
+      if (!RegExp(r'^[a-f0-9-]{36}$').hasMatch(id)) {
+        throw FormatException(tr("无效会议"));
+      }
+      final root = await recordingsRoot();
+      final store = await RecordingStore.load(Directory('${root.path}/$id'));
+      if (store.meta['localOnly'] != true || store.meta['state'] != 'ended') {
+        throw StateError(tr("请先结束录音"));
+      }
+      final request = {
+        'id': id,
+        'title': store.meta['title'],
+        ...settings,
+        'num_speakers':
+            settings['num_speakers'] ?? store.meta['num_speakers'] ?? -1,
+      };
+      await connection.call('POST', '/prepare', request);
+      if (engine?.store.meta['id'] == id) {
+        await engine!.dispose();
+        engine = null;
+        live = null;
+      }
+      // 用户确认目标电脑后再持久化绑定；后续失败由原有分片补传恢复。
+      store.meta.addAll({
+        ...settings,
+        'localOnly': false,
+        'computer': connection.fingerprint,
+      });
+      await store.save();
+    } finally {
+      busy = false;
+      notifyListeners();
     }
     await refresh();
   }
@@ -458,7 +630,13 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
       }
       final root = await recordingsRoot();
       final store = await RecordingStore.load(Directory('${root.path}/$id'));
+      await senders.remove(id)?.dispose();
       await store.deleteLocal();
+      final temporary = await getTemporaryDirectory();
+      for (final extension in ['wav', 'md', 'txt']) {
+        final file = File('${temporary.path}/$id.$extension');
+        if (await file.exists()) await file.delete();
+      }
       meetings.removeWhere((m) => m['id'] == id);
     } finally {
       busy = false;
@@ -466,21 +644,93 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  Future<void> forget() async {
-    if (serviceRunning ||
+  Future<void> connect(DesktopConnection connection) async {
+    if (busy ||
+        serviceRunning ||
+        (engine != null &&
+            (engine!.store.meta['state'] != 'ended' ||
+                (engine!.store.meta['localOnly'] != true &&
+                    engine!.store.meta['finished'] != true &&
+                    engine!.store.meta['remoteDeleted'] != true))) ||
         meetings.any(
-          (m) => m['computer'] == desktop?.fingerprint && m['finished'] != true,
+          (m) =>
+              desktop != null &&
+              m['computer'] == desktop!.fingerprint &&
+              m['finished'] != true &&
+              m['remoteDeleted'] != true,
         )) {
       throw StateError(tr("请先完成当前电脑的录音与补传，未传音频会继续保留"));
     }
-    await vault.delete(key: 'desktop');
-    desktop = null;
-    notifyListeners();
+    busy = true;
+    try {
+      while (refreshing) {
+        await Future<void>.delayed(Duration(milliseconds: 50));
+      }
+      await releaseEngines();
+      await desktop?.dispose();
+      await connection.save();
+      await stopDiscovery();
+      desktop = connection;
+      desktopOnline = true;
+    } finally {
+      busy = false;
+      notifyListeners();
+    }
+    await refresh();
+  }
+
+  Future<void> forget() async {
+    if (busy ||
+        serviceRunning ||
+        (engine != null &&
+            (engine!.store.meta['state'] != 'ended' ||
+                (engine!.store.meta['localOnly'] != true &&
+                    engine!.store.meta['finished'] != true &&
+                    engine!.store.meta['remoteDeleted'] != true))) ||
+        meetings.any(
+          (m) =>
+              desktop != null &&
+              m['computer'] == desktop!.fingerprint &&
+              m['finished'] != true &&
+              m['remoteDeleted'] != true,
+        )) {
+      throw StateError(tr("请先完成当前电脑的录音与补传，未传音频会继续保留"));
+    }
+    busy = true;
+    try {
+      while (refreshing) {
+        await Future<void>.delayed(Duration(milliseconds: 50));
+      }
+      await releaseEngines();
+      await desktop?.dispose();
+      await vault.delete(key: 'desktop');
+      desktop = null;
+      desktopOnline = false;
+    } finally {
+      busy = false;
+      notifyListeners();
+    }
   }
 
   @override
   void dispose() {
+    disposed = true;
     timer?.cancel();
+    for (final done in pendingCommands.values) {
+      if (!done.isCompleted) {
+        done.completeError(StateError(tr("录音操作尚未确认，请检查录音状态后重试")));
+      }
+    }
+    pendingCommands.clear();
+    unawaited(
+      () async {
+        while (refreshing) {
+          await Future<void>.delayed(Duration(milliseconds: 50));
+        }
+        await releaseEngines();
+        await desktop?.dispose();
+      }().catchError((Object e) => debugPrint('Recording cleanup failed: $e')),
+    );
     unawaited(stopDiscovery());
     WidgetsBinding.instance.removeObserver(this);
     FlutterForegroundTask.removeTaskDataCallback(receive);

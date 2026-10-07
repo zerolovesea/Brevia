@@ -577,6 +577,7 @@ class MeetingStoreMixin:
                 raise ValueError("Meeting not found")
             if not meeting["deleted_at"]:
                 raise ValueError("Only deleted meetings can be permanently deleted")
+        self.purge_mobile_recording(meeting_id)
         with self.connect() as db:
             db.execute("DELETE FROM meetings WHERE id=?", (meeting_id,))
         shutil.rmtree(self.meeting_dir(meeting_id), ignore_errors=True)

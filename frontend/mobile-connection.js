@@ -31,6 +31,10 @@
       node.alt = t(key);
     });
     document.querySelector('#mobile-nav strong').textContent = t('设备连接');
+    if (breviaClient?.state.meeting?.tags?.includes('手机录音'))
+      document.querySelector('#pause').textContent = t('在手机控制录音');
+    if (currentMeetingDetail?.tags?.includes('手机录音'))
+      document.querySelector('#detail-view .detail-title .eyebrow').textContent = t('手机录音');
     document.querySelector('#mobile-manage').textContent = t('查看与管理');
     dialog.querySelector('#mobile-dialog-status').textContent = messageKey ? t(messageKey) : '';
     if (pairValue)
@@ -74,6 +78,10 @@
     renderedLocale = locale;
     localize();
     const pending = value.sessions?.find((s) => !s.finished);
+    dialog.querySelector('#mobile-finish-received').hidden = !pending || pending.ended;
+    document.querySelectorAll('.mobile-source-tag').forEach((tag) => {
+      tag.textContent = t('手机录音');
+    });
     const connected = (value.devices || []).filter((d) => d.connected);
     const connectionStatus = connected.length
       ? '已连接'
@@ -86,7 +94,7 @@
       ? `${connected[0].name} · ${t('已连接')}`
       : t(connectionStatus);
     output.textContent = pending
-      ? `${pending.title} · ${pending.ended ? t('电脑处理中') : t('来自手机的会议')}${pending.error ? ` · ${pending.error}` : ''}`
+      ? `${pending.title} · ${pending.ended ? t('电脑处理中') : t('来自手机的会议')}${pending.error ? ` · ${t(pending.error)}` : ''}`
       : connected.length
         ? `${connected.map((d) => d.name).join(', ')} · ${t('可以开始录音')}`
         : value.enabled
@@ -180,6 +188,9 @@
         if (meeting?.status === 'recording') adoptMobileMeeting(meeting);
       }
       if (breviaClient.state.meeting?.id === pending.id) {
+        document
+          .querySelector('#transcript-scroll')
+          .classList.toggle('is-finishing', !!(pending.ended || pending.stopRequested));
         clearInterval(timer);
         seconds = Math.floor((pending.samples || 0) / 16000);
         const time = new Date(seconds * 1000).toISOString().slice(11, 19);
@@ -189,7 +200,7 @@
           ? '电脑处理中'
           : !connected.length
             ? '连接中断 · 等待补传'
-            : pending.state === 'paused'
+            : ['paused', 'interrupted'].includes(pending.state)
               ? '手机已暂停'
               : '手机录音中';
         for (const el of document.querySelectorAll(
@@ -199,6 +210,18 @@
       }
     }
   }
+  dialog.querySelector('#mobile-finish-received').onclick = () => {
+    const pending = lastStatus?.sessions?.find((s) => !s.finished);
+    if (!pending) return;
+    openConfirmation(
+      t('结束电脑上的录音？'),
+      t('电脑将保存已收到的音频并解除录音占用。手机上的未传音频不会被删除，重新连接后可继续补传。'),
+      async () => {
+        await api.finishReceived({ meeting_id: pending.id });
+        await poll();
+      },
+    );
+  };
   dialog.querySelector('#mobile-pair').onclick = () => run(pair);
   document.getElementById('mobile-manage').onclick = open;
   document.getElementById('mobile-nav').onclick = open;

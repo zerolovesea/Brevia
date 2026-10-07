@@ -1,0 +1,3 @@
+{$SIGNAL_DOMAIN} {
+    reverse_proxy signal:8080
+}

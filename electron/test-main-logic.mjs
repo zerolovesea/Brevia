@@ -359,7 +359,7 @@ assert.match(
 );
 assert.match(
   mainSource,
-  /powerMonitor\.on\('suspend',\s+\(\)\s+=>\s+\{\s+void\s+stopActiveMeetingForSleep\(\);\s+\}\);/,
+  /powerMonitor\.on\('suspend',\s+\(\)\s+=>\s+\{\s+mobileServer\?\.remote\?\.stop\(\);\s+void\s+stopActiveMeetingForSleep\(\);\s+\}\);/,
   'system sleep stops an active meeting',
 );
 assert.match(

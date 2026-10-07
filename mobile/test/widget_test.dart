@@ -18,6 +18,47 @@ import 'package:brevia_mobile/connection.dart';
 void main() {
   setUp(() => uiLanguage = 'zh');
 
+  testWidgets(
+    'offline preparation keeps language and participant choices without a computer',
+    (tester) async {
+      Map<String, dynamic>? result;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: breviaTheme(Brightness.light),
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: TextButton(
+                onPressed: () async {
+                  result = await Navigator.push<Map<String, dynamic>>(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => PrepareMeetingPage(
+                        options: {},
+                        computer: '',
+                        initial: {'language': 'en', 'num_speakers': 3},
+                      ),
+                    ),
+                  );
+                },
+                child: Text('prepare'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('prepare'));
+      await tester.pumpAndSettle();
+      expect(find.text('仅保存在手机'), findsWidgets);
+      await tester.tap(find.text('开始录音'));
+      await tester.pumpAndSettle();
+      expect(result?['offline'], true);
+      expect(result?['language'], 'en');
+      expect(result?['num_speakers'], 3);
+      expect(result?.containsKey('refined_model_id'), false);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('system locale, stored choice and all translation placeholders', (
     tester,
   ) async {
@@ -268,19 +309,24 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('已就绪'), findsOneWidget);
   });
-  testWidgets('welcome is full screen and PIN uses one editable field', (
-    tester,
-  ) async {
-    await tester.pumpWidget(BreviaApp(model: AppModel()));
-    await tester.pumpAndSettle();
-    expect(find.byType(NavigationBar), findsNothing);
-    await tester.tap(find.text('输入配对码'));
-    await tester.pumpAndSettle();
-    expect(find.byType(TextField), findsNWidgets(2));
-    await tester.enterText(find.byType(TextField).last, '123456');
-    expect(find.text('连接电脑'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
+  testWidgets(
+    'offline recording is available before pairing and PIN uses one editable field',
+    (tester) async {
+      await tester.pumpWidget(BreviaApp(model: AppModel()));
+      await tester.pumpAndSettle();
+      expect(find.byType(NavigationBar), findsOneWidget);
+      expect(find.text('新建录音'), findsOneWidget);
+      await tester.tap(find.byIcon(Icons.laptop_outlined).last);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('输入配对码'));
+      await tester.tap(find.text('输入配对码'));
+      await tester.pumpAndSettle();
+      expect(find.byType(TextField), findsNWidgets(2));
+      await tester.enterText(find.byType(TextField).last, '123456');
+      expect(find.text('连接电脑'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   test(
     'recover committed audio with stale metadata and ignore an unfinished write',
@@ -351,10 +397,15 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      expect(find.text('会议语言'), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text('录音选项'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
       await tester.tap(find.text('录音选项'));
       await tester.pumpAndSettle();
       expect(find.text('工作区'), findsOneWidget);
-      expect(find.text('会议语言'), findsOneWidget);
       expect(find.text('识别模型'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await tester.scrollUntilVisible(
@@ -432,11 +483,11 @@ void main() {
         home: MeetingPage(model: model, id: 'test'),
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump(Duration(milliseconds: 300));
     expect(find.text('暂停'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.tap(find.text('笔记'));
-    await tester.pumpAndSettle();
+    await tester.pump(Duration(milliseconds: 300));
     expect(tester.takeException(), isNull);
   });
 }

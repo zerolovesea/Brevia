@@ -84,10 +84,15 @@ const { MobileServer } = require('./mobile-server');
       id,
       title: '移动会议',
       language: 'en',
+      num_speakers: 3,
       target_language: 'zh',
       workspace_id: randomUUID(),
       refined_model_id: 'test-model',
     };
+    assert.equal(
+      (await call('POST', '/meetings', { ...session, num_speakers: 0 }, token)).status,
+      400,
+    );
     assert.equal((await call('POST', '/meetings', session, token)).status, 200);
     assert.equal(
       server.status().devices.find((d) => d.id === linked.body.deviceId).connected,
@@ -175,6 +180,7 @@ const { MobileServer } = require('./mobile-server');
       server.status().devices.find((d) => d.id === linked.body.deviceId).recordingCount,
       1,
     );
+    assert.equal(server.sessions.get(id).state, 'paused');
     assert.equal(snapshot.body.stopRequested, true); // Stop survives desktop restart.
     assert.equal(snapshot.body.notes, 'notes from PC');
     assert.equal(snapshot.body.audio, undefined);
@@ -188,6 +194,7 @@ const { MobileServer } = require('./mobile-server');
     const start = deliveries.find((v) => v.action === 'start');
     assert.equal(start.workspace_id, session.workspace_id);
     assert.equal(start.target_language, 'zh');
+    assert.equal(start.num_speakers, 3);
     assert.equal(start.refined_model_id, 'test-model');
     assert.deepEqual(start.tags, ['手机录音']);
     assert.equal(server.sessions.get(id).finished, true);
@@ -252,6 +259,37 @@ const { MobileServer } = require('./mobile-server');
       200,
     );
     assert.equal(server.sessions.get(id).workspace_id, null);
+    const resumedId = randomUUID();
+    await call('POST', '/meetings', { ...session, id: resumedId }, token);
+    await call('PUT', `/meetings/${resumedId}/chunks`, chunk, token);
+    await server.finishReceived(resumedId);
+    await server.drain();
+    await server.drain();
+    assert.equal(server.sessions.get(resumedId).finished, true);
+    const tail = { ...chunk, seq: 1, start_sample: 2 };
+    assert.equal((await call('PUT', `/meetings/${resumedId}/chunks`, tail, token)).status, 200);
+    assert.equal(server.sessions.get(resumedId).finished, false);
+    await call('POST', `/meetings/${resumedId}/end`, { count: 2, samples: 4 }, token);
+    await server.drain();
+    await server.drain();
+    assert.equal(server.sessions.get(resumedId).finished, true);
+    // 后端删除的标记必须覆盖内存缓存，离线客户端不能重建会议。
+    await server.save({
+      id: resumedId,
+      owner: linked.body.deviceId,
+      deleted: true,
+      finished: true,
+    });
+    await server.refreshDeleted();
+    assert.equal(
+      (await call('POST', '/meetings', { ...session, id: resumedId }, token)).status,
+      410,
+    );
+    assert.equal((await call('GET', `/meetings/${resumedId}/snapshot`, null, token)).status, 410);
+    assert.equal(
+      server.status().sessions.some((s) => s.id === resumedId),
+      false,
+    );
     await server.revoke(linked.body.deviceId);
     assert.equal((await call('GET', '/meetings', null, token)).status, 401);
     console.log(

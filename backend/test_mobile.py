@@ -1,6 +1,8 @@
 """Sample-addressed replay checks using the real WAV store, without ASR models."""
 
 import base64
+import json
+from concurrent.futures import ThreadPoolExecutor
 import tempfile
 import threading
 import unittest
@@ -15,6 +17,8 @@ class Bridge(MobileWorkerMixin):
         self.store = store
         self.state = SimpleNamespace(lock=threading.RLock())
         self.active = None
+        self.live_preprocessing_tail = None
+        self.live_postprocessing = None
 
     def start(self, payload):
         self.active = payload['meeting_id']
@@ -36,6 +40,66 @@ class Bridge(MobileWorkerMixin):
 
 
 class MobileReplayTest(unittest.TestCase):
+    def test_replay_waits_for_recognition_before_acknowledging(self):
+        with tempfile.TemporaryDirectory() as directory, ThreadPoolExecutor(1) as executor:
+            bridge = Bridge(Store(directory))
+            mid = 'b46cbe75-c097-436b-9322-55c336203f38'
+            bridge.mobile_apply(dict(action='start', meeting_id=mid, title='Mobile', language='zh'))
+            consumed = threading.Event()
+            release = threading.Event()
+            bridge.live_postprocessing = executor
+            bridge.live_preprocessing_tail = executor.submit(lambda: release.wait(5))
+
+            def replay():
+                bridge.mobile_apply(
+                    dict(
+                        action='chunk',
+                        meeting_id=mid,
+                        start_sample=0,
+                        pcm=base64.b64encode(bytes([1, 0])).decode(),
+                    )
+                )
+                consumed.set()
+
+            thread = threading.Thread(target=replay)
+            thread.start()
+            try:
+                self.assertFalse(consumed.wait(0.05))
+            finally:
+                release.set()
+                thread.join(5)
+                bridge.store.flush_audio(mid, force=True, close=True)
+            self.assertTrue(consumed.is_set())
+
+    def test_deletion_clears_phone_audio_and_prevents_resurrection(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = Store(directory)
+            meeting = store.create_meeting(
+                {'title': 'private', 'language': 'zh', 'refined_model_id': 'test'}
+            )
+            mid = meeting['id']
+            spool = store.root / 'mobile' / mid
+            spool.mkdir(parents=True)
+            (spool / 'session.json').write_text(
+                json.dumps({'id': mid, 'owner': 'phone', 'title': 'private', 'finished': True})
+            )
+            (spool / '0.json').write_text('private audio' * 100)
+            before = store.usage()['meetings']
+            store.soft_delete(mid)
+            store.permanent_delete(mid)
+            self.assertEqual(list(spool.iterdir()), [spool / 'session.json'])
+            self.assertEqual(
+                json.loads((spool / 'session.json').read_text()),
+                {'id': mid, 'owner': 'phone', 'deleted': True, 'finished': True},
+            )
+            self.assertLess(store.usage()['meetings'], before)
+            (spool / '0.json').write_text('private audio')
+            identity = store.root / 'mobile' / 'identity.json'
+            identity.write_text('identity')
+            store.clear_storage_partition('meetings')
+            self.assertFalse((spool / '0.json').exists())
+            self.assertEqual(identity.read_text(), 'identity')
+
     def test_translation_processes_every_segment_and_rejects_active_recording(self):
         bridge = Bridge(
             SimpleNamespace(
@@ -92,9 +156,11 @@ class MobileReplayTest(unittest.TestCase):
                 meeting_id='b46cbe75-c097-436b-9322-55c336203f38',
                 title='Mobile',
                 language='zh',
+                num_speakers=3,
             )
             bridge.mobile_apply(start)
             self.assertIn('手机录音', store.get_meeting(start['meeting_id'])['tags'])
+            self.assertEqual(store.get_meeting(start['meeting_id'])['num_speakers'], 3)
             bridge.mobile_apply(start)
             mid = start['meeting_id']
             pcm = bytes([1, 0, 2, 0, 3, 0])

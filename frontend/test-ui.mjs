@@ -1762,7 +1762,7 @@ assert.match(text(electronMain), /const startupAnimationMs = 1700;/);
 assert.match(text(electronMain), /const startupDataWaitMs = 2200;/);
 assert.match(
   text(electronMain),
-  /powerMonitor\.on\('suspend',\s+\(\)\s+=>\s+\{\s+void\s+stopActiveMeetingForSleep\(\);\s+\}\);/,
+  /powerMonitor\.on\('suspend',\s+\(\)\s+=>\s+\{\s+mobileServer\?\.remote\?\.stop\(\);\s+void\s+stopActiveMeetingForSleep\(\);\s+\}\);/,
 );
 assert.doesNotMatch(text(electronMain), /const splash = new BrowserWindow/);
 assert.match(
@@ -4890,3 +4890,57 @@ const mobileRow = componentContext.renderMeetingRow(
 assert.match(mobileRow, /class="meeting-status"><span class="meeting-source">/);
 assert.doesNotMatch(mobileRow, /class="tag">手机录音/);
 assert.match(mobileRow, /class="tag">讨论/);
+
+// 密集收尾事件必须复用草稿节点；其他会议和只覆盖前半段的 final 不得清空当前草稿。
+const draftHandlers = {};
+const draftClasses = new Set(['is-draft', 'is-active']);
+const draftText = { textContent: 'first' };
+const draftTime = { textContent: '00:00' };
+let removedDrafts = 0;
+const stableDraft = {
+  dataset: { draftTrack: 'mic', start: '0', end: '2' },
+  classList: { contains: (name) => draftClasses.has(name) },
+  querySelector: (selector) => (selector === 'time' ? draftTime : draftText),
+  remove() {
+    removedDrafts++;
+  },
+};
+const activeDrafts = new Map([['mic', stableDraft]]);
+const draftContext = {
+  window: {
+    brevia: {
+      on: (name, handler) => {
+        draftHandlers[name] = handler;
+      },
+    },
+  },
+  meetingActive: true,
+  breviaClient: { state: { meeting: { id: 'phone' } } },
+  draftSegments: activeDrafts,
+  transcript: { lastElementChild: stableDraft, querySelectorAll: () => [] },
+  followLiveTranscript: false,
+  isAtLiveBottom: () => false,
+  formatMeetingTime: () => '00:00',
+  renderLiveEvent() {},
+};
+const draftStart = text(app).indexOf("  window.brevia.on('transcript.final',");
+const draftEnd = text(app).indexOf("  window.brevia.on('transcript.settled',", draftStart);
+runInNewContext(text(app).slice(draftStart, draftEnd), draftContext);
+const draftPayload = {
+  meeting_id: 'phone',
+  track: 'mic',
+  start_ms: 0,
+  end_ms: 4000,
+  text: 'first and second',
+};
+draftHandlers['transcript.draft'](draftPayload);
+draftHandlers['transcript.draft'](draftPayload);
+assert.equal(activeDrafts.get('mic'), stableDraft);
+assert.equal(draftText.textContent, 'first and second');
+draftHandlers['transcript.draft']({ ...draftPayload, meeting_id: 'other', text: '' });
+assert.equal(removedDrafts, 0);
+draftHandlers['transcript.final']({ ...draftPayload, end_ms: 2000 });
+assert.equal(removedDrafts, 0);
+draftHandlers['transcript.final'](draftPayload);
+assert.equal(removedDrafts, 1);
+assert.equal(activeDrafts.size, 0);

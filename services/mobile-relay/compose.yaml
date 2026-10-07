@@ -1,0 +1,40 @@
+services:
+  signal:
+    build: .
+    restart: unless-stopped
+    environment:
+      RELAY_SECRET: ${RELAY_SECRET:?required}
+      TURN_SECRET: ${TURN_SECRET:?required}
+      TURN_URLS: turn:${TURN_DOMAIN:?required}:3478?transport=udp,turn:${TURN_DOMAIN}:3478?transport=tcp,turns:${TURN_DOMAIN}:5349?transport=tcp
+    expose: [8080]
+    mem_limit: 256m
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    ports: ['80:80', '443:443']
+    environment:
+      SIGNAL_DOMAIN: ${SIGNAL_DOMAIN:?required}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+  turn:
+    image: coturn/coturn:4.18.0-r0
+    restart: unless-stopped
+    network_mode: host
+    entrypoint: [turnserver]
+    command:
+      - -c
+      - /etc/coturn/turnserver.conf
+      - --static-auth-secret=${TURN_SECRET:?required}
+      - --realm=${TURN_DOMAIN}
+      - --external-ip=${TURN_PUBLIC_IP:?required}
+    volumes:
+      - ./turnserver.conf:/etc/coturn/turnserver.conf:ro
+      - ./certs:/certs:ro
+volumes:
+  caddy_data:
+  caddy_config:

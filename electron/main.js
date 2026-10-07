@@ -23,6 +23,7 @@ const { fileURLToPath, pathToFileURL } = require('node:url');
 const { randomUUID } = require('node:crypto');
 const { z } = require('zod');
 const { MobileServer } = require('./mobile-server');
+const { MobileRtc } = require('./mobile-rtc');
 const {
   createLineBuffer,
   audioFileURL,
@@ -94,7 +95,9 @@ if (process.platform === 'darwin')
   app.commandLine.appendSwitch('disable-features', 'MacCatapLoopbackAudioForScreenShare');
 if (!benchmarkRefinement && !app.requestSingleInstanceLock()) app.quit();
 app.on('second-instance', () => {
-  const [window] = BrowserWindow.getAllWindows();
+  const window = BrowserWindow.getAllWindows().find(
+    (w) => w !== mobileServer?.remote?.window && w !== floatingCaptionWindow,
+  );
   if (window?.isMinimized()) window.restore();
   window?.focus();
 });
@@ -598,6 +601,11 @@ class WorkerClient {
     )
       writeLog('ERROR', message.payload);
     if (message.type === 'worker.warning') writeLog('WARNING', message.payload);
+    if (message.type === 'app.maintenance' && mobileServer) {
+      void mobileServer
+        .serial(() => mobileServer.refreshDeleted())
+        .catch((error) => writeLog('ERROR', error.message));
+    }
     if (['worker.warning', 'worker.error'].includes(message.type)) {
       const session = mobileServer?.sessions.get(message.payload?.meeting_id);
       if (session)
@@ -924,8 +932,6 @@ const destructiveCommands = new Set([
 ]);
 async function requestWithTaskSafety(type, value) {
   if (!destructiveCommands.has(type)) return worker.request(type, value);
-  if ([...(mobileServer?.sessions.values() || [])].some((s) => !s.finished))
-    throw new Error('请先完成手机录音与补传，再清理数据');
   if (destructiveOperationInProgress)
     throw Object.assign(new Error('Wait for background tasks to finish before clearing data'), {
       code: 'error.tasks.running',
@@ -957,7 +963,16 @@ async function requestWithTaskSafety(type, value) {
       // 等待进程退出，确保超时或异常路径也不会在删除后继续写入。
       if (refinementWorker.stopping) await refinementWorker.stopping;
     }
-    return await worker.request(type, value);
+    const perform = async () => {
+      if ([...(mobileServer?.sessions.values() || [])].some((s) => !s.finished))
+        throw new Error('请先完成手机录音与补传，再清理数据');
+      try {
+        return await worker.request(type, value);
+      } finally {
+        await mobileServer?.refreshDeleted();
+      }
+    };
+    return await (mobileServer ? mobileServer.serial(perform) : perform());
   } finally {
     destructiveOperationInProgress = false;
   }
@@ -1212,6 +1227,9 @@ function registerIpc() {
     return { saved: true };
   });
   handleIpc('mobile.stop', (_, payload) => mobileServer.requestStop(id.parse(payload).meeting_id));
+  handleIpc('mobile.finish-received', (_, payload) =>
+    mobileServer.finishReceived(id.parse(payload).meeting_id),
+  );
   handleIpc('mobile.pair', () => mobileServer.openPairing());
   handleIpc('mobile.close-pairing', () => {
     mobileServer.pairing = null;
@@ -2107,6 +2125,7 @@ function createWindow() {
       revealApp();
     });
   window.on('closed', () => {
+    mobileServer?.remote?.stop();
     closeFloatingCaption();
   });
   return window;
@@ -2173,7 +2192,10 @@ function showFloatingCaption() {
   }
 
   const mainWindow = BrowserWindow.getAllWindows().find(
-    (window) => window !== floatingCaptionWindow && !window.isDestroyed(),
+    (window) =>
+      window !== floatingCaptionWindow &&
+      window !== mobileServer?.remote?.window &&
+      !window.isDestroyed(),
   );
   const display = mainWindow
     ? screen.getDisplayMatching(mainWindow.getBounds())
@@ -2231,7 +2253,7 @@ function showFloatingCaption() {
       captionWindow.show();
       // After showing floating caption, restore focus to main window
       const mainWindow = BrowserWindow.getAllWindows().find(
-        (w) => w !== captionWindow && !w.isDestroyed(),
+        (w) => w !== captionWindow && w !== mobileServer?.remote?.window && !w.isDestroyed(),
       );
       if (mainWindow) {
         mainWindow.focus();
@@ -2338,6 +2360,13 @@ app.whenReady().then(async () => {
   });
   try {
     await mobileServer.init();
+    const remoteConfig = path.join(mobileServer.directory, 'remote.json');
+    if (existsSync(remoteConfig)) {
+      mobileServer.remote = new MobileRtc(
+        mobileServer,
+        JSON.parse(await readFile(remoteConfig, 'utf8')),
+      );
+    }
   } catch (error) {
     writeLog('ERROR', `mobile service: ${error.message}`);
   }
@@ -2366,9 +2395,12 @@ app.whenReady().then(async () => {
   }
   void initializeWorker().catch((error) => reportMainError(error));
   createWindow();
+  void mobileServer?.remote
+    ?.start()
+    .catch((error) => writeLog('WARNING', `mobile remote: ${error.message}`));
   app.on('activate', () => {
     const mainWindow = BrowserWindow.getAllWindows().find(
-      (w) => w !== floatingCaptionWindow && !w.isDestroyed(),
+      (w) => w !== floatingCaptionWindow && w !== mobileServer?.remote?.window && !w.isDestroyed(),
     );
     if (mainWindow) {
       // Restore and focus main window when dock icon is clicked
@@ -2408,9 +2440,16 @@ async function stopActiveMeetingForSleep() {
   }
 }
 powerMonitor.on('suspend', () => {
+  mobileServer?.remote?.stop();
   void stopActiveMeetingForSleep();
 });
+powerMonitor.on('resume', () => {
+  void mobileServer?.remote
+    ?.resume()
+    .catch((error) => writeLog('WARNING', `mobile reconnect: ${error.message}`));
+});
 app.on('before-quit', (event) => {
+  mobileServer?.remote?.stop();
   // 更新安装时立即退出：安装器已经启动，不能等待优雅停会（否则与卸载器争抢文件）。
   if (quittingAfterMeetingStop || installingUpdate) {
     app.isQuitting = true;

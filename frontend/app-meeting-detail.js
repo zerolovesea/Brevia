@@ -44,7 +44,7 @@ function meetingPlaybackPath(meeting) {
 
 function applyBackendDetail(meeting) {
   document.querySelector('#detail-view .detail-title .eyebrow').textContent =
-    meeting.tags?.includes('手机录音') ? '手机录音' : t('本地会议');
+    meeting.tags?.includes('手机录音') ? t('手机录音') : t('本地会议');
   const audioPath = meetingPlaybackPath(meeting);
   const sameDetail = currentMeetingDetail?.id === meeting.id;
   const transcriptScrollTop = sameDetail

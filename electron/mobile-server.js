@@ -19,6 +19,11 @@ const createSession = z.object({
   id: uuid,
   title: z.string().trim().min(1).max(120),
   language: z.enum(['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru', 'auto']).default('zh'),
+  num_speakers: z
+    .number()
+    .int()
+    .refine((value) => value === -1 || value >= 1)
+    .optional(),
   target_language: z.enum(['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']).nullable().optional(),
   workspace_id: uuid.nullable().optional(),
   refined_model_id: z.string().max(100).optional(),
@@ -178,10 +183,12 @@ class MobileServer {
       void this.drain();
     }, 1000);
     this.timer.unref();
+    await this.remote?.start();
     return this.status();
   }
   async disable() {
     this.pairing = null;
+    this.remote?.stop();
     clearInterval(this.timer);
     this.bonjour?.destroy();
     this.bonjour = null;
@@ -213,19 +220,33 @@ class MobileServer {
           .length,
         connected: !!this.server && Date.now() - (this.lastSeen.get(id) || 0) < 15000,
       })),
-      sessions: [...this.sessions.values()].map(
-        ({ id, title, next, processed, samples, state, ended, finished, error }) => ({
-          id,
-          title,
-          next,
-          processed,
-          samples,
-          state,
-          ended,
-          finished,
-          error,
-        }),
-      ),
+      sessions: [...this.sessions.values()]
+        .filter((s) => !s.deleted)
+        .map(
+          ({
+            id,
+            title,
+            next,
+            processed,
+            samples,
+            state,
+            ended,
+            stopRequested,
+            finished,
+            error,
+          }) => ({
+            id,
+            title,
+            next,
+            processed,
+            samples,
+            state,
+            ended,
+            stopRequested,
+            finished,
+            error,
+          }),
+        ),
       error: this.lastError || null,
     };
   }
@@ -254,6 +275,7 @@ class MobileServer {
   async revoke(id) {
     if ([...this.sessions.values()].some((s) => s.owner === id && !s.finished))
       throw fail(409, '该设备仍有未完成的录音，请先结束并补传');
+    this.remote?.drop(id);
     this.devices = this.devices.filter((d) => d.id !== id);
     await atomicJSON(path.join(this.directory, 'devices.json'), this.devices);
     return this.status();
@@ -290,7 +312,13 @@ class MobileServer {
       });
       await atomicJSON(path.join(this.directory, 'devices.json'), this.devices);
       this.pairing = null;
-      return { token, deviceId: id, name: hostname(), fingerprint: this.fingerprint };
+      return {
+        token,
+        deviceId: id,
+        name: hostname(),
+        fingerprint: this.fingerprint,
+        remote: (await this.remote?.credentials(id)) || null,
+      };
     } finally {
       this.pairBusy = false;
     }
@@ -307,7 +335,35 @@ class MobileServer {
   session(id, owner) {
     const s = this.sessions.get(uuid.parse(id));
     if (!s || s.owner !== owner) throw fail(404, '会议不存在');
+    if (s.deleted) throw fail(410, '会议已在电脑永久删除');
     return s;
+  }
+  async refreshDeleted() {
+    for (const [id, session] of this.sessions) {
+      if (session.deleted) continue;
+      const saved = await readJSON(path.join(this.directory, id, 'session.json'), null);
+      if (saved?.deleted) this.sessions.set(id, saved);
+    }
+  }
+  async finishReceived(id) {
+    await this.enable();
+    return this.serial(async () => {
+      const s = this.sessions.get(uuid.parse(id));
+      if (!s || s.deleted) throw fail(404, '会议不存在');
+      if (!s.finished) {
+        // 明确结束当前已接收内容；手机回来后仍可在原会议补传尾部，保留时间轴。
+        const next = {
+          ...s,
+          ended: true,
+          closedOnDesktop: true,
+          stopRequested: true,
+          state: 'ended',
+        };
+        await this.save(next);
+        Object.assign(s, next);
+      }
+      return { saved: true };
+    });
   }
   requestStop(id) {
     return this.serial(async () => {
@@ -337,10 +393,12 @@ class MobileServer {
     }
     if (req.url === '/pair' && req.method === 'POST') return this.pair(await body(req));
     const owner = this.owner(req);
+    if (req.url === '/connection' && req.method === 'GET')
+      return { remote: (await this.remote?.credentials(owner)) || null };
     if (req.url === '/options' && req.method === 'GET') return this.request('mobile.options', {});
     if (req.url === '/meetings' && req.method === 'GET')
       return [...this.sessions.values()]
-        .filter((s) => s.owner === owner)
+        .filter((s) => s.owner === owner && !s.deleted)
         .map((s) => ({
           id: s.id,
           title: s.title,
@@ -405,6 +463,8 @@ class MobileServer {
       };
     }
     return this.serial(async () => {
+      // 等待队列时可能已被永久删除，必须重新检查当前会话。
+      const s = this.session(match[1], owner);
       if (match[2] === 'action' && req.method === 'POST') {
         const v = z
           .discriminatedUnion('action', [
@@ -467,7 +527,9 @@ class MobileServer {
         const v = z
           .object({ state: z.enum(['starting', 'recording', 'paused', 'interrupted', 'ended']) })
           .parse(value);
-        s.state = v.state;
+        const next = { ...s, state: v.state };
+        await this.save(next);
+        Object.assign(s, next);
         return { saved: true };
       }
       if (match[2] === 'chunks' && req.method === 'PUT') {
@@ -489,12 +551,19 @@ class MobileServer {
             throw fail(409, '音频分片冲突');
           return { next: s.next, samples: s.samples };
         }
-        if (s.ended || v.seq !== s.next || v.start_sample !== s.samples)
+        if ((s.ended && !s.closedOnDesktop) || v.seq !== s.next || v.start_sample !== s.samples)
           throw fail(409, '请从电脑确认的位置补传');
         // Ack only after both audio and its manifest are durable. A failed manifest
         // update leaves an orphan that the same next upload may safely overwrite.
         await atomicJSON(file, v);
-        const next = { ...s, next: s.next + 1, samples: s.samples + pcm.length / 2 };
+        const next = {
+          ...s,
+          next: s.next + 1,
+          samples: s.samples + pcm.length / 2,
+          ended: false,
+          finished: false,
+          closedOnDesktop: false,
+        };
         await this.save(next);
         Object.assign(s, next);
         return { next: s.next, samples: s.samples };
@@ -507,7 +576,7 @@ class MobileServer {
           })
           .parse(value);
         if (v.count !== s.next || v.samples !== s.samples) throw fail(409, '仍有录音未补传');
-        const next = { ...s, ended: true };
+        const next = { ...s, ended: true, closedOnDesktop: false };
         await this.save(next);
         Object.assign(s, next);
         return { ended: true };
@@ -557,12 +626,13 @@ class MobileServer {
             void this.drain();
           });
         } else if (s.ended) {
-          await this.request('mobile.apply', {
-            action: 'end',
-            meeting_id: s.id,
-            samples: s.samples,
-          });
           await this.serial(async () => {
+            if (!s.ended || s.processed !== s.next) return;
+            await this.request('mobile.apply', {
+              action: 'end',
+              meeting_id: s.id,
+              samples: s.samples,
+            });
             const next = { ...s, finished: true, error: null };
             await this.save(next);
             Object.assign(s, next);

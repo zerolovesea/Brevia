@@ -180,6 +180,16 @@
         '设备连接': '设备连接',
         '已请求手机结束录音，等待保存与同步': '已请求手机结束录音，等待保存与同步',
         '手机录音': '手机录音',
+        '请先在手机结束录音并完成补传': '请先在手机结束录音并完成补传',
+        '请在手机结束本次录音': '请在手机结束本次录音',
+        '请先完成手机录音与补传，再清理数据': '请先完成手机录音与补传，再清理数据',
+        '请先完成手机录音与补传，再移动文件夹': '请先完成手机录音与补传，再移动文件夹',
+        '会议已在电脑永久删除': '会议已在电脑永久删除',
+        '在手机控制录音': '在手机控制录音',
+        '结束已接收的录音': '结束已接收的录音',
+        '结束电脑上的录音？': '结束电脑上的录音？',
+        '电脑将保存已收到的音频并解除录音占用。手机上的未传音频不会被删除，重新连接后可继续补传。':
+          '电脑将保存已收到的音频并解除录音占用。手机上的未传音频不会被删除，重新连接后可继续补传。',
         '连接同一局域网内的手机设备，查看连接状态与录音使用情况。':
           '连接同一局域网内的手机设备，查看连接状态与录音使用情况。',
         '取消': '取消',
@@ -672,6 +682,19 @@
         '设备连接': 'Device connections',
         '已请求手机结束录音，等待保存与同步': 'Phone stop requested. Waiting for save and sync.',
         '手机录音': 'Phone recording',
+        '请先在手机结束录音并完成补传':
+          'End the recording on your phone and finish uploading first',
+        '请在手机结束本次录音': 'End this recording on your phone',
+        '请先完成手机录音与补传，再清理数据':
+          'Finish the phone recording and upload before clearing data',
+        '请先完成手机录音与补传，再移动文件夹':
+          'Finish the phone recording and upload before moving the folder',
+        '会议已在电脑永久删除': 'This meeting was permanently deleted on the computer',
+        '在手机控制录音': 'Control recording on your phone',
+        '结束已接收的录音': 'Finish received recording',
+        '结束电脑上的录音？': 'Finish recording on this computer?',
+        '电脑将保存已收到的音频并解除录音占用。手机上的未传音频不会被删除，重新连接后可继续补传。':
+          'The computer will save received audio and release the recording session. Unsent audio stays on your phone and can upload after reconnecting.',
         '连接同一局域网内的手机设备，查看连接状态与录音使用情况。':
           'Connect phones on the same local network to view their connection status and recording usage.',
         '取消': 'Cancel',
@@ -1303,6 +1326,18 @@
         '已请求手机结束录音，等待保存与同步':
           'Se ha solicitado detener la grabación. Esperando guardado y sincronización.',
         '手机录音': 'Grabación móvil',
+        '请先在手机结束录音并完成补传': 'Finaliza la grabación y la carga en el teléfono primero',
+        '请在手机结束本次录音': 'Finaliza esta grabación en el teléfono',
+        '请先完成手机录音与补传，再清理数据':
+          'Finaliza la grabación y la carga antes de borrar los datos',
+        '请先完成手机录音与补传，再移动文件夹':
+          'Finaliza la grabación y la carga antes de mover la carpeta',
+        '会议已在电脑永久删除': 'Esta reunión se eliminó permanentemente en el ordenador',
+        '在手机控制录音': 'Controla la grabación desde el teléfono',
+        '结束已接收的录音': 'Finalizar la grabación recibida',
+        '结束电脑上的录音？': '¿Finalizar la grabación en este ordenador?',
+        '电脑将保存已收到的音频并解除录音占用。手机上的未传音频不会被删除，重新连接后可继续补传。':
+          'El ordenador guardará el audio recibido y liberará la sesión. El audio pendiente permanece en el teléfono y podrá enviarse al reconectar.',
         '连接同一局域网内的手机设备，查看连接状态与录音使用情况。':
           'Conecta teléfonos en la misma red local para consultar su estado de conexión y uso de grabación.',
         '取消': 'Cancelar',
@@ -1937,6 +1972,18 @@
         '已请求手机结束录音，等待保存与同步':
           'スマートフォンに録音終了を要求しました。保存と同期を待っています。',
         '手机录音': 'スマートフォン録音',
+        '请先在手机结束录音并完成补传': '先にスマートフォンで録音を終了し、送信を完了してください',
+        '请在手机结束本次录音': 'スマートフォンでこの録音を終了してください',
+        '请先完成手机录音与补传，再清理数据':
+          'スマートフォンの録音と送信を完了してからデータを削除してください',
+        '请先完成手机录音与补传，再移动文件夹':
+          'スマートフォンの録音と送信を完了してからフォルダを移動してください',
+        '会议已在电脑永久删除': 'この会議はパソコンで完全に削除されました',
+        '在手机控制录音': 'スマートフォンで録音を操作',
+        '结束已接收的录音': '受信済みの録音を終了',
+        '结束电脑上的录音？': 'このパソコンで録音を終了しますか？',
+        '电脑将保存已收到的音频并解除录音占用。手机上的未传音频不会被删除，重新连接后可继续补传。':
+          '受信済みの音声を保存し、録音セッションを解放します。未送信の音声はスマートフォンに残り、再接続後に送信できます。',
         '连接同一局域网内的手机设备，查看连接状态与录音使用情况。':
           '同じローカルネットワーク内のスマートフォンに接続し、接続状態と録音の利用状況を確認します。',
         '取消': 'キャンセル',
@@ -2564,6 +2611,18 @@
         '已请求手机结束录音，等待保存与同步':
           '휴대폰에 녹음 종료를 요청했습니다. 저장 및 동기화 대기 중입니다.',
         '手机录音': '휴대폰 녹음',
+        '请先在手机结束录音并完成补传': '먼저 휴대폰 녹음을 종료하고 업로드를 완료하세요',
+        '请在手机结束本次录音': '휴대폰에서 이 녹음을 종료하세요',
+        '请先完成手机录音与补传，再清理数据':
+          '데이터를 지우기 전에 휴대폰 녹음과 업로드를 완료하세요',
+        '请先完成手机录音与补传，再移动文件夹':
+          '폴더를 이동하기 전에 휴대폰 녹음과 업로드를 완료하세요',
+        '会议已在电脑永久删除': '이 회의는 컴퓨터에서 영구 삭제되었습니다',
+        '在手机控制录音': '휴대폰에서 녹음 제어',
+        '结束已接收的录音': '수신한 녹음 종료',
+        '结束电脑上的录音？': '이 컴퓨터에서 녹음을 종료할까요?',
+        '电脑将保存已收到的音频并解除录音占用。手机上的未传音频不会被删除，重新连接后可继续补传。':
+          '수신한 오디오를 저장하고 녹음 세션을 해제합니다. 미전송 오디오는 휴대폰에 남아 재연결 후 전송할 수 있습니다.',
         '连接同一局域网内的手机设备，查看连接状态与录音使用情况。':
           '같은 로컬 네트워크의 휴대폰을 연결하고 연결 상태와 녹음 사용 현황을 확인하세요.',
         '取消': '취소',
@@ -3191,6 +3250,19 @@
         '已请求手机结束录音，等待保存与同步':
           'Arrêt demandé au téléphone. En attente de sauvegarde et synchronisation.',
         '手机录音': 'Enregistrement mobile',
+        '请先在手机结束录音并完成补传':
+          'Terminez d’abord l’enregistrement et l’envoi sur le téléphone',
+        '请在手机结束本次录音': 'Terminez cet enregistrement sur le téléphone',
+        '请先完成手机录音与补传，再清理数据':
+          'Terminez l’enregistrement et l’envoi avant d’effacer les données',
+        '请先完成手机录音与补传，再移动文件夹':
+          'Terminez l’enregistrement et l’envoi avant de déplacer le dossier',
+        '会议已在电脑永久删除': 'Cette réunion a été définitivement supprimée sur l’ordinateur',
+        '在手机控制录音': 'Contrôler l’enregistrement sur le téléphone',
+        '结束已接收的录音': 'Terminer l’enregistrement reçu',
+        '结束电脑上的录音？': 'Terminer l’enregistrement sur cet ordinateur ?',
+        '电脑将保存已收到的音频并解除录音占用。手机上的未传音频不会被删除，重新连接后可继续补传。':
+          'L’ordinateur enregistrera l’audio reçu et libérera la session. L’audio non envoyé reste sur le téléphone et pourra être transmis après reconnexion.',
         '连接同一局域网内的手机设备，查看连接状态与录音使用情况。':
           'Connectez les téléphones du même réseau local pour consulter leur état de connexion et leur utilisation des enregistrements.',
         '取消': 'Annuler',
@@ -3829,6 +3901,18 @@
         '已请求手机结束录音，等待保存与同步':
           'Aufnahmestopp angefordert. Warten auf Speichern und Synchronisierung.',
         '手机录音': 'Smartphone-Aufnahme',
+        '请先在手机结束录音并完成补传': 'Beenden Sie zuerst die Smartphone-Aufnahme und den Upload',
+        '请在手机结束本次录音': 'Beenden Sie diese Aufnahme auf dem Smartphone',
+        '请先完成手机录音与补传，再清理数据':
+          'Beenden Sie Aufnahme und Upload vor dem Löschen der Daten',
+        '请先完成手机录音与补传，再移动文件夹':
+          'Beenden Sie Aufnahme und Upload vor dem Verschieben des Ordners',
+        '会议已在电脑永久删除': 'Dieses Meeting wurde auf dem Computer endgültig gelöscht',
+        '在手机控制录音': 'Aufnahme auf dem Smartphone steuern',
+        '结束已接收的录音': 'Empfangene Aufnahme abschließen',
+        '结束电脑上的录音？': 'Aufnahme auf diesem Computer beenden?',
+        '电脑将保存已收到的音频并解除录音占用。手机上的未传音频不会被删除，重新连接后可继续补传。':
+          'Der Computer speichert das empfangene Audio und gibt die Aufnahmesitzung frei. Nicht gesendetes Audio bleibt auf dem Smartphone und kann nach dem Wiederverbinden übertragen werden.',
         '连接同一局域网内的手机设备，查看连接状态与录音使用情况。':
           'Verbinden Sie Smartphones im selben lokalen Netzwerk, um Verbindungsstatus und Aufnahmenutzung anzuzeigen.',
         '取消': 'Abbrechen',
@@ -4468,6 +4552,17 @@
         '已请求手机结束录音，等待保存与同步':
           'Телефону отправлен запрос завершения. Ожидание сохранения и синхронизации.',
         '手机录音': 'Запись с телефона',
+        '请先在手机结束录音并完成补传': 'Сначала завершите запись на телефоне и загрузку',
+        '请在手机结束本次录音': 'Завершите эту запись на телефоне',
+        '请先完成手机录音与补传，再清理数据': 'Завершите запись и загрузку перед очисткой данных',
+        '请先完成手机录音与补传，再移动文件夹':
+          'Завершите запись и загрузку перед перемещением папки',
+        '会议已在电脑永久删除': 'Эта встреча окончательно удалена на компьютере',
+        '在手机控制录音': 'Управляйте записью с телефона',
+        '结束已接收的录音': 'Завершить полученную запись',
+        '结束电脑上的录音？': 'Завершить запись на этом компьютере?',
+        '电脑将保存已收到的音频并解除录音占用。手机上的未传音频不会被删除，重新连接后可继续补传。':
+          'Компьютер сохранит полученное аудио и освободит сеанс записи. Неотправленное аудио останется на телефоне и сможет загрузиться после подключения.',
         '连接同一局域网内的手机设备，查看连接状态与录音使用情况。':
           'Подключайте телефоны в одной локальной сети, чтобы просматривать состояние подключения и использование записи.',
         '取消': 'Отмена',

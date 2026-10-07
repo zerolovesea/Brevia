@@ -1,8 +1,12 @@
-import 'i18n.dart';
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:crypto/crypto.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
+import 'i18n.dart';
+import 'remote_transport.dart';
 
 const vault = FlutterSecureStorage(
   iOptions: IOSOptions(
@@ -10,22 +14,34 @@ const vault = FlutterSecureStorage(
   ),
 );
 
+class MeetingDeletedException implements Exception {
+  @override
+  String toString() => tr("会议已在电脑永久删除");
+}
+
 class DesktopConnection {
   String address;
   String fingerprint;
   String token;
   String name;
+  Map<String, dynamic>? remote;
+  RemoteTransport? transport;
+  final available = StreamController<bool>.broadcast();
+  bool checkedRemote = false;
+  DateTime lanRetry = DateTime.fromMillisecondsSinceEpoch(0);
   DesktopConnection({
     required this.address,
     required this.fingerprint,
     this.token = '',
     this.name = '',
+    this.remote,
   });
   Map<String, dynamic> toJson() => {
     'address': address,
     'fingerprint': fingerprint,
     'token': token,
     'name': name,
+    if (remote != null) 'remote': remote,
   };
   factory DesktopConnection.fromJson(Map<String, dynamic> v) =>
       DesktopConnection(
@@ -33,6 +49,9 @@ class DesktopConnection {
         fingerprint: v['fingerprint'],
         token: v['token'] ?? '',
         name: v['name'] ?? tr("电脑"),
+        remote: v['remote'] == null
+            ? null
+            : Map<String, dynamic>.from(v['remote']),
       );
   static Uri endpoint(String address) {
     final uri = Uri.parse(
@@ -59,9 +78,69 @@ class DesktopConnection {
   }
 
   Future<dynamic> call(String method, String route, [Object? data]) async {
+    if (remote == null ||
+        (!transportConnected && DateTime.now().isAfter(lanRetry))) {
+      try {
+        final value = await localCall(method, route, data);
+        if (!checkedRemote && token.isNotEmpty) {
+          checkedRemote = true;
+          try {
+            final setup = await localCall('GET', '/connection');
+            if (setup['remote'] != null) {
+              remote = Map<String, dynamic>.from(setup['remote']);
+              await save();
+            }
+          } catch (_) {
+            /* 兼容未启用跨网连接的旧版电脑。 */
+          }
+        }
+        return value;
+      } on SocketException {
+        if (remote == null) rethrow;
+      } on TimeoutException {
+        if (remote == null) rethrow;
+      }
+      lanRetry = DateTime.now().add(Duration(seconds: 30));
+    }
+    transport ??= RemoteTransport(remote!, (connected) {
+      if (!available.isClosed) available.add(connected);
+    });
+    final result = await transport!.call({
+      'method': method,
+      'route': route,
+      'data': data,
+      'token': token,
+    });
+    return decodeResponse(result['status'], result['value']);
+  }
+
+  bool get transportConnected => transport?.connected == true;
+  dynamic decodeResponse(int status, dynamic value) {
+    if (status == 410) throw MeetingDeletedException();
+    if (status != 200) {
+      throw HttpException(
+        value is Map ? remoteError(value['error'].toString()) : tr("连接失败"),
+      );
+    }
+    return value;
+  }
+
+  Future<void> reconnect() async {
+    lanRetry = DateTime.fromMillisecondsSinceEpoch(0);
+    if (!transportConnected) await transport?.reconnect();
+    if (!available.isClosed) available.add(true);
+  }
+
+  Future<void> dispose() async {
+    await transport?.dispose();
+    transport = null;
+  }
+
+  Future<dynamic> localCall(String method, String route, [Object? data]) async {
     final base = endpoint(address);
-    final client = HttpClient(context: SecurityContext(withTrustedRoots: false))
-      ..connectionTimeout = Duration(seconds: 6);
+    final client = HttpClient(
+      context: SecurityContext(withTrustedRoots: false),
+    )..connectionTimeout = Duration(milliseconds: remote == null ? 6000 : 1500);
     String? peer;
     client.badCertificateCallback = (cert, host, port) {
       peer = sha256.convert(cert.der).toString();
@@ -73,7 +152,7 @@ class DesktopConnection {
     try {
       final request = await client
           .openUrl(method, base.replace(path: route))
-          .timeout(Duration(seconds: 8));
+          .timeout(Duration(milliseconds: remote == null ? 8000 : 2000));
       request.followRedirects = false;
       if (token.isNotEmpty) {
         request.headers.set('Authorization', 'Bearer $token');
@@ -98,12 +177,7 @@ class DesktopConnection {
         }
       }
       final value = jsonDecode(utf8.decode(bytes));
-      if (response.statusCode != 200) {
-        throw HttpException(
-          value is Map ? remoteError(value['error'].toString()) : tr("连接失败"),
-        );
-      }
-      return value;
+      return decodeResponse(response.statusCode, value);
     } finally {
       client.close(force: true);
     }

@@ -19,7 +19,7 @@ lane :beta do
     wait_processing_timeout_duration: 2400,
     # Standard TLS; current internal testing excludes France. Reassess before expanding distribution.
     uses_non_exempt_encryption: false,
-    changelog: ENV.fetch('TESTFLIGHT_CHANGELOG') { "内部测试 #{ENV.fetch('BUILD_NUMBER')} · #{ENV.fetch('GITHUB_SHA')[0, 7]}。请验证局域网配对、锁屏录音、断线补传及会后回看。" }
+    changelog: ENV.fetch('TESTFLIGHT_CHANGELOG') { "内部测试 #{ENV.fetch('BUILD_NUMBER')} · #{ENV.fetch('GITHUB_SHA')[0, 7]}。新增离线录音与手动上传，优化字幕收尾和连接恢复。请验证语言/人数预设、锁屏录音及断线补传；跨网 WebRTC 需电脑配置服务。" }
   )
 end
 
