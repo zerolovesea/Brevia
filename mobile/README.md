@@ -206,6 +206,6 @@ Beta 出口声明按当前已确认范围：标准 TLS、内部测试、不在�
 
 ### Android 手动更新
 
-设置页的「检查更新」从 ModelScope `zyaztec/brevia-release/android/latest.json` 读取版本，按 Android build number 比较。同版本号的新构建也可更新。仅在用户点击时联网；确认后下载并校验文件大小、SHA-256，安装前核对包名和签名，由系统确认安装。首次安装可能需要允许 Brevia 安装未知来源应用，然后返回点击「安装更新」。下载期间离开设置页会取消下载，失败可重新下载，不影响录音。iOS 暂不显示此入口。
+设置页的「检查更新」从 ModelScope `zyaztec/brevia-release/android/latest.json` 读取版本，按 Android build number 比较。同版本号的新构建也可更新。仅在用户点击时联网；确认后下载并校验文件大小、SHA-256，安装前核对包名和签名，由系统确认安装。首次安装可能需要允许 Brevia 安装未知来源应用，然后返回点击「安装更新」。Android 使用系统 DownloadManager 后台下载，切换页面或应用不会取消任务；返回设置页恢复进度，完成后点击安装。系统可能因网络或省电策略暂停下载，恢复条件后继续；安装前仍核对大小、SHA-256、包名和签名。iOS 检查当前 App Store 地区的公开版本，发现更新后点击跳转商店；TestFlight 构建号不参与正式版本比较，未上架时显示暂无商店版本。
 
 Android workflow 复用 `MODELSCOPE_API_TOKEN`，先上传带版本和构建号的签名 APK，更新桌面端二维码使用的固定地址 `android/Brevia-android.apk`，成功后再发布 `android/latest.json`。清单发布失败会令工作流失败，旧清单仍指向旧包。首次上线此功能仍需手动安装带更新入口的 APK；iOS 商店更新后续接入。

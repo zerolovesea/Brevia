@@ -1,10 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:path_provider/path_provider.dart';
 
 import 'i18n.dart';
 
@@ -33,26 +33,65 @@ class AndroidRelease {
   Uri get url => Uri.parse('$releaseBase$filename');
 }
 
+bool newerStoreVersion(String latest, String current) {
+  List<int> parts(String value) {
+    if (!RegExp(r'^\d+(\.\d+){0,2}$').hasMatch(value)) {
+      throw const FormatException('Invalid store version');
+    }
+    return [...value.split('.').map(int.parse), 0, 0];
+  }
+
+  final a = parts(latest), b = parts(current);
+  for (var i = 0; i < 3; i++) {
+    if (a[i] != b[i]) return a[i] > b[i];
+  }
+  return false;
+}
+
 class AppUpdateTile extends StatefulWidget {
   const AppUpdateTile({super.key});
   @override
   State<AppUpdateTile> createState() => _AppUpdateTileState();
 }
 
-class _AppUpdateTileState extends State<AppUpdateTile> {
+class _AppUpdateTileState extends State<AppUpdateTile>
+    with WidgetsBindingObserver {
   HttpClient? client;
-  bool busy = false;
+  Timer? timer;
+  bool busy = false, polling = false;
+  String? status, currentVersion, latestVersion;
+  int? currentBuild, latestBuild;
+  String downloadState = 'none';
   double? progress;
-  String? status;
-  File? apk;
-  String? currentVersion;
-  int? currentBuild;
-  AndroidRelease? latest;
+  bool storeUpdate = false;
+  bool get ios => defaultTargetPlatform == TargetPlatform.iOS;
+  bool get downloading => ['downloading', 'paused'].contains(downloadState);
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     loadCurrentVersion();
+    if (!ios) {
+      refreshDownload();
+      timer = Timer.periodic(
+        const Duration(seconds: 1),
+        (_) => refreshDownload(),
+      );
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (ios) return;
+    timer?.cancel();
+    if (state == AppLifecycleState.resumed) {
+      refreshDownload();
+      timer = Timer.periodic(
+        const Duration(seconds: 1),
+        (_) => refreshDownload(),
+      );
+    }
   }
 
   Future<void> loadCurrentVersion() async {
@@ -65,61 +104,142 @@ class _AppUpdateTileState extends State<AppUpdateTile> {
           currentBuild = build;
         });
       }
-    } on PlatformException {
-      // 读取失败不影响用户重试检查更新。
+    } catch (_) {
+      // 获取失败仍允许用户重试检查更新。
+    }
+  }
+
+  void applyDownload(Map<dynamic, dynamic> value) {
+    downloadState = value['state'] as String? ?? 'none';
+    if (downloadState == 'none') {
+      progress = null;
+      return;
+    }
+    latestVersion = value['version'] as String?;
+    latestBuild = (value['build'] as num?)?.toInt();
+    final size = (value['size'] as num?) ?? 0;
+    progress = size > 0
+        ? ((value['bytes'] as num? ?? 0) / size).clamp(0, 1)
+        : null;
+  }
+
+  Future<void> refreshDownload() async {
+    if (polling || busy || !mounted) return;
+    polling = true;
+    try {
+      final value = await updateChannel.invokeMapMethod('downloadStatus');
+      if (mounted && value != null) setState(() => applyDownload(value));
+    } catch (_) {
+      if (mounted) setState(() => status = '更新失败，请检查网络后重试');
+    } finally {
+      polling = false;
     }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    timer?.cancel();
     client?.close(force: true);
     super.dispose();
   }
 
+  Future<Map<String, dynamic>> readManifest(Uri url) async {
+    client = HttpClient()..connectionTimeout = const Duration(seconds: 15);
+    final request = await client!.getUrl(url);
+    final response = await request.close().timeout(const Duration(seconds: 15));
+    if (response.statusCode != 200) {
+      throw const HttpException('Manifest unavailable');
+    }
+    final bytes = <int>[];
+    await for (final chunk in response.timeout(const Duration(seconds: 15))) {
+      bytes.addAll(chunk);
+      if (bytes.length > 262144) {
+        throw const FormatException('Manifest too large');
+      }
+    }
+    return jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>;
+  }
+
   Future<void> update() async {
-    if (busy) return;
+    if (busy || downloading) return;
     setState(() {
       busy = true;
-      status = tr('正在检查更新…');
+      status = '正在检查更新…';
     });
     try {
-      if (apk != null) {
-        await updateChannel.invokeMethod('install', apk!.path);
+      if (ios && storeUpdate) {
+        await updateChannel.invokeMethod('openStore');
+        status = null;
+        return;
+      }
+      if (!ios && downloadState == 'ready') {
+        await updateChannel.invokeMethod('install');
+        status = null;
         return;
       }
       await loadCurrentVersion();
       if (!mounted) return;
-      final current = currentBuild;
-      if (current == null) throw StateError('Version unavailable');
-      client = HttpClient()..connectionTimeout = Duration(seconds: 15);
-      final request = await client!.getUrl(
-        Uri.parse(
-          '${releaseBase}latest.json?t=${DateTime.now().millisecondsSinceEpoch}',
-        ),
-      );
-      final response = await request.close().timeout(Duration(seconds: 15));
-      if (response.statusCode != 200) {
-        throw HttpException('Manifest unavailable');
+      if (currentBuild == null || currentVersion == null) {
+        throw StateError('Version unavailable');
       }
-      final bytes = <int>[];
-      await for (final chunk in response.timeout(Duration(seconds: 15))) {
-        bytes.addAll(chunk);
-        if (bytes.length > 16384) throw FormatException('Manifest too large');
+      if (ios) {
+        final country = await updateChannel.invokeMethod<String>(
+          'storeCountry',
+        );
+        if (!mounted) return;
+        if (country == null || !RegExp(r'^[A-Z]{2}$').hasMatch(country)) {
+          throw StateError('Store unavailable');
+        }
+        final value = await readManifest(
+          Uri.https('itunes.apple.com', '/lookup', {
+            'id': '6819869442',
+            'country': country,
+          }),
+        );
+        if (!mounted) return;
+        final results = value['results'] as List;
+        final app = results
+            .cast<Map>()
+            .where(
+              (item) =>
+                  item['trackId'] == 6819869442 &&
+                  item['bundleId'] == 'com.brevia.breviaMobile',
+            )
+            .firstOrNull;
+        if (app == null) {
+          status = '当前地区暂无可用的商店版本';
+          latestVersion = null;
+          storeUpdate = false;
+          return;
+        }
+        final version = app['version'] as String;
+        storeUpdate = newerStoreVersion(version, currentVersion!);
+        latestVersion = version;
+        status = storeUpdate ? null : '已是最新版本';
+        return;
       }
       final release = AndroidRelease(
-        jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>,
+        await readManifest(
+          Uri.parse(
+            '${releaseBase}latest.json?t=${DateTime.now().millisecondsSinceEpoch}',
+          ),
+        ),
       );
       if (!mounted) return;
-      setState(() => latest = release);
-      if (release.build <= current) {
-        setState(() => status = tr('已是最新版本'));
+      setState(() {
+        latestVersion = release.version;
+        latestBuild = release.build;
+      });
+      if (release.build <= currentBuild!) {
+        status = '已是最新版本';
         return;
       }
       final accept = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
           title: Text(tr('发现新版本 {0}', [release.version])),
-          content: Text(tr('从 ModelScope 下载，完成后由系统确认安装。')),
+          content: Text(tr('后台下载更新，完成后返回此处安装。')),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -132,95 +252,75 @@ class _AppUpdateTileState extends State<AppUpdateTile> {
           ],
         ),
       );
-      if (accept != true || !mounted) {
-        status = null;
-        return;
-      }
-      final directory = Directory(
-        '${(await getTemporaryDirectory()).path}/updates',
-      );
-      if (await directory.exists()) await directory.delete(recursive: true);
-      await directory.create(recursive: true);
-      final partial = File('${directory.path}/${release.filename}.part');
-      final downloadRequest = await client!.getUrl(release.url);
-      final downloadResponse = await downloadRequest.close().timeout(
-        Duration(seconds: 15),
-      );
-      if (downloadResponse.statusCode != 200) {
-        throw HttpException('APK unavailable');
-      }
-      final sink = partial.openWrite();
-      var received = 0;
-      try {
-        await for (final chunk in downloadResponse.timeout(
-          Duration(seconds: 30),
-        )) {
-          received += chunk.length;
-          if (received > release.size) throw FormatException('APK too large');
-          sink.add(chunk);
-          await sink.flush();
-          if (mounted) {
-            setState(() {
-              progress = received / release.size;
-              status = tr('正在下载更新…');
-            });
-          }
-        }
-      } finally {
-        await sink.close();
-      }
-      if (received != release.size ||
-          (await sha256.bind(partial.openRead()).first).toString() !=
-              release.digest) {
-        await partial.delete();
-        throw FormatException('APK checksum mismatch');
-      }
-      apk = await partial.rename('${directory.path}/${release.filename}');
-      if (mounted) await updateChannel.invokeMethod('install', apk!.path);
+      status = null;
+      if (accept != true || !mounted) return;
+      final value = await updateChannel.invokeMapMethod('download', {
+        'version': release.version,
+        'build': release.build,
+        'size': release.size,
+        'sha256': release.digest,
+      });
+      if (mounted && value != null) setState(() => applyDownload(value));
     } catch (_) {
-      apk = null;
-      if (mounted) setState(() => status = tr('更新失败，请检查网络后重试'));
+      status = '更新失败，请检查网络后重试';
     } finally {
       client?.close(force: true);
       client = null;
-      if (mounted) {
-        setState(() {
-          busy = false;
-          progress = null;
-        });
-      }
+      if (mounted) setState(() => busy = false);
     }
   }
 
   @override
-  Widget build(BuildContext context) => ListTile(
-    contentPadding: EdgeInsets.zero,
-    minTileHeight: 76,
-    leading: Icon(Icons.system_update),
-    title: Text(tr(apk == null ? '检查更新' : '安装更新')),
-    subtitle: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          tr('当前版本：{0}', [
-            currentVersion == null ? '—' : '$currentVersion ($currentBuild)',
-          ]),
+  Widget build(BuildContext context) {
+    final message = downloadState == 'ready'
+        ? '下载完成，点击安装更新'
+        : downloadState == 'paused'
+        ? '等待网络，恢复后继续下载'
+        : downloadState == 'downloading'
+        ? '正在下载更新…'
+        : downloadState == 'failed'
+        ? '更新失败，请检查网络后重试'
+        : status;
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      minTileHeight: 76,
+      leading: const Icon(Icons.system_update),
+      title: Text(
+        tr(
+          downloadState == 'ready'
+              ? '安装更新'
+              : storeUpdate
+              ? '前往 App Store 更新'
+              : '检查更新',
         ),
-        Text(
-          tr('最新版本：{0}', [
-            latest == null
-                ? tr('尚未检查')
-                : '${latest!.version} (${latest!.build})',
-          ]),
-        ),
-        if (apk != null)
-          Text(tr('如需授权，请允许安装后返回重试'))
-        else if (status != null)
-          Text(status!),
-        if (busy) LinearProgressIndicator(value: progress),
-      ],
-    ),
-    trailing: Icon(Icons.chevron_right),
-    onTap: busy ? null : update,
-  );
+      ),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            tr('当前版本：{0}', [
+              currentVersion == null ? '—' : '$currentVersion ($currentBuild)',
+            ]),
+          ),
+          Text(
+            tr('最新版本：{0}', [
+              latestVersion == null
+                  ? tr('尚未检查')
+                  : ios
+                  ? latestVersion!
+                  : '$latestVersion ($latestBuild)',
+            ]),
+          ),
+          if (message != null) Text(tr(message)),
+          if (status != null && message != status && !busy) Text(tr(status!)),
+          if (busy || downloading)
+            LinearProgressIndicator(value: downloading ? progress : null),
+          if (downloading && progress != null)
+            Text('${(progress! * 100).floor()}%'),
+        ],
+      ),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: busy || downloading ? null : update,
+    );
+  }
 }

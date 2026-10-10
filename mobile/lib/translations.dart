@@ -1,6 +1,13 @@
 // Shared mobile UI, recording notifications and error messages. Keep placeholders consistent.
 const translations = {
   "en": {
+    "后台下载更新，完成后返回此处安装。":
+        "Download in the background, then return here to install.",
+    "当前地区暂无可用的商店版本": "No App Store version is available in this region.",
+    "下载完成，点击安装更新": "Download complete. Tap to install.",
+    "等待网络，恢复后继续下载": "Waiting for the network. Download will resume.",
+    "前往 App Store 更新": "Update in App Store",
+
     "当前版本：{0}": "Current version: {0}",
     "最新版本：{0}": "Latest version: {0}",
     "尚未检查": "Not checked",
@@ -293,6 +300,14 @@ const translations = {
         "Recording can continue while locked. Calls, force-stop or system limits can interrupt it; check the status when you return.\n\nAndroid uses a microphone foreground service. Allow recording notifications. If battery restrictions stop the app, adjust system settings. Return to the app to resume after pausing.",
   },
   "es": {
+    "后台下载更新，完成后返回此处安装。":
+        "Descarga en segundo plano y vuelve aquí para instalar.",
+    "当前地区暂无可用的商店版本":
+        "No hay una versión de App Store disponible en esta región.",
+    "下载完成，点击安装更新": "Descarga completada. Toca para instalar.",
+    "等待网络，恢复后继续下载": "Esperando la red. La descarga se reanudará.",
+    "前往 App Store 更新": "Actualizar en App Store",
+
     "当前版本：{0}": "Versión actual: {0}",
     "最新版本：{0}": "Última versión: {0}",
     "尚未检查": "Sin comprobar",
@@ -586,6 +601,12 @@ const translations = {
         "La grabación puede continuar con la pantalla bloqueada. Las llamadas, el cierre forzado o los límites del sistema pueden interrumpirla; comprueba el estado al volver.\n\nAndroid usa un servicio de micrófono en primer plano. Permite las notificaciones. Si el ahorro de batería cierra la app, ajusta el sistema. Vuelve a la app para continuar tras pausar.",
   },
   "ja": {
+    "后台下载更新，完成后返回此处安装。": "バックグラウンドでダウンロードし、完了後ここに戻ってインストールします。",
+    "当前地区暂无可用的商店版本": "この地域では App Store 版を利用できません。",
+    "下载完成，点击安装更新": "ダウンロード完了。タップしてインストール。",
+    "等待网络，恢复后继续下载": "ネットワークを待機中。接続後にダウンロードを再開します。",
+    "前往 App Store 更新": "App Store で更新",
+
     "当前版本：{0}": "現在のバージョン：{0}",
     "最新版本：{0}": "最新バージョン：{0}",
     "尚未检查": "未確認",
@@ -851,6 +872,12 @@ const translations = {
         "ロック中も録音できます。着信、強制終了、システム制限で中断される場合があるため、戻ったら状態を確認してください。\n\nAndroid はマイクのフォアグラウンドサービスを使用します。録音通知を許可してください。省電力設定でアプリが停止する場合はシステム設定を調整してください。一時停止後はアプリに戻って再開してください。",
   },
   "ko": {
+    "后台下载更新，完成后返回此处安装。": "백그라운드에서 다운로드한 후 여기로 돌아와 설치하세요.",
+    "当前地区暂无可用的商店版本": "이 지역에서는 App Store 버전을 사용할 수 없습니다.",
+    "下载完成，点击安装更新": "다운로드 완료. 눌러서 설치하세요.",
+    "等待网络，恢复后继续下载": "네트워크 연결을 기다리는 중입니다. 연결되면 다운로드가 재개됩니다.",
+    "前往 App Store 更新": "App Store에서 업데이트",
+
     "当前版本：{0}": "현재 버전: {0}",
     "最新版本：{0}": "최신 버전: {0}",
     "尚未检查": "아직 확인하지 않음",
@@ -1116,6 +1143,13 @@ const translations = {
         "잠금 후에도 녹음할 수 있습니다. 통화, 강제 종료, 시스템 제한으로 중단될 수 있으니 돌아온 후 상태를 확인하세요.\n\nAndroid는 마이크 포그라운드 서비스를 사용합니다. 녹음 알림을 허용하세요. 절전 정책이 앱을 종료하면 시스템 설정을 조정하세요. 일시정지 후에는 앱에서 재개하세요.",
   },
   "fr": {
+    "后台下载更新，完成后返回此处安装。":
+        "Téléchargez en arrière-plan, puis revenez ici pour installer.",
+    "当前地区暂无可用的商店版本": "Aucune version App Store disponible dans cette région.",
+    "下载完成，点击安装更新": "Téléchargement terminé. Touchez pour installer.",
+    "等待网络，恢复后继续下载": "En attente du réseau. Le téléchargement reprendra.",
+    "前往 App Store 更新": "Mettre à jour dans l’App Store",
+
     "当前版本：{0}": "Version actuelle : {0}",
     "最新版本：{0}": "Dernière version : {0}",
     "尚未检查": "Non vérifiée",
@@ -1414,6 +1448,13 @@ const translations = {
         "L’enregistrement peut continuer écran verrouillé. Appels, arrêt forcé ou limites système peuvent l’interrompre ; vérifiez l’état au retour.\n\nAndroid utilise un service de microphone au premier plan. Autorisez les notifications. Si l’économie de batterie arrête l’app, ajustez les réglages système. Revenez dans l’app pour reprendre après une pause.",
   },
   "de": {
+    "后台下载更新，完成后返回此处安装。":
+        "Im Hintergrund herunterladen und anschließend hier installieren.",
+    "当前地区暂无可用的商店版本": "In dieser Region ist keine App-Store-Version verfügbar.",
+    "下载完成，点击安装更新": "Download abgeschlossen. Zum Installieren tippen.",
+    "等待网络，恢复后继续下载": "Warten auf Netzwerk. Der Download wird fortgesetzt.",
+    "前往 App Store 更新": "Im App Store aktualisieren",
+
     "当前版本：{0}": "Aktuelle Version: {0}",
     "最新版本：{0}": "Neueste Version: {0}",
     "尚未检查": "Noch nicht geprüft",
@@ -1710,6 +1751,13 @@ const translations = {
         "Aufnahme ist bei gesperrtem Bildschirm möglich. Anrufe, erzwungenes Beenden oder Systemlimits können sie unterbrechen; prüfen Sie den Status nach der Rückkehr.\n\nAndroid verwendet einen Mikrofon-Vordergrunddienst. Aufnahmebenachrichtigungen erlauben. Bei Beendigung durch Energiesparregeln die Systemeinstellungen anpassen. Nach einer Pause in der App fortsetzen.",
   },
   "ru": {
+    "后台下载更新，完成后返回此处安装。":
+        "Загрузите в фоне, затем вернитесь сюда для установки.",
+    "当前地区暂无可用的商店版本": "В этом регионе нет доступной версии в App Store.",
+    "下载完成，点击安装更新": "Загрузка завершена. Нажмите для установки.",
+    "等待网络，恢复后继续下载": "Ожидание сети. Загрузка продолжится после подключения.",
+    "前往 App Store 更新": "Обновить в App Store",
+
     "当前版本：{0}": "Текущая версия: {0}",
     "最新版本：{0}": "Последняя версия: {0}",
     "尚未检查": "Ещё не проверено",

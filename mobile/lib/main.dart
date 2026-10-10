@@ -2278,7 +2278,10 @@ class SettingsPage extends StatelessWidget {
         ),
       ),
       Divider(height: 1),
-      if (Platform.isAndroid) ...[const AppUpdateTile(), Divider(height: 1)],
+      if (Platform.isAndroid || Platform.isIOS) ...[
+        const AppUpdateTile(),
+        Divider(height: 1),
+      ],
       ListTile(
         contentPadding: EdgeInsets.zero,
         minVerticalPadding: 20,

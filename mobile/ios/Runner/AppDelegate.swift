@@ -1,5 +1,6 @@
 import ActivityKit
 import Flutter
+import StoreKit
 import UIKit
 import flutter_webrtc
 
@@ -32,6 +33,42 @@ import flutter_webrtc
     // WebRTC 仅传数据，音频会话由现有录音器管理，重连不可重置麦克风。
     FlutterWebRTCPlugin.setAudioSessionManagementEnabled(false)
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    let updates = FlutterMethodChannel(
+      name: "com.brevia/app_update",
+      binaryMessenger: engineBridge.applicationRegistrar.messenger())
+    updates.setMethodCallHandler { call, result in
+      switch call.method {
+      case "version":
+        result(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String)
+      case "build":
+        result(Int(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""))
+      case "storeCountry":
+        // 商店账号地区优先，未登录商店时使用设备地区；查询只包含公开 App ID。
+        let region = SKPaymentQueue.default().storefront?.countryCode
+        let locale = Locale(identifier: "en_US_POSIX")
+        let name = region.flatMap { locale.localizedString(forRegionCode: $0) }
+        let country = name.flatMap { name in
+          Locale.isoRegionCodes.first {
+            $0.count == 2 && locale.localizedString(forRegionCode: $0) == name
+          }
+        }
+        result(country ?? Locale.current.regionCode ?? "US")
+      case "openStore":
+        let url = URL(string: "https://apps.apple.com/app/id6819869442")!
+        UIApplication.shared.open(url) { opened in
+          if opened {
+            result(nil)
+          } else {
+            result(
+              FlutterError(
+                code: "store_unavailable", message: "Cannot open App Store", details: nil))
+          }
+        }
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+
     if #available(iOS 16.2, *) {
       activityTask = Task {
         for activity in Activity<RecordingAttributes>.activities {

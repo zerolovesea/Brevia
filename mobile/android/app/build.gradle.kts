@@ -68,3 +68,7 @@ gradle.taskGraph.whenReady {
         throw GradleException("Release signing requires ANDROID_KEYSTORE_PATH, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS and ANDROID_KEY_PASSWORD. Use flutter build apk --debug for development.")
     }
 }
+
+dependencies {
+    testImplementation("junit:junit:4.13.2")
+}
