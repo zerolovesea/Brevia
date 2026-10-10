@@ -52,6 +52,16 @@ const { MobileServer } = require('./mobile-server');
       req.end(value ? JSON.stringify(value) : undefined);
     });
   }
+  async function waitForTask(id, token) {
+    const deadline = Date.now() + 5000;
+    let task;
+    do {
+      task = (await call('GET', `/meetings/${id}/snapshot`, null, token)).body.task;
+      if (task.state !== 'running') break;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    } while (Date.now() < deadline);
+    assert.equal(task.state, 'done');
+  }
   try {
     await server.init();
     await call('GET', '/identity');
@@ -200,11 +210,7 @@ const { MobileServer } = require('./mobile-server');
     assert.equal(server.sessions.get(id).finished, true);
     const task = { action: 'refine', request_id: randomUUID() };
     assert.equal((await call('POST', `/meetings/${id}/action`, task, token)).status, 200);
-    await new Promise((resolve) => setTimeout(resolve, 30));
-    assert.equal(
-      (await call('GET', `/meetings/${id}/snapshot`, null, token)).body.task.state,
-      'done',
-    );
+    await waitForTask(id, token);
     await call('POST', `/meetings/${id}/action`, task, token);
     assert.equal(commands.filter((c) => c === 'meeting.refine').length, 1);
     assert.equal(
@@ -245,7 +251,7 @@ const { MobileServer } = require('./mobile-server');
       ).status,
       200,
     );
-    await new Promise((resolve) => setTimeout(resolve, 30));
+    await waitForTask(id, token);
     assert.equal(commands.filter((c) => c === 'mobile.translate').length, 1);
     assert.equal(
       (
