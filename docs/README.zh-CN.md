@@ -1,311 +1,155 @@
-<p align="center"><img src="assets/brevia-mark.svg" width="258" alt="言录" /></p>
+<p align="center"><img src="assets/brevia-mark.svg" width="258" alt="Brevia 言录" /></p>
 
-<p align="center"><strong>极简设计，本地部署的 AI 会议助手。</strong><br />AI 笔记 · 实时转写 · 多语言 · 说话人识别 · 可审阅总结 — 音频不出本机。</p>
+<p align="center"><strong>本地优先的 AI 会议助手，电脑与手机协同使用。</strong><br />实时转写 · AI 笔记 · 字幕翻译 · 会议纪要，把处理留在自己的电脑上。</p>
 
 <p align="center">
-  <a href="https://github.com/zerolovesea/Brevia/releases"><img src="https://img.shields.io/github/v/release/zerolovesea/Brevia?style=flat-square" alt="Release" /></a>
-  <a href="https://github.com/zerolovesea/Brevia/blob/main/LICENSE"><img src="https://img.shields.io/github/license/zerolovesea/Brevia?style=flat-square" alt="License" /></a>
-  <a href="https://github.com/zerolovesea/Brevia/releases"><img src="https://img.shields.io/github/downloads/zerolovesea/Brevia/total?style=flat-square" alt="Downloads" /></a>
-  <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows-blue?style=flat-square" alt="Platform" />
-  <img src="https://img.shields.io/badge/electron-43-47848F?style=flat-square&logo=electron" alt="Electron" />
-  <img src="https://img.shields.io/badge/python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python" />
+  <a href="https://github.com/zerolovesea/Brevia/releases/latest"><img src="https://img.shields.io/github/v/release/zerolovesea/Brevia?style=flat-square" alt="桌面版本" /></a>
+  <a href="../LICENSE"><img src="https://img.shields.io/github/license/zerolovesea/Brevia?style=flat-square" alt="ISC 许可证" /></a>
+  <a href="https://github.com/zerolovesea/Brevia/releases"><img src="https://img.shields.io/github/downloads/zerolovesea/Brevia/total?style=flat-square" alt="下载量" /></a>
 </p>
 
 <p align="center"><a href="../README.md">English</a> · <strong>简体中文</strong> · <a href="README.es.md">Español</a> · <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a> · <a href="README.fr.md">Français</a> · <a href="README.de.md">Deutsch</a> · <a href="README.ru.md">Русский</a></p>
 
----
+<p align="center"><a href="https://brevia.work">官网</a> · <a href="#下载">下载</a> · <a href="#用手机录音">手机应用</a> · <a href="#常见问题">常见问题</a></p>
 
-## 项目简介
+言录帮你记录、整理和回看会话。线上会议时，同时录制电脑麦克风与系统声音；采访或面谈时，用手机随手录音。会中查看字幕、审核 AI 建议，会后得到可编辑、可分享的笔记。语音识别在自己的电脑上运行，在线 AI 由你选择是否启用。
 
-言录是一款桌面端 AI 会议助手，把会议里最耗时间的部分——记录、整理、复盘——交给设备上的 AI。它同时录制麦克风和系统音频，实时生成字幕，会后自动整理成结构化笔记；会议进行中，AI 笔记会及时提示值得记录的内容。所有语音识别都在本机运行，录音、文字稿、说话人档案默认保存在你自己的电脑上。
+<p align="center"><img src="assets/demo/ai-assist-zh.gif" width="820" alt="言录桌面演示：实时转写与 AI 笔记" /></p>
 
-设计上追求"少即是多"：界面尽可能安静，不打扰会议本身；功能围绕"记录 → 理解 → 检索"这条主线展开；能本地做的绝不发到云端。
+## 下载
 
-<p align="center"><img src="assets/demo/ai-assist-zh.gif" width="820" alt="言录 AI 辅助笔记演示" /></p>
+| 设备                      | 下载与可用状态                                                                                                                                |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| macOS 14+ · Apple Silicon | [下载最新桌面版](https://github.com/zerolovesea/Brevia/releases/latest)，选择 `Brevia-<version>-arm64.dmg`                                    |
+| Windows · x64             | [下载最新桌面版](https://github.com/zerolovesea/Brevia/releases/latest)，选择 `Brevia-<version>-x64-setup.exe`                                |
+| Android 7+                | [下载签名 APK](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk)，后续可在应用「设置」中检查更新 |
+| iPhone · iOS 15+          | App Store 审核中，TestFlight 仅限受邀测试者。[查看发布动态](https://github.com/zerolovesea/Brevia/releases)                                   |
 
 ## 功能介绍
 
-### AI 笔记：提示由你审核
+### 实时转写与翻译
 
-AI 会跟随实时逐字稿，识别决策、待办、关键数字、风险、问题和话题切换。可选择仅按需触发、轻度提醒或自动整理。所有建议都先由你审核：只把有用的内容加入笔记，并可用富文本或 Markdown 继续编辑。
+同时录制麦克风和电脑系统声音，在线会议里双方的发言都能进入同一份文字稿。言录在发言停顿后生成字幕，可按需在旁边显示翻译；也可开启悬浮字幕，在其他应用中工作时继续跟进会议。
 
-AI 笔记与 AI 会议总结可分别配置供应商、模型和 API Key。使用远程服务时，只会发送逐字稿文本与当前笔记上下文，音频始终留在本机；本地模型按需加载，分开配置不会同时常驻两个模型。
+转写支持 **30+ 种语言**，包括中文、英语、日语、韩语、西班牙语、法语、德语、俄语、阿拉伯语、泰语、越南语、印尼语等。选择会议语言后，言录会推荐适用的识别模型。已有录音也能直接导入转写。
+
+![实时会议和翻译](assets/tour/zh/实时会议和翻译.png)
+
+### 由你审核的 AI 笔记
+
+会议进行中，AI 笔记可提示关键决定、待办、重要数字、风险和待确认问题。按需请求、轻量提示、自动整理三种方式自由选择；只采纳有用的建议，也能在电脑端用富文本或 Markdown 同时记下自己的想法。
+
+会后可根据审核后的文字稿生成纪要。AI 笔记与会议纪要支持分别配置：使用本地 AI，或接入 Claude、OpenAI、OpenRouter 及兼容服务。
+
+<details>
+<summary>查看 AI 笔记与会议纪要界面</summary>
 
 ![AI 笔记](assets/tour/zh/AI辅助笔记.png)
 
-### 识别模型怎么选
-
-首次引导会列出可下载的语音模型，并按界面语言预勾选建议项（Silero VAD、说话人分离与声纹模型随包安装，无需选择）；下载前可以自行取消其余模型。
-
-之后每场会议，言录按**会议语言**选默认识别模型，归属关系声明在 `backend/models.json` 里：
-
-| 会议语言                                     | 默认识别模型         | 说明                                         |
-| -------------------------------------------- | -------------------- | -------------------------------------------- |
-| 中文、粤语                                   | FunASR Nano          | 中文及中文方言准确率最高                     |
-| 日语、韩语                                   | Qwen3-ASR 0.6B       | 可选模型里唯一同时覆盖日韩的一个             |
-| 英语、西班牙语、法语、德语、俄语、多语言混说 | Parakeet TDT 0.6B v3 | 一个模型覆盖 25 种欧洲语言，自带标点与时间戳 |
-| 其他语言                                     | Qwen3-ASR 0.6B       | 其余模型里覆盖语言最广的一个                 |
-
-Apple 芯片 Mac 的语音识别与 Silero VAD 使用 mlx-audio/MLX；Windows 继续使用 Sherpa ONNX。两端的说话人分离与声纹仍使用 Sherpa。Mac 升级后需下载对应的 MLX 识别模型，已有录音仍可使用。 实际切段上限取实时设置、语言 VAD 配置和模型容量的最小值（macOS MLX 模型为 20 秒）；自动语言检测至少等待 2 秒静音。
-
-若声明的默认模型尚未下载，言录会改用**已安装且支持该语言**的模型，而不是让你再下一个。准备页提供「识别模型」下拉（未下载的模型也会列出体积），实时页是同一个切换器，会中即可通过 `meeting.reconfigure` 热切换。**设置 → 进阶 → 实时识别**里的 `live_asr.max_speech_seconds` 可以限制单段实时字幕最长能攒到多少秒；实际生效值始终是该值、语言级 VAD 配置与模型自身容量三者的最小值。
-
-性能较低的设备建议使用 2B 内置 AI 笔记模型或在线服务。
-
-### 极简的会议界面，实时转写和翻译
-
-打开就录，每次说完停顿后输出整句字幕，无需切窗口。同时抓取麦克风与系统音频，远程会议里你和对方的声音都能被完整记录。可选的实时翻译在字幕旁并列显示，方便跨语言协作。
-
-![实时会议和翻译](assets/tour/zh/%E5%AE%9E%E6%97%B6%E4%BC%9A%E8%AE%AE%E5%92%8C%E7%BF%BB%E8%AF%91.png)
-
-### 多语言支持 + 会后 AI 会议纪要
-
-言录支持 30+ 种语言的语音转写，涵盖中文、英语、日语、韩语、法语、德语、西班牙语、俄语、阿拉伯语、泰语、越南语、印尼语等。会议结束后，可连接大模型，根据审核后的逐字稿生成会议摘要、关键决策和待办事项。
-
-内置 AI 可在本机直接运行捆绑模型，也可以接入 Claude、OpenAI、OpenRouter，或任意兼容 OpenAI / Anthropic 格式的自建服务。摘要只发送文本，不上传音频。
-
 ![会议纪要](assets/tour/zh/多语言支持与会议纪要.png)
 
-### 会后精修中的说话人识别
+</details>
 
-为每位成员录入一小段语音样本。会议结束后，言录在会后精修时区分说话人，并匹配已保存的声纹档案，在转录中标注对应姓名。会议中的实时字幕不区分说话人。声纹档案可跨会议复用。
+### 方便回看、查找与分享
 
-底层用 Pyannote 分段 + 声纹嵌入模型，全部在本机运行。
-
-![会后精修中的说话人识别](assets/tour/zh/%E6%B3%A8%E5%86%8C%E5%A3%B0%E7%BA%B9%E8%AF%86%E5%88%AB.png)
-
-### 丰富的本地模型库
-
-可下载模型覆盖整句转写、离线精修、语音活动检测、说话人分离、声纹嵌入、AI 笔记与会议纪要，以及字幕翻译。可以按语言和精度自由组合，全部在设备上运行。
-
-![模型库](assets/tour/zh/%E6%A8%A1%E5%9E%8B%E5%BA%93.png)
-
-### 更多能力
-
-- **音频导入** — 已有的会议录音可直接导入离线转写，共用同一套语音管线。
-- **多格式导出** — 逐字稿 / 笔记支持 Markdown、TXT、JSON、SRT、DOCX、PDF；音频以 WAV 导出。
-- **可审阅笔记** — 富文本或 Markdown 自由编辑，只采纳真正有用的 AI 建议。
-- **会议库与工作区** — 搜索标题、逐字稿、说话人和标签；用工作区归类，并可在 30 天内恢复最近删除的会议。
-- **专注查看** — 明暗主题、逐字稿/摘要内联编辑和可选悬浮字幕，让会议界面保持清爽。
-- **多语言界面** — 英语、简体中文、西班牙语、日语、韩语、法语、德语、俄语。
-
-## 安装
-
-从 [GitHub Releases](https://github.com/zerolovesea/Brevia/releases) 下载最新版本：
-
-| 平台                  | 安装包                           |
-| --------------------- | -------------------------------- |
-| macOS (Apple Silicon) | `Brevia-<version>-arm64.dmg`     |
-| Windows (x64)         | `Brevia-<version>-x64-setup.exe` |
-
-> Windows 首次运行可能弹出 **Microsoft Defender SmartScreen** 提示。点击 **"更多信息" → "仍要运行"**，确认下载来源是官方 Releases 页面后继续即可。
-
-首次启动请授予麦克风与屏幕录制权限，并进入 **设置 → 模型库** 下载所需语言的模型。
-
-## 架构
-
-```mermaid
-flowchart LR
-  A[Electron 渲染进程<br/>HTML · Tailwind · JS] <-->|IPC + Zod 校验| B[Electron 主进程]
-  B <-->|JSONL stdin/stdout| C[Python Worker<br/>内置运行时]
-  C --> D[mlx-audio / sherpa-onnx<br/>VAD → 整句 ASR · 说话人]
-  C --> E[本地存储<br/>SQLite · 音频 · 导出]
-  C -. 显式授权 .-> F[可选云端 API<br/>LLM 摘要 · 翻译]
-```
-
-言录采用严格的本地优先架构：
-
-- **渲染进程不打开任何网络端口**，所有跨进程通信由 Electron 主进程用 Zod schema 校验。
-- **主进程只是壳**，启动一个 Python Worker，通过 JSONL over stdin/stdout 通信；Worker 负责模型管理、音频处理、说话人档案、本地存储、导出等所有重逻辑。
-- **数据默认存放在 `~/brevia`**，包括 SQLite 数据库、原始音频、导出文件、模型缓存和声纹档案。
-- **云端调用是可选的**，仅用于 LLM 摘要和翻译，需要用户显式配置服务商并授权后才启用，且只发送文本。
-
-录音链路采用 **Silero VAD 分段 → 单次高精度识别 → 完整字幕**。中文停顿 0.7 秒、其他语言停顿 0.8 秒后触发；连续发言按实时设置、语言配置和模型容量中的最小上限切段。VAD 按声音停顿分段，一段可能含多个语法句，字幕再把相邻的句子攒成段落：中文约 110 字（上限 150 字）、英文约 280 字符（上限 380 字符）为一段，短句不会单独成段。**VAD 端点不作为段落边界**——实测真实会议里端点之后的静音中位数只有 30–50 毫秒，按端点切会得到平均 24 字的碎片段；只有真正的长停顿（≥1.2 秒）才另起一段，不足目标的段落最多滞留 8 秒后兜底提交。连续语音被切开时，下一段解码会回看切点前约 400 毫秒，让切在词中间的字在新的上下文里被完整识别，重复部分按接缝对齐去重。停止录音会处理完末句，识别失败仍保留原始录音。
-
-参见[基准测试报告](../backend/benchmarks/vad-2026-09-05/REPORT.md)。
-
-## 技术栈
-
-| 层级       | 技术                                                                                                                                                 |
-| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 桌面外壳   | Electron 43 — preload 桥接、context isolation、渲染器沙箱                                                                                            |
-| 前端       | 原生 HTML/CSS/JS、Tailwind CSS 4、内置 i18n（8 种语言）                                                                                              |
-| 后端       | Python 3.10+、JSONL Worker 协议、SQLite 存储                                                                                                         |
-| 语音引擎   | [mlx-audio](https://github.com/Blaizzy/mlx-audio) / MLX (macOS); [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 1.13.8 (Windows)、ONNX Runtime |
-| 说话人处理 | Pyannote 分段 + 3D-Speaker ERes2Net Base 声纹嵌入                                                                                                    |
-| LLM 客户端 | 内置 llama.cpp（GGUF）+ 兼容 OpenAI / Anthropic 的标准 API                                                                                           |
-| 音频 I/O   | ffmpeg（发行版内置）                                                                                                                                 |
-| 构建打包   | electron-builder、PyInstaller（打包原生 Python 运行时）                                                                                              |
+- **会后识别说话人。** 精修时区分说话人，并可匹配已保存的声纹档案；实时字幕暂不区分说话人。
+- **可搜索的会议库。** 搜索标题、逐字稿、说话人与标签，用工作区归类；桌面端最近删除的会议可在 30 天内恢复。
+- **可编辑、多格式导出。** 修改逐字稿与摘要，将文字和笔记导出为 Markdown、TXT、JSON、SRT、DOCX 或 PDF，音频导出为 WAV。
+- **适合日常使用的界面。** 电脑与手机均提供深浅色主题，以及中文、英语、西班牙语、日语、韩语、法语、德语和俄语界面。
 
 ## 支持的模型
 
-整句识别、会后精修、AI 笔记与字幕翻译模型可在应用内 **设置 → 模型库** 按需下载；语音活动检测、说话人分离与声纹模型随应用安装。模型清单声明在 [`backend/models.json`](../backend/models.json)。
+识别、AI 笔记和翻译模型可在 **设置 → 模型库** 按需下载；语音活动检测与说话人模型随应用安装。下列模型均在电脑运行，手机录音无需在手机上下载模型。具体版本和大小以应用内模型库为准。
 
-| 类型                | 代表模型                                          | 语言                          |
-| ------------------- | ------------------------------------------------- | ----------------------------- |
-| 整句识别 / 会后精修 | FunASR Nano、Qwen3-ASR 0.6B、Parakeet TDT 0.6B v3 | 中文 / 多语言 / 25 种欧洲语言 |
-| 语音活动检测        | Silero VAD                                        | 通用                          |
-| 说话人分离          | Pyannote Segmentation 3.0                         | 通用                          |
-| 声纹嵌入            | 3D-Speaker ERes2Net Base                          | 中文                          |
-| AI 笔记与会议纪要   | Qwen 3.5 2B、Qwen 3.5 4B                          | 中文 / 英语                   |
-| 字幕翻译            | Tencent Hy-MT2 1.8B                               | 33 种语言                     |
+| 用途              | 模型                      | 语言／作用                  |
+| ----------------- | ------------------------- | --------------------------- |
+| 转写／会后精修    | FunASR Nano               | 中文、粤语、英语            |
+| 转写／会后精修    | Qwen3-ASR 0.6B            | 30 种语言，含中、英、日、韩 |
+| 转写／会后精修    | Parakeet TDT 0.6B v3      | 25 种欧洲语言               |
+| AI 笔记／会议纪要 | Qwen 3.5 2B / 4B          | 中文／英语                  |
+| 字幕翻译          | Tencent Hy-MT2 1.8B       | 多语言翻译                  |
+| 语音活动检测      | Silero VAD                | 检测发言与停顿              |
+| 说话人分离        | Pyannote Segmentation 3.0 | 会后区分不同说话人          |
+| 声纹匹配          | 3D-Speaker ERes2Net Base  | 匹配已保存的说话人档案      |
 
-LLM 摘要可以选「内置 AI」在本机运行捆绑的 GGUF 模型（Qwen 3.5 2B / 4B），也可以接入 Claude、OpenAI、OpenRouter，或任意兼容 OpenAI Chat Completions / Anthropic Messages 的自建服务——例如 Gemini（OpenAI 兼容端点）、DeepSeek、Kimi、通义千问等。
+## 用手机录音
 
-## 本地开发
+[**下载 Android APK**](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk) · iPhone：App Store 审核中，TestFlight 仅限受邀测试者（[查看发布动态](https://github.com/zerolovesea/Brevia/releases)）
 
-前置依赖：Node.js 22+、Python 3.10+、Git、ffmpeg（用于音频导入）。
+把言录带到会议室、采访现场或日常讨论中。手机端无需注册账号，打开即可录音；连接自己的电脑后，还能一边录制，一边查看转写和笔记。
 
-```bash
-git clone https://github.com/zerolovesea/Brevia.git
-cd Brevia
-npm install
-python3 -m pip install -r backend/requirements.txt
-npm start
+<p align="center">
+  <img src="assets/mobile/zh/02-connect.png" width="240" alt="iPhone：扫码或输入配对码连接电脑" />
+  <img src="assets/mobile/zh/01-record.png" width="240" alt="iPhone：离线录音准备，可设置标题、语言与人数" />
+  <img src="assets/mobile/zh/03-transcript.png" width="240" alt="手机会议转写示例：时间戳、录音状态及暂停、重点、结束按钮" />
+</p>
+
+- **随时记录，不必带着电脑。** 无需配对或联网即可录音，支持暂停、继续和标记重要时刻。录音先保存在手机，需要转写时，再选择电脑并确认上传。
+- **手机收音，电脑整理。** 配对后，电脑完成语音识别，并将字幕和笔记实时回传到手机。模型和 AI 设置留在电脑上，手机无需下载大模型。
+- **会后回听，方便分享。** 在会议库查找录音、回听讨论，将音频导出为 WAV，或把笔记和转写分享为 Markdown、文本。删除手机副本不会删除电脑上的会议。
+
+网络暂时中断时，音频继续在手机保存，恢复连接后续传已授权的录音。支持后台录音，但来电、强制退出和系统限制仍可能中断；回到应用后请检查状态，结束后的补传可能需要保持应用在前台。
+
+## 手机与电脑如何协作
+
+```mermaid
+flowchart LR
+  Phone[手机：录音并本地保存] -->|加密传输音频| PC[你的电脑：转写与 AI 处理]
+  PC -->|回传文字与已保存笔记| Phone
+  PC -. 可选：发送相关文字 .-> AI[你选择的在线 AI 服务]
 ```
 
-首次启动时，在选择语音识别模型的页面可以同时选择模型文件夹和会议与录音文件夹。之后可在 **设置** 页面分别更改这两个路径。选择空文件夹后，言录会迁移现有文件并在应用内更新，无需重启；使用外接硬盘时，请在启动前连接硬盘。
+- **首次在同一 Wi-Fi 配对。** 电脑打开 **设置 → 设备连接 → 连接新设备**，手机扫码或输入地址和 PIN，核对校验码后在电脑允许连接。后续连接使用已保存的设备身份。
+- **默认通过局域网通信。** 手机通过 HTTPS 向已配对电脑发送音频，电脑回传转写和笔记。实时处理需要电脑保持唤醒、网络可达；手机本身不运行识别模型。
+- **先保存，再确认。** 音频先落在手机，电脑确认保存后才推进上传位置；断线后从已确认的位置继续，不因上传成功自动删除手机副本。
+- **可选跨网络连接。** 配置自有信令／TURN 服务后，已配对设备可通过 WebRTC DataChannel 跨网通信；优先直连，无法直连时中继加密流量。首次配对仍需局域网，详见[跨网连接与恢复](mobile-remote.md)。
 
-### 常用脚本
+语音识别和说话人处理在电脑本地执行；下载所需模型后，AI 笔记、纪要与翻译也可在本机完成。选择在线 AI 时，相关转写与笔记文字会发给所选服务商，音频不会发给 AI 服务商。跨网中继运营方可看到网络地址、连接时间和流量大小等信息，但不能通过中继读取加密会议内容。详见[隐私政策](https://brevia.work/privacy.html)。
 
-```bash
-npm test                    # 死代码门禁 + Electron 行为 + UI + E2E 冒烟 + 后端测试
-npm run test:e2e            # 启动真实应用并通过 CDP 断言
-npm run build               # 构建 Tailwind CSS
-npm run test:model          # ASR 模型诊断
-npm run test:diarization    # 说话人分离诊断
-npm run start:fresh         # 重置引导流程后启动
-```
+手机原始录音约占 **115 MB／小时**，导出与缓存会额外占用空间。跨网上传还会消耗相应流量及通信开销，较长录音建议使用 Wi-Fi 传输。
 
-### 环境变量
+## 开始使用
 
-```bash
-# 自定义数据目录（录音、导出、SQLite）
-BREVIA_DATA_DIR=/path/to/data
-
-# 自定义模型目录
-BREVIA_MODELS_DIR=/path/to/models
-
-# 自定义录音与会议目录
-BREVIA_MEETINGS_DIR=/path/to/recordings
-
-# 指定 ffmpeg 路径（如未在 PATH 中）
-BREVIA_FFMPEG=/path/to/ffmpeg
-
-BREVIA_DATA_DIR=~/brevia-dev BREVIA_MODELS_DIR=~/brevia-models npm start
-```
-
-### 构建安装包
-
-```bash
-npm ci
-npm run build
-python3 -m pip install -r backend/requirements-build.txt
-npm run dist:mac   # macOS ARM64 DMG
-npm run dist:win   # Windows x64 EXE
-```
-
-产物输出到 `dist/`。每个平台构建都会打包原生 Python Worker（内含语音活动检测、说话人分离与声纹模型）；识别、精修、AI 笔记与翻译模型由应用按需下载。
+1. **准备电脑端。** 安装言录，按提示授权麦克风与系统音频录制，下载推荐的识别模型；需要离线笔记和纪要时，再选择本地 AI 模型。
+2. **开始会议或导入录音。** 选择会议语言、录制，结束后审核并导出结果。
+3. **按需加入手机。** 按上面的步骤配对即可实时转写；也可以先离线录音、稍后上传。仅完成配对不会自动上传离线录音。
 
 ## 常见问题
 
 <details>
-<summary><strong>Windows 打开时弹出 Microsoft Defender SmartScreen 警告</strong></summary>
+<summary><strong>没有互联网也能用吗？</strong></summary>
 
-发布构建未做付费代码签名，SmartScreen 会对新出现的可执行文件默认拦截。点击 **"更多信息" → "仍要运行"**，确认下载来源是官方 [Releases](https://github.com/zerolovesea/Brevia/releases) 页面后继续即可。
-
-</details>
-
-<details>
-<summary><strong>需要单独安装 Python 吗？</strong></summary>
-
-不需要。发布版内置了 Python 运行时和所有依赖。只有从源码运行时才需要本机 Python 环境。
+可以。下载所需模型后，电脑端转写和本地 AI 可离线运行。手机独立录音不需要电脑，也不需要账号；手机转写需要已配对电脑，但同一局域网连接不依赖互联网。在线 AI 和跨网连接需要互联网。
 
 </details>
 
 <details>
-<summary><strong>数据存储在哪里？</strong></summary>
+<summary><strong>应该下载哪些模型？</strong></summary>
 
-默认在 `~/brevia`。首次启动可为模型及录音与会议文件分别选择文件夹；SQLite 数据库和声纹档案仍在数据根目录。设置 `BREVIA_DATA_DIR` 可自定义数据根目录。
-
-</details>
-
-<details>
-<summary><strong>支持哪些语言的转写？</strong></summary>
-
-30+ 种语言，包括中文、英语、日语、韩语、法语、德语、西班牙语、俄语、阿拉伯语、泰语、越南语、印尼语等。在应用内「模型库」中选择对应语言的模型即可。
+先下载适合会议语言的推荐识别模型。需要笔记和纪要时再添加本地 AI 模型，需要翻译时添加翻译模型。模型库会显示下载大小；性能较弱的电脑可优先选择较小的 AI 模型，不必下载全部模型。
 
 </details>
 
 <details>
-<summary><strong>言录会把音频发送到云端吗？</strong></summary>
+<summary><strong>录音和数据存在哪里？</strong></summary>
 
-不会。所有语音识别和说话人分离都在本机运行。只有 LLM 摘要 / 翻译需要联网，且必须由用户显式配置服务商——只发送文本，不上传音频。
-
-</details>
-
-<details>
-<summary><strong>模型需要多少磁盘空间？</strong></summary>
-
-取决于所选模型。整句识别模型是主要占用；语音活动检测、说话人分离与声纹模型随应用安装，可按需另装 AI 笔记模型；具体大小以模型库显示为准。
+电脑端默认存放在 `~/brevia`，模型与录音文件夹可在首次设置时选择，之后在设置中更改。手机录音和缓存文字保存在应用内；删除手机副本不会删除电脑副本。卸载手机应用会清除其本地数据，请先导出或同步尚未上传的录音。
 
 </details>
 
 <details>
-<summary><strong>可以导入已有的会议录音吗？</strong></summary>
+<summary><strong>Windows 提示 SmartScreen 怎么办？</strong></summary>
 
-可以。从左侧栏进入“导入录音”，设置会议名称、语言和模型后选择音频文件。言录会用同一套语音管线离线转写。需要系统 PATH 中有 `ffmpeg`（或设置 `BREVIA_FFMPEG`）。
-
-</details>
-
-<details>
-<summary><strong>如何切换界面语言？</strong></summary>
-
-**设置 → 通用 → 界面语言**。目前提供英语、简体中文、西班牙语、日语、韩语、法语、德语、俄语。
-
-</details>
-
-<details>
-<summary><strong>声纹样本是怎么存储的？</strong></summary>
-
-声纹嵌入向量（几百维浮点数组）和参考音频保存在本地 SQLite 与文件系统中，不会离开本机；删除档案时对应数据也会一并清除。
+先确认安装包来自官方[发布页面](https://github.com/zerolovesea/Brevia/releases)，信任该下载后再选择「更多信息 → 仍要运行」。
 
 </details>
 
 ## 反馈与贡献
 
-### 提交 Issue
+遇到问题或有建议？欢迎[提交 Issue](https://github.com/zerolovesea/Brevia/issues)，附上设备、应用版本、会议语言和复现步骤。截图与日志请去掉会议隐私及凭据；安全问题请私下联系维护者。
 
-发现 Bug 或有新功能建议？欢迎前往 [GitHub Issues](https://github.com/zerolovesea/Brevia/issues) 提交。为了让问题更快得到定位，请尽量提供：
+开发、架构、模型细节和打包说明见[开发指南](DEVELOPMENT.zh-CN.md)、[手机开发指南](../mobile/README.md)及[贡献规范](../CONTRIBUTING.md)。
 
-- 操作系统与版本（如 macOS 14.5 / Windows 11 23H2）
-- 言录版本号（**设置 → 关于**）
-- 使用的模型和语言
-- 复现步骤 / 期望结果 / 实际结果
-- 相关日志（**设置 → 高级 → 打开日志目录**），提交前请自行确认不含敏感信息
+## 许可与致谢
 
-安全类问题请**不要公开发 Issue**，请通过邮件联系维护者。
-
-### 参与贡献
-
-开始修改前，请阅读全项目通用的[代码与格式规范](../CONTRIBUTING.md)。
-
-手机端开发请先阅读[日常开发与提交指南](../mobile/README.md#日常开发与提交)，涵盖分支、检查、PR、合并后的 TestFlight 分发、Android 安装包获取和失败处理。
-
-欢迎 PR。为了保持代码质量，请遵循几点约定：
-
-1. 从 `main` 切出聚焦分支，保持改动精简；一个 PR 只做一件事。
-2. 提交前运行 `npm test`；涉及 ASR 或说话人分离时额外跑 `npm run test:model` 和 `npm run test:diarization`。
-3. 不要提交模型文件、录音、导出文件、API 密钥或 `~/brevia` 目录里的任何本地数据。
-4. 修改界面文案时，请同步维护所有八种语言（`frontend/i18n-data.js`）；添加英文源字符串时把翻译一起补上。
-5. 在 PR 描述中说明改动对模型、平台或系统权限的影响，方便审阅。
-
-## License
-
-言录使用 [ISC License](../LICENSE) 发布。模型文件与第三方依赖遵循各自的许可证条款。
-
-## 致谢
-
-- [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) — 本地 ASR、VAD、标点和说话人处理的核心运行时，采用 [Apache-2.0](https://github.com/k2-fsa/sherpa-onnx/blob/master/LICENSE) 许可。
-- 感谢 [`backend/models.json`](../backend/models.json) 中声明的所有模型作者与维护者，包括 Qwen3-ASR、FunASR、Parakeet（NeMo）、Pyannote、3D-Speaker、Silero、Qwen 和 Tencent Hy-MT2。
-- Electron、ONNX Runtime、Python 以及整个开源语音社区，让本地优先的会议工作流成为可能。
+言录使用 [ISC 许可证](../LICENSE)，模型和第三方依赖遵循各自许可。感谢 [mlx-audio](https://github.com/Blaizzy/mlx-audio)、[sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx)、Electron，以及 Qwen、FunASR、Parakeet、Pyannote、3D-Speaker、Silero、Tencent Hy-MT2 的作者与维护者。模型详情见[开发指南](DEVELOPMENT.zh-CN.md#支持的模型)。

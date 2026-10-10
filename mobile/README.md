@@ -136,7 +136,7 @@ git push -u origin feature/mobile-transcript-layout
 
 改动依赖时，运行 `flutter pub get` 更新并提交 `pubspec.lock`；其他时候使用 `--enforce-lockfile` 与 CI 保持一致。上面的 `git add` 应替换为实际修改的文件，包含必要的原生工程配置、测试和文档；提交前用 `git diff --cached` 检查**整个暂存区**。不要提交构建产物、录音、证书、私钥、密码或本机 SDK 路径。
 
-按主 README 的贡献要求运行仓库根目录 `npm test`；修改桌面样式源 `frontend/tailwind.css` 时，先运行 `npm run build` 并一起提交生成的 `frontend/styles.css`。涉及 ASR 或说话人分离时另跑对应模型检查。后台录音变更还需真机验证上文验收场景，单元测试和编译通过不能替代真机验证。
+按 [贡献规范](../CONTRIBUTING.md) 运行对应范围的检查，涉及桌面或后端时在仓库根目录运行 `npm test`；修改桌面样式源 `frontend/tailwind.css` 时，先运行 `npm run build` 并一起提交生成的 `frontend/styles.css`。涉及 ASR 或说话人分离时另跑对应模型检查。后台录音变更还需真机验证上文验收场景，单元测试和编译通过不能替代真机验证。
 
 ### 3. 创建 PR 并合并
 

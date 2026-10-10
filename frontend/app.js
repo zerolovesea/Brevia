@@ -4849,16 +4849,6 @@ function activateMeeting(meeting, payload) {
     refined_model_id: meeting?.refined_model_id || payload.refined_model_id || null,
   };
   document.querySelector('#live-name').textContent = title;
-  document.querySelectorAll('.mobile-source-tag').forEach((tag) => tag.remove());
-  if (meeting?.tags?.includes('手机录音')) {
-    for (const anchor of [document.querySelector('#live-name'), miniMeeting]) {
-      const tag = document.createElement('span');
-      tag.className = 'mobile-source-tag';
-      tag.textContent = t('手机录音');
-      anchor.after(tag);
-      if (anchor === miniMeeting) anchor.append(tag);
-    }
-  }
   uiData.meetings = uiData.meetings.filter((item) => item.id !== meeting.id);
   uiData.meetings.unshift({
     id: meeting.id,

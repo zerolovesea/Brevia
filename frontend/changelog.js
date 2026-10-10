@@ -2,9 +2,57 @@
 (() => {
   const releases = [
     {
-      'version': '1.3.0',
+      'version': '1.3.1',
       'date': '2026-10-10',
       'current': true,
+      'previousVersion': '1.3.0',
+      'contributors': [],
+      'zh': {
+        'summary': '精简手机会议操作，完善等待反馈、版本显示及桌面设备连接界面。',
+        'what': ['未上传的本地会议可从长按菜单选择上传到电脑。'],
+        'improved': [
+          '手机结束录音直接保存；右滑会议显示删除按钮，点击后直接删除手机副本。',
+          '新建录音按电脑连接情况选择同步或本地保存，减少多余选项。',
+          '等待电脑输出期间持续显示三点动画，覆盖部分字幕、笔记和后续处理，并支持系统减少动态效果设置。',
+          '桌面移除重复的手机录音标签及设备连接窗口中的会议操作区。',
+          '重整多语言使用文档，新增中英文开发指南和手机界面截图。',
+        ],
+        'fixed': [
+          '等待动画显示时不再同时显示“暂无转写”；默认发言人名称按界面语言显示。',
+          'Android 检查更新显示当前版本、最新版本和构建号；退出设置页后不再继续发起版本检查请求。',
+        ],
+        'security': [],
+        'changes': [
+          'v1.3.1 是桌面版本号；手机端改进随配套移动构建分发。iOS 正式上架仍取决于 Apple 审核。',
+          '删除手机会议不再二次确认；未上传录音删除前请自行导出保留。',
+        ],
+      },
+      'en': {
+        'summary':
+          'Streamlines phone recording controls, waiting feedback, version details and desktop device management.',
+        'what': ['Upload a local recording to a computer from its long-press menu.'],
+        'improved': [
+          'Ending a recording saves directly. Swipe right to reveal Delete, then tap to remove the phone copy.',
+          'New recordings use the computer connection to choose syncing or local storage, with fewer setup options.',
+          'Three animated dots remain visible while waiting for desktop output, including partial transcripts, notes and follow-up processing, and respect reduced-motion settings.',
+          'Removed duplicate phone-recording labels and the meeting controls in the desktop device connection dialog.',
+          'Reorganized multilingual user documentation and added English/Chinese developer guides and phone screenshots.',
+        ],
+        'fixed': [
+          'Waiting dots replace the empty transcript message; default speaker names follow the interface language.',
+          'Android update checks show installed and latest versions with build numbers, and no longer start a version-check request after leaving Settings.',
+        ],
+        'security': [],
+        'changes': [
+          'v1.3.1 is the desktop version; phone improvements ship through companion mobile builds. iOS public availability still depends on Apple review.',
+          'Deleting a phone meeting no longer asks for confirmation. Export unuploaded recordings first if you want to keep them.',
+        ],
+      },
+    },
+    {
+      'version': '1.3.0',
+      'date': '2026-10-10',
+      'current': false,
       'previousVersion': '1.2.3',
       'contributors': [],
       'zh': {

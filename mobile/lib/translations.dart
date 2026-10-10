@@ -1,6 +1,9 @@
 // Shared mobile UI, recording notifications and error messages. Keep placeholders consistent.
 const translations = {
   "en": {
+    "当前版本：{0}": "Current version: {0}",
+    "最新版本：{0}": "Latest version: {0}",
+    "尚未检查": "Not checked",
     "检查更新": "Check for updates",
     "正在检查更新…": "Checking for updates…",
     "已是最新版本": "You are up to date",
@@ -290,6 +293,9 @@ const translations = {
         "Recording can continue while locked. Calls, force-stop or system limits can interrupt it; check the status when you return.\n\nAndroid uses a microphone foreground service. Allow recording notifications. If battery restrictions stop the app, adjust system settings. Return to the app to resume after pausing.",
   },
   "es": {
+    "当前版本：{0}": "Versión actual: {0}",
+    "最新版本：{0}": "Última versión: {0}",
+    "尚未检查": "Sin comprobar",
     "检查更新": "Buscar actualizaciones",
     "正在检查更新…": "Buscando actualizaciones…",
     "已是最新版本": "Ya tienes la última versión",
@@ -580,6 +586,9 @@ const translations = {
         "La grabación puede continuar con la pantalla bloqueada. Las llamadas, el cierre forzado o los límites del sistema pueden interrumpirla; comprueba el estado al volver.\n\nAndroid usa un servicio de micrófono en primer plano. Permite las notificaciones. Si el ahorro de batería cierra la app, ajusta el sistema. Vuelve a la app para continuar tras pausar.",
   },
   "ja": {
+    "当前版本：{0}": "現在のバージョン：{0}",
+    "最新版本：{0}": "最新バージョン：{0}",
+    "尚未检查": "未確認",
     "检查更新": "更新を確認",
     "正在检查更新…": "更新を確認中…",
     "已是最新版本": "最新バージョンです",
@@ -842,6 +851,9 @@ const translations = {
         "ロック中も録音できます。着信、強制終了、システム制限で中断される場合があるため、戻ったら状態を確認してください。\n\nAndroid はマイクのフォアグラウンドサービスを使用します。録音通知を許可してください。省電力設定でアプリが停止する場合はシステム設定を調整してください。一時停止後はアプリに戻って再開してください。",
   },
   "ko": {
+    "当前版本：{0}": "현재 버전: {0}",
+    "最新版本：{0}": "최신 버전: {0}",
+    "尚未检查": "아직 확인하지 않음",
     "检查更新": "업데이트 확인",
     "正在检查更新…": "업데이트 확인 중…",
     "已是最新版本": "최신 버전입니다",
@@ -1104,6 +1116,9 @@ const translations = {
         "잠금 후에도 녹음할 수 있습니다. 통화, 강제 종료, 시스템 제한으로 중단될 수 있으니 돌아온 후 상태를 확인하세요.\n\nAndroid는 마이크 포그라운드 서비스를 사용합니다. 녹음 알림을 허용하세요. 절전 정책이 앱을 종료하면 시스템 설정을 조정하세요. 일시정지 후에는 앱에서 재개하세요.",
   },
   "fr": {
+    "当前版本：{0}": "Version actuelle : {0}",
+    "最新版本：{0}": "Dernière version : {0}",
+    "尚未检查": "Non vérifiée",
     "检查更新": "Rechercher une mise à jour",
     "正在检查更新…": "Recherche de mise à jour…",
     "已是最新版本": "Votre version est à jour",
@@ -1399,6 +1414,9 @@ const translations = {
         "L’enregistrement peut continuer écran verrouillé. Appels, arrêt forcé ou limites système peuvent l’interrompre ; vérifiez l’état au retour.\n\nAndroid utilise un service de microphone au premier plan. Autorisez les notifications. Si l’économie de batterie arrête l’app, ajustez les réglages système. Revenez dans l’app pour reprendre après une pause.",
   },
   "de": {
+    "当前版本：{0}": "Aktuelle Version: {0}",
+    "最新版本：{0}": "Neueste Version: {0}",
+    "尚未检查": "Noch nicht geprüft",
     "检查更新": "Nach Updates suchen",
     "正在检查更新…": "Updates werden gesucht…",
     "已是最新版本": "Die Version ist aktuell",
@@ -1692,6 +1710,9 @@ const translations = {
         "Aufnahme ist bei gesperrtem Bildschirm möglich. Anrufe, erzwungenes Beenden oder Systemlimits können sie unterbrechen; prüfen Sie den Status nach der Rückkehr.\n\nAndroid verwendet einen Mikrofon-Vordergrunddienst. Aufnahmebenachrichtigungen erlauben. Bei Beendigung durch Energiesparregeln die Systemeinstellungen anpassen. Nach einer Pause in der App fortsetzen.",
   },
   "ru": {
+    "当前版本：{0}": "Текущая версия: {0}",
+    "最新版本：{0}": "Последняя версия: {0}",
+    "尚未检查": "Ещё не проверено",
     "检查更新": "Проверить обновления",
     "正在检查更新…": "Проверка обновлений…",
     "已是最新版本": "Установлена последняя версия",

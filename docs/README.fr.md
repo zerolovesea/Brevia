@@ -1,56 +1,25 @@
 <p align="center"><img src="assets/brevia-mark.svg" width="258" alt="Brevia" /></p>
 
-<p align="center"><strong>Un assistant de reunion IA minimaliste et local-first.</strong><br />Notes IA · transcription en direct · multilingue · identification des locuteurs · resumes verifiables — l'audio ne quitte pas votre appareil.</p>
-
-<p align="center">
-  <a href="https://github.com/zerolovesea/Brevia/releases"><img src="https://img.shields.io/github/v/release/zerolovesea/Brevia?style=flat-square" alt="Release" /></a>
-  <a href="https://github.com/zerolovesea/Brevia/blob/main/LICENSE"><img src="https://img.shields.io/github/license/zerolovesea/Brevia?style=flat-square" alt="License" /></a>
-  <a href="https://github.com/zerolovesea/Brevia/releases"><img src="https://img.shields.io/github/downloads/zerolovesea/Brevia/total?style=flat-square" alt="Downloads" /></a>
-  <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows-blue?style=flat-square" alt="Platform" />
-  <img src="https://img.shields.io/badge/electron-43-47848F?style=flat-square&logo=electron" alt="Electron" />
-  <img src="https://img.shields.io/badge/python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python" />
-</p>
+<p align="center"><strong>Restez dans la conversation. Gardez les notes.</strong><br />Enregistrez sur ordinateur ou téléphone et transformez vos échanges en transcriptions, décisions et actions avec une IA locale.</p>
 
 <p align="center"><a href="../README.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.es.md">Español</a> · <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a> · <strong>Français</strong> · <a href="README.de.md">Deutsch</a> · <a href="README.ru.md">Русский</a></p>
 
----
+<p align="center"><img src="assets/demo/ai-assist-en.gif" width="820" alt="Brevia desktop demo (English)" /></p>
 
-## A propos
+## Télécharger
 
-Brevia est un assistant de reunion IA pour ordinateur de bureau qui delegue a l'IA embarquee la partie la plus chronophage de toute reunion — capturer, organiser et revisiter. Il enregistre simultanement le microphone et l'audio systeme, diffuse des sous-titres en direct et transforme la conversation terminee en notes structurees. Toute la reconnaissance vocale s'execute en local ; enregistrements, transcriptions et profils vocaux restent par defaut sur votre machine.
+| Appareil                  | Obtenir Brevia                                                                                                                                |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| macOS 14+ · Apple Silicon | [DMG](https://github.com/zerolovesea/Brevia/releases/latest) · `arm64.dmg`                                                                    |
+| Windows · x64             | [Programme d’installation](https://github.com/zerolovesea/Brevia/releases/latest) · `x64-setup.exe`                                           |
+| Android 7+                | [Télécharger l’APK](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk)                            |
+| iPhone · iOS 15+          | App Store : en cours de validation. TestFlight sur invitation uniquement. [État des versions](https://github.com/zerolovesea/Brevia/releases) |
 
-Le design est deliberement discret : une interface qui ne gene pas la reunion, un ensemble de fonctionnalites qui suit un seul arc — **capturer → comprendre → retrouver** — et une regle ferme : ce qui peut se faire en local doit se faire en local.
-
-<p align="center"><img src="assets/demo/ai-assist-en.gif" width="820" alt="Demo de AI Assist Notes de Brevia" /></p>
-
-## Fonctionnalites
+## Ce que vous pouvez faire
 
 ### Des notes IA toujours verifiables
 
 Les notes IA suivent la transcription en direct et peuvent signaler decisions, actions, chiffres cles, risques, questions et changements de sujet. Choisissez l'activation a la demande, des suggestions discretes ou l'organisation automatique. Chaque suggestion reste verifiable : ajoutez seulement les utiles a vos notes et continuez a ecrire en texte enrichi ou Markdown.
-
-Configurez separement les notes IA et le resume de reunion : chacun peut utiliser son propre fournisseur, modele et API Key. Avec un fournisseur distant, seuls le texte de transcription et le contexte actuel des notes sont envoyes ; l'audio ne quitte jamais votre appareil. Les modeles locaux sont charges a la demande, donc deux configurations ne gardent pas deux modeles en memoire.
-
-![AI Assist Notes](assets/tour/en/AI%20Assist%20Notes.png)
-
-### Choisir le modèle de reconnaissance
-
-La configuration initiale liste les modèles de parole téléchargeables et coche celui que Brevia suggère pour la **langue de l'interface** (Silero VAD, la séparation des locuteurs et les empreintes vocales sont fournis et toujours installés) ; vous pouvez décocher le reste avant le téléchargement.
-
-Ensuite, pour chaque réunion, Brevia choisit un modèle de reconnaissance par défaut selon la **langue de la réunion**, déclarée dans `backend/models.json` :
-
-| Langue de la réunion                                            | Modèle par défaut    | Pourquoi                                                                    |
-| --------------------------------------------------------------- | -------------------- | --------------------------------------------------------------------------- |
-| Chinois, cantonais                                              | FunASR Nano          | Meilleure précision sur le chinois et ses dialectes                         |
-| Japonais, coréen                                                | Qwen3-ASR 0.6B       | Le seul modèle sélectionnable couvrant les deux                             |
-| Anglais, espagnol, français, allemand, russe, langues mélangées | Parakeet TDT 0.6B v3 | 25 langues européennes dans un seul modèle, avec ponctuation et horodatages |
-| Toute autre langue                                              | Qwen3-ASR 0.6B       | La couverture la plus large parmi les autres modèles                        |
-
-Sur les Mac Apple Silicon, la reconnaissance vocale et Silero VAD utilisent mlx-audio/MLX ; Windows conserve Sherpa ONNX. La séparation des locuteurs et les empreintes vocales utilisent Sherpa sur les deux plateformes. Après la mise à jour d’un Mac, téléchargez le modèle de reconnaissance MLX correspondant ; les enregistrements existants restent disponibles. La limite effective est le minimum entre le réglage en direct, la limite VAD de la langue et la capacité du modèle (20 s pour les modèles MLX de macOS). La détection automatique de langue attend au moins 2 s de silence.
-
-Si le modèle par défaut n'est pas encore téléchargé, Brevia utilise un modèle **déjà installé** qui prend en charge cette langue, plutôt que d'en demander un autre. L'écran de préparation affiche un sélecteur de **modèle de reconnaissance** (les modèles non téléchargés y figurent avec leur taille), et le même sélecteur apparaît pendant la réunion et change de modèle via `meeting.reconfigure`. Dans **Réglages → Avancé → Reconnaissance en direct**, `live_asr.max_speech_seconds` limite la longueur d'un segment de sous-titre ; la valeur effective est toujours la plus petite entre ce réglage, la configuration VAD par langue et la capacité du modèle.
-
-Sur une machine moins puissante, préférez un modèle local 2B de notes IA ou un fournisseur en ligne.
 
 ### Un ecran de reunion discret avec transcription et traduction en direct
 
@@ -62,10 +31,6 @@ Ouvrez l'application, appuyez sur enregistrer, et regardez les sous-titres appar
 
 Brevia transcrit la parole dans plus de 30 langues — anglais, chinois, japonais, coreen, francais, allemand, espagnol, russe, arabe, thai, vietnamien, indonesien et plus. Une fois la reunion terminee, branchez n'importe quel fournisseur LLM et Brevia redigera le resume, les decisions cles et les taches a partir de votre transcription verifiee.
 
-L'IA integree execute un modele fourni directement sur votre machine, ou vous pouvez brancher Claude, OpenAI, OpenRouter ou tout service compatible avec le format chat OpenAI ou Anthropic. Seul le texte est envoye, jamais l'audio.
-
-![Meeting notes](assets/tour/en/多语言支持与会议纪要.png)
-
 ### Identification des intervenants après la réunion
 
 Enregistrez un court échantillon vocal pour chaque membre. Après la réunion, Brevia distingue les intervenants lors de la révision de la transcription et les associe aux profils vocaux enregistrés pour afficher leurs noms. Les sous-titres en direct ne distinguent pas les intervenants. Les profils vocaux sont réutilisables entre les réunions.
@@ -73,12 +38,6 @@ Enregistrez un court échantillon vocal pour chaque membre. Après la réunion, 
 Propulse par la segmentation Pyannote plus les modeles d'embeddings de locuteur, le tout s'executant sur l'appareil.
 
 ![Identification des intervenants après la réunion](assets/tour/en/%E6%B3%A8%E5%86%8C%E5%A3%B0%E7%BA%B9%E8%AF%86%E5%88%AB.png)
-
-### Une bibliotheque locale de modeles selectionnee
-
-Des modeles telechargeables couvrant la transcription par phrases, l'affinage apres reunion, la detection d'activite vocale, la separation des locuteurs, les empreintes vocales, les notes et le resume IA, ainsi que la traduction des sous-titres. Combinez-les par langue et precision — tout s'execute sur votre appareil.
-
-![Bibliotheque de modeles](assets/tour/en/%E6%A8%A1%E5%9E%8B%E5%BA%93.png)
 
 ### Et plus encore
 
@@ -89,116 +48,54 @@ Des modeles telechargeables couvrant la transcription par phrases, l'affinage ap
 - **Vue concentree** — themes clair et sombre, edition en ligne des transcriptions et resumes, et fenetre optionnelle de sous-titres flottants gardent l'ecran de reunion epure.
 - **Interface multilingue** — anglais, chinois simplifie, espagnol, japonais, coreen, francais, allemand et russe.
 
-## Installation
+## Modèles pris en charge
 
-Telechargez la derniere version depuis [GitHub Releases](https://github.com/zerolovesea/Brevia/releases) :
+Téléchargez les modèles vocaux, de notes IA et de traduction dans **Réglages → Bibliothèque de modèles** selon vos besoins. Les modèles de détection vocale et des intervenants sont inclus. Tous fonctionnent sur l’ordinateur ; aucun téléchargement de modèle sur le téléphone n’est nécessaire. Les variantes et tailles sont indiquées dans l’application.
 
-| Plateforme            | Installeur                       |
-| --------------------- | -------------------------------- |
-| macOS (Apple Silicon) | `Brevia-<version>-arm64.dmg`     |
-| Windows (x64)         | `Brevia-<version>-x64-setup.exe` |
+| Usage                       | Modèle                    | Langues / fonction                                    |
+| --------------------------- | ------------------------- | ----------------------------------------------------- |
+| Transcription / révision    | FunASR Nano               | Chinois, cantonais, anglais                           |
+| Transcription / révision    | Qwen3-ASR 0.6B            | 30 langues, dont chinois, anglais, japonais et coréen |
+| Transcription / révision    | Parakeet TDT 0.6B v3      | 25 langues européennes                                |
+| Notes IA / résumés          | Qwen 3.5 2B / 4B          | Chinois / anglais                                     |
+| Traduction des sous-titres  | Tencent Hy-MT2 1.8B       | Traduction multilingue                                |
+| Activité vocale             | Silero VAD                | Détecter la parole et les pauses                      |
+| Séparation des intervenants | Pyannote Segmentation 3.0 | Distinguer les intervenants après la réunion          |
+| Profils vocaux              | 3D-Speaker ERes2Net Base  | Comparer les profils enregistrés                      |
 
-> Windows peut afficher un avertissement **Microsoft Defender SmartScreen** au premier lancement. Cliquez sur **« Informations complementaires » → « Executer quand meme »** apres avoir verifie que le telechargement provient de la page officielle Releases.
+## Enregistrer avec le téléphone
 
-Au premier lancement, accordez les permissions microphone et enregistrement d'ecran, puis ouvrez **Reglages → Bibliotheque de modeles** pour telecharger les modeles necessaires.
+[**Télécharger l’APK Android**](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk) · iPhone : validation App Store en cours ; TestFlight sur invitation ([Suivre les versions](https://github.com/zerolovesea/Brevia/releases))
 
-## Architecture
+Emportez Brevia en réunion, en entretien ou dans vos échanges du quotidien. Ouvrez l’application et enregistrez sans créer de compte. Connectez votre propre ordinateur pour suivre la transcription et les notes pendant l’enregistrement.
 
-```mermaid
-flowchart LR
-  A[Renderer Electron<br/>HTML · Tailwind · JS] <-->|IPC + validation Zod| B[Processus principal Electron]
-  B <-->|JSONL stdin/stdout| C[Worker Python<br/>runtime integre]
-  C --> D[mlx-audio / sherpa-onnx<br/>ASR · VAD · locuteurs · ponctuation]
-  C --> E[Stockage local<br/>SQLite · audio · exports]
-  C -. consentement explicite .-> F[API cloud optionnelle<br/>resume LLM · traduction]
-```
+<p align="center">
+  <img src="assets/mobile/en/02-connect.png" width="240" alt="Brevia iPhone: computer connection (English)" />
+  <img src="assets/mobile/en/01-record.png" width="240" alt="Brevia iPhone: offline recording setup (English)" />
+  <img src="assets/mobile/en/03-transcript.png" width="240" alt="Brevia mobile: live transcript with demo content (English)" />
+</p>
 
-Brevia suit une conception strictement local-first :
+- **Enregistrez où vous voulez.** Aucun jumelage ni accès à internet nécessaire : mettez en pause, reprenez et marquez les moments importants. L’audio reste sur le téléphone jusqu’au choix d’un ordinateur et à votre confirmation du transfert pour transcription.
+- **Le téléphone capte, l’ordinateur organise.** Une fois jumelé, l’ordinateur reconnaît la parole et renvoie transcriptions et notes en direct. Les modèles et réglages IA restent sur l’ordinateur ; aucun gros modèle à télécharger sur le téléphone.
+- **Réécoutez et partagez.** Retrouvez les enregistrements dans la bibliothèque, réécoutez les échanges, exportez l’audio en WAV ou partagez les notes en Markdown et les transcriptions en texte. Supprimer la copie du téléphone n’efface pas la réunion sur l’ordinateur.
 
-- **Le renderer n'ouvre aucun port reseau**, et chaque message IPC est valide par le processus principal Electron avec un schema Zod.
-- **Le processus principal est une coquille legere.** Il lance un unique worker Python via JSONL stdin/stdout ; le worker gere les modeles, le traitement audio, les profils vocaux, le stockage local et les exports.
-- **Les donnees vivent dans `~/brevia`** par defaut — SQLite, audio brut, exports, modeles en cache et profils vocaux.
-- **Les appels cloud sont opt-in.** Les resumes LLM et la traduction exigent que l'utilisateur configure explicitement un fournisseur, et seul le texte est envoye.
+En cas de coupure réseau, l’audio continue à être sauvegardé sur le téléphone et les transferts autorisés reprennent à la reconnexion. L’enregistrement en arrière-plan est pris en charge, mais les appels, l’arrêt forcé et les restrictions système peuvent l’interrompre. Vérifiez l’état à votre retour ; les transferts après enregistrement peuvent nécessiter de garder l’application ouverte.
 
-L'enregistrement suit le schema **segmentation Silero VAD → un seul decodage hors ligne → un sous-titre complet**. La phrase apparait apres chaque pause (chinois 0,7 s ; autres langues 0,8 s) ; la parole continue est limitée par le minimum entre le réglage en direct, le VAD et la capacité du modèle. Un segment VAD peut contenir plusieurs phrases et les phrases voisines sont regroupees en un paragraphe (chinois ~110 caracteres, max 150 ; latin ~280, max 380). Un point de fin VAD **n'est pas** une frontiere de paragraphe : seule une vraie longue pause (≥1,2 s) en ouvre un, et un paragraphe trop court est valide apres 8 s au plus. Aux coupures, le decodage suivant remonte ~400 ms et supprime les repetitions a la jointure. L'arret traite la derniere phrase ; si la reconnaissance echoue, l'audio d'origine est conserve.
+## Comment le téléphone et l’ordinateur communiquent
 
-Voir la [methodologie et les resultats du benchmark](../backend/benchmarks/vad-2026-09-05/REPORT.md).
+Sur le réseau local, le téléphone envoie l’audio par **HTTPS** à l’ordinateur jumelé, qui renvoie transcriptions et notes. L’audio est d’abord enregistré sur le téléphone ; la progression du transfert n’avance qu’après confirmation de sa sauvegarde par l’ordinateur. Après une coupure, le transfert reprend à cette position. La copie du téléphone n’est pas supprimée automatiquement.
 
-## Stack technique
+Avec votre propre service de signalisation/TURN, les appareils déjà jumelés peuvent communiquer entre réseaux via **WebRTC DataChannel**. La connexion directe est privilégiée ; à défaut, un relais transporte le trafic chiffré. Son opérateur peut voir les adresses réseau et le volume des échanges, mais ne peut pas lire le contenu chiffré via le relais. [La connexion entre réseaux nécessite une configuration supplémentaire ; le premier jumelage reste local.](mobile-remote.md)
 
-| Couche                   | Technologie                                                                                                                                          |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Shell bureau             | Electron 43 — pont preload, isolation de contexte, renderer sandbox                                                                                  |
-| Frontend                 | HTML/CSS/JS natif, Tailwind CSS 4, i18n integre (8 langues)                                                                                          |
-| Backend                  | Python 3.10+, protocole worker JSONL, stockage SQLite                                                                                                |
-| Moteur vocal             | [mlx-audio](https://github.com/Blaizzy/mlx-audio) / MLX (macOS); [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 1.13.8 (Windows), ONNX Runtime |
-| Traitement des locuteurs | Segmentation Pyannote + embeddings 3D-Speaker ERes2Net Base                                                                                          |
-| Client LLM               | llama.cpp integre (GGUF) et APIs chat compatibles OpenAI / Anthropic                                                                                 |
-| I/O audio                | ffmpeg (integre aux releases)                                                                                                                        |
-| Build et empaquetage     | electron-builder, PyInstaller (runtime Python integre)                                                                                               |
+La reconnaissance vocale s’effectue sur votre ordinateur. Les enregistrements hors ligne restent sur le téléphone jusqu’à votre confirmation ; la transcription en direct envoie l’audio à l’ordinateur jumelé. Brevia n’envoie pas automatiquement vos réunions au développeur. Après téléchargement des modèles, vous pouvez utiliser une IA locale. Un fournisseur IA en ligne choisi par vos soins reçoit le texte pertinent, pas l’audio. Les connexions distantes facultatives peuvent relayer du trafic chiffré. [Confidentialité](https://brevia.work/privacy.html).
 
-## Modeles pris en charge
+L’audio du téléphone occupe environ **115 Mo par heure enregistrée**, hors exports et caches. Les transferts distants consomment aussi des données, avec un surcoût réseau.
 
-La transcription par phrases, l'affinage, les notes IA et la traduction des sous-titres se telechargent a la demande depuis **Reglages → Bibliotheque de modeles** ; la detection d'activite vocale, la separation des locuteurs et les empreintes vocales sont fournies. Le manifeste est dans [`backend/models.json`](../backend/models.json).
+## Bien démarrer
 
-| Categorie                            | Modeles representatifs                            | Langues                                        |
-| ------------------------------------ | ------------------------------------------------- | ---------------------------------------------- |
-| Transcription par phrases / affinage | FunASR Nano, Qwen3-ASR 0.6B, Parakeet TDT 0.6B v3 | Chinois / multilingue / 25 langues europeennes |
-| Detection d'activite vocale          | Silero VAD                                        | Universel                                      |
-| Separation des locuteurs             | Pyannote Segmentation 3.0                         | Universel                                      |
-| Empreintes vocales                   | 3D-Speaker ERes2Net Base                          | Chinois                                        |
-| Notes IA et resume de reunion        | Qwen 3.5 2B, Qwen 3.5 4B                          | Chinois / anglais                              |
-| Traduction des sous-titres           | Tencent Hy-MT2 1.8B                               | 33 langues                                     |
-
-Pour les resumes LLM, choisissez **IA integree** pour executer localement un modele GGUF fourni (Qwen 3.5 2B / 4B), ou pointez Brevia vers Claude, OpenAI, OpenRouter ou tout service personnalise compatible avec OpenAI Chat Completions ou Anthropic Messages : Gemini (endpoint compatible OpenAI), DeepSeek, Kimi, Qwen et plus.
-
-## Developpement local
-
-Prerequis : Node.js 22+, Python 3.10+, Git et ffmpeg (pour l'import audio).
-
-```bash
-git clone https://github.com/zerolovesea/Brevia.git
-cd Brevia
-npm install
-python3 -m pip install -r backend/requirements.txt
-npm start
-```
-
-Au premier lancement, autorisez le microphone et l’enregistrement de l’écran, puis choisissez les modèles et les dossiers des modèles et des enregistrements. Vous pouvez modifier ces dossiers dans **Réglages** : Brevia déplace les fichiers existants vers un dossier vide sans redémarrer. Connectez les disques externes avant de lancer l’application.
-
-### Scripts courants
-
-```bash
-npm test                    # Garde de code mort + comportement Electron + UI + smoke E2E + backend
-npm run test:e2e            # Lance l’application reelle et verifie via CDP
-npm run build               # Build Tailwind CSS
-npm run test:model          # Diagnostic des modeles ASR
-npm run test:diarization    # Diagnostic de diarisation
-npm run start:fresh         # Reinitialise l'onboarding et demarre
-```
-
-### Variables d'environnement
-
-```bash
-BREVIA_DATA_DIR=/path/to/data       # Repertoire de donnees personnalise (enregistrements, exports, SQLite)
-BREVIA_MODELS_DIR=/path/to/models   # Repertoire de modeles personnalise
-BREVIA_MEETINGS_DIR=/path/to/recordings # Dossier personnalisé des enregistrements et réunions
-BREVIA_FFMPEG=/path/to/ffmpeg       # Binaire ffmpeg (si absent du PATH)
-
-BREVIA_DATA_DIR=~/brevia-dev BREVIA_MODELS_DIR=~/brevia-models npm start
-```
-
-### Construire les installeurs
-
-```bash
-npm ci
-npm run build
-python3 -m pip install -r backend/requirements-build.txt
-npm run dist:mac   # DMG ARM64 macOS
-npm run dist:win   # EXE x64 Windows
-```
-
-Les artefacts arrivent dans `dist/`. Chaque build de plateforme integre un worker Python natif avec detection d'activite vocale, separation des locuteurs et empreintes vocales ; les modeles de reconnaissance, d'affinage, de notes IA et de traduction restent des telechargements a la demande.
+1. Installez Brevia sur l’ordinateur, accordez les autorisations audio et téléchargez le modèle vocal suggéré. Choisissez aussi un modèle IA local pour les notes hors ligne.
+2. Lancez une réunion ou importez un enregistrement, puis vérifiez et exportez les résultats.
+3. Pour connecter le téléphone, utilisez le même Wi-Fi. Sur ordinateur, ouvrez **Réglages → Connexion des appareils → Connecter un nouvel appareil**. Scannez le QR ou saisissez l’adresse et le PIN, comparez le code de vérification et autorisez la connexion sur l’ordinateur.
 
 ## FAQ
 
@@ -217,76 +114,17 @@ Non. Les builds de release integrent le runtime Python et toutes les dependances
 </details>
 
 <details>
-<summary><strong>Ou sont stockees mes donnees ?</strong></summary>
-
-Par défaut dans `~/brevia`. Les modèles et les enregistrements peuvent avoir des dossiers distincts ; SQLite et les profils vocaux restent à la racine des données. `BREVIA_DATA_DIR` définit cette racine.
-
-</details>
-
-<details>
-<summary><strong>Quelles langues de transcription sont prises en charge ?</strong></summary>
-
-Plus de 30 langues incluant le chinois, l'anglais, le japonais, le coreen, le francais, l'allemand, l'espagnol, le russe, l'arabe, le thai, le vietnamien et l'indonesien. Choisissez le modele correspondant dans la Bibliotheque de modeles de l'application.
-
-</details>
-<details>
-<summary><strong>Brevia envoie-t-il de l'audio vers le cloud ?</strong></summary>
-
-Non. La reconnaissance vocale et la diarisation s'executent toutes en local. Seuls les resumes LLM et la traduction contactent le reseau, et uniquement apres que vous ayez configure un fournisseur — texte uniquement, jamais d'audio.
-
-</details>
-
-<details>
 <summary><strong>Quel espace disque les modeles necessitent-ils ?</strong></summary>
 
-Cela depend de ceux que vous installez. Une configuration typique (transcription par phrases + affinage) fait 1–2 Go ; la detection d'activite vocale, la separation des locuteurs et les empreintes vocales sont fournies. Le plus petit modele de reconnaissance occupe environ 487 Mo ; les plus grands depassent 1 Go.
+Commencez par le modèle vocal recommandé pour votre langue. Ajoutez les modèles IA et de traduction selon vos besoins. La bibliothèque indique les tailles de téléchargement ; inutile de tout installer.
 
 </details>
 
-<details>
-<summary><strong>Puis-je importer des enregistrements existants ?</strong></summary>
+## Aide et contributions
 
-Oui. Importez des fichiers audio depuis la bibliotheque de reunions et Brevia les transcrira hors ligne via le meme pipeline. Necessite `ffmpeg` dans le PATH (ou definir `BREVIA_FFMPEG`).
+[GitHub Issues](https://github.com/zerolovesea/Brevia/issues) — Signalez les problèmes avec la version, l’appareil et les étapes de reproduction ; retirez les informations privées et identifiants des captures et journaux.
 
-</details>
-
-<details>
-<summary><strong>Comment changer la langue de l'interface ?</strong></summary>
-
-**Reglages → General → Langue de l'interface.** Anglais, chinois simplifie, espagnol, japonais, coreen, francais, allemand et russe sont disponibles.
-
-</details>
-
-<details>
-<summary><strong>Comment les echantillons d'empreinte vocale sont-ils stockes ?</strong></summary>
-
-Les embeddings vocaux (un petit vecteur de flottants) et l'audio de reference vivent dans la base SQLite locale et le systeme de fichiers. Rien ne quitte l'appareil, et supprimer un profil supprime les donnees associees.
-
-</details>
-
-## Feedback et contributions
-
-### Signaler un probleme
-
-Un bug ou une demande de fonctionnalite ? Merci de le remonter dans [GitHub Issues](https://github.com/zerolovesea/Brevia/issues). Le triage est plus rapide avec :
-
-- OS et version (ex. macOS 14.5 / Windows 11 23H2)
-- Version de Brevia (**Reglages → A propos**)
-- Modeles et langue utilises
-- Etapes de reproduction / resultat attendu / resultat reel
-- Logs pertinents (**Reglages → Avance → Ouvrir le dossier des logs**) — verifiez qu'ils ne contiennent pas de contenu sensible avant de les joindre
-
-**Problemes de securite :** merci de ne pas ouvrir d'issue publique. Contactez le mainteneur par e-mail.
-
-### Contribuer
-
-Les pull requests sont bienvenues. Pour garder l'arbre propre :
-
-1. Branchez depuis `main` avec un focus etroit — une preoccupation par PR.
-2. Executez `npm test` avant de soumettre ; executez `npm run test:model` et `npm run test:diarization` lorsque vous touchez a l'ASR ou a la diarisation.
-3. Ne commitez pas de modeles telecharges, enregistrements, exports, cles API ou contenu de `~/brevia`.
-4. Lorsque vous modifiez du texte visible par l'utilisateur, mettez a jour les huit locales dans `frontend/i18n-data.js` — ajoutez la chaine source anglaise et ses traductions ensemble.
-5. Notez tout impact sur les modeles, la plateforme ou les permissions dans la description du PR.
+[Développement (anglais)](DEVELOPMENT.md) · [Développement mobile (chinois)](../mobile/README.md) · [CONTRIBUTING](../CONTRIBUTING.md).
 
 ## Licence
 

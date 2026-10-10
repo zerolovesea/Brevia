@@ -20,6 +20,7 @@ class MainActivity : FlutterActivity() {
             .setMethodCallHandler { call, result ->
                 try {
                     when (call.method) {
+                        "version" -> result.success(packageManager.getPackageInfo(packageName, 0).versionName)
                         "build" -> {
                             val info = packageManager.getPackageInfo(packageName, 0)
                             result.success(if (Build.VERSION.SDK_INT >= 28) info.longVersionCode else info.versionCode.toLong())

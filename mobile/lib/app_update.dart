@@ -45,6 +45,30 @@ class _AppUpdateTileState extends State<AppUpdateTile> {
   double? progress;
   String? status;
   File? apk;
+  String? currentVersion;
+  int? currentBuild;
+  AndroidRelease? latest;
+
+  @override
+  void initState() {
+    super.initState();
+    loadCurrentVersion();
+  }
+
+  Future<void> loadCurrentVersion() async {
+    try {
+      final version = await updateChannel.invokeMethod<String>('version');
+      final build = await updateChannel.invokeMethod<int>('build');
+      if (mounted) {
+        setState(() {
+          currentVersion = version;
+          currentBuild = build;
+        });
+      }
+    } on PlatformException {
+      // 读取失败不影响用户重试检查更新。
+    }
+  }
 
   @override
   void dispose() {
@@ -63,7 +87,10 @@ class _AppUpdateTileState extends State<AppUpdateTile> {
         await updateChannel.invokeMethod('install', apk!.path);
         return;
       }
-      final current = await updateChannel.invokeMethod<int>('build');
+      await loadCurrentVersion();
+      if (!mounted) return;
+      final current = currentBuild;
+      if (current == null) throw StateError('Version unavailable');
       client = HttpClient()..connectionTimeout = Duration(seconds: 15);
       final request = await client!.getUrl(
         Uri.parse(
@@ -83,7 +110,8 @@ class _AppUpdateTileState extends State<AppUpdateTile> {
         jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>,
       );
       if (!mounted) return;
-      if (release.build <= current!) {
+      setState(() => latest = release);
+      if (release.build <= current) {
         setState(() => status = tr('已是最新版本'));
         return;
       }
@@ -170,15 +198,28 @@ class _AppUpdateTileState extends State<AppUpdateTile> {
     minTileHeight: 76,
     leading: Icon(Icons.system_update),
     title: Text(tr(apk == null ? '检查更新' : '安装更新')),
-    subtitle: busy
-        ? Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(status ?? ''),
-              LinearProgressIndicator(value: progress),
-            ],
-          )
-        : Text(apk != null ? tr('如需授权，请允许安装后返回重试') : status ?? 'ModelScope'),
+    subtitle: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          tr('当前版本：{0}', [
+            currentVersion == null ? '—' : '$currentVersion ($currentBuild)',
+          ]),
+        ),
+        Text(
+          tr('最新版本：{0}', [
+            latest == null
+                ? tr('尚未检查')
+                : '${latest!.version} (${latest!.build})',
+          ]),
+        ),
+        if (apk != null)
+          Text(tr('如需授权，请允许安装后返回重试'))
+        else if (status != null)
+          Text(status!),
+        if (busy) LinearProgressIndicator(value: progress),
+      ],
+    ),
     trailing: Icon(Icons.chevron_right),
     onTap: busy ? null : update,
   );

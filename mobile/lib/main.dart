@@ -19,6 +19,7 @@ import 'connection.dart';
 import 'recorder.dart';
 import 'storage.dart';
 import 'startup.dart';
+import 'swipe_delete.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -298,34 +299,7 @@ class _HomeState extends State<Home> {
   }
 
   Future<void> deleteRecord(Map<String, dynamic> m) async {
-    final yes = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(tr("删除本机记录？")),
-        content: Text(
-          tr(
-            m['localOnly'] == true
-                ? "此录音仅保存在手机。请先导出需要保留的录音，删除后无法恢复。"
-                : m['remoteDeleted'] == true
-                ? "电脑上的会议已删除。本机可能是唯一副本，请先导出需要保留的录音。删除后无法恢复。"
-                : "删除手机上的录音、字幕与笔记缓存。电脑上的会议仍会保留。",
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(tr("取消")),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(tr("删除")),
-          ),
-        ],
-      ),
-    );
-    if (yes == true && mounted) {
-      await report(context, () => model.deleteMeeting(m['id']));
-    }
+    await report(context, () => model.deleteMeeting(m['id']));
   }
 
   Future<void> meetingMenu(Map<String, dynamic> m) async {
@@ -351,6 +325,13 @@ class _HomeState extends State<Home> {
               ),
             ),
             Divider(height: 1),
+            if (m['state'] == 'ended' && m['localOnly'] == true)
+              ListTile(
+                leading: Icon(Icons.upload_outlined),
+                title: Text(tr('上传到电脑')),
+                enabled: !model.busy,
+                onTap: () => Navigator.pop(ctx, 'upload'),
+              ),
             ListTile(
               leading: Icon(Icons.auto_fix_high_outlined),
               title: Text(tr("重新精修")),
@@ -392,6 +373,10 @@ class _HomeState extends State<Home> {
       ),
     );
     if (!mounted || action == null) return;
+    if (action == 'upload') {
+      await uploadRecording(context, model, m['id']);
+      return;
+    }
     if (action == 'delete') {
       await deleteRecord(m);
       return;
@@ -610,30 +595,14 @@ class _HomeState extends State<Home> {
                                 style: Theme.of(context).textTheme.bodySmall,
                               ),
                             ),
-                          Dismissible(
+                          SwipeDelete(
                             key: ValueKey(m['id']),
-                            direction:
+                            enabled:
                                 m['finished'] == true ||
-                                    m['remoteDeleted'] == true
-                                ? DismissDirection.startToEnd
-                                : DismissDirection.none,
-                            background: Container(
-                              alignment: Alignment.centerLeft,
-                              padding: EdgeInsets.all(20),
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.errorContainer,
-                              child: Icon(
-                                Icons.delete_outline,
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onErrorContainer,
-                              ),
-                            ),
-                            confirmDismiss: (_) async {
-                              await deleteRecord(m);
-                              return false;
-                            },
+                                (m['state'] == 'ended' &&
+                                    (m['remoteDeleted'] == true ||
+                                        m['localOnly'] == true)),
+                            onDelete: () => deleteRecord(m),
                             child: ListTile(
                               contentPadding: EdgeInsets.zero,
                               minVerticalPadding: 16,
@@ -1366,40 +1335,12 @@ class _MeetingPageState extends State<MeetingPage> {
     super.dispose();
   }
 
+  bool ending = false;
+
   Future<void> end() async {
-    final yes = await showModalBottomSheet<bool>(
-      context: context,
-      showDragHandle: true,
-      builder: (ctx) => SingleChildScrollView(
-        padding: EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(tr("结束本次录音？"), style: Theme.of(ctx).textTheme.headlineSmall),
-            SizedBox(height: 24),
-            Text(
-              tr(
-                meeting['localOnly'] == true
-                    ? "结束后由你选择电脑并上传，录音期间不传输音频。"
-                    : "尚未传到电脑的音频会保留在手机，连接后继续补传。",
-              ),
-            ),
-            SizedBox(height: 24),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: Text(tr("结束并保存")),
-            ),
-            SizedBox(height: 12),
-            OutlinedButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text(tr("继续录音")),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (yes == true && mounted) {
+    if (ending) return;
+    setState(() => ending = true);
+    try {
       await report(context, () async {
         await widget.model.command(widget.id, 'end');
         if (mounted) {
@@ -1412,6 +1353,8 @@ class _MeetingPageState extends State<MeetingPage> {
           );
         }
       });
+    } finally {
+      if (mounted) setState(() => ending = false);
     }
   }
 
@@ -1530,61 +1473,71 @@ class _MeetingPageState extends State<MeetingPage> {
     if (list.isEmpty) {
       return Padding(
         padding: EdgeInsets.only(top: 48),
-        child: Text(tr("暂无转写。电脑处理后的文字会显示在这里。")),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (query.isEmpty && waitingForComputer(meeting, widget.model))
+              TranscriptionActivity(meeting: meeting, model: widget.model)
+            else
+              Text(tr("暂无转写。电脑处理后的文字会显示在这里。")),
+          ],
+        ),
       );
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: list
-          .map(
-            (s) => Padding(
-              padding: EdgeInsets.only(bottom: 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  TextButton(
-                    style: TextButton.styleFrom(
-                      padding: EdgeInsets.zero,
-                      alignment: Alignment.centerLeft,
-                      minimumSize: Size(48, ended ? 48 : 28),
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      foregroundColor: Theme.of(
-                        context,
-                      ).colorScheme.onSurfaceVariant,
-                      disabledForegroundColor: Theme.of(
-                        context,
-                      ).colorScheme.onSurfaceVariant,
-                    ),
-                    onPressed: ended
-                        ? () => play(
-                            milliseconds: (s['start_ms'] as num? ?? 0).toInt(),
-                          )
-                        : null,
-                    child: Text(
-                      '${durationText((s['start_ms'] as num? ?? 0) * 16)}   ${s['speaker_name'] ?? s['speaker'] ?? tr("发言人")}',
-                    ),
-                  ),
-                  SelectableText(
-                    (s['text'] ?? '').toString(),
-                    style: Theme.of(
+      children: [
+        ...list.map(
+          (s) => Padding(
+            padding: EdgeInsets.only(bottom: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextButton(
+                  style: TextButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    alignment: Alignment.centerLeft,
+                    minimumSize: Size(48, ended ? 48 : 28),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    foregroundColor: Theme.of(
                       context,
-                    ).textTheme.bodyLarge?.copyWith(height: 1.5),
+                    ).colorScheme.onSurfaceVariant,
+                    disabledForegroundColor: Theme.of(
+                      context,
+                    ).colorScheme.onSurfaceVariant,
                   ),
-                  if ((s['translation'] ?? '').toString().isNotEmpty)
-                    Padding(
-                      padding: EdgeInsets.only(top: 6),
-                      child: SelectableText(
-                        s['translation'],
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
+                  onPressed: ended
+                      ? () => play(
+                          milliseconds: (s['start_ms'] as num? ?? 0).toInt(),
+                        )
+                      : null,
+                  child: Text(
+                    '${durationText((s['start_ms'] as num? ?? 0) * 16)}   ${mobileSpeakerName(s['speaker_name'] ?? s['speaker'])}',
+                  ),
+                ),
+                SelectableText(
+                  (s['text'] ?? '').toString(),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyLarge?.copyWith(height: 1.5),
+                ),
+                if ((s['translation'] ?? '').toString().isNotEmpty)
+                  Padding(
+                    padding: EdgeInsets.only(top: 6),
+                    child: SelectableText(
+                      s['translation'],
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
-                ],
-              ),
+                  ),
+              ],
             ),
-          )
-          .toList(),
+          ),
+        ),
+        if (query.isEmpty)
+          TranscriptionActivity(meeting: meeting, model: widget.model),
+      ],
     );
   }
 
@@ -1651,38 +1604,11 @@ class _MeetingPageState extends State<MeetingPage> {
                   );
                   return;
                 }
-                final confirmed = await showDialog<bool>(
-                  context: context,
-                  builder: (ctx) => AlertDialog(
-                    title: Text(tr("删除手机上的会议？")),
-                    content: Text(
-                      tr(
-                        m['localOnly'] == true
-                            ? "此录音仅保存在手机。请先导出需要保留的录音，删除后无法恢复。"
-                            : m['remoteDeleted'] == true
-                            ? "电脑上的会议已删除。本机可能是唯一副本，请先导出需要保留的录音。删除后无法恢复。"
-                            : "将删除本机录音、转写与笔记缓存。电脑上的会议仍会保留。此操作无法撤销。",
-                      ),
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(ctx, false),
-                        child: Text(tr("取消")),
-                      ),
-                      TextButton(
-                        onPressed: () => Navigator.pop(ctx, true),
-                        child: Text(tr("删除本机记录")),
-                      ),
-                    ],
-                  ),
-                );
-                if (confirmed == true && context.mounted) {
-                  await report(context, () async {
-                    await _player?.stop();
-                    await widget.model.deleteMeeting(widget.id);
-                    if (context.mounted) Navigator.pop(context);
-                  });
-                }
+                await report(context, () async {
+                  await _player?.stop();
+                  await widget.model.deleteMeeting(widget.id);
+                  if (context.mounted) Navigator.pop(context);
+                });
               },
               itemBuilder: (_) => [
                 if (!ended)
@@ -1899,7 +1825,9 @@ class _MeetingPageState extends State<MeetingPage> {
                   children: [
                     if (tab == 0)
                       transcript(snapshot['segments'] as List? ?? [], ended),
-                    if (tab == 1)
+                    if (tab == 1 &&
+                        ((snapshot['notes'] as String? ?? '').isNotEmpty ||
+                            !waitingForComputer(m, widget.model)))
                       SelectionArea(
                         child: MarkdownBody(
                           data: (snapshot['notes'] as String? ?? '').isEmpty
@@ -1914,6 +1842,8 @@ class _MeetingPageState extends State<MeetingPage> {
                           ),
                         ),
                       ),
+                    if (tab == 1)
+                      TranscriptionActivity(meeting: m, model: widget.model),
                     if (tab == 2) ...[
                       for (final mark in (m['marks'] as List? ?? []))
                         ListTile(
@@ -2041,6 +1971,10 @@ class _MeetingPageState extends State<MeetingPage> {
                               ),
                             ],
                           ),
+                          TranscriptionActivity(
+                            meeting: m,
+                            model: widget.model,
+                          ),
                           Text(
                             m['finished'] == true
                                 ? tr("电脑已完成处理")
@@ -2093,7 +2027,7 @@ class _MeetingPageState extends State<MeetingPage> {
                           Expanded(
                             child: OutlinedButton.icon(
                               icon: Icon(Icons.stop, size: 18),
-                              onPressed: end,
+                              onPressed: ending ? null : end,
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: Theme.of(
                                   context,
@@ -2385,7 +2319,7 @@ class PrepareMeetingPage extends StatefulWidget {
 class _PrepareMeetingPageState extends State<PrepareMeetingPage> {
   final title = TextEditingController(text: defaultMeetingTitle());
   String language = 'zh', translation = '', workspace = '', modelId = '';
-  late bool offline;
+  late final bool offline;
   final participants = TextEditingController();
   static Map<String, String> get languages => {
     'zh': tr("中文"),
@@ -2537,14 +2471,6 @@ class _PrepareMeetingPageState extends State<PrepareMeetingPage> {
                 ],
               ),
             ),
-            if (!widget.upload && widget.options.isNotEmpty)
-              SwitchListTile.adaptive(
-                contentPadding: EdgeInsets.zero,
-                title: Text(tr("仅保存在手机")),
-                subtitle: Text(tr("结束后由你选择电脑并上传，录音期间不传输音频。")),
-                value: offline,
-                onChanged: (value) => setState(() => offline = value),
-              ),
             if (offline)
               Padding(
                 padding: EdgeInsets.only(top: 16),
@@ -2648,10 +2574,6 @@ class _PrepareMeetingPageState extends State<PrepareMeetingPage> {
                 child: Text(tr("请先在电脑的模型库安装所选识别模型，然后返回重新准备会议。")),
               ),
 
-            Text(
-              tr("录音前请告知参与者。"),
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
             SizedBox(height: 32),
           ],
         ),
@@ -2738,6 +2660,123 @@ class _PairingPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_PairingPainter old) => old.ink != ink || old.line != line;
+}
+
+bool waitingForComputer(Map<String, dynamic> meeting, AppModel? model) {
+  final snapshot = meeting['snapshot'] as Map? ?? {};
+  final task = snapshot['task'] as Map? ?? {};
+  final connected = model != null && meeting['computer'] != null
+      ? model.connected && meeting['computer'] == model.desktop?.fingerprint
+      : meeting['connected'] == true;
+  if (!connected ||
+      meeting['localOnly'] == true ||
+      meeting['remoteDeleted'] == true ||
+      meeting['error'] != null ||
+      snapshot['error'] != null ||
+      task['state'] == 'failed') {
+    return false;
+  }
+  return task['state'] == 'running' ||
+      task['state'] == 'queued' ||
+      (meeting['finished'] != true &&
+          (['starting', 'recording', 'ended'].contains(meeting['state']) ||
+              (snapshot['processed'] as num? ?? 0) <
+                  (snapshot['next'] as num? ?? 0)));
+}
+
+String mobileSpeakerName(dynamic name) {
+  final value = name?.toString() ?? '';
+  if ([
+    'local-user',
+    'local user',
+    'local_user',
+  ].contains(value.toLowerCase())) {
+    return tr('发言人');
+  }
+  return value.isEmpty ? tr('发言人') : value;
+}
+
+class TranscriptionActivity extends StatelessWidget {
+  final Map<String, dynamic> meeting;
+  final AppModel? model;
+  const TranscriptionActivity({super.key, required this.meeting, this.model});
+
+  @override
+  Widget build(BuildContext context) {
+    if (!waitingForComputer(meeting, model)) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: const _TranscriptionDots(),
+    );
+  }
+}
+
+class _TranscriptionDots extends StatefulWidget {
+  const _TranscriptionDots();
+
+  @override
+  State<_TranscriptionDots> createState() => _TranscriptionDotsState();
+}
+
+class _TranscriptionDotsState extends State<_TranscriptionDots>
+    with SingleTickerProviderStateMixin {
+  late final controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1200),
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      controller.stop();
+    } else if (!controller.isAnimating) {
+      controller.repeat();
+    }
+  }
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final reduced = MediaQuery.disableAnimationsOf(context);
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (_, _) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < 3; i++)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 6),
+              child: Opacity(
+                opacity: reduced
+                    ? 0.6
+                    : 0.25 +
+                          0.75 *
+                              Curves.easeInOut.transform(
+                                1 -
+                                    (2 * ((controller.value - i * 0.18) % 1) -
+                                            1)
+                                        .abs(),
+                              ),
+                child: Container(
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 }
 
 class ConnectionRecoveryNotice extends StatelessWidget {
@@ -2829,7 +2868,7 @@ class SavedMeetingPage extends StatelessWidget {
                       ? tr("等待电脑整理")
                       : tr("已收到电脑笔记"),
                 ),
-                trailing: Icon(Icons.more_horiz),
+                trailing: TranscriptionActivity(meeting: m, model: model),
               ),
               Divider(height: 1),
               if (m['localOnly'] != true &&

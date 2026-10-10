@@ -1,56 +1,25 @@
 <p align="center"><img src="assets/brevia-mark.svg" width="258" alt="Brevia" /></p>
 
-<p align="center"><strong>ミニマルでローカル完結型の AI 会議アシスタント。</strong><br />AIメモ · リアルタイム文字起こし · 多言語 · 話者識別 · 確認可能な要約 — 音声は端末から出ません。</p>
-
-<p align="center">
-  <a href="https://github.com/zerolovesea/Brevia/releases"><img src="https://img.shields.io/github/v/release/zerolovesea/Brevia?style=flat-square" alt="Release" /></a>
-  <a href="https://github.com/zerolovesea/Brevia/blob/main/LICENSE"><img src="https://img.shields.io/github/license/zerolovesea/Brevia?style=flat-square" alt="License" /></a>
-  <a href="https://github.com/zerolovesea/Brevia/releases"><img src="https://img.shields.io/github/downloads/zerolovesea/Brevia/total?style=flat-square" alt="Downloads" /></a>
-  <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows-blue?style=flat-square" alt="Platform" />
-  <img src="https://img.shields.io/badge/electron-43-47848F?style=flat-square&logo=electron" alt="Electron" />
-  <img src="https://img.shields.io/badge/python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python" />
-</p>
+<p align="center"><strong>会話に集中。大切なことは記録に。</strong><br />パソコンやスマートフォンで録音し、ローカル AI で文字起こし・決定事項・次のアクションを整理します。</p>
 
 <p align="center"><a href="../README.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.es.md">Español</a> · <strong>日本語</strong> · <a href="README.ko.md">한국어</a> · <a href="README.fr.md">Français</a> · <a href="README.de.md">Deutsch</a> · <a href="README.ru.md">Русский</a></p>
 
----
+<p align="center"><img src="assets/demo/ai-assist-en.gif" width="820" alt="Brevia desktop demo (English)" /></p>
 
-## 概要
+## ダウンロード
 
-Brevia は、会議で最も時間のかかる部分——記録・整理・振り返り——を端末上の AI に任せるデスクトップ AI 会議アシスタントです。マイクとシステム音声を同時に録音し、リアルタイム字幕をストリーミングし、終了した会話を構造化されたメモにまとめます。すべての音声認識はローカルで動作し、録音・文字起こし・話者プロファイルはデフォルトで自分の端末に留まります。
+| デバイス                  | Brevia を入手                                                                                                       |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| macOS 14+ · Apple Silicon | [DMG](https://github.com/zerolovesea/Brevia/releases/latest) · `arm64.dmg`                                          |
+| Windows · x64             | [インストーラー](https://github.com/zerolovesea/Brevia/releases/latest) · `x64-setup.exe`                           |
+| Android 7+                | [APK をダウンロード](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk) |
+| iPhone · iOS 15+          | App Store 審査中。TestFlight は招待者のみ。 [リリース情報](https://github.com/zerolovesea/Brevia/releases)          |
 
-デザインは意図的に静かです：会議の邪魔をしないインターフェース、**キャプチャ → 理解 → 検索** という一本の流れに沿った機能セット、そして「ローカルでできることはローカルで」という一貫したルール。
-
-<p align="center"><img src="assets/demo/ai-assist-en.gif" width="820" alt="Brevia AI Assist Notes のデモ" /></p>
-
-## 機能
+## できること
 
 ### 確認して使える AIメモ
 
 AIメモはリアルタイム文字起こしを見ながら、決定事項、アクション、重要な数値、リスク、質問、話題の切り替わりを提示します。必要なときだけ使う、控えめな提案、自動整理から選べます。提案はすべて確認可能で、役立つものだけをノートへ追加し、リッチテキストまたは Markdown で編集できます。
-
-AIメモと AI 会議要約は、プロバイダ・モデル・API Key をそれぞれ設定できます。リモートプロバイダ使用時に送信されるのは文字起こしテキストと現在のノート文脈だけで、音声は端末から出ません。ローカルモデルは必要時に読み込まれるため、設定を分けても二つのモデルが同時に常駐しません。
-
-![AI Assist Notes](assets/tour/en/AI%20Assist%20Notes.png)
-
-### 認識モデルの選び方
-
-初回セットアップではダウンロード可能な音声モデルを一覧表示し、**UI の言語**に応じた推奨モデルをあらかじめチェックします（Silero VAD・話者分離・声紋モデルは同梱済みで、選択の必要はありません）。それ以外はダウンロード前に外せます。
-
-その後は会議ごとに、**会議の言語**からデフォルトの認識モデルを選びます。対応関係は `backend/models.json` に宣言されています。
-
-| 会議の言語                                                 | デフォルトの認識モデル | 理由                                                             |
-| ---------------------------------------------------------- | ---------------------- | ---------------------------------------------------------------- |
-| 中国語・広東語                                             | FunASR Nano            | 中国語とその方言で最も高精度                                     |
-| 日本語・韓国語                                             | Qwen3-ASR 0.6B         | 選択可能なモデルで日韓両方をカバーする唯一のもの                 |
-| 英語・スペイン語・フランス語・ドイツ語・ロシア語・混在言語 | Parakeet TDT 0.6B v3   | 25 の欧州言語を 1 モデルでカバーし、句読点とタイムスタンプも付与 |
-| その他の言語                                               | Qwen3-ASR 0.6B         | 残りのモデルで最も広い言語カバレッジ                             |
-
-Apple シリコン搭載 Mac の音声認識と Silero VAD は mlx-audio/MLX を使用し、Windows は Sherpa ONNX を継続します。話者分離と声紋は両方で Sherpa を使用します。Mac のアップグレード後は対応する MLX 認識モデルのダウンロードが必要です。既存の録音は引き続き利用できます。 実際の上限はリアルタイム設定、言語別 VAD 設定、モデル容量の最小値です（macOS MLX モデルは 20 秒）。自動言語検出では少なくとも 2 秒の無音を待ちます。
-
-宣言されたデフォルトが未ダウンロードの場合、別のダウンロードを求めるのではなく、**すでにインストール済みでその言語に対応する**モデルを使います。準備画面には「認識モデル」のセレクタがあり（未ダウンロードのモデルもサイズ付きで表示）、会議中も同じセレクタから `meeting.reconfigure` でモデルを切り替えられます。**設定 → 詳細 → リアルタイム認識**の `live_asr.max_speech_seconds` は 1 つの字幕セグメントが伸びる上限を指定します。実際に有効な値は、この設定・言語ごとの VAD 設定・モデル自身の容量のうち最小のものです。
-
-性能が低い端末では 2B のローカル AI メモモデルまたはオンラインプロバイダを推奨します。
 
 ### 静かな会議画面でのリアルタイム文字起こしと翻訳
 
@@ -62,10 +31,6 @@ Apple シリコン搭載 Mac の音声認識と Silero VAD は mlx-audio/MLX を
 
 Brevia は 30 以上の言語で音声を文字起こしします——英語、中国語、日本語、韓国語、フランス語、ドイツ語、スペイン語、ロシア語、アラビア語、タイ語、ベトナム語、インドネシア語など。会議終了後、任意の LLM プロバイダに接続すれば、確認済みの文字起こしから会議要約、重要な決定事項、アクションアイテムを生成します。
 
-内蔵 AI はバンドルされたモデルをこの端末で実行します。Claude、OpenAI、OpenRouter、または OpenAI / Anthropic のチャット形式に対応したサービスを接続することもできます。送信されるのはテキストのみで、音声は送信されません。
-
-![Meeting notes](assets/tour/en/多语言支持与会议纪要.png)
-
 ### 会議後の精修で話者を識別
 
 メンバーごとに短い音声サンプルを登録すると、会議終了後の精修時に話者を分離し、保存済みの声紋と照合して文字起こしに名前を表示します。会議中のリアルタイム字幕では話者を区別しません。声紋プロフィールは別の会議でも再利用できます。
@@ -73,12 +38,6 @@ Brevia は 30 以上の言語で音声を文字起こしします——英語、
 Pyannote のセグメンテーションと話者埋め込みモデルを組み合わせ、すべて端末上で実行されます。
 
 ![会議後の精修で話者を識別](assets/tour/en/%E6%B3%A8%E5%86%8C%E5%A3%B0%E7%BA%B9%E8%AF%86%E5%88%AB.png)
-
-### 精選されたローカルモデルライブラリ
-
-整句認識、会議後の高精度化、音声活動検出、話者分離、声紋、AI メモと議事録、字幕翻訳をカバーするダウンロード可能なモデル。言語と精度で自由に組み合わせ——すべて端末上で動作します。
-
-![モデルライブラリ](assets/tour/en/%E6%A8%A1%E5%9E%8B%E5%BA%93.png)
 
 ### さらに
 
@@ -89,116 +48,54 @@ Pyannote のセグメンテーションと話者埋め込みモデルを組み�
 - **集中できる表示** — ライト/ダークテーマ、文字起こし・要約のインライン編集、任意のフローティング字幕で会議画面をすっきり保ちます。
 - **多言語 UI** — 英語、簡体中国語、スペイン語、日本語、韓国語、フランス語、ドイツ語、ロシア語。
 
-## インストール
-
-最新版を [GitHub Releases](https://github.com/zerolovesea/Brevia/releases) からダウンロードしてください：
-
-| プラットフォーム      | インストーラ                     |
-| --------------------- | -------------------------------- |
-| macOS (Apple Silicon) | `Brevia-<version>-arm64.dmg`     |
-| Windows (x64)         | `Brevia-<version>-x64-setup.exe` |
-
-> Windows では初回起動時に **Microsoft Defender SmartScreen** の警告が出る場合があります。**「詳細情報」→「実行」** をクリックし、ダウンロード元が公式 Releases ページであることを確認してから続けてください。
-
-初回起動時にマイクと画面録画の権限を付与し、**設定 → モデルライブラリ** で必要なモデルをダウンロードしてください。
-
-## アーキテクチャ
-
-```mermaid
-flowchart LR
-  A[Electron レンダラー<br/>HTML · Tailwind · JS] <-->|IPC + Zod 検証| B[Electron メインプロセス]
-  B <-->|JSONL stdin/stdout| C[Python ワーカー<br/>同梱ランタイム]
-  C --> D[mlx-audio / sherpa-onnx<br/>ASR · VAD · 話者 · 句読点]
-  C --> E[ローカルストレージ<br/>SQLite · 音声 · エクスポート]
-  C -. 明示的同意 .-> F[オプションのクラウド API<br/>LLM 要約 · 翻訳]
-```
-
-Brevia は厳密なローカルファースト設計に従います：
-
-- **レンダラーはネットワークポートを開きません**。すべての IPC メッセージは Electron メインプロセスが Zod スキーマで検証します。
-- **メインプロセスは薄いシェル**。JSONL の stdin/stdout で単一の Python ワーカーを起動し、モデル管理・音声処理・話者プロファイル・ローカルストレージ・エクスポートをすべてワーカーが担います。
-- **データはデフォルトで `~/brevia` に保存**——SQLite、生音声、エクスポート、キャッシュされたモデル、声紋プロファイル。
-- **クラウド呼び出しはオプトイン**。LLM 要約と翻訳はユーザーが明示的にプロバイダを設定した場合のみ有効になり、送信されるのはテキストのみです。
-
-録音は **Silero VAD による分割 → 1 回のオフライン認識 → 完全な字幕** という流れです。発話の区切り（中国語 0.7 秒、その他の言語 0.8 秒）ごとに文が確定し、連続発話はリアルタイム設定、VAD 設定、モデル容量の最小上限で区切られます。VAD の 1 区間に複数の文が含まれることがあり、隣接する文は 1 段落にまとめます（中国語 約 110 字・上限 150 字、ラテン文字 約 280 字・上限 380 字）。VAD の端点は段落境界では**ありません**——本当に長い無音（1.2 秒以上）だけが新しい段落を始め、目標に満たない段落は最大 8 秒で確定します。切れ目では次のデコードが 約 400 ミリ秒さかのぼり、継ぎ目の重複を除去します。停止時は最後の文まで処理し、認識に失敗しても元の音声は保持されます。
-
-[ベンチマークの方法と結果](../backend/benchmarks/vad-2026-09-05/REPORT.md)も参照してください。
-
-## 技術スタック
-
-| レイヤ             | 技術                                                                                                                                                 |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| デスクトップシェル | Electron 43 — preload ブリッジ、コンテキスト分離、サンドボックス化されたレンダラー                                                                   |
-| フロントエンド     | 素の HTML/CSS/JS、Tailwind CSS 4、組み込み i18n（8 ロケール）                                                                                        |
-| バックエンド       | Python 3.10+、JSONL ワーカープロトコル、SQLite ストレージ                                                                                            |
-| 音声エンジン       | [mlx-audio](https://github.com/Blaizzy/mlx-audio) / MLX (macOS); [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 1.13.8 (Windows)、ONNX Runtime |
-| 話者処理           | Pyannote セグメンテーション + 3D-Speaker ERes2Net Base 埋め込み                                                                                      |
-| LLM クライアント   | 内蔵 llama.cpp（GGUF）＋ OpenAI / Anthropic 互換チャット API                                                                                         |
-| 音声 I/O           | ffmpeg（リリースに同梱）                                                                                                                             |
-| ビルドとパッケージ | electron-builder、PyInstaller（Python ランタイム同梱）                                                                                               |
-
 ## 対応モデル
 
-整句認識・高精度化・AI メモ・字幕翻訳のモデルは **設定 → モデルライブラリ** からオンデマンドでダウンロードされます；音声活動検出・話者分離・声紋モデルはアプリに同梱されています。マニフェストは [`backend/models.json`](../backend/models.json) にあります。
+音声認識・AI メモ・翻訳モデルは **設定 → モデルライブラリ** で必要に応じて取得します。音声区間検出と話者処理のモデルはアプリに同梱されています。以下はすべてパソコンで実行し、スマートフォンにモデルを入れる必要はありません。種類と容量はアプリ内で確認できます。
 
-| 種類                        | 代表モデル                                        | 言語                           |
-| --------------------------- | ------------------------------------------------- | ------------------------------ |
-| 整句認識 / 会議後の高精度化 | FunASR Nano、Qwen3-ASR 0.6B、Parakeet TDT 0.6B v3 | 中国語 / 多言語 / 欧州 25 言語 |
-| 音声活動検出                | Silero VAD                                        | 汎用                           |
-| 話者分離                    | Pyannote Segmentation 3.0                         | 汎用                           |
-| 話者埋め込み                | 3D-Speaker ERes2Net Base                          | 中国語                         |
-| AIメモと議事録              | Qwen 3.5 2B、Qwen 3.5 4B                          | 中国語 / 英語                  |
-| 字幕翻訳                    | Tencent Hy-MT2 1.8B                               | 33 言語                        |
+| 用途               | モデル                    | 言語／機能                               |
+| ------------------ | ------------------------- | ---------------------------------------- |
+| 文字起こし／後処理 | FunASR Nano               | 中国語・広東語・英語                     |
+| 文字起こし／後処理 | Qwen3-ASR 0.6B            | 中国語・英語・日本語・韓国語など 30 言語 |
+| 文字起こし／後処理 | Parakeet TDT 0.6B v3      | 欧州の 25 言語                           |
+| AI メモ／要約      | Qwen 3.5 2B / 4B          | 中国語／英語                             |
+| 字幕翻訳           | Tencent Hy-MT2 1.8B       | 多言語翻訳                               |
+| 音声区間検出       | Silero VAD                | 発話と無音を検出                         |
+| 話者分離           | Pyannote Segmentation 3.0 | 会議後に話者を分離                       |
+| 声紋照合           | 3D-Speaker ERes2Net Base  | 保存済みの声紋と照合                     |
 
-LLM 要約では「内蔵 AI」を選ぶとバンドルされた GGUF モデル（Qwen 3.5 2B / 4B）をローカルで実行できます。Claude、OpenAI、OpenRouter、または OpenAI Chat Completions / Anthropic Messages に対応した独自サービス（Gemini の OpenAI 互換エンドポイント、DeepSeek、Kimi、Qwen など）も利用可能です。
+## スマートフォンで録音
 
-## ローカル開発
+[**Android APK をダウンロード**](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk) · iPhone：App Store 審査中。TestFlight は招待者のみ（[リリース情報](https://github.com/zerolovesea/Brevia/releases)）
 
-前提条件：Node.js 22+、Python 3.10+、Git、ffmpeg（音声インポート用）。
+会議やインタビュー、日々の打ち合わせに Brevia を。アカウントを作らず、アプリを開いて録音を始められます。自分のパソコンにつなげば、録音しながら文字起こしやメモも確認できます。
 
-```bash
-git clone https://github.com/zerolovesea/Brevia.git
-cd Brevia
-npm install
-python3 -m pip install -r backend/requirements.txt
-npm start
-```
+<p align="center">
+  <img src="assets/mobile/en/02-connect.png" width="240" alt="Brevia iPhone: computer connection (English)" />
+  <img src="assets/mobile/en/01-record.png" width="240" alt="Brevia iPhone: offline recording setup (English)" />
+  <img src="assets/mobile/en/03-transcript.png" width="240" alt="Brevia mobile: live transcript with demo content (English)" />
+</p>
 
-初回起動時にマイクと画面録画の権限を付与し、モデルと、モデル用・録音用の保存先を選択してください。保存先は後から **設定** で変更できます。既存ファイルは選択した空のフォルダーに移動され、再起動は不要です。外付けドライブは起動前に接続してください。
+- **パソコンを持ち歩かずに録音。** ペアリングやインターネットは不要です。一時停止・再開・重要箇所のマークに対応。音声はスマートフォンに保存され、文字起こしが必要なときにパソコンを選んで送信を承認します。
+- **スマートフォンで収音し、パソコンで整理。** ペアリング後はパソコンが音声認識を行い、文字起こしとメモをリアルタイムで返します。モデルや AI 設定はパソコン側にあり、スマートフォンに大きなモデルを入れる必要はありません。
+- **聞き返して、共有。** 会議ライブラリで録音を探して再生し、音声を WAV、メモを Markdown、文字起こしをテキストで共有できます。スマートフォンのコピーを削除しても、パソコンの会議は残ります。
 
-### よく使うスクリプト
+通信が途切れても音声はスマートフォンに保存され、承認済みの送信は再接続後に再開します。バックグラウンド録音に対応していますが、着信・強制終了・OS の制限で中断する場合があります。アプリに戻ったら状態を確認してください。録音後の送信にはアプリを開いておく必要がある場合があります。
 
-```bash
-npm test                    # デッドコード検査 + Electron 動作 + UI + E2E スモーク + バックエンドテスト
-npm run test:e2e            # 実アプリを起動し CDP 経由で検証
-npm run build               # Tailwind CSS ビルド
-npm run test:model          # ASR モデル診断
-npm run test:diarization    # ダイアライゼーション診断
-npm run start:fresh         # オンボーディングをリセットして起動
-```
+## スマートフォンとパソコンの通信
 
-### 環境変数
+ローカルネットワークでは、スマートフォンからペアリング済みパソコンへ **HTTPS** で音声を送り、文字起こしとメモを受け取ります。音声はまずスマートフォンに保存し、パソコンの保存確認後に送信位置を進めます。通信が途切れた場合は確認済みの位置から再開し、送信完了後もスマートフォンのコピーを自動削除しません。
 
-```bash
-BREVIA_DATA_DIR=/path/to/data       # カスタムデータディレクトリ（録音、エクスポート、SQLite）
-BREVIA_MODELS_DIR=/path/to/models   # カスタムモデルディレクトリ
-BREVIA_MEETINGS_DIR=/path/to/recordings # 録音・会議ファイルの保存先
-BREVIA_FFMPEG=/path/to/ffmpeg       # ffmpeg バイナリ（PATH にない場合）
+自分でシグナリング／TURN サービスを設定すると、ペアリング済みの端末は **WebRTC DataChannel** で別のネットワークからも接続できます。直接接続を優先し、できない場合は暗号化された通信を中継します。中継運営者にはネットワークアドレスや通信量が見えますが、中継を通じて暗号化された会議内容を読むことはできません。 [異なるネットワーク間の接続には追加設定が必要です。初回ペアリングは同じローカルネットワークで行います。](mobile-remote.md)
 
-BREVIA_DATA_DIR=~/brevia-dev BREVIA_MODELS_DIR=~/brevia-models npm start
-```
+音声認識はパソコン内で実行します。オフライン録音はアップロードを承認するまでスマートフォンに保存され、リアルタイム文字起こしではペアリング済みパソコンへ音声を送ります。会議を開発者へ自動送信することはありません。モデル取得後はローカル AI を利用できます。オンライン AI を選んだ場合、関連する文字情報をそのサービスへ送りますが、音声は送りません。任意の遠隔接続サービスは暗号化された通信を中継する場合があります。 [プライバシー](https://brevia.work/privacy.html).
 
-### インストーラのビルド
+スマートフォンの音声は録音 **1 時間あたり約 115 MB** を使い、書き出しやキャッシュは別途容量を消費します。遠隔アップロードには通信量と通信処理分の追加データが必要です。
 
-```bash
-npm ci
-npm run build
-python3 -m pip install -r backend/requirements-build.txt
-npm run dist:mac   # macOS ARM64 DMG
-npm run dist:win   # Windows x64 EXE
-```
+## 使い始める
 
-成果物は `dist/` に出力されます。各プラットフォームビルドは音声活動検出・話者分離・声紋モデルを含むネイティブの Python ワーカーを同梱します；認識・高精度化・AI メモ・翻訳モデルはオンデマンドでダウンロードされます。
+1. パソコンに Brevia をインストールし、音声の権限を許可して推奨の音声モデルをダウンロードします。オフライン AI メモにはローカル AI モデルも選びます。
+2. 会議を開始するか録音を取り込み、結果を確認して書き出します。
+3. スマートフォンを接続する場合は同じ Wi-Fi を使います。パソコンの **設定 → デバイス接続 → 新しいデバイスを接続** から QR を表示し、スマートフォンで読み取るかアドレスと PIN を入力。確認コードを照合してパソコンで許可します。
 
 ## FAQ
 
@@ -217,76 +114,17 @@ npm run dist:win   # Windows x64 EXE
 </details>
 
 <details>
-<summary><strong>データはどこに保存されますか？</strong></summary>
-
-既定の保存先は `~/brevia` です。モデルと録音・会議ファイルには別々の保存先を選択できます。SQLite と声紋プロファイルはデータルートに残ります。`BREVIA_DATA_DIR` でデータルートを指定できます。
-
-</details>
-
-<details>
-<summary><strong>どの言語の文字起こしに対応していますか？</strong></summary>
-
-中国語、英語、日本語、韓国語、フランス語、ドイツ語、スペイン語、ロシア語、アラビア語、タイ語、ベトナム語、インドネシア語など 30 以上の言語に対応。アプリ内のモデルライブラリで対応するモデルを選択してください。
-
-</details>
-<details>
-<summary><strong>Brevia は音声をクラウドに送信しますか？</strong></summary>
-
-送信しません。音声認識とダイアライゼーションはすべてローカルで実行されます。LLM 要約と翻訳のみがネットワークに接続しますが、プロバイダを設定した後のみ——テキストのみで、音声は決して送信しません。
-
-</details>
-
-<details>
 <summary><strong>モデルにはどれくらいのディスク容量が必要ですか？</strong></summary>
 
-インストールするモデルによります。典型的な構成（整句認識 + 高精度化）で 1–2 GB；音声活動検出・話者分離・声紋モデルは同梱済みです。最小の認識モデルは約 487 MB、大きなモデルは 1 GB 超。
+まず会議の言語に合う推奨音声モデルを選び、必要に応じてローカル AI や翻訳モデルを追加してください。ダウンロード容量はモデルライブラリに表示されます。すべてのモデルを入れる必要はありません。
 
 </details>
 
-<details>
-<summary><strong>既存の録音をインポートできますか？</strong></summary>
+## ヘルプと開発参加
 
-できます。会議ライブラリから音声ファイルをインポートすると、Brevia は同じ音声パイプラインでオフライン文字起こしします。PATH に `ffmpeg` が必要（または `BREVIA_FFMPEG` を設定）。
+[GitHub Issues](https://github.com/zerolovesea/Brevia/issues) — 不具合はアプリのバージョン、デバイス、再現手順を添えて報告してください。画像やログから個人情報と認証情報を除いてください。
 
-</details>
-
-<details>
-<summary><strong>UI 言語を切り替えるには？</strong></summary>
-
-**設定 → 一般 → 言語**。英語、簡体中国語、スペイン語、日本語、韓国語、フランス語、ドイツ語、ロシア語が利用可能。
-
-</details>
-
-<details>
-<summary><strong>声紋サンプルはどのように保存されますか？</strong></summary>
-
-声紋埋め込み（小さな浮動小数点ベクトル）と参考音声はローカルの SQLite データベースとファイルシステムに保存されます。端末から出ることはなく、プロファイルを削除すると関連データも削除されます。
-
-</details>
-
-## フィードバックとコントリビュート
-
-### Issue を報告する
-
-バグや機能リクエストは [GitHub Issues](https://github.com/zerolovesea/Brevia/issues) に報告してください。以下を含めるとトリアージが早くなります：
-
-- OS とバージョン（例：macOS 14.5 / Windows 11 23H2）
-- Brevia のバージョン（**設定 → バージョン情報**）
-- 使用中のモデルと言語
-- 再現手順 / 期待される結果 / 実際の結果
-- 関連するログ（**設定 → 詳細 → ログフォルダを開く**）——添付前に機密情報が含まれていないか確認してください
-
-**セキュリティに関する問題：** 公開 Issue を開かず、メンテナにメールで連絡してください。
-
-### コントリビュート
-
-プルリクエストを歓迎します。ツリーを整った状態に保つために：
-
-1. `main` から狭い焦点のブランチを切ってください——1 PR につき 1 つの関心事。
-2. 提出前に `npm test` を実行；ASR やダイアライゼーションに触れる場合は `npm run test:model` と `npm run test:diarization` も実行。
-3. ダウンロード済みモデル、録音、エクスポート、API キー、`~/brevia` の内容をコミットしないでください。
-4. ユーザー向けテキストを変更する場合、`frontend/i18n-data.js` の 8 ロケールすべてを更新してください——英語ソース文字列とその翻訳を一緒に追加。
-5. モデル、プラットフォーム、権限への影響を PR の説明に記載してください。
+[開発ガイド（英語）](DEVELOPMENT.md) · [モバイル開発（中国語）](../mobile/README.md) · [CONTRIBUTING](../CONTRIBUTING.md).
 
 ## ライセンス
 

@@ -945,12 +945,14 @@ try {
     adoptMobileMeeting(meeting);
     await new Promise(resolve => setTimeout(resolve, 400));
     const live = activeView === 'live' && meetingActive && document.querySelector('#pause').disabled && !document.querySelector('#end-meeting').disabled;
-    const source = !!document.querySelector('.live-title .mobile-source-tag');
+    const source = !document.querySelector('.mobile-source-tag');
     const unique = uiData.meetings.filter(m => m.id === meeting.id).length === 1;
     minimizeMeeting(); await showView('home');
-    const mini = !miniMeeting.hidden && miniMeeting.textContent.includes('手机录音') && miniTitle.textContent === meeting.title && getComputedStyle(taskCards).position === 'absolute' && miniMeeting.getBoundingClientRect().bottom <= document.querySelector('.sidebar').getBoundingClientRect().bottom;
+    const mini = !miniMeeting.hidden && !miniMeeting.querySelector('.mobile-source-tag') && miniTitle.textContent === meeting.title && getComputedStyle(taskCards).position === 'absolute' && miniMeeting.getBoundingClientRect().bottom <= document.querySelector('.sidebar').getBoundingClientRect().bottom;
     document.querySelector('#mobile-manage').click();
-    await new Promise(resolve => setTimeout(resolve, 250));
+    // 后台窗口的动画帧可能被节流，等待实际打开而不是固定延迟。
+    for (let i = 0; i < 60 && !settingsModal.classList.contains('modal-enter'); i++) await new Promise(resolve => setTimeout(resolve, 50));
+    await settingsModal.querySelector('.mobile-install img').decode();
     const dialog = activeModal === 'device-connection' && !settingsModal.hidden && settingsModal.classList.contains('modal-enter') && !!settingsModal.querySelector('#mobile-dialog') && settingsModal.querySelector('.mobile-install img').complete && settingsModal.querySelector('.mobile-install img').naturalWidth > 0;
     settingsModal.querySelector('.modal-close').click();
     const closing = settingsModal.classList.contains('modal-leave');

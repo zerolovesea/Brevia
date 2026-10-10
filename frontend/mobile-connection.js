@@ -1,7 +1,6 @@
 (() => {
   const api = window.brevia?.mobile;
   if (!api) return;
-  const output = document.getElementById('mobile-status');
   const dialog = document.getElementById('mobile-dialog');
   const pairDialog = document.getElementById('mobile-pair-dialog');
   let pairingBusy = false;
@@ -61,9 +60,9 @@
     try {
       await action();
     } catch (error) {
-      output.textContent = t(error.detail || error.message || '连接失败，请重试');
-      dialog.querySelector('#mobile-dialog-status').textContent = output.textContent;
-      pairDialog.querySelector('#mobile-pair-error').textContent = output.textContent;
+      const detail = t(error.detail || error.message || '连接失败，请重试');
+      dialog.querySelector('#mobile-dialog-status').textContent = detail;
+      pairDialog.querySelector('#mobile-pair-error').textContent = detail;
     }
   }
   function showPairDialog() {
@@ -113,10 +112,6 @@
     renderedLocale = locale;
     localize();
     const pending = value.sessions?.find((s) => !s.finished);
-    dialog.querySelector('#mobile-finish-received').hidden = !pending || pending.ended;
-    document.querySelectorAll('.mobile-source-tag').forEach((tag) => {
-      tag.textContent = t('手机录音');
-    });
     const connected = (value.devices || []).filter((d) => d.connected);
     const connectionStatus = connected.length
       ? '已连接'
@@ -128,13 +123,6 @@
     document.getElementById('mobile-sidebar-status').textContent = connected.length
       ? `${connected[0].name} · ${t('已连接')}`
       : t(connectionStatus);
-    output.textContent = pending
-      ? `${pending.title} · ${pending.ended ? t('电脑处理中') : t('来自手机的会议')}${pending.error ? ` · ${t(pending.error)}` : ''}`
-      : connected.length
-        ? `${connected.map((d) => d.name).join(', ')} · ${t('可以开始录音')}`
-        : value.enabled
-          ? ''
-          : t('点击连接新设备，开启局域网连接。');
     const approval = pairDialog.querySelector('#mobile-approval');
     if (!pairClosing && ((value.approval?.id || null) !== approvalId || localeChanged)) {
       const newRequest = (value.approval?.id || null) !== approvalId;
@@ -244,18 +232,6 @@
       }
     }
   }
-  dialog.querySelector('#mobile-finish-received').onclick = () => {
-    const pending = lastStatus?.sessions?.find((s) => !s.finished);
-    if (!pending) return;
-    openConfirmation(
-      t('结束电脑上的录音？'),
-      t('电脑将保存已收到的音频并解除录音占用。手机上的未传音频不会被删除，重新连接后可继续补传。'),
-      async () => {
-        await api.finishReceived({ meeting_id: pending.id });
-        await poll();
-      },
-    );
-  };
   dialog.querySelector('#mobile-pair').onclick = () => run(pair);
   document.getElementById('mobile-manage').onclick = open;
   document.getElementById('mobile-nav').onclick = open;

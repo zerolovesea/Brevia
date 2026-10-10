@@ -6032,19 +6032,6 @@ html[data-theme="dark"] .segment.is-draft {
 
 /* LAN phone pairing shares the desktop settings grid and its scroll container. */
 /* Mobile recording uses the same quiet surfaces and controls as desktop meetings. */
-.mobile-source-tag {
-  margin-left: 12px;
-  vertical-align: middle;
-  font-weight: 400;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--color-text) 7%, transparent);
-  font-size: 13px;
-  white-space: nowrap;
-}
 #mobile-nav-dot {
   display: inline-block;
   width: 7px;
@@ -6103,9 +6090,6 @@ html[data-theme="dark"] .segment.is-draft {
 }
 #mobile-approval button + button {
   margin-left: 16px;
-}
-#mini-meeting .mobile-source-tag {
-  margin: 8px 0;
 }
 @media (max-width: 700px) {
   #mobile-pairing:not([hidden]) {

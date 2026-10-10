@@ -11,12 +11,196 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:brevia_mobile/main.dart';
+import 'package:brevia_mobile/swipe_delete.dart';
 import 'package:brevia_mobile/app_model.dart';
 import 'package:brevia_mobile/storage.dart';
 import 'package:brevia_mobile/connection.dart';
 
 void main() {
   setUp(() => uiLanguage = 'zh');
+
+  testWidgets(
+    'transcription activity stops for inactive states and reduced motion',
+    (tester) async {
+      final meeting = <String, dynamic>{
+        'state': 'recording',
+        'connected': true,
+      };
+      Future<void> show(
+        Map<String, dynamic> value, {
+        bool reduced = false,
+      }) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: MediaQuery(
+              data: MediaQueryData(disableAnimations: reduced),
+              child: TranscriptionActivity(meeting: value),
+            ),
+          ),
+        );
+        await tester.pump(const Duration(milliseconds: 200));
+      }
+
+      final dots = find.descendant(
+        of: find.byType(TranscriptionActivity),
+        matching: find.byType(Opacity),
+      );
+      List<double> opacities() =>
+          tester.widgetList<Opacity>(dots).map((dot) => dot.opacity).toList();
+      await show(meeting);
+      expect(dots, findsNWidgets(3));
+      final before = opacities();
+      expect(before.toSet().length, greaterThan(1));
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(opacities(), isNot(before));
+      await show({...meeting, 'state': 'ended'});
+      expect(dots, findsNWidgets(3));
+      for (final inactive in [
+        {'connected': false},
+        {'localOnly': true},
+        {'finished': true},
+        {'remoteDeleted': true},
+        {'error': 'failed'},
+        {
+          'snapshot': {'error': 'failed'},
+        },
+        {'state': 'paused'},
+      ]) {
+        await show({...meeting, ...inactive});
+        expect(dots, findsNothing);
+        await tester.pumpAndSettle();
+      }
+      await show(meeting, reduced: true);
+      expect(dots, findsNWidgets(3));
+      expect(opacities(), [0.6, 0.6, 0.6]);
+      await tester.pumpAndSettle();
+      await tester.pumpWidget(const SizedBox());
+      expect(tester.binding.transientCallbackCount, 0);
+    },
+  );
+
+  test(
+    'waiting includes follow-up tasks and uses the original computer connection',
+    () {
+      final model = AppModel()
+        ..desktop = DesktopConnection(
+          address: 'https://192.168.1.2',
+          fingerprint: 'pc',
+        )
+        ..desktopOnline = true;
+      final meeting = <String, dynamic>{
+        'state': 'ended',
+        'finished': true,
+        'computer': 'pc',
+        'snapshot': {
+          'task': {'state': 'running'},
+        },
+      };
+      expect(waitingForComputer(meeting, model), true);
+      expect(
+        waitingForComputer({
+          ...meeting,
+          'finished': false,
+          'state': 'paused',
+          'snapshot': {'next': 3, 'processed': 2},
+        }, model),
+        true,
+      );
+      expect(
+        waitingForComputer({...meeting, 'computer': 'another'}, model),
+        false,
+      );
+      expect(
+        waitingForComputer({
+          ...meeting,
+          'snapshot': {
+            'task': {'state': 'done'},
+          },
+        }, model),
+        false,
+      );
+      model.desktopOnline = false;
+      expect(waitingForComputer(meeting, model), false);
+      for (final language in languageNames.keys) {
+        uiLanguage = language;
+        expect(mobileSpeakerName('Local user'), tr('发言人'));
+        expect(mobileSpeakerName('local-user'), tr('发言人'));
+        expect(mobileSpeakerName('Alice'), 'Alice');
+      }
+    },
+  );
+
+  testWidgets(
+    'partial transcript and notes retain dots without empty placeholders',
+    (tester) async {
+      final model = AppModel()..serviceRunning = true;
+      model.live = {
+        'id': 'live',
+        'title': 'Test',
+        'state': 'recording',
+        'connected': true,
+        'snapshot': <String, dynamic>{'segments': []},
+      };
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MeetingPage(model: model, id: 'live'),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 200));
+      final dots = find.descendant(
+        of: find.byType(TranscriptionActivity),
+        matching: find.byType(Opacity),
+      );
+      expect(dots, findsNWidgets(3));
+      expect(find.text('暂无转写。电脑处理后的文字会显示在这里。'), findsNothing);
+      model.live!['snapshot'] = {
+        'segments': [
+          {'text': 'Partial transcript', 'speaker_name': 'Local user'},
+        ],
+        'notes': 'Partial notes',
+      };
+      model.notifyListeners();
+      await tester.pump();
+      expect(find.text('Partial transcript'), findsOneWidget);
+      expect(find.textContaining('发言人'), findsOneWidget);
+      expect(dots, findsNWidgets(3));
+      await tester.tap(find.text('笔记'));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text('Partial notes'), findsOneWidget);
+      expect(dots, findsNWidgets(3));
+      model.live!['finished'] = true;
+      model.notifyListeners();
+      await tester.pumpAndSettle();
+      expect(dots, findsNothing);
+    },
+  );
+
+  testWidgets(
+    'long press offline meeting offers upload through existing preparation',
+    (tester) async {
+      final model = MenuModel()
+        ..desktop = UploadMenuConnection()
+        ..desktopOnline = true;
+      model.meetings = [
+        {
+          'id': 'offline',
+          'title': 'Offline recording',
+          'state': 'ended',
+          'localOnly': true,
+        },
+      ];
+      await tester.pumpWidget(BreviaApp(model: model));
+      await tester.pumpAndSettle();
+      await tester.longPress(find.text('Offline recording'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('上传到电脑'));
+      await tester.pumpAndSettle();
+      expect(find.byType(PrepareMeetingPage), findsOneWidget);
+      expect(find.text('上传到这台电脑'), findsOneWidget);
+      expect(find.byType(SwitchListTile), findsNothing);
+      expect(find.text('录音前请告知参与者。'), findsNothing);
+    },
+  );
 
   testWidgets('privacy policy is available offline in every app language', (
     tester,
@@ -74,6 +258,8 @@ void main() {
       await tester.tap(find.text('prepare'));
       await tester.pumpAndSettle();
       expect(find.text('仅保存在手机'), findsWidgets);
+      expect(find.byType(SwitchListTile), findsNothing);
+      expect(find.text('录音前请告知参与者。'), findsNothing);
       await tester.tap(find.text('开始录音'));
       await tester.pumpAndSettle();
       expect(result?['offline'], true);
@@ -129,7 +315,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('long press menu and right swipe both confirm local deletion', (
+  testWidgets('long press deletes directly without a confirmation dialog', (
     tester,
   ) async {
     final model = MenuModel()
@@ -166,15 +352,78 @@ void main() {
     );
     await tester.tap(find.text('删除本机记录'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('取消'));
-    await tester.pumpAndSettle();
-    expect(model.meetings, hasLength(1));
-    await tester.drag(find.byType(Dismissible), const Offset(600, 0));
-    await tester.pumpAndSettle();
-    expect(find.text('删除本机记录？'), findsOneWidget);
-    await tester.tap(find.text('删除'));
-    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsNothing);
     expect(model.meetings, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'right swipe reveals delete; reverse swipe and active rows do not delete',
+    (tester) async {
+      var deleted = 0;
+      Future<void> showRow(bool enabled) => tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SwipeDelete(
+              enabled: enabled,
+              onDelete: () async {
+                deleted++;
+              },
+              child: ListTile(title: Text('record')),
+            ),
+          ),
+        ),
+      );
+      await showRow(true);
+      await tester.drag(find.text('record'), const Offset(300, 0));
+      await tester.pumpAndSettle();
+      expect(deleted, 0);
+      expect(find.text('删除'), findsOneWidget);
+      await tester.drag(find.text('record'), const Offset(-300, 0));
+      await tester.pumpAndSettle();
+      expect(find.text('删除'), findsNothing);
+      await tester.drag(find.text('record'), const Offset(300, 0));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('删除'));
+      await tester.pumpAndSettle();
+      expect(deleted, 1);
+      expect(find.byType(AlertDialog), findsNothing);
+      await showRow(false);
+      await tester.drag(find.text('record'), const Offset(300, 0));
+      await tester.pumpAndSettle();
+      expect(find.text('删除'), findsNothing);
+      expect(deleted, 1);
+    },
+  );
+
+  testWidgets('end saves directly and ignores repeated taps while saving', (
+    tester,
+  ) async {
+    final model = EndModel()
+      ..live = {
+        'id': 'live',
+        'title': 'Meeting',
+        'state': 'recording',
+        'samples': 16000,
+        'localOnly': true,
+      };
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: breviaTheme(Brightness.light),
+        home: MeetingPage(model: model, id: 'live'),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.text('结束'));
+    await tester.pump();
+    expect(model.ends, 1);
+    expect(find.byType(BottomSheet), findsNothing);
+    await tester.tap(find.text('结束'));
+    expect(model.ends, 1);
+    model.saved.complete();
+    await tester.pumpAndSettle();
+    expect(find.byType(SavedMeetingPage), findsOneWidget);
+    expect(find.text('录音已结束'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -228,7 +477,7 @@ void main() {
           home: MeetingPage(model: model, id: 'live'),
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 300));
       expect(tester.takeException(), isNull, reason: language);
     }
   });
@@ -555,4 +804,40 @@ class StopEngine extends RecordingEngine {
       store.meta['state'] = 'ended';
     }
   }
+}
+
+class EndModel extends AppModel {
+  int ends = 0;
+  final saved = Completer<void>();
+  @override
+  Future<void> command(
+    String id,
+    String action, {
+    String note = '',
+    int? sample,
+  }) async {
+    if (action == 'end') {
+      ends++;
+      await saved.future;
+      live!['state'] = 'ended';
+      notifyListeners();
+    }
+  }
+}
+
+class UploadMenuConnection extends DesktopConnection {
+  UploadMenuConnection()
+    : super(address: 'https://192.168.1.2', fingerprint: 'pc', name: 'Mac');
+  @override
+  Future<dynamic> call(String method, String route, [Object? data]) async => {
+    'models': [
+      {
+        'id': 'model',
+        'status': 'ready',
+        'name': 'Model',
+        'languages': ['zh'],
+      },
+    ],
+    'workspaces': [],
+  };
 }
