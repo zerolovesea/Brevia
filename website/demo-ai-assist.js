@@ -219,14 +219,7 @@
     <main class="app-shell is-live-meeting">
       ${new DemoScenariosV3().sidebarHtml()}
       <section class="workspace">
-        <header class="window-bar">
-          <div class="traffic"><i></i><i></i><i></i></div>
-          <span>${c.crumb}</span>
-          <div class="window-actions">
-            <button class="icon-button">文</button>
-            <button class="icon-button">◐</button>
-          </div>
-        </header>
+        ${new DemoScenariosV3().windowBarHtml(c.crumb)}
         <section class="view active" id="live-view">
           <header class="live-header">
             <div class="live-title">

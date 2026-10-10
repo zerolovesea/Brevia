@@ -213,6 +213,7 @@
         </a>
         <div class="hidden items-center gap-8 text-[14px] text-gray1 md:flex">
           <a href="#features" class="link-quiet">功能</a>
+          <a href="#mobile" class="link-quiet">手机端</a>
           <a href="#compare" class="link-quiet">对比</a>
           <a href="#use-cases" class="link-quiet">场景</a>
           <a href="#privacy" class="link-quiet">隐私</a>
@@ -384,7 +385,7 @@
             <div class="demo-canvas hero-demo-canvas">
               <iframe
                 class="demo-frame"
-                src="./demo-home.html?v=969c09b"
+                src="./demo-home.html?v=mobile-layout-20261010"
                 title="言录应用首页演示"
                 loading="eager"
               ></iframe>
@@ -465,7 +466,7 @@
             <div class="demo-canvas">
               <iframe
                 class="demo-frame"
-                src="./demo-transcription.html?v=969c09b"
+                src="./demo-transcription.html?v=mobile-layout-20261010"
                 loading="lazy"
                 title="实时转录与翻译演示"
               ></iframe>
@@ -488,7 +489,7 @@
             <div class="demo-canvas">
               <iframe
                 class="demo-frame"
-                src="./demo-ai-assist.html?v=969c09b"
+                src="./demo-ai-assist.html?v=mobile-layout-20261010"
                 loading="lazy"
                 title="AI 辅助笔记演示"
               ></iframe>
@@ -514,7 +515,7 @@
             <div class="demo-canvas">
               <iframe
                 class="demo-frame"
-                src="./demo-summary.html?v=969c09b"
+                src="./demo-summary.html?v=mobile-layout-20261010"
                 loading="lazy"
                 title="AI 会议纪要演示"
               ></iframe>
@@ -523,11 +524,50 @@
         </div>
       </section>
 
-      <!-- Demo 4 — Voiceprint -->
+      <!-- Demo 4 — Mobile -->
+      <section id="mobile" class="mx-auto max-w-content px-6 pt-20 md:px-8 md:pt-28">
+        <div class="grid grid-cols-1 md:grid-cols-12 items-center gap-8 md:gap-12">
+          <div class="reveal min-w-0 col-span-1 md:order-2 md:col-span-3">
+            <span class="font-mono text-[13px] tracking-[0.14em] text-gray3">04</span>
+            <h3 class="display mt-4 text-[28px] font-normal text-ink">手机录音，电脑转写</h3>
+            <p class="measure mt-5 text-[16px] text-slate"
+              >手机可独立离线录音、标记重点和回听。需要转写时，再选择电脑并确认上传；连接后也能边录边看转写与笔记。模型在电脑运行，手机无需下载。</p
+            >
+            <p class="measure mt-4 text-[14px] text-gray1"
+              >首次配对需在同一局域网，通过扫码或配对码连接，并在电脑确认。配对不会自动上传，实时转写需要电脑在线。</p
+            >
+            <a
+              href="https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk"
+              class="mt-6 inline-flex items-center border border-ink bg-ink px-5 py-3 text-[14px] text-white transition-opacity duration-300 hover:opacity-70"
+              >下载 Android 应用 →</a
+            >
+            <a
+              href="https://github.com/zerolovesea/Brevia/releases/latest"
+              class="link-quiet mt-4 block text-[13px] text-gray1"
+              >iPhone · 查看发布进展 →</a
+            >
+          </div>
+          <div
+            class="reveal min-w-0 col-span-1 md:order-1 md:col-span-9"
+            style="--reveal-delay: 120ms"
+          >
+            <div class="demo-canvas mobile-demo">
+              <iframe
+                class="demo-frame"
+                src="./demo-mobile.html?v=flow-2"
+                title="手机扫码连接电脑，录音、转写与回传演示"
+                loading="lazy"
+              ></iframe>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Demo 5 — Voiceprint -->
       <section class="mx-auto max-w-content px-6 pt-20 md:px-8 md:pt-28">
         <div class="grid grid-cols-12 items-center gap-8 md:gap-12">
           <div class="reveal col-span-12 md:col-span-3">
-            <span class="font-mono text-[13px] tracking-[0.14em] text-gray3">04</span>
+            <span class="font-mono text-[13px] tracking-[0.14em] text-gray3">05</span>
             <h3 class="display mt-4 text-[28px] font-normal text-ink"> 会后精修中的说话人识别 </h3>
             <p class="measure mt-5 text-[16px] text-slate">
               为每位成员录入一小段语音样本。会议结束后，言录在会后精修时区分说话人，并匹配已保存的声纹档案，在转录中标注对应姓名。会议中的实时字幕不区分说话人。声纹档案可跨会议复用。
@@ -537,7 +577,7 @@
             <div class="demo-canvas">
               <iframe
                 class="demo-frame"
-                src="./demo-voiceprint.html?v=969c09b"
+                src="./demo-voiceprint.html?v=mobile-layout-20261010"
                 loading="eager"
                 title="会后精修与声纹识别演示"
               ></iframe>
@@ -546,11 +586,11 @@
         </div>
       </section>
 
-      <!-- Demo 5 — Caption bar -->
+      <!-- Demo 6 — Caption bar -->
       <section class="mx-auto max-w-content px-6 pt-20 md:px-8 md:pt-28">
         <div class="grid grid-cols-12 items-center gap-8 md:gap-12">
           <div class="reveal col-span-12 md:order-2 md:col-span-3">
-            <span class="font-mono text-[13px] tracking-[0.14em] text-gray3">05</span>
+            <span class="font-mono text-[13px] tracking-[0.14em] text-gray3">06</span>
             <h3 class="display mt-4 text-[28px] font-normal text-ink"> 悬浮字幕快捷操作 </h3>
             <p class="measure mt-5 text-[16px] text-slate">
               开会时可以一边处理其他工作，一边让字幕悬浮在屏幕下方持续呈现。需要回看某句话时，点击即可复制、翻译、播放或定位到时间线，不必切回应用窗口。
@@ -560,7 +600,7 @@
             <div class="demo-canvas">
               <iframe
                 class="demo-frame"
-                src="./demo-caption-bar.html?v=969c09b"
+                src="./demo-caption-bar.html?v=mobile-layout-20261010"
                 loading="lazy"
                 title="悬浮字幕条演示"
               ></iframe>
@@ -569,11 +609,11 @@
         </div>
       </section>
 
-      <!-- Demo 6 — Model library -->
+      <!-- Demo 7 — Model library -->
       <section class="mx-auto max-w-content px-6 pt-20 md:px-8 md:pt-28">
         <div class="grid grid-cols-12 items-center gap-8 md:gap-12">
           <div class="reveal col-span-12 md:col-span-3">
-            <span class="font-mono text-[13px] tracking-[0.14em] text-gray3">06</span>
+            <span class="font-mono text-[13px] tracking-[0.14em] text-gray3">07</span>
             <h3 class="display mt-4 text-[28px] font-normal text-ink"> 丰富的模型库 </h3>
             <p class="measure mt-5 text-[16px] text-slate">
               按需要选择和下载字幕、翻译、说话人识别与 AI
@@ -584,7 +624,7 @@
             <div class="demo-canvas">
               <iframe
                 class="demo-frame"
-                src="./demo-model-library.html?v=969c09b"
+                src="./demo-model-library.html?v=mobile-layout-20261010"
                 loading="lazy"
                 title="模型库演示"
               ></iframe>
@@ -842,11 +882,11 @@
           <div class="max-w-read">
             <p class="font-mono text-[13px] uppercase tracking-[0.18em] text-gray3">隐私</p>
             <h2 class="display mt-6 text-[clamp(28px,4vw,42px)] font-light text-ink">
-              会议内容，始终留在您的设备上
+              本地优先，由你决定如何处理
             </h2>
             <p class="measure mt-6 text-[17px] text-slate">
-              语音识别、说话人分离和声纹提取都在设备上完成。录音、转录和声纹档案绝不会上传；如您启用
-              AI 辅助笔记或会议纪要，发送给所选服务商的也仅是转录文本，音频始终不会离开设备。
+              语音识别、说话人分离和声纹提取在电脑上完成。手机录音经你确认后传给配对电脑；选择在线
+              AI 服务时，相关转录文本会发送给所选服务商。
             </p>
             <div class="mt-10 grid gap-x-10 gap-y-6 sm:grid-cols-2">
               <div class="border-t border-line1 pt-4">
@@ -1168,7 +1208,18 @@
                 >下载 →</span
               >
             </a>
-            <p class="measure mt-4 text-[13px] text-gray2">
+            <a
+              href="https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk"
+              class="group mt-4 flex items-center justify-between border border-line2 px-8 py-7 transition-colors duration-300 hover:border-ink"
+              ><div
+                ><p class="text-[17px] font-medium text-ink">Android</p
+                ><p class="mt-1 text-[14px] text-gray1">Android 7.0+ · APK</p></div
+              ><span class="text-[13px] text-gray1">下载 →</span></a
+            ><p class="mt-4 text-[14px] text-gray1"
+              ><a class="link-quiet" href="https://github.com/zerolovesea/Brevia/releases/latest"
+                >iPhone · 查看发布进展 →</a
+              ></p
+            ><p class="measure mt-4 text-[13px] text-gray2">
               Windows 首次运行时可能显示 Microsoft Defender SmartScreen
               提示。确认下载来自官方发布页面后，选择"更多信息" → "仍要运行"。
             </p>
@@ -1228,12 +1279,6 @@
                 >
               </div>
               <div class="bg-white p-6">
-                <p class="text-[16px] font-medium text-ink">手机端支持</p>
-                <p class="measure mt-2 text-[14px] text-slate"
-                  >把录制与回看带到移动设备，随时随地记录会议。</p
-                >
-              </div>
-              <div class="bg-white p-6">
                 <p class="text-[16px] font-medium text-ink">更多模型与语言</p>
                 <p class="measure mt-2 text-[14px] text-slate"
                   >持续扩充模型库，覆盖更多语言与更高精度的 ASR。</p
@@ -1276,8 +1321,8 @@
               </summary>
               <div class="faq-body">
                 <p class="measure pb-6 text-[16px] text-slate">
-                  不会。语音识别和说话人处理都在本地完成。若您启用 AI
-                  辅助笔记或会议纪要，只有转录文本会发送至您配置的 AI 服务商；音频始终不会离开设备。
+                  桌面语音识别与说话人处理在本地完成。使用手机转写时，音频会传给你确认连接的电脑；使用在线
+                  AI 笔记或纪要时，相关文本会发送至所选服务商。
                 </p>
               </div>
             </details>
@@ -1380,13 +1425,14 @@
               <span class="text-[16px] font-bold tracking-tightest text-ink">言录</span>
             </div>
             <p class="measure mt-4 max-w-[240px] text-[13px] text-gray1">
-              简洁、本地优先的 AI 会议助手。音频不离开你的设备。
+              简洁、本地优先的 AI 会议助手。手机录音，电脑转写。
             </p>
           </div>
           <div>
             <p class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">产品</p>
             <div class="mt-4 flex flex-col gap-2.5 text-[14px] text-gray1">
               <a href="#features" class="link-quiet">功能</a>
+              <a href="#mobile" class="link-quiet">手机端</a>
               <a href="#compare" class="link-quiet">对比</a>
               <a href="#use-cases" class="link-quiet">场景</a>
               <a href="#pricing" class="link-quiet">价格</a>

@@ -213,6 +213,7 @@
         </a>
         <div class="hidden items-center gap-8 text-[14px] text-gray1 md:flex">
           <a href="#features" class="link-quiet">Features</a>
+          <a href="#mobile" class="link-quiet">Mobile</a>
           <a href="#compare" class="link-quiet">Compare</a>
           <a href="#use-cases" class="link-quiet">Use cases</a>
           <a href="#privacy" class="link-quiet">Privacy</a>
@@ -385,7 +386,7 @@
             <div class="demo-canvas hero-demo-canvas">
               <iframe
                 class="demo-frame"
-                src="./demo-home-en.html?v=969c09b"
+                src="./demo-home-en.html?v=mobile-layout-20261010"
                 title="Brevia application home screen demo"
                 loading="eager"
               ></iframe>
@@ -475,7 +476,7 @@
             <div class="demo-canvas">
               <iframe
                 class="demo-frame"
-                src="./demo-transcription-en.html?v=969c09b"
+                src="./demo-transcription-en.html?v=mobile-layout-20261010"
                 loading="lazy"
                 title="Live transcription and translation demo"
               ></iframe>
@@ -501,7 +502,7 @@
             <div class="demo-canvas">
               <iframe
                 class="demo-frame"
-                src="./demo-ai-assist-en.html?v=969c09b"
+                src="./demo-ai-assist-en.html?v=mobile-layout-20261010"
                 loading="lazy"
                 title="AI Assist Notes demo"
               ></iframe>
@@ -528,7 +529,7 @@
             <div class="demo-canvas">
               <iframe
                 class="demo-frame"
-                src="./demo-summary-en.html?v=969c09b"
+                src="./demo-summary-en.html?v=mobile-layout-20261010"
                 loading="lazy"
                 title="AI meeting notes demo"
               ></iframe>
@@ -537,11 +538,56 @@
         </div>
       </section>
 
-      <!-- Demo 4 — Voiceprint -->
+      <!-- Demo 4 — Mobile -->
+      <section id="mobile" class="mx-auto max-w-content px-6 pt-20 md:px-8 md:pt-28">
+        <div class="grid grid-cols-1 md:grid-cols-12 items-center gap-8 md:gap-12">
+          <div class="reveal min-w-0 col-span-1 md:order-2 md:col-span-3">
+            <span class="font-mono text-[13px] tracking-[0.14em] text-gray3">04</span>
+            <h3 class="display mt-4 text-[28px] font-normal text-ink"
+              >Record on your phone. Transcribe on your computer.</h3
+            >
+            <p class="measure mt-5 text-[16px] text-slate"
+              >Record offline, mark highlights, and listen back on your phone. Choose a computer and
+              approve the upload when you need transcription, or connect to view live transcripts
+              and notes. Models run on your computer.</p
+            >
+            <p class="measure mt-4 text-[14px] text-gray1"
+              >Pair on the same local network with a QR or pairing code, then approve on your
+              computer. Pairing does not upload recordings automatically. Live transcription
+              requires your computer online.</p
+            >
+            <a
+              href="https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk"
+              class="mt-6 inline-flex items-center border border-ink bg-ink px-5 py-3 text-[14px] text-white transition-opacity duration-300 hover:opacity-70"
+              >Download Android →</a
+            >
+            <a
+              href="https://github.com/zerolovesea/Brevia/releases/latest"
+              class="link-quiet mt-4 block text-[13px] text-gray1"
+              >iPhone · Release updates →</a
+            >
+          </div>
+          <div
+            class="reveal min-w-0 col-span-1 md:order-1 md:col-span-9"
+            style="--reveal-delay: 120ms"
+          >
+            <div class="demo-canvas mobile-demo">
+              <iframe
+                class="demo-frame"
+                src="./demo-mobile-en.html?v=flow-2"
+                title="Phone pairing, recording, transcription and sync demo"
+                loading="lazy"
+              ></iframe>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Demo 5 — Voiceprint -->
       <section class="mx-auto max-w-content px-6 pt-20 md:px-8 md:pt-28">
         <div class="grid grid-cols-12 items-center gap-8 md:gap-12">
           <div class="reveal col-span-12 md:col-span-3">
-            <span class="font-mono text-[13px] tracking-[0.14em] text-gray3">04</span>
+            <span class="font-mono text-[13px] tracking-[0.14em] text-gray3">05</span>
             <h3 class="display mt-4 text-[28px] font-normal text-ink">
               Post-meeting speaker identification
             </h3>
@@ -556,7 +602,7 @@
             <div class="demo-canvas">
               <iframe
                 class="demo-frame"
-                src="./demo-voiceprint-en.html?v=969c09b"
+                src="./demo-voiceprint-en.html?v=mobile-layout-20261010"
                 loading="eager"
                 title="Post-meeting refinement and voiceprint identification demo"
               ></iframe>
@@ -565,11 +611,11 @@
         </div>
       </section>
 
-      <!-- Demo 5 — Caption bar -->
+      <!-- Demo 6 — Caption bar -->
       <section class="mx-auto max-w-content px-6 pt-20 md:px-8 md:pt-28">
         <div class="grid grid-cols-12 items-center gap-8 md:gap-12">
           <div class="reveal col-span-12 md:order-2 md:col-span-3">
-            <span class="font-mono text-[13px] tracking-[0.14em] text-gray3">05</span>
+            <span class="font-mono text-[13px] tracking-[0.14em] text-gray3">06</span>
             <h3 class="display mt-4 text-[28px] font-normal text-ink">
               Floating caption actions
             </h3>
@@ -583,7 +629,7 @@
             <div class="demo-canvas">
               <iframe
                 class="demo-frame"
-                src="./demo-caption-bar-en.html?v=969c09b"
+                src="./demo-caption-bar-en.html?v=mobile-layout-20261010"
                 loading="lazy"
                 title="Floating caption bar demo"
               ></iframe>
@@ -592,11 +638,11 @@
         </div>
       </section>
 
-      <!-- Demo 6 — Model library -->
+      <!-- Demo 7 — Model library -->
       <section class="mx-auto max-w-content px-6 pt-20 md:px-8 md:pt-28">
         <div class="grid grid-cols-12 items-center gap-8 md:gap-12">
           <div class="reveal col-span-12 md:col-span-3">
-            <span class="font-mono text-[13px] tracking-[0.14em] text-gray3">06</span>
+            <span class="font-mono text-[13px] tracking-[0.14em] text-gray3">07</span>
             <h3 class="display mt-4 text-[28px] font-normal text-ink"> Rich model library </h3>
             <p class="measure mt-5 text-[16px] text-slate">
               Choose and download the capabilities you need for captions, translation, speaker
@@ -608,7 +654,7 @@
             <div class="demo-canvas">
               <iframe
                 class="demo-frame"
-                src="./demo-model-library-en.html?v=969c09b"
+                src="./demo-model-library-en.html?v=mobile-layout-20261010"
                 loading="lazy"
                 title="Model library demo"
               ></iframe>
@@ -882,12 +928,12 @@
           <div class="max-w-read">
             <p class="font-mono text-[13px] uppercase tracking-[0.18em] text-gray3">Privacy</p>
             <h2 class="display mt-6 text-[clamp(28px,4vw,42px)] font-light text-ink">
-              What happens on your machine stays on your machine
+              Local first. You choose how to process your recordings.
             </h2>
             <p class="measure mt-6 text-[17px] text-slate">
-              Speech recognition, diarization, and speaker embeddings all run on-device. Recordings,
-              transcripts, and voice profiles are never uploaded. When you opt into AI notes, only
-              the transcript text is sent to the provider you choose — never the audio.
+              Speech recognition, diarization, and speaker embeddings run on your computer. Phone
+              recordings are sent to your paired computer with your approval. If you choose online
+              AI, relevant transcript text is sent to your selected provider.
             </p>
             <div class="mt-10 grid gap-x-10 gap-y-6 sm:grid-cols-2">
               <div class="border-t border-line1 pt-4">
@@ -1235,7 +1281,18 @@
                 >Download →</span
               >
             </a>
-            <p class="measure mt-4 text-[13px] text-gray2">
+            <a
+              href="https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk"
+              class="group mt-4 flex items-center justify-between border border-line2 px-8 py-7 transition-colors duration-300 hover:border-ink"
+              ><div
+                ><p class="text-[17px] font-medium text-ink">Android</p
+                ><p class="mt-1 text-[14px] text-gray1">Android 7.0+ · APK</p></div
+              ><span class="text-[13px] text-gray1">Download →</span></a
+            ><p class="mt-4 text-[14px] text-gray1"
+              ><a class="link-quiet" href="https://github.com/zerolovesea/Brevia/releases/latest"
+                >iPhone · Release updates →</a
+              ></p
+            ><p class="measure mt-4 text-[13px] text-gray2">
               Windows may show a Microsoft Defender SmartScreen prompt on first run. Choose "More
               info" → "Run anyway" after verifying the download came from the official Releases
               page.
@@ -1302,13 +1359,6 @@
                 >
               </div>
               <div class="bg-white p-6">
-                <p class="text-[16px] font-medium text-ink">Mobile support</p>
-                <p class="measure mt-2 text-[14px] text-slate"
-                  >Bring recording and review to mobile devices, so you can capture meetings
-                  anywhere.</p
-                >
-              </div>
-              <div class="bg-white p-6">
                 <p class="text-[16px] font-medium text-ink">More models &amp; languages</p>
                 <p class="measure mt-2 text-[14px] text-slate"
                   >Keep growing the model library across more languages and higher-precision ASR.</p
@@ -1353,9 +1403,9 @@
               </summary>
               <div class="faq-body">
                 <p class="measure pb-6 text-[16px] text-slate">
-                  No. Speech recognition and speaker processing run locally. If you opt into AI
-                  notes, only the transcript text is sent to the LLM provider you configure — the
-                  audio never leaves your machine.
+                  Desktop speech recognition and speaker processing run locally. For mobile
+                  transcription, audio is sent to the computer you approve. Optional online AI notes
+                  and summaries send relevant text to your chosen provider.
                 </p>
               </div>
             </details>
@@ -1467,13 +1517,15 @@
               <span class="text-[16px] font-bold tracking-tightest text-ink">brevia</span>
             </div>
             <p class="measure mt-4 max-w-[240px] text-[13px] text-gray1">
-              A minimal, local-first AI meeting assistant. No audio leaves your device.
+              A minimal, local-first AI meeting assistant. Record on your phone, transcribe on your
+              computer.
             </p>
           </div>
           <div>
             <p class="font-mono text-[12px] uppercase tracking-[0.14em] text-gray3">Product</p>
             <div class="mt-4 flex flex-col gap-2.5 text-[14px] text-gray1">
               <a href="#features" class="link-quiet">Features</a>
+              <a href="#mobile" class="link-quiet">Mobile</a>
               <a href="#compare" class="link-quiet">Compare</a>
               <a href="#use-cases" class="link-quiet">Use cases</a>
               <a href="#pricing" class="link-quiet">Pricing</a>

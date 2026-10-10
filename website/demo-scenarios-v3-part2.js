@@ -11,14 +11,7 @@ DemoScenariosV3.prototype.setupPrepareUI = function () {
       ${this.sidebarHtml()}
 
       <section class="workspace">
-        <header class="window-bar">
-          <div class="traffic"><i></i><i></i><i></i></div>
-          <span>准备录制</span>
-          <div class="window-actions">
-            <button class="icon-button">文</button>
-            <button class="icon-button">◐</button>
-          </div>
-        </header>
+        ${this.windowBarHtml('准备录制')}
 
         <section class="view active" id="prepare-view">
           <button class="back" data-view="home">← 返回会议库</button>
@@ -136,14 +129,7 @@ DemoScenariosV3.prototype.setupLiveUI = function (meetingTitle) {
       ${this.sidebarHtml()}
 
       <section class="workspace">
-        <header class="window-bar">
-          <div class="traffic"><i></i><i></i><i></i></div>
-          <span>正在录制</span>
-          <div class="window-actions">
-            <button class="icon-button">文</button>
-            <button class="icon-button">◐</button>
-          </div>
-        </header>
+        ${this.windowBarHtml('正在录制')}
 
         <section class="view active" id="live-view">
           <header class="live-header">
@@ -429,13 +415,7 @@ DemoScenariosV3.prototype.setupSummaryDetailUI = function () {
       ${this.sidebarHtml()}
 
       <section class="workspace">
-        <header class="window-bar">
-          <div class="traffic"><i></i><i></i><i></i></div>
-          <span>会议详情</span>
-          <div class="window-actions">
-            <button class="icon-button">◐</button>
-          </div>
-        </header>
+        ${this.windowBarHtml('会议详情')}
 
         <section class="view active" id="detail-view">
           <button class="back">← 返回会议库</button>
@@ -840,14 +820,7 @@ DemoScenariosV3.prototype.setupSettingsUI = function () {
       ${this.sidebarHtml('settings')}
 
       <section class="workspace">
-        <header class="window-bar">
-          <div class="traffic"><i></i><i></i><i></i></div>
-          <span>${copy.crumb}</span>
-          <div class="window-actions">
-            <button class="icon-button">文</button>
-            <button class="icon-button">◐</button>
-          </div>
-        </header>
+        ${this.windowBarHtml(copy.crumb)}
 
         <section class="view active" id="settings-view">
           <button class="back">${copy.back}</button>

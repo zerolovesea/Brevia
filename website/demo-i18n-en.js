@@ -6,6 +6,8 @@
 
 (function () {
   const translations = {
+    '设备连接': 'Device connection',
+    '等待设备连接': 'Waiting for a device',
     '开始精修': 'Refine transcript',
     '公开工作区': 'Public workspace',
     '新建工作区': 'New workspace',
@@ -374,7 +376,7 @@
     return translations[text] || text;
   }
 
-  for (const name of ['sidebarHtml', 'liveControlsHtml']) {
+  for (const name of ['sidebarHtml', 'windowBarHtml', 'liveControlsHtml']) {
     const original = DemoScenariosV3.prototype[name];
     DemoScenariosV3.prototype[name] = function (...args) {
       return translateHTML(original.apply(this, args));

@@ -32,6 +32,14 @@ app
         { query: { manual: '1' } },
       );
       await win.webContents.executeJavaScript('document.fonts.ready');
+      const shell = await win.webContents.executeJavaScript(`({
+        deviceEntry: document.querySelectorAll('.sidebar #mobile-nav').length,
+        deviceLabel: document.querySelector('.mobile-sidebar-heading strong')?.textContent,
+        toolbar: ['app-version', 'language-toggle', 'theme-toggle'].every(id => document.getElementById(id)),
+      })`);
+      assert.equal(shell.deviceEntry, 1, `${locale}/${name}: device entry missing`);
+      assert.equal(shell.deviceLabel, locale === 'zh' ? '设备连接' : 'Device connection');
+      assert.equal(shell.toolbar, true, `${locale}/${name}: current toolbar missing`);
     }
     async function capture(file) {
       await wait(350);
@@ -199,6 +207,31 @@ app
         );
         console.log(`PASS ${locale}/ai-assist`);
       }
+      for (const locale of ['zh', 'en']) {
+        await win.loadFile(join(root, `website/demo-mobile${locale === 'en' ? '-en' : ''}.html`));
+        const mobile = await win.webContents.executeJavaScript(`(() => {
+          document.querySelector('#pause-story').click();
+          const result = [];
+          for (let cycle = 0; cycle < 2; cycle++) {
+            for (let stage = 0; stage < 5; stage++) {
+              mobileDemo.render(stage);
+              result.push({
+                stage: document.querySelector('.mobile-story').dataset.stage,
+                desktop: document.querySelectorAll('.mobile-demo-caption.visible').length,
+                phone: document.querySelector('.phone-transcript p').textContent,
+              });
+            }
+          }
+          return result;
+        })()`);
+        mobile.forEach((state, i) => {
+          const stage = i % 5;
+          assert.equal(state.stage, String(stage));
+          assert.equal(state.desktop, stage >= 3 ? 1 : 0);
+          assert.equal(Boolean(state.phone), stage === 4);
+        });
+        console.log(`PASS ${locale}/mobile (two cycles)`);
+      }
       win.webContents.debugger.attach('1.3');
       await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia', {
         features: [{ name: 'prefers-reduced-motion', value: 'reduce' }],
@@ -223,11 +256,11 @@ app
         await win.loadFile(join(root, 'website/index-zh.html'));
         await wait(800);
         const frames = await win.webContents
-          .executeJavaScript(`Array.from(document.querySelectorAll('.demo-canvas')).map(canvas => {
-        const frame = canvas.querySelector('iframe').getBoundingClientRect();
-        return { width: frame.width, expected: canvas.clientWidth, height: frame.height };
+          .executeJavaScript(`Array.from(document.querySelectorAll('.demo-canvas iframe')).map(iframe => {
+        const frame = iframe.getBoundingClientRect();
+        return { width: frame.width, expected: iframe.parentElement.clientWidth, height: frame.height };
       })`);
-        assert.equal(frames.length, 7);
+        assert.equal(frames.length, 8);
         for (const frame of frames) {
           assert.ok(Math.abs(frame.width - frame.expected) < 1, 'Embed must fit the canvas');
           assert.ok(Math.abs(frame.height / frame.width - 750 / 1200) < 0.01);

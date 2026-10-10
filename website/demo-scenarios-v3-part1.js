@@ -22,7 +22,67 @@ class DemoScenariosV3 {
           <button class="nav-item" id="recently-deleted" data-view="home"><span>◷</span> 最近删除</button>
           <button class="nav-item ${active === 'settings' ? 'active' : ''}" data-view="settings"><span>⚙</span> 设置</button>
         </nav>
+        <button class="mobile-sidebar-card" id="mobile-nav" type="button"
+          ><span class="mobile-sidebar-heading"
+            ><svg
+              viewBox="0 0 20 20"
+              width="20"
+              height="20"
+              aria-hidden="true"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+            >
+              <rect x="5" y="2" width="10" height="16" rx="2" />
+              <path d="M8 15h4" /></svg
+            ><strong>设备连接</strong><i id="mobile-nav-dot"></i></span
+          ><span id="mobile-sidebar-status">等待设备连接</span></button
+        >
         </aside>`;
+  }
+
+  windowBarHtml(crumb) {
+    return String.raw`<header class="window-bar"
+          ><div class="traffic"><i></i><i></i><i></i></div><span id="crumb">${crumb}</span
+          ><small class="app-credit">Powered by zerolovesea</small
+          ><div class="window-actions"
+            ><small id="app-version">v1.3.1</small
+            ><a
+              class="icon-button"
+              href="https://github.com/zerolovesea/Brevia"
+              target="_blank"
+              rel="noopener"
+              title="GitHub"
+              aria-label="在 GitHub 上查看 Brevia"
+              ><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+                <path
+                  fill="currentColor"
+                  d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82A7.65 7.65 0 0 1 8 4.73c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8Z"
+                /></svg></a
+            ><div class="language-menu"
+              ><button
+                class="icon-button"
+                id="language-toggle"
+                title="切换语言"
+                aria-label="切换语言"
+                aria-expanded="false"
+                aria-controls="language-options"
+                >文</button
+              ><div class="language-options" id="language-options" role="menu" hidden
+                ><button data-language="zh" role="menuitem">中文</button
+                ><button data-language="en" role="menuitem">English</button
+                ><button data-language="es" role="menuitem">Español</button
+                ><button data-language="ja" role="menuitem">日本語</button
+                ><button data-language="ko" role="menuitem">한국어</button
+                ><button data-language="fr" role="menuitem">Français</button
+                ><button data-language="de" role="menuitem">Deutsch</button
+                ><button data-language="ru" role="menuitem">Русский</button></div
+              ></div
+            ><button class="icon-button" id="theme-toggle" title="切换主题" aria-label="切换主题"
+              >◐</button
+            ></div
+          ></header
+        >`;
   }
 
   liveControlsHtml() {
@@ -217,19 +277,7 @@ class DemoScenariosV3 {
         ${this.sidebarHtml()}
 
         <section class="workspace">
-          <header class="window-bar">
-            <div class="traffic"><i></i><i></i><i></i></div>
-            <span id="crumb">所有会议</span>
-            <div class="window-actions">
-              <a class="icon-button" href="https://github.com/zerolovesea/Brevia" target="_blank" rel="noopener" title="GitHub">
-                <svg viewBox="0 0 16 16" width="16" height="16"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82A7.65 7.65 0 0 1 8 4.73c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
-              </a>
-              <div class="language-menu">
-                <button class="icon-button" title="切换语言">文</button>
-              </div>
-              <button class="icon-button" title="切换主题">◐</button>
-            </div>
-          </header>
+          ${this.windowBarHtml('所有会议')}
 
           <section class="view active" id="home-view">
             <div class="page-head">
