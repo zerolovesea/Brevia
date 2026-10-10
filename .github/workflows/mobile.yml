@@ -96,8 +96,8 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
       - run: flutter pub get --enforce-lockfile
-      - run: cd android && ./gradlew :app:testDebugUnitTest
       - run: flutter build apk --release --build-number="$BUILD_NUMBER"
+      - run: cd android && ./gradlew :app:testDebugUnitTest
       - run: flutter build appbundle --release --build-number="$BUILD_NUMBER"
       - uses: actions/upload-artifact@v4
         with:
