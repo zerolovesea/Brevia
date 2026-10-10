@@ -1,0 +1,280 @@
+(() => {
+  const api = window.brevia?.mobile;
+  if (!api) return;
+  const dialog = document.getElementById('mobile-dialog');
+  const pairDialog = document.getElementById('mobile-pair-dialog');
+  let pairingBusy = false;
+  let pairClosing = null;
+  const pairing = document.getElementById('mobile-pairing');
+  let expires = 0,
+    approvalId = null,
+    deviceList = null,
+    polling = false,
+    lastStatus = null,
+    renderedLocale = null,
+    messageKey = '';
+  const staticCopy = [];
+  for (const root of [dialog, pairDialog]) {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) {
+      const node = walker.currentNode,
+        key = node.textContent.trim();
+      if (/[\u3400-\u9fff]/.test(key)) staticCopy.push({ node, key });
+    }
+  }
+  const imageCopy = [
+    ...dialog.querySelectorAll('img[alt]'),
+    ...pairDialog.querySelectorAll('img[alt]'),
+  ].map((node) => ({
+    node,
+    key: node.alt,
+  }));
+  function localize() {
+    staticCopy.forEach(({ node, key }) => {
+      node.textContent = t(key);
+    });
+    imageCopy.forEach(({ node, key }) => {
+      node.alt = t(key);
+    });
+    document.querySelector('#mobile-nav strong').textContent = t('设备连接');
+    if (breviaClient?.state.meeting?.tags?.includes('手机录音'))
+      document.querySelector('#pause').textContent = t('在手机控制录音');
+    if (currentMeetingDetail?.tags?.includes('手机录音'))
+      document.querySelector('#detail-view .detail-title .eyebrow').textContent = t('手机录音');
+    document.querySelector('#mobile-manage').textContent = t('查看与管理');
+    dialog.querySelector('#mobile-dialog-status').textContent = messageKey ? t(messageKey) : '';
+  }
+  function message(key) {
+    messageKey = key;
+    dialog.querySelector('#mobile-dialog-status').textContent = t(key);
+  }
+  function open() {
+    if (
+      activeModal !== 'device-connection' ||
+      settingsModal.hidden ||
+      settingsModal.classList.contains('modal-leave')
+    )
+      void openModal('device-connection');
+  }
+  async function run(action) {
+    try {
+      await action();
+    } catch (error) {
+      const detail = t(error.detail || error.message || '连接失败，请重试');
+      dialog.querySelector('#mobile-dialog-status').textContent = detail;
+      pairDialog.querySelector('#mobile-pair-error').textContent = detail;
+    }
+  }
+  function showPairDialog() {
+    if (pairDialog.open) return;
+    pairDialog.classList.remove('modal-leave');
+    pairDialog.classList.add('modal-enter');
+    pairDialog.showModal();
+  }
+  function closePairDialog() {
+    if (pairClosing) return pairClosing;
+    if (!pairDialog.open) return Promise.resolve();
+    expires = 0;
+    pairDialog.classList.remove('modal-enter');
+    pairDialog.classList.add('modal-leave');
+    pairClosing = new Promise((resolve) => {
+      setTimeout(() => {
+        pairDialog.close();
+        pairDialog.classList.remove('modal-leave');
+        pairing.hidden = true;
+        pairDialog.querySelector('#mobile-approval').replaceChildren();
+        pairClosing = null;
+        resolve();
+      }, 220);
+    });
+    return pairClosing;
+  }
+  async function pair() {
+    if (pairingBusy || pairDialog.open) return;
+    pairingBusy = true;
+    pairDialog.querySelector('#mobile-pair-error').textContent = '';
+    try {
+      const value = await api.pair();
+      await render(value);
+      expires = value.expires;
+      pairing.hidden = false;
+      pairDialog.querySelector('#mobile-qr').src = value.qr;
+      pairDialog.querySelector('#mobile-pin').textContent = value.pin;
+      localize();
+      showPairDialog();
+    } finally {
+      pairingBusy = false;
+    }
+  }
+  async function render(value) {
+    lastStatus = value;
+    const localeChanged = renderedLocale !== locale;
+    renderedLocale = locale;
+    localize();
+    const pending = value.sessions?.find((s) => !s.finished);
+    const connected = (value.devices || []).filter((d) => d.connected);
+    const connectionStatus = connected.length
+      ? '已连接'
+      : value.enabled
+        ? '等待设备连接'
+        : '服务已关闭';
+    document.getElementById('mobile-nav').classList.toggle('is-connected', connected.length > 0);
+    document.getElementById('mobile-nav').title = `${t('设备连接')} · ${t(connectionStatus)}`;
+    document.getElementById('mobile-sidebar-status').textContent = connected.length
+      ? `${connected[0].name} · ${t('已连接')}`
+      : t(connectionStatus);
+    const approval = pairDialog.querySelector('#mobile-approval');
+    if (!pairClosing && ((value.approval?.id || null) !== approvalId || localeChanged)) {
+      const newRequest = (value.approval?.id || null) !== approvalId;
+      approvalId = value.approval?.id || null;
+      approval.replaceChildren();
+      if (value.approval) {
+        showPairDialog();
+        const request = value.approval;
+        const copy = document.createElement('p');
+        copy.textContent = `${request.name} ${t('请求连接。请核对手机上的校验码：')}${request.verification}`;
+        const deny = document.createElement('button');
+        deny.className = 'secondary';
+        deny.textContent = t('拒绝');
+        const allow = document.createElement('button');
+        allow.className = 'modal-action';
+        allow.textContent = t('允许连接');
+        const respond = (allowed) =>
+          run(async () => {
+            await api.approve({ id: request.id, allowed });
+            await closePairDialog();
+            message(allowed ? '已允许连接，可以在手机开始会议。' : '已拒绝本次连接。');
+          });
+        deny.onclick = () => respond(false);
+        allow.onclick = () => respond(true);
+        approval.append(copy, deny, allow);
+        if (newRequest) deny.focus({ preventScroll: true });
+      }
+    }
+    const nextDevices = JSON.stringify(value.devices || []);
+    if (deviceList !== nextDevices || localeChanged) {
+      deviceList = nextDevices;
+      const devices = dialog.querySelector('#mobile-devices');
+      devices.replaceChildren();
+      if (!value.devices?.length) {
+        const empty = document.createElement('p');
+        empty.className = 'mobile-device-empty';
+        empty.textContent = t('尚未连接设备');
+        devices.append(empty);
+      }
+      for (const device of value.devices || []) {
+        const row = document.createElement('div');
+        row.className = 'mobile-device';
+        const name = document.createElement('div');
+        name.textContent = device.name;
+        const state = document.createElement('small');
+        state.textContent = device.connected ? t('已连接 · 信任设备') : t('离线 · 保留信任');
+        name.append(state);
+        const facts = document.createElement('dl');
+        facts.className = 'mobile-device-facts';
+        const first = new Date(device.firstConnectedAt);
+        const date =
+          device.firstConnectedAt && Number.isFinite(first.getTime())
+            ? new Intl.DateTimeFormat(BreviaI18n.localeTag(locale), {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+              }).format(first)
+            : t('未记录（旧版设备）');
+        for (const [label, value] of [
+          ['首次连接', date],
+          [
+            '会议录音',
+            new Intl.NumberFormat(BreviaI18n.localeTag(locale)).format(device.recordingCount || 0),
+          ],
+        ]) {
+          const group = document.createElement('div');
+          const term = document.createElement('dt');
+          const detail = document.createElement('dd');
+          term.textContent = t(label);
+          detail.textContent = value;
+          group.append(term, detail);
+          facts.append(group);
+        }
+        const revoke = document.createElement('button');
+        revoke.className = 'secondary';
+        revoke.textContent = t('取消信任');
+        revoke.onclick = () => run(async () => render(await api.revoke({ id: device.id })));
+        row.append(name, facts, revoke);
+        devices.append(row);
+      }
+    }
+    if (pending && breviaClient) {
+      if (breviaClient.state.meeting?.id !== pending.id) {
+        const meeting = await window.brevia.meeting.get({ meeting_id: pending.id });
+        if (meeting?.status === 'recording') adoptMobileMeeting(meeting);
+      }
+      if (breviaClient.state.meeting?.id === pending.id) {
+        document
+          .querySelector('#transcript-scroll')
+          .classList.toggle('is-finishing', !!(pending.ended || pending.stopRequested));
+        clearInterval(timer);
+        seconds = Math.floor((pending.samples || 0) / 16000);
+        const time = new Date(seconds * 1000).toISOString().slice(11, 19);
+        document.getElementById('timer').textContent = time;
+        miniTimer.textContent = time;
+        const label = pending.ended
+          ? '电脑处理中'
+          : !connected.length
+            ? '连接中断 · 等待补传'
+            : ['paused', 'interrupted'].includes(pending.state)
+              ? '手机已暂停'
+              : '手机录音中';
+        for (const el of document.querySelectorAll(
+          '#live-recording-state, #mini-meeting .mini-recording',
+        ))
+          el.textContent = t(label);
+      }
+    }
+  }
+  dialog.querySelector('#mobile-pair').onclick = () => run(pair);
+  document.getElementById('mobile-manage').onclick = open;
+  document.getElementById('mobile-nav').onclick = open;
+  const stopPairing = () =>
+    run(async () => {
+      if (approvalId) await api.approve({ id: approvalId, allowed: false });
+      const value = await api.closePairing();
+      await closePairDialog();
+      await render(value);
+    });
+  pairDialog.querySelector('#mobile-close-pairing').onclick = stopPairing;
+  pairDialog.addEventListener('cancel', (event) => {
+    event.preventDefault();
+    stopPairing();
+  });
+  // 上层配对窗口处理 Escape，避免同时关闭后面的设备列表。
+  pairDialog.addEventListener('keydown', (event) => event.stopPropagation());
+  async function poll() {
+    if (polling) return;
+    polling = true;
+    try {
+      await render(await api.status());
+    } catch {
+      /* Startup/replay may not have created the worker meeting yet. */
+    } finally {
+      polling = false;
+    }
+  }
+  window.brevia.on('mobile.discovered', () => {
+    void run(pair);
+  });
+  setInterval(() => {
+    if (expires && Date.now() > expires) {
+      void closePairDialog();
+      message('配对码已过期，请重新显示配对码。');
+    }
+    void poll();
+  }, 2000);
+  window.addEventListener('brevia:language-changed', () => {
+    localize();
+    if (lastStatus) void render(lastStatus);
+    else void poll();
+  });
+  localize();
+  void poll();
+})();

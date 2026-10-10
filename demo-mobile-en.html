@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Phone and computer collaboration demo</title>
+    <link rel="stylesheet" href="./frontend/styles.css" />
+    <link rel="stylesheet" href="./frontend/workspace-styles.css" />
+    <link rel="stylesheet" href="./frontend/detail-header.css" />
+    <link rel="stylesheet" href="./demo-mobile.css?v=flow-2" />
+  </head>
+  <body>
+    <main class="mobile-story" data-stage="0">
+      <header class="story-heading"
+        ><span id="step-count"></span><h1 id="step-title"></h1><p id="step-description"></p
+      ></header>
+      <div class="devices" inert>
+        <section class="phone" aria-label="手机应用">
+          <div class="phone-status"><span>9:41</span><span>▰</span></div>
+          <div class="scanner phone-screen">
+            <header class="phone-appbar"><span>‹</span><strong id="scanner-title"></strong></header>
+            <p id="scan-label"></p
+            ><div class="camera-preview"
+              ><div class="camera-paper"
+                ><small>Brevia</small
+                ><img src="./assets/mobile-demo-qr.svg" alt="演示二维码" /></div
+              ><div class="scan-corners"><i></i></div></div
+            ><span id="manual-label"></span>
+          </div>
+          <div class="phone-verification phone-screen"
+            ><header class="phone-appbar"><span>‹</span><strong id="connect-title"></strong></header
+            ><div class="verification-content"
+              ><span class="laptop-icon">▱</span><h2 id="verify-title"></h2><p id="verify-copy"></p
+              ><div class="verification-code"
+                ><small id="verify-label"></small><strong>8A3F21C9</strong
+                ><p id="verify-note"></p></div
+              ><i class="spinner"></i></div
+          ></div>
+          <div class="phone-meeting phone-screen">
+            <header class="phone-appbar"
+              ><span>‹</span><strong class="meeting-name"></strong><span>⋮</span></header
+            >
+            <div class="phone-live-meta"
+              ><div class="record-status"
+                ><i></i><span id="record-label"></span><time>00:12</time></div
+              ><small id="phone-status"></small
+            ></div>
+            <div class="phone-tabs" id="phone-tabs"></div
+            ><div class="phone-transcript"
+              ><small>00:12 · <span id="speaker-label"></span></small><p></p></div
+            ><div class="phone-wait" id="phone-wait"></div
+            ><div class="phone-controls" id="phone-controls"></div>
+          </div>
+          <div class="home-indicator"></div>
+        </section>
+        <div class="connection" aria-hidden="true"
+          ><div class="audio-flow"
+            ><span id="audio-label"></span><div class="flow-line"><i></i></div></div
+          ><div class="text-flow"
+            ><span id="text-label"></span><div class="flow-line"><i></i></div></div
+        ></div>
+        <section class="computer" aria-label="电脑应用"
+          ><div id="desktop-app"
+            ><div id="desktop-home"></div><div id="desktop-live"></div
+            ><div class="pair-overlay"
+              ><div id="mobile-pair-dialog"
+                ><header class="mobile-pair-header"
+                  ><h2 id="pair-title"></h2
+                  ><button class="secondary" id="pair-stop" tabindex="-1"></button></header
+                ><div id="mobile-pairing"
+                  ><img
+                    id="mobile-qr"
+                    src="./assets/mobile-demo-qr.svg"
+                    alt="演示配对二维码"
+                    width="220"
+                    height="220" /><div
+                    ><p id="mobile-pin">482 916</p><p id="pair-description"></p
+                    ><small id="pair-note"></small></div></div
+                ><div id="mobile-approval"
+                  ><p id="approval-copy"></p
+                  ><button class="secondary" id="pair-deny" tabindex="-1"></button
+                  ><button class="modal-action" id="pair-confirm" tabindex="-1"></button></div
+                ><span class="demo-pointer" aria-hidden="true">➤</span></div
+              ></div
+            ></div
+          ></section
+        >
+      </div>
+      <footer class="story-footer"
+        ><ol id="steps"></ol
+        ><div
+          ><button id="pause-story" type="button"></button
+          ><button id="replay-story" type="button"></button></div
+      ></footer>
+    </main>
+    <script src="./demo-scenarios-v3-part1.js?v=mobile-layout-20261010"></script>
+    <script src="./demo-scenarios-v3-part2.js?v=mobile-layout-20261010"></script>
+    <script src="./demo-i18n-en.js"></script>
+    <script src="./demo-mobile.js?v=flow-2"></script>
+  </body>
+</html>
