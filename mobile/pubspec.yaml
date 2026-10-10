@@ -1,7 +1,7 @@
 name: brevia_mobile
 description: Brevia local-first mobile recorder for iOS and Android.
 publish_to: none
-version: 0.1.5+6
+version: 1.0.0+6
 environment:
   sdk: ^3.10.0
 dependencies:

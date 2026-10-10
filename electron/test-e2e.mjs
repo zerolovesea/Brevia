@@ -159,7 +159,12 @@ mkdirSync(recordingsDir, { recursive: true });
 mkdirSync(userDataDir, { recursive: true });
 
 const port = await freePort();
-const childEnv = { ...process.env, BREVIA_DATA_DIR: dataDir, BREVIA_MEETINGS_DIR: recordingsDir };
+const childEnv = {
+  ...process.env,
+  BREVIA_DATA_DIR: dataDir,
+  BREVIA_MEETINGS_DIR: recordingsDir,
+  BREVIA_MOBILE_PORT: '0',
+};
 // 只在开发机的 venv 真实存在时覆盖；CI 用 setup-python，写死 .venv 路径会让 worker 起不来。
 if (packagedApp) delete childEnv.BREVIA_PYTHON;
 else if (process.env.BREVIA_PYTHON || pythonBin)
@@ -569,7 +574,7 @@ try {
       results.push(translated && normalFits && fits());
       await openModal('device-connection');
       results.push(document.querySelector('#mobile-pair').textContent === t('连接新设备')
-        && document.querySelector('#mobile-install-title').textContent === t('安装手机端')
+        && document.querySelector('#mobile-install-title').textContent === t('安装Brevia手机端')
         && document.querySelector('.mobile-device-empty').textContent === t('尚未连接设备'));
       await closeModal();
     }
@@ -634,6 +639,22 @@ try {
   const detailLayout = await client.send('Runtime.evaluate', {
     expression: `(async () => {
     await initializationPromise;
+    const mobileDeadline = Date.now() + 10000;
+    while (!document.querySelector('.onboarding-mobile-page')) {
+      if (Date.now() > mobileDeadline) throw new Error('Mobile onboarding did not appear after AI setup');
+      await new Promise(resolve => setTimeout(resolve, 25));
+    }
+    const mobilePage = document.querySelector('.onboarding-mobile-page');
+    if (mobilePage.querySelectorAll('.mobile-install-platform img').length !== 2
+      || !mobilePage.querySelector('a[href$="/android/Brevia-android.apk"]')) throw new Error('Mobile downloads missing');
+    mobilePage.querySelector('[data-onboarding-mobile-pair]').click();
+    const pairDialog = document.querySelector('#mobile-pair-dialog');
+    for (let i = 0; i < 200 && !pairDialog.open; i++) await new Promise(resolve => setTimeout(resolve, 50));
+    if (!pairDialog.open || !document.querySelector('.onboarding-mobile-page')) throw new Error('Onboarding pairing is not a separate dialog: ' + JSON.stringify({open:pairDialog.open,connected:pairDialog.isConnected,error:document.querySelector('#mobile-pair-error').textContent,handler:typeof (mobileConnectionContent || document.getElementById('mobile-dialog')).querySelector('#mobile-pair').onclick}));
+    document.querySelector('#mobile-close-pairing').click();
+    for (let i = 0; i < 60 && pairDialog.open; i++) await new Promise(resolve => setTimeout(resolve, 50));
+    if (pairDialog.open) throw new Error('Pairing did not close');
+    mobilePage.querySelector('[data-onboarding-mobile-skip]').click();
     const tourDeadline = Date.now() + 10000;
     while (!document.querySelector('.onboarding-tour-overlay')) {
       if (Date.now() > tourDeadline) throw new Error('Onboarding tour did not appear');
@@ -938,8 +959,23 @@ try {
     await new Promise(resolve => setTimeout(resolve, 250));
     document.querySelector('#mobile-manage').click();
     const retained = !!settingsModal.querySelector('#mobile-pair')?.onclick;
+    document.querySelector('#mobile-pair').click();
+    const pairing = document.querySelector('#mobile-pair-dialog');
+    for (let i = 0; i < 60 && !pairing.open; i++) await new Promise(resolve => setTimeout(resolve, 50));
+    const separatePairing = pairing.open && !settingsModal.contains(pairing)
+      && getComputedStyle(pairing).animationName === 'surface-in'
+      && getComputedStyle(pairing, '::backdrop').animationName === 'overlay-in'
+      && /^\\d{6}$/.test(document.querySelector('#mobile-pin').textContent)
+      && !document.querySelector('#mobile-disable');
+    document.querySelector('#mobile-close-pairing').click();
+    for (let i = 0; i < 60 && !pairing.classList.contains('modal-leave'); i++) await new Promise(resolve => setTimeout(resolve, 10));
+    const pairingLeaving = pairing.open && getComputedStyle(pairing).animationName === 'surface-out'
+      && getComputedStyle(pairing, '::backdrop').animationName === 'overlay-out'
+      && !document.querySelector('#mobile-pairing').hidden;
+    for (let i = 0; i < 60 && pairing.open; i++) await new Promise(resolve => setTimeout(resolve, 50));
+    const pairingClosed = !pairing.open && !settingsModal.hidden;
     closeModal();
-    return {live, source, unique, mini, dialog: dialog && closing && retained};
+    return {live, source, unique, mini, dialog: dialog && closing && retained && separatePairing && pairingLeaving && pairingClosed};
 
   })()`,
     awaitPromise: true,

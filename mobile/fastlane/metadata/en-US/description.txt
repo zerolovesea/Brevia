@@ -1,9 +1,11 @@
-Brevia is a recording companion for the Brevia desktop app. It requires a computer running Brevia and cannot be used as a standalone meeting transcription or meeting notes app.
+Record meetings on your iPhone and work with your own computer using Brevia. Record offline, add notes and timestamped highlights, pause and resume, listen back and export audio. No account is required.
 
-Install and open Brevia on your computer, connect both devices to the same Wi-Fi or local network, then pair using the QR code or PIN in Device Connection. Remote connections over cellular networks are not supported in this version.
+For transcription, pair your iPhone with a computer running a compatible version of Brevia. Your phone captures audio while the computer runs speech recognition and returns transcripts and notes. The phone does not run transcription models. Live transcription, translation and computer AI features require an online computer with the corresponding models installed.
 
-Your phone captures audio while your computer handles speech recognition, transcription and notes. View the live transcript and notes returned by your computer, mark important moments and review synced meetings on your phone.
+Pair for the first time on the same local network using a QR code or manual pairing code, then approve the connection on the computer. Pairing does not automatically upload offline recordings: choose a destination computer and confirm before syncing. Saved audio stays on your phone when disconnected and uploads resume after reconnecting. Remote connections require configuring the relevant services on the computer and completing initial pairing on the local network.
 
-Background recording and reconnection help keep your recording available. Audio is saved on your phone during a connection interruption and uploaded when your computer reconnects. If the system interrupts recording, return to the app to check and resume.
+Background recording is supported, but calls, force-stop and system limits may interrupt it. Check the recording status when you return. Uploading after recording may require keeping the app in the foreground.
 
-Delete synced recordings from your phone without deleting the meetings on your computer. Microphone access is required to record, camera access to scan pairing codes, and local network access to connect. Obtain participants' consent before recording.
+Meetings are stored on your own devices. Deleting the phone copy does not delete the computer copy. If online AI is enabled on the computer, relevant text is processed by the selected provider according to the computer settings.
+
+Free, with no ads. Microphone access records audio, the camera only scans pairing codes, and local network access discovers and connects to computers. Manual pairing is also available. Obtain participants' consent before recording.

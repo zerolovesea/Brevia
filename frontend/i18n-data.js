@@ -162,15 +162,15 @@
         '2 分钟内有效': '2 分钟内有效',
         '未发现局域网，请连接 Wi-Fi': '未发现局域网，请连接 Wi-Fi',
         '连接失败，请重试': '连接失败，请重试',
-        '安装手机端': '安装手机端',
-        'Brevia 手机端是桌面端的配套应用。安装后，将手机与电脑连接到同一局域网，再点击「连接新设备」完成配对。':
-          'Brevia 手机端是桌面端的配套应用。安装后，将手机与电脑连接到同一局域网，再点击「连接新设备」完成配对。',
+        '安装Brevia手机端': '安装Brevia手机端',
+        '把手机变成随身会议助手。连接电脑后，在手机上录音、查看实时字幕和会议纪要，享用电脑端的转写与 AI 功能。也可以先离线录音，稍后连接电脑上传整理。':
+          '把手机变成随身会议助手。连接电脑后，在手机上录音、查看实时字幕和会议纪要，享用电脑端的转写与 AI 功能。也可以先离线录音，稍后连接电脑上传整理。',
         'iPhone · TestFlight 内测': 'iPhone · TestFlight 内测',
         '扫码安装 TestFlight，再打开邀请邮件中的链接安装 Brevia。仅受邀账号可用，尚未在 App Store 正式上架。':
           '扫码安装 TestFlight，再打开邀请邮件中的链接安装 Brevia。仅受邀账号可用，尚未在 App Store 正式上架。',
-        '下载待开放': '下载待开放',
-        '当前暂未提供公开下载。获得测试安装包后可直接安装；正式下载二维码将在开放后显示。':
-          '当前暂未提供公开下载。获得测试安装包后可直接安装；正式下载二维码将在开放后显示。',
+        '下载 Android APK': '下载 Android APK',
+        '扫码或点击链接，从 ModelScope 下载 APK。安装后可在手机设置中检查更新。':
+          '扫码或点击链接，从 ModelScope 下载 APK。安装后可在手机设置中检查更新。',
         '手机配对二维码': '手机配对二维码',
         '扫描前往 App Store 安装 TestFlight': '扫描前往 App Store 安装 TestFlight',
         '停止配对': '停止配对',
@@ -182,6 +182,10 @@
         '手机录音': '手机录音',
         '请先在手机结束录音并完成补传': '请先在手机结束录音并完成补传',
         '请在手机结束本次录音': '请在手机结束本次录音',
+        '该设备仍有未完成的录音，请先结束并补传': '该设备仍有未完成的录音，请先结束并补传',
+        '配对请求已过期': '配对请求已过期',
+        '电脑正在移动或清理数据，请稍后重试': '电脑正在移动或清理数据，请稍后重试',
+        '会议不存在': '会议不存在',
         '请先完成手机录音与补传，再清理数据': '请先完成手机录音与补传，再清理数据',
         '请先完成手机录音与补传，再移动文件夹': '请先完成手机录音与补传，再移动文件夹',
         '会议已在电脑永久删除': '会议已在电脑永久删除',
@@ -664,15 +668,15 @@
         '2 分钟内有效': 'Valid for 2 minutes',
         '未发现局域网，请连接 Wi-Fi': 'No local network found. Connect to Wi-Fi.',
         '连接失败，请重试': 'Connection failed. Try again.',
-        '安装手机端': 'Install the mobile app',
-        'Brevia 手机端是桌面端的配套应用。安装后，将手机与电脑连接到同一局域网，再点击「连接新设备」完成配对。':
-          'Brevia mobile works with the desktop app. Connect both devices to the same local network, then choose Connect new device to pair.',
+        '安装Brevia手机端': 'Install the Brevia mobile app',
+        '把手机变成随身会议助手。连接电脑后，在手机上录音、查看实时字幕和会议纪要，享用电脑端的转写与 AI 功能。也可以先离线录音，稍后连接电脑上传整理。':
+          'Turn your phone into a meeting companion. Connect to your computer to record, follow live captions and review meeting summaries on your phone, using your computer’s transcription and AI features. You can also record offline, then connect and upload for processing later.',
         'iPhone · TestFlight 内测': 'iPhone · TestFlight beta',
         '扫码安装 TestFlight，再打开邀请邮件中的链接安装 Brevia。仅受邀账号可用，尚未在 App Store 正式上架。':
           'Scan to install TestFlight, then open your email invitation to install Brevia. Invitation required; not yet released on the App Store.',
-        '下载待开放': 'Download coming soon',
-        '当前暂未提供公开下载。获得测试安装包后可直接安装；正式下载二维码将在开放后显示。':
-          'No public download yet. Install the test package when provided. A download QR code will appear when available.',
+        '下载 Android APK': 'Download Android APK',
+        '扫码或点击链接，从 ModelScope 下载 APK。安装后可在手机设置中检查更新。':
+          'Scan or click to download the APK from ModelScope. After installation, check for updates in the mobile settings.',
         '手机配对二维码': 'Phone pairing QR code',
         '扫描前往 App Store 安装 TestFlight': 'Scan to install TestFlight from the App Store',
         '停止配对': 'Stop pairing',
@@ -685,6 +689,12 @@
         '请先在手机结束录音并完成补传':
           'End the recording on your phone and finish uploading first',
         '请在手机结束本次录音': 'End this recording on your phone',
+        '该设备仍有未完成的录音，请先结束并补传':
+          'This device has unfinished recordings. End them and finish uploading first.',
+        '配对请求已过期': 'The pairing request has expired.',
+        '电脑正在移动或清理数据，请稍后重试':
+          'The computer is moving or clearing data. Please try again later.',
+        '会议不存在': 'Meeting not found.',
         '请先完成手机录音与补传，再清理数据':
           'Finish the phone recording and upload before clearing data',
         '请先完成手机录音与补传，再移动文件夹':
@@ -1307,15 +1317,15 @@
         '2 分钟内有效': 'Válido durante 2 minutos',
         '未发现局域网，请连接 Wi-Fi': 'No se detectó una red local. Conéctate al Wi-Fi.',
         '连接失败，请重试': 'Error de conexión. Inténtalo de nuevo.',
-        '安装手机端': 'Instalar la app móvil',
-        'Brevia 手机端是桌面端的配套应用。安装后，将手机与电脑连接到同一局域网，再点击「连接新设备」完成配对。':
-          'Brevia móvil complementa la app de escritorio. Conecta ambos dispositivos a la misma red local y pulsa Conectar nuevo dispositivo.',
+        '安装Brevia手机端': 'Instalar la app móvil de Brevia',
+        '把手机变成随身会议助手。连接电脑后，在手机上录音、查看实时字幕和会议纪要，享用电脑端的转写与 AI 功能。也可以先离线录音，稍后连接电脑上传整理。':
+          'Convierte tu móvil en un asistente de reuniones. Conéctalo al ordenador para grabar, seguir subtítulos en directo y consultar resúmenes desde el móvil con las funciones de transcripción e IA del ordenador. También puedes grabar sin conexión y subir la grabación más tarde para procesarla.',
         'iPhone · TestFlight 内测': 'iPhone · Beta de TestFlight',
         '扫码安装 TestFlight，再打开邀请邮件中的链接安装 Brevia。仅受邀账号可用，尚未在 App Store 正式上架。':
           'Escanea para instalar TestFlight y abre la invitación por correo para instalar Brevia. Solo con invitación; aún no disponible en el App Store.',
-        '下载待开放': 'Descarga próximamente',
-        '当前暂未提供公开下载。获得测试安装包后可直接安装；正式下载二维码将在开放后显示。':
-          'Aún no hay descarga pública. Instala el paquete de prueba cuando lo recibas. El código QR aparecerá cuando esté disponible.',
+        '下载 Android APK': 'Descargar APK para Android',
+        '扫码或点击链接，从 ModelScope 下载 APK。安装后可在手机设置中检查更新。':
+          'Escanea o pulsa el enlace para descargar el APK desde ModelScope. Busca actualizaciones en los ajustes de la app.',
         '手机配对二维码': 'Código QR de vinculación',
         '扫描前往 App Store 安装 TestFlight': 'Escanea para instalar TestFlight desde el App Store',
         '停止配对': 'Detener vinculación',
@@ -1328,6 +1338,12 @@
         '手机录音': 'Grabación móvil',
         '请先在手机结束录音并完成补传': 'Finaliza la grabación y la carga en el teléfono primero',
         '请在手机结束本次录音': 'Finaliza esta grabación en el teléfono',
+        '该设备仍有未完成的录音，请先结束并补传':
+          'Este dispositivo tiene grabaciones pendientes. Finalízalas y completa la carga primero.',
+        '配对请求已过期': 'La solicitud de vinculación ha caducado.',
+        '电脑正在移动或清理数据，请稍后重试':
+          'El ordenador está moviendo o borrando datos. Inténtalo más tarde.',
+        '会议不存在': 'No se encontró la reunión.',
         '请先完成手机录音与补传，再清理数据':
           'Finaliza la grabación y la carga antes de borrar los datos',
         '请先完成手机录音与补传，再移动文件夹':
@@ -1952,15 +1968,15 @@
         '2 分钟内有效': '有効期限 2 分',
         '未发现局域网，请连接 Wi-Fi': 'LAN が見つかりません。Wi-Fi に接続してください。',
         '连接失败，请重试': '接続に失敗しました。再試行してください。',
-        '安装手机端': 'モバイルアプリをインストール',
-        'Brevia 手机端是桌面端的配套应用。安装后，将手机与电脑连接到同一局域网，再点击「连接新设备」完成配对。':
-          'Brevia モバイルはデスクトップ版の連携アプリです。両方を同じ LAN に接続し、「新しいデバイスを接続」でペアリングしてください。',
+        '安装Brevia手机端': 'Brevia モバイルアプリをインストール',
+        '把手机变成随身会议助手。连接电脑后，在手机上录音、查看实时字幕和会议纪要，享用电脑端的转写与 AI 功能。也可以先离线录音，稍后连接电脑上传整理。':
+          'スマートフォンを持ち歩ける会議アシスタントに。パソコンにつなぐと、パソコンの文字起こし・AI 機能を使って、スマートフォンで録音、リアルタイム字幕や議事録の確認ができます。オフラインで録音し、あとでパソコンにつないでアップロードすることもできます。',
         'iPhone · TestFlight 内测': 'iPhone · TestFlight ベータ',
         '扫码安装 TestFlight，再打开邀请邮件中的链接安装 Brevia。仅受邀账号可用，尚未在 App Store 正式上架。':
           'スキャンして TestFlight をインストールし、招待メールから Brevia を入手してください。招待されたアカウントのみ利用可能です。App Store では未公開です。',
-        '下载待开放': 'ダウンロード準備中',
-        '当前暂未提供公开下载。获得测试安装包后可直接安装；正式下载二维码将在开放后显示。':
-          '現在、一般公開のダウンロードはありません。テスト用パッケージを入手後にインストールできます。公開後に QR コードを表示します。',
+        '下载 Android APK': 'Android APK をダウンロード',
+        '扫码或点击链接，从 ModelScope 下载 APK。安装后可在手机设置中检查更新。':
+          'スキャンまたはリンクから ModelScope の APK をダウンロード。インストール後はアプリの設定で更新を確認できます。',
         '手机配对二维码': 'スマートフォン用ペアリング QR コード',
         '扫描前往 App Store 安装 TestFlight':
           'スキャンして App Store から TestFlight をインストール',
@@ -1974,6 +1990,12 @@
         '手机录音': 'スマートフォン録音',
         '请先在手机结束录音并完成补传': '先にスマートフォンで録音を終了し、送信を完了してください',
         '请在手机结束本次录音': 'スマートフォンでこの録音を終了してください',
+        '该设备仍有未完成的录音，请先结束并补传':
+          'この端末には未完了の録音があります。録音を終了し、アップロードを完了してください。',
+        '配对请求已过期': 'ペアリング要求の有効期限が切れました。',
+        '电脑正在移动或清理数据，请稍后重试':
+          'パソコンでデータを移動または削除しています。しばらくしてから再試行してください。',
+        '会议不存在': '会議が見つかりません。',
         '请先完成手机录音与补传，再清理数据':
           'スマートフォンの録音と送信を完了してからデータを削除してください',
         '请先完成手机录音与补传，再移动文件夹':
@@ -2592,15 +2614,15 @@
         '2 分钟内有效': '2분간 유효',
         '未发现局域网，请连接 Wi-Fi': '로컬 네트워크를 찾을 수 없습니다. Wi-Fi에 연결하세요.',
         '连接失败，请重试': '연결하지 못했습니다. 다시 시도하세요.',
-        '安装手机端': '모바일 앱 설치',
-        'Brevia 手机端是桌面端的配套应用。安装后，将手机与电脑连接到同一局域网，再点击「连接新设备」完成配对。':
-          'Brevia 모바일은 데스크톱 앱의 보조 앱입니다. 두 기기를 같은 로컬 네트워크에 연결한 뒤 새 기기 연결을 누르세요.',
+        '安装Brevia手机端': 'Brevia 모바일 앱 설치',
+        '把手机变成随身会议助手。连接电脑后，在手机上录音、查看实时字幕和会议纪要，享用电脑端的转写与 AI 功能。也可以先离线录音，稍后连接电脑上传整理。':
+          '휴대폰을 휴대용 회의 도우미로 활용하세요. 컴퓨터에 연결하면 컴퓨터의 전사 및 AI 기능을 이용해 휴대폰에서 녹음하고 실시간 자막과 회의 요약을 확인할 수 있습니다. 오프라인으로 먼저 녹음한 뒤 나중에 연결하여 업로드하고 정리할 수도 있습니다.',
         'iPhone · TestFlight 内测': 'iPhone · TestFlight 베타',
         '扫码安装 TestFlight，再打开邀请邮件中的链接安装 Brevia。仅受邀账号可用，尚未在 App Store 正式上架。':
           '스캔하여 TestFlight를 설치한 뒤 초대 이메일에서 Brevia를 설치하세요. 초대된 계정만 사용할 수 있으며 App Store에는 아직 출시되지 않았습니다.',
-        '下载待开放': '다운로드 준비 중',
-        '当前暂未提供公开下载。获得测试安装包后可直接安装；正式下载二维码将在开放后显示。':
-          '아직 공개 다운로드가 없습니다. 테스트 설치 파일을 받으면 설치할 수 있습니다. 공개 후 다운로드 QR 코드가 표시됩니다.',
+        '下载 Android APK': 'Android APK 다운로드',
+        '扫码或点击链接，从 ModelScope 下载 APK。安装后可在手机设置中检查更新。':
+          '스캔하거나 링크를 눌러 ModelScope에서 APK를 다운로드하세요. 설치 후 앱 설정에서 업데이트를 확인할 수 있습니다。',
         '手机配对二维码': '휴대폰 연결 QR 코드',
         '扫描前往 App Store 安装 TestFlight': '스캔하여 App Store에서 TestFlight 설치',
         '停止配对': '연결 중지',
@@ -2613,6 +2635,12 @@
         '手机录音': '휴대폰 녹음',
         '请先在手机结束录音并完成补传': '먼저 휴대폰 녹음을 종료하고 업로드를 완료하세요',
         '请在手机结束本次录音': '휴대폰에서 이 녹음을 종료하세요',
+        '该设备仍有未完成的录音，请先结束并补传':
+          '이 기기에 완료되지 않은 녹음이 있습니다. 먼저 녹음을 종료하고 업로드를 완료하세요.',
+        '配对请求已过期': '페어링 요청이 만료되었습니다.',
+        '电脑正在移动或清理数据，请稍后重试':
+          '컴퓨터에서 데이터를 이동하거나 삭제하고 있습니다. 잠시 후 다시 시도하세요.',
+        '会议不存在': '회의를 찾을 수 없습니다.',
         '请先完成手机录音与补传，再清理数据':
           '데이터를 지우기 전에 휴대폰 녹음과 업로드를 완료하세요',
         '请先完成手机录音与补传，再移动文件夹':
@@ -3230,15 +3258,15 @@
         '2 分钟内有效': 'Valable 2 minutes',
         '未发现局域网，请连接 Wi-Fi': 'Aucun réseau local détecté. Connectez-vous au Wi-Fi.',
         '连接失败，请重试': 'Connexion impossible. Réessayez.',
-        '安装手机端': 'Installer l’app mobile',
-        'Brevia 手机端是桌面端的配套应用。安装后，将手机与电脑连接到同一局域网，再点击「连接新设备」完成配对。':
-          'Brevia mobile accompagne l’app de bureau. Connectez les deux appareils au même réseau local, puis choisissez Connecter un appareil.',
+        '安装Brevia手机端': 'Installer l’app mobile Brevia',
+        '把手机变成随身会议助手。连接电脑后，在手机上录音、查看实时字幕和会议纪要，享用电脑端的转写与 AI 功能。也可以先离线录音，稍后连接电脑上传整理。':
+          'Transformez votre téléphone en assistant de réunion. Connectez-le à votre ordinateur pour enregistrer, suivre les sous-titres en direct et consulter les comptes rendus sur votre téléphone grâce aux fonctions de transcription et d’IA de l’ordinateur. Vous pouvez aussi enregistrer hors ligne, puis vous connecter pour envoyer et traiter l’enregistrement plus tard.',
         'iPhone · TestFlight 内测': 'iPhone · Bêta TestFlight',
         '扫码安装 TestFlight，再打开邀请邮件中的链接安装 Brevia。仅受邀账号可用，尚未在 App Store 正式上架。':
           'Scannez pour installer TestFlight, puis ouvrez votre invitation pour installer Brevia. Sur invitation uniquement ; pas encore publié sur l’App Store.',
-        '下载待开放': 'Téléchargement à venir',
-        '当前暂未提供公开下载。获得测试安装包后可直接安装；正式下载二维码将在开放后显示。':
-          'Pas encore de téléchargement public. Installez le fichier de test lorsqu’il vous sera fourni. Le QR code sera affiché à l’ouverture.',
+        '下载 Android APK': 'Télécharger l’APK Android',
+        '扫码或点击链接，从 ModelScope 下载 APK。安装后可在手机设置中检查更新。':
+          'Scannez ou cliquez pour télécharger l’APK depuis ModelScope. Vérifiez ensuite les mises à jour dans les réglages de l’application.',
         '手机配对二维码': 'QR code de jumelage',
         '扫描前往 App Store 安装 TestFlight':
           'Scannez pour installer TestFlight depuis l’App Store',
@@ -3253,6 +3281,12 @@
         '请先在手机结束录音并完成补传':
           'Terminez d’abord l’enregistrement et l’envoi sur le téléphone',
         '请在手机结束本次录音': 'Terminez cet enregistrement sur le téléphone',
+        '该设备仍有未完成的录音，请先结束并补传':
+          'Cet appareil contient des enregistrements inachevés. Terminez-les et achevez leur transfert.',
+        '配对请求已过期': 'La demande de jumelage a expiré.',
+        '电脑正在移动或清理数据，请稍后重试':
+          'L’ordinateur déplace ou efface des données. Réessayez plus tard.',
+        '会议不存在': 'Réunion introuvable.',
         '请先完成手机录音与补传，再清理数据':
           'Terminez l’enregistrement et l’envoi avant d’effacer les données',
         '请先完成手机录音与补传，再移动文件夹':
@@ -3881,15 +3915,15 @@
         '2 分钟内有效': '2 Minuten gültig',
         '未发现局域网，请连接 Wi-Fi': 'Kein lokales Netzwerk gefunden. Verbinde dich mit WLAN.',
         '连接失败，请重试': 'Verbindung fehlgeschlagen. Versuche es erneut.',
-        '安装手机端': 'Mobile App installieren',
-        'Brevia 手机端是桌面端的配套应用。安装后，将手机与电脑连接到同一局域网，再点击「连接新设备」完成配对。':
-          'Brevia mobil ergänzt die Desktop-App. Verbinde beide Geräte mit demselben lokalen Netzwerk und wähle Neues Gerät verbinden.',
+        '安装Brevia手机端': 'Brevia Mobile App installieren',
+        '把手机变成随身会议助手。连接电脑后，在手机上录音、查看实时字幕和会议纪要，享用电脑端的转写与 AI 功能。也可以先离线录音，稍后连接电脑上传整理。':
+          'Machen Sie Ihr Handy zum mobilen Besprechungsassistenten. Verbinden Sie es mit Ihrem Computer, um auf dem Handy aufzunehmen, Live-Untertitel zu verfolgen und Zusammenfassungen anzusehen – mit den Transkriptions- und KI-Funktionen Ihres Computers. Sie können auch offline aufnehmen und die Aufnahme später zur Verarbeitung hochladen.',
         'iPhone · TestFlight 内测': 'iPhone · TestFlight-Beta',
         '扫码安装 TestFlight，再打开邀请邮件中的链接安装 Brevia。仅受邀账号可用，尚未在 App Store 正式上架。':
           'Scanne zum Installieren von TestFlight und öffne dann die Einladung per E-Mail für Brevia. Nur auf Einladung; noch nicht im App Store veröffentlicht.',
-        '下载待开放': 'Download folgt',
-        '当前暂未提供公开下载。获得测试安装包后可直接安装；正式下载二维码将在开放后显示。':
-          'Noch kein öffentlicher Download. Installiere das bereitgestellte Testpaket. Der Download-QR-Code erscheint nach der Freigabe.',
+        '下载 Android APK': 'Android-APK herunterladen',
+        '扫码或点击链接，从 ModelScope 下载 APK。安装后可在手机设置中检查更新。':
+          'Scannen oder anklicken, um die APK von ModelScope herunterzuladen. Updates lassen sich danach in den App-Einstellungen prüfen.',
         '手机配对二维码': 'QR-Code zum Koppeln',
         '扫描前往 App Store 安装 TestFlight':
           'Scannen, um TestFlight aus dem App Store zu installieren',
@@ -3903,6 +3937,12 @@
         '手机录音': 'Smartphone-Aufnahme',
         '请先在手机结束录音并完成补传': 'Beenden Sie zuerst die Smartphone-Aufnahme und den Upload',
         '请在手机结束本次录音': 'Beenden Sie diese Aufnahme auf dem Smartphone',
+        '该设备仍有未完成的录音，请先结束并补传':
+          'Dieses Gerät hat unvollständige Aufnahmen. Beenden Sie diese und schließen Sie den Upload ab.',
+        '配对请求已过期': 'Die Kopplungsanfrage ist abgelaufen.',
+        '电脑正在移动或清理数据，请稍后重试':
+          'Der Computer verschiebt oder löscht Daten. Versuchen Sie es später erneut.',
+        '会议不存在': 'Besprechung nicht gefunden.',
         '请先完成手机录音与补传，再清理数据':
           'Beenden Sie Aufnahme und Upload vor dem Löschen der Daten',
         '请先完成手机录音与补传，再移动文件夹':
@@ -4533,15 +4573,15 @@
         '2 分钟内有效': 'Действует 2 минуты',
         '未发现局域网，请连接 Wi-Fi': 'Локальная сеть не найдена. Подключитесь к Wi-Fi.',
         '连接失败，请重试': 'Не удалось подключиться. Повторите попытку.',
-        '安装手机端': 'Установить мобильное приложение',
-        'Brevia 手机端是桌面端的配套应用。安装后，将手机与电脑连接到同一局域网，再点击「连接新设备」完成配对。':
-          'Brevia для телефона дополняет настольное приложение. Подключите оба устройства к одной локальной сети и выберите «Подключить устройство».',
+        '安装Brevia手机端': 'Установить мобильное приложение Brevia',
+        '把手机变成随身会议助手。连接电脑后，在手机上录音、查看实时字幕和会议纪要，享用电脑端的转写与 AI 功能。也可以先离线录音，稍后连接电脑上传整理。':
+          'Превратите телефон в помощника для встреч. Подключитесь к компьютеру, чтобы записывать, следить за субтитрами в реальном времени и читать итоги встречи на телефоне с помощью транскрибации и ИИ на компьютере. Можно также записать офлайн, а позже подключиться и загрузить запись для обработки.',
         'iPhone · TestFlight 内测': 'iPhone · Бета TestFlight',
         '扫码安装 TestFlight，再打开邀请邮件中的链接安装 Brevia。仅受邀账号可用，尚未在 App Store 正式上架。':
           'Отсканируйте код для установки TestFlight, затем откройте приглашение из почты для установки Brevia. Только по приглашению; в App Store пока не опубликовано.',
-        '下载待开放': 'Скоро для скачивания',
-        '当前暂未提供公开下载。获得测试安装包后可直接安装；正式下载二维码将在开放后显示。':
-          'Общедоступной загрузки пока нет. Установите тестовый пакет, когда получите его. QR-код появится после открытия загрузки.',
+        '下载 Android APK': 'Скачать APK для Android',
+        '扫码或点击链接，从 ModelScope 下载 APK。安装后可在手机设置中检查更新。':
+          'Отсканируйте код или нажмите ссылку для загрузки APK из ModelScope. После установки проверяйте обновления в настройках приложения.',
         '手机配对二维码': 'QR-код сопряжения телефона',
         '扫描前往 App Store 安装 TestFlight': 'Отсканируйте для установки TestFlight из App Store',
         '停止配对': 'Остановить сопряжение',
@@ -4554,6 +4594,12 @@
         '手机录音': 'Запись с телефона',
         '请先在手机结束录音并完成补传': 'Сначала завершите запись на телефоне и загрузку',
         '请在手机结束本次录音': 'Завершите эту запись на телефоне',
+        '该设备仍有未完成的录音，请先结束并补传':
+          'На устройстве есть незавершённые записи. Завершите их и дождитесь окончания загрузки.',
+        '配对请求已过期': 'Срок действия запроса на сопряжение истёк.',
+        '电脑正在移动或清理数据，请稍后重试':
+          'Компьютер перемещает или удаляет данные. Повторите попытку позже.',
+        '会议不存在': 'Встреча не найдена.',
         '请先完成手机录音与补传，再清理数据': 'Завершите запись и загрузку перед очисткой данных',
         '请先完成手机录音与补传，再移动文件夹':
           'Завершите запись и загрузку перед перемещением папки',
@@ -7369,14 +7415,14 @@
       'ru': 'Модели получены из надёжных источников и проходят проверку целостности.\nВаши аудиоданные никогда не загружаются в облако.',
     },
     'onboardingLanguageCopy': {
-      'zh': ['选择你的语言', '选择言录的界面语言。', '继续'],
-      'en': ['Choose your language', 'Choose the language for Brevia.', 'Continue'],
-      'es': ['Elige tu idioma', 'Elige el idioma para Brevia.', 'Continuar'],
-      'ja': ['言語を選択', 'Brevia で使用する言語を選択してください。', '続ける'],
-      'ko': ['언어를 선택하세요', 'Brevia에서 사용할 언어를 선택하세요.', '계속'],
-      'fr': ['Choisissez votre langue', 'Choisissez la langue de Brevia.', 'Continuer'],
-      'de': ['Sprache auswählen', 'Wählen Sie die Sprache für Brevia.', 'Fortfahren'],
-      'ru': ['Выберите язык', 'Выберите язык для Brevia.', 'Продолжить'],
+      'zh': ['选择你的语言', '选择言录的界面语言。', '下一步'],
+      'en': ['Choose your language', 'Choose the language for Brevia.', 'Next'],
+      'es': ['Elige tu idioma', 'Elige el idioma para Brevia.', 'Siguiente'],
+      'ja': ['言語を選択', 'Brevia で使用する言語を選択してください。', '次へ'],
+      'ko': ['언어를 선택하세요', 'Brevia에서 사용할 언어를 선택하세요.', '다음'],
+      'fr': ['Choisissez votre langue', 'Choisissez la langue de Brevia.', 'Suivant'],
+      'de': ['Sprache auswählen', 'Wählen Sie die Sprache für Brevia.', 'Weiter'],
+      'ru': ['Выберите язык', 'Выберите язык для Brevia.', 'Далее'],
     },
     'aiOnboardingCopy': {
       'zh': {
@@ -7408,7 +7454,7 @@
           ['assist', '发现重点时提醒我', '发现结论、决策、待办、重要数字时适度提醒。'],
           ['auto', '自动帮我整理', '自动归纳结论、收集待办并整理会议内容。'],
         ],
-        'finish': '完成',
+        'finish': '下一步',
         'skip': '暂不启用',
       },
       'en': {
@@ -7458,7 +7504,7 @@
             'Automatically summarizes conclusions and organizes the meeting.',
           ],
         ],
-        'finish': 'Done',
+        'finish': 'Next',
         'skip': 'Not now',
       },
       'es': {
@@ -7509,7 +7555,7 @@
             'Resume conclusiones y organiza la reunión automáticamente.',
           ],
         ],
-        'finish': 'Listo',
+        'finish': 'Siguiente',
         'skip': 'Ahora no',
       },
       'ja': {
@@ -7547,7 +7593,7 @@
           ['assist', '要点を知らせる', '結論・決定・ToDo・重要な数字を適度に知らせます。'],
           ['auto', '自動で整理する', '結論をまとめ、会議内容を自動整理します。'],
         ],
-        'finish': '完了',
+        'finish': '次へ',
         'skip': 'あとで',
       },
       'ko': {
@@ -7582,7 +7628,7 @@
           ['assist', '핵심 포인트 알림', '결론·결정·할 일·중요 수치를 적절히 알립니다.'],
           ['auto', '자동으로 정리', '결론을 요약하고 회의를 자동 정리합니다.'],
         ],
-        'finish': '완료',
+        'finish': '다음',
         'skip': '나중에',
         'proactivityHint':
           '더 적극적으로 설정할수록 AI가 더 자주 개입합니다. 언제든 AI 메모 설정에서 조정할 수 있습니다.',
@@ -7635,7 +7681,7 @@
             'Résume les conclusions et organise la réunion automatiquement.',
           ],
         ],
-        'finish': 'Terminé',
+        'finish': 'Suivant',
         'skip': 'Pas maintenant',
       },
       'de': {
@@ -7686,7 +7732,7 @@
             'Fasst Schlussfolgerungen zusammen und ordnet die Besprechung automatisch.',
           ],
         ],
-        'finish': 'Fertig',
+        'finish': 'Weiter',
         'skip': 'Später',
       },
       'ru': {
@@ -7735,7 +7781,7 @@
             'Автоматически резюмирует выводы и упорядочивает встречу.',
           ],
         ],
-        'finish': 'Готово',
+        'finish': 'Далее',
         'skip': 'Не сейчас',
       },
     },
@@ -9529,7 +9575,7 @@
         bundledTitle: '已随应用安装',
         bundledDetail: '语音活动检测 · 说话人分离 · 声纹识别',
         atLeastOne: '至少要选一个识别模型，否则无法生成字幕。',
-        download: '下载并继续',
+        download: '下一步',
         later: '稍后设置',
         estimate: '本次下载',
         total: '合计',
@@ -9540,7 +9586,7 @@
         bundledTitle: 'Included with the app',
         bundledDetail: 'Voice activity detection · Speaker diarization · Voiceprint',
         atLeastOne: 'Pick at least one recognition model, otherwise captions cannot be generated.',
-        download: 'Download and continue',
+        download: 'Next',
         later: 'Set up later',
         estimate: 'Download',
         total: 'Total',
@@ -9552,7 +9598,7 @@
         bundledDetail: 'Detección de voz · Separación de hablantes · Huella de voz',
         atLeastOne:
           'Elige al menos un modelo de reconocimiento; si no, no se pueden generar subtítulos.',
-        download: 'Descargar y continuar',
+        download: 'Siguiente',
         later: 'Configurar más tarde',
         estimate: 'Descarga',
         total: 'Total',
@@ -9563,7 +9609,7 @@
         bundledTitle: 'アプリに同梱済み',
         bundledDetail: '音声活動検出 · 話者分離 · 声紋',
         atLeastOne: '認識モデルを 1 つ以上選んでください。選ばないと字幕を生成できません。',
-        download: 'ダウンロードして続ける',
+        download: '次へ',
         later: 'あとで設定',
         estimate: 'ダウンロード',
         total: '合計',
@@ -9574,7 +9620,7 @@
         bundledTitle: '앱에 포함됨',
         bundledDetail: '음성 활동 감지 · 화자 분리 · 성문',
         atLeastOne: '인식 모델을 하나 이상 선택하세요. 선택하지 않으면 자막을 만들 수 없습니다.',
-        download: '다운로드하고 계속',
+        download: '다음',
         later: '나중에 설정',
         estimate: '다운로드',
         total: '합계',
@@ -9586,7 +9632,7 @@
         bundledDetail: 'Détection vocale · Séparation des locuteurs · Empreinte vocale',
         atLeastOne:
           'Choisissez au moins un modèle de reconnaissance, sinon aucun sous-titre ne peut être généré.',
-        download: 'Télécharger et continuer',
+        download: 'Suivant',
         later: 'Configurer plus tard',
         estimate: 'Téléchargement',
         total: 'Total',
@@ -9598,7 +9644,7 @@
         bundledDetail: 'Sprachaktivitätserkennung · Sprechertrennung · Stimmabdruck',
         atLeastOne:
           'Wählen Sie mindestens ein Erkennungsmodell, sonst können keine Untertitel erzeugt werden.',
-        download: 'Herunterladen und fortfahren',
+        download: 'Weiter',
         later: 'Später einrichten',
         estimate: 'Download',
         total: 'Gesamt',
@@ -9609,7 +9655,7 @@
         bundledTitle: 'Входит в приложение',
         bundledDetail: 'Детекция речи · Разделение говорящих · Голосовой отпечаток',
         atLeastOne: 'Выберите хотя бы одну модель распознавания, иначе субтитры создать нельзя.',
-        download: 'Скачать и продолжить',
+        download: 'Далее',
         later: 'Настроить позже',
         estimate: 'Загрузка',
         total: 'Всего',

@@ -5670,6 +5670,43 @@ class WorkerTest(unittest.TestCase):
         )
         self.assertNotEqual(literal["id"], other["id"])
 
+    def test_mobile_translation_uses_current_edited_segments_once(self):
+        meeting = self.worker.store.create_meeting(
+            {'title': 'translation', 'language': 'zh', 'refined_model_id': 'test'}
+        )
+        mid = meeting['id']
+        self.worker.store.set_status(mid, 'ready')
+        old = {'segment_id': 'old', 'text': '旧稿', 'start_ms': 0, 'end_ms': 100}
+        self.worker.store.replace_segments(mid, [old])
+        self.worker.store.save_segment_texts(mid, [{'segment_id': 'old', 'text': '旧稿编辑'}])
+        current = [
+            {'segment_id': 'one', 'text': '预算三万元', 'start_ms': 0, 'end_ms': 100},
+            {'segment_id': 'two', 'text': '明天开始', 'start_ms': 100, 'end_ms': 200},
+        ]
+        self.worker.store.replace_segments(mid, current, 'postprocess-1', 1)
+        self.worker.store.save_segment_texts(mid, [{'segment_id': 'one', 'text': '预算五万元'}])
+        prompts = []
+
+        def translate(*args, **kwargs):
+            prompts.append(args[2].split('\n\n')[-1])
+            return 'Translation: ' + prompts[-1]
+
+        self.worker.llama_generate = translate
+        payload = {'meeting_id': mid, 'target_language': 'en', 'consent': True}
+        self.worker.mobile_translate(payload)
+        self.assertEqual(prompts, ['预算五万元', '明天开始'])
+        segments = self.worker.store.get_meeting(mid, compact=True)['segments']
+        self.assertEqual(
+            [s['translation'] for s in segments],
+            [
+                'Translation: 预算五万元',
+                'Translation: 明天开始',
+            ],
+        )
+        prompts.clear()
+        self.worker.translate({**payload, 'segment_id': 'one'})
+        self.assertEqual(prompts, ['预算五万元'])
+
     def test_translation_is_explicit_and_persisted(self):
         meeting = self.worker.start(
             {

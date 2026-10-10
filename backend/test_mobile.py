@@ -103,7 +103,7 @@ class MobileReplayTest(unittest.TestCase):
     def test_translation_processes_every_segment_and_rejects_active_recording(self):
         bridge = Bridge(
             SimpleNamespace(
-                get_meeting=lambda _: {
+                get_meeting=lambda _, **kwargs: {
                     'status': 'ready',
                     'segments': [{'id': 'one'}, {'id': 'two'}],
                 }
@@ -116,7 +116,7 @@ class MobileReplayTest(unittest.TestCase):
         self.assertEqual(
             calls, [{**payload, 'segment_id': 'one'}, {**payload, 'segment_id': 'two'}]
         )
-        bridge.store.get_meeting = lambda _: {'status': 'recording', 'segments': []}
+        bridge.store.get_meeting = lambda _, **kwargs: {'status': 'recording', 'segments': []}
         with self.assertRaises(ValueError):
             bridge.mobile_translate(payload)
 

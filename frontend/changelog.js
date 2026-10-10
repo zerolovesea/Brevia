@@ -2,9 +2,67 @@
 (() => {
   const releases = [
     {
+      'version': '1.3.0',
+      'date': '2026-10-10',
+      'current': true,
+      'previousVersion': '1.2.3',
+      'contributors': [],
+      'zh': {
+        'summary': '新增手机录音与电脑转写联动，完善离线补传、设备管理和录音恢复。',
+        'what': [
+          '新增手机设备连接与管理：在电脑确认二维码或 PIN 配对，手机录音由电脑识别并回传字幕与笔记。',
+          '手机支持独立离线录音、时间点重点、回听与导出；选择电脑并确认后再上传。',
+          '支持配置自有信令/TURN 服务跨网连接；首次配对仍需局域网。',
+        ],
+        'improved': [
+          '按持久化样本位置恢复补传，重复上传不会重复写入音频；电脑重启或短暂断网后继续同步。',
+          '完善手机连接提示与八种语言的错误文案；Android 支持从设置检查签名更新。',
+        ],
+        'fixed': [
+          '修复定时重连打断连接协商、慢网络阻塞暂停和结束录音的问题。',
+          '修复翻译重复处理历史版本、未采用人工修改后字幕的问题。',
+          '本地录音分片缺失时拒绝恢复并保留原文件，防止覆盖后续有效音频。',
+          '会议复测支持导入音频，并沿用后端的平台和语言默认模型。',
+        ],
+        'security': ['配对凭据保存在系统安全存储，连接校验电脑身份；设备取消信任后撤销访问权限。'],
+        'changes': [
+          '手机本身不运行识别模型；实时转写和翻译需要电脑在线且安装相应模型。',
+          'iOS 1.0 正在提交 App Store 审核，正式可下载时间取决于 Apple 审核；Android 可使用签名 APK。',
+          '来电、强制停止和系统限制仍可能中断录音；结束录音后的补传可能需要保持手机应用在前台。',
+        ],
+      },
+      'en': {
+        'summary':
+          'Adds phone recording with desktop transcription, with offline upload recovery, device management and safer recording recovery.',
+        'what': [
+          'Pair and manage phones from the desktop using a QR code or PIN and computer approval. Desktop recognition returns transcripts and notes to the phone.',
+          'Record offline on the phone, mark timestamps, listen back and export; select a computer and confirm before uploading.',
+          'Configure your own signalling/TURN services for remote connections; initial pairing still requires the local network.',
+        ],
+        'improved': [
+          'Uploads resume from persisted sample positions without duplicating audio, including after a desktop restart or a temporary disconnection.',
+          'Clearer phone connection status and error messages in eight languages; Android can check for signed updates in Settings.',
+        ],
+        'fixed': [
+          'Periodic reconnects no longer interrupt connection negotiation or let slow networks block pause and stop controls.',
+          'Translation processes the current transcript once and respects manual text edits.',
+          'Missing local recording chunks now stop recovery and preserve the files instead of overwriting later valid audio.',
+          'Meeting replay supports imported audio and follows backend platform and language model defaults.',
+        ],
+        'security': [
+          'Pairing credentials use system secure storage and connections verify the computer identity; revoking trust removes device access.',
+        ],
+        'changes': [
+          'The phone does not run recognition models. Live transcription and translation require an online computer with the corresponding models installed.',
+          'iOS 1.0 is being submitted for App Store review; availability depends on Apple approval. Android is available as a signed APK.',
+          'Calls, force-stop and system limits can interrupt recording. Uploads after recording may require keeping the phone app in the foreground.',
+        ],
+      },
+    },
+    {
       'version': '1.2.3',
       'date': '2026-10-05',
-      'current': true,
+      'current': false,
       'previousVersion': '1.2.2',
       'contributors': [],
       'zh': {

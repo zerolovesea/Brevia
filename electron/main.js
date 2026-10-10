@@ -2325,6 +2325,8 @@ app.whenReady().then(async () => {
   }
   registerNoteImageProtocol();
   mobileServer = new MobileServer({
+    // 端到端测试使用临时端口，避免与正在运行的桌面端争用。
+    port: process.env.BREVIA_MOBILE_PORT === '0' ? 0 : undefined,
     directory: path.join(dataDir(), 'mobile'),
     active: () => worker.active,
     discovered: () => worker.sendEvent('mobile.discovered', {}),

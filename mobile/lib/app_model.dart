@@ -62,7 +62,7 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   bool serviceRunning = false, refreshing = false, busy = false;
-  bool foreground = true;
+  bool foreground = true, checkingDesktop = false;
   String? error;
   String appearance = 'system';
   bool desktopOnline = false;
@@ -165,8 +165,9 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
         allowWifiLock: true,
       ),
     );
-    await refresh();
+    await refresh(localOnly: true);
     if (disposed) return;
+    unawaited(refresh());
     if (desktop == null) unawaited(discover());
     timer = Timer.periodic(Duration(seconds: 2), (_) {
       if (foreground) {
@@ -214,8 +215,22 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
     if (foreground) unawaited(refresh());
   }
 
-  Future<void> refresh() async {
-    if (refreshing || busy || disposed) return;
+  Future<void> refresh({bool localOnly = false}) async {
+    if (refreshing || checkingDesktop || busy || disposed) return;
+    // 连通性探测不持有本地录音锁；离线启动和开始录音不等待网络超时。
+    if (!localOnly && desktop != null && !serviceRunning && engine == null) {
+      final connection = desktop!;
+      checkingDesktop = true;
+      try {
+        await connection.call('GET', '/meetings');
+        if (desktop == connection) desktopOnline = true;
+      } catch (_) {
+        if (desktop == connection) desktopOnline = false;
+      } finally {
+        checkingDesktop = false;
+      }
+      if (disposed || busy || desktop != connection) return;
+    }
     refreshing = true;
     try {
       serviceRunning =
@@ -227,14 +242,6 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
         await engine!.dispose();
         engine = null;
         live = null;
-      }
-      if (desktop != null && !serviceRunning && engine == null) {
-        try {
-          await desktop!.call('GET', '/meetings');
-          desktopOnline = true;
-        } catch (_) {
-          desktopOnline = false;
-        }
       }
       final root = await recordingsRoot();
       final records = <Map<String, dynamic>>[];
@@ -256,7 +263,7 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
         (a, b) => (b['created'] as String).compareTo(a['created'] as String),
       );
       if (disposed) return;
-      if (desktop != null && !serviceRunning) {
+      if (!localOnly && desktopOnline && desktop != null && !serviceRunning) {
         for (final record in records.where(
           (m) =>
               m['computer'] == desktop!.fingerprint &&
@@ -289,7 +296,7 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
       meetings = records;
       if (!serviceRunning && engine == null) live = null;
       // 仅为待补传会议保留发送器，复用恢复清单与重试退避；不遍历历史 PCM。
-      if (!serviceRunning && desktop != null) {
+      if (!localOnly && desktopOnline && !serviceRunning && desktop != null) {
         final pending = meetings
             .where(
               (m) =>

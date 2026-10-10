@@ -18,6 +18,31 @@ import 'package:brevia_mobile/connection.dart';
 void main() {
   setUp(() => uiLanguage = 'zh');
 
+  testWidgets('privacy policy is available offline in every app language', (
+    tester,
+  ) async {
+    for (final language in languageNames.keys) {
+      uiLanguage = language;
+      await tester.pumpWidget(
+        MaterialApp(
+          key: ValueKey(language),
+          home: Scaffold(body: SettingsPage(model: AppModel())),
+        ),
+      );
+      await tester.scrollUntilVisible(find.text(tr('隐私与关于')), 400);
+      await tester.tap(find.text(tr('隐私与关于')));
+      await tester.pumpAndSettle();
+      final policy = tester
+          .widget<SelectableText>(find.byType(SelectableText))
+          .data!;
+      expect(policy, contains('2026-10-10'));
+      expect(policy, contains('https://brevia.work/privacy.html'));
+      expect(policy, contains('https://github.com/zerolovesea/Brevia/issues'));
+      expect(policy, isNot(contains('Brevia Mobile 0.1')));
+      expect(tester.takeException(), isNull);
+    }
+  });
+
   testWidgets(
     'offline preparation keeps language and participant choices without a computer',
     (tester) async {

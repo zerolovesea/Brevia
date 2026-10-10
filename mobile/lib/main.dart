@@ -14,6 +14,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:uuid/uuid.dart';
 import 'app_model.dart';
+import 'app_update.dart';
 import 'connection.dart';
 import 'recorder.dart';
 import 'storage.dart';
@@ -2343,6 +2344,7 @@ class SettingsPage extends StatelessWidget {
         ),
       ),
       Divider(height: 1),
+      if (Platform.isAndroid) ...[const AppUpdateTile(), Divider(height: 1)],
       ListTile(
         contentPadding: EdgeInsets.zero,
         minVerticalPadding: 20,
@@ -2353,9 +2355,9 @@ class SettingsPage extends StatelessWidget {
         onTap: () => info(
           context,
           tr("隐私与关于"),
-          Text(
+          SelectableText(
             tr(
-              "Brevia Mobile 0.1\n\n音频仅在手机与已配对电脑之间传输，语音识别在电脑执行。电脑如启用了在线 AI，相关文字按电脑设置发送。\n\n手机不运行转写模型。录音与本地回看不需要注册账号。\n\n测试版：真机后台运行、功耗和中断恢复仍需按项目验收清单验证。",
+              "Brevia 隐私政策\n更新日期：2026-10-10\n\nBrevia 由 YANG ZHOU 提供。手机录音和本地回看无需账号；应用不含广告或行为分析 SDK，不会自动向开发者上传会议。\n\n录音、笔记、字幕和会议设置保存在设备上。离线录音只有在你选择电脑并确认上传后才同步；选择实时转写时，音频会传到已配对电脑，识别在电脑执行。电脑启用在线 AI 时，相关文字按电脑设置发送给所选服务商。\n\n首次配对需要局域网及电脑确认。配置跨网服务后，信令和中继服务可能传送加密流量；运营方可看到网络地址、连接时间和流量大小，不能因此读取加密会议内容。请核对所选服务的隐私政策。\n\n麦克风用于录音，相机仅用于扫码配对，局域网权限用于发现和连接电脑。扫码可用手动配对替代。你可以在系统设置撤销权限；来电、强制停止或系统限制可能中断录音。\n\n配对凭据存入系统安全存储。会议保留至你删除或卸载应用；删除手机副本不会删除电脑副本，取消配对也不会删除已保存的会议。尚未同步的录音请先导出或完成同步；卸载会删除本地数据。备份、导出文件及在线 AI 服务上的数据需在对应位置管理。\n\n支持和隐私咨询：https://github.com/zerolovesea/Brevia/issues 。反馈由你主动提供；公开反馈中不要包含录音、凭据或个人信息。请在录音前取得参与者同意。政策网页：https://brevia.work/privacy.html",
             ),
           ),
         ),

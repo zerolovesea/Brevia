@@ -127,7 +127,10 @@ class DesktopConnection {
 
   Future<void> reconnect() async {
     lanRetry = DateTime.fromMillisecondsSinceEpoch(0);
-    if (!transportConnected) await transport?.reconnect();
+    // 定时唤醒不重置正在协商的连接，也不让网络等待阻塞本地录音控制。
+    if (!transportConnected && transport?.reconnecting == null) {
+      unawaited(transport?.open() ?? Future.value());
+    }
     if (!available.isClosed) available.add(true);
   }
 

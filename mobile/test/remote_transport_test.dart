@@ -1,9 +1,18 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:brevia_mobile/remote_transport.dart';
+import 'package:brevia_mobile/connection.dart';
+
+class SignallingSocket implements WebSocket {
+  @override
+  Future<void> close([int? code, String? reason]) async {}
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
 
 class TestChannel implements RTCDataChannel {
   final RemoteTransport transport;
@@ -65,6 +74,22 @@ class ReconnectingTransport extends RemoteTransport {
 }
 
 void main() {
+  test('periodic wake preserves signalling during ICE negotiation', () async {
+    final transport = RemoteTransport({}, (_) {});
+    final socket = SignallingSocket();
+    transport.socket = socket;
+    transport.session = 'negotiating';
+    final connection = DesktopConnection(address: '', fingerprint: '')
+      ..transport = transport;
+    for (var i = 0; i < 5; i++) {
+      await connection.reconnect();
+    }
+    expect(transport.connected, isFalse);
+    expect(transport.socket, same(socket));
+    expect(transport.session, 'negotiating');
+    expect(transport.generation, 0);
+    await connection.dispose();
+  });
   test('concurrent network and peer failures share one reconnect', () async {
     final transport = ReconnectingTransport();
     final first = transport.reconnect();

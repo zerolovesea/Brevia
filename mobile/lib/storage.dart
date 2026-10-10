@@ -19,10 +19,22 @@ class RecordingStore {
   int get count => offsets.length;
   File chunk(int seq) => File('${directory.path}/$seq.pcm');
   Future<void> recover() async {
+    final sequences = <int>[];
+    await for (final entry in directory.list()) {
+      final match = RegExp(
+        r'^(0|[1-9][0-9]*)\.pcm$',
+      ).firstMatch(entry.uri.pathSegments.last);
+      if (match != null) sequences.add(int.parse(match[1]!));
+    }
+    sequences.sort();
+    if (sequences.length < (meta['count'] as int? ?? 0) ||
+        sequences.indexed.any((entry) => entry.$1 != entry.$2)) {
+      throw FormatException(tr("本地录音分片损坏，请保留文件并联系支持"));
+    }
     offsets.clear();
     samples = 0;
-    while (await chunk(count).exists()) {
-      final length = await chunk(count).length();
+    for (final seq in sequences) {
+      final length = await chunk(seq).length();
       if (length == 0 || length > 32000 || length.isOdd) {
         throw FormatException(tr("本地录音分片损坏，请保留文件并联系支持"));
       }
@@ -36,6 +48,9 @@ class RecordingStore {
   Future<void> append(Uint8List bytes) async {
     if (bytes.isEmpty || bytes.length > 32000 || bytes.length.isOdd) {
       throw ArgumentError('Invalid PCM16 chunk');
+    }
+    if (await chunk(count).exists()) {
+      throw FormatException(tr("本地录音分片损坏，请保留文件并联系支持"));
     }
     final tmp = File('${chunk(count).path}.tmp');
     await tmp.writeAsBytes(bytes, flush: true);

@@ -9,6 +9,18 @@ import 'package:brevia_mobile/recorder.dart';
 import 'package:brevia_mobile/storage.dart';
 import 'package:brevia_mobile/connection.dart';
 import 'package:brevia_mobile/i18n.dart';
+import 'package:brevia_mobile/remote_transport.dart';
+
+class SlowTransport extends RemoteTransport {
+  final entered = Completer<void>();
+  final release = Completer<void>();
+  SlowTransport() : super({}, (_) {});
+  @override
+  Future<void> open() async {
+    if (!entered.isCompleted) entered.complete();
+    await release.future;
+  }
+}
 
 class FakeRecorder implements AudioRecorder {
   @override
@@ -65,8 +77,148 @@ class Engine extends RecordingEngine {
   Future<void> sync() async {}
 }
 
+class OfflineConnection extends DesktopConnection {
+  final requested = Completer<void>();
+  final response = Completer<dynamic>();
+  int calls = 0;
+  OfflineConnection()
+    : super(address: 'https://192.168.1.2', fingerprint: 'offline');
+  @override
+  Future<dynamic> call(String method, String route, [Object? data]) {
+    calls++;
+    if (!requested.isCompleted) requested.complete();
+    return response.future;
+  }
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test('slow signalling does not delay pause or end commands', () async {
+    final dir = await Directory.systemTemp.createTemp('brevia-reconnect-');
+    final store = RecordingStore(dir, {'id': 'test', 'state': 'recording'});
+    final engine = Engine(store);
+    final transport = SlowTransport();
+    engine.connection!.transport = transport;
+    try {
+      final reconnect = engine.command({'action': 'reconnect'});
+      await transport.entered.future;
+      await engine.command({'action': 'pause'}).timeout(Duration(seconds: 2));
+      expect(store.meta['state'], 'paused');
+      await engine.command({'action': 'end'}).timeout(Duration(seconds: 2));
+      expect(engine.fake.stopped, isTrue);
+      expect(store.meta['state'], 'ended');
+      expect(transport.release.isCompleted, isFalse);
+      await reconnect;
+    } finally {
+      transport.release.complete();
+      await transport.dispose();
+      await dir.delete(recursive: true);
+    }
+  });
+  test(
+    'missing committed chunks are rejected without changing audio',
+    () async {
+      for (final missing in [0, 1, 2]) {
+        final dir = await Directory.systemTemp.createTemp('brevia-corrupt-');
+        try {
+          final store = RecordingStore(dir, {
+            'id': 'test',
+            'state': 'recording',
+          });
+          for (var i = 0; i < 3; i++) {
+            await store.append(Uint8List.fromList([i + 1, 0]));
+          }
+          await store.save();
+          await store.chunk(missing).delete();
+          final metadata = await File(
+            '${dir.path}/session.json',
+          ).readAsString();
+          await expectLater(RecordingStore.load(dir), throwsFormatException);
+          expect(
+            await File('${dir.path}/session.json').readAsString(),
+            metadata,
+          );
+          for (var i = 0; i < 3; i++) {
+            if (i != missing) {
+              expect(await store.chunk(i).readAsBytes(), [i + 1, 0]);
+            }
+          }
+          if (missing == 1) {
+            // 元数据滞后也不能把缺口后的有效分片当成可覆盖空间。
+            await writeJson(File('${dir.path}/session.json'), {'count': 0});
+            await expectLater(RecordingStore.load(dir), throwsFormatException);
+            final empty = RecordingStore(dir, {});
+            await expectLater(
+              empty.append(Uint8List(2)),
+              throwsFormatException,
+            );
+            expect(await store.chunk(0).readAsBytes(), [1, 0]);
+          }
+        } finally {
+          await dir.delete(recursive: true);
+        }
+      }
+    },
+  );
+  test(
+    'local startup and recording do not wait for an offline desktop',
+    () async {
+      final root = await Directory.systemTemp.createTemp('brevia-startup-');
+      const channel = MethodChannel('plugins.flutter.io/path_provider');
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (_) async => root.path);
+      final previous = RecordPlatform.instance;
+      final platform = LocalRecordPlatform();
+      RecordPlatform.instance = platform;
+      final connection = OfflineConnection();
+      final model = AppModel()..desktop = connection;
+      Future<void>? refresh;
+      try {
+        final store =
+            RecordingStore(Directory('${root.path}/recordings/saved'), {
+              'id': 'saved',
+              'title': 'Saved',
+              'created': '2026-10-09',
+              'state': 'ended',
+              'localOnly': true,
+            });
+        await store.directory.create(recursive: true);
+        await writeJson(
+          File('${store.directory.path}/session.json'),
+          store.meta,
+        );
+        await model.refresh(localOnly: true);
+        expect(model.meetings.single['id'], 'saved');
+        expect(connection.calls, 0);
+        refresh = model.refresh();
+        await connection.requested.future;
+        expect(model.refreshing, false);
+        final id = await model
+            .start('Offline', offline: true)
+            .timeout(Duration(seconds: 2));
+        expect(model.engine!.connection, isNull);
+        expect(connection.response.isCompleted, false);
+        await model.command(id, 'end');
+        connection.response.completeError(SocketException('offline'));
+        await refresh;
+        expect(model.desktopOnline, false);
+        expect(connection.calls, 1);
+      } finally {
+        if (!connection.response.isCompleted) {
+          connection.response.completeError(SocketException('offline'));
+        }
+        await refresh;
+        await model.releaseEngines();
+        model.dispose();
+        await platform.bytes.close();
+        RecordPlatform.instance = previous;
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, null);
+        await root.delete(recursive: true);
+      }
+    },
+  );
+
   test(
     'recovered transport wakes a pending sender without waiting for backoff',
     () async {

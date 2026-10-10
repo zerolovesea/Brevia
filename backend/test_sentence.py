@@ -1,9 +1,14 @@
 """整句链路的生命周期回归；无需下载识别模型。"""
 
 import base64
+import io
+import json
+import os
+import sys
 import tempfile
 import threading
 import unittest
+import wave
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
@@ -20,6 +25,73 @@ from .config import DEFAULT_SETTINGS, SETTINGS
 from .worker_common import MULTILINGUAL_MODEL_KINDS, model_supports_language
 from .worker_session import SUBTITLE_PARAGRAPH_GAP_MS
 from .worker import Worker
+
+
+class BenchmarkTest(unittest.TestCase):
+    @unittest.skipIf(sys.platform == 'win32', 'Replay profiler requires POSIX resource accounting')
+    def test_meeting_replay_uses_platform_defaults_and_imported_audio(self):
+        from .bench_live import main
+        from .storage import Store
+
+        for platform, language, explicit, track, imported, expected in [
+            ('Darwin', 'zh', None, 'mic', True, 'funasr-nano-mlx'),
+            ('Darwin', 'en', None, 'system', False, 'parakeet-tdt-0.6b-v3-mlx'),
+            ('Windows', 'zh', None, 'mic', False, 'funasr-nano-int8'),
+            ('Darwin', 'en', 'qwen3-asr-0.6b-mlx', 'mic', True, 'qwen3-asr-0.6b-mlx'),
+        ]:
+            with self.subTest(platform=platform, language=language, explicit=explicit):
+                with tempfile.TemporaryDirectory() as root:
+                    store = Store(root)
+                    meeting = store.create_meeting(
+                        {
+                            'title': 'source',
+                            'language': language,
+                            'refined_model_id': 'old-model',
+                        }
+                    )
+                    directory = store.meeting_dir(meeting['id'])
+                    name = f'playback-{track}.wav' if imported else f'{track}-000000.wav'
+                    source = directory / 'audio' / name
+                    with wave.open(str(source), 'wb') as audio:
+                        audio.setparams((1, 2, 16000, 0, 'NONE', 'not compressed'))
+                        audio.writeframes(bytes(3200))
+                    manifest = store.read_manifest(meeting['id'])
+                    manifest['tracks'] = {} if imported else {track: {'chunks': [name]}}
+                    store.write_manifest(meeting['id'], manifest)
+                    before = {p: p.read_bytes() for p in Path(root).rglob('*') if p.is_file()}
+                    output = Path(root) / 'result.json'
+                    argv = [
+                        'bench_live',
+                        '--meeting',
+                        meeting['id'],
+                        '--source-root',
+                        root,
+                        '--models-root',
+                        str(Path(root) / 'models'),
+                        '--unpaced',
+                        '--output',
+                        str(output),
+                    ]
+                    if explicit:
+                        argv += ['--model', explicit]
+                    vad = Mock(tracks={})
+                    vad.accept.return_value = []
+                    vad.flush.return_value = []
+                    with (
+                        patch('backend.asr.platform.system', return_value=platform),
+                        patch('backend.worker_session.SentenceVAD', return_value=vad),
+                        patch('backend.worker_session.RefinedASR'),
+                        patch.object(sys, 'argv', argv),
+                        patch.object(sys, 'path', sys.path.copy()),
+                        patch.dict(os.environ),
+                        patch('sys.stdout', new_callable=io.StringIO),
+                    ):
+                        main()
+                    result = json.loads(output.read_text())
+                    self.assertEqual(result['model'], expected)
+                    self.assertEqual(result['language'], language)
+                    self.assertEqual(result['source_seconds'], 0.1)
+                    self.assertEqual({p: p.read_bytes() for p in before}, before)
 
 
 class SentenceTest(unittest.TestCase):

@@ -28,7 +28,7 @@ class MobileWorkerMixin:
         }
 
     def mobile_translate(self, payload):
-        meeting = self.store.get_meeting(payload['meeting_id'])
+        meeting = self.store.get_meeting(payload['meeting_id'], compact=True)
         if meeting['status'] == 'recording':
             raise ValueError('请先结束会议')
         if not meeting.get('segments'):

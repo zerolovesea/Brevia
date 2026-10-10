@@ -1325,7 +1325,7 @@ const pendingModelTasks = new Map();
 const resumingModelTasks = new Set();
 let onboardingModelIds = [];
 // 首启选型页是否已经满足「能出字幕」：勾了模型，或本地已经装了模型。由
-// updateOnboardingSetup() 维护，供「下载并继续」的守卫使用（见该函数注释）。
+// updateOnboardingSetup() 维护，供模型选择页「下一步」的守卫使用（见该函数注释）。
 let onboardingModelReady = false;
 let initializationPromise;
 const useChinaModelSource = () =>
@@ -2793,7 +2793,7 @@ function updateOnboardingLanguageCopy(nextLocale) {
   if (!onboardingPage || onboardingPreviewLocale === nextLocale) return;
   onboardingPreviewLocale = nextLocale;
   onboardingSelectedLocale = nextLocale;
-  const [title, prompt, continueLabel] =
+  const [title, prompt, nextLabel] =
     onboardingLanguageCopy[nextLocale] || onboardingLanguageCopy.en;
   const nodes = onboardingPage.querySelectorAll('.onboarding-page-copy');
   nodes.forEach((node) => node.classList.add('locale-out'));
@@ -2801,7 +2801,7 @@ function updateOnboardingLanguageCopy(nextLocale) {
     onboardingPage.querySelector('h1').textContent = title;
     onboardingPage.querySelector('.language-wheel').setAttribute('aria-label', prompt);
     onboardingPage.querySelector('.onboarding-page-copy p').textContent = prompt;
-    onboardingPage.querySelector('[type="submit"]').textContent = continueLabel;
+    onboardingPage.querySelector('[type="submit"]').textContent = nextLabel;
     onboardingPage.lang = nextLocale;
     nodes.forEach((node) => {
       node.classList.remove('locale-out');
@@ -3142,7 +3142,7 @@ function openOnboardingAi(settingsMode = false) {
         ${settingsMode ? `<button class="secondary" data-configure-ai-notes type="button">${escapeHtml(t('配置 AI 笔记'))}</button>` : ''}
       </div><div class="onboarding-ai-frame"><aside class="onboarding-ai-demo" data-onboarding-ai-demo></aside></div>
     </section>
-    <div class="onboarding-actions"><button class="secondary" data-onboarding-ai-skip type="button">${escapeHtml(settingsMode ? t('取消') : copy.skip)}</button><button class="modal-action" data-onboarding-ai-finish type="button">${escapeHtml(settingsMode ? t('保存配置') : copy.finish)}</button></div>
+    <div class="onboarding-actions"><button class="modal-action" data-onboarding-ai-finish type="button">${escapeHtml(settingsMode ? t('保存配置') : copy.finish)}</button><button class="secondary" data-onboarding-ai-skip type="button">${escapeHtml(settingsMode ? t('取消') : copy.skip)}</button></div>
   </section>`;
   if (settingsMode) {
     onboardingPage = document.createElement('div');
@@ -3293,7 +3293,38 @@ async function finishAiOnboarding(forceEnabled, settingsMode = false) {
     }
     dismissOnboardingPage();
     showToast(t('已保存'));
-  } else dismissOnboardingPage(openOnboardingTour);
+  } else dismissOnboardingPage(openOnboardingMobile);
+}
+
+function openOnboardingMobile() {
+  // 复用设备连接页的下载内容，避免两个入口的链接和翻译发生偏差。
+  const downloads = (
+    mobileConnectionContent || document.getElementById('mobile-dialog')
+  ).querySelector('.mobile-install-platforms').outerHTML;
+  showOnboardingPage(
+    'setup',
+    `<section class="onboarding-setup-page onboarding-mobile-page">
+      <button class="onboarding-back" data-onboarding-mobile-back type="button" aria-label="${t('返回')}">←</button>
+      <header><img class="onboarding-brand" src="./assets/brevia-logo.svg" alt="Brevia" />
+        <h1>${t('安装Brevia手机端')}</h1>
+        <div class="onboarding-intro"><p>${t('把手机变成随身会议助手。连接电脑后，在手机上录音、查看实时字幕和会议纪要，享用电脑端的转写与 AI 功能。也可以先离线录音，稍后连接电脑上传整理。')}</p></div>
+      </header>
+      <section class="onboarding-section onboarding-mobile-downloads">${downloads}
+        <div class="onboarding-actions"><button class="modal-action" data-onboarding-mobile-pair type="button">${t('连接新设备')}</button></div>
+      </section>
+      <div class="onboarding-actions"><button class="modal-action" data-onboarding-mobile-next type="button">${t('完成')}</button><button class="secondary" data-onboarding-mobile-skip type="button">${t('稍后')}</button></div>
+    </section>`,
+  );
+  onboardingPage.addEventListener('click', (event) => {
+    if (event.target.closest('[data-onboarding-mobile-pair]'))
+      (mobileConnectionContent || document.getElementById('mobile-dialog'))
+        .querySelector('#mobile-pair')
+        .click();
+    else if (event.target.closest('[data-onboarding-mobile-back]'))
+      dismissOnboardingPage(openOnboardingAi);
+    else if (event.target.closest('[data-onboarding-mobile-skip], [data-onboarding-mobile-next]'))
+      dismissOnboardingPage(openOnboardingTour);
+  });
 }
 
 function openOnboardingPermissions() {
@@ -3312,7 +3343,7 @@ function openOnboardingPermissions() {
     `<div class="onboarding-permission-complete onboarding-permission-placeholder" aria-hidden="true">&nbsp;</div>`;
   showOnboardingPage(
     'permissions',
-    `<section class="onboarding-setup-page onboarding-permissions-page"><button class="onboarding-back" data-onboarding-back-language type="button" aria-label="${t('返回')}">←</button><header><img class="onboarding-brand" src="./assets/brevia-logo.svg" alt="Brevia" /><h1>${t('录制权限')}</h1><div class="onboarding-intro"><p>${t('言录需要以下系统权限以提供服务')}</p></div></header><section class="onboarding-section" data-onboarding-permissions>${placeholders}</section><div class="onboarding-actions"><button class="modal-action" data-finish-onboarding type="button" disabled>${t('继续')}</button><button class="secondary" data-skip-onboarding-permissions type="button">${copy.later}</button></div></section>`,
+    `<section class="onboarding-setup-page onboarding-permissions-page"><button class="onboarding-back" data-onboarding-back-language type="button" aria-label="${t('返回')}">←</button><header><img class="onboarding-brand" src="./assets/brevia-logo.svg" alt="Brevia" /><h1>${t('录制权限')}</h1><div class="onboarding-intro"><p>${t('言录需要以下系统权限以提供服务')}</p></div></header><section class="onboarding-section" data-onboarding-permissions>${placeholders}</section><div class="onboarding-actions"><button class="modal-action" data-finish-onboarding type="button" disabled>${escapeHtml((onboardingLanguageCopy[locale] || onboardingLanguageCopy.en)[2])}</button><button class="secondary" data-skip-onboarding-permissions type="button">${copy.later}</button></div></section>`,
   );
   const page = onboardingPage;
   const section = onboardingPage.querySelector('[data-onboarding-permissions]');

@@ -203,3 +203,9 @@ Beta 出口声明按当前已确认范围：标准 TLS、内部测试、不在�
 已结束且同步完成的会议，可在手机详情右上角“会议操作 → 删除本机记录”中删除。删除会清除手机录音和缓存，保留电脑会议；未补传记录需先同步，避免删除唯一音频副本。
 
 跨网连接与信令/TURN 自部署见 [手机跨网连接与恢复](../docs/mobile-remote.md)。首次信任仍在局域网建立。
+
+### Android 手动更新
+
+设置页的「检查更新」从 ModelScope `zyaztec/brevia-release/android/latest.json` 读取版本，按 Android build number 比较。同版本号的新构建也可更新。仅在用户点击时联网；确认后下载并校验文件大小、SHA-256，安装前核对包名和签名，由系统确认安装。首次安装可能需要允许 Brevia 安装未知来源应用，然后返回点击「安装更新」。下载期间离开设置页会取消下载，失败可重新下载，不影响录音。iOS 暂不显示此入口。
+
+Android workflow 复用 `MODELSCOPE_API_TOKEN`，先上传带版本和构建号的签名 APK，更新桌面端二维码使用的固定地址 `android/Brevia-android.apk`，成功后再发布 `android/latest.json`。清单发布失败会令工作流失败，旧清单仍指向旧包。首次上线此功能仍需手动安装带更新入口的 APK；iOS 商店更新后续接入。

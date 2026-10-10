@@ -4755,6 +4755,15 @@ await assert.rejects(
 );
 assert.equal(batchContext.uiData.meetings.map(({ id }) => id).join(','), 'failed,remaining');
 for (const [code, data] of Object.entries(localeContext.window.BreviaLocaleData.catalog)) {
+  for (const key of [
+    '该设备仍有未完成的录音，请先结束并补传',
+    '配对请求已过期',
+    '电脑正在移动或清理数据，请稍后重试',
+    '会议不存在',
+  ]) {
+    assert.ok(data.labels[key], `${code}: missing mobile error translation: ${key}`);
+    if (code !== 'zh') assert.notEqual(data.labels[key], key);
+  }
   const errors = { t: (key) => data.labels[key] || key, MODEL_DOWNLOAD_FAILURES: [] };
   runInNewContext(summaryFn('userFacingError'), errors);
   for (const key of [

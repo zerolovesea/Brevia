@@ -518,23 +518,27 @@
     <script src="./onboarding.js"></script>
     <script src="./app.js"></script>
     <div id="mobile-dialog" hidden
+      ><div class="modal-form-actions"
+        ><button class="modal-action" id="mobile-pair">连接新设备</button></div
       ><p id="mobile-status" role="status"></p
       ><button id="mobile-finish-received" class="secondary" hidden>结束已接收的录音</button
       ><div id="mobile-devices"></div>
       <section class="mobile-install" aria-labelledby="mobile-install-title">
-        <h3 id="mobile-install-title">安装手机端</h3>
+        <h3 id="mobile-install-title">安装Brevia手机端</h3>
         <p
-          >Brevia
-          手机端是桌面端的配套应用。安装后，将手机与电脑连接到同一局域网，再点击「连接新设备」完成配对。</p
+          >把手机变成随身会议助手。连接电脑后，在手机上录音、查看实时字幕和会议纪要，享用电脑端的转写与
+          AI 功能。也可以先离线录音，稍后连接电脑上传整理。</p
         >
         <div class="mobile-install-platforms">
           <div class="mobile-install-platform">
-            <img
-              src="./assets/testflight-download.svg"
-              alt="扫描前往 App Store 安装 TestFlight"
-              width="128"
-              height="128"
-            />
+            <div class="mobile-install-qr">
+              <img
+                src="./assets/testflight-download.svg"
+                alt="扫描前往 App Store 安装 TestFlight"
+                width="128"
+                height="128"
+              />
+            </div>
             <div
               ><h4>iPhone · TestFlight 内测</h4
               ><p
@@ -544,39 +548,46 @@
             >
           </div>
           <div class="mobile-install-platform">
-            <div class="mobile-install-pending"
-              ><svg
-                viewBox="0 0 24 24"
-                width="28"
-                height="28"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-                aria-hidden="true"
-              >
-                <rect x="6" y="2" width="12" height="20" rx="3" />
-                <path d="M10 18h4" /></svg
-              ><span>下载待开放</span></div
+            <a
+              class="mobile-install-qr"
+              href="https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk"
+              target="_blank"
+              rel="noopener noreferrer"
             >
+              <img
+                src="./assets/android-download.svg"
+                alt="下载 Android APK"
+                width="128"
+                height="128"
+              />
+            </a>
             <div
-              ><h4>Android</h4
-              ><p
-                >当前暂未提供公开下载。获得测试安装包后可直接安装；正式下载二维码将在开放后显示。</p
-              ></div
-            >
+              ><h4>Android</h4>
+              <p>扫码或点击链接，从 ModelScope 下载 APK。安装后可在手机设置中检查更新。</p>
+              <a
+                href="https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk"
+                target="_blank"
+                rel="noopener noreferrer"
+                >下载 Android APK</a
+              >
+            </div>
           </div>
         </div> </section
-      ><div id="mobile-pairing" hidden
+      ><p id="mobile-dialog-status" role="status"></p
+    ></div>
+    <dialog id="mobile-pair-dialog" aria-labelledby="mobile-pair-title">
+      <header class="mobile-pair-header"
+        ><h2 id="mobile-pair-title">连接新设备</h2
+        ><button class="secondary" id="mobile-close-pairing">停止配对</button></header
+      >
+      <div id="mobile-pairing" hidden
         ><img id="mobile-qr" alt="手机配对二维码" width="220" height="220" /><div
-          ><p id="mobile-pin"></p><p id="mobile-address"></p
-          ><button class="secondary" id="mobile-close-pairing">停止配对</button></div
+          ><p id="mobile-pin"></p><p id="mobile-address">2 分钟内有效</p></div
         ></div
-      ><div id="mobile-approval" role="status"></div><p id="mobile-dialog-status" role="status"></p
-      ><footer class="modal-form-actions"
-        ><button class="modal-action" id="mobile-pair">连接新设备</button
-        ><button class="secondary" id="mobile-disable">关闭连接服务</button></footer
-      ></div
-    >
+      >
+      <div id="mobile-approval" role="status"></div>
+      <p id="mobile-pair-error" role="alert"></p>
+    </dialog>
     <script src="./mobile-connection.js"></script>
   </body>
 </html>

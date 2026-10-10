@@ -3,6 +3,9 @@
   if (!api) return;
   const output = document.getElementById('mobile-status');
   const dialog = document.getElementById('mobile-dialog');
+  const pairDialog = document.getElementById('mobile-pair-dialog');
+  let pairingBusy = false;
+  let pairClosing = null;
   const pairing = document.getElementById('mobile-pairing');
   let expires = 0,
     approvalId = null,
@@ -10,16 +13,20 @@
     polling = false,
     lastStatus = null,
     renderedLocale = null,
-    pairValue = null,
     messageKey = '';
   const staticCopy = [];
-  const walker = document.createTreeWalker(dialog, NodeFilter.SHOW_TEXT);
-  while (walker.nextNode()) {
-    const node = walker.currentNode,
-      key = node.textContent.trim();
-    if (/[\u3400-\u9fff]/.test(key)) staticCopy.push({ node, key });
+  for (const root of [dialog, pairDialog]) {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) {
+      const node = walker.currentNode,
+        key = node.textContent.trim();
+      if (/[\u3400-\u9fff]/.test(key)) staticCopy.push({ node, key });
+    }
   }
-  const imageCopy = [...dialog.querySelectorAll('img[alt]')].map((node) => ({
+  const imageCopy = [
+    ...dialog.querySelectorAll('img[alt]'),
+    ...pairDialog.querySelectorAll('img[alt]'),
+  ].map((node) => ({
     node,
     key: node.alt,
   }));
@@ -37,9 +44,6 @@
       document.querySelector('#detail-view .detail-title .eyebrow').textContent = t('手机录音');
     document.querySelector('#mobile-manage').textContent = t('查看与管理');
     dialog.querySelector('#mobile-dialog-status').textContent = messageKey ? t(messageKey) : '';
-    if (pairValue)
-      dialog.querySelector('#mobile-address').textContent =
-        `${t('2 分钟内有效')} · ${pairValue.addresses.join(' / ') || t('未发现局域网，请连接 Wi-Fi')}`;
   }
   function message(key) {
     messageKey = key;
@@ -59,18 +63,49 @@
     } catch (error) {
       output.textContent = t(error.detail || error.message || '连接失败，请重试');
       dialog.querySelector('#mobile-dialog-status').textContent = output.textContent;
+      pairDialog.querySelector('#mobile-pair-error').textContent = output.textContent;
     }
   }
+  function showPairDialog() {
+    if (pairDialog.open) return;
+    pairDialog.classList.remove('modal-leave');
+    pairDialog.classList.add('modal-enter');
+    pairDialog.showModal();
+  }
+  function closePairDialog() {
+    if (pairClosing) return pairClosing;
+    if (!pairDialog.open) return Promise.resolve();
+    expires = 0;
+    pairDialog.classList.remove('modal-enter');
+    pairDialog.classList.add('modal-leave');
+    pairClosing = new Promise((resolve) => {
+      setTimeout(() => {
+        pairDialog.close();
+        pairDialog.classList.remove('modal-leave');
+        pairing.hidden = true;
+        pairDialog.querySelector('#mobile-approval').replaceChildren();
+        pairClosing = null;
+        resolve();
+      }, 220);
+    });
+    return pairClosing;
+  }
   async function pair() {
-    open();
-    const value = await api.pair();
-    await render(value);
-    expires = value.expires;
-    pairing.hidden = false;
-    dialog.querySelector('#mobile-qr').src = value.qr;
-    dialog.querySelector('#mobile-pin').textContent = value.pin;
-    pairValue = value;
-    localize();
+    if (pairingBusy || pairDialog.open) return;
+    pairingBusy = true;
+    pairDialog.querySelector('#mobile-pair-error').textContent = '';
+    try {
+      const value = await api.pair();
+      await render(value);
+      expires = value.expires;
+      pairing.hidden = false;
+      pairDialog.querySelector('#mobile-qr').src = value.qr;
+      pairDialog.querySelector('#mobile-pin').textContent = value.pin;
+      localize();
+      showPairDialog();
+    } finally {
+      pairingBusy = false;
+    }
   }
   async function render(value) {
     lastStatus = value;
@@ -100,13 +135,13 @@
         : value.enabled
           ? ''
           : t('点击连接新设备，开启局域网连接。');
-    const approval = dialog.querySelector('#mobile-approval');
-    if ((value.approval?.id || null) !== approvalId || localeChanged) {
+    const approval = pairDialog.querySelector('#mobile-approval');
+    if (!pairClosing && ((value.approval?.id || null) !== approvalId || localeChanged)) {
       const newRequest = (value.approval?.id || null) !== approvalId;
       approvalId = value.approval?.id || null;
       approval.replaceChildren();
       if (value.approval) {
-        open();
+        showPairDialog();
         const request = value.approval;
         const copy = document.createElement('p');
         copy.textContent = `${request.name} ${t('请求连接。请核对手机上的校验码：')}${request.verification}`;
@@ -119,8 +154,7 @@
         const respond = (allowed) =>
           run(async () => {
             await api.approve({ id: request.id, allowed });
-            approval.replaceChildren();
-            pairing.hidden = true;
+            await closePairDialog();
             message(allowed ? '已允许连接，可以在手机开始会议。' : '已拒绝本次连接。');
           });
         deny.onclick = () => respond(false);
@@ -225,17 +259,20 @@
   dialog.querySelector('#mobile-pair').onclick = () => run(pair);
   document.getElementById('mobile-manage').onclick = open;
   document.getElementById('mobile-nav').onclick = open;
-  dialog.querySelector('#mobile-close-pairing').onclick = () =>
+  const stopPairing = () =>
     run(async () => {
-      await render(await api.closePairing());
-      pairing.hidden = true;
+      if (approvalId) await api.approve({ id: approvalId, allowed: false });
+      const value = await api.closePairing();
+      await closePairDialog();
+      await render(value);
     });
-  dialog.querySelector('#mobile-disable').onclick = () =>
-    run(async () => {
-      await render(await api.disable());
-      pairing.hidden = true;
-      message('手机连接服务已关闭');
-    });
+  pairDialog.querySelector('#mobile-close-pairing').onclick = stopPairing;
+  pairDialog.addEventListener('cancel', (event) => {
+    event.preventDefault();
+    stopPairing();
+  });
+  // 上层配对窗口处理 Escape，避免同时关闭后面的设备列表。
+  pairDialog.addEventListener('keydown', (event) => event.stopPropagation());
   async function poll() {
     if (polling) return;
     polling = true;
@@ -248,13 +285,11 @@
     }
   }
   window.brevia.on('mobile.discovered', () => {
-    open();
-    void poll();
+    void run(pair);
   });
   setInterval(() => {
     if (expires && Date.now() > expires) {
-      pairing.hidden = true;
-      expires = 0;
+      void closePairDialog();
       message('配对码已过期，请重新显示配对码。');
     }
     void poll();

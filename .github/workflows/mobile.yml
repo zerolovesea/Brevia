@@ -54,6 +54,7 @@ jobs:
       - run: flutter test
       - run: ruby scripts/test-release.rb
       - run: python3 scripts/test-ios-signing.py
+      - run: python3 scripts/test-android-release.py
       - name: Allocate shared build number
         id: version
         # Seconds since 2026, within Android's versionCode limit. Re-run all jobs for a new number.
@@ -104,6 +105,16 @@ jobs:
             mobile/build/app/outputs/flutter-apk/app-release.apk
             mobile/build/app/outputs/bundle/release/app-release.aab
           if-no-files-found: error
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Publish Android update to ModelScope
+        env:
+          MODELSCOPE_API_TOKEN: ${{ secrets.MODELSCOPE_API_TOKEN }}
+        run: |
+          test -n "$MODELSCOPE_API_TOKEN" || { echo "::error::Missing MODELSCOPE_API_TOKEN"; exit 1; }
+          python -m pip install --disable-pip-version-check modelscope
+          python scripts/android-release.py
       - name: Remove signing material
         if: always()
         run: rm -f "$RUNNER_TEMP/brevia.jks"

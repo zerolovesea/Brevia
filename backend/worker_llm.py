@@ -479,7 +479,12 @@ class LLMWorkerMixin:
             )
         meeting = self.store.get_meeting(payload["meeting_id"])
         stored_segment = next(
-            (item for item in meeting["segments"] if item["id"] == payload["segment_id"]), None
+            (
+                item
+                for item in latest_segments(meeting["segments"])
+                if item["id"] == payload["segment_id"]
+            ),
+            None,
         )
         segment = (
             {"id": payload["segment_id"], **payload["segment"]}

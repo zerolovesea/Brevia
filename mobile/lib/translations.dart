@@ -1,6 +1,17 @@
 // Shared mobile UI, recording notifications and error messages. Keep placeholders consistent.
 const translations = {
   "en": {
+    "检查更新": "Check for updates",
+    "正在检查更新…": "Checking for updates…",
+    "已是最新版本": "You are up to date",
+    "发现新版本 {0}": "Version {0} available",
+    "从 ModelScope 下载，完成后由系统确认安装。":
+        "Download from ModelScope, then confirm installation in Android.",
+    "下载更新": "Download update",
+    "正在下载更新…": "Downloading update…",
+    "更新失败，请检查网络后重试": "Update failed. Check your connection and retry.",
+    "安装更新": "Install update",
+    "如需授权，请允许安装后返回重试": "If prompted, allow installation and return to retry.",
     "录音保留在手机，恢复连接后自动补传。":
         "Recordings stay on your phone and upload automatically when reconnected.",
     "首次配对需同一 Wi-Fi": "Use the same Wi-Fi for initial pairing",
@@ -273,12 +284,24 @@ const translations = {
     "麦克风中断：{0}": "Microphone interrupted: {0}",
     "麦克风已停止，请检查录音权限": "Microphone stopped. Check recording permission.",
     "麦克风返回了不完整的音频样本": "Microphone returned incomplete audio samples",
-    "Brevia Mobile 0.1\n\n音频仅在手机与已配对电脑之间传输，语音识别在电脑执行。电脑如启用了在线 AI，相关文字按电脑设置发送。\n\n手机不运行转写模型。录音与本地回看不需要注册账号。\n\n测试版：真机后台运行、功耗和中断恢复仍需按项目验收清单验证。":
-        "Brevia Mobile\n\nAudio travels only between your phone and paired computer. Speech recognition runs on the computer. If online AI is enabled there, text is sent according to its settings.\n\nThe phone runs no transcription models. Recording and local review require no account.\n\nBeta: background recording, battery use and interruption recovery still require device testing.",
+    "Brevia 隐私政策\n更新日期：2026-10-10\n\nBrevia 由 YANG ZHOU 提供。手机录音和本地回看无需账号；应用不含广告或行为分析 SDK，不会自动向开发者上传会议。\n\n录音、笔记、字幕和会议设置保存在设备上。离线录音只有在你选择电脑并确认上传后才同步；选择实时转写时，音频会传到已配对电脑，识别在电脑执行。电脑启用在线 AI 时，相关文字按电脑设置发送给所选服务商。\n\n首次配对需要局域网及电脑确认。配置跨网服务后，信令和中继服务可能传送加密流量；运营方可看到网络地址、连接时间和流量大小，不能因此读取加密会议内容。请核对所选服务的隐私政策。\n\n麦克风用于录音，相机仅用于扫码配对，局域网权限用于发现和连接电脑。扫码可用手动配对替代。你可以在系统设置撤销权限；来电、强制停止或系统限制可能中断录音。\n\n配对凭据存入系统安全存储。会议保留至你删除或卸载应用；删除手机副本不会删除电脑副本，取消配对也不会删除已保存的会议。尚未同步的录音请先导出或完成同步；卸载会删除本地数据。备份、导出文件及在线 AI 服务上的数据需在对应位置管理。\n\n支持和隐私咨询：https://github.com/zerolovesea/Brevia/issues 。反馈由你主动提供；公开反馈中不要包含录音、凭据或个人信息。请在录音前取得参与者同意。政策网页：https://brevia.work/privacy.html":
+        "Brevia Privacy Policy\nUpdated: 2026-10-10\n\nBrevia is provided by YANG ZHOU. Recording and local review require no account. The app has no advertising or behavioral analytics SDKs and does not automatically send meetings to the developer.\n\nAudio, notes, transcripts and meeting settings are stored on your devices. Offline recordings sync only after you select a computer and confirm upload. Live transcription sends audio to your paired computer, where recognition runs. If online AI is enabled on that computer, relevant text is sent to the selected provider according to the computer settings.\n\nInitial pairing requires a local network and computer approval. Optional remote signalling and relay services may carry encrypted traffic. Their operators can see network addresses, connection times and traffic volumes, but this does not let them read encrypted meeting content. Review your chosen services’ privacy policies.\n\nMicrophone access records audio; the camera scans pairing codes; local network access discovers and connects to computers. Manual pairing can replace scanning. Permissions can be revoked in system settings. Calls, force-stop and system limits may interrupt recording.\n\nPairing credentials use system secure storage. Meetings remain until you delete them or uninstall the app. Deleting a phone copy does not delete the computer copy; unpairing does not delete saved meetings. Export or finish syncing pending recordings before uninstalling, which removes local data. Manage backups, exports and data held by online AI services separately.\n\nSupport and privacy enquiries: https://github.com/zerolovesea/Brevia/issues . Feedback is voluntary; do not include recordings, credentials or personal information in public issues. Obtain participants’ consent before recording. Policy website: https://brevia.work/privacy.html",
     "锁屏后可继续录音。来电、强制停止或系统限制仍可能中断录音，返回后请检查状态。\n\nAndroid 使用麦克风前台服务。请允许录音通知；如厂商省电策略终止应用，可在系统设置中调整。暂停后请回到应用继续。":
         "Recording can continue while locked. Calls, force-stop or system limits can interrupt it; check the status when you return.\n\nAndroid uses a microphone foreground service. Allow recording notifications. If battery restrictions stop the app, adjust system settings. Return to the app to resume after pausing.",
   },
   "es": {
+    "检查更新": "Buscar actualizaciones",
+    "正在检查更新…": "Buscando actualizaciones…",
+    "已是最新版本": "Ya tienes la última versión",
+    "发现新版本 {0}": "Versión {0} disponible",
+    "从 ModelScope 下载，完成后由系统确认安装。":
+        "Descarga desde ModelScope y confirma la instalación en Android.",
+    "下载更新": "Descargar actualización",
+    "正在下载更新…": "Descargando actualización…",
+    "更新失败，请检查网络后重试": "Error al actualizar. Revisa la conexión y reintenta.",
+    "安装更新": "Instalar actualización",
+    "如需授权，请允许安装后返回重试":
+        "Si se solicita, permite la instalación y vuelve a intentarlo.",
     "录音保留在手机，恢复连接后自动补传。":
         "Las grabaciones se conservan en el teléfono y se envían automáticamente al reconectar.",
     "首次配对需同一 Wi-Fi": "La misma Wi-Fi para el primer emparejamiento",
@@ -551,12 +574,23 @@ const translations = {
     "麦克风中断：{0}": "Micrófono interrumpido: {0}",
     "麦克风已停止，请检查录音权限": "Micrófono detenido. Comprueba el permiso.",
     "麦克风返回了不完整的音频样本": "El micrófono devolvió muestras incompletas",
-    "Brevia Mobile 0.1\n\n音频仅在手机与已配对电脑之间传输，语音识别在电脑执行。电脑如启用了在线 AI，相关文字按电脑设置发送。\n\n手机不运行转写模型。录音与本地回看不需要注册账号。\n\n测试版：真机后台运行、功耗和中断恢复仍需按项目验收清单验证。":
-        "Brevia Mobile\n\nEl audio solo viaja entre el teléfono y el ordenador emparejado. El reconocimiento se realiza en el ordenador. Si tiene IA en línea activada, el texto se envía según sus ajustes.\n\nEl teléfono no ejecuta modelos de transcripción. Grabar y consultar localmente no requiere cuenta.\n\nBeta: aún se deben probar en dispositivos la grabación en segundo plano, el consumo y la recuperación.",
+    "Brevia 隐私政策\n更新日期：2026-10-10\n\nBrevia 由 YANG ZHOU 提供。手机录音和本地回看无需账号；应用不含广告或行为分析 SDK，不会自动向开发者上传会议。\n\n录音、笔记、字幕和会议设置保存在设备上。离线录音只有在你选择电脑并确认上传后才同步；选择实时转写时，音频会传到已配对电脑，识别在电脑执行。电脑启用在线 AI 时，相关文字按电脑设置发送给所选服务商。\n\n首次配对需要局域网及电脑确认。配置跨网服务后，信令和中继服务可能传送加密流量；运营方可看到网络地址、连接时间和流量大小，不能因此读取加密会议内容。请核对所选服务的隐私政策。\n\n麦克风用于录音，相机仅用于扫码配对，局域网权限用于发现和连接电脑。扫码可用手动配对替代。你可以在系统设置撤销权限；来电、强制停止或系统限制可能中断录音。\n\n配对凭据存入系统安全存储。会议保留至你删除或卸载应用；删除手机副本不会删除电脑副本，取消配对也不会删除已保存的会议。尚未同步的录音请先导出或完成同步；卸载会删除本地数据。备份、导出文件及在线 AI 服务上的数据需在对应位置管理。\n\n支持和隐私咨询：https://github.com/zerolovesea/Brevia/issues 。反馈由你主动提供；公开反馈中不要包含录音、凭据或个人信息。请在录音前取得参与者同意。政策网页：https://brevia.work/privacy.html":
+        "Política de privacidad de Brevia\nActualizada: 2026-10-10\n\nBrevia es una aplicación de YANG ZHOU. La grabación y la consulta local no requieren cuenta. No incluye SDK de publicidad ni análisis de comportamiento y no envía reuniones automáticamente al desarrollador.\n\nEl audio, las notas, las transcripciones y los ajustes se guardan en tus dispositivos. Las grabaciones sin conexión solo se sincronizan tras elegir un ordenador y confirmar la carga. La transcripción en directo envía audio al ordenador vinculado, donde se realiza el reconocimiento. Si activas IA en línea en el ordenador, el texto correspondiente se envía al proveedor elegido según sus ajustes.\n\nLa vinculación inicial requiere una red local y autorización del ordenador. Los servicios opcionales de señalización y retransmisión pueden transportar tráfico cifrado. Sus operadores ven direcciones de red, horarios de conexión y volumen de tráfico, pero no por ello el contenido cifrado de las reuniones. Consulta sus políticas de privacidad.\n\nEl micrófono graba audio; la cámara escanea códigos de vinculación; el acceso a la red local permite descubrir y conectar ordenadores. Puedes vincular manualmente y revocar permisos en los ajustes del sistema. Las llamadas, el cierre forzado y las restricciones del sistema pueden interrumpir la grabación.\n\nLas credenciales se guardan en el almacenamiento seguro del sistema. Las reuniones permanecen hasta que las eliminas o desinstalas la aplicación. Borrar la copia del teléfono no borra la del ordenador; desvincular no elimina reuniones. Exporta o sincroniza las grabaciones pendientes antes de desinstalar. Gestiona por separado copias de seguridad, archivos exportados y datos de servicios de IA.\n\nSoporte y privacidad: https://github.com/zerolovesea/Brevia/issues . No incluyas grabaciones, credenciales ni datos personales en consultas públicas. Obtén el consentimiento de los participantes antes de grabar. Política web: https://brevia.work/privacy.html",
     "锁屏后可继续录音。来电、强制停止或系统限制仍可能中断录音，返回后请检查状态。\n\nAndroid 使用麦克风前台服务。请允许录音通知；如厂商省电策略终止应用，可在系统设置中调整。暂停后请回到应用继续。":
         "La grabación puede continuar con la pantalla bloqueada. Las llamadas, el cierre forzado o los límites del sistema pueden interrumpirla; comprueba el estado al volver.\n\nAndroid usa un servicio de micrófono en primer plano. Permite las notificaciones. Si el ahorro de batería cierra la app, ajusta el sistema. Vuelve a la app para continuar tras pausar.",
   },
   "ja": {
+    "检查更新": "更新を確認",
+    "正在检查更新…": "更新を確認中…",
+    "已是最新版本": "最新バージョンです",
+    "发现新版本 {0}": "バージョン {0} が利用可能",
+    "从 ModelScope 下载，完成后由系统确认安装。":
+        "ModelScope からダウンロード後、Android でインストールを確認します。",
+    "下载更新": "更新をダウンロード",
+    "正在下载更新…": "更新をダウンロード中…",
+    "更新失败，请检查网络后重试": "更新に失敗しました。接続を確認して再試行してください。",
+    "安装更新": "更新をインストール",
+    "如需授权，请允许安装后返回重试": "必要に応じてインストールを許可し、戻って再試行してください。",
     "录音保留在手机，恢复连接后自动补传。": "録音は端末に保存され、再接続後に自動で送信されます。",
     "首次配对需同一 Wi-Fi": "初回ペアリングは同じ Wi-Fi で",
     "跨网连接需要先在电脑配置服务。": "別のネットワークから接続するには、パソコンでサービスを設定してください。",
@@ -802,12 +836,22 @@ const translations = {
     "麦克风中断：{0}": "マイクが中断されました：{0}",
     "麦克风已停止，请检查录音权限": "マイクが停止しました。録音の権限を確認してください",
     "麦克风返回了不完整的音频样本": "マイクから不完全な音声サンプルが返されました",
-    "Brevia Mobile 0.1\n\n音频仅在手机与已配对电脑之间传输，语音识别在电脑执行。电脑如启用了在线 AI，相关文字按电脑设置发送。\n\n手机不运行转写模型。录音与本地回看不需要注册账号。\n\n测试版：真机后台运行、功耗和中断恢复仍需按项目验收清单验证。":
-        "Brevia Mobile\n\n音声はスマートフォンとペアリングしたパソコン間のみで転送され、音声認識はパソコンで実行されます。オンライン AI が有効な場合、パソコンの設定に従いテキストが送信されます。\n\nスマートフォンでは文字起こしモデルを実行しません。録音と端末での閲覧にアカウント登録は不要です。\n\nベータ版：バックグラウンド録音、消費電力、中断からの復旧は実機での検証が必要です。",
+    "Brevia 隐私政策\n更新日期：2026-10-10\n\nBrevia 由 YANG ZHOU 提供。手机录音和本地回看无需账号；应用不含广告或行为分析 SDK，不会自动向开发者上传会议。\n\n录音、笔记、字幕和会议设置保存在设备上。离线录音只有在你选择电脑并确认上传后才同步；选择实时转写时，音频会传到已配对电脑，识别在电脑执行。电脑启用在线 AI 时，相关文字按电脑设置发送给所选服务商。\n\n首次配对需要局域网及电脑确认。配置跨网服务后，信令和中继服务可能传送加密流量；运营方可看到网络地址、连接时间和流量大小，不能因此读取加密会议内容。请核对所选服务的隐私政策。\n\n麦克风用于录音，相机仅用于扫码配对，局域网权限用于发现和连接电脑。扫码可用手动配对替代。你可以在系统设置撤销权限；来电、强制停止或系统限制可能中断录音。\n\n配对凭据存入系统安全存储。会议保留至你删除或卸载应用；删除手机副本不会删除电脑副本，取消配对也不会删除已保存的会议。尚未同步的录音请先导出或完成同步；卸载会删除本地数据。备份、导出文件及在线 AI 服务上的数据需在对应位置管理。\n\n支持和隐私咨询：https://github.com/zerolovesea/Brevia/issues 。反馈由你主动提供；公开反馈中不要包含录音、凭据或个人信息。请在录音前取得参与者同意。政策网页：https://brevia.work/privacy.html":
+        "Brevia プライバシーポリシー\n更新日：2026-10-10\n\nBrevia の提供者は YANG ZHOU です。録音と端末内での閲覧にアカウントは不要です。広告や行動分析の SDK は含まず、会議を開発者へ自動送信しません。\n\n音声、メモ、字幕、会議設定は端末に保存されます。オフライン録音は、パソコンを選択してアップロードを確認した場合にのみ同期します。リアルタイム文字起こしでは音声をペアリング済みのパソコンへ送り、パソコンで認識します。パソコンでオンライン AI を有効にした場合、設定に従って関連するテキストを選択した事業者へ送信します。\n\n初回ペアリングにはローカルネットワークとパソコンでの承認が必要です。任意のリモート接続サービスは暗号化通信を中継する場合があります。運営者はネットワークアドレス、接続時刻、通信量を確認できますが、それによって暗号化された会議内容を読むことはできません。利用するサービスのポリシーをご確認ください。\n\nマイクは録音、カメラはペアリングコードの読み取り、ローカルネットワークはパソコンの検出と接続に使用します。手動ペアリングも可能です。権限はシステム設定で取り消せます。着信、強制終了、システム制限で録音が中断する場合があります。\n\n接続情報はシステムの安全な領域に保存します。会議は削除またはアンインストールまで残ります。スマートフォンのコピーを削除してもパソコンのコピーは残り、ペアリング解除でも会議は削除されません。アンインストール前に未同期の録音をエクスポートまたは同期してください。バックアップ、書き出したファイル、オンライン AI のデータは別途管理してください。\n\nサポートとプライバシー：https://github.com/zerolovesea/Brevia/issues 。公開の問い合わせに録音、認証情報、個人情報を含めないでください。録音前に参加者の同意を得てください。ポリシー：https://brevia.work/privacy.html",
     "锁屏后可继续录音。来电、强制停止或系统限制仍可能中断录音，返回后请检查状态。\n\nAndroid 使用麦克风前台服务。请允许录音通知；如厂商省电策略终止应用，可在系统设置中调整。暂停后请回到应用继续。":
         "ロック中も録音できます。着信、強制終了、システム制限で中断される場合があるため、戻ったら状態を確認してください。\n\nAndroid はマイクのフォアグラウンドサービスを使用します。録音通知を許可してください。省電力設定でアプリが停止する場合はシステム設定を調整してください。一時停止後はアプリに戻って再開してください。",
   },
   "ko": {
+    "检查更新": "업데이트 확인",
+    "正在检查更新…": "업데이트 확인 중…",
+    "已是最新版本": "최신 버전입니다",
+    "发现新版本 {0}": "버전 {0} 사용 가능",
+    "从 ModelScope 下载，完成后由系统确认安装。": "ModelScope에서 다운로드한 후 Android에서 설치를 확인하세요.",
+    "下载更新": "업데이트 다운로드",
+    "正在下载更新…": "업데이트 다운로드 중…",
+    "更新失败，请检查网络后重试": "업데이트 실패. 연결을 확인하고 다시 시도하세요.",
+    "安装更新": "업데이트 설치",
+    "如需授权，请允许安装后返回重试": "권한 요청 시 설치를 허용한 후 돌아와 다시 시도하세요.",
     "录音保留在手机，恢复连接后自动补传。": "녹음은 휴대폰에 보관되며 다시 연결되면 자동으로 전송됩니다.",
     "首次配对需同一 Wi-Fi": "처음 페어링할 때는 같은 Wi-Fi 사용",
     "跨网连接需要先在电脑配置服务。": "다른 네트워크에서 연결하려면 컴퓨터에서 서비스를 설정하세요.",
@@ -1054,12 +1098,25 @@ const translations = {
     "麦克风中断：{0}": "마이크 중단: {0}",
     "麦克风已停止，请检查录音权限": "마이크가 멈췄습니다. 녹음 권한을 확인하세요",
     "麦克风返回了不完整的音频样本": "마이크에서 불완전한 샘플이 반환됨",
-    "Brevia Mobile 0.1\n\n音频仅在手机与已配对电脑之间传输，语音识别在电脑执行。电脑如启用了在线 AI，相关文字按电脑设置发送。\n\n手机不运行转写模型。录音与本地回看不需要注册账号。\n\n测试版：真机后台运行、功耗和中断恢复仍需按项目验收清单验证。":
-        "Brevia Mobile\n\n음성은 휴대폰과 연결된 컴퓨터 사이에서만 전송됩니다. 음성 인식은 컴퓨터에서 실행됩니다. 온라인 AI를 켠 경우 컴퓨터 설정에 따라 텍스트가 전송됩니다.\n\n휴대폰은 전사 모델을 실행하지 않습니다. 녹음과 기기 내 열람에는 계정이 필요 없습니다.\n\n베타: 백그라운드 녹음, 배터리 사용, 중단 복구는 실기기 검증이 필요합니다.",
+    "Brevia 隐私政策\n更新日期：2026-10-10\n\nBrevia 由 YANG ZHOU 提供。手机录音和本地回看无需账号；应用不含广告或行为分析 SDK，不会自动向开发者上传会议。\n\n录音、笔记、字幕和会议设置保存在设备上。离线录音只有在你选择电脑并确认上传后才同步；选择实时转写时，音频会传到已配对电脑，识别在电脑执行。电脑启用在线 AI 时，相关文字按电脑设置发送给所选服务商。\n\n首次配对需要局域网及电脑确认。配置跨网服务后，信令和中继服务可能传送加密流量；运营方可看到网络地址、连接时间和流量大小，不能因此读取加密会议内容。请核对所选服务的隐私政策。\n\n麦克风用于录音，相机仅用于扫码配对，局域网权限用于发现和连接电脑。扫码可用手动配对替代。你可以在系统设置撤销权限；来电、强制停止或系统限制可能中断录音。\n\n配对凭据存入系统安全存储。会议保留至你删除或卸载应用；删除手机副本不会删除电脑副本，取消配对也不会删除已保存的会议。尚未同步的录音请先导出或完成同步；卸载会删除本地数据。备份、导出文件及在线 AI 服务上的数据需在对应位置管理。\n\n支持和隐私咨询：https://github.com/zerolovesea/Brevia/issues 。反馈由你主动提供；公开反馈中不要包含录音、凭据或个人信息。请在录音前取得参与者同意。政策网页：https://brevia.work/privacy.html":
+        "Brevia 개인정보 처리방침\n업데이트: 2026-10-10\n\nBrevia는 YANG ZHOU가 제공합니다. 녹음과 기기 내 열람에는 계정이 필요 없습니다. 광고 또는 행동 분석 SDK가 없으며 회의를 개발자에게 자동 전송하지 않습니다.\n\n오디오, 메모, 자막 및 회의 설정은 기기에 저장됩니다. 오프라인 녹음은 컴퓨터를 선택하고 업로드를 확인한 후에만 동기화합니다. 실시간 전사는 페어링된 컴퓨터로 오디오를 보내 컴퓨터에서 인식합니다. 컴퓨터에서 온라인 AI를 사용하면 해당 설정에 따라 관련 텍스트를 선택한 서비스에 전송합니다.\n\n최초 페어링에는 로컬 네트워크와 컴퓨터의 승인이 필요합니다. 선택적 원격 연결 서비스가 암호화된 트래픽을 중계할 수 있습니다. 운영자는 네트워크 주소, 연결 시간, 트래픽 양을 볼 수 있지만 이를 통해 암호화된 회의 내용을 읽을 수는 없습니다. 선택한 서비스의 개인정보 처리방침을 확인하세요.\n\n마이크는 녹음, 카메라는 페어링 코드 스캔, 로컬 네트워크는 컴퓨터 검색과 연결에 사용합니다. 수동 페어링도 가능하며 시스템 설정에서 권한을 철회할 수 있습니다. 전화, 강제 종료 또는 시스템 제한으로 녹음이 중단될 수 있습니다.\n\n페어링 자격 증명은 시스템 보안 저장소에 보관됩니다. 회의는 삭제하거나 앱을 제거할 때까지 유지됩니다. 휴대전화 사본 삭제는 컴퓨터 사본에 영향을 주지 않으며 페어링 해제도 회의를 삭제하지 않습니다. 앱 제거 전 미동기화 녹음을 내보내거나 동기화하세요. 백업, 내보낸 파일, 온라인 AI 데이터는 별도로 관리하세요.\n\n지원 및 개인정보 문의: https://github.com/zerolovesea/Brevia/issues . 공개 문의에 녹음, 자격 증명, 개인정보를 포함하지 마세요. 녹음 전에 참여자의 동의를 받으세요. 정책 웹페이지: https://brevia.work/privacy.html",
     "锁屏后可继续录音。来电、强制停止或系统限制仍可能中断录音，返回后请检查状态。\n\nAndroid 使用麦克风前台服务。请允许录音通知；如厂商省电策略终止应用，可在系统设置中调整。暂停后请回到应用继续。":
         "잠금 후에도 녹음할 수 있습니다. 통화, 강제 종료, 시스템 제한으로 중단될 수 있으니 돌아온 후 상태를 확인하세요.\n\nAndroid는 마이크 포그라운드 서비스를 사용합니다. 녹음 알림을 허용하세요. 절전 정책이 앱을 종료하면 시스템 설정을 조정하세요. 일시정지 후에는 앱에서 재개하세요.",
   },
   "fr": {
+    "检查更新": "Rechercher une mise à jour",
+    "正在检查更新…": "Recherche de mise à jour…",
+    "已是最新版本": "Votre version est à jour",
+    "发现新版本 {0}": "Version {0} disponible",
+    "从 ModelScope 下载，完成后由系统确认安装。":
+        "Téléchargez depuis ModelScope, puis confirmez l’installation dans Android.",
+    "下载更新": "Télécharger la mise à jour",
+    "正在下载更新…": "Téléchargement en cours…",
+    "更新失败，请检查网络后重试":
+        "Échec de la mise à jour. Vérifiez la connexion et réessayez.",
+    "安装更新": "Installer la mise à jour",
+    "如需授权，请允许安装后返回重试":
+        "Si demandé, autorisez l’installation puis revenez réessayer.",
     "录音保留在手机，恢复连接后自动补传。":
         "Les enregistrements restent sur le téléphone et sont envoyés automatiquement à la reconnexion.",
     "首次配对需同一 Wi-Fi": "Même Wi-Fi pour le premier jumelage",
@@ -1336,12 +1393,25 @@ const translations = {
     "麦克风中断：{0}": "Microphone interrompu : {0}",
     "麦克风已停止，请检查录音权限": "Microphone arrêté. Vérifiez l’autorisation.",
     "麦克风返回了不完整的音频样本": "Échantillons audio incomplets du microphone",
-    "Brevia Mobile 0.1\n\n音频仅在手机与已配对电脑之间传输，语音识别在电脑执行。电脑如启用了在线 AI，相关文字按电脑设置发送。\n\n手机不运行转写模型。录音与本地回看不需要注册账号。\n\n测试版：真机后台运行、功耗和中断恢复仍需按项目验收清单验证。":
-        "Brevia Mobile\n\nL’audio circule uniquement entre le téléphone et l’ordinateur jumelé. La reconnaissance vocale s’exécute sur l’ordinateur. Si l’IA en ligne y est activée, le texte est envoyé selon ses réglages.\n\nLe téléphone n’exécute aucun modèle de transcription. Enregistrer et consulter localement ne nécessite pas de compte.\n\nBêta : l’enregistrement en arrière-plan, la consommation et la reprise nécessitent encore des essais sur appareil.",
+    "Brevia 隐私政策\n更新日期：2026-10-10\n\nBrevia 由 YANG ZHOU 提供。手机录音和本地回看无需账号；应用不含广告或行为分析 SDK，不会自动向开发者上传会议。\n\n录音、笔记、字幕和会议设置保存在设备上。离线录音只有在你选择电脑并确认上传后才同步；选择实时转写时，音频会传到已配对电脑，识别在电脑执行。电脑启用在线 AI 时，相关文字按电脑设置发送给所选服务商。\n\n首次配对需要局域网及电脑确认。配置跨网服务后，信令和中继服务可能传送加密流量；运营方可看到网络地址、连接时间和流量大小，不能因此读取加密会议内容。请核对所选服务的隐私政策。\n\n麦克风用于录音，相机仅用于扫码配对，局域网权限用于发现和连接电脑。扫码可用手动配对替代。你可以在系统设置撤销权限；来电、强制停止或系统限制可能中断录音。\n\n配对凭据存入系统安全存储。会议保留至你删除或卸载应用；删除手机副本不会删除电脑副本，取消配对也不会删除已保存的会议。尚未同步的录音请先导出或完成同步；卸载会删除本地数据。备份、导出文件及在线 AI 服务上的数据需在对应位置管理。\n\n支持和隐私咨询：https://github.com/zerolovesea/Brevia/issues 。反馈由你主动提供；公开反馈中不要包含录音、凭据或个人信息。请在录音前取得参与者同意。政策网页：https://brevia.work/privacy.html":
+        "Politique de confidentialité de Brevia\nMise à jour : 2026-10-10\n\nBrevia est fourni par YANG ZHOU. Aucun compte n’est requis pour enregistrer et consulter les données locales. L’application ne contient aucun SDK publicitaire ou d’analyse comportementale et n’envoie pas automatiquement vos réunions au développeur.\n\nAudio, notes, transcriptions et réglages sont stockés sur vos appareils. Les enregistrements hors ligne ne sont synchronisés qu’après sélection d’un ordinateur et confirmation du transfert. La transcription en direct envoie l’audio à l’ordinateur jumelé, qui effectue la reconnaissance. Si une IA en ligne y est activée, le texte concerné est envoyé au fournisseur choisi selon les réglages de l’ordinateur.\n\nLe jumelage initial nécessite un réseau local et l’autorisation de l’ordinateur. Les services distants facultatifs peuvent relayer du trafic chiffré. Leurs opérateurs voient les adresses réseau, les horaires et le volume des échanges, sans pouvoir ainsi lire le contenu chiffré des réunions. Consultez leurs politiques de confidentialité.\n\nLe microphone sert à enregistrer, la caméra à scanner les codes de jumelage et le réseau local à détecter et connecter les ordinateurs. Le jumelage manuel est possible. Les autorisations peuvent être retirées dans les réglages système. Appels, arrêt forcé et restrictions système peuvent interrompre l’enregistrement.\n\nLes identifiants de jumelage utilisent le stockage sécurisé du système. Les réunions restent jusqu’à leur suppression ou la désinstallation. Supprimer la copie du téléphone n’efface pas celle de l’ordinateur ; dissocier n’efface pas les réunions. Exportez ou synchronisez les enregistrements en attente avant de désinstaller. Gérez séparément sauvegardes, exports et données des services d’IA.\n\nAssistance et confidentialité : https://github.com/zerolovesea/Brevia/issues . Ne publiez ni enregistrements, ni identifiants, ni données personnelles. Obtenez l’accord des participants avant d’enregistrer. Politique : https://brevia.work/privacy.html",
     "锁屏后可继续录音。来电、强制停止或系统限制仍可能中断录音，返回后请检查状态。\n\nAndroid 使用麦克风前台服务。请允许录音通知；如厂商省电策略终止应用，可在系统设置中调整。暂停后请回到应用继续。":
         "L’enregistrement peut continuer écran verrouillé. Appels, arrêt forcé ou limites système peuvent l’interrompre ; vérifiez l’état au retour.\n\nAndroid utilise un service de microphone au premier plan. Autorisez les notifications. Si l’économie de batterie arrête l’app, ajustez les réglages système. Revenez dans l’app pour reprendre après une pause.",
   },
   "de": {
+    "检查更新": "Nach Updates suchen",
+    "正在检查更新…": "Updates werden gesucht…",
+    "已是最新版本": "Die Version ist aktuell",
+    "发现新版本 {0}": "Version {0} verfügbar",
+    "从 ModelScope 下载，完成后由系统确认安装。":
+        "Von ModelScope herunterladen und die Installation in Android bestätigen.",
+    "下载更新": "Update herunterladen",
+    "正在下载更新…": "Update wird heruntergeladen…",
+    "更新失败，请检查网络后重试":
+        "Update fehlgeschlagen. Verbindung prüfen und erneut versuchen.",
+    "安装更新": "Update installieren",
+    "如需授权，请允许安装后返回重试":
+        "Falls erforderlich, Installation erlauben und erneut versuchen.",
     "录音保留在手机，恢复连接后自动补传。":
         "Aufnahmen bleiben auf dem Telefon und werden nach der Wiederverbindung automatisch übertragen.",
     "首次配对需同一 Wi-Fi": "Erste Kopplung im selben WLAN",
@@ -1616,12 +1686,24 @@ const translations = {
     "麦克风中断：{0}": "Mikrofon unterbrochen: {0}",
     "麦克风已停止，请检查录音权限": "Mikrofon gestoppt. Aufnahmeberechtigung prüfen.",
     "麦克风返回了不完整的音频样本": "Mikrofon lieferte unvollständige Audiodaten",
-    "Brevia Mobile 0.1\n\n音频仅在手机与已配对电脑之间传输，语音识别在电脑执行。电脑如启用了在线 AI，相关文字按电脑设置发送。\n\n手机不运行转写模型。录音与本地回看不需要注册账号。\n\n测试版：真机后台运行、功耗和中断恢复仍需按项目验收清单验证。":
-        "Brevia Mobile\n\nAudio wird nur zwischen Telefon und gekoppeltem Computer übertragen. Spracherkennung läuft am Computer. Bei aktivierter Online-KI wird Text gemäß dessen Einstellungen gesendet.\n\nDas Telefon führt keine Transkriptionsmodelle aus. Aufnahme und lokale Ansicht benötigen kein Konto.\n\nBeta: Hintergrundaufnahme, Energieverbrauch und Wiederherstellung nach Unterbrechungen müssen noch auf Geräten getestet werden.",
+    "Brevia 隐私政策\n更新日期：2026-10-10\n\nBrevia 由 YANG ZHOU 提供。手机录音和本地回看无需账号；应用不含广告或行为分析 SDK，不会自动向开发者上传会议。\n\n录音、笔记、字幕和会议设置保存在设备上。离线录音只有在你选择电脑并确认上传后才同步；选择实时转写时，音频会传到已配对电脑，识别在电脑执行。电脑启用在线 AI 时，相关文字按电脑设置发送给所选服务商。\n\n首次配对需要局域网及电脑确认。配置跨网服务后，信令和中继服务可能传送加密流量；运营方可看到网络地址、连接时间和流量大小，不能因此读取加密会议内容。请核对所选服务的隐私政策。\n\n麦克风用于录音，相机仅用于扫码配对，局域网权限用于发现和连接电脑。扫码可用手动配对替代。你可以在系统设置撤销权限；来电、强制停止或系统限制可能中断录音。\n\n配对凭据存入系统安全存储。会议保留至你删除或卸载应用；删除手机副本不会删除电脑副本，取消配对也不会删除已保存的会议。尚未同步的录音请先导出或完成同步；卸载会删除本地数据。备份、导出文件及在线 AI 服务上的数据需在对应位置管理。\n\n支持和隐私咨询：https://github.com/zerolovesea/Brevia/issues 。反馈由你主动提供；公开反馈中不要包含录音、凭据或个人信息。请在录音前取得参与者同意。政策网页：https://brevia.work/privacy.html":
+        "Datenschutzerklärung von Brevia\nStand: 2026-10-10\n\nBrevia wird von YANG ZHOU bereitgestellt. Aufnahme und lokale Ansicht benötigen kein Konto. Die App enthält keine Werbe- oder Verhaltensanalyse-SDKs und sendet Besprechungen nicht automatisch an den Entwickler.\n\nAudio, Notizen, Transkripte und Einstellungen werden auf Ihren Geräten gespeichert. Offline-Aufnahmen werden erst nach Auswahl eines Computers und Bestätigung des Uploads synchronisiert. Bei Live-Transkription wird Audio zum gekoppelten Computer gesendet und dort erkannt. Ist dort Online-KI aktiviert, wird entsprechender Text gemäß den Computereinstellungen an den gewählten Anbieter gesendet.\n\nDie erste Kopplung benötigt ein lokales Netzwerk und die Freigabe am Computer. Optionale Fernverbindungsdienste können verschlüsselten Datenverkehr weiterleiten. Ihre Betreiber sehen Netzwerkadressen, Verbindungszeiten und Datenmengen, können dadurch aber keine verschlüsselten Besprechungsinhalte lesen. Beachten Sie deren Datenschutzerklärungen.\n\nDas Mikrofon dient der Aufnahme, die Kamera scannt Kopplungscodes und das lokale Netzwerk erkennt und verbindet Computer. Manuelle Kopplung ist möglich. Berechtigungen können in den Systemeinstellungen widerrufen werden. Anrufe, erzwungenes Beenden und Systembeschränkungen können Aufnahmen unterbrechen.\n\nKopplungsdaten liegen im sicheren Systemspeicher. Besprechungen bleiben bis zur Löschung oder Deinstallation erhalten. Das Löschen der Telefonkopie löscht nicht die Computerkopie; Entkoppeln löscht keine Besprechungen. Exportieren oder synchronisieren Sie ausstehende Aufnahmen vor der Deinstallation. Verwalten Sie Sicherungen, Exporte und Daten bei KI-Diensten separat.\n\nSupport und Datenschutz: https://github.com/zerolovesea/Brevia/issues . Veröffentlichen Sie dort keine Aufnahmen, Zugangsdaten oder persönlichen Informationen. Holen Sie vor Aufnahmen die Zustimmung der Teilnehmer ein. Richtlinie: https://brevia.work/privacy.html",
     "锁屏后可继续录音。来电、强制停止或系统限制仍可能中断录音，返回后请检查状态。\n\nAndroid 使用麦克风前台服务。请允许录音通知；如厂商省电策略终止应用，可在系统设置中调整。暂停后请回到应用继续。":
         "Aufnahme ist bei gesperrtem Bildschirm möglich. Anrufe, erzwungenes Beenden oder Systemlimits können sie unterbrechen; prüfen Sie den Status nach der Rückkehr.\n\nAndroid verwendet einen Mikrofon-Vordergrunddienst. Aufnahmebenachrichtigungen erlauben. Bei Beendigung durch Energiesparregeln die Systemeinstellungen anpassen. Nach einer Pause in der App fortsetzen.",
   },
   "ru": {
+    "检查更新": "Проверить обновления",
+    "正在检查更新…": "Проверка обновлений…",
+    "已是最新版本": "Установлена последняя версия",
+    "发现新版本 {0}": "Доступна версия {0}",
+    "从 ModelScope 下载，完成后由系统确认安装。":
+        "Скачайте из ModelScope и подтвердите установку в Android.",
+    "下载更新": "Скачать обновление",
+    "正在下载更新…": "Загрузка обновления…",
+    "更新失败，请检查网络后重试": "Не удалось обновить. Проверьте подключение и повторите.",
+    "安装更新": "Установить обновление",
+    "如需授权，请允许安装后返回重试":
+        "При запросе разрешите установку и вернитесь для повторной попытки.",
     "录音保留在手机，恢复连接后自动补传。":
         "Записи сохраняются на телефоне и автоматически передаются после восстановления связи.",
     "首次配对需同一 Wi-Fi": "Первое сопряжение — в одной сети Wi-Fi",
@@ -1895,8 +1977,8 @@ const translations = {
     "麦克风中断：{0}": "Микрофон прерван: {0}",
     "麦克风已停止，请检查录音权限": "Микрофон остановлен. Проверьте разрешение на запись.",
     "麦克风返回了不完整的音频样本": "Микрофон вернул неполные аудиоданные",
-    "Brevia Mobile 0.1\n\n音频仅在手机与已配对电脑之间传输，语音识别在电脑执行。电脑如启用了在线 AI，相关文字按电脑设置发送。\n\n手机不运行转写模型。录音与本地回看不需要注册账号。\n\n测试版：真机后台运行、功耗和中断恢复仍需按项目验收清单验证。":
-        "Brevia Mobile\n\nАудио передаётся только между телефоном и сопряжённым компьютером. Распознавание выполняется на компьютере. При включённом онлайн-ИИ текст отправляется согласно его настройкам.\n\nНа телефоне нет моделей расшифровки. Для записи и локального просмотра аккаунт не нужен.\n\nБета: фоновую запись, расход батареи и восстановление после прерываний ещё нужно проверить на устройствах.",
+    "Brevia 隐私政策\n更新日期：2026-10-10\n\nBrevia 由 YANG ZHOU 提供。手机录音和本地回看无需账号；应用不含广告或行为分析 SDK，不会自动向开发者上传会议。\n\n录音、笔记、字幕和会议设置保存在设备上。离线录音只有在你选择电脑并确认上传后才同步；选择实时转写时，音频会传到已配对电脑，识别在电脑执行。电脑启用在线 AI 时，相关文字按电脑设置发送给所选服务商。\n\n首次配对需要局域网及电脑确认。配置跨网服务后，信令和中继服务可能传送加密流量；运营方可看到网络地址、连接时间和流量大小，不能因此读取加密会议内容。请核对所选服务的隐私政策。\n\n麦克风用于录音，相机仅用于扫码配对，局域网权限用于发现和连接电脑。扫码可用手动配对替代。你可以在系统设置撤销权限；来电、强制停止或系统限制可能中断录音。\n\n配对凭据存入系统安全存储。会议保留至你删除或卸载应用；删除手机副本不会删除电脑副本，取消配对也不会删除已保存的会议。尚未同步的录音请先导出或完成同步；卸载会删除本地数据。备份、导出文件及在线 AI 服务上的数据需在对应位置管理。\n\n支持和隐私咨询：https://github.com/zerolovesea/Brevia/issues 。反馈由你主动提供；公开反馈中不要包含录音、凭据或个人信息。请在录音前取得参与者同意。政策网页：https://brevia.work/privacy.html":
+        "Политика конфиденциальности Brevia\nОбновлено: 2026-10-10\n\nBrevia предоставляется YANG ZHOU. Для записи и локального просмотра аккаунт не нужен. Приложение не содержит рекламных SDK или SDK поведенческой аналитики и не отправляет встречи разработчику автоматически.\n\nАудио, заметки, расшифровки и настройки хранятся на ваших устройствах. Офлайн-записи синхронизируются только после выбора компьютера и подтверждения загрузки. При расшифровке в реальном времени аудио отправляется на сопряжённый компьютер, где выполняется распознавание. Если там включён онлайн-ИИ, соответствующий текст передаётся выбранному поставщику согласно настройкам компьютера.\n\nПервое сопряжение требует локальной сети и подтверждения на компьютере. Дополнительные сервисы удалённой связи могут передавать зашифрованный трафик. Их операторы видят сетевые адреса, время соединений и объём трафика, но это не позволяет читать зашифрованное содержимое встреч. Ознакомьтесь с их политиками конфиденциальности.\n\nМикрофон нужен для записи, камера — для сканирования кодов, локальная сеть — для поиска и подключения компьютеров. Доступно ручное сопряжение. Разрешения можно отозвать в настройках системы. Звонки, принудительное завершение и системные ограничения могут прервать запись.\n\nДанные сопряжения хранятся в защищённом хранилище системы. Встречи сохраняются до удаления записей или приложения. Удаление копии на телефоне не удаляет копию на компьютере; отмена сопряжения не удаляет встречи. Перед удалением приложения экспортируйте или синхронизируйте ожидающие записи. Резервные копии, экспортированные файлы и данные онлайн-ИИ управляются отдельно.\n\nПоддержка и конфиденциальность: https://github.com/zerolovesea/Brevia/issues . Не публикуйте записи, учётные данные и личную информацию. Получите согласие участников до записи. Политика: https://brevia.work/privacy.html",
     "锁屏后可继续录音。来电、强制停止或系统限制仍可能中断录音，返回后请检查状态。\n\nAndroid 使用麦克风前台服务。请允许录音通知；如厂商省电策略终止应用，可在系统设置中调整。暂停后请回到应用继续。":
         "Запись может продолжаться при блокировке. Звонки, принудительная остановка и ограничения системы могут её прервать; проверьте состояние после возвращения.\n\nAndroid использует активную службу микрофона. Разрешите уведомления. Если энергосбережение останавливает приложение, измените настройки системы. После паузы продолжите запись в приложении.",
   },

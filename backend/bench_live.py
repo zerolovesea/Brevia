@@ -37,7 +37,7 @@ def main():
         choices=('auto', 'zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru'),
         help='覆盖会议识别语言；不指定时沿用源会议',
     )
-    parser.add_argument('--model', default='funasr-nano-int8')
+    parser.add_argument('--model', help='覆盖后端按平台、语言及已安装模型选择的默认模型')
     parser.add_argument('--legacy', action='store_true', help='对归档旧版本使用原流式模型')
     parser.add_argument('--gaps', action='store_true', help='在示例标注的句间插入 1 秒静音')
     parser.add_argument('--silence', action='store_true', help='以等长纯静音验证误触发')
@@ -75,8 +75,20 @@ def main():
         args.language = args.language or row[0]
         directory = args.source_root / 'meetings' / args.meeting
         tracks = json.loads((directory / 'manifest.json').read_text())['tracks']
-        track = 'system' if 'system' in tracks else 'mic'
-        sources = [directory / 'audio' / name for name in tracks[track]['chunks']]
+        track = next(
+            (
+                name
+                for name in ('system', 'mic')
+                if tracks.get(name, {}).get('chunks')
+                or (directory / 'audio' / f'playback-{name}.wav').is_file()
+            ),
+            None,
+        )
+        if track is None:
+            parser.error('Meeting has no audio')
+        sources = [
+            directory / 'audio' / name for name in tracks.get(track, {}).get('chunks', [])
+        ] or [directory / 'audio' / f'playback-{track}.wav']
     else:
         args.language = args.language or 'zh'
         if args.language not in {'zh', 'en', 'es'}:
@@ -228,7 +240,7 @@ def main():
             'platform': platform.platform(),
             'python': platform.python_version(),
             'language': args.language,
-            'model': args.model,
+            'model': meeting['refined_model_id'],
             'legacy': args.legacy,
             'gaps': args.gaps,
             'silence': args.silence,
