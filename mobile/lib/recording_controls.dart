@@ -4,6 +4,48 @@ import 'package:flutter/material.dart';
 
 import 'i18n.dart';
 
+/// 按同一区域的全部状态预留高度，避免文案换行时推动计时器和正文。
+class StableStatusText extends StatelessWidget {
+  final String text;
+  final List<String> states;
+  final TextStyle? style;
+  final TextAlign textAlign;
+  const StableStatusText(
+    this.text, {
+    super.key,
+    required this.states,
+    this.style,
+    this.textAlign = TextAlign.start,
+  });
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final effectiveStyle = DefaultTextStyle.of(context).style.merge(style);
+      double height = 0;
+      for (final value in {
+        text,
+        ...states,
+      }.where((value) => value.isNotEmpty)) {
+        final painter = TextPainter(
+          text: TextSpan(text: value, style: effectiveStyle),
+          textDirection: Directionality.of(context),
+          textScaler: MediaQuery.textScalerOf(context),
+          locale: Localizations.maybeLocaleOf(context),
+        )..layout(maxWidth: constraints.maxWidth);
+        if (painter.height > height) height = painter.height;
+        painter.dispose();
+      }
+      return SizedBox(
+        height: height.ceilToDouble(),
+        child: text.isEmpty
+            ? const SizedBox.shrink()
+            : Text(text, style: style, textAlign: textAlign),
+      );
+    },
+  );
+}
+
 /// 只展示状态和发送动作；录音、传输和错误处理仍由会议控制器负责。
 class RecordingControls extends StatelessWidget {
   final bool paused, pending;

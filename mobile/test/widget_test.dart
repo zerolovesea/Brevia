@@ -295,60 +295,70 @@ void main() {
     },
   );
 
-  testWidgets(
-    'real reconnection shows upload recovery and returns to the transcript',
-    (tester) async {
-      final model = AppModel()..serviceRunning = true;
-      model.live = {
-        'id': 'live',
-        'title': '产品周会',
-        'state': 'recording',
-        'connected': false,
-        'localOnly': false,
-        'samples': 12096000,
-        'count': 100,
-        'uploaded': 20,
-        'snapshot': {
-          'segments': [
-            {'start_ms': 0, 'text': '保留的转写'},
-          ],
-        },
-      };
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: breviaTheme(Brightness.light),
-          home: MeetingPage(model: model, id: 'live'),
-        ),
-      );
-      await tester.pump();
-      expect(find.byType(RecordingRecoveryPage), findsNothing);
-      model.live!['connected'] = true;
-      model.live!['uploaded'] = 62;
+  testWidgets('reconnection retains the transcript and recording controls', (
+    tester,
+  ) async {
+    final model = AppModel()..serviceRunning = true;
+    addTearDown(model.dispose);
+    model.live = {
+      'id': 'live',
+      'title': '产品周会',
+      'state': 'recording',
+      'connected': false,
+      'localOnly': false,
+      'samples': 12096000,
+      'count': 100,
+      'uploaded': 20,
+      'snapshot': {
+        'segments': [
+          {'start_ms': 0, 'text': '保留的转写'},
+        ],
+      },
+    };
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: breviaTheme(Brightness.light),
+        home: MeetingPage(model: model, id: 'live'),
+      ),
+    );
+    await tester.pump();
+    final tabs = tester.getRect(find.text('转写'));
+    final controls = tester.getRect(find.byType(RecordingControls));
+    for (final (connected, count, uploaded) in [
+      (true, 100, 62),
+      (true, 100, 100),
+      (true, 101, 100),
+      (true, 101, 101),
+      (false, 101, 101),
+      (true, 101, 101),
+    ]) {
+      model.live!.addAll({
+        'connected': connected,
+        'count': count,
+        'uploaded': uploaded,
+      });
       model.notifyListeners();
-      await tester.pump();
-      expect(find.byType(RecordingRecoveryPage), findsOneWidget);
-      expect(find.text('62%'), findsOneWidget);
-      expect(find.text('保留的转写'), findsNothing);
-      model.live!['uploaded'] = 100;
-      model.notifyListeners();
-      await tester.pump();
-      expect(find.text('100%'), findsOneWidget);
-      expect(find.text('音频已传输'), findsOneWidget);
-      await tester.scrollUntilVisible(find.text('返回录音'), 160);
-      await tester.ensureVisible(find.text('返回录音'));
-      await tester.tap(find.text('返回录音'));
       await tester.pump();
       expect(find.text('保留的转写'), findsOneWidget);
-      expect(find.byTooltip('结束'), findsOneWidget);
-      expect(model.live!['state'], 'recording');
-      model.notifyListeners();
-      await tester.pump();
-      expect(find.byType(RecordingRecoveryPage), findsNothing);
+      expect(find.text('已恢复连接'), findsNothing);
+      expect(find.text('音频已传输'), findsNothing);
+      expect(find.byTooltip('暂停').hitTestable(), findsOneWidget);
+      expect(find.byTooltip('结束').hitTestable(), findsOneWidget);
+      expect(tester.getRect(find.text('转写')), tabs);
+      expect(tester.getRect(find.byType(RecordingControls)), controls);
+      expect(find.text(connected ? '● 已连接' : '正在重新连接'), findsOneWidget);
+      expect(
+        tester
+            .widget<LinearProgressIndicator>(
+              find.byType(LinearProgressIndicator),
+            )
+            .value,
+        connected ? uploaded / count : null,
+      );
       expect(tester.takeException(), isNull);
-      await tester.pumpWidget(const SizedBox());
-      model.dispose();
-    },
-  );
+    }
+    await tester.pumpWidget(const SizedBox());
+  });
 
   testWidgets('onboarding explains request timing and persists completion', (
     tester,
@@ -490,7 +500,8 @@ void main() {
     model.notifyListeners();
     await tester.pump();
     expect(status, findsNothing);
-    expect(find.byType(ConnectionRecoveryNotice), findsOneWidget);
+    expect(find.byType(MeetingConnectionStatus), findsOneWidget);
+    expect(find.text('正在重新连接'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
 

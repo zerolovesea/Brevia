@@ -95,7 +95,16 @@ void main() {
             ),
           );
           await tester.pump();
-          await tester.scrollUntilVisible(find.text(tr('电脑会议的手机录音')), 200);
+          await tester.scrollUntilVisible(
+            find.text(tr('电脑会议的手机录音')),
+            200,
+            scrollable: find
+                .descendant(
+                  of: find.byType(ListView),
+                  matching: find.byType(Scrollable),
+                )
+                .first,
+          );
           expect(find.text(tr('电脑会议的手机录音')), findsOneWidget);
           expect(find.text('Private desktop transcript'), findsNothing);
           expect(find.text('Private desktop notes'), findsNothing);

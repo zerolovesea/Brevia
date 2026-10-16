@@ -1291,8 +1291,9 @@ class _ConnectionPageState extends State<ConnectionPage> {
               ),
               SizedBox(width: 6),
               Flexible(
-                child: Text(
+                child: StableStatusText(
                   tr(widget.model.connected ? '已连接' : '离线 · 已保留信任'),
+                  states: [tr('已连接'), tr('离线 · 已保留信任')],
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: widget.model.connected
                         ? (Theme.of(context).brightness == Brightness.dark
@@ -1304,14 +1305,13 @@ class _ConnectionPageState extends State<ConnectionPage> {
               ),
             ],
           ),
-          if (widget.model.connected) ...[
-            SizedBox(height: 4),
-            Text(
-              tr('同一局域网'),
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ],
+          SizedBox(height: 4),
+          StableStatusText(
+            widget.model.connected ? tr('同一局域网') : '',
+            states: [tr('同一局域网')],
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
           SizedBox(height: 12),
         ],
         if (manual || waiting) ...[
@@ -1919,7 +1919,6 @@ class _MeetingPageState extends State<MeetingPage> {
   String query = '';
   final scroll = ScrollController();
   bool following = true;
-  bool sawDisconnected = false, showingRecovery = false;
   AudioPlayer? _player;
   AudioPlayer get player => _player ??= AudioPlayer();
   bool loadedAudio = false, loadingAudio = false;
@@ -2255,7 +2254,10 @@ class _MeetingPageState extends State<MeetingPage> {
           );
         }),
         if (query.isEmpty)
-          TranscriptionActivity(meeting: meeting, model: widget.model),
+          SizedBox(
+            height: 34,
+            child: TranscriptionActivity(meeting: meeting, model: widget.model),
+          ),
       ],
     );
   }
@@ -2278,6 +2280,9 @@ class _MeetingPageState extends State<MeetingPage> {
           !ended &&
           !recordingFocus &&
           Theme.of(context).brightness == Brightness.dark;
+      final compactRecording =
+          MediaQuery.sizeOf(context).width < 360 ||
+          MediaQuery.textScalerOf(context).scale(14) > 20;
       final localErrorKind = mobileErrorKind(m['error'] ?? '');
       if (m['error'] == null) dismissedRecoveryError = null;
       if (!ended &&
@@ -2306,21 +2311,6 @@ class _MeetingPageState extends State<MeetingPage> {
           onReturn: () => setState(() => dismissedRecoveryError = m['error']),
         );
       }
-      if (!ended && m['localOnly'] != true) {
-        if (m['connected'] == false) {
-          sawDisconnected = true;
-          showingRecovery = false;
-        } else if (m['connected'] == true && sawDisconnected) {
-          showingRecovery = (m['count'] as num? ?? 0) > 0;
-          sawDisconnected = false;
-        }
-      }
-      if (showingRecovery && !ended && m['localOnly'] != true) {
-        return RecordingRecoveryPage(
-          meeting: m,
-          onReturn: () => setState(() => showingRecovery = false),
-        );
-      }
       final label = state == 'recording' && live
           ? tr("录音中")
           : ended
@@ -2335,8 +2325,32 @@ class _MeetingPageState extends State<MeetingPage> {
           }
         });
       }
+      final toolbarHeight =
+          compactRecording && !recordingFocus && !darkRecording
+          ? kToolbarHeight + MediaQuery.textScalerOf(context).scale(36) - 36
+          : kToolbarHeight;
+      final contentHeight =
+          (MediaQuery.sizeOf(context).height -
+                  MediaQuery.paddingOf(context).vertical -
+                  MediaQuery.viewInsetsOf(context).bottom -
+                  toolbarHeight)
+              .clamp(0.0, double.infinity);
+      final transferInfo = [
+        (
+          Icons.phone_iphone_outlined,
+          tr(m['localOnly'] == true ? '仅保存在手机' : '已存本机'),
+          durationText(m['samples'] ?? 0),
+        ),
+        if (m['localOnly'] != true)
+          (
+            Icons.laptop_outlined,
+            tr('已传电脑'),
+            durationText(snapshot['samples'] ?? 0),
+          ),
+      ];
       return Scaffold(
         appBar: AppBar(
+          toolbarHeight: toolbarHeight,
           centerTitle: !darkRecording,
           title: darkRecording
               ? breviaLogo()
@@ -2372,6 +2386,8 @@ class _MeetingPageState extends State<MeetingPage> {
                             ),
                           ],
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                   ],
@@ -2453,109 +2469,94 @@ class _MeetingPageState extends State<MeetingPage> {
         body: SafeArea(
           child: Column(
             children: [
-              Padding(
-                padding: EdgeInsets.fromLTRB(24, 8, 24, 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (darkRecording)
-                      Padding(
-                        padding: EdgeInsets.only(bottom: 12),
-                        child: Text(
-                          m['title'] ?? tr("会议"),
-                          style: Theme.of(context).textTheme.headlineLarge,
-                        ),
-                      ),
-                    if (darkRecording)
-                      Text.rich(
-                        TextSpan(
-                          children: [
-                            TextSpan(
-                              text: '● ',
-                              style: TextStyle(color: Color(0xffff3b30)),
+              ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: contentHeight * .32),
+                child: SingleChildScrollView(
+                  primary: false,
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(24, 8, 24, 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (darkRecording)
+                          Padding(
+                            padding: EdgeInsets.only(bottom: 12),
+                            child: Text(
+                              m['title'] ?? tr("会议"),
+                              style: Theme.of(context).textTheme.headlineLarge,
                             ),
+                          ),
+                        if (darkRecording)
+                          Text.rich(
                             TextSpan(
-                              text:
-                                  '$label · ${durationText(m['samples'] ?? 0)}',
-                            ),
-                          ],
-                        ),
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    if (ended && m['localOnly'] == true)
-                      Padding(
-                        padding: EdgeInsets.only(top: 16),
-                        child: FilledButton.icon(
-                          onPressed: widget.model.busy
-                              ? null
-                              : () => uploadRecording(
-                                  context,
-                                  widget.model,
-                                  widget.id,
+                              children: [
+                                TextSpan(
+                                  text: '● ',
+                                  style: TextStyle(
+                                    color: state == 'recording' && live
+                                        ? const Color(0xffff3b30)
+                                        : Theme.of(
+                                            context,
+                                          ).colorScheme.onSurfaceVariant,
+                                  ),
                                 ),
-                          icon: BreviaIcon(Icons.upload_outlined),
-                          label: Text(tr('上传到电脑')),
-                        ),
-                      ),
-                    if (!recordingFocus &&
-                        m['localOnly'] != true &&
-                        m['finished'] != true &&
-                        m['remoteDeleted'] != true &&
-                        m['connected'] == false)
-                      const ConnectionRecoveryNotice(),
-                    if (!ended && !recordingFocus && m['connected'] == true)
-                      Container(
-                        margin: EdgeInsets.only(top: 16),
-                        padding: EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.surfaceContainerLowest,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Text(tr('● 已连接')),
-                            SizedBox(height: 12),
-                            LinearProgressIndicator(
-                              value: (m['count'] as num? ?? 0) > 0
-                                  ? ((m['uploaded'] as num? ?? 0) /
-                                            (m['count'] as num))
-                                        .clamp(0, 1)
-                                        .toDouble()
-                                  : 1,
-                              semanticsLabel: tr('已传到电脑  {0}', [
-                                durationText(snapshot['samples'] ?? 0),
-                              ]),
+                                TextSpan(
+                                  text:
+                                      '$label · ${durationText(m['samples'] ?? 0)}',
+                                ),
+                              ],
                             ),
-                            SizedBox(height: 8),
-                            Text(
-                              tr('已传到电脑  {0}', [
-                                durationText(snapshot['samples'] ?? 0),
-                              ]),
-                              style: Theme.of(context).textTheme.bodySmall,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        if (ended && m['localOnly'] == true)
+                          Padding(
+                            padding: EdgeInsets.only(top: 16),
+                            child: FilledButton.icon(
+                              onPressed: widget.model.busy
+                                  ? null
+                                  : () => uploadRecording(
+                                      context,
+                                      widget.model,
+                                      widget.id,
+                                    ),
+                              icon: BreviaIcon(Icons.upload_outlined),
+                              label: Text(tr('上传到电脑')),
                             ),
-                          ],
-                        ),
-                      ),
-                    if (m['remoteDeleted'] == true ||
-                        m['error'] != null ||
-                        snapshot['error'] != null)
-                      Padding(
-                        padding: EdgeInsets.only(top: 16),
-                        child: Text(
-                          m['remoteDeleted'] == true
-                              ? tr('会议已在电脑永久删除')
-                              : m['error']?.toString() ??
-                                    remoteError(snapshot['error'].toString()),
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    if ((m['gaps'] as List? ?? []).isNotEmpty)
-                      Text(tr("本次录音包含中断缺口"), style: TextStyle(fontSize: 13)),
-                  ],
+                          ),
+                        if (!ended && !recordingFocus)
+                          MeetingConnectionStatus(meeting: m),
+                        if (ended &&
+                            m['localOnly'] != true &&
+                            m['finished'] != true &&
+                            m['remoteDeleted'] != true &&
+                            m['connected'] == false)
+                          const ConnectionRecoveryNotice(),
+                        if (m['remoteDeleted'] == true ||
+                            m['error'] != null ||
+                            snapshot['error'] != null)
+                          Padding(
+                            padding: EdgeInsets.only(top: 16),
+                            child: Text(
+                              m['remoteDeleted'] == true
+                                  ? tr('会议已在电脑永久删除')
+                                  : m['error']?.toString() ??
+                                        remoteError(
+                                          snapshot['error'].toString(),
+                                        ),
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        if ((m['gaps'] as List? ?? []).isNotEmpty)
+                          Text(
+                            tr("本次录音包含中断缺口"),
+                            style: TextStyle(fontSize: 13),
+                          ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
               if (!recordingFocus)
@@ -2603,6 +2604,8 @@ class _MeetingPageState extends State<MeetingPage> {
                                 }),
                                 child: Text(
                                   text,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
                                     fontWeight: tab == i
                                         ? FontWeight.w600
@@ -2649,7 +2652,7 @@ class _MeetingPageState extends State<MeetingPage> {
                     children: [
                       if (recordingFocus) ...[
                         if (m['desktopCapture'] == true) ...[
-                          Text(
+                          StableStatusText(
                             tr(
                               ended
                                   ? '录音已结束'
@@ -2661,6 +2664,16 @@ class _MeetingPageState extends State<MeetingPage> {
                                   ? '正在录音，等待电脑连接'
                                   : '电脑正在使用\n手机麦克风',
                             ),
+                            states: [
+                              for (final value in [
+                                '录音已结束',
+                                '录音已中断',
+                                '录音已暂停',
+                                '正在录音，等待电脑连接',
+                                '电脑正在使用\n手机麦克风',
+                              ])
+                                tr(value),
+                            ],
                             style: Theme.of(context).textTheme.headlineLarge,
                           ),
                           const SizedBox(height: 20),
@@ -2689,7 +2702,7 @@ class _MeetingPageState extends State<MeetingPage> {
                             ),
                             const SizedBox(width: 8),
                             Flexible(
-                              child: Text(
+                              child: StableStatusText(
                                 tr(
                                   ended
                                       ? '录音已结束'
@@ -2702,6 +2715,16 @@ class _MeetingPageState extends State<MeetingPage> {
                                       ? '仍在本机录音'
                                       : '录音中',
                                 ),
+                                states: [
+                                  for (final value in [
+                                    '录音已结束',
+                                    '录音已中断',
+                                    '录音已暂停',
+                                    '仍在本机录音',
+                                    '录音中',
+                                  ])
+                                    tr(value),
+                                ],
                                 style: Theme.of(context).textTheme.titleLarge,
                               ),
                             ),
@@ -2711,9 +2734,13 @@ class _MeetingPageState extends State<MeetingPage> {
                         Text(
                           durationText(m['samples'] ?? 0),
                           textAlign: TextAlign.center,
-                          style: Theme.of(
-                            context,
-                          ).textTheme.headlineLarge?.copyWith(fontSize: 48),
+                          style: Theme.of(context).textTheme.headlineLarge
+                              ?.copyWith(
+                                fontSize: 48,
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures(),
+                                ],
+                              ),
                         ),
                         const SizedBox(height: 20),
                         const Center(
@@ -2727,23 +2754,25 @@ class _MeetingPageState extends State<MeetingPage> {
                                 : 0,
                           ),
                         ),
-                        if (state == 'paused') ...[
-                          const SizedBox(height: 12),
-                          Text(
-                            tr('暂停期间不采集音频'),
-                            textAlign: TextAlign.center,
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        ],
-                        if (live &&
-                            m['desktopCapture'] == true &&
-                            m['connected'] == false) ...[
-                          const SizedBox(height: 16),
-                          Text(
-                            tr('音频保留在手机，恢复连接后自动补传。'),
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        ],
+                        const SizedBox(height: 12),
+                        StableStatusText(
+                          [
+                            if (state == 'paused') tr('暂停期间不采集音频'),
+                            if (live &&
+                                m['desktopCapture'] == true &&
+                                m['connected'] == false)
+                              tr('音频保留在手机，恢复连接后自动补传。'),
+                          ].join('\n'),
+                          states: [
+                            [
+                              tr('暂停期间不采集音频'),
+                              if (m['desktopCapture'] == true)
+                                tr('音频保留在手机，恢复连接后自动补传。'),
+                            ].join('\n'),
+                          ],
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
                         const SizedBox(height: 28),
                         Container(
                           padding: EdgeInsets.all(16),
@@ -3000,68 +3029,94 @@ class _MeetingPageState extends State<MeetingPage> {
                               ).colorScheme.surfaceContainerLowest,
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                for (final (icon, title, time) in [
-                                  (
-                                    Icons.phone_iphone_outlined,
-                                    tr(
-                                      m['localOnly'] == true
-                                          ? '仅保存在手机'
-                                          : '已存本机',
-                                    ),
-                                    durationText(m['samples'] ?? 0),
-                                  ),
-                                  if (m['localOnly'] != true)
-                                    (
-                                      Icons.laptop_outlined,
-                                      tr('已传电脑'),
-                                      durationText(snapshot['samples'] ?? 0),
-                                    ),
-                                ])
-                                  Expanded(
-                                    child: Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        BreviaIcon(icon, size: 20),
-                                        const SizedBox(width: 8),
+                            child: compactRecording
+                                ? Wrap(
+                                    spacing: 24,
+                                    runSpacing: 8,
+                                    children: [
+                                      for (final (icon, title, time)
+                                          in transferInfo)
+                                        Semantics(
+                                          label: title,
+                                          value: time,
+                                          child: Tooltip(
+                                            message: title,
+                                            excludeFromSemantics: true,
+                                            child: ExcludeSemantics(
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  BreviaIcon(icon, size: 20),
+                                                  const SizedBox(width: 8),
+                                                  Text(
+                                                    time,
+                                                    style: Theme.of(context)
+                                                        .textTheme
+                                                        .bodySmall
+                                                        ?.copyWith(
+                                                          fontFeatures: const [
+                                                            FontFeature.tabularFigures(),
+                                                          ],
+                                                        ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  )
+                                : Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      for (final (icon, title, time)
+                                          in transferInfo)
                                         Expanded(
-                                          child: Column(
+                                          child: Row(
                                             crossAxisAlignment:
                                                 CrossAxisAlignment.start,
                                             children: [
-                                              Text(
-                                                title,
-                                                style: Theme.of(context)
-                                                    .textTheme
-                                                    .bodySmall
-                                                    ?.copyWith(
-                                                      fontWeight:
-                                                          FontWeight.w600,
-                                                      color: Theme.of(
-                                                        context,
-                                                      ).colorScheme.onSurface,
+                                              BreviaIcon(icon, size: 20),
+                                              const SizedBox(width: 8),
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      title,
+                                                      style: Theme.of(context)
+                                                          .textTheme
+                                                          .bodySmall
+                                                          ?.copyWith(
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                            color:
+                                                                Theme.of(
+                                                                      context,
+                                                                    )
+                                                                    .colorScheme
+                                                                    .onSurface,
+                                                          ),
                                                     ),
-                                              ),
-                                              if (time.isNotEmpty) ...[
-                                                const SizedBox(height: 4),
-                                                Text(
-                                                  time,
-                                                  style: Theme.of(
-                                                    context,
-                                                  ).textTheme.bodySmall,
+                                                    if (time.isNotEmpty) ...[
+                                                      const SizedBox(height: 4),
+                                                      Text(
+                                                        time,
+                                                        style: Theme.of(
+                                                          context,
+                                                        ).textTheme.bodySmall,
+                                                      ),
+                                                    ],
+                                                  ],
                                                 ),
-                                              ],
+                                              ),
                                             ],
                                           ),
                                         ),
-                                      ],
-                                    ),
+                                    ],
                                   ),
-                              ],
-                            ),
                           ),
                           SizedBox(height: 12),
                           if (recordingFocus && !live) ...[
@@ -4061,108 +4116,48 @@ class _TranscriptionDotsState extends State<_TranscriptionDots>
   }
 }
 
-class RecordingRecoveryPage extends StatelessWidget {
+class MeetingConnectionStatus extends StatelessWidget {
   final Map<String, dynamic> meeting;
-  final VoidCallback onReturn;
-  const RecordingRecoveryPage({
-    super.key,
-    required this.meeting,
-    required this.onReturn,
-  });
+  const MeetingConnectionStatus({super.key, required this.meeting});
+
   @override
   Widget build(BuildContext context) {
+    final connected = meeting['connected'] == true;
     final count = meeting['count'] as num? ?? 0;
     final uploaded = meeting['uploaded'] as num? ?? 0;
-    final progress = count > 0
-        ? (uploaded / count).clamp(0, 1).toDouble()
-        : 0.0;
-    final samples = meeting['samples'] as num? ?? 0;
-    final colors = Theme.of(context).colorScheme;
-    return Scaffold(
-      appBar: AppBar(title: breviaLogo(), centerTitle: false),
-      body: SafeArea(
-        child: ListView(
-          padding: EdgeInsets.all(24),
-          children: [
-            SizedBox(height: 48),
-            Center(
-              child: Container(
-                width: 96,
-                height: 96,
-                decoration: BoxDecoration(
-                  color: Color(0xff16803c).withValues(alpha: .08),
-                  shape: BoxShape.circle,
-                ),
-                child: BreviaIcon(
-                  Icons.check,
-                  size: 48,
-                  color: colors.onSurface,
-                ),
-              ),
-            ),
-            SizedBox(height: 24),
-            Text(
-              tr('已恢复连接'),
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            SizedBox(height: 12),
-            Text(
-              tr(
-                progress < 1
-                    ? meeting['state'] == 'recording'
-                          ? '录音继续，正在补传'
-                          : '录音已暂停'
-                    : '音频已传输',
-              ),
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            SizedBox(height: 32),
-            Container(
-              padding: EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: colors.surfaceContainerLowest,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      Expanded(child: Text(tr('补传进度'))),
-                      Text('${(progress * 100).round()}%'),
-                    ],
-                  ),
-                  SizedBox(height: 12),
-                  LinearProgressIndicator(
-                    value: progress,
-                    semanticsLabel: tr('补传进度'),
-                    semanticsValue: '${(progress * 100).round()}%',
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(height: 24),
-            Container(
-              decoration: BoxDecoration(
-                color: colors.surfaceContainerLowest,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: ListTile(
-                contentPadding: EdgeInsets.all(16),
-                minVerticalPadding: 8,
-                leading: BreviaIcon(Icons.description_outlined),
-                title: Text(tr('已保存的录音')),
-                subtitle: Text(
-                  '${durationText(samples)} · ${(samples * 2 / 1000000).toStringAsFixed(1)} MB',
-                ),
-                trailing: BreviaIcon(Icons.check_circle, size: 20),
-              ),
-            ),
-            SizedBox(height: 48),
-            FilledButton(onPressed: onReturn, child: Text(tr('返回录音'))),
-          ],
-        ),
+    final snapshot = meeting['snapshot'] as Map? ?? {};
+    final uploadedLabel = tr('已传到电脑  {0}', [
+      durationText(snapshot['samples'] ?? 0),
+    ]);
+    final offlineLabel = tr('录音保留在手机，恢复连接后自动补传。');
+    return Container(
+      margin: const EdgeInsets.only(top: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          StableStatusText(
+            connected ? tr('● 已连接') : tr('正在重新连接'),
+            states: [tr('● 已连接'), tr('正在重新连接')],
+          ),
+          const SizedBox(height: 12),
+          LinearProgressIndicator(
+            value: connected
+                ? (count > 0 ? (uploaded / count).clamp(0, 1).toDouble() : 1)
+                : null,
+            semanticsLabel: connected ? uploadedLabel : tr('正在重新连接'),
+          ),
+          const SizedBox(height: 8),
+          StableStatusText(
+            connected ? uploadedLabel : offlineLabel,
+            states: [uploadedLabel, offlineLabel],
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
       ),
     );
   }

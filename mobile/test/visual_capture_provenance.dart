@@ -13,6 +13,8 @@ Map<String, String> captureSources() {
     File('test/design_capture_test.dart'),
     File('test/visual_capture_provenance.dart'),
     File('integration_test/visual_alignment_test.dart'),
+    File('test/meeting_stability_test.dart'),
+    File('integration_test/meeting_stability_test.dart'),
     File('test_driver/visual_alignment_driver.dart'),
   ];
   return {
