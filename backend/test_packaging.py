@@ -7,11 +7,15 @@
 所有用例都在临时目录里跑，不触碰真实的 ``backend/bundled-models`` 与 ``backend/runtime``。
 """
 
+import io
+import json
 import os
 import tempfile
 import time
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 from .asr import load_model_catalog, model_directory_name
 from .bundled_models import (
@@ -22,6 +26,64 @@ from .bundled_models import (
 )
 from .config import BUNDLED_MODEL_IDS
 from .preflight_package import binary_name, package_problems
+
+
+class BenchmarkCompatibilityTest(unittest.TestCase):
+    def test_model_diagnosis_defaults_to_platform_model_and_project_fixture(self):
+        from .diagnose_model import main
+
+        for platform, model_id in (("Darwin", "funasr-nano-mlx"), ("Windows", "funasr-nano-int8")):
+            with self.subTest(platform=platform), tempfile.TemporaryDirectory() as root:
+                output = io.StringIO()
+                recognizer = Mock(max_speech_seconds=22.0)
+                recognizer.decode.return_value = "识别样例"
+                with (
+                    patch("backend.asr.platform.system", return_value=platform),
+                    patch("sys.argv", ["diagnose_model", "--models-dir", root]),
+                    patch("backend.diagnose_model.RefinedASR", return_value=recognizer) as factory,
+                    patch("sys.stdout", output),
+                ):
+                    main()
+                self.assertEqual(json.loads(output.getvalue())["model_id"], model_id)
+                self.assertEqual(factory.call_args.args[1], model_id)
+                self.assertGreater(len(recognizer.decode.call_args.args[0]), 0)
+
+    def test_refinement_benchmark_skips_sherpa_only_for_mlx(self):
+        from .bench_refinement import main
+
+        for platform in ("Darwin", "Windows"):
+            with self.subTest(platform=platform), tempfile.TemporaryDirectory() as root:
+                with (
+                    patch("backend.asr.platform.system", return_value=platform),
+                    patch.dict(os.environ, {"BREVIA_BUNDLED_MODELS_DIR": root}),
+                    patch(
+                        "sys.argv",
+                        ["bench_refinement", "--models-root", root, "--max-seconds", "1"],
+                    ),
+                    patch("backend.bench_refinement.benchmark_sherpa", return_value={}) as native,
+                    patch("backend.bench_refinement.benchmark_python_stages", return_value=[]),
+                    patch("backend.bench_refinement.benchmark_python_pipeline", return_value={}),
+                    patch("sys.stdout", io.StringIO()),
+                ):
+                    main()
+                self.assertEqual(native.call_count, int(platform == "Windows"))
+
+    def test_windows_benchmark_reads_native_peak_working_set_without_resource(self):
+        from .bench_asr_models import peak_rss_mb
+
+        def query(_handle, pointer, size):
+            self.assertEqual(pointer._obj.cb, size)
+            pointer._obj.PeakWorkingSetSize = 123 * 1024 * 1024
+            return True
+
+        kernel = SimpleNamespace(GetCurrentProcess=Mock(return_value=1))
+        psapi = SimpleNamespace(GetProcessMemoryInfo=Mock(side_effect=query))
+        with (
+            patch("sys.platform", "win32"),
+            patch("ctypes.WinDLL", side_effect=[kernel, psapi], create=True),
+            patch.dict("sys.modules", {"resource": None}),
+        ):
+            self.assertEqual(peak_rss_mb(), 123)
 
 
 class PackagingAssetTest(unittest.TestCase):

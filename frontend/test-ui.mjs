@@ -931,10 +931,18 @@ mediaContext.AudioContext = class {
     this.state = 'closed';
     closedAudioContexts += 1;
   }
+  async suspend() {
+    this.state = 'suspended';
+  }
 };
 mediaContext.AudioWorkletNode = function AudioWorkletNode() {
   const node = mockNode();
-  node.port.postMessage = () => node.port.onmessage({ data: { flushed: true } });
+  node.port.postMessage = () => {
+    node.port.onmessage({
+      data: { samples: new Float32Array(1000), level: 0, startFrame: 56192 },
+    });
+    node.port.onmessage({ data: { flushed: true } });
+  };
   sharedProcessors.push(node);
   return node;
 };
@@ -957,6 +965,27 @@ assert.deepEqual(
 );
 await clockCapture.stop();
 assert.equal(closedAudioContexts, 1, 'the shared context closes exactly once');
+for (const paused of [false, true]) {
+  const frames = [];
+  const capture = new mediaContext.AudioCapture(async (frame) => frames.push(frame));
+  capture.pendingStreams = [
+    {
+      track: 'mic',
+      stream: {
+        getAudioTracks: () => [{ readyState: 'live', stop() {} }],
+        getVideoTracks: () => [],
+      },
+    },
+  ];
+  await capture.start('tail-meeting');
+  if (paused) await capture.setPaused(true);
+  await capture.stop();
+  assert.equal(
+    frames.reduce((samples, frame) => samples + Buffer.from(frame.pcm, 'base64').length / 2, 0),
+    Math.round((8192 + 1000) / 3),
+    `ending ${paused ? 'paused' : 'running'} capture preserves and resamples the worklet tail`,
+  );
+}
 let releaseFirstAudio;
 const sentAudio = [];
 const batchingCapture = new mediaContext.AudioCapture((payload) => {
@@ -5184,12 +5213,9 @@ assert.match(
 assert.match(text(meetingDetail), /refinedModelAppliedName/);
 assert.ok(localeContext.window.BreviaLocaleData.catalog.en.labels['识别模型']);
 for (const copy of [
-  '更换精修模型',
-  'Change refinement model',
-  '精修モデルを変更',
-  '정제 모델 변경',
-  '该会议已有逐句修改。用新模型重新精修会按新模型重新分段，这些修改可能无法保留。',
-  'Re-refining with a new model re-segments the transcript',
+  '重新精修',
+  '该会议已有逐句修改。重新精修可能改变分段，使这些修改不再出现在当前逐字稿中。原稿仍保存在本机历史数据中。',
+  'Refinement may change segment boundaries',
 ]) {
   assert.ok(text(i18nData).includes(copy), `missing i18n copy: ${copy}`);
 }
@@ -5480,6 +5506,33 @@ assert.equal(
 );
 editsContext.currentMeetingDetail.segments[0].user_edited = 0;
 assert.equal(editsContext.meetingHasUserEdits(), false);
+const refinementCalls = [];
+let confirmRefinement;
+Object.assign(editsContext, {
+  pinnedRefineModel: () => undefined,
+  t: (key) => key,
+  openConfirmation: (_title, _message, confirm) => {
+    confirmRefinement = confirm;
+  },
+  startRefinement: (...args) => refinementCalls.push(args),
+});
+runInNewContext(summaryFn('refineWithSelectedModel'), editsContext);
+for (const modelId of [undefined, 'same-model', 'different-model']) {
+  editsContext.pinnedRefineModel = () => modelId;
+  editsContext.currentMeetingDetail.segments[0].user_edited = 1;
+  const before = refinementCalls.length;
+  editsContext.refineWithSelectedModel(2);
+  assert.equal(
+    refinementCalls.length,
+    before,
+    'edits require confirmation even without a model change',
+  );
+  confirmRefinement();
+  assert.deepEqual(refinementCalls.at(-1), [2, modelId]);
+}
+editsContext.currentMeetingDetail.segments[0].user_edited = 0;
+editsContext.refineWithSelectedModel(undefined);
+assert.deepEqual(refinementCalls.at(-1), [undefined, 'different-model']);
 
 const clientStopContext = {
   window: {
@@ -5558,6 +5611,8 @@ for (const [code, data] of Object.entries(localeContext.window.BreviaLocaleData.
   for (const key of [
     'error.tasks.running',
     'error.voice_sample_owned',
+    'error.voice_sample_limit',
+    'error.voice_duration_limit',
     'error.worker_exited',
     'error.audio_too_long',
   ]) {

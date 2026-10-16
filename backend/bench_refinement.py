@@ -20,6 +20,7 @@ from pathlib import Path
 from .asr import ModelManager, OfflineDiarizer, OfflineVAD, RefinedASR, SpeakerTracker
 from .audio_io import read_mono_wav, read_mono_wav_window
 from .config import SETTINGS
+from .worker_common import default_refined_model_for_language
 
 DEFAULT_WAV = Path(__file__).with_name("fixtures") / "example-zh.wav"
 
@@ -62,12 +63,14 @@ def result(name, audio_seconds, started):
 
 def benchmark_sherpa(path, model_id, language, models_root, window_seconds):
     """Decode through the raw Sherpa recognizer after the app has built its config."""
-    recognizer = RefinedASR(
-        ModelManager(models_root),
+    refined = RefinedASR(
+        ModelManager(models_root, cleanup=False),
         model_id,
         language=language,
         threads=ModelManager.device()["threads"],
-    ).recognizer
+    )
+    recognizer = refined.recognizer
+    window_seconds = min(window_seconds, int(refined.max_speech_seconds))
     audio_seconds = wav_duration_seconds(path)
     started = time.perf_counter()
     for samples, sample_rate in windows(path, window_seconds):
@@ -82,7 +85,7 @@ def benchmark_python_stages(path, model_id, language, models_root, window_second
     """Time the individual operations which make the refinement pipeline heavier."""
     import numpy
 
-    manager = ModelManager(models_root)
+    manager = ModelManager(models_root, cleanup=False)
     audio_seconds = wav_duration_seconds(path)
     samples, sample_rate = read_mono_wav(path)
 
@@ -122,6 +125,7 @@ def benchmark_python_stages(path, model_id, language, models_root, window_second
     recognizer = RefinedASR(
         manager, model_id, language=language, threads=manager.device()["threads"]
     )
+    window_seconds = min(window_seconds, int(recognizer.max_speech_seconds))
     asr_load = time.perf_counter() - started
     started = time.perf_counter()
     for window_samples, window_rate in windows(path, window_seconds):
@@ -199,7 +203,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--wav", type=Path, default=DEFAULT_WAV)
     parser.add_argument("--language", default="zh")
-    parser.add_argument("--refined-model", default="funasr-nano-int8")
+    parser.add_argument("--refined-model")
     parser.add_argument(
         "--models-root",
         default=os.environ.get("BREVIA_MODELS_DIR") or str(Path.home() / "brevia" / "models"),
@@ -210,28 +214,44 @@ def main():
     args = parser.parse_args()
     if not args.wav.is_file():
         parser.error("--wav was not found")
+    if args.window_seconds <= 0 or (args.max_seconds is not None and args.max_seconds <= 0):
+        parser.error("Benchmark durations must be positive")
     wav_duration_seconds(args.wav)
+    os.environ.setdefault(
+        "BREVIA_BUNDLED_MODELS_DIR", str(Path(__file__).with_name("bundled-models"))
+    )
+    manager = ModelManager(args.models_root, cleanup=False)
+    args.refined_model = args.refined_model or default_refined_model_for_language(
+        manager, args.language, is_ready=manager.is_ready
+    )
 
     with tempfile.TemporaryDirectory(prefix="brevia-bench-") as temporary:
         temporary_root = Path(temporary)
         wav_path = temporary_root / "input.wav"
         clip_wav(args.wav, wav_path, args.max_seconds)
         models_root = Path(args.models_root)
-        results = [
-            benchmark_sherpa(
-                wav_path, args.refined_model, args.language, models_root, args.window_seconds
-            ),
-            *benchmark_python_stages(
-                wav_path, args.refined_model, args.language, models_root, args.window_seconds
-            ),
-            benchmark_python_pipeline(
-                wav_path,
-                args.refined_model,
-                args.language,
-                models_root,
-                temporary_root / "python-data",
-            ),
-        ]
+        # 原生 Sherpa 对照仅适用于 ONNX；MLX 使用下面的公共解码接口计时。
+        results = []
+        if manager.get(args.refined_model)["runtime"] != "mlx-audio":
+            results.append(
+                benchmark_sherpa(
+                    wav_path, args.refined_model, args.language, models_root, args.window_seconds
+                )
+            )
+        results.extend(
+            [
+                *benchmark_python_stages(
+                    wav_path, args.refined_model, args.language, models_root, args.window_seconds
+                ),
+                benchmark_python_pipeline(
+                    wav_path,
+                    args.refined_model,
+                    args.language,
+                    models_root,
+                    temporary_root / "python-data",
+                ),
+            ]
+        )
         if args.electron:
             results.append(
                 benchmark_electron(

@@ -842,9 +842,8 @@
         '{count} 条结果': '{count} 条结果',
         '标题匹配': '标题匹配',
         '搜索会议、字幕或说话人…': '搜索会议、字幕或说话人…',
-        '更换精修模型': '更换精修模型',
-        '该会议已有逐句修改。用新模型重新精修会按新模型重新分段，这些修改可能无法保留。':
-          '该会议已有逐句修改。用新模型重新精修会按新模型重新分段，这些修改可能无法保留。',
+        '该会议已有逐句修改。重新精修可能改变分段，使这些修改不再出现在当前逐字稿中。原稿仍保存在本机历史数据中。':
+          '该会议已有逐句修改。重新精修可能改变分段，使这些修改不再出现在当前逐字稿中。原稿仍保存在本机历史数据中。',
         '开始精修': '开始精修',
         '自动（记住上次）': '自动（记住上次）',
         '仅麦克风': '仅麦克风',
@@ -893,6 +892,8 @@
           '请检查存储设备和配置文件。原始数据与迁移日志已保留，修复后重新启动 Brevia。',
         'error.storage_unavailable': '数据文件夹不可用。请连接存储设备后重新启动 Brevia。',
         'error.summary.no_transcript': '当前会议暂无逐字稿内容，请先完成转写后再生成会议纪要。',
+        'error.voice_sample_limit': '声纹录音数量已达上限，请删除旧样本后重试。',
+        'error.voice_duration_limit': '声纹录音总时长已达上限，请删除旧样本后重试。',
         'error.voice_sample_owned': '这段录音已属于另一个声纹。',
         'error.voice_sample_short': '录音太短，请选择更长的声音样本。',
         'error.audio_not_found': '未找到录音文件，请检查文件是否存在。',
@@ -1460,7 +1461,6 @@
         '会议中没有记录笔记。': 'No notes were taken during the meeting.',
         '位参与者': 'participants',
         '重新精修': 'Re-refine',
-        '更换精修模型': 'Change refinement model',
         '尚未生成': 'Not generated yet',
         '生成纪要': 'Generate notes',
         '更多': 'More',
@@ -1712,8 +1712,8 @@
         '{count} 条结果': '{count} results',
         '标题匹配': 'Title match',
         '搜索会议、字幕或说话人…': 'Search meetings, captions, or speakers…',
-        '该会议已有逐句修改。用新模型重新精修会按新模型重新分段，这些修改可能无法保留。':
-          'This meeting has per-sentence edits. Re-refining with a new model re-segments the transcript, so those edits may not be kept.',
+        '该会议已有逐句修改。重新精修可能改变分段，使这些修改不再出现在当前逐字稿中。原稿仍保存在本机历史数据中。':
+          'This meeting has per-sentence edits. Refinement may change segment boundaries, so those edits may disappear from the current transcript. The original remains in local history.',
         '开始精修': 'Start refinement',
         '录制方式': 'Recording mode',
         '自动（记住上次）': 'Auto (remember last)',
@@ -1770,6 +1770,10 @@
         'error.storage_unavailable':
           'The data folder is unavailable. Connect the storage drive and restart Brevia.',
         'error.summary.no_transcript': 'Transcribe this meeting before generating meeting notes.',
+        'error.voice_sample_limit':
+          'The voiceprint recording limit has been reached. Delete older samples and try again.',
+        'error.voice_duration_limit':
+          'The voiceprint duration limit has been reached. Delete older samples and try again.',
         'error.voice_sample_owned': 'This recording already belongs to another voiceprint.',
         'error.voice_sample_short': 'The recording is too short. Choose a longer voice sample.',
         'error.audio_not_found': 'Audio file not found. Check that the file still exists.',
@@ -2344,7 +2348,6 @@
         '会议中没有记录笔记。': 'No se tomaron notas durante la reunión.',
         '位参与者': 'participantes',
         '重新精修': 'Refinar de nuevo',
-        '更换精修模型': 'Cambiar el modelo de refinado',
         '尚未生成': 'Aún no generado',
         '生成纪要': 'Generar notas',
         '更多': 'Más',
@@ -2599,8 +2602,8 @@
         '{count} 条结果': '{count} resultados',
         '标题匹配': 'Coincide con el título',
         '搜索会议、字幕或说话人…': 'Buscar reuniones, subtítulos o hablantes…',
-        '该会议已有逐句修改。用新模型重新精修会按新模型重新分段，这些修改可能无法保留。':
-          'Esta reunión tiene ediciones por frase. Volver a refinar con otro modelo vuelve a segmentar la transcripción, por lo que esas ediciones podrían no conservarse.',
+        '该会议已有逐句修改。重新精修可能改变分段，使这些修改不再出现在当前逐字稿中。原稿仍保存在本机历史数据中。':
+          'Esta reunión tiene cambios por frase. El refinamiento puede cambiar los segmentos y esos cambios podrían dejar de aparecer en la transcripción actual. El original se conserva en el historial local.',
         '开始精修': 'Iniciar refinamiento',
         '录制方式': 'Modo de grabación',
         '自动（记住上次）': 'Auto (recordar último)',
@@ -2657,6 +2660,10 @@
         'error.storage_unavailable':
           'La carpeta de datos no está disponible. Conecta el dispositivo y reinicia Brevia.',
         'error.summary.no_transcript': 'Transcribe esta reunión antes de generar las notas.',
+        'error.voice_sample_limit':
+          'Se ha alcanzado el límite de grabaciones de la huella de voz. Elimina muestras antiguas e inténtalo de nuevo.',
+        'error.voice_duration_limit':
+          'Se ha alcanzado el límite de duración de la huella de voz. Elimina muestras antiguas e inténtalo de nuevo.',
         'error.voice_sample_owned': 'Esta grabación ya pertenece a otra huella de voz.',
         'error.voice_sample_short': 'La grabación es demasiado corta. Elige una muestra más larga.',
         'error.audio_not_found': 'No se encontró el audio. Comprueba que el archivo existe.',
@@ -3229,7 +3236,6 @@
         '会议中没有记录笔记。': '会議中にメモはありませんでした。',
         '位参与者': '人の参加者',
         '重新精修': '再精修',
-        '更换精修模型': '精修モデルを変更',
         '尚未生成': '未生成',
         '生成纪要': '議事録を生成',
         '更多': 'その他',
@@ -3483,8 +3489,8 @@
         '{count} 条结果': '{count} 件の結果',
         '标题匹配': 'タイトル一致',
         '搜索会议、字幕或说话人…': '会議・字幕・話者を検索…',
-        '该会议已有逐句修改。用新模型重新精修会按新模型重新分段，这些修改可能无法保留。':
-          'この会議には文単位の編集があります。別のモデルで再精修すると再分割されるため、その編集は保持されない可能性があります。',
+        '该会议已有逐句修改。重新精修可能改变分段，使这些修改不再出现在当前逐字稿中。原稿仍保存在本机历史数据中。':
+          'この会議には文ごとの修正があります。再精修で区切りが変わると、修正が現在の文字起こしに表示されなくなる場合があります。元の内容は端末の履歴データに保存されます。',
         '开始精修': '精修を開始',
         '录制方式': '録音モード',
         '自动（记住上次）': '自動（前回を記憶）',
@@ -3541,6 +3547,10 @@
         'error.storage_unavailable':
           'データフォルダーを利用できません。ストレージを接続し、Brevia を再起動してください。',
         'error.summary.no_transcript': '会議を文字起こししてから会議メモを生成してください。',
+        'error.voice_sample_limit':
+          '声紋の録音数が上限に達しました。古いサンプルを削除して再試行してください。',
+        'error.voice_duration_limit':
+          '声紋の録音時間が上限に達しました。古いサンプルを削除して再試行してください。',
         'error.voice_sample_owned': 'この録音はすでに別の声紋に登録されています。',
         'error.voice_sample_short': '録音が短すぎます。長い音声サンプルを選んでください。',
         'error.audio_not_found': '録音ファイルが見つかりません。ファイルを確認してください。',
@@ -4102,7 +4112,6 @@
         '会议中没有记录笔记。': '회의 중 메모가 없습니다.',
         '位参与者': '명 참가자',
         '重新精修': '다시 정제',
-        '更换精修模型': '정제 모델 변경',
         '尚未生成': '아직 생성 안 됨',
         '生成纪要': '회의록 생성',
         '更多': '더 보기',
@@ -4356,8 +4365,8 @@
         '{count} 条结果': '{count}개 결과',
         '标题匹配': '제목 일치',
         '搜索会议、字幕或说话人…': '회의·자막·화자 검색…',
-        '该会议已有逐句修改。用新模型重新精修会按新模型重新分段，这些修改可能无法保留。':
-          '이 회의에는 문장 단위 편집이 있습니다. 다른 모델로 다시 정제하면 다시 분할되므로 해당 편집이 유지되지 않을 수 있습니다.',
+        '该会议已有逐句修改。重新精修可能改变分段，使这些修改不再出现在当前逐字稿中。原稿仍保存在本机历史数据中。':
+          '이 회의에는 문장별 수정 사항이 있습니다. 다시 정제하면 구간이 바뀌어 현재 녹취록에 수정 내용이 표시되지 않을 수 있습니다. 원본은 기기의 기록 데이터에 보관됩니다.',
         '开始精修': '정교화 시작',
         '录制方式': '녹음 모드',
         '自动（记住上次）': '자동(지난 설정 기억)',
@@ -4413,6 +4422,10 @@
         'error.storage_unavailable':
           '데이터 폴더를 사용할 수 없습니다. 저장 장치를 연결하고 Brevia를 다시 시작하세요.',
         'error.summary.no_transcript': '회의를 전사한 후 회의록을 생성하세요.',
+        'error.voice_sample_limit':
+          '성문 녹음 수가 한도에 도달했습니다. 이전 샘플을 삭제하고 다시 시도하세요.',
+        'error.voice_duration_limit':
+          '성문 녹음 시간이 한도에 도달했습니다. 이전 샘플을 삭제하고 다시 시도하세요.',
         'error.voice_sample_owned': '이 녹음은 이미 다른 성문에 등록되어 있습니다.',
         'error.voice_sample_short': '녹음이 너무 짧습니다. 더 긴 음성 샘플을 선택하세요.',
         'error.audio_not_found': '녹음 파일을 찾을 수 없습니다. 파일이 있는지 확인하세요.',
@@ -4993,7 +5006,6 @@
         '会议中没有记录笔记。': 'Aucune note n’a été prise pendant la réunion.',
         '位参与者': 'participants',
         '重新精修': 'Ré-affiner',
-        '更换精修模型': 'Changer le modèle d’affinage',
         '尚未生成': 'Pas encore généré',
         '生成纪要': 'Générer les notes',
         '更多': 'Plus',
@@ -5249,8 +5261,8 @@
         '{count} 条结果': '{count} résultats',
         '标题匹配': 'Correspond au titre',
         '搜索会议、字幕或说话人…': 'Rechercher réunions, sous-titres ou locuteurs…',
-        '该会议已有逐句修改。用新模型重新精修会按新模型重新分段，这些修改可能无法保留。':
-          'Cette réunion contient des modifications phrase par phrase. Un nouvel affinage avec un autre modèle re-segmente la transcription ; ces modifications risquent de ne pas être conservées.',
+        '该会议已有逐句修改。重新精修可能改变分段，使这些修改不再出现在当前逐字稿中。原稿仍保存在本机历史数据中。':
+          'Cette réunion contient des modifications phrase par phrase. Un nouvel affinage peut modifier les segments et ces corrections peuvent disparaître de la transcription actuelle. L’original reste dans l’historique local.',
         '开始精修': 'Lancer le raffinage',
         '录制方式': 'Mode d’enregistrement',
         '自动（记住上次）': 'Auto (mémoriser le dernier)',
@@ -5307,6 +5319,10 @@
         'error.storage_unavailable':
           'Le dossier de données est indisponible. Connectez le disque puis relancez Brevia.',
         'error.summary.no_transcript': 'Transcrivez cette réunion avant de générer les notes.',
+        'error.voice_sample_limit':
+          'La limite d’enregistrements de l’empreinte vocale est atteinte. Supprimez d’anciens échantillons et réessayez.',
+        'error.voice_duration_limit':
+          'La durée maximale de l’empreinte vocale est atteinte. Supprimez d’anciens échantillons et réessayez.',
         'error.voice_sample_owned':
           'Cet enregistrement appartient déjà à une autre empreinte vocale.',
         'error.voice_sample_short':
@@ -5889,7 +5905,6 @@
         '会议中没有记录笔记。': 'Während der Besprechung wurden keine Notizen erfasst.',
         '位参与者': 'Teilnehmer',
         '重新精修': 'Erneut nachbearbeiten',
-        '更换精修模型': 'Nachbearbeitungsmodell ändern',
         '尚未生成': 'Noch nicht erstellt',
         '生成纪要': 'Notizen erstellen',
         '更多': 'Mehr',
@@ -6146,8 +6161,8 @@
         '{count} 条结果': '{count} Ergebnisse',
         '标题匹配': 'Titeltreffer',
         '搜索会议、字幕或说话人…': 'Besprechungen, Untertitel oder Sprecher suchen…',
-        '该会议已有逐句修改。用新模型重新精修会按新模型重新分段，这些修改可能无法保留。':
-          'Diese Besprechung enthält satzweise Änderungen. Eine erneute Nachbearbeitung mit einem anderen Modell segmentiert das Transkript neu; diese Änderungen bleiben möglicherweise nicht erhalten.',
+        '该会议已有逐句修改。重新精修可能改变分段，使这些修改不再出现在当前逐字稿中。原稿仍保存在本机历史数据中。':
+          'Diese Besprechung enthält satzweise Änderungen. Eine erneute Nachbearbeitung kann die Segmentgrenzen ändern, sodass diese Änderungen im aktuellen Transkript fehlen. Das Original bleibt im lokalen Verlauf erhalten.',
         '开始精修': 'Verfeinerung starten',
         '录制方式': 'Aufnahmemodus',
         '自动（记住上次）': 'Automatisch (letzte Auswahl merken)',
@@ -6205,6 +6220,10 @@
           'Der Datenordner ist nicht verfügbar. Verbinden Sie den Datenträger und starten Sie Brevia neu.',
         'error.summary.no_transcript':
           'Transkribieren Sie die Besprechung, bevor Sie Notizen erstellen.',
+        'error.voice_sample_limit':
+          'Die maximale Anzahl an Stimmaufnahmen ist erreicht. Löschen Sie ältere Proben und versuchen Sie es erneut.',
+        'error.voice_duration_limit':
+          'Die maximale Aufnahmedauer des Stimmprofils ist erreicht. Löschen Sie ältere Proben und versuchen Sie es erneut.',
         'error.voice_sample_owned': 'Diese Aufnahme gehört bereits zu einem anderen Stimmprofil.',
         'error.voice_sample_short':
           'Die Aufnahme ist zu kurz. Wählen Sie eine längere Sprachprobe.',
@@ -6777,7 +6796,6 @@
         '会议中没有记录笔记。': 'Во время встречи заметки не велись.',
         '位参与者': 'участников',
         '重新精修': 'Обработать заново',
-        '更换精修模型': 'Сменить модель обработки',
         '尚未生成': 'Ещё не создано',
         '生成纪要': 'Создать заметки',
         '更多': 'Ещё',
@@ -7033,8 +7051,8 @@
         '{count} 条结果': '{count} результатов',
         '标题匹配': 'Совпадение по названию',
         '搜索会议、字幕或说话人…': 'Поиск встреч, субтитров или говорящих…',
-        '该会议已有逐句修改。用新模型重新精修会按新模型重新分段，这些修改可能无法保留。':
-          'В этой встрече есть построчные правки. Повторная обработка другой моделью заново разобьёт транскрипт, поэтому эти правки могут не сохраниться.',
+        '该会议已有逐句修改。重新精修可能改变分段，使这些修改不再出现在当前逐字稿中。原稿仍保存在本机历史数据中。':
+          'В этой встрече есть построчные правки. Повторная обработка может изменить границы фрагментов, и правки перестанут отображаться в текущем транскрипте. Оригинал сохранится в локальной истории.',
         '开始精修': 'Начать обработку',
         '录制方式': 'Режим записи',
         '自动（记住上次）': 'Авто (запомнить последнее)',
@@ -7091,6 +7109,10 @@
         'error.storage_unavailable':
           'Папка данных недоступна. Подключите накопитель и перезапустите Brevia.',
         'error.summary.no_transcript': 'Сначала расшифруйте встречу, затем создайте заметки.',
+        'error.voice_sample_limit':
+          'Достигнут лимит записей голосового профиля. Удалите старые образцы и повторите попытку.',
+        'error.voice_duration_limit':
+          'Достигнут лимит длительности голосового профиля. Удалите старые образцы и повторите попытку.',
         'error.voice_sample_owned': 'Эта запись уже принадлежит другому голосовому профилю.',
         'error.voice_sample_short':
           'Запись слишком короткая. Выберите более длинный образец голоса.',

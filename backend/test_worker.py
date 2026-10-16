@@ -3044,6 +3044,7 @@ class WorkerTest(unittest.TestCase):
             patch("backend.worker_refinement.SpeakerTracker") as tracker,
             patch("backend.worker_refinement.RefinedASR") as refined,
         ):
+            refined.return_value.max_speech_seconds = 22.0
             vad.return_value.process.side_effect = lambda samples, _rate, **kwargs: (
                 [{"start_ms": 1000, "end_ms": 2000}]
                 if samples[0] < 0.0007
@@ -3180,6 +3181,7 @@ class WorkerTest(unittest.TestCase):
                 ),
             ),
         ):
+            refined.return_value.max_speech_seconds = 22.0
             vad.return_value.process.return_value = [{"start_ms": 0, "end_ms": 1000}]
             diarizer.return_value.process.return_value = [
                 {"start_ms": 0, "end_ms": 1000, "speaker": "spk-1"}
@@ -3238,6 +3240,7 @@ class WorkerTest(unittest.TestCase):
             patch("backend.worker_refinement.SpeakerTracker") as tracker,
             patch("backend.worker_refinement.RefinedASR") as refined,
         ):
+            refined.return_value.max_speech_seconds = 22.0
             vad.return_value.process.return_value = [{"start_ms": 0, "end_ms": 1000}]
             diarizer.return_value.process.return_value = [
                 {"start_ms": 0, "end_ms": 1000, "speaker": "spk-2"}
@@ -3286,6 +3289,7 @@ class WorkerTest(unittest.TestCase):
             patch("backend.worker_refinement.SpeakerTracker") as tracker,
             patch("backend.worker_refinement.RefinedASR") as refined,
         ):
+            refined.return_value.max_speech_seconds = 22.0
             vad.return_value.process.return_value = [{"start_ms": 0, "end_ms": 1000}]
             diarizer.return_value.process.return_value = [
                 {"start_ms": 0, "end_ms": 1000, "speaker": "spk-1"}
@@ -3735,6 +3739,58 @@ class WorkerTest(unittest.TestCase):
                 "extract_embeddings",
             ],
         )
+
+    def test_refinement_caps_audio_and_ignores_historical_speaker_locks(self):
+        for capacity in (20.0, 22.0):
+            with self.subTest(capacity=capacity):
+                self.worker.models.is_ready = lambda _: False
+                meeting = self._meeting_with_a_saved_subtitle()
+                audio_path = (
+                    self.worker.store.meeting_dir(meeting["id"]) / "audio" / "playback-mic.wav"
+                )
+                with wave.open(str(audio_path), "wb") as audio:
+                    audio.setnchannels(1)
+                    audio.setsampwidth(2)
+                    audio.setframerate(16000)
+                    audio.writeframes(b"\0\0" * 16000 * 40)
+                for revision, speaker in ((0, "manual-z-old"), (1, "manual-a-current")):
+                    segment = {
+                        "segment_id": f"segment-{revision}",
+                        "track": "mic",
+                        "start_ms": 0,
+                        "end_ms": 40000,
+                        "text": "已标记的发言。",
+                        "speaker": speaker,
+                    }
+                    self.worker.store.replace_segments(
+                        meeting["id"], [segment], f"postprocess-{revision}", revision
+                    )
+                    self.worker.store.set_segment_speaker(
+                        meeting["id"], segment["segment_id"], speaker
+                    )
+                turn = {"start_ms": 0, "end_ms": 40000, "speaker": "spk-1"}
+                source = {"path": str(audio_path), "sample_rate": 16000, "duration_ms": 40000}
+                recognizer = Mock(max_speech_seconds=capacity)
+                recognizer.decode_words.return_value = ("新的识别内容。", [])
+                self.worker.models.is_ready = lambda _: True
+                with (
+                    patch.dict(SETTINGS["asr"], {"refined_window_seconds": 60}),
+                    patch.object(
+                        self.worker, "_prepare_track", return_value=("mic", source, [turn], [turn])
+                    ),
+                    patch("backend.worker_refinement.RefinedASR", return_value=recognizer),
+                    patch(
+                        "backend.worker_refinement.read_mono_wav_window",
+                        return_value=([0.1], 16000),
+                    ) as read,
+                ):
+                    self.worker.refine({"meeting_id": meeting["id"]})
+                self.assertGreater(len(read.call_args_list), 1)
+                for call in read.call_args_list:
+                    self.assertLessEqual(call.args[2] - call.args[1], capacity * 1000)
+                current = self.worker.store.get_meeting(meeting["id"], compact=True)["segments"]
+                self.assertTrue(current)
+                self.assertEqual({item["speaker"] for item in current}, {"manual-a-current"})
 
     def test_refinement_decode_range_adds_context_without_crossing_speakers(self):
         turn = {"start_ms": 1000, "end_ms": 1200, "speaker": "spk-1"}
@@ -5795,10 +5851,16 @@ class WorkerTest(unittest.TestCase):
             self.worker.store.save_speaker_profile_sample(
                 "林悦", [0, 1], "sentence-2", profile["id"], duration_ms=1000
             )
-            with self.assertRaisesRegex(ValueError, "at most 2"):
+            with self.assertRaisesRegex(ValueError, "at most 2") as raised:
                 self.worker.store.save_speaker_profile_sample(
                     "林悦", [1, 0], "sentence-3", profile["id"], duration_ms=1000
                 )
+            self.assertEqual(raised.exception.code, "error.voice_sample_limit")
+        with self.assertRaisesRegex(ValueError, "at most 300") as raised:
+            self.worker.store.save_speaker_profile_sample(
+                "林悦", [1, 0], "sentence-3", profile["id"], duration_ms=300000
+            )
+        self.assertEqual(raised.exception.code, "error.voice_duration_limit")
         samples = self.worker.store.list_speaker_profile_samples(profile["id"])
         self.worker.store.delete_speaker_profile_sample(profile["id"], samples[0]["id"])
         self.assertEqual(self.worker.store.speaker_profile(profile["id"])["sample_count"], 1)
@@ -6562,6 +6624,65 @@ class WorkerTest(unittest.TestCase):
                 with self.assertRaises(RuntimeError):
                     self.worker.voice_profiles.enroll(payload)
             self.assertEqual(list(old.parent.glob("*.wav")), [Path(samples[0]["audio_path"])])
+
+    def test_voiceprint_versions_use_separate_audio_and_keep_retry_idempotent(self):
+        source = Path(self.temp.name) / "source.wav"
+        source.write_bytes(b"test")
+        tracker = Mock()
+        tracker.embedding.return_value = [1.0, 0.0]
+        segment = {
+            "id": "mic-0-0",
+            "speaker": "spk-1",
+            "track": "mic",
+            "version": "live",
+            "revision": 0,
+            "text": "One sentence.",
+            "start_ms": 0,
+            "end_ms": 1000,
+        }
+        meeting = {"id": "meeting", "audio": {"playback": {"mic": str(source)}}}
+        with (
+            patch("backend.voice_profiles.SpeakerTracker", return_value=tracker),
+            patch(
+                "backend.voice_profiles.read_mono_wav_window", return_value=([0.1] * 16000, 16000)
+            ),
+        ):
+            for item in [segment, {**segment, "id": "mic-0", "version": "postprocess"}]:
+                profile = self.worker.voice_profiles.learn_from_meeting(
+                    {**meeting, "segments": [item]}, "spk-1", "Speaker"
+                )
+            self.worker.voice_profiles.learn_from_meeting(
+                {**meeting, "segments": [item]}, "spk-1", "Speaker"
+            )
+        samples = self.worker.store.list_speaker_profile_samples(profile["id"])
+        self.assertEqual(len(samples), 2)
+        self.assertEqual(len({row["audio_path"] for row in samples}), 2)
+        self.worker.store.delete_speaker_profile_sample(profile["id"], samples[0]["id"])
+        self.assertFalse(Path(samples[0]["audio_path"]).exists())
+        self.assertTrue(Path(samples[1]["audio_path"]).exists())
+
+    def test_deleting_legacy_shared_voiceprint_audio_keeps_remaining_reference(self):
+        store = self.worker.store
+        profile = store.ensure_speaker_profile("Speaker")
+        directory = store.speaker_profiles_dir / profile["id"]
+        directory.mkdir()
+        audio = directory / "legacy.wav"
+        audio.write_bytes(b"keep")
+        for key in ["live", "refined"]:
+            store.save_speaker_profile_sample(
+                "Speaker", [1, 0], key, profile["id"], str(audio), 100
+            )
+        samples = store.list_speaker_profile_samples(profile["id"])
+        # 旧绝对路径和当前相对路径也应视作同一文件。
+        with store.connect() as db:
+            db.execute(
+                "UPDATE speaker_profile_samples SET audio_path=? WHERE id=?",
+                (str(audio), samples[1]["id"]),
+            )
+        store.delete_speaker_profile_sample(profile["id"], samples[0]["id"])
+        self.assertEqual(audio.read_bytes(), b"keep")
+        store.delete_speaker_profile_sample(profile["id"], samples[1]["id"])
+        self.assertFalse(audio.exists())
 
     def test_voiceprint_learning_reads_only_selected_windows(self):
         source = Path(self.temp.name) / "playback.wav"

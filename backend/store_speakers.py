@@ -158,12 +158,14 @@ class SpeakerProfileStoreMixin:
                 ).fetchone()
                 limits = SETTINGS["voice_profiles"]
                 if usage["samples"] >= limits["max_samples"]:
-                    raise ValueError(
-                        f"A voiceprint can contain at most {limits['max_samples']} recordings"
+                    raise UserFacingError(
+                        "error.voice_sample_limit",
+                        f"A voiceprint can contain at most {limits['max_samples']} recordings",
                     )
                 if usage["duration_ms"] + int(duration_ms) > limits["max_total_seconds"] * 1000:
-                    raise ValueError(
-                        f"Voiceprint recordings can total at most {limits['max_total_seconds']} seconds"
+                    raise UserFacingError(
+                        "error.voice_duration_limit",
+                        f"Voiceprint recordings can total at most {limits['max_total_seconds']} seconds",
                     )
                 db.execute(
                     "INSERT INTO speaker_profile_samples(id,profile_id,source_key,embedding,created_at,audio_path,duration_ms) VALUES(?,?,?,?,?,?,?)",
@@ -234,6 +236,16 @@ class SpeakerProfileStoreMixin:
     def _delete_sample_audio(self, profile_id, audio_path):
         path = self._sample_audio_path(profile_id, audio_path)
         if path:
+            # 旧版可能让不同字幕版本共用 WAV；最后一条引用删除后才清理文件。
+            with self.connect() as db:
+                remaining = db.execute(
+                    "SELECT audio_path FROM speaker_profile_samples WHERE profile_id=?",
+                    (profile_id,),
+                ).fetchall()
+            if any(
+                self._sample_audio_path(profile_id, row["audio_path"]) == path for row in remaining
+            ):
+                return
             try:
                 path.unlink(missing_ok=True)
             except OSError:

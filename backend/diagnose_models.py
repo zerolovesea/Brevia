@@ -21,6 +21,7 @@ from pathlib import Path
 from .asr import ModelManager, RefinedASR
 from .audio_io import read_mono_wav_window
 from .worker_refinement import RefinementWorkerMixin
+from .worker_common import model_supports_language, refined_models_in_priority_order
 
 ARTIFACT_RE = re.compile(r"```|`\(|language\s*=?\s*[A-Za-z]+|\*\*")
 
@@ -62,7 +63,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", default=str(Path.home() / "brevia"))
     parser.add_argument("--meeting", default=None)
-    parser.add_argument("--models", default="qwen3-asr-0.6b-int8,funasr-nano-int8")
+    parser.add_argument("--models")
     parser.add_argument("--language", default="zh")
     parser.add_argument("--step-seconds", type=int, default=90)
     parser.add_argument("--window-seconds", type=int, default=15)
@@ -76,8 +77,18 @@ def main():
         paths = list_recordings(root)[:5]
     paths = [p for p in paths if p.exists()]
 
-    manager = ModelManager(str(root / "models"))
-    model_ids = [m for m in args.models.split(",") if m]
+    manager = ModelManager(str(root / "models"), cleanup=False)
+    model_ids = (
+        [m for m in args.models.split(",") if m]
+        if args.models
+        else [
+            model["id"]
+            for model in refined_models_in_priority_order(manager.catalog.values())
+            if model_supports_language(model, args.language) and manager.is_ready(model["id"])
+        ]
+    )
+    if not model_ids:
+        parser.error("No installed recognition model supports this language")
 
     for path in paths:
         import wave

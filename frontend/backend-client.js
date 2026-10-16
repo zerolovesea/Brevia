@@ -277,7 +277,8 @@ class AudioCapture {
           return;
         }
         ready();
-        if (this.paused || this.stopping) return;
+        // 暂停后结束仍需保存 worklet 中暂停前的尾帧；失败停录继续拒绝新数据。
+        if (this.stopping || (this.paused && !resource.flushResolve)) return;
         // 音频线程的帧编号确定起点，避免 IPC 到达时间/模块加载速度造成两轨错位。
         resource.startMs ??= Math.round((data.startFrame * 1000) / context.sampleRate);
         if (track === 'mic' && this.onLevel) {

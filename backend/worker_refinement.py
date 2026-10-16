@@ -31,7 +31,7 @@ from .worker_common import (
     model_supports_language,
     require,
 )
-from .transcript import subtitle_time_at_offset
+from .transcript import latest_segments, subtitle_time_at_offset
 
 logger = logging.getLogger(__name__)
 
@@ -545,10 +545,15 @@ class RefinementWorkerMixin:
         locked_ids = {speaker["id"] for speaker in meeting["speakers"] if speaker["locked"]}
         locked_segments = [
             segment
-            for segment in meeting["segments"]
+            for segment in latest_segments(meeting["segments"])
             if segment["user_edited"] or segment["speaker"] in locked_ids
         ]
-        window_size = SETTINGS["asr"]["refined_window_seconds"] * 1000
+        context_ms = 800
+        # 识别器的容量包含首尾上下文；高级设置不能把整个窗口推过模型硬上限。
+        window_size = min(
+            SETTINGS["asr"]["refined_window_seconds"] * 1000,
+            round(recognizer.max_speech_seconds * 1000) - 2 * context_ms,
+        )
         windows_by_track = {
             track: self._refinement_turns(
                 turns_by_track[track],
@@ -563,7 +568,6 @@ class RefinementWorkerMixin:
         previous_text = {}
         refined_segments = []
         refined_segment_ids = set()
-        context_ms = 800
         self.store.set_status(meeting["id"], "refining")
         self._refinement_progress(
             {"meeting_id": meeting["id"], "completed": 0, "total": total, "stage": "转写中"},

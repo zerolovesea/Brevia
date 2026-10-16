@@ -3836,10 +3836,6 @@ body {
   width: 24px;
   height: 24px;
 }
-.segment-context-arrow .interface-icon {
-  width: 16px;
-  height: 16px;
-}
 .sidebar :is(.nav-item, .new-meeting, .import-recording) {
   font-size: 16px;
   font-weight: 400;

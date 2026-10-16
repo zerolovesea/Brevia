@@ -5,7 +5,6 @@ import base64
 import hashlib
 import json
 import platform
-import resource
 import sqlite3
 import sys
 import tempfile
@@ -59,8 +58,12 @@ def main():
     import os
 
     os.environ['BREVIA_MODELS_DIR'] = str(args.models_root.resolve())
+    os.environ.setdefault(
+        'BREVIA_BUNDLED_MODELS_DIR', str(args.project_root.resolve() / 'backend/bundled-models')
+    )
     from backend.worker import Worker
     from backend.config import SETTINGS
+    from backend.bench_asr_models import peak_rss_mb
 
     reference = None
     if args.meeting:
@@ -159,7 +162,7 @@ def main():
         if worker.asr is None:
             raise RuntimeError('ASR failed to load')
         load_seconds = time.perf_counter() - started
-        loaded_peak_rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        loaded_peak_rss = peak_rss_mb()
         started, cpu_started = time.perf_counter(), time.process_time()
         call_times = []
         decode_seconds = []
@@ -250,12 +253,11 @@ def main():
             'source_seconds': source_seconds,
             'fed_seconds': len(pcm) / 32000,
             'load_seconds': load_seconds,
-            'loaded_peak_rss_mb': loaded_peak_rss / (1024**2 if sys.platform == 'darwin' else 1024),
+            'loaded_peak_rss_mb': loaded_peak_rss,
             'wall_seconds': finished - started,
             'cpu_seconds': cpu_seconds,
             'cpu_per_source_second': cpu_seconds / source_seconds,
-            'peak_rss_mb': resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-            / (1024**2 if sys.platform == 'darwin' else 1024),
+            'peak_rss_mb': peak_rss_mb(),
             'stop_seconds': finished - before,
             'audio_call_p95_ms': sorted(call_times)[int(0.95 * (len(call_times) - 1))] * 1000,
             'events': counts,
@@ -306,7 +308,11 @@ def main():
             }
         if args.translate_to:
             translation_started = time.perf_counter()
-            children_before = resource.getrusage(resource.RUSAGE_CHILDREN)
+            children_before = None
+            if sys.platform != 'win32':
+                import resource
+
+                children_before = resource.getrusage(resource.RUSAGE_CHILDREN)
             try:
                 translations = [
                     worker.translate(
@@ -321,14 +327,20 @@ def main():
                 ]
             finally:
                 worker.shutdown_sidecars()
-            children_after = resource.getrusage(resource.RUSAGE_CHILDREN)
+            children_cpu = None
+            if children_before is not None:
+                children_after = resource.getrusage(resource.RUSAGE_CHILDREN)
+                children_cpu = (
+                    children_after.ru_utime
+                    + children_after.ru_stime
+                    - children_before.ru_utime
+                    - children_before.ru_stime
+                )
             result['translation'] = {
                 'target': args.translate_to,
                 'wall_seconds': time.perf_counter() - translation_started,
-                'cpu_seconds': children_after.ru_utime
-                + children_after.ru_stime
-                - children_before.ru_utime
-                - children_before.ru_stime,
+                # Windows 无 resource 子进程累计 CPU 指标，不伪造为零。
+                'cpu_seconds': children_cpu,
                 'texts': translations,
             }
             assert all(translations), 'Empty translation'

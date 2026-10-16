@@ -3295,7 +3295,7 @@ function openConfirmation(title, detail, action, anchor) {
   settingsModal.querySelector('.modal-title h2').textContent = title;
   settingsModal.querySelector('.modal-title p').textContent = '';
   settingsModal.querySelector('.modal-body').innerHTML =
-    `<div class="confirmation-actions">${interfaceIcon([t('删除工作区'), t('更换精修模型')].includes(title) ? 'warning' : 'trash')}<h2>${escapeHtml(title)}</h2><p>${escapeHtml(detail)}</p><button class="secondary" data-cancel-confirmation type="button">${t('取消')}</button><button class="modal-action modal-danger" data-confirm-action type="button">${escapeHtml(title === t('删除工作区') ? t('确认') : title)}</button></div>`;
+    `<div class="confirmation-actions">${interfaceIcon([t('删除工作区'), t('重新精修')].includes(title) ? 'warning' : 'trash')}<h2>${escapeHtml(title)}</h2><p>${escapeHtml(detail)}</p><button class="secondary" data-cancel-confirmation type="button">${t('取消')}</button><button class="modal-action modal-danger" data-confirm-action type="button">${escapeHtml(title === t('删除工作区') ? t('确认') : title)}</button></div>`;
   showSettingsModal('[data-cancel-confirmation]');
   if (storageConfirmationPage && anchor)
     positionFloating(settingsModal.querySelector('.modal-panel'), anchor, [
@@ -8748,15 +8748,16 @@ function meetingHasUserEdits() {
 }
 /** 按菜单里的选择发起精修。
  *
- * 换模型会按新模型重新分段，逐句人工修改依赖段落 id，可能对不上；因此**只在确实存在
- * 人工修改且换了模型**时确认一次，其余情况直接开始。
+ * 人工修改依赖段落 id；即使不换模型，VAD 或人数变化也可能重新分段。
  * @param {number} [numSpeakers] 固定说话人数。@returns {void} */
 function refineWithSelectedModel(numSpeakers) {
   const modelId = pinnedRefineModel();
-  if (modelId && modelId !== uiData.detail.refinedModelApplied && meetingHasUserEdits()) {
+  if (meetingHasUserEdits()) {
     openConfirmation(
-      t('更换精修模型'),
-      t('该会议已有逐句修改。用新模型重新精修会按新模型重新分段，这些修改可能无法保留。'),
+      t('重新精修'),
+      t(
+        '该会议已有逐句修改。重新精修可能改变分段，使这些修改不再出现在当前逐字稿中。原稿仍保存在本机历史数据中。',
+      ),
       () => startRefinement(numSpeakers, modelId),
     );
     return;

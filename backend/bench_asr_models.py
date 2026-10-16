@@ -24,13 +24,14 @@ import json
 import math
 import os
 import re
-import resource
 import statistics
+import sys
 import time
 import wave
 from pathlib import Path
 
 from .asr import ModelManager, OfflineVAD, RefinedASR
+from .worker_common import model_supports_language, refined_models_in_priority_order
 
 # 与 diagnose_models.py 保持一致的质量启发式：模型幻觉与重复循环是这两个家族
 # 在真实会议音频上最常见的退化形态。
@@ -39,9 +40,40 @@ ARTIFACT_RE = re.compile(r"```|`\(|language\s*=?\s*[A-Za-z]+|\*\*")
 
 def peak_rss_mb():
     """返回当前进程的峰值常驻内存（MB）。"""
+    if sys.platform == "win32":
+        import ctypes
+        from ctypes import wintypes
+
+        class MemoryCounters(ctypes.Structure):
+            _fields_ = [("cb", ctypes.c_uint32), ("PageFaultCount", ctypes.c_uint32)] + [
+                (name, ctypes.c_size_t)
+                for name in (
+                    "PeakWorkingSetSize",
+                    "WorkingSetSize",
+                    "QuotaPeakPagedPoolUsage",
+                    "QuotaPagedPoolUsage",
+                    "QuotaPeakNonPagedPoolUsage",
+                    "QuotaNonPagedPoolUsage",
+                    "PagefileUsage",
+                    "PeakPagefileUsage",
+                )
+            ]
+
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel.GetCurrentProcess.restype = wintypes.HANDLE
+        query = ctypes.WinDLL("psapi", use_last_error=True).GetProcessMemoryInfo
+        query.argtypes = [wintypes.HANDLE, ctypes.POINTER(MemoryCounters), wintypes.DWORD]
+        query.restype = wintypes.BOOL
+        counters = MemoryCounters()
+        counters.cb = ctypes.sizeof(counters)
+        if not query(kernel.GetCurrentProcess(), ctypes.byref(counters), counters.cb):
+            raise ctypes.WinError(ctypes.get_last_error())
+        return counters.PeakWorkingSetSize / (1024 * 1024)
+    import resource
+
     usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     # macOS 返回字节，Linux 返回 KB。按平台归一化，便于跨平台比较。
-    return usage / (1024 * 1024) if os.uname().sysname == "Darwin" else usage / 1024
+    return usage / (1024 * 1024) if sys.platform == "darwin" else usage / 1024
 
 
 def find_tracks(meeting_dir):
@@ -321,7 +353,7 @@ def main():
     parser.add_argument("--meeting", required=True, help="会议目录名")
     parser.add_argument("--track", default="mic", choices=["mic", "system"])
     parser.add_argument("--language", default="en")
-    parser.add_argument("--models", default="funasr-nano-int8,qwen3-asr-0.6b-int8,whisper-large-v3")
+    parser.add_argument("--models")
     parser.add_argument("--max-windows", type=int, default=24)
     parser.add_argument(
         "--max-window-seconds",
@@ -370,7 +402,19 @@ def main():
     with wave.open(str(merged)) as recording:
         duration = recording.getnframes() / recording.getframerate()
 
-    manager = ModelManager(models_root)
+    manager = ModelManager(
+        models_root,
+        bundled_root=os.environ.get("BREVIA_BUNDLED_MODELS_DIR")
+        or Path(__file__).with_name("bundled-models"),
+        cleanup=False,
+    )
+    args.models = args.models or ",".join(
+        model["id"]
+        for model in refined_models_in_priority_order(manager.catalog.values())
+        if model_supports_language(model, args.language) and manager.is_ready(model["id"])
+    )
+    if not args.models:
+        parser.error("No installed recognition model supports this language")
     vad = OfflineVAD(manager, "silero-vad")
     cleaner = RefinementWorkerMixin._clean_live_text
 

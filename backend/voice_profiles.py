@@ -147,7 +147,7 @@ class VoiceProfileService:
                     continue
                 directory = self.store.speaker_profiles_dir / profile["id"]
                 directory.mkdir(parents=True, exist_ok=True)
-                audio_path = directory / f"{meeting['id']}-{segment['start_ms']}-{index}.wav"
+                audio_path = directory / f"{uuid4().hex}.wav"
                 write_mono_wav(audio_path, clip, rate)
                 try:
                     profile = self.store.save_speaker_profile_sample(

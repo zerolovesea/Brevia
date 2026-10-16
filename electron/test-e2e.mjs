@@ -2385,11 +2385,14 @@ try {
     expression: `(async()=>{
       const errors=[];
       await showView('settings');
+      document.querySelector('.sidebar [data-view="settings"]').focus();
       await new Promise(resolve=>setTimeout(resolve,260));
       const navigation=document.querySelector('#settings-view .settings-navigation');
       if(navigation.querySelectorAll('[data-settings-page]').length!==8) errors.push('general navigation');
-      const general=document.querySelector('.settings-general-main').getBoundingClientRect();
       await openModal('models');
+      // 焦点移出主侧栏会触发收起动画；同一帧比较两页，避免混用动画前后坐标。
+      await new Promise(requestAnimationFrame);
+      const general=document.querySelector('.settings-general-main').getBoundingClientRect();
       const panel=settingsModal.querySelector('.modal-panel').getBoundingClientRect();
       if(Math.abs(general.left-panel.left)>1 || Math.abs(navigation.getBoundingClientRect().width-200)>1) errors.push('settings content origin changed');
       if(!settingsModal.querySelector('.rating-scale') || settingsModal.querySelector('.rating-scale').children.length!==1) errors.push('rating is not continuous');
