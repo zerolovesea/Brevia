@@ -265,6 +265,8 @@
         '保存已下载的本地模型文件。': '保存已下载的本地模型文件。',
         '清空模型': '清空模型',
         '清空会议数据': '清空会议数据',
+        '删除此设备上的会议录音、转写文本与笔记。': '删除此设备上的会议录音、转写文本与笔记。',
+        '清空已下载的模型文件。': '清空已下载的模型文件。',
         '格式工具': '格式工具',
         'AI 生成，请核对。': 'AI 生成，请核对。',
         '复制配对码': '复制配对码',
@@ -316,6 +318,21 @@
         '更改名称': '更改名称',
         '请选择一段清晰的已有录音。': '请选择一段清晰的已有录音。',
         '声纹样本': '声纹样本',
+        '添加到声纹库': '添加到声纹库',
+        '本段说话人将标记为「{name}」。': '本段说话人将标记为「{name}」。',
+        '已达上限': '已达上限',
+        '已添加到「{name}」': '已添加到「{name}」',
+        '查看声纹': '查看声纹',
+        '请试听，确认片段中只有这位说话人。': '请试听，确认片段中只有这位说话人。',
+        '返回已有声纹': '返回已有声纹',
+        '这段录音将作为首个声音样本。': '这段录音将作为首个声音样本。',
+        '添加到谁的声纹？': '添加到谁的声纹？',
+        '返回逐字稿': '返回逐字稿',
+        '正在添加…': '正在添加…',
+        '创建并添加': '创建并添加',
+        '添加到「{name}」': '添加到「{name}」',
+        '已有同名声纹，请选择已有声纹。': '已有同名声纹，请选择已有声纹。',
+        '无法提取声音样本，请选择清晰的单人语音。': '无法提取声音样本，请选择清晰的单人语音。',
         '存储使用情况': '存储使用情况',
         '系统磁盘': '系统磁盘',
         '已使用': '已使用',
@@ -430,6 +447,10 @@
         '译文: 关': '译文: 关',
         '回到最新': '回到最新',
         '参与者': '参与者',
+        '标记说话人': '标记说话人',
+        '说话人名称': '说话人名称',
+        '仅修改此段的说话人。': '仅修改此段的说话人。',
+        '请填写真实的说话人名称。': '请填写真实的说话人名称。',
         '我': '我',
         '麦克风': '麦克风',
         '导出': '导出',
@@ -949,6 +970,9 @@
         '保存已下载的本地模型文件。': 'Store downloaded local model files.',
         '清空模型': 'Clear models',
         '清空会议数据': 'Clear meeting data',
+        '删除此设备上的会议录音、转写文本与笔记。':
+          'Delete meeting recordings, transcripts, and notes from this device.',
+        '清空已下载的模型文件。': 'Delete downloaded model files.',
         '格式工具': 'Formatting tools',
         'AI 生成，请核对。': 'AI-generated. Please review.',
         '复制配对码': 'Copy pairing code',
@@ -1000,6 +1024,24 @@
         '更改名称': 'Rename',
         '请选择一段清晰的已有录音。': 'Choose an existing recording with clear speech.',
         '声纹样本': 'Voice samples',
+        '添加到声纹库': 'Add to voiceprints',
+        '本段说话人将标记为「{name}」。': 'This segment will be labeled as {name}.',
+        '已达上限': 'Limit reached',
+        '已添加到「{name}」': 'Added to {name}',
+        '查看声纹': 'View voiceprint',
+        '请试听，确认片段中只有这位说话人。':
+          'Listen first and confirm that only this person is speaking.',
+        '返回已有声纹': 'Back to existing voiceprints',
+        '这段录音将作为首个声音样本。': 'This clip will be the first voice sample.',
+        '添加到谁的声纹？': 'Whose voiceprint?',
+        '返回逐字稿': 'Back to transcript',
+        '正在添加…': 'Adding…',
+        '创建并添加': 'Create and add',
+        '添加到「{name}」': 'Add to {name}',
+        '已有同名声纹，请选择已有声纹。':
+          'A voiceprint with this name exists. Choose it from the list.',
+        '无法提取声音样本，请选择清晰的单人语音。':
+          'No voice sample could be extracted. Choose clear speech from one person.',
         '存储使用情况': 'Storage usage',
         '系统磁盘': 'System disk',
         '已使用': 'Used',
@@ -1132,6 +1174,8 @@
         '译文: 关': 'Translation: Off',
         '回到最新': 'Back to latest',
         '参与者': 'Participants',
+        '仅修改此段的说话人。': 'Only changes the speaker for this segment.',
+        '请填写真实的说话人名称。': 'Enter a real speaker name.',
         '本场状态': 'Session status',
         '我': 'Me',
         '麦克风': 'Microphone',
@@ -1810,6 +1854,9 @@
         '保存已下载的本地模型文件。': 'Almacena los archivos de modelos locales descargados.',
         '清空模型': 'Borrar modelos',
         '清空会议数据': 'Borrar datos de reuniones',
+        '删除此设备上的会议录音、转写文本与笔记。':
+          'Elimina las grabaciones, transcripciones y notas de reuniones de este dispositivo.',
+        '清空已下载的模型文件。': 'Elimina los archivos de modelos descargados.',
         '格式工具': 'Herramientas de formato',
         'AI 生成，请核对。': 'Generado por IA. Revísalo.',
         '复制配对码': 'Copiar código de emparejamiento',
@@ -1861,6 +1908,23 @@
         '更改名称': 'Cambiar nombre',
         '请选择一段清晰的已有录音。': 'Elige una grabación existente con voz clara.',
         '声纹样本': 'Muestras de voz',
+        '添加到声纹库': 'Añadir a perfiles de voz',
+        '本段说话人将标记为「{name}」。': 'Este segmento se etiquetará como {name}.',
+        '已达上限': 'Límite alcanzado',
+        '已添加到「{name}」': 'Añadido a {name}',
+        '查看声纹': 'Ver perfil de voz',
+        '请试听，确认片段中只有这位说话人。': 'Escucha y confirma que solo habla esta persona.',
+        '返回已有声纹': 'Volver a los perfiles existentes',
+        '这段录音将作为首个声音样本。': 'Este fragmento será la primera muestra de voz.',
+        '添加到谁的声纹？': '¿A qué perfil de voz?',
+        '返回逐字稿': 'Volver a la transcripción',
+        '正在添加…': 'Añadiendo…',
+        '创建并添加': 'Crear y añadir',
+        '添加到「{name}」': 'Añadir a {name}',
+        '已有同名声纹，请选择已有声纹。':
+          'Ya existe un perfil con este nombre. Selecciónalo en la lista.',
+        '无法提取声音样本，请选择清晰的单人语音。':
+          'No se pudo extraer una muestra. Elige la voz clara de una sola persona.',
         '存储使用情况': 'Uso de almacenamiento',
         '系统磁盘': 'Disco del sistema',
         '已使用': 'Usado',
@@ -1992,6 +2056,8 @@
         '译文: 关': 'Traducción: No',
         '回到最新': 'Volver a lo último',
         '参与者': 'Participantes',
+        '仅修改此段的说话人。': 'Solo cambia el hablante de este segmento.',
+        '请填写真实的说话人名称。': 'Introduce un nombre real.',
         '本场状态': 'Estado de la sesión',
         '我': 'Yo',
         '麦克风': 'Micrófono',
@@ -2674,6 +2740,9 @@
         '保存已下载的本地模型文件。': 'ダウンロード済みのローカルモデルを保存します。',
         '清空模型': 'モデルを削除',
         '清空会议数据': '会議データを削除',
+        '删除此设备上的会议录音、转写文本与笔记。':
+          'このデバイスの会議録音、文字起こし、ノートを削除します。',
+        '清空已下载的模型文件。': 'ダウンロード済みのモデルファイルを削除します。',
         '格式工具': '書式ツール',
         'AI 生成，请核对。': 'AI による生成内容です。ご確認ください。',
         '复制配对码': 'ペアリングコードをコピー',
@@ -2725,6 +2794,23 @@
         '更改名称': '名前を変更',
         '请选择一段清晰的已有录音。': '音声が明瞭な既存の録音を選択してください。',
         '声纹样本': '声紋サンプル',
+        '添加到声纹库': '声紋に追加',
+        '本段说话人将标记为「{name}」。': 'この区間の話者を「{name}」に設定します。',
+        '已达上限': '上限に達しました',
+        '已添加到「{name}」': '「{name}」に追加しました',
+        '查看声纹': '声紋を表示',
+        '请试听，确认片段中只有这位说话人。':
+          '再生して、この人だけが話していることを確認してください。',
+        '返回已有声纹': '既存の声紋に戻る',
+        '这段录音将作为首个声音样本。': 'この録音を最初の音声サンプルとして登録します。',
+        '添加到谁的声纹？': '誰の声紋に追加しますか？',
+        '返回逐字稿': '文字起こしに戻る',
+        '正在添加…': '追加中…',
+        '创建并添加': '作成して追加',
+        '添加到「{name}」': '「{name}」に追加',
+        '已有同名声纹，请选择已有声纹。': '同じ名前の声紋があります。一覧から選択してください。',
+        '无法提取声音样本，请选择清晰的单人语音。':
+          '音声を抽出できませんでした。1人の明瞭な発話を選んでください。',
         '存储使用情况': 'ストレージ使用状況',
         '系统磁盘': 'システムディスク',
         '已使用': '使用済み',
@@ -2855,6 +2941,8 @@
         '译文: 关': '翻訳：オフ',
         '回到最新': '最新へ戻る',
         '参与者': '参加者',
+        '仅修改此段的说话人。': 'この区間の話者のみ変更します。',
+        '请填写真实的说话人名称。': '実際の話者名を入力してください。',
         '本场状态': 'セッションの状態',
         '我': '自分',
         '麦克风': 'マイク',
@@ -3531,6 +3619,9 @@
         '保存已下载的本地模型文件。': '다운로드한 로컬 모델 파일을 저장합니다.',
         '清空模型': '모델 삭제',
         '清空会议数据': '회의 데이터 삭제',
+        '删除此设备上的会议录音、转写文本与笔记。':
+          '이 기기의 회의 녹음, 전사문 및 노트를 삭제합니다.',
+        '清空已下载的模型文件。': '다운로드한 모델 파일을 삭제합니다.',
         '格式工具': '서식 도구',
         'AI 生成，请核对。': 'AI가 생성한 내용입니다. 확인해 주세요.',
         '复制配对码': '페어링 코드 복사',
@@ -3582,6 +3673,22 @@
         '更改名称': '이름 변경',
         '请选择一段清晰的已有录音。': '음성이 선명한 기존 녹음을 선택하세요.',
         '声纹样本': '음성 샘플',
+        '添加到声纹库': '성문에 추가',
+        '本段说话人将标记为「{name}」。': '이 구간의 화자를 {name}(으)로 표시합니다.',
+        '已达上限': '한도 도달',
+        '已添加到「{name}」': '{name}에 추가됨',
+        '查看声纹': '성문 보기',
+        '请试听，确认片段中只有这位说话人。': '먼저 들어보고 이 사람만 말하는지 확인하세요.',
+        '返回已有声纹': '기존 성문으로 돌아가기',
+        '这段录音将作为首个声音样本。': '이 녹음을 첫 음성 샘플로 등록합니다.',
+        '添加到谁的声纹？': '누구의 성문에 추가할까요?',
+        '返回逐字稿': '전사문으로 돌아가기',
+        '正在添加…': '추가 중…',
+        '创建并添加': '만들고 추가',
+        '添加到「{name}」': '{name}에 추가',
+        '已有同名声纹，请选择已有声纹。': '같은 이름의 성문이 있습니다. 목록에서 선택하세요.',
+        '无法提取声音样本，请选择清晰的单人语音。':
+          '음성 샘플을 추출하지 못했습니다. 한 사람의 명확한 음성을 선택하세요.',
         '存储使用情况': '저장 공간 사용량',
         '系统磁盘': '시스템 디스크',
         '已使用': '사용됨',
@@ -3713,6 +3820,8 @@
         '译文: 关': '번역: 꺼짐',
         '回到最新': '최신으로 돌아가기',
         '参与者': '참가자',
+        '仅修改此段的说话人。': '이 구간의 화자만 변경합니다.',
+        '请填写真实的说话人名称。': '실제 화자 이름을 입력하세요.',
         '本场状态': '세션 상태',
         '我': '나',
         '麦克风': '마이크',
@@ -4388,6 +4497,9 @@
         '保存已下载的本地模型文件。': 'Conservez les fichiers des modèles locaux téléchargés.',
         '清空模型': 'Effacer les modèles',
         '清空会议数据': 'Effacer les données des réunions',
+        '删除此设备上的会议录音、转写文本与笔记。':
+          'Supprime les enregistrements, transcriptions et notes de réunion de cet appareil.',
+        '清空已下载的模型文件。': 'Supprime les fichiers des modèles téléchargés.',
         '格式工具': 'Outils de mise en forme',
         'AI 生成，请核对。': 'Généré par l’IA. Veuillez vérifier.',
         '复制配对码': 'Copier le code d’association',
@@ -4439,6 +4551,23 @@
         '更改名称': 'Renommer',
         '请选择一段清晰的已有录音。': 'Choisissez un enregistrement existant avec une voix claire.',
         '声纹样本': 'Échantillons vocaux',
+        '添加到声纹库': 'Ajouter aux profils vocaux',
+        '本段说话人将标记为「{name}」。': 'Ce passage sera attribué à {name}.',
+        '已达上限': 'Limite atteinte',
+        '已添加到「{name}」': 'Ajouté à {name}',
+        '查看声纹': 'Voir le profil vocal',
+        '请试听，确认片段中只有这位说话人。': 'Écoutez et vérifiez que cette personne parle seule.',
+        '返回已有声纹': 'Revenir aux profils existants',
+        '这段录音将作为首个声音样本。': 'Cet extrait sera le premier échantillon vocal.',
+        '添加到谁的声纹？': 'À quel profil vocal ?',
+        '返回逐字稿': 'Revenir à la transcription',
+        '正在添加…': 'Ajout en cours…',
+        '创建并添加': 'Créer et ajouter',
+        '添加到「{name}」': 'Ajouter à {name}',
+        '已有同名声纹，请选择已有声纹。':
+          'Un profil porte déjà ce nom. Sélectionnez-le dans la liste.',
+        '无法提取声音样本，请选择清晰的单人语音。':
+          'Impossible d’extraire la voix. Choisissez la voix claire d’une seule personne.',
         '存储使用情况': 'Utilisation du stockage',
         '系统磁盘': 'Disque système',
         '已使用': 'Utilisé',
@@ -4573,6 +4702,8 @@
         '译文: 关': 'Traduction : désactivée',
         '回到最新': 'Revenir aux dernières',
         '参与者': 'Participants',
+        '仅修改此段的说话人。': 'Modifie uniquement le locuteur de ce passage.',
+        '请填写真实的说话人名称。': 'Saisissez le nom réel du locuteur.',
         '本场状态': 'État de la session',
         '我': 'Moi',
         '麦克风': 'Microphone',
@@ -5262,6 +5393,9 @@
         '保存已下载的本地模型文件。': 'Heruntergeladene lokale Modelldateien speichern.',
         '清空模型': 'Modelle löschen',
         '清空会议数据': 'Meeting-Daten löschen',
+        '删除此设备上的会议录音、转写文本与笔记。':
+          'Löscht Besprechungsaufnahmen, Transkripte und Notizen von diesem Gerät.',
+        '清空已下载的模型文件。': 'Löscht heruntergeladene Modelldateien.',
         '格式工具': 'Formatierungswerkzeuge',
         'AI 生成，请核对。': 'Von KI erstellt. Bitte prüfen.',
         '复制配对码': 'Kopplungscode kopieren',
@@ -5313,6 +5447,23 @@
         '更改名称': 'Umbenennen',
         '请选择一段清晰的已有录音。': 'Wählen Sie eine vorhandene Aufnahme mit klarer Sprache.',
         '声纹样本': 'Stimmproben',
+        '添加到声纹库': 'Zum Stimmprofil hinzufügen',
+        '本段说话人将标记为「{name}」。': 'Dieser Abschnitt wird {name} zugeordnet.',
+        '已达上限': 'Limit erreicht',
+        '已添加到「{name}」': 'Zu {name} hinzugefügt',
+        '查看声纹': 'Stimmprofil ansehen',
+        '请试听，确认片段中只有这位说话人。': 'Anhören und prüfen, ob nur diese Person spricht.',
+        '返回已有声纹': 'Zurück zu vorhandenen Profilen',
+        '这段录音将作为首个声音样本。': 'Dieser Ausschnitt wird die erste Stimmprobe.',
+        '添加到谁的声纹？': 'Zu welchem Stimmprofil?',
+        '返回逐字稿': 'Zurück zum Transkript',
+        '正在添加…': 'Wird hinzugefügt…',
+        '创建并添加': 'Erstellen und hinzufügen',
+        '添加到「{name}」': 'Zu {name} hinzufügen',
+        '已有同名声纹，请选择已有声纹。':
+          'Dieser Name ist bereits vorhanden. Wählen Sie das Profil aus der Liste.',
+        '无法提取声音样本，请选择清晰的单人语音。':
+          'Keine Stimmprobe erkannt. Wählen Sie deutliche Sprache einer einzelnen Person.',
         '存储使用情况': 'Speichernutzung',
         '系统磁盘': 'Systemlaufwerk',
         '已使用': 'Belegt',
@@ -5447,6 +5598,8 @@
         '译文: 关': 'Übersetzung: Aus',
         '回到最新': 'Zurück zum Neuesten',
         '参与者': 'Teilnehmende',
+        '仅修改此段的说话人。': 'Ändert nur den Sprecher dieses Abschnitts.',
+        '请填写真实的说话人名称。': 'Bitte einen echten Sprechernamen eingeben.',
         '本场状态': 'Sitzungsstatus',
         '我': 'Ich',
         '麦克风': 'Mikrofon',
@@ -6137,6 +6290,9 @@
         '保存已下载的本地模型文件。': 'Хранит загруженные файлы локальных моделей.',
         '清空模型': 'Удалить модели',
         '清空会议数据': 'Удалить данные встреч',
+        '删除此设备上的会议录音、转写文本与笔记。':
+          'Удаляет записи встреч, расшифровки и заметки с этого устройства.',
+        '清空已下载的模型文件。': 'Удаляет загруженные файлы моделей.',
         '格式工具': 'Инструменты форматирования',
         'AI 生成，请核对。': 'Создано ИИ. Проверьте содержание.',
         '复制配对码': 'Копировать код сопряжения',
@@ -6188,6 +6344,23 @@
         '更改名称': 'Переименовать',
         '请选择一段清晰的已有录音。': 'Выберите существующую запись с чёткой речью.',
         '声纹样本': 'Образцы голоса',
+        '添加到声纹库': 'Добавить в голосовой профиль',
+        '本段说话人将标记为「{name}」。': 'Этот фрагмент будет отмечен именем «{name}».',
+        '已达上限': 'Достигнут лимит',
+        '已添加到「{name}」': 'Добавлено в профиль «{name}»',
+        '查看声纹': 'Открыть голосовой профиль',
+        '请试听，确认片段中只有这位说话人。':
+          'Прослушайте и убедитесь, что говорит только этот человек.',
+        '返回已有声纹': 'К существующим профилям',
+        '这段录音将作为首个声音样本。': 'Эта запись станет первым образцом голоса.',
+        '添加到谁的声纹？': 'В чей голосовой профиль?',
+        '返回逐字稿': 'К расшифровке',
+        '正在添加…': 'Добавление…',
+        '创建并添加': 'Создать и добавить',
+        '添加到「{name}」': 'Добавить в профиль «{name}»',
+        '已有同名声纹，请选择已有声纹。': 'Такое имя уже есть. Выберите профиль из списка.',
+        '无法提取声音样本，请选择清晰的单人语音。':
+          'Не удалось извлечь образец. Выберите чёткую речь одного человека.',
         '存储使用情况': 'Использование хранилища',
         '系统磁盘': 'Системный диск',
         '已使用': 'Использовано',
@@ -6320,6 +6493,8 @@
         '译文: 关': 'Перевод: выкл.',
         '回到最新': 'К последним',
         '参与者': 'Участники',
+        '仅修改此段的说话人。': 'Меняет говорящего только в этом фрагменте.',
+        '请填写真实的说话人名称。': 'Введите настоящее имя говорящего.',
         '本场状态': 'Статус сеанса',
         '我': 'Я',
         '麦克风': 'Микрофон',
@@ -7280,15 +7455,15 @@
         'de': 'KI-Funktionen konfigurieren',
         'ru': 'Настроить функции ИИ',
       },
-      '配置 AI 模型会议纪要，以及智能笔记。': {
-        'zh': '配置 AI 模型会议纪要，以及智能笔记。',
-        'en': 'Configure AI models for meeting notes and smart notes.',
-        'es': 'Configura modelos de IA para actas de reuniones y notas inteligentes.',
-        'ja': '議事録とスマートメモに使う AI モデルを設定します。',
-        'ko': '회의록과 스마트 노트에 사용할 AI 모델을 설정하세요.',
-        'fr': 'Configurez les modèles IA pour les comptes rendus et les notes intelligentes.',
-        'de': 'KI-Modelle für Besprechungsprotokolle und intelligente Notizen konfigurieren.',
-        'ru': 'Настройте ИИ-модели для протоколов встреч и умных заметок.',
+      '配置会议纪要与 AI 笔记使用的模型。': {
+        'zh': '配置会议纪要与 AI 笔记使用的模型。',
+        'en': 'Configure models for meeting summaries and AI notes.',
+        'es': 'Configura modelos para actas de reuniones y notas IA.',
+        'ja': '議事録と AI メモに使うモデルを設定します。',
+        'ko': '회의록과 AI 메모에 사용할 모델을 설정하세요.',
+        'fr': 'Configurez les modèles pour les comptes rendus et les notes IA.',
+        'de': 'Modelle für Besprechungsprotokolle und KI-Notizen konfigurieren.',
+        'ru': 'Настройте модели для протоколов встреч и ИИ-заметок.',
       },
       '性能': {
         'zh': '性能',
@@ -8973,6 +9148,14 @@
     },
     'advancedSettingCopy': {
       'zh': {
+        'integer': '整数',
+        'mlxQuietLabel': '轻声检测增强（0 关 1 开）',
+        'mlxQuietHint':
+          '为语音检测临时增强轻声，仍需模型确认才算语音；不修改原始录音。0 关闭，1 开启。',
+        'defaultSilenceHint':
+          '结束一句所需的连续静音时长；自动语言实时模式至少等待 2 秒，其他模式按此值处理。',
+        'windowsChunkHint':
+          '决定进入分块处理的音频长度；Windows 长音频实际处理块至少为 60000 毫秒，较小值仍影响短／长音频的分界。',
         'sections': {
           'audio': '音频',
           'asr': '识别与端点检测',
@@ -8989,10 +9172,10 @@
           'zh': '中文',
         },
         'fields': {
-          'sample_rate': '采样率（Hz）',
+          'sample_rate': '采样率（Hz，只读）',
           'chunk_seconds': '音频分块时长（秒）',
           'refined_window_seconds': '精修窗口时长（秒）',
-          'max_speech_seconds': '整句识别段长上限（秒，仅在低于语言/模型上限时生效）',
+          'max_speech_seconds': '整句识别段长上限（秒）',
           'mix_max_delay_ms': '最大混音对齐延迟（毫秒）',
           'quiet_speech_recovery': '安静语音兜底识别（0 关 1 开）',
           'quiet_speech_min_seconds': '安静语音最短时长（秒）',
@@ -9004,7 +9187,7 @@
           'microphone_peak': '麦克风峰值限制',
           'segmentation_model_id': '说话区间模型',
           'cluster_threshold': '聚类阈值',
-          'online_similarity_threshold': '在线匹配阈值',
+          'online_similarity_threshold': '声纹验证阈值',
           'voiceprint_similarity_threshold': '声纹匹配阈值',
           'minimum_embedding_seconds': '最短声纹语音（秒）',
           'boundary_tail_seconds': '边界回补时长（秒）',
@@ -9028,11 +9211,76 @@
           'max_samples': '每人最大录音条数',
           'max_total_seconds': '每人最大录音时长（秒）',
           'deleted_retention_days': '删除记录保留天数',
-          'timeout_seconds': '模型请求超时（秒）',
+          'timeout_seconds': '在线 AI 请求超时（秒）',
         },
-        'hint': '用于本地运行配置。',
+        'hints': {
+          'sample_rate': '采集、识别和录音固定使用 16000 Hz，此处仅显示当前值。',
+          'chunk_seconds': '每个录音文件分块的时长；较短会生成更多文件，不改变字幕断句。',
+          'refined_window_seconds':
+            '会后精修每次送入识别模型的音频长度；较长保留更多上下文，也占用更多内存。',
+          'max_speech_seconds':
+            '实时语音段长还受语言与模型上限约束；0 使用默认 22 秒，正值必须满足最短语音与回补所需时长。',
+          'mix_max_delay_ms':
+            '麦克风与系统音频混合前最多等待的对齐时间；较大可容忍更多延迟，也增加等待。',
+          'quiet_speech_recovery':
+            '尝试补识别被语音检测漏掉的轻声片段，作用于实时识别与会后精修；0 关闭，1 开启。',
+          'quiet_speech_min_seconds':
+            '漏检片段至少达到此时长才尝试补识别，减少短促噪声误触发；不得超过最长时长。',
+          'quiet_speech_max_seconds':
+            '漏检轻声片段的处理长度上限；必须大于 0，且不得小于最短时长。',
+          'quiet_speech_level_ratio':
+            '以已检测语音的响度为基准筛选漏检片段；较低会纳入更轻的声音，也更容易纳入噪声。',
+          'microphone_target_rms':
+            '实时识别的麦克风目标响度；只增强偏弱声音，不改变保存的原始录音。',
+          'microphone_minimum_rms': '低于此响度不做自动增益，避免放大底噪。',
+          'microphone_max_gain': '自动增强麦克风音量时允许的最大放大倍数。',
+          'microphone_peak': '自动增益后的峰值上限（0–1），防止放大后失真。',
+          'segmentation_model_id': '检测说话区间与重叠发言的本地模型 ID，需对应模型库中的模型。',
+          'cluster_threshold': '按声纹距离合并说话人；较高更容易将不同片段归为同一人。',
+          'online_similarity_threshold':
+            '验证录音是否属于声纹库中的指定人物；相似度越高要求越严格，不控制实时字幕的说话人划分。',
+          'voiceprint_similarity_threshold':
+            '将说话人匹配到声纹库中已命名人物的门槛；较高可减少误认，也可能漏掉匹配。',
+          'minimum_embedding_seconds': '音频至少达到此长度才提取声纹，避免用过短声音判断身份。',
+          'boundary_tail_seconds': '保留的边界回补参数；当前处理流程未使用，修改不会影响结果。',
+          'speaker_change_detection':
+            '保留的说话人切换检测参数；当前流程由所选区间模型决定，修改此项不会生效。',
+          'num_speakers': '会后分离时使用的说话人数；-1 自动估计，已知人数时可填写正整数。',
+          'min_duration_on': '说话区间检测的最短发言时长，用于过滤过短的片段。',
+          'min_duration_off': '说话区间之间的最短静音间隔；更短的停顿会并入连续发言。',
+          'max_refine_seconds': '允许会后精修的录音总时长上限；超出时会停止并提示。',
+          'diarization_chunk_ms': '会后说话人分离每个处理块的长度；较短可降低单块内存占用。',
+          'diarization_timeout_seconds':
+            '说话人分离单块的等待预算；超过 30 秒的块按时长比例增加预算。',
+          'diarization_overlap_ms': '相邻说话人处理块额外重叠的音频长度，减少分块边界漏判。',
+          'embedding_window_ms': '会后聚类提取声纹时每个音频窗口的长度。',
+          'max_auto_speakers': '自动估计说话人数时允许的最多人数。',
+          'min_auto_speaker_windows':
+            '一个自动聚类的说话人至少需要的声纹窗口数，减少短片段误分出新人物。',
+          'min_auto_speaker_duration_ms': '一个自动聚类的说话人至少需要的累计语音时长。',
+          'auto_cluster_score_tolerance':
+            '聚类评分接近时允许的分数差；较大更倾向选择人数较多的方案。',
+          'threshold': '判定为语音的概率门槛（0–1）；较低更容易检出轻声，也可能带入噪声。',
+          'min_silence_duration':
+            '连续静音达到此时长后结束一句；较短字幕更快出句，较长保留更完整的句子。',
+          'min_speech_duration': '忽略短于此时长的声音片段，减少咳嗽、碰撞等误识别。',
+          'max_speech_duration':
+            '语音检测允许的连续发言上限；达到后切段，实际还受模型与实时段长上限约束。',
+          'max_samples': '每位人物在声纹库中可保存的最多录音样本数。',
+          'max_total_seconds': '每位人物的声纹录音累计时长上限，限制声纹库占用。',
+          'deleted_retention_days': '已删除会议在“最近删除”中保留的天数；到期后清理时会永久删除。',
+          'timeout_seconds': '在线 AI 请求的等待上限；超时会报错，本地模型使用独立的超时机制。',
+        },
       },
       'en': {
+        'integer': 'Integer',
+        'mlxQuietLabel': 'Quiet-speech detection boost (0 off, 1 on)',
+        'mlxQuietHint':
+          'Boost quiet audio for voice detection only; the model must still confirm speech. Original recordings are unchanged. 0 off, 1 on.',
+        'defaultSilenceHint':
+          'Continuous silence needed to end a segment. Automatic-language live mode waits at least 2 seconds; other modes use this value.',
+        'windowsChunkHint':
+          'Threshold for chunked processing. On Windows, long-audio chunks are at least 60000 ms; smaller values still affect the short/long-audio threshold.',
         'sections': {
           'audio': 'Audio',
           'asr': 'Recognition and endpointing',
@@ -9049,10 +9297,10 @@
           'zh': 'Chinese',
         },
         'fields': {
-          'sample_rate': 'Sample rate (Hz)',
+          'sample_rate': 'Sample rate (Hz, read-only)',
           'chunk_seconds': 'Audio chunk duration (s)',
           'refined_window_seconds': 'Refinement window (s)',
-          'max_speech_seconds': 'Sentence segment cap (s; only lowers the language/model cap)',
+          'max_speech_seconds': 'Sentence segment cap (s)',
           'mix_max_delay_ms': 'Maximum mixing alignment delay (ms)',
           'quiet_speech_recovery': 'Quiet-speech fallback recognition (0 off, 1 on)',
           'quiet_speech_min_seconds': 'Quiet speech minimum duration (s)',
@@ -9064,7 +9312,7 @@
           'microphone_peak': 'Microphone peak limit',
           'segmentation_model_id': 'Speech-segmentation model',
           'cluster_threshold': 'Clustering threshold',
-          'online_similarity_threshold': 'Online matching threshold',
+          'online_similarity_threshold': 'Voiceprint verification threshold',
           'voiceprint_similarity_threshold': 'Voiceprint matching threshold',
           'minimum_embedding_seconds': 'Minimum voiceprint audio (s)',
           'boundary_tail_seconds': 'Boundary tail (s)',
@@ -9088,11 +9336,96 @@
           'max_samples': 'Maximum recordings per person',
           'max_total_seconds': 'Maximum recording duration per person (s)',
           'deleted_retention_days': 'Deleted-record retention (days)',
-          'timeout_seconds': 'Model request timeout (s)',
+          'timeout_seconds': 'Online AI request timeout (s)',
         },
-        'hint': 'Used by the local runtime.',
+        'hints': {
+          'sample_rate':
+            'Capture, recognition and recordings use a fixed 16000 Hz. Shown for reference only.',
+          'chunk_seconds':
+            'Duration of each recording file chunk. Shorter chunks create more files without changing caption boundaries.',
+          'refined_window_seconds':
+            'Audio length per recognition pass during refinement. Longer windows retain more context and use more memory.',
+          'max_speech_seconds':
+            'Also limited by language and model. 0 uses the default 22 seconds; positive values must leave room for minimum speech and overlap.',
+          'mix_max_delay_ms':
+            'Maximum wait to align microphone and system audio before mixing. Higher values tolerate more delay but add latency.',
+          'quiet_speech_recovery':
+            'Try to recover quiet speech missed by voice detection in live recognition and post-meeting refinement. 0 off, 1 on.',
+          'quiet_speech_min_seconds':
+            'Minimum missed-speech duration for recovery. Avoids brief noise and must not exceed the maximum duration.',
+          'quiet_speech_max_seconds':
+            'Maximum quiet-speech recovery span. Must be positive and no shorter than the minimum duration.',
+          'quiet_speech_level_ratio':
+            'Level relative to detected speech for recovery. Lower values include quieter speech and more noise.',
+          'microphone_target_rms':
+            'Target microphone loudness for live recognition. Boosts weak audio without changing saved recordings.',
+          'microphone_minimum_rms':
+            'Do not boost audio below this level, to avoid amplifying background noise.',
+          'microphone_max_gain': 'Maximum amplification factor for automatic microphone gain.',
+          'microphone_peak': 'Peak limit after automatic gain (0–1), to prevent clipping.',
+          'segmentation_model_id':
+            'Local model ID for speech and overlap segmentation; must match a library model.',
+          'cluster_threshold':
+            'Speaker clustering distance threshold. Higher values merge more segments into the same speaker.',
+          'online_similarity_threshold':
+            'Verify whether a recording belongs to a named person. Higher similarity requirements are stricter; this does not control live speaker separation.',
+          'voiceprint_similarity_threshold':
+            'Similarity required to match a named voiceprint. Higher values reduce false matches but may miss valid ones.',
+          'minimum_embedding_seconds':
+            'Minimum audio length for a voiceprint, avoiding identity decisions from very short sounds.',
+          'boundary_tail_seconds':
+            'Reserved boundary-tail setting; currently unused, so changes have no effect.',
+          'speaker_change_detection':
+            'Reserved speaker-change setting. The selected segmentation model controls detection; this setting has no effect.',
+          'num_speakers':
+            'Speaker count for post-meeting diarization. -1 estimates automatically; otherwise enter a positive integer.',
+          'min_duration_on':
+            'Minimum speech duration in speaker segmentation, filtering very short regions.',
+          'min_duration_off':
+            'Minimum silence between speaker regions. Shorter pauses are merged into continuous speech.',
+          'max_refine_seconds':
+            'Maximum recording duration accepted for refinement; longer recordings are rejected.',
+          'diarization_chunk_ms':
+            'Chunk length for post-meeting diarization. Shorter chunks reduce memory per chunk.',
+          'diarization_timeout_seconds':
+            'Diarization timeout per chunk; chunks over 30 seconds receive a proportionally larger budget.',
+          'diarization_overlap_ms':
+            'Audio overlap between diarization chunks, reducing missed speaker boundaries.',
+          'embedding_window_ms':
+            'Audio window length for voiceprint extraction during post-meeting clustering.',
+          'max_auto_speakers': 'Maximum speaker count considered during automatic clustering.',
+          'min_auto_speaker_windows':
+            'Minimum voiceprint windows per automatic speaker cluster, reducing spurious speakers.',
+          'min_auto_speaker_duration_ms':
+            'Minimum total speech duration per automatically clustered speaker.',
+          'auto_cluster_score_tolerance':
+            'Score tolerance when choosing clusters. Higher values favor more speakers among similar scores.',
+          'threshold':
+            'Speech probability threshold (0–1). Lower values detect quieter speech but may include noise.',
+          'min_silence_duration':
+            'Silence needed to end a segment. Shorter values deliver captions sooner; longer values keep sentences together.',
+          'min_speech_duration':
+            'Ignore sounds shorter than this duration to reduce false recognition from coughs or bumps.',
+          'max_speech_duration':
+            'Continuous speech limit before splitting; also constrained by the model and live segment cap.',
+          'max_samples': 'Maximum saved voiceprint recordings per person.',
+          'max_total_seconds':
+            'Total voiceprint recording duration per person, limiting library storage.',
+          'deleted_retention_days':
+            'Days deleted meetings remain in Recently Deleted before cleanup permanently removes them.',
+          'timeout_seconds':
+            'Timeout for online AI requests. Local models use a separate timeout mechanism.',
+        },
       },
       'es': {
+        'integer': 'Entero',
+        'mlxQuietLabel': 'Refuerzo de detección de voz baja (0 no, 1 sí)',
+        'mlxQuietHint':
+          'Amplifica voz baja solo para detectarla; el modelo debe confirmarla. No cambia la grabación. 0 desactivado, 1 activado.',
+        'defaultSilenceHint':
+          'Silencio continuo para terminar un segmento. El modo en vivo con idioma automático espera al menos 2 segundos; los demás usan este valor.',
+        'windowsChunkHint':
+          'Umbral para procesar por bloques. En Windows, los bloques de audio largo duran al menos 60000 ms; valores menores aún afectan el umbral de audio corto/largo.',
         'sections': {
           'audio': 'Audio',
           'asr': 'Reconocimiento y detección de final',
@@ -9109,10 +9442,10 @@
           'zh': 'Chino',
         },
         'fields': {
-          'sample_rate': 'Frecuencia de muestreo (Hz)',
+          'sample_rate': 'Frecuencia de muestreo (Hz, solo lectura)',
           'chunk_seconds': 'Duración del bloque de audio (s)',
           'refined_window_seconds': 'Ventana de refinamiento (s)',
-          'max_speech_seconds': 'Límite de segmento (s; solo reduce el límite de idioma/modelo)',
+          'max_speech_seconds': 'Límite de segmento (s)',
           'mix_max_delay_ms': 'Retardo máximo de alineación de mezcla (ms)',
           'quiet_speech_recovery': 'Reconocimiento de reserva para voz baja (0 no, 1 sí)',
           'quiet_speech_min_seconds': 'Duración mínima de voz baja (s)',
@@ -9124,7 +9457,7 @@
           'microphone_peak': 'Límite de pico del micrófono',
           'segmentation_model_id': 'Modelo de segmentación de voz',
           'cluster_threshold': 'Umbral de agrupación',
-          'online_similarity_threshold': 'Umbral de coincidencia en línea',
+          'online_similarity_threshold': 'Umbral de verificación de voz',
           'voiceprint_similarity_threshold': 'Umbral de coincidencia de huella',
           'minimum_embedding_seconds': 'Audio mínimo para huella de voz (s)',
           'boundary_tail_seconds': 'Cola de frontera (s)',
@@ -9148,11 +9481,96 @@
           'max_samples': 'Máximas grabaciones por persona',
           'max_total_seconds': 'Duración máxima por persona (s)',
           'deleted_retention_days': 'Retención de eliminados (días)',
-          'timeout_seconds': 'Tiempo de espera de solicitud (s)',
+          'timeout_seconds': 'Tiempo máximo de IA en línea (s)',
         },
-        'hint': 'Se usa en la ejecución local.',
+        'hints': {
+          'sample_rate':
+            'La captura, el reconocimiento y la grabación usan 16000 Hz fijos. Solo se muestra como referencia.',
+          'chunk_seconds':
+            'Duración de cada archivo de audio. Menor duración genera más archivos sin cambiar los subtítulos.',
+          'refined_window_seconds':
+            'Audio por pasada de refinamiento. Ventanas largas conservan más contexto y consumen más memoria.',
+          'max_speech_seconds':
+            'También limitado por idioma y modelo. 0 usa 22 segundos predeterminados; los valores positivos deben permitir voz mínima y solapamiento.',
+          'mix_max_delay_ms':
+            'Espera máxima para alinear micrófono y audio del sistema. Un valor mayor tolera más retraso, pero añade latencia.',
+          'quiet_speech_recovery':
+            'Intenta recuperar voz baja omitida en vivo y al refinar la reunión. 0 desactivado, 1 activado.',
+          'quiet_speech_min_seconds':
+            'Duración mínima de recuperación. Evita ruidos breves y no debe superar la duración máxima.',
+          'quiet_speech_max_seconds':
+            'Duración máxima de recuperación. Debe ser positiva y no inferior a la mínima.',
+          'quiet_speech_level_ratio':
+            'Nivel relativo a la voz detectada. Un valor menor incluye voz más baja y más ruido.',
+          'microphone_target_rms':
+            'Volumen objetivo del micrófono en vivo. Amplifica audio débil sin cambiar la grabación original.',
+          'microphone_minimum_rms':
+            'No amplifica audio por debajo de este nivel para evitar aumentar el ruido.',
+          'microphone_max_gain': 'Factor máximo de amplificación automática del micrófono.',
+          'microphone_peak':
+            'Límite de pico tras la ganancia automática (0–1) para evitar distorsión.',
+          'segmentation_model_id':
+            'ID del modelo local de segmentación de voz y solapamiento; debe existir en la biblioteca.',
+          'cluster_threshold':
+            'Umbral de distancia para agrupar hablantes. Un valor mayor fusiona más segmentos.',
+          'online_similarity_threshold':
+            'Verifica si una grabación pertenece a la persona indicada. Mayor similitud es más estricta; no controla la separación de hablantes en vivo.',
+          'voiceprint_similarity_threshold':
+            'Similitud para identificar una voz guardada. Mayor valor reduce errores, pero puede omitir coincidencias.',
+          'minimum_embedding_seconds':
+            'Audio mínimo para extraer una huella de voz y evitar decisiones con sonidos muy breves.',
+          'boundary_tail_seconds':
+            'Parámetro reservado de cola de frontera; actualmente sin efecto.',
+          'speaker_change_detection':
+            'Parámetro reservado. La detección depende del modelo de segmentación; este ajuste no tiene efecto.',
+          'num_speakers':
+            'Número de hablantes al separar la reunión. -1 estima automáticamente; o usa un entero positivo.',
+          'min_duration_on':
+            'Duración mínima de voz en la segmentación para filtrar fragmentos breves.',
+          'min_duration_off':
+            'Silencio mínimo entre segmentos; pausas menores se unen como voz continua.',
+          'max_refine_seconds':
+            'Duración máxima aceptada para refinar; se rechazan grabaciones más largas.',
+          'diarization_chunk_ms':
+            'Duración del bloque de separación de hablantes. Bloques cortos reducen memoria por bloque.',
+          'diarization_timeout_seconds':
+            'Tiempo máximo por bloque; los bloques de más de 30 segundos reciben más tiempo proporcionalmente.',
+          'diarization_overlap_ms':
+            'Audio solapado entre bloques para reducir errores en sus bordes.',
+          'embedding_window_ms':
+            'Ventana de audio para extraer huellas de voz al agrupar hablantes.',
+          'max_auto_speakers': 'Máximo de hablantes considerado al agrupar automáticamente.',
+          'min_auto_speaker_windows':
+            'Ventanas mínimas por hablante automático para reducir identificaciones espurias.',
+          'min_auto_speaker_duration_ms':
+            'Duración total mínima de voz por hablante agrupado automáticamente.',
+          'auto_cluster_score_tolerance':
+            'Tolerancia entre puntuaciones similares. Un valor mayor favorece más hablantes.',
+          'threshold':
+            'Umbral de probabilidad de voz (0–1). Menor valor detecta voz baja, pero puede incluir ruido.',
+          'min_silence_duration':
+            'Silencio para terminar un segmento. Menor valor muestra antes los subtítulos; mayor valor mantiene las frases.',
+          'min_speech_duration': 'Ignora sonidos más cortos para reducir errores por tos o golpes.',
+          'max_speech_duration':
+            'Límite de voz continua antes de cortar; también sujeto al modelo y al límite en vivo.',
+          'max_samples': 'Máximo de muestras de voz guardadas por persona.',
+          'max_total_seconds':
+            'Duración total de muestras por persona para limitar el espacio ocupado.',
+          'deleted_retention_days':
+            'Días que se conservan reuniones eliminadas antes de borrarlas permanentemente al limpiar.',
+          'timeout_seconds':
+            'Tiempo máximo de solicitudes de IA en línea. Los modelos locales usan otro mecanismo.',
+        },
       },
       'ja': {
+        'integer': '整数',
+        'mlxQuietLabel': '小さな声の検出強化（0 無効、1 有効）',
+        'mlxQuietHint':
+          '音声検出用にだけ小さな声を増幅します。モデルの音声判定は必要で、原音は変更しません。0 無効、1 有効。',
+        'defaultSilenceHint':
+          '文を確定する連続無音時間です。言語自動のリアルタイム認識は最低 2 秒待ち、他のモードはこの値を使います。',
+        'windowsChunkHint':
+          '分割処理を開始する音声長です。Windows の長音声処理ブロックは最低 60000 ms ですが、小さい値も短音声と長音声の境界に影響します。',
         'sections': {
           'audio': '音声',
           'asr': '認識と終端検出',
@@ -9169,10 +9587,10 @@
           'zh': '中国語',
         },
         'fields': {
-          'sample_rate': 'サンプリングレート（Hz）',
+          'sample_rate': 'サンプリング周波数（Hz、読み取り専用）',
           'chunk_seconds': '音声チャンク長（秒）',
           'refined_window_seconds': '高精度化ウィンドウ（秒）',
-          'max_speech_seconds': '発話セグメント上限（秒。言語・モデル上限を下げる方向にのみ作用）',
+          'max_speech_seconds': '認識区間の上限（秒）',
           'mix_max_delay_ms': 'ミックスの最大整列遅延（ミリ秒）',
           'quiet_speech_recovery': '小さな声の補助認識（0 オフ 1 オン）',
           'quiet_speech_min_seconds': '小さな声の最短長（秒）',
@@ -9184,7 +9602,7 @@
           'microphone_peak': 'マイクピーク上限',
           'segmentation_model_id': '音声区間モデル',
           'cluster_threshold': 'クラスタリング閾値',
-          'online_similarity_threshold': 'オンライン一致閾値',
+          'online_similarity_threshold': '声紋検証の閾値',
           'voiceprint_similarity_threshold': '声紋一致閾値',
           'minimum_embedding_seconds': '声紋用の最短音声（秒）',
           'boundary_tail_seconds': '境界の余韻（秒）',
@@ -9208,11 +9626,87 @@
           'max_samples': '1 人あたりの最大録音数',
           'max_total_seconds': '1 人あたりの最大録音時間（秒）',
           'deleted_retention_days': '削除済み記録の保持日数',
-          'timeout_seconds': 'モデル要求タイムアウト（秒）',
+          'timeout_seconds': 'オンライン AI リクエストのタイムアウト（秒）',
         },
-        'hint': 'ローカル実行に使用します。',
+        'hints': {
+          'sample_rate': '収録・認識・録音は 16000 Hz 固定です。現在値の表示のみです。',
+          'chunk_seconds':
+            '録音ファイルを分割する長さです。短くするとファイル数が増えますが、字幕の区切りは変わりません。',
+          'refined_window_seconds':
+            '精修時に認識モデルへ渡す音声の長さです。長いほど文脈を保持しますが、メモリ消費も増えます。',
+          'max_speech_seconds':
+            '言語とモデルの上限にも制約されます。0 は既定の 22 秒です。正の値は最短音声と重複区間を収める必要があります。',
+          'mix_max_delay_ms':
+            'マイクとシステム音声を混ぜる前の最大同期待ち時間です。大きくすると遅延への許容と待ち時間が増えます。',
+          'quiet_speech_recovery':
+            'リアルタイム認識と会議後の精修で、検出から漏れた小さな声の認識を試みます。0 無効、1 有効。',
+          'quiet_speech_min_seconds':
+            '補完認識を試す最短区間です。短い雑音を抑えます。最長時間以下にしてください。',
+          'quiet_speech_max_seconds':
+            '小さな声の補完処理の最大区間です。0 より大きく、最短時間以上にしてください。',
+          'quiet_speech_level_ratio':
+            '検出済み音声に対する相対音量です。低いほど小さな声と雑音を拾いやすくなります。',
+          'microphone_target_rms':
+            'リアルタイム認識用マイクの目標音量です。保存する原音を変えずに小さな声を増幅します。',
+          'microphone_minimum_rms': 'この音量未満では自動増幅せず、背景雑音の増幅を防ぎます。',
+          'microphone_max_gain': 'マイクの自動増幅で許容する最大倍率です。',
+          'microphone_peak': '自動増幅後のピーク上限（0–1）です。音割れを防ぎます。',
+          'segmentation_model_id':
+            '発話区間・重複発話を検出するローカルモデル ID です。ライブラリのモデルと一致させてください。',
+          'cluster_threshold':
+            '声紋距離による話者統合の閾値です。高いほど同じ話者にまとめやすくなります。',
+          'online_similarity_threshold':
+            '録音が指定人物の声かを検証します。高いほど厳しくなります。リアルタイム字幕の話者分離には影響しません。',
+          'voiceprint_similarity_threshold':
+            '登録済み声紋との照合閾値です。高いほど誤認が減りますが、一致を見逃す場合があります。',
+          'minimum_embedding_seconds':
+            '声紋抽出に必要な最短音声です。短すぎる音声での人物判定を避けます。',
+          'boundary_tail_seconds':
+            '境界補完用の予約項目です。現在の処理では未使用のため、変更しても結果は変わりません。',
+          'speaker_change_detection':
+            '話者交代検出の予約項目です。現在は選択した区間モデルで決まり、この設定は反映されません。',
+          'num_speakers':
+            '会議後の話者数です。-1 は自動推定、人数が分かる場合は正の整数を指定します。',
+          'min_duration_on': '話者区間検出の最短発話時間です。短すぎる区間を除きます。',
+          'min_duration_off': '発話区間間の最短無音時間です。短い間は連続発話として結合します。',
+          'max_refine_seconds':
+            '会議後の精修が受け付ける録音時間の上限です。超過すると通知して停止します。',
+          'diarization_chunk_ms':
+            '会議後の話者分離の処理単位です。短くすると各ブロックのメモリ負荷が減ります。',
+          'diarization_timeout_seconds':
+            '話者分離のブロック単位の待ち時間です。30 秒を超えるブロックは長さに比例して延長します。',
+          'diarization_overlap_ms':
+            '隣接する話者分離ブロックの重複時間です。ブロック境界の見落としを減らします。',
+          'embedding_window_ms': '会議後のクラスタリングで声紋を抽出する音声窓の長さです。',
+          'max_auto_speakers': '自動クラスタリングで推定する話者数の上限です。',
+          'min_auto_speaker_windows':
+            '自動話者グループに必要な最小声紋窓数です。短い断片からの誤分類を抑えます。',
+          'min_auto_speaker_duration_ms': '自動クラスタリングで各話者に必要な累計発話時間です。',
+          'auto_cluster_score_tolerance':
+            'クラスタ評価が近い場合の許容差です。大きいほど話者数の多い案を選びやすくなります。',
+          'threshold': '音声と判定する確率の閾値（0–1）です。低いほど小さな声と雑音を拾います。',
+          'min_silence_duration':
+            '文を確定するまでの連続無音時間です。短いほど字幕が早く、長いほど文をまとめます。',
+          'min_speech_duration': 'この長さ未満の音を無視し、咳や衝撃音などの誤認識を減らします。',
+          'max_speech_duration':
+            '連続発話を分割するまでの上限です。モデルとリアルタイム区間の上限にも制約されます。',
+          'max_samples': '声紋ライブラリに保存できる人物ごとの録音サンプル数です。',
+          'max_total_seconds': '人物ごとの声紋録音の合計時間上限です。保存容量を制限します。',
+          'deleted_retention_days':
+            '削除した会議を「最近削除した項目」に保持する日数です。期限後のクリーンアップで完全に削除されます。',
+          'timeout_seconds':
+            'オンライン AI リクエストの待ち時間上限です。ローカルモデルは別のタイムアウトを使用します。',
+        },
       },
       'ko': {
+        'integer': '정수',
+        'mlxQuietLabel': '작은 목소리 감지 강화(0 끄기, 1 켜기)',
+        'mlxQuietHint':
+          '음성 감지를 위해서만 작은 소리를 증폭합니다. 모델의 음성 확인은 여전히 필요하며 원본은 바꾸지 않습니다. 0 끄기, 1 켜기.',
+        'defaultSilenceHint':
+          '문장 확정에 필요한 연속 무음 길이입니다. 자동 언어 실시간 모드는 최소 2초 대기하며 다른 모드는 이 값을 씁니다.',
+        'windowsChunkHint':
+          '블록 처리를 시작할 음성 길이입니다. Windows의 긴 음성 블록은 최소 60000 ms이며 더 작은 값도 짧은/긴 음성 구분에는 영향을 줍니다.',
         'sections': {
           'audio': '오디오',
           'asr': '인식 및 종점 감지',
@@ -9229,10 +9723,10 @@
           'zh': '중국어',
         },
         'fields': {
-          'sample_rate': '샘플링 레이트(Hz)',
+          'sample_rate': '샘플링 주파수(Hz, 읽기 전용)',
           'chunk_seconds': '오디오 청크 길이(초)',
           'refined_window_seconds': '정교화 창(초)',
-          'max_speech_seconds': '문장 구간 상한(초, 언어/모델 상한을 낮추는 방향으로만 적용)',
+          'max_speech_seconds': '인식 구간 상한(초)',
           'mix_max_delay_ms': '믹싱 최대 정렬 지연(ms)',
           'quiet_speech_recovery': '작은 목소리 보조 인식(0 끔, 1 켬)',
           'quiet_speech_min_seconds': '작은 목소리 최소 길이(초)',
@@ -9244,7 +9738,7 @@
           'microphone_peak': '마이크 피크 제한',
           'segmentation_model_id': '음성 구간 모델',
           'cluster_threshold': '클러스터링 임계값',
-          'online_similarity_threshold': '온라인 일치 임계값',
+          'online_similarity_threshold': '음성 프로필 검증 기준',
           'voiceprint_similarity_threshold': '음성 지문 일치 임계값',
           'minimum_embedding_seconds': '최소 음성 지문 오디오(초)',
           'boundary_tail_seconds': '경계 꼬리(초)',
@@ -9268,11 +9762,91 @@
           'max_samples': '1인당 최대 녹음 수',
           'max_total_seconds': '1인당 최대 녹음 시간(초)',
           'deleted_retention_days': '삭제 기록 보관 기간(일)',
-          'timeout_seconds': '모델 요청 시간 제한(초)',
+          'timeout_seconds': '온라인 AI 요청 제한 시간(초)',
         },
-        'hint': '로컬 실행에 사용됩니다.',
+        'hints': {
+          'sample_rate': '수집·인식·녹음은 16000 Hz로 고정됩니다. 현재 값만 표시합니다.',
+          'chunk_seconds':
+            '녹음 파일을 나누는 길이입니다. 짧을수록 파일이 늘어나며 자막 구분에는 영향이 없습니다.',
+          'refined_window_seconds':
+            '정밀 전사 시 한 번에 인식할 음성 길이입니다. 길수록 문맥과 메모리 사용량이 늘어납니다.',
+          'max_speech_seconds':
+            '언어·모델 상한도 적용됩니다. 0은 기본 22초이며 양수는 최소 발화와 겹침 길이를 수용해야 합니다.',
+          'mix_max_delay_ms':
+            '마이크와 시스템 오디오를 혼합하기 전 최대 동기화 대기 시간입니다. 높이면 지연 허용과 대기가 늘어납니다.',
+          'quiet_speech_recovery':
+            '실시간 인식과 회의 후 정밀 전사에서 감지가 놓친 작은 목소리 복구를 시도합니다. 0 끄기, 1 켜기.',
+          'quiet_speech_min_seconds':
+            '복구를 시도할 최소 길이입니다. 짧은 잡음을 줄이며 최대 길이를 초과할 수 없습니다.',
+          'quiet_speech_max_seconds':
+            '작은 목소리 복구의 최대 구간입니다. 0보다 커야 하며 최소 길이 이상이어야 합니다.',
+          'quiet_speech_level_ratio':
+            '감지된 음성 대비 상대 음량입니다. 낮을수록 더 작은 목소리와 잡음을 포함합니다.',
+          'microphone_target_rms':
+            '실시간 인식용 마이크 목표 음량입니다. 원본 녹음을 바꾸지 않고 약한 소리를 증폭합니다.',
+          'microphone_minimum_rms':
+            '이 음량 미만에서는 자동 증폭하지 않아 배경 잡음 증폭을 막습니다.',
+          'microphone_max_gain': '마이크 자동 증폭에 허용되는 최대 배율입니다.',
+          'microphone_peak': '자동 증폭 후 피크 상한(0–1)입니다. 소리 왜곡을 방지합니다.',
+          'segmentation_model_id':
+            '발화·중첩 발화 구간을 감지하는 로컬 모델 ID입니다. 모델 라이브러리와 일치해야 합니다.',
+          'cluster_threshold':
+            '음성 특징 거리 기반 화자 군집 기준입니다. 높을수록 같은 화자로 합쳐집니다.',
+          'online_similarity_threshold':
+            '녹음이 지정 인물의 목소리인지 검증합니다. 높을수록 엄격하며 실시간 자막 화자 분리에는 영향이 없습니다.',
+          'voiceprint_similarity_threshold':
+            '등록된 음성 프로필 매칭 기준입니다. 높을수록 오인식이 줄지만 매칭을 놓칠 수 있습니다.',
+          'minimum_embedding_seconds':
+            '음성 특징 추출에 필요한 최소 길이입니다. 너무 짧은 소리로 신원을 판단하지 않습니다.',
+          'boundary_tail_seconds':
+            '경계 보완용 예약 항목입니다. 현재 처리에서는 사용하지 않아 변경 효과가 없습니다.',
+          'speaker_change_detection':
+            '화자 전환 감지의 예약 항목입니다. 현재는 선택한 구간 모델로 결정되며 이 설정은 효과가 없습니다.',
+          'num_speakers':
+            '회의 후 화자 분리에 사용할 인원입니다. -1은 자동 추정, 알면 양의 정수를 입력하세요.',
+          'min_duration_on': '화자 구간 감지의 최소 발화 길이입니다. 너무 짧은 구간을 거릅니다.',
+          'min_duration_off':
+            '발화 구간 사이 최소 무음 길이입니다. 더 짧은 쉼은 연속 발화로 합칩니다.',
+          'max_refine_seconds':
+            '회의 후 정밀 전사를 허용하는 녹음 길이 상한입니다. 초과하면 중단하고 알립니다.',
+          'diarization_chunk_ms':
+            '회의 후 화자 분리 처리 블록 길이입니다. 짧을수록 블록당 메모리 사용이 줄어듭니다.',
+          'diarization_timeout_seconds':
+            '화자 분리 블록별 제한 시간입니다. 30초를 넘는 블록은 길이에 비례해 늘어납니다.',
+          'diarization_overlap_ms':
+            '인접 화자 분리 블록의 겹침 길이입니다. 블록 경계의 누락을 줄입니다.',
+          'embedding_window_ms': '회의 후 군집화를 위한 음성 특징 추출 창 길이입니다.',
+          'max_auto_speakers': '자동 군집화에서 허용하는 최대 화자 수입니다.',
+          'min_auto_speaker_windows':
+            '자동 화자 군집당 최소 음성 특징 창 수입니다. 짧은 구간의 잘못된 화자 생성을 줄입니다.',
+          'min_auto_speaker_duration_ms':
+            '자동 군집화된 화자에게 필요한 최소 누적 발화 길이입니다.',
+          'auto_cluster_score_tolerance':
+            '군집 점수가 비슷할 때 허용할 차이입니다. 높을수록 화자가 많은 안을 선택합니다.',
+          'threshold': '음성 판정 확률 기준(0–1)입니다. 낮을수록 작은 목소리와 잡음을 포함합니다.',
+          'min_silence_duration':
+            '문장을 확정할 연속 무음 길이입니다. 짧으면 자막이 빠르고 길면 문장을 더 온전히 유지합니다.',
+          'min_speech_duration': '이 길이보다 짧은 소리를 무시해 기침·충격음 오인식을 줄입니다.',
+          'max_speech_duration':
+            '연속 발화를 나누는 상한입니다. 모델 및 실시간 구간 상한의 제한도 받습니다.',
+          'max_samples': '음성 라이브러리에서 인물별로 저장할 최대 녹음 샘플 수입니다.',
+          'max_total_seconds':
+            '인물별 음성 샘플 누적 길이 상한입니다. 라이브러리 저장량을 제한합니다.',
+          'deleted_retention_days':
+            '삭제된 회의를 최근 삭제 항목에 보관할 일수입니다. 만료 후 정리 시 영구 삭제됩니다.',
+          'timeout_seconds':
+            '온라인 AI 요청 제한 시간입니다. 로컬 모델은 별도 제한 시간을 사용합니다.',
+        },
       },
       'fr': {
+        'integer': 'Entier',
+        'mlxQuietLabel': 'Renforcement de détection des voix faibles (0 non, 1 oui)',
+        'mlxQuietHint':
+          'Amplifie les voix faibles uniquement pour la détection, toujours confirmée par le modèle. Enregistrement inchangé. 0 désactivé, 1 activé.',
+        'defaultSilenceHint':
+          'Silence continu pour terminer un segment. En direct avec langue automatique, attente minimale de 2 secondes ; sinon, cette valeur s’applique.',
+        'windowsChunkHint':
+          'Seuil de traitement par blocs. Sous Windows, les blocs audio longs durent au moins 60000 ms ; les valeurs plus basses influencent encore le seuil court/long.',
         'sections': {
           'audio': 'Audio',
           'asr': 'Reconnaissance et détection de fin',
@@ -9289,10 +9863,10 @@
           'zh': 'Chinois',
         },
         'fields': {
-          'sample_rate': 'Fréquence d’échantillonnage (Hz)',
+          'sample_rate': 'Fréquence (Hz, lecture seule)',
           'chunk_seconds': 'Durée du bloc audio (s)',
           'refined_window_seconds': 'Fenêtre d’affinage (s)',
-          'max_speech_seconds': 'Plafond de segment (s ; n’abaisse que la limite langue/modèle)',
+          'max_speech_seconds': 'Limite de segment (s)',
           'mix_max_delay_ms': 'Délai maximal d’alignement du mixage (ms)',
           'quiet_speech_recovery': 'Reconnaissance de secours pour voix faible (0 off, 1 on)',
           'quiet_speech_min_seconds': 'Durée minimale de voix faible (s)',
@@ -9304,7 +9878,7 @@
           'microphone_peak': 'Limite de crête du microphone',
           'segmentation_model_id': 'Modèle de segmentation de parole',
           'cluster_threshold': 'Seuil de regroupement',
-          'online_similarity_threshold': 'Seuil de correspondance en ligne',
+          'online_similarity_threshold': 'Seuil de vérification vocale',
           'voiceprint_similarity_threshold': 'Seuil de correspondance d’empreinte',
           'minimum_embedding_seconds': 'Audio minimal pour empreinte (s)',
           'boundary_tail_seconds': 'Queue de frontière (s)',
@@ -9328,11 +9902,96 @@
           'max_samples': 'Enregistrements maximum par personne',
           'max_total_seconds': 'Durée maximale par personne (s)',
           'deleted_retention_days': 'Conservation des éléments supprimés (jours)',
-          'timeout_seconds': 'Délai de requête du modèle (s)',
+          'timeout_seconds': 'Délai des requêtes IA en ligne (s)',
         },
-        'hint': 'Utilisé par l’exécution locale.',
+        'hints': {
+          'sample_rate':
+            'Capture, reconnaissance et enregistrement utilisent 16000 Hz fixes. Valeur affichée à titre indicatif.',
+          'chunk_seconds':
+            'Durée de chaque fichier audio. Une durée courte crée plus de fichiers sans modifier les sous-titres.',
+          'refined_window_seconds':
+            'Durée audio par passe de transcription affinée. Plus de contexte demande plus de mémoire.',
+          'max_speech_seconds':
+            'Également limitée par la langue et le modèle. 0 utilise les 22 secondes par défaut ; une valeur positive doit couvrir la parole minimale et le chevauchement.',
+          'mix_max_delay_ms':
+            'Attente maximale pour aligner micro et audio système. Une valeur élevée tolère plus de retard mais augmente la latence.',
+          'quiet_speech_recovery':
+            'Tente de récupérer la parole faible manquée, en direct et après la réunion. 0 désactivé, 1 activé.',
+          'quiet_speech_min_seconds':
+            'Durée minimale de récupération. Évite les bruits brefs et ne doit pas dépasser la durée maximale.',
+          'quiet_speech_max_seconds':
+            'Durée maximale de récupération. Doit être positive et au moins égale à la durée minimale.',
+          'quiet_speech_level_ratio':
+            'Niveau relatif à la parole détectée. Une valeur basse inclut des voix plus faibles et plus de bruit.',
+          'microphone_target_rms':
+            'Volume cible du micro pour la reconnaissance en direct, sans modifier l’enregistrement original.',
+          'microphone_minimum_rms':
+            'Aucun gain sous ce niveau pour éviter d’amplifier le bruit de fond.',
+          'microphone_max_gain': 'Facteur maximal d’amplification automatique du micro.',
+          'microphone_peak':
+            'Limite de crête après gain automatique (0–1), pour éviter la saturation.',
+          'segmentation_model_id':
+            'ID du modèle local de segmentation de parole et de chevauchement ; doit correspondre à la bibliothèque.',
+          'cluster_threshold':
+            'Seuil de distance de regroupement. Une valeur élevée fusionne davantage de segments par locuteur.',
+          'online_similarity_threshold':
+            'Vérifie si un enregistrement appartient à une personne précise. Plus élevé est plus strict ; sans effet sur la séparation en direct.',
+          'voiceprint_similarity_threshold':
+            'Similarité requise pour une empreinte vocale nommée. Plus élevée, elle réduit les erreurs mais peut manquer des correspondances.',
+          'minimum_embedding_seconds':
+            'Durée minimale pour extraire une empreinte vocale et éviter les sons trop brefs.',
+          'boundary_tail_seconds':
+            'Paramètre de fin de frontière réservé, actuellement sans effet.',
+          'speaker_change_detection':
+            'Paramètre réservé. Le modèle de segmentation choisi contrôle la détection ; ce réglage est sans effet.',
+          'num_speakers':
+            'Nombre de locuteurs après réunion. -1 pour estimation automatique, sinon un entier positif.',
+          'min_duration_on': 'Durée minimale de parole pour filtrer les segments trop courts.',
+          'min_duration_off':
+            'Silence minimal entre segments ; les pauses plus courtes sont fusionnées.',
+          'max_refine_seconds':
+            'Durée maximale acceptée pour affiner une transcription ; au-delà, l’enregistrement est refusé.',
+          'diarization_chunk_ms':
+            'Durée des blocs de séparation des locuteurs. Des blocs courts réduisent la mémoire par bloc.',
+          'diarization_timeout_seconds':
+            'Délai par bloc de séparation ; au-delà de 30 secondes, le budget augmente proportionnellement.',
+          'diarization_overlap_ms':
+            'Chevauchement audio entre blocs pour réduire les erreurs aux frontières.',
+          'embedding_window_ms':
+            'Durée de fenêtre pour extraire les empreintes vocales après réunion.',
+          'max_auto_speakers': 'Nombre maximal de locuteurs pour le regroupement automatique.',
+          'min_auto_speaker_windows':
+            'Fenêtres minimales par groupe de locuteur, pour réduire les faux locuteurs.',
+          'min_auto_speaker_duration_ms':
+            'Durée totale minimale de parole par locuteur regroupé automatiquement.',
+          'auto_cluster_score_tolerance':
+            'Tolérance entre scores proches. Une valeur élevée favorise davantage de locuteurs.',
+          'threshold':
+            'Seuil de probabilité de parole (0–1). Plus bas, il détecte des voix faibles mais aussi du bruit.',
+          'min_silence_duration':
+            'Silence nécessaire pour finir un segment. Plus court, les sous-titres arrivent plus vite ; plus long, les phrases restent groupées.',
+          'min_speech_duration':
+            'Ignore les sons plus courts pour réduire les fausses détections dues à la toux ou aux chocs.',
+          'max_speech_duration':
+            'Limite de parole continue avant découpage, également limitée par le modèle et le plafond en direct.',
+          'max_samples': 'Nombre maximal d’échantillons vocaux enregistrés par personne.',
+          'max_total_seconds':
+            'Durée totale des échantillons par personne, pour limiter le stockage.',
+          'deleted_retention_days':
+            'Jours de conservation des réunions supprimées avant leur suppression définitive lors du nettoyage.',
+          'timeout_seconds':
+            'Délai des requêtes IA en ligne. Les modèles locaux utilisent un mécanisme distinct.',
+        },
       },
       'de': {
+        'integer': 'Ganzzahl',
+        'mlxQuietLabel': 'Erkennung leiser Sprache verstärken (0 aus, 1 an)',
+        'mlxQuietHint':
+          'Verstärkt leise Sprache nur zur Erkennung; das Modell muss sie weiterhin bestätigen. Originalaufnahmen bleiben unverändert. 0 aus, 1 an.',
+        'defaultSilenceHint':
+          'Stille zum Satzabschluss. Die automatische Sprachauswahl wartet live mindestens 2 Sekunden; andere Modi verwenden diesen Wert.',
+        'windowsChunkHint':
+          'Schwelle für Blockverarbeitung. Unter Windows sind Blöcke langer Audios mindestens 60000 ms lang; kleinere Werte beeinflussen weiter die Kurz-/Langgrenze.',
         'sections': {
           'audio': 'Audio',
           'asr': 'Erkennung und Endpunkterkennung',
@@ -9349,10 +10008,10 @@
           'zh': 'Chinesisch',
         },
         'fields': {
-          'sample_rate': 'Abtastrate (Hz)',
+          'sample_rate': 'Abtastrate (Hz, schreibgeschützt)',
           'chunk_seconds': 'Audioblockdauer (s)',
           'refined_window_seconds': 'Nachbearbeitungsfenster (s)',
-          'max_speech_seconds': 'Segmentobergrenze (s; senkt nur die Sprach-/Modellgrenze)',
+          'max_speech_seconds': 'Obergrenze je Sprachabschnitt (s)',
           'mix_max_delay_ms': 'Maximale Ausrichtungsverzögerung beim Mischen (ms)',
           'quiet_speech_recovery': 'Ersatztranskription für leise Sprache (0 aus, 1 ein)',
           'quiet_speech_min_seconds': 'Minimale Dauer leiser Sprache (s)',
@@ -9364,7 +10023,7 @@
           'microphone_peak': 'Mikrofon-Peakgrenze',
           'segmentation_model_id': 'Sprachsegmentierungsmodell',
           'cluster_threshold': 'Cluster-Schwellenwert',
-          'online_similarity_threshold': 'Online-Abgleichschwelle',
+          'online_similarity_threshold': 'Schwelle zur Stimmprofilprüfung',
           'voiceprint_similarity_threshold': 'Stimmabdruck-Schwelle',
           'minimum_embedding_seconds': 'Minimales Stimmabdruck-Audio (s)',
           'boundary_tail_seconds': 'Grenz-Nachlauf (s)',
@@ -9388,11 +10047,96 @@
           'max_samples': 'Maximale Aufnahmen pro Person',
           'max_total_seconds': 'Maximale Aufnahmezeit pro Person (s)',
           'deleted_retention_days': 'Aufbewahrung gelöschter Einträge (Tage)',
-          'timeout_seconds': 'Zeitüberschreitung der Modellanfrage (s)',
+          'timeout_seconds': 'Zeitlimit für Online-KI-Anfragen (s)',
         },
-        'hint': 'Wird von der lokalen Laufzeit verwendet.',
+        'hints': {
+          'sample_rate':
+            'Erfassung, Erkennung und Aufnahme verwenden feste 16000 Hz. Der Wert dient nur zur Anzeige.',
+          'chunk_seconds':
+            'Länge der Aufnahmedateien. Kürzere Abschnitte erzeugen mehr Dateien, ändern aber keine Untertitelgrenzen.',
+          'refined_window_seconds':
+            'Audiolänge je Erkennungsschritt bei der Nachbearbeitung. Länger bedeutet mehr Kontext und Speicherbedarf.',
+          'max_speech_seconds':
+            'Auch durch Sprache und Modell begrenzt. 0 verwendet den Standard von 22 Sekunden; positive Werte müssen Mindestsprachdauer und Überlappung erlauben.',
+          'mix_max_delay_ms':
+            'Maximale Wartezeit zum Abgleich von Mikrofon und Systemaudio. Höhere Werte tolerieren mehr Verzögerung und erhöhen die Latenz.',
+          'quiet_speech_recovery':
+            'Versucht, übersehene leise Sprache live und bei der Nachbearbeitung zu erkennen. 0 aus, 1 an.',
+          'quiet_speech_min_seconds':
+            'Mindestdauer der Wiedererkennung. Vermeidet kurze Geräusche und darf die Höchstdauer nicht überschreiten.',
+          'quiet_speech_max_seconds':
+            'Maximale Wiedererkennungsdauer. Muss positiv und mindestens so lang wie die Mindestdauer sein.',
+          'quiet_speech_level_ratio':
+            'Relativer Pegel zur erkannten Sprache. Niedrigere Werte erfassen leisere Sprache und mehr Rauschen.',
+          'microphone_target_rms':
+            'Zielpegel des Mikrofons für die Live-Erkennung. Verstärkt leise Signale, ohne Originalaufnahmen zu ändern.',
+          'microphone_minimum_rms':
+            'Unter diesem Pegel nicht verstärken, damit Hintergrundrauschen nicht lauter wird.',
+          'microphone_max_gain': 'Maximaler Verstärkungsfaktor der automatischen Mikrofonanhebung.',
+          'microphone_peak':
+            'Spitzenpegel nach automatischer Verstärkung (0–1), um Übersteuerung zu vermeiden.',
+          'segmentation_model_id':
+            'Lokale Modell-ID für Sprach- und Überlappungserkennung; muss einem Bibliotheksmodell entsprechen.',
+          'cluster_threshold':
+            'Distanzschwelle für Sprechergruppen. Höhere Werte führen mehr Abschnitte zum selben Sprecher zusammen.',
+          'online_similarity_threshold':
+            'Prüft, ob eine Aufnahme zur angegebenen Person gehört. Höher ist strenger; steuert keine Live-Sprechertrennung.',
+          'voiceprint_similarity_threshold':
+            'Ähnlichkeit für benannte Stimmprofile. Höher reduziert Fehlzuordnungen, kann aber Treffer übersehen.',
+          'minimum_embedding_seconds':
+            'Mindestlänge zur Stimmprofilberechnung, damit zu kurze Laute keine Identität bestimmen.',
+          'boundary_tail_seconds':
+            'Reservierter Parameter für Grenznachlauf; derzeit ungenutzt und ohne Wirkung.',
+          'speaker_change_detection':
+            'Reservierter Parameter. Das gewählte Segmentierungsmodell steuert die Erkennung; diese Einstellung ist wirkungslos.',
+          'num_speakers':
+            'Sprecherzahl bei der Nachbearbeitung. -1 schätzt automatisch; sonst positive Ganzzahl eingeben.',
+          'min_duration_on': 'Mindestsprechdauer zur Filterung sehr kurzer Sprecherabschnitte.',
+          'min_duration_off':
+            'Mindestpause zwischen Sprachabschnitten. Kürzere Pausen werden zusammengeführt.',
+          'max_refine_seconds':
+            'Maximale Aufnahmelänge für die Nachbearbeitung. Längere Aufnahmen werden abgelehnt.',
+          'diarization_chunk_ms':
+            'Blocklänge für die Sprechertrennung. Kürzere Blöcke senken den Speicherbedarf je Block.',
+          'diarization_timeout_seconds':
+            'Zeitbudget je Sprecherblock. Bei Blöcken über 30 Sekunden steigt es proportional zur Länge.',
+          'diarization_overlap_ms':
+            'Audioüberlappung zwischen Blöcken, um Fehler an Blockgrenzen zu verringern.',
+          'embedding_window_ms':
+            'Audiofensterlänge zur Stimmprofilberechnung bei der Nachbearbeitung.',
+          'max_auto_speakers': 'Maximale Sprecherzahl bei der automatischen Gruppierung.',
+          'min_auto_speaker_windows':
+            'Mindestzahl an Stimmfenstern je Sprechergruppe, um falsche neue Sprecher zu vermeiden.',
+          'min_auto_speaker_duration_ms':
+            'Mindestgesamtdauer der Sprache je automatisch gruppiertem Sprecher.',
+          'auto_cluster_score_tolerance':
+            'Toleranz bei ähnlichen Clusterwerten. Höhere Werte bevorzugen Lösungen mit mehr Sprechern.',
+          'threshold':
+            'Sprachwahrscheinlichkeit (0–1). Niedrigere Werte erkennen leise Sprache, aber auch mehr Rauschen.',
+          'min_silence_duration':
+            'Stille zum Satzabschluss. Kürzer liefert Untertitel schneller, länger hält Sätze zusammen.',
+          'min_speech_duration':
+            'Ignoriert kürzere Geräusche, um Fehler durch Husten oder Stöße zu verringern.',
+          'max_speech_duration':
+            'Obergrenze für ununterbrochene Sprache; zusätzlich durch Modell- und Live-Grenzen beschränkt.',
+          'max_samples': 'Maximale Zahl gespeicherter Stimmaufnahmen pro Person.',
+          'max_total_seconds':
+            'Maximale Gesamtlänge der Stimmaufnahmen pro Person zur Speicherbegrenzung.',
+          'deleted_retention_days':
+            'Aufbewahrungsdauer gelöschter Meetings vor der endgültigen Entfernung bei der Bereinigung.',
+          'timeout_seconds':
+            'Zeitlimit für Online-KI-Anfragen. Lokale Modelle verwenden einen eigenen Mechanismus.',
+        },
       },
       'ru': {
+        'integer': 'Целое число',
+        'mlxQuietLabel': 'Усиление детекции тихой речи (0 выкл., 1 вкл.)',
+        'mlxQuietHint':
+          'Усиливает тихий звук только для детектора; модель всё равно должна подтвердить речь. Исходная запись не меняется. 0 выкл., 1 вкл.',
+        'defaultSilenceHint':
+          'Тишина для завершения сегмента. В реальном времени при автоопределении языка ожидание не менее 2 секунд; иначе используется это значение.',
+        'windowsChunkHint':
+          'Порог блочной обработки. В Windows блоки длинного аудио не короче 60000 мс; меньшие значения всё ещё влияют на границу короткого и длинного аудио.',
         'sections': {
           'audio': 'Аудио',
           'asr': 'Распознавание и определение конца',
@@ -9409,10 +10153,10 @@
           'zh': 'Китайский',
         },
         'fields': {
-          'sample_rate': 'Частота дискретизации (Гц)',
+          'sample_rate': 'Частота (Гц, только чтение)',
           'chunk_seconds': 'Длительность аудиоблока (с)',
           'refined_window_seconds': 'Окно обработки (с)',
-          'max_speech_seconds': 'Предел длины сегмента (с; только понижает предел языка/модели)',
+          'max_speech_seconds': 'Предел сегмента речи (с)',
           'mix_max_delay_ms': 'Максимальная задержка выравнивания микса (мс)',
           'quiet_speech_recovery': 'Резервное распознавание тихой речи (0 выкл, 1 вкл)',
           'quiet_speech_min_seconds': 'Минимальная длительность тихой речи (с)',
@@ -9424,7 +10168,7 @@
           'microphone_peak': 'Ограничение пика микрофона',
           'segmentation_model_id': 'Модель сегментации речи',
           'cluster_threshold': 'Порог кластеризации',
-          'online_similarity_threshold': 'Порог онлайн-сопоставления',
+          'online_similarity_threshold': 'Порог проверки голосового профиля',
           'voiceprint_similarity_threshold': 'Порог совпадения отпечатка',
           'minimum_embedding_seconds': 'Минимальное аудио для отпечатка (с)',
           'boundary_tail_seconds': 'Хвост границы (с)',
@@ -9448,9 +10192,85 @@
           'max_samples': 'Максимум записей на человека',
           'max_total_seconds': 'Максимальная длительность на человека (с)',
           'deleted_retention_days': 'Хранение удалённых записей (дни)',
-          'timeout_seconds': 'Тайм-аут запроса модели (с)',
+          'timeout_seconds': 'Тайм-аут онлайн-ИИ (с)',
         },
-        'hint': 'Используется локальным запуском.',
+        'hints': {
+          'sample_rate':
+            'Захват, распознавание и запись используют фиксированные 16000 Гц. Значение показано для справки.',
+          'chunk_seconds':
+            'Длительность файлов записи. Короткие блоки создают больше файлов, не меняя границы субтитров.',
+          'refined_window_seconds':
+            'Длина аудио за проход уточнения. Длинные окна сохраняют контекст, но требуют больше памяти.',
+          'max_speech_seconds':
+            'Также ограничен языком и моделью. 0 использует стандартные 22 секунды; положительное значение должно вмещать минимальную речь и перекрытие.',
+          'mix_max_delay_ms':
+            'Ожидание синхронизации микрофона и системного аудио перед смешиванием. Большие значения увеличивают задержку.',
+          'quiet_speech_recovery':
+            'Попытка восстановить пропущенную тихую речь в реальном времени и после встречи. 0 выкл., 1 вкл.',
+          'quiet_speech_min_seconds':
+            'Минимальная длина восстановления. Исключает короткие шумы и не должна превышать максимальную.',
+          'quiet_speech_max_seconds':
+            'Максимальная длина восстановления. Должна быть положительной и не короче минимальной.',
+          'quiet_speech_level_ratio':
+            'Уровень относительно обнаруженной речи. Низкие значения включают более тихую речь и больше шума.',
+          'microphone_target_rms':
+            'Целевая громкость микрофона для распознавания. Усиливает слабый звук, не меняя исходную запись.',
+          'microphone_minimum_rms':
+            'Звук ниже этого уровня не усиливается, чтобы не поднимать фоновый шум.',
+          'microphone_max_gain': 'Максимальный коэффициент автоматического усиления микрофона.',
+          'microphone_peak': 'Предел пиков после усиления (0–1) для предотвращения искажений.',
+          'segmentation_model_id':
+            'ID локальной модели сегментации речи и перекрытий; должна соответствовать модели в библиотеке.',
+          'cluster_threshold':
+            'Порог расстояния для объединения говорящих. Высокие значения чаще объединяют сегменты в одного человека.',
+          'online_similarity_threshold':
+            'Проверяет принадлежность записи указанному человеку. Высокий порог строже; не управляет разделением говорящих в реальном времени.',
+          'voiceprint_similarity_threshold':
+            'Порог сходства с именованным голосовым профилем. Высокий порог снижает ошибки, но может пропускать совпадения.',
+          'minimum_embedding_seconds':
+            'Минимальная длина аудио для извлечения голосовых признаков; слишком короткие звуки исключаются.',
+          'boundary_tail_seconds':
+            'Резервный параметр хвоста границы. Сейчас не используется и не влияет на результат.',
+          'speaker_change_detection':
+            'Резервный параметр. Обнаружение определяется выбранной моделью сегментации; эта настройка не действует.',
+          'num_speakers':
+            'Число говорящих после встречи. -1 — автооценка; иначе положительное целое число.',
+          'min_duration_on':
+            'Минимальная длительность речи при сегментации для отсеивания коротких фрагментов.',
+          'min_duration_off':
+            'Минимальная пауза между сегментами. Более короткие паузы объединяются с речью.',
+          'max_refine_seconds':
+            'Максимальная длина записи для уточнения. Более длинные записи отклоняются.',
+          'diarization_chunk_ms':
+            'Длина блока разделения говорящих. Короткие блоки уменьшают потребление памяти.',
+          'diarization_timeout_seconds':
+            'Тайм-аут блока разделения. Для блоков длиннее 30 секунд бюджет увеличивается пропорционально.',
+          'diarization_overlap_ms': 'Перекрытие соседних блоков для уменьшения ошибок на границах.',
+          'embedding_window_ms':
+            'Длина аудиоокна для извлечения голосовых признаков при кластеризации.',
+          'max_auto_speakers': 'Максимальное число говорящих при автоматической кластеризации.',
+          'min_auto_speaker_windows':
+            'Минимум окон голосовых признаков на кластер, чтобы уменьшить ложных говорящих.',
+          'min_auto_speaker_duration_ms':
+            'Минимальная суммарная длительность речи на автоматически определяемого говорящего.',
+          'auto_cluster_score_tolerance':
+            'Допуск при близких оценках кластеризации. Большие значения склоняют выбор к большему числу говорящих.',
+          'threshold':
+            'Порог вероятности речи (0–1). Низкие значения улавливают тихую речь и больше шума.',
+          'min_silence_duration':
+            'Тишина для завершения сегмента. Короткая ускоряет субтитры, длинная сохраняет целые предложения.',
+          'min_speech_duration':
+            'Игнорировать короткие звуки, чтобы уменьшить ошибки от кашля и ударов.',
+          'max_speech_duration':
+            'Предел непрерывной речи до разделения; также ограничен моделью и лимитом сегмента в реальном времени.',
+          'max_samples': 'Максимальное число голосовых образцов на человека.',
+          'max_total_seconds':
+            'Предел суммарной длины голосовых образцов на человека для ограничения хранилища.',
+          'deleted_retention_days':
+            'Дни хранения удалённых встреч до окончательного удаления при очистке.',
+          'timeout_seconds':
+            'Тайм-аут запросов к онлайн-ИИ. Локальные модели используют отдельный механизм.',
+        },
       },
     },
     'summaryTaskCopy': {
@@ -9613,7 +10433,7 @@
         'online': '在线服务',
         'onlineHint': '将相关文字发送至所选服务商。',
         'configureOnline': '配置在线服务',
-        'liveNotesTitle': '智能笔记',
+        'liveNotesTitle': undefined,
         'liveNotesDesc': '会议进行时提供建议，由你采纳。',
         'liveNotesConsequence': '不开 AI 笔记，仍会得到 AI 会议纪要；只是会中没有实时建议。',
         'enableLiveNotes': '启用 AI 笔记',
@@ -9643,7 +10463,7 @@
         'online': 'Online AI',
         'onlineHint': 'Send relevant text to your chosen provider.',
         'configureOnline': 'Configure online service',
-        'liveNotesTitle': 'AI notes (real-time suggestions)',
+        'liveNotesTitle': undefined,
         'liveNotesDesc': 'Suggest notes during meetings, for you to accept.',
         'liveNotesConsequence':
           'Without AI notes you still get the AI meeting summary; you just won’t get in-meeting suggestions.',
@@ -9692,7 +10512,7 @@
         'online': 'IA en línea',
         'onlineHint': 'Envía el texto pertinente al proveedor elegido.',
         'configureOnline': 'Configurar servicio en línea',
-        'liveNotesTitle': 'Notas IA',
+        'liveNotesTitle': undefined,
         'liveNotesDesc': 'Sugiere notas durante la reunión; tú decides aceptarlas.',
         'liveNotesConsequence':
           'Sin notas IA sigues teniendo el resumen de la reunión; solo pierdes las sugerencias en directo.',
@@ -9741,7 +10561,7 @@
         'online': 'オンライン AI',
         'onlineHint': '関連テキストを選択したサービスに送信します。',
         'configureOnline': 'オンラインサービスを設定',
-        'liveNotesTitle': 'AI メモ',
+        'liveNotesTitle': undefined,
         'liveNotesDesc': '会議中に提案し、採用はあなたが決めます。',
         'liveNotesConsequence':
           'AI メモをオフにしても AI 会議要約は得られます。会議中のリアルタイム提案だけがなくなります。',
@@ -9778,7 +10598,7 @@
         'online': '온라인 AI',
         'onlineHint': '선택한 제공업체에 관련 텍스트를 보냅니다.',
         'configureOnline': '온라인 서비스 구성',
-        'liveNotesTitle': 'AI 메모',
+        'liveNotesTitle': undefined,
         'liveNotesDesc': '회의 중 메모를 제안하며 채택은 사용자가 결정합니다.',
         'liveNotesConsequence':
           'AI 메모를 꺼도 AI 회의 요약은 받습니다. 회의 중 실시간 제안만 사라집니다.',
@@ -9815,7 +10635,7 @@
         'online': 'IA en ligne',
         'onlineHint': 'Envoyez le texte pertinent au fournisseur choisi.',
         'configureOnline': 'Configurer le service en ligne',
-        'liveNotesTitle': 'Notes IA',
+        'liveNotesTitle': undefined,
         'liveNotesDesc': 'Des suggestions en réunion, à vous de les adopter.',
         'liveNotesConsequence':
           'Sans notes IA, vous avez toujours le résumé de réunion ; seules les suggestions en direct disparaissent.',
@@ -9864,7 +10684,7 @@
         'online': 'Online-KI',
         'onlineHint': 'Relevanten Text an den gewählten Anbieter senden.',
         'configureOnline': 'Onlinedienst konfigurieren',
-        'liveNotesTitle': 'KI-Notizen',
+        'liveNotesTitle': undefined,
         'liveNotesDesc': 'Notizen im Meeting vorschlagen; Sie entscheiden über die Übernahme.',
         'liveNotesConsequence':
           'Ohne KI-Notizen erhalten Sie weiterhin die Zusammenfassung; nur die Echtzeit-Vorschläge entfallen.',
@@ -9912,7 +10732,7 @@
         'online': 'Онлайн-ИИ',
         'onlineHint': 'Отправляет нужный текст выбранному поставщику.',
         'configureOnline': 'Настроить онлайн-сервис',
-        'liveNotesTitle': 'ИИ-заметки',
+        'liveNotesTitle': undefined,
         'liveNotesDesc': 'Предлагает заметки во время встречи; вы решаете, принять ли их.',
         'liveNotesConsequence':
           'Без ИИ-заметок вы всё равно получите ИИ-сводку встречи; пропадут лишь подсказки во время встречи.',

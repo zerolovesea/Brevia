@@ -1168,7 +1168,20 @@ try {
       await new Promise(resolve=>setTimeout(resolve,350));
       dismissible=dismissible && settingsModal.hidden && !document.body.classList.contains('modal-open');
     }
-    return { cards, initial, cancelled, notesConfig, saved, selected, summaryOnly, restored, independent, dismissible, closed: settingsModal.hidden };
+    await showView('home');
+    await openModal('ai-assist');
+    settingsModal.querySelector('[data-ai-settings-enabled]').click();
+    settingsModal.querySelector('form').requestSubmit();
+    await settled(()=>settingsModal.hidden);
+    const floatingDisabled = !(await window.brevia.aiAssist.config.get()).enabled;
+    await openModal('ai-assist');
+    settingsModal.querySelector('[data-ai-settings-enabled]').click();
+    const floatingForm = settingsModal.querySelector('form');
+    const floatingFormEnabled = new FormData(floatingForm).get('enabled')==='on';
+    floatingForm.requestSubmit();
+    await settled(()=>settingsModal.hidden);
+    const floatingSaved = floatingDisabled && floatingFormEnabled && (await window.brevia.aiAssist.config.get()).enabled;
+    return { cards, initial, cancelled, notesConfig, saved, selected, summaryOnly, restored, independent, dismissible, floatingSaved, closed: settingsModal.hidden };
   })()`,
     awaitPromise: true,
     returnByValue: true,
@@ -1185,6 +1198,7 @@ try {
       merged.selected &&
       merged.independent &&
       merged.dismissible &&
+      merged.floatingSaved &&
       merged.closed,
     `合并 AI 设置回归：${JSON.stringify(mergedAiSettings)}`,
   );
@@ -1213,6 +1227,100 @@ try {
     await openModal('advanced-settings');
     const permission = settingsModal.querySelector('[data-permission-settings]');
     if (parseFloat(getComputedStyle(permission).borderTopWidth) === 0) errors.push('permission border');
+    const advancedForm = settingsModal.querySelector('.advanced-settings-form');
+    const numeric = name => advancedForm.elements.namedItem(name);
+    const sampleRate = numeric('audio.sample_rate');
+    if (!sampleRate.readOnly || sampleRate.value !== '16000') errors.push('fixed sample rate');
+    for (const key of advancedSettings.inactive_fields) {
+      if ([...advancedForm.elements].some(input => input.name.split('.').at(-1) === key)) errors.push('inactive advanced setting: ' + key);
+    }
+    for (const input of advancedForm.querySelectorAll('input[type=number]')) {
+      const limits = advancedSettings.field_constraints[input.name];
+      if (input.step !== String(limits.step) || input.min !== String(limits.min) || (limits.max !== undefined && input.max !== String(limits.max))) errors.push('numeric limits: ' + input.name);
+    }
+    const chunk = numeric('audio.chunk_seconds'), threshold = numeric('vad.zh.threshold');
+    chunk.value = '1.5';
+    if (!chunk.validity.stepMismatch) errors.push('integer setting accepts fraction');
+    chunk.value = advancedSettings.settings.audio.chunk_seconds;
+    threshold.value = '1.1';
+    if (!threshold.validity.rangeOverflow) errors.push('threshold accepts value over one');
+    threshold.value = advancedSettings.settings.vad.zh.threshold;
+    const cap = numeric('live_asr.max_speech_seconds'), minimum = numeric('vad.zh.min_speech_duration');
+    cap.value = '0.5'; cap.dispatchEvent(new Event('input', {bubbles:true}));
+    if (!cap.validity.customError) errors.push('live cap gap');
+    cap.value = '1'; minimum.value = '3'; minimum.dispatchEvent(new Event('input', {bubbles:true}));
+    if (!cap.validity.customError || Number(numeric('vad.zh.max_speech_duration').min) <= 3) errors.push('speech limits do not follow minimum');
+    cap.value = '0'; minimum.value = advancedSettings.settings.vad.zh.min_speech_duration;
+    minimum.dispatchEvent(new Event('input', {bubbles:true}));
+    if (!advancedForm.checkValidity()) errors.push('valid advanced values cannot be saved');
+    cap.value = advancedSettings.settings.live_asr.max_speech_seconds;
+    cap.dispatchEvent(new Event('input', {bubbles:true}));
+    const quietHint = numeric('live_asr.quiet_speech_recovery').closest('label').querySelector('small').textContent;
+    const advancedCopy = advancedSettingCopy[locale] || advancedSettingCopy.en;
+    if (advancedSettings.vad_runtime === 'mlx-audio' && !quietHint.includes(advancedCopy.mlxQuietHint)) errors.push('wrong MLX quiet speech explanation');
+    const originalAdvancedValues = structuredClone(advancedSettings.settings);
+    advancedSettings.settings.diarization.boundary_tail_seconds = 7;
+    chunk.value = '31';
+    settingsModal.querySelector('[data-reset-advanced-settings]').click();
+    if (chunk.value !== String(advancedSettings.defaults.audio.chunk_seconds) || advancedSettings.settings.diarization.boundary_tail_seconds !== 7) errors.push('reset overwrites hidden advanced settings');
+    advancedSettings.settings = originalAdvancedValues;
+    renderModal('advanced-settings');
+    const section = settingsModal.querySelector('details.advanced-settings-section');
+    const summary = section.querySelector('summary');
+    summary.click();
+    await new Promise(resolve => setTimeout(resolve, 280));
+    if (!section.open || section.querySelector('.advanced-fields').getBoundingClientRect().height < 60) errors.push('advanced expansion');
+    if (![...section.querySelectorAll('label small')].every(hint => hint.textContent.length > 10)) errors.push('advanced explanations');
+    if (!getComputedStyle(section, '::details-content').transitionProperty.includes('block-size')) errors.push('advanced transition');
+    summary.click();
+    await new Promise(resolve => setTimeout(resolve, 280));
+    if (section.open || section.getBoundingClientRect().height > summary.getBoundingClientRect().height + 3) errors.push('advanced collapse');
+    await openModal('speaker-profiles');
+    const createSpeaker = settingsModal.querySelector('.speaker-create');
+    const createButton = createSpeaker.querySelector('summary');
+    const rect = createButton.getBoundingClientRect(), iconRect = createButton.querySelector('svg').getBoundingClientRect();
+    if (Math.abs(rect.width - rect.height) > 1 || Math.abs((iconRect.left + iconRect.right - rect.left - rect.right) / 2) > 1 || Math.abs((iconRect.top + iconRect.bottom - rect.top - rect.bottom) / 2) > 1) errors.push('speaker plus is not centered in a square control');
+    if (!createButton.getAttribute('aria-label') || !createButton.title || getComputedStyle(createButton.querySelector('span')).display !== 'none') errors.push('speaker plus label');
+    createButton.click();
+    if (!createSpeaker.open || getComputedStyle(createButton.querySelector('span')).display === 'none' || getComputedStyle(createSpeaker.querySelector('form')).display === 'none') errors.push('speaker create cannot expand');
+    createButton.click();
+    if (createSpeaker.open) errors.push('speaker create cannot collapse');
+    const previousTab = modelLibraryTab;
+    for (const code of ['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']) {
+      applyLanguage(code);
+      await openModal('storage');
+      const descriptions = [...settingsModal.querySelectorAll('.storage-list small')].map(e => e.textContent);
+      for (const [index, key] of ['删除此设备上的会议录音、转写文本与笔记。', '清空已下载的模型文件。'].entries()) {
+        if (descriptions[index] !== t(key) || (code !== 'zh' && descriptions[index] === key)) errors.push(code + ': untranslated storage description');
+      }
+      for (const button of settingsModal.querySelectorAll('.settings-navigation button')) {
+        if (button.scrollWidth > button.clientWidth + 1) errors.push(code + ': settings navigation overflow');
+      }
+      await openModal('models');
+      for (const tab of ['installed', 'available']) {
+        modelLibraryTab = tab; renderModelLibrary();
+        const toolbar = settingsModal.querySelector('.model-library-toolbar');
+        if (parseFloat(getComputedStyle(toolbar).borderBottomWidth)) errors.push('model toolbar divider');
+        for (const row of settingsModal.querySelectorAll('.model-library-item')) {
+          const description = row.querySelector('.model-library-description');
+          if (!description?.textContent || getComputedStyle(description).whiteSpace === 'nowrap' || description.scrollHeight > description.clientHeight + 1) errors.push('model introduction clipped');
+          const content = row.querySelector('.model-library-content').getBoundingClientRect();
+          const actions = row.querySelector('.model-actions').getBoundingClientRect();
+          for (const rating of row.querySelectorAll('.model-library-rating')) {
+            const rect = rating.getBoundingClientRect();
+            if (rect.left < content.left - 1 || rect.right > content.right + 1 || rect.right > actions.left + 1) errors.push(code + ': rating overlaps actions');
+            for (const child of rating.children) {
+              const bounds = child.getBoundingClientRect();
+              if (bounds.left < rect.left - 1 || bounds.right > rect.right + 1 || child.scrollWidth > child.clientWidth + 1) errors.push(code + ': rating clipped');
+            }
+            if (Math.abs(rating.querySelector('.rating-scale').getBoundingClientRect().width - 56) > 1) errors.push(code + ': rating scale squeezed');
+          }
+        }
+      }
+    }
+    modelLibraryTab = previousTab;
+    await openModal('summary-model');
+    if (parseFloat(getComputedStyle(settingsModal.querySelector('.settings-tabs')).borderBottomWidth)) errors.push('AI tabs divider');
     await openModal('device-connection');
     closeModal(); await new Promise(resolve => setTimeout(resolve, 250));
     await showView('home');
@@ -1229,6 +1337,196 @@ try {
     Array.isArray(compactSettings.result?.value) && !compactSettings.result.value.length,
     `默认窗口设置布局回归：${JSON.stringify(compactSettings)}`,
   );
+  const summaryToolbarErrors = [];
+  for (const width of [920, 1079, 1800]) {
+    await client.send('Emulation.setDeviceMetricsOverride', {
+      width,
+      height: 675,
+      deviceScaleFactor: 1,
+      mobile: false,
+    });
+    await client.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 0, y: 0 });
+    const result = await client.send('Runtime.evaluate', {
+      expression: `(async()=>{
+        const errors=[],previousLocale=locale,previousTheme=theme;
+        closeModal();await new Promise(r=>setTimeout(r,250));
+        const initialized=await window.brevia.initialize();
+        const meeting=await window.brevia.meeting.get({meeting_id:initialized.meetings[0].id});
+        applyBackendDetail(meeting);detailActiveTab='transcript';uiData.detail.refinedMode='timestamps';renderMeetingDetail();await showView('detail');
+        const participants=Array.from({length:50},(_,i)=>({id:'participant-'+i,name:i===0?'Alexandria Constantinopoulos '.repeat(3):'Participant <'+i+'> 名称'}));
+        for(const code of ['zh','en','es','ja','ko','fr','de','ru'])for(const appearance of ['light','dark']){
+          applyLanguage(code);applyTheme(appearance);
+          currentMeetingDetail={...meeting,speakers:participants};uiData.detail.refinedMode='timestamps';renderMeetingDetail();
+          const row=finalTranscript.querySelector('.segment'),speaker=row.querySelector('.segment-speaker'),copy=row.querySelector('.segment-copy');
+          const before=copy.getBoundingClientRect(),label=speaker.getBoundingClientRect();
+          row.querySelector('[data-segment-tool="speaker"]').focus({preventScroll:true});await new Promise(r=>setTimeout(r,120));
+          const bar=row.querySelector('.segment-tools'),barRect=bar.getBoundingClientRect(),rowRect=row.getBoundingClientRect(),after=copy.getBoundingClientRect();
+          if(Math.abs(label.left-before.left)>1||Math.abs(after.top-before.top)>1||Math.abs(after.left-before.left)>1)errors.push(code+': toolbar moved speaker or text');
+          if(getComputedStyle(bar).opacity!=='1'||barRect.right>rowRect.right+1||barRect.left<rowRect.left-1||barRect.bottom>after.top+1)errors.push(code+': toolbar clips or covers subtitle');
+          if(bar.querySelectorAll('button').length!==4||[...bar.querySelectorAll('button')].some(b=>!b.getAttribute('aria-label')))errors.push(code+': missing accessible actions');
+          const heading=document.querySelector('.summary-head .eyebrow');
+          if(heading.scrollWidth>heading.clientWidth+1)errors.push(code+': summary heading clipped');
+          const section=document.querySelector('.summary-participants'),toggle=section.querySelector('[data-summary-participants-toggle]'),body=document.querySelector('.summary-body');
+          const bodyTop=body.getBoundingClientRect().top;
+          if(section.getBoundingClientRect().height>60||toggle.scrollWidth>toggle.clientWidth+1)errors.push(code+': participants header expanded or clipped');
+          toggle.focus({preventScroll:true});toggle.click();
+          const popover=section.querySelector('[popover]'),rect=popover.getBoundingClientRect(),list=popover.querySelector('.summary-participant-list');
+          if(!popover.matches(':popover-open')||Math.abs(body.getBoundingClientRect().top-bodyTop)>1)errors.push(code+': roster moves summary');
+          if(rect.left<0||rect.right>innerWidth+1||rect.bottom>innerHeight+1||popover.scrollWidth>popover.clientWidth+1||list.scrollHeight<=list.clientHeight)errors.push(code+': roster overflow or missing internal scroll');
+          const search=popover.querySelector('input');search.value='Alexandria';search.dispatchEvent(new Event('input',{bubbles:true}));
+          if([...list.children].filter(row=>!row.hidden).length!==1||list.textContent.indexOf('Participant <1>')<0)errors.push(code+': roster search or escaped names');
+          search.value='__absent__';search.dispatchEvent(new Event('input',{bubbles:true}));
+          if(popover.querySelector('[data-participant-empty]').hidden)errors.push(code+': roster missing empty state');
+          document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+          if(popover.matches(':popover-open')||document.activeElement!==toggle)errors.push(code+': roster Escape or focus return');
+        }
+        applyBackendDetail(meeting);uiData.detail.refinedMode='timestamps';renderMeetingDetail();applyLanguage(previousLocale);applyTheme(previousTheme);
+        return errors;
+      })()`,
+      awaitPromise: true,
+      returnByValue: true,
+    });
+    if (!Array.isArray(result.result?.value) || result.result.value.length)
+      summaryToolbarErrors.push({ width, result });
+  }
+  await client.send('Emulation.clearDeviceMetricsOverride');
+  check(
+    !summaryToolbarErrors.length,
+    '字幕悬浮条与参会者折叠八语种/窄窗口：' + JSON.stringify(summaryToolbarErrors),
+  );
+  const directSubtitleActions = await client.send('Runtime.evaluate', {
+    expression: `(async()=>{
+      const errors=[],initialized=await window.brevia.initialize();
+      const meeting=await window.brevia.meeting.get({meeting_id:initialized.meetings[0].id}),segment=meeting.segments[0];
+      const profilesBefore=await window.brevia.speakerProfile.list();
+      applyBackendDetail(meeting);detailActiveTab='transcript';uiData.detail.refinedMode='timestamps';renderMeetingDetail();await showView('detail');
+      const source=finalTranscript.querySelector('.segment'),time=playerAudio.currentTime;
+      const pending=openSegmentSpeakerPicker(meeting.id,segment.id,source.querySelector('[data-segment-tool="speaker"]'));
+      document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));await pending;
+      if(segmentSpeakerPicker.matches(':popover-open'))errors.push('cancelled speaker request reopened picker');
+      const pendingRoster=openSegmentSpeakerPicker(meeting.id,segment.id,source.querySelector('[data-segment-tool="speaker"]'));
+      document.querySelector('[data-summary-participants-toggle]').click();await pendingRoster;
+      if(segmentSpeakerPicker.matches(':popover-open')||!document.querySelector('.summary-participants-popover:popover-open'))errors.push('late speaker request replaced roster');
+      document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+      source.querySelector('[data-segment-tool="speaker"]').click();
+      for(let i=0;i<80&&!segmentSpeakerPicker.matches(':popover-open');i++)await new Promise(r=>setTimeout(r,25));
+      if(!segmentSpeakerPicker.matches(':popover-open'))return ['speaker picker did not open'];
+      if(playerAudio.currentTime!==time||!source.classList.contains('has-segment-menu'))errors.push('speaker action seeks or loses toolbar');
+      const input=segmentSpeakerPicker.querySelector('input'),form=segmentSpeakerPicker.querySelector('form');
+      input.value='Speaker 1';form.requestSubmit();
+      if(!input.validity.customError||segmentSpeakerDraft.saving)errors.push('placeholder accepted as real person');
+      input.value='Interface test';input.dispatchEvent(new Event('input',{bubbles:true}));
+      segmentSpeakerDraft.segmentId='missing-test-segment';form.requestSubmit();
+      for(let i=0;i<80&&segmentSpeakerDraft.saving;i++)await new Promise(r=>setTimeout(r,25));
+      if(segmentSpeakerPicker.querySelector('[role=alert]').hidden||input.value!=='Interface test'||input.disabled)errors.push('failed assignment loses draft');
+      segmentSpeakerDraft.segmentId=segment.id;
+      const choice=[...segmentSpeakerPicker.querySelectorAll('[data-segment-speaker-choice]')].find(b=>b.dataset.segmentSpeakerChoice!==segment.speaker_name);
+      if(!choice)return ['missing participant choice'];
+      const assigned=choice.dataset.segmentSpeakerChoice;choice.hidden=false;choice.click();
+      for(let i=0;i<80&&segmentSpeakerPicker.matches(':popover-open');i++)await new Promise(r=>setTimeout(r,25));
+      const saved=await window.brevia.meeting.get({meeting_id:meeting.id});
+      if(saved.segments.find(s=>s.id===segment.id).speaker_name!==assigned)errors.push('speaker choice not saved');
+      if(saved.segments.some(s=>s.id!==segment.id&&s.speaker_name!==meeting.segments.find(original=>original.id===s.id).speaker_name))errors.push('assignment changed another segment');
+      if(JSON.stringify(await window.brevia.speakerProfile.list())!==JSON.stringify(profilesBefore))errors.push('assignment unexpectedly enrolled voiceprint');
+      const restored=await window.brevia.segment.speaker({meeting_id:meeting.id,segment_id:segment.id,name:segment.speaker_name});
+      applyBackendDetail(restored);detailActiveTab='transcript';uiData.detail.refinedMode='timestamps';renderMeetingDetail();
+      const notesBefore=uiData.detail.notes;
+      finalTranscript.querySelector('[data-segment-tool="note"]').click();
+      if(!detailNotesEditor?.getMarkdown().includes(segment.text))errors.push('direct note action missing subtitle');
+      uiData.detail.notes=notesBefore;uiData.detail.notesEditing=false;uiData.detail.notesSaveState='saved';detailActiveTab='transcript';renderMeetingDetail();
+      finalTranscript.querySelector('[data-segment-tool="profile"]').click();
+      for(let i=0;i<80&&segmentProfilePanel.hidden;i++)await new Promise(r=>setTimeout(r,25));
+      if(segmentProfilePanel.hidden||segmentProfileDraft?.segmentId!==segment.id)errors.push('direct voiceprint action not connected');
+      closeSegmentProfilePanel(true);closeMeetingPopovers();await showView('home');return errors;
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  check(
+    Array.isArray(directSubtitleActions.result?.value) &&
+      !directSubtitleActions.result.value.length,
+    '字幕直接操作：' + JSON.stringify(directSubtitleActions),
+  );
+  const profilePanelChecks = await client.send('Runtime.evaluate', {
+    expression: `(async()=>{
+      const errors=[],previousLocale=locale,previousProfiles=speakerProfiles,previousTheme=theme;
+      closeModal();await new Promise(r=>setTimeout(r,250));
+      await showView('home');
+      const initialized=await window.brevia.initialize();
+      const detail=await window.brevia.meeting.get({meeting_id:initialized.meetings[0].id});
+      applyBackendDetail(detail);detailActiveTab='transcript';
+      // 示例只有精修稿；用其真实音频与段落验证带时间戳的呈现和菜单入口。
+      uiData.detail.refinedMode='timestamps';renderMeetingDetail();await showView('detail');
+      const segment=detail.segments.find(s=>s.end_ms>s.start_ms);
+      const row=[...finalTranscript.querySelectorAll('article[data-segment-id]')].find(e=>e.dataset.segmentId===segment.id);
+      if(!row?.querySelector('[data-segment-actions]'))return ['missing subtitle action entry'];
+      row.querySelector('[data-segment-actions]').click();
+      if(segmentContextMenu.querySelector('.segment-context-options'))errors.push('legacy cascading menu remains');
+      segmentContextMenu.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}));
+      if(!document.activeElement.matches('[data-open-segment-profile-menu]'))errors.push('subtitle menu keyboard navigation');
+      segmentContextMenu.querySelector('[data-open-segment-profile-menu]').click();
+      for(let i=0;i<60&&segmentProfilePanel.hidden;i++)await new Promise(r=>setTimeout(r,50));
+      if(segmentProfilePanel.hidden) return ['saved subtitle clip did not open'];
+      if(segmentProfileMotion.effect.getKeyframes()[0].transform!=='translateX(100%)'||segmentProfileMotion.effect.getTiming().duration!==240)errors.push('drawer entrance missing');
+      await segmentProfileMotion.finished;
+
+      if(finalTranscript.getBoundingClientRect().height < 100 || document.querySelector('.detail-head').getBoundingClientRect().top > 180)errors.push('sample panel hides transcript context');
+      if(segmentProfileDraft.segment.id!==segment.id||!segmentProfileAudio.src)errors.push('preview source mismatch');
+      const fixtures=[{id:'layout-profile',name:'Alexandria Constantinopoulos',sample_count:9,duration_ms:10000},{id:'full-profile',name:'Full profile',sample_count:50,duration_ms:300000}];
+      for(const code of ['zh','en','es','ja','ko','fr','de','ru'])for(const appearance of ['light','dark']){
+        applyLanguage(code);applyTheme(appearance);speakerProfiles=fixtures;segmentProfileDraft.name='';segmentProfileDraft.search='';segmentProfileDraft.profileId='layout-profile';renderSegmentProfilePanel();
+        const source=[...finalTranscript.querySelectorAll('article[data-segment-id]')].find(e=>e.dataset.segmentId===segment.id);
+        const speaker=source.querySelector('.segment-speaker').getBoundingClientRect(),copy=source.querySelector('.segment-copy').getBoundingClientRect(),time=source.querySelector('time').getBoundingClientRect();
+        if(Math.abs(speaker.left-copy.left)>1||time.left<speaker.right)errors.push(code+': speaker label moved from text start');
+        const footer=segmentProfilePanel.querySelector('footer'),rect=segmentProfilePanel.getBoundingClientRect();
+        if(rect.right>innerWidth+1||rect.bottom>innerHeight+1||footer.getBoundingClientRect().bottom>rect.bottom+1)errors.push(code+': panel footer clipped');
+        if(segmentProfilePanel.scrollWidth>segmentProfilePanel.clientWidth+1)errors.push(code+': horizontal panel overflow');
+        if(!segmentProfilePanel.querySelector('input[value="full-profile"]').disabled)errors.push('full profile selectable');
+        const search=segmentProfilePanel.querySelector('[data-segment-profile-search]');search.value='missing';search.dispatchEvent(new Event('input',{bubbles:true}));
+        if(segmentProfilePanel.querySelector('[data-segment-profile-empty]').hidden)errors.push('search missing empty state');
+        search.value='Alexandria';search.dispatchEvent(new Event('input',{bubbles:true}));
+        if(segmentProfilePanel.querySelectorAll('.segment-profile-person:not([hidden])').length!==1)errors.push('profile search disconnected');
+        segmentProfilePanel.querySelector('[data-new-segment-profile]').click();
+        const input=segmentProfilePanel.querySelector('input[name=name]');
+        if(!input||!segmentProfilePanel.querySelector('[data-save-segment-profile]').disabled)errors.push('new profile missing validation');
+        input.value=fixtures[0].name;input.dispatchEvent(new Event('input',{bubbles:true}));
+        await saveSegmentProfile();
+        if(!segmentProfileDraft.error||segmentProfileDraft.name!==fixtures[0].name||segmentProfileDraft.saving)errors.push('duplicate name loses draft');
+        segmentProfilePanel.querySelector('[data-existing-segment-profile]').click();
+        if(segmentProfileDraft.create||segmentProfileDraft.profileId!=='layout-profile')errors.push('return loses selection');
+      }
+      const before=playerAudio.currentTime;
+      segmentProfilePanel.querySelector('[data-preview-segment-profile]').click();
+      await new Promise(r=>setTimeout(r,150));
+      if(segmentProfileAudio.paused||segmentProfileAudio.currentTime<segment.start_ms/1000||!playerAudio.paused)errors.push('clip preview not isolated');
+      segmentProfileAudio.currentTime=segment.end_ms/1000;
+      segmentProfileAudio.dispatchEvent(new Event('timeupdate'));
+      if(!segmentProfileAudio.paused||playerAudio.currentTime!==before)errors.push('clip end affects main playback');
+      segmentProfileDraft.success={...fixtures[0],sample_count:10};renderSegmentProfilePanel();
+      if(!segmentProfilePanel.querySelector('.segment-profile-success')||!segmentProfilePanel.querySelector('[data-view-segment-profile]'))errors.push('success actions missing');
+      document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+      if(segmentProfilePanel.hidden||!segmentProfilePanel.inert||segmentProfileMotion.effect.getKeyframes().at(-1).transform!=='translateX(100%)')errors.push('drawer exit missing');
+      await segmentProfileMotion.finished;
+      if(!segmentProfilePanel.hidden||document.querySelector('.has-segment-profile')||segmentProfileAudio.hasAttribute('src'))errors.push('panel cleanup incomplete');
+      await openSegmentProfilePanel(detail.id,segment.id);
+      closeSegmentProfilePanel();
+      await openSegmentProfilePanel(detail.id,segment.id);
+      await segmentProfileMotion.finished;
+      if(segmentProfilePanel.hidden||segmentProfilePanel.inert||!segmentProfileDraft)errors.push('reopening drawer lost to stale close');
+      closeSegmentProfilePanel(true);
+
+      speakerProfiles=previousProfiles;applyLanguage(previousLocale);applyTheme(previousTheme);
+      await showView('home');
+      return errors;
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  check(
+    Array.isArray(profilePanelChecks.result?.value) && !profilePanelChecks.result.value.length,
+    '字幕声纹面板、试听与多语言：' + JSON.stringify(profilePanelChecks),
+  );
+
   const settingsModalDescriptions = await client.send('Runtime.evaluate', {
     expression: `(async () => {
     await showView('settings');
@@ -1417,6 +1715,24 @@ try {
     returnByValue: true,
   });
   check(reducedOnboardingMotion.result?.value === true, '引导减少动态：不自动播放且波形静止');
+  const reducedProfileMotion = await client.send('Runtime.evaluate', {
+    expression: `(async()=>{
+      const initialized=await window.brevia.initialize();
+      const meeting=await window.brevia.meeting.get({meeting_id:initialized.meetings[0].id});
+      applyBackendDetail(meeting);await showView('detail');
+      await openSegmentProfilePanel(meeting.id,meeting.segments[0].id);
+      const frames=segmentProfileMotion.effect.getKeyframes();
+      const reduced=frames.every(frame=>frame.transform==='none')&&segmentProfileMotion.effect.getTiming().duration===80;
+      await segmentProfileMotion.finished;
+      closeSegmentProfilePanel();await segmentProfileMotion.finished;
+      const closed=segmentProfilePanel.hidden;
+      await showView('home');return reduced&&closed;
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  check(reducedProfileMotion.result?.value === true, '声纹抽屉减少动态：淡入淡出且正常关闭');
+
   await client.send('Emulation.setEmulatedMedia', {
     features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }],
   });
@@ -2361,6 +2677,8 @@ try {
       if(Math.abs(root.getBoundingClientRect().height-before)>1)errors.push('workspace height changes with count');
       document.querySelector('#workspace-selector').click();
       const picker=workspacePicker,search=picker.querySelector('input');
+      const addWorkspace=picker.querySelector('[data-new-workspace]'),addRect=addWorkspace.getBoundingClientRect(),plusRect=addWorkspace.querySelector('svg').getBoundingClientRect();
+      if(Math.abs((plusRect.top+plusRect.bottom-addRect.top-addRect.bottom)/2)>1||Math.abs(plusRect.width-plusRect.height)>1||plusRect.left<addRect.left||plusRect.right>addRect.right||plusRect.top<addRect.top||plusRect.bottom>addRect.bottom)errors.push('workspace picker plus is offset or clipped');
       if(picker.querySelectorAll('.workspace-item').length!==41)errors.push('missing real workspace choices');
       const list=picker.querySelector('.workspace-picker-list');
       if(list.scrollHeight<=list.clientHeight||getComputedStyle(list).overflowY!=='auto')errors.push('workspace list cannot scroll');

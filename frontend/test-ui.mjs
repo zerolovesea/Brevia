@@ -1139,6 +1139,12 @@ for (const code of ['en', 'es', 'ja', 'ko', 'fr', 'de', 'ru'])
   for (const key of runtimeI18nKeys)
     assert.notEqual(localeContext.window.BreviaLocaleData.catalog[code].labels[key], key);
 for (const code of ['en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']) {
+  for (const key of ['删除此设备上的会议录音、转写文本与笔记。', '清空已下载的模型文件。']) {
+    const value = localeContext.window.BreviaLocaleData.catalog[code].labels[key];
+    assert.ok(value && value !== key, `${code}: ${key}`);
+  }
+}
+for (const code of ['en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']) {
   // ja 的「行数 / 列数」与中文同形，因此只校验键存在，另有英文差异校验兜底。
   for (const key of ['已暂停', '行数', '列数', '插入', '选择行列数', '列 {n}']) {
     assert.ok(
@@ -1498,32 +1504,96 @@ assert.doesNotMatch(
   'the unconsumed per-model tag table must stay deleted',
 );
 assert.equal(localeContext.window.BreviaLocaleData.refinedModelOptionTags, undefined);
-assert.match(
-  text(tailwind),
-  /segment-context-label,\s+\.segment-context-arrow\s+\{\s+@apply\s+shrink-0\s+p-0/,
-);
-assert.match(
-  text(tailwind),
-  /segment-context-options\s+>\s+button\s+\{\s+@apply\s+block\s+w-full\s+px-3\s+py-2/,
-);
-assert.match(
-  text(tailwind),
-  /segment-context-options\s+>\s+span\s+\{\s+@apply\s+block\s+px-3\s+py-2/,
-);
-assert.match(
-  text(tailwind),
-  /segment-context-name-form\s+\{\s+@apply\s+w-52\s+p-3\s+text-\[12px\]\s+leading-5/,
-);
 assert.match(text(app), /refineState = 'refining'/);
-assert.match(
-  text(tailwind),
-  /segment-context-name-form\s+input\s+\{\s+@apply\s+h-8\s+min-w-0.*text-\[12px\]\s+leading-5/,
+assert.match(text(app), /function openSegmentProfilePanel/);
+assert.doesNotMatch(text(app), /fitSegmentSubmenu/);
+assert.match(text(app), /data-segment-profile-search/);
+// 旧片段的 play() 失败不能污染重新打开的面板。
+let rejectOldPreview;
+let profileClick;
+const previewContext = {
+  segmentProfilePanel: {
+    addEventListener: (_type, listener) => {
+      profileClick = listener;
+    },
+  },
+  segmentProfileDraft: { segment: { start_ms: 0, end_ms: 1000 } },
+  segmentProfileAudio: {
+    paused: true,
+    currentTime: 0,
+    play: () =>
+      new Promise((_resolve, reject) => {
+        rejectOldPreview = reject;
+      }),
+  },
+  playerAudio: { pause() {} },
+  userFacingError: (message) => message,
+  renderSegmentProfilePanel() {},
+};
+runInNewContext(
+  text(app).slice(
+    text(app).indexOf("segmentProfilePanel.addEventListener('click',"),
+    text(app).indexOf("segmentProfilePanel.addEventListener('input',"),
+  ),
+  previewContext,
 );
-assert.match(text(tailwind), /segment-context-submenu\.is-positioned > \.segment-context-options/);
-assert.match(
-  text(tailwind),
-  /segment-context-options\s+\{\s+@apply\s+invisible\s+fixed\s+hidden\s+min-w-44/,
+profileClick({
+  target: { closest: (selector) => (selector === '[data-preview-segment-profile]' ? {} : null) },
+});
+previewContext.segmentProfileDraft = { segment: { start_ms: 2000, end_ms: 3000 } };
+rejectOldPreview(new Error('old playback aborted'));
+await Promise.resolve();
+assert.equal(
+  previewContext.segmentProfileDraft.error,
+  undefined,
+  'stale playback must not mark the next clip as broken',
 );
+
+// 保存后即使面板已关闭，同一会议仍同步结果；不能覆盖用户后来打开的另一会议。
+for (const activeId of ['saved-meeting', 'another-meeting']) {
+  let completeProfileSave;
+  let appliedMeeting;
+  const profileContext = {
+    segmentProfileDraft: {
+      meetingId: 'saved-meeting',
+      segmentId: 'clip',
+      profileId: 'person',
+      url: 'audio',
+    },
+    speakerProfiles: [{ id: 'person', name: 'Alex' }],
+    speakerProfileName: (profile) => profile.name,
+    segmentProfileAudio: { pause() {} },
+    renderSegmentProfilePanel() {},
+    currentMeetingDetail: { id: activeId },
+    applyBackendDetail: (meeting) => {
+      appliedMeeting = meeting;
+    },
+    window: {
+      brevia: {
+        segment: {
+          addProfileSample: () =>
+            new Promise((resolve) => {
+              completeProfileSave = resolve;
+            }),
+        },
+        speakerProfile: { list: async () => [{ id: 'person', name: 'Alex', sample_count: 1 }] },
+      },
+    },
+  };
+  runInNewContext(
+    text(app).slice(
+      text(app).indexOf('async function saveSegmentProfile()'),
+      text(app).indexOf("segmentProfilePanel.addEventListener('click',"),
+    ),
+    profileContext,
+  );
+  const saving = profileContext.saveSegmentProfile();
+  profileContext.segmentProfileDraft = undefined;
+  completeProfileSave({ id: 'saved-meeting' });
+  await saving;
+  assert.equal(appliedMeeting?.id, activeId === 'saved-meeting' ? activeId : undefined);
+}
+
 assert.match(text(components), /data-tooltip-key="\$\{key\}"/);
 assert.match(text(app), /document\.querySelectorAll\('\[data-tooltip-key\]'\)/);
 assert.match(text(components), /document\.body\.append\(pageTooltip\)/);
@@ -1541,8 +1611,6 @@ assert.match(
   text(js),
   /Math\.max\(8, Math\.min\(position\.left, window\.innerWidth - width - 8\)\)/,
 );
-assert.match(text(js), /function fitSegmentSubmenu/);
-assert.match(text(js), /submenu\.classList\.contains\('is-positioned'\)/);
 assert.match(text(css), /\.app-shell\{[^}]*grid-template-columns:272px minmax\(0,1fr\)/);
 assert.match(text(workspaces), /class="new-workspace"/);
 assert.match(text(tailwind), /#settings-view\s+\.settings-card\s+\{\s+@apply\s+min-h-20/);
@@ -4911,19 +4979,54 @@ runInNewContext(
   advancedContext,
 );
 const advancedSettings = JSON.parse(await readFile('../backend/settings.json', 'utf8'));
-const advancedMarkup = advancedContext.renderAdvancedSettings(advancedSettings);
-const mlxAdvanced = advancedContext.renderAdvancedSettings(advancedSettings, {
+const commonInactive = ['boundary_tail_seconds', 'speaker_change_detection', 'num_speakers'];
+const advancedMetadata = {
+  vad_runtime: 'sherpa-onnx==1.13.8',
+  inactive_fields: commonInactive,
   speech_cap_minimum: 1,
+  speech_cap_default_seconds: 22,
+  speech_window_seconds: 512 / 16000,
+  speech_overlap_seconds: 0.4,
+  field_constraints: {
+    'audio.sample_rate': { min: 16000, max: 16000, step: 1, read_only: true },
+    'audio.chunk_seconds': { min: 1, step: 1 },
+    'live_asr.max_speech_seconds': { min: 0, step: 'any' },
+    'live_asr.quiet_speech_recovery': { min: 0, max: 1, step: 1 },
+    'live_asr.quiet_speech_max_seconds': { min: 0, exclusive_min: true, step: 'any' },
+    'vad.zh.threshold': { min: 0, max: 1, step: 'any' },
+  },
+};
+const advancedMarkup = advancedContext.renderAdvancedSettings(advancedSettings, advancedMetadata);
+const mlxMetadata = {
+  ...advancedMetadata,
+  vad_runtime: 'mlx-audio',
   inactive_fields: [
+    ...commonInactive,
     'quiet_speech_min_seconds',
     'quiet_speech_max_seconds',
     'quiet_speech_level_ratio',
   ],
-});
-assert.match(mlxAdvanced, /min="0" name="live_asr.max_speech_seconds"/);
+};
+const mlxAdvanced = advancedContext.renderAdvancedSettings(advancedSettings, mlxMetadata);
+assert.match(mlxAdvanced, /name="live_asr.max_speech_seconds"[^>]*min="0"/);
 assert.match(mlxAdvanced, /0 \/ ≥ 1 s/);
 assert.doesNotMatch(mlxAdvanced, /name="live_asr.quiet_speech_min_seconds"/);
-assert.match(mlxAdvanced, /name="live_asr.quiet_speech_recovery"/);
+assert.match(mlxAdvanced, /name="live_asr.quiet_speech_recovery"[^>]*min="0" max="1" step="1"/);
+assert.match(advancedMarkup, /name="audio.sample_rate"[^>]*readonly[^>]*value="16000"/);
+assert.match(advancedMarkup, /name="vad.zh.threshold"[^>]*min="0" max="1" step="any"/);
+assert.match(advancedMarkup, /name="audio.chunk_seconds"[^>]*min="1" step="1"/);
+for (const key of commonInactive) assert.ok(!advancedMarkup.includes(`name="diarization.${key}"`));
+assert.ok(mlxAdvanced.includes(advancedContext.advancedSettingCopy.zh.mlxQuietHint));
+assert.ok(!advancedMarkup.includes(advancedContext.advancedSettingCopy.zh.mlxQuietHint));
+assert.ok(advancedMarkup.includes(advancedContext.advancedSettingCopy.zh.defaultSilenceHint));
+assert.ok(
+  advancedContext
+    .renderAdvancedSettings(advancedSettings, {
+      ...advancedMetadata,
+      diarization_chunk_floor_ms: 60000,
+    })
+    .includes(advancedContext.advancedSettingCopy.zh.windowsChunkHint),
+);
 const advancedPaths = [...advancedMarkup.matchAll(/name="([^"]+)"/g)].map((match) => match[1]);
 const leafPaths = (node, prefix = '') =>
   Object.entries(node).flatMap(([key, value]) =>
@@ -4931,8 +5034,10 @@ const leafPaths = (node, prefix = '') =>
   );
 assert.deepEqual(
   advancedPaths.sort(),
-  leafPaths(advancedSettings).sort(),
-  'every advanced setting is rendered exactly once',
+  leafPaths(advancedSettings)
+    .filter((path) => !commonInactive.includes(path.split('.').at(-1)))
+    .sort(),
+  'only effective settings are rendered, preserving their original paths',
 );
 assert.match(
   advancedMarkup,
@@ -4950,6 +5055,14 @@ for (const key of Object.keys(advancedContext.advancedSettingCopy.zh.fields)) {
       advancedContext.advancedSettingCopy[code].fields[key],
       `missing ${code} label for ${key}`,
     );
+    const hint = advancedContext.advancedSettingCopy[code].hints[key];
+    assert.ok(hint?.length > 10, `missing ${code} explanation for ${key}`);
+    advancedContext.locale = code;
+    const markup = advancedContext.renderAdvancedSettings(advancedSettings, advancedMetadata);
+    if (!commonInactive.includes(key)) assert.ok(markup.includes(hint));
+    const mlxMarkup = advancedContext.renderAdvancedSettings(advancedSettings, mlxMetadata);
+    assert.ok(mlxMarkup.includes(advancedContext.advancedSettingCopy[code].mlxQuietHint));
+    assert.ok(mlxMarkup.includes(advancedContext.advancedSettingCopy[code].defaultSilenceHint));
   }
 }
 assert.doesNotMatch(
@@ -4957,6 +5070,52 @@ assert.doesNotMatch(
   /punctuation|endpoint_rule/,
   'labels for removed settings are gone',
 );
+
+assert.doesNotMatch(advancedMarkup, /用于本地运行配置|undefined/);
+assert.match(mlxAdvanced, /0 使用默认 22 秒/);
+advancedContext.locale = 'zh';
+
+// 条件值与联动下限要随输入更新；原生 required / min / max / step 由 E2E 验证。
+advancedContext.advancedSettings = advancedMetadata;
+runInNewContext(summaryFn('validateAdvancedSettings'), advancedContext);
+const makeAdvancedInput = (name, valueAsNumber) => {
+  const hint = { textContent: 'range' };
+  return {
+    name,
+    valueAsNumber,
+    closest: () => ({ querySelector: () => hint }),
+    setCustomValidity(message) {
+      this.error = message;
+    },
+  };
+};
+const capInput = makeAdvancedInput('live_asr.max_speech_seconds', 0.5);
+const speechInput = makeAdvancedInput('vad.zh.min_speech_duration', 0.3);
+const durationInput = makeAdvancedInput('vad.zh.max_speech_duration', 30);
+const quietMin = makeAdvancedInput('live_asr.quiet_speech_min_seconds', 1);
+const quietMax = makeAdvancedInput('live_asr.quiet_speech_max_seconds', 0);
+const advancedForm = {
+  querySelectorAll: () => [capInput, speechInput, durationInput, quietMin, quietMax],
+};
+advancedContext.validateAdvancedSettings(advancedForm);
+assert.ok(capInput.error, 'positive caps below the supported minimum are invalid');
+assert.ok(quietMax.error, 'exclusive lower bounds reject zero');
+assert.ok(quietMin.error, 'quiet speech minimum must fit in the maximum span');
+capInput.valueAsNumber = 0;
+quietMax.valueAsNumber = 20;
+advancedContext.validateAdvancedSettings(advancedForm);
+assert.equal(capInput.error, '', 'zero uses the default cap');
+assert.equal(quietMax.error, '');
+assert.equal(quietMin.error, '');
+speechInput.valueAsNumber = 3;
+capInput.valueAsNumber = 1;
+advancedContext.validateAdvancedSettings(advancedForm);
+assert.ok(durationInput.min > 3, 'VAD cap includes overlap and window padding');
+assert.ok(capInput.error, 'live cap follows an increased minimum utterance duration');
+speechInput.valueAsNumber = 0.3;
+advancedContext.validateAdvancedSettings(advancedForm);
+assert.equal(durationInput.min, 1);
+assert.equal(capInput.error, '', 'lowering the minimum removes stale input errors');
 
 // 首次精修与重新精修都要能改「会议语言」和「识别模型」。
 summaryContext.BreviaI18n = meetingLanguages.window.BreviaI18n;

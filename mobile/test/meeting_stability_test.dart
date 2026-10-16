@@ -66,19 +66,23 @@ Future<void> verifyMeetingStability(
       },
     };
     await show(MeetingPage(model: model, id: 'stability'));
+    if (mode == 'online') {
+      await tester.tap(find.byTooltip(tr('转写')));
+      await tester.pump(const Duration(milliseconds: 240));
+    }
     final clock = find.byWidgetPredicate(
-      (w) => w is Text && w.data == '12:36' && w.style?.fontSize == 48,
+      (w) => w is Text && w.data == '12:36' && (w.style?.fontSize ?? 0) >= 36,
     );
     if (mode != 'online') {
+      final scrollable = find.descendant(
+        of: find.byKey(const ValueKey('recording-focus-scroll')),
+        matching: find.byType(Scrollable),
+      );
+      // 超大字体仍可滚动访问所有操作，默认字号应单屏可用。
       await tester.scrollUntilVisible(
         clock,
         150,
-        scrollable: find
-            .descendant(
-              of: find.byType(ListView),
-              matching: find.byType(Scrollable),
-            )
-            .first,
+        scrollable: scrollable.first,
         maxScrolls: 30,
       );
       await tester.pumpAndSettle();

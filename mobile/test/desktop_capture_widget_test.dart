@@ -95,17 +95,24 @@ void main() {
             ),
           );
           await tester.pump();
-          await tester.scrollUntilVisible(
-            find.text(tr('电脑会议的手机录音')),
-            200,
-            scrollable: find
-                .descendant(
-                  of: find.byType(ListView),
-                  matching: find.byType(Scrollable),
-                )
-                .first,
-          );
-          expect(find.text(tr('电脑会议的手机录音')), findsOneWidget);
+          if (state == 'ended') {
+            await tester.scrollUntilVisible(
+              find.text(tr('电脑会议的手机录音')),
+              200,
+              scrollable: find
+                  .descendant(
+                    of: find.byType(ListView),
+                    matching: find.byType(Scrollable),
+                  )
+                  .first,
+            );
+          } else {
+            expect(find.byTooltip(tr('录音说明')).hitTestable(), findsOneWidget);
+            expect(find.byTooltip(tr('结束')).hitTestable(), findsOneWidget);
+          }
+          if (state == 'ended') {
+            expect(find.text(tr('电脑会议的手机录音')), findsOneWidget);
+          }
           expect(find.text('Private desktop transcript'), findsNothing);
           expect(find.text('Private desktop notes'), findsNothing);
           expect(find.text(tr('仅保存在手机')), findsNothing);

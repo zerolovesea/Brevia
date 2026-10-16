@@ -75,6 +75,8 @@ const translations = {
     "取消后需要重新配对，手机和电脑中已保存的会议副本不会被删除。":
         "You will need to pair again. Saved meeting copies on both devices are kept.",
     "电脑会议的手机录音": "Phone audio for a desktop meeting",
+    "录音说明": "Recording details",
+    "录音": "Recording",
     "这场会议由电脑发起，逐字稿和笔记保存在电脑。录音保留在手机，断线后可补传。":
         "This meeting was started on the computer. Transcripts and notes stay there. Audio is kept on this phone and can upload after reconnecting.",
     "手机未能开始录音，请打开手机 Brevia 后重试":
@@ -522,6 +524,8 @@ const translations = {
     "取消后需要重新配对，手机和电脑中已保存的会议副本不会被删除。":
         "Tendrás que vincular de nuevo. Se conservan las reuniones guardadas en ambos dispositivos.",
     "电脑会议的手机录音": "Audio del teléfono para una reunión del ordenador",
+    "录音说明": "Información de la grabación",
+    "录音": "Grabación",
     "这场会议由电脑发起，逐字稿和笔记保存在电脑。录音保留在手机，断线后可补传。":
         "Esta reunión se inició en el ordenador. Las transcripciones y notas se guardan allí. El audio queda en el teléfono y puede enviarse al reconectar.",
     "手机未能开始录音，请打开手机 Brevia 后重试":
@@ -963,6 +967,8 @@ const translations = {
     "取消信任这台电脑？": "このパソコンの信頼を解除しますか？",
     "取消后需要重新配对，手机和电脑中已保存的会议副本不会被删除。": "再接続にはペアリングが必要です。両方の端末に保存済みの会議は削除しません。",
     "电脑会议的手机录音": "パソコン会議のスマートフォン録音",
+    "录音说明": "録音の詳細",
+    "录音": "録音",
     "这场会议由电脑发起，逐字稿和笔记保存在电脑。录音保留在手机，断线后可补传。":
         "この会議はパソコンで開始され、文字起こしとノートはパソコンに保存されます。録音はスマートフォンに残り、再接続後に送信できます。",
     "手机未能开始录音，请打开手机 Brevia 后重试": "録音を開始できませんでした。スマートフォンで Brevia を開いて再試行してください",
@@ -1365,6 +1371,8 @@ const translations = {
     "取消后需要重新配对，手机和电脑中已保存的会议副本不会被删除。":
         "다시 연결하려면 기기를 연결해야 합니다. 두 기기에 저장된 회의 사본은 삭제되지 않습니다.",
     "电脑会议的手机录音": "컴퓨터 회의용 휴대폰 녹음",
+    "录音说明": "녹음 안내",
+    "录音": "녹음",
     "这场会议由电脑发起，逐字稿和笔记保存在电脑。录音保留在手机，断线后可补传。":
         "컴퓨터에서 시작한 회의입니다. 전사와 메모는 컴퓨터에 저장됩니다. 녹음은 휴대폰에 보관되며 재연결 후 전송할 수 있습니다.",
     "手机未能开始录音，请打开手机 Brevia 后重试":
@@ -1779,6 +1787,8 @@ const translations = {
     "取消后需要重新配对，手机和电脑中已保存的会议副本不会被删除。":
         "Une nouvelle association sera nécessaire. Les réunions enregistrées sur les deux appareils sont conservées.",
     "电脑会议的手机录音": "Audio du téléphone pour une réunion sur ordinateur",
+    "录音说明": "Détails de l’enregistrement",
+    "录音": "Enregistrement",
     "这场会议由电脑发起，逐字稿和笔记保存在电脑。录音保留在手机，断线后可补传。":
         "Cette réunion a été lancée sur l’ordinateur. Transcriptions et notes y restent. L’audio est conservé sur le téléphone et peut être envoyé après reconnexion.",
     "手机未能开始录音，请打开手机 Brevia 后重试":
@@ -2236,6 +2246,8 @@ const translations = {
     "取消后需要重新配对，手机和电脑中已保存的会议副本不会被删除。":
         "Erneutes Koppeln ist nötig. Gespeicherte Meetings auf beiden Geräten bleiben erhalten.",
     "电脑会议的手机录音": "Telefonaufnahme für ein Desktop-Meeting",
+    "录音说明": "Aufnahmedetails",
+    "录音": "Aufnahme",
     "这场会议由电脑发起，逐字稿和笔记保存在电脑。录音保留在手机，断线后可补传。":
         "Dieses Meeting wurde am Computer gestartet. Transkripte und Notizen bleiben dort. Das Audio bleibt am Telefon und wird nach dem Wiederverbinden übertragen.",
     "手机未能开始录音，请打开手机 Brevia 后重试":
@@ -2692,6 +2704,8 @@ const translations = {
     "取消后需要重新配对，手机和电脑中已保存的会议副本不会被删除。":
         "Потребуется повторное сопряжение. Сохранённые встречи на обоих устройствах останутся.",
     "电脑会议的手机录音": "Запись с телефона для встречи на компьютере",
+    "录音说明": "Сведения о записи",
+    "录音": "Запись",
     "这场会议由电脑发起，逐字稿和笔记保存在电脑。录音保留在手机，断线后可补传。":
         "Встреча начата на компьютере. Расшифровка и заметки остаются там. Аудио сохраняется на телефоне и передаётся после восстановления связи.",
     "手机未能开始录音，请打开手机 Brevia 后重试":

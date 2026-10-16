@@ -1,6 +1,7 @@
 """聚焦的 worker 职责组件。"""
 
 import re
+from uuid import uuid4
 
 from .worker_common import managed_task, require
 
@@ -19,29 +20,36 @@ class SpeakerCommandMixin:
             )
             if not segment:
                 raise ValueError("Segment not found")
+            # 单句标记必须换绑身份，不能通过重命名共享的 speaker 行改动其他字幕。
+            target = next(
+                (person for person in meeting["speakers"] if person["name"] == payload["name"]),
+                None,
+            )
             self.store.set_segment_speaker(
                 payload["meeting_id"],
                 payload["segment_id"],
-                segment["speaker"],
+                target["id"] if target else f"manual-{uuid4()}",
+                profile_id=target.get("profile_id") if target else None,
                 name=payload["name"],
             )
             return self.store.get_meeting(payload["meeting_id"])
+        existing_ids = {item["id"] for item in self.store.list_speaker_profiles()}
         profile = self.store.ensure_speaker_profile(payload["name"])
-        speaker_id = f"profile-{profile['id']}"
+        try:
+            profile = self._learn_segment_profile(meeting, payload["segment_id"], profile)
+        except Exception:
+            if (
+                profile["id"] not in existing_ids
+                and not self.store.speaker_profile(profile["id"])["sample_count"]
+            ):
+                self.store.delete_speaker_profile(profile["id"])
+            raise
         self.store.set_segment_speaker(
             payload["meeting_id"],
             payload["segment_id"],
-            speaker_id,
+            f"profile-{profile['id']}",
             profile["id"],
             profile["name"],
-        )
-        meeting = self.store.get_meeting(payload["meeting_id"])
-        profile = self.voice_profiles.learn_from_meeting(
-            meeting,
-            speaker_id,
-            profile["name"],
-            segment_ids={payload["segment_id"]},
-            source_id=profile["id"],
         )
         self.emit("speaker-profile.updated", {"profile": profile})
         return self.store.get_meeting(payload["meeting_id"])
@@ -51,6 +59,11 @@ class SpeakerCommandMixin:
         """仅在用户明确选择时，将一段已保存对话加入既有声纹档案。"""
         require(payload, "meeting_id", "segment_id", "profile_id")
         profile = self.store.speaker_profile(payload["profile_id"])
+        profile = self._learn_segment_profile(
+            self.store.get_meeting(payload["meeting_id"]),
+            payload["segment_id"],
+            profile,
+        )
         self.store.set_segment_speaker(
             payload["meeting_id"],
             payload["segment_id"],
@@ -58,15 +71,25 @@ class SpeakerCommandMixin:
             profile["id"],
             profile["name"],
         )
-        profile = self.voice_profiles.learn_from_meeting(
-            self.store.get_meeting(payload["meeting_id"]),
-            None,
-            profile["name"],
-            segment_ids={payload["segment_id"]},
-            source_id=profile["id"],
-        )
         self.emit("speaker-profile.updated", {"profile": profile})
         return self.store.get_meeting(payload["meeting_id"])
+
+    def _learn_segment_profile(self, meeting, segment_id, profile):
+        # 录音确实入库后才绑定身份，避免缺失录音或无有效语音时只改了字幕姓名。
+        result = self.voice_profiles.learn_from_meeting(
+            meeting,
+            None,
+            profile["name"],
+            segment_ids={segment_id},
+            source_id=profile["id"],
+        )
+        prefix = f"meeting:{meeting['id']}:{profile['id']}:{segment_id}:"
+        if not any(
+            sample["source_key"].startswith(prefix)
+            for sample in self.store.list_speaker_profile_samples(profile["id"])
+        ):
+            raise ValueError("无法提取声音样本，请选择清晰的单人语音。")
+        return result
 
     @managed_task("speaker.rename", concurrent=True)
     def rename_speaker(self, payload, control=None):

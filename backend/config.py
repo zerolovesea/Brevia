@@ -51,7 +51,12 @@ def live_speech_cap(params, model_limit, overlap_ms=CUT_OVERLAP_MS):
 
 
 def validate_speech_settings(value, *, migrate=False):
-    """Validate related settings together; migrate only unsafe legacy caps."""
+    """校验语音时长之间的约束，迁移旧版不安全的段长上限。"""
+    if (
+        value["live_asr"]["quiet_speech_min_seconds"]
+        > value["live_asr"]["quiet_speech_max_seconds"]
+    ):
+        raise ValueError("quiet_speech_min_seconds must not exceed quiet_speech_max_seconds")
     for language, params in value["vad"].items():
         minimum = minimum_speech_cap(params)
         if params["max_speech_duration"] < minimum:
@@ -127,7 +132,30 @@ def runtime_settings(root):
                 raise ValueError("Advanced settings must be an object")
             _deep_update(value, override)
             _prune_to_template(value, DEFAULT_SETTINGS)
+            # 旧版允许编辑无效采样率与越界轻声参数；只迁移这些项，保留其他偏好。
+            if type(value["audio"]["sample_rate"]) is int and value["audio"]["sample_rate"] > 0:
+                value["audio"]["sample_rate"] = 16000
+            live = value["live_asr"]
+            if type(live["quiet_speech_recovery"]) is int:
+                live["quiet_speech_recovery"] = int(bool(live["quiet_speech_recovery"]))
+            for key in (
+                "quiet_speech_min_seconds",
+                "quiet_speech_max_seconds",
+                "quiet_speech_level_ratio",
+            ):
+                current = live[key]
+                if type(current) not in (int, float) or not math.isfinite(current):
+                    continue
+                if key == "quiet_speech_max_seconds" and current <= 0:
+                    live[key] = DEFAULT_SETTINGS["live_asr"][key]
+                elif key == "quiet_speech_level_ratio":
+                    live[key] = min(1.0, max(0.0, current))
+                else:
+                    live[key] = max(0.0, current)
             _validate(value, DEFAULT_SETTINGS)
+            live["quiet_speech_min_seconds"] = min(
+                live["quiet_speech_min_seconds"], live["quiet_speech_max_seconds"]
+            )
             validate_speech_settings(value, migrate=True)
         except (OSError, ValueError, TypeError, UnicodeError) as error:
             backup = path.with_name(f"{path.name}.corrupt-{uuid4().hex}")
@@ -189,6 +217,91 @@ def _types_compatible(current, default):
     return type(current) is type(default)
 
 
+def setting_limits(key, default):
+    """界面与保存校验共用数值边界，整数步长由出厂模板决定。"""
+    if type(default) not in (int, float):
+        return {}
+    limits = {"min": 0, "step": 1 if isinstance(default, int) else "any"}
+    if key in {
+        "sample_rate",
+        "chunk_seconds",
+        "max_speech_duration",
+        "refined_window_seconds",
+        "boundary_tail_seconds",
+        "microphone_max_gain",
+        "max_samples",
+        "max_total_seconds",
+        "timeout_seconds",
+        "diarization_timeout_seconds",
+        "max_refine_seconds",
+        "diarization_chunk_ms",
+        "embedding_window_ms",
+        "max_auto_speakers",
+        "min_auto_speaker_windows",
+        "quiet_speech_max_seconds",
+    }:
+        if isinstance(default, int):
+            limits["min"] = 1
+        else:
+            limits["exclusive_min"] = True
+    if key in {
+        "online_similarity_threshold",
+        "voiceprint_similarity_threshold",
+        "microphone_target_rms",
+        "microphone_minimum_rms",
+        "microphone_peak",
+        "threshold",
+        "quiet_speech_level_ratio",
+        "quiet_speech_recovery",
+    }:
+        limits["max"] = 1
+    if key == "cluster_threshold":
+        limits["max"] = 2
+    if key == "num_speakers":
+        limits.update(min=-1, exclude=[0])
+    if key == "sample_rate":
+        limits.update(min=16000, max=16000, read_only=True)
+    return limits
+
+
+def advanced_settings_metadata(vad_runtime):
+    """按实际 VAD 引擎提供可见项；隐藏字段保留在原有配置中，避免跨端丢值。"""
+    # 前两项无生产调用方；全局人数始终被会议自身保存的人数覆盖。
+    inactive = ["boundary_tail_seconds", "speaker_change_detection", "num_speakers"]
+    if vad_runtime == "mlx-audio":
+        inactive += [
+            "quiet_speech_min_seconds",
+            "quiet_speech_max_seconds",
+            "quiet_speech_level_ratio",
+        ]
+    fields = {}
+
+    def collect(values, defaults, prefix=""):
+        for key, value in values.items():
+            path = f"{prefix}{key}"
+            if isinstance(value, dict):
+                collect(value, defaults[key], path + ".")
+            elif limits := setting_limits(key, defaults[key]):
+                fields[path] = limits
+
+    collect(SETTINGS, DEFAULT_SETTINGS)
+    for language, params in SETTINGS["vad"].items():
+        fields[f"vad.{language}.max_speech_duration"].update(
+            min=minimum_speech_cap(params), exclusive_min=False
+        )
+    return {
+        "vad_runtime": vad_runtime,
+        "inactive_fields": inactive,
+        "field_constraints": fields,
+        "speech_cap_default_seconds": DEFAULT_SETTINGS["live_asr"]["max_speech_seconds"],
+        "speech_window_seconds": VAD_WINDOW_SECONDS,
+        "speech_overlap_seconds": CUT_OVERLAP_MS / 1000,
+        "speech_cap_minimum": max(
+            minimum_speech_cap(params) for params in SETTINGS["vad"].values()
+        ),
+    }
+
+
 def _validate(value, template):
     """递归验证配置项类型、值域和结构完整性。"""
     if not isinstance(value, dict) or set(value) != set(template):
@@ -205,60 +318,11 @@ def _validate(value, template):
         elif isinstance(current, (int, float)):
             if not math.isfinite(current):
                 raise ValueError(f"Invalid setting: {key}")
-            if key == "num_speakers":
-                validate_num_speakers(current)
-            if key == "cluster_threshold" and not 0 <= current <= 2:
-                raise ValueError(f"Invalid setting: {key}")
+            limits = setting_limits(key, default)
             if (
-                key
-                in {
-                    "online_similarity_threshold",
-                    "voiceprint_similarity_threshold",
-                    "microphone_target_rms",
-                    "microphone_minimum_rms",
-                    "microphone_peak",
-                    "threshold",
-                }
-                and not 0 <= current <= 1
-            ):
-                raise ValueError(f"Invalid setting: {key}")
-            if (
-                key
-                in {
-                    "sample_rate",
-                    "chunk_seconds",
-                    "max_speech_duration",
-                    "refined_window_seconds",
-                    "boundary_tail_seconds",
-                    "microphone_max_gain",
-                    "max_samples",
-                    "max_total_seconds",
-                    "timeout_seconds",
-                    "diarization_timeout_seconds",
-                    "max_refine_seconds",
-                    "diarization_chunk_ms",
-                    "embedding_window_ms",
-                    "max_auto_speakers",
-                    "min_auto_speaker_windows",
-                }
-                and current <= 0
-            ):
-                raise ValueError(f"Invalid setting: {key}")
-            if (
-                key
-                in {
-                    "minimum_embedding_seconds",
-                    "min_duration_on",
-                    "min_duration_off",
-                    "min_silence_duration",
-                    "min_speech_duration",
-                    "deleted_retention_days",
-                    "diarization_overlap_ms",
-                    "mix_max_delay_ms",
-                    "max_speech_seconds",
-                    "min_auto_speaker_duration_ms",
-                    "auto_cluster_score_tolerance",
-                }
-                and current < 0
+                current < limits["min"]
+                or (limits.get("exclusive_min") and current == limits["min"])
+                or ("max" in limits and current > limits["max"])
+                or current in limits.get("exclude", [])
             ):
                 raise ValueError(f"Invalid setting: {key}")

@@ -217,13 +217,13 @@ if (typeof document !== 'undefined') {
   });
   document.addEventListener('pointerover', (event) => {
     const anchor = event.target.closest?.(
-      '.notes-toolbar button[data-tooltip], .model-source-switch label[data-tooltip]',
+      '.notes-toolbar button[data-tooltip], .model-source-switch label[data-tooltip], .segment-tools [data-tooltip]',
     );
     if (anchor) showPageTooltip(anchor, anchor.dataset.tooltip);
   });
   document.addEventListener('pointerout', (event) => {
     const anchor = event.target.closest?.(
-      '.notes-toolbar button[data-tooltip], .model-source-switch label[data-tooltip]',
+      '.notes-toolbar button[data-tooltip], .model-source-switch label[data-tooltip], .segment-tools [data-tooltip]',
     );
     if (anchor && !anchor.contains(event.relatedTarget)) hidePageTooltip();
   });
@@ -333,7 +333,22 @@ function renderTranscriptSegment({
       : `<div class="segment-copy"><p>${escapeHtml(text)}</p>${translationLine}</div>`;
   // 右键菜单按段落 id 定位：详情页（原始/精修稿）只带顶层 segmentId，实时条目只带 speaker.segmentId。
   const contextSegmentId = segmentId || speaker.segmentId;
-  return `<article class="segment"${contextSegmentId ? ` data-segment-id="${escapeHtml(contextSegmentId)}"` : ''}${timing}><div class="segment-meta"><time>${escapeHtml(time)}</time>${showSpeaker && speaker.name ? `<span class="speaker-avatar" aria-hidden="true">${escapeHtml([...speaker.name][0])}</span>` : ''}${label}${overlap}${signalBadge}</div>${copy}</article>`;
+  const tools =
+    contextSegmentId && !textEditable
+      ? `<div class="segment-tools" role="group" aria-label="${escapeHtml(t('字幕'))}">${[
+          ['speaker', 'person', '标记说话人'],
+          ['note', 'notes', '加入笔记'],
+          ['profile', 'waveform', '添加到声纹库'],
+        ]
+          .map(
+            ([action, icon, label]) =>
+              `<button type="button" data-segment-tool="${action}" data-tooltip="${escapeHtml(t(label))}" aria-label="${escapeHtml(t(label))}"${action === 'speaker' ? ' aria-haspopup="dialog"' : ''}>${interfaceIcon(icon)}<span>${escapeHtml(t(label))}</span></button>`,
+          )
+          .join(
+            '',
+          )}<button class="segment-actions" data-segment-actions type="button" data-tooltip="${escapeHtml(t('更多'))}" aria-label="${escapeHtml(t('更多'))}" aria-haspopup="menu">${interfaceIcon('more')}</button></div>`
+      : '';
+  return `<article class="segment"${contextSegmentId ? ` data-segment-id="${escapeHtml(contextSegmentId)}"` : ''}${timing}><div class="segment-meta"><time>${escapeHtml(time)}</time>${showSpeaker && speaker.name ? `<span class="speaker-avatar" aria-hidden="true">${escapeHtml([...speaker.name][0])}</span>` : ''}${label}${overlap}${signalBadge}</div>${copy}${tools}</article>`;
 }
 /** 渲染会议库中的一行。@param {{tone: string, title: string, meta: string, tags: string[], status: object}} meeting 会议数据。@param {number} index 会议索引。@returns {string} 行标记。 */
 function renderMeetingRow(
@@ -1361,7 +1376,18 @@ function renderMeetingSummary({
     : generating
       ? `<button class="modal-action" type="button" disabled>${interfaceIcon('ai')}${t('正在生成会议纪要')}</button>`
       : `<button class="modal-action" ${markdown ? 'data-regenerate-summary' : 'data-generate-summary'} type="button"${blockedAttrs}>${interfaceIcon(markdown ? 'refresh' : 'ai')}${t(markdown ? '重新生成' : '生成纪要')}</button>`;
-  return `<div class="summary-preview"><div class="summary-head"><p class="eyebrow">${t('会议纪要')}</p>${tools}</div><div class="summary-feedback" data-summary-feedback hidden></div>${participants.length ? `<section class="summary-participants"><p>${t('参与者')} (${participants.length})</p><div>${participants.map((person) => `<span><i class="speaker-avatar" aria-hidden="true">${escapeHtml([...person.name][0] || '')}</i>${escapeHtml(person.name)}</span>`).join('')}</div></section>` : ''}${editing ? `<div class="summary-inline-edit"><div data-inline-summary-editor></div></div>` : markdown ? `<div class="summary-body markdown-content">${renderMarkdown(cleanSummaryMarkdown(markdown))}</div>` : `<p class="summary-empty">${t('尚未生成会议纪要')}</p>`}<div class="summary-actions">${action}${markdown && !editing && !generating ? renderSaveState('saved') : ''}</div></div>`;
+  const people = participants.length
+    ? `<section class="summary-participants"><button type="button" data-summary-participants-toggle aria-haspopup="dialog" aria-controls="summary-participants-popover" aria-expanded="false"><span class="summary-participant-count">${escapeHtml(t('参与者'))} (${participants.length})</span><span class="summary-participant-avatars" aria-hidden="true">${participants
+        .slice(0, 3)
+        .map(
+          (person) =>
+            `<i class="speaker-avatar">${escapeHtml([...formatSpeakerName(person)][0] || '')}</i>`,
+        )
+        .join(
+          '',
+        )}${participants.length > 3 ? `<small>+${participants.length - 3}</small>` : ''}</span>${interfaceIcon('chevron-down')}</button><div id="summary-participants-popover" class="meeting-popover summary-participants-popover" popover role="dialog" aria-label="${escapeHtml(t('参与者'))}"><header><h3>${escapeHtml(t('参与者'))} (${participants.length})</h3><button class="icon-button" data-close-meeting-popover type="button" aria-label="${escapeHtml(t('关闭'))}">${interfaceIcon('close')}</button></header><label class="search">${interfaceIcon('search')}<input type="search" data-participant-search aria-label="${escapeHtml(t('搜索'))}" placeholder="${escapeHtml(t('搜索'))}" /></label><div class="summary-participant-list">${participants.map((person) => `<span><i class="speaker-avatar" aria-hidden="true">${escapeHtml([...formatSpeakerName(person)][0] || '')}</i><span>${escapeHtml(formatSpeakerName(person))}</span></span>`).join('')}</div><p data-participant-empty role="status" hidden>${escapeHtml(t('暂无内容'))}</p></div></section>`
+    : '';
+  return `<div class="summary-preview"><div class="summary-head"><p class="eyebrow">${t('会议纪要')}</p>${tools}</div><div class="summary-feedback" data-summary-feedback hidden></div>${people}${editing ? `<div class="summary-inline-edit"><div data-inline-summary-editor></div></div>` : markdown ? `<div class="summary-body markdown-content">${renderMarkdown(cleanSummaryMarkdown(markdown))}</div>` : `<p class="summary-empty">${t('尚未生成会议纪要')}</p>`}<div class="summary-actions">${action}${markdown && !editing && !generating ? renderSaveState('saved') : ''}</div></div>`;
 }
 /** 在页面外壳可用后填充所有数据驱动的静态区域。@returns {void} */
 function renderStaticViews() {

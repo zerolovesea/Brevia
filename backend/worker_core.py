@@ -16,7 +16,7 @@ from .config import (
     SETTINGS,
     runtime_settings,
     save_runtime_settings,
-    minimum_speech_cap,
+    advanced_settings_metadata,
 )
 from .llm_client import complete
 from .storage import Store
@@ -218,18 +218,8 @@ class WorkerCore:
                 "settings.advanced.get": lambda _: {
                     "settings": SETTINGS,
                     "defaults": DEFAULT_SETTINGS,
-                    "speech_cap_minimum": max(
-                        minimum_speech_cap(params) for params in SETTINGS["vad"].values()
-                    ),
-                    "inactive_fields": (
-                        [
-                            "quiet_speech_min_seconds",
-                            "quiet_speech_max_seconds",
-                            "quiet_speech_level_ratio",
-                        ]
-                        if self.models.get("silero-vad").get("runtime") == "mlx-audio"
-                        else []
-                    ),
+                    **advanced_settings_metadata(self.models.get("silero-vad").get("runtime")),
+                    "diarization_chunk_floor_ms": 60000 if os.name == "nt" else 0,
                 },
                 "settings.advanced.save": lambda value: save_runtime_settings(
                     self.store.root, value["settings"]

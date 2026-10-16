@@ -4701,6 +4701,94 @@ class WorkerTest(unittest.TestCase):
         self.assertTrue(user_model.exists())
         self.assertTrue(user_meeting.exists())
 
+    def test_advanced_settings_metadata_follows_the_loaded_engine(self):
+        for engine in ("mlx-audio", "sherpa-onnx==1.13.8"):
+            with (
+                self.subTest(engine=engine),
+                patch.object(self.worker.models, "get", return_value={"runtime": engine}),
+            ):
+                result = self.worker.handle({"id": "settings", "type": "settings.advanced.get"})
+                self.assertEqual(result["vad_runtime"], engine)
+                self.assertTrue(
+                    {"boundary_tail_seconds", "speaker_change_detection", "num_speakers"}.issubset(
+                        result["inactive_fields"]
+                    )
+                )
+                self.assertEqual(
+                    "quiet_speech_min_seconds" in result["inactive_fields"], engine == "mlx-audio"
+                )
+                limits = result["field_constraints"]
+                self.assertEqual(
+                    limits["audio.sample_rate"],
+                    {"min": 16000, "max": 16000, "step": 1, "read_only": True},
+                )
+                self.assertEqual(limits["vad.zh.threshold"], {"min": 0, "max": 1, "step": "any"})
+                self.assertEqual(
+                    limits["live_asr.quiet_speech_recovery"], {"min": 0, "max": 1, "step": 1}
+                )
+                self.assertEqual(limits["audio.chunk_seconds"]["step"], 1)
+
+    def test_fixed_sample_rate_migrates_without_losing_hidden_or_user_settings(self):
+        settings = json.loads(json.dumps(DEFAULT_SETTINGS))
+        settings["audio"]["sample_rate"] = 48000
+        settings["diarization"]["boundary_tail_seconds"] = 7.0
+        settings["live_asr"]["quiet_speech_level_ratio"] = 0.12
+        settings["vad"]["zh"]["threshold"] = 0.6
+        path = Path(self.temp.name) / "advanced-settings.json"
+        path.write_text(json.dumps(settings))
+        loaded = runtime_settings(self.temp.name)
+        self.assertEqual(loaded["audio"]["sample_rate"], 16000)
+        self.assertEqual(loaded["vad"]["zh"]["threshold"], 0.6)
+        self.assertEqual(loaded["diarization"]["boundary_tail_seconds"], 7.0)
+        self.assertEqual(loaded["live_asr"]["quiet_speech_level_ratio"], 0.12)
+        saved = save_runtime_settings(self.temp.name, loaded)
+        self.assertEqual(json.loads(path.read_text()), saved)
+
+    def test_legacy_quiet_settings_migrate_without_resetting_other_preferences(self):
+        settings = json.loads(json.dumps(DEFAULT_SETTINGS))
+        settings["live_asr"].update(
+            quiet_speech_recovery=2,
+            quiet_speech_min_seconds=25.0,
+            quiet_speech_max_seconds=0.0,
+            quiet_speech_level_ratio=1.5,
+        )
+        settings["vad"]["zh"]["threshold"] = 0.6
+        path = Path(self.temp.name) / "advanced-settings.json"
+        path.write_text(json.dumps(settings))
+        loaded = runtime_settings(self.temp.name)
+        self.assertEqual(loaded["live_asr"]["quiet_speech_recovery"], 1)
+        self.assertEqual(loaded["live_asr"]["quiet_speech_min_seconds"], 20)
+        self.assertEqual(loaded["live_asr"]["quiet_speech_max_seconds"], 20)
+        self.assertEqual(loaded["live_asr"]["quiet_speech_level_ratio"], 1)
+        self.assertEqual(loaded["vad"]["zh"]["threshold"], 0.6)
+        self.assertEqual(
+            json.loads(path.read_text()), settings, "loading does not rewrite the original file"
+        )
+
+    def test_advanced_setting_limits_reject_invalid_values_without_writing(self):
+        save_runtime_settings(self.temp.name, DEFAULT_SETTINGS)
+        path = Path(self.temp.name) / "advanced-settings.json"
+        previous = path.read_bytes()
+        for group, key, invalid in (
+            ("audio", "sample_rate", 44100),
+            ("live_asr", "quiet_speech_recovery", 2),
+            ("live_asr", "quiet_speech_recovery", -1),
+            ("live_asr", "quiet_speech_level_ratio", 1.01),
+            ("live_asr", "quiet_speech_level_ratio", -0.01),
+            ("live_asr", "quiet_speech_min_seconds", -1.0),
+            ("live_asr", "quiet_speech_max_seconds", 0.0),
+            ("live_asr", "quiet_speech_max_seconds", 0.5),
+            ("diarization", "num_speakers", 0),
+            ("refinement", "diarization_chunk_ms", 1.5),
+        ):
+            with self.subTest(key=key, value=invalid):
+                settings = json.loads(json.dumps(DEFAULT_SETTINGS))
+                settings[group][key] = invalid
+                with self.assertRaises(ValueError):
+                    save_runtime_settings(self.temp.name, settings)
+                self.assertEqual(path.read_bytes(), previous)
+                self.assertEqual(SETTINGS, DEFAULT_SETTINGS)
+
     def test_advanced_settings_are_saved_outside_the_default_template(self):
         settings = json.loads(json.dumps(DEFAULT_SETTINGS))
         settings["vad"]["default"]["min_silence_duration"] = 0.9
@@ -5258,6 +5346,36 @@ class WorkerTest(unittest.TestCase):
         learn.assert_not_called()
         self.assertEqual(self.worker.store.list_speaker_profiles(), [])
 
+    def test_segment_assignment_keeps_other_segments_and_reuses_existing_person(self):
+        meeting = self.worker.start(
+            {"title": "单句标记", "language": "zh", "refined_model_id": "qwen3-asr-0.6b-int8"}
+        )
+        for index, speaker in enumerate(("spk-1", "spk-1", "spk-2")):
+            self.worker.store.save_segment(
+                {
+                    "meeting_id": meeting["id"],
+                    "segment_id": f"mic-{index}",
+                    "text": f"第{index}句",
+                    "start_ms": index * 1000,
+                    "end_ms": (index + 1) * 1000,
+                    "speaker": speaker,
+                }
+            )
+        self.worker.store.rename_speaker(meeting["id"], "spk-2", "小李")
+        original = self.worker.store.get_meeting(meeting["id"])["segments"]
+        assigned = self.worker.assign_segment_speaker(
+            {"meeting_id": meeting["id"], "segment_id": "mic-0", "name": "小王"}
+        )
+        self.assertEqual(assigned["segments"][0]["speaker_name"], "小王")
+        self.assertNotEqual(assigned["segments"][0]["speaker"], "spk-1")
+        self.assertEqual(assigned["segments"][1:], original[1:])
+        reassigned = self.worker.assign_segment_speaker(
+            {"meeting_id": meeting["id"], "segment_id": "mic-0", "name": "小李"}
+        )
+        self.assertEqual(reassigned["segments"][0]["speaker"], "spk-2")
+        self.assertEqual(reassigned["segments"][1:], original[1:])
+        self.assertEqual(self.worker.store.list_speaker_profiles(), [])
+
     def test_explicit_segment_enrollment_adds_only_that_audio(self):
         meeting = self.worker.start(
             {
@@ -5280,7 +5398,13 @@ class WorkerTest(unittest.TestCase):
             self.worker.voice_profiles,
             "learn_from_meeting",
             side_effect=lambda _meeting, _speaker, name, **_kwargs: (
-                self.worker.store.ensure_speaker_profile(name)
+                self.worker.store.save_speaker_profile_sample(
+                    name,
+                    [1.0, 0.0],
+                    f"meeting:{_meeting['id']}:{_kwargs['source_id']}:mic-0:0",
+                    _kwargs['source_id'],
+                    duration_ms=1000,
+                )
             ),
         ) as learn:
             result = self.worker.assign_segment_speaker(
@@ -5530,7 +5654,17 @@ class WorkerTest(unittest.TestCase):
         )
         profile = self.worker.store.ensure_speaker_profile("小林")
         with patch.object(
-            self.worker.voice_profiles, "learn_from_meeting", return_value=profile
+            self.worker.voice_profiles,
+            "learn_from_meeting",
+            side_effect=lambda _meeting, _speaker, name, **kwargs: (
+                self.worker.store.save_speaker_profile_sample(
+                    name,
+                    [1.0, 0.0],
+                    f"meeting:{meeting['id']}:{profile['id']}:mic-0:0",
+                    profile['id'],
+                    duration_ms=1000,
+                )
+            ),
         ) as learn:
             result = self.worker.add_segment_speaker_profile_sample(
                 {
@@ -5543,6 +5677,57 @@ class WorkerTest(unittest.TestCase):
         self.assertEqual(
             learn.call_args.kwargs,
             {"segment_ids": {"mic-0"}, "source_id": profile["id"]},
+        )
+
+    def test_failed_voiceprint_sampling_does_not_relabel_the_subtitle(self):
+        meeting = self.worker.start(
+            {"title": "失败取样", "language": "zh", "refined_model_id": "qwen3-asr-0.6b-int8"}
+        )
+        self.worker.store.save_segment(
+            {
+                "meeting_id": meeting["id"],
+                "segment_id": "mic-0",
+                "text": "原来的身份",
+                "start_ms": 0,
+                "end_ms": 1000,
+                "speaker": "spk-1",
+            }
+        )
+        profile = self.worker.store.ensure_speaker_profile("小林")
+        for failure in [None, RuntimeError("extract failed")]:
+            with patch.object(
+                self.worker.voice_profiles,
+                "learn_from_meeting",
+                return_value=profile,
+                side_effect=failure,
+            ):
+                with self.assertRaises((ValueError, RuntimeError)):
+                    self.worker.add_segment_speaker_profile_sample(
+                        {
+                            "meeting_id": meeting["id"],
+                            "segment_id": "mic-0",
+                            "profile_id": profile["id"],
+                        }
+                    )
+            segment = self.worker.store.get_meeting(meeting["id"])["segments"][-1]
+            self.assertEqual(segment["speaker"], "spk-1")
+            self.assertNotEqual(segment.get("speaker_name"), "小林")
+        with patch.object(
+            self.worker.voice_profiles,
+            "learn_from_meeting",
+            side_effect=RuntimeError("extract failed"),
+        ):
+            with self.assertRaises(RuntimeError):
+                self.worker.assign_segment_speaker(
+                    {
+                        "meeting_id": meeting["id"],
+                        "segment_id": "mic-0",
+                        "name": "新名字",
+                        "enroll": True,
+                    }
+                )
+        self.assertEqual(
+            [item["name"] for item in self.worker.store.list_speaker_profiles()], ["小林"]
         )
 
     def test_recognized_voiceprints_are_not_automatically_collected_after_a_meeting(

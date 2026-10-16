@@ -21,6 +21,7 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
   List<Map<String, dynamic>> meetings = [];
   Map<String, dynamic>? live;
   RecordingEngine? engine;
+  final inputLevel = ValueNotifier<double>(0);
   Timer? timer;
   bool disposed = false;
   String? viewedMeetingId;
@@ -85,6 +86,7 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
       final previous = capturePreview;
       capturePreview = null;
       previewLevel = null;
+      if (!disposed) inputLevel.value = 0;
       await previewAudio?.cancel();
       previewAudio = null;
       await previous?.dispose();
@@ -108,7 +110,10 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
         capturePreview = recorder;
         notifyListeners();
         previewAudio = stream.listen(
-          (bytes) => previewLevel = pcmLevel(bytes),
+          (bytes) {
+            previewLevel = pcmLevel(bytes);
+            if (!disposed) inputLevel.value = previewLevel!;
+          },
           onError: (Object _) => unawaited(setCapturePreview(false)),
           onDone: () => unawaited(setCapturePreview(false)),
         );
@@ -250,8 +255,14 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   void receive(Object data) {
-    if (data is! Map) return;
+    if (disposed || data is! Map) return;
     final value = Map<String, dynamic>.from(data);
+    if (value.containsKey('inputLevel') && !value.containsKey('state')) {
+      if (live?['id'] == value['id']) {
+        inputLevel.value = (value['inputLevel'] as num).toDouble();
+      }
+      return;
+    }
     if (value.containsKey('commandId')) {
       final done = pendingCommands[value['commandId']];
       if (done != null && !done.isCompleted) {
@@ -269,6 +280,9 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
     } else {
       live = value;
     }
+    inputLevel.value = live?['state'] == 'recording'
+        ? (live?['inputLevel'] as num? ?? 0).toDouble()
+        : 0;
     notifyListeners();
   }
 
@@ -866,6 +880,7 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
   @override
   void dispose() {
     disposed = true;
+    inputLevel.dispose();
     timer?.cancel();
     for (final done in pendingCommands.values) {
       if (!done.isCompleted) {

@@ -62,7 +62,7 @@ const uiData = {
     cards: [
       {
         title: 'AI 功能',
-        description: '配置 AI 模型会议纪要，以及智能笔记。',
+        description: '配置会议纪要与 AI 笔记使用的模型。',
         action: '配置 AI 功能',
         modal: 'ai-features',
       },

@@ -2462,44 +2462,6 @@
   .segment-context-menu {
     @apply fixed z-50 min-w-48 border border-black bg-white text-[12px] shadow-sm;
   }
-  .segment-context-submenu {
-    @apply relative;
-  }
-  .segment-context-submenu > button {
-    @apply flex w-full flex-nowrap items-center justify-between gap-2 whitespace-nowrap px-3 py-2 text-left hover:bg-[#f2f2f2];
-  }
-  .segment-context-label,
-  .segment-context-arrow {
-    @apply shrink-0 p-0;
-  }
-  .segment-context-options {
-    @apply invisible fixed hidden min-w-44 border border-black bg-white shadow-sm;
-  }
-  .segment-context-submenu:hover > .segment-context-options,
-  .segment-context-submenu.is-open > .segment-context-options {
-    @apply block;
-  }
-  .segment-context-submenu.is-positioned > .segment-context-options {
-    @apply visible;
-  }
-  .segment-context-options > button {
-    @apply block w-full px-3 py-2 text-left hover:bg-[#f2f2f2];
-  }
-  .segment-context-options > span {
-    @apply block px-3 py-2 text-[#666666];
-  }
-  .segment-context-name-form {
-    @apply w-52 p-3 text-[12px] leading-5;
-  }
-  .segment-context-name-form label {
-    @apply grid gap-2 text-[12px] leading-5 text-[#666666];
-  }
-  .segment-context-name-form input {
-    @apply h-8 min-w-0 border border-(--color-line) px-2 py-0 text-[12px] leading-5 text-black outline-none focus:border-black;
-  }
-  .segment-context-name-form button {
-    @apply mt-3 text-[12px] leading-5 border border-black bg-black text-white hover:bg-black;
-  }
   .notes {
     @apply flex h-full min-h-0 flex-col overflow-hidden border-l border-black pl-8;
   }
@@ -5267,25 +5229,15 @@ html[data-theme="dark"] .performance-weak-note {
   color: #e6c877;
 }
 /* 右键菜单：与 .meeting-menu 的暗色取值对齐。 */
-html[data-theme="dark"] .segment-context-menu,
-html[data-theme="dark"] .segment-context-options {
+html[data-theme="dark"] .segment-context-menu {
   background: #242424;
   border-color: #666666;
-}
-html[data-theme="dark"] .segment-context-submenu {
-  color: #ddd;
-}
-html[data-theme="dark"] .segment-context-name-form {
-  color: #b0b0b0;
 }
 html[data-theme="dark"] .summary-action-icon {
   border-color: var(--color-line);
   color: #b0b0b0;
 }
 @media (hover: hover) {
-  html[data-theme="dark"] .segment-context-submenu:hover {
-    background: #363636;
-  }
   html[data-theme="dark"] .summary-action-icon:hover {
     border-color: #fff;
     color: #fff;

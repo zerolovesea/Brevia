@@ -179,6 +179,8 @@ class RecordingEngine {
     );
   }
 
+  DateTime levelUpdated = DateTime.fromMillisecondsSinceEpoch(0);
+
   Future<void> beginCapture() async {
     store.meta['state'] = 'starting';
     await write(store.save);
@@ -189,7 +191,7 @@ class RecordingEngine {
           encoder: AudioEncoder.pcm16bits,
           sampleRate: 16000,
           numChannels: 1,
-          streamBufferSize: 32000,
+          streamBufferSize: 1600,
           audioInterruption: AudioInterruptionMode.pause,
           androidConfig: AndroidRecordConfig(manageBluetooth: false),
         ),
@@ -202,18 +204,27 @@ class RecordingEngine {
       audio = stream.listen(
         (bytes) {
           inputLevel = pcmLevel(bytes);
-          // One ordered disk queue; transport never owns the microphone stream.
+          final now = DateTime.now();
+          if (now.difference(levelUpdated).inMilliseconds >= 50 && !disposed) {
+            levelUpdated = now;
+            onChanged({'id': store.meta['id'], 'inputLevel': inputLevel});
+          }
+          // 高频电平独立刷新；录音仍按完整块顺序落盘。
           unawaited(
             write(() async {
               pending.addAll(bytes);
+              var appended = false;
               while (pending.length >= 32000) {
+                appended = true;
                 await store.append(
                   Uint8List.fromList(pending.sublist(0, 32000)),
                 );
                 pending = pending.sublist(32000);
               }
-              await store.save();
-              publish();
+              if (appended) {
+                await store.save();
+                publish();
+              }
             }).catchError((Object e) {
               reportInterruption(tr("手机无法保存录音，请释放空间：{0}", [e]));
             }),

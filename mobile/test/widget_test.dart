@@ -321,6 +321,8 @@ void main() {
         home: MeetingPage(model: model, id: 'live'),
       ),
     );
+    await tester.tap(find.byTooltip('转写'));
+    await tester.pump(const Duration(milliseconds: 240));
     await tester.pump();
     final tabs = tester.getRect(find.text('转写'));
     final controls = tester.getRect(find.byType(RecordingControls));
@@ -475,6 +477,8 @@ void main() {
         home: MeetingPage(model: model, id: 'live'),
       ),
     );
+    await tester.tap(find.byTooltip('转写'));
+    await tester.pump(const Duration(milliseconds: 240));
     await tester.pump();
     final status = find.text('● 已连接');
     expect(status, findsOneWidget);
@@ -542,6 +546,8 @@ void main() {
     model.live!['connected'] = true;
     model.notifyListeners();
     await tester.pump();
+    await tester.tap(find.byTooltip('转写'));
+    await tester.pump(const Duration(milliseconds: 240));
     expect(find.text('转写'), findsOneWidget);
     expect(
       tester
@@ -681,6 +687,8 @@ void main() {
           home: MeetingPage(model: model, id: 'live'),
         ),
       );
+      await tester.tap(find.byTooltip('转写'));
+      await tester.pump(const Duration(milliseconds: 240));
       await tester.pump(const Duration(milliseconds: 200));
       final dots = find.descendant(
         of: find.byType(TranscriptionActivity),
@@ -1334,9 +1342,9 @@ void main() {
     );
     await tester.pump(Duration(milliseconds: 300));
     expect(find.byTooltip('暂停'), findsOneWidget);
-    expect(find.text('暂停'), findsNothing);
+    expect(find.text('暂停'), findsOneWidget);
     expect(tester.takeException(), isNull);
-    await tester.tap(find.text('笔记'));
+    await tester.tap(find.byTooltip('笔记'));
     await tester.pump(Duration(milliseconds: 300));
     expect(tester.takeException(), isNull);
   });

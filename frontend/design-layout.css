@@ -1676,9 +1676,8 @@ html[data-theme="dark"] .summary-enabled-control input[type="checkbox"]:checked:
   min-width: 0;
 }
 .settings-page .model-library-item p {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .model-library-toolbar {
   display: flex;
@@ -1686,7 +1685,6 @@ html[data-theme="dark"] .summary-enabled-control input[type="checkbox"]:checked:
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 12px;
-  border-bottom: 1px solid var(--color-line);
   margin-bottom: 24px;
 }
 .model-library-toolbar .settings-tabs {
@@ -1827,6 +1825,29 @@ html[data-theme] .processing-bar {
 }
 .advanced-settings-section[open] summary > .interface-icon:last-child {
   transform: rotate(180deg);
+}
+/* 原生 details 保留键盘交互；离散过渡让收起时的内容也能完成动画。 */
+details.advanced-settings-section {
+  interpolate-size: allow-keywords;
+}
+details.advanced-settings-section::details-content {
+  block-size: 0;
+  overflow: clip;
+  transition:
+    block-size 220ms cubic-bezier(0.16, 1, 0.3, 1),
+    content-visibility 220ms allow-discrete;
+}
+details.advanced-settings-section[open]::details-content {
+  block-size: auto;
+}
+.advanced-settings-section summary > .interface-icon:last-child {
+  transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  details.advanced-settings-section::details-content,
+  .advanced-settings-section summary > .interface-icon:last-child {
+    transition: none;
+  }
 }
 .advanced-fields {
   display: grid;
@@ -2103,7 +2124,7 @@ html[data-theme] .processing-bar {
 }
 .speaker-directory {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 32px;
+  grid-template-columns: minmax(0, 1fr) var(--control-height);
   grid-template-rows: auto minmax(0, 1fr);
   align-content: start;
   gap: 12px 8px;
@@ -2121,6 +2142,8 @@ html[data-theme] .processing-bar {
 }
 .speaker-person > span {
   flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
   display: grid;
   gap: 8px;
 }
@@ -2139,7 +2162,10 @@ html[data-theme] .processing-bar {
   margin: 0;
 }
 .speaker-create summary {
-  font-size: 0;
+  min-height: var(--control-height);
+  font-size: 14px;
+  justify-content: center;
+  list-style: none;
   border: 1px solid var(--color-line);
   border-radius: 8px;
   display: flex;
@@ -2148,6 +2174,10 @@ html[data-theme] .processing-bar {
   padding: 8px;
   cursor: pointer;
 }
+.speaker-create summary::-webkit-details-marker,
+.speaker-create:not([open]) summary > span {
+  display: none;
+}
 .speaker-profile-list {
   grid-column: 1 / -1;
 }
@@ -2155,8 +2185,14 @@ html[data-theme] .processing-bar {
   grid-column: 1 / -1;
   grid-row: 1;
 }
+.speaker-directory:has(> .speaker-create[open]) {
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+.speaker-directory:has(> .speaker-create[open]) > .search {
+  grid-column: 1 / -1;
+}
 .speaker-create[open] summary {
-  font-size: 14px;
+  justify-content: flex-start;
 }
 .speaker-profile-form {
   display: grid;
@@ -2752,6 +2788,7 @@ html[data-theme] .processing-bar {
   }
   .settings-page .config-fields label {
     display: flex;
+    align-items: stretch;
     gap: 8px;
   }
   .settings-page .ai-service-choice legend,
@@ -2836,6 +2873,7 @@ html[data-theme] .processing-bar {
 @media (max-width: 1100px) {
   .settings-page .config-fields label {
     display: flex;
+    align-items: stretch;
     gap: 8px;
   }
   .settings-page .ai-service-choice legend,
@@ -3899,6 +3937,9 @@ textarea,
   padding: 32px;
 }
 #home-eyebrow {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: left;
   margin: 0;
   font-size: 30px;
   font-weight: 700;
@@ -4200,7 +4241,9 @@ textarea,
 #prepare-view[data-mode="import"] #meeting-form .prepare-fields > label,
 #prepare-view[data-mode="import"] #meeting-form .form-grid > label {
   display: grid;
-  grid-template-columns: 104px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 0.7fr) minmax(0, 1fr);
+  hyphens: auto;
+  overflow-wrap: anywhere;
   gap: 12px;
   align-items: center;
 }
@@ -4211,6 +4254,8 @@ textarea,
   padding-left: 28px;
 }
 .prepare-processing h2 {
+  hyphens: auto;
+  overflow-wrap: anywhere;
   float: none;
   width: auto;
 }
@@ -4330,31 +4375,138 @@ textarea,
 }
 #detail-view .summary-participants {
   flex: none;
-  padding-block: 8px 16px;
+  padding-block: 4px 10px;
   border-bottom: 1px solid var(--color-line);
   margin-bottom: 12px;
 }
-.summary-participants p {
-  margin: 0 0 8px;
-  color: var(--color-text-muted);
-  font-size: 14px;
+.summary-preview {
+  container-type: inline-size;
 }
-.summary-participants > div {
+.summary-participants > button {
   display: flex;
-  flex-wrap: wrap;
-  gap: 12px 16px;
-}
-.summary-participants > div > span {
-  display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: 14px;
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  padding: 4px 0;
+  text-align: start;
+  font-size: 13px;
+  color: var(--color-text-muted);
 }
-.summary-participants .speaker-avatar {
+.summary-participant-count {
+  white-space: nowrap;
+}
+.summary-participants > button > svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-inline-start: auto;
+}
+.summary-participants > button[aria-expanded="true"] > svg {
+  transform: rotate(180deg);
+}
+.summary-participant-avatars {
+  display: flex;
+  align-items: center;
+  margin-inline-start: auto;
+  flex: none;
+}
+.summary-participant-avatars .speaker-avatar {
+  width: 24px;
+  height: 24px;
+  margin-inline-start: -4px;
+  font-size: 11px;
   font-style: normal;
 }
+.summary-participant-avatars small {
+  margin-inline-start: 6px;
+}
+@container (max-width: 300px) {
+  .summary-participant-avatars {
+    display: none;
+  }
+}
+.meeting-popover {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  padding: 16px;
+  width: min(360px, calc(100vw - 16px));
+  max-height: calc(100dvh - 16px);
+  overflow: hidden;
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  background: var(--color-white);
+  color: var(--color-text);
+  box-shadow: 0 8px 24px #0002;
+  font-size: 14px;
+}
+.meeting-popover:popover-open {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.meeting-popover > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex: none;
+}
+.meeting-popover h3 {
+  margin: 0;
+  font-size: 16px;
+  text-transform: none;
+  overflow-wrap: anywhere;
+}
+.meeting-popover .icon-button {
+  flex: none;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  padding: 4px;
+}
+.meeting-popover .search {
+  flex: none;
+  margin: 0;
+  padding: 6px 10px;
+}
+.meeting-popover input {
+  min-width: 0;
+  width: 100%;
+  min-height: 32px;
+  font-size: 14px;
+}
+.summary-participant-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  min-height: 0;
+  max-height: min(320px, 55dvh);
+  overflow: auto;
+}
+.summary-participant-list > span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.summary-participant-list > span > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.summary-participant-list .speaker-avatar {
+  flex: none;
+  font-style: normal;
+}
+@media (max-width: 400px) {
+  .summary-participant-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 #detail-view .detail-summary-panel .summary-participants {
-  display: none;
+  display: block;
 }
 #detail-view .summary-head {
   align-items: center;
@@ -4370,6 +4522,12 @@ textarea,
   min-height: 56px;
 }
 #detail-view .summary-head .eyebrow {
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  hyphens: auto;
+  text-transform: none;
   font-size: 24px;
   color: var(--color-text);
   font-weight: 700;
@@ -5126,6 +5284,7 @@ textarea,
   overflow: hidden;
 }
 .settings-navigation {
+  min-width: 0;
   margin: 0;
   padding: 32px 12px;
   display: flex;
@@ -5155,6 +5314,11 @@ textarea,
   font-size: 16px;
   color: var(--color-text);
   font-weight: 400;
+}
+.settings-navigation button > span {
+  min-width: 0;
+  hyphens: auto;
+  overflow-wrap: anywhere;
 }
 .settings-page > .modal-panel {
   width: 100%;
@@ -5206,7 +5370,6 @@ textarea,
 .settings-tabs {
   display: flex;
   gap: 32px;
-  border-bottom: 1px solid var(--color-line);
   margin-bottom: 16px;
 }
 .settings-tabs button {
@@ -5742,6 +5905,7 @@ textarea,
   gap: 16px;
 }
 .onboarding-phone-content {
+  overflow-y: auto;
   padding: 24px 36px 16px;
 }
 .onboarding-mobile-downloads .mobile-install-platform {
@@ -6007,17 +6171,22 @@ textarea,
   padding-block: 8px;
 }
 .settings-page .advanced-fields label > span {
-  display: flex;
-  align-items: baseline;
-  gap: 24px;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
 }
 .settings-page .advanced-fields b {
-  min-width: 136px;
   font-size: 14px;
-  font-weight: 400;
+  font-weight: 600;
 }
 .settings-page .advanced-fields small {
   margin: 0;
+  line-height: 1.6;
+}
+.settings-page .advanced-fields input[readonly] {
+  background: var(--color-navigation);
+  color: var(--color-text-muted);
+  cursor: default;
 }
 .settings-page .advanced-fields input {
   font-size: 14px;
@@ -6119,6 +6288,19 @@ textarea,
   grid-row: 1 / 3;
   gap: 8px;
 }
+/* 评分标题独占一行，翻译长度不再挤压刻度或侵入操作区。 */
+.settings-page .model-library-rating {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 56px;
+  gap: 2px 8px;
+  overflow-wrap: anywhere;
+}
+.settings-page .model-library-rating small {
+  grid-column: 1 / -1;
+}
+.settings-page .model-library-rating b {
+  min-width: 0;
+}
 .settings-page .model-library-headline {
   font-size: 16px;
   font-weight: 700;
@@ -6140,6 +6322,13 @@ textarea,
 }
 .settings-page .model-library-toolbar {
   margin-bottom: 16px;
+}
+.settings-page .model-library-item .model-library-description {
+  grid-column: 1 / -1;
+  margin: 2px 0 0;
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--color-text-muted);
 }
 .settings-page .model-library-item:has(.model-download-progress) .model-library-ratings {
   grid-row: 1 / 4;
@@ -7967,8 +8156,9 @@ html[data-theme] .toast,
 }
 .sidebar .workspace-picker > button {
   display: flex;
+  align-items: center;
   gap: 12px;
-  padding: 8px 8px 0;
+  padding: 8px;
   border-top: 1px solid var(--color-line);
   text-align: left;
 }
@@ -8873,6 +9063,15 @@ body:has(.app-shell.is-settings-view):has(.sidebar:hover, .sidebar:focus-within)
   }
 }
 @media (max-width: 1100px) {
+  #home-view .page-head {
+    flex-wrap: wrap;
+  }
+  #home-view .page-head > div {
+    flex-basis: 100%;
+  }
+  .prepare-processing h2 {
+    font-size: 20px;
+  }
   .settings-page .summary-enabled-control {
     display: flex;
     flex-direction: column;
@@ -9056,5 +9255,513 @@ html[data-theme="dark"] .onboarding-brand-mark {
 @media (max-width: 700px) {
   .onboarding-motion-rail {
     display: none;
+  }
+}
+
+/* 会中设置浮窗使用独立密度，避免继承设置页的宽松表单。 */
+.ai-assist-modal:not(.settings-page) > .modal-panel {
+  width: min(600px, calc(100vw - 32px));
+  max-width: 600px;
+  padding: 24px;
+}
+.ai-assist-modal:not(.settings-page) .modal-head {
+  margin: 0 0 16px;
+  padding: 0;
+  border: 0;
+}
+.ai-assist-modal:not(.settings-page) .modal-title {
+  flex: 1;
+  position: relative;
+  padding-right: 64px;
+}
+.ai-assist-modal:not(.settings-page) .modal-title h2 {
+  font-size: 24px;
+}
+.ai-assist-modal:not(.settings-page) .modal-title p {
+  font-size: 13px;
+  margin-top: 8px;
+}
+.ai-assist-modal:not(.settings-page) .modal-title .summary-enabled-control {
+  position: absolute;
+  right: 0;
+  top: 0;
+  margin: 0;
+  min-height: 32px;
+}
+.ai-assist-modal:not(.settings-page) .modal-body {
+  padding: 0;
+}
+.ai-assist-modal:not(.settings-page) .ai-assist-config-form {
+  gap: 12px;
+}
+.ai-assist-modal:not(.settings-page) .config-fields {
+  gap: 10px;
+}
+.ai-assist-modal:not(.settings-page) .config-fields label {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+}
+.ai-assist-modal:not(.settings-page)
+  :is(input:not([type="checkbox"], [type="radio"]), .flow-select-toggle) {
+  min-height: 36px;
+  font-size: 13px;
+  padding-block: 6px;
+}
+.ai-assist-modal:not(.settings-page) :is(.ai-service-choice, .ai-assist-proactivity) {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.ai-assist-modal:not(.settings-page) :is(.ai-service-choice, .ai-assist-proactivity) legend {
+  float: left;
+  width: 88px;
+  margin: 0 12px 0 0;
+  padding: 0;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.ai-assist-modal:not(.settings-page) .ai-service-choice label {
+  font-size: 14px;
+  gap: 8px;
+}
+.ai-assist-modal:not(.settings-page) .ai-assist-levels {
+  flex: 1;
+  min-width: 0;
+}
+.ai-assist-modal:not(.settings-page) .ai-assist-level {
+  padding: 8px;
+  min-width: 0;
+  font-size: 13px;
+}
+.ai-assist-modal:not(.settings-page) .onboarding-privacy-hint {
+  padding: 10px 0;
+  margin: 0;
+  font-size: 12px;
+}
+.ai-assist-modal:not(.settings-page) .modal-form-actions {
+  gap: 8px;
+  padding-top: 12px;
+  margin-top: 0;
+}
+.ai-assist-modal:not(.settings-page) .modal-form-actions button {
+  min-height: 36px;
+  padding: 8px 12px;
+  font-size: 14px;
+}
+@media (max-width: 620px) {
+  .ai-assist-modal:not(.settings-page) > .modal-panel {
+    padding: 16px;
+  }
+  .ai-assist-modal:not(.settings-page) .config-fields label {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+}
+/* 收起后所有入口共享完整按钮盒，嵌套的设备标题不再参与水平分配。 */
+.app-shell:is(.is-live-meeting, .is-settings-view):not(:has(.sidebar:hover, .sidebar:focus-within))
+  .sidebar
+  :is(.nav-item, .new-meeting, .import-recording, .mobile-sidebar-card) {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding-inline: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+}
+.app-shell:is(.is-live-meeting, .is-settings-view):not(:has(.sidebar:hover, .sidebar:focus-within))
+  .sidebar
+  .mobile-sidebar-heading {
+  flex: none;
+  width: auto;
+}
+
+/* 字幕取样以临时检查面板保留原文上下文，关闭即恢复原侧栏。 */
+#detail-view.active:has(.has-segment-profile) {
+  --detail-columns: minmax(0, 1fr) 360px;
+}
+.detail-layout.has-segment-profile > .segment-profile-panel {
+  grid-row: 1 / -1;
+}
+:is(.detail-layout, .live-layout).has-segment-profile {
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 360px) !important;
+}
+.detail-layout.has-segment-profile > :is(.notes, .detail-search-results, .detail-mode-toggle),
+.live-layout.has-segment-profile > .live-notes {
+  display: none !important;
+}
+.detail-layout.has-segment-profile > .final-transcript,
+.live-layout.has-segment-profile > .transcript {
+  display: flex !important;
+  grid-column: 1;
+  min-width: 0;
+}
+.segment-profile-panel {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  background: var(--color-white);
+  overflow: hidden;
+}
+.segment-profile-panel > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px;
+}
+.segment-profile-panel h2 {
+  font-size: 20px;
+  line-height: 1.3;
+  margin: 0;
+}
+.segment-profile-panel h3 {
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0 0 12px;
+}
+.segment-profile-body {
+  padding: 0 16px 16px;
+  overflow: auto;
+  min-height: 0;
+  flex: 1;
+}
+.segment-profile-source {
+  background: var(--color-navigation);
+  border-radius: 8px;
+  padding: 12px;
+}
+.segment-profile-source small {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+.segment-profile-source blockquote {
+  border: 0;
+  margin: 10px 0;
+  padding: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.segment-profile-audio {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.segment-profile-audio input {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--color-text);
+}
+.segment-profile-audio time {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.segment-profile-panel .icon-button {
+  flex: none;
+  min-width: 32px;
+  width: 32px;
+  height: 32px;
+  padding: 6px;
+}
+.segment-profile-hint {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--color-text-muted);
+  margin: 12px 0;
+}
+.segment-profile-choice {
+  border-top: 1px solid var(--color-line);
+  padding-top: 16px;
+}
+.segment-profile-choice .search {
+  margin-bottom: 8px;
+  padding: 8px 10px;
+}
+.segment-profile-choice .search input {
+  min-width: 0;
+  width: 100%;
+  min-height: 24px;
+  font-size: 14px;
+}
+.segment-profile-people {
+  max-height: 212px;
+  overflow: auto;
+}
+.segment-profile-person {
+  position: relative;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.segment-profile-person input {
+  order: 3;
+  margin-left: auto;
+  flex: none;
+  accent-color: var(--color-text);
+}
+.segment-profile-person > span {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  gap: 4px;
+  overflow-wrap: anywhere;
+}
+.segment-profile-person b {
+  font-size: 14px;
+  font-weight: 600;
+}
+.segment-profile-person small {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+.segment-profile-person:has(input:checked) {
+  background: var(--color-selected);
+}
+.segment-profile-person:has(input:disabled) {
+  opacity: 0.55;
+  cursor: default;
+}
+.segment-profile-panel .text-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  padding: 10px 0;
+  text-align: left;
+}
+.segment-profile-panel form label {
+  display: grid;
+  gap: 8px;
+  font-size: 14px;
+}
+.segment-profile-panel form input {
+  min-width: 0;
+  width: 100%;
+}
+.segment-profile-panel form p {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+.segment-profile-panel > footer {
+  flex: none;
+  padding: 12px 16px;
+  border-top: 1px solid var(--color-line);
+}
+.segment-profile-panel > footer p {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+  margin: 0 0 10px;
+  overflow-wrap: anywhere;
+}
+.segment-profile-panel > footer > div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.segment-profile-panel > footer button {
+  min-width: 0;
+  max-width: 100%;
+  font-size: 14px;
+  padding: 8px 12px;
+  min-height: 36px;
+  overflow-wrap: anywhere;
+}
+.segment-profile-error {
+  font-size: 13px;
+  color: var(--color-danger);
+  overflow-wrap: anywhere;
+}
+.segment-profile-success {
+  text-align: center;
+  padding: 16px 0;
+}
+.segment-profile-success > svg {
+  width: 32px;
+  height: 32px;
+  color: var(--color-success);
+}
+.segment-profile-success p {
+  font-size: 13px;
+}
+.is-profile-source {
+  background: var(--color-selected);
+  outline: 1px solid var(--color-line);
+  border-radius: 8px;
+}
+/* 操作条独立定位，显隐不会参与说话人标签和字幕正文的排列。 */
+:is(.transcript-body, .transcript-scroll) {
+  container-type: inline-size;
+}
+#detail-view .transcript-body .segment:has(.segment-tools) .segment-meta,
+.transcript-scroll .segment:has(.segment-tools) .segment-meta {
+  min-height: 28px;
+  padding-inline-end: 140px;
+}
+.segment:has(.segment-tools) .segment-speaker {
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.segment-tools {
+  position: absolute;
+  inset-inline-end: 8px;
+  top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--color-line);
+  border-radius: 6px;
+  background: var(--color-white);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 2;
+  transition: opacity 100ms ease;
+}
+.segment-tools button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex: none;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 4px;
+  font-size: 12px;
+  color: var(--color-text);
+  border-radius: 4px;
+}
+.segment-tools button:hover {
+  background: var(--color-selected);
+}
+.segment-tools svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+.segment-tools button span {
+  display: none;
+  white-space: nowrap;
+}
+.segment:is(:hover, :focus-within, .has-segment-menu) .segment-tools {
+  opacity: 1;
+  pointer-events: auto;
+}
+@container (min-width: 900px) {
+  #detail-view .transcript-body .segment:has(.segment-tools) .segment-meta,
+  .transcript-scroll .segment:has(.segment-tools) .segment-meta {
+    padding-inline-end: 560px;
+  }
+  .segment-tools button span {
+    display: inline;
+  }
+}
+.segment-speaker-picker form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+.segment-speaker-picker form > label {
+  display: grid;
+  gap: 6px;
+}
+.segment-speaker-options {
+  display: grid;
+  gap: 4px;
+  max-height: min(240px, 35dvh);
+  overflow: auto;
+  min-height: 0;
+}
+.segment-speaker-options button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px;
+  text-align: start;
+  overflow-wrap: anywhere;
+  border-radius: 6px;
+}
+.segment-speaker-options button[aria-current="true"],
+.segment-speaker-options button:hover {
+  background: var(--color-selected);
+}
+.segment-speaker-options .speaker-avatar {
+  flex: none;
+}
+.segment-speaker-options span {
+  min-width: 0;
+}
+.segment-speaker-picker form > p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  color: var(--color-text-muted);
+}
+.segment-speaker-picker [role="alert"] {
+  color: var(--color-danger);
+}
+.segment-speaker-picker .modal-action {
+  align-self: flex-end;
+}
+.segment-context-menu > button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  border: 0;
+  padding: 10px 12px;
+  text-align: left;
+  font-size: 14px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text);
+}
+.segment-context-menu > button:hover {
+  background: var(--color-selected);
+}
+@media (max-width: 1000px) {
+  #detail-view.active:has(.has-segment-profile) {
+    --detail-columns: minmax(0, 1fr);
+  }
+  :is(.detail-layout, .live-layout).has-segment-profile {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .segment-profile-panel {
+    position: fixed;
+    right: 16px;
+    top: 72px;
+    bottom: 80px;
+    width: min(360px, calc(100vw - 32px));
+    z-index: 50;
+    box-shadow: 0 8px 32px #0002;
+  }
+}
+@media (hover: none) {
+  .segment-tools {
+    opacity: 1;
+    pointer-events: auto;
   }
 }

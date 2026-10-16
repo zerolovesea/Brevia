@@ -298,6 +298,7 @@ const clearDraftSegments = () => {
   draftSegments.clear();
 };
 // 实时字幕段落元数据（text/start_ms/speaker），供「加入笔记」等本地规则辅助读取。
+let segmentSpeakerDraft;
 const liveSegmentData = new Map();
 const maxLiveSegments = 500;
 let followLiveTranscript = true;
@@ -758,8 +759,33 @@ function renderAdvancedSettings(settings, metadata = {}) {
           return `<h4 class="advanced-settings-subgroup">${escapeHtml(copy.subgroups?.[key] || key)}</h4>${rows(fieldPath, value)}`;
         }
         const capMinimum = key === 'max_speech_seconds' ? metadata.speech_cap_minimum : null;
-        const range = capMinimum ? `0 / ≥ ${capMinimum} s` : copy.hint;
-        return `<label><span><b>${escapeHtml(copy.fields[key] || key)}</b><small>${escapeHtml(range)}</small></span><input ${capMinimum ? 'min="0"' : ''} name="${escapeHtml(fieldPath)}" type="${typeof value === 'number' ? 'number' : 'text'}" step="any" value="${escapeHtml(String(value))}" /></label>`;
+        const limits = metadata.field_constraints?.[fieldPath] || {};
+        const mlxQuiet = metadata.vad_runtime === 'mlx-audio' && key === 'quiet_speech_recovery';
+        const label = mlxQuiet ? copy.mlxQuietLabel : copy.fields[key] || key;
+        const hint = mlxQuiet
+          ? copy.mlxQuietHint
+          : fieldPath === 'vad.default.min_silence_duration'
+            ? copy.defaultSilenceHint
+            : key === 'diarization_chunk_ms' && metadata.diarization_chunk_floor_ms
+              ? copy.windowsChunkHint
+              : copy.hints[key];
+        const bounds = capMinimum
+          ? `0 / ≥ ${capMinimum} s`
+          : limits.min === limits.max && limits.min !== undefined
+            ? ''
+            : [
+                limits.min !== undefined ? `${limits.exclusive_min ? '>' : '≥'} ${limits.min}` : '',
+                limits.max !== undefined ? `≤ ${limits.max}` : '',
+                limits.step === 1 ? copy.integer : '',
+              ]
+                .filter(Boolean)
+                .join(' · ');
+        const range = [hint, bounds].filter(Boolean).join(' · ');
+        const attributes = ['min', 'max', 'step']
+          .filter((attribute) => limits[attribute] !== undefined)
+          .map((attribute) => `${attribute}="${escapeHtml(String(limits[attribute]))}"`)
+          .join(' ');
+        return `<label><span><b>${escapeHtml(label)}</b><small>${escapeHtml(range)}</small></span><input name="${escapeHtml(fieldPath)}" type="${typeof value === 'number' ? 'number' : 'text'}" ${attributes}${limits.read_only ? ' readonly' : ' required'} value="${escapeHtml(String(value))}" /></label>`;
       })
       .join('');
   return Object.entries(settings)
@@ -768,6 +794,45 @@ function renderAdvancedSettings(settings, metadata = {}) {
         `<details class="advanced-settings-section"><summary>${interfaceIcon({ audio: 'microphone', asr: 'waveform', vad: 'waveform', live: 'waveform', diarization: 'person', refinement: 'document', summary: 'ai', translation: 'translate' }[section] || 'advanced')}<h3>${escapeHtml(copy.sections[section] || section)}</h3>${interfaceIcon('chevron-down')}</summary><div class="advanced-fields">${rows(section, values)}</div></details>`,
     )
     .join('');
+}
+function validateAdvancedSettings(form) {
+  const inputs = [...form.querySelectorAll('input[type="number"]')];
+  const copy = advancedSettingCopy[locale] || advancedSettingCopy.en;
+  const windowSeconds = advancedSettings.speech_window_seconds;
+  const minimums = new Map();
+  for (const input of inputs.filter((field) => /^vad\..+\.min_speech_duration$/.test(field.name))) {
+    if (!Number.isFinite(input.valueAsNumber) || !windowSeconds) continue;
+    const minimum = Math.max(
+      1,
+      Math.ceil(
+        (input.valueAsNumber + advancedSettings.speech_overlap_seconds + 2 * windowSeconds) /
+          windowSeconds,
+      ) * windowSeconds,
+    );
+    minimums.set(input.name.replace('min_speech_duration', 'max_speech_duration'), minimum);
+  }
+  const capMinimum = minimums.size
+    ? Math.max(...minimums.values())
+    : advancedSettings.speech_cap_minimum || 1;
+  const quietMinimum = inputs.find((field) => field.name === 'live_asr.quiet_speech_min_seconds');
+  const quietMaximum = inputs.find((field) => field.name === 'live_asr.quiet_speech_max_seconds');
+  for (const input of inputs) {
+    const limits = advancedSettings.field_constraints?.[input.name] || {};
+    const value = input.valueAsNumber;
+    const hint = input.closest('label').querySelector('small');
+    if (minimums.has(input.name)) {
+      input.min = minimums.get(input.name);
+      hint.textContent = `${copy.hints.max_speech_duration} · ≥ ${input.min}`;
+    }
+    const isCap = input.name === 'live_asr.max_speech_seconds';
+    if (isCap) hint.textContent = `${copy.hints.max_speech_seconds} · 0 / ≥ ${capMinimum} s`;
+    const invalid =
+      (limits.exclusive_min && value <= limits.min) ||
+      limits.exclude?.includes(value) ||
+      (isCap && (value || advancedSettings.speech_cap_default_seconds) < capMinimum) ||
+      (input === quietMinimum && value > quietMaximum?.valueAsNumber);
+    input.setCustomValidity(invalid ? hint.textContent : '');
+  }
 }
 /** 构建权限部分的一行：状态标记、标签、提示和上下文操作按钮。*/
 function permissionRow(kind, label, detail, granted, denied, active, unsupported) {
@@ -2384,7 +2449,7 @@ function renderSummaryModelForm() {
 /** 渲染纪要模型配置模态框。@returns {void} */
 function renderAiSettingsTabs(active) {
   return settingsModal.classList.contains('settings-page')
-    ? `<div class="settings-tabs"><button type="button" data-ai-settings-tab="summary-model" aria-selected="${active === 'summary-model'}">${t('会议纪要')}</button><button type="button" data-ai-settings-tab="ai-assist" aria-selected="${active === 'ai-assist'}">${t('智能笔记')}</button></div>`
+    ? `<div class="settings-tabs"><button type="button" data-ai-settings-tab="summary-model" aria-selected="${active === 'summary-model'}">${t('会议纪要')}</button><button type="button" data-ai-settings-tab="ai-assist" aria-selected="${active === 'ai-assist'}">${t('AI 笔记')}</button></div>`
     : '';
 }
 function renderAiServiceChoice(config) {
@@ -2392,6 +2457,7 @@ function renderAiServiceChoice(config) {
 }
 /** 同页刷新保留阅读位置与展开状态；换页才复位，不能把刷新当作重新打开。 */
 function replaceModalBody(kind, markup) {
+  settingsModal.querySelector('.modal-title > .summary-enabled-control')?.remove();
   const body = settingsModal.querySelector('.modal-body');
   const panel = settingsModal.querySelector('.modal-panel');
   const same = !settingsModal.hidden && body.dataset.contentKind === kind;
@@ -2491,8 +2557,13 @@ function renderAiAssistModal() {
   });
   replaceModalBody(
     'ai-assist',
-    `${renderAiSettingsTabs('ai-assist')}<form class="ai-assist-config-form"><label class="summary-enabled-control"><span>${t('智能笔记')}</span><input type="checkbox" name="enabled" data-ai-settings-enabled${config.enabled ? ' checked' : ''} /></label>${renderAiServiceChoice(config)}${fields.markup}<fieldset class="ai-assist-proactivity"><legend>${t('主动性')}</legend><div class="ai-assist-levels">${levels}</div></fieldset>${warning}<div class="modal-form-actions">${renderSaveState(JSON.stringify(config) === JSON.stringify(aiAssistConfig) ? 'saved' : 'dirty')}<button class="secondary" data-cancel-model-config type="button">${t('取消')}</button><button class="modal-action" type="submit"${fields.saveDisabled && config.enabled ? ' disabled' : ''}>${t('保存配置')}</button></div></form>`,
+    `${renderAiSettingsTabs('ai-assist')}<form id="ai-assist-config-form" class="ai-assist-config-form"><label class="summary-enabled-control"><span>${t('AI 笔记')}</span><input aria-label="${escapeHtml(t('AI 笔记'))}" type="checkbox" name="enabled" form="ai-assist-config-form" data-ai-settings-enabled${config.enabled ? ' checked' : ''} /></label>${renderAiServiceChoice(config)}${fields.markup}<fieldset class="ai-assist-proactivity"><legend>${t('主动性')}</legend><div class="ai-assist-levels">${levels}</div></fieldset>${warning}<div class="modal-form-actions">${renderSaveState(JSON.stringify(config) === JSON.stringify(aiAssistConfig) ? 'saved' : 'dirty')}<button class="secondary" data-cancel-model-config type="button">${t('取消')}</button><button class="modal-action" type="submit"${fields.saveDisabled && config.enabled ? ' disabled' : ''}>${t('保存配置')}</button></div></form>`,
   );
+  if (!page) {
+    const toggle = settingsModal.querySelector('.modal-body .summary-enabled-control');
+    toggle.querySelector('span').remove();
+    settingsModal.querySelector('.modal-title').append(toggle);
+  }
 }
 
 async function switchAiAssistTo2B() {
@@ -2542,7 +2613,7 @@ function renderSpeakerProfileModal() {
     .join('');
   replaceModalBody(
     'speaker-profiles',
-    `<div class="speaker-manager"><aside class="speaker-directory"><label class="search">${interfaceIcon('search')}<input type="search" data-speaker-search aria-label="${t('搜索')}" placeholder="${t('搜索')}" value="${escapeHtml(speakerProfileSearch)}" /></label><details class="speaker-create"><summary>${interfaceIcon('plus')}${copy.add}</summary><form class="speaker-profile-form"><label>${copy.name}<input name="name" maxlength="32" required /></label><button class="modal-action" type="submit">${copy.add}</button></form></details><div class="speaker-profile-list">${list || `<p class="page-empty">${copy.intro}</p>`}</div></aside><section class="speaker-profile-detail">${profile ? `<header class="speaker-detail-header"><div>${name}<small>${profile.sample_count}/50 ${copy.samples} · ${formatMeetingTime(profile.duration_ms || 0)} / 05:00</small></div><div class="speaker-detail-actions"><button class="secondary" data-verify-speaker-profile="${escapeHtml(profile.id)}" type="button">${voiceCopy.verify}</button><button class="secondary" data-rename-speaker-profile="${escapeHtml(profile.id)}" type="button">${t('更改名称')}</button></div></header><section class="speaker-add"><h3>${copy.addSample}</h3><form class="speaker-sample-form" data-speaker-profile="${escapeHtml(profile.id)}"><div class="speaker-audio-dropzone">${interfaceIcon('upload')}<p>${t('请选择一段清晰的已有录音。')}</p></div><button class="modal-action" type="submit">${t('选择录音并添加')}</button></form></section><section><h3>${t('声纹样本')}</h3><div class="speaker-sample-list">${samples.length ? samples.map((sample) => `<article><button class="sample-play" data-play-speaker-sample="${escapeHtml(sample.id)}" type="button" aria-label="${t('播放录音')}">${interfaceIcon('play')}</button><input type="range" data-speaker-sample-seek="${escapeHtml(sample.id)}" min="0" max="${(sample.duration_ms || 0) / 1000}" step=".1" value="0" aria-label="${t('播放进度')}" /><time>${formatMeetingTime(sample.duration_ms || 0)}</time><button class="model-delete" data-delete-speaker-sample="${escapeHtml(sample.id)}" data-profile-id="${escapeHtml(profile.id)}" type="button">${copy.remove}</button></article>`).join('') : `<p class="page-empty">${copy.empty}</p>`}</div></section><button class="model-delete" data-delete-speaker-profile="${escapeHtml(profile.id)}" type="button">${copy.remove}</button>` : `<div class="page-empty">${interfaceIcon('person')}<h2>${t('声纹管理')}</h2><p>${copy.intro}</p></div>`}</section></div>`,
+    `<div class="speaker-manager"><aside class="speaker-directory"><label class="search">${interfaceIcon('search')}<input type="search" data-speaker-search aria-label="${t('搜索')}" placeholder="${t('搜索')}" value="${escapeHtml(speakerProfileSearch)}" /></label><details class="speaker-create"><summary aria-label="${escapeHtml(copy.add)}" title="${escapeHtml(copy.add)}">${interfaceIcon('plus')}<span>${escapeHtml(copy.add)}</span></summary><form class="speaker-profile-form"><label>${copy.name}<input name="name" maxlength="32" required /></label><button class="modal-action" type="submit">${copy.add}</button></form></details><div class="speaker-profile-list">${list || `<p class="page-empty">${copy.intro}</p>`}</div></aside><section class="speaker-profile-detail">${profile ? `<header class="speaker-detail-header"><div>${name}<small>${profile.sample_count}/50 ${copy.samples} · ${formatMeetingTime(profile.duration_ms || 0)} / 05:00</small></div><div class="speaker-detail-actions"><button class="secondary" data-verify-speaker-profile="${escapeHtml(profile.id)}" type="button">${voiceCopy.verify}</button><button class="secondary" data-rename-speaker-profile="${escapeHtml(profile.id)}" type="button">${t('更改名称')}</button></div></header><section class="speaker-add"><h3>${copy.addSample}</h3><form class="speaker-sample-form" data-speaker-profile="${escapeHtml(profile.id)}"><div class="speaker-audio-dropzone">${interfaceIcon('upload')}<p>${t('请选择一段清晰的已有录音。')}</p></div><button class="modal-action" type="submit">${t('选择录音并添加')}</button></form></section><section><h3>${t('声纹样本')}</h3><div class="speaker-sample-list">${samples.length ? samples.map((sample) => `<article><button class="sample-play" data-play-speaker-sample="${escapeHtml(sample.id)}" type="button" aria-label="${t('播放录音')}">${interfaceIcon('play')}</button><input type="range" data-speaker-sample-seek="${escapeHtml(sample.id)}" min="0" max="${(sample.duration_ms || 0) / 1000}" step=".1" value="0" aria-label="${t('播放进度')}" /><time>${formatMeetingTime(sample.duration_ms || 0)}</time><button class="model-delete" data-delete-speaker-sample="${escapeHtml(sample.id)}" data-profile-id="${escapeHtml(profile.id)}" type="button">${copy.remove}</button></article>`).join('') : `<p class="page-empty">${copy.empty}</p>`}</div></section><button class="model-delete" data-delete-speaker-profile="${escapeHtml(profile.id)}" type="button">${copy.remove}</button>` : `<div class="page-empty">${interfaceIcon('person')}<h2>${t('声纹管理')}</h2><p>${copy.intro}</p></div>`}</section></div>`,
   );
 }
 speakerSampleAudio.addEventListener('timeupdate', () => {
@@ -2884,6 +2955,7 @@ function renderModal(kind) {
       kind,
       `${renderPermissionSettings()}<form class="advanced-settings-form">${renderAdvancedSettings(advancedSettings?.settings || {}, advancedSettings || {})}<div class="modal-form-actions"><button class="modal-action" type="submit">${t('确定')}</button><button class="secondary" data-reset-advanced-settings type="button">${t('恢复默认')}</button></div></form>`,
     );
+    validateAdvancedSettings(settingsModal.querySelector('.advanced-settings-form'));
     return;
   }
   if (kind === 'summary-model') {
@@ -3030,9 +3102,6 @@ function renderModelLibrary() {
           // 评级刻度统一走 renderModelLibraryRatings：它读 modelLibraryMetaCopy，与 AI 模型
           // 选择器同源；这里再内联一份会读到 asrCopy.tiers，同一模型在两个界面显示不同档位词。
           const ratings = renderModelLibraryRatings(model);
-          // 选型模型用我们的实测级文案；其余组件沿用按 id 的客观描述。
-          // 只讲「适合什么场景」——不再单列一行「不适合什么」把缺点摊给用户；
-          // 语言范围已经写在定位短句里（例如 Parakeet 的 25 种欧洲语言就隐含了不含中文）。
           const description = words4.tagline || modelLibraryDescription(model, '');
           const actions = readOnly
             ? `<span class="model-actions"><span class="model-library-readonly">${t('随应用安装')}</span><small>${t('必需')}</small></span>`
@@ -3051,7 +3120,8 @@ function renderModelLibrary() {
             `<div class="model-library-name"><b class="model-library-headline">${escapeHtml(model.name)}</b></div>` +
             progressHtml +
             ratings +
-            `<p class="model-library-details" title="${escapeHtml(description)}">${escapeHtml(modelSizeSummary(model))}${role || description ? ` · ${escapeHtml(role || description)}` : ''}</p>` +
+            `<p class="model-library-details">${escapeHtml(modelSizeSummary(model))}${role ? ` · ${escapeHtml(role)}` : ''}</p>` +
+            `<p class="model-library-description">${escapeHtml(description)}</p>` +
             `</span>${actions}</div>`
           );
         })
@@ -4464,8 +4534,14 @@ settingsModal.addEventListener('click', async (event) => {
     return;
   }
   if (event.target.closest('[data-reset-advanced-settings]')) {
-    advancedSettings.settings = advancedSettings.defaults;
-    renderModal('advanced-settings');
+    const form = settingsModal.querySelector('.advanced-settings-form');
+    // 只恢复当前可见项，保留另一引擎的参数和历史兼容字段。
+    for (const input of form.querySelectorAll('input[name]')) {
+      input.value = input.name
+        .split('.')
+        .reduce((values, key) => values[key], advancedSettings.defaults);
+    }
+    validateAdvancedSettings(form);
     return;
   }
   const openPermission = event.target.closest('[data-open-permission-settings]');
@@ -4840,6 +4916,8 @@ settingsModal.addEventListener('click', async (event) => {
   }
 });
 settingsModal.addEventListener('input', (event) => {
+  const advancedForm = event.target.closest('.advanced-settings-form');
+  if (advancedForm) validateAdvancedSettings(advancedForm);
   if (event.target.matches('[data-speaker-search]')) {
     speakerProfileSearch = event.target.value;
     settingsModal.querySelectorAll('.speaker-person').forEach((row) => {
@@ -4982,6 +5060,8 @@ for (const type of ['input', 'change']) {
 settingsModal.addEventListener('submit', async (event) => {
   if (event.target.matches('.advanced-settings-form')) {
     event.preventDefault();
+    validateAdvancedSettings(event.target);
+    if (!event.target.reportValidity()) return;
     const status = event.target.querySelector('.save-state');
     const save = event.target.querySelector('[type="submit"]');
     if (save.disabled) return;
@@ -5031,7 +5111,9 @@ settingsModal.addEventListener('submit', async (event) => {
     if (form.dataset.savePending === 'true') return;
     form.dataset.savePending = 'true';
     const formValues = Object.fromEntries(new FormData(form));
-    const controls = [...form.querySelectorAll('button, input, select, textarea')];
+    const controls = [...form.elements].filter((control) =>
+      control.matches('button, input, select, textarea'),
+    );
     const previousDisabled = controls.map((button) => button.disabled);
     controls.forEach((button) => {
       button.disabled = true;
@@ -5258,6 +5340,8 @@ function collectTranslations() {
 }
 /** 应用语言环境、重绘依赖组件，并可选择对翻译节点进行动画处理。@param {'zh'|'en'|'es'} nextLocale 要应用的语言环境。@param {boolean} animate 是否对更改进行动画处理。@returns {void} */
 function applyLanguage(nextLocale, animate = false) {
+  closeMeetingPopovers();
+  if (document.querySelector('.segment-context-menu')) closeSegmentContextMenu();
   locale = nextLocale;
   localStorage.setItem('brevia-language', locale);
   document.documentElement.lang = locale === 'zh' ? 'zh-CN' : locale;
@@ -5323,6 +5407,7 @@ function applyLanguage(nextLocale, animate = false) {
     renderMeetingList();
     renderWorkspaceNav();
     renderMeetingDetail();
+    if (document.querySelector('.segment-profile-panel:not([hidden])')) renderSegmentProfilePanel();
     if (activeView === 'home') selectLibraryNav(activeLibraryNav);
     else
       crumb.textContent =
@@ -5621,6 +5706,9 @@ async function transitionPage(current, next, swap = () => {}) {
 /** 在顶级应用视图之间切换。@param {'home'|'prepare'|'live'|'detail'|'settings'} name 目标视图。*/
 const showView = async (name) => {
   if (name === activeView && !pageTransition) return;
+  closeMeetingPopovers();
+  if (document.querySelector('.segment-context-menu')) closeSegmentContextMenu();
+  if (typeof closeSegmentProfilePanel === 'function') closeSegmentProfilePanel(true);
   const current = document.querySelector(`#${activeView}-view`);
   const next = document.querySelector(`#${name}-view`);
   await transitionPage(current, next);
@@ -7903,7 +7991,9 @@ const finalTranscript = document.querySelector('.final-transcript');
 const segmentContextMenu = document.createElement('div');
 segmentContextMenu.className = 'segment-context-menu';
 segmentContextMenu.hidden = true;
+segmentContextMenu.setAttribute('role', 'menu');
 document.body.append(segmentContextMenu);
+let segmentContextReturnFocus;
 let contextSegmentId;
 let contextMeetingId;
 let contextSegment;
@@ -7912,13 +8002,9 @@ function closeSegmentContextMenu() {
   contextMeetingId = undefined;
   contextSegment = undefined;
   segmentContextMenu.hidden = true;
-  segmentContextMenu.querySelectorAll('.segment-context-options').forEach((options) => {
-    options.style.removeProperty('left');
-    options.style.removeProperty('top');
-  });
-  segmentContextMenu
-    .querySelectorAll('.is-open, .is-positioned')
-    .forEach((item) => item.classList.remove('is-open', 'is-positioned'));
+  document
+    .querySelectorAll('.has-segment-menu')
+    .forEach((row) => row.classList.remove('has-segment-menu'));
 }
 function positionFloating(
   floating,
@@ -7952,30 +8038,28 @@ function positionFloating(
   floating.style.left = `${Math.max(8, Math.min(position.left, window.innerWidth - width - 8))}px`;
   floating.style.top = `${Math.max(8, Math.min(position.top, window.innerHeight - height - 8))}px`;
 }
-function fitSegmentSubmenu(submenu) {
-  const options = submenu.querySelector(':scope > .segment-context-options');
-  if (!options || submenu.classList.contains('is-positioned')) return;
-  positionFloating(options, submenu.querySelector(':scope > button'));
-  submenu.classList.add('is-positioned');
-}
 function openSegmentContextMenu(meetingId, segmentId, x, y, segmentInfo) {
+  closeMeetingPopovers();
   followLiveTranscript = false;
   followPlaybackTranscript = false;
   contextMeetingId = meetingId;
   contextSegmentId = segmentId;
   contextSegment = segmentInfo || null;
-  const profiles = speakerProfiles
-    .map(
-      (profile) =>
-        `<button type="button" data-add-segment-profile-sample="${profile.id}">${escapeHtml(speakerProfileName(profile))}</button>`,
-    )
-    .join('');
-  const createProfile = `<div class="segment-context-submenu"><button type="button" data-open-segment-profile-create><span class="segment-context-label">${t('新增声纹')}</span><span class="segment-context-arrow" aria-hidden="true">${interfaceIcon('chevron-right')}</span></button><form class="segment-context-options segment-context-name-form" data-create-segment-profile><label>${t('声纹名称')}<input name="name" maxlength="32" required autocomplete="off" /></label><button type="submit">${t('确定')}</button></form></div>`;
-  segmentContextMenu.innerHTML = `<div class="segment-context-submenu"><button type="button" data-add-segment-note><span class="segment-context-label">${t('加入笔记')}</span></button></div><div class="segment-context-submenu"><button type="button" data-open-segment-profile-menu><span class="segment-context-label">${t('添加录音到声纹库')}</span><span class="segment-context-arrow" aria-hidden="true">${interfaceIcon('chevron-right')}</span></button><div class="segment-context-options">${profiles || `<span>${t('暂无已注册声纹')}</span>`}${createProfile}</div></div>`;
+  segmentContextMenu.innerHTML = `<button type="button" data-add-segment-note>${interfaceIcon('notes')}<span>${t('加入笔记')}</span></button><button type="button" data-open-segment-profile-menu>${interfaceIcon('person')}<span>${t('添加到声纹库')}</span></button><button type="button" data-mark-segment-speaker>${interfaceIcon('person')}<span>${t('标记说话人')}</span></button>`;
+  const source = [...document.querySelectorAll('.view.active .segment[data-segment-id]')].find(
+    (row) => row.dataset.segmentId === segmentId,
+  );
+  segmentContextReturnFocus =
+    source?.querySelector('[data-segment-actions]') || document.activeElement;
+  source?.classList.add('has-segment-menu');
+  segmentContextMenu
+    .querySelectorAll('button')
+    .forEach((button) => button.setAttribute('role', 'menuitem'));
   segmentContextMenu.style.visibility = 'hidden';
   segmentContextMenu.hidden = false;
   positionFloating(segmentContextMenu, { left: x, right: x, top: y, bottom: y });
   segmentContextMenu.style.visibility = '';
+  segmentContextMenu.querySelector('button')?.focus();
 }
 /** 把文本追加到当前活跃的笔记编辑器（live 视图或详情页编辑态）。@param {string} markdown 追加的 Markdown。@param {string} [meetingId] 目标会议 id（live 视图判定用）。@returns {void} */
 function appendTextToActiveNotes(markdown, meetingId) {
@@ -8006,7 +8090,29 @@ function segmentInfoFor(meetingId, segmentId) {
       }
     : null;
 }
+segmentContextMenu.addEventListener('keydown', (event) => {
+  if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+  event.preventDefault();
+  const buttons = [...segmentContextMenu.querySelectorAll('button')];
+  const index = buttons.indexOf(document.activeElement);
+  buttons[
+    event.key === 'Home'
+      ? 0
+      : event.key === 'End'
+        ? buttons.length - 1
+        : (index + (event.key === 'ArrowUp' ? -1 : 1) + buttons.length) % buttons.length
+  ]?.focus();
+});
 segmentContextMenu.addEventListener('click', async (event) => {
+  if (event.target.closest('[data-mark-segment-speaker]')) {
+    const meetingId = contextMeetingId,
+      segmentId = contextSegmentId,
+      anchor = segmentContextReturnFocus;
+    closeSegmentContextMenu();
+    if (anchor?.isConnected) void openSegmentSpeakerPicker(meetingId, segmentId, anchor);
+    return;
+  }
+
   if (event.target.closest('[data-add-segment-note]')) {
     const info = contextSegment;
     const meetingId = contextMeetingId;
@@ -8018,63 +8124,551 @@ segmentContextMenu.addEventListener('click', async (event) => {
     return;
   }
   if (event.target.closest('[data-open-segment-profile-menu]')) {
-    const submenu = event.target.closest('.segment-context-submenu');
-    submenu.classList.toggle('is-open');
-    requestAnimationFrame(() => fitSegmentSubmenu(submenu));
-    return;
-  }
-  const create = event.target.closest('[data-open-segment-profile-create]');
-  if (create) {
-    const submenu = create.closest('.segment-context-submenu');
-    submenu.classList.add('is-open');
-    requestAnimationFrame(() => fitSegmentSubmenu(submenu));
-    submenu.querySelector('input').focus();
-    return;
-  }
-  const profile = event.target.closest('[data-add-segment-profile-sample]');
-  if (!profile || !contextSegmentId || !contextMeetingId) return;
-  const segmentId = contextSegmentId;
-  const meetingId = contextMeetingId;
-  closeSegmentContextMenu();
-  try {
-    const meeting = await window.brevia?.segment.addProfileSample({
-      meeting_id: meetingId,
-      segment_id: segmentId,
-      profile_id: profile.dataset.addSegmentProfileSample,
-    });
-    speakerProfiles = await window.brevia.speakerProfile.list();
-    if (meeting) applyBackendDetail(meeting);
-    showToast(t('已添加录音到声纹库'), undefined, 'success');
-  } catch (error) {
-    showToast(error.message, undefined, 'error');
+    const meetingId = contextMeetingId,
+      segmentId = contextSegmentId;
+    closeSegmentContextMenu();
+    void openSegmentProfilePanel(meetingId, segmentId);
   }
 });
-segmentContextMenu.addEventListener('submit', async (event) => {
-  const form = event.target.closest('[data-create-segment-profile]');
-  if (!form || !contextSegmentId || !contextMeetingId) return;
+const segmentSpeakerPicker = document.createElement('div');
+segmentSpeakerPicker.className = 'meeting-popover segment-speaker-picker';
+segmentSpeakerPicker.setAttribute('popover', 'auto');
+segmentSpeakerPicker.setAttribute('role', 'dialog');
+document.body.append(segmentSpeakerPicker);
+function closeMeetingPopovers() {
+  segmentSpeakerDraft = undefined;
+  document
+    .querySelectorAll('.meeting-popover:popover-open')
+    .forEach((popover) => popover.hidePopover());
+  document
+    .querySelectorAll('.has-segment-menu')
+    .forEach((row) => row.classList.remove('has-segment-menu'));
+}
+function isDefaultSegmentSpeakerName(name) {
+  return /^(?:spk|speaker|说话人|話者|화자|hablante|orador|locuteur|intervenant|sprecher|говорящий|спикер)\d+$/i.test(
+    name.replace(/[\s_-]+/g, ''),
+  );
+}
+async function openSegmentSpeakerPicker(meetingId, segmentId, anchor) {
+  closeMeetingPopovers();
+  followLiveTranscript = followPlaybackTranscript = false;
+  const draft = { meetingId, segmentId, anchor, saving: false };
+  segmentSpeakerDraft = draft;
+  try {
+    const meeting = await window.brevia.meeting.get({ meeting_id: meetingId });
+    if (segmentSpeakerDraft !== draft || !anchor.checkVisibility() || anchor.closest('[inert]'))
+      return;
+    const segment = meeting.segments.find((item) => item.id === segmentId);
+    if (!segment) throw Error(t('无法获取字幕内容'));
+    const names = [
+      ...new Set([...meeting.speakers, ...speakerProfiles].map((person) => person.name)),
+    ].filter((name) => name && name.length <= 32 && !isDefaultSegmentSpeakerName(name));
+    segmentSpeakerPicker.setAttribute('aria-label', t('标记说话人'));
+    segmentSpeakerPicker.innerHTML = `<header><h3>${escapeHtml(t('标记说话人'))}</h3><button class="icon-button" data-close-meeting-popover type="button" aria-label="${escapeHtml(t('关闭'))}">${interfaceIcon('close')}</button></header><form><label>${escapeHtml(t('说话人名称'))}<input name="name" required maxlength="32" autocomplete="off" placeholder="${escapeHtml(t('搜索'))}" /></label><div class="segment-speaker-options">${names.map((name) => `<button type="button" data-segment-speaker-choice="${escapeHtml(name)}"${name === segment.speaker_name ? ' aria-current="true"' : ''}><i class="speaker-avatar" aria-hidden="true">${escapeHtml([...name][0])}</i><span>${escapeHtml(name)}</span></button>`).join('')}</div><p data-speaker-empty role="status"${names.length ? ' hidden' : ''}>${escapeHtml(t('暂无内容'))}</p><p>${escapeHtml(t('仅修改此段的说话人。'))}</p><p role="alert" hidden></p><button class="modal-action" type="submit">${escapeHtml(t('确认'))}</button></form>`;
+    anchor.focus({ preventScroll: true });
+    anchor.closest('.segment')?.classList.add('has-segment-menu');
+    draft.open = true;
+    segmentSpeakerPicker.showPopover();
+    positionFloating(segmentSpeakerPicker, anchor, ['bottom-end', 'top-end']);
+    segmentSpeakerPicker.querySelector('input').focus({ preventScroll: true });
+  } catch (error) {
+    if (segmentSpeakerDraft === draft) {
+      segmentSpeakerDraft = undefined;
+      closeMeetingPopovers();
+      showToast(userFacingError(error.message), undefined, 'error');
+    }
+  }
+}
+segmentSpeakerPicker.addEventListener('input', (event) => {
+  if (!event.target.matches('input[name="name"]')) return;
+  event.target.setCustomValidity('');
+  const query = event.target.value.trim().toLocaleLowerCase();
+  const options = [...segmentSpeakerPicker.querySelectorAll('[data-segment-speaker-choice]')];
+  options.forEach((option) => {
+    option.hidden = !option.dataset.segmentSpeakerChoice.toLocaleLowerCase().includes(query);
+  });
+  segmentSpeakerPicker.querySelector('[data-speaker-empty]').hidden = options.some(
+    (option) => !option.hidden,
+  );
+  segmentSpeakerPicker.querySelector('[role="alert"]').hidden = true;
+});
+segmentSpeakerPicker.addEventListener('click', (event) => {
+  const choice = event.target.closest('[data-segment-speaker-choice]');
+  if (!choice || segmentSpeakerDraft?.saving) return;
+  segmentSpeakerPicker.querySelector('input').value = choice.dataset.segmentSpeakerChoice;
+  segmentSpeakerPicker.querySelector('form').requestSubmit();
+});
+segmentSpeakerPicker.addEventListener('submit', async (event) => {
   event.preventDefault();
-  const name = new FormData(form).get('name').trim();
-  if (!name) return;
-  const segmentId = contextSegmentId;
-  const meetingId = contextMeetingId;
-  closeSegmentContextMenu();
+  const draft = segmentSpeakerDraft;
+  if (!draft || draft.saving) return;
+  const input = segmentSpeakerPicker.querySelector('input');
+  const name = input.value.trim();
+  if (!name || isDefaultSegmentSpeakerName(name)) {
+    input.setCustomValidity(t('请填写真实的说话人名称。'));
+    input.reportValidity();
+    return;
+  }
+  draft.saving = true;
+  segmentSpeakerPicker.querySelectorAll('button, input').forEach((control) => {
+    control.disabled = true;
+  });
   try {
-    const meeting = await window.brevia?.segment.speaker({
-      meeting_id: meetingId,
-      segment_id: segmentId,
+    const meeting = await window.brevia.segment.speaker({
+      meeting_id: draft.meetingId,
+      segment_id: draft.segmentId,
       name,
-      enroll: true,
     });
-    speakerProfiles = await window.brevia.speakerProfile.list();
-    if (meeting) applyBackendDetail(meeting);
-    showToast(t('已创建声纹并添加录音'), undefined, 'success');
+    if (currentMeetingDetail?.id === meeting.id) applyBackendDetail(meeting);
+    if (breviaClient?.state.meeting?.id === meeting.id) {
+      breviaClient.state.meeting.speakers = meeting.speakers;
+      const segment = liveSegmentData.get(draft.segmentId);
+      if (segment) segment.speaker = name;
+    }
+    if (segmentSpeakerDraft === draft) {
+      closeMeetingPopovers();
+      const row = [...document.querySelectorAll('.segment[data-segment-id]')].find(
+        (row) => row.dataset.segmentId === draft.segmentId,
+      );
+      row?.querySelector('[data-segment-tool="speaker"]')?.focus({ preventScroll: true });
+      showToast(t('已保存'), undefined, 'success');
+    }
   } catch (error) {
-    showToast(error.message, undefined, 'error');
+    if (segmentSpeakerDraft === draft) {
+      const message = segmentSpeakerPicker.querySelector('[role="alert"]');
+      message.textContent = userFacingError(error.message);
+      message.hidden = false;
+    }
+  } finally {
+    if (segmentSpeakerDraft === draft) {
+      draft.saving = false;
+      segmentSpeakerPicker.querySelectorAll('button, input').forEach((control) => {
+        control.disabled = false;
+      });
+    }
   }
 });
-segmentContextMenu.addEventListener('pointerover', (event) => {
-  const submenu = event.target.closest('.segment-context-submenu');
-  if (submenu) requestAnimationFrame(() => fitSegmentSubmenu(submenu));
+document.addEventListener(
+  'toggle',
+  (event) => {
+    if (!event.target.matches('.meeting-popover')) return;
+    const open = event.newState === 'open';
+    event.target
+      .closest('.summary-participants')
+      ?.querySelector('[data-summary-participants-toggle]')
+      ?.setAttribute('aria-expanded', String(open));
+    if (
+      event.target === segmentSpeakerPicker &&
+      !open &&
+      (!segmentSpeakerDraft || segmentSpeakerDraft.open)
+    ) {
+      segmentSpeakerDraft = undefined;
+      document
+        .querySelectorAll('.has-segment-menu')
+        .forEach((row) => row.classList.remove('has-segment-menu'));
+    }
+  },
+  true,
+);
+document.addEventListener('click', (event) => {
+  if (event.target.closest('[data-close-meeting-popover]')) {
+    const popover = event.target.closest('[popover]');
+    popover.hidePopover();
+    return;
+  }
+  const toggle = event.target.closest('[data-summary-participants-toggle]');
+  if (!toggle) return;
+  const popover = toggle.closest('.summary-participants').querySelector('[popover]');
+  if (popover.matches(':popover-open')) {
+    popover.hidePopover();
+    return;
+  }
+  const input = popover.querySelector('input');
+  input.value = '';
+  popover.querySelectorAll('.summary-participant-list > span').forEach((row) => {
+    row.hidden = false;
+  });
+  popover.querySelector('[data-participant-empty]').hidden = true;
+  closeMeetingPopovers();
+  popover.showPopover();
+  toggle.setAttribute('aria-expanded', 'true');
+  positionFloating(popover, toggle, ['bottom-end', 'top-end']);
+  input.focus({ preventScroll: true });
+});
+document.addEventListener('input', (event) => {
+  if (!event.target.matches('[data-participant-search]')) return;
+  const popover = event.target.closest('[popover]');
+  const query = event.target.value.trim().toLocaleLowerCase();
+  const rows = [...popover.querySelectorAll('.summary-participant-list > span')];
+  rows.forEach((row) => {
+    row.hidden = !row.textContent.toLocaleLowerCase().includes(query);
+  });
+  popover.querySelector('[data-participant-empty]').hidden = rows.some((row) => !row.hidden);
+});
+window.addEventListener('resize', closeMeetingPopovers);
+document.addEventListener('pointerdown', (event) => {
+  if (
+    segmentSpeakerDraft &&
+    !segmentSpeakerDraft.open &&
+    !event.target.closest('.segment-tools, .segment-context-menu')
+  )
+    closeMeetingPopovers();
+});
+document.addEventListener(
+  'scroll',
+  (event) => {
+    if (!event.target.closest?.('.meeting-popover')) closeMeetingPopovers();
+  },
+  true,
+);
+const segmentProfilePanel = document.createElement('aside');
+segmentProfilePanel.className = 'segment-profile-panel';
+segmentProfilePanel.hidden = true;
+segmentProfilePanel.setAttribute('aria-label', t('添加到声纹库'));
+let segmentProfileDraft;
+let segmentProfileReturnFocus;
+const segmentProfileAudio = new Audio();
+let segmentProfilePreviewTimer;
+let segmentProfileMotion;
+playerAudio.addEventListener('play', () => segmentProfileAudio.pause());
+function closeSegmentProfilePanel(force = false) {
+  if (segmentProfileDraft?.saving && !force) return;
+  const { transform, opacity } = getComputedStyle(segmentProfilePanel);
+  segmentProfileMotion?.cancel();
+  segmentProfileAudio.pause();
+  segmentProfileAudio.removeAttribute('src');
+  segmentProfileDraft = undefined;
+  segmentProfilePanel.inert = true;
+  const complete = () => {
+    segmentProfilePanel.hidden = true;
+    segmentProfilePanel.parentElement?.classList.remove('has-segment-profile');
+    document
+      .querySelectorAll('.is-profile-source')
+      .forEach((e) => e.classList.remove('is-profile-source'));
+    if (segmentProfileReturnFocus?.isConnected)
+      segmentProfileReturnFocus.focus({ preventScroll: true });
+  };
+  if (force || segmentProfilePanel.hidden) {
+    complete();
+    return;
+  }
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  segmentProfileMotion = segmentProfilePanel.animate(
+    [
+      { transform, opacity },
+      { transform: reduced ? 'none' : 'translateX(100%)', opacity: 0 },
+    ],
+    { duration: reduced ? 80 : 160, easing: 'ease-in' },
+  );
+  segmentProfileMotion.finished.then(complete, () => {});
+}
+function renderSegmentProfilePanel() {
+  const draft = segmentProfileDraft;
+  if (!draft) return;
+  segmentProfilePanel.parentElement
+    ?.querySelectorAll('[data-segment-id]')
+    .forEach((row) =>
+      row.classList.toggle('is-profile-source', row.dataset.segmentId === draft.segmentId),
+    );
+  const { segment, profileId, create, saving, success, error } = draft;
+  const profile = speakerProfiles.find((item) => item.id === profileId);
+  const name =
+    success?.name || (create ? draft.name.trim() : profile && speakerProfileName(profile)) || '';
+  const e = escapeHtml;
+  const scope = t('本段说话人将标记为「{name}」。').replace('{name}', name);
+  const limits = advancedSettings?.settings?.voice_profiles || {};
+  const isFull = (item) =>
+    item &&
+    (item.sample_count >= (limits.max_samples || 50) ||
+      item.duration_ms + segment.end_ms - segment.start_ms >
+        (limits.max_total_seconds || 300) * 1000);
+  const profiles = speakerProfiles
+    .map((item) => {
+      const full = isFull(item);
+      return `<label class="segment-profile-person"${saving ? ' inert' : ''}><input type="radio" name="segment-profile" value="${e(item.id)}"${profileId === item.id ? ' checked' : ''}${full ? ' disabled' : ''} />${interfaceIcon('person')}<span><b>${e(speakerProfileName(item))}</b><small>${item.sample_count} ${e((speakerProfileCopy[locale] || speakerProfileCopy.en).samples)}${full ? ` · ${e(t('已达上限'))}` : ''}</small></span></label>`;
+    })
+    .join('');
+  segmentProfilePanel.innerHTML = `<header><h2>${e(t('添加到声纹库'))}</h2><button class="icon-button" data-close-segment-profile type="button" aria-label="${e(t('关闭'))}"${saving ? ' disabled' : ''}>${interfaceIcon('close')}</button></header><div class="segment-profile-body">${success ? `<div class="segment-profile-success" role="status">${interfaceIcon('check')}<h3>${e(t('已添加到「{name}」').replace('{name}', name))}</h3><p>${e(scope)}</p></div>` : ''}<div class="segment-profile-source"><small>${e(draft.title)} · ${e(formatMeetingTime(segment.start_ms))} — ${e(formatMeetingTime(segment.end_ms))}</small><blockquote>${e(segment.text)}</blockquote><div class="segment-profile-audio"><button class="icon-button" data-preview-segment-profile type="button" aria-label="${e(t('播放录音'))}"${!draft.url || saving ? ' disabled' : ''}>${interfaceIcon('play')}</button><input type="range" data-segment-profile-seek min="${segment.start_ms / 1000}" max="${segment.end_ms / 1000}" step=".01" value="${segment.start_ms / 1000}" aria-label="${e(t('播放进度'))}"${!draft.url ? ' disabled' : ''}/><time>${e(formatMeetingTime(segment.end_ms - segment.start_ms))}</time></div></div>${success ? `<button class="secondary" data-view-segment-profile type="button">${e(t('查看声纹'))}</button>` : `<p class="segment-profile-hint">${e(t('请试听，确认片段中只有这位说话人。'))}</p><section class="segment-profile-choice">${create ? `<button class="text-button" data-existing-segment-profile type="button"${saving ? ' disabled' : ''}>${interfaceIcon('back')}${e(t('返回已有声纹'))}</button><h3>${e(t('新增声纹'))}</h3><form data-create-segment-profile><label>${e(t('声纹名称'))}<input name="name" maxlength="32" required autocomplete="off" value="${e(draft.name)}"${saving ? ' disabled' : ''}/></label><p>${e(t('这段录音将作为首个声音样本。'))}</p></form>` : `<h3>${e(t('添加到谁的声纹？'))}</h3><label class="search">${interfaceIcon('search')}<input type="search" data-segment-profile-search placeholder="${e(t('搜索'))}" aria-label="${e(t('搜索'))}" value="${e(draft.search)}"${saving ? ' disabled' : ''}/></label><div class="segment-profile-people">${profiles || `<p>${e(t('暂无已注册声纹'))}</p>`}</div><p data-segment-profile-empty hidden>${e(t('暂无内容'))}</p><button class="text-button" data-new-segment-profile type="button"${saving ? ' disabled' : ''}>${interfaceIcon('plus')}${e(t('新增声纹'))}</button>`}</section>`}<p class="segment-profile-error" role="alert"${error ? '' : ' hidden'}>${e(error || '')}</p></div><footer>${!success ? `<p data-segment-profile-scope>${name ? e(scope) : ''}</p>` : ''}<div>${success ? `<button class="modal-action" data-close-segment-profile type="button">${e(t('返回逐字稿'))}</button>` : `<button class="secondary" data-close-segment-profile type="button"${saving ? ' disabled' : ''}>${e(t('取消'))}</button><button class="modal-action" data-save-segment-profile type="button"${saving || !draft.url || !name || (!create && isFull(profile)) ? ' disabled' : ''}>${e(saving ? t('正在添加…') : create ? t('创建并添加') : t('添加到「{name}」').replace('{name}', name))}</button>`}</div></footer>`;
+  filterSegmentProfiles();
+}
+function filterSegmentProfiles() {
+  if (!segmentProfileDraft) return;
+  const query = segmentProfileDraft.search.toLocaleLowerCase();
+  const rows = [...segmentProfilePanel.querySelectorAll('.segment-profile-person')];
+  rows.forEach((row) => {
+    row.hidden = !row.textContent.toLocaleLowerCase().includes(query);
+  });
+  const empty = segmentProfilePanel.querySelector('[data-segment-profile-empty]');
+  if (empty) empty.hidden = !rows.length || rows.some((row) => !row.hidden);
+}
+async function openSegmentProfilePanel(meetingId, segmentId, anchor) {
+  if (segmentProfileDraft?.saving) return;
+  closeSegmentProfilePanel(true);
+  const layout = document.querySelector(activeView === 'live' ? '.live-layout' : '.detail-layout');
+  const draft = { meetingId, segmentId, name: '', search: '', create: false, saving: false };
+  segmentProfileDraft = draft;
+  segmentProfileReturnFocus =
+    anchor ||
+    [...layout.querySelectorAll('[data-segment-id]')]
+      .find((row) => row.dataset.segmentId === segmentId)
+      ?.querySelector('[data-segment-actions]') ||
+    document.activeElement;
+  try {
+    const meeting = await window.brevia.meeting.get({ meeting_id: meetingId });
+    if (segmentProfileDraft !== draft) return;
+    const segment = meeting.segments.find((item) => item.id === segmentId);
+    const path = meeting.audio?.playback?.[segment?.track] || meetingPlaybackPath(meeting);
+    if (!segment || !path || !(segment.end_ms > segment.start_ms)) throw Error(t('未找到录音文件'));
+    draft.segment = segment;
+    draft.title = meeting.title || t('会议库');
+    speakerProfiles = await window.brevia.speakerProfile.list();
+    if (segmentProfileDraft !== draft) return;
+    draft.profileId = segment.profile_id;
+    draft.url = await window.brevia.audioUrl(path);
+    if (segmentProfileDraft !== draft) return;
+    playerAudio.pause();
+    segmentProfileAudio.src = draft.url;
+    layout.append(segmentProfilePanel);
+    layout.classList.add('has-segment-profile');
+    segmentProfilePanel.hidden = false;
+    segmentProfilePanel.inert = false;
+    layout
+      .querySelectorAll('[data-segment-id]')
+      .forEach((row) =>
+        row.classList.toggle('is-profile-source', row.dataset.segmentId === segmentId),
+      );
+    renderSegmentProfilePanel();
+    const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    segmentProfileMotion = segmentProfilePanel.animate(
+      [
+        { transform: reduced ? 'none' : 'translateX(100%)', opacity: 0 },
+        { transform: 'none', opacity: 1 },
+      ],
+      { duration: reduced ? 80 : 240, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' },
+    );
+    segmentProfilePanel
+      .querySelector('[data-segment-profile-search]')
+      ?.focus({ preventScroll: true });
+  } catch (error) {
+    if (segmentProfileDraft === draft) {
+      closeSegmentProfilePanel();
+      showToast(userFacingError(error.message), undefined, 'error');
+    }
+  }
+}
+async function saveSegmentProfile() {
+  const draft = segmentProfileDraft;
+  if (!draft || draft.saving || !draft.url) return;
+  const name = draft.create
+    ? draft.name.trim()
+    : speakerProfileName(speakerProfiles.find((p) => p.id === draft.profileId) || {});
+  if (!name) return;
+  if (
+    draft.create &&
+    speakerProfiles.some(
+      (p) => speakerProfileName(p).toLocaleLowerCase() === name.toLocaleLowerCase(),
+    )
+  ) {
+    draft.error = t('已有同名声纹，请选择已有声纹。');
+    renderSegmentProfilePanel();
+    return;
+  }
+  draft.saving = true;
+  draft.error = '';
+  segmentProfileAudio.pause();
+  renderSegmentProfilePanel();
+  try {
+    const payload = { meeting_id: draft.meetingId, segment_id: draft.segmentId };
+    const meeting = await (draft.create
+      ? window.brevia.segment.speaker({ ...payload, name, enroll: true })
+      : window.brevia.segment.addProfileSample({ ...payload, profile_id: draft.profileId }));
+    const profiles = await window.brevia.speakerProfile.list();
+    speakerProfiles = profiles;
+    if (meeting && currentMeetingDetail?.id === meeting.id) applyBackendDetail(meeting);
+    if (segmentProfileDraft !== draft) return;
+    draft.success = profiles.find((p) =>
+      draft.create ? p.name === name : p.id === draft.profileId,
+    );
+    if (!draft.success?.sample_count) throw Error(t('无法提取声音样本，请选择清晰的单人语音。'));
+    draft.profileId = draft.success.id;
+  } catch (error) {
+    draft.success = undefined;
+    draft.error = t(userFacingError(error.message));
+  } finally {
+    if (segmentProfileDraft === draft) {
+      draft.saving = false;
+      renderSegmentProfilePanel();
+    }
+  }
+}
+segmentProfilePanel.addEventListener('click', (event) => {
+  if (event.target.closest('[data-close-segment-profile]')) closeSegmentProfilePanel();
+  if (event.target.closest('[data-new-segment-profile], [data-existing-segment-profile]')) {
+    if (segmentProfileDraft.saving) return;
+    segmentProfileDraft.create = Boolean(event.target.closest('[data-new-segment-profile]'));
+    segmentProfileDraft.error = '';
+    renderSegmentProfilePanel();
+    segmentProfilePanel.querySelector('input[name=name], [data-segment-profile-search]')?.focus();
+  }
+  if (event.target.closest('[data-save-segment-profile]')) void saveSegmentProfile();
+  if (event.target.closest('[data-view-segment-profile]')) {
+    expandedSpeakerProfileId = segmentProfileDraft.profileId;
+    closeSegmentProfilePanel();
+    void openModal('speaker-profiles');
+  }
+  if (event.target.closest('[data-preview-segment-profile]')) {
+    const draft = segmentProfileDraft;
+    const { segment } = draft;
+    if (!segmentProfileAudio.paused) segmentProfileAudio.pause();
+    else {
+      playerAudio.pause();
+      if (
+        segmentProfileAudio.currentTime < segment.start_ms / 1000 ||
+        segmentProfileAudio.currentTime >= segment.end_ms / 1000
+      )
+        segmentProfileAudio.currentTime = segment.start_ms / 1000;
+      segmentProfileAudio.play().catch((error) => {
+        if (segmentProfileDraft === draft) {
+          segmentProfileDraft.error = userFacingError(error.message);
+          renderSegmentProfilePanel();
+        }
+      });
+    }
+  }
+});
+segmentProfilePanel.addEventListener('input', (event) => {
+  const draft = segmentProfileDraft;
+  if (!draft || draft.saving) return;
+  if (event.target.matches('[data-segment-profile-search]')) {
+    draft.search = event.target.value;
+    filterSegmentProfiles();
+  }
+  if (event.target.matches('input[name=name]')) {
+    draft.name = event.target.value;
+    draft.error = '';
+    segmentProfilePanel.querySelector('.segment-profile-error').hidden = true;
+    const submit = segmentProfilePanel.querySelector('[data-save-segment-profile]');
+    submit.disabled = !draft.name.trim();
+    segmentProfilePanel.querySelector('[data-segment-profile-scope]').textContent =
+      draft.name.trim()
+        ? t('本段说话人将标记为「{name}」。').replace('{name}', draft.name.trim())
+        : '';
+  }
+  if (event.target.matches('[data-segment-profile-seek]'))
+    segmentProfileAudio.currentTime = Math.min(
+      draft.segment.end_ms / 1000,
+      Math.max(draft.segment.start_ms / 1000, Number(event.target.value)),
+    );
+});
+segmentProfilePanel.addEventListener('change', (event) => {
+  if (
+    event.target.name === 'segment-profile' &&
+    segmentProfileDraft &&
+    !segmentProfileDraft.saving
+  ) {
+    segmentProfileDraft.profileId = event.target.value;
+    renderSegmentProfilePanel();
+    segmentProfilePanel.querySelector('input[name=segment-profile]:checked')?.focus();
+  }
+});
+segmentProfilePanel.addEventListener('submit', (event) => {
+  event.preventDefault();
+  void saveSegmentProfile();
+});
+segmentProfileAudio.addEventListener('loadedmetadata', () => {
+  if (segmentProfileDraft?.segment)
+    segmentProfileAudio.currentTime = segmentProfileDraft.segment.start_ms / 1000;
+});
+function scheduleSegmentProfilePreview() {
+  clearTimeout(segmentProfilePreviewTimer);
+  if (!segmentProfileAudio.paused && segmentProfileDraft?.segment)
+    segmentProfilePreviewTimer = setTimeout(
+      () => segmentProfileAudio.pause(),
+      Math.max(0, segmentProfileDraft.segment.end_ms / 1000 - segmentProfileAudio.currentTime) *
+        1000,
+    );
+}
+segmentProfileAudio.addEventListener('seeked', scheduleSegmentProfilePreview);
+segmentProfileAudio.addEventListener('timeupdate', () => {
+  const draft = segmentProfileDraft;
+  if (!draft?.segment) return;
+  if (segmentProfileAudio.currentTime >= draft.segment.end_ms / 1000) segmentProfileAudio.pause();
+  const slider = segmentProfilePanel.querySelector('[data-segment-profile-seek]');
+  if (slider) slider.value = Math.min(draft.segment.end_ms / 1000, segmentProfileAudio.currentTime);
+});
+for (const type of ['play', 'pause', 'ended'])
+  segmentProfileAudio.addEventListener(type, () => {
+    scheduleSegmentProfilePreview();
+    const button = segmentProfilePanel.querySelector('[data-preview-segment-profile]');
+    if (button) {
+      button.innerHTML = interfaceIcon(segmentProfileAudio.paused ? 'play' : 'pause');
+      button.setAttribute('aria-label', t(segmentProfileAudio.paused ? '播放录音' : '暂停播放'));
+    }
+  });
+segmentProfileAudio.addEventListener('error', () => {
+  if (segmentProfileDraft && segmentProfileAudio.hasAttribute('src')) {
+    segmentProfileDraft.error = t('未找到录音文件');
+    renderSegmentProfilePanel();
+  }
+});
+document.addEventListener(
+  'keydown',
+  (event) => {
+    if (
+      event.key === 'Escape' &&
+      (segmentSpeakerDraft || document.querySelector('.meeting-popover:popover-open'))
+    ) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const anchor =
+        segmentSpeakerDraft?.anchor ||
+        document.querySelector('[data-summary-participants-toggle][aria-expanded="true"]');
+      closeMeetingPopovers();
+      if (anchor?.isConnected) anchor.focus({ preventScroll: true });
+      return;
+    }
+    if (event.key === 'Escape' && !segmentContextMenu.hidden) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      closeSegmentContextMenu();
+      if (segmentContextReturnFocus?.isConnected) segmentContextReturnFocus.focus();
+      return;
+    }
+    if (event.key === 'Escape' && settingsModal.hidden && !segmentProfilePanel.hidden) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      closeSegmentProfilePanel();
+    }
+  },
+  true,
+);
+document.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-segment-actions], [data-segment-tool]');
+  if (!button) return;
+  event.stopPropagation();
+  hidePageTooltip();
+  const row = button.closest('.segment[data-segment-id]');
+  const meetingId =
+    activeView === 'live' ? breviaClient?.state.meeting?.id : currentMeetingDetail?.id;
+  if (!meetingId || !row) return;
+  const segmentId = row.dataset.segmentId;
+  const info = segmentInfoFor(meetingId, segmentId);
+  if (button.dataset.segmentTool === 'speaker') {
+    void openSegmentSpeakerPicker(meetingId, segmentId, button);
+  } else if (button.dataset.segmentTool === 'profile') {
+    closeMeetingPopovers();
+    void openSegmentProfilePanel(meetingId, segmentId, button);
+  } else if (button.dataset.segmentTool === 'note') {
+    closeMeetingPopovers();
+    if (info) {
+      appendTextToActiveNotes(info.text, meetingId);
+      showToast(t('已加入笔记'), undefined, 'success');
+    } else showToast(t('无法获取字幕内容'));
+  } else {
+    closeMeetingPopovers();
+    const rect = button.getBoundingClientRect();
+    openSegmentContextMenu(meetingId, segmentId, rect.left, rect.bottom, info);
+  }
 });
 finalTranscript.addEventListener('contextmenu', (event) => {
   const segment = event.target.closest('[data-segment-id]');
@@ -8346,7 +8940,7 @@ finalTranscript.addEventListener('input', (event) => {
 finalTranscript.addEventListener('click', async (event) => {
   // 点击字幕段的时间戳/说话人区域 → 定位播放该段。
   const segmentMeta = event.target.closest('.segment-meta');
-  if (segmentMeta && !event.target.closest('[data-segment-speaker-input]')) {
+  if (segmentMeta && !event.target.closest('[data-segment-speaker-input], .segment-tools')) {
     const start = Number(segmentMeta.closest('.segment')?.dataset.start);
     if (Number.isFinite(start)) {
       followPlaybackTranscript = true;

@@ -177,7 +177,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('电脑正在使用\n手机麦克风'), findsOneWidget);
+    expect(find.byTooltip('录音说明'), findsOneWidget);
     expect(
       tester
           .state<ScrollableState>(find.byType(Scrollable).first)
@@ -196,7 +196,7 @@ void main() {
     meeting['connected'] = false;
     model.notifyListeners();
     await tester.pumpAndSettle();
-    expect(find.text('正在录音，等待电脑连接'), findsOneWidget);
+    expect(find.text('离线'), findsOneWidget);
     expect(find.text('仍在本机录音'), findsOneWidget);
     expect(find.byTooltip('暂停'), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -244,12 +244,16 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: Scaffold(body: MicrophoneLevel(level: .5))),
     );
-    final segments = find.descendant(
+    final paint = find.descendant(
       of: find.byType(MicrophoneLevel),
-      matching: find.byType(ColoredBox),
+      matching: find.byType(CustomPaint),
     );
-    expect(segments, findsNWidgets(16));
-    expect(tester.getSize(segments.first).height, 12);
+    expect(tester.getSize(paint), const Size(160, 12));
+    await tester.pumpWidget(
+      MaterialApp(home: Scaffold(body: MicrophoneLevel(level: .8))),
+    );
+    await tester.pump(const Duration(milliseconds: 30));
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('model options reject uninstalled choices and retain selection', (

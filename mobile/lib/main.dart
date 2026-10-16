@@ -816,65 +816,77 @@ class _HomeState extends State<Home> {
                   ),
                 ),
         ),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            border: Border(
-              top: BorderSide(color: Theme.of(context).dividerColor, width: .5),
+        if (model.live == null || model.live?['state'] == 'ended')
+          DecoratedBox(
+            decoration: BoxDecoration(
+              border: Border(
+                top: BorderSide(
+                  color: Theme.of(context).dividerColor,
+                  width: .5,
+                ),
+              ),
             ),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: ListTile(
-              contentPadding: EdgeInsets.zero,
-              minTileHeight: 48,
-              minVerticalPadding: 8,
-              leading: const BreviaIcon(Icons.laptop_outlined, size: 22),
-              title: model.desktop == null
-                  ? Text(
-                      tr('连接电脑'),
-                      style: Theme.of(context).textTheme.bodySmall,
-                    )
-                  : Row(
-                      children: [
-                        BreviaIcon(
-                          Icons.circle,
-                          size: 6,
-                          color: model.connected
-                              ? (Theme.of(context).brightness == Brightness.dark
-                                    ? const Color(0xff80c99a)
-                                    : const Color(0xff16812e))
-                              : Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            model.desktop!.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                minTileHeight: 48,
+                minVerticalPadding: 8,
+                leading: const BreviaIcon(Icons.laptop_outlined, size: 22),
+                title: model.desktop == null
+                    ? Text(
+                        tr('连接电脑'),
+                        style: Theme.of(context).textTheme.bodySmall,
+                      )
+                    : Row(
+                        children: [
+                          BreviaIcon(
+                            Icons.circle,
+                            size: 6,
+                            color: model.connected
+                                ? (Theme.of(context).brightness ==
+                                          Brightness.dark
+                                      ? const Color(0xff80c99a)
+                                      : const Color(0xff16812e))
+                                : Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              model.desktop!.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            tr(model.connected ? '已连接' : '离线'),
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          tr(model.connected ? '已连接' : '离线'),
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
-                    ),
-              trailing: const BreviaIcon(Icons.chevron_right, size: 18),
-              onTap: () => setState(() => tab = 1),
+                        ],
+                      ),
+                trailing: const BreviaIcon(Icons.chevron_right, size: 18),
+                onTap: () => setState(() => tab = 1),
+              ),
             ),
           ),
-        ),
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
           child: SizedBox(
             width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: model.busy ? null : prepare,
-              icon: const BreviaIcon(Icons.add, size: 20),
-              label: Text(model.busy ? tr('正在准备…') : tr('新建录音')),
-            ),
+            child: model.live != null && model.live?['state'] != 'ended'
+                ? RecordingReturnBar(
+                    meeting: model.live!,
+                    onTap: () => openMeeting(model.live!['id']),
+                  )
+                : FilledButton.icon(
+                    onPressed: model.busy ? null : prepare,
+                    icon: const BreviaIcon(Icons.add, size: 20),
+                    label: Text(model.busy ? tr('正在准备…') : tr('新建录音')),
+                  ),
           ),
         ),
       ],
@@ -893,7 +905,8 @@ class _HomeState extends State<Home> {
               toolbarHeight: 48,
               title: breviaBrand(),
               actions: [
-                if (tab == 0)
+                if (tab == 0 &&
+                    (model.live == null || model.live?['state'] == 'ended'))
                   IconButton.filled(
                     tooltip: tr('新建录音'),
                     onPressed: model.busy ? null : prepare,
@@ -1237,7 +1250,11 @@ class _ConnectionPageState extends State<ConnectionPage> {
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 16),
-          Center(child: MicrophoneLevel(level: widget.model.previewLevel ?? 0)),
+          ValueListenableBuilder<double>(
+            valueListenable: widget.model.inputLevel,
+            builder: (_, value, _) =>
+                Center(child: MicrophoneLevel(level: value)),
+          ),
           const SizedBox(height: 24),
           Text(tr('电脑已选择此手机为声源，开始录音后这里会显示采集状态。')),
           const SizedBox(height: 24),
@@ -1915,6 +1932,7 @@ class MeetingPage extends StatefulWidget {
 }
 
 class _MeetingPageState extends State<MeetingPage> {
+  bool recordingOverview = true;
   int tab = 0;
   String query = '';
   final scroll = ScrollController();
@@ -2273,9 +2291,14 @@ class _MeetingPageState extends State<MeetingPage> {
       final live =
           widget.model.live?['id'] == widget.id &&
           (widget.model.serviceRunning || widget.model.engine != null);
+      final canReview =
+          !ended &&
+          live &&
+          m['desktopCapture'] != true &&
+          m['localOnly'] != true;
       final recordingFocus =
           m['desktopCapture'] == true ||
-          (!ended && (m['localOnly'] == true || !live));
+          (!ended && (m['localOnly'] == true || !live || recordingOverview));
       final darkRecording =
           !ended &&
           !recordingFocus &&
@@ -2393,6 +2416,30 @@ class _MeetingPageState extends State<MeetingPage> {
                   ],
                 ),
           actions: [
+            if (canReview && recordingOverview) ...[
+              IconButton(
+                tooltip: tr('转写'),
+                onPressed: () => setState(() {
+                  recordingOverview = false;
+                  tab = 0;
+                }),
+                icon: const BreviaIcon(Icons.article_outlined),
+              ),
+              IconButton(
+                tooltip: tr('笔记'),
+                onPressed: () => setState(() {
+                  recordingOverview = false;
+                  tab = 1;
+                }),
+                icon: const BreviaIcon(Icons.edit_note),
+              ),
+            ],
+            if (canReview && !recordingOverview)
+              IconButton(
+                tooltip: tr('返回录音'),
+                onPressed: () => setState(() => recordingOverview = true),
+                icon: const BreviaIcon(Icons.mic_none),
+              ),
             PopupMenuButton<String>(
               icon: const Icon(Icons.more_horiz),
               tooltip: tr("会议操作"),
@@ -2467,483 +2514,543 @@ class _MeetingPageState extends State<MeetingPage> {
           ],
         ),
         body: SafeArea(
-          child: Column(
-            children: [
-              ConstrainedBox(
-                constraints: BoxConstraints(maxHeight: contentHeight * .32),
-                child: SingleChildScrollView(
-                  primary: false,
-                  child: Padding(
-                    padding: EdgeInsets.fromLTRB(24, 8, 24, 12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        if (darkRecording)
-                          Padding(
-                            padding: EdgeInsets.only(bottom: 12),
-                            child: Text(
-                              m['title'] ?? tr("会议"),
-                              style: Theme.of(context).textTheme.headlineLarge,
+          child: recordingFocus && !ended
+              ? RecordingFocus(
+                  meeting: m,
+                  desktopName: widget.model.desktop?.name,
+                  live: live,
+                  pending: recordingCommandPending || ending,
+                  level: widget.model.inputLevel,
+                  onPause: toggleRecording,
+                  onMark: live ? () => report(context, mark) : null,
+                  onEnd: end,
+                )
+              : Column(
+                  children: [
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight: contentHeight * .32,
+                      ),
+                      child: SingleChildScrollView(
+                        primary: false,
+                        child: Padding(
+                          padding: EdgeInsets.fromLTRB(24, 8, 24, 12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              if (darkRecording)
+                                Padding(
+                                  padding: EdgeInsets.only(bottom: 12),
+                                  child: Text(
+                                    m['title'] ?? tr("会议"),
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.headlineLarge,
+                                  ),
+                                ),
+                              if (darkRecording)
+                                Text.rich(
+                                  TextSpan(
+                                    children: [
+                                      TextSpan(
+                                        text: '● ',
+                                        style: TextStyle(
+                                          color: state == 'recording' && live
+                                              ? const Color(0xffff3b30)
+                                              : Theme.of(
+                                                  context,
+                                                ).colorScheme.onSurfaceVariant,
+                                        ),
+                                      ),
+                                      TextSpan(
+                                        text:
+                                            '$label · ${durationText(m['samples'] ?? 0)}',
+                                      ),
+                                    ],
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                              if (ended && m['localOnly'] == true)
+                                Padding(
+                                  padding: EdgeInsets.only(top: 16),
+                                  child: FilledButton.icon(
+                                    onPressed: widget.model.busy
+                                        ? null
+                                        : () => uploadRecording(
+                                            context,
+                                            widget.model,
+                                            widget.id,
+                                          ),
+                                    icon: BreviaIcon(Icons.upload_outlined),
+                                    label: Text(tr('上传到电脑')),
+                                  ),
+                                ),
+                              if (!ended && !recordingFocus)
+                                MeetingConnectionStatus(meeting: m),
+                              if (ended &&
+                                  m['localOnly'] != true &&
+                                  m['finished'] != true &&
+                                  m['remoteDeleted'] != true &&
+                                  m['connected'] == false)
+                                const ConnectionRecoveryNotice(),
+                              if (m['remoteDeleted'] == true ||
+                                  m['error'] != null ||
+                                  snapshot['error'] != null)
+                                Padding(
+                                  padding: EdgeInsets.only(top: 16),
+                                  child: Text(
+                                    m['remoteDeleted'] == true
+                                        ? tr('会议已在电脑永久删除')
+                                        : m['error']?.toString() ??
+                                              remoteError(
+                                                snapshot['error'].toString(),
+                                              ),
+                                    maxLines: 3,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              if ((m['gaps'] as List? ?? []).isNotEmpty)
+                                Text(
+                                  tr("本次录音包含中断缺口"),
+                                  style: TextStyle(fontSize: 13),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (!recordingFocus)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            border: Border(
+                              bottom: BorderSide(
+                                color: Theme.of(context).dividerColor,
+                              ),
                             ),
                           ),
-                        if (darkRecording)
-                          Text.rich(
-                            TextSpan(
-                              children: [
-                                TextSpan(
-                                  text: '● ',
-                                  style: TextStyle(
-                                    color: state == 'recording' && live
+                          child: Row(
+                            children: [
+                              for (final (i, text)
+                                  in (ended
+                                      ? [
+                                          (1, tr('笔记')),
+                                          (0, tr('转写')),
+                                          (2, tr('重点')),
+                                        ]
+                                      : [
+                                          (0, tr('转写')),
+                                          (1, tr('笔记')),
+                                          (2, tr('重点')),
+                                        ]))
+                                Expanded(
+                                  child: AnimatedContainer(
+                                    duration:
+                                        MediaQuery.disableAnimationsOf(context)
+                                        ? Duration.zero
+                                        : const Duration(milliseconds: 180),
+                                    decoration: BoxDecoration(
+                                      border: Border(
+                                        bottom: BorderSide(
+                                          color: tab == i
+                                              ? Theme.of(
+                                                  context,
+                                                ).colorScheme.onSurface
+                                              : Colors.transparent,
+                                          width: 2,
+                                        ),
+                                      ),
+                                    ),
+                                    child: TextButton(
+                                      onPressed: () => setState(() {
+                                        tab = i;
+                                        following = false;
+                                      }),
+                                      child: Text(
+                                        text,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontWeight: tab == i
+                                              ? FontWeight.w600
+                                              : FontWeight.w400,
+                                          color: tab == i
+                                              ? Theme.of(
+                                                  context,
+                                                ).colorScheme.onSurface
+                                              : Theme.of(
+                                                  context,
+                                                ).colorScheme.onSurfaceVariant,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    if (ended && tab == 0)
+                      Padding(
+                        padding: EdgeInsets.fromLTRB(24, 8, 24, 8),
+                        child: TextField(
+                          onChanged: (v) => setState(() => query = v),
+                          decoration: InputDecoration(
+                            hintText: tr("搜索转写"),
+                            prefixIcon: BreviaIcon(Icons.search),
+                            isDense: true,
+                          ),
+                        ),
+                      ),
+                    Expanded(
+                      child: AnimatedSwitcher(
+                        duration: MediaQuery.disableAnimationsOf(context)
+                            ? Duration.zero
+                            : const Duration(milliseconds: 160),
+                        layoutBuilder: (current, previous) =>
+                            current ?? const SizedBox(),
+                        child: ListView(
+                          key: ValueKey(tab),
+                          controller: scroll,
+                          padding: EdgeInsets.all(24),
+                          children: [
+                            if (recordingFocus) ...[
+                              if (m['desktopCapture'] == true) ...[
+                                StableStatusText(
+                                  tr(
+                                    ended
+                                        ? '录音已结束'
+                                        : !live
+                                        ? '录音已中断'
+                                        : state != 'recording'
+                                        ? '录音已暂停'
+                                        : m['connected'] == false
+                                        ? '正在录音，等待电脑连接'
+                                        : '电脑正在使用\n手机麦克风',
+                                  ),
+                                  states: [
+                                    for (final value in [
+                                      '录音已结束',
+                                      '录音已中断',
+                                      '录音已暂停',
+                                      '正在录音，等待电脑连接',
+                                      '电脑正在使用\n手机麦克风',
+                                    ])
+                                      tr(value),
+                                  ],
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.headlineLarge,
+                                ),
+                                const SizedBox(height: 20),
+                                if (!ended && widget.model.desktop != null)
+                                  ListTile(
+                                    leading: const BreviaIcon(
+                                      Icons.laptop_outlined,
+                                    ),
+                                    title: Text(widget.model.desktop!.name),
+                                    subtitle: Text(tr('由电脑发起')),
+                                  ),
+                                const SizedBox(height: 24),
+                              ] else
+                                const SizedBox(height: 48),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  BreviaIcon(
+                                    live && state == 'recording'
+                                        ? Icons.circle
+                                        : Icons.pause,
+                                    size: 12,
+                                    color: live && state == 'recording'
                                         ? const Color(0xffff3b30)
                                         : Theme.of(
                                             context,
                                           ).colorScheme.onSurfaceVariant,
                                   ),
-                                ),
-                                TextSpan(
-                                  text:
-                                      '$label · ${durationText(m['samples'] ?? 0)}',
-                                ),
-                              ],
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        if (ended && m['localOnly'] == true)
-                          Padding(
-                            padding: EdgeInsets.only(top: 16),
-                            child: FilledButton.icon(
-                              onPressed: widget.model.busy
-                                  ? null
-                                  : () => uploadRecording(
-                                      context,
-                                      widget.model,
-                                      widget.id,
-                                    ),
-                              icon: BreviaIcon(Icons.upload_outlined),
-                              label: Text(tr('上传到电脑')),
-                            ),
-                          ),
-                        if (!ended && !recordingFocus)
-                          MeetingConnectionStatus(meeting: m),
-                        if (ended &&
-                            m['localOnly'] != true &&
-                            m['finished'] != true &&
-                            m['remoteDeleted'] != true &&
-                            m['connected'] == false)
-                          const ConnectionRecoveryNotice(),
-                        if (m['remoteDeleted'] == true ||
-                            m['error'] != null ||
-                            snapshot['error'] != null)
-                          Padding(
-                            padding: EdgeInsets.only(top: 16),
-                            child: Text(
-                              m['remoteDeleted'] == true
-                                  ? tr('会议已在电脑永久删除')
-                                  : m['error']?.toString() ??
-                                        remoteError(
-                                          snapshot['error'].toString(),
-                                        ),
-                              maxLines: 3,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        if ((m['gaps'] as List? ?? []).isNotEmpty)
-                          Text(
-                            tr("本次录音包含中断缺口"),
-                            style: TextStyle(fontSize: 13),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              if (!recordingFocus)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      border: Border(
-                        bottom: BorderSide(
-                          color: Theme.of(context).dividerColor,
-                        ),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        for (final (i, text)
-                            in (ended
-                                ? [(1, tr('笔记')), (0, tr('转写')), (2, tr('重点'))]
-                                : [
-                                    (0, tr('转写')),
-                                    (1, tr('笔记')),
-                                    (2, tr('重点')),
-                                  ]))
-                          Expanded(
-                            child: AnimatedContainer(
-                              duration: MediaQuery.disableAnimationsOf(context)
-                                  ? Duration.zero
-                                  : const Duration(milliseconds: 180),
-                              decoration: BoxDecoration(
-                                border: Border(
-                                  bottom: BorderSide(
-                                    color: tab == i
-                                        ? Theme.of(
-                                            context,
-                                          ).colorScheme.onSurface
-                                        : Colors.transparent,
-                                    width: 2,
-                                  ),
-                                ),
-                              ),
-                              child: TextButton(
-                                onPressed: () => setState(() {
-                                  tab = i;
-                                  following = false;
-                                }),
-                                child: Text(
-                                  text,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontWeight: tab == i
-                                        ? FontWeight.w600
-                                        : FontWeight.w400,
-                                    color: tab == i
-                                        ? Theme.of(
-                                            context,
-                                          ).colorScheme.onSurface
-                                        : Theme.of(
-                                            context,
-                                          ).colorScheme.onSurfaceVariant,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-              if (ended && tab == 0)
-                Padding(
-                  padding: EdgeInsets.fromLTRB(24, 8, 24, 8),
-                  child: TextField(
-                    onChanged: (v) => setState(() => query = v),
-                    decoration: InputDecoration(
-                      hintText: tr("搜索转写"),
-                      prefixIcon: BreviaIcon(Icons.search),
-                      isDense: true,
-                    ),
-                  ),
-                ),
-              Expanded(
-                child: AnimatedSwitcher(
-                  duration: MediaQuery.disableAnimationsOf(context)
-                      ? Duration.zero
-                      : const Duration(milliseconds: 160),
-                  layoutBuilder: (current, previous) =>
-                      current ?? const SizedBox(),
-                  child: ListView(
-                    key: ValueKey(tab),
-                    controller: scroll,
-                    padding: EdgeInsets.all(24),
-                    children: [
-                      if (recordingFocus) ...[
-                        if (m['desktopCapture'] == true) ...[
-                          StableStatusText(
-                            tr(
-                              ended
-                                  ? '录音已结束'
-                                  : !live
-                                  ? '录音已中断'
-                                  : state != 'recording'
-                                  ? '录音已暂停'
-                                  : m['connected'] == false
-                                  ? '正在录音，等待电脑连接'
-                                  : '电脑正在使用\n手机麦克风',
-                            ),
-                            states: [
-                              for (final value in [
-                                '录音已结束',
-                                '录音已中断',
-                                '录音已暂停',
-                                '正在录音，等待电脑连接',
-                                '电脑正在使用\n手机麦克风',
-                              ])
-                                tr(value),
-                            ],
-                            style: Theme.of(context).textTheme.headlineLarge,
-                          ),
-                          const SizedBox(height: 20),
-                          if (!ended && widget.model.desktop != null)
-                            ListTile(
-                              leading: const BreviaIcon(Icons.laptop_outlined),
-                              title: Text(widget.model.desktop!.name),
-                              subtitle: Text(tr('由电脑发起')),
-                            ),
-                          const SizedBox(height: 24),
-                        ] else
-                          const SizedBox(height: 48),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            BreviaIcon(
-                              live && state == 'recording'
-                                  ? Icons.circle
-                                  : Icons.pause,
-                              size: 12,
-                              color: live && state == 'recording'
-                                  ? const Color(0xffff3b30)
-                                  : Theme.of(
-                                      context,
-                                    ).colorScheme.onSurfaceVariant,
-                            ),
-                            const SizedBox(width: 8),
-                            Flexible(
-                              child: StableStatusText(
-                                tr(
-                                  ended
-                                      ? '录音已结束'
-                                      : !live
-                                      ? '录音已中断'
-                                      : state != 'recording'
-                                      ? '录音已暂停'
-                                      : m['connected'] == false &&
-                                            m['localOnly'] != true
-                                      ? '仍在本机录音'
-                                      : '录音中',
-                                ),
-                                states: [
-                                  for (final value in [
-                                    '录音已结束',
-                                    '录音已中断',
-                                    '录音已暂停',
-                                    '仍在本机录音',
-                                    '录音中',
-                                  ])
-                                    tr(value),
-                                ],
-                                style: Theme.of(context).textTheme.titleLarge,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          durationText(m['samples'] ?? 0),
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.headlineLarge
-                              ?.copyWith(
-                                fontSize: 48,
-                                fontFeatures: const [
-                                  FontFeature.tabularFigures(),
-                                ],
-                              ),
-                        ),
-                        const SizedBox(height: 20),
-                        const Center(
-                          child: BreviaIcon(Icons.mic_none, size: 32),
-                        ),
-                        const SizedBox(height: 16),
-                        Center(
-                          child: MicrophoneLevel(
-                            level: live && state == 'recording'
-                                ? (m['inputLevel'] as num? ?? 0).toDouble()
-                                : 0,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        StableStatusText(
-                          [
-                            if (state == 'paused') tr('暂停期间不采集音频'),
-                            if (live &&
-                                m['desktopCapture'] == true &&
-                                m['connected'] == false)
-                              tr('音频保留在手机，恢复连接后自动补传。'),
-                          ].join('\n'),
-                          states: [
-                            [
-                              tr('暂停期间不采集音频'),
-                              if (m['desktopCapture'] == true)
-                                tr('音频保留在手机，恢复连接后自动补传。'),
-                            ].join('\n'),
-                          ],
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                        const SizedBox(height: 28),
-                        Container(
-                          padding: EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.surfaceContainerLowest,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Row(
-                            children: [
-                              BreviaIcon(Icons.phone_iphone_outlined),
-                              SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
+                                  const SizedBox(width: 8),
+                                  Flexible(
+                                    child: StableStatusText(
                                       tr(
-                                        m['desktopCapture'] == true
-                                            ? '电脑会议的手机录音'
-                                            : '仅保存在手机',
-                                      ),
-                                    ),
-                                    SizedBox(height: 6),
-                                    Text(
-                                      tr(
-                                        m['desktopCapture'] == true
-                                            ? '这场会议由电脑发起，逐字稿和笔记保存在电脑。录音保留在手机，断线后可补传。'
+                                        ended
+                                            ? '录音已结束'
                                             : !live
-                                            ? '上次录音已中断。已录内容保留，中断期间没有录音。'
-                                            : '无需连接电脑。录音保存在本机，连接后由你主动上传。',
+                                            ? '录音已中断'
+                                            : state != 'recording'
+                                            ? '录音已暂停'
+                                            : m['connected'] == false &&
+                                                  m['localOnly'] != true
+                                            ? '仍在本机录音'
+                                            : '录音中',
                                       ),
+                                      states: [
+                                        for (final value in [
+                                          '录音已结束',
+                                          '录音已中断',
+                                          '录音已暂停',
+                                          '仍在本机录音',
+                                          '录音中',
+                                        ])
+                                          tr(value),
+                                      ],
                                       style: Theme.of(
                                         context,
-                                      ).textTheme.bodySmall,
+                                      ).textTheme.titleLarge,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                durationText(m['samples'] ?? 0),
+                                textAlign: TextAlign.center,
+                                style: Theme.of(context).textTheme.headlineLarge
+                                    ?.copyWith(
+                                      fontSize: 48,
+                                      fontFeatures: const [
+                                        FontFeature.tabularFigures(),
+                                      ],
+                                    ),
+                              ),
+                              const SizedBox(height: 20),
+                              const Center(
+                                child: BreviaIcon(Icons.mic_none, size: 32),
+                              ),
+                              const SizedBox(height: 16),
+                              Center(
+                                child: MicrophoneLevel(
+                                  level: live && state == 'recording'
+                                      ? (m['inputLevel'] as num? ?? 0)
+                                            .toDouble()
+                                      : 0,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              StableStatusText(
+                                [
+                                  if (state == 'paused') tr('暂停期间不采集音频'),
+                                  if (live &&
+                                      m['desktopCapture'] == true &&
+                                      m['connected'] == false)
+                                    tr('音频保留在手机，恢复连接后自动补传。'),
+                                ].join('\n'),
+                                states: [
+                                  [
+                                    tr('暂停期间不采集音频'),
+                                    if (m['desktopCapture'] == true)
+                                      tr('音频保留在手机，恢复连接后自动补传。'),
+                                  ].join('\n'),
+                                ],
+                                textAlign: TextAlign.center,
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                              const SizedBox(height: 28),
+                              Container(
+                                padding: EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.surfaceContainerLowest,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  children: [
+                                    BreviaIcon(Icons.phone_iphone_outlined),
+                                    SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            tr(
+                                              m['desktopCapture'] == true
+                                                  ? '电脑会议的手机录音'
+                                                  : '仅保存在手机',
+                                            ),
+                                          ),
+                                          SizedBox(height: 6),
+                                          Text(
+                                            tr(
+                                              m['desktopCapture'] == true
+                                                  ? '这场会议由电脑发起，逐字稿和笔记保存在电脑。录音保留在手机，断线后可补传。'
+                                                  : !live
+                                                  ? '上次录音已中断。已录内容保留，中断期间没有录音。'
+                                                  : '无需连接电脑。录音保存在本机，连接后由你主动上传。',
+                                            ),
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.bodySmall,
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                   ],
                                 ),
                               ),
                             ],
-                          ),
-                        ),
-                      ],
-                      if (!recordingFocus && tab == 0)
-                        transcript(snapshot['segments'] as List? ?? [], ended),
-                      if (!recordingFocus &&
-                          tab == 1 &&
-                          ((snapshot['notes'] as String? ?? '').isNotEmpty ||
-                              !waitingForComputer(m, widget.model)))
-                        Container(
-                          padding: ended
-                              ? EdgeInsets.zero
-                              : const EdgeInsets.all(16),
-                          decoration: ended
-                              ? null
-                              : BoxDecoration(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.surfaceContainerLowest,
-                                  border: Border.all(
-                                    color: Theme.of(context).dividerColor,
-                                  ),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                          child: SelectionArea(
-                            child: MarkdownBody(
-                              data: (snapshot['notes'] as String? ?? '').isEmpty
-                                  ? tr("电脑生成或保存笔记后会显示在这里。")
-                                  : snapshot['notes'],
-                              sizedImageBuilder: (_) => Text(tr("图片请在电脑查看")),
-                              styleSheet: MarkdownStyleSheet(
-                                p: Theme.of(context).textTheme.bodyLarge,
-                                h2: Theme.of(context).textTheme.titleLarge,
-                                h2Padding: EdgeInsets.only(top: 16, bottom: 8),
-                                blockSpacing: 12,
+                            if (!recordingFocus && tab == 0)
+                              transcript(
+                                snapshot['segments'] as List? ?? [],
+                                ended,
                               ),
-                            ),
-                          ),
-                        ),
-                      if (!recordingFocus && tab == 1)
-                        TranscriptionActivity(meeting: m, model: widget.model),
-                      if (!recordingFocus && tab == 2) ...[
-                        for (final mark in (m['marks'] as List? ?? []))
-                          ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            title: Text(
-                              mark['note'].toString().isEmpty
-                                  ? tr("重点")
-                                  : mark['note'],
-                            ),
-                            subtitle: Text(durationText(mark['sample'])),
-                            onTap: ended
-                                ? () => play(
-                                    milliseconds: ((mark['sample'] as num) / 16)
-                                        .round(),
-                                  )
-                                : null,
-                          ),
-                        if ((m['marks'] as List? ?? []).isEmpty)
-                          Text(tr("点击“重点”记录值得回看的时刻。")),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-              if (!ended && !recordingFocus && tab == 0 && !following)
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: () {
-                      setState(() => following = true);
-                    },
-                    child: Text(tr("回到最新")),
-                  ),
-                ),
-              Container(
-                margin: EdgeInsets.fromLTRB(24, 8, 24, 16),
-                padding: EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).scaffoldBackgroundColor,
-                  border: Border(
-                    top: BorderSide(color: Theme.of(context).dividerColor),
-                  ),
-                ),
-                child: ended
-                    ? Column(
-                        children: [
-                          Row(
-                            children: [
-                              StreamBuilder<PlayerState>(
-                                stream: _player?.playerStateStream,
-                                builder: (_, value) => IconButton.filledTonal(
-                                  style: IconButton.styleFrom(
-                                    backgroundColor: Theme.of(
-                                      context,
-                                    ).colorScheme.surfaceContainerLowest,
-                                  ),
-                                  tooltip: value.data?.playing == true
-                                      ? tr("暂停回听")
-                                      : tr("回听本机录音"),
-                                  onPressed: loadingAudio ? null : play,
-                                  icon: BreviaIcon(
-                                    value.data?.playing == true
-                                        ? Icons.pause
-                                        : Icons.play_arrow,
-                                    size: 24,
+                            if (!recordingFocus &&
+                                tab == 1 &&
+                                ((snapshot['notes'] as String? ?? '')
+                                        .isNotEmpty ||
+                                    !waitingForComputer(m, widget.model)))
+                              Container(
+                                padding: ended
+                                    ? EdgeInsets.zero
+                                    : const EdgeInsets.all(16),
+                                decoration: ended
+                                    ? null
+                                    : BoxDecoration(
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.surfaceContainerLowest,
+                                        border: Border.all(
+                                          color: Theme.of(context).dividerColor,
+                                        ),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                child: SelectionArea(
+                                  child: MarkdownBody(
+                                    data:
+                                        (snapshot['notes'] as String? ?? '')
+                                            .isEmpty
+                                        ? tr("电脑生成或保存笔记后会显示在这里。")
+                                        : snapshot['notes'],
+                                    sizedImageBuilder: (_) =>
+                                        Text(tr("图片请在电脑查看")),
+                                    styleSheet: MarkdownStyleSheet(
+                                      p: Theme.of(context).textTheme.bodyLarge,
+                                      h2: Theme.of(
+                                        context,
+                                      ).textTheme.titleLarge,
+                                      h2Padding: EdgeInsets.only(
+                                        top: 16,
+                                        bottom: 8,
+                                      ),
+                                      blockSpacing: 12,
+                                    ),
                                   ),
                                 ),
                               ),
-                              Expanded(
-                                child: StreamBuilder<Duration>(
-                                  stream: _player?.positionStream,
-                                  builder: (_, pos) => LayoutBuilder(
-                                    builder: (context, constraints) {
-                                      final time = Text(
-                                        '${durationText((pos.data?.inMilliseconds ?? 0) * 16)} / ${durationText(m['samples'] ?? 0)}',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodySmall
-                                            ?.copyWith(fontSize: 12),
-                                      );
-                                      final track = SizedBox(
-                                        height: 32,
-                                        child: Slider(
-                                          value:
-                                              (pos.data?.inMilliseconds
-                                                          .toDouble() ??
-                                                      0)
-                                                  .clamp(
-                                                    0,
+                            if (!recordingFocus && tab == 1)
+                              TranscriptionActivity(
+                                meeting: m,
+                                model: widget.model,
+                              ),
+                            if (!recordingFocus && tab == 2) ...[
+                              for (final mark in (m['marks'] as List? ?? []))
+                                ListTile(
+                                  contentPadding: EdgeInsets.zero,
+                                  title: Text(
+                                    mark['note'].toString().isEmpty
+                                        ? tr("重点")
+                                        : mark['note'],
+                                  ),
+                                  subtitle: Text(durationText(mark['sample'])),
+                                  onTap: ended
+                                      ? () => play(
+                                          milliseconds:
+                                              ((mark['sample'] as num) / 16)
+                                                  .round(),
+                                        )
+                                      : null,
+                                ),
+                              if ((m['marks'] as List? ?? []).isEmpty)
+                                Text(tr("点击“重点”记录值得回看的时刻。")),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                    if (!ended && !recordingFocus && tab == 0 && !following)
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: () {
+                            setState(() => following = true);
+                          },
+                          child: Text(tr("回到最新")),
+                        ),
+                      ),
+                    Container(
+                      margin: EdgeInsets.fromLTRB(24, 8, 24, 16),
+                      padding: EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).scaffoldBackgroundColor,
+                        border: Border(
+                          top: BorderSide(
+                            color: Theme.of(context).dividerColor,
+                          ),
+                        ),
+                      ),
+                      child: ended
+                          ? Column(
+                              children: [
+                                Row(
+                                  children: [
+                                    StreamBuilder<PlayerState>(
+                                      stream: _player?.playerStateStream,
+                                      builder: (_, value) =>
+                                          IconButton.filledTonal(
+                                            style: IconButton.styleFrom(
+                                              backgroundColor: Theme.of(context)
+                                                  .colorScheme
+                                                  .surfaceContainerLowest,
+                                            ),
+                                            tooltip: value.data?.playing == true
+                                                ? tr("暂停回听")
+                                                : tr("回听本机录音"),
+                                            onPressed: loadingAudio
+                                                ? null
+                                                : play,
+                                            icon: BreviaIcon(
+                                              value.data?.playing == true
+                                                  ? Icons.pause
+                                                  : Icons.play_arrow,
+                                              size: 24,
+                                            ),
+                                          ),
+                                    ),
+                                    Expanded(
+                                      child: StreamBuilder<Duration>(
+                                        stream: _player?.positionStream,
+                                        builder: (_, pos) => LayoutBuilder(
+                                          builder: (context, constraints) {
+                                            final time = Text(
+                                              '${durationText((pos.data?.inMilliseconds ?? 0) * 16)} / ${durationText(m['samples'] ?? 0)}',
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .bodySmall
+                                                  ?.copyWith(fontSize: 12),
+                                            );
+                                            final track = SizedBox(
+                                              height: 32,
+                                              child: Slider(
+                                                value:
+                                                    (pos.data?.inMilliseconds
+                                                                .toDouble() ??
+                                                            0)
+                                                        .clamp(
+                                                          0,
+                                                          (_player
+                                                                      ?.duration
+                                                                      ?.inMilliseconds
+                                                                      .toDouble() ??
+                                                                  1)
+                                                              .clamp(
+                                                                1,
+                                                                double.infinity,
+                                                              ),
+                                                        ),
+                                                max:
                                                     (_player
                                                                 ?.duration
                                                                 ?.inMilliseconds
@@ -2953,214 +3060,227 @@ class _MeetingPageState extends State<MeetingPage> {
                                                           1,
                                                           double.infinity,
                                                         ),
-                                                  ),
-                                          max:
-                                              (_player?.duration?.inMilliseconds
-                                                          .toDouble() ??
-                                                      1)
-                                                  .clamp(1, double.infinity),
-                                          onChanged: loadedAudio
-                                              ? (v) => player.seek(
-                                                  Duration(
-                                                    milliseconds: v.toInt(),
-                                                  ),
-                                                )
-                                              : null,
-                                        ),
-                                      );
-                                      // 小屏/系统大字保留完整时间，将播放轨道放到下一行。
-                                      if (constraints.maxWidth < 200 ||
-                                          MediaQuery.textScalerOf(
-                                                context,
-                                              ).scale(12) >
-                                              15) {
-                                        return Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.stretch,
-                                          children: [time, track],
-                                        );
-                                      }
-                                      return Row(
-                                        children: [
-                                          time,
-                                          const SizedBox(width: 8),
-                                          Expanded(child: track),
-                                        ],
-                                      );
-                                    },
-                                  ),
-                                ),
-                              ),
-                              TextButton(
-                                onPressed: () => setState(() {
-                                  player.setSpeed(
-                                    player.speed == 1
-                                        ? 1.5
-                                        : player.speed == 1.5
-                                        ? 2
-                                        : 1,
-                                  );
-                                }),
-                                child: Text('${_player?.speed ?? 1.0}×'),
-                              ),
-                            ],
-                          ),
-                          TranscriptionActivity(
-                            meeting: m,
-                            model: widget.model,
-                          ),
-                          Text(
-                            m['finished'] == true
-                                ? tr("电脑已完成处理")
-                                : m['localOnly'] == true
-                                ? tr("仅保存在手机")
-                                : tr("待补传或等待电脑处理，音频保留在手机"),
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        ],
-                      )
-                    : Column(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.surfaceContainerLowest,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: compactRecording
-                                ? Wrap(
-                                    spacing: 24,
-                                    runSpacing: 8,
-                                    children: [
-                                      for (final (icon, title, time)
-                                          in transferInfo)
-                                        Semantics(
-                                          label: title,
-                                          value: time,
-                                          child: Tooltip(
-                                            message: title,
-                                            excludeFromSemantics: true,
-                                            child: ExcludeSemantics(
-                                              child: Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  BreviaIcon(icon, size: 20),
-                                                  const SizedBox(width: 8),
-                                                  Text(
-                                                    time,
-                                                    style: Theme.of(context)
-                                                        .textTheme
-                                                        .bodySmall
-                                                        ?.copyWith(
-                                                          fontFeatures: const [
-                                                            FontFeature.tabularFigures(),
-                                                          ],
+                                                onChanged: loadedAudio
+                                                    ? (v) => player.seek(
+                                                        Duration(
+                                                          milliseconds: v
+                                                              .toInt(),
                                                         ),
-                                                  ),
-                                                ],
+                                                      )
+                                                    : null,
                                               ),
-                                            ),
-                                          ),
+                                            );
+                                            // 小屏/系统大字保留完整时间，将播放轨道放到下一行。
+                                            if (constraints.maxWidth < 200 ||
+                                                MediaQuery.textScalerOf(
+                                                      context,
+                                                    ).scale(12) >
+                                                    15) {
+                                              return Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.stretch,
+                                                children: [time, track],
+                                              );
+                                            }
+                                            return Row(
+                                              children: [
+                                                time,
+                                                const SizedBox(width: 8),
+                                                Expanded(child: track),
+                                              ],
+                                            );
+                                          },
                                         ),
-                                    ],
-                                  )
-                                : Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      for (final (icon, title, time)
-                                          in transferInfo)
-                                        Expanded(
-                                          child: Row(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              BreviaIcon(icon, size: 20),
-                                              const SizedBox(width: 8),
+                                      ),
+                                    ),
+                                    TextButton(
+                                      onPressed: () => setState(() {
+                                        player.setSpeed(
+                                          player.speed == 1
+                                              ? 1.5
+                                              : player.speed == 1.5
+                                              ? 2
+                                              : 1,
+                                        );
+                                      }),
+                                      child: Text('${_player?.speed ?? 1.0}×'),
+                                    ),
+                                  ],
+                                ),
+                                TranscriptionActivity(
+                                  meeting: m,
+                                  model: widget.model,
+                                ),
+                                Text(
+                                  m['finished'] == true
+                                      ? tr("电脑已完成处理")
+                                      : m['localOnly'] == true
+                                      ? tr("仅保存在手机")
+                                      : tr("待补传或等待电脑处理，音频保留在手机"),
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                              ],
+                            )
+                          : Column(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.surfaceContainerLowest,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: compactRecording
+                                      ? Wrap(
+                                          spacing: 24,
+                                          runSpacing: 8,
+                                          children: [
+                                            for (final (icon, title, time)
+                                                in transferInfo)
+                                              Semantics(
+                                                label: title,
+                                                value: time,
+                                                child: Tooltip(
+                                                  message: title,
+                                                  excludeFromSemantics: true,
+                                                  child: ExcludeSemantics(
+                                                    child: Row(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      children: [
+                                                        BreviaIcon(
+                                                          icon,
+                                                          size: 20,
+                                                        ),
+                                                        const SizedBox(
+                                                          width: 8,
+                                                        ),
+                                                        Text(
+                                                          time,
+                                                          style: Theme.of(context)
+                                                              .textTheme
+                                                              .bodySmall
+                                                              ?.copyWith(
+                                                                fontFeatures:
+                                                                    const [
+                                                                      FontFeature.tabularFigures(),
+                                                                    ],
+                                                              ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                          ],
+                                        )
+                                      : Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            for (final (icon, title, time)
+                                                in transferInfo)
                                               Expanded(
-                                                child: Column(
+                                                child: Row(
                                                   crossAxisAlignment:
                                                       CrossAxisAlignment.start,
                                                   children: [
-                                                    Text(
-                                                      title,
-                                                      style: Theme.of(context)
-                                                          .textTheme
-                                                          .bodySmall
-                                                          ?.copyWith(
-                                                            fontWeight:
-                                                                FontWeight.w600,
-                                                            color:
-                                                                Theme.of(
-                                                                      context,
-                                                                    )
-                                                                    .colorScheme
-                                                                    .onSurface,
+                                                    BreviaIcon(icon, size: 20),
+                                                    const SizedBox(width: 8),
+                                                    Expanded(
+                                                      child: Column(
+                                                        crossAxisAlignment:
+                                                            CrossAxisAlignment
+                                                                .start,
+                                                        children: [
+                                                          Text(
+                                                            title,
+                                                            style: Theme.of(context)
+                                                                .textTheme
+                                                                .bodySmall
+                                                                ?.copyWith(
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w600,
+                                                                  color: Theme.of(
+                                                                    context,
+                                                                  ).colorScheme.onSurface,
+                                                                ),
                                                           ),
-                                                    ),
-                                                    if (time.isNotEmpty) ...[
-                                                      const SizedBox(height: 4),
-                                                      Text(
-                                                        time,
-                                                        style: Theme.of(
-                                                          context,
-                                                        ).textTheme.bodySmall,
+                                                          if (time
+                                                              .isNotEmpty) ...[
+                                                            const SizedBox(
+                                                              height: 4,
+                                                            ),
+                                                            Text(
+                                                              time,
+                                                              style:
+                                                                  Theme.of(
+                                                                        context,
+                                                                      )
+                                                                      .textTheme
+                                                                      .bodySmall,
+                                                            ),
+                                                          ],
+                                                        ],
                                                       ),
-                                                    ],
+                                                    ),
                                                   ],
                                                 ),
                                               ),
-                                            ],
-                                          ),
+                                          ],
                                         ),
-                                    ],
-                                  ),
-                          ),
-                          SizedBox(height: 12),
-                          if (recordingFocus && !live) ...[
-                            SizedBox(
-                              width: double.infinity,
-                              child: FilledButton(
-                                onPressed: recordingCommandPending || ending
-                                    ? null
-                                    : toggleRecording,
-                                child: Text(tr('继续录音')),
-                              ),
-                            ),
-                            SizedBox(height: 12),
-                            SizedBox(
-                              width: double.infinity,
-                              child: OutlinedButton(
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: Theme.of(
-                                    context,
-                                  ).colorScheme.error,
-                                  side: BorderSide(
-                                    color: Theme.of(context).colorScheme.error,
-                                  ),
                                 ),
-                                onPressed: recordingCommandPending || ending
-                                    ? null
-                                    : end,
-                                child: Text(tr('结束并保存')),
-                              ),
+                                SizedBox(height: 12),
+                                if (recordingFocus && !live) ...[
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: FilledButton(
+                                      onPressed:
+                                          recordingCommandPending || ending
+                                          ? null
+                                          : toggleRecording,
+                                      child: Text(tr('继续录音')),
+                                    ),
+                                  ),
+                                  SizedBox(height: 12),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: OutlinedButton(
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: Theme.of(
+                                          context,
+                                        ).colorScheme.error,
+                                        side: BorderSide(
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.error,
+                                        ),
+                                      ),
+                                      onPressed:
+                                          recordingCommandPending || ending
+                                          ? null
+                                          : end,
+                                      child: Text(tr('结束并保存')),
+                                    ),
+                                  ),
+                                ] else
+                                  RecordingControls(
+                                    paused: state != 'recording' || !live,
+                                    pending: recordingCommandPending || ending,
+                                    onPause: toggleRecording,
+                                    onMark: live
+                                        ? () => report(context, mark)
+                                        : null,
+                                    onEnd: end,
+                                    localOnly: m['localOnly'] == true,
+                                  ),
+                              ],
                             ),
-                          ] else
-                            RecordingControls(
-                              paused: state != 'recording' || !live,
-                              pending: recordingCommandPending || ending,
-                              onPause: toggleRecording,
-                              onMark: live ? () => report(context, mark) : null,
-                              onEnd: end,
-                              localOnly: m['localOnly'] == true,
-                            ),
-                        ],
-                      ),
-              ),
-            ],
-          ),
+                    ),
+                  ],
+                ),
         ),
       );
     },

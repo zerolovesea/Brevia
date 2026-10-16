@@ -360,7 +360,7 @@ void main() {
       ),
     );
     await capture('mobile-live');
-    await tester.tap(find.text(tr('笔记')));
+    await tester.tap(find.byTooltip(tr('笔记')));
     await tester.pump();
     await capture('mobile-live-notes');
     await tester.tap(find.text(tr('转写')));
@@ -376,7 +376,7 @@ void main() {
     model.live!['uploaded'] = 20;
     model.notifyListeners();
     await capture('mobile-reconnected');
-    await tester.tap(find.text(tr('返回录音')));
+    await tester.tap(find.byTooltip(tr('返回录音')));
     await tester.pump(const Duration(milliseconds: 500));
     await capture('mobile-reconnected-transcript');
 
@@ -420,6 +420,7 @@ void main() {
     await capture('mobile-live-dark');
     model.live!['desktopCapture'] = true;
     model.live!['inputLevel'] = .5;
+    model.inputLevel.value = .5;
     model.desktop = DesktopConnection(
       address: 'https://192.168.1.24:43187',
       fingerprint: 'fixture',

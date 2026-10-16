@@ -52,6 +52,16 @@ class BrokenStore extends RecordingStore {
   }
 }
 
+class CountingStore extends RecordingStore {
+  CountingStore(super.directory, super.meta);
+  int saves = 0;
+  @override
+  Future<void> save() async {
+    saves++;
+    await super.save();
+  }
+}
+
 class Engine extends RecordingEngine {
   final FakeRecorder fake = FakeRecorder();
   Engine(RecordingStore s)
@@ -141,6 +151,58 @@ void main() {
     );
     expect(pcmLevel(Uint8List.fromList([255, 127])), 1);
   });
+  test(
+    'meter frames update independently without replacing the recording snapshot',
+    () {
+      final model = AppModel();
+      model.receive({'id': 'live', 'state': 'recording', 'samples': 16000});
+      final snapshot = model.live;
+      var changes = 0;
+      model.addListener(() => changes++);
+      model.receive({'id': 'live', 'inputLevel': .7});
+      expect(model.inputLevel.value, .7);
+      expect(model.live, same(snapshot));
+      expect(model.live!['samples'], 16000);
+      expect(changes, 0);
+      model.receive({'id': 'old', 'inputLevel': .1});
+      expect(model.inputLevel.value, .7);
+      model.receive({'id': 'live', 'state': 'paused', 'samples': 16000});
+      expect(model.inputLevel.value, 0);
+      expect(changes, 1);
+      model.dispose();
+    },
+  );
+  test(
+    'short meter buffers still commit one complete ordered recording chunk',
+    () async {
+      final dir = await Directory.systemTemp.createTemp('brevia-meter-');
+      final store = CountingStore(dir, {'id': 'test', 'state': 'ended'});
+      final engine = Engine(store);
+      try {
+        await engine.beginCapture();
+        final initialSaves = store.saves;
+        engine.fake.stream.add(Uint8List(1600));
+        await Future<void>.delayed(Duration.zero);
+        await engine.disk;
+        expect(store.saves, initialSaves);
+        expect(store.samples, 0);
+        for (var i = 0; i < 19; i++) {
+          engine.fake.stream.add(Uint8List(1600));
+        }
+        await Future<void>.delayed(Duration.zero);
+        await engine.disk;
+        expect(store.count, 1);
+        expect(store.samples, 16000);
+        expect(store.saves, initialSaves + 1);
+        expect(await store.chunk(0).length(), 32000);
+      } finally {
+        engine.closing = true;
+        await engine.fake.stream.close();
+        await engine.dispose();
+        await dir.delete(recursive: true);
+      }
+    },
+  );
   test(
     'phone preview sends only levels and releases the microphone in background',
     () async {
