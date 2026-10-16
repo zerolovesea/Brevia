@@ -102,6 +102,54 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets(
+    'long computer names keep connection status and recording reachable',
+    (tester) async {
+      tester.view.physicalSize = const Size(393, 852);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final model = AppModel()
+        ..desktop = DesktopConnection(
+          address: 'https://192.168.1.2',
+          fingerprint: 'paired',
+          name: 'design-studio-team-MacBook-Pro-30273.local',
+        );
+      addTearDown(model.dispose);
+      await tester.pumpWidget(BreviaApp(model: model));
+      await tester.pumpAndSettle();
+      expect(find.text('离线').hitTestable(), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, '开始录音'), findsNothing);
+      await tester.tap(find.widgetWithText(FilledButton, '新建录音'));
+      await tester.pumpAndSettle();
+      expect(find.byType(PrepareMeetingPage), findsOneWidget);
+      expect(find.text('开始录音').hitTestable(), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('settings keep primary entries visible inside phone safe areas', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(393, 852);
+    tester.view.devicePixelRatio = 1;
+    tester.view.padding = const FakeViewPadding(top: 59, bottom: 34);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPadding);
+    final model = AppModel();
+    addTearDown(model.dispose);
+    await tester.pumpWidget(BreviaApp(model: model));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.settings_outlined).last);
+    await tester.pumpAndSettle();
+    for (final title in ['界面语言', '外观', '录音与后台', '连接与设备', '本地存储', '隐私与关于']) {
+      expect(find.text(title).hitTestable(), findsOneWidget, reason: title);
+    }
+    expect(find.text('麦克风权限'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('desktop microphone separates paused and disconnected capture', (
     tester,
   ) async {

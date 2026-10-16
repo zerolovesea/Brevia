@@ -187,6 +187,78 @@ void main() {
       ),
     );
     await capture('ios-mic-large-text');
+    model.live = null;
+    model.serviceRunning = false;
+    model.desktopMicrophoneSelected = false;
+    model.desktopOnline = false;
+    model.desktop!.name = 'design-studio-team-MacBook-Pro-30273.local';
+    final saved = model.meetings;
+    model.meetings = [];
+    await tester.pumpWidget(BreviaApp(model: model));
+    await tester.pumpAndSettle();
+    await capture('ios-aligned-library-empty');
+    await tester.tap(find.byIcon(Icons.link_outlined).last);
+    await tester.pumpAndSettle();
+    expect(find.text('取消信任此电脑').hitTestable(), findsOneWidget);
+    await capture('ios-aligned-connection-long');
+    await tester.tap(find.byIcon(Icons.settings_outlined).last);
+    await tester.pumpAndSettle();
+    await capture('ios-aligned-settings');
+    model.desktop!.name = 'MacBook Pro';
+    model.desktopOnline = true;
+    model.meetings = [
+      ...saved,
+      {
+        ...saved.first,
+        'id': 'visual-design',
+        'title': '设计评审',
+        'created': DateTime.now().copyWith(hour: 14).toIso8601String(),
+      },
+      {
+        ...saved.first,
+        'id': 'visual-offline',
+        'title': '灵感记录',
+        'localOnly': true,
+        'created': DateTime.now()
+            .subtract(const Duration(days: 1))
+            .toIso8601String(),
+      },
+    ];
+    model.notifyListeners();
+    await tester.tap(find.byIcon(Icons.article_outlined).last);
+    await tester.pumpAndSettle();
+    await capture('ios-aligned-library');
+    await tester.tap(find.byIcon(Icons.link_outlined).last);
+    await tester.pumpAndSettle();
+    await capture('ios-aligned-connection');
+    model.appearance = 'dark';
+    model.notifyListeners();
+    await tester.pumpAndSettle();
+    await capture('ios-aligned-connection-dark');
+    await tester.tap(find.byIcon(Icons.settings_outlined).last);
+    await tester.pumpAndSettle();
+    await capture('ios-aligned-settings-dark');
+    model.appearance = 'light';
+    await tester.pumpWidget(
+      MaterialApp(
+        key: UniqueKey(),
+        debugShowCheckedModeBanner: false,
+        theme: breviaTheme(Brightness.light),
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: TextScaler.linear(2)),
+          child: child!,
+        ),
+        home: Home(model: model),
+      ),
+    );
+    await tester.tap(find.byIcon(Icons.settings_outlined).last);
+    await tester.pumpAndSettle();
+    await capture('ios-aligned-settings-large');
+    await tester.tap(find.byIcon(Icons.link_outlined).last);
+    await tester.pumpAndSettle();
+    await capture('ios-aligned-connection-large');
     await tester.pumpWidget(const SizedBox());
   });
 }

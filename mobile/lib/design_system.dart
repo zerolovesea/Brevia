@@ -135,19 +135,19 @@ ThemeData breviaTheme(Brightness brightness) {
           ),
           bodySmall: TextStyle(
             fontSize: 14,
-            height: 1.5,
+            height: 1.4,
             fontWeight: FontWeight.w400,
             color: muted,
           ),
           bodyLarge: TextStyle(
             fontSize: 17,
-            height: 1.55,
+            height: 1.4,
             fontWeight: FontWeight.w400,
             color: ink,
           ),
           bodyMedium: TextStyle(
             fontSize: 16,
-            height: 1.5,
+            height: 1.4,
             fontWeight: FontWeight.w400,
             color: ink,
           ),
@@ -155,7 +155,7 @@ ThemeData breviaTheme(Brightness brightness) {
         .apply(fontFamily: fontFamily),
     dividerTheme: DividerThemeData(
       color: dark ? Color(0xff4a4a4a) : Color(0xffd6d6d6),
-      thickness: 1,
+      thickness: .5,
       space: 32,
     ),
     inputDecorationTheme: InputDecorationTheme(
@@ -241,7 +241,19 @@ ThemeData breviaTheme(Brightness brightness) {
     listTileTheme: ListTileThemeData(
       iconColor: ink,
       contentPadding: EdgeInsets.zero,
-      minVerticalPadding: 14,
+      minVerticalPadding: 8,
+      titleTextStyle: TextStyle(
+        fontFamily: fontFamily,
+        fontSize: 17,
+        height: 1.3,
+        color: ink,
+      ),
+      subtitleTextStyle: TextStyle(
+        fontFamily: fontFamily,
+        fontSize: 14,
+        height: 1.4,
+        color: muted,
+      ),
     ),
     navigationBarTheme: NavigationBarThemeData(
       backgroundColor: canvas,
@@ -257,6 +269,9 @@ ThemeData breviaTheme(Brightness brightness) {
       labelTextStyle: WidgetStateProperty.resolveWith(
         (states) => TextStyle(
           fontSize: 12,
+          fontWeight: states.contains(WidgetState.selected)
+              ? FontWeight.w600
+              : FontWeight.w400,
           color: states.contains(WidgetState.selected) ? ink : muted,
         ),
       ),

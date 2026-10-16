@@ -1,6 +1,15 @@
 // Shared mobile UI, recording notifications and error messages. Keep placeholders consistent.
 const translations = {
   "en": {
+    "{0} 场": "{0} meetings",
+    "同一局域网": "Same local network",
+    "电脑可将此手机选为录音声源；开始采集时，手机会明确提示。":
+        "Your computer can select this phone as its audio source. The phone shows when capture starts.",
+    "录音保留在本机，上传由你确认。":
+        "Recordings stay on your phone. You choose when to upload.",
+    "已开启（自动）": "On (automatic)",
+    "录音期间断线后保留并补传":
+        "Keeps audio if disconnected and uploads after reconnecting",
     "更新通过 App Store 提供。": "Updates are provided through the App Store.",
     "完整隐私政策": "Full privacy policy",
     "反馈与支持": "Feedback and support",
@@ -440,6 +449,14 @@ const translations = {
         "Recording can continue while locked. Calls, force-stop or system limits can interrupt it; check the status when you return.\n\nAndroid uses a microphone foreground service. Allow recording notifications. If battery restrictions stop the app, adjust system settings. Return to the app to resume after pausing.",
   },
   "es": {
+    "{0} 场": "{0} reuniones",
+    "同一局域网": "Misma red local",
+    "电脑可将此手机选为录音声源；开始采集时，手机会明确提示。":
+        "El ordenador puede elegir este móvil como fuente de audio. El móvil indicará cuándo empieza la captura.",
+    "录音保留在本机，上传由你确认。":
+        "El audio se conserva en el móvil. Tú decides cuándo subirlo.",
+    "已开启（自动）": "Activada (automática)",
+    "录音期间断线后保留并补传": "Conserva el audio sin conexión y lo sube al reconectar",
     "更新通过 App Store 提供。": "Las actualizaciones se ofrecen en el App Store.",
     "完整隐私政策": "Política de privacidad completa",
     "反馈与支持": "Comentarios y soporte",
@@ -883,6 +900,13 @@ const translations = {
         "La grabación puede continuar con la pantalla bloqueada. Las llamadas, el cierre forzado o los límites del sistema pueden interrumpirla; comprueba el estado al volver.\n\nAndroid usa un servicio de micrófono en primer plano. Permite las notificaciones. Si el ahorro de batería cierra la app, ajusta el sistema. Vuelve a la app para continuar tras pausar.",
   },
   "ja": {
+    "{0} 场": "{0} 件",
+    "同一局域网": "同じローカルネットワーク",
+    "电脑可将此手机选为录音声源；开始采集时，手机会明确提示。":
+        "パソコンでこのスマホを音源に選択できます。音声の収集が始まるとスマホに表示されます。",
+    "录音保留在本机，上传由你确认。": "録音はスマホに保存され、アップロードは自分で選択できます。",
+    "已开启（自动）": "オン（自動）",
+    "录音期间断线后保留并补传": "切断中も音声を保存し、再接続後に送信",
     "更新通过 App Store 提供。": "アップデートは App Store で提供されます。",
     "完整隐私政策": "プライバシーポリシー全文",
     "反馈与支持": "フィードバックとサポート",
@@ -1278,6 +1302,13 @@ const translations = {
         "ロック中も録音できます。着信、強制終了、システム制限で中断される場合があるため、戻ったら状態を確認してください。\n\nAndroid はマイクのフォアグラウンドサービスを使用します。録音通知を許可してください。省電力設定でアプリが停止する場合はシステム設定を調整してください。一時停止後はアプリに戻って再開してください。",
   },
   "ko": {
+    "{0} 场": "{0}개",
+    "同一局域网": "동일한 로컬 네트워크",
+    "电脑可将此手机选为录音声源；开始采集时，手机会明确提示。":
+        "컴퓨터에서 이 휴대폰을 음원으로 선택할 수 있습니다. 수집이 시작되면 휴대폰에 표시됩니다.",
+    "录音保留在本机，上传由你确认。": "녹음은 휴대폰에 보관되며 업로드는 직접 선택합니다.",
+    "已开启（自动）": "켜짐 (자동)",
+    "录音期间断线后保留并补传": "연결이 끊겨도 저장하고 재연결 후 전송",
     "更新通过 App Store 提供。": "업데이트는 App Store를 통해 제공됩니다.",
     "完整隐私政策": "전체 개인정보 처리방침",
     "反馈与支持": "피드백 및 지원",
@@ -1673,6 +1704,15 @@ const translations = {
         "잠금 후에도 녹음할 수 있습니다. 통화, 강제 종료, 시스템 제한으로 중단될 수 있으니 돌아온 후 상태를 확인하세요.\n\nAndroid는 마이크 포그라운드 서비스를 사용합니다. 녹음 알림을 허용하세요. 절전 정책이 앱을 종료하면 시스템 설정을 조정하세요. 일시정지 후에는 앱에서 재개하세요.",
   },
   "fr": {
+    "{0} 场": "{0} réunions",
+    "同一局域网": "Même réseau local",
+    "电脑可将此手机选为录音声源；开始采集时，手机会明确提示。":
+        "Votre ordinateur peut sélectionner ce téléphone comme source audio. Le téléphone indique le début de la capture.",
+    "录音保留在本机，上传由你确认。":
+        "Les enregistrements restent sur le téléphone. Vous décidez de leur envoi.",
+    "已开启（自动）": "Activée (automatique)",
+    "录音期间断线后保留并补传":
+        "Conserve l’audio hors connexion et l’envoie au retour du réseau",
     "更新通过 App Store 提供。": "Les mises à jour sont proposées via l’App Store.",
     "完整隐私政策": "Politique de confidentialité complète",
     "反馈与支持": "Commentaires et assistance",
@@ -2122,6 +2162,15 @@ const translations = {
         "L’enregistrement peut continuer écran verrouillé. Appels, arrêt forcé ou limites système peuvent l’interrompre ; vérifiez l’état au retour.\n\nAndroid utilise un service de microphone au premier plan. Autorisez les notifications. Si l’économie de batterie arrête l’app, ajustez les réglages système. Revenez dans l’app pour reprendre après une pause.",
   },
   "de": {
+    "{0} 场": "{0} Meetings",
+    "同一局域网": "Gleiches lokales Netzwerk",
+    "电脑可将此手机选为录音声源；开始采集时，手机会明确提示。":
+        "Der Computer kann dieses Handy als Audioquelle auswählen. Das Handy zeigt an, wenn die Aufnahme beginnt.",
+    "录音保留在本机，上传由你确认。":
+        "Aufnahmen bleiben auf dem Handy. Du bestimmst den Upload.",
+    "已开启（自动）": "Ein (automatisch)",
+    "录音期间断线后保留并补传":
+        "Speichert Audio bei Verbindungsabbruch und überträgt es später",
     "更新通过 App Store 提供。": "Updates werden über den App Store bereitgestellt.",
     "完整隐私政策": "Vollständige Datenschutzerklärung",
     "反馈与支持": "Feedback und Support",
@@ -2569,6 +2618,14 @@ const translations = {
         "Aufnahme ist bei gesperrtem Bildschirm möglich. Anrufe, erzwungenes Beenden oder Systemlimits können sie unterbrechen; prüfen Sie den Status nach der Rückkehr.\n\nAndroid verwendet einen Mikrofon-Vordergrunddienst. Aufnahmebenachrichtigungen erlauben. Bei Beendigung durch Energiesparregeln die Systemeinstellungen anpassen. Nach einer Pause in der App fortsetzen.",
   },
   "ru": {
+    "{0} 场": "{0} встреч",
+    "同一局域网": "Одна локальная сеть",
+    "电脑可将此手机选为录音声源；开始采集时，手机会明确提示。":
+        "Компьютер может выбрать этот телефон источником звука. Телефон покажет, когда начнётся запись.",
+    "录音保留在本机，上传由你确认。":
+        "Записи остаются на телефоне. Вы выбираете, когда их отправить.",
+    "已开启（自动）": "Вкл. (автоматически)",
+    "录音期间断线后保留并补传": "Сохраняет звук при разрыве и отправляет после подключения",
     "更新通过 App Store 提供。": "Обновления доступны через App Store.",
     "完整隐私政策": "Полная политика конфиденциальности",
     "反馈与支持": "Обратная связь и поддержка",
