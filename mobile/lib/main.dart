@@ -2503,11 +2503,7 @@ class _MeetingPageState extends State<MeetingPage> {
                         m['remoteDeleted'] != true &&
                         m['connected'] == false)
                       const ConnectionRecoveryNotice(),
-                    if (!ended &&
-                        !recordingFocus &&
-                        m['connected'] == true &&
-                        (m['count'] as num? ?? 0) >
-                            (m['uploaded'] as num? ?? 0))
+                    if (!ended && !recordingFocus && m['connected'] == true)
                       Container(
                         margin: EdgeInsets.only(top: 16),
                         padding: EdgeInsets.all(16),
@@ -2523,11 +2519,12 @@ class _MeetingPageState extends State<MeetingPage> {
                             Text(tr('● 已连接')),
                             SizedBox(height: 12),
                             LinearProgressIndicator(
-                              value:
-                                  ((m['uploaded'] as num? ?? 0) /
-                                          (m['count'] as num))
-                                      .clamp(0, 1)
-                                      .toDouble(),
+                              value: (m['count'] as num? ?? 0) > 0
+                                  ? ((m['uploaded'] as num? ?? 0) /
+                                            (m['count'] as num))
+                                        .clamp(0, 1)
+                                        .toDouble()
+                                  : 1,
                               semanticsLabel: tr('已传到电脑  {0}', [
                                 durationText(snapshot['samples'] ?? 0),
                               ]),

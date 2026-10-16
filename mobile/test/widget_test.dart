@@ -443,6 +443,57 @@ void main() {
     expect(commands, 0);
   });
 
+  testWidgets('connected meeting status stays visible as upload catches up', (
+    tester,
+  ) async {
+    final model = AppModel()..serviceRunning = true;
+    addTearDown(model.dispose);
+    model.live = {
+      'id': 'live',
+      'title': '产品周会',
+      'state': 'recording',
+      'connected': true,
+      'localOnly': false,
+      'samples': 0,
+      'count': 0,
+      'uploaded': 0,
+      'snapshot': <String, dynamic>{},
+    };
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: breviaTheme(Brightness.light),
+        home: MeetingPage(model: model, id: 'live'),
+      ),
+    );
+    await tester.pump();
+    final status = find.text('● 已连接');
+    expect(status, findsOneWidget);
+    final position = tester.getTopLeft(status);
+    for (final counts in [(0, 0), (1, 0), (1, 1), (2, 1), (2, 2)]) {
+      model.live!['count'] = counts.$1;
+      model.live!['uploaded'] = counts.$2;
+      model.notifyListeners();
+      await tester.pump();
+      expect(status, findsOneWidget);
+      expect(tester.getTopLeft(status), position);
+      expect(
+        tester
+            .widget<LinearProgressIndicator>(
+              find.byType(LinearProgressIndicator),
+            )
+            .value,
+        counts.$1 == 0 ? 1 : counts.$2 / counts.$1,
+      );
+      expect(tester.takeException(), isNull);
+    }
+    model.live!['connected'] = false;
+    model.notifyListeners();
+    await tester.pump();
+    expect(status, findsNothing);
+    expect(find.byType(ConnectionRecoveryNotice), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('local and interrupted recording keep recovery actions visible', (
     tester,
   ) async {
