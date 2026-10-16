@@ -1375,11 +1375,7 @@ html[data-theme="dark"] .modal-backdrop:not(.settings-page) > .modal-panel {
   min-height: 44px;
   font-size: 16px;
 }
-.live-more-panel {
-  bottom: auto;
-  top: calc(100% + 8px);
-  right: 0;
-}
+
 .ai-suggestion {
   position: static;
   padding: 16px;
@@ -5135,17 +5131,6 @@ textarea,
   opacity: 1;
   visibility: visible;
 }
-#live-view .live-header .live-more {
-  margin-left: auto;
-  align-self: flex-start;
-}
-#live-view .live-header .live-more-toggle {
-  min-height: 36px;
-  width: 44px;
-  border: 1px solid var(--color-line);
-  border-radius: 8px;
-  background: var(--color-surface);
-}
 #live-view .live-layout {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -5199,7 +5184,28 @@ textarea,
   gap: 12px;
 }
 .live-control-bar .control-secondary {
-  justify-self: end;
+  justify-self: start;
+}
+.live-control-bar .live-caption-controls .icon-button {
+  width: 44px;
+  height: 44px;
+  padding: 10px;
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  color: var(--color-text-muted);
+}
+.live-control-bar .live-caption-controls .icon-button[data-enabled="true"] {
+  background: var(--color-selected);
+  color: var(--color-text);
+}
+.live-control-bar .live-caption-controls .icon-button:hover {
+  background: var(--color-selected);
+}
+.live-control-bar .live-caption-controls .flow-select-options {
+  left: 0;
+  right: auto;
+  max-height: min(360px, 60dvh);
+  overflow-y: auto;
 }
 /* 通用页和配置页共用二级导航；旧入口保留为控制器的数据挂载点。 */
 #settings-view.active {
@@ -6703,8 +6709,11 @@ body:has(.app-shell.is-live-meeting) .export-modal {
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 12px;
   }
-  #live-view .live-control-bar .control-secondary {
-    grid-column: 2;
+  #live-view .live-control-bar .control-source {
+    grid-column: 1 / -1;
+  }
+  #live-view .live-control-bar .control-primary {
+    justify-self: end;
   }
 }
 @media (max-width: 650px) {
@@ -7130,7 +7139,7 @@ body:has(.app-shell.is-live-meeting) .export-modal {
   width: 52px;
   height: 44px;
   flex: none;
-  order: 1;
+  order: 0;
   margin: auto auto 14px;
   padding: 5px;
   max-width: 100%;
@@ -7142,7 +7151,7 @@ body:has(.app-shell.is-live-meeting) .export-modal {
   line-height: 16px;
 }
 .app-shell.is-live-meeting:not(:has(.sidebar:hover, .sidebar:focus-within)) .mobile-sidebar-card {
-  margin-top: 0;
+  margin-top: auto;
 }
 .task-summary > span {
   display: flex;
@@ -9666,7 +9675,7 @@ html[data-theme="dark"] .onboarding-brand-mark {
 @container (min-width: 900px) {
   #detail-view .transcript-body .segment:has(.segment-tools) .segment-meta,
   .transcript-scroll .segment:has(.segment-tools) .segment-meta {
-    padding-inline-end: 560px;
+    padding-inline-end: 200px;
   }
   .segment-tools button span {
     display: inline;
@@ -9760,4 +9769,73 @@ html[data-theme="dark"] .onboarding-brand-mark {
     opacity: 1;
     pointer-events: auto;
   }
+}
+
+/* 重点用单行时间锚点区分普通笔记，全文按需展开。 */
+.note-highlight {
+  margin: 8px 0;
+  border-radius: 6px;
+  background: #edf7f5;
+  color: #176b68;
+  overflow: hidden;
+}
+.note-highlight-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 2px 8px;
+  font-size: 13px;
+}
+.note-highlight-line > svg,
+.note-highlight button svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+.note-highlight button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  min-width: 28px;
+  min-height: 28px;
+  border-radius: 4px;
+  color: inherit;
+}
+.note-highlight button:hover {
+  background: #176b6814;
+}
+.note-highlight button:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: -2px;
+}
+.note-highlight-preview {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+}
+.note-highlight .note-highlight-body {
+  margin: 0;
+  padding: 4px 12px 12px 32px;
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.note-highlight [aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+.detail-notes-content .note-highlight {
+  cursor: pointer;
+}
+[data-theme="dark"] .note-highlight {
+  background: #193633;
+  color: #a0d9d1;
+}
+#mark-important.icon-button {
+  width: 44px;
+  min-width: 44px;
+  padding-inline: 0;
 }

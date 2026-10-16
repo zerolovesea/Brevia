@@ -1122,12 +1122,9 @@ function renderPrepareSelects() {
       ? activeWorkspaceId
       : (values['meeting-workspace'] ?? activeWorkspaceId);
   const language = values['meeting-language'] || defaultMeetingLanguage();
-  // 换语言时保留用户显式选过的模型（只要它仍支持新语言），否则回到该语言的默认模型。
+  // 手动选择已按语言保存；不能把上一种语言的自动默认值当作当前语言的偏好。
   const modelOptions = refinedModelOptions(language);
-  const previousModel = values['refined-model'];
-  const refinedModel = modelOptions.some(([id]) => id === previousModel)
-    ? previousModel
-    : defaultRefinedModelId(language);
+  const refinedModel = defaultRefinedModelId(language);
   // 模型清单要等后端 initialize 返回；在那之前不渲染这一格，避免出现空白的禁用下拉。
   const modelLabel = prepareModelControl(language, refinedModel, modelOptions);
   prepareForm.querySelector('.form-grid').innerHTML =
@@ -2200,7 +2197,7 @@ audioDropzone.addEventListener('drop', (event) => {
   if (event.dataTransfer.files.length) void selectImportAudio(event.dataTransfer.files[0]);
 });
 /** 下拉使用视口坐标，避开表单滚动区裁切并在空间不足时向上展开。 */
-function fitFlowSelectOptions(options, toggle) {
+function fitFlowSelectOptions(options, toggle, minimumWidth = 160, maximumHeight = 256) {
   if (options.hidden) return;
   const value = toggle.closest('.flow-select')?.querySelector('input[type="hidden"]')?.value;
   options.querySelectorAll('[data-value]').forEach((choice) => {
@@ -2209,8 +2206,8 @@ function fitFlowSelectOptions(options, toggle) {
   const anchor = toggle.getBoundingClientRect();
   const available = Math.max(anchor.top - 12, innerHeight - anchor.bottom - 12);
   options.classList.add('is-floating');
-  options.style.width = `${Math.min(Math.max(anchor.width, 160), innerWidth - 24)}px`;
-  options.style.maxHeight = `${Math.min(256, Math.max(80, available))}px`;
+  options.style.width = `${Math.min(Math.max(anchor.width, minimumWidth), innerWidth - 24)}px`;
+  options.style.maxHeight = `${Math.min(maximumHeight, Math.max(80, available))}px`;
   options.style.left = `${Math.max(12, Math.min(anchor.left, innerWidth - options.offsetWidth - 12))}px`;
   options.style.top = `${anchor.bottom + options.offsetHeight + 12 <= innerHeight ? anchor.bottom + 4 : Math.max(12, anchor.top - options.offsetHeight - 4)}px`;
 }
@@ -2231,12 +2228,11 @@ document.addEventListener(
     for (const list of document.querySelectorAll(
       '.flow-select-options.is-floating:not([hidden])',
     )) {
-      if (!list.contains(event.target)) {
+      const select = list.closest('.flow-select');
+      // 字幕自动跟随等无关滚动不移动锚点，不能关闭用户正在操作的菜单。
+      if (event.target.contains?.(select)) {
         list.hidden = true;
-        list
-          .closest('.flow-select')
-          .querySelector('[data-flow-select-toggle]')
-          ?.setAttribute('aria-expanded', 'false');
+        select.querySelector('button')?.setAttribute('aria-expanded', 'false');
       }
     }
   },
@@ -5424,16 +5420,28 @@ function applyLanguage(nextLocale, animate = false) {
     if (activeModal) renderModal(activeModal);
     renderFloatingCaptionToggle();
     setLiveTranslationEnabled(translationAllowed);
+    renderLiveModelControl();
     renderPlaybackFloatingCaptionToggle();
     document.querySelectorAll('[data-tooltip-key]').forEach((button) => {
       const label = t(button.dataset.tooltipKey);
       button.dataset.tooltip = label;
       button.setAttribute('aria-label', label);
     });
+    document.querySelectorAll('[data-note-highlight]').forEach((highlight) => {
+      const seek = highlight.querySelector('[data-note-seek]');
+      seek.dataset.tooltip = seek.ariaLabel = t('跳转到 {time}').replace(
+        '{time}',
+        seek.textContent,
+      );
+      const toggle = highlight.querySelector('[data-note-highlight-toggle]');
+      toggle.dataset.tooltip = toggle.ariaLabel = t(
+        toggle.getAttribute('aria-expanded') === 'true' ? '收起' : '展开',
+      );
+    });
     window.dispatchEvent(new Event('brevia:language-changed'));
     // 更新浮动字幕按钮工具提示
     document
-      .querySelectorAll('#floating-caption-toggle, #playback-floating-caption-toggle')
+      .querySelectorAll('#playback-floating-caption-toggle')
       .forEach((floatingCaptionToggle) => {
         floatingCaptionToggle.title = t('悬浮字幕');
         floatingCaptionToggle.setAttribute('aria-label', t('悬浮字幕'));
@@ -5947,7 +5955,9 @@ function setLiveTranslationEnabled(enabled) {
   translationAllowed = enabled;
   const toggle = document.querySelector('#translation-toggle');
   toggle.dataset.enabled = String(enabled);
-  toggle.textContent = t(enabled ? '翻译：开' : '翻译：关');
+  toggle.innerHTML = interfaceIcon('translate');
+  toggle.dataset.tooltip = t(enabled ? '翻译：开' : '翻译：关');
+  toggle.setAttribute('aria-label', toggle.dataset.tooltip);
   document.querySelector('#translation-options').innerHTML = BreviaI18n.languageOptions(locale, t)
     .map(
       ([value, label]) =>
@@ -5977,21 +5987,26 @@ function renderLiveModelControl() {
   const current = liveConfig.refined_model_id || models[0].id;
   menu.hidden = false;
   const optionLabels = new Map(refinedModelOptions(language));
-  toggle.textContent = optionLabels.get(current) || models[0].name;
-  toggle.setAttribute('aria-expanded', 'false');
+  toggle.innerHTML = interfaceIcon('model');
+  toggle.dataset.tooltip = `${t('识别模型')}: ${optionLabels.get(current) || models[0].name}`;
+  toggle.setAttribute('aria-label', toggle.dataset.tooltip);
+  toggle.setAttribute('aria-expanded', String(!options.hidden));
   options.innerHTML = [...optionLabels]
     .map(
       ([id, label]) =>
         `<button type="button" data-live-model="${escapeHtml(id)}"${id === current ? ' aria-current="true"' : ''}>${escapeHtml(label)}</button>`,
     )
     .join('');
-  options.hidden = true;
+  if (!options.hidden) fitFlowSelectOptions(options, toggle, 320, 360);
 }
 function renderFloatingCaptionToggle() {
   const toggle = document.querySelector('#floating-caption-toggle');
   if (!toggle) return;
   toggle.dataset.enabled = String(floatingCaptionMode === 'live');
-  toggle.textContent = t(floatingCaptionMode === 'live' ? '字幕：开' : '字幕：关');
+  toggle.innerHTML = interfaceIcon('captions');
+  toggle.dataset.tooltip = t(floatingCaptionMode === 'live' ? '关闭悬浮字幕' : '开启悬浮字幕');
+  toggle.setAttribute('aria-label', toggle.dataset.tooltip);
+  toggle.setAttribute('aria-pressed', String(floatingCaptionMode === 'live'));
 }
 function renderPlaybackFloatingCaptionToggle() {
   const toggle = document.querySelector('#playback-floating-caption-toggle');
@@ -6300,11 +6315,7 @@ document.querySelector('#pause').addEventListener('click', async (event) => {
 });
 document.querySelector('#mark-important').addEventListener('click', () => {
   if (!meetingActive) return;
-  const segment = liveSegmentData.get(latestLiveSegmentId);
-  liveNotesEditor.appendMarkdown(
-    `${t('重点')} · ${formatMeetingTime(seconds * 1000)}${segment ? ` — ${segment.text}` : ''}`,
-  );
-  showToast(t('已加入笔记'), undefined, 'success');
+  addSubtitleHighlight(liveSegmentData.get(latestLiveSegmentId), breviaClient?.state.meeting?.id);
 });
 document.querySelector('#end-meeting').addEventListener('click', async (event) => {
   const button = event.currentTarget;
@@ -6345,7 +6356,6 @@ document.querySelector('#end-meeting').addEventListener('click', async (event) =
     showView('detail');
     showToast(message('recordingSaved'), undefined, 'success');
     if (window.brevia) await refreshBackendMeetings();
-    if (meeting && summaryRequestConfig()) void generateMeetingSummary(meeting.id);
   } catch (error) {
     showToast(error.message, undefined, 'error');
     // 采集已经收尾；保留会议 ID 供重试结束，不能装作仍在录音。
@@ -6413,6 +6423,7 @@ const liveNotesEditor = createNotesEditor(liveNotesRoot, {
     aiNoteTypingTimer = setTimeout(() => signalAiNoteTyping(false), 4000);
   },
   getMeetingId: () => breviaClient?.state.meeting?.id,
+  getHighlightTime: () => Math.floor(seconds * 1000),
 });
 const liveNotesToolbar = liveNotesRoot.querySelector('.notes-toolbar');
 liveNotesToolbar.id = 'live-notes-toolbar';
@@ -6831,7 +6842,7 @@ document.querySelector('.live-model-menu').addEventListener('click', async (even
   const toggle = document.querySelector('#live-model-toggle');
   if (event.target.closest('#live-model-toggle')) {
     options.hidden = !options.hidden;
-    fitFlowSelectOptions(options, toggle);
+    fitFlowSelectOptions(options, toggle, 320, 360);
     toggle.setAttribute('aria-expanded', String(!options.hidden));
     return;
   }
@@ -6846,7 +6857,6 @@ document.querySelector('.live-model-menu').addEventListener('click', async (even
   if (!ok) return;
   renderLiveModelControl();
 });
-document.querySelector('.live-header-actions').append(document.querySelector('.live-more'));
 document.querySelector('#live-info-toggle').addEventListener('click', (event) => {
   const panel = document.querySelector('#live-info-panel');
   panel.hidden = !panel.hidden;
@@ -6860,15 +6870,8 @@ document.querySelector('#live-info-toggle').addEventListener('click', (event) =>
   panel.innerHTML = `<strong>${escapeHtml(document.querySelector('#live-name').textContent)}</strong><dl><dt>${escapeHtml(t('工作区'))}</dt><dd>${escapeHtml(getWorkspaceName(meeting?.workspace_id || ''))}</dd><dt>${escapeHtml(t('会议语言'))}</dt><dd>${escapeHtml(language)}</dd></dl>`;
 });
 
-document.querySelector('#live-more-toggle').addEventListener('click', (event) => {
-  const panel = document.querySelector('#live-more-panel');
-  panel.hidden = !panel.hidden;
-  event.currentTarget.setAttribute('aria-expanded', String(!panel.hidden));
-});
 document.addEventListener('keydown', (event) => {
   if (event.key !== 'Escape') return;
-  document.querySelector('#live-more-panel').hidden = true;
-  document.querySelector('#live-more-toggle').setAttribute('aria-expanded', 'false');
   document.querySelector('#live-info-panel').hidden = true;
   document.querySelector('#live-info-toggle').setAttribute('aria-expanded', 'false');
   for (const [options, toggle] of [
@@ -6883,10 +6886,6 @@ document.addEventListener('click', (event) => {
   if (!event.target.closest('.live-info')) {
     document.querySelector('#live-info-panel').hidden = true;
     document.querySelector('#live-info-toggle').setAttribute('aria-expanded', 'false');
-  }
-  if (!event.target.closest('.live-more')) {
-    document.querySelector('#live-more-panel').hidden = true;
-    document.querySelector('#live-more-toggle').setAttribute('aria-expanded', 'false');
   }
   if (!event.target.closest('.translation-menu')) {
     document.querySelector('#translation-options').hidden = true;
@@ -8076,6 +8075,64 @@ function appendTextToActiveNotes(markdown, meetingId) {
   detailNotesEditor.appendMarkdown(markdown);
   updateDetailNotesDraft();
 }
+/** 重点保存字幕原文及其开始时间，不使用点击时的会议计时。 */
+function addSubtitleHighlight(info, meetingId) {
+  const markdown = info && noteHighlightMarkdown(info.start_ms, info.text);
+  if (!markdown || !meetingId) {
+    showToast(t('无法获取字幕内容'));
+    return;
+  }
+  if (meetingActive && meetingId === breviaClient?.state.meeting?.id) {
+    liveNotesEditor.addHighlight(info.start_ms, info.text);
+  } else {
+    if (
+      (detailNotesEditor?.getMarkdown() || uiData.detail.notes || '').split('\n').includes(markdown)
+    )
+      return;
+    appendTextToActiveNotes(markdown, meetingId);
+  }
+  showToast(t('已加入笔记'), undefined, 'success');
+}
+document.addEventListener('click', (event) => {
+  const highlight = event.target.closest('[data-note-highlight]');
+  if (!highlight) return;
+  const toggle = event.target.closest('[data-note-highlight-toggle]');
+  if (toggle) {
+    const body = highlight.querySelector('.note-highlight-body');
+    body.hidden = !body.hidden;
+    toggle.setAttribute('aria-expanded', String(!body.hidden));
+    toggle.dataset.tooltip = toggle.ariaLabel = t(body.hidden ? '展开' : '收起');
+    return;
+  }
+  if (!event.target.closest('[data-note-seek]') && highlight.closest('[contenteditable="true"]'))
+    return;
+  const start = Number(highlight.dataset.noteHighlight) / 1000;
+  if (!Number.isFinite(start) || start < 0) return;
+  if (highlight.closest('#live-view')) {
+    const transcript = document.querySelector('#transcript-scroll');
+    const row = [...transcript.querySelectorAll('.segment[data-start]')].find(
+      (item) => Math.abs(Number(item.dataset.start) - start) < 0.001,
+    );
+    if (row) {
+      followLiveTranscript = false;
+      row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      document.querySelector('#back-to-latest')?.removeAttribute('hidden');
+    }
+    return;
+  }
+  if (!playerAudio.getAttribute('src')) {
+    showToast(t('未找到录音文件'));
+    return;
+  }
+  followPlaybackTranscript = true;
+  playerAudio.currentTime = Math.min(
+    start,
+    Number.isFinite(playerAudio.duration) ? playerAudio.duration : start,
+  );
+  progress.value = playerAudio.currentTime;
+  renderPlayerTime();
+  syncPlaybackTranscript();
+});
 /** 根据会议与段落 id 解析字幕元数据（live 视图从内存映射取，详情页从后端段落取）。@param {string} meetingId 会议 id。@param {string} segmentId 段落 id。@returns {{text:string, start_ms:number, speaker:string}|null} */
 function segmentInfoFor(meetingId, segmentId) {
   if (meetingId === breviaClient?.state.meeting?.id) {
@@ -8658,6 +8715,8 @@ document.addEventListener('click', (event) => {
   } else if (button.dataset.segmentTool === 'profile') {
     closeMeetingPopovers();
     void openSegmentProfilePanel(meetingId, segmentId, button);
+  } else if (button.dataset.segmentTool === 'highlight') {
+    addSubtitleHighlight(info, meetingId);
   } else if (button.dataset.segmentTool === 'note') {
     closeMeetingPopovers();
     if (info) {
@@ -9518,10 +9577,13 @@ if (window.brevia) {
       renderFloatingCaptionToggle();
     }
     if (!meetingActive) return;
+    meetingActive = false;
     clearInterval(timer);
     if (meeting?.id) stopAiNoteForMeeting(meeting.id);
     resetAiNoteSuggestions();
-    if (breviaClient?.capture) await breviaClient.capture.stop();
+    await breviaClient?.capture
+      ?.stop()
+      .catch((error) => console.error('Audio capture cleanup failed', error));
     if (breviaClient) {
       breviaClient.capture = null;
       breviaClient.state.meeting = null;
@@ -9531,10 +9593,13 @@ if (window.brevia) {
         applyBackendDetail(meeting);
       }
     }
-    meetingActive = false;
     miniMeeting.hidden = true;
     showView('detail');
-    void refreshBackendMeetings();
+    // 统一覆盖桌面与手机结束；纪要生成不依赖会议列表刷新成功。
+    const config = summaryRequestConfig();
+    if (meeting && config && (config.provider !== 'built-in' || modelPaths.has(config.model)))
+      void generateMeetingSummary(meeting.id);
+    void refreshBackendMeetings().catch((error) => showToast(error.message, undefined, 'error'));
   });
   window.brevia.on('meeting.interrupted', async ({ meeting_id: meetingId }) => {
     if (!meetingActive || meetingId !== breviaClient?.state.meeting?.id) return;
@@ -9934,6 +9999,7 @@ if (window.brevia) {
    放在文件末尾：上面的 function 声明已提升，而 const 箭头函数（showToast / showView /
    updatePlayerControl / renderPlayerTime）到这里都已初始化。 */
 registerAppActions('app.js', {
+  noteHighlightTime: () => Math.floor(playerAudio.currentTime * 1000),
   updateDetailNotesDraft,
   showToast,
   filterMeetings,

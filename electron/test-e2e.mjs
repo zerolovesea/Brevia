@@ -802,7 +802,7 @@ try {
     `AI 开关、图标或档位未正确保存：${JSON.stringify(aiOptions)}`,
   );
   const floatingBars = await client.send('Runtime.evaluate', {
-    expression: `(() => { const live = document.querySelector('#live-view .floating-control-bar'); const player = document.querySelector('#detail-view .floating-control-bar'); const toggle = document.querySelector('#live-more-toggle'); toggle.click(); const menuOpen = !document.querySelector('#live-more-panel').hidden && toggle.getAttribute('aria-expanded') === 'true'; document.body.click(); const menuClosed = document.querySelector('#live-more-panel').hidden; const wasActive = meetingActive, wasSeconds = seconds; meetingActive = true; seconds = 57; document.querySelector('#mark-important').click(); const note = currentNotesMarkdown(); meetingActive = wasActive; seconds = wasSeconds; return { live: getComputedStyle(live).position, player: getComputedStyle(player).position, menuOpen, menuClosed, note }; })()`,
+    expression: `(() => { const live = document.querySelector('#live-view .floating-control-bar'); const player = document.querySelector('#detail-view .floating-control-bar'); const toggle = document.querySelector('#translation-toggle'); toggle.click(); const menuOpen = !document.querySelector('#translation-options').hidden && toggle.getAttribute('aria-expanded') === 'true'; document.body.click(); const menuClosed = document.querySelector('#translation-options').hidden; const tools = [...live.querySelectorAll('.live-caption-controls .icon-button')].every(button => button.querySelector('svg') && button.getAttribute('aria-label')); const noMore = !document.querySelector('#live-more-toggle'); const wasActive = meetingActive, wasSeconds = seconds, wasMeeting=breviaClient.state.meeting, wasSegment=latestLiveSegmentId, wasNotes=currentNotesMarkdown(); meetingActive = true; seconds = 57; breviaClient.state.meeting={id:'toolbar-highlight-test'};latestLiveSegmentId='toolbar-highlight-test';liveSegmentData.set(latestLiveSegmentId,{start_ms:42000,text:'测试字幕重点'});document.querySelector('#mark-important').click(); const note = currentNotesMarkdown();clearTimeout(liveNotesSaveTimer.current);liveNotesEditor.setMarkdown(wasNotes);liveSegmentData.delete(latestLiveSegmentId);latestLiveSegmentId=wasSegment;breviaClient.state.meeting=wasMeeting; meetingActive = wasActive; seconds = wasSeconds; return { live: getComputedStyle(live).position, player: getComputedStyle(player).position, menuOpen, menuClosed, tools, noMore, note }; })()`,
     returnByValue: true,
   });
   check(
@@ -810,7 +810,9 @@ try {
       floatingBars.result?.value?.player === 'static' &&
       floatingBars.result?.value?.menuOpen &&
       floatingBars.result?.value?.menuClosed &&
-      floatingBars.result?.value?.note?.includes('重点 · 00:57'),
+      floatingBars.result?.value?.tools &&
+      floatingBars.result?.value?.noMore &&
+      floatingBars.result?.value?.note?.includes('> [00:42](#brevia-highlight-42000) 测试字幕重点'),
     `悬浮控制栏操作不正确：${JSON.stringify(floatingBars.result?.value)}`,
   );
   const detailLayout = await client.send('Runtime.evaluate', {
@@ -1363,7 +1365,7 @@ try {
           const bar=row.querySelector('.segment-tools'),barRect=bar.getBoundingClientRect(),rowRect=row.getBoundingClientRect(),after=copy.getBoundingClientRect();
           if(Math.abs(label.left-before.left)>1||Math.abs(after.top-before.top)>1||Math.abs(after.left-before.left)>1)errors.push(code+': toolbar moved speaker or text');
           if(getComputedStyle(bar).opacity!=='1'||barRect.right>rowRect.right+1||barRect.left<rowRect.left-1||barRect.bottom>after.top+1)errors.push(code+': toolbar clips or covers subtitle');
-          if(bar.querySelectorAll('button').length!==4||[...bar.querySelectorAll('button')].some(b=>!b.getAttribute('aria-label')))errors.push(code+': missing accessible actions');
+          if(bar.querySelectorAll('button').length!==5||[...bar.querySelectorAll('button')].some(b=>!b.getAttribute('aria-label')||b.textContent.trim()))errors.push(code+': missing accessible actions');
           const heading=document.querySelector('.summary-head .eyebrow');
           if(heading.scrollWidth>heading.clientWidth+1)errors.push(code+': summary heading clipped');
           const section=document.querySelector('.summary-participants'),toggle=section.querySelector('[data-summary-participants-toggle]'),body=document.querySelector('.summary-body');
@@ -2059,6 +2061,48 @@ try {
     restorationChecks && Object.values(restorationChecks).every(Boolean),
     `设计还原交互、独立 AI 配置及可见布局：${JSON.stringify(restorationChecks || restoration.exceptionDetails)}`,
   );
+  // 旧语言的系统默认不能冒充手动偏好；切换与重绘均按目标语言重新推导。
+  const prepareModelSelection = await client.send('Runtime.evaluate', {
+    expression: `(()=>{
+      const errors=[],savedPreference=localStorage.getItem(PREFERRED_MODEL_KEY),savedPaths=[...modelPaths],savedLanguage=prepareForm.querySelector('[name="meeting-language"]').value;
+      const fun=refinedModels().find(model=>model.kind==='funasr-nano');
+      const qwen=refinedModels().find(model=>(model.default_for_languages||[]).includes('ja'));
+      const parakeet=refinedModels().find(model=>(model.default_for_languages||[]).includes('en'));
+      const choose=(name,value)=>{const choice=prepareForm.querySelector('[data-flow-select-choice="'+name+'"][data-value="'+value+'"]');if(!choice)throw Error('missing model/language choice '+name+':'+value);choice.click();};
+      const expect=(id,scenario)=>{const actual=new FormData(prepareForm).get('refined-model');if(actual!==id)errors.push(scenario+': '+actual+' != '+id);};
+      try {
+        if(!fun||!qwen||!parakeet)throw Error('missing language default fixture');
+        localStorage.removeItem(PREFERRED_MODEL_KEY);
+        refinedModels().forEach(model=>modelPaths.set(model.id,'test-installed'));
+        prepareForm.querySelector('[name="meeting-language"]').value='zh';renderPrepareSelects();expect(fun.id,'Chinese default');
+        choose('meeting-language','en');expect(parakeet.id,'Chinese to English');
+        choose('meeting-language','ja');expect(qwen.id,'English to Japanese');
+        choose('meeting-language','zh');expect(fun.id,'Japanese to Chinese');
+        choose('meeting-language','en');choose('refined-model',fun.id);
+        choose('meeting-language','ja');expect(qwen.id,'English manual choice stays in English');
+        choose('meeting-language','en');expect(fun.id,'English preference restored');
+        choose('refined-model',qwen.id);modelPaths.delete(qwen.id);renderPrepareSelects();expect(qwen.id,'Uninstalled explicit preference');
+        choose('meeting-language','zh');expect(fun.id,'English preference cannot replace Chinese default');
+        choose('meeting-language','en');expect(qwen.id,'English preference survives switching');
+        if(preferredModelMap().en!==qwen.id||preferredModelMap().zh||preferredModelMap().ja)errors.push('automatic selection overwrote preferences');
+        localStorage.removeItem(PREFERRED_MODEL_KEY);modelPaths.clear();modelPaths.set(fun.id,'test-installed');renderPrepareSelects();expect(fun.id,'Installed compatible fallback');
+        modelPaths.clear();renderPrepareSelects();expect(parakeet.id,'No installed compatible model');
+      } finally {
+        if(savedPreference===null)localStorage.removeItem(PREFERRED_MODEL_KEY);else localStorage.setItem(PREFERRED_MODEL_KEY,savedPreference);
+        modelPaths.clear();for(const [id,path]of savedPaths)modelPaths.set(id,path);
+        prepareForm.querySelector('[name="meeting-language"]').value=savedLanguage;renderPrepareSelects();
+      }
+      return errors;
+    })()`,
+    returnByValue: true,
+  });
+  check(
+    Array.isArray(prepareModelSelection.result?.value) &&
+      !prepareModelSelection.result.value.length,
+    '准备页按会议语言选择模型：' +
+      JSON.stringify(prepareModelSelection.result?.value || prepareModelSelection.exceptionDetails),
+  );
+
   const finalAtlasControls = await client.send('Runtime.evaluate', {
     expression: `(async()=>{
       const errors=[];
@@ -2289,6 +2333,131 @@ try {
     Array.isArray(visualFeedback.result?.value) && visualFeedback.result.value.length === 0,
     `本轮视觉反馈回归：${JSON.stringify(visualFeedback.result?.value || visualFeedback.exceptionDetails)}`,
   );
+
+  // 重点在富文本/Markdown 往返时不丢原文，展开与回放跳转互不干扰。
+  const highlightChecks = await client.send('Runtime.evaluate', {
+    expression: `(async()=>{
+      const previousView=activeView;await showView('live');const errors=[],host=document.createElement('div');
+      document.body.append(host);host.style.cssText='position:fixed;left:200px;top:100px;width:500px;height:500px;z-index:9999;background:white';
+      let changes=0;
+      const notes=createNotesEditor(host,{onInput:()=>changes++,getHighlightTime:()=>1200});
+      notes.setMarkdown('普通笔记');
+      const quote='明确验收范围，保留完整原文 <unsafe> **plain** '.repeat(12).trim();
+      if(!notes.addHighlight(1200,quote)||notes.addHighlight(1200,quote)||notes.addHighlight(-1,quote))errors.push('highlight validation/dedup');
+      const markdown=notes.getMarkdown();
+      if(markdown!=='普通笔记\\n\\n'+noteHighlightMarkdown(1200,quote)||changes!==1)errors.push('highlight round trip '+markdown);
+      notes.setMode('markdown');notes.setMode('rich');
+      if(notes.getMarkdown()!==markdown)errors.push('mode switch loses anchor');
+      const row=host.querySelector('[data-note-highlight]'),body=row.querySelector('.note-highlight-body'),toggle=row.querySelector('[data-note-highlight-toggle]');
+      if(!body.hidden||row.querySelector('img,strong'))errors.push('highlight text unsafe or expanded');
+      toggle.click();if(body.hidden||toggle.getAttribute('aria-expanded')!=='true')errors.push('expand');
+      toggle.click();if(!body.hidden)errors.push('collapse');
+      const textNode=host.querySelector('.notes-editor p').firstChild,selection=getSelection(),range=document.createRange();
+      host.querySelector('.notes-editor').focus();range.selectNodeContents(textNode);selection.removeAllRanges();selection.addRange(range);
+      host.querySelector('[data-notes-command="highlight"]').click();
+      if(!notes.getMarkdown().includes(noteHighlightMarkdown(1200,'普通笔记')))errors.push('selected note not marked');
+      if(!notes.addHighlight(1200,'同一时刻的另一条重点'))errors.push('same time different text lost');
+      notes.destroy();host.remove();selection.removeAllRanges();
+      const audio=playerAudio,oldSrc=audio.getAttribute('src'),oldMax=progress.max;
+      const bytes=new Uint8Array(32044),view=new DataView(bytes.buffer);
+      for(const [offset,value]of [[0,'RIFF'],[8,'WAVE'],[12,'fmt '],[36,'data']])for(let i=0;i<value.length;i++)bytes[offset+i]=value.charCodeAt(i);
+      for(const [offset,value]of [[4,32036],[16,16],[24,8000],[28,16000],[40,32000]])view.setUint32(offset,value,true);
+      for(const [offset,value]of [[20,1],[22,1],[32,2],[34,16]])view.setUint16(offset,value,true);
+      const url=URL.createObjectURL(new Blob([bytes],{type:'audio/wav'}));
+      const loaded=new Promise((resolve,reject)=>{audio.addEventListener('loadedmetadata',resolve,{once:true});audio.addEventListener('error',reject,{once:true});});
+      audio.src=url;audio.load();await loaded;
+      const playback=document.createElement('div');playback.className='detail-notes-content';playback.innerHTML=renderMarkdown(noteHighlightMarkdown(1200,quote));finalTranscript.append(playback);
+      audio.pause();playback.querySelector('[data-note-seek]').click();
+      if(Math.abs(audio.currentTime-1.2)>.01||!audio.paused)errors.push('paused seek');
+      await audio.play();playback.querySelector('[data-note-seek]').click();
+      if(Math.abs(audio.currentTime-1.2)>.1||audio.paused)errors.push('playing seek');
+      playback.querySelector('[data-note-highlight-toggle]').click();
+      if(audio.paused)errors.push('expand pauses playback');
+      audio.pause();playback.remove();if(oldSrc)audio.src=oldSrc;else audio.removeAttribute('src');audio.load();progress.max=oldMax;URL.revokeObjectURL(url);
+      await showView(previousView);return errors;
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+    userGesture: true,
+  });
+  check(
+    Array.isArray(highlightChecks.result?.value) && !highlightChecks.result.value.length,
+    '重点笔记与回放：' +
+      JSON.stringify(highlightChecks.result?.value || highlightChecks.exceptionDetails),
+  );
+
+  // 底栏工具与收起侧栏在最小窗口和双语主题下都保留稳定位置。
+  const liveToolbarErrors = [];
+  await client.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 800, y: 100 });
+  for (const width of [880, 1280]) {
+    await client.send('Emulation.setDeviceMetricsOverride', {
+      width,
+      height: 800,
+      deviceScaleFactor: 1,
+      mobile: false,
+    });
+    const result = await client.send('Runtime.evaluate', {
+      expression: `(async()=>{
+        const errors=[],previousView=activeView,previousActive=meetingActive;
+        const cards=[...taskCards.children].map(card=>[card,card.hidden]);
+        for(const [card] of cards)card.hidden=true;
+        meetingActive=true;await showView('live');document.activeElement?.blur();
+        for(const [code,theme] of Object.keys(catalog).map(code=>[code,code==='zh'?'light':'dark'])){
+          applyLanguage(code);applyTheme(theme);renderLiveModelControl();
+          await new Promise(resolve=>setTimeout(resolve,300));
+          const bar=document.querySelector('.live-control-bar'),r=bar.getBoundingClientRect();
+          const tools=[...bar.querySelectorAll('.live-caption-controls .icon-button')].filter(button=>button.getBoundingClientRect().width);
+          const primary=bar.querySelector('.control-primary').getBoundingClientRect();
+          for(const button of tools){const b=button.getBoundingClientRect();if(b.left<r.left||b.right>primary.left||b.bottom>r.bottom||b.width<40||!button.getAttribute('aria-label')||!button.querySelector('svg'))errors.push(code+': tool bounds/label');}
+          if(bar.scrollWidth>bar.clientWidth+1||primary.right>r.right)errors.push(code+': toolbar overflow');
+          for(const withTask of [false,true]){
+            refinementCard.hidden=!withTask;syncTaskCardStack();
+            const device=document.querySelector('#mobile-nav').getBoundingClientRect(),settings=document.querySelector('.sidebar-settings').getBoundingClientRect(),sidebar=document.querySelector('.sidebar').getBoundingClientRect();
+            if(settings.bottom>sidebar.bottom||sidebar.bottom-settings.bottom>32||device.bottom>settings.top+1||settings.top-device.bottom>16)errors.push(code+': sidebar footer '+withTask);
+            if(withTask&&document.querySelector('[data-task-summary]').getBoundingClientRect().bottom>device.top)errors.push(code+': task overlaps device');
+          }
+          document.querySelector('#translation-toggle').click();
+          const options=document.querySelector('#translation-options').getBoundingClientRect(),toggle=document.querySelector('#translation-toggle').getBoundingClientRect();
+          if(options.bottom>toggle.top||options.top<0||options.right>innerWidth)errors.push(code+': translation popup bounds');
+          document.body.click();
+          for(const id of ['floating-caption-toggle','translation-toggle','live-model-toggle','mark-important']){
+            const button=document.getElementById(id);
+            if(!button.getClientRects().length)continue;
+            if(button.textContent.trim())errors.push(code+': icon has visible text '+id);
+            button.dispatchEvent(new PointerEvent('pointerover',{bubbles:true}));
+            if(!pageTooltip||pageTooltip.hidden||pageTooltip.textContent!==button.dataset.tooltip||button.dataset.tooltip!==button.getAttribute('aria-label'))errors.push(code+': localized tooltip '+id);
+            if(!['zh','ja'].includes(code)&&/[\u4e00-\u9fff]/.test(button.dataset.tooltip))errors.push(code+': untranslated tooltip '+id);
+            button.dispatchEvent(new PointerEvent('pointerout',{bubbles:true,relatedTarget:document.body}));
+          }
+          const model=document.querySelector('#live-model-toggle'),modelOptions=document.querySelector('#live-model-options');
+          if(model.getClientRects().length){
+            model.click();
+            const bounds=modelOptions.getBoundingClientRect();
+            if(bounds.width<319||bounds.left<0||bounds.right>innerWidth)errors.push(code+': model menu too narrow');
+            const transcript=document.querySelector('#transcript-scroll');
+            const marker=document.createElement('div');marker.innerHTML=renderTranscriptSegment({text:'持续刷新字幕',time:'00:01',startSeconds:1,endSeconds:2,speaker:{}});marker.style.height='200px';transcript.append(marker);transcript.scrollTop=transcript.scrollHeight;
+            transcript.dispatchEvent(new Event('scroll'));await new Promise(resolve=>requestAnimationFrame(resolve));marker.remove();
+            renderLiveModelControl();
+            if(modelOptions.hidden||model.getAttribute('aria-expanded')!=='true')errors.push(code+': transcript update closed model menu');
+            modelOptions.dispatchEvent(new Event('scroll'));
+            if(modelOptions.hidden)errors.push(code+': model menu scroll closed itself');
+            document.dispatchEvent(new Event('scroll'));
+            if(!modelOptions.hidden||model.getAttribute('aria-expanded')!=='false')errors.push(code+': viewport scroll left stale anchor');
+          }
+        }
+        for(const [card,hidden] of cards)card.hidden=hidden;
+        syncTaskCardStack();applyLanguage('zh');applyTheme('light');
+        meetingActive=previousActive;await showView(previousView);
+        return errors;
+      })()`,
+      awaitPromise: true,
+      returnByValue: true,
+    });
+    if (!Array.isArray(result.result?.value) || result.result.value.length)
+      liveToolbarErrors.push({ width, result });
+  }
+  await client.send('Emulation.clearDeviceMetricsOverride');
+  check(!liveToolbarErrors.length, '会议底栏与侧栏定位：' + JSON.stringify(liveToolbarErrors));
 
   const remainingAlignment = await client.send('Runtime.evaluate', {
     expression: `(async()=>{
@@ -2977,10 +3146,10 @@ try {
         `(async()=>{meetingActive=true;await showView('live');showRefinementProgress(42,100,'产品周会',currentMeetingDetail.id,'正在识别');document.querySelector('.sidebar .brand').focus();})()`,
       ],
       [
-        'desktop-live-more-menu',
-        `(()=>{const toggle=document.querySelector('#live-more-toggle');toggle.click();const panel=document.querySelector('#live-more-panel'),r=panel.getBoundingClientRect(),anchor=toggle.getBoundingClientRect();if(panel.hidden||r.top<anchor.bottom||r.bottom>innerHeight||r.right>innerWidth)throw Error('会议标题栏菜单错位');})()`,
+        'desktop-live-toolbar-translation',
+        `(()=>{const toggle=document.querySelector('#translation-toggle');toggle.click();const panel=document.querySelector('#translation-options'),r=panel.getBoundingClientRect(),anchor=toggle.getBoundingClientRect();if(panel.hidden||r.bottom>anchor.top||r.top<0||r.right>innerWidth)throw Error('会议底栏菜单错位');})()`,
       ],
-      ['desktop-live-more-closed', `document.querySelector('#live-more-toggle').click()`],
+      ['desktop-live-toolbar-closed', `document.querySelector('#translation-toggle').click()`],
       [
         'desktop-live-info',
         `(()=>{const before=meetingActive;document.querySelector('#live-info-toggle').click();const panel=document.querySelector('#live-info-panel'),r=panel.getBoundingClientRect();if(panel.hidden||meetingActive!==before||activeView!=='live'||!panel.textContent.includes(document.querySelector('#live-name').textContent)||r.top<40||r.bottom>innerHeight||r.right>innerWidth)throw Error('会议信息错位或改变录制状态');})()`,

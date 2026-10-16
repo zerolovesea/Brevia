@@ -405,61 +405,54 @@
                   <path d="M4.5 9.5a5.5 5.5 0 0 0 11 0M10 15v3m-3 0h6" /></svg></span
               ><i class="input-meter" data-live-mic-level aria-hidden="true"></i
               ><span id="live-input-label">输入良好</span></div
+            ><div class="control-secondary live-caption-controls"
+              ><button
+                class="floating-caption-toggle icon-button"
+                id="floating-caption-toggle"
+                type="button"
+                data-enabled="false"
+                aria-label="字幕：关"
+                aria-pressed="false"
+                data-tooltip="开启悬浮字幕"
+                ><span data-interface-icon="captions" aria-hidden="true"></span></button
+              ><div class="translation-menu flow-select"
+                ><button
+                  class="translation-toggle icon-button"
+                  id="translation-toggle"
+                  type="button"
+                  data-enabled="false"
+                  aria-label="翻译：关"
+                  data-tooltip="翻译：关"
+                  aria-controls="translation-options"
+                  aria-expanded="false"
+                  ><span data-interface-icon="translate" aria-hidden="true"></span></button
+                ><div class="flow-select-options" id="translation-options" hidden></div></div
+              ><div class="live-model-menu flow-select" id="live-model-menu" hidden
+                ><button
+                  class="live-model-toggle icon-button"
+                  id="live-model-toggle"
+                  type="button"
+                  aria-label="识别模型"
+                  data-tooltip="识别模型"
+                  aria-controls="live-model-options"
+                  aria-expanded="false"
+                  ><span data-interface-icon="model" aria-hidden="true"></span></button
+                ><div class="flow-select-options" id="live-model-options" hidden></div></div></div
             ><div class="control-primary"
               ><button class="pause-button" id="pause"
                 ><span data-interface-icon="pause" aria-hidden="true"></span
                 ><span>暂停</span></button
-              ><button class="mark-button" id="mark-important" type="button" title="重点"
-                ><svg
-                  viewBox="0 0 20 20"
-                  aria-hidden="true"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.6"
-                  stroke-linejoin="round"
-                >
-                  <path d="M5 3h10v14l-5-3-5 3z" /></svg
-                ><span>重点</span></button
+              ><button
+                class="mark-button icon-button"
+                id="mark-important"
+                type="button"
+                data-tooltip-key="重点"
+                data-tooltip="重点"
+                aria-label="重点"
+                ><span data-interface-icon="bookmark" aria-hidden="true"></span></button
               ><button class="end-button" id="end-meeting">结束会议</button></div
-            ><div class="control-secondary"
-              ><div class="live-more"
-                ><button
-                  class="live-more-toggle"
-                  id="live-more-toggle"
-                  type="button"
-                  aria-label="更多"
-                  title="更多"
-                  aria-controls="live-more-panel"
-                  aria-expanded="false"
-                  ><span data-interface-icon="more"></span></button
-                ><div class="live-more-panel" id="live-more-panel" hidden
-                  ><div class="live-caption-controls"
-                    ><button
-                      class="floating-caption-toggle"
-                      id="floating-caption-toggle"
-                      data-enabled="false"
-                      title="悬浮字幕"
-                      >字幕</button
-                    ><div class="translation-menu flow-select"
-                      ><button
-                        class="translation-toggle"
-                        id="translation-toggle"
-                        data-enabled="false"
-                        aria-expanded="false"
-                        >翻译：关</button
-                      ><div class="flow-select-options" id="translation-options" hidden></div></div
-                    ><div class="live-model-menu flow-select" id="live-model-menu" hidden
-                      ><button
-                        class="live-model-toggle"
-                        id="live-model-toggle"
-                        aria-expanded="false"
-                        >识别模型</button
-                      ><div
-                        class="flow-select-options"
-                        id="live-model-options"
-                        hidden
-                      ></div></div></div></div></div></div
-          ></div>
+            ></div
+          >
         </section>
 
         <section class="view" id="detail-view">
