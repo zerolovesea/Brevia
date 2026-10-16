@@ -1,0 +1,61 @@
+{
+  "platform": "macOS-26.6.2-arm64-arm-64bit",
+  "python": "3.12.7",
+  "language": "en",
+  "model": "funasr-nano-int8",
+  "legacy": true,
+  "gaps": false,
+  "silence": false,
+  "paced": true,
+  "max_speech": null,
+  "audio_sha256": "9d8be5a0fc8c5d56c79c132d4f3574c71752c960c9f78ed90932692a56d69179",
+  "source_seconds": 14.8143125,
+  "fed_seconds": 16.8143125,
+  "load_seconds": 3.2238742919871584,
+  "wall_seconds": 17.180460624978878,
+  "cpu_seconds": 12.786664,
+  "cpu_per_source_second": 0.8631290854705542,
+  "peak_rss_mb": 2858.734375,
+  "stop_seconds": 0.17217029200401157,
+  "audio_call_p95_ms": 25.39675001753494,
+  "events": {
+    "transcript.partial": 67,
+    "transcript.final": 2,
+    "transcript.refined": 2,
+    "worker.warning": 0
+  },
+  "error_metric": "WER",
+  "error_rate": 0.021739130434782608,
+  "text": "Good morning. Today we need to confirm the launch scope for the new user onboarding flow. The design is ready and the engine. Engineering team can deliver a test build on Thursday. Great. We will finish internal acceptance by Friday, and begin a limited rollout next Monday.",
+  "emissions": [
+    {
+      "type": "transcript.final",
+      "wall_seconds": 6.349860083020758,
+      "start_ms": 0,
+      "end_ms": 6312,
+      "text": "Good morning to day, we need to confirm the launch scope for the new user on boarding floe"
+    },
+    {
+      "type": "transcript.refined",
+      "wall_seconds": 6.990340083022602,
+      "start_ms": 0,
+      "end_ms": 6312,
+      "text": "Good morning. Today we need to confirm the launch scope for the new user onboarding flow. The design is ready and the engine."
+    },
+    {
+      "type": "transcript.final",
+      "wall_seconds": 16.246925082989037,
+      "start_ms": 6312,
+      "end_ms": 16209,
+      "text": "Can deliver a test build on Thursday great. We will finish internal acceptance by Friday and begin a limited roll out next Monday,"
+    },
+    {
+      "type": "transcript.refined",
+      "wall_seconds": 17.0082550420193,
+      "start_ms": 6312,
+      "end_ms": 16209,
+      "text": "Engineering team can deliver a test build on Thursday. Great. We will finish internal acceptance by Friday, and begin a limited rollout next Monday."
+    }
+  ],
+  "warnings": []
+}

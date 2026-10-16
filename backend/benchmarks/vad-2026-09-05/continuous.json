@@ -1,0 +1,54 @@
+{
+  "platform": "macOS-26.6.2-arm64-arm-64bit",
+  "python": "3.12.7",
+  "language": "zh",
+  "model": "funasr-nano-int8",
+  "legacy": false,
+  "gaps": false,
+  "silence": false,
+  "paced": false,
+  "max_speech": 5.0,
+  "audio_sha256": "2d8927df539ec0925bf23026c9b0c842fb83201fb8dec7dcd10d595d8109ea04",
+  "source_seconds": 14.582125,
+  "fed_seconds": 16.582125,
+  "load_seconds": 2.0440685000503436,
+  "wall_seconds": 1.358553625002969,
+  "cpu_seconds": 2.543776,
+  "cpu_per_source_second": 0.17444480828411496,
+  "peak_rss_mb": 2541.140625,
+  "stop_seconds": 1.212286000023596,
+  "audio_call_p95_ms": 0.8092499920167029,
+  "events": {
+    "transcript.partial": 0,
+    "transcript.final": 3,
+    "transcript.refined": 0,
+    "worker.warning": 0
+  },
+  "error_metric": "CER",
+  "error_rate": 0.07692307692307693,
+  "text": "大家早上好，今天我们确认新用户引导的上限范围。 设计稿已经完成，开发团队周四可以叫复测试版本。好的，那就。 周五前完成内部研售，下周一开始小范围发布。",
+  "emissions": [
+    {
+      "type": "transcript.final",
+      "wall_seconds": 0.49087995797162876,
+      "start_ms": 140,
+      "end_ms": 5120,
+      "text": "大家早上好，今天我们确认新用户引导的上限范围。"
+    },
+    {
+      "type": "transcript.final",
+      "wall_seconds": 0.9085194580256939,
+      "start_ms": 5151,
+      "end_ms": 10143,
+      "text": "设计稿已经完成，开发团队周四可以叫复测试版本。好的，那就。"
+    },
+    {
+      "type": "transcript.final",
+      "wall_seconds": 1.2632459159940481,
+      "start_ms": 10163,
+      "end_ms": 15155,
+      "text": "周五前完成内部研售，下周一开始小范围发布。"
+    }
+  ],
+  "warnings": []
+}

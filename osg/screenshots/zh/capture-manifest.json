@@ -1,0 +1,17 @@
+{
+  "language": "zh",
+  "method": "Current Flutter production widgets; fictional fixture; no system or hardware capture",
+  "size": [
+    1560,
+    3376
+  ],
+  "files": [
+    "01-library.png",
+    "02-connection.png",
+    "03-live.png",
+    "04-notes.png",
+    "05-offline.png",
+    "06-desktop-mic.png",
+    "07-upload.png"
+  ]
+}

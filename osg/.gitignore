@@ -1,0 +1,7 @@
+# Rendered output. Everything here can be rebuilt from osg.config.ts
+# and the committed project file, so none of it belongs in git.
+out/
+proof/
+proof-all/
+*.zip
+design-calls.json

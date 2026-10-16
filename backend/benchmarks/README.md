@@ -12,4 +12,4 @@ MLX 不提供 Sherpa 原生识别器，因此只输出公共解码接口与精�
 `bench_live.py` 与 `bench_asr_models.py` 在 Windows 用系统 API 读取峰值工作集；
 Windows 不提供 `resource` 的子进程累计 CPU 指标，翻译结果的该项显示为 `null`。
 
-历史 VAD 基准结果保存在 `dev` 分支。
+[历史 VAD 基准（2026-09-05）](vad-2026-09-05/REPORT.md) 包含复现命令、原始 JSON 和准确率限制。
