@@ -22,6 +22,9 @@ design.md
 /docs/redesign-*/
 .research/
 
+# 移动端改版设计稿在 ui-redesign 分支管理。
+/docs/mobile-redesign-2026-10-16/
+
 # 开发指南、设计源文件与历史验收资料在 dev 分支管理。
 /docs/DEVELOPMENT*.md
 /docs/releases/*-review.md
