@@ -2,9 +2,166 @@
 (() => {
   const releases = [
     {
+      'version': '1.4.2',
+      'date': '2026-10-17',
+      'current': true,
+      'previousVersion': '1.4.1',
+      'contributors': [],
+      'zh': {
+        'summary':
+          '完善会议记录与声纹管理，重新设计 AI 功能引导，并修复录音尾帧、重点时间点、AI 引用更新和删除失败后的数据保留问题。',
+        'what': [
+          {
+            'text': '会议重点可带时间点保存到笔记，并从笔记定位对应录音或字幕。',
+            'commit': '1b819087efeae279745ebe12b37afb18a90eca21',
+          },
+        ],
+        'improved': [
+          {
+            'text':
+              '重新设计 AI 功能引导右侧，区分会中 AI 笔记与会后会议纪要；同时介绍手动、适度、主动三种模式，提供交互演示、重播与关闭后的静态示例，补齐八语言文案。',
+            'commit': '0ba597dd8400cf7d2b4e82e44cca2730033a1246',
+          },
+          {
+            'text':
+              '完善会议详情、设置、播放器与设备连接的布局和操作反馈；统一减少动态效果与键盘导航，鼠标操作不再显示多余的焦点外框。',
+            'commit': '1b819087efeae279745ebe12b37afb18a90eca21',
+          },
+          {
+            'text':
+              '声纹管理与字幕取样使用实际配置的样本数和时长上限；进阶设置统一界面与后端校验，隐藏当前引擎不适用的选项。',
+            'commit': 'e4b0e005b59cb39fddbf812d888b59cd3128cea6',
+          },
+        ],
+        'fixed': [
+          {
+            'text': '修复暂停后结束录音可能丢失采集尾帧的问题。',
+            'commit': 'd38a6ff88f73257d6eb0496f0f5f123ad96605dd',
+          },
+          {
+            'text':
+              '修复长语音精修窗口加上上下文后可能超过模型上限，以及旧版采样率和轻声参数越界的问题。',
+            'commit': 'd38a6ff88f73257d6eb0496f0f5f123ad96605dd',
+          },
+          {
+            'text':
+              '修复只修改一句字幕的说话人时影响其他字幕，以及不同字幕版本可能共用或误删声纹样本音频的问题。',
+            'commit': 'd38a6ff88f73257d6eb0496f0f5f123ad96605dd',
+          },
+          {
+            'text': '修复录音控制栏的重点标记使用上一句字幕时间，现按点击时的录音时间保存。',
+            'commit': '0ba597dd8400cf7d2b4e82e44cca2730033a1246',
+          },
+          {
+            'text':
+              '永久删除会议、示例会议或声纹档案时，文件清理失败会保留数据库记录与重试入口，避免残留音频失去管理入口。',
+            'commit': '0ba597dd8400cf7d2b4e82e44cca2730033a1246',
+          },
+          {
+            'text': '修复 AI 笔记补充引用依据时因常量队列重新赋值而中断更新的问题。',
+            'commit': '0ba597dd8400cf7d2b4e82e44cca2730033a1246',
+          },
+          {
+            'text': '修复引导页 AI 笔记标题和预览标题缺失，清理内容相同的重复翻译与未使用样式。',
+            'commit': '0ba597dd8400cf7d2b4e82e44cca2730033a1246',
+          },
+        ],
+        'security': [],
+        'changes': [
+          {
+            'text':
+              '手机联动仅使用同一局域网的 HTTPS 配对与传输，移除旧远程中继和 WebRTC 连接路径；离开局域网后可继续本地录音，回到同一网络后补传。',
+            'commit': '62894e6c96f1c6d94e42571f7ff670f6d14f291a',
+          },
+          {
+            'text':
+              'v1.4.2 为桌面版本，提供 macOS Apple Silicon 与 Windows x64 安装包；手机客户端不随本次桌面发布自动升级。',
+            'commit': '0ba597dd8400cf7d2b4e82e44cca2730033a1246',
+          },
+        ],
+      },
+      'en': {
+        'summary':
+          'Refined meeting notes and voiceprint management, redesigned AI onboarding, and fixed recording tails, highlight timestamps, AI evidence updates and data preservation after failed deletion.',
+        'what': [
+          {
+            'text':
+              'Save meeting highlights with timestamps and jump from notes to the corresponding recording or transcript.',
+            'commit': '1b819087efeae279745ebe12b37afb18a90eca21',
+          },
+        ],
+        'improved': [
+          {
+            'text':
+              'Redesigned the right side of AI onboarding to distinguish in-meeting notes from post-meeting summaries. All three modes are explained together, with interactive previews, replay, static examples when disabled and copy in eight languages.',
+            'commit': '0ba597dd8400cf7d2b4e82e44cca2730033a1246',
+          },
+          {
+            'text':
+              'Refined meeting details, settings, playback and device connection layouts and feedback. Reduced-motion behavior and keyboard navigation are consistent, while mouse interactions avoid unnecessary focus outlines.',
+            'commit': '1b819087efeae279745ebe12b37afb18a90eca21',
+          },
+          {
+            'text':
+              'Voiceprint management and transcript sampling use the configured sample and duration limits. Advanced settings share validation with the backend and hide options that do not apply to the active engine.',
+            'commit': 'e4b0e005b59cb39fddbf812d888b59cd3128cea6',
+          },
+        ],
+        'fixed': [
+          {
+            'text': 'Fixed audio tail frames being lost when ending a recording after pausing.',
+            'commit': 'd38a6ff88f73257d6eb0496f0f5f123ad96605dd',
+          },
+          {
+            'text':
+              'Fixed refinement windows exceeding model limits after context was added, and migrated invalid legacy sample-rate and quiet-speech settings.',
+            'commit': 'd38a6ff88f73257d6eb0496f0f5f123ad96605dd',
+          },
+          {
+            'text':
+              'Fixed renaming the speaker of one transcript segment affecting other segments, and voiceprint sample audio being shared or incorrectly removed across transcript versions.',
+            'commit': 'd38a6ff88f73257d6eb0496f0f5f123ad96605dd',
+          },
+          {
+            'text':
+              'Highlights created from the recording controls now use the recording time at the click instead of the previous transcript segment’s timestamp.',
+            'commit': '0ba597dd8400cf7d2b4e82e44cca2730033a1246',
+          },
+          {
+            'text':
+              'If file cleanup fails while deleting a meeting, example meeting or voiceprint profile, its database record and retry path are preserved so remaining audio stays manageable.',
+            'commit': '0ba597dd8400cf7d2b4e82e44cca2730033a1246',
+          },
+          {
+            'text':
+              'Fixed AI note evidence updates failing because a pending suggestion queue was reassigned as a constant.',
+            'commit': '0ba597dd8400cf7d2b4e82e44cca2730033a1246',
+          },
+          {
+            'text':
+              'Restored missing AI note titles in onboarding and previews, and removed identical duplicate translations and unused styles.',
+            'commit': '0ba597dd8400cf7d2b4e82e44cca2730033a1246',
+          },
+        ],
+        'security': [],
+        'changes': [
+          {
+            'text':
+              'Phone connectivity now uses HTTPS pairing and transfer on the same local network. The former remote relay and WebRTC paths are removed; recording can continue offline and upload after returning to the same network.',
+            'commit': '62894e6c96f1c6d94e42571f7ff670f6d14f291a',
+          },
+          {
+            'text':
+              'v1.4.2 is a desktop release for Apple Silicon macOS and Windows x64. Mobile clients are not automatically upgraded by this desktop release.',
+            'commit': '0ba597dd8400cf7d2b4e82e44cca2730033a1246',
+          },
+        ],
+      },
+    },
+    {
       'version': '1.4.1',
       'date': '2026-10-15',
-      'current': true,
+      'current': false,
       'previousVersion': '1.4.0',
       'contributors': [],
       'zh': {

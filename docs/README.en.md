@@ -40,7 +40,7 @@ Brevia is a local-first AI meeting assistant for online calls, interviews and in
 
 <p align="center"><sub>Scan to download on your phone, or tap the platform link.</sub></p>
 
-**Release status:** desktop [v1.4.1](releases/v1.4.1.md), Android 1.0.1, iOS 1.0.0 (checked October 15, 2026). The phone screenshots below show the redesigned 1.0.1 interface; the iOS update is not yet public. Download links follow the available release. Android can check for updates in Settings; iPhone updates come through the App Store.
+**Release status:** desktop [v1.4.2](releases/v1.4.2.md) (October 17, 2026). Mobile release status last checked October 15, 2026: Android 1.0.1, iOS 1.0.0. The phone screenshots below show the redesigned 1.0.1 interface; the iOS update is not yet public. Download links follow the available release. Android can check for updates in Settings; iPhone updates come through the App Store.
 
 ## From conversation to action
 

@@ -25,7 +25,7 @@
 
 Escanea para descargar en el teléfono.
 
-El 15 de octubre de 2026: escritorio v1.4.1, Android 1.0.1 e iOS 1.0.0. Las capturas del teléfono muestran la interfaz 1.0.1; la actualización de iOS aún no es pública.
+Escritorio v1.4.2 (17 de octubre de 2026). Versiones móviles verificadas el 15 de octubre de 2026: Android 1.0.1 e iOS 1.0.0. Las capturas del teléfono muestran la interfaz 1.0.1; la actualización de iOS aún no es pública.
 
 ## Novedades de v1.4
 

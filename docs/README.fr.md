@@ -25,7 +25,7 @@
 
 Scannez pour télécharger sur votre téléphone.
 
-Au 15 octobre 2026 : ordinateur v1.4.1, Android 1.0.1 et iOS 1.0.0. Les captures du téléphone montrent la nouvelle interface 1.0.1 ; la mise à jour iOS n’est pas encore publique.
+Ordinateur v1.4.2 (17 octobre 2026). Versions mobiles vérifiées le 15 octobre 2026 : Android 1.0.1 et iOS 1.0.0. Les captures du téléphone montrent la nouvelle interface 1.0.1 ; la mise à jour iOS n’est pas encore publique.
 
 ## Nouveautés de la version 1.4
 
