@@ -3309,7 +3309,7 @@ details.advanced-settings-section[open]::details-content {
   gap: 16px;
 }
 .onboarding-page .onboarding-ai-feature-head h2 {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 700;
 }
 .onboarding-ai-icon {
@@ -5847,13 +5847,13 @@ textarea,
   grid-template-rows: minmax(0, 1fr);
 }
 .onboarding-ai-content [data-onboarding-summary-demo] {
-  min-height: 180px;
+  min-height: 190px;
 }
 .onboarding-page .onboarding-ai-setup-page,
 .ai-features-content {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  gap: 16px;
+  gap: 12px;
   min-height: 0;
   height: 100%;
 }
@@ -5866,7 +5866,7 @@ textarea,
 .onboarding-ai-sections {
   display: grid;
   align-content: start;
-  gap: 16px;
+  gap: 12px;
   min-height: 0;
   overflow: auto;
   scrollbar-gutter: stable;
@@ -5888,7 +5888,17 @@ textarea,
 }
 .onboarding-ai-setup-page .onboarding-actions {
   margin: 0;
-  padding-top: 8px;
+  padding-top: 4px;
+}
+.onboarding-ai-setup-page > header {
+  gap: 8px;
+}
+.onboarding-ai-setup-page > header h1 {
+  font-size: 32px;
+}
+.onboarding-ai-setup-page > header .onboarding-intro p {
+  font-size: 16px;
+  line-height: 1.5;
 }
 .onboarding-ai-setup-page .onboarding-actions :is(.modal-action, .secondary) {
   height: 44px;
@@ -5901,18 +5911,133 @@ textarea,
   display: grid;
   grid-template-columns: minmax(0, 1.5fr) minmax(220px, 1fr);
   align-items: stretch;
-  gap: 20px;
+  gap: 18px;
 
   border: 1px solid var(--color-line);
   border-radius: 8px;
 
-  padding: 12px 20px;
+  padding: 12px 18px;
+}
+.onboarding-page .onboarding-ai-feature-head {
+  gap: 10px;
+}
+.onboarding-ai-setup-page .onboarding-ai-segments .flow-select-options button {
+  min-height: 36px;
 }
 .onboarding-page .onboarding-ai-feature-desc {
-  margin: 0 0 12px 48px;
-  font-size: 16px;
+  margin: 8px 0 12px;
+  font-size: 14px;
   line-height: 1.5;
   color: var(--color-text-muted);
+}
+.onboarding-ai-timing {
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--color-selected);
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+.onboarding-ai-mode-guide {
+  display: grid;
+  gap: 4px;
+  margin: 10px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.onboarding-ai-mode-guide > div {
+  display: grid;
+  grid-template-columns: minmax(36px, max-content) minmax(0, 1fr);
+  gap: 10px;
+  padding: 0;
+  border: 0;
+}
+.onboarding-ai-mode-guide dt {
+  font-weight: 600;
+  color: var(--color-text);
+}
+.onboarding-ai-mode-guide dd,
+.onboarding-ai-scope {
+  margin: 0;
+  color: var(--color-text-muted);
+  text-align: left;
+}
+.onboarding-ai-scope {
+  font-size: 13px;
+  line-height: 1.5;
+}
+.onboarding-ai-footer > p {
+  margin: 0 0 8px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--color-text-muted);
+}
+.onboarding-ai-setup-page .onboarding-preview-paper {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.onboarding-ai-setup-page .onboarding-preview-paper h3 {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.onboarding-ai-setup-page .onboarding-preview-paper :is(p, ul, b) {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.onboarding-demo-transcript {
+  margin: 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--color-line);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+.onboarding-demo-result {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.onboarding-ai-setup-page [data-demo-notes]:not(:empty),
+.onboarding-ai-setup-page [data-demo-summary-result] {
+  display: grid;
+  gap: 4px;
+}
+.onboarding-ai-setup-page .onboarding-preview-actions {
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+.onboarding-ai-setup-page .onboarding-preview-actions button {
+  padding: 4px 6px;
+  font-size: 11px;
+}
+.onboarding-ai-setup-page .onboarding-demo-task {
+  margin-top: 0;
+}
+.onboarding-demo-caption {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: auto;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+  flex: none;
+}
+.onboarding-demo-caption button {
+  flex: none;
+  padding: 4px 0 0 6px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.onboarding-ai-setup-page [data-demo-suggestion] > p,
+.onboarding-ai-setup-page [data-demo-notes]:not(:empty),
+.onboarding-ai-setup-page [data-demo-summary-result] > :is(p, ul) {
+  animation: onboarding-demo-card-in 200ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 .onboarding-ai-ways {
   display: grid;
@@ -7261,14 +7386,27 @@ html[data-theme] .input-meter::after,
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 12px 16px;
+  padding: 8px 16px;
   border: 1px solid var(--color-line);
   border-radius: 8px;
 }
 .onboarding-shared-service > span {
-  display: flex;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: 24px auto minmax(0, 1fr);
+  gap: 8px 12px;
   align-items: center;
+}
+.onboarding-shared-service small {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+.onboarding-shared-service > button {
+  flex: none;
+  height: 36px;
+  min-height: 36px;
+  padding: 6px 12px;
+  font-size: 14px;
 }
 .onboarding-shared-service b {
   font-size: 16px;

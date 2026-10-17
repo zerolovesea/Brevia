@@ -2591,6 +2591,7 @@ let speakerProfileSearch = '';
 function renderSpeakerProfileModal() {
   const copy = speakerProfileCopy[locale] || speakerProfileCopy.en;
   const voiceCopy = voiceFeaturesCopy[locale] || voiceFeaturesCopy.en;
+  const limits = advancedSettings?.settings?.voice_profiles;
   settingsModal.querySelector('.modal-title h2').textContent = t('声纹管理');
   settingsModal.querySelector('.modal-title p').textContent = copy.intro;
   const profile =
@@ -2610,7 +2611,7 @@ function renderSpeakerProfileModal() {
     .join('');
   replaceModalBody(
     'speaker-profiles',
-    `<div class="speaker-manager"><aside class="speaker-directory"><label class="search">${interfaceIcon('search')}<input type="search" data-speaker-search aria-label="${t('搜索')}" placeholder="${t('搜索')}" value="${escapeHtml(speakerProfileSearch)}" /></label><details class="speaker-create"><summary aria-label="${escapeHtml(copy.add)}" title="${escapeHtml(copy.add)}">${interfaceIcon('plus')}<span>${escapeHtml(copy.add)}</span></summary><form class="speaker-profile-form"><label>${copy.name}<input name="name" maxlength="32" required /></label><button class="modal-action" type="submit">${copy.add}</button></form></details><div class="speaker-profile-list">${list || `<p class="page-empty">${copy.intro}</p>`}</div></aside><section class="speaker-profile-detail">${profile ? `<header class="speaker-detail-header"><div>${name}<small>${profile.sample_count}/50 ${copy.samples} · ${formatMeetingTime(profile.duration_ms || 0)} / 05:00</small></div><div class="speaker-detail-actions"><button class="secondary" data-verify-speaker-profile="${escapeHtml(profile.id)}" type="button">${voiceCopy.verify}</button><button class="secondary" data-rename-speaker-profile="${escapeHtml(profile.id)}" type="button">${t('更改名称')}</button></div></header><section class="speaker-add"><h3>${copy.addSample}</h3><form class="speaker-sample-form" data-speaker-profile="${escapeHtml(profile.id)}"><div class="speaker-audio-dropzone">${interfaceIcon('upload')}<p>${t('请选择一段清晰的已有录音。')}</p></div><button class="modal-action" type="submit">${t('选择录音并添加')}</button></form></section><section><h3>${t('声纹样本')}</h3><div class="speaker-sample-list">${samples.length ? samples.map((sample) => `<article><button class="sample-play" data-play-speaker-sample="${escapeHtml(sample.id)}" type="button" aria-label="${t('播放录音')}">${interfaceIcon('play')}</button><input type="range" data-speaker-sample-seek="${escapeHtml(sample.id)}" min="0" max="${(sample.duration_ms || 0) / 1000}" step=".1" value="0" aria-label="${t('播放进度')}" /><time>${formatMeetingTime(sample.duration_ms || 0)}</time><button class="model-delete" data-delete-speaker-sample="${escapeHtml(sample.id)}" data-profile-id="${escapeHtml(profile.id)}" type="button">${copy.remove}</button></article>`).join('') : `<p class="page-empty">${copy.empty}</p>`}</div></section><button class="model-delete" data-delete-speaker-profile="${escapeHtml(profile.id)}" type="button">${copy.remove}</button>` : `<div class="page-empty">${interfaceIcon('person')}<h2>${t('声纹管理')}</h2><p>${copy.intro}</p></div>`}</section></div>`,
+    `<div class="speaker-manager"><aside class="speaker-directory"><label class="search">${interfaceIcon('search')}<input type="search" data-speaker-search aria-label="${t('搜索')}" placeholder="${t('搜索')}" value="${escapeHtml(speakerProfileSearch)}" /></label><details class="speaker-create"><summary aria-label="${escapeHtml(copy.add)}" title="${escapeHtml(copy.add)}">${interfaceIcon('plus')}<span>${escapeHtml(copy.add)}</span></summary><form class="speaker-profile-form"><label>${copy.name}<input name="name" maxlength="32" required /></label><button class="modal-action" type="submit">${copy.add}</button></form></details><div class="speaker-profile-list">${list || `<p class="page-empty">${copy.intro}</p>`}</div></aside><section class="speaker-profile-detail">${profile ? `<header class="speaker-detail-header"><div>${name}<small>${profile.sample_count}${limits ? `/${limits.max_samples}` : ''} ${copy.samples} · ${formatMeetingTime(profile.duration_ms || 0)}${limits ? ` / ${formatMeetingTime(limits.max_total_seconds * 1000)}` : ''}</small></div><div class="speaker-detail-actions"><button class="secondary" data-verify-speaker-profile="${escapeHtml(profile.id)}" type="button">${voiceCopy.verify}</button><button class="secondary" data-rename-speaker-profile="${escapeHtml(profile.id)}" type="button">${t('更改名称')}</button></div></header><section class="speaker-add"><h3>${copy.addSample}</h3><form class="speaker-sample-form" data-speaker-profile="${escapeHtml(profile.id)}"><div class="speaker-audio-dropzone">${interfaceIcon('upload')}<p>${t('请选择一段清晰的已有录音。')}</p></div><button class="modal-action" type="submit">${t('选择录音并添加')}</button></form></section><section><h3>${t('声纹样本')}</h3><div class="speaker-sample-list">${samples.length ? samples.map((sample) => `<article><button class="sample-play" data-play-speaker-sample="${escapeHtml(sample.id)}" type="button" aria-label="${t('播放录音')}">${interfaceIcon('play')}</button><input type="range" data-speaker-sample-seek="${escapeHtml(sample.id)}" min="0" max="${(sample.duration_ms || 0) / 1000}" step=".1" value="0" aria-label="${t('播放进度')}" /><time>${formatMeetingTime(sample.duration_ms || 0)}</time><button class="model-delete" data-delete-speaker-sample="${escapeHtml(sample.id)}" data-profile-id="${escapeHtml(profile.id)}" type="button">${copy.remove}</button></article>`).join('') : `<p class="page-empty">${copy.empty}</p>`}</div></section><button class="model-delete" data-delete-speaker-profile="${escapeHtml(profile.id)}" type="button">${copy.remove}</button>` : `<div class="page-empty">${interfaceIcon('person')}<h2>${t('声纹管理')}</h2><p>${copy.intro}</p></div>`}</section></div>`,
   );
 }
 speakerSampleAudio.addEventListener('timeupdate', () => {
@@ -3304,11 +3305,13 @@ async function openModal(kind) {
   if (same) return;
   window.clearInterval(permissionPollTimer);
   clearTimeout(modalDismissTimer);
-  if (kind === 'advanced-settings') {
+  if (kind === 'advanced-settings' || kind === 'speaker-profiles') {
     try {
       const [settings, status] = await Promise.all([
         window.brevia?.advancedSettings.get(),
-        window.brevia?.permissions.status().catch(() => undefined),
+        kind === 'advanced-settings'
+          ? window.brevia?.permissions.status().catch(() => undefined)
+          : undefined,
       ]);
       if (revision !== modalRequestRevision) return;
       advancedSettings = settings || { settings: {}, defaults: {} };
@@ -3436,35 +3439,44 @@ function renderOnboardingAiDemo() {
   clearTimeout(onboardingAiDemoTimer);
   const demo = onboardingPage?.querySelector('[data-onboarding-ai-demo]');
   if (!demo) return;
-  const mode = onboardingPage.querySelector('[name="onboarding-ai-enabled"]').checked
-    ? onboardingPage.querySelector('[name="onboarding-ai-proactivity"]').value || 'assist'
-    : 'off';
+  const enabled = onboardingPage.querySelector('[name="onboarding-ai-enabled"]').checked;
+  const selectedMode =
+    onboardingPage.querySelector('[name="onboarding-ai-proactivity"]').value || 'assist';
+  const mode = enabled ? selectedMode : 'off';
   onboardingPage
     .querySelectorAll('.onboarding-ai-segments button')
     .forEach((button) => (button.disabled = mode === 'off'));
   const copy = aiOnboardingCopy[locale] || aiOnboardingCopy.en;
   const sample = aiOnboardingDemoCopy[locale] || aiOnboardingDemoCopy.en;
+  const modeLabel = t({ quiet: '手动', assist: '适度', auto: '主动' }[selectedMode]);
+  const note = sample.scenes.quiet[0][2];
+  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
   demo.dataset.mode = mode;
-  demo.innerHTML = `<div class="onboarding-preview-paper"><h3>${escapeHtml(copy.liveNotesTitle)} <small>${escapeHtml(t('演示'))}</small></h3><p data-demo-notes>${escapeHtml(mode === 'off' ? copy.offEmpty : '')}</p><div data-demo-suggestion></div></div>`;
+  demo.dataset.stage = enabled ? 'idle' : 'off';
+  demo.innerHTML = `<div class="onboarding-preview-paper"><h3>${escapeHtml(t('AI 笔记'))} <small>${escapeHtml(enabled ? `${modeLabel} · ${t('演示')}` : copy.demoOff)}</small></h3><blockquote class="onboarding-demo-transcript">${escapeHtml(sample.transcriptText)}</blockquote><div class="onboarding-demo-result"><div data-demo-notes></div><div data-demo-suggestion>${enabled ? '' : `<p>${escapeHtml(note)}</p>`}</div></div><div class="onboarding-demo-caption"><small data-demo-status>${escapeHtml(modeLabel)}</small>${enabled ? `<button type="button" data-demo-replay>${escapeHtml(copy.replay)}</button>` : ''}</div></div>`;
   if (mode === 'off') return;
   const suggestion = demo.querySelector('[data-demo-suggestion]');
   const notes = demo.querySelector('[data-demo-notes]');
-  const scene = sample.scenes[mode][0];
+  const status = demo.querySelector('[data-demo-status]');
+  demo.querySelector('[data-demo-replay]').onclick = renderOnboardingAiDemo;
   const append = () => {
-    notes.textContent = scene[2];
+    notes.innerHTML = `<b>${escapeHtml(sample.notes)}</b><p>${escapeHtml(note)}</p>`;
     suggestion.replaceChildren();
+    status.textContent = t('已加入笔记');
     demo.dataset.stage = 'written';
   };
   const propose = () => {
     demo.dataset.stage = 'suggestion';
-    suggestion.innerHTML = `<p>${escapeHtml(scene[1])}</p>`;
+    status.textContent = modeLabel;
+    suggestion.innerHTML = `<p>${escapeHtml(note)}</p>`;
     if (mode === 'auto') {
       demo.dataset.stage = 'queued';
       suggestion.insertAdjacentHTML(
         'beforeend',
         `<small>${escapeHtml(t('建议已暂存，停笔后加入'))}</small>`,
       );
-      onboardingAiDemoTimer = setTimeout(append, 1200);
+      if (reducedMotion) append();
+      else onboardingAiDemoTimer = setTimeout(append, 1200);
     } else {
       suggestion.insertAdjacentHTML(
         'beforeend',
@@ -3479,8 +3491,9 @@ function renderOnboardingAiDemo() {
   };
   const analyze = () => {
     demo.dataset.stage = 'analyzing';
+    status.textContent = t('正在分析…');
     suggestion.textContent = t('正在分析…');
-    if (matchMedia('(prefers-reduced-motion: reduce)').matches) propose();
+    if (reducedMotion) propose();
     else onboardingAiDemoTimer = setTimeout(propose, 1200);
   };
   if (mode === 'quiet') {
@@ -3495,15 +3508,22 @@ function renderOnboardingSummaryDemo() {
   const frame = onboardingPage?.querySelector('[data-onboarding-summary-demo]');
   if (!frame) return;
   const enabled = onboardingPage.querySelector('[name="onboarding-summary-enabled"]').checked;
+  const copy = aiOnboardingCopy[locale] || aiOnboardingCopy.en;
   const sample = aiOnboardingSummaryDemoCopy[locale] || aiOnboardingSummaryDemoCopy.en;
   frame.dataset.stage = enabled ? 'processing' : 'off';
-  frame.innerHTML = `<div class="onboarding-preview-paper app-demo-summary-body"><h3>${escapeHtml(t('会议纪要'))} <small>${escapeHtml(t('演示'))}</small></h3><p>${escapeHtml(t(enabled ? '正在生成会议纪要' : '未开启'))}</p>${enabled ? `<aside class="onboarding-demo-task">${interfaceIcon('document')}<span>${escapeHtml(t('正在生成会议纪要'))}</span><div class="processing-bar"><i style="transform:scaleX(.6)"></i></div></aside>` : ''}</div>`;
-  if (!enabled) return;
+  frame.innerHTML = `<div class="onboarding-preview-paper app-demo-summary-body"><h3>${escapeHtml(t('会议纪要'))} <small>${escapeHtml(enabled ? `${copy.after} · ${t('演示')}` : copy.demoOff)}</small></h3><div data-demo-summary-result><aside class="onboarding-demo-task">${interfaceIcon('document')}<span>${escapeHtml(t('正在生成会议纪要'))}</span><div class="processing-bar"><i style="transform:scaleX(.6)"></i></div></aside></div><div class="onboarding-demo-caption"><small data-demo-summary-status>${escapeHtml(copy.after)}</small>${enabled ? `<button type="button" data-summary-demo-replay>${escapeHtml(copy.replay)}</button>` : ''}</div></div>`;
   const complete = () => {
-    frame.dataset.stage = 'saved';
-    frame.innerHTML = `<div class="onboarding-preview-paper app-demo-summary-body"><h3>${escapeHtml(t('会议纪要'))} <small>${escapeHtml(t('演示'))}</small></h3><b>${escapeHtml(t('决定'))}</b><p>${escapeHtml(sample.decision)}</p><b>${escapeHtml(t('待办'))}</b><ul>${sample.actions.map((action) => `<li>${escapeHtml(action)}</li>`).join('')}</ul>${renderSaveState('saved')}</div>`;
+    frame.dataset.stage = enabled ? 'saved' : 'off';
+    frame.querySelector('[data-demo-summary-result]').innerHTML =
+      `<b>${escapeHtml(t('决定'))}</b><p>${escapeHtml(sample.decision)}</p><b>${escapeHtml(t('待办'))}</b><ul><li>${escapeHtml(sample.actions[0])}</li></ul>`;
+    frame.querySelector('[data-demo-summary-status]').textContent = enabled
+      ? t('已保存')
+      : copy.after;
   };
-  if (matchMedia('(prefers-reduced-motion: reduce)').matches) complete();
+  frame
+    .querySelector('[data-summary-demo-replay]')
+    ?.addEventListener('click', renderOnboardingSummaryDemo);
+  if (!enabled || matchMedia('(prefers-reduced-motion: reduce)').matches) complete();
   else onboardingSummaryDemoTimer = setTimeout(complete, 1800);
 }
 
@@ -3989,25 +4009,32 @@ function openOnboardingAi(settingsMode = false) {
         ? ''
         : `<header><h1>${escapeHtml(copy.title)}</h1>${copy.intro ? `<div class="onboarding-intro"><p>${escapeHtml(copy.intro)}</p></div>` : ''}</header>`
     }
-    <div class="onboarding-ai-sections">${settingsMode ? '' : `<div class="onboarding-shared-service"><span>${interfaceIcon('model')}<b>${escapeHtml(t('配置服务'))}</b></span><button class="secondary" data-configure-ai-summary type="button">${escapeHtml(t('配置服务'))}</button></div>`}<section class="onboarding-section onboarding-ai-feature onboarding-ai-row">
+    <div class="onboarding-ai-sections"><section class="onboarding-section onboarding-ai-feature onboarding-ai-row">
       <div class="onboarding-ai-copy">
-        <div class="onboarding-ai-feature-head"><span class="onboarding-ai-icon">${summaryIcon}</span><h2>${escapeHtml(copy.meetingNotesTitle)}</h2><label class="onboarding-ai-switch"><input type="checkbox" name="onboarding-summary-enabled" aria-label="${escapeHtml(copy.meetingNotesTitle)}"${summaryConfig.enabled ? ' checked' : ''} /></label></div>
-        <p class="onboarding-ai-feature-desc">${escapeHtml(copy.meetingNotesDesc)}</p>
+        <div class="onboarding-ai-feature-head"><span class="onboarding-ai-icon">${notesIcon}</span><h2>${escapeHtml(t('AI 笔记'))}</h2><span class="onboarding-ai-timing">${escapeHtml(copy.during)}</span><label class="onboarding-ai-switch"><input type="checkbox" name="onboarding-ai-enabled" aria-label="${escapeHtml(copy.enableLiveNotes)}"${(settingsMode ? aiAssistConfig.enabled : defaultProactivity !== 'off') ? ' checked' : ''} /></label></div>
+        <p class="onboarding-ai-feature-desc">${escapeHtml(copy.liveNotesDesc)}</p>
+        <div class="onboarding-ai-levels"><div class="flow-select onboarding-ai-segments" role="radiogroup" aria-label="${escapeHtml(copy.proactivityTitle)}"><input type="hidden" name="onboarding-ai-proactivity" value="${defaultProactivity === 'off' ? 'assist' : defaultProactivity}" /><div class="flow-select-options">${levels.map(([value, title]) => `<button type="button" role="radio" aria-checked="${value === (defaultProactivity === 'off' ? 'assist' : defaultProactivity)}" data-flow-select-choice="onboarding-ai-proactivity" data-value="${value}">${escapeHtml(title)}</button>`).join('')}</div></div></div>
+        <dl class="onboarding-ai-mode-guide">${copy.levels
+          .filter(([value]) => value !== 'off')
+          .map(
+            ([value, , description]) =>
+              `<div><dt>${escapeHtml(t({ quiet: '手动', assist: '适度', auto: '主动' }[value]))}</dt><dd>${escapeHtml(description)}</dd></div>`,
+          )
+          .join('')}</dl>
+        ${settingsMode ? `<button class="secondary" data-configure-ai-notes type="button">${escapeHtml(t('配置 AI 笔记'))}</button>` : ''}
+      </div><div class="onboarding-ai-frame"><aside class="onboarding-ai-demo" data-onboarding-ai-demo></aside></div>
+    </section>
+    <section class="onboarding-section onboarding-ai-feature onboarding-ai-row">
+      <div class="onboarding-ai-copy">
+        <div class="onboarding-ai-feature-head"><span class="onboarding-ai-icon">${summaryIcon}</span><h2>${escapeHtml(copy.meetingNotesTitle)}</h2><span class="onboarding-ai-timing">${escapeHtml(copy.after)}</span><label class="onboarding-ai-switch"><input type="checkbox" name="onboarding-summary-enabled" aria-label="${escapeHtml(copy.meetingNotesTitle)}"${summaryConfig.enabled ? ' checked' : ''} /></label></div>
+        <p class="onboarding-ai-feature-desc">${escapeHtml(copy.meetingNotesDesc)}</p><p class="onboarding-ai-scope">${escapeHtml(copy.summaryScope)}</p>
         ${settingsMode ? `<div class="onboarding-ai-ways"><label><input type="radio" name="onboarding-ai-way" value="built-in"${summaryConfig.provider === 'built-in' ? ' checked' : ''} /><span><b>${escapeHtml(copy.builtin)}</b><small>${escapeHtml(copy.builtinHint)}</small></span></label><label><input type="radio" name="onboarding-ai-way" value="online"${summaryConfig.provider !== 'built-in' ? ' checked' : ''} /><span><b>${escapeHtml(copy.online)}${recommendTag(deviceIsWeak())}</b><small>${escapeHtml(copy.onlineHint)}</small></span></label></div>` : ''}
         ${settingsMode ? `<button class="secondary" data-configure-ai-summary type="button">${escapeHtml(t('配置服务'))}</button>` : ''}
       </div><div class="onboarding-ai-frame" data-onboarding-summary-demo></div>
     </section>
-    <section class="onboarding-section onboarding-ai-feature onboarding-ai-row">
-      <div class="onboarding-ai-copy">
-        <div class="onboarding-ai-feature-head"><span class="onboarding-ai-icon">${notesIcon}</span><h2>${escapeHtml(copy.liveNotesTitle)}</h2><label class="onboarding-ai-switch"><input type="checkbox" name="onboarding-ai-enabled" aria-label="${escapeHtml(copy.enableLiveNotes)}"${(settingsMode ? aiAssistConfig.enabled : defaultProactivity !== 'off') ? ' checked' : ''} /></label></div>
-        <p class="onboarding-ai-feature-desc">${escapeHtml(copy.liveNotesDesc)}</p>
-        <div class="onboarding-ai-levels"><div class="flow-select onboarding-ai-segments" role="radiogroup" aria-label="${escapeHtml(copy.proactivityTitle)}"><input type="hidden" name="onboarding-ai-proactivity" value="${defaultProactivity === 'off' ? 'assist' : defaultProactivity}" /><div class="flow-select-options">${levels.map(([value, title]) => `<button type="button" role="radio" aria-checked="${value === (defaultProactivity === 'off' ? 'assist' : defaultProactivity)}" data-flow-select-choice="onboarding-ai-proactivity" data-value="${value}">${escapeHtml(title)}</button>`).join('')}</div></div></div>
-        ${copy.proactivityHint ? `<small class="onboarding-ai-feature-hint">${escapeHtml(copy.proactivityHint)}</small>` : ''}
-        ${settingsMode ? `<button class="secondary" data-configure-ai-notes type="button">${escapeHtml(t('配置 AI 笔记'))}</button>` : ''}
-      </div><div class="onboarding-ai-frame"><aside class="onboarding-ai-demo" data-onboarding-ai-demo></aside></div>
-    </section>
+    ${settingsMode ? '' : `<div class="onboarding-shared-service"><span>${interfaceIcon('model')}<b>${escapeHtml(copy.serviceTitle)}</b><small>${escapeHtml(copy.serviceHint)}</small></span><button class="secondary" data-configure-ai-summary type="button">${escapeHtml(t('配置服务'))}</button></div>`}
     ${settingsMode ? `<p class="onboarding-privacy-hint">${interfaceIcon('info')}${escapeHtml(t('在线 AI 会将相关文字发送至所选服务商。'))}</p>` : ''}</div>
-    <div class="onboarding-actions">${settingsMode ? '' : `<button class="secondary onboarding-previous" data-onboarding-back-language type="button">${escapeHtml(t('上一步'))}</button>`}<button class="secondary" data-onboarding-ai-skip type="button">${escapeHtml(settingsMode ? t('取消') : copy.skip)}</button><button class="modal-action" data-onboarding-ai-finish type="button">${escapeHtml(settingsMode ? t('保存配置') : t('下一步'))}${settingsMode ? '' : interfaceIcon('arrow-right')}</button></div>
+    <footer class="onboarding-ai-footer">${settingsMode ? '' : `<p>${escapeHtml(copy.adjustHint)}</p>`}<div class="onboarding-actions">${settingsMode ? '' : `<button class="secondary onboarding-previous" data-onboarding-back-language type="button">${escapeHtml(t('上一步'))}</button>`}<button class="secondary" data-onboarding-ai-skip type="button">${escapeHtml(settingsMode ? t('取消') : copy.skip)}</button><button class="modal-action" data-onboarding-ai-finish type="button">${escapeHtml(settingsMode ? t('保存配置') : t('下一步'))}${settingsMode ? '' : interfaceIcon('arrow-right')}</button></div></footer>
   </section>`;
   if (settingsMode) {
     onboardingPage = document.createElement('div');
@@ -6381,7 +6408,9 @@ document.querySelector('#pause').addEventListener('click', async (event) => {
 });
 document.querySelector('#mark-important').addEventListener('click', () => {
   if (!meetingActive) return;
-  addSubtitleHighlight(liveSegmentData.get(latestLiveSegmentId), breviaClient?.state.meeting?.id);
+  const segment = liveSegmentData.get(latestLiveSegmentId);
+  liveNotesEditor.addHighlight(Math.floor(seconds * 1000), segment?.text || t('重点'));
+  showToast(t('已加入笔记'), undefined, 'success');
 });
 document.querySelector('#end-meeting').addEventListener('click', async (event) => {
   const button = event.currentTarget;
@@ -6671,7 +6700,7 @@ function requestAiSuggestion() {
     .catch(() => {});
 }
 document.querySelector('[data-ai-request]')?.addEventListener('click', requestAiSuggestion);
-const pendingAutoSuggestions = [];
+let pendingAutoSuggestions = [];
 function resetAiNoteSuggestions() {
   clearTimeout(aiNoteTypingTimer);
   aiNoteUserTyping = false;
@@ -8520,12 +8549,12 @@ function renderSegmentProfilePanel() {
     success?.name || (create ? draft.name.trim() : profile && speakerProfileName(profile)) || '';
   const e = escapeHtml;
   const scope = t('本段说话人将标记为「{name}」。').replace('{name}', name);
-  const limits = advancedSettings?.settings?.voice_profiles || {};
+  const limits = advancedSettings?.settings?.voice_profiles;
   const isFull = (item) =>
     item &&
-    (item.sample_count >= (limits.max_samples || 50) ||
-      item.duration_ms + segment.end_ms - segment.start_ms >
-        (limits.max_total_seconds || 300) * 1000);
+    limits &&
+    (item.sample_count >= limits.max_samples ||
+      item.duration_ms + segment.end_ms - segment.start_ms > limits.max_total_seconds * 1000);
   const profiles = speakerProfiles
     .map((item) => {
       const full = isFull(item);
@@ -8558,8 +8587,12 @@ async function openSegmentProfilePanel(meetingId, segmentId, anchor) {
       ?.querySelector('[data-segment-actions]') ||
     document.activeElement;
   try {
-    const meeting = await window.brevia.meeting.get({ meeting_id: meetingId });
+    const [meeting, settings] = await Promise.all([
+      window.brevia.meeting.get({ meeting_id: meetingId }),
+      window.brevia.advancedSettings.get(),
+    ]);
     if (segmentProfileDraft !== draft) return;
+    advancedSettings = settings;
     const segment = meeting.segments.find((item) => item.id === segmentId);
     const path = meeting.audio?.playback?.[segment?.track] || meetingPlaybackPath(meeting);
     if (!segment || !path || !(segment.end_ms > segment.start_ms)) throw Error(t('未找到录音文件'));

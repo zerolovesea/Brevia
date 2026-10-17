@@ -2,6 +2,7 @@ import base64
 import hashlib
 import io
 import json
+import shutil
 import subprocess
 import sys
 import tarfile
@@ -1106,6 +1107,54 @@ class WorkerTest(unittest.TestCase):
         self.assertEqual(
             self.worker.store.get_meeting(meeting["id"])["workspace_id"], workspace["id"]
         )
+
+    def test_permanent_delete_preserves_index_on_file_failure_and_allows_retry(self):
+        store = self.worker.store
+        for missing_directory in (False, True):
+            with self.subTest(missing_directory=missing_directory):
+                meeting = store.create_meeting(
+                    {"title": "删除重试", "language": "zh", "refined_model_id": "funasr-nano-int8"}
+                )
+                directory = store.meeting_dir(meeting["id"])
+                audio = directory / "audio" / "private.wav"
+                audio.write_bytes(b"private recording")
+                store.soft_delete(meeting["id"])
+                with patch(
+                    "backend.store_meetings.shutil.rmtree",
+                    side_effect=PermissionError("file in use"),
+                ):
+                    with self.assertRaises(PermissionError):
+                        self.worker.purge_meeting({"meeting_id": meeting["id"]})
+                self.assertTrue(store.get_meeting(meeting["id"])["deleted_at"])
+                self.assertTrue(audio.exists())
+                if missing_directory:
+                    shutil.rmtree(directory)
+                self.worker.purge_meeting({"meeting_id": meeting["id"]})
+                self.assertFalse(directory.exists())
+                with self.assertRaisesRegex(ValueError, "Meeting not found"):
+                    store.get_meeting(meeting["id"])
+
+    def test_example_delete_keeps_record_and_seed_marker_on_file_failure(self):
+        store = self.worker.store
+        meeting = store.create_meeting(
+            {"title": "示例删除重试", "language": "zh", "refined_model_id": "funasr-nano-int8"}
+        )
+        with store.connect() as db:
+            db.execute("UPDATE meetings SET is_example=1 WHERE id=?", (meeting["id"],))
+        with patch(
+            "backend.store_meetings.shutil.rmtree", side_effect=PermissionError("file in use")
+        ):
+            with self.assertRaises(PermissionError):
+                store.soft_delete(meeting["id"])
+        self.assertTrue(store.get_meeting(meeting["id"])["is_example"])
+        with store.connect() as db:
+            self.assertIsNone(
+                db.execute(
+                    "SELECT value FROM app_meta WHERE key=?", (f"example_deleted:{meeting['id']}",)
+                ).fetchone()
+            )
+        store.soft_delete(meeting["id"])
+        self.assertFalse(store.meeting_dir(meeting["id"]).exists())
 
     def test_meeting_can_start_in_a_workspace(self):
         workspace = self.worker.store.create_workspace({"name": "Team"})
@@ -6541,6 +6590,14 @@ class WorkerTest(unittest.TestCase):
             self.worker.store.list_speaker_profile_samples(profile["id"])[0]["audio_path"],
             str(reference),
         )
+        with patch(
+            "backend.store_speakers.shutil.rmtree", side_effect=PermissionError("file in use")
+        ):
+            with self.assertRaises(PermissionError):
+                self.worker.delete_speaker_profile({"profile_id": profile["id"]})
+        self.assertEqual(self.worker.store.speaker_profile(profile["id"])["sample_count"], 1)
+        self.assertTrue(reference.exists())
+        self.assertFalse(any(event["type"] == "speaker-profile.deleted" for event in self.events))
         self.worker.store.delete_speaker_profile(profile["id"])
         self.assertFalse((self.worker.store.speaker_profiles_dir / profile["id"]).exists())
 

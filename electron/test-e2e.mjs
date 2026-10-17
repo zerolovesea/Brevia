@@ -608,6 +608,14 @@ try {
         page.getAnimations({subtree:true}).filter(a=>a.effect.getComputedTiming().iterations!==Infinity).forEach(a=>a.finish());
         const footer=page.querySelector('.onboarding-actions');
         const summary=page.querySelector('[name=onboarding-summary-enabled]');
+        if(summary.checked!==summaryConfig.enabled)errors.push(code+': summary preference was overridden');
+        const notesTitle=page.querySelectorAll('.onboarding-ai-feature-head h2')[0];
+        const demoTitle=page.querySelector('[data-onboarding-ai-demo] h3');
+        if(notesTitle.textContent!==t('AI 笔记')||!demoTitle.textContent.startsWith(t('AI 笔记'))||notesTitle.getBoundingClientRect().width===0)errors.push(code+': AI notes title missing');
+        const guide=page.querySelector('.onboarding-ai-mode-guide');
+        if(guide.querySelectorAll('dt').length!==3||guide.querySelectorAll('dd').length!==3||guide.textContent.includes('undefined'))errors.push(code+': mode descriptions missing');
+        const rows=page.querySelectorAll('.onboarding-ai-row');
+        if(!rows[0].querySelector('[name=onboarding-ai-enabled]')||!rows[1].querySelector('[name=onboarding-summary-enabled]')||!(rows[1].compareDocumentPosition(page.querySelector('.onboarding-shared-service'))&Node.DOCUMENT_POSITION_FOLLOWING))errors.push(code+': feature order incorrect');
         summary.checked=true;
         summary.dispatchEvent(new Event('change',{bubbles:true}));
         const enabled=page.querySelector('[name=onboarding-ai-enabled]');
@@ -627,6 +635,9 @@ try {
             if(stage)await new Promise(resolve=>setTimeout(resolve,1300));
             if(mode==='quiet'&&stage===0)page.querySelector('[data-demo-suggestion] button').click();
             if(mode==='assist'&&stage===2)page.querySelector('[data-demo-add]')?.click();
+            const demo=page.querySelector('[data-onboarding-ai-demo]');
+            if(stage===2&&demo.dataset.stage!==(mode==='quiet'?'suggestion':'written'))errors.push(code+'/'+mode+': incorrect completion behavior');
+            if(mode==='auto'&&demo.querySelector('[data-demo-add]'))errors.push(code+': auto mode requires acceptance');
             const bounds=footer.getBoundingClientRect();
             if(bounds.bottom>innerHeight+1||bounds.top<0||Math.abs(bounds.top-initial.top)>1)errors.push(code+'/'+mode+'/'+stage+': footer moved or clipped');
             if(page.querySelector('.onboarding-page-content').scrollHeight>page.querySelector('.onboarding-page-content').clientHeight+1)errors.push(code+'/'+mode+': outer page overflow');
@@ -647,6 +658,38 @@ try {
   check(
     Array.isArray(aiAnimationFit.result?.value) && !aiAnimationFit.result.value.length,
     `AI 演示全阶段与八语言不能撑高卡片或挤出导航：${JSON.stringify(aiAnimationFit.result?.value || aiAnimationFit.exceptionDetails)}`,
+  );
+  await client.send('Emulation.setEmulatedMedia', {
+    features: [{ name: 'prefers-reduced-motion', value: 'reduce' }],
+  });
+  const reducedAiDemo = await client.send('Runtime.evaluate', {
+    expression: `(async()=>{
+      const page=onboardingPage,demo=page.querySelector('[data-onboarding-ai-demo]'),summary=page.querySelector('[data-onboarding-summary-demo]');
+      const enabled=page.querySelector('[name=onboarding-ai-enabled]'),summaryEnabled=page.querySelector('[name=onboarding-summary-enabled]');
+      enabled.checked=true;summaryEnabled.checked=true;
+      page.querySelector('[data-flow-select-choice=onboarding-ai-proactivity][data-value=auto]').click();
+      renderOnboardingSummaryDemo();
+      const staticComplete=demo.dataset.stage==='written'&&summary.dataset.stage==='saved';
+      demo.querySelector('[data-demo-replay]').click();
+      const replayComplete=demo.dataset.stage==='written';
+      enabled.checked=false;enabled.dispatchEvent(new Event('change',{bubbles:true}));
+      summaryEnabled.checked=false;summaryEnabled.dispatchEvent(new Event('change',{bubbles:true}));
+      const before=demo.innerHTML+summary.innerHTML;
+      await new Promise(resolve=>setTimeout(resolve,1400));
+      const examplesRetained=demo.dataset.stage==='off'&&summary.dataset.stage==='off'&&!!demo.querySelector('.onboarding-demo-transcript')&&!!summary.querySelector('[data-demo-summary-result] li')&&!demo.querySelector('button')&&!summary.querySelector('button')&&before===demo.innerHTML+summary.innerHTML;
+      enabled.checked=true;summaryEnabled.checked=true;
+      enabled.dispatchEvent(new Event('change',{bubbles:true}));
+      page.querySelector('[data-flow-select-choice=onboarding-ai-proactivity][data-value=assist]').click();
+      renderOnboardingSummaryDemo();
+      return staticComplete&&replayComplete&&examplesRetained;
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  await client.send('Emulation.setEmulatedMedia', { features: [] });
+  check(
+    reducedAiDemo.result?.value === true,
+    '降低动态效果应直接显示成品；关闭功能后保留静态示例并取消演示计时器',
   );
   const builtinOnboarding = await client.send('Runtime.evaluate', {
     expression: `(() => {
@@ -826,9 +869,59 @@ try {
       floatingBars.result?.value?.menuClosed &&
       floatingBars.result?.value?.tools &&
       floatingBars.result?.value?.noMore &&
-      floatingBars.result?.value?.note?.includes('> [00:42](#brevia-highlight-42000) 测试字幕重点'),
+      floatingBars.result?.value?.note?.includes('> [00:57](#brevia-highlight-57000) 测试字幕重点'),
     `悬浮控制栏操作不正确：${JSON.stringify(floatingBars.result?.value)}`,
   );
+  const pointerFocus = await client.send('Runtime.evaluate', {
+    expression: `(async()=>{
+      const probe=document.createElement('div');probe.id='focus-modality-probe';probe.className='live-control-bar';
+      probe.style.cssText='position:fixed;left:8px;top:8px;z-index:9999;width:80px';
+      probe.innerHTML='<div class="live-caption-controls"><button class="icon-button" data-enabled="true" aria-label="Focus test">'+interfaceIcon('captions')+'</button></div>';
+      probe.returnFocus=document.activeElement;document.body.append(probe);
+      const button=probe.querySelector('button');button.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));button.focus();
+      await new Promise(r=>setTimeout(r,200));
+      return {outline:getComputedStyle(button).outlineStyle,keyboard:document.documentElement.hasAttribute('data-keyboard-navigation')};
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  check(
+    pointerFocus.result?.value?.outline === 'none' && pointerFocus.result.value.keyboard === false,
+    '鼠标操作后的自动聚焦不应显示外框：' + JSON.stringify(pointerFocus),
+  );
+  await client.send('Input.dispatchKeyEvent', {
+    type: 'keyDown',
+    key: 'Tab',
+    code: 'Tab',
+    windowsVirtualKeyCode: 9,
+  });
+  await client.send('Input.dispatchKeyEvent', {
+    type: 'keyUp',
+    key: 'Tab',
+    code: 'Tab',
+    windowsVirtualKeyCode: 9,
+  });
+  const keyboardFocus = await client.send('Runtime.evaluate', {
+    expression: `(async()=>{
+      const button=document.querySelector('#focus-modality-probe button');button.focus();
+      await new Promise(r=>setTimeout(r,200));const style=getComputedStyle(button);
+      return {visible:button.matches(':focus-visible'),outline:style.outlineStyle,width:parseFloat(style.outlineWidth),keyboard:document.documentElement.hasAttribute('data-keyboard-navigation')};
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  check(
+    keyboardFocus.result?.value?.visible &&
+      keyboardFocus.result.value.keyboard &&
+      keyboardFocus.result.value.outline === 'solid' &&
+      keyboardFocus.result.value.width > 0,
+    '已启用的图标按钮应有键盘焦点：' + JSON.stringify(keyboardFocus),
+  );
+  const restoredPointerFocus = await client.send('Runtime.evaluate', {
+    expression: `(()=>{const probe=document.querySelector('#focus-modality-probe'),button=probe.querySelector('button');button.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));const outline=getComputedStyle(button).outlineStyle;probe.returnFocus?.focus({preventScroll:true});probe.remove();return outline;})()`,
+    returnByValue: true,
+  });
+  check(restoredPointerFocus.result?.value === 'none', '改回鼠标后应清除键盘焦点外框');
   const detailLayout = await client.send('Runtime.evaluate', {
     expression: `(async () => {
     await initializationPromise;
@@ -1503,6 +1596,25 @@ try {
       if(finalTranscript.getBoundingClientRect().height < 100 || document.querySelector('.detail-head').getBoundingClientRect().top > 180)errors.push('sample panel hides transcript context');
       if(segmentProfileDraft.segment.id!==segment.id||!segmentProfileAudio.src)errors.push('preview source mismatch');
       const fixtures=[{id:'layout-profile',name:'Alexandria Constantinopoulos',sample_count:9,duration_ms:10000},{id:'full-profile',name:'Full profile',sample_count:50,duration_ms:300000}];
+      const savedSettings=(await window.brevia.advancedSettings.get()).settings;
+      const customSettings=structuredClone(savedSettings);
+      customSettings.voice_profiles={max_samples:100,max_total_seconds:600};
+      await window.brevia.advancedSettings.save({settings:customSettings});
+      advancedSettings=undefined;
+      await openSegmentProfilePanel(detail.id,segment.id);
+      speakerProfiles=fixtures;segmentProfileDraft.profileId='full-profile';renderSegmentProfilePanel();
+      if(segmentProfilePanel.querySelector('input[value="full-profile"]').disabled||segmentProfilePanel.querySelector('[data-save-segment-profile]').disabled)errors.push('custom voiceprint capacity requires visiting advanced settings');
+      closeSegmentProfilePanel(true);speakerProfiles=previousProfiles;
+      advancedSettings=undefined;
+      await openModal('speaker-profiles');
+      speakerProfiles=fixtures;expandedSpeakerProfileId='full-profile';renderSpeakerProfileModal();
+      const capacity=settingsModal.querySelector('.speaker-detail-header small').textContent;
+      if(!capacity.includes('50/100')||!capacity.includes('10:00'))errors.push('voiceprint manager shows hardcoded capacity: '+capacity);
+      closeModal();await new Promise(r=>setTimeout(r,250));
+      await window.brevia.advancedSettings.save({settings:savedSettings});
+      advancedSettings=undefined;
+      await openSegmentProfilePanel(detail.id,segment.id);
+      await segmentProfileMotion.finished;
       for(const code of ['zh','en','es','ja','ko','fr','de','ru'])for(const appearance of ['light','dark']){
         applyLanguage(code);applyTheme(appearance);speakerProfiles=fixtures;segmentProfileDraft.name='';segmentProfileDraft.search='';segmentProfileDraft.profileId='layout-profile';renderSegmentProfilePanel();
         const source=[...finalTranscript.querySelectorAll('article[data-segment-id]')].find(e=>e.dataset.segmentId===segment.id);

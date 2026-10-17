@@ -10,7 +10,7 @@ from uuid import uuid4
 
 from .config import SETTINGS, validate_num_speakers
 from .markdown import normalize_summary_markdown
-from .store_base import utc_now
+from .store_base import synchronized_storage_files, utc_now
 from .transcript import latest_segments
 
 
@@ -509,6 +509,7 @@ class MeetingStoreMixin:
         self.write_manifest(meeting_id, manifest)
         return self.get_meeting(meeting_id)
 
+    @synchronized_storage_files
     def soft_delete(self, meeting_id, restore=False):
         """删除或恢复会议。
 
@@ -527,12 +528,14 @@ class MeetingStoreMixin:
             if not meeting:
                 raise ValueError("Meeting not found")
             if meeting["is_example"] and not restore:
+                directory = self.meeting_dir(meeting_id)
+                if directory.exists():
+                    shutil.rmtree(directory)
                 db.execute(
                     "INSERT OR REPLACE INTO app_meta(key,value) VALUES(?,?)",
                     (f"example_deleted:{meeting_id}", utc_now()),
                 )
                 db.execute("DELETE FROM meetings WHERE id=?", (meeting_id,))
-                shutil.rmtree(self.meeting_dir(meeting_id), ignore_errors=True)
                 return
             if restore:
                 if not meeting["deleted_at"]:
@@ -571,6 +574,7 @@ class MeetingStoreMixin:
             self.permanent_delete(meeting_id)
         return ids
 
+    @synchronized_storage_files
     def permanent_delete(self, meeting_id):
         """永久删除已进入最近删除的会议及其录音、逐字稿和导出文件。"""
         with self.connect() as db:
@@ -582,9 +586,12 @@ class MeetingStoreMixin:
             if not meeting["deleted_at"]:
                 raise ValueError("Only deleted meetings can be permanently deleted")
         self.purge_mobile_recording(meeting_id)
+        # 文件清理失败时保留索引，用户才能看到失败并重试。
+        directory = self.meeting_dir(meeting_id)
+        if directory.exists():
+            shutil.rmtree(directory)
         with self.connect() as db:
             db.execute("DELETE FROM meetings WHERE id=?", (meeting_id,))
-        shutil.rmtree(self.meeting_dir(meeting_id), ignore_errors=True)
 
     @staticmethod
     def _meeting(row):

@@ -2532,6 +2532,50 @@ assert.deepEqual(detailHighlights, [
   [highlightContext.noteHighlightMarkdown(147000, '另一句话'), 'detail-highlight'],
 ]);
 
+const recordingMarks = [];
+let recordMark;
+const recordingMarkContext = {
+  document: {
+    querySelector: () => ({ addEventListener: (_, callback) => (recordMark = callback) }),
+  },
+  meetingActive: false,
+  seconds: 57,
+  liveSegmentData: new Map(),
+  latestLiveSegmentId: null,
+  liveNotesEditor: { addHighlight: (...args) => recordingMarks.push(args) },
+  showToast() {},
+  t: (value) => value,
+};
+const recordMarkStart = text(app).indexOf(
+  "document.querySelector('#mark-important').addEventListener(",
+);
+runInNewContext(
+  text(app).slice(
+    recordMarkStart,
+    text(app).indexOf("document.querySelector('#end-meeting')", recordMarkStart),
+  ),
+  recordingMarkContext,
+);
+recordMark();
+assert.equal(recordingMarks.length, 0, '未录音时不创建标记');
+recordingMarkContext.meetingActive = true;
+recordMark();
+assert.deepEqual(recordingMarks, [[57000, '重点']], '首句字幕出现前也能标记当前录音时间');
+recordingMarkContext.latestLiveSegmentId = 'last';
+recordingMarkContext.liveSegmentData.set('last', { start_ms: 42000, text: '上一句字幕' });
+recordingMarkContext.seconds = 58;
+recordMark();
+recordingMarkContext.seconds = 59;
+recordMark();
+assert.deepEqual(
+  recordingMarks.slice(1),
+  [
+    [58000, '上一句字幕'],
+    [59000, '上一句字幕'],
+  ],
+  '同一字幕后的不同录音时刻分别保存',
+);
+
 // 动作接缝真跑一遍：注册前调用要抛出可诊断的错误，重复/越界/非函数注册要立刻失败。
 // 这些是视图模块与 app.js 之间唯一的契约，光断言源码里出现过 appActions 说明不了行为。
 const actionsContext = {};
@@ -4927,7 +4971,62 @@ assert.match(
 assert.ok((text(app).match(/resetAiNoteSuggestions\(\);/g) || []).length >= 3);
 assert.match(text(app), /window\.brevia\.on\('ai-note\.suggestion'/);
 assert.match(text(app), /window\.brevia\.on\('ai-note\.evidence'/);
+// 补充引用依据时必须同时更新展示中与暂存的建议，不能因队列重赋值中断事件。
+const evidenceHandlers = new Map();
+const evidenceContext = {
+  window: { brevia: { on: (name, handler) => evidenceHandlers.set(name, handler) } },
+  meetingActive: true,
+  breviaClient: { state: { meeting: { id: 'evidence-meeting' } } },
+  latestAiSuggestion: { id: 'suggestion-1', text: '决定周五验收' },
+  aiSuggestionQueue: [{ id: 'suggestion-1', text: '决定周五验收' }],
+  renderAiSuggestion: () => {},
+};
+const evidenceStart = summaryAppSource.indexOf(
+  "if (window.brevia?.on)\n  window.brevia.on('ai-note.evidence'",
+);
+const evidenceEnd = summaryAppSource.indexOf('/** 展示队列里的下一条建议', evidenceStart);
+runInNewContext(
+  `${summaryAppSource.match(/(?:const|let) pendingAutoSuggestions = \[\];/)[0]}\npendingAutoSuggestions.push({id:'suggestion-1',text:'决定周五验收'});\n${summaryAppSource.slice(evidenceStart, evidenceEnd)}`,
+  evidenceContext,
+);
+const evidencePayload = {
+  meeting_id: 'evidence-meeting',
+  id: 'suggestion-1',
+  evidence: ['segment-1'],
+};
+evidenceHandlers.get('ai-note.evidence')(evidencePayload);
+assert.equal(evidenceContext.latestAiSuggestion.evidence[0], 'segment-1');
+assert.equal(evidenceContext.aiSuggestionQueue[0].evidence[0], 'segment-1');
+assert.equal(
+  runInNewContext('pendingAutoSuggestions[0].evidence[0]', evidenceContext),
+  'segment-1',
+);
+evidenceHandlers.get('ai-note.evidence')({
+  ...evidencePayload,
+  meeting_id: 'other',
+  evidence: ['wrong'],
+});
+assert.equal(evidenceContext.latestAiSuggestion.evidence[0], 'segment-1');
 assert.match(text(app), /renderOnboardingAiDemo/);
+for (const [language, copy] of Object.entries(
+  localeContext.window.BreviaLocaleData.appCopy.aiOnboardingCopy,
+)) {
+  for (const key of [
+    'during',
+    'after',
+    'serviceTitle',
+    'serviceHint',
+    'adjustHint',
+    'summaryScope',
+    'demoOff',
+    'replay',
+  ]) {
+    assert.ok(typeof copy[key] === 'string' && copy[key].trim(), `${language}: ${key}`);
+  }
+  const modes = copy.levels.filter(([value]) => value !== 'off');
+  assert.equal(modes.length, 3, `${language}: three AI note modes`);
+  assert.equal(new Set(modes.map(([, , description]) => description)).size, 3);
+}
 // AI 辅助笔记（阶段 4 建议 UI + 输入状态机）：三种 UI 形态与操作。
 assert.match(text(html), /data-ai-suggestion/);
 assert.match(text(html), /data-ai-request/);

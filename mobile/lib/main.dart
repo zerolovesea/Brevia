@@ -3266,49 +3266,16 @@ class _MeetingPageState extends State<MeetingPage> {
                                         ),
                                 ),
                                 SizedBox(height: 12),
-                                if (recordingFocus && !live) ...[
-                                  SizedBox(
-                                    width: double.infinity,
-                                    child: FilledButton(
-                                      onPressed:
-                                          recordingCommandPending || ending
-                                          ? null
-                                          : toggleRecording,
-                                      child: Text(tr('继续录音')),
-                                    ),
-                                  ),
-                                  SizedBox(height: 12),
-                                  SizedBox(
-                                    width: double.infinity,
-                                    child: OutlinedButton(
-                                      style: OutlinedButton.styleFrom(
-                                        foregroundColor: Theme.of(
-                                          context,
-                                        ).colorScheme.error,
-                                        side: BorderSide(
-                                          color: Theme.of(
-                                            context,
-                                          ).colorScheme.error,
-                                        ),
-                                      ),
-                                      onPressed:
-                                          recordingCommandPending || ending
-                                          ? null
-                                          : end,
-                                      child: Text(tr('结束并保存')),
-                                    ),
-                                  ),
-                                ] else
-                                  RecordingControls(
-                                    paused: state != 'recording' || !live,
-                                    pending: recordingCommandPending || ending,
-                                    onPause: toggleRecording,
-                                    onMark: live
-                                        ? () => report(context, mark)
-                                        : null,
-                                    onEnd: end,
-                                    localOnly: m['localOnly'] == true,
-                                  ),
+                                RecordingControls(
+                                  paused: state != 'recording' || !live,
+                                  pending: recordingCommandPending || ending,
+                                  onPause: toggleRecording,
+                                  onMark: live
+                                      ? () => report(context, mark)
+                                      : null,
+                                  onEnd: end,
+                                  localOnly: m['localOnly'] == true,
+                                ),
                               ],
                             ),
                     ),

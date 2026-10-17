@@ -34,14 +34,16 @@ html
 html :is(button, [role="button"]):is(:disabled, [aria-disabled="true"], [aria-busy="true"]) {
   scale: 1;
 }
-/* 自动聚焦保留语义，不画系统外框；真实键盘导航以底色 / 下划线定位。 */
-html :is(:focus, :focus-visible, :focus-within) {
+/* 鼠标与页面自动聚焦不画外框，只有键盘导航显示焦点。 */
+html:not([data-keyboard-navigation]) :is(:focus, :focus-visible, :focus-within) {
   outline: none !important;
 }
 html[data-keyboard-navigation]
   :is(button, summary, a[href], [role="button"], [tabindex="0"]):focus-visible {
   background-color: var(--color-selected, #eaeaea);
   color: var(--color-text, #222222);
+  outline: 2px solid var(--color-text, #222222);
+  outline-offset: 3px;
   text-decoration: underline;
   text-underline-offset: 4px;
 }
@@ -108,14 +110,11 @@ html
   :is(
     .workspace-picker,
     .meeting-popover,
-    .meeting-submenu,
     .flow-select-options,
     .language-menu,
-    .search-results-panel,
     .refine-menu,
     .segment-context-menu,
-    .segment-speaker-picker,
-    .export-format-menu
+    .segment-speaker-picker
   ):not([hidden]) {
   animation: brevia-fade-in var(--motion-menu) var(--motion-ease-out) both;
 }
@@ -130,10 +129,10 @@ html .task-card-leave {
   animation: brevia-fade-out 120ms var(--motion-ease-in) both;
   pointer-events: none;
 }
-html :is(.save-state, .summary-feedback, .ai-suggestion-card, .live-caption-unavailable) {
+html :is(.save-state, .summary-feedback, .ai-suggestion-card) {
   animation: brevia-fade-in var(--motion-feedback) var(--motion-ease-out);
 }
-html :is(.processing-bar > i, .model-progress > i, .task-progress > i) {
+html :is(.processing-bar > i, .task-progress > i) {
   transition: transform var(--motion-feedback) linear;
 }
 html :is(.toast, .caption-text, .caption-controls) {
@@ -155,8 +154,7 @@ html
   ) {
   transition: opacity var(--motion-feedback) var(--motion-ease-out);
 }
-html .tabbar-tabs .tab::after,
-html .segmented-control::before {
+html .tabbar-tabs .tab::after {
   transition: transform var(--motion-state) var(--motion-ease-in-out);
 }
 @media (hover: hover) {

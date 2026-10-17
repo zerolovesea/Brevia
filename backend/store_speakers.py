@@ -285,12 +285,14 @@ class SpeakerProfileStoreMixin:
             else None
         )
 
+    @synchronized_storage_files
     def delete_speaker_profile(self, profile_id):
         """删除人员档案及其所有声纹样本和本地录音文件。"""
         directory = safe_child(self.speaker_profiles_dir, profile_id, label="speaker profile id")
+        if directory.exists():
+            shutil.rmtree(directory)
         with self.connect() as db:
             db.execute("DELETE FROM speaker_profiles WHERE id=?", (profile_id,))
-        shutil.rmtree(directory, ignore_errors=True)
 
     @synchronized_storage_files
     def delete_legacy_builtin_profiles(self):
