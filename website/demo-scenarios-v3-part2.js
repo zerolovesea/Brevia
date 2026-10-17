@@ -184,49 +184,21 @@ DemoScenariosV3.prototype.setupLiveUI = function (meetingTitle) {
   return html;
 };
 
-// State management methods — shared fade-swap helper
+// 场景切换保留可读界面，沿用应用导航动效。
 DemoScenariosV3.prototype._fadeSwapContent = function (newHtml, callback) {
   const content = document.getElementById('demo-content');
   if (!content) return;
 
-  content.style.transition = 'opacity 0.2s ease';
-  content.style.opacity = '0';
-
-  return new Promise((resolve) =>
-    setTimeout(
-      () => {
-        content.innerHTML = newHtml;
-
-        // Re-apply scale
-        const viewport = document.getElementById('demo-viewport');
-        const appShell = content.querySelector('.app-shell');
-        if (appShell && viewport) {
-          const designWidth = 1200;
-          const designHeight = 750;
-          const scale = Math.min(
-            viewport.clientWidth / designWidth,
-            viewport.clientHeight / designHeight,
-            1,
-          );
-          appShell.style.transform = `scale(${scale})`;
-          appShell.style.transformOrigin = 'top left';
-        }
-
-        if (callback) callback();
-        resolve();
-
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            content.style.opacity = '1';
-            setTimeout(() => {
-              content.style.transition = '';
-            }, 300);
-          });
-        });
-      },
-      this.engine.reducedMotion ? 0 : 200,
-    ),
-  );
+  content.innerHTML = newHtml;
+  const viewport = document.getElementById('demo-viewport');
+  const appShell = content.querySelector('.app-shell');
+  if (appShell && viewport) {
+    appShell.style.transform = `scale(${Math.min(viewport.clientWidth / 1200, viewport.clientHeight / 750, 1)})`;
+    appShell.style.transformOrigin = 'top left';
+  }
+  if (callback) callback();
+  window.BreviaMotion?.enter(content.querySelector('.view.active'), 'forward');
+  return Promise.resolve();
 };
 
 DemoScenariosV3.prototype.showPrepareView = function () {
@@ -421,25 +393,21 @@ DemoScenariosV3.prototype.setupSummaryDetailUI = function () {
         ${this.windowBarHtml('会议详情')}
 
         <section class="view active" id="detail-view">
-          <button class="back">← 返回会议库</button>
+          <button class="back" aria-label="返回会议库" title="返回会议库"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m12 4-6 6 6 6"/></svg></button>
           <header class="detail-head">
             <div class="detail-title">
-              <p class="eyebrow">本地会议</p>
-              <h1>Q3 产品评审会议</h1>
-              <p class="detail-meta">2026年8月7日 · 45 分钟 · 3 位参与者 · 已生成纪要</p>
+              <h1 title="Q3 产品评审会议">Q3 产品评审会议</h1>
+              <p class="detail-meta"><span>2026/08/07</span><span>45 分钟</span><span>公开工作区</span></p><section class="summary-participants"><button type="button" aria-label="参与者"><span class="summary-participant-count">参与者 (3)</span><span class="summary-participant-avatars"><span class="summary-participant-preview-person"><i class="speaker-avatar" aria-hidden="true">张</i><span>张伟</span></span><span class="summary-participant-preview-person"><i class="speaker-avatar" aria-hidden="true">李</i><span>李娜</span></span><span class="summary-participant-preview-person"><i class="speaker-avatar" aria-hidden="true">王</i><span>王强</span></span></span></button></section>
             </div>
-            <div class="detail-actions">
-              <button class="primary-action" data-export-detail>导出与分享</button>
-            </div>
-          </header>
+          </header><div class="detail-actions"><button class="primary-action" data-export-detail>导出</button></div>
 
 
-          <div class="detail-layout">
+          <div class="detail-layout is-summary-mode" data-detail-mode="summary">
             <section class="final-transcript">
               <div class="tabbar">
                 <div class="tabbar-tabs">
-                  <button class="tab active" data-detail-tab="notes">我的笔记</button>
-                  <button class="tab" data-detail-tab="transcript">字幕</button>
+                  <button class="tab active" data-detail-tab="notes">笔记</button>
+                  <button class="tab" data-detail-tab="transcript">逐字稿</button><button class="tab" data-detail-tab="summary">会议纪要</button>
                 </div>
                 <div class="tabbar-extra">
                   <span class="refine-state is-done"><svg class="check-icon" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3 8.5 3.2 3.2L13 4.5" /></svg> 已精修</span>
@@ -492,9 +460,7 @@ DemoScenariosV3.prototype.setupSummaryDetailUI = function () {
                   </article>
                 </div>
               </div>
-            </section>
-
-            <aside class="notes">
+            <div class="detail-summary-panel" data-detail-panel="summary" hidden>
               <div class="summary-preview">
                 <div class="summary-head">
                   <p class="eyebrow">会议纪要</p>
@@ -516,8 +482,7 @@ DemoScenariosV3.prototype.setupSummaryDetailUI = function () {
                   </ul>
                 </div>
               </div>
-            </aside>
-            <button class="detail-mode-toggle" data-toggle-detail-mode="summary" type="button" aria-label="展开会议纪要" title="展开会议纪要"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 3 5 5-5 5"/></svg></button><button class="detail-mode-toggle" data-toggle-detail-mode="transcript" type="button" aria-label="展开字幕" title="展开字幕"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m10 3-5 5 5 5"/></svg></button>
+            </div></section><aside class="notes" hidden></aside>
           </div>
           <section class="player floating-control-bar"><div class="player-source"><svg viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8v4h3l4 3V5L6 8H3z"/><path d="M13 7a4 4 0 0 1 0 6m2-9a8 8 0 0 1 0 12"/></svg><span>本地录音</span><span class="player-time" id="player-time">18:32</span></div><div class="player-actions"><button class="skip" type="button" aria-label="后退 15 秒">↶ 15</button><button class="play" id="play" aria-label="播放录音">▶</button><button class="skip" type="button" aria-label="前进 15 秒">15 ↷</button></div><div class="player-meta"><span class="player-duration" id="player-duration">45:00</span><div class="player-speed flow-select"><button class="flow-select-toggle" data-flow-select-toggle type="button" aria-expanded="false">1×<span>⌄</span></button><input id="playback-rate" type="hidden" value="1" /><div class="flow-select-options" hidden><button type="button" data-playback-rate="1">1×</button><button type="button" data-playback-rate="1.25">1.25×</button><button type="button" data-playback-rate="1.5">1.5×</button><button type="button" data-playback-rate="2">2×</button></div></div></div><div class="player-track"><input id="progress" type="range" min="0" max="2700" value="1112" aria-label="播放进度" /></div></section>
         </section>
@@ -525,6 +490,17 @@ DemoScenariosV3.prototype.setupSummaryDetailUI = function () {
     </main>
   `;
   return html;
+};
+
+DemoScenariosV3.prototype.selectDetailTab = function (tab) {
+  const root = this.engine.viewport.querySelector('#detail-view');
+  root.querySelectorAll('[data-detail-panel]').forEach((panel) => {
+    panel.hidden = panel.dataset.detailPanel !== tab;
+  });
+  root.querySelectorAll('[data-detail-tab]').forEach((button) => {
+    button.classList.toggle('active', button.dataset.detailTab === tab);
+  });
+  window.BreviaMotion?.enter(root.querySelector(`[data-detail-panel="${tab}"]`), 'tab');
 };
 
 DemoScenariosV3.prototype.showSummaryDetail = function () {
@@ -844,12 +820,10 @@ DemoScenariosV3.prototype.renderModelLibraryItems = function () {
     .map((item) => {
       const heading = item.stage !== lastStage ? `<h3>${item.stage}</h3>` : '';
       lastStage = item.stage;
-      const dots = (level) =>
-        [1, 2, 3].map((step) => `<i${step <= level ? ' class="on"' : ''}></i>`).join('');
       const ratings = String.raw`
       <div class="model-library-ratings">
-        <span class="model-library-rating"><small>${data.qualityLabel}</small><b>${data.qualityTiers[item.quality - 1]}</b><span class="rating-scale" aria-hidden="true">${dots(item.quality)}</span></span>
-        <span class="model-library-rating"><small>${data.speedLabel}</small><b>${data.speedTiers[item.speed - 1]}</b><span class="rating-scale" aria-hidden="true">${dots(item.speed)}</span></span>
+        <span class="model-library-rating"><small>${data.qualityLabel}</small><b>${data.qualityTiers[item.quality - 1]}</b><span class="rating-scale" aria-hidden="true"><i style="--rating-level:${item.quality}"></i></span></span>
+        <span class="model-library-rating"><small>${data.speedLabel}</small><b>${data.speedTiers[item.speed - 1]}</b><span class="rating-scale" aria-hidden="true"><i style="--rating-level:${item.speed}"></i></span></span>
       </div>`;
       const tags = `<div class="model-library-tags">${item.bundled ? '<span class="model-library-installed">随应用安装</span>' : item.installed ? `<span class="model-library-installed">${data.installedLabel}</span>` : ''}</div>`;
       const action = item.bundled

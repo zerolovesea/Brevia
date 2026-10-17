@@ -3,6 +3,7 @@ import 'design_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 
+import 'design_system.dart';
 import 'storage.dart';
 
 import 'i18n.dart';
@@ -82,7 +83,9 @@ class RecordingControls extends StatelessWidget {
           IconButton.filledTonal(
             tooltip: label,
             onPressed: pending ? null : action,
-            icon: BreviaIcon(icon, size: 28),
+            icon: BreviaStateChange(
+              child: BreviaIcon(icon, key: ValueKey(icon), size: 28),
+            ),
             style: IconButton.styleFrom(
               minimumSize: const Size(64, 64),
               backgroundColor: danger
@@ -437,6 +440,9 @@ class RecordingFocus extends StatelessWidget {
                                 tooltip: tr('录音说明'),
                                 onPressed: () => showModalBottomSheet<void>(
                                   context: context,
+                                  sheetAnimationStyle: BreviaMotion.sheet(
+                                    context,
+                                  ),
                                   showDragHandle: true,
                                   isScrollControlled: true,
                                   builder: (_) => SafeArea(

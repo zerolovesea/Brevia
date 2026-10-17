@@ -2007,6 +2007,34 @@ assert.match(
 assert.match(text(html), /brevia-logo-reveal\.gif/);
 assert.match(text(js), /brevia\.on\('startup\.ready'/);
 assert.match(text(js), /const dismissStartupSplash/);
+for (const duration of ['0s', '0.36s']) {
+  let removed = false,
+    fallback;
+  const splash = {
+    classList: { add() {} },
+    addEventListener() {},
+    remove() {
+      removed = true;
+    },
+  };
+  const start = js.indexOf('const dismissStartupSplash =');
+  const end = js.indexOf('// 启动动画', start);
+  runInNewContext(js.slice(start, end) + '\ndismissStartupSplash();', {
+    document: { querySelector: () => splash },
+    getComputedStyle: () => ({ transitionDuration: duration }),
+    setTimeout(callback, ms) {
+      fallback = callback;
+      assert.equal(ms, 392);
+    },
+  });
+  if (duration === '0s')
+    assert.equal(removed, true, 'reduced-motion startup never waits for a missing transitionend');
+  else {
+    assert.equal(removed, false);
+    fallback();
+    assert.equal(removed, true, 'startup removes its overlay even when transitionend is lost');
+  }
+}
 assert.match(text(meetings), /brevia-meetings-v1/);
 assert.match(text(js), /cacheMeetingList\(\)/);
 assert.match(text(css), /\.startup-splash\{[^}]*z-index:100[^}]*transition:opacity \.36s/);
@@ -5431,7 +5459,6 @@ assert.match(
   text(css),
   /\.refine-menu-speakers input:not\(\[type=checkbox\]\):not\(\[type=range\]\):not\(\[type=radio\]\),\.refine-menu-speakers \.flow-select-toggle\{[^}]*height:32px/,
 );
-const navigationWaits = [];
 const viewNode = (id) => {
   const classes = new Set(['active']);
   return {
@@ -5449,6 +5476,9 @@ const viewA = viewNode('a-view'),
 let visibleView = viewA;
 const navigationContext = {
   pageTransition: null,
+  pageTransitionRevision: 0,
+  viewReturnFocus: new Map(),
+  BreviaMotion: { cancel() {}, enter() {} },
   modalRequestRevision: 0,
   activeView: 'a',
   settingsModal: { hidden: true },
@@ -5471,7 +5501,7 @@ const navigationContext = {
   renderMiniPlayback() {},
   syncPhonePreview() {},
   matchMedia: () => ({ matches: false }),
-  window: { setTimeout: (callback) => navigationWaits.push(callback), scrollTo() {} },
+  window: { scrollTo() {} },
 };
 runInNewContext(`async ${summaryFn('transitionPage')}`, navigationContext);
 const firstNavigation = navigationContext.transitionPage(viewA, viewB, () => {
@@ -5480,12 +5510,9 @@ const firstNavigation = navigationContext.transitionPage(viewA, viewB, () => {
 const secondNavigation = navigationContext.transitionPage(viewA, viewC, () => {
   visibleView = viewC;
 });
-navigationWaits.shift()();
 await firstNavigation;
-await Promise.resolve();
-navigationWaits.shift()();
 await secondNavigation;
-assert.equal(visibleView, viewC, 'the last navigation runs after the current transition');
+assert.equal(visibleView, viewC, 'navigation does not wait for visual animation');
 assert.equal(
   navigationContext.activeView,
   'c',
@@ -5511,12 +5538,31 @@ navigationContext.document.body = { classList: { remove() {} } };
 navigationContext.document.querySelector = (selector) =>
   selector === '.view.active' ? visibleView : appShellStub;
 const libraryNavigation = navigationContext.transitionPage(viewC, viewA);
-navigationWaits.shift()();
 await libraryNavigation;
 assert.ok(
   settingsClosed && navigationContext.settingsModal.hidden && !appShellStub.inert,
   '离开设置后会议库可交互',
 );
+// 慢业务清理仍串行，但尚未开始的中间意图不会排成长动画队列。
+let finishNavigation;
+const appliedNavigation = [];
+const heldNavigation = navigationContext.transitionPage(
+  viewA,
+  viewB,
+  () =>
+    new Promise((resolve) => {
+      finishNavigation = resolve;
+    }),
+);
+const skippedNavigation = navigationContext.transitionPage(viewA, viewC, () =>
+  appliedNavigation.push('stale'),
+);
+const latestNavigation = navigationContext.transitionPage(viewA, viewA, () =>
+  appliedNavigation.push('latest'),
+);
+finishNavigation();
+await Promise.all([heldNavigation, skippedNavigation, latestNavigation]);
+assert.deepEqual(appliedNavigation, ['latest']);
 
 const liveElement = () => ({
   classList: { add() {}, remove() {} },
@@ -5841,6 +5887,7 @@ let onboardingNext = 0,
   onboardingDisposed = 0,
   onboardingTimer;
 const dismissal = {
+  BreviaMotion: { duration: () => 180 },
   onboardingPage: {
     dataset: {},
     classList: {
@@ -5848,7 +5895,9 @@ const dismissal = {
       remove: (name) => onboardingClasses.delete(name),
       add: (name) => onboardingClasses.add(name),
     },
-    remove() {},
+    remove() {
+      this.removed = true;
+    },
   },
   onboardingAiDemoTimer: null,
   onboardingSummaryDemoTimer: null,
@@ -5869,13 +5918,41 @@ const dismissal = {
   },
 };
 runInNewContext(summaryFn('dismissOnboardingPage'), dismissal);
-dismissal.dismissOnboardingPage(() => onboardingNext++);
-dismissal.dismissOnboardingPage(() => onboardingNext++);
-onboardingTimer();
+const firstDismissal = dismissal.dismissOnboardingPage(() => onboardingNext++);
+const repeatedDismissal = dismissal.dismissOnboardingPage(() => onboardingNext++);
+assert.equal(firstDismissal, repeatedDismissal, 'repeated dismissal has one awaitable completion');
+await firstDismissal;
 assert.equal(onboardingNext, 1, 'repeated clicks must not create duplicate onboarding pages');
 assert.equal(onboardingDisposed, 1, 'leaving onboarding must dispose motion exactly once');
 dismissal.dismissOnboardingPage(() => onboardingNext++);
 assert.equal(onboardingNext, 1);
+let finishNextStep;
+const retainedPage = {
+  dataset: {},
+  remove() {
+    this.removed = true;
+  },
+};
+dismissal.onboardingPage = retainedPage;
+const slowHandoff = dismissal.dismissOnboardingPage(
+  () =>
+    new Promise((resolve) => {
+      finishNextStep = resolve;
+    }),
+);
+await Promise.resolve();
+assert.equal(
+  retainedPage.removed,
+  undefined,
+  'slow preparation keeps the existing onboarding page visible',
+);
+assert.equal(retainedPage.inert, true, 'pending step cannot be submitted twice');
+finishNextStep(false);
+await slowHandoff;
+assert.equal(retainedPage.removed, undefined, 'failed preparation retains the old page');
+assert.equal(retainedPage.inert, false, 'failed preparation can be retried');
+await dismissal.dismissOnboardingPage(() => {});
+assert.equal(retainedPage.removed, true);
 console.log('UI structure and behavior checks passed.');
 
 // A second meeting cannot launch or clear the first meeting's progress.

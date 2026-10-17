@@ -238,9 +238,14 @@ class _OnboardingGateState extends State<OnboardingGate> {
       ),
       body: SafeArea(
         child: AnimatedSwitcher(
-          duration: MediaQuery.disableAnimationsOf(context)
-              ? Duration.zero
-              : const Duration(milliseconds: 180),
+          duration: BreviaMotion.duration(context, BreviaMotion.state),
+          reverseDuration: BreviaMotion.duration(
+            context,
+            BreviaMotion.feedback,
+          ),
+          switchInCurve: BreviaMotion.out,
+          switchOutCurve: BreviaMotion.into,
+          layoutBuilder: breviaPageLayout,
           child: KeyedSubtree(key: ValueKey(step), child: content()),
         ),
       ),

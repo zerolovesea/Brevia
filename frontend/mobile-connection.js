@@ -104,7 +104,7 @@
         pairDialog.querySelector('#mobile-approval').replaceChildren();
         pairClosing = null;
         resolve();
-      }, 220);
+      }, BreviaMotion.duration('exit'));
     });
     return pairClosing;
   }

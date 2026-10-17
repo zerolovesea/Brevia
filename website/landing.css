@@ -22,6 +22,11 @@
   --cream: #f5f0e5;
   --lilac: #efedf7;
   --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --motion-press: 80ms;
+  --motion-feedback: 120ms;
+  --motion-state: 180ms;
+  --motion-ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --motion-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
   --header: 80px;
   --hand: "Bradley Hand", "Kaiti SC", "STKaiti", cursive;
   color: var(--ink);
@@ -175,15 +180,15 @@ ol {
   font-weight: 500;
   line-height: 1.5;
   transition:
-    background 180ms,
-    transform 180ms var(--ease);
+    background-color var(--motion-feedback) var(--ease),
+    scale var(--motion-state) var(--ease);
 }
 .button:hover {
   background: var(--accent-dark);
-  transform: translateY(-2px);
 }
 .button:active {
-  transform: translateY(0);
+  scale: 0.98;
+  transition-duration: var(--motion-press);
 }
 .button .icon {
   width: 18px;
@@ -412,13 +417,14 @@ h1 .accent:after {
   border: 0;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 260ms;
+  transition: opacity var(--motion-state) var(--ease);
 }
 .motion-demo.is-ready iframe {
   opacity: 1;
 }
+/* 首帧就绪后覆盖静态图，加载与渐显期间始终保留可读画面。 */
 .motion-demo.is-ready .motion-poster {
-  visibility: hidden;
+  visibility: visible;
 }
 .software-section {
   padding: 76px 0 132px;
@@ -1272,10 +1278,25 @@ h2 {
 }
 .faq-sign:after {
   transform: rotate(90deg);
-  transition: transform 180ms;
+  transition: transform var(--motion-state) var(--ease);
 }
 .faq-item[open] .faq-sign:after {
   transform: rotate(0);
+}
+@supports (interpolate-size: allow-keywords) {
+  .faq-item {
+    interpolate-size: allow-keywords;
+  }
+  .faq-item::details-content {
+    block-size: 0;
+    overflow: clip;
+    transition:
+      block-size var(--motion-state) var(--ease),
+      content-visibility var(--motion-state) allow-discrete;
+  }
+  .faq-item[open]::details-content {
+    block-size: auto;
+  }
 }
 .site-footer {
   border-top: 1px solid var(--line);
@@ -2363,7 +2384,8 @@ h2 {
   }
   *,
   *::before,
-  *::after {
+  *::after,
+  .faq-item::details-content {
     animation: none !important;
     transition: none !important;
   }
@@ -2389,5 +2411,27 @@ h2 {
   }
   section {
     break-inside: avoid;
+  }
+}
+
+/* 官网操作沿用同一节奏；内容阅读和已有演示不额外入场。 */
+:is(a[href], button, summary) {
+  transition:
+    color var(--motion-feedback) var(--ease),
+    background-color var(--motion-feedback) var(--ease),
+    border-color var(--motion-feedback) var(--ease),
+    opacity var(--motion-feedback) var(--ease),
+    scale var(--motion-state) var(--ease);
+}
+:is(a[href], button, summary):active {
+  opacity: 0.85;
+  transition-duration: var(--motion-press);
+}
+.disclosure[data-closing] .disclosure-panel {
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .button:active {
+    scale: 1;
   }
 }

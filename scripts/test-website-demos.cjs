@@ -18,6 +18,7 @@ const assert = require('node:assert/strict');
 const root = resolve(__dirname, '..');
 const output = join(root, 'output/website-demos');
 const record = process.argv.includes('--record');
+const updatePosters = process.argv.includes('--update-posters');
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const temp = mkdtempSync(join(tmpdir(), 'brevia-demos-'));
 app.setPath('userData', join(temp, 'profile'));
@@ -135,7 +136,7 @@ app
               if (step.action === 'setState') await new Promise(r => setTimeout(r, 220));
               if (document.querySelector('#detail-view')) {
                 const layout = document.querySelector('.detail-layout').getBoundingClientRect();
-                const notes = document.querySelector('.notes').getBoundingClientRect();
+                const notes = document.querySelector('[data-detail-panel]:not([hidden])').getBoundingClientRect();
                 const player = document.querySelector('.player').getBoundingClientRect();
                 if (layout.height < 200 || notes.height < 200 || layout.bottom > player.top + 1 || player.bottom > innerHeight)
                   throw new Error('Meeting notes or player clipped');
@@ -366,6 +367,19 @@ app
             states[1].text,
             `${locale}/${scene}: no functional motion`,
           );
+          if (updatePosters && ['tour', 'live', 'summary', 'library'].includes(scene)) {
+            const time = { tour: 0, live: 6600, summary: 11500, library: 1000 }[scene];
+            await win.webContents.executeJavaScript(
+              `productMotion.seek(${time});document.querySelector('.motion-cursor').hidden=true`,
+            );
+            await wait(180);
+            const directory = join(root, 'website/assets/app-ui');
+            mkdirSync(directory, { recursive: true });
+            writeFileSync(
+              join(directory, `${locale}-${scene}.png`),
+              (await win.webContents.capturePage()).resize({ width: 1280 }).toPNG(),
+            );
+          }
           if (scene === 'tour') {
             const flow = await win.webContents.executeJavaScript(`(() => {
               const states = [1000, 2150, 2900, 14000, 26000, 29000].map(time => {
@@ -540,6 +554,22 @@ app
             true,
             `${locale}/${scene}: demos must not zoom or pan`,
           );
+          if (scene === 'summary') {
+            const layout = await win.webContents.executeJavaScript(`(() => {
+              productMotion.seek(6000);
+              const view = document.querySelector('#detail-view');
+              const header = view.querySelector('.detail-layout').getBoundingClientRect().top - view.getBoundingClientRect().top;
+              return { header, roster: view.querySelectorAll('.detail-head .summary-participant-preview-person').length,
+                overflow: view.querySelector('.final-transcript').scrollWidth > view.querySelector('.final-transcript').clientWidth,
+                panel: view.querySelector('[data-detail-panel="summary"]').classList.contains('detail-summary-panel'),
+                opaque: [0,100,11990,12000].every(time => {productMotion.seek(time);return getComputedStyle(document.querySelector('#motion-stage')).opacity === '1'})};
+            })()`);
+            assert.ok(layout.header < 160, `${locale}: detail header must remain compact`);
+            assert.equal(layout.roster, 3);
+            assert.equal(layout.panel, true);
+            assert.equal(layout.overflow, false);
+            assert.equal(layout.opaque, true, 'Demo loops must never fade the entire app');
+          }
           if (scene === 'summary') {
             assert.equal(
               states[0].summary,
@@ -726,7 +756,7 @@ app
             headerFits: [...document.querySelectorAll('.header-inner > *, .header-actions > *')].filter(element => element.getClientRects().length).every(element => {const rect = element.getBoundingClientRect();return rect.left >= 0 && rect.right <= innerWidth;}),
             headings: document.querySelectorAll('h1').length,
             motions: document.querySelectorAll('[data-motion-scene]').length,
-            staticApplicationImages: document.querySelectorAll('img[src*="/screenshots/"]:not(.motion-poster)').length,
+            staticApplicationImages: document.querySelectorAll('.privacy-app img[src*="/app-ui/"][src*="-models.png"]').length,
             missingAnchors: [...document.querySelectorAll('a[href^="#"]')].filter(link => !document.getElementById(link.hash.slice(1))).map(link => link.hash),
             downloads: [...document.querySelectorAll('.platform-row a')].map(link => link.href),
             sticky: getComputedStyle(document.querySelector('.site-header')).position,
@@ -1058,7 +1088,7 @@ app
             );
             win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
             win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
-            await wait(30);
+            await wait(140);
             assert.equal(
               await win.webContents.executeJavaScript(
                 "document.querySelector('.mobile-menu').open",
@@ -1076,12 +1106,29 @@ app
             true,
           );
           await win.webContents.executeJavaScript("document.querySelector('h1').click()");
+          await wait(140);
           assert.equal(
             await win.webContents.executeJavaScript(
               "document.querySelector('.language-picker').open",
             ),
             false,
           );
+          await win.webContents.executeJavaScript(`(() => {
+            const trigger = document.querySelector('.language-picker summary');
+            trigger.click(); trigger.click(); trigger.click();
+          })()`);
+          await wait(200);
+          assert.equal(
+            await win.webContents.executeJavaScript(
+              "document.querySelector('.language-picker').open",
+            ),
+            true,
+            'Reopening cancels the old exit',
+          );
+          await win.webContents.executeJavaScript(
+            "document.querySelector('.language-picker summary').click()",
+          );
+          await wait(140);
           await win.webContents.executeJavaScript(
             "document.querySelectorAll('.faq-item summary')[1].click()",
           );
@@ -1149,13 +1196,14 @@ app
       });
       await wait(200);
       const reduced = await win.webContents.executeJavaScript(
-        `({playing:[...document.querySelectorAll('.motion-demo iframe')].some(frame=>frame.contentWindow.productMotion?.running),scroll:getComputedStyle(document.documentElement).scrollBehavior,hero:getComputedStyle(document.querySelector('.hero-window')).transform,software:getComputedStyle(document.querySelector('.software-group')).animationName,stage:getComputedStyle(document.querySelector('.scene-visual .motion-demo')).transform})`,
+        `({playing:[...document.querySelectorAll('.motion-demo iframe')].some(frame=>frame.contentWindow.productMotion?.running),scroll:getComputedStyle(document.documentElement).scrollBehavior,hero:getComputedStyle(document.querySelector('.hero-window')).transform,software:getComputedStyle(document.querySelector('.software-group')).animationName,stage:getComputedStyle(document.querySelector('.scene-visual .motion-demo')).transform,faq:getComputedStyle(document.querySelector('.faq-item'),'::details-content').transitionDuration})`,
       );
       assert.equal(reduced.playing, false);
       assert.equal(reduced.scroll, 'auto');
       assert.equal(reduced.hero, 'none');
       assert.equal(reduced.software, 'none');
       assert.equal(reduced.stage, 'none');
+      assert.equal(reduced.faq, '0s', 'Reduced motion also disables FAQ size interpolation');
       win.webContents.debugger.detach();
       console.log('PASS continuous loop, background pause, and reduced motion');
 

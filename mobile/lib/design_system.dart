@@ -3,6 +3,78 @@ import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/material.dart';
 import 'design_icons.dart';
 
+/// 公共节奏只控制视觉，不延迟录音、保存、网络或系统导航。
+abstract final class BreviaMotion {
+  static const press = Duration(milliseconds: 80);
+  static const feedback = Duration(milliseconds: 120);
+  static const state = Duration(milliseconds: 180);
+  static const surface = Duration(milliseconds: 220);
+  static const spatial = Duration(milliseconds: 280);
+  static const exit = Duration(milliseconds: 140);
+  static const out = Cubic(.16, 1, .3, 1);
+  static const into = Cubic(.4, 0, 1, 1);
+  static const inOut = Cubic(.4, 0, .2, 1);
+
+  static Duration duration(BuildContext context, Duration value) =>
+      (MediaQuery.maybeDisableAnimationsOf(context) ??
+          WidgetsBinding
+              .instance
+              .platformDispatcher
+              .accessibilityFeatures
+              .disableAnimations)
+      ? Duration.zero
+      : value;
+
+  static AnimationStyle sheet(BuildContext context) => AnimationStyle(
+    duration: duration(context, spatial),
+    reverseDuration: duration(context, state),
+  );
+}
+
+/// 只让当前状态参与布局与读屏，旧状态不能在淡出期间继续响应。
+class BreviaStateChange extends StatelessWidget {
+  final Widget child;
+  const BreviaStateChange({super.key, required this.child});
+
+  @override
+  Widget build(BuildContext context) => AnimatedSwitcher(
+    duration: BreviaMotion.duration(context, BreviaMotion.feedback),
+    reverseDuration: BreviaMotion.duration(context, BreviaMotion.press),
+    switchInCurve: BreviaMotion.out,
+    switchOutCurve: BreviaMotion.into,
+    transitionBuilder: (child, animation) => FadeTransition(
+      opacity: Tween<double>(begin: .55, end: 1).animate(animation),
+      child: child,
+    ),
+    layoutBuilder: (current, previous) => current ?? const SizedBox.shrink(),
+    child: child,
+  );
+}
+
+// 保留正在退出的正文，避免新正文首帧透明时露出空背景；旧层不可操作或读屏。
+Widget breviaPageLayout(Widget? current, List<Widget> previous) => Stack(
+  fit: StackFit.expand,
+  children: [
+    for (final child in [...previous, ?current])
+      KeyedSubtree(
+        key: child.key,
+        child: TickerMode(
+          enabled: identical(child, current),
+          child: IgnorePointer(
+            ignoring: !identical(child, current),
+            child: ExcludeFocus(
+              excluding: !identical(child, current),
+              child: ExcludeSemantics(
+                excluding: !identical(child, current),
+                child: child,
+              ),
+            ),
+          ),
+        ),
+      ),
+  ],
+);
+
 // 桌面与手机使用同一语义色板，控件大小遵循原生触控约定。
 ThemeData breviaTheme(Brightness brightness) {
   final dark = brightness == Brightness.dark;
@@ -84,7 +156,7 @@ ThemeData breviaTheme(Brightness brightness) {
     iconButtonTheme: IconButtonThemeData(
       style: IconButton.styleFrom(minimumSize: Size(48, 48)).copyWith(
         foregroundBuilder: breviaPressFeedback,
-        animationDuration: const Duration(milliseconds: 120),
+        animationDuration: BreviaMotion.feedback,
       ),
     ),
     dialogTheme: DialogThemeData(
@@ -94,6 +166,7 @@ ThemeData breviaTheme(Brightness brightness) {
     ),
     segmentedButtonTheme: SegmentedButtonThemeData(
       style: ButtonStyle(
+        animationDuration: BreviaMotion.state,
         side: WidgetStatePropertyAll(BorderSide(color: line)),
         shape: WidgetStatePropertyAll(
           RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -190,7 +263,7 @@ ThemeData breviaTheme(Brightness brightness) {
             ),
           ).copyWith(
             foregroundBuilder: breviaPressFeedback,
-            animationDuration: const Duration(milliseconds: 120),
+            animationDuration: BreviaMotion.feedback,
           ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
@@ -210,7 +283,7 @@ ThemeData breviaTheme(Brightness brightness) {
             ),
           ).copyWith(
             foregroundBuilder: breviaPressFeedback,
-            animationDuration: const Duration(milliseconds: 120),
+            animationDuration: BreviaMotion.feedback,
           ),
     ),
     textButtonTheme: TextButtonThemeData(
@@ -228,7 +301,7 @@ ThemeData breviaTheme(Brightness brightness) {
             ),
           ).copyWith(
             foregroundBuilder: breviaPressFeedback,
-            animationDuration: const Duration(milliseconds: 120),
+            animationDuration: BreviaMotion.feedback,
           ),
     ),
     bottomSheetTheme: BottomSheetThemeData(
@@ -290,8 +363,15 @@ Widget breviaPressFeedback(
           states.contains(WidgetState.pressed)
       ? .96
       : 1,
-  duration: const Duration(milliseconds: 120),
-  curve: Curves.easeOutCubic,
+  duration: BreviaMotion.duration(
+    context,
+    states.contains(WidgetState.pressed)
+        ? BreviaMotion.press
+        : BreviaMotion.state,
+  ),
+  curve: states.contains(WidgetState.pressed)
+      ? BreviaMotion.out
+      : Curves.easeOutBack,
   child: child,
 );
 
@@ -299,10 +379,10 @@ class BreviaPageTransitionsBuilder extends PageTransitionsBuilder {
   const BreviaPageTransitionsBuilder();
 
   @override
-  Duration get transitionDuration => const Duration(milliseconds: 220);
+  Duration get transitionDuration => BreviaMotion.surface;
 
   @override
-  Duration get reverseTransitionDuration => const Duration(milliseconds: 180);
+  Duration get reverseTransitionDuration => BreviaMotion.state;
 
   @override
   Widget buildTransitions<T>(

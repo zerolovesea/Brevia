@@ -156,7 +156,10 @@ function applyBackendDetail(meeting) {
         blocked: summaryBlocked,
         generating: summaryGenerating,
       };
-  document.querySelector('#detail-view .detail-head h1').textContent = meeting.title;
+  const heading = document.querySelector('#detail-view .detail-head h1');
+  heading.textContent = meeting.title;
+  heading.title = meeting.title;
+  document.querySelector('#detail-view > .back').title = t('返回会议库');
   const metaParts = [];
   if (meeting.created_at) {
     metaParts.push(
@@ -168,9 +171,8 @@ function applyBackendDetail(meeting) {
     );
   }
   metaParts.push(`${Math.max(1, Math.round((meeting.duration_ms || 0) / 60000))} ${t('分钟')}`);
-  metaParts.push(`${Number(meeting.speaker_count || 0)} ${t('位参与者')}`);
   document.querySelector('#detail-meta').innerHTML =
-    `${metaParts.map((part, index) => `<span>${index === 1 ? interfaceIcon('clock') : index === 2 ? interfaceIcon('person') : ''}${escapeHtml(part)}</span>`).join('')}<span>${interfaceIcon('folder')}${escapeHtml(getWorkspaceName(meeting.workspace_id || ''))}</span>`;
+    `${metaParts.map((part, index) => `<span>${index === 1 ? interfaceIcon('clock') : ''}${escapeHtml(part)}</span>`).join('')}<span>${interfaceIcon('folder')}${escapeHtml(getWorkspaceName(meeting.workspace_id || ''))}</span>`;
   progress.max = Math.max(1, Math.ceil(meeting.duration_ms / 1000));
   if (!sameMeeting) {
     followPlaybackTranscript = true;

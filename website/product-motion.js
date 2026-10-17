@@ -55,6 +55,10 @@ window.detailActiveTab = 'summary';
   const reveal = (text, progress) =>
     [...text].slice(0, Math.ceil([...text].length * clamp(progress))).join('');
   const meeting = pick('产品周会', 'Product sync');
+  const participants =
+    locale === 'en'
+      ? ['Alex Chen', 'Mia Lee', 'Sam Wang', 'Robin Lin']
+      : ['张伟', '李娜', '王强', '林晨'];
   const captions = [
     [
       '我们今天确认新用户引导的上线范围。',
@@ -135,7 +139,7 @@ window.detailActiveTab = 'summary';
         if (element.hasAttribute(attribute))
           element.setAttribute(attribute, t(element.getAttribute(attribute)));
     });
-    shell.querySelector('#app-version').textContent = motionParams.get('version') || 'v1.4.0';
+    shell.querySelector('#app-version').textContent = motionParams.get('version') || 'v1.4.1';
     shell.querySelector('#theme-toggle').innerHTML = interfaceIcon('sun');
     shell.querySelector('.workspace-container').innerHTML =
       `<div class="workspace-subnav-content"><div class="workspace-heading"><h3>${t('工作区')}</h3><button class="new-workspace">${interfaceIcon('plus')}</button></div><button class="workspace-item workspace-selector">${interfaceIcon('folder')}<span class="workspace-label">${pick('产品', 'Product')}</span>${interfaceIcon('chevron-down')}</button></div>`;
@@ -161,12 +165,13 @@ window.detailActiveTab = 'summary';
     if (scene === 'summary' || tour) {
       const detail = shell.querySelector('#detail-view');
       detail.querySelector('h1').textContent = meeting;
+      detail.querySelector('h1').title = meeting;
       detail.querySelector('.detail-layout').classList.add('is-summary-mode');
       detail.querySelector('.detail-layout').dataset.detailMode = 'summary';
       detail.querySelector('#detail-meta').innerHTML =
-        `<span>2026/10/15</span><span>${interfaceIcon('clock')} ${pick('18 分钟', '18 min')}</span><span>${interfaceIcon('person')} ${pick('2 位参与者', '2 participants')}</span><span>${interfaceIcon('folder')} ${pick('产品', 'Product')}</span>`;
+        `<span>2026/10/15</span><span>${interfaceIcon('clock')} ${pick('18 分钟', '18 min')}</span><span>${interfaceIcon('folder')} ${pick('产品', 'Product')}</span>`;
       detail.querySelector('.final-transcript').innerHTML =
-        `${renderDetailTabbar()}<div data-detail-panel="summary"></div>`;
+        `${renderDetailTabbar()}<div class="detail-summary-panel" data-detail-panel="summary"></div>`;
       detail.append(detail.querySelector('.detail-actions'));
       detail.querySelector('#player-duration').textContent = '18:24';
       const task = shell.querySelector('#refinement-progress').cloneNode(true);
@@ -279,9 +284,6 @@ window.detailActiveTab = 'summary';
     const translationToggle = stage.querySelector('#translation-toggle');
     translationToggle.dataset.enabled = String(translated);
     translationToggle.textContent = t(translated ? '翻译：开' : '翻译：关');
-    const menuOpen = transcription && seconds >= 5.1 && seconds < 7.2;
-    stage.querySelector('#live-more-panel').hidden = !menuOpen;
-    stage.querySelector('#live-more-toggle').setAttribute('aria-expanded', String(menuOpen));
     const choosingLanguage = transcription && seconds >= 6.05 && seconds < 6.75;
     stage.querySelector('#translation-options').hidden = !choosingLanguage;
     translationToggle.setAttribute('aria-expanded', String(choosingLanguage));
@@ -385,19 +387,22 @@ window.detailActiveTab = 'summary';
     const complete = seconds >= 5.3;
     const progress = clamp((seconds - 0.9) / 4.4);
     const markdown = complete ? `# ${meeting}\n\n${summaryBlocks.join('\n\n')}` : '';
-    const html = renderMeetingSummary({ markdown, generating: started && !complete });
+    const html = renderMeetingSummary({ markdown, generating: started && !complete, participants });
     if (rendered.get('summary') !== html) {
       rendered.set('summary', html);
+      stage.querySelector('.detail-head .summary-participants')?.remove();
       stage.querySelector('[data-detail-panel="summary"]').replaceChildren();
       stage.querySelector('.notes').innerHTML = html;
       syncDetailSummaryPanel();
+      if (complete && stage.dataset.running === 'true')
+        BreviaMotion.enter(stage.querySelector('.summary-body'), 'tab');
     }
     const task = stage.querySelector('#summary-progress');
     task.hidden = !started;
     const copy = BreviaLocaleData.appCopy.summaryTaskCopy[locale];
     const step = complete ? 4 : seconds < 1.5 ? 1 : seconds < 4.85 ? 2 : 3;
     const percent = Math.round(progress * 100);
-    task.querySelector('.task-card-heading p').textContent = copy[0];
+    task.querySelector('.task-card-heading p').textContent = complete ? copy[4] : copy[0];
     task.querySelector('strong').innerHTML = renderTaskProgressLabel(copy[step], percent);
     Object.assign(task.dataset, {
       completed: percent,
@@ -588,6 +593,12 @@ window.detailActiveTab = 'summary';
     stage.querySelector('.app-shell').classList.toggle('is-live-meeting', phase === 'live');
     stage.querySelector('#all-meetings').classList.toggle('active', phase === 'home');
     const enteredPrepare = phase === 'prepare' && stage.dataset.tourPhase !== phase;
+    if (
+      stage.dataset.tourPhase &&
+      stage.dataset.tourPhase !== phase &&
+      stage.dataset.running === 'true'
+    )
+      BreviaMotion.enter(stage.querySelector(`#${viewId}`), phase === 'home' ? 'back' : 'forward');
     stage.dataset.tourPhase = phase;
     if (enteredPrepare) fitPrepare();
     if (phase !== 'summary') {
@@ -646,9 +657,7 @@ window.detailActiveTab = 'summary';
             : renderPhone;
   function renderAt(time) {
     const phase = ((time % duration) + duration) % duration;
-    stage.style.opacity = String(
-      0.25 + 0.75 * Math.min(clamp(phase / 450), clamp((duration - phase) / 450)),
-    );
+    stage.style.opacity = '1';
     paint(phase);
     stage.dataset.phase = String(Math.floor(phase));
     stage.dataset.cycle = String(Math.floor(time / duration));
@@ -678,6 +687,10 @@ window.detailActiveTab = 'summary';
       renderAt(duration - 2500);
       stage.style.opacity = '1';
     } else if (running && !document.hidden) frame = requestAnimationFrame(tick);
+    if (reduced || !running || document.hidden)
+      stage.getAnimations({ subtree: true }).forEach((animation) => {
+        if (!(animation instanceof CSSAnimation)) animation.finish();
+      });
   }
   addEventListener('message', (event) => {
     if (

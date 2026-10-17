@@ -36,7 +36,7 @@
     state.ready = false;
     state.command = '';
     element.classList.remove('is-ready');
-    const source = new URL('./product-motion.html?v=20261015-once', location.href);
+    const source = new URL('./product-motion.html?v=20261017-motion', location.href);
     source.searchParams.set('scene', element.dataset.motionScene);
     source.searchParams.set('shot', element.dataset.motionShot || 'overview');
     source.searchParams.set('lang', zh ? 'zh' : 'en');
@@ -156,29 +156,78 @@
   document.documentElement.classList.add('has-motion');
 
   const disclosures = [...document.querySelectorAll('.disclosure')];
-  disclosures.forEach((details) => {
-    details.addEventListener('toggle', () => {
-      if (details.open)
-        disclosures.forEach((other) => {
-          if (other !== details) other.open = false;
-        });
-    });
-    details.querySelectorAll('a').forEach((link) =>
-      link.addEventListener('click', () => {
-        details.open = false;
-      }),
+  const menuAnimations = new Map();
+  function setDisclosure(details, open) {
+    const panel = details.querySelector('.disclosure-panel');
+    const wasOpen = details.open;
+    const { opacity, transform } = getComputedStyle(panel);
+    menuAnimations.get(details)?.cancel();
+    menuAnimations.delete(details);
+    delete details.dataset.closing;
+    panel.inert = !open;
+    if (open) {
+      disclosures.forEach((other) => {
+        if (other !== details && other.open) setDisclosure(other, false);
+      });
+      details.open = true;
+    } else if (!details.open) return;
+    if (reducedMotion.matches || document.hidden) {
+      details.open = open;
+      return;
+    }
+    if (!open) details.dataset.closing = 'true';
+    const animation = panel.animate(
+      open
+        ? [
+            { opacity: wasOpen ? opacity : 0, transform: wasOpen ? transform : 'translateY(-4px)' },
+            { opacity: 1, transform: 'translateY(0)' },
+          ]
+        : [
+            { opacity, transform },
+            { opacity: 0, transform },
+          ],
+      {
+        duration: open ? 160 : 100,
+        easing: open ? 'cubic-bezier(0.16, 1, 0.3, 1)' : 'cubic-bezier(0.4, 0, 1, 1)',
+      },
     );
+    menuAnimations.set(details, animation);
+    animation.finished.then(
+      () => {
+        if (menuAnimations.get(details) !== animation) return;
+        details.open = open;
+        delete details.dataset.closing;
+        menuAnimations.delete(details);
+      },
+      () => {},
+    );
+  }
+  function settleMenus() {
+    if (!document.hidden && !reducedMotion.matches) return;
+    menuAnimations.forEach((animation) => animation.finish());
+  }
+  document.addEventListener('visibilitychange', settleMenus);
+  reducedMotion.addEventListener('change', settleMenus);
+  disclosures.forEach((details) => {
+    details.querySelector('summary').addEventListener('click', (event) => {
+      event.preventDefault();
+      setDisclosure(details, !details.open || details.dataset.closing === 'true');
+    });
+    details
+      .querySelectorAll('a')
+      .forEach((link) => link.addEventListener('click', () => setDisclosure(details, false)));
   });
   document.addEventListener('click', (event) => {
     disclosures.forEach((details) => {
-      if (!details.contains(event.target)) details.open = false;
+      if (!details.contains(event.target) && !details.dataset.closing && details.open)
+        setDisclosure(details, false);
     });
   });
   document.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape') return;
     disclosures.forEach((details) => {
       if (!details.open) return;
-      details.open = false;
+      setDisclosure(details, false);
       details.querySelector('summary').focus();
     });
   });

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'i18n.dart';
+import 'design_system.dart';
 
 class SwipeDelete extends StatefulWidget {
   final bool enabled;
@@ -20,6 +21,7 @@ class SwipeDelete extends StatefulWidget {
 class _SwipeDeleteState extends State<SwipeDelete> {
   double offset = 0;
   bool deleting = false;
+  bool dragging = false;
 
   @override
   Widget build(BuildContext context) {
@@ -52,33 +54,48 @@ class _SwipeDeleteState extends State<SwipeDelete> {
                 ),
               ),
             ),
-          GestureDetector(
-            onHorizontalDragUpdate: widget.enabled && !deleting
-                ? (details) => setState(() {
-                    offset = (offset + details.delta.dx).clamp(0.0, 80.0);
-                  })
-                : null,
-            onHorizontalDragEnd: widget.enabled
-                ? (details) => setState(() {
-                    final velocity = details.primaryVelocity ?? 0;
-                    offset =
-                        velocity > 300 || (velocity >= -300 && offset >= 40)
-                        ? 80
-                        : 0;
-                  })
-                : null,
-            child: AnimatedContainer(
-              duration: MediaQuery.disableAnimationsOf(context)
-                  ? Duration.zero
-                  : const Duration(milliseconds: 150),
-              transform: Matrix4.translationValues(
-                widget.enabled ? offset : 0,
-                0,
-                0,
-              ),
-              child: Material(
-                color: Theme.of(context).scaffoldBackgroundColor,
-                child: widget.child,
+          Listener(
+            onPointerCancel: (_) => setState(() {
+              dragging = false;
+              offset = 0;
+            }),
+            child: GestureDetector(
+              onHorizontalDragStart: widget.enabled && !deleting
+                  ? (_) => setState(() => dragging = true)
+                  : null,
+              onHorizontalDragUpdate: widget.enabled && !deleting
+                  ? (details) => setState(() {
+                      offset = (offset + details.delta.dx).clamp(0.0, 80.0);
+                    })
+                  : null,
+              onHorizontalDragEnd: widget.enabled
+                  ? (details) => setState(() {
+                      dragging = false;
+                      final velocity = details.primaryVelocity ?? 0;
+                      offset =
+                          velocity > 300 || (velocity >= -300 && offset >= 40)
+                          ? 80
+                          : 0;
+                    })
+                  : null,
+              onHorizontalDragCancel: () => setState(() {
+                dragging = false;
+                offset = 0;
+              }),
+              child: AnimatedContainer(
+                duration: dragging
+                    ? Duration.zero
+                    : BreviaMotion.duration(context, BreviaMotion.exit),
+                curve: BreviaMotion.out,
+                transform: Matrix4.translationValues(
+                  widget.enabled ? offset : 0,
+                  0,
+                  0,
+                ),
+                child: Material(
+                  color: Theme.of(context).scaffoldBackgroundColor,
+                  child: widget.child,
+                ),
               ),
             ),
           ),

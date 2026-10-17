@@ -709,6 +709,7 @@ void main() {
       expect(dots, findsNWidgets(3));
       await tester.tap(find.text('笔记'));
       await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump(const Duration(milliseconds: 120));
       expect(find.text('Partial notes'), findsOneWidget);
       expect(dots, findsNWidgets(3));
       model.live!['finished'] = true;

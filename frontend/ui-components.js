@@ -1479,11 +1479,11 @@ function renderMeetingSummary({
       ? `<button class="modal-action" type="button" disabled>${interfaceIcon('ai')}${t('正在生成会议纪要')}</button>`
       : `<button class="modal-action" ${markdown ? 'data-regenerate-summary' : 'data-generate-summary'} type="button"${blockedAttrs}>${interfaceIcon(markdown ? 'refresh' : 'ai')}${t(markdown ? '重新生成' : '生成纪要')}</button>`;
   const people = participants.length
-    ? `<section class="summary-participants"><button type="button" data-summary-participants-toggle aria-haspopup="dialog" aria-controls="summary-participants-popover" aria-expanded="false"><span class="summary-participant-count">${escapeHtml(t('参与者'))} (${participants.length})</span><span class="summary-participant-avatars" aria-hidden="true">${participants
+    ? `<section class="summary-participants"><button type="button" data-summary-participants-toggle aria-haspopup="dialog" aria-controls="summary-participants-popover" aria-expanded="false"><span class="summary-participant-count">${escapeHtml(t('参与者'))} (${participants.length})</span><span class="summary-participant-avatars">${participants
         .slice(0, 3)
         .map(
           (person) =>
-            `<i class="speaker-avatar">${escapeHtml([...formatSpeakerName(person)][0] || '')}</i>`,
+            `<span class="summary-participant-preview-person"><i class="speaker-avatar" aria-hidden="true">${escapeHtml([...formatSpeakerName(person)][0] || '')}</i><span>${escapeHtml(formatSpeakerName(person))}</span></span>`,
         )
         .join(
           '',
@@ -1581,6 +1581,7 @@ function renderMeetingDetail() {
   const d = uiData.detail;
   const actions = document.querySelector('#detail-view .detail-actions');
   if (actions) document.querySelector('#detail-view').append(actions);
+  document.querySelector('#detail-view .detail-head .summary-participants')?.remove();
   const notesMode = detailNotesEditor?.getMode();
   const summaryMode = inlineSummaryEditor?.getMode();
   detailNotesEditor?.destroy();
@@ -1695,11 +1696,7 @@ function syncDetailTranscriptToolbar() {
   const toolbar = root?.querySelector('.detail-transcript-toolbar');
   const extra = root?.querySelector('.tabbar > .tabbar-extra');
   const actions = document.querySelector('#detail-view .detail-actions');
-  if (actions)
-    (detailActiveTab === 'transcript' && !uiData.detail.transcriptEditing && toolbar
-      ? toolbar
-      : document.querySelector('#detail-view')
-    ).append(actions);
+  if (actions) document.querySelector('#detail-view').append(actions);
   toolbar?.querySelector('.tabbar-extra')?.remove();
   if (detailActiveTab !== 'transcript' || !toolbar || !extra) return;
   if (uiData.detail.transcriptEditing) {
@@ -1711,7 +1708,7 @@ function syncDetailTranscriptToolbar() {
   toolbar.append(extra);
 }
 
-/** 保留同一正文和编辑器，纪要标签展开为单栏阅读，笔记标签复用侧栏预览。 */
+/** 三个标签共用阅读区；参会者留在固定页头，纪要编辑器不随切换重建。 */
 function syncDetailSummaryPanel() {
   const root = document.querySelector('#detail-view');
   const main = root?.querySelector('[data-detail-panel="summary"]');
@@ -1719,7 +1716,7 @@ function syncDetailSummaryPanel() {
   const preview = root?.querySelector('.summary-preview');
   if (!main || !aside || !preview) return;
   const body = preview.querySelector('.summary-body');
-  if (detailActiveTab === 'summary' && body && !body.querySelector('.summary-reading-section')) {
+  if (body && !body.querySelector('.summary-reading-section')) {
     let content;
     for (const node of [...body.children]) {
       if (node.tagName === 'H2') {
@@ -1732,7 +1729,8 @@ function syncDetailSummaryPanel() {
       else if (content) content.append(node);
     }
   }
-  aside.hidden = detailActiveTab === 'summary';
-  if (detailActiveTab === 'summary') main.append(preview);
-  else aside.replaceChildren(preview);
+  const people = preview.querySelector('.summary-participants');
+  if (people) root.querySelector('.detail-title').append(people);
+  aside.hidden = true;
+  main.append(preview);
 }

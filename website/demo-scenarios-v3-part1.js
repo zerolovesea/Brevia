@@ -398,41 +398,15 @@ class DemoScenariosV3 {
 
         { action: 'wait', duration: 1200 },
 
-        // 移动到右侧纪要面板
-        {
-          action: 'moveCursor',
-          target: '.notes',
-          duration: 800,
-          delay: 400,
-        },
-
-        { action: 'wait', duration: 1000 },
-
-        // 展开纪要，与应用内的双栏切换一致。
-        {
-          action: 'moveCursor',
-          target: '[data-toggle-detail-mode="summary"]',
-          duration: 600,
-          delay: 400,
-        },
-        { action: 'hover', duration: 400 },
-        { action: 'click', duration: 300 },
-
-        // 将纪要切换到主栏。
-        {
-          action: 'setState',
-          handler: () =>
-            this.engine.viewport.querySelector('.detail-layout').classList.add('is-summary-mode'),
-          delay: 300,
-        },
-
+        { action: 'moveCursor', target: '[data-detail-tab="transcript"]', duration: 600 },
+        { action: 'click', duration: 180 },
+        { action: 'setState', handler: () => this.selectDetailTab('transcript') },
+        { action: 'wait', duration: 1400 },
+        { action: 'moveCursor', target: '[data-detail-tab="summary"]', duration: 600 },
+        { action: 'click', duration: 180 },
+        { action: 'setState', handler: () => this.selectDetailTab('summary') },
         { action: 'wait', duration: 1200 },
 
-        {
-          action: 'setState',
-          handler: () =>
-            this.engine.viewport.querySelector('#detail-view').classList.add('is-header-collapsed'),
-        },
         // 滚动浏览完整内容
         {
           action: 'scrollToBottom',

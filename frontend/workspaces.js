@@ -14,7 +14,7 @@ function closeWorkspaceDialog(backdrop) {
     backdrop.remove();
     if (backdrop.returnFocus?.isConnected) backdrop.returnFocus.focus();
     document.body.classList.remove('modal-open');
-  }, 200);
+  }, BreviaMotion.duration('exit'));
 }
 
 /**
@@ -47,7 +47,11 @@ function getWorkspaceName(workspaceId) {
  */
 let workspacePicker = null;
 function closeWorkspacePicker(restoreFocus = false) {
-  workspacePicker?.remove();
+  const closing = workspacePicker;
+  if (closing) {
+    closing.inert = true;
+    BreviaMotion.leave(closing, () => closing.remove());
+  }
   workspacePicker = null;
   const selector = document.querySelector('#workspace-selector');
   selector?.setAttribute('aria-expanded', 'false');
@@ -290,9 +294,7 @@ function showNewWorkspaceDialog(assignMeetingId, onCreated) {
   // 触发进入动画
   backdrop.classList.remove('modal-leave');
   backdrop.hidden = false;
-  requestAnimationFrame(() => {
-    backdrop.classList.add('modal-enter');
-  });
+  backdrop.classList.add('modal-enter');
 
   // 聚焦输入框
   setTimeout(() => {
@@ -415,9 +417,7 @@ function showEditWorkspaceDialog(workspaceId) {
   // 触发进入动画
   backdrop.classList.remove('modal-leave');
   backdrop.hidden = false;
-  requestAnimationFrame(() => {
-    backdrop.classList.add('modal-enter');
-  });
+  backdrop.classList.add('modal-enter');
 
   // 聚焦输入框
   setTimeout(() => {

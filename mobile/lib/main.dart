@@ -54,7 +54,11 @@ class BreviaApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: breviaTheme(Brightness.light),
       darkTheme: breviaTheme(Brightness.dark),
-      themeAnimationDuration: Duration(milliseconds: 180),
+      themeAnimationDuration: BreviaMotion.duration(
+        context,
+        BreviaMotion.feedback,
+      ),
+      themeAnimationCurve: BreviaMotion.inOut,
       themeMode: model.appearance == 'light'
           ? ThemeMode.light
           : model.appearance == 'dark'
@@ -167,6 +171,7 @@ Future<bool> confirmMobileAction(
 }) async =>
     await showModalBottomSheet<bool>(
       context: context,
+      sheetAnimationStyle: BreviaMotion.sheet(context),
       showDragHandle: true,
       isScrollControlled: true,
       builder: (ctx) => SafeArea(
@@ -395,6 +400,7 @@ class _HomeState extends State<Home> {
         m['computer'] == model.desktop?.fingerprint;
     final action = await showModalBottomSheet<String>(
       context: context,
+      sheetAnimationStyle: BreviaMotion.sheet(context),
       showDragHandle: true,
       builder: (ctx) => SafeArea(
         child: ListView(
@@ -486,6 +492,7 @@ class _HomeState extends State<Home> {
         if (!mounted) return;
         selection = await showModalBottomSheet<String>(
           context: context,
+          sheetAnimationStyle: BreviaMotion.sheet(context),
           showDragHandle: true,
           isScrollControlled: true,
           constraints: BoxConstraints(
@@ -924,10 +931,14 @@ class _HomeState extends State<Home> {
             ),
       body: SafeArea(
         child: AnimatedSwitcher(
-          duration: MediaQuery.disableAnimationsOf(context)
-              ? Duration.zero
-              : Duration(milliseconds: 180),
-          switchInCurve: Curves.easeOut,
+          duration: BreviaMotion.duration(context, BreviaMotion.state),
+          reverseDuration: BreviaMotion.duration(
+            context,
+            BreviaMotion.feedback,
+          ),
+          switchInCurve: BreviaMotion.out,
+          switchOutCurve: BreviaMotion.into,
+          layoutBuilder: breviaPageLayout,
           child: KeyedSubtree(
             key: ValueKey(tab),
             child: tab == 0
@@ -945,6 +956,7 @@ class _HomeState extends State<Home> {
           ),
         ),
         child: NavigationBar(
+          animationDuration: BreviaMotion.duration(context, BreviaMotion.state),
           selectedIndex: tab,
           onDestinationSelected: (v) => setState(() => tab = v),
           destinations: [
@@ -1374,7 +1386,10 @@ class _ConnectionPageState extends State<ConnectionPage> {
             child: SizedBox(
               width: 24,
               height: 24,
-              child: CircularProgressIndicator(strokeWidth: 2),
+              child: TickerMode(
+                enabled: !MediaQuery.disableAnimationsOf(context),
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
             ),
           ),
         ] else if (manual) ...[
@@ -1997,6 +2012,7 @@ class _MeetingPageState extends State<MeetingPage> {
     try {
       final confirmed = await showModalBottomSheet<bool>(
         context: context,
+        sheetAnimationStyle: BreviaMotion.sheet(context),
         showDragHandle: true,
         builder: (ctx) => SafeArea(
           top: false,
@@ -2057,6 +2073,7 @@ class _MeetingPageState extends State<MeetingPage> {
     final text = TextEditingController();
     final note = await showModalBottomSheet<String>(
       context: context,
+      sheetAnimationStyle: BreviaMotion.sheet(context),
       showDragHandle: true,
       isScrollControlled: true,
       builder: (ctx) => SingleChildScrollView(
@@ -2441,12 +2458,22 @@ class _MeetingPageState extends State<MeetingPage> {
                 icon: const BreviaIcon(Icons.mic_none),
               ),
             PopupMenuButton<String>(
+              popUpAnimationStyle: AnimationStyle(
+                duration: BreviaMotion.duration(context, BreviaMotion.feedback),
+                reverseDuration: BreviaMotion.duration(
+                  context,
+                  BreviaMotion.press,
+                ),
+                curve: BreviaMotion.out,
+                reverseCurve: BreviaMotion.into,
+              ),
               icon: const Icon(Icons.more_horiz),
               tooltip: tr("会议操作"),
               onSelected: (action) async {
                 if (action == 'marks') {
                   await showModalBottomSheet(
                     context: context,
+                    sheetAnimationStyle: BreviaMotion.sheet(context),
                     showDragHandle: true,
                     builder: (ctx) => SafeArea(
                       child: ListView(
@@ -2648,10 +2675,11 @@ class _MeetingPageState extends State<MeetingPage> {
                                         ]))
                                 Expanded(
                                   child: AnimatedContainer(
-                                    duration:
-                                        MediaQuery.disableAnimationsOf(context)
-                                        ? Duration.zero
-                                        : const Duration(milliseconds: 180),
+                                    duration: BreviaMotion.duration(
+                                      context,
+                                      BreviaMotion.state,
+                                    ),
+                                    curve: BreviaMotion.inOut,
                                     decoration: BoxDecoration(
                                       border: Border(
                                         bottom: BorderSide(
@@ -2707,11 +2735,16 @@ class _MeetingPageState extends State<MeetingPage> {
                       ),
                     Expanded(
                       child: AnimatedSwitcher(
-                        duration: MediaQuery.disableAnimationsOf(context)
-                            ? Duration.zero
-                            : const Duration(milliseconds: 160),
-                        layoutBuilder: (current, previous) =>
-                            current ?? const SizedBox(),
+                        duration: BreviaMotion.duration(
+                          context,
+                          BreviaMotion.feedback,
+                        ),
+                        reverseDuration: BreviaMotion.duration(
+                          context,
+                          BreviaMotion.press,
+                        ),
+                        switchInCurve: BreviaMotion.out,
+                        layoutBuilder: breviaPageLayout,
                         child: ListView(
                           key: ValueKey(tab),
                           controller: scroll,
@@ -4265,11 +4298,14 @@ class MeetingConnectionStatus extends StatelessWidget {
             states: [tr('● 已连接'), tr('正在重新连接')],
           ),
           const SizedBox(height: 12),
-          LinearProgressIndicator(
-            value: connected
-                ? (count > 0 ? (uploaded / count).clamp(0, 1).toDouble() : 1)
-                : null,
-            semanticsLabel: connected ? uploadedLabel : tr('正在重新连接'),
+          TickerMode(
+            enabled: !MediaQuery.disableAnimationsOf(context),
+            child: LinearProgressIndicator(
+              value: connected
+                  ? (count > 0 ? (uploaded / count).clamp(0, 1).toDouble() : 1)
+                  : null,
+              semanticsLabel: connected ? uploadedLabel : tr('正在重新连接'),
+            ),
           ),
           const SizedBox(height: 8),
           StableStatusText(
@@ -4296,7 +4332,10 @@ class ConnectionRecoveryNotice extends StatelessWidget {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        LinearProgressIndicator(semanticsLabel: tr('正在重新连接')),
+        TickerMode(
+          enabled: !MediaQuery.disableAnimationsOf(context),
+          child: LinearProgressIndicator(semanticsLabel: tr('正在重新连接')),
+        ),
         SizedBox(height: 12),
         Text(tr('电脑已休眠或断开，等待开盖或恢复连接')),
         SizedBox(height: 8),

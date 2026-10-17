@@ -228,7 +228,7 @@ function enterTaskCard(card) {
   card.classList.remove('task-card-leave');
   activateTaskCard(card);
   card.classList.add('task-card-enter');
-  window.setTimeout(() => card.classList.remove('task-card-enter'), 220);
+  window.setTimeout(() => card.classList.remove('task-card-enter'), BreviaMotion.duration('task'));
 }
 function dismissTaskCard(card, done = () => card.remove()) {
   if (!card || card.classList.contains('task-card-leave')) return;
@@ -236,7 +236,7 @@ function dismissTaskCard(card, done = () => card.remove()) {
   card.classList.add('task-card-leave');
   window.setTimeout(() => {
     if (card.classList.contains('task-card-leave')) done();
-  }, 220);
+  }, BreviaMotion.duration('taskExit'));
 }
 function revealTaskCard(card) {
   const wasHidden = card.hidden;
@@ -2490,6 +2490,7 @@ function replaceModalBody(kind, markup) {
     body.scrollTop = 0;
     panel.scrollTop = 0;
     settingsModal.scrollTop = 0;
+    if (settingsModal.classList.contains('settings-page')) BreviaMotion.enter(body, 'sibling');
     return;
   }
   const expanded = new Map(details);
@@ -3115,8 +3116,8 @@ function renderModelLibrary() {
             `<div class="model-library-item">${interfaceIcon(key === 'summary' ? 'document' : key === 'translation' ? 'translate' : 'waveform')}<span class="model-library-content">` +
             `<div class="model-library-name"><b class="model-library-headline">${escapeHtml(model.name)}</b></div>` +
             progressHtml +
-            ratings +
             `<p class="model-library-details">${escapeHtml(modelSizeSummary(model))}${role ? ` · ${escapeHtml(role)}` : ''}</p>` +
+            ratings +
             `<p class="model-library-description">${escapeHtml(description)}</p>` +
             `</span>${actions}</div>`
           );
@@ -3230,20 +3231,12 @@ function showSettingsModal(focusSelector) {
         : (modalCopy[locale] || modalCopy.en).close,
     );
   settingsModal.classList.remove('modal-leave');
+  settingsModal.classList.add('modal-enter');
   settingsModal.style.zIndex = '60';
   settingsModal.hidden = false;
   const protectedFocus = !settingsModal.classList.contains('settings-page');
   document.querySelector('.app-shell').inert = protectedFocus;
   if (onboardingPage) onboardingPage.inert = protectedFocus;
-  const panel = settingsModal.querySelector('.modal-panel');
-  requestAnimationFrame(() => {
-    if (
-      !settingsModal.hidden &&
-      !settingsModal.classList.contains('modal-leave') &&
-      settingsModal.querySelector('.modal-panel') === panel
-    )
-      settingsModal.classList.add('modal-enter');
-  });
   document.body.classList.add('modal-open');
   const actions = settingsModal.querySelector('form .modal-form-actions');
   if (
@@ -3263,7 +3256,7 @@ let storageConfirmationPage;
 function openConfirmation(title, detail, action, anchor) {
   modalRequestRevision += 1;
   clearTimeout(modalDismissTimer);
-  closeMeetingMenus();
+  closeMeetingMenus(true);
   if (activeModal === 'storage' && settingsModal.classList.contains('settings-page')) {
     // 移动真实页面节点保留目录、滚动位置与操作；确认时只让背景不可交互。
     const page = document.createElement('div');
@@ -3413,19 +3406,23 @@ function closeModal() {
   settingsModal.style.zIndex = '';
   settingsModal.classList.remove('modal-enter');
   settingsModal.classList.add('modal-leave');
-  modalDismissTimer = setTimeout(() => {
-    if (!settingsModal.classList.contains('modal-leave')) return;
-    settingsModal.hidden = true;
-    document.querySelector('.app-shell').inert = false;
-    if (onboardingPage) onboardingPage.inert = false;
-    if (returnTo) {
-      void showView(returnTo.view).then(() => {
-        if (returnTo.focus?.isConnected) returnTo.focus.focus({ preventScroll: true });
-      });
-    } else if (modalReturnFocus?.isConnected) modalReturnFocus.focus({ preventScroll: true });
-    settingsModal.classList.remove('modal-leave');
-    if (onboardingPage?.dataset.aiSettings !== 'true') document.body.classList.remove('modal-open');
-  }, 220);
+  modalDismissTimer = setTimeout(
+    () => {
+      if (!settingsModal.classList.contains('modal-leave')) return;
+      settingsModal.hidden = true;
+      document.querySelector('.app-shell').inert = false;
+      if (onboardingPage) onboardingPage.inert = false;
+      if (returnTo) {
+        void showView(returnTo.view).then(() => {
+          if (returnTo.focus?.isConnected) returnTo.focus.focus({ preventScroll: true });
+        });
+      } else if (modalReturnFocus?.isConnected) modalReturnFocus.focus({ preventScroll: true });
+      settingsModal.classList.remove('modal-leave');
+      if (onboardingPage?.dataset.aiSettings !== 'true')
+        document.body.classList.remove('modal-open');
+    },
+    settingsModal.classList.contains('settings-page') ? 0 : BreviaMotion.duration('exit'),
+  );
 }
 
 let onboardingPage;
@@ -3533,20 +3530,11 @@ function openOnboardingLanguage(
         `<label class="language-choice"><input type="radio" name="locale" value="${code}" data-language-wheel-value="${code}"${code === defaultLocale ? ' checked' : ''}/><span>${label}</span></label>`,
     )
     .join('');
-  onboardingPage = document.createElement('main');
-  onboardingPage.className = 'onboarding-page onboarding-active onboarding-language-overlay';
-  onboardingPage.innerHTML = `<header class="onboarding-window-bar"><strong translate="no">Brevia</strong></header>${renderOnboardingRail('language', defaultLocale)}<form class="onboarding-page-content onboarding-language-page" data-onboarding-language><div class="onboarding-page-copy"><h1></h1><p></p></div><div class="language-picker" role="radiogroup" aria-label="${escapeHtml(t('切换语言'))}">${wheelItems}</div><div class="onboarding-actions"><button class="modal-action" type="submit"></button></div></form>`;
-  document.body.append(onboardingPage);
+  const page = document.createElement('main');
+  page.className = 'onboarding-page onboarding-active onboarding-language-overlay';
+  page.innerHTML = `<header class="onboarding-window-bar"><strong translate="no">Brevia</strong></header>${renderOnboardingRail('language', defaultLocale)}<form class="onboarding-page-content onboarding-language-page" data-onboarding-language><div class="onboarding-page-copy"><h1></h1><p></p></div><div class="language-picker" role="radiogroup" aria-label="${escapeHtml(t('切换语言'))}">${wheelItems}</div><div class="onboarding-actions"><button class="modal-action" type="submit"></button></div></form>`;
+  revealOnboardingPage(page, 'language');
   updateOnboardingLanguageCopy(defaultLocale);
-  const enteringPage = onboardingPage;
-  requestAnimationFrame(() => {
-    // 快速返回时旧帧回调不能访问已关闭或已替换的引导页。
-    if (
-      onboardingPage === enteringPage &&
-      !enteringPage.classList.contains('onboarding-page-leave')
-    )
-      enteringPage.classList.add('onboarding-page-enter');
-  });
   onboardingPage.addEventListener('change', (event) => {
     if (event.target.matches('[name="locale"]')) updateOnboardingLanguageCopy(event.target.value);
   });
@@ -3593,7 +3581,7 @@ function updateStorageUsage() {
 }
 
 let storageMovePending = false;
-/** Keep setup and settings inert until the move and UI refresh both finish. */
+/** 迁移和界面更新完成前禁用背景，避免并发修改存储位置。 */
 async function withStorageMigration(operation) {
   if (storageMovePending) return;
   storageMovePending = true;
@@ -3606,12 +3594,19 @@ async function withStorageMigration(operation) {
   dialog.addEventListener('cancel', (event) => event.preventDefault());
   dialog.addEventListener('keydown', (event) => event.stopPropagation());
   document.body.append(dialog);
+  const protectedLayers = [document.querySelector('.app-shell'), onboardingPage, settingsModal]
+    .filter(Boolean)
+    .map((element) => [element, element.inert]);
+  protectedLayers.forEach(([element]) => (element.inert = true));
+  // 快速保存不闪出进度浮窗；真正耗时的迁移仍使用原生模态保护。
+  const revealTimer = setTimeout(() => dialog.showModal(), 180);
   try {
-    dialog.showModal();
     return await operation();
   } finally {
-    dialog.close();
+    clearTimeout(revealTimer);
+    if (dialog.open) dialog.close();
     dialog.remove();
+    protectedLayers.forEach(([element, inert]) => (element.inert = inert));
     storageMovePending = false;
   }
 }
@@ -3664,84 +3659,122 @@ function updateOnboardingLanguageCopy(nextLocale) {
     onboardingLanguageCopy[nextLocale] || onboardingLanguageCopy.en;
   const page = onboardingPage;
   const nodes = page.querySelectorAll('.onboarding-page-copy');
-  nodes.forEach((node) => node.classList.add('locale-out'));
-  window.setTimeout(() => {
-    if (
-      onboardingPage !== page ||
-      onboardingPreviewLocale !== nextLocale ||
-      page.classList.contains('onboarding-page-leave')
-    )
-      return;
-    onboardingMotion?.destroy();
-    onboardingPage.querySelector('.onboarding-rail').outerHTML = renderOnboardingRail(
-      'language',
-      nextLocale,
-    );
-    onboardingMotion = window.BreviaOnboardingMotion.mount(
-      page.querySelector('.onboarding-rail'),
-      'language',
-      nextLocale,
-    );
-    onboardingPage.querySelector('h1').textContent = title;
-    onboardingPage.querySelector('.language-picker').setAttribute('aria-label', prompt);
-    onboardingPage.querySelector('.onboarding-page-copy p').textContent = prompt;
-    onboardingPage.querySelector('[type="submit"]').innerHTML =
-      `${escapeHtml(nextLabel)}${interfaceIcon('arrow-right')}`;
-    onboardingPage.lang = nextLocale;
-    nodes.forEach((node) => {
-      node.classList.remove('locale-out');
-      node.classList.add('locale-in');
-    });
-    window.setTimeout(() => nodes.forEach((node) => node.classList.remove('locale-in')), 220);
-  }, 120);
+  onboardingMotion?.destroy();
+  onboardingPage.querySelector('.onboarding-rail').outerHTML = renderOnboardingRail(
+    'language',
+    nextLocale,
+  );
+  onboardingMotion = window.BreviaOnboardingMotion.mount(
+    page.querySelector('.onboarding-rail'),
+    'language',
+    nextLocale,
+  );
+  onboardingPage.querySelector('h1').textContent = title;
+  onboardingPage.querySelector('.language-picker').setAttribute('aria-label', prompt);
+  onboardingPage.querySelector('.onboarding-page-copy p').textContent = prompt;
+  onboardingPage.querySelector('[type="submit"]').innerHTML =
+    `${escapeHtml(nextLabel)}${interfaceIcon('arrow-right')}`;
+  onboardingPage.lang = nextLocale;
+  nodes.forEach((node) => BreviaMotion.enter(node));
+}
+
+function revealOnboardingPage(page, kind) {
+  const previous = onboardingPage;
+  const steps = ['language', 'permissions', 'setup', 'ai', 'phone'];
+  const back = steps.indexOf(kind) < steps.indexOf(previous?.dataset.onboardingStep);
+  page.dataset.onboardingStep = kind;
+  page.classList.add('onboarding-page-enter');
+  onboardingPage = page;
+  document.body.append(page);
+  BreviaMotion.enter(page.querySelector('.onboarding-page-content'), back ? 'back' : 'forward');
+  // 新页已挂载才移除旧页，异步准备期间不露出会议库或空背景。
+  previous?.remove();
+  requestAnimationFrame(() => {
+    if (onboardingPage !== page || page.inert || page.contains(document.activeElement)) return;
+    const heading = page.querySelector('h1');
+    if (heading) {
+      heading.tabIndex = -1;
+      heading.focus({ preventScroll: true });
+    }
+  });
 }
 
 function showOnboardingPage(kind, content) {
   onboardingMotion?.destroy();
   onboardingMotion = undefined;
-  onboardingPage = document.createElement('main');
-  onboardingPage.className = `onboarding-page onboarding-active onboarding-${kind}-overlay`;
-  onboardingPage.innerHTML = `<header class="onboarding-window-bar"><strong translate="no">Brevia</strong></header>${renderOnboardingRail(kind)}<div class="onboarding-page-content onboarding-${kind}-content">${content}</div>`;
-  document.body.append(onboardingPage);
+  const page = document.createElement('main');
+  page.className = `onboarding-page onboarding-active onboarding-${kind}-overlay`;
+  page.innerHTML = `<header class="onboarding-window-bar"><strong translate="no">Brevia</strong></header>${renderOnboardingRail(kind)}<div class="onboarding-page-content onboarding-${kind}-content">${content}</div>`;
+  revealOnboardingPage(page, kind);
   if (['language', 'permissions', 'setup', 'ai', 'phone'].includes(kind))
     onboardingMotion = window.BreviaOnboardingMotion.mount(
       onboardingPage.querySelector('.onboarding-rail'),
       kind,
       locale,
     );
-  const enteringPage = onboardingPage;
-  requestAnimationFrame(() => {
-    // 快速返回时旧帧回调不能访问已关闭或已替换的引导页。
-    if (
-      onboardingPage === enteringPage &&
-      !enteringPage.classList.contains('onboarding-page-leave')
-    )
-      enteringPage.classList.add('onboarding-page-enter');
-  });
 }
 
 function dismissOnboardingPage(next) {
   clearTimeout(onboardingAiDemoTimer);
   clearTimeout(onboardingSummaryDemoTimer);
   const page = onboardingPage;
-  if (!page || page.classList.contains('onboarding-page-leave')) return;
+  if (!page) return Promise.resolve();
+  if (page.dismissPromise) return page.dismissPromise;
+  if (next) {
+    const motion = onboardingMotion;
+    page.inert = true;
+    void breviaClient?.stopPreview();
+    page.dismissPromise = Promise.resolve()
+      .then(next)
+      .then(
+        (result) => {
+          if (result === false) {
+            page.inert = false;
+            delete page.dismissPromise;
+            return;
+          }
+          if (onboardingMotion === motion) {
+            motion?.destroy();
+            onboardingMotion = undefined;
+          }
+          page.remove();
+          if (onboardingPage === page) {
+            onboardingPage = undefined;
+            if (page.dataset.aiSettings === 'true' && settingsModal.hidden)
+              document.body.classList.remove('modal-open');
+          }
+        },
+        (error) => {
+          page.inert = false;
+          delete page.dismissPromise;
+          throw error;
+        },
+      );
+    return page.dismissPromise;
+  }
   onboardingMotion?.destroy();
   onboardingMotion = undefined;
   void breviaClient?.stopPreview();
+  page.inert = true;
   page.classList.remove('onboarding-page-enter');
   page.classList.add('onboarding-page-leave');
   if (page.dataset.aiSettings === 'true') {
     page.classList.remove('modal-enter');
     page.classList.add('modal-leave');
   }
-  window.setTimeout(() => {
-    page.remove();
-    if (onboardingPage !== page) return;
-    onboardingPage = undefined;
-    if (page.dataset.aiSettings === 'true' && settingsModal.hidden)
-      document.body.classList.remove('modal-open');
-    next?.();
-  }, 260);
+  page.dismissPromise = new Promise((resolve) => {
+    window.setTimeout(() => {
+      page.remove();
+      if (onboardingPage === page) {
+        onboardingPage = undefined;
+        if (page.dataset.aiSettings === 'true' && settingsModal.hidden)
+          document.body.classList.remove('modal-open');
+        next?.();
+      }
+      resolve();
+    }, BreviaMotion.duration('state'));
+  });
+  return page.dismissPromise;
 }
 
 // 识别模型文案（8 语种）由 asr-copy.js 提供；这里只做取值与回退。
@@ -3776,7 +3809,7 @@ async function openOnboardingSetup() {
     locations = await window.brevia.storage.locations();
   } catch (error) {
     showToast(error.message, undefined, 'error');
-    return;
+    return false;
   }
   const modelWords = asrText('model');
   const recommendedWords = asrCopy.recommended || {};
@@ -3880,8 +3913,8 @@ async function openOnboardingSetup() {
           window.BreviaOnboarding.beginDownloads(onboardingModelIds);
           downloadRequiredModels(onboardingModelIds);
         }
-        dismissOnboardingPage(openOnboardingAi);
       });
+      await dismissOnboardingPage(openOnboardingAi);
     } catch (error) {
       showToast(storageErrorMessage(error), undefined, 'error');
       if (download) download.disabled = false;
@@ -3909,9 +3942,28 @@ function updateOnboardingSetup() {
   if (guard) guard.hidden = !missing;
 }
 
-function finishOnboarding() {
+async function finishOnboarding() {
+  const firstEntry = window.BreviaOnboarding.isFirstLaunch();
+  const page = onboardingPage;
   window.BreviaOnboarding.complete();
   closeModal();
+  if (!firstEntry || !page?.classList.contains('onboarding-page')) return;
+  document.body.classList.add('onboarding-handoff');
+  try {
+    await showView('home');
+    page.inert = true;
+    page.style.pointerEvents = 'none';
+    const heading = document.querySelector('#home-view h1');
+    if (heading) {
+      heading.tabIndex = -1;
+      heading.focus({ preventScroll: true });
+    }
+    await BreviaMotion.welcome(page, document.querySelector('.app-shell'));
+  } finally {
+    page.remove();
+    if (onboardingPage === page) onboardingPage = undefined;
+    document.body.classList.remove('onboarding-handoff');
+  }
 }
 // Onboarding 的 AI 辅助配置页（PRD §22）：离线功能配置之后进入。
 const aiOnboardingCopy = window.BreviaLocaleData.appCopy.aiOnboardingCopy;
@@ -3961,10 +4013,10 @@ function openOnboardingAi(settingsMode = false) {
     onboardingPage = document.createElement('div');
     onboardingPage.className = `modal-backdrop ai-features-modal${activeView === 'settings' ? ' settings-page' : ''}`;
     onboardingPage.innerHTML = `${activeView === 'settings' ? renderSettingsNavigation('ai-features') : ''}<section class="modal-panel" role="${activeView === 'settings' ? 'region' : 'dialog'}" aria-modal="${activeView !== 'settings'}" aria-labelledby="ai-features-title"><header class="modal-head"><div class="modal-title"><h2 id="ai-features-title">${escapeHtml(t('AI 功能'))}</h2></div><button class="modal-close" data-close-ai-features type="button" aria-label="${escapeHtml(t('关闭'))}">${interfaceIcon('close')}</button></header><div class="modal-body">${content}</div></section>`;
+    onboardingPage.classList.add('modal-enter');
     document.body.append(onboardingPage);
     document.body.classList.add('modal-open');
     const page = onboardingPage;
-    requestAnimationFrame(() => page.classList.add('modal-enter'));
     const focusTarget = page.querySelector(
       activeView === 'settings' ? '.modal-title h2' : '[data-close-ai-features]',
     );
@@ -4021,7 +4073,7 @@ function openOnboardingAi(settingsMode = false) {
       const kind = destination.dataset.settingsPage;
       if (kind !== 'ai-features')
         dismissOnboardingPage(() => {
-          if (kind !== 'general') void openModal(kind);
+          if (kind !== 'general') return openModal(kind);
         });
       return;
     }
@@ -5646,29 +5698,37 @@ function selectLibraryNav(id) {
   renderSlogan();
   updateHomeViewTitle();
 }
-/** 按请求顺序执行页面过渡，当前过渡结束后再读取真正可见的页面。 */
+/** 业务清理串行，视觉不阻塞导航；尚未开始的旧意图由最新导航替代。 */
 async function transitionPage(current, next, swap = () => {}) {
+  const revision = ++pageTransitionRevision;
   const previous = pageTransition;
   const transition = (async () => {
     if (previous) await previous.catch(() => {});
+    if (revision !== pageTransitionRevision) return false;
     // 所有导航入口共用退出逻辑，会议库切换也必须清除设置页遮罩。
     if (next.id !== 'settings-view') {
       modalRequestRevision += 1;
-      if (!settingsModal.hidden && settingsModal.classList.contains('settings-page')) {
+      if (
+        !settingsModal.hidden &&
+        (settingsModal.classList.contains('settings-page') ||
+          settingsModal.classList.contains('modal-leave'))
+      ) {
         closeModal();
         clearTimeout(modalDismissTimer);
         settingsModal.hidden = true;
         settingsModal.classList.remove('modal-leave');
         document.querySelector('.app-shell').inert = false;
+        if (onboardingPage) onboardingPage.inert = false;
         document.body.classList.remove('modal-open');
       }
       if (onboardingPage?.dataset.aiSettings === 'true') dismissOnboardingPage();
     }
     current = document.querySelector('.view.active') || current;
-    const duration = matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 160;
-    current.classList.add('leaving');
-    await new Promise((resolve) => window.setTimeout(resolve, duration));
     const previousView = activeView;
+    const child = ['prepare', 'detail', 'live'];
+    const forward = child.includes(next.id.slice(0, -5)) && !child.includes(previousView);
+    const back = child.includes(previousView) && !child.includes(next.id.slice(0, -5));
+    if (forward) viewReturnFocus.set(current.id, document.activeElement);
     activeView = next.id.slice(0, -'-view'.length);
     syncPhonePreview();
     try {
@@ -5694,19 +5754,24 @@ async function transitionPage(current, next, swap = () => {}) {
           .querySelectorAll('.nav-item')
           .forEach((item) => item.classList.toggle('active', item.dataset.view === activeView));
       if (activeView === 'detail') resetDetailHeaderCollapse();
-      window.scrollTo({ top: 0, behavior: 'smooth' });
       await swap();
     } finally {
+      BreviaMotion.cancel(current);
       current.classList.remove('active', 'leaving');
       next.classList.remove('active', 'leaving');
-      void next.offsetWidth;
       next.classList.add('active');
+      if (revision === pageTransitionRevision) {
+        BreviaMotion.enter(next, forward ? 'forward' : back ? 'back' : 'sibling');
+        const focus = back ? viewReturnFocus.get(next.id) : null;
+        if (focus?.isConnected) focus.focus({ preventScroll: true });
+      }
       renderMiniPlayback();
     }
+    return revision === pageTransitionRevision;
   })();
   pageTransition = transition;
   try {
-    await transition;
+    return await transition;
   } finally {
     if (pageTransition === transition) pageTransition = null;
   }
@@ -5719,7 +5784,8 @@ const showView = async (name) => {
   if (typeof closeSegmentProfilePanel === 'function') closeSegmentProfilePanel(true);
   const current = document.querySelector(`#${activeView}-view`);
   const next = document.querySelector(`#${name}-view`);
-  await transitionPage(current, next);
+  const navigated = await transitionPage(current, next);
+  if (!navigated) return;
   if (name !== 'live' && meetingActive && !miniMeeting.hidden)
     taskCards.scrollTop = taskCards.scrollHeight;
   if (name === 'prepare') {
@@ -7329,13 +7395,25 @@ const positionOpenMeetingMenus = () => {
     .forEach((menu) => positionWorkspaceAssignMenu(menu));
 };
 const openMeetingMenu = (menu, toggle, opensLeft = false) => {
+  BreviaMotion.cancel(menu);
+  menu.inert = false;
   menu.hidden = false;
   positionMeetingMenu(menu, toggle, opensLeft);
 };
-const closeMeetingMenus = () => {
+const closeMeetingMenus = (immediate = false) => {
   document.querySelectorAll('.meeting-workspace-menu').forEach((menu) => menu.remove());
   document.querySelectorAll('.meeting-menu').forEach((menu) => {
-    menu.hidden = true;
+    if (menu.hidden) return;
+    menu.inert = true;
+    const hide = () => {
+      menu.hidden = true;
+      menu.inert = false;
+    };
+    // 保护弹窗接手时立即退掉下层菜单，避免焦点和旧层在遮罩后滞留。
+    if (immediate) {
+      BreviaMotion.cancel(menu);
+      hide();
+    } else BreviaMotion.leave(menu, hide);
   });
   document
     .querySelectorAll('[data-meeting-menu]')
@@ -8000,7 +8078,11 @@ function closeSegmentContextMenu() {
   contextSegmentId = undefined;
   contextMeetingId = undefined;
   contextSegment = undefined;
-  segmentContextMenu.hidden = true;
+  segmentContextMenu.inert = true;
+  BreviaMotion.leave(segmentContextMenu, () => {
+    segmentContextMenu.hidden = true;
+    segmentContextMenu.inert = false;
+  });
   document
     .querySelectorAll('.has-segment-menu')
     .forEach((row) => row.classList.remove('has-segment-menu'));
@@ -8010,6 +8092,9 @@ function positionFloating(
   reference,
   placements = ['right-start', 'left-start', 'right-end', 'left-end'],
 ) {
+  // 固定浮层定位前结束祖先位移，键盘打开和快速切页也不会建立错误的包含块。
+  for (let element = reference; element; element = element.parentElement)
+    BreviaMotion.cancel(element);
   const anchor = reference.getBoundingClientRect ? reference.getBoundingClientRect() : reference;
   floating.style.left = '0px';
   floating.style.top = '0px';
@@ -8038,6 +8123,8 @@ function positionFloating(
   floating.style.top = `${Math.max(8, Math.min(position.top, window.innerHeight - height - 8))}px`;
 }
 function openSegmentContextMenu(meetingId, segmentId, x, y, segmentInfo) {
+  BreviaMotion.cancel(segmentContextMenu);
+  segmentContextMenu.inert = false;
   closeMeetingPopovers();
   followLiveTranscript = false;
   followPlaybackTranscript = false;
@@ -9231,27 +9318,14 @@ finalTranscript.addEventListener('click', async (event) => {
     tabbar.replaceWith(holder.firstElementChild);
   }
   finalTranscript.querySelectorAll('[data-detail-panel]').forEach((panel) => {
+    BreviaMotion.cancel(panel);
     panel.hidden = panel.dataset.detailPanel !== target;
   });
   syncDetailTranscriptToolbar();
   syncDetailSummaryPanel();
   filterDetailTranscript();
-  if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    const panel = finalTranscript.querySelector(`[data-detail-panel="${target}"]`);
-    panel?.getAnimations().forEach((animation) => animation.cancel());
-    const direction =
-      ['notes', 'transcript', 'summary'].indexOf(target) >
-      ['notes', 'transcript', 'summary'].indexOf(previousTab)
-        ? 1
-        : -1;
-    panel?.animate(
-      [
-        { opacity: 0.55, transform: `translateX(${direction * 8}px)` },
-        { opacity: 1, transform: 'translateX(0)' },
-      ],
-      { duration: 180, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' },
-    );
-  }
+  BreviaMotion.enter(finalTranscript.querySelector(`[data-detail-panel="${target}"]`), 'tab');
+  finalTranscript.querySelector(`[data-detail-tab="${target}"]`)?.focus({ preventScroll: true });
 });
 function filterDetailTranscript() {
   const query = String(uiData.detail.transcriptSearch || '')
@@ -9277,8 +9351,7 @@ function filterDetailTranscript() {
   const panel = document.querySelector('.detail-search-results');
   if (!panel) return;
   panel.hidden = !query || detailActiveTab !== 'transcript';
-  document.querySelector('#detail-view .notes').hidden =
-    !panel.hidden || detailActiveTab === 'summary';
+  document.querySelector('#detail-view .notes').hidden = true;
   document.querySelectorAll('#detail-view [data-transcript-search]').forEach((input) => {
     if (input.value !== uiData.detail.transcriptSearch)
       input.value = uiData.detail.transcriptSearch || '';
@@ -9392,7 +9465,14 @@ if (window.brevia) {
     const splash = document.querySelector('#startup-splash');
     if (!splash) return;
     splash.classList.add('startup-splash-leave');
+    const duration = parseFloat(getComputedStyle(splash).transitionDuration) * 1000;
+    if (!(duration > 0)) {
+      splash.remove();
+      return;
+    }
     splash.addEventListener('transitionend', () => splash.remove(), { once: true });
+    // 减少动态效果、窗口隐藏或渲染中断时可能没有 transitionend。
+    setTimeout(() => splash.remove(), duration + 32);
   };
   // 启动动画 brevia-logo-reveal.gif（约 1.4s）在 Windows 上因页面加载/解码更慢，
   // 会在 startup.ready 到达时还没播完。这里以 GIF 实际开始播放的时间为基准，
@@ -9519,6 +9599,7 @@ if (window.brevia) {
         (item) => Number(item.dataset.start) > payload.start_ms / 1000,
       );
       transcript.insertBefore(element, next || null);
+      if (shouldFollow) BreviaMotion.enter(element, 'attention');
     }
     liveSegments.set(payload.segment_id, element);
     liveSegmentData.set(payload.segment_id, {
