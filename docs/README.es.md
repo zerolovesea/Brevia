@@ -4,7 +4,7 @@
 
 <p align="center"><a href="README.en.md">English</a> · <a href="../README.md">简体中文</a> · <strong>Español</strong> · <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a> · <a href="README.fr.md">Français</a> · <a href="README.de.md">Deutsch</a> · <a href="README.ru.md">Русский</a></p>
 
-<p align="center"><img src="assets/screenshots/desktop/en/live.png" width="960" alt="Brevia v1.4: live transcript and AI notes (English)" /></p>
+<p align="center"><img src="assets/showcase/desktop/en/live.gif" width="960" alt="Brevia: live transcript and AI notes (English)" /></p>
 
 ## Descargar
 
@@ -25,20 +25,15 @@
 
 Escanea para descargar en el teléfono.
 
-Escritorio v1.4.2 (17 de octubre de 2026). Versiones móviles verificadas el 15 de octubre de 2026: Android 1.0.1 e iOS 1.0.0. Las capturas del teléfono muestran la interfaz 1.0.1; la actualización de iOS aún no es pública.
-
 ## Novedades de v1.4
 
 Nueva interfaz en ordenador y móvil: notas junto a la transcripción, biblioteca por espacios de trabajo y acceso directo a transcripción, notas y resumen. También puedes usar un teléfono conectado como micrófono del ordenador.
 
-![Biblioteca de reuniones](assets/screenshots/desktop/en/library.png)
+![Biblioteca de reuniones](assets/showcase/desktop/en/library.gif)
 
-<details>
-<summary>Resumen editable con decisiones y tareas</summary>
+### Resumen editable con decisiones y tareas
 
-![Resumen editable con decisiones y tareas](assets/screenshots/desktop/en/summary.png)
-
-</details>
+![Resumen editable con decisiones y tareas](assets/showcase/desktop/en/summary.gif)
 
 ## Qué puedes hacer
 
@@ -50,7 +45,7 @@ Las notas de IA siguen la transcripción en vivo y señalan decisiones, tareas, 
 
 Ábrelo, pulsa grabar y observa los subtítulos aparecer. Brevia captura el micrófono y el audio del sistema a la vez, de modo que ambas partes de una llamada remota quedan en la misma transcripción. La traducción en vivo opcional se muestra junto al flujo de subtítulos para conversaciones multilingües.
 
-![Reunión y traducción en vivo](assets/screenshots/desktop/en/live.png)
+![Reunión y traducción en vivo](assets/showcase/desktop/en/live.gif)
 
 ### 30+ idiomas de transcripción y resúmenes de reuniones
 
@@ -61,8 +56,6 @@ Brevia transcribe voz en más de 30 idiomas — inglés, chino, japonés, corean
 Graba una breve muestra de voz de cada participante. Una vez terminada la reunión, Brevia distingue a los hablantes durante el refinamiento y los compara con los perfiles de voz guardados para añadir sus nombres a la transcripción. Los subtítulos en directo no distinguen a los hablantes. Los perfiles de voz se pueden reutilizar en otras reuniones.
 
 Con segmentación Pyannote más modelos de embeddings de voz, todo ejecutándose en el dispositivo.
-
-![Identificación de hablantes después de la reunión](assets/screenshots/desktop/en/voiceprints.png)
 
 ### Y más
 
@@ -96,18 +89,16 @@ Descarga modelos de voz, notas IA y traducción desde **Ajustes → Biblioteca d
 Lleva Brevia a reuniones, entrevistas y conversaciones cotidianas. Abre la aplicación y graba sin crear una cuenta. Conecta tu propio ordenador para seguir la transcripción y las notas mientras grabas.
 
 <p align="center">
-  <img src="assets/screenshots/mobile/en/connection.png" width="240" alt="Brevia iPhone: computer connection (English)" />
-  <img src="assets/screenshots/mobile/en/offline.png" width="240" alt="Brevia: offline phone recording (English)" />
-  <img src="assets/screenshots/mobile/en/live.png" width="240" alt="Brevia mobile: live transcript (English)" />
+  <img src="assets/showcase/mobile/en/library.png" width="240" alt="Brevia phone meeting library (English)" />
+  <img src="assets/showcase/mobile/en/offline.png" width="240" alt="Brevia: offline phone recording (English)" />
+  <img src="assets/showcase/mobile/en/live.png" width="240" alt="Brevia mobile: live transcript (English)" />
 </p>
-
-<p align="center"><sub>Interfaz móvil</sub></p>
 
 ### Micrófono del teléfono
 
 En una reunión nueva del ordenador, elige **Phone microphone**, comprueba el nivel de entrada y controla el inicio, pausa, reanudación y fin desde el ordenador. Requiere una app móvil compatible, conectada y en primer plano. La transcripción y las notas de estas reuniones permanecen en el ordenador; las reuniones iniciadas en el teléfono reciben el texto de vuelta.
 
-![Micrófono del teléfono](assets/screenshots/desktop/en/phone-microphone.png)
+![Micrófono del teléfono](assets/showcase/desktop/en/phone-microphone.gif)
 
 - **Graba donde estés.** Sin emparejamiento ni internet: pausa, continúa y marca momentos importantes. El audio queda en el móvil hasta que eliges un ordenador y confirmas la subida para transcribirlo.
 - **El móvil capta; el ordenador organiza.** Tras emparejarlos, el ordenador reconoce la voz y devuelve transcripciones y notas en directo. Los modelos y los ajustes de IA permanecen en el ordenador; no necesitas descargar modelos grandes al móvil.
@@ -121,36 +112,32 @@ En la red local, el móvil envía audio mediante **HTTPS** al ordenador empareja
 
 El reconocimiento de voz se realiza en tu ordenador. Las grabaciones sin conexión permanecen en el móvil hasta que confirmas la subida; la transcripción en directo envía audio al ordenador emparejado. Brevia no envía automáticamente reuniones al desarrollador. Con los modelos descargados puedes usar IA local; si eliges un proveedor de IA en línea, recibe el texto pertinente, no el audio. [Privacidad](https://brevia.work/privacy.html).
 
-El audio del móvil ocupa unos **115 MB por hora grabada**, sin contar exportaciones y cachés. Las subidas y la transcripción en directo requieren que el móvil y el ordenador estén en la misma red local.
-
 ## Primeros pasos
 
 1. Instala Brevia en el ordenador, concede los permisos de audio y descarga el modelo de voz sugerido. Para notas sin conexión, elige también un modelo de IA local.
 2. Inicia una reunión o importa audio; revisa y exporta los resultados.
 3. Para conectar el móvil, usa la misma Wi-Fi. En el ordenador abre **Ajustes → Conexión de dispositivos → Conectar nuevo dispositivo**. Escanea el QR o introduce la dirección y el PIN, compara el código de verificación y autoriza en el ordenador.
 
+## Arquitectura
+
+- **Escritorio:** Electron y JavaScript, con HTML y Tailwind CSS para la interfaz.
+- **Procesamiento local:** Un worker de Python coordina audio y modelos; MLX / sherpa-onnx procesan la voz y llama.cpp ejecuta la IA local.
+- **Móvil:** Flutter y Dart comparten la interfaz y el flujo de grabación entre iOS y Android.
+- **Almacenamiento y sincronización:** SQLite guarda las reuniones en el ordenador; los dispositivos se sincronizan mediante HTTPS en la red local.
+
 ## FAQ
 
-<details>
-<summary><strong>Windows muestra un aviso de Microsoft Defender SmartScreen</strong></summary>
+### Windows muestra un aviso de Microsoft Defender SmartScreen
 
 Los builds de release no están firmados con un certificado de firma de código de pago, y SmartScreen bloquea por defecto los ejecutables recién vistos. Haz clic en **"Más información" → "Ejecutar de todas formas"** tras confirmar que la descarga provino de la página oficial de [Releases](https://github.com/zerolovesea/Brevia/releases).
 
-</details>
-
-<details>
-<summary><strong>¿Necesito instalar Python por separado?</strong></summary>
+### ¿Necesito instalar Python por separado?
 
 No. Los builds de release incluyen el runtime Python y todas las dependencias. Solo necesitas Python para ejecutar desde el código fuente.
 
-</details>
-
-<details>
-<summary><strong>¿Cuánto espacio en disco requieren los modelos?</strong></summary>
+### ¿Cuánto espacio en disco requieren los modelos?
 
 Empieza por el modelo de voz recomendado para tu idioma; añade modelos locales de IA y traducción solo si los necesitas. La biblioteca muestra el tamaño de cada descarga. No es necesario instalarlos todos.
-
-</details>
 
 ## Ayuda y contribuciones
 

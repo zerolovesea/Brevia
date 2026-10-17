@@ -336,6 +336,8 @@ app
             states.push(
               await win.webContents.executeJavaScript(`(() => {
               productMotion.seek(${time});
+              const translation = document.querySelector('#translation-toggle');
+              if (translation && !translation.querySelector('svg')) throw Error('Translation control must keep the application icon');
               return { text: document.querySelector('#motion-stage').innerText,
                 overflow: document.documentElement.scrollWidth > innerWidth,
                 visible: !document.querySelector('.view') || getComputedStyle(document.querySelector('.view.active')).opacity === '1',

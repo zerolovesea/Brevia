@@ -41,7 +41,10 @@ void main() {
         'MaterialIcons',
       )..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'))).load();
     });
-    uiLanguage = 'zh';
+    uiLanguage = Platform.environment['BREVIA_CAPTURE_LANGUAGE'] == 'en'
+        ? 'en'
+        : 'zh';
+    String pick(String zh, String en) => uiLanguage == 'en' ? en : zh;
     SharedPreferences.setMockInitialValues({});
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
@@ -105,7 +108,7 @@ void main() {
     model.meetings.addAll([
       {
         'id': 'review',
-        'title': '产品周会',
+        'title': pick('产品周会', 'Product sync'),
         'samples': 40512000,
         'state': 'ended',
         'finished': true,
@@ -113,22 +116,33 @@ void main() {
         'uploaded': 80,
         'localOnly': false,
         'marks': [
-          {'sample': 12096000, 'note': '核对新用户引导与下载入口'},
+          {
+            'sample': 12096000,
+            'note': pick('核对新用户引导与下载入口', 'Review the onboarding flow'),
+          },
         ],
         'created': DateTime.now()
             .copyWith(hour: 10, minute: 0)
             .toIso8601String(),
         'snapshot': {
-          'notes':
-              '## 决定\n\n下周五发布新用户引导。\n\n## 待办\n\n- 核对语言选项。\n- 验证 Android 下载二维码。',
+          'notes': pick(
+            '## 决定\n\n下周五发布新用户引导。\n\n## 待办\n\n- 核对语言选项。\n- 完成引导流程测试。',
+            '## Decisions\n\nRelease the new onboarding flow next Friday.\n\n## Next steps\n\n- Review language options.\n- Finish onboarding tests.',
+          ),
           'segments': [
-            {'start_ms': 0, 'text': '我们先回顾上周的进展。'},
+            {
+              'start_ms': 0,
+              'text': pick(
+                '我们先回顾上周的进展。',
+                'Let’s review our progress this week.',
+              ),
+            },
           ],
         },
       },
       {
         'id': 'pending',
-        'title': '客户访谈',
+        'title': pick('客户访谈', 'Customer interview'),
         'samples': 8064000,
         'state': 'ended',
         'finished': false,
@@ -242,8 +256,8 @@ void main() {
       ),
     );
     expect(
-      tester.getBottomRight(find.text('手机采集音频，电脑完成转写')).dy,
-      lessThan(tester.getTopLeft(find.text('开始录音')).dy),
+      tester.getBottomRight(find.text(tr('手机采集音频，电脑完成转写'))).dy,
+      lessThan(tester.getTopLeft(find.text(tr('开始录音'))).dy),
     );
     await capture('mobile-prepare-connected');
     for (final (choice, name) in [
@@ -291,7 +305,10 @@ void main() {
     );
     await tester.tap(find.text(tr('转写')));
     await tester.pump();
-    expect(find.text('我们先回顾上周的进展。'), findsOneWidget);
+    expect(
+      find.text(pick('我们先回顾上周的进展。', 'Let’s review our progress this week.')),
+      findsOneWidget,
+    );
     await capture('mobile-review-transcript');
     await tester.tap(find.text(tr('笔记')));
     await tester.pump();
@@ -334,7 +351,7 @@ void main() {
 
     model.live = {
       'id': 'live',
-      'title': '产品周会',
+      'title': pick('产品周会', 'Product sync'),
       'samples': 12096000,
       'state': 'recording',
       'connected': true,
@@ -346,8 +363,17 @@ void main() {
         'samples': 10000000,
         'notes': model.meetings.first['snapshot']['notes'],
         'segments': [
-          {'start_ms': 0, 'text': '我们先回顾上周的进展。'},
-          {'start_ms': 12000, 'text': 'Android 测试版已就绪。接下来核对下载二维码，完成新用户引导评审。'},
+          {
+            'start_ms': 0,
+            'text': pick('我们先回顾上周的进展。', 'Let’s review our progress this week.'),
+          },
+          {
+            'start_ms': 12000,
+            'text': pick(
+              '设计稿已经完成，周四交付测试版本。周五前完成验收，下周一小范围发布。',
+              'The design is ready. Deliver the test build on Thursday, complete acceptance by Friday, and start a limited rollout next Monday.',
+            ),
+          },
         ],
       },
     };
@@ -390,7 +416,7 @@ void main() {
     model.live!['snapshot'] = <String, dynamic>{};
     model.notifyListeners();
     await tester.pump();
-    expect(find.textContaining('已传到电脑'), findsNothing);
+    expect(find.textContaining(tr('已传到电脑')), findsNothing);
     await capture('mobile-offline');
     model.live!['state'] = 'paused';
     model.serviceRunning = false;
@@ -524,6 +550,7 @@ void main() {
       'logicalSize': [390, 844],
       'pixelSize': [780, 1688],
       'font': Platform.environment['BREVIA_CAPTURE_FONT'],
+      'language': uiLanguage,
       'animationsSettledMs': 500,
     });
   }, skip: output == null);

@@ -4,7 +4,7 @@
 
 <p align="center"><a href="README.en.md">English</a> · <a href="../README.md">简体中文</a> · <a href="README.es.md">Español</a> · <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a> · <a href="README.fr.md">Français</a> · <strong>Deutsch</strong> · <a href="README.ru.md">Русский</a></p>
 
-<p align="center"><img src="assets/screenshots/desktop/en/live.png" width="960" alt="Brevia v1.4: live transcript and AI notes (English)" /></p>
+<p align="center"><img src="assets/showcase/desktop/en/live.gif" width="960" alt="Brevia: live transcript and AI notes (English)" /></p>
 
 ## Download
 
@@ -25,20 +25,15 @@
 
 Mit dem Smartphone scannen und herunterladen.
 
-Desktop v1.4.2 (17. Oktober 2026). Mobile Versionen, geprüft am 15. Oktober 2026: Android 1.0.1 und iOS 1.0.0. Die Smartphone-Bilder zeigen die neue Oberfläche 1.0.1; das iOS-Update ist noch nicht öffentlich.
-
 ## Neu in v1.4
 
 Neue Oberflächen für Computer und Smartphone: Notizen neben dem Live-Transkript, eine nach Arbeitsbereichen geordnete Bibliothek und direkte Zugänge zu Notizen, Transkript und Zusammenfassung. Ein verbundenes Smartphone kann auch als Mikrofon des Computers dienen.
 
-![Neue Meeting-Bibliothek](assets/screenshots/desktop/en/library.png)
+![Neue Meeting-Bibliothek](assets/showcase/desktop/en/library.gif)
 
-<details>
-<summary>Bearbeitbare Zusammenfassung mit Entscheidungen und Aufgaben</summary>
+### Bearbeitbare Zusammenfassung mit Entscheidungen und Aufgaben
 
-![Bearbeitbare Zusammenfassung mit Entscheidungen und Aufgaben](assets/screenshots/desktop/en/summary.png)
-
-</details>
+![Bearbeitbare Zusammenfassung mit Entscheidungen und Aufgaben](assets/showcase/desktop/en/summary.gif)
 
 ## Das kann Brevia
 
@@ -50,7 +45,7 @@ KI-Notizen verfolgen das Live-Transkript und koennen Entscheidungen, Aufgaben, w
 
 Oeffnen, Aufnahme starten, Untertitel zusehen. Brevia erfasst Mikrofon und Systemaudio gleichzeitig, sodass beide Seiten eines Remote-Gespraechs im gleichen Transkript landen. Die optionale Live-Uebersetzung wird neben dem Untertitel-Stream angezeigt und unterstuetzt mehrsprachige Gespraeche.
 
-![Live-Meeting und Uebersetzung](assets/screenshots/desktop/en/live.png)
+![Live-Meeting und Uebersetzung](assets/showcase/desktop/en/live.gif)
 
 ### 30+ Transkriptionssprachen und Meeting-Zusammenfassungen
 
@@ -61,8 +56,6 @@ Brevia transkribiert Sprache in mehr als 30 Sprachen — Englisch, Chinesisch, J
 Nimm pro Teammitglied eine kurze Sprachprobe auf. Nach dem Meeting trennt Brevia bei der Nachbearbeitung die Sprecher und gleicht sie mit gespeicherten Stimmprofilen ab, um das Transkript mit Namen zu versehen. Live-Untertitel unterscheiden keine Sprecher. Stimmprofile lassen sich in weiteren Meetings wiederverwenden.
 
 Angetrieben von Pyannote-Segmentierung plus Sprecher-Embedding-Modellen, alles auf dem Geraet.
-
-![Sprechererkennung bei der Nachbearbeitung](assets/screenshots/desktop/en/voiceprints.png)
 
 ### Und mehr
 
@@ -96,18 +89,16 @@ Sprach-, KI-Notiz- und Übersetzungsmodelle bei Bedarf unter **Einstellungen →
 Nehmen Sie Brevia zu Besprechungen, Interviews und alltäglichen Gesprächen mit. Öffnen Sie die App und starten Sie ohne Konto eine Aufnahme. Verbinden Sie Ihren eigenen Computer, um währenddessen Transkripte und Notizen zu verfolgen.
 
 <p align="center">
-  <img src="assets/screenshots/mobile/en/connection.png" width="240" alt="Brevia iPhone: computer connection (English)" />
-  <img src="assets/screenshots/mobile/en/offline.png" width="240" alt="Brevia: offline phone recording (English)" />
-  <img src="assets/screenshots/mobile/en/live.png" width="240" alt="Brevia mobile: live transcript (English)" />
+  <img src="assets/showcase/mobile/en/library.png" width="240" alt="Brevia phone meeting library (English)" />
+  <img src="assets/showcase/mobile/en/offline.png" width="240" alt="Brevia: offline phone recording (English)" />
+  <img src="assets/showcase/mobile/en/live.png" width="240" alt="Brevia mobile: live transcript (English)" />
 </p>
-
-<p align="center"><sub>Smartphone-Oberfläche</sub></p>
 
 ### Smartphone als Mikrofon
 
 Wähle bei einem neuen Meeting am Computer **Phone microphone**, prüfe den Eingangspegel und steuere Start, Pause, Fortsetzen und Ende am Computer. Die kompatible Smartphone-App muss verbunden und im Vordergrund bereit sein. Transkript und Notizen dieser Meetings bleiben am Computer. Am Smartphone gestartete Meetings erhalten den Text auf dem Smartphone zurück.
 
-![Smartphone als Mikrofon](assets/screenshots/desktop/en/phone-microphone.png)
+![Smartphone als Mikrofon](assets/showcase/desktop/en/phone-microphone.gif)
 
 - **Überall aufnehmen.** Ohne Kopplung oder Internet aufnehmen, pausieren, fortsetzen und wichtige Stellen markieren. Audio bleibt auf dem Smartphone, bis Sie einen Computer auswählen und den Upload zur Transkription bestätigen.
 - **Das Smartphone nimmt auf, der Computer organisiert.** Nach der Kopplung übernimmt der Computer die Spracherkennung und sendet Live-Transkripte und Notizen zurück. Modelle und KI-Einstellungen bleiben auf dem Computer; auf dem Smartphone sind keine großen Modelle nötig.
@@ -121,36 +112,32 @@ Im lokalen Netzwerk sendet das Smartphone Audio per **HTTPS** an den gekoppelten
 
 Spracherkennung läuft auf Ihrem Computer. Offline-Aufnahmen bleiben bis zur Upload-Bestätigung auf dem Smartphone; Live-Transkription sendet Audio an den gekoppelten Computer. Brevia überträgt Besprechungen nicht automatisch an den Entwickler. Mit heruntergeladenen Modellen ist lokale KI möglich. Ein selbst gewählter Online-KI-Anbieter erhält relevante Texte, kein Audio. [Datenschutz](https://brevia.work/privacy.html).
 
-Telefonaufnahmen benötigen etwa **115 MB pro aufgenommener Stunde**, ohne Exporte und Cache. Für Uploads und Live-Transkription müssen Smartphone und Computer im selben lokalen Netzwerk sein.
-
 ## Erste Schritte
 
 1. Brevia am Computer installieren, Audioberechtigungen erteilen und das vorgeschlagene Sprachmodell herunterladen. Für Offline-Notizen zusätzlich ein lokales KI-Modell wählen.
 2. Eine Besprechung starten oder Audio importieren, Ergebnisse prüfen und exportieren.
 3. Zum Koppeln dasselbe WLAN verwenden. Am Computer **Einstellungen → Geräteverbindung → Neues Gerät verbinden** öffnen. QR-Code scannen oder Adresse und PIN eingeben, Prüfcode vergleichen und am Computer bestätigen.
 
+## Technischer Aufbau
+
+- **Desktop:** Electron und JavaScript, mit HTML und Tailwind CSS für die Oberfläche.
+- **Lokale Verarbeitung:** Ein Python-Worker steuert Audio und Modelle; MLX / sherpa-onnx übernehmen die Sprachverarbeitung, llama.cpp die lokale KI.
+- **Mobil:** Flutter und Dart teilen Oberfläche und Aufnahmeablauf zwischen iOS und Android.
+- **Speicherung und Abgleich:** SQLite speichert Besprechungen auf dem Computer; die Geräte synchronisieren über HTTPS im lokalen Netzwerk.
+
 ## FAQ
 
-<details>
-<summary><strong>Windows zeigt eine Microsoft-Defender-SmartScreen-Warnung</strong></summary>
+### Windows zeigt eine Microsoft-Defender-SmartScreen-Warnung
 
 Release-Builds sind nicht mit einem kostenpflichtigen Code-Signing-Zertifikat signiert, und SmartScreen blockiert neu gesehene ausfuehrbare Dateien standardmaessig. Klicke auf **„Weitere Informationen" → „Trotzdem ausfuehren"**, nachdem du bestaetigt hast, dass der Download von der offiziellen [Releases](https://github.com/zerolovesea/Brevia/releases)-Seite stammt.
 
-</details>
-
-<details>
-<summary><strong>Muss ich Python separat installieren?</strong></summary>
+### Muss ich Python separat installieren?
 
 Nein. Release-Builds bundeln die Python-Runtime und alle noetigen Abhaengigkeiten. Eine separate Python-Installation wird nur benoetigt, wenn du aus dem Quellcode startest.
 
-</details>
-
-<details>
-<summary><strong>Wie viel Speicherplatz benoetigen die Modelle?</strong></summary>
+### Wie viel Speicherplatz benoetigen die Modelle?
 
 Beginnen Sie mit dem empfohlenen Sprachmodell für Ihre Sprache. Lokale KI- und Übersetzungsmodelle nur bei Bedarf ergänzen. Die Modellbibliothek zeigt die Downloadgrößen; nicht alle Modelle sind nötig.
-
-</details>
 
 ## Hilfe und Beiträge
 

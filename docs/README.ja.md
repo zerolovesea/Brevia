@@ -4,7 +4,7 @@
 
 <p align="center"><a href="README.en.md">English</a> · <a href="../README.md">简体中文</a> · <a href="README.es.md">Español</a> · <strong>日本語</strong> · <a href="README.ko.md">한국어</a> · <a href="README.fr.md">Français</a> · <a href="README.de.md">Deutsch</a> · <a href="README.ru.md">Русский</a></p>
 
-<p align="center"><img src="assets/screenshots/desktop/en/live.png" width="960" alt="Brevia v1.4: live transcript and AI notes (English)" /></p>
+<p align="center"><img src="assets/showcase/desktop/en/live.gif" width="960" alt="Brevia: live transcript and AI notes (English)" /></p>
 
 ## ダウンロード
 
@@ -25,20 +25,15 @@
 
 スマートフォンでスキャンしてダウンロード。
 
-デスクトップ v1.4.2（2026年10月17日）。モバイル版は2026年10月15日の確認時点で Android 1.0.1、iOS 1.0.0。スマートフォンの画像は新しい1.0.1の画面です。iOSの更新はまだ一般公開されていません。
-
 ## v1.4 の新機能
 
 パソコンとスマートフォンの画面を刷新。ノートとライブ文字起こしを並べ、ワークスペース別の会議一覧や、文字起こし・ノート・議事録の切り替えを整理しました。接続したスマートフォンをパソコンのマイクとしても使えます。
 
-![新しい会議ライブラリ](assets/screenshots/desktop/en/library.png)
+![新しい会議ライブラリ](assets/showcase/desktop/en/library.gif)
 
-<details>
-<summary>決定事項とタスクを編集できる議事録</summary>
+### 決定事項とタスクを編集できる議事録
 
-![決定事項とタスクを編集できる議事録](assets/screenshots/desktop/en/summary.png)
-
-</details>
+![決定事項とタスクを編集できる議事録](assets/showcase/desktop/en/summary.gif)
 
 ## できること
 
@@ -50,7 +45,7 @@ AIメモはリアルタイム文字起こしを見ながら、決定事項、ア
 
 開いて録音ボタンを押せば、字幕が現れます。Brevia はマイクとシステム音声を同時にキャプチャし、リモート通話の両側が同じ文字起こしに収まります。オプションのリアルタイム翻訳が字幕の隣に並列表示され、多言語の会話をサポートします。
 
-![リアルタイム会議と翻訳](assets/screenshots/desktop/en/live.png)
+![リアルタイム会議と翻訳](assets/showcase/desktop/en/live.gif)
 
 ### 30 以上の文字起こし言語と会議要約
 
@@ -61,8 +56,6 @@ Brevia は 30 以上の言語で音声を文字起こしします——英語、
 メンバーごとに短い音声サンプルを登録すると、会議終了後の精修時に話者を分離し、保存済みの声紋と照合して文字起こしに名前を表示します。会議中のリアルタイム字幕では話者を区別しません。声紋プロフィールは別の会議でも再利用できます。
 
 Pyannote のセグメンテーションと話者埋め込みモデルを組み合わせ、すべて端末上で実行されます。
-
-![会議後の精修で話者を識別](assets/screenshots/desktop/en/voiceprints.png)
 
 ### さらに
 
@@ -96,18 +89,16 @@ Pyannote のセグメンテーションと話者埋め込みモデルを組み�
 会議やインタビュー、日々の打ち合わせに Brevia を。アカウントを作らず、アプリを開いて録音を始められます。自分のパソコンにつなげば、録音しながら文字起こしやメモも確認できます。
 
 <p align="center">
-  <img src="assets/screenshots/mobile/en/connection.png" width="240" alt="Brevia iPhone: computer connection (English)" />
-  <img src="assets/screenshots/mobile/en/offline.png" width="240" alt="Brevia: offline phone recording (English)" />
-  <img src="assets/screenshots/mobile/en/live.png" width="240" alt="Brevia mobile: live transcript (English)" />
+  <img src="assets/showcase/mobile/en/library.png" width="240" alt="Brevia phone meeting library (English)" />
+  <img src="assets/showcase/mobile/en/offline.png" width="240" alt="Brevia: offline phone recording (English)" />
+  <img src="assets/showcase/mobile/en/live.png" width="240" alt="Brevia mobile: live transcript (English)" />
 </p>
-
-<p align="center"><sub>モバイル画面</sub></p>
 
 ### スマートフォンをマイクに
 
 パソコンで新しい会議を開き、**Phone microphone** を選択します。入力レベルを確認し、パソコンから録音の開始・一時停止・再開・終了を操作できます。対応するスマートフォンアプリを接続し、前面で待機させてください。この会議の文字起こしとノートはパソコンに保存されます。スマートフォンから始めた会議では、文字がスマートフォンに返されます。
 
-![スマートフォンをマイクに](assets/screenshots/desktop/en/phone-microphone.png)
+![スマートフォンをマイクに](assets/showcase/desktop/en/phone-microphone.gif)
 
 - **パソコンを持ち歩かずに録音。** ペアリングやインターネットは不要です。一時停止・再開・重要箇所のマークに対応。音声はスマートフォンに保存され、文字起こしが必要なときにパソコンを選んで送信を承認します。
 - **スマートフォンで収音し、パソコンで整理。** ペアリング後はパソコンが音声認識を行い、文字起こしとメモをリアルタイムで返します。モデルや AI 設定はパソコン側にあり、スマートフォンに大きなモデルを入れる必要はありません。
@@ -121,36 +112,32 @@ Pyannote のセグメンテーションと話者埋め込みモデルを組み�
 
 音声認識はパソコン内で実行します。オフライン録音はアップロードを承認するまでスマートフォンに保存され、リアルタイム文字起こしではペアリング済みパソコンへ音声を送ります。会議を開発者へ自動送信することはありません。モデル取得後はローカル AI を利用できます。オンライン AI を選んだ場合、関連する文字情報をそのサービスへ送りますが、音声は送りません。[プライバシー](https://brevia.work/privacy.html).
 
-スマートフォンの音声は録音 **1 時間あたり約 115 MB** を使い、書き出しやキャッシュは別途容量を消費します。アップロードとリアルタイム文字起こしには、スマートフォンとパソコンが同じローカルネットワークに接続されている必要があります。
-
 ## 使い始める
 
 1. パソコンに Brevia をインストールし、音声の権限を許可して推奨の音声モデルをダウンロードします。オフライン AI メモにはローカル AI モデルも選びます。
 2. 会議を開始するか録音を取り込み、結果を確認して書き出します。
 3. スマートフォンを接続する場合は同じ Wi-Fi を使います。パソコンの **設定 → デバイス接続 → 新しいデバイスを接続** から QR を表示し、スマートフォンで読み取るかアドレスと PIN を入力。確認コードを照合してパソコンで許可します。
 
+## 技術構成
+
+- **デスクトップ：** Electron と JavaScript、画面は HTML と Tailwind CSS で構成。
+- **ローカル処理：** Python Worker が音声とモデルを管理し、MLX / sherpa-onnx が音声推論、llama.cpp がローカル AI を実行。
+- **モバイル：** Flutter と Dart で iOS・Android の画面と録音フローを共通化。
+- **保存と同期：** パソコンの会議記録は SQLite に保存し、端末間はローカルネットワークの HTTPS で同期。
+
 ## FAQ
 
-<details>
-<summary><strong>Windows で Microsoft Defender SmartScreen の警告が表示される</strong></summary>
+### Windows で Microsoft Defender SmartScreen の警告が表示される
 
 リリースビルドは有料のコード署名証明書で署名されていないため、SmartScreen は新しく見る実行ファイルをデフォルトでブロックします。**「詳細情報」→「実行」** をクリックし、ダウンロード元が公式 [Releases](https://github.com/zerolovesea/Brevia/releases) ページであることを確認してから続けてください。
 
-</details>
-
-<details>
-<summary><strong>Python を別途インストールする必要はありますか？</strong></summary>
+### Python を別途インストールする必要はありますか？
 
 いいえ。リリースビルドは Python ランタイムと必要な依存関係をすべて同梱しています。ソースから実行する場合のみ、別途 Python 環境が必要です。
 
-</details>
-
-<details>
-<summary><strong>モデルにはどれくらいのディスク容量が必要ですか？</strong></summary>
+### モデルにはどれくらいのディスク容量が必要ですか？
 
 まず会議の言語に合う推奨音声モデルを選び、必要に応じてローカル AI や翻訳モデルを追加してください。ダウンロード容量はモデルライブラリに表示されます。すべてのモデルを入れる必要はありません。
-
-</details>
 
 ## ヘルプと開発参加
 
