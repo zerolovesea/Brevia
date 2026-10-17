@@ -360,7 +360,7 @@ void main() {
       ),
     );
     await capture('mobile-live');
-    await tester.tap(find.byTooltip(tr('笔记')));
+    await tester.tap(find.text(tr('笔记')));
     await tester.pump();
     await capture('mobile-live-notes');
     await tester.tap(find.text(tr('转写')));
@@ -375,10 +375,10 @@ void main() {
     model.live!['connected'] = true;
     model.live!['uploaded'] = 20;
     model.notifyListeners();
-    await capture('mobile-reconnected');
+    await capture('mobile-reconnected-transcript');
     await tester.tap(find.byTooltip(tr('返回录音')));
     await tester.pump(const Duration(milliseconds: 500));
-    await capture('mobile-reconnected-transcript');
+    await capture('mobile-reconnected');
 
     await tester.tap(find.byTooltip(tr('结束')));
     await tester.pump(const Duration(milliseconds: 500));

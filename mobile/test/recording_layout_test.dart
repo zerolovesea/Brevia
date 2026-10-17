@@ -92,6 +92,10 @@ void main() {
                 ),
               );
               await tester.pump();
+              if (mode == 'online') {
+                await tester.tap(find.byTooltip(tr('返回录音')));
+                await tester.pump();
+              }
               final failure = tester.takeException();
               expect(failure, isNull, reason: '$size / $language / $scale');
               expect(

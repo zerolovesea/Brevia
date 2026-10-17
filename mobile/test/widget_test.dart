@@ -295,6 +295,48 @@ void main() {
     },
   );
 
+  testWidgets('starting online recording opens transcript directly', (
+    tester,
+  ) async {
+    final model = StartModel()
+      ..desktop = UploadMenuConnection()
+      ..desktopOnline = true;
+    addTearDown(model.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: breviaTheme(Brightness.light),
+        home: Home(model: model),
+      ),
+    );
+    await tester.tap(find.widgetWithText(FilledButton, '新建录音'));
+    await tester.pumpAndSettle();
+    expect(find.byType(PrepareMeetingPage), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, '开始录音'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byType(MeetingPage), findsOneWidget);
+    expect(model.viewedMeetingId, 'live');
+    expect(model.live!['localOnly'], false);
+    expect(find.text('转写'), findsOneWidget);
+    expect(find.text('笔记'), findsOneWidget);
+    expect(find.byType(RecordingFocus), findsNothing);
+    expect(find.byType(LinearProgressIndicator), findsNothing);
+    expect(find.text('● 已连接'), findsOneWidget);
+    expect(find.byTooltip('暂停').hitTestable(), findsOneWidget);
+    expect(find.byTooltip('结束').hitTestable(), findsOneWidget);
+    await tester.tap(find.byTooltip('返回录音'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byType(RecordingFocus), findsOneWidget);
+    await tester.tap(find.byTooltip('转写'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('转写'), findsOneWidget);
+    expect(find.byType(RecordingFocus), findsNothing);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('reconnection retains the transcript and recording controls', (
     tester,
   ) async {
@@ -321,7 +363,6 @@ void main() {
         home: MeetingPage(model: model, id: 'live'),
       ),
     );
-    await tester.tap(find.byTooltip('转写'));
     await tester.pump(const Duration(milliseconds: 240));
     await tester.pump();
     final tabs = tester.getRect(find.text('转写'));
@@ -349,14 +390,7 @@ void main() {
       expect(tester.getRect(find.text('转写')), tabs);
       expect(tester.getRect(find.byType(RecordingControls)), controls);
       expect(find.text(connected ? '● 已连接' : '正在重新连接'), findsOneWidget);
-      expect(
-        tester
-            .widget<LinearProgressIndicator>(
-              find.byType(LinearProgressIndicator),
-            )
-            .value,
-        connected ? uploaded / count : null,
-      );
+      expect(find.byType(LinearProgressIndicator), findsNothing);
       expect(tester.takeException(), isNull);
     }
     await tester.pumpWidget(const SizedBox());
@@ -477,7 +511,6 @@ void main() {
         home: MeetingPage(model: model, id: 'live'),
       ),
     );
-    await tester.tap(find.byTooltip('转写'));
     await tester.pump(const Duration(milliseconds: 240));
     await tester.pump();
     final status = find.text('● 已连接');
@@ -490,14 +523,8 @@ void main() {
       await tester.pump();
       expect(status, findsOneWidget);
       expect(tester.getTopLeft(status), position);
-      expect(
-        tester
-            .widget<LinearProgressIndicator>(
-              find.byType(LinearProgressIndicator),
-            )
-            .value,
-        counts.$1 == 0 ? 1 : counts.$2 / counts.$1,
-      );
+      expect(find.byType(LinearProgressIndicator), findsNothing);
+      expect(find.textContaining('已传到电脑'), findsNothing);
       expect(tester.takeException(), isNull);
     }
     model.live!['connected'] = false;
@@ -546,15 +573,10 @@ void main() {
     model.live!['connected'] = true;
     model.notifyListeners();
     await tester.pump();
-    await tester.tap(find.byTooltip('转写'));
     await tester.pump(const Duration(milliseconds: 240));
     expect(find.text('转写'), findsOneWidget);
-    expect(
-      tester
-          .widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator))
-          .value,
-      .5,
-    );
+    expect(find.byType(LinearProgressIndicator), findsNothing);
+    expect(find.text('● 已连接'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
     model.dispose();
@@ -687,7 +709,6 @@ void main() {
           home: MeetingPage(model: model, id: 'live'),
         ),
       );
-      await tester.tap(find.byTooltip('转写'));
       await tester.pump(const Duration(milliseconds: 240));
       await tester.pump(const Duration(milliseconds: 200));
       final dots = find.descendant(
@@ -1343,12 +1364,36 @@ void main() {
     );
     await tester.pump(Duration(milliseconds: 300));
     expect(find.byTooltip('暂停'), findsOneWidget);
-    expect(find.text('暂停'), findsOneWidget);
+    expect(find.text('转写'), findsOneWidget);
     expect(tester.takeException(), isNull);
-    await tester.tap(find.byTooltip('笔记'));
+    await tester.tap(find.text('笔记'));
     await tester.pump(Duration(milliseconds: 300));
     expect(tester.takeException(), isNull);
   });
+}
+
+class StartModel extends AppModel {
+  @override
+  Future<String> start(
+    String title, {
+    String? existing,
+    bool offline = false,
+    Map<String, dynamic> settings = const {},
+    Map<String, dynamic>? desktopRequest,
+  }) async {
+    serviceRunning = true;
+    live = {
+      'id': 'live',
+      'title': title,
+      'state': 'recording',
+      'connected': true,
+      'localOnly': offline,
+      'samples': 0,
+      'snapshot': {'segments': []},
+    };
+    notifyListeners();
+    return 'live';
+  }
 }
 
 class MenuModel extends AppModel {

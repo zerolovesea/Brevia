@@ -66,10 +66,6 @@ Future<void> verifyMeetingStability(
       },
     };
     await show(MeetingPage(model: model, id: 'stability'));
-    if (mode == 'online') {
-      await tester.tap(find.byTooltip(tr('转写')));
-      await tester.pump(const Duration(milliseconds: 240));
-    }
     final clock = find.byWidgetPredicate(
       (w) => w is Text && w.data == '12:36' && (w.style?.fontSize ?? 0) >= 36,
     );
@@ -132,6 +128,7 @@ Future<void> verifyMeetingStability(
       if (tabs != null) {
         expect(tester.getRect(find.text(tr('转写'))), tabs, reason: label);
         expect(find.text(tr(connected ? '● 已连接' : '正在重新连接')), findsOneWidget);
+        expect(find.byType(LinearProgressIndicator), findsNothing);
         if (brightness == Brightness.dark && state == 'paused') {
           final red = find.byWidgetPredicate(
             (w) =>

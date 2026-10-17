@@ -1947,7 +1947,7 @@ class MeetingPage extends StatefulWidget {
 }
 
 class _MeetingPageState extends State<MeetingPage> {
-  bool recordingOverview = true;
+  bool recordingOverview = false;
   int tab = 0;
   String query = '';
   final scroll = ScrollController();
@@ -4276,13 +4276,6 @@ class MeetingConnectionStatus extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final connected = meeting['connected'] == true;
-    final count = meeting['count'] as num? ?? 0;
-    final uploaded = meeting['uploaded'] as num? ?? 0;
-    final snapshot = meeting['snapshot'] as Map? ?? {};
-    final uploadedLabel = tr('已传到电脑  {0}', [
-      durationText(snapshot['samples'] ?? 0),
-    ]);
-    final offlineLabel = tr('录音保留在手机，恢复连接后自动补传。');
     return Container(
       margin: const EdgeInsets.only(top: 16),
       padding: const EdgeInsets.all(16),
@@ -4290,30 +4283,9 @@ class MeetingConnectionStatus extends StatelessWidget {
         color: Theme.of(context).colorScheme.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          StableStatusText(
-            connected ? tr('● 已连接') : tr('正在重新连接'),
-            states: [tr('● 已连接'), tr('正在重新连接')],
-          ),
-          const SizedBox(height: 12),
-          TickerMode(
-            enabled: !MediaQuery.disableAnimationsOf(context),
-            child: LinearProgressIndicator(
-              value: connected
-                  ? (count > 0 ? (uploaded / count).clamp(0, 1).toDouble() : 1)
-                  : null,
-              semanticsLabel: connected ? uploadedLabel : tr('正在重新连接'),
-            ),
-          ),
-          const SizedBox(height: 8),
-          StableStatusText(
-            connected ? uploadedLabel : offlineLabel,
-            states: [uploadedLabel, offlineLabel],
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ],
+      child: StableStatusText(
+        connected ? tr('● 已连接') : tr('正在重新连接'),
+        states: [tr('● 已连接'), tr('正在重新连接')],
       ),
     );
   }
