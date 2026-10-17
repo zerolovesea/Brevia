@@ -315,7 +315,12 @@ class _AppUpdateTileState extends State<AppUpdateTile>
           if (message != null) Text(tr(message)),
           if (status != null && message != status && !busy) Text(tr(status!)),
           if (busy || downloading)
-            LinearProgressIndicator(value: downloading ? progress : null),
+            TickerMode(
+              enabled: !MediaQuery.disableAnimationsOf(context),
+              child: LinearProgressIndicator(
+                value: downloading ? progress : null,
+              ),
+            ),
           if (downloading && progress != null)
             Text('${(progress! * 100).floor()}%'),
         ],

@@ -89,6 +89,7 @@ if (process.env.BREVIA_SKIP_E2E === '1') {
    顺序与 frontend/index.html 一致；漏掉的文件会在下面被交叉校验。 */
 const moduleProbes = [
   ['app-state.js', 'locale'],
+  ['motion.js', 'window.BreviaMotion'],
   ['app-actions.js', 'appActions'],
   ['app-utils.js', 'formatBytes'],
   ['backend-client.js', 'workletContexts'],
@@ -522,6 +523,8 @@ try {
     let finish;
     const pending = withStorageMigration(() => new Promise((resolve) => { finish = resolve; }));
     const dialog = document.querySelector('.storage-migration-dialog');
+    const deferred = !dialog.open && document.querySelector('.app-shell').inert;
+    await new Promise(resolve => setTimeout(resolve, 220));
     const modal = dialog.matches(':modal');
     const cancel = new Event('cancel', { cancelable: true });
     dialog.dispatchEvent(cancel);
@@ -533,10 +536,13 @@ try {
     finish();
     await pending;
     const cleaned = !storageMovePending && !document.querySelector('.storage-migration-dialog');
+    const fast = withStorageMigration(async () => {});
+    const fastHidden = !document.querySelector('.storage-migration-dialog').open;
+    await fast;
     let failure = '';
     try { await withStorageMigration(async () => { throw new Error('disk disconnected'); }); }
     catch (error) { failure = error.message; }
-    return { modal, visible, focusContained, cancelPrevented: cancel.defaultPrevented, duplicateRan, cleaned,
+    return { deferred, fastHidden, modal, visible, focusContained, cancelPrevented: cancel.defaultPrevented, duplicateRan, cleaned,
       failedCleanly: failure === 'disk disconnected' && !storageMovePending && !document.querySelector('.storage-migration-dialog') };
   })()`,
     awaitPromise: true,
@@ -544,7 +550,9 @@ try {
   });
   const move = storageMove.result?.value || {};
   check(
-    move.modal &&
+    move.deferred &&
+      move.fastHidden &&
+      move.modal &&
       move.visible &&
       move.focusContained &&
       move.cancelPrevented &&
@@ -585,7 +593,12 @@ try {
     expression: `(async()=>{
       const errors=[];
       window.__visualAiFit={phase:'initial-dismiss'};
-      if(onboardingPage)await new Promise(resolve=>dismissOnboardingPage(resolve));
+      const dismissBeforeFit=dismissOnboardingPage;
+      dismissOnboardingPage=(next)=>{
+        if(onboardingPage)onboardingPage.dismissTrace=new Error('onboarding dismissal').stack;
+        return dismissBeforeFit(next);
+      };
+      if(onboardingPage)await dismissOnboardingPage();
       for(const code of ['zh','en','es','ja','ko','fr','de','ru']){
         window.__visualAiFit={code,phase:'open'};
         applyLanguage(code);openOnboardingAi();
@@ -617,14 +630,15 @@ try {
             const bounds=footer.getBoundingClientRect();
             if(bounds.bottom>innerHeight+1||bounds.top<0||Math.abs(bounds.top-initial.top)>1)errors.push(code+'/'+mode+'/'+stage+': footer moved or clipped');
             if(page.querySelector('.onboarding-page-content').scrollHeight>page.querySelector('.onboarding-page-content').clientHeight+1)errors.push(code+'/'+mode+': outer page overflow');
-            if([...page.querySelectorAll('.onboarding-ai-row')].some((row,index)=>Math.abs(row.getBoundingClientRect().height-rowHeights[index])>1))errors.push(code+'/'+mode+': demo changed row height '+JSON.stringify({before:rowHeights,after:[...page.querySelectorAll('.onboarding-ai-row')].map(row=>row.getBoundingClientRect().height)}));
+            if([...page.querySelectorAll('.onboarding-ai-row')].some((row,index)=>Math.abs(row.getBoundingClientRect().height-rowHeights[index])>1))errors.push(code+'/'+mode+': demo changed row height '+JSON.stringify({before:rowHeights,after:[...page.querySelectorAll('.onboarding-ai-row')].map(row=>row.getBoundingClientRect().height),connected:page.isConnected,current:page===onboardingPage,classes:page.className,dismissal:page.dismissTrace}));
             if(sections.getBoundingClientRect().bottom>bounds.top+1)errors.push(code+'/'+mode+': content covers footer');
           }
         }
         window.__visualAiFit={code,phase:'dismiss'};
-        await new Promise(resolve=>dismissOnboardingPage(resolve));
+        await dismissOnboardingPage();
       }
       applyLanguage('zh');openOnboardingAi();
+      dismissOnboardingPage=dismissBeforeFit;
       return errors;
     })()`,
     awaitPromise: true,
@@ -802,7 +816,7 @@ try {
     `AI 开关、图标或档位未正确保存：${JSON.stringify(aiOptions)}`,
   );
   const floatingBars = await client.send('Runtime.evaluate', {
-    expression: `(() => { const live = document.querySelector('#live-view .floating-control-bar'); const player = document.querySelector('#detail-view .floating-control-bar'); const toggle = document.querySelector('#live-more-toggle'); toggle.click(); const menuOpen = !document.querySelector('#live-more-panel').hidden && toggle.getAttribute('aria-expanded') === 'true'; document.body.click(); const menuClosed = document.querySelector('#live-more-panel').hidden; const wasActive = meetingActive, wasSeconds = seconds; meetingActive = true; seconds = 57; document.querySelector('#mark-important').click(); const note = currentNotesMarkdown(); meetingActive = wasActive; seconds = wasSeconds; return { live: getComputedStyle(live).position, player: getComputedStyle(player).position, menuOpen, menuClosed, note }; })()`,
+    expression: `(() => { const live = document.querySelector('#live-view .floating-control-bar'); const player = document.querySelector('#detail-view .floating-control-bar'); const toggle = document.querySelector('#translation-toggle'); toggle.click(); const menuOpen = !document.querySelector('#translation-options').hidden && toggle.getAttribute('aria-expanded') === 'true'; document.body.click(); const menuClosed = document.querySelector('#translation-options').hidden; const tools = [...live.querySelectorAll('.live-caption-controls .icon-button')].every(button => button.querySelector('svg') && button.getAttribute('aria-label')); const noMore = !document.querySelector('#live-more-toggle'); const wasActive = meetingActive, wasSeconds = seconds, wasMeeting=breviaClient.state.meeting, wasSegment=latestLiveSegmentId, wasNotes=currentNotesMarkdown(); meetingActive = true; seconds = 57; breviaClient.state.meeting={id:'toolbar-highlight-test'};latestLiveSegmentId='toolbar-highlight-test';liveSegmentData.set(latestLiveSegmentId,{start_ms:42000,text:'测试字幕重点'});document.querySelector('#mark-important').click(); const note = currentNotesMarkdown();clearTimeout(liveNotesSaveTimer.current);liveNotesEditor.setMarkdown(wasNotes);liveSegmentData.delete(latestLiveSegmentId);latestLiveSegmentId=wasSegment;breviaClient.state.meeting=wasMeeting; meetingActive = wasActive; seconds = wasSeconds; return { live: getComputedStyle(live).position, player: getComputedStyle(player).position, menuOpen, menuClosed, tools, noMore, note }; })()`,
     returnByValue: true,
   });
   check(
@@ -810,7 +824,9 @@ try {
       floatingBars.result?.value?.player === 'static' &&
       floatingBars.result?.value?.menuOpen &&
       floatingBars.result?.value?.menuClosed &&
-      floatingBars.result?.value?.note?.includes('重点 · 00:57'),
+      floatingBars.result?.value?.tools &&
+      floatingBars.result?.value?.noMore &&
+      floatingBars.result?.value?.note?.includes('> [00:42](#brevia-highlight-42000) 测试字幕重点'),
     `悬浮控制栏操作不正确：${JSON.stringify(floatingBars.result?.value)}`,
   );
   const detailLayout = await client.send('Runtime.evaluate', {
@@ -830,6 +846,7 @@ try {
     const pairDialog = document.querySelector('#mobile-pair-dialog');
     for (let i = 0; i < 200 && !pairDialog.open; i++) await new Promise(resolve => setTimeout(resolve, 50));
     if (!pairDialog.open || !document.querySelector('.onboarding-mobile-page')) throw new Error('Onboarding pairing is not a separate dialog: ' + JSON.stringify({open:pairDialog.open,connected:pairDialog.isConnected,error:document.querySelector('#mobile-pair-error').textContent,handler:typeof (mobileConnectionContent || document.getElementById('mobile-dialog')).querySelector('#mobile-pair').onclick}));
+    if(getComputedStyle(document.activeElement).outlineStyle !== 'none') throw new Error('Pairing autofocus shows explicit focus outline');
     document.querySelector('#mobile-close-pairing').click();
     for (let i = 0; i < 60 && pairDialog.open; i++) await new Promise(resolve => setTimeout(resolve, 50));
     if (pairDialog.open) throw new Error('Pairing did not close');
@@ -850,7 +867,7 @@ try {
       for (const theme of ['light', 'dark']) {
         applyTheme(theme);
         const panel = document.querySelector('#detail-view .final-transcript').getBoundingClientRect();
-        const notes = document.querySelector('#detail-view .notes').getBoundingClientRect();
+        const notes = document.querySelector('#detail-view [data-detail-panel]:not([hidden])').getBoundingClientRect();
         const player = document.querySelector('#detail-view .player').getBoundingClientRect();
         if (panel.width <= 0 || panel.height <= 0 || notes.height <= 0 || panel.bottom > player.top + 1 || notes.bottom > innerHeight + 1) failures.push(code + '/' + theme + ': meeting content hidden or overlaps player');
       }
@@ -1202,6 +1219,8 @@ try {
       merged.closed,
     `合并 AI 设置回归：${JSON.stringify(mergedAiSettings)}`,
   );
+  // 默认布局不继承真实鼠标或上个用例留下的侧栏Hover状态。
+  await client.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 1000, y: 100 });
   const compactSettings = await client.send('Runtime.evaluate', {
     expression: `(async () => {
     const previousLocale = locale, previousTheme = theme;
@@ -1218,6 +1237,10 @@ try {
             renderModal(kind);
           }
           await new Promise(resolve => setTimeout(resolve, 260));
+          // 导航已改为不等待视觉完成；静态布局检查先结束有限动画并提交一帧。
+          await document.fonts.ready;
+          document.getAnimations().filter(animation=>animation.effect.getComputedTiming().iterations!==Infinity).forEach(animation=>animation.finish());
+          await new Promise(resolve=>requestAnimationFrame(resolve));
           const body = settingsModal.querySelector('.modal-body');
           if (body.scrollHeight > body.clientHeight + 1 || body.scrollWidth > body.clientWidth + 1)
             errors.push([code, appearance, kind, provider, body.clientHeight, body.scrollHeight]);
@@ -1345,7 +1368,7 @@ try {
       deviceScaleFactor: 1,
       mobile: false,
     });
-    await client.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 0, y: 0 });
+    await client.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: width - 20, y: 100 });
     const result = await client.send('Runtime.evaluate', {
       expression: `(async()=>{
         const errors=[],previousLocale=locale,previousTheme=theme;
@@ -1353,19 +1376,26 @@ try {
         const initialized=await window.brevia.initialize();
         const meeting=await window.brevia.meeting.get({meeting_id:initialized.meetings[0].id});
         applyBackendDetail(meeting);detailActiveTab='transcript';uiData.detail.refinedMode='timestamps';renderMeetingDetail();await showView('detail');
+        document.querySelector('#detail-view').getAnimations().forEach(animation=>animation.finish());
         const participants=Array.from({length:50},(_,i)=>({id:'participant-'+i,name:i===0?'Alexandria Constantinopoulos '.repeat(3):'Participant <'+i+'> 名称'}));
         for(const code of ['zh','en','es','ja','ko','fr','de','ru'])for(const appearance of ['light','dark']){
           applyLanguage(code);applyTheme(appearance);
           currentMeetingDetail={...meeting,speakers:participants};uiData.detail.refinedMode='timestamps';renderMeetingDetail();
+          await new Promise(r=>setTimeout(r,180));
+          document.getAnimations().filter(animation=>animation.effect.getComputedTiming().iterations!==Infinity).forEach(animation=>animation.finish());
           const row=finalTranscript.querySelector('.segment'),speaker=row.querySelector('.segment-speaker'),copy=row.querySelector('.segment-copy');
           const before=copy.getBoundingClientRect(),label=speaker.getBoundingClientRect();
           row.querySelector('[data-segment-tool="speaker"]').focus({preventScroll:true});await new Promise(r=>setTimeout(r,120));
-          const bar=row.querySelector('.segment-tools'),barRect=bar.getBoundingClientRect(),rowRect=row.getBoundingClientRect(),after=copy.getBoundingClientRect();
+          const bar=row.querySelector('.segment-tools');
+          // 120ms 恰好落在过渡边界；结束有限动效后再检查终态，避免帧调度造成偶发误报。
+          bar.getAnimations().filter(animation=>animation.effect.getComputedTiming().iterations!==Infinity).forEach(animation=>animation.finish());
+          await new Promise(requestAnimationFrame);
+          const barRect=bar.getBoundingClientRect(),rowRect=row.getBoundingClientRect(),after=copy.getBoundingClientRect();
           if(Math.abs(label.left-before.left)>1||Math.abs(after.top-before.top)>1||Math.abs(after.left-before.left)>1)errors.push(code+': toolbar moved speaker or text');
           if(getComputedStyle(bar).opacity!=='1'||barRect.right>rowRect.right+1||barRect.left<rowRect.left-1||barRect.bottom>after.top+1)errors.push(code+': toolbar clips or covers subtitle');
-          if(bar.querySelectorAll('button').length!==4||[...bar.querySelectorAll('button')].some(b=>!b.getAttribute('aria-label')))errors.push(code+': missing accessible actions');
-          const heading=document.querySelector('.summary-head .eyebrow');
-          if(heading.scrollWidth>heading.clientWidth+1)errors.push(code+': summary heading clipped');
+          if(bar.querySelectorAll('button').length!==5||[...bar.querySelectorAll('button')].some(b=>!b.getAttribute('aria-label')||b.textContent.trim()))errors.push(code+': missing accessible actions');
+          const preview=[...document.querySelectorAll('.summary-participant-preview-person > span')];
+          if(preview.length!==3||preview.some(name=>!name.textContent.trim()||!name.getBoundingClientRect().width))errors.push(code+': initial participant names hidden');
           const section=document.querySelector('.summary-participants'),toggle=section.querySelector('[data-summary-participants-toggle]'),body=document.querySelector('.summary-body');
           const bodyTop=body.getBoundingClientRect().top;
           if(section.getBoundingClientRect().height>60||toggle.scrollWidth>toggle.clientWidth+1)errors.push(code+': participants header expanded or clipped');
@@ -1614,8 +1644,11 @@ try {
 
   const languagePicker = await client.send('Runtime.evaluate', {
     expression: `(async () => {
-      if (onboardingPage) await new Promise(resolve => dismissOnboardingPage(resolve));
+      if (onboardingPage) await dismissOnboardingPage();
       openOnboardingLanguage('zh');
+      await new Promise(requestAnimationFrame);
+      const firstHeading=onboardingPage.querySelector('h1');
+      if(document.activeElement!==firstHeading||getComputedStyle(firstHeading).outlineStyle!=='none')throw Error('onboarding heading shows browser focus ring or loses navigation focus');
       const choices = [...onboardingPage.querySelectorAll('[name="locale"]')];
       const japanese = choices.find(input => input.value === 'ja');
       japanese.click();
@@ -1626,7 +1659,7 @@ try {
       const deadline = Date.now()+5000;
       while (!onboardingPage?.querySelector('[data-onboarding-permissions]') && Date.now()<deadline) await new Promise(resolve=>setTimeout(resolve,25));
       result.saved = locale === 'ja' && localStorage.getItem('brevia-language') === 'ja';
-      await new Promise(resolve => dismissOnboardingPage(resolve));
+      await dismissOnboardingPage();
       return result;
     })()`,
     awaitPromise: true,
@@ -1682,7 +1715,7 @@ try {
           handle.timeline.play(handle.timeline.duration()-.04);
           await new Promise(resolve=>setTimeout(resolve,90));
           if(handle.timeline.paused()||handle.timeline.time()>=.4) errors.push(code+'/'+kind+': automatic loop');
-          await new Promise(resolve=>dismissOnboardingPage(resolve));
+          await dismissOnboardingPage();
           if(onboardingMotion || handle.timeline.isActive()) errors.push(code+'/'+kind+': cleanup');
         }
       }
@@ -1692,7 +1725,7 @@ try {
       if(onboardingPage.lang!=='ja'||onboardingPage.querySelector('.bom').dataset.kind!=='language') errors.push('stale language preview');
       const staleHandle=onboardingMotion;
       updateOnboardingLanguageCopy('ru');
-      await new Promise(resolve=>dismissOnboardingPage(resolve));
+      await dismissOnboardingPage();
       if(staleHandle.timeline.isActive()||onboardingMotion) errors.push('language callback leaked after exit');
       if(JSON.stringify([aiAssistConfig,summaryConfig])!==configBefore) errors.push('demo wrote configuration');
       applyLanguage('zh');
@@ -1710,7 +1743,7 @@ try {
     features: [{ name: 'prefers-reduced-motion', value: 'reduce' }],
   });
   const reducedOnboardingMotion = await client.send('Runtime.evaluate', {
-    expression: `(async()=>{openOnboardingMobile();const handle=onboardingMotion;const wave=onboardingPage.querySelector('[data-motion="curve-one"]').getAttribute('d');await new Promise(r=>setTimeout(r,120));const stable=handle.timeline.paused()&&handle.timeline.time()===0&&onboardingPage.querySelector('[data-motion="curve-one"]').getAttribute('d')===wave;await new Promise(resolve=>dismissOnboardingPage(resolve));return stable;})()`,
+    expression: `(async()=>{openOnboardingMobile();const handle=onboardingMotion;const wave=onboardingPage.querySelector('[data-motion="curve-one"]').getAttribute('d');await new Promise(r=>setTimeout(r,120));const stable=handle.timeline.paused()&&handle.timeline.time()===0&&onboardingPage.querySelector('[data-motion="curve-one"]').getAttribute('d')===wave;await dismissOnboardingPage();return stable;})()`,
     awaitPromise: true,
     returnByValue: true,
   });
@@ -1753,7 +1786,7 @@ try {
           if(content.scrollHeight>content.clientHeight+1) errors.push(name+'/'+i+': page overflow '+content.scrollHeight+'/'+content.clientHeight);
           if(!bounds || bounds.bottom>innerHeight+1 || bounds.top<0) errors.push(name+'/'+i+': footer outside viewport');
         }
-        await new Promise(resolve=>dismissOnboardingPage(resolve));
+        await dismissOnboardingPage();
       }
       await showView('settings');
       const voice=document.getElementById('speaker-profiles-entry');
@@ -1816,7 +1849,10 @@ try {
           },
         );
         request.on('error', reject);
-        request.setTimeout(10000, () => request.destroy(new Error('Phone approval timed out')));
+        // 导出两张审批截图会额外等待渲染帧；普通回归仍保持10秒超时。
+        request.setTimeout(process.env.BREVIA_DESIGN_CAPTURE_DIR ? 60000 : 10000, () =>
+          request.destroy(new Error('Phone approval timed out')),
+        );
         request.end(JSON.stringify({ name: '<UI test phone>', code: pin, nonce }));
       });
     const response = requestPhone(pairState.pin, 'b'.repeat(32));
@@ -1862,7 +1898,7 @@ try {
         Buffer.from(shot.data, 'base64'),
       );
       await client.send('Runtime.evaluate', {
-        expression: `(async()=>{if(onboardingPage)await new Promise(r=>dismissOnboardingPage(r));await showView('home');})()`,
+        expression: `(async()=>{if(onboardingPage)await dismissOnboardingPage();await showView('home');})()`,
         awaitPromise: true,
       });
       await client.send('Runtime.evaluate', {
@@ -1902,7 +1938,7 @@ try {
           );
         }
         await client.send('Runtime.evaluate', {
-          expression: `(async()=>{if(onboardingPage)await new Promise(r=>dismissOnboardingPage(r));await showView('settings');await openModal('device-connection');await document.fonts.ready;document.getAnimations().forEach(a=>a.effect.getComputedTiming().iterations===Infinity?a.pause():a.finish());})()`,
+          expression: `(async()=>{if(onboardingPage)await dismissOnboardingPage();await showView('settings');await openModal('device-connection');await document.fonts.ready;document.getAnimations().forEach(a=>a.effect.getComputedTiming().iterations===Infinity?a.pause():a.finish());})()`,
           awaitPromise: true,
         });
         const shot = await client.send('Page.captureScreenshot', {
@@ -1924,7 +1960,7 @@ try {
     }
   }
   await client.send('Runtime.evaluate', {
-    expression: `(async()=>{document.querySelector('#mobile-close-pairing').click();await new Promise(r=>setTimeout(r,300));if(onboardingPage)await new Promise(resolve=>dismissOnboardingPage(resolve));})()`,
+    expression: `(async()=>{document.querySelector('#mobile-close-pairing').click();await new Promise(r=>setTimeout(r,300));if(onboardingPage)await dismissOnboardingPage();})()`,
     awaitPromise: true,
   });
   const workspaceSubmit = await client.send('Runtime.evaluate', {
@@ -1968,7 +2004,7 @@ try {
 
   const restoration = await client.send('Runtime.evaluate', {
     expression: `(async () => {
-      if (onboardingPage) await new Promise(resolve => dismissOnboardingPage(resolve));
+      if (onboardingPage) await dismissOnboardingPage();
       closeModal(); await new Promise(resolve => setTimeout(resolve,250));
       meetingActive=false; await showView('settings'); openModal('ai-features');
       const tabs=settingsModal.querySelectorAll('[data-ai-settings-tab]').length===2;
@@ -1998,7 +2034,7 @@ try {
       const detail=document.querySelector('#detail-view');
       const content=detail.querySelector('.detail-layout').getBoundingClientRect();
       const player=detail.querySelector('.player').getBoundingClientRect();
-      const reading=content.height>100 && player.bottom<=innerHeight+1 && Math.abs(player.left-detail.getBoundingClientRect().left)<2 && Math.abs(player.right-detail.querySelector('.final-transcript').getBoundingClientRect().right-parseFloat(getComputedStyle(detail).columnGap))<2;
+      const reading=content.height>100 && player.bottom<=innerHeight+1 && Math.abs(player.left-detail.getBoundingClientRect().left)<2 && Math.abs(player.right-detail.getBoundingClientRect().right)<2;
       const threeTabs=detail.querySelectorAll('[data-detail-tab]').length===3;
       detail.querySelector('[data-detail-tab="transcript"]').click();
       detail.querySelector('[data-transcript-version="original"]').click();
@@ -2011,7 +2047,7 @@ try {
       search.value=firstText;search.dispatchEvent(new Event('input',{bubbles:true}));
       const mirrored=resultsPanel.querySelector('[data-transcript-search]').value===firstText && resultsPanel.querySelectorAll('.transcript-search-result').length>0;
       resultsPanel.querySelector('[data-close-transcript-search]').click();
-      const searchRestored=resultsPanel.hidden&&!detail.querySelector('.notes').hidden&&document.activeElement===search;
+      const searchRestored=resultsPanel.hidden&&detail.querySelector('.notes').hidden&&document.activeElement===search;
       search.value=''; search.dispatchEvent(new Event('input',{bubbles:true}));
       detail.querySelector('[data-detail-tab="summary"]').click();
       const summaryVisible=detail.querySelector('[data-detail-panel=summary]').contains(detail.querySelector('.summary-preview')) && detail.querySelector('[data-detail-panel=notes]').hidden && detail.querySelector('.notes').hidden && !detail.querySelector('.detail-actions').hidden && detail.querySelector('.summary-preview').getBoundingClientRect().width > detail.querySelector('.detail-layout').getBoundingClientRect().width * .95 && detail.querySelector('.summary-preview').getBoundingClientRect().height>100;
@@ -2037,9 +2073,9 @@ try {
       summaryEditor.setMarkdown('# 切换标签后保留草稿');
       uiData.detail.summaryDraft=summaryEditor.getMarkdown();
       detail.querySelector('[data-detail-tab=notes]').click();
-      const editorInAside=detail.querySelector('.notes').contains(detail.querySelector('[data-inline-summary-editor]'));
+      const editorRetained=detail.querySelector('[data-detail-panel=summary]').contains(detail.querySelector('[data-inline-summary-editor]'))&&detail.querySelector('[data-detail-panel=summary]').hidden;
       detail.querySelector('[data-detail-tab=summary]').click();
-      const summaryDraftPreserved=editorInAside && inlineSummaryEditor===summaryEditor && summaryEditor.getMarkdown().includes('切换标签后保留草稿') && detail.querySelector('[data-detail-panel=summary]').contains(detail.querySelector('[data-inline-summary-editor]'));
+      const summaryDraftPreserved=editorRetained && inlineSummaryEditor===summaryEditor && summaryEditor.getMarkdown().includes('切换标签后保留草稿') && detail.querySelector('[data-detail-panel=summary]').contains(detail.querySelector('[data-inline-summary-editor]'));
       detail.querySelector('[data-cancel-inline-summary-edit]').click();
       applyBackendDetail({...meeting,transcript_revision:0,segments:meeting.segments.filter(segment=>segment.version!=='live')});
       const rawUnavailable=detail.querySelector('[data-transcript-version=original]').disabled && uiData.detail.originalTranscript.length===0;
@@ -2059,17 +2095,94 @@ try {
     restorationChecks && Object.values(restorationChecks).every(Boolean),
     `设计还原交互、独立 AI 配置及可见布局：${JSON.stringify(restorationChecks || restoration.exceptionDetails)}`,
   );
+  await client.send('Page.bringToFront');
+  const detailConsistency = await client.send('Runtime.evaluate', {
+    expression: `(async()=>{
+      const errors=[];
+      const detail=document.querySelector('#detail-view');
+      const selectors=['.detail-head','.detail-layout','.tabbar','.player','.detail-actions'];
+      const samples=[];
+      for(const tab of ['notes','transcript','summary','notes']){
+        detail.querySelector('[data-detail-tab="'+tab+'"]').click();
+        const panel=detail.querySelector('[data-detail-panel="'+tab+'"]');
+        const animation=panel.getAnimations()[0];
+        if(!animation||animation.effect.getTiming().duration!==180||animation.effect.getKeyframes().some(frame=>Number(frame.opacity)!==1))errors.push(tab+': inconsistent tab motion');
+        animation?.finish();
+        samples.push(selectors.map(selector=>{const r=detail.querySelector(selector).getBoundingClientRect();return [r.x,r.y,r.width,r.height];}));
+        if(detail.querySelector('.tabbar').getBoundingClientRect().bottom-detail.getBoundingClientRect().top>170)errors.push(tab+': header consumes reading space');
+        const title=detail.querySelector('h1');
+        if(title.title!==title.textContent||getComputedStyle(title).whiteSpace!=='nowrap')errors.push(tab+': compact title loses full-text access');
+        if(getComputedStyle(panel).opacity!=='1'||panel.getBoundingClientRect().height<100)errors.push(tab+': empty content region');
+        const roster=detail.querySelector('.summary-participants');
+        if(roster&&!detail.querySelector('.detail-head').contains(roster))errors.push(tab+': roster moved with tab');
+      }
+      for(const sample of samples.slice(1))if(sample.some((rect,i)=>rect.some((value,j)=>Math.abs(value-samples[0][i][j])>1)))errors.push('tab changed header, reading region, navigation, export or player geometry');
+      detail.querySelector('[data-detail-tab="summary"]').click();
+      const body=detail.querySelector('.summary-body');
+      if(body&&[...body.querySelectorAll('hr')].some(rule=>getComputedStyle(rule).display!=='none'))errors.push('redundant summary separators remain');
+      return errors;
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  check(
+    Array.isArray(detailConsistency.result?.value) && !detailConsistency.result.value.length,
+    '详情三标签统一比例、固定页头与播放器、相同切换动效：' +
+      JSON.stringify(detailConsistency.result?.value || detailConsistency.exceptionDetails),
+  );
+  // 旧语言的系统默认不能冒充手动偏好；切换与重绘均按目标语言重新推导。
+  const prepareModelSelection = await client.send('Runtime.evaluate', {
+    expression: `(()=>{
+      const errors=[],savedPreference=localStorage.getItem(PREFERRED_MODEL_KEY),savedPaths=[...modelPaths],savedLanguage=prepareForm.querySelector('[name="meeting-language"]').value;
+      const fun=refinedModels().find(model=>model.kind==='funasr-nano');
+      const qwen=refinedModels().find(model=>(model.default_for_languages||[]).includes('ja'));
+      const parakeet=refinedModels().find(model=>(model.default_for_languages||[]).includes('en'));
+      const choose=(name,value)=>{const choice=prepareForm.querySelector('[data-flow-select-choice="'+name+'"][data-value="'+value+'"]');if(!choice)throw Error('missing model/language choice '+name+':'+value);choice.click();};
+      const expect=(id,scenario)=>{const actual=new FormData(prepareForm).get('refined-model');if(actual!==id)errors.push(scenario+': '+actual+' != '+id);};
+      try {
+        if(!fun||!qwen||!parakeet)throw Error('missing language default fixture');
+        localStorage.removeItem(PREFERRED_MODEL_KEY);
+        refinedModels().forEach(model=>modelPaths.set(model.id,'test-installed'));
+        prepareForm.querySelector('[name="meeting-language"]').value='zh';renderPrepareSelects();expect(fun.id,'Chinese default');
+        choose('meeting-language','en');expect(parakeet.id,'Chinese to English');
+        choose('meeting-language','ja');expect(qwen.id,'English to Japanese');
+        choose('meeting-language','zh');expect(fun.id,'Japanese to Chinese');
+        choose('meeting-language','en');choose('refined-model',fun.id);
+        choose('meeting-language','ja');expect(qwen.id,'English manual choice stays in English');
+        choose('meeting-language','en');expect(fun.id,'English preference restored');
+        choose('refined-model',qwen.id);modelPaths.delete(qwen.id);renderPrepareSelects();expect(qwen.id,'Uninstalled explicit preference');
+        choose('meeting-language','zh');expect(fun.id,'English preference cannot replace Chinese default');
+        choose('meeting-language','en');expect(qwen.id,'English preference survives switching');
+        if(preferredModelMap().en!==qwen.id||preferredModelMap().zh||preferredModelMap().ja)errors.push('automatic selection overwrote preferences');
+        localStorage.removeItem(PREFERRED_MODEL_KEY);modelPaths.clear();modelPaths.set(fun.id,'test-installed');renderPrepareSelects();expect(fun.id,'Installed compatible fallback');
+        modelPaths.clear();renderPrepareSelects();expect(parakeet.id,'No installed compatible model');
+      } finally {
+        if(savedPreference===null)localStorage.removeItem(PREFERRED_MODEL_KEY);else localStorage.setItem(PREFERRED_MODEL_KEY,savedPreference);
+        modelPaths.clear();for(const [id,path]of savedPaths)modelPaths.set(id,path);
+        prepareForm.querySelector('[name="meeting-language"]').value=savedLanguage;renderPrepareSelects();
+      }
+      return errors;
+    })()`,
+    returnByValue: true,
+  });
+  check(
+    Array.isArray(prepareModelSelection.result?.value) &&
+      !prepareModelSelection.result.value.length,
+    '准备页按会议语言选择模型：' +
+      JSON.stringify(prepareModelSelection.result?.value || prepareModelSelection.exceptionDetails),
+  );
+
   const finalAtlasControls = await client.send('Runtime.evaluate', {
     expression: `(async()=>{
       const errors=[];
-      if(onboardingPage) await new Promise(resolve=>dismissOnboardingPage(resolve));
+      if(onboardingPage) await dismissOnboardingPage();
       await openOnboardingSetup();
       for(const card of onboardingPage.querySelectorAll('.onboarding-model-card')) {
         if(card.querySelector('.asr-meters,.asr-meter,.rating-scale,.is-installed')) errors.push('legacy onboarding model details');
         const id=card.querySelector('input').value;
         if(card.querySelector('.asr-tagline').textContent!==asrText('model')[id].onboarding) errors.push('model short description');
       }
-      await new Promise(resolve=>dismissOnboardingPage(resolve));
+      await dismissOnboardingPage();
       openOnboardingPermissions({microphone:'granted',screen:'granted',systemAudioSupported:true});
       await new Promise(resolve=>setTimeout(resolve,100));
       breviaClient.onLevel('mic',0.5);
@@ -2079,11 +2192,11 @@ try {
       if(meters.length<3 || masks.size!==1 || fills.size!==1 || ![...masks][0].includes('data:image/svg+xml')) errors.push('inconsistent input meters');
       breviaClient.onLevel('mic',0);
       if(meters.some(e=>e.style.getPropertyValue('--level')!=='0')) errors.push('silent input still active');
-      await new Promise(resolve=>dismissOnboardingPage(resolve));
+      await dismissOnboardingPage();
       openOnboardingAi();
       if(onboardingPage.querySelector('[data-configure-ai-notes]') || onboardingPage.querySelector('.onboarding-privacy-hint')) errors.push('legacy onboarding AI options');
       if(!onboardingPage.querySelector('.onboarding-shared-service [data-configure-ai-summary]')) errors.push('shared service not separated');
-      await new Promise(resolve=>dismissOnboardingPage(resolve));
+      await dismissOnboardingPage();
       await showView('home');
       for(const destination of ['all-meetings','recently-deleted']) {
         await showView('settings');
@@ -2143,10 +2256,12 @@ try {
       const errors=[];
       const selectors=['[data-edit-transcript]','[data-detail-translation-toggle]','[data-refine-more]','[data-open-summary-edit]','[data-copy-summary]'];
       for(const selector of selectors){
+        document.querySelector('[data-detail-tab="'+(selector.includes('summary')?'summary':'transcript')+'"]').click();
         const button=document.querySelector(selector),icon=button?.querySelector('svg');
         const iconSize=button?.closest('.summary-tools')?18:20;
         if(!button||!icon||Math.abs(parseFloat(getComputedStyle(icon).width)-iconSize)>.1||button.getBoundingClientRect().height<31.5||button.getBoundingClientRect().height>36||!button.textContent.trim())errors.push(selector+': detail action geometry');
       }
+      document.querySelector('[data-detail-tab=transcript]').click();
       if(!document.querySelector('.refine-state.is-done[role=status]')||document.querySelector('.refine-state.is-done svg'))errors.push('legacy refined state');
       const checkMenu=selector=>{
         const menu=document.querySelector(selector),r=menu.getBoundingClientRect();
@@ -2243,7 +2358,7 @@ try {
       if(currentCaptureMode!=='both'||!prepareForm.querySelector('#phone-device-setting').hidden) errors.push('capture: starting another meeting did not restore the default source');
       const data=await window.brevia.initialize();const meeting=await window.brevia.meeting.get({meeting_id:data.meetings[0].id});
       summaryGeneratingMeetingId=undefined;applyBackendDetail(meeting);await showView('detail');await new Promise(resolve=>setTimeout(resolve,350));
-      uiData.detail.summary={markdown:'# Review\\n\\nSaved memo',hasFull:true};detailActiveTab='notes';renderMeetingDetail();setDetailLayoutMode('transcript');
+      uiData.detail.summary={markdown:'# Review\\n\\nSaved memo',hasFull:true};detailActiveTab='summary';renderMeetingDetail();setDetailLayoutMode('transcript');
       const detail=document.getElementById('detail-view');
       for(const code of ['zh','en','es','ja','ko','fr','de','ru']){
         applyLanguage(code);
@@ -2256,11 +2371,10 @@ try {
       const player=detail.querySelector('.player'),source=player.querySelector('.player-source');
       if(!source.contains(playerTime)||!source.contains(playerDuration)||!source.textContent.includes('/')) errors.push('playback times separated');
       if(getComputedStyle(player).borderRadius!=='0px'||getComputedStyle(player).boxShadow!=='none') errors.push('player still floating card');
-      if(Math.abs(detail.querySelector('.notes').getBoundingClientRect().top-detail.querySelector('.detail-head').getBoundingClientRect().top)>2) errors.push('summary top misaligned');
+      if(!visible(detail.querySelector('[data-detail-panel=summary]'))) errors.push('summary reading panel hidden');
       if(!visible(detail.querySelector('[data-export-detail]'))) errors.push('export action occluded');
       const exportButton=detail.querySelector('[data-export-detail]').getBoundingClientRect();
-      const above=exportButton.top-detail.getBoundingClientRect().top,below=detail.querySelector('.notes').getBoundingClientRect().top-exportButton.bottom;
-      if(above<11.5||below<11.5||Math.abs(above-below)>.5)errors.push('export/summary symmetric spacing');
+      if(exportButton.top<detail.getBoundingClientRect().top||exportButton.right>detail.getBoundingClientRect().right)errors.push('export outside fixed header');
       detail.querySelector('[data-open-summary-edit]').click();
       for(const action of ['data-cancel-inline-summary-edit','data-save-inline-summary']) if(!visible(detail.querySelector('['+action+']'))) errors.push('edit footer outside viewport');
       if(parseFloat(getComputedStyle(detail.querySelector('.notes-editor')).fontSize)!==17) errors.push('legacy editor font');
@@ -2279,7 +2393,7 @@ try {
         const mark=getComputedStyle(status.querySelector('.check-icon'));
         if(mark.backgroundColor==='rgba(0, 0, 0, 0)'||mark.borderRadius!=='50%') errors.push('granted status lacks filled check');
       }
-      await new Promise(resolve=>dismissOnboardingPage(resolve));
+      await dismissOnboardingPage();
       return errors;
     })()`,
     awaitPromise: true,
@@ -2289,6 +2403,131 @@ try {
     Array.isArray(visualFeedback.result?.value) && visualFeedback.result.value.length === 0,
     `本轮视觉反馈回归：${JSON.stringify(visualFeedback.result?.value || visualFeedback.exceptionDetails)}`,
   );
+
+  // 重点在富文本/Markdown 往返时不丢原文，展开与回放跳转互不干扰。
+  const highlightChecks = await client.send('Runtime.evaluate', {
+    expression: `(async()=>{
+      const previousView=activeView;await showView('live');const errors=[],host=document.createElement('div');
+      document.body.append(host);host.style.cssText='position:fixed;left:200px;top:100px;width:500px;height:500px;z-index:9999;background:white';
+      let changes=0;
+      const notes=createNotesEditor(host,{onInput:()=>changes++,getHighlightTime:()=>1200});
+      notes.setMarkdown('普通笔记');
+      const quote='明确验收范围，保留完整原文 <unsafe> **plain** '.repeat(12).trim();
+      if(!notes.addHighlight(1200,quote)||notes.addHighlight(1200,quote)||notes.addHighlight(-1,quote))errors.push('highlight validation/dedup');
+      const markdown=notes.getMarkdown();
+      if(markdown!=='普通笔记\\n\\n'+noteHighlightMarkdown(1200,quote)||changes!==1)errors.push('highlight round trip '+markdown);
+      notes.setMode('markdown');notes.setMode('rich');
+      if(notes.getMarkdown()!==markdown)errors.push('mode switch loses anchor');
+      const row=host.querySelector('[data-note-highlight]'),body=row.querySelector('.note-highlight-body'),toggle=row.querySelector('[data-note-highlight-toggle]');
+      if(!body.hidden||row.querySelector('img,strong'))errors.push('highlight text unsafe or expanded');
+      toggle.click();if(body.hidden||toggle.getAttribute('aria-expanded')!=='true')errors.push('expand');
+      toggle.click();if(!body.hidden)errors.push('collapse');
+      const textNode=host.querySelector('.notes-editor p').firstChild,selection=getSelection(),range=document.createRange();
+      host.querySelector('.notes-editor').focus();range.selectNodeContents(textNode);selection.removeAllRanges();selection.addRange(range);
+      host.querySelector('[data-notes-command="highlight"]').click();
+      if(!notes.getMarkdown().includes(noteHighlightMarkdown(1200,'普通笔记')))errors.push('selected note not marked');
+      if(!notes.addHighlight(1200,'同一时刻的另一条重点'))errors.push('same time different text lost');
+      notes.destroy();host.remove();selection.removeAllRanges();
+      const audio=playerAudio,oldSrc=audio.getAttribute('src'),oldMax=progress.max;
+      const bytes=new Uint8Array(32044),view=new DataView(bytes.buffer);
+      for(const [offset,value]of [[0,'RIFF'],[8,'WAVE'],[12,'fmt '],[36,'data']])for(let i=0;i<value.length;i++)bytes[offset+i]=value.charCodeAt(i);
+      for(const [offset,value]of [[4,32036],[16,16],[24,8000],[28,16000],[40,32000]])view.setUint32(offset,value,true);
+      for(const [offset,value]of [[20,1],[22,1],[32,2],[34,16]])view.setUint16(offset,value,true);
+      const url=URL.createObjectURL(new Blob([bytes],{type:'audio/wav'}));
+      const loaded=new Promise((resolve,reject)=>{audio.addEventListener('loadedmetadata',resolve,{once:true});audio.addEventListener('error',reject,{once:true});});
+      audio.src=url;audio.load();await loaded;
+      const playback=document.createElement('div');playback.className='detail-notes-content';playback.innerHTML=renderMarkdown(noteHighlightMarkdown(1200,quote));finalTranscript.append(playback);
+      audio.pause();playback.querySelector('[data-note-seek]').click();
+      if(Math.abs(audio.currentTime-1.2)>.01||!audio.paused)errors.push('paused seek');
+      await audio.play();playback.querySelector('[data-note-seek]').click();
+      if(Math.abs(audio.currentTime-1.2)>.1||audio.paused)errors.push('playing seek');
+      playback.querySelector('[data-note-highlight-toggle]').click();
+      if(audio.paused)errors.push('expand pauses playback');
+      audio.pause();playback.remove();if(oldSrc)audio.src=oldSrc;else audio.removeAttribute('src');audio.load();progress.max=oldMax;URL.revokeObjectURL(url);
+      await showView(previousView);return errors;
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+    userGesture: true,
+  });
+  check(
+    Array.isArray(highlightChecks.result?.value) && !highlightChecks.result.value.length,
+    '重点笔记与回放：' +
+      JSON.stringify(highlightChecks.result?.value || highlightChecks.exceptionDetails),
+  );
+
+  // 底栏工具与收起侧栏在最小窗口和双语主题下都保留稳定位置。
+  const liveToolbarErrors = [];
+  await client.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 800, y: 100 });
+  for (const width of [880, 1280]) {
+    await client.send('Emulation.setDeviceMetricsOverride', {
+      width,
+      height: 800,
+      deviceScaleFactor: 1,
+      mobile: false,
+    });
+    const result = await client.send('Runtime.evaluate', {
+      expression: `(async()=>{
+        const errors=[],previousView=activeView,previousActive=meetingActive;
+        const cards=[...taskCards.children].map(card=>[card,card.hidden]);
+        for(const [card] of cards)card.hidden=true;
+        meetingActive=true;await showView('live');document.activeElement?.blur();
+        for(const [code,theme] of Object.keys(catalog).map(code=>[code,code==='zh'?'light':'dark'])){
+          applyLanguage(code);applyTheme(theme);renderLiveModelControl();
+          await new Promise(resolve=>setTimeout(resolve,300));
+          const bar=document.querySelector('.live-control-bar'),r=bar.getBoundingClientRect();
+          const tools=[...bar.querySelectorAll('.live-caption-controls .icon-button')].filter(button=>button.getBoundingClientRect().width);
+          const primary=bar.querySelector('.control-primary').getBoundingClientRect();
+          for(const button of tools){const b=button.getBoundingClientRect();if(b.left<r.left||b.right>primary.left||b.bottom>r.bottom||b.width<40||!button.getAttribute('aria-label')||!button.querySelector('svg'))errors.push(code+': tool bounds/label');}
+          if(bar.scrollWidth>bar.clientWidth+1||primary.right>r.right)errors.push(code+': toolbar overflow');
+          for(const withTask of [false,true]){
+            refinementCard.hidden=!withTask;syncTaskCardStack();
+            const device=document.querySelector('#mobile-nav').getBoundingClientRect(),settings=document.querySelector('.sidebar-settings').getBoundingClientRect(),sidebar=document.querySelector('.sidebar').getBoundingClientRect();
+            if(settings.bottom>sidebar.bottom||sidebar.bottom-settings.bottom>32||device.bottom>settings.top+1||settings.top-device.bottom>16)errors.push(code+': sidebar footer '+withTask);
+            if(withTask&&document.querySelector('[data-task-summary]').getBoundingClientRect().bottom>device.top)errors.push(code+': task overlaps device');
+          }
+          document.querySelector('#translation-toggle').click();
+          const options=document.querySelector('#translation-options').getBoundingClientRect(),toggle=document.querySelector('#translation-toggle').getBoundingClientRect();
+          if(options.bottom>toggle.top||options.top<0||options.right>innerWidth)errors.push(code+': translation popup bounds');
+          document.body.click();
+          for(const id of ['floating-caption-toggle','translation-toggle','live-model-toggle','mark-important']){
+            const button=document.getElementById(id);
+            if(!button.getClientRects().length)continue;
+            if(button.textContent.trim())errors.push(code+': icon has visible text '+id);
+            button.dispatchEvent(new PointerEvent('pointerover',{bubbles:true}));
+            if(!pageTooltip||pageTooltip.hidden||pageTooltip.textContent!==button.dataset.tooltip||button.dataset.tooltip!==button.getAttribute('aria-label'))errors.push(code+': localized tooltip '+id);
+            if(!['zh','ja'].includes(code)&&/[\u4e00-\u9fff]/.test(button.dataset.tooltip))errors.push(code+': untranslated tooltip '+id);
+            button.dispatchEvent(new PointerEvent('pointerout',{bubbles:true,relatedTarget:document.body}));
+          }
+          const model=document.querySelector('#live-model-toggle'),modelOptions=document.querySelector('#live-model-options');
+          if(model.getClientRects().length){
+            model.click();
+            const bounds=modelOptions.getBoundingClientRect();
+            if(bounds.width<319||bounds.left<0||bounds.right>innerWidth)errors.push(code+': model menu too narrow');
+            const transcript=document.querySelector('#transcript-scroll');
+            const marker=document.createElement('div');marker.innerHTML=renderTranscriptSegment({text:'持续刷新字幕',time:'00:01',startSeconds:1,endSeconds:2,speaker:{}});marker.style.height='200px';transcript.append(marker);transcript.scrollTop=transcript.scrollHeight;
+            transcript.dispatchEvent(new Event('scroll'));await new Promise(resolve=>requestAnimationFrame(resolve));marker.remove();
+            renderLiveModelControl();
+            if(modelOptions.hidden||model.getAttribute('aria-expanded')!=='true')errors.push(code+': transcript update closed model menu');
+            modelOptions.dispatchEvent(new Event('scroll'));
+            if(modelOptions.hidden)errors.push(code+': model menu scroll closed itself');
+            document.dispatchEvent(new Event('scroll'));
+            if(!modelOptions.hidden||model.getAttribute('aria-expanded')!=='false')errors.push(code+': viewport scroll left stale anchor');
+          }
+        }
+        for(const [card,hidden] of cards)card.hidden=hidden;
+        syncTaskCardStack();applyLanguage('zh');applyTheme('light');
+        meetingActive=previousActive;await showView(previousView);
+        return errors;
+      })()`,
+      awaitPromise: true,
+      returnByValue: true,
+    });
+    if (!Array.isArray(result.result?.value) || result.result.value.length)
+      liveToolbarErrors.push({ width, result });
+  }
+  await client.send('Emulation.clearDeviceMetricsOverride');
+  check(!liveToolbarErrors.length, '会议底栏与侧栏定位：' + JSON.stringify(liveToolbarErrors));
 
   const remainingAlignment = await client.send('Runtime.evaluate', {
     expression: `(async()=>{
@@ -2396,6 +2635,15 @@ try {
       const panel=settingsModal.querySelector('.modal-panel').getBoundingClientRect();
       if(Math.abs(general.left-panel.left)>1 || Math.abs(navigation.getBoundingClientRect().width-200)>1) errors.push('settings content origin changed');
       if(!settingsModal.querySelector('.rating-scale') || settingsModal.querySelector('.rating-scale').children.length!==1) errors.push('rating is not continuous');
+      settingsModal.querySelector('[data-model-library-tab="available"]').click();
+      const modelRows=[...settingsModal.querySelectorAll('.model-library-item')];
+      if(!modelRows.length) errors.push('available models missing');
+      for(const row of modelRows){
+        const ratings=[...row.querySelectorAll('.model-library-rating')].map(el=>el.getBoundingClientRect());
+        if(ratings.length===2 && Math.abs(ratings[0].top-ratings[1].top)>1) errors.push('model ratings are stacked');
+        const content=row.querySelector('.model-library-content');
+        if(content.scrollWidth>content.clientWidth+1 || row.scrollWidth>row.clientWidth+1) errors.push('model card overflow');
+      }
       settingsModal.querySelector('.modal-body').scrollTop=500;
       await openModal('device-connection');
       if(settingsModal.querySelector('.modal-body').scrollTop!==0) errors.push('settings retained previous scroll');
@@ -2544,7 +2792,7 @@ try {
       if(${JSON.stringify(name)}==='detail'){
         const player=document.querySelector('#detail-view .player'),p=player.getBoundingClientRect();
         for(const selector of ['.play','.player-source','.player-meta','.player-track']){const r=player.querySelector(selector).getBoundingClientRect();if(r.left<p.left-1||r.right>p.right+1||r.top<p.top-1||r.bottom>p.bottom+1)errors.push(selector+' outside player');}
-        if(p.right>document.querySelector('#detail-view .notes').getBoundingClientRect().left+1)errors.push('player overlaps memo');
+        if(p.top<document.querySelector('#detail-view .detail-layout').getBoundingClientRect().bottom-1)errors.push('player overlaps reading region');
       }else if(${JSON.stringify(name)}==='tasks'){
         const nav=document.querySelector('.workspace-subnav');nav.scrollTop=0;
         const first=nav.querySelector('.workspace-item').getBoundingClientRect(),n=nav.getBoundingClientRect();
@@ -2594,7 +2842,7 @@ try {
     '最小窗口检查后必须恢复默认画布',
   );
 
-  await client.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 1100, y: 100 });
+  await client.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 800, y: 100 });
   const taskLayoutChecks = await client.send('Runtime.evaluate', {
     expression: `(async()=>{
       const errors=[];
@@ -2673,7 +2921,7 @@ try {
     expression: `(async()=>{
       const errors=[],originalWorkspaces=workspaces,originalMeetings=uiData.meetings;
       closeModal();await new Promise(r=>setTimeout(r,250));
-      if(onboardingPage)await new Promise(r=>dismissOnboardingPage(r));
+      if(onboardingPage)await dismissOnboardingPage();
       meetingActive=false;await showView('home');
       const root=document.querySelector('.workspace-subnav'),before=root.getBoundingClientRect().height;
       workspaces=Array.from({length:40},(_,i)=>({id:'fixture-'+i,name:'工作区 '+i,meeting_count:0}));renderWorkspaceNav();
@@ -2738,6 +2986,154 @@ try {
       JSON.stringify(revisedInteractions.result?.value || revisedInteractions.exceptionDetails),
   );
 
+  await client.send('Page.bringToFront');
+  const motionChecks = await client.send('Runtime.evaluate', {
+    expression: `(async()=>{
+      const errors=[];
+      closeModal(); await new Promise(r=>setTimeout(r,180));
+      await Promise.all([showView('prepare'),showView('settings'),showView('home')]);
+      if(activeView!=='home'||document.querySelectorAll('.view.active').length!==1)errors.push('rapid navigation did not converge');
+      if(!document.querySelector('link[href="./motion.css"]'))errors.push('shared motion styles missing');
+      const element=document.createElement('div');document.body.append(element);
+      let closed=0;BreviaMotion.leave(element,()=>closed++);BreviaMotion.enter(element);
+      await new Promise(r=>setTimeout(r,180));
+      if(closed)errors.push('obsolete exit removed a reopened layer');
+      element.remove();
+      const button=document.querySelector('#meeting-selection-toggle');
+      if(parseFloat(getComputedStyle(button).transitionDuration)>0.18)errors.push('frequent button feedback too slow');
+      const auditControls=()=>{
+        for(const control of document.querySelectorAll('button,summary,a[href],input:not([type="hidden"]),textarea,select,[role="button"]')){
+          const style=getComputedStyle(control);
+          if(style.display==='none'||!control.getClientRects().length)continue;
+          if(!style.transitionProperty.split(',').some(property=>['color','background-color','border-color','opacity','all'].includes(property.trim())))errors.push('missing feedback: '+control.tagName+'.'+control.className);
+          if(style.transitionDuration.split(',').every(value=>parseFloat(value)===0))errors.push('missing transition: '+control.tagName+'.'+control.className);
+        }
+      };
+      auditControls();
+      await showView('settings');auditControls();
+      for(const kind of ['models','ai-features','advanced-settings','speaker-profiles','device-connection','storage','whats-new']){
+        await openModal(kind);auditControls();
+      }
+      await showView('prepare');auditControls();
+      await showView('home');
+      if(BreviaMotion.timing.surface<=BreviaMotion.timing.exit)errors.push('exit is not faster than entrance');
+      const view=document.querySelector('.view.active');
+      view.getAnimations().forEach(animation=>animation.finish());
+      if(getComputedStyle(view).opacity!=='1')errors.push('active view invisible');
+      return errors;
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  const onboardingHandoff = await client.send('Runtime.evaluate', {
+    expression: `(async()=>{
+      const errors=[];
+      await dismissOnboardingPage();
+      openOnboardingLanguage('zh');
+      const assertVisible=()=>{
+        if(document.querySelectorAll('.onboarding-page').length!==1)errors.push('missing or duplicate onboarding shell');
+        if(getComputedStyle(onboardingPage).opacity!=='1')errors.push('onboarding shell faded');
+        if(!onboardingPage.querySelector('h1')?.textContent.trim())errors.push('blank onboarding heading');
+      };
+      assertVisible();
+      onboardingPage.querySelector('[value="en"]').click();
+      if(onboardingPage.lang!=='en')errors.push('language change delayed');
+      onboardingPage.querySelector('[value="zh"]').click();
+      let release;
+      const old=onboardingPage;
+      const pending=dismissOnboardingPage(async()=>{
+        await new Promise(resolve=>release=resolve);
+        openOnboardingPermissions();
+      });
+      await new Promise(resolve=>setTimeout(resolve,60));
+      assertVisible();
+      if(!old.isConnected||!old.inert)errors.push('slow next step exposes background or accepts repeat input');
+      release();await pending;
+      for(const open of [openOnboardingSetup,openOnboardingAi,openOnboardingMobile,openOnboardingAi,openOnboardingSetup]){
+        await dismissOnboardingPage(open);
+        assertVisible();
+        await new Promise(requestAnimationFrame);assertVisible();
+        if(getComputedStyle(onboardingPage.querySelector('h1')).outlineStyle!=='none')errors.push('step heading shows browser focus ring');
+        const content=onboardingPage.querySelector('.onboarding-page-content');
+        if(getComputedStyle(content).opacity!=='1')errors.push('step body starts transparent');
+        if([...onboardingPage.querySelectorAll('button')].some(button=>getComputedStyle(button).transitionDuration.split(',').every(value=>parseFloat(value)===0)))errors.push('onboarding control missing feedback');
+      }
+      const frames=onboardingPage.querySelector('.onboarding-page-content').getAnimations()[0]?.effect.getKeyframes();
+      if(frames&&frames[0].transform!=='translateX(-24px)')errors.push('back direction incorrect');
+      // 点击真实下一步：快速存储设置不能闪出原生迁移浮窗。
+      const originalDownload=downloadRequiredModels;
+      const originalShow=HTMLDialogElement.prototype.showModal;
+      let migrationDelay=null, downloaded=false;
+      const modelNextStarted=performance.now();
+      HTMLDialogElement.prototype.showModal=function(){if(this.classList.contains('storage-migration-dialog'))migrationDelay=performance.now()-modelNextStarted;return originalShow.call(this);};
+      downloadRequiredModels=()=>{downloaded=true;};
+      try {
+        onboardingPage.querySelector('[data-download-onboarding-models]').click();
+        const until=Date.now()+3000;
+        while(onboardingPage.dataset.onboardingStep!=='ai'&&Date.now()<until)await new Promise(resolve=>setTimeout(resolve,10));
+        if(!onboardingPage.querySelector('.onboarding-ai-setup-page')||(migrationDelay!==null&&migrationDelay<160)||!downloaded||storageMovePending||document.querySelector('.storage-migration-dialog'))errors.push('model Next flashed a migration dialog or failed to hand off');
+        assertVisible();
+      } finally {
+        downloadRequiredModels=originalDownload;
+        HTMLDialogElement.prototype.showModal=originalShow;
+      }
+      const savedCompletion=localStorage.getItem('brevia-onboarding-complete');
+      try {
+        localStorage.removeItem('brevia-onboarding-complete');
+        await dismissOnboardingPage(openOnboardingMobile);
+        const outgoing=onboardingPage;
+        outgoing.querySelector('[data-onboarding-mobile-next]').click();
+        await new Promise(requestAnimationFrame);
+        await new Promise(requestAnimationFrame);
+        if(!document.body.classList.contains('onboarding-handoff')||getComputedStyle(document.querySelector('.app-shell')).display==='none'||!outgoing.inert)errors.push('first home lacks continuous handoff');
+        const home=document.querySelector('#home-view');
+        if(getComputedStyle(home).opacity!=='1'||!home.getAnimations().some(animation=>animation.effect.getTiming().duration===520))errors.push('first home entrance missing or transparent');
+        document.dispatchEvent(new KeyboardEvent('keydown',{key:'Tab',bubbles:true}));
+        await outgoing.dismissPromise;
+        if(document.querySelector('.onboarding-page')||document.body.classList.contains('onboarding-handoff')||getComputedStyle(home).opacity!=='1')errors.push('welcome input interruption failed');
+        await openOnboardingMobile();
+        const repeated=onboardingPage;
+        repeated.querySelector('[data-onboarding-mobile-next]').click();
+        await repeated.dismissPromise;
+        if(document.body.classList.contains('onboarding-handoff')||home.getAnimations().length)errors.push('welcome replayed after first entry');
+      } finally {
+        if(savedCompletion===null)localStorage.removeItem('brevia-onboarding-complete');
+        else localStorage.setItem('brevia-onboarding-complete',savedCompletion);
+      }
+      await dismissOnboardingPage();
+      applyLanguage('zh');
+      return errors;
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  check(
+    Array.isArray(onboardingHandoff.result?.value) && !onboardingHandoff.result.value.length,
+    '引导全步骤、异步准备连续性和控件反馈：' +
+      JSON.stringify(onboardingHandoff.result?.value || onboardingHandoff.exceptionDetails),
+  );
+  check(
+    Array.isArray(motionChecks.result?.value) && !motionChecks.result.value.length,
+    '公共动效、快速导航和退出重入：' +
+      JSON.stringify(motionChecks.result?.value || motionChecks.exceptionDetails),
+  );
+  await client.send('Emulation.setEmulatedMedia', {
+    features: [{ name: 'prefers-reduced-motion', value: 'reduce' }],
+  });
+  const reducedControls = await client.send('Runtime.evaluate', {
+    expression: `(async()=>{
+      await new Promise(requestAnimationFrame);
+      const controls=[...document.querySelectorAll('button,summary,a[href],input,textarea,select,[role="button"]')];
+      return controls.every(control=>getComputedStyle(control).transitionDuration.split(',').every(value=>parseFloat(value)===0));
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  check(reducedControls.result?.value === true, '减少动态效果：真实控件全部停止过渡');
+  await client.send('Emulation.setEmulatedMedia', {
+    features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }],
+  });
+
   if (process.env.BREVIA_DESIGN_CAPTURE_DIR) {
     const output = path.resolve(process.env.BREVIA_DESIGN_CAPTURE_DIR);
     mkdirSync(output, { recursive: true });
@@ -2760,7 +3156,7 @@ try {
       return value.result?.value;
     };
     await evaluate(
-      `(async () => { if (onboardingPage) await new Promise(resolve => dismissOnboardingPage(resolve)); closeModal(); await new Promise(resolve => setTimeout(resolve,250)); meetingActive=false; miniMeeting.hidden=true; clearInterval(timer); applyLanguage('zh'); applyTheme('light'); })()`,
+      `(async () => { if (onboardingPage) await dismissOnboardingPage(); closeModal(); await new Promise(resolve => setTimeout(resolve,250)); meetingActive=false; miniMeeting.hidden=true; clearInterval(timer); applyLanguage('zh'); applyTheme('light'); })()`,
     );
     await delay(3500);
     const captures = [
@@ -2847,11 +3243,11 @@ try {
       ],
       [
         'desktop-onboarding-models',
-        `(async()=>{await new Promise(resolve=>dismissOnboardingPage(resolve)); await openOnboardingSetup();})()`,
+        `(async()=>{await dismissOnboardingPage(); await openOnboardingSetup();})()`,
       ],
       [
         'desktop-onboarding-ai',
-        `(async()=>{await new Promise(resolve=>dismissOnboardingPage(resolve)); openOnboardingAi();})()`,
+        `(async()=>{await dismissOnboardingPage(); openOnboardingAi();})()`,
       ],
       [
         'desktop-onboarding-ai-config',
@@ -2859,7 +3255,7 @@ try {
       ],
       [
         'desktop-onboarding-phone',
-        `(async()=>{closeModal(); await new Promise(resolve=>setTimeout(resolve,250)); await new Promise(resolve=>dismissOnboardingPage(resolve)); openOnboardingMobile();})()`,
+        `(async()=>{closeModal(); await new Promise(resolve=>setTimeout(resolve,250)); await dismissOnboardingPage(); openOnboardingMobile();})()`,
       ],
       [
         'desktop-onboarding-pairing',
@@ -2867,13 +3263,13 @@ try {
       ],
       [
         'desktop-onboarding-permissions',
-        `(async()=>{document.querySelector('#mobile-close-pairing').click(); await new Promise(resolve=>setTimeout(resolve,250)); await new Promise(resolve=>dismissOnboardingPage(resolve)); openOnboardingPermissions({microphone:'not-determined',screen:'not-determined',systemAudioSupported:true});})()`,
+        `(async()=>{document.querySelector('#mobile-close-pairing').click(); await new Promise(resolve=>setTimeout(resolve,250)); await dismissOnboardingPage(); openOnboardingPermissions({microphone:'not-determined',screen:'not-determined',systemAudioSupported:true});})()`,
       ],
     ];
     captures.push(
       [
         'desktop-workspace-empty',
-        `(async()=>{await new Promise(resolve=>dismissOnboardingPage(resolve));await showView('home');const workspace=await window.brevia.workspace.create({name:'访谈',description:''});workspaces.push(workspace);renderWorkspaceNav();await switchWorkspace(workspace.id);})()`,
+        `(async()=>{await dismissOnboardingPage();await showView('home');const workspace=await window.brevia.workspace.create({name:'访谈',description:''});workspaces.push(workspace);renderWorkspaceNav();await switchWorkspace(workspace.id);})()`,
       ],
       ['desktop-workspace-popover', `document.querySelector('#workspace-edit').click()`],
       ['desktop-notification-workspace', `showToast(t('工作区已创建'),undefined,'success')`],
@@ -2977,10 +3373,10 @@ try {
         `(async()=>{meetingActive=true;await showView('live');showRefinementProgress(42,100,'产品周会',currentMeetingDetail.id,'正在识别');document.querySelector('.sidebar .brand').focus();})()`,
       ],
       [
-        'desktop-live-more-menu',
-        `(()=>{const toggle=document.querySelector('#live-more-toggle');toggle.click();const panel=document.querySelector('#live-more-panel'),r=panel.getBoundingClientRect(),anchor=toggle.getBoundingClientRect();if(panel.hidden||r.top<anchor.bottom||r.bottom>innerHeight||r.right>innerWidth)throw Error('会议标题栏菜单错位');})()`,
+        'desktop-live-toolbar-translation',
+        `(()=>{const toggle=document.querySelector('#translation-toggle');toggle.click();const panel=document.querySelector('#translation-options'),r=panel.getBoundingClientRect(),anchor=toggle.getBoundingClientRect();if(panel.hidden||r.bottom>anchor.top||r.top<0||r.right>innerWidth)throw Error('会议底栏菜单错位');})()`,
       ],
-      ['desktop-live-more-closed', `document.querySelector('#live-more-toggle').click()`],
+      ['desktop-live-toolbar-closed', `document.querySelector('#translation-toggle').click()`],
       [
         'desktop-live-info',
         `(()=>{const before=meetingActive;document.querySelector('#live-info-toggle').click();const panel=document.querySelector('#live-info-panel'),r=panel.getBoundingClientRect();if(panel.hidden||meetingActive!==before||activeView!=='live'||!panel.textContent.includes(document.querySelector('#live-name').textContent)||r.top<40||r.bottom>innerHeight||r.right>innerWidth)throw Error('会议信息错位或改变录制状态');})()`,
@@ -2996,7 +3392,7 @@ try {
       ],
       [
         'desktop-onboarding-ai-local-config',
-        `(async()=>{await new Promise(resolve=>dismissOnboardingPage(resolve));openOnboardingAi();onboardingPage.querySelector('[name="onboarding-summary-enabled"]').checked=true;onboardingPage.querySelector('[name="onboarding-summary-enabled"]').dispatchEvent(new Event('change',{bubbles:true}));window.__designBuiltinPath=modelPaths.get(RECOMMENDED_BUILTIN_MODEL_ID);modelPaths.delete(RECOMMENDED_BUILTIN_MODEL_ID);onboardingBuiltinProvider=true;summaryConfigDraft=structuredClone(summaryConfig);summaryConfigDraft.provider='built-in';openModal('summary-model');})()`,
+        `(async()=>{await dismissOnboardingPage();openOnboardingAi();onboardingPage.querySelector('[name="onboarding-summary-enabled"]').checked=true;onboardingPage.querySelector('[name="onboarding-summary-enabled"]').dispatchEvent(new Event('change',{bubbles:true}));window.__designBuiltinPath=modelPaths.get(RECOMMENDED_BUILTIN_MODEL_ID);modelPaths.delete(RECOMMENDED_BUILTIN_MODEL_ID);onboardingBuiltinProvider=true;summaryConfigDraft=structuredClone(summaryConfig);summaryConfigDraft.provider='built-in';openModal('summary-model');})()`,
       ],
       [
         'desktop-onboarding-ai-local',
@@ -3021,17 +3417,17 @@ try {
       ['desktop-onboarding-ai-written', `onboardingPage.querySelector('[data-demo-add]').click()`],
       [
         'desktop-onboarding-permissions-granted',
-        `(async()=>{await new Promise(resolve=>dismissOnboardingPage(resolve));openOnboardingPermissions({microphone:'granted',screen:'not-determined',systemAudioSupported:true});})()`,
+        `(async()=>{await dismissOnboardingPage();openOnboardingPermissions({microphone:'granted',screen:'not-determined',systemAudioSupported:true});})()`,
       ],
       [
         'desktop-onboarding-permissions-denied',
-        `(async()=>{await new Promise(resolve=>dismissOnboardingPage(resolve));openOnboardingPermissions({microphone:'denied',screen:'denied',systemAudioSupported:false});})()`,
+        `(async()=>{await dismissOnboardingPage();openOnboardingPermissions({microphone:'denied',screen:'denied',systemAudioSupported:false});})()`,
       ],
     );
     captures.push(
       [
         'desktop-workspace-edit',
-        `(async()=>{if(onboardingPage)await new Promise(resolve=>dismissOnboardingPage(resolve));await showView('home');const workspace=await window.brevia.workspace.create({name:'产品',description:'产品研发会议'});workspaces.push(workspace);renderWorkspaceNav();await switchWorkspace(workspace.id);showEditWorkspaceDialog(workspace.id);})()`,
+        `(async()=>{if(onboardingPage)await dismissOnboardingPage();await showView('home');const workspace=await window.brevia.workspace.create({name:'产品',description:'产品研发会议'});workspaces.push(workspace);renderWorkspaceNav();await switchWorkspace(workspace.id);showEditWorkspaceDialog(workspace.id);})()`,
       ],
       [
         'desktop-task-media',
@@ -3092,7 +3488,7 @@ try {
     captures.push(
       [
         'desktop-ai-demo-processing',
-        `(async()=>{if(onboardingPage)await new Promise(resolve=>dismissOnboardingPage(resolve));openOnboardingAi();onboardingPage.querySelector('[name=onboarding-summary-enabled]').checked=true;onboardingPage.querySelector('[name=onboarding-ai-enabled]').checked=true;onboardingPage.querySelector('[name=onboarding-ai-proactivity]').value='assist';renderOnboardingSummaryDemo();renderOnboardingAiDemo();})()`,
+        `(async()=>{if(onboardingPage)await dismissOnboardingPage();openOnboardingAi();onboardingPage.querySelector('[name=onboarding-summary-enabled]').checked=true;onboardingPage.querySelector('[name=onboarding-ai-enabled]').checked=true;onboardingPage.querySelector('[name=onboarding-ai-proactivity]').value='assist';renderOnboardingSummaryDemo();renderOnboardingAiDemo();})()`,
       ],
       [
         'desktop-ai-demo-suggestion',
@@ -3105,7 +3501,7 @@ try {
       ],
       [
         'desktop-detail-tools-refined',
-        `(async()=>{await new Promise(resolve=>dismissOnboardingPage(resolve));await showView('detail');const d=uiData.detail;d.hasRefined=true;d.refinedMode='timestamps';d.transcriptVersion='refined';d.refinedTranscript=d.originalTranscript;currentMeetingDetail.current_segments=d.refinedTranscript.map((entry)=>({id:entry.segmentId,text:entry.text,start_ms:entry.startSeconds*1000,end_ms:entry.endSeconds*1000}));d.transcriptEditable=true;d.refineState='idle';detailActiveTab='transcript';renderMeetingDetail();})()`,
+        `(async()=>{await dismissOnboardingPage();await showView('detail');const d=uiData.detail;d.hasRefined=true;d.refinedMode='timestamps';d.transcriptVersion='refined';d.refinedTranscript=d.originalTranscript;currentMeetingDetail.current_segments=d.refinedTranscript.map((entry)=>({id:entry.segmentId,text:entry.text,start_ms:entry.startSeconds*1000,end_ms:entry.endSeconds*1000}));d.transcriptEditable=true;d.refineState='idle';detailActiveTab='transcript';renderMeetingDetail();})()`,
       ],
       ['desktop-detail-refine-menu', `document.querySelector('[data-refine-more]').click()`],
       [
@@ -3298,7 +3694,7 @@ try {
           );
       }
       if (name.startsWith('desktop-live-task-summary-compact')) {
-        await client.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 1100, y: 100 });
+        await client.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 800, y: 100 });
         await new Promise((resolve) => setTimeout(resolve, 250));
         const valid = await evaluate(
           `(()=>{const summary=document.querySelector('[data-task-summary]'),r=summary.getBoundingClientRect(),device=document.querySelector('#mobile-nav').getBoundingClientRect();return Math.abs(r.width-52)<1&&Math.abs(r.height-44)<1&&device.top>=r.bottom&&device.top-r.bottom<32&&getComputedStyle(taskCards).display==='none'&&summary.textContent.includes('3')&&summary.textContent.includes('18:42');})()`,

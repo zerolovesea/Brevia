@@ -1122,11 +1122,15 @@ html[data-theme="dark"] .modal-backdrop:not(.settings-page) > .modal-panel {
 #detail-view > .back {
   grid-column: 1;
   grid-row: 1;
-  align-self: center;
+  align-self: start;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  font-size: 0;
 }
 #detail-view > .detail-head {
-  grid-column: 1;
-  grid-row: 2;
+  grid-column: 2;
+  grid-row: 1;
 }
 
 #detail-view .detail-layout.is-summary-mode {
@@ -1134,7 +1138,7 @@ html[data-theme="dark"] .modal-backdrop:not(.settings-page) > .modal-panel {
 }
 #detail-view .final-transcript {
   grid-column: 1;
-  grid-row: 2;
+  grid-row: 1;
 }
 
 #detail-view .tabbar-tabs .tab.active {
@@ -1375,11 +1379,7 @@ html[data-theme="dark"] .modal-backdrop:not(.settings-page) > .modal-panel {
   min-height: 44px;
   font-size: 16px;
 }
-.live-more-panel {
-  bottom: auto;
-  top: calc(100% + 8px);
-  right: 0;
-}
+
 .ai-suggestion {
   position: static;
   padding: 16px;
@@ -2572,9 +2572,6 @@ details.advanced-settings-section[open]::details-content {
   .mobile-install-platform {
     flex-direction: column;
   }
-  #detail-view.active {
-    column-gap: 24px;
-  }
   #detail-view .detail-layout {
     gap: 24px;
   }
@@ -2729,11 +2726,11 @@ details.advanced-settings-section[open]::details-content {
   color: var(--color-text);
 }
 #detail-view .player.floating-control-bar {
-  width: calc(100% + var(--detail-inset, 32px) + 24px);
+  width: calc(100% + 2 * var(--detail-inset, 32px));
   margin-left: calc(-1 * var(--detail-inset, 32px));
   justify-self: start;
   grid-template-columns: auto auto minmax(100px, 1fr) auto;
-  padding: 12px 24px;
+  padding: 12px var(--detail-inset, 32px);
 }
 .task-target {
   display: block;
@@ -4310,38 +4307,38 @@ textarea,
 #detail-view.active {
   --detail-inset: 32px;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
-  gap: 12px 24px;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 8px 12px;
   padding: 12px var(--detail-inset, 32px) 0;
   height: 100%;
   position: relative;
   overflow: hidden;
-  --detail-columns: minmax(0, 1fr) 340px;
-  grid-template-columns: var(--detail-columns);
-
-  column-gap: 24px;
-}
-#detail-view:has(.detail-layout.is-summary-mode) {
   --detail-columns: minmax(0, 1fr);
+  grid-template-columns: 32px minmax(0, 1fr) auto;
 }
 #detail-view .detail-head h1 {
-  font-size: 30px;
+  flex-basis: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 24px;
   font-weight: 700;
-  margin: 0 0 8px;
+  margin: 0;
   line-height: 1.3;
 }
 #detail-view .detail-meta {
   margin: 0;
-  font-size: 14px;
+  font-size: 13px;
   color: var(--color-text-muted);
   line-height: 1.5;
 }
 #detail-view .detail-actions {
   position: static;
-  grid-column: 2;
+  grid-column: 3;
   grid-row: 1;
   justify-self: end;
-  align-self: center;
+  align-self: start;
 }
 #detail-view .detail-actions > button {
   min-height: 32px;
@@ -4350,10 +4347,10 @@ textarea,
 }
 #detail-view .detail-layout {
   grid-column: 1 / -1;
-  grid-row: 2 / 5;
+  grid-row: 2;
   display: grid;
   grid-template-columns: var(--detail-columns);
-  grid-template-rows: subgrid;
+  grid-template-rows: minmax(0, 1fr);
   gap: 24px;
   min-height: 0;
   height: auto;
@@ -4370,10 +4367,12 @@ textarea,
   padding: 0 20px;
 }
 #detail-view .summary-participants {
-  flex: none;
-  padding-block: 4px 10px;
-  border-bottom: 1px solid var(--color-line);
-  margin-bottom: 12px;
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 0;
+  border-bottom: 0;
+  margin: 0;
+  max-width: 100%;
 }
 .summary-preview {
   container-type: inline-size;
@@ -4405,23 +4404,32 @@ textarea,
 .summary-participant-avatars {
   display: flex;
   align-items: center;
-  margin-inline-start: auto;
-  flex: none;
+  margin-inline-start: 8px;
+  gap: 12px;
+  min-width: 0;
+  overflow: hidden;
+}
+.summary-participant-preview-person {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.summary-participant-preview-person > span {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .summary-participant-avatars .speaker-avatar {
   width: 24px;
   height: 24px;
-  margin-inline-start: -4px;
+  flex: none;
   font-size: 11px;
   font-style: normal;
 }
 .summary-participant-avatars small {
   margin-inline-start: 6px;
-}
-@container (max-width: 300px) {
-  .summary-participant-avatars {
-    display: none;
-  }
 }
 .meeting-popover {
   position: fixed;
@@ -4433,7 +4441,7 @@ textarea,
   overflow: hidden;
   border: 1px solid var(--color-line);
   border-radius: 8px;
-  background: var(--color-white);
+  background: var(--color-overlay);
   color: var(--color-text);
   box-shadow: 0 8px 24px #0002;
   font-size: 14px;
@@ -4706,7 +4714,7 @@ textarea,
   margin-right: auto;
 }
 #detail-view .tabbar {
-  min-height: 48px;
+  min-height: 40px;
   flex: none;
   gap: 12px;
   border-bottom: 1px solid var(--color-line);
@@ -4715,8 +4723,9 @@ textarea,
 #detail-view .tabbar-tabs .tab {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  font-size: 16px;
+  gap: 8px;
+  padding: 8px 0;
+  font-size: 15px;
 }
 /* 逐字稿的真实附加操作独占工具行，不挤压内容导航。 */
 #detail-view .tabbar:has([data-detail-tab="transcript"].active) {
@@ -4838,8 +4847,11 @@ textarea,
   color: var(--color-text-subtle);
 }
 .detail-search-results {
-  grid-column: 2;
-  grid-row: 1 / -1;
+  position: absolute;
+  z-index: 20;
+  inset: 56px 0 0 auto;
+  width: min(340px, 100%);
+  background: var(--color-surface);
   min-height: 0;
   overflow-y: auto;
   padding: 16px 20px;
@@ -4999,8 +5011,8 @@ textarea,
   padding-top: 8px;
 }
 #detail-view .player {
-  grid-column: 1;
-  grid-row: 4;
+  grid-column: 1 / -1;
+  grid-row: 3;
   z-index: 1;
   position: static;
   width: 100%;
@@ -5135,17 +5147,6 @@ textarea,
   opacity: 1;
   visibility: visible;
 }
-#live-view .live-header .live-more {
-  margin-left: auto;
-  align-self: flex-start;
-}
-#live-view .live-header .live-more-toggle {
-  min-height: 36px;
-  width: 44px;
-  border: 1px solid var(--color-line);
-  border-radius: 8px;
-  background: var(--color-surface);
-}
 #live-view .live-layout {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -5199,7 +5200,28 @@ textarea,
   gap: 12px;
 }
 .live-control-bar .control-secondary {
-  justify-self: end;
+  justify-self: start;
+}
+.live-control-bar .live-caption-controls .icon-button {
+  width: 44px;
+  height: 44px;
+  padding: 10px;
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  color: var(--color-text-muted);
+}
+.live-control-bar .live-caption-controls .icon-button[data-enabled="true"] {
+  background: var(--color-selected);
+  color: var(--color-text);
+}
+.live-control-bar .live-caption-controls .icon-button:hover {
+  background: var(--color-selected);
+}
+.live-control-bar .live-caption-controls .flow-select-options {
+  left: 0;
+  right: auto;
+  max-height: min(360px, 60dvh);
+  overflow-y: auto;
 }
 /* 通用页和配置页共用二级导航；旧入口保留为控制器的数据挂载点。 */
 #settings-view.active {
@@ -6076,25 +6098,22 @@ textarea,
   gap: 8px;
   margin: 0;
 }
-/* D23 与 D42 共用单栏阅读，统一顶部导出入口。 */
-#detail-view:has(.detail-layout.is-summary-mode) .detail-actions {
-  grid-column: 1;
-  display: flex;
-}
 #detail-view .detail-summary-panel {
   flex: 1;
   min-height: 0;
-  border: 1px solid var(--color-line);
-  border-radius: var(--control-radius);
-  margin-top: 16px;
-  padding: 0 24px;
+  border: 0;
+  border-radius: 0;
+  margin-top: 0;
+  padding: 0;
   overflow: hidden;
 }
 #detail-view .detail-summary-panel .summary-preview {
   height: 100%;
 }
 /* 非交互标题接收页面导航焦点，键盘控件仍使用原有 focus-visible。 */
-.settings-page .modal-title h2:focus {
+.settings-page .modal-title h2:focus,
+.onboarding-page-content h1[tabindex="-1"]:focus,
+#settings-view h1[tabindex="-1"]:focus {
   outline: none;
 }
 .settings-page .summary-enabled-control {
@@ -6277,22 +6296,37 @@ textarea,
   background: var(--color-surface);
 }
 .settings-page .model-library-content {
-  grid-template-columns: minmax(0, 1fr) 140px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 6px 12px;
 }
-.settings-page .model-library-content .model-library-ratings {
-  grid-row: 1 / 3;
-  gap: 8px;
+.settings-page .model-library-name,
+.settings-page .model-download-progress,
+.settings-page .model-library-description {
+  flex-basis: 100%;
 }
-/* 评分标题独占一行，翻译长度不再挤压刻度或侵入操作区。 */
+.settings-page .model-library-content .model-library-ratings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  padding: 0;
+  min-width: 0;
+}
 .settings-page .model-library-rating {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 56px;
-  gap: 2px 8px;
-  overflow-wrap: anywhere;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  max-width: 100%;
 }
 .settings-page .model-library-rating small {
-  grid-column: 1 / -1;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.settings-page .model-library-rating .rating-scale {
+  flex-shrink: 0;
 }
 .settings-page .model-library-rating b {
   min-width: 0;
@@ -6302,6 +6336,7 @@ textarea,
   font-weight: 700;
 }
 .settings-page .model-library-details {
+  flex-grow: 1;
   margin: 0;
   font-size: 13px;
   color: var(--color-text-muted);
@@ -6325,9 +6360,6 @@ textarea,
   font-size: 14px;
   line-height: 1.65;
   color: var(--color-text-muted);
-}
-.settings-page .model-library-item:has(.model-download-progress) .model-library-ratings {
-  grid-row: 1 / 4;
 }
 .settings-page .modal-body > .advanced-settings-form {
   gap: 12px;
@@ -6664,7 +6696,7 @@ body:has(.app-shell.is-live-meeting) .export-modal {
 @media (max-width: 1050px) {
   #detail-view.active {
     --detail-inset: 24px;
-    --detail-columns: minmax(0, 1.4fr) minmax(240px, 0.8fr);
+    --detail-columns: minmax(0, 1fr);
   }
   #detail-view .detail-layout {
     grid-template-columns: var(--detail-columns);
@@ -6703,19 +6735,19 @@ body:has(.app-shell.is-live-meeting) .export-modal {
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 12px;
   }
-  #live-view .live-control-bar .control-secondary {
-    grid-column: 2;
+  #live-view .live-control-bar .control-source {
+    grid-column: 1 / -1;
+  }
+  #live-view .live-control-bar .control-primary {
+    justify-self: end;
   }
 }
 @media (max-width: 650px) {
-  #detail-view.active {
-    grid-template-columns: minmax(0, 1fr);
-  }
   #detail-view .detail-layout {
-    grid-row: 3;
+    grid-row: 2;
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto auto;
-    overflow-y: auto;
+    grid-template-rows: minmax(0, 1fr);
+    overflow: hidden;
   }
   #detail-view .final-transcript {
     grid-row: 1;
@@ -6725,7 +6757,7 @@ body:has(.app-shell.is-live-meeting) .export-modal {
     grid-row: 2;
   }
   #detail-view .player {
-    grid-row: 4;
+    grid-row: 3;
   }
 }
 
@@ -7130,7 +7162,7 @@ body:has(.app-shell.is-live-meeting) .export-modal {
   width: 52px;
   height: 44px;
   flex: none;
-  order: 1;
+  order: 0;
   margin: auto auto 14px;
   padding: 5px;
   max-width: 100%;
@@ -7142,7 +7174,7 @@ body:has(.app-shell.is-live-meeting) .export-modal {
   line-height: 16px;
 }
 .app-shell.is-live-meeting:not(:has(.sidebar:hover, .sidebar:focus-within)) .mobile-sidebar-card {
-  margin-top: 0;
+  margin-top: auto;
 }
 .task-summary > span {
   display: flex;
@@ -7626,30 +7658,6 @@ html[data-theme] .toast,
   }
 }
 
-/* D11 的字幕页标题紧凑；保留全局导出与真实转写操作。 */
-#detail-view:has([data-detail-panel="transcript"]:not([hidden])) {
-  padding-top: 16px;
-  grid-template-rows: 0 auto minmax(0, 1fr) auto;
-  row-gap: 8px;
-  --detail-columns: minmax(0, 1fr) 280px;
-}
-#detail-view:has([data-detail-panel="transcript"]:not([hidden])) > .back {
-  grid-row: 2;
-  width: 24px;
-  height: 32px;
-  align-self: start;
-  font-size: 0;
-}
-#detail-view:has([data-detail-panel="transcript"]:not([hidden])) .detail-title {
-  margin-left: 40px;
-}
-#detail-view:has([data-detail-panel="transcript"]:not([hidden])) .detail-head h1 {
-  font-size: 26px;
-}
-#detail-view:has([data-detail-panel="transcript"]:not([hidden])) .detail-actions {
-  grid-row: 2;
-}
-
 #detail-view .detail-transcript-toolbar .detail-actions {
   position: static;
   flex: none;
@@ -7690,7 +7698,7 @@ html[data-theme] .toast,
   grid-template-columns: 128px minmax(0, 1fr);
   gap: 20px;
   padding: 16px 0;
-  border-bottom: 1px solid var(--color-line);
+  border-bottom: 0;
 }
 #detail-view .detail-summary-panel .summary-reading-section > h2 {
   font-size: 16px;
@@ -8180,33 +8188,6 @@ html[data-theme] .toast,
 }
 
 /* D52沿用逐句阅读几何，输入框自动增高且不保留空白预览列。 */
-#detail-view:has([data-detail-panel="transcript"]:not([hidden])):has([data-transcript-save]) {
-  --detail-columns: minmax(0, 1fr);
-  padding-top: 12px;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
-  row-gap: 8px;
-}
-#detail-view:has([data-detail-panel="transcript"]:not([hidden])):has([data-transcript-save])
-  > .back {
-  grid-row: 1;
-  width: auto;
-  height: 32px;
-  font-size: 14px;
-}
-#detail-view:has([data-detail-panel="transcript"]:not([hidden])):has([data-transcript-save])
-  .detail-head
-  h1 {
-  font-size: 30px;
-}
-#detail-view:has([data-detail-panel="transcript"]:not([hidden])):has([data-transcript-save])
-  .detail-title {
-  margin-left: 0;
-}
-#detail-view:has([data-detail-panel="transcript"]:not([hidden])):has([data-transcript-save])
-  .detail-actions {
-  grid-column: 1;
-  grid-row: 1;
-}
 #detail-view:has([data-detail-panel="transcript"]:not([hidden])):has([data-transcript-save])
   .notes {
   display: none;
@@ -9011,6 +8992,11 @@ body:has(.app-shell.is-settings-view) .settings-page {
 body:has(.app-shell.is-settings-view):has(.sidebar:hover, .sidebar:focus-within) .settings-page {
   left: 224px;
 }
+@media (max-width: 850px) {
+  body:has(.app-shell.is-settings-view) .settings-page {
+    left: 0;
+  }
+}
 
 .app-shell:is(.is-live-meeting, .is-settings-view) {
   transition:
@@ -9666,7 +9652,7 @@ html[data-theme="dark"] .onboarding-brand-mark {
 @container (min-width: 900px) {
   #detail-view .transcript-body .segment:has(.segment-tools) .segment-meta,
   .transcript-scroll .segment:has(.segment-tools) .segment-meta {
-    padding-inline-end: 560px;
+    padding-inline-end: 200px;
   }
   .segment-tools button span {
     display: inline;
@@ -9760,4 +9746,107 @@ html[data-theme="dark"] .onboarding-brand-mark {
     opacity: 1;
     pointer-events: auto;
   }
+}
+
+/* 重点用单行时间锚点区分普通笔记，全文按需展开。 */
+.note-highlight {
+  margin: 8px 0;
+  border-radius: 6px;
+  background: #edf7f5;
+  color: #176b68;
+  overflow: hidden;
+}
+.note-highlight-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 2px 8px;
+  font-size: 13px;
+}
+.note-highlight-line > svg,
+.note-highlight button svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+.note-highlight button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  min-width: 28px;
+  min-height: 28px;
+  border-radius: 4px;
+  color: inherit;
+}
+.note-highlight button:hover {
+  background: #176b6814;
+}
+.note-highlight button:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: -2px;
+}
+.note-highlight-preview {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+}
+.note-highlight .note-highlight-body {
+  margin: 0;
+  padding: 4px 12px 12px 32px;
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.note-highlight [aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+.detail-notes-content .note-highlight {
+  cursor: pointer;
+}
+[data-theme="dark"] .note-highlight {
+  background: #193633;
+  color: #a0d9d1;
+}
+#mark-important.icon-button {
+  width: 44px;
+  min-width: 44px;
+  padding-inline: 0;
+}
+
+/* 详情标签共用阅读边界，仅正文接手，页头和播放器不随标签变形。 */
+#detail-view .detail-layout > .notes {
+  display: none;
+}
+#detail-view .detail-head .detail-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+  min-width: 0;
+  width: 100%;
+}
+#detail-view .detail-head .summary-participants > button {
+  min-height: 32px;
+  padding: 4px 0;
+  width: fit-content;
+  max-width: 100%;
+}
+#detail-view .detail-head .summary-participant-avatars {
+  flex: 0 1 auto;
+}
+#detail-view .detail-head .summary-participants > button > svg {
+  margin-inline-start: 0;
+}
+#detail-view .summary-body hr {
+  display: none;
+}
+#detail-view :is(.summary-body, .detail-notes-content, .notes-editor) h2 {
+  border-top: 0;
+}
+#detail-view .summary-body :is(p, li) {
+  line-height: 1.65;
 }

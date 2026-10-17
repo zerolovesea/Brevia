@@ -13,6 +13,7 @@
 const APP_ACTION_NAMES = [
   // ui-components.js
   'updateDetailNotesDraft',
+  'noteHighlightTime',
   'showToast',
   // workspaces.js
   'filterMeetings',

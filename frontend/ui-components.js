@@ -77,6 +77,7 @@ function interfaceIcon(name) {
     music:
       '<path d="M10 18V5l10-2v13M10 8l10-2"/><ellipse cx="6" cy="18" rx="4" ry="3"/><ellipse cx="16" cy="16" rx="4" ry="3"/>',
     clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    captions: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 11h3m4 0h3M7 15h10"/>',
     waveform: '<path d="M4 10v4M8 5v14M12 2v20M16 6v12M20 10v4"/>',
     bookmark: '<path d="M6 3h12v18l-6-4-6 4z"/>',
     'checkbox-checked':
@@ -217,15 +218,33 @@ if (typeof document !== 'undefined') {
   });
   document.addEventListener('pointerover', (event) => {
     const anchor = event.target.closest?.(
-      '.notes-toolbar button[data-tooltip], .model-source-switch label[data-tooltip], .segment-tools [data-tooltip]',
+      '.notes-toolbar button[data-tooltip], .model-source-switch label[data-tooltip], .segment-tools [data-tooltip], .live-caption-controls [data-tooltip], #mark-important[data-tooltip], .note-highlight [data-tooltip]',
     );
     if (anchor) showPageTooltip(anchor, anchor.dataset.tooltip);
   });
   document.addEventListener('pointerout', (event) => {
     const anchor = event.target.closest?.(
-      '.notes-toolbar button[data-tooltip], .model-source-switch label[data-tooltip], .segment-tools [data-tooltip]',
+      '.notes-toolbar button[data-tooltip], .model-source-switch label[data-tooltip], .segment-tools [data-tooltip], .live-caption-controls [data-tooltip], #mark-important[data-tooltip], .note-highlight [data-tooltip]',
     );
     if (anchor && !anchor.contains(event.relatedTarget)) hidePageTooltip();
+  });
+  document.addEventListener('focusin', (event) => {
+    const anchor = event.target.closest?.(
+      '.live-caption-controls [data-tooltip], #mark-important[data-tooltip], .note-highlight [data-tooltip]',
+    );
+    if (anchor) showPageTooltip(anchor, anchor.dataset.tooltip);
+  });
+  document.addEventListener('focusout', (event) => {
+    if (
+      event.target.closest?.(
+        '.live-caption-controls [data-tooltip], #mark-important[data-tooltip], .note-highlight [data-tooltip]',
+      )
+    )
+      hidePageTooltip();
+  });
+  document.addEventListener('click', (event) => {
+    if (event.target.closest?.('.live-caption-controls, #mark-important, .note-highlight'))
+      hidePageTooltip();
   });
 }
 /** 格式化说话人名称，支持多语言。@param {object|string} speaker 说话人对象或名称字符串。@returns {string} 格式化的说话人名称。 */
@@ -338,11 +357,12 @@ function renderTranscriptSegment({
       ? `<div class="segment-tools" role="group" aria-label="${escapeHtml(t('字幕'))}">${[
           ['speaker', 'person', '标记说话人'],
           ['note', 'notes', '加入笔记'],
+          ['highlight', 'bookmark', '重点'],
           ['profile', 'waveform', '添加到声纹库'],
         ]
           .map(
             ([action, icon, label]) =>
-              `<button type="button" data-segment-tool="${action}" data-tooltip="${escapeHtml(t(label))}" aria-label="${escapeHtml(t(label))}"${action === 'speaker' ? ' aria-haspopup="dialog"' : ''}>${interfaceIcon(icon)}<span>${escapeHtml(t(label))}</span></button>`,
+              `<button type="button" data-segment-tool="${action}" data-tooltip="${escapeHtml(t(label))}" aria-label="${escapeHtml(t(label))}"${action === 'speaker' ? ' aria-haspopup="dialog"' : ''}>${interfaceIcon(icon)}</button>`,
           )
           .join(
             '',
@@ -437,6 +457,17 @@ function renderSettingsView() {
 function sanitizeUrl(url = '') {
   return /^(https?:|mailto:|data:image\/|brevia-note:\/\/)/i.test(url.trim()) ? url.trim() : '#';
 }
+/** 时间锚点沿用笔记 Markdown，导出后仍能读到时间与原文。 */
+function noteHighlightMarkdown(startMs, text) {
+  if (!Number.isSafeInteger(startMs) || startMs < 0 || !String(text || '').trim()) return '';
+  return `> [${formatMeetingTime(startMs)}](#brevia-highlight-${startMs}) ${String(text)
+    .replace(/[\r\n]+/g, ' ')
+    .trim()}`;
+}
+function renderNoteHighlight(startMs, text) {
+  const time = formatMeetingTime(startMs);
+  return `<div class="note-highlight" data-note-highlight="${startMs}" contenteditable="false"><div class="note-highlight-line">${interfaceIcon('bookmark')}<button type="button" data-note-seek="${startMs}" data-tooltip="${escapeHtml(t('跳转到 {time}').replace('{time}', time))}" aria-label="${escapeHtml(t('跳转到 {time}').replace('{time}', time))}">${time}</button><span class="note-highlight-preview">${escapeHtml(text)}</span><button type="button" data-note-highlight-toggle aria-expanded="false" data-tooltip="${escapeHtml(t('展开'))}" aria-label="${escapeHtml(t('展开'))}">${interfaceIcon('chevron-down')}</button></div><p class="note-highlight-body" hidden>${escapeHtml(text)}</p></div>`;
+}
 /** 把富文本编辑器的 DOM 子树转换为 Markdown（支持粗体/斜体/代码/链接/图片/标题/列表/引用/表格）。@param {Node} root 根节点。@returns {string} Markdown 文本。 */
 function htmlToMarkdown(root) {
   const lines = [];
@@ -448,6 +479,10 @@ function htmlToMarkdown(root) {
         continue;
       }
       if (child.nodeType !== Node.ELEMENT_NODE) continue;
+      if (child.matches?.('[data-note-highlight]')) {
+        out += `\n\n${noteHighlightMarkdown(Number(child.dataset.noteHighlight), child.querySelector('.note-highlight-body')?.textContent)}\n\n`;
+        continue;
+      }
       const tag = child.tagName.toLowerCase();
       if (tag === 'br') {
         out += '\n';
@@ -492,7 +527,15 @@ function htmlToMarkdown(root) {
       }
       if (child.nodeType !== Node.ELEMENT_NODE) continue;
       const tag = child.tagName.toLowerCase();
-      if (tag === 'p' || tag === 'div') {
+      if (child.matches?.('[data-note-highlight]')) {
+        lines.push(
+          noteHighlightMarkdown(
+            Number(child.dataset.noteHighlight),
+            child.querySelector('.note-highlight-body')?.textContent,
+          ),
+          '',
+        );
+      } else if (tag === 'p' || tag === 'div') {
         lines.push(inline(child));
         lines.push('');
       } else if (/^h[1-3]$/.test(tag)) {
@@ -634,7 +677,12 @@ function placeCaretAtEnd(element) {
  * @returns {{setMarkdown: Function, getMarkdown: Function, setMode: Function, focus: Function, destroy: Function}} 编辑器 API。 */
 function createNotesEditor(root, options = {}) {
   const listeners = new AbortController();
-  const { onInput = null, ariaLabel = t('我的笔记'), getMeetingId = () => null } = options;
+  const {
+    onInput = null,
+    ariaLabel = t('我的笔记'),
+    getMeetingId = () => null,
+    getHighlightTime = null,
+  } = options;
   const toolbarButtons = [
     ['bold', '加粗', '<b>B</b>'],
     ['italic', '斜体', '<i>I</i>'],
@@ -972,6 +1020,36 @@ function createNotesEditor(root, options = {}) {
       setMode(mode === 'rich' ? 'markdown' : 'rich');
       return;
     }
+    if (command === 'highlight' && getHighlightTime) {
+      const selection = window.getSelection();
+      const selected =
+        mode === 'markdown'
+          ? input.value.slice(input.selectionStart, input.selectionEnd)
+          : selection?.rangeCount &&
+              editor.contains(selection.getRangeAt(0).commonAncestorContainer)
+            ? selection.toString()
+            : '';
+      const startMs = getHighlightTime();
+      const markdown = noteHighlightMarkdown(startMs, selected);
+      if (!markdown) {
+        appActions.showToast(t('请先选择笔记内容'));
+        return;
+      }
+      if (mode === 'markdown') insertText(`\n\n${markdown}\n\n`);
+      else {
+        const range = selection.getRangeAt(0).cloneRange();
+        editor.focus();
+        selection.removeAllRanges();
+        selection.addRange(range);
+        document.execCommand(
+          'insertHTML',
+          false,
+          `${renderNoteHighlight(startMs, selected.replace(/[\r\n]+/g, ' ').trim())}<br>`,
+        );
+        onInput?.();
+      }
+      return;
+    }
     editor.focus();
     if (command === 'bold') document.execCommand('bold');
     else if (command === 'italic') document.execCommand('italic');
@@ -1201,6 +1279,24 @@ function createNotesEditor(root, options = {}) {
       // 触发「正在输入」信号，避免 AI 刚写完自己就被当成用户在打字。
       if (onInput) onInput({ programmatic: true });
     },
+    addHighlight(startMs, text) {
+      const markdown = noteHighlightMarkdown(startMs, text);
+      if (!markdown) return false;
+      if (this.getMarkdown().split('\n').includes(markdown)) return false;
+      if (mode === 'rich') {
+        editor.insertAdjacentHTML(
+          'beforeend',
+          `${renderNoteHighlight(
+            startMs,
+            String(text)
+              .replace(/[\r\n]+/g, ' ')
+              .trim(),
+          )}<p><br></p>`,
+        );
+        onInput?.({ programmatic: true });
+      } else this.appendMarkdown(markdown);
+      return true;
+    },
     getMarkdown() {
       return mode === 'rich' ? htmlToMarkdown(editor) : input.value;
     },
@@ -1267,6 +1363,12 @@ function renderMarkdown(markdown) {
   for (let index = 0; index < lines.length; ) {
     const line = lines[index];
     if (!line.trim()) {
+      index += 1;
+      continue;
+    }
+    const highlight = line.match(/^> \[[^\]\n]+\]\(#brevia-highlight-(\d+)\) (.+)$/);
+    if (highlight && Number.isSafeInteger(Number(highlight[1]))) {
+      html.push(renderNoteHighlight(Number(highlight[1]), highlight[2]));
       index += 1;
       continue;
     }
@@ -1377,11 +1479,11 @@ function renderMeetingSummary({
       ? `<button class="modal-action" type="button" disabled>${interfaceIcon('ai')}${t('正在生成会议纪要')}</button>`
       : `<button class="modal-action" ${markdown ? 'data-regenerate-summary' : 'data-generate-summary'} type="button"${blockedAttrs}>${interfaceIcon(markdown ? 'refresh' : 'ai')}${t(markdown ? '重新生成' : '生成纪要')}</button>`;
   const people = participants.length
-    ? `<section class="summary-participants"><button type="button" data-summary-participants-toggle aria-haspopup="dialog" aria-controls="summary-participants-popover" aria-expanded="false"><span class="summary-participant-count">${escapeHtml(t('参与者'))} (${participants.length})</span><span class="summary-participant-avatars" aria-hidden="true">${participants
+    ? `<section class="summary-participants"><button type="button" data-summary-participants-toggle aria-haspopup="dialog" aria-controls="summary-participants-popover" aria-expanded="false"><span class="summary-participant-count">${escapeHtml(t('参与者'))} (${participants.length})</span><span class="summary-participant-avatars">${participants
         .slice(0, 3)
         .map(
           (person) =>
-            `<i class="speaker-avatar">${escapeHtml([...formatSpeakerName(person)][0] || '')}</i>`,
+            `<span class="summary-participant-preview-person"><i class="speaker-avatar" aria-hidden="true">${escapeHtml([...formatSpeakerName(person)][0] || '')}</i><span>${escapeHtml(formatSpeakerName(person))}</span></span>`,
         )
         .join(
           '',
@@ -1479,6 +1581,7 @@ function renderMeetingDetail() {
   const d = uiData.detail;
   const actions = document.querySelector('#detail-view .detail-actions');
   if (actions) document.querySelector('#detail-view').append(actions);
+  document.querySelector('#detail-view .detail-head .summary-participants')?.remove();
   const notesMode = detailNotesEditor?.getMode();
   const summaryMode = inlineSummaryEditor?.getMode();
   detailNotesEditor?.destroy();
@@ -1551,6 +1654,7 @@ function renderMeetingDetail() {
       detailNotesEditor = createNotesEditor(root, {
         onInput: (...args) => appActions.updateDetailNotesDraft(...args),
         getMeetingId: () => currentMeetingDetail?.id,
+        getHighlightTime: () => appActions.noteHighlightTime(),
       });
       if (notesMode) detailNotesEditor.setMode(notesMode);
       detailNotesEditor.setMarkdown(d.notes);
@@ -1592,11 +1696,7 @@ function syncDetailTranscriptToolbar() {
   const toolbar = root?.querySelector('.detail-transcript-toolbar');
   const extra = root?.querySelector('.tabbar > .tabbar-extra');
   const actions = document.querySelector('#detail-view .detail-actions');
-  if (actions)
-    (detailActiveTab === 'transcript' && !uiData.detail.transcriptEditing && toolbar
-      ? toolbar
-      : document.querySelector('#detail-view')
-    ).append(actions);
+  if (actions) document.querySelector('#detail-view').append(actions);
   toolbar?.querySelector('.tabbar-extra')?.remove();
   if (detailActiveTab !== 'transcript' || !toolbar || !extra) return;
   if (uiData.detail.transcriptEditing) {
@@ -1608,7 +1708,7 @@ function syncDetailTranscriptToolbar() {
   toolbar.append(extra);
 }
 
-/** 保留同一正文和编辑器，纪要标签展开为单栏阅读，笔记标签复用侧栏预览。 */
+/** 三个标签共用阅读区；参会者留在固定页头，纪要编辑器不随切换重建。 */
 function syncDetailSummaryPanel() {
   const root = document.querySelector('#detail-view');
   const main = root?.querySelector('[data-detail-panel="summary"]');
@@ -1616,7 +1716,7 @@ function syncDetailSummaryPanel() {
   const preview = root?.querySelector('.summary-preview');
   if (!main || !aside || !preview) return;
   const body = preview.querySelector('.summary-body');
-  if (detailActiveTab === 'summary' && body && !body.querySelector('.summary-reading-section')) {
+  if (body && !body.querySelector('.summary-reading-section')) {
     let content;
     for (const node of [...body.children]) {
       if (node.tagName === 'H2') {
@@ -1629,7 +1729,8 @@ function syncDetailSummaryPanel() {
       else if (content) content.append(node);
     }
   }
-  aside.hidden = detailActiveTab === 'summary';
-  if (detailActiveTab === 'summary') main.append(preview);
-  else aside.replaceChildren(preview);
+  const people = preview.querySelector('.summary-participants');
+  if (people) root.querySelector('.detail-title').append(people);
+  aside.hidden = true;
+  main.append(preview);
 }

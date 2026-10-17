@@ -37,6 +37,7 @@ html.is-collaboration body {
   transition: none !important;
 }
 .motion-pressed {
+  scale: 0.98;
   background: #e9e9e9 !important;
   color: #222 !important;
 }
@@ -336,10 +337,10 @@ body[data-focus]:not([data-focus=""]) .ai-suggestion-text {
 }
 body[data-focus]:not([data-focus=""]) .ai-suggestion-card {
   padding: 20px;
-  background: #edf5fc;
+  background: var(--color-selected);
 }
 body[data-focus]:not([data-focus=""]) .ai-suggestion-accept {
-  background: #0878d1;
+  background: var(--color-text);
   color: white;
 }
 body[data-focus]:not([data-focus=""]) .live-notes .notes-editor li:last-child {
@@ -369,21 +370,6 @@ body[data-focus]:not([data-focus=""]) #home-view .meeting-row-title {
   transform-origin: 2px 2px;
   pointer-events: none;
 }
-.motion-cursor::after {
-  content: "Brevia";
-  position: absolute;
-  left: 24px;
-  top: 30px;
-  border: 1.5px solid white;
-  border-radius: 4px 6px 5px 4px;
-  background: #0878d1;
-  color: white;
-  font:
-    600 12px/1.4 -apple-system,
-    sans-serif;
-  padding: 3px 8px;
-  transform: rotate(-3deg);
-}
 .motion-cursor::before {
   content: "";
   display: none;
@@ -392,9 +378,9 @@ body[data-focus]:not([data-focus=""]) #home-view .meeting-row-title {
   top: -19px;
   width: 40px;
   height: 40px;
-  border: 2.5px solid #0878d1;
-  border-radius: 47% 53% 51% 49%;
-  background: #0878d11a;
+  border: 2px solid var(--color-text);
+  border-radius: 50%;
+  background: #22222212;
   transform: scale(calc(0.45 + var(--click-progress, 0) * 1.8));
   opacity: calc(1 - var(--click-progress, 0));
 }
@@ -484,30 +470,6 @@ body.is-compact .notes-editor h2 {
   font-size: 23px;
   margin: 22px 0 14px;
 }
-body.is-compact #detail-view {
-  padding: 20px;
-}
-body.is-compact #detail-view .detail-header h1 {
-  font-size: 25px;
-}
-body.is-compact .detail-meta {
-  font-size: 11px;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-body.is-compact .summary-body {
-  padding: 20px !important;
-}
-body.is-compact .summary-body h1 {
-  font-size: 27px;
-}
-body.is-compact .summary-body h2 {
-  font-size: 23px;
-}
-body.is-compact .summary-body p,
-body.is-compact .summary-body li {
-  font-size: 18px !important;
-}
 body.is-compact #home-view {
   padding: 25px 20px;
 }
@@ -536,7 +498,7 @@ body.is-compact .meeting-menu {
 }
 @keyframes accepted-highlight {
   from {
-    background: #e5f0fa;
+    background: var(--color-selected);
   }
   to {
     background: transparent;

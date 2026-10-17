@@ -6,6 +6,11 @@
 
 (function () {
   const translations = {
+    '逐字稿': 'Transcript',
+    '笔记': 'Notes',
+    '参与者': 'Participants',
+    '45 分钟': '45 min',
+    '导出': 'Export',
     '设备连接': 'Device connection',
     '等待设备连接': 'Waiting for a device',
     '开始精修': 'Refine transcript',

@@ -1969,8 +1969,7 @@
     width: 17px;
     height: 17px;
   }
-  .mark-button:hover,
-  .live-more-toggle:hover {
+  .mark-button:hover {
     border-color: #767676;
   }
   .live-control-bar .end-button {
@@ -1979,59 +1978,6 @@
     padding: 0 18px;
     font-size: 13px;
     white-space: nowrap;
-  }
-  .live-more {
-    position: relative;
-  }
-  .live-more-toggle {
-    display: grid;
-    width: 42px;
-    height: 42px;
-    place-items: center;
-    border: 1px solid var(--color-line);
-    border-radius: 9px;
-    color: var(--color-text-muted);
-    letter-spacing: 2px;
-  }
-  .live-more-panel {
-    position: absolute;
-    right: 0;
-    bottom: calc(100% + 14px);
-    z-index: 30;
-    width: 230px;
-    padding: 8px;
-    border: 1px solid var(--color-line);
-    border-radius: 12px;
-    background: var(--color-surface);
-    box-shadow: none;
-  }
-  .live-more-panel .live-caption-controls {
-    display: grid;
-    gap: 2px;
-  }
-  .live-more-panel :is(.floating-caption-toggle, .translation-toggle, .live-model-toggle) {
-    display: flex;
-    width: 100%;
-    min-height: 38px;
-    align-items: center;
-    justify-content: flex-start;
-    padding: 0 10px;
-    border: 0;
-    border-radius: 7px;
-    color: var(--color-text-muted);
-    text-align: left;
-    font-size: 12px;
-  }
-  .live-more-panel :is(.floating-caption-toggle, .translation-toggle, .live-model-toggle):hover {
-    background: #f2f2f2;
-    color: var(--color-text);
-  }
-  .floating-control-bar .live-more-panel .flow-select-options {
-    top: 0;
-    right: calc(100% + 10px);
-    bottom: auto;
-    left: auto;
-    min-width: 180px;
   }
   .floating-control-bar .flow-select-options {
     top: auto;
@@ -3904,11 +3850,6 @@
   .player-speed {
     width: 60px;
   }
-  .floating-control-bar .live-more-panel .flow-select-options {
-    top: auto;
-    right: 0;
-    bottom: calc(100% + 4px);
-  }
 }
 
 @media (max-width: 600px) {
@@ -5183,21 +5124,10 @@ html[data-theme="dark"] .player .play.is-playing {
   color: #fff;
 }
 html[data-theme="dark"] .mark-button,
-html[data-theme="dark"] .live-more-toggle,
 html[data-theme="dark"] .player-actions .skip,
 html[data-theme="dark"] .player-speed .flow-select-toggle {
   border-color: #555;
   color: #eee;
-}
-html[data-theme="dark"] .live-more-panel {
-  border-color: var(--color-line);
-  background: #242424;
-}
-html[data-theme="dark"]
-  .live-more-panel
-  :is(.floating-caption-toggle, .translation-toggle, .live-model-toggle):hover {
-  background: #363636;
-  color: #fff;
 }
 html[data-theme="dark"] .tab,
 html[data-theme="dark"] .task-card-close,

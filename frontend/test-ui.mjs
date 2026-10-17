@@ -129,8 +129,8 @@ assert.match(
 );
 assert.match(
   text(html),
-  /class="floating-control-bar live-control-bar"[^]*id="pause"[^]*id="mark-important"[^]*id="end-meeting"[^]*id="live-more-toggle"/,
-  'live controls follow pause, mark, end, more order',
+  /class="floating-control-bar live-control-bar"[^]*id="floating-caption-toggle"[^]*id="translation-toggle"[^]*id="live-model-toggle"[^]*id="pause"[^]*id="mark-important"[^]*id="end-meeting"/,
+  'live tools precede pause, mark and end in the bottom toolbar',
 );
 assert.match(
   text(html),
@@ -623,7 +623,7 @@ const buttonAnimations = [];
 runInNewContext(text(components), {
   document: {
     addEventListener(type, handler, capture) {
-      if (type === 'click') {
+      if (type === 'click' && capture === true) {
         keyboardPress = handler;
         assert.equal(capture, true);
       }
@@ -2007,6 +2007,34 @@ assert.match(
 assert.match(text(html), /brevia-logo-reveal\.gif/);
 assert.match(text(js), /brevia\.on\('startup\.ready'/);
 assert.match(text(js), /const dismissStartupSplash/);
+for (const duration of ['0s', '0.36s']) {
+  let removed = false,
+    fallback;
+  const splash = {
+    classList: { add() {} },
+    addEventListener() {},
+    remove() {
+      removed = true;
+    },
+  };
+  const start = js.indexOf('const dismissStartupSplash =');
+  const end = js.indexOf('// 启动动画', start);
+  runInNewContext(js.slice(start, end) + '\ndismissStartupSplash();', {
+    document: { querySelector: () => splash },
+    getComputedStyle: () => ({ transitionDuration: duration }),
+    setTimeout(callback, ms) {
+      fallback = callback;
+      assert.equal(ms, 392);
+    },
+  });
+  if (duration === '0s')
+    assert.equal(removed, true, 'reduced-motion startup never waits for a missing transitionend');
+  else {
+    assert.equal(removed, false);
+    fallback();
+    assert.equal(removed, true, 'startup removes its overlay even when transitionend is lost');
+  }
+}
 assert.match(text(meetings), /brevia-meetings-v1/);
 assert.match(text(js), /cacheMeetingList\(\)/);
 assert.match(text(css), /\.startup-splash\{[^}]*z-index:100[^}]*transition:opacity \.36s/);
@@ -2431,6 +2459,79 @@ assert.equal(utilsContext.formatMeetingTime(-5), '00:00', '负值夹到 0');
 assert.equal(utilsContext.refinedModelSupportsTimestamps('funasr-nano-int8'), true);
 assert.equal(utilsContext.refinedModelSupportsTimestamps('unknown-model'), false);
 
+// 重点锚点保留原文并拒绝非法时间，正文只作为文本渲染。
+const highlightContext = { formatMeetingTime: utilsContext.formatMeetingTime, t: (value) => value };
+runInNewContext(text(components), highlightContext);
+assert.equal(
+  highlightContext.noteHighlightMarkdown(0, '第一句\n第二句'),
+  '> [00:00](#brevia-highlight-0) 第一句 第二句',
+);
+for (const value of [-1, NaN, Infinity, 1.5, Number.MAX_SAFE_INTEGER + 1, '1000'])
+  assert.equal(highlightContext.noteHighlightMarkdown(value, 'text'), '');
+assert.equal(highlightContext.noteHighlightMarkdown(1000, '  '), '');
+const highlightMarkup = highlightContext.renderMarkdown(
+  highlightContext.noteHighlightMarkdown(147000, '<img src=x onerror=alert(1)> **raw**'),
+);
+assert.match(highlightMarkup, /data-note-highlight="147000"/);
+assert.match(highlightMarkup, /02:27/);
+assert.match(highlightMarkup, /&lt;img/);
+assert.doesNotMatch(highlightMarkup, /<img|<strong>/);
+assert.equal(
+  highlightContext.renderMarkdown('> ordinary quote'),
+  '<blockquote>ordinary quote</blockquote>',
+);
+assert.doesNotMatch(
+  highlightContext.renderMarkdown('> [x](#brevia-highlight-9007199254740992) text'),
+  /data-note-highlight/,
+);
+
+const markedSubtitles = [],
+  detailHighlights = [],
+  highlightToasts = [];
+const subtitleHighlightContext = {
+  noteHighlightMarkdown: highlightContext.noteHighlightMarkdown,
+  meetingActive: true,
+  breviaClient: { state: { meeting: { id: 'live-highlight' } } },
+  liveNotesEditor: { addHighlight: (...args) => markedSubtitles.push(args) },
+  detailNotesEditor: null,
+  uiData: { detail: { notes: '' } },
+  appendTextToActiveNotes: (...args) => detailHighlights.push(args),
+  showToast: (message) => highlightToasts.push(message),
+  t: (value) => value,
+};
+const highlightHandlerStart = text(app).indexOf('function addSubtitleHighlight(');
+runInNewContext(
+  text(app).slice(
+    highlightHandlerStart,
+    text(app).indexOf("document.addEventListener('click'", highlightHandlerStart),
+  ),
+  subtitleHighlightContext,
+);
+subtitleHighlightContext.addSubtitleHighlight(
+  { start_ms: 147000, text: '原字幕' },
+  'live-highlight',
+);
+assert.deepEqual(markedSubtitles, [[147000, '原字幕']], '使用字幕开始时间而非点击时间');
+subtitleHighlightContext.addSubtitleHighlight({ start_ms: -1, text: '非法' }, 'live-highlight');
+assert.equal(markedSubtitles.length, 1);
+subtitleHighlightContext.meetingActive = false;
+subtitleHighlightContext.uiData.detail.notes = highlightContext.noteHighlightMarkdown(
+  147000,
+  '已标记',
+);
+subtitleHighlightContext.addSubtitleHighlight(
+  { start_ms: 147000, text: '已标记' },
+  'detail-highlight',
+);
+assert.equal(detailHighlights.length, 0);
+subtitleHighlightContext.addSubtitleHighlight(
+  { start_ms: 147000, text: '另一句话' },
+  'detail-highlight',
+);
+assert.deepEqual(detailHighlights, [
+  [highlightContext.noteHighlightMarkdown(147000, '另一句话'), 'detail-highlight'],
+]);
+
 // 动作接缝真跑一遍：注册前调用要抛出可诊断的错误，重复/越界/非函数注册要立刻失败。
 // 这些是视图模块与 app.js 之间唯一的契约，光断言源码里出现过 appActions 说明不了行为。
 const actionsContext = {};
@@ -2607,7 +2708,7 @@ const stoppedListeners = text(app).match(/window\.brevia\.on\('meeting\.stopped'
 assert.equal(stoppedListeners.length, 1);
 assert.match(
   text(app),
-  /window\.brevia\.on\('meeting\.stopped', async \(\{ meeting \}\) => \{[\s\S]{0,400}floatingCaptionMode = null;[\s\S]{0,150}if \(!meetingActive\) return;\s+clearInterval\(timer\);/,
+  /window\.brevia\.on\('meeting\.stopped', async \(\{ meeting \}\) => \{[\s\S]{0,400}floatingCaptionMode = null;[\s\S]{0,150}if \(!meetingActive\) return;\s+meetingActive = false;\s+clearInterval\(timer\);/,
 );
 assert.match(
   text(js),
@@ -2617,10 +2718,145 @@ assert.match(
   text(js),
   /if\s+\(summary\?\.cancelled\)\s+\{\s+hideSummaryProgress\(\);\s+return;\s+\}/,
 );
-assert.match(
-  text(js),
-  /if \(meeting && summaryRequestConfig\(\)\) void generateMeetingSummary\(meeting\.id\);/,
+// 结束事件共用一条自动纪要路径，桌面/手机结束与列表刷新失败都应覆盖。
+const stoppedHandlerSource = text(app).match(
+  /window\.brevia\.on\('meeting\.stopped', async \(\{ meeting \}\) => \{[\s\S]*?\n  \}\);/,
+)?.[0];
+assert.ok(stoppedHandlerSource);
+const summaryConfigFunctions = [
+  'providerEntry',
+  'builtinFallbackModel',
+  'requestConfig',
+  'summaryRequestConfig',
+]
+  .map((name) => text(app).match(new RegExp(`function ${name}\\([^]*?\\n\\}`))?.[0])
+  .join('\n');
+for (const scenario of [
+  { provider: 'built-in', model: 'local', installed: true, expected: 1 },
+  { provider: 'built-in', model: 'local', installed: true, phone: true, expected: 1 },
+  { provider: 'built-in', installed: true, expected: 1 },
+  { provider: 'built-in', model: 'local', expected: 0 },
+  { provider: 'built-in', model: 'local', installed: true, enabled: false, expected: 0 },
+  { provider: 'remote', model: 'online', keyReference: 'saved-key', expected: 1 },
+  { provider: 'remote', model: 'online', expected: 0 },
+  { provider: 'built-in', model: 'local', installed: true, cleanupFails: true, expected: 1 },
+]) {
+  const calls = [];
+  const failures = [];
+  const meeting = { id: 'ended', tags: scenario.phone ? ['手机录音'] : [] };
+  const context = {
+    summaryConfig: {
+      enabled: scenario.enabled !== false,
+      provider: scenario.provider,
+      providers: {
+        [scenario.provider]: { model: scenario.model, keyReference: scenario.keyReference },
+      },
+    },
+    summaryProviderPresets: {
+      'built-in': { format: 'builtin' },
+      remote: { needsKey: true, format: 'openai' },
+    },
+    modelCatalog: [{ id: 'local', kind: 'llama-chat' }],
+    modelPaths: new Set(scenario.installed ? ['local'] : []),
+    meetingActive: true,
+    floatingCaptionMode: null,
+    timer: 0,
+    clearInterval() {},
+    stopAiNoteForMeeting() {},
+    resetAiNoteSuggestions() {},
+    breviaClient: {
+      state: { meeting },
+      capture: {
+        stop: async () => {
+          if (scenario.cleanupFails) throw new Error('capture cleanup');
+        },
+      },
+    },
+    miniMeeting: { hidden: false },
+    applyBackendDetail() {},
+    showView() {},
+    refreshBackendMeetings: async () => {
+      throw new Error('list refresh');
+    },
+    showToast: (message) => failures.push(message),
+    generateMeetingSummary: (id) => calls.push(id),
+    console: { error() {} },
+    window: {
+      brevia: {
+        on: (_, handler) => {
+          context.stopped = handler;
+        },
+      },
+    },
+  };
+  runInNewContext(`${summaryConfigFunctions}\n${stoppedHandlerSource}`, context);
+  await context.stopped({ meeting });
+  await context.stopped({ meeting });
+  assert.equal(calls.length, scenario.expected, JSON.stringify(scenario));
+  assert.ok(calls.every((id) => id === meeting.id));
+  assert.equal(context.meetingActive, false);
+  assert.equal(context.breviaClient.state.meeting, null);
+  assert.deepEqual(failures, ['list refresh']);
+}
+assert.doesNotMatch(text(app), /live-more-toggle|live-more-panel/);
+
+for (const code of ['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']) {
+  for (const key of ['开启悬浮字幕', '关闭悬浮字幕', '翻译：开', '翻译：关', '识别模型'])
+    assert.ok(localeContext.window.BreviaLocaleData.catalog[code].labels[key], `${code}: ${key}`);
+}
+// 只有移动菜单锚点的祖先滚动才关闭菜单，字幕更新和菜单自身滚动保持打开。
+const floatingScrollSource = text(app)
+  .slice(text(app).indexOf('function fitFlowSelectOptions'))
+  .match(/document\.addEventListener\(\n  'scroll',[\s\S]*?\n\);/)?.[0];
+assert.ok(floatingScrollSource);
+let onFloatingScroll;
+let expanded = 'true';
+const select = {
+  querySelector: () => ({
+    setAttribute: (_, value) => {
+      expanded = value;
+    },
+  }),
+};
+const popup = { hidden: false, closest: () => select };
+const scrollContext = {
+  document: {
+    addEventListener: (_, handler) => {
+      onFloatingScroll = handler;
+    },
+    querySelectorAll: () => [popup],
+  },
+};
+runInNewContext(floatingScrollSource, scrollContext);
+for (const containsAnchor of [false, false, true]) {
+  onFloatingScroll({ target: { contains: (owner) => containsAnchor && owner === select } });
+  assert.equal(popup.hidden, containsAnchor);
+  assert.equal(expanded, containsAnchor ? 'false' : 'true');
+}
+const fitSource = text(app).match(/function fitFlowSelectOptions\([^]*?\n\}/)?.[0];
+const fitted = {
+  hidden: false,
+  style: {},
+  classList: { add() {} },
+  querySelectorAll: () => [],
+  offsetWidth: 320,
+  offsetHeight: 360,
+};
+const fitContext = { innerWidth: 880, innerHeight: 800 };
+runInNewContext(`${fitSource}\nthis.fit = fitFlowSelectOptions`, fitContext);
+fitContext.fit(
+  fitted,
+  {
+    closest: () => ({ querySelector: () => null }),
+    getBoundingClientRect: () => ({ left: 500, top: 700, bottom: 744, width: 44 }),
+  },
+  320,
+  360,
 );
+assert.equal(fitted.style.width, '320px');
+assert.equal(fitted.style.maxHeight, '360px');
+assert.equal(fitted.style.top, '336px');
+
 assert.match(
   text(js),
   /function\s+availableUpdateActionLabel\(\)\s+\{\s+return\s+updateVersion\s+\?\s+updateCopy\(\)\.update\.replace\('0\.2\.0',\s+updateVersion\)\s+:\s+updateCopy\(\)\.update;\s+\}/,
@@ -5223,7 +5459,6 @@ assert.match(
   text(css),
   /\.refine-menu-speakers input:not\(\[type=checkbox\]\):not\(\[type=range\]\):not\(\[type=radio\]\),\.refine-menu-speakers \.flow-select-toggle\{[^}]*height:32px/,
 );
-const navigationWaits = [];
 const viewNode = (id) => {
   const classes = new Set(['active']);
   return {
@@ -5241,6 +5476,9 @@ const viewA = viewNode('a-view'),
 let visibleView = viewA;
 const navigationContext = {
   pageTransition: null,
+  pageTransitionRevision: 0,
+  viewReturnFocus: new Map(),
+  BreviaMotion: { cancel() {}, enter() {} },
   modalRequestRevision: 0,
   activeView: 'a',
   settingsModal: { hidden: true },
@@ -5263,7 +5501,7 @@ const navigationContext = {
   renderMiniPlayback() {},
   syncPhonePreview() {},
   matchMedia: () => ({ matches: false }),
-  window: { setTimeout: (callback) => navigationWaits.push(callback), scrollTo() {} },
+  window: { scrollTo() {} },
 };
 runInNewContext(`async ${summaryFn('transitionPage')}`, navigationContext);
 const firstNavigation = navigationContext.transitionPage(viewA, viewB, () => {
@@ -5272,12 +5510,9 @@ const firstNavigation = navigationContext.transitionPage(viewA, viewB, () => {
 const secondNavigation = navigationContext.transitionPage(viewA, viewC, () => {
   visibleView = viewC;
 });
-navigationWaits.shift()();
 await firstNavigation;
-await Promise.resolve();
-navigationWaits.shift()();
 await secondNavigation;
-assert.equal(visibleView, viewC, 'the last navigation runs after the current transition');
+assert.equal(visibleView, viewC, 'navigation does not wait for visual animation');
 assert.equal(
   navigationContext.activeView,
   'c',
@@ -5303,12 +5538,31 @@ navigationContext.document.body = { classList: { remove() {} } };
 navigationContext.document.querySelector = (selector) =>
   selector === '.view.active' ? visibleView : appShellStub;
 const libraryNavigation = navigationContext.transitionPage(viewC, viewA);
-navigationWaits.shift()();
 await libraryNavigation;
 assert.ok(
   settingsClosed && navigationContext.settingsModal.hidden && !appShellStub.inert,
   '离开设置后会议库可交互',
 );
+// 慢业务清理仍串行，但尚未开始的中间意图不会排成长动画队列。
+let finishNavigation;
+const appliedNavigation = [];
+const heldNavigation = navigationContext.transitionPage(
+  viewA,
+  viewB,
+  () =>
+    new Promise((resolve) => {
+      finishNavigation = resolve;
+    }),
+);
+const skippedNavigation = navigationContext.transitionPage(viewA, viewC, () =>
+  appliedNavigation.push('stale'),
+);
+const latestNavigation = navigationContext.transitionPage(viewA, viewA, () =>
+  appliedNavigation.push('latest'),
+);
+finishNavigation();
+await Promise.all([heldNavigation, skippedNavigation, latestNavigation]);
+assert.deepEqual(appliedNavigation, ['latest']);
 
 const liveElement = () => ({
   classList: { add() {}, remove() {} },
@@ -5633,6 +5887,7 @@ let onboardingNext = 0,
   onboardingDisposed = 0,
   onboardingTimer;
 const dismissal = {
+  BreviaMotion: { duration: () => 180 },
   onboardingPage: {
     dataset: {},
     classList: {
@@ -5640,7 +5895,9 @@ const dismissal = {
       remove: (name) => onboardingClasses.delete(name),
       add: (name) => onboardingClasses.add(name),
     },
-    remove() {},
+    remove() {
+      this.removed = true;
+    },
   },
   onboardingAiDemoTimer: null,
   onboardingSummaryDemoTimer: null,
@@ -5661,13 +5918,41 @@ const dismissal = {
   },
 };
 runInNewContext(summaryFn('dismissOnboardingPage'), dismissal);
-dismissal.dismissOnboardingPage(() => onboardingNext++);
-dismissal.dismissOnboardingPage(() => onboardingNext++);
-onboardingTimer();
+const firstDismissal = dismissal.dismissOnboardingPage(() => onboardingNext++);
+const repeatedDismissal = dismissal.dismissOnboardingPage(() => onboardingNext++);
+assert.equal(firstDismissal, repeatedDismissal, 'repeated dismissal has one awaitable completion');
+await firstDismissal;
 assert.equal(onboardingNext, 1, 'repeated clicks must not create duplicate onboarding pages');
 assert.equal(onboardingDisposed, 1, 'leaving onboarding must dispose motion exactly once');
 dismissal.dismissOnboardingPage(() => onboardingNext++);
 assert.equal(onboardingNext, 1);
+let finishNextStep;
+const retainedPage = {
+  dataset: {},
+  remove() {
+    this.removed = true;
+  },
+};
+dismissal.onboardingPage = retainedPage;
+const slowHandoff = dismissal.dismissOnboardingPage(
+  () =>
+    new Promise((resolve) => {
+      finishNextStep = resolve;
+    }),
+);
+await Promise.resolve();
+assert.equal(
+  retainedPage.removed,
+  undefined,
+  'slow preparation keeps the existing onboarding page visible',
+);
+assert.equal(retainedPage.inert, true, 'pending step cannot be submitted twice');
+finishNextStep(false);
+await slowHandoff;
+assert.equal(retainedPage.removed, undefined, 'failed preparation retains the old page');
+assert.equal(retainedPage.inert, false, 'failed preparation can be retried');
+await dismissal.dismissOnboardingPage(() => {});
+assert.equal(retainedPage.removed, true);
 console.log('UI structure and behavior checks passed.');
 
 // A second meeting cannot launch or clear the first meeting's progress.
