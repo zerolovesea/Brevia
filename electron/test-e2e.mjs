@@ -686,7 +686,10 @@ try {
     awaitPromise: true,
     returnByValue: true,
   });
-  await client.send('Emulation.setEmulatedMedia', { features: [] });
+  // 恢复本套测试指定的偏好，不能回落到 CI 机器自身的减少动态效果设置。
+  await client.send('Emulation.setEmulatedMedia', {
+    features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }],
+  });
   check(
     reducedAiDemo.result?.value === true,
     '降低动态效果应直接显示成品；关闭功能后保留静态示例并取消演示计时器',
