@@ -2,6 +2,7 @@
 
 import json
 import logging
+import os
 import re
 import sys
 from pathlib import Path
@@ -18,6 +19,16 @@ def check_diarization():
         worker = Worker(output=lambda *_: None)
         try:
             payload = json.loads(sys.stdin.buffer.readline())
+            reading = threading.Event()
+
+            def hold_command_pipe():
+                # 复现正常 Worker 主线程阻塞读命令，防止分析子进程再继承同一输入句柄。
+                reading.set()
+                os.read(sys.stdin.fileno(), 1)
+
+            threading.Thread(target=hold_command_pipe, daemon=True).start()
+            if not reading.wait(timeout=5):
+                raise RuntimeError('Command pipe reader did not start')
             control = SimpleNamespace(paused=threading.Event(), cancelled=threading.Event())
             turns = worker._run_diarization_process(None, payload, control)
             if not turns or not any(turn.get('_embedding') for turn in turns):
