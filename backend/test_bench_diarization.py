@@ -10,7 +10,7 @@ from .bench_diarization import benchmark_entry
 
 
 class DiarizationBenchmarkTest(unittest.TestCase):
-    def run_entry(self, script, timeout=5, startup_timeout=5):
+    def run_entry(self, script, timeout=5, startup_timeout=5, session_chunks=0):
         with tempfile.TemporaryDirectory() as root:
             result = benchmark_entry(
                 [sys.executable, "-u", "-c", script],
@@ -19,6 +19,7 @@ class DiarizationBenchmarkTest(unittest.TestCase):
                 Path(root),
                 timeout,
                 startup_timeout,
+                session_chunks,
             )
         self.assertFalse(result["resources"]["last"]["processes"], result)
         return result
@@ -44,6 +45,20 @@ class DiarizationBenchmarkTest(unittest.TestCase):
         )
         self.assertFalse(result["ok"])
         self.assertIn("Invalid analysis response", result["error"])
+
+    def test_session_requires_stable_results_and_exits_after_shutdown(self):
+        script = (
+            "import sys,json\n"
+            "for line in sys.stdin:\n"
+            " r=json.loads(line)\n"
+            " result=None if r['type']!='process_chunk' else [{'speaker':'spk-1'}]\n"
+            " print(json.dumps({'id':r['id'],'ok':True,'result':result}),flush=True)\n"
+            " if r['type']=='shutdown':break\n"
+        )
+        result = self.run_entry(script, session_chunks=3)
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(len(result["chunks"]), 3)
+        self.assertEqual(len({chunk["result_sha256"] for chunk in result["chunks"]}), 1)
 
 
 if __name__ == "__main__":

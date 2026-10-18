@@ -17,21 +17,26 @@ from .diarization_process import DiarizationProcess
 from .process_resources import ProcessTreeMonitor
 
 
-def benchmark_entry(command, payload, env, directory, timeout, startup_timeout):
+def benchmark_entry(command, payload, env, directory, timeout, startup_timeout, session_chunks=0):
     started = time.monotonic()
     result = {"stages": [], "ok": False}
     monitor = None
     child = None
+    chunks = []
+    initialized = False
+    request_started = started
     with (directory / "native.log").open("w", encoding="utf-8") as log:
         try:
-            child = DiarizationProcess(payload, command=command, stderr=log, env=env)
+            child = DiarizationProcess(
+                payload, command=command, stderr=log, env=env, session=bool(session_chunks)
+            )
             with (directory / "resources.jsonl").open("w", encoding="utf-8") as samples:
                 with ProcessTreeMonitor(child.process.pid, samples) as monitor:
                     try:
                         stage = "startup"
                         while True:
                             elapsed = time.monotonic() - started
-                            if elapsed > timeout or (
+                            if time.monotonic() - request_started > timeout or (
                                 stage in {"startup", "import_modules"} and elapsed > startup_timeout
                             ):
                                 raise TimeoutError(f"Speaker analysis timed out in {stage}")
@@ -50,8 +55,34 @@ def benchmark_entry(command, payload, env, directory, timeout, startup_timeout):
                                 continue
                             if ok is not True:
                                 raise RuntimeError(str(value))
+                            if session_chunks and not initialized:
+                                initialized = True
+                                child.submit("process_chunk", payload)
+                                stage = "submitted"
+                                continue
                             if not isinstance(value, list):
                                 raise ValueError("Analysis result must contain turns")
+                            if session_chunks:
+                                digest = hashlib.sha256(
+                                    json.dumps(value, sort_keys=True, allow_nan=False).encode()
+                                ).hexdigest()
+                                chunks.append(
+                                    {
+                                        "seconds": round(time.monotonic() - request_started, 4),
+                                        "result_sha256": digest,
+                                        "turns": len(value),
+                                    }
+                                )
+                                if digest != chunks[0]["result_sha256"]:
+                                    raise ValueError(
+                                        "Repeated session input changed the analysis result"
+                                    )
+                                if len(chunks) < session_chunks:
+                                    child.submit("process_chunk", payload)
+                                    request_started = time.monotonic()
+                                    stage = "submitted"
+                                    continue
+                                result["chunks"] = chunks
                             result.update(
                                 ok=True,
                                 turns=len(value),
@@ -64,7 +95,7 @@ def benchmark_entry(command, payload, env, directory, timeout, startup_timeout):
                             break
                     finally:
                         closing, child = child, None
-                        closing.close()
+                        closing.close(graceful=bool(session_chunks))
         except (OSError, RuntimeError, ValueError, TimeoutError, EOFError, psutil.Error) as error:
             result["ok"] = False
             result["error"] = f"{type(error).__name__}: {error}"
@@ -89,12 +120,19 @@ def main():
     parser.add_argument("--timeout", type=float, default=300)
     parser.add_argument("--startup-timeout", type=float, default=60)
     parser.add_argument("--threads", type=int, default=4)
+    parser.add_argument(
+        "--session-chunks",
+        type=int,
+        default=0,
+        help="同一会话重复相同输入的次数（1～10）；0 为冷入口",
+    )
     args = parser.parse_args()
     if (
         not 1 <= args.repeat <= 100
         or not 1 <= args.threads <= 256
         or not 0 < args.max_seconds <= 60
         or not 0 < args.startup_timeout <= args.timeout <= 3600
+        or not 0 <= args.session_chunks <= 10
     ):
         parser.error("Invalid repetition, thread, duration or timeout budget")
     if not args.wav.is_file() or (args.worker is not None and not args.worker.is_file()):
@@ -113,7 +151,10 @@ def main():
         "worker": str(args.worker.resolve()) if args.worker else "source",
         "threads": args.threads,
         "runs": [],
-        "scope": "cold-entry-diarization-only; no ASR quality or real-time latency claim",
+        "scope": "repeated-session-protocol-only"
+        if args.session_chunks
+        else "cold-entry-diarization-only; no ASR quality or real-time latency claim",
+        "session_chunks": args.session_chunks,
     }
     with tempfile.TemporaryDirectory(prefix="isolated-", dir=args.output_dir) as temporary:
         root = Path(temporary)
@@ -166,7 +207,13 @@ def main():
             directory = args.output_dir / f"run-{index + 1:03}"
             directory.mkdir()
             result = benchmark_entry(
-                command, payload, env, directory, args.timeout, args.startup_timeout
+                command,
+                payload,
+                env,
+                directory,
+                args.timeout,
+                args.startup_timeout,
+                args.session_chunks,
             )
             report["runs"].append(result)
             (args.output_dir / "report.json").write_text(

@@ -34,3 +34,24 @@ python -m backend.bench_diarization --worker backend/runtime/brevia-worker/brevi
 
 Windows backend validation 工作流构建实际 Windows CPU worker，运行原生自检与入口基线，
 上传诊断和运行时产物。它不发布安装包，不替代 Razer Book 13 上的同机质量及长会议验收。
+
+## 有界分析会话实验
+
+`bench_diarization --session-chunks 3 --repeat 1` 在同一真实入口内初始化一次，
+重复相同输入三次，验证结果哈希一致、正常 shutdown 和进程树回收；它不启用生产复用策略，
+也不替代长会议或泄露验收。Windows CI 对新冻结程序执行此检查。
+
+生产复用仍默认关闭。仅 Windows 设置 `BREVIA_ANALYSIS_BUDGET` 为实测预算 JSON 文件路径后，
+精修任务才使用有界会话；配置错误会明确失败，不静默忽略。配置字段为
+`process_soft_bytes`、`tree_soft_bytes`、`tree_hard_bytes`、`minimum_available_bytes`、
+`minimum_total_bytes` 和 `max_chunks`（1～10）。软 / 硬阈值使用 Windows Private Bytes；
+树范围是当前 refinement worker 及其后代，系统保留量使用整机可用物理内存。
+这些字段均以字节计，必须按设备和模型验证后设置，不提供未经标定的默认值。
+
+软阈值与块数上限在接收当前结果后回收，硬阈值、崩溃和超时作废当前会话。
+当前块最多重试一次，整个精修任务最多异常恢复两次；启动、协议、低内存及清理故障不重试。
+取消会主动回收进程；暂停阻止下一块并释放空闲模型。正常退出最多等待 5 秒后强制回收，
+Windows Job Object 在父进程异常结束时终止分析子树。分析退出后才继续聚类和 ASR。
+
+当前保护尚未覆盖 Electron / 日常 worker 兄弟进程、系统提交上限与 GPU 共享内存；
+因此实验预算不能作为整机完整资源调度或发布验收结论。

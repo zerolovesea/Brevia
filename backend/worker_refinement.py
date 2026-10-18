@@ -28,6 +28,7 @@ from .audio_io import (
 )
 from .config import SETTINGS, SPEAKER_EMBEDDING_MODEL_ID, validate_num_speakers
 from .diarization_engine import diarize_chunk_process as _diarize_chunk_process
+from .diarization_process import DiarizationStartupError, DiarizationTimeout
 from .worker_common import (
     UserFacingError,
     ModelNotInstalled,
@@ -193,14 +194,6 @@ def _diarization_chunk_ms():
     """Windows 减少昂贵的 spawn + 模型加载次数。"""
     chunk_ms = _refinement("diarization_chunk_ms")
     return max(chunk_ms, 60_000) if sys.platform == "win32" else chunk_ms
-
-
-class DiarizationTimeout(RuntimeError):
-    """子进程超过处理预算；可通过缩小分块重试。"""
-
-
-class DiarizationStartupError(RuntimeError):
-    """启动/通信失败与音频长度无关，禁止拆块或换策略重复等待。"""
 
 
 class RefinementWorkerMixin:
@@ -967,48 +960,80 @@ class RefinementWorkerMixin:
         # 1.13.8 无对应的长轨原生崩溃修复；完成长会议回归后再删熔断。
         native_broken = False
         chunk_ms = _diarization_chunk_ms()
-        for core_start in range(0, duration_ms, chunk_ms):
-            self.wait_task(control)
-            core_end = min(duration_ms, core_start + chunk_ms)
-            self._refinement_progress(
-                {
+        session = None
+        if sys.platform == "win32":
+            from .analysis_session import AnalysisBudget, AnalysisSession
+
+            budget = AnalysisBudget.from_environment()
+            if budget is not None:
+
+                def progress(payload):
+                    self._refinement_progress(
+                        {
+                            "meeting_id": meeting_id,
+                            "completed": payload["core_start_ms"] // 1000,
+                            "total": max(1, duration_ms // 1000),
+                            "stage": "分析说话人",
+                        }
+                    )
+
+                session = AnalysisSession(budget, control, self.wait_task, progress)
+        try:
+            for core_start in range(0, duration_ms, chunk_ms):
+                if session is not None and control.paused.is_set():
+                    session.close(graceful=True)
+                self.wait_task(control)
+                core_end = min(duration_ms, core_start + chunk_ms)
+                self._refinement_progress(
+                    {
+                        "meeting_id": meeting_id,
+                        "completed": core_start // 1000,
+                        "total": max(1, duration_ms // 1000),
+                        "stage": "分析说话人",
+                    }
+                )
+                window_start = max(0, core_start - _refinement("diarization_overlap_ms"))
+                window_end = min(duration_ms, core_end + _refinement("diarization_overlap_ms"))
+                window_speech = [
+                    turn
+                    for turn in speech
+                    if turn["end_ms"] > window_start and turn["start_ms"] < window_end
+                ]
+                if not window_speech:
+                    continue
+                payload = {
+                    "path": str(path),
                     "meeting_id": meeting_id,
-                    "completed": core_start // 1000,
-                    "total": max(1, duration_ms // 1000),
-                    "stage": "分析说话人",
+                    "duration_ms": duration_ms,
+                    "models_root": str(self.models.root),
+                    "bundled_models_root": str(self.models.bundled_root)
+                    if self.models.bundled_root
+                    else None,
+                    "segmentation_id": segmentation_id,
+                    "threshold": threshold,
+                    "embedding_window_ms": _refinement("embedding_window_ms"),
+                    "core_start_ms": core_start,
+                    "core_end_ms": core_end,
+                    "window_start_ms": window_start,
+                    "window_end_ms": window_end,
+                    "speech": window_speech,
                 }
-            )
-            window_start = max(0, core_start - _refinement("diarization_overlap_ms"))
-            window_end = min(duration_ms, core_end + _refinement("diarization_overlap_ms"))
-            window_speech = [
-                turn
-                for turn in speech
-                if turn["end_ms"] > window_start and turn["start_ms"] < window_end
-            ]
-            if not window_speech:
-                continue
-            payload = {
-                "path": str(path),
-                "meeting_id": meeting_id,
-                "duration_ms": duration_ms,
-                "models_root": str(self.models.root),
-                "bundled_models_root": str(self.models.bundled_root)
-                if self.models.bundled_root
-                else None,
-                "segmentation_id": segmentation_id,
-                "threshold": threshold,
-                "embedding_window_ms": _refinement("embedding_window_ms"),
-                "core_start_ms": core_start,
-                "core_end_ms": core_end,
-                "window_start_ms": window_start,
-                "window_end_ms": window_end,
-                "speech": window_speech,
-            }
-            result, native_crashed = self._diarize_chunk(
-                context, payload, control, try_native=not native_broken
-            )
-            native_broken = native_broken or native_crashed
-            turns.extend(result)
+                if session is not None:
+                    timeout = _refinement("diarization_timeout_seconds") * max(
+                        1, (core_end - core_start) / 30_000
+                    )
+                    result = session.process_chunk(payload, timeout)
+                    if not self._valid_cached_turns(result, duration_ms):
+                        raise DiarizationStartupError("Invalid speaker analysis chunk result")
+                else:
+                    result, native_crashed = self._diarize_chunk(
+                        context, payload, control, try_native=not native_broken
+                    )
+                    native_broken = native_broken or native_crashed
+                turns.extend(result)
+        finally:
+            if session is not None:
+                session.close(graceful=True)
         # 降级结果不缓存；下次修复运行环境后仍应重新尝试完整的说话人分析。
         if cache_key and not native_broken:
             temporary = None
