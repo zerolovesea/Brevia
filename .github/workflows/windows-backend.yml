@@ -70,6 +70,10 @@ jobs:
           --models-root backend/bundled-models
           --output-dir artifacts/session-entry
           --repeat 1 --threads 4 --session-chunks 3
+      - name: Package the desktop application
+        run: npm run package:win
+      - name: Verify the packaged Windows runtime
+        run: python backend/diagnose_windows_bundle.py --runtime dist/win-unpacked/resources/backend/runtime --packaged
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -84,5 +88,13 @@ jobs:
             backend/runtime/brevia-worker/
             backend/bundled-models/
             backend/fixtures/
+          if-no-files-found: error
+          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-desktop-${{ github.sha }}
+          path: |
+            dist/win-unpacked/
+            dist/Brevia-*-x64-setup.exe
           if-no-files-found: error
           retention-days: 7
