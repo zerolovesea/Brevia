@@ -62,26 +62,6 @@ DEPRECATED_MODEL_PREFIXES = (
 )
 
 
-@functools.lru_cache(maxsize=1)
-def _windows_cuda_available():
-    """探测 Sherpa 自带的 CUDA 构件与真实驱动，不能依赖另装的 Python ORT。"""
-    try:
-        import ctypes
-        import sherpa_onnx
-
-        if "+cuda" not in sherpa_onnx.__version__:
-            return False
-        driver = ctypes.WinDLL("nvcuda.dll")
-        devices = ctypes.c_int()
-        return (
-            driver.cuInit(0) == 0
-            and driver.cuDeviceGetCount(ctypes.byref(devices)) == 0
-            and devices.value > 0
-        )
-    except (ImportError, OSError):
-        return False
-
-
 class DownloadCancelled(Exception):
     """用于中止由下载进度回调驱动的模型下载。"""
 
@@ -542,11 +522,6 @@ class ModelManager:
                 "cuda": ["CUDAExecutionProvider"],
                 "coreml": ["CoreMLExecutionProvider"],
             }[backend]
-        elif sys.platform == "win32":
-            backend = "cuda" if _windows_cuda_available() else "cpu"
-            providers = ["CPUExecutionProvider"]
-            if backend == "cuda":
-                providers.insert(0, "CUDAExecutionProvider")
         else:
             try:
                 import onnxruntime

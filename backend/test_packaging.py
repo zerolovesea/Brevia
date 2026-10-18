@@ -73,31 +73,6 @@ class DiarizationProcessTest(unittest.TestCase):
         self.assertTrue(messages[-1][0], messages)
         self.assertTrue(any(t['_embedding'] for t in messages[-1][1]))
 
-    def test_cuda_detection_requires_compiled_runtime_and_working_driver(self):
-        from .asr import _windows_cuda_available
-
-        native = Mock(__version__='1.13.8+cuda12.cudnn9')
-        driver = Mock()
-        driver.cuInit.return_value = 0
-
-        def count(pointer):
-            pointer._obj.value = 1
-            return 0
-
-        driver.cuDeviceGetCount.side_effect = count
-        with (
-            patch.dict(sys.modules, {'sherpa_onnx': native}),
-            patch('ctypes.WinDLL', return_value=driver, create=True),
-        ):
-            for failed, expected in ((0, True), (100, False)):
-                _windows_cuda_available.cache_clear()
-                driver.cuInit.return_value = failed
-                self.assertEqual(_windows_cuda_available(), expected)
-            _windows_cuda_available.cache_clear()
-            native.__version__ = '1.13.8'
-            self.assertFalse(_windows_cuda_available())
-        _windows_cuda_available.cache_clear()
-
     def test_offline_thread_override_does_not_change_live_budget(self):
         with patch.dict(os.environ, {'BREVIA_OFFLINE_THREADS': '8'}):
             self.assertEqual(ModelManager.device()['threads'], 8)
@@ -372,51 +347,30 @@ class WindowsRuntimeTest(PackagingAssetTest):
         entry = ModuleType('PyInstaller.__main__')
         entry.run = Mock()
         package.__main__ = entry
-        installed = SimpleNamespace(
-            files=[Path('bin/runtime.dll'), Path('include/runtime.h')],
-            locate_file=lambda file: self.root / file,
+        with (
+            patch.dict(sys.modules, {'PyInstaller': package, 'PyInstaller.__main__': entry}),
+            patch.object(sys, 'platform', 'win32'),
+            patch('backend.bundled_models.prepare_bundled_models'),
+        ):
+            runpy.run_path(str(Path(__file__).with_name('pack_worker.py')))
+        args = entry.run.call_args.args[0]
+
+        def values(flag):
+            return {args[i + 1] for i, value in enumerate(args[:-1]) if value == flag}
+
+        self.assertTrue(
+            {
+                'backend.llama_sidecar',
+                'backend.check_windows_runtime',
+                'backend.diarization_process',
+            }
+            <= values('--hidden-import')
         )
-        for cuda in (False, True):
-            with (
-                self.subTest(cuda=cuda),
-                patch.dict(
-                    sys.modules,
-                    {
-                        'PyInstaller': package,
-                        'PyInstaller.__main__': entry,
-                        'sherpa_onnx': SimpleNamespace(
-                            __version__='1.13.8+cuda12.cudnn9' if cuda else '1.13.8'
-                        ),
-                    },
-                ),
-                patch.dict(os.environ, {'BREVIA_BUILD_CUDA': '1' if cuda else '0'}),
-                patch.object(sys, 'platform', 'win32'),
-                patch('backend.bundled_models.prepare_bundled_models'),
-                patch('importlib.metadata.distribution', return_value=installed) as distribution,
-            ):
-                runpy.run_path(str(Path(__file__).with_name('pack_worker.py')))
-            args = entry.run.call_args.args[0]
-
-            def values(flag):
-                return {args[i + 1] for i, value in enumerate(args[:-1]) if value == flag}
-
-            self.assertTrue(
-                {
-                    'backend.llama_sidecar',
-                    'backend.check_windows_runtime',
-                    'backend.diarization_process',
-                }
-                <= values('--hidden-import')
-            )
-            self.assertTrue({'sherpa_onnx', 'llama_cpp'} <= values('--collect-binaries'))
-            self.assertTrue(
-                {'backend.mlx_asr', 'mlx', 'mlx_audio', 'transformers'}
-                <= values('--exclude-module')
-            )
-            self.assertNotIn('sherpa_onnx', values('--exclude-module'))
-            self.assertEqual(distribution.call_count, 6 if cuda else 0)
-            self.assertEqual(len(values('--add-binary')), int(cuda))
-            self.assertTrue(all('runtime.dll' in value for value in values('--add-binary')))
+        self.assertTrue({'sherpa_onnx', 'llama_cpp'} <= values('--collect-binaries'))
+        self.assertTrue(
+            {'backend.mlx_asr', 'mlx', 'mlx_audio', 'transformers'} <= values('--exclude-module')
+        )
+        self.assertNotIn('sherpa_onnx', values('--exclude-module'))
 
     def test_windows_entry_dispatches_sidecar_without_starting_worker(self):
         import sys

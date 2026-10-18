@@ -2059,10 +2059,7 @@ function checkForUpdate() {
     return Promise.resolve({ status: 'unsupported' });
   if (macUpdateCheck) return macUpdateCheck;
   const { autoUpdater } = require('electron-updater');
-  configureMacUpdater(
-    autoUpdater,
-    app.isPackaged && require('../package.json').breviaRuntime === 'cuda' ? 'cuda' : undefined,
-  );
+  configureMacUpdater(autoUpdater);
   macUpdateCheck = new Promise((resolve, reject) => {
     // 更新检查没有内置超时：网络挂起时 electron-updater 可能一个事件都不发，Promise 会
     // 永久 pending，而 macUpdateCheck 只在 finally 里清空，后续调用会一直复用这个悬挂

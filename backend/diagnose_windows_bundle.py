@@ -13,13 +13,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--runtime', type=Path, required=True)
     parser.add_argument('--packaged', action='store_true')
-    parser.add_argument('--cuda', action='store_true')
-    parser.add_argument(
-        '--gpu', action='store_true', help='Require a working NVIDIA GPU and execute CUDA inference'
-    )
     args = parser.parse_args()
-    if args.gpu and not args.cuda:
-        parser.error('--gpu requires --cuda')
     if args.packaged:
         assert not (args.runtime / 'brevia-llama-helper').exists(), (
             'Duplicate Windows sidecar runtime'
@@ -38,9 +32,7 @@ def main():
             BREVIA_DATA_DIR=directory,
             BREVIA_MODELS_DIR=str(Path(directory) / 'models'),
             BREVIA_LLAMA_HELPER='',
-            BREVIA_ASR_BACKEND='cuda' if args.gpu else 'cpu',
-            BREVIA_EXPECT_CUDA='1' if args.cuda else '0',
-            BREVIA_VALIDATE_GPU='1' if args.gpu else '0',
+            BREVIA_ASR_BACKEND='cpu',
         )
 
         def run(arguments, requests=()):
@@ -61,8 +53,6 @@ def main():
 
         native = run(['--check-runtime'])
         expected = {'asr': 'sherpa-onnx', 'vad': 'passed', 'llama': 'passed'}
-        if args.gpu:
-            expected['gpu'] = 'passed'
         assert native == [expected], native
         sidecar = run(['--llama-sidecar'], [{'type': 'ping'}, {'type': 'shutdown'}])
         assert sidecar == [{'type': 'pong'}, {'type': 'goodbye'}], sidecar
