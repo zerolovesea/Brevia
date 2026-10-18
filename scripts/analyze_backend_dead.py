@@ -59,6 +59,9 @@ def collect_definitions():
             if isinstance(node, ast.ClassDef):
                 for item in node.body:
                     if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        # with 和 dataclass 生命周期由 Python 隐式调用。
+                        if item.name in {"__enter__", "__exit__", "__post_init__"}:
+                            continue
                         modules[base][item.name] = "method"
     return modules
 

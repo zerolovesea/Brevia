@@ -27,6 +27,8 @@ from .audio_io import (
     read_mono_wav_window,
 )
 from .config import SETTINGS, SPEAKER_EMBEDDING_MODEL_ID, validate_num_speakers
+from .diarization_engine import diarize_chunk_process as _diarize_chunk_process
+from .diarization_process import DiarizationStartupError, DiarizationTimeout
 from .worker_common import (
     UserFacingError,
     ModelNotInstalled,
@@ -39,10 +41,6 @@ from .worker_common import (
 from .transcript import latest_segments, subtitle_time_at_offset
 
 logger = logging.getLogger(__name__)
-
-# 该值在 diarization 子进程内使用；子进程不加载用户覆盖，故经 payload 传入，
-# 这里仅作缺失时的回退默认值。较长窗口让声纹更稳定，避免把同一个人聚成多人。
-EMBEDDING_WINDOW_MS = 15_000
 
 # 导入录音的说话人分离预算。「准备精修」阶段离线 pyannote 分割的开销按 4 物理核上
 # 约 0.4x 实时估算（60 s 窗口约 24 s），并按核数折算；估计超过预算就跳过分割，只把
@@ -196,104 +194,6 @@ def _diarization_chunk_ms():
     """Windows 减少昂贵的 spawn + 模型加载次数。"""
     chunk_ms = _refinement("diarization_chunk_ms")
     return max(chunk_ms, 60_000) if sys.platform == "win32" else chunk_ms
-
-
-class DiarizationTimeout(RuntimeError):
-    """子进程超过处理预算；可通过缩小分块重试。"""
-
-
-class DiarizationStartupError(RuntimeError):
-    """启动/通信失败与音频长度无关，禁止拆块或换策略重复等待。"""
-
-
-def _diarize_chunk_process(connection, payload):
-    """在短生命进程内完成分段和声纹，让 OS 回收 Sherpa 原生缓冲。"""
-
-    def stage(name):
-        connection.send((None, name))
-
-    try:
-        stage("load_audio")
-        manager = ModelManager(
-            payload["models_root"],
-            bundled_root=payload.get("bundled_models_root"),
-            # 只读子进程：不要在精修期间清理/删除模型目录（退役模型由主进程启动时收敛）。
-            cleanup=False,
-        )
-        samples, sample_rate = read_mono_wav_window(
-            payload["path"], payload["window_start_ms"], payload["window_end_ms"]
-        )
-        cursor = 0
-        for speech in payload["speech"]:
-            start = max(
-                cursor,
-                round((speech["start_ms"] - payload["window_start_ms"]) * sample_rate / 1000),
-            )
-            end = min(
-                len(samples),
-                round((speech["end_ms"] - payload["window_start_ms"]) * sample_rate / 1000),
-            )
-            samples[cursor:start] = 0
-            cursor = max(cursor, end)
-        samples[cursor:] = 0
-        # 会后离线精修独占 CPU：用满 device() 线程数，而非实时路径的 2 线程预算。
-        diarization_threads = manager.device()["threads"]
-        stage("load_embedding_model")
-        tracker = SpeakerTracker(manager, threads=diarization_threads)
-        turns = []
-        fallback_turns = [
-            {
-                "start_ms": max(payload["window_start_ms"], speech["start_ms"])
-                - payload["window_start_ms"],
-                "end_ms": min(payload["window_end_ms"], speech["end_ms"])
-                - payload["window_start_ms"],
-                "speaker": "spk-1",
-            }
-            for speech in payload["speech"]
-        ]
-        if payload.get("vad_fallback"):
-            diarized = fallback_turns
-        else:
-            stage("load_diarization_models")
-            diarizer = OfflineDiarizer(
-                manager,
-                -1,
-                payload["threshold"],
-                payload["segmentation_id"],
-                threads=diarization_threads,
-            )
-            # 分离器在低音量片段可能找不到人；VAD 已确认的内容仍需转写。
-            stage("diarization")
-            diarized = diarizer.process(samples, sample_rate) or fallback_turns
-        stage("extract_embeddings")
-        for turn in diarized:
-            start_ms = max(
-                payload["core_start_ms"],
-                payload["window_start_ms"] + turn["start_ms"],
-            )
-            end_ms = min(
-                payload["core_end_ms"],
-                payload["window_start_ms"] + turn["end_ms"],
-            )
-            embedding_window_ms = payload.get("embedding_window_ms", EMBEDDING_WINDOW_MS)
-            for part_start in range(start_ms, end_ms, embedding_window_ms):
-                part_end = min(part_start + embedding_window_ms, end_ms)
-                local_start = round((part_start - payload["window_start_ms"]) * sample_rate / 1000)
-                local_end = round((part_end - payload["window_start_ms"]) * sample_rate / 1000)
-                embedding = tracker.embedding(samples[local_start:local_end], sample_rate)
-                turns.append(
-                    {
-                        "start_ms": part_start,
-                        "end_ms": part_end,
-                        "speaker": turn["speaker"],
-                        "_embedding": embedding.tolist() if embedding is not None else None,
-                    }
-                )
-        connection.send((True, turns))
-    except BaseException as error:
-        connection.send((False, f"{type(error).__name__}: {error}"))
-    finally:
-        connection.close()
 
 
 class RefinementWorkerMixin:
@@ -1060,48 +960,80 @@ class RefinementWorkerMixin:
         # 1.13.8 无对应的长轨原生崩溃修复；完成长会议回归后再删熔断。
         native_broken = False
         chunk_ms = _diarization_chunk_ms()
-        for core_start in range(0, duration_ms, chunk_ms):
-            self.wait_task(control)
-            core_end = min(duration_ms, core_start + chunk_ms)
-            self._refinement_progress(
-                {
+        session = None
+        if sys.platform == "win32":
+            from .analysis_session import AnalysisBudget, AnalysisSession
+
+            budget = AnalysisBudget.from_environment()
+            if budget is not None:
+
+                def progress(payload):
+                    self._refinement_progress(
+                        {
+                            "meeting_id": meeting_id,
+                            "completed": payload["core_start_ms"] // 1000,
+                            "total": max(1, duration_ms // 1000),
+                            "stage": "分析说话人",
+                        }
+                    )
+
+                session = AnalysisSession(budget, control, self.wait_task, progress)
+        try:
+            for core_start in range(0, duration_ms, chunk_ms):
+                if session is not None and control.paused.is_set():
+                    session.close(graceful=True)
+                self.wait_task(control)
+                core_end = min(duration_ms, core_start + chunk_ms)
+                self._refinement_progress(
+                    {
+                        "meeting_id": meeting_id,
+                        "completed": core_start // 1000,
+                        "total": max(1, duration_ms // 1000),
+                        "stage": "分析说话人",
+                    }
+                )
+                window_start = max(0, core_start - _refinement("diarization_overlap_ms"))
+                window_end = min(duration_ms, core_end + _refinement("diarization_overlap_ms"))
+                window_speech = [
+                    turn
+                    for turn in speech
+                    if turn["end_ms"] > window_start and turn["start_ms"] < window_end
+                ]
+                if not window_speech:
+                    continue
+                payload = {
+                    "path": str(path),
                     "meeting_id": meeting_id,
-                    "completed": core_start // 1000,
-                    "total": max(1, duration_ms // 1000),
-                    "stage": "分析说话人",
+                    "duration_ms": duration_ms,
+                    "models_root": str(self.models.root),
+                    "bundled_models_root": str(self.models.bundled_root)
+                    if self.models.bundled_root
+                    else None,
+                    "segmentation_id": segmentation_id,
+                    "threshold": threshold,
+                    "embedding_window_ms": _refinement("embedding_window_ms"),
+                    "core_start_ms": core_start,
+                    "core_end_ms": core_end,
+                    "window_start_ms": window_start,
+                    "window_end_ms": window_end,
+                    "speech": window_speech,
                 }
-            )
-            window_start = max(0, core_start - _refinement("diarization_overlap_ms"))
-            window_end = min(duration_ms, core_end + _refinement("diarization_overlap_ms"))
-            window_speech = [
-                turn
-                for turn in speech
-                if turn["end_ms"] > window_start and turn["start_ms"] < window_end
-            ]
-            if not window_speech:
-                continue
-            payload = {
-                "path": str(path),
-                "meeting_id": meeting_id,
-                "duration_ms": duration_ms,
-                "models_root": str(self.models.root),
-                "bundled_models_root": str(self.models.bundled_root)
-                if self.models.bundled_root
-                else None,
-                "segmentation_id": segmentation_id,
-                "threshold": threshold,
-                "embedding_window_ms": _refinement("embedding_window_ms"),
-                "core_start_ms": core_start,
-                "core_end_ms": core_end,
-                "window_start_ms": window_start,
-                "window_end_ms": window_end,
-                "speech": window_speech,
-            }
-            result, native_crashed = self._diarize_chunk(
-                context, payload, control, try_native=not native_broken
-            )
-            native_broken = native_broken or native_crashed
-            turns.extend(result)
+                if session is not None:
+                    timeout = _refinement("diarization_timeout_seconds") * max(
+                        1, (core_end - core_start) / 30_000
+                    )
+                    result = session.process_chunk(payload, timeout)
+                    if not self._valid_cached_turns(result, duration_ms):
+                        raise DiarizationStartupError("Invalid speaker analysis chunk result")
+                else:
+                    result, native_crashed = self._diarize_chunk(
+                        context, payload, control, try_native=not native_broken
+                    )
+                    native_broken = native_broken or native_crashed
+                turns.extend(result)
+        finally:
+            if session is not None:
+                session.close(graceful=True)
         # 降级结果不缓存；下次修复运行环境后仍应重新尝试完整的说话人分析。
         if cache_key and not native_broken:
             temporary = None
@@ -1273,6 +1205,8 @@ class RefinementWorkerMixin:
         ], native_crashed
 
     def _run_diarization_process(self, context, payload, control):
+        self.wait_task(control)
+        started = time.monotonic()
         process = None
         receiver = None
         try:
@@ -1300,9 +1234,9 @@ class RefinementWorkerMixin:
         )
         try:
             while True:
-                self.wait_task(control)
-                # 暂停不计入预算；阶段消息不会重置整个分块的截止时间。
-                last_check = time.monotonic()
+                # 已开始的原生调用仍受墙钟预算约束；暂停只阻止下一块提交。
+                if control.cancelled.is_set():
+                    raise TaskCancelled()
                 try:
                     available = receiver.poll(0.1)
                 except EOFError as error:
@@ -1310,7 +1244,7 @@ class RefinementWorkerMixin:
                         raise DiarizationStartupError(str(error)) from error
                     raise RuntimeError(str(error)) from error
                 now = time.monotonic()
-                elapsed += now - last_check
+                elapsed = now - started
                 if available:
                     try:
                         ok, result = receiver.recv()
@@ -1391,7 +1325,12 @@ class RefinementWorkerMixin:
             if process is not None:
                 if process.is_alive():
                     process.terminate()
-                process.join()
+                process.join(timeout=5)
+                if process.is_alive():
+                    process.kill()
+                    process.join(timeout=5)
+                    if process.is_alive():
+                        raise RuntimeError("Speaker analysis process did not exit")
 
     def _cluster_speaker_turns(self, meeting, turns, sample_rate, num_speakers=-1):
         """用子进程返回的声纹在全会议时间轴上统一聚类。"""
@@ -1999,7 +1938,6 @@ class RefinementWorkerMixin:
         vectors = numpy.asarray(embeddings, dtype=numpy.float32)
         vectors /= numpy.linalg.norm(vectors, axis=1, keepdims=True) + 1e-9
         weights = numpy.asarray(durations, dtype=numpy.float64)
-        distances = 1 - numpy.clip(vectors @ vectors.T, -1, 1)
 
         def cluster(count):
             centers = [vectors[numpy.argmax(weights)]]
@@ -2036,28 +1974,35 @@ class RefinementWorkerMixin:
                 candidates[count] = labels
         if not candidates:
             return [0] * len(embeddings)
-        scores = {}
-        for count, labels in candidates.items():
-            if count == 1:
-                scores[count] = 0
-                continue
-            values = []
-            for index, label in enumerate(labels):
-                same = labels == label
-                same[index] = False
-                if not same.any():
-                    values.append(0)
-                    continue
-                within = numpy.average(distances[index, same], weights=weights[same])
-                nearest = min(
-                    numpy.average(
-                        distances[index, labels == other], weights=weights[labels == other]
+        # 距离矩阵只保留约 8 MiB 的行块；固定人数无需任何两两距离。
+        values = {count: numpy.zeros(len(vectors)) for count in candidates if count > 1}
+        block_rows = max(1, (8 * 1024 * 1024) // (4 * len(vectors)))
+        for start in range(0, len(vectors), block_rows) if values else ():
+            distances = vectors[start : start + block_rows] @ vectors.T
+            numpy.clip(distances, -1, 1, out=distances)
+            numpy.subtract(1, distances, out=distances)
+            for count, scores_for_rows in values.items():
+                labels = candidates[count]
+                for offset, distances_for_row in enumerate(distances):
+                    index = start + offset
+                    label = labels[index]
+                    same = labels == label
+                    same[index] = False
+                    if not same.any():
+                        continue
+                    within = numpy.average(distances_for_row[same], weights=weights[same])
+                    nearest = min(
+                        numpy.average(
+                            distances_for_row[labels == other], weights=weights[labels == other]
+                        )
+                        for other in set(labels)
+                        if other != label
                     )
-                    for other in set(labels)
-                    if other != label
-                )
-                values.append((nearest - within) / max(nearest, within, 1e-9))
-            scores[count] = numpy.average(values, weights=weights)
+                    scores_for_rows[index] = (nearest - within) / max(nearest, within, 1e-9)
+        scores = {
+            count: numpy.average(values[count], weights=weights) if count > 1 else 0
+            for count in candidates
+        }
         best = max(scores.values())
         return candidates[
             max(

@@ -3660,6 +3660,7 @@ class WorkerTest(unittest.TestCase):
         receiver.poll.side_effect = [True, False, True]
         receiver.recv.side_effect = [(None, "diarization"), (True, [])]
         process.is_alive.return_value = True
+        process.join.side_effect = lambda **_: setattr(process.is_alive, "return_value", False)
         payload = {"core_start_ms": 0, "core_end_ms": 60000}
         with patch(
             "backend.worker_refinement.time.monotonic", side_effect=[0, 1, 1, 122, 122, 123]
@@ -3682,6 +3683,7 @@ class WorkerTest(unittest.TestCase):
         context.Process.return_value = process
         receiver.poll.return_value = False
         process.is_alive.return_value = True
+        process.join.side_effect = lambda **_: setattr(process.is_alive, "return_value", False)
         payload = {"core_start_ms": 0, "core_end_ms": 15000}
         with patch("backend.worker_refinement.time.monotonic", side_effect=[0, 121]):
             with self.assertRaisesRegex(RuntimeError, "failed to start"):
@@ -3782,8 +3784,9 @@ class WorkerTest(unittest.TestCase):
         receiver.poll.side_effect = [True, False]
         receiver.recv.return_value = (None, "extract_embeddings")
         process.is_alive.return_value = True
+        process.join.side_effect = lambda **_: setattr(process.is_alive, "return_value", False)
         payload = {"core_start_ms": 0, "core_end_ms": 15000}
-        with patch("backend.worker_refinement.time.monotonic", side_effect=[0, 100, 100, 121]):
+        with patch("backend.worker_refinement.time.monotonic", side_effect=[0, 100, 121]):
             with self.assertRaisesRegex(
                 DiarizationTimeout, "stage=extract_embeddings.*elapsed=121.0"
             ):
@@ -3795,9 +3798,8 @@ class WorkerTest(unittest.TestCase):
         control.cancelled.set()
         with self.assertRaises(TaskCancelled):
             self.worker._run_diarization_process(context, payload, control)
-        process.terminate.assert_called_once()
-        process.join.assert_called_once()
-        receiver.close.assert_called_once()
+        context.Process.assert_not_called()
+        receiver.close.assert_not_called()
 
     @patch("backend.worker_refinement.sys.platform", "darwin")
     def test_diarization_reports_progress_while_waiting_for_a_child(self):
@@ -3829,7 +3831,7 @@ class WorkerTest(unittest.TestCase):
 
     def test_empty_diarization_keeps_confirmed_speech(self):
         import numpy
-        from backend.worker_refinement import _diarize_chunk_process
+        from backend.diarization_engine import diarize_chunk_process
 
         connection = Mock()
         payload = {
@@ -3844,18 +3846,18 @@ class WorkerTest(unittest.TestCase):
             "speech": [{"start_ms": 500, "end_ms": 1500}],
         }
         with (
-            patch("backend.worker_refinement.ModelManager") as manager,
+            patch("backend.diarization_engine.ModelManager") as manager,
             patch(
-                "backend.worker_refinement.read_mono_wav_window",
+                "backend.diarization_engine.read_mono_wav_window",
                 return_value=(numpy.ones(32000), 16000),
             ),
-            patch("backend.worker_refinement.OfflineDiarizer") as diarizer,
-            patch("backend.worker_refinement.SpeakerTracker") as tracker,
+            patch("backend.diarization_engine.OfflineDiarizer") as diarizer,
+            patch("backend.diarization_engine.SpeakerTracker") as tracker,
         ):
             manager.return_value.device.return_value = {"threads": 2}
             diarizer.return_value.process.return_value = []
             tracker.return_value.embedding.return_value = None
-            _diarize_chunk_process(connection, payload)
+            diarize_chunk_process(connection, payload)
         self.assertEqual(
             connection.send.call_args.args,
             ((True, [{"start_ms": 500, "end_ms": 1500, "speaker": "spk-1", "_embedding": None}]),),
@@ -3863,9 +3865,9 @@ class WorkerTest(unittest.TestCase):
         self.assertEqual(
             [call.args[0][1] for call in connection.send.call_args_list[:-1]],
             [
-                "load_audio",
                 "load_embedding_model",
                 "load_diarization_models",
+                "load_audio",
                 "diarization",
                 "extract_embeddings",
             ],

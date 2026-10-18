@@ -22,6 +22,8 @@ Pyannote segmentation + 3D-Speaker ERes2Net 完成本地说话人聚类，参数
 ## 精修诊断与复用
 
 Windows 的长录音分析使用 `brevia-worker.exe --diarization` 显式 JSONL 入口。
+分析子进程使用独立 stdin 管道，避免旧冻结程序在 Python 初始化时访问父进程正阻塞读取的继承句柄。
+冻结自检保持命令输入打开并让父端阻塞读取，覆盖这类启动死锁；不能提前向父端发送 EOF 来代替真实应用状态。
 启动/导入阶段 60 秒内未就绪则报错并保留已有逐字稿，不再拆小块或逐块重复启动失败的路径。
 已经开始推理的超时仍保留缩块重试。分块隔离继续用于回收 Sherpa 原生缓冲。
 
@@ -42,7 +44,20 @@ python -m backend.bench_refinement --wav sample.wav --language zh --threads 8
 ```
 
 基准可用 `BREVIA_OFFLINE_THREADS` 覆盖离线线程，不会提高实时识别线程预算。
-尚未取得 Windows 同机数据，因此没有提高默认线程数或移除进程回收。
+同机数据与适用范围见 [Windows 验证记录](benchmarks/windows-validation.md)；默认不启用实验性进程复用。
+
+桌面入口 `--bench-refinement --wav <录音>` 覆盖导入与 Electron 到冻结 Worker 的调用。
+长文件导入策略可能跳过说话人分析；要验证录制会议的完整链路，可在隔离数据目录预置会议后执行：
+
+```powershell
+& .\Brevia.exe --bench-refinement --meeting-id <隔离会议ID> `
+  --data-root <隔离数据目录> --models-root <隔离模型目录> `
+  --refined-model qwen3-asr-0.6b-int8 --language auto
+```
+
+此模式要求显式指定数据目录；只有精修返回 `refined` 才输出成功计时，缺模型不能当作成功。
+计时包含精修 Worker 启动和 IPC，不包含此前导入或 Electron 启动；完整进程耗时另行记录。
+Windows 验证 CI 同时构建桌面安装包，并再次检查打包后实际使用的冻结入口，构件仅供验证，不自动发布。
 
 录音链路：原始 PCM 落盘 → `SentenceVAD` → 磁盘暂存语音段 → 单线程
 `RefinedASR` → `transcript.final` + `transcript.settled`（翻译入口）。不再产生

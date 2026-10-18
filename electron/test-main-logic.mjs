@@ -1189,6 +1189,52 @@ assert.equal(await ipcHandlers.get('floating-caption.close')(event), 'closed');
 event.sender.mainFrame = {};
 assert.ok((await ipcHandlers.get('floating-caption.close')(event)).__brevia_error);
 
+{
+  const source = mainSource.slice(
+    mainSource.indexOf('async function runRefinementBenchmark()'),
+    mainSource.indexOf('function handleTaskControl('),
+  );
+  const requests = [];
+  const options = { '--meeting-id': 'recorded-test', '--data-root': '/isolated-test' };
+  const results = [];
+  let response = { status: 'refined' };
+  const context = {
+    commandArgument: (name, fallback = null) => options[name] ?? fallback,
+    worker: {
+      async request(type, payload) {
+        requests.push({ type, payload });
+        return { id: 'recorded-test', duration_ms: 60000 };
+      },
+    },
+    async handleRefinement(payload) {
+      requests.push({ type: 'meeting.refine', payload });
+      return response;
+    },
+    performance: { now: () => 1000 },
+    console: { log: (line) => results.push(JSON.parse(line)) },
+  };
+  runInNewContext(source, context);
+  await context.runRefinementBenchmark();
+  assert.deepEqual(
+    requests.map(({ type }) => type),
+    ['meeting.get', 'meeting.refine'],
+  );
+  assert.equal(requests[1].payload.meeting_id, 'recorded-test');
+  assert.equal(results[0].audio_seconds, 60);
+  response = { model_required: ['missing-model'] };
+  await assert.rejects(context.runRefinementBenchmark(), /did not complete/);
+  assert.equal(results.length, 1, 'missing models cannot produce a successful benchmark');
+  delete options['--data-root'];
+  const count = requests.length;
+  await assert.rejects(context.runRefinementBenchmark(), /isolated --data-root/);
+  assert.equal(requests.length, count, 'reject unsafe benchmark before accessing meetings');
+  delete options['--meeting-id'];
+  options['--wav'] = '/public-sample.wav';
+  response = { status: 'refined' };
+  await context.runRefinementBenchmark();
+  assert.equal(requests[count].type, 'meeting.import');
+}
+
 console.log('Electron behavior tests passed');
 
 {

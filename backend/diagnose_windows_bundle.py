@@ -5,8 +5,13 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import wave
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from backend.process_resources import stop_process_tree  # noqa: E402
 
 
 def main():
@@ -35,16 +40,46 @@ def main():
             BREVIA_ASR_BACKEND='cpu',
         )
 
-        def run(arguments, requests=()):
-            result = subprocess.run(
-                [str(worker), *arguments],
-                input=''.join(json.dumps(r) + '\n' for r in requests),
-                capture_output=True,
-                text=True,
-                encoding='utf-8',
-                env=env,
-                timeout=120,
-            )
+        def run(arguments, requests=(), *, keep_stdin_open=False):
+            command = [str(worker), *arguments]
+            packet = ''.join(json.dumps(r) + '\n' for r in requests)
+            if keep_stdin_open:
+                # communicate 会提前关闭 stdin，使冻结子进程继承管道的死锁无法复现。
+                with (
+                    tempfile.TemporaryFile(mode='w+', encoding='utf-8') as output,
+                    tempfile.TemporaryFile(mode='w+', encoding='utf-8') as errors,
+                ):
+                    process = subprocess.Popen(
+                        command,
+                        stdin=subprocess.PIPE,
+                        stdout=output,
+                        stderr=errors,
+                        text=True,
+                        encoding='utf-8',
+                        env=env,
+                    )
+                    try:
+                        process.stdin.write(packet)
+                        process.stdin.flush()
+                        process.wait(timeout=120)
+                    finally:
+                        stop_process_tree(process)
+                        process.stdin.close()
+                    output.seek(0)
+                    errors.seek(0)
+                    result = subprocess.CompletedProcess(
+                        command, process.returncode, output.read(), errors.read()
+                    )
+            else:
+                result = subprocess.run(
+                    command,
+                    input=packet,
+                    capture_output=True,
+                    text=True,
+                    encoding='utf-8',
+                    env=env,
+                    timeout=120,
+                )
             if result.returncode:
                 raise RuntimeError(
                     f'{arguments}: exit {result.returncode}\n{result.stderr}\n{result.stdout}'
@@ -79,7 +114,7 @@ def main():
             'segmentation_id': 'pyannote-segmentation-3.0',
             'threshold': 0.35,
         }
-        analysis = run(['--check-diarization'], [payload])
+        analysis = run(['--check-diarization'], [payload], keep_stdin_open=True)
         assert analysis == [{'diarization': 'passed'}], analysis
         print(
             'Windows bundle passed: Sherpa ONNX VAD, llama native backend, JSONL entries, 60s diarization'

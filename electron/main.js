@@ -1055,21 +1055,32 @@ function handleRefinement(payload) {
 
 async function runRefinementBenchmark() {
   const source = commandArgument('--wav');
+  const meetingId = commandArgument('--meeting-id');
   const refinedModel = commandArgument('--refined-model', 'funasr-nano-int8');
   const language = commandArgument('--language', 'zh');
-  if (!source) throw new Error('--bench-refinement requires --wav');
-  const imported = await worker.request('meeting.import', {
-    title: '[benchmark]',
-    language,
-    refined_model_id: refinedModel,
-    speaker_segmentation_model_id: commandArgument(
-      '--segmentation-model',
-      'pyannote-segmentation-3.0',
-    ),
-    path: source,
-  });
+  if (!source && !meetingId) throw new Error('--bench-refinement requires --wav or --meeting-id');
+  if (meetingId && !commandArgument('--data-root'))
+    throw new Error('--meeting-id requires an isolated --data-root');
+  // 预置录制会议覆盖长音频的完整分析链路，避免导入策略跳过说话人分析。
+  const imported = meetingId
+    ? await worker.request('meeting.get', { meeting_id: meetingId })
+    : await worker.request('meeting.import', {
+        title: '[benchmark]',
+        language,
+        refined_model_id: refinedModel,
+        speaker_segmentation_model_id: commandArgument(
+          '--segmentation-model',
+          'pyannote-segmentation-3.0',
+        ),
+        path: source,
+      });
   const started = performance.now();
-  await handleRefinement({ meeting_id: imported.id, refined_model_id: refinedModel, language });
+  const result = await handleRefinement({
+    meeting_id: imported.id,
+    refined_model_id: refinedModel,
+    language,
+  });
+  if (result?.status !== 'refined') throw new Error('Refinement did not complete successfully');
   const elapsedSeconds = (performance.now() - started) / 1000;
   const audioSeconds = imported.duration_ms / 1000;
   console.log(
