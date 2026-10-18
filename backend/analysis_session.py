@@ -215,6 +215,11 @@ class AnalysisSession:
             if monitor is not None and self.monitor_started:
                 monitor.__exit__(None, None, None)
                 self.last_summary = monitor.summary()
+                logger.info(
+                    "analysis session closed chunks=%s peaks=%s",
+                    self.chunks,
+                    self.last_summary["peaks"],
+                )
         except Exception as error:
             failure = failure or error
         self.monitor_started = False

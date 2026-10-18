@@ -16,7 +16,8 @@ def process_descendants(pid):
 
 def stop_process_tree(process, descendants=(), timeout=5):
     """等待受控子树真正退出，避免 Windows Python 启动器留下推理进程。"""
-    children = {child.pid: child for child in descendants}
+    # 采样线程可能同时移除已退出的进程，先固定视图再逐个读取属性。
+    children = {child.pid: child for child in tuple(descendants)}
     if process.poll() is None:
         children.update((child.pid, child) for child in process_descendants(process.pid))
     children = list(children.values())

@@ -8,7 +8,7 @@ import time
 import unittest
 from contextlib import nullcontext
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from .process_resources import ProcessTreeMonitor, process_snapshot, stop_process_tree
 
@@ -82,6 +82,25 @@ class ProcessResourcesTest(unittest.TestCase):
         finally:
             stop_process_tree(child)
             child.stdout.close()
+
+    def test_cleanup_snapshots_the_live_sampler_collection(self):
+        observed = {}
+
+        class Child:
+            kill = Mock()
+
+            @property
+            def pid(self):
+                observed.clear()
+                return 42
+
+        child = Child()
+        observed[42] = child
+        process = Mock()
+        process.poll.return_value = 0
+        with patch("backend.process_resources.psutil.wait_procs", return_value=([], [])):
+            stop_process_tree(process, observed.values())
+        child.kill.assert_called_once()
 
 
 if __name__ == "__main__":
