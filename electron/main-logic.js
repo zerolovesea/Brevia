@@ -165,9 +165,9 @@ async function audioFileURL(filePath, directories) {
   throw new Error('Invalid audio path');
 }
 
-function configureMacUpdater(updater) {
+function configureMacUpdater(updater, channel) {
   updater.autoDownload = false;
-  updater.setFeedURL(modelscopeUpdateFeed);
+  updater.setFeedURL(channel ? { ...modelscopeUpdateFeed, channel } : modelscopeUpdateFeed);
 }
 
 function createDisplayMediaHandler(desktopCapturer, writeLog) {

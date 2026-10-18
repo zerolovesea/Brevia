@@ -9,6 +9,9 @@ import certifi
 
 
 def main():
+    if sys.argv[1:] == ["--diarization"]:
+        import_module("backend.diarization_process").main()
+        return
     multiprocessing.freeze_support()
     os.environ.setdefault("SSL_CERT_FILE", certifi.where())
     # Dynamic imports keep llama out of the macOS worker's dependency graph.

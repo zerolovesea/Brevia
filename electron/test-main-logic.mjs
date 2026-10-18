@@ -289,6 +289,10 @@ assert.deepEqual(updater.feed, {
   provider: 'generic',
   url: 'https://modelscope.cn/models/zyaztec/brevia-release/resolve/master',
 });
+configureMacUpdater(updater, 'cuda');
+assert.equal(updater.feed.channel, 'cuda', 'CUDA builds stay on their own update channel');
+configureMacUpdater(updater);
+assert.equal(updater.feed.channel, undefined, 'CPU builds retain the normal update channel');
 
 assert.equal(systemAudioSupported('darwin', '21.6.0'), false);
 assert.equal(systemAudioSupported('darwin', '22.0.0'), true);

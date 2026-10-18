@@ -4,6 +4,7 @@ import os
 import re
 import subprocess
 import sys
+from importlib.metadata import distribution
 from pathlib import Path
 
 import PyInstaller.__main__
@@ -50,12 +51,33 @@ if sys.platform == "win32":
             "backend.llama_sidecar",
             "--hidden-import",
             "backend.check_windows_runtime",
+            "--hidden-import",
+            "backend.diarization_process",
             "--collect-binaries",
             "llama_cpp",
             "--collect-data",
             "llama_cpp",
         ]
     )
+    if os.environ.get("BREVIA_BUILD_CUDA") == "1":
+        import sherpa_onnx
+
+        if "+cuda12.cudnn9" not in sherpa_onnx.__version__:
+            raise RuntimeError("CUDA packaging requires backend/requirements-cuda.txt")
+        for package in (
+            "nvidia-cublas-cu12",
+            "nvidia-cuda-runtime-cu12",
+            "nvidia-cuda-nvrtc-cu12",
+            "nvidia-curand-cu12",
+            "nvidia-cudnn-cu12",
+            "nvidia-cufft-cu12",
+        ):
+            installed = distribution(package)
+            for file in installed.files or []:
+                if str(file).lower().endswith(".dll"):
+                    mlx_options.extend(
+                        ["--add-binary", f"{installed.locate_file(file)}{os.pathsep}."]
+                    )
 if sys.platform == "darwin":
     import mlx.core
 

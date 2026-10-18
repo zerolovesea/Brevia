@@ -1,0 +1,8 @@
+# Windows x64 / Python 3.12：与 CPU 版相同的 Sherpa 版本，随包携带用户态 CUDA DLL。
+sherpa-onnx @ https://huggingface.co/csukuangfj2/sherpa-onnx-wheels/resolve/main/cuda/1.13.8/sherpa_onnx-1.13.8%2Bcuda12.cudnn9-cp312-cp312-win_amd64.whl#sha256=e37edf2c9f53d735afc07fd81f118e4160d8d05aa5a87377db923610b096bd48
+nvidia-cublas-cu12==12.8.4.1
+nvidia-cuda-runtime-cu12==12.8.90
+nvidia-cuda-nvrtc-cu12==12.8.93
+nvidia-curand-cu12==10.3.9.90
+nvidia-cudnn-cu12==9.10.2.21
+nvidia-cufft-cu12==11.3.3.83

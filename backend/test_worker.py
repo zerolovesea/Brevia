@@ -3651,6 +3651,7 @@ class WorkerTest(unittest.TestCase):
             run.call_count, 6
         )  # one large attempt, one small native, four VAD attempts
 
+    @patch("backend.worker_refinement.sys.platform", "darwin")
     def test_diarization_stage_messages_and_scaled_budget(self):
         context = Mock()
         receiver, sender, process = Mock(), Mock(), Mock()
@@ -3673,6 +3674,7 @@ class WorkerTest(unittest.TestCase):
             )
         receiver.close.assert_called_once()
 
+    @patch("backend.worker_refinement.sys.platform", "darwin")
     def test_diarization_timeout_terminates_the_child(self):
         context = Mock()
         receiver, sender, process = Mock(), Mock(), Mock()
@@ -3682,7 +3684,7 @@ class WorkerTest(unittest.TestCase):
         process.is_alive.return_value = True
         payload = {"core_start_ms": 0, "core_end_ms": 15000}
         with patch("backend.worker_refinement.time.monotonic", side_effect=[0, 121]):
-            with self.assertRaisesRegex(RuntimeError, "Diarization timed out"):
+            with self.assertRaisesRegex(RuntimeError, "failed to start"):
                 self.worker._run_diarization_process(
                     context,
                     payload,
@@ -3692,6 +3694,85 @@ class WorkerTest(unittest.TestCase):
         process.join.assert_called_once()
         receiver.close.assert_called_once()
 
+    def test_diarization_startup_failure_never_retries_or_degrades(self):
+        from .worker_refinement import DiarizationStartupError
+
+        payload = {"core_start_ms": 0, "core_end_ms": 60000}
+        control = SimpleNamespace(paused=threading.Event(), cancelled=threading.Event())
+        with patch.object(
+            self.worker, "_run_diarization_process", side_effect=DiarizationStartupError("startup")
+        ) as run:
+            with self.assertRaises(DiarizationStartupError):
+                self.worker._diarize_chunk(None, payload, control, True)
+        self.assertEqual(run.call_count, 1)
+
+    def test_diarization_cache_reuses_only_successful_raw_embeddings(self):
+        audio = Path(self.temp.name) / "cached.wav"
+        audio.write_bytes(b"audio")
+        control = SimpleNamespace(paused=threading.Event(), cancelled=threading.Event())
+        speech = [{"start_ms": 0, "end_ms": 60000}]
+        raw = [{"start_ms": 0, "end_ms": 60000, "speaker": "spk-1", "_embedding": [1.0]}]
+        with (
+            patch.object(self.worker, "_diarization_cache_key", return_value="key") as key,
+            patch.object(self.worker, "_diarize_chunk", return_value=(raw, False)) as run,
+            patch("backend.worker_refinement._diarization_chunk_ms", return_value=60000),
+        ):
+            first = self.worker._diarize_long_track(
+                audio, 60000, speech, "segmentation", 0.35, control
+            )
+            first[0].pop("_embedding")
+            second = self.worker._diarize_long_track(
+                audio, 60000, speech, "segmentation", 0.35, control
+            )
+            self.assertEqual(second[0]["_embedding"], [1.0])
+            self.assertEqual(run.call_count, 1)
+            key.return_value = "changed-parameters"
+            run.return_value = (raw, True)
+            self.worker._diarize_long_track(audio, 60000, speech, "segmentation", 0.35, control)
+            self.worker._diarize_long_track(audio, 60000, speech, "segmentation", 0.35, control)
+            self.assertEqual(run.call_count, 3)
+            audio.with_suffix(".diarization.json").write_text("broken", encoding="utf-8")
+            self.worker._diarize_long_track(audio, 60000, speech, "segmentation", 0.35, control)
+            self.assertEqual(run.call_count, 4)
+
+    def test_diarization_cache_key_tracks_audio_models_and_settings(self):
+        path = Path(self.temp.name) / "source.wav"
+        path.write_bytes(b"first")
+        for model_id in ("pyannote-segmentation-3.0", "eres2net-base-3dspeaker-zh"):
+            for name in self.worker.models.get(model_id)["files"]:
+                file = self.worker.models.path(model_id) / name
+                file.parent.mkdir(parents=True, exist_ok=True)
+                file.write_bytes(b"weights")
+        speech = [{"start_ms": 0, "end_ms": 60000}]
+
+        def key():
+            return self.worker._diarization_cache_key(
+                path, speech, "pyannote-segmentation-3.0", 0.35
+            )
+
+        initial = key()
+        self.assertIsNotNone(initial)
+        self.assertEqual(key(), initial)
+        path.write_bytes(b"changed audio")
+        self.assertNotEqual(key(), initial)
+        initial = key()
+        speech[0]["end_ms"] = 50000
+        self.assertNotEqual(key(), initial)
+        initial = key()
+        model = self.worker.models.path("eres2net-base-3dspeaker-zh")
+        (model / self.worker.models.get("eres2net-base-3dspeaker-zh")["files"][0]).write_bytes(
+            b"new weights"
+        )
+        self.assertNotEqual(key(), initial)
+        self.assertFalse(self.worker._valid_cached_turns([{"start_ms": -1}], 60000))
+        self.assertFalse(
+            self.worker._valid_cached_turns(
+                [{"start_ms": 0, "end_ms": 1000, "speaker": "spk-1", "_embedding": [float("nan")]}],
+                60000,
+            )
+        )
+
+    @patch("backend.worker_refinement.sys.platform", "darwin")
     def test_diarization_stage_does_not_reset_timeout_and_cancel_cleans_up(self):
         control = SimpleNamespace(paused=threading.Event(), cancelled=threading.Event())
         context = Mock()
@@ -3718,6 +3799,7 @@ class WorkerTest(unittest.TestCase):
         process.join.assert_called_once()
         receiver.close.assert_called_once()
 
+    @patch("backend.worker_refinement.sys.platform", "darwin")
     def test_diarization_reports_progress_while_waiting_for_a_child(self):
         context = Mock()
         receiver, sender, process = Mock(), Mock(), Mock()
