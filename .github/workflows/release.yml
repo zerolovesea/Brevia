@@ -33,10 +33,7 @@ jobs:
             os: windows-latest
             cuda: true
             artifact: |
-              dist/Brevia-*-x64-cuda-setup.exe
-              dist/Brevia-*-x64-cuda-setup.exe.blockmap
-              dist/*.nsis.7z
-              dist/cuda.yml
+              dist/nsis-web/*
     runs-on: ${{ matrix.os }}
     env:
       PYTHONUTF8: '1'
@@ -118,6 +115,9 @@ jobs:
       - name: Verify packaged Windows runtime
         if: matrix.os == 'windows-latest'
         run: python backend/diagnose_windows_bundle.py --runtime dist/win-unpacked/resources/backend/runtime --packaged ${{ matrix.cuda && '--cuda' || '' }}
+      - name: Verify CUDA distribution metadata and checksums
+        if: matrix.cuda
+        run: node scripts/verify-cuda-package.cjs
       - name: Verify macOS signature and notarization
         if: matrix.os == 'macos-14'
         shell: bash
@@ -131,6 +131,7 @@ jobs:
           name: ${{ matrix.name }}
           path: ${{ matrix.artifact }}
           if-no-files-found: error
+          compression-level: 0
 
   publish:
     if: startsWith(github.ref, 'refs/tags/v')
