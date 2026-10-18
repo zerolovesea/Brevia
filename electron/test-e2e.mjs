@@ -76,14 +76,13 @@ function venvPython() {
 }
 
 // 指向打包应用的可执行文件时，同一套检查使用随包 worker，不借用开发环境 Python。
-const packagedApp = process.env.BREVIA_E2E_APP;
-const electronBin = packagedApp || electronBinary();
-const pythonBin = venvPython();
-
 if (process.env.BREVIA_SKIP_E2E === '1') {
   console.log('E2E smoke skipped (BREVIA_SKIP_E2E=1).');
   process.exit(0);
 }
+const packagedApp = process.env.BREVIA_E2E_APP;
+const electronBin = packagedApp || electronBinary();
+const pythonBin = venvPython();
 
 /* 每个脚本各取一个代表性全局，用来证明整条 script 依赖链按顺序执行成功。
    顺序与 frontend/index.html 一致；漏掉的文件会在下面被交叉校验。 */
@@ -681,7 +680,7 @@ try {
       enabled.dispatchEvent(new Event('change',{bubbles:true}));
       page.querySelector('[data-flow-select-choice=onboarding-ai-proactivity][data-value=assist]').click();
       renderOnboardingSummaryDemo();
-      return staticComplete&&replayComplete&&examplesRetained;
+      return {staticComplete,replayComplete,examplesRetained};
     })()`,
     awaitPromise: true,
     returnByValue: true,
@@ -691,8 +690,10 @@ try {
     features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }],
   });
   check(
-    reducedAiDemo.result?.value === true,
-    '降低动态效果应直接显示成品；关闭功能后保留静态示例并取消演示计时器',
+    reducedAiDemo.result?.value &&
+      Object.values(reducedAiDemo.result.value).every((value) => value === true),
+    '降低动态效果应直接显示成品；关闭功能后保留静态示例并取消演示计时器：' +
+      JSON.stringify(reducedAiDemo.result?.value || reducedAiDemo.exceptionDetails),
   );
   const builtinOnboarding = await client.send('Runtime.evaluate', {
     expression: `(() => {
@@ -1334,7 +1335,7 @@ try {
     const previousLocale = locale, previousTheme = theme;
     const errors = [];
     await showView('settings');
-    for (const code of ['zh', 'en']) for (const appearance of ['light', 'dark']) {
+    for (const code of ['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']) for (const appearance of ['light', 'dark']) {
       applyLanguage(code); applyTheme(appearance);
       for (const kind of ['summary-model', 'ai-assist', 'device-connection']) {
         for (const provider of kind === 'device-connection' ? [''] : ['built-in', 'custom-openai', 'custom-claude']) {
@@ -1350,7 +1351,9 @@ try {
           document.getAnimations().filter(animation=>animation.effect.getComputedTiming().iterations!==Infinity).forEach(animation=>animation.finish());
           await new Promise(resolve=>requestAnimationFrame(resolve));
           const body = settingsModal.querySelector('.modal-body');
-          if (body.scrollHeight > body.clientHeight + 1 || body.scrollWidth > body.clientWidth + 1)
+          if (kind === 'device-connection' && (document.querySelector('#mobile-service-toggle').getAttribute('aria-label') !== t('手机连接服务') || document.querySelector('[data-mobile-copy-preview]').getAttribute('aria-label') !== t('复制配对码')))
+            errors.push([code, appearance, 'untranslated device accessibility label']);
+          if (body.scrollWidth > body.clientWidth + 1 || (body.scrollHeight > body.clientHeight + 1 && (['zh', 'en'].includes(code) || getComputedStyle(body).overflowY !== 'auto')))
             errors.push([code, appearance, kind, provider, body.clientHeight, body.scrollHeight]);
         }
       }
@@ -1394,6 +1397,7 @@ try {
     chunk.value = '31';
     settingsModal.querySelector('[data-reset-advanced-settings]').click();
     if (chunk.value !== String(advancedSettings.defaults.audio.chunk_seconds) || advancedSettings.settings.diarization.boundary_tail_seconds !== 7) errors.push('reset overwrites hidden advanced settings');
+    if (!advancedForm.querySelector('[data-save-state="dirty"]')) errors.push('reset shows unsaved defaults as saved');
     advancedSettings.settings = originalAdvancedValues;
     renderModal('advanced-settings');
     const savedAdvancedForm=settingsModal.querySelector('.advanced-settings-form');
@@ -1845,9 +1849,15 @@ try {
           if(content.innerHTML!==before) errors.push(code+'/'+kind+': changed right pane');
           const demo=rail.querySelector('.bom');
           if(demo.scrollWidth>demo.clientWidth+1) errors.push(code+'/'+kind+': horizontal overflow');
-          handle.timeline.play(handle.timeline.duration()-.04);
-          await new Promise(resolve=>setTimeout(resolve,90));
-          if(handle.timeline.paused()||handle.timeline.time()>=.4) errors.push(code+'/'+kind+': automatic loop');
+          let looped=false;
+          const onComplete=handle.timeline.eventCallback('onComplete');
+          await new Promise(resolve=>{
+            const timeout=setTimeout(resolve,2000);
+            handle.timeline.eventCallback('onComplete',()=>{onComplete.call(handle.timeline);looped=true;clearTimeout(timeout);resolve();});
+            handle.timeline.play(handle.timeline.duration()-.04);
+          });
+          handle.timeline.eventCallback('onComplete',onComplete);
+          if(!looped||handle.timeline.paused()||handle.timeline.time()>=.4) errors.push(code+'/'+kind+': automatic loop');
           await dismissOnboardingPage();
           if(onboardingMotion || handle.timeline.isActive()) errors.push(code+'/'+kind+': cleanup');
         }

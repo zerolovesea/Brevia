@@ -2105,6 +2105,23 @@ function checkForUpdate() {
 async function installUpdate() {
   if (!['darwin', 'win32'].includes(process.platform) || !app.isPackaged) return false;
 
+  const requireIdle = async () => {
+    const modelsIdle = await worker.request('models.can-relocate');
+    if (
+      !modelsIdle ||
+      worker.active ||
+      refinementWorker.active ||
+      worker.pending.size ||
+      refinementWorker.pending.size ||
+      storageMigrationInProgress ||
+      destructiveOperationInProgress ||
+      [...(mobileServer?.sessions.values() || [])].some((session) => !session.finished)
+    )
+      throw Object.assign(new Error('Finish recording and background tasks before updating'), {
+        code: 'error.tasks.running',
+      });
+  };
+  await requireIdle();
   const { autoUpdater } = require('electron-updater');
 
   // 监听下载进度并发送给前端
@@ -2127,6 +2144,8 @@ async function installUpdate() {
 
   try {
     await autoUpdater.downloadUpdate();
+    // 下载期间仍可开始会议；退出前必须重新检查，不能跳过录音收尾直接杀进程。
+    await requireIdle();
     autoUpdater.removeListener('download-progress', progressHandler);
     // 安装器启动前先停掉后台转写进程，避免占用安装目录里的文件。
     installingUpdate = true;

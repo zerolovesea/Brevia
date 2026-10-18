@@ -4626,6 +4626,8 @@ settingsModal.addEventListener('click', async (event) => {
         .reduce((values, key) => values[key], advancedSettings.defaults);
     }
     validateAdvancedSettings(form);
+    const status = form.querySelector('.save-state');
+    if (status) status.outerHTML = renderSaveState('dirty');
     return;
   }
   const openPermission = event.target.closest('[data-open-permission-settings]');

@@ -2933,13 +2933,6 @@
     color: #444444;
   }
 
-  .onboarding-ai-feature-hint {
-    display: block;
-    margin-top: 12px;
-    line-height: 1.6;
-    text-align: left;
-  }
-
   .onboarding-ai-ways {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

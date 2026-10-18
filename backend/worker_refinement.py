@@ -448,56 +448,58 @@ class RefinementWorkerMixin:
             self.wait_task(control)
         except TaskCancelled:
             return cancel_refinement()
-        self._refinement_progress(
-            {"meeting_id": meeting["id"], "completed": 0, "total": 0, "stage": "转写中"},
-        )
-        asr_started = time.monotonic()
-        recognizer = RefinedASR(
-            self.models,
-            refined_model_id,
-            language=meeting.get("language"),
-            threads=self.models.device()["threads"],
-        )
-        logger.info(
-            "refinement ASR loaded meeting=%s model=%s backend=%s threads=%s seconds=%.2f",
-            meeting["id"],
-            refined_model_id,
-            self.models.device()["backend"],
-            self.models.device()["threads"],
-            time.monotonic() - asr_started,
-        )
-        decode_seconds = 0.0
-        locked_ids = {speaker["id"] for speaker in meeting["speakers"] if speaker["locked"]}
-        locked_segments = [
-            segment
-            for segment in latest_segments(meeting["segments"])
-            if segment["user_edited"] or segment["speaker"] in locked_ids
-        ]
-        context_ms = 800
-        # 识别器的容量包含首尾上下文；高级设置不能把整个窗口推过模型硬上限。
-        window_size = min(
-            SETTINGS["asr"]["refined_window_seconds"] * 1000,
-            round(recognizer.max_speech_seconds * 1000) - 2 * context_ms,
-        )
-        windows_by_track = {
-            track: self._refinement_turns(
-                turns_by_track[track],
-                sources[track]["duration_ms"],
-                window_size,
-                merge_gap_ms=AUTO_WINDOW_MERGE_GAP_MS if meeting.get("language") == "auto" else 0,
-            )
-            for track in tracks
-        }
-        total = sum(map(len, windows_by_track.values()))
-        completed = 0
-        previous_text = {}
-        refined_segments = []
-        refined_segment_ids = set()
-        self.store.set_status(meeting["id"], "refining")
-        self._refinement_progress(
-            {"meeting_id": meeting["id"], "completed": 0, "total": total, "stage": "转写中"},
-        )
         try:
+            self._refinement_progress(
+                {"meeting_id": meeting["id"], "completed": 0, "total": 0, "stage": "转写中"},
+            )
+            asr_started = time.monotonic()
+            recognizer = RefinedASR(
+                self.models,
+                refined_model_id,
+                language=meeting.get("language"),
+                threads=self.models.device()["threads"],
+            )
+            logger.info(
+                "refinement ASR loaded meeting=%s model=%s backend=%s threads=%s seconds=%.2f",
+                meeting["id"],
+                refined_model_id,
+                self.models.device()["backend"],
+                self.models.device()["threads"],
+                time.monotonic() - asr_started,
+            )
+            decode_seconds = 0.0
+            locked_ids = {speaker["id"] for speaker in meeting["speakers"] if speaker["locked"]}
+            locked_segments = [
+                segment
+                for segment in latest_segments(meeting["segments"])
+                if segment["user_edited"] or segment["speaker"] in locked_ids
+            ]
+            context_ms = 800
+            # 识别器的容量包含首尾上下文；高级设置不能把整个窗口推过模型硬上限。
+            window_size = min(
+                SETTINGS["asr"]["refined_window_seconds"] * 1000,
+                round(recognizer.max_speech_seconds * 1000) - 2 * context_ms,
+            )
+            windows_by_track = {
+                track: self._refinement_turns(
+                    turns_by_track[track],
+                    sources[track]["duration_ms"],
+                    window_size,
+                    merge_gap_ms=AUTO_WINDOW_MERGE_GAP_MS
+                    if meeting.get("language") == "auto"
+                    else 0,
+                )
+                for track in tracks
+            }
+            total = sum(map(len, windows_by_track.values()))
+            completed = 0
+            previous_text = {}
+            refined_segments = []
+            refined_segment_ids = set()
+            self.store.set_status(meeting["id"], "refining")
+            self._refinement_progress(
+                {"meeting_id": meeting["id"], "completed": 0, "total": total, "stage": "转写中"},
+            )
             for track in tracks:
                 source = sources[track]
                 sample_rate = source["sample_rate"]
@@ -609,50 +611,50 @@ class RefinementWorkerMixin:
                 },
             )
             self.wait_task(control)
+            refined_segments.sort(
+                key=lambda item: (item["track"], item["start_ms"], item["end_ms"])
+            )
+            refined_segments = self._assemble_utterances(refined_segments)
+            # 识别窗口和展示段落分开：保留多句上下文，最终按翻译所需长度切段。
+            # 离线精修拿到的是完整音频，句号就是句号，不能再按实时链路的「悬空连接词」规则
+            # 把相邻句子粘起来（那会把「他是。我们是。」变成「他是我们是。」）。
+            paragraphs = []
+            for event in refined_segments:
+                for paragraph in self._sentence_subtitles(
+                    event, event["text"], merge_unfinished=False
+                ):
+                    paragraph["word_timestamps"] = [
+                        word
+                        for word in event.get("word_timestamps", [])
+                        if paragraph["start_ms"] <= word["start_ms"] < paragraph["end_ms"]
+                    ]
+                    paragraphs.append(paragraph)
+            refined_segments = paragraphs
+            version, revision = self.store.next_refinement_version(meeting["id"])
+            refined_segments = self.store.replace_segments(
+                meeting["id"],
+                refined_segments,
+                version,
+                revision,
+                model_id=refined_model_id,
+                language=language,
+            )
+            self.store.replace_speaker_turns(meeting["id"], turns)
+            self.store.set_status(meeting["id"], "refined")
+            logger.info(
+                "refinement ASR completed meeting=%s windows=%s decode_seconds=%.2f total_seconds=%.2f",
+                meeting["id"],
+                total,
+                decode_seconds,
+                time.monotonic() - asr_started,
+            )
+            result = {"meeting_id": meeting["id"], "status": "refined"}
+            self.emit("refinement.ready", result)
+            return result
         except TaskCancelled:
             return cancel_refinement()
         except Exception as error:
             return fail_refinement(error)
-        try:
-            self.wait_task(control)
-        except TaskCancelled:
-            return cancel_refinement()
-        refined_segments.sort(key=lambda item: (item["track"], item["start_ms"], item["end_ms"]))
-        refined_segments = self._assemble_utterances(refined_segments)
-        # 识别窗口和展示段落分开：保留多句上下文，最终按翻译所需长度切段。
-        # 离线精修拿到的是完整音频，句号就是句号，不能再按实时链路的「悬空连接词」规则
-        # 把相邻句子粘起来（那会把「他是。我们是。」变成「他是我们是。」）。
-        paragraphs = []
-        for event in refined_segments:
-            for paragraph in self._sentence_subtitles(event, event["text"], merge_unfinished=False):
-                paragraph["word_timestamps"] = [
-                    word
-                    for word in event.get("word_timestamps", [])
-                    if paragraph["start_ms"] <= word["start_ms"] < paragraph["end_ms"]
-                ]
-                paragraphs.append(paragraph)
-        refined_segments = paragraphs
-        version, revision = self.store.next_refinement_version(meeting["id"])
-        refined_segments = self.store.replace_segments(
-            meeting["id"],
-            refined_segments,
-            version,
-            revision,
-            model_id=refined_model_id,
-            language=language,
-        )
-        self.store.replace_speaker_turns(meeting["id"], turns)
-        self.store.set_status(meeting["id"], "refined")
-        logger.info(
-            "refinement ASR completed meeting=%s windows=%s decode_seconds=%.2f total_seconds=%.2f",
-            meeting["id"],
-            total,
-            decode_seconds,
-            time.monotonic() - asr_started,
-        )
-        result = {"meeting_id": meeting["id"], "status": "refined"}
-        self.emit("refinement.ready", result)
-        return result
 
     @staticmethod
     def _vad_params_for(language):
@@ -1249,6 +1251,17 @@ class RefinementWorkerMixin:
                     raise RuntimeError(str(error)) from error
                 now = time.monotonic()
                 elapsed = now - started
+                if stage in {"startup", "import_modules"} and elapsed >= min(60, timeout):
+                    raise DiarizationStartupError(
+                        f"Speaker analysis failed to start (stage={stage}, elapsed={elapsed:.1f}s). "
+                        "Restart Brevia and check the Windows runtime/security logs."
+                    )
+                if elapsed >= timeout:
+                    raise DiarizationTimeout(
+                        f"Diarization timed out at {payload['core_start_ms']} ms "
+                        f"(stage={stage}, stage_seconds={elapsed - stage_started:.1f}, "
+                        f"elapsed={elapsed:.1f}, timeout={timeout:.1f})"
+                    )
                 if available:
                     try:
                         ok, result = receiver.recv()
@@ -1291,17 +1304,6 @@ class RefinementWorkerMixin:
                     raise RuntimeError(
                         f"Diarization subprocess exited with code {process.exitcode} "
                         f"at {payload['core_start_ms']} ms"
-                    )
-                if stage in {"startup", "import_modules"} and elapsed >= min(60, timeout):
-                    raise DiarizationStartupError(
-                        f"Speaker analysis failed to start (stage={stage}, elapsed={elapsed:.1f}s). "
-                        "Restart Brevia and check the Windows runtime/security logs."
-                    )
-                if elapsed >= timeout:
-                    raise DiarizationTimeout(
-                        f"Diarization timed out at {payload['core_start_ms']} ms "
-                        f"(stage={stage}, stage_seconds={elapsed - stage_started:.1f}, "
-                        f"elapsed={elapsed:.1f}, timeout={timeout:.1f})"
                     )
                 if elapsed - last_progress >= 5:
                     logger.info(

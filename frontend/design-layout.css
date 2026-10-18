@@ -7962,19 +7962,19 @@ html[data-theme] .toast,
   gap: 24px;
 }
 .mobile-device-grid > section {
-  min-height: 320px;
+  min-height: 280px;
   border: 1px solid var(--color-line);
   border-radius: 8px;
   padding: 20px;
 }
 .mobile-connection-summary {
-  min-height: 280px;
+  min-height: 240px;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
   text-align: center;
-  gap: 16px;
+  gap: 12px;
 }
 .mobile-device-illustration {
   display: flex;
@@ -8011,7 +8011,7 @@ html[data-theme] .toast,
   color: var(--color-text-muted);
 }
 .mobile-trusted-panel .mobile-device-empty {
-  min-height: 200px;
+  min-height: 160px;
   display: flex;
   flex-direction: column;
   justify-content: center;

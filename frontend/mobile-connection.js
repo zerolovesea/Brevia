@@ -22,10 +22,12 @@
       if (/[\u3400-\u9fff]/.test(key)) staticCopy.push({ node, key });
     }
   }
-  const attributeCopy = [...pairDialog.querySelectorAll('[aria-label]')].map((node) => ({
-    node,
-    key: node.getAttribute('aria-label'),
-  }));
+  const attributeCopy = [dialog, pairDialog]
+    .flatMap((root) => [...root.querySelectorAll('[aria-label]')])
+    .map((node) => ({
+      node,
+      key: node.getAttribute('aria-label'),
+    }));
   const imageCopy = [
     ...dialog.querySelectorAll('img[alt]'),
     ...pairDialog.querySelectorAll('img[alt]'),

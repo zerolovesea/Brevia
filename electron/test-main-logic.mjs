@@ -21,6 +21,7 @@ try {
   const oldModels = path.join(data, 'models');
   const newModels = path.join(modelLocationRoot, 'external-models');
   await mkdir(oldModels, { recursive: true });
+  await mkdir(path.join(data, 'meetings'));
   await mkdir(newModels);
   await writeFile(path.join(oldModels, 'model.gguf'), 'model data');
   const oldRealPath = await realpath(oldModels);
@@ -29,7 +30,7 @@ try {
   await mkdir(dottedChild);
   await assert.rejects(setFirstRunDirectories(data, { models: dottedChild }), /outside/);
   await rm(dottedChild, { recursive: true });
-  await assert.rejects(setFirstRunDirectories(data, { models: data }), /outside/);
+  await assert.rejects(setFirstRunDirectories(data, { models: data }), /folders must be separate/);
   await assert.rejects(
     setFirstRunDirectories(data, { recordings: oldModels }),
     /folders must be separate/,
@@ -616,6 +617,72 @@ const asyncFn = (name) => {
   const start = mainSource.indexOf(`async function ${name}(`);
   return mainSource.slice(start, mainSource.indexOf('\n}\n', start) + 2);
 };
+
+{
+  let downloadCount = 0;
+  let installs = 0;
+  let downloadsIdle = true;
+  let afterDownload = () => {};
+  const stopped = [];
+  const updater = {
+    on() {},
+    removeListener() {},
+    async downloadUpdate() {
+      downloadCount++;
+      afterDownload();
+    },
+    quitAndInstall() {
+      installs++;
+    },
+  };
+  const context = {
+    process: { platform: 'win32' },
+    app: { isPackaged: true },
+    worker: {
+      active: null,
+      pending: new Map(),
+      process: 'worker',
+      async request() {
+        return downloadsIdle;
+      },
+    },
+    refinementWorker: { active: null, pending: new Map(), process: 'refinement' },
+    mobileServer: { sessions: new Map() },
+    storageMigrationInProgress: false,
+    destructiveOperationInProgress: false,
+    installingUpdate: false,
+    require: () => ({ autoUpdater: updater }),
+    stopProcess: (child) => stopped.push(child),
+  };
+  runInNewContext(asyncFn('installUpdate'), context);
+  for (const target of [context.worker, context.refinementWorker]) {
+    target.active = { meeting_id: 'running' };
+    await assert.rejects(context.installUpdate(), (error) => error.code === 'error.tasks.running');
+    target.active = null;
+  }
+  context.worker.pending.set('save', { type: 'segment.text' });
+  await assert.rejects(context.installUpdate(), (error) => error.code === 'error.tasks.running');
+  context.worker.pending.clear();
+  context.mobileServer.sessions.set('upload', { finished: false });
+  await assert.rejects(context.installUpdate(), (error) => error.code === 'error.tasks.running');
+  context.mobileServer.sessions.clear();
+  downloadsIdle = false;
+  await assert.rejects(context.installUpdate(), (error) => error.code === 'error.tasks.running');
+  downloadsIdle = true;
+  assert.equal(downloadCount, 0, 'busy applications cannot begin installing updates');
+  afterDownload = () => {
+    context.worker.active = { meeting_id: 'started-during-download' };
+  };
+  await assert.rejects(context.installUpdate(), (error) => error.code === 'error.tasks.running');
+  assert.deepEqual(stopped, [], 'a meeting started during download must keep its worker');
+  assert.equal(installs, 0);
+  assert.equal(context.installingUpdate, false);
+  context.worker.active = null;
+  afterDownload = () => {};
+  assert.equal(await context.installUpdate(), true);
+  assert.deepEqual(stopped, ['worker', 'refinement']);
+  assert.equal(installs, 1);
+}
 
 const timers = new Map();
 let nextTimer = 0;

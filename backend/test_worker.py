@@ -3676,6 +3676,38 @@ class WorkerTest(unittest.TestCase):
         receiver.close.assert_called_once()
 
     @patch("backend.worker_refinement.sys.platform", "darwin")
+    def test_diarization_rejects_results_and_stages_arriving_after_deadline(self):
+        from .worker_refinement import DiarizationStartupError
+
+        for started in (False, True):
+            for message in ((True, []), (None, "diarization")):
+                with self.subTest(started=started, message=message):
+                    context = Mock()
+                    receiver, sender, process = Mock(), Mock(), Mock()
+                    context.Pipe.return_value = receiver, sender
+                    context.Process.return_value = process
+                    receiver.poll.return_value = True
+                    receiver.recv.side_effect = (
+                        [(None, "diarization"), message] if started else [message]
+                    )
+                    process.is_alive.return_value = False
+                    clock = [0, 1, 121] if started else [0, 61, 121]
+                    with patch("backend.worker_refinement.time.monotonic", side_effect=clock):
+                        with self.assertRaises(
+                            DiarizationTimeout if started else DiarizationStartupError
+                        ):
+                            self.worker._run_diarization_process(
+                                context,
+                                {"core_start_ms": 0, "core_end_ms": 15000},
+                                SimpleNamespace(
+                                    paused=threading.Event(), cancelled=threading.Event()
+                                ),
+                            )
+                    self.assertEqual(receiver.recv.call_count, int(started))
+                    receiver.close.assert_called_once()
+                    process.join.assert_called_once()
+
+    @patch("backend.worker_refinement.sys.platform", "darwin")
     def test_diarization_timeout_terminates_the_child(self):
         context = Mock()
         receiver, sender, process = Mock(), Mock(), Mock()
@@ -3786,7 +3818,7 @@ class WorkerTest(unittest.TestCase):
         process.is_alive.return_value = True
         process.join.side_effect = lambda **_: setattr(process.is_alive, "return_value", False)
         payload = {"core_start_ms": 0, "core_end_ms": 15000}
-        with patch("backend.worker_refinement.time.monotonic", side_effect=[0, 100, 121]):
+        with patch("backend.worker_refinement.time.monotonic", side_effect=[0, 10, 121]):
             with self.assertRaisesRegex(
                 DiarizationTimeout, "stage=extract_embeddings.*elapsed=121.0"
             ):
@@ -5461,6 +5493,53 @@ class WorkerTest(unittest.TestCase):
                 self.worker.refine({"meeting_id": meeting["id"]})
         prepare.assert_not_called()
         asr.assert_not_called()
+
+    def test_refinement_load_assembly_and_save_failures_emit_terminal_event(self):
+        meeting = self.worker.store.create_meeting(
+            {"title": "精修失败", "language": "zh", "refined_model_id": "qwen3-asr-0.6b-int8"}
+        )
+        audio = self.worker.store.meeting_dir(meeting["id"]) / "audio" / "playback-system.wav"
+        with wave.open(str(audio), "wb") as output:
+            output.setparams((1, 2, 16000, 0, "NONE", "not compressed"))
+            output.writeframes(b"\0\0" * 16000)
+        self.worker.store.finish_meeting(meeting["id"], 1000)
+        self.worker.store.save_segment(
+            {
+                "meeting_id": meeting["id"],
+                "segment_id": "system-0",
+                "start_ms": 0,
+                "end_ms": 1000,
+                "text": "保留原稿",
+                "track": "system",
+            }
+        )
+        before = self.worker.store.get_meeting(meeting["id"])
+        self.worker.models.is_ready = lambda _: True
+        for stage in ("load", "assembly", "save"):
+            with (
+                self.subTest(stage=stage),
+                patch.object(
+                    self.worker,
+                    "_prepare_track",
+                    return_value=("system", {"duration_ms": 1000, "sample_rate": 16000}, [], []),
+                ),
+                patch("backend.worker_refinement.RefinedASR") as recognizer,
+                patch.object(self.worker, "_assemble_utterances", return_value=[]) as assemble,
+                patch.object(self.worker.store, "replace_segments") as save,
+            ):
+                recognizer.return_value.max_speech_seconds = 22
+                {"load": recognizer, "assembly": assemble, "save": save}[
+                    stage
+                ].side_effect = RuntimeError(stage)
+                self.events.clear()
+                with self.assertRaisesRegex(RuntimeError, stage):
+                    self.worker.refine({"meeting_id": meeting["id"]})
+                after = self.worker.store.get_meeting(meeting["id"])
+                self.assertEqual(after["status"], "ready")
+                self.assertEqual(after["segments"], before["segments"])
+                self.assertEqual(after["speaker_turns"], before["speaker_turns"])
+                self.assertEqual(self.events[-1]["type"], "refinement.cancelled")
+                self.assertFalse(self.worker.tasks.has_for_meeting(meeting["id"]))
 
     def test_refinement_recovery_preserves_completed_turns(self):
         meeting = self.worker.start(
