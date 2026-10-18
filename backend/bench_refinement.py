@@ -211,7 +211,10 @@ def main():
     parser.add_argument("--max-seconds", type=float)
     parser.add_argument("--window-seconds", type=int, default=15)
     parser.add_argument("--electron", action="store_true")
+    parser.add_argument("--threads", type=int, choices=range(1, 257), metavar="1..256")
     args = parser.parse_args()
+    if args.threads is not None:
+        os.environ["BREVIA_OFFLINE_THREADS"] = str(args.threads)
     if not args.wav.is_file():
         parser.error("--wav was not found")
     if args.window_seconds <= 0 or (args.max_seconds is not None and args.max_seconds <= 0):

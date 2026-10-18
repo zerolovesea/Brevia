@@ -1,12 +1,17 @@
 """聚焦的 worker 职责组件。"""
 
+import hashlib
+import json
 import logging
+import math
 import os
 import re
 import sys
+import tempfile
 import time
 import wave
 from difflib import SequenceMatcher
+from pathlib import Path
 
 from .asr import (
     ModelManager,
@@ -195,6 +200,10 @@ def _diarization_chunk_ms():
 
 class DiarizationTimeout(RuntimeError):
     """子进程超过处理预算；可通过缩小分块重试。"""
+
+
+class DiarizationStartupError(RuntimeError):
+    """启动/通信失败与音频长度无关，禁止拆块或换策略重复等待。"""
 
 
 def _diarize_chunk_process(connection, payload):
@@ -536,12 +545,22 @@ class RefinementWorkerMixin:
         self._refinement_progress(
             {"meeting_id": meeting["id"], "completed": 0, "total": 0, "stage": "转写中"},
         )
+        asr_started = time.monotonic()
         recognizer = RefinedASR(
             self.models,
             refined_model_id,
             language=meeting.get("language"),
             threads=self.models.device()["threads"],
         )
+        logger.info(
+            "refinement ASR loaded meeting=%s model=%s backend=%s threads=%s seconds=%.2f",
+            meeting["id"],
+            refined_model_id,
+            self.models.device()["backend"],
+            self.models.device()["threads"],
+            time.monotonic() - asr_started,
+        )
+        decode_seconds = 0.0
         locked_ids = {speaker["id"] for speaker in meeting["speakers"] if speaker["locked"]}
         locked_segments = [
             segment
@@ -593,7 +612,9 @@ class RefinementWorkerMixin:
                     current, _ = read_mono_wav_window(
                         source["path"], decode_start_ms, decode_end_ms
                     )
+                    decode_started = time.monotonic()
                     raw_text, words = recognizer.decode_words(current, sample_rate)
+                    decode_seconds += time.monotonic() - decode_started
                     # 音频窗口只提供识别上下文；重复在 ASR 返回的字幕文本层裁切。
                     # 会后精修以前只移除了 token 标记，漏掉了实时链路已经处理过的
                     # 解码空转（整句/短语循环）和语言标签。导入录音最容易把这些原样
@@ -716,6 +737,13 @@ class RefinementWorkerMixin:
         )
         self.store.replace_speaker_turns(meeting["id"], turns)
         self.store.set_status(meeting["id"], "refined")
+        logger.info(
+            "refinement ASR completed meeting=%s windows=%s decode_seconds=%.2f total_seconds=%.2f",
+            meeting["id"],
+            total,
+            decode_seconds,
+            time.monotonic() - asr_started,
+        )
         result = {"meeting_id": meeting["id"], "status": "refined"}
         self.emit("refinement.ready", result)
         return result
@@ -1013,6 +1041,20 @@ class RefinementWorkerMixin:
         """分块隔离 Sherpa 原生推理，防止长音频缓冲在 worker 内累积。"""
         import multiprocessing
 
+        cache_path = Path(path).with_suffix(".diarization.json")
+        cache_key = self._diarization_cache_key(path, speech, segmentation_id, threshold)
+        if cache_key:
+            try:
+                if cache_path.stat().st_size <= 32 * 1024 * 1024:
+                    cached = json.loads(cache_path.read_text(encoding="utf-8"))
+                    if cached.get("key") == cache_key and self._valid_cached_turns(
+                        cached.get("turns"), duration_ms
+                    ):
+                        self.wait_task(control)
+                        logger.info("diarization cache hit meeting=%s", meeting_id)
+                        return cached["turns"]
+            except (OSError, ValueError, AttributeError):
+                pass
         context = multiprocessing.get_context("spawn")
         turns = []
         # 1.13.8 无对应的长轨原生崩溃修复；完成长会议回归后再删熔断。
@@ -1060,7 +1102,80 @@ class RefinementWorkerMixin:
             )
             native_broken = native_broken or native_crashed
             turns.extend(result)
+        # 降级结果不缓存；下次修复运行环境后仍应重新尝试完整的说话人分析。
+        if cache_key and not native_broken:
+            temporary = None
+            try:
+                with tempfile.NamedTemporaryFile(
+                    mode="w", encoding="utf-8", dir=cache_path.parent, delete=False
+                ) as output:
+                    temporary = Path(output.name)
+                    json.dump({"key": cache_key, "turns": turns}, output, allow_nan=False)
+                os.replace(temporary, cache_path)
+            except (OSError, ValueError):
+                logger.warning("Cannot cache speaker analysis for meeting=%s", meeting_id)
+            finally:
+                if temporary is not None:
+                    temporary.unlink(missing_ok=True)
         return turns
+
+    def _diarization_cache_key(self, path, speech, segmentation_id, threshold):
+        """只缓存音频和模型/分割参数一致的原始声纹，归属每次重新聚类与匹配。"""
+        try:
+            files = [Path(path)]
+            models = []
+            for model_id in (segmentation_id, SPEAKER_EMBEDDING_MODEL_ID):
+                model = self.models.get(model_id)
+                models.append((model_id, model["revision"], model["runtime"]))
+                files.extend(self.models.path(model_id) / name for name in model["files"])
+            stamps = [
+                (str(file.resolve()), file.stat().st_size, file.stat().st_mtime_ns)
+                for file in files
+            ]
+            key = {
+                "version": 1,
+                "files": stamps,
+                "models": models,
+                "speech": speech,
+                "diarization": SETTINGS["diarization"],
+                "threshold": threshold,
+                "chunk_ms": _diarization_chunk_ms(),
+                "overlap_ms": _refinement("diarization_overlap_ms"),
+                "embedding_ms": _refinement("embedding_window_ms"),
+                "backend": self.models.device()["backend"],
+            }
+            return hashlib.sha256(json.dumps(key, sort_keys=True).encode()).hexdigest()
+        except (OSError, KeyError, ValueError):
+            return None
+
+    @staticmethod
+    def _valid_cached_turns(turns, duration_ms):
+        if not isinstance(turns, list):
+            return False
+        dimensions = None
+        for turn in turns:
+            if not isinstance(turn, dict):
+                return False
+            start, end = turn.get("start_ms"), turn.get("end_ms")
+            if not all(isinstance(value, int) for value in (start, end)):
+                return False
+            if not 0 <= start < end <= duration_ms or not isinstance(turn.get("speaker"), str):
+                return False
+            vector = turn.get("_embedding")
+            if vector is not None and (
+                not isinstance(vector, list)
+                or not 1 <= len(vector) <= 4096
+                or not all(
+                    isinstance(v, (int, float)) and abs(v) <= 1e6 and math.isfinite(v)
+                    for v in vector
+                )
+            ):
+                return False
+            if vector is not None:
+                if dimensions is not None and len(vector) != dimensions:
+                    return False
+                dimensions = len(vector)
+        return True
 
     def _diarize_chunk(self, context, payload, control, try_native):
         """单个分块：原生超时先缩块重试，再降级为 VAD-only / 单说话人。
@@ -1078,6 +1193,8 @@ class RefinementWorkerMixin:
             try:
                 result = self._run_diarization_process(context, modified_payload, control)
                 return result, native_crashed
+            except DiarizationStartupError:
+                raise
             except RuntimeError as error:
                 if (
                     strategy == "native"
@@ -1156,10 +1273,24 @@ class RefinementWorkerMixin:
         ], native_crashed
 
     def _run_diarization_process(self, context, payload, control):
-        receiver, sender = context.Pipe(duplex=False)
-        process = context.Process(target=_diarize_chunk_process, args=(sender, payload))
-        process.start()
-        sender.close()
+        process = None
+        receiver = None
+        try:
+            if sys.platform == "win32":
+                from .diarization_process import DiarizationProcess
+
+                receiver = DiarizationProcess(payload)
+            else:
+                receiver, sender = context.Pipe(duplex=False)
+                process = context.Process(target=_diarize_chunk_process, args=(sender, payload))
+                try:
+                    process.start()
+                finally:
+                    sender.close()
+        except OSError as error:
+            if receiver is not None:
+                receiver.close()
+            raise DiarizationStartupError(f"Cannot start speaker analysis: {error}") from error
         elapsed = 0.0
         last_progress = 0.0
         stage, stage_started = "startup", 0.0
@@ -1172,13 +1303,20 @@ class RefinementWorkerMixin:
                 self.wait_task(control)
                 # 暂停不计入预算；阶段消息不会重置整个分块的截止时间。
                 last_check = time.monotonic()
-                available = receiver.poll(0.1)
+                try:
+                    available = receiver.poll(0.1)
+                except EOFError as error:
+                    if stage in {"startup", "import_modules"}:
+                        raise DiarizationStartupError(str(error)) from error
+                    raise RuntimeError(str(error)) from error
                 now = time.monotonic()
                 elapsed += now - last_check
                 if available:
                     try:
                         ok, result = receiver.recv()
                     except EOFError as error:
+                        if stage in {"startup", "import_modules"}:
+                            raise DiarizationStartupError(str(error)) from error
                         raise RuntimeError(
                             f"Diarization subprocess closed at {payload['core_start_ms']} ms"
                         ) from error
@@ -1203,12 +1341,23 @@ class RefinementWorkerMixin:
                             elapsed,
                         )
                         if not ok:
+                            if stage in {"startup", "import_modules"}:
+                                raise DiarizationStartupError(result)
                             raise RuntimeError(result)
                         return result
-                elif not process.is_alive() and not receiver.poll():
+                elif process is not None and not process.is_alive() and not receiver.poll():
+                    if stage == "startup":
+                        raise DiarizationStartupError(
+                            f"Speaker analysis exited before startup (code={process.exitcode})"
+                        )
                     raise RuntimeError(
                         f"Diarization subprocess exited with code {process.exitcode} "
                         f"at {payload['core_start_ms']} ms"
+                    )
+                if stage in {"startup", "import_modules"} and elapsed >= min(60, timeout):
+                    raise DiarizationStartupError(
+                        f"Speaker analysis failed to start (stage={stage}, elapsed={elapsed:.1f}s). "
+                        "Restart Brevia and check the Windows runtime/security logs."
                     )
                 if elapsed >= timeout:
                     raise DiarizationTimeout(
@@ -1217,6 +1366,15 @@ class RefinementWorkerMixin:
                         f"elapsed={elapsed:.1f}, timeout={timeout:.1f})"
                     )
                 if elapsed - last_progress >= 5:
+                    logger.info(
+                        "diarization waiting meeting=%s chunk=%s-%s stage=%s elapsed=%.1f timeout=%.1f",
+                        payload.get("meeting_id"),
+                        payload["core_start_ms"],
+                        payload["core_end_ms"],
+                        stage,
+                        elapsed,
+                        min(60, timeout) if stage in {"startup", "import_modules"} else timeout,
+                    )
                     self._refinement_progress(
                         {
                             "meeting_id": payload.get("meeting_id"),
@@ -1230,9 +1388,10 @@ class RefinementWorkerMixin:
                     last_progress = elapsed
         finally:
             receiver.close()
-            if process.is_alive():
-                process.terminate()
-            process.join()
+            if process is not None:
+                if process.is_alive():
+                    process.terminate()
+                process.join()
 
     def _cluster_speaker_turns(self, meeting, turns, sample_rate, num_speakers=-1):
         """用子进程返回的声纹在全会议时间轴上统一聚类。"""

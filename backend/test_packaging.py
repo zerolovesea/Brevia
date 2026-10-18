@@ -10,6 +10,7 @@
 import io
 import json
 import os
+import sys
 import tempfile
 import time
 import unittest
@@ -17,7 +18,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from .asr import load_model_catalog, model_directory_name
+from .asr import ModelManager, load_model_catalog, model_directory_name
 from .bundled_models import (
     expected_bundled_model_names,
     missing_bundled_model_ids,
@@ -26,6 +27,59 @@ from .bundled_models import (
 )
 from .config import BUNDLED_MODEL_IDS
 from .preflight_package import binary_name, package_problems
+
+
+class DiarizationProcessTest(unittest.TestCase):
+    def test_source_entry_reports_startup_and_runs_native_models(self):
+        from .diarization_process import DiarizationProcess
+
+        backend = Path(__file__).parent.resolve()
+        manager = ModelManager(backend / 'bundled-models', cleanup=False)
+        if not all(manager.is_ready(model_id) for model_id in BUNDLED_MODEL_IDS):
+            self.skipTest('bundled native models are not installed')
+        with tempfile.TemporaryDirectory() as root:
+            payload = {
+                'path': str(backend / 'fixtures' / 'example-zh.wav'),
+                'models_root': root,
+                'bundled_models_root': str(backend / 'bundled-models'),
+                'window_start_ms': 0,
+                'window_end_ms': 2000,
+                'core_start_ms': 0,
+                'core_end_ms': 2000,
+                'speech': [{'start_ms': 0, 'end_ms': 2000}],
+                'segmentation_id': 'pyannote-segmentation-3.0',
+                'threshold': 0.35,
+            }
+            messages = []
+            with patch.dict(os.environ, {'BREVIA_ASR_BACKEND': 'cpu'}):
+                process = DiarizationProcess(payload)
+                try:
+                    deadline = time.monotonic() + 60
+                    while time.monotonic() < deadline:
+                        if process.poll(0.1):
+                            message = process.recv()
+                            messages.append(message)
+                            if message[0] is not None:
+                                break
+                    else:
+                        self.fail('Diarization entry did not respond within 60 seconds')
+                finally:
+                    process.close()
+            self.assertFalse(process.reader.is_alive())
+            self.assertFalse(process.writer.is_alive())
+            self.assertIsNotNone(process.process.returncode)
+        self.assertEqual(messages[0], [None, 'import_modules'])
+        self.assertIn([None, 'diarization'], messages)
+        self.assertTrue(messages[-1][0], messages)
+        self.assertTrue(any(t['_embedding'] for t in messages[-1][1]))
+
+    def test_offline_thread_override_does_not_change_live_budget(self):
+        with patch.dict(os.environ, {'BREVIA_OFFLINE_THREADS': '8'}):
+            self.assertEqual(ModelManager.device()['threads'], 8)
+            self.assertLessEqual(ModelManager.thread_budget(), 2)
+        with patch.dict(os.environ, {'BREVIA_OFFLINE_THREADS': '0'}):
+            with self.assertRaises(ValueError):
+                ModelManager.device()
 
 
 class BenchmarkCompatibilityTest(unittest.TestCase):
@@ -305,7 +359,12 @@ class WindowsRuntimeTest(PackagingAssetTest):
             return {args[i + 1] for i, value in enumerate(args[:-1]) if value == flag}
 
         self.assertTrue(
-            {'backend.llama_sidecar', 'backend.check_windows_runtime'} <= values('--hidden-import')
+            {
+                'backend.llama_sidecar',
+                'backend.check_windows_runtime',
+                'backend.diarization_process',
+            }
+            <= values('--hidden-import')
         )
         self.assertTrue({'sherpa_onnx', 'llama_cpp'} <= values('--collect-binaries'))
         self.assertTrue(
@@ -321,6 +380,8 @@ class WindowsRuntimeTest(PackagingAssetTest):
         for flag, module in [
             ('--llama-sidecar', 'backend.llama_sidecar'),
             ('--check-runtime', 'backend.check_windows_runtime'),
+            ('--check-diarization', 'backend.check_windows_runtime'),
+            ('--diarization', 'backend.diarization_process'),
         ]:
             target = Mock()
             with (

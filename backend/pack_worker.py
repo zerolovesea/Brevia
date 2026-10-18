@@ -50,6 +50,8 @@ if sys.platform == "win32":
             "backend.llama_sidecar",
             "--hidden-import",
             "backend.check_windows_runtime",
+            "--hidden-import",
+            "backend.diarization_process",
             "--collect-binaries",
             "llama_cpp",
             "--collect-data",

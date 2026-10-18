@@ -9,6 +9,9 @@ import certifi
 
 
 def main():
+    if sys.argv[1:] == ["--diarization"]:
+        import_module("backend.diarization_process").main()
+        return
     multiprocessing.freeze_support()
     os.environ.setdefault("SSL_CERT_FILE", certifi.where())
     # Dynamic imports keep llama out of the macOS worker's dependency graph.
@@ -16,7 +19,7 @@ def main():
     # files on disk, never the ASR process's model state or address space.
     if sys.platform == "win32" and sys.argv[1:] == ["--llama-sidecar"]:
         import_module("backend.llama_sidecar").main()
-    elif sys.platform == "win32" and sys.argv[1:] == ["--check-runtime"]:
+    elif sys.platform == "win32" and sys.argv[1:] in (["--check-runtime"], ["--check-diarization"]):
         import_module("backend.check_windows_runtime").main()
     else:
         from backend.worker import main as worker_main, protocol_output

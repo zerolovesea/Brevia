@@ -535,7 +535,7 @@ class ModelManager:
             "asr_backend": "mlx-metal" if platform.system() == "Darwin" else backend,
             "providers": providers,
             "backend": backend,
-            "threads": max(1, min(4, (os.cpu_count() or 2) // 2)),
+            "threads": offline_threads(),
             "cores": os.cpu_count() or 2,
             # 耗时代价按物理核折算（见 ModelManager.physical_cores）。与 cores 分开暴露：
             # cores 表示调度意义上的并行度，physical_cores 表示真实吞吐量上限。
@@ -555,6 +555,17 @@ class ModelManager:
         """整句识别保持低线程预算，给采集和 AI 笔记留出 CPU。"""
         total = os.cpu_count() or 2
         return max(1, min(2, total // 4))
+
+
+def offline_threads():
+    """默认保守预算不变；离线基准可显式比较线程数，不影响实时识别。"""
+    value = os.environ.get("BREVIA_OFFLINE_THREADS")
+    if value is None:
+        return max(1, min(4, (os.cpu_count() or 2) // 2))
+    threads = int(value)
+    if not 1 <= threads <= 256:
+        raise ValueError("BREVIA_OFFLINE_THREADS must be between 1 and 256")
+    return threads
 
 
 def _vad_config(manager, model_id, vad_params=None):
