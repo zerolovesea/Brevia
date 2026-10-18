@@ -159,10 +159,13 @@ jobs:
       - env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # CUDA 数据包超过 GitHub 单文件 2 GiB 上限；完整数据已镜像至 ModelScope。
+          shopt -s nullglob
+          release_assets=(dist/*.dmg dist/*.exe dist/*.blockmap dist/*.yml dist/*.json)
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+            gh release upload "$GITHUB_REF_NAME" "${release_assets[@]}" --clobber
           else
-            gh release create "$GITHUB_REF_NAME" dist/* --title "Brevia $GITHUB_REF_NAME" --notes-file "docs/releases/$GITHUB_REF_NAME.md"
+            gh release create "$GITHUB_REF_NAME" "${release_assets[@]}" --title "Brevia $GITHUB_REF_NAME" --notes-file "docs/releases/$GITHUB_REF_NAME.md"
           fi
       - name: Commit website download links
         env:
