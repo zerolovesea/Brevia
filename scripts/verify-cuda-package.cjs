@@ -15,12 +15,14 @@ async function main() {
   assert.equal(manifest.version, version);
   assert.equal(manifest.path, installer);
   assert.equal(manifest.packages.x64.path, archive);
+  assert.ok(Number.isSafeInteger(manifest.packages.x64.size) && manifest.packages.x64.size > 0);
   for (const entry of [...manifest.files, manifest.packages.x64]) {
     const filename = entry.url || entry.path;
     assert.equal(path.basename(filename), filename);
     const file = path.join(root, filename);
     const size = (await stat(file)).size;
-    assert.equal(size, entry.size);
+    // NSIS Web 的安装器条目只声明哈希；数据包条目另外声明大小。
+    if (entry.size != null) assert.equal(size, entry.size);
     const digest = createHash('sha512');
     for await (const chunk of createReadStream(file)) digest.update(chunk);
     assert.equal(digest.digest('base64'), entry.sha512);

@@ -21,7 +21,7 @@ try {
     yaml.dump({
       version,
       path: installer,
-      files: [{ url: installer, sha512, size: bytes.length }],
+      files: [{ url: installer, sha512 }],
       packages: { x64: { path: archive, sha512, size: bytes.length } },
     }),
   );
