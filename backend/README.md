@@ -50,6 +50,9 @@ python -m backend.bench_refinement --wav sample.wav --language zh --threads 8
 
 Release workflow 同时生成普通 CPU 包和 `Brevia-<版本>-x64-cuda-setup.exe`。
 CUDA 版使用独立 `cuda.yml` 更新通道，两种安装包是同一应用的替代安装，不能并存。
+由于 CUDA DLL 体积超过单文件 NSIS 的映射上限，CUDA 安装器使用 NSIS Web 数据包：
+把安装器与同版本的 `brevia-<版本>-x64.nsis.7z` 放在同一目录即可离线安装，安装器会校验 SHA-512；
+缺少数据包时从 ModelScope 下载。分发与镜像时必须同时保留安装器、数据包和 `cuda.yml`。
 语音识别、说话人分析使用 Sherpa 1.13.8 CUDA 12.8/cuDNN 9；纪要与翻译的 llama 仍使用 AVX2 CPU 构件。
 CUDA 用户态 DLL 随包分发，无需单独安装 Toolkit，但需要支持 CUDA 12.8 的 NVIDIA 驱动。
 GPU 不支持的 ONNX 运算仍可能由 CPU 执行，实际收益取决于模型与显卡。
@@ -66,7 +69,7 @@ python -m pip install -r backend/requirements-cuda.txt
 $env:BREVIA_BUILD_CUDA = "1"
 npm run pack:backend
 python backend/diagnose_windows_bundle.py --runtime backend/runtime --cuda
-npm run package:win -- --config.win.artifactName='Brevia-${version}-x64-cuda-setup.${ext}' --config.extraMetadata.breviaRuntime=cuda --config.generateUpdatesFilesForAllChannels=false --config.publish.channel=cuda
+npm run package:win:cuda
 python backend/diagnose_windows_bundle.py --runtime dist/win-unpacked/resources/backend/runtime --packaged --cuda
 ```
 

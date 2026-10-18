@@ -35,6 +35,7 @@ jobs:
             artifact: |
               dist/Brevia-*-x64-cuda-setup.exe
               dist/Brevia-*-x64-cuda-setup.exe.blockmap
+              dist/*.nsis.7z
               dist/cuda.yml
     runs-on: ${{ matrix.os }}
     env:
@@ -110,7 +111,7 @@ jobs:
         if: matrix.cuda
         shell: pwsh
         # 分开安装包名与更新通道，避免普通用户自动下载 CUDA 大包。
-        run: npm run package:win -- --config.win.artifactName='Brevia-${version}-x64-cuda-setup.${ext}' --config.extraMetadata.breviaRuntime=cuda --config.generateUpdatesFilesForAllChannels=false --config.publish.channel=cuda
+        run: npm run package:win:cuda
         env:
           CSC_LINK: ${{ secrets.WIN_CERTIFICATE_P12_BASE64 }}
           CSC_KEY_PASSWORD: ${{ secrets.WIN_CERTIFICATE_PASSWORD }}

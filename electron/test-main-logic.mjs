@@ -293,6 +293,11 @@ configureMacUpdater(updater, 'cuda');
 assert.equal(updater.feed.channel, 'cuda', 'CUDA builds stay on their own update channel');
 configureMacUpdater(updater);
 assert.equal(updater.feed.channel, undefined, 'CPU builds retain the normal update channel');
+const cudaBuild = require('../electron-builder.cuda.cjs');
+assert.deepEqual(cudaBuild.win.target, [{ target: 'nsis-web', arch: ['x64'] }]);
+assert.equal(cudaBuild.extraMetadata.breviaRuntime, 'cuda');
+assert.equal(cudaBuild.publish[0].channel, 'cuda');
+assert.match(cudaBuild.nsisWeb.appPackageUrl, /\/brevia-[\d.]+-x64\.nsis\.7z$/);
 
 assert.equal(systemAudioSupported('darwin', '21.6.0'), false);
 assert.equal(systemAudioSupported('darwin', '22.0.0'), true);

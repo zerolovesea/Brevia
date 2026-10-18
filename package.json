@@ -18,6 +18,7 @@
     "dist": "npm run dist:mac",
     "package:mac": "python backend/preflight_package.py && npm run build && electron-builder --mac dmg zip --arm64 --publish never",
     "package:win": "python backend/preflight_package.py && npm run build && electron-builder --win nsis --x64 --publish never",
+    "package:win:cuda": "python backend/preflight_package.py && npm run build && electron-builder --config electron-builder.cuda.cjs --win nsis-web --x64 --publish never",
     "dist:mac": "npm run pack:backend && npm run package:mac",
     "dist:win": "npm run pack:backend && npm run package:win",
     "release:offline": "node scripts/release-offline.cjs",
