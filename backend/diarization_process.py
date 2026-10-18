@@ -9,11 +9,16 @@ import threading
 
 from .process_resources import process_descendants, stop_process_tree
 
+MAXIMUM_RESPONSE_CHARACTERS = 32 * 1024 * 1024
+
 
 class DiarizationProcess:
     """把独立进程的 JSONL 消息接到分析任务现有的可取消等待循环。"""
 
     def __init__(self, payload, *, command=None, stderr=None, env=None):
+        encoded_payload = json.dumps(payload, allow_nan=False) + "\n"
+        if len(encoded_payload) > 32 * 1024 * 1024:
+            raise ValueError("Diarization payload exceeds the message limit")
         command = command or (
             [sys.executable, "--diarization"]
             if getattr(sys, "frozen", False)
@@ -29,18 +34,24 @@ class DiarizationProcess:
             encoding="utf-8",
             bufsize=1,
         )
-        self.messages = queue.Queue()
+        self.messages = queue.Queue(maxsize=16)
+        self.stopped = threading.Event()
         self.pending = None
         self.descendants = {}
 
         def read():
             try:
-                for line in self.process.stdout:
-                    self.messages.put(json.loads(line))
+                while not self.stopped.is_set():
+                    line = self.process.stdout.readline(MAXIMUM_RESPONSE_CHARACTERS + 1)
+                    if not line:
+                        break
+                    if len(line) > MAXIMUM_RESPONSE_CHARACTERS:
+                        raise ValueError("Diarization response exceeds the message limit")
+                    self._publish(json.loads(line))
             except (OSError, ValueError) as error:
-                self.messages.put((False, f"Invalid diarization output: {error}"))
+                self._publish((False, f"Invalid diarization output: {error}"))
             finally:
-                self.messages.put(None)
+                self._publish(None)
 
         self.reader = threading.Thread(target=read, daemon=True)
         self.reader.start()
@@ -49,12 +60,21 @@ class DiarizationProcess:
             # 子进程尚未读取 stdin 时，大 payload 会填满 Windows 管道；不能阻塞超时/取消。
             try:
                 with self.process.stdin:
-                    self.process.stdin.write(json.dumps(payload) + "\n")
+                    self.process.stdin.write(encoded_payload)
             except (OSError, ValueError) as error:
-                self.messages.put((False, f"Cannot send diarization payload: {error}"))
+                self._publish((False, f"Cannot send diarization payload: {error}"))
 
         self.writer = threading.Thread(target=write, daemon=True)
         self.writer.start()
+
+    def _publish(self, message):
+        # 消费者暂停或退出时不能无限堆积消息，也不能把读取线程卡在满队列中。
+        while not self.stopped.is_set():
+            try:
+                self.messages.put(message, timeout=0.1)
+                return
+            except queue.Full:
+                continue
 
     def poll(self, timeout=0):
         self.descendants.update(
@@ -75,10 +95,20 @@ class DiarizationProcess:
         return message
 
     def close(self):
-        stop_process_tree(self.process, self.descendants.values())
-        self.reader.join(timeout=5)
-        self.writer.join(timeout=5)
+        self.stopped.set()
+        failure = None
+        try:
+            stop_process_tree(self.process, self.descendants.values())
+        except Exception as error:
+            failure = error
+        finally:
+            self.reader.join(timeout=5)
+            self.writer.join(timeout=5)
+        if self.reader.is_alive() or self.writer.is_alive():
+            raise RuntimeError("Diarization pipe threads did not stop") from failure
         self.process.stdout.close()
+        if failure is not None:
+            raise failure
 
 
 def main():
@@ -98,10 +128,10 @@ def main():
         connection = Connection()
         connection.send((None, "import_modules"))
         try:
-            from .worker_refinement import _diarize_chunk_process
+            from .diarization_engine import diarize_chunk_process
 
             payload = json.loads(sys.stdin.buffer.readline())
-            _diarize_chunk_process(connection, payload)
+            diarize_chunk_process(connection, payload)
         except Exception as error:
             connection.send((False, f"{type(error).__name__}: {error}"))
 

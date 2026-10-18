@@ -63,9 +63,9 @@ def benchmark_entry(command, payload, env, directory, timeout, startup_timeout):
                             )
                             break
                     finally:
-                        child.close()
-                        child = None
-        except (OSError, RuntimeError, ValueError, TimeoutError, EOFError) as error:
+                        closing, child = child, None
+                        closing.close()
+        except (OSError, RuntimeError, ValueError, TimeoutError, EOFError, psutil.Error) as error:
             result["ok"] = False
             result["error"] = f"{type(error).__name__}: {error}"
         finally:
