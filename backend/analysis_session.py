@@ -159,7 +159,8 @@ class AnalysisSession:
         self._check_environment()
         try:
             self.child = DiarizationProcess(payload, session=True)
-            self.monitor = ProcessTreeMonitor(os.getpid())
+            # USS 扫描页面较重；生产守护只需 Private Bytes，完整诊断由基准采集。
+            self.monitor = ProcessTreeMonitor(os.getpid(), include_uss=False)
             self.monitor.__enter__()
             self.monitor_started = True
         except Exception as error:

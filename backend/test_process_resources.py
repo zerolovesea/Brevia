@@ -29,6 +29,16 @@ class ProcessResourcesTest(unittest.TestCase):
         self.assertEqual(result["uss_bytes"], 80)
         self.assertEqual(result["cpu_seconds"], 5)
 
+    def test_guard_reads_private_commit_without_scanning_working_set_pages(self):
+        process = Mock(pid=42)
+        process.oneshot.return_value = nullcontext()
+        process.memory_info.return_value = SimpleNamespace(rss=100, private=200)
+        process.cpu_times.return_value = SimpleNamespace(user=2, system=3)
+        result = process_snapshot(process, include_uss=False)
+        process.memory_full_info.assert_not_called()
+        self.assertEqual(result["private_bytes"], 200)
+        self.assertIsNone(result["uss_bytes"])
+
     def test_sampler_records_and_stops_without_retaining_dead_children(self):
         output = io.StringIO()
         child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])

@@ -34,7 +34,7 @@ def stop_process_tree(process, descendants=(), timeout=5):
         raise RuntimeError(f"Analysis descendants did not exit: {[child.pid for child in alive]}")
 
 
-def process_snapshot(process):
+def process_snapshot(process, *, include_uss=True):
     """分别报告工作集与私有提交量，不用虚拟地址空间冒充物理内存。"""
     with process.oneshot():
         memory = process.memory_info()
@@ -48,17 +48,19 @@ def process_snapshot(process):
             "threads": process.num_threads(),
             "handles": process.num_handles() if hasattr(process, "num_handles") else None,
         }
-    try:
-        value["uss_bytes"] = process.memory_full_info().uss
-    except (psutil.AccessDenied, AttributeError, NotImplementedError):
-        value["uss_bytes"] = None
+    value["uss_bytes"] = None
+    if include_uss:
+        try:
+            value["uss_bytes"] = process.memory_full_info().uss
+        except (psutil.AccessDenied, AttributeError, NotImplementedError):
+            pass
     return value
 
 
 class ProcessTreeMonitor:
     """保留已发现的存活子进程，父进程退出后仍能检测未回收的后代。"""
 
-    def __init__(self, pid, output=None, interval=0.5):
+    def __init__(self, pid, output=None, interval=0.5, *, include_uss=True):
         if not 0.05 <= interval <= 60:
             raise ValueError("Sampling interval must be between 0.05 and 60 seconds")
         try:
@@ -69,6 +71,7 @@ class ProcessTreeMonitor:
         self.processes = {(pid, created_at): self.root}
         self.output = output
         self.interval = interval
+        self.include_uss = include_uss
         self.started = time.monotonic()
         self.current = None
         self.peaks = {}
@@ -114,7 +117,7 @@ class ProcessTreeMonitor:
         rows = []
         for identity, process in list(self.processes.items()):
             try:
-                rows.append(process_snapshot(process))
+                rows.append(process_snapshot(process, include_uss=self.include_uss))
             except psutil.NoSuchProcess:
                 self.processes.pop(identity, None)
             except psutil.AccessDenied:
@@ -127,7 +130,7 @@ class ProcessTreeMonitor:
             totals[name] = (
                 sum(values) if all(value is not None for value in values) and not errors else None
             )
-            if totals[name] is not None:
+            if totals[name] is not None and rows:
                 self.peaks[name] = max(self.peaks.get(name, 0), totals[name])
         value = {
             "elapsed_seconds": round(time.monotonic() - self.started, 4),
@@ -150,6 +153,7 @@ class ProcessTreeMonitor:
     def summary(self):
         return {
             "sample_interval_seconds": self.interval,
+            "includes_uss": self.include_uss,
             "peaks": dict(self.peaks),
             "last": self.current,
             # RSS 含共享页面，求和只表示进程工作集之和，不能当作整机物理占用。
