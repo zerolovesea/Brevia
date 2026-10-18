@@ -1,13 +1,37 @@
 """Frozen Windows smoke check: native DLLs and bundled ONNX VAD, no downloads."""
 
 import json
+import logging
 import os
 import re
 import sys
 from pathlib import Path
 
 
+def check_diarization():
+    """从冻结 Worker 内派生分析进程，覆盖真实父子进程环境与协议重定向。"""
+    import threading
+    from types import SimpleNamespace
+    from backend.worker import Worker, protocol_output
+
+    logging.basicConfig(level=logging.INFO, stream=sys.stderr)
+    with protocol_output() as output:
+        worker = Worker(output=lambda *_: None)
+        try:
+            payload = json.loads(sys.stdin.buffer.readline())
+            control = SimpleNamespace(paused=threading.Event(), cancelled=threading.Event())
+            turns = worker._run_diarization_process(None, payload, control)
+            if not turns or not any(turn.get('_embedding') for turn in turns):
+                raise RuntimeError('Frozen worker did not return speaker embeddings')
+            print(json.dumps({'diarization': 'passed'}), file=output, flush=True)
+        finally:
+            worker.store.close_audio_sessions()
+
+
 def main():
+    if sys.argv[1:] == ['--check-diarization']:
+        check_diarization()
+        return
     import llama_cpp
     import numpy as np
     import sherpa_onnx

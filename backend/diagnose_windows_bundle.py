@@ -89,11 +89,8 @@ def main():
             'segmentation_id': 'pyannote-segmentation-3.0',
             'threshold': 0.35,
         }
-        analysis = run(['--diarization'], [payload])
-        assert analysis[0] == [None, 'import_modules'], analysis
-        assert [None, 'diarization'] in analysis, analysis
-        assert analysis[-1][0] is True and analysis[-1][1], analysis
-        assert any(turn.get('_embedding') for turn in analysis[-1][1]), analysis
+        analysis = run(['--check-diarization'], [payload])
+        assert analysis == [{'diarization': 'passed'}], analysis
         print(
             'Windows bundle passed: Sherpa ONNX VAD, llama native backend, JSONL entries, 60s diarization'
         )

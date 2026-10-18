@@ -426,6 +426,7 @@ class WindowsRuntimeTest(PackagingAssetTest):
         for flag, module in [
             ('--llama-sidecar', 'backend.llama_sidecar'),
             ('--check-runtime', 'backend.check_windows_runtime'),
+            ('--check-diarization', 'backend.check_windows_runtime'),
             ('--diarization', 'backend.diarization_process'),
         ]:
             target = Mock()
