@@ -1229,6 +1229,16 @@ try {
       const deadline=Date.now()+5000;
       while(!predicate()) { if(Date.now()>deadline) throw new Error('AI settings save timed out'); await new Promise(resolve=>setTimeout(resolve,25)); }
     };
+    const saveInPlace = async kind => {
+      const form=settingsModal.querySelector('form');
+      form.dispatchEvent(new Event('input',{bubbles:true}));
+      if(!form.querySelector('[data-save-state="dirty"]')) return false;
+      form.requestSubmit();
+      await settled(()=>form.dataset.savePending==='false');
+      return activeView==='settings' && activeModal===kind && !settingsModal.hidden
+        && form.isConnected && !!form.querySelector('[data-save-state="saved"]')
+        && !form.querySelector('[type="submit"]').disabled;
+    };
     meetingActive = false;
     summaryConfig.enabled = false;
     aiAssistConfig.enabled = false;
@@ -1249,8 +1259,7 @@ try {
     const notesConfig = !!settingsModal.querySelector('.ai-assist-config-form');
     settingsModal.querySelector('[name="proactivity"][value="auto"]').click();
     const selected = aiAssistConfigDraft.proactivity==='auto';
-    settingsModal.querySelector('form').requestSubmit();
-    await settled(()=>settingsModal.hidden);
+    const notesSavedInPlace=await saveInPlace('ai-assist');
     const summary = await window.brevia.summary.config.get();
     const notes = await window.brevia.aiAssist.config.get();
     const saved = !summary.enabled && !notes.enabled && notes.proactivity==='auto';
@@ -1261,6 +1270,7 @@ try {
     await openModal('ai-features');
     { const enabled=settingsModal.querySelector('[data-summary-enabled]'); enabled.click(); await settled(()=>!enabled.disabled); }
     const summaryOnly = summaryConfig.enabled && !aiAssistConfig.enabled;
+    const summarySavedInPlace=await saveInPlace('summary-model');
     await openModal('ai-assist');
     const restored = !settingsModal.querySelector('[data-ai-settings-enabled]').checked
       && settingsModal.querySelector('[name="proactivity"][value="auto"]').checked;
@@ -1268,8 +1278,7 @@ try {
     { const enabled=settingsModal.querySelector('[data-summary-enabled]'); enabled.click(); await settled(()=>!enabled.disabled); }
     await openModal('ai-assist');
     settingsModal.querySelector('[data-ai-settings-enabled]').click();
-    settingsModal.querySelector('form').requestSubmit();
-    await settled(()=>settingsModal.hidden);
+    const enabledSavedInPlace=await saveInPlace('ai-assist');
     const independent = summaryOnly && restored && !(await window.brevia.summary.config.get()).enabled
       && (await window.brevia.aiAssist.config.get()).enabled;
     let dismissible=true;
@@ -1294,7 +1303,7 @@ try {
     floatingForm.requestSubmit();
     await settled(()=>settingsModal.hidden);
     const floatingSaved = floatingDisabled && floatingFormEnabled && (await window.brevia.aiAssist.config.get()).enabled;
-    return { cards, initial, cancelled, notesConfig, saved, selected, summaryOnly, restored, independent, dismissible, floatingSaved, closed: settingsModal.hidden };
+    return { cards, initial, cancelled, notesConfig, saved, selected, notesSavedInPlace, summarySavedInPlace, enabledSavedInPlace, summaryOnly, restored, independent, dismissible, floatingSaved, closed: settingsModal.hidden };
   })()`,
     awaitPromise: true,
     returnByValue: true,
@@ -1309,6 +1318,9 @@ try {
       merged.notesConfig &&
       merged.saved &&
       merged.selected &&
+      merged.notesSavedInPlace &&
+      merged.summarySavedInPlace &&
+      merged.enabledSavedInPlace &&
       merged.independent &&
       merged.dismissible &&
       merged.floatingSaved &&
@@ -1384,6 +1396,12 @@ try {
     if (chunk.value !== String(advancedSettings.defaults.audio.chunk_seconds) || advancedSettings.settings.diarization.boundary_tail_seconds !== 7) errors.push('reset overwrites hidden advanced settings');
     advancedSettings.settings = originalAdvancedValues;
     renderModal('advanced-settings');
+    const savedAdvancedForm=settingsModal.querySelector('.advanced-settings-form');
+    savedAdvancedForm.requestSubmit();
+    const saveDeadline=Date.now()+5000;
+    while(savedAdvancedForm.querySelector('[type="submit"]').disabled && Date.now()<saveDeadline)
+      await new Promise(resolve=>setTimeout(resolve,25));
+    if(activeModal!=='advanced-settings' || settingsModal.hidden || !savedAdvancedForm.isConnected || !savedAdvancedForm.querySelector('[data-save-state="saved"]')) errors.push('advanced save left page or missing saved state');
     const section = settingsModal.querySelector('details.advanced-settings-section');
     const summary = section.querySelector('summary');
     summary.click();
@@ -2177,6 +2195,9 @@ try {
       closeModal();await new Promise(resolve=>setTimeout(resolve,250));
       summaryConfig.enabled=false;await generateMeetingSummary();
       const disabledSummary=!detail.querySelector('[data-summary-feedback]').hidden && detail.querySelector('[data-summary-feedback]').textContent.includes(t('会议纪要功能未开启'));
+      detail.querySelector('[data-summary-feedback] [data-settings-modal]').click();
+      const disabledConfigOpens=activeView==='detail' && activeModal==='summary-model' && !settingsModal.hidden;
+      closeModal();await new Promise(resolve=>setTimeout(resolve,250));
       detail.querySelector('.summary-feedback-close').click();summaryConfig=originalSummaryConfig;
       openModal('export');const summaryExportDefault=Object.entries(exportSelection).filter(([,format])=>format).every(([content])=>content==='notes') && Boolean(exportSelection.notes);closeModal();await new Promise(resolve=>setTimeout(resolve,250));
       const summaryBack=detail.querySelector('.back');
@@ -2200,7 +2221,7 @@ try {
       showRefinementProgress(56,100,'Layout test',meeting.id,'正在识别');
       const minimizedProgress=refinementCard.querySelector('.task-mini-percent').textContent==='56%';
       refinementCard.classList.remove('is-minimized'); refinementCard.hidden=true;
-      return {tabs,independent,levels,modelReturn,speakers,menusVisible,prepareReachable,reading,threeTabs,filtered,searchEmpty,mirrored,searchRestored,summaryVisible,inlineSummaryConfig,configReturnsToMeeting,disabledSummary,summaryExportDefault,summaryBackVisible,summaryDraftPreserved,rawUnavailable,minimizedProgress};
+      return {tabs,independent,levels,modelReturn,speakers,menusVisible,prepareReachable,reading,threeTabs,filtered,searchEmpty,mirrored,searchRestored,summaryVisible,inlineSummaryConfig,configReturnsToMeeting,disabledSummary,disabledConfigOpens,summaryExportDefault,summaryBackVisible,summaryDraftPreserved,rawUnavailable,minimizedProgress};
     })()`,
     awaitPromise: true,
     returnByValue: true,
@@ -3232,6 +3253,23 @@ try {
     '公共动效、快速导航和退出重入：' +
       JSON.stringify(motionChecks.result?.value || motionChecks.exceptionDetails),
   );
+  const summaryButtonMotion = await client.send('Runtime.evaluate', {
+    expression: `(async()=>{
+      const host=document.createElement('section');host.id='summary-motion-test';
+      host.innerHTML=renderMeetingSummary({markdown:'# 已有纪要',generating:true});
+      document.body.append(host);
+      const spinners=[...host.querySelectorAll('[aria-busy="true"] .summary-generating-icon')];
+      await new Promise(requestAnimationFrame);
+      const before=spinners.map(spinner=>getComputedStyle(spinner).transform);
+      await new Promise(resolve=>setTimeout(resolve,80));
+      return spinners.length===2 && spinners.every((spinner,index)=>spinner.closest('button').disabled
+        && getComputedStyle(spinner).animationName==='button-spin'
+        && getComputedStyle(spinner).transform!==before[index]);
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  check(summaryButtonMotion.result?.value === true, '纪要生成按钮：禁用重复提交并持续旋转星星');
   await client.send('Emulation.setEmulatedMedia', {
     features: [{ name: 'prefers-reduced-motion', value: 'reduce' }],
   });
@@ -3239,7 +3277,11 @@ try {
     expression: `(async()=>{
       await new Promise(requestAnimationFrame);
       const controls=[...document.querySelectorAll('button,summary,a[href],input,textarea,select,[role="button"]')];
-      return controls.every(control=>getComputedStyle(control).transitionDuration.split(',').every(value=>parseFloat(value)===0));
+      const host=document.getElementById('summary-motion-test');
+      const reduced=[...host.querySelectorAll('.summary-generating-icon')].every(spinner=>parseFloat(getComputedStyle(spinner).animationDuration)===0);
+      const transitions=controls.every(control=>getComputedStyle(control).transitionDuration.split(',').every(value=>parseFloat(value)===0));
+      host.remove();
+      return reduced && transitions;
     })()`,
     awaitPromise: true,
     returnByValue: true,

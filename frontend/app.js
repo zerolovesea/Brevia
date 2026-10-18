@@ -2957,7 +2957,7 @@ function renderModal(kind) {
     );
     replaceModalBody(
       kind,
-      `${renderPermissionSettings()}<form class="advanced-settings-form">${renderAdvancedSettings(advancedSettings?.settings || {}, advancedSettings || {})}<div class="modal-form-actions"><button class="modal-action" type="submit">${t('确定')}</button><button class="secondary" data-reset-advanced-settings type="button">${t('恢复默认')}</button></div></form>`,
+      `${renderPermissionSettings()}<form class="advanced-settings-form">${renderAdvancedSettings(advancedSettings?.settings || {}, advancedSettings || {})}<div class="modal-form-actions">${renderSaveState('saved')}<button class="modal-action" type="submit">${t('确定')}</button><button class="secondary" data-reset-advanced-settings type="button">${t('恢复默认')}</button></div></form>`,
     );
     validateAdvancedSettings(settingsModal.querySelector('.advanced-settings-form'));
     return;
@@ -4405,6 +4405,11 @@ function openOnboardingPermissions(fixtureStatus) {
 }
 
 document.addEventListener('click', async (event) => {
+  const button = event.target.closest('[data-settings-modal]');
+  if (button) {
+    await openModal(button.dataset.settingsModal);
+    return;
+  }
   if (!event.target.closest('#settings-view, .settings-folder-paths')) return;
   const destination = event.target.closest('[data-settings-page]');
   if (destination) {
@@ -4472,8 +4477,6 @@ document.addEventListener('click', async (event) => {
     }
     return;
   }
-  const button = event.target.closest('[data-settings-modal]');
-  if (button) openModal(button.dataset.settingsModal);
   if (event.target.closest('[data-open-whats-new]')) openModal('whats-new');
 });
 let modelAction = document.querySelector('[data-settings-modal="models"]');
@@ -5138,6 +5141,16 @@ for (const type of ['input', 'change']) {
     if (status) status.outerHTML = renderSaveState('dirty');
   });
 }
+/** 设置页保存后保留表单；会议和首次引导中的配置弹层保存后关闭。 */
+function completeSettingsSave(form) {
+  if (!form.isConnected) return;
+  if (!settingsModal.classList.contains('settings-page')) {
+    closeModal();
+    return;
+  }
+  const status = form.querySelector('.save-state');
+  if (status) status.outerHTML = renderSaveState('saved');
+}
 settingsModal.addEventListener('submit', async (event) => {
   if (event.target.matches('.advanced-settings-form')) {
     event.preventDefault();
@@ -5159,7 +5172,7 @@ settingsModal.addEventListener('submit', async (event) => {
       });
       await window.brevia?.advancedSettings.save({ settings });
       advancedSettings.settings = settings;
-      closeModal();
+      completeSettingsSave(event.target);
       showToast(t('已保存'), undefined, 'success');
     } catch (error) {
       const status = event.target.querySelector('.save-state');
@@ -5224,7 +5237,7 @@ settingsModal.addEventListener('submit', async (event) => {
         selectedAiAssistBuiltinModel = '';
         aiAssistConfigDraft = structuredClone(aiAssistConfig);
         await persistAiAssistConfig();
-        closeModal();
+        completeSettingsSave(form);
         if (onboardingPage?.querySelector('[name="onboarding-ai-enabled"]')) {
           onboardingPage.querySelector('[name="onboarding-ai-enabled"]').checked =
             aiAssistConfig.enabled;
@@ -5272,7 +5285,7 @@ settingsModal.addEventListener('submit', async (event) => {
           summaryFeedback = null;
           syncSummaryFeedback();
         }
-        closeModal();
+        completeSettingsSave(form);
         showToast(t('纪要模型已保存'), undefined, 'success');
         return;
       }

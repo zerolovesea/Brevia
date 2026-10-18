@@ -4740,6 +4740,21 @@ assert.doesNotMatch(
   summaryContext.renderMeetingSummary({ generating: true }),
   /data-generate-summary/,
 );
+for (const markdown of ['', '# 已有纪要']) {
+  const generating = componentContext.renderMeetingSummary({ markdown, generating: true });
+  const count = markdown ? 2 : 1;
+  assert.equal(
+    (generating.match(/class="summary-generating-icon" aria-hidden="true"/g) || []).length,
+    count,
+  );
+  assert.equal((generating.match(/disabled aria-busy="true"/g) || []).length, count);
+  assert.ok(generating.includes(componentContext.interfaceIcon('ai')), '生成中使用现有星星图标');
+  assert.doesNotMatch(
+    componentContext.renderMeetingSummary({ markdown, generating: false }),
+    /summary-generating-icon|aria-busy="true"/,
+    '生成结束后移除加载动画并恢复操作',
+  );
+}
 runInNewContext(
   `${summaryConst('const summaryProviders = ')}${summaryConst('const summaryProviderPresets = ', true)}\n${summaryFn('summaryProviderLabel')}${summaryFn('providerEntry')}${summaryFn('builtinModelPicker')}${summaryFn('builtinModelEmptyState')}${summaryConst('const RECOMMENDED_BUILTIN_MODEL_ID = ')}${summaryFn('renderModelConfigFields')}${summaryFn('renderModelConfigForm')}${summaryFn('renderSummaryModelForm')}${summaryFn('renderAiSettingsTabs')}${summaryFn('renderAiServiceChoice')}${summaryFn('renderSummaryModelModal')}`,
   summaryContext,

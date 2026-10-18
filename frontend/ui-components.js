@@ -1469,16 +1469,19 @@ function renderMeetingSummary({
   const blockedAttrs = blocked
     ? ` disabled title="${escapeHtml(t('实时会议中，结束后再生成会议纪要。'))}"`
     : '';
+  const generationIcon = generating
+    ? `<span class="summary-generating-icon" aria-hidden="true">${interfaceIcon('ai')}</span>`
+    : interfaceIcon(markdown ? 'refresh' : 'ai');
   const tools = editing
     ? `<div class="summary-tools"><button class="tabbar-action" data-cancel-inline-summary-edit type="button" aria-label="${t('取消')}" title="${t('取消')}"${saveState === 'saving' ? ' disabled' : ''}>${summaryActionIcons.cancel}</button><button class="tabbar-action is-save" data-save-inline-summary type="button" aria-label="${t('保存')}" title="${t('保存')}"${saveState === 'saving' ? ' disabled' : ''}>${interfaceIcon('check')}</button></div>`
     : markdown
-      ? `<div class="summary-tools"><button class="secondary" data-open-summary-edit type="button"${generating ? ' disabled' : ''}>${interfaceIcon('edit')}${t('编辑')}</button><button class="secondary" data-copy-summary type="button" aria-label="${escapeHtml(t('复制会议纪要'))}">${interfaceIcon('copy')}${t('复制')}</button><button class="secondary summary-reader-regenerate" data-regenerate-summary type="button"${blockedAttrs}${generating ? ' disabled' : ''}>${interfaceIcon('refresh')}${t(generating ? '正在生成会议纪要' : '重新生成')}</button></div>`
+      ? `<div class="summary-tools"><button class="secondary" data-open-summary-edit type="button"${generating ? ' disabled' : ''}>${interfaceIcon('edit')}${t('编辑')}</button><button class="secondary" data-copy-summary type="button" aria-label="${escapeHtml(t('复制会议纪要'))}">${interfaceIcon('copy')}${t('复制')}</button><button class="secondary summary-reader-regenerate" data-regenerate-summary type="button"${blockedAttrs}${generating ? ' disabled aria-busy="true"' : ''}>${generationIcon}${t(generating ? '正在生成会议纪要' : '重新生成')}</button></div>`
       : '';
   const action = editing
     ? renderSaveState(saveState)
     : generating
-      ? `<button class="modal-action" type="button" disabled>${interfaceIcon('ai')}${t('正在生成会议纪要')}</button>`
-      : `<button class="modal-action" ${markdown ? 'data-regenerate-summary' : 'data-generate-summary'} type="button"${blockedAttrs}>${interfaceIcon(markdown ? 'refresh' : 'ai')}${t(markdown ? '重新生成' : '生成纪要')}</button>`;
+      ? `<button class="modal-action" type="button" disabled aria-busy="true">${generationIcon}${t('正在生成会议纪要')}</button>`
+      : `<button class="modal-action" ${markdown ? 'data-regenerate-summary' : 'data-generate-summary'} type="button"${blockedAttrs}>${generationIcon}${t(markdown ? '重新生成' : '生成纪要')}</button>`;
   const people = participants.length
     ? `<section class="summary-participants"><button type="button" data-summary-participants-toggle aria-haspopup="dialog" aria-controls="summary-participants-popover" aria-expanded="false"><span class="summary-participant-count">${escapeHtml(t('参与者'))} (${participants.length})</span><span class="summary-participant-avatars">${participants
         .slice(0, 3)

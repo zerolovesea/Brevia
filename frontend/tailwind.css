@@ -3950,6 +3950,9 @@
 .button-spinner {
   @apply inline-block size-3 animate-[button-spin_.7s_linear_infinite] rounded-full border border-current border-r-transparent;
 }
+.summary-generating-icon {
+  @apply inline-flex animate-[button-spin_1.6s_linear_infinite];
+}
 
 /* Soften the harsh right angles: a restrained, consistent radius across interactive surfaces.
    Tighter on small controls/inner elements, softer on cards and containers. */
