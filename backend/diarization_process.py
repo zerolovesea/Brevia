@@ -7,12 +7,14 @@ import subprocess
 import sys
 import threading
 
+from .process_resources import process_descendants, stop_process_tree
+
 
 class DiarizationProcess:
     """把独立进程的 JSONL 消息接到分析任务现有的可取消等待循环。"""
 
-    def __init__(self, payload):
-        command = (
+    def __init__(self, payload, *, command=None, stderr=None, env=None):
+        command = command or (
             [sys.executable, "--diarization"]
             if getattr(sys, "frozen", False)
             else [sys.executable, "-m", "backend.diarization_process"]
@@ -21,13 +23,15 @@ class DiarizationProcess:
             command,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
-            stderr=None,
+            stderr=stderr,
+            env=env,
             text=True,
             encoding="utf-8",
             bufsize=1,
         )
         self.messages = queue.Queue()
         self.pending = None
+        self.descendants = {}
 
         def read():
             try:
@@ -53,6 +57,9 @@ class DiarizationProcess:
         self.writer.start()
 
     def poll(self, timeout=0):
+        self.descendants.update(
+            (child.pid, child) for child in process_descendants(self.process.pid)
+        )
         if self.pending is not None:
             return True
         try:
@@ -68,9 +75,7 @@ class DiarizationProcess:
         return message
 
     def close(self):
-        if self.process.poll() is None:
-            self.process.kill()
-        self.process.wait(timeout=5)
+        stop_process_tree(self.process, self.descendants.values())
         self.reader.join(timeout=5)
         self.writer.join(timeout=5)
         self.process.stdout.close()

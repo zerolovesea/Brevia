@@ -10,7 +10,7 @@
     "test:dead": "node scripts/check_dead_code.mjs",
     "test:electron": "node electron/test-main-logic.mjs && node scripts/test-deduplicate-runtime.cjs && node electron/test-mobile-server.cjs",
     "test:ui": "cd frontend && node ./test-ui.mjs && node ../scripts/test-motion.mjs",
-    "test:backend": "python -m unittest backend.test_worker backend.test_sentence backend.test_packaging backend.test_mlx backend.test_audio_mixer backend.test_mobile",
+    "test:backend": "python -m unittest backend.test_worker backend.test_sentence backend.test_packaging backend.test_mlx backend.test_audio_mixer backend.test_mobile backend.test_process_resources backend.test_bench_diarization",
     "test:model": ".venv/bin/python -m backend.diagnose_model --models-dir .models",
     "test:diarization": ".venv/bin/python -m backend.diagnose_diarization --models-dir .models --download",
     "bench:electron": "electron . --bench-refinement",
