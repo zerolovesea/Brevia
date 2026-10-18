@@ -282,6 +282,8 @@ html[data-theme="dark"] .modal-danger {
   flex: 1;
 }
 #workspace-edit {
+  border-color: transparent;
+  background: transparent;
   order: 2;
   align-self: start;
   flex: none;
@@ -296,9 +298,13 @@ html[data-theme="dark"] .modal-danger {
   width: 44px;
   height: 44px;
   place-items: center;
-  background: var(--color-navigation);
+  background: transparent;
   border-radius: 8px;
   color: var(--color-text);
+}
+.meeting-row-icon .interface-icon {
+  width: 32px;
+  height: 32px;
 }
 .meeting-row .meeting-main {
   min-width: 0;
@@ -571,9 +577,17 @@ textarea,
 .library-toolbar .search input {
   height: 42px;
   min-height: 42px;
+  font-size: 14px;
   border: 0;
   background: transparent;
   padding: 0;
+}
+.library-toolbar .search {
+  background: var(--color-surface);
+}
+.library-toolbar .search .interface-icon {
+  width: 20px;
+  height: 20px;
 }
 .library-toolbar .search:focus-within {
   outline: 2px solid var(--color-text);
@@ -2362,6 +2376,7 @@ details.advanced-settings-section[open]::details-content {
 
 /* 会议目录、批量管理和任务状态。 */
 #home-view #home-slogan {
+  margin-top: 8px;
   font-size: 16px;
   font-weight: 400;
   color: var(--color-text-muted);
@@ -2371,11 +2386,11 @@ details.advanced-settings-section[open]::details-content {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 16px 0 10px;
+  padding: 16px 0 14px;
   border-bottom: 1px solid var(--color-line);
 }
 #home-view .library-group h2 {
-  font-size: 16px;
+  font-size: 20px;
   font-weight: 600;
   margin: 0;
 }
@@ -2393,7 +2408,7 @@ details.advanced-settings-section[open]::details-content {
   grid-column: 2;
 }
 .meeting-row:has(.meeting-row-checkbox[hidden]) {
-  grid-template-columns: 44px minmax(0, 1fr) minmax(120px, 0.62fr) minmax(140px, 0.34fr) 40px;
+  grid-template-columns: 56px minmax(0, 1fr) minmax(140px, 0.55fr) minmax(180px, 0.88fr) 40px;
 }
 .meeting-row:has(.meeting-row-checkbox[hidden]) .meeting-row-icon {
   grid-column: 1;
@@ -2420,6 +2435,8 @@ details.advanced-settings-section[open]::details-content {
 }
 .meeting-status .status {
   font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text);
 }
 .library-empty {
   display: grid;
@@ -3747,16 +3764,16 @@ body {
 .app-shell {
   height: 100dvh;
   min-height: 0;
-  grid-template-columns: 224px minmax(0, 1fr);
+  grid-template-columns: 240px minmax(0, 1fr);
 }
 .app-shell.is-live-meeting {
   grid-template-columns: 72px minmax(0, 1fr);
 }
 .app-shell.is-live-meeting:has(.sidebar:hover, .sidebar:focus-within) {
-  grid-template-columns: 224px minmax(0, 1fr);
+  grid-template-columns: 240px minmax(0, 1fr);
 }
 .sidebar {
-  padding: 76px 12px 20px;
+  padding: 56px 12px 20px;
   background: var(--color-navigation);
   border-right: 1px solid var(--color-line);
 }
@@ -3766,6 +3783,7 @@ body {
 }
 .sidebar nav .nav-item {
   flex: none;
+  min-height: 48px;
   padding-inline: 16px;
 }
 .sidebar .workspace-subnav {
@@ -3795,8 +3813,8 @@ body {
 .sidebar .brand-mark {
   display: grid;
   flex: none;
-  width: 36px;
-  height: 36px;
+  width: 28px;
+  height: 28px;
   background: transparent;
 }
 .sidebar .brand-mark img,
@@ -3806,26 +3824,26 @@ body {
   height: 100%;
 }
 .brand-name {
-  font-size: 32px;
+  font-size: 26px;
   font-weight: 600;
   letter-spacing: -0.025em;
-  line-height: 36px;
+  line-height: 32px;
 }
 .sidebar .new-meeting {
-  margin-top: 32px;
+  margin-top: 22px;
   padding: 8px 16px;
   gap: 12px;
-  min-height: 40px;
+  min-height: 48px;
 }
 .sidebar .import-recording {
   margin-top: 0;
   padding: 8px 16px;
   gap: 12px;
-  min-height: 40px;
+  min-height: 48px;
 }
 .sidebar .interface-icon {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
 }
 .app-shell.is-live-meeting:not(:has(.sidebar:hover, .sidebar:focus-within))
   .sidebar
@@ -3854,8 +3872,8 @@ body {
   overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  margin-top: 2px;
+  gap: 6px;
+  margin-top: 20px;
 }
 .sidebar nav #all-meetings {
   order: 0;
@@ -3927,22 +3945,22 @@ textarea,
 }
 #home-view.active {
   height: 100%;
-  padding: 32px;
+  padding: 56px 32px 32px 48px;
 }
 #home-eyebrow {
   max-width: 100%;
   overflow-wrap: anywhere;
   text-align: left;
   margin: 0;
-  font-size: 30px;
-  font-weight: 700;
+  font-size: 36px;
+  font-weight: 600;
   line-height: 1.25;
   letter-spacing: -0.02em;
   color: var(--color-text);
   text-transform: none;
 }
 #home-view .meeting-main h2 {
-  font-size: 16px;
+  font-size: 18px;
   line-height: 1.4;
   font-weight: 600;
 }
@@ -3956,8 +3974,9 @@ textarea,
   grid-template-columns: auto 44px minmax(0, 1fr) minmax(0, 180px) auto auto;
   gap: 16px;
   align-items: center;
-  padding: 10px 0;
-  min-height: 80px;
+  padding: 16px 0;
+  min-height: 96px;
+  border-bottom: 1px solid var(--color-line);
 }
 .meeting-tags :is(.tag, span) {
   font-size: 12px;
@@ -4329,7 +4348,7 @@ textarea,
 }
 #detail-view .detail-meta {
   margin: 0;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--color-text-muted);
   line-height: 1.5;
 }
@@ -4341,8 +4360,8 @@ textarea,
   align-self: start;
 }
 #detail-view .detail-actions > button {
-  min-height: 32px;
-  padding: 6px 12px;
+  min-height: 40px;
+  padding: 8px 18px;
   font-size: 14px;
 }
 #detail-view .detail-layout {
@@ -4516,7 +4535,7 @@ textarea,
   align-items: center;
 
   flex: none;
-  border-bottom: 0;
+  border-bottom: 1px solid var(--color-line);
   display: flex;
   justify-content: space-between;
   gap: 12px;
@@ -4532,10 +4551,10 @@ textarea,
   overflow-wrap: anywhere;
   hyphens: auto;
   text-transform: none;
-  font-size: 24px;
-  color: var(--color-text);
-  font-weight: 700;
-  line-height: 1.3;
+  font-size: 16px;
+  color: var(--color-text-muted);
+  font-weight: 500;
+  line-height: 1.5;
   letter-spacing: normal;
   margin: 0;
 }
@@ -4564,16 +4583,19 @@ textarea,
 }
 #detail-view .summary-body {
   padding-right: 16px;
+  color: var(--color-text-body);
   font-size: 16px;
   line-height: 1.5;
-  padding-top: 8px;
+  padding-top: 16px;
 }
 #detail-view .summary-body :is(p, li) {
   font-size: 16px;
   line-height: 1.5;
 }
 #detail-view .summary-body h1 {
-  font-size: 24px;
+  margin-bottom: 16px;
+  font-size: 32px;
+  font-weight: 600;
   line-height: 1.35;
 }
 #detail-view .summary-body h2 {
@@ -4721,11 +4743,17 @@ textarea,
   padding: 0;
 }
 #detail-view .tabbar-tabs .tab {
+  width: 144px;
+  max-width: 30vw;
+  justify-content: center;
   display: inline-flex;
   align-items: center;
   gap: 8px;
   padding: 8px 0;
   font-size: 15px;
+}
+#detail-view .tabbar-tabs .tab > svg {
+  display: none;
 }
 /* 逐字稿的真实附加操作独占工具行，不挤压内容导航。 */
 #detail-view .tabbar:has([data-detail-tab="transcript"].active) {
@@ -5291,7 +5319,7 @@ textarea,
   color: var(--color-text);
 }
 .settings-page {
-  left: 224px;
+  left: 240px;
   top: 40px;
   padding: 0;
   display: grid;
@@ -6581,7 +6609,7 @@ textarea,
 }
 .export-modal {
   padding-top: 84px;
-  padding-left: 216px;
+  padding-left: 232px;
 }
 body:has(.app-shell.is-live-meeting) .export-modal {
   padding-left: 88px;
@@ -6932,7 +6960,6 @@ body:has(.app-shell.is-live-meeting) .export-modal {
 .sidebar :is(.new-meeting, .import-recording, .nav-item, .workspace-item) {
   border-radius: 8px;
   gap: 12px;
-  min-height: 40px;
   flex-shrink: 0;
 }
 .sidebar .new-workspace .interface-icon {
@@ -6979,6 +7006,9 @@ body:has(.app-shell.is-live-meeting) .export-modal {
 .task-stack-toggle[aria-expanded="false"] .interface-icon {
   transform: none;
 }
+.sidebar:has(.task-cards > :not([hidden])) .mobile-sidebar-card {
+  margin-top: 0;
+}
 .sidebar:has(.task-cards:not(.is-collapsed) > :not([hidden])) nav {
   min-height: 0;
 }
@@ -6992,14 +7022,14 @@ body:has(.app-shell.is-live-meeting) .export-modal {
   position: relative;
   inset: auto;
   order: 1;
-  flex: 0 1 240px;
+  flex: 0 1 auto;
   display: grid;
   grid-auto-rows: max-content;
   align-content: start;
   gap: 6px;
   min-height: 64px;
   max-height: 260px;
-  margin: 0;
+  margin: 0 0 16px;
   padding: 0;
   overflow: hidden auto;
 }
@@ -7833,17 +7863,20 @@ html[data-theme] .toast,
 }
 #detail-view .detail-summary-panel .summary-reading-section {
   display: grid;
-  grid-template-columns: 128px minmax(0, 1fr);
-  gap: 20px;
+  grid-template-columns: 152px minmax(0, 1fr);
+  gap: 24px;
   padding: 16px 0;
   border-bottom: 0;
 }
 #detail-view .detail-summary-panel .summary-reading-section > h2 {
   font-size: 16px;
-  font-weight: 700;
+  font-weight: 500;
   margin: 0;
   padding: 0;
   border: 0;
+}
+#detail-view .detail-summary-panel .summary-reading-section > div > p {
+  max-width: 68ch;
 }
 #detail-view .detail-summary-panel .summary-reading-section > div > :first-child {
   margin-top: 0;
@@ -8310,7 +8343,7 @@ html[data-theme] .toast,
 }
 .sidebar .task-stack-toggle {
   border-top: 1px solid var(--color-line);
-  margin-top: 0;
+  margin-top: auto;
   padding-top: 12px;
 }
 .sidebar .task-cards .required-models-card ul {
@@ -8456,14 +8489,14 @@ html[data-theme] .toast,
   min-height: 44px;
   padding: 8px 16px;
   border-radius: 8px;
-  box-shadow: 0 2px 5px #0000000a;
+  box-shadow: none;
   display: flex;
   gap: 12px;
   align-items: center;
 }
 #home-view .page-head .interface-icon {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
 }
 .meeting-menu {
   min-width: 248px;
@@ -9045,7 +9078,7 @@ body:has(.meeting-workspace-menu) .meeting-menu:not([hidden]) [data-meeting-acti
   }
 }
 #home-view .library-toolbar {
-  padding-bottom: 12px;
+  padding-bottom: 20px;
 }
 .sidebar .workspace-picker .search input {
   height: 28px;
@@ -9054,6 +9087,7 @@ body:has(.meeting-workspace-menu) .meeting-menu:not([hidden]) [data-meeting-acti
   line-height: 20px;
 }
 #home-view .page-head > :is(.secondary, .primary-action) {
+  font-size: 14px;
   height: 44px;
   min-height: 44px;
   align-self: start;
@@ -9072,7 +9106,7 @@ body:has(.meeting-workspace-menu) .meeting-menu:not([hidden]) [data-meeting-acti
   grid-template-columns: 72px minmax(0, 1fr);
 }
 .app-shell.is-settings-view:has(.sidebar:hover, .sidebar:focus-within) {
-  grid-template-columns: 224px minmax(0, 1fr);
+  grid-template-columns: 240px minmax(0, 1fr);
 }
 /* 设置浮层首次显示时也不能遮住正在收起的主导航。 */
 .app-shell.is-settings-view:not([inert]) .sidebar {
@@ -9128,7 +9162,7 @@ body:has(.app-shell.is-settings-view) .settings-page {
     opacity 220ms ease-out;
 }
 body:has(.app-shell.is-settings-view):has(.sidebar:hover, .sidebar:focus-within) .settings-page {
-  left: 224px;
+  left: 240px;
 }
 @media (max-width: 850px) {
   body:has(.app-shell.is-settings-view) .settings-page {
@@ -9987,4 +10021,30 @@ html[data-theme="dark"] .onboarding-brand-mark {
 }
 #detail-view .summary-body :is(p, li) {
   line-height: 1.65;
+}
+
+/* 精修稿的阅读表格保留行关系，去掉密集竖线。 */
+#detail-view .summary-body :is(th, td) {
+  border: 0;
+  border-bottom: 1px solid var(--color-line);
+  padding: 10px 16px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+#detail-view .summary-body th {
+  background: var(--color-navigation);
+  font-weight: 500;
+}
+.meeting-status small {
+  font-size: 13px;
+  color: var(--color-text-subtle);
+}
+@media (max-width: 1100px), (max-height: 650px) {
+  #home-view.active {
+    padding: 24px;
+  }
+  .meeting-row {
+    min-height: 80px;
+    padding-block: 10px;
+  }
 }

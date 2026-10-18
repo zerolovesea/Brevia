@@ -566,11 +566,16 @@ class _HomeState extends State<Home> {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+          padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(tr('会议'), style: Theme.of(context).textTheme.headlineLarge),
+              Text(
+                tr('会议'),
+                style: Theme.of(
+                  context,
+                ).textTheme.headlineLarge?.copyWith(fontSize: 38),
+              ),
               const SizedBox(height: 8),
               Text(
                 tr('所有对话，清晰归档。'),
@@ -582,7 +587,7 @@ class _HomeState extends State<Home> {
           ),
         ),
         Padding(
-          padding: EdgeInsets.symmetric(horizontal: 24),
+          padding: EdgeInsets.symmetric(horizontal: 16),
           child: TextField(
             onChanged: (v) => setState(() => query = v),
             decoration: InputDecoration(
@@ -590,25 +595,32 @@ class _HomeState extends State<Home> {
               hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
-              fillColor: Theme.of(context).colorScheme.surfaceContainer,
+              fillColor: Theme.of(context).colorScheme.surface,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide.none,
+                borderSide: BorderSide(
+                  color: Theme.of(context).colorScheme.outline,
+                ),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide.none,
+                borderSide: BorderSide(
+                  color: Theme.of(context).colorScheme.outline,
+                ),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide.none,
+                borderSide: BorderSide(
+                  color: Theme.of(context).colorScheme.primary,
+                  width: 2,
+                ),
               ),
               contentPadding: EdgeInsets.symmetric(
                 horizontal: 16,
                 vertical: 12,
               ),
               constraints: BoxConstraints(minHeight: 48),
-              prefixIcon: BreviaIcon(Icons.search),
+              prefixIcon: BreviaIcon(Icons.search, size: 20),
               isDense: true,
             ),
           ),
@@ -649,7 +661,7 @@ class _HomeState extends State<Home> {
               : RefreshIndicator(
                   onRefresh: model.refresh,
                   child: ListView.separated(
-                    padding: EdgeInsets.symmetric(horizontal: 24),
+                    padding: EdgeInsets.symmetric(horizontal: 16),
                     itemCount: values.length,
                     separatorBuilder: (_, _) => Divider(height: 1),
                     itemBuilder: (_, i) {
@@ -707,7 +719,7 @@ class _HomeState extends State<Home> {
                                     child: Text(
                                       dayLabel(date),
                                       style: const TextStyle(
-                                        fontSize: 18,
+                                        fontSize: 16,
                                         fontWeight: FontWeight.w600,
                                       ),
                                     ),
@@ -735,86 +747,120 @@ class _HomeState extends State<Home> {
                                     (m['remoteDeleted'] == true ||
                                         m['localOnly'] == true)),
                             onDelete: () => deleteRecord(m),
-                            child: ListTile(
-                              leading: Container(
-                                width: 48,
-                                height: 48,
-                                decoration: BoxDecoration(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.surfaceContainer,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: BreviaIcon(
-                                  Icons.description_outlined,
-                                  size: 24,
-                                ),
-                              ),
-                              contentPadding: EdgeInsets.zero,
-                              minVerticalPadding: 12,
-                              title: Text(
-                                m['title'],
-                                style: TextStyle(fontWeight: FontWeight.w600),
-                              ),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    [
-                                      if (date != null)
-                                        '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}',
-                                      durationText(m['samples'] ?? 0),
-                                    ].join(' · '),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      const BreviaIcon(
-                                        Icons.phone_iphone_outlined,
-                                        size: 16,
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Flexible(child: Text(tr('手机录音'))),
-                                      const SizedBox(width: 8),
-                                      Padding(
-                                        padding: const EdgeInsets.only(top: 6),
-                                        child: BreviaIcon(
-                                          Icons.circle,
-                                          size: 6,
-                                          color: m['finished'] == true
-                                              ? (Theme.of(context).brightness ==
-                                                        Brightness.dark
-                                                    ? const Color(0xff80c99a)
-                                                    : const Color(0xff16812e))
-                                              : Theme.of(
-                                                  context,
-                                                ).colorScheme.onSurfaceVariant,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                border: i < values.length - 1
+                                    ? Border(
+                                        bottom: BorderSide(
+                                          color: Theme.of(context).dividerColor,
+                                          width: .5,
                                         ),
+                                      )
+                                    : null,
+                              ),
+                              child: ListTile(
+                                leading: const SizedBox(
+                                  width: 44,
+                                  height: 44,
+                                  child: Center(
+                                    child: BreviaIcon(
+                                      Icons.insert_drive_file_outlined,
+                                      size: 36,
+                                    ),
+                                  ),
+                                ),
+                                contentPadding: EdgeInsets.zero,
+                                horizontalTitleGap: 22,
+                                minTileHeight: 96,
+                                minVerticalPadding: 16,
+                                title: Text(
+                                  m['title'],
+                                  style: TextStyle(
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                subtitle: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.bodySmall,
+                                      [
+                                        if (date != null)
+                                          '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}',
+                                        durationText(m['samples'] ?? 0),
+                                      ].join(' · '),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    DefaultTextStyle.merge(
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        height: 1.5,
                                       ),
-                                      const SizedBox(width: 6),
-                                      Expanded(
-                                        child: Text(
-                                          label,
-                                          style: TextStyle(
-                                            color: m['finished'] == true
-                                                ? const Color(0xff16812e)
-                                                : null,
+                                      child: Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Flexible(child: Text(tr('手机录音'))),
+                                          const Text(' · '),
+                                          Padding(
+                                            padding: const EdgeInsets.only(
+                                              top: 6,
+                                            ),
+                                            child: BreviaIcon(
+                                              Icons.circle,
+                                              size: 6,
+                                              color: m['finished'] == true
+                                                  ? (Theme.of(
+                                                              context,
+                                                            ).brightness ==
+                                                            Brightness.dark
+                                                        ? const Color(
+                                                            0xff80c99a,
+                                                          )
+                                                        : const Color(
+                                                            0xff16812e,
+                                                          ))
+                                                  : Theme.of(context)
+                                                        .colorScheme
+                                                        .onSurfaceVariant,
+                                            ),
                                           ),
-                                        ),
+                                          const SizedBox(width: 6),
+                                          Expanded(
+                                            child: Text(
+                                              label,
+                                              style: TextStyle(
+                                                color: m['finished'] == true
+                                                    ? (Theme.of(
+                                                                context,
+                                                              ).brightness ==
+                                                              Brightness.dark
+                                                          ? const Color(
+                                                              0xff80c99a,
+                                                            )
+                                                          : const Color(
+                                                              0xff16812e,
+                                                            ))
+                                                    : null,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
                                       ),
-                                    ],
-                                  ),
-                                ],
+                                    ),
+                                  ],
+                                ),
+                                trailing: const BreviaIcon(
+                                  Icons.chevron_right,
+                                  size: 20,
+                                ),
+                                onTap: () => openMeeting(m['id']),
+                                onLongPress: () => meetingMenu(m),
                               ),
-                              trailing: const BreviaIcon(
-                                Icons.chevron_right,
-                                size: 20,
-                              ),
-                              onTap: () => openMeeting(m['id']),
-                              onLongPress: () => meetingMenu(m),
                             ),
                           ),
                         ],
@@ -824,7 +870,8 @@ class _HomeState extends State<Home> {
                 ),
         ),
         if (model.live == null || model.live?['state'] == 'ended')
-          DecoratedBox(
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16),
             decoration: BoxDecoration(
               border: Border(
                 top: BorderSide(
@@ -834,16 +881,19 @@ class _HomeState extends State<Home> {
               ),
             ),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
+              padding: EdgeInsets.zero,
               child: ListTile(
                 contentPadding: EdgeInsets.zero,
-                minTileHeight: 48,
+                minTileHeight: 56,
                 minVerticalPadding: 8,
-                leading: const BreviaIcon(Icons.laptop_outlined, size: 22),
+                leading: const BreviaIcon(Icons.laptop_outlined, size: 24),
                 title: model.desktop == null
                     ? Text(
                         tr('连接电脑'),
-                        style: Theme.of(context).textTheme.bodySmall,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
                       )
                     : Row(
                         children: [
@@ -881,7 +931,7 @@ class _HomeState extends State<Home> {
             ),
           ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
           child: SizedBox(
             width: double.infinity,
             child: model.live != null && model.live?['state'] != 'ended'
@@ -2239,6 +2289,11 @@ class _MeetingPageState extends State<MeetingPage> {
                       )
                     : null,
                 child: Text(
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w400,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
                   ended
                       ? '$name   ${durationText((s['start_ms'] as num? ?? 0) * 16)}'
                       : durationText((s['start_ms'] as num? ?? 0) * 16),
@@ -2248,7 +2303,7 @@ class _MeetingPageState extends State<MeetingPage> {
                 (s['text'] ?? '').toString(),
                 style: Theme.of(
                   context,
-                ).textTheme.bodyLarge?.copyWith(height: 1.5),
+                ).textTheme.bodyLarge?.copyWith(fontSize: 17, height: 1.65),
               ),
               if ((s['translation'] ?? '').toString().isNotEmpty)
                 Padding(
@@ -2263,7 +2318,7 @@ class _MeetingPageState extends State<MeetingPage> {
             ],
           );
           return Padding(
-            padding: EdgeInsets.only(bottom: 16),
+            padding: EdgeInsets.only(bottom: 32),
             child: ended
                 ? Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -2421,8 +2476,20 @@ class _MeetingPageState extends State<MeetingPage> {
                                 style: TextStyle(color: Color(0xffff3b30)),
                               ),
                             TextSpan(
-                              text:
-                                  '$label · ${durationText(m['samples'] ?? 0)}',
+                              text: label,
+                              style: TextStyle(
+                                color: state == 'recording' && live
+                                    ? const Color(0xffff3b30)
+                                    : Theme.of(
+                                        context,
+                                      ).colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                            TextSpan(
+                              text: ' · ${durationText(m['samples'] ?? 0)}',
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.onSurface,
+                              ),
                             ),
                           ],
                         ),
@@ -2561,7 +2628,7 @@ class _MeetingPageState extends State<MeetingPage> {
                       child: SingleChildScrollView(
                         primary: false,
                         child: Padding(
-                          padding: EdgeInsets.fromLTRB(24, 8, 24, 12),
+                          padding: EdgeInsets.fromLTRB(20, 0, 20, 0),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
@@ -2650,7 +2717,7 @@ class _MeetingPageState extends State<MeetingPage> {
                     ),
                     if (!recordingFocus)
                       Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
                         child: DecoratedBox(
                           decoration: BoxDecoration(
                             border: Border(
@@ -2748,7 +2815,7 @@ class _MeetingPageState extends State<MeetingPage> {
                         child: ListView(
                           key: ValueKey(tab),
                           controller: scroll,
-                          padding: EdgeInsets.all(24),
+                          padding: EdgeInsets.all(20),
                           children: [
                             if (recordingFocus) ...[
                               if (m['desktopCapture'] == true) ...[
@@ -3014,8 +3081,11 @@ class _MeetingPageState extends State<MeetingPage> {
                         ),
                       ),
                     Container(
-                      margin: EdgeInsets.fromLTRB(24, 8, 24, 16),
-                      padding: EdgeInsets.all(12),
+                      margin: EdgeInsets.fromLTRB(0, 8, 0, 16),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 32,
+                        vertical: 12,
+                      ),
                       decoration: BoxDecoration(
                         color: Theme.of(context).scaffoldBackgroundColor,
                         border: Border(
@@ -3157,12 +3227,8 @@ class _MeetingPageState extends State<MeetingPage> {
                           : Column(
                               children: [
                                 Container(
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.surfaceContainerLowest,
-                                    borderRadius: BorderRadius.circular(8),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
                                   ),
                                   child: compactRecording
                                       ? Wrap(
@@ -3235,7 +3301,7 @@ class _MeetingPageState extends State<MeetingPage> {
                                                                 ?.copyWith(
                                                                   fontWeight:
                                                                       FontWeight
-                                                                          .w600,
+                                                                          .w400,
                                                                   color: Theme.of(
                                                                     context,
                                                                   ).colorScheme.onSurface,
@@ -4243,16 +4309,13 @@ class MeetingConnectionStatus extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final connected = meeting['connected'] == true;
-    return Container(
-      margin: const EdgeInsets.only(top: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(8),
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
       child: StableStatusText(
         connected ? tr('● 已连接') : tr('正在重新连接'),
         states: [tr('● 已连接'), tr('正在重新连接')],
+        textAlign: TextAlign.center,
+        style: Theme.of(context).textTheme.bodySmall,
       ),
     );
   }

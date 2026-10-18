@@ -24,7 +24,15 @@
   function configureMotion(element, state) {
     const phone = element.dataset.motionScene.startsWith('phone-');
     const pairing = element.dataset.motionScene.startsWith('pair-');
-    const width = pairing ? (compact.matches ? 420 : 1000) : phone ? 390 : 1280;
+    const width = pairing
+      ? compact.matches
+        ? 420
+        : 1000
+      : phone
+        ? 390
+        : element.dataset.motionScene === 'live'
+          ? 1152
+          : 1280;
     const height = pairing ? (compact.matches ? 780 : 600) : phone ? 844 : 800;
     state.frame.style.width = `${width}px`;
     state.frame.style.height = `${height}px`;
@@ -36,7 +44,7 @@
     state.ready = false;
     state.command = '';
     element.classList.remove('is-ready');
-    const source = new URL('./product-motion.html?v=20261017-motion', location.href);
+    const source = new URL('./product-motion.html?v=20261018-strict-final', location.href);
     source.searchParams.set('scene', element.dataset.motionScene);
     source.searchParams.set('shot', element.dataset.motionShot || 'overview');
     source.searchParams.set('lang', zh ? 'zh' : 'en');

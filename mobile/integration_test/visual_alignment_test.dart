@@ -79,6 +79,18 @@ void main() {
         },
       },
     ];
+    model.meetings.add({
+      'id': 'visual-local',
+      'title': '客户访谈',
+      'samples': 8064000,
+      'state': 'ended',
+      'finished': false,
+      'count': 16,
+      'uploaded': 0,
+      'localOnly': true,
+      'created': DateTime.now().copyWith(hour: 14, minute: 0).toIso8601String(),
+      'marks': <Map<String, dynamic>>[],
+    });
     model.notifyListeners();
     await capture('ios-library');
     await tester.tap(find.byIcon(Icons.add).first);
@@ -106,10 +118,11 @@ void main() {
       'uploaded': 24,
       'marks': <Map<String, dynamic>>[],
       'snapshot': {
-        'samples': 12096000,
+        'samples': 10000000,
         'notes': '## 决定\n\n下周确认发布计划。',
         'segments': [
-          {'start_ms': 0, 'text': '先回顾项目进展，再确认下一步计划。'},
+          {'start_ms': 0, 'text': '我们先回顾上周的进展。'},
+          {'start_ms': 12000, 'text': '设计稿已经完成，周四交付测试版本。周五前完成验收，下周一小范围发布。'},
         ],
       },
     };
@@ -123,6 +136,7 @@ void main() {
     await tester.tap(find.byTooltip('取消'));
     await tester.pump(const Duration(milliseconds: 500));
     model.live!['localOnly'] = true;
+    model.inputLevel.value = .55;
     model.live!['snapshot'] = <String, dynamic>{};
     model.notifyListeners();
     await capture('ios-offline');

@@ -1708,7 +1708,10 @@ function showSummaryProgress(completed = 0, total = 100, stage = 'summary.prepar
     enterTaskCard(card);
   } else if (card.classList.contains('task-card-leave')) enterTaskCard(card);
   const ratio = total ? Math.min(1, completed / total) : 0;
-  card.querySelector('p').textContent = (summaryTaskCopy[locale] || summaryTaskCopy.en)[0];
+  card.querySelector('p').textContent =
+    stage === 'summary.complete'
+      ? summaryTaskLabel(stage)
+      : (summaryTaskCopy[locale] || summaryTaskCopy.en)[0];
   card.querySelector('strong').innerHTML = renderTaskProgressLabel(
     summaryTaskLabel(stage),
     total ? Math.round(ratio * 100) : undefined,
@@ -1751,7 +1754,10 @@ function refreshLocalizedTaskCards() {
   const summary = document.querySelector('#summary-progress');
   if (summary) {
     const total = Number(summary.dataset.total || 0);
-    summary.querySelector('p').textContent = (summaryTaskCopy[locale] || summaryTaskCopy.en)[0];
+    summary.querySelector('p').textContent =
+      summary.dataset.stage === 'summary.complete'
+        ? summaryTaskLabel(summary.dataset.stage)
+        : (summaryTaskCopy[locale] || summaryTaskCopy.en)[0];
     summary.querySelector('strong').innerHTML = renderTaskProgressLabel(
       summaryTaskLabel(summary.dataset.stage),
       total ? Math.round((Number(summary.dataset.completed || 0) / total) * 100) : undefined,

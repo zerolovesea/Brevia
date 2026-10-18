@@ -504,3 +504,45 @@ body.is-compact .meeting-menu {
     background: transparent;
   }
 }
+
+/* 官网概览沿用正式列表结构，按概念图的演示密度展示。 */
+#motion-stage[data-scene="tour"] #home-view.active {
+  padding: 24px 32px;
+}
+#motion-stage[data-scene="tour"] #home-view .meeting-row {
+  min-height: 48px;
+  padding-block: 3px;
+}
+#motion-stage[data-scene="tour"] #home-view .meeting-main h2 {
+  font-size: 16px;
+  line-height: 1.2;
+}
+#motion-stage[data-scene="tour"] #home-view .meeting-main p {
+  margin-top: 0;
+  font-size: 12px;
+  line-height: 16px;
+}
+#motion-stage[data-scene="tour"] .meeting-row-icon {
+  width: 32px;
+  height: 32px;
+}
+#motion-stage[data-scene="tour"] .meeting-status {
+  display: flex;
+  flex-direction: column;
+}
+#motion-stage[data-scene="tour"] .meeting-status :is(.status, small) {
+  margin: 0;
+  font-size: 12px;
+  line-height: 16px;
+}
+#motion-stage[data-scene="tour"] #home-view .library-toolbar {
+  margin-top: 4px;
+  padding-bottom: 8px;
+}
+#motion-stage[data-scene="tour"] .library-toolbar .search input {
+  height: 34px;
+  min-height: 34px;
+}
+#motion-stage[data-scene="tour"] .library-group {
+  padding: 8px 0 0;
+}

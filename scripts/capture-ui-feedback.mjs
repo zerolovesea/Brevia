@@ -9,6 +9,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const sandbox = path.join(root, '.e2e-tmp', `feedback-${process.pid}`);
+const defaultWindowScale = (2 / 3) * 1.15 * 1.1;
 const output = path.resolve(
   process.env.BREVIA_FEEDBACK_CAPTURE_DIR ||
     'output/playwright/layout-style-comparison/captures/feedback',
@@ -134,7 +135,7 @@ try {
   await send('Emulation.setDeviceMetricsOverride', {
     width: 0,
     height: 0,
-    deviceScaleFactor: 30 / 23,
+    deviceScaleFactor: 1 / defaultWindowScale,
     mobile: false,
   });
   await evaluate(
@@ -158,7 +159,9 @@ try {
         button: 'left',
         clickCount: 1,
       });
-      await delay(100);
+      await evaluate(
+        `Promise.all([...document.querySelectorAll('#feedback-buttons button')[${index}].getAnimations()].map(animation=>animation.finished.catch(()=>{})))`,
+      );
       const pressed = await evaluate(
         `(()=>{const b=document.querySelectorAll('#feedback-buttons button')[${index}],s=getComputedStyle(b);return {scale:s.scale,opacity:s.opacity,duration:s.transitionDuration,width:b.offsetWidth,height:b.offsetHeight,transform:s.transform,active:b.matches(':active'),hover:b.matches(':hover')};})()`,
       );
@@ -267,7 +270,7 @@ try {
   await delay(30);
   assert.ok(
     await evaluate(
-      `(()=>{const s=getComputedStyle(document.querySelector('#feedback-buttons button'));return ['none','1'].includes(s.scale)&&Number(s.opacity)>.89&&Number(s.opacity)<.91;})()`,
+      `(()=>{const s=getComputedStyle(document.querySelector('#feedback-buttons button'));return ['none','1'].includes(s.scale)&&Number(s.opacity)>.84&&Number(s.opacity)<.86;})()`,
     ),
     'reduced motion keeps tone feedback without scale ' +
       JSON.stringify(
@@ -295,7 +298,7 @@ try {
   const scenes = [
     [
       'library',
-      `(()=>{const a=document.querySelector('#meeting-selection-toggle').getBoundingClientRect(),b=document.querySelector('#home-view .primary-action').getBoundingClientRect(),w=document.querySelector('#workspace-selector').getBoundingClientRect(),c=document.querySelector('.workspace-subnav').getBoundingClientRect();if(Math.abs(a.top-b.top)>1||Math.abs(a.height-b.height)>1||w.bottom>c.bottom)throw Error('选择按钮或工作区裁剪 '+JSON.stringify({selection:a,primary:b,selector:w,container:c}));const add=document.querySelector('.new-workspace'),ar=add.getBoundingClientRect(),ir=add.querySelector('svg').getBoundingClientRect();if(Math.abs(ar.x+ar.width/2-ir.x-ir.width/2)>1||Math.abs(ar.y+ar.height/2-ir.y-ir.height/2)>1)throw Error('添加工作区图标未居中');const expected=document.createElement('span');expected.innerHTML=interfaceIcon('chevron-right');if(document.querySelector('[data-meeting-menu] svg').outerHTML!==expected.innerHTML)throw Error('会议行未使用箭头');const nav=document.querySelector('#all-meetings'),group=document.querySelector('.library-group h2');if(getComputedStyle(document.body).fontWeight!=='400'||getComputedStyle(document.querySelector('.library-toolbar .search input')).fontWeight!=='400'||getComputedStyle(nav).fontSize!=='16px'||Math.abs(nav.querySelector('svg').getBoundingClientRect().width-24)>1||getComputedStyle(group).fontSize!=='16px')throw Error('正文/侧栏图标/分组标题样式再次被覆盖 '+JSON.stringify({body:getComputedStyle(document.body).fontWeight,nav:getComputedStyle(nav).fontSize,icon:nav.querySelector('svg').getBoundingClientRect().width,group:getComputedStyle(group).fontSize}));})()`,
+      `(()=>{const a=document.querySelector('#meeting-selection-toggle').getBoundingClientRect(),b=document.querySelector('#home-view .primary-action').getBoundingClientRect(),w=document.querySelector('#workspace-selector').getBoundingClientRect(),c=document.querySelector('.workspace-subnav').getBoundingClientRect();if(Math.abs(a.top-b.top)>1||Math.abs(a.height-b.height)>1||w.bottom>c.bottom)throw Error('选择按钮或工作区裁剪 '+JSON.stringify({selection:a,primary:b,selector:w,container:c}));const add=document.querySelector('.new-workspace'),ar=add.getBoundingClientRect(),ir=add.querySelector('svg').getBoundingClientRect();if(Math.abs(ar.x+ar.width/2-ir.x-ir.width/2)>1||Math.abs(ar.y+ar.height/2-ir.y-ir.height/2)>1)throw Error('添加工作区图标未居中');const expected=document.createElement('span');expected.innerHTML=interfaceIcon('chevron-right');if(document.querySelector('[data-meeting-menu] svg').outerHTML!==expected.innerHTML)throw Error('会议行未使用箭头');const nav=document.querySelector('#all-meetings'),group=document.querySelector('.library-group h2');if(getComputedStyle(document.body).fontWeight!=='400'||getComputedStyle(document.querySelector('.library-toolbar .search input')).fontWeight!=='400'||getComputedStyle(nav).fontSize!=='16px'||Math.abs(nav.querySelector('svg').getBoundingClientRect().width-20)>1||getComputedStyle(group).fontSize!=='20px')throw Error('正文/侧栏图标/分组标题样式再次被覆盖 '+JSON.stringify({body:getComputedStyle(document.body).fontWeight,nav:getComputedStyle(nav).fontSize,icon:nav.querySelector('svg').getBoundingClientRect().width,group:getComputedStyle(group).fontSize}));})()`,
     ],
     [
       'workspace-picker',
@@ -327,7 +330,7 @@ try {
     ],
     [
       'detail-notes',
-      `(async()=>{playerAudio.pause();miniPlayback.hidden=true;await showView('detail');currentMeetingDetail={id:'feedback-detail',title:'产品周会',segments:[],speakers:[]};Object.assign(uiData.detail,{notes:'- 项目计划\\n- 确认下一步',transcript:[{time:'00:00',text:'先回顾上周进展。',speaker:{name:'张伟'},startSeconds:0,endSeconds:10}],hasRefined:false,hasOriginalTranscript:true,transcriptEditing:false,notesEditing:false,summaryEditing:false,summary:{markdown:'## 会议摘要\\n回顾进展，确认下一步。'}});detailActiveTab='notes';document.querySelector('#detail-view .detail-head h1').textContent=currentMeetingDetail.title;renderMeetingDetail();if(document.querySelector('.summary-review-hint')||document.querySelector('#language-toggle'))throw Error('已删除入口仍存在');})()`,
+      `(async()=>{playerAudio.pause();miniPlayback.hidden=true;await showView('detail');currentMeetingDetail={id:'feedback-detail',title:'产品周会',segments:[],speakers:[]};Object.assign(uiData.detail,{notes:'- 项目计划\\n- 确认下一步',transcript:[{time:'00:00',text:'先回顾上周进展。',speaker:{name:'张伟'},startSeconds:0,endSeconds:10}],hasRefined:false,hasOriginalTranscript:true,transcriptEditing:false,notesEditing:false,summaryEditing:false,summary:{markdown:'## 会议摘要\\n回顾进展，确认下一步。'}});detailActiveTab='notes';document.querySelector('#detail-view .detail-head h1').textContent=currentMeetingDetail.title;showSummaryProgress(100,100,'summary.complete');renderMeetingDetail();if(document.querySelector('.summary-review-hint')||document.querySelector('#language-toggle'))throw Error('已删除入口仍存在');})()`,
     ],
     [
       'detail-transcript',
@@ -407,7 +410,7 @@ try {
     ],
     [
       'settings-return-library',
-      `(async()=>{for(const id of ['all-meetings','recently-deleted']){await showView('settings');await openModal('models');const node=document.getElementById(id),r=node.getBoundingClientRect(),hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);if(!node.contains(hit))throw Error('设置遮挡了主导航 '+id);hit.dispatchEvent(new MouseEvent('click',{bubbles:true}));await pageTransition;await new Promise(r=>setTimeout(r,260));if(activeView!=='home'||activeLibraryNav!==id||!settingsModal.hidden||document.querySelector('.app-shell').inert||Math.abs(document.querySelector('.sidebar').getBoundingClientRect().width-224)>1)throw Error('设置返回会议库失败 '+id+' '+JSON.stringify({view:activeView,nav:activeLibraryNav,modalHidden:settingsModal.hidden,inert:document.querySelector('.app-shell').inert,width:document.querySelector('.sidebar').getBoundingClientRect().width}));}await showLibraryNav('all-meetings');})()`,
+      `(async()=>{for(const id of ['all-meetings','recently-deleted']){await showView('settings');await openModal('models');const node=document.getElementById(id),r=node.getBoundingClientRect(),hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);if(!node.contains(hit))throw Error('设置遮挡了主导航 '+id);hit.dispatchEvent(new MouseEvent('click',{bubbles:true}));await pageTransition;await new Promise(r=>setTimeout(r,260));if(activeView!=='home'||activeLibraryNav!==id||!settingsModal.hidden||document.querySelector('.app-shell').inert||Math.abs(document.querySelector('.sidebar').getBoundingClientRect().width-240)>1)throw Error('设置返回会议库失败 '+id+' '+JSON.stringify({view:activeView,nav:activeLibraryNav,modalHidden:settingsModal.hidden,inert:document.querySelector('.app-shell').inert,width:document.querySelector('.sidebar').getBoundingClientRect().width}));}await showLibraryNav('all-meetings');})()`,
     ],
     [
       'storage-system-disk',
@@ -447,11 +450,11 @@ try {
     ],
     [
       'settings-sidebar-hover-open',
-      `(async()=>{await new Promise(r=>setTimeout(r,70));const sidebar=document.querySelector('.sidebar'),width=sidebar.getBoundingClientRect().width;if(width<=72||width>=224)throw Error('侧栏展开缺少动画 '+width);await new Promise(r=>setTimeout(r,220));if(Math.abs(sidebar.getBoundingClientRect().width-224)>1||getComputedStyle(document.querySelector('.brand-name')).display==='none'||Math.abs(settingsModal.getBoundingClientRect().left-224)>1)throw Error('悬停未展开侧栏或设置遮挡侧栏 '+JSON.stringify({width:sidebar.getBoundingClientRect().width,brand:getComputedStyle(document.querySelector('.brand-name')).display,left:settingsModal.getBoundingClientRect().left,styleLeft:getComputedStyle(settingsModal).left,hover:sidebar.matches(':hover'),focus:sidebar.matches(':focus-within')}));})()`,
+      `(async()=>{await new Promise(r=>setTimeout(r,70));const sidebar=document.querySelector('.sidebar'),width=sidebar.getBoundingClientRect().width;if(width<=72||width>=240)throw Error('侧栏展开缺少动画 '+width);await new Promise(r=>setTimeout(r,220));if(Math.abs(sidebar.getBoundingClientRect().width-240)>1||getComputedStyle(document.querySelector('.brand-name')).display==='none'||Math.abs(settingsModal.getBoundingClientRect().left-240)>1)throw Error('悬停未展开侧栏或设置遮挡侧栏 '+JSON.stringify({width:sidebar.getBoundingClientRect().width,brand:getComputedStyle(document.querySelector('.brand-name')).display,left:settingsModal.getBoundingClientRect().left,styleLeft:getComputedStyle(settingsModal).left,hover:sidebar.matches(':hover'),focus:sidebar.matches(':focus-within')}));})()`,
     ],
     [
       'settings-sidebar-hover-close',
-      `(async()=>{await new Promise(r=>setTimeout(r,70));const sidebar=document.querySelector('.sidebar'),width=sidebar.getBoundingClientRect().width;if(width<=72||width>=224)throw Error('侧栏收起缺少动画 '+width);await new Promise(r=>setTimeout(r,220));if(Math.abs(sidebar.getBoundingClientRect().width-72)>1||getComputedStyle(document.querySelector('.brand-name')).display!=='none')throw Error('移开鼠标后侧栏未收起');})()`,
+      `(async()=>{await new Promise(r=>setTimeout(r,70));const sidebar=document.querySelector('.sidebar'),width=sidebar.getBoundingClientRect().width;if(width<=72||width>=240)throw Error('侧栏收起缺少动画 '+width);await new Promise(r=>setTimeout(r,220));if(Math.abs(sidebar.getBoundingClientRect().width-72)>1||getComputedStyle(document.querySelector('.brand-name')).display!=='none')throw Error('移开鼠标后侧栏未收起');})()`,
     ],
   ];
   // 录制笔记空态沿用真实编辑器与动作，数据仅在隔离窗口内。
@@ -471,6 +474,17 @@ try {
     [
       'live-notes-filled',
       `(()=>{applyTheme('light');liveNotesToolbar.hidden=true;liveNotesEditor.setMarkdown('## 会议重点\\n\\n- 确认下周发布计划。');renderAiAssistEmptyState();if(!aiAssistEmptyRoot().hidden)throw Error('已有笔记仍显示空态');})()`,
+    ],
+  );
+  // 精修稿只替换隔离数据，仍调用正式列表、纪要与共享阅读布局。
+  scenes.push(
+    [
+      'polish-library',
+      `(()=>{closeModal();meetingActive=false;workspaces[0].name='产品';activeWorkspaceId=workspaces[0].id;const source=uiData.meetings[0];uiData.meetings=['需求评审','项目复盘','客户访谈','产品周会'].map((title,i)=>({...source,id:'polish-'+i,title,workspaceId:activeWorkspaceId,workspace:{name:'产品'},durationMs:1080000,createdAt:new Date(new Date().setHours(10,34,0,0)).toISOString(),speakerCount:2,hasSummary:true}));showView('home');renderWorkspaceNav();renderMeetingList();updateHomeViewTitle();const icon=document.querySelector('.meeting-row-icon'),search=document.querySelector('.library-toolbar .search'),edit=document.querySelector('#workspace-edit');if(getComputedStyle(icon).backgroundColor!=='rgba(0, 0, 0, 0)'||getComputedStyle(search).backgroundColor!=='rgb(255, 255, 255)'||getComputedStyle(edit).borderTopColor!=='rgba(0, 0, 0, 0)')throw Error('精修列表表面未生效');const row=document.querySelector('.meeting-row');for(const [selector,x] of [['.meeting-main',360],['.meeting-workspace',705],['.meeting-status',902]]){const actual=row.querySelector(selector).getBoundingClientRect().x;if(Math.abs(actual-x)>8)throw Error('概念图列表列对齐偏差 '+selector+' '+actual);}})()`,
+    ],
+    [
+      'polish-summary',
+      `(async()=>{const init=await window.brevia.initialize();const source=await window.brevia.meeting.get({meeting_id:init.meetings[0].id});source.title='产品周会';source.duration_ms=1080000;source.workspace_id=activeWorkspaceId;source.created_at='2026-10-15T02:34:00Z';source.speakers=[{id:'polish-zhang',name:'张伟'},{id:'polish-li',name:'李娜'},{id:'polish-wang',name:'王强'},{id:'polish-zhao',name:'赵敏'}];applyBackendDetail(source);Object.assign(uiData.detail,{notes:'',transcript:[],hasRefined:false,hasOriginalTranscript:true,transcriptEditing:false,notesEditing:false,summaryEditing:false,summary:{markdown:'# 产品周会\\n\\n## 会议摘要\\n会议确认了新用户引导的上线范围。设计已完成，团队将按计划交付测试版本，并开展小范围发布。\\n\\n## 核心结论\\n- 按既定范围发布新用户引导。\\n- 本周优先稳定现有功能，不扩展新需求。\\n\\n## 已确认决定\\n- 下周一开始小范围发布。\\n- 确认方：会议参与者。\\n\\n## 行动项\\n| 任务 | 负责人 | 截止时间 | 状态 |\\n| --- | --- | --- | --- |\\n| 交付测试版本 | 开发团队 | 周四 | 待开始 |\\n| 完成内部验收 | 产品团队 | 周五 | 待开始 |'}});showView('detail');detailActiveTab='summary';renderMeetingDetail();document.querySelector('#detail-view .detail-head h1').textContent=currentMeetingDetail.title;showSummaryProgress(100,100,'summary.complete');if(document.querySelector('#summary-progress header p').textContent!==summaryTaskLabel('summary.complete'))throw Error('已完成纪要仍显示生成中');const card=document.querySelector('#summary-progress').getBoundingClientRect(),device=document.querySelector('#mobile-nav').getBoundingClientRect();if(card.bottom>device.top||device.top<innerHeight-150)throw Error('任务卡或固定入口没有靠下排列 '+JSON.stringify({card:card.toJSON(),device:device.toJSON()}));const body=document.querySelector('[data-detail-panel=summary] .summary-body'),label=document.querySelector('.summary-head .eyebrow');if(body.querySelectorAll('.summary-reading-section').length!==4||body.querySelectorAll('tbody tr').length!==2||getComputedStyle(label).fontSize!=='16px'||getComputedStyle(body.querySelector('td')).borderLeftWidth!=='0px')throw Error('精修纪要结构或层级错误');})()`,
     ],
   );
   const joinedSummary =
@@ -538,7 +552,7 @@ try {
       await send('Emulation.setDeviceMetricsOverride', {
         width: 0,
         height: 0,
-        deviceScaleFactor: 30 / 23,
+        deviceScaleFactor: 1 / defaultWindowScale,
         mobile: false,
       });
     }
@@ -573,6 +587,8 @@ try {
         `(()=>{const hint=aiAssistEmptyRoot(),surface=liveNotesRoot.querySelector('.notes-editor:not([hidden]),.notes-input:not([hidden])');if(hint.hidden||Math.abs(hint.getBoundingClientRect().top-surface.getBoundingClientRect().top)>1)throw Error('笔记空态没有对齐正文起点');const action=hint.querySelector('button');if(action&&(getComputedStyle(action).borderTopWidth!=='0px'||action.getBoundingClientRect().height>25))throw Error('空态动作仍为旧描边大按钮');})()`,
       );
     }
+    if (name.startsWith('polish-'))
+      await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 600, y: 12 });
     const geometry = await evaluate(
       `({width:innerWidth,height:innerHeight,overflow:document.body.scrollWidth>innerWidth+1,splash:!!document.querySelector('#startup-splash'),sidebar:Object.fromEntries(['.brand','.new-meeting','.import-recording','#all-meetings','#recently-deleted','.workspace-subnav','.workspace-heading','#workspace-selector','.task-stack-toggle','.task-cards','#mobile-nav','.sidebar-settings'].map(selector=>{const e=document.querySelector(selector),r=e?.getBoundingClientRect(),s=e&&getComputedStyle(e);return [selector,e?{x:r.x,y:r.y,width:r.width,height:r.height,font:s.fontFamily,fontSize:s.fontSize,fontWeight:s.fontWeight}:null]}))})`,
     );
@@ -587,8 +603,9 @@ try {
       captureBeyondViewport: false,
     });
     const png = Buffer.from(shot.data, 'base64');
-    assert.equal(png.readUInt32BE(16), name === 'live-ai-short' ? 800 : 1280);
-    assert.equal(png.readUInt32BE(20), name === 'live-ai-short' ? 600 : 800);
+    // 原生窗口与 zoom 的整数取整最多相差一个像素，不拉伸截图掩盖差异。
+    assert.ok(Math.abs(png.readUInt32BE(16) - (name === 'live-ai-short' ? 800 : 1280)) <= 1);
+    assert.ok(Math.abs(png.readUInt32BE(20) - (name === 'live-ai-short' ? 600 : 800)) <= 1);
     writeFileSync(path.join(output, `${name}.png`), png);
     results.push({ name, ...geometry });
   }

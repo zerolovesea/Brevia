@@ -21,3 +21,9 @@ Constraints: genuine transparent background with preserved alpha, no logos, no w
 [conversation-sketch.webp](conversation-sketch.webp) 为内置 imagegen 生成的原创透明手绘插画，用于官网的声音、笔记与行动流程。画面使用墨线、彩铅纹理、对话气泡、笔记本、便签和铅笔；通过 cwebp 转为 WebP，保留透明通道。它用于概念说明，不代表应用界面。
 
 生成要求：front-facing editorial notebook doodle collage, imperfect double ink contours and colored-pencil texture, cobalt blue, cream paper, warm yellow, orange and sage; speech bubbles flow into a notepad and checked sticky note; no readable text, logos, watermark, enclosing rectangle or 3D rendering; actual transparent background.
+
+## 第二版概念纸张背景（2026-10-18）
+
+[paper-wash.png](paper-wash.png) 使用内置 imagegen，参照已批准的官网第二版概念图生成。只包含淡蓝、米色的水彩纤维纸片和透明通道，不含应用界面、文字或品牌图形。原尺寸2172×724，作为首屏产品窗口后方的装饰背景使用。
+
+提示词要求：two subtle torn watercolor paper scraps, pale sky blue on the left and warm cream on the right, separated by transparent center; fibrous deckle edges, low contrast; no interface, windows, text, icons, stars or shadows.

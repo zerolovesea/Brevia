@@ -144,7 +144,12 @@ class RecordingControls extends StatelessWidget {
 
 class MicrophoneLevel extends StatefulWidget {
   final double level;
-  const MicrophoneLevel({super.key, required this.level});
+  final Size size;
+  const MicrophoneLevel({
+    super.key,
+    required this.level,
+    this.size = const Size(160, 12),
+  });
   @override
   State<MicrophoneLevel> createState() => _MicrophoneLevelState();
 }
@@ -183,12 +188,12 @@ class _MicrophoneLevelState extends State<MicrophoneLevel>
     child: AnimatedBuilder(
       animation: animation,
       builder: (_, _) => CustomPaint(
-        size: const Size(160, 12),
+        size: widget.size,
         painter: _LevelPainter(
           animation.value.clamp(0, 1),
           Theme.of(context).brightness == Brightness.dark
               ? const Color(0xff80c99a)
-              : const Color(0xff16812e),
+              : const Color(0xff27b97b),
           Theme.of(context).colorScheme.outlineVariant,
         ),
       ),
@@ -203,25 +208,25 @@ class _LevelPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint();
-    for (var i = 0; i < 16; i++) {
+    for (var i = 0; i < 20; i++) {
       final rect = Rect.fromLTWH(
-        i * size.width / 16 + 2,
+        i * size.width / 20 + 2,
         0,
-        size.width / 16 - 4,
+        size.width / 20 - 4,
         size.height,
       );
       canvas.drawRRect(
-        RRect.fromRectAndRadius(rect, const Radius.circular(1)),
+        RRect.fromRectAndRadius(rect, const Radius.circular(2)),
         paint..color = inactive,
       );
-      final fraction = (level * 16 - i).clamp(0.0, 1.0);
+      final fraction = (level * 20 - i).clamp(0.0, 1.0);
       if (fraction > 0) {
         canvas.save();
         canvas.clipRect(
           Rect.fromLTWH(rect.left, 0, rect.width * fraction, size.height),
         );
         canvas.drawRRect(
-          RRect.fromRectAndRadius(rect, const Radius.circular(1)),
+          RRect.fromRectAndRadius(rect, const Radius.circular(2)),
           paint..color = active,
         );
         canvas.restore();
@@ -382,7 +387,7 @@ class RecordingFocus extends StatelessWidget {
               ),
       );
       return Padding(
-        padding: EdgeInsets.fromLTRB(24, compact ? 8 : 16, 24, dense ? 8 : 16),
+        padding: EdgeInsets.fromLTRB(16, compact ? 8 : 0, 16, dense ? 8 : 16),
         child: Column(
           children: [
             Expanded(
@@ -392,12 +397,13 @@ class RecordingFocus extends StatelessWidget {
                   child: ConstrainedBox(
                     constraints: BoxConstraints(minHeight: body.maxHeight),
                     child: Column(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Container(
-                          padding: const EdgeInsets.fromLTRB(12, 8, 0, 8),
+                          padding: const EdgeInsets.fromLTRB(12, 0, 0, 0),
                           decoration: BoxDecoration(
-                            color: colors.surfaceContainerLowest,
+                            color: colors.surface,
+                            border: Border.all(color: colors.outline),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Row(
@@ -419,6 +425,9 @@ class RecordingFocus extends StatelessWidget {
                                           : desktopName ?? tr('连接电脑'),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.bodySmall,
                                     ),
                                     if (!local)
                                       StableStatusText(
@@ -517,7 +526,7 @@ class RecordingFocus extends StatelessWidget {
                                       textAlign: TextAlign.center,
                                       style: Theme.of(
                                         context,
-                                      ).textTheme.titleMedium,
+                                      ).textTheme.bodySmall,
                                     ),
                                   ),
                                 ],
@@ -527,6 +536,7 @@ class RecordingFocus extends StatelessWidget {
                                 durationText(meeting['samples'] ?? 0),
                                 style: Theme.of(context).textTheme.headlineLarge
                                     ?.copyWith(
+                                      fontWeight: FontWeight.w300,
                                       fontSize: constraints.maxHeight < 500
                                           ? 36
                                           : dense
@@ -544,6 +554,7 @@ class RecordingFocus extends StatelessWidget {
                                 valueListenable: level,
                                 builder: (_, value, _) => MicrophoneLevel(
                                   level: recording ? value : 0,
+                                  size: const Size(224, 16),
                                 ),
                               ),
                               if (!compact) ...[
@@ -577,10 +588,11 @@ class RecordingFocus extends StatelessWidget {
                           ),
                         ),
                         Container(
-                          padding: const EdgeInsets.all(12),
+                          padding: const EdgeInsets.symmetric(vertical: 16),
                           decoration: BoxDecoration(
-                            color: colors.surfaceContainerLowest,
-                            borderRadius: BorderRadius.circular(8),
+                            border: Border(
+                              top: BorderSide(color: colors.outline),
+                            ),
                           ),
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,

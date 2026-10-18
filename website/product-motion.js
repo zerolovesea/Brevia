@@ -29,6 +29,7 @@ window.detailActiveTab = 'summary';
   let fitPrepare;
   let acceptedCount = -1;
   const stage = document.querySelector('#motion-stage');
+  stage.dataset.scene = scene;
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
   const duration = tour
     ? 28000
@@ -128,6 +129,7 @@ window.detailActiveTab = 'summary';
     const textNodes = document.createTreeWalker(shell, NodeFilter.SHOW_TEXT);
     while (textNodes.nextNode()) {
       const node = textNodes.currentNode;
+      if (node.parentElement?.closest('.brand-name, [translate="no"]')) continue;
       const label = node.textContent.trim();
       if (label) node.textContent = node.textContent.replace(label, t(label));
     }

@@ -179,8 +179,8 @@ ThemeData breviaTheme(Brightness brightness) {
       centerTitle: true,
       titleTextStyle: TextStyle(
         fontFamily: fontFamily,
-        fontSize: 18,
-        fontWeight: FontWeight.w700,
+        fontSize: 20,
+        fontWeight: FontWeight.w600,
         color: ink,
       ),
       elevation: 0,
@@ -191,30 +191,30 @@ ThemeData breviaTheme(Brightness brightness) {
           headlineLarge: TextStyle(
             fontSize: 32,
             height: 1.25,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w600,
             color: ink,
           ),
           headlineSmall: TextStyle(
             fontSize: 24,
             height: 1.4,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w600,
             color: ink,
           ),
           titleLarge: TextStyle(
             fontSize: 20,
             height: 1.4,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w600,
             color: ink,
           ),
           bodySmall: TextStyle(
-            fontSize: 14,
+            fontSize: 13,
             height: 1.4,
             fontWeight: FontWeight.w400,
             color: muted,
           ),
           bodyLarge: TextStyle(
-            fontSize: 17,
-            height: 1.4,
+            fontSize: 16,
+            height: 1.65,
             fontWeight: FontWeight.w400,
             color: ink,
           ),
@@ -256,7 +256,7 @@ ThemeData breviaTheme(Brightness brightness) {
             textStyle: TextStyle(
               fontFamily: fontFamily,
               fontSize: 16,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w500,
             ),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(8),
@@ -276,7 +276,7 @@ ThemeData breviaTheme(Brightness brightness) {
             textStyle: TextStyle(
               fontFamily: fontFamily,
               fontSize: 16,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w500,
             ),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(8),
@@ -294,7 +294,7 @@ ThemeData breviaTheme(Brightness brightness) {
             textStyle: TextStyle(
               fontFamily: fontFamily,
               fontSize: 16,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w500,
             ),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(8),
@@ -421,7 +421,7 @@ Widget breviaBrand({double size = 32}) => Row(
     const SizedBox(width: 10),
     const Text(
       'Brevia',
-      style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
+      style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
     ),
   ],
 );

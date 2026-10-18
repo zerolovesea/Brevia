@@ -70,6 +70,19 @@ Path? _iconPath(IconData? icon) {
       p.lineTo(16, 13);
       p.moveTo(8, 17);
       p.lineTo(14, 17);
+    case Icons.insert_drive_file_outlined:
+      p.moveTo(14, 2);
+      p.lineTo(6, 2);
+      p.quadraticBezierTo(4, 2, 4, 4);
+      p.lineTo(4, 20);
+      p.quadraticBezierTo(4, 22, 6, 22);
+      p.lineTo(18, 22);
+      p.quadraticBezierTo(20, 22, 20, 20);
+      p.lineTo(20, 8);
+      p.close();
+      p.moveTo(14, 2);
+      p.lineTo(14, 8);
+      p.lineTo(20, 8);
     case Icons.mic_none || Icons.mic_none_outlined:
       p.addRRect(
         RRect.fromRectAndRadius(

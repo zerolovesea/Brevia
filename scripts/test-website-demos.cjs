@@ -325,6 +325,15 @@ app
             `${siteURL}/website/product-motion.html?scene=${scene}&lang=${locale}&manual=1`,
           );
           await waitForMotion();
+          if (scene === 'tour') {
+            const libraryRows = await win.webContents.executeJavaScript(`(() => {
+              productMotion.seek(0);
+              const rows = [...document.querySelectorAll('.meeting-row')];
+              return {count: rows.length, maxHeight: Math.max(...rows.map(row => row.getBoundingClientRect().height))};
+            })()`);
+            assert.equal(libraryRows.count, 4);
+            assert.ok(libraryRows.maxHeight <= 50, '概览四行会议保持概念图密度');
+          }
           const states = [];
           for (const time of scene === 'pair-microphone'
             ? [2000, 8000, 26000]
@@ -771,6 +780,18 @@ app
           assert.equal(page.overflow, false, `${locale}/${width}: horizontal overflow`);
           assert.equal(page.headerFits, true, `${locale}/${width}: header clipped`);
           assert.equal(page.headings, 1);
+          if (locale === 'zh' && width >= 1280) {
+            const conceptLayout = await win.webContents.executeJavaScript(`(() => {
+              const heading = document.querySelector('#title-transcription');
+              const lines = heading.getBoundingClientRect().height / parseFloat(getComputedStyle(heading).lineHeight);
+              const demo = document.querySelector('#transcription [data-motion-scene]');
+              return {lines, aspect: getComputedStyle(demo).aspectRatio, ctaWidth: document.querySelector('.hero-actions .button').getBoundingClientRect().width};
+            })()`);
+            assert.ok(Math.abs(conceptLayout.lines - 2) < 0.05, '转写标题保持概念图的两行');
+            assert.equal(conceptLayout.aspect, '1152 / 800');
+            assert.ok(conceptLayout.ctaWidth >= 264, '首屏主操作保持概念图的宽度');
+          }
+
           assert.deepEqual(
             page.qrWidths,
             width < 640 ? [0, 0] : [128, 128],
@@ -859,6 +880,12 @@ app
             urls.push(frame.src, ...[...frame.contentDocument.querySelectorAll('link[href*="-motion.css"],script[src*="-motion.js"]')].map(element => element.href || element.src));
             return {count:urls.length, versioned:urls.every(url => new URL(url).searchParams.has('v'))};
           })()`);
+          const productBrand = await win.webContents.executeJavaScript(`(() => {
+            const doc = document.querySelector('.hero-visual iframe').contentDocument;
+            const names = [...doc.querySelectorAll('.brand-name,.window-wordmark')];
+            return names.length === 2 && names.every(node => node.textContent === 'Brevia');
+          })()`);
+          assert.equal(productBrand, true, 'Product brand remains Brevia in both languages');
           assert.equal(assetVersions.count, 7);
           assert.equal(
             assetVersions.versioned,
@@ -925,6 +952,12 @@ app
             );
             assert.ok(state.text.includes(locale === 'zh' ? '产品周会' : 'Product sync'));
             if (target === 'transcription') {
+              assert.equal(
+                await win.webContents.executeJavaScript(
+                  "document.querySelector('#transcription iframe').style.width",
+                ),
+                '1152px',
+              );
               await win.webContents.executeJavaScript(
                 "document.querySelector('#transcription iframe').contentWindow.productMotion.seek(7500)",
               );

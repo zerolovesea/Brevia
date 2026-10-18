@@ -20,6 +20,7 @@ function interfaceIcon(name) {
     notes: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>',
     document:
       '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M8 13h8M8 17h6"/>',
+    file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/>',
     folder:
       '<path d="M3 7V5a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>',
     microphone:
@@ -393,7 +394,7 @@ function renderMeetingRow(
   const workspaceLabel = workspace
     ? `${escapeHtml(t('工作区'))} · ${escapeHtml(workspace.name)}`
     : '';
-  return `<article class="meeting-row" data-meeting-index="${index}" data-selection-key="${escapeHtml(id || String(index))}" tabindex="0" aria-selected="false"${id ? ` data-meeting-id="${escapeHtml(id)}"` : ''}${!deleted && id ? ' draggable="true"' : ''}><input class="meeting-row-checkbox" type="checkbox" data-select-meeting aria-label="${escapeHtml(t('选择'))} ${escapeHtml(title)}" /><span class="meeting-row-icon">${interfaceIcon('document')}</span><div class="meeting-main">${heading}${editingMeetingIndex === index ? '' : `<p>${escapeHtml(meta)}</p>`}<div class="meeting-tags">${tags
+  return `<article class="meeting-row" data-meeting-index="${index}" data-selection-key="${escapeHtml(id || String(index))}" tabindex="0" aria-selected="false"${id ? ` data-meeting-id="${escapeHtml(id)}"` : ''}${!deleted && id ? ' draggable="true"' : ''}><input class="meeting-row-checkbox" type="checkbox" data-select-meeting aria-label="${escapeHtml(t('选择'))} ${escapeHtml(title)}" /><span class="meeting-row-icon">${interfaceIcon('file')}</span><div class="meeting-main">${heading}${editingMeetingIndex === index ? '' : `<p>${escapeHtml(meta)}</p>`}<div class="meeting-tags">${tags
     .filter((tag) => tag !== '手机录音' && tag !== '手机麦克风')
     .map((tag) => `<div class="tag">${escapeHtml(tag)}</div>`)
     .join(
