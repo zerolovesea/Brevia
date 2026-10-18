@@ -2,9 +2,116 @@
 (() => {
   const releases = [
     {
+      'version': '1.4.3',
+      'date': '2026-10-18',
+      'current': true,
+      'previousVersion': '1.4.2',
+      'contributors': [],
+      'zh': {
+        'summary':
+          '修复 Windows 会后精修启动卡死，完善后台进程收尾，并修复设置、设备连接与安装更新相关问题。',
+        'what': [],
+        'improved': [
+          {
+            'text': '切换设置页与保存 AI 配置时保留当前页面，完善会议纪要生成中的反馈与动效。',
+            'commit': 'e8c055148c67843e70843e17b213cee88517d480',
+          },
+          {
+            'text': '统一分析进程的关闭与异常清理，防止后台进程残留及清理失败后继续加载模型。',
+            'commit': '491a17bb97fd038b89de114b41125e401883a192',
+          },
+        ],
+        'fixed': [
+          {
+            'text':
+              '修复 Windows 精修分析子进程因继承命令输入管道而卡在启动阶段、进度长时间停在 15% 的问题。',
+            'commit': 'c193323938e17cd07435a4d936209ad360d9c846',
+          },
+          {
+            'text':
+              '修复精修模型加载、字幕整理或保存失败后，界面仍停留在精修进行态的问题；严格执行分析启动及推理超时。',
+            'commit': '748f7b89c15428aafcc2c3ee4dcd1e8ebbb635d0',
+          },
+          {
+            'text':
+              'Windows 安装器不再在打开或取消时强制终止所有同名后台进程；应用内更新会在下载前和安装前检查录音及后台任务，避免中断会议。',
+            'commit': '748f7b89c15428aafcc2c3ee4dcd1e8ebbb635d0',
+          },
+          {
+            'text':
+              '修复 Windows 默认窗口下英文设备连接页多余滚动，并统一设备服务开关和配对码复制按钮的八语言可访问标签。',
+            'commit': '748f7b89c15428aafcc2c3ee4dcd1e8ebbb635d0',
+          },
+          {
+            'text': '修复高级设置恢复默认后仍显示“已保存”的问题，并清理未使用的引导样式。',
+            'commit': '748f7b89c15428aafcc2c3ee4dcd1e8ebbb635d0',
+          },
+        ],
+        'security': [],
+        'changes': [
+          {
+            'text':
+              'v1.4.3 为桌面版本，提供 macOS Apple Silicon 与 Windows x64 安装包；手机客户端不随本次桌面发布自动升级。',
+            'commit': '748f7b89c15428aafcc2c3ee4dcd1e8ebbb635d0',
+          },
+        ],
+      },
+      'en': {
+        'summary':
+          'Fixed Windows refinement startup freezes, strengthened background process cleanup, and resolved settings, device connection and update issues.',
+        'what': [],
+        'improved': [
+          {
+            'text':
+              'Keep the current settings page when navigating or saving AI configuration, with clearer feedback and animation during meeting summary generation.',
+            'commit': 'e8c055148c67843e70843e17b213cee88517d480',
+          },
+          {
+            'text':
+              'Unified analysis process shutdown and failure cleanup to prevent orphaned processes and further model loading after cleanup fails.',
+            'commit': '491a17bb97fd038b89de114b41125e401883a192',
+          },
+        ],
+        'fixed': [
+          {
+            'text':
+              'Fixed Windows analysis subprocesses stalling during startup because they inherited the command input pipe, leaving refinement at 15%.',
+            'commit': 'c193323938e17cd07435a4d936209ad360d9c846',
+          },
+          {
+            'text':
+              'Refinement now leaves the in-progress state when model loading, transcript assembly or saving fails. Analysis startup and inference deadlines are enforced.',
+            'commit': '748f7b89c15428aafcc2c3ee4dcd1e8ebbb635d0',
+          },
+          {
+            'text':
+              'Opening or cancelling the Windows installer no longer forcibly stops every background process with the same name. In-app updates check recording and background tasks before downloading and before installation.',
+            'commit': '748f7b89c15428aafcc2c3ee4dcd1e8ebbb635d0',
+          },
+          {
+            'text':
+              'Removed unnecessary scrolling on the English device connection page at the default Windows window size, and localized accessibility labels for the service switch and pairing-code copy button in all eight languages.',
+            'commit': '748f7b89c15428aafcc2c3ee4dcd1e8ebbb635d0',
+          },
+          {
+            'text':
+              'Fixed advanced settings reporting “Saved” after restoring defaults, and removed unused onboarding styles.',
+            'commit': '748f7b89c15428aafcc2c3ee4dcd1e8ebbb635d0',
+          },
+        ],
+        'security': [],
+        'changes': [
+          {
+            'text':
+              'v1.4.3 is a desktop release for Apple Silicon macOS and Windows x64. Mobile clients are not automatically upgraded by this desktop release.',
+            'commit': '748f7b89c15428aafcc2c3ee4dcd1e8ebbb635d0',
+          },
+        ],
+      },
+    },
+    {
       'version': '1.4.2',
       'date': '2026-10-17',
-      'current': true,
       'previousVersion': '1.4.1',
       'contributors': [],
       'zh': {
