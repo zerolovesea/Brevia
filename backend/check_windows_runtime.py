@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 
-def check_diarization():
+def check_diarization(session=False):
     """从冻结 Worker 内派生分析进程，覆盖真实父子进程环境与协议重定向。"""
     import threading
     from types import SimpleNamespace
@@ -30,7 +30,38 @@ def check_diarization():
             if not reading.wait(timeout=5):
                 raise RuntimeError('Command pipe reader did not start')
             control = SimpleNamespace(paused=threading.Event(), cancelled=threading.Event())
-            turns = worker._run_diarization_process(None, payload, control)
+            if session:
+                import time
+                from backend.diarization_process import DiarizationProcess
+
+                child = DiarizationProcess(payload, session=True)
+                try:
+                    deadline = time.monotonic() + 120
+                    results = []
+                    initialized = False
+                    while len(results) < 2:
+                        if time.monotonic() >= deadline:
+                            raise TimeoutError('Frozen analysis session timed out')
+                        if not child.poll(0.1):
+                            continue
+                        ok, value = child.recv()
+                        if ok is None:
+                            logging.info("frozen analysis stage=%s", value)
+                            continue
+                        if not ok:
+                            raise RuntimeError(value)
+                        if initialized:
+                            results.append(value)
+                        initialized = True
+                        if len(results) < 2:
+                            child.submit('process_chunk', payload)
+                    if results[0] != results[1]:
+                        raise RuntimeError('Frozen analysis session changed results')
+                    turns = results[-1]
+                finally:
+                    child.close(graceful=True)
+            else:
+                turns = worker._run_diarization_process(None, payload, control)
             if not turns or not any(turn.get('_embedding') for turn in turns):
                 raise RuntimeError('Frozen worker did not return speaker embeddings')
             print(json.dumps({'diarization': 'passed'}), file=output, flush=True)
@@ -39,8 +70,8 @@ def check_diarization():
 
 
 def main():
-    if sys.argv[1:] == ['--check-diarization']:
-        check_diarization()
+    if sys.argv[1:] in (['--check-diarization'], ['--check-analysis-session']):
+        check_diarization(session=sys.argv[1:] == ['--check-analysis-session'])
         return
     import llama_cpp
     import numpy as np

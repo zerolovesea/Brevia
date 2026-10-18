@@ -28,7 +28,12 @@ from .audio_io import (
 )
 from .config import SETTINGS, SPEAKER_EMBEDDING_MODEL_ID, validate_num_speakers
 from .diarization_engine import diarize_chunk_process as _diarize_chunk_process
-from .diarization_process import DiarizationStartupError, DiarizationTimeout
+from .diarization_process import (
+    DiarizationCleanupError,
+    DiarizationProcess,
+    DiarizationStartupError,
+    DiarizationTimeout,
+)
 from .worker_common import (
     UserFacingError,
     ModelNotInstalled,
@@ -239,6 +244,7 @@ class RefinementWorkerMixin:
             说话人归属由聚类和 Enrollment 匹配决定，不按物理音轨推定。
         """
         require(payload, "meeting_id")
+        DiarizationProcess.require_reaped()
         meeting = self.store.get_meeting(payload["meeting_id"])
         if meeting["status"] == "recording":
             raise ValueError("Stop the meeting before refinement")
@@ -1211,8 +1217,6 @@ class RefinementWorkerMixin:
         receiver = None
         try:
             if sys.platform == "win32":
-                from .diarization_process import DiarizationProcess
-
                 receiver = DiarizationProcess(payload)
             else:
                 receiver, sender = context.Pipe(duplex=False)
@@ -1321,16 +1325,30 @@ class RefinementWorkerMixin:
                     )
                     last_progress = elapsed
         finally:
-            receiver.close()
-            if process is not None:
-                if process.is_alive():
-                    process.terminate()
-                process.join(timeout=5)
-                if process.is_alive():
-                    process.kill()
+            if process is None:
+                receiver.close()
+            else:
+                # spawn 管道关闭失败也必须继续回收；所有清理失败均禁止重试。
+                failure = None
+                try:
+                    receiver.close()
+                except Exception as error:
+                    failure = error
+                try:
+                    if process.is_alive():
+                        process.terminate()
                     process.join(timeout=5)
                     if process.is_alive():
-                        raise RuntimeError("Speaker analysis process did not exit")
+                        process.kill()
+                        process.join(timeout=5)
+                        if process.is_alive():
+                            raise RuntimeError("Speaker analysis process did not exit")
+                except Exception as error:
+                    failure = failure or error
+                if failure is not None:
+                    raise DiarizationCleanupError(
+                        "Analysis process cleanup did not complete"
+                    ) from failure
 
     def _cluster_speaker_turns(self, meeting, turns, sample_rate, num_speakers=-1):
         """用子进程返回的声纹在全会议时间轴上统一聚类。"""

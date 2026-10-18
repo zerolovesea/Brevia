@@ -1,5 +1,6 @@
 """校验分析引擎的依赖边界、临时状态和聚类内存上限。"""
 
+import gc
 import io
 import json
 import os
@@ -10,6 +11,7 @@ import time
 import unittest
 import weakref
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import numpy
@@ -18,7 +20,13 @@ import psutil
 from .config import SETTINGS
 from .analysis_session import AnalysisBudget, AnalysisResourceError, AnalysisSession
 from .diarization_engine import DiarizationEngine
-from .diarization_process import DiarizationProcess, DiarizationStartupError, serve_session
+from .diarization_process import (
+    DiarizationCleanupError,
+    DiarizationProcess,
+    DiarizationStartupError,
+    serve_session,
+)
+from .process_resources import stop_process_tree
 from .worker_common import TaskCancelled, TaskControl
 from .worker_refinement import RefinementWorkerMixin
 
@@ -168,6 +176,140 @@ class AnalysisPipeTest(unittest.TestCase):
             finally:
                 child.close()
 
+    def test_cleanup_failure_is_terminal_in_both_modes_and_retains_ownership(self):
+        for session in (False, True):
+            with self.subTest(session=session):
+                child = DiarizationProcess(
+                    {},
+                    command=[sys.executable, "-c", "import time;time.sleep(30)"],
+                    session=session,
+                )
+
+                def stop_then_fail(*args):
+                    stop_process_tree(*args)
+                    raise RuntimeError("Analysis descendants did not exit")
+
+                try:
+                    with patch(
+                        "backend.diarization_process.stop_process_tree", side_effect=stop_then_fail
+                    ):
+                        with self.assertRaises(DiarizationCleanupError):
+                            child.close()
+                    self.assertTrue(child.cleanup_failed)
+                    # 后续任务也不能绕过未释放的所有者，两个模式共享这一边界。
+                    for next_mode in (False, True):
+                        with self.assertRaises(DiarizationCleanupError):
+                            DiarizationProcess({}, session=next_mode)
+                    self.assertFalse(child.closed)
+                    self.assertIsNotNone(child.process)
+                    self.assertFalse(child.reader.is_alive())
+                    self.assertFalse(child.writer.is_alive())
+                    self.assertTrue(child.process.stdin.closed)
+                    self.assertTrue(child.process.stdout.closed)
+                    with self.assertRaises(RuntimeError):
+                        child.submit("process_chunk", {})
+                finally:
+                    child.close()
+                self.assertTrue(child.closed)
+                child.close()
+
+    def test_live_failed_owner_blocks_both_modes_until_it_is_reaped(self):
+        for session in (False, True):
+            with self.subTest(session=session):
+                child = DiarizationProcess(
+                    {},
+                    command=[sys.executable, "-c", "import time;time.sleep(30)"],
+                    session=session,
+                )
+                join = child.reader.join
+                try:
+                    # 模拟终止失败和读取线程仍阻塞，缩短本用例的等待，不替换真实进程。
+                    with (
+                        patch(
+                            "backend.diarization_process.stop_process_tree",
+                            side_effect=RuntimeError("cannot reap"),
+                        ),
+                        patch.object(
+                            child.reader, "join", side_effect=lambda timeout: join(timeout=0)
+                        ),
+                    ):
+                        with self.assertRaises(DiarizationCleanupError):
+                            child.close()
+                    self.assertIsNone(child.process.poll())
+                    self.assertTrue(child.reader.is_alive())
+                    self.assertFalse(child.process.stdout.closed)
+                    for next_mode in (False, True):
+                        with self.assertRaises(DiarizationCleanupError):
+                            DiarizationProcess({}, session=next_mode)
+                finally:
+                    child.close()
+                self.assertIsNotNone(child.process.poll())
+                self.assertFalse(child.reader.is_alive())
+
+    def test_thread_start_failure_reaps_the_started_process(self):
+        children = []
+        original = subprocess.Popen
+
+        def start(*args, **kwargs):
+            child = original(*args, **kwargs)
+            children.append(child)
+            return child
+
+        # 使用真实子进程，失败点在第一条管道线程启动前。
+        with (
+            patch(
+                "backend.diarization_process.sys",
+                SimpleNamespace(platform="darwin", executable=sys.executable),
+            ),
+            patch("backend.diarization_process.subprocess.Popen", side_effect=start),
+            patch("threading.Thread.start", side_effect=RuntimeError("no thread")),
+        ):
+            with self.assertRaises(DiarizationStartupError):
+                DiarizationProcess({}, command=[sys.executable, "-c", "import time;time.sleep(30)"])
+        self.assertEqual(len(children), 1)
+        self.assertIsNotNone(children[0].returncode)
+        self.assertTrue(children[0].stdin.closed)
+        self.assertTrue(children[0].stdout.closed)
+
+    def test_default_cleanup_failure_never_starts_fallback(self):
+        worker = RefinementWorkerMixin()
+        worker.wait_task = Mock()
+        worker.emit = Mock()
+        worker._refinement_progress = Mock()
+        children = []
+
+        def start(payload):
+            child = DiarizationProcess(
+                payload,
+                command=[
+                    sys.executable,
+                    "-c",
+                    "import sys;sys.stdin.readline();print('[true,[]]',flush=True)",
+                ],
+            )
+            children.append(child)
+            return child
+
+        def stop_then_fail(*args):
+            stop_process_tree(*args)
+            raise RuntimeError("Analysis descendants did not exit")
+
+        try:
+            with (
+                patch("backend.worker_refinement.sys", SimpleNamespace(platform="win32")),
+                patch("backend.worker_refinement.DiarizationProcess", side_effect=start) as factory,
+                patch("backend.diarization_process.stop_process_tree", side_effect=stop_then_fail),
+            ):
+                with self.assertRaises(DiarizationCleanupError):
+                    worker._diarize_chunk(
+                        None, {"core_start_ms": 0, "core_end_ms": 60000}, TaskControl(), True
+                    )
+            factory.assert_called_once()
+            worker.emit.assert_not_called()
+        finally:
+            for child in children:
+                child.close()
+
 
 class AnalysisSessionProtocolTest(unittest.TestCase):
     def test_session_initializes_once_and_returns_only_matching_requests(self):
@@ -252,8 +394,31 @@ class AnalysisSessionProtocolTest(unittest.TestCase):
                 finally:
                     child.close()
 
-    @unittest.skipUnless(sys.platform == "win32", "Windows Job Object")
-    def test_parent_abrupt_exit_reaps_analysis_and_grandchild(self):
+
+@unittest.skipUnless(sys.platform == "win32", "Windows Job Object")
+class WindowsAnalysisLifecycleTest(unittest.TestCase):
+    def assert_processes_exited(self, pids):
+        remaining = []
+        for pid in pids:
+            try:
+                remaining.append(psutil.Process(pid))
+            except psutil.NoSuchProcess:
+                pass
+        _, alive = psutil.wait_procs(remaining, timeout=5)
+        try:
+            self.assertEqual(alive, [])
+        finally:
+            for process in alive:
+                process.kill()
+            psutil.wait_procs(alive, timeout=5)
+
+    def test_parent_abrupt_exit_reaps_default_analysis_and_grandchild(self):
+        self.check_parent_exit(False)
+
+    def test_parent_abrupt_exit_reaps_reused_analysis_and_grandchild(self):
+        self.check_parent_exit(True)
+
+    def check_parent_exit(self, session):
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary) / "pids.json"
             script = (
@@ -264,7 +429,9 @@ class AnalysisSessionProtocolTest(unittest.TestCase):
                 "p=subprocess.Popen([sys.executable,'-c','import time;time.sleep(60)']); "
                 "Path(sys.argv[1]+'.tmp').write_text(json.dumps([os.getpid(),p.pid]));"
                 "Path(sys.argv[1]+'.tmp').replace(sys.argv[1]);time.sleep(60)\"\n"
-                "child=DiarizationProcess({},command=[sys.executable,'-c',child_code,sys.argv[1]],session=True)\n"
+                "child=DiarizationProcess({},command=[sys.executable,'-c',child_code,sys.argv[1]],session="
+                + str(session)
+                + ")\n"
                 "deadline=time.monotonic()+10\n"
                 "while not Path(sys.argv[1]).exists() and time.monotonic()<deadline: time.sleep(.01)\n"
                 "os._exit(0 if Path(sys.argv[1]).exists() else 1)\n"
@@ -276,9 +443,108 @@ class AnalysisSessionProtocolTest(unittest.TestCase):
             )
             self.assertEqual(completed.returncode, 0, completed.stderr)
             identities = json.loads(output.read_text())
-            remaining = [psutil.Process(pid) for pid in identities if psutil.pid_exists(pid)]
-            _, alive = psutil.wait_procs(remaining, timeout=5)
-            self.assertEqual(alive, [])
+            self.assert_processes_exited(identities)
+
+    def test_job_membership_exists_before_the_child_runs(self):
+        script = (
+            "import ctypes,json;from ctypes import wintypes;"
+            "k=ctypes.WinDLL('kernel32',use_last_error=True);"
+            "k.IsProcessInJob.argtypes=[wintypes.HANDLE,wintypes.HANDLE,ctypes.POINTER(wintypes.BOOL)];"
+            "member=wintypes.BOOL();"
+            "assert k.IsProcessInJob(wintypes.HANDLE(-1),None,ctypes.byref(member));"
+            "print(json.dumps([True,member.value]),flush=True)"
+        )
+        for session in (False, True):
+            with self.subTest(session=session):
+                protocol_script = script.replace(
+                    "print(json.dumps([True,member.value]),flush=True)",
+                    "print(json.dumps({'id':1,'ok':True,'result':member.value}),flush=True)"
+                    if session
+                    else "print(json.dumps([True,member.value]),flush=True)",
+                )
+                child = DiarizationProcess(
+                    {}, command=[sys.executable, "-c", protocol_script], session=session
+                )
+                try:
+                    self.assertTrue(child.poll(5))
+                    self.assertEqual(tuple(child.recv()), (True, True))
+                finally:
+                    child.close()
+
+    def test_close_reaps_unobserved_grandchild_after_launcher_exit(self):
+        for session in (False, True):
+            with self.subTest(session=session), tempfile.TemporaryDirectory() as temporary:
+                output = Path(temporary) / "pids.json"
+                script = (
+                    "import subprocess,sys,json,os;from pathlib import Path;"
+                    "p=subprocess.Popen([sys.executable,'-c','import time;time.sleep(60)']);"
+                    "Path(sys.argv[1]).write_text(json.dumps([os.getpid(),p.pid]))"
+                )
+                child = DiarizationProcess(
+                    {}, command=[sys.executable, "-c", script, str(output)], session=session
+                )
+                try:
+                    deadline = time.monotonic() + 10
+                    while child.process.poll() is None and time.monotonic() < deadline:
+                        time.sleep(0.01)
+                    self.assertIsNotNone(child.process.poll())
+                    self.assertEqual(child.descendants, {})
+                    pids = json.loads(output.read_text())
+                finally:
+                    child.close()
+                self.assert_processes_exited(pids)
+                self.assertIsNone(child.process.job)
+                self.assertIsNone(child.process.handle)
+
+    def test_parent_exit_during_constructor_still_reaps_child(self):
+        for session in (False, True):
+            with self.subTest(session=session), tempfile.TemporaryDirectory() as temporary:
+                output = Path(temporary) / "pid.txt"
+                script = (
+                    "import os,sys;from pathlib import Path;"
+                    "from unittest.mock import patch;"
+                    "from backend.windows_job import WindowsJobProcess;"
+                    "from backend.diarization_process import DiarizationProcess\n"
+                    "original=WindowsJobProcess.start\n"
+                    "def start(self,*args,**kwargs):\n"
+                    " original(self,*args,**kwargs)\n"
+                    " Path(sys.argv[1]).write_text(str(self.pid))\n"
+                    " os._exit(0)\n"
+                    "with patch.object(WindowsJobProcess,'start',start):\n"
+                    " DiarizationProcess({},command=[sys.executable,'-c','import time;time.sleep(60)'],session="
+                    + str(session)
+                    + ")\n"
+                )
+                result = subprocess.run(
+                    [sys.executable, "-c", script, str(output)], capture_output=True, timeout=15
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                pid = int(output.read_text())
+                self.assert_processes_exited([pid])
+
+    def test_failed_native_start_does_not_leak_handles(self):
+        before = psutil.Process().num_handles()
+        for session in (False, True) * 5:
+            with self.assertRaises(DiarizationStartupError):
+                DiarizationProcess({}, command=[r"C:\brevia-no-such-program.exe"], session=session)
+        self.assertLessEqual(psutil.Process().num_handles(), before + 2)
+
+    def test_repeated_close_does_not_leak_native_handles(self):
+        # 首次启动会初始化 Python / psutil 的线程与进程缓存，先固定基线。
+        child = DiarizationProcess({}, command=[sys.executable, "-c", "pass"])
+        child.close()
+        del child
+        gc.collect()
+        before = psutil.Process().num_handles()
+        for session in (False, True) * 10:
+            child = DiarizationProcess({}, command=[sys.executable, "-c", "pass"], session=session)
+            child.close()
+            child.close()
+            self.assertIsNone(child.process.handle)
+            self.assertIsNone(child.process.job)
+        del child
+        gc.collect()
+        self.assertLessEqual(psutil.Process().num_handles(), before + 2)
 
 
 class AnalysisSessionLifecycleTest(unittest.TestCase):
@@ -422,8 +688,28 @@ class AnalysisSessionLifecycleTest(unittest.TestCase):
             with self.assertRaises(DiarizationStartupError):
                 self.session.process_chunk(self.payload, 5)
             self.start.assert_called_once()
+            self.child.close.side_effect = None
+            with self.assertRaises(DiarizationCleanupError):
+                self.session.process_chunk(self.payload, 5)
+            self.start.assert_called_once()
         finally:
             self.child.close.side_effect = None
+
+    def test_failed_sampler_shutdown_keeps_ownership_for_cleanup_retry(self):
+        self.child.recv.side_effect = [(True, None), (True, [1])]
+        self.session.process_chunk(self.payload, 5)
+        self.monitor.__exit__.side_effect = [RuntimeError("sampler did not stop"), None]
+        with self.assertRaises(DiarizationCleanupError):
+            self.session.close()
+        self.assertTrue(self.session.monitor_started)
+        self.assertIs(self.session.monitor, self.monitor)
+        self.session.close()
+        self.assertEqual(self.monitor.__exit__.call_count, 2)
+        self.assertFalse(self.session.monitor_started)
+        self.assertIsNone(self.session.monitor)
+        with self.assertRaises(DiarizationCleanupError):
+            self.session.process_chunk(self.payload, 5)
+        self.start.assert_called_once()
 
 
 if __name__ == "__main__":

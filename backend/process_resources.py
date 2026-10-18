@@ -18,20 +18,41 @@ def stop_process_tree(process, descendants=(), timeout=5):
     """等待受控子树真正退出，避免 Windows Python 启动器留下推理进程。"""
     # 采样线程可能同时移除已退出的进程，先固定视图再逐个读取属性。
     children = {child.pid: child for child in tuple(descendants)}
-    if process.poll() is None:
-        children.update((child.pid, child) for child in process_descendants(process.pid))
+    failures = []
+    try:
+        if process.pid is not None and process.poll() is None:
+            children.update((child.pid, child) for child in process_descendants(process.pid))
+    except Exception as error:
+        failures.append(error)
     children = list(children.values())
     for child in reversed(children):
         try:
             child.kill()
         except psutil.NoSuchProcess:
             pass
-    if process.poll() is None:
+        except Exception as error:
+            failures.append(error)
+    try:
+        # Windows 的 kill 终止整个 Job，即使启动器已退出也不能跳过。
         process.kill()
-    process.wait(timeout=timeout)
-    _, alive = psutil.wait_procs(children, timeout=timeout)
-    if alive:
-        raise RuntimeError(f"Analysis descendants did not exit: {[child.pid for child in alive]}")
+    except ProcessLookupError:
+        pass
+    except Exception as error:
+        failures.append(error)
+    try:
+        process.wait(timeout=timeout)
+    except Exception as error:
+        failures.append(error)
+    try:
+        _, alive = psutil.wait_procs(children, timeout=timeout)
+        if alive:
+            failures.append(
+                RuntimeError(f"Analysis descendants did not exit: {[child.pid for child in alive]}")
+            )
+    except Exception as error:
+        failures.append(error)
+    if failures:
+        raise failures[0]
 
 
 def process_snapshot(process, *, include_uss=True):

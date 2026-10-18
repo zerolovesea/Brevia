@@ -19,7 +19,11 @@ def main():
     # files on disk, never the ASR process's model state or address space.
     if sys.platform == "win32" and sys.argv[1:] == ["--llama-sidecar"]:
         import_module("backend.llama_sidecar").main()
-    elif sys.platform == "win32" and sys.argv[1:] in (["--check-runtime"], ["--check-diarization"]):
+    elif sys.platform == "win32" and sys.argv[1:] in (
+        ["--check-runtime"],
+        ["--check-diarization"],
+        ["--check-analysis-session"],
+    ):
         import_module("backend.check_windows_runtime").main()
     else:
         from backend.worker import main as worker_main, protocol_output

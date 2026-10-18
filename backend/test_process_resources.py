@@ -112,6 +112,29 @@ class ProcessResourcesTest(unittest.TestCase):
             stop_process_tree(process, observed.values())
         child.kill.assert_called_once()
 
+    def test_descendant_failure_does_not_skip_root_or_other_cleanup(self):
+        import psutil
+
+        denied, other = Mock(pid=10), Mock(pid=11)
+        denied.kill.side_effect = psutil.AccessDenied(10)
+        process = Mock(pid=12)
+        process.poll.return_value = 0
+        with patch("backend.process_resources.psutil.wait_procs", return_value=([], [])) as wait:
+            with self.assertRaises(psutil.AccessDenied):
+                stop_process_tree(process, [other, denied])
+        other.kill.assert_called_once()
+        process.kill.assert_called_once()
+        process.wait.assert_called_once_with(timeout=5)
+        wait.assert_called_once()
+
+    def test_dead_launcher_still_terminates_its_job(self):
+        process = Mock(pid=12)
+        process.poll.return_value = 0
+        with patch("backend.process_resources.psutil.wait_procs", return_value=([], [])):
+            stop_process_tree(process)
+        process.kill.assert_called_once()
+        process.wait.assert_called_once_with(timeout=5)
+
 
 if __name__ == "__main__":
     unittest.main()

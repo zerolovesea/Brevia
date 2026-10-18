@@ -20,12 +20,28 @@ class DiarizationStartupError(RuntimeError):
     """启动故障不随音频长度变化，禁止拆块重试。"""
 
 
+class DiarizationCleanupError(DiarizationStartupError):
+    """未证实资源释放，禁止降级、恢复或加载下一套模型。"""
+
+
 class DiarizationProtocolError(DiarizationStartupError):
     """损坏的消息或请求序号不能通过重新处理音频修复。"""
 
 
 class DiarizationProcess:
     """把独立进程的 JSONL 消息接到分析任务现有的可取消等待循环。"""
+
+    # 清理失败的所有者必须留在父端，不能丢掉引用后由下一个任务再加载模型。
+    _unreaped = set()
+    _ownership_lock = threading.RLock()
+
+    @classmethod
+    def require_reaped(cls):
+        with cls._ownership_lock:
+            if cls._unreaped:
+                raise DiarizationCleanupError(
+                    "Previous analysis cleanup did not complete; restart the worker"
+                )
 
     def __init__(self, payload, *, command=None, stderr=None, env=None, session=False):
         self.session = session
@@ -41,80 +57,92 @@ class DiarizationProcess:
             if getattr(sys, "frozen", False)
             else [sys.executable, "-m", "backend.diarization_process"]
         )
-        self.process = subprocess.Popen(
-            command,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=stderr,
-            env=env,
-            text=True,
-            encoding="utf-8",
-            bufsize=1,
-        )
         self.messages = queue.Queue(maxsize=16)
         self.stopped = threading.Event()
         self.pending = None
         self.descendants = {}
         self.requests = queue.Queue(maxsize=1)
         self.requests.put_nowait(encoded_payload)
+        self.process = None
         self.job = None
-        try:
-            if session and sys.platform == "win32":
-                from .windows_job import WindowsProcessJob
-
-                self.job = WindowsProcessJob()
-                self.job.assign(self.process.pid)
-                # venv 启动器可能在入 Job 前已创建解释器；这些后代也必须受约束。
-                for child in process_descendants(self.process.pid):
-                    self.descendants[child.pid] = child
-                    self.job.assign(child.pid)
-        except Exception:
+        self.reader = None
+        self.writer = None
+        self.closed = False
+        self.cleanup_failed = False
+        with self._ownership_lock:
+            self.require_reaped()
             try:
-                if self.job is not None:
-                    self.job.close()
-            finally:
-                stop_process_tree(self.process, self.descendants.values())
-                self.process.stdin.close()
-                self.process.stdout.close()
-            raise
+                if sys.platform == "win32":
+                    from .windows_job import WindowsJobProcess
 
-        def read():
-            try:
-                while not self.stopped.is_set():
-                    line = self.process.stdout.readline(MAXIMUM_RESPONSE_CHARACTERS + 1)
-                    if not line:
-                        break
-                    if len(line) > MAXIMUM_RESPONSE_CHARACTERS:
-                        raise ValueError("Diarization response exceeds the message limit")
-                    self._publish(json.loads(line))
-            except (OSError, ValueError) as error:
-                message = f"Invalid diarization output: {error}"
-                self._publish(DiarizationProtocolError(message) if session else (False, message))
-            finally:
-                self._publish(None)
+                    self.process = WindowsJobProcess()
+                    self.job = self.process
+                    self.process.start(command, stderr=stderr, env=env)
+                else:
+                    self.process = subprocess.Popen(
+                        command,
+                        stdin=subprocess.PIPE,
+                        stdout=subprocess.PIPE,
+                        stderr=stderr,
+                        env=env,
+                        text=True,
+                        encoding="utf-8",
+                        bufsize=1,
+                    )
+            except Exception as error:
+                self.close()
+                raise DiarizationStartupError(f"Cannot start speaker analysis: {error}") from error
+            except BaseException:
+                self.close()
+                raise
 
-        self.reader = threading.Thread(target=read, daemon=True)
-        self.reader.start()
-
-        def write():
-            # 子进程尚未读取 stdin 时，大 payload 会填满 Windows 管道；不能阻塞超时/取消。
-            try:
-                with self.process.stdin:
+            def read():
+                try:
                     while not self.stopped.is_set():
-                        try:
-                            packet = self.requests.get(timeout=0.1)
-                        except queue.Empty:
-                            continue
-                        self.process.stdin.write(packet)
-                        self.process.stdin.flush()
-                        if not session:
+                        line = self.process.stdout.readline(MAXIMUM_RESPONSE_CHARACTERS + 1)
+                        if not line:
                             break
-            except (OSError, ValueError) as error:
-                message = f"Cannot send diarization payload: {error}"
-                self._publish(DiarizationProtocolError(message) if session else (False, message))
+                        if len(line) > MAXIMUM_RESPONSE_CHARACTERS:
+                            raise ValueError("Diarization response exceeds the message limit")
+                        self._publish(json.loads(line))
+                except (OSError, ValueError) as error:
+                    message = f"Invalid diarization output: {error}"
+                    self._publish(
+                        DiarizationProtocolError(message) if session else (False, message)
+                    )
+                finally:
+                    self._publish(None)
 
-        self.writer = threading.Thread(target=write, daemon=True)
-        self.writer.start()
+            def write():
+                # 子进程尚未读取 stdin 时，大 payload 会填满 Windows 管道；不能阻塞超时/取消。
+                try:
+                    with self.process.stdin:
+                        while not self.stopped.is_set():
+                            try:
+                                packet = self.requests.get(timeout=0.1)
+                            except queue.Empty:
+                                continue
+                            self.process.stdin.write(packet)
+                            self.process.stdin.flush()
+                            if not session:
+                                break
+                except (OSError, ValueError) as error:
+                    message = f"Cannot send diarization payload: {error}"
+                    self._publish(
+                        DiarizationProtocolError(message) if session else (False, message)
+                    )
+
+            try:
+                self.reader = threading.Thread(target=read, daemon=True)
+                self.writer = threading.Thread(target=write, daemon=True)
+                self.reader.start()
+                self.writer.start()
+            except Exception as error:
+                self.close()
+                raise DiarizationStartupError(f"Cannot start speaker analysis: {error}") from error
+            except BaseException:
+                self.close()
+                raise
 
     def _publish(self, message):
         # 消费者暂停或退出时不能无限堆积消息，也不能把读取线程卡在满队列中。
@@ -192,35 +220,51 @@ class DiarizationProcess:
         self.inflight = True
 
     def close(self, graceful=False):
-        if graceful and self.session and not self.inflight and not self.stopped.is_set():
-            try:
-                self.submit("shutdown", {})
-                self.process.wait(timeout=5)
-            except (OSError, RuntimeError, subprocess.TimeoutExpired):
-                pass  # 正常关闭有上限；阻塞的原生调用必须继续走强制回收。
-        self.stopped.set()
-        failure = None
-        try:
+        with self._ownership_lock:
+            if self.closed:
+                return
+            if graceful and self.session and not self.inflight and not self.stopped.is_set():
+                try:
+                    self.submit("shutdown", {})
+                    self.process.wait(timeout=5)
+                except (OSError, RuntimeError, subprocess.TimeoutExpired):
+                    pass  # 正常关闭有上限；阻塞的原生调用必须继续走强制回收。
+            self.stopped.set()
+            failures = []
+            if self.process is not None:
+                try:
+                    stop_process_tree(self.process, self.descendants.values())
+                except Exception as error:
+                    failures.append(error)
+            for thread, name in ((self.reader, "stdout"), (self.writer, "stdin")):
+                try:
+                    if thread is not None and thread.ident is not None:
+                        thread.join(timeout=5)
+                        if thread.is_alive():
+                            raise RuntimeError(f"Diarization {name} thread did not stop")
+                    stream = getattr(self.process, name, None)
+                    if stream is not None:
+                        stream.close()
+                except Exception as error:
+                    failures.append(error)
             if self.job is not None:
-                self.job.close()
-        except Exception as error:
-            failure = error
-        try:
-            stop_process_tree(self.process, self.descendants.values())
-        except Exception as error:
-            failure = error
-        finally:
-            self.reader.join(timeout=5)
-            self.writer.join(timeout=5)
-        if self.reader.is_alive() or self.writer.is_alive():
-            raise RuntimeError("Diarization pipe threads did not stop") from failure
-        self.process.stdout.close()
-        self.pending = None
-        for channel in (self.requests, self.messages):
-            while not channel.empty():
-                channel.get_nowait()
-        if failure is not None:
-            raise failure
+                try:
+                    self.job.close_handles()
+                except Exception as error:
+                    failures.append(error)
+            self.pending = None
+            if failures:
+                self._unreaped.add(self)
+                self.cleanup_failed = True
+                raise DiarizationCleanupError(
+                    "Analysis process cleanup did not complete"
+                ) from failures[0]
+            for channel in (self.requests, self.messages):
+                while not channel.empty():
+                    channel.get_nowait()
+            self.descendants.clear()
+            self.closed = True
+            self._unreaped.discard(self)
 
 
 def serve_session(connection, first, source):

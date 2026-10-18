@@ -10,6 +10,7 @@ from pathlib import Path
 import psutil
 
 from .diarization_process import (
+    DiarizationCleanupError,
     DiarizationProcess,
     DiarizationStartupError,
     DiarizationTimeout,
@@ -154,8 +155,6 @@ class AnalysisSession:
                 last_progress = now
 
     def _start(self, payload, started, deadline):
-        if self.cleanup_failed:
-            raise DiarizationStartupError("Previous analysis cleanup did not complete")
         self._check_environment()
         try:
             self.child = DiarizationProcess(payload, session=True)
@@ -163,12 +162,16 @@ class AnalysisSession:
             self.monitor = ProcessTreeMonitor(os.getpid(), include_uss=False)
             self.monitor.__enter__()
             self.monitor_started = True
+        except DiarizationStartupError:
+            raise
         except Exception as error:
             raise DiarizationStartupError(f"Cannot start speaker analysis: {error}") from error
         self.chunks = 0
         self._wait(payload, started, min(deadline, started + 60), initializing=True)
 
     def process_chunk(self, payload, timeout):
+        if self.cleanup_failed:
+            raise DiarizationCleanupError("Previous analysis cleanup did not complete")
         for attempt in range(2):
             try:
                 # 暂停时不为等待下一块保留模型，也不绕过取消检查。
@@ -215,6 +218,7 @@ class AnalysisSession:
         try:
             if monitor is not None and self.monitor_started:
                 monitor.__exit__(None, None, None)
+                self.monitor_started = False
                 self.last_summary = monitor.summary()
                 logger.info(
                     "analysis session closed chunks=%s peaks=%s",
@@ -223,9 +227,8 @@ class AnalysisSession:
                 )
         except Exception as error:
             failure = failure or error
-        self.monitor_started = False
         if failure is not None:
             self.cleanup_failed = True
-            raise DiarizationStartupError("Analysis process cleanup did not complete") from failure
+            raise DiarizationCleanupError("Analysis process cleanup did not complete") from failure
         self.child = None
         self.monitor = None

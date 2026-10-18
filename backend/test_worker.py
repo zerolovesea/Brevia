@@ -5406,6 +5406,62 @@ class WorkerTest(unittest.TestCase):
         )
         self.assertEqual(english["refined_model_id"], "whisper-large-v3")
 
+    def test_analysis_cleanup_failure_preserves_transcript_and_never_loads_asr(self):
+        from .diarization_process import DiarizationCleanupError, DiarizationProcess
+
+        meeting = self.worker.store.create_meeting(
+            {"title": "清理失败", "language": "zh", "refined_model_id": "qwen3-asr-0.6b-int8"}
+        )
+        path = self.worker.store.meeting_dir(meeting["id"]) / "audio" / "playback-system.wav"
+        with wave.open(str(path), "wb") as output:
+            output.setparams((1, 2, 16000, 0, "NONE", "not compressed"))
+            output.writeframes(b"\0\0" * 32000)
+        self.worker.store.finish_meeting(meeting["id"], 2000)
+        self.worker.store.replace_segments(
+            meeting["id"],
+            [
+                {
+                    "segment_id": "system-0",
+                    "track": "system",
+                    "start_ms": 0,
+                    "end_ms": 1000,
+                    "speaker": "spk-1",
+                    "text": "保留已有逐字稿",
+                }
+            ],
+            *self.worker.store.next_refinement_version(meeting["id"]),
+        )
+        self.worker.store.replace_speaker_turns(
+            meeting["id"], [{"start_ms": 0, "end_ms": 1000, "speaker": "spk-1"}]
+        )
+        before = self.worker.store.get_meeting(meeting["id"])
+        self.worker.models.is_ready = lambda _: True
+        with (
+            patch.object(
+                self.worker, "_prepare_track", side_effect=DiarizationCleanupError("not reaped")
+            ),
+            patch("backend.worker_refinement.RefinedASR") as asr,
+        ):
+            with self.assertRaises(DiarizationCleanupError):
+                self.worker.refine({"meeting_id": meeting["id"]})
+        asr.assert_not_called()
+        after = self.worker.store.get_meeting(meeting["id"])
+        self.assertEqual(after["status"], "ready")
+        self.assertEqual(after["segments"], before["segments"])
+        self.assertEqual(after["speaker_turns"], before["speaker_turns"])
+        self.assertFalse(self.worker.tasks.has_for_meeting(meeting["id"]))
+
+        # 后续短录音或缓存命中也必须在模型准备前被拒绝。
+        with (
+            patch.object(DiarizationProcess, "_unreaped", {object()}),
+            patch.object(self.worker, "_prepare_track") as prepare,
+            patch("backend.worker_refinement.RefinedASR") as asr,
+        ):
+            with self.assertRaises(DiarizationCleanupError):
+                self.worker.refine({"meeting_id": meeting["id"]})
+        prepare.assert_not_called()
+        asr.assert_not_called()
+
     def test_refinement_recovery_preserves_completed_turns(self):
         meeting = self.worker.start(
             {

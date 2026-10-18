@@ -7,11 +7,56 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import time
 import wave
+
+import psutil
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from backend.process_resources import stop_process_tree  # noqa: E402
+
+
+def check_parent_exit(command, payload, env):
+    """在原生模型已加载后强退父端；失败时仍回收受测进程。"""
+    descendants = []
+    with tempfile.TemporaryDirectory(prefix='brevia-parent-exit-') as directory:
+        log = Path(directory) / 'native.log'
+        with tempfile.TemporaryFile() as output, log.open('wb') as errors:
+            process = subprocess.Popen(
+                command,
+                stdin=subprocess.PIPE,
+                stdout=output,
+                stderr=errors,
+                env=env,
+                text=True,
+                encoding='utf-8',
+            )
+            try:
+                process.stdin.write(json.dumps(payload) + '\n')
+                process.stdin.flush()
+                deadline = time.monotonic() + 30
+                parent = psutil.Process(process.pid)
+                while time.monotonic() < deadline and process.poll() is None:
+                    descendants = parent.children(recursive=True)
+                    stages = log.read_bytes()
+                    if descendants and (
+                        b'next=diarization' in stages or b'stage=diarization' in stages
+                    ):
+                        break
+                    time.sleep(0.01)
+                else:
+                    raise RuntimeError('Frozen parent did not reach native analysis')
+                process.kill()
+                process.wait(timeout=5)
+                _, alive = psutil.wait_procs(descendants, timeout=5)
+                if alive:
+                    raise RuntimeError(
+                        f'Frozen parent left analysis processes: {[p.pid for p in alive]}'
+                    )
+            finally:
+                stop_process_tree(process, descendants)
+                process.stdin.close()
 
 
 def main():
@@ -116,8 +161,12 @@ def main():
         }
         analysis = run(['--check-diarization'], [payload], keep_stdin_open=True)
         assert analysis == [{'diarization': 'passed'}], analysis
+        analysis = run(['--check-analysis-session'], [payload], keep_stdin_open=True)
+        assert analysis == [{'diarization': 'passed'}], analysis
+        for argument in ('--check-diarization', '--check-analysis-session'):
+            check_parent_exit([str(worker), argument], payload, env)
         print(
-            'Windows bundle passed: Sherpa ONNX VAD, llama native backend, JSONL entries, 60s diarization'
+            'Windows bundle passed: native models, both analysis modes, shutdown and parent crash cleanup'
         )
 
 
