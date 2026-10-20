@@ -125,7 +125,6 @@ function toggleWorkspacePicker() {
     choices[index].focus({ preventScroll: true });
     choices[index].scrollIntoView({ block: 'nearest' });
   });
-  workspacePicker.querySelector('input').focus({ preventScroll: true });
 }
 function renderWorkspaceNav() {
   const nav = document.querySelector('.sidebar nav');
@@ -273,7 +272,7 @@ function showNewWorkspaceDialog(assignMeetingId, onCreated) {
         <form class="workspace-form" data-workspace-form>
           <label>
             ${t('工作区名称')}
-            <input name="name" type="text" maxlength="30" required autofocus />
+            <input name="name" type="text" maxlength="30" required />
           </label>
           <label>
             <span>${t('描述')} <small>${t('（可选）')}</small></span>
@@ -297,9 +296,7 @@ function showNewWorkspaceDialog(assignMeetingId, onCreated) {
   backdrop.classList.add('modal-enter');
 
   // 聚焦输入框
-  setTimeout(() => {
-    backdrop.querySelector('input[name="name"]').focus();
-  }, 100);
+  setTimeout(() => {}, 100);
 
   let escHandler;
   const closeDialog = () => {
@@ -387,7 +384,7 @@ function showEditWorkspaceDialog(workspaceId) {
         <form class="workspace-form" data-workspace-form>
           <label>
             ${t('工作区名称')}
-            <input name="name" type="text" maxlength="30" value="${escapeHtml(workspace.name)}" required autofocus />
+            <input name="name" type="text" maxlength="30" value="${escapeHtml(workspace.name)}" required />
           </label>
           ${anchored ? `<details class="workspace-description"><summary>${t('描述')} ${t('（可选）')}${interfaceIcon('chevron-down')}</summary>` : ''}
           <label>
@@ -420,9 +417,7 @@ function showEditWorkspaceDialog(workspaceId) {
   backdrop.classList.add('modal-enter');
 
   // 聚焦输入框
-  setTimeout(() => {
-    backdrop.querySelector('input[name="name"]').focus();
-  }, 100);
+  setTimeout(() => {}, 100);
 
   let escHandler;
   const closeDialog = () => {
@@ -550,7 +545,6 @@ function showWorkspaceAssignMenu(meetingIndex, anchorRect) {
   document.querySelectorAll('.meeting-workspace-menu').forEach((node) => node.remove());
   document.body.appendChild(menu);
   positionWorkspaceAssignMenu(menu, anchorRect);
-  menu.querySelector('.active')?.focus({ preventScroll: true });
   menu.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') {
       event.preventDefault();

@@ -448,6 +448,7 @@ class RecordingFocus extends StatelessWidget {
                               IconButton(
                                 tooltip: tr('录音说明'),
                                 onPressed: () => showModalBottomSheet<void>(
+                                  requestFocus: false,
                                   context: context,
                                   sheetAnimationStyle: BreviaMotion.sheet(
                                     context,

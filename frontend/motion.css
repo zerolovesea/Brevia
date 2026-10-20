@@ -34,16 +34,14 @@ html
 html :is(button, [role="button"]):is(:disabled, [aria-disabled="true"], [aria-busy="true"]) {
   scale: 1;
 }
-/* 鼠标与页面自动聚焦不画外框，只有键盘导航显示焦点。 */
-html:not([data-keyboard-navigation]) :is(:focus, :focus-visible, :focus-within) {
+/* 聚焦统一不画外圈；键盘导航由底色与下划线提示当前位置。 */
+html :is(:focus, :focus-visible, :focus-within) {
   outline: none !important;
 }
 html[data-keyboard-navigation]
   :is(button, summary, a[href], [role="button"], [tabindex="0"]):focus-visible {
   background-color: var(--color-selected, #eaeaea);
   color: var(--color-text, #222222);
-  outline: 2px solid var(--color-text, #222222);
-  outline-offset: 3px;
   text-decoration: underline;
   text-underline-offset: 4px;
 }

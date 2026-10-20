@@ -300,6 +300,7 @@ const workerEvent = z
       'summary.ready',
       'summary.started',
       'task.status',
+      'transcript.corrected',
       'transcript.draft',
       'transcript.final',
       'transcript.partial',
@@ -1559,12 +1560,54 @@ function registerIpc() {
     'segment.text',
     id.extend({
       segments: z
-        .array(z.object({ segment_id: z.string().min(1), text: z.string().max(4000) }))
+        .array(
+          z.object({
+            segment_id: z.string().min(1),
+            text: z.string().max(4000),
+            expected: z
+              .object({
+                text: z.string().max(4000),
+                version: z.string().max(64),
+                revision: z.number().int().nonnegative(),
+              })
+              .optional(),
+          }),
+        )
         .min(1)
         .max(500)
         .refine((edits) => edits.reduce((total, edit) => total + edit.text.length, 0) <= 60000, {
           message: 'Too many subtitle edits in one save',
         }),
+    }),
+  );
+  handle(
+    'segment.correction',
+    id.extend({
+      action: z.enum(['replace', 'undo', 'disable']),
+      scope: z.enum(['transcript', 'notes', 'summary']).optional(),
+      document: z
+        .object({
+          text: z.string().max(5 * 1024 * 1024),
+          occurrences: z.array(z.number().int().nonnegative()).min(1).max(4000),
+        })
+        .optional(),
+      find: z.string().max(4000).optional(),
+      replacement: z.string().max(4000).optional(),
+      future: z.boolean().optional(),
+      confirm_rule: z.boolean().optional(),
+      matches: z
+        .array(
+          z.object({
+            segment_id: z.string().min(1).max(128),
+            text: z.string().max(4000),
+            version: z.string().max(64),
+            revision: z.number().int().nonnegative(),
+            occurrences: z.array(z.number().int().nonnegative()).min(1).max(4000),
+          }),
+        )
+        .min(1)
+        .max(500)
+        .optional(),
     }),
   );
   handleIpc('segment.speaker-profile-sample', async (_, payload) => {

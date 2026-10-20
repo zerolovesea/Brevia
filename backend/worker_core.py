@@ -227,6 +227,7 @@ class WorkerCore:
                 "metrics.record": lambda value: self.store.metrics(value.get("app_duration_ms", 0)),
                 "segment.speaker": self.assign_segment_speaker,
                 "segment.text": self.save_segment_texts,
+                "segment.correction": self.correct_transcript,
                 "segment.speaker-profile-sample": self.add_segment_speaker_profile_sample,
                 "models.list": lambda _: self.models.list(),
                 "models.can-relocate": lambda _: not self.model_downloads,

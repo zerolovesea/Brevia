@@ -1,6 +1,51 @@
 // Shared mobile UI, recording notifications and error messages. Keep placeholders consistent.
 const translations = {
   "en": {
+    "请求过大": "Request is too large",
+    "无效请求": "Invalid request",
+    "电脑已重启，请重新提交任务": "The computer restarted. Submit the task again.",
+    "未找到可用的局域网 IPv4 地址，请连接 Wi-Fi 或以太网后重试。":
+        "No local IPv4 address found. Connect to Wi-Fi or Ethernet and try again.",
+    "该设备仍有未完成的录音，请先结束并补传":
+        "Finish this device’s recording and upload the remaining audio first.",
+    "正在确认另一部手机": "Another phone is awaiting approval.",
+    "配对码错误": "Incorrect pairing code",
+    "电脑未允许连接，请重新配对": "The computer did not approve the connection. Pair again.",
+    "请重新配对电脑": "Pair with the computer again.",
+    "电脑已取消信任，请重新配对": "The computer revoked access. Pair again.",
+    "会议不存在": "Meeting not found",
+    "电脑有未完成的录音，请先结束并补传":
+        "Finish the computer’s recording and upload the remaining audio first.",
+    "请在已连接的手机上打开 Brevia，并结束其他录音":
+        "Open Brevia on the connected phone and finish any other recording.",
+    "手机端未就绪，请打开或更新 Brevia": "The phone is not ready. Open or update Brevia.",
+    "当前手机录音不可控制": "This phone recording cannot be controlled right now.",
+    "连接中断 · 等待补传": "Disconnected · Waiting to upload remaining audio",
+    "仅允许已配对的手机应用": "Only paired phone apps can connect.",
+    "未找到接口": "Endpoint not found. Check the computer app version.",
+    "电脑正在处理这场会议，请稍后重试":
+        "The computer is processing this meeting. Try again later.",
+    "请先在电脑安装所需模型": "Install the required models on the computer first.",
+    "无效音频": "Invalid audio. Keep the phone recording and try again.",
+    "无效音频长度": "Invalid audio length. Keep the phone recording.",
+    "音频分片冲突": "Audio chunks conflict. Keep the phone recording and export it.",
+    "请从电脑确认的位置补传":
+        "Resume uploading from the position confirmed by the computer.",
+    "仍有录音未补传": "Some recorded audio is still waiting to upload.",
+    "重点数量已达上限": "The highlight limit has been reached.",
+    "不支持此操作": "This action is not supported.",
+    "电脑音频缓存缺失，请保留手机录音并导出":
+        "The computer’s audio cache is missing. Keep and export the phone recording.",
+    "请先结束会议": "End the meeting first.",
+    "会议暂无可翻译的字幕": "This meeting has no transcript to translate yet.",
+    "会议编号已存在，请重新创建手机会议":
+        "This meeting ID already exists. Create a new phone meeting.",
+    "工作区已不存在，请重新选择": "The workspace no longer exists. Choose another.",
+    "电脑正在处理另一场录音，请稍后重试":
+        "The computer is processing another recording. Try again later.",
+    "请先创建手机会议": "Create a meeting on the phone first.",
+    "录音保存较慢，已暂停采集。请等待保存完成后继续。":
+        "Saving is slow, so audio capture was interrupted. Wait for saving to finish before continuing.",
     "{0} 场": "{0} meetings",
     "同一局域网": "Same local network",
     "电脑可将此手机选为录音声源；开始采集时，手机会明确提示。":
@@ -451,6 +496,58 @@ const translations = {
         "Recording can continue while locked. Calls, force-stop or system limits can interrupt it; check the status when you return.\n\nAndroid uses a microphone foreground service. Allow recording notifications. If battery restrictions stop the app, adjust system settings. Return to the app to resume after pausing.",
   },
   "es": {
+    "请求过大": "La solicitud es demasiado grande",
+    "无效请求": "Solicitud no válida",
+    "电脑已重启，请重新提交任务": "El ordenador se reinició. Envía la tarea de nuevo.",
+    "未找到可用的局域网 IPv4 地址，请连接 Wi-Fi 或以太网后重试。":
+        "No se encontró una dirección IPv4 local. Conéctate por Wi-Fi o Ethernet y vuelve a intentarlo.",
+    "该设备仍有未完成的录音，请先结束并补传":
+        "Finaliza la grabación de este dispositivo y sube el audio pendiente.",
+    "正在确认另一部手机": "Otro teléfono está pendiente de aprobación.",
+    "配对码错误": "Código de enlace incorrecto",
+    "电脑未允许连接，请重新配对":
+        "El ordenador no autorizó la conexión. Vuelve a enlazarlo.",
+    "请重新配对电脑": "Vuelve a enlazar el ordenador.",
+    "电脑已取消信任，请重新配对": "El ordenador revocó el acceso. Vuelve a enlazarlo.",
+    "会议不存在": "No se encontró la reunión",
+    "电脑有未完成的录音，请先结束并补传":
+        "Finaliza la grabación del ordenador y sube el audio pendiente.",
+    "请在已连接的手机上打开 Brevia，并结束其他录音":
+        "Abre Brevia en el teléfono conectado y finaliza las otras grabaciones.",
+    "手机端未就绪，请打开或更新 Brevia":
+        "El teléfono no está listo. Abre o actualiza Brevia.",
+    "当前手机录音不可控制": "No se puede controlar esta grabación del teléfono ahora.",
+    "连接中断 · 等待补传": "Desconectado · Esperando subir el audio pendiente",
+    "仅允许已配对的手机应用":
+        "Solo pueden conectarse aplicaciones de teléfonos enlazados.",
+    "未找到接口":
+        "No se encontró la interfaz. Comprueba la versión de la aplicación del ordenador.",
+    "电脑正在处理这场会议，请稍后重试":
+        "El ordenador está procesando esta reunión. Inténtalo más tarde.",
+    "请先在电脑安装所需模型": "Instala primero los modelos necesarios en el ordenador.",
+    "无效音频":
+        "Audio no válido. Conserva la grabación del teléfono y vuelve a intentarlo.",
+    "无效音频长度":
+        "Longitud de audio no válida. Conserva la grabación del teléfono.",
+    "音频分片冲突":
+        "Hay un conflicto entre fragmentos de audio. Conserva y exporta la grabación del teléfono.",
+    "请从电脑确认的位置补传":
+        "Reanuda la carga desde la posición confirmada por el ordenador.",
+    "仍有录音未补传": "Aún queda audio grabado por subir.",
+    "重点数量已达上限": "Se alcanzó el límite de puntos destacados.",
+    "不支持此操作": "Esta acción no es compatible.",
+    "电脑音频缓存缺失，请保留手机录音并导出":
+        "Falta la caché de audio del ordenador. Conserva y exporta la grabación del teléfono.",
+    "请先结束会议": "Finaliza primero la reunión.",
+    "会议暂无可翻译的字幕": "Esta reunión aún no tiene transcripción que traducir.",
+    "会议编号已存在，请重新创建手机会议":
+        "Este identificador de reunión ya existe. Crea una nueva reunión en el teléfono.",
+    "工作区已不存在，请重新选择": "El espacio de trabajo ya no existe. Elige otro.",
+    "电脑正在处理另一场录音，请稍后重试":
+        "El ordenador está procesando otra grabación. Inténtalo más tarde.",
+    "请先创建手机会议": "Crea primero una reunión en el teléfono.",
+    "录音保存较慢，已暂停采集。请等待保存完成后继续。":
+        "El guardado es lento y se interrumpió la captura. Espera a que termine antes de continuar.",
     "{0} 场": "{0} reuniones",
     "同一局域网": "Misma red local",
     "电脑可将此手机选为录音声源；开始采集时，手机会明确提示。":
@@ -904,6 +1001,42 @@ const translations = {
         "La grabación puede continuar con la pantalla bloqueada. Las llamadas, el cierre forzado o los límites del sistema pueden interrumpirla; comprueba el estado al volver.\n\nAndroid usa un servicio de micrófono en primer plano. Permite las notificaciones. Si el ahorro de batería cierra la app, ajusta el sistema. Vuelve a la app para continuar tras pausar.",
   },
   "ja": {
+    "请求过大": "リクエストが大きすぎます",
+    "无效请求": "無効なリクエストです",
+    "电脑已重启，请重新提交任务": "パソコンが再起動しました。タスクを再送信してください。",
+    "未找到可用的局域网 IPv4 地址，请连接 Wi-Fi 或以太网后重试。":
+        "利用可能な LAN IPv4 アドレスがありません。Wi-Fi または Ethernet に接続して再試行してください。",
+    "该设备仍有未完成的录音，请先结束并补传": "この端末の録音を終了し、残りの音声を転送してください。",
+    "正在确认另一部手机": "別のスマートフォンの承認待ちです。",
+    "配对码错误": "ペアリングコードが違います",
+    "电脑未允许连接，请重新配对": "パソコンが接続を許可しませんでした。再度ペアリングしてください。",
+    "请重新配对电脑": "パソコンと再度ペアリングしてください。",
+    "电脑已取消信任，请重新配对": "パソコンが信頼を解除しました。再度ペアリングしてください。",
+    "会议不存在": "会議が見つかりません",
+    "电脑有未完成的录音，请先结束并补传": "パソコンの録音を終了し、残りの音声を転送してください。",
+    "请在已连接的手机上打开 Brevia，并结束其他录音": "接続済みのスマートフォンで Brevia を開き、他の録音を終了してください。",
+    "手机端未就绪，请打开或更新 Brevia": "スマートフォンの準備ができていません。Brevia を開くか更新してください。",
+    "当前手机录音不可控制": "現在、このスマートフォンの録音は操作できません。",
+    "连接中断 · 等待补传": "接続が切れました · 未転送音声の転送待ち",
+    "仅允许已配对的手机应用": "ペアリング済みのスマートフォンアプリのみ接続できます。",
+    "未找到接口": "接続先が見つかりません。パソコンアプリのバージョンを確認してください。",
+    "电脑正在处理这场会议，请稍后重试": "パソコンがこの会議を処理中です。後でもう一度お試しください。",
+    "请先在电脑安装所需模型": "先にパソコンに必要なモデルをインストールしてください。",
+    "无效音频": "音声が無効です。スマートフォンの録音を保持して再試行してください。",
+    "无效音频长度": "音声の長さが無効です。スマートフォンの録音を保持してください。",
+    "音频分片冲突": "音声チャンクが競合しています。スマートフォンの録音を保持し、書き出してください。",
+    "请从电脑确认的位置补传": "パソコンが確認した位置から転送を再開してください。",
+    "仍有录音未补传": "まだ未転送の録音があります。",
+    "重点数量已达上限": "ハイライト数の上限に達しました。",
+    "不支持此操作": "この操作はサポートされていません。",
+    "电脑音频缓存缺失，请保留手机录音并导出": "パソコンの音声キャッシュがありません。スマートフォンの録音を保持し、書き出してください。",
+    "请先结束会议": "先に会議を終了してください。",
+    "会议暂无可翻译的字幕": "この会議にはまだ翻訳できる字幕がありません。",
+    "会议编号已存在，请重新创建手机会议": "会議 ID が既に存在します。スマートフォンで新しい会議を作成してください。",
+    "工作区已不存在，请重新选择": "ワークスペースが存在しません。選び直してください。",
+    "电脑正在处理另一场录音，请稍后重试": "パソコンが別の録音を処理中です。後でもう一度お試しください。",
+    "请先创建手机会议": "先にスマートフォンで会議を作成してください。",
+    "录音保存较慢，已暂停采集。请等待保存完成后继续。": "保存が遅いため録音を中断しました。保存完了後に再開してください。",
     "{0} 场": "{0} 件",
     "同一局域网": "同じローカルネットワーク",
     "电脑可将此手机选为录音声源；开始采集时，手机会明确提示。":
@@ -1308,6 +1441,42 @@ const translations = {
         "ロック中も録音できます。着信、強制終了、システム制限で中断される場合があるため、戻ったら状態を確認してください。\n\nAndroid はマイクのフォアグラウンドサービスを使用します。録音通知を許可してください。省電力設定でアプリが停止する場合はシステム設定を調整してください。一時停止後はアプリに戻って再開してください。",
   },
   "ko": {
+    "请求过大": "요청이 너무 큽니다",
+    "无效请求": "잘못된 요청입니다",
+    "电脑已重启，请重新提交任务": "컴퓨터가 다시 시작되었습니다. 작업을 다시 제출하세요.",
+    "未找到可用的局域网 IPv4 地址，请连接 Wi-Fi 或以太网后重试。":
+        "사용 가능한 로컬 IPv4 주소가 없습니다. Wi-Fi 또는 이더넷에 연결한 후 다시 시도하세요.",
+    "该设备仍有未完成的录音，请先结束并补传": "이 기기의 녹음을 종료하고 남은 오디오를 먼저 전송하세요.",
+    "正在确认另一部手机": "다른 휴대전화의 승인을 기다리고 있습니다.",
+    "配对码错误": "페어링 코드가 올바르지 않습니다",
+    "电脑未允许连接，请重新配对": "컴퓨터가 연결을 승인하지 않았습니다. 다시 페어링하세요.",
+    "请重新配对电脑": "컴퓨터와 다시 페어링하세요.",
+    "电脑已取消信任，请重新配对": "컴퓨터가 신뢰를 해제했습니다. 다시 페어링하세요.",
+    "会议不存在": "회의를 찾을 수 없습니다",
+    "电脑有未完成的录音，请先结束并补传": "컴퓨터의 녹음을 종료하고 남은 오디오를 먼저 전송하세요.",
+    "请在已连接的手机上打开 Brevia，并结束其他录音": "연결된 휴대전화에서 Brevia를 열고 다른 녹음을 종료하세요.",
+    "手机端未就绪，请打开或更新 Brevia": "휴대전화가 준비되지 않았습니다. Brevia를 열거나 업데이트하세요.",
+    "当前手机录音不可控制": "지금은 이 휴대전화 녹음을 제어할 수 없습니다.",
+    "连接中断 · 等待补传": "연결 끊김 · 남은 오디오 전송 대기",
+    "仅允许已配对的手机应用": "페어링된 휴대전화 앱만 연결할 수 있습니다.",
+    "未找到接口": "인터페이스를 찾을 수 없습니다. 컴퓨터 앱 버전을 확인하세요.",
+    "电脑正在处理这场会议，请稍后重试": "컴퓨터가 이 회의를 처리 중입니다. 나중에 다시 시도하세요.",
+    "请先在电脑安装所需模型": "먼저 컴퓨터에 필요한 모델을 설치하세요.",
+    "无效音频": "오디오가 올바르지 않습니다. 휴대전화 녹음을 보관하고 다시 시도하세요.",
+    "无效音频长度": "오디오 길이가 올바르지 않습니다. 휴대전화 녹음을 보관하세요.",
+    "音频分片冲突": "오디오 조각이 충돌합니다. 휴대전화 녹음을 보관하고 내보내세요.",
+    "请从电脑确认的位置补传": "컴퓨터가 확인한 위치부터 전송을 재개하세요.",
+    "仍有录音未补传": "아직 전송되지 않은 녹음이 있습니다.",
+    "重点数量已达上限": "중요 표시 개수 한도에 도달했습니다.",
+    "不支持此操作": "지원하지 않는 작업입니다.",
+    "电脑音频缓存缺失，请保留手机录音并导出": "컴퓨터의 오디오 캐시가 없습니다. 휴대전화 녹음을 보관하고 내보내세요.",
+    "请先结束会议": "먼저 회의를 종료하세요.",
+    "会议暂无可翻译的字幕": "이 회의에는 아직 번역할 자막이 없습니다.",
+    "会议编号已存在，请重新创建手机会议": "회의 ID가 이미 존재합니다. 휴대전화에서 새 회의를 만드세요.",
+    "工作区已不存在，请重新选择": "작업 공간이 더 이상 존재하지 않습니다. 다시 선택하세요.",
+    "电脑正在处理另一场录音，请稍后重试": "컴퓨터가 다른 녹음을 처리 중입니다. 나중에 다시 시도하세요.",
+    "请先创建手机会议": "먼저 휴대전화에서 회의를 만드세요.",
+    "录音保存较慢，已暂停采集。请等待保存完成后继续。": "저장이 느려 녹음을 중단했습니다. 저장이 완료된 후 계속하세요.",
     "{0} 场": "{0}개",
     "同一局域网": "동일한 로컬 네트워크",
     "电脑可将此手机选为录音声源；开始采集时，手机会明确提示。":
@@ -1712,6 +1881,61 @@ const translations = {
         "잠금 후에도 녹음할 수 있습니다. 통화, 강제 종료, 시스템 제한으로 중단될 수 있으니 돌아온 후 상태를 확인하세요.\n\nAndroid는 마이크 포그라운드 서비스를 사용합니다. 녹음 알림을 허용하세요. 절전 정책이 앱을 종료하면 시스템 설정을 조정하세요. 일시정지 후에는 앱에서 재개하세요.",
   },
   "fr": {
+    "请求过大": "La requête est trop volumineuse",
+    "无效请求": "Requête non valide",
+    "电脑已重启，请重新提交任务": "L’ordinateur a redémarré. Relancez la tâche.",
+    "未找到可用的局域网 IPv4 地址，请连接 Wi-Fi 或以太网后重试。":
+        "Aucune adresse IPv4 locale disponible. Connectez-vous au Wi-Fi ou à Ethernet et réessayez.",
+    "该设备仍有未完成的录音，请先结束并补传":
+        "Terminez l’enregistrement de cet appareil et transférez l’audio restant.",
+    "正在确认另一部手机": "Un autre téléphone attend une autorisation.",
+    "配对码错误": "Code d’association incorrect",
+    "电脑未允许连接，请重新配对":
+        "L’ordinateur n’a pas autorisé la connexion. Recommencez l’association.",
+    "请重新配对电脑": "Associez à nouveau l’ordinateur.",
+    "电脑已取消信任，请重新配对":
+        "L’ordinateur a révoqué l’accès. Recommencez l’association.",
+    "会议不存在": "Réunion introuvable",
+    "电脑有未完成的录音，请先结束并补传":
+        "Terminez l’enregistrement sur l’ordinateur et transférez l’audio restant.",
+    "请在已连接的手机上打开 Brevia，并结束其他录音":
+        "Ouvrez Brevia sur le téléphone connecté et terminez les autres enregistrements.",
+    "手机端未就绪，请打开或更新 Brevia":
+        "Le téléphone n’est pas prêt. Ouvrez ou mettez à jour Brevia.",
+    "当前手机录音不可控制":
+        "Cet enregistrement mobile ne peut pas être contrôlé actuellement.",
+    "连接中断 · 等待补传": "Déconnecté · Transfert de l’audio restant en attente",
+    "仅允许已配对的手机应用":
+        "Seules les applications mobiles associées peuvent se connecter.",
+    "未找到接口":
+        "Interface introuvable. Vérifiez la version de l’application sur l’ordinateur.",
+    "电脑正在处理这场会议，请稍后重试":
+        "L’ordinateur traite cette réunion. Réessayez plus tard.",
+    "请先在电脑安装所需模型": "Installez d’abord les modèles requis sur l’ordinateur.",
+    "无效音频":
+        "Audio non valide. Conservez l’enregistrement du téléphone et réessayez.",
+    "无效音频长度":
+        "Longueur audio non valide. Conservez l’enregistrement du téléphone.",
+    "音频分片冲突":
+        "Conflit de fragments audio. Conservez et exportez l’enregistrement du téléphone.",
+    "请从电脑确认的位置补传":
+        "Reprenez le transfert à partir de la position confirmée par l’ordinateur.",
+    "仍有录音未补传": "Une partie de l’audio enregistré reste à transférer.",
+    "重点数量已达上限": "La limite de points importants est atteinte.",
+    "不支持此操作": "Cette action n’est pas prise en charge.",
+    "电脑音频缓存缺失，请保留手机录音并导出":
+        "Le cache audio de l’ordinateur est manquant. Conservez et exportez l’enregistrement du téléphone.",
+    "请先结束会议": "Terminez d’abord la réunion.",
+    "会议暂无可翻译的字幕": "Cette réunion n’a pas encore de transcription à traduire.",
+    "会议编号已存在，请重新创建手机会议":
+        "Cet identifiant de réunion existe déjà. Créez une nouvelle réunion sur le téléphone.",
+    "工作区已不存在，请重新选择":
+        "L’espace de travail n’existe plus. Choisissez-en un autre.",
+    "电脑正在处理另一场录音，请稍后重试":
+        "L’ordinateur traite un autre enregistrement. Réessayez plus tard.",
+    "请先创建手机会议": "Créez d’abord une réunion sur le téléphone.",
+    "录音保存较慢，已暂停采集。请等待保存完成后继续。":
+        "L’enregistrement sur disque est lent, la capture a été interrompue. Attendez la fin de la sauvegarde pour continuer.",
     "{0} 场": "{0} réunions",
     "同一局域网": "Même réseau local",
     "电脑可将此手机选为录音声源；开始采集时，手机会明确提示。":
@@ -2172,6 +2396,60 @@ const translations = {
         "L’enregistrement peut continuer écran verrouillé. Appels, arrêt forcé ou limites système peuvent l’interrompre ; vérifiez l’état au retour.\n\nAndroid utilise un service de microphone au premier plan. Autorisez les notifications. Si l’économie de batterie arrête l’app, ajustez les réglages système. Revenez dans l’app pour reprendre après une pause.",
   },
   "de": {
+    "请求过大": "Die Anfrage ist zu groß",
+    "无效请求": "Ungültige Anfrage",
+    "电脑已重启，请重新提交任务":
+        "Der Computer wurde neu gestartet. Starten Sie die Aufgabe erneut.",
+    "未找到可用的局域网 IPv4 地址，请连接 Wi-Fi 或以太网后重试。":
+        "Keine lokale IPv4-Adresse gefunden. Verbinden Sie sich mit WLAN oder Ethernet und versuchen Sie es erneut.",
+    "该设备仍有未完成的录音，请先结束并补传":
+        "Beenden Sie die Aufnahme dieses Geräts und übertragen Sie zuerst das restliche Audio.",
+    "正在确认另一部手机": "Ein anderes Telefon wartet auf Bestätigung.",
+    "配对码错误": "Falscher Kopplungscode",
+    "电脑未允许连接，请重新配对":
+        "Der Computer hat die Verbindung nicht bestätigt. Koppeln Sie erneut.",
+    "请重新配对电脑": "Koppeln Sie den Computer erneut.",
+    "电脑已取消信任，请重新配对":
+        "Der Computer hat den Zugriff widerrufen. Koppeln Sie erneut.",
+    "会议不存在": "Besprechung nicht gefunden",
+    "电脑有未完成的录音，请先结束并补传":
+        "Beenden Sie die Aufnahme am Computer und übertragen Sie das restliche Audio.",
+    "请在已连接的手机上打开 Brevia，并结束其他录音":
+        "Öffnen Sie Brevia auf dem verbundenen Telefon und beenden Sie andere Aufnahmen.",
+    "手机端未就绪，请打开或更新 Brevia":
+        "Das Telefon ist nicht bereit. Öffnen oder aktualisieren Sie Brevia.",
+    "当前手机录音不可控制": "Diese Telefonaufnahme kann derzeit nicht gesteuert werden.",
+    "连接中断 · 等待补传": "Verbindung unterbrochen · Restliche Übertragung ausstehend",
+    "仅允许已配对的手机应用": "Nur gekoppelte Telefon-Apps können sich verbinden.",
+    "未找到接口":
+        "Schnittstelle nicht gefunden. Prüfen Sie die App-Version am Computer.",
+    "电脑正在处理这场会议，请稍后重试":
+        "Der Computer verarbeitet diese Besprechung. Versuchen Sie es später erneut.",
+    "请先在电脑安装所需模型":
+        "Installieren Sie zuerst die benötigten Modelle am Computer.",
+    "无效音频":
+        "Ungültiges Audio. Behalten Sie die Telefonaufnahme und versuchen Sie es erneut.",
+    "无效音频长度": "Ungültige Audiolänge. Behalten Sie die Telefonaufnahme.",
+    "音频分片冲突":
+        "Audioblöcke stehen im Konflikt. Behalten und exportieren Sie die Telefonaufnahme.",
+    "请从电脑确认的位置补传":
+        "Setzen Sie die Übertragung an der vom Computer bestätigten Stelle fort.",
+    "仍有录音未补传": "Ein Teil der Aufnahme wurde noch nicht übertragen.",
+    "重点数量已达上限": "Die maximale Anzahl an Markierungen wurde erreicht.",
+    "不支持此操作": "Diese Aktion wird nicht unterstützt.",
+    "电脑音频缓存缺失，请保留手机录音并导出":
+        "Der Audiocache am Computer fehlt. Behalten und exportieren Sie die Telefonaufnahme.",
+    "请先结束会议": "Beenden Sie zuerst die Besprechung.",
+    "会议暂无可翻译的字幕": "Diese Besprechung hat noch kein Transkript zum Übersetzen.",
+    "会议编号已存在，请重新创建手机会议":
+        "Diese Besprechungs-ID existiert bereits. Erstellen Sie eine neue Telefonbesprechung.",
+    "工作区已不存在，请重新选择":
+        "Der Arbeitsbereich existiert nicht mehr. Wählen Sie einen anderen.",
+    "电脑正在处理另一场录音，请稍后重试":
+        "Der Computer verarbeitet eine andere Aufnahme. Versuchen Sie es später erneut.",
+    "请先创建手机会议": "Erstellen Sie zuerst eine Besprechung auf dem Telefon.",
+    "录音保存较慢，已暂停采集。请等待保存完成后继续。":
+        "Das Speichern ist langsam, daher wurde die Aufnahme unterbrochen. Warten Sie vor dem Fortsetzen, bis das Speichern abgeschlossen ist.",
     "{0} 场": "{0} Meetings",
     "同一局域网": "Gleiches lokales Netzwerk",
     "电脑可将此手机选为录音声源；开始采集时，手机会明确提示。":
@@ -2630,6 +2908,53 @@ const translations = {
         "Aufnahme ist bei gesperrtem Bildschirm möglich. Anrufe, erzwungenes Beenden oder Systemlimits können sie unterbrechen; prüfen Sie den Status nach der Rückkehr.\n\nAndroid verwendet einen Mikrofon-Vordergrunddienst. Aufnahmebenachrichtigungen erlauben. Bei Beendigung durch Energiesparregeln die Systemeinstellungen anpassen. Nach einer Pause in der App fortsetzen.",
   },
   "ru": {
+    "请求过大": "Слишком большой запрос",
+    "无效请求": "Недопустимый запрос",
+    "电脑已重启，请重新提交任务": "Компьютер перезапущен. Отправьте задачу повторно.",
+    "未找到可用的局域网 IPv4 地址，请连接 Wi-Fi 或以太网后重试。":
+        "Локальный адрес IPv4 не найден. Подключитесь к Wi-Fi или Ethernet и повторите попытку.",
+    "该设备仍有未完成的录音，请先结束并补传":
+        "Завершите запись на этом устройстве и передайте оставшееся аудио.",
+    "正在确认另一部手机": "Ожидается подтверждение другого телефона.",
+    "配对码错误": "Неверный код сопряжения",
+    "电脑未允许连接，请重新配对": "Компьютер не разрешил подключение. Повторите сопряжение.",
+    "请重新配对电脑": "Повторите сопряжение с компьютером.",
+    "电脑已取消信任，请重新配对": "Компьютер отозвал доступ. Повторите сопряжение.",
+    "会议不存在": "Встреча не найдена",
+    "电脑有未完成的录音，请先结束并补传":
+        "Завершите запись на компьютере и передайте оставшееся аудио.",
+    "请在已连接的手机上打开 Brevia，并结束其他录音":
+        "Откройте Brevia на подключённом телефоне и завершите другие записи.",
+    "手机端未就绪，请打开或更新 Brevia": "Телефон не готов. Откройте или обновите Brevia.",
+    "当前手机录音不可控制": "Сейчас невозможно управлять этой записью телефона.",
+    "连接中断 · 等待补传": "Соединение прервано · Ожидание передачи аудио",
+    "仅允许已配对的手机应用":
+        "Подключаться могут только сопряжённые мобильные приложения.",
+    "未找到接口": "Интерфейс не найден. Проверьте версию приложения на компьютере.",
+    "电脑正在处理这场会议，请稍后重试":
+        "Компьютер обрабатывает эту встречу. Повторите попытку позже.",
+    "请先在电脑安装所需模型": "Сначала установите необходимые модели на компьютере.",
+    "无效音频":
+        "Недопустимое аудио. Сохраните запись телефона и повторите попытку.",
+    "无效音频长度": "Недопустимая длина аудио. Сохраните запись телефона.",
+    "音频分片冲突":
+        "Конфликт аудиофрагментов. Сохраните и экспортируйте запись телефона.",
+    "请从电脑确认的位置补传": "Продолжите передачу с позиции, подтверждённой компьютером.",
+    "仍有录音未补传": "Часть записанного аудио ещё не передана.",
+    "重点数量已达上限": "Достигнут предел важных отметок.",
+    "不支持此操作": "Это действие не поддерживается.",
+    "电脑音频缓存缺失，请保留手机录音并导出":
+        "Аудиокэш компьютера отсутствует. Сохраните и экспортируйте запись телефона.",
+    "请先结束会议": "Сначала завершите встречу.",
+    "会议暂无可翻译的字幕": "В этой встрече пока нет текста для перевода.",
+    "会议编号已存在，请重新创建手机会议":
+        "Такой ID встречи уже существует. Создайте новую встречу на телефоне.",
+    "工作区已不存在，请重新选择": "Рабочая область больше не существует. Выберите другую.",
+    "电脑正在处理另一场录音，请稍后重试":
+        "Компьютер обрабатывает другую запись. Повторите попытку позже.",
+    "请先创建手机会议": "Сначала создайте встречу на телефоне.",
+    "录音保存较慢，已暂停采集。请等待保存完成后继续。":
+        "Сохранение идёт медленно, запись прервана. Дождитесь завершения сохранения перед продолжением.",
     "{0} 场": "{0} встреч",
     "同一局域网": "Одна локальная сеть",
     "电脑可将此手机选为录音声源；开始采集时，手机会明确提示。":

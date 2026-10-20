@@ -23,6 +23,28 @@ import 'package:brevia_mobile/mobile_errors.dart';
 void main() {
   setUp(() => uiLanguage = 'zh');
 
+  test(
+    'dynamic desktop errors preserve actionable messages in every language',
+    () {
+      final source = File('../electron/mobile-server.js').readAsStringSync();
+      final messages = RegExp(
+        r'''(?:fail\(\d+,\s*|new Error\(|captureError:\s*|error:\s*)(['"])([^'"\n]*[\u3400-\u9fff][^'"\n]*)\1''',
+      ).allMatches(source).map((match) => match[2]!).toSet();
+      for (final language in languageNames.keys) {
+        uiLanguage = language;
+        for (final message in messages) {
+          expect(
+            remoteError(message),
+            isNot(tr('电脑操作失败，请在电脑查看详情。')),
+            reason: '$language: $message',
+          );
+          if (language != 'zh') expect(remoteError(message), isNot(message));
+        }
+        expect(remoteError('请先在电脑模型库安装所选会议需要的模型：model-a'), contains('model-a'));
+      }
+    },
+  );
+
   test('only known local errors select recovery screens in every language', () {
     for (final language in languageNames.keys) {
       uiLanguage = language;

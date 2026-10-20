@@ -604,7 +604,11 @@ class MobileServer {
         marks: s.marks,
         title: meeting?.title || s.title,
         notes: meeting?.notes || '',
-        segments: meeting?.segments || [],
+        segments: (meeting?.segments || []).map((segment) =>
+          meeting.correction?.stale_translations?.includes(segment.id)
+            ? { ...segment, translation: null }
+            : segment,
+        ),
         summary: meeting?.summary || null,
       };
     }

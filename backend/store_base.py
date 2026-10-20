@@ -94,6 +94,17 @@ CREATE TABLE IF NOT EXISTS summaries (
   raw_response TEXT,
   created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS transcript_corrections (
+  meeting_id TEXT PRIMARY KEY REFERENCES meetings(id) ON DELETE CASCADE,
+  data TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS correction_undo_entries (
+  meeting_id TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
+  scope TEXT NOT NULL,
+  segment_id TEXT NOT NULL,
+  data TEXT NOT NULL,
+  PRIMARY KEY (meeting_id, scope, segment_id)
+);
 CREATE TABLE IF NOT EXISTS app_meta (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
@@ -182,11 +193,21 @@ class StoreBase:
         self.db_path = self.root / "brevia.db"
         with self.connect() as db:
             db.executescript(SCHEMA)
+            # 主 worker 与精修 worker 可同时启动，迁移必须先获得同一个写锁。
+            db.execute("BEGIN IMMEDIATE")
             # 补列按「当前实际结构」判断，每次启动都跑：版本号一旦被写高（例如运行过
             # 中途的开发版），基于版本的迁移会永久跳过，留下缺列的旧表让新代码 INSERT
             # 直接失败（NOT NULL 列缺失）。重建表这类重活仍由 _migrate_schema 按版本控制。
             self._ensure_columns(db)
             self._migrate_schema(db)
+            from .store_corrections import migrate_correction_undo
+
+            migrate_correction_undo(db)
+            db.execute(
+                "CREATE INDEX IF NOT EXISTS segments_refinement_revision "
+                "ON segments(meeting_id, revision DESC) "
+                "WHERE version GLOB 'postprocess*' AND TRIM(text)<>''"
+            )
             # 下架功能的列与示例工作区都按「当前实际结构/数据」判断，每次启动都跑：
             # 版本号只用来跳过重型重建，不能用来跳过这类幂等修复。
             self._drop_retired_columns(db)

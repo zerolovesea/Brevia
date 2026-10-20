@@ -33,6 +33,7 @@ double pcmLevel(Uint8List bytes) {
 }
 
 class RecordingEngine {
+  static const maximumQueuedAudioBytes = 16000 * 2 * 15;
   final RecordingStore store;
   final DesktopConnection? connection;
   final void Function(Map<String, dynamic>) onChanged;
@@ -48,6 +49,8 @@ class RecordingEngine {
   StreamSubscription<bool>? connectionEvents;
   Future<void> disk = Future.value();
   List<int> pending = [];
+  int queuedAudioBytes = 0;
+  bool audioOverloaded = false;
   Map<String, dynamic> snapshot = {};
   bool syncing = false, closing = false, disposed = false, connected = false;
   bool registered = false;
@@ -182,6 +185,7 @@ class RecordingEngine {
   DateTime levelUpdated = DateTime.fromMillisecondsSinceEpoch(0);
 
   Future<void> beginCapture() async {
+    audioOverloaded = false;
     store.meta['state'] = 'starting';
     await write(store.save);
     publish();
@@ -203,6 +207,7 @@ class RecordingEngine {
       audioDone = done;
       audio = stream.listen(
         (bytes) {
+          if (audioOverloaded) return;
           inputLevel = pcmLevel(bytes);
           final now = DateTime.now();
           if (now.difference(levelUpdated).inMilliseconds >= 50 && !disposed) {
@@ -210,25 +215,34 @@ class RecordingEngine {
             onChanged({'id': store.meta['id'], 'inputLevel': inputLevel});
           }
           // 高频电平独立刷新；录音仍按完整块顺序落盘。
+          queuedAudioBytes += bytes.length;
           unawaited(
             write(() async {
-              pending.addAll(bytes);
-              var appended = false;
-              while (pending.length >= 32000) {
-                appended = true;
-                await store.append(
-                  Uint8List.fromList(pending.sublist(0, 32000)),
-                );
-                pending = pending.sublist(32000);
-              }
-              if (appended) {
-                await store.save();
-                publish();
-              }
-            }).catchError((Object e) {
-              reportInterruption(tr("手机无法保存录音，请释放空间：{0}", [e]));
-            }),
+                  pending.addAll(bytes);
+                  var appended = false;
+                  while (pending.length >= 32000) {
+                    appended = true;
+                    await store.append(
+                      Uint8List.fromList(pending.sublist(0, 32000)),
+                    );
+                    pending = pending.sublist(32000);
+                  }
+                  if (appended) {
+                    await store.save();
+                    publish();
+                  }
+                })
+                .whenComplete(() {
+                  queuedAudioBytes -= bytes.length;
+                })
+                .catchError((Object e) {
+                  reportInterruption(tr("手机无法保存录音，请释放空间：{0}", [e]));
+                }),
           );
+          if (queuedAudioBytes >= maximumQueuedAudioBytes) {
+            audioOverloaded = true;
+            reportInterruption(tr('录音保存较慢，已暂停采集。请等待保存完成后继续。'));
+          }
         },
         onDone: () {
           if (!done.isCompleted) done.complete();
@@ -261,6 +275,9 @@ class RecordingEngine {
   Future<void> interrupted(String reason) async {
     error = reason;
     closing = true;
+    store.meta['state'] = 'interrupted';
+    store.meta['interruptedAt'] = DateTime.now().toIso8601String();
+    publish();
     try {
       await recorder.pause();
       await disk;
@@ -268,8 +285,6 @@ class RecordingEngine {
     } catch (_) {
       /* Preserve disk and in-memory tail on write failure. */
     }
-    store.meta['state'] = 'interrupted';
-    store.meta['interruptedAt'] = DateTime.now().toIso8601String();
     try {
       await write(store.save);
     } catch (_) {}
@@ -314,6 +329,7 @@ class RecordingEngine {
           closing = true;
           await disk;
           await flush();
+          audioOverloaded = false;
           if (await recorder.isPaused()) {
             await recorder.resume();
           } else if (!await recorder.isRecording()) {

@@ -27,7 +27,8 @@ const { MobileServer } = require('./mobile-server');
       if (type === 'meeting.get')
         return {
           notes: 'notes from PC',
-          segments: [{ text: 'private transcript' }],
+          segments: [{ id: 'one', text: 'private transcript', translation: 'outdated' }],
+          correction: { stale_translations: ['one'] },
           summary: { text: 'private summary' },
           audio: '/private/path',
         };
@@ -239,6 +240,7 @@ const { MobileServer } = require('./mobile-server');
     assert.equal(server.sessions.get(id).state, 'paused');
     assert.equal(snapshot.body.stopRequested, true); // Stop survives desktop restart.
     assert.equal(snapshot.body.notes, 'notes from PC');
+    assert.equal(snapshot.body.segments[0].translation, null);
     assert.equal(snapshot.body.audio, undefined);
     assert.equal(
       (await call('POST', `/meetings/${id}/end`, { count: 1, samples: 2 }, token)).status,

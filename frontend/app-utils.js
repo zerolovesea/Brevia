@@ -39,3 +39,14 @@ const timestampAlignedRefinedModels = new Set([
 function refinedModelSupportsTimestamps(modelId) {
   return timestampAlignedRefinedModels.has(modelId);
 }
+
+// 全部查找入口共用区分大小写、不重叠的字面匹配；迭代器允许预览提前停止。
+function* textMatchOffsets(text, query) {
+  if (!query) return;
+  for (
+    let offset = text.indexOf(query);
+    offset >= 0;
+    offset = text.indexOf(query, offset + query.length)
+  )
+    yield offset;
+}

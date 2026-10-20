@@ -3,6 +3,17 @@
 import json
 
 from .store_base import utc_now
+from .store_corrections import (
+    CorrectionStoreMixin,
+    _check_correction_base,
+    _clear_undo_entries,
+    _correction_state,
+    _current_segments,
+    _editable_meeting,
+    _mark_correction_stale,
+    _save_correction_state,
+    _write_correction,
+)
 
 
 def _segment_row(payload):
@@ -25,19 +36,19 @@ def _segment_row(payload):
     )
 
 
-def _user_edit_base(rows):
-    """挑出人工编辑的基准行：用户版本优先，其次精修最新一轮，最后实时识别。"""
-    return max(
-        rows,
-        key=lambda row: (
-            row["version"] == "user",
-            row["version"].startswith("postprocess"),
-            row["revision"],
-        ),
-    )
+class TranscriptStoreMixin(CorrectionStoreMixin):
+    def translation_context(self, meeting_id, segment_id):
+        """翻译仅需会议语言与当前单句，不读取音频、纪要或完整历史。"""
+        with self.connect() as db:
+            meeting = db.execute(
+                "SELECT id,target_language FROM meetings WHERE id=? AND deleted_at IS NULL",
+                (meeting_id,),
+            ).fetchone()
+            if not meeting:
+                raise ValueError("Meeting not found")
+            segments = _current_segments(db, meeting_id, segment_id)
+        return dict(meeting), segments[0] if segments else None
 
-
-class TranscriptStoreMixin:
     def save_segment_texts(self, meeting_id, edits):
         """保存人工修正后的字幕文本，写在用户当前看到的那一版上。
 
@@ -56,42 +67,31 @@ class TranscriptStoreMixin:
         Raises:
             ValueError: 段落不存在，或修正后的文本为空。
         """
-        normalized = []
-        for edit in edits:
-            text = " ".join(str(edit.get("text") or "").split())
-            if not text:
-                raise ValueError("Subtitle text cannot be empty")
-            normalized.append((edit["segment_id"], text))
+        if not edits or len(edits) > 500:
+            raise ValueError("每批最多保存 500 段")
         with self.connect() as db:
-            for segment_id, text in normalized:
-                rows = db.execute(
-                    "SELECT * FROM segments WHERE meeting_id=? AND id=?",
-                    (meeting_id, segment_id),
-                ).fetchall()
-                if not rows:
-                    raise ValueError(f"Segment not found: {segment_id}")
-                base = _user_edit_base(rows)
-                version = "live" if base["version"] == "live" else "user"
-                db.execute(
-                    """INSERT INTO segments
-                        (id,meeting_id,revision,version,track,start_ms,end_ms,speaker,text,word_timestamps,translation,user_edited)
-                        VALUES (?,?,?,?,?,?,?,?,?,?,?,1)
-                        ON CONFLICT(meeting_id,id,version) DO UPDATE SET
-                        text=excluded.text,user_edited=1""",
-                    (
-                        base["id"],
-                        meeting_id,
-                        base["revision"],
-                        version,
-                        base["track"],
-                        base["start_ms"],
-                        base["end_ms"],
-                        base["speaker"],
-                        text,
-                        base["word_timestamps"],
-                        base["translation"],
-                    ),
-                )
+            db.execute("BEGIN IMMEDIATE")
+            _editable_meeting(db, meeting_id)
+            current = {item["id"]: item for item in _current_segments(db, meeting_id)}
+            state = _correction_state(db, meeting_id)
+            changed = []
+            total = 0
+            for edit in edits:
+                text = " ".join(str(edit.get("text") or "").split())
+                if not text:
+                    raise ValueError("Subtitle text cannot be empty")
+                total += len(text)
+                if total > 60000:
+                    raise ValueError("每批最多保存 60000 字")
+                base = current.get(edit["segment_id"])
+                if not base:
+                    raise ValueError("Segment not found")
+                if "expected" in edit:
+                    _check_correction_base(base, edit["expected"])
+                _write_correction(db, meeting_id, base, text)
+                changed.append(base)
+            _mark_correction_stale(db, meeting_id, state, changed)
+            _save_correction_state(db, meeting_id, state)
 
     def save_segment(self, payload):
         """插入或更新一段逐字稿。
@@ -103,6 +103,8 @@ class TranscriptStoreMixin:
         已标记 ``user_edited`` 的同版本记录不会被自动识别结果覆盖。
         """
         with self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            self._apply_transcript_rules(db, payload)
             cursor = db.execute(
                 """INSERT INTO segments
                     (id,meeting_id,revision,version,track,start_ms,end_ms,speaker,text,word_timestamps,translation,user_edited)
@@ -137,6 +139,11 @@ class TranscriptStoreMixin:
     ):
         """原子替换一次精修生成的全部段落，保留用户编辑版本。"""
         with self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            state = _correction_state(db, meeting_id)
+            state["undo"] = None
+            _clear_undo_entries(db, meeting_id, "transcript")
+            _mark_correction_stale(db, meeting_id, state, _current_segments(db, meeting_id))
             segment_ids = set()
             normalized = []
             for item in segments:
@@ -172,15 +179,47 @@ class TranscriptStoreMixin:
                     "UPDATE meetings SET transcript_model_id=?, refined_model_id=?, language=?, status='refined' WHERE id=?",
                     (model_id, model_id, language, meeting_id),
                 )
+            current_ids = {item["id"] for item in _current_segments(db, meeting_id)}
+            state["stale_translations"] = sorted(set(state["stale_translations"]) & current_ids)
+            _save_correction_state(db, meeting_id, state)
         return normalized
 
-    def save_translation(self, meeting_id, segment_id, translation):
-        """为会议中同一段落的所有版本保存译文。"""
+    def save_translation(
+        self,
+        meeting_id,
+        segment_id,
+        translation,
+        *,
+        expected_text=None,
+        expected_version=None,
+        target_language=None,
+    ):
+        """只更新源文本及版本仍一致的译文；旧推理不能覆盖新的人工稿。"""
         with self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            current = _current_segments(db, meeting_id, segment_id)
+            base = current[0] if current else None
+            if not base or (expected_text is not None and base["text"] != expected_text):
+                return False
+            if (
+                expected_version is not None
+                and (base["version"], base["revision"]) != expected_version
+            ):
+                return False
+            state = _correction_state(db, meeting_id)
+            if segment_id in state["stale_translations"]:
+                state["stale_translations"].remove(segment_id)
+                _save_correction_state(db, meeting_id, state)
             db.execute(
-                "UPDATE segments SET translation=? WHERE meeting_id=? AND id=?",
-                (translation, meeting_id, segment_id),
+                "UPDATE segments SET translation=? WHERE meeting_id=? AND id=? AND text=?",
+                (translation, meeting_id, segment_id, base["text"]),
             )
+            if target_language is not None:
+                db.execute(
+                    "UPDATE meetings SET target_language=? WHERE id=? AND target_language IS NOT ?",
+                    (target_language, meeting_id, target_language),
+                )
+            return True
 
     def rename_speaker(self, meeting_id, speaker_id, name, locked=False, profile_id=None):
         """保存会议内的说话人显示名。
@@ -226,13 +265,22 @@ class TranscriptStoreMixin:
                 ),
             )
 
-    def save_summary(self, meeting_id, data, raw_response):
+    def save_summary(self, meeting_id, data, raw_response, *, expected_revision=None):
         """保存结构化纪要及供应商原始响应。
 
         解析失败时 ``data`` 可为空，原始响应仍会留下，便于排查而不必重发文本。
         返回是否写入：已删除的会议不再接受后台任务的迟到结果。
         """
         with self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            state = _correction_state(db, meeting_id)
+            state["summary_stale"] = (
+                expected_revision is not None and state.get("revision", 0) != expected_revision
+            )
+            if db.execute(
+                "SELECT 1 FROM meetings WHERE id=? AND deleted_at IS NULL", (meeting_id,)
+            ).fetchone():
+                _save_correction_state(db, meeting_id, state)
             result = db.execute(
                 """INSERT INTO summaries(meeting_id,data,raw_response,created_at)
                    SELECT ?,?,?,? WHERE EXISTS(

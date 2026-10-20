@@ -62,6 +62,16 @@ class CountingStore extends RecordingStore {
   }
 }
 
+class BlockedStore extends RecordingStore {
+  final release = Completer<void>();
+  BlockedStore(super.directory, super.meta);
+  @override
+  Future<void> append(Uint8List bytes) async {
+    await release.future;
+    await super.append(bytes);
+  }
+}
+
 class Engine extends RecordingEngine {
   final FakeRecorder fake = FakeRecorder();
   Engine(RecordingStore s)
@@ -143,6 +153,113 @@ class CaptureEngine extends RecordingEngine {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test(
+    'slow storage interrupts capture with a bounded queue and preserves accepted audio',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'brevia-slow-disk-',
+      );
+      final store = BlockedStore(directory, {
+        'id': 'slow',
+        'state': 'starting',
+      });
+      final engine = Engine(store);
+      try {
+        await engine.beginCapture();
+        for (var i = 0; i < 1000; i++) {
+          engine.fake.stream.add(Uint8List(3200));
+        }
+        await Future<void>.delayed(Duration(milliseconds: 25));
+        expect(engine.audioOverloaded, true);
+        expect(store.meta['state'], 'interrupted');
+        expect(
+          engine.queuedAudioBytes,
+          lessThanOrEqualTo(RecordingEngine.maximumQueuedAudioBytes),
+        );
+        expect(store.samples, 0);
+        store.release.complete();
+        await engine.commands;
+        await engine.disk;
+        expect(engine.queuedAudioBytes, 0);
+        final acceptedBytes = store.samples * 2;
+        expect(
+          acceptedBytes,
+          inInclusiveRange(
+            RecordingEngine.maximumQueuedAudioBytes,
+            RecordingEngine.maximumQueuedAudioBytes + 32000,
+          ),
+        );
+        await engine.command({'action': 'resume'});
+        expect(engine.audioOverloaded, false);
+        engine.fake.stream.add(Uint8List(32000));
+        await Future<void>.delayed(Duration(milliseconds: 10));
+        await engine.disk;
+        expect(store.samples * 2, acceptedBytes + 32000);
+      } finally {
+        if (!store.release.isCompleted) store.release.complete();
+        engine.closing = true;
+        await engine.fake.stream.close();
+        await engine.dispose();
+        await engine.connection?.dispose();
+        await directory.delete(recursive: true);
+      }
+    },
+  );
+
+  test(
+    'snapshot cache retains list search and task data, loads only viewed text and notices changes',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'brevia-snapshots-',
+      );
+      final model = AppModel();
+      final file = File('${directory.path}/snapshot.json');
+      final snapshot = {
+        'notes': 'searchable notes',
+        'task': {'state': 'running'},
+        'samples': 100,
+        'segments': [
+          {'text': 'long transcript'},
+        ],
+        'summary': {'data': 'long summary'},
+      };
+      try {
+        await writeJson(file, snapshot);
+        final index = await model.readSnapshot(directory, 'one');
+        expect(index['notes'], 'searchable notes');
+        expect(index['task']['state'], 'running');
+        expect(index.containsKey('segments'), false);
+        expect(index.containsKey('summary'), false);
+        expect(
+          identical(index, await model.readSnapshot(directory, 'one')),
+          true,
+        );
+        model.viewedMeetingId = 'one';
+        final detail = await model.readSnapshot(directory, 'one');
+        expect(detail['segments'][0]['text'], 'long transcript');
+        expect(
+          identical(detail, await model.readSnapshot(directory, 'one')),
+          true,
+        );
+        model.viewedMeetingId = null;
+        expect(
+          (await model.readSnapshot(directory, 'one')).containsKey('segments'),
+          false,
+        );
+        await writeJson(file, {
+          ...snapshot,
+          'notes': 'changed notes and length',
+        });
+        expect(
+          (await model.readSnapshot(directory, 'one'))['notes'],
+          'changed notes and length',
+        );
+      } finally {
+        model.dispose();
+        await directory.delete(recursive: true);
+      }
+    },
+  );
   test('PCM microphone preview uses the desktop meter scale', () {
     expect(pcmLevel(Uint8List(3200)), 0);
     expect(

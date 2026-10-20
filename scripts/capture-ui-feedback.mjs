@@ -366,7 +366,7 @@ try {
     ],
     [
       'device-languages',
-      `(async()=>{closeModal();await new Promise(r=>setTimeout(r,350));for(const language of Object.keys(catalog)){applyLanguage(language);await openModal('device-connection');const checks={pair:document.querySelector('#mobile-pair').textContent===t('连接新设备'),title:document.querySelector('#mobile-install-title').textContent===t('安装Brevia手机端'),button:document.querySelector('[data-mobile-install-toggle]').textContent===t('安装Brevia手机端'),heading:document.querySelector('.mobile-install-platform h4').textContent===t('iPhone · App Store'),description:document.querySelector('.mobile-install-platform p').textContent===t('扫码或点击链接，从 App Store 免费安装 Brevia。'),state:document.querySelector('.mobile-device-empty')?.textContent===t('暂无已信任设备'),connected:document.querySelector('#mobile-connected-heading').textContent===t('尚未连接设备'),sidebar:[...document.querySelector('#mobile-nav').querySelectorAll('strong,svg,#mobile-sidebar-status,#mobile-nav-dot')].every(n=>{if(!n.getClientRects().length)return true;const r=n.getBoundingClientRect(),o=document.querySelector('#mobile-nav').getBoundingClientRect();const style=getComputedStyle(n),clipped=n.id==='mobile-sidebar-status'&&style.clipPath==='inset(50%)'&&style.overflow==='hidden';return r.left>=o.left-1&&r.right<=o.right+1&&(clipped||n.scrollWidth<=n.clientWidth+1);})};if(Object.values(checks).some(v=>!v))throw Error(language+JSON.stringify(checks));closeModal();await new Promise(r=>setTimeout(r,350));}applyLanguage('zh');aiSuggestionHost.hidden=false;renderAiAssistEmptyState();if(!aiAssistEmptyRoot().hidden)throw Error('空态遮挡待采纳AI建议');aiSuggestionHost.hidden=true;liveNotesEditor.setMode('markdown');renderAiAssistEmptyState();const surface=liveNotesRoot.querySelector('.notes-input');if(Math.abs(aiAssistEmptyRoot().getBoundingClientRect().top-surface.getBoundingClientRect().top)>1)throw Error('Markdown空态错位');liveNotesEditor.setMode('rich');renderAiAssistEmptyState();})()`,
+      `(async()=>{closeModal();await new Promise(r=>setTimeout(r,350));for(const language of Object.keys(catalog)){applyLanguage(language);await openModal('device-connection');const checks={pair:document.querySelector('#mobile-pair').textContent===t('连接新设备'),title:document.querySelector('#mobile-install-title').textContent===t('安装Brevia手机端'),button:document.querySelector('[data-mobile-install-toggle]').textContent===t('安装Brevia手机端'),heading:document.querySelector('.mobile-install-platform h4').textContent===t('iPhone · App Store'),description:document.querySelector('.mobile-install-platform p').textContent===t('扫码或点击链接，从 App Store 免费安装 Brevia。'),state:document.querySelector('.mobile-device-empty')?.textContent===t('暂无已信任设备'),connected:document.querySelector('#mobile-connected-heading').textContent===t('尚未连接设备'),sidebar:[...document.querySelector('#mobile-nav').querySelectorAll('strong,svg,#mobile-sidebar-status,#mobile-nav-dot')].every(n=>{if(!n.getClientRects().length)return true;const r=n.getBoundingClientRect(),o=document.querySelector('#mobile-nav').getBoundingClientRect();const style=getComputedStyle(n),clipped=n.id==='mobile-sidebar-status'&&style.clipPath==='inset(50%)'&&style.overflow==='hidden';return r.left>=o.left-1&&r.right<=o.right+1&&(clipped||n.scrollWidth<=n.clientWidth+1);})};if(Object.values(checks).some(v=>!v))throw Error(language+JSON.stringify(checks));closeModal();await new Promise(r=>setTimeout(r,350));}applyLanguage('zh');if(document.querySelector('[data-ai-assist-empty]'))throw Error('空白笔记仍显示介绍占位');liveNotesEditor.setMode('markdown');liveNotesEditor.setMode('rich');})()`,
     ],
     [
       'settings-language',
@@ -461,19 +461,16 @@ try {
   scenes.push(
     [
       'live-notes-empty-disabled',
-      `(async()=>{applyTheme('light');await showView('live');meetingActive=true;document.querySelector('.app-shell').classList.add('is-live-meeting');document.querySelector('#live-name').textContent='产品周会';setLiveLayoutMode('notes');aiAssistConfig={...aiAssistConfig,enabled:false};aiAssistTemporarilyDisabled=false;liveNotesToolbar.hidden=true;liveNotesEditor.setMode('rich');liveNotesEditor.setMarkdown('');renderAiAssistToggle();renderAiAssistEmptyState();})()`,
+      `(async()=>{applyTheme('light');await showView('live');meetingActive=true;document.querySelector('.app-shell').classList.add('is-live-meeting');document.querySelector('#live-name').textContent='产品周会';aiAssistConfig={...aiAssistConfig,enabled:false};aiAssistTemporarilyDisabled=false;liveNotesToolbar.hidden=true;liveNotesEditor.setMode('rich');liveNotesEditor.setMarkdown('');renderAiAssistToggle();})()`,
     ],
-    [
-      'live-notes-empty-enabled',
-      `(()=>{aiAssistConfig.enabled=true;renderAiAssistToggle();renderAiAssistEmptyState();})()`,
-    ],
+    ['live-notes-empty-enabled', `(()=>{aiAssistConfig.enabled=true;renderAiAssistToggle();})()`],
     [
       'live-notes-empty-toolbar-dark',
-      `(()=>{applyTheme('dark');liveNotesToolbar.hidden=false;renderAiAssistEmptyState();})()`,
+      `(()=>{applyTheme('dark');liveNotesToolbar.hidden=false;})()`,
     ],
     [
       'live-notes-filled',
-      `(()=>{applyTheme('light');liveNotesToolbar.hidden=true;liveNotesEditor.setMarkdown('## 会议重点\\n\\n- 确认下周发布计划。');renderAiAssistEmptyState();if(!aiAssistEmptyRoot().hidden)throw Error('已有笔记仍显示空态');})()`,
+      `(()=>{applyTheme('light');liveNotesToolbar.hidden=true;liveNotesEditor.setMarkdown('## 会议重点\\n\\n- 确认下周发布计划。');if(document.querySelector('[data-ai-assist-empty]'))throw Error('已有笔记仍显示介绍占位');})()`,
     ],
   );
   // 精修稿只替换隔离数据，仍调用正式列表、纪要与共享阅读布局。
@@ -509,7 +506,7 @@ try {
   );
   scenes.push([
     'live-ai-online',
-    `(async()=>{applyTheme('light');await showView('live');meetingActive=true;document.querySelector('.app-shell').classList.add('is-live-meeting');setLiveLayoutMode('notes');await openModal('ai-assist');aiAssistConfigDraft={...aiAssistConfig,enabled:true,provider:'custom-claude',providers:{'custom-claude':{endpoint:'https://example.invalid/v1/messages',model:'test-model'}}};renderModal('ai-assist');})()`,
+    `(async()=>{applyTheme('light');await showView('live');meetingActive=true;document.querySelector('.app-shell').classList.add('is-live-meeting');await openModal('ai-assist');aiAssistConfigDraft={...aiAssistConfig,enabled:true,provider:'custom-claude',providers:{'custom-claude':{endpoint:'https://example.invalid/v1/messages',model:'test-model'}}};renderModal('ai-assist');})()`,
   ]);
   scenes.push(
     [
@@ -537,6 +534,17 @@ try {
       `(async()=>{closeModal();await new Promise(r=>setTimeout(r,260));if(!settingsModal.hidden||document.querySelector('.app-shell').inert||document.body.classList.contains('modal-open'))throw Error('关闭AI选项未恢复会议交互');const r=document.querySelector('#live-view .live-control-bar').getBoundingClientRect();if(r.bottom>innerHeight+1)throw Error('会议操作栏被挤出窗口');})()`,
     ],
   );
+  for (const [name, theme, language] of [
+    ['subtitle-menu-light', 'light', 'zh'],
+    ['subtitle-menu-dark', 'dark', 'zh'],
+    ['subtitle-menu-en', 'light', 'en'],
+    ['subtitle-menu-de', 'dark', 'de'],
+  ]) {
+    scenes.push([
+      name,
+      `(async()=>{closeModal();applyTheme('${theme}');applyLanguage('${language}');await showView('live');meetingActive=true;document.querySelector('.app-shell').classList.add('is-live-meeting');document.querySelector('#live-name').textContent='产品周会';liveNotesEditor.setMarkdown('');const segment={id:'menu-preview',text:'Confirm the release scope and complete the internal review by Friday.',start_ms:135000,end_ms:145000};document.querySelector('#transcript-scroll').innerHTML=renderTranscriptSegment({time:'02:15',startSeconds:135,endSeconds:145,speaker:{name:'张伟'},text:segment.text,showSpeaker:false,segmentId:segment.id});const row=document.querySelector('#transcript-scroll .segment'),anchor=row.querySelector('[data-segment-actions]').getBoundingClientRect();openSegmentContextMenu('menu-preview',segment.id,anchor.right,anchor.bottom,segment);const menu=segmentContextMenu.getBoundingClientRect();if(menu.left<8||menu.right>innerWidth-8||menu.top<8||menu.bottom>innerHeight-8)throw Error('字幕菜单超出窗口');if([...segmentContextMenu.querySelectorAll('button')].some(button=>button.scrollWidth>button.clientWidth+1))throw Error('字幕菜单文案溢出');})()`,
+    ]);
+  }
   const selectedScenes = process.env.BREVIA_FEEDBACK_CAPTURE_SCENES?.split(',');
   for (const [name, expression] of scenes) {
     if (selectedScenes && !selectedScenes.includes(name)) continue;
@@ -584,7 +592,7 @@ try {
     }
     if (name.startsWith('live-notes-empty')) {
       await evaluate(
-        `(()=>{const hint=aiAssistEmptyRoot(),surface=liveNotesRoot.querySelector('.notes-editor:not([hidden]),.notes-input:not([hidden])');if(hint.hidden||Math.abs(hint.getBoundingClientRect().top-surface.getBoundingClientRect().top)>1)throw Error('笔记空态没有对齐正文起点');const action=hint.querySelector('button');if(action&&(getComputedStyle(action).borderTopWidth!=='0px'||action.getBoundingClientRect().height>25))throw Error('空态动作仍为旧描边大按钮');})()`,
+        `(()=>{const surface=liveNotesRoot.querySelector('.notes-editor:not([hidden]),.notes-input:not([hidden])');if(!surface||!surface.getClientRects().length||document.querySelector('[data-ai-assist-empty]'))throw Error('空白笔记编辑区异常');})()`,
       );
     }
     if (name.startsWith('polish-'))
@@ -604,16 +612,17 @@ try {
     });
     const png = Buffer.from(shot.data, 'base64');
     // 原生窗口与 zoom 的整数取整最多相差一个像素，不拉伸截图掩盖差异。
-    assert.ok(Math.abs(png.readUInt32BE(16) - (name === 'live-ai-short' ? 800 : 1280)) <= 1);
-    assert.ok(Math.abs(png.readUInt32BE(20) - (name === 'live-ai-short' ? 600 : 800)) <= 1);
+    const compact = name === 'live-ai-short';
+    assert.ok(Math.abs(png.readUInt32BE(16) - (compact ? 800 : 1280)) <= 1);
+    assert.ok(Math.abs(png.readUInt32BE(20) - (compact ? 600 : 800)) <= 1);
     writeFileSync(path.join(output, `${name}.png`), png);
     results.push({ name, ...geometry });
   }
   if (!selectedScenes || selectedScenes.includes('live-notes-empty-disabled')) {
     await evaluate(
-      `(()=>{meetingActive=true;applyTheme('light');aiAssistConfig.enabled=false;liveNotesEditor.setMarkdown('');renderAiAssistEmptyState();latestLiveSegmentId='empty-check';liveSegmentData.set(latestLiveSegmentId,{text:'核对发布计划'});aiAssistEmptyRoot().querySelector('[data-ai-empty-action]').click();if(!currentNotesMarkdown().includes('核对发布计划')||!aiAssistEmptyRoot().hidden)throw Error('空态插入字幕失败');const editor=liveNotesRoot.querySelector('.notes-editor');editor.innerHTML='';editor.dispatchEvent(new InputEvent('input',{bubbles:true}));if(aiAssistEmptyRoot().hidden)throw Error('清空笔记未恢复空态');for(const code of ['zh','en','es','ja','ko','fr','de','ru']){applyLanguage(code);renderAiAssistEmptyState();const root=aiAssistEmptyRoot();if(root.hidden||root.querySelectorAll('button').length!==1||root.scrollWidth>root.clientWidth+1)throw Error('空态语言/真实操作异常 '+code);}applyLanguage('zh');})()`,
+      `(()=>{meetingActive=true;applyTheme('light');for(const code of ['zh','en','es','ja','ko','fr','de','ru']){applyLanguage(code);for(const enabled of [false,true]){aiAssistConfig.enabled=enabled;renderAiAssistToggle();for(const mode of ['rich','markdown']){liveNotesEditor.setMode(mode);liveNotesEditor.setMarkdown('');const surface=liveNotesRoot.querySelector('.notes-editor:not([hidden]),.notes-input:not([hidden])');if(!surface||!surface.getClientRects().length||document.querySelector('[data-ai-assist-empty]'))throw Error('空白笔记编辑区异常 '+code+' '+enabled+' '+mode);liveNotesEditor.setMarkdown('核对发布计划');if(!currentNotesMarkdown().includes('核对发布计划'))throw Error('笔记输入失败');liveNotesEditor.setMarkdown('');if(currentNotesMarkdown().trim())throw Error('笔记清空失败');}}}applyLanguage('zh');liveNotesEditor.setMode('rich');})()`,
     );
-    console.log('Empty notes: insertion, clear recovery and eight languages passed');
+    console.log('Empty notes: editing, clear and eight languages passed');
   }
   writeFileSync(path.join(output, 'measurements.json'), JSON.stringify(results, null, 2));
   console.log('Feedback capture and behavior checks passed:', results.length);

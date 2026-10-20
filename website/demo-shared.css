@@ -4,6 +4,92 @@
  * (demo-transcription.html, demo-summary.html, demo-voiceprint.html).
  */
 
+/* 旧演示的控件只由官网持有，避免桌面继续携带已退役的组件样式。 */
+@layer components {
+  .summary-action-icon {
+    display: grid;
+    width: 32px;
+    height: 32px;
+    place-items: center;
+    border: 1px solid var(--color-line);
+    color: #444;
+    transition:
+      color 200ms,
+      background-color 200ms,
+      border-color 200ms;
+  }
+  .summary-action-icon svg {
+    width: 16px;
+    height: 16px;
+  }
+  @media (hover: hover) {
+    .summary-action-icon:hover {
+      border-color: #000;
+      color: #000;
+    }
+  }
+  .model-library-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .model-library-tags span {
+    border: 1px solid var(--color-line);
+    padding: 2px 6px;
+    font-size: 10px;
+    color: #666;
+  }
+  .model-library-tags .model-library-installed {
+    border-color: var(--color-success-border);
+    color: var(--color-success);
+  }
+  .model-library-size {
+    font-size: 11px;
+    color: #767676;
+  }
+}
+.model-library-tags span {
+  border-radius: 6px;
+}
+html[data-theme="dark"] .model-library-tags span,
+html[data-theme="dark"] .summary-action-icon {
+  border-color: var(--color-line);
+  color: #b0b0b0;
+}
+html[data-theme="dark"] .model-library-tags .model-library-installed {
+  border-color: #3da866;
+  color: #80c99a;
+}
+@media (hover: hover) {
+  html[data-theme="dark"] .summary-action-icon:hover {
+    border-color: #fff;
+    color: #fff;
+  }
+}
+.demo-layout #detail-view .summary-action-icon {
+  border-radius: 8px;
+}
+.workspace-count {
+  font-size: 0.6875rem;
+  color: rgba(0, 0, 0, 0.32);
+  font-variant-numeric: tabular-nums;
+}
+.demo-layout .workspace-count {
+  background: transparent;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+[data-theme="dark"] .workspace-count {
+  color: rgba(255, 255, 255, 0.35);
+}
+.demo-layout .model-library-size,
+.demo-layout .model-library-tags {
+  font-size: 13px;
+}
+.demo-layout .model-library-size {
+  grid-column: 1;
+}
+
 /* Demo Container */
 .demo-container {
   position: relative;

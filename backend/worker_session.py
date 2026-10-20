@@ -883,6 +883,15 @@ class RecordingSessionMixin:
             del self.pending_subtitles[track]
             self.pending_join.pop(track, None)
         if saved:
+            if event.get("correction_error"):
+                self.emit(
+                    "worker.warning",
+                    {
+                        "meeting_id": event["meeting_id"],
+                        "code": event["correction_error_code"],
+                        "message": event["correction_error"],
+                    },
+                )
             self._emit_draft(event["track"], event["meeting_id"])
             self.emit("transcript.final", event)
             self.emit("transcript.settled", event)

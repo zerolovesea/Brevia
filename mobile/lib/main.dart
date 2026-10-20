@@ -99,6 +99,7 @@ Future<void> report(
         await Navigator.push(
           context,
           MaterialPageRoute(
+            requestFocus: false,
             builder: (ctx) => MobileRecoveryPage(
               kind: kind!,
               savedSamples: kind == MobileErrorKind.storageFull
@@ -170,6 +171,7 @@ Future<bool> confirmMobileAction(
   bool danger = false,
 }) async =>
     await showModalBottomSheet<bool>(
+      requestFocus: false,
       context: context,
       sheetAnimationStyle: BreviaMotion.sheet(context),
       showDragHandle: true,
@@ -186,7 +188,6 @@ Future<bool> confirmMobileAction(
               Text(description),
               const SizedBox(height: 24),
               OutlinedButton(
-                autofocus: true,
                 onPressed: () => Navigator.pop(ctx, false),
                 child: Text(tr('取消')),
               ),
@@ -237,6 +238,7 @@ Future<void> uploadRecording(BuildContext context, AppModel model, String id) =>
         await Navigator.push(
           context,
           MaterialPageRoute(
+            requestFocus: false,
             builder: (ctx) => Scaffold(
               appBar: AppBar(title: Text(tr("连接电脑"))),
               body: SafeArea(
@@ -257,6 +259,7 @@ Future<void> uploadRecording(BuildContext context, AppModel model, String id) =>
       final settings = await Navigator.push<Map<String, dynamic>>(
         context,
         MaterialPageRoute(
+          requestFocus: false,
           builder: (_) => PrepareMeetingPage(
             options: options,
             computer: model.desktop!.name,
@@ -347,6 +350,7 @@ class _HomeState extends State<Home> {
   void openMeeting(String id) => Navigator.push(
     context,
     MaterialPageRoute(
+      requestFocus: false,
       builder: (_) => MeetingPage(model: model, id: id),
     ),
   );
@@ -371,6 +375,7 @@ class _HomeState extends State<Home> {
       final settings = await Navigator.push<Map<String, dynamic>>(
         context,
         MaterialPageRoute(
+          requestFocus: false,
           builder: (_) => PrepareMeetingPage(
             options: options,
             computer: model.desktop?.name ?? '',
@@ -399,6 +404,7 @@ class _HomeState extends State<Home> {
         model.connected &&
         m['computer'] == model.desktop?.fingerprint;
     final action = await showModalBottomSheet<String>(
+      requestFocus: false,
       context: context,
       sheetAnimationStyle: BreviaMotion.sheet(context),
       showDragHandle: true,
@@ -491,6 +497,7 @@ class _HomeState extends State<Home> {
         }
         if (!mounted) return;
         selection = await showModalBottomSheet<String>(
+          requestFocus: false,
           context: context,
           sheetAnimationStyle: BreviaMotion.sheet(context),
           showDragHandle: true,
@@ -611,8 +618,7 @@ class _HomeState extends State<Home> {
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
                 borderSide: BorderSide(
-                  color: Theme.of(context).colorScheme.primary,
-                  width: 2,
+                  color: Theme.of(context).colorScheme.outline,
                 ),
               ),
               contentPadding: EdgeInsets.symmetric(
@@ -747,72 +753,78 @@ class _HomeState extends State<Home> {
                                     (m['remoteDeleted'] == true ||
                                         m['localOnly'] == true)),
                             onDelete: () => deleteRecord(m),
-                            child: Container(
-                              decoration: BoxDecoration(
-                                border: i < values.length - 1
-                                    ? Border(
-                                        bottom: BorderSide(
-                                          color: Theme.of(context).dividerColor,
-                                          width: .5,
-                                        ),
-                                      )
-                                    : null,
+                            child: ListTile(
+                              leading: const SizedBox(
+                                width: 44,
+                                height: 44,
+                                child: Center(
+                                  child: BreviaIcon(
+                                    Icons.insert_drive_file_outlined,
+                                    size: 36,
+                                  ),
+                                ),
                               ),
-                              child: ListTile(
-                                leading: const SizedBox(
-                                  width: 44,
-                                  height: 44,
-                                  child: Center(
-                                    child: BreviaIcon(
-                                      Icons.insert_drive_file_outlined,
-                                      size: 36,
-                                    ),
-                                  ),
+                              contentPadding: EdgeInsets.zero,
+                              horizontalTitleGap: 22,
+                              minTileHeight: 96,
+                              minVerticalPadding: 16,
+                              title: Text(
+                                m['title'],
+                                style: TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w600,
                                 ),
-                                contentPadding: EdgeInsets.zero,
-                                horizontalTitleGap: 22,
-                                minTileHeight: 96,
-                                minVerticalPadding: 16,
-                                title: Text(
-                                  m['title'],
-                                  style: TextStyle(
-                                    fontSize: 17,
-                                    fontWeight: FontWeight.w600,
+                              ),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodySmall,
+                                    [
+                                      if (date != null)
+                                        '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}',
+                                      durationText(m['samples'] ?? 0),
+                                    ].join(' · '),
                                   ),
-                                ),
-                                subtitle: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.bodySmall,
-                                      [
-                                        if (date != null)
-                                          '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}',
-                                        durationText(m['samples'] ?? 0),
-                                      ].join(' · '),
+                                  const SizedBox(height: 6),
+                                  DefaultTextStyle.merge(
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      height: 1.5,
                                     ),
-                                    const SizedBox(height: 6),
-                                    DefaultTextStyle.merge(
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        height: 1.5,
-                                      ),
-                                      child: Row(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Flexible(child: Text(tr('手机录音'))),
-                                          const Text(' · '),
-                                          Padding(
-                                            padding: const EdgeInsets.only(
-                                              top: 6,
-                                            ),
-                                            child: BreviaIcon(
-                                              Icons.circle,
-                                              size: 6,
+                                    child: Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Flexible(child: Text(tr('手机录音'))),
+                                        const Text(' · '),
+                                        Padding(
+                                          padding: const EdgeInsets.only(
+                                            top: 6,
+                                          ),
+                                          child: BreviaIcon(
+                                            Icons.circle,
+                                            size: 6,
+                                            color: m['finished'] == true
+                                                ? (Theme.of(
+                                                            context,
+                                                          ).brightness ==
+                                                          Brightness.dark
+                                                      ? const Color(0xff80c99a)
+                                                      : const Color(0xff16812e))
+                                                : Theme.of(context)
+                                                      .colorScheme
+                                                      .onSurfaceVariant,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Expanded(
+                                          child: Text(
+                                            label,
+                                            style: TextStyle(
                                               color: m['finished'] == true
                                                   ? (Theme.of(
                                                               context,
@@ -824,43 +836,21 @@ class _HomeState extends State<Home> {
                                                         : const Color(
                                                             0xff16812e,
                                                           ))
-                                                  : Theme.of(context)
-                                                        .colorScheme
-                                                        .onSurfaceVariant,
+                                                  : null,
                                             ),
                                           ),
-                                          const SizedBox(width: 6),
-                                          Expanded(
-                                            child: Text(
-                                              label,
-                                              style: TextStyle(
-                                                color: m['finished'] == true
-                                                    ? (Theme.of(
-                                                                context,
-                                                              ).brightness ==
-                                                              Brightness.dark
-                                                          ? const Color(
-                                                              0xff80c99a,
-                                                            )
-                                                          : const Color(
-                                                              0xff16812e,
-                                                            ))
-                                                    : null,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
+                                        ),
+                                      ],
                                     ),
-                                  ],
-                                ),
-                                trailing: const BreviaIcon(
-                                  Icons.chevron_right,
-                                  size: 20,
-                                ),
-                                onTap: () => openMeeting(m['id']),
-                                onLongPress: () => meetingMenu(m),
+                                  ),
+                                ],
                               ),
+                              trailing: const BreviaIcon(
+                                Icons.chevron_right,
+                                size: 20,
+                              ),
+                              onTap: () => openMeeting(m['id']),
+                              onLongPress: () => meetingMenu(m),
                             ),
                           ),
                         ],
@@ -1140,6 +1130,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
           await Navigator.push(
             context,
             MaterialPageRoute(
+              requestFocus: false,
               builder: (ctx) => MobileRecoveryPage(
                 kind: MobileErrorKind.pairingUnavailable,
                 onPrimary: () {
@@ -1167,7 +1158,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
   Future<void> scan() async {
     final raw = await Navigator.push<String>(
       context,
-      MaterialPageRoute(builder: (_) => ScannerPage()),
+      MaterialPageRoute(requestFocus: false, builder: (_) => ScannerPage()),
     );
     if (raw == null || !mounted) return;
     if (raw == 'manual') {
@@ -1604,6 +1595,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(
+                requestFocus: false,
                 builder: (_) => UpdateComputerAddressPage(model: widget.model),
               ),
             ),
@@ -1617,6 +1609,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(
+                requestFocus: false,
                 builder: (_) => ConnectionHelpPage(model: widget.model),
               ),
             ),
@@ -1671,6 +1664,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(
+                requestFocus: false,
                 builder: (_) => ConnectionHelpPage(model: widget.model),
               ),
             ),
@@ -2012,6 +2006,7 @@ class _MeetingPageState extends State<MeetingPage> {
     super.initState();
     if (meeting['state'] == 'ended') tab = 1;
     widget.model.viewedMeetingId = widget.id;
+    unawaited(widget.model.loadMeetingSnapshot(widget.id));
     scroll.addListener(() {
       following =
           !scroll.hasClients ||
@@ -2061,6 +2056,7 @@ class _MeetingPageState extends State<MeetingPage> {
     setState(() => ending = true);
     try {
       final confirmed = await showModalBottomSheet<bool>(
+        requestFocus: false,
         context: context,
         sheetAnimationStyle: BreviaMotion.sheet(context),
         showDragHandle: true,
@@ -2085,7 +2081,6 @@ class _MeetingPageState extends State<MeetingPage> {
                 ),
                 SizedBox(height: 24),
                 OutlinedButton(
-                  autofocus: true,
                   onPressed: () => Navigator.pop(ctx, false),
                   child: Text(tr("继续录音")),
                 ),
@@ -2106,6 +2101,7 @@ class _MeetingPageState extends State<MeetingPage> {
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(
+              requestFocus: false,
               builder: (_) =>
                   SavedMeetingPage(model: widget.model, id: widget.id),
             ),
@@ -2122,6 +2118,7 @@ class _MeetingPageState extends State<MeetingPage> {
         (widget.model.meeting(widget.id)?['samples'] as num?)?.toInt() ?? 0;
     final text = TextEditingController();
     final note = await showModalBottomSheet<String>(
+      requestFocus: false,
       context: context,
       sheetAnimationStyle: BreviaMotion.sheet(context),
       showDragHandle: true,
@@ -2539,6 +2536,7 @@ class _MeetingPageState extends State<MeetingPage> {
               onSelected: (action) async {
                 if (action == 'marks') {
                   await showModalBottomSheet(
+                    requestFocus: false,
                     context: context,
                     sheetAnimationStyle: BreviaMotion.sheet(context),
                     showDragHandle: true,
@@ -3378,6 +3376,7 @@ class SettingsPage extends StatelessWidget {
       Navigator.push(
         context,
         MaterialPageRoute(
+          requestFocus: false,
           builder: (_) => Scaffold(
             appBar: AppBar(title: Text(title)),
             body: SafeArea(
@@ -3936,6 +3935,7 @@ class _PrepareMeetingPageState extends State<PrepareMeetingPage> {
             final selected = await Navigator.push<String>(
               context,
               MaterialPageRoute(
+                requestFocus: false,
                 builder: (ctx) => Scaffold(
                   appBar: AppBar(title: Text(label)),
                   body: SafeArea(
@@ -4475,6 +4475,7 @@ class SavedMeetingPage extends StatelessWidget {
                 onPressed: () => Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(
+                    requestFocus: false,
                     builder: (_) => MeetingPage(model: model, id: id),
                   ),
                 ),

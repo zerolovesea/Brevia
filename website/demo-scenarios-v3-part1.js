@@ -264,7 +264,6 @@ class DemoScenariosV3 {
   typeNoteIntoEditor(text) {
     const editor = this.engine.viewport.querySelector('[data-demo-id="notes-editor"]');
     if (!editor) return;
-    editor.parentElement.querySelector('.ai-assist-empty')?.remove();
     return this.engine.typeText(editor, text, 1, 55);
   }
 
@@ -292,7 +291,6 @@ class DemoScenariosV3 {
                 <span>⌕</span>
                 <input type="search" placeholder="搜索会议、字幕或说话人…" />
               </label></div>
-              <button class="meeting-select-all" id="meeting-select-all" type="button" hidden>全选</button>
             </div>
 
             <section class="meeting-list" aria-label="最近会议">

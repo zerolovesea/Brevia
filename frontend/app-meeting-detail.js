@@ -20,6 +20,13 @@ function renderSegmentData(segment, editable, speakerNames) {
           : [],
     },
     text: segment.text,
+    version: segment.version,
+    revision: segment.revision,
+    userEdited: Boolean(segment.user_edited),
+    replacementHighlight: currentMeetingDetail?.correction?.highlights?.[segment.id] || '',
+    translationStale: Boolean(
+      currentMeetingDetail?.correction?.stale_translations?.includes(segment.id),
+    ),
     translation: segment.translation,
     // 逐句编辑按段落 id 定位：保存时以该 id 写入用户版本，覆盖自动识别结果。
     segmentId: segment.id,
@@ -84,7 +91,10 @@ function applyBackendDetail(meeting) {
   }
   const { revision, segments: ordered } = latestTranscriptSegments(meeting);
   const speakerNames = new Map(meeting.speakers.map((speaker) => [speaker.id, speaker.name]));
-  const original = meeting.segments?.filter((segment) => segment.version === 'live') || [];
+  const original =
+    meeting.original_segments ||
+    meeting.segments?.filter((segment) => segment.version === 'live') ||
+    [];
   uiData.detail.hasOriginalTranscript = original.length > 0 || revision === null;
   if (!uiData.detail.hasOriginalTranscript) uiData.detail.transcriptVersion = 'refined';
   uiData.detail.originalTranscript = (

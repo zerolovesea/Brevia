@@ -107,6 +107,7 @@ const moduleProbes = [
   ['app-meetings.js', 'backendMeeting'],
   ['app-meeting-detail.js', 'renderSegmentData'],
   ['onboarding.js', 'window.BreviaOnboarding'],
+  ['transcript-corrections.js', 'correctionMatches'],
   ['app.js', 't'],
   ['mobile-connection.js', "document.getElementById('mobile-pair').onclick"],
 ];
@@ -530,7 +531,7 @@ try {
     let duplicateRan = false;
     await withStorageMigration(() => { duplicateRan = true; });
     document.querySelector('.new-meeting').focus();
-    const focusContained = dialog.contains(document.activeElement);
+    const focusContained = document.activeElement !== document.querySelector('.new-meeting');
     const visible = dialog.getBoundingClientRect().width > 0 && !!dialog.querySelector('progress');
     finish();
     await pending;
@@ -909,7 +910,7 @@ try {
     expression: `(async()=>{
       const button=document.querySelector('#focus-modality-probe button');button.focus();
       await new Promise(r=>setTimeout(r,200));const style=getComputedStyle(button);
-      return {visible:button.matches(':focus-visible'),outline:style.outlineStyle,width:parseFloat(style.outlineWidth),keyboard:document.documentElement.hasAttribute('data-keyboard-navigation')};
+      return {visible:button.matches(':focus-visible'),outline:style.outlineStyle,decoration:style.textDecorationLine,keyboard:document.documentElement.hasAttribute('data-keyboard-navigation')};
     })()`,
     awaitPromise: true,
     returnByValue: true,
@@ -917,9 +918,9 @@ try {
   check(
     keyboardFocus.result?.value?.visible &&
       keyboardFocus.result.value.keyboard &&
-      keyboardFocus.result.value.outline === 'solid' &&
-      keyboardFocus.result.value.width > 0,
-    '已启用的图标按钮应有键盘焦点：' + JSON.stringify(keyboardFocus),
+      keyboardFocus.result.value.outline === 'none' &&
+      keyboardFocus.result.value.decoration.includes('underline'),
+    '键盘焦点使用底色与下划线，不显示外圈：' + JSON.stringify(keyboardFocus),
   );
   const restoredPointerFocus = await client.send('Runtime.evaluate', {
     expression: `(()=>{const probe=document.querySelector('#focus-modality-probe'),button=probe.querySelector('button');button.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));const outline=getComputedStyle(button).outlineStyle;probe.returnFocus?.focus({preventScroll:true});probe.remove();return outline;})()`,
@@ -1019,6 +1020,7 @@ try {
     applyBackendDetail(meeting);
     const selected = !chosen || uiData.detail.refinedModelId === chosen;
     uiData.detail.summary = { markdown: 'saved memo', hasFull: true };
+    detailActiveTab='summary';
     renderMeetingDetail();
     document.querySelector('[data-open-summary-edit]').click();
     inlineSummaryEditor.setMode('markdown');
@@ -1130,7 +1132,7 @@ try {
     `双语更新日志布局或链接异常：${JSON.stringify(changelog)}`,
   );
   const upgradeSmall = await client.send('Runtime.evaluate', {
-    expression: `(async()=>{await openModal('upgrade-log');const body=settingsModal.querySelector('.modal-body'),panel=settingsModal.querySelector('.modal-panel'),footer=settingsModal.querySelector('.upgrade-log-actions');settingsModal.dispatchEvent(new MouseEvent('click',{bubbles:true}));return activeModal==='upgrade-log'&&document.activeElement===settingsModal.querySelector('.modal-title h2')&&body.scrollWidth<=body.clientWidth+1&&panel.scrollHeight<=panel.clientHeight+1&&footer.getBoundingClientRect().bottom<=innerHeight;})()`,
+    expression: `(async()=>{await openModal('upgrade-log');const body=settingsModal.querySelector('.modal-body'),panel=settingsModal.querySelector('.modal-panel'),footer=settingsModal.querySelector('.upgrade-log-actions');settingsModal.dispatchEvent(new MouseEvent('click',{bubbles:true}));return activeModal==='upgrade-log'&&!settingsModal.contains(document.activeElement)&&body.scrollWidth<=body.clientWidth+1&&panel.scrollHeight<=panel.clientHeight+1&&footer.getBoundingClientRect().bottom<=innerHeight;})()`,
     awaitPromise: true,
     returnByValue: true,
   });
@@ -1595,6 +1597,288 @@ try {
       !directSubtitleActions.result.value.length,
     '字幕直接操作：' + JSON.stringify(directSubtitleActions),
   );
+
+  // 使用隔离数据目录里的真实会议与保存接口，捕获三张纠错状态；不启动麦克风采集。
+  const correctionEvaluate = async (expression) => {
+    const result = await client.send('Runtime.evaluate', {
+      expression,
+      awaitPromise: true,
+      returnByValue: true,
+    });
+    if (result.exceptionDetails)
+      throw Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text);
+    return result.result?.value;
+  };
+  const captureCorrection = async (name) => {
+    if (!process.env.BREVIA_CORRECTION_CAPTURE_DIR) return;
+    await correctionEvaluate(
+      `(async()=>{const deadline=Date.now()+10000;while(document.querySelector('#startup-splash')&&Date.now()<deadline)await new Promise(r=>setTimeout(r,50));if(document.querySelector('#startup-splash'))throw Error('startup splash has not exited');await document.fonts.ready;document.getAnimations().filter(a=>a.effect.getComputedTiming().iterations!==Infinity).forEach(a=>a.finish());await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));})()`,
+    );
+    const shot = await client.send('Page.captureScreenshot', {
+      format: 'png',
+      captureBeyondViewport: false,
+    });
+    const output = path.resolve(process.env.BREVIA_CORRECTION_CAPTURE_DIR);
+    mkdirSync(output, { recursive: true });
+    writeFileSync(path.join(output, name + '.png'), Buffer.from(shot.data, 'base64'));
+  };
+  await correctionEvaluate(`(async()=>{
+    closeModal();applyLanguage('zh');applyTheme('light');
+    const initialized=await window.brevia.initialize();
+    const meeting=await window.brevia.meeting.get({meeting_id:initialized.meetings[0].id});
+    window.correctionTestBackup={meeting,segments:(meeting.current_segments||meeting.segments).slice(0,3)};
+    const samples=['我们先确认北威亚的上线范围。','北威亚的会议纪要功能需要优先验收。','请大家周五前完成北威亚的内部验收。'];
+    const updated=await window.brevia.segment.saveText({meeting_id:meeting.id,segments:window.correctionTestBackup.segments.map((segment,i)=>({segment_id:segment.id,text:samples[i]}))});
+    adoptMobileMeeting(updated);await showView('live');
+    document.body.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));
+    await openLiveCorrection(document.querySelector('#transcript-scroll .segment'));
+    if(document.activeElement===correctionDraft.field)throw Error('pointer opened live editor with focus');
+    closeLiveCorrection();document.dispatchEvent(new KeyboardEvent('keydown',{key:'Tab',bubbles:true}));
+    await openLiveCorrection(document.querySelector('#transcript-scroll .segment'));
+    if(document.activeElement!==correctionDraft.field)throw Error('keyboard did not enter live editor');
+    closeLiveCorrection();document.body.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));
+    await openLiveCorrection(document.querySelector('#transcript-scroll .segment'));
+    const field=correctionDraft.field;if(document.activeElement===field)throw Error('live editor autofocus');field.focus();field.value+=' 修改';field.dispatchEvent(new Event('input',{bubbles:true}));
+    if(document.querySelectorAll('#transcript-scroll textarea').length!==1||!document.querySelector('#end-meeting').checkVisibility())throw Error('live inline editor or recording control missing');
+    const before=field.selectionStart;applyCorrectionMeeting(updated);
+    if(document.activeElement!==field||field.value.indexOf('修改')<0||field.selectionStart!==before)throw Error('refresh lost draft or focus');field.blur();
+  })()`);
+  await captureCorrection('01-live-edit');
+  await correctionEvaluate(`(async()=>{
+    document.querySelector('[data-live-correction-cancel]').click();
+    await openCorrection('北威亚');
+    if(correctionPanel.contains(document.activeElement))throw Error('replacement panel autofocus');const replacement=correctionPanel.querySelector('[data-correction-replacement]');replacement.value='Brevia';replacement.dispatchEvent(new Event('input',{bubbles:true}));
+    if(correctionPanelState.matches.length!==3||correctionPanel.querySelector('[data-correction-future]').checked)throw Error('wrong preview count or future default');
+    const highlights=CSS.highlights.get('correction-search');if(highlights?.size!==3||[...highlights].some(range=>range.toString()!=='北威亚'))throw Error('original transcript matches are not highlighted');
+    if(correctionPanel.textContent.includes('精确匹配'))throw Error('redundant helper remains');
+    const checkbox=correctionPanel.querySelector('[data-correction-match]');checkbox.checked=false;checkbox.dispatchEvent(new Event('input',{bubbles:true}));
+    if(!correctionPanel.querySelector('[data-submit-correction]').textContent.includes('2'))throw Error('selection count did not update');
+    correctionPanel.querySelector('[data-correction-select-all]').click();
+    const panel=correctionPanel.getBoundingClientRect(),controls=document.querySelector('.live-control-bar').getBoundingClientRect();
+    if(panel.bottom>controls.top+1||panel.right>innerWidth+1||panel.left<0)throw Error('replacement panel overlaps recording controls');
+  })()`);
+  await captureCorrection('02-live-replace');
+  await correctionEvaluate(`(async()=>{
+    await submitCorrection();
+    if(!correctionPanel.hidden)throw Error('replace did not save');
+    const meeting=await window.brevia.meeting.get({meeting_id:correctionTestBackup.meeting.id});
+    if(!meeting.correction.undo_count||meeting.segments.filter(s=>s.text.includes('Brevia')).length<3)throw Error('replacement did not persist');
+    meetingActive=false;breviaClient.state.meeting=null;miniMeeting.hidden=true;clearInterval(timer);
+    applyBackendDetail(meeting);detailActiveTab='transcript';uiData.detail.refinedMode='timestamps';renderMeetingDetail();await showView('detail');
+    if(!document.querySelector('[data-correction-undo]')||document.querySelector('[data-segment-text]'))throw Error('saved view must have undo and plain text');
+  })()`);
+  await captureCorrection('03-detail-saved');
+  const correctionChecks = await correctionEvaluate(`(async()=>{
+    const errors=[];
+    await submitCorrection('undo');
+    let meeting=await window.brevia.meeting.get({meeting_id:correctionTestBackup.meeting.id});
+    if(meeting.correction.undo_count||!meeting.segments.some(s=>s.text.includes('北威亚')))errors.push('undo did not restore preview source');
+    await openCorrection('北威亚');
+    const replacement=correctionPanel.querySelector('[data-correction-replacement]');replacement.value='Brevia';replacement.dispatchEvent(new Event('input',{bubbles:true}));
+    const segment=correctionPanelState.matches[0].segment;
+    await window.brevia.segment.saveText({meeting_id:meeting.id,segments:[{segment_id:segment.id,text:segment.text+' 后改'}]});
+    await submitCorrection();
+    if(correctionPanel.hidden||!correctionPanel.querySelector('.correction-error').textContent.includes('更新预览')||replacement.value!=='Brevia')errors.push('conflicting replace lost input '+JSON.stringify({hidden:correctionPanel.hidden,error:correctionPanel.querySelector('.correction-error')?.textContent,value:replacement.value,saving:correctionPanelState?.saving,busy:correctionSaving,disabled:correctionPanel.querySelector('[data-submit-correction]')?.disabled}));
+    closeCorrectionPanel();
+    meeting=await window.brevia.segment.saveText({meeting_id:meeting.id,segments:correctionTestBackup.segments.map(s=>({segment_id:s.id,text:s.text}))});
+    applyCorrectionMeeting(meeting);
+    await showView('home');return errors;
+  })()`);
+  check(
+    !correctionChecks.length,
+    '实时编辑、替换预览、事务保存、撤销与冲突保护：' + JSON.stringify(correctionChecks),
+  );
+
+  await correctionEvaluate(`(async()=>{
+    const id=currentMeetingDetail.id;
+    await window.brevia.meeting.update({meeting_id:id,updates:{notes:'# 本周决定\\n\\n北威亚上线，**北威亚**验收。\\n\\n- [ ] 保留格式'}});
+    await window.brevia.summary.save({meeting_id:id,markdown:'## 会议纪要\\n\\n北威亚上线，北威亚验收。'});
+    applyBackendDetail(await window.brevia.meeting.get({meeting_id:id}));await showView('detail');
+    window.documentCorrectionSources={notes:currentMeetingDetail.notes,summary:currentMeetingDetail.summary.data.markdown};
+  })()`);
+  for (const scope of ['notes', 'summary']) {
+    await correctionEvaluate(`(async()=>{
+      const scope=${JSON.stringify(scope)};
+      detailActiveTab=scope;renderMeetingDetail();
+      const button=document.querySelector('.detail-content-actions [data-open-correction="'+scope+'"]');
+      if(!button?.checkVisibility())throw Error(scope+' find/replace entry missing');
+      button.click();for(let i=0;i<100&&correctionPanel.hidden;i++)await new Promise(r=>setTimeout(r,10));
+      if(correctionPanelState?.scope!==scope||correctionPanel.contains(document.activeElement))throw Error(scope+' wrong scope or autofocus');
+      const query=correctionPanel.querySelector('[data-correction-find]');query.value='北威亚';query.dispatchEvent(new Event('input',{bubbles:true}));
+      const field=correctionPanel.querySelector('[data-correction-replacement]');field.value='Brevia';field.dispatchEvent(new Event('input',{bubbles:true}));
+      if(CSS.highlights.get('correction-search')?.size!==2||correctionPanelState.matches.length!==2)throw Error(scope+' original highlight missing');
+      if(correctionPanel.querySelector('[data-correction-future]'))throw Error(scope+' has transcript rule');
+      const box=correctionPanel.querySelector('[data-correction-match]');box.checked=false;box.dispatchEvent(new Event('input',{bubbles:true}));
+    })()`);
+    await captureCorrection('04-' + scope + '-replace');
+    await correctionEvaluate(`(async()=>{
+      const scope=${JSON.stringify(scope)},id=currentMeetingDetail.id;
+      await submitCorrection();if(!correctionPanel.hidden||CSS.highlights.has('correction-search'))throw Error(scope+' save/cleanup failed');
+      let meeting=await window.brevia.meeting.get({meeting_id:id});
+      const source=documentCorrectionSources[scope],saved=scope==='notes'?meeting.notes:meeting.summary.data.markdown;
+      const second=source.indexOf('北威亚',source.indexOf('北威亚')+3);
+      if(saved!==source.slice(0,second)+'Brevia'+source.slice(second+3))throw Error(scope+' selection or Markdown formatting changed');
+      const undo=document.querySelector('[data-correction-undo="'+scope+'"]');if(!undo?.checkVisibility())throw Error(scope+' undo missing');
+      await submitCorrection('undo',undefined,scope);meeting=await window.brevia.meeting.get({meeting_id:id});
+      if((scope==='notes'?meeting.notes:meeting.summary.data.markdown)!==source)throw Error(scope+' undo failed');
+      await openCorrection('北威亚',false,scope);applyTheme('dark');
+      if(CSS.highlights.get('correction-search')?.size!==2)throw Error(scope+' dark highlight lost');
+    })()`);
+    await captureCorrection('05-' + scope + '-dark');
+    await correctionEvaluate(`closeCorrectionPanel();applyTheme('light');`);
+  }
+  await correctionEvaluate(`(async()=>{
+    const meeting=await window.brevia.meeting.get({meeting_id:currentMeetingDetail.id});
+    adoptMobileMeeting(meeting);await showView('live');
+    liveNotesEditor.setMarkdown('北威亚上线，北威亚验收。');
+    await openCorrection('北威亚',false,'notes');
+    if(CSS.highlights.get('correction-search')?.size!==2)throw Error('live notes original highlight missing');
+    const field=correctionPanel.querySelector('[data-correction-replacement]');field.value='Brevia';field.dispatchEvent(new Event('input',{bubbles:true}));
+    await submitCorrection();if(!currentNotesMarkdown().includes('Brevia'))throw Error('live notes replacement failed');
+    await submitCorrection('undo',undefined,'notes');if(currentNotesMarkdown().includes('Brevia'))throw Error('live notes undo failed');
+    liveNotesEditor.setMode('markdown');await openCorrection('北威亚',false,'notes');
+    if(CSS.highlights.get('correction-search')?.size!==2||!document.querySelector('.correction-markdown-source')?.checkVisibility())throw Error('Markdown source highlight missing');
+    closeCorrectionPanel();if(!liveNotesRoot.querySelector('.notes-input').checkVisibility())throw Error('Markdown source mode was not restored');liveNotesEditor.setMode('rich');
+    meetingActive=false;breviaClient.state.meeting=null;miniMeeting.hidden=true;clearInterval(timer);
+    const original=correctionTestBackup.meeting;
+    await window.brevia.meeting.update({meeting_id:original.id,updates:{notes:original.notes||''}});
+    if(original.summary?.data?.markdown)await window.brevia.summary.save({meeting_id:original.id,markdown:original.summary.data.markdown});
+    delete window.correctionTestBackup;delete window.documentCorrectionSources;await showView('home');
+  })()`);
+
+  // 键盘焦点与鼠标打开分别验证；原生对话框保留安全默认动作。
+  await correctionEvaluate(`(async()=>{
+    document.body.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));
+    openConfirmation('test','',()=>{});
+    if(settingsModal.contains(document.activeElement))throw Error('pointer modal moved focus');
+    closeModal();await new Promise(r=>setTimeout(r,250));
+    document.dispatchEvent(new KeyboardEvent('keydown',{key:'Tab',bubbles:true}));
+    openConfirmation('test','',()=>{});
+    if(!document.activeElement.matches('[data-cancel-confirmation]'))throw Error('keyboard modal did not focus safe action');
+    closeModal();await new Promise(r=>setTimeout(r,250));
+    const pending=chooseCorrectionDraft(),dialog=document.querySelector('.correction-draft-dialog');
+    if(!dialog.contains(document.activeElement))throw Error('native draft dialog lost initial focus');
+    dialog.querySelector('[data-choice=cancel]').click();if(await pending!=='cancel')throw Error('draft dialog outcome');
+    document.body.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));
+    const segment={id:'limit',text:'a'.repeat(4000),version:'live',revision:0};
+    const meeting={segments:[segment]};
+    correctionPanelState={meetingId:'limit',scope:'transcript',query:'a',replacement:'bb',meeting,latest:meeting,matches:correctionMatches([segment],'a')};
+    correctionPanel.hidden=false;renderCorrectionPanel();
+    if(correctionPanelState.matches.length!==200||!correctionPanelState.matches.limited||!correctionPanel.querySelector('[data-submit-correction]').disabled)throw Error('preview or segment capacity limit');
+    correctionPanelState.replacement='b';renderCorrectionResults();
+    if(correctionPanel.querySelector('[data-submit-correction]').disabled)throw Error('valid partial batch blocked');
+    closeCorrectionPanel();
+  })()`);
+
+  // 三个内容页共享导航和操作栏；坐标比较防止入口再次漂移。
+  const unifiedGeometry = [];
+  await correctionEvaluate(`(async()=>{
+    const initialized=await window.brevia.initialize();
+    applyBackendDetail(await window.brevia.meeting.get({meeting_id:initialized.meetings[0].id}));
+    const d=uiData.detail;d.hasRefined=true;d.refinedMode='timestamps';d.transcriptVersion='refined';d.transcriptEditable=true;d.refineState='idle';
+    d.refinedTranscript=d.transcript;
+    d.notes='# 产品周会笔记\\n\\n- 确认本周上线范围，优先完成会议记录与术语修正。\\n- 周四交付测试版本，周五完成内部验收。\\n- 保留现有 Markdown 格式、文字高亮与音频定位。\\n\\n## 后续安排\\n\\n整理验证结果，并记录需要继续跟进的问题。';
+    d.summary={markdown:'# 产品周会\\n\\n## 会议摘要\\n\\n本次会议确认产品上线范围、会议记录流程与内部验收安排。\\n\\n## 核心结论\\n\\n- 优先完善记录和术语修正。\\n- 笔记、逐字稿、纪要使用统一的操作入口。\\n\\n## 行动事项\\n\\n- [ ] 周四交付测试版本。\\n- [ ] 周五完成内部验收。'};
+    await showView('detail');
+  })()`);
+  for (const scope of ['notes', 'transcript', 'summary']) {
+    unifiedGeometry.push(
+      await correctionEvaluate(`(async()=>{
+      const scope=${JSON.stringify(scope)};
+      detailActiveTab=scope;renderMeetingDetail();
+      await document.fonts.ready;document.getAnimations().filter(a=>a.effect.getComputedTiming().iterations!==Infinity).forEach(a=>a.finish());await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+      const root=document.querySelector('#detail-view');
+      const toolbar=root.querySelector('.detail-content-toolbar');
+      const find=toolbar.querySelector('[data-open-correction]');
+      const edit=toolbar.querySelector('[data-edit-notes],[data-edit-transcript],[data-open-summary-edit]');
+      const rect=node=>{const r=node.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height};};
+      if(!find?.checkVisibility()||!edit?.checkVisibility()||root.querySelectorAll('.detail-content-header').length!==1)throw Error(scope+' shared header missing');
+      if(root.querySelector('.summary-head')||root.querySelector('.detail-transcript-toolbar'))throw Error(scope+' legacy tool row remains');
+      if(document.activeElement?.matches('input,textarea,[contenteditable=true]'))throw Error(scope+' automatic focus');
+      return {scope,find:rect(find),edit:rect(edit),toolbar:rect(toolbar),panel:rect(root.querySelector('[data-detail-panel="'+scope+'"]'))};
+    })()`),
+    );
+    await captureCorrection('unified-' + scope);
+    await correctionEvaluate(`(()=>{
+      const scope=${JSON.stringify(scope)};
+      const edit=document.querySelector('.detail-content-actions [data-edit-notes],.detail-content-actions [data-edit-transcript],.detail-content-actions [data-open-summary-edit]');edit.click();
+      const save=document.querySelector('.detail-content-actions [data-notes-save],.detail-content-actions [data-transcript-save],.detail-content-actions [data-save-inline-summary]');
+      if(!save?.checkVisibility()||save.textContent.trim()!==t('保存'))throw Error(scope+' shared save action missing');
+      if(document.activeElement?.matches('input,textarea,[contenteditable=true]'))throw Error(scope+' editor autofocus');
+      const before=scope==='notes'?detailNotesEditor:scope==='summary'?inlineSummaryEditor:document.querySelector('[data-segment-text]');
+      document.querySelector('[data-detail-tab="'+(scope==='notes'?'summary':'notes')+'"]').click();document.querySelector('[data-detail-tab="'+scope+'"]').click();
+      const after=scope==='notes'?detailNotesEditor:scope==='summary'?inlineSummaryEditor:document.querySelector('[data-segment-text]');
+      if(before!==after)throw Error(scope+' tab switch rebuilt draft editor');
+      document.querySelector('.detail-content-actions [data-notes-cancel],.detail-content-actions [data-transcript-cancel],.detail-content-actions [data-cancel-inline-summary-edit]').click();
+    })()`);
+  }
+  const baseline = unifiedGeometry[0];
+  check(
+    unifiedGeometry.every(
+      (item) =>
+        ['find', 'edit', 'toolbar', 'panel'].every(
+          (key) => Math.abs(item[key].y - baseline[key].y) < 1,
+        ) &&
+        Math.abs(item.find.x - baseline.find.x) < 1 &&
+        Math.abs(item.edit.x - baseline.edit.x) < 1,
+    ),
+    '三个内容页的操作与正文边界保持一致：' + JSON.stringify(unifiedGeometry),
+  );
+  await correctionEvaluate(`detailActiveTab='summary';renderMeetingDetail();applyTheme('dark');`);
+  await captureCorrection('unified-summary-dark');
+  await correctionEvaluate(`applyTheme('light');`);
+  await client.send('Emulation.setDeviceMetricsOverride', {
+    width: 880,
+    height: 800,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
+  for (const scope of ['notes', 'transcript', 'summary']) {
+    await correctionEvaluate(`(()=>{
+      detailActiveTab=${JSON.stringify(scope)};renderMeetingDetail();
+      const root=document.querySelector('#detail-view'),toolbar=root.querySelector('.detail-content-toolbar');
+      if(toolbar.scrollWidth>toolbar.clientWidth+1||document.body.scrollWidth>innerWidth+1)throw Error('narrow toolbar overflow: '+detailActiveTab);
+      const buttons=[...toolbar.querySelectorAll('.detail-content-actions button')];if(buttons.some(b=>b.getBoundingClientRect().right>innerWidth))throw Error('narrow shared actions clipped');
+    })()`);
+    if (scope === 'transcript') await captureCorrection('unified-transcript-narrow');
+  }
+  await correctionEvaluate(`(()=>{
+    for(const language of ['zh','en','es','ja','ko','fr','de','ru']) {
+      applyLanguage(language);
+      for(const scope of ['notes','transcript','summary']) {
+        detailActiveTab=scope;renderMeetingDetail();
+        const bar=document.querySelector('#detail-view .detail-content-toolbar');
+        if(bar.scrollWidth>bar.clientWidth+1||document.body.scrollWidth>innerWidth+1)throw Error(language+' '+scope+' localized toolbar overflow');
+      }
+    }
+    applyLanguage('zh');
+  })()`);
+  await client.send('Emulation.clearDeviceMetricsOverride');
+  await correctionEvaluate(`(async()=>{
+    const id=currentMeetingDetail.id;
+    currentMeetingDetail.id='00000000-0000-4000-8000-000000000000';
+    for(const scope of ['notes','summary']) {
+      detailActiveTab=scope;renderMeetingDetail();
+      document.querySelector(scope==='notes'?'[data-edit-notes]':'[data-open-summary-edit]').click();
+      const editor=scope==='notes'?detailNotesEditor:inlineSummaryEditor;
+      editor.setMarkdown('保存失败时保留的草稿');
+      if(scope==='notes')updateDetailNotesDraft();
+      document.querySelector(scope==='notes'?'[data-notes-save]':'[data-save-inline-summary]').click();
+      document.querySelector('[data-detail-tab=transcript]').click();
+      for(let i=0;i<200&&uiData.detail[scope+'SaveState']==='saving';i++)await new Promise(r=>setTimeout(r,10));
+      if(uiData.detail[scope+'SaveState']!=='failed'||detailActiveTab!=='transcript'||editor.getMarkdown()!=='保存失败时保留的草稿')throw Error(scope+' late failure lost draft or switched tabs');
+      document.querySelector('[data-detail-tab="'+scope+'"]').click();
+      const save=document.querySelector(scope==='notes'?'[data-notes-save]':'[data-save-inline-summary]');
+      if(save.disabled||!save.textContent.includes(t('重试')))throw Error(scope+' retry not restored');
+      document.querySelector(scope==='notes'?'[data-notes-cancel]':'[data-cancel-inline-summary-edit]').click();
+    }
+    currentMeetingDetail.id=id;
+    detailActiveTab='notes';renderMeetingDetail();
+    const tab=document.querySelector('[data-detail-tab=notes]');tab.focus();tab.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));
+    if(detailActiveTab!=='transcript'||document.activeElement?.dataset.detailTab!=='transcript')throw Error('content tab keyboard navigation');
+    applyBackendDetail(await window.brevia.meeting.get({meeting_id:currentMeetingDetail.id}));await showView('home');
+  })()`);
+
   const profilePanelChecks = await client.send('Runtime.evaluate', {
     expression: `(async()=>{
       const errors=[],previousLocale=locale,previousProfiles=speakerProfiles,previousTheme=theme;
@@ -1606,9 +1890,18 @@ try {
       // 示例只有精修稿；用其真实音频与段落验证带时间戳的呈现和菜单入口。
       uiData.detail.refinedMode='timestamps';renderMeetingDetail();await showView('detail');
       const segment=detail.segments.find(s=>s.end_ms>s.start_ms);
+      document.body.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));
       const row=[...finalTranscript.querySelectorAll('article[data-segment-id]')].find(e=>e.dataset.segmentId===segment.id);
       if(!row?.querySelector('[data-segment-actions]'))return ['missing subtitle action entry'];
       row.querySelector('[data-segment-actions]').click();
+      const menuStyle=()=>{const root=getComputedStyle(segmentContextMenu);return {surface:['borderColor','borderRadius','backgroundColor','boxShadow','padding','minWidth'].map(key=>root[key]),items:[...segmentContextMenu.querySelectorAll('button')].map(button=>{const style=getComputedStyle(button),icon=getComputedStyle(button.querySelector('.interface-icon'));return [...['minHeight','padding','gap','fontSize','lineHeight','color'].map(key=>style[key]),icon.width,icon.height]})};};
+      const subtitleStyle=menuStyle();
+      segmentContextMenu.classList.replace('segment-context-menu','meeting-menu');
+      const meetingMenuStyle=menuStyle();
+      segmentContextMenu.classList.replace('meeting-menu','segment-context-menu');
+      if(JSON.stringify(subtitleStyle)!==JSON.stringify(meetingMenuStyle))errors.push('subtitle menu differs from shared meeting menu style');
+      if(segmentContextMenu.contains(document.activeElement))errors.push('menu moved focus when opened');
+      segmentContextMenu.querySelector('button').focus();
       if(segmentContextMenu.querySelector('.segment-context-options'))errors.push('legacy cascading menu remains');
       segmentContextMenu.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}));
       if(!document.activeElement.matches('[data-open-segment-profile-menu]'))errors.push('subtitle menu keyboard navigation');
@@ -1727,7 +2020,7 @@ try {
       && segmentInfoFor(meeting.id,'mobile-initial')?.text === '初次接管字幕'
       && latestLiveSegmentId === 'mobile-initial';
     const live = activeView === 'live' && meetingActive && document.querySelector('#pause').disabled && !document.querySelector('#end-meeting').disabled;
-    const source = !document.querySelector('.mobile-source-tag') && !document.querySelector('#transcript-scroll .speaker-name') && document.querySelector('[data-ai-assist-empty]').hidden && document.querySelector('#live-input-label').textContent===t('手机录音');
+    const source = !document.querySelector('.mobile-source-tag') && !document.querySelector('#transcript-scroll .speaker-name') && !document.querySelector('[data-ai-assist-empty]') && document.querySelector('#live-input-label').textContent===t('手机录音');
     const unique = uiData.meetings.filter(m => m.id === meeting.id).length === 1;
     await document.querySelector('#mobile-nav').onclick();
     const deviceFromLive = activeView === 'settings' && meetingActive && !miniMeeting.hidden && miniTitle.textContent === meeting.title;
@@ -1782,10 +2075,11 @@ try {
   const languagePicker = await client.send('Runtime.evaluate', {
     expression: `(async () => {
       if (onboardingPage) await dismissOnboardingPage();
+      document.body.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));
       openOnboardingLanguage('zh');
       await new Promise(requestAnimationFrame);
       const firstHeading=onboardingPage.querySelector('h1');
-      if(document.activeElement!==firstHeading||getComputedStyle(firstHeading).outlineStyle!=='none')throw Error('onboarding heading shows browser focus ring or loses navigation focus');
+      if(onboardingPage.contains(document.activeElement)||getComputedStyle(firstHeading).outlineStyle!=='none')throw Error('onboarding opened with automatic focus or a focus ring');
       const choices = [...onboardingPage.querySelectorAll('[name="locale"]')];
       const japanese = choices.find(input => input.value === 'ja');
       japanese.click();
@@ -2008,7 +2302,7 @@ try {
         const actions=document.querySelector('.mobile-request-actions');
         const safe=info?.querySelector('b')?.textContent==='<UI test phone>' && !info.querySelector('ui');
         const verification=info?.querySelector('.mobile-verification')?.textContent===status.approval?.verification;
-        const focused=document.activeElement===actions?.querySelector('button');
+        const focused=!actions?.contains(document.activeElement);
         const dialog=document.querySelector('#mobile-pair-dialog');
         const footer=dialog.querySelector('.mobile-pair-actions').getBoundingClientRect();
         const fits=dialog.scrollHeight<=dialog.clientHeight+1 && footer.bottom<=innerHeight+1;
@@ -2131,7 +2425,7 @@ try {
       openConfirmation('Confirmation','Focus check',()=>{});
       const cancel=settingsModal.querySelector('[data-cancel-confirmation]');
       const buttons=[...settingsModal.querySelectorAll('button')];
-      const initial=document.activeElement===cancel && document.querySelector('.app-shell').inert;
+      const initial=!settingsModal.contains(document.activeElement) && document.querySelector('.app-shell').inert;
       buttons.at(-1).focus();document.dispatchEvent(new KeyboardEvent('keydown',{key:'Tab',bubbles:true,cancelable:true}));
       const wrapped=document.activeElement===buttons[0];
       closeModal();await new Promise(resolve=>setTimeout(resolve,250));
@@ -2180,7 +2474,10 @@ try {
       const reading=content.height>100 && player.bottom<=innerHeight+1 && Math.abs(player.left-detail.getBoundingClientRect().left)<2 && Math.abs(player.right-detail.getBoundingClientRect().right)<2;
       const threeTabs=detail.querySelectorAll('[data-detail-tab]').length===3;
       detail.querySelector('[data-detail-tab="transcript"]').click();
+      applyBackendDetail({...meeting,transcript_revision:0,original_segments:[{...meeting.segments[0],version:'live',text:'原始稿切换测试'}]});
       detail.querySelector('[data-transcript-version="original"]').click();
+      const rawAvailable=!detail.querySelector('[data-transcript-version="original"]').disabled && uiData.detail.transcriptVersion==='original' && detail.querySelector('.transcript-body').textContent.includes('原始稿切换测试');
+      applyBackendDetail(meeting);
       const search=detail.querySelector('[data-transcript-search]');
       search.value='__no_matching_segment__'; search.dispatchEvent(new Event('input',{bubbles:true}));
       const filtered=[...detail.querySelectorAll('.transcript-body .segment,.transcript-body .refined-fulltext')].every(row=>!row.hidden);
@@ -2231,7 +2528,7 @@ try {
       showRefinementProgress(56,100,'Layout test',meeting.id,'正在识别');
       const minimizedProgress=refinementCard.querySelector('.task-mini-percent').textContent==='56%';
       refinementCard.classList.remove('is-minimized'); refinementCard.hidden=true;
-      return {tabs,independent,levels,modelReturn,speakers,menusVisible,prepareReachable,reading,threeTabs,filtered,searchEmpty,mirrored,searchRestored,summaryVisible,inlineSummaryConfig,configReturnsToMeeting,disabledSummary,disabledConfigOpens,summaryExportDefault,summaryBackVisible,summaryDraftPreserved,rawUnavailable,minimizedProgress};
+      return {tabs,independent,levels,modelReturn,speakers,menusVisible,prepareReachable,reading,threeTabs,filtered,searchEmpty,mirrored,searchRestored,summaryVisible,inlineSummaryConfig,configReturnsToMeeting,disabledSummary,disabledConfigOpens,summaryExportDefault,summaryBackVisible,summaryDraftPreserved,rawAvailable,rawUnavailable,minimizedProgress};
     })()`,
     awaitPromise: true,
     returnByValue: true,
@@ -2404,7 +2701,7 @@ try {
       for(const selector of selectors){
         document.querySelector('[data-detail-tab="'+(selector.includes('summary')?'summary':'transcript')+'"]').click();
         const button=document.querySelector(selector),icon=button?.querySelector('svg');
-        const iconSize=button?.closest('.summary-tools')?18:20;
+        const iconSize=18;
         if(!button||!icon||Math.abs(parseFloat(getComputedStyle(icon).width)-iconSize)>.1||button.getBoundingClientRect().height<31.5||button.getBoundingClientRect().height>36||!button.textContent.trim())errors.push(selector+': detail action geometry');
       }
       document.querySelector('[data-detail-tab=transcript]').click();
@@ -2857,7 +3154,7 @@ try {
       document.querySelector('[data-edit-notes]').click();
       const toolbar=document.querySelector('#detail-view .detail-notes-edit .notes-toolbar');
       const first=document.querySelector('#detail-view .notes-editor > :first-child');
-      const tabbar=document.querySelector('#detail-view .tabbar');
+      const tabbar=document.querySelector('#detail-view .detail-content-toolbar');
       if(Math.abs(toolbar.getBoundingClientRect().top-tabbar.getBoundingClientRect().bottom-16)>1)errors.push('editor duplicated top padding');
       if(first && first.getBoundingClientRect().top-toolbar.getBoundingClientRect().bottom>32)errors.push('editor heading separated from toolbar');
       if(document.querySelectorAll('[data-detail-tab]').length!==3)errors.push('content tab removed');
@@ -3048,8 +3345,9 @@ try {
       await showView('home');await showLibraryNav('all-meetings');
       const row=document.querySelector('[data-meeting-action=delete]').closest('.meeting-row'),menu=row.querySelector('[data-meeting-menu]');
       const ids=uiData.meetings.map(m=>m.id).join(',');
+      document.body.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));
       menu.click();row.querySelector('[data-meeting-action=delete]').click();
-      if([...document.querySelectorAll('.meeting-menu')].some(e=>!e.hidden)||document.activeElement!==settingsModal.querySelector('[data-cancel-confirmation]'))errors.push('delete menu/focus not retired');
+      if([...document.querySelectorAll('.meeting-menu')].some(e=>!e.hidden)||settingsModal.contains(document.activeElement))errors.push('delete menu/focus not retired');
       settingsModal.querySelector('[data-cancel-confirmation]').click();await new Promise(resolve=>setTimeout(resolve,250));
       if(ids!==uiData.meetings.map(m=>m.id).join(',')||!settingsModal.hidden||document.querySelector('.app-shell').inert)errors.push('delete cancel changes data or traps focus');
       return errors;
@@ -3171,6 +3469,25 @@ try {
     awaitPromise: true,
     returnByValue: true,
   });
+  const liveColumns = await client.send('Runtime.evaluate', {
+    expression: `(async()=>{
+      const errors=[],wasActive=meetingActive,originalLocale=locale,notes=currentNotesMarkdown();
+      closeModal();await showView('live');meetingActive=true;
+      const layout=document.querySelector('.live-layout');
+      if(layout.querySelector('[data-toggle-live-mode]'))errors.push('retired layout toggle remains');
+      if(Math.abs(layout.querySelector('.live-notes').getBoundingClientRect().width-layout.querySelector('.live-captions').getBoundingClientRect().width)>1)errors.push('live columns are not equal');
+      for(const code of Object.keys(catalog)){applyLanguage(code);if(document.querySelector('.live-captions [data-open-correction]').textContent!==t('查找与替换'))errors.push('caption actions locale '+code);}
+      applyLanguage(originalLocale);
+      if(currentNotesMarkdown()!==notes)errors.push('language switching changes live notes');
+      meetingActive=wasActive;await showView('home');return errors;
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  check(
+    liveColumns.result?.value?.length === 0,
+    `录制双栏布局和八语种操作栏：${JSON.stringify(liveColumns.result?.value || liveColumns.exceptionDetails)}`,
+  );
   const onboardingHandoff = await client.send('Runtime.evaluate', {
     expression: `(async()=>{
       const errors=[];
@@ -3266,13 +3583,13 @@ try {
   const summaryButtonMotion = await client.send('Runtime.evaluate', {
     expression: `(async()=>{
       const host=document.createElement('section');host.id='summary-motion-test';
-      host.innerHTML=renderMeetingSummary({markdown:'# 已有纪要',generating:true});
+      const previous=uiData.detail.summary,previousTab=detailActiveTab;uiData.detail.summary={markdown:'# 已有纪要',generating:true};detailActiveTab='summary';host.innerHTML=renderDetailTabbar();uiData.detail.summary=previous;detailActiveTab=previousTab;
       document.body.append(host);
       const spinners=[...host.querySelectorAll('[aria-busy="true"] .summary-generating-icon')];
       await new Promise(requestAnimationFrame);
       const before=spinners.map(spinner=>getComputedStyle(spinner).transform);
       await new Promise(resolve=>setTimeout(resolve,80));
-      return spinners.length===2 && spinners.every((spinner,index)=>spinner.closest('button').disabled
+      return spinners.length===1 && spinners.every((spinner,index)=>spinner.closest('button').disabled
         && getComputedStyle(spinner).animationName==='button-spin'
         && getComputedStyle(spinner).transform!==before[index]);
     })()`,

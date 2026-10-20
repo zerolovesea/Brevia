@@ -463,7 +463,16 @@ class ModelManager:
             if not all((source / name).exists() for name in model["files"]):
                 raise ValueError("Model archive is missing required files")
             check_control()
-            source.replace(self.path(model_id))
+            destination = self.local_path(model_id)
+            previous = Path(temporary) / "previous"
+            if destination.exists():
+                destination.replace(previous)
+            try:
+                source.replace(destination)
+            except OSError:
+                if previous.exists():
+                    previous.replace(destination)
+                raise
         (self.path(model_id) / ".brevia.json").write_text(
             json.dumps(
                 {**model, "downloaded_at": time.time(), "archive_sha256": digest},

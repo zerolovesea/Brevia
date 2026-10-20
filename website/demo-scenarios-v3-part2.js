@@ -148,19 +148,8 @@ DemoScenariosV3.prototype.setupLiveUI = function (meetingTitle) {
               <header class="live-section-head">
                 <p class="eyebrow">我的笔记</p>
                 <button class="ai-assist-toggle" type="button"><span class="ai-assist-toggle-star">✦</span> <span>AI 笔记</span></button>
-                <button class="live-mode-toggle" data-toggle-live-mode="caption" type="button" aria-label="展开字幕" title="展开字幕"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 3 5 5-5 5"/></svg></button>
               </header>
               <div data-live-notes-root>
-                <div class="ai-assist-empty">
-                  <div class="ai-assist-empty-inner">
-                    <strong>开始记录会议重点</strong>
-                    <p>你可以直接输入，也可以从右侧实时字幕中将重要内容加入笔记。</p>
-                    <div class="ai-assist-empty-tags">
-                      <button type="button">插入当前字幕</button>
-                      <button type="button">记录当前时间点</button>
-                    </div>
-                  </div>
-                </div>
                 ${notesToolbar}
                 <div class="notes-editor" data-demo-id="notes-editor" contenteditable="false" aria-label="我的笔记" spellcheck="false"></div>
                 <textarea class="notes-input" hidden></textarea>
@@ -170,7 +159,6 @@ DemoScenariosV3.prototype.setupLiveUI = function (meetingTitle) {
             <section class="live-captions">
               <header class="live-section-head">
                 <p class="eyebrow">实时字幕</p>
-                <button class="live-mode-toggle" data-toggle-live-mode="notes" type="button" aria-label="返回笔记" title="返回笔记"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m10 3-5 5 5 5"/></svg></button>
               </header>
               <div class="transcript-scroll" data-demo-id="transcript-scroll"></div>
               <button class="back-to-latest" type="button" hidden><span>↓</span> <span>回到最新</span></button>
@@ -209,7 +197,6 @@ DemoScenariosV3.prototype.fillMeetingTitle = function (title) {
   const input = this.engine.viewport.querySelector('[data-demo-id="meeting-title"]');
   if (input) {
     input.value = title;
-    input.focus({ preventScroll: true });
   }
 };
 

@@ -17,4 +17,14 @@ class TranscriptCommandMixin:
         for edit in edits:
             require(edit, "segment_id", "text")
         self.store.save_segment_texts(payload["meeting_id"], edits)
-        return self.store.get_meeting(payload["meeting_id"], compact=True)
+        meeting = self.store.get_meeting(payload["meeting_id"], compact=True)
+        self.emit("transcript.corrected", {"meeting_id": meeting["id"], "meeting": meeting})
+        return meeting
+
+    def correct_transcript(self, payload):
+        """返回已落库的当前稿和撤销/规则状态。"""
+        require(payload, "meeting_id", "action")
+        self.store.transcript_correction(payload["meeting_id"], payload)
+        meeting = self.store.get_meeting(payload["meeting_id"], compact=True)
+        self.emit("transcript.corrected", {"meeting_id": meeting["id"], "meeting": meeting})
+        return meeting

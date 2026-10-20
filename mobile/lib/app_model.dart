@@ -24,7 +24,34 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
   final inputLevel = ValueNotifier<double>(0);
   Timer? timer;
   bool disposed = false;
-  String? viewedMeetingId;
+  String? _viewedMeetingId;
+  String? get viewedMeetingId => _viewedMeetingId;
+  set viewedMeetingId(String? value) {
+    if (value == _viewedMeetingId) return;
+    final previous = _viewedMeetingId;
+    _viewedMeetingId = value;
+    final cached = _snapshots[previous];
+    if (previous != null && cached != null && cached.full) {
+      final index = snapshotIndex(cached.data);
+      _snapshots[previous] = (
+        modified: cached.modified,
+        size: cached.size,
+        full: false,
+        data: index,
+      );
+      for (final record in meetings.where(
+        (record) => record['id'] == previous,
+      )) {
+        record['snapshot'] = index;
+      }
+    }
+  }
+
+  final Map<
+    String,
+    ({DateTime modified, int size, bool full, Map<String, dynamic> data})
+  >
+  _snapshots = {};
   final Map<String, RecordingEngine> senders = {};
   final Map<String, Completer<void>> pendingCommands = {};
 
@@ -395,14 +422,10 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
           continue;
         }
         final meta = await RecordingStore.metadata(dir);
-        final cached = File('${dir.path}/snapshot.json');
-        records.add({
-          ...meta,
-          'snapshot': await cached.exists()
-              ? jsonDecode(await cached.readAsString())
-              : <String, dynamic>{},
-        });
+        records.add({...meta, 'snapshot': await readSnapshot(dir, meta['id'])});
       }
+      final ids = records.map((record) => record['id']).toSet();
+      _snapshots.removeWhere((id, _) => !ids.contains(id));
       records.sort(
         (a, b) => (b['created'] as String).compareTo(a['created'] as String),
       );
@@ -421,7 +444,9 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
               'GET',
               '/meetings/${record['id']}/snapshot',
             );
-            record['snapshot'] = snapshot;
+            record['snapshot'] = record['id'] == viewedMeetingId
+                ? snapshot
+                : snapshotIndex(snapshot);
             await writeJson(
               File('${root.path}/${record['id']}/snapshot.json'),
               snapshot,
@@ -487,6 +512,63 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
       if (value['id'] == id) return value;
     }
     return null;
+  }
+
+  Map<String, dynamic> snapshotIndex(Map<String, dynamic> snapshot) =>
+      {...snapshot}
+        ..remove('segments')
+        ..remove('summary');
+
+  Future<void> loadMeetingSnapshot(String id) async {
+    final record = meeting(id);
+    if (record == null ||
+        (record['snapshot'] as Map?)?.containsKey('segments') == true) {
+      return;
+    }
+    try {
+      final root = await recordingsRoot();
+      final directory = Directory('${root.path}/$id');
+      if (!await File('${directory.path}/snapshot.json').exists()) return;
+      final snapshot = await readSnapshot(directory, id);
+      if (disposed || viewedMeetingId != id) return;
+      meeting(id)?['snapshot'] = snapshot;
+      notifyListeners();
+    } catch (e) {
+      error = e.toString();
+      notifyListeners();
+    }
+  }
+
+  Future<Map<String, dynamic>> readSnapshot(
+    Directory directory,
+    String id,
+  ) async {
+    final file = File('${directory.path}/snapshot.json');
+    final stat = await file.stat();
+    if (stat.type != FileSystemEntityType.file) {
+      _snapshots.remove(id);
+      return {};
+    }
+    final full = id == viewedMeetingId;
+    final cached = _snapshots[id];
+    Map<String, dynamic> data;
+    if (cached != null &&
+        cached.modified == stat.modified &&
+        cached.size == stat.size &&
+        (!full || cached.full)) {
+      if (cached.full == full) return cached.data;
+      data = snapshotIndex(cached.data);
+    } else {
+      data = Map<String, dynamic>.from(jsonDecode(await file.readAsString()));
+      if (!full) data = snapshotIndex(data);
+    }
+    _snapshots[id] = (
+      modified: stat.modified,
+      size: stat.size,
+      full: full,
+      data: data,
+    );
+    return data;
   }
 
   @override

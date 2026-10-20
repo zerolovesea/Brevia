@@ -48,6 +48,10 @@ String defaultMeetingTitle([DateTime? date]) {
 }
 
 String remoteError(String message) {
+  const missingModels = '请先在电脑模型库安装所选会议需要的模型：';
+  if (message.startsWith(missingModels)) {
+    return '${tr('请先在电脑安装所需模型')}: ${message.substring(missingModels.length)}';
+  }
   if (languageCode == 'zh' ||
       translations[languageCode]?.containsKey(message) == true) {
     return tr(message);

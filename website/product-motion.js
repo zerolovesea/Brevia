@@ -280,9 +280,6 @@ window.detailActiveTab = 'summary';
       })
       .join('');
     write('#transcript-scroll', lines);
-    stage
-      .querySelector('.live-layout')
-      .classList.toggle('is-caption-mode', transcription && seconds >= 1);
     const translationToggle = stage.querySelector('#translation-toggle');
     translationToggle.dataset.enabled = String(translated);
     const translationLabel = t(translated ? '翻译：开' : '翻译：关');
@@ -340,14 +337,8 @@ window.detailActiveTab = 'summary';
       );
     }
     if (transcription) {
-      cursor.hidden = seconds < 0.15 || (seconds >= 1.1 && seconds < 4.5) || seconds > 7.2;
-      if (seconds < 1.1)
-        pointAt(
-          stage.querySelector('[data-toggle-live-mode="caption"]'),
-          (seconds - 0.15) / 0.3,
-          seconds >= 0.75 ? (seconds - 0.75) / 0.18 : -1,
-        );
-      else if (seconds < 5.3)
+      cursor.hidden = seconds < 4.5 || seconds > 7.2;
+      if (seconds < 5.3)
         pointAt(
           stage.querySelector('#live-more-toggle'),
           (seconds - 4.5) / 0.3,
@@ -394,6 +385,8 @@ window.detailActiveTab = 'summary';
     const html = renderMeetingSummary({ markdown, generating: started && !complete, participants });
     if (rendered.get('summary') !== html) {
       rendered.set('summary', html);
+      uiData.detail.summary = { markdown, generating: started && !complete };
+      stage.querySelector('#detail-view .detail-content-header').outerHTML = renderDetailTabbar();
       stage.querySelector('.detail-head .summary-participants')?.remove();
       stage.querySelector('[data-detail-panel="summary"]').replaceChildren();
       stage.querySelector('.notes').innerHTML = html;

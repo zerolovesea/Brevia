@@ -363,7 +363,12 @@ class LLMWorkerMixin:
                 "error.summary.failed", f"Summary generation failed: {error}"
             ) from error
         data = {"markdown": markdown}
-        if not self.store.save_summary(meeting["id"], data, markdown):
+        if not self.store.save_summary(
+            meeting["id"],
+            data,
+            markdown,
+            expected_revision=meeting.get("correction", {}).get("revision", 0),
+        ):
             return {"cancelled": True}
         self.emit(
             "summary.progress",
@@ -452,7 +457,7 @@ class LLMWorkerMixin:
 
     @managed_task("translation.generate", concurrent=True)
     def translate(self, payload, control=None):
-        """翻译一段字幕，并把译文写在同 ID 的所有版本上。
+        """翻译当前字幕，并仅回写源文本仍一致的版本。
 
         段落在渲染器侧可能还没落库（final 事件先到）：此时用命令随带的段落内容建行，
         保证这句译文不会因为竞态被丢掉。
@@ -471,19 +476,11 @@ class LLMWorkerMixin:
             raise UserFacingError(
                 "error.sharing_not_confirmed", "Transcript sharing was not confirmed"
             )
-        meeting = self.store.get_meeting(payload["meeting_id"])
-        stored_segment = next(
-            (
-                item
-                for item in latest_segments(meeting["segments"])
-                if item["id"] == payload["segment_id"]
-            ),
-            None,
+        meeting, stored_segment = self.store.translation_context(
+            payload["meeting_id"], payload["segment_id"]
         )
-        segment = (
-            {"id": payload["segment_id"], **payload["segment"]}
-            if payload.get("segment")
-            else stored_segment
+        segment = stored_segment or (
+            {"id": payload["segment_id"], **payload["segment"]} if payload.get("segment") else None
         )
         # 最终事件可能在重叠任务提交其段落之前到达渲染器；保留该事件而不是丢弃翻译。
         if not stored_segment and payload.get("segment"):
@@ -494,6 +491,7 @@ class LLMWorkerMixin:
                     **payload["segment"],
                 }
             )
+            _, segment = self.store.translation_context(meeting["id"], payload["segment_id"])
         if not segment:
             raise UserFacingError("error.segment_not_found", "Transcript segment not found")
         target = LANGUAGE_NAMES.get(payload["target_language"], payload["target_language"])
@@ -510,13 +508,15 @@ class LLMWorkerMixin:
             temperature=0.3,
             stop_tokens=["<|im_end|>", "<|endoftext|>"],
         ).strip()
-        self.store.save_translation(meeting["id"], segment["id"], translation)
-        # 一段会议可能被逐句翻成上百条：只在目标语言变化时写一次会议记录，
-        # 否则每句都会触发一次 UPDATE + 整场逐字稿重读。
-        if meeting.get("target_language") != payload["target_language"]:
-            self.store.update_meeting(
-                meeting["id"], {"target_language": payload["target_language"]}
-            )
+        if not self.store.save_translation(
+            meeting["id"],
+            segment["id"],
+            translation,
+            expected_text=segment["text"],
+            expected_version=(segment["version"], segment["revision"]),
+            target_language=payload["target_language"],
+        ):
+            return {"cancelled": True}
         event = {
             "meeting_id": meeting["id"],
             "segment_id": segment["id"],

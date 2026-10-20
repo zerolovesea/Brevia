@@ -158,9 +158,6 @@ document.querySelector('[data-task-summary]').addEventListener('click', async ()
   taskCards.classList.remove('is-collapsed');
   document.querySelector('[data-toggle-task-stack]').setAttribute('aria-expanded', 'true');
   const active = taskCards.querySelector('.task-card-stack-item:not(.is-task-card-back)');
-  (
-    active?.querySelector('button:not(:disabled)') || taskCards.querySelector('[tabindex]')
-  )?.focus();
   active?.scrollIntoView({ block: 'nearest' });
 });
 function taskCardControls() {
@@ -2590,7 +2587,6 @@ function temporarilyDisableAiAssist() {
   const meetingId = breviaClient?.state.meeting?.id;
   if (meetingId) stopAiNoteForMeeting(meetingId);
   renderAiAssistToggle();
-  renderAiAssistEmptyState();
   showToast(t('AI 笔记已暂时停用。'));
 }
 let speakerProfileSearch = '';
@@ -3224,8 +3220,13 @@ function renderWhatsNewList(installedVersion) {
     })
     .join('')}</div>`;
 }
-/** 显示设置模态框并播放进入动画；可选聚焦内部元素。@param {string} [focusSelector] 打开后聚焦的模态框内元素。@returns {void} */
-function showSettingsModal(focusSelector) {
+/** 鼠标操作保留当前位置；键盘打开的新交互接续到首个可操作控件。 */
+function focusForKeyboard(element) {
+  if (document.documentElement.hasAttribute('data-keyboard-navigation'))
+    element?.focus({ preventScroll: true });
+}
+/** 显示设置模态框；键盘打开时接续焦点，鼠标打开时保留当前位置。@returns {void} */
+function showSettingsModal() {
   clearTimeout(modalDismissTimer);
   if (settingsModal.hidden) modalReturnFocus = document.activeElement;
   settingsModal.querySelector('.modal-title p').hidden = false;
@@ -3241,6 +3242,10 @@ function showSettingsModal(focusSelector) {
   settingsModal.classList.add('modal-enter');
   settingsModal.style.zIndex = '60';
   settingsModal.hidden = false;
+  focusForKeyboard(
+    settingsModal.querySelector('[data-cancel-confirmation]') ||
+      settingsModal.querySelector('button:not(:disabled)'),
+  );
   const protectedFocus = !settingsModal.classList.contains('settings-page');
   document.querySelector('.app-shell').inert = protectedFocus;
   if (onboardingPage) onboardingPage.inert = protectedFocus;
@@ -3252,7 +3257,6 @@ function showSettingsModal(focusSelector) {
     ['summary-model', 'ai-assist', 'advanced-settings'].includes(activeModal)
   )
     actions.insertAdjacentHTML('afterbegin', renderSaveState('saved'));
-  if (focusSelector) settingsModal.querySelector(focusSelector)?.focus();
 }
 /** Opens and focuses a settings modal. @param {'models'|'storage'|'summary-model'} kind Requested modal. @returns {void} */
 let modalDismissTimer;
@@ -3292,7 +3296,7 @@ function openConfirmation(title, detail, action, anchor) {
   settingsModal.querySelector('.modal-title p').textContent = '';
   settingsModal.querySelector('.modal-body').innerHTML =
     `<div class="confirmation-actions">${interfaceIcon([t('删除工作区'), t('重新精修')].includes(title) ? 'warning' : 'trash')}<h2>${escapeHtml(title)}</h2><p>${escapeHtml(detail)}</p><button class="secondary" data-cancel-confirmation type="button">${t('取消')}</button><button class="modal-action modal-danger" data-confirm-action type="button">${escapeHtml(title === t('删除工作区') ? t('确认') : title)}</button></div>`;
-  showSettingsModal('[data-cancel-confirmation]');
+  showSettingsModal();
   if (storageConfirmationPage && anchor)
     positionFloating(settingsModal.querySelector('.modal-panel'), anchor, [
       'bottom-end',
@@ -3344,13 +3348,7 @@ async function openModal(kind) {
   if (revision !== modalRequestRevision || activeModal !== previousModal) return;
   activeModal = kind;
   renderModal(kind);
-  const focusTarget =
-    kind === 'upgrade-log' || settingsModal.classList.contains('settings-page')
-      ? '.modal-title h2'
-      : '.modal-close';
-  if (focusTarget === '.modal-title h2')
-    settingsModal.querySelector(focusTarget).setAttribute('tabindex', '-1');
-  showSettingsModal(focusTarget);
+  showSettingsModal();
   settingsModal.querySelector('.modal-body').scrollTop = 0;
   settingsModal.querySelector('.modal-panel').scrollTop = 0;
   settingsModal.scrollTop = 0;
@@ -3625,7 +3623,9 @@ async function withStorageMigration(operation) {
     .map((element) => [element, element.inert]);
   protectedLayers.forEach(([element]) => (element.inert = true));
   // 快速保存不闪出进度浮窗；真正耗时的迁移仍使用原生模态保护。
-  const revealTimer = setTimeout(() => dialog.showModal(), 180);
+  const revealTimer = setTimeout(() => {
+    dialog.showModal();
+  }, 180);
   try {
     return await operation();
   } finally {
@@ -3715,14 +3715,11 @@ function revealOnboardingPage(page, kind) {
   BreviaMotion.enter(page.querySelector('.onboarding-page-content'), back ? 'back' : 'forward');
   // 新页已挂载才移除旧页，异步准备期间不露出会议库或空背景。
   previous?.remove();
-  requestAnimationFrame(() => {
-    if (onboardingPage !== page || page.inert || page.contains(document.activeElement)) return;
-    const heading = page.querySelector('h1');
-    if (heading) {
-      heading.tabIndex = -1;
-      heading.focus({ preventScroll: true });
-    }
-  });
+  focusForKeyboard(
+    page.querySelector(
+      '.onboarding-page-content button:not(:disabled), .onboarding-page-content input:not(:disabled)',
+    ),
+  );
 }
 
 function showOnboardingPage(kind, content) {
@@ -3979,11 +3976,6 @@ async function finishOnboarding() {
     await showView('home');
     page.inert = true;
     page.style.pointerEvents = 'none';
-    const heading = document.querySelector('#home-view h1');
-    if (heading) {
-      heading.tabIndex = -1;
-      heading.focus({ preventScroll: true });
-    }
     await BreviaMotion.welcome(page, document.querySelector('.app-shell'));
   } finally {
     page.remove();
@@ -4049,12 +4041,6 @@ function openOnboardingAi(settingsMode = false) {
     onboardingPage.classList.add('modal-enter');
     document.body.append(onboardingPage);
     document.body.classList.add('modal-open');
-    const page = onboardingPage;
-    const focusTarget = page.querySelector(
-      activeView === 'settings' ? '.modal-title h2' : '[data-close-ai-features]',
-    );
-    focusTarget.tabIndex = -1;
-    focusTarget.focus();
   } else showOnboardingPage('ai', content);
   onboardingPage.dataset.aiSettings = String(settingsMode);
   onboardingPage.querySelector('.onboarding-ai-segments').addEventListener('keydown', (event) => {
@@ -4233,7 +4219,6 @@ async function finishAiOnboarding(forceEnabled, settingsMode = false) {
   if (settingsMode) {
     aiAssistTemporarilyDisabled = false;
     renderAiAssistToggle();
-    renderAiAssistEmptyState();
     const meetingId = breviaClient?.state.meeting?.id;
     if (meetingActive && meetingId) {
       if (aiAssistEnabled()) void startAiNoteForMeeting(meetingId);
@@ -4580,7 +4565,6 @@ settingsModal.addEventListener('click', async (event) => {
   if (rename) {
     editingSpeakerProfileId = rename.dataset.renameSpeakerProfile;
     renderSpeakerProfileModal();
-    settingsModal.querySelector('.speaker-profile-rename-form input')?.select();
     return;
   }
   const page = event.target.closest('[data-settings-page]');
@@ -5095,7 +5079,6 @@ settingsModal.addEventListener('dblclick', (event) => {
   if (!profile) return;
   editingSpeakerProfileId = profile.dataset.renameSpeakerProfile;
   renderModal('speaker-profiles');
-  settingsModal.querySelector('.speaker-profile-rename-form input')?.select();
 });
 async function saveModelConfig(
   form,
@@ -5161,11 +5144,16 @@ settingsModal.addEventListener('submit', async (event) => {
     const status = event.target.querySelector('.save-state');
     const save = event.target.querySelector('[type="submit"]');
     if (save.disabled) return;
-    save.disabled = true;
+    const values = new FormData(event.target);
+    const controls = [...event.target.elements];
+    const previousDisabled = controls.map((control) => control.disabled);
+    controls.forEach((control) => {
+      control.disabled = true;
+    });
     if (status) status.outerHTML = renderSaveState('saving');
     try {
       const settings = structuredClone(advancedSettings.settings);
-      new FormData(event.target).forEach((value, path) => {
+      values.forEach((value, path) => {
         // 字段名是完整路径（如 vad.zh.threshold）：逐层下钻后再按原类型写回。
         const keys = path.split('.');
         const leaf = keys.pop();
@@ -5181,7 +5169,9 @@ settingsModal.addEventListener('submit', async (event) => {
       if (status) status.outerHTML = renderSaveState('failed');
       showToast(error.message, undefined, 'error');
     } finally {
-      save.disabled = false;
+      controls.forEach((control, index) => {
+        control.disabled = previousDisabled[index];
+      });
     }
     return;
   }
@@ -5260,7 +5250,6 @@ settingsModal.addEventListener('submit', async (event) => {
           if (aiAssistEnabled()) void startAiNoteForMeeting(meetingId);
           else stopAiNoteForMeeting(meetingId);
         }
-        renderAiAssistEmptyState();
         showToast(t('AI 笔记已保存'), undefined, 'success');
         return;
       }
@@ -5787,11 +5776,6 @@ async function transitionPage(current, next, swap = () => {}) {
       document
         .querySelector('.app-shell')
         .classList.toggle('is-settings-view', activeView === 'settings');
-      if (activeView === 'settings') {
-        const heading = document.querySelector('#settings-view h1');
-        heading.tabIndex = -1;
-        heading.focus({ preventScroll: true });
-      }
       crumb.textContent =
         activeView === 'prepare' && prepareView.dataset.mode === 'import'
           ? t('导入录音')
@@ -5827,6 +5811,13 @@ async function transitionPage(current, next, swap = () => {}) {
 /** 在顶级应用视图之间切换。@param {'home'|'prepare'|'live'|'detail'|'settings'} name 目标视图。*/
 const showView = async (name) => {
   if (name === activeView && !pageTransition) return;
+  if (
+    typeof settleCorrectionDraft === 'function' &&
+    (correctionDraft || uiData.detail.transcriptEditing || correctionPanelState?.saving) &&
+    !(await settleCorrectionDraft())
+  )
+    return;
+  if (typeof closeCorrectionPanel === 'function') closeCorrectionPanel();
   closeMeetingPopovers();
   if (document.querySelector('.segment-context-menu')) closeSegmentContextMenu();
   if (typeof closeSegmentProfilePanel === 'function') closeSegmentProfilePanel(true);
@@ -6162,9 +6153,10 @@ function adoptMobileMeeting(meeting) {
     latestLiveSegmentId = segment.id;
   });
   if (liveNotesEditor) liveNotesEditor.setMarkdown(meeting.notes || '');
-  renderAiAssistEmptyState();
+  if (typeof syncCorrectionControls === 'function') syncCorrectionControls();
 }
 function activateMeeting(meeting, payload) {
+  if (typeof syncCorrectionControls === 'function') queueMicrotask(syncCorrectionControls);
   document.querySelector('#pause').disabled = false;
   document.querySelector('#end-meeting').disabled = false;
   document.querySelector('#end-meeting').removeAttribute('data-awaiting-phone');
@@ -6199,7 +6191,6 @@ function activateMeeting(meeting, payload) {
     liveNotesEditor.setMarkdown('');
     liveNotesEditor.setMode('rich');
   }
-  setLiveLayoutMode('notes');
   resetAiNoteSuggestions();
   renderAiAssistToggle();
   setLiveTranslationEnabled(Boolean(payload.target_language));
@@ -6216,7 +6207,6 @@ function activateMeeting(meeting, payload) {
   pauseButton.dataset.paused = 'false';
   renderPauseButton();
   renderLiveInputStatus();
-  renderAiAssistEmptyState();
   void startAiNoteForMeeting(meeting.id);
   miniMeeting.hidden = true;
   showView('live');
@@ -6496,20 +6486,6 @@ miniMeeting.addEventListener('click', () => {
   miniMeeting.hidden = true;
   showView('live');
 });
-/** 切换会议主区域布局：'notes'（笔记模式，默认）或 'caption'（字幕展开模式）。@param {'notes'|'caption'} mode 目标模式。@returns {void} */
-function setLiveLayoutMode(mode) {
-  const layout = document.querySelector('.live-layout');
-  if (!layout) return;
-  layout.classList.toggle('is-caption-mode', mode === 'caption');
-  layout.dataset.liveMode = mode;
-  if (mode === 'caption') {
-    const transcript = document.querySelector('#transcript-scroll');
-    if (transcript) transcript.scrollTop = transcript.scrollHeight;
-  }
-}
-document.querySelectorAll('[data-toggle-live-mode]').forEach((button) => {
-  button.addEventListener('click', () => setLiveLayoutMode(button.dataset.toggleLiveMode));
-});
 /** 交换详情页的逐字稿与会议纪要主次分区。@param {'summary'|'transcript'} mode 要展开的分区。@returns {void} */
 function setDetailLayoutMode(mode) {
   const layout = document.querySelector('.detail-layout');
@@ -6531,7 +6507,6 @@ const liveNotesEditor = createNotesEditor(liveNotesRoot, {
       currentNotesMarkdown,
       () => breviaClient?.state.meeting?.id,
     );
-    renderAiAssistEmptyState();
     // 程序化写入（AI 落笔/插入字幕）不算用户打字，避免触发 4 秒静默窗口。
     if (opts?.programmatic) return;
     signalAiNoteTyping(true);
@@ -6549,13 +6524,9 @@ document.querySelector('[data-toggle-notes-toolbar]').addEventListener('click', 
   const expanded = button.getAttribute('aria-expanded') !== 'true';
   button.setAttribute('aria-expanded', String(expanded));
   liveNotesToolbar.hidden = !expanded;
-  renderAiAssistEmptyState();
 });
 
-// —— AI 辅助：header 开关、空态引导、未启用 Popover ——
-function aiAssistEmptyRoot() {
-  return document.querySelector('[data-ai-assist-empty]');
-}
+// —— AI 辅助：header 开关与未启用 Popover ——
 function aiAssistToggleButton() {
   return document.querySelector('[data-ai-assist-toggle]');
 }
@@ -6574,43 +6545,6 @@ function renderAiAssistToggle() {
   if (request) {
     request.hidden = !aiAssistEnabled() || aiAssistConfig.proactivity !== 'quiet';
     request.textContent = copy.request || aiAssistCopy.en.request;
-  }
-}
-function renderAiAssistEmptyState() {
-  const root = aiAssistEmptyRoot();
-  if (!root) return;
-  const copy = aiAssistCopy[locale] || aiAssistCopy.en;
-  const hasNotes = Boolean(currentNotesMarkdown().trim());
-  if (hasNotes || !meetingActive || aiSuggestionHost?.hidden === false) {
-    root.hidden = true;
-    root.innerHTML = '';
-    return;
-  }
-  // 随真实编辑面定位，展开工具栏或切换Markdown时不会挡住控件。
-  const surface = liveNotesRoot.querySelector(
-    '.notes-editor:not([hidden]), .notes-input:not([hidden])',
-  );
-  if (surface?.offsetParent) root.style.top = `${surface.offsetTop}px`;
-  const hasAi = aiAssistEnabled();
-  const disabledActions = ['insert-latest'];
-  const tags = hasAi
-    ? copy.emptyEnabledTags.map((tag) => `<span>${escapeHtml(tag)}</span>`).join('')
-    : copy.emptyDisabledTags
-        .slice(0, 1)
-        .map(
-          (tag, index) =>
-            `<button type="button" data-ai-empty-action="${disabledActions[index]}">${escapeHtml(tag)}</button>`,
-        )
-        .join('');
-  root.innerHTML = `<div class="ai-assist-empty-inner"><strong>${escapeHtml(hasAi ? copy.emptyEnabledTitle : copy.emptyDisabledTitle)}</strong><p>${escapeHtml(hasAi ? copy.emptyEnabledBody : copy.emptyDisabledBody)}</p><div class="ai-assist-empty-tags">${tags}</div></div>`;
-  root.hidden = false;
-}
-window.addEventListener('resize', renderAiAssistEmptyState);
-function hideAiAssistEmptyState() {
-  const root = aiAssistEmptyRoot();
-  if (root) {
-    root.hidden = true;
-    root.innerHTML = '';
   }
 }
 function openAiAssistPopover(anchor) {
@@ -6642,20 +6576,11 @@ document.querySelector('[data-ai-assist-toggle]')?.addEventListener('click', () 
   }
   openAiAssistPopover(button);
 });
-// 空态引导中的快捷操作（无需 AI）：插入当前字幕。
+// 点击开关与弹层之外时关闭配置提示。
 document.addEventListener('click', (event) => {
   const pop = document.querySelector('[data-ai-assist-popover]');
   if (pop && !event.target.closest('[data-ai-assist-popover], [data-ai-assist-toggle]'))
     pop.remove();
-  const action = event.target.closest('[data-ai-empty-action]');
-  if (!action || !meetingActive) return;
-  if (action.dataset.aiEmptyAction === 'insert-latest') {
-    const info = liveSegmentData.get(latestLiveSegmentId);
-    if (info) {
-      liveNotesEditor.appendMarkdown(info.text);
-      showToast(t('已加入笔记'), undefined, 'success');
-    } else showToast(t('暂无字幕可插入'));
-  }
 });
 // —— 实时 AI 辅助（阶段 3/4）：启动/停止引擎 + 输入状态信号 + 建议接收与 UI ——
 let latestAiSuggestion = null;
@@ -6802,11 +6727,9 @@ function renderAiSuggestion() {
   if (!latestAiSuggestion || !meetingActive) {
     root.hidden = true;
     root.innerHTML = '';
-    renderAiAssistEmptyState();
     return;
   }
   const suggestion = latestAiSuggestion;
-  hideAiAssistEmptyState();
   if (suggestion.type === 'topic') {
     root.innerHTML = `<button type="button" class="ai-topic-divider" data-ai-topic="${escapeHtml(suggestion.id)}">${t('AI 检测到新话题：')}${escapeHtml(suggestion.text)}</button>`;
     root.hidden = false;
@@ -6845,7 +6768,6 @@ function hideAiSuggestion() {
     root.hidden = true;
     root.innerHTML = '';
   }
-  renderAiAssistEmptyState();
 }
 /** 接受建议：把内容写入正式笔记并上报忽略（去重）。@param {string} text 建议文本。@returns {void} */
 function acceptAiSuggestion(text) {
@@ -6896,6 +6818,7 @@ function currentNotesMarkdown() {
 /** 笔记存储上限（与后端及 IPC 校验一致，足以容纳几张内联图片）。 */
 const MAX_NOTES_CHARS = 5 * 1024 * 1024;
 let notesLimitNotified = false;
+let notesSavePending = Promise.resolve();
 /** 立即把笔记写入后端；超出上限时截断到存储上限并提示一次。@param {string|undefined} meetingId 会议 id。@param {string} notes Markdown 文本。@returns {Promise<void>} */
 function persistNotes(meetingId, notes) {
   if (!meetingId || !window.brevia?.meeting?.update) return Promise.resolve();
@@ -6907,7 +6830,10 @@ function persistNotes(meetingId, notes) {
       showToast(t('笔记已达容量上限，超出部分未保存。'));
     }
   }
-  return window.brevia.meeting.update({ meeting_id: meetingId, updates: { notes: text } });
+  notesSavePending = notesSavePending
+    .catch(() => {})
+    .then(() => window.brevia.meeting.update({ meeting_id: meetingId, updates: { notes: text } }));
+  return notesSavePending;
 }
 /** 防抖保存实时笔记；会议与文本在输入时共同取快照。@param {{current: number|undefined}} timer 防抖计时器。@param {() => string} getNotes 取笔记文本。@param {() => string|undefined} getMeetingId 取会议 id。@returns {void} */
 function scheduleNotesSave(timer, getNotes, getMeetingId) {
@@ -7449,6 +7375,7 @@ const openMeetingMenu = (menu, toggle, opensLeft = false) => {
   menu.inert = false;
   menu.hidden = false;
   positionMeetingMenu(menu, toggle, opensLeft);
+  focusForKeyboard(menu.querySelector('button:not(:disabled)'));
 };
 const closeMeetingMenus = (immediate = false) => {
   document.querySelectorAll('.meeting-workspace-menu').forEach((menu) => menu.remove());
@@ -7632,11 +7559,6 @@ meetingList.addEventListener('click', async (event) => {
       };
       closeMeetingMenus();
       renderMeetingList();
-      requestAnimationFrame(() => {
-        const input = meetingList.querySelector('[data-rename-meeting] input');
-        input?.focus();
-        input?.select();
-      });
       return;
     }
     if (action.dataset.meetingAction === 'open-folder') {
@@ -8181,10 +8103,13 @@ function openSegmentContextMenu(meetingId, segmentId, x, y, segmentInfo) {
   contextMeetingId = meetingId;
   contextSegmentId = segmentId;
   contextSegment = segmentInfo || null;
-  segmentContextMenu.innerHTML = `<button type="button" data-add-segment-note>${interfaceIcon('notes')}<span>${t('加入笔记')}</span></button><button type="button" data-open-segment-profile-menu>${interfaceIcon('person')}<span>${t('添加到声纹库')}</span></button><button type="button" data-mark-segment-speaker>${interfaceIcon('person')}<span>${t('标记说话人')}</span></button>`;
+  segmentContextMenu.innerHTML = `<button type="button" data-add-segment-note>${interfaceIcon('notes')}<span>${t('加入笔记')}</span></button><button type="button" data-open-segment-profile-menu>${interfaceIcon('waveform')}<span>${t('添加到声纹库')}</span></button><button type="button" data-mark-segment-speaker>${interfaceIcon('person')}<span>${t('标记说话人')}</span></button>${typeof openCorrection === 'function' ? `<button type="button" data-context-correction>${interfaceIcon('search')}<span>${t('替换此词…')}</span></button>` : ''}`;
   const source = [...document.querySelectorAll('.view.active .segment[data-segment-id]')].find(
     (row) => row.dataset.segmentId === segmentId,
   );
+  segmentContextMenu.dataset.correctionQuery = source?.contains(window.getSelection()?.anchorNode)
+    ? window.getSelection().toString()
+    : '';
   segmentContextReturnFocus =
     source?.querySelector('[data-segment-actions]') || document.activeElement;
   source?.classList.add('has-segment-menu');
@@ -8195,7 +8120,7 @@ function openSegmentContextMenu(meetingId, segmentId, x, y, segmentInfo) {
   segmentContextMenu.hidden = false;
   positionFloating(segmentContextMenu, { left: x, right: x, top: y, bottom: y });
   segmentContextMenu.style.visibility = '';
-  segmentContextMenu.querySelector('button')?.focus();
+  focusForKeyboard(segmentContextMenu.querySelector('button'));
 }
 /** 把文本追加到当前活跃的笔记编辑器（live 视图或详情页编辑态）。@param {string} markdown 追加的 Markdown。@param {string} [meetingId] 目标会议 id（live 视图判定用）。@returns {void} */
 function appendTextToActiveNotes(markdown, meetingId) {
@@ -8359,12 +8284,11 @@ async function openSegmentSpeakerPicker(meetingId, segmentId, anchor) {
     ].filter((name) => name && name.length <= 32 && !isDefaultSegmentSpeakerName(name));
     segmentSpeakerPicker.setAttribute('aria-label', t('标记说话人'));
     segmentSpeakerPicker.innerHTML = `<header><h3>${escapeHtml(t('标记说话人'))}</h3><button class="icon-button" data-close-meeting-popover type="button" aria-label="${escapeHtml(t('关闭'))}">${interfaceIcon('close')}</button></header><form><label>${escapeHtml(t('说话人名称'))}<input name="name" required maxlength="32" autocomplete="off" placeholder="${escapeHtml(t('搜索'))}" /></label><div class="segment-speaker-options">${names.map((name) => `<button type="button" data-segment-speaker-choice="${escapeHtml(name)}"${name === segment.speaker_name ? ' aria-current="true"' : ''}><i class="speaker-avatar" aria-hidden="true">${escapeHtml([...name][0])}</i><span>${escapeHtml(name)}</span></button>`).join('')}</div><p data-speaker-empty role="status"${names.length ? ' hidden' : ''}>${escapeHtml(t('暂无内容'))}</p><p>${escapeHtml(t('仅修改此段的说话人。'))}</p><p role="alert" hidden></p><button class="modal-action" type="submit">${escapeHtml(t('确认'))}</button></form>`;
-    anchor.focus({ preventScroll: true });
     anchor.closest('.segment')?.classList.add('has-segment-menu');
     draft.open = true;
     segmentSpeakerPicker.showPopover();
     positionFloating(segmentSpeakerPicker, anchor, ['bottom-end', 'top-end']);
-    segmentSpeakerPicker.querySelector('input').focus({ preventScroll: true });
+    focusForKeyboard(segmentSpeakerPicker.querySelector('input'));
   } catch (error) {
     if (segmentSpeakerDraft === draft) {
       segmentSpeakerDraft = undefined;
@@ -8487,7 +8411,6 @@ document.addEventListener('click', (event) => {
   popover.showPopover();
   toggle.setAttribute('aria-expanded', 'true');
   positionFloating(popover, toggle, ['bottom-end', 'top-end']);
-  input.focus({ preventScroll: true });
 });
 document.addEventListener('input', (event) => {
   if (!event.target.matches('[data-participant-search]')) return;
@@ -8636,6 +8559,9 @@ async function openSegmentProfilePanel(meetingId, segmentId, anchor) {
         row.classList.toggle('is-profile-source', row.dataset.segmentId === segmentId),
       );
     renderSegmentProfilePanel();
+    focusForKeyboard(
+      segmentProfilePanel.querySelector('input[name=name], [data-segment-profile-search]'),
+    );
     const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
     segmentProfileMotion = segmentProfilePanel.animate(
       [
@@ -8644,9 +8570,6 @@ async function openSegmentProfilePanel(meetingId, segmentId, anchor) {
       ],
       { duration: reduced ? 80 : 240, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' },
     );
-    segmentProfilePanel
-      .querySelector('[data-segment-profile-search]')
-      ?.focus({ preventScroll: true });
   } catch (error) {
     if (segmentProfileDraft === draft) {
       closeSegmentProfilePanel();
@@ -8706,7 +8629,6 @@ segmentProfilePanel.addEventListener('click', (event) => {
     segmentProfileDraft.create = Boolean(event.target.closest('[data-new-segment-profile]'));
     segmentProfileDraft.error = '';
     renderSegmentProfilePanel();
-    segmentProfilePanel.querySelector('input[name=name], [data-segment-profile-search]')?.focus();
   }
   if (event.target.closest('[data-save-segment-profile]')) void saveSegmentProfile();
   if (event.target.closest('[data-view-segment-profile]')) {
@@ -9010,13 +8932,14 @@ async function generateSegmentTranslation(payload, targetLanguage) {
   });
 }
 /** 将当前最新字幕翻译为指定语言；精修和手工编辑版本优先。 */
-async function translateLatestTranscript(targetLanguage) {
-  const meeting = currentMeetingDetail;
+async function translateLatestTranscript(targetLanguage, meeting = currentMeetingDetail) {
   const segments = meeting && latestTranscriptSegments(meeting).segments;
-  if (!meeting || !segments?.length || !window.brevia?.translation) return;
-  uiData.detail.translationTarget = targetLanguage;
-  uiData.detail.translationPending = true;
-  renderMeetingDetail();
+  if (!meeting || !targetLanguage || !segments?.length || !window.brevia?.translation) return;
+  if (meeting.id === currentMeetingDetail?.id) {
+    uiData.detail.translationTarget = targetLanguage;
+    uiData.detail.translationPending = true;
+    renderMeetingDetail();
+  }
   try {
     let completed = 0;
     showTranslationProgress(completed, segments.length, targetLanguage);
@@ -9030,10 +8953,12 @@ async function translateLatestTranscript(targetLanguage) {
     const failure = results.find((result) => result.status === 'rejected');
     if (failure) showToast(`${t('翻译失败')}: ${failure.reason.message}`, undefined, 'error');
     const refreshed = await window.brevia.meeting.get({ meeting_id: meeting.id });
-    if (refreshed?.id === currentMeetingDetail?.id) applyBackendDetail(refreshed);
+    applyCorrectionMeeting(refreshed);
   } catch (error) {
-    uiData.detail.translationPending = false;
-    renderMeetingDetail();
+    if (meeting.id === currentMeetingDetail?.id) {
+      uiData.detail.translationPending = false;
+      renderMeetingDetail();
+    }
     showToast(`${t('翻译失败')}: ${error.message}`, undefined, 'error');
   }
 }
@@ -9064,7 +8989,16 @@ async function saveDetailTranscriptEdits() {
       showToast(t('保存失败，修改仍保留'), undefined, 'error');
       return;
     }
-    if (text !== original.get(segmentId)) edits.push({ segment_id: segmentId, text });
+    if (text !== original.get(segmentId)) {
+      const base = d.transcriptEditEntries?.find((entry) => entry.segmentId === segmentId);
+      edits.push({
+        segment_id: segmentId,
+        text,
+        ...(base
+          ? { expected: { text: base.text, version: base.version, revision: base.revision } }
+          : {}),
+      });
+    }
   }
   if (!edits.length) {
     d.transcriptEditing = false;
@@ -9114,7 +9048,7 @@ finalTranscript.addEventListener('input', (event) => {
   )
     ? 'dirty'
     : 'unchanged';
-  finalTranscript.querySelector('.tabbar').outerHTML = renderDetailTabbar();
+  finalTranscript.querySelector('.detail-content-header').outerHTML = renderDetailTabbar();
   field
     .closest('.segment-copy')
     .classList.toggle(
@@ -9185,7 +9119,7 @@ finalTranscript.addEventListener('click', async (event) => {
       if (currentMeetingDetail?.id !== meetingId) return;
       if (uiData.detail.notesEditing && detailNotesEditor?.getMarkdown() !== notes) {
         uiData.detail.notesSaveState = 'dirty';
-        document.querySelector('[data-notes-save-status]').innerHTML = renderSaveState('dirty');
+        finalTranscript.querySelector('.detail-content-header').outerHTML = renderDetailTabbar();
         return;
       }
       uiData.detail.notes = notes;
@@ -9196,7 +9130,7 @@ finalTranscript.addEventListener('click', async (event) => {
     } catch (error) {
       if (currentMeetingDetail?.id === meetingId && uiData.detail.notesEditing) {
         uiData.detail.notesSaveState = 'failed';
-        document.querySelector('[data-notes-save-status]').innerHTML = renderSaveState('failed');
+        finalTranscript.querySelector('.detail-content-header').outerHTML = renderDetailTabbar();
         notesSave.textContent = t('重试');
         notesSave.setAttribute('aria-label', t('重试'));
         notesSave.title = t('重试');
@@ -9222,7 +9156,7 @@ finalTranscript.addEventListener('click', async (event) => {
     uiData.detail.transcriptDraft = {};
     detailActiveTab = 'transcript';
     renderMeetingDetail();
-    document.querySelector('.transcript-body [data-segment-text]')?.focus();
+    focusForKeyboard(finalTranscript.querySelector('[data-segment-text]'));
     return;
   }
   const transcriptCancel = event.target.closest('[data-transcript-cancel]');
@@ -9365,7 +9299,7 @@ finalTranscript.addEventListener('click', async (event) => {
   setDetailLayoutMode(target === 'summary' ? 'summary' : 'transcript');
   // tabbar 的编辑动作跟随激活 tab（笔记 → 编辑笔记，字幕 → 逐句编辑字幕），
   // 因此切换 tab 时必须重建 tabbar，否则铅笔会停留在上一个 tab 的含义。
-  const tabbar = finalTranscript.querySelector('.tabbar');
+  const tabbar = finalTranscript.querySelector('.detail-content-header');
   if (tabbar) {
     const holder = document.createElement('div');
     holder.innerHTML = renderDetailTabbar();
@@ -9375,7 +9309,6 @@ finalTranscript.addEventListener('click', async (event) => {
     BreviaMotion.cancel(panel);
     panel.hidden = panel.dataset.detailPanel !== target;
   });
-  syncDetailTranscriptToolbar();
   syncDetailSummaryPanel();
   filterDetailTranscript();
   BreviaMotion.enter(finalTranscript.querySelector(`[data-detail-panel="${target}"]`), 'tab');
@@ -9445,6 +9378,19 @@ document.querySelector('[data-close-transcript-search]').addEventListener('click
   filterDetailTranscript();
   finalTranscript.querySelector('[data-transcript-search]')?.focus();
 });
+finalTranscript.addEventListener('keydown', (event) => {
+  const tab = event.target.closest('[data-detail-tab]');
+  if (!tab || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+  event.preventDefault();
+  const tabs = [...finalTranscript.querySelectorAll('[data-detail-tab]')];
+  const index =
+    event.key === 'Home'
+      ? 0
+      : event.key === 'End'
+        ? tabs.length - 1
+        : (tabs.indexOf(tab) + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+  tabs[index].click();
+});
 finalTranscript.addEventListener('click', (event) => {
   const version = event.target.closest('[data-transcript-version]');
   if (!version || uiData.detail.transcriptEditing) return;
@@ -9480,7 +9426,6 @@ finalTranscript.addEventListener('dblclick', (event) => {
     event.preventDefault();
     editingSegmentSpeakerId = speaker.dataset.segmentSpeaker;
     renderMeetingDetail();
-    requestAnimationFrame(() => document.querySelector('[data-segment-speaker-input]')?.select());
     return;
   }
 });
@@ -9616,8 +9561,18 @@ if (window.brevia) {
     const revision = Number(payload.revision) || 0;
     const seenRevision = liveSegmentData.get(payload.segment_id)?.revision;
     if (seenRevision !== undefined && revision <= seenRevision) return;
-    const shouldFollow = followLiveTranscript || isAtLiveBottom();
+    const shouldFollow =
+      !correctionDraft && correctionPanel.hidden && (followLiveTranscript || isAtLiveBottom());
     const previous = liveSegments.get(payload.segment_id);
+    if (correctionDraft?.segment.id === payload.segment_id) {
+      liveSegmentData.set(payload.segment_id, {
+        revision,
+        text: payload.text,
+        start_ms: payload.start_ms,
+        speaker: payload.speaker,
+      });
+      return;
+    }
     const translation = payload.translation || previous?.querySelector('.translation')?.textContent;
     const entry = {
       time: formatMeetingTime(payload.start_ms),
@@ -9631,6 +9586,7 @@ if (window.brevia) {
       text: payload.text,
       translation,
       showSpeaker: false,
+      userEdited: Boolean(payload.user_edited),
     };
     latestLiveSegmentId = payload.segment_id;
     // 整句直接进入已确认区域，不再等待二次精修。
@@ -9803,7 +9759,8 @@ if (window.brevia) {
       }
       return;
     }
-    const shouldFollow = followLiveTranscript || isAtLiveBottom();
+    const shouldFollow =
+      !correctionDraft && correctionPanel.hidden && (followLiveTranscript || isAtLiveBottom());
     const entry = {
       time: formatMeetingTime(payload.start_ms),
       startSeconds: payload.start_ms / 1000,
@@ -9858,7 +9815,8 @@ if (window.brevia) {
   window.brevia.on('translation.ready', (payload) => {
     const element = liveSegments.get(payload.segment_id);
     if (!element) return;
-    const shouldFollow = followLiveTranscript || isAtLiveBottom();
+    const shouldFollow =
+      !correctionDraft && correctionPanel.hidden && (followLiveTranscript || isAtLiveBottom());
     let line = element.querySelector('.translation');
     if (!line) {
       line = document.createElement('p');
@@ -9979,7 +9937,7 @@ if (window.brevia) {
       showLiveCaptionUnavailable(warningMeetingId, warning);
       return;
     }
-    showToast(warning);
+    showToast(code?.startsWith('error.') ? t(code) : warning);
   });
   window.brevia.on('worker.error', ({ code, message: error }) =>
     showToast(code ? `${t(code)} (${error})` : userFacingError(error), undefined, 'error'),
@@ -10080,9 +10038,10 @@ if (window.brevia) {
         return;
       }
       uiData.detail.summarySaveState = 'saving';
-      document.querySelector('.summary-preview .save-state').outerHTML = renderSaveState('saving');
+      document.querySelector('[data-summary-save-status] .save-state').outerHTML =
+        renderSaveState('saving');
       document
-        .querySelectorAll('.summary-preview .summary-tools button')
+        .querySelectorAll('[data-cancel-inline-summary-edit], [data-save-inline-summary]')
         .forEach((button) => (button.disabled = true));
       void window.brevia.summary
         .save({ meeting_id: meetingId, markdown })
@@ -10110,11 +10069,8 @@ if (window.brevia) {
         .catch((error) => {
           if (currentMeetingDetail?.id === meetingId && uiData.detail.summaryEditing) {
             uiData.detail.summarySaveState = 'failed';
-            document.querySelector('.summary-preview .save-state').outerHTML =
-              renderSaveState('failed');
-            document
-              .querySelectorAll('.summary-preview .summary-tools button')
-              .forEach((button) => (button.disabled = false));
+            finalTranscript.querySelector('.detail-content-header').outerHTML =
+              renderDetailTabbar();
           }
           showToast(error.message, undefined, 'error');
         });

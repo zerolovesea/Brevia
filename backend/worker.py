@@ -159,6 +159,7 @@ def main(protocol=None):
             "speaker.rename",
             "segment.speaker",
             "segment.text",
+            "segment.correction",
             "segment.speaker-profile-sample",
             "meeting.export",
             "meeting.bundle",

@@ -186,7 +186,6 @@
       : t(connectionStatus);
     const approval = pairDialog.querySelector('#mobile-approval');
     if (!pairClosing && ((value.approval?.id || null) !== approvalId || localeChanged)) {
-      const newRequest = (value.approval?.id || null) !== approvalId;
       approvalId = value.approval?.id || null;
       approval.replaceChildren();
       if (value.approval) {
@@ -237,7 +236,6 @@
         confirmation.textContent = t('电脑确认后才建立信任。');
         actions.append(deny, allow, confirmation);
         approval.append(requestInfo, actions);
-        if (newRequest) deny.focus({ preventScroll: true });
       }
     }
     const nextDevices = JSON.stringify(value.devices || []);

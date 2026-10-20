@@ -13,8 +13,6 @@
         captionsLabel: '实时字幕',
         notesLabel: '我的笔记',
         aiAssistLabel: 'AI 笔记',
-        expandCaptions: '展开字幕',
-        backToNotes: '返回笔记',
         captionsBtn: '字幕',
         translationBtn: '译文: 关',
         pauseBtn: 'Ⅱ 暂停',
@@ -74,8 +72,6 @@
         captionsLabel: 'Live captions',
         notesLabel: 'My notes',
         aiAssistLabel: 'AI notes',
-        expandCaptions: 'Expand captions',
-        backToNotes: 'Back to notes',
         captionsBtn: 'Captions',
         translationBtn: 'Translation: Off',
         pauseBtn: 'Ⅱ Pause',
@@ -236,7 +232,6 @@
               <header class="live-section-head">
                 <p class="eyebrow">${c.notesLabel}</p>
                 <button class="ai-assist-toggle is-enabled" type="button"><span class="ai-assist-toggle-star">✦</span> <span>${c.aiAssistLabel}</span></button>
-                <button class="live-mode-toggle" data-toggle-live-mode="caption" type="button" aria-label="${c.expandCaptions}" title="${c.expandCaptions}"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 3 5 5-5 5"/></svg></button>
               </header>
               <div class="ai-suggestion" data-demo-ai-suggestion></div>
               <div data-live-notes-root>
@@ -249,7 +244,6 @@
             <section class="live-captions">
               <header class="live-section-head">
                 <p class="eyebrow">${c.captionsLabel}</p>
-                <button class="live-mode-toggle" data-toggle-live-mode="notes" type="button" aria-label="${c.backToNotes}" title="${c.backToNotes}"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m10 3-5 5 5 5"/></svg></button>
               </header>
               <div class="transcript-scroll" data-demo-transcript></div>
               <button class="back-to-latest" type="button" hidden><span>↓</span> <span>回到最新</span></button>

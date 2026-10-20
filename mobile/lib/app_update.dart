@@ -1,4 +1,5 @@
 import 'design_icons.dart';
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -237,6 +238,7 @@ class _AppUpdateTileState extends State<AppUpdateTile>
         return;
       }
       final accept = await showDialog<bool>(
+        requestFocus: false,
         context: context,
         builder: (context) => AlertDialog(
           title: Text(tr('发现新版本 {0}', [release.version])),

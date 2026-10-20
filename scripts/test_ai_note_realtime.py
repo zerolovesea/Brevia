@@ -13,6 +13,7 @@
     .venv/bin/python scripts/test_ai_note_realtime.py
 
 依赖：
+- 仓库开发使用的 Node.js（读取应用同源提示词）；
 - 已安装内置模型 GGUF（默认 ~/brevia/models，可用 --models-dir 覆盖）；
 - 默认强制 CPU（BREVIA_GPU_LAYERS=0），用 --no-cpu 关闭。
 """
@@ -20,6 +21,8 @@
 import argparse
 import json
 import os
+import queue
+import subprocess
 import sys
 import tempfile
 import time
@@ -61,10 +64,8 @@ def main():
 
 
 def run_podcast(meeting, args):
-    from backend.worker_ai_note import (
-        ANALYSIS_MIN_INTERVAL_ASSIST,
-        ANALYSIS_MIN_INTERVAL_AUTO,
-    )
+    from backend.worker import Worker
+    from backend.worker_ai_note import ANALYSIS_MIN_INTERVAL_SECONDS
 
     fixture = FIXTURES[meeting]
     if not fixture.exists():
@@ -72,128 +73,150 @@ def run_podcast(meeting, args):
     segments = json.loads(fixture.read_text(encoding="utf-8"))
     gap = args.gap if args.gap is not None else (3.0 if meeting == "zh" else 0.9)
     language = "zh" if meeting == "zh" else "en"
-    min_interval = (
-        ANALYSIS_MIN_INTERVAL_AUTO if args.mode == "auto" else ANALYSIS_MIN_INTERVAL_ASSIST
+    min_interval = ANALYSIS_MIN_INTERVAL_SECONDS
+    # 使用应用的同一套提示词，避免回放绕过实际产品约束。
+    prompt = json.loads(
+        subprocess.check_output(
+            [
+                "node",
+                "-e",
+                "const fs=require('node:fs'),vm=require('node:vm'),c={window:{}};"
+                "vm.runInNewContext(fs.readFileSync('frontend/i18n-data.js','utf8'),c);"
+                "process.stdout.write(JSON.stringify(c.window.BreviaLocaleData.aiNotePromptCopy[process.argv[1]]));",
+                language,
+            ],
+            cwd=REPO_ROOT,
+            text=True,
+        )
     )
 
-    events = []
-    root = tempfile.mkdtemp(prefix=f"brevia-ai-note-{meeting}-")
-    worker = Worker(root, events.append)
-    worker.models.is_ready = lambda _: False
-    worker.models.root = Path(args.models_dir)  # 复用真实模型目录
-    if args.debug:
-        original_generate = worker.llama_generate_realtime
+    with tempfile.TemporaryDirectory(prefix=f"brevia-ai-note-{meeting}-") as root:
+        events = queue.SimpleQueue()
+        worker = Worker(root, events.put)
+        worker.models.root = Path(args.models_dir)  # 只读复用模型，不清理实际模型目录。
+        worker._resolve_gguf(args.model)
+        if args.debug:
+            original_generate = worker.llama_generate_realtime
 
-        def debug_generate(model_id, prompt):
-            print(f"\n--- 分析 prompt（{len(prompt)} 字符）---\n{prompt}\n--- 原始输出 ---")
-            raw = original_generate(model_id, prompt)
-            print(f"{raw[:600]}\n---")
-            return raw
+            def debug_generate(model_id, prompt, cancellation=None):
+                print(f"\n--- 分析 prompt（{len(prompt)} 字符）---\n{prompt}\n--- 原始输出 ---")
+                raw = original_generate(model_id, prompt, cancellation=cancellation)
+                print(f"{raw[:600]}\n---")
+                return raw
 
-        worker.llama_generate_realtime = debug_generate
+            worker.llama_generate_realtime = debug_generate
 
-    print(
-        f"\n{'=' * 80}\n播客：{'如果中国严格执行劳动法（中文单人）' if meeting == 'zh' else 'When millions of AI agents meet（英文双人）'}"
-        f"  mode={args.mode}  model={args.model}  段数={len(segments)}  段间隔={gap}s"
-    )
-    print("=" * 80)
+        print(
+            f"\n{'=' * 80}\n播客：{'如果中国严格执行劳动法（中文单人）' if meeting == 'zh' else 'When millions of AI agents meet（英文双人）'}"
+            f"  mode={args.mode}  model={args.model}  段数={len(segments)}  段间隔={gap}s"
+        )
+        print("=" * 80)
 
-    meeting_id = "00000000-0000-4000-8000-0000000000ab"
-    worker.ai_note_start(
-        {
-            "meeting_id": meeting_id,
-            "provider": "built-in",
-            "model": args.model,
-            "proactivity": args.mode,
-            "language": language,
-        }
-    )
+        meeting_id = "00000000-0000-4000-8000-0000000000ab"
+        worker.ai_note_start(
+            {
+                "meeting_id": meeting_id,
+                "provider": "built-in",
+                "model": args.model,
+                "proactivity": args.mode,
+                "language": language,
+                "prompt": prompt,
+            }
+        )
 
-    start_wall = time.monotonic()
-    suggestion_log = []
-    analysis_times = []
-    state = {"analyzing_t0": None, "seq": 0}
+        session = worker._session(meeting_id)
+        start_wall = time.monotonic()
+        suggestion_log = []
+        analysis_times = []
+        state = {"analyzing_t0": None, "seq": 0}
 
-    def drain():
-        """消化已产生的事件并即时打印建议。"""
-        for event in events:
-            etype = event["type"]
-            if etype == "ai-note.suggestion":
-                payload = event["payload"]
-                suggestion_log.append((time.monotonic() - start_wall, payload))
-                print(
-                    f"  [+{time.monotonic() - start_wall:6.1f}s] ✦ {payload['type']:<11} {payload['text']}"
+        def drain():
+            """消化已产生的事件并即时打印建议。"""
+            while True:
+                try:
+                    event = events.get_nowait()
+                except queue.Empty:
+                    break
+                etype = event["type"]
+                if etype == "ai-note.suggestion":
+                    payload = event["payload"]
+                    suggestion_log.append((time.monotonic() - start_wall, payload))
+                    print(
+                        f"  [+{time.monotonic() - start_wall:6.1f}s] ✦ {payload['type']:<11} {payload['text']}"
+                    )
+                elif etype == "ai-note.analyzing":
+                    if event["payload"].get("active"):
+                        state["seq"] += 1
+                        state["analyzing_t0"] = time.monotonic()
+                    elif state["analyzing_t0"] is not None:
+                        analysis_times.append(
+                            (state["seq"], time.monotonic() - state["analyzing_t0"])
+                        )
+                        state["analyzing_t0"] = None
+
+        try:
+            for index, segment in enumerate(segments):
+                text = str(segment["text"] or "").strip()
+                if not text:
+                    continue
+                worker.ai_note_on_segment(
+                    {
+                        "meeting_id": meeting_id,
+                        "text": text,
+                        "start_ms": segment["start_ms"],
+                        "speaker": segment.get("speaker") or "spk-1",
+                    }
                 )
-            elif etype == "ai-note.analyzing":
-                if event["payload"].get("active"):
-                    state["seq"] += 1
-                    state["analyzing_t0"] = time.monotonic()
-                elif state["analyzing_t0"] is not None:
-                    analysis_times.append((state["seq"], time.monotonic() - state["analyzing_t0"]))
-                    state["analyzing_t0"] = None
-        events.clear()
+                drain()
+                if gap:
+                    time.sleep(gap)
 
-    try:
-        for index, segment in enumerate(segments):
-            text = str(segment["text"] or "").strip()
-            if not text:
-                continue
-            worker.ai_note_on_segment(
-                {
-                    "meeting_id": meeting_id,
-                    "text": text,
-                    "start_ms": segment["start_ms"],
-                    "speaker": segment.get("speaker") or "spk-1",
-                }
-            )
+            # 收尾：等到调度器不再有可分析内容（覆盖最后一轮分析）。
+            deadline = time.monotonic() + min_interval + 30
+            while time.monotonic() < deadline:
+                drain()
+                if session is None:
+                    break
+                with session.cond:
+                    interval_elapsed = time.monotonic() - session.last_run_at >= min_interval
+                    idle = (
+                        not session.running
+                        and session.content_version == session.analyzed_version
+                        and (session.pending_chars == 0 or interval_elapsed)
+                    )
+                if idle and state["analyzing_t0"] is None:
+                    break
+                time.sleep(0.5)
             drain()
-            if gap:
-                time.sleep(gap)
+        finally:
+            worker.ai_note_stop({"meeting_id": meeting_id})
+            worker.shutdown_sidecars()
+            if session is not None:
+                session.thread.join(timeout=5)
+                if session.thread.is_alive():
+                    raise RuntimeError("AI replay scheduler did not stop")
 
-        # 收尾：等到调度器不再有可分析内容（覆盖最后一轮分析）。
-        session = worker._ai_note_sessions.get(meeting_id)
-        deadline = time.monotonic() + min_interval + 30
-        while time.monotonic() < deadline:
-            drain()
-            if session is None:
-                break
-            with session.cond:
-                interval_elapsed = time.monotonic() - session.last_run_at >= min_interval
-                idle = (
-                    not session.running
-                    and session.content_version == session.analyzed_version
-                    and (session.pending_chars == 0 or interval_elapsed)
-                )
-            if idle and state["analyzing_t0"] is None:
-                break
-            time.sleep(0.5)
-        drain()
-    finally:
-        worker.ai_note_stop({"meeting_id": meeting_id})
-
-    wall = time.monotonic() - start_wall
-    print(f"\n—— {meeting} 结果 ——")
-    print(
-        f"墙钟总时长: {wall:.1f}s（播客原始时长约 {segments[-1]['start_ms'] / 1000 / 60:.0f} 分钟，加速回放）"
-    )
-    print(
-        "每次分析耗时: " + ", ".join(f"#{seq}={dt:.1f}s" for seq, dt in analysis_times) or "（无）"
-    )
-    types = {}
-    for _, payload in suggestion_log:
-        types[payload["type"]] = types.get(payload["type"], 0) + 1
-    print(
-        f"建议总数: {len(suggestion_log)}  类型分布: "
-        + (", ".join(f"{k}×{v}" for k, v in sorted(types.items())) or "（无）")
-    )
-    if suggestion_log:
-        print("建议明细：")
-        for offset, payload in suggestion_log:
-            print(f"  [+{offset:6.1f}s] {payload['type']:<11} {payload['text']}")
-    worker.shutdown_ai_note()
+        wall = time.monotonic() - start_wall
+        print(f"\n—— {meeting} 结果 ——")
+        print(
+            f"墙钟总时长: {wall:.1f}s（播客原始时长约 {segments[-1]['start_ms'] / 1000 / 60:.0f} 分钟，加速回放）"
+        )
+        print(
+            "每次分析耗时: " + ", ".join(f"#{seq}={dt:.1f}s" for seq, dt in analysis_times)
+            or "（无）"
+        )
+        types = {}
+        for _, payload in suggestion_log:
+            types[payload["type"]] = types.get(payload["type"], 0) + 1
+        print(
+            f"建议总数: {len(suggestion_log)}  类型分布: "
+            + (", ".join(f"{k}×{v}" for k, v in sorted(types.items())) or "（无）")
+        )
+        if suggestion_log:
+            print("建议明细：")
+            for offset, payload in suggestion_log:
+                print(f"  [+{offset:6.1f}s] {payload['type']:<11} {payload['text']}")
 
 
 if __name__ == "__main__":
-    from backend.worker import Worker
-
     main()

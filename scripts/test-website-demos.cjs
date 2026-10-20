@@ -596,7 +596,7 @@ app
                   progress:Number(task.querySelector('[role=progressbar]').getAttribute('aria-valuenow')),
                   step:task.dataset.stage, canGenerate:!!document.querySelector('[data-generate-summary]:not([disabled])'),
                   canCopy:!!document.querySelector('[data-copy-summary]'),
-                  pending:!!document.querySelector('.summary-actions button[disabled]')};
+                  pending:!!document.querySelector('[data-generate-summary][disabled][aria-busy="true"]')};
               });
             })()`);
             assert.equal(generation[0].taskVisible, false);
@@ -707,7 +707,7 @@ app
                 notes:document.querySelectorAll('.notes-editor li').length,
                 suggestion:!document.querySelector('[data-ai-suggestion]').hidden,
                 translations:document.querySelectorAll('#transcript-scroll .translation').length,
-                captionMode:document.querySelector('.live-layout').classList.contains('is-caption-mode')};
+                layoutToggle:!!document.querySelector('[data-toggle-live-mode]')};
             };
             return [sample(500),sample(1100),sample(1900),sample(7000)];
           })()`);
@@ -718,7 +718,7 @@ app
         );
         assert.equal(shots.captions[0].translations, 0);
         assert.equal(shots.captions[3].translations, 5, 'Translation follows enabling the feature');
-        assert.equal(shots.captions[3].captionMode, true);
+        assert.equal(shots.captions[3].layoutToggle, false);
         assert.ok(
           shots.captions.every((state) => state.notes === 0 && !state.suggestion),
           'Transcription must not duplicate the AI notes demo',
@@ -736,7 +736,7 @@ app
           false,
           'AI notes demo accepts only one suggestion per cycle',
         );
-        assert.equal(shots.notes[3].captionMode, false);
+        assert.equal(shots.notes[3].layoutToggle, false);
         console.log(`PASS differentiated transcription and AI review ${locale}`);
       }
       const captures = join(root, 'output/playwright/affine-implementation');
@@ -1379,7 +1379,8 @@ app
       assert.deepEqual(errors, []);
     } finally {
       win.destroy();
-      server.close();
+      server.closeAllConnections();
+      await new Promise((resolve) => server.close(resolve));
       app.quit();
     }
   })

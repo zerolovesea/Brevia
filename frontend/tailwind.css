@@ -85,7 +85,7 @@
   button:focus-visible,
   input:focus-visible,
   select:focus-visible {
-    outline: 2px solid var(--color-link);
+    outline: none;
     outline-offset: 3px;
   }
 }
@@ -348,7 +348,7 @@
     @apply truncate;
   }
   .is-task-card-back:focus-visible {
-    outline: 2px solid var(--color-link);
+    outline: none;
     outline-offset: 2px;
   }
   .processing-card p {
@@ -650,7 +650,7 @@
     @apply bg-[#f2f2f2] opacity-100;
   }
   .meeting-row:focus-visible {
-    @apply outline-2 outline-offset-[-2px] outline-black;
+    background: var(--color-selected);
   }
   .meeting-list.is-selecting {
     @apply cursor-crosshair select-none;
@@ -715,10 +715,12 @@
   .more {
     @apply text-[#767676] transition-colors duration-300 hover:text-black;
   }
-  .meeting-menu {
+  .meeting-menu,
+  .segment-context-menu {
     @apply fixed z-50 w-56 border border-(--color-line) bg-(--color-overlay) p-1;
   }
-  .meeting-menu button {
+  .meeting-menu button,
+  .segment-context-menu > button {
     @apply flex min-h-12 w-full items-center justify-between px-3 py-2 text-left text-[16px] text-(--color-text) transition-colors duration-150 hover:bg-(--color-selected);
   }
   .meeting-menu .meeting-menu-danger {
@@ -738,15 +740,6 @@
   }
   #home-view .library-toolbar {
     @apply mt-7 gap-5 border-b-0 py-0 pb-7;
-  }
-  .meeting-select-all {
-    color: var(--color-text-subtle);
-    font-size: 12px;
-    white-space: nowrap;
-    transition: color 0.3s ease;
-  }
-  .meeting-select-all:hover {
-    color: var(--color-text);
   }
   #home-view .meeting-list {
     @apply min-h-0 overflow-y-auto;
@@ -858,7 +851,7 @@
     background-size: 100% 100%;
   }
   input[type="checkbox"]:focus-visible {
-    outline: 2px solid var(--color-link);
+    outline: none;
     outline-offset: 2px;
   }
   .input-meter {
@@ -978,59 +971,11 @@
     left: calc(50% + 12px);
     width: calc(50% - 12px);
   }
-  .live-layout.is-caption-mode .live-notes {
-    left: calc(100% - 340px);
-    width: 340px;
-    min-width: 0;
-  }
-  .live-layout.is-caption-mode .live-captions {
-    left: 0;
-    width: calc(100% - 364px);
-    min-width: 0;
-  }
   .live-section-head {
     @apply flex items-center justify-between gap-3 py-1;
   }
-  .live-notes .live-section-head {
-    padding-right: 26px;
-  }
   .live-section-head .eyebrow {
     @apply mb-0 text-[18px] font-bold tracking-normal text-(--color-text);
-  }
-  .live-mode-toggle {
-    position: absolute;
-    top: 0;
-    right: -13px;
-    z-index: 2;
-    display: inline-grid;
-    width: 26px;
-    height: 26px;
-    place-items: center;
-    border: 1px solid var(--color-line);
-    border-radius: 999px;
-    background: #fff;
-    padding: 0;
-    color: #777;
-    transition:
-      color 0.3s,
-      border-color 0.3s;
-  }
-  .live-mode-toggle svg {
-    width: 14px;
-    height: 14px;
-  }
-  .live-mode-toggle:hover {
-    border-color: #767676;
-    color: #111;
-  }
-  .live-mode-toggle[data-toggle-live-mode="notes"] {
-    display: none;
-  }
-  .live-layout.is-caption-mode .live-mode-toggle[data-toggle-live-mode="caption"] {
-    display: none;
-  }
-  .live-layout.is-caption-mode .live-mode-toggle[data-toggle-live-mode="notes"] {
-    display: inline-flex;
   }
   .ai-assist-toggle {
     display: inline-flex;
@@ -1078,56 +1023,6 @@
   }
   [data-ai-request]:active {
     transform: translateY(1px);
-  }
-  .ai-assist-empty {
-    position: absolute;
-    top: 12px;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    pointer-events: none;
-    padding: 0 8px 0 0;
-  }
-  .ai-assist-empty-inner {
-    display: grid;
-    gap: 4px;
-  }
-  .ai-assist-empty-inner strong {
-    font-size: 14px;
-    font-weight: 600;
-    color: #b9b9b9;
-    letter-spacing: -0.01em;
-  }
-  .ai-assist-empty-inner p {
-    margin: 0;
-    font-size: 12px;
-    color: #c6c6c6;
-    line-height: 1.7;
-  }
-  .ai-assist-empty-tags {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    margin-top: 6px;
-  }
-  .ai-assist-empty-tags span,
-  .ai-assist-empty-tags button {
-    font-size: 11px;
-    color: #b0b0b0;
-    border: 1px solid #ececec;
-    padding: 3px 9px;
-    background: transparent;
-  }
-  .ai-assist-empty-tags button {
-    pointer-events: auto;
-    cursor: pointer;
-    transition:
-      color 0.2s ease,
-      border-color 0.2s ease;
-  }
-  .ai-assist-empty-tags button:hover {
-    color: #222222;
-    border-color: #767676;
   }
   .ai-assist-popover {
     position: fixed;
@@ -2405,9 +2300,6 @@
   html[data-theme="dark"] #detail-view .final-transcript .segment-text-input {
     @apply border-[#666666] bg-[#191919] text-white focus:border-[#eee];
   }
-  .segment-context-menu {
-    @apply fixed z-50 min-w-48 border border-black bg-white text-[12px] shadow-sm;
-  }
   .notes {
     @apply flex h-full min-h-0 flex-col overflow-hidden border-l border-black pl-8;
   }
@@ -2769,7 +2661,7 @@
     @apply relative grid min-w-0;
   }
   .flow-select-toggle {
-    @apply flex min-h-11 w-full items-center justify-between gap-3 rounded-lg border border-(--color-line) bg-white px-4 py-2 text-left text-[14px] text-(--color-text) hover:border-(--color-text-muted) focus-visible:outline-2;
+    @apply flex min-h-11 w-full items-center justify-between gap-3 rounded-lg border border-(--color-line) bg-white px-4 py-2 text-left text-[14px] text-(--color-text) hover:border-(--color-text-muted);
   }
   .config-fields .flow-select-toggle {
     @apply h-12;
@@ -2791,12 +2683,6 @@
   }
   body:has(.onboarding-page) .modal-backdrop {
     @apply z-[60];
-  }
-  .summary-action-icon {
-    @apply grid size-8 place-items-center border border-(--color-line) text-[#444444] transition-colors duration-200 hover:border-black hover:text-black;
-  }
-  .summary-action-icon svg {
-    @apply size-4;
   }
   /* Onboarding owns its viewport; setup/welcome classes are content-only. */
   .onboarding-page.onboarding-active {
@@ -3324,22 +3210,10 @@
     height: 100%;
     background: var(--color-text);
   }
-  .model-library-tags {
-    @apply flex flex-wrap gap-1.5;
-  }
-  .model-library-tags span {
-    @apply border border-(--color-line) px-1.5 py-0.5 text-[10px] text-[#666666];
-  }
-  .model-library-tags .model-library-installed {
-    @apply border-(--color-success-border) text-(--color-success);
-  }
   .model-library-item .model-actions {
     @apply pt-1;
   }
   /* 模型库新增：不适合的场景、体积/占用/内存一行、只读的随包组件、底部合计。 */
-  .model-library-size {
-    @apply text-[11px] text-[#767676];
-  }
   .model-library-readonly {
     @apply text-[11px] text-[#767676];
   }
@@ -3707,20 +3581,6 @@
     padding-top: 24px;
     min-height: 32vh;
   }
-  .live-layout.is-caption-mode .live-captions,
-  .live-layout.is-caption-mode .live-notes {
-    grid-column: 1;
-    grid-row: auto;
-    border-left: 0;
-    padding-left: 0;
-  }
-  .live-layout.is-caption-mode .live-captions {
-    order: -1;
-  }
-  .live-mode-toggle {
-    position: static;
-    margin-left: auto;
-  }
   .detail-layout > .final-transcript,
   .detail-layout > .notes,
   .detail-layout.is-summary-mode > .final-transcript,
@@ -4000,11 +3860,6 @@ select,
 .notes-url-ok {
   border-radius: 12px;
 }
-.model-library-tags span,
-.ai-assist-empty-tags span,
-.ai-assist-empty-tags button {
-  border-radius: 6px;
-}
 /* Keep hover backgrounds and inner borders clipped inside the rounded corners. */
 .meeting-menu,
 .meeting-workspace-menu,
@@ -4237,12 +4092,6 @@ html[data-theme="dark"] .refine-menu button:hover {
 html[data-theme="dark"] .back-to-latest:hover {
   border-color: #eee;
 }
-html[data-theme="dark"] .live-mode-toggle {
-  color: #777;
-}
-html[data-theme="dark"] .live-mode-toggle:hover {
-  color: #fff;
-}
 html[data-theme="dark"] .ai-assist-toggle:hover,
 html[data-theme="dark"] .ai-assist-toggle.is-enabled {
   color: #fff;
@@ -4266,18 +4115,6 @@ html[data-theme="dark"] .ai-assist-popover p {
 html[data-theme="dark"] .ai-assist-level,
 html[data-theme="dark"] .ai-assist-proactivity,
 html[data-theme="dark"] .ai-assist-popover {
-  border-color: var(--color-line);
-}
-html[data-theme="dark"] .ai-assist-empty-inner strong {
-  color: #777;
-}
-html[data-theme="dark"] .ai-assist-empty-inner p,
-html[data-theme="dark"] .ai-assist-empty-tags span,
-html[data-theme="dark"] .ai-assist-empty-tags button {
-  color: #6a6a6a;
-}
-html[data-theme="dark"] .ai-assist-empty-tags span,
-html[data-theme="dark"] .ai-assist-empty-tags button {
   border-color: var(--color-line);
 }
 html[data-theme="dark"] .ai-assist-level.is-selected {
@@ -4327,20 +4164,11 @@ html[data-theme="dark"] .update-notes {
   border-color: #fff;
   color: #ddd;
 }
-html[data-theme="dark"] .model-library-size,
 html[data-theme="dark"] .model-library-readonly {
   color: #767676;
 }
-html[data-theme="dark"] .model-library-item > span > p,
-html[data-theme="dark"] .model-library-tags span {
+html[data-theme="dark"] .model-library-item > span > p {
   color: #b0b0b0;
-}
-html[data-theme="dark"] .model-library-tags span {
-  border-color: var(--color-line);
-}
-html[data-theme="dark"] .model-library-tags .model-library-installed {
-  border-color: #3da866;
-  color: #80c99a;
 }
 html[data-theme="dark"] .model-library-headline,
 html[data-theme="dark"] .model-library-rating b {
@@ -5084,8 +4912,7 @@ html[data-theme="dark"] {
    判定清单与「暗色无关」白名单由 frontend/test-ui.mjs 的门禁守护。 ── */
 html[data-theme="dark"] .capture-mode-select,
 html[data-theme="dark"] .model-actions,
-html[data-theme="dark"] .meeting-title-rename,
-html[data-theme="dark"] .segment-context-menu {
+html[data-theme="dark"] .meeting-title-rename {
   color: #fff;
 }
 html[data-theme="dark"] .model-actions {
@@ -5154,22 +4981,6 @@ html[data-theme="dark"] .performance-weak-note {
   background: var(--color-navigation);
   color: #e6c877;
 }
-/* 右键菜单：与 .meeting-menu 的暗色取值对齐。 */
-html[data-theme="dark"] .segment-context-menu {
-  background: #242424;
-  border-color: #666666;
-}
-html[data-theme="dark"] .summary-action-icon {
-  border-color: var(--color-line);
-  color: #b0b0b0;
-}
-@media (hover: hover) {
-  html[data-theme="dark"] .summary-action-icon:hover {
-    border-color: #fff;
-    color: #fff;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

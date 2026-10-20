@@ -245,7 +245,7 @@ ThemeData breviaTheme(Brightness brightness) {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(color: ink),
+        borderSide: BorderSide(color: line),
       ),
     ),
     filledButtonTheme: FilledButtonThemeData(

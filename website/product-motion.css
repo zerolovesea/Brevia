@@ -323,9 +323,6 @@ body[data-focus="captions"] #live-view .live-layout,
 body[data-focus="notes"] #live-view .live-layout {
   grid-template-columns: minmax(0, 1fr);
 }
-body[data-focus]:not([data-focus=""]) #live-view .live-section-head .live-mode-toggle {
-  display: none;
-}
 body[data-focus]:not([data-focus=""]) #live-view .notes-editor :is(p, li),
 body[data-focus]:not([data-focus=""]) #transcript-scroll .segment p {
   font-size: 21px;

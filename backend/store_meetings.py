@@ -11,6 +11,7 @@ from uuid import uuid4
 from .config import SETTINGS, validate_num_speakers
 from .markdown import normalize_summary_markdown
 from .store_base import synchronized_storage_files, utc_now
+from .store_corrections import _correction_state, _current_segments
 from .transcript import latest_segments
 
 
@@ -349,6 +350,7 @@ class MeetingStoreMixin:
             ValueError: 会议不存在。
         """
         with self.connect() as db:
+            db.execute("BEGIN")
             row = db.execute(
                 f"""SELECT m.*,
                     {_SPEAKER_COUNT_SQL} AS speaker_count,
@@ -358,13 +360,38 @@ class MeetingStoreMixin:
             ).fetchone()
             if not row:
                 raise ValueError("Meeting not found")
-            segments = db.execute(
-                """SELECT s.*, COALESCE(p.name, s.speaker) AS speaker_name
-                       FROM segments s LEFT JOIN speakers p
-                       ON p.meeting_id=s.meeting_id AND p.id=s.speaker
-                       WHERE s.meeting_id=? ORDER BY s.start_ms, s.version""",
+            revision = db.execute(
+                "SELECT MAX(revision) FROM segments WHERE meeting_id=? "
+                "AND version GLOB 'postprocess*' AND TRIM(text)<>''",
                 (meeting_id,),
-            ).fetchall()
+            ).fetchone()[0]
+            if compact:
+                current = _current_segments(db, meeting_id)
+                original = (
+                    [
+                        dict(segment)
+                        for segment in db.execute(
+                            "SELECT s.*, COALESCE(p.name,s.speaker) AS speaker_name FROM segments s "
+                            "LEFT JOIN speakers p ON p.meeting_id=s.meeting_id AND p.id=s.speaker "
+                            "WHERE s.meeting_id=? AND s.version='live' ORDER BY s.start_ms",
+                            (meeting_id,),
+                        )
+                    ]
+                    if revision is not None
+                    else []
+                )
+                segments = current
+            else:
+                segments = [
+                    dict(segment)
+                    for segment in db.execute(
+                        "SELECT s.*, COALESCE(p.name,s.speaker) AS speaker_name FROM segments s "
+                        "LEFT JOIN speakers p ON p.meeting_id=s.meeting_id AND p.id=s.speaker "
+                        "WHERE s.meeting_id=? ORDER BY s.start_ms,s.version",
+                        (meeting_id,),
+                    )
+                ]
+                current = latest_segments(segments)
             summary = db.execute(
                 "SELECT data,raw_response,created_at FROM summaries WHERE meeting_id=?",
                 (meeting_id,),
@@ -373,20 +400,25 @@ class MeetingStoreMixin:
                 "SELECT id,name,profile_id,locked FROM speakers WHERE meeting_id=? ORDER BY id",
                 (meeting_id,),
             ).fetchall()
-            speaker_turns = db.execute(
-                "SELECT version,start_ms,end_ms,speaker FROM speaker_turns "
-                "WHERE meeting_id=? ORDER BY start_ms,end_ms",
-                (meeting_id,),
-            ).fetchall()
-        segments = [dict(segment) for segment in segments]
-        refined = [
-            segment
-            for segment in segments
-            if segment["version"].startswith("postprocess")
-            and str(segment.get("text") or "").strip()
-        ]
-        revision = max((segment["revision"] for segment in refined), default=None)
-        current = latest_segments(segments)
+            speaker_turns = (
+                []
+                if compact
+                else db.execute(
+                    "SELECT version,start_ms,end_ms,speaker FROM speaker_turns "
+                    "WHERE meeting_id=? ORDER BY start_ms,end_ms",
+                    (meeting_id,),
+                ).fetchall()
+            )
+            correction = _correction_state(db, meeting_id)
+            undo_highlights = (
+                db.execute(
+                    "SELECT segment_id,json_extract(data,'$.after.text') AS text "
+                    "FROM correction_undo_entries WHERE meeting_id=? AND scope='transcript'",
+                    (meeting_id,),
+                ).fetchall()
+                if correction.get("undo")
+                else []
+            )
 
         def segment_data(segment):
             timestamps = (
@@ -405,6 +437,8 @@ class MeetingStoreMixin:
             segment_data(segment) for segment in (current if compact else segments)
         ]
         result["transcript_revision"] = revision
+        if compact and revision is not None:
+            result["original_segments"] = [segment_data(segment) for segment in original]
         if not compact:
             result["current_segments"] = [segment_data(segment) for segment in current]
         result["speakers"] = [dict(speaker) for speaker in speakers]
@@ -421,6 +455,26 @@ class MeetingStoreMixin:
             if summary
             else None
         )
+        undo = correction.get("undo")
+        current_texts = {segment["id"]: segment["text"] for segment in current}
+        result["correction"] = {
+            "revision": correction.get("revision", 0),
+            "rules": correction["rules"],
+            "undo_count": undo["count"] if undo else 0,
+            "document_undo_counts": {
+                scope: value["count"]
+                for scope, value in correction.get("document_undo", {}).items()
+            },
+            "highlights": {
+                entry["segment_id"]: undo.get("replacement", "")
+                for entry in undo_highlights
+                if current_texts.get(entry["segment_id"]) == entry["text"]
+            }
+            if undo
+            else {},
+            "summary_stale": correction["summary_stale"],
+            "stale_translations": correction["stale_translations"],
+        }
         result["audio"] = self.audio_files(meeting_id)
         summary_data = result["summary"].get("data") if result["summary"] else None
         if summary_data and isinstance(summary_data.get("markdown"), str):

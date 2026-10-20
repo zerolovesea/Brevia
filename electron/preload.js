@@ -117,6 +117,7 @@ contextBridge.exposeInMainWorld('brevia', {
   segment: {
     speaker: invoke('segment.speaker'),
     saveText: invoke('segment.text'),
+    correction: invoke('segment.correction'),
     addProfileSample: invoke('segment.speaker-profile-sample'),
   },
   models: {

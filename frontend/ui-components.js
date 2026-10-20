@@ -137,14 +137,6 @@ function renderSettingsNavigation(kind) {
   ];
   return `<nav class="settings-navigation" aria-label="${escapeHtml(t('设置'))}"><h2>${escapeHtml(t('设置'))}</h2>${items.map(([key, label, icon]) => `<button type="button" data-settings-page="${key}"${key === (['summary-model', 'ai-assist'].includes(kind) ? 'ai-features' : kind) ? ' aria-current="page"' : ''}>${interfaceIcon(icon)}<span>${escapeHtml(t(label))}</span></button>`).join('')}</nav>`;
 }
-/** 会议纪要操作共用图标。 */
-const summaryActionIcons = {
-  edit: interfaceIcon('edit'),
-  copy: interfaceIcon('copy'),
-  refresh: interfaceIcon('refresh'),
-  save: interfaceIcon('check'),
-  cancel: interfaceIcon('close'),
-};
 let pageTooltip;
 /** 将所有悬浮说明挂到 body，避免被任意视图或滚动区裁切。 */
 function showPageTooltip(anchor, text) {
@@ -303,6 +295,13 @@ function detectCaptionSignals(text) {
   return signals;
 }
 /** 渲染一条逐字稿条目，用于实时会议或已完成的会议。@param {{time: string, startSeconds?: number, endSeconds?: number, speaker: object, text: string, translation?: string, segmentId?: string, textEditable?: boolean}} entry 逐字稿数据。@returns {string} 条目标记。 */
+function renderCorrectedTranscript(text, word) {
+  if (!word) return escapeHtml(text);
+  return String(text)
+    .split(word)
+    .map(escapeHtml)
+    .join(`<mark class="correction-saved-word">${escapeHtml(word)}</mark>`);
+}
 function renderTranscriptSegment({
   time,
   startSeconds,
@@ -316,6 +315,9 @@ function renderTranscriptSegment({
   textModified = false,
   textSaving = false,
   textError = '',
+  userEdited = false,
+  translationStale = false,
+  replacementHighlight = '',
 }) {
   const timing =
     Number.isFinite(startSeconds) && Number.isFinite(endSeconds)
@@ -343,19 +345,22 @@ function renderTranscriptSegment({
         })()
       : '';
   const translationLine = translation
-    ? `<p class="translation">${textEditable ? `<span>${escapeHtml(t(textModified ? '译文（未更新）' : '翻译'))}</span> ` : ''}${escapeHtml(translation)}</p>`
+    ? translationStale
+      ? `<p class="translation is-stale">${t('译文 · 待更新')}</p>`
+      : `<p class="translation">${textEditable ? `<span>${escapeHtml(t(textModified ? '译文（未更新）' : '翻译'))}</span> ` : ''}${escapeHtml(translation)}</p>`
     : '';
   // 编辑框与 electron/main.js 的 segment.text schema 同界（单句 4000 字符）；
   // 保存时后端会把换行折成空格，因此这里不需要限制成单行输入。
   const copy =
     textEditable && segmentId
       ? `<div class="segment-copy${textModified ? ' is-modified' : ''}">${textModified ? `<small class="segment-modified-state">${t('已修改')}</small>` : ''}<textarea class="segment-text-input"${textSaving ? ' disabled' : ''}${textError ? ' aria-invalid="true"' : ''} data-segment-text="${escapeHtml(segmentId)}" rows="1" maxlength="4000" aria-label="${escapeHtml(t('字幕文本'))}">${escapeHtml(text)}</textarea>${textError ? `<small class="segment-edit-error" role="alert">${escapeHtml(textError)}</small>` : ''}${translationLine}</div>`
-      : `<div class="segment-copy"><p>${escapeHtml(text)}</p>${translationLine}</div>`;
+      : `<div class="segment-copy">${userEdited ? `<small class="segment-modified-state">${t('已修改')}</small>` : ''}<p>${renderCorrectedTranscript(text, replacementHighlight)}</p>${translationLine}</div>`;
   // 右键菜单按段落 id 定位：详情页（原始/精修稿）只带顶层 segmentId，实时条目只带 speaker.segmentId。
   const contextSegmentId = segmentId || speaker.segmentId;
   const tools =
     contextSegmentId && !textEditable
       ? `<div class="segment-tools" role="group" aria-label="${escapeHtml(t('字幕'))}">${[
+          ...(!showSpeaker ? [['edit', 'edit', '编辑']] : []),
           ['speaker', 'person', '标记说话人'],
           ['note', 'notes', '加入笔记'],
           ['highlight', 'bookmark', '重点'],
@@ -809,7 +814,6 @@ function createNotesEditor(root, options = {}) {
     urlPop.style.position = 'fixed';
     urlPop.style.top = `${Math.max(12, Math.min(rect.bottom + 6, window.innerHeight - urlPop.offsetHeight - 12))}px`;
     urlPop.style.left = `${Math.max(12, Math.min(rect.left, window.innerWidth - urlPop.offsetWidth - 12))}px`;
-    urlInput.focus();
   }
   function closeUrlPop() {
     urlPop.hidden = true;
@@ -817,8 +821,6 @@ function createNotesEditor(root, options = {}) {
   }
   function openFind() {
     findPop.hidden = false;
-    findInput.focus();
-    findInput.select();
   }
   /** 把选择器里的行列数同步到网格高亮、计数文案与输入框。@param {{columns: *, rows: *}} next 目标行列数。@param {boolean} syncFields 是否回写数字输入框（用户正在输入时保持原样）。@returns {void} */
   function applyTableSize(next, syncFields = true) {
@@ -879,22 +881,16 @@ function createNotesEditor(root, options = {}) {
       text += node.textContent;
     }
     const matches = [];
-    const needle = query.toLocaleLowerCase();
-    const haystack = text.toLocaleLowerCase();
-    for (
-      let index = haystack.indexOf(needle);
-      index >= 0;
-      index = haystack.indexOf(needle, index + needle.length)
-    )
-      matches.push({ start: index, end: index + needle.length });
+    for (const index of textMatchOffsets(text, query))
+      matches.push({ start: index, end: index + query.length });
     return { nodes, matches };
   }
   function selectFindMatch(step = 1) {
     const query = findInput.value;
     if (!query) return;
     if (mode === 'markdown') {
-      const haystack = input.value.toLocaleLowerCase();
-      const needle = query.toLocaleLowerCase();
+      const haystack = input.value;
+      const needle = query;
       const startFrom =
         step > 0
           ? input.selectionEnd || 0
@@ -1457,31 +1453,13 @@ function renderSaveState(state = 'saved') {
   const mark = state === 'saved' ? interfaceIcon('check') : state === 'failed' ? '!' : '';
   return `<span class="save-state" data-save-state="${state}" role="status"><i class="save-state-mark" aria-hidden="true">${mark}</i>${escapeHtml(t(label || '已保存'))}</span>`;
 }
-/** 渲染详情侧边栏中的会议纪要：标题行（会议纪要 + 生成/重新生成）+ 内容。@param {{markdown?: string}} summary 摘要数据。@returns {string} 摘要标记。 */
+/** 纪要面板只渲染正文；操作与状态由三个标签共用的页头提供。 */
 function renderMeetingSummary({
   markdown,
-  blocked = false,
   generating = false,
   editing = false,
-  saveState = 'saved',
   participants = [],
 }) {
-  const blockedAttrs = blocked
-    ? ` disabled title="${escapeHtml(t('实时会议中，结束后再生成会议纪要。'))}"`
-    : '';
-  const generationIcon = generating
-    ? `<span class="summary-generating-icon" aria-hidden="true">${interfaceIcon('ai')}</span>`
-    : interfaceIcon(markdown ? 'refresh' : 'ai');
-  const tools = editing
-    ? `<div class="summary-tools"><button class="tabbar-action" data-cancel-inline-summary-edit type="button" aria-label="${t('取消')}" title="${t('取消')}"${saveState === 'saving' ? ' disabled' : ''}>${summaryActionIcons.cancel}</button><button class="tabbar-action is-save" data-save-inline-summary type="button" aria-label="${t('保存')}" title="${t('保存')}"${saveState === 'saving' ? ' disabled' : ''}>${interfaceIcon('check')}</button></div>`
-    : markdown
-      ? `<div class="summary-tools"><button class="secondary" data-open-summary-edit type="button"${generating ? ' disabled' : ''}>${interfaceIcon('edit')}${t('编辑')}</button><button class="secondary" data-copy-summary type="button" aria-label="${escapeHtml(t('复制会议纪要'))}">${interfaceIcon('copy')}${t('复制')}</button><button class="secondary summary-reader-regenerate" data-regenerate-summary type="button"${blockedAttrs}${generating ? ' disabled aria-busy="true"' : ''}>${generationIcon}${t(generating ? '正在生成会议纪要' : '重新生成')}</button></div>`
-      : '';
-  const action = editing
-    ? renderSaveState(saveState)
-    : generating
-      ? `<button class="modal-action" type="button" disabled aria-busy="true">${generationIcon}${t('正在生成会议纪要')}</button>`
-      : `<button class="modal-action" ${markdown ? 'data-regenerate-summary' : 'data-generate-summary'} type="button"${blockedAttrs}>${generationIcon}${t(markdown ? '重新生成' : '生成纪要')}</button>`;
   const people = participants.length
     ? `<section class="summary-participants"><button type="button" data-summary-participants-toggle aria-haspopup="dialog" aria-controls="summary-participants-popover" aria-expanded="false"><span class="summary-participant-count">${escapeHtml(t('参与者'))} (${participants.length})</span><span class="summary-participant-avatars">${participants
         .slice(0, 3)
@@ -1493,7 +1471,7 @@ function renderMeetingSummary({
           '',
         )}${participants.length > 3 ? `<small>+${participants.length - 3}</small>` : ''}</span>${interfaceIcon('chevron-down')}</button><div id="summary-participants-popover" class="meeting-popover summary-participants-popover" popover role="dialog" aria-label="${escapeHtml(t('参与者'))}"><header><h3>${escapeHtml(t('参与者'))} (${participants.length})</h3><button class="icon-button" data-close-meeting-popover type="button" aria-label="${escapeHtml(t('关闭'))}">${interfaceIcon('close')}</button></header><label class="search">${interfaceIcon('search')}<input type="search" data-participant-search aria-label="${escapeHtml(t('搜索'))}" placeholder="${escapeHtml(t('搜索'))}" /></label><div class="summary-participant-list">${participants.map((person) => `<span><i class="speaker-avatar" aria-hidden="true">${escapeHtml([...formatSpeakerName(person)][0] || '')}</i><span>${escapeHtml(formatSpeakerName(person))}</span></span>`).join('')}</div><p data-participant-empty role="status" hidden>${escapeHtml(t('暂无内容'))}</p></div></section>`
     : '';
-  return `<div class="summary-preview"><div class="summary-head"><p class="eyebrow">${t('会议纪要')}</p>${tools}</div><div class="summary-feedback" data-summary-feedback hidden></div>${people}${editing ? `<div class="summary-inline-edit"><div data-inline-summary-editor></div></div>` : markdown ? `<div class="summary-body markdown-content">${renderMarkdown(cleanSummaryMarkdown(markdown))}</div>` : `<p class="summary-empty">${t('尚未生成会议纪要')}</p>`}<div class="summary-actions">${action}${markdown && !editing && !generating ? renderSaveState('saved') : ''}</div></div>`;
+  return `<div class="summary-preview"><div class="summary-feedback" data-summary-feedback hidden></div>${people}${editing ? `<div class="summary-inline-edit"><div data-inline-summary-editor></div></div>` : markdown ? `<div class="summary-body markdown-content">${renderMarkdown(cleanSummaryMarkdown(markdown))}</div>` : `<p class="summary-empty">${t(generating ? '正在生成会议纪要' : '尚未生成会议纪要')}</p>`}</div>`;
 }
 /** 在页面外壳可用后填充所有数据驱动的静态区域。@returns {void} */
 function renderStaticViews() {
@@ -1522,9 +1500,9 @@ function renderRefineModelRow(options, selectedId) {
 function refineAppliedModelSuffix(d) {
   return d.refinedModelAppliedName ? ` · ${escapeHtml(d.refinedModelAppliedName)}` : '';
 }
-/** 渲染详情页 tabbar 右侧的精修状态控件。翻译与重新精修各自独立，避免一次选择触发另一项任务。@param {object} d 详情数据。@returns {string} 标记。 */
+/** 逐字稿专属操作；精修状态统一放在导航行。 */
 function renderRefineStatus(d) {
-  if (d.refineState === 'refining') return `<span class="refine-state">${t('正在精修')}</span>`;
+  if (d.refineState === 'refining') return '';
   const languageSelect = `<label class="refine-menu-speakers"><span>${t('会议语言')}</span>${flowSelect('refine-language', d.language || 'auto', BreviaI18n.languageOptions(locale, t, true))}</label>`;
   const translationMenu = `<span class="detail-translation-action"><button class="detail-icon-action" data-detail-translation-toggle type="button" aria-label="${t('翻译')}" title="${t('翻译')}" aria-expanded="false"${d.translationPending ? ' disabled' : ''}>${interfaceIcon('translate')}${t('翻译')}${interfaceIcon('chevron-down')}</button><div class="detail-translation-menu" hidden>${BreviaI18n.languageOptions(
     locale,
@@ -1540,42 +1518,78 @@ function renderRefineStatus(d) {
     typeof refinementBusyMeetingId !== 'undefined' && refinementBusyMeetingId
       ? `<span class="refine-state" role="status">${t('error.tasks.running')}</span>`
       : `<span class="refine-wrap"><button class="detail-icon-action" data-refine-more type="button" aria-label="${t('重新精修')}" title="${t('重新精修')}" aria-expanded="false">${interfaceIcon('refresh')}${t(d.hasRefined ? '重新精修' : '开始精修')}</button><div class="refine-menu" hidden>${languageSelect}${renderRefineModelRow(d.refinedModelOptions, d.refinedModelId)}<label class="refine-menu-speakers"><span>${t('会议人数')}</span><input type="number" min="1" step="1" inputmode="numeric" data-refine-num-speakers placeholder="${t('留空自动识别')}" /></label><button type="button" data-refine-action="${d.hasRefined ? 're-refine' : 'start'}">${d.hasRefined ? t('重新精修') : t('开始精修')}</button></div></span>`;
-  if (!d.hasRefined) return `${translationMenu}${refineMenu}`;
-  return `<span class="refine-state is-done" role="status" title="${escapeHtml(t('已精修'))}${refineAppliedModelSuffix(d)}">${t('已精修')}${refineAppliedModelSuffix(d)}</span>${translationMenu}${refineMenu}`;
+  return `${translationMenu}${refineMenu}`;
 }
-/** 渲染详情页 tabbar：两个内容 tab、随激活 tab 变化的编辑动作，以及精修状态控件。
- *
- * tabbar 单独成函数，是因为切换 tab 只换面板、不整体重绘：编辑按钮的含义取决于当前
- * 激活的 tab，切换后必须同步替换，否则「字幕」页上的铅笔会去编辑笔记。
- * @returns {string} tabbar 标记。
- */
+/** 三个标签共用导航、保存状态与操作栏，切换标签时只重建页头，不重建编辑器。 */
 function renderDetailTabbar() {
   const d = uiData.detail;
-  const notesActions = `<button class="tabbar-action" data-notes-cancel type="button"${d.notesSaveState === 'saving' ? ' disabled' : ''} aria-label="${t('取消')}" title="${t('取消')}">${interfaceIcon('close')}</button><button class="tabbar-action is-save" data-notes-save type="button"${d.notesSaveState === 'saving' ? ' disabled' : ''} aria-label="${t(d.notesSaveState === 'failed' ? '重试' : '保存')}" title="${t(d.notesSaveState === 'failed' ? '重试' : '保存')}">${d.notesSaveState === 'failed' ? t('重试') : interfaceIcon('check')}</button>`;
-  const transcriptState = d.transcriptSaveState || 'unchanged';
-  const transcriptStatus = d.transcriptEditing
-    ? `<span class="save-state" data-transcript-save-status role="status">${escapeHtml(t({ unchanged: '未修改', dirty: '已修改 · 尚未保存', saving: '正在保存…', failed: '保存失败，修改仍保留', saved: '已保存' }[transcriptState] || '未修改'))}</span>`
-    : '';
-  const transcriptActions = `${transcriptStatus}<button class="tabbar-action" data-transcript-cancel type="button"${transcriptState === 'saving' ? ' disabled' : ''} aria-label="${t('取消')}" title="${t('取消')}">${interfaceIcon('close')}</button><button class="tabbar-action is-save" data-transcript-save type="button"${transcriptState === 'saving' ? ' disabled' : ''} aria-label="${t(transcriptState === 'failed' ? '重试' : '保存')}" title="${t(transcriptState === 'failed' ? '重试' : '保存')}">${transcriptState === 'failed' ? t('重试') : interfaceIcon('check')}</button>`;
-  const editNotes = `<button class="tabbar-action" data-edit-notes type="button" aria-label="${t('编辑')}" title="${t('编辑')}">${interfaceIcon('edit')}</button>`;
-  const editTranscript = `<button class="tabbar-action" data-edit-transcript type="button" aria-label="${t('编辑')}" title="${t('编辑')}">${summaryActionIcons.edit}${t('编辑')}</button>`;
-  let action = '';
-  if (d.notesEditing) action = notesActions;
-  else if (d.transcriptEditing) action = transcriptActions;
-  else if (detailActiveTab === 'notes') action = editNotes;
-  // 精修进行中不开放编辑：即将落地的精修结果会按新的窗口重建段落，此时写入的修正会被它取代。
-  // 「精修全文」模式没有逐句段落（整篇是一段文本），同样不提供逐句编辑。
-  else if (
-    detailActiveTab === 'transcript' &&
-    d.transcriptEditable &&
-    d.refinedMode !== 'fulltext' &&
-    d.refineState !== 'refining' &&
-    !(d.hasRefined && d.transcriptVersion === 'original')
-  )
-    action = editTranscript;
-  // 编辑期间收起精修入口：精修会按新的窗口重建段落 id，未保存的修改会失去归属。
-  return `<div class="tabbar"><div class="tabbar-tabs"><button class="tab${detailActiveTab === 'notes' ? ' active' : ''}" data-detail-tab="notes">${interfaceIcon('notes')}${t('笔记')}</button><button class="tab${detailActiveTab === 'transcript' ? ' active' : ''}" data-detail-tab="transcript">${interfaceIcon('chat')}${t('逐字稿')}</button><button class="tab${detailActiveTab === 'summary' ? ' active' : ''}" data-detail-tab="summary">${interfaceIcon('document')}${t('会议纪要')}</button></div><div class="tabbar-extra">${detailActiveTab === 'notes' ? `<span data-notes-save-status>${renderSaveState(d.notesSaveState)}</span>` : ''}${action}${detailActiveTab === 'transcript' && !d.transcriptEditing ? renderRefineStatus(d) : ''}</div></div>`;
+  const scope = detailActiveTab;
+  const summary = d.summary || {};
+  const editing = Boolean(d[`${scope}Editing`]);
+  const saveState = d[`${scope}SaveState`] || 'saved';
+  const busy = saveState === 'saving';
+  let actions = '',
+    context = '',
+    status = '';
+  if (scope === 'notes') {
+    status = `<span data-notes-save-status>${renderSaveState(saveState)}</span>`;
+    actions = editing
+      ? `<button class="tabbar-action" data-notes-cancel type="button"${busy ? ' disabled' : ''} aria-label="${t('取消')}">${interfaceIcon('close')}${t('取消')}</button><button class="tabbar-action is-save" data-notes-save type="button"${busy ? ' disabled' : ''} aria-label="${t(saveState === 'failed' ? '重试' : '保存')}">${interfaceIcon('check')}${t(saveState === 'failed' ? '重试' : '保存')}</button>`
+      : `<button class="tabbar-action" data-edit-notes type="button" aria-label="${t('编辑')}">${interfaceIcon('edit')}${t('编辑')}</button>`;
+  } else if (scope === 'summary') {
+    status = `<span data-summary-save-status>${summary.generating ? `<span class="refine-state" role="status">${t('正在生成会议纪要')}</span>` : summary.markdown || editing ? renderSaveState(saveState) : ''}</span>`;
+    const blocked = summary.blocked
+      ? ` title="${escapeHtml(t('实时会议中，结束后再生成会议纪要。'))}"`
+      : '';
+    const disabled = summary.blocked || summary.generating ? ' disabled' : '';
+    const generationIcon = summary.generating
+      ? `<span class="summary-generating-icon" aria-hidden="true">${interfaceIcon('ai')}</span>`
+      : interfaceIcon(summary.markdown ? 'refresh' : 'ai');
+    actions = editing
+      ? `<button class="tabbar-action" data-cancel-inline-summary-edit type="button"${busy ? ' disabled' : ''} aria-label="${t('取消')}">${interfaceIcon('close')}${t('取消')}</button><button class="tabbar-action is-save" data-save-inline-summary type="button"${busy ? ' disabled' : ''} aria-label="${t(saveState === 'failed' ? '重试' : '保存')}">${interfaceIcon('check')}${t(saveState === 'failed' ? '重试' : '保存')}</button>`
+      : `<button class="tabbar-action" data-open-summary-edit type="button"${!summary.markdown || summary.generating ? ' disabled' : ''} aria-label="${t('编辑')}">${interfaceIcon('edit')}${t('编辑')}</button>`;
+    if (!editing)
+      context = `${summary.markdown ? `<button class="tabbar-action" data-copy-summary type="button" aria-label="${t('复制会议纪要')}">${interfaceIcon('copy')}${t('复制')}</button>` : ''}<button class="tabbar-action" ${summary.markdown ? 'data-regenerate-summary' : 'data-generate-summary'} type="button"${disabled}${blocked}${summary.generating ? ' aria-busy="true"' : ''}>${generationIcon}${t(summary.generating ? '正在生成会议纪要' : summary.markdown ? '重新生成' : '生成纪要')}</button>`;
+  } else {
+    status = editing
+      ? `<span class="save-state" data-transcript-save-status role="status">${escapeHtml(t({ unchanged: '未修改', dirty: '已修改 · 尚未保存', saving: '正在保存…', failed: '保存失败，修改仍保留', saved: '已保存' }[saveState] || '未修改'))}</span>`
+      : d.refineState === 'refining'
+        ? `<span class="refine-state" role="status">${t('正在精修')}</span>`
+        : d.hasRefined
+          ? `<span class="refine-state is-done" role="status" title="${escapeHtml(t('已精修'))}${refineAppliedModelSuffix(d)}">${t('已精修')}${refineAppliedModelSuffix(d)}</span>`
+          : '';
+    if (editing)
+      actions = `<button class="tabbar-action" data-transcript-cancel type="button"${busy ? ' disabled' : ''} aria-label="${t('取消')}">${interfaceIcon('close')}${t('取消')}</button><button class="tabbar-action is-save" data-transcript-save type="button"${busy ? ' disabled' : ''} aria-label="${t(saveState === 'failed' ? '重试' : '保存')}">${interfaceIcon('check')}${t(saveState === 'failed' ? '重试' : '保存')}</button>`;
+    // 精修重建段落时保持只读，历史原始稿和无时间戳全文沿用既有编辑边界。
+    else if (
+      detailActiveTab === 'transcript' &&
+      d.transcriptEditable &&
+      d.refinedMode !== 'fulltext' &&
+      d.refineState !== 'refining' &&
+      !(d.hasRefined && d.transcriptVersion === 'original')
+    )
+      actions = `<button class="tabbar-action" data-edit-transcript type="button" aria-label="${t('编辑')}">${interfaceIcon('edit')}${t('编辑')}</button>`;
+    if (!editing)
+      context = `<div class="transcript-versions">${d.hasRefined ? `<button type="button" data-transcript-version="refined" aria-pressed="${d.transcriptVersion !== 'original'}">${t('精修')}</button>` : ''}<button type="button" data-transcript-version="original"${d.hasOriginalTranscript === false ? ' disabled' : ''} aria-pressed="${!d.hasRefined || d.transcriptVersion === 'original'}">${t('原始')}</button></div><label class="search">${interfaceIcon('search')}<input type="search" data-transcript-search aria-label="${t('搜索')}" placeholder="${t('搜索')}" value="${escapeHtml(d.transcriptSearch || '')}" /></label><span data-transcript-results role="status"></span>${renderRefineStatus(d)}`;
+  }
+  const find =
+    !editing && (scope !== 'transcript' || actions) && typeof correctionControls === 'function'
+      ? correctionControls(currentMeetingDetail, scope)
+      : '';
+  return `<div class="detail-content-header"><div class="tabbar"><div class="tabbar-tabs" role="tablist" aria-label="${t('笔记')} / ${t('逐字稿')} / ${t('会议纪要')}">${[
+    ['notes', '笔记'],
+    ['transcript', '逐字稿'],
+    ['summary', '会议纪要'],
+  ]
+    .map(
+      ([key, label]) =>
+        `<button class="tab${scope === key ? ' active' : ''}" data-detail-tab="${key}" id="detail-tab-${key}" role="tab" aria-selected="${scope === key}" aria-controls="detail-panel-${key}" tabindex="${scope === key ? '0' : '-1'}">${t(label)}</button>`,
+    )
+    .join(
+      '',
+    )}</div><div class="detail-content-status">${status}</div></div><div class="detail-content-toolbar" role="toolbar" aria-label="${t(scope === 'notes' ? '笔记' : scope === 'summary' ? '会议纪要' : '逐字稿')}"><div class="detail-content-actions">${find}${actions}</div><div class="detail-content-context">${context}</div></div></div>`;
 }
+
 function resizeTranscriptField(field) {
   field.style.height = 'auto';
   field.style.height = Math.max(40, field.scrollHeight + 2) + 'px';
@@ -1586,6 +1600,8 @@ function renderMeetingDetail() {
   const actions = document.querySelector('#detail-view .detail-actions');
   if (actions) document.querySelector('#detail-view').append(actions);
   document.querySelector('#detail-view .detail-head .summary-participants')?.remove();
+  const notesHadFocus = Boolean(document.activeElement?.closest('[data-detail-notes-root]'));
+  const summaryHadFocus = Boolean(document.activeElement?.closest('[data-inline-summary-editor]'));
   const notesMode = detailNotesEditor?.getMode();
   const summaryMode = inlineSummaryEditor?.getMode();
   detailNotesEditor?.destroy();
@@ -1593,7 +1609,7 @@ function renderMeetingDetail() {
   detailNotesEditor = inlineSummaryEditor = null;
   const notesPanel = d.notesEditing
     ? `<div class="detail-notes-edit"><div data-detail-notes-root></div></div>`
-    : `<div class="detail-notes-view">${d.notes && String(d.notes).trim() ? `<div class="detail-notes-content markdown-content">${renderMarkdown(d.notes)}</div>` : `<p class="detail-notes-empty">${t('会议中没有记录笔记。')}</p>`}</div>`;
+    : `<div class="detail-notes-view">${typeof correctionFeedback === 'function' ? correctionFeedback(currentMeetingDetail, 'notes') : ''}${d.notes && String(d.notes).trim() ? `<div class="detail-notes-content markdown-content">${renderMarkdown(d.notes)}</div>` : `<p class="detail-notes-empty">${t('会议中没有记录笔记。')}</p>`}</div>`;
   const hasRefined = Boolean(d.hasRefined && d.refinedTranscript.length);
   const fulltextMode =
     hasRefined && d.transcriptVersion !== 'original' && d.refinedMode === 'fulltext';
@@ -1639,9 +1655,8 @@ function renderMeetingDetail() {
         }
       : null;
   document.querySelector('.final-transcript').innerHTML =
-    `${renderDetailTabbar()}<div class="detail-notes-panel" data-detail-panel="notes"${detailActiveTab !== 'notes' ? ' hidden' : ''}>${notesPanel}</div><div class="detail-summary-panel" data-detail-panel="summary"${detailActiveTab !== 'summary' ? ' hidden' : ''}></div><div class="transcript-panel" data-detail-panel="transcript"${detailActiveTab !== 'transcript' ? ' hidden' : ''}><div class="detail-transcript-toolbar"><div class="transcript-versions">${d.hasRefined ? `<button type="button" data-transcript-version="refined"${d.transcriptEditing ? ' disabled' : ''} aria-pressed="${d.transcriptVersion !== 'original'}">${t('精修')}</button>` : ''}<button type="button" data-transcript-version="original"${d.hasOriginalTranscript === false || d.transcriptEditing ? ' disabled' : ''} aria-pressed="${!d.hasRefined || d.transcriptVersion === 'original'}">${t('原始')}</button></div><label class="search">${interfaceIcon('search')}<input type="search" data-transcript-search aria-label="${t('搜索')}" placeholder="${t('搜索')}" value="${escapeHtml(d.transcriptSearch || '')}" /></label><span data-transcript-results role="status"></span></div><div class="transcript-body">${transcriptBody}</div></div>`;
+    `${renderDetailTabbar()}<div class="detail-notes-panel" data-detail-panel="notes" id="detail-panel-notes" role="tabpanel" aria-labelledby="detail-tab-notes"${detailActiveTab !== 'notes' ? ' hidden' : ''}>${notesPanel}</div><div class="detail-summary-panel" data-detail-panel="summary" id="detail-panel-summary" role="tabpanel" aria-labelledby="detail-tab-summary"${detailActiveTab !== 'summary' ? ' hidden' : ''}></div><div class="transcript-panel" data-detail-panel="transcript" id="detail-panel-transcript" role="tabpanel" aria-labelledby="detail-tab-transcript"${detailActiveTab !== 'transcript' ? ' hidden' : ''}><div class="transcript-body">${typeof correctionFeedback === 'function' ? correctionFeedback(currentMeetingDetail) : ''}${transcriptBody}</div></div>`;
   document.querySelectorAll('[data-segment-text]').forEach((field) => resizeTranscriptField(field));
-  syncDetailTranscriptToolbar();
   filterDetailTranscript();
   if (focusState) {
     const restored = [...document.querySelectorAll('[data-segment-text]')].find(
@@ -1662,7 +1677,7 @@ function renderMeetingDetail() {
       });
       if (notesMode) detailNotesEditor.setMode(notesMode);
       detailNotesEditor.setMarkdown(d.notes);
-      detailNotesEditor.focus();
+      if (notesHadFocus) detailNotesEditor.focus();
     }
   }
   document.querySelector('.notes').innerHTML = renderMeetingSummary({
@@ -1672,6 +1687,12 @@ function renderMeetingDetail() {
     participants: currentMeetingDetail?.speakers || [],
   });
   syncDetailSummaryPanel();
+  const summaryPreview = document.querySelector('#detail-view .summary-preview');
+  if (summaryPreview && typeof correctionFeedback === 'function')
+    summaryPreview.insertAdjacentHTML(
+      'afterbegin',
+      correctionFeedback(currentMeetingDetail, 'summary'),
+    );
   filterDetailTranscript();
   syncSummaryFeedback();
   if (d.summaryEditing) {
@@ -1683,33 +1704,15 @@ function renderMeetingDetail() {
         onInput: () => {
           d.summaryDraft = inlineSummaryEditor.getMarkdown();
           d.summarySaveState = 'dirty';
-          const status = document.querySelector('.summary-preview .save-state');
+          const status = document.querySelector('[data-summary-save-status] .save-state');
           if (status) status.outerHTML = renderSaveState('dirty');
         },
       });
       if (summaryMode) inlineSummaryEditor.setMode(summaryMode);
       inlineSummaryEditor.setMarkdown(d.summaryDraft ?? d.summary.markdown);
-      inlineSummaryEditor.focus();
+      if (summaryHadFocus) inlineSummaryEditor.focus();
     }
   }
-}
-
-/** D11 的内容导航和逐字稿操作分行，状态留在标签行，真实操作复用原节点。 */
-function syncDetailTranscriptToolbar() {
-  const root = document.querySelector('.final-transcript');
-  const toolbar = root?.querySelector('.detail-transcript-toolbar');
-  const extra = root?.querySelector('.tabbar > .tabbar-extra');
-  const actions = document.querySelector('#detail-view .detail-actions');
-  if (actions) document.querySelector('#detail-view').append(actions);
-  toolbar?.querySelector('.tabbar-extra')?.remove();
-  if (detailActiveTab !== 'transcript' || !toolbar || !extra) return;
-  if (uiData.detail.transcriptEditing) {
-    root.querySelectorAll('[data-segment-text]').forEach(resizeTranscriptField);
-    return;
-  }
-  const status = extra.querySelector('.refine-state');
-  if (status) root.querySelector('.tabbar').append(status);
-  toolbar.append(extra);
 }
 
 /** 三个标签共用阅读区；参会者留在固定页头，纪要编辑器不随切换重建。 */

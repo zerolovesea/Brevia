@@ -1095,6 +1095,7 @@ const i18nStaticKeys = new Set(
     text(workspaces),
     text(components),
     await readFile('mobile-connection.js', 'utf8'),
+    await readFile('transcript-corrections.js', 'utf8'),
   ].flatMap((source) => [...source.matchAll(/\bt\(\s*'([^']+)'\s*\)/g)].map((match) => match[1])),
 );
 for (const key of i18nStaticKeys)
@@ -2061,7 +2062,7 @@ assert.match(text(js), /closeMeetingMenus/);
 assert.doesNotMatch(text(js), /closeCategoryMenu/);
 assert.match(text(js), /const positionMeetingMenu =/);
 assert.match(text(js), /window\.innerHeight - anchor\.bottom < height && anchor\.top >= height/);
-assert.match(text(css), /\.meeting-menu\{(?=[^}]*position:fixed)(?=[^}]*z-index:50)/);
+assert.match(text(css), /\.meeting-menu[^{}]*\{(?=[^}]*position:fixed)(?=[^}]*z-index:50)/);
 assert.match(text(css), /\.detail-head\{(?=[^}]*z-index:50)/);
 assert.doesNotMatch(text(components), /data-meeting-action="category"/);
 assert.match(text(components), /data-rename-meeting/);
@@ -2680,10 +2681,9 @@ assert.match(
 assert.match(text(css), /\.transcript-scroll \.segment-meta\{[^}]*align-items:baseline/);
 assert.doesNotMatch(text(css), /\.transcript-scroll \.segment p\{[^}]*-webkit-line-clamp/);
 assert.match(text(tailwind), /\.live-notes,\s+\.live-captions\s+\{\s+position:\s+absolute/);
-assert.match(
-  text(tailwind),
-  /\.live-layout\.is-caption-mode\s+\.live-captions\s+\{\s+left:\s+0;\s+width:\s+calc\(100%\s+-\s+364px\)/,
-);
+assert.doesNotMatch(text(html), /data-toggle-live-mode/);
+assert.doesNotMatch(text(js), /setLiveLayoutMode/);
+assert.doesNotMatch(text(tailwind), /is-caption-mode|live-mode-toggle/);
 assert.doesNotMatch(text(js), /live-translation-target|live-toggle|liveInputs/);
 assert.match(text(js), /formatSpeakerName\(payload\.speaker_name \|\| payload\.speaker\)/);
 assert.match(text(js), /function renderExportModal/);
@@ -2691,7 +2691,7 @@ assert.doesNotMatch(text(js), /data-track="vocals"/);
 assert.doesNotMatch(text(js), /data-track="accompaniment"/);
 assert.doesNotMatch(text(js), /data-export-detail[\s\S]{0,300}prompt\(/);
 assert.doesNotMatch(text(components), /data-detail-tab="tracks"/);
-assert.match(text(components), /data-detail-tab="notes"/);
+assert.match(detailTabbarContext.renderDetailTabbar(), /data-detail-tab="notes"/);
 assert.match(text(components), /data-detail-panel="notes"/);
 assert.match(text(components), /class="detail-notes-empty"/);
 assert.match(
@@ -4005,7 +4005,10 @@ assert.match(text(app), /const startRefinement[\s\S]*?requestRefinement/);
 assert.match(text(app), /num_speakers: numSpeakers/);
 assert.match(text(components), /refine-menu-speakers[\s\S]{0,200}data-refine-num-speakers/);
 assert.match(text(app), /function refineNumSpeakers/);
-assert.match(text(app), /async function translateLatestTranscript\(targetLanguage\)/);
+assert.match(
+  text(app),
+  /async function translateLatestTranscript\(targetLanguage, meeting = currentMeetingDetail\)/,
+);
 assert.match(text(components), /data-detail-translation/);
 assert.match(
   text(components),
@@ -4741,20 +4744,60 @@ assert.doesNotMatch(
   /data-generate-summary/,
 );
 for (const markdown of ['', '# 已有纪要']) {
-  const generating = componentContext.renderMeetingSummary({ markdown, generating: true });
-  const count = markdown ? 2 : 1;
+  detailTabbarContext.detailActiveTab = 'summary';
+  detailTabbarContext.uiData.detail.summary = { markdown, generating: true };
+  const generating = detailTabbarContext.renderDetailTabbar();
   assert.equal(
     (generating.match(/class="summary-generating-icon" aria-hidden="true"/g) || []).length,
-    count,
+    1,
   );
-  assert.equal((generating.match(/disabled aria-busy="true"/g) || []).length, count);
+  assert.equal((generating.match(/disabled aria-busy="true"/g) || []).length, 1);
   assert.ok(generating.includes(componentContext.interfaceIcon('ai')), '生成中使用现有星星图标');
+  detailTabbarContext.uiData.detail.summary.generating = false;
   assert.doesNotMatch(
-    componentContext.renderMeetingSummary({ markdown, generating: false }),
+    detailTabbarContext.renderDetailTabbar(),
     /summary-generating-icon|aria-busy="true"/,
-    '生成结束后移除加载动画并恢复操作',
   );
 }
+// 三个页面只保留一套公共操作；隐藏页面的草稿不改变当前页的按钮。
+for (const scope of ['notes', 'transcript', 'summary']) {
+  detailTabbarContext.detailActiveTab = scope;
+  const d = detailTabbarContext.uiData.detail;
+  Object.assign(d, {
+    hasRefined: false,
+    refinedMode: 'timestamps',
+    transcriptVersion: 'refined',
+    notesEditing: false,
+    transcriptEditing: false,
+    summaryEditing: false,
+    transcriptEditable: true,
+    summary: { markdown: '# 纪要' },
+  });
+  const header = detailTabbarContext.renderDetailTabbar();
+  assert.equal((header.match(/class="detail-content-toolbar"/g) || []).length, 1);
+  assert.match(header, new RegExp('id="detail-tab-' + scope + '" role="tab" aria-selected="true"'));
+  d[scope + 'Editing'] = true;
+  const editing = detailTabbarContext.renderDetailTabbar();
+  assert.doesNotMatch(editing, /data-copy-summary|data-regenerate-summary|data-refine-more/);
+  assert.match(editing, /取消<\/button>/);
+  assert.match(editing, /保存<\/button>/);
+}
+detailTabbarContext.detailActiveTab = 'summary';
+detailTabbarContext.uiData.detail.notesEditing = true;
+detailTabbarContext.uiData.detail.summaryEditing = false;
+assert.doesNotMatch(detailTabbarContext.renderDetailTabbar(), /data-notes-save/);
+detailTabbarContext.uiData.detail.summary = {};
+assert.doesNotMatch(
+  detailTabbarContext.renderDetailTabbar(),
+  /data-save-state="saved"/,
+  '尚未生成纪要时不宣称已保存',
+);
+assert.doesNotMatch(
+  summaryContext.renderMeetingSummary({ markdown: '# 纪要' }),
+  /summary-head|data-open-summary-edit|data-regenerate-summary/,
+  '纪要正文不再创建重复工具行',
+);
+
 runInNewContext(
   `${summaryConst('const summaryProviders = ')}${summaryConst('const summaryProviderPresets = ', true)}\n${summaryFn('summaryProviderLabel')}${summaryFn('providerEntry')}${summaryFn('builtinModelPicker')}${summaryFn('builtinModelEmptyState')}${summaryConst('const RECOMMENDED_BUILTIN_MODEL_ID = ')}${summaryFn('renderModelConfigFields')}${summaryFn('renderModelConfigForm')}${summaryFn('renderSummaryModelForm')}${summaryFn('renderAiSettingsTabs')}${summaryFn('renderAiServiceChoice')}${summaryFn('renderSummaryModelModal')}`,
   summaryContext,
@@ -4906,7 +4949,7 @@ summaryContext.summaryConfig = { version: 2, provider: 'built-in', providers: {}
 summaryContext.renderSummaryModelModal();
 assert.doesNotMatch(summaryNodes['.modal-body'].innerHTML, /<img|<script>/);
 assert.doesNotMatch(text(html), /管理模型与术语/);
-// AI 辅助笔记（阶段 0/1）：配置 IPC、入口、空态、设置项与八语种文案。
+// AI 辅助笔记（阶段 0/1）：配置 IPC、入口、设置项与八语种文案。
 assert.match(text(electronMain), /ai-assist\.config\.(get|save)/);
 assert.match(
   text(preload),
@@ -4919,20 +4962,20 @@ assert.match(
 assert.match(text(app), /ai-assist-config-form/);
 assert.match(text(app), /function switchAiAssistTo2B/);
 assert.match(text(app), /function renderAiAssistToggle/);
-assert.match(text(app), /function renderAiAssistEmptyState/);
+assert.doesNotMatch(text(app), /AiAssistEmptyState|data-ai-empty-action/);
 assert.match(text(app), /function openAiAssistPopover/);
 assert.match(
   text(app),
   /if\s+\(kind\s+===\s+'ai-assist'\)\s+\{\s+renderAiAssistModal\(\);\s+return;\s+\}/,
 );
 assert.match(text(html), /data-ai-assist-toggle/);
-assert.match(text(html), /data-ai-assist-empty/);
+assert.doesNotMatch(text(html), /data-ai-assist-empty/);
+assert.doesNotMatch(text(tailwind), /ai-assist-empty/);
 assert.match(text(uiData), /modal: 'ai-features'/);
 assert.match(text(tailwind), /\.ai-assist-toggle/);
 assert.match(text(tailwind), /\.ai-assist-popover/);
 assert.match(text(i18nData), /aiAssistCopy/);
 assert.equal(Object.keys(localeContext.window.BreviaLocaleData.appCopy.aiAssistCopy).length, 8);
-assert.ok(localeContext.window.BreviaLocaleData.catalog.en.labels['暂无字幕可插入']);
 assert.ok(
   localeContext.window.BreviaLocaleData.aiNotePromptCopy.en.instructions.includes(
     'Return at most one suggestion.',
@@ -4960,7 +5003,6 @@ assert.match(text(components), /function detectCaptionSignals/);
 assert.match(text(app), /data-add-segment-note/);
 assert.doesNotMatch(text(app), /data-add-segment-time/);
 assert.match(text(app), /function segmentInfoFor/);
-assert.match(text(app), /data-ai-empty-action/);
 assert.match(text(app), /function appendTextToActiveNotes/);
 assert.match(text(tailwind), /\.caption-signals/);
 // AI 辅助笔记（阶段 3 实时引擎）：IPC、事件白名单、前端启动/停止/输入信号接线。
@@ -5046,7 +5088,6 @@ for (const [language, copy] of Object.entries(
 assert.match(text(html), /data-ai-suggestion/);
 assert.match(text(html), /data-ai-request/);
 assert.match(text(app), /function renderAiSuggestion/);
-assert.match(text(app), /hideAiAssistEmptyState\(\);/);
 assert.match(text(app), /function acceptAiSuggestion/);
 assert.match(text(app), /function convertTopicToHeading/);
 assert.match(text(app), /data-ai-accept/);
@@ -5056,8 +5097,11 @@ assert.match(text(app), /data-ai-topic/);
 assert.match(text(tailwind), /\.ai-suggestion-card/);
 assert.match(text(tailwind), /\.ai-topic-divider/);
 assert.match(text(tailwind), /\.ai-suggestion-badge/);
-for (const language of ['en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']) {
-  assert.ok(localeContext.window.BreviaLocaleData.catalog[language].labels['暂无字幕可插入']);
+for (const copy of Object.values(localeContext.window.BreviaLocaleData.appCopy.aiAssistCopy)) {
+  assert.equal(
+    Object.keys(copy).some((key) => key.startsWith('empty')),
+    false,
+  );
 }
 // AI 辅助仅保留实时建议，不提供聊天式主动分析。
 assert.doesNotMatch(text(electronMain), /ai-note\.analyze/);
@@ -5085,7 +5129,7 @@ assert.doesNotMatch(
 );
 assert.doesNotMatch(text(app), /renderLiveNoteReference|liveNoteReference/);
 assert.match(text(meetingDetail), /summaryGeneratingMeetingId === meeting\.id/);
-assert.match(text(components), /const action = editing/);
+assert.match(text(components), /const editing = Boolean\(d\[`\$\{scope\}Editing`\]\)/);
 assert.match(
   text(app),
   /if\s+\(window\.brevia\)\s+await\s+refreshBackendMeetings\(includeDeleted\)/,
@@ -5101,8 +5145,8 @@ assert.match(text(tailwind), /\.onboarding-ai-levels/);
 // AI 辅助笔记仅保留快速建议与标记。
 assert.match(text(components), /command === 'todo'/);
 assert.match(text(components), /command === 'highlight'/);
-// UI 修订：空态放入笔记输入区；富文本/Markdown 切换为工具栏 SVG 图标 + Command+/；移除字幕搜索与头部模式页签。
-assert.match(text(html), /data-live-notes-root\s*><div\s+class="ai-assist-empty"/);
+// UI 修订：富文本/Markdown 切换为工具栏 SVG 图标 + Command+/；移除字幕搜索与头部模式页签。
+assert.match(text(html), /<div data-live-notes-root><\/div>/);
 assert.doesNotMatch(text(html), /notes-mode-tabs/);
 assert.match(text(html), /class="detail-search-results"[\s\S]*data-close-transcript-search/);
 assert.match(text(components), /data-transcript-search/);
@@ -5533,8 +5577,14 @@ for (const hasRefined of [false, true]) {
   );
   if (hasRefined) {
     assert.doesNotMatch(markup, /data-refine-action="original"/);
+    detailTabbarContext.detailActiveTab = 'transcript';
+    Object.assign(detailTabbarContext.uiData.detail, {
+      hasRefined,
+      transcriptEditing: false,
+      refinedModelAppliedName: 'FunASR Nano int8',
+    });
     assert.match(
-      markup,
+      detailTabbarContext.renderDetailTabbar(),
       /已精修 · FunASR Nano int8/,
       'the refined label names the model that produced it',
     );
@@ -5687,6 +5737,8 @@ const liveElement = () => ({
   remove() {},
 });
 const liveCacheContext = {
+  correctionDraft: null,
+  correctionPanel: { hidden: true },
   liveSegments: new Map(),
   liveSegmentData: new Map(),
   maxLiveSegments: 500,
@@ -5761,7 +5813,6 @@ assert.doesNotMatch(
     },
     renderSegmentData: (segment) => segment,
     liveNotesEditor: { setMarkdown() {} },
-    renderAiAssistEmptyState() {},
   });
   liveCacheContext.transcript.children = restoredNodes;
   liveCacheContext.document.querySelector = (selector) =>
@@ -6168,6 +6219,8 @@ const stableDraft = {
 };
 const activeDrafts = new Map([['mic', stableDraft]]);
 const draftContext = {
+  correctionDraft: null,
+  correctionPanel: { hidden: true },
   window: {
     brevia: {
       on: (name, handler) => {
@@ -6384,3 +6437,231 @@ exportRefreshContext.settingsModal.hidden = true;
 exportRefreshContext.renderExportModal();
 assert.equal(exportRefreshContext.exportSelection.notes, 'md');
 assert.equal(exportRefreshContext.exportSelection.transcript, null);
+
+// 匹配按出现位置选择；英文大小写、正则字符和表情都保持字面语义。
+const correctionSource = await readFile('transcript-corrections.js', 'utf8');
+const matchFunction = correctionSource.slice(
+  correctionSource.indexOf('function correctionMatches('),
+  correctionSource.indexOf('function correctionMeetingId('),
+);
+const findMatches = runInNewContext(`${matchFunction}; correctionMatches`, {
+  textMatchOffsets: utilsContext.textMatchOffsets,
+  correctionPreviewLimit: 200,
+});
+const literalMatches = findMatches(
+  [
+    { id: 'a', text: '😀北威亚和北威亚' },
+    { id: 'b', text: 'Brevia brevia' },
+  ],
+  '北威亚',
+);
+assert.equal(literalMatches.length, 2);
+assert.equal(literalMatches[0].offset, 2);
+assert.equal(literalMatches[1].occurrence, 1);
+assert.equal(findMatches([{ text: 'a.a aa' }], 'a.').length, 1);
+assert.equal(findMatches([{ text: 'Brevia brevia' }], 'Brevia').length, 1);
+assert.equal(findMatches([{ text: 'aaaa' }], 'aa').length, 2);
+assert.equal(findMatches([{ text: 'abc' }], '').length, 0);
+
+const correctedTextFunction = text(components).slice(
+  text(components).indexOf('function renderCorrectedTranscript('),
+  text(components).indexOf('function renderTranscriptSegment('),
+);
+const renderCorrectionText = runInNewContext(
+  `${correctedTextFunction}; renderCorrectedTranscript`,
+  { escapeHtml: summaryContext.escapeHtml },
+);
+assert.equal(
+  renderCorrectionText('Brevia and Brevia', 'Brevia'),
+  '<mark class="correction-saved-word">Brevia</mark> and <mark class="correction-saved-word">Brevia</mark>',
+);
+assert.ok(!renderCorrectionText('<script>x</script>', '<script>').includes('<script>'));
+
+// 保存期间锁定整张表单；成功和失败都恢复控件原有可用状态。
+{
+  const source = text(app);
+  const start = source.indexOf("settingsModal.addEventListener('submit', async (event) => {");
+  const end = source.indexOf("  if (event.target.matches('.speaker-profile-rename-form'))", start);
+  const status = { outerHTML: '' };
+  const fields = [{ disabled: false }, { disabled: false }, { disabled: true }];
+  const form = {
+    isConnected: true,
+    elements: fields,
+    matches: () => true,
+    reportValidity: () => true,
+    querySelector: (selector) => (selector === '.save-state' ? status : fields[0]),
+  };
+  let submit, resolveSave, rejectSave;
+  const context = {
+    structuredClone,
+    settingsModal: {
+      classList: { contains: () => true },
+      addEventListener: (_, callback) => {
+        submit = callback;
+      },
+    },
+    advancedSettings: { settings: { vad: { threshold: 0.5 } } },
+    FormData: class {
+      forEach(callback) {
+        callback('0.6', 'vad.threshold');
+      }
+    },
+    validateAdvancedSettings() {},
+    renderSaveState: (state) => state,
+    showToast() {},
+    t: (key) => key,
+    window: {
+      brevia: {
+        advancedSettings: {
+          save: () =>
+            new Promise((resolve, reject) => {
+              resolveSave = resolve;
+              rejectSave = reject;
+            }),
+        },
+      },
+    },
+  };
+  runInNewContext(summaryFn('completeSettingsSave') + source.slice(start, end) + '});', context);
+  let pending = submit({ target: form, preventDefault() {} });
+  assert.ok(fields.every((field) => field.disabled));
+  resolveSave();
+  await pending;
+  assert.deepEqual(
+    fields.map((field) => field.disabled),
+    [false, false, true],
+  );
+  assert.equal(status.outerHTML, 'saved');
+  pending = submit({ target: form, preventDefault() {} });
+  rejectSave(new Error('disk error'));
+  await pending;
+  assert.deepEqual(
+    fields.map((field) => field.disabled),
+    [false, false, true],
+  );
+  assert.equal(status.outerHTML, 'failed');
+}
+
+// 压缩详情仍提供原始稿；当前稿不被原稿切换覆盖。
+assert.ok(text(meetingDetail).includes('meeting.original_segments'));
+{
+  const source = text(components);
+  const start = source.indexOf('  const translationLine = translation');
+  const end = source.indexOf('  // 编辑框', start);
+  const html = runInNewContext(source.slice(start, end) + '\ntranslationLine', {
+    translation: 'outdated amount',
+    translationStale: true,
+    t: (key) => key,
+  });
+  assert.ok(html.includes('译文 · 待更新'));
+  assert.ok(!html.includes('outdated amount'));
+}
+
+// 动态手机服务错误也必须在每种桌面语言中有词条。
+{
+  const source = String(await readFile('../electron/mobile-server.js'));
+  const data = {};
+  runInNewContext(text(i18nData), { window: data });
+  const labels = data.BreviaLocaleData.catalog;
+  const errors = [
+    ...source.matchAll(
+      /(?:fail\(\d+,\s*|new Error\(|captureError:\s*|error:\s*)(['"])([^'"\n]*[\u3400-\u9fff][^'"\n]*)\1/g,
+    ),
+  ];
+  for (const [, , key] of errors) {
+    for (const code of Object.keys(labels)) assert.ok(labels[code].labels[key], `${code}: ${key}`);
+  }
+}
+
+// 实时重新翻译显式携带会议；详情切换和失败不能更新另一场的界面。
+{
+  const calls = [],
+    applied = [];
+  const live = { id: 'live', segments: [{ id: 'line', text: 'live text' }] };
+  const context = {
+    currentMeetingDetail: { id: 'previous' },
+    latestTranscriptSegments: (meeting) => ({ segments: meeting.segments }),
+    uiData: { detail: {} },
+    renderMeetingDetail: () => assert.fail('实时翻译不能重建上一场详情'),
+    mapWithConcurrency: async (items, _limit, fn) =>
+      Promise.all(items.map(async (item) => ({ status: 'fulfilled', value: await fn(item) }))),
+    generateSegmentTranslation: async (segment, target) => calls.push([segment.id, target]),
+    showTranslationProgress() {},
+    showToast() {},
+    t: (key) => key,
+    applyCorrectionMeeting: (meeting) => applied.push(meeting.id),
+    window: {
+      brevia: { translation: {}, meeting: { get: async ({ meeting_id }) => ({ id: meeting_id }) } },
+    },
+  };
+  runInNewContext('async ' + summaryFn('translateLatestTranscript'), context);
+  await context.translateLatestTranscript('en', live);
+  assert.deepEqual(calls, [['line', 'en']]);
+  assert.deepEqual(applied, ['live']);
+  assert.equal(context.uiData.detail.translationPending, undefined);
+}
+
+// 预览在匹配时停止，既不建立完整结果数组，也不默认提交超过边界的整份文档。
+{
+  const matches = findMatches([{ id: 'notes', text: 'a '.repeat(10000) }], 'a');
+  assert.equal(matches.length, 200);
+  assert.equal(matches.limited, true);
+  assert.equal(findMatches([{ id: 'notes', text: 'a'.repeat(200) }], 'a').limited, undefined);
+  let focused = 0,
+    keyboard = false;
+  const context = { document: { documentElement: { hasAttribute: () => keyboard } } };
+  runInNewContext(summaryFn('focusForKeyboard'), context);
+  const button = { focus: () => focused++ };
+  context.focusForKeyboard(button);
+  assert.equal(focused, 0);
+  keyboard = true;
+  context.focusForKeyboard(button);
+  assert.equal(focused, 1);
+}
+// 编辑器查找与替换共同使用区分大小写的字面规则。
+{
+  const source = text(components);
+  const start = source.indexOf('  function selectFindMatch(');
+  const end = source.indexOf('  /** 切换富文本', start);
+  const input = {
+    value: 'Brevia brevia',
+    selectionEnd: 0,
+    focus() {},
+    setSelectionRange(start, end) {
+      this.selected = [start, end];
+    },
+  };
+  const context = {
+    input,
+    mode: 'markdown',
+    findInput: { value: 'brevia' },
+    replaceInput: { value: 'NEW' },
+    editor: { innerHTML: '' },
+    renderMarkdown: (value) => value,
+    onInput: null,
+  };
+  runInNewContext(source.slice(start, end) + '\nselectFindMatch(); replaceAll();', context);
+  assert.deepEqual(input.selected, [7, 13]);
+  assert.equal(input.value, 'Brevia NEW');
+}
+// 动态警告通过错误码进入与其他错误相同的本地化路径。
+{
+  for (const code of Object.keys(localeContext.window.BreviaLocaleData.catalog))
+    assert.ok(
+      localeContext.window.BreviaLocaleData.appCopy.stageLabels['error.transcript_rule_limit'][
+        code
+      ],
+    );
+  let warn;
+  const source = text(app);
+  const start = source.indexOf("  window.brevia.on('worker.warning'");
+  const end = source.indexOf("  window.brevia.on('worker.error'", start);
+  const messages = [];
+  runInNewContext(source.slice(start, end), {
+    window: { brevia: { on: (_name, callback) => (warn = callback) } },
+    t: (key) => localeContext.window.BreviaLocaleData.appCopy.stageLabels[key].en,
+    showToast: (text) => messages.push(text),
+  });
+  warn({ code: 'error.transcript_rule_limit', message: '中文诊断' });
+  assert.match(messages[0], /original transcript was kept/);
+}

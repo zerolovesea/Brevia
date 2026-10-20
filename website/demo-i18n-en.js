@@ -133,8 +133,6 @@
     '我的笔记': 'My Notes',
     '实时字幕': 'Live Captions',
     'AI 辅助': 'AI Assist',
-    '展开字幕': 'Expand Captions',
-    '返回笔记': 'Back to Notes',
     '加粗': 'Bold',
     '斜体': 'Italic',
     '标题 1': 'Heading 1',
@@ -147,19 +145,6 @@
     '待办': 'Todo',
     '重点': 'Highlight',
     '富文本': 'Rich text',
-    '开始记录会议重点': 'Start taking meeting notes',
-    '你可以直接输入，也可以从右侧实时字幕中将重要内容加入笔记。':
-      'Type directly, or add important moments from the live transcript on the right.',
-    '插入当前字幕': 'Insert current caption',
-    '记录当前时间点': 'Insert timestamp',
-    '开始记录吧': 'Start taking notes',
-    'AI 会自动发现关键结论、待办和重要信息。':
-      'AI will automatically surface key conclusions, action items, and important information.',
-    '记录重点': 'Capture key points',
-    '自动整理': 'Organize automatically',
-    '关联工作区': 'Link workspace',
-
-    // Summary
     '会议纪要': 'Meeting Notes',
     '会议摘要': 'Summary',
     '关键决定': 'Key Decisions',
@@ -390,7 +375,6 @@
 
   DemoScenariosV3.prototype.typeNoteIntoEditor = function () {
     const editor = this.engine.viewport.querySelector('[data-demo-id="notes-editor"]');
-    editor.parentElement.querySelector('.ai-assist-empty')?.remove();
     return this.engine.typeText(
       editor,
       'Action: update the local deployment budget by Friday.',

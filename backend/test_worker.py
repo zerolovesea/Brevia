@@ -42,6 +42,494 @@ from .worker_refinement import DiarizationTimeout, _diarization_chunk_ms
 from .worker_llama_sidecar import ASSISTANT_SIDECAR, _Sidecar, strip_reasoning
 
 
+class TranscriptCorrectionTest(unittest.TestCase):
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.store = Store(directory.name)
+        self.meeting = self.store.create_meeting(
+            {"title": "纠错", "language": "zh", "refined_model_id": "test"}
+        )
+        self.id = self.meeting["id"]
+        self.add_segment("one", "北威亚和北威亚", translation="old translation")
+        self.add_segment("two", "我们使用北威亚")
+
+    def add_segment(self, segment_id, text, **extra):
+        payload = {
+            "meeting_id": self.id,
+            "segment_id": segment_id,
+            "text": text,
+            "start_ms": 0,
+            "end_ms": 1000,
+            **extra,
+        }
+        self.store.save_segment(payload)
+        return payload
+
+    def current(self):
+        return self.store.get_meeting(self.id, compact=True)
+
+    def test_summary_replacement_and_undo_preserve_stale_state(self):
+        self.store.save_summary(self.id, {"markdown": "北威亚的旧纪要"}, "")
+        self.replace()
+        self.store.transcript_correction(
+            self.id,
+            {
+                "scope": "summary",
+                "action": "replace",
+                "find": "北威亚",
+                "replacement": "Brevia",
+                "document": {"text": "北威亚的旧纪要", "occurrences": [0]},
+            },
+        )
+        self.assertTrue(self.current()["correction"]["summary_stale"])
+        self.store.transcript_correction(self.id, {"scope": "summary", "action": "undo"})
+        self.assertTrue(self.current()["correction"]["summary_stale"])
+
+    def test_meeting_snapshot_keeps_text_and_correction_revision_together(self):
+        from .store_corrections import _correction_state
+
+        revision = self.current()["correction"]["revision"]
+
+        def concurrent_edit(db, meeting_id):
+            self.store.save_segment_texts(self.id, [{"segment_id": "one", "text": "later edit"}])
+            return _correction_state(db, meeting_id)
+
+        with patch("backend.store_meetings._correction_state", side_effect=concurrent_edit):
+            snapshot = self.current()
+        self.assertEqual(snapshot["correction"]["revision"], revision)
+        self.assertEqual(snapshot["segments"][0]["text"], "北威亚和北威亚")
+        self.store.save_summary(self.id, {"markdown": "old input"}, "", expected_revision=revision)
+        self.assertTrue(self.current()["correction"]["summary_stale"])
+
+    def test_refinement_discards_stale_ids_but_keeps_current_user_translation_stale(self):
+        self.store.replace_segments(
+            self.id,
+            [
+                {
+                    "segment_id": "kept",
+                    "text": "first",
+                    "translation": "first translation",
+                    "start_ms": 0,
+                    "end_ms": 1000,
+                }
+            ],
+        )
+        self.store.save_segment_texts(self.id, [{"segment_id": "kept", "text": "manual"}])
+        self.store.replace_segments(
+            self.id,
+            [
+                {"segment_id": "kept", "text": "second", "start_ms": 0, "end_ms": 1000},
+                {"segment_id": "new", "text": "new", "start_ms": 1000, "end_ms": 2000},
+            ],
+            "postprocess-1",
+            1,
+        )
+        self.assertEqual(self.current()["correction"]["stale_translations"], ["kept"])
+        self.store.save_translation(self.id, "kept", "manual translation")
+        self.assertEqual(self.current()["correction"]["stale_translations"], [])
+
+    def test_all_transcript_edit_entries_reject_refining_and_deleted_meetings(self):
+        for status in ("refining", "deleted"):
+            if status == "deleted":
+                self.store.set_status(self.id, "ready")
+                self.store.soft_delete(self.id)
+            else:
+                self.store.set_status(self.id, status)
+            with self.subTest(status=status), self.assertRaises(ValueError):
+                self.store.save_segment_texts(self.id, [{"segment_id": "one", "text": "lost"}])
+            with self.subTest(status=status), self.assertRaises(ValueError):
+                self.replace()
+
+    def test_future_undo_metadata_stays_small_and_undo_remains_complete(self):
+        self.replace(future=True)
+        for index in range(601):
+            self.add_segment(f"future-{index}", "北威亚发布")
+        with self.store.connect() as db:
+            raw = db.execute(
+                "SELECT data FROM transcript_corrections WHERE meeting_id=?", (self.id,)
+            ).fetchone()[0]
+            self.assertLess(len(raw), 1000)
+            self.assertNotIn("entries", json.loads(raw)["undo"])
+            self.assertEqual(
+                db.execute(
+                    "SELECT COUNT(*) FROM correction_undo_entries WHERE meeting_id=?", (self.id,)
+                ).fetchone()[0],
+                602,
+            )
+        self.store.transcript_correction(self.id, {"action": "undo"})
+        self.assertEqual(self.current()["correction"]["undo_count"], 0)
+        self.assertTrue(all("Brevia" not in row["text"] for row in self.current()["segments"]))
+
+    def test_legacy_undo_migration_preserves_transcript_and_document_undo(self):
+        self.replace(future=True)
+        source = "北威亚 " * 2000
+        self.store.update_meeting(self.id, {"notes": source})
+        self.store.transcript_correction(
+            self.id,
+            {
+                "scope": "notes",
+                "action": "replace",
+                "find": "北威亚",
+                "replacement": "Brevia",
+                "document": {"text": source, "occurrences": [0]},
+            },
+        )
+        with self.store.connect() as db:
+            state = json.loads(
+                db.execute(
+                    "SELECT data FROM transcript_corrections WHERE meeting_id=?", (self.id,)
+                ).fetchone()[0]
+            )
+            self.assertNotIn("before", state["document_undo"]["notes"])
+            entries = list(
+                db.execute(
+                    "SELECT scope,data FROM correction_undo_entries WHERE meeting_id=?", (self.id,)
+                )
+            )
+            state["undo"]["entries"] = [
+                json.loads(row["data"]) for row in entries if row["scope"] == "transcript"
+            ]
+            state["document_undo"]["notes"] = next(
+                json.loads(row["data"]) for row in entries if row["scope"] == "notes"
+            )
+            db.execute(
+                "UPDATE transcript_corrections SET data=? WHERE meeting_id=?",
+                (json.dumps(state), self.id),
+            )
+            db.execute("DELETE FROM correction_undo_entries")
+            db.execute("DELETE FROM app_meta WHERE key='correction_undo_entries_v1'")
+        self.store = Store(self.store.root)
+        self.add_segment("after-migration", "北威亚发布")
+        self.store.transcript_correction(self.id, {"action": "undo"})
+        self.store.transcript_correction(self.id, {"scope": "notes", "action": "undo"})
+        self.assertEqual(self.current()["notes"], source)
+        self.assertEqual(
+            next(
+                row["text"] for row in self.current()["segments"] if row["id"] == "after-migration"
+            ),
+            "北威亚发布",
+        )
+        self.assertEqual(Store(self.store.root).get_meeting(self.id)["correction"]["undo_count"], 0)
+
+    def test_concurrent_store_startup_serializes_undo_migration(self):
+        with self.store.connect() as db:
+            db.execute("DELETE FROM app_meta WHERE key='correction_undo_entries_v1'")
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            stores = list(pool.map(lambda _: Store(self.store.root), range(8)))
+        self.assertEqual(len(stores), 8)
+        self.assertEqual(self.current()["segments"][0]["text"], "北威亚和北威亚")
+
+    def test_compact_reads_skip_historical_refinements_and_preserve_original(self):
+        for revision in range(3):
+            self.store.replace_segments(
+                self.id,
+                [
+                    {
+                        "segment_id": "refined",
+                        "text": f"version {revision}",
+                        "start_ms": 0,
+                        "end_ms": 1000,
+                    }
+                ],
+                f"postprocess-{revision}",
+                revision,
+            )
+        full = self.store.get_meeting(self.id)
+        with patch(
+            "backend.store_meetings.latest_segments",
+            side_effect=AssertionError("compact loaded history"),
+        ):
+            compact = self.current()
+        self.assertEqual(compact["segments"], full["current_segments"])
+        self.assertEqual(compact["transcript_revision"], 2)
+        self.assertEqual(len(compact["original_segments"]), 2)
+
+    def test_document_replacement_preserves_format_and_scopes_undo(self):
+        notes = "# 北威亚\n\n**北威亚** [官网](https://example.org)\n\n- [ ] 北威亚验收"
+        summary = "## 决定\n\n北威亚上线，北威亚验收。"
+        self.store.update_meeting(self.id, {"notes": notes})
+        self.store.save_summary(self.id, {"markdown": summary, "todo": ["keep"]}, summary)
+        self.replace()
+        for scope, source in (("notes", notes), ("summary", summary)):
+            self.store.transcript_correction(
+                self.id,
+                {
+                    "scope": scope,
+                    "action": "replace",
+                    "find": "北威亚",
+                    "replacement": "Brevia",
+                    "document": {"text": source, "occurrences": [1]},
+                },
+            )
+        meeting = Store(self.store.root).get_meeting(self.id, compact=True)
+        self.assertEqual(meeting["notes"], notes.replace("**北威亚**", "**Brevia**"))
+        self.assertEqual(
+            meeting["summary"]["data"]["markdown"], "## 决定\n\n北威亚上线，Brevia验收。"
+        )
+        self.assertEqual(meeting["summary"]["data"]["todo"], ["keep"])
+        self.assertEqual(meeting["correction"]["document_undo_counts"], {"notes": 1, "summary": 1})
+        self.assertEqual(meeting["correction"]["undo_count"], 1)
+        for scope in ("summary", "notes"):
+            self.store.transcript_correction(self.id, {"scope": scope, "action": "undo"})
+        self.assertEqual(self.current()["notes"], notes)
+        self.assertEqual(self.current()["summary"]["data"]["markdown"], summary)
+        self.assertEqual(self.current()["segments"][0]["text"], "Brevia和北威亚")
+
+    def test_document_replace_and_undo_reject_later_writes(self):
+        for scope in ("notes", "summary"):
+            with self.subTest(scope=scope):
+
+                def save(text):
+                    if scope == "notes":
+                        self.store.update_meeting(self.id, {"notes": text})
+                    else:
+                        self.store.save_summary(self.id, {"markdown": text}, text)
+
+                save("北威亚和北威亚")
+                payload = {
+                    "scope": scope,
+                    "action": "replace",
+                    "find": "北威亚",
+                    "replacement": "Brevia",
+                    "document": {"text": "stale", "occurrences": [0]},
+                }
+                with self.assertRaisesRegex(ValueError, "更新预览"):
+                    self.store.transcript_correction(self.id, payload)
+                payload["document"]["text"] = "北威亚和北威亚"
+                self.store.transcript_correction(self.id, payload)
+                save("later edit")
+                with self.assertRaisesRegex(ValueError, "更新预览"):
+                    self.store.transcript_correction(self.id, {"scope": scope, "action": "undo"})
+                current = self.current()
+                self.assertEqual(
+                    current["notes"]
+                    if scope == "notes"
+                    else current["summary"]["data"]["markdown"],
+                    "later edit",
+                )
+
+    def replace(self, occurrences=None, future=False, replacement="Brevia"):
+        segment = self.current()["segments"][0]
+        self.store.transcript_correction(
+            self.id,
+            {
+                "action": "replace",
+                "find": "北威亚",
+                "replacement": replacement,
+                "future": future,
+                "matches": [
+                    {
+                        "segment_id": segment["id"],
+                        "text": segment["text"],
+                        "version": segment["version"],
+                        "revision": segment["revision"],
+                        "occurrences": [0] if occurrences is None else occurrences,
+                    }
+                ],
+            },
+        )
+
+    def test_selected_occurrence_persists_and_undo_keeps_timing(self):
+        self.store.save_summary(self.id, {"markdown": "old summary"}, "")
+        before = self.current()["segments"][0]
+        self.replace([1])
+        meeting = Store(self.store.root).get_meeting(self.id, compact=True)
+        after = meeting["segments"][0]
+        self.assertEqual(after["text"], "北威亚和Brevia")
+        self.assertEqual(
+            [after[key] for key in ("start_ms", "end_ms", "speaker", "translation")],
+            [before[key] for key in ("start_ms", "end_ms", "speaker", "translation")],
+        )
+        self.assertTrue(meeting["correction"]["summary_stale"])
+        self.assertEqual(meeting["correction"]["stale_translations"], ["one"])
+        self.store.transcript_correction(self.id, {"action": "undo"})
+        self.assertEqual(self.current()["segments"][0]["text"], before["text"])
+        self.assertEqual(self.current()["correction"]["undo_count"], 0)
+
+    def test_conflicting_batch_rolls_back_and_undo_protects_later_edit(self):
+        segments = self.current()["segments"]
+        matches = [
+            {
+                "segment_id": item["id"],
+                "text": item["text"],
+                "version": item["version"],
+                "revision": item["revision"],
+                "occurrences": [0],
+            }
+            for item in segments
+        ]
+        matches[1]["text"] = "stale"
+        with self.assertRaisesRegex(ValueError, "更新预览"):
+            self.store.transcript_correction(
+                self.id,
+                {
+                    "action": "replace",
+                    "find": "北威亚",
+                    "replacement": "Brevia",
+                    "future": True,
+                    "matches": matches,
+                },
+            )
+        self.assertEqual(self.current()["segments"][0]["text"], segments[0]["text"])
+        self.assertEqual(self.current()["correction"]["rules"], [])
+        self.replace(future=True)
+        self.store.save_segment_texts(self.id, [{"segment_id": "one", "text": "later edit"}])
+        with self.assertRaisesRegex(ValueError, "更新预览"):
+            self.store.transcript_correction(self.id, {"action": "undo"})
+        self.assertEqual(self.current()["segments"][0]["text"], "later edit")
+        self.assertTrue(self.current()["correction"]["rules"][0]["enabled"])
+
+    def test_future_rules_restore_and_undo_includes_new_segments(self):
+        self.replace(future=True)
+        self.store = Store(self.store.root)
+        new = self.add_segment("three", "北威亚发布")
+        self.assertEqual(new["text"], "Brevia发布")
+        self.assertTrue(new["user_edited"])
+        self.assertEqual(self.current()["correction"]["undo_count"], 2)
+        self.store.transcript_correction(self.id, {"action": "undo"})
+        text = {item["id"]: item["text"] for item in self.current()["segments"]}
+        self.assertEqual(text["three"], "北威亚发布")
+        self.assertEqual(text["one"], "北威亚和北威亚")
+        self.assertEqual(self.current()["correction"]["rules"], [])
+
+    def test_rules_are_literal_nonrecursive_meeting_scoped_and_stoppable(self):
+        self.replace(future=True, replacement="北威亚北威亚")
+        new = self.add_segment("three", "北威亚")
+        self.assertEqual(new["text"], "北威亚北威亚")
+        self.store.transcript_correction(self.id, {"action": "disable", "find": "北威亚"})
+        self.assertEqual(self.add_segment("four", "北威亚")["text"], "北威亚")
+        another = self.store.create_meeting(
+            {"title": "other", "language": "zh", "refined_model_id": "test"}
+        )
+        payload = {
+            "meeting_id": another["id"],
+            "segment_id": "one",
+            "text": "北威亚",
+            "start_ms": 0,
+            "end_ms": 1000,
+        }
+        self.store.save_segment(payload)
+        self.assertEqual(payload["text"], "北威亚")
+
+    def test_undo_of_a_new_rule_preserves_older_rules_on_future_segments(self):
+        self.replace(future=True)
+        self.add_segment("rule-source", "另词")
+        segment = next(item for item in self.current()["segments"] if item["id"] == "rule-source")
+        self.store.transcript_correction(
+            self.id,
+            {
+                "action": "replace",
+                "find": "另词",
+                "replacement": "Other",
+                "future": True,
+                "matches": [
+                    {
+                        "segment_id": segment["id"],
+                        "text": segment["text"],
+                        "version": segment["version"],
+                        "revision": segment["revision"],
+                        "occurrences": [0],
+                    }
+                ],
+            },
+        )
+        future = self.add_segment("future", "北威亚和另词")
+        self.assertEqual(future["text"], "Brevia和Other")
+        self.store.transcript_correction(self.id, {"action": "undo"})
+        texts = {item["id"]: item["text"] for item in self.current()["segments"]}
+        self.assertEqual(texts["future"], "Brevia和另词")
+        self.assertEqual(self.current()["correction"]["rules"][0]["find"], "北威亚")
+
+    def test_oversized_future_replacement_preserves_original_and_disables_rule(self):
+        self.replace(future=True, replacement="B" * 2000)
+        payload = self.add_segment("large", "北威亚" * 3)
+        self.assertEqual(payload["text"], "北威亚" * 3)
+        self.assertIn("correction_error", payload)
+        self.assertEqual(payload["correction_error_code"], "error.transcript_rule_limit")
+        self.assertFalse(self.current()["correction"]["rules"][0]["enabled"])
+
+    def test_translation_and_summary_finishing_after_an_edit_remain_stale(self):
+        revision = self.current()["correction"]["revision"]
+        self.replace()
+        self.assertFalse(
+            self.store.save_translation(self.id, "one", "stale", expected_text="北威亚和北威亚")
+        )
+        self.assertEqual(self.current()["segments"][0]["translation"], "old translation")
+        self.store.save_summary(self.id, {"markdown": "old input"}, "", expected_revision=revision)
+        self.assertTrue(self.current()["correction"]["summary_stale"])
+        self.store.save_translation(
+            self.id, "one", "new", expected_text=self.current()["segments"][0]["text"]
+        )
+        self.assertEqual(self.current()["correction"]["stale_translations"], [])
+        self.store.save_summary(
+            self.id,
+            {"markdown": "new input"},
+            "",
+            expected_revision=self.current()["correction"]["revision"],
+        )
+        self.assertFalse(self.current()["correction"]["summary_stale"])
+
+    def test_manual_save_checks_snapshot_and_refinement_invalidates_undo(self):
+        base = self.current()["segments"][0]
+        self.replace()
+        with self.assertRaisesRegex(ValueError, "更新预览"):
+            self.store.save_segment_texts(
+                self.id,
+                [
+                    {
+                        "segment_id": "one",
+                        "text": "lost",
+                        "expected": {key: base[key] for key in ("text", "version", "revision")},
+                    }
+                ],
+            )
+        self.store.replace_segments(
+            self.id,
+            [{"segment_id": "refined", "text": "new result", "start_ms": 0, "end_ms": 1000}],
+        )
+        self.assertEqual(self.current()["correction"]["undo_count"], 0)
+        self.assertEqual(self.current()["segments"][0]["text"], "new result")
+
+
+class AiReplayScriptTest(unittest.TestCase):
+    def test_replay_uses_current_prompt_cancellation_and_cleans_up(self):
+        from scripts import test_ai_note_realtime as replay
+
+        workers, roots, generations = [], [], []
+
+        def create_worker(root, output):
+            worker = Worker(root, output)
+            roots.append(Path(root))
+            workers.append(worker)
+            worker._resolve_gguf = Mock(return_value=Path(root) / "model.gguf")
+            worker.llama_generate_realtime = Mock(return_value="{}")
+            generations.append(worker.llama_generate_realtime)
+            return worker
+
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = Path(directory) / "fixture.json"
+            fixture.write_text(
+                json.dumps([{"text": "We confirmed the deployment plan. " * 12, "start_ms": 0}])
+            )
+            args = SimpleNamespace(
+                gap=0, mode="assist", model="test", models_dir=directory, debug=True
+            )
+            with (
+                patch.dict(replay.FIXTURES, {"en": fixture}),
+                patch("backend.worker.Worker", side_effect=create_worker),
+                patch("backend.worker_ai_note.ANALYSIS_MIN_INTERVAL_SECONDS", 0),
+                patch("builtins.print"),
+            ):
+                replay.run_podcast("en", args)
+        worker = workers[0]
+        self.assertTrue(generations[0].called)
+        self.assertIn("cancellation", generations[0].call_args.kwargs)
+        self.assertIn("<meeting_state>", generations[0].call_args.args[1])
+        self.assertFalse(worker._ai_note_sessions)
+        self.assertTrue(all(not root.exists() for root in roots))
+
+
 class SpeechSettingsTest(unittest.TestCase):
     def test_cap_validation_and_migration_preserve_other_settings(self):
         original = json.loads(json.dumps(SETTINGS))
@@ -1034,6 +1522,108 @@ class WorkerTest(unittest.TestCase):
         self.assertEqual(
             result["segments"][0]["word_timestamps"], [{"overlap_speakers": ["spk-1", "spk-2"]}]
         )
+        self.assertEqual([s["text"] for s in result["original_segments"]], ["live"])
+        self.assertNotIn("current_segments", result)
+
+    def test_repair_download_replaces_incomplete_model_and_restores_on_failure(self):
+        manager = ModelManager(Path(self.temp.name) / "repair-models", cleanup=False)
+        manager.catalog = {
+            "repair": {
+                "id": "repair",
+                "revision": "1",
+                "size_bytes": 2,
+                "files": ["a", "b"],
+                "downloads": [
+                    {
+                        "path": name,
+                        "url": "https://example.test/" + name,
+                        "sha256": hashlib.sha256(name.encode()).hexdigest(),
+                    }
+                    for name in ("a", "b")
+                ],
+            }
+        }
+        destination = manager.local_path("repair")
+        destination.mkdir()
+        (destination / "a").write_text("old")
+        manager._download_file = lambda url, path, *_: path.write_text(url.rsplit("/", 1)[1])
+        original_replace = Path.replace
+
+        def fail_install(source, target):
+            if source.name == "model":
+                raise OSError("cannot install")
+            return original_replace(source, target)
+
+        with patch.object(Path, "replace", fail_install):
+            with self.assertRaisesRegex(OSError, "cannot install"):
+                manager.download("repair")
+        self.assertEqual((destination / "a").read_text(), "old")
+        self.assertFalse(manager.is_ready("repair"))
+        manager.download("repair")
+        self.assertTrue(manager.is_ready("repair"))
+        self.assertEqual((destination / "a").read_text(), "a")
+
+    def test_translation_reads_only_current_sentence_and_rejects_superseded_result(self):
+        meeting = self.worker.store.create_meeting(
+            {"title": "translation", "language": "zh", "refined_model_id": "test"}
+        )
+        mid = meeting["id"]
+        self.worker.store.set_status(mid, "ready")
+        old = [{"segment_id": "old", "text": "旧稿", "start_ms": 0, "end_ms": 100}]
+        self.worker.store.replace_segments(mid, old)
+        self.worker.store.save_segment_texts(mid, [{"segment_id": "old", "text": "旧稿修改"}])
+        current = [
+            {"segment_id": str(i), "text": str(i), "start_ms": i * 100, "end_ms": i * 100 + 100}
+            for i in range(20)
+        ]
+        self.worker.store.replace_segments(mid, current, "postprocess-1", 1)
+        _, segment = self.worker.store.translation_context(mid, "old")
+        self.assertIsNone(segment)
+        self.worker.llama_generate = lambda *_args, **_kwargs: "translation"
+        with patch.object(
+            self.worker.store, "get_meeting", wraps=self.worker.store.get_meeting
+        ) as reads:
+            self.worker.mobile_translate(
+                {"meeting_id": mid, "target_language": "en", "consent": True}
+            )
+        self.assertEqual(reads.call_count, 1)
+        self.assertEqual(self.worker.store.get_meeting(mid)["target_language"], "en")
+        _, segment = self.worker.store.translation_context(mid, "0")
+        self.worker.store.replace_segments(mid, current, "postprocess-2", 2)
+        self.assertFalse(
+            self.worker.store.save_translation(
+                mid,
+                "0",
+                "obsolete",
+                expected_text=segment["text"],
+                expected_version=(segment["version"], segment["revision"]),
+            )
+        )
+
+    def test_edited_translations_are_not_exported_as_current(self):
+        meeting = self.worker.store.create_meeting(
+            {"title": "edited", "language": "zh", "refined_model_id": "test"}
+        )
+        mid = meeting["id"]
+        self.worker.store.save_segment(
+            {
+                "meeting_id": mid,
+                "segment_id": "one",
+                "text": "预算五万",
+                "translation": "fifty thousand",
+                "start_ms": 0,
+                "end_ms": 100,
+            }
+        )
+        self.worker.store.save_segment_texts(mid, [{"segment_id": "one", "text": "预算十万"}])
+        result = self.worker.export({"meeting_id": mid, "format": "txt"})
+        text = Path(result["path"]).read_text()
+        self.assertIn("预算十万", text)
+        self.assertNotIn("fifty thousand", text)
+        result = self.worker.export({"meeting_id": mid, "format": "json"})
+        exported = json.loads(Path(result["path"]).read_text())
+        self.assertIsNone(exported["segments"][0]["translation"])
+        self.assertIsNone(exported["current_segments"][0]["translation"])
 
     def test_worker_command_replaces_lone_surrogates_before_sqlite(self):
         meeting = self.worker.handle(
@@ -7486,6 +8076,10 @@ class WorkerTest(unittest.TestCase):
         self.assertEqual(detail["segments"][0]["word_timestamps"], [])
         self.assertEqual(detail["transcript_model_id"], "old-origin")
         with upgraded.connect() as db:
+            self.assertIn(
+                "segments_refinement_revision",
+                [row["name"] for row in db.execute("PRAGMA index_list(segments)")],
+            )
             self.assertEqual(
                 [row["name"] for row in db.execute("PRAGMA table_info(segments)") if row["pk"]],
                 ["id", "meeting_id", "version"],

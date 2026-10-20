@@ -48,8 +48,16 @@ class ExportWorkerMixin:
         if export_format not in {"md", "txt", "json", "srt", "docx", "pdf"}:
             raise ValueError("Unsupported text export format")
         segments = latest_segments(meeting["segments"])
+        stale = set(meeting.get("correction", {}).get("stale_translations", []))
+        segments = [
+            {**item, "translation": None} if item["id"] in stale else item for item in segments
+        ]
         if export_format == "json":
-            content = json.dumps({**meeting, "segments": segments}, ensure_ascii=False, indent=2)
+            content = json.dumps(
+                {**meeting, "segments": segments, "current_segments": segments},
+                ensure_ascii=False,
+                indent=2,
+            )
         elif export_format == "srt":
             content = "\n\n".join(
                 f"{index}\n{srt_time(item['start_ms'])} --> {srt_time(item['end_ms'])}\n"
