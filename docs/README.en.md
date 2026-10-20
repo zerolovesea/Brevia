@@ -18,6 +18,7 @@
 
 For online calls, in-person discussions, interviews and lectures. Keep the full conversation, your own thoughts and the next steps together.
 
+- **Correct text in bulk.** Preview and select replacements in transcripts, notes and summaries, with undo. During recording, apply rules to subsequent captions in the current meeting.
 - **Stay with the conversation.** Follow live transcripts in 30+ languages, with optional translation and floating captions.
 - **Keep what matters.** Write beside the transcript, let AI suggest decisions and action items, and edit notes and summaries in your own words.
 - **Take the meeting room with you.** Record and mark moments on your phone, then continue on your computer. Your phone can also serve as its microphone.

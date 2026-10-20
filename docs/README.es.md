@@ -59,6 +59,7 @@ Con segmentación Pyannote más modelos de embeddings de voz, todo ejecutándose
 
 ### Y más
 
+- **Correcciones por lotes** — previsualiza y selecciona reemplazos en transcripciones, notas y resúmenes, con opción de deshacer; durante la grabación, aplica reglas a los próximos subtítulos de esa reunión.
 - **Importación de audio** — trae grabaciones existentes para transcribirlas offline con el mismo pipeline.
 - **Exportaciones versátiles** — transcripciones y notas en Markdown, TXT, JSON, SRT, DOCX o PDF; audio en WAV.
 - **Notas revisables** — escribe en texto enriquecido o Markdown y acepta solo las sugerencias de IA que te sirvan.

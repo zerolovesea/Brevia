@@ -22,7 +22,7 @@ lane :beta do
     wait_processing_timeout_duration: 2400,
     # 只使用维护者按当前实现复核问卷后的明确声明，不推定豁免。
     uses_non_exempt_encryption: encryption == 'true',
-    changelog: ENV.fetch('TESTFLIGHT_CHANGELOG') { "内部测试 #{ENV.fetch('BUILD_NUMBER')} · #{ENV.fetch('GITHUB_SHA')[0, 7]}。手机新建实时录音后直接进入转写页；顶部只显示连接状态，移除随音频上传反复变化的进度条。请验证新建录音、转写与笔记切换、返回录音概览、暂停/继续、断线重连和大字号显示；离线录音与电脑调用手机麦克风仍使用录音界面，手机与电脑需处于同一局域网。" }
+    changelog: ENV.fetch('TESTFLIGHT_CHANGELOG') { "内部测试 #{ENV.fetch('BUILD_NUMBER')} · #{ENV.fetch('GITHUB_SHA')[0, 7]}。统一本机应用图标、开屏和页眉字标，适配深色模式；精简会议快照缓存，完善录音写入积压时的中断提示。请验证实时转写与笔记切换、暂停/继续、断线重连、离线录音、电脑调用手机麦克风及大字号显示；协作录音需要手机与电脑处于同一局域网。" }
   )
 end
 

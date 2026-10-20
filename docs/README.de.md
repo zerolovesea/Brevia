@@ -59,6 +59,7 @@ Angetrieben von Pyannote-Segmentierung plus Sprecher-Embedding-Modellen, alles a
 
 ### Und mehr
 
+- **Texte gesammelt korrigieren** — Ersetzungen in Transkripten, Notizen und Zusammenfassungen vorab prüfen, auswählen und rückgängig machen; während der Aufnahme Regeln auf folgende Untertitel desselben Meetings anwenden.
 - **Audio-Import** — bring bestehende Aufnahmen fuer die Offline-Transkription in die gleiche Sprachpipeline.
 - **Vielseitige Exporte** — Transkripte und Notizen als Markdown, TXT, JSON, SRT, DOCX oder PDF; Audio als WAV.
 - **Ueberpruefbare Notizen** — schreibe in Rich Text oder Markdown und uebernimm nur hilfreiche KI-Vorschlaege.

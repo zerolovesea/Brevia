@@ -1,6 +1,6 @@
 {
   "name": "brevia",
-  "version": "1.4.3",
+  "version": "1.4.4",
   "main": "electron/main.js",
   "scripts": {
     "assets:brand": "electron scripts/generate-brand-assets.cjs",

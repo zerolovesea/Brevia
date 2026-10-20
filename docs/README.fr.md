@@ -59,6 +59,7 @@ Propulse par la segmentation Pyannote plus les modeles d'embeddings de locuteur,
 
 ### Et plus encore
 
+- **Corrections par lot** — prévisualisez et sélectionnez les remplacements dans les transcriptions, notes et résumés, avec annulation ; pendant l’enregistrement, appliquez des règles aux sous-titres suivants de la réunion.
 - **Import audio** — apportez des enregistrements existants pour une transcription hors ligne via le meme pipeline.
 - **Exports riches** — transcriptions et notes en Markdown, TXT, JSON, SRT, DOCX ou PDF ; audio en WAV.
 - **Notes verifiables** — ecrivez en texte enrichi ou Markdown et acceptez seulement les suggestions IA utiles.
