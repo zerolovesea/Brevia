@@ -1,4 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-  <rect width="1024" height="1024" rx="184" fill="#080808"/>
-  <text x="512" y="686" fill="#fff" font-family="PingFang SC, Hiragino Sans GB, Noto Sans CJK SC, sans-serif" font-size="560" font-weight="700" text-anchor="middle">言</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" role="img" aria-label="Brevia">
+<g id="mark">
+    <path fill="#26221e" d="M0 0h160v160H0z"/>
+    <path fill="#fbfaf7" fill-rule="evenodd" d="M44 54h32l-4-7 10-3 4 10h30v8H44z M54 67h52v8H54z M54 80h52v7H54z M52 92h56v28h-8v-3H60v3h-8z M60 100v9h40v-9z"/>
+  </g>
 </svg>

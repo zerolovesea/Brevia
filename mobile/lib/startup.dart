@@ -110,12 +110,13 @@ class _StartupState extends State<Startup> with SingleTickerProviderStateMixin {
                                     .6,
                                     curve: Curves.easeOut,
                                   ).transform(controller.value),
-                                  child: const Text(
-                                    'Brevia',
-                                    style: TextStyle(
-                                      fontSize: 24,
-                                      fontWeight: FontWeight.w600,
-                                    ),
+                                  child: Image.asset(
+                                    'assets/brevia-wordmark.png',
+                                    height: 24,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurface,
+                                    excludeFromSemantics: true,
                                   ),
                                 ),
                               ),

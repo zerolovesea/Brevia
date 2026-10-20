@@ -1,4 +1,5 @@
 import 'package:brevia_mobile/design_icons.dart';
+import 'package:brevia_mobile/design_system.dart';
 import 'dart:io';
 import 'dart:async';
 import 'package:brevia_mobile/i18n.dart';
@@ -1135,6 +1136,29 @@ void main() {
     },
   );
 
+  testWidgets('brand keeps its wordmark visible in both themes', (
+    tester,
+  ) async {
+    for (final brightness in Brightness.values) {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(brightness: brightness),
+          home: Builder(builder: (context) => breviaBrand(context)),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final image = tester.widget<Image>(find.byType(Image));
+      expect(
+        (image.image as AssetImage).assetName,
+        brightness == Brightness.dark
+            ? 'assets/brevia-lockup-dark.png'
+            : 'assets/brevia-lockup.png',
+      );
+      expect(image.semanticLabel, 'Brevia');
+      expect(tester.takeException(), isNull);
+    }
+  });
+
   testWidgets(
     'startup waits for the first animation frame and never hides slow initialization',
     (tester) async {
@@ -1147,14 +1171,10 @@ void main() {
           ),
         ),
       );
-      final image = tester.widget<Image>(find.byType(Image));
+      final logo = find.image(const AssetImage('assets/brevia-logo.png'));
+      final image = tester.widget<Image>(logo);
       expect((image.image as AssetImage).assetName, 'assets/brevia-logo.png');
-      image.frameBuilder!(
-        tester.element(find.byType(Image)),
-        const SizedBox(),
-        0,
-        false,
-      );
+      image.frameBuilder!(tester.element(logo), const SizedBox(), 0, false);
       await tester.pump(const Duration(milliseconds: 1500));
       expect(find.text('会议列表'), findsNothing);
       ready.complete();

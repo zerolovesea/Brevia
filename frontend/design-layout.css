@@ -3777,11 +3777,9 @@ body {
   width: 100%;
   height: 100%;
 }
-.brand-name {
-  font-size: 26px;
-  font-weight: 600;
-  letter-spacing: -0.025em;
-  line-height: 32px;
+.brand-name img {
+  width: 50px;
+  height: auto;
 }
 .sidebar .new-meeting {
   margin-top: 22px;
@@ -5546,12 +5544,6 @@ textarea,
   border-right: 1px solid var(--color-line);
   color: var(--color-text);
 }
-.onboarding-wordmark {
-  font-size: 64px;
-  font-weight: 700;
-  letter-spacing: -0.035em;
-  line-height: 1.1;
-}
 .onboarding-rail h2 {
   margin: 8px 0 16px;
   font-size: 26px;
@@ -6642,9 +6634,6 @@ body:has(.app-shell.is-live-meeting) .export-modal {
   }
   .onboarding-rail {
     padding: 32px 24px;
-  }
-  .onboarding-wordmark {
-    font-size: 48px;
   }
   .onboarding-rail h2 {
     font-size: 22px;
@@ -9189,13 +9178,9 @@ body:has(.app-shell.is-settings-view):has(.sidebar:hover, .sidebar:focus-within)
   align-items: center;
   gap: 14px;
 }
-.onboarding-brand-mark {
-  width: 56px;
+.onboarding-brand-lockup .onboarding-brand {
+  width: auto;
   height: 56px;
-  flex: none;
-}
-html[data-theme="dark"] .onboarding-brand-mark {
-  filter: invert(1);
 }
 .onboarding-motion-rail {
   display: flex;
@@ -9204,12 +9189,8 @@ html[data-theme="dark"] .onboarding-brand-mark {
   min-height: 0;
   overflow-y: auto;
 }
-.onboarding-motion-rail .onboarding-wordmark {
-  font-size: 43px;
-  line-height: 57px;
-}
-.onboarding-motion-rail .onboarding-brand-mark {
-  width: 42px;
+.onboarding-motion-rail .onboarding-brand {
+  width: auto;
   height: 42px;
 }
 .onboarding-motion-rail h2 {
@@ -9255,12 +9236,8 @@ html[data-theme="dark"] .onboarding-brand-mark {
   .onboarding-motion-rail {
     padding: 24px;
   }
-  .onboarding-motion-rail .onboarding-wordmark {
-    font-size: 34px;
-    line-height: 44px;
-  }
-  .onboarding-motion-rail .onboarding-brand-mark {
-    width: 34px;
+  .onboarding-motion-rail .onboarding-brand {
+    width: auto;
     height: 34px;
   }
   .onboarding-motion-rail h2 {

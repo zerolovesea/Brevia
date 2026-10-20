@@ -2123,7 +2123,7 @@ try {
           const copy=window.BreviaLocaleData.onboardingMotionCopy[code];
           const content=onboardingPage.querySelector('.onboarding-page-content');
           const before=content.innerHTML;
-          if(!rail.querySelector('.onboarding-brand-mark') || rail.querySelectorAll('li').length!==5) errors.push(code+'/'+kind+': brand/navigation');
+          if(!rail.querySelector('.onboarding-brand-lockup img[src$="brevia-logo.svg"][alt="Brevia"]') || rail.querySelectorAll('li').length!==5) errors.push(code+'/'+kind+': brand/navigation');
           if(handle.timeline.duration()!==9) errors.push(code+'/'+kind+': duration');
           if(!handle.timeline.getChildren().every(tween=>tween.targets().every(target=>!(target instanceof Element)||rail.contains(target)))) errors.push(code+'/'+kind+': leaked target');
           handle.seek(0); const wave=rail.querySelector('[data-motion="curve-one"]').getAttribute('d');
@@ -2726,6 +2726,8 @@ try {
     `详情操作统一图标、间距、菜单及编辑保护：${JSON.stringify(detailToolChecks.result?.value || detailToolChecks.exceptionDetails)}`,
   );
 
+  // 默认背景检查前移开鼠标，避免布局变化让按钮恰好进入悬停态。
+  await client.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 0, y: 0 });
   const visualFeedback = await client.send('Runtime.evaluate', {
     expression: `(async()=>{
       const errors=[];

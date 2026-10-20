@@ -32,3 +32,6 @@ flutter:
   uses-material-design: true
   assets:
     - assets/brevia-logo.png
+    - assets/brevia-lockup.png
+    - assets/brevia-lockup-dark.png
+    - assets/brevia-wordmark.png

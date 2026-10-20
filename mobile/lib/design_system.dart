@@ -414,16 +414,14 @@ class BreviaPageTransitionsBuilder extends PageTransitionsBuilder {
   }
 }
 
-Widget breviaBrand({double size = 32}) => Row(
-  mainAxisSize: MainAxisSize.min,
-  children: [
-    breviaLogo(size: size),
-    const SizedBox(width: 10),
-    const Text(
-      'Brevia',
-      style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
-    ),
-  ],
+Widget breviaBrand(BuildContext context, {double size = 32}) => Image.asset(
+  Theme.of(context).brightness == Brightness.dark
+      ? 'assets/brevia-lockup-dark.png'
+      : 'assets/brevia-lockup.png',
+  width: size * 505 / 160,
+  height: size,
+  fit: BoxFit.contain,
+  semanticLabel: 'Brevia',
 );
 
 Widget breviaLogo({double size = 32}) => Image.asset(

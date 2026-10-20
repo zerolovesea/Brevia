@@ -950,7 +950,7 @@ class _HomeState extends State<Home> {
               centerTitle: false,
               titleSpacing: 24,
               toolbarHeight: 48,
-              title: breviaBrand(),
+              title: breviaBrand(context),
               actions: [
                 if (tab == 0 &&
                     (model.live == null || model.live?['state'] == 'ended'))

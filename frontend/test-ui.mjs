@@ -3395,7 +3395,7 @@ assert.match(text(css), /:where\(html,body,\*\)\.is-scrolling\{scrollbar-color:#
 assert.doesNotMatch(text(css), /scrollbar-color:#666 transparent/);
 assert.match(
   text(css),
-  /html\[data-theme=dark\] \.brand img,html\[data-theme=dark\] \.onboarding-brand\{filter:invert\(\)/,
+  /html\[data-theme=dark\] \.brand img,html\[data-theme=dark\] \.about-brand-mark img,html\[data-theme=dark\] \.onboarding-brand\{filter:invert\(\)/,
 );
 assert.match(
   text(tailwind),

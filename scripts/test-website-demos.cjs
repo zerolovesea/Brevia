@@ -58,6 +58,14 @@ app
     }
     const server = createServer((request, response) => {
       const path = new URL(request.url, 'http://localhost').pathname;
+      if (path === '/__github-repo__') {
+        response.writeHead(200, {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        });
+        response.end(JSON.stringify({ stargazers_count: 1234 }));
+        return;
+      }
       const deployed = path.startsWith('/__deployed__/');
       const base = deployed ? join(temp, 'site') : root;
       const file = resolve(
@@ -86,6 +94,10 @@ app
     });
     await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
     const siteURL = `http://127.0.0.1:${server.address().port}`;
+    win.webContents.session.webRequest.onBeforeRequest(
+      { urls: ['https://api.github.com/repos/zerolovesea/Brevia'] },
+      (_, callback) => callback({ redirectURL: `${siteURL}/__github-repo__` }),
+    );
     const waitForMotion = async () => {
       for (let attempt = 0; attempt < 100; attempt++) {
         if (await win.webContents.executeJavaScript('!!window.productMotion')) return;
@@ -100,6 +112,7 @@ app
       await win.loadURL(`${siteURL}/${directory}/index-${language}.html${hash ? '#' + hash : ''}`);
     };
     try {
+      await import('./test-github-stars.mjs');
       for (const locale of ['zh', 'en']) {
         const tour = join(output, 'tour', locale);
         if (record) {
@@ -761,10 +774,26 @@ app
             document.querySelectorAll('img').forEach(image => image.loading = 'eager');
             await Promise.all([...document.images].map(image => image.decode()));
             await document.fonts.ready;
+            for (let attempt = 0; attempt < 100; attempt++) {
+              if (document.querySelector('[data-github-stars]').textContent === '1.2K') return;
+              await new Promise(resolve => setTimeout(resolve, 20));
+            }
+            throw Error('GitHub star count did not load');
           })()`);
           const page = await win.webContents.executeJavaScript(`({
             overflow: document.documentElement.scrollWidth > innerWidth,
             headerFits: [...document.querySelectorAll('.header-inner > *, .header-actions > *')].filter(element => element.getClientRects().length).every(element => {const rect = element.getBoundingClientRect();return rect.left >= 0 && rect.right <= innerWidth;}),
+            github: (() => {
+              const link = document.querySelector('.github-link');
+              const box = link.getBoundingClientRect();
+              const count = link.querySelector('[data-github-stars]').getBoundingClientRect();
+              return link.href === 'https://github.com/zerolovesea/Brevia' && box.width >= 44 && box.height >= 44 && count.right <= box.right && link.getAttribute('aria-label').includes('1,234');
+            })(),
+            headerIcons: (() => {
+              const icons = [...document.querySelectorAll('.header-actions svg')].filter(icon => icon.getBoundingClientRect().width > 0);
+              const centers = icons.map(icon => { const box = icon.getBoundingClientRect(); return box.top + box.height / 2; });
+              return icons.every(icon => icon.querySelector('path') && icon.getBBox().width > 0) && Math.max(...centers) - Math.min(...centers) < 1;
+            })(),
             headings: document.querySelectorAll('h1').length,
             motions: document.querySelectorAll('[data-motion-scene]').length,
             staticApplicationImages: document.querySelectorAll('.privacy-app img[src*="/app-ui/"][src*="-models.png"]').length,
@@ -779,6 +808,12 @@ app
           })`);
           assert.equal(page.overflow, false, `${locale}/${width}: horizontal overflow`);
           assert.equal(page.headerFits, true, `${locale}/${width}: header clipped`);
+          assert.equal(page.github, true, `${locale}/${width}: GitHub link or stars clipped`);
+          assert.equal(
+            page.headerIcons,
+            true,
+            `${locale}/${width}: header icons missing or misaligned`,
+          );
           assert.equal(page.headings, 1);
           if (locale === 'zh' && width >= 1280) {
             const conceptLayout = await win.webContents.executeJavaScript(`(() => {
@@ -883,7 +918,7 @@ app
           const productBrand = await win.webContents.executeJavaScript(`(() => {
             const doc = document.querySelector('.hero-visual iframe').contentDocument;
             const names = [...doc.querySelectorAll('.brand-name,.window-wordmark')];
-            return names.length === 2 && names.every(node => node.textContent === 'Brevia');
+            return names.length === 2 && names.every(node => node.textContent === 'Brevia' || node.querySelector('img')?.alt === 'Brevia');
           })()`);
           assert.equal(productBrand, true, 'Product brand remains Brevia in both languages');
           assert.equal(assetVersions.count, 7);

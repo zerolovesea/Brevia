@@ -182,12 +182,6 @@
   .app-shell.is-live-meeting .brand {
     justify-content: center;
   }
-  .app-shell.is-live-meeting .brand img {
-    display: none;
-  }
-  .app-shell.is-live-meeting .brand-mark {
-    display: grid;
-  }
   .app-shell.is-live-meeting .new-meeting {
     justify-content: center;
     padding-inline: 0;
@@ -249,14 +243,6 @@
   .app-shell.is-live-meeting:has(.sidebar:hover) .brand,
   .app-shell.is-live-meeting:has(.sidebar:focus-within) .brand {
     justify-content: flex-start;
-  }
-  .app-shell.is-live-meeting:has(.sidebar:hover) .brand img,
-  .app-shell.is-live-meeting:has(.sidebar:focus-within) .brand img {
-    display: block;
-  }
-  .app-shell.is-live-meeting:has(.sidebar:hover) .brand-mark,
-  .app-shell.is-live-meeting:has(.sidebar:focus-within) .brand-mark {
-    display: none;
   }
   .app-shell.is-live-meeting:has(.sidebar:hover) .new-meeting,
   .app-shell.is-live-meeting:has(.sidebar:focus-within) .new-meeting {
@@ -4424,6 +4410,7 @@ html[data-theme="dark"] .software-update-notice button {
 }
 /* Explicit foreground overrides for components that use light-theme utility colors. */
 html[data-theme="dark"] .brand img,
+html[data-theme="dark"] .about-brand-mark img,
 html[data-theme="dark"] .onboarding-brand {
   filter: invert(1);
 }

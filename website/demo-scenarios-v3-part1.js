@@ -12,7 +12,7 @@ class DemoScenariosV3 {
 
   sidebarHtml(active = 'home') {
     return String.raw`<aside class="sidebar" aria-label="主导航">
-        <button class="brand" data-view="home" aria-label="Brevia 首页"><span class="brand-mark" aria-hidden="true">言</span><img src="../frontend/assets/brevia-logo.svg" alt="brevia" /></button>
+        <button class="brand" data-view="home" aria-label="Brevia 首页"><span class="brand-mark" aria-hidden="true"><img src="../frontend/assets/brevia-mark.svg" alt="" /></span><span class="brand-name"><img src="../frontend/assets/brevia-wordmark.svg" alt="Brevia" /></span></button>
         <button class="new-meeting" data-demo-id="new-meeting-btn" data-view="prepare" data-prepare-mode="record"><span class="new-meeting-icon">+</span><span class="new-meeting-label">开始会议</span></button>
         <button class="import-recording" id="import-recording" data-view="prepare" data-prepare-mode="import" type="button"><span class="import-recording-icon" aria-hidden="true">↥</span><span class="import-recording-label">导入录音</span></button>
         <nav>

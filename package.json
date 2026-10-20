@@ -3,6 +3,8 @@
   "version": "1.4.3",
   "main": "electron/main.js",
   "scripts": {
+    "assets:brand": "electron scripts/generate-brand-assets.cjs",
+    "assets:brand:check": "electron scripts/generate-brand-assets.cjs --check",
     "build": "cd frontend && npx @tailwindcss/cli -i ./tailwind.css -o ./styles.css --minify",
     "start": "electron .",
     "start:fresh": "electron . --reset-onboarding",

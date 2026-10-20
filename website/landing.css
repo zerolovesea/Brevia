@@ -175,6 +175,37 @@ select:focus-visible {
   align-items: center;
   margin-left: 0;
 }
+.github-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+}
+.github-link:hover {
+  background: #edf0eb;
+}
+.github-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.github-stars {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.github-star {
+  width: 13px;
+  height: 13px;
+}
+[data-github-stars] {
+  min-width: 3ch;
+}
 .button {
   display: inline-flex;
   align-items: center;
@@ -1925,14 +1956,21 @@ h2 {
   .header-actions {
     gap: 0;
   }
-  .header-actions .button-small {
-    padding: 10px 12px;
-    font-size: 12px;
-    gap: 6px;
+  .github-link {
+    gap: 4px;
+    width: 60px;
+    font-size: 11px;
+    line-height: 1.2;
   }
-  .header-actions .button-small .icon {
-    width: 15px;
-    height: 15px;
+  .github-star {
+    display: none;
+  }
+  .header-download-label {
+    display: none;
+  }
+  .header-actions .button-small {
+    width: 44px;
+    padding: 10px;
   }
   .header-actions .icon {
     width: 20px;
@@ -2411,10 +2449,6 @@ h2 {
   }
   .brand img {
     width: 78px;
-  }
-  .header-actions .button-small {
-    padding-inline: 10px;
-    font-size: 11px;
   }
   .hero-trust {
     font-size: 10px;

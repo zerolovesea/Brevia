@@ -16,6 +16,10 @@
 
 Swift 使用与移动端 CI 一致的 Xcode 自带的 `swift-format`（`xcrun swift-format format --in-place <文件>`），CI 使用 `xcrun swift-format lint --strict` 检查；Kotlin 遵循 Android Studio 默认格式。少量 Ruby 和 Shell 脚本沿用语言惯例，不为格式引入额外依赖；分别用 `ruby -c`、`bash -n` 检查语法。原生源码修改后运行对应平台构建。
 
+品牌图形以 `frontend/assets/brevia-logo.svg` 为唯一静态源，字形沿用开屏动画最终定格。安装 ImageMagick 后运行 `npm run assets:brand` 同步桌面、官网、文档和手机资源；`npm run assets:brand:check` 校验产物。不要直接修改生成的图标。
+
+官网导航使用独立的手绘版本 `website/assets/brevia-logo-handdrawn.svg`，其他入口沿用统一品牌图形。
+
 ## 代码书写
 
 - JS / Dart 的变量和函数使用 camelCase；Python 使用 snake_case；类名使用 PascalCase。

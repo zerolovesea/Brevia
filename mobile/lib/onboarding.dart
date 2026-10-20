@@ -100,7 +100,7 @@ class _OnboardingGateState extends State<OnboardingGate> {
       padding: const EdgeInsets.all(24),
       children: [
         if (step == 0) ...[
-          breviaBrand(),
+          breviaBrand(context),
           const SizedBox(height: 32),
           Text(
             tr('手机录音，电脑转写。'),
