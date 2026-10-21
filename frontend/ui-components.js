@@ -38,6 +38,9 @@ function interfaceIcon(name) {
       '<path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="8" cy="18" r="2"/>',
     settings:
       '<path d="m9.5 3-.5 2-2 1.2-2-.6-2.5 4.3L4 11.3v2.4l-1.5 1.4L5 19.4l2-.6 2 1.2.5 2h5l.5-2 2-1.2 2 .6 2.5-4.3-1.5-1.4v-2.4l1.5-1.4L19 5.6l-2 .6L15 5l-.5-2Z"/><circle cx="12" cy="12.5" r="3"/>',
+    window: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/>',
+    pin: '<path d="m14 3 7 7-4 1-4 5-2-2-6 6 6-6-2-2 5-4z"/>',
+    capsule: '<rect x="2" y="7" width="20" height="10" rx="5"/><path d="M7 12h6"/>',
     close: '<path d="m5 5 14 14M19 5 5 19"/>',
     check: '<path d="m5 12 4 4L19 6"/>',
     refresh: '<path d="M20 4v6h-6M20 10a8 8 0 1 0-1 7"/>',
@@ -146,6 +149,8 @@ function showPageTooltip(anchor, text) {
     role: 'tooltip',
   });
   if (!pageTooltip.parentNode) document.body.append(pageTooltip);
+  const quick = anchor.matches('[data-quick-recording]');
+  pageTooltip.classList.toggle('quick-recording-tooltip', quick);
   pageTooltip.textContent = text || '';
   if (!pageTooltip.textContent) return;
   pageTooltip.hidden = false;
@@ -153,7 +158,8 @@ function showPageTooltip(anchor, text) {
   const rect = anchor.getBoundingClientRect();
   const box = pageTooltip.getBoundingClientRect();
   pageTooltip.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - box.width - 8))}px`;
-  pageTooltip.style.top = `${Math.max(8, Math.min(rect.top - box.height - 8, window.innerHeight - box.height - 8))}px`;
+  const top = quick && rect.top - box.height - 8 < 40 ? rect.bottom + 8 : rect.top - box.height - 8;
+  pageTooltip.style.top = `${Math.max(8, Math.min(top, window.innerHeight - box.height - 8))}px`;
   pageTooltip.style.visibility = '';
 }
 function hidePageTooltip() {
@@ -211,32 +217,36 @@ if (typeof document !== 'undefined') {
   });
   document.addEventListener('pointerover', (event) => {
     const anchor = event.target.closest?.(
-      '.notes-toolbar button[data-tooltip], .model-source-switch label[data-tooltip], .segment-tools [data-tooltip], .live-caption-controls [data-tooltip], #mark-important[data-tooltip], .note-highlight [data-tooltip]',
+      '.notes-toolbar button[data-tooltip], .model-source-switch label[data-tooltip], .segment-tools [data-tooltip], .live-caption-controls [data-tooltip], #mark-important[data-tooltip], [data-quick-recording][data-tooltip], .note-highlight [data-tooltip]',
     );
     if (anchor) showPageTooltip(anchor, anchor.dataset.tooltip);
   });
   document.addEventListener('pointerout', (event) => {
     const anchor = event.target.closest?.(
-      '.notes-toolbar button[data-tooltip], .model-source-switch label[data-tooltip], .segment-tools [data-tooltip], .live-caption-controls [data-tooltip], #mark-important[data-tooltip], .note-highlight [data-tooltip]',
+      '.notes-toolbar button[data-tooltip], .model-source-switch label[data-tooltip], .segment-tools [data-tooltip], .live-caption-controls [data-tooltip], #mark-important[data-tooltip], [data-quick-recording][data-tooltip], .note-highlight [data-tooltip]',
     );
     if (anchor && !anchor.contains(event.relatedTarget)) hidePageTooltip();
   });
   document.addEventListener('focusin', (event) => {
     const anchor = event.target.closest?.(
-      '.live-caption-controls [data-tooltip], #mark-important[data-tooltip], .note-highlight [data-tooltip]',
+      '.live-caption-controls [data-tooltip], #mark-important[data-tooltip], [data-quick-recording][data-tooltip], .note-highlight [data-tooltip]',
     );
     if (anchor) showPageTooltip(anchor, anchor.dataset.tooltip);
   });
   document.addEventListener('focusout', (event) => {
     if (
       event.target.closest?.(
-        '.live-caption-controls [data-tooltip], #mark-important[data-tooltip], .note-highlight [data-tooltip]',
+        '.live-caption-controls [data-tooltip], #mark-important[data-tooltip], [data-quick-recording][data-tooltip], .note-highlight [data-tooltip]',
       )
     )
       hidePageTooltip();
   });
   document.addEventListener('click', (event) => {
-    if (event.target.closest?.('.live-caption-controls, #mark-important, .note-highlight'))
+    if (
+      event.target.closest?.(
+        '.live-caption-controls, #mark-important, [data-quick-recording], .note-highlight',
+      )
+    )
       hidePageTooltip();
   });
 }
@@ -399,12 +409,7 @@ function renderMeetingRow(
   const workspaceLabel = workspace
     ? `${escapeHtml(t('工作区'))} · ${escapeHtml(workspace.name)}`
     : '';
-  return `<article class="meeting-row" data-meeting-index="${index}" data-selection-key="${escapeHtml(id || String(index))}" tabindex="0" aria-selected="false"${id ? ` data-meeting-id="${escapeHtml(id)}"` : ''}${!deleted && id ? ' draggable="true"' : ''}><input class="meeting-row-checkbox" type="checkbox" data-select-meeting aria-label="${escapeHtml(t('选择'))} ${escapeHtml(title)}" /><span class="meeting-row-icon">${interfaceIcon('file')}</span><div class="meeting-main">${heading}${editingMeetingIndex === index ? '' : `<p>${escapeHtml(meta)}</p>`}<div class="meeting-tags">${tags
-    .filter((tag) => tag !== '手机录音' && tag !== '手机麦克风')
-    .map((tag) => `<div class="tag">${escapeHtml(tag)}</div>`)
-    .join(
-      '',
-    )}</div></div><span class="meeting-workspace">${workspaceLabel}</span><div class="meeting-status"><span class="status ${status.tone}${status.paused ? ' is-paused' : ''}${statusCode === 'recording' ? ' is-recording' : ''}">${escapeHtml(t(status.label))}</span><small>${escapeHtml(t(status.detail))}</small></div><div class="meeting-actions"><button class="more" data-meeting-menu="${index}" aria-label="${t('更多操作')}" aria-expanded="false">${interfaceIcon('chevron-right')}</button><div class="meeting-menu" hidden>${menu}</div></div></article>`;
+  return `<article class="meeting-row" data-meeting-index="${index}" data-selection-key="${escapeHtml(id || String(index))}" tabindex="0" aria-selected="false"${id ? ` data-meeting-id="${escapeHtml(id)}"` : ''}${!deleted && id ? ' draggable="true"' : ''}><input class="meeting-row-checkbox" type="checkbox" data-select-meeting aria-label="${escapeHtml(t('选择'))} ${escapeHtml(title)}" /><span class="meeting-row-icon">${interfaceIcon('file')}</span><div class="meeting-main">${heading}${editingMeetingIndex === index ? '' : `<p>${escapeHtml(meta)}</p>`}</div><span class="meeting-workspace">${workspaceLabel}</span><div class="meeting-status"><span class="status ${status.tone}${status.paused ? ' is-paused' : ''}${statusCode === 'recording' ? ' is-recording' : ''}">${escapeHtml(t(status.label))}</span><small>${escapeHtml(t(status.detail))}</small></div><div class="meeting-actions"><button class="more" data-meeting-menu="${index}" aria-label="${t('更多操作')}" aria-expanded="false">${interfaceIcon('chevron-right')}</button><div class="meeting-menu" hidden>${menu}</div></div></article>`;
 }
 /** 渲染设置卡片及其模态框操作。@param {{title: string, description: string, action: string, modal: string}} card 卡片数据。@returns {string} 卡片标记。 */
 function renderSettingsCard({ title, description, action, modal }) {
@@ -435,7 +440,7 @@ function renderSettingsView() {
   const grid = document.querySelector('#settings-view .settings-grid');
   grid.insertAdjacentHTML(
     'afterbegin',
-    `<h2 class="settings-group">${escapeHtml(t('基本'))}</h2><section class="settings-card settings-preferences">${interfaceIcon('globe')}<h2>${escapeHtml(t('界面语言'))}</h2><p>${escapeHtml(t('切换语言'))}</p>${flowSelect(
+    `<h2 class="settings-group settings-basic-group">${escapeHtml(t('基本'))}</h2><section class="settings-card settings-preferences">${interfaceIcon('globe')}<h2>${escapeHtml(t('界面语言'))}</h2><p>${escapeHtml(t('切换语言'))}</p>${flowSelect(
       'interface-language',
       locale,
       [
@@ -458,6 +463,38 @@ function renderSettingsView() {
       ],
     )}</section>`,
   );
+  renderDesktopPreferences();
+}
+function renderDesktopPreferences() {
+  document.querySelector('[data-desktop-settings]')?.remove();
+  if (!desktopPreferences || !window.brevia?.desktop) return;
+  const status = document.querySelector('[data-desktop-settings-status]');
+  if (status) status.innerHTML = renderSaveState('saved');
+  const tray = t(window.brevia.platform === 'darwin' ? '菜单栏' : '托盘');
+  const row = (label, description, control) =>
+    `<section class="settings-card settings-preferences desktop-preference">${interfaceIcon({ 关闭主窗口时: 'window', 菜单栏图标: 'more', 托盘图标: 'more', 最小化时自动显示胶囊: 'capsule' }[label])}<div><h2>${escapeHtml(t(label))}</h2><p>${escapeHtml(description)}</p></div>${control}</section>`;
+  const toggle = (key, label) =>
+    `<button type="button" class="preference-switch" data-desktop-toggle="${key}" role="switch" aria-checked="${desktopPreferences[key]}" aria-label="${escapeHtml(t(label))}"><i></i></button>`;
+  const content = `<div data-desktop-settings><h2 class="settings-group">${escapeHtml(t('窗口与后台'))}</h2>${row(
+    '关闭主窗口时',
+    desktopPreferences.closeBehavior === 'hide'
+      ? t('关闭窗口不会结束录音，可从菜单栏或托盘重新打开')
+      : t('录音中退出前会结束并保存当前录音'),
+    flowSelect('desktop-closeBehavior', desktopPreferences.closeBehavior, [
+      ['hide', `${t('隐藏到')}${tray}`],
+      ['quit', t('退出应用')],
+    ]),
+  )}${row(
+    window.brevia.platform === 'darwin' ? '菜单栏图标' : '托盘图标',
+    t('隐藏窗口时始终保留入口'),
+    flowSelect('desktop-trayVisibility', desktopPreferences.trayVisibility, [
+      ['always', t('始终显示')],
+      ['background', t('仅窗口隐藏时')],
+    ]),
+  )}<h2 class="settings-group">${escapeHtml(t('桌面录音胶囊'))}</h2>${row('最小化时自动显示胶囊', t('录音或暂停时显示；隐藏胶囊不会停止录音'), toggle('autoCapsule', '最小化时自动显示胶囊'))}</div>`;
+  const grid = document.querySelector('#settings-view .settings-grid');
+  grid.querySelector('.settings-preferences:last-of-type')?.insertAdjacentHTML('afterend', content);
+  if (!grid.querySelector('[data-desktop-settings]')) grid.insertAdjacentHTML('beforeend', content);
 }
 /** 仅允许安全协议的链接/图片地址，阻止 javascript: 等注入。@param {string} url 原始地址。@returns {string} 安全地址。 */
 function sanitizeUrl(url = '') {
@@ -1453,9 +1490,29 @@ function renderSaveState(state = 'saved') {
   const mark = state === 'saved' ? interfaceIcon('check') : state === 'failed' ? '!' : '';
   return `<span class="save-state" data-save-state="${state}" role="status"><i class="save-state-mark" aria-hidden="true">${mark}</i>${escapeHtml(t(label || '已保存'))}</span>`;
 }
+function renderSummaryDocument(markdown) {
+  const html = renderMarkdown(cleanSummaryMarkdown(markdown));
+  const parts = html.split(/(<h[12]\b[^>]*>[\s\S]*?<\/h[12]>)/i);
+  if (parts.length < 3) return html;
+  let result = parts[0];
+  for (let index = 1; index < parts.length; index += 2) {
+    const title = parts[index];
+    const content = parts[index + 1] || '';
+    const label = title.replace(/<[^>]+>/g, '').trim();
+    const discussion =
+      /^(详细讨论|讨论记录|詳細な議論|詳細討論|상세 논의|Discussion|Detailed discussion|Discusión|Discussion détaillée|Detaillierte Diskussion|Подробное обсуждение)$/i.test(
+        label,
+      );
+    result += discussion
+      ? `<details class="summary-discussion"><summary>${title}<span>${escapeHtml(t('展开讨论记录'))}${interfaceIcon('chevron-down')}</span></summary><div>${content}</div></details>`
+      : `<section class="summary-reading-section">${title}<div>${content}</div></section>`;
+  }
+  return result;
+}
 /** 纪要面板只渲染正文；操作与状态由三个标签共用的页头提供。 */
 function renderMeetingSummary({
   markdown,
+  waitingModels = false,
   generating = false,
   editing = false,
   participants = [],
@@ -1471,7 +1528,7 @@ function renderMeetingSummary({
           '',
         )}${participants.length > 3 ? `<small>+${participants.length - 3}</small>` : ''}</span>${interfaceIcon('chevron-down')}</button><div id="summary-participants-popover" class="meeting-popover summary-participants-popover" popover role="dialog" aria-label="${escapeHtml(t('参与者'))}"><header><h3>${escapeHtml(t('参与者'))} (${participants.length})</h3><button class="icon-button" data-close-meeting-popover type="button" aria-label="${escapeHtml(t('关闭'))}">${interfaceIcon('close')}</button></header><label class="search">${interfaceIcon('search')}<input type="search" data-participant-search aria-label="${escapeHtml(t('搜索'))}" placeholder="${escapeHtml(t('搜索'))}" /></label><div class="summary-participant-list">${participants.map((person) => `<span><i class="speaker-avatar" aria-hidden="true">${escapeHtml([...formatSpeakerName(person)][0] || '')}</i><span>${escapeHtml(formatSpeakerName(person))}</span></span>`).join('')}</div><p data-participant-empty role="status" hidden>${escapeHtml(t('暂无内容'))}</p></div></section>`
     : '';
-  return `<div class="summary-preview"><div class="summary-feedback" data-summary-feedback hidden></div>${people}${editing ? `<div class="summary-inline-edit"><div data-inline-summary-editor></div></div>` : markdown ? `<div class="summary-body markdown-content">${renderMarkdown(cleanSummaryMarkdown(markdown))}</div>` : `<p class="summary-empty">${t(generating ? '正在生成会议纪要' : '尚未生成会议纪要')}</p>`}</div>`;
+  return `<div class="summary-preview"><div class="summary-feedback" data-summary-feedback hidden></div>${people}${editing ? `<div class="summary-inline-edit"><div data-inline-summary-editor></div></div>` : markdown ? `<div class="summary-body markdown-content">${renderSummaryDocument(markdown)}</div>` : waitingModels ? `<section class="summary-waiting"><span>${interfaceIcon('check')}${escapeHtml(t('录音已保存'))}</span><div>${interfaceIcon('document')}<h2>${escapeHtml(t('录音已保存'))}</h2><p>${escapeHtml(t('纪要等待所需模型，就绪后会自动继续。'))}</p><div><button class="secondary" data-settings-modal="models" type="button">${interfaceIcon('download')}${escapeHtml(t('模型库'))}</button><button class="secondary" data-detail-tab="transcript" type="button">${interfaceIcon('document')}${escapeHtml(t('逐字稿'))}</button></div></div></section>` : `<p class="summary-empty">${t(generating ? '正在生成会议纪要' : '尚未生成会议纪要')}</p>`}</div>`;
 }
 /** 在页面外壳可用后填充所有数据驱动的静态区域。@returns {void} */
 function renderStaticViews() {
@@ -1537,7 +1594,7 @@ function renderDetailTabbar() {
       ? `<button class="tabbar-action" data-notes-cancel type="button"${busy ? ' disabled' : ''} aria-label="${t('取消')}">${interfaceIcon('close')}${t('取消')}</button><button class="tabbar-action is-save" data-notes-save type="button"${busy ? ' disabled' : ''} aria-label="${t(saveState === 'failed' ? '重试' : '保存')}">${interfaceIcon('check')}${t(saveState === 'failed' ? '重试' : '保存')}</button>`
       : `<button class="tabbar-action" data-edit-notes type="button" aria-label="${t('编辑')}">${interfaceIcon('edit')}${t('编辑')}</button>`;
   } else if (scope === 'summary') {
-    status = `<span data-summary-save-status>${summary.generating ? `<span class="refine-state" role="status">${t('正在生成会议纪要')}</span>` : summary.markdown || editing ? renderSaveState(saveState) : ''}</span>`;
+    status = `<span data-summary-save-status>${summary.waitingModels ? `<span class="refine-state">${escapeHtml(t('等待模型'))}</span>` : summary.generating ? `<span class="refine-state" role="status">${t('正在生成会议纪要')}</span>` : summary.markdown || editing ? renderSaveState(saveState) : ''}</span>`;
     const blocked = summary.blocked
       ? ` title="${escapeHtml(t('实时会议中，结束后再生成会议纪要。'))}"`
       : '';

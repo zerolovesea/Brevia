@@ -293,9 +293,9 @@
   }
   .app-shell.is-live-meeting:has(.sidebar:hover) .nav-item span,
   .app-shell.is-live-meeting:has(.sidebar:focus-within) .nav-item span {
-    width: 24px;
-    margin-right: 8px;
-    font-size: 18px;
+    width: 20px;
+    margin-right: 0;
+    font-size: inherit;
   }
   .task-cards {
     @apply relative z-10 grid min-w-0 gap-3 overflow-auto;

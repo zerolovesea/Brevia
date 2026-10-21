@@ -39,9 +39,23 @@
           class="new-meeting"
           data-view="prepare"
           data-prepare-mode="record"
-          aria-label="开始会议"
+          aria-label="开始录音"
           ><span class="new-meeting-icon" data-interface-icon="plus" aria-hidden="true"></span
-          ><span class="new-meeting-label">开始会议</span></button
+          ><span class="new-meeting-label">开始录音</span></button
+        >
+        <button
+          class="import-recording quick-recording"
+          data-quick-recording
+          data-tooltip-key="沿用上次会议配置，快速开始录音。"
+          data-tooltip="沿用上次会议配置，快速开始录音。"
+          type="button"
+          aria-label="快速录音"
+          ><span
+            class="import-recording-icon"
+            data-interface-icon="microphone"
+            aria-hidden="true"
+          ></span
+          ><span class="import-recording-label">快速录音</span></button
         >
         <button
           class="import-recording"
@@ -192,8 +206,16 @@
               type="button"
               aria-pressed="false"
               ><span data-interface-icon="checkbox"></span>选择会议</button
-            ><button class="primary-action" data-view="prepare" data-prepare-mode="record"
-              ><span data-interface-icon="plus" aria-hidden="true"></span>开始会议</button
+            ><button
+              class="primary-action quick-recording"
+              data-quick-recording
+              data-tooltip-key="沿用上次会议配置，快速开始录音。"
+              data-tooltip="沿用上次会议配置，快速开始录音。"
+              type="button"
+              ><span data-interface-icon="microphone" aria-hidden="true"></span
+              ><span>快速录音</span></button
+            ><button class="secondary" data-view="prepare" data-prepare-mode="record"
+              ><span data-interface-icon="plus" aria-hidden="true"></span>开始录音</button
             ></div
           >
           <div class="library-toolbar"
@@ -540,7 +562,14 @@
         <section class="view" id="settings-view"
           ><div class="settings-general-main"
             ><p class="eyebrow settings-description">管理 Brevia 的使用偏好、AI 能力与数据设置。</p
-            ><h1>通用</h1><div class="settings-grid"></div
+            ><div class="settings-general-heading"
+              ><h1>通用</h1
+              ><span
+                class="desktop-settings-status"
+                data-desktop-settings-status
+                role="status"
+              ></span></div
+            ><div class="settings-grid"></div
             ><section class="settings-card" id="mobile-connection"
               ><span data-interface-icon="phone" aria-hidden="true"></span><h2>设备连接</h2
               ><p>连接同一局域网内的手机设备，查看连接状态与录音使用情况。</p
@@ -697,6 +726,29 @@
         </div> </details
       ><p id="mobile-dialog-status" role="status"></p
     ></div>
+    <dialog
+      id="quit-recording-dialog"
+      aria-labelledby="quit-recording-title"
+      aria-describedby="quit-recording-description"
+    >
+      <form method="dialog">
+        <div class="quit-recording-body"
+          ><img src="./assets/brevia-mark.svg" alt="" width="48" height="48" /><div
+            ><h2 id="quit-recording-title">结束录音并退出 Brevia？</h2
+            ><p id="quit-recording-description"></p
+            ><p class="quit-recording-hint" data-quit-background hidden
+              >关闭主窗口可以继续在后台录音。</p
+            ></div
+          ></div
+        >
+        <footer
+          ><button class="secondary" value="cancel" autofocus>继续录音</button
+          ><button class="modal-action" value="confirm"
+            ><span data-interface-icon="stop" aria-hidden="true"></span>结束并退出</button
+          ></footer
+        >
+      </form>
+    </dialog>
     <dialog
       id="mobile-pair-dialog"
       aria-labelledby="mobile-pair-title"

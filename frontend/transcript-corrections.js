@@ -47,7 +47,7 @@ function correctionControls(meeting, scope = 'transcript') {
     scope === 'summary' &&
     typeof summaryGeneratingMeetingId !== 'undefined' &&
     summaryGeneratingMeetingId === meeting?.id;
-  return `<div class="correction-controls"><button class="text-button" type="button" data-open-correction="${scope}"${generating ? ' disabled' : ''}>${interfaceIcon('search')}${t('查找与替换')}</button>${scope === 'transcript' && state?.rules?.length ? `<button class="text-button" type="button" data-correction-rules>${t('本场规则')} ${state.rules.filter((rule) => rule.enabled).length}</button>` : ''}</div>`;
+  return `<div class="correction-controls"><button class="icon-button" type="button" data-open-correction="${scope}" title="${escapeHtml(t('查找与替换'))}" aria-label="${escapeHtml(t('查找与替换'))}"${generating ? ' disabled' : ''}>${interfaceIcon('search')}</button>${scope === 'transcript' && state?.rules?.length ? `<button class="text-button" type="button" data-correction-rules>${t('本场规则')} ${state.rules.filter((rule) => rule.enabled).length}</button>` : ''}</div>`;
 }
 function correctionFeedback(meeting, scope = 'transcript') {
   const state = meeting?.correction;

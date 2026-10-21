@@ -276,7 +276,8 @@ html[data-theme="dark"] .modal-danger {
 }
 
 #home-view .page-head {
-  gap: 24px;
+  gap: 12px;
+  margin-bottom: 24px;
 }
 #home-view .page-head > div {
   flex: 1;
@@ -330,15 +331,6 @@ html[data-theme="dark"] .modal-danger {
 .meeting-source .interface-icon {
   width: 14px;
   height: 14px;
-}
-.meeting-tags {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 6px;
-}
-.meeting-tags:empty {
-  display: none;
 }
 .meeting-workspace {
   grid-column: -4;
@@ -474,11 +466,8 @@ html[data-theme="dark"] .modal-danger {
   background: transparent;
   color: var(--color-text);
 }
-.app-shell.is-live-meeting .sidebar .nav-item {
+.app-shell.is-live-meeting:not(:has(.sidebar:hover, .sidebar:focus-within)) .sidebar .nav-item {
   font-size: 0;
-}
-.app-shell.is-live-meeting:has(.sidebar:hover, .sidebar:focus-within) .sidebar .nav-item {
-  font-size: 18px;
 }
 
 #prepare-view[data-mode="import"] .prepare-extra-settings {
@@ -605,8 +594,6 @@ textarea,
   color: var(--color-text-muted);
   margin-top: 2px;
 }
-.meeting-tags,
-.meeting-tags .status,
 .meeting-source {
   font-size: 13px;
 }
@@ -3797,12 +3784,6 @@ body {
   width: 20px;
   height: 20px;
 }
-.app-shell.is-live-meeting:not(:has(.sidebar:hover, .sidebar:focus-within))
-  .sidebar
-  .interface-icon {
-  width: 24px;
-  height: 24px;
-}
 .sidebar :is(.nav-item, .new-meeting, .import-recording) {
   font-size: 16px;
   font-weight: 400;
@@ -3892,6 +3873,7 @@ textarea,
 }
 #home-view.active {
   height: 100%;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
   padding: 56px 32px 32px 48px;
 }
 #home-eyebrow {
@@ -3924,11 +3906,6 @@ textarea,
   padding: 16px 0;
   min-height: 96px;
   border-bottom: 1px solid var(--color-line);
-}
-.meeting-tags :is(.tag, span) {
-  font-size: 12px;
-  line-height: 18px;
-  border-radius: 4px;
 }
 #prepare-view.active {
   overflow-y: auto;
@@ -5199,16 +5176,30 @@ textarea,
 .settings-general-main {
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
+  align-content: start;
   min-width: 0;
   min-height: 0;
   padding: 32px;
   overflow-y: auto;
 }
-#settings-view .settings-general-main > h1 {
+#settings-view .settings-general-heading {
   grid-row: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+#settings-view .settings-general-heading h1 {
   margin: 0;
 }
+#settings-view .desktop-settings-status {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
 #settings-view .settings-description {
+  font-weight: 400;
+  color: var(--color-text-muted);
   grid-row: 2;
   margin: 8px 0 24px;
   font-size: 16px;
@@ -5222,19 +5213,22 @@ textarea,
   margin: 0;
   min-height: 0;
   overflow: visible;
-  border-top: 1px solid var(--color-line);
+  border-top: 0;
 }
 #settings-view .settings-grid > :not(.settings-preferences) {
   display: none;
 }
 #settings-view .settings-preferences {
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) 160px;
+  grid-template-columns: 24px minmax(0, 1fr) 180px;
   align-items: center;
-  gap: 24px;
+  gap: 20px;
   padding: 16px 0;
   min-height: 72px;
   border-bottom: 1px solid var(--color-line);
+}
+#settings-view .settings-preferences > .flow-select {
+  width: 100%;
 }
 #settings-view .settings-preferences > :is(.interface-icon, .flow-select) {
   position: static;
@@ -7214,8 +7208,6 @@ body:has(.app-shell.is-live-meeting) .export-modal {
 }
 .app-shell.is-live-meeting:not(:has(.sidebar:hover, .sidebar:focus-within))
   .task-summary:not([hidden]),
-.app-shell.is-settings-view:not(:has(.sidebar:hover, .sidebar:focus-within))
-  .task-summary:not([hidden]),
 .app-shell.is-live-meeting .task-summary:focus {
   display: grid;
   gap: 2px;
@@ -7233,6 +7225,27 @@ body:has(.app-shell.is-live-meeting) .export-modal {
   font-size: 12px;
   line-height: 16px;
 }
+@media (max-width: 1100px) {
+  .app-shell.is-settings-view:not(:has(.sidebar:hover, .sidebar:focus-within))
+    .task-summary:not([hidden]) {
+    display: grid;
+    gap: 2px;
+    width: 52px;
+    height: 44px;
+    flex: none;
+    order: 0;
+    margin: auto auto 14px;
+    padding: 5px;
+    max-width: 100%;
+    border: 1px solid var(--color-line);
+    border-radius: 8px;
+    background: var(--color-surface);
+    text-align: left;
+    font-size: 12px;
+    line-height: 16px;
+  }
+}
+
 .app-shell.is-live-meeting:not(:has(.sidebar:hover, .sidebar:focus-within)) .mobile-sidebar-card {
   margin-top: auto;
 }
@@ -7289,10 +7302,17 @@ body:has(.app-shell.is-live-meeting) .export-modal {
   min-height: 0;
   overflow-y: auto;
 }
-.app-shell:is(.is-live-meeting, .is-settings-view):not(:has(.sidebar:hover, .sidebar:focus-within))
+.app-shell.is-live-meeting:not(:has(.sidebar:hover, .sidebar:focus-within))
   .sidebar:has(.task-summary:not([hidden]))
   .mobile-sidebar-card {
   margin-top: 0;
+}
+@media (max-width: 1100px) {
+  .app-shell.is-settings-view:not(:has(.sidebar:hover, .sidebar:focus-within))
+    .sidebar:has(.task-summary:not([hidden]))
+    .mobile-sidebar-card {
+    margin-top: 0;
+  }
 }
 .app-shell.is-live-meeting .sidebar::after {
   content: none;
@@ -7811,14 +7831,17 @@ html[data-theme] .toast,
 /* D47–D49：连接状态、可信设备和同一配对会话分阶段呈现。 */
 .settings-page:has(#mobile-dialog:not([hidden])) .modal-head {
   border-bottom: 1px solid var(--color-line);
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 .settings-page #mobile-dialog .mobile-service-heading {
   display: flex;
   justify-content: flex-start;
   align-items: center;
   gap: 16px;
-  margin: 0 0 16px;
+  margin: 0 0 12px;
+}
+.settings-page #mobile-dialog .mobile-device-grid > section {
+  padding: 16px;
 }
 .mobile-service-heading > div {
   flex: 0 1 280px;
@@ -8953,75 +8976,84 @@ body:has(.meeting-workspace-menu) .meeting-menu:not([hidden]) [data-meeting-acti
   outline: 0;
 }
 
-/* 设置保留主导航图标，把空间留给设置导航和内容。 */
+/* 宽窗口保持主导航展开，与设置设计稿一致；窄窗口保留图标导航。 */
 .app-shell.is-settings-view {
-  grid-template-columns: 72px minmax(0, 1fr);
-}
-.app-shell.is-settings-view:has(.sidebar:hover, .sidebar:focus-within) {
   grid-template-columns: 240px minmax(0, 1fr);
 }
-/* 设置浮层首次显示时也不能遮住正在收起的主导航。 */
 .app-shell.is-settings-view:not([inert]) .sidebar {
   z-index: 61;
 }
-.app-shell.is-settings-view:not(:has(.sidebar:hover, .sidebar:focus-within)) .sidebar {
-  padding-inline: 10px;
-}
-.app-shell.is-settings-view:not(:has(.sidebar:hover, .sidebar:focus-within)) .brand {
-  justify-content: center;
-  padding-inline: 0;
-}
-.app-shell.is-settings-view:not(:has(.sidebar:hover, .sidebar:focus-within))
-  :is(
-    .brand-name,
-    .new-meeting-label,
-    .import-recording-label,
-    .workspace-subnav,
-    .task-stack-toggle,
-    .task-cards,
-    .mobile-sidebar-heading strong,
-    #mobile-sidebar-status
-  ) {
-  display: none;
-}
-.app-shell.is-settings-view:not(:has(.sidebar:hover, .sidebar:focus-within))
-  .sidebar
-  :is(.new-meeting, .import-recording, .nav-item, .mobile-sidebar-card) {
-  justify-content: center;
-  padding-inline: 8px;
-  gap: 0;
-  font-size: 0;
-}
-.app-shell.is-settings-view:not(:has(.sidebar:hover, .sidebar:focus-within))
-  .sidebar
-  :is(.new-meeting-icon, .import-recording-icon) {
-  margin: 0;
-}
-.app-shell.is-settings-view:not(:has(.sidebar:hover, .sidebar:focus-within)) .mobile-sidebar-card {
-  min-height: 44px;
-}
-.app-shell.is-settings-view:not(:has(.sidebar:hover, .sidebar:focus-within))
-  .mobile-sidebar-heading {
-  justify-content: center;
-}
-.app-shell.is-settings-view:not(:has(.sidebar:hover, .sidebar:focus-within)) .sidebar-settings {
-  min-height: 40px;
-}
-body:has(.app-shell.is-settings-view) .settings-page {
-  left: 72px;
-  transition:
-    left 220ms ease-out,
-    opacity 220ms ease-out;
-}
-body:has(.app-shell.is-settings-view):has(.sidebar:hover, .sidebar:focus-within) .settings-page {
-  left: 240px;
-}
-@media (max-width: 850px) {
+@media (max-width: 1100px) {
+  /* 设置保留主导航图标，把空间留给设置导航和内容。 */
+  .app-shell.is-settings-view {
+    grid-template-columns: 72px minmax(0, 1fr);
+  }
+  .app-shell.is-settings-view:has(.sidebar:hover, .sidebar:focus-within) {
+    grid-template-columns: 240px minmax(0, 1fr);
+  }
+  /* 设置浮层首次显示时也不能遮住正在收起的主导航。 */
+  .app-shell.is-settings-view:not([inert]) .sidebar {
+    z-index: 61;
+  }
+  .app-shell.is-settings-view:not(:has(.sidebar:hover, .sidebar:focus-within)) .sidebar {
+    padding-inline: 10px;
+  }
+  .app-shell.is-settings-view:not(:has(.sidebar:hover, .sidebar:focus-within)) .brand {
+    justify-content: center;
+    padding-inline: 0;
+  }
+  .app-shell.is-settings-view:not(:has(.sidebar:hover, .sidebar:focus-within))
+    :is(
+      .brand-name,
+      .new-meeting-label,
+      .import-recording-label,
+      .workspace-subnav,
+      .task-stack-toggle,
+      .task-cards,
+      .mobile-sidebar-heading strong,
+      #mobile-sidebar-status
+    ) {
+    display: none;
+  }
+  .app-shell.is-settings-view:not(:has(.sidebar:hover, .sidebar:focus-within))
+    .sidebar
+    :is(.new-meeting, .import-recording, .nav-item, .mobile-sidebar-card) {
+    justify-content: center;
+    padding-inline: 8px;
+    gap: 0;
+    font-size: 0;
+  }
+  .app-shell.is-settings-view:not(:has(.sidebar:hover, .sidebar:focus-within))
+    .sidebar
+    :is(.new-meeting-icon, .import-recording-icon) {
+    margin: 0;
+  }
+  .app-shell.is-settings-view:not(:has(.sidebar:hover, .sidebar:focus-within))
+    .mobile-sidebar-card {
+    min-height: 44px;
+  }
+  .app-shell.is-settings-view:not(:has(.sidebar:hover, .sidebar:focus-within))
+    .mobile-sidebar-heading {
+    justify-content: center;
+  }
+  .app-shell.is-settings-view:not(:has(.sidebar:hover, .sidebar:focus-within)) .sidebar-settings {
+    min-height: 40px;
+  }
   body:has(.app-shell.is-settings-view) .settings-page {
-    left: 0;
+    left: 72px;
+    transition:
+      left 220ms ease-out,
+      opacity 220ms ease-out;
+  }
+  body:has(.app-shell.is-settings-view):has(.sidebar:hover, .sidebar:focus-within) .settings-page {
+    left: 240px;
+  }
+  @media (max-width: 850px) {
+    body:has(.app-shell.is-settings-view) .settings-page {
+      left: 0;
+    }
   }
 }
-
 .app-shell:is(.is-live-meeting, .is-settings-view) {
   transition:
     grid-template-columns 220ms ease-out,
@@ -9029,7 +9061,7 @@ body:has(.app-shell.is-settings-view):has(.sidebar:hover, .sidebar:focus-within)
     background-color 300ms ease,
     color 300ms ease;
 }
-.app-shell:is(.is-live-meeting, .is-settings-view):not(:has(.sidebar:hover, .sidebar:focus-within))
+.app-shell.is-live-meeting:not(:has(.sidebar:hover, .sidebar:focus-within))
   .sidebar
   :is(.mobile-sidebar-card, .sidebar-settings) {
   display: flex;
@@ -9039,7 +9071,19 @@ body:has(.app-shell.is-settings-view):has(.sidebar:hover, .sidebar:focus-within)
   height: 44px;
   padding: 8px;
 }
-.app-shell:is(.is-live-meeting, .is-settings-view):not(:has(.sidebar:hover, .sidebar:focus-within))
+@media (max-width: 1100px) {
+  .app-shell.is-settings-view:not(:has(.sidebar:hover, .sidebar:focus-within))
+    .sidebar
+    :is(.mobile-sidebar-card, .sidebar-settings) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    height: 44px;
+    padding: 8px;
+  }
+}
+.app-shell.is-live-meeting:not(:has(.sidebar:hover, .sidebar:focus-within))
   .mobile-sidebar-heading {
   position: relative;
   display: flex;
@@ -9047,11 +9091,27 @@ body:has(.app-shell.is-settings-view):has(.sidebar:hover, .sidebar:focus-within)
   width: 100%;
   gap: 0;
 }
-.app-shell:is(.is-live-meeting, .is-settings-view):not(:has(.sidebar:hover, .sidebar:focus-within))
-  #mobile-nav-dot {
+@media (max-width: 1100px) {
+  .app-shell.is-settings-view:not(:has(.sidebar:hover, .sidebar:focus-within))
+    .mobile-sidebar-heading {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    gap: 0;
+  }
+}
+.app-shell.is-live-meeting:not(:has(.sidebar:hover, .sidebar:focus-within)) #mobile-nav-dot {
   position: absolute;
   right: 0;
   top: 0;
+}
+@media (max-width: 1100px) {
+  .app-shell.is-settings-view:not(:has(.sidebar:hover, .sidebar:focus-within)) #mobile-nav-dot {
+    position: absolute;
+    right: 0;
+    top: 0;
+  }
 }
 .settings-page .settings-back,
 .ai-features-modal.settings-page [data-close-ai-features] {
@@ -9358,7 +9418,7 @@ body:has(.app-shell.is-settings-view):has(.sidebar:hover, .sidebar:focus-within)
   }
 }
 /* 收起后所有入口共享完整按钮盒，嵌套的设备标题不再参与水平分配。 */
-.app-shell:is(.is-live-meeting, .is-settings-view):not(:has(.sidebar:hover, .sidebar:focus-within))
+.app-shell.is-live-meeting:not(:has(.sidebar:hover, .sidebar:focus-within))
   .sidebar
   :is(.nav-item, .new-meeting, .import-recording, .mobile-sidebar-card) {
   box-sizing: border-box;
@@ -9370,11 +9430,33 @@ body:has(.app-shell.is-settings-view):has(.sidebar:hover, .sidebar:focus-within)
   justify-content: center;
   gap: 0;
 }
-.app-shell:is(.is-live-meeting, .is-settings-view):not(:has(.sidebar:hover, .sidebar:focus-within))
+@media (max-width: 1100px) {
+  .app-shell.is-settings-view:not(:has(.sidebar:hover, .sidebar:focus-within))
+    .sidebar
+    :is(.nav-item, .new-meeting, .import-recording, .mobile-sidebar-card) {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    padding-inline: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+  }
+}
+.app-shell.is-live-meeting:not(:has(.sidebar:hover, .sidebar:focus-within))
   .sidebar
   .mobile-sidebar-heading {
   flex: none;
   width: auto;
+}
+@media (max-width: 1100px) {
+  .app-shell.is-settings-view:not(:has(.sidebar:hover, .sidebar:focus-within))
+    .sidebar
+    .mobile-sidebar-heading {
+    flex: none;
+    width: auto;
+  }
 }
 
 /* 字幕取样以临时检查面板保留原文上下文，关闭即恢复原侧栏。 */
@@ -10398,4 +10480,535 @@ body:has(.app-shell.is-settings-view):has(.sidebar:hover, .sidebar:focus-within)
     min-width: 80px;
     padding-inline: 12px;
   }
+}
+
+/* 下一版体验：按概念稿保留文档层级与录音入口，细节使用现有语义色与动效。 */
+#home-view .quick-recording > span:not(.interface-icon) {
+  font: inherit;
+}
+#home-view .quick-recording {
+  gap: 10px;
+  min-height: 44px;
+}
+#home-view .page-head > :is(.secondary, .primary-action) {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+}
+#home-view .library-toolbar {
+  margin-top: 0;
+}
+#live-view .live-layout {
+  gap: 4px;
+}
+#live-view :is(.live-notes, .live-captions) {
+  border: 1px solid var(--color-line);
+  border-radius: 4px;
+  padding: 18px 16px 0;
+}
+#live-view .live-section-head {
+  min-height: 42px;
+}
+#live-view .transcript-scroll {
+  padding: 18px 0 24px;
+}
+#transcript-scroll .segment:not(.segment-text-editing) {
+  border: 0;
+  padding: 14px 0 20px;
+  column-gap: 16px;
+  background: transparent;
+}
+#transcript-scroll .segment .segment-copy > p {
+  line-height: 1.75;
+}
+#transcript-scroll .segment .translation {
+  color: var(--color-text-muted);
+  font-size: 14px;
+  margin-top: 6px;
+  line-height: 1.65;
+}
+#transcript-scroll .segment.is-draft .segment-copy > p {
+  color: var(--color-text-muted);
+}
+
+#live-view .ai-suggestion-card {
+  background: var(--color-navigation);
+  border-radius: 6px;
+  padding: 14px 16px;
+}
+#live-view .back-to-latest {
+  bottom: 24px;
+  border: 1px solid var(--color-line);
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: none;
+}
+[data-desktop-settings] {
+  display: contents;
+}
+.desktop-preference {
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 24px;
+}
+.desktop-preference > div:first-child {
+  min-width: 0;
+}
+.desktop-preference > div:first-child p {
+  margin: 6px 0 0;
+  line-height: 1.5;
+}
+.desktop-preference .flow-select {
+  min-width: 180px;
+}
+.desktop-preference .flow-select-toggle {
+  min-height: 38px;
+}
+.preference-switch {
+  width: 44px;
+  height: 25px;
+  padding: 3px;
+  border: 1px solid var(--color-line);
+  background: var(--color-selected);
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+}
+.preference-switch i {
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: var(--color-text-muted);
+  transition: transform var(--motion-state) var(--motion-ease-out);
+}
+.preference-switch[aria-checked="true"] {
+  background: var(--color-text);
+  border-color: var(--color-text);
+}
+.preference-switch[aria-checked="true"] i {
+  background: var(--color-surface);
+  transform: translateX(18px);
+}
+.desktop-settings-status {
+  min-height: 22px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+#detail-view .summary-body .summary-reading-section {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  gap: 24px;
+  padding: 24px 0;
+  border-bottom: 1px solid var(--color-line);
+}
+#detail-view .summary-body .summary-reading-section > :is(h1, h2) {
+  font-size: 20px;
+  line-height: 1.5;
+  margin: 0;
+}
+#detail-view .summary-body .summary-reading-section > div > :first-child {
+  margin-top: 0;
+}
+#detail-view .summary-body .summary-reading-section > div > :last-child {
+  margin-bottom: 0;
+}
+.summary-discussion {
+  border-bottom: 1px solid var(--color-line);
+  padding: 24px 0;
+}
+.summary-discussion summary {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+  cursor: pointer;
+  list-style: none;
+}
+.summary-discussion summary::-webkit-details-marker {
+  display: none;
+}
+#detail-view .summary-discussion summary > :is(h1, h2) {
+  font-size: 20px;
+  margin: 0;
+  width: 160px;
+  flex: none;
+}
+.summary-discussion summary > span {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 14px;
+}
+.summary-discussion summary svg {
+  width: 16px;
+  height: 16px;
+  transition: transform var(--motion-state) var(--motion-ease-out);
+}
+.summary-discussion[open] summary svg {
+  transform: rotate(180deg);
+}
+.summary-discussion > div {
+  padding: 20px 0 0 184px;
+}
+@media (max-width: 1000px) {
+  .desktop-preference {
+    gap: 12px;
+  }
+  #detail-view .summary-body .summary-reading-section {
+    grid-template-columns: 120px minmax(0, 1fr);
+    gap: 16px;
+  }
+  .summary-discussion > div {
+    padding-left: 136px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .preference-switch i,
+  .summary-discussion summary svg {
+    transition: none;
+  }
+}
+#settings-view .settings-grid > [data-desktop-settings] {
+  display: contents;
+}
+#settings-view [data-desktop-settings] > .settings-group,
+#settings-view .settings-grid > .settings-basic-group {
+  display: block;
+  margin: 28px 0 0;
+  padding: 0 0 12px;
+  font-size: 15px;
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-line);
+}
+#settings-view .settings-grid > .settings-basic-group {
+  margin-top: 4px;
+}
+#settings-view .desktop-preference {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+#settings-view .desktop-preference h2 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+}
+#settings-view .desktop-preference {
+  grid-template-columns: 24px minmax(0, 1fr) 180px;
+  gap: 20px;
+}
+#settings-view .desktop-preference > .interface-icon {
+  position: static;
+  transform: none;
+  width: 24px;
+  height: 24px;
+}
+#settings-view .desktop-preference > div:first-of-type {
+  min-width: 0;
+}
+#settings-view .desktop-preference p {
+  color: var(--color-text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+#settings-view .desktop-preference .preference-switch {
+  justify-self: end;
+}
+#settings-view .desktop-preference .flow-select {
+  width: 180px;
+}
+#transcript-scroll .segment:not(:has(.segment-text-input)) {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  grid-template-areas: "meta copy";
+  align-items: start;
+}
+#transcript-scroll .segment:not(:has(.segment-text-input)) .segment-meta {
+  grid-area: meta;
+  padding-top: 3px;
+}
+#transcript-scroll .segment:not(:has(.segment-text-input)) .segment-copy {
+  grid-area: copy;
+}
+#settings-view :is(.settings-general-heading h1, .settings-group) {
+  color: var(--color-text);
+}
+#live-view .live-section-head {
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+#live-view .live-section-head > .eyebrow {
+  flex: 1;
+  min-width: 0;
+  margin-right: 0;
+}
+#live-view .live-section-head > .correction-controls {
+  flex: none;
+  flex-wrap: nowrap;
+  margin: 0;
+}
+.summary-waiting {
+  min-height: 350px;
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+  padding: 20px 0 40px;
+  color: var(--color-text);
+}
+.summary-waiting > span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--color-text-muted);
+}
+.summary-waiting > span svg {
+  width: 20px;
+  height: 20px;
+  color: var(--color-success);
+}
+.summary-waiting > div {
+  text-align: center;
+  margin: auto;
+}
+.summary-waiting > div > svg {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 16px;
+}
+.summary-waiting h2 {
+  font-size: 24px;
+  margin: 0 0 12px;
+}
+.summary-waiting p {
+  font-size: 15px;
+  color: var(--color-text-muted);
+  margin: 0 0 24px;
+}
+.summary-waiting > div > div {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+#live-view [data-live-notes-root] > .notes-toolbar {
+  order: 0;
+}
+#live-view [data-live-notes-root] > :is(.notes-editor, .notes-input) {
+  order: 1;
+}
+#live-view [data-live-notes-root] > .ai-suggestion {
+  order: 2;
+  flex: none;
+  padding: 12px 14px;
+  margin: 12px 0 16px;
+}
+#live-view .ai-suggestion-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px 16px;
+  padding: 0;
+}
+#live-view .ai-suggestion-card .ai-suggestion-head {
+  grid-column: 1;
+  grid-row: 1;
+}
+#live-view .ai-suggestion-card .ai-suggestion-text {
+  grid-column: 1;
+  grid-row: 2;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+}
+#live-view .ai-suggestion-card .ai-suggestion-actions {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  margin: 0;
+  align-self: center;
+}
+@media (max-width: 1000px) {
+  #live-view .ai-suggestion-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  #live-view .ai-suggestion-card .ai-suggestion-actions {
+    grid-column: 1;
+    grid-row: 3;
+    justify-content: flex-end;
+  }
+}
+
+/* 会议库以紧凑文档行呈现，分组不再叠加横线。 */
+#home-view .meeting-list {
+  grid-row: 4;
+  border: 0;
+}
+#home-view .meeting-list > * {
+  border-block: 0;
+}
+#home-view .library-group {
+  gap: 8px;
+  padding: 24px 12px 8px;
+}
+#home-view .library-group:first-child {
+  padding-top: 8px;
+}
+#home-view .library-group h2 {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+#home-view .library-group span {
+  font-size: 12px;
+  color: var(--color-text-subtle);
+}
+#home-view .meeting-row {
+  grid-template-columns: 20px 36px minmax(0, 1fr) minmax(0, 0.32fr) minmax(128px, 0.42fr) 32px;
+  gap: 12px;
+  min-height: 76px;
+  padding: 12px;
+  border-radius: 8px;
+}
+#home-view .meeting-row:has(.meeting-row-checkbox[hidden]) {
+  grid-template-columns: 36px minmax(0, 1fr) minmax(0, 0.32fr) minmax(128px, 0.42fr) 32px;
+}
+#home-view .meeting-row .meeting-row-icon {
+  width: 36px;
+  height: 36px;
+  color: var(--color-text-muted);
+}
+#home-view .meeting-row-icon .interface-icon {
+  width: 24px;
+  height: 24px;
+}
+#home-view .meeting-row .meeting-main h2 {
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 500;
+  gap: 8px;
+}
+#home-view .meeting-row .meeting-main p {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 18px;
+}
+#home-view .meeting-row .meeting-status .status {
+  font-size: 12px;
+}
+#home-view .meeting-row .meeting-status small {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--color-text-muted);
+}
+#home-view .meeting-source {
+  border: 0;
+  background: var(--color-navigation);
+}
+#home-view .meeting-row .more {
+  width: 32px;
+  height: 32px;
+}
+#home-view .meeting-row:has(.meeting-title-rename) {
+  min-height: 116px;
+}
+@media (max-width: 1100px) {
+  #home-view .meeting-row {
+    grid-template-columns: 20px 32px minmax(0, 1fr) 0 minmax(100px, 0.4fr) 32px;
+    gap: 8px;
+  }
+  #home-view .meeting-row:has(.meeting-row-checkbox[hidden]) {
+    grid-template-columns: 32px minmax(0, 1fr) 0 minmax(100px, 0.4fr) 32px;
+  }
+  #home-view .meeting-workspace {
+    display: none;
+  }
+}
+
+/* 快速录音在当前页面准备输入，只有成功启动后才进入转写页。 */
+.quick-recording[aria-busy="true"] {
+  cursor: progress;
+}
+.quick-recording[aria-busy="true"] :is(.interface-icon, [data-interface-icon]) {
+  display: none;
+}
+#quit-recording-dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: 560px;
+  max-width: calc(100vw - 40px);
+  max-height: calc(100vh - 40px);
+  padding: 0;
+  border: 1px solid var(--color-line);
+  border-radius: 16px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: 0 16px 48px #00000024;
+}
+#quit-recording-dialog::backdrop {
+  background: color-mix(in srgb, var(--color-surface) 70%, transparent);
+  backdrop-filter: blur(6px);
+}
+#quit-recording-dialog form {
+  margin: 0;
+}
+.quit-recording-body {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 20px;
+  padding: 28px 32px 24px;
+}
+.quit-recording-body > img {
+  border-radius: 10px;
+}
+#quit-recording-title {
+  font-size: 22px;
+  line-height: 1.35;
+  font-weight: 650;
+  margin: 4px 0 20px;
+}
+#quit-recording-description {
+  font-size: 16px;
+  line-height: 1.7;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  margin: 0;
+}
+.quit-recording-hint {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--color-text-muted);
+  margin: 12px 0 0;
+}
+#quit-recording-dialog footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 12px;
+  border-top: 1px solid var(--color-line);
+  padding: 14px 20px;
+}
+#quit-recording-dialog footer button {
+  font-size: 14px;
+  min-height: 44px;
+}
+#quit-recording-dialog [value="confirm"] {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+#quit-recording-dialog [value="confirm"] .interface-icon {
+  width: 16px;
+  height: 16px;
+}
+#quit-recording-dialog [value="confirm"] rect {
+  fill: currentColor;
+  stroke: none;
+}
+#quit-recording-dialog[open] {
+  animation: brevia-surface-in var(--motion-surface) var(--motion-ease-out) both;
+}
+
+.page-tooltip.quick-recording-tooltip {
+  max-width: min(320px, calc(100vw - 16px));
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.6;
 }

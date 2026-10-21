@@ -6,6 +6,8 @@ const {
   dialog,
   ipcMain,
   Menu,
+  nativeImage,
+  Tray,
   powerMonitor,
   protocol,
   screen,
@@ -32,6 +34,7 @@ const { fileURLToPath, pathToFileURL } = require('node:url');
 const { randomUUID } = require('node:crypto');
 const { z } = require('zod');
 const { MobileServer } = require('./mobile-server');
+const { DesktopController } = require('./desktop-controller');
 const {
   createLineBuffer,
   audioFileURL,
@@ -63,12 +66,19 @@ function handleIpc(channel, callback) {
       const captionPage = pathToFileURL(
         path.join(packagedRoot, 'frontend', 'floating-caption.html'),
       ).href;
+      const capsulePage = pathToFileURL(
+        path.join(packagedRoot, 'frontend', 'recording-capsule.html'),
+      ).href;
       const page = frame?.url?.split(/[?#]/)[0];
       if (
         !frame ||
         frame !== event.sender.mainFrame ||
         !(
           page === mainPage ||
+          (page === capsulePage &&
+            ['desktop.state', 'desktop.action', 'desktop.expand', 'desktop.move'].includes(
+              channel,
+            )) ||
           (page === captionPage &&
             [
               'floating-caption.close',
@@ -107,7 +117,7 @@ if (process.platform === 'darwin')
   app.commandLine.appendSwitch('disable-features', 'MacCatapLoopbackAudioForScreenShare');
 if (!benchmarkRefinement && !app.requestSingleInstanceLock()) app.quit();
 app.on('second-instance', () => {
-  const window = BrowserWindow.getAllWindows().find((w) => w !== floatingCaptionWindow);
+  const window = desktop?.mainWindow;
   if (window?.isMinimized()) window.restore();
   window?.focus();
 });
@@ -116,6 +126,14 @@ const root = path.join(__dirname, '..');
 const packagedRoot = app.isPackaged ? process.resourcesPath : root;
 const { catalog } = require(path.join(packagedRoot, 'frontend', 'i18n-data.js'));
 const mainText = (key) => (catalog[app.getLocale().split('-')[0]] || catalog.en).labels[key] || key;
+const desktop = new DesktopController({
+  electron: { app, BrowserWindow, Menu, Tray, nativeImage, screen },
+  root: packagedRoot,
+  dataDir: () => dataDir(),
+  text: (key, locale) =>
+    (catalog[locale || app.getLocale().split('-')[0]] || catalog.en).labels[key] || key,
+  reportError: (error) => reportMainError(error),
+});
 const startupAnimationMs = 1700;
 const startupDataWaitMs = 2200;
 // 单行 JSON 消息上限：长会议逐字稿（含逐词时间戳）可能达到数十 MB；
@@ -1234,6 +1252,70 @@ async function buildSelectedBundle(meetingId, prepared) {
 }
 
 function registerIpc() {
+  handleIpc('desktop.preferences.get', () => desktop.preferences);
+  handleIpc('desktop.preferences.save', (_, payload) => desktop.save(payload));
+  handleIpc('desktop.publish', (_, payload) => {
+    desktop.update(payload);
+    return true;
+  });
+  handleIpc('desktop.level', (_, payload) => {
+    desktop.level(
+      z.object({ meetingId: z.string(), level: z.number().min(0).max(1) }).parse(payload),
+    );
+    return true;
+  });
+  handleIpc('desktop.state', () => ({
+    ...desktop.state,
+    expanded: desktop.expanded,
+    above: desktop.above,
+  }));
+  handleIpc('desktop.action', (_, payload) => {
+    const value = z
+      .object({
+        action: z.enum([
+          'return',
+          'pause',
+          'stop',
+          'mark',
+          'accept',
+          'ignore',
+          'ai-settings',
+          'models',
+        ]),
+        suggestionId: z.string().optional(),
+        meetingId: z.string().nullable().optional(),
+        tab: z.enum(['captions', 'notes']).optional(),
+      })
+      .parse(payload);
+    return desktop.action(value.action, value);
+  });
+  handleIpc('desktop.complete', (_, payload) => {
+    desktop.complete(
+      z
+        .object({
+          requestId: z.string().uuid(),
+          error: z.string().max(2000).optional(),
+          result: z.boolean().optional(),
+        })
+        .parse(payload),
+    );
+    return true;
+  });
+  handleIpc('desktop.expand', (_, payload) => {
+    desktop.expand(z.object({ expanded: z.boolean() }).parse(payload).expanded);
+    return true;
+  });
+  handleIpc('desktop.move', (_, payload) => {
+    desktop.move(
+      z
+        .object({
+          dx: z.number().finite().min(-10000).max(10000),
+          dy: z.number().finite().min(-10000).max(10000),
+        })
+        .parse(payload),
+    );
+    return true;
+  });
   handleIpc('mobile.status', () => ({
     ...mobileServer.status(),
     approval: mobileApproval && {
@@ -2218,6 +2300,7 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       // 保留原布局画布，窗口与界面统一放大 10%，让位置、字号和间距同步缩放。
       zoomFactor: windowScale,
+      backgroundThrottling: false,
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -2282,6 +2365,18 @@ function createWindow() {
       initializationReady = true;
       revealApp();
     });
+  desktop.attach(window);
+  window.on('close', (event) => {
+    if (app.isQuitting) return;
+    event.preventDefault();
+    if (desktop.preferences.closeBehavior === 'hide') {
+      try {
+        desktop.hideMain();
+      } catch (error) {
+        reportMainError(error);
+      }
+    } else app.quit();
+  });
   window.on('closed', () => {
     closeFloatingCaption();
   });
@@ -2337,8 +2432,7 @@ let floatingCaptionBounds = null;
 function showFloatingCaption() {
   // Reuse existing window if it's still valid
   if (floatingCaptionWindow && !floatingCaptionWindow.isDestroyed()) {
-    floatingCaptionWindow.show();
-    floatingCaptionWindow.focus();
+    floatingCaptionWindow.showInactive();
     return true;
   }
 
@@ -2348,9 +2442,7 @@ function showFloatingCaption() {
     floatingCaptionReady = false;
   }
 
-  const mainWindow = BrowserWindow.getAllWindows().find(
-    (window) => window !== floatingCaptionWindow && !window.isDestroyed(),
-  );
+  const mainWindow = desktop.mainWindow;
   const display = mainWindow
     ? screen.getDisplayMatching(mainWindow.getBounds())
     : screen.getPrimaryDisplay();
@@ -2404,14 +2496,7 @@ function showFloatingCaption() {
     floatingCaptionReady = true;
     sendFloatingCaptionState();
     if (!captionWindow.isDestroyed()) {
-      captionWindow.show();
-      // After showing floating caption, restore focus to main window
-      const mainWindow = BrowserWindow.getAllWindows().find(
-        (w) => w !== captionWindow && !w.isDestroyed(),
-      );
-      if (mainWindow) {
-        mainWindow.focus();
-      }
+      captionWindow.showInactive();
     }
   });
 
@@ -2547,11 +2632,10 @@ app.whenReady().then(async () => {
     return;
   }
   void initializeWorker().catch((error) => reportMainError(error));
+  await desktop.load();
   createWindow();
   app.on('activate', () => {
-    const mainWindow = BrowserWindow.getAllWindows().find(
-      (w) => w !== floatingCaptionWindow && !w.isDestroyed(),
-    );
+    const mainWindow = desktop.mainWindow;
     if (mainWindow) {
       // Restore and focus main window when dock icon is clicked
       if (mainWindow.isMinimized()) {
@@ -2566,6 +2650,7 @@ app.whenReady().then(async () => {
   });
 });
 let quittingAfterMeetingStop = false;
+let quitRequested = false;
 let installingUpdate = false;
 let stoppingForSleep = false;
 async function stopActiveMeeting() {
@@ -2610,10 +2695,44 @@ app.on('before-quit', (event) => {
     return;
   }
   event.preventDefault();
-  quittingAfterMeetingStop = true;
-  void Promise.race([stopActiveMeeting(), new Promise((resolve) => setTimeout(resolve, 8000))])
-    .catch((error) => writeLog('WARNING', `stop meeting before quit: ${logText(error)}`))
-    .finally(() => app.quit());
+  if (quitRequested) return;
+  quitRequested = true;
+  void (async () => {
+    try {
+      const rendererCrashed = desktop.mainWindow?.webContents?.isCrashed?.();
+      if (desktop.state && !rendererCrashed) await desktop.action('flush');
+      if (worker.active) {
+        const t = (key) => desktop.text(key, desktop.state?.locale);
+        const quitMeetingId = desktop.state?.meetingId;
+        let confirmed;
+        if (rendererCrashed || !desktop.state) {
+          const result = await dialog.showMessageBox(desktop.mainWindow, {
+            type: 'question',
+            title: t('退出 Brevia'),
+            message: t('结束录音并退出 Brevia？'),
+            detail: `${desktop.state?.title || 'Brevia'}\n${t('退出前会结束并保存当前录音。')}`,
+            buttons: [t('继续录音'), t('结束并退出')],
+            defaultId: 0,
+            cancelId: 0,
+            noLink: true,
+          });
+          confirmed = result.response === 1;
+        } else confirmed = await desktop.action('confirm-quit');
+        if (!confirmed) return;
+        if (rendererCrashed || !desktop.state) await stopActiveMeeting();
+        else await desktop.action('stop', { meetingId: quitMeetingId });
+        // 手机结束为异步补传，不能把已发送停止指令当作已保存。
+        if (worker.active) throw new Error(t('录音仍在保存，请稍后重试退出'));
+      }
+      quittingAfterMeetingStop = true;
+      app.quit();
+    } catch (error) {
+      reportMainError(error);
+      desktop.showMain();
+    } finally {
+      quitRequested = false;
+    }
+  })();
 });
 app.on('window-all-closed', () => {
   app.quit();

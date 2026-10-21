@@ -62,11 +62,16 @@ app.whenReady().then(async () => {
       if (source === mark) assert.equal(buffer[25], 2, '平台图标必须使用无透明通道的 RGB PNG');
       return buffer;
     };
+    const trayMark = mark
+      .replace(/<path fill="#26221e"[^>]*\/>/, '')
+      .replaceAll('#fbfaf7', '#000000');
+    add('electron/assets/trayTemplate.png', await png(trayMark, 32));
     const sizes = new Map();
     const icon = async (size) => {
       if (!sizes.has(size)) sizes.set(size, await png(mark, size));
       return sizes.get(size);
     };
+    add('electron/assets/tray.png', await icon(32));
     add('mobile/assets/brevia-logo.png', await icon(192));
     add('mobile/assets/brevia-lockup.png', await png(logo, 606, 192));
     add(

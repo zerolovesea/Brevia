@@ -2244,7 +2244,7 @@ assert.match(
 );
 assert.match(
   text(js),
-  /function renderPrepareSelects\(\) \{[\s\S]*?prepareView\.dataset\.mode === 'import'/,
+  /function renderPrepareSelects\(refinedModelOverride\) \{[\s\S]*?prepareView\.dataset\.mode === 'import'/,
 );
 assert.match(text(js), /if \(prepareView\.dataset\.mode === 'import'\) \{[\s\S]*?meeting\.import/);
 assert.doesNotMatch(text(components), /查看完整内容/);
@@ -2553,7 +2553,7 @@ const recordMarkStart = text(app).indexOf(
 runInNewContext(
   text(app).slice(
     recordMarkStart,
-    text(app).indexOf("document.querySelector('#end-meeting')", recordMarkStart),
+    text(app).indexOf('async function stopCurrentRecording', recordMarkStart),
   ),
   recordingMarkContext,
 );
@@ -2824,6 +2824,7 @@ for (const scenario of [
     },
     showToast: (message) => failures.push(message),
     generateMeetingSummary: (id) => calls.push(id),
+    resumeReadyModelTasks() {},
     console: { error() {} },
     window: {
       brevia: {
@@ -3975,7 +3976,15 @@ assert.match(
 assert.doesNotMatch(text(js), /name="performance-mode"/);
 assert.match(text(js), /正在下载模型，完成后会自动切换/);
 assert.doesNotThrow(() => new Function(text(js)));
-assert.doesNotMatch(text(electronMain), /showMessageBox/);
+assert.equal(
+  [...text(electronMain).matchAll(/showMessageBox/g)].length,
+  1,
+  '仅录音退出使用原生确认',
+);
+assert.match(
+  text(electronMain),
+  /if \(worker\.active\) \{[\s\S]*?dialog\.showMessageBox[\s\S]*?继续录音[\s\S]*?结束并退出/,
+);
 assert.match(text(electronMain), /permissions\.open-screen-settings/);
 assert.match(text(electronMain), /permissions\.open-microphone-settings/);
 assert.match(text(electronMain), /Privacy_ScreenCapture/);
@@ -4241,6 +4250,122 @@ const summaryFn = (name) => {
   const start = summaryAppSource.indexOf(`function ${name}(`);
   return summaryAppSource.slice(start, summaryAppSource.indexOf('\n}\n', start) + 2);
 };
+// 快速入口读取真实的上次会议设置，正常启动不经过准备页。
+const quickInputs = new Map(
+  ['meeting-language', 'meeting-speakers', 'meeting-workspace', 'translation-target'].map((key) => [
+    key,
+    { value: 'old-form-value' },
+  ]),
+);
+const quickError = { hidden: true, textContent: '' };
+const previousMeeting = {
+  language: 'zh',
+  num_speakers: 3,
+  target_language: 'en',
+  refined_model_id: 'last-model',
+  speaker_segmentation_model_id: 'last-segmentation',
+  vad_model_id: 'last-vad',
+  workspace_id: 'last-workspace',
+};
+const quickStarts = [];
+let previousMeetings = [{ is_example: true, language: 'ja' }, previousMeeting];
+const quickContext = {
+  meetingActive: false,
+  quickRecordingBusy: false,
+  locale: 'zh',
+  activeWorkspaceId: 'current-workspace',
+  BreviaI18n: { defaultMeetingTitle: () => '快速会议' },
+  document: { querySelectorAll: () => [], querySelector: () => ({ value: '' }) },
+  window: { brevia: { meeting: { list: async () => previousMeetings } } },
+  prepareForm: {
+    dataset: {},
+    querySelector: (selector) =>
+      selector === '[data-prepare-error]'
+        ? quickError
+        : quickInputs.get(selector.match(/name="([^"]+)"/)[1]),
+  },
+  modelCatalog: [{ id: 'translation-model', stages: ['translation'] }],
+  modelPaths: new Set(['last-model', 'last-vad', 'translation-model', 'mixed-model', 'silero-vad']),
+  defaultRefinedModelId: () => 'mixed-model',
+  preferredModelsForLanguage: () => ({ segmentation: 'default-segmentation' }),
+  startConfiguredRecording: async (payload, mode) =>
+    quickStarts.push({ payload: JSON.parse(JSON.stringify(payload)), mode }),
+  setPrepareMode() {},
+  renderPrepareSelects: (model) => {
+    quickContext.selectedModel = model;
+  },
+  renderCaptureMode: (mode) => {
+    quickContext.captureMode = mode;
+  },
+  showView: async (view) => {
+    quickContext.view = view;
+  },
+  t: (key) => key,
+};
+runInNewContext(`async ${summaryFn('startQuickRecording')}`, quickContext);
+await quickContext.startQuickRecording();
+assert.equal(quickStarts.length, 1);
+assert.deepEqual(quickStarts[0], {
+  payload: { title: '快速会议', ...previousMeeting },
+  mode: 'both',
+});
+assert.equal(quickContext.view, undefined, '正常快速启动不显示设置页');
+assert.equal(
+  quickInputs.get('meeting-language').value,
+  'old-form-value',
+  '快速启动不改尚未提交的设置表单',
+);
+previousMeetings = [];
+await quickContext.startQuickRecording();
+assert.equal(quickStarts[1].payload.language, 'auto');
+assert.equal(quickStarts[1].payload.workspace_id, 'current-workspace');
+previousMeetings = [previousMeeting];
+quickContext.modelPaths.clear();
+await quickContext.startQuickRecording();
+assert.equal(quickStarts.length, 2, '缺模型时不启动采集');
+assert.equal(quickContext.view, 'prepare');
+assert.equal(quickContext.selectedModel, 'last-model');
+assert.equal(quickContext.captureMode, 'both');
+assert.equal(quickContext.prepareForm.dataset.segmentationModel, 'last-segmentation');
+assert.equal(quickError.hidden, false);
+assert.equal(quickContext.quickRecordingBusy, false);
+quickContext.window.brevia.meeting.list = async () => {
+  throw new Error('database unavailable');
+};
+await assert.rejects(quickContext.startQuickRecording(), /database unavailable/);
+assert.equal(quickContext.quickRecordingBusy, false, '读配置失败也释放快速入口');
+// 手动开始与快速入口复用相同采集、模型队列及激活路径。
+const recordingCalls = [];
+const configuredContext = {
+  captureModeInputs: (mode) => ({ mic: mode === 'both', system: mode === 'both' }),
+  selectedPhoneDevice: () => null,
+  selectedMicDeviceId: () => 'selected-mic',
+  t: (key) => key,
+  breviaClient: {
+    start: async (payload, inputs, mic) => {
+      recordingCalls.push({ payload, inputs, mic });
+      return { id: 'new-recording' };
+    },
+  },
+  activateMeeting: (meeting) => recordingCalls.push(meeting.id),
+  queueModelTask: (task, payload) => recordingCalls.push(task),
+  downloadRequiredModels: () => {},
+  activateTaskCard: () => {},
+  document: { querySelector: () => ({}) },
+  showToast: () => {},
+};
+runInNewContext(`async ${summaryFn('startConfiguredRecording')}`, configuredContext);
+await configuredContext.startConfiguredRecording({ language: 'zh' }, 'both');
+assert.deepEqual(JSON.parse(JSON.stringify(recordingCalls[0])), {
+  payload: { language: 'zh' },
+  inputs: { mic: true, system: true },
+  mic: 'selected-mic',
+});
+assert.equal(recordingCalls[1], 'new-recording');
+await assert.rejects(configuredContext.startConfiguredRecording({}, 'phone'), /手机端未就绪/);
+configuredContext.breviaClient.start = async () => ({ model_required: ['missing-model'] });
+assert.equal(await configuredContext.startConfiguredRecording({}, 'both'), null);
+assert.equal(recordingCalls.at(-1), 'meeting.start', '缺模型仍进入既有下载队列');
 const summaryConst = (decl, multiline = false) => {
   const start = summaryAppSource.indexOf(decl);
   return multiline
@@ -5112,7 +5237,7 @@ assert.doesNotMatch(
 );
 assert.doesNotMatch(text(html), /data-ai-actions|data-ai-action/);
 assert.match(text(html), /class="brand-mark"[^>]*><img src="\.\/assets\/brevia-mark\.svg"/);
-assert.match(text(html), /class="new-meeting-label">开始会议/);
+assert.match(text(html), /class="new-meeting-label">开始录音/);
 assert.match(
   text(app),
   /classList\.toggle\(\s*'is-live-meeting',\s+activeView\s+===\s+'live'\s+&&\s+meetingActive,?\s*\)/,
@@ -6201,7 +6326,7 @@ const mobileRow = componentContext.renderMeetingRow(
 );
 assert.match(mobileRow, /<h2>Phone<span class="meeting-source">/);
 assert.doesNotMatch(mobileRow, /class="tag">手机录音/);
-assert.match(mobileRow, /class="tag">讨论/);
+assert.doesNotMatch(mobileRow, /class="(?:tag|meeting-tags)"/, '会议列表不再渲染占位标签');
 
 // 密集收尾事件必须复用草稿节点；其他会议和只覆盖前半段的 final 不得清空当前草稿。
 const draftHandlers = {};
@@ -6664,4 +6789,70 @@ assert.ok(text(meetingDetail).includes('meeting.original_segments'));
   });
   warn({ code: 'error.transcript_rule_limit', message: '中文诊断' });
   assert.match(messages[0], /original transcript was kept/);
+}
+
+// 胶囊与主窗口共用采纳：写入失败保留建议；重试不能向笔记重复追加。
+{
+  let writes = 0,
+    appended = 0,
+    hidden = 0;
+  const context = {
+    latestAiSuggestion: { id: 'suggestion', text: '保留阅读位置' },
+    breviaClient: { state: { meeting: { id: 'meeting' } } },
+    aiSuggestionAccepting: false,
+    aiSuggestionDraftKey: null,
+    aiSuggestionAutoFadeTimer: undefined,
+    liveNotesSaveTimer: { current: undefined },
+    document: { querySelectorAll: () => [] },
+    clearTimeout() {},
+    appendAiSuggestion() {
+      appended++;
+    },
+    currentNotesMarkdown: () => '- 保留阅读位置',
+    persistNotes: async () => {
+      if (++writes === 1) throw Error('disk full');
+    },
+    hideAiSuggestion() {
+      hidden++;
+    },
+    showToast() {},
+    t: (key) => key,
+  };
+  const source = text(app).match(/async function acceptAiSuggestion\(text\) \{[\s\S]*?\n\}/)?.[0];
+  assert.ok(source);
+  runInNewContext(source, context);
+  assert.equal(await context.acceptAiSuggestion('保留阅读位置'), false);
+  assert.equal(hidden, 0, '保存失败不能丢掉建议入口');
+  assert.equal(await context.acceptAiSuggestion('保留阅读位置'), true);
+  assert.equal(appended, 1, '失败后重试不重复写入笔记');
+  assert.equal(hidden, 1);
+}
+// 缺模型的纪要使用已有队列，在模型就绪后续跑一次。
+{
+  const calls = [];
+  const context = {
+    pendingModelTasks: new Map([
+      [
+        'summary.generate:meeting',
+        { task: 'summary.generate', payload: { meeting_id: 'meeting' }, models: ['model'] },
+      ],
+    ]),
+    resumingModelTasks: new Set(),
+    modelPaths: new Set(['model']),
+    summaryGeneratingMeetingId: undefined,
+    meetingActive: true,
+    currentMeetingDetail: null,
+    generateMeetingSummary: async (id) => calls.push(id),
+    showToast() {},
+  };
+  const source = text(app).match(/async function resumeReadyModelTasks\(\) \{[\s\S]*?\n\}/)?.[0];
+  assert.ok(source);
+  runInNewContext(source, context);
+  await context.resumeReadyModelTasks();
+  assert.equal(calls.length, 0, '录音时继续保留等待任务');
+  context.meetingActive = false;
+  await context.resumeReadyModelTasks();
+  await context.resumeReadyModelTasks();
+  assert.deepEqual(calls, ['meeting']);
+  assert.equal(context.pendingModelTasks.size, 0);
 }

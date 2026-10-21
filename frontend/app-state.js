@@ -30,3 +30,18 @@ const progress = document.querySelector('#progress');
 const playerAudio = new Audio();
 let playbackStarted = false;
 let followPlaybackTranscript = true;
+
+let desktopPreferences = null;
+
+let desktopSaveError = '';
+let desktopSavedMeeting = null;
+let desktopPublishTimer;
+let desktopLevel = 0;
+let desktopLevelAt = 0;
+let desktopSettingsBusy = false;
+let quickRecordingBusy = false;
+
+let aiSuggestionAccepting = false;
+let aiSuggestionDraftKey = null;
+
+let desktopLevelSentAt = 0;

@@ -2230,7 +2230,9 @@ try {
       renderSettingsView();
       if(document.getElementById('speaker-profiles-entry')!==voice || !document.getElementById('app-update-entry')) errors.push('settings entries lost');
       const directory=document.querySelector('#settings-view .settings-grid');
-      if(directory.scrollHeight>directory.clientHeight+1) errors.push('settings directory requires scrolling '+directory.scrollHeight+'/'+directory.clientHeight);
+      const settingsScroll=document.querySelector('.settings-general-main');
+      const capsuleOption=document.querySelector('[data-desktop-toggle="autoCapsule"]');
+      if(capsuleOption){capsuleOption.scrollIntoView({block:'nearest'});const r=capsuleOption.getBoundingClientRect();if(r.top<0||r.bottom>innerHeight+1)errors.push('desktop preferences cannot be reached');settingsScroll.scrollTop=0;}
       const toggle=document.querySelector('[data-toggle-notes-toolbar]');
       const toolbar=document.getElementById('live-notes-toolbar');
       if(!toolbar.hidden) errors.push('toolbar initially expanded');
@@ -2644,7 +2646,7 @@ try {
       for(const destination of ['all-meetings','recently-deleted']) {
         await showView('settings');
         await openModal('models');
-        if(!document.querySelector('.app-shell').classList.contains('is-settings-view')) errors.push('settings sidebar not collapsed');
+        if(!document.querySelector('.app-shell').classList.contains('is-settings-view')) errors.push('settings layout state missing');
         await showLibraryNav(destination);
         if(activeView!=='home' || activeLibraryNav!==destination || !settingsModal.hidden || document.querySelector('.app-shell').inert || document.querySelector('.app-shell').classList.contains('is-settings-view')) errors.push('settings navigation blocked '+destination);
       }
@@ -2665,8 +2667,11 @@ try {
       miniMeeting.hidden=false;syncTaskCardStack(miniMeeting);
       await showView('settings');
       const taskSummary=document.querySelector('[data-task-summary]');
-      if(getComputedStyle(taskSummary).display==='none') errors.push('settings hide ongoing meeting');
-      taskSummary.click();await pageTransition;
+      if(getComputedStyle(taskSummary).display==='none') {
+        if(getComputedStyle(taskCards).display==='none'||getComputedStyle(miniMeeting).display==='none') errors.push('settings hide ongoing meeting');
+        document.querySelector('#all-meetings').click();
+      } else taskSummary.click();
+      await pageTransition;
       if(activeView!=='home' || getComputedStyle(taskCards).display==='none') errors.push('settings cannot restore ongoing tasks');
       miniMeeting.hidden=true;
       for(const tone of ['success','error','info']) {
@@ -3478,7 +3483,15 @@ try {
       const layout=document.querySelector('.live-layout');
       if(layout.querySelector('[data-toggle-live-mode]'))errors.push('retired layout toggle remains');
       if(Math.abs(layout.querySelector('.live-notes').getBoundingClientRect().width-layout.querySelector('.live-captions').getBoundingClientRect().width)>1)errors.push('live columns are not equal');
-      for(const code of Object.keys(catalog)){applyLanguage(code);if(document.querySelector('.live-captions [data-open-correction]').textContent!==t('查找与替换'))errors.push('caption actions locale '+code);}
+      for(const code of Object.keys(catalog)){
+        applyLanguage(code);
+        for(const header of layout.querySelectorAll('.live-section-head')){
+          const button=header.querySelector('[data-open-correction]'),title=header.querySelector('.eyebrow');
+          if(button.textContent.trim()||!button.querySelector('svg')||button.title!==t('查找与替换')||button.getAttribute('aria-label')!==t('查找与替换'))errors.push('find icon locale '+code);
+          const b=button.getBoundingClientRect(),h=title.getBoundingClientRect();
+          if(b.top>=h.bottom||b.bottom<=h.top||b.right>header.getBoundingClientRect().right+1)errors.push('find icon outside title row '+code);
+        }
+      }
       applyLanguage(originalLocale);
       if(currentNotesMarkdown()!==notes)errors.push('language switching changes live notes');
       meetingActive=wasActive;await showView('home');return errors;

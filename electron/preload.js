@@ -47,6 +47,17 @@ contextBridge.exposeInMainWorld('brevia', {
   initialize: invoke('app.initialize'),
   maintain: invoke('app.maintain'),
   appInfo: { version: invoke('app.version') },
+  desktop: {
+    preferences: invoke('desktop.preferences.get'),
+    savePreferences: invoke('desktop.preferences.save'),
+    publish: invoke('desktop.publish'),
+    publishLevel: invoke('desktop.level'),
+    state: invoke('desktop.state'),
+    action: invoke('desktop.action'),
+    complete: invoke('desktop.complete'),
+    expand: invoke('desktop.expand'),
+    move: invoke('desktop.move'),
+  },
   update: { check: invoke('update.check'), install: invoke('update.install') },
   permissions: {
     status: invoke('permissions.status'),

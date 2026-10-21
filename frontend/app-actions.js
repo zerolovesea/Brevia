@@ -15,6 +15,7 @@ const APP_ACTION_NAMES = [
   'updateDetailNotesDraft',
   'noteHighlightTime',
   'showToast',
+  'summaryWaitState',
   // workspaces.js
   'filterMeetings',
   'renderMeetingList',

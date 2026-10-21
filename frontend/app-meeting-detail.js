@@ -166,6 +166,8 @@ function applyBackendDetail(meeting) {
         blocked: summaryBlocked,
         generating: summaryGenerating,
       };
+  uiData.detail.summary.waitingModels =
+    'summaryWaitState' in appActions && appActions.summaryWaitState(meeting.id);
   const heading = document.querySelector('#detail-view .detail-head h1');
   heading.textContent = meeting.title;
   heading.title = meeting.title;
