@@ -6468,16 +6468,59 @@ document.querySelector('#mark-important').addEventListener('click', () => {
   liveNotesEditor.addHighlight(Math.floor(seconds * 1000), segment?.text || t('重点'));
   showToast(t('已加入笔记'), undefined, 'success');
 });
+// Worker 结束事件与停录响应可能先后到达，共享同一次收尾。
+let recordingFinishPending = Promise.resolve();
+function finishCurrentRecording(meeting) {
+  if (
+    !meetingActive ||
+    (meeting && breviaClient?.state.meeting && meeting.id !== breviaClient.state.meeting.id)
+  )
+    return recordingFinishPending;
+  meetingActive = false;
+  recordingFinishPending = (async () => {
+    clearInterval(timer);
+    if (floatingCaptionMode === 'live' && window.brevia?.floatingCaption) {
+      window.brevia.floatingCaption.close();
+      floatingCaptionMode = null;
+      renderFloatingCaptionToggle();
+    }
+    desktopSavedMeeting = meeting || null;
+    desktopSaveError = '';
+    if (meeting?.id) stopAiNoteForMeeting(meeting.id);
+    resetAiNoteSuggestions();
+    await breviaClient?.capture
+      ?.stop()
+      .catch((error) => console.error('Audio capture cleanup failed', error));
+    if (breviaClient) {
+      breviaClient.capture = null;
+      breviaClient.state.meeting = null;
+      breviaClient.state.inputs = null;
+      if (meeting) {
+        breviaClient.state.selectedMeetingId = meeting.id;
+        applyBackendDetail(meeting);
+      }
+    }
+    miniMeeting.hidden = true;
+    showView('detail');
+    const config = summaryRequestConfig();
+    if (meeting && config && (config.provider !== 'built-in' || modelPaths.has(config.model)))
+      void generateMeetingSummary(meeting.id);
+    void resumeReadyModelTasks();
+    if (window.brevia)
+      void refreshBackendMeetings().catch((error) => showToast(error.message, undefined, 'error'));
+  })();
+  return recordingFinishPending;
+}
 async function stopCurrentRecording(event) {
   const button = event.currentTarget;
   if (button.disabled || !meetingActive) return false;
   const buttonLabel = button.innerHTML;
+  let captureStopped = false;
   desktopSaveError = '';
   button.disabled = true;
   button.classList.add('is-pending');
   button.setAttribute('aria-busy', 'true');
   button.innerHTML = `<i class="button-spinner" aria-hidden="true"></i>${t('结束中')}`;
-  clearInterval(timer);
   try {
     if (breviaClient?.state.meeting?.tags?.includes('手机录音')) {
       const meetingId = breviaClient.state.meeting.id;
@@ -6487,37 +6530,33 @@ async function stopCurrentRecording(event) {
       await window.brevia.mobile.stop({ meeting_id: meetingId });
       button.dataset.awaitingPhone = meetingId;
       showToast(t('已请求手机结束录音，等待保存与同步'));
-      return;
+      return true;
     }
+    clearInterval(timer);
     // 先释放采集；保存失败时会议 ID 与笔记草稿保留，允许再次结束。
     await breviaClient?.capture
       ?.stop()
       .catch((error) => console.error('Audio capture cleanup failed', error));
+    captureStopped = true;
     clearTimeout(liveNotesSaveTimer.current);
     const notes = currentNotesMarkdown();
     const activeMeetingId = breviaClient?.state.meeting?.id;
-    if (notes && activeMeetingId) {
+    if (activeMeetingId) {
       await persistNotes(activeMeetingId, notes);
     }
     const meeting = breviaClient ? await breviaClient.stop(seconds * 1000) : null;
-    meetingActive = false;
-    miniMeeting.hidden = true;
-    if (meeting) {
-      breviaClient.state.selectedMeetingId = meeting.id;
-      applyBackendDetail(meeting);
-    }
-    showView('detail');
-    desktopSavedMeeting = meeting;
+    await finishCurrentRecording(meeting);
     showToast(message('recordingSaved'), undefined, 'success');
-    if (window.brevia) await refreshBackendMeetings();
     return true;
   } catch (error) {
-    desktopSaveError = error.detail || error.message;
+    desktopSaveError = captureStopped ? error.detail || error.message : '';
     showToast(error.message, undefined, 'error');
-    // 采集已经收尾；保留会议 ID 供重试结束，不能装作仍在录音。
-    document.querySelector('#pause').dataset.paused = 'true';
-    renderPauseButton();
-    document.querySelector('#pause').disabled = true;
+    // 只有电脑采集确实收尾后才显示暂停；手机请求失败时继续保留真实录音状态。
+    if (captureStopped) {
+      document.querySelector('#pause').dataset.paused = 'true';
+      renderPauseButton();
+      document.querySelector('#pause').disabled = true;
+    }
     return false;
   } finally {
     if (button.dataset.awaitingPhone) {
@@ -9741,38 +9780,10 @@ if (window.brevia) {
     setLiveTranslationEnabled(Boolean(liveConfig.target_language));
     renderLiveModelControl();
   });
-  window.brevia.on('meeting.stopped', async ({ meeting }) => {
-    if (floatingCaptionMode === 'live' && window.brevia?.floatingCaption) {
-      window.brevia.floatingCaption.close();
-      floatingCaptionMode = null;
-      renderFloatingCaptionToggle();
-    }
-    if (!meetingActive) return;
-    meetingActive = false;
-    clearInterval(timer);
-    desktopSavedMeeting = meeting || null;
-    if (meeting?.id) stopAiNoteForMeeting(meeting.id);
-    resetAiNoteSuggestions();
-    await breviaClient?.capture
-      ?.stop()
-      .catch((error) => console.error('Audio capture cleanup failed', error));
-    if (breviaClient) {
-      breviaClient.capture = null;
-      breviaClient.state.meeting = null;
-      breviaClient.state.inputs = null;
-      if (meeting) {
-        breviaClient.state.selectedMeetingId = meeting.id;
-        applyBackendDetail(meeting);
-      }
-    }
-    miniMeeting.hidden = true;
-    showView('detail');
-    // 统一覆盖桌面与手机结束；纪要生成不依赖会议列表刷新成功。
-    const config = summaryRequestConfig();
-    if (meeting && config && (config.provider !== 'built-in' || modelPaths.has(config.model)))
-      void generateMeetingSummary(meeting.id);
-    void resumeReadyModelTasks();
-    void refreshBackendMeetings().catch((error) => showToast(error.message, undefined, 'error'));
+  window.brevia.on('meeting.stopped', ({ meeting }) => {
+    return finishCurrentRecording(meeting).catch((error) =>
+      showToast(error.message, undefined, 'error'),
+    );
   });
   window.brevia.on('meeting.interrupted', async ({ meeting_id: meetingId }) => {
     if (!meetingActive || meetingId !== breviaClient?.state.meeting?.id) return;
@@ -10467,9 +10478,8 @@ if (window.brevia?.desktop) {
           if (!latestAiSuggestion || latestAiSuggestion.id !== suggestionId)
             throw new Error(t('建议已更新，请重试'));
           if (action === 'accept') {
-            acceptAiSuggestion(latestAiSuggestion.text);
-            clearTimeout(liveNotesSaveTimer.current);
-            await persistNotes(breviaClient.state.meeting.id, currentNotesMarkdown());
+            if (!(await acceptAiSuggestion(latestAiSuggestion.text)))
+              throw new Error(t('操作未完成，请在主窗口查看'));
           } else document.querySelector('[data-ai-ignore]')?.click();
         }
         if (action === 'confirm-quit') result = await confirmQuitRecording();

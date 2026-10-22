@@ -197,21 +197,15 @@ function setupListener() {
   if (window.brevia?.onFloatingCaptionUpdate) {
     window.brevia.onFloatingCaptionUpdate((data) => {
       if (data.locale) {
-        const labels = (
-          window.BreviaLocaleData.catalog[data.locale] || window.BreviaLocaleData.catalog.en
-        ).labels;
-        closeBtn.title = labels['关闭'];
-        closeBtn.setAttribute('aria-label', labels['关闭']);
+        const t = (key) => window.BreviaLocaleData.translate(key, data.locale);
+        closeBtn.title = t('关闭');
+        closeBtn.setAttribute('aria-label', t('关闭'));
         document.documentElement.lang = data.locale;
-        document.title = labels['悬浮字幕'];
-        document.querySelector('[data-caption-title]').textContent = labels['实时字幕'];
-        document.getElementById('caption-pin').setAttribute('aria-label', labels['置顶'] || 'Pin');
-        document
-          .getElementById('caption-smaller')
-          .setAttribute('aria-label', labels['减小字号'] || 'Decrease text size');
-        document
-          .getElementById('caption-larger')
-          .setAttribute('aria-label', labels['增大字号'] || 'Increase text size');
+        document.title = t('悬浮字幕');
+        document.querySelector('[data-caption-title]').textContent = t('实时字幕');
+        document.getElementById('caption-pin').setAttribute('aria-label', t('置顶'));
+        document.getElementById('caption-smaller').setAttribute('aria-label', t('减小字号'));
+        document.getElementById('caption-larger').setAttribute('aria-label', t('增大字号'));
       }
       // 如果我们从主进程接收到完整状态对象（在窗口加载时）
       if (data.lastFinalized !== undefined && data.current !== undefined) {

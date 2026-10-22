@@ -32,8 +32,7 @@ const micMessage = (key) => {
       /* 回退到中文。 */
     }
   }
-  const labels = window.BreviaLocaleData?.catalog?.[locale]?.labels || {};
-  return labels[key] || key;
+  return window.BreviaLocaleData?.translate(key, locale) || key;
 };
 
 // 将 getUserMedia DOMException 转换为可操作的消息。NotFoundError 表示操作系统未暴露
@@ -472,6 +471,8 @@ window.breviaClient = window.brevia
   ? {
       state: { meeting: null, selectedMeetingId: null, initialized: null, inputs: null },
       capture: null,
+      starting: false,
+      stopping: false,
       preview: null,
       onLevel: null,
       onCaptureError: null,
@@ -506,62 +507,65 @@ window.breviaClient = window.brevia
         return result;
       },
       async start(payload, inputs, micDeviceId) {
-        await this.stopPreview();
-        if (inputs.phone) {
-          const meeting = await window.brevia.mobile.startCapture({
-            ...payload,
-            device_id: inputs.phone,
-          });
-          this.state.meeting = meeting;
-          this.state.selectedMeetingId = meeting.id;
-          this.state.inputs = { ...inputs };
-          return meeting;
-        }
-        this.capture = new AudioCapture(window.brevia.meeting.audio, this.onLevel, (error) =>
-          this.onCaptureError?.(error),
-        );
-        this.capture.micDeviceId = micDeviceId ?? this.micDeviceId;
-        let meeting;
+        if (this.starting || this.stopping || this.state.meeting)
+          throw new Error(micMessage('error.recording.start_busy'));
+        this.starting = true;
+        let capture, meeting;
         try {
+          await this.stopPreview();
+          if (inputs.phone) {
+            const meeting = await window.brevia.mobile.startCapture({
+              ...payload,
+              device_id: inputs.phone,
+            });
+            this.state.meeting = meeting;
+            this.state.selectedMeetingId = meeting.id;
+            this.state.inputs = { ...inputs };
+            return meeting;
+          }
+          capture = new AudioCapture(window.brevia.meeting.audio, this.onLevel, (error) =>
+            this.onCaptureError?.(error),
+          );
+          capture.micDeviceId = micDeviceId ?? this.micDeviceId;
           if (inputs.system) {
             const permissions = await window.brevia.permissions.status();
             if (permissions.systemAudioSupported === false)
               throw new Error(micMessage('当前系统不支持直接录制系统音频，请仅使用麦克风'));
           }
-          await this.capture.prepare(inputs);
+          await capture.prepare(inputs);
           const startPayload = {
             ...payload,
             audio_tracks: Object.keys(inputs).filter((track) => inputs[track]),
           };
           meeting = await window.brevia.meeting.start(startPayload);
           if (meeting?.model_required) {
-            await this.capture.stop();
-            this.capture = null;
+            await capture.stop();
             return meeting;
           }
-          await this.capture.start(meeting.id);
+          await capture.start(meeting.id);
+          this.capture = capture;
+          this.state.meeting = meeting;
+          this.state.selectedMeetingId = meeting.id;
+          this.state.inputs = { ...inputs };
+          return meeting;
         } catch (error) {
-          // 清理步骤自身抛错时不能掩盖原始错误，也不能跳过 this.capture 置空——否则后续
-          // stop()/pause() 会拿到一个已死的 capture 实例。
+          // 只释放本次启动拥有的采集；清理失败不能掩盖原始错误。
           try {
-            await this.capture?.stop();
+            await capture?.stop();
           } catch (cleanupError) {
             console.error('Audio capture cleanup failed', cleanupError);
           }
-          if (meeting) {
+          if (meeting?.id) {
             try {
               await window.brevia.meeting.stop({ meeting_id: meeting.id, duration_ms: 0 });
             } catch (cleanupError) {
               console.error('Meeting stop after failed start', cleanupError);
             }
           }
-          this.capture = null;
           throw error;
+        } finally {
+          this.starting = false;
         }
-        this.state.meeting = meeting;
-        this.state.selectedMeetingId = meeting.id;
-        this.state.inputs = { ...inputs };
-        return meeting;
       },
       async previewMic() {
         if (!this.preview) {
@@ -588,14 +592,15 @@ window.breviaClient = window.brevia
         const meetingId = this.state.meeting?.id || this.capture?.meetingId;
         if (!meetingId) throw new Error(micMessage('当前没有正在进行的会议'));
         const capture = this.capture;
+        this.stopping = true;
         // 采集侧收尾失败不能阻断后端会议结束：否则 capture.stop() 抛错会让 meeting.stop 永远
         // 不被调用，会议在后端一直处于进行中。
         try {
-          if (capture) await capture.stop();
-        } catch (error) {
-          console.error('Audio capture cleanup failed', error);
-        }
-        try {
+          try {
+            if (capture) await capture.stop();
+          } catch (error) {
+            console.error('Audio capture cleanup failed', error);
+          }
           const meeting = await window.brevia.meeting.stop({
             meeting_id: meetingId,
             duration_ms: durationMs,
@@ -605,6 +610,7 @@ window.breviaClient = window.brevia
           return meeting;
         } finally {
           this.capture = null;
+          this.stopping = false;
         }
       },
     }

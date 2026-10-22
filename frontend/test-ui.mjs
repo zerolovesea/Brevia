@@ -1875,7 +1875,7 @@ assert.match(text(app), /refinement\.progress'.*stage.*showRefinementProgress/s)
 assert.equal(localeContext.window.BreviaLocaleData.catalog.en.labels['检查音频'], 'Checking audio');
 assert.doesNotMatch(
   text(i18nData),
-  /Object\.assign|catalog\.[a-z]+\.labels\[/,
+  /Object\.assign|catalog\.[a-z]+\.labels\[[^\]]+\]\s*=/,
   'locale tables have no runtime overrides',
 );
 for (const locale of ['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']) {
@@ -2751,10 +2751,6 @@ assert.match(
 const stoppedListeners = text(app).match(/window\.brevia\.on\('meeting\.stopped'/g) || [];
 assert.equal(stoppedListeners.length, 1);
 assert.match(
-  text(app),
-  /window\.brevia\.on\('meeting\.stopped', async \(\{ meeting \}\) => \{[\s\S]{0,400}floatingCaptionMode = null;[\s\S]{0,150}if \(!meetingActive\) return;\s+meetingActive = false;\s+clearInterval\(timer\);/,
-);
-assert.match(
   text(js),
   /async function generateMeetingSummary\(meetingId = breviaClient\?\.state\.selectedMeetingId\)/,
 );
@@ -2764,9 +2760,12 @@ assert.match(
 );
 // 结束事件共用一条自动纪要路径，桌面/手机结束与列表刷新失败都应覆盖。
 const stoppedHandlerSource = text(app).match(
-  /window\.brevia\.on\('meeting\.stopped', async \(\{ meeting \}\) => \{[\s\S]*?\n  \}\);/,
+  /window\.brevia\.on\('meeting\.stopped', \(\{ meeting \}\) => \{[\s\S]*?\n  \}\);/,
 )?.[0];
 assert.ok(stoppedHandlerSource);
+const finishRecordingSource = text(app).match(
+  /function finishCurrentRecording\(meeting\) \{[\s\S]*?\n\}/,
+)[0];
 const summaryConfigFunctions = [
   'providerEntry',
   'builtinFallbackModel',
@@ -2834,7 +2833,10 @@ for (const scenario of [
       },
     },
   };
-  runInNewContext(`${summaryConfigFunctions}\n${stoppedHandlerSource}`, context);
+  runInNewContext(
+    `let recordingFinishPending = Promise.resolve();\n${summaryConfigFunctions}\n${finishRecordingSource}\n${stoppedHandlerSource}`,
+    context,
+  );
   await context.stopped({ meeting });
   await context.stopped({ meeting });
   assert.equal(calls.length, scenario.expected, JSON.stringify(scenario));
@@ -3666,11 +3668,11 @@ assert.match(text(components), /refine-wrap/);
 assert.match(text(app), /closest\('\.refine-wrap, \.refine-menu/);
 assert.match(
   text(backendClient),
-  /await this\.capture\.prepare\(inputs\)[\s\S]*audio_tracks:[\s\S]*window\.brevia\.meeting\.start\(startPayload\)/,
+  /await capture\.prepare\(inputs\)[\s\S]*audio_tracks:[\s\S]*window\.brevia\.meeting\.start\(startPayload\)/,
 );
 assert.match(text(backendClient), /系统音频.*未产生音频数据/);
 assert.match(text(backendClient), /this\.state\.meeting\?\.id \|\| this\.capture\?\.meetingId/);
-assert.match(text(backendClient), /await this\.capture\.stop\(\)/);
+assert.match(text(backendClient), /await capture\.stop\(\)/);
 assert.match(text(electronMain), /handleIpc\('permissions\.status'/);
 assert.match(text(electronMain), /systemPreferences\.askForMediaAccess\('microphone'\)/);
 assert.ok(packageManifest.build.mac.extendInfo.NSAudioCaptureUsageDescription);
@@ -6855,4 +6857,285 @@ assert.ok(text(meetingDetail).includes('meeting.original_segments'));
   await context.resumeReadyModelTasks();
   assert.deepEqual(calls, ['meeting']);
   assert.equal(context.pendingModelTasks.size, 0);
+}
+
+// 所有录音入口共用生命周期；被拒绝的启动不能停止另一场采集。
+{
+  const captures = [];
+  let releasePrepare, releaseStop;
+  const context = {
+    console,
+    captures,
+    window: {
+      brevia: {
+        meeting: {
+          start: async () => ({ id: 'active' }),
+          stop: () =>
+            new Promise((resolve) => {
+              releaseStop = resolve;
+            }),
+        },
+        mobile: {
+          startCapture() {
+            throw Error('unexpected phone capture');
+          },
+        },
+      },
+    },
+  };
+  runInNewContext(text(backendClient), context);
+  runInNewContext(
+    `AudioCapture = class {
+    constructor() { captures.push(this); this.stops = 0; }
+    async prepare() { await waitPrepare(); }
+    async start() {}
+    async stop() { this.stops++; }
+  };`,
+    Object.assign(context, {
+      waitPrepare: () =>
+        new Promise((resolve) => {
+          releasePrepare = resolve;
+        }),
+    }),
+  );
+  const client = context.window.breviaClient;
+  const first = client.start({}, { mic: true });
+  await Promise.resolve();
+  await assert.rejects(client.start({}, { mic: true }), /error.recording.start_busy/);
+  await assert.rejects(client.start({}, { phone: 'device' }), /error.recording.start_busy/);
+  assert.equal(captures.length, 1);
+  releasePrepare();
+  await first;
+  assert.equal(client.capture, captures[0]);
+  assert.equal(captures[0].stops, 0);
+  await assert.rejects(client.start({}, { mic: true }), /error.recording.start_busy/);
+  const stopping = client.stop(1000);
+  await Promise.resolve();
+  client.state.meeting = null; // 结束事件先于停录响应到达。
+  await assert.rejects(client.start({}, { mic: true }), /error.recording.start_busy/);
+  releaseStop({ id: 'active' });
+  await stopping;
+  assert.equal(client.stopping, false);
+  assert.equal(client.capture, null);
+  context.waitPrepare = async () => {
+    throw Error('permission denied');
+  };
+  await assert.rejects(client.start({}, { mic: true }), /permission denied/);
+  assert.equal(client.starting, false);
+  assert.equal(captures[1].stops, 1, '启动失败只释放本次资源');
+  context.waitPrepare = async () => {};
+  await client.start({}, { mic: true });
+  assert.equal(client.capture, captures[2], '失败后可以正常重试');
+}
+
+// 手机尚未收到停录指令时，保存或请求失败不能伪造暂停、冻结计时。
+for (const failure of ['notes', 'request', null]) {
+  const pause = { dataset: { paused: 'false' }, disabled: false };
+  const button = {
+    dataset: {},
+    innerHTML: 'stop',
+    classList: { add() {}, remove() {} },
+    setAttribute() {},
+    removeAttribute() {},
+  };
+  let stopped = 0,
+    cleared = 0;
+  const context = {
+    meetingActive: true,
+    desktopSaveError: '',
+    timer: 0,
+    breviaClient: { state: { meeting: { id: 'phone', tags: ['手机录音'] } } },
+    document: { querySelector: (selector) => (selector === '#pause' ? pause : button) },
+    window: {
+      brevia: {
+        mobile: {
+          stop: async () => {
+            stopped++;
+            if (failure === 'request') throw Error('connection lost');
+          },
+        },
+      },
+    },
+    clearInterval() {
+      cleared++;
+    },
+    clearTimeout() {},
+    liveNotesSaveTimer: {},
+    currentNotesMarkdown: () => 'notes',
+    persistNotes: async () => {
+      if (failure === 'notes') throw Error('disk full');
+    },
+    showToast() {},
+    renderPauseButton() {},
+    t: (key) => key,
+  };
+  runInNewContext(`async ${summaryFn('stopCurrentRecording')}`, context);
+  const result = await context.stopCurrentRecording({ currentTarget: button });
+  assert.equal(result, failure === null);
+  assert.equal(stopped, failure === 'notes' ? 0 : 1);
+  assert.equal(pause.dataset.paused, 'false');
+  assert.equal(pause.disabled, false);
+  assert.equal(cleared, 0);
+  assert.equal(context.desktopSaveError, '');
+  assert.equal(button.disabled, failure === null);
+}
+
+// 胶囊必须等待共享采纳结果；一次动作只保存一次，失败后原建议仍可重试。
+{
+  const completions = [];
+  let writes = 0,
+    appended = 0,
+    handler;
+  const context = {
+    meetingActive: true,
+    latestAiSuggestion: { id: 'suggestion', text: '保留阅读位置' },
+    breviaClient: { state: { meeting: { id: 'meeting' } } },
+    aiSuggestionAccepting: false,
+    aiSuggestionDraftKey: null,
+    aiSuggestionAutoFadeTimer: undefined,
+    liveNotesSaveTimer: {},
+    document: { querySelectorAll: () => [] },
+    clearTimeout() {},
+    appendAiSuggestion() {
+      appended++;
+    },
+    currentNotesMarkdown: () => '- 保留阅读位置',
+    persistNotes: async () => {
+      if (++writes === 1) throw Error('disk full');
+    },
+    hideAiSuggestion() {
+      context.latestAiSuggestion = null;
+    },
+    showToast() {},
+    t: (key) => key,
+    publishDesktopRecording() {},
+    window: {
+      brevia: {
+        on: (_, callback) => {
+          handler = callback;
+        },
+        desktop: { complete: async (value) => completions.push(value) },
+      },
+    },
+  };
+  const listener = text(app).match(/window\.brevia\.on\(\s*'desktop.action',[\s\S]*?\n  \);/)[0];
+  runInNewContext(`async ${summaryFn('acceptAiSuggestion')}\n${listener}`, context);
+  await handler({
+    action: 'accept',
+    requestId: 'first',
+    meetingId: 'meeting',
+    suggestionId: 'suggestion',
+  });
+  assert.equal(writes, 1);
+  assert.ok(completions[0].error);
+  assert.ok(context.latestAiSuggestion);
+  await handler({
+    action: 'accept',
+    requestId: 'retry',
+    meetingId: 'meeting',
+    suggestionId: 'suggestion',
+  });
+  assert.equal(writes, 2);
+  assert.equal(appended, 1);
+  assert.equal(completions[1].error, undefined);
+  assert.equal(context.latestAiSuggestion, null);
+}
+
+// 同一份词条在主进程、主窗和辅助窗中保持一致，并覆盖异常语种回退。
+{
+  const data = localeContext.window.BreviaLocaleData;
+  const keys = [
+    'error.recording.start_busy',
+    'error.desktop.icon_unavailable',
+    'error.desktop.session_changed',
+    'error.desktop.window_unavailable',
+    'error.desktop.action_pending',
+    'error.desktop.closed',
+  ];
+  for (const code of Object.keys(data.catalog)) {
+    for (const retired of ['胶囊置顶', '重置胶囊位置', '默认录音配置'])
+      assert.equal(data.catalog[code].labels[retired], undefined);
+    for (const key of keys) {
+      assert.ok(data.catalog[code].labels[key], `${code}: ${key}`);
+      assert.equal(data.translate(key, code), data.catalog[code].labels[key]);
+      assert.notEqual(data.translate(key, code), key);
+    }
+  }
+  assert.equal(data.translate(keys[0], 'unknown'), data.translate(keys[0], 'en'));
+  assert.equal(data.translate(keys[0], '__proto__'), data.translate(keys[0], 'en'));
+  assert.equal(data.translate('unknown.key', 'en'), 'unknown.key');
+  assert.equal(data.translate('新建会议', 'zh'), '新建会议', '中文源串无需重复登记为词条');
+  const layout = await readFile('design-layout.css', 'utf8');
+  assert.doesNotMatch(layout, /\.summary-tools\b|\.summary-reader-regenerate\b/);
+}
+
+// 停录响应和事件无论谁先到达，都只完成一次收尾和任务恢复。
+for (const eventFirst of [false, true]) {
+  let persisted = 0,
+    resumed = 0,
+    viewed = 0;
+  const meeting = { id: 'local', tags: [] };
+  const pause = { dataset: {}, disabled: false };
+  const button = {
+    dataset: {},
+    innerHTML: 'stop',
+    classList: { add() {}, remove() {} },
+    setAttribute() {},
+    removeAttribute() {},
+  };
+  const context = {
+    meetingActive: true,
+    desktopSaveError: '',
+    desktopSavedMeeting: null,
+    floatingCaptionMode: null,
+    timer: 0,
+    seconds: 20,
+    miniMeeting: {},
+    clearInterval() {},
+    clearTimeout() {},
+    liveNotesSaveTimer: {},
+    document: { querySelector: (selector) => (selector === '#pause' ? pause : button) },
+    breviaClient: {
+      state: { meeting },
+      capture: { stop: async () => {} },
+      stop: async () => {
+        if (eventFirst) await context.finishCurrentRecording(meeting);
+        return meeting;
+      },
+    },
+    window: { brevia: {} },
+    currentNotesMarkdown: () => '',
+    persistNotes: async (_id, notes) => {
+      assert.equal(notes, '');
+      persisted++;
+    },
+    stopAiNoteForMeeting() {},
+    resetAiNoteSuggestions() {},
+    applyBackendDetail() {},
+    showView() {
+      viewed++;
+    },
+    summaryRequestConfig: () => null,
+    resumeReadyModelTasks() {
+      resumed++;
+    },
+    refreshBackendMeetings: async () => {
+      throw Error('refresh failed');
+    },
+    showToast() {},
+    t: (key) => key,
+    message: (key) => key,
+  };
+  runInNewContext(
+    `let recordingFinishPending = Promise.resolve();\n${finishRecordingSource}\nasync ${summaryFn('stopCurrentRecording')}`,
+    context,
+  );
+  assert.equal(await context.stopCurrentRecording({ currentTarget: button }), true);
+  await context.finishCurrentRecording(meeting);
+  assert.equal(context.meetingActive, false);
+  assert.equal(context.desktopSavedMeeting.id, meeting.id);
+  assert.equal(context.desktopSaveError, '');
+  assert.equal(persisted, 1, '停录也必须保存清空后的笔记');
+  assert.equal(resumed, 1);
+  assert.equal(viewed, 1);
 }

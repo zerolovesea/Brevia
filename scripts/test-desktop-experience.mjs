@@ -277,7 +277,10 @@ try {
   assert.equal(await evaluate(`desktopPreferences.closeBehavior`), 'hide');
   await mainEval(`${nativeWindow}.close(); true`);
   assert.equal(await mainEval(`${nativeWindow}.isVisible()`), false, '隐藏保留窗口');
-  await mainEval(`${nativeWindow}.show(); true`);
+  await mainEval(
+    `process.getBuiltinModule('module').createRequire(process.cwd()+'/electron/main.js')('electron').app.emit('second-instance'); true`,
+  );
+  assert.equal(await mainEval(`${nativeWindow}.isVisible()`), true, '再次启动恢复隐藏主窗');
   await evaluate(String.raw`(async()=>{
     window.desktopPauseCalls=[];
     const meeting={id:'desktop-fixture',title:'产品周会',language:'zh',tags:[],workspace_id:null};

@@ -229,7 +229,6 @@
         '纪要等待所需模型，就绪后会自动继续。': '纪要等待所需模型，就绪后会自动继续。',
         '请确认录音配置并下载所需模型后开始': '请确认录音配置并下载所需模型后开始',
         '正在保存录音': '正在保存录音',
-        '已重置': '已重置',
         '操作未完成，请在主窗口查看': '操作未完成，请在主窗口查看',
         '录音仍在保存，请稍后重试退出': '录音仍在保存，请稍后重试退出',
         '建议已更新，请重试': '建议已更新，请重试',
@@ -251,14 +250,10 @@
         '桌面录音胶囊': '桌面录音胶囊',
         '最小化时自动显示胶囊': '最小化时自动显示胶囊',
         '录音或暂停时显示；隐藏胶囊不会停止录音': '录音或暂停时显示；隐藏胶囊不会停止录音',
-        '胶囊置顶': '胶囊置顶',
-        '显示在其他窗口上方': '显示在其他窗口上方',
-        '重置胶囊位置': '重置胶囊位置',
         '展开讨论记录': '展开讨论记录',
         '返回当前会议': '返回当前会议',
         '展开字幕与笔记': '展开字幕与笔记',
         '拖动胶囊': '拖动胶囊',
-        '在主窗口查看': '在主窗口查看',
         '识别中': '识别中',
         '等待语音': '等待语音',
         '待采纳建议': '待采纳建议',
@@ -275,20 +270,13 @@
 
         '显示录音胶囊': '显示录音胶囊',
         '退出 Brevia': '退出 Brevia',
-        '结束录音并退出？': '结束录音并退出？',
         '继续录音': '继续录音',
         '结束并退出': '结束并退出',
         '固定展开': '固定展开',
         '取消固定': '取消固定',
         '跟随最新': '跟随最新',
-        '有新内容 · 回到最新': '有新内容 · 回到最新',
-        'AI 笔记已开启': 'AI 笔记已开启',
-        'AI 笔记未开启': 'AI 笔记未开启',
-        '暂无新建议': '暂无新建议',
         '录音中': '录音中',
         '未在录音': '未在录音',
-        '沿用上次配置': '沿用上次配置',
-        '默认录音配置': '默认录音配置',
         '打开 Brevia': '打开 Brevia',
         '结束并保存': '结束并保存',
         '重试保存': '重试保存',
@@ -984,6 +972,12 @@
         '文件夹更改失败，请检查路径、磁盘连接和写入权限。':
           '文件夹更改失败，请检查路径、磁盘连接和写入权限。',
         'error.operation_failed': '操作失败，请稍后重试。',
+        'error.recording.start_busy': '正在准备或录制会议，请先完成当前操作。',
+        'error.desktop.icon_unavailable': '无法加载菜单栏或托盘图标，请重新安装 Brevia。',
+        'error.desktop.session_changed': '当前录音已切换，请重试。',
+        'error.desktop.window_unavailable': '录音窗口不可用，请重新打开 Brevia。',
+        'error.desktop.action_pending': '操作仍在进行，请打开 Brevia 查看状态。',
+        'error.desktop.closed': 'Brevia 已关闭。',
         'error.audio_backpressure': '音频处理积压，录音正在停止；已采集的音频会保存。',
         'error.worker_exited': '转写进程已退出。',
         'error.worker_recovery': '录音仍保存在本地，但转写无法恢复。',
@@ -1033,7 +1027,6 @@
         '请确认录音配置并下载所需模型后开始':
           'Review recording settings and download the required models to start',
         '正在保存录音': 'Saving recording',
-        '已重置': 'Reset',
         '操作未完成，请在主窗口查看': 'Operation incomplete. Check the main window.',
         '录音仍在保存，请稍后重试退出': 'Recording is still saving. Try quitting again shortly.',
         '建议已更新，请重试': 'Suggestion changed. Try again.',
@@ -1056,14 +1049,10 @@
         '最小化时自动显示胶囊': 'Show capsule when minimized',
         '录音或暂停时显示；隐藏胶囊不会停止录音':
           'Show while recording or paused. Hiding the capsule keeps recording.',
-        '胶囊置顶': 'Keep capsule on top',
-        '显示在其他窗口上方': 'Show above other windows',
-        '重置胶囊位置': 'Reset capsule position',
         '展开讨论记录': 'Expand discussion',
         '返回当前会议': 'Return to current meeting',
         '展开字幕与笔记': 'Expand captions and notes',
         '拖动胶囊': 'Drag capsule',
-        '在主窗口查看': 'Open in main window',
         '识别中': 'Transcribing',
         '等待语音': 'Waiting for speech',
         '待采纳建议': 'Suggested note',
@@ -1082,20 +1071,13 @@
 
         '显示录音胶囊': 'Show recording capsule',
         '退出 Brevia': 'Quit Brevia',
-        '结束录音并退出？': 'End recording and quit?',
         '继续录音': 'Continue recording',
         '结束并退出': 'End and quit',
         '固定展开': 'Pin open',
         '取消固定': 'Unpin',
         '跟随最新': 'Follow latest',
-        '有新内容 · 回到最新': 'New content · Back to latest',
-        'AI 笔记已开启': 'AI notes enabled',
-        'AI 笔记未开启': 'AI notes disabled',
-        '暂无新建议': 'No new suggestions',
         '录音中': 'Recording',
         '未在录音': 'Not recording',
-        '沿用上次配置': 'Last used settings',
-        '默认录音配置': 'Default recording settings',
         '打开 Brevia': 'Open Brevia',
         '结束并保存': 'End and save',
         '重试保存': 'Retry saving',
@@ -1971,6 +1953,15 @@
         '文件夹更改失败，请检查路径、磁盘连接和写入权限。':
           'Could not change folders. Check the path, drive connection and write permissions.',
         'error.operation_failed': 'The operation failed. Please try again.',
+        'error.recording.start_busy':
+          'A meeting is starting or recording. Finish the current operation first.',
+        'error.desktop.icon_unavailable':
+          'The menu bar or tray icon could not be loaded. Reinstall Brevia.',
+        'error.desktop.session_changed': 'The recording session has changed. Please try again.',
+        'error.desktop.window_unavailable': 'The recording window is unavailable. Reopen Brevia.',
+        'error.desktop.action_pending':
+          'The operation is still pending. Open Brevia to check its status.',
+        'error.desktop.closed': 'Brevia has closed.',
         'error.audio_backpressure':
           'Audio processing is falling behind. Recording is stopping; captured audio will be saved.',
         'error.worker_exited': 'The transcription process exited.',
@@ -2030,7 +2021,6 @@
         '请确认录音配置并下载所需模型后开始':
           'Revisa los ajustes y descarga los modelos necesarios',
         '正在保存录音': 'Guardando grabación',
-        '已重置': 'Restablecido',
         '操作未完成，请在主窗口查看': 'Operación incompleta. Abre la ventana principal.',
         '录音仍在保存，请稍后重试退出': 'La grabación sigue guardándose. Inténtalo más tarde.',
         '建议已更新，请重试': 'La sugerencia cambió. Inténtalo de nuevo.',
@@ -2053,14 +2043,10 @@
         '最小化时自动显示胶囊': 'Mostrar cápsula al minimizar',
         '录音或暂停时显示；隐藏胶囊不会停止录音':
           'Se muestra al grabar o pausar. Ocultarla no detiene la grabación.',
-        '胶囊置顶': 'Mantener cápsula encima',
-        '显示在其他窗口上方': 'Mostrar sobre otras ventanas',
-        '重置胶囊位置': 'Restablecer posición',
         '展开讨论记录': 'Ampliar discusión',
         '返回当前会议': 'Volver a la reunión actual',
         '展开字幕与笔记': 'Abrir subtítulos y notas',
         '拖动胶囊': 'Arrastrar cápsula',
-        '在主窗口查看': 'Ver en ventana principal',
         '识别中': 'Transcribiendo',
         '等待语音': 'Esperando voz',
         '待采纳建议': 'Sugerencia pendiente',
@@ -2078,20 +2064,13 @@
 
         '显示录音胶囊': 'Mostrar cápsula',
         '退出 Brevia': 'Salir de Brevia',
-        '结束录音并退出？': '¿Finalizar la grabación y salir?',
         '继续录音': 'Continuar grabación',
         '结束并退出': 'Finalizar y salir',
         '固定展开': 'Fijar abierto',
         '取消固定': 'Desfijar',
         '跟随最新': 'Seguir lo último',
-        '有新内容 · 回到最新': 'Nuevo contenido · Ir al final',
-        'AI 笔记已开启': 'Notas de IA activadas',
-        'AI 笔记未开启': 'Notas de IA desactivadas',
-        '暂无新建议': 'Sin nuevas sugerencias',
         '录音中': 'Grabando',
         '未在录音': 'Sin grabación',
-        '沿用上次配置': 'Últimos ajustes',
-        '默认录音配置': 'Ajustes predeterminados',
         '打开 Brevia': 'Abrir Brevia',
         '结束并保存': 'Finalizar y guardar',
         '重试保存': 'Reintentar guardar',
@@ -2974,6 +2953,16 @@
         '文件夹更改失败，请检查路径、磁盘连接和写入权限。':
           'No se pudieron cambiar las carpetas. Comprueba la ruta, la conexión del disco y los permisos de escritura.',
         'error.operation_failed': 'La operación falló. Inténtalo de nuevo.',
+        'error.recording.start_busy':
+          'Se está preparando o grabando una reunión. Finaliza primero la operación actual.',
+        'error.desktop.icon_unavailable':
+          'No se pudo cargar el icono de la barra de menús o la bandeja. Reinstala Brevia.',
+        'error.desktop.session_changed': 'La sesión de grabación ha cambiado. Inténtalo de nuevo.',
+        'error.desktop.window_unavailable':
+          'La ventana de grabación no está disponible. Vuelve a abrir Brevia.',
+        'error.desktop.action_pending':
+          'La operación sigue en curso. Abre Brevia para ver su estado.',
+        'error.desktop.closed': 'Brevia se ha cerrado.',
         'error.audio_backpressure':
           'El procesamiento de audio se está retrasando. La grabación se detiene; el audio capturado se guardará.',
         'error.worker_exited': 'El proceso de transcripción terminó.',
@@ -3033,7 +3022,6 @@
         '请确认录音配置并下载所需模型后开始':
           '録音設定を確認し、必要なモデルをダウンロードしてください',
         '正在保存录音': '録音を保存中',
-        '已重置': 'リセットしました',
         '操作未完成，请在主窗口查看': '操作が完了していません。メイン画面で確認してください',
         '录音仍在保存，请稍后重试退出': '録音を保存中です。しばらくしてから終了してください',
         '建议已更新，请重试': '提案が更新されました。再試行してください',
@@ -3056,14 +3044,10 @@
         '最小化时自动显示胶囊': '最小化時にカプセルを表示',
         '录音或暂停时显示；隐藏胶囊不会停止录音':
           '録音中・一時停止中に表示。非表示にしても録音は続きます',
-        '胶囊置顶': 'カプセルを最前面に表示',
-        '显示在其他窗口上方': '他のウィンドウの上に表示',
-        '重置胶囊位置': 'カプセル位置をリセット',
         '展开讨论记录': '議論の記録を展開',
         '返回当前会议': '現在の会議に戻る',
         '展开字幕与笔记': '字幕とノートを展開',
         '拖动胶囊': 'カプセルをドラッグ',
-        '在主窗口查看': 'メイン画面で表示',
         '识别中': '認識中',
         '等待语音': '音声を待機中',
         '待采纳建议': '未採用の提案',
@@ -3081,20 +3065,13 @@
 
         '显示录音胶囊': '録音カプセルを表示',
         '退出 Brevia': 'Brevia を終了',
-        '结束录音并退出？': '録音を終了してアプリを閉じますか？',
         '继续录音': '録音を続ける',
         '结束并退出': '終了して閉じる',
         '固定展开': '展開を固定',
         '取消固定': '固定を解除',
         '跟随最新': '最新を追従',
-        '有新内容 · 回到最新': '新しい内容 · 最新へ',
-        'AI 笔记已开启': 'AI ノート有効',
-        'AI 笔记未开启': 'AI ノート無効',
-        '暂无新建议': '新しい提案はありません',
         '录音中': '録音中',
         '未在录音': '録音していません',
-        '沿用上次配置': '前回の設定',
-        '默认录音配置': '既定の録音設定',
         '打开 Brevia': 'Brevia を開く',
         '结束并保存': '終了して保存',
         '重试保存': '保存を再試行',
@@ -3974,6 +3951,17 @@
         '文件夹更改失败，请检查路径、磁盘连接和写入权限。':
           'フォルダーを変更できませんでした。パス、ドライブの接続、書き込み権限を確認してください。',
         'error.operation_failed': '操作に失敗しました。もう一度お試しください。',
+        'error.recording.start_busy':
+          '会議の準備中または録音中です。現在の操作を先に完了してください。',
+        'error.desktop.icon_unavailable':
+          'メニューバーまたはトレイのアイコンを読み込めません。Brevia を再インストールしてください。',
+        'error.desktop.session_changed':
+          '録音セッションが切り替わりました。もう一度お試しください。',
+        'error.desktop.window_unavailable':
+          '録音ウィンドウを利用できません。Brevia を開き直してください。',
+        'error.desktop.action_pending':
+          '操作はまだ進行中です。Brevia を開いて状態を確認してください。',
+        'error.desktop.closed': 'Brevia は終了しました。',
         'error.audio_backpressure':
           '音声処理が遅れています。録音を停止し、取得済みの音声を保存します。',
         'error.worker_exited': '文字起こしプロセスが終了しました。',
@@ -4031,7 +4019,6 @@
           '모델이 준비되면 회의록 생성을 자동으로 계속합니다.',
         '请确认录音配置并下载所需模型后开始': '녹음 설정을 확인하고 필요한 모델을 다운로드하세요',
         '正在保存录音': '녹음 저장 중',
-        '已重置': '초기화됨',
         '操作未完成，请在主窗口查看': '작업이 완료되지 않았습니다. 메인 창을 확인하세요',
         '录音仍在保存，请稍后重试退出': '녹음 저장 중입니다. 잠시 후 다시 종료하세요',
         '建议已更新，请重试': '제안이 변경되었습니다. 다시 시도하세요',
@@ -4054,14 +4041,10 @@
         '最小化时自动显示胶囊': '최소화 시 캡슐 표시',
         '录音或暂停时显示；隐藏胶囊不会停止录音':
           '녹음 또는 일시 정지 중 표시됩니다. 숨겨도 녹음은 계속됩니다',
-        '胶囊置顶': '캡슐을 항상 위에 표시',
-        '显示在其他窗口上方': '다른 창 위에 표시',
-        '重置胶囊位置': '캡슐 위치 초기화',
         '展开讨论记录': '논의 기록 펼치기',
         '返回当前会议': '현재 회의로 돌아가기',
         '展开字幕与笔记': '자막 및 노트 펼치기',
         '拖动胶囊': '캡슐 드래그',
-        '在主窗口查看': '메인 창에서 보기',
         '识别中': '인식 중',
         '等待语音': '음성 대기 중',
         '待采纳建议': '검토할 제안',
@@ -4078,20 +4061,13 @@
 
         '显示录音胶囊': '녹음 캡슐 표시',
         '退出 Brevia': 'Brevia 종료',
-        '结束录音并退出？': '녹음을 끝내고 종료할까요?',
         '继续录音': '녹음 계속',
         '结束并退出': '끝내고 종료',
         '固定展开': '펼친 상태 고정',
         '取消固定': '고정 해제',
         '跟随最新': '최신 내용 따라가기',
-        '有新内容 · 回到最新': '새 내용 · 최신으로',
-        'AI 笔记已开启': 'AI 노트 켜짐',
-        'AI 笔记未开启': 'AI 노트 꺼짐',
-        '暂无新建议': '새 제안 없음',
         '录音中': '녹음 중',
         '未在录音': '녹음 중 아님',
-        '沿用上次配置': '이전 설정',
-        '默认录音配置': '기본 녹음 설정',
         '打开 Brevia': 'Brevia 열기',
         '结束并保存': '끝내고 저장',
         '重试保存': '저장 재시도',
@@ -4959,6 +4935,15 @@
         '文件夹更改失败，请检查路径、磁盘连接和写入权限。':
           '폴더를 변경하지 못했습니다. 경로, 드라이브 연결 및 쓰기 권한을 확인하세요.',
         'error.operation_failed': '작업에 실패했습니다. 다시 시도해 주세요.',
+        'error.recording.start_busy':
+          '회의를 준비하거나 녹음 중입니다. 현재 작업을 먼저 완료하세요.',
+        'error.desktop.icon_unavailable':
+          '메뉴 막대 또는 트레이 아이콘을 불러올 수 없습니다. Brevia를 다시 설치하세요.',
+        'error.desktop.session_changed': '녹음 세션이 변경되었습니다. 다시 시도하세요.',
+        'error.desktop.window_unavailable': '녹음 창을 사용할 수 없습니다. Brevia를 다시 여세요.',
+        'error.desktop.action_pending':
+          '작업이 아직 진행 중입니다. Brevia를 열어 상태를 확인하세요.',
+        'error.desktop.closed': 'Brevia가 종료되었습니다.',
         'error.audio_backpressure':
           '오디오 처리가 지연되어 녹음을 중지합니다. 수집한 오디오는 저장됩니다.',
         'error.worker_exited': '전사 프로세스가 종료되었습니다.',
@@ -5016,7 +5001,6 @@
         '请确认录音配置并下载所需模型后开始':
           'Vérifiez les réglages et téléchargez les modèles requis',
         '正在保存录音': 'Enregistrement en cours',
-        '已重置': 'Réinitialisé',
         '操作未完成，请在主窗口查看': 'Opération incomplète. Consultez la fenêtre principale.',
         '录音仍在保存，请稍后重试退出': 'La sauvegarde continue. Réessayez de quitter plus tard.',
         '建议已更新，请重试': 'La suggestion a changé. Réessayez.',
@@ -5039,14 +5023,10 @@
         '最小化时自动显示胶囊': 'Afficher la capsule à la réduction',
         '录音或暂停时显示；隐藏胶囊不会停止录音':
           'Visible pendant l’enregistrement ou la pause. La masquer n’arrête pas l’enregistrement.',
-        '胶囊置顶': 'Garder la capsule au premier plan',
-        '显示在其他窗口上方': 'Afficher au-dessus des autres fenêtres',
-        '重置胶囊位置': 'Réinitialiser la position',
         '展开讨论记录': 'Développer la discussion',
         '返回当前会议': 'Revenir à la réunion',
         '展开字幕与笔记': 'Ouvrir les sous-titres et notes',
         '拖动胶囊': 'Déplacer la capsule',
-        '在主窗口查看': 'Voir dans la fenêtre principale',
         '识别中': 'Transcription',
         '等待语音': 'En attente de parole',
         '待采纳建议': 'Suggestion à accepter',
@@ -5065,20 +5045,13 @@
 
         '显示录音胶囊': 'Afficher la capsule',
         '退出 Brevia': 'Quitter Brevia',
-        '结束录音并退出？': 'Terminer l’enregistrement et quitter ?',
         '继续录音': 'Continuer l’enregistrement',
         '结束并退出': 'Terminer et quitter',
         '固定展开': 'Garder ouvert',
         '取消固定': 'Détacher',
         '跟随最新': 'Suivre le direct',
-        '有新内容 · 回到最新': 'Nouveau contenu · Revenir au direct',
-        'AI 笔记已开启': 'Notes IA activées',
-        'AI 笔记未开启': 'Notes IA désactivées',
-        '暂无新建议': 'Aucune nouvelle suggestion',
         '录音中': 'Enregistrement',
         '未在录音': 'Pas d’enregistrement',
-        '沿用上次配置': 'Derniers réglages',
-        '默认录音配置': 'Réglages par défaut',
         '打开 Brevia': 'Ouvrir Brevia',
         '结束并保存': 'Terminer et sauvegarder',
         '重试保存': 'Réessayer la sauvegarde',
@@ -5971,6 +5944,16 @@
         '文件夹更改失败，请检查路径、磁盘连接和写入权限。':
           'Impossible de changer les dossiers. Vérifiez le chemin, la connexion du disque et les droits d’écriture.',
         'error.operation_failed': 'L’opération a échoué. Réessayez.',
+        'error.recording.start_busy':
+          'Une réunion est en préparation ou en cours d’enregistrement. Terminez d’abord l’opération actuelle.',
+        'error.desktop.icon_unavailable':
+          'Impossible de charger l’icône de la barre de menus ou de notification. Réinstallez Brevia.',
+        'error.desktop.session_changed': 'La session d’enregistrement a changé. Réessayez.',
+        'error.desktop.window_unavailable':
+          'La fenêtre d’enregistrement est indisponible. Rouvrez Brevia.',
+        'error.desktop.action_pending':
+          'L’opération est toujours en cours. Ouvrez Brevia pour vérifier son état.',
+        'error.desktop.closed': 'Brevia est fermé.',
         'error.audio_backpressure':
           'Le traitement audio prend du retard. L’enregistrement s’arrête ; l’audio capturé sera conservé.',
         'error.worker_exited': 'Le processus de transcription s’est arrêté.',
@@ -6032,7 +6015,6 @@
         '请确认录音配置并下载所需模型后开始':
           'Aufnahmeeinstellungen prüfen und benötigte Modelle laden',
         '正在保存录音': 'Aufnahme wird gespeichert',
-        '已重置': 'Zurückgesetzt',
         '操作未完成，请在主窗口查看': 'Vorgang nicht abgeschlossen. Hauptfenster öffnen.',
         '录音仍在保存，请稍后重试退出': 'Aufnahme wird noch gespeichert. Später erneut beenden.',
         '建议已更新，请重试': 'Vorschlag geändert. Erneut versuchen.',
@@ -6055,14 +6037,10 @@
         '最小化时自动显示胶囊': 'Kapsel beim Minimieren anzeigen',
         '录音或暂停时显示；隐藏胶囊不会停止录音':
           'Bei Aufnahme oder Pause anzeigen. Ausblenden beendet keine Aufnahme.',
-        '胶囊置顶': 'Kapsel im Vordergrund halten',
-        '显示在其他窗口上方': 'Über anderen Fenstern anzeigen',
-        '重置胶囊位置': 'Kapselposition zurücksetzen',
         '展开讨论记录': 'Diskussion aufklappen',
         '返回当前会议': 'Zur aktuellen Besprechung',
         '展开字幕与笔记': 'Untertitel und Notizen öffnen',
         '拖动胶囊': 'Kapsel verschieben',
-        '在主窗口查看': 'Im Hauptfenster öffnen',
         '识别中': 'Transkription läuft',
         '等待语音': 'Warte auf Sprache',
         '待采纳建议': 'Offener Vorschlag',
@@ -6082,20 +6060,13 @@
 
         '显示录音胶囊': 'Aufnahmekapsel anzeigen',
         '退出 Brevia': 'Brevia beenden',
-        '结束录音并退出？': 'Aufnahme beenden und schließen?',
         '继续录音': 'Aufnahme fortsetzen',
         '结束并退出': 'Beenden und schließen',
         '固定展开': 'Offen halten',
         '取消固定': 'Lösen',
         '跟随最新': 'Neueste verfolgen',
-        '有新内容 · 回到最新': 'Neue Inhalte · Zum Ende',
-        'AI 笔记已开启': 'KI-Notizen aktiviert',
-        'AI 笔记未开启': 'KI-Notizen deaktiviert',
-        '暂无新建议': 'Keine neuen Vorschläge',
         '录音中': 'Aufnahme läuft',
         '未在录音': 'Keine Aufnahme',
-        '沿用上次配置': 'Letzte Einstellungen',
-        '默认录音配置': 'Standard-Aufnahmeeinstellungen',
         '打开 Brevia': 'Brevia öffnen',
         '结束并保存': 'Beenden und speichern',
         '重试保存': 'Speichern wiederholen',
@@ -6991,6 +6962,17 @@
         '文件夹更改失败，请检查路径、磁盘连接和写入权限。':
           'Ordner konnten nicht geändert werden. Prüfen Sie Pfad, Laufwerksverbindung und Schreibrechte.',
         'error.operation_failed': 'Der Vorgang ist fehlgeschlagen. Bitte versuchen Sie es erneut.',
+        'error.recording.start_busy':
+          'Eine Besprechung wird vorbereitet oder aufgezeichnet. Schließen Sie zuerst den aktuellen Vorgang ab.',
+        'error.desktop.icon_unavailable':
+          'Das Menüleisten- oder Taskleistensymbol konnte nicht geladen werden. Installieren Sie Brevia erneut.',
+        'error.desktop.session_changed':
+          'Die Aufnahmesitzung hat sich geändert. Versuchen Sie es erneut.',
+        'error.desktop.window_unavailable':
+          'Das Aufnahmefenster ist nicht verfügbar. Öffnen Sie Brevia erneut.',
+        'error.desktop.action_pending':
+          'Der Vorgang läuft noch. Öffnen Sie Brevia, um den Status zu prüfen.',
+        'error.desktop.closed': 'Brevia wurde geschlossen.',
         'error.audio_backpressure':
           'Die Audioverarbeitung kommt nicht nach. Die Aufnahme wird beendet; erfasstes Audio wird gespeichert.',
         'error.worker_exited': 'Der Transkriptionsprozess wurde beendet.',
@@ -7054,7 +7036,6 @@
           'Создание резюме продолжится, когда модель будет готова.',
         '请确认录音配置并下载所需模型后开始': 'Проверьте настройки и загрузите нужные модели',
         '正在保存录音': 'Сохранение записи',
-        '已重置': 'Сброшено',
         '操作未完成，请在主窗口查看': 'Операция не завершена. Откройте главное окно.',
         '录音仍在保存，请稍后重试退出': 'Запись ещё сохраняется. Повторите выход позже.',
         '建议已更新，请重试': 'Предложение изменилось. Повторите.',
@@ -7077,14 +7058,10 @@
         '最小化时自动显示胶囊': 'Показывать капсулу при сворачивании',
         '录音或暂停时显示；隐藏胶囊不会停止录音':
           'Показывать при записи или паузе. Скрытие не останавливает запись.',
-        '胶囊置顶': 'Капсула поверх окон',
-        '显示在其他窗口上方': 'Показывать поверх других окон',
-        '重置胶囊位置': 'Сбросить положение капсулы',
         '展开讨论记录': 'Развернуть обсуждение',
         '返回当前会议': 'Вернуться к текущей встрече',
         '展开字幕与笔记': 'Открыть субтитры и заметки',
         '拖动胶囊': 'Переместить капсулу',
-        '在主窗口查看': 'Открыть в главном окне',
         '识别中': 'Распознавание',
         '等待语音': 'Ожидание речи',
         '待采纳建议': 'Предложение к принятию',
@@ -7102,20 +7079,13 @@
 
         '显示录音胶囊': 'Показать капсулу записи',
         '退出 Brevia': 'Выйти из Brevia',
-        '结束录音并退出？': 'Завершить запись и выйти?',
         '继续录音': 'Продолжить запись',
         '结束并退出': 'Завершить и выйти',
         '固定展开': 'Закрепить открытым',
         '取消固定': 'Открепить',
         '跟随最新': 'Следить за новыми',
-        '有新内容 · 回到最新': 'Новый текст · К последнему',
-        'AI 笔记已开启': 'ИИ-заметки включены',
-        'AI 笔记未开启': 'ИИ-заметки выключены',
-        '暂无新建议': 'Новых предложений нет',
         '录音中': 'Идёт запись',
         '未在录音': 'Запись не идёт',
-        '沿用上次配置': 'Последние настройки',
-        '默认录音配置': 'Настройки по умолчанию',
         '打开 Brevia': 'Открыть Brevia',
         '结束并保存': 'Завершить и сохранить',
         '重试保存': 'Повторить сохранение',
@@ -7991,6 +7961,15 @@
         '文件夹更改失败，请检查路径、磁盘连接和写入权限。':
           'Не удалось изменить папки. Проверьте путь, подключение диска и права записи.',
         'error.operation_failed': 'Не удалось выполнить действие. Повторите попытку.',
+        'error.recording.start_busy':
+          'Встреча подготавливается или записывается. Сначала завершите текущую операцию.',
+        'error.desktop.icon_unavailable':
+          'Не удалось загрузить значок строки меню или панели уведомлений. Переустановите Brevia.',
+        'error.desktop.session_changed': 'Сеанс записи изменился. Повторите попытку.',
+        'error.desktop.window_unavailable': 'Окно записи недоступно. Откройте Brevia заново.',
+        'error.desktop.action_pending':
+          'Операция ещё выполняется. Откройте Brevia, чтобы проверить её состояние.',
+        'error.desktop.closed': 'Brevia закрыта.',
         'error.audio_backpressure':
           'Обработка аудио отстаёт. Запись останавливается; записанное аудио будет сохранено.',
         'error.worker_exited': 'Процесс транскрипции завершился.',
@@ -13538,6 +13517,10 @@
   const chinaModelSourceLabel = '是否使用中国大陆镜像源进行下载加速';
 
   const data = {
+    translate: (key, locale = 'en') =>
+      appCopy.stageLabels[key]?.[locale] ||
+      catalog[locale]?.labels?.[key] ||
+      (locale === 'zh' ? key : appCopy.stageLabels[key]?.en || catalog.en.labels[key] || key),
     onboardingMotionCopy,
     onboardingStorageCopy,
     catalog,

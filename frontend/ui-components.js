@@ -107,12 +107,7 @@ function renderTaskProgressLabel(label, percent) {
 }
 /** 引导仅表达现有步骤；内容和提交事件仍由各步骤拥有。 */
 function renderOnboardingRail(kind, displayLocale = locale) {
-  const translate = (key) =>
-    window.BreviaLocaleData.appCopy.stageLabels[key]?.[displayLocale] ||
-    (window.BreviaLocaleData.catalog[displayLocale] || window.BreviaLocaleData.catalog.en).labels[
-      key
-    ] ||
-    key;
+  const translate = (key) => window.BreviaLocaleData.translate(key, displayLocale);
   const stages = ['language', 'permissions', 'setup', 'ai', 'phone'];
   const active = Math.max(0, stages.indexOf(kind));
   const motion = stages.includes(kind);

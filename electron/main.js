@@ -117,21 +117,18 @@ if (process.platform === 'darwin')
   app.commandLine.appendSwitch('disable-features', 'MacCatapLoopbackAudioForScreenShare');
 if (!benchmarkRefinement && !app.requestSingleInstanceLock()) app.quit();
 app.on('second-instance', () => {
-  const window = desktop?.mainWindow;
-  if (window?.isMinimized()) window.restore();
-  window?.focus();
+  desktop.showMain();
 });
 
 const root = path.join(__dirname, '..');
 const packagedRoot = app.isPackaged ? process.resourcesPath : root;
-const { catalog } = require(path.join(packagedRoot, 'frontend', 'i18n-data.js'));
-const mainText = (key) => (catalog[app.getLocale().split('-')[0]] || catalog.en).labels[key] || key;
+const { translate } = require(path.join(packagedRoot, 'frontend', 'i18n-data.js'));
+const mainText = (key) => translate(key, app.getLocale().split('-')[0]);
 const desktop = new DesktopController({
   electron: { app, BrowserWindow, Menu, Tray, nativeImage, screen },
   root: packagedRoot,
   dataDir: () => dataDir(),
-  text: (key, locale) =>
-    (catalog[locale || app.getLocale().split('-')[0]] || catalog.en).labels[key] || key,
+  text: (key, locale) => translate(key, locale || app.getLocale().split('-')[0]),
   reportError: (error) => reportMainError(error),
 });
 const startupAnimationMs = 1700;

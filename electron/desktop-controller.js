@@ -88,10 +88,12 @@ class DesktopController {
       this.destroy();
     });
     window.webContents.on('render-process-gone', () => {
-      this.state = null;
       for (const request of this.pending.values())
-        request.reject(new Error('Recording window unavailable'));
+        request.reject(
+          new Error(this.text('error.desktop.window_unavailable', this.state?.locale)),
+        );
       this.pending.clear();
+      this.state = null;
       this.sync();
     });
     this.sync();
@@ -149,13 +151,12 @@ class DesktopController {
     if (this.tray) return;
     const icon = this.nativeImage.createFromPath(
       path.join(
-        this.root,
-        process.platform === 'darwin'
-          ? 'electron/assets/trayTemplate.png'
-          : 'electron/assets/tray.png',
+        __dirname,
+        process.platform === 'darwin' ? 'assets/trayTemplate.png' : 'assets/tray.png',
       ),
     );
-    if (icon.isEmpty()) throw new Error('Menu bar icon unavailable');
+    if (icon.isEmpty())
+      throw new Error(this.text('error.desktop.icon_unavailable', this.state?.locale));
     icon.setTemplateImage(process.platform === 'darwin');
     this.tray = new this.Tray(icon);
     this.tray.setToolTip('Brevia');
@@ -274,10 +275,10 @@ class DesktopController {
 
   async action(action, payload = {}) {
     if (payload.meetingId && payload.meetingId !== this.state?.meetingId)
-      throw new Error('Recording session changed');
+      throw new Error(this.text('error.desktop.session_changed', this.state?.locale));
     const meetingId = this.state?.meetingId || null;
     if (!this.mainWindow || this.mainWindow.isDestroyed())
-      throw new Error('Recording window unavailable');
+      throw new Error(this.text('error.desktop.window_unavailable', this.state?.locale));
     if (
       ['return', 'prepare', 'settings', 'quick', 'ai-settings', 'models', 'confirm-quit'].includes(
         action,
@@ -292,9 +293,7 @@ class DesktopController {
           : setTimeout(
               () => {
                 this.pending.delete(requestId);
-                reject(
-                  new Error('The operation is still pending; open Brevia to check its status.'),
-                );
+                reject(new Error(this.text('error.desktop.action_pending', this.state?.locale)));
               },
               action === 'stop' ? 610000 : 190000,
             );
@@ -435,7 +434,8 @@ class DesktopController {
     this.tray = null;
     this.capsule?.destroy();
     this.capsule = null;
-    for (const request of this.pending.values()) request.reject(new Error('Application closed'));
+    for (const request of this.pending.values())
+      request.reject(new Error(this.text('error.desktop.closed', this.state?.locale)));
     this.pending.clear();
   }
 }

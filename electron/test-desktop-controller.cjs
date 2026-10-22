@@ -82,7 +82,12 @@ class Tray extends EventEmitter {
     app: { quit() {} },
     BrowserWindow: Window,
     Tray,
-    nativeImage: { createFromPath: () => ({ isEmpty: () => false, setTemplateImage() {} }) },
+    nativeImage: {
+      createFromPath: (file) => ({
+        isEmpty: () => !require('node:fs').existsSync(file),
+        setTemplateImage() {},
+      }),
+    },
     Menu: { buildFromTemplate: (menu) => menu },
     screen: {
       getDisplayMatching: () => ({ workArea: { x: -900, y: 0, width: 900, height: 700 } }),
@@ -193,7 +198,7 @@ class Tray extends EventEmitter {
     electron.nativeImage.createFromPath = () => ({ isEmpty: () => true });
     controller.tray?.destroy();
     controller.tray = null;
-    assert.throws(() => controller.hideMain(), /icon unavailable/);
+    assert.throws(() => controller.hideMain(), /error.desktop.icon_unavailable/);
     assert.equal(main.isVisible(), true, '入口创建失败时不隐藏主窗口');
     assert.equal(errors.length, 0);
     console.log(

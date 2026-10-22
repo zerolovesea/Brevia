@@ -18,11 +18,7 @@
     drag = null,
     suppressClick = false,
     busy = false;
-  const t = (key) =>
-    window.BreviaLocaleData.appCopy.stageLabels[key]?.[state?.locale || 'zh'] ||
-    (window.BreviaLocaleData.catalog[state?.locale || 'zh'] || window.BreviaLocaleData.catalog.en)
-      .labels[key] ||
-    key;
+  const t = (key) => window.BreviaLocaleData.translate(key, state?.locale || 'zh');
   const escape = (value) =>
     String(value || '').replace(
       /[&<>"']/g,

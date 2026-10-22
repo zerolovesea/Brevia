@@ -1139,7 +1139,6 @@ html[data-theme="dark"] .modal-backdrop:not(.settings-page) > .modal-panel {
   font-weight: 700;
 }
 
-#detail-view .summary-tools,
 #detail-view .summary-actions {
   display: flex;
   align-items: center;
@@ -1148,14 +1147,14 @@ html[data-theme="dark"] .modal-backdrop:not(.settings-page) > .modal-panel {
   flex: none;
 }
 
-#detail-view :is(.summary-tools, .summary-actions) button {
+#detail-view .summary-actions button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   padding: 8px 16px;
 }
-#detail-view :is(.summary-tools, .summary-actions) svg {
+#detail-view .summary-actions svg {
   width: 20px;
   height: 20px;
 }
@@ -4482,29 +4481,7 @@ textarea,
   letter-spacing: normal;
   margin: 0;
 }
-#detail-view .summary-tools {
-  padding: 0;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex: none;
 
-  flex-wrap: wrap;
-  max-width: 100%;
-}
-#detail-view .summary-tools button {
-  min-height: 32px;
-  padding: 6px 8px;
-  gap: 8px;
-  font-size: 14px;
-  border: 0;
-  background: transparent;
-  border-radius: var(--control-radius);
-}
-#detail-view .summary-tools svg {
-  width: 18px;
-  height: 18px;
-}
 #detail-view .summary-body {
   padding-right: 16px;
   color: var(--color-text-body);
@@ -4651,10 +4628,7 @@ textarea,
   font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
   line-height: 1.65;
 }
-.summary-tools .tabbar-action.is-save {
-  background: var(--color-text) !important;
-  color: var(--color-surface);
-}
+
 .modal-form-actions .save-state {
   margin-right: auto;
 }
@@ -4710,7 +4684,7 @@ textarea,
   width: 20px;
   height: 20px;
 }
-#detail-view :is(.summary-tools button, .tabbar-action, .detail-icon-action):hover:not(:disabled) {
+#detail-view :is(.tabbar-action, .detail-icon-action):hover:not(:disabled) {
   background: var(--color-selected);
 }
 #detail-view .refine-state {
@@ -7675,12 +7649,6 @@ html[data-theme] .toast,
   }
 }
 
-#detail-view .summary-tools .summary-reader-regenerate {
-  display: none;
-}
-#detail-view .detail-summary-panel .summary-tools .summary-reader-regenerate {
-  display: inline-flex;
-}
 #detail-view .detail-summary-panel .summary-preview > .summary-actions {
   display: none;
 }
