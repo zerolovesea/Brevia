@@ -46,7 +46,7 @@ python -m backend.bench_refinement --wav sample.wav --language zh --threads 8
 ```
 
 基准可用 `BREVIA_OFFLINE_THREADS` 覆盖离线线程，不会提高实时识别线程预算。
-同机数据与适用范围见 [Windows 验证记录](benchmarks/windows-validation.md)；默认不启用实验性进程复用。
+诊断工具与实验配置见[基准说明](benchmarks/README.md)；默认不启用实验性进程复用。
 
 桌面入口 `--bench-refinement --wav <录音>` 覆盖导入与 Electron 到冻结 Worker 的调用。
 长文件导入策略可能跳过说话人分析；要验证录制会议的完整链路，可在隔离数据目录预置会议后执行：

@@ -32,6 +32,14 @@ design.md
 /backend/benchmarks/vad-*/
 /website/DESIGN.md
 
+# 主线不再维护的历史截图、内部方案与验收记录。
+/docs/assets/screenshots/
+/docs/design-issue-*/
+/backend/benchmarks/windows-validation.md
+/website/assets/home-cn.png
+/website/assets/home-en.png
+/website/assets/illustrations/voice-to-action.webp
+
 # 基准测试临时区：会议音频副本、模型软链、Whisper 下载、benchmark JSON
 .bench-tmp/
 
