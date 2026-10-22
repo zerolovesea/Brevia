@@ -1,0 +1,250 @@
+/* Motion Design System：布局与业务状态仍归各页面，动效只解释变化。 */
+:root {
+  --motion-press: 80ms;
+  --motion-feedback: 120ms;
+  --motion-state: 180ms;
+  --motion-surface: 220ms;
+  --motion-spatial: 280ms;
+  --motion-exit: 140ms;
+  --motion-menu: 160ms;
+  --motion-menu-exit: 100ms;
+  --motion-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --motion-ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --motion-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+}
+/* 覆盖动态生成的按钮、链接与行控件；不缩放行、卡片和拖动手柄。 */
+html :is(button, summary, a[href], [role="button"]) {
+  transition:
+    color var(--motion-feedback) var(--motion-ease-out),
+    background-color var(--motion-feedback) var(--motion-ease-out),
+    border-color var(--motion-feedback) var(--motion-ease-out),
+    opacity var(--motion-feedback) var(--motion-ease-out),
+    filter var(--motion-feedback) var(--motion-ease-out),
+    scale var(--motion-state) var(--motion-ease-out);
+}
+html
+  :is(button, summary, a[href], [role="button"]):active:not(
+    :disabled,
+    [aria-disabled="true"],
+    [aria-busy="true"]
+  ) {
+  opacity: 0.85;
+  transition-duration: var(--motion-press);
+}
+html :is(button, [role="button"]):is(:disabled, [aria-disabled="true"], [aria-busy="true"]) {
+  scale: 1;
+}
+/* 聚焦统一不画外圈；键盘导航由底色与下划线提示当前位置。 */
+html :is(:focus, :focus-visible, :focus-within) {
+  outline: none !important;
+}
+html[data-keyboard-navigation]
+  :is(button, summary, a[href], [role="button"], [tabindex="0"]):focus-visible {
+  background-color: var(--color-selected, #eaeaea);
+  color: var(--color-text, #222222);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+html[data-keyboard-navigation]
+  :is(input, textarea, select, [contenteditable="true"]):focus-visible {
+  border-color: var(--color-text, #222222);
+  background-color: var(--color-selected, #eaeaea);
+  color: var(--color-text, #222222);
+}
+html[data-keyboard-navigation]
+  label:has(input:is([type="checkbox"], [type="radio"]):focus-visible) {
+  background-color: var(--color-selected, #eaeaea);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+html body.onboarding-handoff .app-shell {
+  display: grid;
+}
+html :is(input, textarea, select, [contenteditable="true"]) {
+  transition:
+    border-color var(--motion-feedback) var(--motion-ease-out),
+    background-color var(--motion-feedback) var(--motion-ease-out),
+    color var(--motion-feedback) var(--motion-ease-out);
+}
+/* 切页由真实导航统一驱动，取消旧的 CSS 进出场，避免两个时间轴叠加。 */
+html .view.active,
+html .view.leaving {
+  animation: none;
+  opacity: 1;
+}
+.modal-backdrop.modal-enter:not(.settings-page) .modal-panel,
+#mobile-pair-dialog.modal-enter {
+  animation: brevia-surface-in var(--motion-surface) var(--motion-ease-out) both;
+}
+.modal-backdrop.modal-leave:not(.settings-page) .modal-panel,
+#mobile-pair-dialog.modal-leave {
+  animation: brevia-surface-out var(--motion-exit) var(--motion-ease-in) both;
+}
+.modal-backdrop.modal-enter:not(.settings-page),
+#mobile-pair-dialog.modal-enter::backdrop {
+  animation: brevia-fade-in var(--motion-menu) var(--motion-ease-out) both;
+}
+.modal-backdrop.modal-leave:not(.settings-page),
+#mobile-pair-dialog.modal-leave::backdrop {
+  animation: brevia-fade-out var(--motion-menu-exit) var(--motion-ease-in) both;
+}
+html .settings-page.modal-enter,
+html .settings-page.modal-leave,
+html .settings-page:is(.modal-enter, .modal-leave) .modal-panel {
+  animation: none;
+}
+html .workspace-edit-popover:is(.modal-enter, .modal-leave) .modal-panel,
+html .storage-confirmation:is(.modal-enter, .modal-leave) .modal-panel {
+  /* 定位依赖的 transform 不参与入场，避免锚定浮层偏移。 */
+  animation-name: brevia-fade-in;
+  animation-duration: var(--motion-menu);
+}
+html .workspace-edit-popover.modal-leave .modal-panel,
+html .storage-confirmation.modal-leave .modal-panel {
+  animation-name: brevia-fade-out;
+  animation-duration: var(--motion-menu-exit);
+}
+html
+  :is(
+    .workspace-picker,
+    .meeting-popover,
+    .flow-select-options,
+    .language-menu,
+    .refine-menu,
+    .segment-context-menu,
+    .segment-speaker-picker
+  ):not([hidden]) {
+  animation: brevia-fade-in var(--motion-menu) var(--motion-ease-out) both;
+}
+html .task-card-enter {
+  animation: brevia-fade-in 160ms var(--motion-ease-out) both;
+}
+html .onboarding-page.onboarding-active {
+  opacity: 1;
+  animation: none;
+}
+html .task-card-leave {
+  animation: brevia-fade-out 120ms var(--motion-ease-in) both;
+  pointer-events: none;
+}
+html :is(.save-state, .summary-feedback, .ai-suggestion-card) {
+  animation: brevia-fade-in var(--motion-feedback) var(--motion-ease-out);
+}
+html :is(.processing-bar > i, .task-progress > i) {
+  transition: transform var(--motion-feedback) linear;
+}
+html :is(.toast, .caption-text, .caption-controls) {
+  transition: opacity var(--motion-feedback) var(--motion-ease-out);
+}
+html .toast:not(.visible) {
+  transition-duration: var(--motion-menu-exit);
+}
+/* 滚动触发的页头收缩直接稳定布局，不连续插值字体、间距与高度。 */
+html
+  #detail-view
+  :is(
+    .detail-head,
+    .detail-title,
+    .detail-head h1,
+    .detail-head .eyebrow,
+    .detail-head .detail-meta,
+    .detail-actions
+  ) {
+  transition: opacity var(--motion-feedback) var(--motion-ease-out);
+}
+html .tabbar-tabs .tab::after {
+  transition: transform var(--motion-state) var(--motion-ease-in-out);
+}
+@media (hover: hover) {
+  html :is(button, summary, [role="button"]):hover:not(:disabled, [aria-disabled="true"]) {
+    /* 保留各组件的语义底色，只补上未定义专属 Hover 的控件。 */
+    filter: brightness(0.96);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  html
+    :is(
+      .primary-action,
+      .modal-action,
+      .secondary,
+      .icon-button,
+      .pause-button,
+      .mark-button,
+      .end-button
+    ):active:not(:disabled, [aria-disabled="true"], [aria-busy="true"]) {
+    scale: 0.98;
+  }
+}
+@keyframes brevia-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes brevia-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+@keyframes brevia-surface-in {
+  from {
+    opacity: 0;
+    translate: 0 12px;
+    scale: 0.98;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+    scale: 1;
+  }
+}
+@keyframes brevia-surface-out {
+  from {
+    opacity: 1;
+    translate: 0 0;
+    scale: 1;
+  }
+  to {
+    opacity: 0;
+    translate: 0 8px;
+    scale: 0.98;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-press: 0ms;
+    --motion-feedback: 0ms;
+    --motion-state: 0ms;
+    --motion-surface: 0ms;
+    --motion-spatial: 0ms;
+    --motion-exit: 0ms;
+    --motion-menu: 0ms;
+    --motion-menu-exit: 0ms;
+  }
+  html *,
+  html *::before,
+  html *::after,
+  #mobile-pair-dialog::backdrop {
+    animation-duration: 0s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0s !important;
+    scroll-behavior: auto !important;
+  }
+  html :is(button, summary, a[href], [role="button"]):active {
+    scale: 1 !important;
+  }
+  html .segment.is-draft .segment-copy > p::after {
+    content: "";
+    animation: none;
+  }
+}
+html[data-motion-paused] *,
+html[data-motion-paused] *::before,
+html[data-motion-paused] *::after {
+  animation-play-state: paused !important;
+}

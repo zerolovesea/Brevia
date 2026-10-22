@@ -1,0 +1,407 @@
+html,
+body {
+  background: transparent !important;
+  overflow: hidden;
+  margin: 0;
+}
+body {
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: 14px;
+}
+button {
+  font: inherit;
+  cursor: pointer;
+  color: inherit;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+button svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+.capsule-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0;
+  margin: 12px;
+  margin-left: calc(12px + var(--capsule-offset, 0px));
+  width: min(320px, calc(100vw - 24px));
+  height: calc(100vh - 24px);
+}
+.recording-pill {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 56px;
+  padding: 8px 10px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: 40px;
+  box-shadow: 0 4px 12px #0000000a;
+  user-select: none;
+}
+.recording-pill button {
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  min-height: 34px;
+  flex-shrink: 0;
+}
+.recording-pill button:hover {
+  background: var(--color-selected);
+}
+.recording-pill,
+.recording-pill :is(.capsule-identity, .capsule-preview) {
+  touch-action: none;
+  cursor: grab;
+}
+.recording-pill.is-dragging,
+.recording-pill.is-dragging * {
+  cursor: grabbing;
+}
+.capsule-grip {
+  flex: none;
+  width: 10px;
+  cursor: grab;
+}
+.capsule-grip span {
+  width: 10px;
+  height: 20px;
+  background: radial-gradient(circle, var(--color-text-subtle) 1.5px, transparent 2px) 0 0/5px 7px;
+}
+.recording-pill .capsule-logo {
+  flex: none;
+  width: 26px;
+  min-height: 26px;
+  border-radius: 6px;
+}
+.capsule-identity {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+  text-align: left;
+}
+.capsule-logo img {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+}
+.capsule-identity > span {
+  min-width: 0;
+}
+.capsule-identity strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 650;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  max-width: 110px;
+}
+.capsule-identity small {
+  color: var(--color-text-muted);
+  font-size: 11px;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.capsule-identity small::before {
+  content: "";
+  display: inline-block;
+  margin-right: 5px;
+  width: 7px;
+  height: 7px;
+  background: var(--color-recording);
+  border-radius: 50%;
+}
+body:not([data-phase="recording"]) .capsule-identity small::before {
+  background: var(--color-text-subtle);
+}
+.recording-pill .capsule-preview {
+  gap: 8px;
+  padding: 0 6px;
+  border-left: 1px solid var(--color-line);
+  border-radius: 0;
+}
+#capsule-meter {
+  height: 24px;
+  width: 40px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+#capsule-meter i {
+  width: 2px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--color-text);
+  transition: height 75ms linear;
+}
+#capsule-time {
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+.recording-pill :is(.capsule-pause, .capsule-stop) {
+  width: 34px;
+  border: 1px solid var(--color-line);
+  padding: 0;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.recording-pill button svg {
+  width: 16px;
+  height: 16px;
+}
+.recording-pill .capsule-stop {
+  color: var(--color-danger);
+  border-color: var(--color-recording-border);
+}
+.capsule-panel {
+  position: relative;
+  left: calc(-1 * var(--capsule-offset, 0px));
+  width: calc(100vw - 24px);
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: color-mix(in srgb, var(--color-surface) 92%, transparent);
+  backdrop-filter: blur(18px);
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
+  box-shadow: 0 6px 12px #0000000b;
+  overflow: hidden;
+  transform-origin: top center;
+}
+.capsule-panel[hidden],
+[hidden] {
+  display: none !important;
+}
+.capsule-panel > header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 18px;
+  border-bottom: 1px solid var(--color-line);
+  min-height: 48px;
+  gap: 12px;
+}
+.capsule-panel [role="tablist"] {
+  display: flex;
+  gap: 22px;
+}
+.capsule-panel [role="tab"] {
+  padding: 14px 0 12px;
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--color-text-muted);
+}
+.capsule-panel [aria-selected="true"] {
+  border-bottom-color: var(--color-text);
+  color: var(--color-text);
+  font-weight: 650;
+}
+#capsule-pin {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  border: 0;
+  background: transparent;
+  padding: 8px 0;
+}
+#capsule-pin[aria-pressed="true"] {
+  color: var(--color-text);
+}
+.capsule-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 20px 20px 12px;
+  overscroll-behavior: contain;
+  scrollbar-color: var(--color-line) transparent;
+  scrollbar-width: thin;
+  user-select: text;
+}
+.capsule-line {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  column-gap: 12px;
+  margin-bottom: 24px;
+}
+.capsule-line time {
+  color: var(--color-text-subtle);
+  font-size: 12px;
+  padding-top: 3px;
+  font-variant-numeric: tabular-nums;
+}
+.capsule-line p {
+  margin: 0;
+  line-height: 1.7;
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+.capsule-line .capsule-translation {
+  color: var(--color-text-muted);
+  font-size: 13px;
+  margin-top: 5px;
+}
+.capsule-line[data-draft="true"] {
+  color: var(--color-text-muted);
+}
+.capsule-line small {
+  font-size: 12px;
+  color: var(--color-text-subtle);
+  padding-left: 8px;
+  white-space: nowrap;
+}
+#capsule-captions {
+  padding-bottom: 44px;
+}
+#capsule-follow {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  margin: -34px 0 0 auto;
+  padding: 0;
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  background: var(--color-surface);
+}
+.capsule-progress {
+  vertical-align: middle;
+  margin-left: 8px;
+  color: var(--color-text-muted);
+}
+#capsule-ai-state {
+  margin: 0 0 12px;
+}
+#capsule-error {
+  flex: none;
+  margin: 0;
+  padding: 8px 18px;
+  border-top: 1px solid var(--color-line);
+  color: var(--color-danger);
+  font-size: 12px;
+}
+.capsule-suggestion {
+  border-bottom: 1px solid var(--color-line);
+  padding-bottom: 18px;
+  margin-bottom: 20px;
+}
+.capsule-suggestion p,
+.capsule-note-copy {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.7;
+}
+.capsule-suggestion h3,
+#capsule-notes h3 {
+  font-size: 13px;
+  margin: 0 0 14px;
+  font-weight: 600;
+}
+.capsule-suggestion-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.capsule-suggestion-actions button,
+.capsule-empty button {
+  padding: 6px 14px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: 6px;
+}
+.capsule-suggestion-actions button:first-child {
+  background: var(--color-text);
+  color: var(--color-text-inverse);
+}
+.capsule-empty {
+  color: var(--color-text-muted);
+  padding: 32px 0;
+  line-height: 1.7;
+  text-align: center;
+}
+body[data-above="true"] .capsule-shell {
+  flex-direction: column-reverse;
+}
+body[data-above="true"] .capsule-panel {
+  transform-origin: bottom center;
+}
+::selection {
+  background: var(--color-selected);
+  color: var(--color-text);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .capsule-panel {
+    background: var(--color-surface);
+    backdrop-filter: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  #capsule-meter i {
+    transition: none;
+  }
+}
+@media (max-width: 330px) {
+  .recording-pill {
+    gap: 6px;
+    padding-inline: 8px;
+  }
+  #capsule-meter {
+    display: none;
+  }
+  .capsule-identity strong {
+    max-width: 80px;
+  }
+}
+.capsule-panel:not([hidden]) {
+  animation: brevia-surface-in var(--motion-surface) var(--motion-ease-out) both;
+}
+.capsule-note-copy {
+  white-space: normal;
+}
+.capsule-note-copy h4 {
+  font-weight: 600;
+  margin: 16px 0 8px;
+}
+.capsule-note-copy p {
+  margin: 6px 0;
+}
+.capsule-note-copy .capsule-note-bullet {
+  position: relative;
+  padding-left: 16px;
+}
+.capsule-note-bullet::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 0.7em;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+}

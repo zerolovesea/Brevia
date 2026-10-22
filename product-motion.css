@@ -1,0 +1,545 @@
+html,
+body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #fff;
+  color-scheme: light;
+}
+html.is-collaboration,
+html.is-collaboration body {
+  background: transparent;
+}
+#motion-stage {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+#motion-stage .app-shell {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+#motion-stage .view {
+  animation: none;
+}
+#motion-stage[data-running="false"] *,
+#motion-stage[data-running="false"] *::before,
+#motion-stage[data-running="false"] *::after {
+  animation-play-state: paused !important;
+}
+#motion-stage[data-reduced="true"] *,
+#motion-stage[data-reduced="true"] *::before,
+#motion-stage[data-reduced="true"] *::after {
+  animation: none !important;
+  transition: none !important;
+}
+.motion-pressed {
+  scale: 0.98;
+  background: #e9e9e9 !important;
+  color: #222 !important;
+}
+.motion-selected {
+  background: #f5f5f5;
+}
+.motion-export-toast {
+  position: absolute;
+  left: 50%;
+  bottom: 40px;
+  transform: translateX(-50%);
+  padding: 12px 22px;
+  border: 1px solid #e5e5e5;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 15px;
+}
+#motion-stage .meeting-menu {
+  z-index: 2;
+}
+#motion-stage .notes-editor {
+  cursor: default;
+}
+body.is-phone {
+  font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "PingFang SC", sans-serif;
+}
+.motion-phone {
+  width: 100%;
+  height: 100%;
+  background: #fff;
+  color: #111;
+  padding: 34px 24px 28px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+.motion-phone-header {
+  position: relative;
+  text-align: center;
+  min-height: 94px;
+  padding: 20px 24px 18px;
+}
+.motion-phone-header > strong {
+  display: block;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.motion-phone-header > i {
+  position: absolute;
+  top: 24px;
+  right: -5px;
+}
+.motion-phone-header .interface-icon {
+  width: 23px;
+  height: 23px;
+}
+.motion-phone-meta {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+  color: #666;
+  font-size: 14px;
+  line-height: 1.6;
+  margin-top: 4px;
+}
+.phone-record-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ff3b30;
+  flex-shrink: 0;
+}
+.motion-phone-tabs {
+  display: flex;
+  padding: 5px;
+  border-radius: 8px;
+  background: #f5f5f5;
+  gap: 4px;
+  margin-block: 14px 20px;
+}
+.motion-phone-tabs span {
+  flex: 1;
+  padding: 8px 3px;
+  text-align: center;
+  font-size: 15px;
+  color: #666;
+}
+.motion-phone-tabs span.active {
+  background: #fff;
+  border-radius: 6px;
+  font-weight: 600;
+  color: #111;
+}
+.motion-phone-content {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+.phone-caption {
+  padding-block: 14px 18px;
+}
+.phone-caption time {
+  color: #777;
+  font-size: 13px;
+}
+.phone-caption p {
+  font-size: 17px;
+  line-height: 1.65;
+  margin: 7px 0 0;
+}
+.phone-notes {
+  padding-top: 12px;
+  font-size: 17px;
+  line-height: 1.8;
+}
+.phone-notes h2 {
+  font-size: 21px;
+  margin-block: 8px 18px;
+}
+.phone-notes ul {
+  padding-left: 22px;
+}
+.phone-notes li {
+  margin-block: 12px;
+}
+.motion-phone-sync {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 18px 8px;
+  border-radius: 8px;
+  background: #f7f7f7;
+  margin-block: 12px 20px;
+  gap: 12px;
+}
+.motion-phone-sync > span {
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  column-gap: 5px;
+  align-items: center;
+}
+.motion-phone-sync .interface-icon {
+  width: 18px;
+  height: 18px;
+}
+.motion-phone-sync b {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+.motion-phone-sync small {
+  grid-column: 2;
+  font-size: 12px;
+  color: #777;
+  margin-top: 5px;
+}
+.motion-phone-controls {
+  display: flex;
+  justify-content: center;
+  gap: 28px;
+  padding-top: 20px;
+  border-top: 1px solid #e5e5e5;
+}
+.motion-phone-controls button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 68px;
+  height: 68px;
+  padding: 20px;
+  border: 1px solid #ccc;
+  border-radius: 50%;
+  background: #fff;
+  color: #111;
+}
+.motion-phone-controls .interface-icon {
+  width: 26px;
+  height: 26px;
+}
+.motion-phone-controls .phone-stop {
+  color: white;
+  background: #ff3b30;
+  border-color: #ff3b30;
+}
+.motion-phone-controls .phone-stop .interface-icon {
+  fill: currentColor;
+  width: 28px;
+  height: 28px;
+}
+.motion-phone-toast {
+  position: absolute;
+  bottom: 132px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 12px 20px;
+  border-radius: 8px;
+  background: #222;
+  color: #fff;
+  font-size: 14px;
+  white-space: nowrap;
+}
+.phone-record-focus {
+  height: 66%;
+  min-height: 270px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 18px;
+}
+.phone-record-focus .phone-record-dot {
+  width: 17px;
+  height: 17px;
+  animation: phone-record-pulse 1.7s ease-in-out infinite;
+}
+.phone-record-focus strong {
+  font-size: 21px;
+  font-weight: 550;
+  margin-top: 4px;
+}
+.phone-record-focus time {
+  font-size: 56px;
+  line-height: 1.25;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+.phone-local-note {
+  display: flex;
+  gap: 14px;
+  padding: 22px 18px;
+  background: #f7f7f7;
+  border-radius: 8px;
+}
+.phone-local-note > .interface-icon {
+  width: 23px;
+  height: 23px;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+.phone-local-note strong {
+  font-size: 15px;
+  font-weight: 550;
+}
+.phone-local-note p {
+  color: #666;
+  font-size: 13px;
+  line-height: 1.8;
+  margin: 8px 0 0;
+}
+@keyframes phone-record-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.65;
+  }
+}
+
+/* 页面切换的进入动画由应用控制；嵌入演示始终呈现选中的视图。 */
+#motion-stage .view.active {
+  opacity: 1;
+  transform: none;
+}
+
+/* 官网演示的单栏与紧凑布局，不修改正式应用。 */
+body[data-focus]:not([data-focus=""]) #motion-stage .sidebar,
+body.is-compact #motion-stage .sidebar {
+  display: none;
+}
+body[data-focus]:not([data-focus=""]) #motion-stage .app-shell,
+body.is-compact #motion-stage .app-shell {
+  grid-template-columns: minmax(0, 1fr);
+}
+body[data-focus="captions"] #live-view .live-notes,
+body[data-focus="notes"] #live-view .live-captions {
+  display: none;
+}
+body[data-focus="captions"] #live-view .live-layout,
+body[data-focus="notes"] #live-view .live-layout {
+  grid-template-columns: minmax(0, 1fr);
+}
+body[data-focus]:not([data-focus=""]) #live-view .notes-editor :is(p, li),
+body[data-focus]:not([data-focus=""]) #transcript-scroll .segment p {
+  font-size: 21px;
+  line-height: 1.8;
+}
+body[data-focus]:not([data-focus=""]) .ai-suggestion-text {
+  font-size: 21px;
+  line-height: 1.6;
+}
+body[data-focus]:not([data-focus=""]) .ai-suggestion-card {
+  padding: 20px;
+  background: var(--color-selected);
+}
+body[data-focus]:not([data-focus=""]) .ai-suggestion-accept {
+  background: var(--color-text);
+  color: white;
+}
+body[data-focus]:not([data-focus=""]) .live-notes .notes-editor li:last-child {
+  animation: accepted-highlight 800ms ease-out both;
+}
+body[data-focus]:not([data-focus=""]) .summary-body {
+  font-size: 20px;
+  line-height: 1.7;
+}
+body[data-focus]:not([data-focus=""]) .summary-body p,
+body[data-focus]:not([data-focus=""]) .summary-body li {
+  font-size: 20px;
+  line-height: 1.7;
+}
+body[data-focus]:not([data-focus=""]) #home-view .meeting-row-title {
+  font-size: 22px;
+}
+.motion-cursor {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 100;
+  width: 30px;
+  height: 39px;
+  background: url("./assets/demo-cursor.svg") center / contain no-repeat;
+  filter: drop-shadow(1px 2px 1px #211b3230);
+  transform-origin: 2px 2px;
+  pointer-events: none;
+}
+.motion-cursor::before {
+  content: "";
+  display: none;
+  position: absolute;
+  left: -19px;
+  top: -19px;
+  width: 40px;
+  height: 40px;
+  border: 2px solid var(--color-text);
+  border-radius: 50%;
+  background: #22222212;
+  transform: scale(calc(0.45 + var(--click-progress, 0) * 1.8));
+  opacity: calc(1 - var(--click-progress, 0));
+}
+.motion-cursor[data-clicking="true"]::before {
+  display: block;
+}
+[data-reduced="true"] .motion-cursor {
+  display: none;
+}
+body.is-compact #motion-stage .window-bar {
+  height: 36px;
+  min-height: 36px;
+}
+body.is-compact #motion-stage .window-bar .window-actions,
+body.is-compact #motion-stage .window-bar #crumb,
+body.is-compact #motion-stage .window-bar .app-credit {
+  display: none;
+}
+body.is-compact #live-view.active {
+  padding: 18px 16px 0;
+}
+body.is-compact #live-view .live-header {
+  padding: 0 4px 16px;
+  min-height: 74px;
+}
+body.is-compact #live-name {
+  font-size: 24px;
+}
+body.is-compact #live-view .live-header-actions {
+  display: none;
+}
+body.is-compact #live-view .live-notes,
+body.is-compact #live-view .live-captions {
+  padding: 18px;
+}
+body.is-compact #live-view .notes-editor :is(p, li),
+body.is-compact #transcript-scroll .segment p {
+  font-size: 20px;
+  line-height: 1.7;
+}
+body.is-compact #live-view .live-section-head .eyebrow {
+  font-size: 22px;
+}
+body.is-compact #live-view .live-control-bar {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 0;
+  gap: 10px;
+  min-height: 60px;
+}
+body.is-compact #live-view .live-control-bar .control-source {
+  display: flex;
+  gap: 5px;
+  font-size: 13px;
+}
+body.is-compact #live-view #live-input-label {
+  font-size: 13px;
+}
+body.is-compact #live-view .control-secondary {
+  display: none;
+}
+body.is-compact #live-view .control-primary .mark-button,
+body.is-compact #live-view .control-primary .end-button {
+  display: none;
+}
+body.is-compact #live-view .control-primary {
+  margin-left: auto;
+}
+body.is-compact #live-view .control-primary button {
+  padding: 10px 12px;
+  font-size: 14px;
+}
+body.is-compact .ai-suggestion-card {
+  padding: 16px !important;
+}
+body.is-compact .ai-suggestion-text {
+  font-size: 18px !important;
+}
+body.is-compact .ai-suggestion-actions button {
+  font-size: 14px;
+  padding: 10px 14px;
+}
+body.is-compact .ai-suggestion-head {
+  font-size: 13px;
+}
+body.is-compact .notes-editor h2 {
+  font-size: 23px;
+  margin: 22px 0 14px;
+}
+body.is-compact #home-view {
+  padding: 25px 20px;
+}
+body.is-compact #home-view .page-head {
+  flex-wrap: wrap;
+  gap: 15px;
+}
+body.is-compact #home-slogan {
+  font-size: 27px;
+}
+body.is-compact #home-view .page-head > button {
+  display: none;
+}
+body.is-compact #home-view .meeting-row {
+  padding: 16px 12px;
+}
+body.is-compact #home-view .meeting-row-title {
+  font-size: 18px;
+}
+body.is-compact .meeting-row-meta {
+  font-size: 12px;
+}
+body.is-compact .meeting-menu {
+  max-width: 240px;
+  right: 0;
+}
+@keyframes accepted-highlight {
+  from {
+    background: var(--color-selected);
+  }
+  to {
+    background: transparent;
+  }
+}
+
+/* 官网概览沿用正式列表结构，按概念图的演示密度展示。 */
+#motion-stage[data-scene="tour"] #home-view.active {
+  padding: 24px 32px;
+}
+#motion-stage[data-scene="tour"] #home-view .meeting-row {
+  min-height: 48px;
+  padding-block: 3px;
+}
+#motion-stage[data-scene="tour"] #home-view .meeting-main h2 {
+  font-size: 16px;
+  line-height: 1.2;
+}
+#motion-stage[data-scene="tour"] #home-view .meeting-main p {
+  margin-top: 0;
+  font-size: 12px;
+  line-height: 16px;
+}
+#motion-stage[data-scene="tour"] .meeting-row-icon {
+  width: 32px;
+  height: 32px;
+}
+#motion-stage[data-scene="tour"] .meeting-status {
+  display: flex;
+  flex-direction: column;
+}
+#motion-stage[data-scene="tour"] .meeting-status :is(.status, small) {
+  margin: 0;
+  font-size: 12px;
+  line-height: 16px;
+}
+#motion-stage[data-scene="tour"] #home-view .library-toolbar {
+  margin-top: 4px;
+  padding-bottom: 8px;
+}
+#motion-stage[data-scene="tour"] .library-toolbar .search input {
+  height: 34px;
+  min-height: 34px;
+}
+#motion-stage[data-scene="tour"] .library-group {
+  padding: 8px 0 0;
+}

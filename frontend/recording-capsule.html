@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; img-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Brevia</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./recording-capsule.css" />
+    <link rel="stylesheet" href="./motion.css" />
+  </head>
+  <body>
+    <main class="capsule-shell">
+      <section class="recording-pill" aria-label="Brevia">
+        <button class="capsule-grip" aria-label="拖动胶囊" type="button"><span></span></button>
+        <button class="capsule-logo" data-action="return" type="button" aria-label="返回当前会议"
+          ><img src="./assets/brevia-mark.svg" alt=""
+        /></button>
+        <div class="capsule-identity"
+          ><span><strong id="capsule-title"></strong><small id="capsule-status"></small></span
+        ></div>
+        <button
+          class="capsule-preview"
+          id="capsule-preview"
+          aria-label="展开字幕与笔记"
+          aria-controls="capsule-panel"
+          aria-expanded="false"
+          type="button"
+          ><span id="capsule-meter" aria-hidden="true"></span
+          ><time id="capsule-time">00:00</time></button
+        >
+        <button class="capsule-pause" data-action="pause" type="button"></button>
+        <button class="capsule-stop" data-action="stop" type="button"></button>
+      </section>
+      <section id="capsule-panel" class="capsule-panel" hidden>
+        <header
+          ><div role="tablist" aria-label="字幕与笔记"
+            ><button
+              id="captions-tab"
+              role="tab"
+              data-tab="captions"
+              aria-controls="captions-panel"
+              aria-selected="true"
+              type="button"
+            ></button
+            ><button
+              id="notes-tab"
+              role="tab"
+              data-tab="notes"
+              aria-controls="notes-panel"
+              aria-selected="false"
+              tabindex="-1"
+              type="button"
+            ></button></div
+          ><button id="capsule-pin" aria-pressed="false" type="button"></button
+        ></header>
+        <div
+          class="capsule-body"
+          id="captions-panel"
+          role="tabpanel"
+          aria-labelledby="captions-tab"
+          tabindex="0"
+          ><div id="capsule-captions"></div
+          ><button id="capsule-follow" type="button" hidden></button>
+        </div>
+        <div
+          class="capsule-body"
+          id="notes-panel"
+          role="tabpanel"
+          aria-labelledby="notes-tab"
+          tabindex="0"
+          hidden
+          ><span
+            id="capsule-ai-state"
+            class="button-spinner capsule-progress"
+            role="img"
+            hidden
+          ></span
+          ><div id="capsule-suggestion"></div><div id="capsule-notes"></div
+        ></div>
+        <p id="capsule-error" role="alert" hidden></p>
+      </section>
+    </main>
+    <script src="./i18n-data.js"></script>
+    <script src="./motion.js"></script>
+    <script src="./recording-capsule.js"></script>
+  </body>
+</html>

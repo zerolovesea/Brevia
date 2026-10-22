@@ -1,0 +1,194 @@
+/* 共用三画面轮播；尺寸和颜色跟随左侧栏，右侧设置不参与。 */
+.bom {
+  width: 100%;
+  min-width: 0;
+  color: var(--color-text, #222);
+}
+.bom * {
+  box-sizing: border-box;
+}
+.bom-paper {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 452 / 278;
+  min-height: 278px;
+  background: var(--color-surface, #fff);
+  border-radius: 16px;
+  overflow: hidden;
+}
+.bom-card-heading {
+  position: absolute;
+  top: 21px;
+  left: 24px;
+  right: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 17px;
+  line-height: 25px;
+}
+.bom-card-heading b {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+.bom-record-indicator {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  color: var(--color-text-muted, #666);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.bom-record-indicator i {
+  width: 10px;
+  height: 10px;
+  background: var(--color-recording, #ff3b43);
+  border-radius: 50%;
+}
+.bom-wave {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: var(--color-text-subtle, #969aa2);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+.bom-transcript {
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 31%;
+  display: grid;
+  gap: 14px;
+}
+.bom p,
+.bom h3 {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.bom .bom-transcript p,
+.bom .bom-minutes p {
+  font-size: 17px;
+  line-height: 1.6;
+  color: var(--color-text-body, #444);
+  max-width: none;
+}
+.bom-transcript p,
+.bom-minutes section {
+  opacity: 0;
+}
+.bom-minutes {
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 26%;
+  display: grid;
+  gap: 20px;
+}
+.bom-minutes h3 {
+  margin-bottom: 8px;
+  color: var(--color-text-muted, #666);
+  font-size: 12px;
+  line-height: 1.5;
+  font-weight: 500;
+}
+.bom-minutes p {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.bom-bullet {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--color-text, #222);
+  flex: none;
+  margin: 11px 6px 0;
+}
+.bom-check-box {
+  width: 16px;
+  height: 16px;
+  border: 1.4px solid var(--color-text-subtle, #858991);
+  border-radius: 4px;
+  flex: none;
+  margin-top: 5px;
+}
+.bom-captions {
+  display: grid;
+  text-align: center;
+  min-height: 106px;
+  margin-top: 18px;
+  align-items: start;
+}
+.bom-captions > div {
+  grid-area: 1 / 1;
+  min-width: 0;
+}
+.bom-captions h3 {
+  font-size: 25px;
+  font-weight: 650;
+  line-height: 1.4;
+  margin-bottom: 5px;
+}
+.bom .bom-captions p {
+  max-width: none;
+  color: var(--color-text-muted, #666);
+  font-size: 16px;
+  line-height: 1.6;
+}
+.bom [data-motion="caption-transcript"],
+.bom [data-motion="caption-summary"] {
+  opacity: 0;
+}
+.bom-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  height: 16px;
+  margin-top: 8px;
+}
+.bom-pagination i {
+  display: block;
+  width: 9px;
+  height: 9px;
+  border-radius: 8px;
+  background: var(--color-text, #222);
+  opacity: 0.2;
+}
+.bom-pagination i:first-child {
+  opacity: 1;
+  transform: scaleX(3);
+}
+@media (max-width: 1100px) {
+  .bom-card-heading {
+    top: 16px;
+    left: 18px;
+    right: 18px;
+    font-size: 15px;
+  }
+  .bom-transcript,
+  .bom-minutes {
+    left: 20px;
+    right: 20px;
+  }
+  .bom .bom-transcript p,
+  .bom .bom-minutes p {
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .bom-minutes {
+    gap: 14px;
+  }
+  .bom-captions h3 {
+    font-size: 21px;
+  }
+  .bom .bom-captions p {
+    font-size: 14px;
+  }
+}
