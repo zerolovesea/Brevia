@@ -67,5 +67,5 @@ npm run release:offline
 ## 6. 发布后
 
 - [ ] 确认 GitHub Release 里的 `Brevia-<version>-arm64.dmg` 与 `Brevia-<version>-x64-setup.exe` 存在。
-- [ ] 确认 CI 已更新 `website/index-*.html` 的下载链接（`scripts/update-release-links.mjs`）。
+- [ ] 确认 CI 已更新官网与各语言 README 的下载链接（`scripts/update-release-links.mjs`）。
 - [ ] 在应用内「更新日志」里确认新版本被标为当前版本。

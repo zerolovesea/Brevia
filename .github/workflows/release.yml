@@ -139,7 +139,7 @@ jobs:
           else
             gh release create "$GITHUB_REF_NAME" dist/* --title "Brevia $GITHUB_REF_NAME" --notes-file "docs/releases/$GITHUB_REF_NAME.md"
           fi
-      - name: Commit website download links
+      - name: Commit download links
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ github.ref_name }}
@@ -149,7 +149,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           node scripts/update-release-links.mjs
-          git add website/index-zh.html website/index-en.html
+          git add website/index-zh.html website/index-en.html README.md docs/README.*.md
           git diff --cached --quiet || git commit -m "chore: update download links for $GITHUB_REF_NAME"
           git push origin main
           gh workflow run deploy-pages.yml --ref main

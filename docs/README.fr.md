@@ -8,12 +8,12 @@
 
 ## Télécharger
 
-| Appareil                  | Obtenir Brevia                                                                                                     |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| macOS 14+ · Apple Silicon | [DMG](https://github.com/zerolovesea/Brevia/releases/latest) · `arm64.dmg`                                         |
-| Windows · x64             | [Programme d’installation](https://github.com/zerolovesea/Brevia/releases/latest) · `x64-setup.exe`                |
-| Android 7+                | [Télécharger l’APK](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk) |
-| iPhone · iOS 15+          | [App Store](https://apps.apple.com/app/id6819869442)                                                               |
+| Appareil                  | Obtenir Brevia                                                                                                        |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| macOS 14+ · Apple Silicon | [DMG](https://github.com/zerolovesea/Brevia/releases/download/v1.4.4/Brevia-1.4.4-arm64.dmg)                          |
+| Windows · x64             | [Programme d’installation](https://github.com/zerolovesea/Brevia/releases/download/v1.4.4/Brevia-1.4.4-x64-setup.exe) |
+| Android 7+                | [Télécharger l’APK](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk)    |
+| iPhone · iOS 15+          | [App Store](https://apps.apple.com/app/id6819869442)                                                                  |
 
 <table align="center">
   <tr><th><a href="https://apps.apple.com/app/id6819869442">iPhone · App Store</a></th><th><a href="https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk">Android · APK</a></th></tr>

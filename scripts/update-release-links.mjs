@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 
 const tag = process.env.VERSION;
 if (!/^v\d+(?:\.\d+)+$/.test(tag || ''))
@@ -21,4 +21,19 @@ for (const [file, baseUrl] of updates) {
     throw new Error(`Could not update all release links in ${file}`);
   }
   writeFileSync(file, html);
+}
+
+const readmes = [
+  'README.md',
+  ...readdirSync('docs')
+    .filter((name) => /^README\..+\.md$/.test(name))
+    .map((name) => `docs/${name}`),
+];
+for (const file of readmes) {
+  const markdown = readFileSync(file, 'utf8').replace(
+    /https:\/\/(?:github\.com\/zerolovesea\/Brevia\/releases\/download\/v[\d.]+|modelscope\.cn\/models\/zyaztec\/brevia-release\/resolve\/master)\/Brevia-[\d.]+-(arm64\.dmg|x64-setup\.exe)/g,
+    (url, suffix) =>
+      `${url.slice(0, url.lastIndexOf('/Brevia-')).replace(/\/v[\d.]+$/, `/${tag}`)}/Brevia-${version}-${suffix}`,
+  );
+  writeFileSync(file, markdown);
 }

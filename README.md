@@ -26,12 +26,12 @@
 
 ## 下载
 
-| 设备    | 下载入口                                                                                                            | 系统要求                  |
-| ------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------- |
-| Mac     | [下载最新 macOS 版](https://github.com/zerolovesea/Brevia/releases/latest)，选择 `Brevia-<version>-arm64.dmg`       | Apple Silicon · macOS 14+ |
-| Windows | [下载最新 Windows 版](https://github.com/zerolovesea/Brevia/releases/latest)，选择 `Brevia-<version>-x64-setup.exe` | x64                       |
-| iPhone  | [在 App Store 下载](https://apps.apple.com/app/id6819869442)                                                        | iOS 15+                   |
-| Android | [下载签名 APK](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk)       | Android 7+                |
+| 设备    | 下载入口                                                                                                             | 系统要求                  |
+| ------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| Mac     | [下载最新 macOS 版](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/Brevia-1.4.4-arm64.dmg)       | Apple Silicon · macOS 14+ |
+| Windows | [下载最新 Windows 版](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/Brevia-1.4.4-x64-setup.exe) | x64                       |
+| iPhone  | [在 App Store 下载](https://apps.apple.com/app/id6819869442)                                                         | iOS 15+                   |
+| Android | [下载签名 APK](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk)        | Android 7+                |
 
 ### 扫码下载 iPhone / Android 应用
 

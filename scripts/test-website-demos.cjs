@@ -1332,8 +1332,16 @@ app
           true,
         );
       }
-      // 发布脚本相对仓库根目录读取 website/，只在临时副本验证。
+      // 发布脚本相对仓库根目录读取官网和 README，只在临时副本验证。
       cpSync(join(root, 'website'), join(temp, 'website'), { recursive: true });
+      const readmes = [
+        'README.md',
+        ...readdirSync(join(root, 'docs'))
+          .filter((name) => /^README\..+\.md$/.test(name))
+          .map((name) => `docs/${name}`),
+      ];
+      mkdirSync(join(temp, 'docs'), { recursive: true });
+      for (const file of readmes) cpSync(join(root, file), join(temp, file));
       const release = spawnSync(
         process.execPath,
         [join(root, 'scripts/update-release-links.mjs')],
@@ -1344,6 +1352,12 @@ app
         },
       );
       assert.equal(release.status, 0, release.stderr);
+      for (const file of readmes) {
+        const markdown = readFileSync(join(temp, file), 'utf8');
+        assert.ok(markdown.includes('Brevia-9.8.7-arm64.dmg'), file);
+        assert.ok(markdown.includes('Brevia-9.8.7-x64-setup.exe'), file);
+        assert.ok(!/Brevia-<version>| · `(?:arm64\.dmg|x64-setup\.exe)`/.test(markdown), file);
+      }
       for (const locale of ['zh', 'en']) {
         const html = readFileSync(join(temp, `website/index-${locale}.html`), 'utf8');
         assert.ok(html.includes('Brevia-9.8.7-arm64.dmg'));
