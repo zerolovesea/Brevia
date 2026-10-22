@@ -59,6 +59,7 @@ Propulse par la segmentation Pyannote plus les modeles d'embeddings de locuteur,
 
 ### Et plus encore
 
+- **Gardez l’enregistrement à portée de main.** Réutilisez la configuration de la dernière réunion, puis contrôlez l’enregistrement et consultez les sous-titres et notes depuis la barre de menus, la zone de notification ou la capsule flottante lorsque la fenêtre principale est réduite ou masquée.
 - **Corrections par lot** — prévisualisez et sélectionnez les remplacements dans les transcriptions, notes et résumés, avec annulation ; pendant l’enregistrement, appliquez des règles aux sous-titres suivants de la réunion.
 - **Import audio** — apportez des enregistrements existants pour une transcription hors ligne via le meme pipeline.
 - **Exports riches** — transcriptions et notes en Markdown, TXT, JSON, SRT, DOCX ou PDF ; audio en WAV.

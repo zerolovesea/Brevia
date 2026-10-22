@@ -59,6 +59,7 @@ Con segmentación Pyannote más modelos de embeddings de voz, todo ejecutándose
 
 ### Y más
 
+- **Controla la grabación al instante.** Reutiliza la configuración de la última reunión y controla la grabación, los subtítulos y las notas desde la barra de menús, la bandeja o la cápsula flotante mientras la ventana principal está minimizada u oculta.
 - **Correcciones por lotes** — previsualiza y selecciona reemplazos en transcripciones, notas y resúmenes, con opción de deshacer; durante la grabación, aplica reglas a los próximos subtítulos de esa reunión.
 - **Importación de audio** — trae grabaciones existentes para transcribirlas offline con el mismo pipeline.
 - **Exportaciones versátiles** — transcripciones y notas en Markdown, TXT, JSON, SRT, DOCX o PDF; audio en WAV.

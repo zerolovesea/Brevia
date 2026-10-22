@@ -59,6 +59,7 @@ Angetrieben von Pyannote-Segmentierung plus Sprecher-Embedding-Modellen, alles a
 
 ### Und mehr
 
+- **Aufnahme jederzeit im Griff.** Übernehmen Sie die letzte Besprechungskonfiguration für eine schnelle Aufnahme. Über Menüleiste, Taskleiste oder schwebende Kapsel steuern Sie die Aufnahme und sehen Untertitel und Notizen, auch wenn das Hauptfenster minimiert oder ausgeblendet ist.
 - **Texte gesammelt korrigieren** — Ersetzungen in Transkripten, Notizen und Zusammenfassungen vorab prüfen, auswählen und rückgängig machen; während der Aufnahme Regeln auf folgende Untertitel desselben Meetings anwenden.
 - **Audio-Import** — bring bestehende Aufnahmen fuer die Offline-Transkription in die gleiche Sprachpipeline.
 - **Vielseitige Exporte** — Transkripte und Notizen als Markdown, TXT, JSON, SRT, DOCX oder PDF; Audio als WAV.

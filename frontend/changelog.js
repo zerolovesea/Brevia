@@ -2,9 +2,147 @@
 (() => {
   const releases = [
     {
+      'version': '1.4.5',
+      'date': '2026-10-22',
+      'current': true,
+      'previousVersion': '1.4.4',
+      'contributors': [],
+      'zh': {
+        'summary': '新增快速录音、菜单栏／托盘与悬浮录音胶囊，完善后台录音、保存和八语言提示。',
+        'what': [
+          {
+            'text':
+              '首页、侧栏与菜单栏支持快速录音，沿用最近会议的语言、模型和工作区，以麦克风与系统音频开始采集；缺模型时进入准备页确认。',
+            'commit': 'ad856adadf5f7c72f00d511730e8c7c608731795',
+          },
+          {
+            'text':
+              '新增悬浮录音胶囊：主窗口最小化或隐藏时控制暂停、结束与保存，悬停查看实时字幕、本场笔记并采纳 AI 建议。',
+            'commit': 'ad856adadf5f7c72f00d511730e8c7c608731795',
+          },
+          {
+            'text':
+              '新增菜单栏／托盘入口与后台窗口设置，可选择关闭主窗口后继续录音；真正退出时确认并等待录音保存。',
+            'commit': 'ad856adadf5f7c72f00d511730e8c7c608731795',
+          },
+        ],
+        'improved': [
+          {
+            'text':
+              '本地纪要模型尚未安装时展示等待状态，安装完成后自动继续；统一会议结束后的收尾和任务恢复，避免重复处理。',
+            'commit': 'ad856adadf5f7c72f00d511730e8c7c608731795',
+          },
+          {
+            'text':
+              '主界面、菜单栏、录音胶囊与悬浮字幕共用翻译查询，补齐八种语言的桌面错误提示，清理废弃文案和无效样式。',
+            'commit': 'ee53f98e89dc820c57b5f68f9b42298119ce911e',
+          },
+        ],
+        'fixed': [
+          {
+            'text': '修复快速录音与普通录音同时启动时，可能停止另一场采集或遗失采集资源的问题。',
+            'commit': 'ee53f98e89dc820c57b5f68f9b42298119ce911e',
+          },
+          {
+            'text': '修复手机停录请求或笔记保存失败后，电脑错误显示已暂停并停止计时的问题。',
+            'commit': 'ee53f98e89dc820c57b5f68f9b42298119ce911e',
+          },
+          {
+            'text':
+              '修复胶囊采纳 AI 建议时重复保存、保存结果与建议状态不一致的问题；失败后仍可重试且不重复追加笔记。',
+            'commit': 'ee53f98e89dc820c57b5f68f9b42298119ce911e',
+          },
+          {
+            'text':
+              '修复清空笔记后立即结束录音时，空笔记未能保存的问题；会议列表刷新失败不再影响停录结果。',
+            'commit': 'ee53f98e89dc820c57b5f68f9b42298119ce911e',
+          },
+          {
+            'text': '修复安装版菜单栏／托盘图标加载路径，并在再次启动应用时恢复已隐藏的主窗口。',
+            'commit': 'ee53f98e89dc820c57b5f68f9b42298119ce911e',
+          },
+        ],
+        'security': [],
+        'changes': [
+          {
+            'text':
+              'v1.4.5 提供 macOS Apple Silicon 与 Windows x64 安装包；手机端通过独立更新渠道升级，协作录音仍需手机与电脑处于同一局域网。',
+            'commit': 'ad856adadf5f7c72f00d511730e8c7c608731795',
+          },
+        ],
+      },
+      'en': {
+        'summary':
+          'Add quick recording, menu bar and tray controls, and a floating recording capsule, with more reliable background recording, saving and messages in all eight languages.',
+        'what': [
+          {
+            'text':
+              'Start quick recordings from the home page, sidebar or menu bar using the latest meeting’s language, models and workspace, with microphone and system audio capture. Missing models open the preparation page for confirmation.',
+            'commit': 'ad856adadf5f7c72f00d511730e8c7c608731795',
+          },
+          {
+            'text':
+              'Use the floating recording capsule to pause, end and save while the main window is minimized or hidden. Hover to review live captions and meeting notes, and accept AI suggestions.',
+            'commit': 'ad856adadf5f7c72f00d511730e8c7c608731795',
+          },
+          {
+            'text':
+              'Add menu bar and tray controls with background window preferences. Optionally keep recording when the main window closes; quitting asks for confirmation and waits for the recording to be saved.',
+            'commit': 'ad856adadf5f7c72f00d511730e8c7c608731795',
+          },
+        ],
+        'improved': [
+          {
+            'text':
+              'Show a waiting state when a local summary model is missing and continue after installation. Use one completion flow to finalize meetings and resume queued tasks without duplicate handling.',
+            'commit': 'ad856adadf5f7c72f00d511730e8c7c608731795',
+          },
+          {
+            'text':
+              'Share translation lookup across the main interface, menu bar, recording capsule and floating captions, with desktop error messages in all eight languages and obsolete copy and styles removed.',
+            'commit': 'ee53f98e89dc820c57b5f68f9b42298119ce911e',
+          },
+        ],
+        'fixed': [
+          {
+            'text':
+              'Prevent overlapping quick and regular recording starts from stopping another capture or losing ownership of capture resources.',
+            'commit': 'ee53f98e89dc820c57b5f68f9b42298119ce911e',
+          },
+          {
+            'text':
+              'Keep the real recording state and timer when a phone stop request or note save fails, instead of incorrectly showing the recording as paused.',
+            'commit': 'ee53f98e89dc820c57b5f68f9b42298119ce911e',
+          },
+          {
+            'text':
+              'Save accepted AI suggestions once and keep capsule acknowledgements aligned with the save result. Failed saves remain retryable without appending duplicate notes.',
+            'commit': 'ee53f98e89dc820c57b5f68f9b42298119ce911e',
+          },
+          {
+            'text':
+              'Save empty notes when a recording ends immediately after the notes are cleared, and keep meeting-list refresh failures from changing the recording’s save result.',
+            'commit': 'ee53f98e89dc820c57b5f68f9b42298119ce911e',
+          },
+          {
+            'text':
+              'Fix menu bar and tray icon loading in packaged apps, and restore the hidden main window when the application is launched again.',
+            'commit': 'ee53f98e89dc820c57b5f68f9b42298119ce911e',
+          },
+        ],
+        'security': [],
+        'changes': [
+          {
+            'text':
+              'v1.4.5 provides installers for Apple Silicon macOS and Windows x64. Mobile clients update through their own distribution channels, and collaborative recording still requires the phone and computer to share a local network.',
+            'commit': 'ad856adadf5f7c72f00d511730e8c7c608731795',
+          },
+        ],
+      },
+    },
+    {
       'version': '1.4.4',
       'date': '2026-10-20',
-      'current': true,
       'previousVersion': '1.4.3',
       'contributors': [],
       'zh': {

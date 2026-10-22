@@ -18,6 +18,7 @@
 
 For online calls, in-person discussions, interviews and lectures. Keep the full conversation, your own thoughts and the next steps together.
 
+- **Keep recording within reach.** Reuse the latest meeting setup for quick recording, then control recording and review captions and notes through the menu bar, tray or floating capsule while the main window is minimized or hidden.
 - **Correct text in bulk.** Preview and select replacements in transcripts, notes and summaries, with undo. During recording, apply rules to subsequent captions in the current meeting.
 - **Stay with the conversation.** Follow live transcripts in 30+ languages, with optional translation and floating captions.
 - **Keep what matters.** Write beside the transcript, let AI suggest decisions and action items, and edit notes and summaries in your own words.
