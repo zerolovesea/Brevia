@@ -322,6 +322,58 @@ app
       console.log('PASS reduced motion');
       win.webContents.debugger.detach();
       for (const locale of ['zh', 'en']) {
+        win.setContentSize(1280, 800);
+        await win.loadURL(
+          `${siteURL}/website/product-motion.html?scene=capsule&lang=${locale}&manual=1`,
+        );
+        await waitForMotion();
+        for (const [time, phase, expanded, tab] of [
+          [3000, 'recording', false, 'captions'],
+          [6500, 'recording', true, 'captions'],
+          [10500, 'recording', true, 'notes'],
+          [13500, 'recording', true, 'notes'],
+          [15500, 'paused', true, 'captions'],
+          [17500, 'recording', true, 'captions'],
+          [18500, 'saving', false, 'captions'],
+          [19500, 'failed', false, 'captions'],
+          [21500, 'saving', false, 'captions'],
+          [22500, 'saved', false, 'captions'],
+          [32500, 'recording', true, 'captions'],
+          [10500, 'recording', true, 'notes'],
+        ]) {
+          const state = await win.webContents.executeJavaScript(`(() => {
+            productMotion.seek(${time});
+            const doc = document.querySelector('.capsule-demo-window').contentDocument;
+            const pill = doc.querySelector('.recording-pill').getBoundingClientRect();
+            return {phase:doc.body.dataset.phase, expanded:!doc.querySelector('#capsule-panel').hidden,
+              tab:doc.querySelector('[aria-selected="true"]').dataset.tab,
+              suggestion:doc.querySelector('#capsule-suggestion').textContent.trim(),
+              pinned:doc.querySelector('#capsule-pin').getAttribute('aria-pressed'),
+              retry:doc.querySelector('.capsule-stop').getAttribute('aria-label'),
+              fits:pill.left>=0 && pill.right<=464 && pill.bottom<=470,
+              synced:document.querySelector('.capsule-demo-app').contentDocument.querySelector('#timer').textContent.endsWith(doc.querySelector('#capsule-time').textContent),
+              notes:doc.querySelector('#capsule-notes').textContent};
+          })()`);
+          assert.equal(state.synced, true, `${locale}/capsule: timer differs from main window`);
+          assert.equal(state.phase, phase);
+          assert.equal(state.expanded, expanded);
+          assert.equal(state.tab, tab);
+          assert.equal(state.fits, true, `${locale}/capsule: clipped controls`);
+          if (time === 10500) assert.ok(state.suggestion.length > 0);
+          if (time === 13500) {
+            assert.equal(state.suggestion, '');
+            assert.equal(state.pinned, 'true');
+            assert.ok(
+              state.notes.includes(
+                locale === 'zh' ? '周五前完成内部验收' : 'Complete internal acceptance',
+              ),
+            );
+          }
+          if (phase === 'failed')
+            assert.equal(state.retry, locale === 'zh' ? '重试保存' : 'Retry saving');
+          if (record && time < 26000) await capture(join(output, `capsule-${locale}-${time}.png`));
+        }
+        console.log(`PASS motion ${locale}/capsule (states, controls and reverse seek)`);
         for (const scene of [
           'tour',
           'live',
@@ -921,7 +973,7 @@ app
             return names.length === 2 && names.every(node => node.textContent === 'Brevia' || node.querySelector('img')?.alt === 'Brevia');
           })()`);
           assert.equal(productBrand, true, 'Product brand remains Brevia in both languages');
-          assert.equal(assetVersions.count, 7);
+          assert.equal(assetVersions.count, 8);
           assert.equal(
             assetVersions.versioned,
             true,

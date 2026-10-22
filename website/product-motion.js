@@ -9,6 +9,7 @@ window.detailActiveTab = 'summary';
 (async () => {
   const pick = (zh, en) => (locale === 'en' ? en : zh);
   const scene = [
+    'capsule',
     'tour',
     'live',
     'summary',
@@ -31,13 +32,16 @@ window.detailActiveTab = 'summary';
   const stage = document.querySelector('#motion-stage');
   stage.dataset.scene = scene;
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
-  const duration = tour
-    ? 28000
-    : collaboration || motionParams.has('capture')
-      ? pairingTimes.duration
-      : ['live', 'summary', 'library'].includes(scene)
-        ? 12000
-        : 20000;
+  const duration =
+    scene === 'capsule'
+      ? 26000
+      : tour
+        ? 28000
+        : collaboration || motionParams.has('capture')
+          ? pairingTimes.duration
+          : ['live', 'summary', 'library'].includes(scene)
+            ? 12000
+            : 20000;
   let elapsed = 0;
   let previous = 0;
   let frame = 0;
@@ -103,7 +107,9 @@ window.detailActiveTab = 'summary';
     : '';
   document.body.dataset.focus = focus;
 
-  if (collaboration) {
+  if (scene === 'capsule') {
+    renderCollaboration = await createCapsuleScene(stage, locale);
+  } else if (collaboration) {
     renderCollaboration = await createCollaborationScene(stage, scene, locale);
   } else if (!phone) {
     const templateURL = new URL('index.html', document.querySelector('[data-app-style]').href);
@@ -641,17 +647,18 @@ window.detailActiveTab = 'summary';
       }
     } else renderSummary(time - 17000);
   }
-  const paint = collaboration
-    ? renderCollaboration
-    : tour
-      ? renderTour
-      : scene === 'live'
-        ? renderCapture || renderLive
-        : scene === 'summary'
-          ? renderSummary
-          : scene === 'library'
-            ? renderLibrary
-            : renderPhone;
+  const paint =
+    collaboration || scene === 'capsule'
+      ? renderCollaboration
+      : tour
+        ? renderTour
+        : scene === 'live'
+          ? renderCapture || renderLive
+          : scene === 'summary'
+            ? renderSummary
+            : scene === 'library'
+              ? renderLibrary
+              : renderPhone;
   function renderAt(time) {
     const phase = ((time % duration) + duration) % duration;
     stage.style.opacity = '1';

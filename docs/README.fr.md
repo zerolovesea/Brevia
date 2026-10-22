@@ -31,6 +31,12 @@ Une nouvelle interface sur ordinateur et téléphone : notes à côté de la tra
 
 ![Nouvelle bibliothèque de réunions](assets/showcase/desktop/en/library.gif)
 
+### Capsule d’enregistrement flottante
+
+Contrôlez l’enregistrement, consultez les sous-titres et les notes, mettez en pause et relancez la sauvegarde depuis la capsule flottante.
+
+![Capsule d’enregistrement flottante](assets/showcase/desktop/en/capsule.gif)
+
 ### Résumé modifiable avec décisions et actions
 
 ![Résumé modifiable avec décisions et actions](assets/showcase/desktop/en/summary.gif)

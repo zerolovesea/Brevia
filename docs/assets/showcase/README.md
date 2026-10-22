@@ -16,7 +16,9 @@ node scripts/render-readme-demos.mjs
 node scripts/render-readme-demos.mjs live zh
 ```
 
-场景为 `live`、`summary`、`library`、`phone-microphone`，语言为 `zh`、`en`。逻辑视口 1280 × 800，输出 2560 × 1600、10 fps 循环 GIF。中间文件保存在忽略目录 `output/readme-gif-export/`。脚本检查尺寸、帧数、播放时长和文件大小；导出后还应查看完整流程、文字和控件。
+场景为 `capsule`、`live`、`summary`、`library`、`phone-microphone`，语言为 `zh`、`en`。逻辑视口 1280 × 800，输出 2560 × 1600、10 fps 循环 GIF。中间文件保存在忽略目录 `output/readme-gif-export/`。胶囊场景为 26 秒，复用正式 `recording-capsule.html` 与状态渲染，展示收起、字幕翻译、笔记建议与采纳、固定面板、暂停与继续、保存及失败重试，并回到主窗口。演示使用虚构会议数据，不启动录音或后端。
+
+脚本检查尺寸、帧数、播放时长和文件大小；导出后还应查看完整流程、文字和控件。
 
 ## 手机页面
 

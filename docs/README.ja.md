@@ -31,6 +31,12 @@
 
 ![新しい会議ライブラリ](assets/showcase/desktop/en/library.gif)
 
+### フローティング録音カプセル
+
+カプセルから録音を操作し、字幕やメモを確認できます。一時停止・再開や保存の再試行にも対応します。
+
+![フローティング録音カプセル](assets/showcase/desktop/en/capsule.gif)
+
 ### 決定事項とタスクを編集できる議事録
 
 ![決定事項とタスクを編集できる議事録](assets/showcase/desktop/en/summary.gif)

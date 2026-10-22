@@ -31,6 +31,12 @@ Nueva interfaz en ordenador y móvil: notas junto a la transcripción, bibliotec
 
 ![Biblioteca de reuniones](assets/showcase/desktop/en/library.gif)
 
+### Cápsula de grabación flotante
+
+Controla la grabación, consulta subtítulos y notas, pausa y reintenta el guardado desde la cápsula flotante.
+
+![Cápsula de grabación flotante](assets/showcase/desktop/en/capsule.gif)
+
 ### Resumen editable con decisiones y tareas
 
 ![Resumen editable con decisiones y tareas](assets/showcase/desktop/en/summary.gif)

@@ -31,6 +31,12 @@
 
 ![새 회의 라이브러리](assets/showcase/desktop/en/library.gif)
 
+### 플로팅 녹음 캡슐
+
+캡슐에서 녹음을 제어하고 자막과 메모를 확인하세요. 일시 정지와 재개, 저장 재시도도 지원합니다.
+
+![플로팅 녹음 캡슐](assets/showcase/desktop/en/capsule.gif)
+
 ### 결정과 할 일을 편집하는 회의 요약
 
 ![결정과 할 일을 편집하는 회의 요약](assets/showcase/desktop/en/summary.gif)

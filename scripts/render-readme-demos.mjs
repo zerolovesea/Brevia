@@ -9,6 +9,7 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const project = join(root, 'output/readme-gif-export');
 const assets = join(root, 'docs/assets/showcase/desktop');
 const scenes = {
+  capsule: { query: 'scene=capsule', start: 0, duration: 26 },
   live: { query: 'scene=live', start: 0, duration: 12 },
   summary: { query: 'scene=summary', start: 0, duration: 12 },
   library: { query: 'scene=library', start: 0, duration: 12 },

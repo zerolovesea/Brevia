@@ -31,6 +31,12 @@ Neue Oberflächen für Computer und Smartphone: Notizen neben dem Live-Transkrip
 
 ![Neue Meeting-Bibliothek](assets/showcase/desktop/en/library.gif)
 
+### Schwebende Aufnahmekapsel
+
+Aufnahme steuern, Untertitel und Notizen lesen, pausieren und das Speichern bei Bedarf erneut versuchen.
+
+![Schwebende Aufnahmekapsel](assets/showcase/desktop/en/capsule.gif)
+
 ### Bearbeitbare Zusammenfassung mit Entscheidungen und Aufgaben
 
 ![Bearbeitbare Zusammenfassung mit Entscheidungen und Aufgaben](assets/showcase/desktop/en/summary.gif)

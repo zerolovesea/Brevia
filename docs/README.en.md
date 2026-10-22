@@ -61,6 +61,12 @@ For phone setup and pairing, see the [mobile guide](../mobile/README.md).
 
 Live transcripts and notes sit side by side, so you can check the original words as you write. Add your own thoughts while AI helps surface decisions, action items and open questions. You choose which suggestions to keep.
 
+### Keep recording within reach
+
+The floating capsule keeps recording status, elapsed time and pause controls at hand. Expand it for live captions and translation, meeting notes and AI suggestions. Pin the panel open or retry a failed save, then click the Brevia icon to return to your meeting.
+
+![Floating recording capsule: captions, notes, pause and save states](assets/showcase/desktop/en/capsule.gif)
+
 ### Turn the meeting into a plan
 
 Turn a long discussion into key points, decisions and next steps. Your summary stays editable: add owners, check the details and share it with the team. The transcript and recording remain together whenever you need the original context.
