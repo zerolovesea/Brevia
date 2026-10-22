@@ -29,8 +29,8 @@ For online calls, in-person discussions, interviews and lectures. Keep the full 
 
 | Device  | Download                                                                                                             | Requirements              |
 | ------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------- |
-| Mac     | [Download for macOS](https://github.com/zerolovesea/Brevia/releases/download/v1.4.4/Brevia-1.4.4-arm64.dmg)          | Apple Silicon · macOS 14+ |
-| Windows | [Download for Windows](https://github.com/zerolovesea/Brevia/releases/download/v1.4.4/Brevia-1.4.4-x64-setup.exe)    | x64                       |
+| Mac     | [Download for macOS](https://github.com/zerolovesea/Brevia/releases/download/v1.4.5/Brevia-1.4.5-arm64.dmg)          | Apple Silicon · macOS 14+ |
+| Windows | [Download for Windows](https://github.com/zerolovesea/Brevia/releases/download/v1.4.5/Brevia-1.4.5-x64-setup.exe)    | x64                       |
 | iPhone  | [Download on the App Store](https://apps.apple.com/app/id6819869442)                                                 | iOS 15+                   |
 | Android | [Download signed APK](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk) | Android 7+                |
 

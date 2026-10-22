@@ -10,8 +10,8 @@
 
 | 기기                      | Brevia 받기                                                                                                   |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| macOS 14+ · Apple Silicon | [DMG](https://github.com/zerolovesea/Brevia/releases/download/v1.4.4/Brevia-1.4.4-arm64.dmg)                  |
-| Windows · x64             | [설치 프로그램](https://github.com/zerolovesea/Brevia/releases/download/v1.4.4/Brevia-1.4.4-x64-setup.exe)    |
+| macOS 14+ · Apple Silicon | [DMG](https://github.com/zerolovesea/Brevia/releases/download/v1.4.5/Brevia-1.4.5-arm64.dmg)                  |
+| Windows · x64             | [설치 프로그램](https://github.com/zerolovesea/Brevia/releases/download/v1.4.5/Brevia-1.4.5-x64-setup.exe)    |
 | Android 7+                | [APK 다운로드](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk) |
 | iPhone · iOS 15+          | [App Store](https://apps.apple.com/app/id6819869442)                                                          |
 
