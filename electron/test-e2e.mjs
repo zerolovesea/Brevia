@@ -28,7 +28,7 @@ if (typeof WebSocket === 'undefined') {
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '..');
-const defaultWindowScale = (2 / 3) * 1.15 * 1.1;
+const defaultWindowScale = 1;
 const captureStartedAt = Date.now();
 const captureSources = process.env.BREVIA_DESIGN_CAPTURE_DIR
   ? (() => {
@@ -379,7 +379,7 @@ try {
       Math.abs(compactWindow.result.value.viewportHeight - 800) <= 2 &&
       Math.abs(compactWindow.result.value.scale - defaultWindowScale) < 0.02 &&
       !compactWindow.result.value.overflow,
-    `旧缩放配置启动并重载后，应保留 1280×800 布局并将界面整体放大 10%：${JSON.stringify(compactWindow.result?.value)}`,
+    `旧缩放配置启动并重载后，应使用 1280×800 原生比例且无横向溢出：${JSON.stringify(compactWindow.result?.value)}`,
   );
 
   const probe = `(() => {
@@ -489,7 +489,7 @@ try {
   });
   await delay(350);
   const importPage = await client.send('Runtime.evaluate', {
-    expression: `({ sidebar: !!document.querySelector('.sidebar > #import-recording'), active: document.querySelector('#prepare-view').classList.contains('active'), mode: document.querySelector('#prepare-view').dataset.mode, capture: getComputedStyle(document.querySelector('#prepare-view fieldset')).display })`,
+    expression: `({ sidebar: !!document.querySelector('.sidebar #import-recording'), active: document.querySelector('#prepare-view').classList.contains('active'), mode: document.querySelector('#prepare-view').dataset.mode, capture: getComputedStyle(document.querySelector('#prepare-view fieldset')).display })`,
     returnByValue: true,
   });
   check(
@@ -790,40 +790,53 @@ try {
     await showView('home');
     await new Promise(resolve => setTimeout(resolve, 2100));
     const card = document.querySelector('#mobile-nav');
-    const results = [];
+    const errors = [];
     for (const language of Object.keys(catalog)) {
       applyLanguage(language);
       const status = document.querySelector('#mobile-sidebar-status');
       const translated = [t('等待设备连接'), t('服务已关闭')].includes(status.textContent);
       const fits = () => [...card.querySelectorAll('strong, svg, #mobile-sidebar-status, #mobile-nav-dot')].every(node => {
+        if (!node.getClientRects().length) return true;
         const bounds = node.getBoundingClientRect(), outer = card.getBoundingClientRect();
         const style = getComputedStyle(node);
         const clippedStatus = node.id === 'mobile-sidebar-status' && style.clipPath === 'inset(50%)' && style.overflow === 'hidden';
         return bounds.right <= outer.right + 1 && bounds.left >= outer.left - 1 && (clippedStatus || node.scrollWidth <= node.clientWidth + 1);
       });
       const normalFits = fits();
-      status.textContent = 'VeryLongDeviceNameWithoutSpaces'.repeat(4) + ' · ' + t('已连接');
-      results.push(translated && normalFits && fits());
+      if(!translated)errors.push(language+': sidebar status untranslated');
+      if(!normalFits)errors.push(language+': sidebar content clipped');
+      if(!card.title.includes(status.textContent)||card.getAttribute('aria-label')!==card.title)errors.push(language+': device status accessible label missing');
       await openModal('device-connection');
-      results.push(document.querySelector('#mobile-pair').textContent === t('连接新设备')
+      const phone=document.querySelector('#mobile-dialog'),devices=(await window.brevia.mobile.status()).devices;
+      const expected=devices.length?'paired':'intro';
+      if(phone.dataset.mobilePageState!==expected||!phone.querySelector('[data-mobile-panel="'+expected+'"]').checkVisibility())errors.push(language+': device page stage mismatch');
+      if(expected==='intro'){
+        phone.querySelector('[data-mobile-page-step=install]').click();
+        if(phone.dataset.mobilePageState!=='install'||!phone.querySelector('[data-mobile-panel=install]').checkVisibility()||!phone.querySelector('.mobile-install').open)errors.push(language+': install step inaccessible');
+      }
+      const modalTranslated=document.querySelector('#mobile-pair').textContent === t('连接新设备')
         && document.querySelector('#mobile-install-title').textContent === t('安装Brevia手机端')
-        && document.querySelector('[data-mobile-install-toggle]').textContent === t('安装Brevia手机端')
-        && document.querySelector('#mobile-dialog .mobile-install').hidden
         && document.querySelector('.mobile-install-platform a').href === 'https://apps.apple.com/app/id6819869442'
         && document.querySelector('.mobile-install-platform h4').textContent === t('iPhone · App Store')
         && document.querySelector('.mobile-install-platform p').textContent === t('扫码或点击链接，从 App Store 免费安装 Brevia。')
-        && (document.querySelector('.mobile-device-empty')?.textContent === t('暂无已信任设备') || document.querySelector('.mobile-device small')?.textContent === t('离线 · 保留信任')));
+        && (document.querySelector('.mobile-device-empty')?.textContent === t('暂无已信任设备') || document.querySelector('.mobile-device small')?.textContent === t('离线 · 保留信任'));
+      if(!modalTranslated)errors.push(language+': device dialog content untranslated');
+      if(expected==='intro'){
+        phone.querySelector('[data-mobile-panel=install] [data-mobile-page-step=back]').click();
+        if(phone.dataset.mobilePageState!=='intro'||phone.querySelector('[data-mobile-panel=install]').checkVisibility())errors.push(language+': install back did not restore introduction');
+      }
       await closeModal();
     }
     applyLanguage(previous);
-    return results.every(Boolean);
+    return errors;
   })()`,
     awaitPromise: true,
     returnByValue: true,
   });
   check(
-    deviceLanguages.result?.value === true,
-    '设备连接应即时切换八种语言，且长标题和设备名称不能溢出卡片',
+    Array.isArray(deviceLanguages.result?.value) && deviceLanguages.result.value.length === 0,
+    '设备连接八语言及长名称布局：' +
+      JSON.stringify(deviceLanguages.result?.value || deviceLanguages.exceptionDetails),
   );
   const rapidNavigation = await client.send('Runtime.evaluate', {
     expression: `(async () => {
@@ -836,7 +849,7 @@ try {
     await Promise.all([showView('settings'), showLibraryNav(activeLibraryNav)]);
     if (!homeIsActive()) return false;
     await Promise.all([showView('settings'), switchWorkspace(activeWorkspaceId)]);
-    if (!homeIsActive()) return false;
+    if (activeView !== 'settings' || !document.querySelector('#settings-view').classList.contains('active') || document.querySelectorAll('body > .app-shell > .workspace > .view.active').length !== 1 || crumb.textContent !== catalog[locale].views.settings) return false;
     await Promise.all([showLibraryNav('recently-deleted'), showView('settings')]);
     if (activeView !== 'settings' || !document.querySelector('#settings-view').classList.contains('active') || crumb.textContent !== catalog[locale].views.settings) return false;
     await showLibraryNav('all-meetings');
@@ -983,6 +996,89 @@ try {
     Array.isArray(detailLayout.result?.value) && detailLayout.result.value.length === 0,
     `多语言/主题布局回归：${JSON.stringify(detailLayout)}`,
   );
+  const librarySearchCommand = await client.send('Runtime.evaluate', {
+    expression: `(async()=>{
+      const errors=[];
+      await initializationPromise;
+      await showView('home');
+      const shortcut=document.querySelector('#library-search-shortcut');
+      const search=document.querySelector('#meeting-search');
+      const key=()=>new KeyboardEvent('keydown',{key:'k',code:'KeyK',metaKey:window.brevia.platform==='darwin',ctrlKey:window.brevia.platform!=='darwin',bubbles:true,cancelable:true});
+      const waitForSearch=async()=>{
+        const until=Date.now()+3000;
+        while(document.activeElement!==search&&Date.now()<until)await new Promise(resolve=>setTimeout(resolve,10));
+        return document.activeElement===search&&!document.querySelector('.app-shell').classList.contains('is-library-hidden');
+      };
+      shortcut.focus();shortcut.click();
+      if(!await waitForSearch())errors.push('sidebar search did not focus meeting search');
+      await showView('settings');
+      shortcut.focus();
+      const command=key();shortcut.dispatchEvent(command);
+      if(!command.defaultPrevented||activeView!=='home'||!await waitForSearch())errors.push('keyboard search did not navigate and focus');
+      const library=document.querySelector('.library-panel'),sidebar=document.querySelector('.sidebar'),workspace=document.querySelector('.workspace');
+      if(library!==sidebar||!sidebar.contains(meetingList)||!sidebar.contains(taskCards)||document.querySelectorAll('#desktop-app > aside').length!==1||Math.abs(sidebar.getBoundingClientRect().width-(innerWidth<=1050?240:260))>1)errors.push('single persistent meeting sidebar missing');
+      const group=meetingList.querySelector('.sidebar-workspace');
+      let groupToggle=group?.querySelector('.sidebar-workspace-toggle'),groupMeetings=group?.querySelector('.sidebar-workspace-meetings');
+      if(!groupToggle||!groupMeetings||groupToggle.getAttribute('aria-expanded')!=='true'||groupMeetings.hidden)errors.push('workspace tree initially collapsed or missing');
+      else {
+        groupToggle.click();await new Promise(resolve=>setTimeout(resolve,50));
+        groupToggle=meetingList.querySelector('.sidebar-workspace-toggle');groupMeetings=meetingList.querySelector('.sidebar-workspace-meetings');
+        if(groupToggle.getAttribute('aria-expanded')!=='false'||!groupMeetings.hidden)errors.push('workspace tree does not collapse');
+        groupToggle.click();await new Promise(resolve=>setTimeout(resolve,50));
+        groupToggle=meetingList.querySelector('.sidebar-workspace-toggle');groupMeetings=meetingList.querySelector('.sidebar-workspace-meetings');
+        if(groupToggle.getAttribute('aria-expanded')!=='true'||groupMeetings.hidden)errors.push('workspace tree does not expand');
+      }
+      for(const row of meetingList.querySelectorAll('.meeting-row')){
+        if(Math.abs(row.getBoundingClientRect().height-32)>1)errors.push('meeting tree row density');
+        if([...row.querySelectorAll('.meeting-main p,.meeting-status,.meeting-row-icon,.meeting-workspace,.meeting-source')].some(node=>node.checkVisibility()))errors.push('meeting tree shows retired metadata');
+      }
+      const initialized=await window.brevia.initialize();
+      const meeting=await window.brevia.meeting.get({meeting_id:initialized.meetings[0].id});
+      applyBackendDetail(meeting);await showView('detail');renderMeetingList();
+      const documentPanel=document.querySelector('[data-detail-panel=notes]');
+      shortcut.focus();shortcut.dispatchEvent(key());
+      if(!await waitForSearch()||activeView!=='detail'||currentMeetingDetail.id!==meeting.id||document.querySelector('[data-detail-panel=notes]')!==documentPanel)errors.push('library search replaced open document');
+      const currentRow=meetingList.querySelector('[data-meeting-id="'+CSS.escape(meeting.id)+'"]');
+      if(!currentRow||currentRow.getAttribute('aria-current')!=='page')errors.push('open meeting missing current navigation state');
+      const toggle=document.querySelector('#library-toggle'),left=workspace.getBoundingClientRect().left;
+      toggle.click();await new Promise(requestAnimationFrame);
+      if(toggle.getAttribute('aria-expanded')!=='false'||getComputedStyle(library).visibility!=='hidden'||Math.abs(library.getBoundingClientRect().width)>1||workspace.getBoundingClientRect().left>=left||Math.abs(workspace.getBoundingClientRect().left)>1||activeView!=='detail')errors.push('library toggle did not expand current workspace');
+      shortcut.click();await waitForSearch();
+      if(toggle.getAttribute('aria-expanded')!=='true'||getComputedStyle(library).visibility!=='visible'||Math.abs(library.getBoundingClientRect().width-(innerWidth<=1050?240:260))>1||activeView!=='detail')errors.push('search did not restore library beside document');
+      const wasActive=meetingActive;
+      meetingActive=true;await showView('live');
+      const notes=currentNotesMarkdown(),liveEditor=liveNotesEditor;
+      shortcut.focus();shortcut.dispatchEvent(key());
+      if(!await waitForSearch()||activeView!=='live'||!meetingActive||liveNotesEditor!==liveEditor||currentNotesMarkdown()!==notes)errors.push('library search interrupted recording workspace');
+      meetingActive=wasActive;await showView('home');
+      for(const tag of ['input','textarea','div']){
+        const editor=document.createElement(tag);
+        if(tag==='div'){editor.contentEditable='true';editor.textContent='draft';}
+        else editor.value='draft';
+        document.body.append(editor);editor.focus();
+        const event=key();editor.dispatchEvent(event);
+        if(event.defaultPrevented||document.activeElement!==editor||(tag==='div'?editor.textContent:editor.value)!=='draft')errors.push(tag+': search intercepted editing');
+        editor.remove();
+      }
+      await openModal('upgrade-log');
+      const modalButton=settingsModal.querySelector('button');modalButton.focus();
+      const modalFocus=document.activeElement,modalView=activeView;
+      const modalCommand=key();modalButton.dispatchEvent(modalCommand);
+      shortcut.click();
+      await new Promise(resolve=>setTimeout(resolve,50));
+      if(modalCommand.defaultPrevented||activeModal!=='upgrade-log'||activeView!==modalView||document.activeElement!==modalFocus)errors.push('search escaped modal');
+      closeModal();await new Promise(resolve=>setTimeout(resolve,250));
+      await showView('detail');
+      return errors;
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  check(
+    Array.isArray(librarySearchCommand.result?.value) &&
+      librarySearchCommand.result.value.length === 0,
+    `搜索入口、快捷键、编辑与弹窗保护：${JSON.stringify(librarySearchCommand)}`,
+  );
   const refineModelLayout = await client.send('Runtime.evaluate', {
     expression: `(() => {
     const host = document.createElement('div');
@@ -1017,6 +1113,8 @@ try {
     const meeting = await window.brevia.meeting.get({ meeting_id: breviaClient.state.initialized.meetings[0].id });
     const chosen = refinedModelOptions(meeting.language).at(-1)?.[0];
     if (chosen) meeting.refined_model_id = chosen;
+    // 独立验证首次载入；前一用例已打开同一会议，不能把保留本地选择误判为回归。
+    currentMeetingDetail = null;
     applyBackendDetail(meeting);
     const selected = !chosen || uiData.detail.refinedModelId === chosen;
     uiData.detail.summary = { markdown: 'saved memo', hasFull: true };
@@ -1032,8 +1130,11 @@ try {
     const localizedDraft = inlineSummaryEditor.getMarkdown() === draft && inlineSummaryEditor.getMode() === 'markdown';
     applyBackendDetail(meeting);
     const refreshedDraft = inlineSummaryEditor.getMarkdown() === draft;
+    const beforeSwitch=currentMeetingDetail.id;
+    await openMeetingRow({dataset:{meetingId:'blocked-draft-switch'},style:{}});
+    const switchBlocked=currentMeetingDetail.id===beforeSwitch&&inlineSummaryEditor.getMarkdown()===draft&&uiData.detail.summaryEditing;
     for (let index = 0; index < 30; index += 1) renderMeetingDetail();
-    return { selected, localizedDraft, refreshedDraft, editing: uiData.detail.summaryEditing };
+    return { selected, localizedDraft, refreshedDraft, switchBlocked, editing: uiData.detail.summaryEditing };
   })()`,
     awaitPromise: true,
     returnByValue: true,
@@ -1042,6 +1143,7 @@ try {
     editingRegression.result?.value?.selected &&
       editingRegression.result?.value?.localizedDraft &&
       editingRegression.result?.value?.refreshedDraft &&
+      editingRegression.result?.value?.switchBlocked &&
       editingRegression.result?.value?.editing,
     `草稿/模型回归：${JSON.stringify(editingRegression)}`,
   );
@@ -1355,8 +1457,23 @@ try {
           const body = settingsModal.querySelector('.modal-body');
           if (kind === 'device-connection' && (document.querySelector('#mobile-service-toggle').getAttribute('aria-label') !== t('手机连接服务') || document.querySelector('[data-mobile-copy-preview]').getAttribute('aria-label') !== t('复制配对码')))
             errors.push([code, appearance, 'untranslated device accessibility label']);
-          if (body.scrollWidth > body.clientWidth + 1 || (body.scrollHeight > body.clientHeight + 1 && (['zh', 'en'].includes(code) || getComputedStyle(body).overflowY !== 'auto')))
-            errors.push([code, appearance, kind, provider, body.clientHeight, body.scrollHeight]);
+          if (body.scrollWidth > body.clientWidth + 1)
+            errors.push([code, appearance, kind, provider, 'horizontal overflow', body.clientWidth, body.scrollWidth]);
+          // 设置正文按内容独立滚动；必须真正可滚到底并完整触及保存动作。
+          if (body.scrollHeight > body.clientHeight + 1) {
+            const previousScroll=body.scrollTop;
+            body.scrollTop=body.scrollHeight;
+            await new Promise(resolve=>requestAnimationFrame(resolve));
+            if (!['auto','scroll'].includes(getComputedStyle(body).overflowY) || body.scrollTop + body.clientHeight < body.scrollHeight - 1)
+              errors.push([code, appearance, kind, provider, 'vertical scroll inaccessible', body.clientHeight, body.scrollHeight, body.scrollTop]);
+            const action=body.querySelector('.modal-form-actions [type="submit"]');
+            if(action){
+              const bounds=action.getBoundingClientRect(),viewport=body.getBoundingClientRect();
+              if(!action.checkVisibility()||bounds.top<viewport.top-1||bounds.bottom>viewport.bottom+1||bounds.left<viewport.left-1||bounds.right>viewport.right+1)
+                errors.push([code,appearance,kind,provider,'save action unreachable']);
+            }
+            body.scrollTop=previousScroll;
+          }
         }
       }
     }
@@ -1795,6 +1912,8 @@ try {
       if(!find?.checkVisibility()||!edit?.checkVisibility()||root.querySelectorAll('.detail-content-header').length!==1)throw Error(scope+' shared header missing');
       if(root.querySelector('.summary-head')||root.querySelector('.detail-transcript-toolbar'))throw Error(scope+' legacy tool row remains');
       if(document.activeElement?.matches('input,textarea,[contenteditable=true]'))throw Error(scope+' automatic focus');
+      const tabs=[...root.querySelectorAll('[data-detail-tab]')].map(rect);
+      if(tabs.length!==3||tabs.some(tab=>Math.abs(tab.y-tabs[0].y)>1)||tabs.some((tab,index)=>index&&tab.x<tabs[index-1].x+tabs[index-1].width))throw Error(scope+' horizontal tabs missing or overlapping');
       return {scope,find:rect(find),edit:rect(edit),toolbar:rect(toolbar),panel:rect(root.querySelector('[data-detail-panel="'+scope+'"]'))};
     })()`),
     );
@@ -1816,13 +1935,19 @@ try {
   check(
     unifiedGeometry.every(
       (item) =>
-        ['find', 'edit', 'toolbar', 'panel'].every(
-          (key) => Math.abs(item[key].y - baseline[key].y) < 1,
-        ) &&
+        Math.abs(item.toolbar.y - baseline.toolbar.y) < 1 &&
         Math.abs(item.find.x - baseline.find.x) < 1 &&
-        Math.abs(item.edit.x - baseline.edit.x) < 1,
+        Math.abs(item.edit.x - baseline.edit.x) < 1 &&
+        ['find', 'edit'].every(
+          (key) =>
+            item[key].y >= item.toolbar.y &&
+            item[key].y + item[key].height <= item.toolbar.y + item.toolbar.height + 1,
+        ) &&
+        item.panel.y >= item.toolbar.y + item.toolbar.height - 1 &&
+        item.panel.width > 0 &&
+        item.panel.height > 0,
     ),
-    '三个内容页的操作与正文边界保持一致：' + JSON.stringify(unifiedGeometry),
+    '三个内容页共享水平导航、工具入口且正文不重叠：' + JSON.stringify(unifiedGeometry),
   );
   await correctionEvaluate(`detailActiveTab='summary';renderMeetingDetail();applyTheme('dark');`);
   await captureCorrection('unified-summary-dark');
@@ -2026,8 +2151,10 @@ try {
     const deviceFromLive = activeView === 'settings' && meetingActive && !miniMeeting.hidden && miniTitle.textContent === meeting.title;
     closeModal(); await showView('live');
     minimizeMeeting(); await showView('home');
+    if(taskCards.classList.contains('is-collapsed'))document.querySelector('[data-task-summary]').click();
     const miniDiagnostic={title:miniTitle.textContent,hidden:miniMeeting.hidden,source:!!miniMeeting.querySelector('.mobile-source-tag'),position:getComputedStyle(taskCards).position,task:taskCards.getBoundingClientRect().toJSON(),mini:miniMeeting.getBoundingClientRect().toJSON(),sidebar:document.querySelector('.sidebar').getBoundingClientRect().toJSON(),view:activeView};
-    const mini = !miniMeeting.hidden && !miniMeeting.querySelector('.mobile-source-tag') && miniTitle.textContent === meeting.title && getComputedStyle(taskCards).position === 'relative' && miniMeeting.getBoundingClientRect().bottom <= document.querySelector('.sidebar').getBoundingClientRect().bottom;
+    const taskBounds=taskCards.getBoundingClientRect(),statusBounds=document.querySelector('#desktop-statusbar').getBoundingClientRect();
+    const mini = document.querySelector('.library-panel').contains(taskCards) && !miniMeeting.hidden && !miniMeeting.querySelector('.mobile-source-tag') && miniTitle.textContent === meeting.title && getComputedStyle(taskCards).position === 'fixed' && taskBounds.left>=0 && taskBounds.right<=innerWidth+1 && taskBounds.top>=0 && taskBounds.bottom<=statusBounds.top && miniMeeting.getBoundingClientRect().bottom<=taskBounds.bottom+1;
     await document.querySelector('#mobile-manage').onclick();
     // 后台窗口的动画帧可能被节流，等待实际打开而不是固定延迟。
     for (let i = 0; i < 60 && !settingsModal.classList.contains('modal-enter'); i++) await new Promise(resolve => setTimeout(resolve, 50));
@@ -2040,7 +2167,7 @@ try {
     await new Promise(resolve => setTimeout(resolve, 250));
     await document.querySelector('#mobile-manage').onclick();
     const retained = !!settingsModal.querySelector('#mobile-pair')?.onclick;
-    document.querySelector('#mobile-pair').click();
+    document.querySelector('#mobile-dialog [data-mobile-panel]:not([hidden]) [data-mobile-page-step=pair], #mobile-dialog [data-mobile-panel=pair]:not([hidden]) #mobile-pair').click();
     const pairing = document.querySelector('#mobile-pair-dialog');
     const preview = settingsModal.querySelector('.mobile-pair-preview');
     for (let i = 0; i < 60 && !pairing.open; i++) await new Promise(resolve => setTimeout(resolve, 50));
@@ -2619,14 +2746,17 @@ try {
         if(!animation||animation.effect.getTiming().duration!==180||animation.effect.getKeyframes().some(frame=>Number(frame.opacity)!==1))errors.push(tab+': inconsistent tab motion');
         animation?.finish();
         samples.push(selectors.map(selector=>{const r=detail.querySelector(selector).getBoundingClientRect();return [r.x,r.y,r.width,r.height];}));
-        if(detail.querySelector('.tabbar').getBoundingClientRect().bottom-detail.getBoundingClientRect().top>170)errors.push(tab+': header consumes reading space');
+        const nav=detail.querySelector('.detail-document-navigation'),navBounds=nav.getBoundingClientRect(),panelBounds=panel.getBoundingClientRect(),tools=detail.querySelector('.detail-content-toolbar').getBoundingClientRect();
+        const tablist=nav.querySelector('[role=tablist]'),tabButtons=[...tablist.querySelectorAll('[data-detail-tab]')];
+        if(tablist.getAttribute('aria-orientation')==='vertical'||tabButtons.length!==3||tabButtons.some(button=>Math.abs(button.getBoundingClientRect().top-tabButtons[0].getBoundingClientRect().top)>1)||navBounds.bottom>tools.top+1||panelBounds.top<tools.bottom-1)errors.push(tab+': horizontal navigation or toolbar overlaps content');
+        if(detail.querySelector('.detail-document-heading')||tablist.querySelector('[aria-selected=true]')?.dataset.detailTab!==tab)errors.push(tab+': selected document tab incorrect');
         const title=detail.querySelector('h1');
         if(title.title!==title.textContent||getComputedStyle(title).whiteSpace!=='nowrap')errors.push(tab+': compact title loses full-text access');
         if(getComputedStyle(panel).opacity!=='1'||panel.getBoundingClientRect().height<100)errors.push(tab+': empty content region');
         const roster=detail.querySelector('.summary-participants');
         if(roster&&!detail.querySelector('.detail-head').contains(roster))errors.push(tab+': roster moved with tab');
       }
-      for(const sample of samples.slice(1))if(sample.some((rect,i)=>rect.some((value,j)=>Math.abs(value-samples[0][i][j])>1)))errors.push('tab changed header, reading region, navigation, export or player geometry');
+      for(const [index,sample] of samples.slice(1).entries())for(const [i,rect] of sample.entries())if(rect.some((value,j)=>Math.abs(value-samples[0][i][j])>1))errors.push('tab changed geometry '+JSON.stringify({tab:['transcript','summary','notes'][index],region:selectors[i],before:samples[0][i],after:rect}));
       detail.querySelector('[data-detail-tab="summary"]').click();
       const body=detail.querySelector('.summary-body');
       if(body&&[...body.querySelectorAll('hr')].some(rule=>getComputedStyle(rule).display!=='none'))errors.push('redundant summary separators remain');
@@ -2638,7 +2768,12 @@ try {
   check(
     Array.isArray(detailConsistency.result?.value) && !detailConsistency.result.value.length,
     '详情三标签统一比例、固定页头与播放器、相同切换动效：' +
-      JSON.stringify(detailConsistency.result?.value || detailConsistency.exceptionDetails),
+      JSON.stringify(
+        detailConsistency.result?.value ||
+          detailConsistency.exceptionDetails?.exception?.description ||
+          detailConsistency.exceptionDetails ||
+          detailConsistency,
+      ),
   );
   // 旧语言的系统默认不能冒充手动偏好；切换与重绘均按目标语言重新推导。
   const prepareModelSelection = await client.send('Runtime.evaluate', {
@@ -2722,22 +2857,26 @@ try {
       if(onboardingPage || document.body.classList.contains('modal-open')) errors.push('AI settings still cover library');
       showRefinementProgress(42,100,'视觉回归任务',currentMeetingDetail.id,'正在识别');
       miniPlayback.hidden=false;syncTaskCardStack(miniPlayback);
+      const taskSummary=document.querySelector('[data-task-summary]');
+      if(taskCards.classList.contains('is-collapsed'))taskSummary.click();
       const r=refinementCard.getBoundingClientRect(),bar=refinementBar.parentElement.getBoundingClientRect();
       if(bar.height<3 || bar.top<r.top || bar.bottom>r.bottom+.5 || refinementBar.parentElement.getAttribute('aria-valuenow')!=='42') errors.push('rear task progress hidden');
-      const toggle=document.querySelector('[data-toggle-task-stack]');toggle.click();
-      if(getComputedStyle(taskCards).display!=='none') errors.push('task stack cannot collapse');
-      toggle.click();
-      if(getComputedStyle(taskCards).display==='none') errors.push('task stack cannot restore');
+      taskSummary.click();
+      if(getComputedStyle(taskCards).display!=='none'||taskSummary.getAttribute('aria-expanded')!=='false') errors.push('task stack cannot collapse');
+      taskSummary.click();
+      if(getComputedStyle(taskCards).display==='none'||taskSummary.getAttribute('aria-expanded')!=='true') errors.push('task stack cannot restore');
       miniPlayback.hidden=true;refinementCard.hidden=true;
       miniMeeting.hidden=false;syncTaskCardStack(miniMeeting);
       await showView('settings');
-      const taskSummary=document.querySelector('[data-task-summary]');
-      if(getComputedStyle(taskSummary).display==='none') {
-        if(getComputedStyle(taskCards).display==='none'||getComputedStyle(miniMeeting).display==='none') errors.push('settings hide ongoing meeting');
-        document.querySelector('#all-meetings').click();
-      } else taskSummary.click();
-      await pageTransition;
-      if(activeView!=='home' || getComputedStyle(taskCards).display==='none') errors.push('settings cannot restore ongoing tasks');
+      if(!document.querySelector('#desktop-statusbar').contains(taskSummary)||!taskSummary.checkVisibility())errors.push('settings hide task summary');
+      if(!taskCards.classList.contains('is-collapsed'))taskSummary.click();
+      taskSummary.click();
+      if(activeView!=='settings'||!taskCards.checkVisibility()||!miniMeeting.checkVisibility())errors.push('settings cannot reveal ongoing tasks in place');
+      const taskBounds=taskCards.getBoundingClientRect(),statusBounds=document.querySelector('#desktop-statusbar').getBoundingClientRect();
+      if(taskBounds.left<0||taskBounds.right>innerWidth+1||taskBounds.top<0||taskBounds.bottom>statusBounds.top)errors.push('task popover overlaps status bar or leaves viewport');
+      taskSummary.click();
+      if(activeView!=='settings'||taskSummary.getAttribute('aria-expanded')!=='false'||getComputedStyle(taskCards).display!=='none')errors.push('task summary cannot collapse in settings');
+      await showView('home');
       miniMeeting.hidden=true;
       for(const tone of ['success','error','info']) {
         showToast(t('工作区已创建'),undefined,tone);
@@ -2746,8 +2885,10 @@ try {
       toast.classList.remove('visible');
       const actions=document.querySelector('.window-actions');
       const center=actions.getBoundingClientRect().top+actions.getBoundingClientRect().height/2;
-      for(const e of actions.querySelectorAll(':scope > #app-version,:scope > a,:scope > .language-menu,:scope > #theme-toggle')) {
+      const visibleActions=[...actions.querySelectorAll(':scope > #app-version,:scope > a,:scope > .language-menu,:scope > #theme-toggle')].filter(element=>element.checkVisibility());
+      for(const [index,e] of visibleActions.entries()) {
         const r=e.getBoundingClientRect();if(Math.abs(r.top+r.height/2-center)>1) errors.push('window action alignment');
+        if(index&&Math.abs(r.left-visibleActions[index-1].getBoundingClientRect().right-8)>1)errors.push('window action spacing');
       }
       return errors;
     })()`,
@@ -2771,7 +2912,7 @@ try {
       for(const selector of selectors){
         document.querySelector('[data-detail-tab="'+(selector.includes('summary')?'summary':'transcript')+'"]').click();
         const button=document.querySelector(selector),icon=button?.querySelector('svg');
-        const iconSize=18;
+        const iconSize=16;
         if(!button||!icon||Math.abs(parseFloat(getComputedStyle(icon).width)-iconSize)>.1||button.getBoundingClientRect().height<31.5||button.getBoundingClientRect().height>36||!button.textContent.trim())errors.push(selector+': detail action geometry');
       }
       document.querySelector('[data-detail-tab=transcript]').click();
@@ -2807,13 +2948,15 @@ try {
       for(const mode of ['record','import']){
         setPrepareMode(mode);await showView('prepare');
         const button=prepareForm.querySelector('.primary-action'),view=document.getElementById('prepare-view');
-        const r=button.getBoundingClientRect(),v=view.getBoundingClientRect(),padding=parseFloat(getComputedStyle(view).paddingBottom);
-        if(!visible(button)||Math.abs(r.bottom-(v.bottom-padding))>2) errors.push(mode+': footer not aligned '+r.bottom+'/'+(v.bottom-padding));
-        if(view.scrollHeight>view.clientHeight+1) errors.push(mode+': default page needs scrolling');
+        button.scrollIntoView({block:'nearest'});await new Promise(requestAnimationFrame);
+        const r=button.getBoundingClientRect(),v=view.getBoundingClientRect(),formBounds=prepareForm.getBoundingClientRect();
+        if(!visible(button)||r.left<formBounds.left||r.right>formBounds.right+1||r.bottom>formBounds.bottom+1)errors.push(mode+': start action outside recording composer');
+        if(r.top<v.top-1||r.bottom>v.bottom+1||view.scrollWidth>view.clientWidth+1)errors.push(mode+': start action cannot be reached without horizontal overflow');
+        view.scrollTop=0;
       }
       setPrepareMode('record');await showView('prepare');
       const primaryFields=[...prepareForm.querySelectorAll('.form-grid label')];
-      if(primaryFields.length!==3 || primaryFields.some(field=>Math.abs(field.getBoundingClientRect().left-primaryFields[0].getBoundingClientRect().left)>1)) errors.push('record: main fields are not one column');
+      if(primaryFields.length!==2||primaryFields.some(field=>field.getBoundingClientRect().width<=0)||!prepareForm.querySelector('details.prepare-options [name=meeting-speakers]'))errors.push('record: core fields or expandable options missing');
       const speakerInput=prepareForm.querySelector('[name="meeting-speakers"]');
       const previousSpeakers=speakerInput.value;
       speakerInput.value='4';renderPrepareSelects();setPrepareMode('import');
@@ -2862,7 +3005,7 @@ try {
           }
           const meter=prepareForm.querySelector('.capture-status');
           const start=prepareForm.querySelector('.primary-action');
-          if(!visible(meter)||!visible(start)||meter.getBoundingClientRect().bottom>start.getBoundingClientRect().top||prepareForm.querySelector('fieldset').getBoundingClientRect().bottom>meter.getBoundingClientRect().top) errors.push(code+'/'+mode+': sources, audio levels or start button overlap');
+          const overlaps=(a,b)=>Math.min(a.right,b.right)-Math.max(a.left,b.left)>1&&Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top)>1;const mr=meter.getBoundingClientRect(),sr=start.getBoundingClientRect(),sources=prepareForm.querySelector('fieldset').getBoundingClientRect();if(!visible(meter)||!visible(start)||overlaps(mr,sr)||overlaps(sources,mr)||overlaps(sources,sr))errors.push(code+'/'+mode+': sources, audio levels or start button overlap');
         }
       }
       applyLanguage('zh');
@@ -2892,14 +3035,16 @@ try {
       if(exportButton.top<detail.getBoundingClientRect().top||exportButton.right>detail.getBoundingClientRect().right)errors.push('export outside fixed header');
       detail.querySelector('[data-open-summary-edit]').click();
       for(const action of ['data-cancel-inline-summary-edit','data-save-inline-summary']) if(!visible(detail.querySelector('['+action+']'))) errors.push('edit footer outside viewport');
-      if(parseFloat(getComputedStyle(detail.querySelector('.notes-editor')).fontSize)!==17) errors.push('legacy editor font');
+      if(parseFloat(getComputedStyle(detail.querySelector('.notes-editor')).fontSize)!==15) errors.push('document editor font');
       inlineSummaryEditor.setMode('markdown');
       if(!getComputedStyle(detail.querySelector('.notes-input')).fontFamily.includes('monospace')) errors.push('Markdown source must use monospace');
       detail.querySelector('[data-cancel-inline-summary-edit]').click();
       for(const theme of ['light','dark']){
         applyTheme(theme);
-        const expected=theme==='dark'?'rgb(25, 25, 25)':'rgb(255, 255, 255)';
-        if(getComputedStyle(document.body).backgroundColor!==expected||getComputedStyle(player).backgroundColor!==expected) errors.push(theme+': canvas background');
+        const expected=getComputedStyle(document.body).getPropertyValue('--color-surface').trim();
+        const canvasProbe=document.createElement('span');canvasProbe.style.backgroundColor=expected;document.body.append(canvasProbe);
+        const canvasColor=getComputedStyle(canvasProbe).backgroundColor;canvasProbe.remove();
+        if(getComputedStyle(document.body).backgroundColor!==canvasColor||getComputedStyle(player).backgroundColor!=='rgba(0, 0, 0, 0)') errors.push(theme+': canvas background');
         if(getComputedStyle(document.querySelector('.sidebar .new-meeting')).backgroundColor!=='rgba(0, 0, 0, 0)') errors.push(theme+': legacy navigation fill');
       }
       applyTheme('light');applyBackendDetail(meeting);
@@ -2993,13 +3138,21 @@ try {
           const bar=document.querySelector('.live-control-bar'),r=bar.getBoundingClientRect();
           const tools=[...bar.querySelectorAll('.live-caption-controls .icon-button')].filter(button=>button.getBoundingClientRect().width);
           const primary=bar.querySelector('.control-primary').getBoundingClientRect();
-          for(const button of tools){const b=button.getBoundingClientRect();if(b.left<r.left||b.right>primary.left||b.bottom>r.bottom||b.width<40||!button.getAttribute('aria-label')||!button.querySelector('svg'))errors.push(code+': tool bounds/label');}
+          for(const button of tools){const b=button.getBoundingClientRect();if(b.left<r.left||b.right>primary.left||b.bottom>r.bottom||b.width<32||!button.getAttribute('aria-label')||!button.querySelector('svg'))errors.push(code+': tool bounds/label');}
           if(bar.scrollWidth>bar.clientWidth+1||primary.right>r.right)errors.push(code+': toolbar overflow');
           for(const withTask of [false,true]){
             refinementCard.hidden=!withTask;syncTaskCardStack();
-            const device=document.querySelector('#mobile-nav').getBoundingClientRect(),settings=document.querySelector('.sidebar-settings').getBoundingClientRect(),sidebar=document.querySelector('.sidebar').getBoundingClientRect();
-            if(settings.bottom>sidebar.bottom||sidebar.bottom-settings.bottom>32||device.bottom>settings.top+1||settings.top-device.bottom>16)errors.push(code+': sidebar footer '+withTask);
-            if(withTask&&document.querySelector('[data-task-summary]').getBoundingClientRect().bottom>device.top)errors.push(code+': task overlaps device');
+            const footer=document.querySelector('.sidebar-footer'),footerBounds=footer.getBoundingClientRect(),sidebar=document.querySelector('.sidebar').getBoundingClientRect();
+            const footerControls=[document.querySelector('#all-meetings'),document.querySelector('#recently-deleted'),document.querySelector('.sidebar-settings')];
+            if(footerBounds.bottom>sidebar.bottom+1||sidebar.bottom-footerBounds.bottom>32||footerControls.some((control,index)=>{const r=control.getBoundingClientRect();return !footer.contains(control)||!control.checkVisibility()||r.left<footerBounds.left-1||r.right>footerBounds.right+1||r.top<footerBounds.top-1||r.bottom>footerBounds.bottom+1||(index&&r.top<footerControls[index-1].getBoundingClientRect().bottom-1);}))errors.push(code+': sidebar footer '+withTask);
+            const statusbar=document.querySelector('#desktop-statusbar'),statusBounds=statusbar.getBoundingClientRect();
+            if(Math.abs(statusBounds.height-24)>1||Math.abs(statusBounds.bottom-innerHeight)>1||statusBounds.left>1||Math.abs(statusBounds.width-innerWidth)>1)errors.push(code+': status bar geometry');
+            for(const control of [document.querySelector('#mobile-nav'),document.querySelector('[data-task-summary]')].filter(control=>control.checkVisibility())){const r=control.getBoundingClientRect();if(!statusbar.contains(control)||r.left<statusBounds.left-1||r.right>statusBounds.right+1||r.top<statusBounds.top-1||r.bottom>statusBounds.bottom+1)errors.push(code+': status control outside bar');}
+            if(withTask){
+              const summary=document.querySelector('[data-task-summary]');if(taskCards.classList.contains('is-collapsed'))summary.click();
+              const bounds=taskCards.getBoundingClientRect();if(!taskCards.checkVisibility()||bounds.left<0||bounds.right>innerWidth+1||bounds.top<0||bounds.bottom>statusBounds.top)errors.push(code+': task popover outside viewport');
+              summary.click();
+            }
           }
           document.querySelector('#translation-toggle').click();
           const options=document.querySelector('#translation-options').getBoundingClientRect(),toggle=document.querySelector('#translation-toggle').getBoundingClientRect();
@@ -3138,17 +3291,36 @@ try {
   const designStates = await client.send('Runtime.evaluate', {
     expression: `(async()=>{
       const errors=[];
+      const sidebar=document.querySelector('.sidebar'),libraryToggle=document.querySelector('#library-toggle'),shell=document.querySelector('.app-shell');
+      for(const collapsed of [false,true]){
+        await showView('home');
+        if(shell.classList.contains('is-library-hidden')!==collapsed)libraryToggle.click();
+        await showView('settings');await new Promise(resolve=>setTimeout(resolve,260));
+        if(Math.abs(sidebar.getBoundingClientRect().width)>1||sidebar.querySelector('.meeting-list').checkVisibility({visibilityProperty:true})||Math.abs(document.querySelector('.workspace').getBoundingClientRect().left)>1||shell.classList.contains('is-library-hidden')!==collapsed)errors.push('settings did not replace meeting navigation or changed collapse preference');
+        await openModal('models');
+        const back=settingsModal.querySelector('.settings-workspace-back');
+        if(!back?.checkVisibility())errors.push('settings return action missing');
+        else{back.click();await pageTransition;await new Promise(resolve=>setTimeout(resolve,260));}
+        if(activeView!=='home'||!settingsModal.hidden||shell.classList.contains('is-library-hidden')!==collapsed||Math.abs(sidebar.getBoundingClientRect().width-(collapsed?0:innerWidth<=1050?240:260))>1)errors.push('settings return did not preserve sidebar preference '+collapsed);
+      }
+      if(shell.classList.contains('is-library-hidden'))libraryToggle.click();
       await showView('settings');
-      document.querySelector('.sidebar [data-view="settings"]').focus();
-      await new Promise(resolve=>setTimeout(resolve,260));
       const navigation=document.querySelector('#settings-view .settings-navigation');
       if(navigation.querySelectorAll('[data-settings-page]').length!==8) errors.push('general navigation');
+      const search=navigation.querySelector('[data-settings-search]');
+      search.value=t('模型库');search.dispatchEvent(new Event('input',{bubbles:true}));
+      const matches=[...navigation.querySelectorAll('[data-settings-page]')].filter(button=>button.checkVisibility());
+      if(matches.length!==1||matches[0].dataset.settingsPage!=='models'||activeView!=='settings')errors.push('settings search does not filter navigation in place');
+      search.value='__absent__';search.dispatchEvent(new Event('input',{bubbles:true}));
+      if(!navigation.querySelector('.settings-search-empty').checkVisibility())errors.push('settings search missing empty state');
+      search.value='';search.dispatchEvent(new Event('input',{bubbles:true}));
+      if([...navigation.querySelectorAll('[data-settings-page]')].some(button=>!button.checkVisibility()))errors.push('settings search clearing did not restore navigation');
       await openModal('models');
-      // 焦点移出主侧栏会触发收起动画；同一帧比较两页，避免混用动画前后坐标。
+      // 设置目录替代会议导航，切换分区保持内容起点。
       await new Promise(requestAnimationFrame);
       const general=document.querySelector('.settings-general-main').getBoundingClientRect();
       const panel=settingsModal.querySelector('.modal-panel').getBoundingClientRect();
-      if(Math.abs(general.left-panel.left)>1 || Math.abs(navigation.getBoundingClientRect().width-200)>1) errors.push('settings content origin changed');
+      if(Math.abs(general.left-panel.left)>1 || Math.abs(navigation.getBoundingClientRect().width-(innerWidth<=1050?220:280))>1) errors.push('settings content origin changed');
       if(!settingsModal.querySelector('.rating-scale') || settingsModal.querySelector('.rating-scale').children.length!==1) errors.push('rating is not continuous');
       settingsModal.querySelector('[data-model-library-tab="available"]').click();
       const modelRows=[...settingsModal.querySelectorAll('.model-library-item')];
@@ -3166,7 +3338,7 @@ try {
       await showView('home');
       const deleted=document.getElementById('recently-deleted').getBoundingClientRect();
       const workspace=document.querySelector('.workspace-heading').getBoundingClientRect();
-      if(deleted.top>=workspace.top || !document.querySelector('.new-workspace[aria-label]')) errors.push('sidebar order');
+      if(!document.querySelector('.sidebar').contains(document.getElementById('recently-deleted'))||!document.querySelector('.library-panel').contains(document.querySelector('.workspace-heading'))||!document.querySelector('.new-workspace[aria-label]')) errors.push('single sidebar navigation missing');
       await showView('detail');detailActiveTab='notes';renderMeetingDetail();
       document.querySelector('[data-edit-notes]').click();
       const saved=persistNotes;
@@ -3227,7 +3399,9 @@ try {
       const toolbar=document.querySelector('#detail-view .detail-notes-edit .notes-toolbar');
       const first=document.querySelector('#detail-view .notes-editor > :first-child');
       const tabbar=document.querySelector('#detail-view .detail-content-toolbar');
-      if(Math.abs(toolbar.getBoundingClientRect().top-tabbar.getBoundingClientRect().bottom-16)>1)errors.push('editor duplicated top padding');
+      const editorPanel=document.querySelector('#detail-view .detail-notes-panel');
+      const topInset=parseFloat(getComputedStyle(editorPanel).paddingTop);
+      if(Math.abs(toolbar.getBoundingClientRect().top-tabbar.getBoundingClientRect().bottom-topInset)>2)errors.push('editor duplicated top padding');
       if(first && first.getBoundingClientRect().top-toolbar.getBoundingClientRect().bottom>32)errors.push('editor heading separated from toolbar');
       if(document.querySelectorAll('[data-detail-tab]').length!==3)errors.push('content tab removed');
       document.querySelector('[data-notes-cancel]').click();
@@ -3236,7 +3410,7 @@ try {
         document.getAnimations().forEach(a=>a.effect.getComputedTiming().iterations===Infinity?a.pause():a.finish());
         await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
         const panel=settingsModal.querySelector('.modal-panel'),p=panel.getBoundingClientRect(),w=document.querySelector('.workspace').getBoundingClientRect();
-        if(Math.abs(p.left+p.width/2-w.left-w.width/2+16)>1||p.top<0||p.bottom>innerHeight+1)errors.push(code+': export position');
+        if(Math.abs(p.left+p.width/2-w.left-w.width/2)>1||p.top<0||p.bottom>innerHeight+1)errors.push(code+': export position');
         const buttons=[...panel.querySelectorAll('.export-actions button')];
         const checkActions=()=>{if(buttons.some(b=>{const r=b.getBoundingClientRect();return r.left<p.left||r.right>p.right+1||r.top<p.top||r.bottom>p.bottom+1;}))errors.push(code+': export actions clipped');};
         checkActions();
@@ -3309,8 +3483,8 @@ try {
         for(const selector of ['.play','.player-source','.player-meta','.player-track']){const r=player.querySelector(selector).getBoundingClientRect();if(r.left<p.left-1||r.right>p.right+1||r.top<p.top-1||r.bottom>p.bottom+1)errors.push(selector+' outside player');}
         if(p.top<document.querySelector('#detail-view .detail-layout').getBoundingClientRect().bottom-1)errors.push('player overlaps reading region');
       }else if(${JSON.stringify(name)}==='tasks'){
-        const nav=document.querySelector('.workspace-subnav');nav.scrollTop=0;
-        const first=nav.querySelector('.workspace-item').getBoundingClientRect(),n=nav.getBoundingClientRect();
+        const nav=meetingList;nav.scrollTop=0;
+        const first=nav.querySelector('.sidebar-workspace-toggle').getBoundingClientRect(),n=nav.getBoundingClientRect();
         if(first.top<n.top||first.bottom>n.bottom+1)errors.push('first workspace clipped by tasks');
         for(const selector of ['#mobile-nav','.sidebar-settings']){const r=document.querySelector(selector).getBoundingClientRect();if(r.bottom>innerHeight+1)errors.push(selector+' outside sidebar');}
       }else{
@@ -3368,6 +3542,7 @@ try {
       miniMeeting.hidden=false;miniTitle.textContent=longTitle;miniTimer.textContent='00:12:36';
       miniPlayback.hidden=false;document.querySelector('#mini-playback-title').textContent=longTitle;
       syncTaskCardStack(miniPlayback);
+      if(taskCards.classList.contains('is-collapsed'))document.querySelector('[data-task-summary]').click();
       const minimize=refinementCard.querySelector('[data-minimize-task-card]');
       minimize.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));
       if(!refinementCard.classList.contains('is-task-card-back'))errors.push('child key activates background card');
@@ -3409,9 +3584,9 @@ try {
       document.activeElement.blur();await new Promise(resolve=>setTimeout(resolve,250));
       if(!settingsModal.hidden||activeModal||activeView!=='live'||!meetingActive||document.querySelector('.app-shell').inert)errors.push('settings remains over live meeting');
       for(const card of [...taskCards.children].filter(c=>!c.hidden)){
-        if(card.scrollWidth>card.clientWidth+1)errors.push(card.id+': narrow sidebar overflow');
+        if(card.scrollWidth>card.clientWidth+1)errors.push(card.id+': task popover horizontal overflow');
         const visibleText=[...card.querySelectorAll('header p,strong,time,.task-card-actions')].some(e=>e.getBoundingClientRect().width>0);
-        if(visibleText)errors.push(card.id+': narrow sidebar exposes full task text');
+        if(!visibleText||!document.querySelector('.library-panel').contains(card))errors.push(card.id+': persistent library lost task text');
       }
       meetingActive=false;miniMeeting.hidden=true;miniPlayback.hidden=true;refinementCard.hidden=true;
       await showView('home');await showLibraryNav('all-meetings');
@@ -3547,7 +3722,8 @@ try {
       closeModal();await showView('live');meetingActive=true;
       const layout=document.querySelector('.live-layout');
       if(layout.querySelector('[data-toggle-live-mode]'))errors.push('retired layout toggle remains');
-      if(Math.abs(layout.querySelector('.live-notes').getBoundingClientRect().width-layout.querySelector('.live-captions').getBoundingClientRect().width)>1)errors.push('live columns are not equal');
+      const notesBounds=layout.querySelector('.live-notes').getBoundingClientRect(),captionsBounds=layout.querySelector('.live-captions').getBoundingClientRect();
+      if(notesBounds.left>=captionsBounds.left||Math.abs(notesBounds.width/(notesBounds.width+captionsBounds.width)-.6)>.01||Math.abs(notesBounds.top-captionsBounds.top)>1)errors.push('live notes must lead the 60/40 split');
       for(const code of Object.keys(catalog)){
         applyLanguage(code);
         for(const header of layout.querySelectorAll('.live-section-head')){
@@ -3930,7 +4106,7 @@ try {
       ],
       [
         'desktop-component-states',
-        `(async()=>{persistNotes=window.visualPersistNotes;document.querySelector('[data-notes-cancel]').click();await showView('prepare');prepareForm.querySelector('[name="meeting-speakers"]').closest('.flow-select').querySelector('.flow-select-toggle').click();})()`,
+        `(async()=>{persistNotes=window.visualPersistNotes;document.querySelector('[data-notes-cancel]').click();await showView('prepare');prepareForm.querySelector('details.prepare-options').open=true;prepareForm.querySelector('[name="meeting-speakers"]').closest('.flow-select').querySelector('.flow-select-toggle').click();})()`,
       ],
       [
         'desktop-live-expanded',
@@ -3995,7 +4171,7 @@ try {
       ],
       [
         'desktop-task-media',
-        `(async()=>{document.querySelector('.workspace-dialog [data-close-modal]').click();await switchWorkspace('');uiData.meetings=window.visualLibraryMeetings;renderMeetingList();miniMeeting.hidden=false;miniTitle.textContent='产品周会';miniTimer.textContent='00:12:36';miniPlayback.hidden=false;miniPlayback.querySelector('#mini-playback-title').textContent='客户访谈';miniPlayback.querySelector('#mini-playback-state').textContent='已暂停';if(refinementCard.classList.contains('is-minimized'))toggleTaskCardMinimized(refinementCard,refinementCard.querySelector('[data-minimize-task-card]'));showRefinementProgress(42,100,'产品周会',currentMeetingDetail.id,'正在识别');document.querySelector('.workspace-subnav').classList.remove('is-collapsed');setTaskCardPaused(refinementCard,false);syncTaskCardStack(refinementCard);await document.fonts.ready;document.getAnimations().forEach(a=>a.effect.getComputedTiming().iterations===Infinity?a.pause():a.finish());await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));for(const card of taskCards.querySelectorAll('.is-task-card-back')){const r=card.getBoundingClientRect(),h=card.querySelector('header').getBoundingClientRect();if(h.top<r.top||h.bottom>r.top+48)throw new Error('后层任务标题不可见');}const nav=document.querySelector('.workspace-subnav'),first=nav.querySelector('.workspace-item');nav.scrollTop=0;if(first.getBoundingClientRect().bottom>nav.getBoundingClientRect().bottom+1)throw new Error('任务挤出首个工作区 '+JSON.stringify({first:first.getBoundingClientRect().toJSON(),nav:nav.getBoundingClientRect().toJSON(),sidebar:document.querySelector('.sidebar').getBoundingClientRect().toJSON()}));})()`,
+        `(async()=>{document.querySelector('.workspace-dialog [data-close-modal]').click();await switchWorkspace('');uiData.meetings=window.visualLibraryMeetings;renderMeetingList();miniMeeting.hidden=false;miniTitle.textContent='产品周会';miniTimer.textContent='00:12:36';miniPlayback.hidden=false;miniPlayback.querySelector('#mini-playback-title').textContent='客户访谈';miniPlayback.querySelector('#mini-playback-state').textContent='已暂停';if(refinementCard.classList.contains('is-minimized'))toggleTaskCardMinimized(refinementCard,refinementCard.querySelector('[data-minimize-task-card]'));showRefinementProgress(42,100,'产品周会',currentMeetingDetail.id,'正在识别');document.querySelector('.workspace-subnav').classList.remove('is-collapsed');setTaskCardPaused(refinementCard,false);syncTaskCardStack(refinementCard);if(taskCards.classList.contains('is-collapsed'))document.querySelector('[data-task-summary]').click();await document.fonts.ready;document.getAnimations().forEach(a=>a.effect.getComputedTiming().iterations===Infinity?a.pause():a.finish());await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));for(const card of taskCards.querySelectorAll('.is-task-card-back')){const r=card.getBoundingClientRect(),h=card.querySelector('header').getBoundingClientRect();if(h.top<r.top||h.bottom>r.top+48)throw new Error('后层任务标题不可见');}const nav=meetingList,first=nav.querySelector('.sidebar-workspace-toggle');nav.scrollTop=0;if(first.getBoundingClientRect().bottom>nav.getBoundingClientRect().bottom+1)throw new Error('任务挤出首个工作区 '+JSON.stringify({first:first.getBoundingClientRect().toJSON(),nav:nav.getBoundingClientRect().toJSON(),sidebar:document.querySelector('.sidebar').getBoundingClientRect().toJSON()}));})()`,
       ],
       [
         'desktop-models-downloading',
@@ -4104,7 +4280,7 @@ try {
       ],
       [
         'desktop-live-task-summary-compact-v11',
-        `(async()=>{meetingActive=true;await showView('live');taskCards.querySelectorAll('.task-card-stack-item').forEach(card=>card.hidden=true);miniMeeting.hidden=false;miniTimer.textContent='18:42';miniPlayback.hidden=false;refinementCard.hidden=false;syncTaskCardStack(miniMeeting);document.activeElement?.blur();})()`,
+        `(async()=>{meetingActive=true;await showView('live');taskCards.querySelectorAll('.task-card-stack-item').forEach(card=>card.hidden=true);miniMeeting.hidden=false;miniTimer.textContent='18:42';miniPlayback.hidden=false;refinementCard.hidden=false;syncTaskCardStack(miniMeeting);if(!taskCards.classList.contains('is-collapsed'))document.querySelector('[data-task-summary]').click();document.activeElement?.blur();})()`,
       ],
       [
         'desktop-live-task-summary-compact-error-v11',
@@ -4120,7 +4296,7 @@ try {
       ],
       [
         'desktop-tasks-download-states',
-        `(()=>{const models=onboardingAsrModels().slice(0,3);models.forEach((model,i)=>modelDownloads.set(model.id,{received:model.size_bytes*.42,total:model.size_bytes,paused:i===1,error:i===2?'网络连接暂时中断，请重试。':undefined}));renderModelDownloadQueue();syncTaskCardStack();taskCards.scrollTop=taskCards.scrollHeight;})()`,
+        `(()=>{const models=onboardingAsrModels().slice(0,3);models.forEach((model,i)=>modelDownloads.set(model.id,{received:model.size_bytes*.42,total:model.size_bytes,paused:i===1,error:i===2?'网络连接暂时中断，请重试。':undefined}));renderModelDownloadQueue();syncTaskCardStack();if(taskCards.classList.contains('is-collapsed'))document.querySelector('[data-task-summary]').click();taskCards.scrollTop=taskCards.scrollHeight;})()`,
       ],
       [
         'desktop-settings-with-tasks',
@@ -4137,7 +4313,7 @@ try {
       ],
       [
         'desktop-tasks-paused',
-        `(async()=>{closeModal();await new Promise(resolve=>setTimeout(resolve,250));setTaskCardPaused(refinementCard,true);syncTaskCardStack(refinementCard);taskCards.scrollTop=taskCards.scrollHeight;})()`,
+        `(async()=>{closeModal();await new Promise(resolve=>setTimeout(resolve,250));setTaskCardPaused(refinementCard,true);syncTaskCardStack(refinementCard);if(taskCards.classList.contains('is-collapsed'))document.querySelector('[data-task-summary]').click();taskCards.scrollTop=taskCards.scrollHeight;})()`,
       ],
       [
         'desktop-tasks-minimized',
@@ -4147,12 +4323,12 @@ try {
     captures.push(
       [
         'desktop-sidebar-workspace-selector-tasks',
-        `(async()=>{closeModal();await new Promise(r=>setTimeout(r,250));await switchWorkspace('');uiData.meetings=window.visualLibraryMeetings;renderMeetingList();taskCards.querySelectorAll('.is-minimized').forEach(c=>toggleTaskCardMinimized(c,c.querySelector('[data-minimize-task-card]')));workspaces=Array.from({length:24},(_,i)=>({id:'visual-workspace-'+i,name:['产品','访谈','海外','未分类'][i%4]+(i>3?' '+i:''),meeting_count:i}));renderWorkspaceNav();miniMeeting.hidden=false;miniTitle.textContent='产品周会';miniTimer.textContent='00:12:36';miniPlayback.hidden=false;document.querySelector('#mini-playback-title').textContent='客户访谈';modelDownloads.clear();renderModelDownloadQueue();showRefinementProgress(42,100,'产品周会',currentMeetingDetail.id,'正在识别');syncTaskCardStack(refinementCard);taskCards.scrollTop=0;})()`,
+        `(async()=>{closeModal();await new Promise(r=>setTimeout(r,250));await switchWorkspace('');uiData.meetings=window.visualLibraryMeetings;renderMeetingList();taskCards.querySelectorAll('.is-minimized').forEach(c=>toggleTaskCardMinimized(c,c.querySelector('[data-minimize-task-card]')));workspaces=Array.from({length:24},(_,i)=>({id:'visual-workspace-'+i,name:['产品','访谈','海外','未分类'][i%4]+(i>3?' '+i:''),meeting_count:i}));renderWorkspaceNav();miniMeeting.hidden=false;miniTitle.textContent='产品周会';miniTimer.textContent='00:12:36';miniPlayback.hidden=false;document.querySelector('#mini-playback-title').textContent='客户访谈';modelDownloads.clear();renderModelDownloadQueue();showRefinementProgress(42,100,'产品周会',currentMeetingDetail.id,'正在识别');syncTaskCardStack(refinementCard);if(taskCards.classList.contains('is-collapsed'))document.querySelector('[data-task-summary]').click();taskCards.scrollTop=0;})()`,
       ],
       ['desktop-library-select-entry-v11', `(()=>{})()`],
       [
         'desktop-sidebar-workspace-popover-tasks',
-        `(()=>{onboardingAsrModels().slice(0,3).forEach(model=>modelDownloads.set(model.id,{received:model.size_bytes*.42,total:model.size_bytes}));renderModelDownloadQueue();showTranslationProgress(56,100,'en');showSummaryProgress(68,100,'summary.generating',uiData.meetings[0].id);document.querySelectorAll('#translation-progress,#summary-progress').forEach(card=>card.hidden=false);syncTaskCardStack();taskCards.scrollTop=0;document.querySelector('#workspace-selector').click();})()`,
+        `(()=>{onboardingAsrModels().slice(0,3).forEach(model=>modelDownloads.set(model.id,{received:model.size_bytes*.42,total:model.size_bytes}));renderModelDownloadQueue();showTranslationProgress(56,100,'en');showSummaryProgress(68,100,'summary.generating',uiData.meetings[0].id);document.querySelectorAll('#translation-progress,#summary-progress').forEach(card=>card.hidden=false);syncTaskCardStack();if(taskCards.classList.contains('is-collapsed'))document.querySelector('[data-task-summary]').click();taskCards.scrollTop=0;document.querySelector('#workspace-selector').click();})()`,
       ],
       [
         'desktop-sidebar-workspace-search',
@@ -4226,7 +4402,7 @@ try {
       ],
       [
         'desktop-mobile-discovery-pairing',
-        `(async()=>{closeModal();await new Promise(r=>setTimeout(r,250));await showLibraryNav('all-meetings');uiData.meetings=window.visualLibraryMeetings;renderMeetingList();await openModal('device-connection');document.querySelector('#mobile-pair').click();const deadline=Date.now()+6000;while(!document.querySelector('#mobile-pair-dialog').open&&Date.now()<deadline)await new Promise(r=>setTimeout(r,25));if(!document.querySelector('#mobile-pair-dialog').open)throw new Error('配对弹窗未打开');settingsModal.hidden=true;settingsModal.classList.remove('modal-enter');document.querySelector('.app-shell').inert=false;})()`,
+        `(async()=>{closeModal();await new Promise(r=>setTimeout(r,250));await showLibraryNav('all-meetings');uiData.meetings=window.visualLibraryMeetings;renderMeetingList();await openModal('device-connection');document.querySelector('#mobile-dialog [data-mobile-panel]:not([hidden]) [data-mobile-page-step=pair], #mobile-dialog [data-mobile-panel=pair]:not([hidden]) #mobile-pair').click();const deadline=Date.now()+6000;while(!document.querySelector('#mobile-pair-dialog').open&&Date.now()<deadline)await new Promise(r=>setTimeout(r,25));if(!document.querySelector('#mobile-pair-dialog').open)throw new Error('配对弹窗未打开');settingsModal.hidden=true;settingsModal.classList.remove('modal-enter');document.querySelector('.app-shell').inert=false;})()`,
       ],
       [
         'desktop-mobile-pairing-expired',
@@ -4261,9 +4437,9 @@ try {
         await client.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 800, y: 100 });
         await new Promise((resolve) => setTimeout(resolve, 250));
         const valid = await evaluate(
-          `(()=>{const summary=document.querySelector('[data-task-summary]'),r=summary.getBoundingClientRect(),device=document.querySelector('#mobile-nav').getBoundingClientRect();return Math.abs(r.width-52)<1&&Math.abs(r.height-44)<1&&device.top>=r.bottom&&device.top-r.bottom<32&&getComputedStyle(taskCards).display==='none'&&summary.textContent.includes('3')&&summary.textContent.includes('18:42');})()`,
+          `(()=>{const summary=document.querySelector('[data-task-summary]'),r=summary.getBoundingClientRect(),bar=document.querySelector('#desktop-statusbar'),bounds=bar.getBoundingClientRect(),device=document.querySelector('#mobile-nav').getBoundingClientRect();return bar.contains(summary)&&Math.abs(bounds.height-24)<1&&Math.abs(bounds.bottom-innerHeight)<1&&r.width>0&&r.top>=bounds.top-1&&r.bottom<=bounds.bottom+1&&(device.right<=r.left+1||device.left>=r.right-1)&&device.right<=bounds.right+1&&getComputedStyle(taskCards).display==='none'&&summary.getAttribute('aria-expanded')==='false'&&summary.textContent.includes('3')&&summary.textContent.includes('18:42');})()`,
         );
-        if (!valid) throw Error(name + ': D51汇总几何/数量/计时/底部定位不正确');
+        if (!valid) throw Error(name + ': 底部任务汇总几何/数量/计时不正确');
       }
       if (name === 'desktop-import-selected') {
         const audioPath = await evaluate(
@@ -4341,7 +4517,7 @@ try {
       }
       if (['desktop-detail', 'desktop-notes-edit'].includes(name)) {
         const rhythm = await evaluate(
-          `(()=>{const root=document.querySelector('.detail-notes-content,.detail-notes-edit .notes-editor');const first=root.querySelector('h1'),section=root.querySelector('h2'),paragraph=root.querySelector('p');return first&&getComputedStyle(first).fontSize==='28px'&&getComputedStyle(section).fontSize==='20px'&&getComputedStyle(paragraph).fontSize==='16px'&&parseFloat(getComputedStyle(section).marginTop)===20;})()`,
+          `(()=>{const root=document.querySelector('.detail-notes-content,.detail-notes-edit .notes-editor');const first=root.querySelector('h1'),section=root.querySelector('h2'),paragraph=root.querySelector('p');return first&&getComputedStyle(first).fontSize==='26px'&&getComputedStyle(section).fontSize==='18px'&&getComputedStyle(paragraph).fontSize==='15px'&&parseFloat(getComputedStyle(section).marginTop)===28;})()`,
         );
         if (!rhythm) throw Error(name + ': 阅读与编辑的排版层级不一致');
       }
@@ -4367,9 +4543,9 @@ try {
         ['desktop-library-select-entry-v11', 'desktop-library-selection-empty-v11'].includes(name)
       ) {
         const valid = await evaluate(
-          `(()=>{const button=document.querySelector('#meeting-selection-toggle'),r=button.getBoundingClientRect(),icon=button.querySelector('svg').getBoundingClientRect(),start=document.querySelector('#home-view .page-head > .primary-action').getBoundingClientRect();if(Math.abs(r.height-44)>1||Math.abs(icon.width-20)>1||Math.abs(start.left-r.right-12)>1)return false;const fields=[...meetingList.querySelectorAll('.meeting-row:not([hidden]) [data-select-meeting]')];if(!meetingSelectionMode)return batchToolbar.hidden&&fields.every(f=>f.hidden)&&button.getAttribute('aria-pressed')==='false';return selectedMeetingKeys.size===0&&!batchToolbar.hidden&&fields.every(f=>!f.hidden&&!f.checked)&&batchToolbar.querySelector('[data-batch-export]').disabled&&batchToolbar.querySelector('[data-batch-delete]').disabled&&!batchToolbar.querySelector('[data-batch-clear]').disabled&&getComputedStyle(batchToolbar.querySelector('[data-batch-delete]')).color===getComputedStyle(batchToolbar.querySelector('[data-batch-export]')).color&&batchToolbar.querySelector('[data-batch-count]').textContent===t('已选择')+' 0 / '+fields.length;})()`,
+          `(()=>{const button=document.querySelector('#meeting-selection-toggle'),r=button.getBoundingClientRect(),icon=button.querySelector('svg').getBoundingClientRect(),toolbar=document.querySelector('.library-toolbar').getBoundingClientRect();if(r.height<28||icon.width<15||icon.right>r.right||icon.bottom>r.bottom||r.left<toolbar.left||r.right>toolbar.right+1||r.top<toolbar.top||r.bottom>toolbar.bottom+1)return false;const fields=[...meetingList.querySelectorAll('.meeting-row:not([hidden]) [data-select-meeting]')];if(!meetingSelectionMode)return batchToolbar.hidden&&fields.every(f=>f.hidden)&&button.getAttribute('aria-pressed')==='false';return selectedMeetingKeys.size===0&&!batchToolbar.hidden&&fields.every(f=>!f.hidden&&!f.checked)&&batchToolbar.querySelector('[data-batch-export]').disabled&&batchToolbar.querySelector('[data-batch-delete]').disabled&&!batchToolbar.querySelector('[data-batch-clear]').disabled&&getComputedStyle(batchToolbar.querySelector('[data-batch-delete]')).color===getComputedStyle(batchToolbar.querySelector('[data-batch-export]')).color&&batchToolbar.querySelector('[data-batch-count]').textContent===t('已选择')+' 0 / '+fields.length;})()`,
         );
-        if (!valid) throw new Error(name + ': 选择入口几何或0项初始状态不符合D53/D54');
+        if (!valid) throw new Error(name + ': 选择入口几何或0项初始状态不正确');
       }
       const shot = await client.send('Page.captureScreenshot', {
         format: 'png',
@@ -4428,7 +4604,7 @@ try {
         imageWidth: png.readUInt32BE(16),
         imageHeight: png.readUInt32BE(20),
         ...(await evaluate(
-          `({ width:innerWidth, height:innerHeight, windowWidth:outerWidth, windowHeight:outerHeight, dpr:devicePixelRatio, overflow:document.body.scrollWidth>innerWidth+1, modal:{hidden:settingsModal.hidden,classes:settingsModal.className,opacity:getComputedStyle(settingsModal).opacity,panelOpacity:getComputedStyle(settingsModal.querySelector('.modal-panel')).opacity}, font:getComputedStyle(document.body).fontFamily, fontWeight:getComputedStyle(document.body).fontWeight, typography:['.page-title','.meeting-title','.detail-title','.notes-body','.transcript-text','.primary-button','.secondary-button','.setting-label'].flatMap(selector=>[...document.querySelectorAll(selector)].filter(e=>e.getBoundingClientRect().width&&e.getBoundingClientRect().height).slice(0,3).map(e=>({selector,weight:getComputedStyle(e).fontWeight,size:getComputedStyle(e).fontSize}))), regions:['.sidebar','.window-bar','#settings-view .settings-navigation','.settings-page .settings-navigation','.settings-general-main','.settings-page .modal-panel','#meeting-form','.detail-layout','.player'].map(selector=>{const e=document.querySelector(selector),r=e?.getBoundingClientRect();return {selector,rect:r?.toJSON(),display:e&&getComputedStyle(e).display}}), onboarding:[...document.querySelectorAll('.onboarding-page-content')].map(e=>({height:e.clientHeight,scroll:e.scrollHeight})), actions:[...document.querySelectorAll('.onboarding-actions,.onboarding-tour-actions')].map(e=>({bottom:e.getBoundingClientRect().bottom})) })`,
+          `({ width:innerWidth, height:innerHeight, windowWidth:outerWidth, windowHeight:outerHeight, dpr:devicePixelRatio, overflow:document.body.scrollWidth>innerWidth+1, modal:{hidden:settingsModal.hidden,classes:settingsModal.className,opacity:getComputedStyle(settingsModal).opacity,panelOpacity:getComputedStyle(settingsModal.querySelector('.modal-panel')).opacity}, font:getComputedStyle(document.body).fontFamily, fontWeight:getComputedStyle(document.body).fontWeight, typography:['.page-title','.meeting-title','.detail-title','.notes-body','.transcript-text','.primary-button','.secondary-button','.setting-label'].flatMap(selector=>[...document.querySelectorAll(selector)].filter(e=>e.getBoundingClientRect().width&&e.getBoundingClientRect().height).slice(0,3).map(e=>({selector,weight:getComputedStyle(e).fontWeight,size:getComputedStyle(e).fontSize}))), regions:['.sidebar','.library-panel','#desktop-statusbar','#task-cards','.window-bar','#settings-view .settings-navigation','.settings-page .settings-navigation','.settings-general-main','.settings-page .modal-panel','#meeting-form','.detail-layout','.player'].map(selector=>{const e=document.querySelector(selector),r=e?.getBoundingClientRect();return {selector,rect:r?.toJSON(),display:e&&getComputedStyle(e).display}}), onboarding:[...document.querySelectorAll('.onboarding-page-content')].map(e=>({height:e.clientHeight,scroll:e.scrollHeight})), actions:[...document.querySelectorAll('.onboarding-actions,.onboarding-tour-actions')].map(e=>({bottom:e.getBoundingClientRect().bottom})) })`,
         )),
       });
     }
@@ -4457,7 +4633,7 @@ try {
         const nativeScenes = [
           [
             'desktop-sidebar-tasks-small-window',
-            `(async()=>{meetingActive=false;await showLibraryNav('all-meetings');uiData.meetings=window.visualLibraryMeetings;renderMeetingList();miniMeeting.hidden=false;miniPlayback.hidden=false;refinementCard.hidden=false;syncTaskCardStack();taskCards.scrollTop=0;})()`,
+            `(async()=>{meetingActive=false;await showLibraryNav('all-meetings');uiData.meetings=window.visualLibraryMeetings;renderMeetingList();miniMeeting.hidden=false;miniPlayback.hidden=false;refinementCard.hidden=false;syncTaskCardStack();if(taskCards.classList.contains('is-collapsed'))document.querySelector('[data-task-summary]').click();taskCards.scrollTop=0;})()`,
           ],
           [
             'desktop-sidebar-workspace-small-window',
@@ -4473,7 +4649,7 @@ try {
           ],
           [
             'desktop-live-task-summary-native-minimum',
-            `(async()=>{closeModal();meetingActive=true;await showView('live');taskCards.querySelectorAll('.task-card-stack-item').forEach(card=>card.hidden=true);miniMeeting.hidden=false;miniPlayback.hidden=false;refinementCard.hidden=false;miniTimer.textContent='18:42';syncTaskCardStack(miniMeeting);document.activeElement?.blur();})()`,
+            `(async()=>{closeModal();meetingActive=true;await showView('live');taskCards.querySelectorAll('.task-card-stack-item').forEach(card=>card.hidden=true);miniMeeting.hidden=false;miniPlayback.hidden=false;refinementCard.hidden=false;miniTimer.textContent='18:42';syncTaskCardStack(miniMeeting);if(!taskCards.classList.contains('is-collapsed'))document.querySelector('[data-task-summary]').click();document.activeElement?.blur();})()`,
           ],
           [
             'desktop-detail-transcript-native-minimum',
@@ -4485,7 +4661,7 @@ try {
           await client.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 800, y: 100 });
           await delay(350);
           const geometry = await evaluate(
-            `(()=>{const errors=[];if(document.querySelector('dialog[open]')||(!settingsModal.hidden&&!['upgrade-log','device-connection'].includes(activeModal)))errors.push('前序弹窗未关闭');if(activeModal==='upgrade-log'&&settingsModal.querySelector('.upgrade-log-actions').getBoundingClientRect().bottom>innerHeight+1)errors.push('升级操作溢出');if(activeView==='home'){const nav=document.querySelector('.workspace-subnav').getBoundingClientRect(),selector=document.querySelector('#workspace-selector').getBoundingClientRect(),device=document.querySelector('#mobile-nav').getBoundingClientRect();if(selector.bottom>nav.bottom+1||device.bottom>innerHeight+1||taskCards.getBoundingClientRect().bottom>device.top+1)errors.push('侧栏分区溢出');if(workspacePicker&&workspacePicker.getBoundingClientRect().bottom>innerHeight+1)errors.push('工作区菜单溢出');}if(document.body.scrollWidth>innerWidth+1)errors.push('横向溢出');const summary=document.querySelector('[data-task-summary]').getBoundingClientRect(),player=document.querySelector('#detail-view .player').getBoundingClientRect();if(activeView==='live'&&(Math.abs(summary.width-52)>1||Math.abs(summary.height-44)>1||summary.bottom>document.querySelector('#mobile-nav').getBoundingClientRect().top))errors.push('汇总入口错位');if(activeView==='detail'&&(document.querySelectorAll('[data-transcript-save]').length!==1||player.bottom>innerHeight+1))errors.push('编辑动作或播放器溢出');return {errors,width:innerWidth,height:innerHeight,dpr:devicePixelRatio,overflow:document.body.scrollWidth>innerWidth+1};})()`,
+            `(()=>{const errors=[];if(document.querySelector('dialog[open]')||(!settingsModal.hidden&&!['upgrade-log','device-connection'].includes(activeModal)))errors.push('前序弹窗未关闭');if(activeModal==='upgrade-log'&&settingsModal.querySelector('.upgrade-log-actions').getBoundingClientRect().bottom>innerHeight+1)errors.push('升级操作溢出');if(activeView==='home'){const nav=document.querySelector('.workspace-subnav').getBoundingClientRect(),selector=document.querySelector('#workspace-selector').getBoundingClientRect(),device=document.querySelector('#mobile-nav').getBoundingClientRect();if(selector.bottom>nav.bottom+1||device.bottom>innerHeight+1||(taskCards.checkVisibility()&&taskCards.getBoundingClientRect().bottom>document.querySelector('#desktop-statusbar').getBoundingClientRect().top))errors.push('侧栏分区溢出');if(workspacePicker&&workspacePicker.getBoundingClientRect().bottom>innerHeight+1)errors.push('工作区菜单溢出');}if(document.body.scrollWidth>innerWidth+1)errors.push('横向溢出');const summary=document.querySelector('[data-task-summary]').getBoundingClientRect(),player=document.querySelector('#detail-view .player').getBoundingClientRect();if(taskCards.checkVisibility()){const tasks=taskCards.getBoundingClientRect();if(tasks.top<0||tasks.left<0||tasks.right>innerWidth+1||tasks.bottom>document.querySelector('#desktop-statusbar').getBoundingClientRect().top)errors.push('任务弹层超出视口或覆盖状态栏');}if(activeView==='detail'&&(document.querySelectorAll('[data-transcript-save]').length!==1||player.bottom>innerHeight+1))errors.push('编辑动作或播放器溢出');return {errors,width:innerWidth,height:innerHeight,dpr:devicePixelRatio,overflow:document.body.scrollWidth>innerWidth+1};})()`,
           );
           if (geometry.errors.length) throw Error(name + ': ' + geometry.errors.join(','));
           const shot = await client.send('Page.captureScreenshot', {
@@ -4508,7 +4684,7 @@ try {
         }
         await evaluate(`document.querySelector('[data-transcript-cancel]').click()`);
       } finally {
-        await resizeNativeWindow(1079, 675);
+        await resizeNativeWindow(1280, 800);
         inspector.close();
       }
     }
@@ -4541,7 +4717,7 @@ try {
       startedAt: new Date(captureStartedAt).toISOString(),
       completedAt: new Date().toISOString(),
       checksPassed: failures.length === 0 && pageErrors.length === 0,
-      nativeContent: { width: 1079, height: 675 },
+      nativeContent: { width: 1280, height: 800 },
       zoom: defaultWindowScale,
       sources: captureSources,
       files: readdirSync(output).filter(

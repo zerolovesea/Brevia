@@ -224,6 +224,12 @@
         'settings': '设置',
       },
       'labels': {
+        '状态': '状态',
+        '让手机与电脑一起工作': '让手机与电脑一起工作',
+        '开始连接': '开始连接',
+        '已安装，开始配对': '已安装，开始配对',
+        'Brevia 手机端会议界面': 'Brevia 手机端会议界面',
+        'Brevia 手机端': 'Brevia 手机端',
         '录音已保存': '录音已保存',
         '等待模型': '等待模型',
         '纪要等待所需模型，就绪后会自动继续。': '纪要等待所需模型，就绪后会自动继续。',
@@ -1035,6 +1041,12 @@
         'settings': 'Settings',
       },
       'labels': {
+        '状态': 'Status',
+        '让手机与电脑一起工作': 'Let your phone and computer work together',
+        '开始连接': 'Get started',
+        '已安装，开始配对': 'Already installed? Pair now',
+        'Brevia 手机端会议界面': 'Brevia mobile meeting screen',
+        'Brevia 手机端': 'Brevia mobile app',
         '录音已保存': 'Recording saved',
         '等待模型': 'Waiting for model',
         '纪要等待所需模型，就绪后会自动继续。':
@@ -2046,6 +2058,12 @@
         'settings': 'Configuración',
       },
       'labels': {
+        '状态': 'Estado',
+        '让手机与电脑一起工作': 'Conecta tu móvil y tu ordenador',
+        '开始连接': 'Empezar',
+        '已安装，开始配对': 'Ya está instalada: emparejar',
+        'Brevia 手机端会议界面': 'Pantalla de reunión de Brevia para móviles',
+        'Brevia 手机端': 'Brevia para móviles',
         '录音已保存': 'Grabación guardada',
         '等待模型': 'Esperando modelo',
         '纪要等待所需模型，就绪后会自动继续。':
@@ -3064,6 +3082,12 @@
         'settings': '設定',
       },
       'labels': {
+        '状态': '状態',
+        '让手机与电脑一起工作': 'スマートフォンとパソコンをつなぐ',
+        '开始连接': '接続を始める',
+        '已安装，开始配对': 'インストール済み：ペアリングへ',
+        'Brevia 手机端会议界面': 'Breviaモバイル版の会議画面',
+        'Brevia 手机端': 'Breviaモバイル版',
         '录音已保存': '録音を保存しました',
         '等待模型': 'モデルを待機中',
         '纪要等待所需模型，就绪后会自动继续。':
@@ -4078,6 +4102,12 @@
         'settings': '설정',
       },
       'labels': {
+        '状态': '상태',
+        '让手机与电脑一起工作': '휴대폰과 컴퓨터를 연결하세요',
+        '开始连接': '연결 시작',
+        '已安装，开始配对': '이미 설치했어요 · 페어링',
+        'Brevia 手机端会议界面': 'Brevia 모바일 회의 화면',
+        'Brevia 手机端': 'Brevia 모바일',
         '录音已保存': '녹음 저장됨',
         '等待模型': '모델 대기 중',
         '纪要等待所需模型，就绪后会自动继续。':
@@ -5076,6 +5106,12 @@
         'settings': 'Paramètres',
       },
       'labels': {
+        '状态': 'État',
+        '让手机与电脑一起工作': 'Faites travailler votre téléphone et votre ordinateur ensemble',
+        '开始连接': 'Commencer',
+        '已安装，开始配对': 'Déjà installé ? Associer',
+        'Brevia 手机端会议界面': 'Écran de réunion de Brevia mobile',
+        'Brevia 手机端': 'Brevia mobile',
         '录音已保存': 'Enregistrement sauvegardé',
         '等待模型': 'En attente du modèle',
         '纪要等待所需模型，就绪后会自动继续。':
@@ -6109,6 +6145,12 @@
         'settings': 'Einstellungen',
       },
       'labels': {
+        '状态': 'Status',
+        '让手机与电脑一起工作': 'Smartphone und Computer verbinden',
+        '开始连接': 'Verbinden',
+        '已安装，开始配对': 'Bereits installiert? Jetzt koppeln',
+        'Brevia 手机端会议界面': 'Besprechungsansicht von Brevia mobil',
+        'Brevia 手机端': 'Brevia mobil',
         '录音已保存': 'Aufnahme gespeichert',
         '等待模型': 'Warte auf Modell',
         '纪要等待所需模型，就绪后会自动继续。':
@@ -7151,6 +7193,12 @@
         'settings': 'Настройки',
       },
       'labels': {
+        '状态': 'Состояние',
+        '让手机与电脑一起工作': 'Объедините телефон и компьютер',
+        '开始连接': 'Начать подключение',
+        '已安装，开始配对': 'Уже установлено — создать пару',
+        'Brevia 手机端会议界面': 'Экран встречи в мобильном Brevia',
+        'Brevia 手机端': 'Мобильный Brevia',
         '录音已保存': 'Запись сохранена',
         '等待模型': 'Ожидание модели',
         '纪要等待所需模型，就绪后会自动继续。':
@@ -13650,6 +13698,95 @@
       selectionOverview,
     };
   })();
+
+  // 桌面工作台导航与草稿保护文案。
+  const workbenchCopy = {
+    '搜索设置': [
+      '搜索设置',
+      'Search settings',
+      'Buscar ajustes',
+      '設定を検索',
+      '설정 검색',
+      'Rechercher un réglage',
+      'Einstellungen suchen',
+      'Поиск настроек',
+    ],
+    '未找到设置': [
+      '未找到设置',
+      'No settings found',
+      'No se encontraron ajustes',
+      '設定が見つかりません',
+      '설정을 찾을 수 없습니다',
+      'Aucun réglage trouvé',
+      'Keine Einstellungen gefunden',
+      'Настройки не найдены',
+    ],
+    '设备与数据': [
+      '设备与数据',
+      'Devices and data',
+      'Dispositivos y datos',
+      'デバイスとデータ',
+      '기기 및 데이터',
+      'Appareils et données',
+      'Geräte und Daten',
+      'Устройства и данные',
+    ],
+    '更多设置': [
+      '更多设置',
+      'More settings',
+      'Más ajustes',
+      'その他の設定',
+      '추가 설정',
+      'Plus de réglages',
+      'Weitere Einstellungen',
+      'Другие настройки',
+    ],
+    '从左侧选择会议，或开始一次新的记录。': [
+      '从左侧选择会议，或开始一次新的记录。',
+      'Choose a meeting on the left, or start a new recording.',
+      'Elige una reunión a la izquierda o inicia una grabación.',
+      '左側から会議を選ぶか、新しい録音を始めます。',
+      '왼쪽에서 회의를 선택하거나 새 녹음을 시작하세요.',
+      'Choisissez une réunion à gauche ou démarrez un enregistrement.',
+      'Wähle links ein Meeting oder starte eine Aufnahme.',
+      'Выберите встречу слева или начните новую запись.',
+    ],
+    '配置音源与会议语言': [
+      '配置音源与会议语言',
+      'Choose audio sources and language',
+      'Elige las fuentes de audio y el idioma',
+      '音源と言語を設定',
+      '오디오 소스 및 언어 선택',
+      'Choisir les sources audio et la langue',
+      'Audioquellen und Sprache wählen',
+      'Выберите источники звука и язык',
+    ],
+    '从已有录音整理内容': [
+      '从已有录音整理内容',
+      'Turn a recording into meeting notes',
+      'Convierte una grabación en notas',
+      '録音から会議を整理',
+      '기존 녹음으로 회의 정리',
+      'Organiser une réunion à partir d’un enregistrement',
+      'Eine Aufnahme in Besprechungsnotizen verwandeln',
+      'Создайте заметки из готовой записи',
+    ],
+    '请先保存或取消当前编辑': [
+      '请先保存或取消当前编辑',
+      'Save or cancel your current edits first',
+      'Guarda o cancela los cambios actuales primero',
+      '先に現在の編集を保存またはキャンセルしてください',
+      '현재 편집 내용을 먼저 저장하거나 취소하세요',
+      'Enregistrez ou annulez d’abord les modifications',
+      'Speichere oder verwerfe zuerst deine Änderungen',
+      'Сначала сохраните или отмените текущие изменения',
+    ],
+  };
+  for (const [key, values] of Object.entries(workbenchCopy)) {
+    ['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru'].forEach((code, index) => {
+      catalog[code].labels[key] = values[index];
+    });
+  }
 
   const chinaModelSourceLabel = '是否使用中国大陆镜像源进行下载加速';
 

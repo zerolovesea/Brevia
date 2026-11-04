@@ -5,6 +5,8 @@
   const pairDialog = document.getElementById('mobile-pair-dialog');
   let pairingBusy = false;
   let pairClosing = null;
+  let mobilePageStep = null;
+  let mobilePairRevision = 0;
   const pairing = document.getElementById('mobile-pairing');
   let expires = 0,
     approvalId = null,
@@ -43,6 +45,9 @@
     imageCopy.forEach(({ node, key }) => {
       node.alt = t(key);
     });
+    const preview = dialog.querySelector('[data-mobile-preview-image]');
+    const previewPath = `./assets/mobile-preview-${locale === 'zh' ? 'zh' : 'en'}.png`;
+    if (preview && preview.getAttribute('src') !== previewPath) preview.src = previewPath;
     document.querySelector('#mobile-nav strong').textContent = t('设备连接');
     if (
       breviaClient?.state.meeting?.tags?.includes('手机录音') &&
@@ -59,6 +64,59 @@
   function message(key) {
     messageKey = key;
     dialog.querySelector('#mobile-dialog-status').textContent = t(key);
+  }
+  function renderMobilePage(value = lastStatus, direction) {
+    const state = mobilePageStep || (value?.devices?.length ? 'paired' : 'intro');
+    const previous = dialog.dataset.mobilePageState;
+    dialog.dataset.mobilePageState = state;
+    dialog.querySelectorAll('[data-mobile-panel]').forEach((panel) => {
+      panel.hidden = panel.dataset.mobilePanel !== state;
+    });
+    dialog.querySelector('.mobile-trusted-panel').hidden = state !== 'paired';
+    const install = dialog.querySelector('.mobile-install');
+    install.open = state === 'install';
+    dialog.querySelectorAll('[data-mobile-step-marker]').forEach((marker) => {
+      if (marker.dataset.mobileStepMarker === state) marker.setAttribute('aria-current', 'step');
+      else marker.removeAttribute('aria-current');
+    });
+    // 轮询和语言更新只刷新数据；只有可见页面真正换步骤时才进入动效。
+    if (previous !== state && typeof BreviaMotion !== 'undefined') {
+      const surface = dialog.querySelector('.mobile-page-main');
+      BreviaMotion.cancel(surface);
+      if (previous && dialog.checkVisibility?.())
+        BreviaMotion.enter(
+          surface,
+          direction ||
+            (state === 'intro' || (previous === 'pair' && state === 'install')
+              ? 'step-back'
+              : 'step-forward'),
+        );
+    }
+  }
+  function updateMobilePage(value) {
+    // 新的信任设备才表示本轮配对完成；已有连接不能跳过“再连接一台”的流程。
+    if (
+      mobilePageStep === 'pair' &&
+      lastStatus &&
+      value.devices?.some(
+        (device) => !lastStatus.devices?.some((previous) => previous.id === device.id),
+      )
+    )
+      mobilePageStep = null;
+    renderMobilePage(value);
+  }
+  async function changeMobilePageStep(step) {
+    if (step !== 'pair') mobilePairRevision++;
+    mobilePageStep =
+      step === 'back'
+        ? mobilePageStep === 'pair'
+          ? 'install'
+          : null
+        : ['install', 'pair'].includes(step)
+          ? step
+          : null;
+    renderMobilePage(lastStatus, step === 'back' ? 'step-back' : 'step-forward');
+    if (step === 'pair') await run(pair);
   }
   async function open() {
     if (
@@ -88,6 +146,7 @@
   }
   function closePairDialog() {
     if (pairClosing) return pairClosing;
+    mobilePairRevision++;
     if (!pairDialog.open) {
       expires = 0;
       pairing.hidden = true;
@@ -113,12 +172,16 @@
   async function pair(refresh = false) {
     if (pairingBusy || pairClosing || (pairDialog.open && !refresh)) return;
     if (refresh && !pairDialog.open) return;
+    const revision = ++mobilePairRevision;
+    mobilePageStep = 'pair';
+    renderMobilePage();
     pairingBusy = true;
     pairDialog.querySelector('#mobile-pair-error').textContent = '';
     try {
       const value = await api.pair();
-      if (refresh && (!pairDialog.open || pairClosing)) return;
+      if (revision !== mobilePairRevision || (refresh && (!pairDialog.open || pairClosing))) return;
       await render(value);
+      if (revision !== mobilePairRevision || (refresh && (!pairDialog.open || pairClosing))) return;
       expires = value.expires;
       document.getElementById('mobile-retry-pairing').hidden = true;
       document.getElementById('mobile-copy-pin').disabled = false;
@@ -134,7 +197,7 @@
       localize();
       showPairDialog();
     } catch (error) {
-      if (refresh && (!pairDialog.open || pairClosing)) return;
+      if (revision !== mobilePairRevision || (refresh && (!pairDialog.open || pairClosing))) return;
       expires = 0;
       pairing.hidden = true;
       dialog.querySelector('.mobile-pair-preview').hidden = true;
@@ -145,7 +208,33 @@
       pairingBusy = false;
     }
   }
+  function mobileSessionStatus(pending, connected) {
+    return pending.ended
+      ? '电脑处理中'
+      : !connected.some((device) => device.id === pending.owner)
+        ? '连接中断 · 等待补传'
+        : ['paused', 'interrupted'].includes(pending.state)
+          ? '手机已暂停'
+          : pending.state === 'starting'
+            ? '等待手机开始录音'
+            : '手机录音中';
+  }
+  function renderMobileSidebar(value, pending, connected, connectionStatus) {
+    const status = pending ? mobileSessionStatus(pending, connected) : connectionStatus;
+    const names = (value.devices || [])
+      .filter((device) => device.connected || device.id === pending?.owner)
+      .map((device) => device.name);
+    const label = [t('设备连接'), t(status), ...names, pending?.error && t(pending.error)]
+      .filter(Boolean)
+      .join(' · ');
+    const entry = document.getElementById('mobile-nav');
+    entry.classList.toggle('is-connected', connected.length > 0);
+    entry.title = label;
+    entry.setAttribute('aria-label', label);
+    document.getElementById('mobile-sidebar-status').textContent = t(status);
+  }
   async function render(value) {
+    updateMobilePage(value);
     lastStatus = value;
     updateCapturePhones(value.devices || []);
     const localeChanged = renderedLocale !== locale;
@@ -179,11 +268,7 @@
     const service = dialog.querySelector('#mobile-service-state');
     service.textContent = t(connectionStatus);
     service.dataset.connected = String(connected.length > 0);
-    document.getElementById('mobile-nav').classList.toggle('is-connected', connected.length > 0);
-    document.getElementById('mobile-nav').title = `${t('设备连接')} · ${t(connectionStatus)}`;
-    document.getElementById('mobile-sidebar-status').textContent = connected.length
-      ? `${connected[0].name} · ${t('已连接')}`
-      : t(connectionStatus);
+    renderMobileSidebar(value, pending, connected, connectionStatus);
     const approval = pairDialog.querySelector('#mobile-approval');
     if (!pairClosing && ((value.approval?.id || null) !== approvalId || localeChanged)) {
       approvalId = value.approval?.id || null;
@@ -219,6 +304,7 @@
           return run(async () => {
             await api.approve({ id: request.id, allowed });
             await closePairDialog();
+            if (allowed) mobilePageStep = null;
             message(allowed ? '已允许连接，可以在手机开始会议。' : '已拒绝本次连接。');
             await render(await api.status());
           }).finally(() => {
@@ -322,15 +408,7 @@
         const time = new Date(seconds * 1000).toISOString().slice(11, 19);
         document.getElementById('timer').textContent = time;
         miniTimer.textContent = time;
-        const label = pending.ended
-          ? '电脑处理中'
-          : !connected.some((device) => device.id === pending.owner)
-            ? '连接中断 · 等待补传'
-            : ['paused', 'interrupted'].includes(pending.state)
-              ? '手机已暂停'
-              : pending.state === 'starting'
-                ? '等待手机开始录音'
-                : '手机录音中';
+        const label = mobileSessionStatus(pending, connected);
         for (const el of document.querySelectorAll(
           '#live-recording-state, #mini-meeting .mini-recording',
         ))
@@ -340,6 +418,10 @@
       }
     }
   }
+  dialog.addEventListener('click', (event) => {
+    const step = event.target.closest('[data-mobile-page-step]');
+    if (step) void changeMobilePageStep(step.dataset.mobilePageStep);
+  });
   dialog.querySelector('#mobile-pair').onclick = () => run(pair);
   dialog.querySelector('#mobile-service-toggle').onchange = (event) => {
     const switcher = event.target;
@@ -431,5 +513,6 @@
   ])
     mount.innerHTML = interfaceIcon(mount.dataset.interfaceIcon);
   localize();
+  renderMobilePage();
   void poll();
 })();

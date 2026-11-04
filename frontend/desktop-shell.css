@@ -1,0 +1,940 @@
+/* 桌面工作台独立于官网演示；业务状态与跨端数据继续由原控制器管理。 */
+:root {
+  --color-black: #171717;
+  --color-link: #171717;
+  --color-surface: #ffffff;
+  --color-overlay: #ffffff;
+  --color-navigation: #fafafa;
+  --color-selected: #eeeeee;
+  --color-line: #e5e5e5;
+  --color-text: #171717;
+  --color-text-strong: #0a0a0a;
+  --color-text-body: #333333;
+  --color-text-muted: #696969;
+  --color-text-subtle: #737373;
+  --color-text-faint: #737373;
+  --color-text-inverse: #ffffff;
+  --control-height: 32px;
+  --control-radius: 6px;
+  --menu-row-height: 32px;
+  --desktop-sidebar: 260px;
+  --desktop-header: 40px;
+  --desktop-input-border: #d4d4d4;
+  --desktop-shadow: 0 8px 24px #00000012;
+}
+html[data-theme="dark"] {
+  --color-black: #e5e5e5;
+  --color-link: #f0f0f0;
+  --color-surface: #0a0a0a;
+  --color-overlay: #171717;
+  --color-navigation: #171717;
+  --color-selected: #2a2a2a;
+  --color-line: #2b2b2b;
+  --color-text: #f0f0f0;
+  --color-text-strong: #fafafa;
+  --color-text-body: #d4d4d4;
+  --color-text-muted: #acacac;
+  --color-text-subtle: #a3a3a3;
+  --color-text-faint: #a3a3a3;
+  --color-text-inverse: #171717;
+  --desktop-input-border: #404040;
+  --desktop-shadow: 0 8px 24px #00000040;
+}
+html,
+body {
+  background: var(--color-surface);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+}
+html {
+  font-size: 16px;
+}
+body {
+  font-size: 14px;
+}
+::selection {
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-text) 16%, var(--color-surface));
+}
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--desktop-input-border) transparent;
+  caret-color: var(--color-text);
+}
+button,
+a,
+input,
+select,
+textarea {
+  -webkit-app-region: no-drag;
+}
+button:focus-visible,
+a:focus-visible,
+[tabindex="0"]:focus-visible {
+  background-color: var(--color-selected);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+button:disabled {
+  cursor: default;
+}
+.interface-icon {
+  width: 18px;
+  height: 18px;
+}
+.primary-action,
+.modal-action,
+.secondary,
+.back {
+  min-height: var(--control-height);
+  padding: 6px 12px;
+  border-radius: var(--control-radius);
+  gap: 6px;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
+  box-shadow: none;
+}
+.primary-action,
+.modal-action:not(.modal-danger) {
+  color: var(--color-text-inverse);
+  background: var(--color-text);
+  border: 1px solid transparent;
+}
+.primary-action:hover:not(:disabled),
+.modal-action:not(.modal-danger):hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-text) 85%, var(--color-surface));
+}
+.secondary {
+  background: var(--color-surface);
+  border-color: var(--desktop-input-border);
+  color: var(--color-text);
+}
+.secondary:hover:not(:disabled) {
+  background: var(--color-selected);
+}
+.icon-button,
+.modal-close {
+  width: 30px;
+  height: 30px;
+  min-height: 30px;
+  border-radius: 6px;
+}
+.icon-button .interface-icon,
+.primary-action .interface-icon,
+.secondary .interface-icon {
+  width: 16px;
+  height: 16px;
+}
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="hidden"]),
+textarea,
+.flow-select-toggle {
+  min-height: 36px;
+  border-radius: 6px;
+  font-size: 13px;
+  border-color: var(--desktop-input-border);
+}
+.flow-select-toggle {
+  padding: 7px 10px;
+  gap: 8px;
+}
+.flow-select-options,
+.meeting-menu,
+.workspace-picker,
+.segment-context-menu {
+  border-radius: 8px;
+  padding: 4px;
+  box-shadow: var(--desktop-shadow);
+  background: var(--color-overlay);
+  border-color: var(--color-line);
+}
+.flow-select-options button,
+.meeting-menu button,
+.segment-context-menu > button {
+  min-height: 32px;
+  font-size: 13px;
+  padding: 6px 10px;
+  gap: 8px;
+  border-radius: 4px;
+}
+
+/* 单一会议侧栏：工作区与会议共用导航，折叠后让出完整工作面。 */
+#desktop-app {
+  --desktop-sidebar: 260px;
+  display: grid;
+  grid-template-columns: var(--desktop-sidebar) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) 24px;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  transition: none;
+}
+#desktop-app:is(.is-library-hidden, .is-settings-view) {
+  --desktop-sidebar: 0px;
+}
+#desktop-app .sidebar.library-panel {
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: calc(100dvh - 24px);
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 44px 12px 10px;
+  gap: 0;
+  border: 0;
+  border-right: 1px solid var(--color-line);
+  background: var(--color-navigation);
+  overflow: hidden;
+  z-index: 31;
+}
+#desktop-app:is(.is-library-hidden, .is-settings-view) .sidebar {
+  visibility: hidden;
+  padding-inline: 0;
+  border: 0;
+}
+#desktop-app .sidebar::after {
+  display: none;
+}
+.sidebar-brand-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+#desktop-app .sidebar .brand {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-height: 32px;
+  padding: 0 8px;
+  margin: 0;
+  gap: 8px;
+}
+#desktop-app .sidebar .brand-mark {
+  display: none;
+}
+#desktop-app .sidebar .brand-name {
+  display: block;
+  width: 76px;
+  height: 22px;
+}
+#desktop-app .sidebar .brand-name img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+#desktop-app .sidebar .sidebar-search {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  min-height: 30px;
+  flex: none;
+  padding: 6px;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+}
+#desktop-app .sidebar-search :is(span:not([data-interface-icon]):not(.interface-icon), kbd) {
+  display: none;
+}
+#desktop-app .sidebar .interface-icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+.sidebar-primary {
+  display: grid;
+  gap: 2px;
+  margin-bottom: 18px;
+}
+#desktop-app .sidebar :is(.new-meeting, .import-recording, .nav-item, .mobile-sidebar-card) {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  height: 34px;
+  min-height: 34px;
+  flex: none;
+  gap: 10px;
+  margin: 0;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--color-text);
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 400;
+  text-align: left;
+}
+#desktop-app .sidebar :is(.new-meeting, .import-recording, .nav-item, .mobile-sidebar-card):hover,
+#desktop-app .sidebar .nav-item.active {
+  background: var(--color-selected);
+}
+#desktop-app
+  .sidebar
+  :is(.new-meeting-label, .import-recording-label, .mobile-sidebar-heading strong) {
+  display: inline;
+  max-width: none;
+  opacity: 1;
+  visibility: visible;
+  font-size: 13px;
+  font-weight: 400;
+}
+#desktop-app
+  .sidebar
+  :is(.new-meeting-icon, .import-recording-icon, .nav-item > span, .mobile-sidebar-heading) {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: auto;
+  margin: 0;
+  gap: 10px;
+}
+#desktop-app .sidebar #mobile-sidebar-status {
+  display: none;
+}
+#desktop-app .sidebar #mobile-nav-dot {
+  position: static;
+  width: 5px;
+  height: 5px;
+  margin: 0;
+}
+#desktop-app .sidebar-footer {
+  flex: none;
+  order: 10;
+  padding-top: 10px;
+}
+#desktop-app .sidebar-footer nav {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+#desktop-app .sidebar .sidebar-settings {
+  order: initial;
+}
+#desktop-app .sidebar .library-heading {
+  display: none;
+}
+#desktop-app .sidebar .workspace-subnav {
+  display: block;
+  flex: none;
+  height: auto;
+  min-height: 0;
+  margin: 0 0 8px;
+  padding: 0;
+  border: 0;
+  overflow: visible;
+}
+#desktop-app .sidebar .workspace-subnav-content {
+  display: block;
+  padding: 0;
+  border: 0;
+}
+#desktop-app .sidebar .workspace-heading {
+  min-height: 28px;
+  height: auto;
+  padding: 0 8px;
+}
+#desktop-app .sidebar .workspace-heading h3 {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+#desktop-app .sidebar .new-workspace {
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+  padding: 4px;
+  border: 0;
+  background: transparent;
+}
+#desktop-app .sidebar .workspace-selector {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: auto;
+  min-height: 24px;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+#desktop-app .workspace-picker {
+  position: fixed;
+  inset: auto;
+  z-index: 90;
+  margin: 0;
+  padding: 6px;
+  width: 256px;
+  max-width: calc(100vw - 16px);
+  max-height: min(336px, calc(100dvh - 16px));
+  overflow: auto;
+}
+#desktop-app .workspace-picker .workspace-item {
+  display: flex;
+  min-height: 32px;
+  padding: 6px 8px;
+  gap: 8px;
+  font-size: 12px;
+}
+#desktop-app .workspace-picker > button {
+  min-height: 32px;
+  padding: 6px 8px;
+  gap: 8px;
+  font-size: 12px;
+}
+#desktop-app .library-toolbar {
+  display: flex;
+  align-items: center;
+  flex: none;
+  margin: 0 0 12px;
+  padding: 0;
+  gap: 4px;
+  border: 0;
+}
+#desktop-app .library-search {
+  flex: 1;
+  min-width: 0;
+}
+#desktop-app .search {
+  display: flex;
+  height: 30px;
+  min-height: 30px;
+  padding: 0 8px;
+  gap: 6px;
+  border: 1px solid var(--color-line);
+  border-radius: 6px;
+  background: var(--color-surface);
+}
+#desktop-app .search input {
+  width: 100%;
+  min-width: 0;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+  font-size: 11px;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+#desktop-app #meeting-selection-toggle {
+  width: 26px;
+  min-height: 30px;
+  height: 30px;
+  padding: 5px;
+  gap: 0;
+  font-size: 0;
+  border: 0;
+  background: transparent;
+}
+#desktop-app .search-results {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  width: min(460px, calc(100vw - 16px));
+  max-height: min(480px, calc(100dvh - 16px));
+  border-radius: 9px;
+  box-shadow: var(--desktop-shadow);
+}
+#desktop-app .search-results:popover-open {
+  display: block;
+}
+#desktop-app .meeting-list {
+  flex: 1;
+  min-height: 80px;
+  overflow: auto;
+  margin: 0 -4px;
+  padding: 0 4px 12px;
+  border: 0;
+}
+#desktop-app .sidebar-workspace {
+  margin-bottom: 12px;
+  padding: 0;
+  border: 0;
+}
+.sidebar-workspace-header {
+  display: flex;
+  align-items: center;
+}
+#desktop-app .sidebar-workspace-toggle {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+}
+#desktop-app .sidebar-workspace-toggle > .interface-icon:first-child {
+  width: 12px;
+  height: 12px;
+  margin-left: -4px;
+  color: var(--color-text-muted);
+}
+#desktop-app .sidebar-workspace-toggle[aria-expanded="true"] > .interface-icon:first-child {
+  transform: rotate(90deg);
+}
+.sidebar-workspace-count {
+  font-size: 10px;
+  color: var(--color-text-muted);
+}
+.sidebar-workspace-edit {
+  width: 24px;
+  height: 28px;
+  padding: 4px;
+  border-radius: 5px;
+  color: var(--color-text-muted);
+  opacity: 0;
+}
+.sidebar-workspace-header:is(:hover, :focus-within) .sidebar-workspace-edit {
+  opacity: 1;
+}
+#desktop-app .sidebar-workspace-toggle {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 6px 8px;
+  margin: 0;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--color-text);
+  border-radius: 6px;
+}
+#desktop-app .sidebar-workspace-toggle[aria-expanded="false"] .workspace-disclosure {
+  transform: rotate(-90deg);
+}
+#desktop-app .sidebar-workspace-toggle .workspace-disclosure {
+  width: 12px;
+  height: 12px;
+  margin-left: auto;
+  color: var(--color-text-muted);
+}
+#desktop-app .sidebar-workspace-toggle:hover {
+  background: var(--color-selected);
+}
+.sidebar-workspace-empty {
+  margin: 0;
+  padding: 6px 8px 10px 32px;
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+#desktop-app .meeting-row,
+#desktop-app .meeting-row:has(.meeting-row-checkbox[hidden]) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 24px;
+  grid-template-rows: auto;
+  align-items: center;
+  align-content: center;
+  min-height: 32px;
+  gap: 0;
+  padding: 3px 6px 3px 32px;
+  border: 0;
+  border-radius: 7px;
+  cursor: pointer;
+}
+#desktop-app .meeting-row:hover,
+#desktop-app .meeting-row.is-current,
+#desktop-app .meeting-row[aria-selected="true"] {
+  background: var(--color-selected);
+}
+#desktop-app .meeting-row .meeting-row-icon {
+  display: none;
+}
+#desktop-app .meeting-row:not(:has(.meeting-row-checkbox[hidden])) {
+  grid-template-columns: 18px minmax(0, 1fr) 24px;
+  gap: 6px;
+  padding-left: 8px;
+}
+#desktop-app .meeting-row .meeting-row-checkbox {
+  grid-column: 1;
+  grid-row: 1;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+}
+#desktop-app .meeting-row .meeting-main {
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
+}
+#desktop-app .meeting-row:not(:has(.meeting-row-checkbox[hidden])) .meeting-main {
+  grid-column: 2;
+}
+#desktop-app .meeting-main h2 {
+  display: block;
+  margin: 0;
+  font-size: 13px;
+  line-height: 24px;
+  font-weight: 400;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+#desktop-app
+  .meeting-row
+  :is(.meeting-main p, .meeting-workspace, .meeting-source, .meeting-status) {
+  display: none;
+}
+#desktop-app .meeting-row .meeting-actions {
+  grid-column: -1;
+  grid-row: 1;
+}
+#desktop-app .meeting-row .more {
+  width: 22px;
+  height: 24px;
+  min-height: 24px;
+  padding: 3px;
+  opacity: 0;
+}
+#desktop-app .meeting-row:is(:hover, :focus-within, .is-current) .more {
+  opacity: 1;
+}
+#desktop-app .meeting-row .meeting-menu {
+  font-size: 12px;
+}
+#desktop-app .library-group {
+  padding: 8px;
+  color: var(--color-text-muted);
+}
+#desktop-app .library-group :is(h2, span) {
+  font-size: 11px;
+  font-weight: 400;
+}
+#desktop-app .library-empty {
+  min-height: 180px;
+  padding: 24px 12px;
+  gap: 10px;
+}
+#desktop-app .library-empty > .interface-icon {
+  width: 24px;
+  height: 24px;
+}
+#desktop-app .library-empty h2 {
+  font-size: 13px;
+}
+#desktop-app .library-empty p {
+  font-size: 11px;
+  line-height: 1.6;
+}
+#desktop-app .library-empty > div {
+  justify-content: center;
+  gap: 6px;
+}
+#desktop-app .library-empty button {
+  min-height: 30px;
+  padding: 5px 8px;
+  gap: 4px;
+  font-size: 11px;
+}
+#desktop-app .batch-toolbar {
+  flex-wrap: wrap;
+  padding: 6px;
+  margin: 0 0 8px;
+  gap: 4px;
+  font-size: 11px;
+}
+#desktop-app .batch-actions {
+  flex-wrap: wrap;
+  gap: 4px;
+}
+#desktop-app .batch-actions button {
+  min-height: 28px;
+  padding: 4px 6px;
+  font-size: 11px;
+}
+#desktop-app .sidebar .task-summary {
+  display: none;
+}
+#desktop-app .sidebar .task-stack-toggle {
+  display: none;
+  flex: none;
+  min-height: 28px;
+  padding: 6px 4px;
+  margin: 0;
+  border: 0;
+  font-size: 11px;
+}
+#desktop-app .sidebar .task-cards:not(.is-collapsed):has(> :not([hidden])) {
+  position: fixed;
+  inset: auto auto 36px 12px;
+  display: grid;
+  visibility: visible;
+  width: min(360px, calc(100vw - 24px));
+  height: auto;
+  min-height: 0;
+  max-height: min(420px, calc(100dvh - 84px));
+  margin: 0;
+  padding: 8px;
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+  background: var(--color-overlay);
+  box-shadow: var(--desktop-shadow);
+  overflow: auto;
+  z-index: 200;
+  animation: desktop-status-panel-in 160ms var(--motion-ease-out) both;
+}
+#desktop-app .sidebar:has(.task-cards:not(.is-collapsed) > :not([hidden])) {
+  z-index: 200;
+}
+#desktop-app .sidebar .task-cards.is-collapsed {
+  display: none;
+}
+#desktop-app .sidebar .task-card-heading {
+  grid-template-columns: 22px minmax(0, 1fr) auto auto;
+}
+#desktop-app .sidebar .task-card-heading > p {
+  display: block;
+  font-size: 12px;
+}
+#desktop-app .sidebar .task-kind-icon .interface-icon {
+  width: 18px;
+  height: 18px;
+}
+#desktop-app .sidebar .task-cards > .task-card-stack-item > :is(strong, time) {
+  display: block;
+  margin-left: 26px;
+  font-size: 11px;
+}
+#desktop-app .sidebar .processing-card > strong:has(.task-progress-label) {
+  display: flex;
+}
+#desktop-app .sidebar .task-card-progress,
+#desktop-app .sidebar .mini-playback-controls {
+  display: flex;
+  margin-left: 26px;
+}
+#desktop-app .sidebar .task-card-actions {
+  display: flex;
+}
+#desktop-app .workspace {
+  grid-column: 2;
+  grid-row: 1;
+  height: calc(100dvh - 24px);
+  min-width: 0;
+  padding: 0;
+  display: grid;
+  grid-template-rows: 40px minmax(0, 1fr);
+  overflow: hidden;
+}
+#desktop-app .window-bar {
+  position: relative;
+  inset: auto;
+  grid-row: 1;
+  height: 40px;
+  min-height: 40px;
+  padding: 0 12px;
+  gap: 8px;
+  display: flex;
+  align-items: center;
+  background: var(--color-surface);
+  border: 0;
+}
+#desktop-app .workspace > .view {
+  grid-row: 2;
+}
+#desktop-app:is(.is-library-hidden, .is-settings-view) .window-bar {
+  padding-left: 80px;
+}
+#desktop-app.is-settings-view #library-toggle {
+  display: none;
+}
+#desktop-app .window-bar .traffic {
+  display: none;
+}
+#desktop-app .window-wordmark {
+  display: none;
+}
+#desktop-app .window-bar #crumb {
+  visibility: visible;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+#desktop-app .window-actions {
+  margin-left: auto;
+  gap: 8px;
+}
+#desktop-app .window-actions #app-version {
+  display: none;
+}
+body:has(#desktop-app) .settings-page {
+  left: 0;
+  top: 40px;
+  bottom: 24px;
+}
+body:has(#desktop-app.is-library-hidden) .settings-page {
+  left: 0;
+}
+body:has(#desktop-app) .export-modal {
+  padding: 24px 24px 24px 284px;
+}
+body:has(#desktop-app.is-library-hidden) .export-modal {
+  padding-left: 24px;
+}
+@media (max-width: 1050px) {
+  #desktop-app {
+    --desktop-sidebar: 240px;
+  }
+  #desktop-app:is(.is-library-hidden, .is-settings-view) {
+    --desktop-sidebar: 0px;
+  }
+  body:has(#desktop-app) .settings-page {
+    left: 0;
+  }
+  body:has(#desktop-app.is-library-hidden) .settings-page {
+    left: 0;
+  }
+  body:has(#desktop-app) .export-modal {
+    padding-left: 24px;
+  }
+}
+
+/* 与 Orca 一样，状态摘要留在单行底栏，操作面板向上展开。 */
+#desktop-statusbar {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 24px;
+  padding: 0 12px;
+  gap: 16px;
+  border-top: 1px solid var(--color-line);
+  background: var(--color-navigation);
+  color: var(--color-text-muted);
+  font-size: 11px;
+  z-index: 201;
+}
+#desktop-statusbar :is(.mobile-sidebar-card, .task-summary, .statusbar-settings) {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: auto;
+  min-width: 0;
+  height: 22px;
+  min-height: 22px;
+  margin: 0;
+  padding: 2px 4px;
+  gap: 6px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+  font-size: 11px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+#desktop-statusbar :is(.mobile-sidebar-card, .task-summary, .statusbar-settings):hover {
+  background: var(--color-selected);
+  color: var(--color-text);
+}
+#desktop-statusbar #mobile-nav {
+  max-width: min(56vw, 440px);
+}
+#desktop-statusbar .mobile-sidebar-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  width: auto;
+}
+#desktop-app #desktop-statusbar .mobile-sidebar-heading strong {
+  display: inline;
+  max-width: none;
+  opacity: 1;
+  font-size: 11px;
+  font-weight: 400;
+}
+#desktop-statusbar .interface-icon {
+  width: 13px;
+  height: 13px;
+  flex: none;
+}
+#desktop-statusbar #mobile-sidebar-status {
+  position: static;
+  display: block;
+  width: auto;
+  height: auto;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  clip-path: none;
+  opacity: 1;
+  font-size: 11px;
+}
+#desktop-statusbar #mobile-nav-dot {
+  position: static;
+  display: inline-block;
+  visibility: visible;
+  width: 5px;
+  height: 5px;
+  margin: 0;
+  border-radius: 50%;
+  background: var(--color-text-subtle);
+}
+#desktop-statusbar #mobile-nav.is-connected #mobile-nav-dot {
+  background: var(--color-success);
+}
+#desktop-statusbar .task-summary {
+  flex: none;
+}
+#desktop-statusbar .task-summary > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+#desktop-statusbar .task-summary b {
+  font-size: 11px;
+  font-weight: 400;
+}
+#desktop-statusbar .task-summary [data-task-summary-count] {
+  padding: 0;
+  min-width: 0;
+  background: none;
+  border: 0;
+}
+#desktop-statusbar .task-summary [data-task-summary-status] {
+  font-size: 11px;
+}
+#desktop-statusbar .task-summary i {
+  width: 5px;
+  height: 5px;
+  background: var(--color-text-muted);
+}
+#desktop-statusbar .task-summary.is-recording i {
+  background: var(--color-recording);
+}
+#desktop-statusbar .task-summary.has-errors {
+  color: var(--color-danger);
+}
+#desktop-statusbar .task-summary.has-errors [data-task-summary-count] {
+  color: inherit;
+  background: none;
+}
+#desktop-statusbar .task-summary[aria-expanded="true"] > :last-child {
+  transform: rotate(180deg);
+}
+#desktop-statusbar .statusbar-settings {
+  margin-left: auto;
+}
+@keyframes desktop-status-panel-in {
+  from {
+    opacity: 0;
+    translate: 0 6px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}

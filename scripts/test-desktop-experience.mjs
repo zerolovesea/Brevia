@@ -13,7 +13,7 @@ if (process.env.BREVIA_SKIP_E2E === '1') {
   process.exit(0);
 }
 const sandbox = path.join(root, '.e2e-tmp', `desktop-${process.pid}`);
-const defaultWindowScale = (2 / 3) * 1.15 * 1.1;
+const defaultWindowScale = 1;
 const output = path.resolve(
   process.env.BREVIA_FEEDBACK_CAPTURE_DIR || 'output/uiux-next-version-2026-10-20/implementation',
 );
@@ -202,8 +202,8 @@ try {
     await evaluate(
       `(()=>{const a=getComputedStyle(document.querySelector('#home-view .quick-recording > span:last-child')),b=getComputedStyle(document.querySelector('#home-view [data-prepare-mode="record"]'));return [a.fontSize,a.fontWeight,b.fontSize,b.fontWeight]})()`,
     ),
-    ['14px', '500', '14px', '500'],
-    '录音按钮文字样式统一',
+    ['13px', '400', '14px', '400'],
+    '快速录音使用次级文字入口，主录音入口保持清楚层级',
   );
   assert.equal(await evaluate(`Boolean(document.querySelector('[data-quick-hint]'))`), false);
   await evaluate(
@@ -310,18 +310,24 @@ try {
   assert.deepEqual(
     await evaluate(sidebarSizes),
     normalSidebar,
-    '会议展开侧栏与常规侧栏字号、图标尺寸一致',
+    '实时会议与首页的侧栏字号、图标尺寸一致',
   );
   await capture('17-live-sidebar');
-  await evaluate(`document.activeElement.blur()`);
+  await evaluate(`document.activeElement.blur();document.querySelector('#library-toggle').click()`);
   await delay(350);
   const collapsedNavIcons = await evaluate(
     `([...document.querySelectorAll('.sidebar .nav-item .interface-icon')].map(n=>[n.closest('button').id||n.closest('button').className,getComputedStyle(n).width]))`,
   );
   assert.ok(
-    collapsedNavIcons.every(([, width]) => Math.abs(parseFloat(width) - 20) < 0.1),
+    collapsedNavIcons.every(([, width]) => Math.abs(parseFloat(width) - 16) < 0.1),
     '收起侧栏不放大导航图标：' + JSON.stringify(collapsedNavIcons),
   );
+  assert.equal(
+    await evaluate(`document.querySelector('.sidebar').getBoundingClientRect().width`),
+    0,
+    '显式收起后侧栏完整让出工作面',
+  );
+  await evaluate(`document.querySelector('#library-toggle').click()`);
   await evaluate(`window.quitConfirmation=confirmQuitRecording();true`);
   await send('Input.dispatchKeyEvent', {
     type: 'keyDown',
@@ -387,12 +393,21 @@ try {
   );
   assert.equal(
     await evaluate(
-      `(()=>{const m=document.querySelector('#mini-meeting'),r=m.getBoundingClientRect(),s=document.querySelector('.sidebar').getBoundingClientRect();return m.checkVisibility()&&m.closest('.sidebar')&&r.left>=s.left&&r.right<=s.right&&r.bottom<=s.bottom&&!document.querySelector('#background-recording')&&document.querySelector('#mini-timer').textContent==='00:18:42'})()`,
+      `(()=>{const summary=document.querySelector('[data-task-summary]');return summary.checkVisibility()&&summary.closest('#desktop-statusbar')&&summary.classList.contains('is-recording')&&!document.querySelector('#background-recording')&&document.querySelector('#mini-timer').textContent==='00:18:42'})()`,
     ),
     true,
-    '离开会议恢复侧栏中的真实会议卡片，不再覆盖正文',
+    '离开实时会议后底栏保留真实录音摘要',
+  );
+  await evaluate(`document.querySelector('[data-task-summary]').click()`);
+  assert.equal(
+    await evaluate(
+      `(()=>{const m=document.querySelector('#mini-meeting'),r=document.querySelector('#task-cards').getBoundingClientRect(),s=document.querySelector('#desktop-statusbar').getBoundingClientRect();return m.checkVisibility()&&r.left>=0&&r.right<=innerWidth&&r.bottom<s.top})()`,
+    ),
+    true,
+    '任务详情向上展开且不覆盖底栏',
   );
   await capture('04-background-recording');
+  await evaluate(`document.querySelector('[data-task-summary]').click()`);
   await mainEval(`${nativeWindow}.minimize(); true`);
   let capsule;
   for (let attempt = 0; attempt < 60; attempt++) {

@@ -72,6 +72,28 @@ assert.ok(
   animations.at(-1).frames.every((frame) => frame.opacity === 1),
   'detail tabs never fade to blank',
 );
+motion.enter(element, 'settings');
+assert.equal(animations.at(-1).options.duration, 180);
+assert.equal(animations.at(-1).options.easing, 'ease-out');
+assert.equal(animations.at(-1).frames[0].transform, 'translateY(8px)');
+assert.equal(animations.at(-1).frames[0].opacity, 0);
+assert.equal(animations.at(-1).frames.at(-1).opacity, 1);
+const settingsEntry = animations.at(-1);
+motion.enter(element, 'step-forward');
+assert.equal(settingsEntry.cancelled, true, 'a new step interrupts settings entry');
+assert.equal(animations.at(-1).options.duration, 280);
+assert.equal(animations.at(-1).options.easing, 'cubic-bezier(0.32, 0.72, 0.24, 1)');
+assert.equal(animations.at(-1).frames[0].transform, 'translateX(40px)');
+assert.equal(animations.at(-1).frames[0].opacity, 0);
+const forwardStep = animations.at(-1);
+motion.enter(element, 'step-back');
+assert.equal(forwardStep.cancelled, true, 'back interrupts an unfinished forward step');
+assert.equal(animations.at(-1).options.duration, 280);
+assert.equal(animations.at(-1).frames[0].transform, 'translateX(-40px)');
+assert.equal(animations.at(-1).frames.at(-1).transform, 'translateX(0)');
+const backwardStep = animations.at(-1);
+motion.cancel(element);
+assert.equal(backwardStep.cancelled, true, 'explicit cancellation retires a step');
 motion.enter(element, 'press');
 assert.equal(animations.at(-1).frames[1].scale, 1.004);
 handlers.get('pointerdown')({ target: { parentElement: element } });
@@ -87,12 +109,14 @@ assert.equal(
 );
 const count = animations.length;
 motion.enter(element, 'forward');
+for (const kind of ['settings', 'step-forward', 'step-back']) motion.enter(element, kind);
 assert.equal(animations.length, count);
 assert.equal(motion.duration('exit'), 0);
 preference.matches = false;
 assert.equal(motion.duration('exit'), 140);
 document.hidden = true;
 motion.enter(element);
+for (const kind of ['settings', 'step-forward', 'step-back']) motion.enter(element, kind);
 assert.equal(animations.length, count, 'hidden windows do not run motion');
 document.hidden = false;
 motion.enter(element);
@@ -146,6 +170,76 @@ assert.equal(
   beforeReducedWelcome,
   'reduced motion skips first entry choreography',
 );
+preference.matches = false;
+// 手机轮询会重复渲染同一阶段，只检查真实换步是否触发动效，避免刷新重播。
+const mobileSource = readFileSync(
+  new URL('../frontend/mobile-connection.js', import.meta.url),
+  'utf8',
+);
+const mobileRenderStart = mobileSource.indexOf('  function renderMobilePage(');
+const mobilePanels = ['intro', 'install', 'pair', 'paired'].map((state) => ({
+  dataset: { mobilePanel: state },
+}));
+const mobileSurface = { ...element };
+const mobileInstall = {};
+const mobileTrusted = {};
+let mobileVisible = true;
+const mobileDialog = {
+  dataset: {},
+  checkVisibility: () => mobileVisible,
+  querySelector: (selector) =>
+    selector === '.mobile-page-main'
+      ? mobileSurface
+      : selector === '.mobile-install'
+        ? mobileInstall
+        : mobileTrusted,
+  querySelectorAll: (selector) => (selector === '[data-mobile-panel]' ? mobilePanels : []),
+};
+const mobileContext = {
+  dialog: mobileDialog,
+  lastStatus: { devices: [] },
+  mobilePageStep: null,
+  BreviaMotion: motion,
+};
+runInNewContext(
+  mobileSource.slice(mobileRenderStart, mobileSource.indexOf('\n  }\n', mobileRenderStart) + 4),
+  mobileContext,
+);
+const beforeMobile = animations.length;
+mobileContext.renderMobilePage();
+assert.equal(animations.length, beforeMobile, 'initial mobile status does not replay entry');
+mobileContext.mobilePageStep = 'install';
+mobileContext.renderMobilePage();
+assert.equal(animations.length, beforeMobile + 1);
+assert.equal(animations.at(-1).frames[0].transform, 'translateX(40px)');
+const installEntry = animations.at(-1);
+mobileContext.renderMobilePage();
+mobileContext.renderMobilePage({ devices: [] });
+assert.equal(animations.length, beforeMobile + 1, 'polling and relocalization keep the step still');
+assert.equal(installEntry.cancelled, false, 'same-state refresh leaves entry uninterrupted');
+mobileContext.mobilePageStep = 'pair';
+mobileContext.renderMobilePage();
+assert.equal(installEntry.cancelled, true);
+const pairEntry = animations.at(-1);
+mobileContext.mobilePageStep = 'install';
+mobileContext.renderMobilePage(undefined, 'step-back');
+assert.equal(pairEntry.cancelled, true);
+assert.equal(animations.at(-1).frames[0].transform, 'translateX(-40px)');
+const backEntry = animations.at(-1);
+mobileVisible = false;
+mobileContext.mobilePageStep = null;
+const beforeHiddenStage = animations.length;
+mobileContext.renderMobilePage({ devices: [{ id: 'phone' }] });
+assert.equal(backEntry.cancelled, true, 'hidden state changes cancel obsolete entry');
+assert.equal(animations.length, beforeHiddenStage, 'hidden mobile pages never animate');
+mobileVisible = true;
+mobileContext.renderMobilePage({ devices: [{ id: 'phone' }] });
+assert.equal(animations.length, beforeHiddenStage, 'revealing the same stage does not replay it');
+preference.matches = true;
+mobileContext.mobilePageStep = 'pair';
+mobileContext.renderMobilePage();
+assert.equal(animations.length, beforeHiddenStage, 'reduced motion also skips mobile steps');
+assert.equal(mobileDialog.dataset.mobilePageState, 'pair', 'reduced motion preserves real state');
 preference.matches = false;
 const inventory = spawnSync(process.execPath, ['scripts/motion-inventory.mjs'], {
   cwd: root,

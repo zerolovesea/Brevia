@@ -5,6 +5,54 @@ const views = [...document.querySelectorAll('.view')];
 const crumb = document.querySelector('#crumb');
 const toast = document.querySelector('#toast');
 const themeToggle = document.querySelector('#theme-toggle');
+const librarySearchShortcut = document.querySelector('#library-search-shortcut');
+librarySearchShortcut.querySelector('kbd').textContent =
+  window.brevia?.platform === 'darwin' ? '⌘ K' : 'Ctrl K';
+/** 显式搜索命令才移动焦点，切换页面仍沿用原有草稿保存与录音后台逻辑。 */
+async function focusLibrarySearch() {
+  if (
+    activeModal ||
+    onboardingPage ||
+    desktopShortcutCapture ||
+    document.querySelector('.workspace-dialog')
+  )
+    return;
+  if (activeView === 'settings') await showView('home');
+  setLibraryVisible(true);
+  meetingSearch.focus({ preventScroll: true });
+}
+function setLibraryVisible(visible) {
+  if (!visible) closeSearchPopup();
+  document.querySelector('.app-shell').classList.toggle('is-library-hidden', !visible);
+  document.querySelector('#library-toggle').setAttribute('aria-expanded', String(visible));
+}
+document.querySelector('#library-toggle').addEventListener('click', () => {
+  setLibraryVisible(document.querySelector('.app-shell').classList.contains('is-library-hidden'));
+});
+function syncCurrentMeetingNavigation() {
+  meetingList.querySelectorAll('[data-meeting-id]').forEach((row) => {
+    const current = activeView === 'detail' && row.dataset.meetingId === currentMeetingDetail?.id;
+    row.classList.toggle('is-current', current);
+    if (current) row.setAttribute('aria-current', 'page');
+    else row.removeAttribute('aria-current');
+  });
+}
+librarySearchShortcut.addEventListener('click', () => void focusLibrarySearch());
+document.addEventListener('keydown', (event) => {
+  if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'k') return;
+  if (event.shiftKey || event.altKey || event.repeat || event.isComposing) return;
+  // 富文本编辑器的链接快捷键和快捷键录入仍由原控制器处理。
+  if (event.target.closest?.('input, textarea, [contenteditable="true"]')) return;
+  if (
+    activeModal ||
+    onboardingPage ||
+    desktopShortcutCapture ||
+    document.querySelector('.workspace-dialog')
+  )
+    return;
+  event.preventDefault();
+  void focusLibrarySearch();
+});
 const miniMeeting = document.querySelector('#mini-meeting');
 const miniPlayback = document.querySelector('#mini-playback');
 const miniPlaybackSeek = document.querySelector('#mini-playback-seek');
@@ -22,6 +70,7 @@ function syncTaskCardStack(active) {
   const cards = [...taskCards.children].filter((card) => card.matches(stackableTaskCardSelector));
   const toggle = document.querySelector('[data-toggle-task-stack]');
   toggle.hidden = !cards.length;
+  toggle.setAttribute('aria-expanded', String(!taskCards.classList.contains('is-collapsed')));
   toggle.querySelector('[data-task-count]').textContent = `${t('任务')} · ${cards.length}`;
   active ||= cards.find((card) => !card.classList.contains('is-task-card-back')) || cards[0];
   renderTaskSummary(cards, active);
@@ -95,12 +144,15 @@ function syncTaskCardStack(active) {
     }
   });
 }
-document.querySelector('[data-toggle-task-stack]').addEventListener('click', (event) => {
-  const button = event.currentTarget;
-  const collapsed = button.getAttribute('aria-expanded') === 'true';
-  button.setAttribute('aria-expanded', String(!collapsed));
-  taskCards.classList.toggle('is-collapsed', collapsed);
-});
+function toggleTaskStack() {
+  const collapsed = taskCards.classList.toggle('is-collapsed');
+  syncTaskCardStack();
+  if (!collapsed)
+    taskCards
+      .querySelector('.task-card-stack-item:not(.is-task-card-back)')
+      ?.scrollIntoView({ block: 'nearest' });
+}
+document.querySelector('[data-toggle-task-stack]').addEventListener('click', toggleTaskStack);
 function activateTaskCard(card) {
   if (
     !card?.matches(
@@ -116,21 +168,24 @@ function activateTaskCard(card) {
 new MutationObserver(() => syncTaskCardStack()).observe(taskCards, {
   childList: true,
   attributes: true,
-  attributeFilter: ['hidden', 'data-completed', 'data-total', 'data-paused'],
+  attributeFilter: ['hidden', 'data-completed', 'data-total', 'data-paused', 'data-failed'],
   characterData: true,
   subtree: true,
 });
-/** 收起侧栏只保留当前真实任务与数量；完整列表仍由原有任务节点拥有。 */
+/** 底部摘要始终反映真实任务与展开状态，详细操作仍由原有任务节点拥有。 */
 function renderTaskSummary(cards, active) {
   const summary = document.querySelector('[data-task-summary]');
   if (!summary) return;
   summary.hidden = !cards.length;
+  summary.setAttribute('aria-expanded', String(!taskCards.classList.contains('is-collapsed')));
   const heading = active?.querySelector('.task-card-heading p')?.textContent || t('任务');
   const failed = cards.filter(
     (card) => card.dataset.failed === 'true' || card.querySelector('.download-error-detail'),
   ).length;
   let status = t('处理中');
-  if (active?.dataset.paused === 'true') status = t('已暂停');
+  if (active?.dataset.failed === 'true' || active?.querySelector('.download-error-detail'))
+    status = t('任务失败');
+  else if (active?.dataset.paused === 'true') status = t('已暂停');
   else if (active === miniMeeting) status = miniTimer.textContent;
   else if (active === miniPlayback)
     status = document.querySelector('#player-time')?.textContent || '00:00';
@@ -153,12 +208,30 @@ function renderTaskSummary(cards, active) {
   summary.title = label;
   summary.setAttribute('aria-label', label);
 }
-document.querySelector('[data-task-summary]').addEventListener('click', async () => {
-  if (activeView === 'settings') await showView('home');
-  taskCards.classList.remove('is-collapsed');
-  document.querySelector('[data-toggle-task-stack]').setAttribute('aria-expanded', 'true');
-  const active = taskCards.querySelector('.task-card-stack-item:not(.is-task-card-back)');
-  active?.scrollIntoView({ block: 'nearest' });
+document.querySelector('[data-task-summary]').addEventListener('click', toggleTaskStack);
+document.addEventListener('pointerdown', (event) => {
+  if (
+    !document.querySelector('[data-task-summary]').hidden &&
+    !taskCards.classList.contains('is-collapsed') &&
+    !event.target.closest('#task-cards, [data-task-summary], [data-toggle-task-stack]')
+  )
+    toggleTaskStack();
+});
+document.addEventListener('keydown', (event) => {
+  if (
+    event.key !== 'Escape' ||
+    event.defaultPrevented ||
+    document.querySelector('[data-task-summary]').hidden ||
+    taskCards.classList.contains('is-collapsed') ||
+    (activeModal && !settingsModal.classList.contains('settings-page')) ||
+    (onboardingPage && onboardingPage.dataset.aiSettings !== 'true') ||
+    document.querySelector('dialog[open], .workspace-dialog')
+  )
+    return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  toggleTaskStack();
+  document.querySelector('[data-task-summary]').focus({ preventScroll: true });
 });
 function taskCardControls() {
   return `<span class="task-card-actions"><button class="task-card-close" data-minimize-task-card type="button" aria-label="${t('最小化')}">${interfaceIcon('minimize')}</button><button class="task-card-close" data-dismiss-task-card type="button" aria-label="${t('关闭')}">${interfaceIcon('close')}</button></span>`;
@@ -714,14 +787,14 @@ function configureSettingsPage(kind) {
     navigation?.dataset.page !== navigationKind ||
     navigation?.dataset.locale !== locale
   ) {
-    const scrollTop = navigation?.scrollTop || 0;
+    const scrollTop = navigation?.querySelector('.settings-nav-sections')?.scrollTop || 0;
     navigation?.remove();
     if (page) {
       settingsModal.insertAdjacentHTML('afterbegin', renderSettingsNavigation(kind));
       const next = settingsModal.querySelector('.settings-navigation');
       next.dataset.page = navigationKind;
       next.dataset.locale = locale;
-      next.scrollTop = scrollTop;
+      next.querySelector('.settings-nav-sections').scrollTop = scrollTop;
     }
   }
   const back = settingsModal.querySelector('.modal-close');
@@ -881,6 +954,7 @@ const libraryToolbar = document.querySelector('.library-toolbar');
 const meetingSearch = document.querySelector('#meeting-search');
 const meetingSearchClear = document.querySelector('#meeting-search-clear');
 const searchResultsPanel = document.querySelector('#search-results');
+searchResultsPanel.setAttribute('popover', 'manual');
 let searchDebounceTimer = 0;
 let searchRequestId = 0;
 const batchToolbar = document.createElement('section');
@@ -949,14 +1023,22 @@ function clearMeetingSelection() {
   meetingSelectionMode = false;
   syncMeetingSelection();
 }
-/** 将活动工作区过滤应用于会议库列表（搜索已改为独立浮窗，不再过滤列表）。@returns {void} */
+/** 工作区只折叠自己的会议；活动工作区仅决定下一场会议的默认归属。@returns {void} */
 function filterMeetings() {
   meetingList.querySelectorAll('.meeting-row').forEach((row) => {
     const meeting = uiData.meetings[Number(row.dataset.meetingIndex)];
-    const workspaceMatch =
-      activeLibraryNav === 'recently-deleted' ||
-      (activeWorkspaceId === '' ? !meeting.workspaceId : meeting.workspaceId === activeWorkspaceId);
-    row.hidden = !workspaceMatch;
+    row.hidden =
+      activeLibraryNav !== 'recently-deleted' &&
+      collapsedSidebarWorkspaces.has(meeting.workspaceId || '');
+  });
+  meetingList.querySelectorAll('[data-sidebar-workspace]').forEach((group) => {
+    const workspaceId = group.dataset.sidebarWorkspace;
+    const expanded = !collapsedSidebarWorkspaces.has(workspaceId);
+    const toggle = group.querySelector('[data-sidebar-workspace-toggle]');
+    toggle.setAttribute('aria-expanded', String(expanded));
+    toggle.setAttribute('aria-pressed', String(workspaceId === activeWorkspaceId));
+    toggle.classList.toggle('active', workspaceId === activeWorkspaceId);
+    group.querySelector('.sidebar-workspace-meetings').hidden = !expanded;
   });
   meetingList.querySelectorAll('header.library-group').forEach((heading) => {
     const count = [...meetingList.querySelectorAll('.meeting-row')].filter(
@@ -966,12 +1048,56 @@ function filterMeetings() {
     heading.querySelector('span').textContent = count;
   });
   meetingList.querySelector('.library-empty')?.remove();
-  if (![...meetingList.querySelectorAll('.meeting-row')].some((row) => !row.hidden)) {
+  if (activeLibraryNav === 'recently-deleted' && !meetingList.querySelector('.meeting-row')) {
     meetingList.insertAdjacentHTML(
       'beforeend',
       `<section class="library-empty">${interfaceIcon('document')}<h2>${t(activeLibraryNav === 'recently-deleted' ? '没有已删除的会议' : '这里还没有会议')}</h2><p>${t(activeLibraryNav === 'recently-deleted' ? '删除的会议会显示在这里。' : '录制或导入后，在这里整理。')}</p>${activeLibraryNav === 'recently-deleted' ? '' : `<div><button class="primary-action" data-view="prepare" data-prepare-mode="record">${interfaceIcon('plus')}${t('开始会议')}</button><button class="secondary" data-view="prepare" data-prepare-mode="import">${interfaceIcon('upload')}${t('导入音频')}</button></div>`}</section>`,
     );
   }
+}
+function toggleSidebarWorkspace(
+  workspaceId,
+  expanded = collapsedSidebarWorkspaces.has(workspaceId),
+) {
+  if (expanded) collapsedSidebarWorkspaces.delete(workspaceId);
+  else collapsedSidebarWorkspaces.add(workspaceId);
+  void switchWorkspace(workspaceId);
+  syncMeetingSelection();
+}
+function renderSidebarMeetingTree() {
+  const meetings = uiData.meetings
+    .map((meeting, index) => ({ meeting, index }))
+    .filter(({ meeting }) => !meeting.isExample || meeting.exampleLocale === locale);
+  if (activeLibraryNav === 'recently-deleted') {
+    const group = t('最近删除');
+    return `<header class="library-group" data-library-group="${escapeHtml(group)}"><h2>${escapeHtml(group)}</h2><span>${meetings.length}</span></header>${meetings
+      .map(({ meeting, index }) =>
+        renderMeetingRow(localizeMeeting(meeting), index).replace(
+          'class="meeting-row"',
+          `class="meeting-row" data-library-group="${escapeHtml(group)}"`,
+        ),
+      )
+      .join('')}`;
+  }
+  const groups = [{ id: '', name: t('公开工作区') }, ...workspaces];
+  // 已恢复会议的原工作区元数据可能稍后才到；此时也不能隐藏可用的录音。
+  for (const { meeting } of meetings) {
+    const workspaceId = meeting.workspaceId || '';
+    if (!groups.some(({ id }) => id === workspaceId))
+      groups.push({
+        id: workspaceId,
+        name: meeting.workspace?.name || getWorkspaceName(workspaceId),
+      });
+  }
+  return groups
+    .map((workspace, groupIndex) => {
+      const items = meetings.filter(({ meeting }) => (meeting.workspaceId || '') === workspace.id);
+      const expanded = !collapsedSidebarWorkspaces.has(workspace.id);
+      const current = workspace.id === activeWorkspaceId;
+      const contentId = `sidebar-workspace-meetings-${groupIndex}`;
+      return `<section class="sidebar-workspace" data-sidebar-workspace="${escapeHtml(workspace.id)}"><header class="sidebar-workspace-header"><button type="button" class="workspace-item sidebar-workspace-toggle${current ? ' active' : ''}" data-sidebar-workspace-toggle data-workspace-id="${escapeHtml(workspace.id)}" aria-expanded="${expanded}" aria-pressed="${current}" aria-controls="${contentId}" title="${escapeHtml(workspace.name)}">${interfaceIcon('chevron-right')}${interfaceIcon('folder')}<span class="workspace-label">${escapeHtml(workspace.name)}</span><span class="sidebar-workspace-count">${items.length}</span></button>${workspace.id ? `<button type="button" class="sidebar-workspace-edit" data-edit-sidebar-workspace="${escapeHtml(workspace.id)}" aria-label="${escapeHtml(t('编辑工作区'))} ${escapeHtml(workspace.name)}" title="${escapeHtml(t('编辑工作区'))}">${interfaceIcon('more')}</button>` : ''}</header><div class="sidebar-workspace-meetings" id="${contentId}"${expanded ? '' : ' hidden'}>${items.length ? items.map(({ meeting, index }) => renderMeetingRow(localizeMeeting(meeting), index)).join('') : `<p class="sidebar-workspace-empty">${escapeHtml(t('还没有会议记录'))}</p>`}</div></section>`;
+    })
+    .join('');
 }
 /** 使用当前界面语言格式化后端会议元数据。@param {object} meeting 存储的 UI 会议。@returns {object} 显示就绪的会议。*/
 function localizeMeeting(meeting) {
@@ -1017,42 +1143,7 @@ function renderMeetingList() {
       editingMeetingIndex = null;
     }
   }
-  let previous = '';
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  meetingList.innerHTML = uiData.meetings
-    .map((meeting, index) => {
-      if (meeting.isExample && meeting.exampleLocale !== locale) return '';
-      const timestamp = new Date(meeting.createdAt).getTime();
-      const days = Number.isFinite(timestamp)
-        ? Math.floor((today.getTime() - timestamp) / 86400000)
-        : null;
-      const group =
-        activeLibraryNav === 'recently-deleted'
-          ? t('最近删除')
-          : days === null
-            ? t('会议库')
-            : days <= 0
-              ? t('今天')
-              : days === 1
-                ? t('昨天')
-                : days < 7
-                  ? t('本周')
-                  : t('更早');
-      const heading =
-        group !== previous
-          ? `<header class="library-group" data-library-group="${escapeHtml(group)}"><h2>${escapeHtml(group)}</h2><span></span></header>`
-          : '';
-      previous = group;
-      return (
-        heading +
-        renderMeetingRow(localizeMeeting(meeting), index).replace(
-          'class="meeting-row"',
-          `class="meeting-row" data-library-group="${escapeHtml(group)}"`,
-        )
-      );
-    })
-    .join('');
+  meetingList.innerHTML = renderSidebarMeetingTree();
   if (renameForm && meetingRenameDraft) {
     const replacement = meetingList.querySelector('[data-rename-meeting]');
     if (replacement) {
@@ -1063,6 +1154,7 @@ function renderMeetingList() {
   filterMeetings();
   syncMeetingSelection();
   cacheMeetingList();
+  syncCurrentMeetingNavigation();
 }
 
 const prepareForm = document.querySelector('#meeting-form');
@@ -1142,7 +1234,11 @@ function renderPrepareSelects(refinedModelOverride) {
   }
   if (prepareView.dataset.mode !== 'import') {
     prepareForm.querySelectorAll('.form-grid label').forEach((label) => {
-      if (label.querySelector('[name="refined-model"], [name="meeting-speakers"]'))
+      if (
+        label.querySelector(
+          '[name="refined-model"], [name="meeting-speakers"], [name="translation-target"]',
+        )
+      )
         extraSettings.append(label);
     });
   }
@@ -2948,27 +3044,6 @@ function renderModal(kind) {
     if (!same) body.replaceChildren(mobileConnectionContent);
     body.dataset.contentKind = kind;
     mobileConnectionContent.hidden = false;
-    const install = mobileConnectionContent.querySelector('.mobile-install');
-    install.id = 'mobile-install-panel';
-    if (!same) {
-      install.hidden = true;
-      install.open = false;
-      mobileConnectionContent.prepend(install);
-    }
-    const installToggle = document.createElement('button');
-    installToggle.className = 'secondary mobile-install-toggle';
-    installToggle.type = 'button';
-    installToggle.dataset.mobileInstallToggle = '';
-    installToggle.textContent = t('安装Brevia手机端');
-    installToggle.setAttribute('aria-controls', install.id);
-    installToggle.setAttribute('aria-expanded', String(!install.hidden));
-    installToggle.addEventListener('click', () => {
-      install.hidden = !install.hidden;
-      install.open = !install.hidden;
-      installToggle.setAttribute('aria-expanded', String(!install.hidden));
-      if (!install.hidden) settingsModal.querySelector('.modal-body').scrollTop = 0;
-    });
-    settingsModal.querySelector('.modal-close').before(installToggle);
     return;
   }
   if (kind === 'advanced-settings') {
@@ -5816,13 +5891,16 @@ async function transitionPage(current, next, swap = () => {}) {
           .forEach((item) => item.classList.toggle('active', item.dataset.view === activeView));
       if (activeView === 'detail') resetDetailHeaderCollapse();
       await swap();
+      syncCurrentMeetingNavigation();
     } finally {
       BreviaMotion.cancel(current);
       current.classList.remove('active', 'leaving');
       next.classList.remove('active', 'leaving');
       next.classList.add('active');
       if (revision === pageTransitionRevision) {
-        BreviaMotion.enter(next, forward ? 'forward' : back ? 'back' : 'sibling');
+        if (activeView === 'settings' && previousView !== 'settings')
+          BreviaMotion.enter(next.querySelector('.settings-general-main'), 'settings');
+        else BreviaMotion.enter(next, forward ? 'forward' : back ? 'back' : 'sibling');
         const focus = back ? viewReturnFocus.get(next.id) : null;
         if (focus?.isConnected) focus.focus({ preventScroll: true });
       }
@@ -5847,6 +5925,7 @@ const showView = async (name) => {
   )
     return;
   if (typeof closeCorrectionPanel === 'function') closeCorrectionPanel();
+  closeSearchPopup();
   closeMeetingPopovers();
   if (document.querySelector('.segment-context-menu')) closeSegmentContextMenu();
   if (typeof closeSegmentProfilePanel === 'function') closeSegmentProfilePanel(true);
@@ -5902,7 +5981,8 @@ document
   .querySelector('#detail-view')
   ?.addEventListener('scroll', updateDetailHeaderCollapse, true);
 /** 使用与顶级视图相同的页面淡出/淡入时序切换会议库源。*/
-async function showLibraryNav(id) {
+async function showLibraryNav(id, revealLibrary = true) {
+  if (revealLibrary) setLibraryVisible(true);
   const includeDeleted = id === 'recently-deleted';
   if (activeView === 'home' && id === activeLibraryNav && !pageTransition) return;
   if (activeView === 'live' && meetingActive) minimizeMeeting();
@@ -6073,7 +6153,16 @@ function minimizeMeeting() {
 document.addEventListener('click', (event) => {
   const target = event.target.closest('[data-view]');
   if (!target || ['all-meetings', 'recently-deleted'].includes(target.id)) return;
-  if (target.dataset.view === 'home') selectLibraryNav('all-meetings');
+  if (target.dataset.view === 'home') {
+    if (activeLibraryNav !== 'all-meetings') {
+      // 设置返回与品牌入口仍需更换回收站数据，但保留用户原有的侧栏开合。
+      void showLibraryNav('all-meetings', false).catch((error) =>
+        showToast(error.message, undefined, 'error'),
+      );
+      return;
+    }
+    selectLibraryNav('all-meetings');
+  }
   if (target.dataset.view === 'prepare') setPrepareMode(target.dataset.prepareMode || 'record');
   if (activeView === 'live' && meetingActive && target.dataset.view !== 'live') minimizeMeeting();
   showView(target.dataset.view);
@@ -7147,14 +7236,19 @@ searchResultsPanel.addEventListener('click', async (event) => {
     return;
   }
   try {
-    const meeting = await window.brevia.meeting.get({ meeting_id: meetingId });
-    breviaClient.state.selectedMeetingId = meetingId;
-    applyBackendDetail(meeting);
-    await showView('detail');
+    await openMeetingRow(result, meetingId);
   } catch (error) {
     showToast(error.message, undefined, 'error');
   }
 });
+searchResultsPanel.addEventListener('keydown', (event) => {
+  if (event.key !== 'Escape') return;
+  event.preventDefault();
+  event.stopPropagation();
+  meetingSearch.focus({ preventScroll: true });
+  closeSearchPopup();
+});
+window.addEventListener('resize', positionSearchPopup);
 /** 对搜索结果文本进行安全高亮。@param {string} text 原文。@param {string} query 关键词。@returns {string} 带 <mark> 高亮的 HTML。 */
 function highlightSearchMatch(text, query) {
   const source = String(text || '');
@@ -7225,14 +7319,24 @@ async function updateSearchPopup() {
       .join('')}`;
   }
   searchResultsPanel.hidden = false;
+  if (!searchResultsPanel.matches(':popover-open')) searchResultsPanel.showPopover();
+  positionSearchPopup();
+}
+function positionSearchPopup() {
+  if (searchResultsPanel.hidden) return;
+  positionFloating(searchResultsPanel, meetingSearch.closest('.search'), [
+    'bottom-start',
+    'top-start',
+  ]);
 }
 function closeSearchPopup() {
   searchRequestId++;
   window.clearTimeout(searchDebounceTimer);
+  if (searchResultsPanel.matches(':popover-open')) searchResultsPanel.hidePopover();
   searchResultsPanel.hidden = true;
   searchResultsPanel.innerHTML = '';
 }
-const meetingSelectionSurface = document.querySelector('#home-view');
+const meetingSelectionSurface = document.querySelector('.library-panel');
 let dragSelection;
 let suppressMeetingClick = false;
 const toggleMeetingSelection = (row) => {
@@ -7267,8 +7371,11 @@ document.querySelector('#meeting-selection-toggle').addEventListener('click', ()
 meetingSelectionSurface.addEventListener('pointerdown', (event) => {
   if (
     event.button !== 0 ||
+    !meetingList.contains(event.target) ||
     event.clientY < libraryToolbar.getBoundingClientRect().top ||
-    event.target.closest('.meeting-row, .meeting-actions, .batch-toolbar')
+    event.target.closest(
+      'button, input, textarea, select, a, [contenteditable="true"], .meeting-row, .meeting-actions, .batch-toolbar',
+    )
   )
     return;
   dragSelection = {
@@ -7350,6 +7457,12 @@ meetingSelectionSurface.addEventListener(
 );
 meetingList.addEventListener('keydown', (event) => {
   if (event.target.matches('input, textarea')) return;
+  const workspace = event.target.closest('[data-sidebar-workspace-toggle]');
+  if (workspace && ['ArrowLeft', 'ArrowRight'].includes(event.key)) {
+    event.preventDefault();
+    toggleSidebarWorkspace(workspace.dataset.workspaceId || '', event.key === 'ArrowRight');
+    return;
+  }
   const row = event.target.closest('.meeting-row');
   if (row && event.key === ' ') {
     event.preventDefault();
@@ -7599,15 +7712,22 @@ async function runBatchMutation(action, meetings, previousResults = [], allMeeti
   }
 }
 
-async function openMeetingRow(row) {
+async function openMeetingRow(row, meetingId = row.dataset.meetingId) {
+  if (currentMeetingDetail?.id !== meetingId) {
+    // 持续可见的会议导航允许直接切换；未保存的文档必须先由用户保存或取消。
+    if (uiData.detail.notesEditing || uiData.detail.summaryEditing) {
+      showToast(t('请先保存或取消当前编辑'), undefined, 'error');
+      return;
+    }
+    if (typeof settleCorrectionDraft === 'function' && !(await settleCorrectionDraft())) return;
+  }
+  if (activeView === 'live' && meetingActive) minimizeMeeting();
   if (!window.brevia) {
     showView('detail');
     return;
   }
   const request = ++meetingListRequest;
-  breviaClient.state.selectedMeetingId = row.dataset.meetingId;
-
-  const meetingId = row.dataset.meetingId;
+  breviaClient.state.selectedMeetingId = meetingId;
   row.style.opacity = '0.6';
 
   try {
@@ -7616,7 +7736,8 @@ async function openMeetingRow(row) {
     row.style.opacity = '';
     if (request !== meetingListRequest) return;
     applyBackendDetail(meeting);
-    showView('detail');
+    await showView('detail');
+    syncCurrentMeetingNavigation();
   } catch (error) {
     row.style.opacity = '';
     showToast(error.message, undefined, 'error');
@@ -7852,6 +7973,16 @@ document.addEventListener('click', (event) => {
   }
 
   // 工作区相关事件
+  const sidebarWorkspaceEdit = event.target.closest('[data-edit-sidebar-workspace]');
+  if (sidebarWorkspaceEdit) {
+    showEditWorkspaceDialog(sidebarWorkspaceEdit.dataset.editSidebarWorkspace);
+    return;
+  }
+  const sidebarWorkspace = event.target.closest('[data-sidebar-workspace-toggle]');
+  if (sidebarWorkspace) {
+    toggleSidebarWorkspace(sidebarWorkspace.dataset.workspaceId || '');
+    return;
+  }
   if (event.target.closest('#workspace-selector')) {
     toggleWorkspacePicker();
     return;
@@ -8209,6 +8340,8 @@ function positionFloating(
   const width = floating.offsetWidth;
   const height = floating.offsetHeight;
   const positions = {
+    'bottom-start': { left: anchor.left, top: anchor.bottom + 4 },
+    'top-start': { left: anchor.left, top: anchor.top - height - 4 },
     'bottom-end': { left: anchor.right - width, top: anchor.bottom + 4 },
     'top-end': { left: anchor.right - width, top: anchor.top - height - 4 },
     'right-center': { left: anchor.right, top: (anchor.top + anchor.bottom - height) / 2 },
@@ -9516,7 +9649,11 @@ document.querySelector('[data-close-transcript-search]').addEventListener('click
 });
 finalTranscript.addEventListener('keydown', (event) => {
   const tab = event.target.closest('[data-detail-tab]');
-  if (!tab || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+  if (
+    !tab ||
+    !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)
+  )
+    return;
   event.preventDefault();
   const tabs = [...finalTranscript.querySelectorAll('[data-detail-tab]')];
   const index =
@@ -9524,7 +9661,10 @@ finalTranscript.addEventListener('keydown', (event) => {
       ? 0
       : event.key === 'End'
         ? tabs.length - 1
-        : (tabs.indexOf(tab) + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+        : (tabs.indexOf(tab) +
+            (['ArrowRight', 'ArrowDown'].includes(event.key) ? 1 : -1) +
+            tabs.length) %
+          tabs.length;
   tabs[index].click();
 });
 finalTranscript.addEventListener('click', (event) => {

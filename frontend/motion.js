@@ -18,6 +18,7 @@
     out: 'cubic-bezier(0.16, 1, 0.3, 1)',
     in: 'cubic-bezier(0.4, 0, 1, 1)',
     inOut: 'cubic-bezier(0.4, 0, 0.2, 1)',
+    step: 'cubic-bezier(0.32, 0.72, 0.24, 1)',
   });
   function cancel(element) {
     running.get(element)?.cancel();
@@ -29,38 +30,62 @@
     // 同级切换由选中态表达，不把已经可读的整页重新淡成空白。
     if (kind === 'sibling') return;
     if (preference.matches || document.hidden || !element.animate) return;
-    const offset = kind === 'forward' ? 24 : kind === 'back' ? -24 : 0;
+    const isStep = kind === 'step-forward' || kind === 'step-back';
+    const offset = isStep
+      ? kind === 'step-back'
+        ? -40
+        : 40
+      : kind === 'forward'
+        ? 24
+        : kind === 'back'
+          ? -24
+          : 0;
     const frames =
-      kind === 'attention'
+      kind === 'settings'
         ? [
-            { backgroundColor: 'var(--color-selected)', offset: 0 },
-            { backgroundColor: 'var(--color-selected)', offset: 0.22 },
-            { backgroundColor: 'transparent' },
+            { opacity: 0, transform: 'translateY(8px)' },
+            { opacity: 1, transform: 'translateY(0)' },
           ]
-        : kind === 'tab'
+        : isStep
           ? [
-              { opacity: 1, transform: 'translateY(6px)' },
-              { opacity: 1, transform: 'translateY(0)' },
+              { opacity: 0, transform: `translateX(${offset}px)` },
+              { opacity: 1, transform: 'translateX(0)' },
             ]
-          : kind === 'press'
-            ? [{ scale: 0.98 }, { scale: 1.004, offset: 0.65 }, { scale: 1 }]
-            : offset
+          : kind === 'attention'
+            ? [
+                { backgroundColor: 'var(--color-selected)', offset: 0 },
+                { backgroundColor: 'var(--color-selected)', offset: 0.22 },
+                { backgroundColor: 'transparent' },
+              ]
+            : kind === 'tab'
               ? [
-                  { opacity: 1, transform: `translateX(${offset}px)` },
-                  { opacity: 1, transform: 'translateX(0)' },
+                  { opacity: 1, transform: 'translateY(6px)' },
+                  { opacity: 1, transform: 'translateY(0)' },
                 ]
-              : [{ opacity: 0.72 }, { opacity: 1 }];
+              : kind === 'press'
+                ? [{ scale: 0.98 }, { scale: 1.004, offset: 0.65 }, { scale: 1 }]
+                : offset
+                  ? [
+                      { opacity: 1, transform: `translateX(${offset}px)` },
+                      { opacity: 1, transform: 'translateX(0)' },
+                    ]
+                  : [{ opacity: 0.72 }, { opacity: 1 }];
     const duration =
-      kind === 'attention'
-        ? 1120
-        : offset
-          ? kind === 'back'
-            ? timing.state
-            : timing.spatial
-          : kind === 'press' || kind === 'tab'
-            ? timing.state
-            : timing.feedback;
-    const animation = element.animate(frames, { duration, easing: easing.out });
+      kind === 'settings'
+        ? timing.state
+        : isStep
+          ? timing.spatial
+          : kind === 'attention'
+            ? 1120
+            : offset
+              ? kind === 'back'
+                ? timing.state
+                : timing.spatial
+              : kind === 'press' || kind === 'tab'
+                ? timing.state
+                : timing.feedback;
+    const curve = kind === 'settings' ? 'ease-out' : isStep ? easing.step : easing.out;
+    const animation = element.animate(frames, { duration, easing: curve });
     running.set(element, animation);
     const clean = () => {
       if (running.get(element) === animation) running.delete(element);

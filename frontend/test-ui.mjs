@@ -613,7 +613,7 @@ assert.deepEqual(
   [],
   `顶层代码不得引用后加载的符号，否则启动即报错：\n${orderViolations.join('\n')}`,
 );
-const componentContext = {};
+const componentContext = { document: { addEventListener() {} } };
 runInNewContext(text(components), componentContext);
 // 动效只处理真实键盘点击，不改变点击行为；快速重复按键取消上一段反馈。
 let keyboardPress;
@@ -1020,6 +1020,80 @@ await assert.rejects(
 );
 const localeContext = { window: {} };
 runInNewContext(text(i18nData), localeContext);
+// 设置搜索过滤已翻译的真实导航按钮，同时保持分组与空状态一致。
+{
+  let onSettingsInput;
+  let settingsLocale = 'zh';
+  const settingsNavigationContext = {
+    t: (key) => localeContext.window.BreviaLocaleData.catalog[settingsLocale].labels[key] || key,
+    document: {
+      addEventListener(type, handler) {
+        if (type === 'input') onSettingsInput = handler;
+      },
+    },
+  };
+  runInNewContext(text(components), settingsNavigationContext);
+  for (const current of ['summary-model', 'ai-assist']) {
+    const rendered = settingsNavigationContext.renderSettingsNavigation(current);
+    assert.match(rendered, /data-settings-page="ai-features" aria-current="page"/);
+    assert.equal((rendered.match(/aria-current="page"/g) || []).length, 1);
+    assert.equal((rendered.match(/class="settings-nav-group"/g) || []).length, 3);
+  }
+  for (const code of ['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']) {
+    settingsLocale = code;
+    const markup = settingsNavigationContext.renderSettingsNavigation('models');
+    assert.match(markup, /data-settings-page="models" aria-current="page"/);
+    const groups = [
+      ...markup.matchAll(/<section class="settings-nav-group">([\s\S]*?)<\/section>/g),
+    ].map((match) => {
+      const buttons = [
+        ...match[1].matchAll(
+          /<button\b[^>]*data-settings-page="([^"]+)"[^>]*>([\s\S]*?)<\/button>/g,
+        ),
+      ].map((button) => ({
+        key: button[1],
+        textContent: button[2]
+          .replace(/<[^>]*>/g, '')
+          .replaceAll('&amp;', '&')
+          .replaceAll('&#39;', "'"),
+        hidden: false,
+      }));
+      return { buttons, hidden: false, querySelectorAll: () => buttons };
+    });
+    assert.equal(groups.flatMap((group) => group.buttons).length, 8);
+    const empty = { hidden: true };
+    const navigation = { querySelectorAll: () => groups, querySelector: () => empty };
+    const input = {
+      value: `  ${settingsNavigationContext.t('模型库').toLocaleUpperCase()}  `,
+      closest: () => navigation,
+      matches: (selector) => selector === '[data-settings-search]',
+    };
+    onSettingsInput({ target: input });
+    assert.deepEqual(
+      groups.flatMap((group) =>
+        group.buttons.filter((button) => !button.hidden).map((button) => button.key),
+      ),
+      ['models'],
+      `${code}: 按本地化标签搜索`,
+    );
+    assert.deepEqual(
+      groups.map((group) => group.hidden),
+      [true, false, true],
+    );
+    assert.equal(empty.hidden, true);
+    input.value = '__missing_setting__';
+    onSettingsInput({ target: input });
+    assert.ok(groups.every((group) => group.hidden));
+    assert.equal(empty.hidden, false);
+    input.value = '  ';
+    onSettingsInput({ target: input });
+    assert.ok(
+      groups.every((group) => !group.hidden && group.buttons.every((button) => !button.hidden)),
+    );
+    assert.equal(empty.hidden, true, `${code}: 清空恢复全部导航`);
+  }
+  assert.doesNotThrow(() => onSettingsInput({ target: {} }), '无关输入不进入设置过滤');
+}
 const i18nRuntimeSource = await readFile('i18n-runtime.js', 'utf8');
 assert.doesNotThrow(() => runInNewContext(i18nRuntimeSource, { window: localeContext.window }));
 for (const stored of ['zh', 'en', 'de', 'fr-CA', '__proto__', '']) {
@@ -1419,6 +1493,7 @@ assert.doesNotMatch(
 );
 // tabbar 的铅笔跟随激活 tab：笔记页编辑笔记，字幕页编辑字幕，录制中 / 精修中不提供入口。
 const detailTabbarContext = {
+  document: { addEventListener() {} },
   uiData: { detail: { hasRefined: false, refineState: 'idle', transcriptEditable: true } },
   detailActiveTab: 'notes',
   locale: 'zh',
@@ -1429,6 +1504,14 @@ const detailTabbarContext = {
   },
 };
 runInNewContext(text(components), detailTabbarContext);
+const documentNavigation = detailTabbarContext.renderDetailTabbar();
+assert.match(documentNavigation, /role="tablist" aria-orientation="horizontal"/);
+assert.equal((documentNavigation.match(/role="tab"/g) || []).length, 3);
+assert.match(documentNavigation, /role="toolbar" aria-label="笔记"/);
+assert.ok(
+  documentNavigation.indexOf('detail-content-status') < documentNavigation.indexOf('</nav>'),
+);
+assert.equal((documentNavigation.split('detail-content-status')[0].match(/<svg/g) || []).length, 3);
 assert.match(
   detailTabbarContext.renderDetailTabbar(),
   /data-edit-notes type=/,
@@ -1918,16 +2001,12 @@ assert.match(text(js), /showNewWorkspaceDialog\(null, \(workspace\)/);
 assert.match(text(app), /showWorkspaceAssignMenu\(index, rect\)/);
 assert.match(text(js), /function renderWorkspaceNav/);
 assert.match(text(js), /async function switchWorkspace/);
-assert.match(
-  text(workspaces),
-  /await\s+appActions\.transitionPage\([\s\S]*?,\s+applyWorkspace,?\s*\)/,
-);
 assert.match(text(js), /meeting\.list\(\{ include_deleted: includeDeleted \}\)/);
 assert.doesNotMatch(text(js), /action === 'purge' && window\.brevia/);
 assert.match(text(js), /addEventListener\('pointerdown'/);
 assert.match(text(js), /addEventListener\('dragstart'/);
 assert.match(text(js), /meetingSelectionSurface\.setPointerCapture/);
-assert.match(text(js), /meetingSelectionSurface = document\.querySelector\('#home-view'\)/);
+assert.match(text(js), /meetingSelectionSurface = document\.querySelector\('\.library-panel'\)/);
 assert.match(text(js), /event\.clientY < libraryToolbar\.getBoundingClientRect\(\)\.top/);
 assert.doesNotMatch(text(js), /pointerdown[\s\S]{0,300}event\.preventDefault\(\)/);
 assert.match(text(js), /pointermove[\s\S]{0,500}meetingSelectionSurface\.setPointerCapture/);
@@ -2461,7 +2540,11 @@ assert.equal(utilsContext.refinedModelSupportsTimestamps('funasr-nano-int8'), tr
 assert.equal(utilsContext.refinedModelSupportsTimestamps('unknown-model'), false);
 
 // 重点锚点保留原文并拒绝非法时间，正文只作为文本渲染。
-const highlightContext = { formatMeetingTime: utilsContext.formatMeetingTime, t: (value) => value };
+const highlightContext = {
+  document: { addEventListener() {} },
+  formatMeetingTime: utilsContext.formatMeetingTime,
+  t: (value) => value,
+};
 runInNewContext(text(components), highlightContext);
 assert.equal(
   highlightContext.noteHighlightMarkdown(0, '第一句\n第二句'),
@@ -4252,6 +4335,587 @@ const summaryFn = (name) => {
   const start = summaryAppSource.indexOf(`function ${name}(`);
   return summaryAppSource.slice(start, summaryAppSource.indexOf('\n}\n', start) + 2);
 };
+// 从回收站经设置返回时必须刷新正常会议，且不能改变用户的侧栏折叠偏好。
+{
+  let homeClick;
+  let returnToLibrary;
+  const calls = [];
+  const homeContext = {
+    activeView: 'settings',
+    activeLibraryNav: 'recently-deleted',
+    pageTransition: null,
+    meetingActive: false,
+    document: {
+      querySelector: () => ({}),
+      addEventListener: (_type, handler) => {
+        homeClick = handler;
+      },
+    },
+    setLibraryVisible: () => calls.push('reveal'),
+    selectLibraryNav(id) {
+      this.activeLibraryNav = id;
+    },
+    transitionPage: async (_current, _next, swap) => {
+      await swap();
+      homeContext.activeView = 'home';
+    },
+    refreshBackendMeetings: async (includeDeleted) => calls.push(['refresh', includeDeleted]),
+    showView: (view) => calls.push(['view', view]),
+    showToast: (message) => assert.fail(message),
+    window: { brevia: {} },
+  };
+  homeContext.selectLibraryNav = (id) => {
+    homeContext.activeLibraryNav = id;
+  };
+  runInNewContext(`async ${summaryFn('showLibraryNav')}`, homeContext);
+  const libraryNavigation = homeContext.showLibraryNav;
+  homeContext.showLibraryNav = (...args) => {
+    returnToLibrary = libraryNavigation(...args);
+    return returnToLibrary;
+  };
+  const homeClickStart = summaryAppSource.indexOf(
+    "document.addEventListener('click', (event) => {\n  const target = event.target.closest('[data-view]');",
+  );
+  runInNewContext(
+    summaryAppSource.slice(homeClickStart, summaryAppSource.indexOf('\n});', homeClickStart) + 4),
+    homeContext,
+  );
+  const event = { target: { closest: () => ({ dataset: { view: 'home' } }) } };
+  homeClick(event);
+  await returnToLibrary;
+  assert.deepEqual(calls, [['refresh', false]]);
+  assert.equal(homeContext.activeLibraryNav, 'all-meetings');
+  assert.equal(homeContext.activeView, 'home');
+  calls.length = 0;
+  homeClick(event);
+  assert.deepEqual(calls, [['view', 'home']], '正常列表返回首页不增加后端读取');
+}
+// 两个任务入口共用真实展开状态；进度、失败和空列表均从现有任务卡读取。
+{
+  const classList = () => {
+    const values = new Set();
+    return {
+      add: (value) => values.add(value),
+      contains: (value) => values.has(value),
+      toggle(value, force = !values.has(value)) {
+        if (force) values.add(value);
+        else values.delete(value);
+        return force;
+      },
+    };
+  };
+  const control = () => ({
+    attributes: {},
+    classList: classList(),
+    setAttribute(name, value) {
+      this.attributes[name] = value;
+    },
+    removeAttribute(name) {
+      delete this.attributes[name];
+    },
+  });
+  const labels = new Map();
+  const summary = {
+    ...control(),
+    focus() {
+      this.focused = true;
+    },
+    querySelector(selector) {
+      if (!labels.has(selector)) labels.set(selector, {});
+      return labels.get(selector);
+    },
+  };
+  const toggle = { ...control(), querySelector: () => ({}) };
+  let scrolled = 0;
+  const card = (title, dataset) => ({
+    ...control(),
+    dataset,
+    style: {},
+    matches: () => true,
+    querySelector: (selector) =>
+      selector === '.task-card-heading p' ? { textContent: title } : null,
+    scrollIntoView: () => scrolled++,
+  });
+  const progressCard = card('Transcript', { completed: '42', total: '100' });
+  const failedCard = card('Download', { completed: '0', total: '100', failed: 'true' });
+  const cards = {
+    children: [progressCard, failedCard],
+    classList: classList(),
+    querySelector: () => progressCard,
+  };
+  const taskContext = {
+    activeModal: 'models',
+    settingsModal: { classList: { contains: () => true } },
+    onboardingPage: null,
+    taskCards: cards,
+    stackableTaskCardSelector: 'unused',
+    miniMeeting: {},
+    miniPlayback: {},
+    miniTimer: { textContent: '00:00:15' },
+    t: (value) => value,
+    document: {
+      querySelector: (selector) =>
+        selector === '[data-task-summary]'
+          ? summary
+          : selector === '[data-toggle-task-stack]'
+            ? toggle
+            : null,
+    },
+  };
+  for (const name of ['renderTaskSummary', 'syncTaskCardStack', 'toggleTaskStack'])
+    runInNewContext(summaryFn(name), taskContext);
+  const taskEvents = {};
+  taskContext.document.addEventListener = (name, callback) => {
+    taskEvents[name] = callback;
+  };
+  const taskEventsStart = summaryAppSource.indexOf(
+    "document.addEventListener('pointerdown'",
+    summaryAppSource.indexOf("document.querySelector('[data-task-summary]').addEventListener"),
+  );
+  runInNewContext(
+    summaryAppSource.slice(
+      taskEventsStart,
+      summaryAppSource.indexOf('function taskCardControls', taskEventsStart),
+    ),
+    taskContext,
+  );
+  taskContext.syncTaskCardStack(progressCard);
+  assert.equal(labels.get('[data-task-summary-count]').textContent, 2);
+  assert.equal(labels.get('[data-task-summary-status]').textContent, '42%');
+  assert.match(summary.title, /任务失败 1/);
+  assert.equal(summary.attributes['aria-expanded'], 'true');
+  taskContext.toggleTaskStack();
+  assert.equal(summary.attributes['aria-expanded'], 'false');
+  assert.equal(toggle.attributes['aria-expanded'], 'false');
+  assert.equal(cards.classList.contains('is-collapsed'), true);
+  taskContext.syncTaskCardStack(failedCard);
+  assert.equal(labels.get('[data-task-summary-status]').textContent, '任务失败');
+  assert.equal(summary.attributes['aria-expanded'], 'false', '进度更新不能重新展开任务');
+  taskContext.toggleTaskStack();
+  assert.equal(summary.attributes['aria-expanded'], 'true');
+  assert.equal(toggle.attributes['aria-expanded'], 'true');
+  assert.equal(scrolled, 1);
+  taskEvents.pointerdown({ target: { closest: () => ({}) } });
+  assert.equal(summary.attributes['aria-expanded'], 'true', '内部seek和按钮操作不关闭任务浮层');
+  taskEvents.pointerdown({ target: { closest: () => null } });
+  assert.equal(summary.attributes['aria-expanded'], 'false');
+  assert.equal(summary.focused, undefined, '点击外侧不抢回焦点');
+  taskContext.toggleTaskStack();
+  let escaped = false;
+  taskEvents.keydown({
+    key: 'Escape',
+    preventDefault() {
+      escaped = true;
+    },
+    stopImmediatePropagation() {},
+  });
+  assert.equal(escaped, true);
+  assert.equal(summary.attributes['aria-expanded'], 'false');
+  assert.equal(summary.focused, true, '设置页也可关闭任务并将焦点交还状态栏入口');
+  cards.children = [];
+  taskContext.syncTaskCardStack();
+  assert.equal(summary.hidden, true);
+  assert.equal(toggle.hidden, true);
+  escaped = false;
+  taskEvents.keydown({
+    key: 'Escape',
+    preventDefault() {
+      escaped = true;
+    },
+  });
+  assert.equal(escaped, false, '没有任务时不拦截Escape');
+}
+// 设备入口只显示短状态；完整设备名和会话错误留在可访问标签里。
+{
+  const source = text(await readFile('mobile-connection.js'));
+  const mobileStatus = { textContent: '' };
+  const mobileEntry = {
+    title: '',
+    attributes: {},
+    classList: { toggle() {} },
+    setAttribute(name, value) {
+      this.attributes[name] = value;
+    },
+  };
+  const mobileContext = {
+    t: (value) => value,
+    document: { getElementById: (id) => (id === 'mobile-nav' ? mobileEntry : mobileStatus) },
+  };
+  for (const name of ['mobileSessionStatus', 'renderMobileSidebar']) {
+    const start = source.indexOf(`  function ${name}(`);
+    runInNewContext(source.slice(start, source.indexOf('\n  }\n', start) + 4), mobileContext);
+  }
+  const phone = { id: 'phone', name: '手机名称'.repeat(40), connected: true };
+  const value = { enabled: true, devices: [phone] };
+  mobileContext.renderMobileSidebar(value, undefined, [phone], '已连接');
+  assert.equal(mobileStatus.textContent, '已连接');
+  assert.ok(mobileEntry.title.includes(phone.name));
+  assert.equal(mobileEntry.attributes['aria-label'], mobileEntry.title);
+  for (const [session, connected, expected] of [
+    [{ owner: 'phone' }, [phone], '手机录音中'],
+    [{ owner: 'phone', state: 'paused' }, [phone], '手机已暂停'],
+    [{ owner: 'phone', state: 'starting' }, [phone], '等待手机开始录音'],
+    [{ owner: 'phone' }, [], '连接中断 · 等待补传'],
+    [{ owner: 'phone', ended: true }, [], '电脑处理中'],
+  ]) {
+    mobileContext.renderMobileSidebar(value, session, connected, '已连接');
+    assert.equal(mobileStatus.textContent, expected);
+  }
+  for (const status of ['等待设备连接', '服务已关闭']) {
+    mobileContext.renderMobileSidebar({ devices: [] }, undefined, [], status);
+    assert.equal(mobileStatus.textContent, status);
+  }
+  const panels = ['intro', 'install', 'pair', 'paired'].map((state) => ({
+    dataset: { mobilePanel: state },
+    hidden: false,
+  }));
+  const markers = ['install', 'pair'].map((step) => ({
+    dataset: { mobileStepMarker: step },
+    attributes: {},
+    setAttribute(name, value) {
+      this.attributes[name] = value;
+    },
+    removeAttribute(name) {
+      delete this.attributes[name];
+    },
+  }));
+  const trusted = {},
+    install = {};
+  const page = {
+    dataset: {},
+    querySelector: (selector) => (selector === '.mobile-trusted-panel' ? trusted : install),
+    querySelectorAll: (selector) => (selector === '[data-mobile-panel]' ? panels : markers),
+  };
+  let pairCalls = 0;
+  Object.assign(mobileContext, {
+    dialog: page,
+    mobilePageStep: null,
+    mobilePairRevision: 0,
+    lastStatus: { devices: [] },
+    run: async (action) => action(),
+    pair: () => pairCalls++,
+  });
+  for (const name of ['renderMobilePage', 'updateMobilePage', 'changeMobilePageStep']) {
+    const start = source.indexOf(
+      `  ${name === 'changeMobilePageStep' ? 'async ' : ''}function ${name}(`,
+    );
+    runInNewContext(source.slice(start, source.indexOf('\n  }\n', start) + 4), mobileContext);
+  }
+  mobileContext.renderMobilePage();
+  assert.equal(page.dataset.mobilePageState, 'intro');
+  assert.equal(trusted.hidden, true);
+  await mobileContext.changeMobilePageStep('install');
+  assert.equal(page.dataset.mobilePageState, 'install');
+  assert.equal(install.open, true);
+  assert.equal(markers[0].attributes['aria-current'], 'step');
+  await mobileContext.changeMobilePageStep('pair');
+  assert.equal(page.dataset.mobilePageState, 'pair');
+  assert.equal(pairCalls, 1);
+  assert.equal(panels.find((panel) => panel.dataset.mobilePanel === 'pair').hidden, false);
+  mobileContext.updateMobilePage({ devices: [phone] });
+  assert.equal(page.dataset.mobilePageState, 'paired', '真实新增信任设备自动结束配对流程');
+  assert.equal(trusted.hidden, false);
+  mobileContext.lastStatus = { devices: [phone] };
+  await mobileContext.changeMobilePageStep('pair');
+  mobileContext.updateMobilePage({ devices: [phone] });
+  assert.equal(page.dataset.mobilePageState, 'pair', '已有连接不能跳过配对另一台的第二步');
+  await mobileContext.changeMobilePageStep('back');
+  assert.equal(page.dataset.mobilePageState, 'install');
+  await mobileContext.changeMobilePageStep('done');
+  assert.equal(page.dataset.mobilePageState, 'paired');
+  mobileContext.updateMobilePage({ devices: [] });
+  assert.equal(page.dataset.mobilePageState, 'intro', '撤销最后一台设备回到入口');
+}
+// 工作区对话框独立于 activeModal；搜索按钮和 CmdK 都必须留在该对话框内。
+{
+  let searchShortcut;
+  let workspaceDialog = {};
+  const searchFocusCalls = [];
+  const commandContext = {
+    activeModal: null,
+    onboardingPage: null,
+    desktopShortcutCapture: null,
+    activeView: 'detail',
+    document: {
+      querySelector: () => workspaceDialog,
+      addEventListener: (_type, callback) => (searchShortcut = callback),
+    },
+    setLibraryVisible: (visible) => searchFocusCalls.push(visible),
+    meetingSearch: { focus: () => searchFocusCalls.push('focused') },
+  };
+  runInNewContext(`async ${summaryFn('focusLibrarySearch')}`, commandContext);
+  const shortcutStart = summaryAppSource.indexOf(
+    "document.addEventListener('keydown', (event) => {",
+  );
+  runInNewContext(
+    summaryAppSource.slice(shortcutStart, summaryAppSource.indexOf('\n});', shortcutStart) + 4),
+    commandContext,
+  );
+  const command = {
+    metaKey: true,
+    key: 'k',
+    target: { closest: () => null },
+    preventDefault: () => searchFocusCalls.push('prevented'),
+  };
+  await commandContext.focusLibrarySearch();
+  searchShortcut(command);
+  assert.deepEqual(searchFocusCalls, [], '独立工作区对话框打开时不能移动焦点或吞掉快捷键');
+  workspaceDialog = null;
+  searchShortcut(command);
+  assert.deepEqual(searchFocusCalls, ['prevented', true, 'focused']);
+}
+// 框选只从会议树空白处启动，侧栏播放器和文件夹按钮不得被父容器抢走指针。
+{
+  let startSelection;
+  const selectionContext = {
+    meetingSelectionSurface: { addEventListener: (_type, callback) => (startSelection = callback) },
+    meetingList: { contains: (target) => target.inTree },
+    libraryToolbar: { getBoundingClientRect: () => ({ top: 100 }) },
+    selectedMeetingKeys: new Set(),
+    document: { createElement: () => ({}) },
+    dragSelection: undefined,
+  };
+  const selectionStart = summaryAppSource.indexOf(
+    "meetingSelectionSurface.addEventListener('pointerdown'",
+  );
+  runInNewContext(
+    summaryAppSource.slice(selectionStart, summaryAppSource.indexOf('\n});', selectionStart) + 4),
+    selectionContext,
+  );
+  const pointer = { button: 0, pointerId: 1, clientX: 50, clientY: 200 };
+  startSelection({ ...pointer, target: { inTree: false, closest: () => null } });
+  assert.equal(selectionContext.dragSelection, undefined, '任务进度条不能启动会议框选');
+  startSelection({ ...pointer, target: { inTree: true, closest: () => ({}) } });
+  assert.equal(selectionContext.dragSelection, undefined, '文件夹按钮不能启动会议框选');
+  startSelection({ ...pointer, target: { inTree: true, closest: () => null } });
+  assert.equal(selectionContext.dragSelection.pointerId, 1);
+  assert.equal(selectionContext.dragSelection.moved, false);
+}
+// 旧工作区编辑入口藏在不可见的标题内时，编辑对话框必须使用居中布局。
+{
+  const anchor = { hidden: false, getClientRects: () => [] };
+  const workspaceDialogContext = {
+    workspaces: [{ id: 'alpha' }],
+    activeWorkspaceId: 'alpha',
+    activeView: 'home',
+    document: { createElement: () => ({}), querySelector: () => anchor },
+  };
+  const dialogStart = text(workspaces).indexOf('function showEditWorkspaceDialog(');
+  const dialogMarkup = text(workspaces).indexOf('  backdrop.innerHTML =', dialogStart);
+  runInNewContext(
+    `${text(workspaces).slice(dialogStart, dialogMarkup)}return backdrop.className;\n}`,
+    workspaceDialogContext,
+  );
+  assert.equal(
+    workspaceDialogContext.showEditWorkspaceDialog('alpha'),
+    'modal-backdrop workspace-dialog',
+  );
+  anchor.getClientRects = () => [{}];
+  assert.match(workspaceDialogContext.showEditWorkspaceDialog('alpha'), /workspace-edit-popover/);
+}
+// 同一侧栏中所有工作区保留原始会议索引；展开/选择默认归属不能替换正在编辑的文档。
+{
+  const entries = [
+    { id: 'public', title: 'Public', workspaceId: '' },
+    { id: 'hidden-example', title: 'Other locale', isExample: true, exampleLocale: 'en' },
+    { id: 'alpha', title: 'Alpha meeting', workspaceId: 'alpha' },
+    { id: 'beta', title: 'Beta meeting', workspaceId: 'beta' },
+    {
+      id: 'restored',
+      title: 'Restored',
+      workspaceId: 'restored',
+      workspace: { name: 'Old workspace' },
+    },
+  ].map((meeting) => ({ meta: '', tags: [], status: {}, ...meeting }));
+  const sidebarRows = entries.map((meeting, index) => ({
+    dataset: { meetingIndex: String(index) },
+    hidden: false,
+  }));
+  const sidebarGroups = ['', 'alpha', 'beta'].map((id) => {
+    const toggle = {
+      attributes: {},
+      classList: { toggle() {} },
+      setAttribute(name, value) {
+        this.attributes[name] = value;
+      },
+    };
+    const content = { hidden: false };
+    return {
+      dataset: { sidebarWorkspace: id },
+      toggle,
+      content,
+      querySelector: (selector) =>
+        selector === '[data-sidebar-workspace-toggle]' ? toggle : content,
+    };
+  });
+  const sidebarCalls = [];
+  const sidebarContext = {
+    activeView: 'detail',
+    activeLibraryNav: 'all-meetings',
+    activeWorkspaceId: 'alpha',
+    currentMeetingDetail: { id: 'open-document' },
+    uiData: { meetings: entries, detail: { notesEditing: true, notes: 'unsaved draft' } },
+    workspaces: [
+      { id: 'alpha', name: 'Alpha <&>' },
+      { id: 'beta', name: 'Beta' },
+      { id: 'empty', name: 'Empty' },
+    ],
+    collapsedSidebarWorkspaces: new Set(),
+    locale: 'zh',
+    t: (value) => value,
+    interfaceIcon: componentContext.interfaceIcon,
+    escapeHtml: runInNewContext('escapeHtml', componentContext),
+    renderMeetingRow: componentContext.renderMeetingRow,
+    localizeMeeting: (meeting) => meeting,
+    getWorkspaceName: () => 'Unknown',
+    renderWorkspaceNav: () => sidebarCalls.push('workspace-nav'),
+    updateHomeViewTitle() {},
+    syncMeetingSelection: () => sidebarCalls.push('selection'),
+    localStorage: { setItem: (key, value) => sidebarCalls.push([key, value]) },
+    meetingList: {
+      querySelectorAll: (selector) =>
+        selector === '.meeting-row'
+          ? sidebarRows
+          : selector === '[data-sidebar-workspace]'
+            ? sidebarGroups
+            : [],
+      querySelector: (selector) => (selector === '.meeting-row' ? sidebarRows[0] : null),
+    },
+    appActions: {},
+  };
+  for (const name of ['renderSidebarMeetingTree', 'filterMeetings', 'toggleSidebarWorkspace'])
+    runInNewContext(summaryFn(name), sidebarContext);
+  const switchStart = text(workspaces).indexOf('async function switchWorkspace(');
+  runInNewContext(
+    text(workspaces).slice(switchStart, text(workspaces).indexOf('\n}\n', switchStart) + 2),
+    sidebarContext,
+  );
+  sidebarContext.appActions.filterMeetings = sidebarContext.filterMeetings;
+  const tree = sidebarContext.renderSidebarMeetingTree();
+  assert.equal((tree.match(/class="sidebar-workspace"/g) || []).length, 5);
+  assert.match(tree, /Alpha &lt;&amp;&gt;/);
+  assert.match(
+    tree,
+    /data-sidebar-workspace="beta"[\s\S]*data-meeting-index="3"[^>]*data-meeting-id="beta"/,
+  );
+  assert.match(tree, /data-sidebar-workspace="empty"[\s\S]*sidebar-workspace-empty/);
+  assert.match(tree, /data-sidebar-workspace="restored"[\s\S]*Old workspace/);
+  assert.doesNotMatch(tree, /hidden-example/);
+  assert.match(tree, /data-edit-sidebar-workspace="alpha"/);
+  assert.match(tree, /data-meeting-index="2"[^>]*draggable="true"/);
+  sidebarContext.filterMeetings();
+  assert.equal(sidebarRows[0].hidden, false);
+  assert.equal(sidebarRows[3].hidden, false, '活动工作区不能过滤其他组的会议');
+  sidebarContext.toggleSidebarWorkspace('beta');
+  assert.equal(sidebarContext.activeWorkspaceId, 'beta');
+  assert.equal(sidebarRows[2].hidden, false);
+  assert.equal(sidebarRows[3].hidden, true);
+  assert.equal(sidebarGroups[2].toggle.attributes['aria-expanded'], 'false');
+  assert.equal(sidebarGroups[2].content.hidden, true);
+  assert.equal(sidebarContext.activeView, 'detail');
+  assert.equal(sidebarContext.currentMeetingDetail.id, 'open-document');
+  assert.equal(sidebarContext.uiData.detail.notes, 'unsaved draft');
+  assert.equal(sidebarContext.uiData.detail.notesEditing, true);
+  sidebarContext.toggleSidebarWorkspace('beta', true);
+  assert.equal(sidebarRows[3].hidden, false);
+  assert.equal(sidebarGroups[2].toggle.attributes['aria-expanded'], 'true');
+  sidebarContext.activeLibraryNav = 'recently-deleted';
+  sidebarContext.collapsedSidebarWorkspaces.add('beta');
+  sidebarContext.filterMeetings();
+  assert.equal(sidebarRows[3].hidden, false, '回收站不受工作区折叠状态影响');
+  const trashTree = sidebarContext.renderSidebarMeetingTree();
+  assert.doesNotMatch(trashTree, /data-sidebar-workspace=/);
+  assert.match(trashTree, /data-library-group="最近删除"/);
+}
+// 常驻会议导航不得绕过未保存文档与纠错草稿的切换保护。
+const meetingNavigationCalls = [];
+const navigationRows = ['current', 'another'].map((meetingId) => ({
+  dataset: { meetingId },
+  style: {},
+  attributes: {},
+  classList: { toggle() {} },
+  setAttribute(name, value) {
+    this.attributes[name] = value;
+  },
+  removeAttribute(name) {
+    delete this.attributes[name];
+  },
+}));
+const meetingNavigationContext = {
+  currentMeetingDetail: { id: 'current' },
+  uiData: { detail: {} },
+  activeView: 'detail',
+  meetingActive: false,
+  meetingListRequest: 0,
+  breviaClient: { state: {} },
+  t: (value) => value,
+  showToast: (message) => meetingNavigationCalls.push(message),
+  settleCorrectionDraft: async () => false,
+  minimizeMeeting: () => meetingNavigationCalls.push('minimize'),
+  applyBackendDetail: (meeting) => {
+    meetingNavigationContext.currentMeetingDetail = meeting;
+    meetingNavigationCalls.push(meeting.id);
+  },
+  showView: (view) => {
+    meetingNavigationContext.activeView = view;
+    meetingNavigationCalls.push(view);
+  },
+  meetingList: { querySelectorAll: () => navigationRows },
+  searchResultsPanel: {
+    addEventListener(_type, callback) {
+      meetingNavigationContext.searchClick = callback;
+    },
+  },
+  meetingSearch: { value: '' },
+  meetingSearchClear: { hidden: true },
+  closeSearchPopup() {},
+  window: {
+    brevia: {
+      meeting: {
+        get: async ({ meeting_id }) => {
+          meetingNavigationCalls.push('load');
+          return { id: meeting_id };
+        },
+      },
+    },
+  },
+};
+runInNewContext(`async ${summaryFn('openMeetingRow')}`, meetingNavigationContext);
+runInNewContext(summaryFn('syncCurrentMeetingNavigation'), meetingNavigationContext);
+const searchClickStart = summaryAppSource.indexOf("searchResultsPanel.addEventListener('click'");
+runInNewContext(
+  summaryAppSource.slice(searchClickStart, summaryAppSource.indexOf('\n});', searchClickStart) + 4),
+  meetingNavigationContext,
+);
+const searchResult = { dataset: { searchResult: 'another' }, style: {} };
+const searchResultEvent = { target: { closest: () => searchResult } };
+const anotherMeetingRow = { dataset: { meetingId: 'another' }, style: {} };
+for (const scope of ['notes', 'summary']) {
+  meetingNavigationContext.uiData.detail[`${scope}Editing`] = true;
+  await meetingNavigationContext.openMeetingRow(anotherMeetingRow);
+  assert.deepEqual(meetingNavigationCalls.splice(0), ['请先保存或取消当前编辑']);
+  await meetingNavigationContext.searchClick(searchResultEvent);
+  assert.deepEqual(meetingNavigationCalls.splice(0), ['请先保存或取消当前编辑']);
+  assert.equal(meetingNavigationContext.currentMeetingDetail.id, 'current');
+  meetingNavigationContext.uiData.detail[`${scope}Editing`] = false;
+}
+await meetingNavigationContext.openMeetingRow(anotherMeetingRow);
+await meetingNavigationContext.searchClick(searchResultEvent);
+assert.deepEqual(meetingNavigationCalls, [], '拒绝离开纠错草稿时不能加载另一个会议');
+meetingNavigationContext.settleCorrectionDraft = async () => true;
+meetingNavigationContext.activeView = 'live';
+meetingNavigationContext.meetingActive = true;
+await meetingNavigationContext.openMeetingRow(anotherMeetingRow);
+assert.deepEqual(meetingNavigationCalls, ['minimize', 'load', 'another', 'detail']);
+assert.equal(meetingNavigationContext.breviaClient.state.selectedMeetingId, 'another');
+assert.equal(navigationRows[1].attributes['aria-current'], 'page');
+meetingNavigationCalls.length = 0;
+meetingNavigationContext.currentMeetingDetail = { id: 'current' };
+meetingNavigationContext.syncCurrentMeetingNavigation();
+await meetingNavigationContext.searchClick(searchResultEvent);
+assert.deepEqual(meetingNavigationCalls, ['load', 'another', 'detail']);
+assert.equal(navigationRows[0].attributes['aria-current'], undefined);
+assert.equal(navigationRows[1].attributes['aria-current'], 'page', '详情同页切换仍更新当前行');
 // 快速入口读取真实的上次会议设置，正常启动不经过准备页。
 const quickInputs = new Map(
   ['meeting-language', 'meeting-speakers', 'meeting-workspace', 'translation-target'].map((key) => [
@@ -4771,6 +5435,7 @@ const summaryNodes = {
   '.modal-body': { innerHTML: '' },
 };
 const summaryContext = {
+  document: { addEventListener() {} },
   locale: 'zh',
   t: (value) => localeContext.window.BreviaLocaleData.catalog.zh.labels[value] || value,
   summaryModelCopy: localeContext.window.BreviaLocaleData.appCopy.summaryModelCopy,
@@ -4831,15 +5496,35 @@ assert.equal(
 // 关闭搜索、修改查询和较新请求都必须使旧响应失效，旧错误也不能关闭新结果。
 {
   let resolveSearch, rejectSearch;
-  const panel = { hidden: true, innerHTML: '' };
+  const panel = {
+    hidden: true,
+    innerHTML: '',
+    open: false,
+    style: {},
+    offsetWidth: 460,
+    offsetHeight: 480,
+    matches: () => panel.open,
+    showPopover() {
+      this.open = true;
+    },
+    hidePopover() {
+      this.open = false;
+    },
+  };
+  const searchAnchor = {
+    getBoundingClientRect: () => ({ left: 66, right: 268, top: 280, bottom: 310 }),
+  };
   const scheduled = new Set();
   const searchContext = {
     searchRequestId: 0,
-    meetingSearch: { value: 'old' },
+    meetingSearch: { value: 'old', closest: () => searchAnchor },
     meetingSearchClear: {},
     searchResultsPanel: panel,
     searchDebounceTimer: undefined,
+    BreviaMotion: { cancel() {} },
     window: {
+      innerWidth: 800,
+      innerHeight: 600,
       clearTimeout(fn) {
         scheduled.delete(fn);
       },
@@ -4862,7 +5547,13 @@ assert.equal(
     showToast: () => assert.fail('stale errors must not show a toast'),
   };
   runInNewContext(
-    ['scheduleMeetingSearch', 'updateSearchPopup', 'closeSearchPopup']
+    [
+      'scheduleMeetingSearch',
+      'updateSearchPopup',
+      'closeSearchPopup',
+      'positionSearchPopup',
+      'positionFloating',
+    ]
       .map((name) => `${name === 'updateSearchPopup' ? 'async ' : ''}${summaryFn(name)}`)
       .join('\n'),
     searchContext,
@@ -4888,6 +5579,14 @@ assert.equal(
   staleError(new Error('old search failed'));
   await pending;
   assert.equal(panel.hidden, false);
+  assert.equal(panel.open, true, '搜索结果进入顶层，不能被窄导航容器裁剪');
+  assert.equal(panel.style.left, '66px');
+  assert.equal(panel.style.top, '112px', '空间不足时保持浮层位于视口内');
+  searchContext.window.innerWidth = 500;
+  searchContext.positionSearchPopup();
+  assert.equal(panel.style.left, '32px', '调整窗口后重新限制浮层右边界');
+  searchContext.closeSearchPopup();
+  assert.equal(panel.open, false, '关闭搜索时必须同步移除顶层浮窗');
 }
 {
   let pop;
@@ -5850,6 +6549,7 @@ const viewA = viewNode('a-view'),
   viewC = viewNode('c-view');
 let visibleView = viewA;
 const navigationContext = {
+  syncCurrentMeetingNavigation() {},
   pageTransition: null,
   pageTransitionRevision: 0,
   viewReturnFocus: new Map(),
@@ -6476,18 +7176,23 @@ const mobilePairFunction = mobileConnectionSource.match(
   /  (async function pair\([\s\S]*?)(?=  async function render)/,
 );
 assert.ok(mobilePairFunction);
-let finishPairRefresh;
+let finishPairRefresh, failPairRefresh;
 let pairRefreshCalls = 0;
 const refreshDisplays = [];
 const pairRefreshContext = {
   pairingBusy: false,
   pairClosing: null,
+  mobilePageStep: null,
+  mobilePairRevision: 0,
+  lastStatus: null,
+  renderMobilePage() {},
   pairDialog: { open: true, querySelector: () => ({ textContent: '' }) },
   api: {
     pair: () => {
       pairRefreshCalls++;
-      return new Promise((resolve) => {
+      return new Promise((resolve, reject) => {
         finishPairRefresh = resolve;
+        failPairRefresh = reject;
       });
     },
   },
@@ -6506,6 +7211,29 @@ pairRefreshContext.pairClosing = null;
 pairRefreshContext.pairDialog.open = false;
 await pairRefreshContext.pair(true);
 assert.equal(pairRefreshCalls, 1, '关闭浮窗后不自动生成新配对码');
+const changePairStepStart = mobileConnectionSource.indexOf(
+  '  async function changeMobilePageStep(',
+);
+runInNewContext(
+  mobileConnectionSource.slice(
+    changePairStepStart,
+    mobileConnectionSource.indexOf('\n  }\n', changePairStepStart) + 4,
+  ),
+  pairRefreshContext,
+);
+const cancelledPairSuccess = pairRefreshContext.pair();
+await pairRefreshContext.changeMobilePageStep('back');
+finishPairRefresh({});
+await cancelledPairSuccess;
+assert.equal(pairRefreshContext.mobilePageStep, 'install');
+assert.equal(pairRefreshContext.pairingBusy, false);
+assert.deepEqual(refreshDisplays, [], '退出步骤后晚到的首次配对结果不能重开浮窗');
+const cancelledPairFailure = pairRefreshContext.pair();
+await pairRefreshContext.changeMobilePageStep('done');
+failPairRefresh(new Error('late pairing failure'));
+await cancelledPairFailure;
+assert.equal(pairRefreshContext.pairingBusy, false);
+assert.deepEqual(refreshDisplays, [], '退出步骤后晚到的错误也不能弹出配对窗口');
 
 const diskUsageContext = {
   systemDiskUsage: { total: 1000, used: 700, free: 270 },

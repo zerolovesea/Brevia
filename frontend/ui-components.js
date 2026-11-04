@@ -39,6 +39,7 @@ function interfaceIcon(name) {
     settings:
       '<path d="m9.5 3-.5 2-2 1.2-2-.6-2.5 4.3L4 11.3v2.4l-1.5 1.4L5 19.4l2-.6 2 1.2.5 2h5l.5-2 2-1.2 2 .6 2.5-4.3-1.5-1.4v-2.4l1.5-1.4L19 5.6l-2 .6L15 5l-.5-2Z"/><circle cx="12" cy="12.5" r="3"/>',
     window: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/>',
+    sidebar: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/>',
     pin: '<path d="m14 3 7 7-4 1-4 5-2-2-6 6 6-6-2-2 5-4z"/>',
     capsule: '<rect x="2" y="7" width="20" height="10" rx="5"/><path d="M7 12h6"/>',
     close: '<path d="m5 5 14 14M19 5 5 19"/>',
@@ -93,6 +94,7 @@ function interfaceIcon(name) {
     edit: '<path d="m16 3 5 5L8 21H3v-5ZM14 5l5 5"/>',
     person: '<circle cx="12" cy="7" r="4"/><path d="M4 21v-3c0-6 16-6 16 0v3"/>',
     'chevron-down': '<path d="m6 9 6 6 6-6"/>',
+    'chevron-up': '<path d="m6 15 6-6 6 6"/>',
     'chevron-right': '<path d="m9 6 6 6-6 6"/>',
     'skip-back':
       '<path d="M3 8V3m0 5h5M4 7a9 9 0 1 1-1 9"/><text x="8" y="16" stroke="none" fill="currentColor" font-size="9" font-family="inherit">15</text>',
@@ -123,18 +125,54 @@ function renderOnboardingRail(kind, displayLocale = locale) {
 }
 /** 设置导航与内容共用原有动作键，避免产生第二套设置状态。 */
 function renderSettingsNavigation(kind) {
-  const items = [
-    ['general', '通用', 'settings'],
-    ['models', '模型库', 'model'],
-    ['ai-features', 'AI 功能', 'ai'],
-    ['advanced-settings', '进阶设置', 'advanced'],
-    ['speaker-profiles', '声纹管理', 'microphone'],
-    ['device-connection', '设备连接', 'phone'],
-    ['storage', '存储与隐私', 'storage'],
-    ['whats-new', '关于与更新', 'info'],
+  const groups = [
+    [
+      '应用设置',
+      [
+        ['general', '通用', 'settings'],
+        ['advanced-settings', '进阶设置', 'advanced'],
+        ['whats-new', '关于与更新', 'info'],
+      ],
+    ],
+    [
+      'AI 功能',
+      [
+        ['models', '模型库', 'model'],
+        ['ai-features', 'AI 功能', 'ai'],
+        ['speaker-profiles', '声纹管理', 'microphone'],
+      ],
+    ],
+    [
+      '设备与数据',
+      [
+        ['device-connection', '设备连接', 'phone'],
+        ['storage', '存储与隐私', 'storage'],
+      ],
+    ],
   ];
-  return `<nav class="settings-navigation" aria-label="${escapeHtml(t('设置'))}"><h2>${escapeHtml(t('设置'))}</h2>${items.map(([key, label, icon]) => `<button type="button" data-settings-page="${key}"${key === (['summary-model', 'ai-assist'].includes(kind) ? 'ai-features' : kind) ? ' aria-current="page"' : ''}>${interfaceIcon(icon)}<span>${escapeHtml(t(label))}</span></button>`).join('')}</nav>`;
+  const current = ['summary-model', 'ai-assist'].includes(kind) ? 'ai-features' : kind;
+  return `<nav class="settings-navigation" aria-label="${escapeHtml(t('设置'))}"><div class="settings-nav-header"><button type="button" class="settings-workspace-back" data-view="home">${interfaceIcon('back')}${escapeHtml(t('返回会议库'))}</button><label class="settings-search">${interfaceIcon('search')}<input type="search" data-settings-search placeholder="${escapeHtml(t('搜索设置'))}" aria-label="${escapeHtml(t('搜索设置'))}" autocomplete="off" spellcheck="false" /></label></div><div class="settings-nav-sections">${groups.map(([heading, items]) => `<section class="settings-nav-group"><h3>${escapeHtml(t(heading))}</h3>${items.map(([key, label, icon]) => `<button type="button" data-settings-page="${key}"${key === current ? ' aria-current="page"' : ''}>${interfaceIcon(icon)}<span>${escapeHtml(t(label))}</span></button>`).join('')}</section>`).join('')}<p class="settings-search-empty" role="status" hidden>${escapeHtml(t('未找到设置'))}</p></div></nav>`;
 }
+function filterSettingsNavigation(input) {
+  const navigation = input.closest('.settings-navigation');
+  const query = input.value.trim().toLocaleLowerCase();
+  let matches = 0;
+  navigation.querySelectorAll('.settings-nav-group').forEach((group) => {
+    let visible = false;
+    group.querySelectorAll('[data-settings-page]').forEach((button) => {
+      button.hidden = !button.textContent.toLocaleLowerCase().includes(query);
+      if (!button.hidden) {
+        visible = true;
+        matches++;
+      }
+    });
+    group.hidden = !visible;
+  });
+  navigation.querySelector('.settings-search-empty').hidden = matches > 0;
+}
+document.addEventListener('input', (event) => {
+  if (event.target.matches?.('[data-settings-search]')) filterSettingsNavigation(event.target);
+});
 let pageTooltip;
 /** 将所有悬浮说明挂到 body，避免被任意视图或滚动区裁切。 */
 function showPageTooltip(anchor, text) {
@@ -1597,7 +1635,7 @@ function renderRefineModelRow(options, selectedId) {
 function refineAppliedModelSuffix(d) {
   return d.refinedModelAppliedName ? ` · ${escapeHtml(d.refinedModelAppliedName)}` : '';
 }
-/** 逐字稿专属操作；精修状态统一放在导航行。 */
+/** 逐字稿专属操作；精修状态显示在当前文档的工具栏。 */
 function renderRefineStatus(d) {
   if (d.refineState === 'refining') return '';
   const languageSelect = `<label class="refine-menu-speakers"><span>${t('会议语言')}</span>${flowSelect('refine-language', d.language || 'auto', BreviaI18n.languageOptions(locale, t, true))}</label>`;
@@ -1617,10 +1655,11 @@ function renderRefineStatus(d) {
       : `<span class="refine-wrap"><button class="detail-icon-action" data-refine-more type="button" aria-label="${t('重新精修')}" title="${t('重新精修')}" aria-expanded="false">${interfaceIcon('refresh')}${t(d.hasRefined ? '重新精修' : '开始精修')}</button><div class="refine-menu" hidden>${languageSelect}${renderRefineModelRow(d.refinedModelOptions, d.refinedModelId)}<label class="refine-menu-speakers"><span>${t('会议人数')}</span><input type="number" min="1" step="1" inputmode="numeric" data-refine-num-speakers placeholder="${t('留空自动识别')}" /></label><button type="button" data-refine-action="${d.hasRefined ? 're-refine' : 'start'}">${d.hasRefined ? t('重新精修') : t('开始精修')}</button></div></span>`;
   return `${translationMenu}${refineMenu}`;
 }
-/** 三个标签共用导航、保存状态与操作栏，切换标签时只重建页头，不重建编辑器。 */
+/** 文档导航与操作栏共用更新入口，切换文档时保留编辑器和草稿。 */
 function renderDetailTabbar() {
   const d = uiData.detail;
   const scope = detailActiveTab;
+  const title = t(scope === 'notes' ? '笔记' : scope === 'summary' ? '会议纪要' : '逐字稿');
   const summary = d.summary || {};
   const editing = Boolean(d[`${scope}Editing`]);
   const saveState = d[`${scope}SaveState`] || 'saved';
@@ -1673,18 +1712,18 @@ function renderDetailTabbar() {
     !editing && (scope !== 'transcript' || actions) && typeof correctionControls === 'function'
       ? correctionControls(currentMeetingDetail, scope)
       : '';
-  return `<div class="detail-content-header"><div class="tabbar"><div class="tabbar-tabs" role="tablist" aria-label="${t('笔记')} / ${t('逐字稿')} / ${t('会议纪要')}">${[
-    ['notes', '笔记'],
-    ['transcript', '逐字稿'],
-    ['summary', '会议纪要'],
+  return `<div class="detail-content-header"><nav class="tabbar detail-document-navigation" aria-label="${t('内容')}"><div class="tabbar-tabs" role="tablist" aria-orientation="horizontal" aria-label="${t('笔记')} / ${t('逐字稿')} / ${t('会议纪要')}">${[
+    ['notes', '笔记', 'notes'],
+    ['transcript', '逐字稿', 'waveform'],
+    ['summary', '会议纪要', 'document'],
   ]
     .map(
-      ([key, label]) =>
-        `<button class="tab${scope === key ? ' active' : ''}" data-detail-tab="${key}" id="detail-tab-${key}" role="tab" aria-selected="${scope === key}" aria-controls="detail-panel-${key}" tabindex="${scope === key ? '0' : '-1'}">${t(label)}</button>`,
+      ([key, label, icon]) =>
+        `<button type="button" class="tab${scope === key ? ' active' : ''}" data-detail-tab="${key}" id="detail-tab-${key}" role="tab" aria-selected="${scope === key}" aria-controls="detail-panel-${key}" tabindex="${scope === key ? '0' : '-1'}">${interfaceIcon(icon)}<span>${t(label)}</span></button>`,
     )
     .join(
       '',
-    )}</div><div class="detail-content-status">${status}</div></div><div class="detail-content-toolbar" role="toolbar" aria-label="${t(scope === 'notes' ? '笔记' : scope === 'summary' ? '会议纪要' : '逐字稿')}"><div class="detail-content-actions">${find}${actions}</div><div class="detail-content-context">${context}</div></div></div>`;
+    )}</div><div class="detail-content-status">${status}</div></nav><div class="detail-content-toolbar" role="toolbar" aria-label="${title}"><div class="detail-content-actions">${find}${actions}</div><div class="detail-content-context">${context}</div></div></div>`;
 }
 
 function resizeTranscriptField(field) {

@@ -2300,7 +2300,7 @@ async function installUpdate() {
 function createWindow() {
   const appUrl = pathToFileURL(path.join(packagedRoot, 'frontend', 'index.html')).href;
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
-  const windowScale = Math.min((2 / 3) * 1.15 * 1.1, width / 1280, height / 800);
+  const windowScale = Math.min(1, width / 1280, height / 800);
   const window = new BrowserWindow({
     width: Math.round(1280 * windowScale),
     height: Math.round(800 * windowScale),
@@ -2311,7 +2311,7 @@ function createWindow() {
     titleBarStyle: 'hiddenInset',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
-      // 保留原布局画布，窗口与界面统一放大 10%，让位置、字号和间距同步缩放。
+      // 紧凑控件使用原生 CSS 尺度；仅小屏幕缩放，避免继承旧版整体缩小后的细小文字。
       zoomFactor: windowScale,
       backgroundThrottling: false,
       contextIsolation: true,

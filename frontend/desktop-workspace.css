@@ -1,0 +1,2036 @@
+/* 单一工作面：留白用于阅读和编辑，入口、设置与控制保持紧凑。 */
+#home-view.active {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  place-items: center;
+  padding: 48px 32px;
+  overflow-y: auto;
+  background: var(--color-surface);
+}
+#home-view .workspace-welcome {
+  width: min(100%, 560px);
+  max-width: none;
+  margin: auto;
+  padding: 0 0 8vh;
+  text-align: left;
+}
+#home-view .workspace-welcome > img {
+  width: 32px;
+  height: 32px;
+  margin-bottom: 24px;
+}
+#home-view .workspace-welcome h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 550;
+  line-height: 1.35;
+  letter-spacing: -0.6px;
+}
+#home-view .workspace-welcome > p {
+  margin: 12px 0 28px;
+  color: var(--color-text-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+#home-view .workspace-launch-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+#home-view .workspace-launch {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  align-items: center;
+  min-height: 96px;
+  padding: 20px;
+  gap: 6px 12px;
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+  color: var(--color-text);
+  background: var(--color-surface);
+  text-align: left;
+}
+#home-view .workspace-launch:hover {
+  background: var(--color-navigation);
+  border-color: var(--desktop-input-border);
+}
+#home-view .workspace-launch > :is(.interface-icon, [data-interface-icon]) {
+  grid-column: 1;
+  grid-row: 1;
+  width: 20px;
+  height: 20px;
+}
+#home-view .workspace-launch > strong {
+  grid-column: 2;
+  grid-row: 1;
+  font-size: 14px;
+  font-weight: 500;
+}
+#home-view .workspace-launch > span:not(.interface-icon):not([data-interface-icon]) {
+  grid-column: 2;
+  grid-row: 2;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+#home-view .workspace-welcome .quick-recording {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  margin: 18px 0 0;
+  padding: 6px 0;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+#home-view .workspace-welcome .quick-recording:hover {
+  color: var(--color-text);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+/* 准备页是一张会议编辑器；主要配置和启动操作在默认窗口内连续呈现。 */
+#prepare-view.active {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  height: 100%;
+  padding: 20px 32px 28px;
+  overflow-y: auto;
+  container-type: inline-size;
+}
+#prepare-view > .back {
+  flex: none;
+  align-self: flex-start;
+  min-height: 28px;
+  padding: 4px 0;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+#prepare-view .prepare-layout {
+  width: 100%;
+  max-width: 640px;
+  height: auto;
+  min-height: 0;
+  margin: 0 auto;
+  flex: none;
+}
+#prepare-view .prepare-layout > div {
+  height: auto;
+}
+#prepare-view #meeting-form,
+#prepare-view[data-mode="import"] #meeting-form {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  height: auto;
+  gap: 20px;
+  padding: 0;
+  margin: 0;
+}
+#prepare-view .prepare-heading h1 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 550;
+  line-height: 1.4;
+}
+#prepare-view .prepare-heading p {
+  margin: 5px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+#prepare-view #meeting-form .prepare-fields,
+#prepare-view[data-mode="import"] #meeting-form .prepare-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 0;
+  border: 0;
+  gap: 14px 16px;
+}
+#prepare-view #meeting-form .meeting-name-field {
+  grid-column: 1 / -1;
+  grid-row: auto;
+  gap: 4px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+#prepare-view #meeting-form .form-grid {
+  display: contents;
+}
+#prepare-view #meeting-form .prepare-extra-settings {
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
+}
+#prepare-view .prepare-options {
+  grid-column: 1 / -1;
+}
+#prepare-view .prepare-options summary {
+  cursor: pointer;
+  width: fit-content;
+  padding: 2px 0;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+#prepare-view .prepare-options[open] .prepare-extra-settings {
+  display: grid;
+  margin-top: 12px;
+}
+#prepare-view[data-mode="import"] .prepare-options {
+  display: none;
+}
+#prepare-view #meeting-form label,
+#prepare-view[data-mode="import"] #meeting-form .prepare-fields > label,
+#prepare-view[data-mode="import"] #meeting-form .form-grid > label {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 400;
+}
+#prepare-view #meeting-form :is(input, .flow-select-toggle),
+#prepare-view[data-mode="record"] .prepare-extra-settings .flow-select-toggle {
+  min-height: 34px;
+  padding-block: 6px;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 20px;
+  border-radius: 6px;
+}
+#prepare-view #meeting-form #meeting-title {
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 0 9px;
+  border: 0;
+  border-bottom: 1px solid var(--color-line);
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-text);
+  font-size: 24px;
+  font-weight: 500;
+  line-height: 30px;
+}
+#prepare-view #meeting-form #meeting-title:focus {
+  border-bottom-color: var(--color-text);
+  box-shadow: none;
+}
+#prepare-view #meeting-form fieldset,
+#prepare-view .prepare-processing {
+  padding: 0;
+  margin: 0;
+  border: 0;
+  min-width: 0;
+}
+#prepare-view #meeting-form fieldset legend,
+#prepare-view.is-compact #meeting-form fieldset legend,
+#prepare-view .prepare-processing h2 {
+  float: none;
+  min-height: 28px;
+  margin: 0 0 8px;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+#prepare-view .capture-phone {
+  min-height: 26px;
+  padding: 3px 0 3px 8px;
+  border: 0;
+  border-radius: 4px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+#prepare-view .capture-settings,
+#prepare-view.is-compact .capture-settings {
+  gap: 12px;
+}
+#prepare-view .prepare-source-description,
+#prepare-view.is-compact .prepare-source-description {
+  margin: 0 0 10px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+/* 分组标题已说明来源，避免重复的“采集模式”占据一整行。 */
+#prepare-view .capture-settings > label:has(#capture-mode-mount) {
+  gap: 0;
+  font-size: 0;
+  line-height: 0;
+}
+#prepare-view .capture-source-list .flow-select-options,
+#prepare-view.is-compact .capture-source-list .flow-select-options {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+#prepare-view .capture-source-list .flow-select-options button,
+#prepare-view.is-compact .capture-source-list .flow-select-options button {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) 16px;
+  align-content: start;
+  align-items: center;
+  min-height: 84px;
+  padding: 10px;
+  gap: 6px;
+  border-radius: 6px;
+  background: var(--color-surface);
+}
+#prepare-view .capture-source-list .flow-select-options button > .interface-icon {
+  grid-column: 1;
+  grid-row: 1;
+  width: 16px;
+  height: 16px;
+}
+#prepare-view .capture-source-list .flow-select-options button > span {
+  display: contents;
+}
+#prepare-view .capture-source-list .flow-select-options button > i {
+  grid-column: 3;
+  grid-row: 1;
+  width: 16px;
+  height: 16px;
+}
+#prepare-view .capture-source-list .flow-select-options button:hover,
+#prepare-view .capture-source-list .flow-select-options button[aria-checked="true"] {
+  background: var(--color-navigation);
+}
+#prepare-view .capture-source-list .flow-select-options button[aria-checked="true"] {
+  border-color: var(--color-text);
+}
+#prepare-view .capture-source-list .flow-select-options button b,
+#prepare-view.is-compact .capture-source-list .flow-select-options button b {
+  grid-column: 2;
+  grid-row: 1;
+  font-size: 12px;
+  font-weight: 500;
+}
+#prepare-view .capture-source-list .flow-select-options button small,
+#prepare-view.is-compact .capture-source-list .flow-select-options button small {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
+}
+#prepare-view .prepare-session-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-line);
+}
+#prepare-view .prepare-input-status {
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+#prepare-view .capture-status {
+  border: 0;
+  padding: 0;
+  gap: 4px;
+  font-size: 11px;
+}
+#prepare-view .capture-status .input-meter,
+#prepare-view.is-compact .capture-status .input-meter {
+  width: 88px;
+  height: 10px;
+}
+#prepare-view .prepare-session-footer > .primary-action {
+  width: auto;
+  min-width: 120px;
+  min-height: 36px;
+  margin-left: auto;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+}
+#prepare-view .prepare-error {
+  margin: 0;
+  font-size: 13px;
+}
+#prepare-view .prepare-processing > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
+  margin-top: 12px;
+}
+#prepare-view .audio-dropzone,
+#prepare-view .audio-dropzone.has-file {
+  min-height: 144px;
+  gap: 6px;
+  padding: 20px;
+  background: var(--color-navigation);
+  border-radius: 8px;
+}
+#prepare-view .audio-dropzone > .interface-icon {
+  width: 24px;
+  height: 24px;
+  color: var(--color-text-muted);
+}
+#prepare-view .audio-dropzone h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+#prepare-view .audio-dropzone p,
+#prepare-view .audio-import-selection {
+  font-size: 12px;
+}
+#prepare-view .audio-import-selection {
+  padding: 8px 12px;
+  margin-top: 8px;
+}
+
+/* 笔记是实时会议的主要工作面，字幕作为右侧持续更新的参考。 */
+#live-view.active {
+  padding: 0;
+  background: var(--color-surface);
+}
+#live-view .live-header {
+  min-height: 68px;
+  padding: 14px 24px;
+  gap: 12px;
+  border-bottom: 1px solid var(--color-line);
+  background: var(--color-surface);
+}
+#live-view .live-title {
+  min-width: 0;
+  gap: 4px;
+}
+#live-view #live-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 24px;
+}
+#live-view .live-status,
+#live-view .live-status :is(time, .save-state, .recording) {
+  font-size: 12px;
+  line-height: 18px;
+}
+#live-view .live-status {
+  flex-wrap: wrap;
+  gap: 10px;
+}
+#live-view .live-layout {
+  display: grid;
+  gap: 0;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+}
+#live-view :is(.live-notes, .live-captions) {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--color-surface);
+}
+#live-view .live-captions {
+  order: 1;
+  border-left: 1px solid var(--color-line);
+  background: var(--color-navigation);
+}
+#live-view .live-notes {
+  order: 0;
+}
+#live-view .live-section-head {
+  min-height: 44px;
+  gap: 6px;
+  padding: 6px 14px;
+  margin: 0;
+  border-bottom: 1px solid var(--color-line);
+}
+#live-view .live-section-head .eyebrow {
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+}
+#live-view .live-section-head .interface-icon {
+  width: 16px;
+  height: 16px;
+}
+#live-view .live-section-head :is(.icon-button, .ai-assist-toggle, [data-open-correction]) {
+  min-height: 28px;
+  height: 28px;
+  min-width: 28px;
+  gap: 4px;
+  padding: 4px 6px;
+  font-size: 12px;
+  border-radius: 4px;
+}
+#live-view .ai-assist-toggle .ai-assist-toggle-star {
+  color: inherit;
+}
+#live-view [data-live-notes-root] {
+  width: 100%;
+  max-width: 46rem;
+  margin-inline: auto;
+  padding: 0 32px;
+}
+#live-view :is(.notes-editor, .notes-input, .transcript-scroll) {
+  padding: 24px 0;
+  font-size: 15px;
+  line-height: 1.7;
+}
+#live-view .transcript-scroll {
+  padding-inline: 24px;
+}
+#live-view .notes-editor :is(p, li),
+#live-view #transcript-scroll .segment .segment-copy > p {
+  font-size: 15px;
+  line-height: 1.7;
+}
+.notes-editor .task-item span {
+  color: var(--color-text-body);
+}
+#live-view .notes-editor :is(h1, h2, h3) {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+#live-view #transcript-scroll .segment:not(.segment-text-editing) {
+  padding: 8px 0 20px;
+  column-gap: 12px;
+}
+#live-view #transcript-scroll .segment :is(time, .translation) {
+  font-size: 12px;
+}
+#live-view .notes-toolbar {
+  padding: 6px 0;
+  gap: 2px;
+}
+#live-view [data-live-notes-root] > .ai-suggestion {
+  margin: 8px 0 16px;
+  padding: 12px;
+  border-radius: 6px;
+  background: var(--color-navigation);
+}
+#live-view .ai-suggestion-card .ai-suggestion-text {
+  font-size: 13px;
+}
+#live-view .live-control-bar {
+  min-height: 56px;
+  padding: 10px 20px;
+  gap: 12px;
+  border-top: 1px solid var(--color-line);
+  background: var(--color-surface);
+}
+#live-view .live-control-bar :is(button, .flow-select-toggle) {
+  min-height: 32px;
+  font-size: 13px;
+}
+#live-view .live-control-bar .live-caption-controls .icon-button {
+  width: 32px;
+  height: 32px;
+  padding: 7px;
+  border-radius: 6px;
+  background: var(--color-surface);
+}
+#live-view .live-control-bar .interface-icon {
+  width: 16px;
+  height: 16px;
+}
+#live-view .live-control-bar .control-primary {
+  gap: 6px;
+}
+#live-view .live-control-bar .end-button {
+  padding-inline: 14px;
+  border-radius: 6px;
+}
+#live-view .live-control-bar .input-meter {
+  height: 12px;
+}
+
+/* 纠错面板跟随真实控制栏上沿，兼容状态栏和窄窗控制栏换行。 */
+#live-view.active .live-control-bar,
+#detail-view.active .player {
+  anchor-name: --desktop-workspace-controls;
+}
+.correction-panel {
+  position-anchor: --desktop-workspace-controls;
+  bottom: 120px;
+  bottom: anchor(top, 120px);
+}
+
+/* 详情是单列文档，顶部标签切换已有面板，底部播放条始终保留。 */
+#detail-view.active {
+  --detail-inset: 24px;
+  padding-top: 16px;
+  gap: 12px 8px;
+  background: var(--color-surface);
+}
+#detail-view .detail-head h1 {
+  font-size: 18px;
+  font-weight: 550;
+  line-height: 26px;
+}
+#detail-view .detail-meta,
+#detail-view .summary-participants > button {
+  min-height: 24px;
+  font-size: 12px;
+}
+#detail-view .detail-actions > button {
+  min-height: 32px;
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--color-text);
+  background: transparent;
+  border-color: var(--color-line);
+}
+#detail-view .detail-layout {
+  gap: 0;
+  width: calc(100% + 2 * var(--detail-inset));
+  margin-inline: calc(-1 * var(--detail-inset));
+  border-top: 1px solid var(--color-line);
+}
+#detail-view .final-transcript,
+#detail-view .detail-layout.is-summary-mode .final-transcript {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--color-surface);
+  overflow: hidden;
+}
+#detail-view .detail-content-header {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  min-width: 0;
+  border-bottom: 1px solid var(--color-line);
+}
+#detail-view .detail-content-header .detail-document-navigation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: nowrap;
+  min-height: 44px;
+  padding: 0 24px;
+  gap: 12px;
+  border: 0;
+  background: var(--color-surface);
+}
+#detail-view .detail-document-navigation .tabbar-tabs {
+  display: flex;
+  flex-direction: row;
+  min-width: 0;
+  margin: 0;
+  gap: 16px;
+}
+#detail-view .detail-document-navigation .tabbar-tabs .tab {
+  width: auto;
+  min-width: 0;
+  max-width: none;
+  min-height: 44px;
+  justify-content: center;
+  padding: 10px 2px;
+  gap: 6px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+  white-space: nowrap;
+}
+#detail-view .detail-document-navigation .tabbar-tabs .tab.active {
+  border-bottom-color: var(--color-text);
+  background: transparent;
+  color: var(--color-text);
+}
+#detail-view .detail-document-navigation .tabbar-tabs .tab > svg {
+  display: block;
+  width: 15px;
+  height: 15px;
+  flex: none;
+}
+#detail-view .detail-content-toolbar {
+  min-width: 0;
+  min-height: 40px;
+  padding: 4px 24px 6px;
+  gap: 6px 12px;
+  border: 0;
+}
+#detail-view .detail-content-status {
+  margin-left: auto;
+  max-width: 42%;
+  font-size: 12px;
+}
+#detail-view .detail-content-status :is(.save-state, .refine-state) {
+  font-size: 12px;
+}
+#detail-view :is(.detail-content-actions, .detail-content-context) {
+  gap: 4px;
+}
+#detail-view .detail-content-context {
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+#detail-view .detail-content-context:empty {
+  display: none;
+}
+#detail-view
+  .detail-content-toolbar
+  :is(.tabbar-action, .detail-icon-action, [data-open-correction], [data-correction-rules]) {
+  min-height: 32px;
+  gap: 5px;
+  padding: 4px 6px;
+  font-size: 12px;
+}
+#detail-view
+  .detail-content-toolbar
+  :is(.tabbar-action, .detail-icon-action, [data-open-correction], [data-correction-rules])
+  svg {
+  width: 16px;
+  height: 16px;
+}
+#detail-view .detail-content-context .search {
+  flex: 1;
+  max-width: 180px;
+}
+#detail-view .final-transcript > [data-detail-panel] {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+#detail-view :is(.detail-notes-panel, .transcript-body, .summary-body, .summary-inline-edit),
+#detail-view .detail-notes-panel:has(.detail-notes-edit) {
+  width: 100%;
+  max-width: 46rem;
+  margin-inline: auto;
+  padding: 32px 40px 48px;
+}
+#detail-view :is(.detail-notes-content, .notes-editor, .notes-input, .summary-body),
+#detail-view .detail-notes-content :is(p, li),
+#detail-view .notes-editor :is(p, li, td, th),
+#detail-view .summary-body :is(p, li),
+#detail-view .transcript-body .segment-copy > p {
+  font-size: 15px;
+  line-height: 1.75;
+}
+#detail-view :is(.detail-notes-content, .summary-body, .notes-editor) h1 {
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.35;
+  margin: 0 0 24px;
+}
+#detail-view :is(.detail-notes-content, .summary-body, .notes-editor) h2 {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.4;
+  margin: 28px 0 10px;
+  padding: 0;
+  border: 0;
+}
+#detail-view :is(.detail-notes-content, .summary-body, .notes-editor) h3 {
+  font-size: 16px;
+  font-weight: 600;
+}
+#detail-view .summary-body .summary-reading-section {
+  display: block;
+  padding: 0;
+  margin-bottom: 24px;
+}
+#detail-view .summary-body .summary-reading-section > :is(h1, h2) {
+  padding: 0;
+  margin: 0 0 10px;
+  font-size: 18px;
+  color: var(--color-text);
+}
+#detail-view .summary-discussion summary {
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 12px 0;
+}
+#detail-view .summary-discussion > div {
+  padding-left: 0;
+}
+#detail-view .transcript-body .segment {
+  padding: 12px 0;
+  border-radius: 6px;
+}
+#detail-view .transcript-body .segment :is(time, .segment-speaker) {
+  font-size: 12px;
+}
+#detail-view .player.floating-control-bar {
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  min-height: 48px;
+  padding: 6px var(--detail-inset);
+  border-top: 1px solid var(--color-line);
+  background: transparent;
+  gap: 12px;
+}
+#detail-view .player-actions {
+  grid-column: 1;
+  grid-row: 1;
+}
+#detail-view .player-source {
+  grid-column: 2;
+  grid-row: 1;
+  font-size: 11px;
+}
+#detail-view .player-track {
+  grid-column: 3;
+  grid-row: 1;
+}
+#detail-view .player-meta {
+  grid-column: 4;
+  grid-row: 1;
+  gap: 4px;
+}
+#detail-view .player .play {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+}
+#detail-view .player :is(.player-icon-button, .player-speed .flow-select-toggle) {
+  min-height: 28px;
+  height: 28px;
+  font-size: 12px;
+}
+#detail-view .refine-menu {
+  gap: 12px;
+  width: 280px;
+  padding: 12px;
+}
+#detail-view .refine-menu-speakers {
+  gap: 6px;
+}
+#detail-view .refine-menu-speakers :is(input, .flow-select-toggle),
+#detail-view .refine-menu > button {
+  min-height: 36px;
+  padding: 7px 10px;
+  font-size: 13px;
+}
+#detail-view .detail-translation-menu button {
+  min-height: 32px;
+  padding: 6px 8px;
+  font-size: 13px;
+}
+
+/* 设置接管导航列，章节标题与分组容器沿用 Orca 的设置工作面比例。 */
+#settings-view.active,
+.settings-page {
+  grid-template-columns: 280px minmax(0, 1fr);
+}
+.settings-navigation {
+  padding: 0;
+  gap: 0;
+  border-right: 1px solid var(--color-line);
+  background: var(--color-navigation);
+}
+.settings-navigation h2 {
+  margin: 16px 12px 20px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.settings-navigation button {
+  min-height: 32px;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+.settings-navigation button[aria-current="page"] {
+  border: 1px solid var(--color-line);
+  background: var(--color-selected);
+  color: var(--color-text);
+}
+.settings-navigation .settings-nav-header {
+  flex: none;
+  border-bottom: 1px solid var(--color-line);
+}
+.settings-navigation .settings-nav-header .settings-workspace-back {
+  width: 100%;
+  min-height: 56px;
+  padding: 16px 24px;
+  border-radius: 0;
+  border-bottom: 1px solid var(--color-line);
+}
+.settings-navigation .settings-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  height: 36px;
+  margin: 12px;
+  padding: 0 10px;
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  box-shadow: 0 1px 2px #00000005;
+}
+:is(#settings-view, .settings-page) .settings-navigation .settings-search input {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 13px;
+  outline: 0;
+}
+.settings-navigation .settings-search:focus-within {
+  border-color: var(--desktop-input-border);
+}
+.settings-navigation .settings-nav-sections {
+  flex: 1;
+  min-height: 0;
+  padding: 12px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+.settings-navigation .settings-nav-group {
+  display: grid;
+  gap: 3px;
+  margin-bottom: 20px;
+}
+.settings-navigation .settings-nav-group h3 {
+  margin: 8px 12px 10px;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 16px;
+  letter-spacing: 0.04em;
+}
+.settings-navigation .settings-search-empty {
+  margin: 20px 12px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.settings-navigation .settings-workspace-back {
+  color: var(--color-text-muted);
+}
+.settings-navigation .interface-icon {
+  width: 16px;
+  height: 16px;
+}
+.settings-general-main,
+.settings-page > .modal-panel {
+  padding: 40px 32px 72px;
+  background: var(--color-surface);
+  scrollbar-gutter: stable;
+}
+.settings-general-main {
+  display: flex;
+  flex-direction: column;
+}
+html[data-theme="dark"] .settings-page > .modal-panel {
+  background: var(--color-surface);
+}
+#settings-view .settings-general-heading {
+  order: 0;
+}
+#settings-view .settings-general-heading h1,
+.settings-page .modal-head .modal-title h2 {
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 32px;
+  letter-spacing: -0.4px;
+}
+#settings-view .settings-description,
+.settings-page .modal-title p {
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 24px;
+}
+#settings-view .settings-description {
+  order: 1;
+  padding-bottom: 20px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--color-line);
+}
+#settings-view .settings-grid,
+.settings-page .modal-head,
+.settings-page .modal-body {
+  width: 100%;
+  max-width: 832px;
+  margin-inline: auto;
+}
+#settings-view :is(.settings-general-heading, .settings-description) {
+  width: 100%;
+  max-width: 832px;
+  margin-inline: auto;
+}
+#settings-view .settings-grid {
+  order: 2;
+  flex: none;
+  padding: 24px 28px;
+  border: 1px solid var(--color-line);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--color-navigation) 50%, var(--color-surface));
+}
+.settings-page .modal-body > :is(.ai-assist-config-form, .model-config-form),
+.settings-page :is(.advanced-settings-section, .storage-overview, .storage-list, .storage-privacy),
+.settings-page .ai-features-content > .onboarding-section {
+  padding: 24px 28px;
+  border: 1px solid var(--color-line);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--color-navigation) 50%, var(--color-surface));
+}
+.settings-page :is(.advanced-settings-section, .storage-overview) {
+  margin-bottom: 24px;
+}
+.settings-page .modal-body > form {
+  flex: none;
+}
+.settings-page details.advanced-settings-section {
+  padding: 0;
+}
+.settings-page details.advanced-settings-section > summary {
+  min-height: 56px;
+  padding: 16px 24px;
+}
+.settings-page details.advanced-settings-section .advanced-fields {
+  padding: 12px 24px 24px;
+}
+
+#settings-view .settings-preferences,
+#settings-view .desktop-preference {
+  grid-template-columns: minmax(0, 1fr) 172px;
+  gap: 16px;
+  min-height: 64px;
+  padding: 12px 0;
+  border: 0;
+}
+#settings-view :is(.settings-preferences, .desktop-preference) > .interface-icon {
+  display: none;
+}
+#settings-view .desktop-preference h2,
+#settings-view .settings-preferences > h2 {
+  font-size: 14px;
+  font-weight: 400;
+}
+#settings-view .desktop-preference p {
+  margin-top: 4px;
+  font-size: 12px;
+}
+#settings-view .desktop-preference .flow-select {
+  min-width: 0;
+  width: 172px;
+}
+#settings-view .settings-preferences .flow-select-toggle {
+  height: 36px;
+  min-height: 36px;
+  padding-block: 6px;
+  line-height: 20px;
+}
+#settings-view [data-desktop-settings] > .settings-group,
+#settings-view .settings-grid > .settings-basic-group {
+  margin-top: 24px;
+  padding: 24px 0 12px;
+  border-top: 1px solid var(--color-line);
+  border-bottom: 0;
+  color: var(--color-text);
+  font-size: 14px;
+  font-weight: 400;
+}
+#settings-view .settings-grid > .settings-basic-group {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+#settings-view .preference-switch {
+  width: 36px;
+  height: 20px;
+  min-height: 20px;
+  padding: 2px;
+  justify-self: end;
+}
+#settings-view .preference-switch i {
+  width: 14px;
+  height: 14px;
+}
+#settings-view .preference-switch[aria-checked="true"] i {
+  transform: translateX(16px);
+}
+.settings-page .modal-head {
+  padding-bottom: 20px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--color-line);
+}
+.settings-page .modal-body {
+  padding: 0 0 24px;
+  scrollbar-gutter: stable;
+}
+.settings-page .modal-form-actions {
+  padding-top: 12px;
+  background: var(--color-surface);
+}
+.settings-page :is(.config-fields label, .config-select-field, .summary-enabled-control),
+.settings-page :is(.ai-service-choice, .ai-assist-proactivity) legend {
+  font-size: 13px;
+}
+.settings-page .config-fields :is(input, .flow-select-toggle),
+.settings-page .model-picker .flow-select-toggle {
+  min-height: 36px;
+  padding-block: 7px;
+  font-size: 13px;
+}
+.settings-page .model-library-item {
+  padding: 16px;
+  margin-bottom: 12px;
+  border-radius: 14px;
+  background: var(--color-surface);
+}
+.settings-page .model-library-item :is(h4, .model-library-headline),
+.settings-page .model-group-heading h3 {
+  font-size: 14px;
+  font-weight: 600;
+}
+.settings-page .model-library-item :is(.model-library-description, .model-library-details) {
+  font-size: 12px;
+  line-height: 1.6;
+}
+.settings-page .model-actions .modal-action {
+  min-width: 72px;
+  min-height: 32px;
+  padding: 6px 10px;
+  font-size: 13px;
+}
+.settings-page .settings-tabs {
+  gap: 16px;
+}
+.settings-page .settings-tabs button {
+  padding: 8px 4px;
+  font-size: 13px;
+}
+.settings-page .advanced-settings-section summary h3,
+.settings-page .speaker-detail-header h2,
+.settings-page .storage-overview h3,
+.settings-page .mobile-service-heading h3 {
+  font-size: 15px;
+  font-weight: 600;
+}
+.settings-page .advanced-fields b {
+  font-size: 13px;
+  font-weight: 500;
+}
+.settings-page :is(.advanced-fields, .permission-setting-row) small {
+  font-size: 12px;
+}
+.settings-page .speaker-person {
+  gap: 10px;
+  padding: 12px 8px;
+}
+.settings-page .speaker-person b {
+  font-size: 13px;
+  font-weight: 500;
+}
+.settings-page .speaker-create:not([open]) > summary {
+  width: var(--control-height);
+  height: var(--control-height);
+  padding: 6px;
+}
+.settings-page .speaker-create summary > .interface-icon {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+.settings-page .storage-list section {
+  padding: 14px 12px;
+  gap: 12px;
+  font-size: 13px;
+}
+.settings-page .storage-list small,
+.settings-page .storage-privacy p {
+  font-size: 12px;
+}
+.settings-page .storage-privacy summary,
+.settings-page .mobile-install > summary {
+  font-size: 14px;
+  padding: 12px;
+}
+.settings-page .mobile-device {
+  padding: 14px 0;
+  font-size: 13px;
+}
+/* 手机连接复用真实安装和配对状态：左侧操作流程，右侧为 Brevia 实际手机界面。 */
+.settings-page:has(#mobile-dialog:not([hidden])) > .modal-panel {
+  padding: 0;
+}
+.settings-page:has(#mobile-dialog:not([hidden])) .modal-head {
+  display: none;
+}
+.settings-page:has(#mobile-dialog:not([hidden])) .modal-body {
+  max-width: none;
+  padding: 0;
+}
+#mobile-dialog .mobile-page-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  align-items: center;
+  gap: 48px 56px;
+  min-height: 100%;
+  padding: 56px;
+  background-image: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--color-line) 65%, transparent) 0.65px,
+    transparent 0.9px
+  );
+  background-size: 6px 6px;
+}
+#mobile-dialog .mobile-page-main {
+  min-width: 0;
+  max-width: 560px;
+}
+#mobile-dialog .mobile-page-intro h1 {
+  margin: 0;
+  max-width: 520px;
+  font-size: 60px;
+  font-weight: 600;
+  line-height: 1.08;
+  letter-spacing: -2px;
+  text-wrap: balance;
+}
+html:lang(zh) #mobile-dialog .mobile-page-intro h1 {
+  max-width: 6em;
+  text-wrap: wrap;
+}
+#mobile-dialog .mobile-page-intro > p:not(.mobile-page-eyebrow) {
+  max-width: 480px;
+  margin: 24px 0 0;
+  color: var(--color-text-muted);
+  font-size: 18px;
+  line-height: 1.65;
+}
+#mobile-dialog .mobile-page-intro > .mobile-page-eyebrow {
+  margin: 0 0 24px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+}
+#mobile-dialog .mobile-platforms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 24px;
+}
+#mobile-dialog .mobile-platforms > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 3px 10px;
+  border: 1px solid var(--color-line);
+  border-radius: 16px;
+  background: var(--color-surface);
+  font-size: 12px;
+  line-height: 20px;
+}
+#mobile-dialog .mobile-platforms .interface-icon {
+  width: 15px;
+  height: 15px;
+}
+#mobile-dialog[data-mobile-page-state="install"] .mobile-platforms,
+#mobile-dialog[data-mobile-page-state="pair"] .mobile-platforms,
+#mobile-dialog[data-mobile-page-state="paired"] .mobile-platforms {
+  display: none;
+}
+#mobile-dialog .mobile-intro-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 18px;
+  margin-top: 32px;
+}
+#mobile-dialog .mobile-intro-actions .modal-action {
+  min-width: 150px;
+  min-height: 40px;
+  padding: 10px 20px;
+  border-radius: 24px;
+  font-size: 13px;
+}
+#mobile-dialog .mobile-intro-actions .text-button {
+  min-height: 36px;
+  padding: 6px 0;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+#mobile-dialog .mobile-device-grid {
+  display: contents;
+}
+#mobile-dialog .mobile-setup-flow,
+#mobile-dialog .mobile-device-grid > .mobile-connect-panel {
+  min-width: 0;
+  min-height: 0;
+  margin: 28px 0 0;
+  padding: 24px;
+  border: 1px solid var(--color-line);
+  border-radius: 14px;
+  background: var(--color-navigation);
+}
+#mobile-dialog .mobile-flow-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+#mobile-dialog .mobile-flow-header > button {
+  flex: none;
+}
+#mobile-dialog .mobile-flow-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+#mobile-dialog .mobile-flow-steps li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+#mobile-dialog .mobile-flow-steps li > span {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  border: 1px solid var(--color-line);
+  border-radius: 50%;
+  font-size: 10px;
+}
+#mobile-dialog .mobile-flow-steps [aria-current="step"] {
+  color: var(--color-text);
+}
+#mobile-dialog .mobile-flow-steps [aria-current="step"] > span {
+  border-color: var(--color-text);
+  background: var(--color-text);
+  color: var(--color-text-inverse);
+}
+#mobile-dialog .mobile-flow-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-line);
+}
+#mobile-dialog .mobile-install {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+#mobile-dialog .mobile-install > summary {
+  padding: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+#mobile-dialog .mobile-install > p {
+  margin: 12px 0 0;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+#mobile-dialog .mobile-install-platforms {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  margin-top: 20px;
+}
+#mobile-dialog .mobile-install-platform {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 16px;
+  align-items: center;
+  min-width: 0;
+}
+#mobile-dialog .mobile-install-qr {
+  width: 88px;
+  height: 88px;
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  background: white;
+}
+#mobile-dialog .mobile-install-platform :is(h4, p) {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+#mobile-dialog .mobile-install-platform h4 {
+  font-weight: 500;
+}
+#mobile-dialog .mobile-install-platform p {
+  margin-top: 4px;
+  color: var(--color-text-muted);
+}
+#mobile-dialog .mobile-install-platform :is(.secondary, .modal-action) {
+  display: inline-flex;
+  width: auto;
+  min-height: 28px;
+  margin-top: 8px;
+  padding: 4px 8px;
+  font-size: 11px;
+  line-height: 18px;
+}
+#mobile-dialog .mobile-connection-summary {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: start;
+  justify-items: start;
+  min-height: 0;
+  gap: 10px 12px;
+  text-align: left;
+}
+#mobile-dialog .mobile-connection-symbol {
+  grid-column: 1;
+  grid-row: 1;
+  padding-top: 2px;
+  color: var(--color-text-muted);
+}
+#mobile-dialog .mobile-connection-summary > div {
+  grid-column: 2;
+  min-width: 0;
+}
+#mobile-dialog .mobile-connection-summary h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+#mobile-dialog .mobile-connection-summary p {
+  margin: 6px 0 0;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+#mobile-dialog .mobile-connection-summary button {
+  grid-column: 2;
+  min-width: 0;
+  max-width: 100%;
+}
+#mobile-dialog .mobile-connection-summary .mobile-connect-hint {
+  grid-column: 2;
+  margin-top: 0;
+}
+#mobile-dialog .mobile-pair-preview {
+  grid-template-columns: 128px minmax(0, 1fr);
+  gap: 12px;
+  margin: 16px 0 0;
+  padding: 12px;
+  background: var(--color-surface);
+}
+#mobile-dialog .mobile-pair-preview > button {
+  grid-column: 1 / -1;
+  justify-self: end;
+}
+#mobile-dialog .mobile-device-grid > .mobile-trusted-panel {
+  min-height: 0;
+  padding: 0;
+  margin-top: 28px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+#mobile-dialog .mobile-trusted-panel > header {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--color-line);
+}
+#mobile-dialog .mobile-trusted-panel h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 500;
+}
+#mobile-dialog .mobile-trusted-panel p {
+  margin: 4px 0 0;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+#mobile-dialog .mobile-device {
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  min-width: 0;
+  padding: 16px 0;
+  gap: 6px 10px;
+  font-size: 13px;
+}
+#mobile-dialog .mobile-device > div {
+  min-width: 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+#mobile-dialog .mobile-device small,
+#mobile-dialog .mobile-device-facts :is(dt, dd) {
+  font-size: 11px;
+  line-height: 1.5;
+}
+#mobile-dialog .mobile-device button {
+  min-height: 28px;
+  padding: 4px 8px;
+  font-size: 11px;
+}
+#mobile-dialog .mobile-device-facts {
+  gap: 4px 12px;
+}
+#mobile-dialog .mobile-paired-actions {
+  margin-top: 16px;
+}
+#mobile-dialog .mobile-page-support {
+  grid-column: 1 / -1;
+  width: 100%;
+  max-width: 560px;
+}
+.settings-page #mobile-dialog .mobile-service-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 0;
+  padding-top: 20px;
+  border-top: 1px solid var(--color-line);
+}
+#mobile-dialog .mobile-service-heading > div {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+#mobile-dialog .mobile-service-heading h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+}
+#mobile-dialog .mobile-service-heading p {
+  margin: 4px 0 0;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+#mobile-dialog .mobile-service-heading .mobile-service-state {
+  font-size: 11px;
+}
+#mobile-dialog #mobile-service-enabled {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+#mobile-dialog .mobile-connection-capabilities {
+  margin: 16px 0 0;
+  padding: 0;
+  border: 0;
+}
+#mobile-dialog .mobile-connection-capabilities > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 0;
+  list-style: none;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+#mobile-dialog .mobile-connection-capabilities[open] > summary svg {
+  transform: rotate(180deg);
+}
+#mobile-dialog .mobile-connection-capabilities > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  margin-top: 12px;
+}
+#mobile-dialog .mobile-connection-capabilities p {
+  min-width: 0;
+  gap: 10px;
+}
+#mobile-dialog .mobile-connection-capabilities .interface-icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+#mobile-dialog .mobile-connection-capabilities b {
+  font-size: 12px;
+  font-weight: 500;
+}
+#mobile-dialog .mobile-connection-capabilities small {
+  margin-top: 3px;
+  font-size: 11px;
+  line-height: 1.5;
+}
+#mobile-dialog #mobile-dialog-status {
+  margin: 16px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+}
+#mobile-dialog .mobile-page-preview {
+  width: 300px;
+  max-width: 100%;
+  min-width: 0;
+  margin: 0;
+  justify-self: center;
+  align-self: center;
+}
+#mobile-dialog .mobile-preview-device {
+  overflow: hidden;
+  border: 8px solid #202020;
+  border-radius: 38px;
+  background: white;
+  box-shadow: 0 20px 60px #00000012;
+}
+#mobile-dialog .mobile-preview-device img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+#mobile-dialog .mobile-page-preview figcaption {
+  margin-top: 16px;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  text-align: center;
+}
+#mobile-pair-dialog {
+  width: 640px;
+  max-width: calc(100vw - 48px);
+  max-height: calc(100dvh - 48px);
+  padding: 24px 24px 0;
+  border: 1px solid var(--color-line);
+  border-radius: 14px;
+  background: var(--color-surface);
+  box-shadow: var(--desktop-shadow);
+}
+#mobile-pair-dialog .mobile-pair-header {
+  gap: 16px;
+  margin-bottom: 16px;
+}
+#mobile-pair-dialog #mobile-pair-title {
+  gap: 10px;
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 28px;
+}
+#mobile-pair-dialog #mobile-pair-title .interface-icon {
+  width: 20px;
+  height: 20px;
+}
+#mobile-pair-dialog #mobile-pair-description {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.6;
+}
+#mobile-pair-dialog #mobile-pairing:not([hidden]) {
+  grid-template-columns: 224px minmax(0, 1fr);
+  align-items: center;
+  gap: 24px;
+  margin: 20px 0;
+  padding: 0;
+  border: 0;
+}
+#mobile-pair-dialog .mobile-pair-qr {
+  padding: 0;
+  gap: 8px;
+}
+#mobile-pair-dialog #mobile-qr {
+  width: 224px;
+  height: 224px;
+  padding: 20px;
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
+  background: white;
+}
+#mobile-pair-dialog .mobile-pair-qr small {
+  font-size: 12px;
+}
+#mobile-pair-dialog .mobile-pair-code {
+  padding-left: 0;
+  border: 0;
+}
+#mobile-pair-dialog .mobile-pair-code h3 {
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+#mobile-pair-dialog .mobile-pin-field {
+  min-height: 48px;
+  padding: 8px 12px;
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  background: var(--color-navigation);
+}
+#mobile-pair-dialog #mobile-pin {
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+}
+#mobile-pair-dialog .mobile-pair-time,
+#mobile-pair-dialog #mobile-address {
+  margin: 12px 0 0;
+  font-size: 12px;
+}
+#mobile-pair-dialog #mobile-pair-waiting {
+  min-height: 36px;
+  margin: 12px 0;
+  gap: 8px;
+  font-size: 12px;
+  background: var(--color-navigation);
+}
+#mobile-pair-dialog .mobile-pair-network {
+  margin: 12px 0 20px;
+  gap: 8px;
+  font-size: 12px;
+}
+#mobile-pair-dialog .mobile-pair-network .interface-icon {
+  width: 16px;
+  height: 16px;
+}
+#mobile-pair-dialog.has-approval #mobile-pairing,
+#mobile-pair-dialog.has-approval #mobile-pair-description {
+  display: none;
+}
+#mobile-pair-dialog #mobile-approval:not(:empty) {
+  padding: 20px;
+  gap: 16px;
+  border-radius: 12px;
+  background: var(--color-navigation);
+}
+#mobile-pair-dialog #mobile-approval .mobile-request-info {
+  gap: 12px;
+}
+#mobile-pair-dialog #mobile-approval .mobile-request-copy {
+  gap: 6px;
+  font-size: 13px;
+}
+#mobile-pair-dialog #mobile-approval .mobile-verification {
+  padding: 12px;
+  margin: 4px 0;
+  font-size: 28px;
+  line-height: 36px;
+  background: var(--color-surface);
+}
+#mobile-pair-dialog #mobile-approval .mobile-request-copy small,
+#mobile-pair-dialog #mobile-approval .mobile-request-actions small {
+  font-size: 12px;
+  line-height: 1.5;
+}
+#mobile-pair-dialog .mobile-request-actions button {
+  min-height: 36px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+#mobile-pair-dialog .mobile-pair-actions {
+  margin: 0 -24px;
+  padding: 12px 24px;
+  gap: 8px;
+  border-top: 1px solid var(--color-line);
+}
+#mobile-pair-dialog #mobile-pair-error {
+  margin: 12px 0;
+  font-size: 13px;
+}
+
+/* 引导沿用已有五步及真实权限状态，收紧品牌与表单的视觉尺度。 */
+.onboarding-page.onboarding-active {
+  --onboarding-rail-width: 30%;
+}
+.onboarding-page .onboarding-rail {
+  padding: 36px 28px 24px;
+}
+.onboarding-page .onboarding-rail h2 {
+  font-size: 22px;
+}
+.onboarding-page .onboarding-rail p {
+  font-size: 14px;
+}
+.onboarding-page .onboarding-rail li {
+  min-height: 32px;
+  gap: 10px;
+  font-size: 13px;
+}
+.onboarding-page .onboarding-page-content:not(.onboarding-language-page) {
+  padding: 28px 36px 20px;
+}
+.onboarding-page h1,
+.onboarding-ai-setup-page > header h1 {
+  font-size: 26px;
+  font-weight: 600;
+}
+.onboarding-page .onboarding-intro p,
+.onboarding-language-page .onboarding-page-copy p {
+  font-size: 14px;
+}
+.onboarding-page .language-choice {
+  min-height: 56px;
+  padding: 12px 16px;
+  gap: 12px;
+  font-size: 15px;
+  border-radius: 6px;
+}
+.onboarding-page .onboarding-permission {
+  min-height: 80px;
+  padding: 16px;
+  gap: 14px;
+  border-radius: 6px;
+}
+.onboarding-page .onboarding-permission b {
+  font-size: 15px;
+  font-weight: 500;
+}
+.onboarding-page .onboarding-permission-copy small {
+  margin-top: 4px;
+  font-size: 12px;
+}
+.onboarding-page .onboarding-actions :is(.modal-action, .secondary) {
+  min-height: 36px;
+  height: 36px;
+  min-width: 0;
+  padding: 8px 14px;
+  gap: 8px;
+  font-size: 13px;
+  border-radius: 6px;
+}
+.onboarding-page .onboarding-folder-section summary,
+.onboarding-page .onboarding-model-heading h2,
+.onboarding-page .onboarding-ai-feature-head h2 {
+  font-size: 15px;
+  font-weight: 500;
+}
+.onboarding-page .onboarding-ai-feature-desc,
+.onboarding-page .onboarding-model-card .asr-card-head b {
+  font-size: 13px;
+}
+
+@container (max-width: 520px) {
+  #prepare-view .capture-source-list .flow-select-options,
+  #prepare-view.is-compact .capture-source-list .flow-select-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  #prepare-view .capture-source-list .flow-select-options button,
+  #prepare-view.is-compact .capture-source-list .flow-select-options button {
+    min-height: 68px;
+  }
+}
+@container (max-width: 380px) {
+  #prepare-view #meeting-form .prepare-fields,
+  #prepare-view[data-mode="import"] #meeting-form .prepare-fields,
+  #prepare-view #meeting-form .prepare-extra-settings,
+  #prepare-view .prepare-processing > div {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  #prepare-view .prepare-session-footer {
+    flex-wrap: wrap;
+  }
+}
+@media (max-width: 1050px) {
+  #home-view.active {
+    padding-inline: 28px;
+  }
+  #home-view .workspace-launch {
+    padding: 16px;
+  }
+  #prepare-view.active {
+    padding-inline: 24px;
+  }
+  #detail-view :is(.detail-notes-panel, .transcript-body, .summary-body, .summary-inline-edit),
+  #detail-view .detail-notes-panel:has(.detail-notes-edit) {
+    padding: 28px 24px 40px;
+  }
+  #detail-view .detail-content-toolbar,
+  #detail-view .detail-content-header .detail-document-navigation {
+    padding-inline: 20px;
+  }
+  #live-view [data-live-notes-root],
+  #live-view .transcript-scroll {
+    padding-inline: 20px;
+  }
+  /* 狭窄双栏收起 AI 文案，读屏名称仍保留。 */
+  #live-view .ai-assist-toggle [data-ai-assist-toggle-label] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  #settings-view.active,
+  .settings-page {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+  .settings-general-main,
+  .settings-page > .modal-panel {
+    padding: 32px 24px 56px;
+  }
+  #settings-view .settings-grid {
+    padding: 20px;
+  }
+  #mobile-dialog .mobile-page-content {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+    padding: 40px 32px;
+  }
+  #mobile-dialog .mobile-page-main {
+    max-width: 560px;
+    margin-inline: auto;
+    width: 100%;
+  }
+  #mobile-dialog .mobile-page-preview {
+    display: none;
+  }
+  #mobile-dialog .mobile-page-intro h1 {
+    font-size: 48px;
+    letter-spacing: -1.4px;
+  }
+  #mobile-dialog .mobile-setup-flow,
+  #mobile-dialog .mobile-device-grid > .mobile-connect-panel {
+    padding: 20px;
+  }
+  #mobile-dialog .mobile-install-platform {
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: 12px;
+  }
+  #mobile-dialog .mobile-install-qr {
+    width: 72px;
+    height: 72px;
+  }
+  #settings-view .settings-preferences,
+  #settings-view .desktop-preference {
+    grid-template-columns: minmax(0, 1fr) 140px;
+    gap: 10px;
+  }
+  #settings-view .desktop-preference .flow-select {
+    width: 140px;
+  }
+  .onboarding-page .onboarding-rail {
+    padding: 28px 20px;
+  }
+  .onboarding-page .onboarding-page-content:not(.onboarding-language-page) {
+    padding-inline: 24px;
+  }
+}
+@media (max-width: 850px) {
+  #detail-view.active {
+    --detail-inset: 20px;
+  }
+  #live-view .live-section-head {
+    padding-inline: 10px;
+  }
+  #live-view .live-control-bar {
+    column-gap: 8px;
+    padding-inline: 12px;
+  }
+  #live-view .live-control-bar .input-meter {
+    max-width: 72px;
+  }
+}
+@media (max-height: 700px) {
+  #prepare-view.active {
+    gap: 12px;
+    padding-top: 12px;
+    padding-bottom: 16px;
+  }
+  #prepare-view #meeting-form,
+  #prepare-view[data-mode="import"] #meeting-form {
+    gap: 10px;
+  }
+  #prepare-view #meeting-form #meeting-title {
+    min-height: 40px;
+    padding-block: 4px 7px;
+    line-height: 26px;
+  }
+  #prepare-view .prepare-heading p {
+    margin-top: 3px;
+  }
+  #prepare-view .prepare-session-footer {
+    padding-top: 12px;
+  }
+  #prepare-view .audio-dropzone,
+  #prepare-view .audio-dropzone.has-file {
+    grid-template-columns: 32px minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    min-height: 80px;
+    padding: 12px;
+    gap: 4px 12px;
+    align-items: center;
+    justify-items: start;
+    text-align: left;
+  }
+  #prepare-view .audio-dropzone > :is(.interface-icon, [data-interface-icon]) {
+    grid-column: 1;
+    grid-row: 1 / 3;
+  }
+  #prepare-view .audio-dropzone h2 {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: end;
+  }
+  #prepare-view .audio-dropzone p {
+    grid-column: 2;
+    grid-row: 2;
+    align-self: start;
+    margin: 0;
+  }
+  #prepare-view .audio-dropzone > button {
+    grid-column: 3;
+    grid-row: 1 / 3;
+  }
+  #prepare-view .prepare-processing h2 {
+    margin-bottom: 0;
+  }
+  #prepare-view .prepare-processing > div {
+    margin-top: 8px;
+  }
+}
+@media (max-width: 760px) {
+  #mobile-dialog .mobile-page-content {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  #mobile-dialog .mobile-page-preview {
+    display: none;
+  }
+}
+@media (max-width: 600px) {
+  #home-view .workspace-launch-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  #settings-view.active,
+  .settings-page {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .settings-navigation {
+    flex-direction: row;
+    overflow-x: auto;
+    padding: 8px;
+    border-right: 0;
+    border-bottom: 1px solid var(--color-line);
+  }
+  .settings-navigation h2 {
+    display: none;
+  }
+  .settings-navigation button {
+    flex: none;
+    white-space: nowrap;
+  }
+  #live-view .live-layout {
+    grid-template-columns: minmax(0, 1fr);
+    overflow-y: auto;
+  }
+  #live-view :is(.live-notes, .live-captions) {
+    min-height: 260px;
+  }
+  #live-view .live-captions {
+    border-left: 0;
+    border-top: 1px solid var(--color-line);
+  }
+}
