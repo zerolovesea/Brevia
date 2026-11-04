@@ -403,15 +403,15 @@ document.querySelectorAll('[data-interface-icon]').forEach((mount) => {
   mount.innerHTML = interfaceIcon(mount.dataset.interfaceIcon);
 });
 const speakerProfileCard = document.createElement('section');
-speakerProfileCard.className = 'settings-card';
+speakerProfileCard.className = 'preferences-destination';
 speakerProfileCard.id = 'speaker-profiles-entry';
-speakerProfileCard.innerHTML = `${interfaceIcon('microphone')}<h2></h2><p></p><button class="secondary settings-row-action" type="button">${interfaceIcon('chevron-right')}</button>`;
+speakerProfileCard.innerHTML = `<div class="preference-copy"><h2></h2><p></p></div><button class="preferences-open" type="button">${interfaceIcon('chevron-right')}</button>`;
 document.querySelector('#mobile-connection').before(speakerProfileCard);
 const updateCard = document.createElement('section');
-updateCard.className = 'settings-card update-card';
+updateCard.className = 'preferences-destination preferences-update';
 updateCard.id = 'app-update-entry';
-updateCard.innerHTML = `${interfaceIcon('info')}<h2 id="settings-update-label"></h2><p></p><button class="secondary settings-row-action" data-open-whats-new type="button" aria-labelledby="settings-update-label">${interfaceIcon('chevron-right')}</button><span class="update-actions"><button class="update-notes" data-open-whats-new type="button"></button><button class="update-button" type="button"></button></span>`;
-document.querySelector('#settings-view .settings-grid').append(updateCard);
+updateCard.innerHTML = `<div class="preference-copy"><h2 id="settings-update-label"></h2><p></p></div><button class="preferences-open" data-open-whats-new type="button" aria-labelledby="settings-update-label">${interfaceIcon('chevron-right')}</button><span class="update-actions"><button class="update-notes" data-open-whats-new type="button"></button><button class="update-button" type="button"></button></span>`;
+document.querySelector('#settings-view .preferences-destinations').append(updateCard);
 const updateTitle = updateCard.querySelector('h2');
 const updateDescription = updateCard.querySelector('p');
 const updateButton = updateCard.querySelector('button.update-button');
@@ -733,7 +733,7 @@ const settingsModal = document.createElement('div');
 settingsModal.className = 'modal-backdrop';
 settingsModal.hidden = true;
 const settingsModalMarkup = () =>
-  `<section class="modal-panel" role="dialog" aria-modal="true"><header class="modal-head"><div class="modal-title"><h2></h2><p></p></div><button class="modal-close" type="button" aria-label="关闭">${interfaceIcon('close')}</button></header><div class="modal-body"></div></section>`;
+  `<section class="modal-panel ui-surface" role="dialog" aria-modal="true"><header class="modal-head ui-surface-heading"><div class="modal-title"><h2></h2><p></p></div><button class="modal-close" type="button" aria-label="关闭">${interfaceIcon('close')}</button></header><div class="modal-body"></div></section>`;
 settingsModal.innerHTML = settingsModalMarkup();
 document.body.append(settingsModal);
 const settingsFolders = document.createElement('div');
@@ -774,6 +774,9 @@ function configureSettingsPage(kind) {
   if (kind !== 'whats-new' && kind !== 'upgrade-log') updateLogReturn = undefined;
   settingsModal.classList.toggle('export-modal', kind === 'export' || kind === 'share');
   const panel = settingsModal.querySelector('.modal-panel');
+  panel.classList.toggle('preferences-workspace', page);
+  settingsModal.querySelector('.modal-head').classList.toggle('preferences-titlebar', page);
+  settingsModal.querySelector('.modal-body').classList.toggle('preferences-scroll', page);
   if (kind === 'upgrade-log') {
     settingsModal.querySelector('.modal-title h2').id = 'upgrade-log-title';
     panel.setAttribute('aria-labelledby', 'upgrade-log-title');
@@ -855,13 +858,13 @@ function renderAdvancedSettings(settings, metadata = {}) {
           .filter((attribute) => limits[attribute] !== undefined)
           .map((attribute) => `${attribute}="${escapeHtml(String(limits[attribute]))}"`)
           .join(' ');
-        return `<label><span><b>${escapeHtml(label)}</b><small>${escapeHtml(range)}</small></span><input name="${escapeHtml(fieldPath)}" type="${typeof value === 'number' ? 'number' : 'text'}" ${attributes}${limits.read_only ? ' readonly' : ' required'} value="${escapeHtml(String(value))}" /></label>`;
+        return `<label class="preference-row preference-field"><span class="preference-copy"><b>${escapeHtml(label)}</b><small>${escapeHtml(range)}</small></span><span class="preference-control"><input name="${escapeHtml(fieldPath)}" type="${typeof value === 'number' ? 'number' : 'text'}" ${attributes}${limits.read_only ? ' readonly' : ' required'} value="${escapeHtml(String(value))}" /></span></label>`;
       })
       .join('');
   return Object.entries(settings)
     .map(
       ([section, values]) =>
-        `<details class="advanced-settings-section"><summary>${interfaceIcon({ audio: 'microphone', asr: 'waveform', vad: 'waveform', live: 'waveform', diarization: 'person', refinement: 'document', summary: 'ai', translation: 'translate' }[section] || 'advanced')}<h3>${escapeHtml(copy.sections[section] || section)}</h3>${interfaceIcon('chevron-down')}</summary><div class="advanced-fields">${rows(section, values)}</div></details>`,
+        `<details class="preferences-disclosure advanced-settings-section"><summary>${interfaceIcon({ audio: 'microphone', asr: 'waveform', vad: 'waveform', live: 'waveform', diarization: 'person', refinement: 'document', summary: 'ai', translation: 'translate' }[section] || 'advanced')}<h3>${escapeHtml(copy.sections[section] || section)}</h3>${interfaceIcon('chevron-down')}</summary><div class="preferences-disclosure-fields advanced-fields">${rows(section, values)}</div></details>`,
     )
     .join('');
 }
@@ -918,7 +921,7 @@ function permissionRow(kind, label, detail, granted, denied, active, unsupported
       : active
         ? `<button class="modal-action permission-setting-action" data-request-permission="${kind}" type="button">${t('允许')}</button>`
         : `<button class="modal-action permission-setting-action" data-open-permission-settings="${kind}" type="button">${t('打开系统设置')}</button>`;
-  return `<label class="permission-setting-row${granted ? ' is-granted' : ''}">${interfaceIcon(kind === 'microphone' ? 'microphone' : 'appearance')}<span><b>${escapeHtml(label)}</b><small>${escapeHtml(hint)}</small></span><span class="permission-setting-control"><span class="permission-setting-state">${state}</span>${action}</span></label>`;
+  return `<div class="preference-row preferences-permission-row${granted ? ' is-granted' : ''}"><span class="preference-copy"><b>${escapeHtml(label)}</b><small>${escapeHtml(hint)}</small></span><span class="preference-control preferences-permission-control"><span class="preferences-permission-state">${state}</span>${action}</span></div>`;
 }
 /** 渲染显示在高级设置模态框顶部的系统权限部分。@returns {string} */
 function renderPermissionSettings() {
@@ -946,7 +949,7 @@ function renderPermissionSettings() {
       false,
       screenUnsupported,
     );
-  return `<section class="advanced-settings-section permission-settings-section" data-permission-settings><h3>${interfaceIcon('settings')}${t('系统权限')}</h3>${rows}</section>`;
+  return `<section class="preferences-section permission-settings-section" data-permission-settings><header class="preferences-section-heading"><h3>${t('系统权限')}</h3></header>${rows}</section>`;
 }
 const modelDownloads = new Map();
 const meetingList = document.querySelector('.meeting-list');
@@ -963,7 +966,7 @@ batchToolbar.hidden = true;
 batchToolbar.setAttribute('aria-live', 'polite');
 batchToolbar.innerHTML =
   '<label class="batch-select-all"><input id="batch-select-all" type="checkbox" /><span data-batch-all-label></span></label><strong data-batch-count></strong><div class="batch-actions"><button type="button" data-batch-restore></button><button type="button" data-batch-export></button><button class="batch-delete" type="button" data-batch-delete></button><button type="button" data-batch-clear></button></div>';
-libraryToolbar.after(batchToolbar);
+document.querySelector('.navigation-library-heading').after(batchToolbar);
 /** 同步选中行样式和上下文批量工具栏。@param {boolean} updateToolbar 是否重绘批量操作。@returns {void} */
 function syncMeetingSelection(updateToolbar = true) {
   const rows = [...meetingList.querySelectorAll('.meeting-row')];
@@ -1072,7 +1075,7 @@ function renderSidebarMeetingTree() {
     const group = t('最近删除');
     return `<header class="library-group" data-library-group="${escapeHtml(group)}"><h2>${escapeHtml(group)}</h2><span>${meetings.length}</span></header>${meetings
       .map(({ meeting, index }) =>
-        renderMeetingRow(localizeMeeting(meeting), index).replace(
+        renderNavigationMeeting(localizeMeeting(meeting), index).replace(
           'class="meeting-row"',
           `class="meeting-row" data-library-group="${escapeHtml(group)}"`,
         ),
@@ -1095,7 +1098,7 @@ function renderSidebarMeetingTree() {
       const expanded = !collapsedSidebarWorkspaces.has(workspace.id);
       const current = workspace.id === activeWorkspaceId;
       const contentId = `sidebar-workspace-meetings-${groupIndex}`;
-      return `<section class="sidebar-workspace" data-sidebar-workspace="${escapeHtml(workspace.id)}"><header class="sidebar-workspace-header"><button type="button" class="workspace-item sidebar-workspace-toggle${current ? ' active' : ''}" data-sidebar-workspace-toggle data-workspace-id="${escapeHtml(workspace.id)}" aria-expanded="${expanded}" aria-pressed="${current}" aria-controls="${contentId}" title="${escapeHtml(workspace.name)}">${interfaceIcon('chevron-right')}${interfaceIcon('folder')}<span class="workspace-label">${escapeHtml(workspace.name)}</span><span class="sidebar-workspace-count">${items.length}</span></button>${workspace.id ? `<button type="button" class="sidebar-workspace-edit" data-edit-sidebar-workspace="${escapeHtml(workspace.id)}" aria-label="${escapeHtml(t('编辑工作区'))} ${escapeHtml(workspace.name)}" title="${escapeHtml(t('编辑工作区'))}">${interfaceIcon('more')}</button>` : ''}</header><div class="sidebar-workspace-meetings" id="${contentId}"${expanded ? '' : ' hidden'}>${items.length ? items.map(({ meeting, index }) => renderMeetingRow(localizeMeeting(meeting), index)).join('') : `<p class="sidebar-workspace-empty">${escapeHtml(t('还没有会议记录'))}</p>`}</div></section>`;
+      return `<section class="sidebar-workspace" data-sidebar-workspace="${escapeHtml(workspace.id)}"><header class="sidebar-workspace-header"><button type="button" class="workspace-item sidebar-workspace-toggle${current ? ' active' : ''}" data-sidebar-workspace-toggle data-workspace-id="${escapeHtml(workspace.id)}" aria-expanded="${expanded}" aria-pressed="${current}" aria-controls="${contentId}" title="${escapeHtml(workspace.name)}">${interfaceIcon('chevron-right')}${interfaceIcon('folder')}<span class="workspace-label">${escapeHtml(workspace.name)}</span><span class="sidebar-workspace-count">${items.length}</span></button>${workspace.id ? `<button type="button" class="sidebar-workspace-edit" data-edit-sidebar-workspace="${escapeHtml(workspace.id)}" aria-label="${escapeHtml(t('编辑工作区'))} ${escapeHtml(workspace.name)}" title="${escapeHtml(t('编辑工作区'))}">${interfaceIcon('more')}</button>` : ''}</header><div class="sidebar-workspace-meetings" id="${contentId}"${expanded ? '' : ' hidden'}>${items.length ? items.map(({ meeting, index }) => renderNavigationMeeting(localizeMeeting(meeting), index)).join('') : `<p class="sidebar-workspace-empty">${escapeHtml(t('还没有会议记录'))}</p>`}</div></section>`;
     })
     .join('');
 }
@@ -1116,7 +1119,7 @@ function localizeMeeting(meeting) {
     ...meeting,
     meta: `${created} · ${minutes} ${t('分钟')}`,
     // label 一律存文案 key；detail 允许是 key（录制中）或已合成的译文（已完成）。
-    // renderMeetingRow 会统一走一次 t()：key 被翻译，已翻译文本原样返回。
+    // renderNavigationMeeting 会统一走一次 t()：key 被翻译，已翻译文本原样返回。
     status:
       meeting.statusCode === 'recording'
         ? { tone: 'processing', label: paused ? '已暂停' : '正在录制', paused, detail: '本地保存' }
@@ -1160,24 +1163,6 @@ function renderMeetingList() {
 const prepareForm = document.querySelector('#meeting-form');
 let importAudioSelection = null;
 const prepareView = document.querySelector('#prepare-view');
-const prepareLayout = prepareView.querySelector('.prepare-layout');
-const desktopPrepareLayout = matchMedia('(min-width: 851px)');
-/** 在窗口调整大小时，将准备控件适配到可见的桌面工作空间。@returns {void} */
-function fitPrepareLayout() {
-  prepareLayout.style.removeProperty('transform');
-  prepareLayout.style.removeProperty('width');
-  prepareView.classList.remove('is-compact');
-  const sources = prepareForm.querySelector('fieldset');
-  const status = prepareForm.querySelector('.prepare-input-status');
-  // 长语言文案或较矮窗口只收紧右侧间距，始终给电平和开始按钮留出空间。
-  const crowded =
-    prepareView.dataset.mode !== 'import' &&
-    sources.getBoundingClientRect().bottom + 12 > status.getBoundingClientRect().top;
-  prepareView.classList.toggle('is-compact', !desktopPrepareLayout.matches || crowded);
-}
-
-new ResizeObserver(() => requestAnimationFrame(fitPrepareLayout)).observe(prepareView);
-desktopPrepareLayout.addEventListener('change', fitPrepareLayout);
 const importRecording = document.querySelector('#import-recording');
 const meetingTitle = document.querySelector('#meeting-title');
 let meetingTitleEdited = false;
@@ -1197,7 +1182,7 @@ const defaultMeetingLanguage = () => ({ zh: 'zh', ja: 'ja', ko: 'ko' })[locale] 
 function prepareModelControl(language, refinedModel, modelOptions) {
   if (!modelOptions.length) return '';
   const words = (asrCopy.prepare || {})[locale] || (asrCopy.prepare || {}).en || {};
-  return `<label class="prepare-model-select">${escapeHtml(words.modelLabel || t('识别模型'))}${flowSelect('refined-model', refinedModel, modelOptions)}</label>`;
+  return `<label class="prepare-model-select">${escapeHtml(words.modelLabel || t('识别模型'))}${desktopSelect('refined-model', refinedModel, modelOptions)}</label>`;
 }
 function renderPrepareSelects(refinedModelOverride) {
   const values = Object.fromEntries(new FormData(prepareForm));
@@ -1217,7 +1202,7 @@ function renderPrepareSelects(refinedModelOverride) {
   // 模型清单要等后端 initialize 返回；在那之前不渲染这一格，避免出现空白的禁用下拉。
   const modelLabel = prepareModelControl(language, refinedModel, modelOptions);
   prepareForm.querySelector('.form-grid').innerHTML =
-    `<label>${t('工作区')}${flowSelect('meeting-workspace', workspaceValue, workspaceOptions)}</label><label>${t('会议语言')}${flowSelect('meeting-language', language, BreviaI18n.languageOptions(locale, t, true))}</label><label>${t('译文目标')}${flowSelect('translation-target', values['translation-target'] || '', BreviaI18n.languageOptions(locale, t))}</label><label>${t('预期说话人数')}${flowSelect('meeting-speakers', values['meeting-speakers'] || '-1', [['-1', t('自动检测')], ...Array.from({ length: 10 }, (_, i) => [String(i + 1), String(i + 1)])])}</label>${modelLabel}`;
+    `<label>${t('工作区')}${desktopSelect('meeting-workspace', workspaceValue, workspaceOptions)}</label><label>${t('会议语言')}${desktopSelect('meeting-language', language, BreviaI18n.languageOptions(locale, t, true))}</label><label>${t('译文目标')}${desktopSelect('translation-target', values['translation-target'] || '', BreviaI18n.languageOptions(locale, t))}</label><label>${t('预期说话人数')}${desktopSelect('meeting-speakers', values['meeting-speakers'] || '-1', [['-1', t('自动检测')], ...Array.from({ length: 10 }, (_, i) => [String(i + 1), String(i + 1)])])}</label>${modelLabel}`;
   const processing = prepareForm.querySelector('[data-prepare-processing]');
   processing.replaceChildren();
   const extraSettings = prepareForm.querySelector('[data-prepare-extra-settings]');
@@ -1251,8 +1236,6 @@ function renderPrepareSelects(refinedModelOverride) {
       ? '导入会议录音，在电脑上转写和整理。'
       : '设置会议信息并选择录制来源，开始记录你的会议。',
   );
-  prepareView.querySelector('[data-prepare-source-description]').textContent =
-    t('选择要录制的音频来源，可单选。');
   prepareForm.querySelector('.primary-action').innerHTML = importing
     ? `${escapeHtml(t('导入录音'))}${interfaceIcon('arrow-right')}`
     : `${interfaceIcon('record')}${escapeHtml(t('开始录制'))}`;
@@ -1260,7 +1243,6 @@ function renderPrepareSelects(refinedModelOverride) {
   importRecording.title = t('导入本地音频');
   if (activeView === 'prepare')
     crumb.textContent = importing ? t('导入录音') : catalog[locale].views.prepare;
-  requestAnimationFrame(fitPrepareLayout);
 }
 const CAPTURE_MODES = new Set(['mic', 'system', 'both', 'phone']);
 let currentCaptureMode = 'both';
@@ -1333,13 +1315,7 @@ function captureModeSelect(value) {
     ['phone', t('手机麦克风'), t('适合线下会议，用手机近距离收音')],
   ];
   const selected = options.find(([mode]) => mode === value) || options[2];
-  const count = capturePhones.length
-    ? t('{count} 台手机已连接').replace(
-        '{count}',
-        new Intl.NumberFormat(BreviaI18n.localeTag(locale)).format(capturePhones.length),
-      )
-    : '';
-  return `<div class="flow-select capture-mode-select capture-source-list"><button class="flow-select-toggle" data-flow-select-toggle type="button" aria-expanded="false" hidden>${escapeHtml(selected[1])}<span class="select-chevron">${interfaceIcon('chevron-down')}</span></button><input type="hidden" name="capture-mode" value="${escapeHtml(selected[0])}" /><div class="flow-select-options" role="radiogroup" aria-label="${escapeHtml(t('录制来源'))}">${options.map(([mode, label, scene]) => `<button type="button" role="radio" aria-checked="${mode === selected[0]}" data-flow-select-choice="capture-mode" data-value="${mode}" data-label="${escapeHtml(label)}">${interfaceIcon(mode === 'phone' ? 'phone' : mode === 'mic' ? 'microphone' : mode === 'system' ? 'appearance' : 'waveform')}<span><b>${escapeHtml(label)}${mode === 'phone' && count ? `<em class="capture-phone-count">${escapeHtml(count)}</em>` : ''}</b><small>${escapeHtml(scene)}</small></span><i></i></button>`).join('')}</div></div>`;
+  return `<div class="flow-select capture-mode-select compose-source-switch"><button class="flow-select-toggle" data-flow-select-toggle type="button" aria-expanded="false" hidden>${escapeHtml(selected[1])}<span class="select-chevron">${interfaceIcon('chevron-down')}</span></button><input type="hidden" name="capture-mode" value="${escapeHtml(selected[0])}" /><div class="flow-select-options" role="radiogroup" aria-label="${escapeHtml(t('录制来源'))}">${options.map(([mode, label, scene]) => `<button type="button" role="radio" aria-checked="${mode === selected[0]}" data-flow-select-choice="capture-mode" data-value="${mode}" data-label="${escapeHtml(label)}" title="${escapeHtml(scene)}">${interfaceIcon(mode === 'phone' ? 'phone' : mode === 'mic' ? 'microphone' : mode === 'system' ? 'appearance' : 'waveform')}<span>${escapeHtml(label)}</span></button>`).join('')}</div></div>`;
 }
 function renderPhoneDeviceOptions() {
   const mount = prepareForm.querySelector('#phone-device-mount');
@@ -1351,7 +1327,7 @@ function renderPhoneDeviceOptions() {
   if (selectedPhoneDeviceId && !selectedPhoneDevice())
     options.unshift([selectedPhoneDeviceId, t('设备已断开'), t('未就绪')]);
   if (!options.length) options.push(['', t('尚未连接设备')]);
-  mount.innerHTML = flowSelect(
+  mount.innerHTML = desktopSelect(
     'phone-device',
     selectedPhoneDeviceId,
     options,
@@ -1368,6 +1344,14 @@ function renderCaptureMode(value = currentCaptureMode) {
   if (!mount) return;
   currentCaptureMode = CAPTURE_MODES.has(value) ? value : 'both';
   mount.innerHTML = captureModeSelect(currentCaptureMode);
+  prepareView.querySelector('[data-prepare-source-description]').textContent = t(
+    {
+      mic: '适合面对面交流、个人口述',
+      system: '适合网课、视频和电脑播放的音频',
+      both: '适合线上会议，同时收录双方声音',
+      phone: '适合线下会议，用手机近距离收音',
+    }[currentCaptureMode],
+  );
   const inputs = captureModeInputs();
   const micSetting = prepareForm.querySelector('#mic-device-setting');
   if (micSetting) micSetting.hidden = !inputs.mic;
@@ -1393,7 +1377,6 @@ function renderCaptureMode(value = currentCaptureMode) {
   renderPrepareAudioSources();
   // 仅在准备页内预览麦克风；启动或首页重绘不应采集声音。
   if (activeView !== 'prepare' || prepareView.dataset.mode === 'import') return;
-  fitPrepareLayout();
   if (inputs.mic) {
     void refreshMicDevices();
     void previewMicrophone();
@@ -1646,15 +1629,15 @@ function renderMicDeviceOptions() {
   const options = micDeviceOptions();
   const flow = mount.querySelector('.flow-select');
   if (!flow) {
-    mount.innerHTML = flowSelect('mic-device', savedMicDeviceId(), options);
+    mount.innerHTML = desktopSelect('mic-device', savedMicDeviceId(), options);
   } else {
-    flow.querySelector('.flow-select-options').innerHTML = options
-      .map(
-        ([value, label]) =>
-          `<button type="button" data-flow-select-choice="mic-device" data-value="${escapeHtml(value)}">${escapeHtml(label)}</button>`,
-      )
-      .join('');
-    const current = flow.querySelector('input').value || savedMicDeviceId();
+    const previous = flow.querySelector('input').value || savedMicDeviceId();
+    const current = options.some(([value]) => value === previous) ? previous : options[0][0];
+    const template = document.createElement('template');
+    template.innerHTML = desktopSelect('mic-device', current, options);
+    flow
+      .querySelector('.flow-select-options')
+      .replaceChildren(...template.content.querySelector('.flow-select-options').childNodes);
     const label = options.find(([value]) => value === current)?.[1] || options[0][1];
     flow.querySelector('.flow-select-toggle').firstChild.nodeValue = label;
     flow.querySelector('input').value = current;
@@ -2326,6 +2309,8 @@ function fitFlowSelectOptions(options, toggle, minimumWidth = 160, maximumHeight
   const value = toggle.closest('.flow-select')?.querySelector('input[type="hidden"]')?.value;
   options.querySelectorAll('[data-value]').forEach((choice) => {
     choice.toggleAttribute('aria-current', choice.dataset.value === value);
+    if (choice.getAttribute('role') === 'option')
+      choice.setAttribute('aria-selected', String(choice.dataset.value === value));
   });
   const anchor = toggle.getBoundingClientRect();
   const available = Math.max(anchor.top - 12, innerHeight - anchor.bottom - 12);
@@ -2464,18 +2449,18 @@ function builtinModelPicker(currentModelId, installed, hint, allowDownload = fal
   const intro =
     builtinModelIntro[selected.id]?.[locale] || builtinModelIntro[selected.id]?.en || '';
   return (
-    `<div class="model-picker"><label>${escapeHtml(t('本地模型'))}${flowSelect('model', selected.id, options)}</label>` +
+    `<section class="preferences-model-picker">${renderPreferenceRow('本地模型', '', desktopSelect('model', selected.id, options))}<div class="preferences-model-details">` +
     (intro
-      ? `<p class="model-picker-intro" title="${escapeHtml(intro)}">${escapeHtml(intro)}</p>`
+      ? `<p class="preferences-model-description" title="${escapeHtml(intro)}">${escapeHtml(intro)}</p>`
       : '') +
-    `<div class="model-picker-foot">${renderModelLibraryRatings(selected)}` +
+    `<div class="preferences-model-footer">${renderModelLibraryRatings(selected)}` +
     (allowDownload
       ? downloadAction +
         (settingsModal.classList.contains('settings-page')
           ? `<button class="text-button" type="button" data-open-models-from-config>${escapeHtml(t('管理模型库'))}</button>`
           : '')
       : `<button class="text-button" type="button" data-open-models-from-config>${escapeHtml(t('管理模型库'))}</button>`) +
-    '</div></div>' +
+    '</div></div></section>' +
     (allowDownload
       ? ''
       : `<p class="summary-model-hint">${escapeHtml(hint || copy.builtinHint)}</p>`)
@@ -2486,7 +2471,7 @@ function builtinModelEmptyState(storedModelId) {
   const copy = summaryModelCopy[locale] || summaryModelCopy.en;
   return (
     `<input type="hidden" name="model" value="${escapeHtml(storedModelId)}" />` +
-    `<div class="model-picker is-empty"><p class="summary-model-hint">${escapeHtml(t('还没有下载内置 AI 模型。'))}</p>` +
+    `<div class="preferences-model-empty"><p class="summary-model-hint">${escapeHtml(t('还没有下载内置 AI 模型。'))}</p>` +
     `<button class="modal-action" type="button" data-open-models-from-config>${escapeHtml(t('管理模型库'))}</button></div>` +
     `<p class="summary-model-hint">${escapeHtml(copy.builtinHint)}</p>`
   );
@@ -2506,7 +2491,11 @@ function renderModelConfigFields(config, selectedModel, { required = true, hint 
   const providerField =
     page && isBuiltin
       ? '<input type="hidden" name="provider" value="built-in" />'
-      : `<label class="config-select-field">${copy.provider}${flowSelect('provider', provider, providerOptions)}</label>`;
+      : renderPreferenceRow(
+          copy.provider,
+          '',
+          desktopSelect('provider', provider, providerOptions),
+        );
   let fields = '';
   let builtinModelList = '';
   let currentModelId = '';
@@ -2539,17 +2528,17 @@ function renderModelConfigFields(config, selectedModel, { required = true, hint 
     // 固定供应商的请求地址由代码派生，只有自定义供应商才让用户填写。
     const requiredAttr = required ? ' required' : '';
     const endpointField = preset.needsEndpoint
-      ? `<label>${copy.endpoint}<input name="endpoint" value="${escapeHtml(entry.endpoint || '')}" type="url" placeholder="${escapeHtml(copy.endpointPlaceholder)}"${requiredAttr} /></label>`
+      ? `<label class="preference-row preference-field"><span class="preference-copy">${copy.endpoint}</span><span class="preference-control"><input name="endpoint" value="${escapeHtml(entry.endpoint || '')}" type="url" placeholder="${escapeHtml(copy.endpointPlaceholder)}"${requiredAttr} /></span></label>`
       : '';
     // maxlength 对齐主进程的 zod 上限（model 128、keyLength 512），否则超长值要到
     // 主进程才被拒，用户只会看到一句无从下手的「操作失败」。
-    const keyField = `<label>${copy.key}<span class="secret-field"><input name="apiKey" type="password" autocomplete="new-password" maxlength="512" value="${escapeHtml(modelConfigSecrets.get(config)?.[provider] || '')}" placeholder="${entry.keyReference ? '•'.repeat(entry.keyLength || 8) : ''}"${entry.keyReference || !required ? '' : ' required'} /><button class="icon-button" type="button" data-toggle-secret aria-label="${escapeHtml(t('显示或隐藏 API Key'))}" aria-pressed="false">${interfaceIcon('eye')}</button></span></label>`;
-    const modelField = `<label>${copy.model}<input name="model" value="${escapeHtml(entry.model || '')}" maxlength="128" placeholder="${escapeHtml(preset.model)}"${requiredAttr} /></label>`;
+    const keyField = `<label class="preference-row preference-field"><span class="preference-copy">${copy.key}</span><span class="preference-control secret-field"><input name="apiKey" type="password" autocomplete="new-password" maxlength="512" value="${escapeHtml(modelConfigSecrets.get(config)?.[provider] || '')}" placeholder="${entry.keyReference ? '•'.repeat(entry.keyLength || 8) : ''}"${entry.keyReference || !required ? '' : ' required'} /><button class="icon-button" type="button" data-toggle-secret aria-label="${escapeHtml(t('显示或隐藏 API Key'))}" aria-pressed="false">${interfaceIcon('eye')}</button></span></label>`;
+    const modelField = `<label class="preference-row preference-field"><span class="preference-copy">${copy.model}</span><span class="preference-control"><input name="model" value="${escapeHtml(entry.model || '')}" maxlength="128" placeholder="${escapeHtml(preset.model)}"${requiredAttr} /></span></label>`;
     fields = `${endpointField}${keyField}${modelField}`;
   }
 
   return {
-    markup: `<div class="config-fields">${providerField}${fields}</div>${builtinModelList}<p class="onboarding-privacy-hint">${interfaceIcon('info')}${escapeHtml(t(isBuiltin ? '本地模型在此设备上运行。' : '在线 AI 会将相关文字发送至所选服务商。'))}</p>`,
+    markup: `<section class="preferences-model-connection"><div class="preferences-form-fields config-fields">${providerField}${fields}</div>${builtinModelList}<p class="preferences-privacy-note onboarding-privacy-hint">${interfaceIcon('info')}${escapeHtml(t(isBuiltin ? '本地模型在此设备上运行。' : '在线 AI 会将相关文字发送至所选服务商。'))}</p></section>`,
     saveDisabled: required && isBuiltin && !modelPaths.has(currentModelId),
   };
 }
@@ -2557,7 +2546,7 @@ function renderModelConfigForm(config, formClass, selectedModel) {
   const copy = summaryModelCopy[locale] || summaryModelCopy.en;
   const fields = renderModelConfigFields(config, selectedModel);
   const state = JSON.stringify(config) === JSON.stringify(summaryConfig) ? 'saved' : 'dirty';
-  return `<form class="${formClass}">${fields.markup}<div class="modal-form-actions">${renderSaveState(state)}<button class="secondary" type="button" data-cancel-model-config>${escapeHtml(t('取消'))}</button><button class="modal-action" type="submit"${fields.saveDisabled ? ' disabled' : ''}>${copy.save}</button></div></form>`;
+  return `<form class="${formClass} preferences-form">${fields.markup}<footer class="preferences-form-footer modal-form-actions">${renderSaveState(state)}<button class="secondary" type="button" data-cancel-model-config>${escapeHtml(t('取消'))}</button><button class="modal-action" type="submit"${fields.saveDisabled ? ' disabled' : ''}>${copy.save}</button></footer></form>`;
 }
 function renderSummaryModelForm() {
   return renderModelConfigForm(
@@ -2569,11 +2558,11 @@ function renderSummaryModelForm() {
 /** 渲染纪要模型配置模态框。@returns {void} */
 function renderAiSettingsTabs(active) {
   return settingsModal.classList.contains('settings-page')
-    ? `<div class="settings-tabs"><button type="button" data-ai-settings-tab="summary-model" aria-selected="${active === 'summary-model'}">${t('会议纪要')}</button><button type="button" data-ai-settings-tab="ai-assist" aria-selected="${active === 'ai-assist'}">${t('AI 笔记')}</button></div>`
+    ? `<nav class="preferences-tabs settings-tabs" aria-label="${escapeHtml(t('AI 功能'))}"><button type="button" data-ai-settings-tab="summary-model" aria-selected="${active === 'summary-model'}">${t('会议纪要')}</button><button type="button" data-ai-settings-tab="ai-assist" aria-selected="${active === 'ai-assist'}">${t('AI 笔记')}</button></nav>`
     : '';
 }
 function renderAiServiceChoice(config) {
-  return `<fieldset class="ai-service-choice"><legend>${t('服务方式')}</legend><label><input type="radio" name="ai-service-way" value="built-in"${config.provider === 'built-in' ? ' checked' : ''} />${t('本地模型')}</label><label><input type="radio" name="ai-service-way" value="online"${config.provider !== 'built-in' ? ' checked' : ''} />${t('在线服务')}</label></fieldset>`;
+  return `<fieldset class="preferences-choice-row"><legend>${t('服务方式')}</legend><div class="preference-copy" aria-hidden="true">${t('服务方式')}</div><div class="preferences-choice-options"><label><input type="radio" name="ai-service-way" value="built-in"${config.provider === 'built-in' ? ' checked' : ''} />${t('本地模型')}</label><label><input type="radio" name="ai-service-way" value="online"${config.provider !== 'built-in' ? ' checked' : ''} />${t('在线服务')}</label></div></fieldset>`;
 }
 /** 同页刷新保留阅读位置与展开状态；换页才复位，不能把刷新当作重新打开。 */
 function replaceModalBody(kind, markup) {
@@ -2608,7 +2597,9 @@ function replaceModalBody(kind, markup) {
           attribute.name === 'name' ||
           attribute.name.startsWith('data-')),
     );
-  body.innerHTML = markup;
+  body.innerHTML = settingsModal.classList.contains('settings-page')
+    ? `<div class="preferences-page-content">${markup}</div>`
+    : markup;
   body.dataset.contentKind = kind;
   if (!same) {
     body.scrollTop = 0;
@@ -2648,7 +2639,7 @@ function renderSummaryModelModal() {
     copy.featureIntro || summaryModelCopy.en.featureIntro;
   replaceModalBody(
     'summary-model',
-    `${renderAiSettingsTabs('summary-model')}${onboardingBuiltinProvider || onboardingOnlineProvider ? '' : `<label class="summary-enabled-control"><span>${t('会议纪要')}</span><input type="checkbox" data-summary-enabled${summaryConfig.enabled ? ' checked' : ''} /></label>`}${page ? renderAiServiceChoice(summaryConfigDraft) : ''}${renderSummaryModelForm()}`,
+    `${renderAiSettingsTabs('summary-model')}${onboardingBuiltinProvider || onboardingOnlineProvider ? '' : `<label class="preference-row summary-enabled-control"><span class="preference-copy"><b>${t('会议纪要')}</b><small>${escapeHtml(copy.featureIntro || summaryModelCopy.en.featureIntro)}</small></span><span class="preference-control"><input type="checkbox" data-summary-enabled${summaryConfig.enabled ? ' checked' : ''} /></span></label>`}${page ? renderAiServiceChoice(summaryConfigDraft) : ''}${renderSummaryModelForm()}`,
   );
 }
 
@@ -2678,11 +2669,12 @@ function renderAiAssistModal() {
   });
   replaceModalBody(
     'ai-assist',
-    `${renderAiSettingsTabs('ai-assist')}<form id="ai-assist-config-form" class="ai-assist-config-form"><label class="summary-enabled-control"><span>${t('AI 笔记')}</span><input aria-label="${escapeHtml(t('AI 笔记'))}" type="checkbox" name="enabled" form="ai-assist-config-form" data-ai-settings-enabled${config.enabled ? ' checked' : ''} /></label>${renderAiServiceChoice(config)}${fields.markup}<fieldset class="ai-assist-proactivity"><legend>${t('主动性')}</legend><div class="ai-assist-levels">${levels}</div></fieldset>${warning}<div class="modal-form-actions">${renderSaveState(JSON.stringify(config) === JSON.stringify(aiAssistConfig) ? 'saved' : 'dirty')}<button class="secondary" data-cancel-model-config type="button">${t('取消')}</button><button class="modal-action" type="submit"${fields.saveDisabled && config.enabled ? ' disabled' : ''}>${t('保存配置')}</button></div></form>`,
+    `${renderAiSettingsTabs('ai-assist')}<form id="ai-assist-config-form" class="ai-assist-config-form preferences-form"><label class="preference-row summary-enabled-control"><span class="preference-copy"><b>${t('AI 笔记')}</b><small>${escapeHtml(t('让 AI 在会议中帮你发现重点、提取待办并整理笔记。'))}</small></span><span class="preference-control"><input aria-label="${escapeHtml(t('AI 笔记'))}" type="checkbox" name="enabled" form="ai-assist-config-form" data-ai-settings-enabled${config.enabled ? ' checked' : ''} /></span></label>${renderAiServiceChoice(config)}${fields.markup}<fieldset class="preferences-choice-row"><legend>${t('主动性')}</legend><div class="preference-copy" aria-hidden="true">${t('主动性')}</div><div class="preferences-choice-options">${levels}</div></fieldset>${warning}<footer class="preferences-form-footer modal-form-actions">${renderSaveState(JSON.stringify(config) === JSON.stringify(aiAssistConfig) ? 'saved' : 'dirty')}<button class="secondary" data-cancel-model-config type="button">${t('取消')}</button><button class="modal-action" type="submit"${fields.saveDisabled && config.enabled ? ' disabled' : ''}>${t('保存配置')}</button></footer></form>`,
   );
   if (!page) {
     const toggle = settingsModal.querySelector('.modal-body .summary-enabled-control');
     toggle.querySelector('span').remove();
+    toggle.classList.remove('preference-row');
     settingsModal.querySelector('.modal-title').append(toggle);
   }
 }
@@ -2734,7 +2726,7 @@ function renderSpeakerProfileModal() {
     .join('');
   replaceModalBody(
     'speaker-profiles',
-    `<div class="speaker-manager"><aside class="speaker-directory"><label class="search">${interfaceIcon('search')}<input type="search" data-speaker-search aria-label="${t('搜索')}" placeholder="${t('搜索')}" value="${escapeHtml(speakerProfileSearch)}" /></label><details class="speaker-create"><summary aria-label="${escapeHtml(copy.add)}" title="${escapeHtml(copy.add)}">${interfaceIcon('plus')}<span>${escapeHtml(copy.add)}</span></summary><form class="speaker-profile-form"><label>${copy.name}<input name="name" maxlength="32" required /></label><button class="modal-action" type="submit">${copy.add}</button></form></details><div class="speaker-profile-list">${list || `<p class="page-empty">${copy.intro}</p>`}</div></aside><section class="speaker-profile-detail">${profile ? `<header class="speaker-detail-header"><div>${name}<small>${profile.sample_count}${limits ? `/${limits.max_samples}` : ''} ${copy.samples} · ${formatMeetingTime(profile.duration_ms || 0)}${limits ? ` / ${formatMeetingTime(limits.max_total_seconds * 1000)}` : ''}</small></div><div class="speaker-detail-actions"><button class="secondary" data-verify-speaker-profile="${escapeHtml(profile.id)}" type="button">${voiceCopy.verify}</button><button class="secondary" data-rename-speaker-profile="${escapeHtml(profile.id)}" type="button">${t('更改名称')}</button></div></header><section class="speaker-add"><h3>${copy.addSample}</h3><form class="speaker-sample-form" data-speaker-profile="${escapeHtml(profile.id)}"><div class="speaker-audio-dropzone">${interfaceIcon('upload')}<p>${t('请选择一段清晰的已有录音。')}</p></div><button class="modal-action" type="submit">${t('选择录音并添加')}</button></form></section><section><h3>${t('声纹样本')}</h3><div class="speaker-sample-list">${samples.length ? samples.map((sample) => `<article><button class="sample-play" data-play-speaker-sample="${escapeHtml(sample.id)}" type="button" aria-label="${t('播放录音')}">${interfaceIcon('play')}</button><input type="range" data-speaker-sample-seek="${escapeHtml(sample.id)}" min="0" max="${(sample.duration_ms || 0) / 1000}" step=".1" value="0" aria-label="${t('播放进度')}" /><time>${formatMeetingTime(sample.duration_ms || 0)}</time><button class="model-delete" data-delete-speaker-sample="${escapeHtml(sample.id)}" data-profile-id="${escapeHtml(profile.id)}" type="button">${copy.remove}</button></article>`).join('') : `<p class="page-empty">${copy.empty}</p>`}</div></section><button class="model-delete" data-delete-speaker-profile="${escapeHtml(profile.id)}" type="button">${copy.remove}</button>` : `<div class="page-empty">${interfaceIcon('person')}<h2>${t('声纹管理')}</h2><p>${copy.intro}</p></div>`}</section></div>`,
+    `<div class="preferences-speakers speaker-manager"><aside class="preferences-people speaker-directory"><header class="preferences-people-toolbar"><label class="search">${interfaceIcon('search')}<input type="search" data-speaker-search aria-label="${t('搜索')}" placeholder="${t('搜索')}" value="${escapeHtml(speakerProfileSearch)}" /></label><details class="speaker-create"><summary aria-label="${escapeHtml(copy.add)}" title="${escapeHtml(copy.add)}">${interfaceIcon('plus')}<span>${escapeHtml(copy.add)}</span></summary><form class="speaker-profile-form"><label>${copy.name}<input name="name" maxlength="32" required /></label><button class="modal-action" type="submit">${copy.add}</button></form></details></header><div class="speaker-profile-list">${list || `<p class="page-empty">${t('暂无内容')}</p>`}</div></aside><section class="preferences-person speaker-profile-detail">${profile ? `<header class="speaker-detail-header"><div>${name}<small>${profile.sample_count}${limits ? `/${limits.max_samples}` : ''} ${copy.samples} · ${formatMeetingTime(profile.duration_ms || 0)}${limits ? ` / ${formatMeetingTime(limits.max_total_seconds * 1000)}` : ''}</small></div><div class="speaker-detail-actions"><button class="secondary" data-verify-speaker-profile="${escapeHtml(profile.id)}" type="button">${voiceCopy.verify}</button><button class="secondary" data-rename-speaker-profile="${escapeHtml(profile.id)}" type="button">${t('更改名称')}</button></div></header><section class="preferences-section speaker-add"><form class="preference-row preferences-sample-add speaker-sample-form" data-speaker-profile="${escapeHtml(profile.id)}"><div class="preference-copy"><h3>${copy.addSample}</h3><p>${t('请选择一段清晰的已有录音。')}</p></div><div class="preference-control"><button class="modal-action" type="submit">${t('选择录音并添加')}</button></div></form></section><section class="preferences-section"><header class="preferences-section-heading"><h3>${t('声纹样本')}</h3></header><div class="speaker-sample-list">${samples.length ? samples.map((sample) => `<article><button class="sample-play" data-play-speaker-sample="${escapeHtml(sample.id)}" type="button" aria-label="${t('播放录音')}">${interfaceIcon('play')}</button><input type="range" data-speaker-sample-seek="${escapeHtml(sample.id)}" min="0" max="${(sample.duration_ms || 0) / 1000}" step=".1" value="0" aria-label="${t('播放进度')}" /><time>${formatMeetingTime(sample.duration_ms || 0)}</time><button class="model-delete" data-delete-speaker-sample="${escapeHtml(sample.id)}" data-profile-id="${escapeHtml(profile.id)}" type="button">${copy.remove}</button></article>`).join('') : `<p class="page-empty">${copy.empty}</p>`}</div></section><button class="model-delete" data-delete-speaker-profile="${escapeHtml(profile.id)}" type="button">${copy.remove}</button>` : `<div class="page-empty">${interfaceIcon('person')}<h2>${t('声纹管理')}</h2><p>${copy.intro}</p></div>`}</section></div>`,
   );
 }
 speakerSampleAudio.addEventListener('timeupdate', () => {
@@ -3053,7 +3045,7 @@ function renderModal(kind) {
     );
     replaceModalBody(
       kind,
-      `${renderPermissionSettings()}<form class="advanced-settings-form">${renderAdvancedSettings(advancedSettings?.settings || {}, advancedSettings || {})}<div class="modal-form-actions">${renderSaveState('saved')}<button class="modal-action" type="submit">${t('确定')}</button><button class="secondary" data-reset-advanced-settings type="button">${t('恢复默认')}</button></div></form>`,
+      `${renderPermissionSettings()}<form class="advanced-settings-form preferences-form">${renderAdvancedSettings(advancedSettings?.settings || {}, advancedSettings || {})}<footer class="preferences-form-footer modal-form-actions">${renderSaveState('saved')}<button class="modal-action" type="submit">${t('确定')}</button><button class="secondary" data-reset-advanced-settings type="button">${t('恢复默认')}</button></footer></form>`,
     );
     validateAdvancedSettings(settingsModal.querySelector('.advanced-settings-form'));
     return;
@@ -3088,7 +3080,7 @@ function renderModal(kind) {
     renderSettingsFolderRows();
     replaceModalBody(
       kind,
-      `<section class="storage-overview"><div class="storage-usage-heading"><h3>${t('存储使用情况')}</h3></div><div data-storage-system-disk>${renderSystemDiskUsage()}</div><div class="storage-app-usage"><span></span><span></span></div></section><div class="storage-data-heading"><h3>${t('数据管理')}</h3><button class="secondary" data-cleanup-storage type="button">${cleanup.button}</button></div><div class="storage-list">${copy.items.map(([name], index) => `<section>${interfaceIcon('trash')}<span><b>${escapeHtml(t(index ? '清空模型' : '清空会议数据'))}</b><small>${escapeHtml(t(index ? '清空已下载的模型文件。' : '删除此设备上的会议录音、转写文本与笔记。'))}</small></span><button class="secondary modal-danger" data-clear-storage="${['meetings', 'models'][index]}" type="button">${t(index ? '清空模型' : '清空会议数据')}</button></section>`).join('')}</div><h3 class="storage-privacy-heading">${t('隐私说明')}</h3><details class="storage-privacy"><summary>${interfaceIcon('document')}<span><b>${t('隐私说明')}</b><small>${t('本地模型在此设备上运行。')}</small></span>${interfaceIcon('chevron-down')}</summary><p>${t('本地模型在此设备上运行。')}</p><p>${t('在线 AI 会将相关文字发送至所选服务商。')}</p></details>`,
+      `<section class="preferences-section storage-overview"><header class="preferences-section-heading storage-usage-heading"><h3>${t('存储使用情况')}</h3></header><div class="preferences-storage-meter" data-storage-system-disk>${renderSystemDiskUsage()}</div><div class="storage-app-usage"><span></span><span></span></div></section><section class="preferences-section preferences-storage-management"><header class="preferences-section-heading storage-data-heading"><h3>${t('数据管理')}</h3><button class="secondary" data-cleanup-storage type="button">${cleanup.button}</button></header><div class="storage-list">${copy.items.map(([name], index) => `<div class="preference-row preferences-danger-row"><div class="preference-copy"><h3>${escapeHtml(t(index ? '清空模型' : '清空会议数据'))}</h3><p>${escapeHtml(t(index ? '清空已下载的模型文件。' : '删除此设备上的会议录音、转写文本与笔记。'))}</p></div><div class="preference-control"><button class="secondary modal-danger" data-clear-storage="${['meetings', 'models'][index]}" type="button">${t(index ? '清空模型' : '清空会议数据')}</button></div></div>`).join('')}</div></section><section class="preferences-section"><header class="preferences-section-heading"><h3>${t('隐私说明')}</h3></header><div class="preferences-privacy"><p>${interfaceIcon('storage')}${t('本地模型在此设备上运行。')}</p><p>${interfaceIcon('globe')}${t('在线 AI 会将相关文字发送至所选服务商。')}</p></div></section>`,
     );
     settingsModal.querySelector('.storage-overview').after(settingsFolders);
     settingsFolders.hidden = false;
@@ -3181,9 +3173,9 @@ function renderModelLibrary() {
           : !modelPaths.has(model.id) && !model.bundled),
     );
     if (!models.length) return '';
-    const heading = `<header class="model-group-heading"><h3>${escapeHtml((modelLibraryMetaCopy[locale] || modelLibraryMetaCopy.en)[stage] || key)} <small>${models.length}</small></h3><p>${escapeHtml(t({ refined: '用于实时转写与会后精修。', vad: '语音活动检测', diarization: '说话人分离', 'speaker-embedding': '声纹识别', summary: '会议纪要', translation: '翻译' }[key] || key))}</p></header>`;
+    const heading = `<header class="preferences-section-heading model-group-heading"><h3>${escapeHtml((modelLibraryMetaCopy[locale] || modelLibraryMetaCopy.en)[stage] || key)} <small>${models.length}</small></h3><p>${escapeHtml(t({ refined: '用于实时转写与会后精修。', vad: '语音活动检测', diarization: '说话人分离', 'speaker-embedding': '声纹识别', summary: '会议纪要', translation: '翻译' }[key] || key))}</p></header>`;
     return (
-      heading +
+      `<section class="preferences-model-group">${heading}<div class="preferences-model-rows">` +
       models
         .map((model) => {
           const isInstalled = modelPaths.has(model.id);
@@ -3216,22 +3208,23 @@ function renderModelLibrary() {
               ` type="button"${inFlight ? ' disabled' : ''}>` +
               `${isInstalled ? labels.remove : progress?.error ? t('重试') : inFlight ? labels.downloading : labels.download}</button>${inFlight ? `<button class="secondary" data-pause-required="${escapeHtml(model.id)}" type="button">${t(progress.paused ? '继续' : '暂停')}</button>` : ''}</span>`;
           return (
-            `<div class="model-library-item">${interfaceIcon(key === 'summary' ? 'document' : key === 'translation' ? 'translate' : 'waveform')}<span class="model-library-content">` +
+            `<article class="preferences-model-row"><div class="preferences-model-main"><span class="preferences-model-symbol">${interfaceIcon(key === 'summary' ? 'document' : key === 'translation' ? 'translate' : 'waveform')}</span><div class="model-library-content">` +
             `<div class="model-library-name"><b class="model-library-headline">${escapeHtml(model.name)}</b></div>` +
             progressHtml +
             `<p class="model-library-details">${escapeHtml(modelSizeSummary(model))}${role ? ` · ${escapeHtml(role)}` : ''}</p>` +
             ratings +
             `<p class="model-library-description">${escapeHtml(description)}</p>` +
-            `</span>${actions}</div>`
+            `</div></div><div class="preferences-model-actions">${actions}</div></article>`
           );
         })
-        .join('')
+        .join('') +
+      '</div></section>'
     );
   }).join('');
 
   replaceModalBody(
     'models',
-    `<div class="model-library-toolbar"><div class="settings-tabs"><button type="button" data-model-library-tab="installed" aria-selected="${modelLibraryTab === 'installed'}">${t('已安装')}</button><button type="button" data-model-library-tab="available" aria-selected="${modelLibraryTab === 'available'}">${t('可下载')}</button></div>${chinaModelSourceToggle()}</div><div class="modal-list model-library-list">${rows || `<p class="page-empty">${t('暂无内容')}</p>`}</div>`,
+    `<div class="preferences-library-toolbar model-library-toolbar"><nav class="preferences-tabs settings-tabs" aria-label="${escapeHtml(t('模型库'))}"><button type="button" data-model-library-tab="installed" aria-selected="${modelLibraryTab === 'installed'}">${t('已安装')}</button><button type="button" data-model-library-tab="available" aria-selected="${modelLibraryTab === 'available'}">${t('可下载')}</button></nav>${chinaModelSourceToggle()}</div><div class="preferences-library model-library-list">${rows || `<p class="page-empty">${t('暂无内容')}</p>`}</div>`,
   );
 }
 
@@ -3257,7 +3250,7 @@ function renderWhatsNewModal() {
   );
   replaceModalBody(
     activeModal,
-    `<section class="about-version"><span class="about-brand-mark" aria-hidden="true"><img src="./assets/brevia-mark.svg" alt="" /></span><div><h3>Brevia</h3><p>v${escapeHtml(installedAppVersion || '—')}</p></div><button class="secondary" data-check-app-update type="button">${t('检查更新')}</button></section><a class="about-repository" href="https://github.com/zerolovesea/Brevia" target="_blank" rel="noopener noreferrer">${interfaceIcon('github')}<span><b>zerolovesea / Brevia</b><small>github.com/zerolovesea/Brevia</small></span>${interfaceIcon('chevron-right')}</a><h3>${t('更新日志')}</h3>${renderWhatsNewList()}`,
+    `<section class="preferences-about-version about-version"><span class="about-brand-mark" aria-hidden="true"><img src="./assets/brevia-mark.svg" alt="" /></span><div class="preference-copy"><h3>Brevia</h3><p>v${escapeHtml(installedAppVersion || '—')}</p></div><button class="secondary" data-check-app-update type="button">${t('检查更新')}</button></section><section class="preferences-section"><a class="preferences-about-link about-repository" href="https://github.com/zerolovesea/Brevia" target="_blank" rel="noopener noreferrer">${interfaceIcon('github')}<span><b>zerolovesea / Brevia</b><small>github.com/zerolovesea/Brevia</small></span>${interfaceIcon('chevron-right')}</a></section><section class="preferences-section"><header class="preferences-section-heading"><h3>${t('更新日志')}</h3></header>${renderWhatsNewList()}</section>`,
   );
 }
 /** 当前版本展开、历史版本折叠；分类条目附提交引用与首次贡献者。 */
@@ -3680,7 +3673,7 @@ function renderSettingsFolderRows() {
   settingsFolders.innerHTML = ['recordings', 'models']
     .map(
       (key, index) =>
-        `<section class="settings-folder-row">${interfaceIcon(key === 'models' ? 'model' : 'document')}<span><b>${escapeHtml(key === 'models' ? copy.models : copy.recordings)}</b><small>${escapeHtml(t(key === 'models' ? '保存已下载的本地模型文件。' : '保存此设备上的会议录音。'))}</small></span><div class="storage-path-size"><b class="storage-size">${escapeHtml(storageUsage ? formatBytes([storageUsage.meetings, storageUsage.models][index]) : '—')}</b><small data-settings-path="${key}"></small></div><div class="storage-folder-actions"><button class="secondary" data-change-folder="${key}" type="button">${copy.choose}</button><button class="secondary" data-open-storage="${key === 'models' ? 'models' : 'meetings'}" type="button">${t('从文件夹打开')}</button></div></section>`,
+        `<section class="preference-row preferences-folder"><div class="preference-copy"><h3>${escapeHtml(key === 'models' ? copy.models : copy.recordings)}</h3><p>${escapeHtml(t(key === 'models' ? '保存已下载的本地模型文件。' : '保存此设备上的会议录音。'))}</p><small data-settings-path="${key}"></small></div><div class="preference-control preferences-folder-control"><div class="storage-path-size"><b class="storage-size">${escapeHtml(storageUsage ? formatBytes([storageUsage.meetings, storageUsage.models][index]) : '—')}</b></div><div class="storage-folder-actions"><button class="secondary" data-change-folder="${key}" type="button">${copy.choose}</button><button class="secondary" data-open-storage="${key === 'models' ? 'models' : 'meetings'}" type="button">${t('从文件夹打开')}</button></div></div></section>`,
     )
     .join('');
   void refreshSettingsFolderRows();
@@ -4565,7 +4558,6 @@ document.addEventListener('click', async (event) => {
   }
   if (event.target.closest('[data-open-whats-new]')) openModal('whats-new');
 });
-let modelAction = document.querySelector('[data-settings-modal="models"]');
 speakerProfileCard
   .querySelector('button')
   .addEventListener('click', () => openModal('speaker-profiles'));
@@ -4574,12 +4566,6 @@ speakerProfileCard
 // 去凑 i18n 里的名字），但它没有任何读者：installModel / deleteInstalledModel /
 // isModelInstalled 三个函数只是为了喂它。整条链路已删除。
 const modelPaths = new Map();
-/** 在语言环境或模型列表更改后同步已安装模型操作。@returns {void} */
-function renderModelControls() {
-  modelAction = document.querySelector('[data-settings-modal="models"]');
-  modelAction.setAttribute('aria-label', (modelLabels[locale] || modelLabels.en).manage);
-  modelAction.innerHTML = interfaceIcon('chevron-right');
-}
 /** 热切换当前会议的实时配置（语言/整句识别模型）。@param {object} changes 部分配置。@returns {Promise<void>} */
 async function reconfigureLive(changes) {
   const meetingId = breviaClient?.state.meeting?.id;
@@ -4609,7 +4595,6 @@ async function reconfigureLive(changes) {
     return false;
   }
 }
-renderModelControls();
 settingsModal.addEventListener('click', async (event) => {
   if (event.target.closest('[data-update-log-dismiss]')) {
     closeModal();
@@ -5537,7 +5522,7 @@ function applyLanguage(nextLocale, animate = false) {
   document.querySelector('#live-info-toggle').setAttribute('aria-expanded', 'false');
   applyTheme(theme);
   const rerendered = [
-    '.settings-grid',
+    '.preferences-workspace',
     '.meeting-list',
     '#meeting-form .form-grid',
     '.final-transcript',
@@ -5587,7 +5572,7 @@ function applyLanguage(nextLocale, animate = false) {
       `${interfaceIcon('stop')}<span>${escapeHtml(t('结束会议'))}</span>`;
     renderSettingsView();
     document.querySelector('#mobile-connection').before(speakerProfileCard);
-    document.querySelector('#settings-view .settings-grid').append(updateCard);
+    document.querySelector('#settings-view .preferences-destinations').append(updateCard);
     renderSettingsFolderRows();
     renderDefaultMeetingTitle();
     renderMeetingList();
@@ -5604,7 +5589,6 @@ function applyLanguage(nextLocale, animate = false) {
     renderUpdateButton();
     renderUpdateNotice();
     renderSpeakerProfileCard();
-    renderModelControls();
     renderRequiredModelsCard();
     refreshLocalizedTaskCards();
     if (activeModal) renderModal(activeModal);
@@ -5936,7 +5920,6 @@ const showView = async (name) => {
   if (name !== 'live' && meetingActive && !miniMeeting.hidden)
     taskCards.scrollTop = taskCards.scrollHeight;
   if (name === 'prepare') {
-    requestAnimationFrame(fitPrepareLayout);
     renderCaptureMode();
     if (prepareView.dataset.mode !== 'import') void refreshPrepareAudioSources();
   }

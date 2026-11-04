@@ -175,6 +175,9 @@
     if (document.hidden) settle();
   });
   window.addEventListener('pagehide', settle);
+  function cancelInteractionMotion(target) {
+    for (let node = target; node; node = node.parentElement) if (running.has(node)) cancel(node);
+  }
   document.addEventListener('keydown', (event) => {
     if (
       !event.metaKey &&
@@ -184,21 +187,18 @@
     )
       document.documentElement.toggleAttribute('data-keyboard-navigation', true);
     if (welcomeAnimations.length) welcomeAnimations.forEach((animation) => animation.finish());
+    cancelInteractionMotion(event.target);
   });
   document.addEventListener('pointerdown', (event) => {
     document.documentElement.toggleAttribute('data-keyboard-navigation', false);
     if (welcomeAnimations.length) welcomeAnimations.forEach((animation) => animation.finish());
-    let node = event.target;
-    while (node) {
-      // 新操作优先于尚未结束的视觉接手，固定定位菜单不会跟随页面半途漂移。
-      if (running.has(node)) cancel(node);
-      node = node.parentElement;
-    }
+    // 菜单锚点先回到稳定位置，鼠标和键盘使用同一规则。
+    cancelInteractionMotion(event.target);
   });
   // 弹性只用于离散控件的释放；行、卡片、拖动手柄与文字链接不回弹。
   document.addEventListener('pointerup', (event) => {
     const control = event.target.closest?.(
-      '.primary-action, .modal-action, .secondary, .icon-button, .pause-button, .mark-button, .end-button',
+      '.ui-button, .primary-action, .modal-action, .secondary, .icon-button, .pause-button, .mark-button, .end-button',
     );
     if (
       control &&

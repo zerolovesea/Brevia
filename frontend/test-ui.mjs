@@ -38,6 +38,23 @@ const [
   ].map((file) => readFile(file)),
 );
 const js = Buffer.concat([app, meetings, meetingDetail, workspaces]);
+const composeCss = await readFile('desktop-compose.css', 'utf8');
+const desktopControls = await readFile('desktop-controls.js', 'utf8');
+const startWorkspace = html
+  .toString()
+  .match(/<div class="start-workspace">([\s\S]*?)<\/section>/)?.[1];
+assert.ok(startWorkspace, 'the home workspace exposes a dedicated start surface');
+for (const mode of ['record', 'import'])
+  assert.match(
+    startWorkspace,
+    new RegExp('data-view="prepare"\\s+data-prepare-mode="' + mode + '"'),
+  );
+assert.match(
+  startWorkspace,
+  /data-quick-recording/,
+  'quick recording remains a distinct direct action',
+);
+
 const [backendClient, audioProcessor, logo, revealGif] = await Promise.all(
   [
     'backend-client.js',
@@ -67,6 +84,78 @@ const asr = await readFile('../backend/asr.py');
 //      恰当的：它们描述的正是**源码形态**，而且比启动一次真实应用快几个数量级。
 // 真实启动后的 DOM 行为由 `electron/test-e2e.mjs`（CDP）覆盖，那才是端到端层。
 // 因此"把结构断言也改成行为断言"不是目标——目标是让**逻辑**不靠源码文本证明。
+
+// 新选择器只移动焦点；方向键跳过禁用项，实际提交仍由原有 click 控制器处理。
+{
+  let keydown;
+  let opened = 0;
+  let submitted = 0;
+  const document = {
+    activeElement: null,
+    addEventListener: (type, callback) => {
+      if (type === 'keydown') keydown = callback;
+    },
+  };
+  const options = Array.from({ length: 4 }, (_, index) => ({
+    disabled: index === 1,
+    hasAttribute: (name) => name === 'aria-current' && index === 2,
+    focus() {
+      document.activeElement = this;
+    },
+    scrollIntoView() {},
+    click() {
+      submitted += 1;
+    },
+  }));
+  const list = {
+    hidden: true,
+    querySelectorAll: () => options.filter((option) => !option.disabled),
+  };
+  const trigger = {
+    disabled: false,
+    click() {
+      opened += 1;
+      list.hidden = false;
+    },
+  };
+  const select = {
+    querySelector: (selector) => (selector === '[data-flow-select-toggle]' ? trigger : list),
+  };
+  const press = (key, target = { closest: () => select }) => {
+    let prevented = false;
+    keydown({
+      key,
+      target,
+      preventDefault() {
+        prevented = true;
+      },
+      stopPropagation() {},
+    });
+    return prevented;
+  };
+  runInNewContext(desktopControls, { document });
+  assert.equal(press('ArrowDown'), true);
+  assert.equal(opened, 1);
+  assert.equal(document.activeElement, options[2], 'opening focuses the selected available option');
+  press('ArrowDown');
+  assert.equal(document.activeElement, options[3]);
+  press('ArrowDown');
+  assert.equal(document.activeElement, options[0], 'arrow navigation wraps');
+  press('ArrowUp');
+  assert.equal(document.activeElement, options[3]);
+  press('Home');
+  assert.equal(document.activeElement, options[0]);
+  press('ArrowDown');
+  assert.equal(document.activeElement, options[2], 'disabled options are skipped');
+  press('End');
+  assert.equal(document.activeElement, options[3]);
+  assert.equal(submitted, 0, 'navigation must not commit an unconfirmed value');
+  assert.equal(press('Enter'), false, 'native activation remains owned by the click controller');
+  trigger.disabled = true;
+  assert.equal(press('Home'), false);
+  assert.equal(document.activeElement, options[3], 'disabled selects do not move focus');
+  assert.equal(press('ArrowDown', { closest: () => null }), false);
+}
 
 // 模型选择的纯逻辑：与 index.html 同一种加载方式，测试直接拿合成清单跑真实边界。
 // 在**宿主 realm** 里加载：模块只往 window 上挂东西，因此没必要用 vm。用 vm 会让模块
@@ -1094,6 +1183,84 @@ runInNewContext(text(i18nData), localeContext);
   }
   assert.doesNotThrow(() => onSettingsInput({ target: {} }), '无关输入不进入设置过滤');
 }
+// 设置工作面重建时保留有事件/实时状态的节点对象，桌面能力缺失时移除对应入口。
+{
+  const kept = ['speaker-profiles-entry', 'mobile-connection', 'app-update-entry'].map((id) => ({
+    id,
+  }));
+  let appended = [];
+  const scroll = { scrollTop: 87 };
+  const links = [{ hidden: false }, { hidden: false }];
+  const mount = {
+    innerHTML: '',
+    replaceChildren() {
+      this.innerHTML = '';
+    },
+  };
+  const status = { hidden: false, textContent: 'old' };
+  const destinations = {
+    append(node) {
+      appended.push(node);
+    },
+  };
+  const settingsView = {
+    innerHTML: '',
+    querySelector: (selector) => (selector === '.preferences-scroll' ? scroll : destinations),
+  };
+  const context = {
+    locale: 'zh',
+    theme: 'system',
+    t: (key) => key,
+    uiData: {
+      settings: {
+        cards: [{ title: '存储与隐私', description: '数据', action: '查看', modal: 'storage' }],
+      },
+    },
+    desktopPreferences: {
+      closeBehavior: 'hide',
+      trayVisibility: 'always',
+      autoCapsule: true,
+      recordingShortcut: 'Control+Alt+R',
+      pauseShortcut: '',
+    },
+    window: { brevia: { platform: 'darwin', desktop: {} } },
+    document: {
+      addEventListener() {},
+      getElementById: (id) =>
+        id === 'settings-view' ? settingsView : kept.find((node) => node.id === id),
+      querySelector: (selector) => (selector === '[data-desktop-settings-mount]' ? mount : status),
+      querySelectorAll: () => links,
+    },
+  };
+  runInNewContext(text(components), context);
+  context.renderSettingsView();
+  assert.deepEqual(appended, kept, 'existing live nodes are moved, never cloned or replaced');
+  assert.equal(scroll.scrollTop, 87, 'rerender keeps the settings reading position');
+  for (const target of ['basics', 'window', 'shortcuts'])
+    assert.ok(settingsView.innerHTML.includes(`href="#preferences-${target}"`));
+  assert.doesNotMatch(settingsView.innerHTML, /settings-grid|settings-card/);
+  assert.match(settingsView.innerHTML, /name="interface-language"/);
+  assert.match(settingsView.innerHTML, /name="interface-theme"/);
+  for (const hook of [
+    'name="desktop-closeBehavior"',
+    'name="desktop-trayVisibility"',
+    'data-desktop-toggle="autoCapsule"',
+    'data-shortcut-control="recordingShortcut"',
+    'data-shortcut-control="pauseShortcut"',
+  ])
+    assert.ok(mount.innerHTML.includes(hook), hook);
+  assert.ok(links.every((link) => !link.hidden));
+  context.desktopPreferences = null;
+  appended = [];
+  context.renderSettingsView();
+  assert.deepEqual(appended, kept);
+  assert.equal(mount.innerHTML, '');
+  assert.ok(
+    links.every((link) => link.hidden),
+    'unsupported desktop preferences leave no dead section links',
+  );
+}
+
 const i18nRuntimeSource = await readFile('i18n-runtime.js', 'utf8');
 assert.doesNotThrow(() => runInNewContext(i18nRuntimeSource, { window: localeContext.window }));
 for (const stored of ['zh', 'en', 'de', 'fr-CA', '__proto__', '']) {
@@ -1367,7 +1534,7 @@ componentContext.t = (value) => value;
 componentContext.editingMeetingIndex = null;
 componentContext.categories = [];
 assert.doesNotMatch(
-  componentContext.renderMeetingRow(
+  componentContext.renderNavigationMeeting(
     {
       id: 'active',
       tone: 'violet',
@@ -1381,17 +1548,17 @@ assert.doesNotMatch(
   /data-meeting-action="delete"/,
 );
 assert.match(
-  componentContext.renderMeetingRow(
+  componentContext.renderNavigationMeeting(
     { id: 'drag-me', tone: 'violet', title: 'Meeting', meta: '', tags: [], status: {} },
     0,
   ),
   /draggable="true"/,
 );
-// 录制中会议行的次要信息存的是文案 key，renderMeetingRow 必须翻一次——漏掉会让所有非中文
-// 界面的会议库在标题下显示「本地保存」。
-componentContext.t = (value) => ({ 本地保存: 'Saved locally' })[value] || value;
+// 桌面导航不再显示旧行副信息，但可访问名称必须保留本地化的录音状态。
+componentContext.t = (value) =>
+  ({ 正在录制: 'Recording', 本地保存: 'Saved locally' })[value] || value;
 assert.match(
-  componentContext.renderMeetingRow(
+  componentContext.renderNavigationMeeting(
     {
       id: 'rec',
       tone: 'violet',
@@ -1402,8 +1569,8 @@ assert.match(
     },
     0,
   ),
-  /Saved locally/,
-  'meeting-row detail must be translated',
+  /aria-label="M · Recording"/,
+  'meeting navigation exposes its translated recording status',
 );
 componentContext.t = (value) => value;
 assert.doesNotMatch(
@@ -1756,7 +1923,16 @@ assert.match(
   /id="import-recording"\s+data-view="prepare"\s+data-prepare-mode="import"/,
 );
 assert.match(text(css), /\.import-recording\{[^}]*border/);
-assert.match(text(js), /function fitPrepareLayout/);
+assert.match(
+  composeCss,
+  /\.compose-workspace\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) 280px/,
+);
+assert.match(
+  composeCss,
+  /#meeting-form\.compose-form\s*\{[^}]*grid-template-rows:\s*minmax\(0, 1fr\) auto/,
+);
+assert.match(text(html), /class="compose-footer"[\s\S]*class="primary-action compose-submit"/);
+assert.doesNotMatch(text(js), /function fitPrepareLayout/);
 assert.match(text(js), /function renderModelDownloadQueue/);
 assert.match(text(js), /id = 'model-download-queue'/);
 assert.match(text(js), /function renderModelLibrary\(\)/);
@@ -1836,8 +2012,8 @@ assert.doesNotMatch(text(workerSession), /_identify_speaker/);
 assert.doesNotMatch(text(workerSession), /tracker\.assign_embedding/);
 assert.doesNotMatch(text(workerSession), /SpeakerTracker/);
 assert.doesNotMatch(text(js), /name="num-speakers"[^>]*max="20"/);
-assert.match(text(js), /prepareLayout\.style\.removeProperty\('transform'\)/);
-assert.match(text(js), /new ResizeObserver\(\(\) => requestAnimationFrame\(fitPrepareLayout\)\)/);
+assert.doesNotMatch(composeCss, /transform:\s*scale/);
+assert.match(composeCss, /\.compose-workspace\s*\{[^}]*overflow-y:\s*auto/);
 assert.doesNotMatch(text(css), /max-width:1100px|max-height:760px/);
 assert.match(
   text(css),
@@ -1877,7 +2053,7 @@ assert.match(text(js), /function activeWorkspaceDescription\(\)/);
 assert.ok(!text(js).includes('sloganIndex'), 'the latest library subtitle stays fixed');
 assert.match(
   text(js),
-  /flowSelect\('meeting-language', language, BreviaI18n\.languageOptions\(locale, t, true\)\)/,
+  /desktopSelect\('meeting-language', language, BreviaI18n\.languageOptions\(locale, t, true\)\)/,
 );
 assert.match(
   text(js),
@@ -1984,10 +2160,10 @@ assert.match(text(components), /inline-segment-speaker-form/);
 assert.match(text(components), /function renderMeetingSummary/);
 assert.match(text(components), /function cleanSummaryMarkdown/);
 assert.match(text(components), /renderMarkdown\(cleanSummaryMarkdown\(markdown\)\)/);
-assert.match(text(components), /function flowSelect/);
+assert.match(text(components), /function desktopSelect/);
 assert.match(text(js), /renderMeetingDetail\(\);/);
 assert.match(text(js), /function saveInlineSegmentSpeaker/);
-assert.match(text(components), /function renderMeetingRow/);
+assert.match(text(components), /function renderNavigationMeeting/);
 assert.match(text(components), /function renderSettingsCard/);
 assert.match(text(js), /renderStaticViews\(\);/);
 assert.match(text(js), /function renderPrepareSelects/);
@@ -2127,8 +2303,8 @@ assert.doesNotMatch(text(js), /Powered by zerolovesea/);
 assert.match(text(electronMain), /PYTHONUTF8: '1'/);
 assert.match(text(electronMain), /setPermissionRequestHandler/);
 assert.match(text(js), /exportMany/);
-assert.doesNotMatch(text(js), /flowSelect\('library-category'/);
-assert.doesNotMatch(text(js), /flowSelect\('library-date'/);
+assert.doesNotMatch(text(js), /(?:flowSelect|desktopSelect)\('library-category'/);
+assert.doesNotMatch(text(js), /(?:flowSelect|desktopSelect)\('library-date'/);
 assert.doesNotMatch(text(js), /const dateMatch = activeDateRange === 'all'/);
 assert.match(text(js), /window\.brevia\.meeting\.search\(\{ query \}\)/);
 assert.match(text(js), /function highlightSearchMatch/);
@@ -2427,10 +2603,149 @@ assert.equal(
   4,
   'device count does not add source rows',
 );
-assert.ok(connectedSources.includes('2 台手机已连接'));
+assert.match(
+  connectedSources,
+  /aria-checked="true" data-flow-select-choice="capture-mode" data-value="phone"/,
+);
+assert.doesNotMatch(
+  connectedSources,
+  /capture-phone-count|<small>/,
+  'source segments keep scenario help outside the choice',
+);
 assert.equal(captureSourceContext.captureModeInputs('phone').phone, 'two');
 assert.equal(captureSourceContext.captureModeInputs('phone').mic, false);
 assert.equal(captureSourceContext.captureModeInputs('phone').system, false);
+// 系统设备变动时只替换菜单选项，菜单节点、展开状态和真实提交值保持一致。
+{
+  const preferences = new Map([['brevia-mic-device', 'usb']]);
+  const captureRoutes = [];
+  let currentFlow;
+  const optionNodes = (markup) =>
+    [...markup.matchAll(/<button\b[^>]*role="option"[^>]*>[\s\S]*?<\/button>/g)].map(([html]) => ({
+      html,
+      getAttribute(name) {
+        return html.match(new RegExp('(?:^|\\s)' + name + '="([^"]*)"'))?.[1] ?? null;
+      },
+    }));
+  const readFlow = (markup) => {
+    const input = {
+      value: markup.match(/<input type="hidden" name="mic-device" value="([^"]*)"/)[1],
+    };
+    const trigger = { firstChild: { nodeValue: markup.match(/<button[^>]*>([^<]*)/)[1] } };
+    const list = {
+      hidden: true,
+      style: { top: '120px' },
+      childNodes: optionNodes(markup),
+      replaceChildren(...nodes) {
+        this.childNodes = nodes;
+      },
+    };
+    return {
+      input,
+      trigger,
+      list,
+      querySelector: (selector) =>
+        selector === 'input' ? input : selector === '.flow-select-toggle' ? trigger : list,
+    };
+  };
+  const mount = {
+    querySelector: () => currentFlow,
+    set innerHTML(markup) {
+      currentFlow = readFlow(markup);
+    },
+  };
+  const context = {
+    t: (key) => key,
+    desktopSelect: componentContext.desktopSelect,
+    localStorage: {
+      getItem: (key) => preferences.get(key),
+      setItem: (key, value) => preferences.set(key, value),
+    },
+    prepareForm: {
+      querySelector: (selector) => (selector === '#mic-device-mount' ? mount : currentFlow?.input),
+    },
+    breviaClient: { setMicDevice: (id) => captureRoutes.push(id) },
+    document: {
+      createElement(tag) {
+        assert.equal(tag, 'template');
+        let markup = '';
+        return {
+          set innerHTML(value) {
+            markup = value;
+          },
+          content: { querySelector: () => ({ childNodes: optionNodes(markup) }) },
+        };
+      },
+    },
+  };
+  const micSource = text(app).slice(
+    text(app).indexOf('const MIC_DEVICE_KEY ='),
+    text(app).indexOf('async function refreshMicDevices('),
+  );
+  runInNewContext(micSource, context);
+  runInNewContext(
+    "cachedMicDevices=[{deviceId:'usb',label:'USB mic'}];renderMicDeviceOptions();",
+    context,
+  );
+  assert.equal(context.selectedMicDeviceId(), 'usb');
+  const originalFlow = currentFlow;
+  const originalList = currentFlow.list;
+  originalList.hidden = false;
+  runInNewContext(
+    "cachedMicDevices=[{deviceId:'usb',label:'Renamed USB'},{deviceId:'desk',label:'Desk <microphone>'}];renderMicDeviceOptions();",
+    context,
+  );
+  assert.equal(currentFlow, originalFlow);
+  assert.equal(currentFlow.list, originalList);
+  assert.equal(originalList.hidden, false, 'refresh keeps the expanded menu open');
+  assert.equal(originalList.style.top, '120px', 'refresh keeps its viewport placement');
+  assert.equal(currentFlow.input.value, 'usb');
+  assert.equal(currentFlow.trigger.firstChild.nodeValue, 'Renamed USB');
+  assert.equal(originalList.childNodes.length, 3);
+  for (const option of originalList.childNodes) {
+    assert.equal(option.getAttribute('class'), 'ui-select-option');
+    assert.equal(option.getAttribute('role'), 'option');
+    assert.equal(option.getAttribute('data-flow-select-choice'), 'mic-device');
+  }
+  assert.doesNotMatch(
+    originalList.childNodes[2].html,
+    /<microphone>/,
+    'device labels remain escaped',
+  );
+  assert.equal(
+    originalList.childNodes
+      .filter((option) => option.getAttribute('aria-selected') === 'true')[0]
+      .getAttribute('data-value'),
+    'usb',
+  );
+  runInNewContext(
+    "cachedMicDevices=[{deviceId:'desk',label:'Desk mic'}];renderMicDeviceOptions();",
+    context,
+  );
+  assert.equal(preferences.get('brevia-mic-device'), '');
+  assert.equal(
+    context.selectedMicDeviceId(),
+    '',
+    'disconnected device cannot remain in the submitted field',
+  );
+  assert.equal(currentFlow.trigger.firstChild.nodeValue, '系统默认');
+  assert.equal(
+    originalList.childNodes
+      .filter((option) => option.getAttribute('aria-selected') === 'true')[0]
+      .getAttribute('data-value'),
+    '',
+  );
+  assert.equal(
+    captureRoutes.at(-1),
+    '',
+    'capture uses the same default route as the displayed selection',
+  );
+  assert.equal(originalList.hidden, false);
+  originalList.hidden = true;
+  context.renderMicDeviceOptions();
+  assert.equal(originalList.hidden, true, 'closed menus stay closed');
+}
+
 const previewRequests = [];
 let finishPreview;
 let previewRenders = 0;
@@ -3959,7 +4274,7 @@ assert.match(text(js), /const page = onboardingPage/);
 assert.match(text(js), /page\.querySelector\('\[name="locale"\]:checked'\)\.value/);
 assert.match(text(js), /finally \{\s*nodes\.forEach/);
 for (const selector of [
-  '.settings-grid',
+  '.preferences-workspace',
   '.meeting-list',
   '#meeting-form .form-grid',
   '.final-transcript',
@@ -4010,7 +4325,7 @@ assert.match(
   /latestTranscriptSegments\(meeting\)/,
   '展示和保存必须使用同一份后端选定的逐字稿',
 );
-assert.match(text(js), /flowSelect\('refined-model', refinedModel, modelOptions\)/);
+assert.match(text(js), /desktopSelect\('refined-model', refinedModel, modelOptions\)/);
 assert.match(
   text(js),
   /const modelLabel = prepareModelControl\(language, refinedModel, modelOptions\);/,
@@ -4018,11 +4333,20 @@ assert.match(
 // 识别模型的「推荐」角标直接标在下拉选项上，不再在「会议语言」下面写一段解释文字。
 assert.match(text(js), /recommendedWord: \(asrCopy\.recommended/, '角标文案仍来自 8 语言文案表');
 assert.match(ms, /model\.id === recommendedId \? recommendedWord : ''/, '角标口径在模块里');
-assert.match(text(components), /flow-select-badge/);
-assert.match(text(components), /const\s+badge\s*=\s*\(option\)\s*=>\s*\(?option\?\.\[2\]/);
-assert.match(text(components), /data-label="\$\{escapeHtml\(option\[1\]\)\}"/);
-assert.match(text(components), /\$\{escapeHtml\(option\[1\]\)\}\$\{badge\(option\)\}/);
-assert.doesNotMatch(text(components), /\$\{badge\(selected\)\}/);
+const badgedSelect = componentContext.desktopSelect('model', 'one', [
+  ['one', 'Model one', '推荐'],
+  ['two', 'Model two'],
+]);
+assert.match(badgedSelect, /class="flow-select ui-select"/);
+assert.match(badgedSelect, /role="listbox" hidden/);
+assert.match(badgedSelect, /role="option"[^>]*data-value="one"[^>]*aria-selected="true"/);
+assert.match(badgedSelect, /data-label="Model one"/);
+assert.match(badgedSelect, /<span>Model one<\/span><em class="flow-select-badge">推荐<\/em>/);
+assert.doesNotMatch(
+  badgedSelect.split('<input')[0],
+  /flow-select-badge/,
+  'selection trigger keeps only the selected model name',
+);
 assert.doesNotMatch(
   text(js),
   /prepare-language-hint/,
@@ -4300,7 +4624,8 @@ for (const copy of [
 assert.doesNotMatch(text(css), /\.status\.complete:before/);
 assert.match(text(css), /\.page-head>div\{[^}]*min-width:0/);
 assert.doesNotMatch(text(js), /renderModelRow/);
-assert.match(text(components), /id="installed-models"[\s\S]*data-settings-modal="models"/);
+assert.match(text(components), /data-settings-page="\$\{key\}"/);
+assert.match(text(components), /preferences-destinations/);
 assert.match(text(components), /class="transcript-body"/);
 assert.match(text(components), /data-start=/);
 assert.match(text(components), /data-segment-id=/);
@@ -4765,7 +5090,7 @@ const summaryFn = (name) => {
     t: (value) => value,
     interfaceIcon: componentContext.interfaceIcon,
     escapeHtml: runInNewContext('escapeHtml', componentContext),
-    renderMeetingRow: componentContext.renderMeetingRow,
+    renderNavigationMeeting: componentContext.renderNavigationMeeting,
     localizeMeeting: (meeting) => meeting,
     getWorkspaceName: () => 'Unknown',
     renderWorkspaceNav: () => sidebarCalls.push('workspace-nav'),
@@ -5732,7 +6057,7 @@ assert.doesNotMatch(onboardingSummaryHtml, /data-summary-enabled|data-china-mode
 assert.match(onboardingSummaryHtml, /name="provider" value="built-in"/);
 assert.match(
   onboardingSummaryHtml,
-  /data-flow-select-choice="provider" data-value="built-in"[^>]*>本地模型/,
+  /data-flow-select-choice="provider" data-value="built-in"[^>]*><span>本地模型<\/span>/,
 );
 assert.match(onboardingSummaryHtml, /data-flow-select-choice="provider" data-value="openai"/);
 assert.equal(summaryNodes['.modal-title h2'].textContent, 'AI 会议纪要');
@@ -5786,11 +6111,11 @@ assert.match(summaryHtml, /data-flow-select-choice="model" data-value="qwen3\.5-
 assert.match(summaryHtml, /data-flow-select-choice="model" data-value="qwen3\.5-2b-q4km"/);
 assert.match(
   summaryHtml,
-  /data-value="qwen3\.5-2b-q4km"[^>]*>Qwen 3\.5 2B<em class="flow-select-badge">推荐<\/em>/,
+  /data-value="qwen3\.5-2b-q4km"[^>]*><span>Qwen 3\.5 2B<\/span><em class="flow-select-badge">推荐<\/em>/,
 );
-assert.match(
-  summaryHtml,
-  /data-value="qwen3\.5-4b-q4km"[^>]*>Qwen 3\.5 4B<\/button>/,
+assert.doesNotMatch(
+  summaryHtml.match(/data-value="qwen3\.5-4b-q4km"[^>]*>[\s\S]*?<\/button>/)[0],
+  /flow-select-badge/,
   'only the recommended option carries a badge',
 );
 assert.equal(
@@ -6238,11 +6563,26 @@ assert.match(
   /button\.innerHTML = .*interfaceIcon\(paused \? 'play' : 'pause'\).*;\s*renderRecordingState\(paused\);/,
   'the pause button also refreshes the recording state',
 );
-assert.match(
-  text(components),
-  /\$\{status\.paused \? ' is-paused' : ''\}/,
-  'paused meetings are marked in the library list',
-);
+for (const paused of [false, true]) {
+  const row = componentContext.renderNavigationMeeting(
+    {
+      id: 'active-state',
+      statusCode: 'recording',
+      title: 'Meeting',
+      meta: '',
+      tags: [],
+      status: { tone: 'processing', paused, label: paused ? '已暂停' : '正在录制' },
+    },
+    0,
+  );
+  assert.match(row, new RegExp(paused ? 'is-paused' : 'is-recording'));
+  assert.match(
+    row,
+    new RegExp('aria-label="[^"]*' + (paused ? '已暂停' : '正在录制') + '[^"]*"'),
+    'active recording state remains accessible in meeting navigation',
+  );
+  assert.match(row, /navigation-meeting-signal/);
+}
 // 暂停态改用警示色（令牌），不再沿用录制红——断言角色而不是字面值。
 assert.match(
   text(tailwind),
@@ -6482,7 +6822,7 @@ for (const hasRefined of [false, true]) {
   );
   assert.match(
     markup,
-    /data-flow-select-choice="refine-model" data-value="qwen3-asr-0\.6b-int8"[^>]*>Qwen3-ASR 0\.6B · 838MB/,
+    /data-flow-select-choice="refine-model" data-value="qwen3-asr-0\.6b-int8"[^>]*><span>Qwen3-ASR 0\.6B · 838MB<\/span>/,
     'uninstalled candidates carry their size',
   );
   if (hasRefined) {
@@ -7106,11 +7446,25 @@ assert.equal(
   'a late failure cannot reset another meeting’s state',
 );
 
-const mobileRow = componentContext.renderMeetingRow(
+const mobileRow = componentContext.renderNavigationMeeting(
   { id: 'mobile', title: 'Phone', meta: '', tags: ['手机录音', '讨论'], status: {} },
   0,
 );
 assert.match(mobileRow, /<h2>Phone<span class="meeting-source">/);
+assert.match(
+  mobileRow,
+  /aria-label="[^"]*手机录音[^"]*"/,
+  'phone recording source is part of the navigation name',
+);
+const phoneMicRow = componentContext.renderNavigationMeeting(
+  { id: 'phone-mic', title: 'Live phone', meta: '', tags: ['手机录音', '手机麦克风'], status: {} },
+  0,
+);
+assert.match(
+  phoneMicRow,
+  /aria-label="[^"]*手机麦克风[^"]*"/,
+  'phone microphone recording keeps its distinct source',
+);
 assert.doesNotMatch(mobileRow, /class="tag">手机录音/);
 assert.doesNotMatch(mobileRow, /class="(?:tag|meeting-tags)"/, '会议列表不再渲染占位标签');
 

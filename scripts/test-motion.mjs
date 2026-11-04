@@ -98,6 +98,26 @@ motion.enter(element, 'press');
 assert.equal(animations.at(-1).frames[1].scale, 1.004);
 handlers.get('pointerdown')({ target: { parentElement: element } });
 assert.equal(animations.at(-1).cancelled, true, 'new input interrupts visual settling');
+// 键盘打开菜单前也要稳定全部祖先位置，旁路区域的动效不受影响。
+const keyboardAncestor = { ...element };
+const keyboardControl = { ...element, parentElement: keyboardAncestor };
+const unrelatedControl = { ...element };
+motion.enter(keyboardAncestor, 'forward');
+const ancestorAnimation = animations.at(-1);
+motion.enter(keyboardControl, 'press');
+const controlAnimation = animations.at(-1);
+motion.enter(unrelatedControl, 'press');
+const unrelatedAnimation = animations.at(-1);
+handlers.get('keydown')({ key: 'ArrowDown', target: { parentElement: keyboardControl } });
+assert.equal(controlAnimation.cancelled, true, 'keyboard input settles its control');
+assert.equal(
+  ancestorAnimation.cancelled,
+  true,
+  'keyboard input settles the moving page before positioning a menu',
+);
+assert.equal(unrelatedAnimation.cancelled, false, 'keyboard input leaves unrelated controls alone');
+motion.cancel(unrelatedControl);
+
 motion.enter(element, 'attention');
 assert.equal(animations.at(-1).options.duration, 1120);
 preference.matches = true;

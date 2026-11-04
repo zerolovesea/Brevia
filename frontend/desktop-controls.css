@@ -1,0 +1,452 @@
+/* 桌面控件的独立外观；原事件属性仅连接已有业务。 */
+:root {
+  --ui-control: 32px;
+  --ui-radius: 6px;
+  --ui-menu-shadow: 0 8px 28px #00000012, 0 1px 3px #00000008;
+}
+html[data-theme="dark"] {
+  --ui-menu-shadow: 0 8px 28px #00000050, 0 1px 3px #00000030;
+}
+body .ui-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 32px;
+  padding: 6px 12px;
+  border: 1px solid var(--color-line);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: 500 12px/18px system-ui;
+  cursor: pointer;
+  box-shadow: 0 1px 2px #00000004;
+}
+body .ui-button:hover:not(:disabled) {
+  background: var(--color-selected);
+}
+body .ui-button-primary {
+  background: var(--color-text);
+  color: var(--color-text-inverse);
+  border-color: transparent;
+}
+body .ui-button-primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-text) 88%, var(--color-surface));
+}
+body .ui-button-danger {
+  color: var(--color-danger);
+  background: none;
+  border-color: transparent;
+}
+body .ui-button .interface-icon {
+  width: 15px;
+  height: 15px;
+}
+body .ui-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+body .ui-select {
+  position: relative;
+  min-width: 0;
+  width: 100%;
+}
+body .ui-select > .ui-select-trigger {
+  display: block;
+  position: relative;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  height: 34px;
+  min-height: 34px;
+  padding: 7px 30px 7px 10px;
+  border: 1px solid var(--color-line);
+  border-radius: 6px;
+  background: var(--color-surface);
+  box-shadow: 0 1px 2px #00000003;
+  color: var(--color-text);
+  font: 400 13px/18px system-ui;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+body .ui-select > .ui-select-trigger:hover:not(:disabled),
+body .ui-select > .ui-select-trigger[aria-expanded="true"] {
+  border-color: var(--desktop-input-border);
+  background: var(--color-navigation);
+}
+body .ui-select-trigger .select-chevron {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+  flex: none;
+  width: 12px;
+  height: 12px;
+  color: var(--color-text-subtle);
+}
+body .ui-select-trigger .select-chevron svg {
+  width: 12px;
+  height: 12px;
+}
+body .ui-select-list {
+  position: absolute;
+  inset: calc(100% + 4px) 0 auto;
+  z-index: 160;
+  min-width: 140px;
+  max-height: 260px;
+  padding: 5px;
+  margin: 0;
+  overflow: auto;
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  background: var(--color-overlay);
+  box-shadow: var(--ui-menu-shadow);
+}
+body .ui-select-list.is-floating {
+  position: fixed;
+  bottom: auto;
+  right: auto;
+}
+#desktop-app .ui-select-list > .ui-select-option,
+body .ui-select-list > .ui-select-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 30px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  text-align: left;
+  font: 400 12px/18px system-ui;
+  color: var(--color-text);
+}
+body .ui-select-option[aria-current]::after {
+  content: none;
+}
+#desktop-app .ui-select-option > span,
+body .ui-select-option > span {
+  white-space: normal;
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+body .ui-select-option > i {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  opacity: 0;
+  flex: none;
+}
+body .ui-select-option > i svg {
+  width: 14px;
+  height: 14px;
+}
+body .ui-select-option[aria-current] > i {
+  opacity: 1;
+}
+body .ui-select-option:is(:hover, :focus-visible) {
+  background: var(--color-selected);
+}
+body .ui-select-option .flow-select-badge {
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 400;
+  color: var(--color-text-muted);
+  padding: 0;
+  border: 0;
+  background: none;
+}
+body .ui-menu {
+  position: fixed;
+  z-index: 180;
+  min-width: 196px;
+  width: 212px;
+  max-width: calc(100vw - 24px);
+  padding: 5px;
+  border: 1px solid var(--color-line);
+  border-radius: 9px;
+  background: var(--color-overlay);
+  box-shadow: var(--ui-menu-shadow);
+  font-size: 12px;
+}
+body .ui-menu .ui-menu-caption {
+  display: block;
+  margin: 0 3px 4px;
+  padding: 6px 6px 8px;
+  border-bottom: 1px solid var(--color-line);
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--color-text-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+body .ui-menu > button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 30px;
+  margin: 0;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--color-text);
+  font: 400 12px/18px system-ui;
+  text-align: left;
+}
+body .ui-menu > button:hover {
+  background: var(--color-selected);
+}
+body .ui-menu > button svg {
+  width: 14px;
+  height: 14px;
+}
+body .ui-menu > button span {
+  flex: 1;
+}
+body .ui-menu > button.meeting-menu-danger {
+  color: var(--color-danger);
+  border: 0;
+  margin-top: 5px;
+}
+body .modal-backdrop:not(.settings-page) {
+  z-index: 300;
+}
+body .workspace-dialog {
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: #00000024;
+  backdrop-filter: blur(2px);
+}
+body .workspace-dialog > .ui-dialog {
+  display: block;
+  width: 420px;
+  max-width: calc(100vw - 48px);
+  max-height: calc(100dvh - 80px);
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
+  background: var(--color-overlay);
+  box-shadow: 0 20px 70px #00000026;
+  overflow: auto;
+}
+body .ui-dialog-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 20px 16px;
+}
+body .ui-dialog-title h2 {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 24px;
+  letter-spacing: -0.3px;
+}
+body .ui-dialog-title p {
+  margin: 6px 0 0;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 18px;
+}
+body .ui-dialog-header .modal-close {
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+  padding: 4px;
+  border: 0;
+  background: none;
+}
+body .ui-dialog-body {
+  padding: 0 20px 20px;
+}
+body .ui-dialog-form {
+  display: grid;
+  gap: 16px;
+}
+body .ui-dialog-form > label {
+  display: grid;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+  color: var(--color-text);
+}
+body .ui-dialog-form input,
+body .ui-dialog-form textarea {
+  width: 100%;
+  min-height: 34px;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--color-line);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: 400 13px/18px system-ui;
+  box-shadow: 0 1px 2px #00000003;
+}
+body .ui-dialog-form textarea {
+  height: 68px;
+  resize: vertical;
+}
+body .ui-dialog-form input:focus,
+body .ui-dialog-form textarea:focus {
+  border-color: var(--desktop-input-border);
+}
+body .ui-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  padding-top: 4px;
+}
+body .ui-dialog-actions .ui-button-danger {
+  margin-right: auto;
+  order: -1;
+}
+#home-view.active {
+  display: grid;
+  place-items: center;
+  padding: 48px;
+  overflow: auto;
+}
+#home-view .start-workspace {
+  width: min(100%, 560px);
+  text-align: center;
+}
+#home-view .start-symbol {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 26px;
+  border: 1px solid var(--color-line);
+  border-radius: 14px;
+  background: var(--color-navigation);
+}
+#home-view .start-symbol svg {
+  width: 24px;
+  height: 24px;
+  color: var(--color-text-muted);
+}
+#home-view h1 {
+  margin: 0;
+  font-size: 30px;
+  line-height: 40px;
+  letter-spacing: -0.7px;
+  font-weight: 550;
+}
+#home-view .start-workspace > p {
+  margin: 12px 0 28px;
+  font-size: 13px;
+  line-height: 22px;
+  color: var(--color-text-muted);
+}
+#home-view .start-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+#home-view .start-actions .ui-button {
+  min-height: 38px;
+  padding: 9px 18px;
+  font-size: 13px;
+}
+#home-view .quick-recording {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: auto;
+  margin: 22px auto 0;
+  padding: 4px;
+  border: 0;
+  background: none;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 18px;
+}
+#home-view .quick-recording svg {
+  width: 14px;
+  height: 14px;
+}
+@media (max-width: 850px) {
+  #home-view.active {
+    padding: 28px;
+  }
+  #home-view h1 {
+    font-size: 26px;
+  }
+}
+body .modal-backdrop:not(.settings-page):not(.workspace-dialog) > .ui-surface {
+  width: min(520px, calc(100vw - 48px));
+  max-height: calc(100dvh - 80px);
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
+  background: var(--color-overlay);
+  box-shadow: 0 20px 70px #00000026;
+  overflow: hidden;
+}
+body .modal-backdrop:not(.settings-page) .ui-surface-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 20px 20px 16px;
+  margin: 0;
+  flex: none;
+  border: 0;
+}
+body .modal-backdrop:not(.settings-page) .ui-surface-heading h2 {
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+  margin: 0;
+}
+body .modal-backdrop:not(.settings-page) .ui-surface-heading p {
+  font-size: 12px;
+  line-height: 19px;
+  margin: 6px 0 0;
+}
+body .modal-backdrop:not(.settings-page) .ui-surface > .modal-body {
+  padding: 0 20px 20px;
+  min-height: 0;
+  overflow: auto;
+}
+body .modal-backdrop:not(.settings-page) .ui-surface :is(.modal-action, .secondary) {
+  min-height: 32px;
+  font-size: 12px;
+  line-height: 18px;
+  padding: 6px 10px;
+  border-radius: 6px;
+}
+body
+  .modal-backdrop:is(.export-modal, .batch-modal, .summary-model-modal, .ai-assist-modal):not(
+    .settings-page
+  )
+  > .ui-surface {
+  width: min(720px, calc(100vw - 48px));
+}

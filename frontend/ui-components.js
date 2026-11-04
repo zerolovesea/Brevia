@@ -151,7 +151,7 @@ function renderSettingsNavigation(kind) {
     ],
   ];
   const current = ['summary-model', 'ai-assist'].includes(kind) ? 'ai-features' : kind;
-  return `<nav class="settings-navigation" aria-label="${escapeHtml(t('设置'))}"><div class="settings-nav-header"><button type="button" class="settings-workspace-back" data-view="home">${interfaceIcon('back')}${escapeHtml(t('返回会议库'))}</button><label class="settings-search">${interfaceIcon('search')}<input type="search" data-settings-search placeholder="${escapeHtml(t('搜索设置'))}" aria-label="${escapeHtml(t('搜索设置'))}" autocomplete="off" spellcheck="false" /></label></div><div class="settings-nav-sections">${groups.map(([heading, items]) => `<section class="settings-nav-group"><h3>${escapeHtml(t(heading))}</h3>${items.map(([key, label, icon]) => `<button type="button" data-settings-page="${key}"${key === current ? ' aria-current="page"' : ''}>${interfaceIcon(icon)}<span>${escapeHtml(t(label))}</span></button>`).join('')}</section>`).join('')}<p class="settings-search-empty" role="status" hidden>${escapeHtml(t('未找到设置'))}</p></div></nav>`;
+  return `<nav class="settings-navigation preferences-navigation" aria-label="${escapeHtml(t('设置'))}"><header class="preferences-navigation-heading"><button type="button" class="settings-workspace-back" data-view="home" aria-label="${escapeHtml(t('返回会议库'))}">${interfaceIcon('back')}</button><h2>${escapeHtml(t('设置'))}</h2></header><div class="preferences-navigation-search"><label class="settings-search">${interfaceIcon('search')}<input type="search" data-settings-search placeholder="${escapeHtml(t('搜索设置'))}" aria-label="${escapeHtml(t('搜索设置'))}" autocomplete="off" spellcheck="false" /></label></div><div class="settings-nav-sections">${groups.map(([heading, items]) => `<section class="settings-nav-group"><h3>${escapeHtml(t(heading))}</h3><div class="preferences-navigation-items">${items.map(([key, label, icon]) => `<button type="button" data-settings-page="${key}"${key === current ? ' aria-current="page"' : ''}>${interfaceIcon(icon)}<span>${escapeHtml(t(label))}</span></button>`).join('')}</div></section>`).join('')}<p class="settings-search-empty" role="status" hidden>${escapeHtml(t('未找到设置'))}</p></div></nav>`;
 }
 function filterSettingsNavigation(input) {
   const navigation = input.closest('.settings-navigation');
@@ -310,22 +310,11 @@ function rectanglesIntersect(first, second) {
  * 选项是 `[值, 文案]` 或 `[值, 文案, 角标]`。角标只在展开选项中、模型名右侧显示；
  * 选中态只保留模型名。
  * @param {string} name 提交的字段名称。@param {string} value 选中的值。@param {Array<[string, string, string?]>} options 值/标签/角标三元组。@param {boolean} activeModel 标记活动的摘要模型选择器。@returns {string} 选择框标记。 */
-function flowSelect(name, value, options, activeModel = false, disabled = false) {
-  // 回退到空白对，使空选项列表渲染为无害的占位符而不是抛出错误。
+/** 桌面选择器与官网演示独立，保持官网原有组件契约。 */
+function desktopSelect(name, value, options, activeModel = false, disabled = false) {
   const selected = options.find(([option]) => option === value) || options[0] || ['', ''];
-  const badge = (option) =>
-    option?.[2] ? `<em class="flow-select-badge">${escapeHtml(option[2])}</em>` : '';
-  const icon = {
-    'meeting-workspace': 'folder',
-    'meeting-language': 'globe',
-    'translation-target': 'translate',
-    'meeting-speakers': 'person',
-    'refined-model': 'cpu',
-    'mic-device': 'microphone',
-    'phone-device': 'phone',
-  }[name];
   disabled = disabled || options.length === 0;
-  return `<div class="flow-select"${activeModel ? ' data-active-summary-model' : ''}><button class="flow-select-toggle" data-flow-select-toggle type="button" aria-expanded="false"${disabled ? ' disabled' : ''}>${escapeHtml(selected[1])}${icon ? `<span class="select-value-icon">${interfaceIcon(icon)}</span>` : ''}<span class="select-chevron">${interfaceIcon('chevron-down')}</span></button><input type="hidden" name="${name}" value="${escapeHtml(selected[0])}" /><div class="flow-select-options" hidden>${options.map((option) => `<button type="button" data-flow-select-choice="${name}" data-value="${escapeHtml(option[0])}" data-label="${escapeHtml(option[1])}"${option[0] === selected[0] ? ' aria-current="true"' : ''}${disabled ? ' disabled' : ''}>${escapeHtml(option[1])}${badge(option)}</button>`).join('')}</div></div>`;
+  return `<div class="flow-select ui-select"${activeModel ? ' data-active-summary-model' : ''}><button class="flow-select-toggle ui-select-trigger" data-flow-select-toggle type="button" aria-haspopup="listbox" aria-expanded="false"${disabled ? ' disabled' : ''}>${escapeHtml(selected[1])}<span class="select-chevron">${interfaceIcon('chevron-down')}</span></button><input type="hidden" name="${name}" value="${escapeHtml(selected[0])}" /><div class="flow-select-options ui-select-list" role="listbox" hidden>${options.map((option) => `<button class="ui-select-option" type="button" role="option" data-flow-select-choice="${name}" data-value="${escapeHtml(option[0])}" data-label="${escapeHtml(option[1])}" aria-selected="${option[0] === selected[0]}"${option[0] === selected[0] ? ' aria-current="true"' : ''}${disabled ? ' disabled' : ''}><span>${escapeHtml(option[1])}</span>${option[2] ? `<em class="flow-select-badge">${escapeHtml(option[2])}</em>` : ''}<i aria-hidden="true">${interfaceIcon('check')}</i></button>`).join('')}</div></div>`;
 }
 /** 基于本地规则检测字幕中的明显信号（数字/日期/问句），不依赖大模型。@param {string} text 字幕文本。@returns {string[]} 命中的信号键名。 */
 function detectCaptionSignals(text) {
@@ -420,7 +409,8 @@ function renderTranscriptSegment({
   return `<article class="segment"${contextSegmentId ? ` data-segment-id="${escapeHtml(contextSegmentId)}"` : ''}${timing}><div class="segment-meta"><time>${escapeHtml(time)}</time>${showSpeaker && speaker.name ? `<span class="speaker-avatar" aria-hidden="true">${escapeHtml([...speaker.name][0])}</span>` : ''}${label}${overlap}${signalBadge}</div>${copy}${tools}</article>`;
 }
 /** 渲染会议库中的一行。@param {{tone: string, title: string, meta: string, tags: string[], status: object}} meeting 会议数据。@param {number} index 会议索引。@returns {string} 行标记。 */
-function renderMeetingRow(
+/** 桌面会议导航只展示标题；录音状态保留在标记与可访问名称中。 */
+function renderNavigationMeeting(
   { id, tone, title, meta, tags, status, statusCode, deleted = false, workspaceId, workspace },
   index,
 ) {
@@ -439,64 +429,63 @@ function renderMeetingRow(
     editingMeetingIndex === index
       ? `<form class="meeting-title-rename" data-rename-meeting data-meeting-index="${index}"><div class="meeting-rename-controls"><input name="title" value="${escapeHtml(draft?.title ?? title)}" maxlength="120" required aria-label="${t('重命名')}"${draft?.saving ? ' disabled' : ''} /><button type="submit" class="secondary"${draft?.saving ? ' disabled' : ''}>${interfaceIcon('checkbox-checked')}${t('保存')}</button><button type="button" class="secondary" data-cancel-meeting-rename${draft?.saving ? ' disabled' : ''}>${interfaceIcon('close')}${t('取消')}</button></div><small>${escapeHtml(t('Enter 保存 · Esc 取消'))}</small><p class="meeting-rename-meta">${escapeHtml(meta)}</p><span class="meeting-rename-state" role="status">${escapeHtml(t(draft?.saving ? '正在保存…' : draft?.error ? '重命名失败，修改仍保留' : draft?.title !== title ? '已修改 · 尚未保存' : '未修改'))}${draft?.error ? ` · ${escapeHtml(draft.error)}` : ''}</span></form>`
       : `<h2>${escapeHtml(title)}${tags.includes('手机录音') ? `<span class="meeting-source">${interfaceIcon('phone')}${escapeHtml(t(tags.includes('手机麦克风') ? '手机麦克风' : '手机录音'))}</span>` : ''}</h2>`;
-  const workspaceLabel = workspace
-    ? `${escapeHtml(t('工作区'))} · ${escapeHtml(workspace.name)}`
+  const paused = Boolean(status?.paused);
+  const active = paused || statusCode === 'recording' || status?.tone === 'processing';
+  const stateLabel = t(status?.label || '');
+  const sourceLabel = tags.includes('手机录音')
+    ? t(tags.includes('手机麦克风') ? '手机麦克风' : '手机录音')
     : '';
-  return `<article class="meeting-row" data-meeting-index="${index}" data-selection-key="${escapeHtml(id || String(index))}" tabindex="0" aria-selected="false"${id ? ` data-meeting-id="${escapeHtml(id)}"` : ''}${!deleted && id ? ' draggable="true"' : ''}><input class="meeting-row-checkbox" type="checkbox" data-select-meeting aria-label="${escapeHtml(t('选择'))} ${escapeHtml(title)}" /><span class="meeting-row-icon">${interfaceIcon('file')}</span><div class="meeting-main">${heading}${editingMeetingIndex === index ? '' : `<p>${escapeHtml(meta)}</p>`}</div><span class="meeting-workspace">${workspaceLabel}</span><div class="meeting-status"><span class="status ${status.tone}${status.paused ? ' is-paused' : ''}${statusCode === 'recording' ? ' is-recording' : ''}">${escapeHtml(t(status.label))}</span><small>${escapeHtml(t(status.detail))}</small></div><div class="meeting-actions"><button class="more" data-meeting-menu="${index}" aria-label="${t('更多操作')}" aria-expanded="false">${interfaceIcon('chevron-right')}</button><div class="meeting-menu" hidden>${menu}</div></div></article>`;
+  const accessibleLabel = [title, sourceLabel, stateLabel].filter(Boolean).join(' · ');
+  const stateClass = paused ? ' is-paused' : statusCode === 'recording' ? ' is-recording' : '';
+  const signal = active
+    ? `<span class="navigation-meeting-signal${stateClass}" aria-hidden="true"></span>`
+    : '';
+  return `<article class="meeting-row navigation-meeting${stateClass}" aria-label="${escapeHtml(accessibleLabel)}" data-meeting-index="${index}" data-selection-key="${escapeHtml(id || String(index))}" tabindex="0" aria-selected="false"${id ? ` data-meeting-id="${escapeHtml(id)}"` : ''}${!deleted && id ? ' draggable="true"' : ''}><input class="meeting-row-checkbox" type="checkbox" data-select-meeting aria-label="${escapeHtml(t('选择'))} ${escapeHtml(title)}" /><div class="meeting-main">${signal}${heading}</div><div class="meeting-actions"><button class="more" data-meeting-menu="${index}" aria-label="${t('更多操作')}" aria-expanded="false">${interfaceIcon('more')}</button><div class="meeting-menu ui-menu" hidden><p class="ui-menu-caption">${escapeHtml(title)}</p>${menu}</div></div></article>`;
 }
-/** 渲染设置卡片及其模态框操作。@param {{title: string, description: string, action: string, modal: string}} card 卡片数据。@returns {string} 卡片标记。 */
+/** 设置入口使用整行导航；数据与操作键继续由现有控制器管理。 */
 function renderSettingsCard({ title, description, action, modal }) {
-  return `<section class="settings-card" id="${modal}">${interfaceIcon({ 'ai-features': 'ai', 'advanced-settings': 'advanced', 'storage': 'storage' }[modal])}<h2>${t(title)}</h2><p>${t(description)}</p><button class="secondary settings-row-action" data-settings-modal="${modal}" aria-label="${escapeHtml(t(action))}">${interfaceIcon('chevron-right')}</button></section>`;
+  return `<section class="preferences-destination" id="${modal}"><div class="preference-copy"><h2>${escapeHtml(t(title))}</h2><p>${escapeHtml(t(description))}</p></div><button type="button" class="preferences-open" data-settings-modal="${modal}" aria-label="${escapeHtml(t(action))}">${interfaceIcon('chevron-right')}</button></section>`;
 }
-/** 渲染语言相关的设置卡片，不重置其他视图。 */
+/** 每项设置拥有独立标签、说明和控制区，长译文不会挤压右侧控件。 */
+function renderPreferenceRow(label, description, control) {
+  return `<div class="preference-row"><div class="preference-copy"><h3>${escapeHtml(t(label))}</h3>${description ? `<p>${escapeHtml(description)}</p>` : ''}</div><div class="preference-control">${control}</div></div>`;
+}
+/** 重建通用设置工作面；保留持有实时状态与事件的设备、更新节点。 */
 function renderSettingsView() {
   const settingsView = document.getElementById('settings-view');
-  settingsView.querySelector('.settings-navigation')?.remove();
-  settingsView.insertAdjacentHTML('afterbegin', renderSettingsNavigation('general'));
-  const mobileCard = document.getElementById('mobile-connection');
-  const speakerCard = document.getElementById('speaker-profiles-entry');
-  const aboutCard = document.getElementById('app-update-entry');
-  document.querySelector('#settings-view .settings-grid').innerHTML =
-    `<h2 class="settings-group">${escapeHtml(t('会议与 AI'))}</h2><section class="settings-card" id="installed-models">${interfaceIcon('model')}<h2>${t('模型库')}</h2><p>${t('下载和管理本地语音识别模型，为字幕、精修和说话人识别提供能力。')}</p><button class="secondary settings-row-action" data-settings-modal="models" aria-label="${escapeHtml(t('管理模型库'))}">${interfaceIcon('chevron-right')}</button></section>${uiData.settings.cards
-      .filter((card) => card.modal !== 'storage')
-      .map(renderSettingsCard)
-      .join(
-        '',
-      )}<h2 class="settings-group">${escapeHtml(t('设备与数据'))}</h2>${uiData.settings.cards
-      .filter((card) => card.modal === 'storage')
-      .map(renderSettingsCard)
-      .join('')}`;
-  if (mobileCard) document.getElementById('storage').before(mobileCard);
-  if (speakerCard) document.getElementById('storage').before(speakerCard);
-  if (speakerCard && mobileCard) mobileCard.before(speakerCard);
-  if (aboutCard) document.querySelector('#settings-view .settings-grid').append(aboutCard);
-  const grid = document.querySelector('#settings-view .settings-grid');
-  grid.insertAdjacentHTML(
-    'afterbegin',
-    `<h2 class="settings-group settings-basic-group">${escapeHtml(t('基本'))}</h2><section class="settings-card settings-preferences">${interfaceIcon('globe')}<h2>${escapeHtml(t('界面语言'))}</h2><p>${escapeHtml(t('切换语言'))}</p>${flowSelect(
-      'interface-language',
-      locale,
-      [
-        ['zh', '简体中文'],
-        ['en', 'English'],
-        ['es', 'Español'],
-        ['ja', '日本語'],
-        ['ko', '한국어'],
-        ['fr', 'Français'],
-        ['de', 'Deutsch'],
-        ['ru', 'Русский'],
-      ],
-    )}</section><section class="settings-card settings-preferences">${interfaceIcon('appearance')}<h2>${escapeHtml(t('外观'))}</h2><p>${escapeHtml(t('切换主题'))}</p>${flowSelect(
-      'interface-theme',
-      typeof theme !== 'undefined' ? theme : 'system',
-      [
-        ['system', t('跟随系统')],
-        ['light', t('浅色')],
-        ['dark', t('深色')],
-      ],
-    )}</section>`,
-  );
+  const destinations = ['speaker-profiles-entry', 'mobile-connection', 'app-update-entry']
+    .map((id) => document.getElementById(id))
+    .filter(Boolean);
+  const previousScroll = settingsView.querySelector('.preferences-scroll')?.scrollTop || 0;
+  settingsView.innerHTML = `${renderSettingsNavigation('general')}<main class="settings-general-main preferences-workspace"><header class="preferences-titlebar"><div><h1>${escapeHtml(t('通用'))}</h1><p>${escapeHtml(t('管理 Brevia 的使用偏好、AI 能力与数据设置。'))}</p></div><span class="desktop-settings-status" data-desktop-settings-status hidden aria-live="polite" role="status"></span></header><nav class="preferences-section-links" aria-label="${escapeHtml(t('通用'))}"><a href="#preferences-basics">${escapeHtml(t('基本'))}</a><a href="#preferences-window" data-desktop-section-link>${escapeHtml(t('窗口与后台'))}</a><a href="#preferences-shortcuts" data-desktop-section-link>${escapeHtml(t('全局快捷键'))}</a></nav><div class="preferences-scroll"><div class="preferences-content"><section class="preferences-section" id="preferences-basics" aria-labelledby="preferences-basics-title"><header class="preferences-section-heading"><h2 id="preferences-basics-title">${escapeHtml(t('基本'))}</h2></header>${renderPreferenceRow(
+    '界面语言',
+    t('切换语言'),
+    desktopSelect('interface-language', locale, [
+      ['zh', '简体中文'],
+      ['en', 'English'],
+      ['es', 'Español'],
+      ['ja', '日本語'],
+      ['ko', '한국어'],
+      ['fr', 'Français'],
+      ['de', 'Deutsch'],
+      ['ru', 'Русский'],
+    ]),
+  )}${renderPreferenceRow(
+    '外观',
+    t('切换主题'),
+    desktopSelect('interface-theme', typeof theme !== 'undefined' ? theme : 'system', [
+      ['system', t('跟随系统')],
+      ['light', t('浅色')],
+      ['dark', t('深色')],
+    ]),
+  )}</section><div data-desktop-settings-mount></div><section class="preferences-section preferences-destinations" aria-labelledby="preferences-destinations-title"><header class="preferences-section-heading"><h2 id="preferences-destinations-title">${escapeHtml(t('设备与数据'))}</h2></header>${uiData.settings.cards
+    .filter((card) => card.modal === 'storage')
+    .map(renderSettingsCard)
+    .join('')}</section></div></div></main>`;
+  const destinationList = settingsView.querySelector('.preferences-destinations');
+  destinations.forEach((node) => destinationList.append(node));
   renderDesktopPreferences();
+  settingsView.querySelector('.preferences-scroll').scrollTop = previousScroll;
 }
 function desktopShortcutFromEvent(event) {
   if (!(event.ctrlKey || event.altKey || event.metaKey)) return '';
@@ -539,40 +528,43 @@ function desktopShortcutValue(value) {
   }<span class="select-chevron">${interfaceIcon('chevron-down')}</span>`;
 }
 function renderDesktopPreferences() {
-  document.querySelector('[data-desktop-settings]')?.remove();
-  if (!desktopPreferences || !window.brevia?.desktop) return;
+  const mount = document.querySelector('[data-desktop-settings-mount]');
+  if (!mount) return;
+  const supported = Boolean(desktopPreferences && window.brevia?.desktop);
+  document.querySelectorAll('[data-desktop-section-link]').forEach((link) => {
+    link.hidden = !supported;
+  });
+  if (!supported) {
+    mount.replaceChildren();
+    return;
+  }
   const status = document.querySelector('[data-desktop-settings-status]');
   if (status) {
     status.hidden = true;
     status.textContent = '';
   }
   const tray = t(window.brevia.platform === 'darwin' ? '菜单栏' : '托盘');
-  const row = (label, description, control) =>
-    `<section class="settings-card settings-preferences desktop-preference">${interfaceIcon({ 关闭主窗口时: 'window', 菜单栏图标: 'more', 托盘图标: 'more', 最小化时自动显示胶囊: 'capsule', '开始／结束录音': 'microphone', '暂停／继续录音': 'pause' }[label])}<div><h2>${escapeHtml(t(label))}</h2><p>${escapeHtml(description)}</p></div>${control}</section>`;
   const toggle = (key, label) =>
-    `<button type="button" class="preference-switch" data-desktop-toggle="${key}" role="switch" aria-checked="${desktopPreferences[key]}" aria-label="${escapeHtml(t(label))}"><i></i></button>`;
+    `<button type="button" class="preference-toggle" data-desktop-toggle="${key}" role="switch" aria-checked="${desktopPreferences[key]}" aria-label="${escapeHtml(t(label))}"><span></span></button>`;
   const shortcut = (key, label) =>
-    `<div class="flow-select desktop-shortcut"><button type="button" class="flow-select-toggle" data-flow-select-toggle data-shortcut-control="${key}" aria-label="${escapeHtml(`${t(label)} · ${desktopShortcutLabel(desktopPreferences[key])}`)}" aria-expanded="false">${desktopShortcutValue(desktopPreferences[key])}</button><div class="flow-select-options" hidden><button type="button" data-shortcut-capture="${key}">${escapeHtml(t('录制快捷键'))}</button><button type="button" data-shortcut-clear="${key}">${escapeHtml(t('清除快捷键'))}</button><button type="button" data-shortcut-reset="${key}">${escapeHtml(t('恢复默认'))}</button></div></div>`;
-  const content = `<div data-desktop-settings><h2 class="settings-group">${escapeHtml(t('窗口与后台'))}</h2>${row(
+    `<div class="ui-select flow-select desktop-shortcut"><button type="button" class="ui-select-trigger flow-select-toggle" data-flow-select-toggle data-shortcut-control="${key}" aria-label="${escapeHtml(`${t(label)} · ${desktopShortcutLabel(desktopPreferences[key])}`)}" aria-expanded="false">${desktopShortcutValue(desktopPreferences[key])}</button><div class="ui-select-list flow-select-options" hidden><button type="button" class="ui-select-option" data-shortcut-capture="${key}">${escapeHtml(t('录制快捷键'))}</button><button type="button" class="ui-select-option" data-shortcut-clear="${key}">${escapeHtml(t('清除快捷键'))}</button><button type="button" class="ui-select-option" data-shortcut-reset="${key}">${escapeHtml(t('恢复默认'))}</button></div></div>`;
+  mount.innerHTML = `<div data-desktop-settings><section class="preferences-section" id="preferences-window" aria-labelledby="preferences-window-title"><header class="preferences-section-heading"><h2 id="preferences-window-title">${escapeHtml(t('窗口与后台'))}</h2></header>${renderPreferenceRow(
     '关闭主窗口时',
     desktopPreferences.closeBehavior === 'hide'
       ? t('关闭窗口不会结束录音，可从菜单栏或托盘重新打开')
       : t('录音中退出前会结束并保存当前录音'),
-    flowSelect('desktop-closeBehavior', desktopPreferences.closeBehavior, [
+    desktopSelect('desktop-closeBehavior', desktopPreferences.closeBehavior, [
       ['hide', `${t('隐藏到')}${tray}`],
       ['quit', t('退出应用')],
     ]),
-  )}${row(
+  )}${renderPreferenceRow(
     window.brevia.platform === 'darwin' ? '菜单栏图标' : '托盘图标',
     t('隐藏窗口时始终保留入口'),
-    flowSelect('desktop-trayVisibility', desktopPreferences.trayVisibility, [
+    desktopSelect('desktop-trayVisibility', desktopPreferences.trayVisibility, [
       ['always', t('始终显示')],
       ['background', t('仅窗口隐藏时')],
     ]),
-  )}<h2 class="settings-group">${escapeHtml(t('桌面录音胶囊'))}</h2>${row('最小化时自动显示胶囊', t('录音或暂停时显示；隐藏胶囊不会停止录音'), toggle('autoCapsule', '最小化时自动显示胶囊'))}<h2 class="settings-group">${escapeHtml(t('全局快捷键'))}</h2>${row('开始／结束录音', t('沿用最近配置，再次按下结束并保存'), shortcut('recordingShortcut', '开始／结束录音'))}${row('暂停／继续录音', t('仅在当前录音支持暂停时生效'), shortcut('pauseShortcut', '暂停／继续录音'))}</div>`;
-  const grid = document.querySelector('#settings-view .settings-grid');
-  grid.querySelector('.settings-preferences:last-of-type')?.insertAdjacentHTML('afterend', content);
-  if (!grid.querySelector('[data-desktop-settings]')) grid.insertAdjacentHTML('beforeend', content);
+  )}${renderPreferenceRow('最小化时自动显示胶囊', t('录音或暂停时显示；隐藏胶囊不会停止录音'), toggle('autoCapsule', '最小化时自动显示胶囊'))}</section><section class="preferences-section" id="preferences-shortcuts" aria-labelledby="preferences-shortcuts-title"><header class="preferences-section-heading"><h2 id="preferences-shortcuts-title">${escapeHtml(t('全局快捷键'))}</h2></header>${renderPreferenceRow('开始／结束录音', t('沿用最近配置，再次按下结束并保存'), shortcut('recordingShortcut', '开始／结束录音'))}${renderPreferenceRow('暂停／继续录音', t('仅在当前录音支持暂停时生效'), shortcut('pauseShortcut', '暂停／继续录音'))}</section></div>`;
 }
 /** 仅允许安全协议的链接/图片地址，阻止 javascript: 等注入。@param {string} url 原始地址。@returns {string} 安全地址。 */
 function sanitizeUrl(url = '') {
@@ -1611,7 +1603,7 @@ function renderMeetingSummary({
 /** 在页面外壳可用后填充所有数据驱动的静态区域。@returns {void} */
 function renderStaticViews() {
   document.querySelector('.meeting-list').innerHTML = uiData.meetings
-    .map(renderMeetingRow)
+    .map(renderNavigationMeeting)
     .join('');
   document.querySelector('#transcript-scroll').innerHTML = uiData.live.transcript
     .map((entry) => renderTranscriptSegment({ ...entry, showSpeaker: false }))
@@ -1629,7 +1621,7 @@ function renderStaticViews() {
  */
 function renderRefineModelRow(options, selectedId) {
   if (!Array.isArray(options) || !options.length) return '';
-  return `<label class="refine-menu-speakers" data-refine-model-row><span>${escapeHtml(t('识别模型'))}</span>${flowSelect('refine-model', selectedId, options)}</label>`;
+  return `<label class="refine-menu-speakers" data-refine-model-row><span>${escapeHtml(t('识别模型'))}</span>${desktopSelect('refine-model', selectedId, options)}</label>`;
 }
 /** 「已精修」标签里的模型名后缀，让人一眼看出当前稿子由哪个模型产出。@param {object} d 详情数据。@returns {string} 后缀标记。 */
 function refineAppliedModelSuffix(d) {
@@ -1638,7 +1630,7 @@ function refineAppliedModelSuffix(d) {
 /** 逐字稿专属操作；精修状态显示在当前文档的工具栏。 */
 function renderRefineStatus(d) {
   if (d.refineState === 'refining') return '';
-  const languageSelect = `<label class="refine-menu-speakers"><span>${t('会议语言')}</span>${flowSelect('refine-language', d.language || 'auto', BreviaI18n.languageOptions(locale, t, true))}</label>`;
+  const languageSelect = `<label class="refine-menu-speakers"><span>${t('会议语言')}</span>${desktopSelect('refine-language', d.language || 'auto', BreviaI18n.languageOptions(locale, t, true))}</label>`;
   const translationMenu = `<span class="detail-translation-action"><button class="detail-icon-action" data-detail-translation-toggle type="button" aria-label="${t('翻译')}" title="${t('翻译')}" aria-expanded="false"${d.translationPending ? ' disabled' : ''}>${interfaceIcon('translate')}${t('翻译')}${interfaceIcon('chevron-down')}</button><div class="detail-translation-menu" hidden>${BreviaI18n.languageOptions(
     locale,
     t,

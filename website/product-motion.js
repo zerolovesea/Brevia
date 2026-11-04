@@ -7,6 +7,163 @@ window.uiData = { detail: {} };
 window.detailActiveTab = 'summary';
 
 (async () => {
+  // 官网演示保留原界面组件，桌面重构不改变已发布的演示布局。
+  function flowSelect(name, value, options, activeModel = false, disabled = false) {
+    // 回退到空白对，使空选项列表渲染为无害的占位符而不是抛出错误。
+    const selected = options.find(([option]) => option === value) || options[0] || ['', ''];
+    const badge = (option) =>
+      option?.[2] ? `<em class="flow-select-badge">${escapeHtml(option[2])}</em>` : '';
+    const icon = {
+      'meeting-workspace': 'folder',
+      'meeting-language': 'globe',
+      'translation-target': 'translate',
+      'meeting-speakers': 'person',
+      'refined-model': 'cpu',
+      'mic-device': 'microphone',
+      'phone-device': 'phone',
+    }[name];
+    disabled = disabled || options.length === 0;
+    return `<div class="flow-select"${activeModel ? ' data-active-summary-model' : ''}><button class="flow-select-toggle" data-flow-select-toggle type="button" aria-expanded="false"${disabled ? ' disabled' : ''}>${escapeHtml(selected[1])}${icon ? `<span class="select-value-icon">${interfaceIcon(icon)}</span>` : ''}<span class="select-chevron">${interfaceIcon('chevron-down')}</span></button><input type="hidden" name="${name}" value="${escapeHtml(selected[0])}" /><div class="flow-select-options" hidden>${options.map((option) => `<button type="button" data-flow-select-choice="${name}" data-value="${escapeHtml(option[0])}" data-label="${escapeHtml(option[1])}"${option[0] === selected[0] ? ' aria-current="true"' : ''}${disabled ? ' disabled' : ''}>${escapeHtml(option[1])}${badge(option)}</button>`).join('')}</div></div>`;
+  }
+  function renderMeetingRow(
+    { id, tone, title, meta, tags, status, statusCode, deleted = false, workspaceId, workspace },
+    index,
+  ) {
+    const workspaceMenu =
+      !deleted && typeof showWorkspaceAssignMenu === 'function'
+        ? `<button data-meeting-action="workspace" data-meeting-index="${index}">${interfaceIcon('folder')}<span>${t('移至工作区')}</span>${interfaceIcon('chevron-right')}</button>`
+        : '';
+    const menu = deleted
+      ? `<button data-meeting-action="restore" data-meeting-index="${index}">${interfaceIcon('restore')}<span>${t('恢复')}</span></button><button class="meeting-menu-danger" data-meeting-action="purge" data-meeting-index="${index}">${interfaceIcon('trash')}<span>${BreviaI18n.trashCopy(locale).purge}</span></button>`
+      : `<button data-meeting-action="rename" data-meeting-index="${index}">${interfaceIcon('edit')}<span>${t('重命名')}</span></button>${workspaceMenu}<button data-meeting-action="open-folder" data-meeting-index="${index}">${interfaceIcon('folder')}<span>${t('从文件夹打开')}</span></button><button data-meeting-action="export" data-meeting-index="${index}">${interfaceIcon('upload')}<span>${t('导出')}</span></button>${status?.tone === 'processing' ? '' : `<button class="meeting-menu-danger" data-meeting-action="delete" data-meeting-index="${index}">${interfaceIcon('trash')}<span>${t('删除')}</span></button>`}`;
+    const draft =
+      typeof meetingRenameDraft !== 'undefined' && meetingRenameDraft?.key === (id || String(index))
+        ? meetingRenameDraft
+        : null;
+    const heading =
+      editingMeetingIndex === index
+        ? `<form class="meeting-title-rename" data-rename-meeting data-meeting-index="${index}"><div class="meeting-rename-controls"><input name="title" value="${escapeHtml(draft?.title ?? title)}" maxlength="120" required aria-label="${t('重命名')}"${draft?.saving ? ' disabled' : ''} /><button type="submit" class="secondary"${draft?.saving ? ' disabled' : ''}>${interfaceIcon('checkbox-checked')}${t('保存')}</button><button type="button" class="secondary" data-cancel-meeting-rename${draft?.saving ? ' disabled' : ''}>${interfaceIcon('close')}${t('取消')}</button></div><small>${escapeHtml(t('Enter 保存 · Esc 取消'))}</small><p class="meeting-rename-meta">${escapeHtml(meta)}</p><span class="meeting-rename-state" role="status">${escapeHtml(t(draft?.saving ? '正在保存…' : draft?.error ? '重命名失败，修改仍保留' : draft?.title !== title ? '已修改 · 尚未保存' : '未修改'))}${draft?.error ? ` · ${escapeHtml(draft.error)}` : ''}</span></form>`
+        : `<h2>${escapeHtml(title)}${tags.includes('手机录音') ? `<span class="meeting-source">${interfaceIcon('phone')}${escapeHtml(t(tags.includes('手机麦克风') ? '手机麦克风' : '手机录音'))}</span>` : ''}</h2>`;
+    const workspaceLabel = workspace
+      ? `${escapeHtml(t('工作区'))} · ${escapeHtml(workspace.name)}`
+      : '';
+    return `<article class="meeting-row" data-meeting-index="${index}" data-selection-key="${escapeHtml(id || String(index))}" tabindex="0" aria-selected="false"${id ? ` data-meeting-id="${escapeHtml(id)}"` : ''}${!deleted && id ? ' draggable="true"' : ''}><input class="meeting-row-checkbox" type="checkbox" data-select-meeting aria-label="${escapeHtml(t('选择'))} ${escapeHtml(title)}" /><span class="meeting-row-icon">${interfaceIcon('file')}</span><div class="meeting-main">${heading}${editingMeetingIndex === index ? '' : `<p>${escapeHtml(meta)}</p>`}</div><span class="meeting-workspace">${workspaceLabel}</span><div class="meeting-status"><span class="status ${status.tone}${status.paused ? ' is-paused' : ''}${statusCode === 'recording' ? ' is-recording' : ''}">${escapeHtml(t(status.label))}</span><small>${escapeHtml(t(status.detail))}</small></div><div class="meeting-actions"><button class="more" data-meeting-menu="${index}" aria-label="${t('更多操作')}" aria-expanded="false">${interfaceIcon('chevron-right')}</button><div class="meeting-menu" hidden>${menu}</div></div></article>`;
+  }
+  // 协作演示在另一个 classic script 中构建选择器，仍需要官网自己的共享入口。
+  window.flowSelect = flowSelect;
+
+  function adaptWebsiteShell(shell) {
+    const sidebar = shell.querySelector('.sidebar.library-panel');
+    if (!sidebar) return;
+    const element = (tag, className) => Object.assign(document.createElement(tag), { className });
+    const home = shell.querySelector('#home-view');
+    const heading = element('div', 'page-head');
+    const title = element('div', '');
+    const slogan = element('h1', '');
+    slogan.id = 'home-slogan';
+    title.append(shell.querySelector('#home-eyebrow'), slogan);
+    const edit = shell.querySelector('#workspace-edit');
+    edit.className = 'secondary';
+    edit.append(document.createTextNode('编辑工作区'));
+    const selection = shell.querySelector('#meeting-selection-toggle');
+    selection.append(document.createTextNode('选择会议'));
+    const quick = home.querySelector('.quick-recording');
+    quick.className = 'primary-action quick-recording';
+    const start = home.querySelector('[data-prepare-mode="record"]');
+    start.className = 'secondary';
+    heading.append(shell.querySelector('#trash-back'), title, edit, selection, quick, start);
+    const search = sidebar.querySelector('.library-toolbar');
+    search.className = 'library-toolbar';
+    search.querySelector('#library-search-shortcut')?.remove();
+    home.replaceChildren(heading, search, sidebar.querySelector('.meeting-list'));
+
+    // 官网保留旧侧栏与正文列表；桌面状态栏和会议树不带入既定宣传画面。
+    const navigation = sidebar.querySelector('nav');
+    navigation.prepend(sidebar.querySelector('.workspace-container'));
+    const quickSidebar = quick.cloneNode(true);
+    quickSidebar.className = 'import-recording quick-recording';
+    const tasks = sidebar.querySelector('#task-cards');
+    tasks.classList.remove('is-collapsed');
+    sidebar.replaceChildren(
+      sidebar.querySelector('.brand'),
+      sidebar.querySelector('.new-meeting'),
+      quickSidebar,
+      sidebar.querySelector('#import-recording'),
+      navigation,
+      shell.querySelector('[data-task-summary]'),
+      shell.querySelector('#mobile-nav'),
+      sidebar.querySelector('.sidebar-settings'),
+      sidebar.querySelector('[data-toggle-task-stack]'),
+      tasks,
+    );
+    sidebar.className = 'sidebar';
+    shell.querySelector('#desktop-statusbar')?.remove();
+    shell.querySelector('#library-toggle')?.remove();
+
+    const prepare = shell.querySelector('#prepare-view');
+    if (!prepare?.classList.contains('compose-page')) return;
+    const form = prepare.querySelector('#meeting-form');
+    const back = prepare.querySelector('[data-view="home"]');
+    back.className = 'back';
+    back.append(document.createTextNode('返回会议库'));
+    const prepareHeading = element('header', 'prepare-heading');
+    prepareHeading.append(
+      prepare.querySelector('h1'),
+      prepare.querySelector('[data-prepare-description]'),
+    );
+    const fields = element('div', 'prepare-fields');
+    const name = prepare.querySelector('.compose-title-field');
+    name.className = 'meeting-name-field';
+    const grid = prepare.querySelector('.form-grid');
+    grid.className = 'form-grid';
+    const extras = prepare.querySelector('[data-prepare-extra-settings]');
+    extras.className = 'prepare-extra-settings';
+    fields.append(name, grid, extras);
+    const fieldset = prepare.querySelector('fieldset');
+    fieldset.className = '';
+    const legend = fieldset.querySelector('legend');
+    const connect = prepare.querySelector('[data-capture-phone]');
+    connect.className = 'capture-phone';
+    legend.append(connect);
+    const capture = element('div', 'capture-settings');
+    const source = element('label', '');
+    source.append(
+      document.createTextNode('采集模式'),
+      prepare.querySelector('#capture-mode-mount'),
+    );
+    capture.append(
+      source,
+      prepare.querySelector('#mic-device-setting'),
+      prepare.querySelector('#phone-device-setting'),
+    );
+    fieldset.replaceChildren(
+      legend,
+      prepare.querySelector('[data-prepare-source-description]'),
+      capture,
+    );
+    const input = prepare.querySelector('.prepare-input-status');
+    input.className = 'prepare-input-status';
+    const submit = prepare.querySelector('[type="submit"]');
+    submit.className = 'primary-action wide';
+    form.className = '';
+    form.replaceChildren(
+      prepareHeading,
+      prepare.querySelector('.audio-import'),
+      fields,
+      prepare.querySelector('.prepare-processing'),
+      prepare.querySelector('[data-prepare-error]'),
+      fieldset,
+      input,
+      submit,
+    );
+    const layout = element('div', 'prepare-layout');
+    const column = element('div', '');
+    column.append(form);
+    layout.append(column);
+    prepare.classList.remove('compose-page');
+    prepare.replaceChildren(back, layout);
+  }
+
   const pick = (zh, en) => (locale === 'en' ? en : zh);
   const scene = [
     'capsule',
@@ -117,6 +274,7 @@ window.detailActiveTab = 'summary';
     if (!response.ok) throw Error(`Application template: ${response.status}`);
     const template = new DOMParser().parseFromString(await response.text(), 'text/html');
     const shell = template.querySelector('.app-shell');
+    adaptWebsiteShell(shell);
     shell.removeAttribute('aria-live');
     shell
       .querySelectorAll('img')

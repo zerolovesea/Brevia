@@ -132,7 +132,7 @@ function renderWorkspaceNav() {
   if (!container) return;
   container.classList.add('workspace-subnav');
   container.id = 'workspace-subnav';
-  container.innerHTML = `<div class="workspace-subnav-content"><div class="workspace-heading"><button id="workspace-selector" type="button" class="workspace-selector" aria-label="${escapeHtml(t('工作区'))}" aria-expanded="${Boolean(workspacePicker)}" aria-controls="workspace-picker"><span>${escapeHtml(t('工作区'))}</span>${interfaceIcon('chevron-down')}</button><button class="new-workspace" type="button" data-new-workspace aria-label="${escapeHtml(t('新建工作区'))}" title="${escapeHtml(t('新建工作区'))}">${interfaceIcon('plus')}</button></div></div>`;
+  container.innerHTML = `<div class="workspace-subnav-content"><div class="workspace-heading navigation-section-heading"><button id="workspace-selector" type="button" class="workspace-selector" aria-label="${escapeHtml(t('工作区'))}" aria-expanded="${Boolean(workspacePicker)}" aria-controls="workspace-picker"><span>${escapeHtml(t('工作区'))}</span>${interfaceIcon('chevron-down')}</button><button class="new-workspace" type="button" data-new-workspace aria-label="${escapeHtml(t('新建工作区'))}" title="${escapeHtml(t('新建工作区'))}">${interfaceIcon('plus')}</button></div></div>`;
   if (workspacePicker) {
     renderWorkspacePickerItems();
     positionWorkspacePicker(container.querySelector('#workspace-selector'));
@@ -231,16 +231,16 @@ function showNewWorkspaceDialog(assignMeetingId, onCreated) {
   backdrop.className = 'modal-backdrop workspace-dialog';
   backdrop.returnFocus = document.activeElement;
   backdrop.innerHTML = `
-    <section class="modal-panel" role="dialog" aria-modal="true">
-      <header class="modal-head">
-        <div class="modal-title">
+    <section class="modal-panel ui-dialog" role="dialog" aria-modal="true" aria-label="${t('新建工作区')}">
+      <header class="ui-dialog-header">
+        <div class="ui-dialog-title">
           <h2>${t('新建工作区')}</h2>
           <p>${t('创建一个新的工作区来组织会议')}</p>
         </div>
         <button class="modal-close" type="button" data-close-modal aria-label="${t('关闭')}">${interfaceIcon('close')}</button>
       </header>
-      <div class="modal-body">
-        <form class="workspace-form" data-workspace-form>
+      <div class="ui-dialog-body">
+        <form class="workspace-form ui-dialog-form" data-workspace-form>
           <label>
             ${t('工作区名称')}
             <input name="name" type="text" maxlength="30" required />
@@ -249,9 +249,9 @@ function showNewWorkspaceDialog(assignMeetingId, onCreated) {
             <span>${t('描述')} <small>${t('（可选）')}</small></span>
             <textarea name="description" maxlength="100" rows="2"></textarea>
           </label>
-          <div class="modal-form-actions">
-            <button type="button" class="secondary" data-close-modal>${t('取消')}</button>
-            <button type="submit" class="modal-action">${t('创建工作区')}</button>
+          <div class="ui-dialog-actions">
+            <button type="button" class="ui-button" data-close-modal>${t('取消')}</button>
+            <button type="submit" class="ui-button ui-button-primary">${t('创建工作区')}</button>
           </div>
         </form>
       </div>
@@ -265,9 +265,6 @@ function showNewWorkspaceDialog(assignMeetingId, onCreated) {
   backdrop.classList.remove('modal-leave');
   backdrop.hidden = false;
   backdrop.classList.add('modal-enter');
-
-  // 聚焦输入框
-  setTimeout(() => {}, 100);
 
   let escHandler;
   const closeDialog = () => {
@@ -348,16 +345,16 @@ function showEditWorkspaceDialog(workspaceId) {
   backdrop.className = `modal-backdrop workspace-dialog${anchored ? ' workspace-edit-popover' : ''}`;
   backdrop.returnFocus = document.activeElement;
   backdrop.innerHTML = `
-    <section class="modal-panel" role="dialog" aria-modal="true" aria-label="${t('编辑工作区')}">
-      <header class="modal-head">
-        <div class="modal-title">
+    <section class="modal-panel ui-dialog" role="dialog" aria-modal="true" aria-label="${t('编辑工作区')}">
+      <header class="ui-dialog-header">
+        <div class="ui-dialog-title">
           <h2>${t('编辑工作区')}</h2>
           <p>${escapeHtml(workspace.name)}</p>
         </div>
         <button class="modal-close" type="button" data-close-modal aria-label="${t('关闭')}">${interfaceIcon('close')}</button>
       </header>
-      <div class="modal-body">
-        <form class="workspace-form" data-workspace-form>
+      <div class="ui-dialog-body">
+        <form class="workspace-form ui-dialog-form" data-workspace-form>
           <label>
             ${t('工作区名称')}
             <input name="name" type="text" maxlength="30" value="${escapeHtml(workspace.name)}" required />
@@ -368,10 +365,10 @@ function showEditWorkspaceDialog(workspaceId) {
             <textarea name="description" aria-label="${t('描述')}" maxlength="100" rows="2">${escapeHtml(workspace.description)}</textarea>
           </label>
           ${anchored ? '</details>' : ''}
-          <div class="modal-form-actions">
-            <button type="button" class="secondary" data-close-modal>${t('取消')}</button>
-            <button type="submit" class="modal-action">${t('保存更改')}</button>
-            <button type="button" class="danger" data-delete-workspace>${t('删除工作区')}</button>
+          <div class="ui-dialog-actions">
+            <button type="button" class="ui-button" data-close-modal>${t('取消')}</button>
+            <button type="submit" class="ui-button ui-button-primary">${t('保存更改')}</button>
+            <button type="button" class="ui-button ui-button-danger" data-delete-workspace>${t('删除工作区')}</button>
           </div>
         </form>
       </div>
@@ -391,9 +388,6 @@ function showEditWorkspaceDialog(workspaceId) {
   backdrop.classList.remove('modal-leave');
   backdrop.hidden = false;
   backdrop.classList.add('modal-enter');
-
-  // 聚焦输入框
-  setTimeout(() => {}, 100);
 
   let escHandler;
   const closeDialog = () => {

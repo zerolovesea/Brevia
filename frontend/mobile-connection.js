@@ -45,9 +45,6 @@
     imageCopy.forEach(({ node, key }) => {
       node.alt = t(key);
     });
-    const preview = dialog.querySelector('[data-mobile-preview-image]');
-    const previewPath = `./assets/mobile-preview-${locale === 'zh' ? 'zh' : 'en'}.png`;
-    if (preview && preview.getAttribute('src') !== previewPath) preview.src = previewPath;
     document.querySelector('#mobile-nav strong').textContent = t('设备连接');
     if (
       breviaClient?.state.meeting?.tags?.includes('手机录音') &&

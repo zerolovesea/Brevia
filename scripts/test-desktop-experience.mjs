@@ -202,7 +202,7 @@ try {
     await evaluate(
       `(()=>{const a=getComputedStyle(document.querySelector('#home-view .quick-recording > span:last-child')),b=getComputedStyle(document.querySelector('#home-view [data-prepare-mode="record"]'));return [a.fontSize,a.fontWeight,b.fontSize,b.fontWeight]})()`,
     ),
-    ['13px', '400', '14px', '400'],
+    ['12px', '400', '13px', '500'],
     '快速录音使用次级文字入口，主录音入口保持清楚层级',
   );
   assert.equal(await evaluate(`Boolean(document.querySelector('[data-quick-hint]'))`), false);
@@ -216,22 +216,36 @@ try {
     await evaluate(`document.querySelector('.sidebar .new-meeting').textContent.trim()`),
     '开始录音',
   );
-  const quickButton = await evaluate(
-    `document.querySelector('#home-view [data-quick-recording]').getBoundingClientRect().toJSON()`,
+  // 先聚焦并移出旧悬停位置，保证 CDP 产生一次真实进入事件。
+  await mainEval(`(()=>{const win=${nativeWindow};win.show();win.focus();return true;})()`);
+  await send('Page.bringToFront');
+  await evaluate(
+    `document.fonts.ready.then(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))))`,
   );
-  await send('Input.dispatchMouseEvent', {
-    type: 'mouseMoved',
-    x: quickButton.x + quickButton.width / 2,
-    y: quickButton.y + quickButton.height / 2,
-  });
-  await delay(150);
-  assert.equal(
-    await evaluate(
-      `document.querySelector('.page-tooltip').checkVisibility() && document.querySelector('.page-tooltip').textContent.includes('上次会议')`,
-    ),
-    true,
-    '快速录音悬停说明配置来源',
-  );
+  const hoverPoints = await evaluate(`(()=>{
+    const button=document.querySelector('#home-view [data-quick-recording]'),r=button.getBoundingClientRect();
+    const center={x:r.left+r.width/2,y:r.top+r.height/2};
+    const outside=[{x:8,y:8},{x:innerWidth-8,y:8},{x:8,y:innerHeight-32}].find(point=>!button.contains(document.elementFromPoint(point.x,point.y)));
+    return {center,outside,hit:button.contains(document.elementFromPoint(center.x,center.y))};
+  })()`);
+  assert.ok(hoverPoints.hit && hoverPoints.outside, '快速录音中心必须可命中，且存在可移出的区域');
+  await send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...hoverPoints.outside });
+  await delay(50);
+  await send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...hoverPoints.center });
+  const tooltipDeadline = Date.now() + 1000;
+  let tooltipState;
+  do {
+    tooltipState = await evaluate(`(()=>{
+      const button=document.querySelector('#home-view [data-quick-recording]'),tooltip=document.querySelector('.page-tooltip');
+      const point=${JSON.stringify(hoverPoints.center)},hit=document.elementFromPoint(point.x,point.y),r=tooltip?.getBoundingClientRect();
+      const visible=!!tooltip?.checkVisibility({visibilityProperty:true,opacityProperty:true});
+      const text=tooltip?.textContent||'';
+      return {ready:button.contains(hit)&&button.matches(':hover')&&visible&&text.includes('上次会议')&&r.left>=0&&r.right<=innerWidth+1&&r.top>=0&&r.bottom<=innerHeight+1,hasFocus:document.hasFocus(),hit:hit?.outerHTML.slice(0,180),hover:button.matches(':hover'),tooltip:{visible,hidden:tooltip?.hidden,text}};
+    })()`);
+    if (tooltipState.ready) break;
+    await delay(50);
+  } while (Date.now() < tooltipDeadline);
+  assert.ok(tooltipState.ready, `快速录音悬停说明配置来源：${JSON.stringify(tooltipState)}`);
   assert.equal(
     await evaluate(
       `(()=>{const b=document.querySelector('#home-view [data-quick-recording]');return b.getAttribute('aria-label')||b.textContent.trim()})()`,
@@ -265,7 +279,7 @@ try {
   );
   assert.equal(
     await evaluate(
-      `(()=>{const rows=[...document.querySelectorAll('#settings-view .settings-preferences > .flow-select')].map(n=>n.getBoundingClientRect());return rows.every(r=>Math.abs(r.width-rows[0].width)<1&&Math.abs(r.right-rows[0].right)<1)})()`,
+      `(()=>{const rows=[...document.querySelectorAll('#preferences-basics .preference-control > .ui-select')].map(n=>n.getBoundingClientRect());return rows.length===2&&rows.every(r=>r.width>0&&Math.abs(r.width-rows[0].width)<1&&Math.abs(r.right-rows[0].right)<1)})()`,
     ),
     true,
     '通用设置下拉项宽度与右边缘对齐',

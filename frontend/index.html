@@ -23,6 +23,10 @@
     <link rel="stylesheet" href="./motion.css" />
     <link rel="stylesheet" href="./desktop-shell.css" />
     <link rel="stylesheet" href="./desktop-workspace.css" />
+    <link rel="stylesheet" href="./desktop-controls.css" />
+    <link rel="stylesheet" href="./desktop-compose.css" />
+    <link rel="stylesheet" href="./desktop-settings.css" />
+    <link rel="stylesheet" href="./desktop-mobile-preview.css" />
   </head>
   <body>
     <div class="startup-splash" id="startup-splash" aria-hidden="true"
@@ -31,26 +35,50 @@
       ></div
     >
     <main class="app-shell" id="desktop-app" aria-live="polite">
-      <aside class="sidebar library-panel" id="library-panel" aria-label="主导航">
-        <div class="sidebar-brand-row">
+      <aside
+        class="sidebar library-panel navigation-sidebar"
+        id="library-panel"
+        aria-label="主导航"
+      >
+        <header class="navigation-brand sidebar-brand-row">
           <button class="brand" data-view="home" aria-label="Brevia 首页"
-            ><span class="brand-mark" aria-hidden="true"
-              ><img src="./assets/brevia-mark.svg" alt="" /></span
+            ><span class="brand-mark"><img src="./assets/brevia-mark.svg" alt="" /></span
             ><span class="brand-name"><img src="./assets/brevia-wordmark.svg" alt="Brevia" /></span
           ></button>
-          <button
-            class="sidebar-search"
-            id="library-search-shortcut"
-            type="button"
-            aria-label="搜索"
-            title="搜索"
-            aria-keyshortcuts="Meta+k Control+k"
-          >
-            <span data-interface-icon="search" aria-hidden="true"></span><span>搜索</span
-            ><kbd aria-hidden="true"></kbd>
-          </button>
-        </div>
-        <div class="sidebar-primary">
+        </header>
+        <div class="library-toolbar navigation-search"
+          ><div class="library-search"
+            ><label class="search"
+              ><span data-interface-icon="search" aria-hidden="true"></span
+              ><input
+                id="meeting-search"
+                type="search"
+                placeholder="搜索会议、字幕或说话人…"
+                autocomplete="off"
+                spellcheck="false" /><button
+                class="search-clear"
+                id="meeting-search-clear"
+                type="button"
+                aria-label="清空搜索"
+                hidden
+                >×</button
+              ><button
+                class="sidebar-search"
+                id="library-search-shortcut"
+                type="button"
+                aria-label="搜索"
+                title="搜索"
+                aria-keyshortcuts="Meta+k Control+k"
+                ><kbd aria-hidden="true"></kbd></button></label
+            ><div
+              class="search-results"
+              id="search-results"
+              role="listbox"
+              aria-label="搜索结果"
+              hidden
+            ></div></div
+        ></div>
+        <div class="sidebar-primary navigation-actions">
           <button
             class="new-meeting"
             data-view="prepare"
@@ -76,42 +104,19 @@
             ><span class="import-recording-label">导入本地音频</span></button
           >
         </div>
-        <div class="workspace-container"></div>
-        <button class="back" id="trash-back" type="button" data-view="home" hidden
-          ><span data-interface-icon="back"></span>返回会议库</button
-        >
-        <div class="library-toolbar"
-          ><div class="library-search"
-            ><label class="search"
-              ><span data-interface-icon="search" aria-hidden="true"></span
-              ><input
-                id="meeting-search"
-                type="search"
-                placeholder="搜索会议、字幕或说话人…"
-                autocomplete="off"
-                spellcheck="false"
-              /><button
-                class="search-clear"
-                id="meeting-search-clear"
-                type="button"
-                aria-label="清空搜索"
-                hidden
-                >×</button
-              ></label
-            ><div
-              class="search-results"
-              id="search-results"
-              role="listbox"
-              aria-label="搜索结果"
-              hidden
-            ></div></div
+        <div class="navigation-library-heading"
+          ><div class="workspace-container"></div
           ><button
             class="secondary"
             id="meeting-selection-toggle"
             type="button"
             aria-pressed="false"
-            ><span data-interface-icon="checkbox"></span>选择会议</button
-          ></div
+            aria-label="选择会议"
+            title="选择会议"
+            ><span data-interface-icon="checkbox"></span></button
+        ></div>
+        <button class="back" id="trash-back" type="button" data-view="home" hidden
+          ><span data-interface-icon="back"></span>返回会议库</button
         >
         <section class="meeting-list" aria-label="最近会议"></section>
         <button
@@ -182,7 +187,7 @@
                 aria-label="关闭播放"
                 ><span data-interface-icon="close"></span></button></div></section
         ></div>
-        <footer class="sidebar-footer">
+        <footer class="sidebar-footer navigation-footer">
           <nav>
             <button
               class="nav-item active"
@@ -256,17 +261,22 @@
         ></header>
 
         <section class="view active" id="home-view">
-          <div class="workspace-welcome">
-            <img src="./assets/brevia-mark.svg" width="32" height="32" alt="" />
+          <div class="start-workspace">
+            <div class="start-symbol" aria-hidden="true"
+              ><span data-interface-icon="waveform"></span
+            ></div>
             <h1>开始一场会议</h1><p>从左侧选择会议，或开始一次新的记录。</p>
-            <div class="workspace-launch-actions">
-              <button class="workspace-launch" data-view="prepare" data-prepare-mode="record"
-                ><span data-interface-icon="microphone" aria-hidden="true"></span
-                ><strong>开始录音</strong><span>配置音源与会议语言</span></button
+            <div class="start-actions">
+              <button
+                class="ui-button ui-button-primary start-record"
+                data-view="prepare"
+                data-prepare-mode="record"
+                ><span data-interface-icon="plus" aria-hidden="true"></span
+                ><span>开始录音</span></button
               >
-              <button class="workspace-launch" data-view="prepare" data-prepare-mode="import"
+              <button class="ui-button start-import" data-view="prepare" data-prepare-mode="import"
                 ><span data-interface-icon="upload" aria-hidden="true"></span
-                ><strong>导入本地音频</strong><span>从已有录音整理内容</span></button
+                ><span>导入本地音频</span></button
               >
             </div>
             <button
@@ -281,80 +291,138 @@
           </div>
         </section>
 
-        <section class="view" id="prepare-view" data-mode="record">
-          <button class="back" data-view="home"
-            ><span data-interface-icon="back"></span>返回会议库</button
-          ><div class="prepare-layout"
-            ><div
-              ><form id="meeting-form"
-                ><header class="prepare-heading"
-                  ><h1>开始一场会议</h1><p data-prepare-description></p></header
-                ><section class="audio-import" hidden>
-                  <div class="audio-dropzone" tabindex="0" role="button" aria-label="选择音频文件">
-                    <span data-interface-icon="document" aria-hidden="true"></span
-                    ><h2>选择文件或拖到这里</h2><p>支持 WAV、MP3、M4A、FLAC、AAC、OGG</p
-                    ><button class="secondary" data-select-import-audio type="button"
-                      >选择文件</button
-                    > </div
-                  ><div class="audio-import-selection" hidden
-                    ><span
-                      ><strong data-import-audio-name></strong
-                      ><small data-import-audio-size></small></span
-                    ><button
+        <section class="view compose-page" id="prepare-view" data-mode="record">
+          <header class="compose-page-header">
+            <button
+              class="compose-back"
+              data-view="home"
+              type="button"
+              aria-label="返回会议库"
+              title="返回会议库"
+              ><span data-interface-icon="back" aria-hidden="true"></span
+            ></button>
+            <span class="compose-mode-mark" aria-hidden="true"
+              ><span class="compose-record-copy" data-interface-icon="record"></span
+              ><span class="compose-import-copy" data-interface-icon="upload"></span
+            ></span>
+            <div class="compose-page-title"><h1>新建会议</h1><p data-prepare-description></p></div>
+          </header>
+          <form id="meeting-form" class="compose-form">
+            <div class="prepare-layout compose-workspace">
+              <article class="compose-editor">
+                <section class="audio-import compose-import-stage" hidden>
+                  <button
+                    class="audio-dropzone compose-drop-target"
+                    data-select-import-audio
+                    type="button"
+                    aria-label="选择音频文件"
+                  >
+                    <span
+                      class="compose-drop-symbol"
+                      data-interface-icon="upload"
+                      aria-hidden="true"
+                    ></span>
+                    <strong class="compose-drop-heading">选择文件或拖到这里</strong>
+                    <span class="compose-drop-description">支持 WAV、MP3、M4A、FLAC、AAC、OGG</span>
+                    <span class="compose-file-picker">选择文件</span>
+                  </button>
+                  <article class="audio-import-selection compose-file-item" hidden>
+                    <span
+                      class="compose-file-symbol"
+                      data-interface-icon="document"
+                      aria-hidden="true"
+                    ></span>
+                    <div class="compose-file-description"
+                      ><strong data-import-audio-name></strong><small data-import-audio-size></small
+                    ></div>
+                    <button
                       class="icon-button"
                       data-clear-import-audio
                       type="button"
                       aria-label="移除文件"
-                      ><span data-interface-icon="close"></span></button
-                  ></div> </section
-                ><div class="prepare-fields"
-                  ><label class="meeting-name-field"
-                    >会议名称<input
-                      id="meeting-title"
-                      value="会议"
-                      maxlength="120"
-                      required /></label
-                  ><div class="form-grid"></div
-                  ><details class="prepare-options"
-                    ><summary>更多设置</summary
-                    ><div
-                      class="prepare-extra-settings"
-                      data-prepare-extra-settings
-                    ></div></details></div
-                ><section class="prepare-processing" hidden
-                  ><h2>处理选项</h2><div data-prepare-processing></div></section
-                ><p class="prepare-error" data-prepare-error role="alert" hidden></p
-                ><fieldset
-                  ><legend
-                    ><span>录制来源</span
-                    ><button type="button" class="capture-phone" data-capture-phone
-                      ><span data-interface-icon="plus"></span><span>连接设备</span></button
-                    ></legend
-                  ><p class="prepare-source-description" data-prepare-source-description></p
-                  ><div class="capture-settings"
-                    ><label>采集模式<span id="capture-mode-mount"></span></label
-                    ><label id="mic-device-setting"
-                      >麦克风设备<span id="mic-device-mount"></span></label
-                    ><label id="phone-device-setting" hidden
-                      >手机设备<span id="phone-device-mount"></span></label></div></fieldset
-                ><footer class="prepare-session-footer"
-                  ><div class="prepare-input-status"
-                    ><div class="capture-status" aria-live="polite"
-                      ><span id="mic-input-state"
+                      ><span data-interface-icon="close" aria-hidden="true"></span
+                    ></button>
+                    <div class="compose-file-progress" role="status"
+                      ><span class="loading-spinner" aria-hidden="true"></span
+                      ><span>准备中</span></div
+                    >
+                  </article>
+                </section>
+                <section class="compose-meeting-fields" aria-labelledby="compose-meeting-heading">
+                  <header class="compose-section-header"
+                    ><h2 id="compose-meeting-heading">会议信息</h2></header
+                  >
+                  <label class="compose-title-field"
+                    >会议名称<input id="meeting-title" value="会议" maxlength="120" required
+                  /></label>
+                  <div class="form-grid compose-essential-fields"></div>
+                </section>
+                <details class="prepare-options compose-advanced">
+                  <summary
+                    ><span data-interface-icon="settings" aria-hidden="true"></span
+                    ><span>更多设置</span
+                    ><span data-interface-icon="chevron-down" aria-hidden="true"></span
+                  ></summary>
+                  <div class="compose-extra-fields" data-prepare-extra-settings></div>
+                </details>
+              </article>
+              <aside class="compose-inspector">
+                <section class="compose-record-inspector">
+                  <fieldset class="compose-source-fieldset">
+                    <legend><span>录制来源</span></legend>
+                    <div id="capture-mode-mount" class="compose-source-mount"></div>
+                    <p
+                      class="prepare-source-description compose-source-description"
+                      data-prepare-source-description
+                    ></p>
+                  </fieldset>
+                  <div class="compose-device-routes">
+                    <label id="mic-device-setting"
+                      >麦克风设备<span id="mic-device-mount"></span
+                    ></label>
+                    <label id="phone-device-setting" hidden
+                      >手机设备<span id="phone-device-mount"></span
+                    ></label>
+                    <button type="button" class="compose-connect-device" data-capture-phone
+                      ><span data-interface-icon="plus" aria-hidden="true"></span
+                      ><span>连接设备</span></button
+                    >
+                  </div>
+                  <div class="prepare-input-status compose-input-monitor">
+                    <div class="capture-status" aria-live="polite">
+                      <span id="mic-input-state"
                         ><b>麦克风</b
                         ><strong
                           ><i class="input-meter" id="mic-level" aria-hidden="true"></i
                           ><span id="mic-input-label">未检测</span></strong
                         ></span
-                      ><span id="system-input-state"
+                      >
+                      <span id="system-input-state"
                         ><b>系统音频</b
                         ><strong><span id="system-input-label">未检测</span></strong></span
-                      ></div
-                    ><small id="capture-mode-hint" hidden></small></div
-                  ><button class="primary-action wide" type="submit"
-                    >开始录制
-                    <span data-interface-icon="arrow-right"></span></button></footer></form></div
-          ></div>
+                      >
+                    </div>
+                    <small id="capture-mode-hint" hidden></small>
+                  </div>
+                </section>
+                <section class="prepare-processing compose-processing" hidden>
+                  <header class="compose-section-header"><h2>处理选项</h2></header>
+                  <div class="compose-processing-fields" data-prepare-processing></div>
+                </section>
+              </aside>
+            </div>
+            <footer class="compose-footer">
+              <p class="prepare-error compose-error" data-prepare-error role="alert" hidden></p>
+              <div class="compose-footer-summary"
+                ><span data-interface-icon="storage" aria-hidden="true"></span
+                ><span class="compose-record-copy">本地录音</span
+                ><span class="compose-import-copy">导入本地音频</span></div
+              >
+              <button class="primary-action compose-submit" type="submit"
+                >开始录制<span data-interface-icon="arrow-right" aria-hidden="true"></span
+              ></button>
+            </footer>
+          </form>
         </section>
 
         <section class="view" id="live-view">
@@ -601,29 +669,14 @@
         </section>
 
         <section class="view" id="settings-view"
-          ><div class="settings-general-main"
-            ><p class="eyebrow settings-description">管理 Brevia 的使用偏好、AI 能力与数据设置。</p
-            ><div class="settings-general-heading"
-              ><h1>通用</h1
+          ><section class="preferences-destination" id="mobile-connection"
+            ><div class="preference-copy"
+              ><h2>设备连接</h2><p>连接同一局域网内的手机设备，查看连接状态与录音使用情况。</p></div
+            ><button class="preferences-open" id="mobile-manage" aria-label="查看与管理"
               ><span
-                class="desktop-settings-status"
-                data-desktop-settings-status
-                hidden
-                aria-live="polite"
-                role="status"
-              ></span></div
-            ><div class="settings-grid"></div
-            ><section class="settings-card" id="mobile-connection"
-              ><span data-interface-icon="phone" aria-hidden="true"></span><h2>设备连接</h2
-              ><p>连接同一局域网内的手机设备，查看连接状态与录音使用情况。</p
-              ><button
-                class="secondary settings-row-action"
-                id="mobile-manage"
-                aria-label="查看与管理"
-                ><span
-                  data-interface-icon="chevron-right"
-                  aria-hidden="true"
-                ></span></button></section></div
+                data-interface-icon="chevron-right"
+                aria-hidden="true"
+              ></span></button></section
         ></section>
       </section>
       <footer id="desktop-statusbar" aria-label="状态">
@@ -837,15 +890,7 @@
             >
           </section>
         </div>
-        <figure class="mobile-page-preview">
-          <div class="mobile-preview-device"
-            ><img
-              data-mobile-preview-image
-              src="./assets/mobile-preview-zh.png"
-              alt="Brevia 手机端会议界面"
-          /></div>
-          <figcaption>Brevia 手机端</figcaption>
-        </figure>
+        <figure class="mobile-page-preview"></figure>
         <section class="mobile-page-support">
           <div class="mobile-service-heading">
             <div><h3>手机连接服务</h3><p>请让手机与电脑处于同一局域网。</p></div>
@@ -947,5 +992,7 @@
       >
     </dialog>
     <script src="./mobile-connection.js"></script>
+    <script src="./desktop-controls.js"></script>
+    <script src="./desktop-mobile-preview.js"></script>
   </body>
 </html>
