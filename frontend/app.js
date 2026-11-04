@@ -4429,6 +4429,7 @@ document.addEventListener('click', async (event) => {
   }
   const toggle = event.target.closest('[data-flow-select-toggle]');
   if (toggle) {
+    if (desktopShortcutCapture?.button === toggle) return;
     const choices = toggle.parentElement.querySelector('.flow-select-options');
     choices.hidden = !choices.hidden;
     fitFlowSelectOptions(choices, toggle);
@@ -6241,6 +6242,22 @@ function activateMeeting(meeting, payload) {
   miniMeeting.hidden = true;
   showView('live');
   startTimer();
+  const inputs = breviaClient?.state.inputs;
+  if (window.brevia?.desktop && (inputs?.phone || inputs?.mic || inputs?.system)) {
+    const mode = inputs?.phone
+      ? 'phone'
+      : inputs?.mic
+        ? inputs.system
+          ? 'both'
+          : 'mic'
+        : 'system';
+    void window.brevia.desktop
+      .rememberCapture({ mode })
+      .then((preferences) => {
+        desktopPreferences = preferences;
+      })
+      .catch((error) => showToast(error.detail || error.message, undefined, 'error'));
+  }
 }
 async function startConfiguredRecording(payload, captureMode) {
   const inputs = captureModeInputs(captureMode);
@@ -9632,6 +9649,7 @@ if (window.brevia) {
     applyInitializationResult(result);
     whatsNewReady = true;
     maybeShowWhatsNew();
+    scheduleDesktopRecording();
   });
   void initializationPromise.catch((error) =>
     showToast(`${t('配置或后端启动失败')}: ${userFacingError(error.message)}`, undefined, 'error'),
@@ -10224,7 +10242,7 @@ if (!window.brevia) {
 
 // 桌面入口共享实时页的操作与草稿；辅助窗口不直接调用录音 Worker。
 
-async function startQuickRecording() {
+async function startQuickRecording({ background = false } = {}) {
   if (meetingActive) {
     miniMeeting.hidden = true;
     showView('live');
@@ -10247,6 +10265,7 @@ async function startQuickRecording() {
       : [];
     const saved = meetings.find((meeting) => !meeting.is_example);
     const language = saved?.language || 'auto';
+    const captureMode = desktopPreferences?.lastCaptureMode || 'both';
     const payload = {
       title: BreviaI18n.defaultMeetingTitle(locale),
       language,
@@ -10277,14 +10296,15 @@ async function startQuickRecording() {
       prepareForm.dataset.segmentationModel = payload.speaker_segmentation_model_id;
       prepareForm.dataset.vadModel = payload.vad_model_id;
       renderPrepareSelects(payload.refined_model_id);
-      renderCaptureMode('both');
+      renderCaptureMode(captureMode);
+      if (background) await window.brevia.desktop.show();
       await showView('prepare');
       const error = prepareForm.querySelector('[data-prepare-error]');
       error.textContent = t('请确认录音配置并下载所需模型后开始');
       error.hidden = false;
       return;
     }
-    await startConfiguredRecording(payload, 'both');
+    await startConfiguredRecording(payload, captureMode);
   } finally {
     quickRecordingBusy = false;
     buttons.forEach((button) => {
@@ -10334,6 +10354,7 @@ function desktopRecordingSnapshot() {
       : 'idle';
   const captionNodes = [...document.querySelectorAll('#transcript-scroll .segment')].slice(-80);
   return {
+    ready: Boolean(breviaClient?.state.initialized && desktopPreferences),
     meetingId: meeting?.id || desktopSavedMeeting?.id || null,
     title: meeting?.title || desktopSavedMeeting?.title || '',
     phase,
@@ -10409,21 +10430,21 @@ async function saveDesktopPreference(key, value) {
   if (!desktopPreferences || desktopSettingsBusy) return;
   desktopSettingsBusy = true;
   const status = document.querySelector('[data-desktop-settings-status]');
-  if (status) status.textContent = t('正在保存…');
+  if (status) {
+    status.hidden = false;
+    status.textContent = t('正在保存…');
+  }
   document.querySelectorAll('[data-desktop-settings] button').forEach((button) => {
     button.disabled = true;
   });
   try {
     desktopPreferences = await window.brevia.desktop.savePreferences({
-      ...desktopPreferences,
       [key]: value,
     });
     renderDesktopPreferences();
-    const saved = document.querySelector('[data-desktop-settings-status]');
-    if (saved) saved.innerHTML = renderSaveState('saved');
   } catch (error) {
     if (status) status.textContent = `${t('保存失败')} · ${error.detail || error.message}`;
-    showToast(error.message, undefined, 'error');
+    showToast(error.detail || error.message, undefined, 'error');
   } finally {
     desktopSettingsBusy = false;
     document.querySelectorAll('[data-desktop-settings] button').forEach((button) => {
@@ -10448,11 +10469,12 @@ if (window.brevia?.desktop) {
     .then((preferences) => {
       desktopPreferences = preferences;
       renderDesktopPreferences();
+      scheduleDesktopRecording();
     })
     .catch((error) => showToast(error.message, undefined, 'error'));
   window.brevia.on(
     'desktop.action',
-    async ({ action, requestId, suggestionId, tab, meetingId }) => {
+    async ({ action, requestId, suggestionId, tab, meetingId, background }) => {
       let error, result;
       try {
         if (
@@ -10483,7 +10505,7 @@ if (window.brevia?.desktop) {
           } else document.querySelector('[data-ai-ignore]')?.click();
         }
         if (action === 'confirm-quit') result = await confirmQuitRecording();
-        if (action === 'quick') await startQuickRecording();
+        if (action === 'quick') await startQuickRecording({ background });
         if (action === 'prepare') {
           setPrepareMode('record');
           showView('prepare');
@@ -10525,3 +10547,94 @@ if (window.brevia?.desktop) {
   );
 }
 scheduleDesktopRecording();
+
+let desktopShortcutCapture = null;
+async function finishDesktopShortcutCapture(value, restoreFocus = false) {
+  const capture = desktopShortcutCapture;
+  if (!capture || capture.finishing) return;
+  capture.finishing = true;
+  clearTimeout(capture.timer);
+  try {
+    await window.brevia.desktop.editShortcuts({ editing: false });
+    if (value !== undefined) await saveDesktopPreference(capture.key, value);
+  } catch (error) {
+    showToast(error.detail || error.message, undefined, 'error');
+  } finally {
+    desktopShortcutCapture = null;
+    const button = document.querySelector(`[data-shortcut-control="${capture.key}"]`);
+    if (button) {
+      button.innerHTML = desktopShortcutValue(desktopPreferences[capture.key]);
+      button.setAttribute(
+        'aria-label',
+        `${button.closest('section').querySelector('h2').textContent} · ${desktopShortcutLabel(desktopPreferences[capture.key])}`,
+      );
+      button.closest('section').querySelector('p').textContent = capture.description;
+      if (restoreFocus || value !== undefined) button.focus();
+    }
+  }
+}
+document.addEventListener('click', async (event) => {
+  const action = event.target.closest(
+    '[data-shortcut-capture], [data-shortcut-clear], [data-shortcut-reset]',
+  );
+  if (!action || desktopSettingsBusy || desktopShortcutCapture) return;
+  const select = action.closest('.flow-select');
+  const button = select.querySelector('[data-shortcut-control]');
+  const key = button.dataset.shortcutControl;
+  select.querySelector('.flow-select-options').hidden = true;
+  button.setAttribute('aria-expanded', 'false');
+  if (!action.hasAttribute('data-shortcut-capture')) {
+    await saveDesktopPreference(
+      key,
+      action.hasAttribute('data-shortcut-reset') && key === 'recordingShortcut'
+        ? 'Alt+CommandOrControl+R'
+        : '',
+    );
+    document.querySelector(`[data-shortcut-control="${key}"]`)?.focus();
+    return;
+  }
+  const description = button.closest('section').querySelector('p');
+  const capture = { key, button, description: description.textContent };
+  desktopShortcutCapture = capture;
+  button.textContent = t('请按组合键');
+  button.setAttribute('aria-label', t('请按组合键，Esc 取消，退格清除'));
+  description.textContent = t(
+    '无需切换窗口；组合键需包含 Ctrl、Alt 或 Command。Esc 取消，退格清除。',
+  );
+  try {
+    await window.brevia.desktop.editShortcuts({ editing: true });
+    if (desktopShortcutCapture !== capture || capture.finishing) {
+      await window.brevia.desktop.editShortcuts({ editing: false });
+      return;
+    }
+    button.focus();
+    capture.timer = setTimeout(() => void finishDesktopShortcutCapture(), 60000);
+  } catch (error) {
+    await finishDesktopShortcutCapture();
+    showToast(error.detail || error.message, undefined, 'error');
+  }
+});
+document.addEventListener(
+  'keydown',
+  (event) => {
+    if (!desktopShortcutCapture) return;
+    if (event.key === 'Tab') {
+      void finishDesktopShortcutCapture();
+      return;
+    }
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if (desktopShortcutCapture.finishing || event.repeat || event.isComposing) return;
+    if (event.key === 'Escape') void finishDesktopShortcutCapture(undefined, true);
+    else if (['Backspace', 'Delete'].includes(event.key)) void finishDesktopShortcutCapture('');
+    else {
+      const value = desktopShortcutFromEvent(event);
+      if (value) void finishDesktopShortcutCapture(value);
+    }
+  },
+  true,
+);
+document.addEventListener('focusout', (event) => {
+  if (event.target === desktopShortcutCapture?.button) void finishDesktopShortcutCapture();
+});
+window.addEventListener('blur', () => void finishDesktopShortcutCapture());

@@ -10980,3 +10980,31 @@ body:has(.meeting-workspace-menu) .meeting-menu:not([hidden]) [data-meeting-acti
   font-size: 12px;
   line-height: 1.6;
 }
+
+/* 快捷键沿用通用设置的单行下拉控件，仅按键内容使用键帽。 */
+.desktop-shortcut-keys {
+  min-height: 1lh;
+  line-height: inherit;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+}
+.desktop-shortcut-keys kbd {
+  display: grid;
+  place-items: center;
+  min-width: 20px;
+  height: 22px;
+  padding: 0 2px;
+  border: 1px solid var(--color-line);
+  border-radius: 4px;
+  background: var(--color-navigation);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 12px;
+}
+.desktop-shortcut-empty {
+  line-height: inherit;
+  color: var(--color-text-muted);
+}

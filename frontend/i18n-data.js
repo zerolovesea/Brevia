@@ -973,6 +973,21 @@
           '文件夹更改失败，请检查路径、磁盘连接和写入权限。',
         'error.operation_failed': '操作失败，请稍后重试。',
         'error.recording.start_busy': '正在准备或录制会议，请先完成当前操作。',
+        '未设置': '未设置',
+        '录制快捷键': '录制快捷键',
+        '清除快捷键': '清除快捷键',
+        '请按组合键': '请按组合键',
+        '全局快捷键': '全局快捷键',
+        '开始／结束录音': '开始／结束录音',
+        '暂停／继续录音': '暂停／继续录音',
+        '点击设置快捷键': '点击设置快捷键',
+        '请按组合键，Esc 取消，退格清除': '请按组合键，Esc 取消，退格清除',
+        '无需切换窗口；组合键需包含 Ctrl、Alt 或 Command。Esc 取消，退格清除。':
+          '无需切换窗口；组合键需包含 Ctrl、Alt 或 Command。Esc 取消，退格清除。',
+        '沿用最近配置，再次按下结束并保存': '沿用最近配置，再次按下结束并保存',
+        '仅在当前录音支持暂停时生效': '仅在当前录音支持暂停时生效',
+        '两个录音动作不能使用同一快捷键': '两个录音动作不能使用同一快捷键',
+        '快捷键不可用，请在设置中更换组合键': '快捷键不可用，请在设置中更换组合键',
         'error.desktop.icon_unavailable': '无法加载菜单栏或托盘图标，请重新安装 Brevia。',
         'error.desktop.session_changed': '当前录音已切换，请重试。',
         'error.desktop.window_unavailable': '录音窗口不可用，请重新打开 Brevia。',
@@ -1955,6 +1970,23 @@
         'error.operation_failed': 'The operation failed. Please try again.',
         'error.recording.start_busy':
           'A meeting is starting or recording. Finish the current operation first.',
+        '未设置': 'Not set',
+        '录制快捷键': 'Record shortcut',
+        '清除快捷键': 'Clear shortcut',
+        '请按组合键': 'Press a combination',
+        '全局快捷键': 'Global recording shortcuts',
+        '开始／结束录音': 'Start / stop recording',
+        '暂停／继续录音': 'Pause / resume recording',
+        '点击设置快捷键': 'Set shortcut',
+        '请按组合键，Esc 取消，退格清除': 'Press a combination; Esc cancels, Backspace clears',
+        '无需切换窗口；组合键需包含 Ctrl、Alt 或 Command。Esc 取消，退格清除。':
+          'Use shortcuts without switching windows. Include Ctrl, Alt or Command. Esc cancels; Backspace clears.',
+        '沿用最近配置，再次按下结束并保存':
+          'Press again to stop and save; reuse recent recording settings',
+        '仅在当前录音支持暂停时生效': 'Only works when the current recording supports pausing',
+        '两个录音动作不能使用同一快捷键': 'Recording actions cannot share the same shortcut',
+        '快捷键不可用，请在设置中更换组合键':
+          'Shortcut unavailable. Choose another combination in Settings.',
         'error.desktop.icon_unavailable':
           'The menu bar or tray icon could not be loaded. Reinstall Brevia.',
         'error.desktop.session_changed': 'The recording session has changed. Please try again.',
@@ -2955,6 +2987,23 @@
         'error.operation_failed': 'La operación falló. Inténtalo de nuevo.',
         'error.recording.start_busy':
           'Se está preparando o grabando una reunión. Finaliza primero la operación actual.',
+        '未设置': 'Sin asignar',
+        '录制快捷键': 'Grabar atajo',
+        '清除快捷键': 'Borrar atajo',
+        '请按组合键': 'Pulsa una combinación',
+        '全局快捷键': 'Atajos globales de grabación',
+        '开始／结束录音': 'Iniciar / detener grabación',
+        '暂停／继续录音': 'Pausar / reanudar grabación',
+        '点击设置快捷键': 'Configurar atajo',
+        '请按组合键，Esc 取消，退格清除': 'Pulsa una combinación; Esc cancela, Retroceso borra',
+        '无需切换窗口；组合键需包含 Ctrl、Alt 或 Command。Esc 取消，退格清除。':
+          'Sin cambiar de ventana. Incluye Ctrl, Alt o Command. Esc cancela; Retroceso borra.',
+        '沿用最近配置，再次按下结束并保存':
+          'Pulsa de nuevo para detener y guardar; reutiliza la configuración reciente',
+        '仅在当前录音支持暂停时生效': 'Solo funciona si la grabación actual permite pausas',
+        '两个录音动作不能使用同一快捷键': 'Las acciones de grabación no pueden compartir atajo',
+        '快捷键不可用，请在设置中更换组合键':
+          'Atajo no disponible. Elige otra combinación en Ajustes.',
         'error.desktop.icon_unavailable':
           'No se pudo cargar el icono de la barra de menús o la bandeja. Reinstala Brevia.',
         'error.desktop.session_changed': 'La sesión de grabación ha cambiado. Inténtalo de nuevo.',
@@ -3953,6 +4002,22 @@
         'error.operation_failed': '操作に失敗しました。もう一度お試しください。',
         'error.recording.start_busy':
           '会議の準備中または録音中です。現在の操作を先に完了してください。',
+        '未设置': '未設定',
+        '录制快捷键': 'ショートカットを記録',
+        '清除快捷键': 'ショートカットを解除',
+        '请按组合键': 'キーを押してください',
+        '全局快捷键': '録音のグローバルショートカット',
+        '开始／结束录音': '録音を開始／終了',
+        '暂停／继续录音': '録音を一時停止／再開',
+        '点击设置快捷键': 'ショートカットを設定',
+        '请按组合键，Esc 取消，退格清除': 'キーを押す：Esc でキャンセル、Backspace で解除',
+        '无需切换窗口；组合键需包含 Ctrl、Alt 或 Command。Esc 取消，退格清除。':
+          'ウインドウの切り替え不要。Ctrl、Alt、Command のいずれかを含めます。Esc でキャンセル、Backspace で解除。',
+        '沿用最近配置，再次按下结束并保存': '再度押すと終了して保存。最近の録音設定を使用',
+        '仅在当前录音支持暂停时生效': '現在の録音が一時停止に対応している場合のみ有効',
+        '两个录音动作不能使用同一快捷键': '録音操作に同じショートカットは設定できません',
+        '快捷键不可用，请在设置中更换组合键':
+          'ショートカットを使用できません。設定で別のキーを選んでください。',
         'error.desktop.icon_unavailable':
           'メニューバーまたはトレイのアイコンを読み込めません。Brevia を再インストールしてください。',
         'error.desktop.session_changed':
@@ -4937,6 +5002,23 @@
         'error.operation_failed': '작업에 실패했습니다. 다시 시도해 주세요.',
         'error.recording.start_busy':
           '회의를 준비하거나 녹음 중입니다. 현재 작업을 먼저 완료하세요.',
+        '未设置': '미설정',
+        '录制快捷键': '단축키 입력',
+        '清除快捷键': '단축키 해제',
+        '请按组合键': '키 조합을 누르세요',
+        '全局快捷键': '전역 녹음 단축키',
+        '开始／结束录音': '녹음 시작 / 종료',
+        '暂停／继续录音': '녹음 일시 정지 / 재개',
+        '点击设置快捷键': '단축키 설정',
+        '请按组合键，Esc 取消，退格清除': '키 조합 입력; Esc 취소, Backspace 해제',
+        '无需切换窗口；组合键需包含 Ctrl、Alt 或 Command。Esc 取消，退格清除。':
+          '창 전환 없이 사용합니다. Ctrl, Alt 또는 Command를 포함하세요. Esc 취소, Backspace 해제.',
+        '沿用最近配置，再次按下结束并保存':
+          '다시 누르면 종료 후 저장하며 최근 녹음 설정을 사용합니다',
+        '仅在当前录音支持暂停时生效': '현재 녹음이 일시 정지를 지원할 때만 작동합니다',
+        '两个录音动作不能使用同一快捷键': '녹음 동작에 같은 단축키를 사용할 수 없습니다',
+        '快捷键不可用，请在设置中更换组合键':
+          '단축키를 사용할 수 없습니다. 설정에서 다른 조합을 선택하세요.',
         'error.desktop.icon_unavailable':
           '메뉴 막대 또는 트레이 아이콘을 불러올 수 없습니다. Brevia를 다시 설치하세요.',
         'error.desktop.session_changed': '녹음 세션이 변경되었습니다. 다시 시도하세요.',
@@ -5946,6 +6028,25 @@
         'error.operation_failed': 'L’opération a échoué. Réessayez.',
         'error.recording.start_busy':
           'Une réunion est en préparation ou en cours d’enregistrement. Terminez d’abord l’opération actuelle.',
+        '未设置': 'Non défini',
+        '录制快捷键': 'Saisir un raccourci',
+        '清除快捷键': 'Effacer le raccourci',
+        '请按组合键': 'Appuyez sur les touches',
+        '全局快捷键': 'Raccourcis globaux d’enregistrement',
+        '开始／结束录音': 'Démarrer / arrêter l’enregistrement',
+        '暂停／继续录音': 'Mettre en pause / reprendre',
+        '点击设置快捷键': 'Définir un raccourci',
+        '请按组合键，Esc 取消，退格清除':
+          'Appuyez sur une combinaison ; Échap annule, Retour arrière efface',
+        '无需切换窗口；组合键需包含 Ctrl、Alt 或 Command。Esc 取消，退格清除。':
+          'Sans changer de fenêtre. Incluez Ctrl, Alt ou Command. Échap annule ; Retour arrière efface.',
+        '沿用最近配置，再次按下结束并保存':
+          'Appuyez à nouveau pour arrêter et enregistrer avec les réglages récents',
+        '仅在当前录音支持暂停时生效': 'Fonctionne uniquement si l’enregistrement permet la pause',
+        '两个录音动作不能使用同一快捷键':
+          'Les actions d’enregistrement ne peuvent pas partager un raccourci',
+        '快捷键不可用，请在设置中更换组合键':
+          'Raccourci indisponible. Choisissez une autre combinaison dans les réglages.',
         'error.desktop.icon_unavailable':
           'Impossible de charger l’icône de la barre de menus ou de notification. Réinstallez Brevia.',
         'error.desktop.session_changed': 'La session d’enregistrement a changé. Réessayez.',
@@ -6964,6 +7065,26 @@
         'error.operation_failed': 'Der Vorgang ist fehlgeschlagen. Bitte versuchen Sie es erneut.',
         'error.recording.start_busy':
           'Eine Besprechung wird vorbereitet oder aufgezeichnet. Schließen Sie zuerst den aktuellen Vorgang ab.',
+        '未设置': 'Nicht festgelegt',
+        '录制快捷键': 'Tastenkürzel aufnehmen',
+        '清除快捷键': 'Tastenkürzel löschen',
+        '请按组合键': 'Tastenkombination drücken',
+        '全局快捷键': 'Globale Aufnahme-Tastenkürzel',
+        '开始／结束录音': 'Aufnahme starten / beenden',
+        '暂停／继续录音': 'Aufnahme pausieren / fortsetzen',
+        '点击设置快捷键': 'Tastenkürzel festlegen',
+        '请按组合键，Esc 取消，退格清除':
+          'Tastenkombination drücken; Esc bricht ab, Rücktaste löscht',
+        '无需切换窗口；组合键需包含 Ctrl、Alt 或 Command。Esc 取消，退格清除。':
+          'Ohne Fensterwechsel. Ctrl, Alt oder Command verwenden. Esc bricht ab; Rücktaste löscht.',
+        '沿用最近配置，再次按下结束并保存':
+          'Erneut drücken zum Beenden und Speichern mit den letzten Aufnahmeeinstellungen',
+        '仅在当前录音支持暂停时生效':
+          'Nur verfügbar, wenn die aktuelle Aufnahme Pausen unterstützt',
+        '两个录音动作不能使用同一快捷键':
+          'Aufnahmeaktionen dürfen nicht dasselbe Tastenkürzel verwenden',
+        '快捷键不可用，请在设置中更换组合键':
+          'Tastenkürzel nicht verfügbar. In den Einstellungen eine andere Kombination wählen.',
         'error.desktop.icon_unavailable':
           'Das Menüleisten- oder Taskleistensymbol konnte nicht geladen werden. Installieren Sie Brevia erneut.',
         'error.desktop.session_changed':
@@ -7963,6 +8084,22 @@
         'error.operation_failed': 'Не удалось выполнить действие. Повторите попытку.',
         'error.recording.start_busy':
           'Встреча подготавливается или записывается. Сначала завершите текущую операцию.',
+        '未设置': 'Не задано',
+        '录制快捷键': 'Записать сочетание',
+        '清除快捷键': 'Очистить сочетание',
+        '请按组合键': 'Нажмите сочетание',
+        '全局快捷键': 'Глобальные сочетания для записи',
+        '开始／结束录音': 'Начать / завершить запись',
+        '暂停／继续录音': 'Приостановить / продолжить запись',
+        '点击设置快捷键': 'Задать сочетание',
+        '请按组合键，Esc 取消，退格清除': 'Нажмите сочетание; Esc — отмена, Backspace — очистка',
+        '无需切换窗口；组合键需包含 Ctrl、Alt 或 Command。Esc 取消，退格清除。':
+          'Без переключения окон. Добавьте Ctrl, Alt или Command. Esc — отмена, Backspace — очистка.',
+        '沿用最近配置，再次按下结束并保存':
+          'Повторное нажатие завершит и сохранит запись с последними настройками',
+        '仅在当前录音支持暂停时生效': 'Работает, только если текущая запись поддерживает паузу',
+        '两个录音动作不能使用同一快捷键': 'Для действий записи нельзя использовать одно сочетание',
+        '快捷键不可用，请在设置中更换组合键': 'Сочетание недоступно. Выберите другое в настройках.',
         'error.desktop.icon_unavailable':
           'Не удалось загрузить значок строки меню или панели уведомлений. Переустановите Brevia.',
         'error.desktop.session_changed': 'Сеанс записи изменился. Повторите попытку.',

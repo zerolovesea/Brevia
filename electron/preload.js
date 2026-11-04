@@ -49,6 +49,9 @@ contextBridge.exposeInMainWorld('brevia', {
   appInfo: { version: invoke('app.version') },
   desktop: {
     preferences: invoke('desktop.preferences.get'),
+    editShortcuts: invoke('desktop.shortcuts.edit'),
+    rememberCapture: invoke('desktop.capture.remember'),
+    show: invoke('desktop.show'),
     savePreferences: invoke('desktop.preferences.save'),
     publish: invoke('desktop.publish'),
     publishLevel: invoke('desktop.level'),

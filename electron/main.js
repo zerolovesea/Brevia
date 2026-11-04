@@ -5,6 +5,7 @@ const {
   desktopCapturer,
   dialog,
   ipcMain,
+  globalShortcut,
   Menu,
   nativeImage,
   Tray,
@@ -125,7 +126,7 @@ const packagedRoot = app.isPackaged ? process.resourcesPath : root;
 const { translate } = require(path.join(packagedRoot, 'frontend', 'i18n-data.js'));
 const mainText = (key) => translate(key, app.getLocale().split('-')[0]);
 const desktop = new DesktopController({
-  electron: { app, BrowserWindow, Menu, Tray, nativeImage, screen },
+  electron: { app, BrowserWindow, Menu, Tray, nativeImage, screen, globalShortcut },
   root: packagedRoot,
   dataDir: () => dataDir(),
   text: (key, locale) => translate(key, locale || app.getLocale().split('-')[0]),
@@ -1251,6 +1252,21 @@ async function buildSelectedBundle(meetingId, prepared) {
 function registerIpc() {
   handleIpc('desktop.preferences.get', () => desktop.preferences);
   handleIpc('desktop.preferences.save', (_, payload) => desktop.save(payload));
+  handleIpc('desktop.shortcuts.edit', (_, payload) => {
+    desktop.editShortcuts(z.object({ editing: z.boolean() }).strict().parse(payload).editing);
+    return true;
+  });
+  handleIpc('desktop.capture.remember', (_, payload) => {
+    const { mode } = z
+      .object({ mode: z.enum(['mic', 'system', 'both', 'phone']) })
+      .strict()
+      .parse(payload);
+    return desktop.save({ lastCaptureMode: mode });
+  });
+  handleIpc('desktop.show', () => {
+    desktop.showMain();
+    return true;
+  });
   handleIpc('desktop.publish', (_, payload) => {
     desktop.update(payload);
     return true;
@@ -2734,3 +2750,5 @@ app.on('before-quit', (event) => {
 app.on('window-all-closed', () => {
   app.quit();
 });
+
+app.on('will-quit', () => globalShortcut.unregisterAll());

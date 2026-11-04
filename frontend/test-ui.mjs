@@ -4274,6 +4274,7 @@ let previousMeetings = [{ is_example: true, language: 'ja' }, previousMeeting];
 const quickContext = {
   meetingActive: false,
   quickRecordingBusy: false,
+  desktopPreferences: { lastCaptureMode: 'both' },
   locale: 'zh',
   activeWorkspaceId: 'current-workspace',
   BreviaI18n: { defaultMeetingTitle: () => '快速会议' },
@@ -4317,6 +4318,10 @@ assert.equal(
   'old-form-value',
   '快速启动不改尚未提交的设置表单',
 );
+quickContext.desktopPreferences.lastCaptureMode = 'system';
+await quickContext.startQuickRecording();
+assert.equal(quickStarts.pop().mode, 'system', '沿用最近成功采集的来源');
+quickContext.desktopPreferences.lastCaptureMode = 'both';
 previousMeetings = [];
 await quickContext.startQuickRecording();
 assert.equal(quickStarts[1].payload.language, 'auto');
@@ -4331,11 +4336,59 @@ assert.equal(quickContext.captureMode, 'both');
 assert.equal(quickContext.prepareForm.dataset.segmentationModel, 'last-segmentation');
 assert.equal(quickError.hidden, false);
 assert.equal(quickContext.quickRecordingBusy, false);
+let backgroundPreparationShown = 0;
+quickContext.window.brevia.desktop = { show: async () => backgroundPreparationShown++ };
+await quickContext.startQuickRecording({ background: true });
+assert.equal(backgroundPreparationShown, 1, '后台缺模型时显示主窗口处理准备配置');
+assert.equal(quickStarts.length, 2, '显示准备页不能启动第二套采集');
 quickContext.window.brevia.meeting.list = async () => {
   throw new Error('database unavailable');
 };
 await assert.rejects(quickContext.startQuickRecording(), /database unavailable/);
 assert.equal(quickContext.quickRecordingBusy, false, '读配置失败也释放快速入口');
+// 组合键使用物理键位，避免 Option 输入特殊字符或不同布局造成不稳定绑定。
+const shortcutContext = {};
+const shortcutSource = text(components);
+const shortcutStart = shortcutSource.indexOf('function desktopShortcutFromEvent(');
+runInNewContext(
+  shortcutSource.slice(shortcutStart, shortcutSource.indexOf('\n}\n', shortcutStart) + 2),
+  shortcutContext,
+);
+assert.equal(
+  shortcutContext.desktopShortcutFromEvent({ code: 'KeyR', altKey: true, metaKey: true }),
+  'Alt+Command+R',
+);
+assert.equal(
+  shortcutContext.desktopShortcutFromEvent({ code: 'Digit1', ctrlKey: true, shiftKey: true }),
+  'Control+Shift+1',
+);
+assert.equal(shortcutContext.desktopShortcutFromEvent({ code: 'F24', altKey: true }), 'Alt+F24');
+assert.equal(shortcutContext.desktopShortcutFromEvent({ code: 'KeyR', shiftKey: true }), '');
+assert.equal(shortcutContext.desktopShortcutFromEvent({ code: 'AltLeft', altKey: true }), '');
+assert.equal(shortcutContext.desktopShortcutFromEvent({ code: 'Space', ctrlKey: true }), '');
+const shortcutMarkupContext = {
+  window: { brevia: { platform: 'darwin' } },
+  t: (key) => key,
+  escapeHtml: (value) => String(value).replaceAll('<', '&lt;'),
+  interfaceIcon: () => '<svg></svg>',
+};
+for (const name of ['desktopShortcutLabel', 'desktopShortcutValue']) {
+  const start = shortcutSource.indexOf(`function ${name}(`);
+  runInNewContext(
+    shortcutSource.slice(start, shortcutSource.indexOf('\n}\n', start) + 2),
+    shortcutMarkupContext,
+  );
+}
+assert.equal(shortcutMarkupContext.desktopShortcutLabel('Alt+CommandOrControl+R'), '⌥+⌘+R');
+assert.equal(
+  (shortcutMarkupContext.desktopShortcutValue('Alt+CommandOrControl+R').match(/<kbd>/g) || [])
+    .length,
+  3,
+);
+assert.match(shortcutMarkupContext.desktopShortcutValue(''), /未设置/);
+shortcutMarkupContext.window.brevia.platform = 'win32';
+assert.equal(shortcutMarkupContext.desktopShortcutLabel('Alt+CommandOrControl+R'), 'Alt+Ctrl+R');
+assert.match(shortcutMarkupContext.desktopShortcutValue('Control+<'), /&lt;/);
 // 手动开始与快速入口复用相同采集、模型队列及激活路径。
 const recordingCalls = [];
 const configuredContext = {
@@ -4368,6 +4421,37 @@ await assert.rejects(configuredContext.startConfiguredRecording({}, 'phone'), /�
 configuredContext.breviaClient.start = async () => ({ model_required: ['missing-model'] });
 assert.equal(await configuredContext.startConfiguredRecording({}, 'both'), null);
 assert.equal(recordingCalls.at(-1), 'meeting.start', '缺模型仍进入既有下载队列');
+// 手机独立录音没有桌面采集源，接管显示不能覆盖上次桌面采集配置。
+const activationSource = summaryFn('activateMeeting');
+const rememberCaptureSource = activationSource.slice(
+  activationSource.indexOf('  const inputs = breviaClient?.state.inputs;'),
+  activationSource.lastIndexOf('\n}'),
+);
+for (const [inputs, expected] of [
+  [null, null],
+  [{ mic: false, system: false }, null],
+  [{ mic: true, system: false }, 'mic'],
+  [{ mic: false, system: true }, 'system'],
+  [{ mic: true, system: true }, 'both'],
+  [{ mic: false, system: false, phone: 'phone-id' }, 'phone'],
+]) {
+  const captured = [];
+  runInNewContext(rememberCaptureSource, {
+    breviaClient: { state: { inputs } },
+    window: {
+      brevia: {
+        desktop: {
+          rememberCapture: async ({ mode }) => {
+            captured.push(mode);
+            return { lastCaptureMode: mode };
+          },
+        },
+      },
+    },
+    showToast: (message) => assert.fail(message),
+  });
+  assert.deepEqual(captured, expected ? [expected] : []);
+}
 const summaryConst = (decl, multiline = false) => {
   const start = summaryAppSource.indexOf(decl);
   return multiline

@@ -4,7 +4,21 @@ const { randomUUID } = require('node:crypto');
 const { z } = require('zod');
 const { writeAtomicFile } = require('./main-logic');
 
+const shortcutSchema = z
+  .string()
+  .max(100)
+  .refine(
+    (value) =>
+      value === '' ||
+      (/(?:^|\+)(?:Control|Alt|Command|CommandOrControl)\+/.test(value) &&
+        /^(?:(?:Control|Alt|Shift|Command|CommandOrControl)\+)+(?:[A-Z0-9]|F(?:[1-9]|1[0-9]|2[0-4]))$/.test(
+          value,
+        )),
+  );
 const desktopPreferencesSchema = z.object({
+  recordingShortcut: shortcutSchema.default('Alt+CommandOrControl+R'),
+  pauseShortcut: shortcutSchema.default(''),
+  lastCaptureMode: z.enum(['mic', 'system', 'both', 'phone']).default('both'),
   closeBehavior: z.enum(['quit', 'hide']).default('quit'),
   trayVisibility: z.enum(['always', 'background']).default('always'),
   autoCapsule: z.boolean().default(true),
@@ -12,6 +26,7 @@ const desktopPreferencesSchema = z.object({
   capsuleOnTop: z.boolean().default(true),
 });
 const desktopStateSchema = z.object({
+  ready: z.boolean().default(false),
   meetingId: z.string().nullable(),
   title: z.string().max(500),
   phase: z.enum(['idle', 'recording', 'paused', 'saving', 'failed', 'saved']),
@@ -51,6 +66,8 @@ class DesktopController {
     this.expanded = false;
     this.ready = false;
     this.bounds = null;
+    this.shortcuts = new Map();
+    this.savePending = Promise.resolve();
   }
 
   async load() {
@@ -67,18 +84,118 @@ class DesktopController {
     return path.join(this.dataDir(), 'desktop-preferences.json');
   }
 
-  async save(payload) {
-    const next = desktopPreferencesSchema.strict().parse(payload);
-    // 先建立恢复入口；失败时不写入隐藏偏好，也不隐藏窗口。
+  save(payload) {
+    const pending = this.savePending.then(() => this.saveNext(payload));
+    this.savePending = pending.catch(() => {});
+    return pending;
+  }
+
+  async saveNext(payload) {
+    const next = desktopPreferencesSchema.strict().parse({ ...this.preferences, ...payload });
+    if (
+      next.recordingShortcut &&
+      next.pauseShortcut &&
+      this.shortcutName(next.recordingShortcut) === this.shortcutName(next.pauseShortcut)
+    )
+      throw new Error(this.text('两个录音动作不能使用同一快捷键', this.state?.locale));
     if (next.closeBehavior === 'hide') this.ensureTray();
-    await writeAtomicFile(this.file(), JSON.stringify(next));
+    const previous = this.preferences;
+    this.updatingShortcuts =
+      this.shortcutsReady &&
+      ['recordingShortcut', 'pauseShortcut'].some((key) => Object.hasOwn(payload, key));
+    if (this.updatingShortcuts) this.globalShortcut.setSuspended(false);
+    try {
+      // 写入成功前保留旧注册，磁盘失败时无需重新争抢旧按键。
+      if (this.updatingShortcuts) this.registerShortcuts(next, true);
+      await writeAtomicFile(this.file(), JSON.stringify(next));
+      if (this.updatingShortcuts) this.registerShortcuts(next);
+    } catch (error) {
+      if (this.updatingShortcuts) this.registerShortcuts(previous);
+      throw error;
+    } finally {
+      if (this.updatingShortcuts) this.globalShortcut.setSuspended(Boolean(this.shortcutEditing));
+      this.updatingShortcuts = false;
+    }
     this.preferences = next;
     this.sync();
     return next;
   }
 
+  shortcutName(value) {
+    return value
+      .replace('CommandOrControl', process.platform === 'darwin' ? 'Command' : 'Control')
+      .split('+')
+      .sort()
+      .join('+');
+  }
+
+  registerShortcuts(preferences, keepPrevious = false) {
+    const next = new Map();
+    for (const key of ['recordingShortcut', 'pauseShortcut']) {
+      const value = preferences[key];
+      if (!value) continue;
+      const name = this.shortcutName(value);
+      if (next.has(name))
+        throw new Error(this.text('两个录音动作不能使用同一快捷键', this.state?.locale));
+      next.set(name, { value, key });
+    }
+    const added = [];
+    try {
+      for (const [name, binding] of next) {
+        if (this.shortcuts.has(name)) continue;
+        if (!this.globalShortcut.register(binding.value, () => void this.runShortcut(name)))
+          throw new Error(this.text('快捷键不可用，请在设置中更换组合键', this.state?.locale));
+        added.push(binding.value);
+      }
+    } catch (error) {
+      for (const value of added) this.globalShortcut.unregister(value);
+      throw error;
+    }
+    if (!keepPrevious)
+      for (const [name, binding] of this.shortcuts)
+        if (!next.has(name)) this.globalShortcut.unregister(binding.value);
+    this.shortcuts = keepPrevious ? new Map([...this.shortcuts, ...next]) : next;
+  }
+
+  editShortcuts(editing) {
+    clearTimeout(this.shortcutEditTimer);
+    this.shortcutEditing = editing;
+    this.globalShortcut.setSuspended(editing);
+    this.mainWindow?.webContents.setIgnoreMenuShortcuts(editing);
+    if (editing) this.shortcutEditTimer = setTimeout(() => this.editShortcuts(false), 60000);
+  }
+
+  async runShortcut(name) {
+    if (
+      this.shortcutEditing ||
+      this.shortcutBusy ||
+      this.updatingShortcuts ||
+      !this.state?.ready ||
+      Date.now() < (this.shortcutCooldown || 0) ||
+      this.pending.size ||
+      this.state.phase === 'saving'
+    )
+      return;
+    const key = this.shortcuts.get(name)?.key;
+    if (!key) return;
+    const pause = key === 'pauseShortcut';
+    if (pause && (!this.state.canPause || !['recording', 'paused'].includes(this.state.phase)))
+      return;
+    this.shortcutBusy = true;
+    try {
+      await this.action(pause ? 'pause' : this.active() ? 'stop' : 'quick', { background: true });
+    } catch (error) {
+      this.showMain();
+      this.reportError(error);
+    } finally {
+      this.shortcutBusy = false;
+      this.shortcutCooldown = Date.now() + 750;
+    }
+  }
+
   attach(window) {
     this.mainWindow = window;
+    window.on('blur', () => this.editShortcuts(false));
     window.on('minimize', () => this.sync());
     window.on('restore', () => this.sync());
     window.on('show', () => this.sync());
@@ -88,6 +205,7 @@ class DesktopController {
       this.destroy();
     });
     window.webContents.on('render-process-gone', () => {
+      this.editShortcuts(false);
       for (const request of this.pending.values())
         request.reject(
           new Error(this.text('error.desktop.window_unavailable', this.state?.locale)),
@@ -133,6 +251,15 @@ class DesktopController {
       this.expanded = false;
     }
     this.state = state;
+    if (state.ready && !this.shortcutsReady) {
+      this.shortcutsReady = true;
+      try {
+        this.registerShortcuts(this.preferences);
+      } catch (error) {
+        this.showMain();
+        this.reportError(error);
+      }
+    }
     this.sync(menuChanged);
     this.sendState();
   }
@@ -215,17 +342,26 @@ class DesktopController {
             {
               label: t(state.phase === 'paused' ? '继续录音' : '暂停录音'),
               enabled: state.canPause && !busy && state.phase !== 'failed',
+              accelerator: this.preferences.pauseShortcut || undefined,
+              registerAccelerator: false,
               click: run('pause'),
             },
             { label: t('标记重点'), enabled: state.phase === 'recording', click: run('mark') },
             {
               label: t(state.phase === 'failed' ? '重试保存' : '结束并保存'),
               enabled: !busy,
+              accelerator: this.preferences.recordingShortcut || undefined,
+              registerAccelerator: false,
               click: run('stop'),
             },
           ]
         : [
-            { label: t('快速录音'), click: run('quick') },
+            {
+              label: t('快速录音'),
+              accelerator: this.preferences.recordingShortcut || undefined,
+              registerAccelerator: false,
+              click: run('quick'),
+            },
             { label: t('开始录音'), click: run('prepare') },
           ]),
       { type: 'separator' },
@@ -280,6 +416,7 @@ class DesktopController {
     if (!this.mainWindow || this.mainWindow.isDestroyed())
       throw new Error(this.text('error.desktop.window_unavailable', this.state?.locale));
     if (
+      !payload.background &&
       ['return', 'prepare', 'settings', 'quick', 'ai-settings', 'models', 'confirm-quit'].includes(
         action,
       )
@@ -429,6 +566,10 @@ class DesktopController {
     this.sendState();
   }
   destroy() {
+    this.editShortcuts(false);
+    for (const binding of this.shortcuts.values()) this.globalShortcut.unregister(binding.value);
+    this.shortcuts.clear();
+    this.shortcutsReady = false;
     clearTimeout(this.savedTimer);
     this.tray?.destroy();
     this.tray = null;

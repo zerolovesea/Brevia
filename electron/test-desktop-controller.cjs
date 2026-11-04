@@ -13,6 +13,9 @@ class Window extends EventEmitter {
     this.rectangle = { x: 0, y: 0, width: 344, height: 80 };
     this.webContents = new EventEmitter();
     this.webContents.setWindowOpenHandler = () => {};
+    this.webContents.setIgnoreMenuShortcuts = (value) => {
+      this.ignoreMenuShortcuts = value;
+    };
     this.webContents.send = (...args) => {
       this.sent = args;
     };
@@ -78,7 +81,20 @@ class Tray extends EventEmitter {
 (async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'brevia-desktop-'));
   const errors = [];
+  const bindings = new Map();
+  let suspended = false;
   const electron = {
+    globalShortcut: {
+      register(value, callback) {
+        if (value === 'Alt+X' || bindings.has(value)) return false;
+        bindings.set(value, callback);
+        return true;
+      },
+      unregister: (value) => bindings.delete(value),
+      setSuspended: (value) => {
+        suspended = value;
+      },
+    },
     app: { quit() {} },
     BrowserWindow: Window,
     Tray,
@@ -119,6 +135,7 @@ class Tray extends EventEmitter {
     main.visible = true;
     controller.attach(main);
     const state = {
+      ready: true,
       meetingId: 'one',
       title: '第一场',
       phase: 'recording',
@@ -137,6 +154,8 @@ class Tray extends EventEmitter {
     };
     assert.throws(() => desktopStateSchema.parse({ ...state, level: 9 }));
     assert.throws(() => desktopStateSchema.parse({ ...state, captions: Array(81).fill({}) }));
+    controller.update({ ...state, ready: false });
+    assert.equal(bindings.size, 0, '初始化完成前不注册快捷键');
     controller.update(state);
     assert.equal(controller.capsule, undefined, '可见主窗不自动弹胶囊');
     main.minimized = true;
@@ -195,6 +214,102 @@ class Tray extends EventEmitter {
     await assert.rejects(failed, /保存失败/);
     controller.update({ ...state, phase: 'paused' });
     assert.equal(controller.state.phase, 'paused');
+    const defaultKey = controller.preferences.recordingShortcut;
+    assert.equal(bindings.has(defaultKey), true);
+    await assert.rejects(controller.save({ recordingShortcut: 'R' }));
+    await assert.rejects(controller.save({ recordingShortcut: 'Shift+R' }));
+    await assert.rejects(controller.save({ recordingShortcut: 'Alt+X' }), /快捷键不可用/);
+    assert.equal(controller.preferences.recordingShortcut, defaultKey);
+    assert.equal(bindings.has(defaultKey), true, '冲突时保留旧绑定');
+    const alias = defaultKey.replace(
+      'CommandOrControl',
+      process.platform === 'darwin' ? 'Command' : 'Control',
+    );
+    await assert.rejects(controller.save({ pauseShortcut: alias }), /同一快捷键/);
+    await controller.save({ recordingShortcut: 'Alt+R', pauseShortcut: 'Alt+P' });
+    assert.equal(bindings.has(defaultKey), false);
+    assert.equal(bindings.size, 2);
+    const preferenceFile = controller.file;
+    controller.file = () => dir;
+    await assert.rejects(controller.save({ recordingShortcut: 'Alt+T' }));
+    controller.file = preferenceFile;
+    assert.equal(controller.preferences.recordingShortcut, 'Alt+R');
+    assert.equal(bindings.has('Alt+R'), true, '磁盘失败恢复旧快捷键');
+    assert.equal(bindings.has('Alt+T'), false);
+    await Promise.all([
+      controller.save({ lastCaptureMode: 'mic' }),
+      controller.save({ autoCapsule: false }),
+    ]);
+    assert.equal(controller.preferences.lastCaptureMode, 'mic');
+    assert.equal(controller.preferences.autoCapsule, false, '独立偏好并发保存不会互相覆盖');
+    controller.editShortcuts(true);
+    assert.equal(suspended, true);
+    assert.equal(main.ignoreMenuShortcuts, true, '按键编辑不能触发菜单的重新加载或退出');
+    await controller.save({ lastCaptureMode: 'both' });
+    assert.equal(suspended, true, '后台记忆来源不能打断按键编辑');
+    main.emit('blur');
+    assert.equal(suspended, false);
+    assert.equal(main.ignoreMenuShortcuts, false);
+    const recordingName = controller.shortcutName('Alt+R');
+    const pauseName = controller.shortcutName('Alt+P');
+    const invoke = (name) => {
+      controller.shortcutCooldown = 0;
+      return controller.runShortcut(name);
+    };
+    controller.update({ ...state, phase: 'idle', meetingId: null });
+    main.hide();
+    main.focused = false;
+    const starting = invoke(recordingName);
+    assert.equal(main.sent[1].payload.action, 'quick');
+    assert.equal(main.sent[1].payload.background, true);
+    assert.equal(main.isVisible(), false);
+    assert.equal(main.focused, false);
+    const startRequest = main.sent[1].payload.requestId;
+    await invoke(recordingName);
+    assert.equal(controller.pending.size, 1, '启动未确认时连按不重复发送');
+    controller.complete({ requestId: startRequest });
+    await starting;
+    for (const phase of ['recording', 'paused', 'failed']) {
+      controller.update({ ...state, phase });
+      const stopping = invoke(recordingName);
+      assert.equal(main.sent[1].payload.action, 'stop');
+      controller.complete({ requestId: main.sent[1].payload.requestId });
+      await stopping;
+    }
+    controller.update({ ...state, phase: 'saving' });
+    await invoke(recordingName);
+    assert.equal(controller.pending.size, 0, '保存中不重复结束');
+    controller.update({ ...state, phase: 'recording', canPause: false });
+    await invoke(pauseName);
+    assert.equal(controller.pending.size, 0);
+    controller.update(state);
+    const pausing = invoke(pauseName);
+    assert.equal(main.sent[1].payload.action, 'pause');
+    controller.complete({ requestId: main.sent[1].payload.requestId });
+    await pausing;
+    await controller.runShortcut(recordingName);
+    assert.equal(controller.pending.size, 0, '完成后短暂防抖');
+    controller.editShortcuts(true);
+    await invoke(recordingName);
+    assert.equal(controller.pending.size, 0, '编辑中不响应快捷键');
+    controller.editShortcuts(false);
+    const failing = invoke(recordingName);
+    controller.complete({ requestId: main.sent[1].payload.requestId, error: '保存错误' });
+    await failing;
+    assert.equal(main.isVisible(), true, '失败显示恢复入口');
+    assert.equal(errors.pop().message, '保存错误');
+    await controller.save({ recordingShortcut: '', pauseShortcut: '' });
+    assert.equal(bindings.size, 0, '清除后释放注册');
+    const conflict = make();
+    conflict.preferences.recordingShortcut = 'Alt+X';
+    const conflictWindow = new Window();
+    conflict.attach(conflictWindow);
+    conflict.update(state);
+    assert.equal(conflictWindow.isVisible(), true, '启动冲突显示窗口提示');
+    assert.match(errors.pop().message, /快捷键不可用/);
+    assert.equal(conflict.preferences.recordingShortcut, 'Alt+X', '启动冲突不覆盖保存配置');
+    conflict.destroy();
+    await controller.save({ recordingShortcut: 'Alt+R' });
     electron.nativeImage.createFromPath = () => ({ isEmpty: () => true });
     controller.tray?.destroy();
     controller.tray = null;
@@ -206,6 +321,8 @@ class Tray extends EventEmitter {
     );
   } finally {
     controller.destroy();
+    assert.equal(bindings.size, 0);
+    assert.equal(suspended, false);
     await rm(dir, { recursive: true, force: true });
   }
 })().catch((error) => {

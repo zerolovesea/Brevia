@@ -2249,6 +2249,71 @@ try {
     Array.isArray(onboardingFit.result?.value) && onboardingFit.result.value.length === 0,
     `引导页默认满屏及应用入口回归：${JSON.stringify(onboardingFit)}`,
   );
+  const shortcutSettings = await client.send('Runtime.evaluate', {
+    expression: `(async()=>{
+      const errors=[];
+      await showView('settings');
+      const button=()=>document.querySelector('[data-shortcut-control="pauseShortcut"]');
+      const begin=()=>{button().click();document.querySelector('[data-shortcut-capture="pauseShortcut"]').click();};
+      const wait=async(test)=>{const until=Date.now()+3000;while(!test()&&Date.now()<until)await new Promise(r=>setTimeout(r,10));if(!test())errors.push('shortcut operation timed out');};
+      button().scrollIntoView({block:'center'});
+      if(button().getBoundingClientRect().bottom>innerHeight+1) errors.push('shortcut controls unreachable');
+      begin();
+      await wait(()=>desktopShortcutCapture?.timer);
+      document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',code:'Escape',bubbles:true}));
+      await wait(()=>!desktopShortcutCapture);
+      if(desktopPreferences.pauseShortcut!=='') errors.push('cancel changed shortcut');
+      begin();
+      await wait(()=>desktopShortcutCapture?.timer);
+      document.dispatchEvent(new KeyboardEvent('keydown',{key:'R',code:'KeyR',altKey:true,metaKey:window.brevia.platform==='darwin',ctrlKey:window.brevia.platform!=='darwin',bubbles:true}));
+      await wait(()=>!desktopShortcutCapture && !desktopSettingsBusy);
+      if(desktopPreferences.pauseShortcut!=='') errors.push('duplicate overwrote previous shortcut');
+      begin();
+      await wait(()=>desktopShortcutCapture?.timer);
+      document.dispatchEvent(new KeyboardEvent('keydown',{key:'Backspace',code:'Backspace',bubbles:true}));
+      await wait(()=>!desktopShortcutCapture && !desktopSettingsBusy);
+      if((await window.brevia.desktop.preferences()).pauseShortcut!=='') errors.push('clear not persisted');
+      for(const code of ['zh','en','es','ja','ko','fr','de','ru']){
+        applyLanguage(code);
+        if(document.querySelectorAll('[data-shortcut-capture]').length!==2)errors.push(code+': missing shortcut controls');
+        if(code!=='zh' && t('全局快捷键')==='全局快捷键')errors.push(code+': missing shortcut translation');
+      }
+      applyLanguage('zh');
+      toast.classList.remove('visible');
+      button().scrollIntoView({block:'center'});
+      const reference=document.querySelector('[data-flow-select-choice="desktop-closeBehavior"]').closest('section');
+      const referenceControl=reference.querySelector('.flow-select-toggle').getBoundingClientRect();
+      for(const control of document.querySelectorAll('[data-shortcut-control]')){
+        const bounds=control.getBoundingClientRect();
+        if(Math.abs(bounds.width-referenceControl.width)>1 || Math.abs(bounds.height-referenceControl.height)>1)errors.push('shortcut control size differs from settings');
+        if(Math.abs(control.closest('section').getBoundingClientRect().height-reference.getBoundingClientRect().height)>1)errors.push('shortcut row height differs from settings');
+      }
+      if(!document.querySelector('[data-desktop-settings-status]').hidden)errors.push('saved footer should be hidden');
+      if(document.querySelectorAll('[data-shortcut-control="recordingShortcut"] kbd').length!==3)errors.push('shortcut keycaps missing');
+      button().click();
+      const menu=button().parentElement.querySelector('.flow-select-options');
+      if(menu.hidden || menu.getBoundingClientRect().bottom>innerHeight+1)errors.push('shortcut menu clipped');
+      document.querySelector('[data-shortcut-clear="pauseShortcut"]').click();
+      await wait(()=>!desktopSettingsBusy);
+      if(!document.querySelector('[data-desktop-settings-status]').hidden)errors.push('clear left saved footer');
+      button().click();
+      document.querySelector('[data-shortcut-reset="pauseShortcut"]').click();
+      await wait(()=>!desktopSettingsBusy);
+      if((await window.brevia.desktop.preferences()).pauseShortcut!=='')errors.push('reset did not restore default');
+      return errors;
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  check(
+    Array.isArray(shortcutSettings.result?.value) && shortcutSettings.result.value.length === 0,
+    `快捷键设置：取消、冲突、清除、可达性和八语言：${JSON.stringify(shortcutSettings)}`,
+  );
+  const shortcutShot = await client.send('Page.captureScreenshot', { format: 'png' });
+  writeFileSync(
+    path.join(root, '.e2e-tmp', 'recording-shortcuts.png'),
+    Buffer.from(shortcutShot.data, 'base64'),
+  );
   const phonePair = await client.send('Runtime.evaluate', {
     expression: `(async()=>{
       openOnboardingMobile();

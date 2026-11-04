@@ -460,16 +460,61 @@ function renderSettingsView() {
   );
   renderDesktopPreferences();
 }
+function desktopShortcutFromEvent(event) {
+  if (!(event.ctrlKey || event.altKey || event.metaKey)) return '';
+  const key = /^(?:Key[A-Z]|Digit[0-9]|F(?:[1-9]|1[0-9]|2[0-4]))$/.test(event.code)
+    ? event.code.replace(/^(Key|Digit)/, '')
+    : '';
+  if (!key) return '';
+  return [
+    event.ctrlKey && 'Control',
+    event.altKey && 'Alt',
+    event.shiftKey && 'Shift',
+    event.metaKey && 'Command',
+    key,
+  ]
+    .filter(Boolean)
+    .join('+');
+}
+function desktopShortcutLabel(value) {
+  if (!value) return t('未设置');
+  const mac = window.brevia.platform === 'darwin';
+  return value
+    .replace('CommandOrControl', mac ? 'Command' : 'Control')
+    .split('+')
+    .map(
+      (key) =>
+        (mac ? { Alt: '⌥', Command: '⌘', Control: '⌃', Shift: '⇧' } : { Control: 'Ctrl' })[key] ||
+        key,
+    )
+    .join('+');
+}
+function desktopShortcutValue(value) {
+  const label = desktopShortcutLabel(value);
+  return `${
+    value
+      ? `<span class="desktop-shortcut-keys" aria-hidden="true">${label
+          .split('+')
+          .map((key) => `<kbd>${escapeHtml(key)}</kbd>`)
+          .join('')}</span>`
+      : `<span class="desktop-shortcut-empty">${escapeHtml(label)}</span>`
+  }<span class="select-chevron">${interfaceIcon('chevron-down')}</span>`;
+}
 function renderDesktopPreferences() {
   document.querySelector('[data-desktop-settings]')?.remove();
   if (!desktopPreferences || !window.brevia?.desktop) return;
   const status = document.querySelector('[data-desktop-settings-status]');
-  if (status) status.innerHTML = renderSaveState('saved');
+  if (status) {
+    status.hidden = true;
+    status.textContent = '';
+  }
   const tray = t(window.brevia.platform === 'darwin' ? '菜单栏' : '托盘');
   const row = (label, description, control) =>
-    `<section class="settings-card settings-preferences desktop-preference">${interfaceIcon({ 关闭主窗口时: 'window', 菜单栏图标: 'more', 托盘图标: 'more', 最小化时自动显示胶囊: 'capsule' }[label])}<div><h2>${escapeHtml(t(label))}</h2><p>${escapeHtml(description)}</p></div>${control}</section>`;
+    `<section class="settings-card settings-preferences desktop-preference">${interfaceIcon({ 关闭主窗口时: 'window', 菜单栏图标: 'more', 托盘图标: 'more', 最小化时自动显示胶囊: 'capsule', '开始／结束录音': 'microphone', '暂停／继续录音': 'pause' }[label])}<div><h2>${escapeHtml(t(label))}</h2><p>${escapeHtml(description)}</p></div>${control}</section>`;
   const toggle = (key, label) =>
     `<button type="button" class="preference-switch" data-desktop-toggle="${key}" role="switch" aria-checked="${desktopPreferences[key]}" aria-label="${escapeHtml(t(label))}"><i></i></button>`;
+  const shortcut = (key, label) =>
+    `<div class="flow-select desktop-shortcut"><button type="button" class="flow-select-toggle" data-flow-select-toggle data-shortcut-control="${key}" aria-label="${escapeHtml(`${t(label)} · ${desktopShortcutLabel(desktopPreferences[key])}`)}" aria-expanded="false">${desktopShortcutValue(desktopPreferences[key])}</button><div class="flow-select-options" hidden><button type="button" data-shortcut-capture="${key}">${escapeHtml(t('录制快捷键'))}</button><button type="button" data-shortcut-clear="${key}">${escapeHtml(t('清除快捷键'))}</button><button type="button" data-shortcut-reset="${key}">${escapeHtml(t('恢复默认'))}</button></div></div>`;
   const content = `<div data-desktop-settings><h2 class="settings-group">${escapeHtml(t('窗口与后台'))}</h2>${row(
     '关闭主窗口时',
     desktopPreferences.closeBehavior === 'hide'
@@ -486,7 +531,7 @@ function renderDesktopPreferences() {
       ['always', t('始终显示')],
       ['background', t('仅窗口隐藏时')],
     ]),
-  )}<h2 class="settings-group">${escapeHtml(t('桌面录音胶囊'))}</h2>${row('最小化时自动显示胶囊', t('录音或暂停时显示；隐藏胶囊不会停止录音'), toggle('autoCapsule', '最小化时自动显示胶囊'))}</div>`;
+  )}<h2 class="settings-group">${escapeHtml(t('桌面录音胶囊'))}</h2>${row('最小化时自动显示胶囊', t('录音或暂停时显示；隐藏胶囊不会停止录音'), toggle('autoCapsule', '最小化时自动显示胶囊'))}<h2 class="settings-group">${escapeHtml(t('全局快捷键'))}</h2>${row('开始／结束录音', t('沿用最近配置，再次按下结束并保存'), shortcut('recordingShortcut', '开始／结束录音'))}${row('暂停／继续录音', t('仅在当前录音支持暂停时生效'), shortcut('pauseShortcut', '暂停／继续录音'))}</div>`;
   const grid = document.querySelector('#settings-view .settings-grid');
   grid.querySelector('.settings-preferences:last-of-type')?.insertAdjacentHTML('afterend', content);
   if (!grid.querySelector('[data-desktop-settings]')) grid.insertAdjacentHTML('beforeend', content);
