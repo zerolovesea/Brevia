@@ -888,6 +888,9 @@ body:has(#desktop-app.is-library-hidden) .export-modal {
   font-size: 11px;
   z-index: 201;
 }
+body:has(.onboarding-page) #desktop-statusbar {
+  display: none;
+}
 #desktop-statusbar :is(.mobile-sidebar-card, .task-summary, .statusbar-settings) {
   position: relative;
   display: inline-flex;

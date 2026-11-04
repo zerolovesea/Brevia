@@ -2389,6 +2389,7 @@ try {
       const steps=[['language',()=>openOnboardingLanguage('zh')],['permissions',()=>openOnboardingPermissions()],['models',()=>openOnboardingSetup()],['ai',()=>openOnboardingAi()],['phone',()=>openOnboardingMobile()]];
       for(const [name,open] of steps){
         await open();
+        if(document.querySelector('#desktop-statusbar').checkVisibility()) errors.push(name+': status bar visible during onboarding');
         await new Promise(resolve=>setTimeout(resolve,100));
         onboardingPage.getAnimations({subtree:true}).filter(a=>a.effect.getComputedTiming().iterations!==Infinity).forEach(a=>a.finish());
         const pages=1;
@@ -2400,6 +2401,7 @@ try {
           if(!bounds || bounds.bottom>innerHeight+1 || bounds.top<0) errors.push(name+'/'+i+': footer outside viewport');
         }
         await dismissOnboardingPage();
+        if(!document.querySelector('#desktop-statusbar').checkVisibility()) errors.push(name+': status bar not restored after onboarding');
       }
       await showView('settings');
       const voice=document.getElementById('speaker-profiles-entry');
