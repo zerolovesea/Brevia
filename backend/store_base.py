@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS meetings (
   created_at TEXT NOT NULL,
   started_at TEXT,
   meeting_date TEXT,
+  summary_template TEXT,
   ended_at TEXT,
   duration_ms INTEGER NOT NULL DEFAULT 0,
   archived_at TEXT,
@@ -240,6 +241,8 @@ class StoreBase:
         任何中间版本（包括版本号被写高、但列并未真正补上的开发版）恢复到当前结构。
         """
         columns = {row["name"] for row in db.execute("PRAGMA table_info(meetings)")}
+        if "summary_template" not in columns:
+            db.execute("ALTER TABLE meetings ADD COLUMN summary_template TEXT")
         if "meeting_date" not in columns:
             # 历史导入和本地录音没有可靠标识，保留未知日期。
             db.execute("ALTER TABLE meetings ADD COLUMN meeting_date TEXT")

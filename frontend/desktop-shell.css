@@ -877,6 +877,32 @@ body:has(#desktop-app.is-library-hidden) .settings-page {
   font-size: 11px;
   z-index: 201;
 }
+#desktop-statusbar .library-metrics {
+  margin-inline-start: auto;
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  min-width: 0;
+}
+.library-metrics > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.status-version {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 760px) {
+  #desktop-statusbar {
+    gap: 6px;
+  }
+  #desktop-statusbar .library-metrics {
+    gap: 6px;
+  }
+}
 body:has(.onboarding-page) #desktop-statusbar {
   display: none;
 }

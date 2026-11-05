@@ -168,7 +168,6 @@ contextBridge.exposeInMainWorld('brevia', {
     reconfigure: invoke('ai-note.reconfigure'),
   },
   translation: { generate: invoke('translation.generate') },
-  secret: { set: invoke('secret.set') },
   showItem: invoke('shell.showItem'),
   audioUrl: invoke('audio.url'),
   floatingCaption: {

@@ -98,7 +98,7 @@ def evidence_instructions(template, language):
             "只保留有内容的章节。每条实质信息写成一个项目，不重复、不使用表格或空白占位。"
             "每条末尾务必附上支持它的输入段号，格式：- 要点。[[conclusion:S2,S4]]。"
             "结论用 conclusion，明确决定用 decision，待办用 action，明确提到的原因用 cause；"
-            "发言中明确出现因果关系时，用问题作为 Markdown 小标题，在其下单列一条 cause，不要归为普通结论。没有明确原因则省略。不得创造段号，合并时原样传递段号。"
+            "发言中明确出现因果关系时，用问题作为 Markdown 小标题，在其下单列一条 cause，不要归为普通结论。引用的原话必须明确说明该问题及原因。猜测保留发言人的不确定语气；没有明确因果关系则省略，不把先后顺序当作原因。不得创造段号，合并时原样传递段号。"
             "原样保留相对日期及紧随其后的程序标注；原话没有明确日期且没有程序标注时，只保留原话，不得推算日期或为模糊表达设截止日。"
             "仅当发言明确纠正术语时保留“错写 → 正确术语”。"
         )
@@ -109,7 +109,7 @@ def evidence_instructions(template, language):
         "write one Markdown bullet with a source suffix, e.g. '- <claim> [[decision:S1,S3]]'. "
         "Use kinds conclusion, decision, action, cause. Use bullets instead of action tables. "
         "Copy only source IDs actually supporting that claim; never guess IDs. Preserve these "
-        "suffixes when merging partial summaries. When a cause is explicit, write it as a distinct cause bullet under a heading naming the problem. Omit cause analysis if none is stated. "
+        "suffixes when merging partial summaries. When a cause is explicit, write it as a distinct cause bullet under a heading naming the problem. The source must explicitly connect that cause to that problem. Preserve uncertainty and omit inferred causes; chronology alone is insufficient. "
         "Keep the original relative date wording with supplied calendar annotations. Never calculate "
         "dates yourself or turn uncertain phrases into deadlines. Keep explicitly stated terminology "
         "corrections as wrong spelling → correct term. Use the requested output language."

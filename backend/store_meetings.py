@@ -10,7 +10,7 @@ from uuid import uuid4
 
 from .config import SETTINGS, validate_num_speakers
 from .markdown import normalize_summary_markdown
-from .meeting_evidence import confirmed_date, parse_claims, resolve_claims
+from .meeting_evidence import TEMPLATES, confirmed_date, parse_claims, resolve_claims
 from .store_base import synchronized_storage_files, utc_now
 from .store_corrections import _correction_state, _current_segments
 from .transcript import latest_segments
@@ -87,6 +87,9 @@ class MeetingStoreMixin:
         # ``dict.get(key, -1)`` 会返回 None，交给 validate_num_speakers 会报一个
         # 与用户意图不符的「必须是整数」错误。
         num_speakers = payload.get("num_speakers")
+        template = payload.get("summary_template")
+        if template is not None and template not in TEMPLATES:
+            raise ValueError("Unknown meeting template")
         values = (
             meeting_id,
             payload["title"].strip(),
@@ -100,6 +103,7 @@ class MeetingStoreMixin:
             json.dumps(payload.get("tags", []), ensure_ascii=False),
             "recording",
             confirmed_date(payload.get("meeting_date")),
+            template,
             now,
             now,
         )
@@ -123,8 +127,8 @@ class MeetingStoreMixin:
                 db.execute(
                     """INSERT INTO meetings
                         (id,title,language,target_language,refined_model_id,
-                         speaker_segmentation_model_id,vad_model_id,num_speakers,workspace_id,tags,status,meeting_date,created_at,started_at)
-                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                         speaker_segmentation_model_id,vad_model_id,num_speakers,workspace_id,tags,status,meeting_date,summary_template,created_at,started_at)
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                     values,
                 )
         except Exception:

@@ -196,8 +196,10 @@ function render() {
 function setupListener() {
   if (window.brevia?.onFloatingCaptionUpdate) {
     window.brevia.onFloatingCaptionUpdate((data) => {
+      if (data.theme) document.documentElement.style.colorScheme = data.theme;
       if (data.locale) {
         const t = (key) => window.BreviaLocaleData.translate(key, data.locale);
+        captionContainer.dataset.waiting = t('等待语音');
         closeBtn.title = t('关闭');
         closeBtn.setAttribute('aria-label', t('关闭'));
         document.documentElement.lang = data.locale;

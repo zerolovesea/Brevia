@@ -22,6 +22,7 @@ const {
   appendFile,
   copyFile,
   mkdir,
+  open,
   readFile,
   rm,
   stat,
@@ -340,7 +341,9 @@ const workerEvent = z
   })
   .strict();
 const workerMessage = z.union([workerResponse, workerEvent]);
+const summaryTemplate = z.enum(['general', 'weekly', 'interview', 'review']);
 const meetingStart = z.object({
+  summary_template: summaryTemplate.optional(),
   title: z.string().trim().min(1).max(120),
   // 语言由后端按空值兜底成 auto；这里不接受 ''/null，避免两端对同一个语义有两种判断。
   language: z.string().min(2).max(16).optional(),
@@ -390,11 +393,18 @@ const meetingReconfigure = id.extend({
   target_language: z.string().min(2).max(16).nullable().optional(),
   refined_model_id: z.string().min(1).max(128).optional(),
 });
-// 纪要供应商固定为这六项；只有 built-in 在本地运行，因此其余都必须带请求地址。
+// 纪要与笔记共用供应商列表；只有 built-in 在本地运行，因此其余都必须带请求地址。
 const summaryProviderIds = [
   'built-in',
   'claude',
   'openai',
+  'gemini',
+  'deepseek',
+  'qwen',
+  'kimi',
+  'glm',
+  'mistral',
+  'groq',
   'openrouter',
   'custom-openai',
   'custom-claude',
@@ -1135,10 +1145,33 @@ function handleTaskControl(channel, schema) {
   });
 }
 
-async function setSecret(reference, value) {
+async function saveProviderConfig(payload, schema, save) {
+  const config = schema.parse(payload);
+  if (payload.apiKey === undefined) {
+    await save(config);
+    return config;
+  }
+  const apiKey = z.string().min(1).max(512).parse(payload.apiKey);
+  const reference = config.providers[config.provider]?.keyReference;
+  if (config.provider === 'built-in' || !reference)
+    throw new Error('Missing provider key reference');
   const directory = path.join(dataDir(), 'secrets');
   await mkdir(directory, { recursive: true });
-  await writeAtomicFile(path.join(directory, `${reference}.key`), value);
+  const file = path.join(directory, `${reference}.key`);
+  // 其他功能和排队中的任务可能仍在使用旧密钥。
+  const handle = await open(file, 'wx', 0o600);
+  try {
+    try {
+      await handle.writeFile(apiKey);
+    } finally {
+      await handle.close();
+    }
+    await save(config);
+  } catch (error) {
+    await rm(file, { force: true });
+    throw error;
+  }
+  return config;
 }
 
 async function getSecret(reference) {
@@ -1802,30 +1835,19 @@ function registerIpc() {
   handleTaskControl('task.pause', taskControl);
   handleTaskControl('task.resume', taskControl);
   handleTaskControl('task.cancel', taskControl);
-  handleIpc('secret.set', async (_, payload) => {
-    const value = z
-      .object({ reference: z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/), value: z.string().min(1) })
-      .parse(payload);
-    await setSecret(value.reference, value.value);
-    return true;
-  });
   handleIpc('summary.config.get', async () => readSummaryConfig());
-  handleIpc('summary.config.save', async (_, payload) => {
-    const config = summaryConfig.parse(payload);
-    await writeSummaryConfig(config);
-    return config;
-  });
+  handleIpc('summary.config.save', (_, payload) =>
+    saveProviderConfig(payload, summaryConfig, writeSummaryConfig),
+  );
   handleIpc('ai-assist.config.get', async () => readAiAssistConfig());
-  handleIpc('ai-assist.config.save', async (_, payload) => {
-    const config = aiAssistConfig.parse(payload);
-    await writeAiAssistConfig(config);
-    return config;
-  });
+  handleIpc('ai-assist.config.save', (_, payload) =>
+    saveProviderConfig(payload, aiAssistConfig, writeAiAssistConfig),
+  );
   handleIpc('summary.generate', async (_, payload) => {
     const value = id
       .extend({
         ...llmRequest.shape,
-        template: z.enum(['general', 'weekly', 'interview', 'review']).optional(),
+        template: summaryTemplate.optional(),
         language: z.enum(['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']).default('en'),
         consent: z.literal(true),
       })
@@ -1905,7 +1927,7 @@ function registerIpc() {
     return syncMarkdown(
       dataDir(),
       recordingsDir(),
-      () => worker.request('meeting.get', { meeting_id }),
+      () => worker.request('meeting.markdown-note', { meeting_id }),
       mode,
       async (defaultPath) => {
         const result = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), {
@@ -1945,7 +1967,14 @@ function registerIpc() {
       .object({
         meeting_ids: z.array(z.string().uuid()).min(1).max(200),
         format: z.enum(['md', 'txt', 'json', 'srt', 'docx', 'pdf', 'wav']).default('md'),
+        content: z.enum(['notes', 'mynotes', 'transcript', 'audio']).optional(),
         filename_prefix: z.string().max(60).optional(),
+      })
+      .refine(({ content, format }) => {
+        if (!content) return true;
+        if (content === 'audio') return format === 'wav';
+        if (content === 'transcript') return format !== 'wav';
+        return ['md', 'txt', 'docx', 'pdf'].includes(format);
       })
       .parse(payload);
     const destination = await dialog.showOpenDialog({
@@ -1958,7 +1987,7 @@ function registerIpc() {
       try {
         const exported = await prepareExport({
           meeting_id: meetingId,
-          content: value.format === 'wav' ? 'audio' : 'transcript',
+          content: value.content || (value.format === 'wav' ? 'audio' : 'transcript'),
           format: value.format,
           ...(value.filename_prefix ? { filename_prefix: value.filename_prefix } : {}),
         });
@@ -2257,6 +2286,7 @@ function registerIpc() {
     }
 
     if (value.locale !== undefined) floatingCaptionState.locale = value.locale;
+    if (value.theme) floatingCaptionState.theme = value.theme;
 
     sendFloatingCaptionState();
     return true;
@@ -2573,6 +2603,7 @@ const floatingCaptionPayload = z
     finalize: z.boolean().optional(),
     updateFinalized: z.boolean().optional(),
     clearCurrentIfMatch: z.boolean().optional(),
+    theme: z.enum(['light', 'dark']).optional(),
     translationPending: z.boolean().optional(),
     locale: z.string().max(16).optional(),
   })
@@ -2596,6 +2627,7 @@ function sendFloatingCaptionState() {
     pendingTranslation: floatingCaptionState.pendingTranslation,
     translationPending: floatingCaptionState.translationPending,
     locale: floatingCaptionState.locale,
+    theme: floatingCaptionState.theme,
   });
 }
 
@@ -2619,8 +2651,8 @@ function showFloatingCaption() {
     ? screen.getDisplayMatching(mainWindow.getBounds())
     : screen.getPrimaryDisplay();
   const { workArea } = display;
-  const width = Math.min(760, workArea.width - 80);
-  const height = 220;
+  const width = Math.min(660, workArea.width - 32);
+  const height = 156;
 
   // Restore saved position or use default centered position
   const savedBounds =

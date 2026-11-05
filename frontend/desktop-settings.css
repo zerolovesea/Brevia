@@ -516,11 +516,6 @@ body .settings-page {
   margin: 0;
   color: var(--color-text);
 }
-.preference-row.summary-enabled-control input {
-  width: 16px;
-  height: 16px;
-  accent-color: var(--color-text);
-}
 .preferences-tabs.settings-tabs {
   display: flex;
   align-items: center;
@@ -1599,7 +1594,7 @@ body .settings-page .preferences-workspace :is(.modal-action, .secondary) {
   width: auto;
   max-width: none;
 }
-.preferences-workspace .summary-enabled-control input[type="checkbox"] {
+.modal-panel .summary-enabled-control input[type="checkbox"] {
   appearance: none;
   width: 32px;
   min-width: 32px;
@@ -1610,7 +1605,7 @@ body .settings-page .preferences-workspace :is(.modal-action, .secondary) {
   border-radius: 20px;
   background: var(--desktop-input-border);
 }
-.preferences-workspace .summary-enabled-control input[type="checkbox"]::after {
+.modal-panel .summary-enabled-control input[type="checkbox"]::after {
   content: "";
   display: block;
   width: 14px;
@@ -1619,10 +1614,10 @@ body .settings-page .preferences-workspace :is(.modal-action, .secondary) {
   background: white;
   transform: none;
 }
-.preferences-workspace .summary-enabled-control input[type="checkbox"]:checked {
+.modal-panel .summary-enabled-control input[type="checkbox"]:checked {
   background: var(--color-text);
 }
-.preferences-workspace .summary-enabled-control input[type="checkbox"]:checked::after {
+.modal-panel .summary-enabled-control input[type="checkbox"]:checked::after {
   transform: translateX(14px);
 }
 .preferences-choice-options input[type="radio"] {
@@ -2023,6 +2018,10 @@ body .settings-page .preferences-workspace :is(.modal-action, .secondary) {
   border-radius: 50%;
 }
 .pref-capsule-wave {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
   width: 24px;
   height: 24px;
   background: #383836;
@@ -2032,9 +2031,17 @@ body .settings-page .preferences-workspace :is(.modal-action, .secondary) {
   width: 11px;
   height: 11px;
 }
-.pref-capsule-wave .interface-icon {
-  width: 15px;
-  height: 15px;
+.pref-capsule-wave i {
+  width: 2px;
+  height: 5px;
+  border-radius: 2px;
+  background: currentColor;
+}
+.pref-capsule-wave i:nth-child(even) {
+  height: 10px;
+}
+.pref-capsule-wave i:nth-child(3) {
+  height: 14px;
 }
 .pref-capsule-readout {
   display: block;
@@ -2083,31 +2090,81 @@ body .settings-page .preferences-workspace :is(.modal-action, .secondary) {
 .pref-capsule-stop svg rect {
   fill: currentColor;
 }
+@property --capsule-seconds {
+  syntax: "<integer>";
+  inherits: false;
+  initial-value: 36;
+}
 @media (prefers-reduced-motion: no-preference) {
+  body:not(:has(.settings-page:not([hidden])))
+    #settings-view.active
+    .pref-capsule[data-enabled="true"] {
+    .pref-capsule-wave i {
+      animation: pref-meter 720ms ease-in-out infinite alternate;
+    }
+    .pref-capsule-wave i:nth-child(even) {
+      animation-delay: -400ms;
+    }
+    .pref-capsule-wave i:nth-child(3) {
+      animation-delay: -160ms;
+    }
+    .pref-capsule-readout b {
+      animation: pref-seconds 10s steps(10, end) infinite;
+      counter-reset: capsule-seconds var(--capsule-seconds);
+    }
+    .pref-capsule-readout b span {
+      display: none;
+    }
+    .pref-capsule-readout b::after {
+      content: counter(capsule-seconds, decimal-leading-zero);
+    }
+  }
   .ai-example-turn,
-  .ai-example-output,
-  .ai-example-note-actions {
-    animation: ai-example-appear 0.28s var(--motion-ease-out) backwards;
+  .ai-example-note,
+  .ai-example-fact {
+    animation: ai-example-transcript 7s var(--motion-ease-out) infinite backwards;
   }
   .ai-example-turn:nth-of-type(2) {
-    animation-delay: 0.55s;
+    animation-delay: 480ms;
   }
-  .ai-example-output,
-  .ai-example-note-actions {
-    animation-delay: 0.76s;
+  .ai-example-note,
+  .ai-example-fact {
+    animation-delay: 950ms;
   }
-  .ai-settings-example[data-ai-example="summary-model"] .ai-example-output {
-    animation-delay: 1.12s;
+  .ai-example-fact + .ai-example-fact {
+    animation-delay: 1.35s;
+  }
+  [data-ai-example="ai-assist"] .ai-example-turn,
+  [data-ai-example="ai-assist"] .ai-example-note {
+    animation-duration: 4.2s;
+  }
+  .ai-settings-example:focus-within :is(.ai-example-turn, .ai-example-note, .ai-example-fact) {
+    animation: none;
   }
 }
-@keyframes ai-example-appear {
+@keyframes pref-meter {
   from {
-    opacity: 0;
-    transform: translateY(5px);
+    transform: scaleY(0.4);
   }
   to {
+    transform: scaleY(1);
+  }
+}
+@keyframes pref-seconds {
+  to {
+    --capsule-seconds: 46;
+  }
+}
+@keyframes ai-example-transcript {
+  0%,
+  100% {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  7%,
+  91% {
     opacity: 1;
-    transform: translateY(0);
+    transform: none;
   }
 }
 @media (max-width: 760px) {

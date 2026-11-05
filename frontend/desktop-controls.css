@@ -461,7 +461,15 @@ body .workspace-create-popover .ui-dialog-actions {
   padding: 8px 10px;
   border-radius: 8px;
 }
-#home-view .home-meeting:has([data-open-recent]):is(:hover, :focus-within) {
+#home-view button.home-meeting {
+  width: 100%;
+  text-align: start;
+  border: 0;
+  background: transparent;
+  transform: none;
+  cursor: pointer;
+}
+#home-view button.home-meeting:is(:hover, :focus-visible) {
   background: var(--color-navigation);
 }
 #home-view .home-meeting-mark {
@@ -474,7 +482,7 @@ body .workspace-create-popover .ui-dialog-actions {
   background: var(--color-navigation);
   color: var(--color-text-muted);
 }
-#home-view .home-meeting :is([data-open-recent], strong) {
+#home-view .home-meeting strong {
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
@@ -486,12 +494,6 @@ body .workspace-create-popover .ui-dialog-actions {
   font-size: 14px;
   font-weight: 500;
   color: var(--color-text);
-}
-#home-view [data-open-recent]::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 8px;
 }
 #home-view .home-meeting-copy {
   min-width: 0;

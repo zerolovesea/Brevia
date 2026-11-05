@@ -569,6 +569,7 @@ class AiNoteWorkerMixin:
                             "meeting_id": session.meeting_id,
                             "id": duplicate["id"],
                             "evidence": duplicate["evidence"],
+                            "sources": duplicate["sources"],
                         },
                     )
                 continue
@@ -767,6 +768,7 @@ class AiNoteWorkerMixin:
                 "text": suggestion["text"],
                 "importance": suggestion.get("importance", "medium"),
                 "evidence": suggestion["evidence"],
+                "sources": suggestion.get("sources", []),
                 "source_tracked": True,
             },
         )

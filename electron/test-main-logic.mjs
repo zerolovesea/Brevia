@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { createRequire } from 'node:module';
 import { runInNewContext } from 'node:vm';
-import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, open, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { Writable } from 'node:stream';
@@ -463,6 +463,15 @@ assert.equal(await batchExportHandler(null, { meeting_ids: exportIds }), null);
 assert.equal(exportPrepared.length, 3, '取消目录选择不进行导出');
 await assert.rejects(batchExportHandler(null, { meeting_ids: ['invalid'] }));
 await assert.rejects(batchExportHandler(null, { meeting_ids: Array(201).fill(exportIds[0]) }));
+
+exportCanceled = false;
+for (const content of ['mynotes', 'notes']) {
+  await batchExportHandler(null, { meeting_ids: [exportIds[0]], content, format: 'md' });
+  assert.equal(exportPrepared.at(-1).content, content);
+  await assert.rejects(
+    batchExportHandler(null, { meeting_ids: exportIds, content, format: 'json' }),
+  );
+}
 
 const workerEventBlock = mainSource.slice(
   mainSource.indexOf('const workerEvent ='),
@@ -1138,6 +1147,37 @@ for (const [save, load, file, value] of [
   );
   assert.equal((await load()).enabled, true, 'concurrent saves preserve the last requested config');
 }
+// 轮换密钥时必须先获得独立引用，配置落盘失败后仍可重试。
+Object.assign(configContext, { dataDir: () => configDir, path, mkdir, open, rm });
+runInNewContext(
+  `${asyncFn('saveProviderConfig')}
+this.saveCredentials = (payload, save) => saveProviderConfig(payload, summaryConfig, save);`,
+  configContext,
+);
+const secretFile = path.join(configDir, 'secrets', 'summary-1.key');
+const withSecret = { ...storedConfig, apiKey: 'test-key' };
+await assert.rejects(
+  configContext.saveCredentials(withSecret, async () => {
+    throw new Error('disk full');
+  }),
+  /disk full/,
+);
+await assert.rejects(readFile(secretFile), { code: 'ENOENT' });
+const savedOptions = await configContext.saveCredentials(
+  withSecret,
+  configContext.writeSummaryConfig,
+);
+assert.equal(savedOptions.apiKey, undefined);
+assert.equal(JSON.parse(await readFile(configFile, 'utf8')).apiKey, undefined);
+await assert.rejects(
+  configContext.saveCredentials(
+    { ...withSecret, apiKey: 'replacement' },
+    configContext.writeSummaryConfig,
+  ),
+  { code: 'EEXIST' },
+);
+assert.equal(await readFile(secretFile, 'utf8'), 'test-key');
+
 await rm(configDir, { recursive: true, force: true });
 
 // share.open-external 只放行社交网页(https)与邮件(mailto),其余 scheme 一律拒绝,
@@ -1392,15 +1432,15 @@ runInNewContext(
   ),
   ipcContext,
 );
-ipcContext.handleIpc('secret.set', () => 'allowed');
+ipcContext.handleIpc('summary.config.save', () => 'allowed');
 ipcContext.handleIpc('floating-caption.close', () => 'closed');
 const frame = { url: pathToFileURL(path.join(ipcRoot, 'frontend', 'index.html')).href + '?test=1' };
 const event = { senderFrame: frame, sender: { mainFrame: frame } };
-assert.equal(await ipcHandlers.get('secret.set')(event), 'allowed');
+assert.equal(await ipcHandlers.get('summary.config.save')(event), 'allowed');
 frame.url = 'https://example.com';
-assert.ok((await ipcHandlers.get('secret.set')(event)).__brevia_error);
+assert.ok((await ipcHandlers.get('summary.config.save')(event)).__brevia_error);
 frame.url = pathToFileURL(path.join(ipcRoot, 'frontend', 'floating-caption.html')).href;
-assert.ok((await ipcHandlers.get('secret.set')(event)).__brevia_error);
+assert.ok((await ipcHandlers.get('summary.config.save')(event)).__brevia_error);
 assert.equal(await ipcHandlers.get('floating-caption.close')(event), 'closed');
 event.sender.mainFrame = {};
 assert.ok((await ipcHandlers.get('floating-caption.close')(event)).__brevia_error);

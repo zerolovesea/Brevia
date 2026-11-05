@@ -326,11 +326,7 @@ try {
   await client.send('Page.enable');
   await client.send('Page.addScriptToEvaluateOnNewDocument', {
     source: `window.openReviewDocument = (scope) => {
-    document.querySelector('[data-detail-tab="' + (scope === 'transcript' ? 'transcript' : 'notes') + '"]').click();
-    if (scope !== 'transcript') {
-      const select = document.querySelector('[data-notebook-document]');
-      if (select.value !== scope) { select.value = scope; select.dispatchEvent(new Event('change', {bubbles: true})); }
-    }
+    document.querySelector('[role="tab"][data-detail-tab="' + scope + '"]').click();
   }`,
   });
   // 普通动画用例不继承 runner 的无障碍偏好；减少动态效果在下方单独验证。
@@ -1740,7 +1736,7 @@ try {
         closeModal();await new Promise(r=>setTimeout(r,250));
         const initialized=await window.brevia.initialize();
         const meeting=await window.brevia.meeting.get({meeting_id:initialized.meetings[0].id});
-        applyBackendDetail(meeting);detailActiveTab='transcript';uiData.detail.refinedMode='timestamps';renderMeetingDetail();await showView('detail');
+        applyBackendDetail(meeting);uiData.detail.refinedMode='timestamps';renderMeetingDetail();await showView('detail');openReviewDocument('transcript');
         document.querySelector('#detail-view').getAnimations().forEach(animation=>animation.finish());
         const participants=Array.from({length:50},(_,i)=>({id:'participant-'+i,name:i===0?'Alexandria Constantinopoulos '.repeat(3):'Participant <'+i+'> 名称'}));
         for(const code of ['zh','en','es','ja','ko','fr','de','ru'])for(const appearance of ['light','dark']){
@@ -1794,7 +1790,7 @@ try {
       const errors=[],initialized=await window.brevia.initialize();
       const meeting=await window.brevia.meeting.get({meeting_id:initialized.meetings[0].id}),segment=meeting.segments[0];
       const profilesBefore=await window.brevia.speakerProfile.list();
-      applyBackendDetail(meeting);detailActiveTab='transcript';uiData.detail.refinedMode='timestamps';renderMeetingDetail();await showView('detail');
+      applyBackendDetail(meeting);uiData.detail.refinedMode='timestamps';renderMeetingDetail();await showView('detail');openReviewDocument('transcript');
       const source=finalTranscript.querySelector('.segment'),time=playerAudio.currentTime;
       const pending=openSegmentSpeakerPicker(meeting.id,segment.id,source.querySelector('[data-segment-tool="speaker"]'));
       document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));await pending;
@@ -1949,7 +1945,7 @@ try {
     if(!vocabulary.some(t=>t.wrong==='北威亚'&&t.correct==='Brevia'&&!t.post_replace&&!t.hotword))throw Error('search alias was not remembered independently');
 
     meetingActive=false;breviaClient.state.meeting=null;miniMeeting.hidden=true;clearInterval(timer);
-    applyBackendDetail(meeting);detailActiveTab='transcript';uiData.detail.refinedMode='timestamps';renderMeetingDetail();await showView('detail');
+    applyBackendDetail(meeting);uiData.detail.refinedMode='timestamps';renderMeetingDetail();await showView('detail');openReviewDocument('transcript');
     if(!document.querySelector('[data-correction-undo]')||document.querySelector('[data-segment-text]'))throw Error('saved view must have undo and plain text');
   })()`);
   await captureCorrection('03-detail-saved');
@@ -2015,6 +2011,21 @@ try {
   await correctionEvaluate(`(async()=>{
     const meeting=await window.brevia.meeting.get({meeting_id:currentMeetingDetail.id});
     adoptMobileMeeting(meeting);await showView('live');
+    const segment=meeting.segments.at(-1);
+    const citation={segment_id:segment.id,text:segment.text,start_ms:segment.start_ms,end_ms:segment.end_ms,track:segment.track,speaker:segment.speaker_name};
+    const claim={id:'live-citation',type:'decision',text:'核对生成时的决定',sources:[citation]};
+    latestAiSuggestion=claim;renderAiSuggestion();
+    document.querySelector('[data-live-suggestion-sources]').click();
+    let evidence=document.querySelector('[data-live-note-dialog][open]');
+    if(evidence.querySelector('blockquote p').textContent!==citation.text)throw Error('live suggestion source snapshot missing');
+    evidence.querySelector('[data-live-locate]').click();
+    if(document.activeElement!==liveSegments.get(segment.id))throw Error('live source does not focus the matching transcript');
+    setLiveAcceptedClaims([{...claim,sources:[{...citation,text:'生成时的原话快照'}]}]);
+    document.querySelector('[data-live-accepted]').click();
+    evidence=document.querySelector('[data-live-note-dialog][open]');
+    if(evidence.querySelector('[data-live-locate]')||!evidence.textContent.includes('生成时的原话快照'))throw Error('stale source linked to a changed live segment');
+    resetAiNoteSuggestions();
+    if(!document.querySelector('[data-live-accepted]').hidden||document.querySelector('[data-live-note-dialog][open]'))throw Error('stale meeting citation survived reset');
     liveNotesEditor.setMarkdown('北威亚上线，北威亚验收。');
     await openCorrection('北威亚',false,'notes');
     if(CSS.highlights.get('correction-search')?.size!==2)throw Error('live notes original highlight missing');
@@ -2069,6 +2080,9 @@ try {
     await showView('detail');
     openReviewDocument('summary');
     const find = key => document.querySelector('[data-evidence-id="'+key+'"]');
+    const quotes = find(claim.id).closest('.evidence-document');
+    if (!quotes || quotes.open || !document.querySelector('.evidence-notebook > .summary-document .summary-reading-section')?.checkVisibility()) throw Error('summary text and citations are not independently readable');
+    quotes.querySelector('summary').click();
     find(claim.id).querySelector('summary').click();
     if (!find(claim.id).open || !find(claim.id).textContent.includes(claim.original_text) || !find(claim.id).querySelector('blockquote').textContent.includes(source.text)) throw Error('claim lost its original text or quote');
     if (playerAudio.readyState && Math.abs(playerAudio.currentTime-segment.start_ms/1000)>.15) throw Error('claim seek failed');
@@ -2111,8 +2125,8 @@ try {
       if(!find?.checkVisibility()||!edit?.checkVisibility()||root.querySelectorAll('.detail-content-header').length!==1)throw Error(scope+' shared header missing');
       if(root.querySelector('.summary-head')||root.querySelector('.detail-transcript-toolbar'))throw Error(scope+' legacy tool row remains');
       if(document.activeElement?.matches('input,textarea,[contenteditable=true]'))throw Error(scope+' automatic focus');
-      const tabs=[...root.querySelectorAll('[data-detail-tab]')].map(rect);
-      if(tabs.length!==2||tabs.some(tab=>Math.abs(tab.y-tabs[0].y)>1)||tabs.some((tab,index)=>index&&tab.x<tabs[index-1].x+tabs[index-1].width))throw Error(scope+' horizontal tabs missing or overlapping');
+      const tabs=[...root.querySelectorAll('[role=tab]')].map(rect);
+      if(tabs.length!==3||tabs.some(tab=>Math.abs(tab.y-tabs[0].y)>1)||tabs.some((tab,index)=>index&&tab.x<tabs[index-1].x+tabs[index-1].width))throw Error(scope+' horizontal tabs missing or overlapping');
       return {scope,find:rect(find),edit:rect(edit),toolbar:rect(toolbar),panel:rect(root.querySelector('[data-detail-panel="'+scope+'"]'))};
     })()`),
     );
@@ -2210,9 +2224,9 @@ try {
       await showView('home');
       const initialized=await window.brevia.initialize();
       const detail=await window.brevia.meeting.get({meeting_id:initialized.meetings[0].id});
-      applyBackendDetail(detail);detailActiveTab='transcript';
+      applyBackendDetail(detail);
       // 示例只有精修稿；用其真实音频与段落验证带时间戳的呈现和菜单入口。
-      uiData.detail.refinedMode='timestamps';renderMeetingDetail();await showView('detail');
+      uiData.detail.refinedMode='timestamps';renderMeetingDetail();await showView('detail');openReviewDocument('transcript');
       const segment=detail.segments.find(s=>s.end_ms>s.start_ms);
       document.body.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));
       const row=[...finalTranscript.querySelectorAll('article[data-segment-id]')].find(e=>e.dataset.segmentId===segment.id);
@@ -2362,7 +2376,7 @@ try {
       && segmentInfoFor(meeting.id,'mobile-initial')?.text === '初次接管字幕'
       && latestLiveSegmentId === 'mobile-initial';
     const live = activeView === 'live' && meetingActive && document.querySelector('#pause').disabled && !document.querySelector('#end-meeting').disabled;
-    const source = !document.querySelector('.mobile-source-tag') && !document.querySelector('#transcript-scroll .speaker-name') && !document.querySelector('[data-ai-assist-empty]') && document.querySelector('#live-input-label').hidden && document.querySelector('.control-source').getAttribute('aria-label')===t('手机录音');
+    const source = !document.querySelector('.mobile-source-tag') && !document.querySelector('#transcript-scroll .speaker-name') && !document.querySelector('[data-ai-assist-empty]') && !document.querySelector('.control-source') && liveInputLabel()===t('手机录音');
     const unique = uiData.meetings.filter(m => m.id === meeting.id).length === 1;
     await document.querySelector('#mobile-nav').onclick();
     const deviceFromLive = activeView === 'settings' && meetingActive && !miniMeeting.hidden && miniTitle.textContent === meeting.title;
@@ -2936,7 +2950,7 @@ try {
       const content=detail.querySelector('.detail-layout').getBoundingClientRect();
       const player=detail.querySelector('.player').getBoundingClientRect();
       const reading=content.height>100 && player.bottom<=innerHeight+1 && Math.abs(player.left-content.left)<2 && Math.abs(player.right-content.right)<2;
-      const twoTabs=detail.querySelectorAll('[data-detail-tab]').length===2;
+      const threeTabs=detail.querySelectorAll('[role=tab]').length===3 && detailActiveTab==='summary';
       detail.querySelector('[data-detail-tab="transcript"]').click();
       applyBackendDetail({...meeting,transcript_revision:0,original_segments:[{...meeting.segments[0],version:'live',text:'原始稿切换测试'}]});
       detail.querySelector('[data-transcript-version="original"]').click();
@@ -2965,7 +2979,7 @@ try {
       const configReturnsToMeeting=activeView==='detail' && activeModal==='summary-model' && currentMeetingDetail.id===meeting.id;
       closeModal();await new Promise(resolve=>setTimeout(resolve,250));
       summaryConfig.enabled=false;await generateMeetingSummary();
-      const disabledSummary=!detail.querySelector('[data-summary-feedback]').hidden && detail.querySelector('[data-summary-feedback]').textContent.includes(t('会议纪要功能未开启'));
+      const disabledSummary=!detail.querySelector('[data-summary-feedback]').hidden && detail.querySelector('[data-summary-feedback]').textContent.includes(t('内置纪要模型未配置')) && !summaryConfig.enabled;
       detail.querySelector('[data-summary-feedback] [data-settings-modal]').click();
       const disabledConfigOpens=activeView==='detail' && activeModal==='summary-model' && !settingsModal.hidden;
       closeModal();await new Promise(resolve=>setTimeout(resolve,250));
@@ -2992,7 +3006,7 @@ try {
       showRefinementProgress(56,100,'Layout test',meeting.id,'正在识别');
       const minimizedProgress=refinementCard.querySelector('.task-mini-percent').textContent==='56%';
       refinementCard.classList.remove('is-minimized'); refinementCard.hidden=true;
-      return {tabs,independent,levels,modelReturn,speakers,menusVisible,prepareReachable,reading,twoTabs,filtered,searchEmpty,mirrored,searchRestored,summaryVisible,inlineSummaryConfig,configReturnsToMeeting,disabledSummary,disabledConfigOpens,summaryExportDefault,summaryBackVisible,summaryDraftPreserved,rawAvailable,rawUnavailable,minimizedProgress};
+      return {tabs,independent,levels,modelReturn,speakers,menusVisible,prepareReachable,reading,threeTabs,filtered,searchEmpty,mirrored,searchRestored,summaryVisible,inlineSummaryConfig,configReturnsToMeeting,disabledSummary,disabledConfigOpens,summaryExportDefault,summaryBackVisible,summaryDraftPreserved,rawAvailable,rawUnavailable,minimizedProgress};
     })()`,
     awaitPromise: true,
     returnByValue: true,
@@ -3018,8 +3032,8 @@ try {
         samples.push(selectors.map(selector=>{const r=detail.querySelector(selector).getBoundingClientRect();return [r.x,r.y,r.width,r.height];}));
         const nav=detail.querySelector('.detail-document-navigation'),navBounds=nav.getBoundingClientRect(),panelBounds=panel.getBoundingClientRect(),tools=detail.querySelector('.detail-content-toolbar').getBoundingClientRect();
         const tablist=nav.querySelector('[role=tablist]'),tabButtons=[...tablist.querySelectorAll('[data-detail-tab]')];
-        if(tablist.getAttribute('aria-orientation')==='vertical'||tabButtons.length!==2||tabButtons.some(button=>Math.abs(button.getBoundingClientRect().top-tabButtons[0].getBoundingClientRect().top)>1)||navBounds.bottom>tools.top+1||panelBounds.top<tools.bottom-1)errors.push(tab+': horizontal navigation or toolbar overlaps content');
-        if(detail.querySelector('.detail-document-heading')||tablist.querySelector('[aria-selected=true]')?.dataset.detailTab!==(tab==='summary'?'notes':tab))errors.push(tab+': selected document tab incorrect');
+        if(tablist.getAttribute('aria-orientation')==='vertical'||tabButtons.length!==3||tabButtons.some(button=>Math.abs(button.getBoundingClientRect().top-tabButtons[0].getBoundingClientRect().top)>1)||navBounds.bottom>tools.top+1||panelBounds.top<tools.bottom-1)errors.push(tab+': horizontal navigation or toolbar overlaps content');
+        if(detail.querySelector('.detail-document-heading')||tablist.querySelector('[aria-selected=true]')?.dataset.detailTab!==tab)errors.push(tab+': selected document tab incorrect');
         const title=detail.querySelector('h1');
         if(title.title!==title.textContent||getComputedStyle(title).whiteSpace!=='nowrap')errors.push(tab+': compact title loses full-text access');
         if(getComputedStyle(panel).opacity!=='1'||panel.getBoundingClientRect().height<100)errors.push(tab+': empty content region');
@@ -3125,12 +3139,12 @@ try {
         verifyMeter('#mic-level',true);
         breviaClient.state.meeting={...(saved.meeting||currentMeetingDetail),tags:[]};
         breviaClient.state.inputs={mic:true,system:false};
-        meetingActive=true;await showView('live');renderLiveInputStatus();
-        verifyMeter('[data-live-mic-level]',false);
+        meetingActive=true;await showView('live');
+        if(document.querySelector('[data-live-mic-level]'))errors.push('unexpected live meter');
       }finally{
         if(onboardingPage)await dismissOnboardingPage();
         meetingActive=saved.active;breviaClient.state.meeting=saved.meeting;breviaClient.state.inputs=saved.inputs;
-        await showView(saved.view);setPrepareMode(saved.prepare||'record');renderCaptureMode(saved.mode);renderLiveInputStatus();
+        await showView(saved.view);setPrepareMode(saved.prepare||'record');renderCaptureMode(saved.mode);
       }
       openOnboardingAi();
       if(onboardingPage.querySelector('[data-configure-ai-notes]') || onboardingPage.querySelector('.onboarding-privacy-hint')) errors.push('legacy onboarding AI options');
@@ -3258,9 +3272,11 @@ try {
       if(primaryFields.length!==2||primaryFields.some(field=>field.getBoundingClientRect().width<=0)||!prepareForm.querySelector('details.prepare-options [name=meeting-speakers]'))errors.push('record: core fields or expandable options missing');
       const speakerInput=prepareForm.querySelector('[name="meeting-speakers"]');
       const previousSpeakers=speakerInput.value;
+      prepareForm.querySelector('details.prepare-options [data-flow-select-choice="summary-template"][data-value=interview]').click();
       speakerInput.value='4';renderPrepareSelects();setPrepareMode('import');
       if(new FormData(prepareForm).get('meeting-speakers')!=='4' || !prepareForm.querySelector('[data-prepare-processing] [name="meeting-speakers"]')) errors.push('prepare: processing values lost when moving fields');
-      setPrepareMode('record');prepareForm.querySelector('[name="meeting-speakers"]').value=previousSpeakers;renderPrepareSelects();
+      if(new FormData(prepareForm).get('summary-template')!=='interview'||!prepareForm.querySelector('[data-prepare-processing] [name="summary-template"]')) errors.push('prepare: meeting template missing from import');
+      setPrepareMode('record');prepareForm.querySelector('[name="summary-template"]').value='general';prepareForm.querySelector('[name="meeting-speakers"]').value=previousSpeakers;renderPrepareSelects();
       const phoneId='a'.repeat(32),secondPhoneId='c'.repeat(32),oldPhoneId='b'.repeat(32);
       const phones=[{id:phoneId,name:'Phone <test>',connected:true,captureReady:true},{id:secondPhoneId,name:'Pixel 9',connected:true,captureReady:true},{id:oldPhoneId,name:'Old phone',connected:true,captureReady:false}];
       localStorage.setItem('brevia-capture-mode','mic');
@@ -3449,14 +3465,16 @@ try {
           editor.scrollTop=editor.scrollHeight;
           if(Math.abs(toolbar.getBoundingClientRect().top-before)>1)errors.push('format controls scroll with editor');
         }
-        renderLiveInputStatus();
-        if(!studio.querySelector('#live-input-label').hidden||studio.querySelector('.control-source svg')||!studio.querySelector('.control-source').title)errors.push('input source must use a meter with an accessible name');
+
+        if(studio.querySelector('.control-source'))errors.push('unexpected live input source');
         for(const [code,theme] of Object.keys(catalog).map(code=>[code,code==='zh'?'light':'dark'])){
           applyLanguage(code);applyTheme(theme);renderLiveModelControl();
           await new Promise(resolve=>setTimeout(resolve,300));
           const bar=document.querySelector('.live-control-bar'),r=bar.getBoundingClientRect();
           const tools=[...bar.querySelectorAll('.live-caption-controls .icon-button')].filter(button=>button.getBoundingClientRect().width);
           const primary=bar.querySelector('.control-primary').getBoundingClientRect();
+          const secondary=bar.querySelector('.control-secondary').getBoundingClientRect(),style=getComputedStyle(bar);
+          if(style.gridTemplateColumns.split(' ').length!==2||Math.abs(secondary.left-r.left-bar.clientLeft-parseFloat(style.paddingLeft))>1||Math.abs(primary.right-r.right+bar.clientLeft+parseFloat(style.paddingRight))>1||Math.abs(primary.top+primary.height/2-secondary.top-secondary.height/2)>1)errors.push(code+': recording groups must align with both bar edges on one row');
           for(const button of tools){const b=button.getBoundingClientRect();if(b.left<r.left||b.right>primary.left||b.bottom>r.bottom||b.width<32||!button.getAttribute('aria-label')||!button.querySelector('svg'))errors.push(code+': tool bounds/label');}
           if(bar.scrollWidth>bar.clientWidth+1||primary.right>r.right)errors.push(code+': toolbar overflow');
           let footerPosition;
@@ -3770,7 +3788,7 @@ try {
       const topInset=parseFloat(getComputedStyle(editorPanel).paddingTop);
       if(Math.abs(toolbar.getBoundingClientRect().top-tabbar.getBoundingClientRect().bottom-topInset)>2)errors.push('editor duplicated top padding');
       if(first && first.getBoundingClientRect().top-toolbar.getBoundingClientRect().bottom>32)errors.push('editor heading separated from toolbar');
-      if(document.querySelectorAll('[data-detail-tab]').length!==2)errors.push('review navigation changed');
+      if(document.querySelectorAll('.tabbar-tabs [role=tab]').length!==3)errors.push('review navigation changed');
       document.querySelector('[data-notes-cancel]').click();
       for(const code of ['zh','en','es','ja','ko','fr','de','ru']){
         applyLanguage(code);await openModal('export');await document.fonts.ready;
@@ -3992,6 +4010,38 @@ try {
     Array.isArray(taskLayoutChecks.result?.value) && !taskLayoutChecks.result.value.length,
     `任务卡片、真实进度、设置返回与删除取消：${JSON.stringify(taskLayoutChecks)}`,
   );
+
+  // 指针只移动一次；逐帧检查边缘命中与几何，覆盖悬停位移和后台列表刷新。
+  const homeRow = await client.send('Runtime.evaluate', {
+    expression: `(async()=>{
+      const row=document.querySelector('#home-view button.home-meeting');
+      row.scrollIntoView({block:'nearest'});
+      await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+      return row.getBoundingClientRect().toJSON();
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  const homeBounds = homeRow.result.value;
+  for (const y of [homeBounds.bottom - 1, homeBounds.top + homeBounds.height / 2]) {
+    const x = homeBounds.left + homeBounds.width / 2;
+    await client.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
+    const stable = await client.send('Runtime.evaluate', {
+      expression: `(async()=>{
+        const row=document.querySelector('#home-view button.home-meeting');
+        for(let start=performance.now();performance.now()-start<480;){
+          await new Promise(requestAnimationFrame);
+          renderHomeMeetings();
+          const hit=document.elementFromPoint(${x},${y}),r=row.getBoundingClientRect();
+          if(!row.matches(':hover')||hit?.closest('.home-meeting')!==row||Math.abs(r.top-${homeBounds.top})>.5||Math.abs(r.left-${homeBounds.left})>.5)return false;
+        }
+        return true;
+      })()`,
+      awaitPromise: true,
+      returnByValue: true,
+    });
+    check(stable.result?.value === true, '首页会议在静止指针下应持续命中同一行');
+  }
 
   // 显式启用时导出真实 Electron 渲染图，供设计稿对照；默认测试不产生图片。
   const revisedInteractions = await client.send('Runtime.evaluate', {
@@ -4347,7 +4397,7 @@ try {
       ],
       [
         'desktop-live',
-        `(async()=>{closeModal(); await new Promise(resolve=>setTimeout(resolve,250)); meetingActive=true; breviaClient.state.meeting={...breviaClient.state.meeting,tags:[]};breviaClient.state.inputs={mic:true,system:true};renderLiveInputStatus();document.querySelector('#pause').disabled=false;document.querySelector('#pause').innerHTML=interfaceIcon('pause')+'<span>'+t('暂停')+'</span>'; document.querySelector('#live-name').textContent='产品周会'; uiData.live.transcript=[['10:02','我们先回顾一下上周的进展。整体来说，核心功能已经稳定，当前重点是提升会议纪要的准确性和可用性。接下来会重点看真实使用场景。'],['10:04','我们建议优先邀请 3 个有代表性的客户，结合他们的真实会议内容，收集使用反馈和典型问题，再决定后续的扩展节奏。'],['10:06','另外，关于数据存储方式，我们需要向客户解释清楚：录音和文字内容优先保存在本地，在线服务需要明确确认。'],['10:08','本周先完成测试版本，下周开始试点。各负责人同步准备使用指南和反馈入口。']].map(([time,text],i)=>({time,text,speaker:{name:''},translation:i===2?'In addition, regarding the storage method, we need to explain it clearly to customers: prioritize local storage of audio and text.':undefined}));document.querySelector('#transcript-scroll').innerHTML=uiData.live.transcript.map(entry=>renderTranscriptSegment({...entry,showSpeaker:false})).join(''); await showView('live'); liveNotesEditor?.setMarkdown('## 一、试点范围\\n\\n- 先在产品团队与 3 个核心客户中进行试点\\n- 覆盖会议场景：周会、需求评审、客户访谈\\n- 试点周期 4 周，收集使用反馈并评估效果\\n- 重点验证：转写准确性、会议纪要、行动项提取\\n\\n## 二、待办事项\\n\\n- [ ] 优化会议纪要生成效果（负责人：张伟）\\n- [ ] 准备试点使用指南与 FAQ（负责人：李娜）\\n- [ ] 整理客户反馈入口（4 月 28 日）');latestAiSuggestion={id:'visual-suggestion',type:'conclusion',text:'本周先完成测试版本，下周开始小范围试点，随后汇总使用反馈并评估效果。'};aiNoteUserTyping=false;renderAiSuggestion();clearTimeout(aiSuggestionAutoFadeTimer); })()`,
+        `(async()=>{closeModal(); await new Promise(resolve=>setTimeout(resolve,250)); meetingActive=true; breviaClient.state.meeting={...breviaClient.state.meeting,tags:[]};breviaClient.state.inputs={mic:true,system:true};document.querySelector('#pause').disabled=false;document.querySelector('#pause').innerHTML=interfaceIcon('pause')+'<span>'+t('暂停')+'</span>'; document.querySelector('#live-name').textContent='产品周会'; uiData.live.transcript=[['10:02','我们先回顾一下上周的进展。整体来说，核心功能已经稳定，当前重点是提升会议纪要的准确性和可用性。接下来会重点看真实使用场景。'],['10:04','我们建议优先邀请 3 个有代表性的客户，结合他们的真实会议内容，收集使用反馈和典型问题，再决定后续的扩展节奏。'],['10:06','另外，关于数据存储方式，我们需要向客户解释清楚：录音和文字内容优先保存在本地，在线服务需要明确确认。'],['10:08','本周先完成测试版本，下周开始试点。各负责人同步准备使用指南和反馈入口。']].map(([time,text],i)=>({time,text,speaker:{name:''},translation:i===2?'In addition, regarding the storage method, we need to explain it clearly to customers: prioritize local storage of audio and text.':undefined}));document.querySelector('#transcript-scroll').innerHTML=uiData.live.transcript.map(entry=>renderTranscriptSegment({...entry,showSpeaker:false})).join(''); await showView('live'); liveNotesEditor?.setMarkdown('## 一、试点范围\\n\\n- 先在产品团队与 3 个核心客户中进行试点\\n- 覆盖会议场景：周会、需求评审、客户访谈\\n- 试点周期 4 周，收集使用反馈并评估效果\\n- 重点验证：转写准确性、会议纪要、行动项提取\\n\\n## 二、待办事项\\n\\n- [ ] 优化会议纪要生成效果（负责人：张伟）\\n- [ ] 准备试点使用指南与 FAQ（负责人：李娜）\\n- [ ] 整理客户反馈入口（4 月 28 日）');latestAiSuggestion={id:'visual-suggestion',type:'conclusion',text:'本周先完成测试版本，下周开始小范围试点，随后汇总使用反馈并评估效果。'};aiNoteUserTyping=false;renderAiSuggestion();clearTimeout(aiSuggestionAutoFadeTimer); })()`,
       ],
       ['desktop-live-dark', `applyTheme('dark')`],
       [

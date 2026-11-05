@@ -325,9 +325,6 @@ window.detailActiveTab = 'summary';
       renderCapture = createCaptureDemo(stage, shell, template, locale, renderLive);
     if (scene === 'live' || tour) {
       shell.querySelector('#live-name').textContent = meeting;
-      shell.querySelector('#live-input-label').textContent = motionParams.has('capture')
-        ? pick('手机麦克风', 'Phone microphone')
-        : pick('麦克风 + 系统音频', 'Microphone + system audio');
       const notesRoot = shell.querySelector('[data-live-notes-root]');
       notesRoot.replaceChildren(shell.querySelector('[data-ai-suggestion]'));
       liveNotesEditor = createNotesEditor(notesRoot);
@@ -574,7 +571,7 @@ window.detailActiveTab = 'summary';
     const copy = BreviaLocaleData.appCopy.summaryTaskCopy[locale];
     const step = complete ? 4 : seconds < 1.5 ? 1 : seconds < 4.85 ? 2 : 3;
     const percent = Math.round(progress * 100);
-    task.querySelector('.task-card-heading p').textContent = complete ? copy[4] : copy[0];
+    task.querySelector('.task-card-heading p').textContent = complete ? copy[4] : t('会议纪要');
     task.querySelector('strong').innerHTML = renderTaskProgressLabel(copy[step], percent);
     Object.assign(task.dataset, {
       completed: percent,
@@ -841,13 +838,6 @@ window.detailActiveTab = 'summary';
     if (collaboration || now - lastPaint >= 16) {
       renderAt(elapsed);
       lastPaint = now;
-    }
-    const meter = stage.querySelector('[data-live-mic-level]');
-    if (meter) {
-      const speech = 0.5 + 0.5 * Math.sin(elapsed / 1100);
-      const level =
-        0.12 + speech * (0.4 + 0.2 * Math.sin(elapsed / 91) + 0.15 * Math.sin(elapsed / 213));
-      meter.style.setProperty('--level', clamp(level));
     }
     frame = requestAnimationFrame(tick);
   }

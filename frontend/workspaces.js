@@ -335,6 +335,7 @@ function showWorkspaceForm({ assignMeetingId, onCreated, trigger, workspace }) {
         popover.inert = true;
         try {
           await window.brevia.workspace.delete({ workspace_id: workspace.id });
+          scheduleLibraryMetrics();
           closeDialog();
           workspaces = workspaces.filter((w) => w.id !== workspace.id);
           if (activeWorkspaceId === workspace.id) void switchWorkspace('');

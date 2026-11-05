@@ -163,7 +163,6 @@ window.createCaptureDemo = (stage, shell, template, locale, renderLive) => {
         button.classList.toggle('motion-pressed', progress > 0.9);
       }
     }
-    get('#live-input-label').textContent = pick('手机麦克风', 'Phone microphone');
   };
 };
 
@@ -261,12 +260,6 @@ window.createCollaborationScene = async (stage, scene, locale) => {
         : 'ready';
     root.dataset.recording = String(recording);
     root.dataset.returning = String(receiving);
-    const meter = frame.contentDocument.querySelector('[data-live-mic-level]');
-    if (meter)
-      meter.style.setProperty(
-        '--level',
-        recording ? 0.35 + 0.2 * Math.sin(seconds * 5) + 0.1 * Math.sin(seconds * 13) : 0,
-      );
     get('.collab-scan-line').style.transform =
       `translateY(${Math.max(0, Math.min(1, (time - 2100) / 1200)) * 240}px)`;
     const camera = pairing && time >= pairingTimes.camera && !approval;

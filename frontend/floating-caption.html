@@ -11,242 +11,77 @@
     <title>Floating Caption</title>
     <link rel="stylesheet" href="./motion.css" />
     <style>
-      * {
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
-      }
-
-      body {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-        --caption-line: #d6d6d6;
-        font-weight: 500;
-        background: transparent;
-        color: #222222;
-        overflow: hidden;
-        user-select: none;
-        -webkit-user-select: none;
-      }
-
-      .caption-shell { display: flex; flex-direction: column; height: 100vh; position: relative; --caption-size: 20px; }
-      .caption-header { flex:none; display:flex; align-items:center; gap:12px; padding:10px 48px 10px 16px; background:#fafafa; border-bottom:1px solid var(--caption-line); border-radius:12px 12px 0 0; font-size:14px; color:#666; }
-      .caption-header strong { margin-right:auto; font-weight:600; }
-      .caption-header button { border:0; background:transparent; color:inherit; min-width:28px; min-height:28px; font:inherit; cursor:pointer; }
-      .caption-header button[aria-pressed="true"] { color:#222; background:#eaeaea; border-radius:4px; }
-      .caption-header button:focus-visible { outline:none; background:#eaeaea; }
-      .caption-size-value { font-variant-numeric:tabular-nums; }
-
-
-      .caption-container {
-        padding: 16px 20px;
-        border-top: 0;
-        border-radius: 0 0 12px 12px;
-        flex: 1;
-        min-height: 0;
-        position: relative;
-        background: #ffffff;
-
-        border: 1px solid var(--caption-line);
-        border-radius: 0 0 12px 12px;
-        box-shadow: 0 4px 16px rgba(0,0,0,.08);
-        max-height: none;
-        overflow-y: auto;
-        overscroll-behavior: contain;
-        scrollbar-color: rgba(255, 255, 255, 0.48) transparent;
-        transition: background 0.2s ease;
-        cursor: move;
-      }
-
-      .caption-container::-webkit-scrollbar {
-        width: 8px;
-      }
-
-      .caption-container::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.48);
-        border: 2px solid transparent;
-        border-radius: 999px;
-        background-clip: padding-box;
-      }
-
-      .caption-container:hover {
-        background: #fafafa;
-      }
-
-      .caption-controls {
-        position: absolute;
-        top: 14px;
-        right: 12px;
-        z-index: 1;
+      * { box-sizing: border-box; }
+      html { color-scheme: light dark; }
+      body { margin: 0; font: 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: transparent; color: light-dark(#202124, #f5f5f5); }
+      .caption-shell {
+        --caption-size: 20px;
         display: flex;
-        gap: 8px;
-        -webkit-app-region: no-drag;
-        opacity: 1;
-        transition: opacity 0.2s ease;
+        flex-direction: column;
+        height: 100vh;
+        padding: 8px 16px 12px;
+        border: 1px solid light-dark(#dedfe1, #45464a);
+        border-radius: 16px;
+        background: light-dark(#fcfcfd, #232427);
       }
-
-      .caption-shell:hover .caption-controls {
-        opacity: 1;
+      .caption-header, .caption-controls { display: flex; align-items: center; gap: 4px; }
+      .caption-header { justify-content: space-between; cursor: grab; user-select: none; }
+      .caption-header strong { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 600; }
+      .caption-header strong::before { content: ""; width: 6px; height: 6px; background: currentColor; border-radius: 50%; }
+      .caption-controls { color: light-dark(#65666b, #bdbec2); }
+      .caption-controls button {
+        display: grid; place-items: center; width: 28px; height: 26px; padding: 0;
+        border: none; border-radius: 6px; background: transparent; color: inherit; font: inherit; cursor: pointer;
       }
-
-      .close-btn {
-        position: relative;
-        width: 20px;
-        height: 20px;
-        border: none;
-        background: transparent;
-        color: #666666;
-        cursor: pointer;
-        font-size: 0;
-        line-height: 1;
-        display: grid;
-        place-items: center;
-        transition: opacity 0.2s ease;
-        padding: 0;
-      }
-
-      .close-btn:hover {
-        opacity: 0.6;
-      }
-
-      .close-btn::before,
-      .close-btn::after {
-        content: '';
-        position: absolute;
-        width: 12px;
-        height: 1px;
-        background: currentColor;
-      }
-
-      .close-btn::before {
-        transform: rotate(45deg);
-      }
-
-      .close-btn::after {
-        transform: rotate(-45deg);
-      }
-
-      .caption-text {
-        font-size: var(--caption-size);
-        line-height: 1.5;
-        font-weight: 500;
-        color: #222222;
-        text-shadow: none;
-        letter-spacing: -0.035em;
-        word-wrap: break-word;
-        overflow-wrap: break-word;
-        transition: opacity 0.2s ease;
-      }
-
-      .caption-fade {
-        animation: caption-fade 160ms ease-out;
-      }
-
-      .caption-finalized {
-        font-size: var(--caption-size);
-        line-height: 1.4;
-        font-weight: 500;
-        color: #666666;
-        text-shadow: none;
-        word-wrap: break-word;
-        overflow-wrap: break-word;
-        letter-spacing: -0.035em;
-        transition: opacity 0.2s ease;
-      }
-
-      .caption-finalized.hidden {
-        display: none;
-      }
-
-      .caption-translation {
-        font-size: clamp(15px, 1.5vw, 22px);
-        line-height: 1.4;
-        color: #666666;
-        text-shadow: none;
-        margin-top: 8px;
-        margin-bottom: 14px;
-        word-wrap: break-word;
-        overflow-wrap: break-word;
-        transition: opacity 0.2s ease;
-      }
-
-      .caption-translation.hidden {
-        display: none;
-      }
-
-      .caption-translation.dimmed {
-        opacity: 0.5;
-      }
-
-      /* Translation loading dots */
-      .translation-loading {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        height: 1.4em;
-      }
-
-      .translation-loading span {
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-        background: currentColor;
-        opacity: 0.4;
-        animation: translation-dot 1.4s infinite ease-in-out both;
-      }
-
-      .translation-loading span:nth-child(1) { animation-delay: -0.32s; }
-      .translation-loading span:nth-child(2) { animation-delay: -0.16s; }
-      .translation-loading span:nth-child(3) { animation-delay: 0s; }
-
-      @keyframes translation-dot {
-        0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
-        40% { transform: scale(1); opacity: 1; }
-      }
-
-      @keyframes caption-fade {
-        from { opacity: 0.65; }
-        to { opacity: 1; }
-      }
-
-      @media (prefers-color-scheme: dark) {
-        body { --caption-line: #4a4a4a; }
-        body, .caption-text { color: #f2f2f2; }
-        .caption-container, .caption-container:hover { background: #191919; border-color: var(--caption-line); }
-        .caption-translation { color: #b0b0b0; }
-        .close-btn, .caption-finalized { color: #b0b0b0; }
-        .caption-header { background:#151515; border-color:var(--caption-line); color:#b0b0b0; }
-        .caption-header button[aria-pressed="true"] { color:#f2f2f2; background:#333; }
-      }
-      @media (prefers-reduced-motion: reduce) {
-        .caption-fade { animation: none; }
-      }
+      .caption-controls button:is(:hover, [aria-pressed="true"]) { background: light-dark(#eaeaec, #383a3e); color: light-dark(#181819,#fff); }
+      .caption-controls svg { width: 15px; height: 15px; }
+      .caption-size-value { font-size: 11px; font-variant-numeric: tabular-nums; }
+      .caption-controls .close-btn { margin-inline-start: 4px; font-size: 18px; }
+      .caption-container { min-height: 0; flex: 1; overflow-y: auto; scrollbar-width: thin; overflow-wrap: anywhere; padding: 8px 2px 0; cursor: grab; }
+      .caption-container:active, .caption-header:active { cursor: grabbing; }
+      .caption-finalized, .caption-text { font-size: var(--caption-size); line-height: 1.45; }
+      .caption-finalized:not(.hidden) + .caption-text:not(:empty) { margin-top: 5px; }
+      .caption-translation, .caption-container::before { color: light-dark(#62646a, #b7bac1); }
+      .caption-translation { font-size: calc(var(--caption-size) * .86); line-height: 1.4; padding-inline-start: 8px; border-inline-start: 2px solid light-dark(#c6c9cf,#626771); margin-block: 4px; }
+      .caption-container:has(.caption-finalized.hidden):has(.caption-text:empty)::before { content: attr(data-waiting); font-size: var(--caption-size); }
+      .hidden { display: none; }
+      .dimmed { opacity: .6; }
+      .translation-loading { display: inline-flex; gap: 3px; align-items: center; height: 1em; }
+      .translation-loading span { width: 4px; height: 4px; border-radius: 50%; background: currentColor; animation: translation-dot 1.2s ease-in-out infinite alternate; }
+      .translation-loading span:nth-child(2) { animation-delay: -.35s; }
+      .translation-loading span:nth-child(3) { animation-delay: -.7s; }
+      @keyframes translation-dot { from { opacity: .3; } to { opacity: 1; } }
+      .caption-fade { animation: caption-fade 160ms ease-out; }
+      @keyframes caption-fade { from { opacity: 0.65; } to { opacity: 1; } }
+      @media (prefers-reduced-motion: reduce) { .caption-fade, .translation-loading span { animation: none; } }
     </style>
   </head>
   <body>
     <div class="caption-shell">
       <header class="caption-header"
-        ><strong>Brevia · <span data-caption-title>实时字幕</span></strong
-        ><button id="caption-pin" type="button" aria-pressed="true" aria-label="置顶"
-          ><svg
-            viewBox="0 0 24 24"
-            width="20"
-            height="20"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.6"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path d="m16 3 5 5-3 1-4 4 1 4-3 3-4-4-4-4 3-3 4 1 4-4 1-3Z" />
-            <path d="m8 16-5 5" /></svg></button
-        ><button id="caption-smaller" type="button" aria-label="减小字号">A−</button
-        ><span class="caption-size-value">20</span
-        ><button id="caption-larger" type="button" aria-label="增大字号">A+</button></header
-      ><div class="caption-controls">
-        <button class="close-btn" id="close-btn" title="" aria-label="">×</button>
-      </div>
-      <div class="caption-container" id="caption-container">
+        ><strong data-caption-title>实时字幕</strong
+        ><div class="caption-controls"
+          ><button id="caption-pin" type="button" aria-pressed="true" aria-label="置顶"
+            ><svg
+              viewBox="0 0 24 24"
+              width="20"
+              height="20"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="m16 3 5 5-3 1-4 4 1 4-3 3-4-4-4-4 3-3 4 1 4-4 1-3Z" />
+              <path d="m8 16-5 5" /></svg></button
+          ><button id="caption-smaller" type="button" aria-label="减小字号">A−</button
+          ><span class="caption-size-value">20</span
+          ><button id="caption-larger" type="button" aria-label="增大字号">A+</button>
+          <button class="close-btn" id="close-btn" title="" aria-label="">×</button>
+        </div></header
+      >
+      <div class="caption-container" data-waiting="等待语音" id="caption-container">
         <div class="caption-finalized hidden" id="caption-finalized"></div>
         <div class="caption-text" id="caption-text"></div>
         <div class="caption-translation hidden" id="caption-translation"></div>

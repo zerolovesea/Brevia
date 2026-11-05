@@ -1787,37 +1787,14 @@
   }
   .live-control-bar {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) auto;
   }
-  .control-source,
   .control-primary,
   .control-secondary,
   .player-actions {
     display: flex;
     align-items: center;
     gap: 10px;
-  }
-  .control-source {
-    min-width: 0;
-    flex: 1;
-    color: var(--color-text-muted);
-    font-size: 12px;
-    white-space: nowrap;
-  }
-  .control-source svg {
-    width: 20px;
-    height: 20px;
-    flex: none;
-  }
-  .control-source .input-meter {
-    flex: none;
-  }
-  .live-control-bar:has(#pause[data-paused="true"]) .input-meter {
-    opacity: 0.35;
-  }
-  .control-source span {
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
   .control-primary {
     justify-content: center;
@@ -3639,7 +3616,6 @@
     grid-template-columns: 1fr;
     justify-items: stretch;
   }
-  .control-source,
   .control-primary,
   .control-secondary {
     justify-content: center;

@@ -239,6 +239,7 @@ class WorkerCore:
                 "task.resume": self.resume_task,
                 "task.cancel": self.cancel_task,
                 "meeting.export": self.export,
+                "meeting.markdown-note": self.markdown_note,
                 "meeting.bundle": self.bundle,
                 "meeting.bundle-files": self.bundle_files,
                 "meeting.refinement-recover": self.recover_refinement,

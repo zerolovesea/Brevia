@@ -49,7 +49,6 @@
   document.querySelector('#desktop-home').innerHTML = scenarios.setupHomeUI();
   const desktop = document.querySelector('#desktop-live');
   desktop.innerHTML = scenarios.setupLiveUI(title);
-  desktop.querySelector('#live-input-label').textContent = pick('手机音频', 'Phone audio');
   desktop.querySelector('.recording').innerHTML = `<i></i>${pick('手机录音中', 'Phone recording')}`;
   desktop.querySelector('[data-demo-id="timer"]').textContent = '00:00:12';
   document.querySelector('.meeting-name').textContent = title;

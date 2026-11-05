@@ -11,7 +11,131 @@ from .transcript import clock, latest_segments, srt_time
 from .worker_common import managed_task, require
 
 
+CAUSE_LABELS = {
+    "zh": ("原因分析", "缺少原文依据", "原文已变化", "依据较少", "与当前笔记待核对"),
+    "en": (
+        "Cause analysis",
+        "No source cited",
+        "Transcript changed",
+        "Limited evidence",
+        "Check against edited notes",
+    ),
+    "es": (
+        "Análisis de causas",
+        "Sin cita original",
+        "La transcripción ha cambiado",
+        "Poco respaldo",
+        "Contrastar con las notas editadas",
+    ),
+    "ja": ("原因分析", "出典なし", "原文変更あり", "根拠が少ない", "編集後のメモと要照合"),
+    "ko": ("원인 분석", "인용 없음", "원문 변경됨", "근거 부족", "수정된 노트와 대조 필요"),
+    "fr": (
+        "Analyse des causes",
+        "Aucune source citée",
+        "Transcription modifiée",
+        "Peu de sources",
+        "À comparer aux notes modifiées",
+    ),
+    "de": (
+        "Ursachenanalyse",
+        "Kein Beleg",
+        "Transkript geändert",
+        "Wenig Belegtext",
+        "Mit bearbeiteten Notizen abgleichen",
+    ),
+    "ru": (
+        "Анализ причин",
+        "Нет источника",
+        "Текст изменился",
+        "Мало подтверждений",
+        "Сверить с изменёнными заметками",
+    ),
+}
+
+
+def mermaid_label(text):
+    # 引号与实体前缀来自用户输入，不能结束节点或插入 Mermaid 指令。
+    return re.sub(r'["`#&<>%]', lambda m: f"#{ord(m[0])};", " ".join(text.splitlines()))
+
+
+def cause_appendix(meeting, body, *, markdown):
+    """从同一份纪要快照输出可编辑分支；只引用生成时的原话，标出失去对应关系的旧分支。"""
+    summary = (meeting.get("summary") or {}).get("data") or {}
+    groups = {}
+    for claim in summary.get("claims", []):
+        if claim["kind"] == "cause":
+            groups.setdefault(claim["section"], []).append(claim)
+    marker = f"%% Brevia cause tree {meeting['id']}"
+    if not groups or marker in body.splitlines():
+        return ""
+    title, missing, changed, thin, detached = CAUSE_LABELS.get(
+        summary.get("language") or meeting.get("example_locale") or meeting.get("language"),
+        CAUSE_LABELS["en"],
+    )
+    statuses = {"missing": missing, "changed": changed, "thin": thin}
+    lines = [f"## {title}", "", "```mermaid", "flowchart LR", marker] if markdown else [title]
+    quotes = []
+    number = 0
+    for group, (section, claims) in enumerate(groups.items()):
+        section = section or title
+        lines.append(f'    p{group}["{mermaid_label(section)}"]' if markdown else section)
+        for index, claim in enumerate(claims):
+            number += 1
+            label = f"{number}. {claim['text']}"
+            status = statuses.get(claim.get("status"))
+            if status:
+                label += f" · {status}"
+            if claim.get("detached"):
+                label += f" · {detached}"
+            if markdown:
+                lines.append(f'    p{group} --- c{number}["{mermaid_label(label)}"]')
+            else:
+                arm = "└──" if index == len(claims) - 1 else "├──"
+                lines.append(f"{arm} {label}")
+            for src in claim["sources"]:
+                stamp = ""
+                if src.get("seekable", True):
+                    stamp = f"{clock(src['start_ms'])}–{clock(src['end_ms'])} · "
+                quote = " ".join(f"{src['speaker']} · {src['text']}".splitlines())
+                if markdown:
+                    # 原话作为文字引用，避免转写中的链接或图片被外部笔记软件执行。
+                    quote = re.sub(r"([\\`*_{}\[\]<>~&])", r"\\\1", quote)
+                    quotes.append(f"> **{number}** · {stamp}{quote}")
+                else:
+                    lines.append(f"    {stamp}{quote}")
+    if markdown:
+        lines.append("```")
+        for quote in quotes:
+            lines.extend(["", quote])
+    return "\n".join(lines)
+
+
+def note_body(meeting, content_type):
+    if content_type == "mynotes":
+        content = meeting.get("notes") or ""
+        if not content.strip():
+            raise ValueError("会议中没有记录笔记。")
+        return content
+    summary = (meeting.get("summary") or {}).get("data")
+    if not summary:
+        raise ValueError("Generate meeting notes before exporting them")
+    if not summary.get("markdown"):
+        raise ValueError("Meeting notes must be regenerated as Markdown")
+    return summary["markdown"]
+
+
 class ExportWorkerMixin:
+    def markdown_note(self, payload):
+        meeting = self.store.get_meeting(payload["meeting_id"], compact=True)
+        content = note_body(meeting, "notes")
+        appendix = cause_appendix(meeting, content, markdown=True)
+        return {
+            "id": meeting["id"],
+            "title": meeting["title"],
+            "deleted_at": meeting["deleted_at"],
+            "markdown": content + ("\n\n" + appendix if appendix else ""),
+        }
+
     @managed_task("meeting.export", concurrent=True)
     def export(self, payload, control=None):
         """导出逐字稿、纪要或录音。
@@ -52,6 +176,7 @@ class ExportWorkerMixin:
         segments = [
             {**item, "translation": None} if item["id"] in stale else item for item in segments
         ]
+        appendix = ""
         if export_format == "json":
             content = json.dumps(
                 {**meeting, "segments": segments, "current_segments": segments},
@@ -64,17 +189,11 @@ class ExportWorkerMixin:
                 f"{item['speaker_name']}: {item['text']}"
                 for index, item in enumerate(segments, 1)
             )
-        elif content_type == "mynotes":
-            content = meeting.get("notes") or ""
-            if not content.strip():
-                raise ValueError("会议中没有记录笔记。")
-        elif content_type == "notes":
-            summary = meeting.get("summary", {}).get("data") if meeting.get("summary") else None
-            if not summary:
-                raise ValueError("Generate meeting notes before exporting them")
-            content = summary.get("markdown")
-            if not content:
-                raise ValueError("Meeting notes must be regenerated as Markdown")
+        elif content_type in {"mynotes", "notes"}:
+            content = note_body(meeting, content_type)
+            appendix = cause_appendix(meeting, content, markdown=export_format == "md")
+            if appendix and export_format != "pdf":
+                content += "\n\n" + appendix
         else:
             lines = [
                 f"[{clock(item['start_ms'])}] {item['speaker_name']}: {item['text']}"
@@ -97,6 +216,7 @@ class ExportWorkerMixin:
                     stem,
                     content,
                     markdown=content_type in {"notes", "mynotes"},
+                    appendix=appendix,
                 )
             else:
                 path.write_text(content, encoding="utf-8")
@@ -277,7 +397,7 @@ class ExportWorkerMixin:
         return destination
 
     @staticmethod
-    def _write_print_html(directory, title, content, markdown=False):
+    def _write_print_html(directory, title, content, markdown=False, appendix=""):
         """创建 Unicode 安全的 HTML，供 Electron 跨平台 PDF 渲染器使用。"""
         destination = directory / f"{title}.print.html"
         body = (
@@ -285,6 +405,9 @@ class ExportWorkerMixin:
             if markdown
             else f"<pre>{escape(content)}</pre>"
         )
+        if appendix:
+            heading, tree = appendix.split("\n", 1)
+            body += f"<h2>{escape(heading)}</h2><pre>{escape(tree)}</pre>"
         destination.write_text(
             "<!doctype html><meta charset='utf-8'><style>"
             "@page{margin:64px 44px 48px}"

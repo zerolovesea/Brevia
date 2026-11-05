@@ -851,8 +851,7 @@ try {
     uiData.detail.summary.markdown='## 会议摘要\n\n本次会议确认下一版本的体验优化范围：先缩短开录流程，再改善字幕阅读和处理状态。\n\n## 已确认决定\n\n- 提供快速录音入口，沿用有效的上次设置。\n- 历史字幕保持稳定，新内容在尾部更新。\n\n## 下一步\n\n| 任务 | 负责人 | 截止时间 |\n| --- | --- | --- |\n| 交付体验优化稿 | 设计 | 周四 |\n| 完成快速录音联调 | 开发 | 周五 |\n\n## 详细讨论\n\n录音入口、字幕排版与恢复策略。';
     renderMeetingDetail();await showView('detail');
   })()`);
-  assert.equal(await evaluate(`document.querySelectorAll('.summary-reading-section').length`), 3);
-  assert.equal(await evaluate(`document.querySelector('.summary-discussion').open`), false);
+  assert.equal(await evaluate(`document.querySelectorAll('.summary-reading-section').length`), 4);
   await capture('12-meeting-summary');
   await evaluate(
     `uiData.detail.summary.markdown='';uiData.detail.summary.waitingModels=true;renderMeetingDetail();`,

@@ -289,7 +289,7 @@ function syncMarkdown(root, recordings, getMeeting, mode, pickDirectory) {
   return serializeMarkdown(async () => {
     const meeting = await getMeeting();
     if (meeting.deleted_at) throw new Error('Meeting was deleted');
-    const markdown = meeting.summary?.data?.markdown;
+    const markdown = meeting.markdown;
     if (!markdown?.trim()) throw new Error('No saved Markdown summary');
     const previous = await markdownTarget(root, recordings, meeting.id);
     let directory = previous.path ? path.dirname(previous.path) : previous.directory;

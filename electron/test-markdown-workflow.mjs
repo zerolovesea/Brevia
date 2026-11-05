@@ -25,7 +25,7 @@ try {
   const meeting = {
     id: randomUUID(),
     title: 'Planning',
-    summary: { data: { markdown: 'First draft' } },
+    markdown: 'First draft',
   };
   const recordings = path.join(root, 'recordings');
   await mkdir(path.join(recordings, meeting.id), { recursive: true });
@@ -53,12 +53,19 @@ try {
     ('\uFEFF---\ntags: [team]\n---\n' + note + '\nMy follow-up\n').replace(/\n/g, '\r\n'),
   );
   meeting.title = 'Renamed';
-  meeting.summary.data.markdown = 'Updated minutes\nSecond point';
+  meeting.markdown = 'Updated minutes\nSecond point';
   assert.equal((await sync()).path, file);
   const saved = await readFile(file, 'utf8');
   assert.ok(saved.startsWith('\uFEFF---\r\ntags: [team]\r\n---\r\n'));
   assert.ok(saved.includes('Updated minutes\r\nSecond point'));
   assert.ok(saved.endsWith('My follow-up\r\n'));
+  meeting.markdown += '\n\n```mermaid\nflowchart LR\n p0 --- c1["Updated branch"]\n```';
+  await sync();
+  await sync();
+  const withTree = await readFile(file, 'utf8');
+  assert.equal(withTree.match(/```mermaid/g).length, 1);
+  assert.ok(withTree.includes('Updated branch'));
+  assert.ok(withTree.endsWith('My follow-up\r\n'));
   assert.equal((await markdownTarget(root, recordings, meeting.id)).path, file);
   assert.deepEqual(
     (await Promise.all([sync(), sync()])).map((r) => r.status),
@@ -66,14 +73,14 @@ try {
   );
   // 模拟 Obsidian 在 Brevia 原子发布后，才通过先前打开的文件描述符落盘。
   const editor = await open(file, 'a');
-  meeting.summary.data.markdown = 'Second edition';
+  meeting.markdown = 'Second edition';
   assert.equal((await sync()).status, 'saved');
   // A → B → A 再到 C，重复内容也可能属于不同的已打开文件。
   const secondEditor = await open(file, 'a');
-  meeting.summary.data.markdown = 'Updated minutes\nSecond point';
+  meeting.markdown = 'Updated minutes\nSecond point';
   assert.equal((await sync()).status, 'saved');
   const thirdEditor = await open(file, 'a');
-  meeting.summary.data.markdown = 'Third edition';
+  meeting.markdown = 'Third edition';
   assert.equal((await sync()).status, 'saved');
   for (const handle of [editor, secondEditor, thirdEditor])
     assert.ok((await handle.stat()).nlink > 0);
@@ -98,14 +105,14 @@ try {
     assert.ok((await readFile(changed.recoveryPath, 'utf8')).endsWith(line));
   }
   for (const markdown of ['Third edition', 'Fourth edition']) {
-    meeting.summary.data.markdown = markdown;
+    meeting.markdown = markdown;
     assert.equal((await sync()).status, 'saved');
   }
   const sameLengthEditor = await open(file, 'r+');
   const originalBytes = await readFile(file);
   const position = originalBytes.indexOf('My follow-up');
   assert.ok(position >= 0);
-  meeting.summary.data.markdown = 'Fifth edition';
+  meeting.markdown = 'Fifth edition';
   assert.equal((await sync()).status, 'saved');
   assert.equal((await sync()).status, 'saved');
   await sameLengthEditor.write(Buffer.from('My own notes'), 0, 12, position);

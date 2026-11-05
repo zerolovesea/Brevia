@@ -910,13 +910,21 @@ class WorkerTest(unittest.TestCase):
                 }
             )
         self.worker.store.save_summary(meeting["id"], {"markdown": "summary"}, "summary")
+        with self.worker.store.connect() as db:
+            db.execute("UPDATE meetings SET duration_ms=71234 WHERE id=?", (meeting["id"],))
+        self.worker.store.seed_examples()
         metrics = self.worker.store.metrics()
         self.assertEqual(
             (metrics["subtitle_count"], metrics["subtitle_lines"], metrics["summary_count"]),
             (1, 2, 1),
         )
+        self.assertEqual(metrics["meeting_count"], 1)
+        self.assertEqual(metrics["meeting_duration_ms"], 71234)
+        self.assertEqual(metrics["subtitle_characters"], len("line one\nline two"))
+        self.assertEqual(metrics["summary_characters"], len("summary"))
         self.worker.store.soft_delete(meeting["id"])
         metrics = self.worker.store.metrics()
+        self.assertEqual(metrics["meeting_count"], 0)
         self.assertEqual((metrics["subtitle_count"], metrics["summary_count"]), (0, 0))
 
     def test_recording_and_export_reject_symlink_destinations(self):
@@ -2530,6 +2538,7 @@ class WorkerTest(unittest.TestCase):
                 "language": "zh",
                 "refined_model_id": "test",
                 "meeting_date": "2026-11-05",
+                "summary_template": "review",
             }
         )
         meeting_id = meeting["id"]
@@ -2554,12 +2563,13 @@ class WorkerTest(unittest.TestCase):
                 "provider": "openai",
                 "endpoint": "https://example.test",
                 "model": "test",
-                "template": "review",
                 "consent": True,
             }
         )
         self.assertIn("下周五（11 月 13 日）", prompts[0])
         self.assertIn("Required revisions", prompts[0])
+        self.assertEqual(result["template"], "review")
+        self.assertEqual(result["language"], "en")
         cause, action = result["claims"]
         self.assertEqual(
             (cause["kind"], cause["section"], cause["status"]), ("cause", "回滚", "supported")
@@ -2667,6 +2677,25 @@ class WorkerTest(unittest.TestCase):
         )
         item = self.worker._analyze_realtime(session, 0)[0]
         self.assertEqual((item["evidence"], item["sources"]), ([], []))
+
+        session.recent_segments = [snapshot(row)]
+        self.worker._ai_note_complete = lambda *_: (
+            '{"type":"action","text":"Prepare the Friday demo agenda","evidence":["00:01"]}'
+        )
+        item = self.worker._analyze_realtime(session, 0)[0]
+        self.worker._emit_suggestion(session, item)
+        emitted = self.events[-1]["payload"]
+        self.assertEqual(emitted["sources"], [snapshot(row)])
+        refined = {**row, "segment_id": "later", "start_ms": 9000, "end_ms": 13000}
+        session.recent_segments.append(snapshot(refined))
+        self.worker._ai_note_complete = lambda *_: (
+            '{"type":"action","text":"Prepare the Friday demo agenda","evidence":["00:09"]}'
+        )
+        self.assertEqual(self.worker._analyze_realtime(session, 0), [])
+        merged = self.events[-1]
+        self.assertEqual(merged["type"], "ai-note.evidence")
+        self.assertEqual(merged["payload"]["id"], emitted["id"])
+        self.assertEqual(merged["payload"]["sources"], [snapshot(row), snapshot(refined)])
 
     def test_late_generation_and_stale_whole_document_edit_preserve_newer_summary(self):
         store = self.worker.store
@@ -3395,6 +3424,85 @@ class WorkerTest(unittest.TestCase):
         self.assertNotIn("print-brand", printed)
         self.assertIn("<h2>行动项</h2>", printed)
         self.assertNotIn("## **行动项**", printed)
+
+    def test_note_exports_include_edited_cause_tree_and_original_quotes(self):
+        from .meeting_evidence import parse_claims
+
+        store = self.worker.store
+        meeting = store.create_meeting(
+            {"title": "Review", "language": "zh", "refined_model_id": "test"}
+        )
+        mid = meeting["id"]
+        raw = '## Delay\n- Slow builds [[cause:S1]]\n- Another cause [[cause:S2]]\n- Unverified [[cause:S9]]'
+        segment = {
+            "id": "s1",
+            "start_ms": 62000,
+            "end_ms": 68000,
+            "speaker": "Ada",
+            "text": "The build took too long.",
+        }
+        untimed = {**segment, "id": "s2", "text": "No reliable timestamp."}
+        markdown, claims = parse_claims(raw, [segment, untimed], True)
+        claims[1]["sources"][0]["seekable"] = False
+        store.save_summary(mid, {"markdown": markdown, "claims": claims, "language": "en"}, raw)
+        personal = "My own *notes*\n\n```mermaid\nflowchart LR\nA --> B\n```"
+        store.update_meeting(mid, {"notes": personal})
+        self.worker.save_summary(
+            {
+                "meeting_id": mid,
+                "claim_id": claims[0]["id"],
+                "expected_text": "Slow builds",
+                "text": 'Build "A" & `B`',
+            }
+        )
+        paths = {}
+        for doc in ("mynotes", "notes"):
+            for fmt in ("md", "txt", "docx", "pdf"):
+                exported = self.worker.export({"meeting_id": mid, "content": doc, "format": fmt})
+                path = Path(exported["path"])
+                if fmt == "docx":
+                    with zipfile.ZipFile(path) as archive:
+                        text = archive.read("word/document.xml").decode()
+                else:
+                    text = path.read_text(encoding="utf-8")
+                self.assertIn("01:02–01:08 · Ada · The build took too long.", text)
+                self.assertNotIn("01:02–01:08 · Ada · No reliable timestamp.", text)
+                self.assertIn("No source cited", text)
+                if fmt == "md":
+                    self.assertIn('p0 --- c1["1. Build #34;A#34; #38; #96;B#96;', text)
+                    self.assertIn("Transcript changed", text)
+                    self.assertEqual(text.count("%% Brevia cause tree"), 1)
+                    if doc == "mynotes":
+                        self.assertTrue(text.startswith(personal + "\n\n"))
+                    paths[doc] = path
+                else:
+                    self.assertIn("└── 3. Unverified", text)
+
+        note = self.worker.handle(
+            {"id": "sync", "type": "meeting.markdown-note", "payload": {"meeting_id": mid}}
+        )
+        self.assertEqual(note["markdown"], paths["notes"].read_text(encoding="utf-8"))
+        zipped = self.worker.bundle_files(
+            {
+                "meeting_id": mid,
+                "files": [{"name": path.name, "path": str(path)} for path in paths.values()],
+            }
+        )
+        with zipfile.ZipFile(zipped["path"]) as archive:
+            for path in paths.values():
+                self.assertEqual(archive.read(path.name), path.read_bytes())
+        pasted = paths["mynotes"].read_text(encoding="utf-8").replace("p0 --- c1", "p0 -.-> c1")
+        store.update_meeting(mid, {"notes": pasted})
+        exported = self.worker.export({"meeting_id": mid, "content": "mynotes", "format": "md"})
+        self.assertEqual(Path(exported["path"]).read_text(encoding="utf-8"), pasted)
+        self.worker.save_summary({"meeting_id": mid, "markdown": "# Rewritten"})
+        revised = self.worker.markdown_note({"meeting_id": mid})["markdown"]
+        self.assertTrue(revised.startswith("# Rewritten"))
+        self.assertIn("Check against edited notes", revised)
+        store.save_summary(mid, {"markdown": "# Legacy note"}, "")
+        self.assertEqual(
+            self.worker.markdown_note({"meeting_id": mid})["markdown"], "# Legacy note"
+        )
 
     def test_summary_repairs_joined_markdown_without_rewriting_storage(self):
         from .markdown import normalize_summary_markdown

@@ -138,12 +138,14 @@ function renderClaimGroups(claims, accepted = false) {
     .join('');
 }
 function renderEvidenceNotebook(claims, markdown) {
-  const detached = claims.some((claim) => claim.detached);
-  const document = renderSummaryDocument(markdown);
-  const groups = renderClaimGroups(claims);
-  return detached
-    ? `<div class="evidence-notebook">${document}<details class="evidence-document"><summary>${interfaceIcon('notebook')}${escapeHtml(t('生成时的结论'))}${interfaceIcon('chevron-down')}</summary>${groups}</details></div>`
-    : `<div class="evidence-notebook">${groups}<details class="evidence-document"><summary>${interfaceIcon('document')}${escapeHtml(t('纪要全文'))}${interfaceIcon('chevron-down')}</summary>${document}</details></div>`;
+  const causes = claims.filter((claim) => claim.kind === 'cause' && !claim.detached);
+  const references = claims.filter((claim) => claim.kind !== 'cause' && !claim.detached);
+  const history = claims.filter((claim) => claim.detached);
+  const disclosure = (items, label) =>
+    items.length
+      ? `<details class="evidence-document"><summary>${interfaceIcon('notebook')}${escapeHtml(t(label))}${interfaceIcon('chevron-down')}</summary>${renderClaimGroups(items)}</details>`
+      : '';
+  return `<div class="evidence-notebook">${renderClaimGroups(causes)}<div class="summary-document">${renderSummaryDocument(markdown)}</div>${disclosure(references, '引用')}${disclosure(history, '生成时的结论')}</div>`;
 }
 function seekEvidence(source, play = false) {
   if (!source || source.seekable === false || !Number.isFinite(source.start_ms) || !playerAudio.src)
@@ -270,3 +272,74 @@ document.addEventListener('change', async (event) => {
     showToast(userFacingError(error.detail || error.message), undefined, 'error');
   }
 });
+
+function liveEvidenceSegment(source) {
+  const row = liveSegmentData.get(source.segment_id);
+  const element = liveSegments.get(source.segment_id);
+  if (
+    !element?.isConnected ||
+    !row ||
+    row.text !== source.text ||
+    row.track !== source.track ||
+    row.start_ms !== source.start_ms ||
+    row.end_ms !== source.end_ms ||
+    element.querySelector('.segment-text-input')
+  )
+    return null;
+  return element;
+}
+
+// 实时页只展示推理时的快照。相同秒数可能有多条字幕，不能只按时间回查。
+function openLiveNoteEvidence(claims, title) {
+  const meetingId = breviaClient?.state.meeting?.id;
+  if (!meetingActive || !meetingId || !claims.length) return;
+  const dialog = document.createElement('dialog');
+  dialog.dataset.liveNoteDialog = '';
+  dialog.className = 'claim-edit-dialog';
+  dialog.setAttribute('aria-label', title);
+  const sources = [];
+  const sections = claims.map((claim) => {
+    const quotes = (claim.sources || [])
+      .map((source) => {
+        const index = sources.push(source) - 1;
+        const stamp =
+          source.seekable !== false && Number.isFinite(source.start_ms)
+            ? `<time>${formatMeetingTime(source.start_ms)}</time>`
+            : '';
+        const locate = liveEvidenceSegment(source)
+          ? `<button type="button" class="evidence-locate" data-live-locate="${index}">${escapeHtml(t('逐字稿'))}${interfaceIcon('chevron-right')}</button>`
+          : '';
+        return `<blockquote><div>${stamp}<span>${escapeHtml(formatSpeakerName(source.speaker))}</span>${locate}</div><p>${escapeHtml(source.text)}</p></blockquote>`;
+      })
+      .join('');
+    return `<section><h3>${escapeHtml(claim.text)}</h3>${claim.detached ? `<small>${escapeHtml(t('与当前笔记待核对'))}</small>` : ''}<div class="evidence-quotes">${quotes || escapeHtml(t('缺少原文依据'))}</div></section>`;
+  });
+  dialog.innerHTML = `<header><h2>${escapeHtml(title)}</h2><form method="dialog"><button class="icon-button" aria-label="${escapeHtml(t('关闭'))}">${interfaceIcon('close')}</button></form></header>${sections.join('')}`;
+  dialog.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-live-locate]');
+    if (!button || breviaClient?.state.meeting?.id !== meetingId) return;
+    const row = liveEvidenceSegment(sources[Number(button.dataset.liveLocate)]);
+    if (!row) {
+      button.replaceWith(document.createTextNode(t('原文已变化')));
+      return;
+    }
+    dialog.close();
+    followLiveTranscript = false;
+    const toggle = document.querySelector('[data-live-transcript-toggle]');
+    if (toggle.getAttribute('aria-expanded') === 'false') toggle.click();
+    row.tabIndex = -1;
+    row.focus({ preventScroll: true });
+    row.scrollIntoView({ block: 'center' });
+  });
+  clearTimeout(aiSuggestionAutoFadeTimer);
+  dialog.addEventListener(
+    'close',
+    () => {
+      dialog.remove();
+      if (latestAiSuggestion && meetingActive) scheduleAiSuggestionAutoFade();
+    },
+    { once: true },
+  );
+  document.body.append(dialog);
+  dialog.showModal();
+}

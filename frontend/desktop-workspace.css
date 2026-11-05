@@ -257,20 +257,6 @@
   padding-inline: 14px;
   border-radius: 6px;
 }
-#live-view .live-control-bar .control-source {
-  display: flex;
-}
-#live-view .live-control-bar .input-meter {
-  width: clamp(36px, 5vw, 74px);
-  height: 7px;
-  border-radius: 4px;
-  background: var(--color-selected);
-  mask-image: none;
-}
-
-#live-view .live-control-bar .input-meter::after {
-  background: var(--color-text-body);
-}
 #live-view .live-caption-controls {
   display: flex;
   align-items: center;
@@ -507,13 +493,6 @@
   margin: 0 0 10px;
   font-size: 18px;
   color: var(--color-text);
-}
-#detail-view .summary-discussion summary {
-  grid-template-columns: minmax(0, 1fr) auto;
-  padding: 12px 0;
-}
-#detail-view .summary-discussion > div {
-  padding-left: 0;
 }
 #detail-view .transcript-body .segment {
   padding: 12px 0;
@@ -1677,9 +1656,6 @@ html:lang(zh) #mobile-dialog .mobile-page-intro h1 {
     column-gap: 8px;
     padding-inline: 12px;
   }
-  #live-view .live-control-bar .input-meter {
-    max-width: 72px;
-  }
 }
 
 @media (max-width: 760px) {
@@ -2208,13 +2184,13 @@ body .workspace-create-popover.term-editor {
 .evidence-quotes {
   padding: 4px 8px 12px;
 }
-#detail-view .evidence-quotes blockquote {
+:is(#detail-view, [data-live-note-dialog]) .evidence-quotes blockquote {
   margin: 8px 0;
   padding: 7px 12px;
   border-inline-start: 2px solid var(--color-line);
   background: transparent;
 }
-#detail-view .evidence-quotes blockquote > div {
+:is(#detail-view, [data-live-note-dialog]) .evidence-quotes blockquote > div {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -2222,7 +2198,7 @@ body .workspace-create-popover.term-editor {
   color: var(--color-text-muted);
   font-size: 12px;
 }
-#detail-view .evidence-quotes blockquote p,
+:is(#detail-view, [data-live-note-dialog]) .evidence-quotes blockquote p,
 #detail-view .evidence-original {
   margin: 3px 0;
   font-size: 13px;
@@ -2289,6 +2265,28 @@ body .workspace-create-popover.term-editor {
 }
 .claim-edit-dialog::backdrop {
   background: #0002;
+}
+[data-live-note-dialog] {
+  max-height: min(72vh, 640px);
+  margin: auto;
+  overflow: auto;
+}
+[data-live-note-dialog] header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+[data-live-note-dialog] h2 {
+  font-size: 16px;
+}
+[data-live-note-dialog] h3 {
+  margin: 14px 0 0;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+[data-live-note-dialog] .evidence-quotes {
+  padding: 3px 0;
+  font-size: 13px;
 }
 .claim-edit-dialog textarea {
   display: block;

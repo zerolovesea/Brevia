@@ -95,7 +95,7 @@ function refreshCorrectionHighlights() {
     state.scope === 'notes'
       ? '.detail-notes-content, [data-live-notes-root] .notes-editor, .correction-markdown-source'
       : state.scope === 'summary'
-        ? '.summary-body'
+        ? '.summary-document'
         : '.segment-copy > p, .refined-fulltext-body';
   const ranges = [
     ...document.querySelectorAll(`.view.active ${selector.split(', ').join(', .view.active ')}`),
@@ -143,6 +143,7 @@ function applyCorrectionMeeting(meeting) {
   if (currentMeetingDetail?.id === meeting.id) applyBackendDetail(meeting);
   if (breviaClient?.state.meeting?.id === meeting.id) {
     Object.assign(breviaClient.state.meeting, meeting);
+    if (meeting.accepted_claims) setLiveAcceptedClaims(meeting.accepted_claims);
     for (const segment of meeting.current_segments || meeting.segments) {
       const row = liveSegments.get(segment.id);
       const data = liveSegmentData.get(segment.id);
@@ -299,6 +300,7 @@ async function settleCorrectionDraft() {
           markdown: text,
           expected_markdown: before,
         });
+      scheduleLibraryMetrics();
     }
     d[`${scope}Editing`] = false;
     d[`${scope}SaveState`] = 'saved';
@@ -817,7 +819,7 @@ correctionPanel.addEventListener('click', (event) => {
       const selector =
         state.scope === 'notes'
           ? '.detail-notes-content, [data-live-notes-root] .notes-editor'
-          : '.summary-body';
+          : '.summary-document';
       const root = [...document.querySelectorAll(selector)].find((node) => node.checkVisibility());
       const range =
         root && correctionTextRanges(root, state.query)[Number(locate.dataset.correctionLocate)];
@@ -920,13 +922,13 @@ document.addEventListener('keydown', (event) => {
     event.shiftKey &&
     event.key.toLowerCase() === 'h' &&
     event.target.closest(
-      '.transcript-body, #transcript-scroll, .detail-notes-content, .summary-body, [data-live-notes-root]',
+      '.transcript-body, #transcript-scroll, .detail-notes-content, .summary-document, [data-live-notes-root]',
     )
   ) {
     event.preventDefault();
     const scope = event.target.closest('.detail-notes-content, [data-live-notes-root]')
       ? 'notes'
-      : event.target.closest('.summary-body')
+      : event.target.closest('.summary-document')
         ? 'summary'
         : 'transcript';
     void openCorrection(window.getSelection()?.toString() || '', false, scope).catch((error) =>

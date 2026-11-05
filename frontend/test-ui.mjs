@@ -1682,12 +1682,12 @@ const detailTabbarContext = {
 runInNewContext(text(components), detailTabbarContext);
 const documentNavigation = detailTabbarContext.renderDetailTabbar();
 assert.match(documentNavigation, /role="tablist" aria-orientation="horizontal"/);
-assert.equal((documentNavigation.match(/role="tab"/g) || []).length, 2);
+assert.equal((documentNavigation.match(/role="tab"/g) || []).length, 3);
 assert.match(documentNavigation, /role="toolbar" aria-label="笔记"/);
 assert.ok(
   documentNavigation.indexOf('detail-content-status') < documentNavigation.indexOf('</nav>'),
 );
-assert.equal((documentNavigation.split('detail-content-status')[0].match(/<svg/g) || []).length, 2);
+assert.equal((documentNavigation.split('detail-content-status')[0].match(/<svg/g) || []).length, 3);
 assert.match(
   detailTabbarContext.renderDetailTabbar(),
   /data-edit-notes type=/,
@@ -2094,20 +2094,12 @@ assert.match(text(html), /id="playback-rate"/);
 assert.match(text(i18nData), /catalog\s*=\s*{/);
 assert.match(text(js), /window\.BreviaLocaleData/);
 assert.doesNotMatch(text(js), /defaultSummaryPrompts|prompt-form/);
-assert.match(
-  text(js),
-  /const\s+summaryProviders\s+=\s+\[\s*'built-in',\s+'claude',\s+'openai',\s+'openrouter',\s+'custom-openai',\s+'custom-claude',?\s*\]/,
-);
 assert.match(text(js), /model\.kind === 'llama-chat' && modelPaths\.has\(model\.id\)/);
 // 只有两个自定义供应商暴露请求地址，固定供应商的地址由 summaryProviderPresets 派生。
 assert.match(text(js), /const\s+endpointField\s+=\s+preset\.needsEndpoint\s+\?/);
 assert.match(
   text(js),
   /'custom-openai':\s+\{\s+format:\s+'openai',\s+endpoint:\s+'',\s+needsKey:\s+true,\s+needsEndpoint:\s+true/,
-);
-assert.match(
-  text(js),
-  /openrouter:\s+\{\s+format:\s+'openai',\s+endpoint:\s+'https:\/\/openrouter\.ai\/api\/v1\/chat\/completions',\s+needsKey:\s+true,\s+needsEndpoint:\s+false/,
 );
 // 安装与删除只在模型库；功能设置只负责「这个功能用哪个」。
 assert.doesNotMatch(
@@ -2230,10 +2222,6 @@ assert.doesNotMatch(text(electronMain), /power_saving/);
 assert.match(text(electronMain), /'meeting\.reconfigured'/);
 assert.match(text(electronMain), /endpoint: z\.string\(\)\.url\(\)\.optional\(\)/);
 // 纪要配置收敛为「单套激活 + 按供应商记住凭据」，只认 version 2，不再迁移旧结构。
-assert.match(
-  text(electronMain),
-  /const\s+summaryProviderIds\s+=\s+\[\s*'built-in',\s+'claude',\s+'openai',\s+'openrouter',\s+'custom-openai',\s+'custom-claude',?\s*\]/,
-);
 assert.match(
   text(electronMain),
   /providers: z\.partialRecord\(z\.enum\(summaryProviderIds\), summaryProviderEntry\)/,
@@ -3205,17 +3193,17 @@ assert.match(
 assert.doesNotMatch(text(app), /summary-modal-document\) return;/);
 assert.match(text(app), /data-export-save/);
 assert.doesNotMatch(text(app), /data-export-reveal/);
-assert.match(text(js), /data-regenerate-summary\]'\)\) void generateMeetingSummary\(\)/);
+assert.match(
+  text(js),
+  /closest\('\[data-generate-summary\], \[data-regenerate-summary\]'\)\)\s*void generateMeetingSummary\(currentMeetingDetail\?\.id\)/,
+);
 assert.match(
   text(tailwind),
   /\.markdown-content\s+ul\s+ul\s+\{\s+list-style-type:\s+circle;\s+\}[^]*\.markdown-content\s+ul\s+ul\s+ul\s+\{\s+list-style-type:\s+square;\s+\}/,
 );
 const stoppedListeners = text(app).match(/window\.brevia\.on\('meeting\.stopped'/g) || [];
 assert.equal(stoppedListeners.length, 1);
-assert.match(
-  text(js),
-  /async function generateMeetingSummary\(\s*meetingId = breviaClient\?\.state\.selectedMeetingId,\s*template/,
-);
+assert.doesNotMatch(text(app), /\bgenerateMeetingSummary\(\)/);
 assert.match(
   text(js),
   /if\s+\(summary\?\.cancelled\)\s+\{\s+hideSummaryProgress\(\);\s+return;\s+\}/,
@@ -3306,6 +3294,45 @@ for (const scenario of [
   assert.equal(context.meetingActive, false);
   assert.equal(context.breviaClient.state.meeting, null);
   assert.deepEqual(failures, ['list refresh']);
+}
+// 手动生成只消费当前纪要的有效连接，不能改写会后的自动生成偏好。
+{
+  const calls = [];
+  const config = {
+    enabled: false,
+    provider: 'remote',
+    providers: { remote: { model: 'saved-model', keyReference: 'saved-key' } },
+  };
+  const context = {
+    summaryConfig: config,
+    summaryProviderPresets: {
+      remote: { needsKey: true, endpoint: 'https://example.test', format: 'openai' },
+    },
+    meetingActive: false,
+    summaryGeneratingMeetingId: null,
+    pendingModelTasks: new Map(),
+    locale: 'zh',
+    showSummaryProgress() {},
+    hideSummaryProgress() {},
+    resumeReadyModelTasks() {},
+    window: {
+      brevia: {
+        summary: {
+          generate: async (payload) => {
+            calls.push(payload);
+            return { cancelled: true };
+          },
+        },
+      },
+    },
+  };
+  const generate = text(app).match(/async function generateMeetingSummary\([^]*?\n\}/)[0];
+  runInNewContext(summaryConfigFunctions + '\n' + generate, context);
+  await context.generateMeetingSummary('confirmed');
+  assert.equal(calls[0].meeting_id, 'confirmed');
+  assert.equal(calls[0].model, 'saved-model');
+  assert.equal(calls[0].key_reference, 'saved-key');
+  assert.equal(context.summaryRequestConfig(), null);
 }
 assert.doesNotMatch(text(app), /live-more-toggle|live-more-panel/);
 
@@ -4696,16 +4723,9 @@ assert.match(
 );
 assert.match(text(floatingCaption), /captionContainer\.scrollTop = captionContainer\.scrollHeight/);
 assert.match(text(floatingCaptionHtml), /\.caption-shell \{[^}]*display: flex;[^}]*height: 100vh;/);
-assert.match(text(floatingCaptionHtml), /max-height: none;[\s\S]*overflow-y: auto;/);
-assert.match(
-  text(floatingCaptionHtml),
-  /\.caption-controls \{[\s\S]*z-index: 1;[\s\S]*opacity: 1;/,
-);
-assert.match(
-  text(floatingCaptionHtml),
-  /class="caption-shell">[\s\S]*class="caption-controls"[\s\S]*class="caption-container"/,
-);
-assert.match(text(floatingCaptionHtml), /@keyframes caption-fade \{\s*from \{ opacity: 0\.65; \}/);
+assert.match(text(floatingCaptionHtml), /\.caption-container \{[^}]*overflow-y: auto/);
+assert.match(text(floatingCaptionHtml), /class="caption-controls"[\s\S]*class="caption-container"/);
+assert.match(text(floatingCaptionHtml), /prefers-reduced-motion: reduce/);
 assert.match(text(electronMain), /translationPending: z\.boolean\(\)\.optional\(\)/);
 assert.match(text(electronMain), /worker\.restarts = 0;\s*resetFloatingCaptionState\(\);/);
 assert.match(text(electronMain), /pendingTranslation\.segmentId === value\.segmentId/);
@@ -4785,7 +4805,13 @@ const summaryFn = (name) => {
   return summaryAppSource.slice(start, summaryAppSource.indexOf('\n}\n', start) + 2);
 };
 {
-  const panel = { parentElement: { classList: { toggle() {} } } };
+  const panel = {
+    parentElement: { classList: { toggle() {} } },
+    set innerHTML(markup) {
+      this.markup = markup;
+      this.firstRow = {};
+    },
+  };
   const meetings = [null, 1, 4, 3, 6, 5, 2].map((day) => ({
     id: day ? String(day) : 'legacy',
     title: 'Meeting',
@@ -4804,11 +4830,17 @@ const summaryFn = (name) => {
   };
   runInNewContext(summaryFn('renderHomeMeetings') + '\nrenderHomeMeetings()', context);
   assert.deepEqual(
-    [...panel.innerHTML.matchAll(/data-open-recent="([^"]+)"/g)].map((match) => match[1]),
+    [...panel.markup.matchAll(/data-open-recent="([^"]+)"/g)].map((match) => match[1]),
     ['6', '5', '4', '3', '2'],
     'restoring an older meeting cannot displace a recent meeting',
   );
   assert.equal(meetings[0].id, 'legacy', 'the recent list preserves sidebar indices');
+  const first = panel.firstRow;
+  context.renderHomeMeetings();
+  assert.equal(panel.firstRow, first, 'unchanged refresh keeps the hovered row node');
+  meetings.find((meeting) => meeting.id === '6').title = 'Renamed meeting';
+  context.renderHomeMeetings();
+  assert.match(panel.markup, /Renamed meeting/);
 }
 // 行菜单打开在侧栏外侧，并在底部与窄视口中保持可访问。
 {
@@ -5339,6 +5371,9 @@ const navigationRows = ['current', 'another'].map((meetingId) => ({
   },
 }));
 const meetingNavigationContext = {
+  switchDetailDocument(target) {
+    assert.equal(target, 'summary');
+  },
   settingsModal: { matches: () => false },
   currentMeetingDetail: { id: 'current' },
   uiData: { detail: {} },
@@ -5414,12 +5449,38 @@ await meetingNavigationContext.searchClick(searchResultEvent);
 assert.deepEqual(meetingNavigationCalls, ['load', 'another', 'detail']);
 assert.equal(navigationRows[0].attributes['aria-current'], undefined);
 assert.equal(navigationRows[1].attributes['aria-current'], 'page', '详情同页切换仍更新当前行');
+{
+  const pending = new Map();
+  meetingNavigationContext.window.brevia.meeting.get = ({ meeting_id }) =>
+    new Promise((resolve, reject) => pending.set(meeting_id, { resolve, reject }));
+  const open = (id) =>
+    meetingNavigationContext.openMeetingRow({ dataset: { meetingId: id }, style: {} });
+  const failed = open('failed');
+  await new Promise(setImmediate);
+  assert.equal(meetingNavigationContext.breviaClient.state.selectedMeetingId, 'another');
+  pending.get('failed').reject(new Error('unavailable'));
+  await failed;
+  assert.equal(meetingNavigationContext.currentMeetingDetail.id, 'another');
+  assert.equal(meetingNavigationContext.breviaClient.state.selectedMeetingId, 'another');
+  const slow = open('slow');
+  const latest = open('latest');
+  await new Promise(setImmediate);
+  pending.get('latest').resolve({ id: 'latest' });
+  await latest;
+  pending.get('slow').resolve({ id: 'slow' });
+  await slow;
+  assert.equal(meetingNavigationContext.currentMeetingDetail.id, 'latest');
+  assert.equal(meetingNavigationContext.breviaClient.state.selectedMeetingId, 'latest');
+}
 // 快速入口读取真实的上次会议设置，正常启动不经过准备页。
 const quickInputs = new Map(
-  ['meeting-language', 'meeting-speakers', 'meeting-workspace', 'translation-target'].map((key) => [
-    key,
-    { value: 'old-form-value' },
-  ]),
+  [
+    'meeting-language',
+    'meeting-speakers',
+    'meeting-workspace',
+    'translation-target',
+    'summary-template',
+  ].map((key) => [key, { value: 'old-form-value' }]),
 );
 const quickError = { hidden: true, textContent: '' };
 const previousMeeting = {
@@ -5430,6 +5491,7 @@ const previousMeeting = {
   speaker_segmentation_model_id: 'last-segmentation',
   vad_model_id: 'last-vad',
   workspace_id: 'last-workspace',
+  summary_template: 'interview',
 };
 const quickStarts = [];
 let previousMeetings = [{ is_example: true, language: 'ja' }, previousMeeting];
@@ -5487,6 +5549,7 @@ quickContext.desktopPreferences.lastCaptureMode = 'both';
 previousMeetings = [];
 await quickContext.startQuickRecording();
 assert.equal(quickStarts[1].payload.language, 'auto');
+assert.equal(quickStarts[1].payload.summary_template, 'general');
 assert.equal(quickStarts[1].payload.workspace_id, 'current-workspace');
 previousMeetings = [previousMeeting];
 quickContext.modelPaths.clear();
@@ -5494,6 +5557,7 @@ await quickContext.startQuickRecording();
 assert.equal(quickStarts.length, 2, '缺模型时不启动采集');
 assert.equal(quickContext.view, 'prepare');
 assert.equal(quickContext.selectedModel, 'last-model');
+assert.equal(quickInputs.get('summary-template').value, 'interview');
 assert.equal(quickContext.captureMode, 'both');
 assert.equal(quickContext.prepareForm.dataset.segmentationModel, 'last-segmentation');
 assert.equal(quickError.hidden, false);
@@ -6169,12 +6233,15 @@ assert.doesNotMatch(
 for (const markdown of ['', '# 已有纪要']) {
   detailTabbarContext.detailActiveTab = 'summary';
   detailTabbarContext.uiData.detail.summary = { markdown, generating: true };
-  const generating = detailTabbarContext.renderDetailTabbar();
+  const generating =
+    detailTabbarContext.renderDetailTabbar() +
+    summaryContext.renderMeetingSummary({ markdown, generating: true });
+  assert.equal((generating.match(/正在生成会议纪要/g) || []).length, 1);
   assert.equal(
     (generating.match(/class="summary-generating-icon" aria-hidden="true"/g) || []).length,
     1,
   );
-  assert.equal((generating.match(/disabled aria-busy="true"/g) || []).length, 1);
+  assert.equal((generating.match(/disabled aria-busy="true"/g) || []).length, markdown ? 1 : 0);
   assert.ok(generating.includes(componentContext.interfaceIcon('ai')), '生成中使用现有星星图标');
   detailTabbarContext.uiData.detail.summary.generating = false;
   assert.doesNotMatch(
@@ -6198,14 +6265,7 @@ for (const scope of ['notes', 'transcript', 'summary']) {
   });
   const header = detailTabbarContext.renderDetailTabbar();
   assert.equal((header.match(/class="detail-content-toolbar"/g) || []).length, 1);
-  assert.match(
-    header,
-    new RegExp(
-      'id="detail-tab-' +
-        (scope === 'summary' ? 'notes' : scope) +
-        '" role="tab" aria-selected="true"',
-    ),
-  );
+  assert.match(header, new RegExp('id="detail-tab-' + scope + '" role="tab" aria-selected="true"'));
   d[scope + 'Editing'] = true;
   const editing = detailTabbarContext.renderDetailTabbar();
   assert.doesNotMatch(editing, /data-copy-summary|data-regenerate-summary|data-refine-more/);
@@ -6229,20 +6289,14 @@ assert.doesNotMatch(
 );
 
 runInNewContext(
-  `${summaryConst('const summaryProviders = ')}${summaryConst('const summaryProviderPresets = ', true)}\n${summaryFn('summaryProviderLabel')}${summaryFn('providerEntry')}${summaryFn('builtinModelPicker')}${summaryFn('builtinModelEmptyState')}${summaryConst('const RECOMMENDED_BUILTIN_MODEL_ID = ')}${summaryFn('renderModelConfigFields')}${summaryFn('renderModelConfigForm')}${summaryFn('renderSummaryModelForm')}${summaryFn('renderAiSettingsExample')}${summaryFn('operateAiSettingsExample')}${summaryFn('renderAiSettingsTabs')}${summaryFn('renderAiServiceChoice')}${summaryFn('renderSummaryModelModal')}`,
+  `${summaryFn('onlineProvider')}${summaryConst('const summaryProviderPresets = ', true)}${summaryConst('const summaryProviders = ')}\n${summaryFn('summaryProviderLabel')}${summaryFn('providerEntry')}${summaryFn('builtinModelPicker')}${summaryFn('builtinModelEmptyState')}${summaryConst('const RECOMMENDED_BUILTIN_MODEL_ID = ')}${summaryFn('renderModelConfigFields')}${summaryFn('renderModelConfigForm')}${summaryFn('renderSummaryModelForm')}${summaryFn('renderAiSettingsExample')}${summaryFn('advanceAiSettingsExample')}${summaryFn('operateAiSettingsExample')}${summaryFn('renderAiSettingsTabs')}${summaryFn('renderAiServiceChoice')}${summaryFn('renderSummaryModelModal')}`,
   summaryContext,
 );
-// 设置预览使用固定会议数据。重播、请求与采纳都无需桌面桥接或模型配置写入。
+// 设置预览使用固定会议数据，循环与手动采纳都只影响当前示例。
 {
   const example = {
     dataset: { initialStage: 'request', stage: 'request' },
     querySelector(selector) {
-      if (selector === '.ai-example-scene') {
-        return {
-          cloneNode: () => 'new scene',
-          replaceWith: (node) => assert.equal(node, 'new scene'),
-        };
-      }
       return {
         focus() {
           example.focused = selector;
@@ -6259,8 +6313,8 @@ runInNewContext(
   assert.equal(example.dataset.stage, 'suggested');
   click('accept');
   assert.equal(example.dataset.stage, 'written');
-  assert.equal(example.focused, '[data-ai-example-action="replay"]');
-  click('replay');
+  assert.equal(example.focused, '[data-example-saved]');
+  summaryContext.advanceAiSettingsExample(example);
   assert.equal(example.dataset.stage, 'request');
   for (const [mode, stage] of [
     ['quiet', 'request'],
@@ -6279,6 +6333,7 @@ runInNewContext(
     assert.ok(html.includes(summaryContext.escapeHtml(sample.decision)));
     assert.ok(html.includes(summaryContext.escapeHtml(sample.actions[0])));
     assert.ok(html.includes('00:12') && html.includes('00:24'));
+    assert.doesNotMatch(html, /data-ai-example-action="replay"/);
   }
   summaryContext.window = localeContext.window;
   for (const enabled of [true, false]) {
@@ -6375,7 +6430,23 @@ assert.equal(
   false,
   'disabling AI notes must not require a downloaded model',
 );
-for (const provider of ['claude', 'openai', 'openrouter']) {
+const namedProviders = [
+  'claude',
+  'openai',
+  'gemini',
+  'deepseek',
+  'qwen',
+  'kimi',
+  'glm',
+  'mistral',
+  'groq',
+  'openrouter',
+];
+const providerIds = ['built-in', ...namedProviders, 'custom-openai', 'custom-claude'];
+assert.deepEqual(Array.from(runInNewContext('summaryProviders', summaryContext)), providerIds);
+const mainIds = text(electronMain).match(/const summaryProviderIds = (\[[^;]+\]);/)[1];
+assert.deepEqual(Array.from(runInNewContext(mainIds)), providerIds);
+for (const provider of namedProviders) {
   summaryHtml = renderSummaryModal(provider);
   assert.doesNotMatch(
     summaryHtml,
@@ -6383,7 +6454,7 @@ for (const provider of ['claude', 'openai', 'openrouter']) {
     `${provider} must not expose an endpoint field`,
   );
   assert.match(summaryHtml, /name="apiKey"/, `${provider} needs an api key field`);
-  assert.match(summaryHtml, /name="model"/, `${provider} needs a model field`);
+  assert.match(summaryHtml, /name="model" value="[^"]+"/, `${provider} needs a default model`);
   assert.doesNotMatch(summaryHtml, /data-open-models-from-config|data-flow-select-choice="model"/);
 }
 for (const provider of ['custom-openai', 'custom-claude']) {
@@ -6392,6 +6463,58 @@ for (const provider of ['custom-openai', 'custom-claude']) {
     /name="endpoint"[^>]*type="url"/,
     `${provider} needs an endpoint field`,
   );
+}
+// 自定义服务更换地址时，纪要与笔记都必须重新提供密钥；其他服务的未保存草稿不能一同写入。
+{
+  const context = {
+    ...summaryContext,
+    crypto: { randomUUID: () => 'fresh' },
+    showToast() {},
+  };
+  runInNewContext(
+    `${summaryFn('onlineProvider')}${summaryConst('const summaryProviderPresets = ', true)}${summaryConst('const summaryProviders = ')}${summaryFn('providerEntry')}${summaryFn('saveModelConfig')}`,
+    context,
+  );
+  for (const isNote of [false, true]) {
+    const provider = 'custom-openai';
+    const before = {
+      model: 'before',
+      endpoint: 'https://old.test/v1',
+      keyReference: 'old-key',
+      keyLength: 8,
+    };
+    const saved = { provider, providers: { [provider]: before } };
+    context[isNote ? 'aiAssistConfig' : 'summaryConfig'] = saved;
+    const draft = structuredClone(saved);
+    const endpoint = 'https://new.test/v1';
+    draft.providers[provider].endpoint = endpoint;
+    draft.providers.openai = { model: '' };
+    const form = { matches: () => isNote };
+    const prefix = isNote ? 'ai-assist' : 'summary';
+    const values = { provider, endpoint, model: 'after' };
+    assert.equal(await context.saveModelConfig(form, draft, prefix, values), false);
+    assert.equal(
+      await context.saveModelConfig(form, draft, prefix, { ...values, apiKey: 'test-only' }),
+      true,
+    );
+    assert.equal(draft.providers[provider].keyReference, prefix + '-fresh');
+    assert.equal(
+      context.saveModelConfig(form, draft, prefix, { ...values, endpoint: before.endpoint }),
+      true,
+    );
+    assert.equal(draft.providers[provider].keyReference, 'old-key');
+    assert.equal(
+      context.saveModelConfig(form, draft, prefix, {
+        ...values,
+        endpoint: before.endpoint,
+        apiKey: 'rotation',
+      }),
+      true,
+    );
+    assert.equal(draft.providers[provider].keyReference, prefix + '-fresh');
+    assert.deepEqual(Object.keys(draft.providers), [provider]);
+    assert.equal(saved.providers[provider].keyReference, 'old-key');
+  }
 }
 // 已存凭据只回填模型和圆点占位长度，密钥引用和明文都不进 DOM。
 summaryHtml = renderSummaryModal('openai', {
@@ -6408,7 +6531,7 @@ assert.match(summaryHtml, /name="model"[^>]*maxlength="128"/);
 assert.match(text(electronMain), /model: z\.string\(\)\.trim\(\)\.min\(1\)\.max\(128\)/);
 assert.match(text(electronMain), /keyLength: z\.number\(\)\.int\(\)\.positive\(\)\.max\(512\)/);
 summaryHtml = renderSummaryModal('openai');
-for (const id of ['built-in', 'claude', 'openai', 'openrouter', 'custom-openai', 'custom-claude']) {
+for (const id of providerIds) {
   assert.match(
     summaryHtml,
     new RegExp(`data-flow-select-choice="provider" data-value="${id}"`),
@@ -6582,21 +6705,43 @@ runInNewContext(
 const evidencePayload = {
   meeting_id: 'evidence-meeting',
   id: 'suggestion-1',
-  evidence: ['segment-1'],
+  evidence: ['00:01'],
+  sources: [{ segment_id: 's1', start_ms: 1000, end_ms: 2000, track: 'mic', text: '周五验收' }],
 };
 evidenceHandlers.get('ai-note.evidence')(evidencePayload);
-assert.equal(evidenceContext.latestAiSuggestion.evidence[0], 'segment-1');
-assert.equal(evidenceContext.aiSuggestionQueue[0].evidence[0], 'segment-1');
-assert.equal(
-  runInNewContext('pendingAutoSuggestions[0].evidence[0]', evidenceContext),
-  'segment-1',
-);
+assert.equal(evidenceContext.latestAiSuggestion.evidence[0], '00:01');
+assert.equal(evidenceContext.aiSuggestionQueue[0].evidence[0], '00:01');
+assert.equal(runInNewContext('pendingAutoSuggestions[0].evidence[0]', evidenceContext), '00:01');
+assert.equal(evidenceContext.latestAiSuggestion.sources[0].text, '周五验收');
 evidenceHandlers.get('ai-note.evidence')({
   ...evidencePayload,
   meeting_id: 'other',
   evidence: ['wrong'],
 });
-assert.equal(evidenceContext.latestAiSuggestion.evidence[0], 'segment-1');
+assert.equal(evidenceContext.latestAiSuggestion.evidence[0], '00:01');
+{
+  const source = evidencePayload.sources[0];
+  const element = { isConnected: true, querySelector: () => null };
+  const segments = new Map([['s1', { ...source }]]);
+  const locate = runInNewContext(
+    (await readFile('meeting-evidence.js', 'utf8')) + '\nliveEvidenceSegment',
+    {
+      document: { addEventListener() {} },
+      liveSegments: new Map([['s1', element]]),
+      liveSegmentData: segments,
+    },
+  );
+  assert.equal(locate(source), element);
+  for (const changed of [
+    { text: '另一句话' },
+    { end_ms: 2400 },
+    { start_ms: 1200 },
+    { track: 'system' },
+  ]) {
+    segments.set('s1', { ...source, ...changed });
+    assert.equal(locate(source), null);
+  }
+}
 assert.match(text(app), /renderOnboardingAiDemo/);
 for (const [language, copy] of Object.entries(
   localeContext.window.BreviaLocaleData.appCopy.aiOnboardingCopy,
@@ -7534,11 +7679,15 @@ const batchContext = {
   meetingSelectionMode: false,
   window: { brevia: { meeting: {} } },
   uiData: { meetings: [] },
+  scheduleLibraryMetrics() {
+    batchRefreshes++;
+  },
   clearMeetingSelection() {},
   renderMeetingList() {},
 };
 runInNewContext(`async ${summaryFn('mutateMeetings')}`, batchContext);
 let runningMutations = 0;
+let batchRefreshes = 0;
 const deletedMeetings = [];
 batchContext.window.brevia.meeting.delete = async ({ meeting_id }) => {
   assert.equal(runningMutations++, 0, 'destructive IPC requests must be sequential');
@@ -7551,6 +7700,7 @@ const batchMeetings = Array.from({ length: 6 }, (_, id) => ({ id: String(id) }))
 batchContext.uiData.meetings = [...batchMeetings];
 await batchContext.mutateMeetings('delete', batchMeetings);
 assert.equal(deletedMeetings.length, 6);
+assert.equal(batchRefreshes, 1);
 assert.equal(batchContext.uiData.meetings.length, 0);
 batchContext.uiData.meetings = [{ id: 'done' }, { id: 'failed' }, { id: 'remaining' }];
 await assert.rejects(
@@ -7923,6 +8073,7 @@ const storageClearContext = {
     load: () => storagePlaybackEvents.push('load'),
   },
   renderMiniPlayback: () => storagePlaybackEvents.push('mini'),
+  scheduleLibraryMetrics: () => storagePlaybackEvents.push('metrics'),
   refreshBackendMeetings: async () => storagePlaybackEvents.push('refresh'),
   storageUsage: { meetings: 100, models: 200 },
   locale: 'zh',
@@ -7982,6 +8133,7 @@ assert.deepEqual(storagePlaybackEvents, [
   'load',
   'mini',
   'clear:meetings',
+  'metrics',
   'forget:brevia-meetings-v1',
   'refresh',
   'clear:models',
@@ -8311,33 +8463,65 @@ assert.ok(text(meetingDetail).includes('meeting.original_segments'));
   assert.equal(appended, 1, '失败后重试不重复写入笔记');
   assert.equal(hidden, 1);
 }
-// 缺模型的纪要使用已有队列，在模型就绪后续跑一次。
+// 等待本地模型期间改用云端、关闭自动生成，也只能用当初选定的本地模型续跑一次。
 {
   const calls = [];
   const context = {
-    pendingModelTasks: new Map([
-      [
-        'summary.generate:meeting',
-        { task: 'summary.generate', payload: { meeting_id: 'meeting' }, models: ['model'] },
-      ],
-    ]),
+    pendingModelTasks: new Map(),
     resumingModelTasks: new Set(),
-    modelPaths: new Set(['model']),
+    modelPaths: new Set(),
+    summaryConfig: {
+      enabled: true,
+      provider: 'built-in',
+      providers: {
+        'built-in': { model: 'original-local-model' },
+        remote: { model: 'cloud-model', keyReference: 'cloud-key' },
+      },
+    },
+    summaryProviderPresets: {
+      'built-in': { format: 'openai' },
+      remote: { needsKey: true, endpoint: 'https://example.test', format: 'openai' },
+    },
     summaryGeneratingMeetingId: undefined,
-    meetingActive: true,
+    meetingActive: false,
     currentMeetingDetail: null,
-    generateMeetingSummary: async (id) => calls.push(id),
+    locale: 'zh',
+    window: {
+      brevia: {
+        summary: {
+          generate: async (payload) => {
+            calls.push(payload);
+            return { cancelled: true };
+          },
+        },
+      },
+    },
+    showSummaryConfigCard() {},
+    showSummaryProgress() {},
+    hideSummaryProgress() {},
     showToast() {},
   };
-  const source = text(app).match(/async function resumeReadyModelTasks\(\) \{[\s\S]*?\n\}/)?.[0];
-  assert.ok(source);
-  runInNewContext(source, context);
+  const source = ['generateMeetingSummary', 'queueModelTask', 'resumeReadyModelTasks']
+    .map((name) => text(app).match(new RegExp(`(?:async )?function ${name}\\([^]*?\\n\\}`))[0])
+    .join('\n');
+  runInNewContext(summaryConfigFunctions + '\n' + source, context);
+  await context.generateMeetingSummary('meeting');
+  assert.equal(context.pendingModelTasks.size, 1);
+  context.summaryConfig.provider = 'remote';
+  context.summaryConfig.enabled = false;
+  context.modelPaths.add('original-local-model');
+  context.meetingActive = true;
   await context.resumeReadyModelTasks();
   assert.equal(calls.length, 0, '录音时继续保留等待任务');
   context.meetingActive = false;
   await context.resumeReadyModelTasks();
   await context.resumeReadyModelTasks();
-  assert.deepEqual(calls, ['meeting']);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].meeting_id, 'meeting');
+  assert.equal(calls[0].provider, 'built-in');
+  assert.equal(calls[0].model, 'original-local-model');
+  assert.equal(calls[0].endpoint, undefined);
+  assert.equal(calls[0].key_reference, undefined);
   assert.equal(context.pendingModelTasks.size, 0);
 }
 

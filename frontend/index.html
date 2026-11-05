@@ -500,6 +500,13 @@
                   aria-expanded="false"
                   ><span class="ai-assist-toggle-star" data-interface-icon="ai"></span>
                   <span data-ai-assist-toggle-label>AI 笔记</span></button
+                ><button
+                  class="icon-button"
+                  data-live-accepted
+                  type="button"
+                  aria-haspopup="dialog"
+                  hidden
+                  ><span data-interface-icon="notebook" aria-hidden="true"></span></button
                 ><button class="text-button" data-ai-request type="button" hidden
                   >请求建议</button
                 ></header
@@ -514,9 +521,6 @@
               ></section
             ></div
           ><div class="floating-control-bar live-control-bar"
-            ><div class="control-source" role="img" aria-label="麦克风" title="麦克风"
-              ><i class="input-meter" data-live-mic-level aria-hidden="true"></i
-              ><span id="live-input-label" hidden></span></div
             ><div class="control-secondary live-caption-controls"
               ><button
                 class="floating-caption-toggle icon-button"
@@ -707,6 +711,8 @@
           ><span><i aria-hidden="true"></i><span data-task-summary-status></span></span
           ><span data-interface-icon="chevron-up" aria-hidden="true"></span
         ></button>
+        <div class="library-metrics" data-library-metrics></div>
+        <span class="status-version" data-status-version></span>
       </footer>
     </main>
     <div class="toast" id="toast" role="status"></div>

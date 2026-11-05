@@ -242,7 +242,13 @@ class LLMWorkerMixin:
             },
         )
         segments = meeting["segments"]
-        template = payload.get("template", "general")
+        previous = (meeting.get("summary") or {}).get("data") or {}
+        template = (
+            payload.get("template")
+            or meeting.get("summary_template")
+            or previous.get("template")
+            or "general"
+        )
         transcript = "\n".join(
             f"S{index} [{clock(item['start_ms'])}] {item['speaker_name']}: "
             + annotate_dates(" ".join(item["text"].splitlines()), meeting.get("meeting_date"))
@@ -269,7 +275,7 @@ class LLMWorkerMixin:
             if len(transcript) > MAX_SUMMARY_TRANSCRIPT_CHARS:
                 # 长会议：分段提取关键信息后合并，避免提示词超出上下文导致空响应或丢内容。
                 markdown = self._summarize_in_chunks(
-                    transcript, meeting, language, payload, control
+                    transcript, meeting, language, {**payload, "template": template}, control
                 )
             else:
                 prompt = summary_prompt(transcript, meeting["title"], language, template)
@@ -314,11 +320,11 @@ class LLMWorkerMixin:
         rendered, claims = parse_claims(markdown, segments, timed)
         data = {
             "markdown": rendered,
+            "language": language,
             "claims": claims,
             "template": template,
             "basis_date": meeting["meeting_date"],
         }
-        previous = (meeting.get("summary") or {}).get("data") or {}
         if not self.store.save_summary(
             meeting["id"],
             data,

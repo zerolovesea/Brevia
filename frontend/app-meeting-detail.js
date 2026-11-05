@@ -85,9 +85,7 @@ function applyBackendDetail(meeting) {
     uiData.detail.transcriptEditEntries = undefined;
     uiData.detail.transcriptErrors = {};
     uiData.detail.transcriptDraft = {};
-    detailActiveTab = meeting.summary?.data?.claims?.length ? 'summary' : 'notes';
-    uiData.detail.notebookDocument = detailActiveTab;
-    uiData.detail.summaryTemplate = meeting.summary?.data?.template || 'general';
+    detailActiveTab = 'summary';
     uiData.detail.transcriptVersion = 'refined';
     uiData.detail.transcriptSearch = '';
     uiData.detail.translationTarget = meeting.target_language || '';

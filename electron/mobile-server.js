@@ -27,6 +27,7 @@ const createSession = z.object({
     .optional(),
   target_language: z.enum(['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']).nullable().optional(),
   workspace_id: uuid.nullable().optional(),
+  summary_template: z.enum(['general', 'weekly', 'interview', 'review']).optional(),
   refined_model_id: z.string().max(100).optional(),
   speaker_segmentation_model_id: z.string().max(100).optional(),
   vad_model_id: z.string().max(100).optional(),

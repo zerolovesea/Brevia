@@ -600,39 +600,50 @@ function renderUpdateButton() {
     link.href = 'https://github.com/zerolovesea/Brevia/releases/latest';
   }
 }
-// 纪要供应商固定为这六项。请求地址由 summaryProviderPresets 派生，只有两个自定义
-// 供应商才向用户暴露地址输入框。
-const summaryProviders = [
-  'built-in',
-  'claude',
-  'openai',
-  'openrouter',
-  'custom-openai',
-  'custom-claude',
-];
+// 固定服务商共用兼容 API；自定义服务的地址与凭据由用户单独配置。
+function onlineProvider(label, endpoint, model, format = 'openai') {
+  return { label, endpoint, model, format, needsKey: true, needsEndpoint: false };
+}
 const summaryProviderPresets = {
   'built-in': { format: 'openai', endpoint: '', needsKey: false, needsEndpoint: false, model: '' },
-  claude: {
-    format: 'claude',
-    endpoint: 'https://api.anthropic.com',
-    needsKey: true,
-    needsEndpoint: false,
-    model: 'claude-sonnet-4-5',
-  },
-  openai: {
-    format: 'openai',
-    endpoint: 'https://api.openai.com/v1/chat/completions',
-    needsKey: true,
-    needsEndpoint: false,
-    model: 'gpt-4.1-mini',
-  },
-  openrouter: {
-    format: 'openai',
-    endpoint: 'https://openrouter.ai/api/v1/chat/completions',
-    needsKey: true,
-    needsEndpoint: false,
-    model: 'openai/gpt-4.1-mini',
-  },
+  claude: onlineProvider('Claude', 'https://api.anthropic.com', 'claude-sonnet-4-6', 'claude'),
+  openai: onlineProvider('OpenAI', 'https://api.openai.com/v1/chat/completions', 'gpt-5-mini'),
+  gemini: onlineProvider(
+    'Google Gemini',
+    'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+    'gemini-3.5-flash',
+  ),
+  deepseek: onlineProvider(
+    'DeepSeek',
+    'https://api.deepseek.com/chat/completions',
+    'deepseek-flash',
+  ),
+  qwen: onlineProvider(
+    'Qwen · CN',
+    'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
+    'qwen-plus',
+  ),
+  kimi: onlineProvider('Kimi · CN', 'https://api.moonshot.cn/v1/chat/completions', 'kimi-k3.1-pro'),
+  glm: onlineProvider(
+    'Zhipu GLM · CN',
+    'https://open.bigmodel.cn/api/paas/v4/chat/completions',
+    'glm-4.7-flash',
+  ),
+  mistral: onlineProvider(
+    'Mistral AI',
+    'https://api.mistral.ai/v1/chat/completions',
+    'mistral-small-latest',
+  ),
+  groq: onlineProvider(
+    'Groq',
+    'https://api.groq.com/openai/v1/chat/completions',
+    'openai/gpt-oss-20b',
+  ),
+  openrouter: onlineProvider(
+    'OpenRouter',
+    'https://openrouter.ai/api/v1/chat/completions',
+    'openai/gpt-5-mini',
+  ),
   'custom-openai': {
     format: 'openai',
     endpoint: '',
@@ -648,9 +659,15 @@ const summaryProviderPresets = {
     model: '',
   },
 };
+const summaryProviders = Object.keys(summaryProviderPresets);
 function summaryProviderLabel(provider) {
   const copy = summaryModelCopy[locale] || summaryModelCopy.en;
-  return copy.providers?.[provider] || (summaryModelCopy.en.providers?.[provider] ?? provider);
+  return (
+    copy.providers?.[provider] ||
+    summaryProviderPresets[provider]?.label ||
+    summaryModelCopy.en.providers?.[provider] ||
+    provider
+  );
 }
 // 只有一套生效配置，但每个供应商的模型/地址/密钥引用分别留存，来回切换不会丢失已填内容。
 let summaryConfig = { version: 2, enabled: true, provider: 'built-in', providers: {} };
@@ -705,8 +722,11 @@ function currentSummaryConfig() {
   };
 }
 /** 在浏览器存储之外保存纪要模型设置；密钥保留在 Electron 安全存储中。*/
-async function persistSummaryConfig() {
-  await window.brevia?.summary.config.save(currentSummaryConfig());
+async function persistSummaryConfig(apiKey) {
+  await window.brevia?.summary.config.save({
+    ...currentSummaryConfig(),
+    ...(apiKey ? { apiKey } : {}),
+  });
 }
 /** 应用已读取的配置；只认 version 2，其余一律回落到默认的内置供应商。*/
 function applySummaryConfig(config) {
@@ -750,8 +770,11 @@ function currentAiAssistConfig() {
     providers: aiAssistConfig.providers,
   };
 }
-async function persistAiAssistConfig() {
-  await window.brevia?.aiAssist.config.save(currentAiAssistConfig());
+async function persistAiAssistConfig(apiKey) {
+  await window.brevia?.aiAssist.config.save({
+    ...currentAiAssistConfig(),
+    ...(apiKey ? { apiKey } : {}),
+  });
 }
 function applyAiAssistConfig(config) {
   aiAssistConfig = {
@@ -1209,10 +1232,11 @@ function renderHomeMeetings() {
   panel.hidden = !deleted && !display.length;
   if (panel.hidden) {
     panel.replaceChildren();
+    panel.homeMarkup = '';
     return;
   }
   let previousDay;
-  panel.innerHTML = `<h2>${escapeHtml(t(deleted ? '最近删除' : '最近会议'))}</h2>${
+  const markup = `<h2>${escapeHtml(t(deleted ? '最近删除' : '最近会议'))}</h2>${
     display
       .map((meeting) => {
         const key = escapeHtml(meeting.id);
@@ -1231,10 +1255,16 @@ function renderHomeMeetings() {
         const day = meta ? date.toDateString() : '';
         const dayLabel = day === previousDay ? '' : meta;
         previousDay = day;
-        return `<div class="home-meeting"><span class="home-meeting-mark" aria-hidden="true">${interfaceIcon(deleted ? 'trash' : 'document')}</span><div class="home-meeting-copy">${deleted ? `<strong>${title}</strong>` : `<button data-open-recent="${key}" title="${title}">${title}</button>`}<span>${escapeHtml(context.join(' · '))}</span></div><small title="${escapeHtml(meta)}">${escapeHtml(dayLabel)}</small>${deleted ? `<button class="home-restore" data-restore-recent="${key}">${escapeHtml(t('恢复'))}</button>` : interfaceIcon('chevron-right')}</div>`;
+        const row = deleted ? 'div' : 'button';
+        const open = deleted ? '' : ` type="button" data-open-recent="${key}" title="${title}"`;
+        return `<${row} class="home-meeting"${open}><span class="home-meeting-mark" aria-hidden="true">${interfaceIcon(deleted ? 'trash' : 'document')}</span><span class="home-meeting-copy"><strong>${title}</strong><span>${escapeHtml(context.join(' · '))}</span></span><small>${escapeHtml(dayLabel)}</small>${deleted ? `<button class="home-restore" data-restore-recent="${key}">${escapeHtml(t('恢复'))}</button>` : interfaceIcon('chevron-right')}</${row}>`;
       })
       .join('') || `<p>${escapeHtml(t('还没有会议记录'))}</p>`
   }`;
+  if (panel.homeMarkup !== markup) {
+    panel.innerHTML = markup;
+    panel.homeMarkup = markup;
+  }
 }
 document.querySelector('[data-home-meetings]').addEventListener('click', async (event) => {
   const open = event.target.closest('[data-open-recent]');
@@ -1329,6 +1359,16 @@ function renderPrepareSelects(refinedModelOverride) {
   const modelLabel = prepareModelControl(language, refinedModel, modelOptions);
   prepareForm.querySelector('.form-grid').innerHTML =
     `<label>${t('工作区')}${desktopSelect('meeting-workspace', workspaceValue, workspaceOptions)}</label><label>${t('会议语言')}${desktopSelect('meeting-language', language, BreviaI18n.languageOptions(locale, t, true))}</label><label>${t('译文目标')}${desktopSelect('translation-target', values['translation-target'] || '', BreviaI18n.languageOptions(locale, t))}</label><label>${t('预期说话人数')}${desktopSelect('meeting-speakers', values['meeting-speakers'] || '-1', [['-1', t('自动检测')], ...Array.from({ length: 10 }, (_, i) => [String(i + 1), String(i + 1)])])}</label>${modelLabel}`;
+  const templateLabel = `<label>${escapeHtml(t('整理模板'))}${desktopSelect(
+    'summary-template',
+    values['summary-template'] || 'general',
+    [
+      ['general', t('通用')],
+      ['weekly', t('周会')],
+      ['interview', t('访谈')],
+      ['review', t('评审')],
+    ],
+  )}</label>`;
   const processing = prepareForm.querySelector('[data-prepare-processing]');
   processing.replaceChildren();
   const extraSettings = prepareForm.querySelector('[data-prepare-extra-settings]');
@@ -1359,6 +1399,10 @@ function renderPrepareSelects(refinedModelOverride) {
         extraSettings.append(label);
     });
   }
+  (prepareView.dataset.mode === 'import' ? processing : extraSettings).insertAdjacentHTML(
+    'beforeend',
+    templateLabel,
+  );
   prepareForm.querySelector('.prepare-processing').hidden = prepareView.dataset.mode !== 'import';
   renderCaptureMode();
   const importing = prepareView.dataset.mode === 'import';
@@ -1638,12 +1682,10 @@ if (breviaClient) {
       }
     }
     if (track !== 'mic') return;
-    document
-      .querySelectorAll('#mic-level, [data-onboarding-mic-level], [data-live-mic-level]')
-      .forEach((meter) => {
-        if (meter.id === 'mic-level' && currentCaptureMode === 'phone') return;
-        meter.style.setProperty('--level', Math.max(0, Math.min(1, level)));
-      });
+    document.querySelectorAll('#mic-level, [data-onboarding-mic-level]').forEach((meter) => {
+      if (meter.id === 'mic-level' && currentCaptureMode === 'phone') return;
+      meter.style.setProperty('--level', Math.max(0, Math.min(1, level)));
+    });
   };
   // 恢复用户上次选择的麦克风设备(若有)。
   if (savedMicDeviceId()) breviaClient.setMicDevice(savedMicDeviceId());
@@ -1927,9 +1969,7 @@ function showSummaryProgress(completed = 0, total = 100, stage = 'summary.prepar
   } else if (card.classList.contains('task-card-leave')) enterTaskCard(card);
   const ratio = total ? Math.min(1, completed / total) : 0;
   card.querySelector('p').textContent =
-    stage === 'summary.complete'
-      ? summaryTaskLabel(stage)
-      : (summaryTaskCopy[locale] || summaryTaskCopy.en)[0];
+    stage === 'summary.complete' ? summaryTaskLabel(stage) : t('会议纪要');
   card.querySelector('strong').innerHTML = renderTaskProgressLabel(
     summaryTaskLabel(stage),
     total ? Math.round(ratio * 100) : undefined,
@@ -1975,19 +2015,15 @@ function refreshLocalizedTaskCards() {
     summary.querySelector('p').textContent =
       summary.dataset.stage === 'summary.complete'
         ? summaryTaskLabel(summary.dataset.stage)
-        : (summaryTaskCopy[locale] || summaryTaskCopy.en)[0];
+        : t('会议纪要');
     summary.querySelector('strong').innerHTML = renderTaskProgressLabel(
       summaryTaskLabel(summary.dataset.stage),
       total ? Math.round((Number(summary.dataset.completed || 0) / total) * 100) : undefined,
     );
   }
 }
-async function generateMeetingSummary(
-  meetingId = breviaClient?.state.selectedMeetingId,
-  template = currentMeetingDetail?.id === meetingId
-    ? uiData.detail.summaryTemplate || 'general'
-    : 'general',
-) {
+async function generateMeetingSummary(meetingId, config = requestConfig(summaryConfig)) {
+  if (!meetingId) return;
   if (meetingActive) {
     showToast(t('实时会议中，结束后再生成会议纪要。'));
     return;
@@ -1996,11 +2032,9 @@ async function generateMeetingSummary(
     showToast(t('已有会议纪要正在生成，请稍候。'));
     return;
   }
-  const config = summaryRequestConfig();
-  if (!meetingId) return;
   if (!config || (config.provider === 'built-in' && !modelPaths.has(config.model))) {
     if (config?.provider === 'built-in')
-      queueModelTask('summary.generate', { meeting_id: meetingId, template }, [config.model]);
+      queueModelTask('summary.generate', { meeting_id: meetingId }, [config.model]);
     showSummaryConfigCard();
     return;
   }
@@ -2010,7 +2044,6 @@ async function generateMeetingSummary(
   try {
     const summary = await window.brevia.summary.generate({
       meeting_id: meetingId,
-      template,
       provider: config.provider,
       ...(config.endpoint ? { endpoint: config.endpoint } : {}),
       model: config.model,
@@ -2096,7 +2129,12 @@ async function resumeReadyModelTasks() {
       if (pending.task === 'summary.generate') {
         if (currentMeetingDetail?.id === pending.payload.meeting_id)
           uiData.detail.summary.waitingModels = false;
-        await generateMeetingSummary(pending.payload.meeting_id, pending.payload.template);
+        // 下载前用户选择了本地处理。即使等待期间切换到远程供应商，也只用该本地模型。
+        await generateMeetingSummary(pending.payload.meeting_id, {
+          provider: 'built-in',
+          model: pending.models[0],
+          format: summaryProviderPresets['built-in'].format,
+        });
       } else if (pending.task === 'meeting.refine') {
         await requestRefinement(pending.payload);
       } else if (pending.task === 'meeting.reconfigure') {
@@ -2726,7 +2764,7 @@ function renderModelConfigFields(config, selectedModel, { required = true, hint 
     // maxlength 对齐主进程的 zod 上限（model 128、keyLength 512），否则超长值要到
     // 主进程才被拒，用户只会看到一句无从下手的「操作失败」。
     const keyField = `<label class="preference-row preference-field"><span class="preference-copy">${copy.key}</span><span class="preference-control secret-field"><input name="apiKey" type="password" autocomplete="new-password" maxlength="512" value="${escapeHtml(modelConfigSecrets.get(config)?.[provider] || '')}" placeholder="${entry.keyReference ? '•'.repeat(entry.keyLength || 8) : ''}"${entry.keyReference || !required ? '' : ' required'} /><button class="icon-button" type="button" data-toggle-secret aria-label="${escapeHtml(t('显示或隐藏 API Key'))}" aria-pressed="false">${interfaceIcon('eye')}</button></span></label>`;
-    const modelField = `<label class="preference-row preference-field"><span class="preference-copy">${copy.model}</span><span class="preference-control"><input name="model" value="${escapeHtml(entry.model || '')}" maxlength="128" placeholder="${escapeHtml(preset.model)}"${requiredAttr} /></span></label>`;
+    const modelField = `<label class="preference-row preference-field"><span class="preference-copy">${copy.model}</span><span class="preference-control"><input name="model" value="${escapeHtml(entry.model ?? preset.model)}" maxlength="128" placeholder="${escapeHtml(preset.model)}"${requiredAttr} /></span></label>`;
     fields = `${endpointField}${keyField}${modelField}`;
   }
 
@@ -2765,10 +2803,10 @@ function renderAiSettingsExample(active) {
     ? `<div class="ai-example-note-actions">
     <button data-ai-example-action="request" type="button">${interfaceIcon('ai')}${escapeHtml(t('请求 AI 建议'))}</button>
     <button data-ai-example-action="accept" type="button">${interfaceIcon('plus')}${escapeHtml(t('加入笔记'))}</button>
-    <span data-example-saved role="status">${interfaceIcon('check')}${escapeHtml(t('已加入笔记'))}</span></div>`
+    <span data-example-saved tabindex="-1">${interfaceIcon('check')}${escapeHtml(t('已加入笔记'))}</span></div>`
     : '';
   return `<section class="ai-settings-example" data-ai-example="${active}" data-stage="${state}" data-initial-stage="${state}" aria-label="${escapeHtml(title + ' · ' + t('演示'))}">
-    <header><h3>${escapeHtml(live ? copy.during : copy.after)}<span>·</span>${escapeHtml(t('演示'))}</h3><button data-ai-example-action="replay" type="button">${interfaceIcon('refresh')}${escapeHtml(copy.replay)}</button></header>
+    <header><h3>${escapeHtml(live ? copy.during : copy.after)}<span>·</span>${escapeHtml(t('演示'))}</h3></header>
     <div class="ai-example-scene">
       <div class="ai-example-source"><h4>${interfaceIcon('waveform')}${escapeHtml(t(live ? '实时转写' : '逐字稿'))}</h4>
       ${line('00:12', liveSample.transcriptText)}${!live ? line('00:24', liveSample.scenes.quiet[1][2].replace(/^[•*-]\s*/, '')) : ''}</div>
@@ -2777,22 +2815,33 @@ function renderAiSettingsExample(active) {
       <div class="ai-example-output">${live ? `<p class="ai-example-note">${escapeHtml(liveSample.scenes.quiet[0][2].replace(/^[•*-]\s*/, ''))}</p>` : fact('check', t('决定'), summary.decision) + fact('checkbox', t('待办'), summary.actions[0])}</div>${takeNote}</div>
     </div></section>`;
 }
-/** 重播与采纳仅作用于当前预览；换页后由 DOM 一起释放。 */
+/** 由预览自身的 CSS 循环推动阶段；换页、隐藏或减少动态效果时没有后台定时器。 */
+function advanceAiSettingsExample(example) {
+  const stage = example.dataset.stage;
+  example.dataset.stage =
+    stage === 'request'
+      ? 'suggested'
+      : stage === 'suggested'
+        ? 'written'
+        : example.dataset.initialStage;
+}
+settingsModal.addEventListener('animationiteration', (event) => {
+  const example = event.target.closest('[data-ai-example="ai-assist"]');
+  if (
+    example &&
+    event.target.matches('.ai-example-turn') &&
+    event.animationName === 'ai-example-transcript' &&
+    !example.matches(':focus-within')
+  )
+    advanceAiSettingsExample(example);
+});
 function operateAiSettingsExample(button) {
   const example = button.closest('[data-ai-example]');
-  const action = button.dataset.aiExampleAction;
-  if (action === 'replay') {
-    example.dataset.stage = example.dataset.initialStage;
-    const scene = example.querySelector('.ai-example-scene');
-    scene.replaceWith(scene.cloneNode(true));
-    return;
-  }
-  example.dataset.stage = action === 'request' ? 'suggested' : 'written';
-  const selector =
-    action === 'request'
-      ? '[data-ai-example-action="accept"]'
-      : '[data-ai-example-action="replay"]';
-  example.querySelector(selector).focus({ preventScroll: true });
+  const request = button.dataset.aiExampleAction === 'request';
+  example.dataset.stage = request ? 'suggested' : 'written';
+  example
+    .querySelector(request ? '[data-ai-example-action="accept"]' : '[data-example-saved]')
+    .focus({ preventScroll: true });
 }
 function renderAiSettingsTabs(active) {
   return settingsModal.classList.contains('settings-page')
@@ -2877,7 +2926,7 @@ function renderSummaryModelModal() {
     copy.featureIntro || summaryModelCopy.en.featureIntro;
   replaceModalBody(
     'summary-model',
-    `${renderAiSettingsTabs('summary-model')}${page ? '<div class="preferences-ai-panel">' : ''}${onboardingBuiltinProvider || onboardingOnlineProvider ? '' : `<label class="preference-row summary-enabled-control"><span class="preference-copy" title="${escapeHtml(copy.featureIntro || summaryModelCopy.en.featureIntro)}"><b>${t('会议纪要')}</b></span><span class="preference-control"><input type="checkbox" data-summary-enabled${summaryConfig.enabled ? ' checked' : ''} /></span></label>`}${page ? renderAiServiceChoice(summaryConfigDraft) : ''}${renderSummaryModelForm()}${page ? '</div>' : ''}`,
+    `${renderAiSettingsTabs('summary-model')}${page ? '<div class="preferences-ai-panel">' : ''}${onboardingBuiltinProvider || onboardingOnlineProvider ? '' : `<label class="preference-row summary-enabled-control"><span class="preference-copy" title="${escapeHtml(copy.featureIntro || summaryModelCopy.en.featureIntro)}"><b>${t('会后自动生成纪要')}</b></span><span class="preference-control"><input type="checkbox" data-summary-enabled${summaryConfig.enabled ? ' checked' : ''} /></span></label>`}${page ? renderAiServiceChoice(summaryConfigDraft) : ''}${renderSummaryModelForm()}${page ? '</div>' : ''}`,
   );
 }
 
@@ -3163,10 +3212,17 @@ function exportHubHtml() {
     if (!(content in exportSelection)) exportSelection[content] = exportDefaultFormat[content];
   });
   const txt = copy.txt;
+  const hasCauseTree = currentMeetingDetail?.summary?.data?.claims?.some(
+    (claim) => claim.kind === 'cause',
+  );
   const rows = meta
     .map(({ content }) => {
       const label = exportContentLabel[content]();
       const desc = copy.desc[content] || '';
+      const graph =
+        hasCauseTree && ['notes', 'mynotes'].includes(content)
+          ? `<small>${escapeHtml(t('文件含鱼骨图'))}</small>`
+          : '';
       const current = exportSelection[content] || exportDefaultFormat[content];
       const currentDisplay = exportFormatDisplay[current] || txt;
       const formatOptions = (exportContentFormats[content] || [])
@@ -3177,7 +3233,7 @@ function exportHubHtml() {
         .join('');
       return `<label class="export-content-row${exportSelection[content] ? ' is-checked' : ''}">
       <input type="checkbox" data-export-item="${content}"${exportSelection[content] ? ' checked' : ''}>
-      ${interfaceIcon(content === 'audio' ? 'music' : content === 'transcript' ? 'waveform' : 'document')}<span class="export-content-name"><b title="${escapeHtml(desc)}">${escapeHtml(label)}</b></span>
+      ${interfaceIcon(content === 'audio' ? 'music' : content === 'transcript' ? 'waveform' : 'document')}<span class="export-content-name"><b title="${escapeHtml(desc)}">${escapeHtml(label)}</b>${graph}</span>
       ${
         content === 'audio'
           ? '<span class="export-format-fixed">WAV</span>'
@@ -5111,8 +5167,9 @@ settingsModal.addEventListener('click', async (event) => {
   }
   const batchExportFormat = event.target.closest('[data-batch-export-format]');
   if (batchExportFormat) {
+    const content = settingsModal.querySelector('[data-batch-export-content]').value;
     closeModal();
-    void exportSelectedMeetings(batchExportFormat.dataset.batchExportFormat);
+    void exportSelectedMeetings(batchExportFormat.dataset.batchExportFormat, content);
     return;
   }
   const openStorage = event.target.closest('[data-open-storage]');
@@ -5141,6 +5198,7 @@ settingsModal.addEventListener('click', async (event) => {
           }
           storageUsage = await window.brevia?.storage.clear({ partition });
           if (partition === 'meetings') {
+            scheduleLibraryMetrics();
             currentMeetingDetail = null;
             if (breviaClient) breviaClient.state.selectedMeetingId = null;
             try {
@@ -5171,11 +5229,6 @@ settingsModal.addEventListener('click', async (event) => {
     } catch (error) {
       showToast(error.message, undefined, 'error');
     }
-    return;
-  }
-  if (event.target.closest('[data-regenerate-summary]')) {
-    closeModal();
-    void generateMeetingSummary();
     return;
   }
   const sync = event.target.closest('[data-sync-note]');
@@ -5556,10 +5609,28 @@ settingsModal.addEventListener('input', (event) => {
     keys[config.provider] = event.target.value;
     modelConfigSecrets.set(config, keys);
   } else if (name === 'model' || name === 'endpoint') {
-    config.providers[config.provider] = { ...providerEntry(config), [name]: event.target.value };
+    const entry = { ...providerEntry(config), [name]: event.target.value };
+    const previousEndpoint = providerEntry(config).endpoint;
+    if (name === 'endpoint' && previousEndpoint && previousEndpoint !== entry.endpoint) {
+      delete entry.keyReference;
+      delete entry.keyLength;
+      const keys = modelConfigSecrets.get(config);
+      if (keys) delete keys[config.provider];
+      const field = form.elements.apiKey;
+      field.value = '';
+      field.placeholder = '';
+      field.required = !form.matches('.ai-assist-config-form') || config.enabled;
+    }
+    config.providers[config.provider] = entry;
   }
 });
 settingsModal.addEventListener('change', async (event) => {
+  if (event.target.matches('[data-batch-export-content]')) {
+    settingsModal.querySelector('.export-options').innerHTML = batchFormatButtons(
+      event.target.value,
+    );
+    return;
+  }
   if (event.target.matches('[data-ai-settings-enabled]')) {
     aiAssistConfigDraft.enabled = event.target.checked;
     renderAiAssistModal();
@@ -5624,19 +5695,15 @@ settingsModal.addEventListener('dblclick', (event) => {
   editingSpeakerProfileId = profile.dataset.renameSpeakerProfile;
   renderModal('speaker-profiles');
 });
-async function saveModelConfig(
-  form,
-  config,
-  keyPrefix,
-  values = Object.fromEntries(new FormData(form)),
-) {
+function saveModelConfig(form, config, keyPrefix, values = Object.fromEntries(new FormData(form))) {
   const isAiNoteForm = form.matches('.ai-assist-config-form');
   const modelMissingMessage = isAiNoteForm
     ? t('请先选择或填写 AI 笔记模型。')
     : t('请先选择或填写纪要模型。');
   const provider = summaryProviders.includes(values.provider) ? values.provider : config.provider;
   const preset = summaryProviderPresets[provider];
-  const previous = providerEntry(config, provider);
+  const savedConfig = isAiNoteForm ? aiAssistConfig : summaryConfig;
+  const savedEntry = providerEntry(savedConfig, provider);
   const entry = { model: (values.model || '').trim() };
   if (!entry.model) {
     showToast(modelMissingMessage);
@@ -5650,18 +5717,22 @@ async function saveModelConfig(
     }
   }
   if (preset.needsKey) {
-    entry.keyReference = previous.keyReference || `${keyPrefix}-${crypto.randomUUID()}`;
-    if (values.apiKey && window.brevia) {
+    // 请求地址变化后必须重新输入密钥，且不能覆盖其他功能仍引用的旧密钥。
+    const sameEndpoint = !preset.needsEndpoint || savedEntry.endpoint === entry.endpoint;
+    const previous = sameEndpoint ? savedEntry : {};
+    if (values.apiKey) {
+      entry.keyReference = `${keyPrefix}-${crypto.randomUUID()}`;
       entry.keyLength = values.apiKey.length;
-      await window.brevia.secret.set({ reference: entry.keyReference, value: values.apiKey });
-    } else if (previous.keyLength) entry.keyLength = previous.keyLength;
-    else {
+    } else if (previous.keyReference && previous.keyLength) {
+      entry.keyReference = previous.keyReference;
+      entry.keyLength = previous.keyLength;
+    } else {
       showToast(t('请填写 API Key。'));
       return false;
     }
   }
   config.provider = provider;
-  config.providers = { ...config.providers, [provider]: entry };
+  config.providers = { ...savedConfig.providers, [provider]: entry };
   return true;
 }
 for (const type of ['input', 'change']) {
@@ -5676,6 +5747,12 @@ function completeSettingsSave(form) {
   if (!settingsModal.classList.contains('settings-page')) {
     closeModal();
     return;
+  }
+  const field = form.elements.apiKey;
+  if (field?.value) {
+    field.placeholder = '•'.repeat(field.value.length);
+    field.value = '';
+    field.required = false;
   }
   const status = form.querySelector('.save-state');
   if (status) status.outerHTML = renderSaveState('saved');
@@ -5736,7 +5813,7 @@ settingsModal.addEventListener('submit', async (event) => {
   if (event.target.matches('.ai-assist-config-form, .summary-model-form')) {
     event.preventDefault();
     const form = event.target;
-    const previousSummary = structuredClone(summaryConfig);
+    let previousSummary = structuredClone(summaryConfig);
     const previousAiAssist = structuredClone(aiAssistConfig);
     if (form.dataset.savePending === 'true') return;
     form.dataset.savePending = 'true';
@@ -5755,10 +5832,15 @@ settingsModal.addEventListener('submit', async (event) => {
         event.preventDefault();
         const values = formValues;
         const enabled = values.enabled === 'on';
-        const configured = Boolean(values.model?.trim());
+        const configured = Boolean(
+          values.model?.trim() &&
+            (aiAssistConfigDraft.provider === 'built-in' ||
+              values.apiKey ||
+              providerEntry(aiAssistConfigDraft).keyReference),
+        );
         if (
           (enabled || configured) &&
-          !(await saveModelConfig(event.target, aiAssistConfigDraft, 'ai-assist', formValues))
+          !saveModelConfig(event.target, aiAssistConfigDraft, 'ai-assist', formValues)
         )
           return;
         if (configured) {
@@ -5772,7 +5854,9 @@ settingsModal.addEventListener('submit', async (event) => {
         aiAssistConfigRevision += 1;
         selectedAiAssistBuiltinModel = '';
         aiAssistConfigDraft = structuredClone(aiAssistConfig);
-        await persistAiAssistConfig();
+        await persistAiAssistConfig(
+          configured && aiAssistConfig.provider !== 'built-in' ? values.apiKey : undefined,
+        );
         completeSettingsSave(form);
         if (onboardingPage?.querySelector('[name="onboarding-ai-enabled"]')) {
           onboardingPage.querySelector('[name="onboarding-ai-enabled"]').checked =
@@ -5799,14 +5883,16 @@ settingsModal.addEventListener('submit', async (event) => {
       }
       if (event.target.matches('.summary-model-form')) {
         event.preventDefault();
-        if (!(await saveModelConfig(event.target, summaryConfigDraft, 'summary', formValues)))
-          return;
+        if (!saveModelConfig(event.target, summaryConfigDraft, 'summary', formValues)) return;
         summaryConfig.provider = summaryConfigDraft.provider;
         summaryConfig.providers = summaryConfigDraft.providers;
         summaryConfigRevision += 1;
         selectedBuiltinModel = '';
         summaryConfigDraft = structuredClone(summaryConfig);
-        await persistSummaryConfig();
+        await persistSummaryConfig(
+          summaryConfig.provider !== 'built-in' ? formValues.apiKey : undefined,
+        );
+        previousSummary = structuredClone(summaryConfig);
         if (onboardingPage?.dataset.aiSettings === 'false') {
           aiAssistConfig.provider = summaryConfig.provider;
           aiAssistConfig.providers = structuredClone(summaryConfig.providers);
@@ -5815,7 +5901,7 @@ settingsModal.addEventListener('submit', async (event) => {
           await persistAiAssistConfig();
         }
         dismissTaskCard(document.querySelector('#summary-config-required'));
-        const ready = summaryRequestConfig();
+        const ready = requestConfig(summaryConfig);
         if (ready && (ready.provider !== 'built-in' || modelPaths.has(ready.model))) {
           summaryFeedback = null;
           syncSummaryFeedback();
@@ -5906,6 +5992,7 @@ function applyTheme(nextTheme) {
       : theme;
   document.documentElement.dataset.theme = effective;
   document.documentElement.style.colorScheme = effective;
+  void window.brevia?.floatingCaption?.update?.({ theme: effective });
   themeToggle.innerHTML = interfaceIcon(effective === 'dark' ? 'moon' : 'sun');
   themeToggle.title = (themeLabels[locale] || themeLabels.en)[
     effective === 'dark' ? 'light' : 'dark'
@@ -5981,6 +6068,7 @@ function applyLanguage(nextLocale, animate = false) {
   closeMeetingPopovers();
   if (document.querySelector('.segment-context-menu')) closeSegmentContextMenu();
   locale = nextLocale;
+  renderLibraryMetrics();
   localStorage.setItem('brevia-language', locale);
   document.documentElement.lang = locale === 'zh' ? 'zh-CN' : locale;
   document.title = t('Brevia');
@@ -6034,7 +6122,6 @@ function applyLanguage(nextLocale, animate = false) {
     renderPrepareAudioSources();
     renderPauseButton();
     updatePlayerDisplayControls();
-    renderLiveInputStatus();
     document.querySelector('#end-meeting').innerHTML =
       `${interfaceIcon('stop')}<span>${escapeHtml(t('结束会议'))}</span>`;
     renderSettingsView();
@@ -6126,28 +6213,24 @@ function showSummaryConfigCard(error) {
   const retained = Boolean(uiData.detail.summary.markdown);
   const copy = {
     title: t(
-      !summaryConfig.enabled
-        ? '会议纪要功能未开启'
-        : authentication
-          ? rejected
-            ? '纪要服务拒绝了请求'
-            : '纪要服务认证失败'
-          : builtin
-            ? '内置纪要模型未配置'
-            : '纪要模型需要配置',
+      authentication
+        ? rejected
+          ? '纪要服务拒绝了请求'
+          : '纪要服务认证失败'
+        : builtin
+          ? '内置纪要模型未配置'
+          : '纪要模型需要配置',
     ),
     detail: t(
-      !summaryConfig.enabled
-        ? '请先开启会议纪要功能，再重新生成。'
-        : authentication
-          ? '请检查 API 地址、密钥和服务商访问策略。'
-          : builtin
-            ? retained
-              ? '请先选择并下载一个内置纪要模型，再重新生成。现有纪要仍保留。'
-              : '请先选择并下载一个内置纪要模型，再生成会议纪要。'
-            : summaryProviderPresets[summaryConfig.provider]?.needsKey
-              ? '请补全纪要服务的模型、API 地址和密钥，再重新生成。'
-              : '请补全纪要服务的模型和连接配置，再重新生成。',
+      authentication
+        ? '请检查 API 地址、密钥和服务商访问策略。'
+        : builtin
+          ? retained
+            ? '请先选择并下载一个内置纪要模型，再重新生成。现有纪要仍保留。'
+            : '请先选择并下载一个内置纪要模型，再生成会议纪要。'
+          : summaryProviderPresets[summaryConfig.provider]?.needsKey
+            ? '请补全纪要服务的模型、API 地址和密钥，再重新生成。'
+            : '请补全纪要服务的模型和连接配置，再重新生成。',
     ),
     action: t('配置纪要模型'),
   };
@@ -6353,7 +6436,10 @@ async function transitionPage(current, next, swap = () => {}) {
         document
           .querySelectorAll('.nav-item')
           .forEach((item) => item.classList.toggle('active', item.dataset.view === activeView));
-      if (activeView === 'detail') resetDetailHeaderCollapse();
+      if (activeView === 'detail') {
+        if (previousView !== 'detail') switchDetailDocument('summary');
+        resetDetailHeaderCollapse();
+      }
       await swap();
       syncCurrentMeetingNavigation();
     } finally {
@@ -6487,6 +6573,7 @@ async function loadInstalledAppVersion() {
 function applyInstalledVersion(version) {
   installedAppVersion = version;
   appVersion.textContent = `v${version}`;
+  document.querySelector('[data-status-version]').textContent = appVersion.textContent;
   renderUpdateButton();
   maybeShowWhatsNew();
 }
@@ -6786,6 +6873,8 @@ function adoptMobileMeeting(meeting) {
       revision: Number(segment.revision) || 0,
       text: segment.text,
       start_ms: segment.start_ms,
+      end_ms: segment.end_ms,
+      track: segment.track,
       speaker: segment.speaker_name || segment.speaker,
     });
     latestLiveSegmentId = segment.id;
@@ -6833,6 +6922,7 @@ function activateMeeting(meeting, payload) {
     liveNotesEditor.setMode('rich');
   }
   resetAiNoteSuggestions();
+  setLiveAcceptedClaims(meeting.accepted_claims || []);
   renderAiAssistToggle();
   setLiveTranslationEnabled(Boolean(payload.target_language));
   renderLiveModelControl();
@@ -6847,7 +6937,6 @@ function activateMeeting(meeting, payload) {
   const pauseButton = document.querySelector('#pause');
   pauseButton.dataset.paused = 'false';
   renderPauseButton();
-  renderLiveInputStatus();
   void startAiNoteForMeeting(meeting.id);
   miniMeeting.hidden = true;
   showView('live');
@@ -6913,6 +7002,7 @@ async function submitMeeting(event) {
     speaker_segmentation_model_id: segmentationModelId,
     vad_model_id: prepareForm.dataset.vadModel || 'silero-vad',
     workspace_id: form.get('meeting-workspace') || null,
+    summary_template: form.get('summary-template') || 'general',
   };
   try {
     if (prepareView.dataset.mode === 'import') {
@@ -6977,7 +7067,7 @@ function renderRecordingState(paused) {
   active.status = { ...active.status, label, paused };
   if (changed) renderMeetingList();
 }
-function renderLiveInputStatus() {
+function liveInputLabel() {
   const phone = breviaClient?.state.meeting?.tags?.includes('手机录音');
   const inputs = breviaClient?.state.inputs || captureModeInputs();
   const label = phone
@@ -6989,11 +7079,7 @@ function renderLiveInputStatus() {
       : inputs.mic
         ? '麦克风'
         : '系统音频';
-  const source = document.querySelector('#live-view .control-source');
-  source.title = t(label);
-  source.setAttribute('aria-label', source.title);
-  document.querySelector('#live-input-label').textContent = source.title;
-  document.querySelector('[data-live-mic-level]').hidden = phone || !inputs.mic;
+  return t(label);
 }
 /** 实时识别链路没能建立时，给出一条**常驻**提示卡（而不是一闪而过的 toast）。
  *
@@ -7127,7 +7213,7 @@ function finishCurrentRecording(meeting) {
     showView('detail');
     const config = summaryRequestConfig();
     if (meeting && config && (config.provider !== 'built-in' || modelPaths.has(config.model)))
-      void generateMeetingSummary(meeting.id);
+      void generateMeetingSummary(meeting.id, config);
     void resumeReadyModelTasks();
     if (window.brevia)
       void refreshBackendMeetings().catch((error) => showToast(error.message, undefined, 'error'));
@@ -7365,12 +7451,23 @@ function requestAiSuggestion() {
     .catch(() => {});
 }
 document.querySelector('[data-ai-request]')?.addEventListener('click', requestAiSuggestion);
+let liveAcceptedClaims = [];
+function setLiveAcceptedClaims(claims) {
+  liveAcceptedClaims = claims;
+  const button = document.querySelector('[data-live-accepted]');
+  button.hidden = !claims.length;
+  button.title = t('已采纳的 AI 笔记');
+  button.setAttribute('aria-label', button.title);
+}
+window.addEventListener('brevia:language-changed', () => setLiveAcceptedClaims(liveAcceptedClaims));
 let pendingAutoSuggestions = [];
 function resetAiNoteSuggestions() {
   clearTimeout(aiNoteTypingTimer);
   aiNoteUserTyping = false;
   pendingAutoSuggestions.length = 0;
   aiSuggestionQueue = [];
+  setLiveAcceptedClaims([]);
+  document.querySelector('[data-live-note-dialog][open]')?.close();
   aiSuggestionDraftKey = null;
   latestAiSuggestion = null;
   hideAiSuggestion();
@@ -7413,10 +7510,17 @@ if (window.brevia?.on)
   window.brevia.on('ai-note.evidence', (payload) => {
     if (!meetingActive || payload.meeting_id !== breviaClient?.state.meeting?.id) return;
     const mergeEvidence = (suggestion) =>
-      suggestion?.id === payload.id ? { ...suggestion, evidence: payload.evidence } : suggestion;
+      suggestion?.id === payload.id
+        ? {
+            ...suggestion,
+            evidence: payload.evidence,
+            sources: payload.sources ?? suggestion.sources,
+          }
+        : suggestion;
     latestAiSuggestion = mergeEvidence(latestAiSuggestion);
     aiSuggestionQueue = aiSuggestionQueue.map(mergeEvidence);
     pendingAutoSuggestions = pendingAutoSuggestions.map(mergeEvidence);
+    // 采纳时已经冻结的引文只从保存结果恢复，后来的补充不应改写那次采纳。
     renderAiSuggestion();
   });
 /** 展示队列里的下一条建议（没有则回到空状态）。@returns {void} */
@@ -7456,8 +7560,12 @@ function renderAiSuggestion() {
     return;
   }
   const suggestion = latestAiSuggestion;
+  const count = suggestion.sources?.length || 0;
+  const evidenceLabel = count
+    ? `<button class="ai-suggestion-evidence text-button" type="button" data-live-suggestion-sources aria-haspopup="dialog">${escapeHtml(t('依据 {count} 段字幕').replace('{count}', count))}</button>`
+    : `<small class="ai-suggestion-evidence">${escapeHtml(t('缺少原文依据'))}</small>`;
   if (suggestion.type === 'topic') {
-    root.innerHTML = `<button type="button" class="ai-topic-divider" data-ai-topic="${escapeHtml(suggestion.id)}">${t('AI 检测到新话题：')}${escapeHtml(suggestion.text)}</button>`;
+    root.innerHTML = `<button type="button" class="ai-topic-divider" data-ai-topic="${escapeHtml(suggestion.id)}">${t('AI 检测到新话题：')}${escapeHtml(suggestion.text)}</button>${evidenceLabel}`;
     root.hidden = false;
     scheduleAiSuggestionAutoFade();
     return;
@@ -7469,18 +7577,25 @@ function renderAiSuggestion() {
   }
   const label = t(aiSuggestionTypeKey(suggestion.type));
   const actionLabel = suggestion.type === 'supplement' ? t('补充') : t('加入笔记');
-  const evidence = Array.isArray(suggestion.evidence) ? suggestion.evidence : [];
-  const evidenceLabel = evidence.length
-    ? `<span class="ai-suggestion-evidence" title="${escapeHtml(evidence.join('、'))}">${escapeHtml(t('依据 {count} 段字幕').replace('{count}', evidence.length))}</span>`
-    : '';
   root.innerHTML = `<div class="ai-suggestion-card"><div class="ai-suggestion-head"><span class="ai-suggestion-star">${interfaceIcon('ai')}</span> <span class="ai-suggestion-type">${escapeHtml(label)}</span>${evidenceLabel}</div><p class="ai-suggestion-text">${escapeHtml(suggestion.text)}</p><div class="ai-suggestion-actions"><button type="button" class="ai-suggestion-accept" data-ai-accept>${interfaceIcon('plus')} ${escapeHtml(actionLabel)}</button><button type="button" class="ai-suggestion-ignore" data-ai-ignore>${t('忽略')}</button></div></div>`;
   root.hidden = false;
   scheduleAiSuggestionAutoFade();
 }
 function scheduleAiSuggestionAutoFade() {
   clearTimeout(aiSuggestionAutoFadeTimer);
+  if (
+    document.querySelector('[data-live-note-dialog][open]') ||
+    aiSuggestionRoot()?.matches(':focus-within')
+  )
+    return;
   aiSuggestionAutoFadeTimer = setTimeout(hideAiSuggestion, 15000);
 }
+aiSuggestionHost?.addEventListener('focusin', () => clearTimeout(aiSuggestionAutoFadeTimer));
+aiSuggestionHost?.addEventListener('focusout', () => {
+  queueMicrotask(() => {
+    if (latestAiSuggestion) scheduleAiSuggestionAutoFade();
+  });
+});
 function hideAiSuggestion() {
   clearTimeout(aiSuggestionAutoFadeTimer);
   latestAiSuggestion = null;
@@ -7535,6 +7650,14 @@ function convertTopicToHeading() {
   void acceptAiSuggestion(suggestion.text);
 }
 document.addEventListener('click', (event) => {
+  if (event.target.closest('[data-live-accepted]')) {
+    openLiveNoteEvidence(liveAcceptedClaims, t('已采纳的 AI 笔记'));
+    return;
+  }
+  if (event.target.closest('[data-live-suggestion-sources]') && latestAiSuggestion) {
+    openLiveNoteEvidence([latestAiSuggestion], t('引用'));
+    return;
+  }
   const accept = event.target.closest('[data-ai-accept]');
   if (accept) {
     const suggestion = latestAiSuggestion;
@@ -7584,10 +7707,12 @@ function persistNotes(meetingId, notes) {
   notesSavePending = notesSavePending
     .catch(() => {})
     .then(async () => {
-      await window.brevia.meeting.update({
+      const saved = await window.brevia.meeting.update({
         meeting_id: meetingId,
         updates: { notes: text, ...(sources.length ? { accepted_suggestion_ids: sources } : {}) },
       });
+      if (meetingActive && breviaClient?.state.meeting?.id === meetingId && saved?.accepted_claims)
+        setLiveAcceptedClaims(saved.accepted_claims);
       const pending = pendingNoteSources.get(meetingId);
       if (pending) {
         for (const id of sources) pending.delete(id);
@@ -8005,7 +8130,20 @@ meetingList.addEventListener('keydown', (event) => {
     toggleMeetingSelection(row);
   }
 });
-const batchExportFormats = ['md', 'txt', 'json', 'srt', 'docx', 'pdf', 'wav'];
+function batchFormatButtons(content) {
+  const formats =
+    content === 'transcript'
+      ? ['md', 'txt', 'json', 'srt', 'docx', 'pdf']
+      : content === 'audio'
+        ? ['wav']
+        : exportContentFormats[content];
+  return formats
+    .map(
+      (format) =>
+        `<button type="button" data-batch-export-format="${format}"><b>${exportFormatDisplay[format]}</b><strong>.${format}</strong></button>`,
+    )
+    .join('');
+}
 let batchExportSnapshot = [];
 let batchOperationBusy = false;
 function openBatchExport() {
@@ -8019,7 +8157,9 @@ function openBatchExport() {
   );
   replaceModalBody(
     'batch-export',
-    `<div class="export-options">${batchExportFormats.map((format) => `<button type="button" data-batch-export-format="${format}"><span><b>${format.toUpperCase()}</b></span><strong>.${format}</strong></button>`).join('')}</div>`,
+    `<label class="export-content-row"><b>${escapeHtml((exportHubCopy[locale] || exportHubCopy.en).what)}</b>
+    <select data-batch-export-content>${['transcript', 'mynotes', 'notes', 'audio'].map((type) => `<option value="${type}">${escapeHtml(exportContentLabel[type]())}</option>`).join('')}</select></label>
+    <div class="export-options">${batchFormatButtons('transcript')}</div>`,
   );
   showSettingsModal();
 }
@@ -8059,6 +8199,7 @@ function showBatchResults(meetings, results, action, retry) {
 }
 async function exportSelectedMeetings(
   format,
+  content,
   meetings = batchExportSnapshot,
   previousResults = [],
 ) {
@@ -8069,7 +8210,8 @@ async function exportSelectedMeetings(
       ? await window.brevia.meeting.exportMany({
           meeting_ids: meetings.map(({ id }) => id).filter(Boolean),
           format,
-          filename_prefix: `[${format === 'wav' ? t('会议录音') : t('字幕')}]`,
+          content,
+          filename_prefix: `[${content === 'transcript' ? t('字幕') : exportContentLabel[content]()}]`,
         })
       : null;
     if (!result) return;
@@ -8082,7 +8224,7 @@ async function exportSelectedMeetings(
     const combined = [...previousResults.filter((item) => !ids.has(item.meeting_id)), ...received];
     const allMeetings = batchExportSnapshot;
     showBatchResults(allMeetings, combined, 'export', (failures) =>
-      exportSelectedMeetings(format, failures, combined),
+      exportSelectedMeetings(format, content, failures, combined),
     );
   } catch (error) {
     showBatchResults(batchExportSnapshot, previousResults, 'export', null);
@@ -8219,8 +8361,10 @@ async function mutateMeetings(action, meetings) {
       results.push({ meeting_id: meeting.id, error: String(error.message || error) });
     }
   }
-  if (['delete', 'restore', 'purge'].includes(action))
+  if (['delete', 'restore', 'purge'].includes(action)) {
     uiData.meetings = uiData.meetings.filter((meeting) => !completed.has(meeting.id));
+    if (completed.size) scheduleLibraryMetrics();
+  }
   clearMeetingSelection();
   const failed = results.filter((result) => result.error);
   if (failed.length) {
@@ -8286,7 +8430,6 @@ async function openMeetingRow(row, meetingId = row.dataset.meetingId) {
     return;
   }
   const request = ++meetingListRequest;
-  breviaClient.state.selectedMeetingId = meetingId;
   row.style.opacity = '0.6';
 
   try {
@@ -8294,12 +8437,14 @@ async function openMeetingRow(row, meetingId = row.dataset.meetingId) {
 
     row.style.opacity = '';
     if (request !== meetingListRequest) return;
+    breviaClient.state.selectedMeetingId = meeting.id;
     applyBackendDetail(meeting);
+    if (activeView === 'detail') switchDetailDocument('summary');
     await showView('detail');
     syncCurrentMeetingNavigation();
   } catch (error) {
     row.style.opacity = '';
-    showToast(error.message, undefined, 'error');
+    if (request === meetingListRequest) showToast(error.message, undefined, 'error');
   }
 }
 function finishMeetingRename(restoreFocus) {
@@ -10166,26 +10311,13 @@ finalTranscript.addEventListener('click', async (event) => {
   }
   const tab = event.target.closest('[data-detail-tab]');
   if (!tab) return;
-  switchDetailDocument(
-    tab.dataset.detailTab === 'notes'
-      ? uiData.detail.notebookDocument || 'notes'
-      : tab.dataset.detailTab,
-  );
-});
-finalTranscript.addEventListener('change', (event) => {
-  if (event.target.matches('[data-summary-template]'))
-    uiData.detail.summaryTemplate = event.target.value;
-  if (event.target.matches('[data-notebook-document]')) {
-    if (!switchDetailDocument(event.target.value)) event.target.value = detailActiveTab;
-    finalTranscript.querySelector('[data-notebook-document]')?.focus({ preventScroll: true });
-  }
+  switchDetailDocument(tab.dataset.detailTab);
 });
 function switchDetailDocument(target) {
   if (correctionPanelState && correctionPanelState.scope !== target) {
     if (correctionPanelState.saving) return false;
     closeCorrectionPanel();
   }
-  if (target !== 'transcript') uiData.detail.notebookDocument = target;
   if (target === detailActiveTab) return true;
   detailActiveTab = target;
   setDetailLayoutMode(target === 'summary' ? 'summary' : 'transcript');
@@ -10204,9 +10336,7 @@ function switchDetailDocument(target) {
   syncDetailSummaryPanel();
   filterDetailTranscript();
   BreviaMotion.enter(finalTranscript.querySelector(`[data-detail-panel="${target}"]`), 'tab');
-  finalTranscript
-    .querySelector(`[data-detail-tab="${target === 'summary' ? 'notes' : target}"]`)
-    ?.focus({ preventScroll: true });
+  finalTranscript.querySelector(`[data-detail-tab="${target}"]`)?.focus({ preventScroll: true });
   return true;
 }
 function filterDetailTranscript() {
@@ -10281,7 +10411,7 @@ finalTranscript.addEventListener('keydown', (event) => {
   )
     return;
   event.preventDefault();
-  const tabs = [...finalTranscript.querySelectorAll('[data-detail-tab]')];
+  const tabs = [...finalTranscript.querySelectorAll('[role="tab"]')];
   const index =
     event.key === 'Home'
       ? 0
@@ -10344,6 +10474,7 @@ finalTranscript.addEventListener('focusout', (event) => {
 function applyInitializationResult(result) {
   modelCatalog = result.models;
   uiData.meetings = result.meetings.map(backendMeeting);
+  scheduleLibraryMetrics();
   if (typeof initializeWorkspaces === 'function') {
     initializeWorkspaces(result.workspaces || []);
     renderWorkspaceNav();
@@ -10458,6 +10589,8 @@ if (window.brevia) {
         revision,
         text: payload.text,
         start_ms: payload.start_ms,
+        end_ms: payload.end_ms,
+        track: payload.track,
         speaker: payload.speaker,
       });
       return;
@@ -10505,6 +10638,8 @@ if (window.brevia) {
       revision,
       text: payload.text,
       start_ms: payload.start_ms,
+      end_ms: payload.end_ms,
+      track: payload.track,
       speaker: payload.speaker_name || payload.speaker,
     });
     while (liveSegments.size > maxLiveSegments) {
@@ -10742,6 +10877,16 @@ if (window.brevia) {
     showSummaryProgress(completed, total, stage),
   );
   window.brevia.on('summary.ready', () => showSummaryComplete());
+  for (const event of [
+    'summary.ready',
+    'refinement.ready',
+    'meeting.stopped',
+    'meeting.imported',
+    'transcript.corrected',
+    'app.maintenance',
+  ]) {
+    window.brevia.on(event, scheduleLibraryMetrics);
+  }
   window.brevia.on('model.progress', ({ model_id, received, total }) => {
     if (!modelDownloads.has(model_id)) return;
     modelDownloads.set(model_id, {
@@ -10911,6 +11056,7 @@ if (window.brevia) {
       void window.brevia.summary
         .save({ meeting_id: meetingId, markdown, expected_markdown: uiData.detail.summaryEditBase })
         .then((saved) => {
+          scheduleLibraryMetrics();
           if (currentMeetingDetail?.id !== meetingId) return;
           const data = saved?.markdown
             ? saved
@@ -10945,8 +11091,8 @@ if (window.brevia) {
         });
       return;
     }
-    if (event.target.closest('[data-generate-summary]')) void generateMeetingSummary();
-    if (event.target.closest('[data-regenerate-summary]')) void generateMeetingSummary();
+    if (event.target.closest('[data-generate-summary], [data-regenerate-summary]'))
+      void generateMeetingSummary(currentMeetingDetail?.id);
   });
 
   document.querySelector('[data-export-detail]').addEventListener('click', () => {
@@ -11035,6 +11181,7 @@ async function startQuickRecording({ background = false } = {}) {
         saved?.speaker_segmentation_model_id || preferredModelsForLanguage(language).segmentation,
       vad_model_id: saved?.vad_model_id || 'silero-vad',
       workspace_id: saved ? saved.workspace_id || null : activeWorkspaceId || null,
+      summary_template: saved?.summary_template || 'general',
     };
     const translationModel = modelCatalog.find((model) => model.stages?.includes('translation'));
     const required = [
@@ -11050,6 +11197,7 @@ async function startQuickRecording({ background = false } = {}) {
         'meeting-speakers': payload.num_speakers,
         'meeting-workspace': payload.workspace_id || '',
         'translation-target': payload.target_language || '',
+        'summary-template': payload.summary_template,
       }))
         prepareForm.querySelector(`[name="${key}"]`).value = String(value);
       prepareForm.dataset.segmentationModel = payload.speaker_segmentation_model_id;
@@ -11119,7 +11267,7 @@ function desktopRecordingSnapshot() {
     phase,
     elapsed: Math.max(0, seconds),
     level: phase === 'recording' && Date.now() - desktopLevelAt < 1000 ? desktopLevel : 0,
-    input: document.querySelector('#live-input-label').textContent,
+    input: liveInputLabel(),
     canPause: !document.querySelector('#pause').disabled,
     locale,
     theme: document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light',

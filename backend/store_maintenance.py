@@ -87,35 +87,37 @@ class MaintenanceStoreMixin:
         with self.connect() as db:
             row = db.execute("SELECT value FROM app_meta WHERE key='metrics'").fetchone()
             value = json.loads(row["value"]) if row else {"app_duration_ms": 0}
-            value["app_duration_ms"] += max(0, int(app_duration_ms))
-            db.execute(
-                "INSERT OR REPLACE INTO app_meta(key,value) VALUES('metrics',?)",
-                (json.dumps(value),),
+            if app_duration_ms > 0:
+                value["app_duration_ms"] += int(app_duration_ms)
+                db.execute(
+                    "INSERT OR REPLACE INTO app_meta(key,value) VALUES('metrics',?)",
+                    (json.dumps(value),),
+                )
+            value.update(
+                db.execute(
+                    "SELECT COUNT(*) AS meeting_count, COALESCE(SUM(duration_ms),0) AS meeting_duration_ms "
+                    "FROM meetings WHERE deleted_at IS NULL AND is_example=0"
+                ).fetchone()
             )
-            value["meeting_duration_ms"] = db.execute(
-                "SELECT COALESCE(SUM(duration_ms),0) AS total FROM meetings WHERE deleted_at IS NULL"
-            ).fetchone()["total"]
             # 与展示、导出共用版本选择；逐场读取，避免累计全部历史稿到内存。
             rows = db.execute(
                 "SELECT s.meeting_id,s.id,s.version,s.revision,s.start_ms,s.text "
                 "FROM segments s JOIN meetings m ON m.id=s.meeting_id "
-                "WHERE m.deleted_at IS NULL ORDER BY s.meeting_id,s.start_ms"
+                "WHERE m.deleted_at IS NULL AND m.is_example=0 ORDER BY s.meeting_id,s.start_ms"
             )
-            value["subtitle_count"] = value["subtitle_lines"] = 0
+            value["subtitle_count"] = value["subtitle_lines"] = value["subtitle_characters"] = 0
             for _, segments in groupby(rows, key=lambda row: row["meeting_id"]):
                 current = latest_segments([dict(row) for row in segments])
                 value["subtitle_count"] += len(current)
+                value["subtitle_characters"] += sum(len(item["text"]) for item in current)
                 value["subtitle_lines"] += sum(item["text"].count("\n") + 1 for item in current)
-            summaries = [
-                row["data"]
-                for row in db.execute(
-                    "SELECT s.data FROM summaries s JOIN meetings m ON m.id=s.meeting_id "
-                    "WHERE s.data IS NOT NULL AND m.deleted_at IS NULL"
-                )
-            ]
-            value["summary_count"] = len(summaries)
-            value["summary_characters"] = sum(
-                len(json.loads(item).get("markdown", "")) for item in summaries
+            value.update(
+                db.execute(
+                    "SELECT COUNT(*) AS summary_count, "
+                    "COALESCE(SUM(length(json_extract(s.data,'$.markdown'))),0) AS summary_characters "
+                    "FROM summaries s JOIN meetings m ON m.id=s.meeting_id "
+                    "WHERE s.data IS NOT NULL AND m.deleted_at IS NULL AND m.is_example=0"
+                ).fetchone()
             )
         return value
 

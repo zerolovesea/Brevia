@@ -548,8 +548,8 @@ function desktopShortcutValue(value) {
 function renderCapsuleExample(enabled) {
   const title = window.BreviaLocaleData.onboardingMotionCopy[locale]?.meeting || t('会议');
   return `<span class="pref-capsule" data-enabled="${enabled}" role="img" aria-label="${escapeHtml(t('桌面录音胶囊') + ' · ' + t('演示'))}">
-    <i class="pref-capsule-grip"></i><span class="pref-capsule-wave">${interfaceIcon('waveform')}</span>
-    <span class="pref-capsule-readout"><span><b>02:36</b><small>${escapeHtml(t('录音中'))}</small></span><strong>${escapeHtml(title)}</strong></span>
+    <i class="pref-capsule-grip"></i><span class="pref-capsule-wave"><i></i><i></i><i></i><i></i><i></i></span>
+    <span class="pref-capsule-readout"><span><b>02:<span>36</span></b><small>${escapeHtml(t('录音中'))}</small></span><strong>${escapeHtml(title)}</strong></span>
     ${interfaceIcon('captions')}<i class="pref-capsule-pause">${interfaceIcon('pause')}</i><i class="pref-capsule-stop">${interfaceIcon('stop')}</i></span>`;
 }
 function renderDesktopPreferences() {
@@ -1595,14 +1595,7 @@ function renderSummaryDocument(markdown) {
   for (let index = 1; index < parts.length; index += 2) {
     const title = parts[index];
     const content = parts[index + 1] || '';
-    const label = title.replace(/<[^>]+>/g, '').trim();
-    const discussion =
-      /^(详细讨论|讨论记录|詳細な議論|詳細討論|상세 논의|Discussion|Detailed discussion|Discusión|Discussion détaillée|Detaillierte Diskussion|Подробное обсуждение)$/i.test(
-        label,
-      );
-    result += discussion
-      ? `<details class="summary-discussion"><summary>${title}<span>${escapeHtml(t('展开讨论记录'))}${interfaceIcon('chevron-down')}</span></summary><div>${content}</div></details>`
-      : `<section class="summary-reading-section">${title}<div>${content}</div></section>`;
+    result += `<section class="summary-reading-section">${title}<div>${content}</div></section>`;
   }
   return result;
 }
@@ -1627,7 +1620,7 @@ function renderMeetingSummary({
           '',
         )}${participants.length > 3 ? `<small>+${participants.length - 3}</small>` : ''}</span>${interfaceIcon('chevron-down')}</button><div id="summary-participants-popover" class="meeting-popover summary-participants-popover" popover role="dialog" aria-label="${escapeHtml(t('参与者'))}"><header><h3>${escapeHtml(t('参与者'))} (${participants.length})</h3><button class="icon-button" data-close-meeting-popover type="button" aria-label="${escapeHtml(t('关闭'))}">${interfaceIcon('close')}</button></header><label class="search">${interfaceIcon('search')}<input type="search" data-participant-search aria-label="${escapeHtml(t('搜索'))}" placeholder="${escapeHtml(t('搜索'))}" /></label><div class="summary-participant-list">${participants.map((person) => `<span><i class="speaker-avatar" aria-hidden="true">${escapeHtml([...formatSpeakerName(person)][0] || '')}</i><span>${escapeHtml(formatSpeakerName(person))}</span></span>`).join('')}</div><p data-participant-empty role="status" hidden>${escapeHtml(t('暂无内容'))}</p></div></section>`
     : '';
-  return `<div class="summary-preview"><div class="summary-feedback" data-summary-feedback hidden></div>${people}${editing ? `<div class="summary-inline-edit"><div data-inline-summary-editor></div></div>` : markdown ? `<div class="summary-body markdown-content">${claims.length ? renderEvidenceNotebook(claims, markdown) : renderSummaryDocument(markdown)}</div>` : waitingModels ? `<section class="summary-waiting"><span>${interfaceIcon('check')}${escapeHtml(t('录音已保存'))}</span><div>${interfaceIcon('document')}<h2>${escapeHtml(t('录音已保存'))}</h2><p>${escapeHtml(t('纪要等待所需模型，就绪后会自动继续。'))}</p><div><button class="secondary" data-settings-modal="models" type="button">${interfaceIcon('download')}${escapeHtml(t('模型库'))}</button><button class="secondary" data-detail-tab="transcript" type="button">${interfaceIcon('document')}${escapeHtml(t('逐字稿'))}</button></div></div></section>` : `<div class="summary-empty"><span class="summary-empty-mark">${interfaceIcon('ai')}</span><h2>${escapeHtml(t(generating ? '正在生成会议纪要' : '尚未生成会议纪要'))}</h2>${!generating && !blocked ? `<button class="primary-action" data-generate-summary type="button">${escapeHtml(t('生成纪要'))}${interfaceIcon('arrow-right')}</button>` : ''}</div>`}</div>`;
+  return `<div class="summary-preview"><div class="summary-feedback" data-summary-feedback hidden></div>${people}${editing ? `<div class="summary-inline-edit"><div data-inline-summary-editor></div></div>` : markdown ? `<div class="summary-body markdown-content${claims.length ? '' : ' summary-document'}">${claims.length ? renderEvidenceNotebook(claims, markdown) : renderSummaryDocument(markdown)}</div>` : generating ? `<div class="summary-empty" role="status"><span class="summary-empty-mark"><span class="summary-generating-icon" aria-hidden="true">${interfaceIcon('ai')}</span></span><h2>${escapeHtml(t('正在生成会议纪要'))}</h2></div>` : waitingModels ? `<section class="summary-waiting"><span>${interfaceIcon('check')}${escapeHtml(t('录音已保存'))}</span><div>${interfaceIcon('document')}<h2>${escapeHtml(t('录音已保存'))}</h2><p>${escapeHtml(t('纪要等待所需模型，就绪后会自动继续。'))}</p><div><button class="secondary" data-settings-modal="models" type="button">${interfaceIcon('download')}${escapeHtml(t('模型库'))}</button><button class="secondary" data-detail-tab="transcript" type="button">${interfaceIcon('document')}${escapeHtml(t('逐字稿'))}</button></div></div></section>` : `<div class="summary-empty"><span class="summary-empty-mark">${interfaceIcon('ai')}</span><h2>${escapeHtml(t('尚未生成会议纪要'))}</h2>${!blocked ? `<button class="primary-action" data-generate-summary type="button">${escapeHtml(t('生成纪要'))}${interfaceIcon('arrow-right')}</button>` : ''}</div>`}</div>`;
 }
 /** 在页面外壳可用后填充所有数据驱动的静态区域。@returns {void} */
 function renderStaticViews() {
@@ -1694,7 +1687,7 @@ function renderDetailTabbar() {
       ? `<button class="tabbar-action" data-notes-cancel type="button"${busy ? ' disabled' : ''} aria-label="${t('取消')}">${interfaceIcon('close')}${t('取消')}</button><button class="tabbar-action is-save" data-notes-save type="button"${busy ? ' disabled' : ''} aria-label="${t(saveState === 'failed' ? '重试' : '保存')}">${interfaceIcon('check')}${t(saveState === 'failed' ? '重试' : '保存')}</button>`
       : `<button class="tabbar-action" data-edit-notes type="button" aria-label="${t('编辑')}">${interfaceIcon('edit')}${t('编辑')}</button>`;
   } else if (scope === 'summary') {
-    status = `<span data-summary-save-status>${summary.waitingModels ? `<span class="refine-state">${escapeHtml(t('等待模型'))}</span>` : summary.generating ? `<span class="refine-state" role="status">${t('正在生成会议纪要')}</span>` : summary.markdown || editing ? renderSaveState(saveState) : ''}</span>`;
+    status = `<span data-summary-save-status>${summary.waitingModels ? `<span class="refine-state">${escapeHtml(t('等待模型'))}</span>` : !summary.generating && (summary.markdown || editing) ? renderSaveState(saveState) : ''}</span>`;
     const blocked = summary.blocked
       ? ` title="${escapeHtml(t('实时会议中，结束后再生成会议纪要。'))}"`
       : '';
@@ -1707,7 +1700,7 @@ function renderDetailTabbar() {
       : `<button class="tabbar-action" data-open-summary-edit type="button"${!summary.markdown || summary.generating ? ' disabled' : ''} aria-label="${t('编辑')}">${interfaceIcon('edit')}${t('编辑')}</button>`;
     if (
       !editing &&
-      (summary.markdown || summary.blocked || summary.generating || summary.waitingModels)
+      (summary.markdown || (!summary.generating && (summary.blocked || summary.waitingModels)))
     )
       context = `${summary.markdown ? `<button class="tabbar-action" data-copy-summary type="button" aria-label="${t('复制会议纪要')}">${interfaceIcon('copy')}${t('复制')}</button>` : ''}<button class="tabbar-action" ${summary.markdown ? 'data-regenerate-summary' : 'data-generate-summary'} type="button"${disabled}${blocked}${summary.generating ? ' aria-busy="true"' : ''}>${generationIcon}${t(summary.generating ? '正在生成会议纪要' : summary.markdown ? '重新生成' : '生成纪要')}</button>`;
   } else {
@@ -1736,36 +1729,17 @@ function renderDetailTabbar() {
     !editing && (scope !== 'transcript' || actions) && typeof correctionControls === 'function'
       ? correctionControls(currentMeetingDetail, scope)
       : '';
-  const notebook = scope !== 'transcript';
-  const notebookTarget = notebook ? scope : d.notebookDocument || 'notes';
-  const documents = notebook
-    ? `<select class="notebook-document-select" data-notebook-document aria-label="${escapeHtml(t('笔记'))}"><option value="notes"${scope === 'notes' ? ' selected' : ''}>${escapeHtml(t('我的笔记'))}</option><option value="summary"${scope === 'summary' ? ' selected' : ''}>${escapeHtml(t('会议纪要'))}</option></select>`
-    : '';
-  const templates =
-    scope === 'summary' && !editing
-      ? `<select class="summary-template-select" data-summary-template aria-label="${escapeHtml(t('整理模板'))}" title="${escapeHtml(t('整理模板'))}"${summary.generating ? ' disabled' : ''}>${[
-          ['general', '通用'],
-          ['weekly', '周会'],
-          ['interview', '访谈'],
-          ['review', '评审'],
-        ]
-          .map(
-            ([key, label]) =>
-              `<option value="${key}"${(d.summaryTemplate || 'general') === key ? ' selected' : ''}>${escapeHtml(t(label))}</option>`,
-          )
-          .join('')}</select>`
-      : '';
-  return `<div class="detail-content-header"><nav class="tabbar detail-document-navigation" aria-label="${t('内容')}"><div class="tabbar-tabs" role="tablist" aria-orientation="horizontal" aria-label="${t('笔记')} / ${t('逐字稿')}">${[
-    ['notes', '笔记', 'notebook', notebook, notebookTarget],
-    ['transcript', '逐字稿', 'waveform', !notebook, 'transcript'],
+  const tabs = [
+    ['summary', '会议纪要', 'document'],
+    ['notes', '笔记', 'notebook'],
+    ['transcript', '逐字稿', 'waveform'],
   ]
-    .map(
-      ([key, label, icon, active, panel]) =>
-        `<button type="button" class="tab${active ? ' active' : ''}" data-detail-tab="${key}" id="detail-tab-${key}" role="tab" aria-selected="${active}" aria-controls="detail-panel-${panel}" tabindex="${active ? '0' : '-1'}">${interfaceIcon(icon)}<span>${t(label)}</span></button>`,
-    )
-    .join(
-      '',
-    )}</div>${documents}<div class="detail-content-status">${status}</div></nav><div class="detail-content-toolbar" role="toolbar" aria-label="${title}"><div class="detail-content-actions">${find}${actions}</div><div class="detail-content-context">${templates}${context}</div></div></div>`;
+    .map(([key, label, icon]) => {
+      const active = scope === key;
+      return `<button type="button" class="tab${active ? ' active' : ''}" data-detail-tab="${key}" id="detail-tab-${key}" role="tab" aria-selected="${active}" aria-controls="detail-panel-${key}" tabindex="${active ? '0' : '-1'}">${interfaceIcon(icon)}<span>${t(label)}</span></button>`;
+    })
+    .join('');
+  return `<div class="detail-content-header"><nav class="tabbar detail-document-navigation" aria-label="${t('内容')}"><div class="tabbar-tabs" role="tablist" aria-orientation="horizontal" aria-label="${t('内容')}">${tabs}</div><div class="detail-content-status">${status}</div></nav><div class="detail-content-toolbar" role="toolbar" aria-label="${title}"><div class="detail-content-actions">${find}${actions}</div><div class="detail-content-context">${context}</div></div></div>`;
 }
 
 function resizeTranscriptField(field) {
@@ -1840,7 +1814,7 @@ function renderMeetingDetail() {
         }
       : null;
   document.querySelector('.final-transcript').innerHTML =
-    `${renderDetailTabbar()}<div class="detail-notes-panel" data-detail-panel="notes" id="detail-panel-notes" role="tabpanel" aria-labelledby="detail-tab-notes"${detailActiveTab !== 'notes' ? ' hidden' : ''}>${notesPanel}${!d.notesEditing && d.acceptedClaims?.length ? renderClaimGroups(d.acceptedClaims, true) : ''}</div><div class="detail-summary-panel" data-detail-panel="summary" id="detail-panel-summary" role="tabpanel" aria-labelledby="detail-tab-notes"${detailActiveTab !== 'summary' ? ' hidden' : ''}></div><div class="transcript-panel" data-detail-panel="transcript" id="detail-panel-transcript" role="tabpanel" aria-labelledby="detail-tab-transcript"${detailActiveTab !== 'transcript' ? ' hidden' : ''}><div class="transcript-body">${typeof correctionFeedback === 'function' ? correctionFeedback(currentMeetingDetail) : ''}${transcriptBody}</div></div>`;
+    `${renderDetailTabbar()}<div class="detail-notes-panel" data-detail-panel="notes" id="detail-panel-notes" role="tabpanel" aria-labelledby="detail-tab-notes"${detailActiveTab !== 'notes' ? ' hidden' : ''}>${notesPanel}${!d.notesEditing && d.acceptedClaims?.length ? renderClaimGroups(d.acceptedClaims, true) : ''}</div><div class="detail-summary-panel" data-detail-panel="summary" id="detail-panel-summary" role="tabpanel" aria-labelledby="detail-tab-summary"${detailActiveTab !== 'summary' ? ' hidden' : ''}></div><div class="transcript-panel" data-detail-panel="transcript" id="detail-panel-transcript" role="tabpanel" aria-labelledby="detail-tab-transcript"${detailActiveTab !== 'transcript' ? ' hidden' : ''}><div class="transcript-body">${typeof correctionFeedback === 'function' ? correctionFeedback(currentMeetingDetail) : ''}${transcriptBody}</div></div>`;
   document.querySelectorAll('[data-segment-text]').forEach((field) => resizeTranscriptField(field));
   filterDetailTranscript();
   if (focusState) {
