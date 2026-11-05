@@ -12,12 +12,41 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import 'connection.dart';
+import 'desktop_library.dart';
 import 'i18n.dart';
 import 'recorder.dart';
 import 'storage.dart';
 
+class UnsyncedDesktopDraftsException implements Exception {}
+
 class AppModel extends ChangeNotifier with WidgetsBindingObserver {
   DesktopConnection? desktop;
+  DesktopLibrary? _library;
+  DesktopLibrary? get desktopLibrary {
+    final connection = desktop;
+    if (connection == null) return _library = null;
+    if (_library?.connection != connection) {
+      _library = DesktopLibrary(connection);
+    }
+    return _library;
+  }
+
+  List<MeetingData> get desktopMeetings => desktopLibrary?.meetings ?? const [];
+  DesktopLibrary? _refreshingLibrary;
+  Future<void> refreshLibrary() async {
+    final library = desktopLibrary;
+    if (library == null || _refreshingLibrary == library || disposed) return;
+    _refreshingLibrary = library;
+    try {
+      await library.refresh();
+    } catch (_) {
+      // 暂时离线时保留已同步到本机的回看内容。
+    } finally {
+      if (_refreshingLibrary == library) _refreshingLibrary = null;
+    }
+    if (!disposed && identical(library, desktopLibrary)) notifyListeners();
+  }
+
   List<Map<String, dynamic>> meetings = [];
   Map<String, dynamic>? live;
   RecordingEngine? engine;
@@ -256,8 +285,14 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
         allowWifiLock: true,
       ),
     );
+    try {
+      await desktopLibrary?.load();
+    } on FileSystemException catch (e) {
+      debugPrint('Could not open the shared meeting cache: $e');
+    }
     await refresh(localOnly: true);
     if (disposed) return;
+    unawaited(refreshLibrary());
     unawaited(refresh());
     if (desktop == null) unawaited(discover());
     timer = Timer.periodic(Duration(milliseconds: 250), (tick) {
@@ -266,6 +301,7 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
           if (capturePreview != null) unawaited(refresh());
           return;
         }
+        unawaited(refreshLibrary());
         if (serviceRunning) {
           unawaited(
             sendCommand({'action': 'reconnect'}).catchError((Object _) {}),
@@ -317,6 +353,7 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     foreground = state == AppLifecycleState.resumed;
     if (foreground) {
+      unawaited(refreshLibrary());
       unawaited(refresh());
     } else {
       unawaited(setCapturePreview(false));
@@ -435,7 +472,10 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
           (m) =>
               m['computer'] == desktop!.fingerprint &&
               m['remoteDeleted'] != true &&
-              (m['snapshot']?['task']?['state'] == 'running' ||
+              ([
+                    'running',
+                    'queued',
+                  ].contains(m['snapshot']?['task']?['state']) ||
                   (m['id'] == viewedMeetingId && m['finished'] == true)) &&
               m['id'] != engine?.store.meta['id'],
         )) {
@@ -828,6 +868,7 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
     String action, {
     String? workspace,
     String? target,
+    bool consent = false,
   }) async {
     final record = meeting(id);
     if (record == null || record['finished'] != true) {
@@ -836,22 +877,47 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
     if (desktop == null || record['computer'] != desktop!.fingerprint) {
       throw StateError(tr("请连接这场会议原来的电脑"));
     }
-    await desktop!.call('POST', '/meetings/$id/action', {
-      'action': action,
-      if (action == 'workspace') 'workspace_id': workspace,
-      if (action != 'workspace') 'request_id': Uuid().v4(),
-      if (action == 'translate') ...{
-        'target_language': target,
-        'consent': true,
-      },
-    });
-    final snapshot = Map<String, dynamic>.from(
-      await desktop!.call('GET', '/meetings/$id/snapshot'),
-    );
-    final root = await recordingsRoot();
-    await writeJson(File('${root.path}/$id/snapshot.json'), snapshot);
-    if (live?['id'] == id) live = {...live!, 'snapshot': snapshot};
-    if (engine?.store.meta['id'] == id) engine!.snapshot = snapshot;
+    if (action == 'summary' && !consent) throw StateError(tr('请确认使用电脑生成纪要'));
+    final connection = desktop!;
+    if (busy) throw StateError(tr('请等待当前操作完成'));
+    busy = true;
+    try {
+      while (refreshing) {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }
+      final receipt = await connection.call('POST', '/meetings/$id/action', {
+        if (action == 'summary') 'consent': true,
+        'action': action,
+        if (action == 'workspace') 'workspace_id': workspace,
+        if (action != 'workspace') 'request_id': Uuid().v4(),
+        if (action == 'translate') ...{
+          'target_language': target,
+          'consent': true,
+        },
+      });
+      final root = await recordingsRoot();
+      final file = File('${root.path}/$id/snapshot.json');
+      // 电脑已接单后就记住任务；即使下一次取结果断线，重开应用也会继续跟进。
+      if (receipt is Map && receipt['task'] is Map) {
+        final saved = await file.exists()
+            ? Map<String, dynamic>.from(jsonDecode(await file.readAsString()))
+            : <String, dynamic>{};
+        saved['task'] = receipt['task'];
+        await writeJson(file, saved);
+        record['snapshot'] = id == viewedMeetingId
+            ? saved
+            : snapshotIndex(saved);
+      }
+      final snapshot = Map<String, dynamic>.from(
+        await connection.call('GET', '/meetings/$id/snapshot'),
+      );
+      await writeJson(file, snapshot);
+      if (live?['id'] == id) live = {...live!, 'snapshot': snapshot};
+      if (engine?.store.meta['id'] == id) engine!.snapshot = snapshot;
+    } finally {
+      busy = false;
+      notifyListeners();
+    }
     await refresh();
   }
 
@@ -890,7 +956,10 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  Future<void> connect(DesktopConnection connection) async {
+  Future<void> connect(
+    DesktopConnection connection, {
+    bool discardSharedDrafts = false,
+  }) async {
     if (busy ||
         serviceRunning ||
         (engine != null &&
@@ -909,20 +978,32 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
     }
     busy = true;
     try {
+      final previous = desktop;
+      final switching =
+          previous != null &&
+          (previous.token != connection.token ||
+              previous.fingerprint != connection.fingerprint);
+      final oldLibrary = switching ? desktopLibrary : null;
+      if (!discardSharedDrafts &&
+          await oldLibrary?.hasUnsyncedDrafts() == true) {
+        throw UnsyncedDesktopDraftsException();
+      }
       await setCapturePreview(false);
       while (refreshing) {
         await Future<void>.delayed(Duration(milliseconds: 50));
       }
       await releaseEngines();
-      await desktop?.dispose();
       await connection.save();
-      await stopDiscovery();
       desktop = connection;
       desktopOnline = true;
+      if (!identical(previous, connection)) await previous?.dispose();
+      await oldLibrary?.forget();
+      await stopDiscovery();
     } finally {
       busy = false;
       notifyListeners();
     }
+    unawaited(refreshLibrary());
     await refresh();
   }
 
@@ -951,7 +1032,9 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
       await releaseEngines();
       await desktop?.dispose();
       await vault.delete(key: 'desktop');
+      final oldLibrary = _library;
       desktop = null;
+      await oldLibrary?.forget();
       desktopOnline = false;
     } finally {
       busy = false;

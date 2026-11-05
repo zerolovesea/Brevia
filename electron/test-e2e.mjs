@@ -109,8 +109,13 @@ const moduleProbes = [
   ['app-meeting-detail.js', 'renderSegmentData'],
   ['onboarding.js', 'window.BreviaOnboarding'],
   ['transcript-corrections.js', 'correctionMatches'],
+  ['summary-providers.js', 'configuredSummaryProvider'],
   ['app.js', 't'],
   ['mobile-connection.js', "document.getElementById('mobile-pair').onclick"],
+  [
+    'mobile-note-review.js',
+    "document.querySelector('.mobile-note-review [data-apply]')?.onclick || undefined",
+  ],
   ['desktop-controls.js', 'desktopControlsReady'],
   ['desktop-mobile-preview.js', 'window.BreviaDesktopMobilePreview'],
 ];

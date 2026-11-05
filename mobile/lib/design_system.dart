@@ -109,7 +109,9 @@ ThemeData breviaTheme(Brightness brightness) {
         onSurface: ink,
         onSurfaceVariant: muted,
         outline: line,
-        outlineVariant: line,
+        outlineVariant: dark
+            ? const Color(0xff393a3b)
+            : const Color(0xffe5e5e3),
         surfaceTint: Colors.transparent,
         error: dark ? Color(0xffed9494) : Color(0xffa83b3b),
       );
@@ -251,7 +253,7 @@ ThemeData breviaTheme(Brightness brightness) {
     filledButtonTheme: FilledButtonThemeData(
       style:
           FilledButton.styleFrom(
-            minimumSize: Size(48, 52),
+            minimumSize: Size(48, 48),
             padding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             textStyle: TextStyle(
               fontFamily: fontFamily,
@@ -269,7 +271,7 @@ ThemeData breviaTheme(Brightness brightness) {
     outlinedButtonTheme: OutlinedButtonThemeData(
       style:
           OutlinedButton.styleFrom(
-            minimumSize: Size(48, 52),
+            minimumSize: Size(48, 48),
             foregroundColor: ink,
             side: BorderSide(color: line),
             padding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
@@ -317,8 +319,9 @@ ThemeData breviaTheme(Brightness brightness) {
       minVerticalPadding: 8,
       titleTextStyle: TextStyle(
         fontFamily: fontFamily,
-        fontSize: 17,
-        height: 1.3,
+        fontSize: 15,
+        fontWeight: FontWeight.w500,
+        height: 1.35,
         color: ink,
       ),
       subtitleTextStyle: TextStyle(
@@ -332,7 +335,7 @@ ThemeData breviaTheme(Brightness brightness) {
       backgroundColor: canvas,
       height: 64,
       elevation: 0,
-      indicatorColor: Colors.transparent,
+      indicatorColor: scheme.surfaceContainer,
       iconTheme: WidgetStateProperty.resolveWith(
         (states) => IconThemeData(
           size: 24,
@@ -431,3 +434,110 @@ Widget breviaLogo({double size = 32}) => Image.asset(
   fit: BoxFit.contain,
   semanticLabel: 'Brevia',
 );
+
+class BreviaPanel extends StatelessWidget {
+  const BreviaPanel({
+    super.key,
+    required this.child,
+    this.padding = const EdgeInsets.all(16),
+  });
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: scheme.surfaceContainerLow,
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: scheme.outlineVariant),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Padding(padding: padding, child: child),
+    );
+  }
+}
+
+class BreviaGlyph extends StatelessWidget {
+  const BreviaGlyph(this.icon, {super.key});
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(10),
+      color: Theme.of(context).colorScheme.surfaceContainer,
+    ),
+    child: Padding(
+      padding: const EdgeInsets.all(10),
+      child: BreviaIcon(icon, size: 20),
+    ),
+  );
+}
+
+/// Intrinsic widths keep long translations and large text horizontally accessible.
+class BreviaTabs extends StatelessWidget {
+  const BreviaTabs({
+    super.key,
+    required this.entries,
+    required this.selected,
+    required this.onSelect,
+  });
+  final List<(int, String)> entries;
+  final int selected;
+  final ValueChanged<int> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Align(
+      alignment: AlignmentDirectional.centerStart,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainer,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(3),
+            child: Row(
+              children: [
+                for (final (value, label) in entries)
+                  Semantics(
+                    selected: selected == value,
+                    child: TextButton(
+                      style: TextButton.styleFrom(
+                        minimumSize: const Size(48, 44),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 8,
+                        ),
+                        backgroundColor: selected == value
+                            ? scheme.surface
+                            : Colors.transparent,
+                        foregroundColor: selected == value
+                            ? scheme.onSurface
+                            : scheme.onSurfaceVariant,
+                        textStyle: Theme.of(context).textTheme.labelLarge
+                            ?.copyWith(
+                              fontSize: 14,
+                              fontWeight: selected == value
+                                  ? FontWeight.w600
+                                  : FontWeight.w500,
+                            ),
+                      ),
+                      onPressed: () => onSelect(value),
+                      child: Text(label),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

@@ -24,6 +24,7 @@ const {
   mkdir,
   open,
   readFile,
+  realpath,
   rm,
   stat,
   statfs,
@@ -130,6 +131,9 @@ app.on('second-instance', () => {
 
 const root = path.join(__dirname, '..');
 const packagedRoot = app.isPackaged ? process.resourcesPath : root;
+const { configuredSummaryProvider } = require(
+  path.join(packagedRoot, 'frontend', 'summary-providers.js'),
+);
 const { translate } = require(path.join(packagedRoot, 'frontend', 'i18n-data.js'));
 const mainText = (key) => translate(key, app.getLocale().split('-')[0]);
 const desktop = new DesktopController({
@@ -484,15 +488,39 @@ const aiNoteReconfigure = z.object({
   min_interval_seconds: z.number().min(1).max(86400).nullable().optional(),
 });
 
+async function meetingFilesRoot(meetingId) {
+  z.string().uuid().parse(meetingId);
+  const expected = path.join(await realpath(recordingsDir()), meetingId);
+  if ((await realpath(expected)) !== expected) throw new Error('Invalid meeting directory');
+  return expected;
+}
+
+async function readNoteImage(meetingId, filename) {
+  if (!/^[0-9a-f-]{36}\.(png|jpe?g|gif|webp)$/i.test(filename))
+    throw new Error('Invalid note image');
+  const root = await meetingFilesRoot(meetingId);
+  const source = fileURLToPath(
+    await audioFileURL(path.join(noteImagesDir(meetingId), filename), [root]),
+  );
+  if (source !== path.join(root, 'notes', filename) || (await stat(source)).size > 10 * 1024 * 1024)
+    throw new Error('Invalid note image');
+  const extension = path.extname(filename).slice(1).toLowerCase();
+  return {
+    image: await readFile(source),
+    type: extension === 'jpg' ? 'image/jpeg' : 'image/' + extension,
+  };
+}
+
 async function saveNoteImage({ meeting_id, mime_type, bytes }) {
   const image = Buffer.from(bytes);
   if (!image.length || image.length > 10 * 1024 * 1024)
     throw new Error('Image must be 10 MB or smaller');
   const extension = mime_type === 'image/jpeg' ? 'jpg' : mime_type.slice('image/'.length);
   const filename = `${randomUUID()}.${extension}`;
-  await audioFileURL(path.join(recordingsDir(), meeting_id), [recordingsDir()]);
+  const root = await meetingFilesRoot(meeting_id);
   await mkdir(noteImagesDir(meeting_id), { recursive: true });
-  const directory = fileURLToPath(await audioFileURL(noteImagesDir(meeting_id), [recordingsDir()]));
+  const directory = fileURLToPath(await audioFileURL(noteImagesDir(meeting_id), [root]));
+  if (directory !== path.join(root, 'notes')) throw new Error('Invalid note image directory');
   await writeFile(path.join(directory, filename), image, { mode: 0o600, flag: 'wx' });
   return { url: `brevia-note://${meeting_id}/${filename}` };
 }
@@ -503,19 +531,7 @@ function registerNoteImageProtocol() {
       const url = new URL(request.url);
       const meetingId = url.hostname;
       const filename = decodeURIComponent(url.pathname.slice(1));
-      if (
-        !/^[0-9a-f-]{36}$/i.test(meetingId) ||
-        !/^[0-9a-f-]{36}\.(png|jpe?g|gif|webp)$/i.test(filename)
-      )
-        throw new Error('Invalid note image');
-      const source = fileURLToPath(
-        await audioFileURL(path.join(noteImagesDir(meetingId), filename), [recordingsDir()]),
-      );
-      const image = await readFile(source);
-      const type =
-        filename.endsWith('.jpg') || filename.endsWith('.jpeg')
-          ? 'image/jpeg'
-          : `image/${filename.split('.').pop()}`;
+      const { image, type } = await readNoteImage(meetingId, filename);
       return new Response(image, { headers: { 'content-type': type } });
     } catch {
       return new Response(null, { status: 404 });
@@ -1389,11 +1405,35 @@ function registerIpc() {
     },
   }));
   handleIpc('mobile.approve', (_, payload) => {
-    const value = z.object({ id: z.string().uuid(), allowed: z.boolean() }).parse(payload);
+    const value = z
+      .object({
+        id: z.string().uuid(),
+        allowed: z.boolean(),
+        libraryAccess: z.boolean().default(false),
+      })
+      .parse(payload);
     if (mobileApproval?.id !== value.id) throw new Error('配对请求已过期');
-    mobileApproval.resolve(value.allowed);
+    mobileApproval.resolve(value.allowed && { allowed: true, libraryAccess: value.libraryAccess });
     return { saved: true };
   });
+  handleIpc('mobile.access', (_, payload) => {
+    const { id, enabled } = z
+      .object({ id: z.string().regex(/^[a-f0-9]{32}$/), enabled: z.boolean() })
+      .parse(payload);
+    return mobileServer.setLibraryAccess(id, enabled);
+  });
+  handleIpc('mobile.proposals', () => mobileServer.proposals());
+  handleIpc('mobile.resolve-proposal', (_, payload) =>
+    mobileServer.resolveProposal(
+      id
+        .extend({
+          id: z.string().uuid(),
+          accept: z.boolean(),
+          expected_notes: z.string().max(5 * 1024 * 1024),
+        })
+        .parse(payload),
+    ),
+  );
   handleIpc('mobile.stop', (_, payload) => mobileServer.requestStop(id.parse(payload).meeting_id));
   handleIpc('mobile.start-capture', (_, payload) => {
     const { device_id: deviceId, ...value } = meetingStart
@@ -1570,7 +1610,12 @@ function registerIpc() {
       return { dropped: true };
     return worker.request('meeting.audio', value);
   });
-  handle('meeting.pause', id.extend({ paused: z.boolean() }), 'meeting.pause');
+  handleIpc('meeting.pause', async (_, payload) => {
+    const value = id.extend({ paused: z.boolean() }).parse(payload);
+    const result = await worker.request('meeting.pause', value);
+    if (worker.active?.meeting_id === value.meeting_id) worker.active.paused = result.paused;
+    return result;
+  });
   handleModelRequirement('meeting.reconfigure', meetingReconfigure, 'meeting.reconfigure');
   handleIpc('meeting.stop', async (_, payload) => {
     if (worker.active?.mobile) throw new Error('请在手机结束本次录音');
@@ -2773,12 +2818,74 @@ app.whenReady().then(async () => {
     directory: path.join(dataDir(), 'mobile'),
     active: () => worker.active,
     discovered: () => worker.sendEvent('mobile.discovered', {}),
+    changed: () => worker.sendEvent('mobile.collaboration', {}),
     request: async (type, payload) => {
-      if (
-        ['mobile.apply', 'meeting.refine', 'mobile.translate', 'workspace.assign'].includes(type) &&
-        (storageMigrationInProgress || destructiveOperationInProgress)
-      )
+      if (storageMigrationInProgress || destructiveOperationInProgress)
         throw new Error('电脑正在移动或清理数据，请稍后重试');
+      if (type === 'mobile.document.open') {
+        const value = id
+          .extend({ content: z.enum(['notes', 'mynotes']), format: z.enum(['docx', 'pdf']) })
+          .parse(payload);
+        const root = await meetingFilesRoot(value.meeting_id);
+        const exported = await prepareExport({ ...value, filename_prefix: randomUUID() + '-' });
+        const source = fileURLToPath(await audioFileURL(exported.path, [root]));
+        if (
+          path.dirname(source) !== path.join(root, 'exports') ||
+          path.extname(source) !== '.' + value.format
+        )
+          throw new Error('Invalid export file');
+        const handle = await open(source, 'r');
+        // 响应通过文件句柄发送，只移除此请求创建的临时导出。
+        try {
+          await rm(source);
+          return handle;
+        } catch (error) {
+          await handle.close();
+          throw error;
+        }
+      }
+      if (type === 'mobile.audio.open') {
+        const root = await meetingFilesRoot(payload.meeting_id);
+        const source = fileURLToPath(await audioFileURL(payload.path, [root]));
+        if (!source.endsWith('.wav')) throw new Error('Invalid audio file');
+        return open(source, 'r');
+      }
+      if (type === 'mobile.image.save') return saveNoteImage(payload);
+      if (type === 'mobile.image.read') {
+        const { image, type: mime_type } = await readNoteImage(
+          payload.meeting_id,
+          payload.filename,
+        );
+        return { mime_type, base64: image.toString('base64') };
+      }
+      if (type === 'mobile.summary') {
+        const config = (await readSummaryConfig()) || { provider: 'built-in', providers: {} };
+        const models =
+          config.provider === 'built-in' ? await worker.request('models.list', {}) : [];
+        const ready = models.filter(
+          (m) => m.status === 'ready' && m.path && m.kind === 'llama-chat',
+        );
+        const service = configuredSummaryProvider(config, ready[0]?.id);
+        if (
+          !service ||
+          (service.provider === 'built-in' && !ready.some((m) => m.id === service.model))
+        )
+          throw new Error('请先在电脑配置纪要模型');
+        const { provider, model, endpoint, format, keyReference } = service;
+        const api_key = await getSecret(keyReference);
+        if (provider !== 'built-in' && (!api_key || payload.consent !== true))
+          throw new Error('请在手机确认使用电脑配置的在线服务');
+        return worker.request('summary.generate', {
+          meeting_id: payload.meeting_id,
+          provider,
+          model,
+          endpoint,
+          format,
+          api_key,
+          language: payload.language || app.getLocale().split('-')[0],
+          consent: true,
+        });
+      }
       if (type === 'meeting.refine') return handleRefinement(payload);
       const result = await worker.request(type, payload);
       if (type === 'mobile.apply') {

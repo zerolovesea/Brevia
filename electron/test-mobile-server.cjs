@@ -33,6 +33,7 @@ const { MobileServer } = require('./mobile-server');
           audio: '/private/path',
         };
       deliveries.push(payload);
+      if (type === 'meeting.refine') return { id: payload.meeting_id, status: 'refined' };
       return { id: payload.meeting_id };
     },
   };
@@ -53,9 +54,18 @@ const { MobileServer } = require('./mobile-server');
           },
         },
         (res) => {
-          let body = '';
-          res.on('data', (c) => (body += c));
-          res.on('end', () => resolve({ status: res.statusCode, body: JSON.parse(body) }));
+          const chunks = [];
+          const mime = res.headers['content-type'];
+          res.on('data', (chunk) => chunks.push(chunk));
+          res.on('end', () => {
+            const data = Buffer.concat(chunks);
+            resolve({
+              status: res.statusCode,
+              mime,
+              body: mime === 'application/json' ? JSON.parse(data) : data,
+            });
+          });
+          res.on('error', reject);
         },
       );
       req.on('error', reject);
@@ -447,6 +457,126 @@ const { MobileServer } = require('./mobile-server');
     assert.equal(
       server.status().sessions.some((s) => s.id === resumedId),
       false,
+    );
+    // 单独授权后才能读取电脑会话，作为电脑麦克风配对也不隐含此授权。
+    const sharedMeeting = {
+      id: randomUUID(),
+      title: 'Desktop',
+      status: 'ready',
+      notes: 'Desktop notes',
+      summary: { data: { markdown: 'Summary' }, raw_response: 'private' },
+      audio: { playback: { mix: '/private/mix.wav' } },
+      current_segments: [{ id: 'current', text: 'Speech', translation: 'obsolete' }],
+      segments: [{ id: 'old', text: 'Retired' }],
+      correction: { stale_translations: ['current'] },
+    };
+    const sample = Buffer.from([1, 2, 3, 4]);
+    const samplePath = path.join(directory, 'export');
+    await fs.writeFile(samplePath, sample);
+    let summaries = 0;
+    let summaryResult = { saved: true };
+    server.request = async (type, payload) => {
+      if (type === 'mobile.library') return [sharedMeeting, { id: captureId }, { id }];
+      if (type === 'meeting.get') return { ...sharedMeeting, id: payload.meeting_id };
+      if (type === 'mobile.proposal.status') return null;
+      if (type === 'mobile.summary') {
+        summaries++;
+        return summaryResult;
+      }
+      if (type === 'meeting.refine') return { ...sharedMeeting, status: 'ready' };
+      if (type === 'mobile.audio.open') return fs.open(samplePath, 'r');
+      if (type === 'mobile.document.open') {
+        assert.deepEqual(payload, {
+          meeting_id: sharedMeeting.id,
+          content: 'mynotes',
+          format: 'docx',
+        });
+        return fs.open(samplePath, 'r');
+      }
+      return options.request(type, payload);
+    };
+    const sharedPath = '/desktop-meetings/' + sharedMeeting.id;
+    const getShared = (suffix, as = token) => call('GET', sharedPath + suffix, null, as);
+    assert.deepEqual((await call('GET', '/desktop-meetings', null, token)).body, []);
+    assert.equal((await call('GET', sharedPath + '/snapshot')).status, 401);
+    assert.equal((await getShared('/audio')).status, 404);
+    assert.equal((await getShared('/document/mynotes/docx')).status, 404);
+    assert.equal(
+      (await call('GET', '/desktop-meetings/' + captureId + '/snapshot', null, token)).status,
+      404,
+    );
+    await server.setLibraryAccess(linked.body.deviceId, true);
+    assert.equal((await getShared('/snapshot', second.body.token)).status, 404);
+    assert.deepEqual(
+      (await call('GET', '/desktop-meetings', null, token)).body.map((r) => r.id),
+      [sharedMeeting.id, captureId],
+    );
+    const sharedSnapshot = (await getShared('/snapshot')).body;
+    assert.equal(sharedSnapshot.notes, sharedMeeting.notes);
+    assert.equal(sharedSnapshot.segments[0].id, 'current');
+    assert.equal(sharedSnapshot.segments[0].translation, null);
+    assert.equal(sharedSnapshot.summary.raw_response, undefined);
+    assert.equal(sharedSnapshot.audio, undefined);
+    assert.match(sharedSnapshot.revision, /^[a-f0-9]{64}$/);
+    assert.equal(sharedSnapshot.has_audio, true);
+    assert.deepEqual((await getShared('/audio')).body, sample);
+    const doc = await getShared('/document/mynotes/docx');
+    assert.match(doc.mime, /wordprocessingml/);
+    assert.deepEqual(doc.body, sample);
+    assert.equal((await getShared('/document/mynotes/html')).status, 404);
+    const summary = { action: 'summary', request_id: randomUUID(), consent: true };
+    sharedMeeting.status = 'recording';
+    assert.equal((await getShared('/snapshot')).body.state, 'recording');
+    assert.equal((await call('POST', sharedPath + '/action', summary, token)).status, 409);
+    sharedMeeting.status = 'ready';
+    assert.equal(
+      (await call('POST', sharedPath + '/action', { ...summary, consent: false }, token)).status,
+      400,
+    );
+    assert.equal(
+      (await call('POST', sharedPath + '/action', summary, token)).body.task.state,
+      'running',
+    );
+    await server.queue;
+    assert.equal(
+      (await call('POST', sharedPath + '/action', summary, token)).body.task.state,
+      'done',
+    );
+    assert.equal(summaries, 1);
+    summaryResult = { cancelled: true };
+    for (const action of ['summary', 'refine']) {
+      const input = { action, request_id: randomUUID(), consent: true };
+      assert.equal(
+        (await call('POST', sharedPath + '/action', input, token)).body.task.state,
+        'running',
+      );
+      await server.queue;
+      const failed = (await getShared('/snapshot')).body.task;
+      assert.equal(failed.state, 'failed');
+      assert.equal(failed.error, '电脑已取消任务，请重试');
+      assert.deepEqual(
+        (await call('POST', sharedPath + '/action', input, token)).body.task,
+        failed,
+      );
+    }
+    assert.equal(summaries, 2);
+    assert.equal(
+      (
+        await call(
+          'POST',
+          sharedPath + '/images',
+          { mime_type: 'image/png', base64: 'QUJD' },
+          token,
+        )
+      ).status,
+      400,
+    );
+    await server.setLibraryAccess(linked.body.deviceId, false);
+    assert.equal((await getShared('/snapshot')).status, 404);
+    assert.equal((await getShared('/audio')).status, 404);
+    assert.equal(
+      (await call('GET', '/desktop-meetings/' + id + '/snapshot', null, token)).status,
+      200,
     );
     await server.revoke(linked.body.deviceId);
     assert.equal((await call('GET', '/meetings', null, token)).status, 401);

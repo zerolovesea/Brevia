@@ -1,9 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:uuid/uuid.dart';
 
 import 'i18n.dart';
 
@@ -12,6 +15,11 @@ const vault = FlutterSecureStorage(
     accessibility: KeychainAccessibility.first_unlock_this_device,
   ),
 );
+
+class DesktopHttpException extends HttpException {
+  final int status;
+  DesktopHttpException(this.status, super.message);
+}
 
 class MeetingDeletedException implements Exception {
   @override
@@ -70,7 +78,8 @@ class DesktopConnection {
   dynamic decodeResponse(int status, dynamic value) {
     if (status == 410) throw MeetingDeletedException();
     if (status != 200) {
-      throw HttpException(
+      throw DesktopHttpException(
+        status,
         value is Map ? remoteError(value['error'].toString()) : tr("连接失败"),
       );
     }
@@ -83,7 +92,12 @@ class DesktopConnection {
 
   Future<void> dispose() => available.close();
 
-  Future<dynamic> call(String method, String route, [Object? data]) async {
+  Future<T> _request<T>(
+    String method,
+    String route,
+    Object? data,
+    Future<T> Function(HttpClientResponse response) handle,
+  ) async {
     final base = endpoint(address);
     final client = HttpClient(context: SecurityContext(withTrustedRoots: false))
       ..connectionTimeout = Duration(seconds: 6);
@@ -106,7 +120,13 @@ class DesktopConnection {
       request.headers.contentType = ContentType.json;
       if (data != null) request.write(jsonEncode(data));
       final response = await request.close().timeout(
-        Duration(seconds: route == '/pair' ? 120 : 12),
+        Duration(
+          seconds: route == '/pair'
+              ? 120
+              : route.contains('/document/')
+              ? 60
+              : 12,
+        ),
       );
       peer ??= response.certificate == null
           ? null
@@ -115,17 +135,77 @@ class DesktopConnection {
         throw HandshakeException(tr("电脑身份已改变，请重新配对"));
       }
       if (fingerprint.isEmpty) fingerprint = peer!;
-      final bytes = <int>[];
-      await for (final chunk in response.timeout(Duration(seconds: 15))) {
-        bytes.addAll(chunk);
-        if (bytes.length > 16 * 1024 * 1024) {
-          throw FormatException(tr("电脑返回内容过大"));
-        }
-      }
-      final value = jsonDecode(utf8.decode(bytes));
-      return decodeResponse(response.statusCode, value);
+      return await handle(response);
     } finally {
       client.close(force: true);
+    }
+  }
+
+  Future<dynamic> call(String method, String route, [Object? data]) =>
+      _request(method, route, data, (response) async {
+        final bytes = <int>[];
+        await for (final chunk in response.timeout(Duration(seconds: 15))) {
+          bytes.addAll(chunk);
+          if (bytes.length > 16 * 1024 * 1024) {
+            throw FormatException(tr("电脑返回内容过大"));
+          }
+        }
+        final value = jsonDecode(utf8.decode(bytes));
+        return decodeResponse(response.statusCode, value);
+      });
+
+  /// 通过已配对的 TLS 连接将音频或导出文档直接写入临时文件。
+  Future<void> downloadFile(String route, File temporary) =>
+      _request('GET', route, null, (response) async {
+        if (response.statusCode != 200) {
+          throw DesktopHttpException(response.statusCode, tr('连接失败'));
+        }
+        final out = temporary.openWrite();
+        try {
+          await out.addStream(response.timeout(const Duration(seconds: 15)));
+          await out.flush();
+        } finally {
+          await out.close();
+        }
+      });
+
+  static final _imageName = RegExp(
+    r'^[a-zA-Z0-9_-]+\.(?:jpe?g|png|webp|gif)$',
+    caseSensitive: false,
+  );
+  static bool isNoteImageFilename(String name) => _imageName.hasMatch(name);
+
+  Future<Uint8List> noteImage(String id, String name) async {
+    if (!RegExp(r'^[a-zA-Z0-9_-]+$').hasMatch(id) ||
+        !isNoteImageFilename(name)) {
+      throw FormatException(tr('图片格式无效'));
+    }
+    final result = await call('GET', '/desktop-meetings/$id/images/$name');
+    return base64Decode(result['base64']);
+  }
+
+  Future<File> document(
+    String id,
+    String content,
+    String format, {
+    Directory? directory,
+  }) async {
+    if (!Uuid.isValidUUID(fromString: id) ||
+        !['notes', 'mynotes'].contains(content) ||
+        !['pdf', 'docx'].contains(format)) {
+      throw ArgumentError('Unsupported document export');
+    }
+    final temp = directory ?? await getTemporaryDirectory();
+    final file = File('${temp.path}/brevia-${Uuid().v4()}.$format');
+    try {
+      await downloadFile(
+        '/desktop-meetings/$id/document/$content/$format',
+        file,
+      );
+      return file;
+    } catch (_) {
+      if (await file.exists()) await file.delete();
+      rethrow;
     }
   }
 

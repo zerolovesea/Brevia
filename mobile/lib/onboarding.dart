@@ -83,7 +83,7 @@ class _OnboardingGateState extends State<OnboardingGate> {
   }
 
   Widget instruction(IconData icon, String title, String body) => ListTile(
-    leading: BreviaIcon(icon),
+    leading: BreviaGlyph(icon),
     title: Text(tr(title)),
     subtitle: Text(tr(body)),
     contentPadding: EdgeInsets.zero,
@@ -121,8 +121,11 @@ class _OnboardingGateState extends State<OnboardingGate> {
           Container(
             padding: const EdgeInsets.only(left: 16),
             decoration: BoxDecoration(
-              border: Border.all(color: Theme.of(context).dividerColor),
-              borderRadius: BorderRadius.circular(8),
+              color: Theme.of(context).colorScheme.surfaceContainerLow,
+              border: Border.all(
+                color: Theme.of(context).colorScheme.outlineVariant,
+              ),
+              borderRadius: BorderRadius.circular(14),
             ),
             child: Row(
               children: [
@@ -154,13 +157,13 @@ class _OnboardingGateState extends State<OnboardingGate> {
             '安装并打开电脑端 Brevia',
             '在电脑浏览器打开 brevia.work，下载适合电脑的版本。',
           ),
-          const Divider(height: 1),
+          const SizedBox(height: 4),
           instruction(
             Icons.description_outlined,
             '完成电脑端的模型准备',
             '手机采集音频，电脑完成转写',
           ),
-          const Divider(height: 1),
+          const SizedBox(height: 4),
           instruction(
             Icons.qr_code_scanner,
             '打开「设备连接 → 连接新设备」',
@@ -200,7 +203,7 @@ class _OnboardingGateState extends State<OnboardingGate> {
           const Center(child: PairingIllustration()),
           const SizedBox(height: 24),
           instruction(Icons.mic_none, '手机采集音频', '转写和笔记会回到这里。'),
-          const Divider(height: 1),
+          const SizedBox(height: 4),
           instruction(
             Icons.phone_iphone_outlined,
             '原始录音保留在本机',
@@ -226,7 +229,13 @@ class _OnboardingGateState extends State<OnboardingGate> {
               )
             : null,
         title: step < 3
-            ? Text('${(step + 1).toString().padLeft(2, '0')} / 03')
+            ? SizedBox(
+                width: 68,
+                child: LinearProgressIndicator(
+                  value: (step + 1) / 3,
+                  minHeight: 3,
+                ),
+              )
             : null,
         actions: [
           if (step < 3)

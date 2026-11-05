@@ -1,12 +1,104 @@
 """Authenticated desktop bridge only: replayable, sample-addressed mobile audio."""
 
 import base64
+import json
 import os
 
 from .worker_common import synchronized_recording, model_supports_language, missing_models
 
 
 class MobileWorkerMixin:
+    def mobile_library(self, _payload):
+        # 列表轮询不加载纪要、笔记、音频和字幕。
+        with self.store.connect() as db:
+            return [
+                dict(row)
+                for row in db.execute(
+                    "SELECT id,title,status,created_at,duration_ms FROM meetings "
+                    "WHERE deleted_at IS NULL ORDER BY created_at DESC"
+                )
+            ]
+
+    def mobile_proposal_put(self, payload):
+        mid, device, pid = (payload[key] for key in ('meeting_id', 'device_id', 'id'))
+        with self.store.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            if not db.execute(
+                "SELECT 1 FROM meetings WHERE id=? AND deleted_at IS NULL", (mid,)
+            ).fetchone():
+                return {'missing': True}
+            prior = db.execute(
+                "SELECT id,state FROM mobile_note_proposals WHERE meeting_id=? AND device_id=?",
+                (mid, device),
+            ).fetchone()
+            if prior and prior['id'] == pid:
+                return dict(prior)
+            if prior and prior['state'] == 'pending':
+                return {'conflict': True}
+            db.execute(
+                "INSERT INTO mobile_note_proposals(meeting_id,device_id,id,base_revision,notes,state) "
+                "VALUES(?,?,?,?,?,'pending') ON CONFLICT(meeting_id,device_id) DO UPDATE SET "
+                "id=excluded.id,base_revision=excluded.base_revision,notes=excluded.notes,state='pending'",
+                (mid, device, pid, payload['base_revision'], payload['notes']),
+            )
+            return {'id': pid, 'state': 'pending'}
+
+    def mobile_proposal_status(self, payload):
+        with self.store.connect() as db:
+            row = db.execute(
+                "SELECT id,state FROM mobile_note_proposals WHERE meeting_id=? AND device_id=?",
+                (payload['meeting_id'], payload['device_id']),
+            ).fetchone()
+            return dict(row) if row else None
+
+    def mobile_proposal_list(self, payload):
+        mid = payload.get('meeting_id')
+        with self.store.connect() as db:
+            return [
+                dict(row)
+                for row in db.execute(
+                    "SELECT p.*,m.title AS meeting_title FROM mobile_note_proposals p "
+                    "JOIN meetings m ON m.id=p.meeting_id WHERE p.state='pending' "
+                    "AND m.deleted_at IS NULL AND (? IS NULL OR p.meeting_id=?) ORDER BY p.rowid",
+                    (mid, mid),
+                )
+            ]
+
+    def mobile_proposal_resolve(self, payload):
+        mid, pid = payload['meeting_id'], payload['id']
+        with self.store.connect() as db:
+            # 用户选择的是预览时的两个版本；写入笔记和消费提议必须同一事务。
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute(
+                "SELECT p.notes,p.state FROM mobile_note_proposals p JOIN meetings m ON m.id=p.meeting_id "
+                "WHERE p.meeting_id=? AND p.id=? AND m.deleted_at IS NULL",
+                (mid, pid),
+            ).fetchone()
+            if not row or row['state'] != 'pending':
+                return {'missing': True}
+            result = {'id': pid, 'meeting_id': mid, 'state': 'declined'}
+            if payload['accept']:
+                if not db.execute(
+                    "UPDATE meetings SET notes=? WHERE id=? AND notes=?",
+                    (row['notes'], mid, payload['expected_notes']),
+                ).rowcount:
+                    return {'conflict': True}
+                result.update(state='accepted', notes=row['notes'])
+            db.execute(
+                "UPDATE mobile_note_proposals SET state=?,notes='' WHERE id=?",
+                (result['state'], pid),
+            )
+            return result
+
+    def mobile_proposal_forget(self, payload):
+        with self.store.connect() as db:
+            db.execute(
+                "DELETE FROM mobile_note_proposals WHERE device_id=? "
+                "AND meeting_id NOT IN (SELECT value FROM json_each(?))",
+                (payload['device_id'], json.dumps(payload.get('keep_meetings', []))),
+            )
+        return {'saved': True}
+
     def mobile_options(self, _payload):
         languages = ['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru', 'auto']
         models = [

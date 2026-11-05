@@ -45,6 +45,10 @@ void main() {
         ? 'en'
         : 'zh';
     String pick(String zh, String en) => uiLanguage == 'en' ? en : zh;
+    final acceptanceQuote = pick(
+      '请在周五前完成引导流程的验收。',
+      'Finish acceptance testing for onboarding by Friday.',
+    );
     SharedPreferences.setMockInitialValues({});
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
@@ -125,6 +129,48 @@ void main() {
             .copyWith(hour: 10, minute: 0)
             .toIso8601String(),
         'snapshot': {
+          'summary': {
+            'markdown': pick(
+              '## 发布决定\n\n验收通过后发布新版引导。',
+              '## Release decision\n\nShip the new onboarding after acceptance.',
+            ),
+            'data': {
+              'claims': [
+                {
+                  'id': 'release',
+                  'kind': 'cause',
+                  'section': pick('发布条件', 'Release criteria'),
+                  'text': pick(
+                    '核对上周的进展，再确认发布安排。',
+                    'Check progress before scheduling the release.',
+                  ),
+                  'sources': [
+                    {
+                      'start_ms': 0,
+                      'speaker': 'Lin',
+                      'text': pick(
+                        '我们先回顾上周的进展。',
+                        'Let’s review our progress this week.',
+                      ),
+                    },
+                  ],
+                },
+                {
+                  'id': 'acceptance',
+                  'kind': 'cause',
+                  'section': pick('发布条件', 'Release criteria'),
+                  'text': pick('周五前完成验收。', 'Complete acceptance by Friday.'),
+                  'sources': [
+                    {
+                      'start_ms': 24000,
+                      'speaker': 'Lin',
+                      'text': acceptanceQuote,
+                    },
+                  ],
+                },
+              ],
+            },
+          },
           'notes': pick(
             '## 决定\n\n下周五发布新用户引导。\n\n## 待办\n\n- 核对语言选项。\n- 完成引导流程测试。',
             '## Decisions\n\nRelease the new onboarding flow next Friday.\n\n## Next steps\n\n- Review language options.\n- Finish onboarding tests.',
@@ -137,6 +183,7 @@ void main() {
                 'Let’s review our progress this week.',
               ),
             },
+            {'start_ms': 24000, 'text': acceptanceQuote},
           ],
         },
       },
@@ -165,12 +212,12 @@ void main() {
     model.meetings = meetings;
     model.notifyListeners();
     await tester.pump();
-    await tester.tap(find.byIcon(Icons.add).first);
+    await tester.tap(find.widgetWithText(FilledButton, tr('新建录音')));
     await tester.pumpAndSettle();
     await capture('mobile-prepare');
     await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
-    await tester.tap(find.byIcon(Icons.laptop_outlined).last);
+    await tester.tap(find.byIcon(Icons.link_outlined).last);
     await tester.pumpAndSettle();
     await capture('mobile-connection');
     await tester.ensureVisible(find.text(tr('输入配对码')));
@@ -179,8 +226,10 @@ void main() {
     await capture('mobile-manual');
     await tester.enterText(find.byType(TextField).last, '123456');
     await tester.pump();
-    expect(find.text('1'), findsOneWidget);
-    expect(find.text('6'), findsOneWidget);
+    expect(
+      tester.widget<TextField>(find.byType(TextField).last).controller!.text,
+      '123456',
+    );
     await capture('mobile-manual-entered');
     final dynamic connection = tester.state(find.byType(ConnectionPage));
     connection.setState(() {
@@ -303,8 +352,17 @@ void main() {
         home: MeetingPage(model: model, id: 'review'),
       ),
     );
+    await capture('mobile-review-summary');
+    await tester.tap(find.byType(ExpansionTile).first);
+    await tester.pumpAndSettle();
+    await capture('mobile-review-evidence');
+    await tester.tap(find.byTooltip(tr('导出')));
+    await tester.pumpAndSettle();
+    await capture('mobile-review-export');
+    Navigator.of(tester.element(find.byType(BottomSheet))).pop();
+    await tester.pumpAndSettle();
     await tester.tap(find.text(tr('转写')));
-    await tester.pump();
+    await tester.pumpAndSettle();
     expect(
       find.text(pick('我们先回顾上周的进展。', 'Let’s review our progress this week.')),
       findsOneWidget,

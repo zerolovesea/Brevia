@@ -2493,3 +2493,111 @@ brevia-cause-tree [data-ink="3"] {
     }
   }
 }
+
+.mobile-library-permission {
+  display: inline-flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  color: var(--color-text);
+  font-size: 12px;
+  cursor: pointer;
+}
+.mobile-library-permission input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--color-text);
+}
+#desktop-statusbar #mobile-notes-pending {
+  padding: 0 9px;
+  height: 20px;
+  border: none;
+  border-radius: 5px;
+  background: var(--color-navigation);
+  color: var(--color-text);
+  font-size: 11px;
+}
+.mobile-note-review {
+  width: min(720px, calc(100vw - 48px));
+  max-height: calc(100vh - 64px);
+  overflow: auto;
+  padding: 20px;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: 14px;
+  box-shadow: 0 16px 64px #0002;
+}
+.mobile-note-review::backdrop {
+  background: rgb(0 0 0 / 18%);
+}
+.mobile-note-review > header,
+.mobile-note-review footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mobile-note-review > header {
+  justify-content: space-between;
+}
+.mobile-note-review h2 {
+  margin: 0;
+  font-size: 19px;
+}
+.mobile-note-review h3 {
+  margin: 0 0 10px;
+  font-size: 13px;
+}
+.mobile-note-review select {
+  width: 100%;
+  margin: 12px 0;
+  font: inherit;
+  font-size: 13px;
+}
+.mobile-note-review select:disabled {
+  opacity: 1;
+  appearance: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+}
+.mobile-note-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.mobile-note-columns section {
+  min-width: 0;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--color-navigation);
+}
+.mobile-note-columns section > div {
+  min-height: 86px;
+  max-height: 45vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.mobile-note-columns img {
+  display: block;
+  max-height: 140px;
+  max-width: 100%;
+  border-radius: 4px;
+}
+.mobile-note-review [role="status"] {
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+.mobile-note-review [role="status"]:empty {
+  display: none;
+}
+.mobile-note-review footer {
+  justify-content: flex-end;
+  margin-top: 14px;
+}

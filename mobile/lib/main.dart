@@ -19,6 +19,8 @@ import 'package:share_plus/share_plus.dart';
 import 'package:uuid/uuid.dart';
 
 import 'app_model.dart';
+import 'collaboration.dart';
+import 'meeting_artifacts.dart';
 import 'app_update.dart';
 import 'connection.dart';
 import 'recorder.dart';
@@ -273,6 +275,31 @@ Future<void> uploadRecording(BuildContext context, AppModel model, String id) =>
       await model.upload(id, settings);
     });
 
+Future<void> requestPhoneProcessing(
+  BuildContext context,
+  AppModel model,
+  String id,
+  String action,
+) async {
+  final summary = action == 'summary';
+  final label = tr(summary ? '生成会议纪要' : '重新精修');
+  final confirmed = await confirmMobileAction(
+    context,
+    label,
+    tr(summary ? '如使用在线模型，电脑会将会议文字发送给配置的服务商。' : '电脑将使用已有录音重新生成字幕，当前字幕可能被替换。'),
+    label,
+  );
+  if (!confirmed || !context.mounted) return;
+  await report(context, () async {
+    await model.meetingAction(id, action, consent: summary);
+    if (context.mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(tr('已提交到电脑处理'))));
+    }
+  });
+}
+
 class Home extends StatefulWidget {
   final AppModel model;
   const Home({super.key, required this.model});
@@ -282,6 +309,8 @@ class Home extends StatefulWidget {
 
 class _HomeState extends State<Home> {
   int tab = 0;
+  bool searching = false;
+  bool desktopLibrary = false;
   String query = '';
   String? openedDesktopMeeting;
   AppModel get model => widget.model;
@@ -400,9 +429,14 @@ class _HomeState extends State<Home> {
     final ready = m['state'] == 'ended' && m['finished'] == true;
     final online =
         ready &&
+        m['remoteDeleted'] != true &&
         m['desktopCapture'] != true &&
         model.connected &&
         m['computer'] == model.desktop?.fingerprint;
+    final processing = const {
+      'running',
+      'queued',
+    }.contains(m['snapshot']?['task']?['state']);
     final action = await showModalBottomSheet<String>(
       requestFocus: false,
       context: context,
@@ -432,9 +466,15 @@ class _HomeState extends State<Home> {
                 onTap: () => Navigator.pop(ctx, 'upload'),
               ),
             ListTile(
+              leading: const BreviaIcon(Icons.auto_awesome),
+              title: Text(tr('生成会议纪要')),
+              enabled: online && !processing,
+              onTap: () => Navigator.pop(ctx, 'summary'),
+            ),
+            ListTile(
               leading: BreviaIcon(Icons.auto_fix_high_outlined),
               title: Text(tr("重新精修")),
-              enabled: online,
+              enabled: online && !processing,
               onTap: () => Navigator.pop(ctx, 'refine'),
             ),
             ListTile(
@@ -478,6 +518,10 @@ class _HomeState extends State<Home> {
     }
     if (action == 'delete') {
       await deleteRecord(m);
+      return;
+    }
+    if (action == 'summary' || action == 'refine') {
+      await requestPhoneProcessing(context, model, m['id'], action);
       return;
     }
     await report(context, () async {
@@ -529,15 +573,6 @@ class _HomeState extends State<Home> {
         );
         if (selection == null || !mounted) return;
       }
-      if (action == 'refine') {
-        final yes = await confirmMobileAction(
-          context,
-          tr('重新精修会议？'),
-          tr('电脑将使用已有录音重新生成字幕，当前字幕可能被替换。'),
-          tr('重新精修'),
-        );
-        if (!yes || !mounted) return;
-      }
       await model.meetingAction(
         m['id'],
         action,
@@ -555,388 +590,286 @@ class _HomeState extends State<Home> {
   }
 
   Widget library() {
-    final values = model.meetings
+    final theme = Theme.of(context);
+    final computer = model.desktop;
+    final local = model.meetings
         .where(
-          (m) => '${m['title']} ${m['snapshot']?['notes'] ?? ''}'
+          (m) => "${m['title']} ${m['snapshot']?['notes'] ?? ''}"
               .toLowerCase()
-              .contains(query.toLowerCase()),
+              .contains(query.trim().toLowerCase()),
         )
         .toList();
-    final dayCounts = <DateTime, int>{};
-    for (final meeting in values) {
-      final date = DateTime.tryParse(meeting['created'] ?? '')?.toLocal();
-      if (date != null) {
-        final day = DateTime(date.year, date.month, date.day);
-        dayCounts.update(day, (count) => count + 1, ifAbsent: () => 1);
+    final remote = model.desktopMeetings
+        .where(
+          (m) => "${m['title'] ?? ''}".toLowerCase().contains(
+            query.trim().toLowerCase(),
+          ),
+        )
+        .toList();
+    bool isLive(Map m) => m['state'] == 'recording' || m['state'] == 'paused';
+    final ongoing = remote.where((m) => model.connected && isLive(m)).toList();
+    final archive = remote.where((m) => !isLive(m)).toList();
+    final onComputer = desktopLibrary && computer != null;
+    final records = onComputer ? archive : local;
+    final phoneRecording =
+        model.live != null && model.live?['state'] != 'ended';
+    void openRemote(Map m) => Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => DesktopMeetingPage(model: model, id: m['id'] as String),
+      ),
+    );
+    DateTime? recordDate(Map m) {
+      final value = m[onComputer ? 'created_at' : 'created'];
+      if (value is num) {
+        return DateTime.fromMillisecondsSinceEpoch(
+          value.toInt() * (value < 100000000000 ? 1000 : 1),
+        ).toLocal();
       }
+      return DateTime.tryParse(value?.toString() ?? '')?.toLocal();
     }
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                tr('会议'),
-                style: Theme.of(
-                  context,
-                ).textTheme.headlineLarge?.copyWith(fontSize: 38),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                tr('所有对话，清晰归档。'),
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ),
-        ),
-        Padding(
-          padding: EdgeInsets.symmetric(horizontal: 16),
-          child: TextField(
-            onChanged: (v) => setState(() => query = v),
-            decoration: InputDecoration(
-              hintText: tr("搜索本机会议"),
-              hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-              fillColor: Theme.of(context).colorScheme.surface,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(
-                  color: Theme.of(context).colorScheme.outline,
-                ),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(
-                  color: Theme.of(context).colorScheme.outline,
-                ),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(
-                  color: Theme.of(context).colorScheme.outline,
-                ),
-              ),
-              contentPadding: EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 12,
-              ),
-              constraints: BoxConstraints(minHeight: 48),
-              prefixIcon: BreviaIcon(Icons.search, size: 20),
-              isDense: true,
-            ),
-          ),
-        ),
-        SizedBox(height: 16),
-        Expanded(
-          child: values.isEmpty
-              ? Center(
-                  child: SingleChildScrollView(
-                    child: Padding(
-                      padding: EdgeInsets.all(32),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          BreviaIcon(
-                            Icons.article_outlined,
-                            size: 40,
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onSurfaceVariant,
-                          ),
-                          SizedBox(height: 16),
-                          Text(
-                            query.isEmpty ? tr("还没有会议记录") : tr("没有找到会议"),
-                            style: Theme.of(context).textTheme.titleLarge,
-                          ),
-                          SizedBox(height: 12),
-                          Text(
-                            tr("手机录音，电脑转写。\n转写和笔记会回到这里。"),
-                            textAlign: TextAlign.center,
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        ],
+
+    String dayLabel(DateTime date) {
+      final today = DateUtils.dateOnly(DateTime.now());
+      if (DateUtils.isSameDay(date, today)) return tr('今天');
+      if (DateUtils.isSameDay(
+        date,
+        DateTime(today.year, today.month, today.day - 1),
+      )) {
+        return tr('昨天');
+      }
+      return MaterialLocalizations.of(context).formatShortDate(date);
+    }
+
+    return RefreshIndicator(
+      onRefresh: model.refresh,
+      child: CustomScrollView(
+        key: const PageStorageKey('mobile-library'),
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+            sliver: SliverList.list(
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        tr('会议'),
+                        style: theme.textTheme.headlineLarge,
                       ),
                     ),
-                  ),
-                )
-              : RefreshIndicator(
-                  onRefresh: model.refresh,
-                  child: ListView.separated(
-                    padding: EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: values.length,
-                    separatorBuilder: (_, _) => Divider(height: 1),
-                    itemBuilder: (_, i) {
-                      final m = model.meeting(values[i]['id']) ?? values[i];
-                      final state = m['state'];
-                      final task = m['snapshot']?['task'];
-                      final label = m['localOnly'] == true && state == 'ended'
-                          ? tr('仅保存在手机')
-                          : m['remoteDeleted'] == true
-                          ? tr('会议已在电脑永久删除')
-                          : task?['state'] == 'running'
-                          ? tr("电脑处理中")
-                          : task?['state'] == 'failed'
-                          ? tr("处理失败 · 长按重试")
-                          : state == 'recording'
-                          ? tr("正在录音")
-                          : state != 'ended'
-                          ? tr("未完成 · 点此恢复")
-                          : m['finished'] == true
-                          ? tr("已同步")
-                          : tr("等待补传或电脑处理");
-                      final date = DateTime.tryParse(
-                        m['created'] ?? '',
-                      )?.toLocal();
-                      final previous = i == 0
-                          ? null
-                          : DateTime.tryParse(
-                              values[i - 1]['created'] ?? '',
-                            )?.toLocal();
-                      final today = DateTime.now();
-                      String dayLabel(DateTime d) {
-                        final days = DateTime(
-                          today.year,
-                          today.month,
-                          today.day,
-                        ).difference(DateTime(d.year, d.month, d.day)).inDays;
-                        return days == 0
-                            ? tr("今天")
-                            : days == 1
-                            ? tr("昨天")
-                            : tr("{0}月{1}日", [d.month, d.day]);
-                      }
-
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          if (date != null &&
-                              (previous == null ||
-                                  dayLabel(date) != dayLabel(previous)))
-                            Padding(
-                              padding: EdgeInsets.only(top: 8, bottom: 12),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      dayLabel(date),
-                                      style: const TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                  Text(
-                                    tr('{0} 场', [
-                                      dayCounts[DateTime(
-                                        date.year,
-                                        date.month,
-                                        date.day,
-                                      )]!,
-                                    ]),
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.bodySmall,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          SwipeDelete(
-                            key: ValueKey(m['id']),
-                            enabled:
-                                m['finished'] == true ||
-                                (m['state'] == 'ended' &&
-                                    (m['remoteDeleted'] == true ||
-                                        m['localOnly'] == true)),
-                            onDelete: () => deleteRecord(m),
-                            child: ListTile(
-                              leading: const SizedBox(
-                                width: 44,
-                                height: 44,
-                                child: Center(
-                                  child: BreviaIcon(
-                                    Icons.insert_drive_file_outlined,
-                                    size: 36,
-                                  ),
-                                ),
-                              ),
-                              contentPadding: EdgeInsets.zero,
-                              horizontalTitleGap: 22,
-                              minTileHeight: 96,
-                              minVerticalPadding: 16,
-                              title: Text(
-                                m['title'],
-                                style: TextStyle(
-                                  fontSize: 17,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.bodySmall,
-                                    [
-                                      if (date != null)
-                                        '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}',
-                                      durationText(m['samples'] ?? 0),
-                                    ].join(' · '),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  DefaultTextStyle.merge(
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      height: 1.5,
-                                    ),
-                                    child: Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Flexible(child: Text(tr('手机录音'))),
-                                        const Text(' · '),
-                                        Padding(
-                                          padding: const EdgeInsets.only(
-                                            top: 6,
-                                          ),
-                                          child: BreviaIcon(
-                                            Icons.circle,
-                                            size: 6,
-                                            color: m['finished'] == true
-                                                ? (Theme.of(
-                                                            context,
-                                                          ).brightness ==
-                                                          Brightness.dark
-                                                      ? const Color(0xff80c99a)
-                                                      : const Color(0xff16812e))
-                                                : Theme.of(context)
-                                                      .colorScheme
-                                                      .onSurfaceVariant,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 6),
-                                        Expanded(
-                                          child: Text(
-                                            label,
-                                            style: TextStyle(
-                                              color: m['finished'] == true
-                                                  ? (Theme.of(
-                                                              context,
-                                                            ).brightness ==
-                                                            Brightness.dark
-                                                        ? const Color(
-                                                            0xff80c99a,
-                                                          )
-                                                        : const Color(
-                                                            0xff16812e,
-                                                          ))
-                                                  : null,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              trailing: const BreviaIcon(
-                                Icons.chevron_right,
-                                size: 20,
-                              ),
-                              onTap: () => openMeeting(m['id']),
-                              onLongPress: () => meetingMenu(m),
-                            ),
-                          ),
-                        ],
-                      );
-                    },
-                  ),
+                    IconButton(
+                      tooltip: tr('搜索会议'),
+                      icon: BreviaIcon(searching ? Icons.close : Icons.search),
+                      onPressed: () => setState(() {
+                        searching = !searching;
+                        query = '';
+                      }),
+                    ),
+                  ],
                 ),
-        ),
-        if (model.live == null || model.live?['state'] == 'ended')
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: BoxDecoration(
-              border: Border(
-                top: BorderSide(
-                  color: Theme.of(context).dividerColor,
-                  width: .5,
-                ),
-              ),
-            ),
-            child: Padding(
-              padding: EdgeInsets.zero,
-              child: ListTile(
-                contentPadding: EdgeInsets.zero,
-                minTileHeight: 56,
-                minVerticalPadding: 8,
-                leading: const BreviaIcon(Icons.laptop_outlined, size: 24),
-                title: model.desktop == null
-                    ? Text(
-                        tr('连接电脑'),
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
+                if (searching) ...[
+                  const SizedBox(height: 8),
+                  TextField(
+                    autofocus: true,
+                    onChanged: (value) => setState(() => query = value),
+                    decoration: InputDecoration(
+                      hintText: tr('搜索会议'),
+                      prefixIcon: const BreviaIcon(Icons.search),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 16),
+                BreviaPanel(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      ListTile(
+                        leading: const BreviaIcon(Icons.laptop_outlined),
+                        title: Text(
+                          computer?.name ?? tr('连接电脑'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                      )
-                    : Row(
-                        children: [
-                          BreviaIcon(
-                            Icons.circle,
-                            size: 6,
-                            color: model.connected
-                                ? (Theme.of(context).brightness ==
-                                          Brightness.dark
-                                      ? const Color(0xff80c99a)
-                                      : const Color(0xff16812e))
-                                : Theme.of(
-                                    context,
-                                  ).colorScheme.onSurfaceVariant,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              model.desktop!.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            tr(model.connected ? '已连接' : '离线'),
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        ],
+                        subtitle: computer == null
+                            ? null
+                            : Text(tr(model.connected ? '已连接' : '离线')),
+                        trailing: const BreviaIcon(
+                          Icons.chevron_right,
+                          size: 18,
+                        ),
+                        onTap: () => setState(() => tab = 1),
                       ),
-                trailing: const BreviaIcon(Icons.chevron_right, size: 18),
-                onTap: () => setState(() => tab = 1),
-              ),
+                      if (ongoing.isNotEmpty) ...[
+                        const Divider(height: 1),
+                        for (final m in ongoing)
+                          ListTile(
+                            leading: const BreviaIcon(
+                              Icons.graphic_eq,
+                              size: 22,
+                            ),
+                            title: Text(
+                              m['title']?.toString() ?? tr('会议'),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            subtitle: Text(
+                              tr(m['state'] == 'paused' ? '录音已暂停' : '正在录音'),
+                            ),
+                            trailing: const BreviaIcon(
+                              Icons.chevron_right,
+                              size: 18,
+                            ),
+                            onTap: () => openRemote(m),
+                          ),
+                      ],
+                      const SizedBox(height: 8),
+                      if (phoneRecording)
+                        RecordingReturnBar(
+                          meeting: model.live!,
+                          onTap: () => openMeeting(model.live!['id']),
+                        )
+                      else
+                        FilledButton.icon(
+                          onPressed: model.busy ? null : prepare,
+                          icon: const BreviaIcon(Icons.add, size: 20),
+                          label: Text(model.busy ? tr('正在准备…') : tr('新建录音')),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                if (computer != null)
+                  BreviaTabs(
+                    entries: [(0, tr('本机会议')), (1, tr('电脑会议'))],
+                    selected: onComputer ? 1 : 0,
+                    onSelect: (i) => setState(() => desktopLibrary = i == 1),
+                  )
+                else
+                  Text(tr('本机会议'), style: theme.textTheme.titleSmall),
+                const SizedBox(height: 8),
+              ],
             ),
           ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-          child: SizedBox(
-            width: double.infinity,
-            child: model.live != null && model.live?['state'] != 'ended'
-                ? RecordingReturnBar(
-                    meeting: model.live!,
-                    onTap: () => openMeeting(model.live!['id']),
-                  )
-                : FilledButton.icon(
-                    onPressed: model.busy ? null : prepare,
-                    icon: const BreviaIcon(Icons.add, size: 20),
-                    label: Text(model.busy ? tr('正在准备…') : tr('新建录音')),
+          if (records.isEmpty)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 32,
+                ),
+                child: Text(
+                  tr(
+                    query.isNotEmpty
+                        ? '没有找到会议'
+                        : onComputer
+                        ? '暂无共享会议'
+                        : '还没有会议记录',
                   ),
-          ),
-        ),
-      ],
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodySmall,
+                ),
+              ),
+            )
+          else
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+              sliver: SliverList.builder(
+                itemCount: records.length,
+                itemBuilder: (context, i) {
+                  final m = records[i];
+                  final date = recordDate(m);
+                  final task = m['snapshot']?['task'];
+                  final state = m['state'];
+                  final label = onComputer
+                      ? null
+                      : m['remoteDeleted'] == true
+                      ? tr('会议已在电脑永久删除')
+                      : task?['state'] == 'running'
+                      ? tr('电脑处理中')
+                      : task?['state'] == 'failed'
+                      ? tr('处理失败 · 长按重试')
+                      : state == 'recording'
+                      ? tr('正在录音')
+                      : state != 'ended'
+                      ? tr('未完成 · 点此恢复')
+                      : m['localOnly'] == true
+                      ? tr('仅保存在手机')
+                      : m['finished'] == true
+                      ? tr('已同步')
+                      : tr('等待补传或电脑处理');
+                  final duration = onComputer
+                      ? durationText(
+                          ((m['duration_ms'] as num? ?? 0) * 16).round(),
+                        )
+                      : durationText(m['samples'] ?? 0);
+                  final row = ListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 2,
+                    ),
+                    leading: BreviaGlyph(
+                      onComputer
+                          ? Icons.laptop_outlined
+                          : Icons.insert_drive_file_outlined,
+                    ),
+                    title: Text(
+                      m['title']?.toString() ?? tr('会议'),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: Text(
+                      [
+                        if (date != null)
+                          MaterialLocalizations.of(
+                            context,
+                          ).formatTimeOfDay(TimeOfDay.fromDateTime(date)),
+                        duration,
+                        ?label,
+                      ].join(' · '),
+                    ),
+                    trailing: const BreviaIcon(Icons.chevron_right, size: 16),
+                    onTap: () =>
+                        onComputer ? openRemote(m) : openMeeting(m['id']),
+                    onLongPress: onComputer ? null : () => meetingMenu(m),
+                  );
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (date != null &&
+                          (i == 0 ||
+                              !DateUtils.isSameDay(
+                                date,
+                                recordDate(records[i - 1]),
+                              )))
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(3, 12, 3, 4),
+                          child: Text(
+                            dayLabel(date),
+                            style: theme.textTheme.bodySmall,
+                          ),
+                        ),
+                      if (onComputer)
+                        row
+                      else
+                        SwipeDelete(
+                          key: ValueKey(m['id']),
+                          enabled:
+                              m['finished'] == true ||
+                              (state == 'ended' &&
+                                  (m['remoteDeleted'] == true ||
+                                      m['localOnly'] == true)),
+                          onDelete: () => deleteRecord(m),
+                          child: row,
+                        ),
+                    ],
+                  );
+                },
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -951,23 +884,6 @@ class _HomeState extends State<Home> {
               titleSpacing: 24,
               toolbarHeight: 48,
               title: breviaBrand(context),
-              actions: [
-                if (tab == 0 &&
-                    (model.live == null || model.live?['state'] == 'ended'))
-                  IconButton.filled(
-                    tooltip: tr('新建录音'),
-                    onPressed: model.busy ? null : prepare,
-                    style: IconButton.styleFrom(
-                      foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                      minimumSize: const Size(32, 32),
-                      fixedSize: const Size(32, 32),
-                      padding: const EdgeInsets.all(6),
-                      tapTargetSize: MaterialTapTargetSize.padded,
-                    ),
-                    icon: const BreviaIcon(Icons.add, size: 20),
-                  ),
-                const SizedBox(width: 16),
-              ],
             ),
       body: SafeArea(
         child: AnimatedSwitcher(
@@ -1021,6 +937,28 @@ class _HomeState extends State<Home> {
   );
 }
 
+Future<bool> connectPairedComputer(
+  BuildContext context,
+  AppModel model,
+  DesktopConnection candidate,
+) async {
+  try {
+    await model.connect(candidate);
+  } on UnsyncedDesktopDraftsException {
+    if (!context.mounted) return false;
+    final discard = await confirmMobileAction(
+      context,
+      tr('更换配对电脑？'),
+      tr('此手机上原电脑的共享会议和未同步笔记将被移除。手机录音会保留。'),
+      tr('更换电脑'),
+      danger: true,
+    );
+    if (!discard || !context.mounted) return false;
+    await model.connect(candidate, discardSharedDrafts: true);
+  }
+  return true;
+}
+
 class ConnectionPage extends StatefulWidget {
   final AppModel model;
   final VoidCallback? onConnected;
@@ -1052,6 +990,8 @@ class _ConnectionPageState extends State<ConnectionPage> {
   }
 
   Future<void> pair({Map<String, dynamic>? qr}) async {
+    final model = widget.model;
+    DesktopConnection? provisional;
     setState(() {
       loading = true;
       result = null;
@@ -1071,7 +1011,11 @@ class _ConnectionPageState extends State<ConnectionPage> {
         try {
           await widget.model.updateAddress(endpoint.toString());
           if (mounted) {
-            setState(() => result = tr("已恢复连接 {0}", [previous.name]));
+            setState(() {
+              manual = false;
+              pin.clear();
+              result = tr("已恢复连接 {0}", [previous.name]);
+            });
             widget.onConnected?.call();
           }
           return;
@@ -1086,7 +1030,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
           }
         }
       }
-      final candidate = DesktopConnection(
+      final candidate = provisional = DesktopConnection(
         address: endpoint.toString(),
         fingerprint: expected,
       );
@@ -1108,14 +1052,20 @@ class _ConnectionPageState extends State<ConnectionPage> {
       });
       candidate.token = response['token'];
       candidate.name = response['name'];
-      await widget.model.connect(candidate);
+      if (!mounted) return;
+      if (!await connectPairedComputer(context, model, candidate)) {
+        if (mounted) setState(() => verification = null);
+        return;
+      }
       if (mounted && widget.onConnected != null) {
         widget.onConnected!();
         return;
       }
       if (mounted) {
         setState(() {
-          result = tr("已连接 {0}", [candidate.name]);
+          manual = false;
+          pin.clear();
+          result = null;
           verification = null;
         });
       }
@@ -1151,6 +1101,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
         }
       }
     } finally {
+      if (!identical(model.desktop, provisional)) await provisional?.dispose();
       if (mounted) setState(() => loading = false);
     }
   }
@@ -1184,489 +1135,280 @@ class _ConnectionPageState extends State<ConnectionPage> {
   );
 
   Widget connectionBody(BuildContext context) {
-    final computer = widget.model.desktop;
+    final model = widget.model;
+    final computer = model.desktop;
     final waiting = loading && verification != null;
-    if (!manual && !waiting && computer == null) {
-      return LayoutBuilder(
-        builder: (context, constraints) => SingleChildScrollView(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: constraints.maxHeight),
-            child: IntrinsicHeight(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(24, 24, 24, 24),
-                child: Column(
-                  children: [
-                    breviaLogo(size: 44),
-                    SizedBox(height: 16),
-                    Text(
-                      tr('连接电脑'),
-                      style: Theme.of(context).textTheme.headlineLarge,
-                    ),
-                    SizedBox(height: 12),
-                    Text(
-                      tr("手机采集音频，电脑完成转写"),
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    SizedBox(height: 56),
-                    PairingIllustration(),
-                    SizedBox(height: 32),
-                    Text(
-                      tr('让记录接着发生'),
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    SizedBox(height: 12),
-                    Text(
-                      tr('打开电脑端 Brevia，在「设备连接」中添加手机。'),
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    SizedBox(height: 32),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton.icon(
-                        onPressed: loading ? null : scan,
-                        icon: BreviaIcon(Icons.qr_code_scanner, size: 20),
-                        label: Text(tr("扫描电脑二维码")),
-                      ),
-                    ),
-                    SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton(
-                        onPressed: () => setState(() => manual = true),
-                        child: Text(tr("输入配对码")),
-                      ),
-                    ),
-                    if (result != null)
-                      Padding(
-                        padding: EdgeInsets.only(top: 16),
-                        child: Text(result!, textAlign: TextAlign.center),
-                      ),
-                    SizedBox(height: 28),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        BreviaIcon(
-                          Icons.wifi,
-                          size: 16,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                        SizedBox(width: 8),
-                        Text(
-                          tr("首次配对需同一 Wi-Fi"),
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 24),
-                    Spacer(),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-    }
+    final theme = Theme.of(context);
+    void help() => Navigator.push(
+      context,
+      MaterialPageRoute<void>(builder: (_) => ConnectionHelpPage(model: model)),
+    );
+    void enterManual([String? endpoint]) => setState(() {
+      if (endpoint != null) address.text = endpoint;
+      result = null;
+      manual = true;
+    });
+    Widget heading(String text) => Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Text(text, style: theme.textTheme.headlineLarge),
+    );
+    final nearby = model.nearby.entries.toList();
     return ListView(
-      padding: EdgeInsets.fromLTRB(24, 12, 24, 32),
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
       children: [
-        if (manual && !waiting)
-          Align(
-            alignment: Alignment.centerLeft,
-            child: IconButton(
-              tooltip: tr("返回连接"),
-              onPressed: loading ? null : () => setState(() => manual = false),
-              icon: BreviaIcon(Icons.arrow_back_ios_new, size: 20),
-            ),
-          ),
-        SizedBox(height: computer != null && !manual && !waiting ? 8 : 24),
-        if (computer != null &&
-            !manual &&
-            !waiting &&
-            widget.model.desktopMicrophoneSelected) ...[
-          Text(
-            tr('已准备作为电脑麦克风'),
-            style: Theme.of(context).textTheme.headlineLarge,
-          ),
-          const SizedBox(height: 12),
-          Text(tr('等待电脑开始录音'), style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 28),
-          const Center(child: PairingIllustration()),
-          const SizedBox(height: 24),
-          Text(
-            tr(widget.model.capturePreview != null ? '试音中，不保存录音' : '尚未开始录音'),
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const SizedBox(height: 16),
-          ValueListenableBuilder<double>(
-            valueListenable: widget.model.inputLevel,
-            builder: (_, value, _) =>
-                Center(child: MicrophoneLevel(level: value)),
-          ),
-          const SizedBox(height: 24),
-          Text(tr('电脑已选择此手机为声源，开始录音后这里会显示采集状态。')),
-          const SizedBox(height: 24),
-        ],
-        if (computer != null &&
-            !manual &&
-            !waiting &&
-            !widget.model.desktopMicrophoneSelected) ...[
-          Center(child: breviaLogo(size: 44)),
-          SizedBox(height: 8),
-          Text(
-            tr('连接与设备'),
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.headlineLarge,
-          ),
-          SizedBox(height: 8),
-          Text(
-            tr('手机采集音频，电脑完成转写'),
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-          SizedBox(height: 12),
-          SizedBox(
-            height: 64,
-            child: Center(child: BreviaIcon(Icons.laptop_outlined, size: 112)),
-          ),
-          SizedBox(height: 4),
-          Text(
-            computer.name,
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(
-              context,
-            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
-          ),
-          SizedBox(height: 4),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              BreviaIcon(
-                Icons.circle,
-                size: 6,
-                color: widget.model.connected
-                    ? (Theme.of(context).brightness == Brightness.dark
-                          ? const Color(0xff80c99a)
-                          : const Color(0xff16812e))
-                    : Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-              SizedBox(width: 6),
-              Flexible(
-                child: StableStatusText(
-                  tr(widget.model.connected ? '已连接' : '离线 · 已保留信任'),
-                  states: [tr('已连接'), tr('离线 · 已保留信任')],
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: widget.model.connected
-                        ? (Theme.of(context).brightness == Brightness.dark
-                              ? const Color(0xff80c99a)
-                              : const Color(0xff16812e))
-                        : null,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: 4),
-          StableStatusText(
-            widget.model.connected ? tr('同一局域网') : '',
-            states: [tr('同一局域网')],
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          SizedBox(height: 12),
-        ],
-        if (manual || waiting) ...[
-          if (!manual || waiting) ...[
-            BreviaIcon(Icons.laptop_outlined, size: 64),
-            SizedBox(height: 24),
-          ],
-          Text(
-            waiting
-                ? tr("请在电脑上允许连接")
-                : manual
-                ? tr("手动连接")
-                : computer!.name,
-            textAlign: manual && !waiting ? TextAlign.start : TextAlign.center,
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
-          SizedBox(height: 24),
-        ],
         if (waiting) ...[
-          Text(tr("确认两端显示相同的校验码。"), textAlign: TextAlign.center),
-          SizedBox(height: 32),
-          Container(
-            padding: EdgeInsets.all(32),
-            decoration: BoxDecoration(
-              border: Border.all(color: Theme.of(context).dividerColor),
-              borderRadius: BorderRadius.circular(12),
-            ),
+          heading(tr('请在电脑上允许连接')),
+          BreviaPanel(
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(tr("校验码")),
-                SizedBox(height: 16),
+                const PairingIllustration(active: true),
+                const SizedBox(height: 18),
+                Text(
+                  tr('校验码'),
+                  style: theme.textTheme.bodySmall,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 4),
                 SelectableText(
                   verification!,
-                  style: Theme.of(context).textTheme.headlineLarge,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.headlineLarge?.copyWith(
+                    letterSpacing: 3,
+                  ),
                 ),
-                SizedBox(height: 16),
-                Text(tr("仅在校验码一致时允许连接"), textAlign: TextAlign.center),
+                const SizedBox(height: 12),
+                Text(
+                  tr('仅在校验码一致时允许连接'),
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodySmall,
+                ),
               ],
-            ),
-          ),
-          SizedBox(height: 32),
-          Center(
-            child: SizedBox(
-              width: 24,
-              height: 24,
-              child: TickerMode(
-                enabled: !MediaQuery.disableAnimationsOf(context),
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
             ),
           ),
         ] else if (manual) ...[
-          Text(
-            tr(
-              '在电脑 Brevia「设备连接」中显示配对码。检查同一局域网、系统权限及防火墙；访客 Wi-Fi 可能隔离设备，可尝试电脑热点。',
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: IconButton(
+              icon: const BreviaIcon(Icons.chevron_left),
+              tooltip: tr('返回连接'),
+              onPressed: loading
+                  ? null
+                  : () => setState(() {
+                      manual = false;
+                      result = null;
+                    }),
             ),
-            style: Theme.of(context).textTheme.bodySmall,
           ),
-          SizedBox(height: 28),
-          for (final entry in widget.model.nearby.entries)
-            ListTile(
-              leading: BreviaIcon(Icons.laptop_outlined),
-              title: Text(entry.value),
-              trailing: BreviaIcon(Icons.chevron_right),
-              onTap: () => setState(() => address.text = entry.key),
-            ),
-          Text(tr('电脑的局域网地址')),
-          SizedBox(height: 8),
-          TextField(
-            controller: address,
-            keyboardType: TextInputType.url,
-            autocorrect: false,
-            decoration: InputDecoration(hintText: 'https://192.168.1.24:43187'),
-          ),
-          SizedBox(height: 24),
-          Text(tr('6 位配对码')),
-          SizedBox(height: 8),
-          Semantics(
-            label: tr("6 位配对码"),
-            child: Stack(
-              alignment: Alignment.center,
+          heading(tr('手动连接')),
+          BreviaPanel(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                ExcludeSemantics(
-                  child: Row(
-                    children: List.generate(
-                      6,
-                      (i) => Expanded(
-                        child: Container(
-                          height: 60,
-                          margin: EdgeInsets.only(right: i == 5 ? 0 : 8),
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            border: Border.all(
-                              color: Theme.of(context).dividerColor,
-                            ),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            pin.text.length > i ? pin.text[i] : '',
-                            style: TextStyle(fontSize: 26),
-                          ),
-                        ),
-                      ),
-                    ),
+                Text(tr('电脑的局域网地址'), style: theme.textTheme.titleSmall),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: address,
+                  keyboardType: TextInputType.url,
+                  autocorrect: false,
+                  onChanged: (_) => setState(() {}),
+                  decoration: const InputDecoration(
+                    hintText: 'https://192.168.1.24:43187',
                   ),
                 ),
+                const SizedBox(height: 16),
+                Text(tr('6 位配对码'), style: theme.textTheme.titleSmall),
+                const SizedBox(height: 8),
                 TextField(
                   controller: pin,
                   keyboardType: TextInputType.number,
-                  inputFormatters: [
-                    FilteringTextInputFormatter.digitsOnly,
-                    LengthLimitingTextInputFormatter(6),
-                  ],
-                  enableInteractiveSelection: true,
-                  showCursor: false,
-                  style: TextStyle(color: Colors.transparent),
-                  onChanged: (_) => setState(() {}),
-                  decoration: InputDecoration(
-                    filled: false,
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    focusedBorder: InputBorder.none,
+                  maxLength: 6,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  autofillHints: const [AutofillHints.oneTimeCode],
+                  decoration: const InputDecoration(
+                    hintText: '000000',
                     counterText: '',
-                    labelText: null,
                   ),
+                  style: theme.textTheme.titleLarge?.copyWith(letterSpacing: 5),
+                  onChanged: (_) => setState(() {}),
+                ),
+                const SizedBox(height: 18),
+                FilledButton(
+                  onPressed:
+                      loading ||
+                          address.text.trim().isEmpty ||
+                          pin.text.length != 6
+                      ? null
+                      : () => pair(),
+                  child: Text(tr(loading ? '连接中…' : '连接电脑')),
                 ),
               ],
             ),
           ),
-          SizedBox(height: 24),
-          FilledButton(
-            onPressed: loading || pin.text.length != 6 ? null : () => pair(),
-            child: Text(loading ? tr("连接中…") : tr("连接电脑")),
-          ),
-          SizedBox(height: 12),
-          OutlinedButton(
+          TextButton(
             onPressed: loading ? null : scan,
-            child: Text(tr("改用扫码连接")),
+            child: Text(tr('改用扫码连接')),
           ),
         ] else if (computer == null) ...[
-          FilledButton.icon(
-            onPressed: loading ? null : scan,
-            icon: BreviaIcon(Icons.qr_code_scanner, size: 20),
-            label: Text(tr("扫描电脑二维码")),
-          ),
-          SizedBox(height: 12),
-          OutlinedButton(
-            onPressed: () => setState(() => manual = true),
-            child: Text(tr("输入配对码")),
-          ),
-          SizedBox(height: 24),
-          Text(
-            tr("首次配对需同一 Wi-Fi"),
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ] else ...[
-          if (widget.model.desktopMicrophoneSelected) ...[
-            Container(
-              decoration: BoxDecoration(
-                border: Border.all(color: Theme.of(context).dividerColor),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: ListTile(
-                contentPadding: EdgeInsets.symmetric(horizontal: 16),
-                leading: BreviaIcon(Icons.laptop_outlined, size: 36),
-                title: Text(computer.name),
-                subtitle: Text(
-                  widget.model.connected ? tr('● 已连接') : tr('离线 · 已保留信任'),
+          heading(tr('连接电脑')),
+          BreviaPanel(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const PairingIllustration(),
+                const SizedBox(height: 20),
+                Text(
+                  tr('打开电脑端 Brevia，在「设备连接」中添加手机。'),
+                  style: theme.textTheme.bodyMedium,
                 ),
-              ),
-            ),
-            SizedBox(height: 16),
-          ],
-          Divider(height: 1),
-          ListTile(
-            minTileHeight: 64,
-            leading: BreviaIcon(Icons.sync),
-            title: Text(tr('自动重连')),
-            subtitle: Text(
-              tr('录音期间断线后保留并补传'),
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(fontSize: 12),
-            ),
-            trailing: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: 100),
-              child: Text(
-                tr('已开启（自动）'),
-                textAlign: TextAlign.right,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(fontSize: 12),
-              ),
+                const SizedBox(height: 18),
+                FilledButton.icon(
+                  onPressed: loading ? null : scan,
+                  icon: const BreviaIcon(Icons.qr_code_scanner, size: 20),
+                  label: Text(tr('扫描电脑二维码')),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton(
+                  onPressed: loading ? null : () => enterManual(),
+                  child: Text(tr('输入配对码')),
+                ),
+              ],
             ),
           ),
-          Divider(height: 1),
-          ListTile(
-            minTileHeight: 56,
-            leading: BreviaIcon(Icons.qr_code_scanner),
-            title: Text(tr('重新扫码连接')),
-            trailing: BreviaIcon(Icons.chevron_right, size: 18),
-            onTap: loading ? null : scan,
-          ),
-          Divider(height: 1),
-          ListTile(
-            minTileHeight: 56,
-            leading: BreviaIcon(Icons.edit_outlined),
-            title: Text(tr('更新电脑地址')),
-            trailing: BreviaIcon(Icons.chevron_right, size: 18),
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                requestFocus: false,
-                builder: (_) => UpdateComputerAddressPage(model: widget.model),
-              ),
+          const SizedBox(height: 20),
+          Text(tr('首次配对需同一 Wi-Fi'), style: theme.textTheme.bodySmall),
+          for (final entry in nearby)
+            ListTile(
+              leading: const BreviaGlyph(Icons.laptop_outlined),
+              title: Text(entry.value),
+              trailing: const BreviaIcon(Icons.chevron_right, size: 18),
+              onTap: loading ? null : () => enterManual(entry.key),
+            ),
+        ] else ...[
+          heading(tr('连接与设备')),
+          BreviaPanel(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                PairingIllustration(active: model.connected),
+                const SizedBox(height: 16),
+                Text(
+                  computer.name,
+                  style: theme.textTheme.titleLarge,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.circle,
+                      size: 7,
+                      color: model.connected
+                          ? const Color(0xff26815c)
+                          : theme.colorScheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 7),
+                    Expanded(
+                      child: IndexedStack(
+                        index: model.connected ? 0 : 1,
+                        alignment: AlignmentDirectional.centerStart,
+                        children: [
+                          for (final status in ['已连接', '离线 · 已保留信任'])
+                            Text(tr(status), style: theme.textTheme.bodySmall),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                if (model.desktopMicrophoneSelected) ...[
+                  const Divider(),
+                  Text(
+                    tr(
+                      model.capturePreview != null ? '已准备作为电脑麦克风' : '等待电脑开始录音',
+                    ),
+                    style: theme.textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    tr(model.capturePreview != null ? '试音中，不保存录音' : '尚未开始录音'),
+                    style: theme.textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 12),
+                  ValueListenableBuilder<double>(
+                    valueListenable: model.inputLevel,
+                    builder: (_, value, _) => MicrophoneLevel(level: value),
+                  ),
+                ],
+              ],
             ),
           ),
-          Divider(height: 1),
-          ListTile(
-            minTileHeight: 56,
-            leading: BreviaIcon(Icons.help_outline),
-            title: Text(tr('连接帮助')),
-            trailing: BreviaIcon(Icons.chevron_right, size: 18),
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                requestFocus: false,
-                builder: (_) => ConnectionHelpPage(model: widget.model),
-              ),
-            ),
-          ),
-          Divider(height: 1),
-          SizedBox(height: 8),
-          Container(
-            padding: EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainer,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              tr('电脑可将此手机选为录音声源；开始采集时，手机会明确提示。'),
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(fontSize: 12),
-            ),
-          ),
-          SizedBox(height: 8),
-          TextButton(
-            onPressed: () async {
-              final confirmed = await confirmMobileAction(
-                context,
-                tr('取消信任这台电脑？'),
-                tr('取消后需要重新配对，手机和电脑中已保存的会议副本不会被删除。'),
-                tr('取消信任此电脑'),
-                danger: true,
-              );
-              if (confirmed && context.mounted) {
-                await report(context, () => widget.model.forget());
-              }
-            },
-            child: Text(
-              tr("取消信任此电脑"),
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.error,
-                fontWeight: FontWeight.w400,
-              ),
+          const SizedBox(height: 20),
+          BreviaPanel(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 3),
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const BreviaIcon(Icons.sync),
+                  title: Text(tr('自动重连')),
+                  subtitle: Text(tr('录音期间断线后保留并补传')),
+                  trailing: const BreviaIcon(Icons.check, size: 18),
+                ),
+                ListTile(
+                  leading: const BreviaIcon(Icons.qr_code_scanner),
+                  title: Text(tr('重新扫码连接')),
+                  trailing: const BreviaIcon(Icons.chevron_right, size: 18),
+                  onTap: loading ? null : scan,
+                ),
+                ListTile(
+                  leading: const BreviaIcon(Icons.edit_outlined),
+                  title: Text(tr('更新电脑地址')),
+                  trailing: const BreviaIcon(Icons.chevron_right, size: 18),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) => UpdateComputerAddressPage(model: model),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
         if (result != null)
           Padding(
-            padding: EdgeInsets.symmetric(vertical: 24),
-            child: Text(result!, textAlign: TextAlign.center),
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Semantics(
+              liveRegion: true,
+              child: Text(result!, style: theme.textTheme.bodySmall),
+            ),
           ),
-        if (manual)
+        if (!waiting)
           ListTile(
+            leading: const BreviaIcon(Icons.help_outline),
             title: Text(tr('连接帮助')),
-            trailing: BreviaIcon(Icons.chevron_right),
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                requestFocus: false,
-                builder: (_) => ConnectionHelpPage(model: widget.model),
-              ),
+            trailing: const BreviaIcon(Icons.chevron_right, size: 18),
+            onTap: help,
+          ),
+        if (computer != null && !waiting && !manual)
+          TextButton(
+            onPressed: loading
+                ? null
+                : () async {
+                    final confirmed = await confirmMobileAction(
+                      context,
+                      tr('取消信任这台电脑？'),
+                      tr('此手机上原电脑的共享会议和未同步笔记将被移除。手机录音会保留。'),
+                      tr('取消信任此电脑'),
+                      danger: true,
+                    );
+                    if (confirmed && context.mounted) {
+                      await report(context, model.forget);
+                    }
+                  },
+            child: Text(
+              tr('取消信任此电脑'),
+              style: TextStyle(color: theme.colorScheme.error),
             ),
           ),
       ],
@@ -2004,7 +1746,7 @@ class _MeetingPageState extends State<MeetingPage> {
   @override
   void initState() {
     super.initState();
-    if (meeting['state'] == 'ended') tab = 1;
+    if (meeting['state'] == 'ended') tab = meeting['localOnly'] == true ? 1 : 3;
     widget.model.viewedMeetingId = widget.id;
     unawaited(widget.model.loadMeetingSnapshot(widget.id));
     scroll.addListener(() {
@@ -2184,12 +1926,7 @@ class _MeetingPageState extends State<MeetingPage> {
       if (!loadedAudio) {
         setState(() => loadingAudio = true);
         try {
-          final root = await recordingsRoot();
-          final store = await RecordingStore.load(
-            Directory('${root.path}/${widget.id}'),
-          );
-          if (store.count == 0) throw StateError(tr("本机没有音频"));
-          final wav = await store.wav(await getTemporaryDirectory());
+          final wav = await audioFile();
           await player.setFilePath(wav.path);
           loadedAudio = true;
         } finally {
@@ -2207,38 +1944,13 @@ class _MeetingPageState extends State<MeetingPage> {
     });
   }
 
-  Future<void> share() async {
-    await report(context, () async {
-      final m = meeting;
-      final snapshot = m['snapshot'] as Map? ?? {};
-      final segments = snapshot['segments'] as List? ?? [];
-      final content = tab == 1
-          ? (snapshot['notes'] ?? '').toString()
-          : segments
-                .map(
-                  (s) =>
-                      '${durationText((s['start_ms'] as num? ?? 0) * 16)} ${s['text']}',
-                )
-                .join('\n\n');
-      if (content.trim().isEmpty) throw StateError(tr("暂无可分享的内容"));
-      final file = File(
-        '${(await getTemporaryDirectory()).path}/${widget.id}.${tab == 1 ? 'md' : 'txt'}',
-      );
-      await file.writeAsString(
-        tr("{0}\n截至最后同步的内容\n\n{1}", [m['title'], content]),
-        flush: true,
-      );
-      if (!mounted) return;
-      final box = context.findRenderObject() as RenderBox?;
-      await SharePlus.instance.share(
-        ShareParams(
-          files: [XFile(file.path)],
-          sharePositionOrigin: box == null
-              ? null
-              : box.localToGlobal(Offset.zero) & box.size,
-        ),
-      );
-    });
+  Future<File> audioFile() async {
+    final root = await recordingsRoot();
+    final store = await RecordingStore.load(
+      Directory('${root.path}/${widget.id}'),
+    );
+    if (store.count == 0) throw StateError(tr('本机没有音频'));
+    return store.wav(await getTemporaryDirectory());
   }
 
   Widget transcript(List<dynamic> segments, bool ended) {
@@ -2354,7 +2066,39 @@ class _MeetingPageState extends State<MeetingPage> {
     animation: widget.model,
     builder: (_, _) {
       final m = meeting;
-      final snapshot = m['snapshot'] as Map? ?? {};
+      final snapshot = Map<String, dynamic>.from(m['snapshot'] as Map? ?? {});
+      final desktopMicrophone = m['desktopCapture'] == true;
+      final artifacts = <String, dynamic>{
+        if (!desktopMicrophone) ...m,
+        if (!desktopMicrophone) ...snapshot,
+        'id': widget.id,
+        'title': m['title'],
+      };
+      final markdown = meetingSummaryMarkdown(artifacts);
+      final processing = const {
+        'queued',
+        'running',
+      }.contains(snapshot['task']?['state']);
+      final desktop = widget.model.desktop;
+      final ownsRecording =
+          desktop != null &&
+          m['computer'] == desktop.fingerprint &&
+          m['finished'] == true &&
+          m['remoteDeleted'] != true &&
+          m['desktopCapture'] != true;
+      final readImage =
+          desktop != null &&
+              widget.model.connected &&
+              m['computer'] == desktop.fingerprint &&
+              m['remoteDeleted'] != true &&
+              m['desktopCapture'] != true
+          ? (String name) => desktop.noteImage(widget.id, name)
+          : null;
+      final canProcess = ownsRecording && widget.model.connected && !processing;
+      final sharedOnComputer =
+          m['desktopCapture'] == true &&
+          widget.model.desktopLibrary?.visible(widget.id) == true &&
+          desktop?.fingerprint == m['computer'];
       final state = m['state'];
       final ended = state == 'ended';
       final live =
@@ -2366,7 +2110,7 @@ class _MeetingPageState extends State<MeetingPage> {
           m['desktopCapture'] != true &&
           m['localOnly'] != true;
       final recordingFocus =
-          m['desktopCapture'] == true ||
+          desktopMicrophone ||
           (!ended && (m['localOnly'] == true || !live || recordingOverview));
       final darkRecording =
           !ended &&
@@ -2497,6 +2241,18 @@ class _MeetingPageState extends State<MeetingPage> {
                   ],
                 ),
           actions: [
+            if (sharedOnComputer)
+              IconButton(
+                icon: const BreviaIcon(Icons.laptop_outlined),
+                tooltip: tr('电脑会议'),
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) =>
+                        DesktopMeetingPage(model: widget.model, id: widget.id),
+                  ),
+                ),
+              ),
             if (canReview && recordingOverview) ...[
               IconButton(
                 tooltip: tr('转写'),
@@ -2598,10 +2354,14 @@ class _MeetingPageState extends State<MeetingPage> {
               ],
             ),
             if (ended)
-              IconButton(
-                onPressed: share,
-                tooltip: tr("分享已同步内容"),
-                icon: BreviaIcon(Icons.ios_share),
+              MeetingExportButton(
+                snapshot: artifacts,
+                imageBytes: readImage,
+                documentFile: ownsRecording && widget.model.connected
+                    ? (content, format) =>
+                          desktop.document(widget.id, content, format)
+                    : null,
+                audioFile: (m['samples'] as num? ?? 0) > 0 ? audioFile : null,
               ),
           ],
         ),
@@ -2715,75 +2475,19 @@ class _MeetingPageState extends State<MeetingPage> {
                     ),
                     if (!recordingFocus)
                       Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            border: Border(
-                              bottom: BorderSide(
-                                color: Theme.of(context).dividerColor,
-                              ),
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              for (final (i, text)
-                                  in (ended
-                                      ? [
-                                          (1, tr('笔记')),
-                                          (0, tr('转写')),
-                                          (2, tr('重点')),
-                                        ]
-                                      : [
-                                          (0, tr('转写')),
-                                          (1, tr('笔记')),
-                                          (2, tr('重点')),
-                                        ]))
-                                Expanded(
-                                  child: AnimatedContainer(
-                                    duration: BreviaMotion.duration(
-                                      context,
-                                      BreviaMotion.state,
-                                    ),
-                                    curve: BreviaMotion.inOut,
-                                    decoration: BoxDecoration(
-                                      border: Border(
-                                        bottom: BorderSide(
-                                          color: tab == i
-                                              ? Theme.of(
-                                                  context,
-                                                ).colorScheme.onSurface
-                                              : Colors.transparent,
-                                          width: 2,
-                                        ),
-                                      ),
-                                    ),
-                                    child: TextButton(
-                                      onPressed: () => setState(() {
-                                        tab = i;
-                                        following = false;
-                                      }),
-                                      child: Text(
-                                        text,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          fontWeight: tab == i
-                                              ? FontWeight.w600
-                                              : FontWeight.w400,
-                                          color: tab == i
-                                              ? Theme.of(
-                                                  context,
-                                                ).colorScheme.onSurface
-                                              : Theme.of(
-                                                  context,
-                                                ).colorScheme.onSurfaceVariant,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                        child: BreviaTabs(
+                          entries: [
+                            if (ended) (3, tr('会议纪要')),
+                            (1, tr('笔记')),
+                            (0, tr('转写')),
+                            (2, tr('重点')),
+                          ],
+                          selected: tab,
+                          onSelect: (i) => setState(() {
+                            tab = i;
+                            following = false;
+                          }),
                         ),
                       ),
                     if (ended && tab == 0)
@@ -2990,6 +2694,74 @@ class _MeetingPageState extends State<MeetingPage> {
                                 ),
                               ),
                             ],
+                            if (!recordingFocus && ended && tab == 3) ...[
+                              if (m['finished'] == true &&
+                                  m['desktopCapture'] != true)
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 6,
+                                  children: [
+                                    OutlinedButton.icon(
+                                      onPressed: canProcess
+                                          ? () => requestPhoneProcessing(
+                                              context,
+                                              widget.model,
+                                              widget.id,
+                                              'summary',
+                                            )
+                                          : null,
+                                      icon: const BreviaIcon(
+                                        Icons.auto_awesome,
+                                        size: 16,
+                                      ),
+                                      label: Text(tr('生成会议纪要')),
+                                    ),
+                                    TextButton.icon(
+                                      onPressed: canProcess
+                                          ? () => requestPhoneProcessing(
+                                              context,
+                                              widget.model,
+                                              widget.id,
+                                              'refine',
+                                            )
+                                          : null,
+                                      icon: const BreviaIcon(
+                                        Icons.auto_fix_high_outlined,
+                                        size: 16,
+                                      ),
+                                      label: Text(tr('重新精修')),
+                                    ),
+                                  ],
+                                ),
+                              if (processing)
+                                Text(
+                                  tr('电脑处理中'),
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                              const SizedBox(height: 12),
+                              MeetingEvidenceTree(
+                                snapshot: artifacts,
+                                onSeek: (ms) => play(milliseconds: ms),
+                              ),
+                              if (markdown.trim().isNotEmpty)
+                                SelectionArea(
+                                  child: MarkdownBody(
+                                    data: markdown,
+                                    sizedImageBuilder: (img) =>
+                                        MeetingNoteImage(
+                                          id: widget.id,
+                                          uri: img.uri,
+                                          alt: img.alt,
+                                          load: readImage,
+                                        ),
+                                  ),
+                                )
+                              else if (!processing)
+                                Text(
+                                  tr('暂无会议纪要'),
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                            ],
                             if (!recordingFocus && tab == 0)
                               transcript(
                                 snapshot['segments'] as List? ?? [],
@@ -3022,8 +2794,13 @@ class _MeetingPageState extends State<MeetingPage> {
                                             .isEmpty
                                         ? tr("电脑生成或保存笔记后会显示在这里。")
                                         : snapshot['notes'],
-                                    sizedImageBuilder: (_) =>
-                                        Text(tr("图片请在电脑查看")),
+                                    sizedImageBuilder: (img) =>
+                                        MeetingNoteImage(
+                                          id: widget.id,
+                                          uri: img.uri,
+                                          alt: img.alt,
+                                          load: readImage,
+                                        ),
                                     styleSheet: MarkdownStyleSheet(
                                       p: Theme.of(context).textTheme.bodyLarge,
                                       h2: Theme.of(
@@ -3338,7 +3115,6 @@ class _MeetingPageState extends State<MeetingPage> {
                                       ? () => report(context, mark)
                                       : null,
                                   onEnd: end,
-                                  localOnly: m['localOnly'] == true,
                                 ),
                               ],
                             ),
@@ -3473,19 +3249,14 @@ class SettingsPage extends StatelessWidget {
     padding: EdgeInsets.fromLTRB(24, 20, 24, 16),
     children: [
       Text(tr('设置'), style: Theme.of(context).textTheme.headlineLarge),
-      const SizedBox(height: 8),
-      Text(
-        tr('让 Brevia 按你的习惯工作。'),
-        style: Theme.of(context).textTheme.bodySmall,
-      ),
-      const SizedBox(height: 24),
+      const SizedBox(height: 20),
       Text(tr('偏好设置'), style: Theme.of(context).textTheme.bodySmall),
       const SizedBox(height: 8),
-      SizedBox(
+      BreviaPanel(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Divider(height: 1),
             ListTile(
               contentPadding: EdgeInsets.zero,
               minTileHeight: 56,
@@ -3531,7 +3302,6 @@ class SettingsPage extends StatelessWidget {
                 ),
               ),
             ),
-            Divider(height: 1),
             ListTile(
               contentPadding: EdgeInsets.zero,
               minVerticalPadding: 8,
@@ -3638,11 +3408,16 @@ class SettingsPage extends StatelessWidget {
                 ),
               ),
             ),
-            Divider(height: 1),
-            const SizedBox(height: 24),
-            Text(tr('录音与数据'), style: Theme.of(context).textTheme.bodySmall),
-            const SizedBox(height: 8),
-            Divider(height: 1),
+          ],
+        ),
+      ),
+      const SizedBox(height: 20),
+      Text(tr('录音与数据'), style: Theme.of(context).textTheme.bodySmall),
+      const SizedBox(height: 8),
+      BreviaPanel(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+        child: Column(
+          children: [
             ListTile(
               contentPadding: EdgeInsets.zero,
               minVerticalPadding: 8,
@@ -3696,7 +3471,6 @@ class SettingsPage extends StatelessWidget {
                 ),
               ),
             ),
-            Divider(height: 1),
             ListTile(
               contentPadding: EdgeInsets.zero,
               minVerticalPadding: 8,
@@ -3704,16 +3478,16 @@ class SettingsPage extends StatelessWidget {
               leading: BreviaIcon(Icons.laptop_outlined),
               title: Text(tr("连接与设备")),
               trailing: BreviaIcon(Icons.chevron_right),
-              onTap: () => info(
+              onTap: () => Navigator.push(
                 context,
-                tr("连接与设备"),
-                SizedBox(
-                  height: MediaQuery.sizeOf(context).height * .8,
-                  child: ConnectionPage(model: model),
+                MaterialPageRoute<void>(
+                  builder: (_) => Scaffold(
+                    appBar: AppBar(),
+                    body: SafeArea(child: ConnectionPage(model: model)),
+                  ),
                 ),
               ),
             ),
-            Divider(height: 1),
             ListTile(
               contentPadding: EdgeInsets.zero,
               minVerticalPadding: 8,
@@ -3723,7 +3497,6 @@ class SettingsPage extends StatelessWidget {
               trailing: BreviaIcon(Icons.chevron_right),
               onTap: () => storagePage(context),
             ),
-            Divider(height: 1),
             ListTile(
               contentPadding: EdgeInsets.zero,
               minVerticalPadding: 8,
@@ -3816,26 +3589,11 @@ class SettingsPage extends StatelessWidget {
                 ),
               ),
             ),
-            Divider(height: 1),
             const SizedBox(height: 16),
             if (Platform.isAndroid || Platform.isIOS) ...[
               updateEntry(context),
               Divider(height: 1),
             ],
-            const SizedBox(height: 16),
-            Text(
-              tr('录音保留在本机，上传由你确认。'),
-              textAlign: TextAlign.center,
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(fontSize: 12),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Brevia',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
           ],
         ),
       ),
@@ -4034,6 +3792,35 @@ class _PrepareMeetingPageState extends State<PrepareMeetingPage> {
         child: ListView(
           padding: EdgeInsets.all(24),
           children: [
+            BreviaPanel(
+              child: Row(
+                children: [
+                  BreviaGlyph(
+                    offline
+                        ? Icons.phone_iphone_outlined
+                        : Icons.laptop_outlined,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          offline ? tr('仅保存在手机') : widget.computer,
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          tr(offline ? '连接电脑后可上传' : '手机采集音频，电脑完成转写'),
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
             Text(tr("会议标题")),
             SizedBox(height: 8),
             TextField(
@@ -4107,68 +3894,6 @@ class _PrepareMeetingPageState extends State<PrepareMeetingPage> {
               ),
             ],
             SizedBox(height: 8),
-            Container(
-              padding: EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerLowest,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  BreviaIcon(
-                    offline
-                        ? Icons.phone_iphone_outlined
-                        : Icons.laptop_outlined,
-                  ),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(offline ? tr("仅保存在手机") : widget.computer),
-                        SizedBox(height: 4),
-                        Text(
-                          tr(
-                            offline
-                                ? "无需连接电脑。录音保存在本机，连接后由你主动上传。"
-                                : "手机采集音频，电脑完成转写",
-                          ),
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
-                    ),
-                  ),
-                  SizedBox(width: 12),
-                  if (!offline)
-                    BreviaIcon(
-                      Icons.check_circle,
-                      color: Color(0xff16803c),
-                      size: 20,
-                    ),
-                ],
-              ),
-            ),
-
-            if (!widget.upload && offline) ...[
-              SizedBox(height: 16),
-              Center(
-                child: Container(
-                  width: 80,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surfaceContainerLowest,
-                    shape: BoxShape.circle,
-                  ),
-                  child: BreviaIcon(Icons.mic_none, size: 40),
-                ),
-              ),
-              SizedBox(height: 12),
-              Text(
-                tr("点击下方按钮开始录音"),
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
             SizedBox(height: 16),
             if (!ready)
               Padding(
@@ -4366,69 +4091,75 @@ class SavedMeetingPage extends StatelessWidget {
           child: ListView(
             padding: EdgeInsets.all(24),
             children: [
-              SizedBox(height: 24),
-              Center(
-                child: BreviaIcon(
-                  Icons.check_circle,
-                  size: 64,
-                  color: Color(0xff16803c),
+              BreviaPanel(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const BreviaGlyph(Icons.check),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            tr('录音已结束'),
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    Text(
+                      durationText(m['samples'] ?? 0),
+                      style: Theme.of(context).textTheme.headlineLarge
+                          ?.copyWith(
+                            fontSize: 40,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                          ),
+                    ),
+                  ],
                 ),
               ),
-              SizedBox(height: 20),
-              Text(
-                tr("录音已结束"),
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-              SizedBox(height: 16),
-              Text(
-                durationText(m['samples'] ?? 0),
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-              SizedBox(height: 40),
-              Divider(height: 1),
-              ListTile(
-                leading: BreviaIcon(Icons.phone_iphone_outlined),
-                title: Text(tr("手机录音")),
-                subtitle: Text(tr("已保存")),
-                trailing: BreviaIcon(
-                  Icons.check_circle,
-                  color: Color(0xff16803c),
+              const SizedBox(height: 16),
+              BreviaPanel(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 6,
+                ),
+                child: Column(
+                  children: [
+                    ListTile(
+                      leading: const BreviaIcon(Icons.phone_iphone_outlined),
+                      title: Text(tr('手机录音')),
+                      trailing: Text(tr('已保存')),
+                    ),
+                    ListTile(
+                      leading: const BreviaIcon(Icons.laptop_outlined),
+                      title: Text(tr('传到电脑')),
+                      subtitle: Text(
+                        m['localOnly'] == true
+                            ? tr('尚未上传')
+                            : pending > 0
+                            ? tr('待补传 {0}', [durationText(pending)])
+                            : tr('音频已传输'),
+                      ),
+                    ),
+                    ListTile(
+                      leading: const BreviaIcon(Icons.description_outlined),
+                      title: Text(tr('会议笔记')),
+                      subtitle: Text(
+                        m['desktopCapture'] == true
+                            ? tr('这场会议由电脑发起，逐字稿和笔记保存在电脑。录音保留在手机，断线后可补传。')
+                            : (snapshot['notes'] ?? '').toString().isEmpty
+                            ? tr('等待电脑整理')
+                            : tr('已收到电脑笔记'),
+                      ),
+                      trailing: m['desktopCapture'] == true
+                          ? null
+                          : TranscriptionActivity(meeting: m, model: model),
+                    ),
+                  ],
                 ),
               ),
-              Divider(height: 1),
-              ListTile(
-                leading: BreviaIcon(Icons.laptop_outlined),
-                title: Text(tr("传到电脑")),
-                subtitle: Text(
-                  m['localOnly'] == true
-                      ? tr("尚未上传")
-                      : pending > 0
-                      ? tr("待补传 {0}", [durationText(pending)])
-                      : tr("音频已传输"),
-                ),
-                trailing: BreviaIcon(
-                  pending > 0 ? Icons.schedule : Icons.check_circle,
-                  color: pending > 0 ? Color(0xffa05a00) : Color(0xff16803c),
-                ),
-              ),
-              Divider(height: 1),
-              ListTile(
-                leading: BreviaIcon(Icons.description_outlined),
-                title: Text(tr("会议笔记")),
-                subtitle: Text(
-                  m['desktopCapture'] == true
-                      ? tr('这场会议由电脑发起，逐字稿和笔记保存在电脑。录音保留在手机，断线后可补传。')
-                      : (snapshot['notes'] ?? '').toString().isEmpty
-                      ? tr("等待电脑整理")
-                      : tr("已收到电脑笔记"),
-                ),
-                trailing: m['desktopCapture'] == true
-                    ? null
-                    : TranscriptionActivity(meeting: m, model: model),
-              ),
-              Divider(height: 1),
               if (m['localOnly'] != true &&
                   m['finished'] != true &&
                   m['remoteDeleted'] != true &&
@@ -4449,7 +4180,7 @@ class SavedMeetingPage extends StatelessWidget {
                     ),
                   ),
                 ),
-              SizedBox(height: 40),
+              const SizedBox(height: 24),
               if (m['localOnly'] == true) ...[
                 FilledButton.icon(
                   onPressed: model.busy
@@ -4460,35 +4191,40 @@ class SavedMeetingPage extends StatelessWidget {
                 ),
                 SizedBox(height: 12),
               ],
-              if (m['localOnly'] == true)
-                OutlinedButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: Text(tr("返回会议列表")),
+              if (m['localOnly'] != true)
+                FilledButton(
+                  onPressed: () => Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(
+                      requestFocus: false,
+                      builder: (_) => MeetingPage(model: model, id: id),
+                    ),
+                  ),
+                  child: Text(
+                    tr(m['desktopCapture'] == true ? '手机录音' : '查看转写与笔记'),
+                  ),
                 )
               else
-                FilledButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: Text(tr("返回会议列表")),
-                ),
-              SizedBox(height: 12),
-              TextButton(
-                onPressed: () => Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                    requestFocus: false,
-                    builder: (_) => MeetingPage(model: model, id: id),
+                OutlinedButton(
+                  onPressed: () => Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(
+                      requestFocus: false,
+                      builder: (_) => MeetingPage(model: model, id: id),
+                    ),
                   ),
+                  child: Text(tr('手机录音')),
                 ),
-                child: Text(
-                  tr(m['desktopCapture'] == true ? '手机录音' : "查看转写与笔记"),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(tr('返回会议列表')),
+              ),
+              if (pending > 0)
+                Text(
+                  tr("关闭页面不会删除待传录音。"),
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodySmall,
                 ),
-              ),
-              SizedBox(height: 32),
-              Text(
-                tr("关闭页面不会删除待传录音。"),
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
             ],
           ),
         ),

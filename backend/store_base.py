@@ -40,6 +40,15 @@ CREATE TABLE IF NOT EXISTS meetings (
   example_locale TEXT,
   notes TEXT NOT NULL DEFAULT ''
 );
+CREATE TABLE IF NOT EXISTS mobile_note_proposals (
+  meeting_id TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
+  device_id TEXT NOT NULL,
+  id TEXT NOT NULL UNIQUE,
+  base_revision TEXT NOT NULL,
+  notes TEXT NOT NULL,
+  state TEXT NOT NULL,
+  PRIMARY KEY(meeting_id, device_id)
+);
 CREATE TABLE IF NOT EXISTS ai_note_claims (
   meeting_id TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
   id TEXT NOT NULL,

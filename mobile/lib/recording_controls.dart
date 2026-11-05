@@ -53,7 +53,7 @@ class StableStatusText extends StatelessWidget {
 /// 只展示状态和发送动作；录音、传输和错误处理仍由会议控制器负责。
 class RecordingControls extends StatelessWidget {
   final bool paused, pending;
-  final bool localOnly, showLabels;
+  final bool showLabels;
   final VoidCallback onPause, onEnd;
   final VoidCallback? onMark;
   const RecordingControls({
@@ -63,14 +63,12 @@ class RecordingControls extends StatelessWidget {
     required this.onPause,
     required this.onEnd,
     this.onMark,
-    this.localOnly = false,
     this.showLabels = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final dark = Theme.of(context).brightness == Brightness.dark;
     Widget control(
       String label,
       IconData icon,
@@ -84,27 +82,17 @@ class RecordingControls extends StatelessWidget {
             tooltip: label,
             onPressed: pending ? null : action,
             icon: BreviaStateChange(
-              child: BreviaIcon(icon, key: ValueKey(icon), size: 28),
+              child: BreviaIcon(icon, key: ValueKey(icon), size: 23),
             ),
             style: IconButton.styleFrom(
-              minimumSize: const Size(64, 64),
+              minimumSize: const Size(58, 50),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
               backgroundColor: danger
-                  ? localOnly
-                        ? Colors.transparent
-                        : dark
-                        ? Colors.white
-                        : const Color(0xffff3b30)
-                  : colors.surface,
-              foregroundColor: danger
-                  ? localOnly || dark
-                        ? const Color(0xffff3b30)
-                        : Colors.white
-                  : colors.onSurface,
-              side: danger
-                  ? localOnly
-                        ? const BorderSide(color: Color(0xffff3b30))
-                        : BorderSide.none
-                  : BorderSide(color: colors.outlineVariant),
+                  ? colors.onSurface
+                  : colors.surfaceContainer,
+              foregroundColor: danger ? colors.surface : colors.onSurface,
             ),
           ),
           if (showLabels) ...[
@@ -403,8 +391,8 @@ class RecordingFocus extends StatelessWidget {
                           padding: const EdgeInsets.fromLTRB(12, 0, 0, 0),
                           decoration: BoxDecoration(
                             color: colors.surface,
-                            border: Border.all(color: colors.outline),
-                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: colors.outlineVariant),
+                            borderRadius: BorderRadius.circular(14),
                           ),
                           child: Row(
                             children: [
@@ -537,7 +525,8 @@ class RecordingFocus extends StatelessWidget {
                                 durationText(meeting['samples'] ?? 0),
                                 style: Theme.of(context).textTheme.headlineLarge
                                     ?.copyWith(
-                                      fontWeight: FontWeight.w300,
+                                      fontWeight: FontWeight.w400,
+                                      letterSpacing: -1.6,
                                       fontSize: constraints.maxHeight < 500
                                           ? 36
                                           : dense
@@ -650,7 +639,6 @@ class RecordingFocus extends StatelessWidget {
                     onPause: onPause,
                     onMark: onMark,
                     onEnd: onEnd,
-                    localOnly: local,
                     showLabels: true,
                   ),
               ],

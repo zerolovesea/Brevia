@@ -97,7 +97,7 @@ void main() {
     await capture('ios-prepare');
     await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
-    await tester.tap(find.byIcon(Icons.laptop_outlined).last);
+    await tester.tap(find.byIcon(Icons.link_outlined).last);
     await capture('ios-connection');
     await tester.tap(find.byIcon(Icons.settings_outlined).last);
     await capture('ios-settings');

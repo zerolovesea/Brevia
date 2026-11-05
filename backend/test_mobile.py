@@ -115,6 +115,44 @@ class MobileReplayTest(unittest.TestCase):
             self.assertFalse((spool / '0.json').exists())
             self.assertEqual(identity.read_text(), 'identity')
 
+    def test_shared_note_proposals_require_review_of_current_notes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = Store(directory)
+            bridge = Bridge(store)
+            mid = store.create_meeting(
+                {'title': 'Review', 'language': 'zh', 'refined_model_id': 'test'}
+            )['id']
+            proposal = dict(
+                meeting_id=mid, device_id='phone', id='p1', base_revision='base', notes='Phone'
+            )
+            self.assertEqual(bridge.mobile_proposal_put(proposal)['state'], 'pending')
+            self.assertEqual(bridge.mobile_proposal_put(proposal)['state'], 'pending')
+            self.assertTrue(bridge.mobile_proposal_put({**proposal, 'id': 'p2'})['conflict'])
+            self.assertEqual(bridge.mobile_proposal_list({})[0]['meeting_title'], 'Review')
+            store.update_meeting(mid, {'notes': 'Desktop'})
+            decision = dict(id='p1', meeting_id=mid, accept=True, expected_notes='')
+            self.assertTrue(bridge.mobile_proposal_resolve(decision)['conflict'])
+            self.assertEqual(store.get_meeting(mid)['notes'], 'Desktop')
+            accepted = bridge.mobile_proposal_resolve({**decision, 'expected_notes': 'Desktop'})
+            self.assertEqual(accepted['state'], 'accepted')
+            self.assertEqual(store.get_meeting(mid)['notes'], 'Phone')
+            self.assertEqual(bridge.mobile_proposal_put(proposal)['state'], 'accepted')
+            bridge.mobile_proposal_put({**proposal, 'id': 'p2', 'notes': 'Discard'})
+            bridge.mobile_proposal_resolve({**decision, 'id': 'p2', 'accept': False})
+            self.assertEqual(bridge.mobile_proposal_status(proposal)['state'], 'declined')
+            self.assertEqual(store.get_meeting(mid)['notes'], 'Phone')
+            bridge.mobile_proposal_forget({'device_id': 'phone', 'keep_meetings': [mid]})
+            self.assertIsNotNone(bridge.mobile_proposal_status(proposal))
+            bridge.mobile_proposal_forget({'device_id': 'phone'})
+            self.assertIsNone(bridge.mobile_proposal_status(proposal))
+            bridge.mobile_proposal_put(proposal)
+            store.soft_delete(mid)
+            self.assertEqual(bridge.mobile_library({}), [])
+            self.assertEqual(bridge.mobile_proposal_list({}), [])
+            self.assertTrue(bridge.mobile_proposal_resolve(decision)['missing'])
+            store.permanent_delete(mid)
+            self.assertIsNone(bridge.mobile_proposal_status(proposal))
+
     def test_translation_processes_every_segment_and_rejects_active_recording(self):
         bridge = Bridge(
             SimpleNamespace(

@@ -37,7 +37,8 @@ const [
     'floating-caption.html',
   ].map((file) => readFile(file)),
 );
-const js = Buffer.concat([app, meetings, meetingDetail, workspaces]);
+const providerSource = await readFile('summary-providers.js', 'utf8');
+const js = Buffer.concat([Buffer.from(providerSource), app, meetings, meetingDetail, workspaces]);
 const composeCss = await readFile('desktop-compose.css', 'utf8');
 const desktopControls = await readFile('desktop-controls.js', 'utf8');
 const startWorkspace = html
@@ -3217,12 +3218,13 @@ const finishRecordingSource = text(app).match(
   /function finishCurrentRecording\(meeting\) \{[\s\S]*?\n\}/,
 )[0];
 const summaryConfigFunctions = [
+  'configuredSummaryProvider',
   'providerEntry',
   'builtinFallbackModel',
   'requestConfig',
   'summaryRequestConfig',
 ]
-  .map((name) => text(app).match(new RegExp(`function ${name}\\([^]*?\\n\\}`))?.[0])
+  .map((name) => text(js).match(new RegExp(`function ${name}\\([^]*?\\n\\}`))?.[0])
   .join('\n');
 for (const scenario of [
   { provider: 'built-in', model: 'local', installed: true, expected: 1 },
@@ -4799,7 +4801,7 @@ assert.match(text(css), /\.selection-marquee\{/);
 assert.match(text(css), /\.meeting-row\.is-selected\{/);
 assert.match(text(html), /ui-data\.js[\s\S]*ui-components\.js[\s\S]*app\.js/);
 // 纪要模态框的真实渲染产物：字段可见性、内置模型清单、凭据回填、转义和八语言标签。
-const summaryAppSource = text(app);
+const summaryAppSource = providerSource + '\n' + text(app);
 const summaryFn = (name) => {
   const start = summaryAppSource.indexOf(`function ${name}(`);
   return summaryAppSource.slice(start, summaryAppSource.indexOf('\n}\n', start) + 2);

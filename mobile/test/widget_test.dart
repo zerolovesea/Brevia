@@ -1210,7 +1210,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(NavigationBar), findsOneWidget);
       expect(find.text('新建录音'), findsOneWidget);
-      await tester.tap(find.byIcon(Icons.laptop_outlined).last);
+      await tester.tap(find.byIcon(Icons.link_outlined).last);
       await tester.pumpAndSettle();
       await tester.ensureVisible(find.text('输入配对码'));
       await tester.tap(find.text('输入配对码'));
@@ -1366,7 +1366,7 @@ void main() {
     await tester.pumpWidget(BreviaApp(model: model));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
-    await tester.tap(find.byIcon(Icons.laptop_outlined).last);
+    await tester.tap(find.byIcon(Icons.link_outlined).last);
     await tester.pumpAndSettle();
     expect(find.text('重新扫码连接'), findsOneWidget);
     expect(tester.takeException(), isNull);

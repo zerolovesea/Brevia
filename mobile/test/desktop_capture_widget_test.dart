@@ -80,6 +80,9 @@ void main() {
                 {'text': 'Private desktop transcript'},
               ],
               'notes': 'Private desktop notes',
+              'summary': {
+                'data': {'markdown': 'Private desktop summary'},
+              },
             },
           };
           model.meetings = [meeting];
@@ -112,9 +115,19 @@ void main() {
           }
           if (state == 'ended') {
             expect(find.text(tr('电脑会议的手机录音')), findsOneWidget);
+            expect(find.text(tr('笔记')), findsNothing);
+            expect(find.text(tr('转写')), findsNothing);
+            expect(find.text(tr('会议纪要')), findsNothing);
+            await tester.tap(find.byTooltip(tr('导出')));
+            await tester.pumpAndSettle();
+            expect(find.text(tr('会议录音')), findsOneWidget);
+            expect(find.text(tr('逐字稿')), findsNothing);
+            expect(find.text(tr('我的笔记')), findsNothing);
+            expect(find.text(tr('会议纪要')), findsNothing);
           }
           expect(find.text('Private desktop transcript'), findsNothing);
           expect(find.text('Private desktop notes'), findsNothing);
+          expect(find.text('Private desktop summary'), findsNothing);
           expect(find.text(tr('仅保存在手机')), findsNothing);
           expect(tester.takeException(), isNull, reason: '$language / $state');
           await tester.pumpWidget(const SizedBox());

@@ -1,4 +1,5 @@
 const https = require('node:https');
+const { pipeline } = require('node:stream/promises');
 const { Bonjour } = require('bonjour-service');
 const { networkInterfaces, hostname } = require('node:os');
 const path = require('node:path');
@@ -64,13 +65,13 @@ async function readJSON(file, fallback) {
     throw e;
   }
 }
-async function body(req) {
-  if (Number(req.headers['content-length']) > 60000) throw fail(413, '请求过大');
+async function body(req, limit = 60000) {
+  if (Number(req.headers['content-length']) > limit) throw fail(413, '请求过大');
   let size = 0;
   const chunks = [];
   for await (const chunk of req) {
     size += chunk.length;
-    if (size > 60000) throw fail(413, '请求过大');
+    if (size > limit) throw fail(413, '请求过大');
     chunks.push(chunk);
   }
   try {
@@ -87,10 +88,20 @@ class MobileServer {
     approve,
     active,
     discovered = () => {},
+    changed = () => {},
     advertise = true,
     port = 43187,
   }) {
-    Object.assign(this, { directory, request, approve, active, discovered, advertise, port });
+    Object.assign(this, {
+      directory,
+      request,
+      approve,
+      active,
+      discovered,
+      changed,
+      advertise,
+      port,
+    });
     this.lastSeen = new Map();
     this.captureReady = new Map();
     this.captureLevels = new Map();
@@ -98,6 +109,8 @@ class MobileServer {
     this.discoveryNoticeAt = 0;
     this.queue = Promise.resolve();
     this.sessions = new Map();
+    this.desktopTasks = {};
+    this.fileStreams = new Map();
     this.pairing = null;
     this.pairBusy = false;
     this.draining = false;
@@ -111,6 +124,11 @@ class MobileServer {
   async init() {
     await fs.mkdir(this.directory, { recursive: true, mode: 0o700 });
     this.devices = await readJSON(path.join(this.directory, 'devices.json'), []);
+    this.desktopTasks = await readJSON(path.join(this.directory, 'desktop-tasks.json'), {});
+    for (const task of Object.values(this.desktopTasks)) {
+      if (task.state === 'running')
+        Object.assign(task, { state: 'failed', error: '电脑已重启，请重新提交任务' });
+    }
     let identity = await readJSON(path.join(this.directory, 'identity.json'), null);
     if (!identity) {
       const keys = await selfsigned.generate([{ name: 'commonName', value: 'Brevia Local' }], {
@@ -144,11 +162,34 @@ class MobileServer {
     if (this.server) return this.status();
     const server = https.createServer({ ...this.identity, minVersion: 'TLSv1.2' }, (req, res) => {
       this.route(req)
-        .then((value) => {
+        .then(async (value) => {
+          if (value?.fileHandle) {
+            const { fileHandle, mime, deviceId, meetingId } = value;
+            let source;
+            try {
+              const { size } = await fileHandle.stat();
+              if (res.destroyed) return;
+              this.assertAccess(deviceId, meetingId);
+              res.writeHead(200, {
+                'Content-Type': mime,
+                'Content-Length': size,
+                'Cache-Control': 'no-store',
+              });
+              source = fileHandle.createReadStream();
+              this.fileStreams.set(source, deviceId);
+              await pipeline(source, res);
+            } finally {
+              this.fileStreams.delete(source);
+              source?.destroy();
+              await fileHandle.close();
+            }
+            return;
+          }
           res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
           res.end(JSON.stringify(value));
         })
         .catch((error) => {
+          if (res.destroyed || res.headersSent) return;
           res.writeHead(error.status || (error instanceof z.ZodError ? 400 : 500), {
             'Content-Type': 'application/json',
             'Cache-Control': 'no-store',
@@ -246,7 +287,8 @@ class MobileServer {
       name: hostname(),
       addresses,
       fingerprint: this.fingerprint,
-      devices: this.devices.map(({ id, name, firstConnectedAt }) => ({
+      devices: this.devices.map(({ id, name, firstConnectedAt, libraryAccess }) => ({
+        libraryAccess: libraryAccess === true,
         id,
         name,
         firstConnectedAt: firstConnectedAt || null,
@@ -315,14 +357,45 @@ class MobileServer {
       qr: await QRCode.toDataURL(payload, { width: 256, margin: 2 }),
     };
   }
-  async revoke(id) {
-    if ([...this.sessions.values()].some((s) => s.owner === id && !s.finished))
-      throw fail(409, '该设备仍有未完成的录音，请先结束并补传');
-    this.captureLevels.delete(id);
-    if (this.capturePreview?.deviceId === id) this.capturePreview = null;
-    this.devices = this.devices.filter((d) => d.id !== id);
-    await atomicJSON(path.join(this.directory, 'devices.json'), this.devices);
-    return this.status();
+  async saveDevices(devices) {
+    await atomicJSON(path.join(this.directory, 'devices.json'), devices);
+    this.devices = devices;
+  }
+  stopDeviceStreams(id) {
+    for (const [stream, owner] of this.fileStreams) {
+      if (owner === id) stream.destroy();
+    }
+  }
+  setLibraryAccess(id, enabled) {
+    return this.serial(async () => {
+      if (!this.devices.some((device) => device.id === id)) throw fail(404, '设备不存在');
+      const devices = this.devices.map((device) =>
+        device.id === id ? { ...device, libraryAccess: enabled === true } : device,
+      );
+      await this.saveDevices(devices);
+      if (!enabled) {
+        this.stopDeviceStreams(id);
+        const own = [...this.sessions.values()]
+          .filter((s) => s.owner === id && !s.deleted && !s.desktopCapture)
+          .map((s) => s.id);
+        await this.request('mobile.proposal.forget', { device_id: id, keep_meetings: own });
+      }
+      this.changed();
+      return this.status();
+    });
+  }
+  revoke(id) {
+    return this.serial(async () => {
+      if ([...this.sessions.values()].some((s) => s.owner === id && !s.finished))
+        throw fail(409, '该设备仍有未完成的录音，请先结束并补传');
+      await this.saveDevices(this.devices.filter((d) => d.id !== id));
+      this.stopDeviceStreams(id);
+      this.captureLevels.delete(id);
+      if (this.capturePreview?.deviceId === id) this.capturePreview = null;
+      await this.request('mobile.proposal.forget', { device_id: id });
+      this.changed();
+      return this.status();
+    });
   }
   async pair(value) {
     const input = z
@@ -344,17 +417,26 @@ class MobileServer {
     this.pairBusy = true;
     try {
       const allowed = await this.approve({ name: input.name, verification });
-      if (!allowed || this.pairing !== p || p.expires < Date.now())
+      if (
+        (allowed !== true && allowed?.allowed !== true) ||
+        this.pairing !== p ||
+        p.expires < Date.now()
+      )
         throw fail(403, '电脑未允许连接，请重新配对');
       const token = randomBytes(32).toString('hex');
       const id = randomBytes(16).toString('hex');
-      this.devices.push({
-        id,
-        name: input.name,
-        firstConnectedAt: new Date().toISOString(),
-        tokenHash: hash(token),
-      });
-      await atomicJSON(path.join(this.directory, 'devices.json'), this.devices);
+      await this.serial(() =>
+        this.saveDevices([
+          ...this.devices,
+          {
+            libraryAccess: allowed?.libraryAccess === true,
+            id,
+            name: input.name,
+            firstConnectedAt: new Date().toISOString(),
+            tokenHash: hash(token),
+          },
+        ]),
+      );
       this.pairing = null;
       return {
         token,
@@ -497,6 +579,265 @@ class MobileServer {
       return { requested: true };
     });
   }
+  canAccess(owner, id) {
+    const device = this.devices.find((entry) => entry.id === owner);
+    const session = this.sessions.get(id);
+    if (!device) return false;
+    if (session && (session.owner !== owner || session.deleted)) return false;
+    return (session && !session.desktopCapture) || device.libraryAccess === true;
+  }
+  assertAccess(owner, id) {
+    if (!this.canAccess(owner, id)) throw fail(404, '会议不存在');
+  }
+  meetingState(meeting) {
+    const s = this.sessions.get(meeting.id);
+    if (s && !s.finished) return s.state === 'paused' ? 'paused' : 'recording';
+    const active = this.active();
+    if (meeting.status === 'paused' || (active?.meeting_id === meeting.id && active.paused))
+      return 'paused';
+    if (meeting.status === 'recording' || active?.meeting_id === meeting.id) return 'recording';
+    return 'ended';
+  }
+  async desktopMeetings(owner) {
+    const hasGrant = this.devices.find((d) => d.id === owner)?.libraryAccess;
+    if (!hasGrant) return [];
+    const rows = await this.request('mobile.library', {});
+    return rows
+      .filter(
+        ({ id }) =>
+          this.canAccess(owner, id) &&
+          (!this.sessions.has(id) || this.sessions.get(id).desktopCapture),
+      )
+      .map((row) => ({
+        id: row.id,
+        title: row.title,
+        state: this.meetingState(row),
+        created_at: row.created_at,
+        duration_ms: row.duration_ms,
+      }));
+  }
+  async sharedMeeting(owner, id) {
+    this.assertAccess(owner, id);
+    let meeting;
+    try {
+      meeting = await this.request('meeting.get', { meeting_id: id });
+    } catch (error) {
+      if (/meeting not found/i.test(error.message)) throw fail(404, '会议不存在');
+      throw error;
+    }
+    this.assertAccess(owner, id);
+    if (!meeting || meeting.deleted_at || meeting.id !== id) throw fail(404, '会议不存在');
+    return meeting;
+  }
+  proposals(meetingId) {
+    return this.request('mobile.proposal.list', { meeting_id: meetingId || null }).then((rows) =>
+      rows
+        .filter((row) => this.canAccess(row.device_id, row.meeting_id))
+        .map((row) => ({
+          ...row,
+          device_name: this.devices.find((device) => device.id === row.device_id).name,
+        })),
+    );
+  }
+  resolveProposal(value) {
+    return this.serial(async () => {
+      const pending = await this.proposals(value.meeting_id);
+      if (!pending.some((p) => p.id === value.id)) throw fail(404, '提议已失效');
+      const result = await this.request('mobile.proposal.resolve', value);
+      if (result.conflict) throw fail(409, '电脑笔记已更新，请重新核对。');
+      if (result.missing) throw fail(404, '提议已失效');
+      this.changed();
+      return result;
+    });
+  }
+  async sharedRoute(req, owner, id, operation, filename) {
+    this.assertAccess(owner, id);
+    if (filename && operation !== 'images') throw fail(404, '未找到接口');
+    if (req.method === 'GET') {
+      const meeting = await this.sharedMeeting(owner, id);
+      const playback = meeting.audio?.playback;
+      const audioPath = playback?.mix || playback?.mic || playback?.system;
+      if (operation === 'audio' && audioPath && this.meetingState(meeting) === 'ended') {
+        const fileHandle = await this.request('mobile.audio.open', {
+          meeting_id: id,
+          path: audioPath,
+        });
+        return { fileHandle, mime: 'audio/wav', deviceId: owner, meetingId: id };
+      }
+      if (
+        operation === 'images' &&
+        filename &&
+        /^[a-f0-9-]{36}\.(png|jpe?g|webp|gif)$/.test(filename)
+      ) {
+        const result = await this.request('mobile.image.read', { meeting_id: id, filename });
+        this.assertAccess(owner, id);
+        return result;
+      }
+      if (operation !== 'snapshot') throw fail(404, '内容不可用');
+      const proposal = await this.request('mobile.proposal.status', {
+        meeting_id: id,
+        device_id: owner,
+      });
+      this.assertAccess(owner, id);
+      const notes = meeting.notes || '';
+      const stale = new Set(meeting.correction?.stale_translations);
+      return {
+        id,
+        title: meeting.title,
+        state: this.meetingState(meeting),
+        created_at: meeting.created_at,
+        duration_ms: meeting.duration_ms,
+        notes,
+        revision: hash(notes),
+        segments: (meeting.current_segments || meeting.segments || []).map(
+          ({ id, text, start_ms, end_ms, speaker, speaker_name, track, translation, version }) => ({
+            id,
+            text,
+            start_ms,
+            end_ms,
+            speaker,
+            speaker_name,
+            track,
+            version,
+            translation: stale.has(id) ? null : translation,
+          }),
+        ),
+        summary: meeting.summary
+          ? { data: meeting.summary.data, created_at: meeting.summary.created_at }
+          : null,
+        accepted_claims: meeting.accepted_claims || [],
+        has_audio: Boolean(audioPath) && this.meetingState(meeting) === 'ended',
+        task: this.sessions.get(id)?.task || this.desktopTasks[id] || null,
+        proposal,
+      };
+    }
+    if (req.method !== 'POST' || filename) throw fail(405, '不支持此操作');
+    const maxImageBytes = 4 * 1024 * 1024;
+    const maxNotesBytes = 5 * 1024 * 1024;
+    const limit =
+      operation === 'images'
+        ? Math.ceil(maxImageBytes / 3) * 4 + 256
+        : operation === 'proposals'
+          ? maxNotesBytes + 512
+          : 60000;
+    const value = await body(req, limit);
+    return this.serial(async () => {
+      const meeting = await this.sharedMeeting(owner, id);
+      if (operation === 'proposals') {
+        const v = z
+          .object({
+            id: uuid,
+            base_revision: z.string().regex(/^[a-f0-9]{64}$/),
+            notes: z.string().max(maxNotesBytes),
+          })
+          .parse(value);
+        const result = await this.request('mobile.proposal.put', {
+          ...v,
+          meeting_id: id,
+          device_id: owner,
+        });
+        if (result.missing) throw fail(404, '会议不存在');
+        if (result.conflict) throw fail(409, '上一份笔记正在等待电脑确认');
+        this.changed();
+        return result;
+      }
+      if (operation === 'images') {
+        const { mime_type, base64 } = z
+          .object({
+            mime_type: z.enum(['image/jpeg', 'image/png', 'image/webp']),
+            base64: z.string().min(4),
+          })
+          .parse(value);
+        const bytes = Buffer.from(base64, 'base64');
+        if (bytes.length > maxImageBytes || bytes.toString('base64') !== base64)
+          throw fail(400, '图片格式无效');
+        const magic = {
+          'image/jpeg': 'ffd8ff',
+          'image/png': '89504e470d0a1a0a',
+          'image/webp': '52494646',
+        }[mime_type];
+        if (
+          !bytes.subarray(0, magic.length / 2).equals(Buffer.from(magic, 'hex')) ||
+          (mime_type === 'image/webp' && bytes.toString('ascii', 8, 12) !== 'WEBP')
+        )
+          throw fail(400, '图片格式无效');
+        return this.request('mobile.image.save', { meeting_id: id, mime_type, bytes });
+      }
+      if (operation === 'action') {
+        if (this.meetingState(meeting) !== 'ended') throw fail(409, '请先结束录音并完成同步');
+        if (!['summary', 'refine'].includes(value?.action)) throw fail(400, '不支持此操作');
+        return this.startTask(id, value, this.sessions.get(id));
+      }
+      throw fail(404, '未找到接口');
+    });
+  }
+  async saveTask(id, task) {
+    const s = this.sessions.get(id);
+    if (s && !s.deleted) {
+      await this.save({ ...s, task });
+      s.task = task;
+    } else if (!s) {
+      const tasks = { ...this.desktopTasks, [id]: task };
+      await atomicJSON(path.join(this.directory, 'desktop-tasks.json'), tasks);
+      this.desktopTasks = tasks;
+    }
+  }
+  async startTask(id, input, session) {
+    const v = z
+      .discriminatedUnion('action', [
+        z.object({ action: z.literal('workspace'), workspace_id: uuid.nullable() }),
+        z.object({ action: z.literal('refine'), request_id: uuid }),
+        z.object({ action: z.literal('summary'), request_id: uuid, consent: z.literal(true) }),
+        z.object({
+          action: z.literal('translate'),
+          request_id: uuid,
+          target_language: createSession.shape.target_language.unwrap().unwrap(),
+          consent: z.literal(true),
+        }),
+      ])
+      .parse(input);
+    if (session && !session.finished) throw fail(409, '请先结束录音并完成同步');
+    const prior = session?.task || this.desktopTasks[id];
+    if (prior && prior.id === v.request_id) return { task: prior };
+    if (prior?.state === 'running') throw fail(409, '电脑正在处理这场会议，请稍后重试');
+    if (v.action === 'workspace') {
+      await this.request('workspace.assign', { meeting_id: id, workspace_id: v.workspace_id });
+      await this.save({ ...session, workspace_id: v.workspace_id });
+      Object.assign(session, { workspace_id: v.workspace_id });
+      return { saved: true };
+    }
+    const task = { id: v.request_id, action: v.action, state: 'running' };
+    await this.saveTask(id, task);
+    const command = {
+      summary: 'mobile.summary',
+      refine: 'meeting.refine',
+      translate: 'mobile.translate',
+    }[v.action];
+    Promise.resolve()
+      .then(() =>
+        this.request(command, {
+          meeting_id: id,
+          target_language: v.target_language,
+          consent: v.consent,
+        }),
+      )
+      .then((result) => {
+        if (result?.model_required) throw fail(409, '请先在电脑安装所需模型');
+        if (result?.cancelled || (v.action === 'refine' && result?.status !== 'refined'))
+          throw fail(409, '电脑已取消任务，请重试');
+        return { ...task, state: 'done' };
+      })
+      .catch((error) => ({
+        ...task,
+        state: 'failed',
+        error: error.status === 409 ? error.message : '电脑操作失败，请在电脑查看详情。',
+      }))
+      .then((done) => this.serial(() => this.saveTask(id, done)))
+      .catch((error) => {
+        this.lastError = error.message;
+      });
+    return { task };
+  }
   async route(req) {
     // Browser pages cannot use this native API (no CORS or cookie authentication).
     if (req.headers.origin) throw fail(403, '仅允许已配对的手机应用');
@@ -510,6 +851,30 @@ class MobileServer {
     }
     if (req.url === '/pair' && req.method === 'POST') return this.pair(await body(req));
     const owner = this.owner(req);
+    if (req.url === '/desktop-meetings' && req.method === 'GET') return this.desktopMeetings(owner);
+    const shared =
+      /^\/desktop-meetings\/([a-f0-9-]+)\/(snapshot|action|proposals|images|audio)(?:\/([a-f0-9.-]+))?$/.exec(
+        req.url,
+      );
+    if (shared) return this.sharedRoute(req, owner, uuid.parse(shared[1]), shared[2], shared[3]);
+    const document =
+      /^\/desktop-meetings\/([a-f0-9-]+)\/document\/(notes|mynotes)\/(pdf|docx)$/.exec(req.url);
+    if (document && req.method === 'GET') {
+      const [, rawId, content, format] = document;
+      const meetingId = uuid.parse(rawId);
+      const meeting = await this.sharedMeeting(owner, meetingId);
+      if (this.meetingState(meeting) !== 'ended') throw fail(409, '请先结束录音并完成同步');
+      const fileHandle = await this.request('mobile.document.open', {
+        meeting_id: meetingId,
+        content,
+        format,
+      });
+      const mime =
+        format === 'pdf'
+          ? 'application/pdf'
+          : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      return { fileHandle, mime, deviceId: owner, meetingId };
+    }
     if (req.url === '/options' && req.method === 'GET') return this.request('mobile.options', {});
     if (req.url === '/meetings' && req.method === 'GET')
       return [...this.sessions.values()]
@@ -611,6 +976,7 @@ class MobileServer {
             : segment,
         ),
         summary: meeting?.summary || null,
+        accepted_claims: meeting?.accepted_claims || [],
       };
     }
     return this.serial(async () => {
@@ -618,62 +984,7 @@ class MobileServer {
       const s = this.session(match[1], owner);
       if (match[2] === 'action' && req.method === 'POST') {
         if (s.desktopCapture) throw fail(403, '请在电脑管理这场会议');
-        const v = z
-          .discriminatedUnion('action', [
-            z.object({ action: z.literal('workspace'), workspace_id: uuid.nullable() }),
-            z.object({ action: z.literal('refine'), request_id: uuid }),
-            z.object({
-              action: z.literal('translate'),
-              request_id: uuid,
-              target_language: createSession.shape.target_language.unwrap().unwrap(),
-              consent: z.literal(true),
-            }),
-          ])
-          .parse(value);
-        if (!s.finished) throw fail(409, '请先结束录音并完成同步');
-        if (s.task?.state === 'running') {
-          if (s.task.id === v.request_id) return { task: s.task };
-          throw fail(409, '电脑正在处理这场会议，请稍后重试');
-        }
-        if (v.action === 'workspace') {
-          await this.request('workspace.assign', {
-            meeting_id: s.id,
-            workspace_id: v.workspace_id,
-          });
-          const next = { ...s, workspace_id: v.workspace_id };
-          await this.save(next);
-          Object.assign(s, next);
-          return { saved: true };
-        }
-        if (s.task?.id === v.request_id) return { task: s.task };
-        const next = { ...s, task: { id: v.request_id, action: v.action, state: 'running' } };
-        await this.save(next);
-        Object.assign(s, next);
-        // Long desktop tasks return immediately; phones poll the existing snapshot for completion.
-        Promise.resolve()
-          .then(() =>
-            this.request(v.action === 'refine' ? 'meeting.refine' : 'mobile.translate', {
-              meeting_id: s.id,
-              target_language: v.target_language,
-              consent: v.consent,
-            }),
-          )
-          .then((result) => {
-            if (result?.model_required) throw new Error('请先在电脑安装所需模型');
-            return { ...s.task, state: 'done' };
-          })
-          .catch((error) => ({ ...s.task, state: 'failed', error: error.message }))
-          .then((task) =>
-            this.serial(async () => {
-              const updated = { ...s, task };
-              await this.save(updated);
-              Object.assign(s, updated);
-            }),
-          )
-          .catch((error) => {
-            s.task = { ...s.task, state: 'failed', error: error.message };
-          });
-        return { task: s.task };
+        return this.startTask(s.id, value, s);
       }
       if (match[2] === 'state' && req.method === 'POST') {
         const v = z

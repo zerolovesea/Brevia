@@ -63,6 +63,15 @@
     messageKey = key;
     dialog.querySelector('#mobile-dialog-status').textContent = t(key);
   }
+  function libraryPermission(enabled) {
+    const label = document.createElement('label');
+    label.className = 'mobile-library-permission';
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.checked = Boolean(enabled);
+    label.append(input, document.createTextNode(t('允许访问电脑会议')));
+    return { label, input };
+  }
   function renderMobilePage(value = lastStatus, direction) {
     const state = hasPairedDevice || value?.devices?.length ? 'paired' : mobilePageStep || 'intro';
     const previous = dialog.dataset.mobilePageState;
@@ -308,11 +317,16 @@
         const allow = document.createElement('button');
         allow.className = 'modal-action';
         allow.textContent = t('允许连接');
+        const permission = libraryPermission(false);
         const respond = (allowed) => {
           if (allow.disabled) return;
           deny.disabled = allow.disabled = true;
           return run(async () => {
-            await api.approve({ id: request.id, allowed });
+            await api.approve({
+              id: request.id,
+              allowed,
+              libraryAccess: allowed && permission.input.checked,
+            });
             await closePairDialog();
             if (allowed) mobilePageStep = null;
             message(allowed ? '已允许连接，可以在手机开始会议。' : '已拒绝本次连接。');
@@ -331,7 +345,7 @@
         const confirmation = document.createElement('small');
         confirmation.textContent = t('电脑确认后才建立信任。');
         actions.append(deny, allow, confirmation);
-        approval.append(requestInfo, actions);
+        approval.append(requestInfo, permission.label, actions);
       }
     }
     const nextDevices = JSON.stringify(value.devices || []);
@@ -343,6 +357,7 @@
       const focusedId = devices.contains(document.activeElement)
         ? document.activeElement.closest('.mobile-device')?.dataset.deviceId
         : null;
+      const focusedControl = document.activeElement?.matches('input') ? 'input' : 'button';
       const deviceScroll = devices.scrollTop;
       devices.replaceChildren();
       if (!value.devices?.length) {
@@ -416,13 +431,28 @@
           `<span class="trusted-device-symbol" aria-hidden="true"><i>${interfaceIcon('waveform')}</i></span>`,
         );
         row.dataset.connected = String(device.connected);
-        row.append(name, facts, revoke);
+        const permission = libraryPermission(device.libraryAccess);
+        permission.input.onchange = () => {
+          const enabled = permission.input.checked;
+          permission.input.disabled = true;
+          return run(async () => {
+            try {
+              await render(await api.access({ id: device.id, enabled }));
+            } catch (error) {
+              permission.input.checked = Boolean(device.libraryAccess);
+              throw error;
+            } finally {
+              permission.input.disabled = false;
+            }
+          });
+        };
+        row.append(name, facts, revoke, permission.label);
         devices.append(row);
       }
       devices.scrollTop = deviceScroll;
       if (focusedId) {
         const next =
-          devices.querySelector(`[data-device-id="${CSS.escape(focusedId)}"] button`) ||
+          devices.querySelector(`[data-device-id="${CSS.escape(focusedId)}"] ${focusedControl}`) ||
           devices.querySelector('button') ||
           [...dialog.querySelectorAll('[data-mobile-page-step]')].find((button) =>
             button.checkVisibility(),
