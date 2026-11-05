@@ -4534,10 +4534,14 @@ body.modal-open {
   opacity: 1;
   transition: opacity 0.36s ease;
 }
-.startup-splash img {
-  display: block;
-  width: 100%;
-  height: 100%;
+.startup-splash {
+  display: grid;
+  place-items: center;
+}
+.startup-splash .startup-logo {
+  width: min(354px, 72vw);
+  height: auto;
+  overflow: visible;
 }
 .startup-splash .startup-credit {
   position: fixed;

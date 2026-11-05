@@ -2260,7 +2260,7 @@ assert.match(
   text(html),
   /window-actions"\s*><small\s+id="app-version">v—<\/small\s*><a\s+class="icon-button"\s+href="https:\/\/github\.com\/zerolovesea\/Brevia"/,
 );
-assert.match(text(html), /brevia-logo-reveal\.gif/);
+assert.match(text(html), /class="startup-logo"/);
 assert.match(text(js), /brevia\.on\('startup\.ready'/);
 assert.match(text(js), /const dismissStartupSplash/);
 for (const duration of ['0s', '0.36s']) {
@@ -2274,7 +2274,7 @@ for (const duration of ['0s', '0.36s']) {
     },
   };
   const start = js.indexOf('const dismissStartupSplash =');
-  const end = js.indexOf('// 启动动画', start);
+  const end = js.indexOf('const revealAfterSplash =', start);
   runInNewContext(js.slice(start, end) + '\ndismissStartupSplash();', {
     document: { querySelector: () => splash },
     getComputedStyle: () => ({ transitionDuration: duration }),
@@ -2290,6 +2290,38 @@ for (const duration of ['0s', '0.36s']) {
     fallback();
     assert.equal(removed, true, 'startup removes its overlay even when transitionend is lost');
   }
+}
+// 后端先就绪时仍等待矢量时间线，动画被取消也释放遮罩。
+for (const canceled of [false, true]) {
+  let reveal;
+  let removed = false;
+  let finish;
+  const finished = new Promise((resolve, reject) => {
+    finish = canceled ? () => reject(new Error('canceled')) : resolve;
+  });
+  const start = js.indexOf('const revealAfterSplash =');
+  const end = js.indexOf('if (window.BreviaOnboarding.isFirstLaunch())', start);
+  runInNewContext(js.slice(start, end), {
+    window: {
+      brevia: {
+        on: (_, callback) => {
+          reveal = callback;
+        },
+      },
+    },
+    document: { querySelector: () => ({ getAnimations: () => [{ finished }] }) },
+    dismissStartupSplash: () => {
+      removed = true;
+    },
+    checkForUpdates() {},
+    Promise,
+  });
+  reveal();
+  await Promise.resolve();
+  assert.equal(removed, false);
+  finish();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(removed, true);
 }
 assert.match(text(meetings), /brevia-meetings-v1/);
 assert.match(text(js), /cacheMeetingList\(\)/);
@@ -4112,7 +4144,7 @@ assert.match(
   text(js),
   /window\.brevia\.on\('startup\.ready', \(\) => \{\s+const reveal = \(\) => \{/,
 );
-assert.match(text(js), /splashGifDurationMs = 1500/);
+assert.match(text(js), /Promise\.allSettled\(animations\.map/);
 assert.match(text(js), /if \(!silent\) showToast\(error\.message, undefined, 'error'\)/);
 assert.match(text(js), /const preferredModelsForLanguage = \(language\) =>/);
 assert.match(

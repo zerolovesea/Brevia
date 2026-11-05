@@ -1171,10 +1171,8 @@ void main() {
           ),
         ),
       );
-      final logo = find.image(const AssetImage('assets/brevia-logo.png'));
-      final image = tester.widget<Image>(logo);
-      expect((image.image as AssetImage).assetName, 'assets/brevia-logo.png');
-      image.frameBuilder!(tester.element(logo), const SizedBox(), 0, false);
+      expect(find.byType(CustomPaint), findsWidgets);
+      await tester.pump();
       await tester.pump(const Duration(milliseconds: 1500));
       expect(find.text('会议列表'), findsNothing);
       ready.complete();

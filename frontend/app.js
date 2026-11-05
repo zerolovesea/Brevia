@@ -9732,34 +9732,20 @@ if (window.brevia) {
     // 减少动态效果、窗口隐藏或渲染中断时可能没有 transitionend。
     setTimeout(() => splash.remove(), duration + 32);
   };
-  // 启动动画 brevia-logo-reveal.gif（约 1.4s）在 Windows 上因页面加载/解码更慢，
-  // 会在 startup.ready 到达时还没播完。这里以 GIF 实际开始播放的时间为基准，
-  // 等它播满时长后再揭示应用，避免 Windows 上动画被截断（macOS 不受影响）。
-  const splashGif = document.querySelector('#startup-splash img');
-  const splashGifDurationMs = 1500; // GIF 时长 1400ms + 少量余量
-  let splashGifStartedAt = null;
-  if (splashGif) {
-    const markGifStarted = () => {
-      if (splashGifStartedAt === null) splashGifStartedAt = performance.now();
-    };
-    if (splashGif.complete && splashGif.naturalWidth > 0) markGifStarted();
-    else splashGif.addEventListener('load', markGifStarted, { once: true });
-  }
   const revealAfterSplash = () => {
     dismissStartupSplash();
     void checkForUpdates({ silent: true });
   };
   window.brevia.on('startup.ready', () => {
     const reveal = () => {
-      const startedAt = splashGifStartedAt ?? performance.now();
-      const wait = Math.max(0, splashGifDurationMs - (performance.now() - startedAt));
-      setTimeout(revealAfterSplash, wait);
+      const splash = document.querySelector('#startup-splash');
+      const animations = splash?.getAnimations({ subtree: true }) || [];
+      // 等真实矢量时间线结束；取消动画也必须释放启动遮罩。
+      void Promise.allSettled(animations.map((animation) => animation.finished)).then(
+        revealAfterSplash,
+      );
     };
-    if (splashGif && splashGifStartedAt === null) {
-      splashGif.addEventListener('load', reveal, { once: true });
-    } else {
-      reveal();
-    }
+    reveal();
   });
   if (window.BreviaOnboarding.isFirstLaunch()) openOnboardingLanguage();
   void loadSummaryConfig().catch((error) =>

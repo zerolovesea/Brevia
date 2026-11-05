@@ -1,0 +1,64 @@
+/* 共享 1500ms 时钟：标记先落位，字形显现，字标延后收稳。 */
+:root {
+  --p2m-duration: 1500ms;
+  --p2m-ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+}
+#mark {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: mark-arrive var(--p2m-duration) both;
+}
+#mark path + path {
+  animation: ink-reveal var(--p2m-duration) both;
+}
+#wordmark {
+  animation: word-arrive var(--p2m-duration) both;
+}
+@keyframes mark-arrive {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+  20% {
+    opacity: 1;
+    transform: translateY(4px) scale(0.96);
+    animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  70% {
+    transform: translateY(-1px) scale(1.01);
+    animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes ink-reveal {
+  0%,
+  20% {
+    clip-path: inset(0 0 100% 0);
+  }
+  24% {
+    clip-path: inset(0 0 100% 0);
+    animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  72%,
+  100% {
+    clip-path: inset(0);
+  }
+}
+@keyframes word-arrive {
+  0%,
+  32% {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  32% {
+    animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  88%,
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
