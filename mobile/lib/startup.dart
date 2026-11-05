@@ -93,7 +93,9 @@ class _StartupState extends State<Startup> with SingleTickerProviderStateMixin {
                                 label: 'Brevia',
                                 child: CustomPaint(
                                   size: const Size(64, 64),
-                                  painter: _StartupMarkPainter(controller.value),
+                                  painter: _StartupMarkPainter(
+                                    controller.value,
+                                  ),
                                 ),
                               ),
                             ),
