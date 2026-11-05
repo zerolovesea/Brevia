@@ -2,6 +2,8 @@
 
 手机、桌面、后端和官网共用以下原则；各语言遵循自己的默认工具，不改变接口或数据格式来统一命名。
 
+桌面前端和产品需求接续前阅读[桌面设计与交互规范](docs/desktop-design-system.md)，沿用页面层级、组件状态与交互约定。视觉或交互约定变化时同步维护该文档。
+
 ## 格式与检查
 
 安装开发工具：`npm ci`、`python -m pip install -r requirements-dev.txt`；手机使用与 `.github/workflows/mobile.yml` 一致的 Flutter 版本。
