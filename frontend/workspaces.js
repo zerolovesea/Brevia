@@ -81,12 +81,18 @@ function toggleWorkspacePicker() {
   workspacePicker.id = 'workspace-picker';
   workspacePicker.setAttribute('popover', 'manual');
   workspacePicker.setAttribute('aria-label', t('工作区'));
-  workspacePicker.innerHTML = `<label class="search">${interfaceIcon('search')}<input type="search" placeholder="${escapeHtml(t('搜索工作区'))}" aria-label="${escapeHtml(t('搜索工作区'))}" /></label><div class="workspace-picker-list"></div><button type="button" data-new-workspace>${interfaceIcon('plus')}${escapeHtml(t('新建工作区'))}</button>`;
+  workspacePicker.innerHTML = `<label class="search">${interfaceIcon('search')}<input type="search" placeholder="${escapeHtml(t('搜索工作区'))}" aria-label="${escapeHtml(t('搜索工作区'))}" /></label><div class="workspace-picker-list"></div><button type="button" data-workspace-terms>${interfaceIcon('search')}${escapeHtml(t('工作区词典'))}</button><button type="button" data-new-workspace>${interfaceIcon('plus')}${escapeHtml(t('新建工作区'))}</button>`;
   // 浮层留在会议导航内，工作区切换不会改变当前工作面的宽度。
   document.querySelector('.library-panel').append(workspacePicker);
   workspacePicker.showPopover();
   selector.setAttribute('aria-expanded', 'true');
   renderWorkspacePickerItems();
+  workspacePicker.querySelector('[data-workspace-terms]').addEventListener('click', () => {
+    closeWorkspacePicker();
+    void openWorkspaceTerms(activeWorkspaceId || '', selector).catch((error) =>
+      appActions.showToast(userFacingError(error.message), undefined, 'error'),
+    );
+  });
   positionWorkspacePicker(selector);
   workspacePicker.querySelector('input').addEventListener('input', renderWorkspacePickerItems);
   workspacePicker.addEventListener('keydown', (event) => {

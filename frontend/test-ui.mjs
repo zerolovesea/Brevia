@@ -1222,7 +1222,10 @@ runInNewContext(text(i18nData), localeContext);
       recordingShortcut: 'Control+Alt+R',
       pauseShortcut: '',
     },
-    window: { brevia: { platform: 'darwin', desktop: {} } },
+    window: {
+      brevia: { platform: 'darwin', desktop: {} },
+      BreviaLocaleData: localeContext.window.BreviaLocaleData,
+    },
     document: {
       addEventListener() {},
       getElementById: (id) =>
@@ -1679,12 +1682,12 @@ const detailTabbarContext = {
 runInNewContext(text(components), detailTabbarContext);
 const documentNavigation = detailTabbarContext.renderDetailTabbar();
 assert.match(documentNavigation, /role="tablist" aria-orientation="horizontal"/);
-assert.equal((documentNavigation.match(/role="tab"/g) || []).length, 3);
+assert.equal((documentNavigation.match(/role="tab"/g) || []).length, 2);
 assert.match(documentNavigation, /role="toolbar" aria-label="笔记"/);
 assert.ok(
   documentNavigation.indexOf('detail-content-status') < documentNavigation.indexOf('</nav>'),
 );
-assert.equal((documentNavigation.split('detail-content-status')[0].match(/<svg/g) || []).length, 3);
+assert.equal((documentNavigation.split('detail-content-status')[0].match(/<svg/g) || []).length, 2);
 assert.match(
   detailTabbarContext.renderDetailTabbar(),
   /data-edit-notes type=/,
@@ -1970,8 +1973,24 @@ assert.doesNotMatch(text(js), /model\.retired \? `<span>\$\{t\('已退役'\)\}<\
 assert.doesNotMatch(text(js), /model\.retired && !isInstalled/);
 // 模型库完全由清单生成，按钮一律携带 model_id，不再用数组下标（§1.4 / §9.5）。
 assert.doesNotMatch(text(js), /modelIds\[sourceIndex\]/);
-assert.match(text(js), /data-download-model="\$\{escapeHtml\(model\.id\)\}"/);
-assert.match(text(js), /data-delete-model="\$\{escapeHtml\(model\.id\)\}"/);
+const modelLibraryRenderer = text(app)
+  .split('function renderModelLibrary()')[1]
+  .split('function renderWhatsNewModal')[0];
+for (const action of [
+  'download-model',
+  'delete-model',
+  'open-model-folder',
+  'pause-required',
+  'cancel-required',
+])
+  assert.ok(
+    modelLibraryRenderer.includes("'data-" + action + "'"),
+    'the library exposes ' + action,
+  );
+assert.match(modelLibraryRenderer, /data-modal-detail="model-\$\{id\}"/);
+assert.match(modelLibraryRenderer, /languages\.of\(code\)/);
+assert.match(modelLibraryRenderer, /const id = escapeHtml\(model\.id\)/);
+assert.match(modelLibraryRenderer, /\$\{attribute\}="\$\{id\}" aria-label=/);
 // 模型库大小摘要仅显示下载大小。
 assert.match(
   text(js),
@@ -2881,7 +2900,9 @@ assert.doesNotMatch(
 );
 assert.doesNotMatch(text(js), /prepareModelCard|prepareModelChoices|modelPicker/);
 assert.match(text(js), /model\.progress/);
-assert.match(text(js), /model-download-progress/);
+assert.match(modelLibraryRenderer, /class="model-transfer"/);
+assert.match(modelLibraryRenderer, /<progress max="100">/);
+assert.match(text(app), /bar.setAttribute\('aria-label', label\)/);
 // 纯工具已下沉到 app-utils.js（与 index.html 的加载顺序一致），并且这里真跑它：
 // 「源码里存在这个函数」不说明任何行为，格式化边界才是会出错的地方。
 const utilsContext = { window: {} };
@@ -3193,7 +3214,7 @@ const stoppedListeners = text(app).match(/window\.brevia\.on\('meeting\.stopped'
 assert.equal(stoppedListeners.length, 1);
 assert.match(
   text(js),
-  /async function generateMeetingSummary\(meetingId = breviaClient\?\.state\.selectedMeetingId\)/,
+  /async function generateMeetingSummary\(\s*meetingId = breviaClient\?\.state\.selectedMeetingId,\s*template/,
 );
 assert.match(
   text(js),
@@ -5927,6 +5948,10 @@ const summaryContext = {
   locale: 'zh',
   t: (value) => localeContext.window.BreviaLocaleData.catalog.zh.labels[value] || value,
   summaryModelCopy: localeContext.window.BreviaLocaleData.appCopy.summaryModelCopy,
+  aiOnboardingCopy: localeContext.window.BreviaLocaleData.appCopy.aiOnboardingCopy,
+  aiOnboardingDemoCopy: localeContext.window.BreviaLocaleData.appCopy.aiOnboardingDemoCopy,
+  aiOnboardingSummaryDemoCopy:
+    localeContext.window.BreviaLocaleData.appCopy.aiOnboardingSummaryDemoCopy,
   modelLabels: localeContext.window.BreviaLocaleData.appCopy.modelLabels,
   builtinModelIntro: { 'qwen3.5-2b-q4km': { zh: '质量与速度均衡' } },
   asrCopy: asrCopyData,
@@ -6173,7 +6198,14 @@ for (const scope of ['notes', 'transcript', 'summary']) {
   });
   const header = detailTabbarContext.renderDetailTabbar();
   assert.equal((header.match(/class="detail-content-toolbar"/g) || []).length, 1);
-  assert.match(header, new RegExp('id="detail-tab-' + scope + '" role="tab" aria-selected="true"'));
+  assert.match(
+    header,
+    new RegExp(
+      'id="detail-tab-' +
+        (scope === 'summary' ? 'notes' : scope) +
+        '" role="tab" aria-selected="true"',
+    ),
+  );
   d[scope + 'Editing'] = true;
   const editing = detailTabbarContext.renderDetailTabbar();
   assert.doesNotMatch(editing, /data-copy-summary|data-regenerate-summary|data-refine-more/);
@@ -6197,9 +6229,65 @@ assert.doesNotMatch(
 );
 
 runInNewContext(
-  `${summaryConst('const summaryProviders = ')}${summaryConst('const summaryProviderPresets = ', true)}\n${summaryFn('summaryProviderLabel')}${summaryFn('providerEntry')}${summaryFn('builtinModelPicker')}${summaryFn('builtinModelEmptyState')}${summaryConst('const RECOMMENDED_BUILTIN_MODEL_ID = ')}${summaryFn('renderModelConfigFields')}${summaryFn('renderModelConfigForm')}${summaryFn('renderSummaryModelForm')}${summaryFn('renderAiSettingsTabs')}${summaryFn('renderAiServiceChoice')}${summaryFn('renderSummaryModelModal')}`,
+  `${summaryConst('const summaryProviders = ')}${summaryConst('const summaryProviderPresets = ', true)}\n${summaryFn('summaryProviderLabel')}${summaryFn('providerEntry')}${summaryFn('builtinModelPicker')}${summaryFn('builtinModelEmptyState')}${summaryConst('const RECOMMENDED_BUILTIN_MODEL_ID = ')}${summaryFn('renderModelConfigFields')}${summaryFn('renderModelConfigForm')}${summaryFn('renderSummaryModelForm')}${summaryFn('renderAiSettingsExample')}${summaryFn('operateAiSettingsExample')}${summaryFn('renderAiSettingsTabs')}${summaryFn('renderAiServiceChoice')}${summaryFn('renderSummaryModelModal')}`,
   summaryContext,
 );
+// 设置预览使用固定会议数据。重播、请求与采纳都无需桌面桥接或模型配置写入。
+{
+  const example = {
+    dataset: { initialStage: 'request', stage: 'request' },
+    querySelector(selector) {
+      if (selector === '.ai-example-scene') {
+        return {
+          cloneNode: () => 'new scene',
+          replaceWith: (node) => assert.equal(node, 'new scene'),
+        };
+      }
+      return {
+        focus() {
+          example.focused = selector;
+        },
+      };
+    },
+  };
+  const click = (action) =>
+    summaryContext.operateAiSettingsExample({
+      dataset: { aiExampleAction: action },
+      closest: () => example,
+    });
+  click('request');
+  assert.equal(example.dataset.stage, 'suggested');
+  click('accept');
+  assert.equal(example.dataset.stage, 'written');
+  assert.equal(example.focused, '[data-ai-example-action="replay"]');
+  click('replay');
+  assert.equal(example.dataset.stage, 'request');
+  for (const [mode, stage] of [
+    ['quiet', 'request'],
+    ['assist', 'suggested'],
+    ['auto', 'written'],
+  ]) {
+    summaryContext.aiAssistConfigDraft = { proactivity: mode };
+    assert.ok(
+      summaryContext.renderAiSettingsExample('ai-assist').includes(`data-stage="${stage}"`),
+    );
+  }
+  for (const code of Object.keys(localeContext.window.BreviaLocaleData.onboardingMotionCopy)) {
+    summaryContext.locale = code;
+    const sample = summaryContext.aiOnboardingSummaryDemoCopy[code];
+    const html = summaryContext.renderAiSettingsExample('summary-model');
+    assert.ok(html.includes(summaryContext.escapeHtml(sample.decision)));
+    assert.ok(html.includes(summaryContext.escapeHtml(sample.actions[0])));
+    assert.ok(html.includes('00:12') && html.includes('00:24'));
+  }
+  summaryContext.window = localeContext.window;
+  for (const enabled of [true, false]) {
+    const capsule = summaryContext.renderCapsuleExample(enabled);
+    assert.ok(capsule.includes(`data-enabled="${enabled}"`));
+    assert.doesNotMatch(capsule, /<button|data-action=/);
+  }
+  summaryContext.locale = 'zh';
+}
 const summaryCatalogModels = [
   { id: 'qwen3.5-2b-q4km', name: 'Qwen 3.5 2B', kind: 'llama-chat', size_bytes: 100 },
   { id: 'qwen3.5-4b-q4km', name: 'Qwen 3.5 4B', kind: 'llama-chat' },
@@ -6426,6 +6514,53 @@ assert.match(
 assert.ok((text(app).match(/resetAiNoteSuggestions\(\);/g) || []).length >= 3);
 assert.match(text(app), /window\.brevia\.on\('ai-note\.suggestion'/);
 assert.match(text(app), /window\.brevia\.on\('ai-note\.evidence'/);
+// 树的主题来自原小节，只连接该节明确标记的原因；决定、已采纳笔记和缺少原因的会议独立展示。
+{
+  const { renderClaimGroups } = runInNewContext(
+    (await readFile('meeting-evidence.js', 'utf8')) + '\n({ renderClaimGroups })',
+    {
+      document: { addEventListener() {} },
+      t: (s) => s,
+      escapeHtml: (s) => String(s).replaceAll('<', '&lt;').replaceAll('>', '&gt;'),
+      interfaceIcon: () => '<svg></svg>',
+      formatMeetingTime: (ms) => String(ms),
+      formatSpeakerName: (speaker) => speaker,
+    },
+  );
+  const cause = {
+    id: 'cause-1',
+    kind: 'cause',
+    section: '延迟<复盘>',
+    text: '没有采集尾部延迟',
+    sources: [
+      { text: '这里只看平均值。', speaker: '陈', start_ms: 46000, current_segment_id: 's-1' },
+    ],
+  };
+  const other = { ...cause, id: 'cause-2', text: '样本集中在办公网络' };
+  const decision = { ...cause, id: 'decision-1', kind: 'decision', text: '周五再灰度' };
+  const result = renderClaimGroups([
+    cause,
+    other,
+    decision,
+    { ...cause, id: 'cause-3', section: '' },
+  ]);
+  const trees = [...result.matchAll(/<brevia-cause-tree>([\s\S]*?)<\/brevia-cause-tree>/g)].map(
+    (m) => m[1],
+  );
+  assert.equal(trees.length, 2);
+  assert.match(trees[0], /延迟&lt;复盘&gt;/);
+  assert.doesNotMatch(trees[0], /周五再灰度|cause-3/);
+  assert.equal((trees[0].match(/<path\/>/g) || []).length, 2);
+  assert.equal((trees[1].match(/<path\/>/g) || []).length, 1);
+  assert.match(trees[1], /<span>原因分析<\/span>/);
+  assert.match(
+    trees[0],
+    /data-evidence-id="cause-1"[\s\S]*?data-play-evidence="0"[\s\S]*?data-locate-evidence="0"[\s\S]*?这里只看平均值。/,
+  );
+  assert.match(result, /data-evidence-id="decision-1"/);
+  assert.doesNotMatch(renderClaimGroups([decision]), /brevia-cause-tree/);
+  assert.doesNotMatch(renderClaimGroups([cause], true), /brevia-cause-tree/);
+}
 // 补充引用依据时必须同时更新展示中与暂存的建议，不能因队列重赋值中断事件。
 const evidenceHandlers = new Map();
 const evidenceContext = {
@@ -7919,6 +8054,23 @@ assert.equal(findMatches([{ text: 'a.a aa' }], 'a.').length, 1);
 assert.equal(findMatches([{ text: 'Brevia brevia' }], 'Brevia').length, 1);
 assert.equal(findMatches([{ text: 'aaaa' }], 'aa').length, 2);
 assert.equal(findMatches([{ text: 'abc' }], '').length, 0);
+
+const getTermSuggestions = runInNewContext(
+  correctionSource.slice(
+    correctionSource.indexOf('function suggestedTermPairs('),
+    correctionSource.indexOf('function termFlagsMarkup('),
+  ) + '; suggestedTermPairs',
+);
+const suggestions = getTermSuggestions({
+  summary: {
+    data: { markdown: '- 纠错：历史中单 → 历史工单\n- 错词 → 别词\n- 城北（误识为“城被”）' },
+  },
+  current_segments: [{ text: '请把历史中单交给城被团队。' }],
+});
+assert.deepEqual(JSON.parse(JSON.stringify(suggestions)), [
+  { wrong: '历史中单', correct: '历史工单' },
+  { wrong: '城被', correct: '城北' },
+]);
 
 const correctedTextFunction = text(components).slice(
   text(components).indexOf('function renderCorrectedTranscript('),

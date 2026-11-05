@@ -330,6 +330,58 @@ class TranscriptCorrectionTest(unittest.TestCase):
             },
         )
 
+    def test_workspace_terms_search_history_and_apply_to_future_audio(self):
+        workspace = self.store.create_workspace({"name": "Audio"})["id"]
+        self.store.assign_meeting_to_workspace(self.id, workspace)
+        other = self.store.create_meeting(
+            {"title": "北威亚", "language": "zh", "refined_model_id": "test"}
+        )
+        term = {
+            "workspace_id": workspace,
+            "wrong": "北威亚",
+            "correct": "Brevia",
+            "post_replace": False,
+            "hotword": False,
+        }
+        self.store.write_workspace_term(term)
+        (hit,) = self.store.search_meetings("我们使用Brevia")
+        self.assertEqual(hit["id"], self.id)
+        self.assertEqual(hit["snippets"][0]["matched_term"], "我们使用北威亚")
+        self.assertNotIn(other["id"], [m["id"] for m in self.store.search_meetings("Brevia")])
+        self.assertEqual(self.store.asr_term_options(self.current()), {})
+        self.assertEqual(self.add_segment("three", "北威亚")["text"], "北威亚")
+        self.store.write_workspace_term({**term, "post_replace": True, "hotword": True})
+        self.assertEqual(self.store.asr_term_options(self.current()), {"hotwords": ["Brevia"]})
+        self.assertEqual(self.store.asr_term_options(other), {})
+        result = self.add_segment("four", "测试北威亚")
+        self.assertEqual(result["text"], "测试Brevia")
+        self.assertEqual(result["asr_text"], "测试北威亚")
+        self.assertEqual(self.add_segment("four", "测试北威亚")["text"], "测试Brevia")
+        (updated,) = self.store.replace_segments(
+            self.id, [{"segment_id": "five", "start_ms": 0, "end_ms": 1000, "text": "北威亚"}]
+        )
+        self.assertEqual((updated["text"], updated["asr_text"]), ("Brevia", "北威亚"))
+        self.store.write_workspace_term({**term, "remove": True})
+        self.assertEqual(self.store.workspace_terms(workspace), [])
+
+    def test_remember_term_transaction_rolls_back_on_stale_preview(self):
+        self.store.save_summary(self.id, {"markdown": "北威亚"}, "")
+        request = {
+            "scope": "summary",
+            "action": "replace",
+            "find": "北威亚",
+            "replacement": "Brevia",
+            "document": {"text": "过期", "occurrences": [0]},
+            "remember": {"workspace_id": "", "post_replace": False, "hotword": True},
+        }
+        with self.assertRaisesRegex(Exception, "预览"):
+            self.store.transcript_correction(self.id, request)
+        self.assertEqual(self.store.workspace_terms(""), [])
+        request["document"]["text"] = "北威亚"
+        self.store.transcript_correction(self.id, request)
+        self.assertEqual(self.store.workspace_terms("")[0]["correct"], "Brevia")
+        self.assertEqual(self.current()["summary"]["data"]["markdown"], "Brevia")
+
     def test_selected_occurrence_persists_and_undo_keeps_timing(self):
         self.store.save_summary(self.id, {"markdown": "old summary"}, "")
         before = self.current()["segments"][0]
@@ -2470,6 +2522,274 @@ class WorkerTest(unittest.TestCase):
             "# 已编辑",
         )
 
+    def test_summary_claims_preserve_evidence_across_edits_and_refinement(self):
+        store = self.worker.store
+        meeting = store.create_meeting(
+            {
+                "title": "Review",
+                "language": "zh",
+                "refined_model_id": "test",
+                "meeting_date": "2026-11-05",
+            }
+        )
+        meeting_id = meeting["id"]
+        original = "下周五完成验收，因为后台需要保留历史工单并验证回滚。"
+        row = {
+            "meeting_id": meeting_id,
+            "segment_id": "mic-1",
+            "text": original,
+            "start_ms": 1000,
+            "end_ms": 9000,
+            "speaker": "lead",
+        }
+        store.save_segment(row)
+        prompts = []
+        self.worker.llm_complete = lambda _, prompt: (
+            prompts.append(prompt)
+            or ("# 验收\n## 回滚\n- 保留历史工单 [[cause:S1,S99,S1]]\n- 发布版本 [[action:S99]]")
+        )
+        result = self.worker.summarize(
+            {
+                "meeting_id": meeting_id,
+                "provider": "openai",
+                "endpoint": "https://example.test",
+                "model": "test",
+                "template": "review",
+                "consent": True,
+            }
+        )
+        self.assertIn("下周五（11 月 13 日）", prompts[0])
+        self.assertIn("Required revisions", prompts[0])
+        cause, action = result["claims"]
+        self.assertEqual(
+            (cause["kind"], cause["section"], cause["status"]), ("cause", "回滚", "supported")
+        )
+        self.assertEqual((action["sources"], action["status"]), ([], "missing"))
+        self.assertEqual(cause["sources"][0]["text"], original)
+        self.assertEqual(cause["sources"][0]["current_segment_id"], "mic-1")
+        self.assertIn("00:01", result["markdown"])
+        store.transcript_correction(
+            meeting_id,
+            {
+                "scope": "summary",
+                "action": "replace",
+                "find": "保留",
+                "replacement": "保存",
+                "document": {"text": result["markdown"], "occurrences": [0]},
+            },
+        )
+        rewritten = store.get_meeting(meeting_id)["summary"]["data"]["claims"][0]
+        self.assertEqual(
+            (rewritten["text"], rewritten["edited"], rewritten["detached"]),
+            ("保存历史工单", True, False),
+        )
+        store.transcript_correction(meeting_id, {"scope": "summary", "action": "undo"})
+        self.assertFalse(store.get_meeting(meeting_id)["summary"]["data"]["claims"][0]["edited"])
+        self.assertNotIn("S99", result["markdown"])
+        edited = self.worker.save_summary(
+            {
+                "meeting_id": meeting_id,
+                "claim_id": cause["id"],
+                "expected_text": cause["text"],
+                "text": "保留原工单",
+            }
+        )
+        self.assertTrue(edited["claims"][0]["edited"])
+        self.assertEqual(edited["claims"][0]["original_text"], cause["text"])
+        with self.assertRaises(ValueError):
+            self.worker.save_summary(
+                {
+                    "meeting_id": meeting_id,
+                    "claim_id": cause["id"],
+                    "expected_text": cause["text"],
+                    "text": "错误的旧编辑",
+                }
+            )
+        store.replace_segments(
+            meeting_id,
+            [
+                {**row, "text": "编号相同但内容已变化"},
+                {**row, "segment_id": "later", "start_ms": 8999, "end_ms": 15000},
+            ],
+        )
+        stale = store.get_meeting(meeting_id, compact=True)["summary"]["data"]["claims"][0]
+        self.assertEqual(stale["status"], "changed")
+        self.assertIsNone(stale["sources"][0]["current_segment_id"])
+        self.assertEqual(stale["sources"][0]["text"], original)
+        detached = self.worker.save_summary({"meeting_id": meeting_id, "markdown": "# 自由编辑"})
+        self.assertTrue(detached["claims"][0]["detached"])
+
+    def test_adoption_is_atomic_and_does_not_fabricate_missing_sources(self):
+        from .meeting_evidence import claim_record, snapshot
+
+        store = self.worker.store
+        meeting = store.create_meeting(
+            {"title": "Notes", "language": "en", "refined_model_id": "test"}
+        )
+        mid = meeting["id"]
+        row = {
+            "meeting_id": mid,
+            "segment_id": "s",
+            "text": "Move the demo to Friday.",
+            "start_ms": 1000,
+            "end_ms": 6000,
+        }
+        store.save_segment(row)
+        claim = claim_record("Friday demo", "action", [snapshot(row)])
+        store.record_ai_claim(mid, claim)
+        with self.assertRaises(ValueError):
+            store.update_meeting(
+                mid, {"notes": "draft", "accepted_suggestion_ids": [claim["id"], "unknown"]}
+            )
+        self.assertEqual(store.get_meeting(mid)["accepted_claims"], [])
+        self.assertEqual(store.get_meeting(mid)["notes"], "")
+        for _ in range(2):
+            detail = store.update_meeting(
+                mid, {"notes": "- Friday demo", "accepted_suggestion_ids": [claim["id"]]}
+            )
+            self.assertEqual(len(detail["accepted_claims"]), 1)
+            self.assertFalse(detail["accepted_claims"][0]["detached"])
+        self.assertTrue(
+            store.update_meeting(mid, {"notes": "- Monday demo"})["accepted_claims"][0]["detached"]
+        )
+        session = _AiNoteSession(mid, {}, "assist", "en")
+        session.recent_segments = [snapshot(row)]
+        self.worker._ai_note_complete = lambda *_: (
+            '{"type":"action","text":"Schedule another detailed demo","evidence":["99:01"]}'
+        )
+        item = self.worker._analyze_realtime(session, 0)[0]
+        self.assertEqual((item["evidence"], item["sources"]), ([], []))
+        session.recent_segments.append(
+            {**snapshot(row), "start_ms": 1100, "segment_id": "duplicate-clock"}
+        )
+        self.worker._ai_note_complete = lambda *_: (
+            '{"type":"decision","text":"Replace the old database after acceptance","evidence":["00:01"]}'
+        )
+        item = self.worker._analyze_realtime(session, 0)[0]
+        self.assertEqual((item["evidence"], item["sources"]), ([], []))
+
+    def test_late_generation_and_stale_whole_document_edit_preserve_newer_summary(self):
+        store = self.worker.store
+        mid = store.create_meeting(
+            {"title": "Archive", "language": "zh", "refined_model_id": "test"}
+        )["id"]
+        store.save_segment(
+            {
+                "meeting_id": mid,
+                "segment_id": "a",
+                "text": "下周五验收",
+                "start_ms": 0,
+                "end_ms": 900,
+            }
+        )
+        store.save_summary(mid, {"markdown": "旧纪要"}, "原始响应")
+        payload = {
+            "meeting_id": mid,
+            "provider": "openai",
+            "endpoint": "https://example.test",
+            "consent": True,
+            "model": "test",
+        }
+
+        def concurrent_edit(_, prompt):
+            self.assertIn("下周五验收", prompt)
+            self.worker.save_summary(
+                {"meeting_id": mid, "markdown": "用户补充", "expected_markdown": "旧纪要"}
+            )
+            return "# 迟到的生成"
+
+        self.worker.llm_complete = concurrent_edit
+        with self.assertRaisesRegex(Exception, "变化"):
+            self.worker.summarize(payload)
+        with self.assertRaisesRegex(Exception, "变化"):
+            self.worker.save_summary(
+                {"meeting_id": mid, "markdown": "过期的全篇编辑", "expected_markdown": "旧纪要"}
+            )
+        self.assertEqual(store.get_meeting(mid)["summary"]["data"]["markdown"], "用户补充")
+
+        def date_confirmed(_, prompt):
+            store.update_meeting(mid, {"meeting_date": "2026-11-05"})
+            return "# 未确认日期时生成的结果"
+
+        self.worker.llm_complete = date_confirmed
+        with self.assertRaisesRegex(Exception, "变化"):
+            self.worker.summarize(payload)
+        self.worker.llm_complete = lambda *_: "# 新纪要"
+        self.worker.summarize(payload)
+        self.assertTrue(
+            store.update_meeting(mid, {"meeting_date": None})["correction"]["summary_stale"]
+        )
+
+    def test_unreferenced_prose_remains_visible_beside_cited_claims(self):
+        from .meeting_evidence import parse_claims, resolve_claims
+
+        row = {
+            "id": "a",
+            "track": "mic",
+            "start_ms": 1000,
+            "end_ms": 2000,
+            "text": "Friday release",
+        }
+        raw = "# Review\n\nThe launch is delayed.\n\n- Release on Friday [[decision:S1]]\n\n| Task | Owner |\n| --- | --- |\n| Publish | Jo |\n\n```py\n- this is code [[cause:S1]]\n```\n(partial summaries truncated)"
+        markdown, claims = parse_claims(raw, [row], True)
+        resolve_claims(claims, [row], markdown)
+        self.assertEqual(
+            [(c["text"], c["status"]) for c in claims],
+            [
+                ("The launch is delayed.", "missing"),
+                ("Release on Friday", "thin"),
+                ("Publish | Jo", "missing"),
+            ],
+        )
+        self.assertIn("- this is code [[cause:S1]]", markdown)
+
+    def test_only_visible_sources_survive_summary_chunk_merge(self):
+        from .meeting_evidence import parse_claims, restrict_sources, resolve_claims
+
+        from .worker_llm import _split_transcript
+
+        split = _split_transcript("S1 [00:01] " + "一二三" * 20, 22)
+        self.assertTrue(all(part.startswith("S1 [00:01] ") and len(part) <= 22 for part in split))
+        rows = [
+            {
+                "id": f"real-{i}",
+                "start_ms": i * 1000,
+                "end_ms": (i + 1) * 1000,
+                "track": "mic",
+                "text": "回滚失败，因为连续漏报告警。",
+            }
+            for i in range(3)
+        ]
+        partial = restrict_sources("- 回滚失败，因为漏报了告警。[[conclusion:S1,S3]]", {"S1", "S2"})
+        text, claims = parse_claims(partial, rows, seekable=False)
+        self.assertEqual(claims[0]["kind"], "cause")
+        self.assertEqual(claims[0]["section"], "回滚失败")
+        self.assertEqual([s["segment_id"] for s in claims[0]["sources"]], ["real-0"])
+        self.assertNotIn("00:00", text)
+        self.assertFalse(claims[0]["sources"][0]["seekable"])
+        ambiguous = [rows[0], {**rows[0], "id": "duplicate"}]
+        self.assertEqual(resolve_claims(claims, ambiguous, text)[0]["status"], "changed")
+
+    def test_relative_dates_require_confirmed_calendar_day(self):
+        from .meeting_evidence import annotate_dates, confirmed_date
+
+        phrase = "明天、下周五、月底前后、下次评审之前、明天的明天"
+        self.assertEqual(annotate_dates(phrase, None), phrase)
+        self.assertEqual(
+            annotate_dates("明天，下周五。月底前后、下次评审之前", "2026-11-05"),
+            "明天（11 月 6 日），下周五（11 月 13 日）。月底前后、下次评审之前",
+        )
+        self.assertEqual(annotate_dates("tomorrow", "2024-02-28"), "tomorrow (2024-02-29)")
+        self.assertEqual(annotate_dates("明天", "2026-12-31"), "明天（2027 年 1 月 1 日）")
+        self.assertEqual(annotate_dates("next Monday", "2026-11-08"), "next Monday (2026-11-09)")
+        with self.assertRaises(ValueError):
+            confirmed_date("2026-02-31")
+        self.assertIsNone(
+            self.worker.store.create_meeting(
+                {"title": "Archive", "language": "en", "refined_model_id": "test"}
+            )["meeting_date"]
+        )
+
     def test_summary_appends_transcript_to_custom_prompt_and_parses_code_fence(self):
         meeting = self.worker.start(
             {
@@ -2718,7 +3038,7 @@ class WorkerTest(unittest.TestCase):
                 "language": "zh",
             }
         )
-        self.assertIn("本周五完成验收", prompts[0])
+        self.assertRegex(prompts[0], r"本周五（[^）]+）完成验收")
 
     def test_summary_cancellation_skips_late_save(self):
         meeting = self.worker.start(
@@ -7714,12 +8034,19 @@ class WorkerTest(unittest.TestCase):
         audio = Path(meeting["audio"]["playback"]["mic"])
         self.assertTrue(audio.exists())
         self.assertTrue(all(segment["translation"] for segment in meeting["segments"]))
-        self.assertTrue(
-            all(
-                self.worker.store.get_meeting(item["id"])["summary"]["data"]["markdown"]
-                for item in examples
-            )
-        )
+        for item in examples:
+            detail = self.worker.store.get_meeting(item["id"])
+            claims = detail["summary"]["data"]["claims"]
+            self.assertEqual([c["kind"] for c in claims], ["cause", "cause", "decision"])
+            for claim, segment in zip(
+                claims, (detail["segments"][1], detail["segments"][2], detail["segments"][2])
+            ):
+                source = claim["sources"][0]
+                self.assertFalse(claim["detached"])
+                self.assertEqual(source["current_segment_id"], segment["id"])
+                self.assertEqual(source["text"], segment["text"])
+                self.assertEqual(source["start_ms"], segment["start_ms"])
+                self.assertTrue(source["seekable"])
         spanish = next(item for item in examples if item["example_locale"] == "es")
         self.assertEqual(spanish["language"], "en")
         self.assertEqual(spanish["target_language"], "es")
@@ -7730,6 +8057,39 @@ class WorkerTest(unittest.TestCase):
             db.execute("DELETE FROM app_meta WHERE key LIKE 'examples_seeded_%'")
         self.assertTrue(self.worker.store.seed_examples())
         self.assertNotIn(meeting["id"], {item["id"] for item in self.worker.store.list_meetings()})
+
+    def test_upgrade_only_replaces_unedited_sample_minutes(self):
+        from .store_meetings import EXAMPLES_SEED_KEY, _legacy_example_note
+
+        store = self.worker.store
+        store.seed_examples()
+        fixtures = json.loads(Path(__file__).with_name("examples.json").read_text())
+        first, second = fixtures[:2]
+        store.update_meeting(first["id"], {"title": "我的示例", "notes": "保留这段个人笔记"})
+        with store.connect() as db:
+            db.execute(
+                "UPDATE app_meta SET key='examples_seeded_v5' WHERE key=?", (EXAMPLES_SEED_KEY,)
+            )
+            db.execute("DELETE FROM meetings WHERE id=?", (fixtures[2]["id"],))
+            for item, note in [(first, _legacy_example_note(first)), (second, "my edited summary")]:
+                db.execute(
+                    "UPDATE summaries SET data=? WHERE meeting_id=?",
+                    (json.dumps({"markdown": note}, ensure_ascii=False), item["id"]),
+                )
+            db.execute(
+                "UPDATE segments SET text='修改过的逐字稿' WHERE meeting_id=? AND start_ms=?",
+                (first["id"], first["segments"][1][0]),
+            )
+        self.assertTrue(store.seed_examples())
+        self.assertFalse(store.meeting_exists(fixtures[2]["id"]))
+        upgraded = store.get_meeting(first["id"])
+        self.assertEqual(upgraded["title"], "我的示例")
+        self.assertEqual(upgraded["notes"], "保留这段个人笔记")
+        self.assertEqual(upgraded["segments"][1]["text"], "修改过的逐字稿")
+        self.assertEqual(upgraded["summary"]["data"]["claims"][0]["status"], "changed")
+        self.assertEqual(
+            store.get_meeting(second["id"])["summary"]["data"], {"markdown": "my edited summary"}
+        )
 
     def test_deleted_meetings_can_be_restored_or_purged_with_files(self):
         meeting = self.worker.start(

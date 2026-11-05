@@ -5,7 +5,10 @@ from uuid import uuid4
 from .store_base import utc_now
 
 
-class WorkspaceStoreMixin:
+from .store_terms import TermStoreMixin
+
+
+class WorkspaceStoreMixin(TermStoreMixin):
     """工作区相关的存储操作。"""
 
     def list_workspaces(self):

@@ -10250,6 +10250,28 @@ body:has(.meeting-workspace-menu) .meeting-menu:not([hidden]) [data-meeting-acti
 #detail-view .detail-content-status .save-state {
   display: inline-flex;
 }
+#detail-view :is(.notebook-document-select, .summary-template-select) {
+  field-sizing: content;
+  width: auto;
+  max-width: 150px;
+  min-width: 0;
+  height: 29px;
+  padding: 3px 22px 3px 8px;
+  border: 1px solid var(--color-line);
+  border-radius: 6px;
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 12px;
+}
+#detail-view .notebook-document-select {
+  border-color: transparent;
+  color: var(--color-text-muted);
+}
+#detail-view .notebook-document-select:is(:hover, :focus-visible) {
+  border-color: var(--color-line);
+  color: var(--color-text);
+}
 #detail-view .detail-content-toolbar {
   display: flex;
   align-items: center;

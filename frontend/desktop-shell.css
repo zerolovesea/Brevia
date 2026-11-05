@@ -472,19 +472,12 @@ textarea,
 #desktop-app .sidebar-workspace-toggle[aria-expanded="true"] > .interface-icon:first-child {
   rotate: 90deg;
 }
-#desktop-app .sidebar-workspace-count {
-  font-size: 10px;
-  font-variant-numeric: tabular-nums;
-  color: var(--color-text-subtle);
-}
 #desktop-app .sidebar-workspace-toggle[aria-pressed="true"] .workspace-label {
   color: var(--color-text);
   font-weight: 550;
 }
-#desktop-app
-  .sidebar-workspace-header:has(.sidebar-workspace-edit):is(:hover, :focus-within)
-  .sidebar-workspace-count {
-  opacity: 0;
+#desktop-app .sidebar-workspace-header:has(.sidebar-workspace-edit) .workspace-label {
+  padding-inline-end: 16px;
 }
 #desktop-app .sidebar-workspace-edit {
   position: absolute;

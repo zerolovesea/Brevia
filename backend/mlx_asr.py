@@ -30,11 +30,12 @@ def local_model_path(manager, model_id):
 
 
 class MLXASR:
-    def __init__(self, manager, model_id, language=None, threads=None):
+    def __init__(self, manager, model_id, language=None, threads=None, hotwords=None):
         import mlx.core as mx
         from mlx_audio.stt.utils import load_model
 
         self.model_id = model_id
+        self.hotwords = hotwords or []
         self.model_kind = manager.get(model_id)['kind']
         self.language = language
         self.max_speech_seconds = 20.0
@@ -56,9 +57,11 @@ class MLXASR:
             )
 
     def _options(self):
+        words = {"hotwords": self.hotwords} if getattr(self, "hotwords", None) else {}
         if self.model_kind == 'funasr-nano':
             return dict(
                 language=None if self.language == 'auto' else self.language,
+                **words,
                 max_tokens=512,
                 temperature=0.0,
                 verbose=False,
@@ -68,6 +71,7 @@ class MLXASR:
 
             return dict(
                 language=RefinedASR._qwen3_language(self.language) or None,
+                **words,
                 max_tokens=512,
                 temperature=0.0,
                 verbose=False,
@@ -77,6 +81,7 @@ class MLXASR:
         if self.model_kind == 'whisper':
             return dict(
                 language=None if self.language == 'auto' else self.language,
+                **words,
                 task='transcribe',
                 stream=False,
                 verbose=None,
@@ -127,6 +132,10 @@ class MLXASR:
             options = self._options()
             options.pop('temperature')  # stream_generate defaults to greedy decoding.
             options.pop('verbose')
+            if self.model_kind == 'qwen3' and options.get('hotwords'):
+                from mlx_audio.stt.utils import merge_hotwords
+
+                options['system_prompt'] = merge_hotwords(None, options.pop('hotwords'))
             try:
                 # mlx-audio's text stream decodes each token separately. Its
                 # tokenizer splits 龘/हिन्दी across tokens, producing U+FFFD.

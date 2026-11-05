@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS meetings (
   status TEXT NOT NULL,
   created_at TEXT NOT NULL,
   started_at TEXT,
+  meeting_date TEXT,
   ended_at TEXT,
   duration_ms INTEGER NOT NULL DEFAULT 0,
   archived_at TEXT,
@@ -37,6 +38,13 @@ CREATE TABLE IF NOT EXISTS meetings (
   is_example INTEGER NOT NULL DEFAULT 0,
   example_locale TEXT,
   notes TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS ai_note_claims (
+  meeting_id TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
+  id TEXT NOT NULL,
+  data TEXT NOT NULL,
+  accepted INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY(meeting_id,id)
 );
 CREATE TABLE IF NOT EXISTS segments (
   id TEXT NOT NULL,
@@ -97,6 +105,14 @@ CREATE TABLE IF NOT EXISTS summaries (
 CREATE TABLE IF NOT EXISTS transcript_corrections (
   meeting_id TEXT PRIMARY KEY REFERENCES meetings(id) ON DELETE CASCADE,
   data TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS workspace_terms (
+  workspace_id TEXT NOT NULL,
+  wrong TEXT NOT NULL,
+  correct TEXT NOT NULL,
+  post_replace INTEGER NOT NULL DEFAULT 0,
+  hotword INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (workspace_id,wrong)
 );
 CREATE TABLE IF NOT EXISTS correction_undo_entries (
   meeting_id TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
@@ -224,6 +240,9 @@ class StoreBase:
         任何中间版本（包括版本号被写高、但列并未真正补上的开发版）恢复到当前结构。
         """
         columns = {row["name"] for row in db.execute("PRAGMA table_info(meetings)")}
+        if "meeting_date" not in columns:
+            # 历史导入和本地录音没有可靠标识，保留未知日期。
+            db.execute("ALTER TABLE meetings ADD COLUMN meeting_date TEXT")
         if "transcript_model_id" not in columns:
             db.execute("ALTER TABLE meetings ADD COLUMN transcript_model_id TEXT")
             db.execute(
@@ -253,6 +272,8 @@ class StoreBase:
         if "deleted_at" not in workspace_columns:
             db.execute("ALTER TABLE workspaces ADD COLUMN deleted_at TEXT")
         segment_columns = {row["name"] for row in db.execute("PRAGMA table_info(segments)")}
+        if "asr_text" not in segment_columns:
+            db.execute("ALTER TABLE segments ADD COLUMN asr_text TEXT")
         if "word_timestamps" not in segment_columns:
             db.execute("ALTER TABLE segments ADD COLUMN word_timestamps TEXT")
         speaker_columns = {row["name"] for row in db.execute("PRAGMA table_info(speakers)")}
@@ -316,12 +337,12 @@ class StoreBase:
                 "id TEXT NOT NULL, meeting_id TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE, "
                 "revision INTEGER NOT NULL DEFAULT 0, version TEXT NOT NULL, track TEXT NOT NULL, "
                 "start_ms INTEGER NOT NULL, end_ms INTEGER NOT NULL, speaker TEXT NOT NULL, text TEXT NOT NULL, "
-                "word_timestamps TEXT, translation TEXT, user_edited INTEGER NOT NULL DEFAULT 0, "
+                "word_timestamps TEXT, translation TEXT, user_edited INTEGER NOT NULL DEFAULT 0, asr_text TEXT, "
                 "PRIMARY KEY (meeting_id, id, version))"
             )
             db.execute(
                 "INSERT INTO segments_new SELECT id,meeting_id,revision,version,track,start_ms,end_ms,"
-                "speaker,text,word_timestamps,translation,user_edited FROM segments"
+                "speaker,text,word_timestamps,translation,user_edited,asr_text FROM segments"
             )
             db.execute("DROP TABLE segments")
             db.execute("ALTER TABLE segments_new RENAME TO segments")

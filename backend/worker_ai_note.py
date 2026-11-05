@@ -19,6 +19,7 @@ import time
 from difflib import SequenceMatcher
 from uuid import uuid4
 
+from .meeting_evidence import annotate_dates, claim_record, snapshot
 from .transcript import clock
 from .worker_common import require
 from .worker_llama_sidecar import ASSISTANT_SIDECAR
@@ -260,6 +261,7 @@ class _AiNoteSession:
 
     def __init__(self, meeting_id, connection, proactivity, language, prompt_copy=None):
         self.meeting_id = meeting_id
+        self.meeting_date = None
         self.language = language or "zh"
         self.connection = connection
         self.proactivity = proactivity or "assist"
@@ -318,6 +320,11 @@ class AiNoteWorkerMixin:
             payload.get("language", "zh"),
             payload.get("prompt"),
         )
+        with self.store.connect() as db:
+            row = db.execute(
+                "SELECT meeting_date FROM meetings WHERE id=?", (meeting_id,)
+            ).fetchone()
+            session.meeting_date = row[0] if row else None
         previous = None
         with self._ai_note_lock:
             previous = self._ai_note_sessions.get(meeting_id)
@@ -435,11 +442,7 @@ class AiNoteWorkerMixin:
         text = str(event.get("text") or "")
         with session.cond:
             session.recent_segments.append(
-                {
-                    "text": text,
-                    "start_ms": int(event.get("start_ms") or 0),
-                    "speaker": event.get("speaker") or "spk-1",
-                }
+                snapshot({**event, "text": text, "start_ms": int(event.get("start_ms") or 0)})
             )
             if len(session.recent_segments) > MAX_RECENT_SEGMENTS:
                 session.recent_segments = session.recent_segments[-MAX_RECENT_SEGMENTS:]
@@ -521,7 +524,10 @@ class AiNoteWorkerMixin:
 
     def _analyze_realtime(self, session, task_generation):
         """执行一次实时分析；超时/取消/过期都返回空列表。"""
-        prompt = self._realtime_prompt(session)
+        # 推理期间可能新增字幕。引用只能来自构造本次 prompt 时实际显示的窗口。
+        with session.cond:
+            window = self._recent_window(session)
+        prompt = self._realtime_prompt(session, window)
         try:
             raw = self._ai_note_complete(session, prompt)
         except Exception:
@@ -531,13 +537,32 @@ class AiNoteWorkerMixin:
             return []
         accepted = []
         for item in self._parse_suggestions(raw):
-            item["evidence"] = self._valid_evidence(session, item.get("evidence"))
+            requested = item.get("evidence")
+            requested = requested if isinstance(requested, list) else [requested]
+            times = [clock(row["start_ms"]) for row, _ in window]
+            item["evidence"] = list(
+                dict.fromkeys(
+                    stamp
+                    for stamp in requested
+                    if isinstance(stamp, str) and times.count(stamp) == 1
+                )
+            )[:2]
+            item["sources"] = [
+                snapshot(row)
+                for row, _ in window
+                if row.get("segment_id") and clock(row["start_ms"]) in item["evidence"]
+            ]
             duplicate = self._duplicate_claim(session, item)
             if duplicate:
                 duplicate["evidence"] = list(
                     dict.fromkeys(duplicate["evidence"] + item["evidence"])
                 )
+                old_ids = {source["segment_id"] for source in duplicate.get("sources", [])}
+                duplicate.setdefault("sources", []).extend(
+                    src for src in item["sources"] if src["segment_id"] not in old_ids
+                )
                 if duplicate.get("emitted"):
+                    self._store_suggestion(session, duplicate)
                     self.emit(
                         "ai-note.evidence",
                         {
@@ -597,14 +622,6 @@ class AiNoteWorkerMixin:
                 return claim
         return None
 
-    @staticmethod
-    def _valid_evidence(session, evidence):
-        """只接受当前字幕窗口中已有的时间戳，杜绝模型虚构来源。"""
-        allowed = [clock(segment["start_ms"]) for segment in session.recent_segments[-8:]]
-        requested = evidence if isinstance(evidence, list) else [evidence]
-        valid = [str(value) for value in requested if str(value) in allowed]
-        return list(dict.fromkeys(valid))[:2] or allowed[-1:]
-
     def _fuzzy_duplicate(self, norms, norm):
         """近义重复检测：与最近建议的归一化文本相似度过高则视为重复。"""
         for previous in norms[-12:]:
@@ -642,15 +659,30 @@ class AiNoteWorkerMixin:
                 return True
         return False
 
-    def _realtime_prompt(self, session):
+    @staticmethod
+    def _recent_window(session):
+        lang = session.language if session.language in RECENT_TRANSCRIPT_CHARS else "en"
+        remaining = RECENT_TRANSCRIPT_CHARS[lang]
+        window = []
+        for segment in reversed(session.recent_segments[-REALTIME_RECENT_SEGMENTS[lang] :]):
+            label = f"[{clock(segment['start_ms'])}] "
+            if remaining <= len(label):
+                break
+            line = label + annotate_dates(segment["text"], session.meeting_date)
+            if window and len(line) > remaining:
+                break
+            line = line[:remaining]
+            window.append((segment, line))
+            remaining -= len(line) + 1
+        return window[::-1]
+
+    def _realtime_prompt(self, session, window=None):
         state = session.meeting_state.to_prompt(session.prompt_copy["state_labels"])[
             :MEETING_STATE_MAX_CHARS
         ]
-        lang = session.language if session.language in RECENT_TRANSCRIPT_CHARS else "en"
         recent = "\n".join(
-            f"[{clock(segment['start_ms'])}] {segment['text']}"
-            for segment in session.recent_segments[-REALTIME_RECENT_SEGMENTS[lang] :]
-        )[: RECENT_TRANSCRIPT_CHARS[lang]]
+            line for _, line in (window if window is not None else self._recent_window(session))
+        )
         user = session.user_paragraph[:USER_PARAGRAPH_CHARS]
         claims = "\n".join(f"- {claim['text']}" for claim in session.recent_claims[-6:])
         instructions = session.prompt_copy["instructions"]
@@ -715,7 +747,17 @@ class AiNoteWorkerMixin:
         if batch:
             self._emit_suggestion(session, batch[0])
 
+    def _store_suggestion(self, session, suggestion):
+        claim = claim_record(
+            suggestion["text"],
+            suggestion["type"],
+            suggestion.get("sources", []),
+            claim_id=suggestion["id"],
+        )
+        self.store.record_ai_claim(session.meeting_id, claim)
+
     def _emit_suggestion(self, session, suggestion):
+        self._store_suggestion(session, suggestion)
         self.emit(
             "ai-note.suggestion",
             {
@@ -725,6 +767,7 @@ class AiNoteWorkerMixin:
                 "text": suggestion["text"],
                 "importance": suggestion.get("importance", "medium"),
                 "evidence": suggestion["evidence"],
+                "source_tracked": True,
             },
         )
         suggestion["emitted"] = True

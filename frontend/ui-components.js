@@ -11,6 +11,7 @@ const checkIconSvg =
 /** 界面共用线框图标；名称固定，外部文本不参与 SVG 插值。 */
 function interfaceIcon(name) {
   const paths = {
+    branch: '<path d="M4 20 20 4M8 16h8M12 12V5M15 9h5"/>',
     github:
       '<g transform="scale(1.5)"><path fill="currentColor" stroke="none" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82A7.65 7.65 0 0 1 8 4.73c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></g>',
     chat: '<path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5H5l-3 2 1.8-5A8.5 8.5 0 1 1 21 11.5Z"/><path d="M8 11h.01M12 11h.01M16 11h.01" stroke-width="2"/>',
@@ -353,6 +354,7 @@ function renderTranscriptSegment({
   userEdited = false,
   translationStale = false,
   replacementHighlight = '',
+  backlinks = '',
 }) {
   const timing =
     Number.isFinite(startSeconds) && Number.isFinite(endSeconds)
@@ -409,7 +411,7 @@ function renderTranscriptSegment({
             '',
           )}<button class="segment-actions" data-segment-actions type="button" data-tooltip="${escapeHtml(t('更多'))}" aria-label="${escapeHtml(t('更多'))}" aria-haspopup="menu">${interfaceIcon('more')}</button></div>`
       : '';
-  return `<article class="segment"${contextSegmentId ? ` data-segment-id="${escapeHtml(contextSegmentId)}"` : ''}${timing}><div class="segment-meta"><time>${escapeHtml(time)}</time>${showSpeaker && speaker.name ? `<span class="speaker-avatar" aria-hidden="true">${escapeHtml([...speaker.name][0])}</span>` : ''}${label}${overlap}${signalBadge}</div>${copy}${tools}</article>`;
+  return `<article class="segment"${contextSegmentId ? ` data-segment-id="${escapeHtml(contextSegmentId)}"` : ''}${timing}><div class="segment-meta"><time>${escapeHtml(time)}</time>${showSpeaker && speaker.name ? `<span class="speaker-avatar" aria-hidden="true">${escapeHtml([...speaker.name][0])}</span>` : ''}${label}${overlap}${signalBadge}</div>${copy}${backlinks}${tools}</article>`;
 }
 /** 渲染会议库中的一行。@param {{tone: string, title: string, meta: string, tags: string[], status: object}} meeting 会议数据。@param {number} index 会议索引。@returns {string} 行标记。 */
 /** 桌面会议导航只展示标题；录音状态保留在标记与可访问名称中。 */
@@ -542,6 +544,14 @@ function desktopShortcutValue(value) {
     .map((key) => `<kbd>${escapeHtml(key)}</kbd>`)
     .join('')}</span>`;
 }
+/** 仅模拟悬浮胶囊外观，不挂载录音桥接或真实控制按钮。 */
+function renderCapsuleExample(enabled) {
+  const title = window.BreviaLocaleData.onboardingMotionCopy[locale]?.meeting || t('会议');
+  return `<span class="pref-capsule" data-enabled="${enabled}" role="img" aria-label="${escapeHtml(t('桌面录音胶囊') + ' · ' + t('演示'))}">
+    <i class="pref-capsule-grip"></i><span class="pref-capsule-wave">${interfaceIcon('waveform')}</span>
+    <span class="pref-capsule-readout"><span><b>02:36</b><small>${escapeHtml(t('录音中'))}</small></span><strong>${escapeHtml(title)}</strong></span>
+    ${interfaceIcon('captions')}<i class="pref-capsule-pause">${interfaceIcon('pause')}</i><i class="pref-capsule-stop">${interfaceIcon('stop')}</i></span>`;
+}
 function renderDesktopPreferences() {
   const mount = document.querySelector('[data-desktop-settings-mount]');
   if (!mount) return;
@@ -581,7 +591,7 @@ function renderDesktopPreferences() {
       ['always', t('始终显示')],
       ['background', t('仅窗口隐藏时')],
     ]),
-  )}${renderPreferenceRow('最小化时自动显示胶囊', t('录音或暂停时显示；隐藏胶囊不会停止录音'), toggle('autoCapsule', '最小化时自动显示胶囊'))}</section><section class="preferences-section" id="preferences-shortcuts" aria-labelledby="preferences-shortcuts-title"><header class="preferences-section-heading"><h2 id="preferences-shortcuts-title">${escapeHtml(t('全局快捷键'))}</h2></header>${renderPreferenceRow('开始／结束录音', t('沿用最近配置，再次按下结束并保存'), shortcut('recordingShortcut', '开始／结束录音'))}${renderPreferenceRow('暂停／继续录音', t('仅在当前录音支持暂停时生效'), shortcut('pauseShortcut', '暂停／继续录音'))}</section></div>`;
+  )}${renderPreferenceRow('最小化时自动显示胶囊', t('录音或暂停时显示；隐藏胶囊不会停止录音'), `<span class="pref-capsule-setting">${renderCapsuleExample(desktopPreferences.autoCapsule)}${toggle('autoCapsule', '最小化时自动显示胶囊')}</span>`)}</section><section class="preferences-section" id="preferences-shortcuts" aria-labelledby="preferences-shortcuts-title"><header class="preferences-section-heading"><h2 id="preferences-shortcuts-title">${escapeHtml(t('全局快捷键'))}</h2></header>${renderPreferenceRow('开始／结束录音', t('沿用最近配置，再次按下结束并保存'), shortcut('recordingShortcut', '开始／结束录音'))}${renderPreferenceRow('暂停／继续录音', t('仅在当前录音支持暂停时生效'), shortcut('pauseShortcut', '暂停／继续录音'))}</section></div>`;
 }
 /** 仅允许安全协议的链接/图片地址，阻止 javascript: 等注入。@param {string} url 原始地址。@returns {string} 安全地址。 */
 function sanitizeUrl(url = '') {
@@ -1599,6 +1609,7 @@ function renderSummaryDocument(markdown) {
 /** 纪要面板只渲染正文；操作与状态由三个标签共用的页头提供。 */
 function renderMeetingSummary({
   markdown,
+  claims = [],
   waitingModels = false,
   blocked = false,
   generating = false,
@@ -1616,7 +1627,7 @@ function renderMeetingSummary({
           '',
         )}${participants.length > 3 ? `<small>+${participants.length - 3}</small>` : ''}</span>${interfaceIcon('chevron-down')}</button><div id="summary-participants-popover" class="meeting-popover summary-participants-popover" popover role="dialog" aria-label="${escapeHtml(t('参与者'))}"><header><h3>${escapeHtml(t('参与者'))} (${participants.length})</h3><button class="icon-button" data-close-meeting-popover type="button" aria-label="${escapeHtml(t('关闭'))}">${interfaceIcon('close')}</button></header><label class="search">${interfaceIcon('search')}<input type="search" data-participant-search aria-label="${escapeHtml(t('搜索'))}" placeholder="${escapeHtml(t('搜索'))}" /></label><div class="summary-participant-list">${participants.map((person) => `<span><i class="speaker-avatar" aria-hidden="true">${escapeHtml([...formatSpeakerName(person)][0] || '')}</i><span>${escapeHtml(formatSpeakerName(person))}</span></span>`).join('')}</div><p data-participant-empty role="status" hidden>${escapeHtml(t('暂无内容'))}</p></div></section>`
     : '';
-  return `<div class="summary-preview"><div class="summary-feedback" data-summary-feedback hidden></div>${people}${editing ? `<div class="summary-inline-edit"><div data-inline-summary-editor></div></div>` : markdown ? `<div class="summary-body markdown-content">${renderSummaryDocument(markdown)}</div>` : waitingModels ? `<section class="summary-waiting"><span>${interfaceIcon('check')}${escapeHtml(t('录音已保存'))}</span><div>${interfaceIcon('document')}<h2>${escapeHtml(t('录音已保存'))}</h2><p>${escapeHtml(t('纪要等待所需模型，就绪后会自动继续。'))}</p><div><button class="secondary" data-settings-modal="models" type="button">${interfaceIcon('download')}${escapeHtml(t('模型库'))}</button><button class="secondary" data-detail-tab="transcript" type="button">${interfaceIcon('document')}${escapeHtml(t('逐字稿'))}</button></div></div></section>` : `<div class="summary-empty"><span class="summary-empty-mark">${interfaceIcon('ai')}</span><h2>${escapeHtml(t(generating ? '正在生成会议纪要' : '尚未生成会议纪要'))}</h2>${!generating && !blocked ? `<button class="primary-action" data-generate-summary type="button">${escapeHtml(t('生成纪要'))}${interfaceIcon('arrow-right')}</button>` : ''}</div>`}</div>`;
+  return `<div class="summary-preview"><div class="summary-feedback" data-summary-feedback hidden></div>${people}${editing ? `<div class="summary-inline-edit"><div data-inline-summary-editor></div></div>` : markdown ? `<div class="summary-body markdown-content">${claims.length ? renderEvidenceNotebook(claims, markdown) : renderSummaryDocument(markdown)}</div>` : waitingModels ? `<section class="summary-waiting"><span>${interfaceIcon('check')}${escapeHtml(t('录音已保存'))}</span><div>${interfaceIcon('document')}<h2>${escapeHtml(t('录音已保存'))}</h2><p>${escapeHtml(t('纪要等待所需模型，就绪后会自动继续。'))}</p><div><button class="secondary" data-settings-modal="models" type="button">${interfaceIcon('download')}${escapeHtml(t('模型库'))}</button><button class="secondary" data-detail-tab="transcript" type="button">${interfaceIcon('document')}${escapeHtml(t('逐字稿'))}</button></div></div></section>` : `<div class="summary-empty"><span class="summary-empty-mark">${interfaceIcon('ai')}</span><h2>${escapeHtml(t(generating ? '正在生成会议纪要' : '尚未生成会议纪要'))}</h2>${!generating && !blocked ? `<button class="primary-action" data-generate-summary type="button">${escapeHtml(t('生成纪要'))}${interfaceIcon('arrow-right')}</button>` : ''}</div>`}</div>`;
 }
 /** 在页面外壳可用后填充所有数据驱动的静态区域。@returns {void} */
 function renderStaticViews() {
@@ -1725,18 +1736,36 @@ function renderDetailTabbar() {
     !editing && (scope !== 'transcript' || actions) && typeof correctionControls === 'function'
       ? correctionControls(currentMeetingDetail, scope)
       : '';
-  return `<div class="detail-content-header"><nav class="tabbar detail-document-navigation" aria-label="${t('内容')}"><div class="tabbar-tabs" role="tablist" aria-orientation="horizontal" aria-label="${t('笔记')} / ${t('逐字稿')} / ${t('会议纪要')}">${[
-    ['notes', '笔记', 'notebook'],
-    ['transcript', '逐字稿', 'waveform'],
-    ['summary', '会议纪要', 'ai'],
+  const notebook = scope !== 'transcript';
+  const notebookTarget = notebook ? scope : d.notebookDocument || 'notes';
+  const documents = notebook
+    ? `<select class="notebook-document-select" data-notebook-document aria-label="${escapeHtml(t('笔记'))}"><option value="notes"${scope === 'notes' ? ' selected' : ''}>${escapeHtml(t('我的笔记'))}</option><option value="summary"${scope === 'summary' ? ' selected' : ''}>${escapeHtml(t('会议纪要'))}</option></select>`
+    : '';
+  const templates =
+    scope === 'summary' && !editing
+      ? `<select class="summary-template-select" data-summary-template aria-label="${escapeHtml(t('整理模板'))}" title="${escapeHtml(t('整理模板'))}"${summary.generating ? ' disabled' : ''}>${[
+          ['general', '通用'],
+          ['weekly', '周会'],
+          ['interview', '访谈'],
+          ['review', '评审'],
+        ]
+          .map(
+            ([key, label]) =>
+              `<option value="${key}"${(d.summaryTemplate || 'general') === key ? ' selected' : ''}>${escapeHtml(t(label))}</option>`,
+          )
+          .join('')}</select>`
+      : '';
+  return `<div class="detail-content-header"><nav class="tabbar detail-document-navigation" aria-label="${t('内容')}"><div class="tabbar-tabs" role="tablist" aria-orientation="horizontal" aria-label="${t('笔记')} / ${t('逐字稿')}">${[
+    ['notes', '笔记', 'notebook', notebook, notebookTarget],
+    ['transcript', '逐字稿', 'waveform', !notebook, 'transcript'],
   ]
     .map(
-      ([key, label, icon]) =>
-        `<button type="button" class="tab${scope === key ? ' active' : ''}" data-detail-tab="${key}" id="detail-tab-${key}" role="tab" aria-selected="${scope === key}" aria-controls="detail-panel-${key}" tabindex="${scope === key ? '0' : '-1'}">${interfaceIcon(icon)}<span>${t(label)}</span></button>`,
+      ([key, label, icon, active, panel]) =>
+        `<button type="button" class="tab${active ? ' active' : ''}" data-detail-tab="${key}" id="detail-tab-${key}" role="tab" aria-selected="${active}" aria-controls="detail-panel-${panel}" tabindex="${active ? '0' : '-1'}">${interfaceIcon(icon)}<span>${t(label)}</span></button>`,
     )
     .join(
       '',
-    )}</div><div class="detail-content-status">${status}</div></nav><div class="detail-content-toolbar" role="toolbar" aria-label="${title}"><div class="detail-content-actions">${find}${actions}</div><div class="detail-content-context">${context}</div></div></div>`;
+    )}</div>${documents}<div class="detail-content-status">${status}</div></nav><div class="detail-content-toolbar" role="toolbar" aria-label="${title}"><div class="detail-content-actions">${find}${actions}</div><div class="detail-content-context">${templates}${context}</div></div></div>`;
 }
 
 function resizeTranscriptField(field) {
@@ -1765,9 +1794,14 @@ function renderMeetingDetail() {
     hasRefined && d.transcriptVersion !== 'original' && d.refinedMode === 'fulltext';
   const showingRefined =
     hasRefined && d.transcriptVersion !== 'original' && d.refinedMode === 'timestamps';
+  const evidenceLinks = transcriptEvidenceLinks(
+    d.summary?.claims || [],
+    d.acceptedClaims || [],
+    hasRefined && d.transcriptVersion === 'original' ? d.originalTranscript : null,
+  );
   let transcriptBody;
   if (fulltextMode) {
-    transcriptBody = `<div class="refined-fulltext"><p class="eyebrow">${t('精修全文')}</p><p class="refined-fulltext-hint">${t('经过会后模型整理后的完整转写文本。由于当前模型不提供时间戳，该版本不支持逐句音频定位。')}</p><div class="refined-fulltext-body">${escapeHtml(d.refinedFulltext)}</div></div>`;
+    transcriptBody = `<div class="refined-fulltext"><p class="eyebrow">${t('精修全文')}</p><p class="refined-fulltext-hint">${t('经过会后模型整理后的完整转写文本。由于当前模型不提供时间戳，该版本不支持逐句音频定位。')}</p><div class="refined-fulltext-body">${d.refinedTranscript.map((entry) => `<div data-segment-id="${escapeHtml(entry.segmentId)}">${escapeHtml(entry.speaker.name)}：${escapeHtml(entry.text)}${evidenceLinks.get(entry.segmentId) || ''}</div>`).join('')}</div></div>`;
   } else {
     // 编辑态下用草稿覆盖后端文本，使并发刷新不会吞掉尚未保存的输入。
     const draft = d.transcriptEditing ? d.transcriptDraft || {} : {};
@@ -1783,6 +1817,7 @@ function renderMeetingDetail() {
       .map((entry) => ({
         ...entry,
         text: draft[entry.segmentId] ?? entry.text,
+        backlinks: d.transcriptEditing ? '' : evidenceLinks.get(entry.segmentId) || '',
         textEditable: Boolean(d.transcriptEditing),
         textModified: Boolean(
           d.transcriptEditing &&
@@ -1805,7 +1840,7 @@ function renderMeetingDetail() {
         }
       : null;
   document.querySelector('.final-transcript').innerHTML =
-    `${renderDetailTabbar()}<div class="detail-notes-panel" data-detail-panel="notes" id="detail-panel-notes" role="tabpanel" aria-labelledby="detail-tab-notes"${detailActiveTab !== 'notes' ? ' hidden' : ''}>${notesPanel}</div><div class="detail-summary-panel" data-detail-panel="summary" id="detail-panel-summary" role="tabpanel" aria-labelledby="detail-tab-summary"${detailActiveTab !== 'summary' ? ' hidden' : ''}></div><div class="transcript-panel" data-detail-panel="transcript" id="detail-panel-transcript" role="tabpanel" aria-labelledby="detail-tab-transcript"${detailActiveTab !== 'transcript' ? ' hidden' : ''}><div class="transcript-body">${typeof correctionFeedback === 'function' ? correctionFeedback(currentMeetingDetail) : ''}${transcriptBody}</div></div>`;
+    `${renderDetailTabbar()}<div class="detail-notes-panel" data-detail-panel="notes" id="detail-panel-notes" role="tabpanel" aria-labelledby="detail-tab-notes"${detailActiveTab !== 'notes' ? ' hidden' : ''}>${notesPanel}${!d.notesEditing && d.acceptedClaims?.length ? renderClaimGroups(d.acceptedClaims, true) : ''}</div><div class="detail-summary-panel" data-detail-panel="summary" id="detail-panel-summary" role="tabpanel" aria-labelledby="detail-tab-notes"${detailActiveTab !== 'summary' ? ' hidden' : ''}></div><div class="transcript-panel" data-detail-panel="transcript" id="detail-panel-transcript" role="tabpanel" aria-labelledby="detail-tab-transcript"${detailActiveTab !== 'transcript' ? ' hidden' : ''}><div class="transcript-body">${typeof correctionFeedback === 'function' ? correctionFeedback(currentMeetingDetail) : ''}${transcriptBody}</div></div>`;
   document.querySelectorAll('[data-segment-text]').forEach((field) => resizeTranscriptField(field));
   filterDetailTranscript();
   if (focusState) {

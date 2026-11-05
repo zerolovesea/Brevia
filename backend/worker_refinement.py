@@ -458,6 +458,7 @@ class RefinementWorkerMixin:
                 refined_model_id,
                 language=meeting.get("language"),
                 threads=self.models.device()["threads"],
+                **self.store.asr_term_options(meeting),
             )
             logger.info(
                 "refinement ASR loaded meeting=%s model=%s backend=%s threads=%s seconds=%.2f",

@@ -34,6 +34,12 @@ const path = require('node:path');
 const { fileURLToPath, pathToFileURL } = require('node:url');
 const { randomUUID } = require('node:crypto');
 const { z } = require('zod');
+const {
+  markdownTarget,
+  syncMarkdown,
+  serializeMarkdown,
+  sendGroupSummary,
+} = require('./markdown-workflow');
 const { MobileServer } = require('./mobile-server');
 const { DesktopController } = require('./desktop-controller');
 const {
@@ -373,6 +379,8 @@ const meetingUpdates = z
     title: z.string().trim().min(1).max(120),
     tags: z.array(z.string().max(32)).max(20),
     archived_at: z.string().max(64).nullable(),
+    meeting_date: z.iso.date().nullable(),
+    accepted_suggestion_ids: z.array(z.string().uuid()).max(1000),
     refined_model_id: z.string().min(1).max(128),
     notes: z.string().max(5 * 1024 * 1024),
   })
@@ -999,7 +1007,12 @@ async function requestWithTaskSafety(type, value) {
       if ([...(mobileServer?.sessions.values() || [])].some((s) => !s.finished))
         throw new Error('请先完成手机录音与补传，再清理数据');
       try {
-        return await worker.request(type, value);
+        const removeMeeting =
+          type === 'meeting.delete' ||
+          type === 'meeting.purge' ||
+          (type === 'storage.clear' && value.partition === 'meetings');
+        const execute = () => worker.request(type, value);
+        return await (removeMeeting ? serializeMarkdown(execute) : execute());
       } finally {
         await mobileServer?.refreshDeleted();
       }
@@ -1498,7 +1511,9 @@ function registerIpc() {
     return { path: file, name: path.basename(file), size: metadata.size };
   });
   handleIpc('meeting.import', async (_, payload) => {
-    const value = meetingStart.extend({ path: z.string().optional() }).parse(payload);
+    const value = meetingStart
+      .extend({ path: z.string().optional(), meeting_date: z.iso.date().nullable().optional() })
+      .parse(payload);
     const selected =
       selectedImportAudio && value.path === selectedImportAudio
         ? { canceled: false, filePaths: [selectedImportAudio] }
@@ -1550,6 +1565,18 @@ function registerIpc() {
     return saveNoteImage(value);
   });
   handle('workspace.list', z.object({}), 'workspace.list');
+  const termScope = z.object({ workspace_id: z.union([z.literal(''), z.string().uuid()]) });
+  const termFlags = z.object({ post_replace: z.boolean(), hotword: z.boolean() });
+  const termText = z.string().trim().min(1).max(80);
+  handle('workspace.terms', termScope, 'workspace.terms');
+  handle(
+    'workspace.term.save',
+    z.union([
+      termScope.extend({ wrong: termText, remove: z.literal(true) }),
+      termScope.merge(termFlags).extend({ wrong: termText, correct: termText }),
+    ]),
+    'workspace.term.save',
+  );
   handle('workspace.get', z.object({ workspace_id: z.string() }), 'workspace.get');
   handle(
     'workspace.create',
@@ -1702,6 +1729,7 @@ function registerIpc() {
       replacement: z.string().max(4000).optional(),
       future: z.boolean().optional(),
       confirm_rule: z.boolean().optional(),
+      remember: termScope.merge(termFlags).optional(),
       matches: z
         .array(
           z.object({
@@ -1797,6 +1825,7 @@ function registerIpc() {
     const value = id
       .extend({
         ...llmRequest.shape,
+        template: z.enum(['general', 'weekly', 'interview', 'review']).optional(),
         language: z.enum(['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']).default('en'),
         consent: z.literal(true),
       })
@@ -1812,7 +1841,19 @@ function registerIpc() {
   handleIpc('summary.save', async (_, payload) =>
     worker.request(
       'summary.save',
-      id.extend({ markdown: z.string().max(5 * 1024 * 1024) }).parse(payload),
+      z
+        .union([
+          id.extend({
+            claim_id: z.string().uuid(),
+            text: z.string().trim().min(1).max(10000),
+            expected_text: z.string(),
+          }),
+          id.extend({
+            markdown: z.string().max(5 * 1024 * 1024),
+            expected_markdown: z.string().optional(),
+          }),
+        ])
+        .parse(payload),
     ),
   );
   handleIpc('translation.generate', async (_, payload) => {
@@ -1854,6 +1895,36 @@ function registerIpc() {
   handleIpc('ai-note.reconfigure', (_, payload) =>
     worker.request('ai-note.reconfigure', aiNoteReconfigure.parse(payload)),
   );
+  handleIpc('meeting.markdown-target', (_, payload) =>
+    markdownTarget(dataDir(), recordingsDir(), id.parse(payload).meeting_id),
+  );
+  handleIpc('meeting.sync-markdown', async (event, payload) => {
+    const { meeting_id, mode } = id
+      .extend({ mode: z.enum(['sync', 'choose', 'copy']) })
+      .parse(payload);
+    return syncMarkdown(
+      dataDir(),
+      recordingsDir(),
+      () => worker.request('meeting.get', { meeting_id }),
+      mode,
+      async (defaultPath) => {
+        const result = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), {
+          properties: ['openDirectory', 'createDirectory'],
+          defaultPath: defaultPath || undefined,
+        });
+        return result.canceled ? null : result.filePaths[0];
+      },
+    );
+  });
+  handleIpc('share.group-summary', async (_, payload) => {
+    const { meeting_id, address } = id
+      .extend({ address: z.string().trim().max(500) })
+      .parse(payload);
+    const meeting = await worker.request('meeting.get', { meeting_id });
+    const markdown = meeting.summary?.data?.markdown;
+    if (!markdown?.trim()) return 'empty';
+    return sendGroupSummary(address, meeting.title + '\n\n' + markdown);
+  });
   handleIpc('meeting.export', async (_, payload) => {
     const value = id
       .extend({

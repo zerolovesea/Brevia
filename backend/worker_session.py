@@ -9,6 +9,7 @@ import time
 from threading import BoundedSemaphore
 from array import array
 from concurrent.futures import ThreadPoolExecutor
+from datetime import date
 from difflib import SequenceMatcher
 from pathlib import Path
 from uuid import uuid4
@@ -98,7 +99,7 @@ class RecordingSessionMixin:
         missing = missing_models(self.models, required_models)
         if payload.get("require_models") and missing:
             raise ModelNotInstalled(missing)
-        meeting = self.store.create_meeting(payload)
+        meeting = self.store.create_meeting({**payload, "meeting_date": date.today().isoformat()})
         self._prepare_active(meeting, audio_tracks=payload.get("audio_tracks"))
         self.emit("meeting.started", {"meeting_id": self.active, "meeting": meeting})
         return meeting
@@ -263,7 +264,10 @@ class RecordingSessionMixin:
         self.live_postprocessing = None
         try:
             self.asr = RefinedASR(
-                self.models, meeting["refined_model_id"], language=meeting["language"]
+                self.models,
+                meeting["refined_model_id"],
+                language=meeting["language"],
+                **self.store.asr_term_options(meeting),
             )
             # 连续语音硬上限取「语言配置」与识别模型容量（如 FunASR Nano ~22 s）的
             # 较小值：超过模型 KV 容量的长段会整段解码为空，单人播客场景会漏识别。
@@ -342,7 +346,12 @@ class RecordingSessionMixin:
         )
         asr, vad = self.asr, self.vad
         if changed_asr:
-            asr = RefinedASR(self.models, updated["refined_model_id"], language=updated["language"])
+            asr = RefinedASR(
+                self.models,
+                updated["refined_model_id"],
+                language=updated["language"],
+                **self.store.asr_term_options(previous),
+            )
             vad = SentenceVAD(
                 self.models,
                 updated["vad_model_id"],

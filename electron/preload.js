@@ -85,6 +85,8 @@ contextBridge.exposeInMainWorld('brevia', {
     restore: invoke('meeting.restore'),
     purge: invoke('meeting.purge'),
     refine: invoke('meeting.refine'),
+    markdownTarget: invoke('meeting.markdown-target'),
+    syncMarkdown: invoke('meeting.sync-markdown'),
     export: invoke('meeting.export'),
     exportMany: invoke('meeting.export-many'),
     exportBundle: invoke('meeting.export-bundle'),
@@ -92,6 +94,7 @@ contextBridge.exposeInMainWorld('brevia', {
     noteImage: { save: invoke('meeting.note-image.save') },
   },
   share: {
+    groupSummary: invoke('share.group-summary'),
     copyText: invoke('share.copy-text'),
     openExternal: invoke('share.open-external'),
     file: invoke('share.file'),
@@ -105,6 +108,8 @@ contextBridge.exposeInMainWorld('brevia', {
     update: invoke('workspace.update'),
     delete: invoke('workspace.delete'),
     assign: invoke('workspace.assign'),
+    terms: invoke('workspace.terms'),
+    saveTerm: invoke('workspace.term.save'),
   },
   speakerProfile: {
     list: invoke('speaker-profile.list'),

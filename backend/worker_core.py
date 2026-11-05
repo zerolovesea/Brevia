@@ -252,6 +252,8 @@ class WorkerCore:
                 "ai-note.request": self.ai_note_request,
                 "ai-note.dismiss": self.ai_note_dismiss,
                 "ai-note.reconfigure": self.ai_note_reconfigure,
+                "workspace.terms": lambda value: self.store.workspace_terms(value["workspace_id"]),
+                "workspace.term.save": self.store.write_workspace_term,
                 "workspace.list": lambda _: self.store.list_workspaces(),
                 "workspace.get": lambda value: self.store.get_workspace(value["workspace_id"]),
                 "workspace.create": lambda value: self.store.create_workspace(value),

@@ -10,13 +10,14 @@ from uuid import uuid4
 
 from .config import SETTINGS, validate_num_speakers
 from .markdown import normalize_summary_markdown
+from .meeting_evidence import confirmed_date, parse_claims, resolve_claims
 from .store_base import synchronized_storage_files, utc_now
 from .store_corrections import _correction_state, _current_segments
 from .transcript import latest_segments
 
 
 logger = logging.getLogger(__name__)
-EXAMPLES_SEED_KEY = "examples_seeded_v5"
+EXAMPLES_SEED_KEY = "examples_seeded_v6"
 
 # 说话人计数：聚类后（speaker_turns postprocess）优先用聚类结果，否则回退到字幕的 distinct speaker。
 _SPEAKER_COUNT_SQL = """
@@ -35,8 +36,8 @@ def _like_pattern(value):
     return "%" + value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
 
 
-def example_note(example):
-    """返回与界面语言一致的示例会议纪要。"""
+def _legacy_example_note(example):
+    """v5 原始示例正文，用来区分预置内容和用户改写的纪要。"""
     notes = {
         "zh": "## **会议摘要**\n\n会议确认了新用户引导的上线范围。设计已完成，研发将在周四交付测试版本；团队计划周五前完成内部验收，并于下周一开始小范围发布。\n\n## **核心结论**\n\n- 新用户引导按既定范围上线。\n- 周四交付测试版本，周五前完成内部验收。\n\n## **已确认决定**\n\n- 决定：下周一开始小范围发布。\n- 确认方：会议参与者。\n\n## **行动项**\n\n| **任务** | **负责人** | **截止时间** | **状态** |\n| -------- | ---------- | ------------ | -------- |\n| 交付测试版本 | 开发团队 | 周四 | 待开始 |\n| 完成内部验收 | 未明确 | 周五前 | 待开始 |",
         "en": "## **Meeting Summary**\n\nThe team confirmed the launch scope for the new-user onboarding flow. Design is complete, engineering will deliver a test build on Thursday, and a limited rollout will begin next Monday after internal acceptance.\n\n## **Key Conclusions**\n\n- The onboarding flow will launch within the agreed scope.\n- The test build is due Thursday and internal acceptance is due by Friday.\n\n## **Confirmed Decisions**\n\n- Decision: Begin a limited rollout next Monday.\n- Confirmed by: Meeting participants.\n\n## **Action Items**\n\n| **Task** | **Owner** | **Due date** | **Status** |\n| -------- | ---------- | ------------ | ---------- |\n| Deliver the test build | Engineering team | Thursday | Not started |\n| Complete internal acceptance | Not specified | By Friday | Not started |",
@@ -98,6 +99,7 @@ class MeetingStoreMixin:
             payload.get("workspace_id"),
             json.dumps(payload.get("tags", []), ensure_ascii=False),
             "recording",
+            confirmed_date(payload.get("meeting_date")),
             now,
             now,
         )
@@ -121,8 +123,8 @@ class MeetingStoreMixin:
                 db.execute(
                     """INSERT INTO meetings
                         (id,title,language,target_language,refined_model_id,
-                         speaker_segmentation_model_id,vad_model_id,num_speakers,workspace_id,tags,status,created_at,started_at)
-                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                         speaker_segmentation_model_id,vad_model_id,num_speakers,workspace_id,tags,status,meeting_date,created_at,started_at)
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                     values,
                 )
         except Exception:
@@ -174,40 +176,58 @@ class MeetingStoreMixin:
         q = (query or "").strip()
         if not q:
             return []
-        like = _like_pattern(q)
         with self.connect() as db:
+            aliases = {}
+            for term in db.execute(
+                "SELECT workspace_id,wrong,correct FROM workspace_terms "
+                "WHERE instr(lower(?),lower(correct)) OR instr(lower(?),lower(wrong))",
+                (q, q),
+            ):
+                # 逐个替换查询中的术语，保留其余上下文，也保留 LIKE 的字面通配符。
+                variants = aliases.setdefault(term["workspace_id"], set())
+                for source, target in (
+                    (term["correct"], term["wrong"]),
+                    (term["wrong"], term["correct"]),
+                ):
+                    if source.lower() in q.lower():
+                        variants.add(q.lower().replace(source.lower(), target.lower()))
+            patterns = [(None, _like_pattern(q))]
+            patterns.extend(
+                (workspace, _like_pattern(word))
+                for workspace, words in aliases.items()
+                for word in words
+            )
             rows = db.execute(
-                f"""SELECT m.*,
-                    {_SPEAKER_COUNT_SQL} AS speaker_count,
-                    {_HAS_SUMMARY_SQL} AS has_summary
-                    FROM meetings m
-                    WHERE m.deleted_at IS NULL AND (
-                        m.title LIKE ? ESCAPE '\\'
-                        OR m.tags LIKE ? ESCAPE '\\'
-                        OR m.id IN (SELECT meeting_id FROM segments WHERE text LIKE ? ESCAPE '\\')
-                        OR m.id IN (
-                            SELECT s.meeting_id FROM segments s
-                            JOIN speakers p ON p.meeting_id=s.meeting_id AND p.id=s.speaker
-                            WHERE p.name LIKE ? ESCAPE '\\'
-                        )
-                    )
-                    ORDER BY m.created_at DESC""",
-                (like, like, like, like),
+                f"""WITH terms AS (
+                    SELECT json_extract(value,'$[0]') workspace, json_extract(value,'$[1]') term FROM json_each(?)
+                ), hits AS (
+                    SELECT m.id FROM terms k JOIN meetings m
+                    ON (k.workspace IS NULL OR k.workspace=COALESCE(m.workspace_id,''))
+                    WHERE m.deleted_at IS NULL AND (m.title LIKE k.term ESCAPE '\\' OR m.tags LIKE k.term ESCAPE '\\')
+                    UNION
+                    SELECT s.meeting_id FROM segments s JOIN meetings m ON s.meeting_id=m.id
+                    JOIN terms k ON (k.workspace IS NULL OR k.workspace=COALESCE(m.workspace_id,''))
+                    LEFT JOIN speakers p ON p.meeting_id=s.meeting_id AND p.id=s.speaker
+                    WHERE m.deleted_at IS NULL AND (s.text LIKE k.term ESCAPE '\\' OR p.name LIKE k.term ESCAPE '\\')
+                )
+                SELECT m.*, {_SPEAKER_COUNT_SQL} AS speaker_count, {_HAS_SUMMARY_SQL} AS has_summary
+                FROM meetings m JOIN hits ON hits.id=m.id ORDER BY m.created_at DESC""",
+                (json.dumps(patterns),),
             ).fetchall()
             results = []
             for row in rows:
                 meeting = self._meeting(row)
+                variants = [q, *sorted(aliases.get(row["workspace_id"] or "", ()))]
                 meeting["snippets"] = [
                     dict(snippet)
                     for snippet in db.execute(
-                        """SELECT s.start_ms, s.end_ms,
-                                  COALESCE(p.name, s.speaker) AS speaker_name, s.text
-                           FROM segments s LEFT JOIN speakers p
-                           ON p.meeting_id=s.meeting_id AND p.id=s.speaker
-                           WHERE s.meeting_id=? AND (s.text LIKE ? ESCAPE '\\' OR COALESCE(p.name,'') LIKE ? ESCAPE '\\')
-                           ORDER BY s.start_ms LIMIT 3""",
-                        (row["id"], like, like),
-                    ).fetchall()
+                        """SELECT s.start_ms, s.end_ms, COALESCE(p.name,s.speaker) speaker_name,
+                                  s.text, k.value matched_term
+                           FROM segments s LEFT JOIN speakers p ON p.meeting_id=s.meeting_id AND p.id=s.speaker
+                           JOIN json_each(?) k ON (instr(lower(s.text),lower(k.value)) OR instr(lower(p.name),lower(k.value)))
+                           WHERE s.meeting_id=? GROUP BY s.id,s.version ORDER BY s.start_ms LIMIT 3""",
+                        (json.dumps(variants), row["id"]),
+                    )
                 ]
                 results.append(meeting)
         return results
@@ -221,16 +241,59 @@ class MeetingStoreMixin:
             本次是否执行了种子写入；同一版本重复调用返回 ``False``。
         """
         fixture_root = Path(__file__).with_name("fixtures")
-        examples = json.loads(Path(__file__).with_name("examples.json").read_text(encoding="utf-8"))
         with self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
             if db.execute("SELECT 1 FROM app_meta WHERE key=?", (EXAMPLES_SEED_KEY,)).fetchone():
                 return False
+            previous_seed = db.execute(
+                "SELECT 1 FROM app_meta WHERE key='examples_seeded_v5'"
+            ).fetchone()
+            examples = json.loads(
+                Path(__file__).with_name("examples.json").read_text(encoding="utf-8")
+            )
             now = utc_now()
             for example in examples:
                 if db.execute(
                     "SELECT 1 FROM app_meta WHERE key=?",
                     (f"example_deleted:{example['id']}",),
                 ).fetchone():
+                    continue
+                # 引用固定在随应用提供的录音上。旧示例的逐字稿可能已经被用户编辑。
+                sources = [
+                    {
+                        "id": f"example-{example['locale']}-{index}",
+                        "version": "postprocess",
+                        "track": "mic",
+                        "start_ms": start,
+                        "end_ms": end,
+                        "speaker_name": example["speakers"][speaker],
+                        "text": text,
+                    }
+                    for index, (start, end, speaker, text, _) in enumerate(example["segments"], 1)
+                ]
+                markdown, claims = parse_claims(
+                    f"# {example['title']}\n\n{example['review_markdown']}", sources, True
+                )
+                data = json.dumps({"markdown": markdown, "claims": claims}, ensure_ascii=False)
+                existing = db.execute(
+                    "SELECT is_example FROM meetings WHERE id=?", (example["id"],)
+                ).fetchone()
+                if existing:
+                    if existing["is_example"]:
+                        db.execute(
+                            """UPDATE summaries SET data=?
+                               WHERE meeting_id=? AND raw_response='example' AND data=?""",
+                            (
+                                data,
+                                example["id"],
+                                json.dumps(
+                                    {"markdown": _legacy_example_note(example)}, ensure_ascii=False
+                                ),
+                            ),
+                        )
+                    continue
+                # 旧版“清空所有会议”不会逐个写入 tombstone。已播种过的示例缺失时保留删除状态。
+                if previous_seed:
                     continue
                 meeting_dir = self.meetings_dir / example["id"]
                 (meeting_dir / "audio").mkdir(parents=True, exist_ok=True)
@@ -244,16 +307,11 @@ class MeetingStoreMixin:
                     {"meeting_id": example["id"], "closed": True, "tracks": {}},
                 )
                 db.execute(
-                    """INSERT OR IGNORE INTO meetings
+                    """INSERT INTO meetings
                         (id,title,language,target_language,refined_model_id,
                          tags,status,created_at,started_at,ended_at,duration_ms,
                          is_example,example_locale)
-                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
-                        ON CONFLICT(id) DO UPDATE SET
-                        title=excluded.title,language=excluded.language,
-                        target_language=excluded.target_language,
-                        tags=excluded.tags,status=excluded.status,duration_ms=excluded.duration_ms,
-                        is_example=1,example_locale=excluded.example_locale""",
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                     (
                         example["id"],
                         example["title"],
@@ -271,14 +329,12 @@ class MeetingStoreMixin:
                     ),
                 )
                 db.executemany(
-                    """INSERT INTO speakers(meeting_id,id,name,locked) VALUES(?,?,?,1)
-                           ON CONFLICT(meeting_id,id) DO UPDATE SET name=excluded.name""",
+                    """INSERT INTO speakers(meeting_id,id,name,locked) VALUES(?,?,?,1)""",
                     (
                         (example["id"], speaker_id, name)
                         for speaker_id, name in example["speakers"].items()
                     ),
                 )
-                db.execute("DELETE FROM segments WHERE meeting_id=?", (example["id"],))
                 db.executemany(
                     """INSERT INTO segments
                         (id,meeting_id,version,track,start_ms,end_ms,speaker,text,translation)
@@ -306,15 +362,8 @@ class MeetingStoreMixin:
                     ),
                 )
                 db.execute(
-                    """INSERT INTO summaries(meeting_id,data,raw_response,created_at) VALUES(?,?,?,?)
-                       ON CONFLICT(meeting_id) DO UPDATE SET
-                       data=excluded.data,raw_response=excluded.raw_response,created_at=excluded.created_at""",
-                    (
-                        example["id"],
-                        json.dumps({"markdown": example_note(example)}, ensure_ascii=False),
-                        "example",
-                        now,
-                    ),
+                    "INSERT INTO summaries(meeting_id,data,raw_response,created_at) VALUES(?,?,?,?)",
+                    (example["id"], data, "example", now),
                 )
             db.execute(
                 "INSERT INTO app_meta(key,value) VALUES(?,?)",
@@ -392,6 +441,13 @@ class MeetingStoreMixin:
                     )
                 ]
                 current = latest_segments(segments)
+            accepted_claims = [
+                json.loads(entry["data"])
+                for entry in db.execute(
+                    "SELECT data FROM ai_note_claims WHERE meeting_id=? AND accepted=1 ORDER BY rowid",
+                    (meeting_id,),
+                )
+            ]
             summary = db.execute(
                 "SELECT data,raw_response,created_at FROM summaries WHERE meeting_id=?",
                 (meeting_id,),
@@ -455,6 +511,9 @@ class MeetingStoreMixin:
             if summary
             else None
         )
+        result["accepted_claims"] = resolve_claims(
+            accepted_claims, current, result["notes"], accepted=True
+        )
         undo = correction.get("undo")
         current_texts = {segment["id"]: segment["text"] for segment in current}
         result["correction"] = {
@@ -479,6 +538,13 @@ class MeetingStoreMixin:
         summary_data = result["summary"].get("data") if result["summary"] else None
         if summary_data and isinstance(summary_data.get("markdown"), str):
             summary_data["markdown"] = normalize_summary_markdown(summary_data["markdown"])
+            if (
+                "basis_date" in summary_data
+                and summary_data["basis_date"] != result["meeting_date"]
+            ):
+                result["correction"]["summary_stale"] = True
+            if summary_data.get("claims"):
+                resolve_claims(summary_data["claims"], current, summary_data["markdown"])
         return result
 
     def update_meeting(self, meeting_id, updates):
@@ -491,6 +557,7 @@ class MeetingStoreMixin:
             "title",
             "tags",
             "archived_at",
+            "meeting_date",
             "refined_model_id",
             "language",
             "target_language",
@@ -505,9 +572,21 @@ class MeetingStoreMixin:
                 raise ValueError("Title cannot be empty")
         if "notes" in fields:
             fields["notes"] = str(fields["notes"] or "")[: 5 * 1024 * 1024]
+        if "meeting_date" in fields:
+            fields["meeting_date"] = confirmed_date(fields["meeting_date"])
         if "tags" in fields:
             fields["tags"] = json.dumps(fields["tags"], ensure_ascii=False)
         with self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            for claim_id in set(updates.get("accepted_suggestion_ids") or []):
+                if (
+                    "notes" not in fields
+                    or not db.execute(
+                        "UPDATE ai_note_claims SET accepted=1 WHERE id=? AND meeting_id=?",
+                        (claim_id, meeting_id),
+                    ).rowcount
+                ):
+                    raise ValueError("Suggestion no longer available")
             db.execute(
                 f"UPDATE meetings SET {','.join(f'{key}=?' for key in fields)} WHERE id=?",
                 [*fields.values(), meeting_id],

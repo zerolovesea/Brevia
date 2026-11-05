@@ -219,6 +219,8 @@ class ModelManager:
                 **model,
                 "status": "ready" if self.is_ready(model["id"]) else "not_installed",
                 "bundled": self.is_bundled(model["id"]),
+                "supports_hotwords": model["kind"] in ("qwen3", "funasr-nano")
+                or (model["kind"] == "whisper" and model.get("runtime") == "mlx-audio"),
                 "path": str(self.path(model["id"])) if self.is_ready(model["id"]) else None,
             }
             for model in self.catalog.values()
@@ -1306,7 +1308,7 @@ class RefinedASR:
             return MLXASR(manager, model_id, *args, **kwargs)
         return super().__new__(cls)
 
-    def __init__(self, manager, model_id, language=None, threads=None):
+    def __init__(self, manager, model_id, language=None, threads=None, hotwords=None):
         """加载 Qwen3-ASR 会后精修模型。
 
         Args:
@@ -1353,6 +1355,7 @@ class RefinedASR:
                 embedding=str(path / "embedding.int8.onnx"),
                 tokenizer=str(path / "Qwen3-0.6B"),
                 language=self._funasr_nano_language(language),
+                hotwords=",".join(hotwords or []),
                 **common,
             )
         elif model["kind"] == "whisper":
@@ -1383,6 +1386,7 @@ class RefinedASR:
                 decoder=str(path / "decoder.int8.onnx"),
                 tokenizer=str(path / "tokenizer"),
                 **common,
+                hotwords=",".join(hotwords or []),
                 max_total_len=1024,
                 max_new_tokens=512,
             )

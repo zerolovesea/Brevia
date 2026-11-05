@@ -288,13 +288,17 @@ async function settleCorrectionDraft() {
     const before =
       scope === 'notes'
         ? currentMeetingDetail.notes || ''
-        : currentMeetingDetail.summary?.data?.markdown || '';
+        : (d.summaryEditBase ?? currentMeetingDetail.summary?.data?.markdown ?? '');
     const choice = text !== before ? await chooseCorrectionDraft() : 'discard';
     if (choice === 'cancel') return false;
     if (choice === 'save') {
       if (scope === 'notes') await persistNotes(currentMeetingDetail.id, text);
       else
-        await window.brevia.summary.save({ meeting_id: currentMeetingDetail.id, markdown: text });
+        await window.brevia.summary.save({
+          meeting_id: currentMeetingDetail.id,
+          markdown: text,
+          expected_markdown: before,
+        });
     }
     d[`${scope}Editing`] = false;
     d[`${scope}SaveState`] = 'saved';
@@ -331,6 +335,140 @@ async function openLiveCorrection(row) {
   const latest = document.querySelector('#back-to-latest');
   if (latest) latest.hidden = false;
 }
+function suggestedTermPairs(meeting) {
+  const text = meeting.summary?.data?.markdown || '';
+  const segments = meeting.current_segments || meeting.segments || [];
+  const pairs = [];
+  const add = (wrong, correct) => {
+    if (!wrong || wrong === correct || pairs.some((pair) => pair.wrong === wrong)) return;
+    if (segments.some((segment) => segment.text.includes(wrong))) pairs.push({ wrong, correct });
+  };
+  for (const line of text.split('\n')) {
+    // 只取明确写出的纠错映射；普通因果箭头不能变成词典规则。
+    const entry = line
+      .replace(/^\s*[-*•]\s*/, '')
+      .replace(/[*`“”「」"]/g, '')
+      .trim();
+    const arrow = entry.match(
+      /^(?:(?:术语纠错|纠错|错写|correction)\s*[:：]\s*)?([^→:：，。；;]{1,80}?)\s*→\s*([^→:：，。；;]{1,80})$/i,
+    );
+    const inverse = entry.match(
+      /^([^（(]{1,80})[（(]\s*(?:误识为|错写为|misheard as)\s*[:：]?\s*([^）)]{1,80})[）)]$/i,
+    );
+    if (arrow) add(arrow[1].trim(), arrow[2].trim());
+    if (inverse) add(inverse[2].trim(), inverse[1].trim());
+    if (pairs.length === 8) break;
+  }
+  return pairs;
+}
+
+function termFlagsMarkup(post, hot, supported = true) {
+  return `<label><input type="checkbox" data-term-post ${post ? 'checked' : ''} />${t('转写后替换')}</label><label><input type="checkbox" data-term-hotword ${hot ? 'checked' : ''} ${supported ? '' : 'disabled'} />${t('识别热词')}${supported ? '' : ` · ${t('当前模型不支持')}`}</label>`;
+}
+
+async function openWorkspaceTerms(workspaceId, anchor) {
+  const rows = await window.brevia.workspace.terms({ workspace_id: workspaceId });
+  if (!anchor?.isConnected) return;
+  document.querySelector('.term-editor:popover-open')?.hidePopover();
+  const panel = document.createElement('section');
+  const e = escapeHtml;
+  panel.className = 'workspace-dialog workspace-create-popover term-editor';
+  panel.setAttribute('popover', 'auto');
+  panel.setAttribute('role', 'dialog');
+  panel.setAttribute('aria-label', t('工作区词典'));
+  panel.innerHTML = `<header class="ui-dialog-header"><div><h2>${t('工作区词典')}</h2><small>${e(getWorkspaceName(workspaceId))}</small></div><button class="modal-close" type="button" data-term-close aria-label="${t('关闭')}">${interfaceIcon('close')}</button></header>
+  <div class="term-list"></div><form class="term-form"><label>${t('识别错写')}<input name="wrong" required maxlength="80" autocomplete="off" /></label><label>${t('正确术语')}<input name="correct" required maxlength="80" autocomplete="off" /></label>
+  <div class="term-options"><span>${interfaceIcon('search')}${t('搜索别名')}</span>${termFlagsMarkup(false, false)}</div>
+  <div class="ui-dialog-actions"><button type="button" class="ui-button ui-button-danger" data-term-remove hidden>${t('删除')}</button><button type="button" class="text-button" data-term-reset hidden>${t('取消')}</button><button type="submit" class="modal-action">${t('保存')}</button></div></form>`;
+  const form = panel.querySelector('form');
+  const supported = modelCatalog
+    .filter((m) => m.supports_hotwords && !m.retired)
+    .map((m) => m.name);
+  panel.querySelector('[data-term-hotword]').parentElement.title =
+    `${t('识别热词')} · ${supported.join(' / ') || t('当前模型不支持')}`;
+  const list = panel.querySelector('.term-list');
+  const reposition = () => {
+    if (!anchor.isConnected) return panel.hidePopover();
+    positionFloating(panel, anchor, ['bottom-start', 'top-start', 'bottom-end']);
+  };
+  const renderRows = () => {
+    list.innerHTML = rows
+      .map(
+        (r, i) =>
+          `<button type="button" data-term-index="${i}"><span>${e(r.wrong)}</span><span>→</span><strong>${e(r.correct)}</strong>${interfaceIcon('edit')}</button>`,
+      )
+      .join('');
+    list.hidden = !rows.length;
+    reposition();
+  };
+  const edit = (row) => {
+    form.elements.wrong.readOnly = !!row;
+    form.elements.wrong.value = row?.wrong || '';
+    form.elements.correct.value = row?.correct || '';
+    form.querySelector('[data-term-post]').checked = !!row?.post_replace;
+    form.querySelector('[data-term-hotword]').checked = !!row?.hotword;
+    form.querySelector('[data-term-remove]').hidden = !row;
+    form.querySelector('[data-term-reset]').hidden = !row;
+    form.elements[row ? 'correct' : 'wrong'].focus();
+    reposition();
+  };
+  const save = async (remove) => {
+    if (form.inert) return;
+    form.inert = list.inert = true;
+    try {
+      const payload = { workspace_id: workspaceId, wrong: form.elements.wrong.value.trim() };
+      if (remove) payload.remove = true;
+      else
+        Object.assign(payload, {
+          correct: form.elements.correct.value.trim(),
+          post_replace: form.querySelector('[data-term-post]').checked,
+          hotword: form.querySelector('[data-term-hotword]').checked,
+        });
+      const next = await window.brevia.workspace.saveTerm(payload);
+      if (!panel.isConnected) return;
+      rows.splice(0, rows.length, ...next);
+      renderRows();
+      form.inert = false;
+      edit(null);
+    } catch (error) {
+      showToast(userFacingError(error.message), undefined, 'error');
+    } finally {
+      form.inert = list.inert = false;
+    }
+  };
+  panel.addEventListener('click', (event) => {
+    if (event.target.closest('[data-term-close]')) return panel.hidePopover();
+    const item = event.target.closest('[data-term-index]');
+    if (item) edit(rows[Number(item.dataset.termIndex)]);
+    if (event.target.closest('[data-term-reset]')) edit(null);
+    if (event.target.closest('[data-term-remove]')) {
+      openConfirmation(
+        t('删除'),
+        `${form.elements.wrong.value} → ${form.elements.correct.value} · ${t('移除后，此词条将不再生效。')}`,
+        () => save(true),
+        event.target.closest('button'),
+      );
+    }
+  });
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    void save(false);
+  });
+  panel.addEventListener('toggle', (event) => {
+    if (event.newState !== 'closed') return;
+    window.removeEventListener('resize', reposition);
+    const restore =
+      panel.contains(document.activeElement) || document.activeElement === document.body;
+    panel.remove();
+    if (restore) anchor.focus({ preventScroll: true });
+  });
+  document.body.append(panel);
+  panel.showPopover();
+  renderRows();
+  edit(null);
+  window.addEventListener('resize', reposition);
+}
+
 async function openCorrection(query = '', rules = false, scope = 'transcript') {
   const meetingId = correctionMeetingId();
   if (!meetingId || !(await settleCorrectionDraft())) return;
@@ -360,6 +498,7 @@ async function openCorrection(query = '', rules = false, scope = 'transcript') {
     latest: meeting,
     query,
     replacement: '',
+    termSuggestions: scope === 'transcript' ? suggestedTermPairs(meeting) : [],
     matches: correctionMatches(correctionSegments(meeting, scope), query),
     rules,
     saving: false,
@@ -376,7 +515,10 @@ async function openCorrection(query = '', rules = false, scope = 'transcript') {
     correctionPanelState.sourcePreview = { input, preview };
   }
   renderCorrectionPanel();
-  focusForKeyboard(correctionPanel.querySelector('input, button'));
+  focusForKeyboard(
+    correctionPanel.querySelector('[data-correction-find]') ||
+      correctionPanel.querySelector('button'),
+  );
   correctionContentObserver.disconnect();
   correctionContentObserver.observe(document.querySelector('.view.active'), {
     childList: true,
@@ -407,7 +549,15 @@ function renderCorrectionPanel() {
     state.scope === 'transcript' &&
     meetingActive &&
     breviaClient?.state.meeting?.id === state.meetingId;
-  correctionPanel.innerHTML = `<header><h2 id="correction-title">${t(state.rules ? '本场规则' : '查找与替换')}</h2><button class="icon-button" data-close-correction type="button" aria-label="${t('关闭')}">${interfaceIcon('close')}</button></header>${state.rules ? `<div class="correction-results">${state.latest.correction?.rules?.length ? state.latest.correction.rules.map((rule, index) => `<div class="correction-rule"><strong>${e(rule.find)} → ${e(rule.replacement)}</strong><span>${t(rule.enabled && live ? '已启用' : '已停用')}</span><button class="text-button" type="button" data-reuse-correction="${index}">${t('重新应用')}</button>${rule.enabled ? `<button class="text-button" type="button" data-disable-correction="${index}">${t('停用')}</button>` : ''}</div>`).join('') : `<p>${t('暂无本场规则')}</p>`}</div><footer><button class="secondary" data-close-correction type="button">${t('关闭')}</button></footer>` : `<div class="correction-fields"><label>${t('查找')}<input data-correction-find maxlength="4000" value="${e(state.query)}" autocomplete="off" /></label><label>${t('替换为')}<input data-correction-replacement maxlength="4000" value="${e(state.replacement)}" autocomplete="off" /></label></div><div class="correction-match-heading"><strong data-correction-count></strong><button class="text-button" data-correction-select-all type="button">${t('全选')}</button></div><div class="correction-pending" role="status" hidden></div><div class="correction-results" data-correction-results></div>${live ? `<label class="correction-future"><input type="checkbox" data-correction-future${state.future ? ' checked' : ''}/><span>${t('本场后续字幕也应用此规则')}<small>${t('仅对之后确认的新字幕生效')}</small></span></label>` : ''}<p class="correction-error" role="alert"></p><footer><button class="secondary" data-close-correction type="button">${t('取消')}</button><button class="modal-action" data-submit-correction type="button"></button></footer>`}`;
+  const supportsHotword = modelCatalog.some(
+    (model) => model.id === state.meeting.refined_model_id && model.supports_hotwords,
+  );
+  const choices = state.termSuggestions || [];
+  const suggestions = choices.length
+    ? `<details class="term-suggestions"><summary>${t('纪要中的纠错')} · ${choices.length}</summary>${choices.map((pair, i) => `<button type="button" data-term-suggestion="${i}">${e(pair.wrong)} → ${e(pair.correct)}</button>`).join('')}</details>`
+    : '';
+  const remember = `<div class="correction-term"><label><input type="checkbox" data-term-remember ${state.remember ? 'checked' : ''} />${t('记为工作区搜索别名')}</label><div class="term-options" ${state.remember ? '' : 'hidden'}>${termFlagsMarkup(state.postReplace, state.hotword, supportsHotword)}</div></div>`;
+  correctionPanel.innerHTML = `<header><h2 id="correction-title">${t(state.rules ? '本场规则' : '查找与替换')}</h2><button class="icon-button" data-close-correction type="button" aria-label="${t('关闭')}">${interfaceIcon('close')}</button></header>${state.rules ? `<div class="correction-results">${state.latest.correction?.rules?.length ? state.latest.correction.rules.map((rule, index) => `<div class="correction-rule"><strong>${e(rule.find)} → ${e(rule.replacement)}</strong><span>${t(rule.enabled && live ? '已启用' : '已停用')}</span><button class="text-button" type="button" data-reuse-correction="${index}">${t('重新应用')}</button>${rule.enabled ? `<button class="text-button" type="button" data-disable-correction="${index}">${t('停用')}</button>` : ''}</div>`).join('') : `<p>${t('暂无本场规则')}</p>`}</div><footer><button class="secondary" data-close-correction type="button">${t('关闭')}</button></footer>` : `<div class="correction-fields"><label>${t('查找')}<input data-correction-find maxlength="4000" value="${e(state.query)}" autocomplete="off" /></label><label>${t('替换为')}<input data-correction-replacement maxlength="4000" value="${e(state.replacement)}" autocomplete="off" /></label></div>${suggestions}<div class="correction-match-heading"><strong data-correction-count></strong><button class="text-button" data-correction-select-all type="button">${t('全选')}</button></div><div class="correction-pending" role="status" hidden></div><div class="correction-results" data-correction-results></div>${live ? `<label class="correction-future"><input type="checkbox" data-correction-future${state.future ? ' checked' : ''}/><span>${t('本场后续字幕也应用此规则')}<small>${t('仅对之后确认的新字幕生效')}</small></span></label>` : ''}${remember}<p class="correction-error" role="alert"></p><footer><button class="secondary" data-close-correction type="button">${t('取消')}</button><button class="modal-action" data-submit-correction type="button"></button></footer>`}`;
   if (!state.rules) renderCorrectionResults();
 }
 function renderCorrectionResults() {
@@ -465,6 +615,7 @@ function renderCorrectionResults() {
     !state.query.trim() ||
     !state.replacement.trim() ||
     state.query === state.replacement ||
+    (state.remember && Math.max(state.query.length, state.replacement.length) > 80) ||
     !selected.length ||
     overLimit;
   const error = correctionPanel.querySelector('.correction-error');
@@ -517,6 +668,12 @@ async function submitCorrection(action = 'replace', find, scope = 'transcript') 
       future: Boolean(state.future),
       matches: groups,
     });
+    if (state.remember)
+      payload.remember = {
+        workspace_id: state.meeting.workspace_id || '',
+        post_replace: !!state.postReplace,
+        hotword: !!state.hotword,
+      };
     if (state.scope !== 'transcript') {
       payload.document = {
         text: groups[0].text,
@@ -547,7 +704,8 @@ async function submitCorrection(action = 'replace', find, scope = 'transcript') 
     button.disabled = true;
   });
   if (state) state.saving = true;
-  correctionPanel.querySelectorAll('button, input').forEach((control) => {
+  const enabledControls = correctionPanel.querySelectorAll('button:enabled, input:enabled');
+  enabledControls.forEach((control) => {
     control.disabled = true;
   });
   const submit = correctionPanel.querySelector('[data-submit-correction]');
@@ -573,7 +731,7 @@ async function submitCorrection(action = 'replace', find, scope = 'transcript') 
   } catch (error) {
     if (state) {
       state.saving = false;
-      correctionPanel.querySelectorAll('button, input').forEach((control) => {
+      enabledControls.forEach((control) => {
         control.disabled = false;
       });
       const message = correctionPanel.querySelector('.correction-error');
@@ -600,7 +758,12 @@ correctionPanel.addEventListener('input', (event) => {
   } else if (event.target.matches('[data-correction-replacement]')) {
     state.confirmRule = false;
     state.replacement = event.target.value;
-  } else if (event.target.matches('[data-correction-future]')) state.future = event.target.checked;
+  } else if (event.target.matches('[data-term-remember]')) {
+    state.remember = event.target.checked;
+    correctionPanel.querySelector('.term-options').hidden = !state.remember;
+  } else if (event.target.matches('[data-term-post]')) state.postReplace = event.target.checked;
+  else if (event.target.matches('[data-term-hotword]')) state.hotword = event.target.checked;
+  else if (event.target.matches('[data-correction-future]')) state.future = event.target.checked;
   else if (event.target.matches('[data-correction-match]'))
     state.matches[Number(event.target.dataset.correctionMatch)].selected = event.target.checked;
   renderCorrectionResults();
@@ -609,6 +772,18 @@ correctionPanel.addEventListener('click', (event) => {
   const state = correctionPanelState;
   if (!state || state.saving) return;
   if (event.target.closest('[data-close-correction]')) closeCorrectionPanel();
+  const suggestion = event.target.closest('[data-term-suggestion]');
+  if (suggestion) {
+    const pair = state.termSuggestions[Number(suggestion.dataset.termSuggestion)];
+    state.query = pair.wrong;
+    state.replacement = pair.correct;
+    state.remember = false;
+    state.confirmRule = false;
+    state.meeting = state.latest;
+    state.matches = correctionMatches(correctionSegments(state.meeting, state.scope), state.query);
+    renderCorrectionPanel();
+    correctionPanel.querySelector('[data-correction-find]').focus();
+  }
   if (event.target.closest('[data-submit-correction]')) void submitCorrection();
   if (event.target.closest('[data-correction-select-all]')) {
     state.matches.forEach((match) => {
@@ -680,14 +855,6 @@ correctionPanel.addEventListener('click', (event) => {
 document.addEventListener(
   'click',
   (event) => {
-    const tab = event.target.closest('[data-detail-tab]');
-    if (tab && correctionPanelState && tab.dataset.detailTab !== correctionPanelState.scope) {
-      if (correctionPanelState.saving) {
-        event.stopImmediatePropagation();
-        return;
-      }
-      closeCorrectionPanel();
-    }
     const target = event.target.closest(
       '[data-open-correction], [data-correction-rules], [data-correction-undo], [data-live-correction-save], [data-live-correction-cancel], [data-live-correction-replace], [data-segment-tool="edit"], [data-correction-translate], [data-correction-summary], [data-context-correction]',
     );
@@ -720,8 +887,7 @@ document.addEventListener(
         return translateLatestTranscript(meeting.target_language, meeting);
       }
       if (target.matches('[data-correction-summary]')) {
-        detailActiveTab = 'summary';
-        renderMeetingDetail();
+        switchDetailDocument('summary');
         return;
       }
       return openCorrection(

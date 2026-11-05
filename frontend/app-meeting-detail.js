@@ -20,6 +20,7 @@ function renderSegmentData(segment, editable, speakerNames) {
           : [],
     },
     text: segment.text,
+    track: segment.track,
     version: segment.version,
     revision: segment.revision,
     userEdited: Boolean(segment.user_edited),
@@ -84,7 +85,9 @@ function applyBackendDetail(meeting) {
     uiData.detail.transcriptEditEntries = undefined;
     uiData.detail.transcriptErrors = {};
     uiData.detail.transcriptDraft = {};
-    detailActiveTab = 'notes';
+    detailActiveTab = meeting.summary?.data?.claims?.length ? 'summary' : 'notes';
+    uiData.detail.notebookDocument = detailActiveTab;
+    uiData.detail.summaryTemplate = meeting.summary?.data?.template || 'general';
     uiData.detail.transcriptVersion = 'refined';
     uiData.detail.transcriptSearch = '';
     uiData.detail.translationTarget = meeting.target_language || '';
@@ -97,13 +100,10 @@ function applyBackendDetail(meeting) {
     [];
   uiData.detail.hasOriginalTranscript = original.length > 0 || revision === null;
   if (!uiData.detail.hasOriginalTranscript) uiData.detail.transcriptVersion = 'refined';
-  uiData.detail.originalTranscript = (
-    original.length
-      ? original.sort((a, b) => a.start_ms - b.start_ms)
-      : revision === null
-        ? ordered
-        : []
-  ).map((segment) => renderSegmentData(segment, revision === null, speakerNames));
+  // 没有精修版本时只有当前稿；其中可能同时含有实时段落和人工修订段落。
+  uiData.detail.originalTranscript = (revision === null ? ordered : original).map((segment) =>
+    renderSegmentData(segment, revision === null, speakerNames),
+  );
   uiData.detail.transcript = ordered.map((segment) =>
     renderSegmentData(segment, true, speakerNames),
   );
@@ -150,11 +150,12 @@ function applyBackendDetail(meeting) {
   // 编辑中的笔记以本地草稿为准，不覆盖；非编辑状态同步服务器最新值。
   if (!sameDetail || !uiData.detail.notesEditing) uiData.detail.notes = meeting.notes || '';
   const summary = meeting.summary?.data;
+  uiData.detail.acceptedClaims = meeting.accepted_claims || [];
   const summaryBlocked = meetingActive;
   const summaryGenerating = summaryGeneratingMeetingId === meeting.id;
   uiData.detail.summary = summary?.markdown
     ? {
-        markdown: summary.markdown,
+        ...summary,
         hasFull: true,
         blocked: summaryBlocked,
         generating: summaryGenerating,
@@ -172,19 +173,19 @@ function applyBackendDetail(meeting) {
   heading.textContent = meeting.title;
   heading.title = meeting.title;
   document.querySelector('#detail-view > .back').title = t('返回会议库');
-  const metaParts = [];
-  if (meeting.created_at) {
-    metaParts.push(
-      new Date(meeting.created_at).toLocaleDateString(BreviaI18n.localeTag(locale), {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-      }),
-    );
-  }
-  metaParts.push(`${Math.max(1, Math.round((meeting.duration_ms || 0) / 60000))} ${t('分钟')}`);
+  const date = meeting.meeting_date || (!('meeting_date' in meeting) && meeting.created_at);
+  const dateLabel = date
+    ? new Date(meeting.meeting_date ? date + 'T12:00:00' : date).toLocaleDateString(
+        BreviaI18n.localeTag(locale),
+        { year: 'numeric', month: '2-digit', day: '2-digit' },
+      )
+    : t('确认会议日期');
+  const dateField =
+    'meeting_date' in meeting
+      ? `<label class="review-date" title="${escapeHtml(t('确认会议日期'))}">${escapeHtml(dateLabel)}<input type="date" data-review-date value="${escapeHtml(meeting.meeting_date || '')}" aria-label="${escapeHtml(t('确认会议日期'))}" /></label>`
+      : escapeHtml(dateLabel);
   document.querySelector('#detail-meta').innerHTML =
-    `${metaParts.map((part, index) => `<span>${index === 1 ? interfaceIcon('clock') : ''}${escapeHtml(part)}</span>`).join('')}<span>${interfaceIcon('folder')}${escapeHtml(getWorkspaceName(meeting.workspace_id || ''))}</span>`;
+    `<span>${dateField}</span><span>${interfaceIcon('clock')}${Math.max(1, Math.round((meeting.duration_ms || 0) / 60000))} ${escapeHtml(t('分钟'))}</span><span>${interfaceIcon('folder')}${escapeHtml(getWorkspaceName(meeting.workspace_id || ''))}</span>`;
   progress.max = Math.max(1, Math.ceil(meeting.duration_ms / 1000));
   if (!sameMeeting) {
     followPlaybackTranscript = true;

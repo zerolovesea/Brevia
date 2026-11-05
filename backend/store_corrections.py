@@ -5,6 +5,8 @@ import re
 
 from .transcript import latest_segments
 from .markdown import normalize_summary_markdown
+from .meeting_evidence import align_replacement
+from .store_terms import save_term, workspace_replacements
 from .worker_common import UserFacingError
 
 
@@ -13,7 +15,7 @@ CONFLICT = "部分内容已变化，请更新预览"
 
 def _editable_meeting(db, meeting_id, scope="transcript"):
     meeting = db.execute(
-        "SELECT status,deleted_at FROM meetings WHERE id=?", (meeting_id,)
+        "SELECT status,deleted_at,workspace_id FROM meetings WHERE id=?", (meeting_id,)
     ).fetchone()
     if not meeting or meeting["deleted_at"]:
         raise ValueError("Meeting not found")
@@ -228,10 +230,12 @@ def _correct_document(db, meeting_id, state, scope, payload):
     if scope == "notes":
         db.execute("UPDATE meetings SET notes=? WHERE id=?", (updated, meeting_id))
     else:
+        if data.get("claims"):
+            align_replacement(data["claims"], text, updated)
         data["markdown"] = updated
         db.execute(
-            "UPDATE summaries SET data=?,raw_response=? WHERE meeting_id=?",
-            (json.dumps(data, ensure_ascii=False), updated, meeting_id),
+            "UPDATE summaries SET data=? WHERE meeting_id=?",
+            (json.dumps(data, ensure_ascii=False), meeting_id),
         )
     _save_correction_state(db, meeting_id, state)
 
@@ -246,6 +250,19 @@ class CorrectionStoreMixin:
                 raise ValueError("Unknown correction scope")
             meeting = _editable_meeting(db, meeting_id, scope)
             state = _correction_state(db, meeting_id)
+            if payload.get("remember") and payload["action"] == "replace":
+                if (meeting["workspace_id"] or "") != payload["remember"]["workspace_id"]:
+                    raise UserFacingError("error.transcript_conflict", CONFLICT)
+                save_term(
+                    db,
+                    meeting["workspace_id"],
+                    {
+                        **payload["remember"],
+                        "wrong": payload["find"],
+                        "correct": payload["replacement"],
+                    },
+                    remember=True,
+                )
             if scope != "transcript":
                 _correct_document(db, meeting_id, state, scope, payload)
                 return
@@ -348,27 +365,28 @@ class CorrectionStoreMixin:
     def _apply_transcript_rules(self, db, payload):
         """仅对首次落库的实时段落按原文匹配一次，不递归替换结果。"""
         meeting_id = payload["meeting_id"]
-        if (
-            payload.get("version", "live") != "live"
-            or db.execute(
-                "SELECT 1 FROM segments WHERE meeting_id=? AND id=?",
-                (meeting_id, payload["segment_id"]),
-            ).fetchone()
-        ):
+        if payload.get("version", "live") != "live" or payload.get("user_edited"):
+            return
+        prior = db.execute(
+            "SELECT text,asr_text FROM segments WHERE meeting_id=? AND id=? AND version='live'",
+            (meeting_id, payload["segment_id"]),
+        ).fetchone()
+        if prior:
+            # 同一识别事件重试时复用第一次校对的结果，不应用后来新增的规则。
+            if prior["asr_text"] and payload["text"] in (prior["asr_text"], prior["text"]):
+                payload.update(text=prior["text"], asr_text=prior["asr_text"], word_timestamps=None)
             return
         meeting = db.execute("SELECT status FROM meetings WHERE id=?", (meeting_id,)).fetchone()
         if not meeting or meeting["status"] not in ("recording", "paused", "interrupted"):
             return
         state = _correction_state(db, meeting_id)
-        rules = sorted(
-            (rule for rule in state["rules"] if rule["enabled"]),
-            key=lambda rule: -len(rule["find"]),
-        )
-        if not rules:
+        replacements = workspace_replacements(db, meeting_id)
+        local = {rule["find"]: rule["replacement"] for rule in state["rules"] if rule["enabled"]}
+        replacements.update(local)
+        if not replacements:
             return
         original = payload["text"]
-        pattern = "|".join(re.escape(rule["find"]) for rule in rules)
-        replacements = {rule["find"]: rule["replacement"] for rule in rules}
+        pattern = "|".join(re.escape(word) for word in sorted(replacements, key=len, reverse=True))
         text = re.sub(pattern, lambda match: replacements[match[0]], original)
         if text == original:
             return
@@ -380,7 +398,11 @@ class CorrectionStoreMixin:
             payload["correction_error_code"] = "error.transcript_rule_limit"
             return
         text = text.strip()
-        payload.update(text=text, user_edited=True)
+        payload.update(text=text, asr_text=original)
+        if any(match[0] in local for match in re.finditer(pattern, original)):
+            payload["user_edited"] = True
+        else:
+            payload["word_timestamps"] = None
         undo = state["undo"]
         tracked = [
             match

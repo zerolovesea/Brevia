@@ -8,6 +8,8 @@ import path from 'node:path';
 import { Writable } from 'node:stream';
 import { pathToFileURL } from 'node:url';
 
+await import('./test-markdown-workflow.mjs');
+
 const require = createRequire(import.meta.url);
 const {
   applyPendingMove,

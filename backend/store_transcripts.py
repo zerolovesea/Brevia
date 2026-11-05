@@ -2,8 +2,12 @@
 
 import json
 
+from .store_terms import post_replacer
+from .markdown import normalize_summary_markdown
 from .store_base import utc_now
+from .worker_common import UserFacingError
 from .store_corrections import (
+    CONFLICT,
     CorrectionStoreMixin,
     _check_correction_base,
     _clear_undo_entries,
@@ -33,6 +37,7 @@ def _segment_row(payload):
         else None,
         payload.get("translation"),
         int(payload.get("user_edited", False)),
+        payload.get("asr_text"),
     )
 
 
@@ -107,11 +112,11 @@ class TranscriptStoreMixin(CorrectionStoreMixin):
             self._apply_transcript_rules(db, payload)
             cursor = db.execute(
                 """INSERT INTO segments
-                    (id,meeting_id,revision,version,track,start_ms,end_ms,speaker,text,word_timestamps,translation,user_edited)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                    (id,meeting_id,revision,version,track,start_ms,end_ms,speaker,text,word_timestamps,translation,user_edited,asr_text)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
                     ON CONFLICT(meeting_id,id,version) DO UPDATE SET
                     revision=excluded.revision,end_ms=excluded.end_ms,speaker=excluded.speaker,
-                    text=excluded.text,word_timestamps=excluded.word_timestamps,translation=excluded.translation
+                    text=excluded.text,asr_text=excluded.asr_text,word_timestamps=excluded.word_timestamps,translation=excluded.translation
                     WHERE segments.user_edited=0""",
                 _segment_row(payload),
             )
@@ -144,6 +149,7 @@ class TranscriptStoreMixin(CorrectionStoreMixin):
             state["undo"] = None
             _clear_undo_entries(db, meeting_id, "transcript")
             _mark_correction_stale(db, meeting_id, state, _current_segments(db, meeting_id))
+            apply = post_replacer(db, meeting_id)
             segment_ids = set()
             normalized = []
             for item in segments:
@@ -164,14 +170,17 @@ class TranscriptStoreMixin(CorrectionStoreMixin):
                         "user_edited": 0,
                     }
                 )
+            if apply:
+                for item in normalized:
+                    apply(item)
             db.execute(
                 "DELETE FROM segments WHERE meeting_id=? AND version=?",
                 (meeting_id, version),
             )
             db.executemany(
                 """INSERT INTO segments
-                    (id,meeting_id,revision,version,track,start_ms,end_ms,speaker,text,word_timestamps,translation,user_edited)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    (id,meeting_id,revision,version,track,start_ms,end_ms,speaker,text,word_timestamps,translation,user_edited,asr_text)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 [_segment_row(item) for item in normalized],
             )
             if model_id is not None:
@@ -265,7 +274,60 @@ class TranscriptStoreMixin(CorrectionStoreMixin):
                 ),
             )
 
-    def save_summary(self, meeting_id, data, raw_response, *, expected_revision=None):
+    def record_ai_claim(self, meeting_id, claim):
+        with self.connect() as db:
+            db.execute(
+                """INSERT INTO ai_note_claims(meeting_id,id,data)
+                   SELECT ?,?,? WHERE EXISTS(SELECT 1 FROM meetings WHERE id=? AND deleted_at IS NULL)
+                   ON CONFLICT(meeting_id,id) DO UPDATE SET data=excluded.data WHERE accepted=0""",
+                (meeting_id, claim["id"], json.dumps(claim, ensure_ascii=False), meeting_id),
+            )
+
+    def edit_summary(self, meeting_id, payload):
+        """锁定同一份纪要后再编辑，保留生成时的原话与原结论。"""
+        with self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            _editable_meeting(db, meeting_id, "summary")
+            row = db.execute(
+                "SELECT data FROM summaries WHERE meeting_id=?", (meeting_id,)
+            ).fetchone()
+            data = json.loads(row["data"]) if row and row["data"] else {}
+            if (
+                "expected_markdown" in payload
+                and normalize_summary_markdown(data.get("markdown", ""))
+                != payload["expected_markdown"]
+            ):
+                raise UserFacingError("error.transcript_conflict", CONFLICT)
+            if "claim_id" in payload:
+                claim = next(
+                    (c for c in data.get("claims", []) if c["id"] == payload["claim_id"]), None
+                )
+                lines = data.get("markdown", "").splitlines()
+                if (
+                    not claim
+                    or claim["text"] != payload.get("expected_text")
+                    or lines.count(claim["line"]) != 1
+                ):
+                    raise ValueError("Conclusion changed; reopen it to edit")
+                text = str(payload.get("text") or "").strip()
+                if not text or len(text) > 10000 or len(text.splitlines()) != 1:
+                    raise ValueError("Expected a single conclusion")
+                index = lines.index(claim["line"])
+                lines[index] = claim["prefix"] + text + claim["suffix"]
+                claim.update(text=text, line=lines[index], edited=text != claim["original_text"])
+                data["markdown"] = "\n".join(lines)
+            else:
+                data["markdown"] = str(payload["markdown"])
+            db.execute(
+                """INSERT INTO summaries(meeting_id,data,raw_response,created_at) VALUES (?,?,?,?)
+                   ON CONFLICT(meeting_id) DO UPDATE SET data=excluded.data""",
+                (meeting_id, json.dumps(data, ensure_ascii=False), data["markdown"], utc_now()),
+            )
+        return self.get_meeting(meeting_id, compact=True)["summary"]["data"]
+
+    def save_summary(
+        self, meeting_id, data, raw_response, *, expected_revision=None, expected_document=None
+    ):
         """保存结构化纪要及供应商原始响应。
 
         解析失败时 ``data`` 可为空，原始响应仍会留下，便于排查而不必重发文本。
@@ -273,6 +335,20 @@ class TranscriptStoreMixin(CorrectionStoreMixin):
         """
         with self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
+            if expected_document is not None:
+                base = db.execute(
+                    """SELECT m.meeting_date, json_extract(s.data,'$.markdown') AS markdown
+                       FROM meetings m LEFT JOIN summaries s ON s.meeting_id=m.id
+                       WHERE m.id=? AND m.deleted_at IS NULL""",
+                    (meeting_id,),
+                ).fetchone()
+                if not base:
+                    return False
+                if (
+                    base["meeting_date"],
+                    normalize_summary_markdown(base["markdown"]),
+                ) != expected_document:
+                    raise UserFacingError("error.transcript_conflict", CONFLICT)
             state = _correction_state(db, meeting_id)
             state["summary_stale"] = (
                 expected_revision is not None and state.get("revision", 0) != expected_revision

@@ -1156,7 +1156,7 @@ function renderSidebarMeetingTree() {
       const expanded = !collapsedSidebarWorkspaces.has(workspace.id);
       const current = workspace.id === activeWorkspaceId;
       const contentId = `sidebar-workspace-meetings-${groupIndex}`;
-      return `<section class="sidebar-workspace" data-sidebar-workspace="${escapeHtml(workspace.id)}"><header class="sidebar-workspace-header"><button type="button" class="workspace-item sidebar-workspace-toggle${current ? ' active' : ''}" data-sidebar-workspace-toggle data-workspace-id="${escapeHtml(workspace.id)}" aria-expanded="${expanded}" aria-pressed="${current}" aria-controls="${contentId}" title="${escapeHtml(workspace.name)}">${interfaceIcon('chevron-right')}${interfaceIcon('folder')}<span class="workspace-label">${escapeHtml(workspace.name)}</span><span class="sidebar-workspace-count">${items.length}</span></button>${workspace.id ? `<button type="button" class="sidebar-workspace-edit" data-edit-sidebar-workspace="${escapeHtml(workspace.id)}" aria-label="${escapeHtml(t('编辑工作区'))} ${escapeHtml(workspace.name)}" title="${escapeHtml(t('编辑工作区'))}">${interfaceIcon('more')}</button>` : ''}</header><div class="sidebar-workspace-meetings" id="${contentId}"${expanded ? '' : ' hidden'}>${items.length ? items.map(({ meeting, index }) => renderNavigationMeeting(localizeMeeting(meeting), index)).join('') : `<p class="sidebar-workspace-empty">${escapeHtml(t('还没有会议记录'))}</p>`}</div></section>`;
+      return `<section class="sidebar-workspace" data-sidebar-workspace="${escapeHtml(workspace.id)}"><header class="sidebar-workspace-header"><button type="button" class="workspace-item sidebar-workspace-toggle${current ? ' active' : ''}" data-sidebar-workspace-toggle data-workspace-id="${escapeHtml(workspace.id)}" aria-expanded="${expanded}" aria-pressed="${current}" aria-controls="${contentId}" title="${escapeHtml(workspace.name)}">${interfaceIcon('chevron-right')}${interfaceIcon('folder')}<span class="workspace-label">${escapeHtml(workspace.name)}</span></button>${workspace.id ? `<button type="button" class="sidebar-workspace-edit" data-edit-sidebar-workspace="${escapeHtml(workspace.id)}" aria-label="${escapeHtml(t('编辑工作区'))} ${escapeHtml(workspace.name)}" title="${escapeHtml(t('编辑工作区'))}">${interfaceIcon('more')}</button>` : ''}</header><div class="sidebar-workspace-meetings" id="${contentId}"${expanded ? '' : ' hidden'}>${items.length ? items.map(({ meeting, index }) => renderNavigationMeeting(localizeMeeting(meeting), index)).join('') : `<p class="sidebar-workspace-empty">${escapeHtml(t('还没有会议记录'))}</p>`}</div></section>`;
     })
     .join('');
 }
@@ -1334,6 +1334,12 @@ function renderPrepareSelects(refinedModelOverride) {
   const extraSettings = prepareForm.querySelector('[data-prepare-extra-settings]');
   extraSettings.replaceChildren();
   if (prepareView.dataset.mode === 'import') {
+    prepareForm
+      .querySelector('.form-grid')
+      .insertAdjacentHTML(
+        'beforeend',
+        `<label>${escapeHtml(t('会议日期（可留空）'))}<input type="date" name="meeting-date" value="${escapeHtml(values['meeting-date'] || '')}" title="${escapeHtml(t('仅在日期确定时填写，用于换算录音中的相对日期。'))}" /></label>`,
+      );
     prepareForm.querySelectorAll('.form-grid label').forEach((label) => {
       if (
         label.querySelector(
@@ -1976,7 +1982,12 @@ function refreshLocalizedTaskCards() {
     );
   }
 }
-async function generateMeetingSummary(meetingId = breviaClient?.state.selectedMeetingId) {
+async function generateMeetingSummary(
+  meetingId = breviaClient?.state.selectedMeetingId,
+  template = currentMeetingDetail?.id === meetingId
+    ? uiData.detail.summaryTemplate || 'general'
+    : 'general',
+) {
   if (meetingActive) {
     showToast(t('实时会议中，结束后再生成会议纪要。'));
     return;
@@ -1989,7 +2000,7 @@ async function generateMeetingSummary(meetingId = breviaClient?.state.selectedMe
   if (!meetingId) return;
   if (!config || (config.provider === 'built-in' && !modelPaths.has(config.model))) {
     if (config?.provider === 'built-in')
-      queueModelTask('summary.generate', { meeting_id: meetingId }, [config.model]);
+      queueModelTask('summary.generate', { meeting_id: meetingId, template }, [config.model]);
     showSummaryConfigCard();
     return;
   }
@@ -1999,6 +2010,7 @@ async function generateMeetingSummary(meetingId = breviaClient?.state.selectedMe
   try {
     const summary = await window.brevia.summary.generate({
       meeting_id: meetingId,
+      template,
       provider: config.provider,
       ...(config.endpoint ? { endpoint: config.endpoint } : {}),
       model: config.model,
@@ -2017,7 +2029,7 @@ async function generateMeetingSummary(meetingId = breviaClient?.state.selectedMe
       return;
     }
     const meeting = await window.brevia.meeting.get({ meeting_id: meetingId });
-    meeting.summary = { data: summary };
+    meeting.summary ||= { data: summary };
     summaryGeneratingMeetingId = undefined;
     if (meetingId === breviaClient.state.selectedMeetingId) applyBackendDetail(meeting);
     dismissTaskCard(document.querySelector('#summary-config-required'));
@@ -2084,7 +2096,7 @@ async function resumeReadyModelTasks() {
       if (pending.task === 'summary.generate') {
         if (currentMeetingDetail?.id === pending.payload.meeting_id)
           uiData.detail.summary.waitingModels = false;
-        await generateMeetingSummary(pending.payload.meeting_id);
+        await generateMeetingSummary(pending.payload.meeting_id, pending.payload.template);
       } else if (pending.task === 'meeting.refine') {
         await requestRefinement(pending.payload);
       } else if (pending.task === 'meeting.reconfigure') {
@@ -2129,14 +2141,60 @@ function scheduleRequiredModelsCardRender() {
   });
 }
 let modelLibraryRenderFrame;
-/** 节流刷新模型库弹窗：进度事件每秒数十次，逐帧重建会打断点击（mousedown 与 mouseup 之间
- * 节点被销毁，click 永远命中不到）。@returns {void} */
-function scheduleModelLibraryRender() {
+const pendingModelProgress = new Set();
+function scheduleModelLibraryRender(modelId) {
+  if (activeModal !== 'models') return;
+  pendingModelProgress.add(modelId);
   if (modelLibraryRenderFrame) return;
   modelLibraryRenderFrame = requestAnimationFrame(() => {
     modelLibraryRenderFrame = undefined;
-    if (activeModal === 'models') renderModelLibrary();
+    for (const id of pendingModelProgress) refreshModelCardProgress(id);
+    pendingModelProgress.clear();
   });
+}
+
+/** 只有开始或结束传输才更换卡片操作。进度、暂停与继续保留原按钮和展开状态。 */
+function refreshModelCardProgress(modelId) {
+  if (activeModal !== 'models') return;
+  const row = settingsModal.querySelector(`[data-model-card="${CSS.escape(modelId)}"]`);
+  if (!row) return;
+  const progress = modelDownloads.get(modelId);
+  if (row.querySelector('.model-transfer') && progress && !progress.cancelled && !progress.error)
+    updateModelTransfer(row, progress);
+  else renderModelLibrary();
+}
+
+function updateModelTransfer(row, progress) {
+  const transfer = row.querySelector('.model-transfer');
+  const bar = transfer.querySelector('progress');
+  const percent = progress.total
+    ? Math.min(100, Math.round((100 * progress.received) / progress.total))
+    : undefined;
+  if (percent === undefined) bar.removeAttribute('value');
+  else bar.value = percent;
+  transfer.querySelector('[data-transfer-quantity]').textContent =
+    percent === undefined
+      ? ''
+      : `${formatBytes(progress.received)} / ${formatBytes(progress.total)} · ${percent}%`;
+
+  const state = progress.cancelling ? 'cancelling' : progress.paused ? 'paused' : 'downloading';
+  if (transfer.dataset.state === state) return;
+  transfer.dataset.state = state;
+  const label =
+    state === 'downloading'
+      ? (modelLabels[locale] || modelLabels.en).downloading
+      : t(state === 'paused' ? '暂停' : '正在取消');
+  bar.setAttribute('aria-label', label);
+  transfer.querySelector('[data-transfer-state]').textContent = label;
+  const pause = row.querySelector('[data-pause-required]');
+  const cancel = row.querySelector('[data-cancel-required]');
+  pause.disabled = cancel.disabled = state === 'cancelling';
+  pause.title =
+    t(progress.paused ? '继续' : '暂停') +
+    ' · ' +
+    row.querySelector('.model-library-headline').textContent;
+  pause.setAttribute('aria-label', pause.title);
+  pause.innerHTML = interfaceIcon(progress.paused ? 'play' : 'pause');
 }
 let dismissedModelDownloadIds = [];
 function renderModelDownloadQueue() {
@@ -2229,6 +2287,22 @@ function renderRequiredModelsCard() {
     .forEach((id) => requiredModelIds.delete(id));
   renderModelDownloadQueue();
 }
+async function cancelModelDownload(modelId) {
+  const progress = modelDownloads.get(modelId);
+  if (!progress || progress.cancelling) return;
+  modelDownloads.set(modelId, { ...progress, cancelling: true });
+  renderRequiredModelsCard();
+  refreshModelCardProgress(modelId);
+  try {
+    await window.brevia?.models.cancel({ model_id: modelId });
+  } catch (error) {
+    const pending = modelDownloads.get(modelId);
+    if (pending?.cancelling) modelDownloads.set(modelId, { ...pending, cancelling: false });
+    renderRequiredModelsCard();
+    refreshModelCardProgress(modelId);
+    showToast(error.message, undefined, 'error');
+  }
+}
 async function downloadRequiredModel(modelId) {
   dismissedModelDownloadIds = [];
   if (modelPaths.has(modelId)) {
@@ -2250,11 +2324,13 @@ async function downloadRequiredModel(modelId) {
   )
     modelDownloads.set(modelId, { received: 0, total: 0 });
   renderRequiredModelsCard();
+  refreshModelCardProgress(modelId);
   try {
     await window.brevia?.models.download(modelDownloadPayload(modelId));
   } catch (error) {
     modelDownloads.set(modelId, { error: error.message });
     renderRequiredModelsCard();
+    refreshModelCardProgress(modelId);
   }
 }
 function downloadRequiredModels(models) {
@@ -2350,18 +2426,7 @@ taskCards.addEventListener('click', (event) => {
     return;
   }
   const cancel = event.target.closest('[data-cancel-required]');
-  if (cancel) {
-    const modelId = cancel.dataset.cancelRequired;
-    modelDownloads.set(modelId, { ...modelDownloads.get(modelId), cancelling: true });
-    renderRequiredModelsCard();
-    void window.brevia?.models.cancel({ model_id: modelId }).catch((error) => {
-      if (modelDownloads.has(modelId))
-        modelDownloads.set(modelId, { ...modelDownloads.get(modelId), cancelling: false });
-      renderRequiredModelsCard();
-      showToast(error.message, undefined, 'error');
-    });
-    return;
-  }
+  if (cancel) void cancelModelDownload(cancel.dataset.cancelRequired);
 });
 taskCards.addEventListener('keydown', (event) => {
   const card = event.target.closest('.is-task-card-back');
@@ -2394,6 +2459,9 @@ async function selectImportAudio(file) {
   try {
     const selection = await window.brevia.meeting.selectAudio(file);
     if (selection) {
+      const date = prepareForm.querySelector('[name="meeting-date"]');
+      if (date && importAudioSelection && importAudioSelection.path !== selection.path)
+        date.value = '';
       importAudioSelection = selection;
       renderImportAudioSelection();
     }
@@ -2479,6 +2547,8 @@ prepareForm.addEventListener('click', (event) => {
     return;
   }
   if (event.target.closest('[data-clear-import-audio]')) {
+    const date = prepareForm.querySelector('[name="meeting-date"]');
+    if (date) date.value = '';
     importAudioSelection = null;
     renderImportAudioSelection();
     return;
@@ -2678,10 +2748,55 @@ function renderSummaryModelForm() {
     selectedBuiltinModel,
   );
 }
-/** 渲染纪要模型配置模态框。@returns {void} */
+/** 示例取自本地首启演示，两种功能可在同一段会议上对照。 */
+function renderAiSettingsExample(active) {
+  const live = active === 'ai-assist';
+  const mode = live ? aiAssistConfigDraft?.proactivity || 'assist' : 'summary';
+  const copy = aiOnboardingCopy[locale] || aiOnboardingCopy.en;
+  const liveSample = aiOnboardingDemoCopy[locale] || aiOnboardingDemoCopy.en;
+  const summary = aiOnboardingSummaryDemoCopy[locale] || aiOnboardingSummaryDemoCopy.en;
+  const title = t(live ? 'AI 笔记' : '会议纪要');
+  const state = mode === 'quiet' ? 'request' : mode === 'assist' ? 'suggested' : 'written';
+  const line = (time, quote) =>
+    `<div class="ai-example-turn"><time>${time}</time><p>${escapeHtml(quote)}</p></div>`;
+  const fact = (icon, label, content) =>
+    `<div class="ai-example-fact">${interfaceIcon(icon)}<div><small>${escapeHtml(label)}</small><p>${escapeHtml(content)}</p></div></div>`;
+  const takeNote = live
+    ? `<div class="ai-example-note-actions">
+    <button data-ai-example-action="request" type="button">${interfaceIcon('ai')}${escapeHtml(t('请求 AI 建议'))}</button>
+    <button data-ai-example-action="accept" type="button">${interfaceIcon('plus')}${escapeHtml(t('加入笔记'))}</button>
+    <span data-example-saved role="status">${interfaceIcon('check')}${escapeHtml(t('已加入笔记'))}</span></div>`
+    : '';
+  return `<section class="ai-settings-example" data-ai-example="${active}" data-stage="${state}" data-initial-stage="${state}" aria-label="${escapeHtml(title + ' · ' + t('演示'))}">
+    <header><h3>${escapeHtml(live ? copy.during : copy.after)}<span>·</span>${escapeHtml(t('演示'))}</h3><button data-ai-example-action="replay" type="button">${interfaceIcon('refresh')}${escapeHtml(copy.replay)}</button></header>
+    <div class="ai-example-scene">
+      <div class="ai-example-source"><h4>${interfaceIcon('waveform')}${escapeHtml(t(live ? '实时转写' : '逐字稿'))}</h4>
+      ${line('00:12', liveSample.transcriptText)}${!live ? line('00:24', liveSample.scenes.quiet[1][2].replace(/^[•*-]\s*/, '')) : ''}</div>
+      <span class="ai-example-flow" aria-hidden="true">${interfaceIcon('arrow-right')}</span>
+      <div class="ai-example-result"><h4>${interfaceIcon(live ? 'notebook' : 'document')}${escapeHtml(title)}</h4>
+      <div class="ai-example-output">${live ? `<p class="ai-example-note">${escapeHtml(liveSample.scenes.quiet[0][2].replace(/^[•*-]\s*/, ''))}</p>` : fact('check', t('决定'), summary.decision) + fact('checkbox', t('待办'), summary.actions[0])}</div>${takeNote}</div>
+    </div></section>`;
+}
+/** 重播与采纳仅作用于当前预览；换页后由 DOM 一起释放。 */
+function operateAiSettingsExample(button) {
+  const example = button.closest('[data-ai-example]');
+  const action = button.dataset.aiExampleAction;
+  if (action === 'replay') {
+    example.dataset.stage = example.dataset.initialStage;
+    const scene = example.querySelector('.ai-example-scene');
+    scene.replaceWith(scene.cloneNode(true));
+    return;
+  }
+  example.dataset.stage = action === 'request' ? 'suggested' : 'written';
+  const selector =
+    action === 'request'
+      ? '[data-ai-example-action="accept"]'
+      : '[data-ai-example-action="replay"]';
+  example.querySelector(selector).focus({ preventScroll: true });
+}
 function renderAiSettingsTabs(active) {
   return settingsModal.classList.contains('settings-page')
-    ? `<nav class="preferences-tabs settings-tabs" aria-label="${escapeHtml(t('AI 功能'))}"><button type="button" data-ai-settings-tab="summary-model" aria-selected="${active === 'summary-model'}">${t('会议纪要')}</button><button type="button" data-ai-settings-tab="ai-assist" aria-selected="${active === 'ai-assist'}">${t('AI 笔记')}</button></nav>`
+    ? `<nav class="preferences-tabs settings-tabs" aria-label="${escapeHtml(t('AI 功能'))}"><button type="button" data-ai-settings-tab="summary-model" aria-selected="${active === 'summary-model'}">${t('会议纪要')}</button><button type="button" data-ai-settings-tab="ai-assist" aria-selected="${active === 'ai-assist'}">${t('AI 笔记')}</button></nav>${renderAiSettingsExample(active)}`
     : '';
 }
 function renderAiServiceChoice(config) {
@@ -2880,6 +2995,7 @@ const shareSocialUrls = {
 // ===== 导出与分享（统一面板）=====
 // 导出内容清单：仅包含当前会议实际可用的内容。exportSelection 记录「已勾选内容 -> 所选格式」。
 let exportSelection = {};
+let exportMarkdownTarget = {};
 const exportContentFormats = {
   notes: ['md', 'pdf', 'docx', 'txt'],
   mynotes: ['md', 'pdf', 'docx', 'txt'],
@@ -3074,23 +3190,32 @@ function exportHubHtml() {
     </label>`;
     })
     .join('');
-  const channels = [];
-  if (window.brevia?.platform === 'darwin') channels.push({ id: 'system', kind: 'file' });
-  channels.push(
-    { id: 'copy', kind: 'text' },
-    { id: 'email', kind: 'text' },
-    { id: 'whatsapp', kind: 'text' },
-    { id: 'telegram', kind: 'text' },
-    { id: 'x', kind: 'text' },
-    { id: 'weibo', kind: 'text' },
-  );
-  const platforms = channels
-    .map(({ id, kind }) => {
+  const wf = copy.workflow;
+  const hasSummary = meta.some(({ content }) => content === 'notes');
+  const destination = exportMarkdownTarget.path || exportMarkdownTarget.directory || '';
+  const localNote =
+    hasSummary && window.brevia?.meeting?.syncMarkdown
+      ? `<section class="export-markdown">
+    ${interfaceIcon('notes')}<span><b>${escapeHtml(wf.local)}</b>${destination ? `<small title="${escapeHtml(destination)}">${escapeHtml(destination.split(/[\\/]/).pop())}</small>` : ''}</span>
+    <button type="button" class="secondary" data-sync-note="sync">${escapeHtml(exportMarkdownTarget.path ? wf.updateNote : wf.saveNote)}</button>
+    ${destination ? `<button class="export-icon-action" type="button" data-sync-note="choose" title="${escapeHtml(wf.folder)}" aria-label="${escapeHtml(wf.folder)}">${interfaceIcon('folder')}</button>` : ''}
+    <p role="status" data-sync-status hidden></p>
+  </section>`
+      : '';
+  const bot =
+    hasSummary && window.brevia?.share?.groupSummary
+      ? `<details class="export-group-bot"><summary>${interfaceIcon('chat')}${escapeHtml(wf.bot)}</summary>
+    <div><input type="password" data-group-address maxlength="500" autocomplete="off" aria-label="Webhook URL" placeholder="Webhook URL"><button type="button" class="secondary" data-group-send>${escapeHtml(wf.send)}</button></div>
+    <p role="status" data-group-status hidden></p></details>`
+      : '';
+  const platforms = ['email', 'whatsapp', 'telegram', 'x', 'weibo']
+    .map((id) => {
       const [label, desc] = copy.platform[id];
-      return `<button type="button" class="share-platform" data-share-target="${id}" data-share-kind="${kind}">${sharePlatformIcon(id)}<b>${escapeHtml(label)}</b><small>${escapeHtml(desc)}</small></button>`;
+      return `<button type="button" class="share-platform" data-share-target="${id}" data-share-kind="text" title="${escapeHtml(desc)}">${sharePlatformIcon(id)}<b>${escapeHtml(label)}</b></button>`;
     })
     .join('');
-  return `<div class="export-builder">
+  return `<div class="export-builder" data-export-meeting="${escapeHtml(currentMeetingDetail?.id)}">
+    ${localNote}
     <section class="export-builder-section">
       <h3 class="sr-only">${copy.what}</h3>
       <div class="export-content-list">${rows || `<p class="export-empty">${copy.empty}</p>`}</div>
@@ -3103,7 +3228,7 @@ function exportHubHtml() {
       </div>
     </section>
     <section class="export-builder-section">
-      <details class="export-more-share"><summary>${copy.shareTo}</summary><p class="share-hint">${copy.shareHint}</p><div class="share-platforms">${platforms}</div></details>
+      <details class="export-more-share"><summary title="${escapeHtml(copy.shareHint)}">${copy.shareTo}</summary><div class="share-platforms">${platforms}</div>${bot}</details>
     </section>
   </div>`;
 }
@@ -3283,6 +3408,16 @@ function renderModelLibrary() {
   const roleWords = (asrCopy.asrRole || {})[locale] || (asrCopy.asrRole || {}).en || {};
   const modelWords = (asrCopy.model || {})[locale] || (asrCopy.model || {}).en || {};
   const labels = modelLabels[locale] || modelLabels.en;
+  const languages = new Intl.DisplayNames([BreviaI18n.localeTag(locale)], { type: 'language' });
+  const catalog = visibleModels();
+  const stageIcons = {
+    refined: 'captions',
+    vad: 'waveform',
+    diarization: 'person',
+    'speaker-embedding': 'microphone',
+    summary: 'notes',
+    translation: 'translate',
+  };
 
   settingsModal.querySelector('.modal-title h2').textContent =
     (modalCopy[locale] || modalCopy.en).models?.title || t('模型库');
@@ -3291,7 +3426,7 @@ function renderModelLibrary() {
   );
 
   const rows = MODEL_LIBRARY_GROUPS.map(({ key, stage }) => {
-    const models = visibleModels().filter(
+    const models = catalog.filter(
       (model) =>
         modelLibraryGroup(model) === key &&
         (modelLibraryTab === 'installed'
@@ -3309,49 +3444,59 @@ function renderModelLibrary() {
         translation: '翻译',
       }[key] || key,
     );
-    const heading = `<header class="preferences-section-heading model-group-heading" title="${escapeHtml(groupHint)}"><h3>${escapeHtml((modelLibraryMetaCopy[locale] || modelLibraryMetaCopy.en)[stage] || key)} <small>${models.length}</small></h3></header>`;
+    const heading = `<header class="preferences-section-heading model-group-heading" title="${escapeHtml(groupHint)}"><h3>${escapeHtml((modelLibraryMetaCopy[locale] || modelLibraryMetaCopy.en)[stage] || key)}</h3></header>`;
     return (
       `<section class="preferences-model-group">${heading}<div class="preferences-model-rows">` +
       models
         .map((model) => {
           const isInstalled = modelPaths.has(model.id);
           const readOnly = Boolean(model.bundled);
-          const progress = modelDownloads.get(model.id);
-          const ratio = progress?.total ? Math.min(1, progress.received / progress.total) : 0;
-          // 已取消是终结状态：不禁用按钮，否则重新下载将不可能。
+          const progress = readOnly || isInstalled ? undefined : modelDownloads.get(model.id);
           const inFlight = progress && !progress.error && !progress.cancelled;
-          const progressHtml = progress?.error
-            ? `<span class="model-download-progress">${escapeHtml(progress.error)}</span>`
-            : inFlight
-              ? `<span class="model-download-progress">${formatBytes(progress.received)} / ${formatBytes(progress.total)} · ${Math.round(ratio * 100)}%<span class="processing-bar" role="progressbar" aria-label="${escapeHtml(t('下载'))}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(ratio * 100)}"><i style="transform:scaleX(${ratio})"></i></span></span>`
-              : '';
-          const words4 = modelWords[model.id] || {};
-          const role = roleWords[model.asr_role];
-          // 评级刻度统一走 renderModelLibraryRatings：它读 modelLibraryMetaCopy，与 AI 模型
-          // 选择器同源；这里再内联一份会读到 asrCopy.tiers，同一模型在两个界面显示不同档位词。
-          const ratings = renderModelLibraryRatings(model);
-          const description = words4.tagline || modelLibraryDescription(model, '');
-          const actions = readOnly
-            ? `<span class="model-actions"><span class="model-library-readonly">${t('随应用安装')}</span><small>${t('必需')}</small></span>`
-            : `<span class="model-actions">` +
-              (isInstalled
-                ? `<button class="secondary" data-open-model-folder="${escapeHtml(model.id)}" type="button">${t('从文件夹打开')}</button>`
-                : '') +
-              `<button class="modal-action${isInstalled ? ' modal-danger' : ''}" ` +
-              (isInstalled
-                ? `data-delete-model="${escapeHtml(model.id)}"`
-                : `data-download-model="${escapeHtml(model.id)}"`) +
-              ` type="button"${inFlight ? ' disabled' : ''}>` +
-              `${isInstalled ? labels.remove : progress?.error ? t('重试') : inFlight ? labels.downloading : labels.download}</button>${inFlight ? `<button class="secondary" data-pause-required="${escapeHtml(model.id)}" type="button">${t(progress.paused ? '继续' : '暂停')}</button>` : ''}</span>`;
-          return (
-            `<article class="preferences-model-row"><div class="preferences-model-main"><span class="preferences-model-symbol">${interfaceIcon(key === 'summary' ? 'document' : key === 'translation' ? 'translate' : 'waveform')}</span><div class="model-library-content">` +
-            `<div class="model-library-name"><b class="model-library-headline">${escapeHtml(model.name)}</b></div>` +
-            progressHtml +
-            `<p class="model-library-details">${escapeHtml(modelSizeSummary(model))}${role ? ` · ${escapeHtml(role)}` : ''}</p>` +
-            ratings +
-            `<p class="model-library-description">${escapeHtml(description)}</p>` +
-            `</div></div><div class="preferences-model-actions">${actions}</div></article>`
-          );
+          const id = escapeHtml(model.id);
+          const languageNames = (model.languages || [])
+            .filter((code) => code !== 'all')
+            .map((code) => languages.of(code));
+          const language =
+            languageNames.length && languageNames.length <= 3
+              ? languageNames.join(' · ')
+              : roleWords[model.asr_role] || (key === 'translation' ? roleWords.multilingual : '');
+          const description = modelWords[model.id]?.tagline || modelLibraryDescription(model, '');
+          const meta = `<span class="model-library-details"><span title="${escapeHtml(modelSizeSummary(model))}">${formatBytes(model.size_bytes || 0)}</span>${language ? `<span title="${escapeHtml(languageNames.join(', ') || language)}">${escapeHtml(language)}</span>` : ''}</span>`;
+          const identity = `<span class="preferences-model-symbol">${interfaceIcon(stageIcons[key])}</span><span class="model-library-content"><b class="model-library-headline">${escapeHtml(model.name)}</b>${meta}</span>`;
+          const intro = description
+            ? `<details class="model-intro" data-modal-detail="model-${id}"><summary class="preferences-model-main" data-model-description="${id}">${identity}${interfaceIcon('chevron-down')}</summary><p class="model-library-description">${escapeHtml(description)}</p></details>`
+            : `<div class="preferences-model-main">${identity}</div>`;
+          const action = (attribute, icon, label) => {
+            const name = escapeHtml(label + ' · ' + model.name);
+            return `<button type="button" ${attribute}="${id}" aria-label="${name}" title="${name}">${interfaceIcon(icon)}</button>`;
+          };
+          let controls;
+          if (readOnly) {
+            controls = `<span class="model-library-readonly" title="${escapeHtml(t('必需'))}">${interfaceIcon('check')}${escapeHtml(t('随应用安装'))}</span>`;
+          } else if (isInstalled) {
+            controls =
+              action('data-open-model-folder', 'folder', t('从文件夹打开')) +
+              action('data-delete-model', 'trash', labels.remove);
+          } else if (inFlight) {
+            controls =
+              action('data-pause-required', 'pause', t('暂停')) +
+              action('data-cancel-required', 'close', t('取消'));
+          } else {
+            controls = action(
+              'data-download-model',
+              progress?.error ? 'refresh' : 'download',
+              progress?.error ? t('重试') : labels.download,
+            );
+          }
+          let status = '';
+          if (progress?.error) {
+            status = `<p class="model-transfer-error">${interfaceIcon('warning')}${escapeHtml(progress.error)}</p>`;
+          } else if (inFlight) {
+            status =
+              '<div class="model-transfer"><div><span data-transfer-state></span><span data-transfer-quantity></span></div><progress max="100"></progress></div>';
+          }
+          return `<article class="preferences-model-row" data-model-card="${id}">${intro}<footer class="model-card-footer">${renderModelLibraryRatings(model)}<div class="preferences-model-actions">${controls}</div></footer>${status}</article>`;
         })
         .join('') +
       '</div></section>'
@@ -3362,6 +3507,10 @@ function renderModelLibrary() {
     'models',
     `<div class="preferences-library-toolbar model-library-toolbar"><nav class="preferences-tabs settings-tabs" aria-label="${escapeHtml(t('模型库'))}"><button type="button" data-model-library-tab="installed" aria-selected="${modelLibraryTab === 'installed'}">${t('已安装')}</button><button type="button" data-model-library-tab="available" aria-selected="${modelLibraryTab === 'available'}">${t('可下载')}</button></nav>${chinaModelSourceToggle()}</div><div class="preferences-library model-library-list">${rows || `<p class="page-empty">${t('暂无内容')}</p>`}</div>`,
   );
+  for (const transfer of settingsModal.querySelectorAll('.model-transfer')) {
+    const row = transfer.closest('[data-model-card]');
+    updateModelTransfer(row, modelDownloads.get(row.dataset.modelCard));
+  }
 }
 
 /** 渲染“更新日志”弹窗：标题 + 按版本倒序的内容列表。@returns {void} */
@@ -3485,6 +3634,7 @@ function showSettingsModal(confirmationAnchor) {
         .querySelector('.modal-panel')
         .setAttribute('aria-labelledby', 'library-confirm-title');
     } else {
+      settingsModal.querySelector('.modal-panel').removeAttribute('aria-describedby');
       source?.setAttribute('aria-expanded', 'true');
       settingsModal.querySelector('.modal-title h2').id = 'export-popover-title';
       settingsModal
@@ -3526,7 +3676,7 @@ let modalReturnFocus;
 let modalRequestRevision = 0;
 let confirmationAction;
 let storageConfirmationPage;
-function openConfirmation(title, detail, action, anchor) {
+function openConfirmation(title, detail, action, anchor, subject) {
   modalRequestRevision += 1;
   clearTimeout(modalDismissTimer);
   closeMeetingMenus(true);
@@ -3560,8 +3710,22 @@ function openConfirmation(title, detail, action, anchor) {
   settingsModal.querySelector('.modal-title p').textContent = '';
   settingsModal.querySelector('.modal-body').innerHTML =
     `<div class="confirmation-actions">${interfaceIcon([t('删除工作区'), t('重新精修')].includes(title) ? 'warning' : 'trash')}<h2>${escapeHtml(title)}</h2><p>${escapeHtml(detail)}</p><button class="secondary" data-cancel-confirmation type="button">${t('取消')}</button><button class="modal-action modal-danger" data-confirm-action type="button">${escapeHtml(title === t('删除工作区') ? t('确认') : title)}</button></div>`;
-  if (libraryAnchor)
-    settingsModal.querySelector('.confirmation-actions h2').id = 'library-confirm-title';
+  if (libraryAnchor) {
+    const card = settingsModal.querySelector('.confirmation-actions');
+    const heading = card.querySelector('h2');
+    heading.id = 'library-confirm-title';
+    card.querySelector('p').id = 'library-confirm-detail';
+    if (subject) {
+      const name = document.createElement('strong');
+      name.className = 'confirmation-subject';
+      name.textContent = subject;
+      name.title = subject;
+      heading.append(name);
+    }
+    settingsModal
+      .querySelector('.modal-panel')
+      .setAttribute('aria-describedby', 'library-confirm-detail');
+  }
   showSettingsModal(libraryAnchor);
   if (storageConfirmationPage && anchor)
     positionFloating(settingsModal.querySelector('.modal-panel'), anchor, [
@@ -3581,6 +3745,15 @@ async function openModal(kind) {
   if (same) return;
   window.clearInterval(permissionPollTimer);
   clearTimeout(modalDismissTimer);
+  if (kind === 'export' || kind === 'share') {
+    const meeting_id = currentMeetingDetail?.id;
+    const target =
+      meeting_id && window.brevia?.meeting?.markdownTarget
+        ? await window.brevia.meeting.markdownTarget({ meeting_id }).catch(() => null)
+        : null;
+    if (revision !== modalRequestRevision || meeting_id !== currentMeetingDetail?.id) return;
+    exportMarkdownTarget = target || {};
+  }
   if (kind === 'advanced-settings' || kind === 'speaker-profiles') {
     try {
       const [settings, status] = await Promise.all([
@@ -4812,6 +4985,11 @@ settingsModal.addEventListener('click', async (event) => {
     await checkForUpdates();
     return;
   }
+  const exampleAction = event.target.closest('[data-ai-example-action]');
+  if (exampleAction) {
+    operateAiSettingsExample(exampleAction);
+    return;
+  }
   const aiTab = event.target.closest('[data-ai-settings-tab]');
   if (aiTab) {
     await openModal(aiTab.dataset.aiSettingsTab);
@@ -4828,6 +5006,11 @@ settingsModal.addEventListener('click', async (event) => {
   if (modelTab) {
     modelLibraryTab = modelTab.dataset.modelLibraryTab;
     renderModelLibrary();
+    return;
+  }
+  const cancelModel = event.target.closest('[data-cancel-required]');
+  if (cancelModel) {
+    await cancelModelDownload(cancelModel.dataset.cancelRequired);
     return;
   }
   const pauseModel = event.target.closest('[data-pause-required]');
@@ -4993,6 +5176,82 @@ settingsModal.addEventListener('click', async (event) => {
   if (event.target.closest('[data-regenerate-summary]')) {
     closeModal();
     void generateMeetingSummary();
+    return;
+  }
+  const sync = event.target.closest('[data-sync-note]');
+  if (sync) {
+    const section = sync.closest('.export-markdown');
+    const meeting_id = sync.closest('[data-export-meeting]').dataset.exportMeeting;
+    const wf = (exportHubCopy[locale] || exportHubCopy.en).workflow;
+    const buttons = section.querySelectorAll('button');
+    buttons.forEach((button) => {
+      button.disabled = true;
+    });
+    try {
+      const result = await window.brevia.meeting.syncMarkdown({
+        meeting_id,
+        mode: sync.dataset.syncNote,
+      });
+      if (
+        !result ||
+        !section.isConnected ||
+        settingsModal.hidden ||
+        currentMeetingDetail?.id !== meeting_id
+      )
+        return;
+      if (result.status === 'conflict') {
+        const status = section.querySelector('[data-sync-status]');
+        status.textContent = result.recoveryPath
+          ? wf.recovered.replace('{path}', () => result.recoveryPath)
+          : wf.conflict;
+        status.hidden = false;
+        const primary = section.querySelector('[data-sync-note]');
+        primary.dataset.syncNote = 'copy';
+        primary.textContent = wf.copyNote;
+      } else {
+        exportMarkdownTarget = result;
+        renderExportModal();
+        settingsModal.querySelector('[data-sync-note]')?.focus();
+        showToast(t('已保存'), undefined, 'success');
+      }
+    } catch (error) {
+      showToast(error.message, undefined, 'error');
+    } finally {
+      buttons.forEach((button) => {
+        button.disabled = false;
+      });
+    }
+    return;
+  }
+  const send = event.target.closest('[data-group-send]');
+  if (send) {
+    const group = send.closest('.export-group-bot');
+    const address = group.querySelector('[data-group-address]');
+    const status = group.querySelector('[data-group-status]');
+    const wf = (exportHubCopy[locale] || exportHubCopy.en).workflow;
+    const meeting_id = send.closest('[data-export-meeting]').dataset.exportMeeting;
+    send.disabled = true;
+    try {
+      const result = await window.brevia.share.groupSummary({
+        meeting_id,
+        address: address.value.trim(),
+      });
+      status.textContent =
+        result === 'sent'
+          ? wf.sent
+          : result === 'address'
+            ? wf.address
+            : result === 'size'
+              ? wf.size
+              : wf.failed;
+      if (result === 'sent') address.value = '';
+      if (result === 'address') address.focus();
+    } catch {
+      status.textContent = wf.failed;
+    } finally {
+      status.hidden = false;
+      send.disabled = false;
+    }
     return;
   }
   const exportSave = event.target.closest('[data-export-save]');
@@ -5339,6 +5598,8 @@ settingsModal.addEventListener('change', async (event) => {
   }
   if (event.target.matches('.ai-assist-level input[type=radio]')) {
     aiAssistConfigDraft.proactivity = event.target.value;
+    const example = settingsModal.querySelector('[data-ai-example="ai-assist"]');
+    if (example) example.outerHTML = renderAiSettingsExample('ai-assist');
     settingsModal
       .querySelectorAll('.ai-assist-level')
       .forEach((level) =>
@@ -6659,10 +6920,12 @@ async function submitMeeting(event) {
         window.brevia &&
         (await window.brevia.meeting.import({
           ...payload,
+          ...(form.get('meeting-date') ? { meeting_date: form.get('meeting-date') } : {}),
           path: importAudioSelection?.path || 'selected-by-electron',
         }));
       if (!meeting) return;
       breviaClient.state.selectedMeetingId = meeting.id;
+      prepareForm.querySelector('[name="meeting-date"]').value = '';
       importAudioSelection = null;
       renderImportAudioSelection();
       applyBackendDetail(meeting);
@@ -7112,7 +7375,13 @@ function resetAiNoteSuggestions() {
   latestAiSuggestion = null;
   hideAiSuggestion();
 }
+const pendingNoteSources = new Map();
 function appendAiSuggestion(suggestion) {
+  if (suggestion.source_tracked && suggestion.meeting_id && suggestion.id) {
+    if (!pendingNoteSources.has(suggestion.meeting_id))
+      pendingNoteSources.set(suggestion.meeting_id, new Set());
+    pendingNoteSources.get(suggestion.meeting_id).add(suggestion.id);
+  }
   liveNotesEditor.appendMarkdown(`${suggestion.type === 'topic' ? '##' : '-'} ${suggestion.text}`);
   scheduleNotesSave(
     liveNotesSaveTimer,
@@ -7263,8 +7532,7 @@ async function acceptAiSuggestion(text) {
 function convertTopicToHeading() {
   const suggestion = latestAiSuggestion;
   if (!suggestion || suggestion.type !== 'topic') return;
-  liveNotesEditor.appendMarkdown(`## ${suggestion.text}`);
-  hideAiSuggestion();
+  void acceptAiSuggestion(suggestion.text);
 }
 document.addEventListener('click', (event) => {
   const accept = event.target.closest('[data-ai-accept]');
@@ -7312,9 +7580,20 @@ function persistNotes(meetingId, notes) {
       showToast(t('笔记已达容量上限，超出部分未保存。'));
     }
   }
+  const sources = [...(pendingNoteSources.get(meetingId) || [])];
   notesSavePending = notesSavePending
     .catch(() => {})
-    .then(() => window.brevia.meeting.update({ meeting_id: meetingId, updates: { notes: text } }));
+    .then(async () => {
+      await window.brevia.meeting.update({
+        meeting_id: meetingId,
+        updates: { notes: text, ...(sources.length ? { accepted_suggestion_ids: sources } : {}) },
+      });
+      const pending = pendingNoteSources.get(meetingId);
+      if (pending) {
+        for (const id of sources) pending.delete(id);
+        if (!pending.size) pendingNoteSources.delete(meetingId);
+      }
+    });
   return notesSavePending;
 }
 /** 防抖保存实时笔记；会议与文本在输入时共同取快照。@param {{current: number|undefined}} timer 防抖计时器。@param {() => string} getNotes 取笔记文本。@param {() => string|undefined} getMeetingId 取会议 id。@returns {void} */
@@ -7569,7 +7848,7 @@ async function updateSearchPopup() {
         const duration = durationMs ? `${Math.round(durationMs / 60000)} ${t('分钟')}` : '';
         const snippet =
           meeting.snippets && meeting.snippets.length
-            ? `<p class="search-snippet"><b>${highlightSearchMatch(meeting.snippets[0].speaker_name, query)}</b><span>${highlightSearchMatch(meeting.snippets[0].text, query)}</span></p>`
+            ? `<p class="search-snippet"><b>${highlightSearchMatch(meeting.snippets[0].speaker_name, query)}</b><span>${highlightSearchMatch(meeting.snippets[0].text, meeting.snippets[0].matched_term || query)}</span></p>`
             : `<p class="search-snippet search-snippet-title"><span>${escapeHtml(t('标题匹配'))}</span></p>`;
         return `<button type="button" class="search-result" role="option" data-search-result="${escapeHtml(meeting.id)}"><strong>${highlightSearchMatch(meeting.title, query)}</strong><small>${escapeHtml([created, duration].filter(Boolean).join(' · '))}</small>${snippet}</button>`;
       })
@@ -8164,7 +8443,7 @@ meetingList.addEventListener('click', async (event) => {
     if (action.dataset.meetingAction === 'delete') {
       openConfirmation(
         t('删除'),
-        `「${meeting.title}」\n${meetingDeletionConsequence([meeting])}`,
+        meetingDeletionConsequence([meeting]),
         async () => {
           try {
             await mutateMeetings('delete', [meeting]);
@@ -8178,6 +8457,7 @@ meetingList.addEventListener('click', async (event) => {
           }
         },
         actions.querySelector('[data-meeting-menu]'),
+        meeting.title,
       );
       return;
     }
@@ -8193,7 +8473,7 @@ meetingList.addEventListener('click', async (event) => {
     if (action.dataset.meetingAction === 'purge') {
       openConfirmation(
         BreviaI18n.trashCopy(locale).purge,
-        `「${meeting.title}」\n${meetingDeletionConsequence([meeting], true)}`,
+        meetingDeletionConsequence([meeting], true),
         async () => {
           try {
             await mutateMeetings('purge', [meeting]);
@@ -8203,6 +8483,7 @@ meetingList.addEventListener('click', async (event) => {
           }
         },
         actions.querySelector('[data-meeting-menu]'),
+        meeting.title,
       );
       return;
     }
@@ -9885,9 +10166,27 @@ finalTranscript.addEventListener('click', async (event) => {
   }
   const tab = event.target.closest('[data-detail-tab]');
   if (!tab) return;
-  const target = tab.dataset.detailTab;
-  const previousTab = detailActiveTab;
-  if (target === previousTab) return;
+  switchDetailDocument(
+    tab.dataset.detailTab === 'notes'
+      ? uiData.detail.notebookDocument || 'notes'
+      : tab.dataset.detailTab,
+  );
+});
+finalTranscript.addEventListener('change', (event) => {
+  if (event.target.matches('[data-summary-template]'))
+    uiData.detail.summaryTemplate = event.target.value;
+  if (event.target.matches('[data-notebook-document]')) {
+    if (!switchDetailDocument(event.target.value)) event.target.value = detailActiveTab;
+    finalTranscript.querySelector('[data-notebook-document]')?.focus({ preventScroll: true });
+  }
+});
+function switchDetailDocument(target) {
+  if (correctionPanelState && correctionPanelState.scope !== target) {
+    if (correctionPanelState.saving) return false;
+    closeCorrectionPanel();
+  }
+  if (target !== 'transcript') uiData.detail.notebookDocument = target;
+  if (target === detailActiveTab) return true;
   detailActiveTab = target;
   setDetailLayoutMode(target === 'summary' ? 'summary' : 'transcript');
   // tabbar 的编辑动作跟随激活 tab（笔记 → 编辑笔记，字幕 → 逐句编辑字幕），
@@ -9905,8 +10204,11 @@ finalTranscript.addEventListener('click', async (event) => {
   syncDetailSummaryPanel();
   filterDetailTranscript();
   BreviaMotion.enter(finalTranscript.querySelector(`[data-detail-panel="${target}"]`), 'tab');
-  finalTranscript.querySelector(`[data-detail-tab="${target}"]`)?.focus({ preventScroll: true });
-});
+  finalTranscript
+    .querySelector(`[data-detail-tab="${target === 'summary' ? 'notes' : target}"]`)
+    ?.focus({ preventScroll: true });
+  return true;
+}
 function filterDetailTranscript() {
   const query = String(uiData.detail.transcriptSearch || '')
     .trim()
@@ -10448,7 +10750,7 @@ if (window.brevia) {
       total,
       paused: false,
     });
-    scheduleModelLibraryRender();
+    scheduleModelLibraryRender(model_id);
     refreshModelConfigModels();
     scheduleRequiredModelsCardRender();
   });
@@ -10488,7 +10790,8 @@ if (window.brevia) {
     } else if (status === 'failed' && modelDownloads.has(model_id))
       modelDownloads.set(model_id, { error });
     else if (status === 'not_installed') modelPaths.delete(model_id);
-    if (activeModal === 'models') renderModal('models');
+    if (status === 'paused' || status === 'downloading') refreshModelCardProgress(model_id);
+    else if (activeModal === 'models') renderModal('models');
     refreshModelConfigModels();
     renderRequiredModelsCard();
   });
@@ -10577,6 +10880,7 @@ if (window.brevia) {
       return;
     }
     if (event.target.closest('[data-open-summary-edit]')) {
+      uiData.detail.summaryEditBase = currentMeetingDetail?.summary?.data?.markdown || '';
       uiData.detail.summaryEditing = true;
       uiData.detail.summarySaveState = 'saved';
       renderMeetingDetail();
@@ -10605,12 +10909,16 @@ if (window.brevia) {
         .querySelectorAll('[data-cancel-inline-summary-edit], [data-save-inline-summary]')
         .forEach((button) => (button.disabled = true));
       void window.brevia.summary
-        .save({ meeting_id: meetingId, markdown })
-        .then(() => {
+        .save({ meeting_id: meetingId, markdown, expected_markdown: uiData.detail.summaryEditBase })
+        .then((saved) => {
           if (currentMeetingDetail?.id !== meetingId) return;
-          currentMeetingDetail.summary = { data: { markdown } };
+          const data = saved?.markdown
+            ? saved
+            : { ...currentMeetingDetail.summary?.data, markdown };
+          currentMeetingDetail.summary = { data };
+          uiData.detail.summaryEditBase = data.markdown;
           uiData.detail.summary = {
-            markdown,
+            ...data,
             hasFull: true,
             blocked: meetingActive,
             generating: false,
@@ -10885,6 +11193,7 @@ async function saveDesktopPreference(key, value) {
     status.hidden = false;
     status.textContent = t('正在保存…');
   }
+  const focusedToggle = document.activeElement?.dataset.desktopToggle === key;
   const controls = document.querySelectorAll('[data-desktop-settings] button:enabled');
   controls.forEach((button) => {
     button.disabled = true;
@@ -10902,6 +11211,10 @@ async function saveDesktopPreference(key, value) {
     controls.forEach((button) => {
       button.disabled = false;
     });
+    if (focusedToggle && document.activeElement === document.body) {
+      const toggle = document.querySelector(`[data-desktop-toggle="${CSS.escape(key)}"]`);
+      if (toggle?.checkVisibility()) toggle.focus({ preventScroll: true });
+    }
   }
 }
 document.addEventListener('click', (event) => {

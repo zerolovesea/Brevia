@@ -2,6 +2,7 @@
   {
     "id": "00000000-0000-4000-8000-000000000001",
     "locale": "zh",
+    "review_markdown": "## 小范围发布前，需要准备什么？\n\n- 设计稿已就绪，开发团队周四可以交付测试版本。 [[cause:S2]]\n- 团队计划周五前完成内部验收。 [[cause:S3]]\n\n## 发布决定\n\n- 下周一开始小范围发布。 [[decision:S3]]",
     "title": "示例 · 产品上线同步会",
     "category": "示例会议",
     "tags": ["产品", "上线"],
@@ -17,6 +18,7 @@
   {
     "id": "00000000-0000-4000-8000-000000000002",
     "locale": "en",
+    "review_markdown": "## What needs to be ready for the rollout?\n\n- The designs are ready, so engineering can deliver a test build on Thursday. [[cause:S2]]\n- The team plans to complete internal acceptance by Friday. [[cause:S3]]\n\n## Rollout decision\n\n- Begin a limited rollout next Monday. [[decision:S3]]",
     "title": "Example · Product Launch Sync",
     "category": "Example",
     "tags": ["Product", "Launch"],
@@ -32,6 +34,7 @@
   {
     "id": "00000000-0000-4000-8000-000000000003",
     "locale": "es",
+    "review_markdown": "## ¿Qué debe estar listo para el lanzamiento?\n\n- El diseño está listo y el equipo de ingeniería puede entregar una versión de prueba el jueves. [[cause:S2]]\n- El equipo prevé completar la validación interna antes del viernes. [[cause:S3]]\n\n## Decisión de lanzamiento\n\n- Iniciar un lanzamiento limitado el próximo lunes. [[decision:S3]]",
     "language": "en",
     "target_language": "es",
     "title": "Ejemplo · Reunión de lanzamiento",
@@ -49,6 +52,7 @@
   {
     "id": "00000000-0000-4000-8000-000000000004",
     "locale": "ja",
+    "review_markdown": "## 限定公開までに何を準備するか\n\n- デザインが完成し、開発チームは木曜日にテストビルドを提供できる。 [[cause:S2]]\n- 金曜日までに社内の受け入れ確認を終える予定。 [[cause:S3]]\n\n## 公開の決定\n\n- 翌週の月曜日に限定公開を開始する。 [[decision:S3]]",
     "language": "en",
     "target_language": "ja",
     "title": "例 · プロダクトローンチ同期会",
@@ -66,6 +70,7 @@
   {
     "id": "00000000-0000-4000-8000-000000000005",
     "locale": "ko",
+    "review_markdown": "## 제한 출시에 무엇이 필요한가?\n\n- 디자인이 준비되어 개발팀은 목요일에 테스트 빌드를 제공할 수 있다. [[cause:S2]]\n- 팀은 금요일까지 내부 승인을 마칠 예정이다. [[cause:S3]]\n\n## 출시 결정\n\n- 다음 주 월요일부터 제한 출시를 시작한다. [[decision:S3]]",
     "language": "en",
     "target_language": "ko",
     "title": "예시 · 제품 출시 동기화",
@@ -83,6 +88,7 @@
   {
     "id": "00000000-0000-4000-8000-000000000006",
     "locale": "fr",
+    "review_markdown": "## Que faut-il préparer pour le déploiement limité ?\n\n- La conception est prête et l’équipe technique peut livrer une version de test jeudi. [[cause:S2]]\n- L’équipe prévoit de terminer la validation interne d’ici vendredi. [[cause:S3]]\n\n## Décision de lancement\n\n- Commencer le déploiement limité lundi prochain. [[decision:S3]]",
     "language": "en",
     "target_language": "fr",
     "title": "Exemple · Synchronisation du lancement produit",
@@ -100,6 +106,7 @@
   {
     "id": "00000000-0000-4000-8000-000000000007",
     "locale": "de",
+    "review_markdown": "## Was muss für die begrenzte Einführung bereitstehen?\n\n- Das Design ist fertig. Das Entwicklungsteam kann am Donnerstag einen Test-Build liefern. [[cause:S2]]\n- Das Team plant, die interne Abnahme bis Freitag abzuschließen. [[cause:S3]]\n\n## Entscheidung zum Start\n\n- Die begrenzte Einführung beginnt nächsten Montag. [[decision:S3]]",
     "language": "en",
     "target_language": "de",
     "title": "Beispiel · Abstimmung zum Produktstart",
@@ -117,6 +124,7 @@
   {
     "id": "00000000-0000-4000-8000-000000000008",
     "locale": "ru",
+    "review_markdown": "## Что должно быть готово к ограниченному запуску?\n\n- Дизайн готов, и разработчики могут предоставить тестовую сборку в четверг. [[cause:S2]]\n- Команда планирует завершить внутреннюю приёмку к пятнице. [[cause:S3]]\n\n## Решение о запуске\n\n- Начать ограниченный запуск в следующий понедельник. [[decision:S3]]",
     "language": "en",
     "target_language": "ru",
     "title": "Пример · Синхронизация запуска продукта",

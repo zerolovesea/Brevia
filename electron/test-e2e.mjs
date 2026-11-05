@@ -99,6 +99,7 @@ const moduleProbes = [
   ['i18n-runtime.js', 't'],
   ['model-selection.js', 'window.BreviaModelSelection'],
   ['asr-copy.js', 'window.BreviaAsrCopy'],
+  ['meeting-evidence.js', 'transcriptEvidenceLinks'],
   ['ui-components.js', 'escapeHtml'],
   ['assets/vendor/gsap.min.js', 'window.gsap'],
   ['assets/vendor/CustomEase.min.js', 'window.CustomEase'],
@@ -323,6 +324,15 @@ try {
   await client.send('Runtime.enable');
   await client.send('Log.enable');
   await client.send('Page.enable');
+  await client.send('Page.addScriptToEvaluateOnNewDocument', {
+    source: `window.openReviewDocument = (scope) => {
+    document.querySelector('[data-detail-tab="' + (scope === 'transcript' ? 'transcript' : 'notes') + '"]').click();
+    if (scope !== 'transcript') {
+      const select = document.querySelector('[data-notebook-document]');
+      if (select.value !== scope) { select.value = scope; select.dispatchEvent(new Event('change', {bubbles: true})); }
+    }
+  }`,
+  });
   // 普通动画用例不继承 runner 的无障碍偏好；减少动态效果在下方单独验证。
   await client.send('Emulation.setEmulatedMedia', {
     features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }],
@@ -1665,18 +1675,25 @@ try {
         const toolbar = settingsModal.querySelector('.model-library-toolbar');
         if (parseFloat(getComputedStyle(toolbar).borderBottomWidth)) errors.push('model toolbar divider');
         for (const row of settingsModal.querySelectorAll('.preferences-model-row')) {
-          const description = row.querySelector('.model-library-description');
-          if (!description?.textContent || getComputedStyle(description).whiteSpace === 'nowrap' || description.scrollHeight > description.clientHeight + 1) errors.push('model introduction clipped');
-          const content = row.querySelector('.model-library-content').getBoundingClientRect();
-          const actions = row.querySelector('.model-actions').getBoundingClientRect();
+          const intro = row.querySelector('details.model-intro');
+          const description = intro?.querySelector('.model-library-description');
+          if (intro) {
+            const wasOpen = intro.open;
+            intro.open = false;
+            intro.querySelector('summary').click();
+            if (!intro.open || !description?.textContent.trim() || !description.checkVisibility() || description.scrollWidth > description.clientWidth + 1) errors.push(code + ': model introduction inaccessible');
+            intro.open = wasOpen;
+          }
+          const bounds = row.getBoundingClientRect();
+          const actions = row.querySelector('.preferences-model-actions').getBoundingClientRect();
+          for (const button of row.querySelectorAll('button')) {
+            const target = button.getBoundingClientRect();
+            if (!button.getAttribute('aria-label') || !button.title || target.width < 28 || target.height < 28 || target.right > bounds.right + 1) errors.push(code + ': model action inaccessible');
+          }
           for (const rating of row.querySelectorAll('.model-library-rating')) {
             const rect = rating.getBoundingClientRect();
-            if (rect.left < content.left - 1 || rect.right > content.right + 1 || rect.right > actions.left + 1) errors.push(code + ': rating overlaps actions');
-            for (const child of rating.children) {
-              const bounds = child.getBoundingClientRect();
-              if (bounds.left < rect.left - 1 || bounds.right > rect.right + 1 || child.scrollWidth > child.clientWidth + 1) errors.push(code + ': rating clipped');
-            }
-            if (Math.abs(rating.querySelector('.rating-scale').getBoundingClientRect().width - 56) > 1) errors.push(code + ': rating scale squeezed');
+            const scale = rating.querySelector('.rating-scale').getBoundingClientRect();
+            if (rect.left < bounds.left || rect.right > actions.left + 1 || scale.width < 12 || scale.width > rect.width + 1) errors.push(code + ': model rating clipped');
           }
         }
       }
@@ -1850,6 +1867,38 @@ try {
     mkdirSync(output, { recursive: true });
     writeFileSync(path.join(output, name + '.png'), Buffer.from(shot.data, 'base64'));
   };
+  // 全新数据目录的示例走实际会议入口，引用随应用提供，不依赖下载或推理。
+  await correctionEvaluate(`(async()=>{
+    closeModal();applyLanguage('zh');applyTheme('light');
+    const { meetings } = await window.brevia.initialize();
+    const sample = meetings.find(item => item.example_locale === 'zh');
+    if (!sample) throw Error('first-run example missing');
+    await showView('home');
+    currentMeetingDetail = null;
+    const row = document.querySelector('[data-open-recent="'+sample.id+'"]');
+    if (!row?.checkVisibility()) throw Error('first-run example missing from library');
+    row.click();
+    for(let i=0;i<80 && (currentMeetingDetail?.id!==sample.id || activeView!=='detail');i++) await new Promise(r=>setTimeout(r,25));
+    if (detailActiveTab !== 'summary') throw Error('example did not open its prepared review');
+    const branches = [...document.querySelectorAll('brevia-cause-tree .evidence-claim')];
+    if (branches.length !== 2 || !branches[0].checkVisibility()) throw Error('first-run tree missing');
+    branches[0].querySelector('summary').click();
+    if (!branches[0].querySelector('blockquote').textContent.includes('开发团队周四可以交付测试版本')) throw Error('first-run source mismatch');
+    const playback = branches[0].querySelector('[data-play-evidence]');
+    const playing = new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(Error('example WAV did not play')), 4000);
+      playerAudio.addEventListener('playing', () => {clearTimeout(timer);resolve()}, {once:true});
+    });
+    playback.click();
+    await playing;
+    if (Math.abs(playerAudio.currentTime - 5.016) > .2) throw Error('example quote did not seek to its audio');
+    playerAudio.pause();
+  })()`);
+  if (process.env.BREVIA_CORRECTION_CAPTURE_DIR)
+    await correctionEvaluate(`(async()=>{
+      for(let i=0;i<50 && document.querySelector('#toast.visible');i++) await new Promise(r=>setTimeout(r,100));
+    })()`);
+  await captureCorrection('first-run-example-tree');
   await correctionEvaluate(`(async()=>{
     closeModal();applyLanguage('zh');applyTheme('light');
     const initialized=await window.brevia.initialize();
@@ -1882,6 +1931,11 @@ try {
     const checkbox=correctionPanel.querySelector('[data-correction-match]');checkbox.checked=false;checkbox.dispatchEvent(new Event('input',{bubbles:true}));
     if(!correctionPanel.querySelector('[data-submit-correction]').textContent.includes('2'))throw Error('selection count did not update');
     correctionPanel.querySelector('[data-correction-select-all]').click();
+    const remember=correctionPanel.querySelector('[data-term-remember]');
+    if(!remember||remember.checked)throw Error('new terms must be opt-in');
+    remember.click();
+    if(!correctionPanel.querySelector('.term-options').checkVisibility()||correctionPanel.querySelector('[data-term-post]').checked||correctionPanel.querySelector('[data-term-hotword]').checked)throw Error('separate vocabulary permissions missing');
+
     const panel=correctionPanel.getBoundingClientRect(),controls=document.querySelector('.live-control-bar').getBoundingClientRect();
     if(panel.bottom>controls.top+1||panel.right>innerWidth+1||panel.left<0)throw Error('replacement panel overlaps recording controls');
   })()`);
@@ -1891,6 +1945,9 @@ try {
     if(!correctionPanel.hidden)throw Error('replace did not save');
     const meeting=await window.brevia.meeting.get({meeting_id:correctionTestBackup.meeting.id});
     if(!meeting.correction.undo_count||meeting.segments.filter(s=>s.text.includes('Brevia')).length<3)throw Error('replacement did not persist');
+    const vocabulary=await window.brevia.workspace.terms({workspace_id:meeting.workspace_id||''});
+    if(!vocabulary.some(t=>t.wrong==='北威亚'&&t.correct==='Brevia'&&!t.post_replace&&!t.hotword))throw Error('search alias was not remembered independently');
+
     meetingActive=false;breviaClient.state.meeting=null;miniMeeting.hidden=true;clearInterval(timer);
     applyBackendDetail(meeting);detailActiveTab='transcript';uiData.detail.refinedMode='timestamps';renderMeetingDetail();await showView('detail');
     if(!document.querySelector('[data-correction-undo]')||document.querySelector('[data-segment-text]'))throw Error('saved view must have undo and plain text');
@@ -1998,6 +2055,37 @@ try {
     closeCorrectionPanel();
   })()`);
 
+  // 使用当前会议的真实段落和播放器，测试引用、反向链接和精修后失配的分支。
+  await correctionEvaluate(`(async () => {
+    const data = await window.brevia.initialize();
+    const meeting = await window.brevia.meeting.get({meeting_id:data.meetings[0].id});
+    const rows = meeting.current_segments || meeting.segments;
+    const segment = rows.find(row => row.start_ms > 0) || rows[0];
+    const source = {...segment,segment_id:segment.id,current_segment_id:segment.id,seekable:true};
+    const claim = {id:'check-claim',kind:'decision',section:'',text:'开发团队周四交付测试版本',original_text:'周四可以交付测试版本',edited:true,sources:[source],source_chars:source.text.length,status:'supported'};
+    const cause = {...claim,id:'check-cause',kind:'cause',section:'测试版交付条件',text:'设计稿已经完成',edited:false};
+    const orphan = {...cause,id:'check-orphan',text:'旧版验收口径需要复核',status:'changed',sources:[{...source,text:'这版验收先沿用原来的测试范围。',current_segment_id:null}]};
+    applyBackendDetail({...meeting,summary:{data:{markdown:'# 试点评审',claims:[claim,cause,orphan]}}});
+    await showView('detail');
+    openReviewDocument('summary');
+    const find = key => document.querySelector('[data-evidence-id="'+key+'"]');
+    find(claim.id).querySelector('summary').click();
+    if (!find(claim.id).open || !find(claim.id).textContent.includes(claim.original_text) || !find(claim.id).querySelector('blockquote').textContent.includes(source.text)) throw Error('claim lost its original text or quote');
+    if (playerAudio.readyState && Math.abs(playerAudio.currentTime-segment.start_ms/1000)>.15) throw Error('claim seek failed');
+    find(claim.id).querySelector('[data-locate-evidence]').click();
+    const row = [...document.querySelectorAll('.transcript-body [data-segment-id]')].find(el => el.dataset.segmentId === segment.id);
+    const back = row?.querySelector('[data-evidence-back="check-claim"]');
+    if (detailActiveTab !== 'transcript' || !back?.checkVisibility() || document.activeElement !== back) throw Error('citation does not resolve to its own transcript row');
+    back.click();
+    if (detailActiveTab !== 'summary' || !find(claim.id).open) throw Error('missing transcript backlink');
+    if (transcriptEvidenceLinks([claim],[],[{segmentId:source.segment_id, track:source.track,text:'changed',startSeconds:source.start_ms/1000,endSeconds:source.end_ms/1000}]).size) throw Error('wrong reverse link on historical transcript with same ID');
+    if (!find(cause.id).closest('brevia-cause-tree') || find(orphan.id).querySelector('[data-locate-evidence]') || !find(orphan.id).textContent.includes(t('原文已变化'))) throw Error('stale citation or missing causal branch');
+    find(claim.id).querySelector('[data-edit-evidence]').click();
+    const editor = document.querySelector('.claim-edit-dialog');
+    if (!editor?.open || editor.querySelector('textarea').value !== claim.text) throw Error('claim editor failed');
+    editor.querySelector('button[type="button"]').click();
+  })()`);
+  await captureCorrection('evidence-review');
   // 三个内容页共享导航和操作栏；坐标比较防止入口再次漂移。
   const unifiedGeometry = [];
   await correctionEvaluate(`(async()=>{
@@ -2024,7 +2112,7 @@ try {
       if(root.querySelector('.summary-head')||root.querySelector('.detail-transcript-toolbar'))throw Error(scope+' legacy tool row remains');
       if(document.activeElement?.matches('input,textarea,[contenteditable=true]'))throw Error(scope+' automatic focus');
       const tabs=[...root.querySelectorAll('[data-detail-tab]')].map(rect);
-      if(tabs.length!==3||tabs.some(tab=>Math.abs(tab.y-tabs[0].y)>1)||tabs.some((tab,index)=>index&&tab.x<tabs[index-1].x+tabs[index-1].width))throw Error(scope+' horizontal tabs missing or overlapping');
+      if(tabs.length!==2||tabs.some(tab=>Math.abs(tab.y-tabs[0].y)>1)||tabs.some((tab,index)=>index&&tab.x<tabs[index-1].x+tabs[index-1].width))throw Error(scope+' horizontal tabs missing or overlapping');
       return {scope,find:rect(find),edit:rect(edit),toolbar:rect(toolbar),panel:rect(root.querySelector('[data-detail-panel="'+scope+'"]'))};
     })()`),
     );
@@ -2036,7 +2124,7 @@ try {
       if(!save?.checkVisibility()||save.textContent.trim()!==t('保存'))throw Error(scope+' shared save action missing');
       if(document.activeElement?.matches('input,textarea,[contenteditable=true]'))throw Error(scope+' editor autofocus');
       const before=scope==='notes'?detailNotesEditor:scope==='summary'?inlineSummaryEditor:document.querySelector('[data-segment-text]');
-      document.querySelector('[data-detail-tab="'+(scope==='notes'?'summary':'notes')+'"]').click();document.querySelector('[data-detail-tab="'+scope+'"]').click();
+      openReviewDocument(scope==='notes'?'summary':'notes');openReviewDocument(scope);
       const after=scope==='notes'?detailNotesEditor:scope==='summary'?inlineSummaryEditor:document.querySelector('[data-segment-text]');
       if(before!==after)throw Error(scope+' tab switch rebuilt draft editor');
       document.querySelector('.detail-content-actions [data-notes-cancel],.detail-content-actions [data-transcript-cancel],.detail-content-actions [data-cancel-inline-summary-edit]').click();
@@ -2103,7 +2191,7 @@ try {
       document.querySelector('[data-detail-tab=transcript]').click();
       for(let i=0;i<200&&uiData.detail[scope+'SaveState']==='saving';i++)await new Promise(r=>setTimeout(r,10));
       if(uiData.detail[scope+'SaveState']!=='failed'||detailActiveTab!=='transcript'||editor.getMarkdown()!=='保存失败时保留的草稿')throw Error(scope+' late failure lost draft or switched tabs');
-      document.querySelector('[data-detail-tab="'+scope+'"]').click();
+      openReviewDocument(scope);
       const save=document.querySelector(scope==='notes'?'[data-notes-save]':'[data-save-inline-summary]');
       if(save.disabled||!save.textContent.includes(t('重试')))throw Error(scope+' retry not restored');
       document.querySelector(scope==='notes'?'[data-notes-cancel]':'[data-cancel-inline-summary-edit]').click();
@@ -2848,7 +2936,7 @@ try {
       const content=detail.querySelector('.detail-layout').getBoundingClientRect();
       const player=detail.querySelector('.player').getBoundingClientRect();
       const reading=content.height>100 && player.bottom<=innerHeight+1 && Math.abs(player.left-content.left)<2 && Math.abs(player.right-content.right)<2;
-      const threeTabs=detail.querySelectorAll('[data-detail-tab]').length===3;
+      const twoTabs=detail.querySelectorAll('[data-detail-tab]').length===2;
       detail.querySelector('[data-detail-tab="transcript"]').click();
       applyBackendDetail({...meeting,transcript_revision:0,original_segments:[{...meeting.segments[0],version:'live',text:'原始稿切换测试'}]});
       detail.querySelector('[data-transcript-version="original"]').click();
@@ -2865,7 +2953,7 @@ try {
       resultsPanel.querySelector('[data-close-transcript-search]').click();
       const searchRestored=resultsPanel.hidden&&detail.querySelector('.notes').hidden&&document.activeElement===search;
       search.value=''; search.dispatchEvent(new Event('input',{bubbles:true}));
-      detail.querySelector('[data-detail-tab="summary"]').click();
+      openReviewDocument('summary');
       const summaryVisible=detail.querySelector('[data-detail-panel=summary]').contains(detail.querySelector('.summary-preview')) && detail.querySelector('[data-detail-panel=notes]').hidden && detail.querySelector('.notes').hidden && !detail.querySelector('.detail-actions').hidden && detail.querySelector('.summary-preview').getBoundingClientRect().width > detail.querySelector('.detail-layout').getBoundingClientRect().width * .95 && detail.querySelector('.summary-preview').getBoundingClientRect().height>100;
       const originalSummaryConfig=structuredClone(summaryConfig);
       const retainedSummary=uiData.detail.summary.markdown;
@@ -2891,9 +2979,9 @@ try {
       const summaryEditor=inlineSummaryEditor;
       summaryEditor.setMarkdown('# 切换标签后保留草稿');
       uiData.detail.summaryDraft=summaryEditor.getMarkdown();
-      detail.querySelector('[data-detail-tab=notes]').click();
+      openReviewDocument('notes');
       const editorRetained=detail.querySelector('[data-detail-panel=summary]').contains(detail.querySelector('[data-inline-summary-editor]'))&&detail.querySelector('[data-detail-panel=summary]').hidden;
-      detail.querySelector('[data-detail-tab=summary]').click();
+      openReviewDocument('summary');
       const summaryDraftPreserved=editorRetained && inlineSummaryEditor===summaryEditor && summaryEditor.getMarkdown().includes('切换标签后保留草稿') && detail.querySelector('[data-detail-panel=summary]').contains(detail.querySelector('[data-inline-summary-editor]'));
       detail.querySelector('[data-cancel-inline-summary-edit]').click();
       applyBackendDetail({...meeting,transcript_revision:0,segments:meeting.segments.filter(segment=>segment.version!=='live')});
@@ -2904,7 +2992,7 @@ try {
       showRefinementProgress(56,100,'Layout test',meeting.id,'正在识别');
       const minimizedProgress=refinementCard.querySelector('.task-mini-percent').textContent==='56%';
       refinementCard.classList.remove('is-minimized'); refinementCard.hidden=true;
-      return {tabs,independent,levels,modelReturn,speakers,menusVisible,prepareReachable,reading,threeTabs,filtered,searchEmpty,mirrored,searchRestored,summaryVisible,inlineSummaryConfig,configReturnsToMeeting,disabledSummary,disabledConfigOpens,summaryExportDefault,summaryBackVisible,summaryDraftPreserved,rawAvailable,rawUnavailable,minimizedProgress};
+      return {tabs,independent,levels,modelReturn,speakers,menusVisible,prepareReachable,reading,twoTabs,filtered,searchEmpty,mirrored,searchRestored,summaryVisible,inlineSummaryConfig,configReturnsToMeeting,disabledSummary,disabledConfigOpens,summaryExportDefault,summaryBackVisible,summaryDraftPreserved,rawAvailable,rawUnavailable,minimizedProgress};
     })()`,
     awaitPromise: true,
     returnByValue: true,
@@ -2922,7 +3010,7 @@ try {
       const selectors=['.detail-head','.detail-layout','.tabbar','.player','.detail-actions'];
       const samples=[];
       for(const tab of ['notes','transcript','summary','notes']){
-        detail.querySelector('[data-detail-tab="'+tab+'"]').click();
+        openReviewDocument(tab);
         const panel=detail.querySelector('[data-detail-panel="'+tab+'"]');
         const animation=panel.getAnimations()[0];
         if(!animation||animation.effect.getTiming().duration!==180||animation.effect.getKeyframes().some(frame=>Number(frame.opacity)!==1))errors.push(tab+': inconsistent tab motion');
@@ -2930,8 +3018,8 @@ try {
         samples.push(selectors.map(selector=>{const r=detail.querySelector(selector).getBoundingClientRect();return [r.x,r.y,r.width,r.height];}));
         const nav=detail.querySelector('.detail-document-navigation'),navBounds=nav.getBoundingClientRect(),panelBounds=panel.getBoundingClientRect(),tools=detail.querySelector('.detail-content-toolbar').getBoundingClientRect();
         const tablist=nav.querySelector('[role=tablist]'),tabButtons=[...tablist.querySelectorAll('[data-detail-tab]')];
-        if(tablist.getAttribute('aria-orientation')==='vertical'||tabButtons.length!==3||tabButtons.some(button=>Math.abs(button.getBoundingClientRect().top-tabButtons[0].getBoundingClientRect().top)>1)||navBounds.bottom>tools.top+1||panelBounds.top<tools.bottom-1)errors.push(tab+': horizontal navigation or toolbar overlaps content');
-        if(detail.querySelector('.detail-document-heading')||tablist.querySelector('[aria-selected=true]')?.dataset.detailTab!==tab)errors.push(tab+': selected document tab incorrect');
+        if(tablist.getAttribute('aria-orientation')==='vertical'||tabButtons.length!==2||tabButtons.some(button=>Math.abs(button.getBoundingClientRect().top-tabButtons[0].getBoundingClientRect().top)>1)||navBounds.bottom>tools.top+1||panelBounds.top<tools.bottom-1)errors.push(tab+': horizontal navigation or toolbar overlaps content');
+        if(detail.querySelector('.detail-document-heading')||tablist.querySelector('[aria-selected=true]')?.dataset.detailTab!==(tab==='summary'?'notes':tab))errors.push(tab+': selected document tab incorrect');
         const title=detail.querySelector('h1');
         if(title.title!==title.textContent||getComputedStyle(title).whiteSpace!=='nowrap')errors.push(tab+': compact title loses full-text access');
         if(getComputedStyle(panel).opacity!=='1'||panel.getBoundingClientRect().height<100)errors.push(tab+': empty content region');
@@ -2939,7 +3027,7 @@ try {
         if(roster&&!detail.querySelector('.detail-head').contains(roster))errors.push(tab+': roster moved with tab');
       }
       for(const [index,sample] of samples.slice(1).entries())for(const [i,rect] of sample.entries())if(rect.some((value,j)=>Math.abs(value-samples[0][i][j])>1))errors.push('tab changed geometry '+JSON.stringify({tab:['transcript','summary','notes'][index],region:selectors[i],before:samples[0][i],after:rect}));
-      detail.querySelector('[data-detail-tab="summary"]').click();
+      openReviewDocument('summary');
       const body=detail.querySelector('.summary-body');
       if(body&&[...body.querySelectorAll('hr')].some(rule=>getComputedStyle(rule).display!=='none'))errors.push('redundant summary separators remain');
       return errors;
@@ -2949,7 +3037,7 @@ try {
   });
   check(
     Array.isArray(detailConsistency.result?.value) && !detailConsistency.result.value.length,
-    '详情三标签统一比例、固定页头与播放器、相同切换动效：' +
+    '回看分区统一比例、固定页头与播放器、相同切换动效：' +
       JSON.stringify(
         detailConsistency.result?.value ||
           detailConsistency.exceptionDetails?.exception?.description ||
@@ -3116,7 +3204,7 @@ try {
       const errors=[];
       const selectors=['[data-edit-transcript]','[data-detail-translation-toggle]','[data-refine-more]','[data-open-summary-edit]','[data-copy-summary]'];
       for(const selector of selectors){
-        document.querySelector('[data-detail-tab="'+(selector.includes('summary')?'summary':'transcript')+'"]').click();
+        openReviewDocument(selector.includes('summary')?'summary':'transcript');
         const button=document.querySelector(selector),icon=button?.querySelector('svg');
         const iconSize=16;
         if(!button||!icon||Math.abs(parseFloat(getComputedStyle(icon).width)-iconSize)>.1||button.getBoundingClientRect().height<31.5||button.getBoundingClientRect().height>36||!button.textContent.trim())errors.push(selector+': detail action geometry');
@@ -3578,10 +3666,37 @@ try {
       const modelRows=[...settingsModal.querySelectorAll('.preferences-model-row')];
       if(!modelRows.length) errors.push('available models missing');
       for(const row of modelRows){
-        const ratings=[...row.querySelectorAll('.model-library-rating')].map(el=>el.getBoundingClientRect());
-        if(ratings.length===2 && Math.abs(ratings[0].top-ratings[1].top)>1) errors.push('model ratings are stacked');
-        const content=row.querySelector('.model-library-content');
-        if(content.scrollWidth>content.clientWidth+1 || row.scrollWidth>row.clientWidth+1) errors.push('model card overflow');
+        if(!row.querySelector('[data-download-model], [data-pause-required]')) errors.push('available model action missing');
+        if(row.scrollWidth>row.clientWidth+1) errors.push('model card overflow');
+      }
+      const grid=settingsModal.querySelector('.preferences-model-rows');
+      if(grid && getComputedStyle(grid).gridTemplateColumns.split(' ').length !== (grid.clientWidth>=650 ? 2 : 1))errors.push('model library column count');
+      const intro=modelRows[0]?.querySelector('.model-intro');
+      if(intro){
+        intro.open=true;
+        const id=intro.dataset.modalDetail;
+        renderModelLibrary();
+        if(![...settingsModal.querySelectorAll('details[open]')].some(node=>node.dataset.modalDetail===id))errors.push('model introduction closed after refresh');
+      }
+      const cardId=settingsModal.querySelector('[data-download-model]')?.dataset.downloadModel;
+      if(cardId){
+        try{
+          modelDownloads.set(cardId,{received:0,total:0});
+          renderModelLibrary();
+          const card = settingsModal.querySelector('[data-model-card="' + CSS.escape(cardId) + '"]');
+          const pause = card.querySelector('[data-pause-required]');
+          const details = card.querySelector('details');
+          if(details)details.open=true;
+          pause.focus({preventScroll:true});
+          modelDownloads.set(cardId,{received:25,total:100});scheduleModelLibraryRender(cardId);
+          await new Promise(requestAnimationFrame);
+          if(!pause.isConnected||document.activeElement!==pause||(details&&!details.open)||card.querySelector('progress').value!==25)errors.push('model transfer refresh replaced focus or stale value');
+          modelDownloads.set(cardId,{received:25,total:100,paused:true});refreshModelCardProgress(cardId);
+          if(card.querySelector('[data-pause-required]')!==pause||!pause.title.includes(t('继续'))||!card.querySelector('[data-cancel-required]'))errors.push('paused model lost resume or cancel');
+        }finally{
+          modelDownloads.delete(cardId);
+          renderModelLibrary();
+        }
       }
       settingsModal.querySelector('.modal-body').scrollTop=500;
       await openModal('device-connection');
@@ -3655,7 +3770,7 @@ try {
       const topInset=parseFloat(getComputedStyle(editorPanel).paddingTop);
       if(Math.abs(toolbar.getBoundingClientRect().top-tabbar.getBoundingClientRect().bottom-topInset)>2)errors.push('editor duplicated top padding');
       if(first && first.getBoundingClientRect().top-toolbar.getBoundingClientRect().bottom>32)errors.push('editor heading separated from toolbar');
-      if(document.querySelectorAll('[data-detail-tab]').length!==3)errors.push('content tab removed');
+      if(document.querySelectorAll('[data-detail-tab]').length!==2)errors.push('review navigation changed');
       document.querySelector('[data-notes-cancel]').click();
       for(const code of ['zh','en','es','ja','ko','fr','de','ru']){
         applyLanguage(code);await openModal('export');await document.fonts.ready;
@@ -3681,6 +3796,10 @@ try {
         fields.forEach(f=>{if(!f.checked)f.click();});
         panel.querySelector('.export-more-share summary').click();checkActions();
         if(!panel.querySelector('[data-share-target=email]')||!panel.querySelector('[data-export-summary]').textContent.trim())errors.push(code+': share channels or packaging hint missing');
+        const targets=[...panel.querySelectorAll('[data-share-target]')].map(b=>b.dataset.shareTarget);
+        if(new Set(targets).size!==targets.length)errors.push(code+': duplicate share actions');
+        if([...panel.querySelectorAll('.share-platform')].some(b=>{const r=b.getBoundingClientRect();return r.height>40||r.width<1||r.right>p.right+1||r.left<p.left-1;}))errors.push(code+': compact share rows overflow');
+        if(exportContentMeta().some(item=>item.content==='notes')&&(!panel.querySelector('[data-sync-note]')||!panel.querySelector('[data-group-send]')))errors.push(code+': no local summary workflow or explicit bot action');
         closeModal();
       }
       applyLanguage('zh');
@@ -4247,7 +4366,7 @@ try {
         'desktop-detail-search-reset',
         `document.querySelector('[data-close-transcript-search]').click()`,
       ],
-      ['desktop-detail-summary', `document.querySelector('[data-detail-tab=summary]').click()`],
+      ['desktop-detail-summary', `openReviewDocument('summary')`],
       [
         'desktop-detail-summary-config-required',
         `(()=>{window.visualSavedSummaryConfig=structuredClone(summaryConfig);summaryConfig.enabled=true;summaryConfig.provider='built-in';summaryConfig.providers['built-in'].model='__missing_summary_model__';return generateMeetingSummary();})()`,
@@ -4261,10 +4380,7 @@ try {
         'desktop-detail-ready',
         `document.querySelector('[data-cancel-inline-summary-edit]').click()`,
       ],
-      [
-        'desktop-export',
-        `document.querySelector('[data-detail-tab=notes]').click();openModal('export')`,
-      ],
+      ['desktop-export', `openReviewDocument('notes');openModal('export')`],
       [
         'desktop-language',
         `(async()=>{closeModal(); await new Promise(resolve=>setTimeout(resolve,250)); meetingActive=false; applyTheme('light'); openOnboardingLanguage('zh');})()`,
@@ -4558,7 +4674,7 @@ try {
       ],
       [
         'desktop-detail-summary-tools',
-        `(()=>{document.querySelector('[data-transcript-cancel]').click();document.querySelector('[data-detail-tab=summary]').click();})()`,
+        `(()=>{document.querySelector('[data-transcript-cancel]').click();openReviewDocument('summary');})()`,
       ],
     );
     captures.push(

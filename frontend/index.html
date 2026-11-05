@@ -294,12 +294,7 @@
 
         <section class="view active" id="home-view">
           <div class="start-workspace">
-            <header class="home-heading"
-              ><h1>开始一场会议</h1>
-              <div class="start-symbol" aria-hidden="true"
-                ><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i
-              ></div>
-            </header>
+            <header class="home-heading"><h1>开始一场会议</h1></header>
             <div class="start-actions">
               <button
                 class="ui-button ui-button-primary quick-recording"
@@ -727,6 +722,7 @@
     <script src="./i18n-runtime.js"></script>
     <script src="./model-selection.js"></script>
     <script src="./asr-copy.js"></script>
+    <script src="./meeting-evidence.js"></script>
     <script src="./ui-components.js"></script>
     <script src="./assets/vendor/gsap.min.js"></script>
     <script src="./assets/vendor/CustomEase.min.js"></script>
@@ -770,14 +766,22 @@
             </div>
             <div class="mobile-equipment" aria-hidden="true">
               <div class="mobile-computer"
-                ><div class="mobile-computer-display"
-                  ><img src="./assets/brevia-wordmark.svg" alt="" /></div
+                ><div class="mobile-computer-display">
+                  <div class="mini-app-title"><i></i><i></i><i></i></div>
+                  <div class="mini-app-library"
+                    ><img src="./assets/brevia-wordmark.svg" alt="" /><i></i><i></i><i></i
+                  ></div>
+                  <div class="mini-app-document"
+                    ><span data-interface-icon="waveform"></span><strong>Brevia</strong><i></i
+                    ><i></i><i></i><i></i><div class="mini-app-track"><b></b></div
+                  ></div> </div
               ></div>
               <div class="mobile-equipment-link"></div>
               <div class="mobile-handset">
                 <div class="mobile-handset-face">
                   <span class="mobile-handset-camera"></span>
                   <span class="mobile-handset-icon" data-interface-icon="waveform"></span>
+                  <div class="mini-app-wave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
                   <strong data-mobile-handset-name></strong>
                   <div class="mobile-handset-records">
                     <small>会议录音</small><b data-mobile-handset-count></b>

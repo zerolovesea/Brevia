@@ -340,6 +340,10 @@
       const scrollTop = body?.scrollTop || 0;
       deviceList = nextDevices;
       const devices = dialog.querySelector('#mobile-devices');
+      const focusedId = devices.contains(document.activeElement)
+        ? document.activeElement.closest('.mobile-device')?.dataset.deviceId
+        : null;
+      const deviceScroll = devices.scrollTop;
       devices.replaceChildren();
       if (!value.devices?.length) {
         const empty = document.createElement('p');
@@ -349,10 +353,14 @@
         devices.append(empty);
       }
       for (const device of value.devices || []) {
-        const row = document.createElement('div');
+        const row = document.createElement('article');
         row.className = 'mobile-device';
+        row.dataset.deviceId = device.id;
         const name = document.createElement('div');
-        name.textContent = device.name;
+        name.className = 'mobile-device-identity';
+        const title = document.createElement('h3');
+        title.textContent = title.title = device.name;
+        name.append(title);
         const state = document.createElement('small');
         state.textContent = device.connected ? t('已连接 · 信任设备') : t('离线 · 保留信任');
         name.append(state);
@@ -383,8 +391,10 @@
           facts.append(group);
         }
         const revoke = document.createElement('button');
-        revoke.className = 'secondary';
+        revoke.className = 'trusted-device-revoke';
+        revoke.type = 'button';
         revoke.textContent = t('取消信任');
+        revoke.setAttribute('aria-label', `${t('取消信任')} · ${device.name}`);
         revoke.onclick = () => {
           if (
             !window.confirm(
@@ -400,10 +410,24 @@
             revoke.disabled = false;
           });
         };
-        row.insertAdjacentHTML('afterbegin', interfaceIcon('phone'));
+        // 配对记录只有设备名，不能据此推断系统或机型。
+        row.insertAdjacentHTML(
+          'afterbegin',
+          `<span class="trusted-device-symbol" aria-hidden="true"><i>${interfaceIcon('waveform')}</i></span>`,
+        );
         row.dataset.connected = String(device.connected);
         row.append(name, facts, revoke);
         devices.append(row);
+      }
+      devices.scrollTop = deviceScroll;
+      if (focusedId) {
+        const next =
+          devices.querySelector(`[data-device-id="${CSS.escape(focusedId)}"] button`) ||
+          devices.querySelector('button') ||
+          [...dialog.querySelectorAll('[data-mobile-page-step]')].find((button) =>
+            button.checkVisibility(),
+          );
+        next?.focus({ preventScroll: true });
       }
       if (body) body.scrollTop = scrollTop;
     }
