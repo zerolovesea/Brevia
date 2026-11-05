@@ -552,6 +552,12 @@ function renderUpdateButton() {
         ? availableUpdateActionLabel()
         : copy.action;
   updateButton.disabled = updateBusy;
+  const aboutAction = settingsModal.querySelector('[data-check-app-update]');
+  if (aboutAction) {
+    aboutAction.textContent = updateButton.textContent;
+    aboutAction.disabled = updateBusy;
+    aboutAction.title = updateDescription.textContent;
+  }
 }
 // 纪要供应商固定为这六项。请求地址由 summaryProviderPresets 派生，只有两个自定义
 // 供应商才向用户暴露地址输入框。
@@ -858,7 +864,7 @@ function renderAdvancedSettings(settings, metadata = {}) {
           .filter((attribute) => limits[attribute] !== undefined)
           .map((attribute) => `${attribute}="${escapeHtml(String(limits[attribute]))}"`)
           .join(' ');
-        return `<label class="preference-row preference-field"><span class="preference-copy"><b>${escapeHtml(label)}</b><small>${escapeHtml(range)}</small></span><span class="preference-control"><input name="${escapeHtml(fieldPath)}" type="${typeof value === 'number' ? 'number' : 'text'}" ${attributes}${limits.read_only ? ' readonly' : ' required'} value="${escapeHtml(String(value))}" /></span></label>`;
+        return `<label class="preference-row preference-field" title="${escapeHtml(range)}"><span class="preference-copy"><b>${escapeHtml(label)}</b><small>${escapeHtml(range)}</small></span><span class="preference-control"><input name="${escapeHtml(fieldPath)}" type="${typeof value === 'number' ? 'number' : 'text'}" ${attributes}${limits.read_only ? ' readonly' : ' required'} value="${escapeHtml(String(value))}" /></span></label>`;
       })
       .join('');
   return Object.entries(settings)
@@ -904,12 +910,13 @@ function validateAdvancedSettings(form) {
       limits.exclude?.includes(value) ||
       (isCap && (value || advancedSettings.speech_cap_default_seconds) < capMinimum) ||
       (input === quietMinimum && value > quietMaximum?.valueAsNumber);
+    input.closest('label').title = hint.textContent;
     input.setCustomValidity(invalid ? hint.textContent : '');
   }
 }
 /** 构建权限部分的一行：状态标记、标签、提示和上下文操作按钮。*/
 function permissionRow(kind, label, detail, granted, denied, active, unsupported) {
-  const state = `<span class="permission-badge${granted ? ' is-granted' : denied ? ' is-denied' : ''}">${granted ? checkIconSvg : ''}${t(granted ? '已允许' : unsupported ? '不可用' : '未授权')}</span>`;
+  const state = `<span class="permission-badge${granted ? ' is-granted' : denied ? ' is-denied' : ''}">${t(granted ? '已允许' : unsupported ? '不可用' : '未授权')}</span>`;
   const hint = unsupported
     ? t('当前系统不支持直接录制系统音频，请仅使用麦克风')
     : denied
@@ -921,7 +928,7 @@ function permissionRow(kind, label, detail, granted, denied, active, unsupported
       : active
         ? `<button class="modal-action permission-setting-action" data-request-permission="${kind}" type="button">${t('允许')}</button>`
         : `<button class="modal-action permission-setting-action" data-open-permission-settings="${kind}" type="button">${t('打开系统设置')}</button>`;
-  return `<div class="preference-row preferences-permission-row${granted ? ' is-granted' : ''}"><span class="preference-copy"><b>${escapeHtml(label)}</b><small>${escapeHtml(hint)}</small></span><span class="preference-control preferences-permission-control"><span class="preferences-permission-state">${state}</span>${action}</span></div>`;
+  return `<div class="preference-row preferences-permission-row${granted ? ' is-granted' : ''}"><span class="preference-copy" title="${escapeHtml(hint)}"><b>${escapeHtml(label)}</b>${denied || unsupported ? `<small>${escapeHtml(hint)}</small>` : ''}</span><span class="preference-control preferences-permission-control"><span class="preferences-permission-state">${state}</span>${action}</span></div>`;
 }
 /** 渲染显示在高级设置模态框顶部的系统权限部分。@returns {string} */
 function renderPermissionSettings() {
@@ -989,10 +996,13 @@ function syncMeetingSelection(updateToolbar = true) {
   if (!updateToolbar) return;
   batchToolbar.hidden = !meetingSelectionMode;
   const toggle = document.querySelector('#meeting-selection-toggle');
-  toggle.innerHTML = `${interfaceIcon(meetingSelectionMode ? 'close' : 'checkbox')}${escapeHtml(t(meetingSelectionMode ? '退出选择' : '选择会议'))}`;
+  toggle.innerHTML = `${interfaceIcon('checkbox')}${escapeHtml(t(meetingSelectionMode ? '退出选择' : '选择会议'))}`;
   toggle.setAttribute('aria-pressed', String(meetingSelectionMode));
+  toggle.title = toggle.ariaLabel = t(meetingSelectionMode ? '退出选择' : '选择会议');
   meetingList.classList.toggle('is-selecting', meetingSelectionMode);
   batchToolbar.querySelector('[data-batch-count]').textContent =
+    `${selectedMeetingKeys.size} / ${visibleRows.length}`;
+  batchToolbar.querySelector('[data-batch-count]').ariaLabel =
     `${t('已选择')} ${selectedMeetingKeys.size} / ${visibleRows.length}`;
   const all = batchToolbar.querySelector('#batch-select-all');
   all.checked = visibleRows.length > 0 && selectedMeetingKeys.size === visibleRows.length;
@@ -1018,6 +1028,9 @@ function syncMeetingSelection(updateToolbar = true) {
     `${interfaceIcon('trash')}${escapeHtml(deleted ? BreviaI18n.trashCopy(locale).purge : t('删除'))}`;
   batchToolbar.querySelector('[data-batch-clear]').innerHTML =
     `${interfaceIcon('close')}${escapeHtml(t('取消'))}`;
+  batchToolbar.querySelectorAll('.batch-actions button').forEach((button) => {
+    button.title = button.ariaLabel = button.textContent.trim();
+  });
 }
 const selectedMeetings = () =>
   uiData.meetings.filter((meeting, index) => selectedMeetingKeys.has(meeting.id || String(index)));
@@ -1309,8 +1322,8 @@ function captureModeInputs(mode = currentCaptureMode) {
 }
 function captureModeSelect(value) {
   const options = [
-    ['mic', t('仅麦克风'), t('适合面对面交流、个人口述')],
-    ['system', t('仅系统音频'), t('适合网课、视频和电脑播放的音频')],
+    ['mic', t('麦克风'), t('适合面对面交流、个人口述')],
+    ['system', t('系统音频'), t('适合网课、视频和电脑播放的音频')],
     ['both', t('麦克风 + 系统音频'), t('适合线上会议，同时收录双方声音')],
     ['phone', t('手机麦克风'), t('适合线下会议，用手机近距离收音')],
   ];
@@ -2391,10 +2404,14 @@ prepareForm.addEventListener('click', (event) => {
   ) {
     select.querySelector('.flow-select-options').hidden = true;
     select.querySelector('.flow-select-toggle').setAttribute('aria-expanded', 'false');
-    showNewWorkspaceDialog(null, (workspace) => {
-      prepareForm.querySelector('[name="meeting-workspace"]').value = workspace.id;
-      renderPrepareSelects();
-    });
+    showNewWorkspaceDialog(
+      null,
+      (workspace) => {
+        prepareForm.querySelector('[name="meeting-workspace"]').value = workspace.id;
+        renderPrepareSelects();
+      },
+      select.querySelector('.flow-select-toggle'),
+    );
     return;
   }
   select.querySelector('input').value = choice.dataset.value;
@@ -2449,10 +2466,7 @@ function builtinModelPicker(currentModelId, installed, hint, allowDownload = fal
   const intro =
     builtinModelIntro[selected.id]?.[locale] || builtinModelIntro[selected.id]?.en || '';
   return (
-    `<section class="preferences-model-picker">${renderPreferenceRow('本地模型', '', desktopSelect('model', selected.id, options))}<div class="preferences-model-details">` +
-    (intro
-      ? `<p class="preferences-model-description" title="${escapeHtml(intro)}">${escapeHtml(intro)}</p>`
-      : '') +
+    `<section class="preferences-model-picker">${renderPreferenceRow('本地模型', intro, desktopSelect('model', selected.id, options))}<div class="preferences-model-details">` +
     `<div class="preferences-model-footer">${renderModelLibraryRatings(selected)}` +
     (allowDownload
       ? downloadAction +
@@ -2639,7 +2653,7 @@ function renderSummaryModelModal() {
     copy.featureIntro || summaryModelCopy.en.featureIntro;
   replaceModalBody(
     'summary-model',
-    `${renderAiSettingsTabs('summary-model')}${onboardingBuiltinProvider || onboardingOnlineProvider ? '' : `<label class="preference-row summary-enabled-control"><span class="preference-copy"><b>${t('会议纪要')}</b><small>${escapeHtml(copy.featureIntro || summaryModelCopy.en.featureIntro)}</small></span><span class="preference-control"><input type="checkbox" data-summary-enabled${summaryConfig.enabled ? ' checked' : ''} /></span></label>`}${page ? renderAiServiceChoice(summaryConfigDraft) : ''}${renderSummaryModelForm()}`,
+    `${renderAiSettingsTabs('summary-model')}${page ? '<div class="preferences-ai-panel">' : ''}${onboardingBuiltinProvider || onboardingOnlineProvider ? '' : `<label class="preference-row summary-enabled-control"><span class="preference-copy" title="${escapeHtml(copy.featureIntro || summaryModelCopy.en.featureIntro)}"><b>${t('会议纪要')}</b></span><span class="preference-control"><input type="checkbox" data-summary-enabled${summaryConfig.enabled ? ' checked' : ''} /></span></label>`}${page ? renderAiServiceChoice(summaryConfigDraft) : ''}${renderSummaryModelForm()}${page ? '</div>' : ''}`,
   );
 }
 
@@ -2669,7 +2683,7 @@ function renderAiAssistModal() {
   });
   replaceModalBody(
     'ai-assist',
-    `${renderAiSettingsTabs('ai-assist')}<form id="ai-assist-config-form" class="ai-assist-config-form preferences-form"><label class="preference-row summary-enabled-control"><span class="preference-copy"><b>${t('AI 笔记')}</b><small>${escapeHtml(t('让 AI 在会议中帮你发现重点、提取待办并整理笔记。'))}</small></span><span class="preference-control"><input aria-label="${escapeHtml(t('AI 笔记'))}" type="checkbox" name="enabled" form="ai-assist-config-form" data-ai-settings-enabled${config.enabled ? ' checked' : ''} /></span></label>${renderAiServiceChoice(config)}${fields.markup}<fieldset class="preferences-choice-row"><legend>${t('主动性')}</legend><div class="preference-copy" aria-hidden="true">${t('主动性')}</div><div class="preferences-choice-options">${levels}</div></fieldset>${warning}<footer class="preferences-form-footer modal-form-actions">${renderSaveState(JSON.stringify(config) === JSON.stringify(aiAssistConfig) ? 'saved' : 'dirty')}<button class="secondary" data-cancel-model-config type="button">${t('取消')}</button><button class="modal-action" type="submit"${fields.saveDisabled && config.enabled ? ' disabled' : ''}>${t('保存配置')}</button></footer></form>`,
+    `${renderAiSettingsTabs('ai-assist')}${page ? '<div class="preferences-ai-panel">' : ''}<form id="ai-assist-config-form" class="ai-assist-config-form preferences-form"><label class="preference-row summary-enabled-control"><span class="preference-copy" title="${escapeHtml(t('让 AI 在会议中帮你发现重点、提取待办并整理笔记。'))}"><b>${t('AI 笔记')}</b></span><span class="preference-control"><input aria-label="${escapeHtml(t('AI 笔记'))}" type="checkbox" name="enabled" form="ai-assist-config-form" data-ai-settings-enabled${config.enabled ? ' checked' : ''} /></span></label>${renderAiServiceChoice(config)}${fields.markup}<fieldset class="preferences-choice-row"><legend>${t('主动性')}</legend><div class="preference-copy" aria-hidden="true">${t('主动性')}</div><div class="preferences-choice-options">${levels}</div></fieldset>${warning}<footer class="preferences-form-footer modal-form-actions">${renderSaveState(JSON.stringify(config) === JSON.stringify(aiAssistConfig) ? 'saved' : 'dirty')}<button class="secondary" data-cancel-model-config type="button">${t('取消')}</button><button class="modal-action" type="submit"${fields.saveDisabled && config.enabled ? ' disabled' : ''}>${t('保存配置')}</button></footer></form>${page ? '</div>' : ''}`,
   );
   if (!page) {
     const toggle = settingsModal.querySelector('.modal-body .summary-enabled-control');
@@ -3173,7 +3187,17 @@ function renderModelLibrary() {
           : !modelPaths.has(model.id) && !model.bundled),
     );
     if (!models.length) return '';
-    const heading = `<header class="preferences-section-heading model-group-heading"><h3>${escapeHtml((modelLibraryMetaCopy[locale] || modelLibraryMetaCopy.en)[stage] || key)} <small>${models.length}</small></h3><p>${escapeHtml(t({ refined: '用于实时转写与会后精修。', vad: '语音活动检测', diarization: '说话人分离', 'speaker-embedding': '声纹识别', summary: '会议纪要', translation: '翻译' }[key] || key))}</p></header>`;
+    const groupHint = t(
+      {
+        refined: '用于实时转写与会后精修。',
+        vad: '语音活动检测',
+        diarization: '说话人分离',
+        'speaker-embedding': '声纹识别',
+        summary: '会议纪要',
+        translation: '翻译',
+      }[key] || key,
+    );
+    const heading = `<header class="preferences-section-heading model-group-heading" title="${escapeHtml(groupHint)}"><h3>${escapeHtml((modelLibraryMetaCopy[locale] || modelLibraryMetaCopy.en)[stage] || key)} <small>${models.length}</small></h3></header>`;
     return (
       `<section class="preferences-model-group">${heading}<div class="preferences-model-rows">` +
       models
@@ -3250,8 +3274,9 @@ function renderWhatsNewModal() {
   );
   replaceModalBody(
     activeModal,
-    `<section class="preferences-about-version about-version"><span class="about-brand-mark" aria-hidden="true"><img src="./assets/brevia-mark.svg" alt="" /></span><div class="preference-copy"><h3>Brevia</h3><p>v${escapeHtml(installedAppVersion || '—')}</p></div><button class="secondary" data-check-app-update type="button">${t('检查更新')}</button></section><section class="preferences-section"><a class="preferences-about-link about-repository" href="https://github.com/zerolovesea/Brevia" target="_blank" rel="noopener noreferrer">${interfaceIcon('github')}<span><b>zerolovesea / Brevia</b><small>github.com/zerolovesea/Brevia</small></span>${interfaceIcon('chevron-right')}</a></section><section class="preferences-section"><header class="preferences-section-heading"><h3>${t('更新日志')}</h3></header>${renderWhatsNewList()}</section>`,
+    `<section class="preferences-about-version about-version"><span class="about-brand-mark" aria-hidden="true"><img src="./assets/brevia-mark.svg" alt="" /></span><div class="preference-copy"><h3>Brevia</h3><p>v${escapeHtml(installedAppVersion || '—')}</p></div><button class="secondary" data-check-app-update type="button"></button></section><a class="preferences-about-link about-repository" href="https://github.com/zerolovesea/Brevia" target="_blank" rel="noopener noreferrer">${interfaceIcon('github')}<span><b>GitHub</b><small>zerolovesea / Brevia</small></span>${interfaceIcon('chevron-right')}</a><section class="preferences-section preferences-release-notes"><header class="preferences-section-heading"><h3>${t('更新日志')}</h3></header>${renderWhatsNewList()}</section>`,
   );
+  renderUpdateButton();
 }
 /** 当前版本展开、历史版本折叠；分类条目附提交引用与首次贡献者。 */
 function renderWhatsNewList(installedVersion) {
@@ -4615,7 +4640,6 @@ settingsModal.addEventListener('click', async (event) => {
   }
   if (event.target.closest('[data-check-app-update]')) {
     await runUpdateAction();
-    renderWhatsNewModal();
     return;
   }
   const aiTab = event.target.closest('[data-ai-settings-tab]');
@@ -6068,6 +6092,7 @@ function markWhatsNewSeen() {
 }
 void loadInstalledAppVersion();
 async function checkForUpdates({ silent = false } = {}) {
+  if (updateBusy) return;
   updateBusy = true;
   renderUpdateButton();
   try {
@@ -6085,6 +6110,7 @@ async function checkForUpdates({ silent = false } = {}) {
   }
 }
 async function runUpdateAction() {
+  if (updateBusy) return;
   if (!updateAvailable) return checkForUpdates();
   updateBusy = true;
   updateDownloadProgress = null;
@@ -7578,12 +7604,22 @@ batchToolbar.addEventListener('click', async (event) => {
 });
 const positionMeetingMenu = (menu, toggle, opensLeft = false) => {
   const anchor = toggle.getBoundingClientRect();
-  const height = menu.offsetHeight;
-  const opensUp = window.innerHeight - anchor.bottom < height && anchor.top >= height;
-  const left = opensLeft ? anchor.left - menu.offsetWidth - 4 : anchor.right - menu.offsetWidth;
-  menu.classList.toggle('opens-up', opensUp);
-  menu.style.top = `${opensUp ? anchor.top - height : anchor.bottom}px`;
-  menu.style.left = `${Math.max(8, Math.min(left, window.innerWidth - menu.offsetWidth - 8))}px`;
+  const sidebar = toggle.closest('.library-panel');
+  const reference = {
+    left: anchor.left - 8,
+    right: (sidebar?.getBoundingClientRect().right || anchor.right) + 8,
+    top: anchor.top - 5,
+    bottom: anchor.bottom + 5,
+  };
+  menu.style.maxHeight = `${Math.max(0, window.innerHeight - 16)}px`;
+  positionFloating(
+    menu,
+    reference,
+    opensLeft
+      ? ['left-start', 'left-end', 'right-start', 'right-end']
+      : ['right-start', 'right-end', 'left-start', 'left-end'],
+  );
+  menu.classList.toggle('opens-up', Number.parseFloat(menu.style.top) < anchor.top - 5);
 };
 const positionOpenMeetingMenus = () => {
   document
@@ -7980,8 +8016,7 @@ document.addEventListener('click', (event) => {
 
   const newWorkspaceBtn = event.target.closest('[data-new-workspace]');
   if (newWorkspaceBtn && typeof showNewWorkspaceDialog === 'function') {
-    closeWorkspacePicker(true);
-    showNewWorkspaceDialog();
+    showNewWorkspaceDialog(null, null, newWorkspaceBtn);
     return;
   }
 
@@ -8000,7 +8035,7 @@ document.addEventListener('click', (event) => {
   if (newWorkspaceAssign && typeof showNewWorkspaceDialog === 'function') {
     const meetingIndex = Number(newWorkspaceAssign.dataset.meetingIndex);
     const meeting = uiData.meetings[meetingIndex];
-    showNewWorkspaceDialog(meeting?.id);
+    showNewWorkspaceDialog(meeting?.id, null, newWorkspaceAssign);
     return;
   }
 });
@@ -10672,12 +10707,13 @@ async function finishDesktopShortcutCapture(value, restoreFocus = false) {
     desktopShortcutCapture = null;
     const button = document.querySelector(`[data-shortcut-control="${capture.key}"]`);
     if (button) {
+      const row = button.closest('.preference-row');
       button.innerHTML = desktopShortcutValue(desktopPreferences[capture.key]);
       button.setAttribute(
         'aria-label',
-        `${button.closest('section').querySelector('h2').textContent} · ${desktopShortcutLabel(desktopPreferences[capture.key])}`,
+        `${row.querySelector('h3').textContent} · ${desktopShortcutLabel(desktopPreferences[capture.key])}`,
       );
-      button.closest('section').querySelector('p').textContent = capture.description;
+      if (button === capture.button) row.title = capture.description;
       if (restoreFocus || value !== undefined) button.focus();
     }
   }
@@ -10702,14 +10738,12 @@ document.addEventListener('click', async (event) => {
     document.querySelector(`[data-shortcut-control="${key}"]`)?.focus();
     return;
   }
-  const description = button.closest('section').querySelector('p');
-  const capture = { key, button, description: description.textContent };
+  const row = button.closest('.preference-row');
+  const capture = { key, button, description: row.title };
   desktopShortcutCapture = capture;
   button.textContent = t('请按组合键');
   button.setAttribute('aria-label', t('请按组合键，Esc 取消，退格清除'));
-  description.textContent = t(
-    '无需切换窗口；组合键需包含 Ctrl、Alt 或 Command。Esc 取消，退格清除。',
-  );
+  row.title = t('无需切换窗口；组合键需包含 Ctrl、Alt 或 Command。Esc 取消，退格清除。');
   try {
     await window.brevia.desktop.editShortcuts({ editing: true });
     if (desktopShortcutCapture !== capture || capture.finishing) {

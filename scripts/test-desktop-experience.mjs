@@ -185,10 +185,6 @@ try {
     "process.getBuiltinModule('module').createRequire(process.cwd()+'/electron/main.js')('electron').BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().includes('/index.html'))";
   const capture = async (name) => {
     await delay(250);
-    if (name === '14-quick-recording-tooltip')
-      await evaluate(
-        `document.querySelector('#home-view [data-quick-recording]').dispatchEvent(new PointerEvent('pointerover',{bubbles:true}))`,
-      );
     const { data } = await send('Page.captureScreenshot', {
       format: 'png',
       captureBeyondViewport: false,
@@ -210,7 +206,7 @@ try {
     `(()=>{window.originalLibrary=uiData.meetings;const sample=uiData.meetings[0];uiData.meetings=[['产品体验复盘',0,24,4,true],['设计评审',0,38,3,true],['团队周会',3,56,8,true],['用户访谈',10,32,2,false],['版本规划',12,46,5,true]].map(([title,days,minutes,speakerCount,hasSummary],i)=>({...sample,id:'review-'+i,isExample:false,title,createdAt:new Date(Date.now()-days*86400000-3600000).toISOString(),durationMs:minutes*60000,speakerCount,hasSummary,tags:[]}));renderMeetingList();})()`,
   );
   await capture('01-library');
-  const sidebarSizes = `([...document.querySelectorAll('.sidebar :is(.new-meeting,.import-recording,.nav-item,.mobile-sidebar-card)')].map(n=>({font:getComputedStyle(n.querySelector('strong')||n).fontSize,icon:getComputedStyle(n.querySelector('.interface-icon')).width})))`;
+  const sidebarSizes = `([...document.querySelectorAll('.sidebar :is(.new-meeting,.import-recording,.nav-item,.mobile-sidebar-card)')].map(n=>({font:getComputedStyle(n.querySelector('strong')||n).fontSize,icon:getComputedStyle(n.querySelector('.interface-icon, .brand-mark')).width})))`;
   const normalSidebar = await evaluate(sidebarSizes);
   assert.equal(
     await evaluate(`document.querySelector('.sidebar .new-meeting').textContent.trim()`),
@@ -232,27 +228,21 @@ try {
   await send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...hoverPoints.outside });
   await delay(50);
   await send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...hoverPoints.center });
-  const tooltipDeadline = Date.now() + 1000;
-  let tooltipState;
-  do {
-    tooltipState = await evaluate(`(()=>{
-      const button=document.querySelector('#home-view [data-quick-recording]'),tooltip=document.querySelector('.page-tooltip');
-      const point=${JSON.stringify(hoverPoints.center)},hit=document.elementFromPoint(point.x,point.y),r=tooltip?.getBoundingClientRect();
-      const visible=!!tooltip?.checkVisibility({visibilityProperty:true,opacityProperty:true});
-      const text=tooltip?.textContent||'';
-      return {ready:button.contains(hit)&&button.matches(':hover')&&visible&&text.includes('上次会议')&&r.left>=0&&r.right<=innerWidth+1&&r.top>=0&&r.bottom<=innerHeight+1,hasFocus:document.hasFocus(),hit:hit?.outerHTML.slice(0,180),hover:button.matches(':hover'),tooltip:{visible,hidden:tooltip?.hidden,text}};
-    })()`);
-    if (tooltipState.ready) break;
-    await delay(50);
-  } while (Date.now() < tooltipDeadline);
-  assert.ok(tooltipState.ready, `快速录音悬停说明配置来源：${JSON.stringify(tooltipState)}`);
+  const quickHint = await evaluate(`(()=>{
+    const button=document.querySelector('#home-view [data-quick-recording]');
+    return {title:button.title,customTooltip:button.hasAttribute('data-tooltip')};
+  })()`);
+  assert.ok(
+    quickHint.title.includes('上次会议') && !quickHint.customTooltip,
+    '快速录音使用原生 title 说明配置来源',
+  );
   assert.equal(
     await evaluate(
       `(()=>{const b=document.querySelector('#home-view [data-quick-recording]');return b.getAttribute('aria-label')||b.textContent.trim()})()`,
     ),
     '快速录音',
   );
-  await capture('14-quick-recording-tooltip');
+  await capture('14-quick-recording');
   await evaluate(`hidePageTooltip()`);
   await evaluate(
     `(async()=>{const oldStart=startConfiguredRecording,paths=new Map(modelPaths);try{for(const model of modelCatalog)modelPaths.set(model.id,'/fixture-model');window.quickRoutes=[];startConfiguredRecording=async(payload,mode)=>{window.quickRoutes.push({payload,mode,view:activeView});};await startQuickRecording();if(window.quickRoutes.length!==1||window.quickRoutes[0].mode!=='both'||window.quickRoutes[0].view!=='home'||activeView!=='home')throw Error('快速录音经过了准备页');}finally{startConfiguredRecording=oldStart;modelPaths.clear();for(const [key,value] of paths)modelPaths.set(key,value);}})()`,

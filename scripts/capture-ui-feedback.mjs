@@ -420,7 +420,7 @@ try {
     ],
     [
       'settings-about-logo',
-      `(async()=>{document.querySelector('#mobile-close-pairing').click();await new Promise(r=>setTimeout(r,300));await new Promise(r=>dismissOnboardingPage(r));await showView('home');document.querySelector('.sidebar-settings').click();await pageTransition;await openModal('whats-new');await new Promise(r=>setTimeout(r,260));const sidebar=document.querySelector('.sidebar'),about=settingsModal.querySelector('.about-brand-mark img');await about.decode();if(sidebar.getBoundingClientRect().width>1||!about.naturalWidth||!settingsModal.querySelector('.settings-workspace-back').checkVisibility())throw Error('设置未替换会议侧栏或缺少返回/关于logo');})()`,
+      `(async()=>{document.querySelector('#mobile-close-pairing').click();await new Promise(r=>setTimeout(r,300));await new Promise(r=>dismissOnboardingPage(r));await showView('home');document.querySelector('.statusbar-settings').click();await pageTransition;await openModal('whats-new');await new Promise(r=>setTimeout(r,260));const sidebar=document.querySelector('.sidebar'),about=settingsModal.querySelector('.about-brand-mark img');await about.decode();if(sidebar.getBoundingClientRect().width>1||!about.naturalWidth||!settingsModal.querySelector('.settings-workspace-back').checkVisibility())throw Error('设置未替换会议侧栏或缺少返回/关于logo');})()`,
     ],
     [
       'settings-return-library',
@@ -612,7 +612,7 @@ try {
     if (name.startsWith('polish-'))
       await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 600, y: 12 });
     const geometry = await evaluate(
-      `({width:innerWidth,height:innerHeight,overflow:document.body.scrollWidth>innerWidth+1,splash:!!document.querySelector('#startup-splash'),sidebar:Object.fromEntries(['.brand','.new-meeting','.import-recording','#all-meetings','#recently-deleted','.workspace-subnav','.workspace-heading','#workspace-selector','.task-stack-toggle','.task-cards','#mobile-nav','.sidebar-settings'].map(selector=>{const e=document.querySelector(selector),r=e?.getBoundingClientRect(),s=e&&getComputedStyle(e);return [selector,e?{x:r.x,y:r.y,width:r.width,height:r.height,font:s.fontFamily,fontSize:s.fontSize,fontWeight:s.fontWeight}:null]}))})`,
+      `({width:innerWidth,height:innerHeight,overflow:document.body.scrollWidth>innerWidth+1,splash:!!document.querySelector('#startup-splash'),sidebar:Object.fromEntries(['.brand','.new-meeting','.import-recording','#all-meetings','#recently-deleted','.workspace-subnav','.workspace-heading','#workspace-selector','.task-stack-toggle','.task-cards','#mobile-nav','.statusbar-settings'].map(selector=>{const e=document.querySelector(selector),r=e?.getBoundingClientRect(),s=e&&getComputedStyle(e);return [selector,e?{x:r.x,y:r.y,width:r.width,height:r.height,font:s.fontFamily,fontSize:s.fontSize,fontWeight:s.fontWeight}:null]}))})`,
     );
     if (name.startsWith('live-ai'))
       geometry.modal = await evaluate(

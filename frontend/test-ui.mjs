@@ -1190,7 +1190,6 @@ runInNewContext(text(i18nData), localeContext);
   }));
   let appended = [];
   const scroll = { scrollTop: 87 };
-  const links = [{ hidden: false }, { hidden: false }];
   const mount = {
     innerHTML: '',
     replaceChildren() {
@@ -1229,15 +1228,16 @@ runInNewContext(text(i18nData), localeContext);
       getElementById: (id) =>
         id === 'settings-view' ? settingsView : kept.find((node) => node.id === id),
       querySelector: (selector) => (selector === '[data-desktop-settings-mount]' ? mount : status),
-      querySelectorAll: () => links,
     },
   };
   runInNewContext(text(components), context);
   context.renderSettingsView();
   assert.deepEqual(appended, kept, 'existing live nodes are moved, never cloned or replaced');
   assert.equal(scroll.scrollTop, 87, 'rerender keeps the settings reading position');
-  for (const target of ['basics', 'window', 'shortcuts'])
-    assert.ok(settingsView.innerHTML.includes(`href="#preferences-${target}"`));
+  assert.doesNotMatch(settingsView.innerHTML, /preferences-section-links/);
+  assert.match(settingsView.innerHTML, /id="preferences-basics"/);
+  for (const target of ['window', 'shortcuts'])
+    assert.ok(mount.innerHTML.includes(`id="preferences-${target}"`));
   assert.doesNotMatch(settingsView.innerHTML, /settings-grid|settings-card/);
   assert.match(settingsView.innerHTML, /name="interface-language"/);
   assert.match(settingsView.innerHTML, /name="interface-theme"/);
@@ -1249,16 +1249,12 @@ runInNewContext(text(i18nData), localeContext);
     'data-shortcut-control="pauseShortcut"',
   ])
     assert.ok(mount.innerHTML.includes(hook), hook);
-  assert.ok(links.every((link) => !link.hidden));
   context.desktopPreferences = null;
   appended = [];
   context.renderSettingsView();
   assert.deepEqual(appended, kept);
   assert.equal(mount.innerHTML, '');
-  assert.ok(
-    links.every((link) => link.hidden),
-    'unsupported desktop preferences leave no dead section links',
-  );
+  assert.doesNotMatch(settingsView.innerHTML, /data-desktop-section-link/);
 }
 
 const i18nRuntimeSource = await readFile('i18n-runtime.js', 'utf8');
@@ -1923,13 +1919,11 @@ assert.match(
   /id="import-recording"\s+data-view="prepare"\s+data-prepare-mode="import"/,
 );
 assert.match(text(css), /\.import-recording\{[^}]*border/);
+assert.match(composeCss, /\.compose-workspace\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);/);
+assert.match(composeCss, /#meeting-form\.compose-form\s*\{[^}]*max-width:\s*740px/);
 assert.match(
   composeCss,
-  /\.compose-workspace\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) 280px/,
-);
-assert.match(
-  composeCss,
-  /#meeting-form\.compose-form\s*\{[^}]*grid-template-rows:\s*minmax\(0, 1fr\) auto/,
+  /\.compose-source-switch \.flow-select-options\s*\{[^}]*grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\)/,
 );
 assert.match(text(html), /class="compose-footer"[\s\S]*class="primary-action compose-submit"/);
 assert.doesNotMatch(text(js), /function fitPrepareLayout/);
@@ -2013,7 +2007,7 @@ assert.doesNotMatch(text(workerSession), /tracker\.assign_embedding/);
 assert.doesNotMatch(text(workerSession), /SpeakerTracker/);
 assert.doesNotMatch(text(js), /name="num-speakers"[^>]*max="20"/);
 assert.doesNotMatch(composeCss, /transform:\s*scale/);
-assert.match(composeCss, /\.compose-workspace\s*\{[^}]*overflow-y:\s*auto/);
+assert.match(composeCss, /#prepare-view\.compose-page\.active\s*\{[^}]*overflow:\s*hidden auto/);
 assert.doesNotMatch(text(css), /max-width:1100px|max-height:760px/);
 assert.match(
   text(css),
@@ -2173,7 +2167,7 @@ assert.match(
   /if \(target\.dataset\.view === 'prepare'\) setPrepareMode\(target\.dataset\.prepareMode \|\| 'record'\)/,
 );
 assert.match(text(js), /__new_workspace__/);
-assert.match(text(js), /showNewWorkspaceDialog\(null, \(workspace\)/);
+assert.match(text(js), /showNewWorkspaceDialog\(\s*null,\s*\(workspace\)/);
 assert.match(text(app), /showWorkspaceAssignMenu\(index, rect\)/);
 assert.match(text(js), /function renderWorkspaceNav/);
 assert.match(text(js), /async function switchWorkspace/);
@@ -2348,7 +2342,7 @@ assert.match(
 assert.match(text(js), /closeMeetingMenus/);
 assert.doesNotMatch(text(js), /closeCategoryMenu/);
 assert.match(text(js), /const positionMeetingMenu =/);
-assert.match(text(js), /window\.innerHeight - anchor\.bottom < height && anchor\.top >= height/);
+assert.match(text(workspaces), /popover\.setAttribute\('popover', 'auto'\)/);
 assert.match(text(css), /\.meeting-menu[^{}]*\{(?=[^}]*position:fixed)(?=[^}]*z-index:50)/);
 assert.match(text(css), /\.detail-head\{(?=[^}]*z-index:50)/);
 assert.doesNotMatch(text(components), /data-meeting-action="category"/);
@@ -4692,6 +4686,46 @@ const summaryFn = (name) => {
   const start = summaryAppSource.indexOf(`function ${name}(`);
   return summaryAppSource.slice(start, summaryAppSource.indexOf('\n}\n', start) + 2);
 };
+// 行菜单打开在侧栏外侧，并在底部与窄视口中保持可访问。
+{
+  const menu = { offsetWidth: 212, offsetHeight: 234, style: {}, classList: { toggle() {} } };
+  let rect = { left: 224, right: 248, top: 250, bottom: 274 };
+  let sidebarRight = 260;
+  const toggle = {
+    getBoundingClientRect: () => rect,
+    closest: () => ({ getBoundingClientRect: () => ({ right: sidebarRight }) }),
+  };
+  const context = {
+    window: { innerWidth: 1280, innerHeight: 800 },
+    BreviaMotion: { cancel() {} },
+  };
+  const start = summaryAppSource.indexOf('const positionMeetingMenu =');
+  runInNewContext(
+    `${summaryFn('positionFloating')}\n${summaryAppSource.slice(start, summaryAppSource.indexOf('\n};', start) + 3)}\nthis.positionMenu = positionMeetingMenu;`,
+    context,
+  );
+  context.positionMenu(menu, toggle);
+  assert.equal(menu.style.left, '268px', 'sidebar menu must not cover its source row');
+  assert.equal(menu.style.top, '245px');
+  rect = { ...rect, top: 740, bottom: 764 };
+  context.positionMenu(menu, toggle);
+  assert.equal(menu.style.top, '535px', 'bottom rows open upward within the viewport');
+  context.window.innerWidth = 600;
+  sidebarRight = 590;
+  rect = { left: 554, right: 578, top: 250, bottom: 274 };
+  context.positionMenu(menu, toggle);
+  assert.equal(menu.style.left, '334px', 'menus flip left when the right edge is crowded');
+  context.window.innerWidth = 320;
+  context.window.innerHeight = 240;
+  rect = { left: 224, right: 248, top: 210, bottom: 234 };
+  sidebarRight = 260;
+  menu.offsetHeight = 224;
+  context.positionMenu(menu, toggle);
+  assert.equal(menu.style.maxHeight, '224px');
+  assert.ok(Number.parseFloat(menu.style.left) >= 8);
+  assert.ok(Number.parseFloat(menu.style.left) + menu.offsetWidth <= 312);
+  assert.equal(menu.style.top, '8px');
+}
 // 从回收站经设置返回时必须刷新正常会议，且不能改变用户的侧栏折叠偏好。
 {
   let homeClick;

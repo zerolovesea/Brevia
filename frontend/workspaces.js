@@ -225,17 +225,35 @@ document
 /**
  * 显示新建工作区对话框
  */
-function showNewWorkspaceDialog(assignMeetingId, onCreated) {
-  if (workspacePicker) closeWorkspacePicker(true);
-  const backdrop = document.createElement('div');
-  backdrop.className = 'modal-backdrop workspace-dialog';
-  backdrop.returnFocus = document.activeElement;
-  backdrop.innerHTML = `
-    <section class="modal-panel ui-dialog" role="dialog" aria-modal="true" aria-label="${t('新建工作区')}">
+function showNewWorkspaceDialog(assignMeetingId, onCreated, trigger) {
+  document.querySelector('.workspace-create-popover:popover-open')?.hidePopover();
+  let anchor = trigger;
+  if (anchor?.closest('.workspace-picker')) anchor = document.querySelector('#workspace-selector');
+  if (anchor?.closest('.meeting-workspace-menu'))
+    anchor = document.querySelector(`[data-meeting-menu="${trigger.dataset.meetingIndex}"]`);
+  if (!anchor?.getClientRects().length || anchor === document.body)
+    anchor = document.querySelector('.new-workspace');
+  const selectName = anchor?.closest('.flow-select')?.querySelector('input[name]')?.name;
+  const focusTarget = () =>
+    (selectName &&
+      document
+        .querySelector(`.flow-select input[name="${CSS.escape(selectName)}"]`)
+        ?.closest('.flow-select')
+        ?.querySelector('.flow-select-toggle')) ||
+    (anchor?.isConnected && anchor) ||
+    document.querySelector('.new-workspace') ||
+    document.querySelector('#library-toggle');
+  if (workspacePicker) closeWorkspacePicker();
+  closeMeetingMenus(true);
+  const popover = document.createElement('section');
+  popover.className = 'workspace-dialog workspace-create-popover';
+  popover.setAttribute('popover', 'auto');
+  popover.setAttribute('role', 'dialog');
+  popover.setAttribute('aria-label', t('新建工作区'));
+  popover.innerHTML = `
       <header class="ui-dialog-header">
         <div class="ui-dialog-title">
           <h2>${t('新建工作区')}</h2>
-          <p>${t('创建一个新的工作区来组织会议')}</p>
         </div>
         <button class="modal-close" type="button" data-close-modal aria-label="${t('关闭')}">${interfaceIcon('close')}</button>
       </header>
@@ -243,64 +261,72 @@ function showNewWorkspaceDialog(assignMeetingId, onCreated) {
         <form class="workspace-form ui-dialog-form" data-workspace-form>
           <label>
             ${t('工作区名称')}
-            <input name="name" type="text" maxlength="30" required />
+            <input name="name" type="text" maxlength="30" required autofocus autocomplete="off" />
           </label>
-          <label>
-            <span>${t('描述')} <small>${t('（可选）')}</small></span>
-            <textarea name="description" maxlength="100" rows="2"></textarea>
-          </label>
+          <details class="workspace-description">
+            <summary>${interfaceIcon('chevron-down')}<span>${t('描述')}</span></summary>
+            <textarea name="description" maxlength="100" rows="2" aria-label="${t('描述')}"></textarea>
+          </details>
           <div class="ui-dialog-actions">
-            <button type="button" class="ui-button" data-close-modal>${t('取消')}</button>
             <button type="submit" class="ui-button ui-button-primary">${t('创建工作区')}</button>
           </div>
         </form>
       </div>
-    </section>
   `;
-
-  document.body.appendChild(backdrop);
-  document.body.classList.add('modal-open');
-
-  // 触发进入动画
-  backdrop.classList.remove('modal-leave');
-  backdrop.hidden = false;
-  backdrop.classList.add('modal-enter');
-
-  let escHandler;
   const closeDialog = () => {
-    document.removeEventListener('keydown', escHandler);
-    closeWorkspaceDialog(backdrop);
+    if (popover.matches(':popover-open')) popover.hidePopover();
   };
-
-  // 关闭按钮事件
-  backdrop.querySelectorAll('[data-close-modal]').forEach((btn) => {
-    btn.addEventListener('click', closeDialog);
-  });
-
-  let backdropPointerDown = false;
-  backdrop.addEventListener('pointerdown', (e) => {
-    backdropPointerDown = e.target === backdrop;
-  });
-  // 仅当按下与松开都在背景上才关闭，避免拖出弹窗时误关。
-  backdrop.addEventListener('click', (e) => {
-    if (backdropPointerDown && e.target === backdrop) closeDialog();
-    backdropPointerDown = false;
-  });
-
-  // ESC 键关闭
-  escHandler = (e) => {
-    if (e.key === 'Escape') {
-      closeDialog();
-      document.removeEventListener('keydown', escHandler);
+  const reposition = () => {
+    if (!popover.matches(':popover-open')) return;
+    const reference = focusTarget();
+    if (!reference?.getClientRects().length) {
+      popover.style.left = `${Math.max(8, (innerWidth - popover.offsetWidth) / 2)}px`;
+      popover.style.top = `${Math.max(8, (innerHeight - popover.offsetHeight) / 2)}px`;
+      return;
     }
+    const rect = reference.getBoundingClientRect();
+    const sidebar = reference.closest('.library-panel');
+    if (sidebar) {
+      const edge = sidebar.getBoundingClientRect().right + 8;
+      positionFloating(popover, {
+        left: rect.left - 8,
+        right: edge,
+        top: rect.top,
+        bottom: rect.bottom,
+      });
+    } else
+      positionFloating(popover, reference, ['bottom-start', 'top-start', 'bottom-end', 'top-end']);
   };
-  document.addEventListener('keydown', escHandler);
+  popover.querySelector('[data-close-modal]').addEventListener('click', closeDialog);
+  popover.querySelector('details').addEventListener('toggle', reposition);
+  popover.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') event.stopPropagation();
+  });
+  // 原生顶层负责 Esc 与外部点击；关闭后仅在焦点没有转交给其他控件时恢复入口。
+  popover.addEventListener('toggle', (event) => {
+    if (event.newState !== 'closed') return;
+    window.removeEventListener('resize', reposition);
+    document.removeEventListener('scroll', reposition, true);
+    const restoreFocus =
+      popover.contains(document.activeElement) || document.activeElement === document.body;
+    popover.remove();
+    if (restoreFocus) focusTarget()?.focus({ preventScroll: true });
+  });
+  document.body.appendChild(popover);
+  focusTarget()?.focus({ preventScroll: true });
+  popover.showPopover();
+  reposition();
+  BreviaMotion.enter(popover, 'settings');
+  window.addEventListener('resize', reposition);
+  document.addEventListener('scroll', reposition, true);
 
-  // 提交表单
-  backdrop.querySelector('[data-workspace-form]').addEventListener('submit', async (e) => {
+  popover.querySelector('[data-workspace-form]').addEventListener('submit', async (e) => {
     e.preventDefault();
     const submit = e.target.querySelector('[type="submit"]');
     if (submit.disabled) return;
+    const name = e.target.elements.name;
+    name.value = name.value.trim();
+    if (!e.target.reportValidity()) return;
     submit.disabled = true;
     const formData = new FormData(e.target);
     const payload = {
@@ -317,7 +343,6 @@ function showNewWorkspaceDialog(assignMeetingId, onCreated) {
       renderWorkspaceNav();
       appActions.renderMeetingList();
       closeDialog();
-      document.removeEventListener('keydown', escHandler);
       appActions.showToast(t('工作区已创建'), undefined, 'success');
     } catch (error) {
       appActions.showToast(error.message, undefined, 'error');

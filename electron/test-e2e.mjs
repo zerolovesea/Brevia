@@ -1341,8 +1341,8 @@ try {
       const previous=locale;
       for(const code of ['zh','en','es','ja','ko','fr','de','ru']) {
         applyLanguage(code);
-        const description=document.querySelector('#settings-view .preferences-titlebar p');
-        if(!description || description.textContent.trim()!==t('管理 Brevia 的使用偏好、AI 能力与数据设置。'))errors.push('untranslated settings description: '+code);
+        const heading=document.querySelector('#settings-view .preferences-titlebar h1');
+        if(!heading || heading.textContent.trim()!==t('通用'))errors.push('untranslated settings heading: '+code);
       }
       applyLanguage(previous);
       return errors;
@@ -1352,7 +1352,7 @@ try {
   });
   check(
     Array.isArray(settingsNavigation.result?.value) && !settingsNavigation.result.value.length,
-    '设置导航竞态或静态说明翻译：' +
+    '设置导航竞态或标题翻译：' +
       JSON.stringify(
         settingsNavigation.result?.value ||
           settingsNavigation.exceptionDetails?.exception?.description ||
@@ -1512,7 +1512,7 @@ try {
     await openModal('advanced-settings');
     const permission = settingsModal.querySelector('[data-permission-settings]');
     const permissionHeading=permission.querySelector('.preferences-section-heading');
-    if(!permissionHeading || parseFloat(getComputedStyle(permissionHeading).borderBottomWidth)<1) errors.push('permission section heading missing');
+    if(!permissionHeading || !permissionHeading.checkVisibility() || permissionHeading.textContent.trim()!==t('系统权限')) errors.push('permission section heading missing');
     const permissionRows=[...permission.querySelectorAll('.preferences-permission-row')];
     if(permissionRows.length!==2)errors.push('permission rows missing');
     for(const row of permissionRows){
@@ -2161,15 +2161,26 @@ try {
     '字幕声纹面板、试听与多语言：' + JSON.stringify(profilePanelChecks),
   );
 
-  const settingsModalDescriptions = await client.send('Runtime.evaluate', {
+  const settingsPageHeaders = await client.send('Runtime.evaluate', {
     expression: `(async () => {
     await showView('settings');
     const failures = [];
     for (const kind of ['models', 'storage', 'advanced-settings', 'summary-model', 'ai-assist', 'whats-new']) {
       await openModal(kind);
-      const description = settingsModal.querySelector('.modal-title p');
-      if (description.hidden || getComputedStyle(description).display === 'none' || !settingsModal.classList.contains('settings-page')) failures.push(kind);
-      if (!settingsModal.querySelector('h2').textContent) failures.push(kind + ': missing title');
+      const nav = settingsModal.querySelector('.preferences-navigation [aria-current="page"]');
+      const title = settingsModal.querySelector('.preferences-titlebar h2');
+      if (!settingsModal.classList.contains('settings-page') || !nav?.checkVisibility() || !title?.checkVisibility() || !title.textContent.trim()) failures.push(kind);
+      if (kind === 'whats-new') {
+        const action = settingsModal.querySelector('[data-check-app-update]');
+        const previous = {busy:updateBusy, progress:updateDownloadProgress};
+        try {
+          updateBusy=true;updateDownloadProgress={percent:42,transferred:42,total:100};renderUpdateButton();
+          if (!action.disabled || !action.textContent.includes('42%')) failures.push('about page download progress');
+        } finally {
+          updateBusy=previous.busy;updateDownloadProgress=previous.progress;renderUpdateButton();
+        }
+        if (action.disabled!==updateButton.disabled || action.textContent!==updateButton.textContent) failures.push('about page update state');
+      }
       closeModal();
     }
     await new Promise(resolve => setTimeout(resolve, 250));
@@ -2179,9 +2190,8 @@ try {
     returnByValue: true,
   });
   check(
-    Array.isArray(settingsModalDescriptions.result?.value) &&
-      !settingsModalDescriptions.result.value.length,
-    `设置页面导航或说明不可见：${JSON.stringify(settingsModalDescriptions)}`,
+    Array.isArray(settingsPageHeaders.result?.value) && !settingsPageHeaders.result.value.length,
+    `设置页面导航、标题或更新状态异常：${JSON.stringify(settingsPageHeaders)}`,
   );
   const mobileLive = await client.send('Runtime.evaluate', {
     expression: `(async () => {
@@ -2646,10 +2656,25 @@ try {
   });
   const workspaceSubmit = await client.send('Runtime.evaluate', {
     expression: `(async()=>{
-      showNewWorkspaceDialog();
+      await showView('home');
+      setLibraryVisible(true);
+      document.querySelector('.new-workspace').click();
       const form=document.querySelector('.workspace-dialog form');
+      const popup=form.closest('.workspace-create-popover');
+      if(!popup?.matches(':popover-open')||popup.getAttribute('popover')!=='auto'||document.body.classList.contains('modal-open'))throw new Error('workspace creation must be a nonmodal native popover');
+      const bounds=popup.getBoundingClientRect(),sidebar=document.querySelector('.library-panel').getBoundingClientRect();
+      if(bounds.width>320||bounds.width<300||bounds.left<sidebar.right||bounds.bottom>innerHeight-7)throw new Error('workspace popover is not anchored beside the sidebar');
+      const input=form.querySelector('[name="name"]');
+      const field=input.getBoundingClientRect(),heading=popup.querySelector('h2').getBoundingClientRect(),close=popup.querySelector('[data-close-modal]').getBoundingClientRect();
+      if(Math.abs(field.left-bounds.left-15)>1||Math.abs(bounds.right-field.right-15)>1||Math.abs(heading.left-field.left)>1||Math.abs(close.right-field.right)>1)throw new Error('workspace popover content must fill its padded width');
+      if(document.activeElement!==input)throw new Error('workspace name is not focused');
+      input.value='   ';form.requestSubmit();
+      if(input.checkValidity())throw new Error('blank workspace name accepted');
+      popup.querySelector('details').open=true;
+      await new Promise(resolve=>requestAnimationFrame(resolve));
+      if(!popup.querySelector('textarea').checkVisibility())throw new Error('optional workspace description inaccessible');
       const name='Design review '+Date.now();
-      form.querySelector('[name="name"]').value=name;
+      input.value=name;
       form.requestSubmit(); form.requestSubmit();
       for(let i=0;i<100 && !workspaces.some(item=>item.name===name);i++) await new Promise(resolve=>setTimeout(resolve,25));
       const created=workspaces.filter(item=>item.name===name);
@@ -2664,6 +2689,45 @@ try {
     returnByValue: true,
   });
   check(workspaceSubmit.result?.value === true, '连续提交工作区表单只能创建一次');
+  await client.send('Runtime.evaluate', {
+    expression: "document.querySelector('.new-workspace').click()",
+  });
+  await client.send('Input.dispatchKeyEvent', {
+    type: 'keyDown',
+    key: 'Escape',
+    code: 'Escape',
+    windowsVirtualKeyCode: 27,
+  });
+  await client.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape' });
+  const workspaceEscape = await client.send('Runtime.evaluate', {
+    expression: `(async()=>{await new Promise(resolve=>setTimeout(resolve,50));return !document.querySelector('.workspace-create-popover')&&document.activeElement.matches('.new-workspace');})()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  check(workspaceEscape.result?.value === true, 'Esc 关闭新建工作区并恢复入口焦点');
+  await client.send('Runtime.evaluate', {
+    expression: "document.querySelector('.new-workspace').click()",
+  });
+  await client.send('Input.dispatchMouseEvent', {
+    type: 'mousePressed',
+    x: 600,
+    y: 40,
+    button: 'left',
+    clickCount: 1,
+  });
+  await client.send('Input.dispatchMouseEvent', {
+    type: 'mouseReleased',
+    x: 600,
+    y: 40,
+    button: 'left',
+    clickCount: 1,
+  });
+  const workspaceDismiss = await client.send('Runtime.evaluate', {
+    expression: `(async()=>{await new Promise(resolve=>setTimeout(resolve,50));return !document.querySelector('.workspace-create-popover')&&!document.body.classList.contains('modal-open');})()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  check(workspaceDismiss.result?.value === true, '外部点击轻关闭工作区浮层且不锁定页面');
   const protectedFocus = await client.send('Runtime.evaluate', {
     expression: `(async()=>{
       openConfirmation('Confirmation','Focus check',()=>{});
@@ -2999,14 +3063,15 @@ try {
         setPrepareMode(mode);await showView('prepare');
         const button=prepareForm.querySelector('.primary-action'),view=document.getElementById('prepare-view');
         await new Promise(requestAnimationFrame);
-        const scroller=prepareForm.querySelector('.compose-workspace');
+        button.scrollIntoView({block:'nearest'});await new Promise(requestAnimationFrame);
         const r=button.getBoundingClientRect(),v=view.getBoundingClientRect(),formBounds=prepareForm.getBoundingClientRect();
-        const footer=prepareForm.querySelector('.compose-footer');
-        if(scroller.contains(footer)||!visible(button)||r.left<formBounds.left||r.right>formBounds.right+1||r.bottom>formBounds.bottom+1)errors.push(mode+': start action outside fixed composer footer');
+        const workspace=prepareForm.querySelector('.compose-workspace').getBoundingClientRect();
+        if(!visible(button)||r.left<formBounds.left||r.right>formBounds.right+1||formBounds.width>741)errors.push(mode+': start action escaped the centered composer');
+        if(r.top<workspace.bottom-1||r.top-workspace.bottom>40)errors.push(mode+': start action is detached from the form');
         if(r.top<v.top-1||r.bottom>v.bottom+1||view.scrollWidth>view.clientWidth+1)errors.push(mode+': start action cannot be reached without horizontal overflow');
-        scroller.scrollTop=scroller.scrollHeight;await new Promise(requestAnimationFrame);
-        if(Math.abs(button.getBoundingClientRect().top-r.top)>1||!visible(button))errors.push(mode+': scrolling fields moved the submit action');
-        scroller.scrollTop=0;
+        view.scrollTop=view.scrollHeight;await new Promise(requestAnimationFrame);
+        if(!visible(button))errors.push(mode+': submit action is unreachable after scrolling');
+        view.scrollTop=0;
       }
       setPrepareMode('record');await showView('prepare');
       const primaryFields=[...prepareForm.querySelectorAll('.form-grid label')];
@@ -3054,14 +3119,13 @@ try {
           const sources=sourceRows();
           const columns=new Set(sources.map(radio=>Math.round(radio.getBoundingClientRect().left)));
           const rows=new Set(sources.map(radio=>Math.round(radio.getBoundingClientRect().top)));
-          if(columns.size!==2||rows.size!==2)errors.push(code+': recording sources are not a two-by-two segment');
+          if(columns.size!==4||rows.size!==1)errors.push(code+': recording sources are not one horizontal row');
           for(const radio of sources){
             const icon=radio.querySelector('.interface-icon').getBoundingClientRect();
             if(Math.abs(icon.width-icon.height)>0.1||icon.width<13.9) errors.push(code+': recording source icon was squeezed');
             if(radio.scrollWidth>radio.clientWidth+1) errors.push(code+': recording source text overflows');
           }
-          const scenario=prepareForm.querySelector('[data-prepare-source-description]');
-          if(!scenario.checkVisibility()||!scenario.textContent.trim())errors.push(code+': selected recording scenario help is missing');
+          if(sources.some(radio=>!radio.title.trim()))errors.push(code+': recording source title is missing');
           if(sources.filter(radio=>radio.getAttribute('aria-checked')==='true').length!==1)errors.push(code+': recording source selection is ambiguous');
           const meter=prepareForm.querySelector('.capture-status');
           const start=prepareForm.querySelector('.primary-action');
@@ -3204,7 +3268,8 @@ try {
           for(const withTask of [false,true]){
             refinementCard.hidden=!withTask;syncTaskCardStack();
             const footer=document.querySelector('.sidebar-footer'),footerBounds=footer.getBoundingClientRect(),sidebar=document.querySelector('.sidebar').getBoundingClientRect();
-            const footerControls=[document.querySelector('#all-meetings'),document.querySelector('#recently-deleted'),document.querySelector('.sidebar-settings')];
+            const footerControls=[document.querySelector('#recently-deleted')];
+            if(document.querySelectorAll('.statusbar-settings').length!==1||document.querySelector('.sidebar-settings')||!document.querySelector('.navigation-brand #all-meetings')?.checkVisibility())errors.push(code+': duplicate or missing navigation entry');
             const footerRects=footerControls.map(control=>control.getBoundingClientRect());
             const overlap=(a,b)=>Math.min(a.right,b.right)-Math.max(a.left,b.left)>1&&Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top)>1;
             if(footerBounds.bottom>sidebar.bottom+1||sidebar.bottom-footerBounds.bottom>32||footerControls.some((control,index)=>{const r=footerRects[index];return !footer.contains(control)||!control.checkVisibility()||r.width<28||r.height<28||r.left<footerBounds.left-1||r.right>footerBounds.right+1||r.top<footerBounds.top-1||r.bottom>footerBounds.bottom+1||!((control.getAttribute('aria-label')||control.title||control.textContent).trim())||footerRects.some((other,j)=>j<index&&overlap(r,other));}))errors.push(code+': sidebar footer '+withTask);
@@ -3395,7 +3460,7 @@ try {
       await new Promise(requestAnimationFrame);
       const general=document.querySelector('.settings-general-main').getBoundingClientRect();
       const panel=settingsModal.querySelector('.modal-panel').getBoundingClientRect();
-      if(Math.abs(general.left-panel.left)>1 || Math.abs(navigation.getBoundingClientRect().width-(innerWidth<=1050?200:220))>1) errors.push('settings content origin changed');
+      if(Math.abs(general.left-panel.left)>1 || Math.abs(navigation.getBoundingClientRect().width-settingsModal.querySelector('.preferences-navigation').getBoundingClientRect().width)>1) errors.push('settings content origin changed');
       if(!settingsModal.querySelector('.rating-scale') || settingsModal.querySelector('.rating-scale').children.length!==1) errors.push('rating is not continuous');
       settingsModal.querySelector('[data-model-library-tab="available"]').click();
       const modelRows=[...settingsModal.querySelectorAll('.preferences-model-row')];
@@ -3561,7 +3626,7 @@ try {
         const nav=meetingList;nav.scrollTop=0;
         const first=nav.querySelector('.sidebar-workspace-toggle').getBoundingClientRect(),n=nav.getBoundingClientRect();
         if(first.top<n.top||first.bottom>n.bottom+1)errors.push('first workspace clipped by tasks');
-        for(const selector of ['#mobile-nav','.sidebar-settings']){const r=document.querySelector(selector).getBoundingClientRect();if(r.bottom>innerHeight+1)errors.push(selector+' outside sidebar');}
+        for(const selector of ['#mobile-nav','.statusbar-settings']){const r=document.querySelector(selector).getBoundingClientRect();if(r.bottom>innerHeight+1)errors.push(selector+' outside sidebar');}
       }else{
         const p=settingsModal.querySelector('.modal-panel').getBoundingClientRect();
         for(const selector of ['.export-actions','[data-export-summary]']){const r=settingsModal.querySelector(selector).getBoundingClientRect();if(r.top<p.top||r.bottom>p.bottom+1||r.left<p.left||r.right>p.right+1)errors.push(selector+' outside export');}

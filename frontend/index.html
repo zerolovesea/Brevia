@@ -76,10 +76,41 @@
         aria-label="主导航"
       >
         <header class="navigation-brand sidebar-brand-row">
-          <button class="brand" data-view="home" aria-label="Brevia 首页"
+          <button
+            class="brand nav-item active"
+            id="all-meetings"
+            data-view="home"
+            aria-label="Brevia 首页"
+            title="会议库"
             ><span class="brand-mark"><img src="./assets/brevia-mark.svg" alt="" /></span
             ><span class="brand-name"><img src="./assets/brevia-wordmark.svg" alt="Brevia" /></span
           ></button>
+          <div class="sidebar-primary navigation-actions">
+            <button
+              class="new-meeting"
+              data-view="prepare"
+              data-prepare-mode="record"
+              aria-label="开始录音"
+              title="开始录音"
+              ><span class="new-meeting-icon" data-interface-icon="plus" aria-hidden="true"></span
+              ><span class="new-meeting-label">开始录音</span></button
+            >
+            <button
+              class="import-recording"
+              id="import-recording"
+              data-view="prepare"
+              data-prepare-mode="import"
+              aria-label="导入本地音频"
+              title="导入本地音频"
+              type="button"
+              ><span
+                class="import-recording-icon"
+                data-interface-icon="upload"
+                aria-hidden="true"
+              ></span
+              ><span class="import-recording-label">导入本地音频</span></button
+            >
+          </div>
         </header>
         <div class="library-toolbar navigation-search"
           ><div class="library-search"
@@ -113,32 +144,6 @@
               hidden
             ></div></div
         ></div>
-        <div class="sidebar-primary navigation-actions">
-          <button
-            class="new-meeting"
-            data-view="prepare"
-            data-prepare-mode="record"
-            aria-label="开始录音"
-            title="开始录音"
-            ><span class="new-meeting-icon" data-interface-icon="plus" aria-hidden="true"></span
-            ><span class="new-meeting-label">开始录音</span></button
-          >
-          <button
-            class="import-recording"
-            id="import-recording"
-            data-view="prepare"
-            data-prepare-mode="import"
-            aria-label="导入本地音频"
-            title="导入本地音频"
-            type="button"
-            ><span
-              class="import-recording-icon"
-              data-interface-icon="upload"
-              aria-hidden="true"
-            ></span
-            ><span class="import-recording-label">导入本地音频</span></button
-          >
-        </div>
         <div class="navigation-library-heading"
           ><div class="workspace-container"></div
           ><button
@@ -224,21 +229,10 @@
         ></div>
         <footer class="sidebar-footer navigation-footer">
           <nav>
-            <button
-              class="nav-item active"
-              id="all-meetings"
-              title="会议库"
-              data-view="home"
-              aria-expanded="true"
-              ><span data-interface-icon="document" aria-hidden="true"></span> 会议库</button
-            >
             <button class="nav-item" id="recently-deleted" title="最近删除" data-view="home"
               ><span data-interface-icon="trash" aria-hidden="true"></span> 最近删除</button
             >
           </nav>
-          <button class="nav-item sidebar-settings" title="设置" data-view="settings"
-            ><span data-interface-icon="settings" aria-hidden="true"></span> 设置</button
-          >
         </footer>
         <header class="library-heading"
           ><div
@@ -297,10 +291,10 @@
 
         <section class="view active" id="home-view">
           <div class="start-workspace">
-            <div class="start-symbol" aria-hidden="true"
-              ><span data-interface-icon="waveform"></span
-            ></div>
-            <h1>开始一场会议</h1><p>从左侧选择会议，或开始一次新的记录。</p>
+            <div class="start-symbol" aria-hidden="true">
+              <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+            </div>
+            <h1>开始一场会议</h1>
             <div class="start-actions">
               <button
                 class="ui-button ui-button-primary start-record"
@@ -318,8 +312,7 @@
               class="text-button quick-recording"
               data-quick-recording
               type="button"
-              data-tooltip-key="沿用上次会议配置，快速开始录音。"
-              data-tooltip="沿用上次会议配置，快速开始录音。"
+              title="沿用上次会议配置，快速开始录音。"
               ><span data-interface-icon="record" aria-hidden="true"></span
               ><span>快速录音</span></button
             >
@@ -336,10 +329,6 @@
               title="返回会议库"
               ><span data-interface-icon="back" aria-hidden="true"></span
             ></button>
-            <span class="compose-mode-mark" aria-hidden="true"
-              ><span class="compose-record-copy" data-interface-icon="record"></span
-              ><span class="compose-import-copy" data-interface-icon="upload"></span
-            ></span>
             <div class="compose-page-title"><h1>新建会议</h1><p data-prepare-description></p></div>
           </header>
           <form id="meeting-form" class="compose-form">
@@ -359,7 +348,6 @@
                     ></span>
                     <strong class="compose-drop-heading">选择文件或拖到这里</strong>
                     <span class="compose-drop-description">支持 WAV、MP3、M4A、FLAC、AAC、OGG</span>
-                    <span class="compose-file-picker">选择文件</span>
                   </button>
                   <article class="audio-import-selection compose-file-item" hidden>
                     <span
@@ -383,23 +371,12 @@
                     >
                   </article>
                 </section>
-                <section class="compose-meeting-fields" aria-labelledby="compose-meeting-heading">
-                  <header class="compose-section-header"
-                    ><h2 id="compose-meeting-heading">会议信息</h2></header
-                  >
+                <section class="compose-meeting-fields">
                   <label class="compose-title-field"
                     >会议名称<input id="meeting-title" value="会议" maxlength="120" required
                   /></label>
                   <div class="form-grid compose-essential-fields"></div>
                 </section>
-                <details class="prepare-options compose-advanced">
-                  <summary
-                    ><span data-interface-icon="settings" aria-hidden="true"></span
-                    ><span>更多设置</span
-                    ><span data-interface-icon="chevron-down" aria-hidden="true"></span
-                  ></summary>
-                  <div class="compose-extra-fields" data-prepare-extra-settings></div>
-                </details>
               </article>
               <aside class="compose-inspector">
                 <section class="compose-record-inspector">
@@ -445,14 +422,17 @@
                   <div class="compose-processing-fields" data-prepare-processing></div>
                 </section>
               </aside>
+              <details class="prepare-options compose-advanced">
+                <summary
+                  ><span data-interface-icon="settings" aria-hidden="true"></span
+                  ><span>更多设置</span
+                  ><span data-interface-icon="chevron-down" aria-hidden="true"></span
+                ></summary>
+                <div class="compose-extra-fields" data-prepare-extra-settings></div>
+              </details>
             </div>
             <footer class="compose-footer">
               <p class="prepare-error compose-error" data-prepare-error role="alert" hidden></p>
-              <div class="compose-footer-summary"
-                ><span data-interface-icon="storage" aria-hidden="true"></span
-                ><span class="compose-record-copy">本地录音</span
-                ><span class="compose-import-copy">导入本地音频</span></div
-              >
               <button class="primary-action compose-submit" type="submit"
                 >开始录制<span data-interface-icon="arrow-right" aria-hidden="true"></span
               ></button>

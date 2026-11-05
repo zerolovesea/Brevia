@@ -1,8 +1,8 @@
-/* 设置以独立导航、标题栏和表单行构成；内容区独立滚动，不依赖旧卡片布局。 */
+/* 设置以窄导航、连续分组和紧凑表单构成；内容与导航分别滚动。 */
 #desktop-app #settings-view.active,
 body .settings-page {
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
+  grid-template-columns: 224px minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
   gap: 0;
   height: 100%;
@@ -32,8 +32,8 @@ body .settings-page {
   align-items: center;
   flex: none;
   gap: 8px;
-  height: 56px;
-  padding: 12px 16px;
+  height: 64px;
+  padding: 16px 14px;
 }
 .preferences-navigation-heading h2 {
   margin: 0;
@@ -49,7 +49,7 @@ body .settings-page {
   min-height: 28px;
   padding: 0;
   border: 0;
-  border-radius: 5px;
+  border-radius: 7px;
   background: transparent;
   color: var(--color-text-muted);
 }
@@ -59,7 +59,7 @@ body .settings-page {
 }
 .preferences-navigation-search {
   flex: none;
-  padding: 0 16px 12px;
+  padding: 0 14px 20px;
 }
 .preferences-navigation .settings-search {
   display: flex;
@@ -69,11 +69,14 @@ body .settings-page {
   margin: 0;
   padding: 0 8px;
   border: 1px solid var(--color-line);
-  border-radius: 5px;
+  border-radius: 7px;
   background: var(--color-surface);
   color: var(--color-text-muted);
 }
-.preferences-navigation .settings-search input {
+.preferences-navigation
+  .preferences-navigation-search
+  .settings-search
+  input[data-settings-search] {
   width: 100%;
   min-width: 0;
   height: 28px;
@@ -94,7 +97,12 @@ body .settings-page {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 4px 10px 24px;
+  padding: 0 10px 24px;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+.preferences-navigation .settings-nav-sections:hover {
+  scrollbar-color: color-mix(in srgb, var(--color-text) 18%, transparent) transparent;
 }
 .preferences-navigation .settings-nav-group {
   margin: 0 0 20px;
@@ -115,16 +123,19 @@ body .settings-page {
   align-items: center;
   gap: 9px;
   width: 100%;
-  min-height: 32px;
-  padding: 6px 10px;
+  min-height: 34px;
+  padding: 7px 10px;
   border: 0;
-  border-radius: 5px;
+  border-radius: 7px;
   background: transparent;
   color: var(--color-text-muted);
   font-size: 13px;
   font-weight: 400;
   line-height: 20px;
   text-align: left;
+  transition:
+    background 150ms ease,
+    color 150ms ease;
 }
 .preferences-navigation [data-settings-page]:hover,
 .preferences-navigation [data-settings-page][aria-current="page"] {
@@ -169,11 +180,10 @@ body .settings-page {
   gap: 24px;
   width: 100%;
   max-width: none;
-  min-height: 76px;
+  min-height: 84px;
   margin: 0;
-  padding: 18px 32px;
+  padding: 28px max(32px, calc((100% - 760px) / 2)) 20px;
   border: 0;
-  border-bottom: 1px solid var(--color-line);
   background: var(--color-surface);
 }
 .preferences-titlebar > div {
@@ -182,16 +192,13 @@ body .settings-page {
 .preferences-titlebar h1,
 .settings-page .preferences-titlebar h2 {
   margin: 0;
-  font-size: 18px;
+  font-size: 23px;
   font-weight: 600;
-  line-height: 24px;
-  letter-spacing: -0.2px;
+  line-height: 30px;
+  letter-spacing: -0.5px;
 }
 .preferences-titlebar p {
-  margin: 4px 0 0;
-  color: var(--color-text-muted);
-  font-size: 12px;
-  line-height: 18px;
+  display: none;
 }
 .settings-page .preferences-titlebar .modal-close {
   display: none;
@@ -202,28 +209,6 @@ body .settings-page {
   font-size: 12px;
   color: var(--color-text-muted);
 }
-.preferences-section-links {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: 24px;
-  min-height: 40px;
-  padding: 0 32px;
-  border-bottom: 1px solid var(--color-line);
-  background: var(--color-surface);
-}
-.preferences-section-links a {
-  display: flex;
-  align-items: center;
-  min-height: 40px;
-  color: var(--color-text-muted);
-  font-size: 12px;
-  text-decoration: none;
-}
-.preferences-section-links a:hover,
-.preferences-section-links a:focus-visible {
-  color: var(--color-text);
-}
 #settings-view .preferences-scroll,
 .settings-page .preferences-scroll {
   flex: 1;
@@ -232,58 +217,60 @@ body .settings-page {
   min-height: 0;
   min-width: 0;
   margin: 0;
-  padding: 24px 32px 48px;
+  padding: 4px 32px 40px;
   overflow: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
-  scroll-padding-top: 24px;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--color-text) 14%, transparent) transparent;
+  scroll-padding-top: 16px;
 }
 .preferences-content,
 .preferences-page-content {
   width: 100%;
-  max-width: 840px;
+  max-width: 760px;
   margin-inline: auto;
+  --preferences-group-surface: color-mix(in srgb, var(--color-surface) 96%, var(--color-text));
 }
 .preferences-section {
-  margin: 0 0 28px;
-  padding: 0;
+  margin: 0 0 18px;
+  padding: 14px 20px 10px;
   border: 0;
-  background: transparent;
-  scroll-margin-top: 24px;
+  border-radius: 10px;
+  background: var(--preferences-group-surface);
+  scroll-margin-top: 16px;
 }
 .preferences-section-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  min-height: 36px;
+  min-height: 28px;
   margin: 0;
-  padding: 0 0 8px;
+  padding: 0 0 4px;
   border: 0;
-  border-bottom: 1px solid var(--color-line);
 }
 .preferences-section-heading :is(h2, h3) {
   margin: 0;
-  color: var(--color-text);
-  font-size: 13px;
+  color: var(--color-text-muted);
+  font-size: 12px;
   font-weight: 600;
   line-height: 20px;
 }
 .preference-row,
 .preferences-destination {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(160px, 220px);
+  grid-template-columns: minmax(0, 1fr) minmax(160px, 210px);
   align-items: center;
   gap: 24px;
   min-width: 0;
-  min-height: 68px;
+  min-height: 52px;
   margin: 0;
-  padding: 15px 0;
+  padding: 9px 0;
   border: 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--color-line) 60%, transparent);
   background: transparent;
   color: var(--color-text);
-  font-size: 13px;
+  font-size: 14px;
 }
 .preference-copy {
   display: block;
@@ -295,8 +282,8 @@ body .settings-page {
 .preference-copy :is(h2, h3, b) {
   display: block;
   margin: 0;
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: 400;
   line-height: 20px;
   letter-spacing: normal;
 }
@@ -325,7 +312,7 @@ body .settings-page {
   min-height: 32px;
   padding: 6px 10px;
   border: 1px solid var(--desktop-input-border);
-  border-radius: 5px;
+  border-radius: 7px;
   background: var(--color-surface);
   color: var(--color-text);
   font-size: 13px;
@@ -376,7 +363,7 @@ body .settings-page {
   min-height: 30px;
   padding: 0;
   border: 0;
-  border-radius: 5px;
+  border-radius: 7px;
   color: var(--color-text-muted);
   background: transparent;
 }
@@ -398,8 +385,25 @@ body .settings-page {
 .preferences-update .update-notes {
   min-height: 28px;
   padding: 4px 10px;
-  border-radius: 5px;
+  border-radius: 7px;
   font-size: 12px;
+}
+.preferences-ai-panel {
+  padding: 12px 20px 18px;
+  border-radius: 10px;
+  background: var(--preferences-group-surface);
+}
+.preferences-workspace .save-state {
+  gap: 6px;
+  font-size: 12px;
+}
+.preferences-workspace .save-state[data-save-state="saved"] .save-state-mark {
+  width: 6px;
+  height: 6px;
+  background: var(--color-success-indicator);
+}
+.preferences-workspace .save-state[data-save-state="saved"] .save-state-mark svg {
+  display: none;
 }
 .preferences-form,
 .preferences-form-fields.config-fields {
@@ -444,13 +448,13 @@ body .settings-page {
 .preferences-tabs.settings-tabs {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   width: fit-content;
   padding: 3px;
-  margin: 0 0 20px;
-  border: 1px solid var(--color-line);
-  border-radius: 6px;
-  background: var(--color-navigation);
+  margin: 0 0 18px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--preferences-group-surface);
 }
 .preferences-tabs.settings-tabs button {
   min-height: 28px;
@@ -472,12 +476,12 @@ body .settings-page {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 24px;
+  gap: 20px;
   min-width: 0;
+  min-height: 52px;
   margin: 0;
-  padding: 16px 0;
+  padding: 9px 0;
   border: 0;
-  border-bottom: 1px solid var(--color-line);
 }
 .preferences-choice-row legend {
   position: absolute;
@@ -496,23 +500,30 @@ body .settings-page {
   align-items: center;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--color-text) 5%, transparent);
 }
 .preferences-choice-options label {
   display: flex;
   align-items: center;
   gap: 6px;
-  min-height: 30px;
+  min-height: 28px;
   padding: 4px 10px;
-  border: 1px solid var(--color-line);
+  border: 0;
   border-radius: 5px;
   background: transparent;
   font-size: 12px;
   line-height: 20px;
+  cursor: pointer;
+  transition:
+    background 150ms ease,
+    box-shadow 150ms ease;
 }
 .preferences-choice-options label:has(input:checked) {
-  border-color: var(--desktop-input-border);
-  background: var(--color-selected);
+  background: var(--color-surface);
+  box-shadow: 0 1px 3px #0000000d;
 }
 .preferences-choice-options input {
   width: 12px;
@@ -524,21 +535,20 @@ body .settings-page {
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  margin-top: 24px;
-  padding: 16px 0 0;
-  border-top: 1px solid var(--color-line);
+  margin-top: 18px;
+  padding: 8px 0 0;
+  border: 0;
 }
 .preferences-form-footer .save-state {
   margin-right: auto;
 }
 .preferences-disclosure.advanced-settings-section {
   display: block;
-  margin: 0;
-  padding: 0;
+  margin: 0 0 10px;
+  padding: 0 18px;
   border: 0;
-  border-bottom: 1px solid var(--color-line);
-  border-radius: 0;
-  background: transparent;
+  border-radius: 10px;
+  background: var(--preferences-group-surface);
 }
 .preferences-disclosure > summary {
   display: flex;
@@ -567,11 +577,48 @@ body .settings-page {
 }
 .preferences-disclosure-fields.advanced-fields {
   display: block;
-  padding: 0 0 16px 26px;
+  padding: 0 0 12px 26px;
 }
 .preferences-disclosure-fields.advanced-fields .preference-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 112px;
+  min-height: 46px;
+  padding: 6px 0;
+}
+.preferences-workspace .preferences-disclosure .preference-copy small {
+  display: none;
+}
+.preferences-workspace .preferences-disclosure .preference-field:has(input:invalid) small {
+  display: block;
+  color: var(--color-danger);
+}
+.preferences-permission-state .permission-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 3px 8px;
+  border: 0;
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--color-text) 5%, transparent);
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  white-space: nowrap;
+}
+.preferences-permission-state .permission-badge::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--color-text-muted);
+}
+.preferences-permission-state .permission-badge.is-granted::before {
+  background: var(--color-success-indicator);
+}
+.preferences-permission-state .permission-badge.is-denied::before {
+  background: var(--color-warning);
 }
 .preferences-disclosure-fields .advanced-settings-subgroup {
   margin: 16px 0 4px;
@@ -586,14 +633,7 @@ body .settings-page {
   background: transparent;
 }
 .preferences-model-details {
-  padding: 16px 0;
-}
-.preferences-model-details .preferences-model-description {
-  max-height: none;
-  overflow: visible;
-  font-size: 12px;
-  line-height: 20px;
-  color: var(--color-text-muted);
+  padding: 4px 0 10px;
 }
 .preferences-model-details .preferences-model-footer {
   display: flex;
@@ -634,7 +674,7 @@ body .settings-page {
   overflow: visible;
 }
 .preferences-model-group {
-  margin-bottom: 28px;
+  margin-bottom: 22px;
 }
 .preferences-model-group .model-group-heading {
   display: block;
@@ -650,20 +690,15 @@ body .settings-page {
   font-size: 11px;
   font-weight: 400;
 }
-.preferences-model-group .model-group-heading p {
-  margin: 4px 0 0;
-  color: var(--color-text-muted);
-  font-size: 12px;
-  line-height: 18px;
-}
 .preferences-model-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 24px;
-  padding: 18px 0;
+  gap: 20px;
+  margin-bottom: 8px;
+  padding: 16px;
   border: 0;
-  border-bottom: 1px solid var(--color-line);
-  background: transparent;
+  border-radius: 10px;
+  background: var(--preferences-group-surface);
 }
 .preferences-model-main {
   display: flex;
@@ -674,10 +709,11 @@ body .settings-page {
   display: grid;
   place-items: center;
   flex: none;
-  width: 30px;
-  height: 30px;
-  border: 1px solid var(--color-line);
-  border-radius: 6px;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 7px;
+  background: var(--color-surface);
   color: var(--color-text-muted);
 }
 .preferences-model-symbol .interface-icon {
@@ -744,12 +780,14 @@ body .settings-page {
   font-size: 12px;
 }
 .settings-page .settings-folder-paths {
-  margin: 0 0 28px;
-  padding: 0;
+  margin: 0 0 18px;
+  padding: 8px 20px;
   border: 0;
+  border-radius: 10px;
+  background: var(--preferences-group-surface);
 }
 .preferences-storage-meter {
-  padding: 20px 0 12px;
+  padding: 12px 0;
 }
 .preferences-section.storage-overview .storage-app-usage {
   display: flex;
@@ -770,7 +808,7 @@ body .settings-page {
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  margin: 14px 0;
+  margin: 8px 0;
   color: var(--color-text-muted);
   font-size: 12px;
   line-height: 20px;
@@ -793,9 +831,6 @@ body .settings-page {
   .settings-page .preferences-scroll {
     padding-inline: 24px;
   }
-  .preferences-section-links {
-    padding-inline: 24px;
-  }
   .preference-row,
   .preferences-form-fields.config-fields > .preference-row {
     grid-template-columns: minmax(0, 1fr) 192px;
@@ -811,14 +846,18 @@ body .settings-page {
 .preferences-speakers.speaker-manager {
   display: grid;
   grid-template-columns: 180px minmax(0, 1fr);
-  gap: 28px;
+  gap: 20px;
   min-height: 380px;
 }
 .preferences-people.speaker-directory {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
   min-width: 0;
-  padding: 0 20px 0 0;
-  border-right: 1px solid var(--color-line);
-  background: transparent;
+  padding: 10px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--preferences-group-surface);
 }
 .preferences-people-toolbar {
   display: grid;
@@ -833,7 +872,7 @@ body .settings-page {
   margin: 0;
   padding: 0 8px;
   border: 1px solid var(--color-line);
-  border-radius: 5px;
+  border-radius: 7px;
 }
 .preferences-people .search input {
   width: 100%;
@@ -883,7 +922,7 @@ body .settings-page {
   height: 30px;
   margin-top: 4px;
   border: 1px solid var(--desktop-input-border);
-  border-radius: 5px;
+  border-radius: 7px;
   background: var(--color-surface);
 }
 .preferences-people .speaker-person {
@@ -895,7 +934,7 @@ body .settings-page {
   margin: 0 0 3px;
   padding: 8px;
   border: 0;
-  border-radius: 5px;
+  border-radius: 7px;
   background: transparent;
   text-align: left;
 }
@@ -936,8 +975,8 @@ body .settings-page {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding-bottom: 20px;
-  border-bottom: 1px solid var(--color-line);
+  padding: 8px 0 16px;
+  border: 0;
 }
 .preferences-person .speaker-detail-header h2 {
   margin: 0;
@@ -963,7 +1002,7 @@ body .settings-page {
 }
 .preferences-person .preferences-sample-add {
   grid-template-columns: minmax(0, 1fr) auto;
-  padding: 20px 0;
+  padding: 4px 0;
   margin: 0;
   border: 0;
   background: transparent;
@@ -982,10 +1021,13 @@ body .settings-page {
 .preferences-about-version.about-version {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 0 0 24px;
-  margin: 0 0 24px;
-  border-bottom: 1px solid var(--color-line);
+  gap: 16px;
+  min-height: 116px;
+  padding: 24px;
+  margin: 0 0 10px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--preferences-group-surface);
 }
 .preferences-about-version .preference-copy {
   flex: 1;
@@ -993,24 +1035,47 @@ body .settings-page {
 .preferences-about-version .about-brand-mark {
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
-  border: 1px solid var(--color-line);
-  border-radius: 8px;
+  width: 52px;
+  height: 52px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--color-surface);
+  box-shadow: 0 2px 5px #00000006;
 }
 .preferences-about-version .about-brand-mark img {
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
 }
 .preferences-about-link.about-repository {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 16px 0;
+  padding: 12px 20px;
+  margin: 0 0 24px;
   border: 0;
-  border-bottom: 1px solid var(--color-line);
-  border-radius: 0;
-  background: transparent;
+  border-radius: 10px;
+  background: var(--preferences-group-surface);
+  transition: background-color 150ms ease;
+}
+.preferences-about-link.about-repository:hover {
+  background: var(--color-selected);
+}
+.preferences-about-link.about-repository > .interface-icon:first-child {
+  width: 22px;
+  height: 22px;
+}
+.preferences-about-link.about-repository > .interface-icon:last-child {
+  width: 14px;
+  height: 14px;
+  color: var(--color-text-muted);
+}
+.preferences-page-content .preferences-about-version .preference-copy h3 {
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 28px;
+}
+.preferences-about-version.about-version .preference-copy p {
+  font-size: 12px;
 }
 .preferences-about-link span {
   flex: 1;
@@ -1056,22 +1121,19 @@ html[data-theme] .settings-page .preferences-scroll {
   background: var(--color-surface);
 }
 .settings-page .preferences-workspace > .preferences-titlebar {
-  min-height: 76px;
-  padding: 18px 32px;
+  min-height: 84px;
+  padding: 28px max(32px, calc((100% - 760px) / 2)) 20px;
   margin: 0;
-  border-bottom: 1px solid var(--color-line);
+  border: 0;
 }
 .settings-page .preferences-workspace > .preferences-titlebar .modal-title h2 {
-  font-size: 18px;
+  font-size: 23px;
   font-weight: 600;
-  line-height: 24px;
-  letter-spacing: -0.2px;
+  line-height: 30px;
+  letter-spacing: -0.5px;
 }
 .settings-page .preferences-workspace > .preferences-titlebar .modal-title p {
-  margin: 4px 0 0;
-  color: var(--color-text-muted);
-  font-size: 12px;
-  line-height: 18px;
+  display: none;
 }
 .preferences-page-content {
   flex: none;
@@ -1079,34 +1141,30 @@ html[data-theme] .settings-page .preferences-scroll {
 }
 .preferences-page-content .preference-copy :is(h2, h3, b) {
   margin: 0;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 20px;
-  font-weight: 500;
+  font-weight: 400;
 }
 .preferences-page-content .preferences-section-heading :is(h2, h3) {
   margin: 0;
-  font-size: 13px;
+  font-size: 12px;
   line-height: 20px;
   font-weight: 600;
-}
-html .preferences-navigation .settings-search input {
-  background: transparent;
-  color: var(--color-text);
 }
 body .settings-page .preferences-workspace :is(.modal-action, .secondary) {
   min-height: 32px;
   padding: 6px 10px;
-  border-radius: 5px;
+  border-radius: 7px;
   font-size: 12px;
   line-height: 18px;
 }
 .settings-page .preference-row.summary-enabled-control {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(160px, 220px);
+  grid-template-columns: minmax(0, 1fr) minmax(160px, 210px);
   align-items: center;
   gap: 24px;
-  min-height: 68px;
-  padding: 15px 0;
+  min-height: 52px;
+  padding: 9px 0;
   margin: 0;
 }
 .settings-page .summary-enabled-control .preference-copy {
@@ -1153,8 +1211,8 @@ body .settings-page .preferences-workspace :is(.modal-action, .secondary) {
 .preferences-workspace .preferences-form-footer {
   position: static;
   inset: auto;
-  margin-top: 24px;
-  padding-top: 16px;
+  margin-top: 18px;
+  padding-top: 8px;
   background: transparent;
 }
 .preferences-workspace .preferences-form-fields .preference-control input {
@@ -1194,7 +1252,7 @@ body .settings-page .preferences-workspace :is(.modal-action, .secondary) {
 }
 .preferences-workspace .preferences-disclosure .preference-copy b {
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
 }
 .preferences-workspace .preferences-disclosure .preference-copy small {
   margin-top: 4px;
@@ -1220,16 +1278,7 @@ body .settings-page .preferences-workspace :is(.modal-action, .secondary) {
 .preferences-library .preferences-model-group .model-group-heading h3 {
   margin: 0;
 }
-.preferences-library .preferences-model-group .model-group-heading p {
-  display: block;
-  margin: 4px 0 0;
-  font-size: 12px;
-}
-.preferences-people.speaker-directory {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
+
 .preferences-people .speaker-create summary {
   width: 100%;
   height: auto;
@@ -1251,15 +1300,92 @@ body .settings-page .preferences-workspace :is(.modal-action, .secondary) {
 .preferences-person .speaker-sample-list article {
   margin: 0;
   border: 0;
-  border-bottom: 1px solid var(--color-line);
   border-radius: 0;
 }
+.preferences-release-notes.preferences-section {
+  padding: 0;
+  background: transparent;
+}
+.preferences-release-notes .whatsnew-list {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+}
+.preferences-release-notes .whatsnew-entry {
+  padding: 0 0 0 16px;
+  border: 0;
+  border-left: 1px solid var(--color-line);
+  border-radius: 0;
+  background: transparent;
+}
+.preferences-release-notes .whatsnew-entry > summary {
+  min-height: 44px;
+  gap: 12px;
+}
+.preferences-release-notes .whatsnew-entry > summary::after {
+  width: 6px;
+  height: 6px;
+  color: var(--color-text-muted);
+}
+.preferences-release-notes .whatsnew-heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+.preferences-release-notes .whatsnew-entry h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+}
+.preferences-release-notes .whatsnew-entry h3 em {
+  margin: 0;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 4px;
+  background: var(--color-selected);
+  color: var(--color-text-muted);
+  font-size: 10px;
+  font-weight: 400;
+  font-style: normal;
+}
+.preferences-release-notes .whatsnew-entry time {
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+.preferences-release-notes .whatsnew-entry .whatsnew-summary {
+  margin: 4px 0 12px;
+  color: var(--color-text-muted);
+}
+.preferences-release-notes .whatsnew-entry section {
+  display: block;
+  margin: 0;
+}
+.preferences-release-notes .whatsnew-entry ul {
+  display: block;
+  margin: 0;
+  padding-left: 16px;
+}
+.preferences-release-notes .whatsnew-entry li {
+  margin: 5px 0;
+  color: var(--color-text-body);
+}
+.preferences-release-notes .whatsnew-entry footer {
+  margin: 14px 0 18px;
+  font-size: 12px;
+}
 .preferences-workspace .whatsnew-entry :is(p, li) {
-  font-size: 13px;
-  line-height: 1.6;
+  font-size: 12px;
+  line-height: 1.65;
 }
 .preferences-workspace .whatsnew-entry h4 {
-  font-size: 13px;
+  margin: 16px 0 5px;
+  font-size: 12px;
   font-weight: 600;
 }
 

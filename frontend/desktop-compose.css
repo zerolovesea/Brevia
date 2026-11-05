@@ -1,23 +1,24 @@
-/* 录音与导入共用编辑区、检查区和固定提交栏，旧类名只保留控制器查询。 */
+/* 会议信息、音源和提交动作共享一张工作面；旧类名保留控制器与官网适配钩子。 */
 #prepare-view.compose-page.active {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  grid-template-columns: minmax(0, 1fr);
+  display: block;
   height: 100%;
   min-height: 0;
-  padding: 0;
-  gap: 0;
-  overflow: hidden;
+  padding: 0 32px 40px;
+  overflow: hidden auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
   container-type: inline-size;
   background: var(--color-surface);
 }
 #prepare-view.compose-page .compose-page-header {
   display: flex;
   align-items: center;
-  min-height: 76px;
+  width: 100%;
+  max-width: 740px;
+  min-height: 36px;
   gap: 12px;
-  padding: 16px 24px;
-  border-bottom: 1px solid var(--color-line);
+  margin: 36px auto 28px;
+  padding: 0;
 }
 #prepare-view.compose-page .compose-back {
   display: grid;
@@ -27,41 +28,29 @@
   height: 32px;
   padding: 6px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 8px;
   background: transparent;
   color: var(--color-text-muted);
+  transition:
+    background 160ms ease,
+    color 160ms ease;
 }
 #prepare-view.compose-page .compose-back:hover {
   background: var(--color-selected);
   color: var(--color-text);
-}
-#prepare-view.compose-page .compose-mode-mark {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 32px;
-  height: 32px;
-  border: 1px solid var(--color-line);
-  border-radius: 8px;
-  background: var(--color-navigation);
 }
 #prepare-view.compose-page .compose-page-title {
   min-width: 0;
 }
 #prepare-view.compose-page .compose-page-title h1 {
   margin: 0;
-  font-size: 18px;
+  font-size: 24px;
   font-weight: 600;
-  line-height: 24px;
+  line-height: 32px;
+  letter-spacing: -0.035em;
 }
-#prepare-view.compose-page .compose-page-title p {
-  margin: 3px 0 0;
-  color: var(--color-text-muted);
-  font-size: 12px;
-  line-height: 18px;
-}
-#prepare-view.compose-page[data-mode="record"] .compose-import-copy,
-#prepare-view.compose-page[data-mode="import"] .compose-record-copy,
+#prepare-view.compose-page .compose-page-title p,
+#prepare-view.compose-page .compose-source-description,
 #prepare-view.compose-page[data-mode="import"] .compose-record-inspector,
 #prepare-view.compose-page[data-mode="import"] .compose-advanced {
   display: none;
@@ -69,40 +58,37 @@
 #prepare-view.compose-page #meeting-form.compose-form {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr) auto;
-  align-items: stretch;
+  grid-template-rows: auto auto;
+  align-content: start;
+  width: 100%;
+  max-width: 740px;
   min-height: 0;
-  height: 100%;
-  gap: 0;
-  margin: 0;
+  height: auto;
+  gap: 20px;
+  margin: 0 auto;
   padding: 0;
-  overflow: hidden;
+  overflow: visible;
 }
 #prepare-view.compose-page .compose-workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 280px;
+  grid-template-columns: minmax(0, 1fr);
   align-content: start;
   align-items: start;
   width: 100%;
-  max-width: 1080px;
+  min-width: 0;
   min-height: 0;
-  height: 100%;
-  gap: 40px;
-  margin-inline: auto;
-  padding: 32px;
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
+  height: auto;
+  gap: 24px;
+  margin: 0;
+  padding: 0;
 }
 #prepare-view.compose-page .compose-editor {
-  display: flex;
-  flex-direction: column;
+  display: grid;
   min-width: 0;
-  gap: 28px;
+  gap: 24px;
 }
 #prepare-view.compose-page .compose-section-header {
-  margin-bottom: 18px;
+  margin-bottom: 12px;
 }
 #prepare-view.compose-page .compose-section-header h2,
 #prepare-view.compose-page #meeting-form .compose-source-fieldset legend {
@@ -112,16 +98,13 @@
   margin: 0;
   padding: 0;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 20px;
 }
 #prepare-view.compose-page .compose-meeting-fields {
   display: grid;
   min-width: 0;
-  gap: 20px;
-}
-#prepare-view.compose-page .compose-meeting-fields > .compose-section-header {
-  margin-bottom: 0;
+  gap: 16px;
 }
 #prepare-view.compose-page #meeting-form label,
 #prepare-view.compose-page #meeting-form .compose-essential-fields > label {
@@ -130,29 +113,30 @@
   align-items: start;
   min-width: 0;
   gap: 7px;
-  color: var(--color-text);
+  color: var(--color-text-muted);
   font-size: 12px;
   font-weight: 400;
   line-height: 18px;
 }
 #prepare-view.compose-page #meeting-form #meeting-title {
   width: 100%;
-  min-height: 36px;
-  height: 36px;
-  padding: 7px 10px;
+  min-height: 44px;
+  height: 44px;
+  padding: 9px 12px;
   border: 1px solid var(--desktop-input-border);
-  border-radius: 6px;
+  border-radius: 9px;
   background: var(--color-surface);
   color: var(--color-text);
-  font-size: 14px;
-  font-weight: 400;
-  line-height: 20px;
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 24px;
 }
 #prepare-view.compose-page #meeting-form :is(.ui-select-trigger, .flow-select-toggle) {
-  min-height: 36px;
-  height: 36px;
+  min-height: 38px;
+  height: 38px;
   min-width: 0;
-  padding: 7px 30px 7px 10px;
+  padding: 8px 30px 8px 11px;
+  border-radius: 8px;
   font-size: 13px;
   font-weight: 400;
   line-height: 20px;
@@ -161,53 +145,65 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   min-width: 0;
-  gap: 20px 16px;
+  gap: 16px;
   margin: 0;
   padding: 0;
 }
 #prepare-view.compose-page .compose-advanced {
-  margin: 0;
-  border-top: 1px solid var(--color-line);
+  margin: -8px 0 0;
+  border: 0;
 }
 #prepare-view.compose-page .compose-advanced > summary {
   display: flex;
   align-items: center;
+  width: fit-content;
   gap: 8px;
-  min-height: 44px;
-  padding: 12px 0;
+  min-height: 32px;
+  padding: 5px 0;
   color: var(--color-text-muted);
   font-size: 12px;
   line-height: 20px;
   list-style: none;
   cursor: pointer;
 }
+#prepare-view.compose-page .compose-advanced > summary:hover {
+  color: var(--color-text);
+}
 #prepare-view.compose-page .compose-advanced > summary::-webkit-details-marker {
   display: none;
 }
-#prepare-view.compose-page .compose-advanced > summary > :last-child {
-  margin-left: auto;
-}
 #prepare-view.compose-page .compose-advanced > summary .interface-icon {
-  width: 15px;
-  height: 15px;
+  width: 14px;
+  height: 14px;
+}
+#prepare-view.compose-page .compose-advanced > summary > :last-child {
+  transition: transform 180ms ease;
 }
 #prepare-view.compose-page .compose-advanced[open] > summary > :last-child {
   transform: rotate(180deg);
 }
-#prepare-view.compose-page .compose-extra-fields {
+#prepare-view.compose-page .compose-extra-fields,
+#prepare-view.compose-page .compose-processing .compose-processing-fields {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-  padding: 8px 0 16px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  min-width: 0;
+  gap: 14px;
+  margin: 0;
+  padding: 12px 0 0;
 }
 #prepare-view.compose-page .compose-inspector {
   min-width: 0;
-  padding-left: 24px;
-  border-left: 1px solid var(--color-line);
+  padding: 0;
+  border: 0;
 }
 #prepare-view.compose-page .compose-record-inspector {
   display: grid;
-  gap: 24px;
+  min-width: 0;
+  gap: 18px;
+  padding: 18px;
+  border: 1px solid color-mix(in srgb, var(--color-line) 65%, transparent);
+  border-radius: 14px;
+  background: var(--color-navigation);
 }
 #prepare-view.compose-page #meeting-form .compose-source-fieldset {
   grid-area: auto;
@@ -218,37 +214,38 @@
 }
 #prepare-view.compose-page .compose-source-mount {
   display: block;
-  margin-top: 14px;
+  margin-top: 12px;
 }
-#prepare-view.compose-page :is(.compose-source-switch, .capture-source-list) {
+#prepare-view.compose-page .compose-source-switch {
   min-width: 0;
 }
-#prepare-view.compose-page :is(.compose-source-switch, .capture-source-list) .flow-select-options,
-#prepare-view.compose-page .compose-source-switch[role="radiogroup"] {
+#prepare-view.compose-page .compose-source-switch .flow-select-options {
   position: static;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 3px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 6px;
   max-height: none;
   margin: 0;
-  padding: 3px;
-  border: 1px solid var(--color-line);
-  border-radius: 8px;
-  background: var(--color-navigation);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   box-shadow: none;
 }
-#prepare-view.compose-page :is(.compose-source-switch, .capture-source-list) [role="radio"] {
+#prepare-view.compose-page .compose-source-switch [role="radio"] {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   width: 100%;
   min-width: 0;
-  min-height: 36px;
+  min-height: 76px;
   height: auto;
-  gap: 5px;
-  padding: 6px;
+  gap: 9px;
+  padding: 10px 8px;
   border: 1px solid transparent;
-  border-radius: 5px;
+  border-radius: 9px;
   background: transparent;
   color: var(--color-text-muted);
   font-size: 12px;
@@ -257,69 +254,55 @@
   text-align: center;
   white-space: normal;
   overflow-wrap: anywhere;
+  transition:
+    background 160ms ease,
+    box-shadow 160ms ease,
+    color 160ms ease;
 }
-#prepare-view.compose-page :is(.compose-source-switch, .capture-source-list) [role="radio"]:hover {
+#prepare-view.compose-page .compose-source-switch [role="radio"]:hover {
   color: var(--color-text);
   background: var(--color-selected);
 }
-#prepare-view.compose-page
-  :is(.compose-source-switch, .capture-source-list)
-  [role="radio"][aria-checked="true"] {
+#prepare-view.compose-page .compose-source-switch [role="radio"][aria-checked="true"] {
   border-color: var(--color-line);
   background: var(--color-surface);
   color: var(--color-text);
-  box-shadow: 0 1px 2px #00000006;
+  box-shadow:
+    0 2px 5px #00000006,
+    0 1px 2px #00000004;
 }
-#prepare-view.compose-page
-  :is(.compose-source-switch, .capture-source-list)
-  [role="radio"]
-  .interface-icon {
-  width: 14px;
-  height: 14px;
+#prepare-view.compose-page .compose-source-switch [role="radio"] .interface-icon {
+  width: 19px;
+  height: 19px;
   flex: none;
-}
-#prepare-view.compose-page :is(.compose-source-switch, .capture-source-list) [role="radio"] b {
-  display: inline;
-  font-size: 12px;
-  font-weight: 400;
-  line-height: inherit;
-}
-#prepare-view.compose-page
-  :is(.compose-source-switch, .capture-source-list)
-  [role="radio"]
-  :is(i, small, .capture-phone-count) {
-  display: none;
-}
-#prepare-view.compose-page .compose-source-description {
-  min-height: 36px;
-  margin: 10px 0 0;
-  color: var(--color-text-muted);
-  font-size: 11px;
-  line-height: 18px;
 }
 #prepare-view.compose-page .compose-device-routes {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
   min-width: 0;
   gap: 12px;
 }
-#prepare-view.compose-page #mic-device-setting[hidden] {
+#prepare-view.compose-page #mic-device-setting[hidden],
+#prepare-view.compose-page #phone-device-setting[hidden] {
   display: none !important;
 }
 #prepare-view.compose-page .compose-connect-device {
   display: inline-flex;
   align-items: center;
-  justify-self: start;
-  min-height: 28px;
+  justify-self: end;
+  min-height: 38px;
   gap: 6px;
-  padding: 4px 0;
+  padding: 8px;
   border: 0;
-  border-radius: 4px;
+  border-radius: 7px;
   background: transparent;
   color: var(--color-text-muted);
   font-size: 12px;
   line-height: 20px;
 }
 #prepare-view.compose-page .compose-connect-device:hover {
+  background: var(--color-selected);
   color: var(--color-text);
 }
 #prepare-view.compose-page .compose-connect-device .interface-icon {
@@ -329,13 +312,12 @@
 #prepare-view.compose-page .compose-input-monitor {
   grid-area: auto;
   min-width: 0;
-  padding: 16px 0 0;
+  padding: 0;
   border: 0;
-  border-top: 1px solid var(--color-line);
 }
 #prepare-view.compose-page .compose-input-monitor .capture-status {
-  grid-template-columns: minmax(0, 1fr);
-  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 24px;
   margin: 0;
   padding: 0;
   border: 0;
@@ -343,18 +325,20 @@
   line-height: 18px;
 }
 #prepare-view.compose-page .capture-status > span {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 6px;
+  display: flex;
+  align-items: center;
   min-width: 0;
+  gap: 12px;
 }
 #prepare-view.compose-page .capture-status b {
+  flex: none;
   font-size: 11px;
   font-weight: 400;
 }
 #prepare-view.compose-page .capture-status strong {
   display: flex;
   align-items: center;
+  flex: 1;
   justify-content: space-between;
   min-width: 0;
   gap: 8px;
@@ -371,7 +355,7 @@
   display: block;
   margin-top: 12px;
   color: var(--color-text-muted);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 18px;
 }
 #prepare-view.compose-page .compose-processing {
@@ -380,29 +364,29 @@
   padding: 0;
   border: 0;
 }
-#prepare-view.compose-page .compose-processing .compose-processing-fields {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 20px;
+#prepare-view.compose-page .compose-processing .compose-section-header {
   margin: 0;
 }
 #prepare-view.compose-page .compose-import-stage {
+  grid-area: auto;
   min-width: 0;
 }
-#prepare-view.compose-page .compose-drop-target,
-#prepare-view.compose-page .compose-drop-target.has-file {
+#prepare-view.compose-page .compose-drop-target {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   width: 100%;
-  min-height: 220px;
+  min-height: 168px;
   gap: 8px;
   padding: 24px;
   border: 1px dashed var(--desktop-input-border);
-  border-radius: 10px;
+  border-radius: 14px;
   background: var(--color-navigation);
   text-align: center;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease;
 }
 #prepare-view.compose-page .compose-drop-target:hover,
 #prepare-view.compose-page .compose-drop-target.is-dragging {
@@ -412,17 +396,14 @@
 #prepare-view.compose-page .compose-drop-symbol {
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
-  margin-bottom: 4px;
-  border: 1px solid var(--color-line);
-  border-radius: 10px;
-  background: var(--color-surface);
+  width: 38px;
+  height: 38px;
+  margin-bottom: 3px;
   color: var(--color-text-muted);
 }
 #prepare-view.compose-page .compose-drop-symbol .interface-icon {
-  width: 20px;
-  height: 20px;
+  width: 28px;
+  height: 28px;
 }
 #prepare-view.compose-page .compose-drop-heading {
   margin: 0;
@@ -436,31 +417,48 @@
   font-size: 11px;
   line-height: 18px;
 }
-#prepare-view.compose-page .compose-file-picker {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 32px;
-  margin-top: 8px;
-  padding: 6px 12px;
-  border: 1px solid var(--desktop-input-border);
-  border-radius: 6px;
-  background: var(--color-surface);
-  color: var(--color-text);
+#prepare-view.compose-page .compose-drop-target.has-file {
+  min-height: 48px;
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+}
+#prepare-view.compose-page .compose-drop-target.has-file .compose-drop-symbol {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+}
+#prepare-view.compose-page .compose-drop-target.has-file .compose-drop-symbol .interface-icon {
+  width: 18px;
+  height: 18px;
+}
+#prepare-view.compose-page .compose-drop-target.has-file .compose-drop-heading {
   font-size: 12px;
+  font-weight: 400;
+}
+#prepare-view.compose-page .compose-drop-target.has-file .compose-drop-description {
+  display: none;
 }
 #prepare-view.compose-page .compose-file-item {
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) 28px;
+  grid-template-columns: 32px minmax(0, 1fr) 28px;
   align-items: center;
   gap: 8px 12px;
   min-width: 0;
-  margin: 12px 0 0;
-  padding: 12px 0;
-  border: 0;
-  border-bottom: 1px solid var(--color-line);
-  border-radius: 0;
+  margin: 10px 0 0;
+  padding: 14px;
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
   background: var(--color-surface);
+}
+#prepare-view.compose-page .compose-file-symbol {
+  display: grid;
+  place-items: center;
+  height: 36px;
+  border-radius: 7px;
+  background: var(--color-navigation);
+  color: var(--color-text-muted);
 }
 #prepare-view.compose-page .compose-file-description {
   display: grid;
@@ -471,7 +469,7 @@
   overflow: hidden;
   color: var(--color-text);
   font-size: 13px;
-  font-weight: 400;
+  font-weight: 500;
   line-height: 20px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -504,98 +502,71 @@
   height: 12px;
 }
 #prepare-view.compose-page .compose-footer {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px 24px;
-  min-width: 0;
-  margin: 0;
-  padding: 14px 24px;
-  border-top: 1px solid var(--color-line);
-  background: var(--color-surface);
-  z-index: 1;
-}
-#prepare-view.compose-page .compose-footer-summary {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
   min-width: 0;
-  gap: 8px;
-  color: var(--color-text-muted);
-  font-size: 12px;
-  line-height: 20px;
-}
-#prepare-view.compose-page .compose-footer-summary .interface-icon {
-  width: 15px;
-  height: 15px;
+  gap: 12px 20px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: var(--color-surface);
 }
 #prepare-view.compose-page .compose-footer .compose-submit {
   width: auto;
-  min-width: 128px;
-  min-height: 36px;
-  margin: 0;
-  padding: 8px 16px;
+  min-width: 132px;
+  min-height: 40px;
+  margin: 0 0 0 auto;
+  padding: 10px 18px;
+  border-radius: 9px;
   font-size: 13px;
   line-height: 20px;
 }
 #prepare-view.compose-page .compose-error {
-  grid-column: 1 / -1;
-  grid-row: auto;
+  flex: 1 1 250px;
   margin: 0;
   font-size: 12px;
   line-height: 18px;
 }
-@container (max-width: 760px) {
-  #prepare-view.compose-page .compose-workspace {
-    grid-template-columns: minmax(0, 1fr) 240px;
-    gap: 24px;
-    padding: 24px;
+@container (max-width: 580px) {
+  #prepare-view.compose-page .compose-extra-fields,
+  #prepare-view.compose-page .compose-processing .compose-processing-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  #prepare-view.compose-page .compose-inspector {
-    padding-left: 20px;
+  #prepare-view.compose-page .compose-source-switch [role="radio"] {
+    padding-inline: 5px;
+  }
+  #prepare-view.compose-page .compose-input-monitor .capture-status {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@container (max-width: 420px) {
+  #prepare-view.compose-page .compose-source-switch .flow-select-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   #prepare-view.compose-page #meeting-form .compose-essential-fields,
-  #prepare-view.compose-page .compose-extra-fields {
+  #prepare-view.compose-page .compose-extra-fields,
+  #prepare-view.compose-page .compose-processing .compose-processing-fields {
     grid-template-columns: minmax(0, 1fr);
   }
-  #prepare-view.compose-page .compose-drop-target,
-  #prepare-view.compose-page .compose-drop-target.has-file {
-    min-height: 180px;
-    padding: 20px 12px;
-  }
-}
-@container (max-width: 600px) {
-  #prepare-view.compose-page .compose-workspace {
-    grid-template-columns: minmax(0, 1fr) 220px;
-    gap: 16px;
-    padding: 20px;
-  }
-  #prepare-view.compose-page .compose-inspector {
-    padding-left: 16px;
-  }
-  #prepare-view.compose-page .compose-page-header {
-    gap: 10px;
-    padding-inline: 20px;
-  }
-}
-@container (max-width: 520px) {
-  #prepare-view.compose-page .compose-workspace {
+  #prepare-view.compose-page .compose-device-routes {
     grid-template-columns: minmax(0, 1fr);
-  }
-  #prepare-view.compose-page .compose-inspector {
-    padding: 24px 0 0;
-    border-left: 0;
-    border-top: 1px solid var(--color-line);
   }
 }
 @media (max-height: 700px) {
   #prepare-view.compose-page .compose-page-header {
-    min-height: 64px;
-    padding-block: 12px;
+    margin-block: 20px;
   }
-  #prepare-view.compose-page .compose-workspace {
-    padding-block: 20px;
-  }
-  #prepare-view.compose-page .compose-footer {
-    padding-block: 12px;
+}
+@media (prefers-reduced-motion: reduce) {
+  #prepare-view.compose-page
+    :is(
+      .compose-back,
+      .compose-drop-target,
+      .compose-source-switch [role="radio"],
+      .compose-advanced > summary > :last-child
+    ) {
+    transition: none;
   }
 }

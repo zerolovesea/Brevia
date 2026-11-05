@@ -79,7 +79,18 @@ window.detailActiveTab = 'summary';
 
     // 官网保留旧侧栏与正文列表；桌面状态栏和会议树不带入既定宣传画面。
     const navigation = sidebar.querySelector('nav');
-    navigation.prepend(sidebar.querySelector('.workspace-container'));
+    const brand = sidebar.querySelector('.brand');
+    brand.removeAttribute('id');
+    brand.className = 'brand';
+    const allMeetings = element('button', 'nav-item active');
+    allMeetings.id = 'all-meetings';
+    allMeetings.dataset.view = 'home';
+    allMeetings.innerHTML =
+      '<span data-interface-icon="document" aria-hidden="true"></span> 会议库';
+    navigation.prepend(sidebar.querySelector('.workspace-container'), allMeetings);
+    const settings = shell.querySelector('.statusbar-settings');
+    settings.className = 'nav-item sidebar-settings';
+    settings.append(document.createTextNode('设置'));
     const quickSidebar = quick.cloneNode(true);
     quickSidebar.className = 'import-recording quick-recording';
     const tasks = sidebar.querySelector('#task-cards');
@@ -92,7 +103,7 @@ window.detailActiveTab = 'summary';
       navigation,
       shell.querySelector('[data-task-summary]'),
       shell.querySelector('#mobile-nav'),
-      sidebar.querySelector('.sidebar-settings'),
+      settings,
       sidebar.querySelector('[data-toggle-task-stack]'),
       tasks,
     );

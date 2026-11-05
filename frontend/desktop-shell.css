@@ -58,7 +58,7 @@ body {
 }
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--desktop-input-border) transparent;
+  scrollbar-color: color-mix(in srgb, var(--color-text) 20%, transparent) transparent;
   caret-color: var(--color-text);
 }
 button,
@@ -200,14 +200,14 @@ textarea,
 }
 /* 会议导航：搜索与创建是命令区，会议树独立滚动。 */
 #desktop-app .navigation-sidebar {
-  padding: 42px 10px 8px;
+  padding: 42px 12px 8px;
 }
 #desktop-app .navigation-brand {
   display: flex;
   align-items: center;
   height: 38px;
   flex: none;
-  margin: 0 4px 10px;
+  margin: 0 0 12px;
 }
 #desktop-app .navigation-brand .brand {
   display: flex;
@@ -215,8 +215,10 @@ textarea,
   width: auto;
   min-height: 28px;
   margin: 0;
-  padding: 0 4px;
+  padding: 0 7px;
   gap: 8px;
+  border-radius: 6px;
+  background: transparent;
 }
 #desktop-app .navigation-brand .brand-mark {
   display: block;
@@ -245,7 +247,7 @@ textarea,
 #desktop-app .navigation-search {
   display: flex;
   flex: none;
-  margin: 0 0 8px;
+  margin: 0 0 18px;
   padding: 0;
   border: 0;
 }
@@ -307,9 +309,9 @@ textarea,
 }
 #desktop-app .navigation-actions {
   display: flex;
-  gap: 4px;
+  gap: 2px;
   flex: none;
-  margin: 0 0 20px;
+  margin: 0 0 0 auto;
 }
 #desktop-app .navigation-actions button {
   display: flex;
@@ -326,20 +328,17 @@ textarea,
   color: var(--color-text);
   font: 400 13px/20px system-ui;
 }
-#desktop-app .navigation-actions .new-meeting {
-  flex: 1;
-}
-#desktop-app .navigation-actions .import-recording {
-  width: 34px;
-  padding: 9px;
+#desktop-app .navigation-actions :is(.new-meeting, .import-recording) {
   flex: none;
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 8px;
 }
-#desktop-app .navigation-actions .import-recording-label {
+#desktop-app .navigation-actions :is(.new-meeting-label, .import-recording-label) {
   display: none;
 }
-#desktop-app
-  .navigation-actions
-  :is(.new-meeting-label, .new-meeting-icon, .import-recording-icon) {
+#desktop-app .navigation-actions :is(.new-meeting-icon, .import-recording-icon) {
   opacity: 1;
   visibility: visible;
   max-width: none;
@@ -415,19 +414,25 @@ textarea,
   display: block;
   flex: 1;
   min-height: 0;
-  margin: 0;
-  padding: 0 0 12px;
+  margin: 0 -10px 0 0;
+  padding: 0 10px 12px 0;
+  scrollbar-gutter: stable;
+  scrollbar-color: transparent transparent;
   overflow-y: auto;
   overflow-x: hidden;
 }
+#desktop-app .meeting-list:is(:hover, :focus-within) {
+  scrollbar-color: color-mix(in srgb, var(--color-text) 20%, transparent) transparent;
+}
 #desktop-app .sidebar-workspace {
   border: 0;
-  margin: 0 0 12px;
+  margin: 0 0 14px;
   padding: 0;
 }
 #desktop-app .sidebar-workspace-header {
   display: flex;
   align-items: center;
+  position: relative;
   gap: 0;
   min-height: 30px;
 }
@@ -469,7 +474,18 @@ textarea,
   font-variant-numeric: tabular-nums;
   color: var(--color-text-subtle);
 }
+#desktop-app .sidebar-workspace-toggle[aria-pressed="true"] .workspace-label {
+  color: var(--color-text);
+  font-weight: 550;
+}
+#desktop-app
+  .sidebar-workspace-header:has(.sidebar-workspace-edit):is(:hover, :focus-within)
+  .sidebar-workspace-count {
+  opacity: 0;
+}
 #desktop-app .sidebar-workspace-edit {
+  position: absolute;
+  inset-inline-end: 0;
   opacity: 0;
   width: 24px;
   height: 24px;
@@ -585,18 +601,13 @@ textarea,
   align-items: center;
   flex: none;
   order: 10;
-  margin: 0 -10px -8px;
-  padding: 7px 10px;
-  border-top: 1px solid var(--color-line);
-  gap: 4px;
+  margin: 0;
+  padding: 6px 0 0;
+  border: 0;
 }
 #desktop-app .navigation-footer nav {
   display: flex;
-  flex-direction: row;
-  align-items: center;
-  flex: 1;
-  min-width: 0;
-  gap: 3px;
+  width: 100%;
   margin: 0;
   padding: 0;
   border: 0;
@@ -604,12 +615,12 @@ textarea,
 #desktop-app .navigation-footer .nav-item {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   min-height: 30px;
   height: 30px;
-  width: auto;
+  width: 100%;
   margin: 0;
-  padding: 6px 8px;
+  padding: 6px 9px;
   border: 0;
   border-radius: 6px;
   background: transparent;
@@ -621,83 +632,61 @@ textarea,
   background: var(--color-selected);
   color: var(--color-text);
 }
-#desktop-app .navigation-footer #all-meetings {
-  display: block;
-  flex: 0 1 auto;
-  min-width: 0;
-  max-width: calc(100% - 33px);
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-#desktop-app .navigation-footer #all-meetings .interface-icon {
-  display: inline-block;
-  vertical-align: middle;
-  margin-right: 6px;
-}
-#desktop-app .navigation-footer #recently-deleted {
-  flex: none;
-  font-size: 0;
-  padding: 7px;
-  width: 30px;
-}
-#desktop-app .navigation-footer .sidebar-settings {
-  flex: none;
-  font-size: 0;
-  padding: 7px;
-  width: 30px;
-}
 #desktop-app .sidebar .library-heading {
   display: none;
 }
 #desktop-app .batch-toolbar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  display: flex;
   align-items: center;
   flex: none;
-  gap: 8px;
-  margin: 0 0 10px;
-  padding: 9px;
-  border: 1px solid var(--color-line);
-  border-radius: 8px;
-  background: var(--color-surface);
+  gap: 6px;
+  margin: 0 0 8px;
+  padding: 5px 7px;
+  min-height: 36px;
+  border: 0;
+  border-radius: 7px;
+  background: var(--color-selected);
 }
 #desktop-app .batch-select-all {
   display: flex;
   align-items: center;
-  gap: 7px;
-  font-size: 11px;
+  min-height: 26px;
+}
+#desktop-app [data-batch-all-label] {
+  display: none;
 }
 #desktop-app .batch-toolbar input {
   width: 14px;
   height: 14px;
   min-height: 14px;
+  margin: 0;
   accent-color: var(--color-text);
 }
 #desktop-app .batch-toolbar strong {
-  font-size: 10px;
+  flex: 1;
+  font-size: 11px;
   font-weight: 400;
+  white-space: nowrap;
 }
 #desktop-app .batch-actions {
-  grid-column: 1/-1;
   display: flex;
-  justify-content: flex-end;
-  gap: 4px;
+  gap: 2px;
 }
 #desktop-app .batch-actions button {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  min-height: 25px;
-  height: 25px;
-  padding: 3px 6px;
+  justify-content: center;
+  min-height: 26px;
+  height: 26px;
+  width: 26px;
+  padding: 5px;
   border: 0;
-  border-radius: 4px;
-  font-size: 11px;
+  border-radius: 5px;
+  font-size: 0;
   background: transparent;
 }
 #desktop-app .batch-actions button:hover {
-  background: var(--color-selected);
+  background: var(--color-surface);
 }
 #desktop-app .library-empty {
   min-height: 160px;

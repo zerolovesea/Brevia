@@ -448,7 +448,7 @@ function renderSettingsCard({ title, description, action, modal }) {
 }
 /** 每项设置拥有独立标签、说明和控制区，长译文不会挤压右侧控件。 */
 function renderPreferenceRow(label, description, control) {
-  return `<div class="preference-row"><div class="preference-copy"><h3>${escapeHtml(t(label))}</h3>${description ? `<p>${escapeHtml(description)}</p>` : ''}</div><div class="preference-control">${control}</div></div>`;
+  return `<div class="preference-row"${description ? ` title="${escapeHtml(description)}"` : ''}><div class="preference-copy"><h3>${escapeHtml(t(label))}</h3></div><div class="preference-control">${control}</div></div>`;
 }
 /** 重建通用设置工作面；保留持有实时状态与事件的设备、更新节点。 */
 function renderSettingsView() {
@@ -457,7 +457,7 @@ function renderSettingsView() {
     .map((id) => document.getElementById(id))
     .filter(Boolean);
   const previousScroll = settingsView.querySelector('.preferences-scroll')?.scrollTop || 0;
-  settingsView.innerHTML = `${renderSettingsNavigation('general')}<main class="settings-general-main preferences-workspace"><header class="preferences-titlebar"><div><h1>${escapeHtml(t('通用'))}</h1><p>${escapeHtml(t('管理 Brevia 的使用偏好、AI 能力与数据设置。'))}</p></div><span class="desktop-settings-status" data-desktop-settings-status hidden aria-live="polite" role="status"></span></header><nav class="preferences-section-links" aria-label="${escapeHtml(t('通用'))}"><a href="#preferences-basics">${escapeHtml(t('基本'))}</a><a href="#preferences-window" data-desktop-section-link>${escapeHtml(t('窗口与后台'))}</a><a href="#preferences-shortcuts" data-desktop-section-link>${escapeHtml(t('全局快捷键'))}</a></nav><div class="preferences-scroll"><div class="preferences-content"><section class="preferences-section" id="preferences-basics" aria-labelledby="preferences-basics-title"><header class="preferences-section-heading"><h2 id="preferences-basics-title">${escapeHtml(t('基本'))}</h2></header>${renderPreferenceRow(
+  settingsView.innerHTML = `${renderSettingsNavigation('general')}<main class="settings-general-main preferences-workspace"><header class="preferences-titlebar"><div><h1>${escapeHtml(t('通用'))}</h1></div><span class="desktop-settings-status" data-desktop-settings-status hidden aria-live="polite" role="status"></span></header><div class="preferences-scroll"><div class="preferences-content"><section class="preferences-section" id="preferences-basics" aria-labelledby="preferences-basics-title"><header class="preferences-section-heading"><h2 id="preferences-basics-title">${escapeHtml(t('基本'))}</h2></header>${renderPreferenceRow(
     '界面语言',
     t('切换语言'),
     desktopSelect('interface-language', locale, [
@@ -478,7 +478,7 @@ function renderSettingsView() {
       ['light', t('浅色')],
       ['dark', t('深色')],
     ]),
-  )}</section><div data-desktop-settings-mount></div><section class="preferences-section preferences-destinations" aria-labelledby="preferences-destinations-title"><header class="preferences-section-heading"><h2 id="preferences-destinations-title">${escapeHtml(t('设备与数据'))}</h2></header>${uiData.settings.cards
+  )}</section><div data-desktop-settings-mount></div><section class="preferences-section preferences-destinations" hidden aria-labelledby="preferences-destinations-title"><header class="preferences-section-heading"><h2 id="preferences-destinations-title">${escapeHtml(t('设备与数据'))}</h2></header>${uiData.settings.cards
     .filter((card) => card.modal === 'storage')
     .map(renderSettingsCard)
     .join('')}</section></div></div></main>`;
@@ -531,9 +531,6 @@ function renderDesktopPreferences() {
   const mount = document.querySelector('[data-desktop-settings-mount]');
   if (!mount) return;
   const supported = Boolean(desktopPreferences && window.brevia?.desktop);
-  document.querySelectorAll('[data-desktop-section-link]').forEach((link) => {
-    link.hidden = !supported;
-  });
   if (!supported) {
     mount.replaceChildren();
     return;
