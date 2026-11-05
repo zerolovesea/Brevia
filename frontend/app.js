@@ -65,7 +65,7 @@ const refinementPercent = document.querySelector('#refinement-percent');
 const refinementBar = document.querySelector('#refinement-bar');
 const taskCards = document.querySelector('#task-cards');
 const stackableTaskCardSelector =
-  ':is(.processing-card, .mini-meeting, .mini-playback, .software-update-notice):not([hidden])';
+  ':is(.processing-card, .mini-meeting, .mini-playback):not([hidden])';
 function syncTaskCardStack(active) {
   const cards = [...taskCards.children].filter((card) => card.matches(stackableTaskCardSelector));
   const toggle = document.querySelector('[data-toggle-task-stack]');
@@ -155,9 +155,7 @@ function toggleTaskStack() {
 document.querySelector('[data-toggle-task-stack]').addEventListener('click', toggleTaskStack);
 function activateTaskCard(card) {
   if (
-    !card?.matches(
-      ':is(.processing-card, .mini-meeting, .mini-playback, .software-update-notice):not([hidden])',
-    ) ||
+    !card?.matches(':is(.processing-card, .mini-meeting, .mini-playback):not([hidden])') ||
     card.classList.contains('task-card-leave')
   )
     return;
@@ -417,18 +415,36 @@ const updateDescription = updateCard.querySelector('p');
 const updateButton = updateCard.querySelector('button.update-button');
 const updateNotesButton = updateCard.querySelector('.update-notes');
 const updateNotice = document.createElement('aside');
-updateNotice.className = 'software-update-notice';
+updateNotice.className = 'release-notice';
 updateNotice.hidden = true;
-updateNotice.innerHTML = `<div class="task-kind-icon">${interfaceIcon('upload')}</div><span></span><i hidden aria-hidden="true"><b></b></i><button type="button"></button>`;
-taskCards.append(updateNotice);
-const updateNoticeText = updateNotice.querySelector('span');
-const updateNoticeProgress = updateNotice.querySelector('i');
-const updateNoticeProgressBar = updateNoticeProgress.querySelector('b');
-const updateNoticeButton = updateNotice.querySelector('button');
+updateNotice.innerHTML = `<header><strong></strong><button type="button" data-dismiss-update>${interfaceIcon('close')}</button></header><p></p><a data-release-link target="_blank" rel="noopener noreferrer"></a><progress max="100" hidden></progress><button type="button" class="release-install" data-install-app-update></button>`;
+document.body.append(updateNotice);
 let updateAvailable = false;
 let updateVersion = '';
-let updateBusy = false;
+let updateBusy = '';
 let updateDownloadProgress = null;
+let updateStatus = '';
+let updateRetryDelay = 3600000;
+let updateCheckTimer;
+let nextUpdateCheckAt = 0;
+let updateReminderTimer;
+const UPDATE_DAY = 86400000;
+const updateDelays = [0, 1, 3, 7, 14, 30];
+let updatePolicy = {};
+try {
+  const saved = JSON.parse(localStorage.getItem('brevia-update-policy'));
+  if (saved && typeof saved === 'object') updatePolicy = saved;
+} catch {
+  // 存储不可用时仍允许本次会话检查、下载和关闭提醒。
+}
+if (!updateDelays.includes(updatePolicy.delayDays)) updatePolicy.delayDays = 0;
+function persistUpdatePolicy() {
+  try {
+    localStorage.setItem('brevia-update-policy', JSON.stringify(updatePolicy));
+  } catch {
+    // 本次会话仍使用内存中的提醒偏好。
+  }
+}
 let installedAppVersion = '—';
 const appVersion = document.querySelector('#app-version');
 document.querySelectorAll('.startup-credit, .app-credit').forEach((credit) => credit.remove());
@@ -508,55 +524,80 @@ function availableUpdateLabel() {
 function availableUpdateActionLabel() {
   return updateVersion ? updateCopy().update.replace('0.2.0', updateVersion) : updateCopy().update;
 }
-function renderUpdateNotice() {
-  const copy = updateCopy();
-  const progress =
-    updateDownloadProgress && Math.max(0, Math.min(100, updateDownloadProgress.percent || 0));
-  updateNoticeText.textContent =
-    progress === null
-      ? availableUpdateLabel()
-      : `${copy.downloading || '正在下载'} ${Math.round(progress)}%`;
-  updateNoticeProgress.hidden = progress === null;
-  updateNoticeProgressBar.style.transform = `scaleX(${(progress || 0) / 100})`;
-  updateNoticeButton.textContent = progress === null ? copy.floating : copy.updating;
-  updateNoticeButton.disabled = updateBusy;
-  const wasHidden = updateNotice.hidden;
-  updateNotice.hidden = !updateAvailable;
-  if (updateAvailable && wasHidden) {
-    taskCards.append(updateNotice);
-    enterTaskCard(updateNotice);
-  }
+function updateReleaseLink(link) {
+  link.textContent = (whatsNewCopy[locale] || whatsNewCopy.en).title;
+  link.href = `https://github.com/zerolovesea/Brevia/releases/tag/v${encodeURIComponent(updateVersion)}`;
 }
-/** 根据当前语言环境和可用性状态渲染设置页面的更新操作。@returns {void} */
+function renderUpdateNotice() {
+  clearTimeout(updateReminderTimer);
+  const waiting = (updatePolicy.releasedAt || 0) + updatePolicy.delayDays * UPDATE_DAY - Date.now();
+  updateNotice.hidden =
+    !updateAvailable || updatePolicy.dismissedVersion === updateVersion || waiting > 0;
+  if (updateNotice.hidden) {
+    if (updateAvailable && updatePolicy.dismissedVersion !== updateVersion && waiting > 0)
+      updateReminderTimer = setTimeout(renderUpdateNotice, Math.min(waiting, UPDATE_DAY));
+    return;
+  }
+  const copy = updateCopy();
+  updateNotice.querySelector('strong').textContent = copy.title;
+  updateNotice.querySelector('[data-dismiss-update]').ariaLabel = t('关闭');
+  updateNotice.querySelector('p').textContent = availableUpdateLabel();
+  updateReleaseLink(updateNotice.querySelector('[data-release-link]'));
+  const progress = updateNotice.querySelector('progress');
+  progress.hidden = !updateDownloadProgress;
+  progress.value = updateDownloadProgress?.percent || 0;
+  progress.setAttribute('aria-label', copy.downloading);
+  const install = updateNotice.querySelector('[data-install-app-update]');
+  install.title = copy.restart;
+  install.textContent = updateDownloadProgress
+    ? `${copy.downloading} ${Math.round(progress.value)}%`
+    : updateBusy === 'install'
+      ? copy.updating
+      : availableUpdateActionLabel();
+  install.disabled = Boolean(updateBusy);
+}
 function renderUpdateButton() {
   const copy = updateCopy();
   updateTitle.textContent = t('关于与更新');
   updateNotesButton.textContent = (whatsNewCopy[locale] || whatsNewCopy.en).view;
-  if (updateDownloadProgress) {
-    const percent = Math.round(updateDownloadProgress.percent);
-    const transferred = formatBytes(updateDownloadProgress.transferred);
-    const total = formatBytes(updateDownloadProgress.total);
-    updateDescription.textContent = `${copy.downloading || '正在下载'} ${percent}% · ${transferred} / ${total}`;
-  } else {
-    updateDescription.textContent = updateAvailable
-      ? availableUpdateLabel()
-      : `${currentVersionLabel()} ${installedAppVersion}`;
-  }
-  updateButton.textContent = updateDownloadProgress
-    ? `${copy.downloading || '正在下载'} ${Math.round(updateDownloadProgress.percent)}%`
-    : updateBusy
-      ? updateAvailable
-        ? copy.updating
-        : copy.checking
-      : updateAvailable
-        ? availableUpdateActionLabel()
-        : copy.action;
-  updateButton.disabled = updateBusy;
-  const aboutAction = settingsModal.querySelector('[data-check-app-update]');
-  if (aboutAction) {
-    aboutAction.textContent = updateButton.textContent;
-    aboutAction.disabled = updateBusy;
-    aboutAction.title = updateDescription.textContent;
+  const detail = updateDownloadProgress
+    ? `${copy.downloading} ${Math.round(updateDownloadProgress.percent)}% · ${formatBytes(updateDownloadProgress.transferred)} / ${formatBytes(updateDownloadProgress.total)}`
+    : updateBusy === 'install'
+      ? copy.updating
+      : updateStatus === 'unsupported'
+        ? copy.unsupported
+        : updateAvailable
+          ? availableUpdateLabel()
+          : updateStatus === 'current'
+            ? copy.current
+            : '';
+  updateDescription.textContent = detail || `${currentVersionLabel()} ${installedAppVersion}`;
+  updateButton.textContent = updateBusy === 'check' ? copy.checking : copy.action;
+  updateButton.disabled = Boolean(updateBusy);
+  const section = settingsModal.querySelector('.release-settings');
+  if (!section) return;
+  const check = section.querySelector('[data-check-app-update]');
+  check.querySelector('span').textContent = updateButton.textContent;
+  check.disabled = updateButton.disabled;
+  const install = section.querySelector('[data-install-app-update]');
+  install.title = copy.restart;
+  install.hidden = !updateAvailable;
+  install.disabled = Boolean(updateBusy);
+  install.querySelector('span').textContent =
+    updateBusy === 'install' ? copy.updating : availableUpdateActionLabel();
+  const status = section.querySelector('[role="status"]');
+  status.textContent = detail;
+  status.hidden = !detail;
+  const progress = section.querySelector('progress');
+  progress.hidden = !updateDownloadProgress;
+  progress.value = updateDownloadProgress?.percent || 0;
+  const link = section.querySelector('[data-release-link]');
+  link.hidden = !updateAvailable;
+  if (updateAvailable) updateReleaseLink(link);
+  else if (updateStatus === 'unsupported') {
+    link.hidden = false;
+    link.textContent = (whatsNewCopy[locale] || whatsNewCopy.en).title;
+    link.href = 'https://github.com/zerolovesea/Brevia/releases/latest';
   }
 }
 // 纪要供应商固定为这六项。请求地址由 summaryProviderPresets 派生，只有两个自定义
@@ -765,6 +806,7 @@ function configureSettingsPage(kind) {
     ].includes(kind);
   settingsModal.classList.toggle('settings-page', page);
   settingsModal.classList.toggle('confirmation-modal', kind === 'confirmation');
+  settingsModal.classList.remove('library-confirmation');
   settingsModal.classList.toggle('summary-model-modal', kind === 'summary-model');
   settingsModal.classList.toggle('ai-assist-modal', kind === 'ai-assist');
   settingsModal.classList.toggle(
@@ -788,7 +830,10 @@ function configureSettingsPage(kind) {
     panel.setAttribute('aria-labelledby', 'upgrade-log-title');
   } else panel.removeAttribute('aria-labelledby');
   panel.setAttribute('role', page ? 'region' : 'dialog');
-  panel.setAttribute('aria-modal', String(!page));
+  panel.setAttribute(
+    'aria-modal',
+    String(!page && !settingsModal.classList.contains('export-modal')),
+  );
   const navigation = settingsModal.querySelector('.settings-navigation');
   const navigationKind = ['summary-model', 'ai-assist'].includes(kind) ? 'ai-features' : kind;
   if (
@@ -870,7 +915,7 @@ function renderAdvancedSettings(settings, metadata = {}) {
   return Object.entries(settings)
     .map(
       ([section, values]) =>
-        `<details class="preferences-disclosure advanced-settings-section"><summary>${interfaceIcon({ audio: 'microphone', asr: 'waveform', vad: 'waveform', live: 'waveform', diarization: 'person', refinement: 'document', summary: 'ai', translation: 'translate' }[section] || 'advanced')}<h3>${escapeHtml(copy.sections[section] || section)}</h3>${interfaceIcon('chevron-down')}</summary><div class="preferences-disclosure-fields advanced-fields">${rows(section, values)}</div></details>`,
+        `<details class="preferences-disclosure advanced-settings-section"><summary class="preferences-advanced-heading">${interfaceIcon({ audio: 'microphone', asr: 'waveform', vad: 'waveform', live: 'waveform', diarization: 'person', refinement: 'document', summary: 'ai', translation: 'translate' }[section] || 'advanced')}<h3>${escapeHtml(copy.sections[section] || section)}</h3>${interfaceIcon('chevron-down')}</summary><div class="preferences-disclosure-fields advanced-fields">${rows(section, values)}</div></details>`,
     )
     .join('');
 }
@@ -956,7 +1001,7 @@ function renderPermissionSettings() {
       false,
       screenUnsupported,
     );
-  return `<section class="preferences-section permission-settings-section" data-permission-settings><header class="preferences-section-heading"><h3>${t('系统权限')}</h3></header>${rows}</section>`;
+  return `<section class="preferences-section permission-settings-section" data-permission-settings><header class="preferences-section-heading preferences-advanced-heading">${interfaceIcon('laptop')}<h3>${t('系统权限')}</h3></header>${rows}</section>`;
 }
 const modelDownloads = new Map();
 const meetingList = document.querySelector('.meeting-list');
@@ -1146,6 +1191,72 @@ function meetingSecondaryInfo(meeting) {
   if (meeting.hasSummary) parts.push(t('已生成纪要'));
   return parts.length ? parts.join(' · ') : t('本地录音');
 }
+function renderHomeMeetings() {
+  const panel = document.querySelector('[data-home-meetings]');
+  const deleted = activeLibraryNav === 'recently-deleted';
+  const meetings = uiData.meetings.filter(
+    (meeting) =>
+      meeting.id &&
+      (!meeting.isExample || meeting.exampleLocale === locale) &&
+      Boolean(meeting.deleted) === deleted,
+  );
+  const display = deleted
+    ? meetings
+    : meetings
+        .sort((a, b) => (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0))
+        .slice(0, 5);
+  panel.parentElement.classList.toggle('is-trash', deleted);
+  panel.hidden = !deleted && !display.length;
+  if (panel.hidden) {
+    panel.replaceChildren();
+    return;
+  }
+  let previousDay;
+  panel.innerHTML = `<h2>${escapeHtml(t(deleted ? '最近删除' : '最近会议'))}</h2>${
+    display
+      .map((meeting) => {
+        const key = escapeHtml(meeting.id);
+        const title = escapeHtml(meeting.title);
+        const context = [getWorkspaceName(meeting.workspaceId)];
+        if (meeting.durationMs > 0)
+          context.push(`${Math.ceil(meeting.durationMs / 60000)} ${t('分钟')}`);
+        const date = meeting.createdAt && new Date(meeting.createdAt);
+        const meta =
+          date && Number.isFinite(date.valueOf())
+            ? date.toLocaleDateString(BreviaI18n.localeTag(locale), {
+                month: 'short',
+                day: 'numeric',
+              })
+            : '';
+        const day = meta ? date.toDateString() : '';
+        const dayLabel = day === previousDay ? '' : meta;
+        previousDay = day;
+        return `<div class="home-meeting"><span class="home-meeting-mark" aria-hidden="true">${interfaceIcon(deleted ? 'trash' : 'document')}</span><div class="home-meeting-copy">${deleted ? `<strong>${title}</strong>` : `<button data-open-recent="${key}" title="${title}">${title}</button>`}<span>${escapeHtml(context.join(' · '))}</span></div><small title="${escapeHtml(meta)}">${escapeHtml(dayLabel)}</small>${deleted ? `<button class="home-restore" data-restore-recent="${key}">${escapeHtml(t('恢复'))}</button>` : interfaceIcon('chevron-right')}</div>`;
+      })
+      .join('') || `<p>${escapeHtml(t('还没有会议记录'))}</p>`
+  }`;
+}
+document.querySelector('[data-home-meetings]').addEventListener('click', async (event) => {
+  const open = event.target.closest('[data-open-recent]');
+  if (open) {
+    if (meetingActive && open.dataset.openRecent === breviaClient?.state.meeting?.id)
+      return startQuickRecording();
+    return openMeetingRow(open, open.dataset.openRecent);
+  }
+  const restore = event.target.closest('[data-restore-recent]');
+  const meeting =
+    restore && uiData.meetings.find((item) => item.id === restore.dataset.restoreRecent);
+  if (!meeting || restore.disabled) return;
+  restore.disabled = true;
+  try {
+    await mutateMeetings('restore', [meeting]);
+    showToast(t('恢复'), undefined, 'success');
+  } catch (error) {
+    showToast(error.message, undefined, 'error');
+  } finally {
+    restore.disabled = false;
+  }
+});
 /** 仅重新渲染会议列表，保留设置模态框事件绑定。@returns {void} */
 function renderMeetingList() {
   const renameForm = meetingList.querySelector('[data-rename-meeting]');
@@ -1159,12 +1270,14 @@ function renderMeetingList() {
       editingMeetingIndex = null;
     }
   }
+  renderHomeMeetings();
   meetingList.innerHTML = renderSidebarMeetingTree();
   if (renameForm && meetingRenameDraft) {
     const replacement = meetingList.querySelector('[data-rename-meeting]');
-    if (replacement) {
+    if (replacement && renameForm.dataset.renameMeeting === meetingRenameDraft.key) {
       renameForm.dataset.meetingIndex = editingMeetingIndex;
       replacement.replaceWith(renameForm);
+      if (renameFocus?.isConnected) renameFocus.focus({ preventScroll: true });
     }
   }
   filterMeetings();
@@ -2370,10 +2483,6 @@ prepareForm.addEventListener('click', (event) => {
     renderImportAudioSelection();
     return;
   }
-  if (event.target.closest('[data-capture-phone]')) {
-    void openModal('device-connection');
-    return;
-  }
   const toggle = event.target.closest('[data-flow-select-toggle]');
   if (toggle) {
     const options = toggle.parentElement.querySelector('.flow-select-options');
@@ -2844,7 +2953,7 @@ async function runExportBundle(mode, anchor) {
   const items = selectedExportItems();
   if (!items.length) throw new Error(t('请先选择要导出的内容'));
   const result = await window.brevia?.meeting.exportBundle({
-    meeting_id: breviaClient.state.selectedMeetingId,
+    meeting_id: currentMeetingDetail.id,
     items,
     mode,
     ...(anchor ? { anchor } : {}),
@@ -2908,17 +3017,20 @@ function exportShareText() {
 function renderExportModal() {
   const copy = exportHubCopy[locale] || exportHubCopy.en;
   settingsModal.querySelector('.modal-title h2').textContent = copy.title;
-  settingsModal.querySelector('.modal-title p').textContent = t('选择要导出的内容及格式。');
+  settingsModal.querySelector('.modal-title p').textContent = '';
   if (
     settingsModal.hidden ||
     settingsModal.querySelector('.modal-body').dataset.contentKind !== activeModal
   ) {
+    const contents = exportContentMeta();
+    const summaryOnly =
+      activeView === 'detail' &&
+      detailActiveTab === 'summary' &&
+      contents.some(({ content }) => content === 'notes');
     exportSelection = {};
-    exportContentMeta().forEach(({ content }) => {
+    contents.forEach(({ content }) => {
       exportSelection[content] =
-        activeView === 'detail' && detailActiveTab === 'summary' && content !== 'notes'
-          ? null
-          : exportDefaultFormat[content];
+        summaryOnly && content !== 'notes' ? null : exportDefaultFormat[content];
     });
   }
   replaceModalBody(activeModal, exportHubHtml());
@@ -2949,7 +3061,7 @@ function exportHubHtml() {
         .join('');
       return `<label class="export-content-row${exportSelection[content] ? ' is-checked' : ''}">
       <input type="checkbox" data-export-item="${content}"${exportSelection[content] ? ' checked' : ''}>
-      ${interfaceIcon(content === 'audio' ? 'music' : content === 'transcript' ? 'waveform' : 'document')}<span class="export-content-name"><b>${escapeHtml(label)}</b><small>${escapeHtml(desc)}</small></span>
+      ${interfaceIcon(content === 'audio' ? 'music' : content === 'transcript' ? 'waveform' : 'document')}<span class="export-content-name"><b title="${escapeHtml(desc)}">${escapeHtml(label)}</b></span>
       ${
         content === 'audio'
           ? '<span class="export-format-fixed">WAV</span>'
@@ -3274,7 +3386,7 @@ function renderWhatsNewModal() {
   );
   replaceModalBody(
     activeModal,
-    `<section class="preferences-about-version about-version"><span class="about-brand-mark" aria-hidden="true"><img src="./assets/brevia-mark.svg" alt="" /></span><div class="preference-copy"><h3>Brevia</h3><p>v${escapeHtml(installedAppVersion || '—')}</p></div><button class="secondary" data-check-app-update type="button"></button></section><a class="preferences-about-link about-repository" href="https://github.com/zerolovesea/Brevia" target="_blank" rel="noopener noreferrer">${interfaceIcon('github')}<span><b>GitHub</b><small>zerolovesea / Brevia</small></span>${interfaceIcon('chevron-right')}</a><section class="preferences-section preferences-release-notes"><header class="preferences-section-heading"><h3>${t('更新日志')}</h3></header>${renderWhatsNewList()}</section>`,
+    `<section class="release-settings"><header><span class="about-brand-mark" aria-hidden="true"><img src="./assets/brevia-mark.svg" alt="" /></span><div><h3>${escapeHtml(updateCopy().title)}</h3><small>${escapeHtml(currentVersionLabel())} · v${escapeHtml(installedAppVersion || '—')}</small></div></header><div class="release-actions"><button class="secondary" data-check-app-update type="button">${interfaceIcon('refresh')}<span></span></button><button class="release-install" data-install-app-update hidden type="button">${interfaceIcon('download')}<span></span></button></div><div class="release-state"><span role="status" hidden></span><a data-release-link target="_blank" rel="noopener noreferrer" hidden></a></div><progress max="100" aria-label="${escapeHtml(updateCopy().downloading)}" hidden></progress><fieldset class="release-delay"><legend title="${escapeHtml(updateCopy().delayHint)}">${escapeHtml(updateCopy().delay)}</legend><div>${updateDelays.map((days) => `<label><input type="radio" name="release-delay" value="${days}"${days === updatePolicy.delayDays ? ' checked' : ''} /><span>${days ? new Intl.NumberFormat(BreviaI18n.localeTag(locale), { style: 'unit', unit: 'day', unitDisplay: 'short' }).format(days) : escapeHtml(updateCopy().immediate)}</span></label>`).join('')}</div></fieldset></section><a class="preferences-about-link about-repository" href="https://github.com/zerolovesea/Brevia" target="_blank" rel="noopener noreferrer">${interfaceIcon('github')}<span><b>GitHub</b><small>zerolovesea / Brevia</small></span>${interfaceIcon('chevron-right')}</a><section class="preferences-section preferences-release-notes"><header class="preferences-section-heading"><h3>${t('更新日志')}</h3></header>${renderWhatsNewList()}</section>`,
   );
   renderUpdateButton();
 }
@@ -3344,7 +3456,7 @@ function focusForKeyboard(element) {
     element?.focus({ preventScroll: true });
 }
 /** 显示设置模态框；键盘打开时接续焦点，鼠标打开时保留当前位置。@returns {void} */
-function showSettingsModal() {
+function showSettingsModal(confirmationAnchor) {
   clearTimeout(modalDismissTimer);
   if (settingsModal.hidden) modalReturnFocus = document.activeElement;
   settingsModal.querySelector('.modal-title p').hidden = false;
@@ -3360,6 +3472,38 @@ function showSettingsModal() {
   settingsModal.classList.add('modal-enter');
   settingsModal.style.zIndex = '60';
   settingsModal.hidden = false;
+  if (settingsModal.classList.contains('export-modal') || confirmationAnchor) {
+    settingsModal.setAttribute('popover', 'auto');
+    const trigger = confirmationAnchor || document.querySelector('[data-export-detail]');
+    const source = trigger?.checkVisibility() ? trigger : null;
+    settingsModal.showPopover(source ? { source } : undefined);
+    if (source) modalReturnFocus = source;
+    if (confirmationAnchor) {
+      source?.classList.add('is-confirmation-anchor');
+      settingsModal.querySelector('.modal-panel').setAttribute('aria-modal', 'false');
+      settingsModal
+        .querySelector('.modal-panel')
+        .setAttribute('aria-labelledby', 'library-confirm-title');
+    } else {
+      source?.setAttribute('aria-expanded', 'true');
+      settingsModal.querySelector('.modal-title h2').id = 'export-popover-title';
+      settingsModal
+        .querySelector('.modal-panel')
+        .setAttribute('aria-labelledby', 'export-popover-title');
+    }
+    document.querySelector('.app-shell').inert = false;
+    document.body.classList.remove('modal-open');
+    focusForKeyboard(
+      settingsModal.querySelector('[data-cancel-confirmation], [data-export-item]') ||
+        settingsModal.querySelector('.modal-close'),
+    );
+    return;
+  }
+  if (settingsModal.hasAttribute('popover')) {
+    document.querySelector('.is-confirmation-anchor')?.classList.remove('is-confirmation-anchor');
+    settingsModal.removeAttribute('popover');
+    document.querySelector('[data-export-detail]')?.setAttribute('aria-expanded', 'false');
+  }
   focusForKeyboard(
     settingsModal.querySelector('[data-cancel-confirmation]') ||
       settingsModal.querySelector('button:not(:disabled)'),
@@ -3408,13 +3552,17 @@ function openConfirmation(title, detail, action, anchor) {
     title === BreviaI18n.trashCopy(locale).purge,
   );
   settingsModal.classList.toggle('storage-confirmation', Boolean(storageConfirmationPage));
+  const libraryAnchor = !storageConfirmationPage && anchor;
+  settingsModal.classList.toggle('library-confirmation', Boolean(libraryAnchor));
   confirmationAction = action;
   activeModal = 'confirmation';
   settingsModal.querySelector('.modal-title h2').textContent = title;
   settingsModal.querySelector('.modal-title p').textContent = '';
   settingsModal.querySelector('.modal-body').innerHTML =
     `<div class="confirmation-actions">${interfaceIcon([t('删除工作区'), t('重新精修')].includes(title) ? 'warning' : 'trash')}<h2>${escapeHtml(title)}</h2><p>${escapeHtml(detail)}</p><button class="secondary" data-cancel-confirmation type="button">${t('取消')}</button><button class="modal-action modal-danger" data-confirm-action type="button">${escapeHtml(title === t('删除工作区') ? t('确认') : title)}</button></div>`;
-  showSettingsModal();
+  if (libraryAnchor)
+    settingsModal.querySelector('.confirmation-actions h2').id = 'library-confirm-title';
+  showSettingsModal(libraryAnchor);
   if (storageConfirmationPage && anchor)
     positionFloating(settingsModal.querySelector('.modal-panel'), anchor, [
       'bottom-end',
@@ -3501,6 +3649,21 @@ function refreshPermissionSettings() {
 function closeModal() {
   modalRequestRevision += 1;
   if (settingsModal.hidden) return;
+  if (settingsModal.hasAttribute('popover')) {
+    const restoreFocus =
+      settingsModal.contains(document.activeElement) || document.activeElement === document.body;
+    activeModal = undefined;
+    confirmationAction = undefined;
+    document.querySelector('.is-confirmation-anchor')?.classList.remove('is-confirmation-anchor');
+    const trigger = document.querySelector('[data-export-detail]');
+    trigger?.setAttribute('aria-expanded', 'false');
+    settingsModal.hidden = true;
+    settingsModal.removeAttribute('popover');
+    settingsModal.classList.remove('modal-enter');
+    if (restoreFocus && modalReturnFocus?.isConnected)
+      modalReturnFocus.focus({ preventScroll: true });
+    return;
+  }
   if (storageConfirmationPage) {
     clearTimeout(modalDismissTimer);
     const { page, returnFocus, scrollTop } = storageConfirmationPage;
@@ -4522,7 +4685,6 @@ document.addEventListener('click', async (event) => {
   }
   const toggle = event.target.closest('[data-flow-select-toggle]');
   if (toggle) {
-    if (desktopShortcutCapture?.button === toggle) return;
     const choices = toggle.parentElement.querySelector('.flow-select-options');
     choices.hidden = !choices.hidden;
     fitFlowSelectOptions(choices, toggle);
@@ -4620,6 +4782,14 @@ async function reconfigureLive(changes) {
     return false;
   }
 }
+settingsModal.addEventListener('toggle', (event) => {
+  if (
+    event.newState === 'closed' &&
+    settingsModal.hasAttribute('popover') &&
+    !settingsModal.matches(':popover-open')
+  )
+    closeModal();
+});
 settingsModal.addEventListener('click', async (event) => {
   if (event.target.closest('[data-update-log-dismiss]')) {
     closeModal();
@@ -4639,7 +4809,7 @@ settingsModal.addEventListener('click', async (event) => {
     return;
   }
   if (event.target.closest('[data-check-app-update]')) {
-    await runUpdateAction();
+    await checkForUpdates();
     return;
   }
   const aiTab = event.target.closest('[data-ai-settings-tab]');
@@ -4827,22 +4997,23 @@ settingsModal.addEventListener('click', async (event) => {
   }
   const exportSave = event.target.closest('[data-export-save]');
   if (exportSave) {
+    const revision = modalRequestRevision;
+    const title = currentMeetingDetail?.title || '';
     exportSave.disabled = true;
     try {
       const result = await runExportBundle('save');
       if (result && result.count !== null) {
-        closeModal();
+        if (revision === modalRequestRevision && exportSave.isConnected) closeModal();
         const copy = exportHubCopy[locale] || exportHubCopy.en;
         showToast(
-          result.count > 1
-            ? copy.savedBundle
-            : t('已导出「{title}」').replace('{title}', currentMeetingDetail?.title || ''),
+          result.count > 1 ? copy.savedBundle : t('已导出「{title}」').replace('{title}', title),
           undefined,
           'success',
         );
-      } else exportSave.disabled = false;
+      } else if (revision === modalRequestRevision && exportSave.isConnected)
+        updateExportBuilderState();
     } catch (error) {
-      exportSave.disabled = false;
+      if (revision === modalRequestRevision && exportSave.isConnected) updateExportBuilderState();
       showToast(error.message, undefined, 'error');
     }
     return;
@@ -4850,6 +5021,8 @@ settingsModal.addEventListener('click', async (event) => {
   const shareTarget = event.target.closest('[data-share-target]');
   if (shareTarget) {
     const target = shareTarget.dataset.shareTarget;
+    const revision = modalRequestRevision;
+    const ownsPopover = () => revision === modalRequestRevision && shareTarget.isConnected;
     shareTarget.disabled = true;
     try {
       if (target === 'system') {
@@ -4859,18 +5032,18 @@ settingsModal.addEventListener('click', async (event) => {
           x: Math.round(event.clientX),
           y: Math.round(event.clientY),
         });
-        shareTarget.disabled = false;
+        if (ownsPopover()) updateExportBuilderState();
       } else {
         const text = exportShareText();
         if (!text) throw new Error(t('暂无可分享的内容'));
         if (target === 'copy') {
           await window.brevia?.share.copyText({ text });
-          closeModal();
+          if (ownsPopover()) closeModal();
           showToast(t('已复制到剪贴板'), undefined, 'success');
         } else if (target === 'email') {
           const subject = currentMeetingDetail?.title || '';
           await window.brevia?.share.openExternal({ url: buildMailto(subject, text) });
-          closeModal();
+          if (ownsPopover()) closeModal();
         } else {
           const spec = shareSocialUrls[target];
           const title = currentMeetingDetail?.title || '';
@@ -4878,11 +5051,11 @@ settingsModal.addEventListener('click', async (event) => {
           const excerpt = makeExcerpt(combined, spec.limit);
           if (!excerpt) throw new Error(t('暂无可分享的内容'));
           await window.brevia?.share.openExternal({ url: spec.url(excerpt) });
-          closeModal();
+          if (ownsPopover()) closeModal();
         }
       }
     } catch (error) {
-      shareTarget.disabled = false;
+      if (ownsPopover()) updateExportBuilderState();
       showToast(error.message, undefined, 'error');
     }
     return;
@@ -5535,6 +5708,15 @@ function collectTranslations() {
 }
 /** 应用语言环境、重绘依赖组件，并可选择对翻译节点进行动画处理。@param {'zh'|'en'|'es'} nextLocale 要应用的语言环境。@param {boolean} animate 是否对更改进行动画处理。@returns {void} */
 function applyLanguage(nextLocale, animate = false) {
+  // 确认内容含会议标题及不可逆后果，换语言时作废旧动作，由入口重新生成。
+  let confirmationMeetingKey;
+  if (activeModal === 'confirmation') {
+    confirmationAction = undefined;
+    closeModal();
+    confirmationMeetingKey = document.activeElement
+      ?.closest('.meeting-row')
+      ?.getAttribute('data-selection-key');
+  }
   closeMeetingPopovers();
   if (document.querySelector('.segment-context-menu')) closeSegmentContextMenu();
   locale = nextLocale;
@@ -5615,7 +5797,13 @@ function applyLanguage(nextLocale, animate = false) {
     renderSpeakerProfileCard();
     renderRequiredModelsCard();
     refreshLocalizedTaskCards();
-    if (activeModal) renderModal(activeModal);
+    if (activeModal && activeModal !== 'confirmation') renderModal(activeModal);
+    if (confirmationMeetingKey && document.activeElement === document.body) {
+      const row = meetingList.querySelector(
+        `[data-selection-key="${CSS.escape(confirmationMeetingKey)}"] [data-meeting-menu]`,
+      );
+      (row || meetingSearch).focus({ preventScroll: true });
+    }
     renderFloatingCaptionToggle();
     setLiveTranslationEnabled(translationAllowed);
     renderLiveModelControl();
@@ -5843,6 +6031,7 @@ function selectLibraryNav(id) {
   homeEyebrow.disabled = true;
   homeEyebrow.className = 'eyebrow';
   document.querySelector('#trash-back').hidden = !deleted;
+  document.querySelector('.navigation-sidebar').classList.toggle('showing-trash', deleted);
   meetingSearch.placeholder = deleted ? t('搜索已删除的会议') : t('搜索会议、字幕或说话人…');
   renderSlogan();
   updateHomeViewTitle();
@@ -5854,6 +6043,12 @@ async function transitionPage(current, next, swap = () => {}) {
   const transition = (async () => {
     if (previous) await previous.catch(() => {});
     if (revision !== pageTransitionRevision) return false;
+    if (
+      !settingsModal.hidden &&
+      (settingsModal.classList.contains('export-modal') ||
+        settingsModal.classList.contains('library-confirmation'))
+    )
+      closeModal();
     // 所有导航入口共用退出逻辑，会议库切换也必须清除设置页遮罩。
     if (next.id !== 'settings-view') {
       modalRequestRevision += 1;
@@ -6091,43 +6286,92 @@ function markWhatsNewSeen() {
   }
 }
 void loadInstalledAppVersion();
+function scheduleUpdateCheck(delay) {
+  clearTimeout(updateCheckTimer);
+  nextUpdateCheckAt = Date.now() + delay;
+  updateCheckTimer = setTimeout(() => void checkForUpdates({ silent: true }), delay);
+}
 async function checkForUpdates({ silent = false } = {}) {
-  if (updateBusy) return;
-  updateBusy = true;
+  if (!window.brevia?.update || updateBusy) return;
+  clearTimeout(updateCheckTimer);
+  nextUpdateCheckAt = 0;
+  updateBusy = 'check';
   renderUpdateButton();
+  renderUpdateNotice();
   try {
-    const result = await window.brevia?.update?.check?.();
-    updateAvailable = result?.status === 'available';
-    updateVersion = result?.version || '';
-    if (!silent && result?.status === 'current')
-      showToast((updateLabels[locale] || updateLabels.en).current);
+    const result = await window.brevia.update.check();
+    updateStatus = silent && result.status === 'unsupported' ? '' : result.status;
+    updateAvailable = result.status === 'available' && Boolean(result.version);
+    updateVersion = updateAvailable ? result.version : '';
+    if (updatePolicy.offeredVersion !== updateVersion || !updatePolicy.releasedAt) {
+      updatePolicy.releasedAt = Math.min(Date.now(), Date.parse(result.releaseDate) || Date.now());
+      updatePolicy.offeredVersion = updateVersion;
+    }
+    if (result.status !== 'unsupported') updatePolicy.lastCheck = Date.now();
+    persistUpdatePolicy();
+    updateRetryDelay = 3600000;
+    if (result.status !== 'unsupported') scheduleUpdateCheck(UPDATE_DAY);
   } catch (error) {
-    if (!silent) showToast(error.message, undefined, 'error');
+    if (!silent) showToast(userFacingError(error.message), undefined, 'error');
+    scheduleUpdateCheck(updateRetryDelay);
+    updateRetryDelay = Math.min(6 * 3600000, updateRetryDelay * 2);
   } finally {
-    updateBusy = false;
+    updateBusy = '';
     renderUpdateButton();
     renderUpdateNotice();
   }
 }
+function startAutomaticUpdateChecks() {
+  // 新会话重新确认曾发现的版本，安装器也需要本次检查取得下载清单。
+  const remaining = updatePolicy.offeredVersion
+    ? 0
+    : Math.min(UPDATE_DAY, (Number(updatePolicy.lastCheck) || 0) + UPDATE_DAY - Date.now());
+  scheduleUpdateCheck(Math.max(1000, remaining));
+}
+window.addEventListener('focus', () => {
+  if (nextUpdateCheckAt && Date.now() >= nextUpdateCheckAt) void checkForUpdates({ silent: true });
+});
 async function runUpdateAction() {
-  if (updateBusy) return;
-  if (!updateAvailable) return checkForUpdates();
-  updateBusy = true;
+  if (updateBusy || !updateAvailable) return;
+  updateBusy = 'install';
   updateDownloadProgress = null;
   renderUpdateButton();
   renderUpdateNotice();
   try {
     await window.brevia.update.install();
   } catch (error) {
-    showToast(error.message, undefined, 'error');
-    updateBusy = false;
+    showToast(
+      error.code === 'error.tasks.running'
+        ? t(error.code)
+        : userFacingError(error.detail || error.message),
+      undefined,
+      'error',
+    );
+  } finally {
+    updateBusy = '';
     updateDownloadProgress = null;
     renderUpdateButton();
     renderUpdateNotice();
+    scheduleUpdateCheck(UPDATE_DAY);
   }
 }
-updateButton.addEventListener('click', () => void runUpdateAction());
-updateNoticeButton.addEventListener('click', () => void runUpdateAction());
+updateButton.addEventListener('click', () => void checkForUpdates());
+document.addEventListener('click', (event) => {
+  if (event.target.closest('[data-install-app-update]')) void runUpdateAction();
+  if (event.target.closest('[data-dismiss-update]')) {
+    updatePolicy.dismissedVersion = updateVersion;
+    persistUpdatePolicy();
+    renderUpdateNotice();
+  }
+});
+document.addEventListener('change', (event) => {
+  if (!event.target.matches('.release-delay input')) return;
+  const delay = Number(event.target.value);
+  if (!updateDelays.includes(delay)) return;
+  updatePolicy.delayDays = delay;
+  persistUpdatePolicy();
+  renderUpdateNotice();
+});
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') {
     const list = document.querySelector('.flow-select-options.is-floating:not([hidden])');
@@ -6136,11 +6380,17 @@ document.addEventListener('keydown', (event) => {
       const toggle = list.closest('.flow-select').querySelector('[data-flow-select-toggle]');
       toggle?.setAttribute('aria-expanded', 'false');
       toggle?.focus();
+      event.preventDefault();
       event.stopImmediatePropagation();
       return;
     }
-    if (activeModal) closeModal();
-    else if (onboardingPage?.dataset.aiSettings === 'true') dismissOnboardingPage();
+    if (activeModal) {
+      if (settingsModal.matches(':popover-open')) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
+      closeModal();
+    } else if (onboardingPage?.dataset.aiSettings === 'true') dismissOnboardingPage();
   }
 });
 // Command+/ 或 Ctrl+/：切换富文本 / Markdown 编辑模式。
@@ -6305,6 +6555,7 @@ function activateMeeting(meeting, payload) {
   uiData.meetings = uiData.meetings.filter((item) => item.id !== meeting.id);
   uiData.meetings.unshift({
     id: meeting.id,
+    createdAt: meeting.created_at || new Date().toISOString(),
     tone: 'violet',
     title,
     meta: `${t('刚刚')} · 0 ${t('分钟')}`,
@@ -6475,17 +6726,11 @@ function renderLiveInputStatus() {
       : inputs.mic
         ? '麦克风'
         : '系统音频';
-  document.querySelector('#live-input-label').textContent = t(label);
+  const source = document.querySelector('#live-view .control-source');
+  source.title = t(label);
+  source.setAttribute('aria-label', source.title);
+  document.querySelector('#live-input-label').textContent = source.title;
   document.querySelector('[data-live-mic-level]').hidden = phone || !inputs.mic;
-  document.querySelector('[data-live-source-icon]').innerHTML = interfaceIcon(
-    phone
-      ? 'phone'
-      : inputs.mic && inputs.system
-        ? 'waveform'
-        : inputs.mic
-          ? 'microphone'
-          : 'appearance',
-  );
 }
 /** 实时识别链路没能建立时，给出一条**常驻**提示卡（而不是一闪而过的 toast）。
  *
@@ -6705,6 +6950,19 @@ document.addEventListener('click', (event) => {
   const button = event.target.closest('[data-toggle-detail-mode]');
   if (button) setDetailLayoutMode(button.dataset.toggleDetailMode);
 });
+document.querySelector('[data-live-transcript-toggle]').addEventListener('click', (event) => {
+  const toggle = event.currentTarget;
+  const expanded = toggle.getAttribute('aria-expanded') === 'false';
+  if (!expanded && segmentProfileDraft?.saving) return;
+  if (!expanded && segmentProfileDraft) closeSegmentProfilePanel(true);
+  document.querySelector('#live-view').classList.toggle('is-transcript-collapsed', !expanded);
+  document.querySelector('#live-transcript-panel').hidden = !expanded;
+  toggle.setAttribute('aria-expanded', String(expanded));
+  if (expanded && followLiveTranscript) {
+    const transcript = document.querySelector('#transcript-scroll');
+    transcript.scrollTop = transcript.scrollHeight;
+  }
+});
 const liveNotesRoot = document.querySelector('[data-live-notes-root]');
 const aiSuggestionHost = document.querySelector('[data-ai-suggestion]');
 if (aiSuggestionHost) liveNotesRoot.append(aiSuggestionHost);
@@ -6724,16 +6982,6 @@ const liveNotesEditor = createNotesEditor(liveNotesRoot, {
   getMeetingId: () => breviaClient?.state.meeting?.id,
   getHighlightTime: () => Math.floor(seconds * 1000),
 });
-const liveNotesToolbar = liveNotesRoot.querySelector('.notes-toolbar');
-liveNotesToolbar.id = 'live-notes-toolbar';
-liveNotesToolbar.hidden = true;
-document.querySelector('[data-toggle-notes-toolbar]').addEventListener('click', (event) => {
-  const button = event.currentTarget;
-  const expanded = button.getAttribute('aria-expanded') !== 'true';
-  button.setAttribute('aria-expanded', String(expanded));
-  liveNotesToolbar.hidden = !expanded;
-});
-
 // —— AI 辅助：header 开关与未启用 Popover ——
 function aiAssistToggleButton() {
   return document.querySelector('[data-ai-assist-toggle]');
@@ -7465,7 +7713,7 @@ meetingSelectionSurface.addEventListener(
   true,
 );
 meetingList.addEventListener('keydown', (event) => {
-  if (event.target.matches('input, textarea')) return;
+  if (event.target.closest('input, textarea, [data-rename-meeting]')) return;
   const workspace = event.target.closest('[data-sidebar-workspace-toggle]');
   if (workspace && ['ArrowLeft', 'ArrowRight'].includes(event.key)) {
     event.preventDefault();
@@ -7587,10 +7835,11 @@ batchToolbar.addEventListener('click', async (event) => {
   }
   const permanently = activeLibraryNav === 'recently-deleted';
   const deleteLabel = permanently ? BreviaI18n.trashCopy(locale).purge : t('删除');
-  if (event.target.closest('[data-batch-delete]')) {
+  const deleteButton = event.target.closest('[data-batch-delete]');
+  if (deleteButton) {
     openConfirmation(
       deleteLabel,
-      `${BreviaI18n.selectionOverview(locale, meetings.length)}\n${meetings.map((meeting) => '「' + meeting.title + '」').join('\n')}\n${t(permanently ? '此操作不可恢复。' : '会议将移至最近删除，可在那里恢复。')}`,
+      `${BreviaI18n.selectionOverview(locale, meetings.length)}\n${meetings.map((meeting) => '「' + meeting.title + '」').join('\n')}\n${meetingDeletionConsequence(meetings, permanently)}`,
       async () => {
         try {
           await runBatchMutation(permanently ? 'purge' : 'delete', meetings);
@@ -7599,9 +7848,20 @@ batchToolbar.addEventListener('click', async (event) => {
           showToast(error.message, undefined, 'error');
         }
       },
+      deleteButton,
     );
   }
 });
+/** 示例录音直接永久删除，混合选择须分别说明两种结果。 */
+function meetingDeletionConsequence(meetings, permanently = false) {
+  if (permanently) return t('此操作不可恢复。');
+  const outcomes = [];
+  if (meetings.some((meeting) => !meeting.isExample))
+    outcomes.push(t('会议将移至最近删除，可在那里恢复。'));
+  if (meetings.some((meeting) => meeting.isExample))
+    outcomes.push(t('示例会议及录音将永久删除，无法恢复。'));
+  return outcomes.join(' ');
+}
 const positionMeetingMenu = (menu, toggle, opensLeft = false) => {
   const anchor = toggle.getBoundingClientRect();
   const sidebar = toggle.closest('.library-panel');
@@ -7739,6 +7999,7 @@ async function openMeetingRow(row, meetingId = row.dataset.meetingId) {
       return;
     }
     if (typeof settleCorrectionDraft === 'function' && !(await settleCorrectionDraft())) return;
+    if (settingsModal.matches(':popover-open')) closeModal();
   }
   if (activeView === 'live' && meetingActive) minimizeMeeting();
   if (!window.brevia) {
@@ -7762,6 +8023,16 @@ async function openMeetingRow(row, meetingId = row.dataset.meetingId) {
     showToast(error.message, undefined, 'error');
   }
 }
+function finishMeetingRename(restoreFocus) {
+  const key = meetingRenameDraft.key;
+  meetingRenameDraft = null;
+  editingMeetingIndex = null;
+  renderMeetingList();
+  if (restoreFocus)
+    meetingList
+      .querySelector(`[data-selection-key="${CSS.escape(key)}"]`)
+      ?.focus({ preventScroll: true });
+}
 meetingList.addEventListener('click', async (event) => {
   if (suppressMeetingClick) {
     event.preventDefault();
@@ -7771,9 +8042,7 @@ meetingList.addEventListener('click', async (event) => {
   if (event.target.closest('[data-rename-meeting]')) {
     event.stopPropagation();
     if (event.target.closest('[data-cancel-meeting-rename]') && !meetingRenameDraft?.saving) {
-      meetingRenameDraft = null;
-      editingMeetingIndex = null;
-      renderMeetingList();
+      finishMeetingRename(true);
     }
     return;
   }
@@ -7826,6 +8095,16 @@ meetingList.addEventListener('click', async (event) => {
       return;
     }
     if (action.dataset.meetingAction === 'rename') {
+      const pending = meetingList.querySelector('[data-rename-meeting] input');
+      if (pending && (meetingRenameDraft?.saving || pending.value !== pending.defaultValue)) {
+        closeMeetingMenus();
+        const group = pending.closest('[data-sidebar-workspace]')?.dataset.sidebarWorkspace;
+        if (collapsedSidebarWorkspaces.has(group)) toggleSidebarWorkspace(group, true);
+        pending.scrollIntoView({ block: 'nearest' });
+        pending.focus({ preventScroll: true });
+        showToast(t(meetingRenameDraft?.saving ? '正在保存…' : '已修改 · 尚未保存'));
+        return;
+      }
       editingMeetingIndex = index;
       meetingRenameDraft = {
         key: meeting.id || String(index),
@@ -7835,6 +8114,9 @@ meetingList.addEventListener('click', async (event) => {
       };
       closeMeetingMenus();
       renderMeetingList();
+      const titleInput = meetingList.querySelector('[data-rename-meeting] input');
+      titleInput?.focus({ preventScroll: true });
+      titleInput?.select();
       return;
     }
     if (action.dataset.meetingAction === 'open-folder') {
@@ -7880,18 +8162,23 @@ meetingList.addEventListener('click', async (event) => {
       return;
     }
     if (action.dataset.meetingAction === 'delete') {
-      openConfirmation(t('删除'), `「${meeting.title}」`, async () => {
-        try {
-          await mutateMeetings('delete', [meeting]);
-          showToast(
-            t(meeting.isExample ? '示例会议及录音已删除' : '会议已移至最近删除'),
-            undefined,
-            'success',
-          );
-        } catch (error) {
-          showToast(error.message, undefined, 'error');
-        }
-      });
+      openConfirmation(
+        t('删除'),
+        `「${meeting.title}」\n${meetingDeletionConsequence([meeting])}`,
+        async () => {
+          try {
+            await mutateMeetings('delete', [meeting]);
+            showToast(
+              t(meeting.isExample ? '示例会议及录音已删除' : '会议已移至最近删除'),
+              undefined,
+              'success',
+            );
+          } catch (error) {
+            showToast(error.message, undefined, 'error');
+          }
+        },
+        actions.querySelector('[data-meeting-menu]'),
+      );
       return;
     }
     if (action.dataset.meetingAction === 'restore') {
@@ -7904,14 +8191,19 @@ meetingList.addEventListener('click', async (event) => {
       return;
     }
     if (action.dataset.meetingAction === 'purge') {
-      openConfirmation(BreviaI18n.trashCopy(locale).purge, `「${meeting.title}」`, async () => {
-        try {
-          await mutateMeetings('purge', [meeting]);
-          showToast(BreviaI18n.trashCopy(locale).purge, undefined, 'success');
-        } catch (error) {
-          showToast(error.message, undefined, 'error');
-        }
-      });
+      openConfirmation(
+        BreviaI18n.trashCopy(locale).purge,
+        `「${meeting.title}」\n${meetingDeletionConsequence([meeting], true)}`,
+        async () => {
+          try {
+            await mutateMeetings('purge', [meeting]);
+            showToast(BreviaI18n.trashCopy(locale).purge, undefined, 'success');
+          } catch (error) {
+            showToast(error.message, undefined, 'error');
+          }
+        },
+        actions.querySelector('[data-meeting-menu]'),
+      );
       return;
     }
   }
@@ -7921,15 +8213,16 @@ meetingList.addEventListener('input', (event) => {
   event.target.setCustomValidity('');
   meetingRenameDraft.title = event.target.value;
   meetingRenameDraft.error = '';
-  event.target.closest('form').querySelector('.meeting-rename-state').textContent =
-    t('已修改 · 尚未保存');
+  event.target.closest('form').querySelector('.meeting-rename-state').textContent = '';
 });
 meetingList.addEventListener('submit', async (event) => {
   if (!event.target.matches('[data-rename-meeting]')) return;
   event.preventDefault();
   const form = event.target,
     draft = meetingRenameDraft;
-  if (!draft || draft.saving) return;
+  if (!draft || draft.saving || form.dataset.renameMeeting !== draft.key) return;
+  const ownsFocus = () =>
+    document.activeElement === document.body || form.contains(document.activeElement);
   const title = form.querySelector('input').value.trim();
   if (!title) {
     form.querySelector('input').setCustomValidity(t('会议名称不能为空'));
@@ -7947,35 +8240,45 @@ meetingList.addEventListener('submit', async (event) => {
   try {
     if (title !== meeting.title)
       await window.brevia?.meeting.update({ meeting_id: meeting.id, updates: { title } });
-    meeting.title = title;
-    if (meetingRenameDraft === draft) {
-      meetingRenameDraft = null;
-      editingMeetingIndex = null;
+    const row = uiData.meetings.find((item) => item.id === meeting.id);
+    if (row) row.title = title;
+    if (currentMeetingDetail?.id === meeting.id) {
+      currentMeetingDetail.title = title;
+      const heading = document.querySelector('#detail-view .detail-head h1');
+      heading.title = title;
+      heading.textContent = title;
+      renderMiniPlayback();
     }
-    renderMeetingList();
+    if (meetingActive && breviaClient?.state.meeting?.id === meeting.id) {
+      breviaClient.state.meeting.title = title;
+      document.querySelector('#live-name').textContent = title;
+      miniTitle.textContent = title;
+      scheduleDesktopRecording();
+    }
+    if (meetingRenameDraft === draft) {
+      finishMeetingRename(ownsFocus());
+    } else renderMeetingList();
   } catch (error) {
     draft.saving = false;
-    draft.error = error.message;
+    draft.error = userFacingError(error.message);
     form.querySelectorAll('input,button').forEach((control) => {
       control.disabled = false;
     });
     form.querySelector('.meeting-rename-state').textContent =
-      `${t('重命名失败，修改仍保留')} · ${userFacingError(error.message)}`;
+      `${t('重命名失败，修改仍保留')} · ${draft.error}`;
+    if (form.isConnected && ownsFocus()) form.querySelector('input').focus({ preventScroll: true });
   }
 });
 meetingList.addEventListener('keydown', (event) => {
   if (
     event.key === 'Escape' &&
+    !event.isComposing &&
     event.target.closest('[data-rename-meeting]') &&
     !meetingRenameDraft?.saving
   ) {
     event.preventDefault();
     event.stopPropagation();
-    const key = meetingRenameDraft.key;
-    meetingRenameDraft = null;
-    editingMeetingIndex = null;
-    renderMeetingList();
-    meetingList.querySelector(`[data-selection-key="${CSS.escape(key)}"]`)?.focus();
+    finishMeetingRename(true);
   }
 });
 document.addEventListener('click', (event) => {
@@ -7994,7 +8297,10 @@ document.addEventListener('click', (event) => {
   // 工作区相关事件
   const sidebarWorkspaceEdit = event.target.closest('[data-edit-sidebar-workspace]');
   if (sidebarWorkspaceEdit) {
-    showEditWorkspaceDialog(sidebarWorkspaceEdit.dataset.editSidebarWorkspace);
+    showEditWorkspaceDialog(
+      sidebarWorkspaceEdit.dataset.editSidebarWorkspace,
+      sidebarWorkspaceEdit,
+    );
     return;
   }
   const sidebarWorkspace = event.target.closest('[data-sidebar-workspace-toggle]');
@@ -8048,7 +8354,7 @@ document.addEventListener('contextmenu', (event) => {
     // 只有非公开工作区才能右键编辑
     if (workspaceId) {
       event.preventDefault();
-      showEditWorkspaceDialog(workspaceId);
+      showEditWorkspaceDialog(workspaceId, workspaceItem);
     }
   }
 });
@@ -9769,7 +10075,7 @@ if (window.brevia) {
   };
   const revealAfterSplash = () => {
     dismissStartupSplash();
-    void checkForUpdates({ silent: true });
+    startAutomaticUpdateChecks();
   };
   window.brevia.on('startup.ready', () => {
     const reveal = () => {
@@ -10335,9 +10641,10 @@ if (window.brevia) {
     if (event.target.closest('[data-regenerate-summary]')) void generateMeetingSummary();
   });
 
-  document.querySelector('[data-export-detail]').addEventListener('click', async () => {
+  document.querySelector('[data-export-detail]').addEventListener('click', () => {
     if (!breviaClient.state.selectedMeetingId) return;
-    openModal('export');
+    if (settingsModal.matches(':popover-open')) closeModal();
+    else void openModal('export');
   });
 }
 
@@ -10578,7 +10885,8 @@ async function saveDesktopPreference(key, value) {
     status.hidden = false;
     status.textContent = t('正在保存…');
   }
-  document.querySelectorAll('[data-desktop-settings] button').forEach((button) => {
+  const controls = document.querySelectorAll('[data-desktop-settings] button:enabled');
+  controls.forEach((button) => {
     button.disabled = true;
   });
   try {
@@ -10591,7 +10899,7 @@ async function saveDesktopPreference(key, value) {
     showToast(error.detail || error.message, undefined, 'error');
   } finally {
     desktopSettingsBusy = false;
-    document.querySelectorAll('[data-desktop-settings] button').forEach((button) => {
+    controls.forEach((button) => {
       button.disabled = false;
     });
   }
@@ -10695,61 +11003,66 @@ scheduleDesktopRecording();
 let desktopShortcutCapture = null;
 async function finishDesktopShortcutCapture(value, restoreFocus = false) {
   const capture = desktopShortcutCapture;
-  if (!capture || capture.finishing) return;
-  capture.finishing = true;
+  if (!capture) return;
+  if (capture.finishing) return capture.finishing;
   clearTimeout(capture.timer);
-  try {
-    await window.brevia.desktop.editShortcuts({ editing: false });
-    if (value !== undefined) await saveDesktopPreference(capture.key, value);
-  } catch (error) {
-    showToast(error.detail || error.message, undefined, 'error');
-  } finally {
-    desktopShortcutCapture = null;
-    const button = document.querySelector(`[data-shortcut-control="${capture.key}"]`);
-    if (button) {
-      const row = button.closest('.preference-row');
-      button.innerHTML = desktopShortcutValue(desktopPreferences[capture.key]);
-      button.setAttribute(
-        'aria-label',
-        `${row.querySelector('h3').textContent} · ${desktopShortcutLabel(desktopPreferences[capture.key])}`,
-      );
-      if (button === capture.button) row.title = capture.description;
-      if (restoreFocus || value !== undefined) button.focus();
+  capture.finishing = complete();
+  return capture.finishing;
+
+  async function complete() {
+    try {
+      await window.brevia.desktop.editShortcuts({ editing: false });
+      if (value !== undefined) await saveDesktopPreference(capture.key, value);
+    } catch (error) {
+      showToast(error.detail || error.message, undefined, 'error');
+    } finally {
+      desktopShortcutCapture = null;
+      const button = document.querySelector(`[data-shortcut-control="${capture.key}"]`);
+      if (button) {
+        const row = button.closest('.preference-row');
+        button.innerHTML = desktopShortcutValue(desktopPreferences[capture.key]);
+        button.setAttribute(
+          'aria-label',
+          `${row.querySelector('h3').textContent} · ${desktopShortcutLabel(desktopPreferences[capture.key])}`,
+        );
+        button.setAttribute('aria-pressed', 'false');
+        button.title = t('录制快捷键');
+        if ((restoreFocus || value !== undefined) && activeView === 'settings' && !activeModal)
+          button.focus();
+      }
     }
   }
 }
 document.addEventListener('click', async (event) => {
   const action = event.target.closest(
-    '[data-shortcut-capture], [data-shortcut-clear], [data-shortcut-reset]',
+    '[data-shortcut-control], [data-shortcut-clear], [data-shortcut-reset]',
   );
-  if (!action || desktopSettingsBusy || desktopShortcutCapture) return;
-  const select = action.closest('.flow-select');
-  const button = select.querySelector('[data-shortcut-control]');
+  if (!action || action.disabled || desktopSettingsBusy) return;
+  if (desktopShortcutCapture) {
+    const same = desktopShortcutCapture.button === action;
+    await finishDesktopShortcutCapture();
+    if (same || desktopShortcutCapture || !action.isConnected) return;
+  }
+  const button = action.closest('.desktop-shortcut').querySelector('[data-shortcut-control]');
   const key = button.dataset.shortcutControl;
-  select.querySelector('.flow-select-options').hidden = true;
-  button.setAttribute('aria-expanded', 'false');
-  if (!action.hasAttribute('data-shortcut-capture')) {
+  if (action !== button) {
     await saveDesktopPreference(
       key,
-      action.hasAttribute('data-shortcut-reset') && key === 'recordingShortcut'
-        ? 'Alt+CommandOrControl+R'
-        : '',
+      action.hasAttribute('data-shortcut-reset') ? desktopShortcutDefault(key) : '',
     );
     document.querySelector(`[data-shortcut-control="${key}"]`)?.focus();
     return;
   }
-  const row = button.closest('.preference-row');
-  const capture = { key, button, description: row.title };
+  const capture = { key, button };
   desktopShortcutCapture = capture;
+  button.focus();
+  button.setAttribute('aria-pressed', 'true');
   button.textContent = t('请按组合键');
   button.setAttribute('aria-label', t('请按组合键，Esc 取消，退格清除'));
-  row.title = t('无需切换窗口；组合键需包含 Ctrl、Alt 或 Command。Esc 取消，退格清除。');
+  button.title = t('无需切换窗口；组合键需包含 Ctrl、Alt 或 Command。Esc 取消，退格清除。');
   try {
     await window.brevia.desktop.editShortcuts({ editing: true });
-    if (desktopShortcutCapture !== capture || capture.finishing) {
-      await window.brevia.desktop.editShortcuts({ editing: false });
-      return;
-    }
+    if (desktopShortcutCapture !== capture || capture.finishing) return;
     button.focus();
     capture.timer = setTimeout(() => void finishDesktopShortcutCapture(), 60000);
   } catch (error) {

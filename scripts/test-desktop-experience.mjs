@@ -194,12 +194,11 @@ try {
   };
   await evaluate(`(async()=>{await showView('home');})()`);
   assert.ok(await evaluate(`document.querySelector('[data-quick-recording]').checkVisibility()`));
-  assert.deepEqual(
+  assert.ok(
     await evaluate(
-      `(()=>{const a=getComputedStyle(document.querySelector('#home-view .quick-recording > span:last-child')),b=getComputedStyle(document.querySelector('#home-view [data-prepare-mode="record"]'));return [a.fontSize,a.fontWeight,b.fontSize,b.fontWeight]})()`,
+      `document.querySelector('#home-view .start-actions > :first-child').matches('.ui-button-primary[data-quick-recording]')`,
     ),
-    ['12px', '400', '13px', '500'],
-    '快速录音使用次级文字入口，主录音入口保持清楚层级',
+    '快速录音是首页首要操作',
   );
   assert.equal(await evaluate(`Boolean(document.querySelector('[data-quick-hint]'))`), false);
   await evaluate(
@@ -276,7 +275,23 @@ try {
   );
   await capture('02-general-settings');
   await evaluate(
-    `(async()=>{for(const code of ['zh','en','es','ja','ko','fr','de','ru']){applyLanguage(code);renderDesktopPreferences();const node=document.querySelector('[data-desktop-settings]');if(node.getBoundingClientRect().right>innerWidth+1)throw Error('Settings overflow '+code);}applyLanguage('zh');await saveDesktopPreference('closeBehavior','hide');})()`,
+    `(async()=>{
+      for(const code of ['zh','en','es','ja','ko','fr','de','ru']){
+        applyLanguage(code);renderDesktopPreferences();
+        const node=document.querySelector('[data-desktop-settings]');
+        if(node.getBoundingClientRect().right>innerWidth+1)throw Error('Settings overflow '+code);
+        const editors=node.querySelectorAll('.desktop-shortcut');
+        if(editors.length!==2)throw Error('Shortcut editors missing '+code);
+        for(const editor of editors){
+          const frame=editor.getBoundingClientRect();
+          for(const button of editor.querySelectorAll('button')){
+            const bounds=button.getBoundingClientRect();
+            if(!button.checkVisibility() || bounds.left<frame.left-1 || bounds.right>frame.right+1 || button.scrollWidth>button.clientWidth+1)throw Error('Shortcut controls clipped '+code);
+          }
+        }
+      }
+      applyLanguage('zh');await saveDesktopPreference('closeBehavior','hide');
+    })()`,
   );
   assert.equal(await evaluate(`desktopPreferences.closeBehavior`), 'hide');
   await mainEval(`${nativeWindow}.close(); true`);
@@ -562,8 +577,20 @@ try {
   await delay(200);
   await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 1, y: 1 });
   await capture('05-capsule-recording');
-  await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 280, y: 42 });
-  await delay(450);
+  const hoverCapsuleControl = async (selector) => {
+    const point = await evaluate(
+      `(()=>{const r=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();return {x:r.left+r.width/2,y:r.top+r.height/2}})()`,
+    );
+    await send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...point });
+    await delay(450);
+  };
+  await hoverCapsuleControl('.capsule-pause');
+  assert.equal(
+    await evaluate(`document.querySelector('#capsule-panel').hidden`),
+    true,
+    '指向录音控制不会展开字幕',
+  );
+  await hoverCapsuleControl('#capsule-preview');
   assert.equal(
     await evaluate(`document.querySelector('#capsule-panel').hidden`),
     false,
@@ -734,7 +761,25 @@ try {
   socket = mainSocket;
   assert.deepEqual(await evaluate(`window.desktopPauseCalls`), [true], '胶囊复用主窗口暂停');
   socket = capsuleSocket;
+  assert.equal(
+    await evaluate(
+      `getComputedStyle(document.querySelector('#capsule-meter')).getPropertyValue('--level').trim()`,
+    ),
+    '0',
+    '暂停状态的胶囊电平归零',
+  );
   await capture('08-capsule-paused');
+  assert.equal(
+    await evaluate(`document.querySelector('#capsule-pin').getAttribute('aria-pressed')`),
+    'true',
+    '点击字幕按钮固定展开',
+  );
+  await evaluate(`document.querySelector('#capsule-pin').click()`);
+  assert.equal(
+    await evaluate(`document.querySelector('#capsule-pin').getAttribute('aria-pressed')`),
+    'false',
+    '取消固定',
+  );
   await evaluate(`document.querySelector('#capsule-pin').click()`);
   await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 1, y: 1 });
   await delay(450);

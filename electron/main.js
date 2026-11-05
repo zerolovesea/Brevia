@@ -711,6 +711,11 @@ class WorkerClient {
     }
     if (storageMigrationInProgress && !duringMigration)
       throw new Error('Folders are being moved. Please wait.');
+    // 快捷键、桌面与手机请求共用此入口；检查放到异步启动之后，避免越过安装锁。
+    if (app.preparingUpdate && type !== 'models.can-relocate')
+      throw Object.assign(new Error('Update installation is in progress'), {
+        code: 'error.tasks.running',
+      });
     if (destructiveOperationInProgress && dataTaskCommands.has(type))
       throw Object.assign(new Error('Wait for data cleanup to finish'), {
         code: 'error.tasks.running',
@@ -1381,7 +1386,14 @@ function registerIpc() {
   );
   handleIpc('app.version', () => app.getVersion());
   handleIpc('update.check', () => checkForUpdate());
-  handleIpc('update.install', () => installUpdate());
+  let pendingInstall;
+  handleIpc('update.install', () => {
+    if (!pendingInstall)
+      pendingInstall = installUpdate().finally(() => {
+        pendingInstall = null;
+      });
+    return pendingInstall;
+  });
   handleIpc('permissions.status', () => {
     if (process.platform === 'darwin')
       return {
@@ -2228,7 +2240,8 @@ function checkForUpdate() {
       cleanup();
       reject(error);
     };
-    const available = (info) => done({ status: 'available', version: info.version });
+    const available = (info) =>
+      done({ status: 'available', version: info.version, releaseDate: info.releaseDate });
     const current = () => done({ status: 'current' });
     autoUpdater.once('update-available', available);
     autoUpdater.once('update-not-available', current);
@@ -2247,8 +2260,12 @@ async function installUpdate() {
     const modelsIdle = await worker.request('models.can-relocate');
     if (
       !modelsIdle ||
+      quitRequested ||
+      app.isQuitting ||
       worker.active ||
       refinementWorker.active ||
+      worker.starting ||
+      refinementWorker.starting ||
       worker.pending.size ||
       refinementWorker.pending.size ||
       storageMigrationInProgress ||
@@ -2279,22 +2296,93 @@ async function installUpdate() {
   };
 
   autoUpdater.on('download-progress', progressHandler);
-
+  let disabledWindow;
   try {
     await autoUpdater.downloadUpdate();
-    // 下载期间仍可开始会议；退出前必须重新检查，不能跳过录音收尾直接杀进程。
     await requireIdle();
-    autoUpdater.removeListener('download-progress', progressHandler);
-    // 安装器启动前先停掉后台转写进程，避免占用安装目录里的文件。
-    installingUpdate = true;
-    stopProcess(worker.process);
-    stopProcess(refinementWorker.process);
-    autoUpdater.quitAndInstall();
+    // 下载期间仍可开始会议或编辑笔记；进入系统安装阶段前需确认存盘及空闲状态。
+    const window = desktop.mainWindow;
+    if (window && !window.isDestroyed() && window.isEnabled()) {
+      window.setEnabled(false);
+      disabledWindow = window;
+    }
+    if (desktop.state && !window?.webContents.isCrashed()) await desktop.action('flush');
+    if (quitRequested || quittingAfterMeetingStop || app.isQuitting)
+      throw new Error('Application is shutting down');
+    app.preparingUpdate = true;
+    // 手机建会在模型检查和写入 session 之间也有异步磁盘操作。
+    await mobileServer?.queue;
+    await requireIdle();
+    await handOffUpdate(autoUpdater, require('electron').autoUpdater);
     return true;
   } catch (error) {
-    autoUpdater.removeListener('download-progress', progressHandler);
+    app.preparingUpdate = false;
+    installingUpdate = false;
+    if (disabledWindow && !disabledWindow.isDestroyed()) disabledWindow.setEnabled(true);
+    if (disabledWindow?.isDestroyed() && !desktop.mainWindow && !app.isQuitting) {
+      // macOS 原生安装会先关闭窗口。重启失败时恢复入口，原来的 IPC 调用者已经销毁。
+      createWindow().webContents.once('did-finish-load', () => reportMainError(error));
+    }
     throw error;
+  } finally {
+    autoUpdater.removeListener('download-progress', progressHandler);
   }
+}
+
+function handOffUpdate(updater, nativeUpdater) {
+  return new Promise((resolve, reject) => {
+    let feedOrigin;
+    const timer = setTimeout(() => {
+      if (!app.isQuitting) fail(new Error('Update installation timed out'));
+    }, 120000);
+    const cleanup = () => {
+      clearTimeout(timer);
+      updater.removeListener('error', fail);
+      nativeUpdater.removeListener('update-not-available', unavailable);
+      nativeUpdater.removeListener('update-downloaded', ready);
+      nativeUpdater.removeListener('before-quit-for-update', quitting);
+      app.removeListener('will-quit', done);
+    };
+    const fail = (error) => {
+      cleanup();
+      reject(error);
+    };
+    const unavailable = () => fail(new Error('No staged update is available'));
+    const quitting = () => {
+      installingUpdate = true;
+    };
+    const done = () => {
+      cleanup();
+      resolve();
+    };
+    const install = () => {
+      try {
+        updater.quitAndInstall();
+      } catch (error) {
+        fail(error);
+      }
+    };
+    const ready = (_event, _notes, _name, _date, url) => {
+      // 每次下载都会建立新的本机代理。超时重试时忽略上一轮延迟到达的原生事件。
+      if (!URL.canParse(url) || new URL(url).origin !== feedOrigin) return;
+      nativeUpdater.removeListener('update-downloaded', ready);
+      install();
+    };
+    updater.once('error', fail);
+    nativeUpdater.once('before-quit-for-update', quitting);
+    app.once('will-quit', done);
+    if (process.platform !== 'darwin') return install();
+    // autoInstallOnAppQuit=false 时，MacUpdater.downloadUpdate 只建立 ZIP 代理。
+    // 显式等待 Squirrel 解包、校验签名，避免提前关闭 worker 或留下自动退出监听。
+    nativeUpdater.on('update-downloaded', ready);
+    nativeUpdater.once('update-not-available', unavailable);
+    try {
+      feedOrigin = new URL(nativeUpdater.getFeedURL()).origin;
+      nativeUpdater.checkForUpdates();
+    } catch (error) {
+      fail(error);
+    }
+  });
 }
 
 function createWindow() {
@@ -2380,7 +2468,7 @@ function createWindow() {
     });
   desktop.attach(window);
   window.on('close', (event) => {
-    if (app.isQuitting) return;
+    if (app.isQuitting || installingUpdate) return;
     event.preventDefault();
     if (desktop.preferences.closeBehavior === 'hide') {
       try {
@@ -2691,7 +2779,11 @@ powerMonitor.on('suspend', () => {
   void stopActiveMeetingForSleep();
 });
 app.on('before-quit', (event) => {
-  // 更新安装时立即退出：安装器已经启动，不能等待优雅停会（否则与卸载器争抢文件）。
+  // Squirrel 尚在准备时不能让普通退出隐式安装，只有系统确认的更新退出才可放行。
+  if (app.preparingUpdate && !installingUpdate) {
+    event.preventDefault();
+    return;
+  }
   if (quittingAfterMeetingStop || installingUpdate) {
     app.isQuitting = true;
     stopProcess(worker.process);
@@ -2748,7 +2840,8 @@ app.on('before-quit', (event) => {
   })();
 });
 app.on('window-all-closed', () => {
-  app.quit();
+  // macOS 原生更新会先关闭全部窗口，再由 Squirrel 决定重启或报告错误。
+  if (!installingUpdate) app.quit();
 });
 
 app.on('will-quit', () => globalShortcut.unregisterAll());

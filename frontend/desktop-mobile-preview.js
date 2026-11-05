@@ -1,6 +1,5 @@
 (() => {
   const instances = new WeakMap();
-  const sceneNames = ['会议列表', '实时转写', '会议纪要'];
   const transcript = [
     '我们先对齐这次会议的目标。',
     '接下来确认负责人和交付时间。',
@@ -17,10 +16,10 @@
   const icon = (name) => interfaceIcon(name);
 
   function markup() {
-    return `<div class="dmp-phone" aria-describedby="dmp-description">
+    return `<div class="dmp-phone" role="group" data-preview-label="交互预览">
       <div class="dmp-screen">
-        <div class="dmp-statusbar" aria-hidden="true"><b>9:41</b><span class="dmp-island"></span><span class="dmp-status-icons"><i></i><i></i></span></div>
-        <section class="dmp-scene is-active" data-preview-scene="0" role="tabpanel" id="dmp-scene-0" aria-labelledby="dmp-tab-0">
+        <div class="dmp-statusbar"><b aria-hidden="true">9:41</b><span class="dmp-island"></span><button type="button" class="dmp-pause" data-preview-pause aria-pressed="false">${icon('pause')}</button></div>
+        <section class="dmp-scene is-active" data-preview-scene="0" role="group" tabindex="-1" data-preview-label="会议列表">
           <header class="dmp-header"><img src="./assets/brevia-logo.svg" alt="Brevia"/><strong>Brevia</strong>${copy('演示', 'small')}</header>
           <div class="dmp-scroll">
             <div class="dmp-page-heading">${copy('会议', 'h2')}<span>03</span></div>
@@ -35,7 +34,7 @@
           <div class="dmp-home-actions"><button class="dmp-record" data-preview-select="1" type="button">${icon('microphone')}${copy('开始录音')}</button></div>
           <nav class="dmp-phone-nav" aria-hidden="true"><span class="is-selected">${icon('list')}${copy('会议')}</span><span>${icon('notes')}${copy('笔记')}</span><span>${icon('settings')}${copy('设置')}</span></nav>
         </section>
-        <section class="dmp-scene" data-preview-scene="1" role="tabpanel" id="dmp-scene-1" aria-labelledby="dmp-tab-1" aria-hidden="true" inert>
+        <section class="dmp-scene" data-preview-scene="1" role="group" tabindex="-1" data-preview-label="实时转写" aria-hidden="true" inert>
           <header class="dmp-header"><button type="button" class="dmp-back" data-preview-select="0" data-preview-label="返回">${icon('back')}</button><strong>${copy('产品讨论')}</strong>${copy('演示', 'small')}</header>
           <div class="dmp-live-meta"><span><i></i>${copy('录音中')}</span><time data-preview-timer>00:42</time></div>
           <div class="dmp-waveform" aria-hidden="true">${Array.from({ length: 29 }, (_, index) => `<i style="--bar-level:${0.2 + Math.abs(Math.sin(index * 1.7)) * 0.65}"></i>`).join('')}</div>
@@ -45,7 +44,7 @@
           </div>
           <div class="dmp-live-footer"><span class="dmp-record-indicator">${icon('recording')}</span><button data-preview-select="2" type="button">${copy('查看纪要')}${icon('arrow-right')}</button></div>
         </section>
-        <section class="dmp-scene" data-preview-scene="2" role="tabpanel" id="dmp-scene-2" aria-labelledby="dmp-tab-2" aria-hidden="true" inert>
+        <section class="dmp-scene" data-preview-scene="2" role="group" tabindex="-1" data-preview-label="会议纪要" aria-hidden="true" inert>
           <header class="dmp-header"><button type="button" class="dmp-back" data-preview-select="1" data-preview-label="返回">${icon('back')}</button><strong>${copy('会议纪要')}</strong>${copy('演示', 'small')}</header>
           <div class="dmp-scroll dmp-summary">
             <div class="dmp-summary-heading">${copy('产品讨论', 'h2')}<small>14:30 · 12:08</small></div>
@@ -62,8 +61,7 @@
         </section>
         <div class="dmp-home-indicator" aria-hidden="true"></div>
       </div>
-    </div>
-    <figcaption class="dmp-caption"><div class="dmp-demo-label">${copy('交互预览')}</div><div class="dmp-controls"><div class="dmp-tabs" role="tablist" data-preview-label="预览场景">${sceneNames.map((name, index) => `<button type="button" role="tab" id="dmp-tab-${index}" aria-controls="dmp-scene-${index}" aria-selected="${index === 0}" tabindex="${index === 0 ? 0 : -1}" data-preview-select="${index}">${copy(name)}<i aria-hidden="true"></i></button>`).join('')}</div><button type="button" class="dmp-pause" data-preview-pause aria-pressed="false">${icon('pause')}</button></div><p id="dmp-description">${copy('演示内容，不代表设备连接状态。')}</p></figcaption>`;
+    </div>`;
   }
 
   function init(dialog = document.getElementById('mobile-dialog')) {
@@ -83,7 +81,6 @@
     const context = canvas.getContext('2d');
     const preference = matchMedia('(prefers-reduced-motion: reduce)');
     const screens = [...preview.querySelectorAll('[data-preview-scene]')];
-    const tabs = [...preview.querySelectorAll('[role="tab"]')];
     const bars = [...preview.querySelectorAll('.dmp-waveform i')];
     const utterances = [...preview.querySelectorAll('[data-preview-utterance]')];
     const texts = [...preview.querySelectorAll('[data-preview-transcript]')];
@@ -157,7 +154,6 @@
     }
 
     function renderPhone() {
-      preview.style.setProperty('--demo-progress', Math.min(1, elapsed / 4500));
       preview.classList.toggle('is-tapping', running && elapsed >= 4500);
       if (scene === 2) {
         const progress = fullScene || preference.matches ? 1 : Math.min(1, elapsed / 1400);
@@ -199,10 +195,6 @@
         screen.classList.toggle('is-past', item < index);
         screen.setAttribute('aria-hidden', String(item !== index));
         screen.inert = item !== index;
-      });
-      tabs.forEach((tab, item) => {
-        tab.setAttribute('aria-selected', String(item === index));
-        tab.tabIndex = item === index ? 0 : -1;
       });
       preview.dataset.previewScene = String(index);
       renderPhone();
@@ -273,19 +265,9 @@
       const target = event.target.closest('[data-preview-select]');
       if (target) {
         select(Number(target.dataset.previewSelect));
-        // 手机内的导航会移除原按钮的可操作性，把键盘位置交给对应场景标签。
-        if (target.closest('[data-preview-scene]')) tabs[scene].focus({ preventScroll: true });
+        screens[scene].focus({ preventScroll: true });
       }
       if (event.target.closest('[data-preview-pause]')) setPaused(!paused);
-    }
-
-    function onKeydown(event) {
-      if (!event.target.matches('[role="tab"]')) return;
-      const keys = { ArrowRight: (scene + 1) % 3, ArrowLeft: (scene + 2) % 3, Home: 0, End: 2 };
-      if (!(event.key in keys)) return;
-      event.preventDefault();
-      select(keys[event.key]);
-      tabs[scene].focus();
     }
 
     function onPointer(event) {
@@ -328,7 +310,7 @@
     for (let node = dialog; node; node = node.parentElement)
       state.observe(node, {
         attributes: true,
-        attributeFilter: ['hidden', 'class', 'style', 'open'],
+        attributeFilter: ['hidden', 'class', 'style', 'open', 'data-mobile-page-state'],
       });
     const theme = new MutationObserver(sizeBackground);
     theme.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
@@ -336,7 +318,6 @@
     window.addEventListener('brevia:language-changed', localize);
     preference.addEventListener('change', onPreference);
     preview.addEventListener('click', onClick);
-    preview.addEventListener('keydown', onKeydown);
     preview.addEventListener('focusin', onFocusIn);
     preview.addEventListener('focusout', onFocusOut);
     content.addEventListener('pointermove', onPointer);
@@ -355,7 +336,6 @@
       window.removeEventListener('pagehide', destroy);
       preference.removeEventListener('change', onPreference);
       preview.removeEventListener('click', onClick);
-      preview.removeEventListener('keydown', onKeydown);
       preview.removeEventListener('focusin', onFocusIn);
       preview.removeEventListener('focusout', onFocusOut);
       content.removeEventListener('pointermove', onPointer);
@@ -367,7 +347,6 @@
         'is-preview-offpage',
         'is-tapping',
       );
-      preview.style.removeProperty('--demo-progress');
       for (const key of ['previewScene', 'previewRunning', 'previewPaused'])
         delete preview.dataset[key];
       preview.replaceChildren(...original);

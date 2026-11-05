@@ -1,5 +1,5 @@
 /* 独立 DOM 演示；配对与连接状态仍由 mobile-connection.js 管理。 */
-#mobile-dialog .mobile-page-content.has-mobile-demo {
+#mobile-dialog[data-mobile-page-state="intro"] .mobile-page-content.has-mobile-demo {
   position: relative;
   isolation: isolate;
   background-image: radial-gradient(
@@ -22,10 +22,9 @@
   z-index: 0;
 }
 #mobile-dialog .mobile-page-preview.desktop-mobile-preview {
-  width: min(100%, 354px, calc((100dvh - 196px) * 9 / 19.5));
+  width: min(100%, 354px, calc((100dvh - 72px - 2 * clamp(24px, 4vw, 62px)) * 9 / 19.5));
   margin: 0;
   overflow: visible;
-  --demo-progress: 0;
 }
 .desktop-mobile-preview .dmp-phone {
   position: relative;
@@ -95,36 +94,6 @@
   left: 37%;
   background: #090909;
   border-radius: 18px;
-}
-.desktop-mobile-preview .dmp-status-icons {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-.desktop-mobile-preview .dmp-status-icons i:first-child {
-  width: 13px;
-  height: 9px;
-  background: currentColor;
-  clip-path: polygon(
-    0 75%,
-    20% 75%,
-    20% 50%,
-    45% 50%,
-    45% 25%,
-    70% 25%,
-    70% 0,
-    100% 0,
-    100% 100%,
-    0 100%
-  );
-}
-.desktop-mobile-preview .dmp-status-icons i:last-child {
-  width: 18px;
-  height: 9px;
-  border: 1px solid currentColor;
-  border-radius: 2px;
-  box-shadow: inset 0 0 0 1px var(--color-surface);
-  background: currentColor;
 }
 .desktop-mobile-preview .dmp-scene {
   position: absolute;
@@ -588,91 +557,22 @@
   background: var(--color-text);
   z-index: 6;
 }
-#mobile-dialog .desktop-mobile-preview .dmp-caption {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 4px 8px;
-  margin-top: 14px;
-  text-align: center;
-}
-.desktop-mobile-preview .dmp-demo-label {
-  max-width: 60px;
-  font-size: 9px;
-  letter-spacing: 0.04em;
-  color: var(--color-text-muted);
-}
-.desktop-mobile-preview .dmp-controls {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-width: 0;
-}
-.desktop-mobile-preview .dmp-tabs {
-  display: flex;
-  align-items: center;
-  flex: 1;
-  min-width: 0;
-  gap: 3px;
-}
-.desktop-mobile-preview .dmp-tabs button {
-  position: relative;
-  flex: 1;
-  min-width: 0;
-  border: 0;
-  background: transparent;
-  border-radius: 4px;
-  color: var(--color-text-muted);
-  padding: 7px 5px 10px;
-  font-size: 10px;
-  line-height: 1.4;
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-.desktop-mobile-preview .dmp-tabs button[aria-selected="true"] {
-  color: var(--color-text);
-}
-.desktop-mobile-preview .dmp-tabs button i {
-  position: absolute;
-  bottom: 2px;
-  left: 6px;
-  right: 6px;
-  height: 2px;
-  border-radius: 2px;
-  background: var(--color-line);
-  overflow: hidden;
-}
-.desktop-mobile-preview .dmp-tabs button[aria-selected="true"] i::after {
-  content: "";
-  display: block;
-  height: 100%;
-  background: var(--color-text);
-  transform-origin: left;
-  transform: scaleX(var(--demo-progress));
-}
 .desktop-mobile-preview .dmp-pause {
   display: grid;
   place-items: center;
   flex: none;
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 24px;
+  min-height: 0;
   padding: 0;
-  border: 1px solid var(--color-line);
-  border-radius: 50%;
+  border: 0;
+  border-radius: 8px;
   background: var(--color-surface);
   color: var(--color-text-muted);
 }
 .desktop-mobile-preview .dmp-pause .interface-icon {
   width: 11px;
   height: 11px;
-}
-.desktop-mobile-preview .dmp-caption > p {
-  grid-column: 1 / -1;
-  margin: 4px 0 0;
-  color: var(--color-text-subtle);
-  font-size: 9px;
-  line-height: 1.5;
 }
 .desktop-mobile-preview button:focus-visible,
 .desktop-mobile-preview input:focus-visible {
@@ -716,22 +616,5 @@
 @media (prefers-reduced-motion: reduce) {
   .desktop-mobile-preview * {
     transition: none !important;
-  }
-}
-@media (max-width: 1050px) {
-  #mobile-dialog .desktop-mobile-preview .dmp-caption {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .desktop-mobile-preview .dmp-demo-label {
-    display: none;
-  }
-  #mobile-dialog .mobile-page-content.has-mobile-demo {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  #mobile-dialog .mobile-page-preview.desktop-mobile-preview {
-    display: block;
-    grid-column: 1;
-    width: min(100%, 300px, calc((100dvh - 160px) * 9 / 19.5));
-    margin: 20px auto 12px;
   }
 }

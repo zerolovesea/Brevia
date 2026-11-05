@@ -24,8 +24,11 @@
       /[&<>"']/g,
       (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char],
     );
-  const bars = Array.from({ length: 10 }, () => meter.appendChild(document.createElement('i')));
-  const heights = [0.3, 0.5, 0.7, 1, 0.8, 0.6, 0.45, 0.7, 0.4, 0.25];
+  // 同一组真实电平驱动初次状态和后续采样，暂停时各声柱落到底线。
+  for (const weight of [0.35, 0.7, 1, 0.55, 0.8, 0.4]) {
+    const bar = meter.appendChild(document.createElement('i'));
+    bar.style.setProperty('--weight', weight);
+  }
 
   let expandRevision = 0;
   let closingAnimation;
@@ -91,11 +94,18 @@
     stop.setAttribute('aria-label', stop.title);
     stop.disabled = busy || saving || inactive;
     stop.hidden = saving || inactive;
-    select('.capsule-logo').setAttribute('aria-label', t('返回当前会议'));
-    select('.capsule-grip').setAttribute('aria-label', t('拖动胶囊'));
-    select('#capsule-preview').setAttribute('aria-label', t('展开字幕与笔记'));
-    select('#capsule-pin').innerHTML = icon('pin') + escape(t(pinned ? '取消固定' : '固定展开'));
-    select('#capsule-pin').setAttribute('aria-pressed', String(pinned));
+    const home = select('.capsule-logo'),
+      preview = select('#capsule-preview'),
+      pin = select('#capsule-pin');
+    home.title = t('返回当前会议');
+    home.setAttribute('aria-label', home.title);
+    select('.capsule-grip').title = t('拖动胶囊');
+    preview.title = t(expanded ? (pinned ? '收起' : '固定展开') : '展开字幕与笔记');
+    preview.setAttribute('aria-label', preview.title);
+    pin.innerHTML = icon('pin');
+    pin.title = t(pinned ? '取消固定' : '固定展开');
+    pin.setAttribute('aria-label', pin.title);
+    pin.setAttribute('aria-pressed', String(pinned));
     select('#capsule-follow').innerHTML = icon('down');
     select('#capsule-follow').title = t('跟随最新');
     select('#capsule-follow').setAttribute('aria-label', t('跟随最新'));
@@ -159,12 +169,11 @@
         idle: '未在录音',
       }[state.phase],
     );
+    select('#capsule-status').title = select('#capsule-status').textContent;
     select('#capsule-time').textContent = new Date(state.elapsed * 1000)
       .toISOString()
       .slice(state.elapsed >= 3600 ? 11 : 14, 19);
-    bars.forEach((bar, index) => {
-      bar.style.height = `${3 + (state.phase === 'recording' ? state.level * 21 * heights[index] : 0)}px`;
-    });
+    meter.style.setProperty('--level', state.phase === 'recording' ? state.level : 0);
     meter.hidden = ['saving', 'saved', 'failed', 'idle'].includes(state.phase);
     select('[role="tablist"]').setAttribute('aria-label', t('展开字幕与笔记'));
     select('#captions-tab').textContent = t('实时字幕');
@@ -217,9 +226,14 @@
       select('#capsule-notes').innerHTML = notesHtml;
     renderControls();
   }
-  document.querySelector('.recording-pill').addEventListener('pointerenter', () => {
-    clearTimeout(closeTimer);
-    if (!expanded && !pointerDown) openTimer = setTimeout(() => void expand(true), 250);
+  const shell = select('.capsule-shell');
+  shell.addEventListener('pointerenter', () => clearTimeout(closeTimer));
+  // 靠近暂停或结束时保持位置稳定，只有读数和字幕按钮触发悬停预览。
+  document.querySelectorAll('.capsule-identity, .capsule-preview').forEach((trigger) => {
+    trigger.addEventListener('pointerenter', () => {
+      if (!expanded && !pointerDown) openTimer = setTimeout(() => void expand(true), 250);
+    });
+    trigger.addEventListener('pointerleave', () => clearTimeout(openTimer));
   });
   function scheduleClose() {
     clearTimeout(openTimer);
@@ -230,16 +244,21 @@
     if (!pinned && !pointerDown && !keyboardInside)
       closeTimer = setTimeout(() => void expand(false), 350);
   }
-  document.querySelector('.capsule-shell').addEventListener('pointerleave', scheduleClose);
+  shell.addEventListener('pointerleave', scheduleClose);
   document.addEventListener('pointerdown', () => {
     pointerDown = true;
     suppressClick = false;
   });
   document.addEventListener('pointerup', () => {
     pointerDown = false;
-    if (!document.querySelector('.capsule-shell').matches(':hover')) scheduleClose();
+    if (!shell.matches(':hover')) scheduleClose();
   });
-  select('#capsule-preview').onclick = () => void expand(!expanded);
+  select('#capsule-preview').onclick = () => {
+    // 悬停已经展开时，点击保留面板，避免刚想阅读就将它收起。
+    pinned = !(expanded && pinned);
+    renderControls();
+    void expand(pinned);
+  };
   select('#capsule-pin').onclick = () => {
     pinned = !pinned;
     renderControls();
@@ -320,9 +339,7 @@
   window.brevia.on('desktop.level', ({ meetingId, level }) => {
     if (state?.meetingId !== meetingId || state.phase !== 'recording') return;
     state.level = level;
-    bars.forEach((bar, index) => {
-      bar.style.height = `${3 + level * 21 * heights[index]}px`;
-    });
+    meter.style.setProperty('--level', level);
   });
   window.brevia.on('desktop.state', render);
   void bridge.state().then(render).catch(showError);

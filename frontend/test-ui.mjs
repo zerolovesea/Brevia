@@ -1249,6 +1249,16 @@ runInNewContext(text(i18nData), localeContext);
     'data-shortcut-control="pauseShortcut"',
   ])
     assert.ok(mount.innerHTML.includes(hook), hook);
+  const shortcuts = mount.innerHTML.slice(mount.innerHTML.indexOf('id="preferences-shortcuts"'));
+  assert.doesNotMatch(shortcuts, /data-flow-select-toggle|flow-select-options/);
+  const shortcutButtons = shortcuts.match(/<button\b[^>]*>/g) || [];
+  for (const action of ['control', 'clear', 'reset']) {
+    const pause = shortcutButtons.find((button) =>
+      button.includes(`data-shortcut-${action}="pauseShortcut"`),
+    );
+    assert.ok(pause, `missing pause shortcut ${action}`);
+    assert.equal(/\bdisabled\b/.test(pause), action !== 'control');
+  }
   context.desktopPreferences = null;
   appended = [];
   context.renderSettingsView();
@@ -2236,8 +2246,12 @@ assert.match(
   text(electronMain),
   /window\s*\.loadFile\(\s*path\s*\.join\(\s*packagedRoot,\s+'frontend',\s+'index\s*\.html',?\s*\)/,
 );
-assert.match(text(electronMain), /webContents\.on\('did-finish-load'/);
-assert.doesNotMatch(text(electronMain), /webContents\.once\('did-finish-load'/);
+const mainWindowLifecycle = text(electronMain).slice(
+  text(electronMain).indexOf('function createWindow()'),
+  text(electronMain).indexOf('let floatingCaptionWindow'),
+);
+assert.match(mainWindowLifecycle, /window\.webContents\.on\('did-finish-load'/);
+assert.doesNotMatch(mainWindowLifecycle, /window\.webContents\.once\('did-finish-load'/);
 assert.match(text(electronMain), /reloadRevealTimer = setTimeout/);
 assert.match(
   text(electronMain),
@@ -2307,7 +2321,7 @@ for (const canceled of [false, true]) {
     dismissStartupSplash: () => {
       removed = true;
     },
-    checkForUpdates() {},
+    startAutomaticUpdateChecks() {},
     Promise,
   });
   reveal();
@@ -2353,7 +2367,10 @@ assert.doesNotMatch(text(js), /renameForm\.requestSubmit\(\)/);
 assert.doesNotMatch(text(components), /data-delete-meeting-category/);
 assert.match(text(components), /data-selection-key/);
 assert.doesNotMatch(text(js), /data-new-meeting-category/);
-assert.match(text(js), /event\.target\.matches\('input, textarea'\)\) return/);
+assert.match(
+  text(js),
+  /event\.target\.closest\('input, textarea, \[data-rename-meeting\]'\)\) return/,
+);
 assert.doesNotMatch(text(js), /meeting-category/);
 assert.match(text(uiData), /const uiData/);
 assert.doesNotMatch(
@@ -3332,7 +3349,6 @@ assert.match(
   text(js),
   /function\s+availableUpdateActionLabel\(\)\s+\{\s+return\s+updateVersion\s+\?\s+updateCopy\(\)\.update\.replace\('0\.2\.0',\s+updateVersion\)\s+:\s+updateCopy\(\)\.update;\s+\}/,
 );
-assert.match(text(js), /updateAvailable\s+\?\s+availableUpdateActionLabel\(\)\s+:\s+copy\.action/);
 assert.match(text(js), /content: 'notes'/);
 // 统一「导出与分享」面板:内容勾选 + 每项格式 + 导出文件 + 分享到。
 assert.match(text(js), /function exportHubHtml/);
@@ -4066,15 +4082,72 @@ assert.match(text(js), /meeting\.exampleLocale === locale/);
 assert.match(text(js), /function selectLibraryNav/);
 assert.match(text(js), /await refreshBackendMeetings\(\)/);
 assert.match(text(js), /let updateAvailable = false/);
-assert.match(text(js), /updateNoticeProgressBar\.style\.transform/);
-assert.match(text(js), /renderUpdateNotice\(\);/);
-assert.match(text(tailwind), /\.software-update-notice > i/);
-assert.match(text(js), /taskCards\.append\(updateNotice\)/);
-assert.match(text(js), /stackableTaskCardSelector\s+=\s+'[^']*\.software-update-notice/);
-assert.match(
-  text(tailwind),
-  /\.task-cards > \.software-update-notice \{[^}]*@apply relative bottom-auto left-auto z-auto w-full max-w-full/,
-);
+// 检查与安装分开；离线重试退避，长时间运行也会继续查找新版本。
+{
+  const source = text(app);
+  const timers = [];
+  const notices = [];
+  let checkCount = 0;
+  let installs = 0;
+  let fail = true;
+  const update = {
+    async check() {
+      checkCount++;
+      if (fail) throw Error('offline');
+      return { status: 'available', version: '1.5.0', releaseDate: '2026-01-01T00:00:00Z' };
+    },
+    async install() {
+      installs++;
+    },
+  };
+  const context = {
+    window: { brevia: { update }, addEventListener() {} },
+    updatePolicy: { delayDays: 3 },
+    updateBusy: '',
+    updateAvailable: false,
+    updateRetryDelay: 3600000,
+    UPDATE_DAY: 86400000,
+    updateCheckTimer: 0,
+    nextUpdateCheckAt: 0,
+    updateDownloadProgress: null,
+    updateStatus: '',
+    updateVersion: '',
+    renderUpdateButton() {},
+    renderUpdateNotice() {},
+    persistUpdatePolicy() {},
+    clearTimeout() {},
+    setTimeout(fn, delay) {
+      timers.push(delay);
+      return timers.length;
+    },
+    showToast(message) {
+      notices.push(message);
+    },
+    userFacingError: String,
+  };
+  runInNewContext(
+    source.slice(
+      source.indexOf('function scheduleUpdateCheck('),
+      source.indexOf("updateButton.addEventListener('click'"),
+    ),
+    context,
+  );
+  await context.runUpdateAction();
+  assert.equal(installs, 0);
+  await context.checkForUpdates({ silent: true });
+  await context.checkForUpdates({ silent: true });
+  assert.deepEqual(timers, [3600000, 7200000]);
+  assert.equal(notices.length, 0);
+  fail = false;
+  await Promise.all([context.checkForUpdates(), context.checkForUpdates()]);
+  assert.equal(checkCount, 3);
+  assert.equal(context.updatePolicy.releasedAt, Date.parse('2026-01-01T00:00:00Z'));
+  assert.equal(context.updatePolicy.offeredVersion, '1.5.0');
+  assert.equal(timers.at(-1), 86400000);
+  assert.equal(installs, 0);
+  await context.runUpdateAction();
+  assert.equal(installs, 1);
+}
 assert.doesNotMatch(
   text(tailwind),
   /\.summary-model-modal\s+\.modal-body\s+\{\s+overflow:\s+visible/,
@@ -4103,10 +4176,15 @@ assert.ok(packageManifest.build.mac.extendInfo.NSAudioCaptureUsageDescription);
 assert.ok(packageManifest.build.mac.extendInfo.NSMicrophoneUsageDescription);
 assert.match(text(electronMain), /MacCatapLoopbackAudioForScreenShare/);
 assert.match(text(electronMain), /autoUpdater\.downloadUpdate\(\)/);
-assert.match(text(electronMain), /autoUpdater\.quitAndInstall\(\)/);
+assert.match(
+  text(electronMain),
+  /await handOffUpdate\(autoUpdater, require\('electron'\)\.autoUpdater\)/,
+);
+assert.match(text(electronMain), /nativeUpdater\.on\('update-downloaded', ready\)/);
+assert.match(text(electronMain), /nativeUpdater\.once\('before-quit-for-update', quitting\)/);
 assert.match(text(js), /navigator\.mediaDevices\.getUserMedia\(\{ audio: true \}\)/);
 assert.match(text(js), /window\.brevia\.permissions\.requestMicrophone\(\)/);
-assert.match(text(js), /window\.brevia\?\.update\?\.check/);
+assert.match(text(js), /window\.brevia\.update\.check/);
 assert.match(text(js), /window\.brevia\.update\.install/);
 assert.match(text(electronMain), /handleIpc\('metrics\.record'/);
 assert.match(text(electronMain), /error\.code === 'EPIPE'/);
@@ -4139,7 +4217,6 @@ assert.match(
   /window\.brevia\.on\('startup\.ready', \(\) => \{\s+const reveal = \(\) => \{/,
 );
 assert.match(text(js), /Promise\.allSettled\(animations\.map/);
-assert.match(text(js), /if \(!silent\) showToast\(error\.message, undefined, 'error'\)/);
 assert.match(text(js), /const preferredModelsForLanguage = \(language\) =>/);
 assert.match(
   text(js),
@@ -4686,6 +4763,32 @@ const summaryFn = (name) => {
   const start = summaryAppSource.indexOf(`function ${name}(`);
   return summaryAppSource.slice(start, summaryAppSource.indexOf('\n}\n', start) + 2);
 };
+{
+  const panel = { parentElement: { classList: { toggle() {} } } };
+  const meetings = [null, 1, 4, 3, 6, 5, 2].map((day) => ({
+    id: day ? String(day) : 'legacy',
+    title: 'Meeting',
+    createdAt: day ? `2026-11-0${day}T12:00:00Z` : undefined,
+  }));
+  const context = {
+    document: { querySelector: () => panel },
+    activeLibraryNav: 'all-meetings',
+    uiData: { meetings },
+    locale: 'en',
+    BreviaI18n: { localeTag: () => 'en-US' },
+    getWorkspaceName: () => 'Workspace',
+    interfaceIcon: () => '',
+    escapeHtml: String,
+    t: String,
+  };
+  runInNewContext(summaryFn('renderHomeMeetings') + '\nrenderHomeMeetings()', context);
+  assert.deepEqual(
+    [...panel.innerHTML.matchAll(/data-open-recent="([^"]+)"/g)].map((match) => match[1]),
+    ['6', '5', '4', '3', '2'],
+    'restoring an older meeting cannot displace a recent meeting',
+  );
+  assert.equal(meetings[0].id, 'legacy', 'the recent list preserves sidebar indices');
+}
 // 行菜单打开在侧栏外侧，并在底部与窄视口中保持可访问。
 {
   const menu = { offsetWidth: 212, offsetHeight: 234, style: {}, classList: { toggle() {} } };
@@ -4970,11 +5073,11 @@ const summaryFn = (name) => {
       delete this.attributes[name];
     },
   }));
-  const trusted = {},
-    install = {};
+  const install = {};
+  const hostStorage = new Map();
   const page = {
     dataset: {},
-    querySelector: (selector) => (selector === '.mobile-trusted-panel' ? trusted : install),
+    querySelector: () => install,
     querySelectorAll: (selector) => (selector === '[data-mobile-panel]' ? panels : markers),
   };
   let pairCalls = 0;
@@ -4982,6 +5085,8 @@ const summaryFn = (name) => {
     dialog: page,
     mobilePageStep: null,
     mobilePairRevision: 0,
+    hasPairedDevice: false,
+    localStorage: { setItem: (key, value) => hostStorage.set(key, value) },
     lastStatus: { devices: [] },
     run: async (action) => action(),
     pair: () => pairCalls++,
@@ -4994,7 +5099,7 @@ const summaryFn = (name) => {
   }
   mobileContext.renderMobilePage();
   assert.equal(page.dataset.mobilePageState, 'intro');
-  assert.equal(trusted.hidden, true);
+  assert.equal(panels.at(-1).hidden, true);
   await mobileContext.changeMobilePageStep('install');
   assert.equal(page.dataset.mobilePageState, 'install');
   assert.equal(install.open, true);
@@ -5005,17 +5110,19 @@ const summaryFn = (name) => {
   assert.equal(panels.find((panel) => panel.dataset.mobilePanel === 'pair').hidden, false);
   mobileContext.updateMobilePage({ devices: [phone] });
   assert.equal(page.dataset.mobilePageState, 'paired', '真实新增信任设备自动结束配对流程');
-  assert.equal(trusted.hidden, false);
+  assert.equal(panels.at(-1).hidden, false);
   mobileContext.lastStatus = { devices: [phone] };
   await mobileContext.changeMobilePageStep('pair');
   mobileContext.updateMobilePage({ devices: [phone] });
-  assert.equal(page.dataset.mobilePageState, 'pair', '已有连接不能跳过配对另一台的第二步');
+  assert.equal(pairCalls, 2, '在管理页添加第二台手机也打开配对窗');
+  assert.equal(page.dataset.mobilePageState, 'paired');
   await mobileContext.changeMobilePageStep('back');
-  assert.equal(page.dataset.mobilePageState, 'install');
+  assert.equal(page.dataset.mobilePageState, 'paired');
   await mobileContext.changeMobilePageStep('done');
   assert.equal(page.dataset.mobilePageState, 'paired');
   mobileContext.updateMobilePage({ devices: [] });
-  assert.equal(page.dataset.mobilePageState, 'intro', '撤销最后一台设备回到入口');
+  assert.equal(page.dataset.mobilePageState, 'paired', '撤销最后一台设备仍展示日常管理页');
+  assert.equal(hostStorage.get('brevia-mobile-has-paired'), 'true');
 }
 // 工作区对话框独立于 activeModal；搜索按钮和 CmdK 都必须留在该对话框内。
 {
@@ -5081,28 +5188,6 @@ const summaryFn = (name) => {
   startSelection({ ...pointer, target: { inTree: true, closest: () => null } });
   assert.equal(selectionContext.dragSelection.pointerId, 1);
   assert.equal(selectionContext.dragSelection.moved, false);
-}
-// 旧工作区编辑入口藏在不可见的标题内时，编辑对话框必须使用居中布局。
-{
-  const anchor = { hidden: false, getClientRects: () => [] };
-  const workspaceDialogContext = {
-    workspaces: [{ id: 'alpha' }],
-    activeWorkspaceId: 'alpha',
-    activeView: 'home',
-    document: { createElement: () => ({}), querySelector: () => anchor },
-  };
-  const dialogStart = text(workspaces).indexOf('function showEditWorkspaceDialog(');
-  const dialogMarkup = text(workspaces).indexOf('  backdrop.innerHTML =', dialogStart);
-  runInNewContext(
-    `${text(workspaces).slice(dialogStart, dialogMarkup)}return backdrop.className;\n}`,
-    workspaceDialogContext,
-  );
-  assert.equal(
-    workspaceDialogContext.showEditWorkspaceDialog('alpha'),
-    'modal-backdrop workspace-dialog',
-  );
-  anchor.getClientRects = () => [{}];
-  assert.match(workspaceDialogContext.showEditWorkspaceDialog('alpha'), /workspace-edit-popover/);
 }
 // 同一侧栏中所有工作区保留原始会议索引；展开/选择默认归属不能替换正在编辑的文档。
 {
@@ -5233,6 +5318,7 @@ const navigationRows = ['current', 'another'].map((meetingId) => ({
   },
 }));
 const meetingNavigationContext = {
+  settingsModal: { matches: () => false },
   currentMeetingDetail: { id: 'current' },
   uiData: { detail: {} },
   activeView: 'detail',
@@ -5421,6 +5507,17 @@ assert.equal(shortcutContext.desktopShortcutFromEvent({ code: 'F24', altKey: tru
 assert.equal(shortcutContext.desktopShortcutFromEvent({ code: 'KeyR', shiftKey: true }), '');
 assert.equal(shortcutContext.desktopShortcutFromEvent({ code: 'AltLeft', altKey: true }), '');
 assert.equal(shortcutContext.desktopShortcutFromEvent({ code: 'Space', ctrlKey: true }), '');
+// 德语/法语键盘以实际字母提供注册值；不能写入 accelerator 的字符回退到物理键。
+for (const [event, expected] of [
+  [{ key: 'z', code: 'KeyY', ctrlKey: true }, 'Control+Z'],
+  [{ key: 'a', code: 'KeyQ', ctrlKey: true, shiftKey: true }, 'Control+Shift+A'],
+  [{ key: '®', code: 'KeyR', altKey: true }, 'Alt+R'],
+  [{ key: 'Dead', code: 'KeyE', altKey: true }, 'Alt+E'],
+  [{ key: 'ф', code: 'KeyA', ctrlKey: true }, 'Control+A'],
+  [{ key: 'Process', code: 'KeyA', ctrlKey: true, isComposing: true }, ''],
+  [{ key: '1', code: 'Numpad1', ctrlKey: true }, ''],
+])
+  assert.equal(shortcutContext.desktopShortcutFromEvent(event), expected);
 const shortcutMarkupContext = {
   window: { brevia: { platform: 'darwin' } },
   t: (key) => key,
@@ -5442,7 +5539,7 @@ assert.equal(
 );
 assert.match(shortcutMarkupContext.desktopShortcutValue(''), /未设置/);
 shortcutMarkupContext.window.brevia.platform = 'win32';
-assert.equal(shortcutMarkupContext.desktopShortcutLabel('Alt+CommandOrControl+R'), 'Alt+Ctrl+R');
+assert.equal(shortcutMarkupContext.desktopShortcutLabel('Alt+CommandOrControl+R'), 'Ctrl+Alt+R');
 assert.match(shortcutMarkupContext.desktopShortcutValue('Control+<'), /&lt;/);
 // 手动开始与快速入口复用相同采集、模型队列及激活路径。
 const recordingCalls = [];
@@ -7641,6 +7738,7 @@ runInNewContext(
   ),
   pairRefreshContext,
 );
+pairRefreshContext.mobilePageStep = 'pair';
 const cancelledPairSuccess = pairRefreshContext.pair();
 await pairRefreshContext.changeMobilePageStep('back');
 finishPairRefresh({});

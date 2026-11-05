@@ -48,7 +48,7 @@ class Node {
     return { width: 600, height: 400, left: 0, top: 0 };
   }
   matches(selector) {
-    return selector === ':focus-within' ? this.focused : this.role === 'tab';
+    return selector === ':focus-within' && this.focused;
   }
   focus() {
     this.focused = true;
@@ -97,11 +97,6 @@ function fixture({ reduced = false, visible = true } = {}) {
   dialog.visible = visible;
   dialog.parentElement = document.documentElement;
   const screens = Array.from({ length: 3 }, () => new Node());
-  const tabs = Array.from({ length: 3 }, () => {
-    const node = new Node();
-    node.role = 'tab';
-    return node;
-  });
   const bars = Array.from({ length: 29 }, () => new Node());
   const utterances = Array.from({ length: 3 }, () => new Node());
   const texts = Array.from({ length: 3 }, () => new Node());
@@ -135,7 +130,6 @@ function fixture({ reduced = false, visible = true } = {}) {
   preview.querySelectorAll = (selector) =>
     ({
       '[data-preview-scene]': screens,
-      '[role="tab"]': tabs,
       '.dmp-waveform i': bars,
       '[data-preview-utterance]': utterances,
       '[data-preview-transcript]': texts,
@@ -196,7 +190,6 @@ function fixture({ reduced = false, visible = true } = {}) {
     content,
     dialog,
     screens,
-    tabs,
     bars,
     texts,
     timer,
@@ -240,7 +233,7 @@ demo.advance(240);
 assert.equal(demo.preview.dataset.previewScene, '1');
 assert.equal(demo.screens[0].inert, true, 'inactive content cannot receive keyboard input');
 assert.equal(demo.screens[1].inert, false);
-assert.equal(demo.tabs[1].getAttribute('aria-selected'), 'true');
+assert.equal(demo.screens[1].getAttribute('aria-hidden'), 'false');
 const textBefore = demo.texts.map((node) => node.textContent).join('');
 const levelBefore = demo.bars[10].values.get('--bar-level');
 demo.advance(1440);
@@ -261,15 +254,15 @@ assert.equal(demo.frames.size, 0);
 assert.equal(demo.preview.dataset.previewPaused, 'true');
 const pausedText = demo.texts.map((node) => node.textContent).join('');
 const pausedPaints = demo.painted();
-const pausedProgress = demo.preview.values.get('--demo-progress');
+const pausedTimer = demo.timer.textContent;
 demo.advance(60000);
 assert.equal(demo.painted(), pausedPaints, 'user pause suspends drawing work');
 assert.equal(demo.texts.map((node) => node.textContent).join(''), pausedText);
 demo.controller.setPaused(false);
 demo.advance(40);
 assert.equal(
-  demo.preview.values.get('--demo-progress'),
-  pausedProgress,
+  demo.timer.textContent,
+  pausedTimer,
   'resume never catches up the hidden elapsed time',
 );
 
@@ -314,17 +307,13 @@ demo.language('en');
 assert.equal(demo.translated.textContent, 'en:交互预览');
 assert.equal(demo.preview.dataset.previewScene, '2', 'language updates preserve the active screen');
 assert.equal(demo.summary.textContent, 'en:已完成');
-let prevented = false;
-demo.preview.dispatch('keydown', {
-  target: demo.tabs[2],
-  key: 'Home',
-  preventDefault() {
-    prevented = true;
-  },
-});
-assert.equal(prevented, true);
+const sceneLink = {
+  dataset: { previewSelect: '0' },
+  closest: (selector) => (selector === '[data-preview-select]' ? sceneLink : null),
+};
+demo.preview.dispatch('click', { target: sceneLink });
 assert.equal(demo.preview.dataset.previewScene, '0');
-assert.equal(demo.tabs[0].focused, true);
+assert.equal(demo.screens[0].focused, true, 'in-phone navigation moves focus to the visible scene');
 
 demo.preference.matches = true;
 demo.preference.dispatch('change');

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
 import { createRequire } from 'node:module';
 import { runInNewContext } from 'node:vm';
 import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
@@ -286,6 +287,7 @@ const updater = {
 };
 configureMacUpdater(updater);
 assert.equal(updater.autoDownload, false);
+assert.equal(updater.autoInstallOnAppQuit, false);
 assert.deepEqual(updater.feed, {
   provider: 'generic',
   url: 'https://modelscope.cn/models/zyaztec/brevia-release/resolve/master',
@@ -624,20 +626,49 @@ const asyncFn = (name) => {
   let downloadsIdle = true;
   let afterDownload = () => {};
   const stopped = [];
-  const updater = {
-    on() {},
-    removeListener() {},
+  const nativeUpdater = new EventEmitter();
+  const app = Object.assign(new EventEmitter(), { isPackaged: true });
+  const updater = Object.assign(new EventEmitter(), {
     async downloadUpdate() {
       downloadCount++;
       afterDownload();
     },
     quitAndInstall() {
       installs++;
+      nativeUpdater.emit('before-quit-for-update');
     },
-  };
+  });
+  // MacUpdater 将 Squirrel 的异步错误重新发为自己的 error 事件。
+  nativeUpdater.on('error', (error) => updater.emit('error', error));
+  nativeUpdater.getFeedURL = () => `http://127.0.0.1:${3000 + downloadCount}`;
+  const ready = (feed = nativeUpdater.getFeedURL()) =>
+    nativeUpdater.emit('update-downloaded', {}, '', '', new Date(), feed + '/update.zip');
+  let expireHandoff;
+  let windowEnabled = true;
+  let windowDestroyed = false;
   const context = {
     process: { platform: 'win32' },
-    app: { isPackaged: true },
+    URL,
+    setTimeout: (callback) => {
+      expireHandoff = callback;
+      return 1;
+    },
+    clearTimeout: () => {
+      expireHandoff = null;
+    },
+    app,
+    desktop: {
+      state: {},
+      action: async () => {},
+      mainWindow: {
+        webContents: { isCrashed: () => false },
+        isDestroyed: () => windowDestroyed,
+        isEnabled: () => windowEnabled,
+        setEnabled: (enabled) => {
+          windowEnabled = enabled;
+        },
+      },
+    },
     worker: {
       active: null,
       pending: new Map(),
@@ -651,10 +682,33 @@ const asyncFn = (name) => {
     storageMigrationInProgress: false,
     destructiveOperationInProgress: false,
     installingUpdate: false,
-    require: () => ({ autoUpdater: updater }),
+    quittingAfterMeetingStop: false,
+    quitRequested: false,
+    stoppingProcessGroups: new Set(),
+    require: (name) => ({ autoUpdater: name === 'electron' ? nativeUpdater : updater }),
     stopProcess: (child) => stopped.push(child),
   };
-  runInNewContext(asyncFn('installUpdate'), context);
+  const mainWindow = context.desktop.mainWindow;
+  context.createWindow = () => {
+    windowDestroyed = false;
+    windowEnabled = true;
+    context.desktop.mainWindow = mainWindow;
+    return { webContents: new EventEmitter() };
+  };
+  runInNewContext(
+    [
+      asyncFn('installUpdate'),
+      mainSource.slice(
+        mainSource.indexOf('function handOffUpdate('),
+        mainSource.indexOf('function createWindow()'),
+      ),
+      mainSource.slice(
+        mainSource.indexOf("app.on('before-quit'"),
+        mainSource.indexOf("app.on('will-quit'"),
+      ),
+    ].join('\n'),
+    context,
+  );
   for (const target of [context.worker, context.refinementWorker]) {
     target.active = { meeting_id: 'running' };
     await assert.rejects(context.installUpdate(), (error) => error.code === 'error.tasks.running');
@@ -679,9 +733,96 @@ const asyncFn = (name) => {
   assert.equal(context.installingUpdate, false);
   context.worker.active = null;
   afterDownload = () => {};
-  assert.equal(await context.installUpdate(), true);
-  assert.deepEqual(stopped, ['worker', 'refinement']);
+  const windowsInstall = context.installUpdate();
+  await new Promise(setImmediate);
+  assert.equal(context.installingUpdate, true);
   assert.equal(installs, 1);
+  assert.deepEqual(stopped, [], 'workers survive until the operating system actually quits');
+  const finishQuit = () => {
+    app.emit('before-quit', {
+      preventDefault() {
+        assert.fail('confirmed update should quit');
+      },
+    });
+    app.emit('will-quit');
+  };
+  finishQuit();
+  assert.equal(await windowsInstall, true);
+  assert.deepEqual(stopped, ['worker', 'refinement']);
+
+  // 模拟重新启动后安装另一个版本，在原生校验期间依次触发普通退出、异步错误、重试及成功。
+  Object.assign(app, { preparingUpdate: false, isQuitting: false });
+  context.installingUpdate = false;
+  context.process.platform = 'darwin';
+  windowEnabled = true;
+  stopped.length = 0;
+  nativeUpdater.checkForUpdates = () => {};
+  const first = context.installUpdate();
+  await new Promise(setImmediate);
+  assert.equal(app.preparingUpdate, true);
+  assert.equal(windowEnabled, false);
+  assert.equal(context.installingUpdate, false);
+  assert.equal(installs, 1, 'the ZIP alone cannot commit a macOS update');
+  let blockedQuit = false;
+  app.emit('before-quit', {
+    preventDefault() {
+      blockedQuit = true;
+    },
+  });
+  assert.ok(blockedQuit, 'ordinary quit cannot install while Squirrel is staging');
+  nativeUpdater.emit('error', Error('signature rejected'));
+  await assert.rejects(first, /signature rejected/);
+  assert.equal(app.preparingUpdate, false);
+  assert.equal(context.installingUpdate, false);
+  assert.equal(windowEnabled, true);
+  assert.equal(nativeUpdater.listenerCount('update-downloaded'), 0);
+  assert.equal(app.listenerCount('will-quit'), 0);
+  assert.deepEqual(stopped, []);
+
+  const second = context.installUpdate();
+  await new Promise(setImmediate);
+  ready();
+  assert.equal(installs, 2, 'a retry installs once after native verification');
+  windowDestroyed = true;
+  context.desktop.mainWindow = null;
+  app.emit('window-all-closed');
+  nativeUpdater.emit('error', Error('native relaunch failed'));
+  await assert.rejects(second, /native relaunch failed/);
+  assert.equal(
+    context.installingUpdate,
+    false,
+    'an asynchronous relaunch failure restores normal quit',
+  );
+  assert.equal(app.preparingUpdate, false);
+  assert.equal(windowEnabled, true);
+  assert.equal(
+    context.desktop.mainWindow,
+    mainWindow,
+    'a failed macOS relaunch restores the closed window',
+  );
+  assert.deepEqual(stopped, []);
+
+  const stalled = context.installUpdate();
+  await new Promise(setImmediate);
+  const expiredFeed = nativeUpdater.getFeedURL();
+  expireHandoff();
+  await assert.rejects(stalled, /timed out/);
+  assert.equal(expireHandoff, null);
+  assert.equal(app.preparingUpdate, false);
+  assert.equal(windowEnabled, true);
+  assert.equal(nativeUpdater.listenerCount('update-downloaded'), 0);
+  assert.equal(updater.listenerCount('error'), 0);
+  ready(expiredFeed);
+  assert.equal(installs, 2, 'late staging must not quit the application');
+  const third = context.installUpdate();
+  await new Promise(setImmediate);
+  ready(expiredFeed);
+  assert.equal(installs, 2, 'a retry ignores a result from the expired proxy');
+  ready();
+  assert.equal(installs, 3);
+  finishQuit();
+  assert.equal(await third, true);
+  assert.deepEqual(stopped, ['worker', 'refinement']);
 }
 
 const timers = new Map();
@@ -731,6 +872,12 @@ requests.process = {
     },
   }),
 };
+workerClientContext.app.preparingUpdate = true;
+for (const action of ['meeting.start', 'meeting.import', 'mobile.prepare', 'models.download']) {
+  await assert.rejects(requests.request(action), (error) => error.code === 'error.tasks.running');
+}
+assert.deepEqual(writes, [], 'staging prevents all recording sources from entering the worker');
+workerClientContext.app.preparingUpdate = false;
 const firstRequest = requests.request('meeting.list');
 const secondRequest = requests.request('meeting.get', { meeting_id: 'meeting' });
 assert.equal(writes.length, 1, 'backpressure keeps the second request outside the pipe');

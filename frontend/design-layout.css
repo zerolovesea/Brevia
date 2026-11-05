@@ -411,15 +411,6 @@ html[data-theme="dark"] .modal-danger {
   border-radius: 3px;
   background: var(--progress-track);
 }
-.software-update-notice > i {
-  height: var(--progress-height);
-  border-radius: 3px;
-  background: var(--progress-track);
-}
-.software-update-notice > i b {
-  border-radius: 3px;
-  background: var(--color-text);
-}
 .processing-bar > i {
   border-radius: 3px;
   background: var(--color-text);
@@ -2514,7 +2505,6 @@ details.advanced-settings-section[open]::details-content {
 .required-models-card li > .processing-bar {
   grid-column: 1/-1;
 }
-.software-update-notice > span,
 .live-transcription-unavailable-body {
   font-size: 14px;
   line-height: 1.6;
@@ -5419,18 +5409,6 @@ textarea,
   font-size: 13px;
   color: var(--color-text-muted);
 }
-.mobile-connection-capabilities h4 {
-  margin: 0 0 16px;
-  font-size: 16px;
-  font-weight: 600;
-}
-.mobile-connection-capabilities p {
-  font-size: 14px;
-}
-.mobile-connection-capabilities .interface-icon {
-  width: 24px;
-  height: 24px;
-}
 .mobile-install > summary {
   display: flex;
   align-items: center;
@@ -7808,9 +7786,6 @@ html[data-theme] .toast,
   gap: 16px;
   margin: 0 0 12px;
 }
-.settings-page #mobile-dialog .mobile-device-grid > section {
-  padding: 16px;
-}
 .mobile-service-heading > div {
   flex: 0 1 280px;
 }
@@ -7897,34 +7872,6 @@ html[data-theme] .toast,
   padding: 16px;
   border-radius: 50%;
   background: var(--color-navigation);
-}
-.mobile-connection-capabilities {
-  border-top: 1px solid var(--color-line);
-  margin-top: 20px;
-  padding-top: 12px;
-}
-.mobile-connection-capabilities > div {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 24px;
-}
-.mobile-connection-capabilities p {
-  display: flex;
-  align-items: flex-start;
-  gap: 16px;
-  margin: 0;
-}
-.mobile-connection-capabilities b,
-.mobile-connection-capabilities small {
-  display: block;
-}
-.mobile-connection-capabilities b {
-  font-size: 16px;
-}
-.mobile-connection-capabilities small {
-  margin-top: 8px;
-  font-size: 14px;
-  color: var(--color-text-muted);
 }
 #mobile-pair-dialog {
   position: fixed;
@@ -8084,9 +8031,6 @@ html[data-theme] .toast,
   }
   .mobile-service-heading {
     flex-wrap: wrap;
-  }
-  .mobile-connection-capabilities > div {
-    grid-template-columns: 1fr;
   }
 }
 
@@ -8408,45 +8352,56 @@ html[data-theme] .toast,
   background: var(--color-selected);
 }
 .meeting-title-rename {
-  display: grid;
-  gap: 4px;
   min-width: 0;
 }
 .meeting-rename-controls {
-  max-width: 600px;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 26px 26px;
   align-items: center;
-  gap: 12px;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--color-line);
+  border-radius: 7px;
+  background: var(--color-surface);
+}
+.meeting-rename-controls:focus-within {
+  border-color: var(--color-text-muted);
 }
 .meeting-rename-controls input {
   width: 100%;
   min-width: 0;
-  flex: 1;
-  height: 44px;
-  border: 1px solid var(--color-text);
-  border-radius: 8px;
-  padding: 8px 12px;
-  font-size: 16px;
+  height: 28px;
+  padding: 2px 5px;
+  border: 0;
+  color: var(--color-text);
+  font: inherit;
 }
 .meeting-rename-controls button {
-  min-height: 44px;
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  white-space: nowrap;
-  padding: 8px 12px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  min-height: 26px;
+  padding: 3px;
+  border: 0;
+  border-radius: 4px;
+  color: var(--color-text-muted);
+  background: transparent;
+}
+.meeting-rename-controls button:is(:hover, :focus-visible) {
+  color: var(--color-text);
+  background: var(--color-selected);
 }
 .meeting-rename-controls .interface-icon {
-  width: 20px;
-  height: 20px;
+  width: 15px;
+  height: 15px;
 }
-.meeting-title-rename small,
-.meeting-rename-state {
+.meeting-rename-state:not(:empty) {
+  display: block;
+  padding: 4px;
   color: var(--color-text-muted);
-  font-size: 13px;
-}
-.meeting-row:has(.meeting-title-rename) {
-  min-height: 144px;
+  font-size: 11px;
+  overflow-wrap: anywhere;
 }
 #home-view .batch-toolbar {
   display: flex;
@@ -8510,12 +8465,6 @@ html[data-theme] .toast,
   border-radius: 8px;
 }
 @media (max-width: 1050px) {
-  .meeting-rename-controls {
-    flex-wrap: wrap;
-  }
-  .meeting-rename-controls input {
-    flex-basis: 100%;
-  }
   .meeting-list.is-selecting .meeting-row {
     grid-template-columns: 32px 36px minmax(0, 1fr) auto 32px;
   }
@@ -8563,9 +8512,6 @@ body:has(.onboarding-phone-overlay) #mobile-pair-dialog::backdrop {
 .batch-modal .modal-panel {
   width: 640px;
   max-width: calc(100vw - 48px);
-}
-.meeting-rename-meta {
-  margin: 0;
 }
 
 /* 返回普通页面时直接恢复完整侧栏，避免宽度动画将任务内容挤出视口。 */
@@ -9438,7 +9384,7 @@ body:has(.meeting-workspace-menu) .meeting-menu:not([hidden]) [data-meeting-acti
   grid-template-columns: minmax(0, 1fr) minmax(320px, 360px) !important;
 }
 .detail-layout.has-segment-profile > :is(.notes, .detail-search-results, .detail-mode-toggle),
-.live-layout.has-segment-profile > .live-notes {
+.live-layout.has-segment-profile > .live-captions {
   display: none !important;
 }
 .detail-layout.has-segment-profile > .final-transcript,
@@ -10872,9 +10818,6 @@ body:has(.meeting-workspace-menu) .meeting-menu:not([hidden]) [data-meeting-acti
   width: 32px;
   height: 32px;
 }
-#home-view .meeting-row:has(.meeting-title-rename) {
-  min-height: 116px;
-}
 @media (max-width: 1100px) {
   #home-view .meeting-row {
     grid-template-columns: 20px 32px minmax(0, 1fr) 0 minmax(100px, 0.4fr) 32px;
@@ -10979,32 +10922,4 @@ body:has(.meeting-workspace-menu) .meeting-menu:not([hidden]) [data-meeting-acti
   padding: 10px 12px;
   font-size: 12px;
   line-height: 1.6;
-}
-
-/* 快捷键沿用通用设置的单行下拉控件，仅按键内容使用键帽。 */
-.desktop-shortcut-keys {
-  min-height: 1lh;
-  line-height: inherit;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-  overflow: hidden;
-}
-.desktop-shortcut-keys kbd {
-  display: grid;
-  place-items: center;
-  min-width: 20px;
-  height: 22px;
-  padding: 0 2px;
-  border: 1px solid var(--color-line);
-  border-radius: 4px;
-  background: var(--color-navigation);
-  color: var(--color-text);
-  font: inherit;
-  font-size: 12px;
-}
-.desktop-shortcut-empty {
-  line-height: inherit;
-  color: var(--color-text-muted);
 }

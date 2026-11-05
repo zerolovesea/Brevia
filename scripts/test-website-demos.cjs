@@ -579,7 +579,7 @@ app
               productMotion.seek(6600);
               const root=document.querySelector('[data-live-notes-root]');
               return {suggestionInside:root.contains(document.querySelector('[data-ai-suggestion]')),
-                toolbarHidden:root.querySelector('.notes-toolbar').hidden,
+                toolbarVisible:root.querySelector('.notes-toolbar').checkVisibility(),
                 toast:document.querySelector('#toast.visible')?.innerText};
             })()`);
             assert.equal(
@@ -588,9 +588,9 @@ app
               'Suggestions share the official notes surface',
             );
             assert.equal(
-              acceptedUI.toolbarHidden,
+              acceptedUI.toolbarVisible,
               true,
-              'Notes toolbar starts collapsed in the app',
+              'The meeting toolbar stays visible after accepting a suggestion',
             );
             assert.equal(acceptedUI.toast, locale === 'zh' ? '已加入笔记' : 'Added to notes');
             await capture(

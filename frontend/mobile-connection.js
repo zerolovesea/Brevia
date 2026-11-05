@@ -6,6 +6,7 @@
   let pairingBusy = false;
   let pairClosing = null;
   let mobilePageStep = null;
+  let hasPairedDevice = localStorage.getItem('brevia-mobile-has-paired') === 'true';
   let mobilePairRevision = 0;
   const pairing = document.getElementById('mobile-pairing');
   let expires = 0,
@@ -63,13 +64,12 @@
     dialog.querySelector('#mobile-dialog-status').textContent = t(key);
   }
   function renderMobilePage(value = lastStatus, direction) {
-    const state = mobilePageStep || (value?.devices?.length ? 'paired' : 'intro');
+    const state = hasPairedDevice || value?.devices?.length ? 'paired' : mobilePageStep || 'intro';
     const previous = dialog.dataset.mobilePageState;
     dialog.dataset.mobilePageState = state;
     dialog.querySelectorAll('[data-mobile-panel]').forEach((panel) => {
       panel.hidden = panel.dataset.mobilePanel !== state;
     });
-    dialog.querySelector('.mobile-trusted-panel').hidden = state !== 'paired';
     const install = dialog.querySelector('.mobile-install');
     install.open = state === 'install';
     dialog.querySelectorAll('[data-mobile-step-marker]').forEach((marker) => {
@@ -91,15 +91,12 @@
     }
   }
   function updateMobilePage(value) {
-    // 新的信任设备才表示本轮配对完成；已有连接不能跳过“再连接一台”的流程。
-    if (
-      mobilePageStep === 'pair' &&
-      lastStatus &&
-      value.devices?.some(
-        (device) => !lastStatus.devices?.some((previous) => previous.id === device.id),
-      )
-    )
+    // 信任记录来自本机服务；仅记住首次引导已完成，在线状态始终使用当前连接。
+    if (value.devices?.length && !hasPairedDevice) {
+      hasPairedDevice = true;
+      localStorage.setItem('brevia-mobile-has-paired', 'true');
       mobilePageStep = null;
+    }
     renderMobilePage(value);
   }
   async function changeMobilePageStep(step) {
@@ -123,7 +120,7 @@
     ) {
       if (activeView === 'live' && meetingActive) minimizeMeeting();
       await showView('settings');
-      await openModal('device-connection');
+      if (activeView === 'settings') await openModal('device-connection');
     }
   }
   async function run(action) {
@@ -170,8 +167,6 @@
     if (pairingBusy || pairClosing || (pairDialog.open && !refresh)) return;
     if (refresh && !pairDialog.open) return;
     const revision = ++mobilePairRevision;
-    mobilePageStep = 'pair';
-    renderMobilePage();
     pairingBusy = true;
     pairDialog.querySelector('#mobile-pair-error').textContent = '';
     try {
@@ -230,6 +225,22 @@
     entry.setAttribute('aria-label', label);
     document.getElementById('mobile-sidebar-status').textContent = t(status);
   }
+  function renderMobileEquipment(value, connected, pending) {
+    const hostName = dialog.querySelector('[data-mobile-host-name]');
+    hostName.textContent = value.name || '';
+    hostName.title = hostName.textContent;
+    hostName.parentElement.hidden = !value.name;
+    const featured =
+      value.devices?.find((device) => device.id === pending?.owner) ||
+      connected[0] ||
+      value.devices?.[0];
+    const equipment = dialog.querySelector('.mobile-equipment');
+    equipment.dataset.link = featured ? (featured.connected ? 'connected' : 'offline') : 'empty';
+    equipment.querySelector('[data-mobile-handset-name]').textContent = featured?.name || '';
+    equipment.querySelector('[data-mobile-handset-count]').textContent = featured
+      ? new Intl.NumberFormat(BreviaI18n.localeTag(locale)).format(featured.recordingCount || 0)
+      : '';
+  }
   async function render(value) {
     updateMobilePage(value);
     lastStatus = value;
@@ -265,6 +276,8 @@
     const service = dialog.querySelector('#mobile-service-state');
     service.textContent = t(connectionStatus);
     service.dataset.connected = String(connected.length > 0);
+    service.dataset.enabled = String(Boolean(value.enabled));
+    if (hasPairedDevice) renderMobileEquipment(value, connected, pending);
     renderMobileSidebar(value, pending, connected, connectionStatus);
     const approval = pairDialog.querySelector('#mobile-approval');
     if (!pairClosing && ((value.approval?.id || null) !== approvalId || localeChanged)) {
@@ -372,7 +385,21 @@
         const revoke = document.createElement('button');
         revoke.className = 'secondary';
         revoke.textContent = t('取消信任');
-        revoke.onclick = () => run(async () => render(await api.revoke({ id: device.id })));
+        revoke.onclick = () => {
+          if (
+            !window.confirm(
+              t('取消对「{name}」的信任？这台设备需要重新配对才能访问电脑。').replace(
+                '{name}',
+                () => device.name,
+              ),
+            )
+          )
+            return;
+          revoke.disabled = true;
+          return run(async () => render(await api.revoke({ id: device.id }))).finally(() => {
+            revoke.disabled = false;
+          });
+        };
         row.insertAdjacentHTML('afterbegin', interfaceIcon('phone'));
         row.dataset.connected = String(device.connected);
         row.append(name, facts, revoke);
@@ -420,6 +447,8 @@
     if (step) void changeMobilePageStep(step.dataset.mobilePageStep);
   });
   dialog.querySelector('#mobile-pair').onclick = () => run(pair);
+  // 准备录音中原地配对，关闭浮窗后继续填写当前会议。
+  document.querySelector('[data-capture-phone]').onclick = () => run(pair);
   dialog.querySelector('#mobile-service-toggle').onchange = (event) => {
     const switcher = event.target;
     switcher.disabled = true;
@@ -440,9 +469,9 @@
   const stopPairing = () =>
     run(async () => {
       if (approvalId) await api.approve({ id: approvalId, allowed: false });
-      const value = await api.closePairing();
+      await api.closePairing();
       await closePairDialog();
-      await render(value);
+      await render(await api.status());
     });
   pairDialog.querySelector('#mobile-close-pairing').onclick = stopPairing;
   dialog.querySelector('[data-mobile-cancel-preview]').onclick = stopPairing;

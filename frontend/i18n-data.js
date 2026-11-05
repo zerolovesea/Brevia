@@ -581,6 +581,8 @@
         '未记录（旧版设备）': '未记录（旧版设备）',
         '首次连接': '首次连接',
         '取消信任': '取消信任',
+        '取消对「{name}」的信任？这台设备需要重新配对才能访问电脑。':
+          '取消对「{name}」的信任？这台设备需要重新配对才能访问电脑。',
         '连接中断 · 等待补传': '连接中断 · 等待补传',
         '手机已暂停': '手机已暂停',
         '手机录音中': '手机录音中',
@@ -724,6 +726,7 @@
         '选择格式：md / txt / json / srt / docx / pdf / flac / wav / m4a':
           '选择格式：md / txt / json / srt / docx / pdf / flac / wav / m4a',
         '已导出「{title}」': '已导出「{title}」',
+        '示例会议及录音将永久删除，无法恢复。': '示例会议及录音将永久删除，无法恢复。',
         '示例会议及录音已删除': '示例会议及录音已删除',
         '会议已移至最近删除': '会议已移至最近删除',
         '暂停录音': '暂停录音',
@@ -1449,6 +1452,8 @@
         '未记录（旧版设备）': 'Not recorded (older device)',
         '首次连接': 'First connected',
         '取消信任': 'Forget device',
+        '取消对「{name}」的信任？这台设备需要重新配对才能访问电脑。':
+          'Forget “{name}”? This device will need to pair again to access this computer.',
         '连接中断 · 等待补传': 'Disconnected · Waiting to sync',
         '手机已暂停': 'Paused on phone',
         '手机录音中': 'Recording on phone',
@@ -1650,6 +1655,8 @@
         '选择格式：md / txt / json / srt / docx / pdf / flac / wav / m4a':
           'Choose format: md / txt / json / srt / docx / pdf / flac / wav / m4a',
         '已导出「{title}」': 'Exported “{title}”',
+        '示例会议及录音将永久删除，无法恢复。':
+          'Example meetings and their recordings will be permanently deleted and cannot be recovered.',
         '示例会议及录音已删除': 'Example meeting and recording deleted',
         '会议已移至最近删除': 'Meeting moved to Recently Deleted',
         '暂停录音': 'Pause recording',
@@ -2470,6 +2477,8 @@
         '未记录（旧版设备）': 'Sin registrar (dispositivo anterior)',
         '首次连接': 'Primera conexión',
         '取消信任': 'Olvidar dispositivo',
+        '取消对「{name}」的信任？这台设备需要重新配对才能访问电脑。':
+          '¿Olvidar «{name}»? El dispositivo tendrá que volver a enlazarse para acceder a este ordenador.',
         '连接中断 · 等待补传': 'Sin conexión · Esperando sincronización',
         '手机已暂停': 'Pausado en el teléfono',
         '手机录音中': 'Grabando en el teléfono',
@@ -2669,6 +2678,8 @@
         '选择格式：md / txt / json / srt / docx / pdf / flac / wav / m4a':
           'Elija formato: md / txt / json / srt / docx / pdf / flac / wav / m4a',
         '已导出「{title}」': 'Se exportó “{title}”',
+        '示例会议及录音将永久删除，无法恢复。':
+          'Las reuniones de ejemplo y sus grabaciones se eliminarán definitivamente y no se podrán recuperar.',
         '示例会议及录音已删除': 'Se eliminaron la reunión y grabación de ejemplo',
         '会议已移至最近删除': 'La reunión se movió a Eliminadas recientemente',
         '暂停录音': 'Pausar grabación',
@@ -3491,6 +3502,8 @@
         '未记录（旧版设备）': '未記録（旧バージョン）',
         '首次连接': '初回接続',
         '取消信任': '信頼を解除',
+        '取消对「{name}」的信任？这台设备需要重新配对才能访问电脑。':
+          '「{name}」の信頼を解除しますか？このデバイスからパソコンにアクセスするには、再度ペアリングが必要です。',
         '连接中断 · 等待补传': '接続中断 · 同期待ち',
         '手机已暂停': 'スマートフォンで一時停止中',
         '手机录音中': 'スマートフォンで録音中',
@@ -3693,6 +3706,8 @@
         '选择格式：md / txt / json / srt / docx / pdf / flac / wav / m4a':
           '形式を選択: md / txt / json / srt / docx / pdf / flac / wav / m4a',
         '已导出「{title}」': '「{title}」をエクスポートしました',
+        '示例会议及录音将永久删除，无法恢复。':
+          'サンプル会議と録音は完全に削除され、復元できません。',
         '示例会议及录音已删除': 'サンプル会議と録音を削除しました',
         '会议已移至最近删除': '会議を最近削除した項目に移動しました',
         '暂停录音': '録音を一時停止',
@@ -4502,6 +4517,8 @@
         '未记录（旧版设备）': '기록 없음 (이전 버전 기기)',
         '首次连接': '최초 연결',
         '取消信任': '기기 신뢰 해제',
+        '取消对「{name}」的信任？这台设备需要重新配对才能访问电脑。':
+          '“{name}” 기기의 신뢰를 해제할까요? 이 컴퓨터에 접근하려면 다시 페어링해야 합니다.',
         '连接中断 · 等待补传': '연결 끊김 · 동기화 대기',
         '手机已暂停': '휴대폰에서 일시 정지됨',
         '手机录音中': '휴대폰에서 녹음 중',
@@ -4700,6 +4717,8 @@
         '选择格式：md / txt / json / srt / docx / pdf / flac / wav / m4a':
           '형식 선택: md / txt / json / srt / docx / pdf / flac / wav / m4a',
         '已导出「{title}」': '“{title}”을(를) 내보냈습니다',
+        '示例会议及录音将永久删除，无法恢复。':
+          '예시 회의와 녹음이 영구 삭제되며 복구할 수 없습니다.',
         '示例会议及录音已删除': '예시 회의와 녹음을 삭제했습니다',
         '会议已移至最近删除': '회의를 최근 삭제됨으로 옮겼습니다',
         '暂停录音': '녹음 일시 중지',
@@ -5525,6 +5544,8 @@
         '未记录（旧版设备）': 'Non enregistré (ancien appareil)',
         '首次连接': 'Première connexion',
         '取消信任': 'Oublier l’appareil',
+        '取消对「{name}」的信任？这台设备需要重新配对才能访问电脑。':
+          'Oublier « {name} » ? Cet appareil devra être de nouveau jumelé pour accéder à cet ordinateur.',
         '连接中断 · 等待补传': 'Déconnecté · Synchronisation en attente',
         '手机已暂停': 'En pause sur le téléphone',
         '手机录音中': 'Enregistrement sur le téléphone',
@@ -5727,6 +5748,8 @@
         '选择格式：md / txt / json / srt / docx / pdf / flac / wav / m4a':
           'Choisir le format : md / txt / json / srt / docx / pdf / flac / wav / m4a',
         '已导出「{title}」': '« {title} » a été exporté',
+        '示例会议及录音将永久删除，无法恢复。':
+          'Les réunions d’exemple et leurs enregistrements seront définitivement supprimés et ne pourront pas être restaurés.',
         '示例会议及录音已删除': 'La réunion et l’enregistrement d’exemple ont été supprimés',
         '会议已移至最近删除': 'La réunion a été placée dans Éléments récemment supprimés',
         '暂停录音': 'Mettre l’enregistrement en pause',
@@ -6567,6 +6590,8 @@
         '未记录（旧版设备）': 'Nicht erfasst (älteres Gerät)',
         '首次连接': 'Erste Verbindung',
         '取消信任': 'Gerät vergessen',
+        '取消对「{name}」的信任？这台设备需要重新配对才能访问电脑。':
+          '„{name}“ vergessen? Dieses Gerät muss erneut gekoppelt werden, um auf diesen Computer zuzugreifen.',
         '连接中断 · 等待补传': 'Getrennt · Warten auf Synchronisierung',
         '手机已暂停': 'Auf dem Telefon pausiert',
         '手机录音中': 'Aufnahme auf dem Telefon',
@@ -6770,6 +6795,8 @@
         '选择格式：md / txt / json / srt / docx / pdf / flac / wav / m4a':
           'Format auswählen: md / txt / json / srt / docx / pdf / flac / wav / m4a',
         '已导出「{title}」': '„{title}“ exportiert',
+        '示例会议及录音将永久删除，无法恢复。':
+          'Beispielbesprechungen und ihre Aufnahmen werden endgültig gelöscht und können nicht wiederhergestellt werden.',
         '示例会议及录音已删除': 'Beispielbesprechung und Aufnahme gelöscht',
         '会议已移至最近删除': 'Besprechung in „Zuletzt gelöscht“ verschoben',
         '暂停录音': 'Aufnahme anhalten',
@@ -7598,6 +7625,8 @@
         '未记录（旧版设备）': 'Не записано (старое устройство)',
         '首次连接': 'Первое подключение',
         '取消信任': 'Забыть устройство',
+        '取消对「{name}」的信任？这台设备需要重新配对才能访问电脑。':
+          'Забыть «{name}»? Чтобы получить доступ к компьютеру, устройство потребуется связать повторно.',
         '连接中断 · 等待补传': 'Связь прервана · Ожидание синхронизации',
         '手机已暂停': 'Приостановлено на телефоне',
         '手机录音中': 'Запись на телефоне',
@@ -7796,6 +7825,8 @@
         '选择格式：md / txt / json / srt / docx / pdf / flac / wav / m4a':
           'Выберите формат: md / txt / json / srt / docx / pdf / flac / wav / m4a',
         '已导出「{title}」': '«{title}» экспортировано',
+        '示例会议及录音将永久删除，无法恢复。':
+          'Примеры встреч и их записи будут удалены без возможности восстановления.',
         '示例会议及录音已删除': 'Пример встречи и запись удалены',
         '会议已移至最近删除': 'Встреча перемещена в Недавно удалённые',
         '暂停录音': 'Приостановить запись',
@@ -9341,6 +9372,11 @@
     },
     'updateLabels': {
       'zh': {
+        'delay': '更新提醒延迟',
+        'delayHint': '新版本发布后，经过所选天数再自动提醒。',
+        'immediate': '立即',
+        'unsupported': '请在发行页面获取此版本的更新。',
+        'restart': '下载完成后将重启 Brevia。',
         'title': '软件更新',
         'description': '当前版本 0.1.0',
         'action': '检查更新',
@@ -9353,6 +9389,11 @@
         'current': '已是最新版本',
       },
       'en': {
+        'delay': 'Update reminder delay',
+        'delayHint': 'Wait this many days after release before showing an automatic reminder.',
+        'immediate': 'None',
+        'unsupported': 'Get updates for this build from the releases page.',
+        'restart': 'Brevia will restart after the download.',
         'title': 'Software updates',
         'description': 'Current version 0.1.0',
         'action': 'Check for updates',
@@ -9365,6 +9406,11 @@
         'current': 'Up to date',
       },
       'es': {
+        'delay': 'Retrasar el aviso',
+        'delayHint': 'Días desde la publicación hasta el aviso automático.',
+        'immediate': 'Ninguno',
+        'unsupported': 'Consulta las actualizaciones de esta versión en la página de lanzamientos.',
+        'restart': 'Brevia se reiniciará después de la descarga.',
         'title': 'Actualizaciones',
         'description': 'Versión actual 0.1.0',
         'action': 'Buscar actualizaciones',
@@ -9377,6 +9423,11 @@
         'current': 'Ya está actualizado',
       },
       'ja': {
+        'delay': '更新通知までの期間',
+        'delayHint': 'リリースから指定の日数が経過した後に自動通知します。',
+        'immediate': 'なし',
+        'unsupported': 'このビルドの更新はリリースページで確認できます。',
+        'restart': 'ダウンロード後に Brevia が再起動します。',
         'title': 'ソフトウェアアップデート',
         'description': '現在のバージョン 0.1.0',
         'action': 'アップデートを確認',
@@ -9389,6 +9440,11 @@
         'current': '最新です',
       },
       'ko': {
+        'delay': '업데이트 알림 지연',
+        'delayHint': '새 버전 출시 후 선택한 기간이 지나면 자동으로 알려줍니다.',
+        'immediate': '없음',
+        'unsupported': '이 빌드의 업데이트는 릴리스 페이지에서 확인하세요.',
+        'restart': '다운로드 후 Brevia가 다시 시작됩니다.',
         'title': '소프트웨어 업데이트',
         'description': '현재 버전 0.1.0',
         'action': '업데이트 확인',
@@ -9401,6 +9457,11 @@
         'current': '최신 버전입니다',
       },
       'fr': {
+        'delay': 'Délai de notification',
+        'delayHint': 'Délai entre la publication et la notification automatique.',
+        'immediate': 'Aucun',
+        'unsupported': 'Consultez les mises à jour de cette version sur la page des versions.',
+        'restart': 'Brevia redémarrera après le téléchargement.',
         'title': 'Mises à jour logicielles',
         'description': 'Version actuelle 0.1.0',
         'action': 'Rechercher des mises à jour',
@@ -9413,6 +9474,11 @@
         'current': 'À jour',
       },
       'de': {
+        'delay': 'Update-Erinnerung verzögern',
+        'delayHint': 'Tage zwischen Veröffentlichung und automatischer Benachrichtigung.',
+        'immediate': 'Sofort',
+        'unsupported': 'Updates für diese Ausgabe finden Sie auf der Release-Seite.',
+        'restart': 'Brevia startet nach dem Download neu.',
         'title': 'Softwareupdates',
         'description': 'Aktuelle Version 0.1.0',
         'action': 'Nach Updates suchen',
@@ -9425,6 +9491,11 @@
         'current': 'Aktuell',
       },
       'ru': {
+        'delay': 'Задержка уведомления',
+        'delayHint': 'Число дней от выпуска до автоматического уведомления.',
+        'immediate': 'Нет',
+        'unsupported': 'Обновления для этой сборки доступны на странице выпусков.',
+        'restart': 'После загрузки Brevia перезапустится.',
         'title': 'Обновления ПО',
         'description': 'Текущая версия 0.1.0',
         'action': 'Проверить обновления',

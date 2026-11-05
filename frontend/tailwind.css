@@ -3408,28 +3408,6 @@
   .mini-playback-controls button {
     @apply text-[16px] text-[#666666];
   }
-  .software-update-notice {
-    @apply fixed bottom-8 left-8 z-10 flex flex-wrap items-center gap-x-4 gap-y-2 border border-black bg-white p-3 text-left text-[12px] text-black;
-    width: calc(clamp(220px, 22vw, 272px) - 3rem);
-    max-width: calc(100vw - 4rem);
-    animation: mini-in 260ms ease forwards;
-  }
-  .software-update-notice span {
-    @apply text-[#666666];
-  }
-  .software-update-notice > i {
-    @apply order-3 h-1 basis-full overflow-hidden bg-[#eaeaea];
-  }
-  .software-update-notice > i b {
-    @apply block h-full origin-left bg-black transition-transform duration-200;
-    transform: scaleX(0);
-  }
-  .software-update-notice button {
-    @apply border border-black bg-black px-3 py-2 text-[12px] text-white transition-opacity duration-300 hover:opacity-70 disabled:cursor-wait disabled:opacity-50;
-  }
-  .task-cards > .software-update-notice {
-    @apply relative bottom-auto left-auto z-auto w-full max-w-full;
-  }
 }
 
 /* Small-screen layout: collapse side-by-side panels without changing component markup. */
@@ -3828,7 +3806,6 @@ select,
 .processing-card,
 .mini-meeting,
 .mini-playback,
-.software-update-notice,
 .toast,
 .modal-panel,
 .ai-assist-popover,
@@ -3855,8 +3832,7 @@ select,
 .segment-context-menu,
 .toast,
 .mini-meeting,
-.mini-playback,
-.software-update-notice {
+.mini-playback {
   overflow: hidden;
 }
 /* .refine-menu 需要让内部下拉浮出面板，因此不能裁剪；用内边距圆角代替裁剪。 */
@@ -4388,25 +4364,6 @@ html[data-theme="dark"] .mini-playback > i {
 }
 html[data-theme="dark"] .mini-playback > i b {
   background: #fff;
-}
-html[data-theme="dark"] .software-update-notice {
-  border-color: #666666;
-  background: #242424;
-  color: #fff;
-}
-html[data-theme="dark"] .software-update-notice span {
-  color: #b0b0b0;
-}
-html[data-theme="dark"] .software-update-notice > i {
-  background: #333333;
-}
-html[data-theme="dark"] .software-update-notice > i b {
-  background: #fff;
-}
-html[data-theme="dark"] .software-update-notice button {
-  border-color: #fff;
-  background: #fff;
-  color: #191919;
 }
 /* Explicit foreground overrides for components that use light-theme utility colors. */
 html[data-theme="dark"] .brand img,

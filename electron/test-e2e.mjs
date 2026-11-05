@@ -798,60 +798,6 @@ try {
     configDrafts.result?.value === true,
     '纪要与 AI 笔记输入应在刷新和供应商切换后保留，密钥不能进入可持久化配置',
   );
-  const deviceLanguages = await client.send('Runtime.evaluate', {
-    expression: `(async () => {
-    const previous = locale;
-    await showView('home');
-    await new Promise(resolve => setTimeout(resolve, 2100));
-    const card = document.querySelector('#mobile-nav');
-    const errors = [];
-    for (const language of Object.keys(catalog)) {
-      applyLanguage(language);
-      const status = document.querySelector('#mobile-sidebar-status');
-      const translated = [t('等待设备连接'), t('服务已关闭')].includes(status.textContent);
-      const fits = () => [...card.querySelectorAll('strong, svg, #mobile-sidebar-status, #mobile-nav-dot')].every(node => {
-        if (!node.getClientRects().length) return true;
-        const bounds = node.getBoundingClientRect(), outer = card.getBoundingClientRect();
-        const style = getComputedStyle(node);
-        const clippedStatus = node.id === 'mobile-sidebar-status' && style.clipPath === 'inset(50%)' && style.overflow === 'hidden';
-        return bounds.right <= outer.right + 1 && bounds.left >= outer.left - 1 && (clippedStatus || node.scrollWidth <= node.clientWidth + 1);
-      });
-      const normalFits = fits();
-      if(!translated)errors.push(language+': sidebar status untranslated');
-      if(!normalFits)errors.push(language+': sidebar content clipped');
-      if(!card.title.includes(status.textContent)||card.getAttribute('aria-label')!==card.title)errors.push(language+': device status accessible label missing');
-      await openModal('device-connection');
-      const phone=document.querySelector('#mobile-dialog'),devices=(await window.brevia.mobile.status()).devices;
-      const expected=devices.length?'paired':'intro';
-      if(phone.dataset.mobilePageState!==expected||!phone.querySelector('[data-mobile-panel="'+expected+'"]').checkVisibility())errors.push(language+': device page stage mismatch');
-      if(expected==='intro'){
-        phone.querySelector('[data-mobile-page-step=install]').click();
-        if(phone.dataset.mobilePageState!=='install'||!phone.querySelector('[data-mobile-panel=install]').checkVisibility()||!phone.querySelector('.mobile-install').open)errors.push(language+': install step inaccessible');
-      }
-      const modalTranslated=document.querySelector('#mobile-pair').textContent === t('连接新设备')
-        && document.querySelector('#mobile-install-title').textContent === t('安装Brevia手机端')
-        && document.querySelector('.mobile-install-platform a').href === 'https://apps.apple.com/app/id6819869442'
-        && document.querySelector('.mobile-install-platform h4').textContent === t('iPhone · App Store')
-        && document.querySelector('.mobile-install-platform p').textContent === t('扫码或点击链接，从 App Store 免费安装 Brevia。')
-        && (document.querySelector('.mobile-device-empty')?.textContent === t('暂无已信任设备') || document.querySelector('.mobile-device small')?.textContent === t('离线 · 保留信任'));
-      if(!modalTranslated)errors.push(language+': device dialog content untranslated');
-      if(expected==='intro'){
-        phone.querySelector('[data-mobile-panel=install] [data-mobile-page-step=back]').click();
-        if(phone.dataset.mobilePageState!=='intro'||phone.querySelector('[data-mobile-panel=install]').checkVisibility())errors.push(language+': install back did not restore introduction');
-      }
-      await closeModal();
-    }
-    applyLanguage(previous);
-    return errors;
-  })()`,
-    awaitPromise: true,
-    returnByValue: true,
-  });
-  check(
-    Array.isArray(deviceLanguages.result?.value) && deviceLanguages.result.value.length === 0,
-    '设备连接八语言及长名称布局：' +
-      JSON.stringify(deviceLanguages.result?.value || deviceLanguages.exceptionDetails),
-  );
   const rapidNavigation = await client.send('Runtime.evaluate', {
     expression: `(async () => {
     const homeIsActive = () => activeView === 'home' && document.querySelector('#home-view').classList.contains('active')
@@ -1010,6 +956,104 @@ try {
     Array.isArray(detailLayout.result?.value) && detailLayout.result.value.length === 0,
     `多语言/主题布局回归：${JSON.stringify(detailLayout)}`,
   );
+  const deviceLanguages = await client.send('Runtime.evaluate', {
+    expression: `(async () => {
+    const previous = locale;
+    await showView('home');
+    await new Promise(resolve => setTimeout(resolve, 2100));
+    const card = document.querySelector('#mobile-nav');
+    const errors = [];
+    for (const language of Object.keys(catalog)) {
+      applyLanguage(language);
+      const status = document.querySelector('#mobile-sidebar-status');
+      const translated = [t('等待设备连接'), t('服务已关闭')].includes(status.textContent);
+      const fits = () => [...card.querySelectorAll('strong, svg, #mobile-sidebar-status, #mobile-nav-dot')].every(node => {
+        if (!node.getClientRects().length) return true;
+        const bounds = node.getBoundingClientRect(), outer = card.getBoundingClientRect();
+        const style = getComputedStyle(node);
+        const clippedStatus = node.id === 'mobile-sidebar-status' && style.clipPath === 'inset(50%)' && style.overflow === 'hidden';
+        return bounds.right <= outer.right + 1 && bounds.left >= outer.left - 1 && (clippedStatus || node.scrollWidth <= node.clientWidth + 1);
+      });
+      const normalFits = fits();
+      if(!translated)errors.push(language+': sidebar status untranslated');
+      if(!normalFits)errors.push(language+': sidebar content clipped');
+      if(!card.title.includes(status.textContent)||card.getAttribute('aria-label')!==card.title)errors.push(language+': device status accessible label missing');
+      await card.onclick();
+      await document.fonts.ready;
+      await new Promise(requestAnimationFrame);
+      if(activeView!=='settings'||!settingsModal.classList.contains('settings-page'))errors.push(language+': status bar did not open device settings');
+      const phone=document.querySelector('#mobile-dialog'),{devices,sessions}=await window.brevia.mobile.status();
+      const expected=devices.length||localStorage.getItem('brevia-mobile-has-paired')==='true'?'paired':'intro';
+      if(phone.dataset.mobilePageState!==expected||!phone.querySelector('[data-mobile-panel="'+expected+'"]').checkVisibility())errors.push(language+': device page stage mismatch');
+      if(expected==='paired'){
+        const equipment=phone.querySelector('.mobile-equipment');
+        const owner=sessions?.find(session=>!session.finished)?.owner;
+        const device=devices.find(d=>d.id===owner)||devices.find(d=>d.connected)||devices[0];
+        const state=device?(device.connected?'connected':'offline'):'empty';
+        if(!equipment.checkVisibility()||equipment.dataset.link!==state||equipment.querySelector('[data-mobile-handset-name]').textContent!==(device?.name||''))errors.push(language+': device graphic does not match trust records');
+      }
+      if(expected==='intro'){
+        const body=phone.closest('.modal-body');
+        const bounds=body.getBoundingClientRect();
+        const elements=['.mobile-page-intro','.mobile-intro-actions','.mobile-page-support','.dmp-phone'].map(selector=>{
+          const el=phone.querySelector(selector),rect=el.getBoundingClientRect();
+          return {selector,visible:el.checkVisibility(),top:Math.round(rect.top),bottom:Math.round(rect.bottom),fits:rect.top>=bounds.top-1&&rect.bottom<=bounds.bottom+1&&rect.left>=bounds.left-1&&rect.right<=bounds.right+1};
+        });
+        if(body.scrollHeight>body.clientHeight+1||body.scrollWidth>body.clientWidth+1||elements.some(el=>!el.visible||!el.fits))errors.push(language+': device introduction does not fit '+JSON.stringify({window:[innerWidth,innerHeight],client:[body.clientWidth,body.clientHeight],scroll:[body.scrollWidth,body.scrollHeight],elements}));
+        phone.querySelector('[data-mobile-page-step=install]').click();
+        if(phone.dataset.mobilePageState!=='install'||!phone.querySelector('[data-mobile-panel=install]').checkVisibility()||!phone.querySelector('.mobile-install').open)errors.push(language+': install step inaccessible');
+      }
+      const modalTranslated=document.querySelector('#mobile-pair').textContent === t('连接新设备')
+        && document.querySelector('#mobile-install-title').textContent === t('安装Brevia手机端')
+        && document.querySelector('.mobile-install-platform a').href === 'https://apps.apple.com/app/id6819869442'
+        && document.querySelector('.mobile-install-platform h4').textContent === t('iPhone · App Store')
+        && document.querySelector('.mobile-install-platform p').textContent === t('扫码或点击链接，从 App Store 免费安装 Brevia。')
+        && (document.querySelector('.mobile-device-empty')?.textContent === t('暂无已信任设备') || document.querySelector('.mobile-device small')?.textContent === t('离线 · 保留信任'));
+      if(!modalTranslated)errors.push(language+': device dialog content untranslated');
+      if(expected==='intro'){
+        phone.querySelector('[data-mobile-panel=install] [data-mobile-page-step=back]').click();
+        if(phone.dataset.mobilePageState!=='intro'||phone.querySelector('[data-mobile-panel=install]').checkVisibility())errors.push(language+': install back did not restore introduction');
+      }
+      closeModal();
+      await showView('home');
+    }
+    applyLanguage(previous);
+    return errors;
+  })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  check(
+    Array.isArray(deviceLanguages.result?.value) && deviceLanguages.result.value.length === 0,
+    '设备连接八语言及长名称布局：' +
+      JSON.stringify(deviceLanguages.result?.value || deviceLanguages.exceptionDetails),
+  );
+  const preparePairing = await client.send('Runtime.evaluate', {
+    expression: `(async()=>{
+      setPrepareMode('record');
+      await showView('prepare');
+      prepareForm.querySelector('[data-flow-select-choice="capture-mode"][data-value="phone"]').click();
+      const title=prepareForm.querySelector('#meeting-title'),oldTitle=title.value;
+      title.value='配对后继续的会议';
+      const draft=JSON.stringify([...new FormData(prepareForm)]);
+      const button=prepareForm.querySelector('[data-capture-phone]');
+      button.focus();
+      await button.onclick();
+      const pair=document.querySelector('#mobile-pair-dialog');
+      const inline=activeView==='prepare'&&pair.open&&settingsModal.hidden;
+      await pair.querySelector('#mobile-close-pairing').onclick();
+      const retained=activeView==='prepare'&&!pair.open&&document.activeElement===button&&title.value==='配对后继续的会议'&&currentCaptureMode==='phone'&&draft===JSON.stringify([...new FormData(prepareForm)]);
+      title.value=oldTitle;setPrepareMode('record');await showView('home');
+      return {inline,retained};
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  check(
+    preparePairing.result?.value?.inline && preparePairing.result.value.retained,
+    '准备录音中就地连接设备须恢复焦点并保留会议草稿：' +
+      JSON.stringify(preparePairing.result?.value || preparePairing.exceptionDetails),
+  );
   const librarySearchCommand = await client.send('Runtime.evaluate', {
     expression: `(async()=>{
       const errors=[];
@@ -1043,7 +1087,7 @@ try {
         if(groupToggle.getAttribute('aria-expanded')!=='true'||groupMeetings.hidden)errors.push('workspace tree does not expand');
       }
       for(const row of meetingList.querySelectorAll('.meeting-row')){
-        if(Math.abs(row.getBoundingClientRect().height-32)>1)errors.push('meeting tree row density');
+        if(Math.abs(row.getBoundingClientRect().height-28)>1)errors.push('meeting tree row density');
         if([...row.querySelectorAll('.meeting-main p,.meeting-status,.meeting-row-icon,.meeting-workspace,.meeting-source')].some(node=>node.checkVisibility()))errors.push('meeting tree shows retired metadata');
       }
       const initialized=await window.brevia.initialize();
@@ -1532,6 +1576,24 @@ try {
       if (input.step !== String(limits.step) || input.min !== String(limits.min) || (limits.max !== undefined && input.max !== String(limits.max))) errors.push('numeric limits: ' + input.name);
     }
     const chunk = numeric('audio.chunk_seconds'), threshold = numeric('vad.zh.threshold');
+    const audioSection=sampleRate.closest('details'),previouslyOpen=audioSection.open;
+    audioSection.open=true;
+    await new Promise(requestAnimationFrame);
+    for(const appearance of ['light','dark']){
+      applyTheme(appearance);
+      for(const field of [sampleRate,chunk]){
+        const frame=field.getBoundingClientRect(),column=field.closest('.preference-control').getBoundingClientRect();
+        if(!frame.height || Math.abs(frame.left-column.left)>1 || Math.abs(frame.width-column.width)>1)errors.push(appearance+': advanced input does not fill its column');
+      }
+      const fixed=sampleRate.getBoundingClientRect(),editable=chunk.getBoundingClientRect();
+      if(Math.abs(fixed.width-editable.width)>1 || Math.abs(fixed.height-editable.height)>1 || Math.abs(fixed.left-editable.left)>1)errors.push(appearance+': advanced numeric fields not aligned');
+      const groupStyle=getComputedStyle(permission);
+      for(const group of advancedForm.querySelectorAll('.preferences-disclosure')){
+        const style=getComputedStyle(group);
+        if(style.backgroundColor!==groupStyle.backgroundColor || style.borderWidth!==groupStyle.borderWidth || style.borderRadius!==groupStyle.borderRadius)errors.push(appearance+': advanced groups use different surfaces');
+      }
+    }
+    audioSection.open=previouslyOpen;
     chunk.value = '1.5';
     if (!chunk.validity.stepMismatch) errors.push('integer setting accepts fraction');
     chunk.value = advancedSettings.settings.audio.chunk_seconds;
@@ -2171,15 +2233,23 @@ try {
       const title = settingsModal.querySelector('.preferences-titlebar h2');
       if (!settingsModal.classList.contains('settings-page') || !nav?.checkVisibility() || !title?.checkVisibility() || !title.textContent.trim()) failures.push(kind);
       if (kind === 'whats-new') {
-        const action = settingsModal.querySelector('[data-check-app-update]');
-        const previous = {busy:updateBusy, progress:updateDownloadProgress};
+        const check = settingsModal.querySelector('[data-check-app-update]');
+        const install = settingsModal.querySelector('[data-install-app-update]');
+        const previous = {busy:updateBusy, progress:updateDownloadProgress, available:updateAvailable, version:updateVersion, policy:{...updatePolicy}};
         try {
-          updateBusy=true;updateDownloadProgress={percent:42,transferred:42,total:100};renderUpdateButton();
-          if (!action.disabled || !action.textContent.includes('42%')) failures.push('about page download progress');
+          updateBusy='install';updateAvailable=true;updateVersion='1.9.7';updateDownloadProgress={percent:42,transferred:42,total:100};Object.assign(updatePolicy,{delayDays:0,dismissedVersion:'',releasedAt:Date.now()});renderUpdateButton();renderUpdateNotice();
+          if (!check.disabled || !install.disabled || install.hidden || settingsModal.querySelector('.release-settings progress').value!==42 || updateNotice.querySelector('progress').value!==42) failures.push('about page download progress');
+          updateBusy='';updateDownloadProgress=null;renderUpdateButton();renderUpdateNotice();
+          if (check.textContent!==updateCopy().action || !install.textContent.includes(updateVersion) || !updateNotice.checkVisibility()) failures.push('separate check and install controls');
+          updateNotice.querySelector('[data-dismiss-update]').click();renderUpdateNotice();
+          if (!updateNotice.hidden || install.hidden) failures.push('dismissal hides only the notification');
+          updateVersion='1.9.8';renderUpdateNotice();
+          if (updateNotice.hidden) failures.push('new version restores update offer');
+          settingsModal.querySelector('.release-delay input[value="3"]').click();
+          if (!updateNotice.hidden || install.hidden || updatePolicy.delayDays!==3) failures.push('release delay keeps manual installation available');
         } finally {
-          updateBusy=previous.busy;updateDownloadProgress=previous.progress;renderUpdateButton();
+          updatePolicy=previous.policy;persistUpdatePolicy();updateBusy=previous.busy;updateDownloadProgress=previous.progress;updateAvailable=previous.available;updateVersion=previous.version;renderUpdateButton();renderUpdateNotice();
         }
-        if (action.disabled!==updateButton.disabled || action.textContent!==updateButton.textContent) failures.push('about page update state');
       }
       closeModal();
     }
@@ -2204,7 +2274,7 @@ try {
       && segmentInfoFor(meeting.id,'mobile-initial')?.text === '初次接管字幕'
       && latestLiveSegmentId === 'mobile-initial';
     const live = activeView === 'live' && meetingActive && document.querySelector('#pause').disabled && !document.querySelector('#end-meeting').disabled;
-    const source = !document.querySelector('.mobile-source-tag') && !document.querySelector('#transcript-scroll .speaker-name') && !document.querySelector('[data-ai-assist-empty]') && document.querySelector('#live-input-label').textContent===t('手机录音');
+    const source = !document.querySelector('.mobile-source-tag') && !document.querySelector('#transcript-scroll .speaker-name') && !document.querySelector('[data-ai-assist-empty]') && document.querySelector('#live-input-label').hidden && document.querySelector('.control-source').getAttribute('aria-label')===t('手机录音');
     const unique = uiData.meetings.filter(m => m.id === meeting.id).length === 1;
     await document.querySelector('#mobile-nav').onclick();
     const deviceFromLive = activeView === 'settings' && meetingActive && !miniMeeting.hidden && miniTitle.textContent === meeting.title;
@@ -2420,13 +2490,6 @@ try {
       const settingsScroll=document.querySelector('#settings-view .preferences-scroll');
       const capsuleOption=document.querySelector('[data-desktop-toggle="autoCapsule"]');
       if(capsuleOption){capsuleOption.scrollIntoView({block:'nearest'});const r=capsuleOption.getBoundingClientRect();if(r.top<0||r.bottom>innerHeight+1)errors.push('desktop preferences cannot be reached');settingsScroll.scrollTop=0;}
-      const toggle=document.querySelector('[data-toggle-notes-toolbar]');
-      const toolbar=document.getElementById('live-notes-toolbar');
-      if(!toolbar.hidden) errors.push('toolbar initially expanded');
-      toggle.click();
-      if(toolbar.hidden || toggle.getAttribute('aria-expanded')!=='true') errors.push('toolbar cannot expand');
-      toggle.click();
-      if(!toolbar.hidden) errors.push('toolbar cannot collapse');
       return errors;
     })()`,
     awaitPromise: true,
@@ -2441,15 +2504,16 @@ try {
       const errors=[];
       await showView('settings');
       const button=()=>document.querySelector('[data-shortcut-control="pauseShortcut"]');
-      const begin=()=>{button().click();document.querySelector('[data-shortcut-capture="pauseShortcut"]').click();};
+      const begin=()=>button().click();
       const wait=async(test)=>{const until=Date.now()+3000;while(!test()&&Date.now()<until)await new Promise(r=>setTimeout(r,10));if(!test())errors.push('shortcut operation timed out');};
       button().scrollIntoView({block:'center'});
       if(button().getBoundingClientRect().bottom>innerHeight+1) errors.push('shortcut controls unreachable');
       begin();
       await wait(()=>desktopShortcutCapture?.timer);
+      if(button().getAttribute('aria-pressed')!=='true'||document.activeElement!==button()) errors.push('shortcut capture not focused or announced');
       document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',code:'Escape',bubbles:true}));
       await wait(()=>!desktopShortcutCapture);
-      if(desktopPreferences.pauseShortcut!=='') errors.push('cancel changed shortcut');
+      if(desktopPreferences.pauseShortcut!=='' || button().getAttribute('aria-pressed')==='true' || document.activeElement!==button()) errors.push('cancel did not restore prior shortcut and focus');
       begin();
       await wait(()=>desktopShortcutCapture?.timer);
       document.dispatchEvent(new KeyboardEvent('keydown',{key:'R',code:'KeyR',altKey:true,metaKey:window.brevia.platform==='darwin',ctrlKey:window.brevia.platform!=='darwin',bubbles:true}));
@@ -2462,31 +2526,35 @@ try {
       if((await window.brevia.desktop.preferences()).pauseShortcut!=='') errors.push('clear not persisted');
       for(const code of ['zh','en','es','ja','ko','fr','de','ru']){
         applyLanguage(code);
-        if(document.querySelectorAll('[data-shortcut-capture]').length!==2)errors.push(code+': missing shortcut controls');
+        if(document.querySelectorAll('[data-shortcut-control]').length!==2)errors.push(code+': missing shortcut controls');
         if(code!=='zh' && t('全局快捷键')==='全局快捷键')errors.push(code+': missing shortcut translation');
       }
       applyLanguage('zh');
       toast.classList.remove('visible');
       button().scrollIntoView({block:'center'});
-      const reference=document.querySelector('[data-flow-select-choice="desktop-closeBehavior"]').closest('.preference-row');
-      const referenceControl=reference.querySelector('.flow-select-toggle').getBoundingClientRect();
-      for(const control of document.querySelectorAll('[data-shortcut-control]')){
-        const bounds=control.getBoundingClientRect();
-        if(Math.abs(bounds.width-referenceControl.width)>1 || Math.abs(bounds.height-referenceControl.height)>1)errors.push('shortcut control size differs from settings');
-        const row=control.closest('.preference-row').getBoundingClientRect();if(bounds.left<row.left-1||bounds.right>row.right+1||bounds.top<row.top-1||bounds.bottom>row.bottom+1)errors.push('shortcut control leaves its settings row');
+      const groups=[...document.querySelectorAll('.desktop-shortcut')];
+      const reference=document.querySelector('#preferences-basics .preference-control').getBoundingClientRect();
+      for(const group of groups){
+        const bounds=group.getBoundingClientRect();
+        if(Math.abs(bounds.right-reference.right)>1)errors.push('shortcut actions misaligned');
+        for(const control of group.querySelectorAll('button')){
+          const rect=control.getBoundingClientRect();
+          if(!control.checkVisibility() || !control.getAttribute('aria-label') || rect.width<20 || rect.left<bounds.left-1 || rect.right>bounds.right+1)errors.push('shortcut action clipped or unlabeled');
+        }
       }
-      if(!document.querySelector('[data-desktop-settings-status]').hidden)errors.push('saved footer should be hidden');
-      if(document.querySelectorAll('[data-shortcut-control="recordingShortcut"] kbd').length!==3)errors.push('shortcut keycaps missing');
-      button().click();
-      const menu=button().parentElement.querySelector('.flow-select-options');
-      if(menu.hidden || menu.getBoundingClientRect().bottom>innerHeight+1)errors.push('shortcut menu clipped');
-      document.querySelector('[data-shortcut-clear="pauseShortcut"]').click();
+      const recording=()=>document.querySelector('[data-shortcut-control="recordingShortcut"]');
+      const clearRecording=()=>document.querySelector('[data-shortcut-clear="recordingShortcut"]');
+      const resetRecording=()=>document.querySelector('[data-shortcut-reset="recordingShortcut"]');
+      if(!document.querySelector('[data-shortcut-clear="pauseShortcut"]').disabled || !document.querySelector('[data-shortcut-reset="pauseShortcut"]').disabled)errors.push('empty default shortcut offers redundant actions');
+      const initial=desktopPreferences.recordingShortcut;
+      if(recording().querySelectorAll('kbd').length!==3 || clearRecording().disabled || !resetRecording().disabled)errors.push('default shortcut controls incorrect');
+      clearRecording().click();
       await wait(()=>!desktopSettingsBusy);
-      if(!document.querySelector('[data-desktop-settings-status]').hidden)errors.push('clear left saved footer');
-      button().click();
-      document.querySelector('[data-shortcut-reset="pauseShortcut"]').click();
+      if((await window.brevia.desktop.preferences()).recordingShortcut!=='' || !clearRecording().disabled || resetRecording().disabled)errors.push('clear action not saved or not reversible');
+      resetRecording().click();
       await wait(()=>!desktopSettingsBusy);
-      if((await window.brevia.desktop.preferences()).pauseShortcut!=='')errors.push('reset did not restore default');
+      if((await window.brevia.desktop.preferences()).recordingShortcut!==initial || !resetRecording().disabled || clearRecording().disabled)errors.push('restore default not persisted');
+      if(!document.querySelector('[data-desktop-settings-status]').hidden)errors.push('saved status should be hidden');
       return errors;
     })()`,
     awaitPromise: true,
@@ -2619,7 +2687,7 @@ try {
           });
           const accepted = requestPhone(session.result.value, 'c'.repeat(32));
           const decision = await client.send('Runtime.evaluate', {
-            expression: `(async()=>{const deadline=Date.now()+6000;while(!document.querySelector('.mobile-request-actions .modal-action')){if(Date.now()>deadline)throw Error('允许连接入口未出现');await new Promise(r=>setTimeout(r,25));}await document.querySelector('.mobile-request-actions .modal-action').onclick();const state=await window.brevia.mobile.status();return !document.querySelector('#mobile-pair-dialog').open&&state.devices.some(d=>d.name==='<UI test phone>')&&!document.querySelector('#mobile-nav').classList.contains('is-connected');})()`,
+            expression: `(async()=>{const deadline=Date.now()+6000;while(!document.querySelector('.mobile-request-actions .modal-action')){if(Date.now()>deadline)throw Error('允许连接入口未出现');await new Promise(r=>setTimeout(r,25));}await document.querySelector('.mobile-request-actions .modal-action').onclick();const state=await window.brevia.mobile.status();return !document.querySelector('#mobile-pair-dialog').open&&state.devices.some(d=>d.name==='<UI test phone>')&&(mobileConnectionContent||document.getElementById('mobile-dialog')).dataset.mobilePageState==='paired'&&!document.querySelector('#mobile-nav').classList.contains('is-connected');})()`,
             awaitPromise: true,
             returnByValue: true,
           });
@@ -2779,7 +2847,7 @@ try {
       const detail=document.querySelector('#detail-view');
       const content=detail.querySelector('.detail-layout').getBoundingClientRect();
       const player=detail.querySelector('.player').getBoundingClientRect();
-      const reading=content.height>100 && player.bottom<=innerHeight+1 && Math.abs(player.left-detail.getBoundingClientRect().left)<2 && Math.abs(player.right-detail.getBoundingClientRect().right)<2;
+      const reading=content.height>100 && player.bottom<=innerHeight+1 && Math.abs(player.left-content.left)<2 && Math.abs(player.right-content.right)<2;
       const threeTabs=detail.querySelectorAll('[data-detail-tab]').length===3;
       detail.querySelector('[data-detail-tab="transcript"]').click();
       applyBackendDetail({...meeting,transcript_revision:0,original_segments:[{...meeting.segments[0],version:'live',text:'原始稿切换测试'}]});
@@ -2944,14 +3012,38 @@ try {
       await dismissOnboardingPage();
       openOnboardingPermissions({microphone:'granted',screen:'granted',systemAudioSupported:true});
       await new Promise(resolve=>setTimeout(resolve,100));
-      breviaClient.onLevel('mic',0.5);
-      const meters=[...document.querySelectorAll('#mic-level,[data-onboarding-mic-level],[data-live-mic-level]')];
-      const masks=new Set(meters.map(e=>getComputedStyle(e).maskImage));
-      const fills=new Set(meters.map(e=>getComputedStyle(e,'::after').backgroundColor));
-      if(meters.length<3 || masks.size!==1 || fills.size!==1 || ![...masks][0].includes('data:image/svg+xml')) errors.push('inconsistent input meters');
-      breviaClient.onLevel('mic',0);
-      if(meters.some(e=>e.style.getPropertyValue('--level')!=='0')) errors.push('silent input still active');
-      await dismissOnboardingPage();
+      const saved={mode:currentCaptureMode,prepare:prepareView.dataset.mode,view:activeView,active:meetingActive,meeting:breviaClient.state.meeting,inputs:breviaClient.state.inputs};
+      const verifyMeter=(selector,segmented)=>{
+        const meter=document.querySelector(selector);
+        if(!meter?.checkVisibility({visibilityProperty:true})||meter.closest('[inert]')){errors.push(selector+' is not on the active surface');return;}
+        const color=document.createElement('span');color.style.color=segmented?'var(--color-success-indicator)':'var(--color-text-body)';meter.after(color);
+        if(getComputedStyle(meter,'::after').backgroundColor!==getComputedStyle(color).color)errors.push(selector+' signal color');
+        color.remove();
+        const css=getComputedStyle(meter);
+        if(segmented?!css.maskImage.includes('data:image/svg+xml'):css.maskImage!=='none'||parseFloat(css.height)!==7)errors.push(selector+' signal shape');
+        for(const level of [.5,0]){
+          breviaClient.onLevel('mic',level);
+          // 结束本次电平的短过渡，避免等待期间下一帧硬件采样覆盖固定测试信号。
+          getComputedStyle(meter,'::after').transform;
+          for(const animation of meter.getAnimations({subtree:true}))if(animation.transitionProperty==='transform')animation.finish();
+          const transform=getComputedStyle(meter,'::after').transform;
+          if(Number(meter.style.getPropertyValue('--level'))!==level||transform==='none'||Math.abs(new DOMMatrixReadOnly(transform).a-level)>.001)errors.push(selector+' signal '+level+' produced '+transform);
+        }
+      };
+      try{
+        verifyMeter('[data-onboarding-mic-level]',true);
+        await dismissOnboardingPage();
+        setPrepareMode('record');renderCaptureMode('mic');await showView('prepare');
+        verifyMeter('#mic-level',true);
+        breviaClient.state.meeting={...(saved.meeting||currentMeetingDetail),tags:[]};
+        breviaClient.state.inputs={mic:true,system:false};
+        meetingActive=true;await showView('live');renderLiveInputStatus();
+        verifyMeter('[data-live-mic-level]',false);
+      }finally{
+        if(onboardingPage)await dismissOnboardingPage();
+        meetingActive=saved.active;breviaClient.state.meeting=saved.meeting;breviaClient.state.inputs=saved.inputs;
+        await showView(saved.view);setPrepareMode(saved.prepare||'record');renderCaptureMode(saved.mode);renderLiveInputStatus();
+      }
       openOnboardingAi();
       if(onboardingPage.querySelector('[data-configure-ai-notes]') || onboardingPage.querySelector('.onboarding-privacy-hint')) errors.push('legacy onboarding AI options');
       if(!onboardingPage.querySelector('.onboarding-shared-service [data-configure-ai-summary]')) errors.push('shared service not separated');
@@ -2999,7 +3091,7 @@ try {
       toast.classList.remove('visible');
       const actions=document.querySelector('.window-actions');
       const center=actions.getBoundingClientRect().top+actions.getBoundingClientRect().height/2;
-      const visibleActions=[...actions.querySelectorAll(':scope > #app-version,:scope > a,:scope > .language-menu,:scope > #theme-toggle')].filter(element=>element.checkVisibility());
+      const visibleActions=[...actions.children].filter(element=>element.checkVisibility());
       for(const [index,e] of visibleActions.entries()) {
         const r=e.getBoundingClientRect();if(Math.abs(r.top+r.height/2-center)>1) errors.push('window action alignment');
         if(index&&Math.abs(r.left-visibleActions[index-1].getBoundingClientRect().right-8)>1)errors.push('window action spacing');
@@ -3152,7 +3244,7 @@ try {
       applyLanguage('zh');
       const player=detail.querySelector('.player'),source=player.querySelector('.player-source');
       if(!source.contains(playerTime)||!source.contains(playerDuration)||!source.textContent.includes('/')) errors.push('playback times separated');
-      if(getComputedStyle(player).borderRadius!=='0px'||getComputedStyle(player).boxShadow!=='none') errors.push('player still floating card');
+      if (![...player.querySelectorAll('.player-actions .skip')].every(visible) || player.querySelectorAll('.player-actions .skip').length!==2) errors.push('15-second transport controls unreachable');
       if(!visible(detail.querySelector('[data-detail-panel=summary]'))) errors.push('summary reading panel hidden');
       if(!visible(detail.querySelector('[data-export-detail]'))) errors.push('export action occluded');
       const exportButton=detail.querySelector('[data-export-detail]').getBoundingClientRect();
@@ -3168,7 +3260,7 @@ try {
         const expected=getComputedStyle(document.body).getPropertyValue('--color-surface').trim();
         const canvasProbe=document.createElement('span');canvasProbe.style.backgroundColor=expected;document.body.append(canvasProbe);
         const canvasColor=getComputedStyle(canvasProbe).backgroundColor;canvasProbe.remove();
-        if(getComputedStyle(document.body).backgroundColor!==canvasColor||getComputedStyle(player).backgroundColor!=='rgba(0, 0, 0, 0)') errors.push(theme+': canvas background');
+        if(getComputedStyle(document.body).backgroundColor!==canvasColor||getComputedStyle(player).backgroundColor!==canvasColor) errors.push(theme+': canvas background');
         if(getComputedStyle(document.querySelector('.sidebar .new-meeting')).backgroundColor!=='rgba(0, 0, 0, 0)') errors.push(theme+': legacy navigation fill');
       }
       applyTheme('light');applyBackendDetail(meeting);
@@ -3256,6 +3348,21 @@ try {
         const cards=[...taskCards.children].map(card=>[card,card.hidden]);
         for(const [card] of cards)card.hidden=true;
         meetingActive=true;await showView('live');document.activeElement?.blur();
+        const studio=document.querySelector('#live-view'),notes=studio.querySelector('.live-notes'),captions=studio.querySelector('.live-captions');
+        const toggle=studio.querySelector('[data-live-transcript-toggle]');
+        const editor=notes.querySelector('[contenteditable=true], textarea');
+        for(const expanded of [false,true]){
+          toggle.click();
+          if(toggle.getAttribute('aria-expanded')!==String(expanded)||!notes.checkVisibility()||captions.checkVisibility()!==expanded||!editor?.isConnected)errors.push('persistent notes editor / transcript visibility');
+          const toolbar=notes.querySelector('.notes-toolbar'),buttons=[...toolbar.querySelectorAll('button')];
+          if(!toolbar.checkVisibility()||!buttons.length||buttons.some(b=>Math.abs(b.getBoundingClientRect().y-buttons[0].getBoundingClientRect().y)>1))errors.push('format controls must stay in one row');
+          if(innerWidth>=1280 && toolbar.scrollWidth>toolbar.clientWidth+1)errors.push('default window clips format controls');
+          const before=toolbar.getBoundingClientRect().top;
+          editor.scrollTop=editor.scrollHeight;
+          if(Math.abs(toolbar.getBoundingClientRect().top-before)>1)errors.push('format controls scroll with editor');
+        }
+        renderLiveInputStatus();
+        if(!studio.querySelector('#live-input-label').hidden||studio.querySelector('.control-source svg')||!studio.querySelector('.control-source').title)errors.push('input source must use a meter with an accessible name');
         for(const [code,theme] of Object.keys(catalog).map(code=>[code,code==='zh'?'light':'dark'])){
           applyLanguage(code);applyTheme(theme);renderLiveModelControl();
           await new Promise(resolve=>setTimeout(resolve,300));
@@ -3269,7 +3376,7 @@ try {
             refinementCard.hidden=!withTask;syncTaskCardStack();
             const footer=document.querySelector('.sidebar-footer'),footerBounds=footer.getBoundingClientRect(),sidebar=document.querySelector('.sidebar').getBoundingClientRect();
             const footerControls=[document.querySelector('#recently-deleted')];
-            if(document.querySelectorAll('.statusbar-settings').length!==1||document.querySelector('.sidebar-settings')||!document.querySelector('.navigation-brand #all-meetings')?.checkVisibility())errors.push(code+': duplicate or missing navigation entry');
+            if(document.querySelectorAll('.window-settings').length!==1||document.querySelector('.sidebar-settings')||!document.querySelector('.navigation-brand #all-meetings')?.checkVisibility())errors.push(code+': duplicate or missing navigation entry');
             const footerRects=footerControls.map(control=>control.getBoundingClientRect());
             const overlap=(a,b)=>Math.min(a.right,b.right)-Math.max(a.left,b.left)>1&&Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top)>1;
             if(footerBounds.bottom>sidebar.bottom+1||sidebar.bottom-footerBounds.bottom>32||footerControls.some((control,index)=>{const r=footerRects[index];return !footer.contains(control)||!control.checkVisibility()||r.width<28||r.height<28||r.left<footerBounds.left-1||r.right>footerBounds.right+1||r.top<footerBounds.top-1||r.bottom>footerBounds.bottom+1||!((control.getAttribute('aria-label')||control.title||control.textContent).trim())||footerRects.some((other,j)=>j<index&&overlap(r,other));}))errors.push(code+': sidebar footer '+withTask);
@@ -3371,11 +3478,16 @@ try {
       closeModal();await new Promise(resolve=>setTimeout(resolve,250));await showView('home');
       const originalWorkspace=activeWorkspaceId,workspace=workspaces.find(w=>w.id===originalWorkspace)||workspaces[0];
       if(workspace){
-        await switchWorkspace(workspace.id);document.querySelector('#workspace-edit').click();
+        await switchWorkspace(workspace.id);
+        const trigger=document.querySelector('[data-edit-sidebar-workspace="'+workspace.id+'"]');
+        trigger.click();
         await new Promise(resolve=>setTimeout(resolve,150));
-        const popup=document.querySelector('.workspace-edit-popover .modal-panel'),anchor=document.querySelector('#workspace-edit').getBoundingClientRect();
-        if(!popup)errors.push('workspace not anchored');
-        else {const r=popup.getBoundingClientRect();if(Math.abs(r.right-anchor.right)>2||r.top<anchor.bottom||r.bottom>innerHeight)errors.push('workspace popup bounds');const save=popup.querySelector('[type="submit"]').getBoundingClientRect(),cancel=popup.querySelector('.modal-form-actions [data-close-modal]').getBoundingClientRect();if(Math.abs(save.top-cancel.top)>1||save.left>=cancel.left)errors.push('workspace action layout');const controls=[...popup.querySelectorAll('button:not(:disabled), input, textarea, summary')].filter(e=>e.getClientRects().length);controls.at(-1).focus();document.dispatchEvent(new KeyboardEvent('keydown',{key:'Tab',bubbles:true,cancelable:true}));if(document.activeElement!==controls[0])errors.push('workspace focus trap');if(!popup.querySelector('textarea[name="description"]')||!popup.querySelector('[data-delete-workspace]'))errors.push('workspace operations removed');}
+        const popup=document.querySelector('.workspace-dialog:popover-open');
+        if(!popup||!popup.querySelector('[data-delete-workspace]')||popup.querySelector('[name=name]').value!==workspace.name||popup.getBoundingClientRect().bottom>innerHeight)errors.push('workspace edit popover');
+        const name=popup.querySelector('[name=name]'),desc=popup.querySelector('[name=description]');name.value='draft name';desc.value='draft description';const erase=popup.querySelector('[data-delete-workspace]');erase.click();
+        if(!settingsModal.matches(':popover-open')||!popup.matches(':popover-open')||document.querySelector('.app-shell').inert)errors.push('workspace deletion replaced draft editor');
+        document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));
+        if(!settingsModal.hidden||!popup.matches(':popover-open')||name.value!=='draft name'||desc.value!=='draft description')errors.push('workspace deletion cancelled but draft lost');
         document.querySelector('.workspace-dialog [data-close-modal]').click();toast.classList.remove('visible');await new Promise(resolve=>setTimeout(resolve,250));await switchWorkspace(originalWorkspace);
       }
       return errors;
@@ -3549,8 +3661,8 @@ try {
         applyLanguage(code);await openModal('export');await document.fonts.ready;
         document.getAnimations().forEach(a=>a.effect.getComputedTiming().iterations===Infinity?a.pause():a.finish());
         await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
-        const panel=settingsModal.querySelector('.modal-panel'),p=panel.getBoundingClientRect(),w=document.querySelector('.workspace').getBoundingClientRect();
-        if(Math.abs(p.left+p.width/2-w.left-w.width/2)>1||p.top<0||p.bottom>innerHeight+1)errors.push(code+': export position');
+        const panel=settingsModal.querySelector('.modal-panel'),p=panel.getBoundingClientRect(),trigger=document.querySelector('[data-export-detail]').getBoundingClientRect();
+        if(!settingsModal.matches(':popover-open')||document.querySelector('.app-shell').inert||Math.abs(p.right-trigger.right)>2||Math.abs(p.top-trigger.bottom-6)>2||p.bottom>innerHeight+1)errors.push(code+': export anchor or non-modal interaction');
         const buttons=[...panel.querySelectorAll('.export-actions button')];
         const checkActions=()=>{if(buttons.some(b=>{const r=b.getBoundingClientRect();return r.left<p.left||r.right>p.right+1||r.top<p.top||r.bottom>p.bottom+1;}))errors.push(code+': export actions clipped');};
         checkActions();
@@ -3572,6 +3684,15 @@ try {
         closeModal();
       }
       applyLanguage('zh');
+      const originalExport=runExportBundle,originalMeeting=currentMeetingDetail;let complete;
+      try{
+        runExportBundle=()=>new Promise(resolve=>{complete=resolve;});
+        await openModal('export');settingsModal.querySelector('[data-export-save]').click();
+        if(typeof complete!=='function')throw Error('export did not start');
+        closeModal();currentMeetingDetail={...originalMeeting,title:'other meeting'};await openModal('export');
+        complete({count:1});await new Promise(resolve=>setTimeout(resolve,20));
+        if(!settingsModal.matches(':popover-open')||!toast.textContent.includes(originalMeeting.title)||toast.textContent.includes('other meeting'))errors.push('stale export completion modified a newer surface or meeting title');
+      }finally{runExportBundle=originalExport;currentMeetingDetail=originalMeeting;closeModal();}
       for(const theme of ['light','dark']){
         applyTheme(theme);let actions=0;
         showToast(t('已保存'),{label:t('重试'),run:()=>actions++},'success');
@@ -3626,7 +3747,7 @@ try {
         const nav=meetingList;nav.scrollTop=0;
         const first=nav.querySelector('.sidebar-workspace-toggle').getBoundingClientRect(),n=nav.getBoundingClientRect();
         if(first.top<n.top||first.bottom>n.bottom+1)errors.push('first workspace clipped by tasks');
-        for(const selector of ['#mobile-nav','.statusbar-settings']){const r=document.querySelector(selector).getBoundingClientRect();if(r.bottom>innerHeight+1)errors.push(selector+' outside sidebar');}
+        for(const selector of ['#mobile-nav','.window-settings']){const r=document.querySelector(selector).getBoundingClientRect();if(r.bottom>innerHeight+1)errors.push(selector+' outside sidebar');}
       }else{
         const p=settingsModal.querySelector('.modal-panel').getBoundingClientRect();
         for(const selector of ['.export-actions','[data-export-summary]']){const r=settingsModal.querySelector(selector).getBoundingClientRect();if(r.top<p.top||r.bottom>p.bottom+1||r.left<p.left||r.right>p.right+1)errors.push(selector+' outside export');}
@@ -3735,8 +3856,14 @@ try {
       document.body.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));
       menu.click();row.querySelector('[data-meeting-action=delete]').click();
       if([...document.querySelectorAll('.meeting-menu')].some(e=>!e.hidden)||settingsModal.contains(document.activeElement))errors.push('delete menu/focus not retired');
+      if(!settingsModal.matches(':popover-open')||!menu.classList.contains('is-confirmation-anchor')||document.querySelector('.app-shell').inert||!settingsModal.querySelector('.confirmation-actions p').textContent.includes(meetingDeletionConsequence([uiData.meetings[Number(menu.dataset.meetingMenu)]])))errors.push('row delete must explain consequence from its button');
+
       settingsModal.querySelector('[data-cancel-confirmation]').click();await new Promise(resolve=>setTimeout(resolve,250));
       if(ids!==uiData.meetings.map(m=>m.id).join(',')||!settingsModal.hidden||document.querySelector('.app-shell').inert)errors.push('delete cancel changes data or traps focus');
+      const stableRow=row.dataset.selectionKey;menu.click();row.querySelector('[data-meeting-action=delete]').click();settingsModal.querySelector('[data-cancel-confirmation]').focus();
+      applyLanguage(locale);
+      if(activeModal==='confirmation'||confirmationAction||!settingsModal.hidden||document.activeElement.closest('.meeting-row')?.dataset.selectionKey!==stableRow||ids!==uiData.meetings.map(m=>m.id).join(','))errors.push('locale refresh must cancel deletion, preserve data and refocus the rebuilt meeting');
+
       return errors;
     })()`,
     awaitPromise: true,
@@ -3779,13 +3906,27 @@ try {
       if([...document.querySelectorAll('.meeting-menu button')].some(b=>!b.querySelector('svg')))errors.push('legacy menu icon');
       closeMeetingMenus();
       document.querySelector('[data-meeting-menu]').click();document.querySelector('[data-meeting-action=rename]').click();
-      let input=meetingList.querySelector('[data-rename-meeting] input');input.value='重命名测试';input.dispatchEvent(new Event('input',{bubbles:true}));
+      let input=meetingList.querySelector('[data-rename-meeting] input');
+      const renameWidth=input.getBoundingClientRect().width,renameBounds=input.form.getBoundingClientRect();
+      if(document.activeElement!==input||renameWidth<renameBounds.width*.6||input.form.scrollWidth>input.form.clientWidth+1||[...input.form.querySelectorAll('button')].some(button=>!button.getAttribute('aria-label')||button.getBoundingClientRect().right>renameBounds.right+1))errors.push('sidebar rename field clipped or unfocused');
+      input.value='重命名测试';input.dispatchEvent(new Event('input',{bubbles:true}));
+      const another={...uiData.meetings[0],id:'rename-other',title:'另一场会议',isExample:false};
+      uiData.meetings.push(another);
       renderMeetingList();
-      if(meetingList.querySelector('[data-rename-meeting] input')!==input||input.value!=='重命名测试')errors.push('refresh loses rename draft');
+      const renameOther=()=>{const row=meetingList.querySelector('[data-meeting-id=rename-other]');row.querySelector('[data-meeting-menu]').click();row.querySelector('[data-meeting-action=rename]').click();};
+      renameOther();
+      input.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,isComposing:true}));
+      if(meetingList.querySelector('[data-rename-meeting] input')!==input||input.value!=='重命名测试'||meetingRenameDraft?.key!==actual.id)errors.push('refresh, composing or selecting another row loses rename draft');
       input.form.requestSubmit();
+      renameOther();
       for(let i=0;i<100&&meetingRenameDraft;i++)await new Promise(r=>setTimeout(r,30));
       const written=await window.brevia.meeting.get({meeting_id:actual.id});
       if(meetingRenameDraft||written.title!=='重命名测试')errors.push('rename not persisted');
+      renameOther();
+      const otherField=meetingList.querySelector('[data-rename-meeting] input');
+      if(otherField===input||otherField.disabled||otherField.value!==another.title)errors.push('rename reused another meeting form');
+      otherField.form.querySelector('[data-cancel-meeting-rename]').click();
+      if(document.activeElement?.dataset.meetingId!==another.id)errors.push('cancel rename loses keyboard focus');
       await window.brevia.meeting.update({meeting_id:actual.id,updates:{title:actual.title}});
       uiData.meetings=[{...backendMeeting(actual),id:'9d610fcc-dd65-4a78-a996-f287d57242e3',isExample:false}];renderMeetingList();
       document.querySelector('[data-meeting-menu]').click();document.querySelector('[data-meeting-action=rename]').click();
@@ -3801,10 +3942,17 @@ try {
       if(selectedMeetingKeys.size!==1||!batchToolbar.querySelector('#batch-select-all').indeterminate)errors.push('mixed checkbox state');
       batchToolbar.querySelector('#batch-select-all').click();
       if(selectedMeetingKeys.size!==4||!batchToolbar.querySelector('#batch-select-all').checked)errors.push('select all');
+      const batchDelete=batchToolbar.querySelector('[data-batch-delete]');batchDelete.click();
+      if(!settingsModal.matches(':popover-open')||!batchDelete.classList.contains('is-confirmation-anchor')||!settingsModal.querySelector('.confirmation-actions p').textContent.includes(t('会议将移至最近删除，可在那里恢复。')))errors.push('batch deletion anchor or consequence');
+      settingsModal.querySelector('[data-cancel-confirmation]').click();
       batchToolbar.querySelector('#batch-select-all').click();
       if(selectedMeetingKeys.size||!meetingSelectionMode||!batchToolbar.querySelector('[data-batch-delete]').disabled)errors.push('clear all exits selection or enables delete');
       document.querySelector('#meeting-selection-toggle').click();
       if(meetingSelectionMode||!batchToolbar.hidden)errors.push('explicit exit');
+      activeLibraryNav='recently-deleted';uiData.meetings=[{...backendMeeting(actual),deleted:true,isExample:false,deletedAt:new Date().toISOString()}];renderMeetingList();
+      const purgeButton=meetingList.querySelector('[data-meeting-menu]');purgeButton.click();meetingList.querySelector('[data-meeting-action=purge]').click();
+      if(!settingsModal.matches(':popover-open')||!purgeButton.classList.contains('is-confirmation-anchor')||!settingsModal.querySelector('.confirmation-actions p').textContent.includes(t('此操作不可恢复。')))errors.push('permanent deletion lacks anchored consequence');
+      settingsModal.querySelector('[data-cancel-confirmation]').click();activeLibraryNav='all-meetings';
       uiData.meetings=originalMeetings;workspaces=originalWorkspaces;activeWorkspaceId='';renderWorkspaceNav();renderMeetingList();
       return errors;
     })()`,
@@ -3863,7 +4011,7 @@ try {
       const layout=document.querySelector('.live-layout');
       if(layout.querySelector('[data-toggle-live-mode]'))errors.push('retired layout toggle remains');
       const notesBounds=layout.querySelector('.live-notes').getBoundingClientRect(),captionsBounds=layout.querySelector('.live-captions').getBoundingClientRect();
-      if(notesBounds.left>=captionsBounds.left||Math.abs(notesBounds.width/(notesBounds.width+captionsBounds.width)-.6)>.01||Math.abs(notesBounds.top-captionsBounds.top)>1)errors.push('live notes must lead the 60/40 split');
+      if(notesBounds.left>=captionsBounds.left||Math.abs(notesBounds.width/(notesBounds.width+captionsBounds.width)-1.25/2.25)>.01||Math.abs(notesBounds.top-captionsBounds.top)>1)errors.push('live notes must lead the split');
       for(const code of Object.keys(catalog)){
         applyLanguage(code);
         for(const header of layout.querySelectorAll('.live-section-head')){
@@ -4067,7 +4215,7 @@ try {
       ],
       [
         'desktop-confirmation',
-        `(()=>{document.querySelector('.workspace-dialog [data-close-modal]').click(); openConfirmation(t('删除工作区'),t('工作区内的会议将移至最近删除。恢复会议时将还原原工作区。此操作不能撤销。'),()=>{});})()`,
+        `(async()=>{document.querySelector('.workspace-dialog [data-close-modal]').click();await showLibraryNav('all-meetings');const row=meetingList.querySelector('.meeting-row');row.querySelector('[data-meeting-menu]').click();row.querySelector('[data-meeting-action=delete]').click();})()`,
       ],
       [
         'desktop-tasks',
@@ -4534,7 +4682,7 @@ try {
       ],
       [
         'desktop-devices-empty',
-        `(async()=>{clearMeetingSelection();await showView('settings');await openModal('device-connection');for(const button of document.querySelectorAll('#mobile-devices button'))await button.onclick();if((await window.brevia.mobile.status()).devices.length||!document.querySelector('.mobile-device-empty'))throw Error('空设备场景仍残留已信任设备');settingsModal.querySelector('.modal-body').scrollTop=0;})()`,
+        `(async()=>{clearMeetingSelection();await showView('settings');await openModal('device-connection');const confirm=window.confirm;try{let approved=false;window.confirm=question=>{if(!question.includes(t('取消对「{name}」的信任？这台设备需要重新配对才能访问电脑。').split('{name}')[1]))throw Error('解除信任缺少后果提示');return approved;};const first=document.querySelector('#mobile-devices button');await first.onclick();if(!(await window.brevia.mobile.status()).devices.length)throw Error('取消确认仍解除了信任');approved=true;const count=(await window.brevia.mobile.status()).devices.length;for(let index=0;index<count;index++)await document.querySelector('#mobile-devices button').onclick();}finally{window.confirm=confirm;}if((await window.brevia.mobile.status()).devices.length||!document.querySelector('.mobile-device-empty')||document.querySelector('#mobile-dialog').dataset.mobilePageState!=='paired')throw Error('撤销信任后未保留设备管理');settingsModal.querySelector('.modal-body').scrollTop=0;})()`,
       ],
       [
         'desktop-devices-service-off',

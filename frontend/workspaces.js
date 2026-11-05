@@ -8,16 +8,6 @@ let workspaces = [];
 let activeWorkspaceId = ''; // 空字符串表示公开工作区
 const collapsedSidebarWorkspaces = new Set();
 
-function closeWorkspaceDialog(backdrop) {
-  backdrop.classList.remove('modal-enter');
-  backdrop.classList.add('modal-leave');
-  setTimeout(() => {
-    backdrop.remove();
-    if (backdrop.returnFocus?.isConnected) backdrop.returnFocus.focus();
-    document.body.classList.remove('modal-open');
-  }, BreviaMotion.duration('exit'));
-}
-
 /**
  * 初始化工作区数据
  * @param {Array} workspaceList - 从后端获取的工作区列表
@@ -81,13 +71,7 @@ function renderWorkspacePickerItems() {
       .join('') || `<p class="page-empty">${escapeHtml(t('没有搜索结果'))}</p>`;
 }
 function positionWorkspacePicker(selector) {
-  const anchor = selector.getBoundingClientRect();
-  const edge = document.querySelector('.library-panel').getBoundingClientRect().right;
-  positionFloating(
-    workspacePicker,
-    { left: edge, right: edge, top: anchor.top, bottom: anchor.bottom },
-    ['right-center', 'right-end', 'right-start', 'left-end'],
-  );
+  positionFloating(workspacePicker, selector, ['bottom-start', 'top-start']);
 }
 function toggleWorkspacePicker() {
   if (workspacePicker) return closeWorkspacePicker(true);
@@ -226,6 +210,18 @@ document
  * 显示新建工作区对话框
  */
 function showNewWorkspaceDialog(assignMeetingId, onCreated, trigger) {
+  showWorkspaceForm({ assignMeetingId, onCreated, trigger });
+}
+function showEditWorkspaceDialog(workspaceId, trigger) {
+  const workspace = workspaces.find((item) => item.id === workspaceId);
+  if (!workspace) return;
+  const editButton = document.querySelector(
+    `[data-edit-sidebar-workspace="${CSS.escape(workspaceId)}"]`,
+  );
+  showWorkspaceForm({ workspace, trigger: trigger || editButton });
+}
+function showWorkspaceForm({ assignMeetingId, onCreated, trigger, workspace }) {
+  const title = t(workspace ? '编辑工作区' : '新建工作区');
   document.querySelector('.workspace-create-popover:popover-open')?.hidePopover();
   let anchor = trigger;
   if (anchor?.closest('.workspace-picker')) anchor = document.querySelector('#workspace-selector');
@@ -241,6 +237,8 @@ function showNewWorkspaceDialog(assignMeetingId, onCreated, trigger) {
         ?.closest('.flow-select')
         ?.querySelector('.flow-select-toggle')) ||
     (anchor?.isConnected && anchor) ||
+    (workspace &&
+      document.querySelector(`[data-edit-sidebar-workspace="${CSS.escape(workspace.id)}"]`)) ||
     document.querySelector('.new-workspace') ||
     document.querySelector('#library-toggle');
   if (workspacePicker) closeWorkspacePicker();
@@ -249,11 +247,11 @@ function showNewWorkspaceDialog(assignMeetingId, onCreated, trigger) {
   popover.className = 'workspace-dialog workspace-create-popover';
   popover.setAttribute('popover', 'auto');
   popover.setAttribute('role', 'dialog');
-  popover.setAttribute('aria-label', t('新建工作区'));
+  popover.setAttribute('aria-label', title);
   popover.innerHTML = `
       <header class="ui-dialog-header">
         <div class="ui-dialog-title">
-          <h2>${t('新建工作区')}</h2>
+          <h2>${escapeHtml(title)}</h2>
         </div>
         <button class="modal-close" type="button" data-close-modal aria-label="${t('关闭')}">${interfaceIcon('close')}</button>
       </header>
@@ -261,14 +259,15 @@ function showNewWorkspaceDialog(assignMeetingId, onCreated, trigger) {
         <form class="workspace-form ui-dialog-form" data-workspace-form>
           <label>
             ${t('工作区名称')}
-            <input name="name" type="text" maxlength="30" required autofocus autocomplete="off" />
+            <input name="name" type="text" maxlength="30" value="${escapeHtml(workspace?.name || '')}" required autofocus autocomplete="off" />
           </label>
           <details class="workspace-description">
             <summary>${interfaceIcon('chevron-down')}<span>${t('描述')}</span></summary>
-            <textarea name="description" maxlength="100" rows="2" aria-label="${t('描述')}"></textarea>
+            <textarea name="description" maxlength="100" rows="2" aria-label="${t('描述')}">${escapeHtml(workspace?.description || '')}</textarea>
           </details>
           <div class="ui-dialog-actions">
-            <button type="submit" class="ui-button ui-button-primary">${t('创建工作区')}</button>
+             ${workspace ? `<button type="button" class="ui-button ui-button-danger" data-delete-workspace>${t('删除工作区')}</button>` : ''}
+            <button type="submit" class="ui-button ui-button-primary">${t(workspace ? '保存更改' : '创建工作区')}</button>
           </div>
         </form>
       </div>
@@ -320,6 +319,35 @@ function showNewWorkspaceDialog(assignMeetingId, onCreated, trigger) {
   window.addEventListener('resize', reposition);
   document.addEventListener('scroll', reposition, true);
 
+  // 删除工作区
+  popover.querySelector('[data-delete-workspace]')?.addEventListener('click', (event) => {
+    const deleteButton = event.currentTarget;
+    appActions.openConfirmation(
+      t('删除工作区'),
+      t('工作区内的会议将移至最近删除。恢复会议时将还原原工作区。此操作不能撤销。'),
+      async () => {
+        popover.inert = true;
+        try {
+          await window.brevia.workspace.delete({ workspace_id: workspace.id });
+          closeDialog();
+          workspaces = workspaces.filter((w) => w.id !== workspace.id);
+          if (activeWorkspaceId === workspace.id) void switchWorkspace('');
+          uiData.meetings = uiData.meetings.filter(
+            (meeting) => meeting.workspaceId !== workspace.id,
+          );
+          renderWorkspaceNav();
+          appActions.renderMeetingList();
+          appActions.showToast(t('工作区已删除'), undefined, 'success');
+        } catch (error) {
+          popover.inert = false;
+          deleteButton.focus({ preventScroll: true });
+          appActions.showToast(error.message, undefined, 'error');
+        }
+      },
+      deleteButton,
+    );
+  });
+
   popover.querySelector('[data-workspace-form]').addEventListener('submit', async (e) => {
     e.preventDefault();
     const submit = e.target.querySelector('[type="submit"]');
@@ -335,163 +363,29 @@ function showNewWorkspaceDialog(assignMeetingId, onCreated, trigger) {
     };
 
     try {
-      const workspace = await window.brevia.workspace.create(payload);
-      workspaces.push(workspace);
+      if (workspace) {
+        const updated = await window.brevia.workspace.update({
+          workspace_id: workspace.id,
+          updates: payload,
+        });
+        const index = workspaces.findIndex((item) => item.id === workspace.id);
+        if (index >= 0) workspaces[index] = updated;
+        renderWorkspaceNav();
+        appActions.renderMeetingList();
+        updateHomeViewTitle();
+        closeDialog();
+        appActions.showToast(t('工作区已更新'), undefined, 'success');
+        return;
+      }
+      const created = await window.brevia.workspace.create(payload);
+      workspaces.push(created);
       workspaces.sort((a, b) => a.position - b.position);
-      if (assignMeetingId) await assignMeetingToWorkspace(assignMeetingId, workspace.id);
-      onCreated?.(workspace);
+      if (assignMeetingId) await assignMeetingToWorkspace(assignMeetingId, created.id);
+      onCreated?.(created);
       renderWorkspaceNav();
       appActions.renderMeetingList();
       closeDialog();
       appActions.showToast(t('工作区已创建'), undefined, 'success');
-    } catch (error) {
-      appActions.showToast(error.message, undefined, 'error');
-    } finally {
-      submit.disabled = false;
-    }
-  });
-}
-
-/**
- * 显示工作区编辑对话框
- * @param {string} workspaceId - 工作区 ID
- */
-function showEditWorkspaceDialog(workspaceId) {
-  const workspace = workspaces.find((w) => w.id === workspaceId);
-  if (!workspace) return;
-
-  const backdrop = document.createElement('div');
-  const anchor = document.querySelector('#workspace-edit');
-  const anchored =
-    anchor?.getClientRects().length > 0 &&
-    !anchor.hidden &&
-    activeView === 'home' &&
-    activeWorkspaceId === workspaceId;
-  backdrop.className = `modal-backdrop workspace-dialog${anchored ? ' workspace-edit-popover' : ''}`;
-  backdrop.returnFocus = document.activeElement;
-  backdrop.innerHTML = `
-    <section class="modal-panel ui-dialog" role="dialog" aria-modal="true" aria-label="${t('编辑工作区')}">
-      <header class="ui-dialog-header">
-        <div class="ui-dialog-title">
-          <h2>${t('编辑工作区')}</h2>
-          <p>${escapeHtml(workspace.name)}</p>
-        </div>
-        <button class="modal-close" type="button" data-close-modal aria-label="${t('关闭')}">${interfaceIcon('close')}</button>
-      </header>
-      <div class="ui-dialog-body">
-        <form class="workspace-form ui-dialog-form" data-workspace-form>
-          <label>
-            ${t('工作区名称')}
-            <input name="name" type="text" maxlength="30" value="${escapeHtml(workspace.name)}" required />
-          </label>
-          ${anchored ? `<details class="workspace-description"><summary>${t('描述')} ${t('（可选）')}${interfaceIcon('chevron-down')}</summary>` : ''}
-          <label>
-            ${anchored ? '' : `<span>${t('描述')} <small>${t('（可选）')}</small></span>`}
-            <textarea name="description" aria-label="${t('描述')}" maxlength="100" rows="2">${escapeHtml(workspace.description)}</textarea>
-          </label>
-          ${anchored ? '</details>' : ''}
-          <div class="ui-dialog-actions">
-            <button type="button" class="ui-button" data-close-modal>${t('取消')}</button>
-            <button type="submit" class="ui-button ui-button-primary">${t('保存更改')}</button>
-            <button type="button" class="ui-button ui-button-danger" data-delete-workspace>${t('删除工作区')}</button>
-          </div>
-        </form>
-      </div>
-    </section>
-  `;
-
-  document.body.appendChild(backdrop);
-  document.body.classList.add('modal-open');
-  const panel = backdrop.querySelector('.modal-panel');
-  const reposition = () => {
-    if (anchored) positionFloating(panel, anchor, ['bottom-end', 'top-end']);
-  };
-  reposition();
-  window.addEventListener('resize', reposition);
-
-  // 触发进入动画
-  backdrop.classList.remove('modal-leave');
-  backdrop.hidden = false;
-  backdrop.classList.add('modal-enter');
-
-  let escHandler;
-  const closeDialog = () => {
-    document.removeEventListener('keydown', escHandler);
-    window.removeEventListener('resize', reposition);
-    closeWorkspaceDialog(backdrop);
-  };
-
-  // 关闭按钮事件
-  backdrop.querySelectorAll('[data-close-modal]').forEach((btn) => {
-    btn.addEventListener('click', closeDialog);
-  });
-
-  let backdropPointerDown = false;
-  backdrop.addEventListener('pointerdown', (e) => {
-    backdropPointerDown = e.target === backdrop;
-  });
-  // 仅当按下与松开都在背景上才关闭，避免拖出弹窗时误关。
-  backdrop.addEventListener('click', (e) => {
-    if (backdropPointerDown && e.target === backdrop) closeDialog();
-    backdropPointerDown = false;
-  });
-
-  // ESC 键关闭
-  escHandler = (e) => {
-    if (e.key === 'Escape') {
-      closeDialog();
-      document.removeEventListener('keydown', escHandler);
-    }
-  };
-  document.addEventListener('keydown', escHandler);
-
-  // 删除工作区
-  backdrop.querySelector('[data-delete-workspace]').addEventListener('click', async () => {
-    appActions.openConfirmation(
-      t('删除工作区'),
-      t('工作区内的会议将移至最近删除。恢复会议时将还原原工作区。此操作不能撤销。'),
-      async () => {
-        try {
-          await window.brevia.workspace.delete({ workspace_id: workspaceId });
-          workspaces = workspaces.filter((w) => w.id !== workspaceId);
-          if (activeWorkspaceId === workspaceId) void switchWorkspace('');
-          uiData.meetings = uiData.meetings.filter(
-            (meeting) => meeting.workspaceId !== workspaceId,
-          );
-          renderWorkspaceNav();
-          appActions.renderMeetingList();
-          closeDialog();
-          document.removeEventListener('keydown', escHandler);
-          appActions.showToast(t('工作区已删除'), undefined, 'success');
-        } catch (error) {
-          appActions.showToast(error.message, undefined, 'error');
-        }
-      },
-    );
-  });
-
-  // 提交表单
-  backdrop.querySelector('[data-workspace-form]').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const submit = e.target.querySelector('[type="submit"]');
-    if (submit.disabled) return;
-    submit.disabled = true;
-    const formData = new FormData(e.target);
-    const updates = {
-      name: formData.get('name').trim(),
-      description: formData.get('description').trim(),
-    };
-
-    try {
-      const updated = await window.brevia.workspace.update({ workspace_id: workspaceId, updates });
-      const index = workspaces.findIndex((w) => w.id === workspaceId);
-      if (index >= 0) workspaces[index] = updated;
-      renderWorkspaceNav();
-      appActions.renderMeetingList();
-      updateHomeViewTitle();
-      closeDialog();
-      document.removeEventListener('keydown', escHandler);
-      appActions.showToast(t('工作区已更新'), undefined, 'success');
     } catch (error) {
       appActions.showToast(error.message, undefined, 'error');
     } finally {

@@ -406,25 +406,68 @@ body .workspace-create-popover .ui-dialog-actions {
   padding-top: 0;
 }
 #home-view.active {
-  display: grid;
-  grid-template-rows: minmax(0, 1fr);
-  place-items: center;
-  padding: 40px;
+  display: block;
+  height: 100%;
+  padding: clamp(32px, 7vh, 72px) clamp(24px, 5vw, 80px) 32px;
   overflow: auto;
 }
 #home-view .start-workspace {
-  width: min(100%, 520px);
-  margin-bottom: 7vh;
-  text-align: center;
-  animation: start-arrive 420ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  width: min(100%, 720px);
+  margin: 0 auto;
+  animation: start-arrive 320ms ease-out both;
+}
+#home-view .home-heading {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  min-height: 100px;
+  overflow: hidden;
+}
+#home-view .home-heading::before,
+#home-view .home-heading::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  pointer-events: none;
+  inset: -16px -16px -16px 12%;
+  color: var(--color-text-muted);
+  background-image:
+    radial-gradient(circle at 9px 19px, currentColor 1px, transparent 1.5px),
+    radial-gradient(circle at 36px 49px, currentColor 0.7px, transparent 1.4px),
+    radial-gradient(circle at 73px 17px, currentColor 1px, transparent 1.7px),
+    radial-gradient(circle at 92px 36px, currentColor 1.2px, transparent 1.8px);
+  background-size: 103px 61px;
+  mask-image: radial-gradient(ellipse at 74% 50%, #000 5%, transparent 74%);
+  opacity: 0.3;
+}
+#home-view .home-heading::after {
+  background-size: 75px 79px;
+  opacity: 0.18;
+}
+#home-view.active .home-heading::before {
+  animation: home-particles 13s ease-in-out infinite alternate;
+}
+#home-view.active .home-heading::after {
+  animation: home-particles 18s -7s ease-in-out infinite alternate-reverse;
+}
+@keyframes home-particles {
+  from {
+    transform: translate(-7px, 5px);
+  }
+  to {
+    transform: translate(9px, -6px);
+  }
 }
 #home-view .start-symbol {
   display: flex;
-  justify-content: center;
   align-items: center;
-  gap: 5px;
-  height: 48px;
-  margin: 0 auto 28px;
+  justify-content: center;
+  gap: 4px;
+  height: 52px;
+  margin-right: 6%;
   color: var(--color-text);
 }
 #home-view .start-symbol i {
@@ -450,60 +493,128 @@ body .workspace-create-popover .ui-dialog-actions {
   animation-delay: -2.1s;
   opacity: 1;
 }
-#home-view h1 {
-  margin: 0 0 32px;
-  font-size: 32px;
-  line-height: 1.3;
-  letter-spacing: -0.8px;
-  font-weight: 550;
+#home-view h1,
+#home-view .is-trash .home-recent h2 {
+  font-size: clamp(26px, 3vw, 38px);
+  font-weight: 600;
+  letter-spacing: -0.045em;
+  line-height: 1.24;
+  margin: 0;
 }
 #home-view .start-actions {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 0 30px;
 }
 #home-view .start-actions .ui-button {
-  min-height: 44px;
-  padding: 11px 22px;
-  border-radius: 9px;
-  font-size: 13px;
-  transition:
-    background 160ms,
-    border-color 160ms,
-    transform 160ms;
+  min-height: 42px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
 }
-#home-view .start-actions .ui-button:active {
-  transform: scale(0.97);
+#home-view .start-actions .quick-recording {
+  padding-inline: 20px;
 }
-#home-view .start-import {
-  background: var(--color-navigation);
-  border-color: transparent;
+#home-view .home-recent {
+  border-top: 1px solid var(--color-line);
+  padding-top: 24px;
 }
-#home-view .start-import:hover {
-  background: var(--color-selected);
+#home-view .home-recent h2 {
+  margin: 0 0 12px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text);
 }
-#home-view .quick-recording {
-  display: inline-flex;
+#home-view .home-meeting {
+  position: relative;
+  display: flex;
   align-items: center;
-  gap: 6px;
-  width: auto;
-  margin: 20px auto 0;
-  padding: 6px 10px;
+  gap: 14px;
+  min-height: 59px;
+  padding: 8px 10px;
+  border-radius: 8px;
+}
+#home-view .home-meeting:has([data-open-recent]):is(:hover, :focus-within) {
+  background: var(--color-navigation);
+}
+#home-view .home-meeting-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 38px;
+  border-radius: 7px;
+  background: var(--color-navigation);
+  color: var(--color-text-muted);
+}
+#home-view .home-meeting :is([data-open-recent], strong) {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  padding: 0;
   border: 0;
-  border-radius: 6px;
   background: none;
+  text-align: start;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text);
+}
+#home-view [data-open-recent]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 8px;
+}
+#home-view .home-meeting-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+#home-view .home-meeting-copy > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--color-text-muted);
   font-size: 12px;
-  line-height: 18px;
 }
-#home-view .quick-recording:hover {
-  color: var(--color-text);
-  background: var(--color-navigation);
+#home-view .home-meeting small {
+  order: -1;
+  flex: 0 0 76px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
-#home-view .quick-recording svg {
+#home-view .home-meeting > :last-child {
+  margin-inline-start: auto;
+  flex-shrink: 0;
+}
+@media (max-width: 920px) {
+  #home-view .home-meeting small {
+    flex-basis: 54px;
+  }
+}
+#home-view .home-meeting > .interface-icon {
   width: 14px;
-  height: 14px;
+  color: var(--color-text-subtle);
+}
+#home-view .home-restore {
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--color-line);
+  font-size: 12px;
+}
+#home-view .is-trash :is(.home-heading, .start-actions) {
+  display: none;
+}
+#home-view .is-trash .home-recent {
+  border: 0;
+  padding: 0;
+}
+#home-view .is-trash .home-recent h2 {
+  margin-bottom: 24px;
 }
 @keyframes start-arrive {
   from {
@@ -526,7 +637,9 @@ body .workspace-create-popover .ui-dialog-actions {
 }
 @media (prefers-reduced-motion: reduce) {
   #home-view .start-workspace,
-  #home-view .start-symbol i {
+  #home-view .start-symbol i,
+  #home-view.active .home-heading::before,
+  #home-view.active .home-heading::after {
     animation: none;
   }
 }
@@ -587,9 +700,201 @@ body .modal-backdrop:not(.settings-page) .ui-surface :is(.modal-action, .seconda
   border-radius: 6px;
 }
 body
-  .modal-backdrop:is(.export-modal, .batch-modal, .summary-model-modal, .ai-assist-modal):not(
-    .settings-page
-  )
+  .modal-backdrop:is(.batch-modal, .summary-model-modal, .ai-assist-modal):not(.settings-page)
   > .ui-surface {
   width: min(720px, calc(100vw - 48px));
+}
+
+/* 原生顶层浮窗以导出按钮为锚，切换选项不会锁住会议工作面。 */
+[data-export-detail] {
+  anchor-name: --meeting-export;
+}
+body .modal-backdrop:is(.export-modal, .library-confirmation)[popover] {
+  position: fixed;
+  position-anchor: --meeting-export;
+  inset: auto;
+  top: calc(anchor(bottom, 60px) + 6px);
+  right: max(8px, anchor(right, 20px));
+  display: none;
+  width: min(396px, calc(100vw - 16px));
+  height: auto;
+  max-height: calc(100dvh - 128px);
+  overflow: visible;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  backdrop-filter: none;
+}
+body :is(.export-modal, .library-confirmation)[popover]:popover-open {
+  display: block;
+}
+body :is(.export-modal, .library-confirmation)[popover]::backdrop {
+  background: transparent;
+  backdrop-filter: none;
+}
+body
+  .modal-backdrop:is(.export-modal, .library-confirmation)[popover]:not(.settings-page)
+  > .ui-surface {
+  display: flex;
+  flex-direction: column;
+  position: static;
+  width: 100%;
+  min-width: 0;
+  height: auto;
+  max-width: none;
+  max-height: inherit;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
+  background: var(--color-overlay);
+  box-shadow: 0 10px 38px #0002;
+}
+body .export-modal[popover] .ui-surface-heading {
+  padding: 14px 16px 8px;
+  border: 0;
+}
+body .export-modal[popover] .ui-surface-heading h2 {
+  font-size: 15px;
+  line-height: 22px;
+}
+body .export-modal[popover] .ui-surface-heading p {
+  display: none;
+}
+body .export-modal[popover] .ui-surface .modal-body {
+  overflow: auto;
+  padding: 0 12px 12px;
+}
+body .export-modal[popover] .export-builder {
+  display: grid;
+  gap: 8px;
+}
+body .export-modal[popover] .export-builder-section {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  overflow: visible;
+}
+body .export-modal[popover] .export-content-row {
+  display: grid;
+  grid-template-columns: 16px 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 7px;
+  min-height: 40px;
+  margin: 0;
+  border: 0;
+  border-radius: 6px;
+}
+body .export-modal[popover] .export-content-row.is-checked {
+  background: var(--color-navigation);
+}
+body .export-modal[popover] .export-content-row input {
+  width: 14px;
+  height: 14px;
+  min-height: 0;
+  margin: 0;
+  accent-color: var(--color-text);
+}
+body .export-modal[popover] .export-content-row .interface-icon {
+  width: 15px;
+  height: 15px;
+}
+body .export-modal[popover] .export-content-name b {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+body .export-modal[popover] :is(.export-format-wrap, .export-format-fixed) {
+  width: 96px;
+  min-width: 0;
+}
+body .export-modal[popover] :is(.export-content-row .flow-select-toggle, .export-format-fixed) {
+  min-height: 28px;
+  padding: 4px 7px;
+  font-size: 12px;
+}
+body .export-modal[popover] .export-selection-summary {
+  font-size: 11px;
+  margin: 8px 4px;
+  color: var(--color-text-muted);
+}
+body .export-modal[popover] .export-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+body .export-modal[popover] .export-actions button {
+  min-width: 0;
+}
+body .export-modal[popover] .export-more-share {
+  border: 0;
+  padding: 0 4px;
+}
+body .export-modal[popover] .export-more-share > summary {
+  min-height: 26px;
+  font-size: 12px;
+}
+
+/* 删除确认跟随实际操作按钮，靠近窗口边缘时由浏览器翻转位置。 */
+.is-confirmation-anchor {
+  anchor-name: --library-confirm;
+}
+body .modal-backdrop.library-confirmation[popover] {
+  position-anchor: --library-confirm;
+  position-area: bottom span-right;
+  position-try-fallbacks:
+    flip-block,
+    flip-inline,
+    flip-block flip-inline;
+  inset: auto;
+  margin-block: 5px;
+  width: min(282px, calc(100vw - 16px));
+  justify-self: start;
+  max-height: calc(100dvh - 16px);
+}
+body .library-confirmation[popover] .ui-surface-heading {
+  display: none;
+}
+body .library-confirmation .modal-panel .modal-body {
+  padding: 12px 14px;
+  overflow: auto;
+}
+body .library-confirmation .confirmation-actions {
+  grid-template-columns: 1fr auto;
+  gap: 6px;
+  text-align: start;
+}
+body .library-confirmation .confirmation-actions > svg {
+  display: none;
+}
+body .library-confirmation .confirmation-actions h2,
+body .library-confirmation .confirmation-actions p {
+  grid-column: 1 / -1;
+  margin: 0;
+  text-align: start;
+}
+body .library-confirmation .confirmation-actions h2 {
+  font-size: 15px;
+  font-weight: 600;
+}
+body .library-confirmation .confirmation-actions p {
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+body .library-confirmation .confirmation-actions button {
+  justify-self: end;
+  margin-top: 2px;
+  min-height: 30px;
+  padding: 4px 12px;
+}
+body .library-confirmation .confirmation-actions [data-confirm-action] {
+  background: var(--color-danger);
+  border-color: transparent;
+  color: white;
+}
+#desktop-app .navigation-meeting .more.is-confirmation-anchor {
+  opacity: 1;
 }

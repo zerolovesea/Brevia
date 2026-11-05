@@ -167,6 +167,8 @@ async function audioFileURL(filePath, directories) {
 
 function configureMacUpdater(updater) {
   updater.autoDownload = false;
+  // 下载完成后可能已开始录音，只有通过空闲复查才能退出安装。
+  updater.autoInstallOnAppQuit = false;
   updater.setFeedURL(modelscopeUpdateFeed);
 }
 

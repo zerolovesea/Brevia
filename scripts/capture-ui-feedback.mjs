@@ -420,7 +420,7 @@ try {
     ],
     [
       'settings-about-logo',
-      `(async()=>{document.querySelector('#mobile-close-pairing').click();await new Promise(r=>setTimeout(r,300));await new Promise(r=>dismissOnboardingPage(r));await showView('home');document.querySelector('.statusbar-settings').click();await pageTransition;await openModal('whats-new');await new Promise(r=>setTimeout(r,260));const sidebar=document.querySelector('.sidebar'),about=settingsModal.querySelector('.about-brand-mark img');await about.decode();if(sidebar.getBoundingClientRect().width>1||!about.naturalWidth||!settingsModal.querySelector('.settings-workspace-back').checkVisibility())throw Error('设置未替换会议侧栏或缺少返回/关于logo');})()`,
+      `(async()=>{document.querySelector('#mobile-close-pairing').click();await new Promise(r=>setTimeout(r,300));await new Promise(r=>dismissOnboardingPage(r));await showView('home');document.querySelector('.window-settings').click();await pageTransition;await openModal('whats-new');await new Promise(r=>setTimeout(r,260));const sidebar=document.querySelector('.sidebar'),about=settingsModal.querySelector('.about-brand-mark img');await about.decode();if(sidebar.getBoundingClientRect().width>1||!about.naturalWidth||!settingsModal.querySelector('.settings-workspace-back').checkVisibility())throw Error('设置未替换会议侧栏或缺少返回/关于logo');})()`,
     ],
     [
       'settings-return-library',
@@ -475,16 +475,13 @@ try {
   scenes.push(
     [
       'live-notes-empty-disabled',
-      `(async()=>{applyTheme('light');await showView('live');meetingActive=true;document.querySelector('.app-shell').classList.add('is-live-meeting');document.querySelector('#live-name').textContent='产品周会';aiAssistConfig={...aiAssistConfig,enabled:false};aiAssistTemporarilyDisabled=false;liveNotesToolbar.hidden=true;liveNotesEditor.setMode('rich');liveNotesEditor.setMarkdown('');renderAiAssistToggle();})()`,
+      `(async()=>{applyTheme('light');await showView('live');meetingActive=true;document.querySelector('.app-shell').classList.add('is-live-meeting');document.querySelector('#live-name').textContent='产品周会';aiAssistConfig={...aiAssistConfig,enabled:false};aiAssistTemporarilyDisabled=false;liveNotesEditor.setMode('rich');liveNotesEditor.setMarkdown('');renderAiAssistToggle();})()`,
     ],
     ['live-notes-empty-enabled', `(()=>{aiAssistConfig.enabled=true;renderAiAssistToggle();})()`],
-    [
-      'live-notes-empty-toolbar-dark',
-      `(()=>{applyTheme('dark');liveNotesToolbar.hidden=false;})()`,
-    ],
+    ['live-notes-empty-toolbar-dark', `(()=>{applyTheme('dark');})()`],
     [
       'live-notes-filled',
-      `(()=>{applyTheme('light');liveNotesToolbar.hidden=true;liveNotesEditor.setMarkdown('## 会议重点\\n\\n- 确认下周发布计划。');if(document.querySelector('[data-ai-assist-empty]'))throw Error('已有笔记仍显示介绍占位');})()`,
+      `(()=>{applyTheme('light');liveNotesEditor.setMarkdown('## 会议重点\\n\\n- 确认下周发布计划。');if(document.querySelector('[data-ai-assist-empty]'))throw Error('已有笔记仍显示介绍占位');})()`,
     ],
   );
   // 精修稿只替换隔离数据，仍调用正式列表、纪要与共享阅读布局。
@@ -612,7 +609,7 @@ try {
     if (name.startsWith('polish-'))
       await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 600, y: 12 });
     const geometry = await evaluate(
-      `({width:innerWidth,height:innerHeight,overflow:document.body.scrollWidth>innerWidth+1,splash:!!document.querySelector('#startup-splash'),sidebar:Object.fromEntries(['.brand','.new-meeting','.import-recording','#all-meetings','#recently-deleted','.workspace-subnav','.workspace-heading','#workspace-selector','.task-stack-toggle','.task-cards','#mobile-nav','.statusbar-settings'].map(selector=>{const e=document.querySelector(selector),r=e?.getBoundingClientRect(),s=e&&getComputedStyle(e);return [selector,e?{x:r.x,y:r.y,width:r.width,height:r.height,font:s.fontFamily,fontSize:s.fontSize,fontWeight:s.fontWeight}:null]}))})`,
+      `({width:innerWidth,height:innerHeight,overflow:document.body.scrollWidth>innerWidth+1,splash:!!document.querySelector('#startup-splash'),sidebar:Object.fromEntries(['.brand','.new-meeting','.import-recording','#all-meetings','#recently-deleted','.workspace-subnav','.workspace-heading','#workspace-selector','.task-stack-toggle','.task-cards','#mobile-nav','.window-settings'].map(selector=>{const e=document.querySelector(selector),r=e?.getBoundingClientRect(),s=e&&getComputedStyle(e);return [selector,e?{x:r.x,y:r.y,width:r.width,height:r.height,font:s.fontFamily,fontSize:s.fontSize,fontWeight:s.fontWeight}:null]}))})`,
     );
     if (name.startsWith('live-ai'))
       geometry.modal = await evaluate(

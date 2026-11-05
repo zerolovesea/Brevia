@@ -15,13 +15,17 @@
   <body>
     <main class="capsule-shell">
       <section class="recording-pill" aria-label="Brevia">
-        <button class="capsule-grip" aria-label="拖动胶囊" type="button"><span></span></button>
-        <button class="capsule-logo" data-action="return" type="button" aria-label="返回当前会议"
-          ><img src="./assets/brevia-mark.svg" alt=""
-        /></button>
-        <div class="capsule-identity"
-          ><span><strong id="capsule-title"></strong><small id="capsule-status"></small></span
-        ></div>
+        <span class="capsule-grip" aria-hidden="true"></span>
+        <button class="capsule-logo" data-action="return" type="button" aria-label="返回当前会议">
+          <span id="capsule-meter" aria-hidden="true"></span>
+          <img src="./assets/brevia-mark.svg" alt="" />
+        </button>
+        <div class="capsule-identity">
+          <div class="capsule-readout"
+            ><time id="capsule-time">00:00</time><small id="capsule-status"></small
+          ></div>
+          <strong id="capsule-title"></strong>
+        </div>
         <button
           class="capsule-preview"
           id="capsule-preview"
@@ -29,9 +33,18 @@
           aria-controls="capsule-panel"
           aria-expanded="false"
           type="button"
-          ><span id="capsule-meter" aria-hidden="true"></span
-          ><time id="capsule-time">00:00</time></button
-        >
+          ><svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <rect x="3.5" y="5" width="17" height="14" rx="3" />
+            <path d="M7.5 10h9M7.5 14h6" /></svg
+        ></button>
         <button class="capsule-pause" data-action="pause" type="button"></button>
         <button class="capsule-stop" data-action="stop" type="button"></button>
       </section>

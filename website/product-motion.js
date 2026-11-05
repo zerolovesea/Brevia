@@ -56,6 +56,7 @@ window.detailActiveTab = 'summary';
     const sidebar = shell.querySelector('.sidebar.library-panel');
     if (!sidebar) return;
     const element = (tag, className) => Object.assign(document.createElement(tag), { className });
+    shell.querySelector('[data-live-transcript-toggle]')?.remove();
     const home = shell.querySelector('#home-view');
     const heading = element('div', 'page-head');
     const title = element('div', '');
@@ -88,9 +89,9 @@ window.detailActiveTab = 'summary';
     allMeetings.innerHTML =
       '<span data-interface-icon="document" aria-hidden="true"></span> 会议库';
     navigation.prepend(sidebar.querySelector('.workspace-container'), allMeetings);
-    const settings = shell.querySelector('.statusbar-settings');
+    const settings = shell.querySelector('.window-settings');
     settings.className = 'nav-item sidebar-settings';
-    settings.append(document.createTextNode('设置'));
+
     const quickSidebar = quick.cloneNode(true);
     quickSidebar.className = 'import-recording quick-recording';
     const tasks = sidebar.querySelector('#task-cards');
@@ -331,7 +332,6 @@ window.detailActiveTab = 'summary';
       notesRoot.replaceChildren(shell.querySelector('[data-ai-suggestion]'));
       liveNotesEditor = createNotesEditor(notesRoot);
       notesRoot.querySelector('.notes-editor').contentEditable = 'false';
-      notesRoot.querySelector('.notes-toolbar').hidden = true;
       shell.querySelector('#translation-options').innerHTML = BreviaI18n.languageOptions(locale, t)
         .map(
           ([value, label]) =>

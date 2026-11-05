@@ -426,15 +426,18 @@ textarea,
 }
 #desktop-app .sidebar-workspace {
   border: 0;
-  margin: 0 0 14px;
+  margin: 0 0 6px;
   padding: 0;
+}
+#desktop-app .sidebar-workspace:has(.sidebar-workspace-toggle[aria-expanded="false"]) {
+  margin-bottom: 1px;
 }
 #desktop-app .sidebar-workspace-header {
   display: flex;
   align-items: center;
   position: relative;
   gap: 0;
-  min-height: 30px;
+  min-height: 28px;
 }
 #desktop-app .sidebar-workspace-toggle {
   display: flex;
@@ -443,7 +446,7 @@ textarea,
   gap: 7px;
   width: 0;
   min-width: 0;
-  min-height: 30px;
+  min-height: 28px;
   margin: 0;
   padding: 4px 6px;
   border: 0;
@@ -507,9 +510,9 @@ textarea,
   display: grid;
   grid-template-columns: minmax(0, 1fr) 22px;
   align-items: center;
-  min-height: 32px;
+  min-height: 28px;
   margin: 1px 0;
-  padding: 4px 4px 4px 29px;
+  padding: 2px 4px 2px 29px;
   gap: 0;
   border: 0;
   border-radius: 6px;
@@ -527,6 +530,19 @@ textarea,
   min-width: 0;
   grid-column: 1;
   grid-row: 1;
+}
+#desktop-app .navigation-meeting:has(.meeting-title-rename) {
+  grid-template-columns: minmax(0, 1fr);
+  padding: 2px 3px;
+  background: transparent;
+}
+#desktop-app
+  .navigation-meeting:has(.meeting-title-rename)
+  :is(.meeting-actions, .navigation-meeting-signal) {
+  display: none;
+}
+#desktop-app .navigation-meeting .meeting-main:has(.meeting-title-rename) {
+  display: block;
 }
 #desktop-app .navigation-meeting .meeting-main:has(.navigation-meeting-signal) {
   display: flex;
@@ -837,12 +853,6 @@ body:has(#desktop-app) .settings-page {
 body:has(#desktop-app.is-library-hidden) .settings-page {
   left: 0;
 }
-body:has(#desktop-app) .export-modal {
-  padding: 24px 24px 24px 284px;
-}
-body:has(#desktop-app.is-library-hidden) .export-modal {
-  padding-left: 24px;
-}
 @media (max-width: 1050px) {
   #desktop-app {
     --desktop-sidebar: 240px;
@@ -855,9 +865,6 @@ body:has(#desktop-app.is-library-hidden) .export-modal {
   }
   body:has(#desktop-app.is-library-hidden) .settings-page {
     left: 0;
-  }
-  body:has(#desktop-app) .export-modal {
-    padding-left: 24px;
   }
 }
 
@@ -880,7 +887,7 @@ body:has(#desktop-app.is-library-hidden) .export-modal {
 body:has(.onboarding-page) #desktop-statusbar {
   display: none;
 }
-#desktop-statusbar :is(.mobile-sidebar-card, .task-summary, .statusbar-settings) {
+#desktop-statusbar :is(.mobile-sidebar-card, .task-summary) {
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -900,7 +907,7 @@ body:has(.onboarding-page) #desktop-statusbar {
   line-height: 18px;
   white-space: nowrap;
 }
-#desktop-statusbar :is(.mobile-sidebar-card, .task-summary, .statusbar-settings):hover {
+#desktop-statusbar :is(.mobile-sidebar-card, .task-summary):hover {
   background: var(--color-selected);
   color: var(--color-text);
 }
@@ -992,9 +999,50 @@ body:has(.onboarding-page) #desktop-statusbar {
 #desktop-statusbar .task-summary[aria-expanded="true"] > :last-child {
   transform: rotate(180deg);
 }
-#desktop-statusbar .statusbar-settings {
-  margin-left: auto;
+#desktop-app .window-actions .window-settings {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  margin: 0;
+  padding: 3px 8px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--color-text-body);
+  background: var(--color-navigation);
+  font-size: 12px;
+  -webkit-app-region: no-drag;
 }
+#desktop-app .window-actions .window-settings:hover {
+  background: var(--color-selected);
+}
+#desktop-app .window-settings .interface-icon {
+  width: 16px;
+  height: 16px;
+}
+#desktop-app.is-settings-view .window-settings {
+  display: none;
+}
+#desktop-app .showing-trash .navigation-library-heading .workspace-container {
+  visibility: hidden;
+}
+#desktop-app .showing-trash .navigation-library-heading {
+  margin-bottom: 0;
+}
+#desktop-app .showing-trash #trash-back {
+  align-self: flex-start;
+  margin: -26px 0 6px;
+  padding: 4px 8px;
+  min-height: 26px;
+  z-index: 1;
+}
+#desktop-app .showing-trash .library-group {
+  display: none;
+}
+#desktop-app .showing-trash .navigation-meeting {
+  padding-left: 9px;
+}
+
 @keyframes desktop-status-panel-in {
   from {
     opacity: 0;

@@ -96,6 +96,9 @@ function interfaceIcon(name) {
     'chevron-down': '<path d="m6 9 6 6 6-6"/>',
     'chevron-up': '<path d="m6 15 6-6 6 6"/>',
     'chevron-right': '<path d="m9 6 6 6-6 6"/>',
+    'split-view': '<rect x="3" y="4" width="18" height="16" rx="3"/><path d="M13 4v16"/>',
+    notebook:
+      '<rect x="5" y="3" width="15" height="18" rx="2.5"/><path d="M9 3v18M3 7h4m-4 5h4m-4 5h4m5-10h5"/>',
     'skip-back':
       '<path d="M3 8V3m0 5h5M4 7a9 9 0 1 1-1 9"/><text x="8" y="16" stroke="none" fill="currentColor" font-size="9" font-family="inherit">15</text>',
     'skip-forward':
@@ -410,10 +413,7 @@ function renderTranscriptSegment({
 }
 /** 渲染会议库中的一行。@param {{tone: string, title: string, meta: string, tags: string[], status: object}} meeting 会议数据。@param {number} index 会议索引。@returns {string} 行标记。 */
 /** 桌面会议导航只展示标题；录音状态保留在标记与可访问名称中。 */
-function renderNavigationMeeting(
-  { id, tone, title, meta, tags, status, statusCode, deleted = false, workspaceId, workspace },
-  index,
-) {
+function renderNavigationMeeting({ id, title, tags, status, statusCode, deleted = false }, index) {
   const workspaceMenu =
     !deleted && typeof showWorkspaceAssignMenu === 'function'
       ? `<button data-meeting-action="workspace" data-meeting-index="${index}">${interfaceIcon('folder')}<span>${t('移至工作区')}</span>${interfaceIcon('chevron-right')}</button>`
@@ -427,7 +427,14 @@ function renderNavigationMeeting(
       : null;
   const heading =
     editingMeetingIndex === index
-      ? `<form class="meeting-title-rename" data-rename-meeting data-meeting-index="${index}"><div class="meeting-rename-controls"><input name="title" value="${escapeHtml(draft?.title ?? title)}" maxlength="120" required aria-label="${t('重命名')}"${draft?.saving ? ' disabled' : ''} /><button type="submit" class="secondary"${draft?.saving ? ' disabled' : ''}>${interfaceIcon('checkbox-checked')}${t('保存')}</button><button type="button" class="secondary" data-cancel-meeting-rename${draft?.saving ? ' disabled' : ''}>${interfaceIcon('close')}${t('取消')}</button></div><small>${escapeHtml(t('Enter 保存 · Esc 取消'))}</small><p class="meeting-rename-meta">${escapeHtml(meta)}</p><span class="meeting-rename-state" role="status">${escapeHtml(t(draft?.saving ? '正在保存…' : draft?.error ? '重命名失败，修改仍保留' : draft?.title !== title ? '已修改 · 尚未保存' : '未修改'))}${draft?.error ? ` · ${escapeHtml(draft.error)}` : ''}</span></form>`
+      ? `<form class="meeting-title-rename" data-rename-meeting="${escapeHtml(id || String(index))}" data-meeting-index="${index}">
+          <div class="meeting-rename-controls">
+            <input name="title" value="${escapeHtml(draft?.title ?? title)}" maxlength="120" required aria-label="${t('重命名')}" title="${t('Enter 保存 · Esc 取消')}"${draft?.saving ? ' disabled' : ''} />
+            <button type="submit" aria-label="${t('保存')}" title="${t('保存')}"${draft?.saving ? ' disabled' : ''}>${interfaceIcon('check')}</button>
+            <button type="button" data-cancel-meeting-rename aria-label="${t('取消')}" title="${t('取消')}"${draft?.saving ? ' disabled' : ''}>${interfaceIcon('close')}</button>
+          </div>
+          <span class="meeting-rename-state" role="status">${draft?.error ? escapeHtml(t('重命名失败，修改仍保留') + ' · ' + draft.error) : draft?.saving ? escapeHtml(t('正在保存…')) : ''}</span>
+        </form>`
       : `<h2>${escapeHtml(title)}${tags.includes('手机录音') ? `<span class="meeting-source">${interfaceIcon('phone')}${escapeHtml(t(tags.includes('手机麦克风') ? '手机麦克风' : '手机录音'))}</span>` : ''}</h2>`;
   const paused = Boolean(status?.paused);
   const active = paused || statusCode === 'recording' || status?.tone === 'processing';
@@ -437,10 +444,11 @@ function renderNavigationMeeting(
     : '';
   const accessibleLabel = [title, sourceLabel, stateLabel].filter(Boolean).join(' · ');
   const stateClass = paused ? ' is-paused' : statusCode === 'recording' ? ' is-recording' : '';
-  const signal = active
-    ? `<span class="navigation-meeting-signal${stateClass}" aria-hidden="true"></span>`
-    : '';
-  return `<article class="meeting-row navigation-meeting${stateClass}" aria-label="${escapeHtml(accessibleLabel)}" data-meeting-index="${index}" data-selection-key="${escapeHtml(id || String(index))}" tabindex="0" aria-selected="false"${id ? ` data-meeting-id="${escapeHtml(id)}"` : ''}${!deleted && id ? ' draggable="true"' : ''}><input class="meeting-row-checkbox" type="checkbox" data-select-meeting aria-label="${escapeHtml(t('选择'))} ${escapeHtml(title)}" /><div class="meeting-main">${signal}${heading}</div><div class="meeting-actions"><button class="more" data-meeting-menu="${index}" aria-label="${t('更多操作')}" aria-expanded="false">${interfaceIcon('more')}</button><div class="meeting-menu ui-menu" hidden><p class="ui-menu-caption">${escapeHtml(title)}</p>${menu}</div></div></article>`;
+  const signal =
+    active && editingMeetingIndex !== index
+      ? `<span class="navigation-meeting-signal${stateClass}" aria-hidden="true"></span>`
+      : '';
+  return `<article class="meeting-row navigation-meeting${stateClass}" aria-label="${escapeHtml(accessibleLabel)}" data-meeting-index="${index}" data-selection-key="${escapeHtml(id || String(index))}" tabindex="0" aria-selected="false"${id ? ` data-meeting-id="${escapeHtml(id)}"` : ''}${!deleted && id && editingMeetingIndex !== index ? ' draggable="true"' : ''}><input class="meeting-row-checkbox" type="checkbox" data-select-meeting aria-label="${escapeHtml(t('选择'))} ${escapeHtml(title)}" /><div class="meeting-main">${signal}${heading}</div><div class="meeting-actions"><button class="more" data-meeting-menu="${index}" aria-label="${t('更多操作')}" aria-expanded="false">${interfaceIcon('more')}</button><div class="meeting-menu ui-menu" hidden><p class="ui-menu-caption">${escapeHtml(title)}</p>${menu}</div></div></article>`;
 }
 /** 设置入口使用整行导航；数据与操作键继续由现有控制器管理。 */
 function renderSettingsCard({ title, description, action, modal }) {
@@ -488,11 +496,18 @@ function renderSettingsView() {
   settingsView.querySelector('.preferences-scroll').scrollTop = previousScroll;
 }
 function desktopShortcutFromEvent(event) {
-  if (!(event.ctrlKey || event.altKey || event.metaKey)) return '';
-  const key = /^(?:Key[A-Z]|Digit[0-9]|F(?:[1-9]|1[0-9]|2[0-4]))$/.test(event.code)
-    ? event.code.replace(/^(Key|Digit)/, '')
-    : '';
-  if (!key) return '';
+  if (
+    event.isComposing ||
+    event.code?.startsWith('Numpad') ||
+    !(event.ctrlKey || event.altKey || event.metaKey)
+  )
+    return '';
+  // 字母按当前键盘布局注册；Option、死键或非拉丁字符无法表示为 accelerator 时按物理键回退。
+  let key = event.key || '';
+  if (/^[a-z0-9]$/i.test(key)) key = key.toUpperCase();
+  else if (/^(?:Key[A-Z]|Digit[0-9]|F(?:[1-9]|1[0-9]|2[0-4]))$/.test(event.code))
+    key = event.code.replace(/^(Key|Digit)/, '');
+  else return '';
   return [
     event.ctrlKey && 'Control',
     event.altKey && 'Alt',
@@ -506,26 +521,26 @@ function desktopShortcutFromEvent(event) {
 function desktopShortcutLabel(value) {
   if (!value) return t('未设置');
   const mac = window.brevia.platform === 'darwin';
-  return value
-    .replace('CommandOrControl', mac ? 'Command' : 'Control')
-    .split('+')
-    .map(
-      (key) =>
-        (mac ? { Alt: '⌥', Command: '⌘', Control: '⌃', Shift: '⇧' } : { Control: 'Ctrl' })[key] ||
-        key,
-    )
-    .join('+');
+  const names = mac
+    ? { Control: '⌃', Alt: '⌥', Shift: '⇧', Command: '⌘' }
+    : { Control: 'Ctrl', Alt: 'Alt', Shift: 'Shift', Command: 'Win' };
+  const keys = value.replace('CommandOrControl', mac ? 'Command' : 'Control').split('+');
+  const modifiers = Object.keys(names).filter((key) => keys.includes(key));
+  return [
+    ...modifiers.map((key) => names[key]),
+    ...keys.filter((key) => !modifiers.includes(key)),
+  ].join('+');
+}
+function desktopShortcutDefault(key) {
+  return key === 'recordingShortcut' ? 'Alt+CommandOrControl+R' : '';
 }
 function desktopShortcutValue(value) {
   const label = desktopShortcutLabel(value);
-  return `${
-    value
-      ? `<span class="desktop-shortcut-keys" aria-hidden="true">${label
-          .split('+')
-          .map((key) => `<kbd>${escapeHtml(key)}</kbd>`)
-          .join('')}</span>`
-      : `<span class="desktop-shortcut-empty">${escapeHtml(label)}</span>`
-  }<span class="select-chevron">${interfaceIcon('chevron-down')}</span>`;
+  if (!value) return `<span class="desktop-shortcut-empty">${escapeHtml(label)}</span>`;
+  return `<span class="desktop-shortcut-keys" aria-hidden="true">${label
+    .split('+')
+    .map((key) => `<kbd>${escapeHtml(key)}</kbd>`)
+    .join('')}</span>`;
 }
 function renderDesktopPreferences() {
   const mount = document.querySelector('[data-desktop-settings-mount]');
@@ -543,8 +558,13 @@ function renderDesktopPreferences() {
   const tray = t(window.brevia.platform === 'darwin' ? '菜单栏' : '托盘');
   const toggle = (key, label) =>
     `<button type="button" class="preference-toggle" data-desktop-toggle="${key}" role="switch" aria-checked="${desktopPreferences[key]}" aria-label="${escapeHtml(t(label))}"><span></span></button>`;
-  const shortcut = (key, label) =>
-    `<div class="ui-select flow-select desktop-shortcut"><button type="button" class="ui-select-trigger flow-select-toggle" data-flow-select-toggle data-shortcut-control="${key}" aria-label="${escapeHtml(`${t(label)} · ${desktopShortcutLabel(desktopPreferences[key])}`)}" aria-expanded="false">${desktopShortcutValue(desktopPreferences[key])}</button><div class="ui-select-list flow-select-options" hidden><button type="button" class="ui-select-option" data-shortcut-capture="${key}">${escapeHtml(t('录制快捷键'))}</button><button type="button" class="ui-select-option" data-shortcut-clear="${key}">${escapeHtml(t('清除快捷键'))}</button><button type="button" class="ui-select-option" data-shortcut-reset="${key}">${escapeHtml(t('恢复默认'))}</button></div></div>`;
+  const shortcut = (key, label) => {
+    const value = desktopPreferences[key];
+    const name = escapeHtml(t(label));
+    const action = (operation, text, icon, disabled) =>
+      `<button type="button" class="shortcut-action" data-shortcut-${operation}="${key}" aria-label="${name} · ${escapeHtml(t(text))}" title="${escapeHtml(t(text))}"${disabled ? ' disabled' : ''}>${interfaceIcon(icon)}</button>`;
+    return `<div class="desktop-shortcut" role="group" aria-label="${name}"><button type="button" class="shortcut-recorder" data-shortcut-control="${key}" aria-pressed="false" aria-label="${name} · ${escapeHtml(desktopShortcutLabel(value))}" title="${escapeHtml(t('录制快捷键'))}">${desktopShortcutValue(value)}</button>${action('clear', '清除快捷键', 'close', !value)}${action('reset', '恢复默认', 'restore', desktopShortcutLabel(value) === desktopShortcutLabel(desktopShortcutDefault(key)))}</div>`;
+  };
   mount.innerHTML = `<div data-desktop-settings><section class="preferences-section" id="preferences-window" aria-labelledby="preferences-window-title"><header class="preferences-section-heading"><h2 id="preferences-window-title">${escapeHtml(t('窗口与后台'))}</h2></header>${renderPreferenceRow(
     '关闭主窗口时',
     desktopPreferences.closeBehavior === 'hide'
@@ -1580,6 +1600,7 @@ function renderSummaryDocument(markdown) {
 function renderMeetingSummary({
   markdown,
   waitingModels = false,
+  blocked = false,
   generating = false,
   editing = false,
   participants = [],
@@ -1595,7 +1616,7 @@ function renderMeetingSummary({
           '',
         )}${participants.length > 3 ? `<small>+${participants.length - 3}</small>` : ''}</span>${interfaceIcon('chevron-down')}</button><div id="summary-participants-popover" class="meeting-popover summary-participants-popover" popover role="dialog" aria-label="${escapeHtml(t('参与者'))}"><header><h3>${escapeHtml(t('参与者'))} (${participants.length})</h3><button class="icon-button" data-close-meeting-popover type="button" aria-label="${escapeHtml(t('关闭'))}">${interfaceIcon('close')}</button></header><label class="search">${interfaceIcon('search')}<input type="search" data-participant-search aria-label="${escapeHtml(t('搜索'))}" placeholder="${escapeHtml(t('搜索'))}" /></label><div class="summary-participant-list">${participants.map((person) => `<span><i class="speaker-avatar" aria-hidden="true">${escapeHtml([...formatSpeakerName(person)][0] || '')}</i><span>${escapeHtml(formatSpeakerName(person))}</span></span>`).join('')}</div><p data-participant-empty role="status" hidden>${escapeHtml(t('暂无内容'))}</p></div></section>`
     : '';
-  return `<div class="summary-preview"><div class="summary-feedback" data-summary-feedback hidden></div>${people}${editing ? `<div class="summary-inline-edit"><div data-inline-summary-editor></div></div>` : markdown ? `<div class="summary-body markdown-content">${renderSummaryDocument(markdown)}</div>` : waitingModels ? `<section class="summary-waiting"><span>${interfaceIcon('check')}${escapeHtml(t('录音已保存'))}</span><div>${interfaceIcon('document')}<h2>${escapeHtml(t('录音已保存'))}</h2><p>${escapeHtml(t('纪要等待所需模型，就绪后会自动继续。'))}</p><div><button class="secondary" data-settings-modal="models" type="button">${interfaceIcon('download')}${escapeHtml(t('模型库'))}</button><button class="secondary" data-detail-tab="transcript" type="button">${interfaceIcon('document')}${escapeHtml(t('逐字稿'))}</button></div></div></section>` : `<p class="summary-empty">${t(generating ? '正在生成会议纪要' : '尚未生成会议纪要')}</p>`}</div>`;
+  return `<div class="summary-preview"><div class="summary-feedback" data-summary-feedback hidden></div>${people}${editing ? `<div class="summary-inline-edit"><div data-inline-summary-editor></div></div>` : markdown ? `<div class="summary-body markdown-content">${renderSummaryDocument(markdown)}</div>` : waitingModels ? `<section class="summary-waiting"><span>${interfaceIcon('check')}${escapeHtml(t('录音已保存'))}</span><div>${interfaceIcon('document')}<h2>${escapeHtml(t('录音已保存'))}</h2><p>${escapeHtml(t('纪要等待所需模型，就绪后会自动继续。'))}</p><div><button class="secondary" data-settings-modal="models" type="button">${interfaceIcon('download')}${escapeHtml(t('模型库'))}</button><button class="secondary" data-detail-tab="transcript" type="button">${interfaceIcon('document')}${escapeHtml(t('逐字稿'))}</button></div></div></section>` : `<div class="summary-empty"><span class="summary-empty-mark">${interfaceIcon('ai')}</span><h2>${escapeHtml(t(generating ? '正在生成会议纪要' : '尚未生成会议纪要'))}</h2>${!generating && !blocked ? `<button class="primary-action" data-generate-summary type="button">${escapeHtml(t('生成纪要'))}${interfaceIcon('arrow-right')}</button>` : ''}</div>`}</div>`;
 }
 /** 在页面外壳可用后填充所有数据驱动的静态区域。@returns {void} */
 function renderStaticViews() {
@@ -1673,7 +1694,10 @@ function renderDetailTabbar() {
     actions = editing
       ? `<button class="tabbar-action" data-cancel-inline-summary-edit type="button"${busy ? ' disabled' : ''} aria-label="${t('取消')}">${interfaceIcon('close')}${t('取消')}</button><button class="tabbar-action is-save" data-save-inline-summary type="button"${busy ? ' disabled' : ''} aria-label="${t(saveState === 'failed' ? '重试' : '保存')}">${interfaceIcon('check')}${t(saveState === 'failed' ? '重试' : '保存')}</button>`
       : `<button class="tabbar-action" data-open-summary-edit type="button"${!summary.markdown || summary.generating ? ' disabled' : ''} aria-label="${t('编辑')}">${interfaceIcon('edit')}${t('编辑')}</button>`;
-    if (!editing)
+    if (
+      !editing &&
+      (summary.markdown || summary.blocked || summary.generating || summary.waitingModels)
+    )
       context = `${summary.markdown ? `<button class="tabbar-action" data-copy-summary type="button" aria-label="${t('复制会议纪要')}">${interfaceIcon('copy')}${t('复制')}</button>` : ''}<button class="tabbar-action" ${summary.markdown ? 'data-regenerate-summary' : 'data-generate-summary'} type="button"${disabled}${blocked}${summary.generating ? ' aria-busy="true"' : ''}>${generationIcon}${t(summary.generating ? '正在生成会议纪要' : summary.markdown ? '重新生成' : '生成纪要')}</button>`;
   } else {
     status = editing
@@ -1702,9 +1726,9 @@ function renderDetailTabbar() {
       ? correctionControls(currentMeetingDetail, scope)
       : '';
   return `<div class="detail-content-header"><nav class="tabbar detail-document-navigation" aria-label="${t('内容')}"><div class="tabbar-tabs" role="tablist" aria-orientation="horizontal" aria-label="${t('笔记')} / ${t('逐字稿')} / ${t('会议纪要')}">${[
-    ['notes', '笔记', 'notes'],
+    ['notes', '笔记', 'notebook'],
     ['transcript', '逐字稿', 'waveform'],
-    ['summary', '会议纪要', 'document'],
+    ['summary', '会议纪要', 'ai'],
   ]
     .map(
       ([key, label, icon]) =>
@@ -1723,7 +1747,8 @@ function resizeTranscriptField(field) {
 function renderMeetingDetail() {
   const d = uiData.detail;
   const actions = document.querySelector('#detail-view .detail-actions');
-  if (actions) document.querySelector('#detail-view').append(actions);
+  if (actions && actions !== actions.parentElement.lastElementChild)
+    actions.parentElement.append(actions);
   document.querySelector('#detail-view .detail-head .summary-participants')?.remove();
   const notesHadFocus = Boolean(document.activeElement?.closest('[data-detail-notes-root]'));
   const summaryHadFocus = Boolean(document.activeElement?.closest('[data-inline-summary-editor]'));

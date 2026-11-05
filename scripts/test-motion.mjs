@@ -217,6 +217,7 @@ const mobileDialog = {
 };
 const mobileContext = {
   dialog: mobileDialog,
+  hasPairedDevice: false,
   lastStatus: { devices: [] },
   mobilePageStep: null,
   BreviaMotion: motion,
