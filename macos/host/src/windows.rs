@@ -285,12 +285,16 @@ fn print_pdf(app: &AppHandle, source: &Path) -> NativeResult {
     // 打印窗无前端桥、无脚本且只能导航到当前离线导出页面。
     let url = tauri::Url::from_file_path(&source).map_err(|_| "Invalid print path")?;
     let allowed = url.clone();
-    let window = WebviewWindowBuilder::new(app, id, WebviewUrl::External("about:blank".parse()?))
-        .visible(false)
-        .skip_taskbar(true)
-        .on_navigation(move |u| *u == allowed || u.as_str() == "about:blank")
-        .on_new_window(|_, _| tauri::webview::NewWindowResponse::Deny)
-        .build()?;
+    let mut builder =
+        WebviewWindowBuilder::new(app, id, WebviewUrl::External("about:blank".parse()?))
+            .visible(false)
+            .skip_taskbar(true)
+            .on_navigation(move |u| *u == allowed || u.as_str() == "about:blank")
+            .on_new_window(|_, _| tauri::webview::NewWindowResponse::Deny);
+    if let Some(profile) = crate::preferences::profile() {
+        builder = builder.data_directory(profile.join("WebView2"));
+    }
+    let window = builder.build()?;
     struct PrintWindow(WebviewWindow);
     impl Drop for PrintWindow {
         fn drop(&mut self) {
