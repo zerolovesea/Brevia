@@ -140,6 +140,23 @@ Swift 使用对应平台 CI 固定的 Xcode 自带的 `swift-format`（`xcrun sw
 
 依赖安全检查同时运行 `npm audit` 与 `npm audit --omit=dev`。开发依赖也要检查；Electron 只用于显式旧壳开发及测试，不进入两端成品。2026-11-06 移除退役 electron-builder 及其依赖后，全量与生产依赖审计均无已知公告。
 
+### CI / CD 职责
+
+| 工作流                         | 职责与触发范围                                                                                                            |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| Code style                     | PR / main 的统一 JS、文档及 Python 格式与静态检查。                                                                       |
+| Native macOS validation        | 桌面相关改动的测试、原生打包、真实 WKWebView / PDF / 录音收尾及 Agent 验证。                                              |
+| Native Windows validation      | 桌面相关改动的 Windows 测试、MSVC / NSIS 构建、WebView2 / PDF、旧版升级和真实模型验证。纯手机、官网或说明文档改动不触发。 |
+| Release                        | 标签或手动运行时构建两端正式签名成品，验证公证、升级与推理；仅 `v*` 标签公开发布和更新下载链接。                          |
+| Mobile CI and distribution     | 手机改动的 Flutter / 原生检查，main 自动分发 Android 更新及内部 TestFlight；正式 App Store 送审单独触发。                 |
+| Deploy website to GitHub Pages | 官网、前端素材相关的 main 改动部署静态站点。                                                                              |
+
+格式检查集中在 Code style；两端业务测试保留各自运行，以覆盖路径、进程及系统差异。Release 重新验证实际签名成品，不能用普通 CI 的未签名构件代替。
+
+后端单测由 `npm test` / `npm run test:backend` 执行；`test:mac:webkit` 专门检查原生平台与成品，不重复后端单测。macOS 验证及 Release 均先执行完整 `npm test`，再检查原生成品。
+
+`electron/` 当前仍包含两端原生应用复用的主控制器、手机服务、Agent、预加载协议及品牌资源；`macos/control.cjs` 通过平台适配层加载其中的业务代码。移除 Electron 运行时不等于可以删除该目录。彻底移除开发依赖前，还需迁出这些共享模块、退役旧壳与 Python 开发入口，并替换依赖 Electron 的 E2E、官网演示、图标生成及样式指纹工具；旧数据迁移和旧版安装器升级验证仍需保留。
+
 ## 正式发布
 
 发布任何版本前逐项确认。本指南保留可复用的检查与 CI 流程；证书、登录信息和本机路径由维护者在仓库外管理。

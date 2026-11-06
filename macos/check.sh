@@ -18,7 +18,6 @@ xcrun clang++ -std=c++17 -I dist/native/inference-sources/llama.cpp-e3546c7948e3
 sources=dist/native/inference-sources
 xcrun clang++ -std=c++17 -O2 -I "$sources" macos/inference/test-audio-decode.cpp macos/inference/AudioDecode.cpp "$sources/opusfile-build/libopusfile.a" "$sources/opus-build/libopus.a" "$sources/ogg-build/libogg.a" -o "$scratch/decode-test"
 "$scratch/decode-test"
-node --test macos/backend/test-*.cjs
 codesign --verify --deep --strict "$bundle"
 node macos/test-packaged-control.cjs "$bundle"
 node macos/test-agent-app.cjs "$bundle"
