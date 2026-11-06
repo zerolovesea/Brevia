@@ -131,7 +131,7 @@ git push -u origin feature/mobile-transcript-layout
 打开仓库 **Actions → Mobile CI and distribution**，核对运行对应的提交和各任务状态：
 
 - iOS：`ios` 任务完成上传、等待 Apple 处理并分配内部测试组后，受邀账号可在 TestFlight 更新。上传成功不等于已经可安装。
-- Android：在本次运行的 **Artifacts** 中下载 `Brevia-android-<构建号>`，解压后用 APK 安装；AAB 用于后续商店提交，不能直接在手机安装。当前不自动发布到 Google Play 或 GitHub Release。
+- Android：签名 APK 发布到应用内更新渠道，也可从本次运行的 **Artifacts** 下载 `Brevia-android-<构建号>`；AAB 用于后续商店提交，不能直接在手机安装。当前不自动发布到 Google Play 或 GitHub Release。
 - 检查失败：先修复并提交。签名或上传失败：查看失败步骤，由维护者核对 Secrets、证书、描述文件或 Apple 处理状态，不必修改业务代码绕过检查。
 - 某个平台失败不代表另一平台未发布；先核对各任务结果。需要重新打包上传时选择 **Re-run all jobs**，以分配新构建号，避免重用已上传的构建号。
 
@@ -142,7 +142,7 @@ git push -u origin feature/mobile-transcript-layout
 工作流：`.github/workflows/mobile.yml`（Mobile CI and distribution）。
 
 - PR 涉及 `mobile/**` 或该工作流：只跑静态分析与测试，不读取发布密钥。
-- push 到 `main` 且上述路径有变化：检查通过后，iOS 上传并等待 Apple 处理，分配到“Brevia 内部测试”；Android 生成固定签名 APK / AAB，保存在本次 Actions 的 Artifacts 中。没有自动上传 Google Play。
+- push 到 `main` 且上述路径有变化：检查通过后，iOS 上传并等待 Apple 处理，分配到“Brevia 内部测试”；Android 生成固定签名 APK / AAB，保存到 Artifacts，并将 APK 发布到 ModelScope 应用内更新渠道。没有自动上传 Google Play。
 - 手动运行选择 `testflight`：与自动推送相同；必须选择 `main`。
 - 版本名来自 `pubspec.yaml`。构建号是自 2026-01-01 起的秒数加 1000，两端共用，括号数字会较大。发布任务串行，不中断正在上传的构建。重新上传时使用 **Re-run all jobs** 分配新号，不单独重跑已成功上传的任务。
 - iOS 保存 IPA 和 dSYM，测试说明带 Git commit。安卓不回退到 debug 签名；旧 debug 签名 APK 无法被新签名覆盖，首次换签需要先备份录音再卸载旧包。
@@ -201,7 +201,7 @@ gh workflow run mobile.yml --repo zerolovesea/Brevia --ref main \
 
 ### 手机会议与桌面联动
 
-电脑端点击底部设备状态，或打开「设置 → 设备连接」，可配对新手机、管理已信任设备，以及决定每台手机能否访问电脑会议。首次连接日期和录音次数按设备显示，旧版未记录日期时显示「未记录」。已配对的手机在线状态由心跳更新。
+电脑端点击底部设备状态，或打开「设置 → 设备连接」，可配对新手机、管理已信任设备和取消信任。已信任手机可以访问电脑会议。首次连接日期和录音次数按设备显示，旧版未记录日期时显示「未记录」。已配对的手机在线状态由心跳更新。
 
 手机开会前从电脑读取工作区和模型列表，可设置标题、工作区、语言、识别模型与翻译；缺少模型时先到电脑安装。会议进入桌面实时页，离开实时页后保留任务卡片，列表、实时页和详情标记“手机录音”。暂停和结束在手机操作，电脑继续编辑笔记和查看字幕。
 
@@ -213,4 +213,4 @@ gh workflow run mobile.yml --repo zerolovesea/Brevia --ref main \
 
 设置页的「检查更新」从 ModelScope `zyaztec/brevia-release/android/latest.json` 读取版本，按 Android build number 比较。同版本号的新构建也可更新。仅在用户点击时联网；确认后下载并校验文件大小、SHA-256，安装前核对包名和签名，由系统确认安装。首次安装可能需要允许 Brevia 安装未知来源应用，然后返回点击「安装更新」。Android 使用系统 DownloadManager 后台下载，切换页面或应用不会取消任务；返回设置页恢复进度，完成后点击安装。系统可能因网络或省电策略暂停下载，恢复条件后继续；安装前仍核对大小、SHA-256、包名和签名。iOS 检查当前 App Store 地区的公开版本，发现更新后点击跳转商店；TestFlight 构建号不参与正式版本比较，未上架时显示暂无商店版本。
 
-Android workflow 复用 `MODELSCOPE_API_TOKEN`，先上传带版本和构建号的签名 APK，更新桌面端二维码使用的固定地址 `android/Brevia-android.apk`，成功后再发布 `android/latest.json`。清单发布失败会令工作流失败，旧清单仍指向旧包。首次上线此功能仍需手动安装带更新入口的 APK；iOS 商店更新后续接入。
+Android workflow 复用 `MODELSCOPE_API_TOKEN`，先上传带版本和构建号的签名 APK，更新桌面端二维码使用的固定地址 `android/Brevia-android.apk`，成功后再发布 `android/latest.json`。清单发布失败会令工作流失败，旧清单仍指向旧包。首次上线此功能仍需手动安装带更新入口的 APK。
