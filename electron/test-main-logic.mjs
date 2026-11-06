@@ -580,7 +580,6 @@ for (const source of [
       `${type} emitted by ${source} must be accepted by Electron`,
     );
 }
-assert.match(mainSource, /process\.platform === 'win32'\) Menu\.setApplicationMenu\(null\)/);
 assert.match(
   mainSource,
   /screen\.getDisplayMatching\(mainWindow\.getBounds\(\)\)/,

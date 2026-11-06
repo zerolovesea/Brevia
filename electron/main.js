@@ -2965,7 +2965,7 @@ app.on('host-disconnected', () => {
 });
 app.whenReady().then(async () => {
   let agentRecording;
-  if (process.platform === 'win32') Menu.setApplicationMenu(null);
+  if (process.platform === 'win32' && !nativeBackend) Menu.setApplicationMenu(null);
   try {
     agentService = new AgentService({
       root: dataDir(),
