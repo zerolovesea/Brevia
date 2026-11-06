@@ -106,8 +106,9 @@ test('Recording preserves original PCM and sends compatible settled transcript e
   await audio(w, meeting.id, pcm);
   await w.handlers['meeting.pause']({ meeting_id: meeting.id, paused: true });
   await audio(w, meeting.id, pcm, 1000);
-  const saved = await w.handlers['meeting.stop']({ meeting_id: meeting.id, duration_ms: 2000 });
+  const saved = await w.handlers['meeting.stop']({ meeting_id: meeting.id, duration_ms: 62000 });
   assert.equal(saved.status, 'ready');
+  assert.equal(saved.duration_ms, 2000, 'saved PCM duration excludes time spent paused');
   assert.equal(w.active, null);
   const file = w.store.audioFiles(meeting.id).playback.mic,
     info = wavInfo(file);
@@ -118,6 +119,16 @@ test('Recording preserves original PCM and sends compatible settled transcript e
   assert.equal(events.filter((e) => e.type === 'worker.warning').length, 0);
   assert.equal(calls.filter(([type]) => type === 'vad.load').length, 2);
   assert.ok(calls.find(([type]) => type === 'asr.load')[1].files.length);
+  const withoutAudio = await start(w, 'text-only');
+  const compatible = await w.handlers['meeting.stop']({
+    meeting_id: withoutAudio.id,
+    duration_ms: 1250,
+  });
+  assert.equal(
+    compatible.duration_ms,
+    1250,
+    'sessions without original audio retain supplied duration',
+  );
 });
 test('Lost phone chunk responses replay safely, including partial overlap and stale manifest', async (t) => {
   const { w, root } = await setup(t);

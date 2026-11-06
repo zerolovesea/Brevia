@@ -408,7 +408,10 @@ function attachRecording(worker) {
       worker.closeRecognition(session);
       await worker.shutdownAiNote?.();
     }
-    const meeting = await worker.store.finishMeeting(payload.meeting_id, payload.duration_ms);
+    // 音轨时间轴已扣除暂停；没有原轨的兼容会话仍保留调用方时长。
+    const duration =
+      worker.store.recordedDurationMs(payload.meeting_id) || payload.duration_ms || 0;
+    const meeting = await worker.store.finishMeeting(payload.meeting_id, duration);
     worker.session = null;
     worker.active = null;
     worker.emit('meeting.stopped', { meeting_id: meeting.id, meeting });
