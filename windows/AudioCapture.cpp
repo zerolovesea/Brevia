@@ -79,7 +79,8 @@ struct Track {
   std::string name;
   ma_device device{};
   bool initialized = false;
-  int64_t next = 0;
+  int64_t next = 0, start = 0;
+  std::string samples;
   Clock::time_point last_level{};
   ~Track() {
     if (initialized)
@@ -120,6 +121,7 @@ struct Capture {
       expectedStop = true;
       active = false;
       preview = false;
+      flush();
     }
     tracks.clear();
     {
@@ -133,6 +135,20 @@ struct Capture {
     output.push_back(std::move(value));
     available.notify_one();
   }
+  void flush(Track &track) {
+    if (track.samples.empty())
+      return;
+    queue({{"type", "audio"},
+           {"track", track.name},
+           {"sample_rate", 16000},
+           {"start_ms", track.start / 16.},
+           {"pcm", base64::encode(track.samples)}});
+    track.samples.clear();
+  }
+  void flush() {
+    for (auto &track : tracks)
+      flush(*track);
+  }
   static void notification(const ma_device_notification *event) {
     if (event->type != ma_device_notification_type_stopped &&
         event->type != ma_device_notification_type_interruption_began)
@@ -144,6 +160,7 @@ struct Capture {
       return;
     self.failed = true;
     self.active = false;
+    self.flush();
     self.queue({{"type", "error"},
                 {"message", "Audio input disconnected: " + track.name}});
   }
@@ -154,10 +171,11 @@ struct Capture {
     std::lock_guard<std::mutex> lock(self.mutex);
     if (self.failed || !frames || (!self.active && !self.preview))
       return;
-    // 管道阻塞时只保留有限音频，显式失败防止后台无限占内存。
-    if (self.output.size() >= 3000) {
+    // 合并后单包更大，相应缩小队列，管道阻塞时仍只保留有限音频。
+    if (self.output.size() >= 512) {
       self.failed = true;
       self.active = false;
+      self.flush();
       self.queue(
           {{"type", "error"}, {"message", "Audio storage cannot keep up"}});
       return;
@@ -189,14 +207,17 @@ struct Capture {
                         16 / 1000 -
                     frames;
     // 两路共用单调时钟；只补真实的设备间隙，不把每次回调抖动写进音轨。
-    if (position - track.next > 1600)
+    if (position - track.next > 1600) {
+      self.flush(track);
       track.next = std::max<int64_t>(0, position);
-    self.queue({{"type", "audio"},
-                {"track", track.name},
-                {"sample_rate", 16000},
-                {"start_ms", track.next / 16.},
-                {"pcm", base64::encode(pcm)}});
+    }
+    if (track.samples.empty())
+      track.start = track.next;
+    track.samples.append(pcm);
     track.next += frames;
+    // 与 macOS 一样累计约 160 ms，避免双轨 20 ms 回调挤占业务 RPC 限额。
+    if (track.samples.size() >= 5120)
+      self.flush(track);
   }
   void add(Context &context, const std::string &name, const ma_device_id *id) {
     auto track = std::make_unique<Track>();
@@ -216,6 +237,7 @@ struct Capture {
     check(ma_device_init(&context.value, &config, &track->device));
     track->initialized = true;
     check(ma_device_start(&track->device));
+    std::lock_guard<std::mutex> lock(mutex);
     tracks.push_back(std::move(track));
   }
   void command(const std::string &name) {
@@ -245,14 +267,16 @@ struct Capture {
           elapsed = std::max(elapsed, track->next);
         active = false;
         expectedStop = true;
+        flush();
         if (name == "stop")
           preview = false;
       }
     }
     // WASAPI 停启会等待音频线程；持有回调锁会死锁。
     for (auto &track : tracks)
-      check(starting ? ma_device_start(&track->device)
-                     : ma_device_stop(&track->device));
+      if (track->initialized)
+        check(starting ? ma_device_start(&track->device)
+                       : ma_device_stop(&track->device));
     std::lock_guard<std::mutex> lock(mutex);
     if (failed && name != "stop")
       throw std::runtime_error("Audio capture has failed");

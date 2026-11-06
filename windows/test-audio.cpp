@@ -1,56 +1,139 @@
 #define BREVIA_AUDIO_TEST
 #include "AudioCapture.cpp"
 #include <cassert>
+#include <functional>
 #include <sstream>
 
-int main() {
-  // 无设备测试只驱动真实回调；硬件断连与驱动重启由 Windows 实机回归验证。
+static Track &addTrack(Capture &capture, const std::string &name) {
+  auto track = std::make_unique<Track>();
+  track->owner = &capture;
+  track->name = name;
+  track->device.pUserData = track.get();
+  capture.tracks.push_back(std::move(track));
+  return *capture.tracks.back();
+}
+static void audio(Track &track) {
+  const std::vector<int16_t> samples(320, 16384);
+  Capture::audio(&track.device, nullptr, samples.data(), samples.size());
+}
+static std::vector<JSON> collect(const std::function<void()> &run) {
   std::ostringstream output;
   auto *original = std::cout.rdbuf(output.rdbuf());
-  {
-    Capture capture(false);
-    Track track;
-    track.owner = &capture;
-    track.name = "mic";
-    track.device.pUserData = &track;
-    std::vector<int16_t> samples(320, 16384);
-    capture.command("start");
-    Capture::audio(&track.device, nullptr, samples.data(), samples.size());
-    capture.command("pause");
-    Capture::audio(&track.device, nullptr, samples.data(), samples.size());
-    ma_device_notification notification{};
-    notification.pDevice = &track.device;
-    notification.type = ma_device_notification_type_stopped;
-    Capture::notification(&notification);
-    capture.command("resume");
-    Capture::audio(&track.device, nullptr, samples.data(), samples.size());
-    Capture::notification(&notification);
-    Capture::audio(&track.device, nullptr, samples.data(), samples.size());
-    capture.command("stop");
-  }
+  run(); // Capture 析构等待 writer 排空后才读取输出，避免测试本身的数据竞争。
   std::cout.rdbuf(original);
   std::istringstream input(output.str());
   std::string line;
-  std::vector<JSON> frames;
-  std::vector<std::string> events;
-  int errors = 0;
+  std::vector<JSON> events;
   while (std::getline(input, line)) {
     auto value = JSON::parse(line);
-    if (value["type"] == "level")
-      continue;
-    events.push_back(value["type"] == "ack"
-                         ? value["command"].get<std::string>()
-                         : value["type"].get<std::string>());
-    if (value["type"] == "audio")
-      frames.push_back(value);
-    if (value["type"] == "error")
-      ++errors;
+    if (value["type"] != "level")
+      events.push_back(std::move(value));
   }
-  assert(
-      (events == std::vector<std::string>{"start", "audio", "pause", "resume",
-                                          "audio", "error", "stop"}));
-  assert(errors == 1 && frames.size() == 2);
-  assert(frames[0]["start_ms"] == 0 && frames[1]["start_ms"] == 20);
-  auto bytes = base64::decode(frames[0]["pcm"].get<std::string>());
-  assert(bytes.size() == 640 && bytes[0] == 0 && bytes[1] == 64);
+  return events;
+}
+static void expectAudio(const JSON &value, size_t bytes, double startMs) {
+  assert(value["type"] == "audio" && value["sample_rate"] == 16000);
+  assert(value["start_ms"] == startMs);
+  const auto pcm = base64::decode(value["pcm"].get<std::string>());
+  assert(pcm.size() == bytes);
+  for (size_t i = 0; i < pcm.size(); i += 2)
+    assert(pcm[i] == 0 && pcm[i + 1] == 64);
+}
+int main() {
+  const auto packetRate = collect([] {
+    Capture capture(false);
+    Track mic;
+    mic.owner = &capture;
+    mic.name = "mic";
+    mic.device.pUserData = &mic;
+    capture.command("start");
+    for (int i = 0; i < 8; ++i)
+      audio(mic);
+    capture.command("stop");
+  });
+  assert(packetRate.size() == 3);
+  expectAudio(packetRate[1], 5120, 0);
+
+  // 真实采集回调和控制逻辑；未初始化的 Track 不调用系统设备停启。
+  const auto batches = collect([] {
+    Capture capture(false);
+    auto &mic = addTrack(capture, "mic");
+    capture.command("start");
+    for (int i = 0; i < 9; ++i)
+      audio(mic);
+    capture.started = Clock::now();
+    capture.command("pause");
+    audio(mic);
+    ma_device_notification notification{};
+    notification.pDevice = &mic.device;
+    notification.type = ma_device_notification_type_stopped;
+    Capture::notification(&notification);
+    capture.command("resume");
+    audio(mic);
+    capture.command("stop");
+  });
+  assert(batches.size() == 7);
+  assert(batches[0]["command"] == "start");
+  expectAudio(batches[1], 5120, 0);
+  expectAudio(batches[2], 640, 160); // pause 的不足一包音频在确认前落盘。
+  assert(batches[3]["command"] == "pause");
+  assert(batches[4]["command"] == "resume");
+  expectAudio(batches[5], 640, 180);
+  assert(batches[6]["command"] == "stop");
+
+  const auto disconnected = collect([] {
+    Capture capture(false);
+    auto &mic = addTrack(capture, "mic");
+    auto &system = addTrack(capture, "system");
+    capture.command("start");
+    audio(mic);
+    audio(system);
+    ma_device_notification notification{};
+    notification.pDevice = &mic.device;
+    notification.type = ma_device_notification_type_interruption_began;
+    Capture::notification(&notification);
+    audio(system);
+    Capture::notification(&notification);
+    capture.command("stop");
+  });
+  assert(disconnected.size() == 5);
+  expectAudio(disconnected[1], 640, 0);
+  expectAudio(disconnected[2], 640, 0);
+  assert(disconnected[1]["track"] == "mic");
+  assert(disconnected[2]["track"] == "system");
+  assert(disconnected[3]["type"] == "error");
+  assert(disconnected[4]["command"] == "stop");
+
+  const auto gap = collect([] {
+    Capture capture(false);
+    auto &mic = addTrack(capture, "mic");
+    capture.command("start");
+    audio(mic);
+    capture.started = Clock::now() - std::chrono::milliseconds(500);
+    audio(mic);
+    capture.command("stop");
+  });
+  assert(gap.size() == 4);
+  expectAudio(gap[1], 640, 0);
+  assert(gap[2]["start_ms"].get<double>() >= 480);
+  expectAudio(gap[2], 640, gap[2]["start_ms"]);
+  assert(gap[3]["command"] == "stop");
+
+  const auto eof = collect([] {
+    Capture capture(false);
+    auto &mic = addTrack(capture, "mic");
+    capture.command("start");
+    audio(mic);
+  });
+  assert(eof.size() == 2);
+  expectAudio(eof[1], 640, 0);
+
+  const auto preview = collect([] {
+    Capture capture(true);
+    auto &mic = addTrack(capture, "mic");
+    for (int i = 0; i < 9; ++i)
+      audio(mic);
+    capture.command("stop");
+  });
+  assert(preview.size() == 1 && preview[0]["command"] == "stop");
 }
