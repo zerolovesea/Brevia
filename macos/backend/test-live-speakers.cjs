@@ -6,7 +6,7 @@ const { test } = require('node:test');
 const { Worker } = require('./worker.cjs');
 const { EMBEDDING_MODEL } = require('./worker-speakers.cjs');
 
-async function setup(t) {
+async function setup(t, durationMs = 4000) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'brevia-live-speakers-'));
   const events = [],
     calls = [];
@@ -42,7 +42,7 @@ async function setup(t) {
     refined_model_id: 'funasr-nano-int8',
     audio_tracks: ['mic'],
   });
-  const pcm = Buffer.alloc(4 * 32000);
+  const pcm = Buffer.alloc(durationMs * 32);
   for (let i = 0; i < pcm.length; i += 2) pcm.writeInt16LE(4000, i);
   worker.store.appendAudio('live', 'mic', pcm, 16000, 0);
   const publish = (id = 'first') =>
@@ -52,7 +52,7 @@ async function setup(t) {
       revision: 1,
       track: 'mic',
       start_ms: 0,
-      end_ms: 4000,
+      end_ms: durationMs,
       speaker: 'local-user',
       text: 'The transcript arrives first.',
     });
@@ -149,3 +149,49 @@ test('Live speaker work stays bounded, yields to ASR and ignores unavailable mod
   assert.equal(live.queue.length, 0);
   assert.equal(calls.length, 0);
 });
+
+test(
+  'Long utterances yield between voiceprint windows when ASR work arrives',
+  { timeout: 5000 },
+  async (t) => {
+    const { worker, events, calls, publish, complete, wait } = await setup(t, 8000);
+    publish();
+    const live = worker.session.liveSpeakers;
+    const running = live.run();
+    await wait();
+    assert.equal(calls.length, 1);
+    worker.session.preprocessingQueued = 1;
+    complete();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(calls.length, 1, 'new ASR work takes priority over the second window');
+    worker.session.preprocessingQueued = 0;
+    while (calls.length < 2) await new Promise((resolve) => setTimeout(resolve, 10));
+    complete();
+    await running;
+    assert.equal(!!live.disabled, false);
+    assert.equal(events.filter((event) => event.type === 'transcript.refined').length, 1);
+    assert.equal(events.filter((event) => event.type === 'transcript.settled').length, 1);
+  },
+);
+
+for (const action of ['pause', 'expire'])
+  test(`Voiceprint windows stop waiting for ASR on ${action}`, { timeout: 5000 }, async (t) => {
+    const { worker, events, calls, publish, complete, wait } = await setup(t, 8000);
+    publish();
+    const live = worker.session.liveSpeakers,
+      item = live.queue[0],
+      running = live.run();
+    await wait();
+    worker.session.preprocessingQueued = 1;
+    complete();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(calls.length, 1);
+    if (action === 'pause') live.setPaused(true);
+    else item.at -= 31000;
+    await running;
+    assert.equal(calls.length, 1);
+    assert.equal(!!live.disabled, false);
+    assert.equal(live.running, false);
+    assert.equal(events.filter((event) => event.type === 'transcript.refined').length, 0);
+    worker.session.preprocessingQueued = 0;
+  });

@@ -1,6 +1,7 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const { randomUUID } = require('node:crypto');
+const { setTimeout: delay } = require('node:timers/promises');
 const { readWindow, normalized, EMBEDDING_MODEL } = require('./worker-speakers.cjs');
 
 const similarity = (a, b) =>
@@ -98,6 +99,16 @@ class LiveSpeakers {
     );
     this.timer.unref();
   }
+  hasPriorityWork() {
+    return (
+      this.session.queued ||
+      this.session.preprocessingQueued ||
+      this.session.decoding ||
+      this.session.overloaded ||
+      this.worker.tasks.hasAny() ||
+      [...this.worker.engines].some((engine) => engine !== this.engine && engine.pending?.size)
+    );
+  }
   async run() {
     if (this.closed || this.paused || this.running || this.disabled) return;
     const worker = this.worker,
@@ -105,15 +116,7 @@ class LiveSpeakers {
     if (worker.session !== session) return this.close();
     this.queue = this.queue.filter((item) => performance.now() - item.at < 30000);
     if (!this.queue.length) return;
-    if (
-      performance.now() < this.nextAt ||
-      session.queued ||
-      session.preprocessingQueued ||
-      session.decoding ||
-      session.overloaded ||
-      worker.tasks.hasAny() ||
-      [...worker.engines].some((engine) => engine !== this.engine && engine.pending?.size)
-    ) {
+    if (performance.now() < this.nextAt || this.hasPriorityWork()) {
       this.nextAt = Math.max(this.nextAt, performance.now() + 500);
       this.schedule();
       return;
@@ -126,6 +129,7 @@ class LiveSpeakers {
     this.idleTimer = null;
     this.controller = new AbortController();
     const started = performance.now();
+    let waitingMs = 0;
     try {
       const windows =
         item.end - item.start > 4000
@@ -136,7 +140,15 @@ class LiveSpeakers {
           : [[item.start, item.end]];
       const vectors = [];
       for (const [start, end] of windows) {
+        // 前一窗计算期间可能新增字幕任务；每个短窗都让路，等待过期则丢弃。
+        while (this.hasPriorityWork()) {
+          if (performance.now() - item.at >= 30000) return;
+          const waiting = performance.now();
+          await delay(100, undefined, { signal: this.controller.signal });
+          waitingMs += performance.now() - waiting;
+        }
         this.controller.signal.throwIfAborted();
+        if (performance.now() - item.at >= 30000) return;
         const pcm = audioWindow(store, mid, item.track, start, end);
         if (!pcm || !pcm.some((value) => value !== 0)) return;
         this.engine ||= worker.newEngine('sherpa-onnx');
@@ -253,7 +265,8 @@ class LiveSpeakers {
     } finally {
       this.running = false;
       // 至少间隔八秒，并把实际计算时间限制在约 10% 的占空比内。
-      this.nextAt = performance.now() + Math.max(8000, (performance.now() - started) * 9);
+      this.nextAt =
+        performance.now() + Math.max(8000, (performance.now() - started - waitingMs) * 9);
       clearTimeout(this.idleTimer);
       this.idleTimer = setTimeout(() => {
         this.engine?.close();
