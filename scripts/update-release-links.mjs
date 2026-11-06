@@ -14,6 +14,7 @@ for (const [file, baseUrl] of updates) {
   const macUrl = `${baseUrl}/Brevia-WebKit-${version}-arm64.dmg`;
   const windowsUrl = `${baseUrl}/Brevia-${version}-x64-setup.exe`;
   let html = readFileSync(file, 'utf8')
+    .replace(/<!-- native-release-pending -->[\s\S]*?<!-- \/native-release-pending -->\s*/g, '')
     .replace(/href="[^"]*Brevia-[^"]*-arm64\.dmg"/, `href="${macUrl}"`)
     .replace(/href="[^"]*Brevia-[^"]*-x64-setup\.exe"/, `href="${windowsUrl}"`)
     .replace(/(<[^>]*data-release-version[^>]*>)[^<]*(<\/)/g, `$1${tag}$2`);
