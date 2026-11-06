@@ -5006,7 +5006,7 @@ assert.match(text(css), /\.selection-marquee\{/);
 assert.match(text(css), /\.meeting-row\.is-selected\{/);
 assert.match(text(html), /ui-data\.js[\s\S]*ui-components\.js[\s\S]*app\.js/);
 // 纪要模态框的真实渲染产物：字段可见性、内置模型清单、凭据回填、转义和八语言标签。
-const summaryAppSource = providerSource + '\n' + text(app);
+const summaryAppSource = text(providerSource) + '\n' + text(app);
 const summaryFn = (name) => {
   const start = summaryAppSource.indexOf(`function ${name}(`);
   return summaryAppSource.slice(start, summaryAppSource.indexOf('\n}\n', start) + 2);
