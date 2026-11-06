@@ -840,6 +840,7 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
         'id': id,
         'title': store.meta['title'],
         ...settings,
+        'transfer_mode': 'import',
         'num_speakers':
             settings['num_speakers'] ?? store.meta['num_speakers'] ?? -1,
       };
@@ -853,6 +854,7 @@ class AppModel extends ChangeNotifier with WidgetsBindingObserver {
       store.meta.addAll({
         ...settings,
         'localOnly': false,
+        'transfer_mode': 'import',
         'computer': connection.fingerprint,
       });
       await store.save();

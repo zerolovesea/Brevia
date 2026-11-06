@@ -3,7 +3,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const root = path.resolve(__dirname, '..');
-const legacy = process.platform !== 'darwin' || process.argv.includes('--legacy');
+const legacy = process.argv.includes('--legacy');
 const tests = legacy
   ? [
       'worker',

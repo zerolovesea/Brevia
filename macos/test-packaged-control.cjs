@@ -8,11 +8,16 @@ const { once } = require('node:events');
 const { createInterface } = require('node:readline');
 
 async function test() {
-  const resources = path.join(path.resolve(process.argv[2]), 'Contents/Resources');
+  const windows = process.platform === 'win32';
+  const resources = path.join(
+    path.resolve(process.argv[2]),
+    windows ? 'resources' : 'Contents/Resources',
+  );
+  const node = path.join(resources, 'control', windows ? 'node.exe' : 'node');
   const scratch = await fs.mkdtemp(path.join(os.tmpdir(), 'brevia-native-test-'));
   const cli = spawnSync(
-    path.join(path.resolve(process.argv[2]), 'Contents/MacOS/brevia'),
-    ['status', '--no-start'],
+    node,
+    [path.join(resources, 'control/brevia.cjs'), 'status', '--no-start'],
     {
       env: { ...process.env, BREVIA_DATA_DIR: scratch },
       encoding: 'utf8',
@@ -22,10 +27,13 @@ async function test() {
   assert.equal(cli.status, 0, cli.stderr || cli.error?.message);
   assert.deepEqual(JSON.parse(cli.stdout), { ok: true, result: { running: false, ready: false } });
   await fs.access(path.join(resources, 'skills/brevia/SKILL.md'));
-  const helper = path.join(scratch, 'input');
-  await fs.writeFile(
-    helper,
-    `#!/bin/sh
+  const helper = windows
+    ? path.resolve('dist/native-win/build/Release/brevia-audio-test-input.exe')
+    : path.join(scratch, 'input');
+  if (!windows)
+    await fs.writeFile(
+      helper,
+      `#!/bin/sh
 printf '%s\\n' '{"type":"ready","micFellBack":false}'
 while read -r cmd; do
   if [ "$cmd" = stop ]; then
@@ -34,25 +42,21 @@ while read -r cmd; do
   printf '{"type":"ack","command":"%s"}\\n' "$cmd"
   if [ "$cmd" = stop ]; then exit 0; fi
 done\n`,
-    { mode: 0o700 },
-  );
-  const child = spawn(
-    path.join(resources, 'control/node'),
-    [path.join(resources, 'control/control.cjs')],
-    {
-      env: {
-        ...process.env,
-        BREVIA_RESOURCES: resources,
-        BREVIA_AUDIO_HELPER: helper,
-        BREVIA_DATA_DIR: scratch,
-        BREVIA_MODELS_DIR: path.join(scratch, 'models'),
-        BREVIA_MEETINGS_DIR: path.join(scratch, 'meetings'),
-        BREVIA_MOBILE_PORT: '0',
-        BREVIA_PYTHON: '/deliberately-unavailable-python',
-      },
-      stdio: ['pipe', 'pipe', 'inherit'],
+      { mode: 0o700 },
+    );
+  const child = spawn(node, [path.join(resources, 'control/control.cjs')], {
+    env: {
+      ...process.env,
+      BREVIA_RESOURCES: resources,
+      BREVIA_AUDIO_HELPER: helper,
+      BREVIA_DATA_DIR: scratch,
+      BREVIA_MODELS_DIR: path.join(scratch, 'models'),
+      BREVIA_MEETINGS_DIR: path.join(scratch, 'meetings'),
+      BREVIA_MOBILE_PORT: '0',
+      BREVIA_PYTHON: '/deliberately-unavailable-python',
     },
-  );
+    stdio: ['pipe', 'pipe', 'inherit'],
+  });
   const exited = once(child, 'exit');
   const requests = new Map();
   let next = 0,
@@ -99,6 +103,8 @@ done\n`,
     const agent = await call('agent.settings.get');
     assert.equal(agent.enabled, true);
     assert.equal(typeof agent.mcp, 'object');
+    await fs.access(agent.cli_path);
+    await fs.access(agent.mcp.command);
     assert.doesNotMatch(JSON.stringify(agent), /Bearer|"tokens"/);
     const promptDefaults = await call('prompts.get');
     assert.deepEqual(promptDefaults, { summary: '', ai_note: '', translation: '' });
@@ -109,7 +115,10 @@ done\n`,
     const model = state.models.find((m) => m.id === 'funasr-nano-int8');
     assert.equal(model.status, 'not_installed');
     assert.equal(model.runtime_tier, 'core');
-    assert.ok(state.models.some((m) => m.id === 'funasr-nano-mlx' && m.runtime_tier === 'core'));
+    assert.equal(
+      state.models.some((m) => m.id === 'funasr-nano-mlx' && m.runtime_tier === 'core'),
+      !windows,
+    );
     await assert.rejects(call('meeting.delete', {}, 'floating-caption'));
     const config = {
       title: 'Native offline smoke',

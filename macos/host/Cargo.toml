@@ -14,10 +14,14 @@ percent-encoding = "2"
 rusty-leveldb = { version = "4", default-features = false }
 serde_json = "1"
 sha2 = "0.10"
-tauri = { version = "2", features = ["tray-icon", "protocol-asset", "macos-private-api"] }
+tauri = { version = "~2.12", features = ["tray-icon", "protocol-asset", "macos-private-api"] }
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-updater = { version = "2.14", default-features = false, features = ["native-tls", "zip", "system-proxy"] }
 tokio = { version = "1", features = ["sync", "time"] }
+
+[target.'cfg(windows)'.dependencies]
+webview2-com = "0.39"
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_System_Com", "Win32_System_DataExchange", "Win32_System_Memory", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_UI_Shell", "Win32_UI_Shell_Common", "Win32_UI_WindowsAndMessaging", "Win32_UI_Controls", "Win32_System_LibraryLoader", "Win32_Security"] }
 
 [dev-dependencies]
 tempfile = "3"

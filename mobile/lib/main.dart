@@ -3711,6 +3711,7 @@ class _PrepareMeetingPageState extends State<PrepareMeetingPage> {
                           ListTile(
                             title: Text(entry.value),
                             enabled:
+                                widget.upload ||
                                 label != tr('识别模型') ||
                                 models.any(
                                   (m) =>
@@ -3756,6 +3757,7 @@ class _PrepareMeetingPageState extends State<PrepareMeetingPage> {
   Widget build(BuildContext context) {
     final ready =
         offline ||
+        (widget.upload && models.any((m) => m['id'] == modelId)) ||
         models.any((m) => m['id'] == modelId && m['status'] == 'ready');
     return Scaffold(
       appBar: AppBar(title: Text(tr(widget.upload ? "上传录音" : "新建录音"))),

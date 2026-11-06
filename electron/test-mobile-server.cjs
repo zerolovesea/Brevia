@@ -32,6 +32,7 @@ const { MobileServer } = require('./mobile-server');
           summary: { text: 'private summary' },
           audio: '/private/path',
         };
+      if (type === 'mobile.library') return [];
       deliveries.push(payload);
       if (type === 'meeting.refine') return { id: payload.meeting_id, status: 'refined' };
       return { id: payload.meeting_id };
@@ -141,6 +142,9 @@ const { MobileServer } = require('./mobile-server');
     const connectedAt = server.status().devices[0].firstConnectedAt;
     assert.ok(Number.isFinite(Date.parse(connectedAt)));
     assert.equal(server.status().devices[0].recordingCount, 0);
+    assert.equal(server.status().devices[0].libraryAccess, true);
+    const deviceFile = path.join(directory, 'devices.json');
+    assert.equal(JSON.parse(await fs.readFile(deviceFile, 'utf8'))[0].libraryAccess, true);
     const token = linked.body.token;
     assert.equal(
       (await call('POST', '/pair', { name: 'test', code: pair.pin, nonce: 'a'.repeat(32) })).status,
@@ -176,11 +180,19 @@ const { MobileServer } = require('./mobile-server');
       404,
     );
     const secondPair = await server.openPairing();
+    // 旧版电脑审批可能仍传递已移除勾选框的 false 值。
+    server.approve = async () => ({ allowed: true, libraryAccess: false });
     const second = await call('POST', '/pair', {
       name: 'other phone',
       code: secondPair.pin,
       nonce: 'b'.repeat(32),
     });
+    server.approve = options.approve;
+    assert.equal(second.status, 200);
+    assert.equal(
+      server.status().devices.find((device) => device.id === second.body.deviceId).libraryAccess,
+      true,
+    );
     assert.equal((await call('GET', '/meetings', null, second.body.token)).body.length, 0);
     assert.equal(
       (await call('GET', `/meetings/${id}/snapshot`, null, second.body.token)).status,
@@ -233,8 +245,15 @@ const { MobileServer } = require('./mobile-server');
     );
     // Restart between durable acknowledgment and worker consumption.
     await server.disable();
+    const legacyDevices = JSON.parse(await fs.readFile(deviceFile, 'utf8'));
+    legacyDevices[0].libraryAccess = false;
+    delete legacyDevices[1].libraryAccess;
+    await fs.writeFile(deviceFile, JSON.stringify(legacyDevices));
     server = new MobileServer(options);
     await server.init();
+    const migratedDevices = legacyDevices.map((device) => ({ ...device, libraryAccess: true }));
+    assert.deepEqual(server.devices, migratedDevices);
+    assert.deepEqual(JSON.parse(await fs.readFile(deviceFile, 'utf8')), migratedDevices);
     await server.enable();
     clearInterval(server.timer);
     assert.equal((await call('PUT', `/meetings/${id}/chunks`, chunk, token)).body.next, 1);
@@ -458,7 +477,7 @@ const { MobileServer } = require('./mobile-server');
       server.status().sessions.some((s) => s.id === resumedId),
       false,
     );
-    // 单独授权后才能读取电脑会话，作为电脑麦克风配对也不隐含此授权。
+    // 信任即允许访问电脑会议，但不能访问另一台手机私有的录音会话。
     const sharedMeeting = {
       id: randomUUID(),
       title: 'Desktop',
@@ -475,7 +494,7 @@ const { MobileServer } = require('./mobile-server');
     await fs.writeFile(samplePath, sample);
     let summaries = 0;
     let summaryResult = { saved: true };
-    server.request = async (type, payload) => {
+    const sharedRequest = async (type, payload) => {
       if (type === 'mobile.library') return [sharedMeeting, { id: captureId }, { id }];
       if (type === 'meeting.get') return { ...sharedMeeting, id: payload.meeting_id };
       if (type === 'mobile.proposal.status') return null;
@@ -495,22 +514,32 @@ const { MobileServer } = require('./mobile-server');
       }
       return options.request(type, payload);
     };
+    server.request = sharedRequest;
     const sharedPath = '/desktop-meetings/' + sharedMeeting.id;
     const getShared = (suffix, as = token) => call('GET', sharedPath + suffix, null, as);
-    assert.deepEqual((await call('GET', '/desktop-meetings', null, token)).body, []);
-    assert.equal((await call('GET', sharedPath + '/snapshot')).status, 401);
-    assert.equal((await getShared('/audio')).status, 404);
-    assert.equal((await getShared('/document/mynotes/docx')).status, 404);
-    assert.equal(
-      (await call('GET', '/desktop-meetings/' + captureId + '/snapshot', null, token)).status,
-      404,
-    );
-    await server.setLibraryAccess(linked.body.deviceId, true);
-    assert.equal((await getShared('/snapshot', second.body.token)).status, 404);
     assert.deepEqual(
-      (await call('GET', '/desktop-meetings', null, token)).body.map((r) => r.id),
+      (await call('GET', '/desktop-meetings', null, token)).body.map((row) => row.id),
       [sharedMeeting.id, captureId],
     );
+    assert.equal((await call('GET', sharedPath + '/snapshot')).status, 401);
+    assert.equal((await getShared('/audio')).status, 200);
+    assert.equal((await getShared('/document/mynotes/docx')).status, 200);
+    assert.equal(
+      (await call('GET', '/desktop-meetings/' + captureId + '/snapshot', null, token)).status,
+      200,
+    );
+    await server.setLibraryAccess(linked.body.deviceId, true);
+    assert.equal((await getShared('/snapshot', second.body.token)).status, 200);
+    assert.deepEqual(
+      (await call('GET', '/desktop-meetings', null, second.body.token)).body.map((row) => row.id),
+      [sharedMeeting.id],
+    );
+    for (const privateId of [id, captureId])
+      assert.equal(
+        (await call('GET', `/desktop-meetings/${privateId}/snapshot`, null, second.body.token))
+          .status,
+        404,
+      );
     const sharedSnapshot = (await getShared('/snapshot')).body;
     assert.equal(sharedSnapshot.notes, sharedMeeting.notes);
     assert.equal(sharedSnapshot.segments[0].id, 'current');
@@ -571,15 +600,159 @@ const { MobileServer } = require('./mobile-server');
       ).status,
       400,
     );
-    await server.setLibraryAccess(linked.body.deviceId, false);
-    assert.equal((await getShared('/snapshot')).status, 404);
-    assert.equal((await getShared('/audio')).status, 404);
+    const forgottenBefore = commands.filter((type) => type === 'mobile.proposal.forget').length;
+    const access = await server.setLibraryAccess(linked.body.deviceId, false);
+    assert.equal(
+      access.devices.find((device) => device.id === linked.body.deviceId).libraryAccess,
+      true,
+    );
+    assert.equal(
+      commands.filter((type) => type === 'mobile.proposal.forget').length,
+      forgottenBefore,
+    );
+    assert.equal((await getShared('/snapshot')).status, 200);
+    assert.equal((await getShared('/audio')).status, 200);
     assert.equal(
       (await call('GET', '/desktop-meetings/' + id + '/snapshot', null, token)).status,
       200,
     );
+    // 兼容入口不能让重启前后的访问权限不一致。
+    await server.disable();
+    server = new MobileServer(options);
+    await server.init();
+    server.request = sharedRequest;
+    await server.enable();
+    clearInterval(server.timer);
+    assert.equal((await getShared('/snapshot')).status, 200);
+    assert.equal((await getShared('/audio')).status, 200);
+    assert.equal(
+      server.status().devices.find((device) => device.id === linked.body.deviceId).libraryAccess,
+      true,
+    );
     await server.revoke(linked.body.deviceId);
     assert.equal((await call('GET', '/meetings', null, token)).status, 401);
+    assert.equal((await getShared('/snapshot')).status, 401);
+    assert.equal((await getShared('/audio')).status, 401);
+    assert.equal(server.canAccess(linked.body.deviceId, sharedMeeting.id), false);
+    await assert.rejects(server.setLibraryAccess(linked.body.deviceId, false), /设备不存在/);
+    assert.equal((await getShared('/snapshot', second.body.token)).status, 200);
+
+    // 离线录音先交付，再由桌面导入；录音繁忙、断线和重启都不要求手机等待转写。
+    let activeImportMeeting = { meeting_id: 'desktop-recording' };
+    const importCalls = [];
+    let releaseRefinement;
+    let refinementResult = { status: 'refined' };
+    server.active = () => activeImportMeeting;
+    const importRequest = async (type, payload) => {
+      importCalls.push(type);
+      if (type === 'meeting.refine') {
+        await new Promise((resolve) => {
+          releaseRefinement = resolve;
+        });
+        return refinementResult;
+      }
+      return { id: payload.meeting_id, status: 'ready' };
+    };
+    server.request = importRequest;
+    const importedId = randomUUID();
+    assert.equal(
+      (
+        await call(
+          'POST',
+          '/meetings',
+          { id: importedId, title: '离线录音', transfer_mode: 'import' },
+          second.body.token,
+        )
+      ).status,
+      200,
+    );
+    await call(
+      'PUT',
+      `/meetings/${importedId}/chunks`,
+      { seq: 0, start_sample: 0, pcm: 'AQACAA==' },
+      second.body.token,
+    );
+    await server.drain();
+    assert.equal(importCalls.includes('mobile.apply'), false);
+    const receipt = await call(
+      'POST',
+      `/meetings/${importedId}/end`,
+      { count: 1, samples: 2 },
+      second.body.token,
+    );
+    assert.equal(receipt.body.received, true);
+    assert.equal(receipt.body.task.state, 'queued');
+    await server.drainImport();
+    assert.equal(importCalls.includes('mobile.import'), false);
+    clearTimeout(server.importTimer);
+    server.importTimer = null;
+    await server.disable();
+    activeImportMeeting = null;
+    const imported = server.drainImport();
+    while (!releaseRefinement) await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(server.sessions.get(importedId).finished, true);
+    assert.equal(server.sessions.get(importedId).task.state, 'running');
+    releaseRefinement();
+    await imported;
+    assert.equal(server.sessions.get(importedId).task.state, 'done');
+    assert.deepEqual(
+      importCalls.filter((type) => ['mobile.import', 'meeting.refine'].includes(type)),
+      ['mobile.import', 'meeting.refine'],
+    );
+
+    const interrupted = {
+      ...server.sessions.get(importedId),
+      task: { ...server.sessions.get(importedId).task, state: 'running' },
+    };
+    await server.save(interrupted);
+    server = new MobileServer({ ...options, request: importRequest });
+    await server.init();
+    clearTimeout(server.importTimer);
+    server.importTimer = null;
+    assert.equal(server.server, undefined);
+    assert.equal(server.sessions.get(importedId).task.state, 'queued');
+    releaseRefinement = null;
+    refinementResult = { status: 'ready' };
+    const cancelledImport = server.drainImport();
+    while (!releaseRefinement) await new Promise((resolve) => setImmediate(resolve));
+    releaseRefinement();
+    await cancelledImport;
+    assert.equal(server.sessions.get(importedId).task.state, 'failed');
+    const beforeRetry = importCalls.length;
+    await server.drainImport();
+    assert.equal(importCalls.length, beforeRetry, 'cancelled work is not silently retried');
+    const manualTaskId = randomUUID();
+    server.active = () => ({ meeting_id: 'other' });
+    server.request = async () => {
+      throw new Error('Background processing failed');
+    };
+    await server.startTask(manualTaskId, {
+      action: 'summary',
+      request_id: randomUUID(),
+      consent: true,
+    });
+    while (server.desktopTasks[manualTaskId].state === 'running')
+      await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(
+      server.desktopTasks[manualTaskId].state,
+      'failed',
+      'manual failures have no queue consumer and must remain retryable',
+    );
+    await server.saveTask(importedId, { ...server.sessions.get(importedId).task, state: 'queued' });
+    let importerBlocked = false;
+    server.active = () => importerBlocked;
+    server.request = async () => {
+      importerBlocked = true;
+      throw new Error('Desktop is moving data');
+    };
+    await server.drainImport();
+    assert.equal(
+      server.sessions.get(importedId).task.state,
+      'queued',
+      'automatic imports remain queued when desktop operations temporarily block them',
+    );
+    clearTimeout(server.importTimer);
+    server.importTimer = null;
     console.log(
       'mobile server: TLS pairing, authorization, durable retry, conflict detection and finalization passed',
     );

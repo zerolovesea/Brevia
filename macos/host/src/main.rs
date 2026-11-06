@@ -1,7 +1,11 @@
+#![cfg_attr(windows, windows_subsystem = "windows")]
+
 mod control;
 mod native;
 mod preferences;
 mod update;
+#[cfg(windows)]
+mod windows;
 
 use base64::Engine;
 use control::{notify, Control};
@@ -83,22 +87,43 @@ fn instance_lock() -> Result<Option<File>, Box<dyn std::error::Error>> {
     }
 }
 
+fn note_image_location(uri: &tauri::http::Uri) -> Option<(&str, &str)> {
+    let host = uri.host()?;
+    let path = uri.path().trim_start_matches('/');
+    let (meeting, filename) = if host == "localhost" {
+        path.split_once('/')?
+    } else {
+        (host, path)
+    };
+    if meeting.is_empty() || filename.is_empty() || filename.contains('/') {
+        return None;
+    }
+    Some((meeting, filename))
+}
+
 fn main() {
+    #[cfg(target_os = "macos")]
     extern "C" {
         fn brevia_activate_running_peer(legacy_only: bool) -> i32;
     }
-    if std::env::var_os("BREVIA_DATA_DIR").is_none()
-        && unsafe { brevia_activate_running_peer(true) } == 1
-    {
+    fn activate_peer(legacy_only: bool) -> bool {
+        #[cfg(target_os = "macos")]
+        {
+            unsafe { brevia_activate_running_peer(legacy_only) == 1 }
+        }
+        #[cfg(windows)]
+        {
+            windows::activate_peer(legacy_only)
+        }
+    }
+    if std::env::var_os("BREVIA_DATA_DIR").is_none() && activate_peer(true) {
         return;
     }
     let _lock = match instance_lock() {
         Ok(Some(lock)) => lock,
         Ok(None) => {
             if !std::env::args().any(|arg| arg == "--background") {
-                unsafe {
-                    brevia_activate_running_peer(false);
-                }
+                activate_peer(false);
             }
             return;
         }
@@ -107,21 +132,30 @@ fn main() {
             std::process::exit(1);
         }
     };
-    let app = tauri::Builder::default()
-        .manage(Lifecycle{quitting: AtomicBool::new(false), instance_lock: std::sync::Mutex::new(Some(_lock))})
+    let builder = tauri::Builder::default()
+        .manage(Lifecycle {
+            quitting: AtomicBool::new(false),
+            instance_lock: std::sync::Mutex::new(Some(_lock)),
+        })
         .manage(update::State::default())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
-        .on_web_content_process_terminate(|view| {
-            notify(view.app_handle(), json!({"host":"window.crashed", "label":view.label()}));
-            let _ = view.reload();
-        })
-        .invoke_handler(tauri::generate_handler![desktop_invoke, preferences::confirm_preferences])
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build());
+    #[cfg(target_os = "macos")]
+    let builder = builder.on_web_content_process_terminate(|view| {
+        notify(
+            view.app_handle(),
+            json!({"host":"window.crashed", "label":view.label()}),
+        );
+        let _ = view.reload();
+    });
+    let app = builder.invoke_handler(tauri::generate_handler![desktop_invoke, preferences::confirm_preferences])
         .register_asynchronous_uri_scheme_protocol("brevia-note", |ctx, request, responder| {
             let app = ctx.app_handle().clone();
             tauri::async_runtime::spawn(async move {
-                let meeting = request.uri().host().unwrap_or("");
-                let name = request.uri().path().trim_start_matches('/');
+                let Some((meeting, name)) = note_image_location(request.uri()) else {
+                    responder.respond(tauri::http::Response::builder().status(404).body(Vec::new()).unwrap());
+                    return;
+                };
                 let payload = json!({"meeting_id":meeting, "filename":name});
                 let result = app.state::<Control>().request("host","host.note-image",payload).await;
                 let data = result.ok().and_then(|v|{
@@ -138,7 +172,10 @@ fn main() {
         })
         .setup(|app| {
             let _ = APP.set(app.handle().clone());
+            #[cfg(target_os = "macos")]
             unsafe {native::brevia_watch_sleep(will_sleep);}
+            #[cfg(windows)]
+            windows::watch_system(app.handle(), will_sleep)?;
             Control::start(app.handle())?;
             if let Ok(Some(m)) = app.primary_monitor() {
                 let pos=m.work_area().position.to_logical::<f64>(m.scale_factor());
@@ -155,6 +192,7 @@ fn main() {
             api.prevent_exit();
             notify(handle, json!({"host":"app.quit"}));
         }
+        #[cfg(target_os = "macos")]
         RunEvent::Reopen { .. } => notify(handle, json!({"host":"app.activate"})),
         RunEvent::Exit => {
             handle
@@ -170,6 +208,24 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn parses_both_native_note_image_addresses() {
+        for url in [
+            "brevia-note://meeting/image.png",
+            "brevia-note://localhost/meeting/image.png",
+        ] {
+            assert_eq!(
+                note_image_location(&url.parse().unwrap()),
+                Some(("meeting", "image.png"))
+            );
+        }
+        for url in [
+            "brevia-note://localhost/meeting",
+            "brevia-note://meeting/sub/image.png",
+        ] {
+            assert!(note_image_location(&url.parse().unwrap()).is_none());
+        }
+    }
     #[test]
     fn restricts_internal_commands_and_overlay_origins() {
         assert!(!permitted("main", "host.note-image"));

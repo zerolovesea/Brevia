@@ -38,7 +38,7 @@ function defaultName(name) {
 }
 function createSpeakerHandlers(worker) {
   const store = worker.store;
-  worker.speakerEmbedding = async (engine, pcm, control) => {
+  worker.speakerEmbedding = async (engine, pcm, control, { threads = 4 } = {}) => {
     await control?.wait();
     if (pcm.length < worker.settings.diarization.minimum_embedding_seconds * 32000) return null;
     if (!worker.models.isReady(EMBEDDING_MODEL)) throw new ModelNotInstalled([EMBEDDING_MODEL]);
@@ -58,6 +58,7 @@ function createSpeakerHandlers(worker) {
         ),
         pcm: pcm.toString('base64'),
         sample_rate: 16000,
+        threads,
       },
       { signal: control?.signal },
     );

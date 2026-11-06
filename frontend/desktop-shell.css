@@ -58,8 +58,11 @@ body {
 }
 * {
   scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--color-text) 20%, transparent) transparent;
+  scrollbar-color: transparent transparent;
   caret-color: var(--color-text);
+}
+.is-scrolling {
+  scrollbar-color: color-mix(in srgb, var(--color-text) 20%, transparent) transparent;
 }
 button,
 a,
@@ -421,7 +424,7 @@ textarea,
   overflow-y: auto;
   overflow-x: hidden;
 }
-#desktop-app .meeting-list:is(:hover, :focus-within) {
+#desktop-app .meeting-list.is-scrolling {
   scrollbar-color: color-mix(in srgb, var(--color-text) 20%, transparent) transparent;
 }
 #desktop-app .sidebar-workspace {

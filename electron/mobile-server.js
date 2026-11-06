@@ -32,6 +32,7 @@ const createSession = z.object({
   refined_model_id: z.string().max(100).optional(),
   speaker_segmentation_model_id: z.string().max(100).optional(),
   vad_model_id: z.string().max(100).optional(),
+  transfer_mode: z.enum(['import']).optional(),
 });
 const fail = (status, message) => Object.assign(new Error(message), { status });
 
@@ -124,6 +125,9 @@ class MobileServer {
   async init() {
     await fs.mkdir(this.directory, { recursive: true, mode: 0o700 });
     this.devices = await readJSON(path.join(this.directory, 'devices.json'), []);
+    // 信任即允许访问电脑会议，保留旧客户端使用的协议字段。
+    if (this.devices.some((device) => device.libraryAccess !== true))
+      await this.saveDevices(this.devices.map((device) => ({ ...device, libraryAccess: true })));
     this.desktopTasks = await readJSON(path.join(this.directory, 'desktop-tasks.json'), {});
     for (const task of Object.values(this.desktopTasks)) {
       if (task.state === 'running')
@@ -151,12 +155,17 @@ class MobileServer {
           await this.save(session);
         }
         if (session.task?.state === 'running')
-          session.task = { ...session.task, state: 'failed', error: '电脑已重启，请重新提交任务' };
+          session.task = {
+            ...session.task,
+            state: session.task.automatic ? 'queued' : 'failed',
+            error: session.task.automatic ? null : '电脑已重启，请重新提交任务',
+          };
         this.sessions.set(session.id, session);
       }
     }
     const config = await readJSON(path.join(this.directory, 'config.json'), {});
     if (config.enabled !== false) await this.enable();
+    this.scheduleImport();
   }
   async enable() {
     if (this.server) return this.status();
@@ -366,20 +375,14 @@ class MobileServer {
       if (owner === id) stream.destroy();
     }
   }
-  setLibraryAccess(id, enabled) {
+  setLibraryAccess(id) {
     return this.serial(async () => {
       if (!this.devices.some((device) => device.id === id)) throw fail(404, '设备不存在');
       const devices = this.devices.map((device) =>
-        device.id === id ? { ...device, libraryAccess: enabled === true } : device,
+        device.id === id ? { ...device, libraryAccess: true } : device,
       );
       await this.saveDevices(devices);
-      if (!enabled) {
-        this.stopDeviceStreams(id);
-        const own = [...this.sessions.values()]
-          .filter((s) => s.owner === id && !s.deleted && !s.desktopCapture)
-          .map((s) => s.id);
-        await this.request('mobile.proposal.forget', { device_id: id, keep_meetings: own });
-      }
+      // 兼容旧客户端的设置入口；访问权限只随取消信任一起撤回。
       this.changed();
       return this.status();
     });
@@ -429,7 +432,7 @@ class MobileServer {
         this.saveDevices([
           ...this.devices,
           {
-            libraryAccess: allowed?.libraryAccess === true,
+            libraryAccess: true,
             id,
             name: input.name,
             firstConnectedAt: new Date().toISOString(),
@@ -584,7 +587,7 @@ class MobileServer {
     const session = this.sessions.get(id);
     if (!device) return false;
     if (session && (session.owner !== owner || session.deleted)) return false;
-    return (session && !session.desktopCapture) || device.libraryAccess === true;
+    return true;
   }
   assertAccess(owner, id) {
     if (!this.canAccess(owner, id)) throw fail(404, '会议不存在');
@@ -599,8 +602,7 @@ class MobileServer {
     return 'ended';
   }
   async desktopMeetings(owner) {
-    const hasGrant = this.devices.find((d) => d.id === owner)?.libraryAccess;
-    if (!hasGrant) return [];
+    if (!this.devices.some((device) => device.id === owner)) return [];
     const rows = await this.request('mobile.library', {});
     return rows
       .filter(
@@ -796,6 +798,18 @@ class MobileServer {
         }),
       ])
       .parse(input);
+    if (
+      v.action === 'refine' &&
+      session?.transfer_mode === 'import' &&
+      session.ended &&
+      !session.finished &&
+      session.task?.state === 'failed'
+    ) {
+      const task = { id: v.request_id, action: 'refine', state: 'queued', automatic: true };
+      await this.saveTask(id, task);
+      this.scheduleImport();
+      return { task };
+    }
     if (session && !session.finished) throw fail(409, '请先结束录音并完成同步');
     const prior = session?.task || this.desktopTasks[id];
     if (prior && prior.id === v.request_id) return { task: prior };
@@ -922,7 +936,11 @@ class MobileServer {
       return this.serial(async () => {
         const v = createSession.parse(value);
         if (this.sessions.has(v.id)) return this.session(v.id, owner);
-        if (this.active() || [...this.sessions.values()].some((s) => !s.finished))
+        if (
+          v.transfer_mode !== 'import' &&
+          (this.active() ||
+            [...this.sessions.values()].some((s) => !s.finished && s.transfer_mode !== 'import'))
+        )
           throw fail(409, '电脑有未完成的录音，请先结束并补传');
         await this.request('mobile.prepare', v);
         const s = {
@@ -960,6 +978,7 @@ class MobileServer {
         processed: s.processed,
         ended: s.ended,
         finished: s.finished,
+        received: s.ended && !s.closedOnDesktop,
         stopRequested: s.stopRequested === true,
         desktopCapture: s.desktopCapture === true,
         desiredState: s.desiredState,
@@ -1049,9 +1068,12 @@ class MobileServer {
           .parse(value);
         if (v.count !== s.next || v.samples !== s.samples) throw fail(409, '仍有录音未补传');
         const next = { ...s, ended: true, closedOnDesktop: false };
+        if (s.transfer_mode === 'import' && !s.task)
+          next.task = { id: randomUUID(), action: 'refine', state: 'queued', automatic: true };
         await this.save(next);
         Object.assign(s, next);
-        return { ended: true };
+        this.scheduleImport();
+        return { ended: true, received: true, task: s.task || null };
       }
       if (match[2] === 'marks' && req.method === 'POST') {
         const v = z
@@ -1068,11 +1090,82 @@ class MobileServer {
       throw fail(405, '不支持此操作');
     });
   }
+  scheduleImport() {
+    if (
+      this.importing ||
+      this.importTimer ||
+      ![...this.sessions.values()].some(
+        (s) => !s.deleted && s.transfer_mode === 'import' && s.ended && s.task?.state === 'queued',
+      )
+    )
+      return;
+    // 已接收的录音归桌面处理，不随手机断线或关闭连接服务而停止。
+    this.importTimer = setTimeout(() => {
+      this.importTimer = null;
+      void this.drainImport();
+    }, 1000);
+    this.importTimer.unref();
+  }
+  async drainImport() {
+    if (this.importing) return;
+    if (this.active()) {
+      this.scheduleImport();
+      return;
+    }
+    const s = [...this.sessions.values()].find(
+      (value) =>
+        !value.deleted &&
+        value.transfer_mode === 'import' &&
+        value.ended &&
+        value.task?.state === 'queued',
+    );
+    if (!s) return;
+    this.importing = true;
+    const task = { ...s.task, state: 'running' };
+    try {
+      await this.serial(() => this.saveTask(s.id, task));
+      const meeting = await this.request('mobile.import', {
+        ...createSession.parse(s),
+        meeting_id: s.id,
+        samples: s.samples,
+        count: s.next,
+      });
+      await this.serial(async () => {
+        if (this.sessions.get(s.id)?.deleted) return;
+        const next = { ...s, processed: s.next, finished: true, error: null };
+        await this.save(next);
+        Object.assign(s, next);
+      });
+      if (this.sessions.get(s.id)?.deleted) return;
+      const result =
+        meeting.status === 'refined'
+          ? meeting
+          : await this.request('meeting.refine', { meeting_id: s.id });
+      if (result?.model_required) throw fail(409, '请先在电脑安装所需模型');
+      if (result?.status !== 'refined') throw fail(409, '电脑已取消任务，请重试');
+      await this.serial(() => this.saveTask(s.id, { ...task, state: 'done' }));
+    } catch (error) {
+      await this.serial(() =>
+        this.saveTask(s.id, {
+          ...task,
+          state: this.active() && error.status !== 409 ? 'queued' : 'failed',
+          error: error.status === 409 ? error.message : '电脑操作失败，请在电脑查看详情。',
+        }),
+      ).catch((e) => {
+        this.lastError = e.message;
+      });
+    } finally {
+      this.importing = false;
+      this.scheduleImport();
+    }
+  }
   async drain() {
     if (this.draining || !this.server) return;
     this.draining = true;
     try {
-      const s = [...this.sessions.values()].find((value) => !value.finished);
+      const s = [...this.sessions.values()].find(
+        (value) => !value.finished && !value.deleted && value.transfer_mode !== 'import',
+      );
       if (!s) return;
       try {
         if (

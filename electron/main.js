@@ -585,7 +585,7 @@ class WorkerClient {
             ? 'python'
             : 'python3');
     const args = useBundledWorker ? [] : ['-m', 'backend.worker'];
-    const ffmpeg = process.env.BREVIA_FFMPEG || bundledFfmpegPath();
+    const ffmpeg = nativeBackend ? null : process.env.BREVIA_FFMPEG || bundledFfmpegPath();
     const recoverInterrupted = !this.refinement && !this.hasSpawned;
     const workerExecutable = nativeBackend ? process.execPath : python;
     const workerArgs = nativeBackend ? [path.join(packagedRoot, 'control', 'worker.cjs')] : args;
@@ -609,6 +609,7 @@ class WorkerClient {
       },
       stdio: ['pipe', 'pipe', 'pipe'],
       detached: process.platform !== 'win32',
+      windowsHide: true,
     });
     this.process = child;
     this.writing = null;
@@ -830,7 +831,8 @@ class WorkerClient {
     const stopped = child ? new Promise((resolve) => child.once('exit', resolve)) : this.stopping;
     if (child) {
       this.process = null;
-      stopProcess(child);
+      if (nativeBackend) child.stdin.end();
+      else stopProcess(child);
     }
     try {
       await Promise.race([stopped, timeout]);
@@ -953,7 +955,11 @@ function initializeWorker(duringMigration = false) {
 
 async function migrateStorageFolders(value) {
   if (storageMigrationInProgress) throw new Error('Folders are already being moved');
-  if ([...(mobileServer?.sessions.values() || [])].some((s) => !s.finished))
+  if (
+    [...(mobileServer?.sessions.values() || [])].some(
+      (s) => !s.finished || ['queued', 'running'].includes(s.task?.state),
+    )
+  )
     throw new Error('请先完成手机录音与补传，再移动文件夹');
   if (
     (process.env.BREVIA_MODELS_DIR && value.models !== modelsDir()) ||
@@ -1051,7 +1057,11 @@ async function requestWithTaskSafety(type, value) {
       if (refinementWorker.stopping) await refinementWorker.stopping;
     }
     const perform = async () => {
-      if ([...(mobileServer?.sessions.values() || [])].some((s) => !s.finished))
+      if (
+        [...(mobileServer?.sessions.values() || [])].some(
+          (s) => !s.finished || ['queued', 'running'].includes(s.task?.state),
+        )
+      )
         throw new Error('请先完成手机录音与补传，再清理数据');
       try {
         const removeMeeting =
@@ -1355,22 +1365,33 @@ async function buildSelectedBundle(meetingId, prepared) {
 function registerIpc() {
   const agentSettings = () => {
     const cli = app.isPackaged
-      ? nativeBackend
+      ? nativeBackend && process.platform === 'darwin'
         ? path.resolve(process.resourcesPath, '../MacOS/brevia')
-        : path.join(path.dirname(process.execPath), 'brevia.cmd')
+        : nativeBackend
+          ? path.resolve(process.resourcesPath, '../brevia.cmd')
+          : path.join(path.dirname(process.execPath), 'brevia.cmd')
       : path.join(root, 'scripts/brevia.cjs');
-    const mcp = nativeBackend
-      ? { command: cli, args: ['mcp'] }
-      : {
-          command: process.execPath,
-          args: [
-            app.isPackaged ? path.join(process.resourcesPath, 'control/brevia.cjs') : cli,
-            'mcp',
-          ],
-          env: { ELECTRON_RUN_AS_NODE: '1' },
-        };
+    const mcp =
+      nativeBackend && process.platform === 'darwin'
+        ? { command: cli, args: ['mcp'] }
+        : {
+            command: process.execPath,
+            args: [
+              app.isPackaged ? path.join(process.resourcesPath, 'control/brevia.cjs') : cli,
+              'mcp',
+            ],
+            ...(!nativeBackend && { env: { ELECTRON_RUN_AS_NODE: '1' } }),
+          };
     mcp.env = { ...mcp.env, BREVIA_DATA_DIR: dataDir() };
-    return { ...agentService.getSettings(), cli_path: cli, mcp };
+    return {
+      ...agentService.getSettings(),
+      cli_path: cli,
+      skill_path: path.join(
+        app.isPackaged ? process.resourcesPath : root,
+        'skills/brevia/SKILL.md',
+      ),
+      mcp,
+    };
   };
   handleIpc('agent.settings.get', agentSettings);
   handleIpc('agent.settings.save', async (_, payload) => {
@@ -1622,26 +1643,33 @@ function registerIpc() {
           process.platform !== 'win32' ||
           systemPreferences.getMediaAccessStatus('microphone') === 'granted',
   );
+  let pendingScreenPermission;
+  handleIpc('permissions.request-screen', () => {
+    if (process.platform !== 'darwin') return supportsSystemAudio();
+    // 只响应用户主动申请；macOS 拒绝过的权限仍需用户在系统设置中开启。
+    if (!pendingScreenPermission) {
+      pendingScreenPermission = (async () => {
+        if (nativeAudio) return nativeAudio.query('request-screen');
+        await registerScreenPermission(desktopCapturer, writeLog);
+        return systemPreferences.getMediaAccessStatus('screen') === 'granted';
+      })().finally(() => {
+        pendingScreenPermission = undefined;
+      });
+    }
+    return pendingScreenPermission;
+  });
   handleIpc('permissions.open-screen-settings', async () => {
     if (process.platform !== 'darwin') return false;
-    if (nativeAudio) await nativeAudio.query('request-screen');
-    else await registerScreenPermission(desktopCapturer, writeLog);
-    const settings = spawn(
-      'open',
-      ['x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'],
-      { detached: true, stdio: 'ignore' },
+    await shell.openExternal(
+      'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture',
     );
-    settings.unref();
     return true;
   });
   handleIpc('permissions.open-microphone-settings', async () => {
     if (process.platform === 'darwin') {
-      const settings = spawn(
-        'open',
-        ['x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone'],
-        { detached: true, stdio: 'ignore' },
+      await shell.openExternal(
+        'x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone',
       );
-      settings.unref();
       return true;
     }
     if (process.platform === 'win32') {
@@ -2549,7 +2577,9 @@ async function installUpdate() {
       refinementWorker.pending.size ||
       storageMigrationInProgress ||
       destructiveOperationInProgress ||
-      [...(mobileServer?.sessions.values() || [])].some((session) => !session.finished)
+      [...(mobileServer?.sessions.values() || [])].some(
+        (session) => !session.finished || ['queued', 'running'].includes(session.task?.state),
+      )
     )
       throw Object.assign(new Error('Finish recording and background tasks before updating'), {
         code: 'error.tasks.running',
@@ -2594,6 +2624,9 @@ async function installUpdate() {
     await mobileServer?.queue;
     await requireIdle();
     if (nativeAudio) {
+      // Windows 安装器启动成功后宿主直接退出，先让业务进程完成落盘并关闭 SQLite。
+      if (process.platform === 'win32')
+        await Promise.all([worker.stopForMigration(), refinementWorker.stopForMigration()]);
       await app.nativeUpdate('install');
       installingUpdate = true;
       app.relaunch();
@@ -2972,7 +3005,11 @@ app.whenReady().then(async () => {
     // 端到端测试使用临时端口，避免与正在运行的桌面端争用。
     port: process.env.BREVIA_MOBILE_PORT === '0' ? 0 : undefined,
     directory: path.join(dataDir(), 'mobile'),
-    active: () => worker.active,
+    active: () =>
+      worker.active ||
+      ((app.preparingUpdate || storageMigrationInProgress || destructiveOperationInProgress) && {
+        busy: true,
+      }),
     discovered: () => worker.sendEvent('mobile.discovered', {}),
     changed: () => worker.sendEvent('mobile.collaboration', {}),
     request: async (type, payload) => {

@@ -70,7 +70,8 @@ class Worker {
         : new EngineClient(
             path.join(
               process.env.BREVIA_NATIVE_ENGINES || path.join(this.resources, 'engines'),
-              runtime === 'mlx-audio' ? 'brevia-mlx' : 'brevia-inference',
+              (runtime === 'mlx-audio' ? 'brevia-mlx' : 'brevia-inference') +
+                (process.platform === 'win32' ? '.exe' : ''),
             ),
           );
       if (!reusable) {

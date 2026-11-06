@@ -101,9 +101,9 @@ function interfaceIcon(name) {
     notebook:
       '<rect x="5" y="3" width="15" height="18" rx="2.5"/><path d="M9 3v18M3 7h4m-4 5h4m-4 5h4m5-10h5"/>',
     'skip-back':
-      '<path d="M3 8V3m0 5h5M4 7a9 9 0 1 1-1 9"/><text x="8" y="16" stroke="none" fill="currentColor" font-size="9" font-family="inherit">15</text>',
+      '<path d="M8 3 4 7l4 4M4 7h8a8 8 0 1 1-7.5 10.8"/><text x="12" y="17" text-anchor="middle" stroke="none" fill="currentColor" font-size="8" font-weight="600" font-family="system-ui, sans-serif">15</text>',
     'skip-forward':
-      '<path d="M21 8V3m0 5h-5M20 7a9 9 0 1 0 1 9"/><text x="8" y="16" stroke="none" fill="currentColor" font-size="9" font-family="inherit">15</text>',
+      '<path d="m16 3 4 4-4 4m4-4h-8a8 8 0 1 0 7.5 10.8"/><text x="12" y="17" text-anchor="middle" stroke="none" fill="currentColor" font-size="8" font-weight="600" font-family="system-ui, sans-serif">15</text>',
   };
   return `<svg class="interface-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name] || paths.document}</svg>`;
 }
@@ -143,7 +143,7 @@ function renderSettingsNavigation(kind) {
       [
         ['models', '模型库', 'model'],
         ['ai-features', 'AI 功能', 'ai'],
-        ['prompts', '提示词', 'document'],
+        ['agent-settings', 'Agent 与 MCP', 'advanced'],
         ['speaker-profiles', '声纹管理', 'microphone'],
       ],
     ],
@@ -151,7 +151,6 @@ function renderSettingsNavigation(kind) {
       '设备与数据',
       [
         ['device-connection', '设备连接', 'phone'],
-        ['agent-settings', 'Agent 与 MCP', 'advanced'],
         ['storage', '存储与隐私', 'storage'],
       ],
     ],
@@ -302,6 +301,12 @@ function formatSpeakerName(speaker) {
   }
   return name;
 }
+function renderSpeakerAvatar(speaker) {
+  const name = typeof speaker === 'string' ? speaker : speaker?.name || '';
+  let color = 0;
+  for (const letter of name) color = (color * 31 + letter.codePointAt(0)) >>> 0;
+  return `<span class="speaker-avatar" data-speaker-color="${color % 6}" aria-hidden="true">${escapeHtml([...formatSpeakerName(speaker)][0] || '')}</span>`;
+}
 /** 判断两个视口矩形是否重叠。@param {object} first 第一个矩形。@param {object} second 第二个矩形。@returns {boolean} */
 function rectanglesIntersect(first, second) {
   return (
@@ -418,7 +423,7 @@ function renderTranscriptSegment({
             '',
           )}<button class="segment-actions" data-segment-actions type="button" data-tooltip="${escapeHtml(t('更多'))}" aria-label="${escapeHtml(t('更多'))}" aria-haspopup="menu">${interfaceIcon('more')}</button></div>`
       : '';
-  return `<article class="segment"${contextSegmentId ? ` data-segment-id="${escapeHtml(contextSegmentId)}"` : ''}${tools ? ` style="--segment-tool-count:${segmentToolActions.length + 1}"` : ''}${timing}><div class="segment-meta"><time>${escapeHtml(time)}</time>${showSpeaker && speaker.name ? `<span class="speaker-avatar" aria-hidden="true">${escapeHtml([...speaker.name][0])}</span>` : ''}${label}${overlap}${signalBadge}</div>${copy}${backlinks}${tools}</article>`;
+  return `<article class="segment"${contextSegmentId ? ` data-segment-id="${escapeHtml(contextSegmentId)}"` : ''}${tools ? ` style="--segment-tool-count:${segmentToolActions.length + 1}"` : ''}${timing}><div class="segment-meta"><time>${escapeHtml(time)}</time>${showSpeaker && speaker.name ? `${renderSpeakerAvatar(speaker)}` : ''}${label}${overlap}${signalBadge}</div>${copy}${backlinks}${tools}</article>`;
 }
 /** 渲染会议库中的一行。@param {{tone: string, title: string, meta: string, tags: string[], status: object}} meeting 会议数据。@param {number} index 会议索引。@returns {string} 行标记。 */
 /** 桌面会议导航只展示标题；录音状态保留在标记与可访问名称中。 */
@@ -602,7 +607,17 @@ function renderDesktopPreferences() {
 }
 /** 仅允许安全协议的链接/图片地址，阻止 javascript: 等注入。@param {string} url 原始地址。@returns {string} 安全地址。 */
 function sanitizeUrl(url = '') {
-  return /^(https?:|mailto:|data:image\/|brevia-note:\/\/)/i.test(url.trim()) ? url.trim() : '#';
+  const value = noteImageMarkdownUrl(url.trim());
+  if (globalThis.__BREVIA_PLATFORM__ === 'win32' && /^brevia-note:\/\//i.test(value))
+    return value.replace(/^brevia-note:\/\//i, 'http://brevia-note.localhost/');
+  return /^(https?:|mailto:|data:image\/|brevia-note:\/\/)/i.test(value) ? value : '#';
+}
+// WebView2 的本地图片地址只用于显示；保存后仍可由 macOS、手机和导出读取。
+function noteImageMarkdownUrl(url = '') {
+  return url.replace(
+    /^http:\/\/brevia-note\.localhost\/([0-9a-f-]{36})\/([0-9a-f-]{36}\.(?:png|jpe?g|gif|webp))$/i,
+    'brevia-note://$1/$2',
+  );
 }
 /** 时间锚点沿用笔记 Markdown，导出后仍能读到时间与原文。 */
 function noteHighlightMarkdown(startMs, text) {
@@ -640,9 +655,10 @@ function htmlToMarkdown(root) {
       if (tag === 'b' || tag === 'strong') out += `**${inner}**`;
       else if (tag === 'i' || tag === 'em') out += `*${inner}*`;
       else if (tag === 'code') out += `\`${inner}\``;
-      else if (tag === 'a') out += `[${inner}](${child.getAttribute('href') || ''})`;
+      else if (tag === 'a')
+        out += `[${inner}](${noteImageMarkdownUrl(child.getAttribute('href') || '')})`;
       else if (tag === 'img')
-        out += `![${child.getAttribute('alt') || ''}](${child.getAttribute('src') || ''})`;
+        out += `![${child.getAttribute('alt') || ''}](${noteImageMarkdownUrl(child.getAttribute('src') || '')})`;
       else out += inner;
     }
     return out;
@@ -685,7 +701,7 @@ function htmlToMarkdown(root) {
       } else if (tag === 'p' || tag === 'div') {
         lines.push(inline(child));
         lines.push('');
-      } else if (/^h[1-3]$/.test(tag)) {
+      } else if (/^h[1-6]$/.test(tag)) {
         lines.push(`${'#'.repeat(Number(tag[1]))} ${inline(child)}`);
         lines.push('');
       } else if (tag === 'ul' || tag === 'ol') {
@@ -777,7 +793,7 @@ function selectionBlock(editor) {
   const anchor = window.getSelection()?.anchorNode;
   const element = anchor?.nodeType === Node.ELEMENT_NODE ? anchor : anchor?.parentElement;
   if (!element || !editor.contains(element)) return null;
-  return element.closest('p, li, h1, h2, h3, blockquote') || null;
+  return element.closest('p, li, h1, h2, h3, h4, h5, h6, blockquote') || null;
 }
 /** 当前选区生效的块格式命令，用于把工具栏按钮标记为按下状态。@param {HTMLElement} editor contenteditable 区域。@returns {string|null} 命令名。 */
 function activeBlockCommand(editor) {
@@ -785,7 +801,7 @@ function activeBlockCommand(editor) {
   if (!block) return null;
   if (block.closest('blockquote')) return 'quote';
   const tag = block.tagName.toLowerCase();
-  if (/^h[1-3]$/.test(tag)) return tag;
+  if (/^h[1-6]$/.test(tag)) return tag;
   const list = block.closest('ul, ol');
   return list ? list.tagName.toLowerCase() : null;
 }
@@ -1249,7 +1265,7 @@ function createNotesEditor(root, options = {}) {
         if (mode === 'markdown') insertText(`![](${url})`);
         else {
           editor.focus();
-          document.execCommand('insertImage', false, url);
+          document.execCommand('insertImage', false, sanitizeUrl(url));
           if (onInput) onInput();
         }
       })
@@ -1260,7 +1276,7 @@ function createNotesEditor(root, options = {}) {
     if (url && urlTarget) {
       editor.focus();
       if (urlTarget === 'link') document.execCommand('createLink', false, url);
-      else document.execCommand('insertImage', false, url);
+      else document.execCommand('insertImage', false, sanitizeUrl(url));
     }
     closeUrlPop();
   });
@@ -1375,7 +1391,7 @@ function createNotesEditor(root, options = {}) {
   editor.addEventListener('input', () => {
     const anchor = window.getSelection()?.anchorNode;
     let block = (anchor?.nodeType === Node.ELEMENT_NODE ? anchor : anchor?.parentElement)?.closest(
-      'p, li, h1, h2, h3, blockquote',
+      'p, li, h1, h2, h3, h4, h5, h6, blockquote',
     );
     const ordered = /^\d+\.\s$/.test(block?.textContent || '');
     if (ordered || /^[-*]\s$/.test(block?.textContent || '')) {
@@ -1448,8 +1464,33 @@ function createNotesEditor(root, options = {}) {
   };
 }
 /** 渲染生成的会议纪要所使用的 Markdown 子集，已对模型输出进行转义。 */
-function renderMarkdown(markdown) {
-  const inline = (value) =>
+function renderMarkdown(markdown, summarySources) {
+  const citation = (line) => summarySources?.get(line) || '';
+  const timestamps = (text) =>
+    text
+      .split(/(\[[\d:·,，–—\s-]+\]|〔[\d:·,，–—\s-]+〕)/g)
+      .map((part, index) => {
+        if (index % 2 === 0) return escapeHtml(part);
+        const times = part
+          .slice(1, -1)
+          .trim()
+          .split(/\s*[·,，–—-]\s*/);
+        const values = times.map((time) => {
+          if (!/^(?:\d{1,3}:)?\d{1,3}:\d{2}$/.test(time)) return null;
+          const units = time.split(':').map(Number);
+          if (units.at(-1) >= 60 || (units.length === 3 && units[1] >= 60)) return null;
+          return units.reduce((seconds, unit) => seconds * 60 + unit, 0);
+        });
+        if (values.some((value) => value === null)) return escapeHtml(part);
+        return times
+          .map(
+            (time, index) =>
+              `<button type="button" class="summary-time" data-summary-seek="${values[index]}" title="${escapeHtml(t('播放此段'))}">${interfaceIcon('play')}<time>${escapeHtml(time)}</time></button>`,
+          )
+          .join(' ');
+      })
+      .join('');
+  const inline = (value, allowTimestamps = Boolean(summarySources)) =>
     String(value)
       // 只解析原始文本，后续标记不能再次改写生成的 HTML 属性。
       .split(/(!?\[[^\]\n]*\]\([^)\n]+\)|`[^`\n]+`|\*\*[^*\n]+\*\*|\*[^*\n]+\*)/g)
@@ -1459,15 +1500,15 @@ function renderMarkdown(markdown) {
           const url = escapeHtml(sanitizeUrl(link[3]));
           return link[1]
             ? `<img src="${url}" alt="${escapeHtml(link[2])}" />`
-            : `<a href="${url}" target="_blank" rel="noopener">${inline(link[2])}</a>`;
+            : `<a href="${url}" target="_blank" rel="noopener">${inline(link[2], false)}</a>`;
         }
         if (part.length > 2 && part.startsWith('`') && part.endsWith('`'))
           return `<code>${escapeHtml(part.slice(1, -1))}</code>`;
         if (part.length > 4 && part.startsWith('**') && part.endsWith('**'))
-          return `<strong>${inline(part.slice(2, -2))}</strong>`;
+          return `<strong>${inline(part.slice(2, -2), allowTimestamps)}</strong>`;
         if (part.length > 2 && part.startsWith('*') && part.endsWith('*'))
-          return `<em>${inline(part.slice(1, -1))}</em>`;
-        return escapeHtml(part);
+          return `<em>${inline(part.slice(1, -1), allowTimestamps)}</em>`;
+        return allowTimestamps ? timestamps(part) : escapeHtml(part);
       })
       .join('');
   const lines = String(markdown || '')
@@ -1483,7 +1524,8 @@ function renderMarkdown(markdown) {
     const items = [];
     let index = start;
     while (index < lines.length) {
-      const item = listLine(lines[index]);
+      const raw = lines[index];
+      const item = listLine(raw);
       if (!item || item[1].length !== indent || /\d+\.$/.test(item[2]) !== ordered) break;
       index += 1;
       let nested = '';
@@ -1494,7 +1536,7 @@ function renderMarkdown(markdown) {
         nested += rendered.html;
         index = rendered.index;
       }
-      items.push(`<li>${inline(item[3])}${nested}</li>`);
+      items.push(`<li>${inline(item[3])}${citation(raw)}${nested}</li>`);
     }
     return { html: `<${tag}>${items.join('')}</${tag}>`, index };
   };
@@ -1504,34 +1546,53 @@ function renderMarkdown(markdown) {
       index += 1;
       continue;
     }
+    const fence = line.match(/^\s*(`{3,}|~{3,})[^`~]*$/);
+    if (fence) {
+      const code = [];
+      index += 1;
+      while (
+        index < lines.length &&
+        !new RegExp(`^\\s*${fence[1][0]}{${fence[1].length},}\\s*$`).test(lines[index])
+      )
+        code.push(lines[index++]);
+      if (index < lines.length) index += 1;
+      html.push(`<pre><code>${escapeHtml(code.join('\n'))}</code></pre>`);
+      continue;
+    }
     const highlight = line.match(/^> \[[^\]\n]+\]\(#brevia-highlight-(\d+)\) (.+)$/);
     if (highlight && Number.isSafeInteger(Number(highlight[1]))) {
       html.push(renderNoteHighlight(Number(highlight[1]), highlight[2]));
       index += 1;
       continue;
     }
-    const heading = line.match(/^(#{1,3})\s+(.+)$/);
+    const heading = line.match(/^(#{1,6})\s+(.+)$/);
     if (heading) {
       const level = heading[1].length;
-      html.push(`<h${level}>${inline(heading[2])}</h${level}>`);
+      html.push(`<h${level}>${inline(heading[2])}</h${level}>${citation(line)}`);
       index += 1;
       continue;
     }
     if (/^\|/.test(line)) {
       const rows = [];
-      while (index < lines.length && /^\|/.test(lines[index]))
-        rows.push(
-          lines[index++]
+      while (index < lines.length && /^\|/.test(lines[index])) {
+        const raw = lines[index++];
+        rows.push({
+          cells: raw
             .split('|')
             .slice(1, -1)
-            .map((cell) => inline(cell.trim())),
-        );
-      const body = rows.filter((row) => !row.every((cell) => /^:?-{3,}:?$/.test(cell)));
+            .map((cell) => cell.trim()),
+          source: citation(raw),
+        });
+      }
+      const body = rows.filter((row) => !row.cells.every((cell) => /^:?-{3,}:?$/.test(cell)));
       if (body.length)
         html.push(
-          `<table><thead><tr>${body[0].map((cell) => `<th>${cell}</th>`).join('')}</tr></thead><tbody>${body
+          `<table><thead><tr>${body[0].cells.map((cell, column) => `<th>${inline(cell)}${column === body[0].cells.length - 1 ? body[0].source : ''}</th>`).join('')}</tr></thead><tbody>${body
             .slice(1)
-            .map((row) => `<tr>${row.map((cell) => `<td>${cell}</td>`).join('')}</tr>`)
+            .map(
+              (row) =>
+                `<tr>${row.cells.map((cell, column) => `<td>${inline(cell)}${column === row.cells.length - 1 ? row.source : ''}</td>`).join('')}</tr>`,
+            )
             .join('')}</tbody></table>`,
         );
       continue;
@@ -1542,18 +1603,22 @@ function renderMarkdown(markdown) {
       continue;
     }
     if (/^>\s?/.test(line)) {
+      const quoteStart = index;
       const items = [];
       while (index < lines.length && /^>\s?/.test(lines[index]))
         items.push(inline(lines[index++].replace(/^>\s?/, '')));
-      html.push(`<blockquote>${items.join('<br />')}</blockquote>`);
+      html.push(
+        `<blockquote>${items.join('<br />')}</blockquote>${lines.slice(quoteStart, index).map(citation).join('')}`,
+      );
       continue;
     }
     if (/^[-*]\s*\[[ xX]\]\s*/.test(line)) {
       const items = [];
       while (index < lines.length && /^[-*]\s*\[[ xX]\]\s*/.test(lines[index])) {
-        const task = lines[index++].match(/^[-*]\s*\[([ xX])\]\s*(.*)$/);
+        const raw = lines[index++];
+        const task = raw.match(/^[-*]\s*\[([ xX])\]\s*(.*)$/);
         items.push(
-          `<li class="task-item"><span class="markdown-task-mark" role="checkbox" aria-checked="${task[1].toLowerCase() === 'x'}" aria-disabled="true">${task[1].toLowerCase() === 'x' ? interfaceIcon('check') : ''}</span><span class="markdown-task-text">${inline(task[2])}</span></li>`,
+          `<li class="task-item"><span class="markdown-task-mark" role="checkbox" aria-checked="${task[1].toLowerCase() === 'x'}" aria-disabled="true">${task[1].toLowerCase() === 'x' ? interfaceIcon('check') : ''}</span><span class="markdown-task-text">${inline(task[2])}${citation(raw)}</span></li>`,
         );
       }
       html.push(`<ul>${items.join('')}</ul>`);
@@ -1569,11 +1634,12 @@ function renderMarkdown(markdown) {
     while (
       index < lines.length &&
       lines[index].trim() &&
-      !/^(#{1,3}\s+|\||[-*]\s*(?:\[[ xX]\]\s*|\s)|\d+\.\s+|>\s?)/.test(lines[index]) &&
+      !/^\s*(`{3,}|~{3,})/.test(lines[index]) &&
+      !/^(#{1,6}\s+|\||[-*]\s*(?:\[[ xX]\]\s*|\s)|\d+\.\s+|>\s?)/.test(lines[index]) &&
       !/^(---|\*\*\*|___)\s*$/.test(lines[index])
     )
       paragraph.push(lines[index++]);
-    html.push(`<p>${inline(paragraph.join(' '))}</p>`);
+    html.push(`<p>${inline(paragraph.join(' '))}</p>${paragraph.map(citation).join('')}`);
   }
   return html.join('');
 }
@@ -1608,11 +1674,11 @@ function summaryDocumentSections(markdown) {
   }
   return sections;
 }
-function renderSummaryDocument(markdown) {
+function renderSummaryDocument(markdown, summarySources = new Map()) {
   return summaryDocumentSections(markdown)
     .map(
       ({ id, lines }) =>
-        `<section class="summary-reading-section" data-summary-section="${id}" tabindex="-1">${renderMarkdown(lines.join('\n'))}</section>`,
+        `<section class="summary-reading-section" data-summary-section="${id}" tabindex="-1">${renderMarkdown(lines.join('\n'), summarySources)}</section>`,
     )
     .join('');
 }
@@ -1631,11 +1697,11 @@ function renderMeetingSummary({
         .slice(0, 3)
         .map(
           (person) =>
-            `<span class="summary-participant-preview-person"><i class="speaker-avatar" aria-hidden="true">${escapeHtml([...formatSpeakerName(person)][0] || '')}</i><span>${escapeHtml(formatSpeakerName(person))}</span></span>`,
+            `<span class="summary-participant-preview-person">${renderSpeakerAvatar(person)}<span>${escapeHtml(formatSpeakerName(person))}</span></span>`,
         )
         .join(
           '',
-        )}${participants.length > 3 ? `<small>+${participants.length - 3}</small>` : ''}</span>${interfaceIcon('chevron-down')}</button><div id="summary-participants-popover" class="meeting-popover summary-participants-popover" popover role="dialog" aria-label="${escapeHtml(t('参与者'))}"><header><h3>${escapeHtml(t('参与者'))} (${participants.length})</h3><button class="icon-button" data-close-meeting-popover type="button" aria-label="${escapeHtml(t('关闭'))}">${interfaceIcon('close')}</button></header><label class="search">${interfaceIcon('search')}<input type="search" data-participant-search aria-label="${escapeHtml(t('搜索'))}" placeholder="${escapeHtml(t('搜索'))}" /></label><div class="summary-participant-list">${participants.map((person) => `<span><i class="speaker-avatar" aria-hidden="true">${escapeHtml([...formatSpeakerName(person)][0] || '')}</i><span>${escapeHtml(formatSpeakerName(person))}</span></span>`).join('')}</div><p data-participant-empty role="status" hidden>${escapeHtml(t('暂无内容'))}</p></div></section>`
+        )}${participants.length > 3 ? `<small>+${participants.length - 3}</small>` : ''}</span>${interfaceIcon('chevron-down')}</button><div id="summary-participants-popover" class="meeting-popover summary-participants-popover" popover role="dialog" aria-label="${escapeHtml(t('参与者'))}"><header><h3>${escapeHtml(t('参与者'))} (${participants.length})</h3><button class="icon-button" data-close-meeting-popover type="button" aria-label="${escapeHtml(t('关闭'))}">${interfaceIcon('close')}</button></header><label class="search">${interfaceIcon('search')}<input type="search" data-participant-search aria-label="${escapeHtml(t('搜索'))}" placeholder="${escapeHtml(t('搜索'))}" /></label><div class="summary-participant-list">${participants.map((person) => `<span>${renderSpeakerAvatar(person)}<span>${escapeHtml(formatSpeakerName(person))}</span></span>`).join('')}</div><p data-participant-empty role="status" hidden>${escapeHtml(t('暂无内容'))}</p></div></section>`
     : '';
   return `<div class="summary-preview"><div class="summary-feedback" data-summary-feedback hidden></div>${people}${editing ? `<div class="summary-inline-edit"><div data-inline-summary-editor></div></div>` : markdown ? `<div class="summary-body markdown-content${claims.length ? '' : ' summary-document'}">${claims.length ? renderEvidenceNotebook(claims, markdown) : renderSummaryDocument(markdown)}</div>` : generating ? `<div class="summary-empty" role="status"><span class="summary-empty-mark"><span class="summary-generating-icon" aria-hidden="true">${interfaceIcon('ai')}</span></span><h2>${escapeHtml(t('正在生成会议纪要'))}</h2></div>` : waitingModels ? `<section class="summary-waiting"><span>${interfaceIcon('check')}${escapeHtml(t('录音已保存'))}</span><div>${interfaceIcon('document')}<h2>${escapeHtml(t('录音已保存'))}</h2><p>${escapeHtml(t('纪要等待所需模型，就绪后会自动继续。'))}</p><div><button class="secondary" data-settings-modal="models" type="button">${interfaceIcon('download')}${escapeHtml(t('模型库'))}</button><button class="secondary" data-detail-tab="transcript" type="button">${interfaceIcon('document')}${escapeHtml(t('逐字稿'))}</button></div></div></section>` : `<div class="summary-empty"><span class="summary-empty-mark">${interfaceIcon('ai')}</span><h2>${escapeHtml(t('尚未生成会议纪要'))}</h2>${!blocked ? `<button class="primary-action" data-generate-summary type="button">${escapeHtml(t('生成纪要'))}${interfaceIcon('arrow-right')}</button>` : ''}</div>`}</div>`;
 }
@@ -1683,7 +1749,7 @@ function renderRefineStatus(d) {
   const refineMenu =
     typeof refinementBusyMeetingId !== 'undefined' && refinementBusyMeetingId
       ? `<span class="refine-state" role="status">${t('error.tasks.running')}</span>`
-      : `<span class="refine-wrap"><button class="detail-icon-action" data-refine-more type="button" aria-label="${t('重新精修')}" title="${t('重新精修')}" aria-expanded="false">${interfaceIcon('refresh')}${t(d.hasRefined ? '重新精修' : '开始精修')}</button><div class="refine-menu" hidden>${languageSelect}${renderRefineModelRow(d.refinedModelOptions, d.refinedModelId)}<label class="refine-menu-speakers"><span>${t('会议人数')}</span><input type="number" min="1" step="1" inputmode="numeric" data-refine-num-speakers placeholder="${t('留空自动识别')}" /></label><button type="button" data-refine-action="${d.hasRefined ? 're-refine' : 'start'}">${d.hasRefined ? t('重新精修') : t('开始精修')}</button></div></span>`;
+      : `<span class="refine-wrap"><button class="detail-icon-action" data-refine-more type="button" aria-label="${t('重新精修')}" title="${t('重新精修')}" aria-expanded="false">${interfaceIcon('refresh')}${t(d.hasRefined ? '重新精修' : '开始精修')}</button><div class="refine-menu" hidden><header>${interfaceIcon('waveform')}<strong>${t('会后精修')}</strong></header>${languageSelect}${renderRefineModelRow(d.refinedModelOptions, d.refinedModelId)}<label class="refine-menu-speakers"><span>${t('会议人数')}</span><input type="number" min="1" step="1" inputmode="numeric" data-refine-num-speakers placeholder="${t('留空自动识别')}" /></label><footer><button class="primary-action" type="button" data-refine-action="${d.hasRefined ? 're-refine' : 'start'}">${d.hasRefined ? t('重新精修') : t('开始精修')}${interfaceIcon('arrow-right')}</button></footer></div></span>`;
   return `${translationMenu}${refineMenu}`;
 }
 /** 文档导航与操作栏共用更新入口，切换文档时保留编辑器和草稿。 */

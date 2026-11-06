@@ -14,20 +14,38 @@
 #include <memory>
 #include <stdexcept>
 
+#ifdef _WIN32
+extern bool decode_windows_audio(const char *, const char *, int, int);
+#endif
+
 void decode_audio(const char *source, const char *destination, int rate,
                   int channels) {
   if (rate < 8000 || rate > 192000 || channels < 1 || channels > 2)
     throw std::runtime_error("Invalid decode format");
-  if (std::filesystem::weakly_canonical(source) ==
-      std::filesystem::weakly_canonical(destination))
+  const auto inputPath = std::filesystem::u8path(source);
+  const auto outputPath = std::filesystem::u8path(destination);
+  if (std::filesystem::weakly_canonical(inputPath) ==
+          std::filesystem::weakly_canonical(outputPath) ||
+      (std::filesystem::exists(outputPath) &&
+       std::filesystem::equivalent(inputPath, outputPath)))
     throw std::runtime_error("Audio source must be preserved");
+#ifdef _WIN32
+  if (decode_windows_audio(source, destination, rate, channels))
+    return;
+#endif
   ma_decoder_config config =
       ma_decoder_config_init(ma_format_s16, channels, rate);
   ma_decoding_backend_vtable *backends[] = {ma_decoding_backend_libopus};
   config.ppCustomBackendVTables = backends;
   config.customBackendCount = 1;
   ma_decoder decoder;
-  if (ma_decoder_init_file(source, &config, &decoder) != MA_SUCCESS)
+#ifdef _WIN32
+  const auto decoded =
+      ma_decoder_init_file_w(inputPath.c_str(), &config, &decoder);
+#else
+  const auto decoded = ma_decoder_init_file(source, &config, &decoder);
+#endif
+  if (decoded != MA_SUCCESS)
     throw std::runtime_error("The native decoder cannot read this audio file");
   struct Cleanup {
     ma_decoder *decoder;
@@ -36,7 +54,14 @@ void decode_audio(const char *source, const char *destination, int rate,
   ma_encoder_config output_config = ma_encoder_config_init(
       ma_encoding_format_wav, ma_format_s16, channels, rate);
   ma_encoder output;
-  if (ma_encoder_init_file(destination, &output_config, &output) != MA_SUCCESS)
+#ifdef _WIN32
+  const auto encoded =
+      ma_encoder_init_file_w(outputPath.c_str(), &output_config, &output);
+#else
+  const auto encoded =
+      ma_encoder_init_file(destination, &output_config, &output);
+#endif
+  if (encoded != MA_SUCCESS)
     throw std::runtime_error("Cannot create decoded audio");
   struct OutputCleanup {
     ma_encoder *encoder;
@@ -61,4 +86,6 @@ void decode_audio(const char *source, const char *destination, int rate,
         written != frames)
       throw std::runtime_error("Could not write decoded audio");
   }
+  if (!frames_written)
+    throw std::runtime_error("Audio file contains no samples");
 }

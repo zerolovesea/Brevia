@@ -70,6 +70,7 @@ contextBridge.exposeInMainWorld('brevia', {
   permissions: {
     status: invoke('permissions.status'),
     requestMicrophone: invoke('permissions.request-microphone'),
+    requestScreen: invoke('permissions.request-screen'),
     openMicrophoneSettings: invoke('permissions.open-microphone-settings'),
     openScreenSettings: invoke('permissions.open-screen-settings'),
   },

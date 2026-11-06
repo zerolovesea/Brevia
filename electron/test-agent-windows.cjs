@@ -49,7 +49,11 @@ test('Windows CLI distribution is standalone and needs no installed Node package
   try {
     await packageAgent(root);
     const script = fs.readFileSync(path.join(root, 'brevia.cmd'), 'utf8');
-    assert.ok(script.includes('"%~dp0Brevia.exe" "%~dp0resources\\control\\brevia.cjs" %*'));
+    assert.ok(
+      script.includes(
+        '"%~dp0resources\\control\\node.exe" "%~dp0resources\\control\\brevia.cjs" %*',
+      ),
+    );
     assert.ok(script.includes('exit /b %ERRORLEVEL%'));
     const data = path.join(root, 'data');
     const result = spawnSync(

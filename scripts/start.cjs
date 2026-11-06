@@ -17,4 +17,7 @@ if (process.platform === 'darwin') {
     '--args',
     ...process.argv.slice(2),
   ]);
+} else if (process.platform === 'win32') {
+  run(process.execPath, ['windows/package.cjs', 'app']);
+  run(path.join(root, 'dist/native-win/app/Brevia.exe'), process.argv.slice(2));
 } else run(require('electron'), ['.', ...process.argv.slice(2)]);

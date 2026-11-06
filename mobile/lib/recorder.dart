@@ -404,6 +404,7 @@ class RecordingEngine {
             'refined_model_id',
             'speaker_segmentation_model_id',
             'vad_model_id',
+            'transfer_mode',
           ])
             if (store.meta[key] != null) key: store.meta[key],
         });
@@ -434,13 +435,27 @@ class RecordingEngine {
         throw StateError(tr("手机与电脑的录音清单不一致，请保留本地文件"));
       }
       // Small bounded batch allows controls and snapshots to stay responsive.
-      for (var sent = 0; next < store.count && sent < 8; sent++) {
+      for (
+        var sent = 0;
+        next < store.count && sent < (state == 'ended' ? 128 : 8);
+        sent++
+      ) {
         final data = await store.chunk(next).readAsBytes();
         final ack = await connection!.call('PUT', '/meetings/$id/chunks', {
           'seq': next,
           'start_sample': store.offsets[next],
           'pcm': base64Encode(data),
         });
+        final acknowledged = ack['next'];
+        if (acknowledged is! int ||
+            acknowledged <= next ||
+            acknowledged > store.count ||
+            ack['samples'] !=
+                (acknowledged == store.count
+                    ? store.samples
+                    : store.offsets[acknowledged])) {
+          throw StateError(tr("手机与电脑的录音清单不一致，请保留本地文件"));
+        }
         next = ack['next'];
         snapshot['next'] = next;
         snapshot['samples'] = ack['samples'];
@@ -459,11 +474,13 @@ class RecordingEngine {
       if (store.meta['state'] == 'ended' &&
           next == store.count &&
           snapshot['ended'] != true) {
-        await connection!.call('POST', '/meetings/$id/end', {
+        final receipt = await connection!.call('POST', '/meetings/$id/end', {
           'count': store.count,
           'samples': store.samples,
         });
         snapshot['ended'] = true;
+        snapshot['received'] = receipt['received'] == true;
+        if (receipt['task'] != null) snapshot['task'] = receipt['task'];
       }
       await write(() async {
         store.meta['uploaded'] = next;
@@ -471,7 +488,7 @@ class RecordingEngine {
             store.meta['state'] == 'ended' &&
             next == store.count &&
             snapshot['ended'] == true &&
-            snapshot['finished'] == true;
+            (snapshot['received'] == true || snapshot['finished'] == true);
         await store.save();
         await writeJson(
           File('${store.directory.path}/snapshot.json'),
@@ -512,6 +529,12 @@ class RecordingEngine {
       syncing = false;
       syncDone?.complete();
       publish();
+      if (connected &&
+          failures == 0 &&
+          store.meta['state'] == 'ended' &&
+          (snapshot['next'] as int? ?? 0) < store.count) {
+        Timer.run(() => unawaited(sync()));
+      }
     }
   }
 

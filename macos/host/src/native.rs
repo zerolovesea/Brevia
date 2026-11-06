@@ -2,10 +2,13 @@ use crate::control::{notify, Control};
 use crate::Lifecycle;
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use serde_json::{json, Value};
+#[cfg(target_os = "macos")]
 use sha2::{Digest, Sha256};
 use std::error::Error;
+#[cfg(target_os = "macos")]
 use std::ffi::{c_char, c_void, CStr, CString};
 use std::path::Path;
+#[cfg(target_os = "macos")]
 use std::process::Command;
 use std::sync::atomic::Ordering;
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, MenuItemKind, PredefinedMenuItem, Submenu};
@@ -19,13 +22,15 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
 type NativeResult = Result<Value, Box<dyn Error>>;
 
+#[cfg(target_os = "macos")]
 extern "C" {
     fn brevia_appkit(name: *const c_char, args: *const c_char, window: *mut c_void) -> *mut c_char;
     fn brevia_free(response: *mut c_char);
     pub fn brevia_watch_sleep(notify: extern "C" fn());
 }
 
-fn appkit(method: &str, args: &Value, window: Option<&WebviewWindow>) -> NativeResult {
+#[cfg(target_os = "macos")]
+fn system_operation(method: &str, args: &Value, window: Option<&WebviewWindow>) -> NativeResult {
     let mut args = args.clone();
     if method == "window.printPDF" {
         args["brand"] = Value::from(include_str!("../../../frontend/assets/brevia-logo.svg"));
@@ -49,8 +54,37 @@ fn appkit(method: &str, args: &Value, window: Option<&WebviewWindow>) -> NativeR
     Ok(parsed["result"].clone())
 }
 
+#[cfg(windows)]
+fn system_operation(method: &str, args: &Value, window: Option<&WebviewWindow>) -> NativeResult {
+    crate::windows::dispatch(method, args, window)
+}
+
+fn local_page(url: &tauri::Url, page: &str) -> bool {
+    let origin = if cfg!(windows) {
+        matches!(url.scheme(), "http" | "https") && url.host_str() == Some("tauri.localhost")
+    } else {
+        url.scheme() == "tauri" && url.host_str() == Some("localhost")
+    };
+    origin
+        && url.port().is_none()
+        && url.username().is_empty()
+        && url.password().is_none()
+        && (url.path() == format!("/{page}")
+            || (page == "index.html" && matches!(url.path(), "" | "/")))
+}
+
+fn shortcut_key(accelerator: &str) -> String {
+    accelerator
+        .replace(
+            "CommandOrControl",
+            if cfg!(windows) { "Control" } else { "Super" },
+        )
+        .replace("CmdOrCtrl", if cfg!(windows) { "Control" } else { "Super" })
+        .replace("Command", "Super")
+}
+
 pub fn show_fatal(message: &str) {
-    let _ = appkit(
+    let _ = system_operation(
         "dialog.message",
         &json!({"message":"Brevia", "detail":message}),
         None,
@@ -68,7 +102,10 @@ fn open_web_link(url: &tauri::Url) {
     if matches!(url.scheme(), "https" | "http") {
         let address = url.as_str().to_owned();
         std::thread::spawn(move || {
+            #[cfg(target_os = "macos")]
             let _ = Command::new("/usr/bin/open").arg(address).status();
+            #[cfg(windows)]
+            let _ = crate::windows::open(&address, false);
         });
     }
 }
@@ -91,18 +128,20 @@ fn create_window(app: &AppHandle, label: &str, args: &Value) -> NativeResult {
         page.to_string()
     };
     let mut builder = WebviewWindowBuilder::new(app, label, WebviewUrl::App(target.into()))
+        .initialization_script(format!(
+            "window.__BREVIA_PLATFORM__ = {:?};",
+            if cfg!(windows) { "win32" } else { "darwin" }
+        ))
         .initialization_script(include_str!("../../bridge.js").replace(
             "/* BREVIA_PRELOAD */",
             include_str!("../../../electron/preload.js"),
         ))
         .on_navigation(move |url| {
-            if page == "index.html" {
+            let local = local_page(url, page);
+            if !local && page == "index.html" {
                 open_web_link(url);
             }
-            url.scheme() == "tauri"
-                && url.host_str() == Some("localhost")
-                && (url.path() == format!("/{page}")
-                    || (page == "index.html" && matches!(url.path(), "" | "/")))
+            local
         })
         .on_new_window(move |url, _| {
             if page == "index.html" {
@@ -129,19 +168,26 @@ fn create_window(app: &AppHandle, label: &str, args: &Value) -> NativeResult {
         if let Some(script) = crate::preferences::initialization() {
             builder = builder.initialization_script(script);
         }
-        builder = builder
-            .title_bar_style(tauri::TitleBarStyle::Overlay)
-            .hidden_title(true);
+        #[cfg(target_os = "macos")]
+        {
+            builder = builder
+                .title_bar_style(tauri::TitleBarStyle::Overlay)
+                .hidden_title(true);
+        }
     } else {
         builder = builder
             .decorations(false)
             .shadow(false)
             .skip_taskbar(true)
             .focused(false)
-            .accept_first_mouse(true)
-            .visible_on_all_workspaces(true)
             .always_on_top(args["alwaysOnTop"].as_bool().unwrap_or(true))
             .transparent(args["transparent"].as_bool().unwrap_or(true));
+        #[cfg(target_os = "macos")]
+        {
+            builder = builder
+                .accept_first_mouse(true)
+                .visible_on_all_workspaces(true);
+        }
     }
     if let (Some(x), Some(y)) = (args["x"].as_f64(), args["y"].as_f64()) {
         builder = builder.position(x, y);
@@ -149,12 +195,20 @@ fn create_window(app: &AppHandle, label: &str, args: &Value) -> NativeResult {
     if let (Some(w), Some(h)) = (args["minWidth"].as_f64(), args["minHeight"].as_f64()) {
         builder = builder.min_inner_size(w, h);
     }
+    #[cfg(target_os = "macos")]
     if let Some(profile) = std::env::var_os("BREVIA_DATA_DIR") {
         // 每个显式资料目录使用自己的持久 WebKit 存储。
         let digest = Sha256::digest(profile.as_encoded_bytes());
         builder = builder.data_store_identifier(digest[..16].try_into().unwrap());
     }
+    #[cfg(windows)]
+    if let Some(profile) = crate::preferences::profile() {
+        builder = builder.data_directory(profile.join("WebView2"));
+    }
     let window = builder.build()?;
+    #[cfg(windows)]
+    crate::windows::watch_webview(&window)?;
+    #[cfg(target_os = "macos")]
     if label == "main" {
         extern "C" {
             fn brevia_watch_minimize(window: *mut c_void, notify: extern "C" fn(bool));
@@ -184,6 +238,14 @@ fn create_window(app: &AppHandle, label: &str, args: &Value) -> NativeResult {
         ),
         WindowEvent::Destroyed => notify(&handle, json!({"host":"window.closed","label":label})),
         WindowEvent::Moved(_) | WindowEvent::Resized(_) => {
+            #[cfg(windows)]
+            if label == "main" && matches!(event, WindowEvent::Resized(_)) {
+                if let Some(window) = handle.get_webview_window(&label) {
+                    if let Ok(minimized) = window.is_minimized() {
+                        notify(&handle, json!({"host":if minimized {"window.minimize"} else {"window.restore"},"label":label}));
+                    }
+                }
+            }
             if let Some(bounds) = handle
                 .get_webview_window(&label)
                 .and_then(|w| window_bounds(&w).ok())
@@ -291,28 +353,38 @@ pub fn dispatch(app: &AppHandle, msg: &Value) -> NativeResult {
             return Ok(json!({"x":pos.x,"y":pos.y,"width":size.width,"height":size.height}));
         }
         "dialog.open" | "dialog.save" | "dialog.message" | "shell.copyText" | "shell.share"
-        | "window.printPDF" => return appkit(method, a, window.as_ref()),
+        | "window.printPDF" => return system_operation(method, a, window.as_ref()),
         "shell.openExternal" | "shell.openPath" | "shell.showItem" => {
+            #[cfg(target_os = "macos")]
             let mut open = Command::new("/usr/bin/open");
             if method == "shell.openExternal" {
                 let url = tauri::Url::parse(text("url")?)?;
                 if !matches!(
                     url.scheme(),
-                    "https" | "http" | "mailto" | "x-apple.systempreferences"
+                    "https" | "http" | "mailto" | "x-apple.systempreferences" | "ms-settings"
                 ) {
                     return Err("Unsupported URL".into());
                 }
+                #[cfg(target_os = "macos")]
                 open.arg(url.as_str());
+                #[cfg(windows)]
+                crate::windows::open(url.as_str(), false)?;
             } else {
                 let path = Path::new(text("path")?);
                 if !path.is_absolute() {
                     return Err("Expected absolute path".into());
                 }
-                if method == "shell.showItem" {
-                    open.arg("-R");
+                #[cfg(target_os = "macos")]
+                {
+                    if method == "shell.showItem" {
+                        open.arg("-R");
+                    }
+                    open.arg(path);
                 }
-                open.arg(path);
+                #[cfg(windows)]
+                crate::windows::open(text("path")?, method == "shell.showItem")?;
             }
+            #[cfg(target_os = "macos")]
             if !open.status()?.success() {
                 return Err("macOS could not open this item".into());
             }
@@ -324,7 +396,12 @@ pub fn dispatch(app: &AppHandle, msg: &Value) -> NativeResult {
             }
             app.asset_protocol_scope().allow_file(&path)?;
             return Ok(json!(format!(
-                "asset://localhost/{}",
+                "{}{}",
+                if cfg!(windows) {
+                    "http://asset.localhost/"
+                } else {
+                    "asset://localhost/"
+                },
                 utf8_percent_encode(path.to_str().ok_or("Invalid path")?, NON_ALPHANUMERIC)
             )));
         }
@@ -346,7 +423,7 @@ pub fn dispatch(app: &AppHandle, msg: &Value) -> NativeResult {
                     .icon(tauri::include_image!(
                         "../../electron/assets/trayTemplate.png"
                     ))
-                    .icon_as_template(true)
+                    .icon_as_template(cfg!(target_os = "macos"))
                     .menu(&menu)
                     .on_menu_event(|app, event| {
                         notify(app, json!({"host":"tray.click","id":event.id().as_ref()}))
@@ -362,10 +439,7 @@ pub fn dispatch(app: &AppHandle, msg: &Value) -> NativeResult {
         }
         "shortcut.register" | "shortcut.unregister" => {
             let accelerator = text("accelerator")?.to_owned();
-            let shortcut = accelerator
-                .replace("CommandOrControl", "Super")
-                .replace("CmdOrCtrl", "Super")
-                .replace("Command", "Super");
+            let shortcut = shortcut_key(&accelerator);
             if method == "shortcut.register" {
                 app.global_shortcut()
                     .on_shortcut(shortcut.as_str(), move |app, _, event| {
@@ -396,4 +470,50 @@ pub fn dispatch(app: &AppHandle, msg: &Value) -> NativeResult {
         _ => return Err(format!("Unsupported native operation: {method}").into()),
     }
     Ok(json!(true))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn only_application_documents_receive_the_bridge() {
+        let base = if cfg!(windows) {
+            "http://tauri.localhost"
+        } else {
+            "tauri://localhost"
+        };
+        assert!(local_page(
+            &format!("{base}/index.html?resetOnboarding=1")
+                .parse()
+                .unwrap(),
+            "index.html"
+        ));
+        for suffix in ["/floating-caption.html", "/other.html", "/index.html/extra"] {
+            assert!(!local_page(
+                &format!("{base}{suffix}").parse().unwrap(),
+                "index.html"
+            ));
+        }
+        assert!(!local_page(
+            &"https://tauri.localhost.evil.test/index.html"
+                .parse()
+                .unwrap(),
+            "index.html"
+        ));
+        assert!(!local_page(
+            &"http://tauri.localhost:8080/index.html".parse().unwrap(),
+            "index.html"
+        ));
+    }
+    #[test]
+    fn command_or_control_uses_the_platform_modifier() {
+        assert_eq!(
+            shortcut_key("CommandOrControl+Shift+R"),
+            if cfg!(windows) {
+                "Control+Shift+R"
+            } else {
+                "Super+Shift+R"
+            }
+        );
+    }
 }

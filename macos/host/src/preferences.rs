@@ -20,8 +20,12 @@ pub fn profile() -> Option<PathBuf> {
     std::env::var_os("BREVIA_DATA_DIR")
         .map(PathBuf::from)
         .or_else(|| {
-            std::env::var_os("HOME")
-                .map(|h| PathBuf::from(h).join("Library/Application Support/Brevia"))
+            #[cfg(target_os = "macos")]
+            let path = std::env::var_os("HOME")
+                .map(|h| PathBuf::from(h).join("Library/Application Support/Brevia"));
+            #[cfg(windows)]
+            let path = std::env::var_os("APPDATA").map(|p| PathBuf::from(p).join("Brevia"));
+            path
         })
 }
 

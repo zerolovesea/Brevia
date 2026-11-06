@@ -95,18 +95,22 @@ class ModelManager {
     {
       bundledRoot = process.env.BREVIA_BUNDLED_MODELS_DIR,
       catalogPath = path.join(__dirname, '../../backend/models.json'),
+      platform = process.platform,
     } = {},
   ) {
     this.root = path.resolve(root);
     this.bundledRoot = bundledRoot;
     this.event = event;
+    this.platform = platform;
     fs.mkdirSync(this.root, { recursive: true });
     this.all = JSON.parse(fs.readFileSync(catalogPath, 'utf8'));
     this.catalog = new Map();
     for (const model of this.all)
-      if (!model.platforms || model.platforms.includes('darwin')) this.catalog.set(model.id, model);
-    for (const model of this.all)
-      if (model.platforms?.includes('macos-webkit')) this.catalog.set(model.id, model);
+      if (!model.platforms || model.platforms.includes(platform === 'win32' ? 'windows' : platform))
+        this.catalog.set(model.id, model);
+    if (platform === 'darwin')
+      for (const model of this.all)
+        if (model.platforms?.includes('macos-webkit')) this.catalog.set(model.id, model);
     for (const model of this.catalog.values()) {
       model.capabilities = modelCapabilities(model);
       model.runtime_tier = 'core';
@@ -173,16 +177,17 @@ class ModelManager {
   device() {
     let physical = os.cpus().length;
     try {
-      physical = Number(
-        execFileSync('/usr/sbin/sysctl', ['-n', 'hw.physicalcpu'], {
-          encoding: 'utf8',
-          timeout: 2000,
-        }).trim(),
-      );
+      if (this.platform === 'darwin')
+        physical = Number(
+          execFileSync('/usr/sbin/sysctl', ['-n', 'hw.physicalcpu'], {
+            encoding: 'utf8',
+            timeout: 2000,
+          }).trim(),
+        );
     } catch {}
     return {
       architecture: os.arch(),
-      asr_backend: 'mlx-metal',
+      asr_backend: this.platform === 'darwin' ? 'mlx-metal' : 'cpu',
       providers: ['CPUExecutionProvider'],
       backend: 'cpu',
       threads: Math.max(1, Math.min(4, Math.floor(os.cpus().length / 2))),

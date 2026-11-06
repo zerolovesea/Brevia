@@ -44,7 +44,10 @@ Object.assign(app, {
   setAppLogsPath() {},
   getPath(key) {
     if (key === 'home') return os.homedir();
-    if (key === 'userData') return path.join(os.homedir(), 'Library/Application Support/Brevia');
+    if (key === 'userData')
+      return process.platform === 'win32'
+        ? path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData/Roaming'), 'Brevia')
+        : path.join(os.homedir(), 'Library/Application Support/Brevia');
     throw new Error('Unknown app path ' + key);
   },
   getVersion: () => version,
@@ -332,6 +335,21 @@ async function dispatch({ channel, payload, label }) {
   }
   const sender = windows.get(label)?.webContents;
   if (!sender || !callbacks.has(channel)) throw new Error('Unknown desktop command');
+  if (channel === 'meeting.note-image.save') {
+    if (typeof payload?.bytes !== 'string' || payload.bytes.length > 13981016)
+      throw new Error('Invalid note image data');
+    const bytes = Buffer.from(payload.bytes, 'base64');
+    if (
+      !bytes.length ||
+      bytes.length > 10 * 1024 * 1024 ||
+      bytes.toString('base64') !== payload.bytes
+    )
+      throw new Error('Invalid note image data');
+    payload = {
+      ...payload,
+      bytes: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.length),
+    };
+  }
   const result = await callbacks.get(channel)({ sender, senderFrame: sender.mainFrame }, payload);
   if (channel === 'audio.url' && typeof result === 'string')
     return native('file.url', { path: fileURLToPath(result) });

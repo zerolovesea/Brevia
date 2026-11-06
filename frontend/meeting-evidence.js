@@ -32,7 +32,7 @@ function transcriptEvidenceLinks(claims, accepted, historicalRows) {
   return links;
 }
 const claimKindLabels = { decision: '决定', action: '待办', cause: '原因分析', conclusion: '结论' };
-function renderEvidenceClaim(claim, accepted, branch = null) {
+function renderEvidenceClaim(claim, accepted, branch = null, inline = false) {
   const sourceLabel = { changed: '原文已变化', thin: '依据较少', missing: '缺少原文依据' }[
     claim.status
   ];
@@ -64,8 +64,8 @@ function renderEvidenceClaim(claim, accepted, branch = null) {
   const layout = branch
     ? ` name="cause-${escapeHtml(branch.group)}" data-ink="${branch.index % 4}"`
     : '';
-  const stem = branch ? '' : '<span class="claim-stem" aria-hidden="true"></span>';
-  return `<details class="evidence-claim"${layout} data-evidence-id="${id}" data-evidence-document="${accepted ? 'notes' : 'summary'}"><summary>${stem}<span class="claim-reading"><strong>${escapeHtml(claim.text)}</strong><small>${first ? `<time>${formatMeetingTime(first.start_ms)}</time>` : ''}${sourceLabel ? `<span class="source-status">${escapeHtml(t(sourceLabel))}</span>` : ''}${claim.sources.length ? escapeHtml(tally) : ''}${claim.detached || claim.edited ? `<span>${escapeHtml(t(claim.detached ? '与当前笔记待核对' : '已编辑'))}</span>` : ''}</small></span>${interfaceIcon('chevron-down')}</summary><div class="evidence-quotes">${history}${quoteRows}${edit}</div></details>`;
+  const stem = branch || inline ? '' : '<span class="claim-stem" aria-hidden="true"></span>';
+  return `<details class="evidence-claim${inline ? ' evidence-inline' : ''}"${layout} data-evidence-id="${id}" data-evidence-document="${accepted ? 'notes' : 'summary'}"><summary>${stem}<span class="claim-reading">${inline ? '' : `<strong>${escapeHtml(claim.text)}</strong>`}<small>${first ? `<time>${formatMeetingTime(first.start_ms)}</time>` : ''}${sourceLabel ? `<span class="source-status">${escapeHtml(t(sourceLabel))}</span>` : ''}${claim.sources.length ? escapeHtml(tally) : ''}${claim.detached || claim.edited ? `<span>${escapeHtml(t(claim.detached ? '与当前笔记待核对' : '已编辑'))}</span>` : ''}</small></span>${interfaceIcon('chevron-down')}</summary><div class="evidence-quotes">${history}${quoteRows}${edit}</div></details>`;
 }
 
 // 使用实际排版后的端点。长段落换行、展开引文和窗口缩放都可能改变相邻分支的位置。
@@ -157,6 +157,7 @@ function causeChapterGroups(claims, markdown) {
   );
 }
 function renderDetailCauseRail(claims, markdown, meetingId) {
+  if (!String(markdown || '').trim()) return '';
   const groups = causeChapterGroups(claims, markdown);
   if (!groups.length) return '';
   return `<aside class="detail-cause-rail" data-meeting-id="${escapeHtml(String(meetingId))}" aria-label="${escapeHtml(t('原因分析'))}"><div class="detail-cause-scroll">${renderCauseTree(groups)}</div></aside>`;
@@ -220,18 +221,33 @@ function renderClaimGroups(claims, accepted = false) {
   );
 }
 function renderEvidenceNotebook(claims, markdown) {
-  const references = claims.filter((claim) => claim.kind !== 'cause' && !claim.detached);
-  const history = claims.filter((claim) => claim.detached);
+  const occurrences = new Map();
+  for (const { lines } of summaryDocumentSections(markdown))
+    for (const line of lines) occurrences.set(line, (occurrences.get(line) || 0) + 1);
+  const references = new Map();
+  const history = [];
+  for (const claim of claims) {
+    if (claim.detached) history.push(claim);
+    else if (claim.kind !== 'cause') {
+      if (claim.line && occurrences.get(claim.line) === 1)
+        references.set(
+          claim.line,
+          (references.get(claim.line) || '') + renderEvidenceClaim(claim, false, null, true),
+        );
+      else history.push(claim);
+    }
+  }
   const disclosure = (items, label) =>
     items.length
       ? `<details class="evidence-document"><summary>${interfaceIcon('notebook')}${escapeHtml(t(label))}${interfaceIcon('chevron-down')}</summary>${renderClaimGroups(items)}</details>`
       : '';
-  return `<div class="evidence-notebook"><div class="summary-document">${renderSummaryDocument(markdown)}</div>${disclosure(references, '引用')}${disclosure(history, '生成时的结论')}</div>`;
+  return `<div class="evidence-notebook"><div class="summary-document">${renderSummaryDocument(markdown, references)}</div>${disclosure(history, '生成时的结论')}</div>`;
 }
 function seekEvidence(source, play = false) {
   if (!source || source.seekable === false || !Number.isFinite(source.start_ms) || !playerAudio.src)
     return;
   const start = source.start_ms / 1000;
+  if (start < 0 || (Number.isFinite(playerAudio.duration) && start > playerAudio.duration)) return;
   playerAudio.currentTime = start;
   progress.value = start;
   renderPlayerTime();
@@ -281,6 +297,9 @@ function editEvidenceClaim(claim, meetingId) {
   input.focus();
 }
 document.addEventListener('click', (event) => {
+  const timestamp = event.target.closest('[data-summary-seek]');
+  if (timestamp)
+    return seekEvidence({ start_ms: Number(timestamp.dataset.summarySeek) * 1000 }, true);
   const sectionLink = event.target.closest('[data-summary-section-link]');
   if (sectionLink) {
     if (uiData.detail.summaryEditing) return showToast(t('请先保存或取消当前编辑'));

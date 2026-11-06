@@ -1,4 +1,7 @@
 const { modelSupportsLanguage } = require('./models.cjs');
+const fs = require('node:fs/promises');
+const path = require('node:path');
+const { wavHeader, wavInfo } = require('./audio-io.cjs');
 
 function createMobileHandlers(worker) {
   const store = worker.store;
@@ -106,12 +109,98 @@ function createMobileHandlers(worker) {
         needed = [value.refined_model_id, value.vad_model_id];
       if (value.target_language) needed.push('hy-mt2-1.8b-q4km');
       const missing = worker.models.missing(needed);
-      if (missing.length)
+      if (missing.length && p.transfer_mode !== 'import')
         throw new Error('请先在电脑模型库安装所选会议需要的模型：' + missing.join(', '));
       if (value.workspace_id && !store.listWorkspaces().some((w) => w.id === value.workspace_id))
         throw new Error('工作区已不存在，请重新选择');
       return { ready: true };
     },
+    'mobile.import': (p) =>
+      worker.tasks.running('meeting.import', p.meeting_id, async (control) => {
+        const id = p.meeting_id;
+        if (
+          !/^[a-f0-9-]{36}$/.test(id) ||
+          !Number.isSafeInteger(p.count) ||
+          p.count < 0 ||
+          !Number.isSafeInteger(p.samples) ||
+          p.samples < 0 ||
+          p.samples * 2 > 0xffffffff - 36
+        )
+          throw new Error('Invalid mobile import');
+        const directory = path.join(worker.root, 'mobile', id);
+        if (
+          (await fs.realpath(directory)) !== path.join(await fs.realpath(worker.root), 'mobile', id)
+        )
+          throw new Error('Invalid mobile import directory');
+        const source = JSON.parse(await fs.readFile(path.join(directory, 'session.json'), 'utf8'));
+        if (
+          source.id !== id ||
+          source.deleted ||
+          source.transfer_mode !== 'import' ||
+          !source.ended ||
+          source.closedOnDesktop ||
+          source.next !== p.count ||
+          source.samples !== p.samples
+        )
+          throw new Error('Mobile recording has not been fully received');
+        const row = store.one('SELECT id,deleted_at FROM meetings WHERE id=?', id);
+        if (row?.deleted_at) throw new Error('会议已删除，请恢复后重试');
+        let meeting;
+        if (row) {
+          meeting = store.getMeeting(id);
+          const manifest = store.readManifest(id);
+          if (manifest.mobile_import !== id) throw new Error('会议编号已存在，请重新创建手机会议');
+          if (manifest.source === 'audio_import') {
+            const info = wavInfo(meeting.audio.playback.mic);
+            if (info.frames !== p.samples)
+              throw new Error('Imported audio does not match the received recording');
+            return meeting;
+          }
+        } else {
+          meeting = store.createMeeting(worker.sentencePayload({ ...p, tags: ['手机录音'] }));
+          store.writeManifest(id, { ...store.readManifest(id), mobile_import: id });
+        }
+        const target = store.checkedAudioPath(id, 'playback-mic.wav'),
+          temp = target + '.tmp';
+        let output;
+        try {
+          output = await fs.open(temp, 'w', 0o600);
+          await output.writeFile(wavHeader(p.samples * 2, 16000));
+          let samples = 0;
+          for (let seq = 0; seq < p.count; seq++) {
+            await control.wait();
+            const chunk = JSON.parse(
+              await fs.readFile(path.join(directory, `${seq}.json`), 'utf8'),
+            );
+            const pcm = worker.decodePCM(chunk.pcm);
+            if (
+              chunk.seq !== seq ||
+              chunk.start_sample !== samples ||
+              !pcm.length ||
+              pcm.length > 32000
+            )
+              throw new Error('Invalid mobile audio chunk');
+            await output.writeFile(pcm);
+            samples += pcm.length / 2;
+          }
+          if (samples !== p.samples)
+            throw new Error('Mobile audio length does not match the receipt');
+          await output.sync();
+          await output.close();
+          output = null;
+          await control.wait();
+          await fs.rename(temp, target);
+          const result = store.finishImportedMeeting(id, p.samples / 16);
+          worker.emit('meeting.imported', { meeting_id: id, meeting: result });
+          return result;
+        } catch (error) {
+          store.setStatus(id, 'ready');
+          throw error;
+        } finally {
+          await output?.close();
+          await fs.rm(temp, { force: true });
+        }
+      }),
     'mobile.apply': (p) =>
       worker.serialRecording(async () => {
         if (worker.active && worker.active !== p.meeting_id)

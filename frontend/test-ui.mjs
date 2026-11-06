@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { runInNewContext } from 'node:vm';
+import './test-permissions.mjs';
 
 const [
   html,
@@ -308,11 +309,6 @@ assert.match(
 );
 assert.match(
   text(components),
-  /function renderDetailTabbar\(\)/,
-  'the tabbar is rendered on its own so its action can follow the active tab',
-);
-assert.match(
-  text(components),
   /detailActiveTab\s+===\s+'transcript'\s+&&\s+d\.transcriptEditable\s+&&\s+d\.refinedMode\s+!==\s+'fulltext'\s+&&\s+d\.refineState\s+!==\s+'refining'/,
   'subtitle editing waits for a settled per-segment transcript',
 );
@@ -326,7 +322,6 @@ assert.match(
   /if \(tabbar\) \{\n\s+const holder = document\.createElement\('div'\);/,
   'tab switching tolerates a missing tabbar',
 );
-assert.match(text(app), /function saveDetailTranscriptEdits\(\)/);
 assert.match(
   text(app),
   /window\.brevia\.segment\.saveText\(\{\s*meeting_id:\s*meeting\.id,\s*segments:\s*edits,?\s*\}\)/,
@@ -703,7 +698,10 @@ assert.deepEqual(
   [],
   `顶层代码不得引用后加载的符号，否则启动即报错：\n${orderViolations.join('\n')}`,
 );
-const componentContext = { document: { addEventListener() {} } };
+const componentContext = {
+  document: { addEventListener() {} },
+  Node: { TEXT_NODE: 3, ELEMENT_NODE: 1 },
+};
 runInNewContext(text(components), componentContext);
 // 动效只处理真实键盘点击，不改变点击行为；快速重复按键取消上一段反馈。
 let keyboardPress;
@@ -754,6 +752,37 @@ assert.equal(buttonAnimations.length, 2, '减少动态、禁用和非键盘点�
 assert.match(componentContext.renderTaskProgressLabel('<long title>', 0), /&lt;long title&gt;/);
 assert.match(componentContext.renderTaskProgressLabel('Meeting', 0), /task-progress-value.*0%/);
 assert.doesNotMatch(componentContext.renderTaskProgressLabel('Waiting'), /task-progress-value/);
+for (let level = 1; level <= 6; level++) {
+  const heading = `${'#'.repeat(level)} Heading ${level}`;
+  assert.equal(componentContext.renderMarkdown(heading), `<h${level}>Heading ${level}</h${level}>`);
+  assert.equal(
+    componentContext.renderMarkdown(`Paragraph\n${heading}`),
+    `<p>Paragraph</p><h${level}>Heading ${level}</h${level}>`,
+    'All heading levels must end the preceding paragraph without a blank line',
+  );
+}
+assert.equal(componentContext.renderMarkdown('####### Literal'), '<p>####### Literal</p>');
+assert.equal(
+  componentContext.renderMarkdown('```\n#### Literal\n```'),
+  '<pre><code>#### Literal</code></pre>',
+);
+assert.equal(
+  componentContext.renderMarkdown('#### **Heading** <img src=x onerror=alert(1)>'),
+  '<h4><strong>Heading</strong> &lt;img src=x onerror=alert(1)&gt;</h4>',
+  'Higher headings retain inline formatting and escape raw HTML',
+);
+const markdownHeadingNodes = Array.from({ length: 6 }, (_, index) => ({
+  nodeType: 1,
+  tagName: `H${index + 1}`,
+  childNodes: [{ nodeType: 3, textContent: `Heading ${index + 1}` }],
+}));
+assert.equal(
+  componentContext.htmlToMarkdown({ childNodes: markdownHeadingNodes }),
+  markdownHeadingNodes
+    .map((_, index) => `${'#'.repeat(index + 1)} Heading ${index + 1}`)
+    .join('\n\n'),
+  'Editing and saving must preserve every heading level',
+);
 const readOnlyTasks = componentContext.renderMarkdown('- [ ] Pending\n- [x] Done');
 assert.match(readOnlyTasks, /class="markdown-task-mark" role="checkbox" aria-checked="false"/);
 assert.match(readOnlyTasks, /aria-checked="true"/);
@@ -841,6 +870,7 @@ runInNewContext(text(backendClient), phoneContext);
   const calls = [];
   const handlers = new Map();
   let meeting = { model_required: ['asr'] };
+  let pauseFailure = false;
   const native = {
     devices: async () => [{ deviceId: 'device1', label: 'Mic' }],
     prepare: async (config) => {
@@ -860,7 +890,9 @@ runInNewContext(text(backendClient), phoneContext);
     permissions: { status: () => ({ systemAudioSupported: true }) },
     meeting: {
       start: async () => meeting,
-      pause: async () => {},
+      pause: async () => {
+        if (pauseFailure) throw new Error('worker pause failed');
+      },
       stop: async () => meeting,
     },
   };
@@ -879,15 +911,25 @@ runInNewContext(text(backendClient), phoneContext);
   assert.equal(calls.filter(([name]) => name === 'stop').length, 2);
   meeting = { id: 'native' };
   await client.start({}, { mic: true, system: true });
+  for (const previous of [false, true]) {
+    await client.pause(previous);
+    pauseFailure = true;
+    await assert.rejects(client.pause(!previous), /worker pause failed/);
+    assert.deepEqual(
+      calls.slice(-2),
+      [
+        ['pause', !previous],
+        ['pause', previous],
+      ],
+      'worker failure must restore the capture state, not only the pause button',
+    );
+    pauseFailure = false;
+  }
+  calls.length = 0;
   await client.pause(true);
   await client.pause(false);
   await client.stop(5000);
-  assert.deepEqual(calls.slice(-4), [
-    ['start', 'native'],
-    ['pause', true],
-    ['pause', false],
-    ['stop'],
-  ]);
+  assert.deepEqual(calls.slice(-3), [['pause', true], ['pause', false], ['stop']]);
   assert.equal(handlers.size, 0);
   calls.length = 0;
   client.adoptNativeRecording({ id: 'agent-recording' }, { mic: true });
@@ -1266,7 +1308,8 @@ runInNewContext(text(i18nData), localeContext);
       }));
       return { buttons, hidden: false, querySelectorAll: () => buttons };
     });
-    assert.equal(groups.flatMap((group) => group.buttons).length, 10);
+    assert.equal(groups.flatMap((group) => group.buttons).length, 9);
+    assert.doesNotMatch(markup, /data-settings-page="prompts"/);
     const empty = { hidden: true };
     const navigation = { querySelectorAll: () => groups, querySelector: () => empty };
     const input = {
@@ -2316,7 +2359,6 @@ assert.match(
   text(js),
   /renderSettingsView\(\);[\s\S]{0,220}before\(speakerProfileCard\);[\s\S]{0,120}append\(updateCard\)/,
 );
-assert.match(text(components), /function renderSettingsView\(\)/);
 assert.doesNotMatch(text(electronMain), /handleIpc\('secret\.get'/);
 assert.match(text(js), /renderSlogan/);
 assert.match(text(app), /refinement\.progress'.*stage.*showRefinementProgress/s);
@@ -2344,14 +2386,9 @@ assert.match(text(uiData), /title: 'AI 功能'[\s\S]*modal: 'ai-features'/);
 assert.doesNotMatch(text(uiData), /modal: '(?:ai-assist|summary-model)'/);
 assert.match(text(js), /summaryProviders/);
 assert.match(text(js), /persistSummaryConfig/);
-assert.match(text(components), /function renderTranscriptSegment/);
 assert.match(text(components), /inline-segment-speaker-form/);
-assert.match(text(components), /function renderMeetingSummary/);
-assert.match(text(components), /function cleanSummaryMarkdown/);
-assert.match(text(components), /function desktopSelect/);
 assert.match(text(js), /renderMeetingDetail\(\);/);
 assert.match(text(js), /function saveInlineSegmentSpeaker/);
-assert.match(text(components), /function renderNavigationMeeting/);
 assert.match(text(components), /function renderSettingsCard/);
 assert.match(text(js), /renderStaticViews\(\);/);
 assert.match(text(js), /function renderPrepareSelects/);
@@ -2780,11 +2817,6 @@ assert.equal(revealGif.readUInt16LE(6), 2400);
 assert.equal(revealGif.readUInt16LE(8), 1520);
 assert.equal(revealGif.includes(Buffer.from('NETSCAPE2.0')), false);
 assert.match(text(backendClient), /this\.stopPromise/);
-assert.doesNotMatch(text(electronMain), /require\('@ffmpeg-installer\/ffmpeg'\)/);
-assert.match(text(electronMain), /app\.asar\.unpacked/);
-assert.match(text(electronMain), /BREVIA_FFMPEG: ffmpeg/);
-assert.equal(packageManifest.dependencies['@ffmpeg-installer/ffmpeg'], '1.1.0');
-assert.deepEqual(packageManifest.build.asarUnpack, ['node_modules/@ffmpeg-installer/**']);
 assert.doesNotMatch(text(backendClient), /setTrackEnabled\(/);
 assert.doesNotMatch(text(backendClient), /_gateSystem|alwaysRecordSystem|audioSource/);
 assert.match(text(js), /const CAPTURE_MODES = new Set\(\['mic', 'system', 'both', 'phone'\]\)/);
@@ -3309,7 +3341,6 @@ assert.doesNotMatch(text(js), /setLiveLayoutMode/);
 assert.doesNotMatch(text(tailwind), /is-caption-mode|live-mode-toggle/);
 assert.doesNotMatch(text(js), /live-translation-target|live-toggle|liveInputs/);
 assert.match(text(js), /formatSpeakerName\(payload\.speaker_name \|\| payload\.speaker\)/);
-assert.match(text(js), /function renderExportModal/);
 assert.doesNotMatch(text(js), /data-track="vocals"/);
 assert.doesNotMatch(text(js), /data-track="accompaniment"/);
 assert.doesNotMatch(text(js), /data-export-detail[\s\S]{0,300}prompt\(/);
@@ -4299,7 +4330,7 @@ assert.match(
   /html\[data-theme=dark\] \.processing-bar i,html\[data-theme=dark\] \.model-download-progress i\{background-color:#fff/,
 );
 assert.match(text(js), /document\.addEventListener\(\s*'scroll',[\s\S]{0,300}is-scrolling/);
-assert.match(text(js), /setTimeout\(\(\) => scroller\.classList\.remove\('is-scrolling'\), 2000\)/);
+assert.match(text(js), /setTimeout\(\(\) => scroller\.classList\.remove\('is-scrolling'\), 900\)/);
 assert.match(text(js), /meeting\.exampleLocale === locale/);
 assert.match(text(js), /function selectLibraryNav/);
 assert.match(text(js), /await refreshBackendMeetings\(\)/);
@@ -4727,7 +4758,7 @@ assert.match(text(electronMain), /permissions\.open-screen-settings/);
 assert.match(text(electronMain), /permissions\.open-microphone-settings/);
 assert.match(text(electronMain), /Privacy_ScreenCapture/);
 assert.match(text(electronMain), /Privacy_Microphone/);
-assert.match(text(electronMain), /spawn\(\s*'open',\s+\[\s*'x-apple\.systempreferences/);
+assert.match(text(electronMain), /shell\.openExternal\(\s*'x-apple\.systempreferences/);
 assert.doesNotMatch(text(electronMain), /useSystemPicker/);
 assert.match(text(electronMain), /requestSingleInstanceLock/);
 assert.match(text(electronMain), /async function stopActiveMeeting\(\)/);
@@ -4908,7 +4939,6 @@ assert.match(text(electronMain), /translationPending: z\.boolean\(\)\.optional\(
 assert.match(text(electronMain), /worker\.restarts = 0;\s*resetFloatingCaptionState\(\);/);
 assert.match(text(electronMain), /pendingTranslation\.segmentId === value\.segmentId/);
 assert.match(text(electronMain), /translationPending: floatingCaptionState\.translationPending/);
-assert.match(text(js), /function showRefinementProgress/);
 assert.match(text(js), /function refinementTitle\(meetingId\)/);
 assert.match(text(js), /refinementTitle\(meeting_id\), meeting_id, stage/);
 assert.match(text(js), /target\.textContent = refinementMeetingTitle/);
@@ -4981,35 +5011,154 @@ const summaryFn = (name) => {
   const start = summaryAppSource.indexOf(`function ${name}(`);
   return summaryAppSource.slice(start, summaryAppSource.indexOf('\n}\n', start) + 2);
 };
-// Agent 权限回显真实保存值；提示词失败保留草稿，导航后不抢回当前页面。
+// 取消嵌套确认要恢复原设置节点、滚动与焦点；轮询替换设备按钮后仍要回到对应入口。
+for (const [kind, anchorState] of [
+  ['storage', 'connected'],
+  ['device-connection', 'connected'],
+  ['device-connection', 'replaced'],
+  ['device-connection', 'removed'],
+]) {
+  const body = { scrollTop: 0 };
+  const keptNodes = [{ name: 'navigation' }, { name: 'draft', value: '未保存的内容' }, body];
+  let removed = false;
+  let focused;
+  let cleared = false;
+  let anchorMarked = true;
+  const shell = { inert: true };
+  const bodyClasses = new Set();
+  const attributes = new Set(kind === 'device-connection' ? ['popover'] : []);
+  const focusButton = (name, visible = true) => ({
+    isConnected: true,
+    checkVisibility: () => visible,
+    focus: (options) => {
+      assert.equal(options.preventScroll, true);
+      focused = name;
+    },
+  });
+  const newDeviceButton = focusButton('replaced-device');
+  const connectionButtons = [focusButton('hidden-pair', false), focusButton('connect-device')];
+  const page = {
+    className: 'settings-page',
+    childNodes: keptNodes,
+    remove: () => {
+      removed = true;
+    },
+  };
+  const panel = {
+    hidden: false,
+    className: 'confirmation-modal library-confirmation',
+    childNodes: [{ name: 'confirmation' }],
+    removeAttribute: (name) => attributes.delete(name),
+    hasAttribute: (name) => attributes.has(name),
+    replaceChildren: (...nodes) => {
+      panel.childNodes = nodes;
+    },
+    querySelector: (selector) => {
+      if (selector === '.modal-body') return body;
+      assert.equal(selector, '[data-device-id="phone-1"] .trusted-device-revoke');
+      return anchorState === 'replaced' ? newDeviceButton : null;
+    },
+    querySelectorAll: (selector) => {
+      assert.equal(
+        selector,
+        '#mobile-dialog [data-mobile-page-step="pair"], #mobile-dialog [data-mobile-page-step="install"]',
+      );
+      return connectionButtons;
+    },
+  };
+  const context = {
+    modalRequestRevision: 7,
+    modalDismissTimer: 42,
+    confirmationAction: () => assert.fail('cancel must not confirm'),
+    activeModal: 'confirmation',
+    settingsModal: panel,
+    storageConfirmationPage: {
+      page,
+      kind,
+      scrollTop: 186,
+      returnDeviceId: kind === 'device-connection' ? 'phone-1' : undefined,
+      returnFocus: {
+        ...focusButton('original'),
+        isConnected: anchorState === 'connected',
+      },
+    },
+    CSS: { escape: (value) => value },
+    clearTimeout: (timer) => {
+      cleared = timer === 42;
+    },
+    document: {
+      body: { classList: { add: (name) => bodyClasses.add(name) } },
+      querySelector: (selector) =>
+        selector === '.app-shell'
+          ? shell
+          : selector === '.is-confirmation-anchor'
+            ? {
+                classList: {
+                  remove: () => {
+                    anchorMarked = false;
+                  },
+                },
+              }
+            : null,
+    },
+  };
+  runInNewContext(summaryFn('closeModal'), context);
+  context.closeModal();
+  assert.equal(context.modalRequestRevision, 8);
+  assert.equal(context.activeModal, kind);
+  assert.equal(context.confirmationAction, undefined);
+  assert.equal(context.storageConfirmationPage, undefined);
+  assert.equal(panel.hidden, false);
+  assert.equal(panel.className, 'settings-page');
+  assert.equal(attributes.has('popover'), false);
+  for (const [index, node] of keptNodes.entries()) assert.equal(panel.childNodes[index], node);
+  assert.equal(panel.childNodes[1].value, '未保存的内容');
+  assert.equal(body.scrollTop, 186);
+  assert.equal(shell.inert, false);
+  assert.equal(anchorMarked, false);
+  assert.equal(bodyClasses.has('modal-open'), true);
+  assert.equal(
+    focused,
+    anchorState === 'connected'
+      ? 'original'
+      : anchorState === 'replaced'
+        ? 'replaced-device'
+        : 'connect-device',
+  );
+  assert.ok(removed && cleared);
+}
+// Agent 引导只复制接入信息，旧配置一次启用；回读确认值，导航后不抢回当前页面。
 {
   let settingsLocale = 'zh';
   const changes = [];
-  const controls = [{ disabled: false }, { disabled: false }];
+  const controls = [{ disabled: false, focus() {} }];
+  const savedPayloads = [];
   let releaseSave;
   const context = {
     agentSettings: {
       enabled: true,
       permissions: { read: true, infer: true, record: false },
       status: { ready: true },
+      skill_path: '/Applications/Brevia.app/skills/brevia/SKILL.md',
       cli_path: '/Applications/Brevia.app/control/brevia',
-      mcp: { command: 'brevia', args: ['mcp'] },
+      mcp: {
+        command: 'brevia',
+        args: ['mcp'],
+        env: { BREVIA_DATA_DIR: '/Users/example/Library/Application Support/Brevia' },
+      },
       token: 'must-never-render',
     },
     agentSettingsBusy: false,
     agentSettingsError: '',
-    promptSettingsDraft: { summary: '<structure>', ai_note: '', translation: 'Keep names' },
-    promptSaveState: 'dirty',
-    promptSaving: false,
     t: (key) => localeContext.window.BreviaLocaleData.catalog[settingsLocale].labels[key] || key,
     escapeHtml: (value) =>
       String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('"', '&quot;'),
-    renderSaveState: (state) => `<span class="save-state">${state}</span>`,
+    interfaceIcon: (name) => `<svg data-icon="${name}"></svg>`,
     activeModal: 'agent-settings',
     settingsModal: {
       hidden: false,
       querySelectorAll: () => controls,
-      querySelector: () => ({ focus() {} }),
+      querySelector: () => controls[0],
     },
     renderModal: (kind) => changes.push(kind),
     userFacingError: (message) => message,
@@ -5018,49 +5167,76 @@ const summaryFn = (name) => {
       brevia: {
         agent: {
           settings: {
-            save: (value) =>
-              new Promise((resolve) => {
+            save: (value) => {
+              savedPayloads.push(JSON.parse(JSON.stringify(value)));
+              return new Promise((resolve) => {
                 releaseSave = () => resolve({ ...context.agentSettings, ...value });
-              }),
+              });
+            },
             get: async () => context.agentSettings,
           },
         },
-        prompts: { save: async (value) => value },
       },
     },
   };
   runInNewContext(
-    ['renderAgentSettings', 'renderPromptSettings'].map(summaryFn).join('\n') +
+    summaryFn('agentSetupGuide') +
       '\n' +
-      ['saveAgentPermission', 'savePromptSettings']
-        .map((name) => 'async ' + summaryFn(name))
-        .join('\n'),
+      summaryFn('renderAgentSettings') +
+      '\nasync ' +
+      summaryFn('enableAgentAccess'),
     context,
   );
   for (const code of ['zh', 'en', 'es', 'ja', 'ko', 'fr', 'de', 'ru']) {
     settingsLocale = code;
     const labels = localeContext.window.BreviaLocaleData.catalog[code].labels;
     const agentMarkup = context.renderAgentSettings();
-    const promptMarkup = context.renderPromptSettings();
-    assert.equal((agentMarkup.match(/role="switch"/g) || []).length, 4);
-    assert.match(agentMarkup, /data-agent-permission="record" role="switch" aria-checked="false"/);
+    assert.doesNotMatch(agentMarkup, /role="switch"|data-agent-permission/);
+    assert.match(agentMarkup, /data-agent-enable/);
     assert.doesNotMatch(agentMarkup, /must-never-render/);
-    assert.equal((promptMarkup.match(/maxlength="4000"/g) || []).length, 3);
-    assert.match(promptMarkup, /&lt;structure>/);
+    assert.equal((agentMarkup.match(/data-agent-copy="prompt"/g) || []).length, 3);
+    assert.match(agentMarkup, /data-agent-copy="guide"/);
+    assert.match(agentMarkup, /data-agent-copy="mcp"/);
+    assert.match(agentMarkup, /data-agent-copy="cli"/);
+    const guide = context.agentSetupGuide();
+    assert.ok(guide.includes(context.agentSettings.skill_path));
+    assert.ok(guide.includes(context.agentSettings.cli_path));
+    assert.ok(guide.includes(context.agentSettings.mcp.env.BREVIA_DATA_DIR));
+    assert.match(guide, /status --no-start/);
+    assert.doesNotMatch(guide, /must-never-render/);
     for (const key of [
       'Agent 与 MCP',
-      '提示词',
-      '本机访问',
-      '允许本机 Agent 访问',
+      '适合 Codex、Claude Code 等能操作本机的 Agent。',
+      '复制引导语发给 Agent，它会先读取 Skill，再通过 CLI 调用 Brevia。',
+      '复制引导语',
+      '查看引导语',
+      '请先读取下面的 Brevia Skill，再通过 CLI 检查连接。后续按 Skill 中的说明执行我的请求；仅在我明确要求时开始录音。',
+      'Skill 文件',
+      '操作说明，告诉 Agent 如何使用 Brevia；实际操作由 CLI 或 MCP 执行。',
+      '本机命令入口，适合能运行终端命令的 Agent。',
+      '客户端工具接口，适合通过 MCP 连接应用的 Agent。',
+      '用于支持 MCP 的客户端。复制配置到客户端的 MCP 设置，重新连接后即可使用。',
+      '本机接入尚未启用完整能力。启用后，Agent 可查询会议、运行推理和控制录音。',
+      '启用本机接入',
+      'CLI 路径',
+      '数据目录',
       '复制 MCP 配置',
       '复制路径',
-      '最多 4000 字；补充要求不会替换应用的基础规则。',
+      '试着这样提问',
+      '点击复制',
+      '用 Brevia 查找讨论发布计划的会议，并列出决定和待办。',
+      '用 Brevia 将我提供的音频转成带时间戳的字幕，保存到我指定的文件夹。',
+      '用 Brevia 查看录音设备，然后用电脑麦克风开始录音。',
     ]) {
       assert.ok(labels[key], `${code}: ${key} has a translation`);
       if (code !== 'zh') assert.notEqual(labels[key], key);
     }
   }
-  const saving = context.saveAgentPermission({ dataset: { agentPermission: 'record' } });
+  assert.doesNotMatch(text(app), /renderPromptSettings|savePromptSettings|prompt-settings-form/);
+  assert.doesNotMatch(text(components), /\['prompts',/);
+  context.agentSettings.cli_path = '/Applications/<Brevia> "local"/brevia';
+  assert.match(context.renderAgentSettings(), /&lt;Brevia> &quot;local&quot;/);
+  const saving = context.enableAgentAccess();
   assert.equal(context.agentSettingsBusy, true);
   assert.ok(controls.every(({ disabled }) => disabled));
   assert.equal(
@@ -5068,16 +5244,22 @@ const summaryFn = (name) => {
     false,
     'only confirmed settings become visible',
   );
-  await context.saveAgentPermission({ dataset: { agentPermission: 'read' } });
+  await context.enableAgentAccess();
+  assert.deepEqual(savedPayloads, [
+    { enabled: true, permissions: { read: true, infer: true, record: true } },
+  ]);
   releaseSave();
   await saving;
   assert.equal(context.agentSettings.permissions.record, true);
   assert.equal(
     context.agentSettings.permissions.read,
     true,
-    'busy clicks do not toggle another permission',
+    'enabling access preserves existing read access',
   );
   assert.equal(context.agentSettingsBusy, false);
+  assert.doesNotMatch(context.renderAgentSettings(), /data-agent-enable|data-agent-permission/);
+  context.agentSettings.enabled = false;
+  assert.match(context.renderAgentSettings(), /data-agent-enable/);
   context.window.brevia.agent.settings.save = async () => {
     throw new Error('save failed');
   };
@@ -5085,38 +5267,24 @@ const summaryFn = (name) => {
     ...context.agentSettings,
     enabled: false,
   });
-  await context.saveAgentPermission({ dataset: { agentPermission: 'enabled' } });
+  await context.enableAgentAccess();
   assert.equal(
     context.agentSettings.enabled,
     false,
     'reload the actual settings after a failed response',
   );
   assert.equal(context.agentSettingsError, 'save failed');
-  context.activeModal = 'prompts';
-  const form = {
-    reportValidity: () => true,
-    elements: controls,
-    querySelector: () => ({ outerHTML: '' }),
-  };
-  context.window.brevia.prompts.save = async () => {
-    throw new Error('disk full');
-  };
-  await context.savePromptSettings(form);
-  assert.equal(context.promptSettingsDraft.summary, '<structure>');
-  assert.equal(context.promptSaveState, 'failed');
-  assert.equal(context.promptSaving, false);
-  context.window.brevia.prompts.save = (value) =>
+  context.window.brevia.agent.settings.save = (value) =>
     new Promise((resolve) => {
-      releaseSave = () => resolve(value);
+      releaseSave = () => resolve({ ...context.agentSettings, ...value });
     });
-  const retry = context.savePromptSettings(form);
+  const retry = context.enableAgentAccess();
   context.activeModal = 'general';
   const renderCount = changes.length;
   releaseSave();
   await retry;
-  assert.equal(context.promptSaveState, 'saved');
+  assert.equal(context.agentSettings.enabled, true);
   assert.equal(changes.length, renderCount, 'late save does not replace the page the user opened');
-  assert.equal(context.promptSettingsDraft.translation, 'Keep names');
 }
 {
   const panel = {
@@ -5441,7 +5609,6 @@ const summaryFn = (name) => {
     },
   }));
   const install = {};
-  const hostStorage = new Map();
   const page = {
     dataset: {},
     querySelector: () => install,
@@ -5453,7 +5620,6 @@ const summaryFn = (name) => {
     mobilePageStep: null,
     mobilePairRevision: 0,
     hasPairedDevice: false,
-    localStorage: { setItem: (key, value) => hostStorage.set(key, value) },
     lastStatus: { devices: [] },
     run: async (action) => action(),
     pair: () => pairCalls++,
@@ -5465,7 +5631,7 @@ const summaryFn = (name) => {
     runInNewContext(source.slice(start, source.indexOf('\n  }\n', start) + 4), mobileContext);
   }
   mobileContext.renderMobilePage();
-  assert.equal(page.dataset.mobilePageState, 'intro');
+  assert.equal(page.dataset.mobilePageState, 'intro', '无信任设备时显示首次连接引导');
   assert.equal(panels.at(-1).hidden, true);
   await mobileContext.changeMobilePageStep('install');
   assert.equal(page.dataset.mobilePageState, 'install');
@@ -5488,8 +5654,9 @@ const summaryFn = (name) => {
   await mobileContext.changeMobilePageStep('done');
   assert.equal(page.dataset.mobilePageState, 'paired');
   mobileContext.updateMobilePage({ devices: [] });
-  assert.equal(page.dataset.mobilePageState, 'paired', '撤销最后一台设备仍展示日常管理页');
-  assert.equal(hostStorage.get('brevia-mobile-has-paired'), 'true');
+  assert.equal(page.dataset.mobilePageState, 'intro', '撤销最后一台设备后返回首次连接引导');
+  assert.equal(panels.find((panel) => panel.dataset.mobilePanel === 'intro').hidden, false);
+  assert.equal(panels.at(-1).hidden, true);
 }
 // 工作区对话框独立于 activeModal；搜索按钮和 CmdK 都必须留在该对话框内。
 {
@@ -6385,6 +6552,48 @@ assert.equal(
   summaryContext.renderMarkdown('[x](javascript:alert) <img src=x onerror=alert>'),
   '<p><a href="#" target="_blank" rel="noopener">x</a> &lt;img src=x onerror=alert&gt;</p>',
 );
+// 时间引用只在纪要正文内变成回听按钮，不吞掉普通括号、链接或代码。
+{
+  const rendered = summaryContext.renderSummaryDocument(
+    '# 回听\n- 决定 [00:00 · 00:10]\n- 交付〔01:02 · 01:30〕\n- 长会议 [1:02:03]',
+  );
+  assert.deepEqual(
+    [...rendered.matchAll(/data-summary-seek="(\d+)"/g)].map((match) => Number(match[1])),
+    [0, 10, 62, 90, 3723],
+  );
+  assert.equal((rendered.match(/class="summary-time"/g) || []).length, 5);
+  for (const value of [
+    '[普通注释]',
+    '[00:60]',
+    '[1:60:00]',
+    '[00:10 · 未确认]',
+    '〔00:99〕',
+    '`[00:10]`',
+    '```\n[00:10]\n```',
+    '[00:10](https://example.com)',
+  ]) {
+    const markup = summaryContext.renderSummaryDocument(value);
+    assert.doesNotMatch(markup, /data-summary-seek=/, value);
+    assert.match(markup, /普通注释|00:60|1:60:00|未确认|00:99|00:10/, value);
+  }
+  assert.doesNotMatch(summaryContext.renderMarkdown('[00:10]'), /data-summary-seek=/);
+}
+// 说话人颜色跨字符串／对象和重绘保持一致，显示文字仍需要转义。
+{
+  const render = summaryContext.renderSpeakerAvatar;
+  const first = render('陈');
+  const second = render('林');
+  assert.equal(first, render({ name: '陈' }));
+  assert.equal(first, render('陈'));
+  assert.match(first, /data-speaker-color="[0-5]"/);
+  assert.notEqual(
+    first.match(/data-speaker-color="([0-5])"/)[1],
+    second.match(/data-speaker-color="([0-5])"/)[1],
+  );
+  assert.match(render('<img src=x>'), /&lt;<\/span>/);
+  assert.doesNotMatch(render('<img src=x>'), /<img/);
+  assert.match(render('😀小陈'), /😀<\/span>/);
+}
 // 关闭搜索、修改查询和较新请求都必须使旧响应失效，旧错误也不能关闭新结果。
 {
   let resolveSearch, rejectSearch;
@@ -6887,7 +7096,6 @@ assert.match(text(app), /ai-assist-config-form/);
 assert.match(text(app), /function switchAiAssistTo2B/);
 assert.match(text(app), /function renderAiAssistToggle/);
 assert.doesNotMatch(text(app), /AiAssistEmptyState|data-ai-empty-action/);
-assert.match(text(app), /function openAiAssistPopover/);
 assert.match(
   text(app),
   /if\s+\(kind\s+===\s+'ai-assist'\)\s+\{\s+renderAiAssistModal\(\);\s+return;\s+\}/,
@@ -6926,7 +7134,6 @@ assert.match(text(components), /\^\[-\*\]\\s\$/);
 assert.match(text(components), /function detectCaptionSignals/);
 assert.match(text(app), /data-add-segment-note/);
 assert.doesNotMatch(text(app), /data-add-segment-time/);
-assert.match(text(app), /function segmentInfoFor/);
 assert.match(text(app), /function appendTextToActiveNotes/);
 assert.match(text(tailwind), /\.caption-signals/);
 // AI 辅助笔记（阶段 3 实时引擎）：IPC、事件白名单、前端启动/停止/输入信号接线。
@@ -6954,19 +7161,21 @@ assert.match(text(app), /window\.brevia\.on\('ai-note\.suggestion'/);
 assert.match(text(app), /window\.brevia\.on\('ai-note\.evidence'/);
 // 树的主题来自原小节，只连接该节明确标记的原因；决定、已采纳笔记和缺少原因的会议独立展示。
 {
-  const { renderClaimGroups, causeChapterGroups, renderDetailCauseRail } = runInNewContext(
-    (await readFile('meeting-evidence.js', 'utf8')) +
-      '\n({ renderClaimGroups, causeChapterGroups, renderDetailCauseRail })',
-    {
-      document: { addEventListener() {} },
-      t: (s) => s,
-      escapeHtml: (s) => String(s).replaceAll('<', '&lt;').replaceAll('>', '&gt;'),
-      interfaceIcon: () => '<svg></svg>',
-      formatMeetingTime: (ms) => String(ms),
-      formatSpeakerName: (speaker) => speaker,
-      summaryDocumentSections: summaryContext.summaryDocumentSections,
-    },
-  );
+  const { renderClaimGroups, causeChapterGroups, renderDetailCauseRail, renderEvidenceNotebook } =
+    runInNewContext(
+      (await readFile('meeting-evidence.js', 'utf8')) +
+        '\n({ renderClaimGroups, causeChapterGroups, renderDetailCauseRail, renderEvidenceNotebook })',
+      {
+        document: { addEventListener() {} },
+        t: (s) => s,
+        escapeHtml: (s) => String(s).replaceAll('<', '&lt;').replaceAll('>', '&gt;'),
+        interfaceIcon: () => '<svg></svg>',
+        formatMeetingTime: (ms) => String(ms),
+        formatSpeakerName: (speaker) => speaker,
+        summaryDocumentSections: summaryContext.summaryDocumentSections,
+        renderSummaryDocument: summaryContext.renderSummaryDocument,
+      },
+    );
   const cause = {
     id: 'cause-1',
     kind: 'cause',
@@ -7042,6 +7251,8 @@ assert.match(text(app), /window\.brevia\.on\('ai-note\.evidence'/);
     '新标题',
   );
   assert.equal(renderDetailCauseRail([decision], markdown, 'm'), '');
+  assert.equal(renderDetailCauseRail([cause], '', 'm'), '');
+  assert.equal(renderDetailCauseRail([cause], '  \n\t', 'm'), '');
   const rail = renderDetailCauseRail(linked, markdown, 'm');
   assert.equal((rail.match(/<brevia-cause-tree>/g) || []).length, 1);
   assert.equal((rail.match(/data-summary-section-link=/g) || []).length, 2);
@@ -7051,6 +7262,52 @@ assert.match(text(app), /window\.brevia\.on\('ai-note\.evidence'/);
   assert.match(rendered, /保留正文/);
   assert.match(rendered, /<h3>细节<\/h3>/);
   assert.doesNotMatch(rendered, /模型前言/);
+  const notebook = renderEvidenceNotebook(
+    linked.map((claim) => ({ ...claim, kind: 'decision' })),
+    markdown,
+  );
+  const [body, history] = notebook.split('<details class="evidence-document">');
+  assert.match(body, /<li>已完成设计<details[^>]*data-evidence-id="first"/);
+  assert.match(body, /<li>等待验收<details[^>]*data-evidence-id="subheading"/);
+  assert.match(body, /<li>资源不足<details[^>]*data-evidence-id="later"/);
+  assert.equal((body.match(/data-evidence-id="first"/g) || []).length, 1);
+  assert.doesNotMatch(body, /data-evidence-id="(?:duplicate|removed|detached)"/);
+  for (const id of ['duplicate', 'removed', 'detached'])
+    assert.match(history, new RegExp(`data-evidence-id="${id}"`));
+  assert.match(body, /class="evidence-claim evidence-inline"/);
+  // 表格里的每条待办就地展开原话，不把两行的引用合并到表格尾部。
+  const rows = ['| 完成验收 [00:12] | 林 |', '| 发出报告 [00:24] | 陈 |'];
+  const table = renderEvidenceNotebook(
+    rows.map((line, index) => ({
+      id: `table-${index}`,
+      kind: 'action',
+      section: '待办',
+      text: index ? '发出报告' : '完成验收',
+      line,
+      sources: [
+        {
+          text: index ? '报告由我发送。' : '我负责验收。',
+          start_ms: (index + 1) * 12000,
+          current_segment_id: `table-source-${index}`,
+        },
+      ],
+    })),
+    '# 待办\n| 事项 | 负责人 |\n| --- | --- |\n' + rows.join('\n'),
+  );
+  const tableRows = [...table.matchAll(/<tbody>([\s\S]*?)<\/tbody>/g)][0][1];
+  const cells = [...tableRows.matchAll(/<tr>([\s\S]*?)<\/tr>/g)].map((row) =>
+    [...row[1].matchAll(/<td>([\s\S]*?)<\/td>/g)].map((cell) => cell[1]),
+  );
+  assert.equal(cells.length, 2);
+  assert.equal(cells[0].length, 2);
+  assert.equal(cells[1].length, 2);
+  assert.match(cells[0][0], /data-summary-seek="12"/);
+  assert.match(cells[1][0], /data-summary-seek="24"/);
+  assert.match(cells[0][1], /data-evidence-id="table-0"[\s\S]*我负责验收。/);
+  assert.match(cells[1][1], /data-evidence-id="table-1"[\s\S]*报告由我发送。/);
+  assert.doesNotMatch(cells[0][1], /data-evidence-id="table-1"/);
+  assert.doesNotMatch(cells[1][1], /data-evidence-id="table-0"/);
+  assert.doesNotMatch(table.split('</table>')[1], /data-evidence-id=/);
 }
 // 补充引用依据时必须同时更新展示中与暂存的建议，不能因队列重赋值中断事件。
 const evidenceHandlers = new Map();
@@ -7134,7 +7391,6 @@ for (const [language, copy] of Object.entries(
 assert.match(text(html), /data-ai-suggestion/);
 assert.match(text(html), /data-ai-request/);
 assert.match(text(app), /function renderAiSuggestion/);
-assert.match(text(app), /function acceptAiSuggestion/);
 assert.match(text(app), /function convertTopicToHeading/);
 assert.match(text(app), /data-ai-accept/);
 assert.match(text(app), /data-ai-ignore/);
@@ -7239,7 +7495,41 @@ assert.match(
   text(components),
   /meeting\.noteImage\.save\(\{\s*meeting_id:\s*meetingId,\s*mime_type:\s*file\.type,\s*bytes,?\s*\}/,
 );
-assert.match(text(components), /sanitizeUrl\(url = ''\)[\s\S]{0,180}brevia-note/);
+const noteImageAddress =
+  'brevia-note://fa3b618c-ce90-4c28-8137-ac1e32865df0/e5a140ba-79e8-4ab2-9f92-f778601d0dc2.png';
+const webviewImageAddress = noteImageAddress.replace(
+  'brevia-note://',
+  'http://brevia-note.localhost/',
+);
+assert.equal(componentContext.sanitizeUrl(noteImageAddress), noteImageAddress);
+componentContext.__BREVIA_PLATFORM__ = 'win32';
+assert.equal(componentContext.sanitizeUrl(noteImageAddress), webviewImageAddress);
+assert.equal(componentContext.sanitizeUrl('javascript:alert(1)'), '#');
+assert.equal(componentContext.noteImageMarkdownUrl(webviewImageAddress), noteImageAddress);
+assert.equal(
+  componentContext.noteImageMarkdownUrl('http://brevia-note.localhost.evil.test/a/b.png'),
+  'http://brevia-note.localhost.evil.test/a/b.png',
+);
+assert.equal(
+  componentContext.htmlToMarkdown({
+    childNodes: [
+      {
+        nodeType: 1,
+        tagName: 'P',
+        childNodes: [
+          {
+            nodeType: 1,
+            tagName: 'IMG',
+            childNodes: [],
+            getAttribute: (name) => (name === 'src' ? webviewImageAddress : 'photo'),
+          },
+        ],
+      },
+    ],
+  }),
+  `![photo](${noteImageAddress})`,
+);
+delete componentContext.__BREVIA_PLATFORM__;
 assert.match(
   text(electronMain),
   /function saveNoteImage\([\s\S]{0,700}Image must be 10 MB or smaller/,
@@ -7663,7 +7953,6 @@ assert.doesNotMatch(
 assert.match(text(app), /data-flow-select-choice="refine-model"/);
 assert.match(text(app), /uiData\.detail\.refinedModelPinned = true/);
 assert.match(text(app), /function pinnedRefineModel\(\)/);
-assert.match(text(app), /function meetingHasUserEdits\(\)/);
 assert.match(text(app), /function refineWithSelectedModel\(numSpeakers\)/);
 assert.match(text(app), /\.\.\.\(modelId \? \{ refined_model_id: modelId \} : \{\}\)/);
 assert.match(text(app), /refineWithSelectedModel\(refineNumSpeakers\(\)\)/);
@@ -8353,9 +8642,10 @@ const mobileConnectionSource = await readFile('mobile-connection.js', 'utf8');
     revoke,
     device,
     t: (value) => value,
-    openConfirmation: (title, detail, action, anchor) => {
+    openConfirmation: (title, detail, action, anchor, subject) => {
       assert.equal(title, '取消信任');
-      assert.ok(detail.includes(device.name));
+      assert.equal(subject, device.name);
+      assert.ok(detail.includes('需要重新配对'));
       assert.equal(anchor, revoke);
       confirmed = action;
     },
@@ -9851,7 +10141,6 @@ for (const eventFirst of [false, true]) {
       pause: async (paused) => {
         calls.push(['pause', paused]);
       },
-      capture: { setPaused: async (paused) => calls.push(['rollback', paused]) },
     },
     activateMeeting: (meeting) => {
       context.meetingActive = true;
@@ -9884,10 +10173,78 @@ for (const eventFirst of [false, true]) {
     throw Error('save failed');
   };
   await assert.rejects(context.controlAgentRecording({ action: 'pause' }), /save failed/);
-  assert.deepEqual(calls.at(-1), ['rollback', false]);
   assert.equal((await context.controlAgentRecording({ action: 'stop' })).state, 'stopped');
   await assert.rejects(
     context.controlAgentRecording({ action: 'stop', meeting_id: 'wrong' }),
     /操作未完成/,
   );
 }
+
+// 说话人异步补齐不能重绘正文或重新触发字幕、翻译和滚动。
+const liveSpeakerHandlers = {};
+const liveSpeakerLabel = { dataset: {}, textContent: '', insertAdjacentHTML() {} };
+let liveSpeakerAdded = 0;
+const liveSpeakerRow = {
+  querySelector(selector) {
+    if (selector === '.segment-meta')
+      return {
+        append() {
+          liveSpeakerAdded++;
+        },
+      };
+    return null;
+  },
+};
+const liveSpeakerContext = {
+  window: {
+    brevia: {
+      on(name, callback) {
+        liveSpeakerHandlers[name] = callback;
+      },
+    },
+  },
+  meetingActive: true,
+  breviaClient: { state: { meeting: { id: 'meeting' } } },
+  liveSegmentData: new Map([
+    ['segment', { revision: 1, text: 'Keep the text', speaker: 'local-user' }],
+  ]),
+  liveSegments: new Map([['segment', liveSpeakerRow]]),
+  correctionDraft: null,
+  document: {
+    createElement() {
+      return liveSpeakerLabel;
+    },
+  },
+  formatSpeakerName: (name) => name,
+  renderSpeakerAvatar: () => '<span></span>',
+};
+const speakerHandlerStart = text(app).indexOf("  window.brevia.on('transcript.refined',");
+runInNewContext(
+  text(app).slice(
+    speakerHandlerStart,
+    text(app).indexOf("  window.brevia.on('transcript.final',", speakerHandlerStart),
+  ),
+  liveSpeakerContext,
+);
+const speakerEvent = {
+  meeting_id: 'meeting',
+  segment_id: 'segment',
+  revision: 2,
+  speaker: 'profile-a',
+  speaker_name: 'Alice',
+};
+liveSpeakerHandlers['transcript.refined']({ ...speakerEvent, meeting_id: 'other' });
+assert.equal(liveSpeakerAdded, 0);
+liveSpeakerHandlers['transcript.refined'](speakerEvent);
+assert.equal(liveSpeakerLabel.textContent, 'Alice');
+assert.equal(liveSpeakerLabel.dataset.segmentSpeaker, 'segment');
+assert.equal(liveSpeakerContext.liveSegmentData.get('segment').text, 'Keep the text');
+liveSpeakerHandlers['transcript.refined']({ ...speakerEvent, speaker_name: 'Stale' });
+assert.equal(liveSpeakerLabel.textContent, 'Alice');
+liveSpeakerContext.correctionDraft = { segment: { id: 'segment' } };
+liveSpeakerHandlers['transcript.refined']({
+  ...speakerEvent,
+  revision: 3,
+  speaker_name: 'Editing',
+});
+assert.equal(liveSpeakerAdded, 1);

@@ -13,7 +13,7 @@ macos/host/cargo.sh test --release --locked --manifest-path macos/host/Cargo.tom
 xcrun swift-format lint --strict macos/audio/*.swift macos/inference/Package.swift macos/inference/Sources/main.swift
 xcrun swiftc -D BREVIA_AUDIO_TEST -parse-as-library macos/audio/*.swift -o "$scratch/audio-test"
 "$scratch/audio-test" > /dev/null
-xcrun clang++ -std=c++17 -fobjc-arc -framework Foundation macos/inference/test-native-helpers.mm -o "$scratch/inference-test"
+xcrun clang++ -std=c++17 -I dist/native/inference-sources/llama.cpp-e3546c7948e3af463d0b401e6421d5a4c2faf565/vendor macos/inference/test-native-helpers.cpp -o "$scratch/inference-test"
 "$scratch/inference-test"
 node --test macos/backend/test-*.cjs
 codesign --verify --deep --strict "$bundle"

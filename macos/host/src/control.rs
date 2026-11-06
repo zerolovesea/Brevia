@@ -17,11 +17,19 @@ pub struct Control {
     replies: Mutex<HashMap<u64, oneshot::Sender<Reply>>>,
     next: AtomicU64,
     pub drop_path: Mutex<Option<PathBuf>>,
+    #[cfg(windows)]
+    _job: crate::windows::ProcessJob,
 }
 
 impl Control {
     pub fn start(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         let resources = app.path().resource_dir()?;
+        #[cfg(windows)]
+        let resources = if resources.join("resources/control/control.cjs").is_file() {
+            resources.join("resources")
+        } else {
+            resources
+        };
         let bundled = resources.join("control/control.cjs").is_file();
         let locate = |key: &str, name: &str| -> Result<PathBuf, String> {
             if bundled {
@@ -32,7 +40,11 @@ impl Control {
                     .ok_or_else(|| format!("Missing {key}"))
             }
         };
-        let mut child = Command::new(locate("BREVIA_CONTROL_NODE", "node")?)
+        let mut command = Command::new(locate(
+            "BREVIA_CONTROL_NODE",
+            if cfg!(windows) { "node.exe" } else { "node" },
+        )?);
+        command
             .arg(locate("BREVIA_CONTROL_ENTRY", "control.cjs")?)
             .args(
                 std::env::args()
@@ -42,15 +54,34 @@ impl Control {
             .env("BREVIA_RESOURCES", &resources)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::inherit())
-            .spawn()?;
+            .stderr(Stdio::inherit());
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            command.creation_flags(0x08000000);
+            command.env("BREVIA_WAIT_FOR_HOST", "1");
+        }
+        let mut child = command.spawn()?;
+        #[cfg(windows)]
+        let job = match crate::windows::ProcessJob::new(&child) {
+            Ok(job) => job,
+            Err(error) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(error);
+            }
+        };
         let stdout = child.stdout.take().ok_or("control stdout")?;
         app.manage(Self {
             stdin: Mutex::new(child.stdin.take()),
             replies: Mutex::new(HashMap::new()),
             next: AtomicU64::new(1),
             drop_path: Mutex::new(None),
+            #[cfg(windows)]
+            _job: job,
         });
+        #[cfg(windows)]
+        app.state::<Control>().send(&json!({"host":"ready"}))?;
 
         // 原生操作按发送顺序执行；读取侧必须保持畅通，才能同时完成前端请求。
         let (native_tx, native_rx) = mpsc::channel::<Value>();

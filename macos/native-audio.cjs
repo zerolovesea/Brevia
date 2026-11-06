@@ -7,13 +7,19 @@ const run = promisify(execFile);
 class NativeAudio {
   binary() {
     return (
-      process.env.BREVIA_AUDIO_HELPER || path.join(process.resourcesPath, 'control', 'brevia-audio')
+      process.env.BREVIA_AUDIO_HELPER ||
+      path.join(
+        process.resourcesPath,
+        'control',
+        'brevia-audio' + (process.platform === 'win32' ? '.exe' : ''),
+      )
     );
   }
   async query(command) {
     const { stdout } = await run(this.binary(), [command], {
       timeout: 120000,
       maxBuffer: 256 * 1024,
+      windowsHide: true,
     });
     return JSON.parse(stdout);
   }
@@ -25,7 +31,10 @@ class NativeAudio {
     if (deviceId) args.push('--device', deviceId);
     if (preview) args.push('--preview');
     if (!mic && !system) throw new Error('Select an audio input');
-    const proc = spawn(this.binary(), args, { stdio: ['pipe', 'pipe', 'inherit'] });
+    const proc = spawn(this.binary(), args, {
+      stdio: ['pipe', 'pipe', 'inherit'],
+      windowsHide: true,
+    });
     const state = { proc, append, publish, preview, meeting: null };
     this.session = state;
     const ready = this.waitFor(state, 'ready', 120000);

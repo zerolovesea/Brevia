@@ -644,6 +644,7 @@ void main() {
                 as Map;
         expect(registration['language'], 'en');
         expect(registration['num_speakers'], 3);
+        expect(registration['transfer_mode'], 'import');
         expect(connection.samples, 2);
       } finally {
         await model.releaseEngines();
@@ -653,6 +654,36 @@ void main() {
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
             .setMockMethodCallHandler(channel, null);
         await root.delete(recursive: true);
+      }
+    },
+  );
+
+  test(
+    'durable receipt releases the phone before desktop transcription completes',
+    () async {
+      final dir = await Directory.systemTemp.createTemp('brevia-receipt-');
+      final store = RecordingStore(dir, {
+        'id': 'test',
+        'state': 'ended',
+        'transfer_mode': 'import',
+      });
+      await store.append(Uint8List.fromList([1, 0, 2, 0]));
+      final connection = SyncConnection()
+        ..acknowledgesReceipt = true
+        ..processingFinished = false;
+      final engine = RecordingEngine(store, connection, (_) {});
+      try {
+        await engine.sync();
+        expect(store.meta['finished'], true);
+        expect(engine.snapshot['task']['state'], 'queued');
+        expect(engine.snapshot['finished'], false);
+        expect(connection.calls.last, 'POST /meetings/test/end');
+        await engine.dispose();
+        await store.deleteLocal();
+        expect(await dir.exists(), false);
+      } finally {
+        await engine.dispose();
+        if (await dir.exists()) await dir.delete(recursive: true);
       }
     },
   );
@@ -876,6 +907,7 @@ class SyncConnection extends DesktopConnection {
   final List<String> calls = [];
   bool deleted = false, rejectPrepare = false;
   bool loseChunkAck = false, loseEndAck = false;
+  bool acknowledgesReceipt = false, processingFinished = true;
   int next = 0, samples = 0;
   final List<Object?> payloads = [];
   SyncConnection() : super(address: 'https://192.168.1.2', fingerprint: 'test');
@@ -890,7 +922,8 @@ class SyncConnection extends DesktopConnection {
         'next': next,
         'samples': samples,
         'ended': true,
-        'finished': true,
+        'finished': processingFinished,
+        'received': acknowledgesReceipt && next > 0,
       };
     }
     if (route.endsWith('/chunks')) {
@@ -905,6 +938,13 @@ class SyncConnection extends DesktopConnection {
     if (route.endsWith('/end') && loseEndAck) {
       loseEndAck = false;
       throw SocketException('end acknowledgement lost');
+    }
+    if (route.endsWith('/end') && acknowledgesReceipt) {
+      return {
+        'ended': true,
+        'received': true,
+        'task': {'state': 'queued', 'action': 'refine'},
+      };
     }
     return {};
   }

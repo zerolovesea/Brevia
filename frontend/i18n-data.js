@@ -224,7 +224,49 @@
         'settings': '设置',
       },
       'labels': {
+        '连接你的 Agent': '连接你的 Agent',
+        '将配置添加到客户端的 MCP 设置，重新连接后即可使用 Brevia 工具。':
+          '将配置添加到客户端的 MCP 设置，重新连接后即可使用 Brevia 工具。',
+        '使用 CLI 接入': '使用 CLI 接入',
+        '将此路径交给 Agent，让它运行 status 检查连接。':
+          '将此路径交给 Agent，让它运行 status 检查连接。',
+        '试着这样提问': '试着这样提问',
+        '点击复制': '点击复制',
+        '用 Brevia 查找讨论发布计划的会议，并列出决定和待办。':
+          '用 Brevia 查找讨论发布计划的会议，并列出决定和待办。',
+        '用 Brevia 将我提供的音频转成带时间戳的字幕，保存到我指定的文件夹。':
+          '用 Brevia 将我提供的音频转成带时间戳的字幕，保存到我指定的文件夹。',
+        '用 Brevia 查看录音设备，然后用电脑麦克风开始录音。':
+          '用 Brevia 查看录音设备，然后用电脑麦克风开始录音。',
+        '申请权限': '申请权限',
+        '正在请求权限…': '正在请求权限…',
+        '隐私与安全性 → 屏幕与系统音频录制': '隐私与安全性 → 屏幕与系统音频录制',
+        '隐私与安全性 → 麦克风': '隐私与安全性 → 麦克风',
+        '连接后，手机可访问电脑上的会议。': '连接后，手机可访问电脑上的会议。',
+        '这台设备将断开连接，需要重新配对才能访问电脑。':
+          '这台设备将断开连接，需要重新配对才能访问电脑。',
         'Agent 与 MCP': 'Agent 与 MCP',
+        '适合 Codex、Claude Code 等能操作本机的 Agent。':
+          '适合 Codex、Claude Code 等能操作本机的 Agent。',
+        '复制引导语发给 Agent，它会先读取 Skill，再通过 CLI 调用 Brevia。':
+          '复制引导语发给 Agent，它会先读取 Skill，再通过 CLI 调用 Brevia。',
+        '复制引导语': '复制引导语',
+        '查看引导语': '查看引导语',
+        '请先读取下面的 Brevia Skill，再通过 CLI 检查连接。后续按 Skill 中的说明执行我的请求；仅在我明确要求时开始录音。':
+          '请先读取下面的 Brevia Skill，再通过 CLI 检查连接。后续按 Skill 中的说明执行我的请求；仅在我明确要求时开始录音。',
+        'Skill 文件': 'Skill 文件',
+        '操作说明，告诉 Agent 如何使用 Brevia；实际操作由 CLI 或 MCP 执行。':
+          '操作说明，告诉 Agent 如何使用 Brevia；实际操作由 CLI 或 MCP 执行。',
+        '本机命令入口，适合能运行终端命令的 Agent。': '本机命令入口，适合能运行终端命令的 Agent。',
+        '客户端工具接口，适合通过 MCP 连接应用的 Agent。':
+          '客户端工具接口，适合通过 MCP 连接应用的 Agent。',
+        '用于支持 MCP 的客户端。复制配置到客户端的 MCP 设置，重新连接后即可使用。':
+          '用于支持 MCP 的客户端。复制配置到客户端的 MCP 设置，重新连接后即可使用。',
+        '本机接入尚未启用完整能力。启用后，Agent 可查询会议、运行推理和控制录音。':
+          '本机接入尚未启用完整能力。启用后，Agent 可查询会议、运行推理和控制录音。',
+        '启用本机接入': '启用本机接入',
+        'CLI 路径': 'CLI 路径',
+        '数据目录': '数据目录',
         '提示词': '提示词',
         '本机访问': '本机访问',
         '允许本机 Agent 访问': '允许本机 Agent 访问',
@@ -899,6 +941,7 @@
         '收起': '收起',
         '选择录音并添加': '选择录音并添加',
         '播放录音': '播放录音',
+        '复制到剪贴板': '复制到剪贴板',
         '已复制到剪贴板': '已复制到剪贴板',
         '暂无可分享的内容': '暂无可分享的内容',
         '进阶设置': '进阶设置',
@@ -1096,7 +1139,51 @@
         'settings': 'Settings',
       },
       'labels': {
+        '连接你的 Agent': 'Connect your agent',
+        '将配置添加到客户端的 MCP 设置，重新连接后即可使用 Brevia 工具。':
+          'Add the configuration to your client’s MCP settings, then reconnect to use Brevia tools.',
+        '使用 CLI 接入': 'Connect through the CLI',
+        '将此路径交给 Agent，让它运行 status 检查连接。':
+          'Give your agent this path and ask it to run status to check the connection.',
+        '试着这样提问': 'Try asking',
+        '点击复制': 'Click to copy',
+        '用 Brevia 查找讨论发布计划的会议，并列出决定和待办。':
+          'Use Brevia to find meetings about the release plan and list the decisions and action items.',
+        '用 Brevia 将我提供的音频转成带时间戳的字幕，保存到我指定的文件夹。':
+          'Use Brevia to transcribe the audio I provide into timestamped captions and save them in the folder I specify.',
+        '用 Brevia 查看录音设备，然后用电脑麦克风开始录音。':
+          'Use Brevia to list recording devices, then start recording with the computer microphone.',
+        '申请权限': 'Request access',
+        '正在请求权限…': 'Requesting access…',
+        '隐私与安全性 → 屏幕与系统音频录制': 'Privacy & Security → Screen & System Audio Recording',
+        '隐私与安全性 → 麦克风': 'Privacy & Security → Microphone',
+        '连接后，手机可访问电脑上的会议。':
+          'Once connected, your phone can access meetings on this computer.',
+        '这台设备将断开连接，需要重新配对才能访问电脑。':
+          'This device will disconnect and must pair again to access this computer.',
         'Agent 与 MCP': 'Agent & MCP',
+        '适合 Codex、Claude Code 等能操作本机的 Agent。':
+          'For Agents that can operate this computer, such as Codex and Claude Code.',
+        '复制引导语发给 Agent，它会先读取 Skill，再通过 CLI 调用 Brevia。':
+          'Send the setup prompt to your Agent. It will read the Skill, then use Brevia through the CLI.',
+        '复制引导语': 'Copy setup prompt',
+        '查看引导语': 'View setup prompt',
+        '请先读取下面的 Brevia Skill，再通过 CLI 检查连接。后续按 Skill 中的说明执行我的请求；仅在我明确要求时开始录音。':
+          'First read the Brevia Skill below, then check the connection through the CLI. Follow the Skill to carry out my requests; only start recording when I explicitly ask.',
+        'Skill 文件': 'Skill file',
+        '操作说明，告诉 Agent 如何使用 Brevia；实际操作由 CLI 或 MCP 执行。':
+          'Instructions that teach the Agent how to use Brevia. Actions are performed through the CLI or MCP.',
+        '本机命令入口，适合能运行终端命令的 Agent。':
+          'A local command entry point for Agents that can run terminal commands.',
+        '客户端工具接口，适合通过 MCP 连接应用的 Agent。':
+          'A client tool interface for Agents that connect to apps through MCP.',
+        '用于支持 MCP 的客户端。复制配置到客户端的 MCP 设置，重新连接后即可使用。':
+          'For MCP-compatible clients. Paste the configuration into your client’s MCP settings, then reconnect to get started.',
+        '本机接入尚未启用完整能力。启用后，Agent 可查询会议、运行推理和控制录音。':
+          'Local access is not fully enabled. Enable it to let Agents query meetings, run inference and control recording.',
+        '启用本机接入': 'Enable local access',
+        'CLI 路径': 'CLI path',
+        '数据目录': 'Data directory',
         '提示词': 'Prompts',
         '本机访问': 'Local access',
         '允许本机 Agent 访问': 'Allow local Agent access',
@@ -1910,6 +1997,7 @@
         '收起': 'Collapse',
         '选择录音并添加': 'Choose recording and add',
         '播放录音': 'Play recording',
+        '复制到剪贴板': 'Copy to clipboard',
         '已复制到剪贴板': 'Copied to clipboard',
         '暂无可分享的内容': 'Nothing to share yet',
         '进阶设置': 'Advanced settings',
@@ -2170,7 +2258,52 @@
         'settings': 'Configuración',
       },
       'labels': {
+        '连接你的 Agent': 'Conecta tu agente',
+        '将配置添加到客户端的 MCP 设置，重新连接后即可使用 Brevia 工具。':
+          'Añade la configuración a los ajustes MCP de tu cliente y vuelve a conectarlo para usar las herramientas de Brevia.',
+        '使用 CLI 接入': 'Conectar mediante la CLI',
+        '将此路径交给 Agent，让它运行 status 检查连接。':
+          'Dale esta ruta a tu agente y pídele que ejecute status para comprobar la conexión.',
+        '试着这样提问': 'Prueba a pedir',
+        '点击复制': 'Haz clic para copiar',
+        '用 Brevia 查找讨论发布计划的会议，并列出决定和待办。':
+          'Usa Brevia para buscar reuniones sobre el plan de lanzamiento y enumerar las decisiones y tareas pendientes.',
+        '用 Brevia 将我提供的音频转成带时间戳的字幕，保存到我指定的文件夹。':
+          'Usa Brevia para transcribir el audio que te proporcione en subtítulos con marcas de tiempo y guardarlos en la carpeta que indique.',
+        '用 Brevia 查看录音设备，然后用电脑麦克风开始录音。':
+          'Usa Brevia para listar los dispositivos de grabación y empezar a grabar con el micrófono del ordenador.',
+        '申请权限': 'Solicitar acceso',
+        '正在请求权限…': 'Solicitando acceso…',
+        '隐私与安全性 → 屏幕与系统音频录制':
+          'Privacidad y seguridad → Grabación de pantalla y del audio del sistema',
+        '隐私与安全性 → 麦克风': 'Privacidad y seguridad → Micrófono',
+        '连接后，手机可访问电脑上的会议。':
+          'Una vez conectado, el teléfono podrá acceder a las reuniones de este ordenador.',
+        '这台设备将断开连接，需要重新配对才能访问电脑。':
+          'Este dispositivo se desconectará y deberá volver a vincularse para acceder a este ordenador.',
         'Agent 与 MCP': 'Agent y MCP',
+        '适合 Codex、Claude Code 等能操作本机的 Agent。':
+          'Para agentes que pueden operar este equipo, como Codex y Claude Code.',
+        '复制引导语发给 Agent，它会先读取 Skill，再通过 CLI 调用 Brevia。':
+          'Envía las instrucciones al agente. Primero leerá el Skill y luego usará Brevia mediante la CLI.',
+        '复制引导语': 'Copiar instrucciones',
+        '查看引导语': 'Ver instrucciones',
+        '请先读取下面的 Brevia Skill，再通过 CLI 检查连接。后续按 Skill 中的说明执行我的请求；仅在我明确要求时开始录音。':
+          'Primero lee el Skill de Brevia que aparece a continuación y comprueba la conexión mediante la CLI. Sigue las indicaciones del Skill para ejecutar mis solicitudes; inicia la grabación solo cuando te lo pida expresamente.',
+        'Skill 文件': 'Archivo Skill',
+        '操作说明，告诉 Agent 如何使用 Brevia；实际操作由 CLI 或 MCP 执行。':
+          'Instrucciones para que el agente sepa usar Brevia. Las acciones se ejecutan mediante la CLI o MCP.',
+        '本机命令入口，适合能运行终端命令的 Agent。':
+          'Acceso local por comandos para agentes que pueden usar la terminal.',
+        '客户端工具接口，适合通过 MCP 连接应用的 Agent。':
+          'Interfaz de herramientas para agentes que se conectan a aplicaciones mediante MCP.',
+        '用于支持 MCP 的客户端。复制配置到客户端的 MCP 设置，重新连接后即可使用。':
+          'Para clientes compatibles con MCP. Pega la configuración en sus ajustes de MCP y vuelve a conectar para empezar.',
+        '本机接入尚未启用完整能力。启用后，Agent 可查询会议、运行推理和控制录音。':
+          'El acceso local aún no está habilitado por completo. Actívalo para que los agentes puedan consultar reuniones, ejecutar inferencias y controlar la grabación.',
+        '启用本机接入': 'Activar acceso local',
+        'CLI 路径': 'Ruta de la CLI',
+        '数据目录': 'Directorio de datos',
         '提示词': 'Instrucciones',
         '本机访问': 'Acceso local',
         '允许本机 Agent 访问': 'Permitir acceso de Agent local',
@@ -2990,6 +3123,7 @@
         '收起': 'Contraer',
         '选择录音并添加': 'Elegir grabación y añadir',
         '播放录音': 'Reproducir grabación',
+        '复制到剪贴板': 'Copiar al portapapeles',
         '已复制到剪贴板': 'Copiado al portapapeles',
         '暂无可分享的内容': 'Aún no hay nada que compartir',
         '进阶设置': 'Configuración avanzada',
@@ -3252,7 +3386,52 @@
         'settings': '設定',
       },
       'labels': {
+        '连接你的 Agent': 'エージェントを接続',
+        '将配置添加到客户端的 MCP 设置，重新连接后即可使用 Brevia 工具。':
+          'クライアントの MCP 設定に追加し、再接続すると Brevia のツールを利用できます。',
+        '使用 CLI 接入': 'CLI で接続',
+        '将此路径交给 Agent，让它运行 status 检查连接。':
+          'このパスをエージェントに渡し、status を実行して接続を確認してください。',
+        '试着这样提问': 'こんなふうに頼めます',
+        '点击复制': 'クリックしてコピー',
+        '用 Brevia 查找讨论发布计划的会议，并列出决定和待办。':
+          'Brevia でリリース計画について話した会議を探して、決定事項とタスクを一覧にしてください。',
+        '用 Brevia 将我提供的音频转成带时间戳的字幕，保存到我指定的文件夹。':
+          'Brevia で私が渡す音声をタイムスタンプ付きの字幕にして、指定したフォルダーに保存してください。',
+        '用 Brevia 查看录音设备，然后用电脑麦克风开始录音。':
+          'Brevia で録音デバイスを確認してから、パソコンのマイクで録音を開始してください。',
+        '申请权限': 'アクセスをリクエスト',
+        '正在请求权限…': 'アクセスをリクエスト中…',
+        '隐私与安全性 → 屏幕与系统音频录制':
+          'プライバシーとセキュリティ → 画面収録とシステムオーディオ録音',
+        '隐私与安全性 → 麦克风': 'プライバシーとセキュリティ → マイク',
+        '连接后，手机可访问电脑上的会议。':
+          '接続すると、スマートフォンからこのパソコンの会議にアクセスできます。',
+        '这台设备将断开连接，需要重新配对才能访问电脑。':
+          'このデバイスは切断されます。パソコンにアクセスするには、再度ペアリングが必要です。',
         'Agent 与 MCP': 'Agent と MCP',
+        '适合 Codex、Claude Code 等能操作本机的 Agent。':
+          'Codex や Claude Code など、このコンピュータを操作できる Agent 向けです。',
+        '复制引导语发给 Agent，它会先读取 Skill，再通过 CLI 调用 Brevia。':
+          '導入プロンプトを Agent に送ると、Skill を読み、CLI 経由で Brevia を操作します。',
+        '复制引导语': '導入プロンプトをコピー',
+        '查看引导语': '導入プロンプトを表示',
+        '请先读取下面的 Brevia Skill，再通过 CLI 检查连接。后续按 Skill 中的说明执行我的请求；仅在我明确要求时开始录音。':
+          'まず以下の Brevia Skill を読み、CLI で接続を確認してください。以降は Skill の説明に従って私の依頼を実行し、録音は私が明示的に求めた場合にのみ開始してください。',
+        'Skill 文件': 'Skill ファイル',
+        '操作说明，告诉 Agent 如何使用 Brevia；实际操作由 CLI 或 MCP 执行。':
+          'Agent に Brevia の使い方を伝える手順書です。実際の操作は CLI または MCP 経由で行います。',
+        '本机命令入口，适合能运行终端命令的 Agent。':
+          'ターミナルのコマンドを実行できる Agent 向けのローカル操作窓口です。',
+        '客户端工具接口，适合通过 MCP 连接应用的 Agent。':
+          'MCP 経由でアプリに接続する Agent 向けのツールインターフェースです。',
+        '用于支持 MCP 的客户端。复制配置到客户端的 MCP 设置，重新连接后即可使用。':
+          'MCP 対応クライアント向けです。クライアントの MCP 設定に構成を貼り付け、再接続すると利用できます。',
+        '本机接入尚未启用完整能力。启用后，Agent 可查询会议、运行推理和控制录音。':
+          'ローカルアクセスの全機能はまだ有効になっていません。有効にすると、Agent が会議の検索、推論の実行、録音の操作を行えます。',
+        '启用本机接入': 'ローカルアクセスを有効化',
+        'CLI 路径': 'CLI パス',
+        '数据目录': 'データディレクトリ',
         '提示词': 'プロンプト',
         '本机访问': 'ローカルアクセス',
         '允许本机 Agent 访问': 'ローカル Agent のアクセスを許可',
@@ -4071,6 +4250,7 @@
         '收起': '折りたたむ',
         '选择录音并添加': '録音を選択して追加',
         '播放录音': '録音を再生',
+        '复制到剪贴板': 'クリップボードにコピー',
         '已复制到剪贴板': 'クリップボードにコピーしました',
         '暂无可分享的内容': '共有できる内容がまだありません',
         '进阶设置': '詳細設定',
@@ -4331,7 +4511,51 @@
         'settings': '설정',
       },
       'labels': {
+        '连接你的 Agent': '에이전트 연결',
+        '将配置添加到客户端的 MCP 设置，重新连接后即可使用 Brevia 工具。':
+          '클라이언트의 MCP 설정에 구성을 추가한 다음 다시 연결하면 Brevia 도구를 사용할 수 있습니다.',
+        '使用 CLI 接入': 'CLI로 연결',
+        '将此路径交给 Agent，让它运行 status 检查连接。':
+          '에이전트에 이 경로를 전달하고 status를 실행해 연결을 확인하도록 요청하세요.',
+        '试着这样提问': '이렇게 요청해 보세요',
+        '点击复制': '클릭하여 복사',
+        '用 Brevia 查找讨论发布计划的会议，并列出决定和待办。':
+          'Brevia로 출시 계획을 논의한 회의를 찾아 결정 사항과 할 일을 정리해 주세요.',
+        '用 Brevia 将我提供的音频转成带时间戳的字幕，保存到我指定的文件夹。':
+          'Brevia로 제가 제공하는 오디오를 타임스탬프가 있는 자막으로 변환하고 지정한 폴더에 저장해 주세요.',
+        '用 Brevia 查看录音设备，然后用电脑麦克风开始录音。':
+          'Brevia로 녹음 장치를 확인한 다음 컴퓨터 마이크로 녹음을 시작해 주세요.',
+        '申请权限': '권한 요청',
+        '正在请求权限…': '권한 요청 중…',
+        '隐私与安全性 → 屏幕与系统音频录制': '개인정보 보호 및 보안 → 화면 및 시스템 오디오 녹음',
+        '隐私与安全性 → 麦克风': '개인정보 보호 및 보안 → 마이크',
+        '连接后，手机可访问电脑上的会议。':
+          '연결하면 휴대폰에서 이 컴퓨터의 회의에 접근할 수 있습니다.',
+        '这台设备将断开连接，需要重新配对才能访问电脑。':
+          '이 기기의 연결이 해제됩니다. 컴퓨터에 접근하려면 다시 페어링해야 합니다.',
         'Agent 与 MCP': 'Agent 및 MCP',
+        '适合 Codex、Claude Code 等能操作本机的 Agent。':
+          'Codex, Claude Code 등 이 컴퓨터를 조작할 수 있는 Agent용입니다.',
+        '复制引导语发给 Agent，它会先读取 Skill，再通过 CLI 调用 Brevia。':
+          '설정 프롬프트를 Agent에게 보내면 Skill을 읽은 뒤 CLI로 Brevia를 사용합니다.',
+        '复制引导语': '설정 프롬프트 복사',
+        '查看引导语': '설정 프롬프트 보기',
+        '请先读取下面的 Brevia Skill，再通过 CLI 检查连接。后续按 Skill 中的说明执行我的请求；仅在我明确要求时开始录音。':
+          '먼저 아래 Brevia Skill을 읽고 CLI로 연결을 확인하세요. 이후에는 Skill의 안내에 따라 제 요청을 수행하고, 제가 명시적으로 요청할 때만 녹음을 시작하세요.',
+        'Skill 文件': 'Skill 파일',
+        '操作说明，告诉 Agent 如何使用 Brevia；实际操作由 CLI 或 MCP 执行。':
+          'Agent에게 Brevia 사용법을 알려주는 안내서입니다. 실제 작업은 CLI 또는 MCP로 실행합니다.',
+        '本机命令入口，适合能运行终端命令的 Agent。':
+          '터미널 명령을 실행할 수 있는 Agent를 위한 로컬 명령 인터페이스입니다.',
+        '客户端工具接口，适合通过 MCP 连接应用的 Agent。':
+          'MCP로 앱에 연결하는 Agent를 위한 클라이언트 도구 인터페이스입니다.',
+        '用于支持 MCP 的客户端。复制配置到客户端的 MCP 设置，重新连接后即可使用。':
+          'MCP 지원 클라이언트용입니다. 클라이언트의 MCP 설정에 구성을 붙여넣고 다시 연결하면 사용할 수 있습니다.',
+        '本机接入尚未启用完整能力。启用后，Agent 可查询会议、运行推理和控制录音。':
+          '로컬 접근 기능이 아직 모두 활성화되지 않았습니다. 활성화하면 Agent가 회의를 조회하고 추론을 실행하며 녹음을 제어할 수 있습니다.',
+        '启用本机接入': '로컬 접근 활성화',
+        'CLI 路径': 'CLI 경로',
+        '数据目录': '데이터 디렉터리',
         '提示词': '프롬프트',
         '本机访问': '로컬 접근',
         '允许本机 Agent 访问': '로컬 Agent 접근 허용',
@@ -5134,6 +5358,7 @@
         '收起': '접기',
         '选择录音并添加': '녹음 선택 및 추가',
         '播放录音': '녹음 재생',
+        '复制到剪贴板': '클립보드에 복사',
         '已复制到剪贴板': '클립보드에 복사했습니다',
         '暂无可分享的内容': '아직 공유할 내용이 없습니다',
         '进阶设置': '고급 설정',
@@ -5392,7 +5617,52 @@
         'settings': 'Paramètres',
       },
       'labels': {
+        '连接你的 Agent': 'Connecter votre agent',
+        '将配置添加到客户端的 MCP 设置，重新连接后即可使用 Brevia 工具。':
+          'Ajoutez la configuration aux paramètres MCP de votre client, puis reconnectez-le pour utiliser les outils Brevia.',
+        '使用 CLI 接入': 'Connexion par la CLI',
+        '将此路径交给 Agent，让它运行 status 检查连接。':
+          'Donnez ce chemin à votre agent et demandez-lui de lancer status pour vérifier la connexion.',
+        '试着这样提问': 'Exemples de demandes',
+        '点击复制': 'Cliquer pour copier',
+        '用 Brevia 查找讨论发布计划的会议，并列出决定和待办。':
+          'Utilise Brevia pour trouver les réunions sur le plan de lancement et lister les décisions et les tâches.',
+        '用 Brevia 将我提供的音频转成带时间戳的字幕，保存到我指定的文件夹。':
+          'Utilise Brevia pour transcrire le fichier audio que je fournis en sous-titres horodatés et les enregistrer dans le dossier indiqué.',
+        '用 Brevia 查看录音设备，然后用电脑麦克风开始录音。':
+          'Utilise Brevia pour lister les périphériques d’enregistrement, puis lance un enregistrement avec le microphone de l’ordinateur.',
+        '申请权限': 'Demander l’accès',
+        '正在请求权限…': 'Demande d’accès…',
+        '隐私与安全性 → 屏幕与系统音频录制':
+          'Confidentialité et sécurité → Enregistrement de l’écran et de l’audio du système',
+        '隐私与安全性 → 麦克风': 'Confidentialité et sécurité → Microphone',
+        '连接后，手机可访问电脑上的会议。':
+          'Une fois connecté, votre téléphone peut accéder aux réunions de cet ordinateur.',
+        '这台设备将断开连接，需要重新配对才能访问电脑。':
+          'Cet appareil sera déconnecté. Il devra être jumelé à nouveau pour accéder à cet ordinateur.',
         'Agent 与 MCP': 'Agent et MCP',
+        '适合 Codex、Claude Code 等能操作本机的 Agent。':
+          'Pour les agents capables d’utiliser cet ordinateur, comme Codex et Claude Code.',
+        '复制引导语发给 Agent，它会先读取 Skill，再通过 CLI 调用 Brevia。':
+          'Envoyez les instructions à l’agent. Il lira le Skill, puis utilisera Brevia via la CLI.',
+        '复制引导语': 'Copier les instructions',
+        '查看引导语': 'Voir les instructions',
+        '请先读取下面的 Brevia Skill，再通过 CLI 检查连接。后续按 Skill 中的说明执行我的请求；仅在我明确要求时开始录音。':
+          'Lisez d’abord le Skill Brevia ci-dessous, puis vérifiez la connexion via la CLI. Suivez ensuite les consignes du Skill pour exécuter mes demandes ; ne lancez un enregistrement que si je le demande explicitement.',
+        'Skill 文件': 'Fichier Skill',
+        '操作说明，告诉 Agent 如何使用 Brevia；实际操作由 CLI 或 MCP 执行。':
+          'Instructions expliquant à l’agent comment utiliser Brevia. Les actions sont exécutées via la CLI ou MCP.',
+        '本机命令入口，适合能运行终端命令的 Agent。':
+          'Une interface de commandes locale pour les agents capables d’utiliser le terminal.',
+        '客户端工具接口，适合通过 MCP 连接应用的 Agent。':
+          'Une interface d’outils pour les agents qui se connectent aux applications via MCP.',
+        '用于支持 MCP 的客户端。复制配置到客户端的 MCP 设置，重新连接后即可使用。':
+          'Pour les clients compatibles MCP. Collez la configuration dans les réglages MCP du client, puis reconnectez-vous pour commencer.',
+        '本机接入尚未启用完整能力。启用后，Agent 可查询会议、运行推理和控制录音。':
+          'L’accès local n’est pas entièrement activé. Activez-le pour que les agents puissent consulter les réunions, exécuter des inférences et contrôler l’enregistrement.',
+        '启用本机接入': 'Activer l’accès local',
+        'CLI 路径': 'Chemin de la CLI',
+        '数据目录': 'Dossier de données',
         '提示词': 'Consignes',
         '本机访问': 'Accès local',
         '允许本机 Agent 访问': 'Autoriser l’accès local des agents',
@@ -6224,6 +6494,7 @@
         '收起': 'Réduire',
         '选择录音并添加': 'Choisir un enregistrement et ajouter',
         '播放录音': 'Lire l’enregistrement',
+        '复制到剪贴板': 'Copier dans le presse-papiers',
         '已复制到剪贴板': 'Copié dans le presse-papiers',
         '暂无可分享的内容': 'Rien à partager pour le moment',
         '进阶设置': 'Paramètres avancés',
@@ -6491,7 +6762,52 @@
         'settings': 'Einstellungen',
       },
       'labels': {
+        '连接你的 Agent': 'Agent verbinden',
+        '将配置添加到客户端的 MCP 设置，重新连接后即可使用 Brevia 工具。':
+          'Füge die Konfiguration zu den MCP-Einstellungen deines Clients hinzu und verbinde ihn erneut, um Brevia-Werkzeuge zu nutzen.',
+        '使用 CLI 接入': 'Über die CLI verbinden',
+        '将此路径交给 Agent，让它运行 status 检查连接。':
+          'Gib deinem Agent diesen Pfad und bitte ihn, mit status die Verbindung zu prüfen.',
+        '试着这样提问': 'Beispielanfragen',
+        '点击复制': 'Zum Kopieren klicken',
+        '用 Brevia 查找讨论发布计划的会议，并列出决定和待办。':
+          'Finde mit Brevia Besprechungen zum Veröffentlichungsplan und liste die Entscheidungen und Aufgaben auf.',
+        '用 Brevia 将我提供的音频转成带时间戳的字幕，保存到我指定的文件夹。':
+          'Transkribiere mit Brevia die von mir bereitgestellte Audiodatei in Untertitel mit Zeitstempeln und speichere sie im angegebenen Ordner.',
+        '用 Brevia 查看录音设备，然后用电脑麦克风开始录音。':
+          'Liste mit Brevia die Aufnahmegeräte auf und starte dann eine Aufnahme mit dem Mikrofon des Computers.',
+        '申请权限': 'Zugriff anfragen',
+        '正在请求权限…': 'Zugriff wird angefragt…',
+        '隐私与安全性 → 屏幕与系统音频录制':
+          'Datenschutz & Sicherheit → Aufnahme von Bildschirm & Systemaudio',
+        '隐私与安全性 → 麦克风': 'Datenschutz & Sicherheit → Mikrofon',
+        '连接后，手机可访问电脑上的会议。':
+          'Nach dem Verbinden kann dein Smartphone auf die Besprechungen dieses Computers zugreifen.',
+        '这台设备将断开连接，需要重新配对才能访问电脑。':
+          'Dieses Gerät wird getrennt und muss erneut gekoppelt werden, um auf diesen Computer zuzugreifen.',
         'Agent 与 MCP': 'Agent und MCP',
+        '适合 Codex、Claude Code 等能操作本机的 Agent。':
+          'Für Agents, die diesen Computer bedienen können, etwa Codex oder Claude Code.',
+        '复制引导语发给 Agent，它会先读取 Skill，再通过 CLI 调用 Brevia。':
+          'Sende die Startanweisung an den Agent. Er liest zuerst den Skill und nutzt Brevia dann über die CLI.',
+        '复制引导语': 'Startanweisung kopieren',
+        '查看引导语': 'Startanweisung anzeigen',
+        '请先读取下面的 Brevia Skill，再通过 CLI 检查连接。后续按 Skill 中的说明执行我的请求；仅在我明确要求时开始录音。':
+          'Lies zuerst den folgenden Brevia-Skill und prüfe dann die Verbindung über die CLI. Führe meine Anfragen anschließend gemäß dem Skill aus. Starte Aufnahmen nur, wenn ich ausdrücklich darum bitte.',
+        'Skill 文件': 'Skill-Datei',
+        '操作说明，告诉 Agent 如何使用 Brevia；实际操作由 CLI 或 MCP 执行。':
+          'Anleitung zur Nutzung von Brevia durch den Agent. Aktionen werden über die CLI oder MCP ausgeführt.',
+        '本机命令入口，适合能运行终端命令的 Agent。':
+          'Lokaler Befehlszugang für Agents, die Terminalbefehle ausführen können.',
+        '客户端工具接口，适合通过 MCP 连接应用的 Agent。':
+          'Tool-Schnittstelle für Agents, die sich über MCP mit Apps verbinden.',
+        '用于支持 MCP 的客户端。复制配置到客户端的 MCP 设置，重新连接后即可使用。':
+          'Für MCP-kompatible Clients. Füge die Konfiguration in die MCP-Einstellungen des Clients ein und verbinde ihn erneut.',
+        '本机接入尚未启用完整能力。启用后，Agent 可查询会议、运行推理和控制录音。':
+          'Der lokale Zugriff ist noch nicht vollständig aktiviert. Aktiviere ihn, damit Agents Meetings abfragen, Inferenz ausführen und Aufnahmen steuern können.',
+        '启用本机接入': 'Lokalen Zugriff aktivieren',
+        'CLI 路径': 'CLI-Pfad',
+        '数据目录': 'Datenverzeichnis',
         '提示词': 'Prompts',
         '本机访问': 'Lokaler Zugriff',
         '允许本机 Agent 访问': 'Lokalen Agent-Zugriff erlauben',
@@ -7326,6 +7642,7 @@
         '收起': 'Einklappen',
         '选择录音并添加': 'Aufnahme auswählen und hinzufügen',
         '播放录音': 'Aufnahme abspielen',
+        '复制到剪贴板': 'In die Zwischenablage kopieren',
         '已复制到剪贴板': 'In die Zwischenablage kopiert',
         '暂无可分享的内容': 'Noch nichts zu teilen',
         '进阶设置': 'Erweiterte Einstellungen',
@@ -7598,7 +7915,52 @@
         'settings': 'Настройки',
       },
       'labels': {
+        '连接你的 Agent': 'Подключите агента',
+        '将配置添加到客户端的 MCP 设置，重新连接后即可使用 Brevia 工具。':
+          'Добавьте конфигурацию в настройки MCP вашего клиента и переподключитесь, чтобы использовать инструменты Brevia.',
+        '使用 CLI 接入': 'Подключение через CLI',
+        '将此路径交给 Agent，让它运行 status 检查连接。':
+          'Передайте этот путь агенту и попросите выполнить status для проверки подключения.',
+        '试着这样提问': 'Примеры запросов',
+        '点击复制': 'Нажмите, чтобы скопировать',
+        '用 Brevia 查找讨论发布计划的会议，并列出决定和待办。':
+          'Найди в Brevia встречи, на которых обсуждался план выпуска, и перечисли решения и задачи.',
+        '用 Brevia 将我提供的音频转成带时间戳的字幕，保存到我指定的文件夹。':
+          'Преобразуй с помощью Brevia предоставленную мной аудиозапись в субтитры с временными метками и сохрани их в указанной папке.',
+        '用 Brevia 查看录音设备，然后用电脑麦克风开始录音。':
+          'Покажи устройства записи в Brevia, затем начни запись через микрофон компьютера.',
+        '申请权限': 'Запросить доступ',
+        '正在请求权限…': 'Запрос доступа…',
+        '隐私与安全性 → 屏幕与系统音频录制':
+          'Конфиденциальность и безопасность → Запись экрана и системного аудио',
+        '隐私与安全性 → 麦克风': 'Конфиденциальность и безопасность → Микрофон',
+        '连接后，手机可访问电脑上的会议。':
+          'После подключения телефон получит доступ к встречам на этом компьютере.',
+        '这台设备将断开连接，需要重新配对才能访问电脑。':
+          'Устройство будет отключено. Для доступа к этому компьютеру потребуется повторное сопряжение.',
         'Agent 与 MCP': 'Agent и MCP',
+        '适合 Codex、Claude Code 等能操作本机的 Agent。':
+          'Для агентов, которые могут управлять этим компьютером, например Codex и Claude Code.',
+        '复制引导语发给 Agent，它会先读取 Skill，再通过 CLI 调用 Brevia。':
+          'Отправьте агенту вводный запрос. Он прочитает Skill, а затем будет использовать Brevia через CLI.',
+        '复制引导语': 'Скопировать вводный запрос',
+        '查看引导语': 'Посмотреть вводный запрос',
+        '请先读取下面的 Brevia Skill，再通过 CLI 检查连接。后续按 Skill 中的说明执行我的请求；仅在我明确要求时开始录音。':
+          'Сначала прочитай приведённый ниже Skill Brevia, затем проверь подключение через CLI. Выполняй мои дальнейшие запросы по инструкциям Skill; начинай запись только по моей явной просьбе.',
+        'Skill 文件': 'Файл Skill',
+        '操作说明，告诉 Agent 如何使用 Brevia；实际操作由 CLI 或 MCP 执行。':
+          'Инструкции по использованию Brevia для агента. Сами действия выполняются через CLI или MCP.',
+        '本机命令入口，适合能运行终端命令的 Agent。':
+          'Локальный командный интерфейс для агентов, умеющих работать с терминалом.',
+        '客户端工具接口，适合通过 MCP 连接应用的 Agent。':
+          'Интерфейс инструментов для агентов, подключающихся к приложениям через MCP.',
+        '用于支持 MCP 的客户端。复制配置到客户端的 MCP 设置，重新连接后即可使用。':
+          'Для клиентов с поддержкой MCP. Вставьте конфигурацию в настройки MCP клиента и подключитесь заново.',
+        '本机接入尚未启用完整能力。启用后，Agent 可查询会议、运行推理和控制录音。':
+          'Локальный доступ включён не полностью. Включите его, чтобы агенты могли просматривать встречи, запускать модели и управлять записью.',
+        '启用本机接入': 'Включить локальный доступ',
+        'CLI 路径': 'Путь к CLI',
+        '数据目录': 'Каталог данных',
         '提示词': 'Инструкции',
         '本机访问': 'Локальный доступ',
         '允许本机 Agent 访问': 'Разрешить локальный доступ Agent',
@@ -8410,6 +8772,7 @@
         '收起': 'Свернуть',
         '选择录音并添加': 'Выбрать и добавить запись',
         '播放录音': 'Воспроизвести запись',
+        '复制到剪贴板': 'Копировать в буфер обмена',
         '已复制到剪贴板': 'Скопировано в буфер обмена',
         '暂无可分享的内容': 'Пока нечем поделиться',
         '进阶设置': 'Расширенные настройки',

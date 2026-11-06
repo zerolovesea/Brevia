@@ -482,6 +482,7 @@ class NativeAudioCapture {
   constructor(onLevel, onError) {
     this.onLevel = onLevel;
     this.onError = onError;
+    this.paused = false;
     this.unsubscribe = [];
   }
 
@@ -523,8 +524,10 @@ class NativeAudioCapture {
     return window.brevia.nativeAudio.start({ meeting_id: meetingId });
   }
 
-  setPaused(paused) {
-    return window.brevia.nativeAudio.pause({ paused });
+  async setPaused(paused) {
+    const result = await window.brevia.nativeAudio.pause({ paused });
+    this.paused = paused;
+    return result;
   }
 
   stopPreview() {
@@ -685,8 +688,20 @@ window.breviaClient = window.brevia
         if (!meetingId) throw new Error(micMessage('当前没有正在进行的会议'));
         if (this.state.meeting?.tags?.includes('手机麦克风'))
           return window.brevia.mobile.pauseCapture({ meeting_id: meetingId, paused });
-        if (this.capture) await this.capture.setPaused(paused);
-        return window.brevia.meeting.pause({ meeting_id: meetingId, paused });
+        const capture = this.capture;
+        const previous = Boolean(capture?.paused);
+        if (capture) await capture.setPaused(paused);
+        try {
+          return await window.brevia.meeting.pause({ meeting_id: meetingId, paused });
+        } catch (error) {
+          // 业务端拒绝切换时，采集状态也须恢复，避免界面继续计时却没有录音。
+          try {
+            await capture?.setPaused(previous);
+          } catch (cleanupError) {
+            console.error('Audio pause rollback failed', cleanupError);
+          }
+          throw error;
+        }
       },
       async stop(durationMs) {
         const meetingId = this.state.meeting?.id || this.capture?.meetingId;

@@ -309,6 +309,91 @@ const mainSource = (await readFile(new URL('./main.js', import.meta.url), 'utf8'
   /\r\n/g,
   '\n',
 );
+// 权限申请和设置跳转是两个独立的用户操作；不启动录音或弹出真实系统授权。
+{
+  const source = mainSource.slice(
+    mainSource.indexOf("  handleIpc('permissions.status'"),
+    mainSource.indexOf("  handleIpc('app.initialize'"),
+  );
+  const handlers = new Map();
+  const requests = [];
+  const opened = [];
+  let finishRequest;
+  let requestError;
+  const nativeAudio = {
+    query(command) {
+      requests.push(command);
+      if (requestError) return Promise.reject(requestError);
+      if (command === 'permissions') return { screen: 'denied' };
+      return new Promise((resolve) => {
+        finishRequest = resolve;
+      });
+    },
+  };
+  const context = {
+    handleIpc: (name, handler) => handlers.set(name, handler),
+    nativeAudio,
+    process: { platform: 'darwin' },
+    supportsSystemAudio: () => true,
+    shell: {
+      openExternal: async (url) => {
+        opened.push(url);
+      },
+    },
+    registerScreenPermission: assert.fail,
+  };
+  runInNewContext(source, context);
+  assert.deepEqual(requests, [], 'registering handlers must not ask for permission');
+  assert.deepEqual(await handlers.get('permissions.status')(), { screen: 'denied' });
+  requests.length = 0;
+  assert.equal(await handlers.get('permissions.open-screen-settings')(), true);
+  assert.equal(await handlers.get('permissions.open-microphone-settings')(), true);
+  assert.deepEqual(requests, [], 'opening Settings must not also request permission');
+  assert.deepEqual(opened, [
+    'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture',
+    'x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone',
+  ]);
+  const first = handlers.get('permissions.request-screen')();
+  assert.equal(handlers.get('permissions.request-screen')(), first);
+  assert.deepEqual(requests, ['request-screen'], 'concurrent clicks share one native prompt');
+  finishRequest(false);
+  assert.equal(await first, false, 'denial remains denial instead of claiming success');
+  const second = handlers.get('permissions.request-screen')();
+  finishRequest(true);
+  assert.equal(await second, true);
+  assert.equal(requests.length, 2, 'a later explicit request can retry');
+  requestError = new Error('native helper unavailable');
+  await assert.rejects(handlers.get('permissions.request-screen')(), requestError);
+  requestError = undefined;
+  const retry = handlers.get('permissions.request-screen')();
+  finishRequest(true);
+  assert.equal(await retry, true, 'failed requests release the pending guard');
+  context.shell.openExternal = async () => {
+    throw new Error('settings unavailable');
+  };
+  await assert.rejects(handlers.get('permissions.open-screen-settings')(), /settings unavailable/);
+  await assert.rejects(
+    handlers.get('permissions.open-microphone-settings')(),
+    /settings unavailable/,
+  );
+
+  let registered = 0;
+  let screenState = 'denied';
+  context.nativeAudio = null;
+  context.desktopCapturer = {};
+  context.writeLog = assert.fail;
+  context.registerScreenPermission = async () => {
+    registered += 1;
+  };
+  context.systemPreferences = { getMediaAccessStatus: () => screenState };
+  assert.equal(await handlers.get('permissions.request-screen')(), false);
+  screenState = 'granted';
+  assert.equal(await handlers.get('permissions.request-screen')(), true);
+  assert.equal(registered, 2, 'Electron fallback asks via desktopCapturer on explicit clicks');
+  context.process.platform = 'win32';
+  assert.equal(await handlers.get('permissions.request-screen')(), true);
+  assert.equal(registered, 2, 'Windows never enters the macOS capture prompt path');
+}
 // 旧的跨网配置不能影响局域网服务启停。
 {
   const { MobileServer } = require('./mobile-server');
@@ -1578,7 +1663,7 @@ console.log('Electron behavior tests passed');
   const source = await readFile(new URL('../scripts/release-offline.cjs', import.meta.url), 'utf8');
   for (const [platform, expected] of [
     ['darwin', ['dist:mac']],
-    ['win32', ['pack:backend', 'package:win']],
+    ['win32', ['dist:win']],
   ]) {
     const calls = [];
     runInNewContext(source, {

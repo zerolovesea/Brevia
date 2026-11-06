@@ -300,7 +300,7 @@ test('Native streaming events find their pending request via payload.id', async 
       `require('node:readline').createInterface({input:process.stdin}).on('line',line=>{const r=JSON.parse(line);console.log(JSON.stringify({type:'asr.partial',payload:{id:r.id,text:'partial'}}));console.log(JSON.stringify({id:r.id,ok:true,result:{text:'final'}}));});`,
   );
   fs.chmodSync(file, 0o700);
-  const engine = new EngineClient(file);
+  const engine = new EngineClient(process.execPath, [file]);
   t.after(() => {
     engine.close();
     fs.rmSync(root, { recursive: true, force: true });
@@ -390,4 +390,56 @@ test('Closed temporary engines unregister while reusable channels remain managed
     assert.equal(active.closeCount, 1, 'shutdown must still close live temporary engines');
     assert.equal(channel.closeCount, 2, 'shutdown must still close reusable channels');
   });
+});
+
+test('Offline phone import resumes from durable PCM without starting recognition or replacing existing results', async (t) => {
+  const { w, root, calls } = await setup(t);
+  const id = '993c9e98-02e5-4fa9-89f6-3b06798298ea';
+  const payload = {
+    meeting_id: id,
+    id,
+    title: 'Offline',
+    language: 'zh',
+    refined_model_id: 'funasr-nano-int8',
+    transfer_mode: 'import',
+    count: 2,
+    samples: 4,
+  };
+  w.models.missing = () => ['funasr-nano-int8'];
+  assert.equal(w.handlers['mobile.prepare'](payload).ready, true);
+  assert.throws(
+    () => w.handlers['mobile.prepare']({ ...payload, transfer_mode: undefined }),
+    /安装/,
+  );
+  const directory = path.join(root, 'mobile', id);
+  fs.mkdirSync(directory, { recursive: true });
+  fs.writeFileSync(
+    path.join(directory, 'session.json'),
+    JSON.stringify({ id, transfer_mode: 'import', ended: true, next: 2, samples: 4 }),
+  );
+  fs.writeFileSync(
+    path.join(directory, '0.json'),
+    JSON.stringify({ seq: 0, start_sample: 0, pcm: 'AQACAA==' }),
+  );
+  await assert.rejects(w.handlers['mobile.import'](payload), /ENOENT/);
+  assert.equal(fs.existsSync(path.join(directory, '0.json')), true);
+  fs.writeFileSync(
+    path.join(directory, '1.json'),
+    JSON.stringify({ seq: 1, start_sample: 2, pcm: 'AwAEAA==' }),
+  );
+  const result = await w.handlers['mobile.import'](payload);
+  assert.equal(result.status, 'ready');
+  assert.equal(w.active, null);
+  assert.equal(calls.length, 0);
+  const file = result.audio.playback.mic,
+    info = wavInfo(file);
+  assert.deepEqual(
+    fs.readFileSync(file).subarray(info.offset),
+    Buffer.from([1, 0, 2, 0, 3, 0, 4, 0]),
+  );
+  w.store.setStatus(id, 'refined');
+  assert.equal((await w.handlers['mobile.import'](payload)).status, 'refined');
+  w.store.softDelete(id);
+  await assert.rejects(w.handlers['mobile.import'](payload), /已删除/);
+  assert.ok(w.store.getMeeting(id).deleted_at);
 });

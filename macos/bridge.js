@@ -17,6 +17,15 @@
   const ipcRenderer = {
     async invoke(channel, payload) {
       await subscription;
+      if (channel === 'meeting.note-image.save') {
+        if (!(payload?.bytes instanceof ArrayBuffer) || payload.bytes.byteLength > 10 * 1024 * 1024)
+          throw new Error('Invalid note image data');
+        const bytes = new Uint8Array(payload.bytes);
+        let text = '';
+        for (let offset = 0; offset < bytes.length; offset += 32768)
+          text += String.fromCharCode(...bytes.subarray(offset, offset + 32768));
+        payload = { ...payload, bytes: btoa(text) };
+      }
       return core.invoke('desktop_invoke', { channel, payload });
     },
     on(name, fn) {
@@ -51,7 +60,7 @@
     ipcRenderer,
     webUtils: { getPathForFile: (file) => (typeof file === 'string' ? file : undefined) },
   });
-  const process = { platform: 'darwin' };
+  const process = { platform: window.__BREVIA_PLATFORM__ || 'darwin' };
   {
     /* BREVIA_PRELOAD */
   }

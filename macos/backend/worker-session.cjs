@@ -6,6 +6,7 @@ const { AlignedAudioMixer, pcmFloats, floatPCM } = require('./audio-mixer.cjs');
 const { cleanText, LiveSubtitles } = require('./subtitles.cjs');
 const { convertToPCM, wavInfo } = require('./audio-io.cjs');
 const { SentenceVAD } = require('./sentence-vad.cjs');
+const { LiveSpeakers } = require('./live-speakers.cjs');
 
 function attachRecording(worker) {
   worker.recordingTail = Promise.resolve();
@@ -95,6 +96,7 @@ function attachRecording(worker) {
       if (!worker.store.saveSegment(event)) return;
       worker.emit('transcript.final', event);
       worker.emit('transcript.settled', event);
+      session.liveSpeakers.enqueue(event);
       try {
         worker.aiNoteOnSegment?.(event);
       } catch (error) {
@@ -102,10 +104,12 @@ function attachRecording(worker) {
       }
     });
     worker.session = session;
+    session.liveSpeakers = new LiveSpeakers(worker, session);
     try {
       session.recognition = await worker.loadRecognition(meeting);
     } catch (error) {
       if (requireASR) {
+        session.liveSpeakers.close();
         worker.session = null;
         worker.active = null;
         throw error;
@@ -158,6 +162,7 @@ function attachRecording(worker) {
     session.previewed.add(track);
     // 首段草稿不切断 VAD，也不写会议；正式整句识别仍保留完整上下文。
     session.decode = session.decode.then(async () => {
+      session.decoding = true;
       const update = (text) => {
         session.previews.set(track, {
           start_ms: segment.start_ms,
@@ -179,6 +184,8 @@ function attachRecording(worker) {
           code: 'sentence_transcription_failed',
           message: error.message,
         });
+      } finally {
+        session.decoding = false;
       }
     });
   }
@@ -213,6 +220,7 @@ function attachRecording(worker) {
     };
     session.queued++;
     session.decode = session.decode.then(async () => {
+      session.decoding = true;
       try {
         const result = await recognition.recognizer.request(
           'asr.decode',
@@ -242,6 +250,7 @@ function attachRecording(worker) {
           end_ms: event.end_ms,
         });
       } finally {
+        session.decoding = false;
         session.queued--;
         fs.rmSync(file, { force: true });
         draft(session, track);
@@ -392,6 +401,7 @@ function attachRecording(worker) {
   worker.stopRecording = async (payload) => {
     worker.requireActive(payload.meeting_id);
     const session = worker.session;
+    session?.liveSpeakers.close();
     try {
       await worker.flushRecognition();
     } finally {
@@ -411,6 +421,7 @@ function attachRecording(worker) {
     'meeting.pause': (p) =>
       worker.serialRecording(async () => {
         worker.requireActive(p.meeting_id);
+        worker.session?.liveSpeakers.setPaused(Boolean(p.paused));
         if (p.paused) await worker.flushRecognition();
         return { paused: Boolean(p.paused) };
       }),

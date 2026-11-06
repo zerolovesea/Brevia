@@ -15,6 +15,7 @@ async function convertToPCM(
   { signal } = {},
 ) {
   try {
+    if (process.platform !== 'darwin') throw new Error('Use the native audio decoder');
     await run(
       '/usr/bin/afconvert',
       ['-f', 'WAVE', '-d', 'LEI16@' + sampleRate, '-c', String(channels), source, destination],

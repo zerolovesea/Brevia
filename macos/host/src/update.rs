@@ -4,8 +4,12 @@ use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_updater::{Update, UpdaterExt};
 use tokio::sync::Mutex;
 
+#[cfg(target_os = "macos")]
 const FEED: &str =
     "https://github.com/zerolovesea/Brevia/releases/latest/download/latest-webkit.json";
+#[cfg(windows)]
+const FEED: &str =
+    "https://github.com/zerolovesea/Brevia/releases/latest/download/latest-windows.json";
 const PUBLIC_KEY: Option<&str> = option_env!("BREVIA_NATIVE_UPDATE_PUBKEY");
 
 #[derive(Default)]

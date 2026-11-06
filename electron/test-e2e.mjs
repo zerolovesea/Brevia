@@ -994,7 +994,7 @@ try {
       await new Promise(requestAnimationFrame);
       if(activeView!=='settings'||!settingsModal.classList.contains('settings-page'))errors.push(language+': status bar did not open device settings');
       const phone=document.querySelector('#mobile-dialog'),{devices,sessions}=await window.brevia.mobile.status();
-      const expected=devices.length||localStorage.getItem('brevia-mobile-has-paired')==='true'?'paired':'intro';
+      const expected=devices.length?'paired':'intro';
       if(phone.dataset.mobilePageState!==expected||!phone.querySelector('[data-mobile-panel="'+expected+'"]').checkVisibility())errors.push(language+': device page stage mismatch');
       if(expected==='paired'){
         const equipment=phone.querySelector('.mobile-equipment');
@@ -1760,7 +1760,7 @@ try {
           if(Math.abs(label.left-before.left)>1||Math.abs(after.top-before.top)>1||Math.abs(after.left-before.left)>1)errors.push(code+': toolbar moved speaker or text');
           if(getComputedStyle(bar).opacity!=='1'||barRect.right>rowRect.right+1||barRect.left<rowRect.left-1||barRect.bottom>after.top+1)errors.push(code+': toolbar clips or covers subtitle '+JSON.stringify({appearance,connected:row.isConnected,focused:document.activeElement?.outerHTML,hasFocus:document.hasFocus(),opacity:getComputedStyle(bar).opacity,bar:barRect,row:rowRect,copy:after}));
           if(bar.querySelectorAll('button').length!==7||[...bar.querySelectorAll('button')].some(b=>!b.getAttribute('aria-label')||b.textContent.trim()))errors.push(code+': missing accessible actions');
-          const preview=[...document.querySelectorAll('.summary-participant-preview-person > span')];
+          const preview=[...document.querySelectorAll('.summary-participant-preview-person > span:not(.speaker-avatar)')];
           if(preview.length!==3||preview.some(name=>!name.textContent.trim()||!name.getBoundingClientRect().width))errors.push(code+': initial participant names hidden');
           const section=document.querySelector('.summary-participants'),toggle=section.querySelector('[data-summary-participants-toggle]'),body=document.querySelector('.summary-body');
           const bodyTop=body.getBoundingClientRect().top;
@@ -2176,6 +2176,60 @@ try {
   })()`);
   await captureCorrection('cause-rail-narrow');
   await client.send('Emulation.clearDeviceMetricsOverride');
+  // 使用真实录音验证正文时间戳，并确保列表、表格的依据留在对应内容旁。
+  await correctionEvaluate(`(async()=>{
+    const initialized=await window.brevia.initialize();
+    const meeting=await window.brevia.meeting.get({meeting_id:initialized.meetings[0].id});
+    const segment=(meeting.current_segments||meeting.segments)[0];
+    const source={...segment,segment_id:segment.id,current_segment_id:segment.id,seekable:true};
+    const list='- 周四交付测试版本。〔00:02 · 00:03〕';
+    const firstRow='| 产品团队 | 核对验收范围 [00:04] |';
+    const secondRow='| 研发团队 | 完成测试版本 [00:05] |';
+    const claim=(id,line,text)=>({id,kind:'decision',section:'交付安排',line,text,original_text:text,sources:[source],source_chars:source.text.length,status:'supported'});
+    const claims=[claim('inline-list',list,'周四交付测试版本。'),claim('inline-table-first',firstRow,'产品团队核对验收范围'),claim('inline-table-second',secondRow,'研发团队完成测试版本')];
+    const code=String.fromCharCode(96);
+    const markdown=['# 交付安排',list,'| 负责人 | 工作 |','| --- | --- |',firstRow,secondRow,'','[待确认] '+code+'[00:06]'+code+' [00:07](https://example.com/recording)'].join(String.fromCharCode(10));
+    applyBackendDetail({...meeting,summary:{data:{markdown,claims}}});
+    renderMeetingDetail();await showView('detail');openReviewDocument('summary');
+    const notebook=document.querySelector('.summary-body .evidence-notebook');
+    if(!notebook||notebook.querySelector('.evidence-document')||notebook.querySelectorAll('.evidence-inline').length!==3)throw Error('已匹配引用仍集中在纪要末尾');
+    const item=notebook.querySelector('[data-evidence-id="inline-list"]');
+    if(!item.closest('li')?.textContent.includes('周四交付测试版本'))throw Error('列表依据未绑定对应要点');
+    for(const [id,owner]of[['inline-table-first','产品团队'],['inline-table-second','研发团队']]){
+      const evidence=notebook.querySelector('[data-evidence-id="'+id+'"]');
+      const row=evidence?.closest('tr');
+      if(!row||row.querySelector('td')?.textContent!==owner||row.querySelectorAll('.evidence-inline').length!==1)throw Error('表格依据串行或移至表格外：'+id);
+    }
+    const times=[...notebook.querySelectorAll('[data-summary-seek]')];
+    if(times.map(button=>Number(button.dataset.summarySeek)).join(',')!=='2,3,4,5')throw Error('正文时间戳格式、普通方括号或代码链接识别错误');
+    if(!notebook.textContent.includes('[待确认]')||notebook.querySelector('a [data-summary-seek],code [data-summary-seek]'))throw Error('普通正文或链接被播放按钮破坏');
+    item.querySelector('summary').click();
+    if(!item.open||!item.querySelector('.evidence-quotes').textContent.includes(source.text))throw Error('行内引用未展开对应原话');
+    const deadline=Date.now()+6000;
+    while(playerAudio.readyState<1){if(Date.now()>deadline)throw Error('样例录音元数据未加载');await new Promise(r=>setTimeout(r,25));}
+    playerAudio.pause();times[0].click();
+    while(playerAudio.paused){if(Date.now()>deadline)throw Error('纪要时间戳没有开始播放');await new Promise(r=>setTimeout(r,25));}
+    if(playerAudio.currentTime<1.9||playerAudio.currentTime>2.8)throw Error('纪要时间戳跳转位置错误：'+playerAudio.currentTime);
+    playerAudio.pause();
+  })()`);
+  await captureCorrection('summary-inline-citations');
+  await correctionEvaluate(`(async()=>{
+    const initialized=await window.brevia.initialize();
+    const meeting=await window.brevia.meeting.get({meeting_id:initialized.meetings[0].id});
+    const segment=(meeting.current_segments||meeting.segments)[0];
+    const source={...segment,segment_id:segment.id,current_segment_id:segment.id,seekable:true};
+    const staleCause={id:'stale-cause',kind:'cause',section:'旧版原因',text:'旧版结论',sources:[source],status:'supported'};
+    applyBackendDetail({...meeting,summary:{data:{markdown:'',claims:[staleCause]}}});
+    renderMeetingDetail();await showView('detail');
+    for(const tab of['summary','notes','transcript']){
+      openReviewDocument(tab);
+      await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+      const reading=document.querySelector('.final-transcript'),panel=reading.querySelector('[data-detail-panel="'+tab+'"]');
+      if(reading.classList.contains('has-cause-rail')||reading.querySelector('.detail-cause-rail'))throw Error(tab+'：无纪要仍显示旧版原因图');
+      if(tab!=='notes'&&panel.getBoundingClientRect().width<reading.clientWidth-4)throw Error(tab+'：无原因图时正文仍预留空栏');
+    }
+  })()`);
+  await captureCorrection('transcript-without-cause-rail');
   // 三个内容页共享导航和操作栏；坐标比较防止入口再次漂移。
   const unifiedGeometry = [];
   await correctionEvaluate(`(async()=>{
@@ -2851,26 +2905,45 @@ try {
         Buffer.from(homePairShot.data, 'base64'),
       );
     }
-    await client.send('Runtime.evaluate', {
-      expression: "document.querySelector('.mobile-request-actions button').click()",
+    // HTTP 拒绝先于退场动画完成；等待处理函数关闭旧审批，再发起下一次配对。
+    const denied = await client.send('Runtime.evaluate', {
+      expression: `(async()=>{await document.querySelector('.mobile-request-actions button').onclick();return !document.querySelector('#mobile-pair-dialog').open;})()`,
+      awaitPromise: true,
+      returnByValue: true,
     });
+    if (denied.exceptionDetails)
+      throw Error(denied.exceptionDetails.exception?.description || denied.exceptionDetails.text);
+    check(denied.result?.value === true, '拒绝处理完成后必须关闭配对审批');
     check((await response) === 403, '电脑拒绝后真实配对请求应返回 403');
     if (process.env.BREVIA_DESIGN_CAPTURE_DIR) {
       for (const allowed of [false, true]) {
         if (allowed) {
           const session = await client.send('Runtime.evaluate', {
-            expression: `(async()=>{await document.querySelector('#mobile-pair').onclick();return document.querySelector('#mobile-pin').textContent;})()`,
+            expression: `(async()=>{await document.querySelector('#mobile-pair').onclick();const dialog=document.querySelector('#mobile-pair-dialog');const pin=document.querySelector('#mobile-pin').textContent;if(!dialog.open||!/^\\d{6}$/.test(pin))throw Error('重新配对没有打开有效的配对码');return pin;})()`,
             awaitPromise: true,
             returnByValue: true,
           });
-          const accepted = requestPhone(session.result.value, 'c'.repeat(32));
-          const decision = await client.send('Runtime.evaluate', {
-            expression: `(async()=>{const deadline=Date.now()+6000;while(!document.querySelector('.mobile-request-actions .modal-action')){if(Date.now()>deadline)throw Error('允许连接入口未出现');await new Promise(r=>setTimeout(r,25));}await document.querySelector('.mobile-request-actions .modal-action').onclick();const state=await window.brevia.mobile.status();return !document.querySelector('#mobile-pair-dialog').open&&state.devices.some(d=>d.name==='<UI test phone>')&&(mobileConnectionContent||document.getElementById('mobile-dialog')).dataset.mobilePageState==='paired'&&!document.querySelector('#mobile-nav').classList.contains('is-connected');})()`,
-            awaitPromise: true,
-            returnByValue: true,
-          });
+          if (session.exceptionDetails)
+            throw Error(
+              session.exceptionDetails.exception?.description || session.exceptionDetails.text,
+            );
+          const [accepted, decision] = await Promise.all([
+            requestPhone(session.result.value, 'c'.repeat(32)),
+            (async () => {
+              const result = await client.send('Runtime.evaluate', {
+                expression: `(async()=>{const deadline=Date.now()+6000;while(!document.querySelector('.mobile-request-actions .modal-action')){if(Date.now()>deadline)throw Error('允许连接入口未出现');await new Promise(r=>setTimeout(r,25));}await document.querySelector('.mobile-request-actions .modal-action').onclick();const state=await window.brevia.mobile.status();return !document.querySelector('#mobile-pair-dialog').open&&state.devices.some(d=>d.name==='<UI test phone>')&&(mobileConnectionContent||document.getElementById('mobile-dialog')).dataset.mobilePageState==='paired'&&!document.querySelector('#mobile-nav').classList.contains('is-connected');})()`,
+                awaitPromise: true,
+                returnByValue: true,
+              });
+              if (result.exceptionDetails)
+                throw Error(
+                  result.exceptionDetails.exception?.description || result.exceptionDetails.text,
+                );
+              return result;
+            })(),
+          ]);
           check(
-            (await accepted) === 200 && decision.result?.value === true,
+            accepted === 200 && decision.result?.value === true,
             '真实允许连接必须建立信任、关闭审批且不伪装成已连接',
           );
         }
@@ -3306,6 +3379,12 @@ try {
         if(r.top<0||r.bottom>innerHeight+1||r.left<0||r.right>innerWidth+1||!menu.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2)))errors.push(selector+': menu clipped or occluded');
       };
       document.querySelector('[data-refine-more]').click();checkMenu('.refine-menu');
+      const refineMenu=document.querySelector('.refine-menu'),refineBounds=refineMenu.getBoundingClientRect();
+      if(refineBounds.width>280||refineBounds.height>280||!refineMenu.querySelector('header')||!refineMenu.querySelector('footer [data-refine-action]'))errors.push('refine: compact heading or action layout missing');
+      for(const row of refineMenu.querySelectorAll('.refine-menu-speakers')){
+        const label=row.querySelector(':scope>span'),control=row.querySelector('.flow-select,input');
+        if(!label||!control||control.getBoundingClientRect().left<label.getBoundingClientRect().right-1||row.scrollWidth>row.clientWidth+1)errors.push('refine: field label and input overlap');
+      }
       document.querySelector('[data-detail-translation-toggle]').click();checkMenu('.detail-translation-menu');
       document.querySelector('[data-edit-transcript]').click();
       if(!document.querySelector('[data-transcript-save]')||document.querySelector('[data-refine-more]'))errors.push('editing action guard lost');
@@ -3729,46 +3808,51 @@ try {
       const wait=async(predicate)=>{const deadline=Date.now()+5000;while(!predicate()){if(Date.now()>deadline)throw Error('settings save timed out');await pause();}};
       const originalPrompts=await window.brevia.prompts.get();
       const originalAgent=await window.brevia.agent.settings.get();
-      await showView('settings');await openModal('agent-settings');
-      if(settingsModal.querySelectorAll('[role=switch]').length!==4)errors.push('agent permissions missing');
-      if(!settingsModal.querySelector('[data-agent-copy=mcp]')||!settingsModal.querySelector('[data-agent-copy=cli]'))errors.push('agent integration copy missing');
-      const savedTheme=theme;
-      applyTheme('dark');
-      const checkedToggle=settingsModal.querySelector('[role=switch][aria-checked=true]');
-      if(checkedToggle&&getComputedStyle(checkedToggle).backgroundColor===getComputedStyle(checkedToggle.querySelector('span')).backgroundColor)errors.push('dark toggle thumb blends into the checked track');
-      applyTheme(savedTheme);
-      settingsModal.querySelector('[data-agent-permission=record]').click();
-      await wait(()=>!agentSettingsBusy);
-      if((await window.brevia.agent.settings.get()).permissions.record===originalAgent.permissions.record)errors.push('record permission not persisted');
-      if(settingsModal.querySelector('[data-agent-permission=record]').getAttribute('aria-checked')!==String(!originalAgent.permissions.record))errors.push('permission control is stale');
-      await window.brevia.agent.settings.save({enabled:originalAgent.enabled,permissions:originalAgent.permissions});
-      await openModal('prompts');
-      const field=settingsModal.querySelector('[name=summary]');
-      field.value='Keep decisions and next steps. <verbatim>';
-      field.dispatchEvent(new Event('input',{bubbles:true}));
-      if(settingsModal.querySelector('.save-state')?.dataset.saveState!=='dirty')errors.push('prompt edit still appears saved');
-      await openModal('agent-settings');await openModal('prompts');
-      if(settingsModal.querySelector('[name=summary]').value!=='Keep decisions and next steps. <verbatim>')errors.push('navigation lost prompt draft');
-      settingsModal.querySelector('form').requestSubmit();await wait(()=>!promptSaving);
-      if((await window.brevia.prompts.get()).summary!=='Keep decisions and next steps. <verbatim>')errors.push('prompt was not persisted');
-      settingsModal.querySelector('[data-reset-prompts]').click();
-      if([...settingsModal.querySelectorAll('textarea')].some(field=>field.value))errors.push('restore defaults left prompt content');
-      if(!(await window.brevia.prompts.get()).summary)errors.push('restore defaults saved without explicit submit');
-      settingsModal.querySelector('form').requestSubmit();await wait(()=>!promptSaving);
-      if(Object.values(await window.brevia.prompts.get()).some(Boolean))errors.push('blank overrides did not restore defaults');
-      await window.brevia.prompts.save(originalPrompts);promptSettingsDraft=originalPrompts;promptSaveState='saved';
-      return errors;
+      try {
+        await window.brevia.agent.settings.save({enabled:false,permissions:{read:true,infer:false,record:false}});
+        await showView('settings');await openModal('agent-settings');
+        if(settingsModal.querySelector('[role=switch],[data-agent-permission]'))errors.push('retired agent permission switches remain');
+        if(['guide','mcp','cli'].some(kind=>!settingsModal.querySelector('[data-agent-copy="'+kind+'"]')))errors.push('agent integration copy missing');
+        if(settingsModal.querySelectorAll('[data-agent-copy=prompt]').length!==3)errors.push('agent prompt examples missing');
+        const guide=agentSetupGuide();
+        if(!agentSettings.skill_path||!guide.includes(agentSettings.skill_path)||!guide.includes(agentSettings.cli_path)||!guide.includes(agentSettings.mcp.env.BREVIA_DATA_DIR)||!guide.includes('status --no-start'))errors.push('agent guide missing actual local setup paths');
+        const enable=settingsModal.querySelector('[data-agent-enable]');
+        if(!enable)errors.push('legacy agent access cannot be enabled');
+        else {
+          enable.click();
+          await wait(()=>!agentSettingsBusy);
+          const enabled=await window.brevia.agent.settings.get();
+          if(!enabled.enabled||['read','infer','record'].some(key=>!enabled.permissions[key]))errors.push('agent access not fully enabled');
+          if(settingsModal.querySelector('[data-agent-enable]'))errors.push('agent enable control is stale');
+        }
+        const navigation=settingsModal.querySelector('.settings-navigation');
+        if(document.querySelector('[data-settings-page=prompts],[data-modal=prompts]'))errors.push('retired prompt navigation remains reachable');
+        const search=navigation.querySelector('[data-settings-search]');
+        search.value=t('提示词');search.dispatchEvent(new Event('input',{bubbles:true}));
+        if([...navigation.querySelectorAll('[data-settings-page]')].some(button=>button.checkVisibility()))errors.push('retired prompt settings appears in search');
+        search.value='';search.dispatchEvent(new Event('input',{bubbles:true}));
+        const page=settingsModal.querySelector('.agent-settings');
+        const stateBefore={activeModal,activeView,modalRequestRevision,contentKind:settingsModal.querySelector('.modal-body').dataset.contentKind};
+        await openModal('prompts');
+        const stateAfter={activeModal,activeView,modalRequestRevision,contentKind:settingsModal.querySelector('.modal-body').dataset.contentKind};
+        if(JSON.stringify(stateAfter)!==JSON.stringify(stateBefore)||settingsModal.querySelector('.agent-settings')!==page||!page.checkVisibility())errors.push('retired prompt route changed the current settings page');
+        if(JSON.stringify(await window.brevia.prompts.get())!==JSON.stringify(originalPrompts))errors.push('retiring prompt settings changed stored overrides');
+        return errors;
+      } finally {
+        await window.brevia.agent.settings.save({enabled:originalAgent.enabled,permissions:originalAgent.permissions});
+      }
     })()`,
     awaitPromise: true,
     returnByValue: true,
   });
   check(
     !agentSettingsFlow.exceptionDetails,
-    'Agent and prompt settings flow threw: ' + JSON.stringify(agentSettingsFlow.exceptionDetails),
+    'Agent settings and retired prompt route threw: ' +
+      JSON.stringify(agentSettingsFlow.exceptionDetails),
   );
   check(
     !agentSettingsFlow.result?.value?.length,
-    'Agent and prompt settings: ' + JSON.stringify(agentSettingsFlow.result?.value),
+    'Agent settings and retired prompt route: ' + JSON.stringify(agentSettingsFlow.result?.value),
   );
   if (process.env.BREVIA_SETTINGS_CAPTURE_DIR) {
     const output = path.resolve(process.env.BREVIA_SETTINGS_CAPTURE_DIR);
@@ -3784,7 +3868,7 @@ try {
         deviceScaleFactor: 1,
         mobile: false,
       });
-      for (const kind of ['agent-settings', 'prompts']) {
+      for (const kind of ['agent-settings']) {
         const layout = await client.send('Runtime.evaluate', {
           expression: `(async()=>{applyLanguage(${JSON.stringify(language)});applyTheme(${JSON.stringify(appearance)});await showView('settings');await openModal(${JSON.stringify(kind)});await new Promise(r=>setTimeout(r,260));const panel=settingsModal.querySelector('.modal-body');return {overflow:document.body.scrollWidth>innerWidth+1,contentOverflow:panel.scrollWidth>panel.clientWidth+1,visible:settingsModal.checkVisibility()};})()`,
           awaitPromise: true,
@@ -3832,7 +3916,9 @@ try {
       if(shell.classList.contains('is-library-hidden'))libraryToggle.click();
       await showView('settings');
       const navigation=document.querySelector('#settings-view .settings-navigation');
-      if(navigation.querySelectorAll('[data-settings-page]').length!==10) errors.push('general navigation');
+      const settingPages=[...navigation.querySelectorAll('[data-settings-page]')].map(button=>button.dataset.settingsPage).sort();
+      const expectedPages=['general','advanced-settings','whats-new','models','ai-features','speaker-profiles','device-connection','agent-settings','storage'].sort();
+      if(JSON.stringify(settingPages)!==JSON.stringify(expectedPages)) errors.push('general navigation '+JSON.stringify(settingPages));
       const search=navigation.querySelector('[data-settings-search]');
       search.value=t('模型库');search.dispatchEvent(new Event('input',{bubbles:true}));
       const matches=[...navigation.querySelectorAll('[data-settings-page]')].filter(button=>button.checkVisibility());
@@ -4587,11 +4673,35 @@ try {
       ['desktop-detail-summary', `openReviewDocument('summary')`],
       [
         'desktop-detail-summary-config-required',
-        `(()=>{window.visualSavedSummaryConfig=structuredClone(summaryConfig);summaryConfig.enabled=true;summaryConfig.provider='built-in';summaryConfig.providers['built-in'].model='__missing_summary_model__';return generateMeetingSummary();})()`,
+        `(async()=>{
+          window.visualSavedSummaryConfig=structuredClone(summaryConfig);
+          window.visualSavedSummaryWait=uiData.detail.summary.waitingModels;
+          window.visualSummaryTaskKey='summary.generate:'+currentMeetingDetail.id;
+          window.visualSavedSummaryTask=pendingModelTasks.get(window.visualSummaryTaskKey);
+          summaryConfig.enabled=true;
+          summaryConfig.provider='built-in';
+          summaryConfig.providers['built-in'].model='__missing_summary_model__';
+          await generateMeetingSummary(currentMeetingDetail.id);
+          const feedback=document.querySelector('[data-summary-feedback]');
+          if(!feedback?.checkVisibility()||!feedback.querySelector('.summary-feedback-close')||!feedback.querySelector('[data-settings-modal="summary-model"]'))throw Error('缺失纪要模型时未显示可关闭的配置提示');
+        })()`,
       ],
       [
         'desktop-detail-edit',
-        `(()=>{summaryConfig=window.visualSavedSummaryConfig;document.querySelector('.summary-feedback-close').click();document.querySelector('[data-open-summary-edit]').click();})()`,
+        `(()=>{
+          summaryConfig=window.visualSavedSummaryConfig;
+          if(window.visualSavedSummaryTask)pendingModelTasks.set(window.visualSummaryTaskKey,window.visualSavedSummaryTask);
+          else pendingModelTasks.delete(window.visualSummaryTaskKey);
+          uiData.detail.summary.waitingModels=window.visualSavedSummaryWait;
+          document.querySelector('.summary-feedback-close').click();
+          if(!document.querySelector('[data-summary-feedback]').hidden)throw Error('关闭配置提示后仍然可见');
+          document.querySelector('[data-open-summary-edit]').click();
+          if(!inlineSummaryEditor||!document.querySelector('[data-cancel-inline-summary-edit]'))throw Error('纪要编辑器未打开');
+          delete window.visualSavedSummaryConfig;
+          delete window.visualSavedSummaryWait;
+          delete window.visualSummaryTaskKey;
+          delete window.visualSavedSummaryTask;
+        })()`,
       ],
       ['desktop-detail-edit-markdown', `inlineSummaryEditor.setMode('markdown')`],
       [
@@ -5015,8 +5125,24 @@ try {
         `(async()=>{closeModal();await new Promise(r=>setTimeout(r,250));await showLibraryNav('recently-deleted');uiData.meetings=window.visualLibraryMeetings.slice(0,2).map(m=>({...m,deleted:true,deletedAt:new Date().toISOString()}));renderMeetingList();document.querySelector('#meeting-selection-toggle').click();batchToolbar.querySelector('#batch-select-all').click();})()`,
       ],
       [
+        'desktop-devices-revoke',
+        `(async()=>{clearMeetingSelection();await showView('settings');await openModal('device-connection');window.visualDevicePage=document.querySelector('#mobile-dialog');const first=document.querySelector('.trusted-device-revoke');if(!first)throw Error('撤销信任截图缺少已配对设备');first.click();await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));if(activeModal!=='confirmation'||!settingsModal.matches(':popover-open')||!settingsModal.textContent.includes(t('这台设备将断开连接，需要重新配对才能访问电脑。'))||!settingsModal.querySelector('.confirmation-subject')?.textContent)throw Error('解除信任缺少锚定浮窗、设备名称或后果提示');const bounds=settingsModal.querySelector('.modal-panel').getBoundingClientRect();if(bounds.width>300||bounds.height>240||bounds.left<0||bounds.top<0||bounds.right>innerWidth||bounds.bottom>innerHeight)throw Error('解除信任浮窗尺寸或位置不正确：'+JSON.stringify(bounds.toJSON()));})()`,
+      ],
+      [
+        'desktop-devices-revoke-cancelled',
+        `(async()=>{settingsModal.querySelector('[data-cancel-confirmation]').click();if(activeModal!=='device-connection'||document.querySelector('#mobile-dialog')!==window.visualDevicePage||document.querySelector('.app-shell').inert||settingsModal.hasAttribute('popover'))throw Error('取消后未恢复原设备设置页面');if(!(await window.brevia.mobile.status()).devices.length)throw Error('取消确认仍解除了信任');document.querySelector('.trusted-device-revoke').click();if(activeModal!=='confirmation')throw Error('恢复后的设备按钮失去事件绑定');settingsModal.querySelector('[data-cancel-confirmation]').click();if(activeModal!=='device-connection'||document.querySelector('#mobile-dialog')!==window.visualDevicePage)throw Error('再次取消未恢复原页面');})()`,
+      ],
+      [
+        'desktop-devices-revoke-escape',
+        `(()=>{window.visualRevokeTrigger=document.querySelector('.trusted-device-revoke');window.visualRevokeTrigger.focus();window.visualRevokeTrigger.click();if(!settingsModal.matches(':popover-open'))throw Error('Escape 回归未打开撤销信任浮窗');})()`,
+      ],
+      [
+        'desktop-devices-revoke-outside',
+        `(()=>{window.visualRevokeTrigger=document.querySelector('.trusted-device-revoke');window.visualRevokeTrigger.focus();window.visualRevokeTrigger.click();if(!settingsModal.matches(':popover-open'))throw Error('外部点击回归未打开撤销信任浮窗');})()`,
+      ],
+      [
         'desktop-devices-empty',
-        `(async()=>{clearMeetingSelection();await showView('settings');await openModal('device-connection');const wait=async(predicate)=>{const deadline=Date.now()+6000;while(!await predicate()){if(Date.now()>deadline)throw Error('撤销信任确认超时');await new Promise(r=>setTimeout(r,25));}};const first=document.querySelector('#mobile-devices button');await first.onclick();if(activeModal!=='confirmation'||!settingsModal.textContent.includes(t('取消对「{name}」的信任？这台设备需要重新配对才能访问电脑。').split('{name}')[1]))throw Error('解除信任缺少后果提示');settingsModal.querySelector('[data-cancel-confirmation]').click();await wait(()=>activeModal==='device-connection');if(!(await window.brevia.mobile.status()).devices.length)throw Error('取消确认仍解除了信任');let count=(await window.brevia.mobile.status()).devices.length;while(count){await document.querySelector('#mobile-devices button').onclick();settingsModal.querySelector('[data-confirm-action]').click();await wait(async()=>activeModal==='device-connection'&&(await window.brevia.mobile.status()).devices.length<count);count=(await window.brevia.mobile.status()).devices.length;}if(!document.querySelector('.mobile-device-empty')||document.querySelector('#mobile-dialog').dataset.mobilePageState!=='paired')throw Error('撤销信任后未保留设备管理');settingsModal.querySelector('.modal-body').scrollTop=0;})()`,
+        `(async()=>{const wait=async(predicate)=>{const deadline=Date.now()+6000;while(!await predicate()){if(Date.now()>deadline)throw Error('撤销信任确认超时');await new Promise(r=>setTimeout(r,25));}};let count=(await window.brevia.mobile.status()).devices.length;while(count){document.querySelector('.trusted-device-revoke').click();settingsModal.querySelector('[data-confirm-action]').click();await wait(async()=>activeModal==='device-connection'&&(await window.brevia.mobile.status()).devices.length<count);count=(await window.brevia.mobile.status()).devices.length;}const dialog=document.querySelector('#mobile-dialog');if(dialog.dataset.mobilePageState!=='intro'||dialog.querySelector('[data-mobile-panel="intro"]').hidden||dialog.querySelector('.mobile-device'))throw Error('撤销最后一台设备后未返回连接引导页');settingsModal.querySelector('.modal-body').scrollTop=0;delete window.visualDevicePage;})()`,
       ],
       [
         'desktop-devices-service-off',
@@ -5035,6 +5161,35 @@ try {
     for (const [name, expression] of captures) {
       console.log('Capturing', name);
       await evaluate(expression);
+      if (['desktop-devices-revoke-escape', 'desktop-devices-revoke-outside'].includes(name)) {
+        if (name.endsWith('-escape')) {
+          await client.send('Input.dispatchKeyEvent', {
+            type: 'keyDown',
+            key: 'Escape',
+            code: 'Escape',
+            windowsVirtualKeyCode: 27,
+          });
+          await client.send('Input.dispatchKeyEvent', {
+            type: 'keyUp',
+            key: 'Escape',
+            code: 'Escape',
+          });
+        } else {
+          const x = await evaluate('innerWidth / 2');
+          for (const type of ['mousePressed', 'mouseReleased']) {
+            await client.send('Input.dispatchMouseEvent', {
+              type,
+              x,
+              y: 20,
+              button: 'left',
+              clickCount: 1,
+            });
+          }
+        }
+        await evaluate(
+          `(async()=>{const deadline=Date.now()+2000;while(activeModal!=='device-connection'){if(Date.now()>deadline)throw Error('撤销信任浮窗未轻关闭');await new Promise(r=>setTimeout(r,25));}if(document.querySelector('#mobile-dialog')!==window.visualDevicePage||document.querySelector('.app-shell').inert||settingsModal.hasAttribute('popover')||document.activeElement!==window.visualRevokeTrigger)throw Error('轻关闭未恢复原设备设置页面、交互或入口焦点');if(!(await window.brevia.mobile.status()).devices.length)throw Error('轻关闭意外解除了信任');delete window.visualRevokeTrigger;})()`,
+        );
+      }
       if (name.startsWith('desktop-update-') && (await evaluate(`activeModal==='upgrade-log'`))) {
         const issues = await evaluate(
           `(()=>{const body=settingsModal.querySelector('.modal-body'),panel=settingsModal.querySelector('.modal-panel'),footer=settingsModal.querySelector('.upgrade-log-actions');const errors=[];if(body.scrollWidth>body.clientWidth+1)errors.push('正文横向溢出');if(footer.getBoundingClientRect().bottom>innerHeight||panel.scrollHeight>panel.clientHeight+1)errors.push('固定动作溢出');if(settingsModal.querySelectorAll('.upgrade-log-actions').length!==1)errors.push('重复动作');if(!settingsModal.querySelector('.whatsnew-entry.is-current[open]')?.textContent.includes(installedAppVersion))errors.push('实际版本未展开');if(!document.querySelector('.app-shell').inert)errors.push('背景仍可操作');return errors;})()`,
@@ -5128,14 +5283,34 @@ try {
         `new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))`,
       );
       if (['desktop-onboarding-ai-config', 'desktop-onboarding-ai-local-config'].includes(name)) {
-        const configFits = await evaluate(
-          `(()=>{const panel=settingsModal.querySelector('.modal-panel'),r=panel.getBoundingClientRect();return Math.abs(r.width-450)<2&&Math.abs(r.left-(innerWidth-r.width)/2)<2&&r.top>=0&&r.bottom<=innerHeight&&(!onboardingBuiltinProvider||(!!panel.querySelector('[data-download-model]')&&panel.querySelector('[type="submit"]').disabled));})()`,
+        const configState = await evaluate(
+          `(()=>{const panel=settingsModal.querySelector('.modal-panel');return {rect:panel.getBoundingClientRect().toJSON(),viewport:{width:innerWidth,height:innerHeight},provider:panel.querySelector('[name="provider"]')?.value,remoteFields:['endpoint','apiKey','model'].every(name=>!!panel.querySelector('[name="'+name+'"]')),download:!!panel.querySelector('[data-download-model]'),submitDisabled:panel.querySelector('[type="submit"]').disabled,fieldHeights:[...panel.querySelectorAll('.config-fields input:not([type=hidden]),.config-fields .flow-select-toggle')].map(e=>e.getBoundingClientRect().height)};})()`,
         );
-        if (!configFits) throw Error(name + ': 引导配置浮窗错位或缺少真实下载状态');
-        const compact = await evaluate(
-          `(()=>{const panel=settingsModal.querySelector('.modal-panel');return panel.getBoundingClientRect().height<520&&[...panel.querySelectorAll('.config-fields input:not([type=hidden]),.config-fields .flow-select-toggle')].every(e=>e.getBoundingClientRect().height>=31.5&&e.getBoundingClientRect().height<=36.5);})()`,
-        );
-        if (!compact) throw Error(name + ': 共享字段或模型区的留白覆盖了紧凑配置样式');
+        const { rect, viewport } = configState;
+        // 首启允许展示本地候选，不代表当前选中本地服务；按实际供应商检查配置状态。
+        const providerReady =
+          name === 'desktop-onboarding-ai-local-config'
+            ? configState.provider === 'built-in' &&
+              configState.download &&
+              configState.submitDisabled
+            : configState.provider === 'custom-openai' &&
+              configState.remoteFields &&
+              !configState.submitDisabled;
+        const configFits =
+          Math.abs(rect.width - 450) < 2 &&
+          Math.abs(rect.left - (viewport.width - rect.width) / 2) < 2 &&
+          rect.top >= 0 &&
+          rect.bottom <= viewport.height &&
+          providerReady;
+        if (!configFits)
+          throw Error(name + ': 引导配置浮窗错位或配置状态错误 ' + JSON.stringify(configState));
+        const compact =
+          rect.height < 520 &&
+          configState.fieldHeights.every((height) => Math.abs(height - 40) <= 0.5);
+        if (!compact)
+          throw Error(
+            name + ': 共享字段或模型区的留白覆盖了紧凑配置样式 ' + JSON.stringify(configState),
+          );
       }
       if (['desktop-detail', 'desktop-notes-edit'].includes(name)) {
         const rhythm = await evaluate(

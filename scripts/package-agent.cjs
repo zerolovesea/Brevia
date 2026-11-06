@@ -1,4 +1,4 @@
-// Windows CLI 复用安装包的 Electron Node 运行时，不依赖系统 Node 或单独 Worker。
+// CLI 使用随安装包提供的 Node，不依赖系统环境。
 const fs = require('node:fs');
 const path = require('node:path');
 const { build } = require('esbuild');
@@ -18,8 +18,7 @@ async function packageAgent(destination = path.join(root, 'dist/agent')) {
     [
       '@echo off',
       'setlocal',
-      'set "ELECTRON_RUN_AS_NODE=1"',
-      '"%~dp0Brevia.exe" "%~dp0resources\\control\\brevia.cjs" %*',
+      '"%~dp0resources\\control\\node.exe" "%~dp0resources\\control\\brevia.cjs" %*',
       'exit /b %ERRORLEVEL%',
       '',
     ].join('\r\n'),

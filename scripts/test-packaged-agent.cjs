@@ -17,10 +17,10 @@ try {
     assert.ok(fs.existsSync(path.join(app, file)), file);
   const request = (args, input) => {
     const result = spawnSync(
-      path.join(app, 'Brevia.exe'),
+      path.join(app, 'resources/control/node.exe'),
       [path.join(app, 'resources/control/brevia.cjs'), ...args],
       {
-        env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', BREVIA_DATA_DIR: scratch },
+        env: { ...process.env, BREVIA_DATA_DIR: scratch },
         encoding: 'utf8',
         windowsHide: true,
         timeout: 15000,

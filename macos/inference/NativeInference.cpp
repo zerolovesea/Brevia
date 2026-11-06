@@ -1,77 +1,89 @@
+#include "EngineProtocol.h"
 #include "UTF8Text.h"
-#import <Foundation/Foundation.h>
+#include "base64.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
+#include <filesystem>
 #include <iostream>
+#include <limits>
 #include <llama.h>
 #include <memory>
 #include <sherpa-onnx/c-api/c-api.h>
 #include <stdexcept>
 #include <string>
 #include <tuple>
+#ifdef _WIN32
+#include <fcntl.h>
+#include <io.h>
+#define dup _dup
+#define dup2 _dup2
+#define fdopen _fdopen
+#define STDOUT_FILENO 1
+#define STDERR_FILENO 2
+#else
 #include <unistd.h>
+#endif
+using JSON = nlohmann::json;
 #include <vector>
 
 static FILE *protocol;
-static void emit(NSDictionary *value) {
-  NSData *data = [NSJSONSerialization dataWithJSONObject:value
-                                                 options:0
-                                                   error:nil];
-  if (!data || fwrite(data.bytes, 1, data.length, protocol) != data.length ||
+static void emit(const JSON &value) {
+  auto data = value.dump(-1, ' ', false, JSON::error_handler_t::replace);
+  if (fwrite(data.data(), 1, data.size(), protocol) != data.size() ||
       fputc('\n', protocol) < 0)
     exit(1);
   fflush(protocol);
 }
-static NSString *text(const char *value) {
-  return value ? [NSString stringWithUTF8String:value] ?: @"" : @"";
-}
-static std::string string(NSDictionary *p, NSString *key,
+static std::string text(const char *value) { return value ? value : ""; }
+static std::string string(const JSON &p, const char *key,
                           std::string fallback = "") {
-  id value = p[key];
-  if (!value)
+  if (!p.contains(key))
     return fallback;
-  if (![value isKindOfClass:NSString.class])
+  if (!p[key].is_string())
     throw std::runtime_error("Expected a string");
-  return [value UTF8String];
+  return p[key].get<std::string>();
 }
-static double number(NSDictionary *p, NSString *key, double fallback) {
-  id value = p[key];
-  if (!value)
-    return fallback;
-  if (![value isKindOfClass:NSNumber.class] ||
-      !std::isfinite([value doubleValue]))
-    throw std::runtime_error("Expected a finite number");
-  return [value doubleValue];
+static bool flag(const JSON &p, const char *key) {
+  return p.contains(key) && p[key].is_boolean() && p[key].get<bool>();
 }
 static std::string file(const std::string &base, const std::string &name = "") {
-  std::string path = base + (name.empty() ? "" : "/" + name);
-  if (path.empty() || access(path.c_str(), R_OK))
-    throw std::runtime_error("Model file not installed: " + path);
-  return path;
+  auto path = std::filesystem::u8path(base);
+  if (!name.empty())
+    path /= std::filesystem::u8path(name);
+  if (base.empty() || !std::filesystem::exists(path))
+    throw std::runtime_error("Model file not installed: " + path.u8string());
+  return path.u8string();
 }
-static std::vector<float> pcm(NSDictionary *p) {
-  if (number(p, @"sample_rate", 16000) != 16000)
+static std::vector<float> pcm(const JSON &p) {
+  if (number(p, "sample_rate", 16000) != 16000)
     throw std::runtime_error("Expected 16 kHz mono PCM16");
-  NSString *encoded = p[@"pcm"];
-  if (![encoded isKindOfClass:NSString.class])
-    throw std::runtime_error("Missing PCM");
-  NSData *data = [[NSData alloc] initWithBase64EncodedString:encoded options:0];
-  if (!data || !data.length || data.length % 2 || data.length > 16000 * 2 * 600)
+  auto encoded = string(p, "pcm");
+  std::string data;
+  try {
+    data = base64::decode(encoded);
+  } catch (const base64_error &) {
     throw std::runtime_error("Invalid or oversized PCM");
-  std::vector<float> samples(data.length / 2);
-  const uint8_t *bytes = (const uint8_t *)data.bytes;
+  }
+  if (data.empty() || data.size() % 2 || data.size() > 16000 * 2 * 600 ||
+      base64::encode(data) != encoded)
+    throw std::runtime_error("Invalid or oversized PCM");
+  std::vector<float> samples(data.size() / 2);
+  const auto *bytes = reinterpret_cast<const uint8_t *>(data.data());
   for (size_t i = 0; i < samples.size(); ++i)
     samples[i] = (int16_t)(bytes[2 * i] | bytes[2 * i + 1] << 8) / 32768.f;
   return samples;
 }
-static NSString *encode(const float *samples, size_t size) {
-  std::vector<int16_t> values(size);
-  for (size_t i = 0; i < size; ++i)
-    values[i] =
+static std::string encode(const float *samples, size_t size) {
+  std::string values(size * 2, '\0');
+  for (size_t i = 0; i < size; ++i) {
+    auto value =
         (int16_t)std::clamp(std::lround(samples[i] * 32768), -32768L, 32767L);
-  return [[NSData dataWithBytes:values.data() length:values.size() * 2]
-      base64EncodedStringWithOptions:0];
+    values[2 * i] = value & 255;
+    values[2 * i + 1] = (uint16_t)value >> 8;
+  }
+  return base64::encode(values);
 }
 static const SherpaOnnxOfflineRecognizer *recognizer = nullptr;
 static const SherpaOnnxVoiceActivityDetector *vad = nullptr;
@@ -96,41 +108,36 @@ static std::tuple<std::string, std::string, int, double, double, double>
     loadedDiarizer;
 extern void decode_audio(const char *, const char *, int, int);
 
-static id loadASR(NSDictionary *p) {
-  std::string base = file(string(p, @"path"));
-  std::string kind = string(p, @"kind"), language = string(p, @"language");
-  NSArray *hotwords = p[@"hotwords"] ?: @[];
-  if (![hotwords isKindOfClass:NSArray.class])
+static JSON loadASR(const JSON &p) {
+  std::string base = file(string(p, "path"));
+  std::string kind = string(p, "kind"), language = string(p, "language");
+  auto hotwords = p.value("hotwords", JSON::array());
+  if (!hotwords.is_array())
     throw std::runtime_error("Invalid hotwords");
-  for (id word in hotwords)
-    if (![word isKindOfClass:NSString.class])
+  std::string hot;
+  for (const auto &word : hotwords) {
+    if (!word.is_string())
       throw std::runtime_error("Invalid hotword");
-  std::string hot = [[hotwords componentsJoinedByString:@","] UTF8String];
+    if (!hot.empty())
+      hot += ",";
+    hot += word.get<std::string>();
+  }
   SherpaOnnxOfflineRecognizerConfig config{};
   config.feat_config.sample_rate = 16000;
   config.feat_config.feature_dim = 80;
   config.model_config.provider = "cpu";
-  config.model_config.num_threads =
-      std::clamp((int)number(p, @"threads", 4), 1, 32);
+  config.model_config.num_threads = integer(p, "threads", 4, 1, 32);
   config.decoding_method = "greedy_search";
   std::string encoder, decoder, embedding, tokens, tokenizer, conv, hint;
-  NSDictionary *hints = @{
-    @"zh" : @"中文",
-    @"en" : @"英文",
-    @"yue" : @"粤语",
-    @"ja" : @"日语",
-    @"ko" : @"韩语",
-    @"fr" : @"法语",
-    @"de" : @"德语",
-    @"es" : @"西班牙语",
-    @"ru" : @"俄语"
-  };
+  const JSON hints = {{"zh", "中文"}, {"en", "英文"},     {"yue", "粤语"},
+                      {"ja", "日语"}, {"ko", "韩语"},     {"fr", "法语"},
+                      {"de", "德语"}, {"es", "西班牙语"}, {"ru", "俄语"}};
   if (kind == "funasr-nano") {
     encoder = file(base, "encoder_adaptor.int8.onnx");
     decoder = file(base, "llm.int8.onnx");
     embedding = file(base, "embedding.int8.onnx");
     tokenizer = file(base, "Qwen3-0.6B");
-    hint = [hints[text(language.c_str())] ?: @"" UTF8String];
+    hint = hints.value(language, "");
     auto &m = config.model_config.funasr_nano;
     m.encoder_adaptor = encoder.c_str();
     m.llm = decoder.c_str();
@@ -156,16 +163,15 @@ static id loadASR(NSDictionary *p) {
     m.max_new_tokens = 512;
     m.top_p = 0.8;
   } else if (kind == "nemo-transducer" || kind == "whisper") {
-    NSArray *files = p[@"files"];
-    if (![files isKindOfClass:NSArray.class] ||
-        files.count < (kind == "whisper" ? 3U : 4U))
+    auto files = p.value("files", JSON::array());
+    if (!files.is_array() || files.size() < (kind == "whisper" ? 3U : 4U))
       throw std::runtime_error("Model files are required");
-    for (id value in files)
-      if (![value isKindOfClass:NSString.class])
+    for (const auto &value : files)
+      if (!value.is_string())
         throw std::runtime_error("Invalid model file");
-    encoder = file(base, [files[0] UTF8String]);
-    decoder = file(base, [files[1] UTF8String]);
-    tokens = file(base, [files[kind == "whisper" ? 2 : 3] UTF8String]);
+    encoder = file(base, files[0].get<std::string>());
+    decoder = file(base, files[1].get<std::string>());
+    tokens = file(base, files[kind == "whisper" ? 2 : 3].get<std::string>());
     config.model_config.tokens = tokens.c_str();
     if (kind == "whisper") {
       hint = language == "auto" ? "" : language;
@@ -174,7 +180,7 @@ static id loadASR(NSDictionary *p) {
       config.model_config.whisper.language = hint.c_str();
       config.model_config.whisper.task = "transcribe";
     } else {
-      embedding = file(base, [files[2] UTF8String]);
+      embedding = file(base, files[2].get<std::string>());
       config.model_config.transducer.encoder = encoder.c_str();
       config.model_config.transducer.decoder = decoder.c_str();
       config.model_config.transducer.joiner = embedding.c_str();
@@ -189,19 +195,17 @@ static id loadASR(NSDictionary *p) {
     throw std::runtime_error("Could not load recognition model");
   asrKind = kind;
   asrLanguage = language;
-  return @{
-    @"max_speech_seconds" : @(kind == "qwen3"         ? 50
-                              : kind == "funasr-nano" ? 22
-                              : kind == "whisper"     ? 30
-                                                      : 20)
-  };
+  return {{"max_speech_seconds", kind == "qwen3"         ? 50
+                                 : kind == "funasr-nano" ? 22
+                                 : kind == "whisper"     ? 30
+                                                         : 20}};
 }
-static id decodeASR(NSDictionary *p) {
+static JSON decodeASR(const JSON &p) {
   if (!recognizer)
     throw std::runtime_error("Load an ASR model first");
   auto samples = pcm(p);
   if (samples.empty())
-    return @{@"text" : @"", @"words" : @[]};
+    return {{"text", ""}, {"words", JSON::array()}};
   auto stream = std::unique_ptr<const SherpaOnnxOfflineStream,
                                 decltype(&SherpaOnnxDestroyOfflineStream)>(
       SherpaOnnxCreateOfflineStream(recognizer),
@@ -209,21 +213,13 @@ static id decodeASR(NSDictionary *p) {
   if (!stream)
     throw std::runtime_error("Could not create recognition stream");
   if (asrKind == "qwen3" && !asrLanguage.empty() && asrLanguage != "auto") {
-    NSDictionary *hints = @{
-      @"zh" : @"Chinese",
-      @"en" : @"English",
-      @"yue" : @"Cantonese",
-      @"ja" : @"Japanese",
-      @"ko" : @"Korean",
-      @"fr" : @"French",
-      @"de" : @"German",
-      @"es" : @"Spanish",
-      @"ru" : @"Russian"
-    };
+    const JSON hints = {
+        {"zh", "Chinese"},  {"en", "English"}, {"yue", "Cantonese"},
+        {"ja", "Japanese"}, {"ko", "Korean"},  {"fr", "French"},
+        {"de", "German"},   {"es", "Spanish"}, {"ru", "Russian"}};
     SherpaOnnxOfflineStreamSetOption(
         stream.get(), "language",
-        [hints[text(asrLanguage.c_str())] ?: text(asrLanguage.c_str())
-            UTF8String]);
+        hints.value(asrLanguage, asrLanguage).c_str());
   }
   SherpaOnnxAcceptWaveformOffline(stream.get(), 16000, samples.data(),
                                   (int)samples.size());
@@ -235,13 +231,13 @@ static id decodeASR(NSDictionary *p) {
           SherpaOnnxDestroyOfflineRecognizerResult);
   if (!result)
     throw std::runtime_error("Recognition failed");
-  NSMutableArray *words = [NSMutableArray array];
+  JSON words = JSON::array();
   if (result->timestamps && result->tokens_arr) {
     for (int i = 0; i < result->count; ++i) {
-      NSString *token = [text(result->tokens_arr[i])
-          stringByReplacingOccurrencesOfString:@"▁"
-                                    withString:@" "];
-      if ([token hasPrefix:@"<|"] || !token.length)
+      std::string token = text(result->tokens_arr[i]);
+      for (size_t at = 0; (at = token.find("▁", at)) != std::string::npos; ++at)
+        token.replace(at, std::string("▁").size(), " ");
+      if (token.rfind("<|", 0) == 0 || token.empty())
         continue;
       float end = result->durations
                       ? result->timestamps[i] + result->durations[i]
@@ -253,17 +249,13 @@ static id decodeASR(NSDictionary *p) {
       long start = std::clamp(std::lround(result->timestamps[i] * 1000), 0L,
                               duration - 1);
       long stop = std::clamp(std::lround(end * 1000), start + 1, duration);
-      [words addObject:@{
-        @"text" : token,
-        @"start_ms" : @(start),
-        @"end_ms" : @(stop)
-      }];
+      words.push_back({{"text", token}, {"start_ms", start}, {"end_ms", stop}});
     }
   }
-  return @{@"text" : text(result->text), @"words" : words};
+  return {{"text", text(result->text)}, {"words", words}};
 }
-static id loadVAD(NSDictionary *p) {
-  auto path = file(string(p, @"path"));
+static JSON loadVAD(const JSON &p) {
+  auto path = file(string(p, "path"));
   SherpaOnnxVadModelConfig config{};
   config.sample_rate = 16000;
   config.num_threads = 1;
@@ -271,12 +263,14 @@ static id loadVAD(NSDictionary *p) {
   auto &m = config.silero_vad;
   m.model = path.c_str();
   m.window_size = 512;
-  m.threshold = number(p, @"threshold", 0.5);
-  m.min_silence_duration = number(p, @"min_silence_duration", 0.5);
-  m.min_speech_duration = number(p, @"min_speech_duration", 0.25);
-  m.max_speech_duration = number(p, @"max_speech_duration", 20);
+  m.threshold = number(p, "threshold", 0.5);
+  m.min_silence_duration = number(p, "min_silence_duration", 0.5);
+  m.min_speech_duration = number(p, "min_speech_duration", 0.25);
+  m.max_speech_duration = number(p, "max_speech_duration", 20);
   if (m.threshold <= 0 || m.threshold >= 1 || m.min_silence_duration <= 0 ||
-      m.max_speech_duration <= 0 || m.max_speech_duration > 600)
+      m.min_silence_duration > 600 || m.min_speech_duration < 0 ||
+      m.min_speech_duration > 600 || m.max_speech_duration <= 0 ||
+      m.max_speech_duration > 600)
     throw std::runtime_error("Invalid VAD settings");
   if (vad)
     SherpaOnnxDestroyVoiceActivityDetector(vad);
@@ -289,28 +283,28 @@ static id loadVAD(NSDictionary *p) {
   vadStart = -1;
   vadMinSpeech = m.min_speech_duration * 16000;
   // 目录固定 Silero V5；V4 接入时可明确传入 window_overlap:0。
-  vadWindowOverlap = number(p, @"window_overlap", 64);
-  if (vadWindowOverlap != 0 && vadWindowOverlap != 64)
+  const auto overlap = number(p, "window_overlap", 64);
+  if (overlap != 0 && overlap != 64)
     throw std::runtime_error("Invalid Silero window overlap");
+  vadWindowOverlap = static_cast<int>(overlap);
   vadFlushed = false;
-  return @{};
+  return JSON::object();
 }
-static void drainVAD(NSMutableArray *result) {
+static void drainVAD(JSON &result) {
   while (!SherpaOnnxVoiceActivityDetectorEmpty(vad)) {
     const auto *segment = SherpaOnnxVoiceActivityDetectorFront(vad);
     vadHead = segment->start + segment->n;
     auto end = std::min(vadHead, vadTotal);
     if (end > segment->start)
-      [result addObject:@{
-        @"start_ms" : @(segment->start / 16.),
-        @"end_ms" : @(end / 16.),
-        @"pcm" : encode(segment->samples, end - segment->start)
-      }];
+      result.push_back(
+          {{"start_ms", segment->start / 16.},
+           {"end_ms", end / 16.},
+           {"pcm", encode(segment->samples, end - segment->start)}});
     SherpaOnnxDestroySpeechSegment(segment);
     SherpaOnnxVoiceActivityDetectorPop(vad);
   }
 }
-static void acceptVADFrame(const float *samples, NSMutableArray *result) {
+static void acceptVADFrame(const float *samples, JSON &result) {
   bool previous = SherpaOnnxVoiceActivityDetectorDetected(vad);
   SherpaOnnxVoiceActivityDetectorAcceptWaveform(vad, samples, 512);
   vadProcessed += 512;
@@ -327,7 +321,7 @@ static void acceptVADFrame(const float *samples, NSMutableArray *result) {
   }
   drainVAD(result);
 }
-static id resetVAD() {
+static JSON resetVAD() {
   if (!vad)
     throw std::runtime_error("Load VAD first");
   SherpaOnnxVoiceActivityDetectorReset(vad);
@@ -335,12 +329,12 @@ static id resetVAD() {
   vadTotal = vadProcessed = vadHead = 0;
   vadStart = -1;
   vadFlushed = false;
-  return @{};
+  return JSON::object();
 }
-static id feedVAD(NSDictionary *p, bool flush) {
+static JSON feedVAD(const JSON &p, bool flush) {
   if (!vad)
     throw std::runtime_error("Load VAD first");
-  NSMutableArray *result = [NSMutableArray array];
+  JSON result = JSON::array();
   if (flush) {
     if (!vadPending.empty()) {
       vadPending.resize(512, 0);
@@ -367,20 +361,19 @@ static id feedVAD(NSDictionary *p, bool flush) {
       acceptVADFrame(vadPending.data() + offset, result);
     vadPending.erase(vadPending.begin(), vadPending.begin() + offset);
   }
-  if ([p[@"with_state"] boolValue])
-    return @{
-      @"segments" : result,
-      @"speech_detected" : @(SherpaOnnxVoiceActivityDetectorDetected(vad) != 0),
-      @"current_segment_start" : @(vadStart)
-    };
+  if (flag(p, "with_state"))
+    return {
+        {"segments", result},
+        {"speech_detected", SherpaOnnxVoiceActivityDetectorDetected(vad) != 0},
+        {"current_segment_start", vadStart}};
   return result;
 }
-static id embed(NSDictionary *p) {
-  auto path = file(string(p, @"path"));
+static JSON embed(const JSON &p) {
+  auto path = file(string(p, "path"));
   auto samples = pcm(p);
   SherpaOnnxSpeakerEmbeddingExtractorConfig config{};
   config.model = path.c_str();
-  config.num_threads = std::clamp((int)number(p, @"threads", 4), 1, 32);
+  config.num_threads = integer(p, "threads", 4, 1, 32);
   config.provider = "cpu";
   auto key = std::make_pair(path, config.num_threads);
   if (!speakerExtractor || key != loadedEmbedding) {
@@ -406,16 +399,16 @@ static id embed(NSDictionary *p) {
       extractor.get(), stream.get());
   if (!values)
     throw std::runtime_error("Could not compute speaker embedding");
-  NSMutableArray *result = [NSMutableArray array];
+  JSON result = JSON::array();
   for (int i = 0; i < SherpaOnnxSpeakerEmbeddingExtractorDim(extractor.get());
        ++i)
-    [result addObject:@(values[i])];
+    result.push_back(values[i]);
   SherpaOnnxSpeakerEmbeddingExtractorDestroyEmbedding(values);
-  return @{@"embedding" : result};
+  return {{"embedding", result}};
 }
-static id diarize(NSDictionary *p) {
-  auto segmentation = file(string(p, @"segmentation_path")),
-       embedding = file(string(p, @"embedding_path"));
+static JSON diarize(const JSON &p) {
+  auto segmentation = file(string(p, "segmentation_path")),
+       embedding = file(string(p, "embedding_path"));
   auto samples = pcm(p);
   SherpaOnnxOfflineSpeakerDiarizationConfig config{};
   config.segmentation.pyannote.model = segmentation.c_str();
@@ -424,10 +417,18 @@ static id diarize(NSDictionary *p) {
   config.embedding.model = embedding.c_str();
   config.embedding.num_threads = 4;
   config.embedding.provider = "cpu";
-  config.clustering.num_clusters = number(p, @"num_speakers", -1);
-  config.clustering.threshold = number(p, @"threshold", 0.5);
-  config.min_duration_on = number(p, @"min_duration_on", 0.2);
-  config.min_duration_off = number(p, @"min_duration_off", 0.1);
+  auto speakers = number(p, "num_speakers", -1);
+  if (speakers != -1 &&
+      (speakers < 1 || speakers > 100 || speakers != std::trunc(speakers)))
+    throw std::runtime_error("Invalid speaker count");
+  config.clustering.num_clusters = static_cast<int>(speakers);
+  config.clustering.threshold = number(p, "threshold", 0.5);
+  config.min_duration_on = number(p, "min_duration_on", 0.2);
+  config.min_duration_off = number(p, "min_duration_off", 0.1);
+  if (config.clustering.threshold < 0 || config.clustering.threshold > 1 ||
+      config.min_duration_on < 0 || config.min_duration_on > 600 ||
+      config.min_duration_off < 0 || config.min_duration_off > 600)
+    throw std::runtime_error("Invalid speaker segmentation settings");
   auto key =
       std::make_tuple(segmentation, embedding, config.clustering.num_clusters,
                       config.clustering.threshold, config.min_duration_on,
@@ -449,20 +450,18 @@ static id diarize(NSDictionary *p) {
     throw std::runtime_error("Speaker segmentation failed");
   auto segments =
       SherpaOnnxOfflineSpeakerDiarizationResultSortByStartTime(result.get());
-  NSMutableArray *output = [NSMutableArray array];
+  JSON output = JSON::array();
   for (int i = 0; i < SherpaOnnxOfflineSpeakerDiarizationResultGetNumSegments(
                           result.get());
        ++i)
-    [output addObject:@{
-      @"start_ms" : @(std::lround(segments[i].start * 1000)),
-      @"end_ms" : @(std::lround(segments[i].end * 1000)),
-      @"speaker" : @(segments[i].speaker)
-    }];
+    output.push_back({{"start_ms", std::lround(segments[i].start * 1000)},
+                      {"end_ms", std::lround(segments[i].end * 1000)},
+                      {"speaker", segments[i].speaker}});
   SherpaOnnxOfflineSpeakerDiarizationDestroySegment(segments);
-  return @{@"segments" : output};
+  return {{"segments", output}};
 }
-static id loadLlama(NSDictionary *p) {
-  auto path = file(string(p, @"path"));
+static JSON loadLlama(const JSON &p) {
+  auto path = file(string(p, "path"));
   if (!llamaInitialized) {
     llama_log_set(
         [](enum ggml_log_level level, const char *message, void *) {
@@ -474,12 +473,13 @@ static id loadLlama(NSDictionary *p) {
     llama_backend_init();
     llamaInitialized = true;
   }
-  int size = std::clamp((int)number(p, @"context_size", 8192), 512, 65536);
-  int threads = std::clamp((int)number(p, @"threads", 4), 1, 32);
-  int layers = (int)number(p, @"gpu_layers", 99);
+  int size = integer(p, "context_size", 8192, 512, 65536);
+  int threads = integer(p, "threads", 4, 1, 32);
+  int layers =
+      integer(p, "gpu_layers", 99, -1, std::numeric_limits<int>::max());
   auto key = std::make_tuple(path, size, threads, layers);
   if (context && loadedLlama == key)
-    return @{};
+    return JSON::object();
   if (context) {
     llama_free(context);
     context = nullptr;
@@ -502,14 +502,14 @@ static id loadLlama(NSDictionary *p) {
   if (!context)
     throw std::runtime_error("Could not create GGUF context");
   loadedLlama = key;
-  return @{};
+  return JSON::object();
 }
-static id generate(NSDictionary *p, id requestID) {
+static JSON generate(const JSON &p, const JSON &requestID) {
   if (!context)
     throw std::runtime_error("Load GGUF model first");
-  auto prompt = string(p, @"prompt");
-  int maximum = std::clamp((int)number(p, @"max_tokens", 2048), 1, 16384);
-  if ([p[@"chat"] boolValue]) {
+  auto prompt = string(p, "prompt");
+  int maximum = integer(p, "max_tokens", 2048, 1, 16384);
+  if (flag(p, "chat")) {
     llama_chat_message message = {"user", prompt.c_str()};
     const char *format = llama_model_chat_template(model, nullptr);
     int size = llama_chat_apply_template(format, &message, 1, true, nullptr, 0);
@@ -520,7 +520,7 @@ static id generate(NSDictionary *p, id requestID) {
                               size);
     prompt.assign(formatted.data(), size);
     // Qwen 的模板默认开启思考；产品的本地纪要/翻译只接收最终回答。
-    if (![p[@"enable_thinking"] boolValue] && format &&
+    if (!flag(p, "enable_thinking") && format &&
         strstr(format, "enable_thinking") && strstr(format, "<think>"))
       prompt += "<think>\n\n</think>\n";
   }
@@ -542,23 +542,25 @@ static id generate(NSDictionary *p, id requestID) {
   auto sampler = std::unique_ptr<llama_sampler, decltype(&llama_sampler_free)>(
       llama_sampler_chain_init(llama_sampler_chain_default_params()),
       llama_sampler_free);
-  double temperature = number(p, @"temperature", 0.3);
+  double temperature = number(p, "temperature", 0.3);
   if (temperature <= 0)
     llama_sampler_chain_add(sampler.get(), llama_sampler_init_greedy());
   else {
     llama_sampler_chain_add(
-        sampler.get(), llama_sampler_init_top_k((int)number(p, @"top_k", 40)));
+        sampler.get(),
+        llama_sampler_init_top_k(
+            integer(p, "top_k", 40, 0, std::numeric_limits<int>::max())));
     llama_sampler_chain_add(
-        sampler.get(), llama_sampler_init_top_p(number(p, @"top_p", 0.95), 1));
+        sampler.get(), llama_sampler_init_top_p(number(p, "top_p", 0.95), 1));
     llama_sampler_chain_add(sampler.get(),
                             llama_sampler_init_temp(temperature));
     llama_sampler_chain_add(sampler.get(), llama_sampler_init_dist(0));
   }
-  NSArray *stops = p[@"stop_tokens"] ?: @[];
-  if (![stops isKindOfClass:NSArray.class])
+  auto stops = p.value("stop_tokens", JSON::array());
+  if (!stops.is_array())
     throw std::runtime_error("Invalid stop tokens");
-  for (id stop in stops)
-    if (![stop isKindOfClass:NSString.class])
+  for (const auto &stop : stops)
+    if (!stop.is_string())
       throw std::runtime_error("Invalid stop token");
   std::string output;
   bool complete = false;
@@ -579,8 +581,8 @@ static id generate(NSDictionary *p, id requestID) {
     } else
       output.append(buffer, count);
     bool stopped = false;
-    for (NSString *stop in stops) {
-      auto marker = std::string(stop.UTF8String);
+    for (const auto &stop : stops) {
+      auto marker = stop.get<std::string>();
       auto at = output.find(marker);
       if (!marker.empty() && at != std::string::npos) {
         output.resize(at);
@@ -588,14 +590,9 @@ static id generate(NSDictionary *p, id requestID) {
         break;
       }
     }
-    NSString *partial = [[NSString alloc] initWithBytes:output.data()
-                                                 length:output.size()
-                                               encoding:NSUTF8StringEncoding];
-    if (partial)
-      emit(@{
-        @"type" : @"llama.partial",
-        @"payload" : @{@"id" : requestID, @"text" : partial}
-      });
+    if (validUTF8(output))
+      emit({{"type", "llama.partial"},
+            {"payload", {{"id", requestID}, {"text", output}}}});
     if (stopped) {
       complete = true;
       break;
@@ -604,64 +601,70 @@ static id generate(NSDictionary *p, id requestID) {
     if (llama_decode(context, batch))
       throw std::runtime_error("GGUF generation failed");
   }
-  if ([p[@"require_complete"] boolValue] && !complete)
-    throw std::runtime_error("Translation exceeded output token limit; no complete result was produced");
-  return @{@"text" : completeUTF8Prefix(output)};
+  if (flag(p, "require_complete") && !complete)
+    throw std::runtime_error("Translation exceeded output token limit; no "
+                             "complete result was produced");
+  return {{"text", completeUTF8Prefix(output)}};
 }
 int main() {
-  protocol = fdopen(dup(STDOUT_FILENO), "w");
-  dup2(STDERR_FILENO, STDOUT_FILENO);
+#ifdef _WIN32
+  _setmode(_fileno(stdin), _O_BINARY);
+  _setmode(_fileno(stdout), _O_BINARY);
+#endif
+  protocol = fdopen(dup(STDOUT_FILENO), "wb");
+  if (!protocol || dup2(STDERR_FILENO, STDOUT_FILENO) < 0)
+    return 1;
   std::string line;
-  while (std::getline(std::cin, line))
-    @autoreleasepool {
-      id identifier = NSNull.null;
-      try {
-        if (line.size() > 32 * 1024 * 1024)
-          throw std::runtime_error("Inference command too large");
-        id request = [NSJSONSerialization
-            JSONObjectWithData:[NSData dataWithBytes:line.data()
-                                              length:line.size()]
-                       options:0
-                         error:nil];
-        if (![request isKindOfClass:NSDictionary.class] || !request[@"id"] ||
-            ![request[@"payload"] isKindOfClass:NSDictionary.class])
-          throw std::runtime_error("Invalid inference command");
-        identifier = request[@"id"];
-        NSDictionary *payload = request[@"payload"];
-        auto type = string(request, @"type");
-        id result;
-        if (type == "asr.load")
-          result = loadASR(payload);
-        else if (type == "asr.decode")
-          result = decodeASR(payload);
-        else if (type == "vad.load")
-          result = loadVAD(payload);
-        else if (type == "vad.feed" || type == "vad.flush")
-          result = feedVAD(payload, type == "vad.flush");
-        else if (type == "vad.reset")
-          result = resetVAD();
-        else if (type == "speaker.embed")
-          result = embed(payload);
-        else if (type == "speaker.diarize")
-          result = diarize(payload);
-        else if (type == "llama.load")
-          result = loadLlama(payload);
-        else if (type == "llama.generate")
-          result = generate(payload, identifier);
-        else if (type == "audio.decode") {
-          auto source = file(string(payload, @"source")),
-               destination = string(payload, @"destination");
-          decode_audio(source.c_str(), destination.c_str(),
-                       number(payload, @"sample_rate", 16000),
-                       number(payload, @"channels", 1));
-          result = @{@"path" : text(destination.c_str())};
-        } else
-          throw std::runtime_error("Unknown inference command");
-        emit(@{@"id" : identifier, @"ok" : @YES, @"result" : result});
-      } catch (const std::exception &e) {
-        emit(@{@"id" : identifier, @"ok" : @NO, @"error" : text(e.what())});
-      }
+  bool oversized;
+  while (readCommandLine(std::cin, line, oversized)) {
+    JSON identifier = nullptr;
+    try {
+      if (oversized)
+        throw std::runtime_error("Inference command too large");
+      auto request = JSON::parse(line);
+      if (!request.is_object() || !request.contains("id") ||
+          !request.contains("payload") || !request["payload"].is_object())
+        throw std::runtime_error("Invalid inference command");
+      identifier = request["id"];
+      const auto &payload = request["payload"];
+      auto type = string(request, "type");
+      JSON result;
+      if (type == "asr.load")
+        result = loadASR(payload);
+      else if (type == "asr.decode")
+        result = decodeASR(payload);
+      else if (type == "vad.load")
+        result = loadVAD(payload);
+      else if (type == "vad.feed" || type == "vad.flush")
+        result = feedVAD(payload, type == "vad.flush");
+      else if (type == "vad.reset")
+        result = resetVAD();
+      else if (type == "speaker.embed")
+        result = embed(payload);
+      else if (type == "speaker.diarize")
+        result = diarize(payload);
+      else if (type == "llama.load")
+        result = loadLlama(payload);
+      else if (type == "llama.generate")
+        result = generate(payload, identifier);
+      else if (type == "audio.decode") {
+        auto source = file(string(payload, "source")),
+             destination = string(payload, "destination");
+        auto rate = number(payload, "sample_rate", 16000),
+             channels = number(payload, "channels", 1);
+        if (rate < 8000 || rate > 192000 || rate != std::trunc(rate) ||
+            (channels != 1 && channels != 2))
+          throw std::runtime_error("Invalid decode format");
+        decode_audio(source.c_str(), destination.c_str(),
+                     static_cast<int>(rate), static_cast<int>(channels));
+        result = {{"path", destination}};
+      } else
+        throw std::runtime_error("Unknown inference command");
+      emit({{"id", identifier}, {"ok", true}, {"result", result}});
+    } catch (const std::exception &e) {
+      emit({{"id", identifier}, {"ok", false}, {"error", text(e.what())}});
     }
+  }
   if (recognizer)
     SherpaOnnxDestroyOfflineRecognizer(recognizer);
   if (vad)

@@ -5,13 +5,7 @@ if (!target) throw new Error('Offline release requires macOS or Windows');
 const env = { ...process.env };
 for (const key of ['APPLE_ID', 'APPLE_APP_SPECIFIC_PASSWORD', 'APPLE_TEAM_ID']) delete env[key];
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-const commands =
-  target === 'mac'
-    ? [['run', 'dist:mac']]
-    : [
-        ['run', 'pack:backend'],
-        ['run', 'package:win'],
-      ];
+const commands = [['run', 'dist:' + target]];
 for (const args of commands) {
   const result = spawnSync(npm, args, {
     stdio: 'inherit',

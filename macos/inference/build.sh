@@ -81,7 +81,7 @@ for library in "$output/"*.dylib; do
     install_name_tool -add_rpath '@loader_path' "$library"
   fi
 done
-xcrun clang++ -std=c++17 -fobjc-arc -O2 -mmacosx-version-min=14.0 -framework Foundation -I "$cache/sherpa-headers" -I "$llama/include" -I "$llama/ggml/include" macos/inference/NativeInference.mm macos/inference/AudioDecode.cpp -I "$cache" -L "$output" -lsherpa-onnx-c-api -lllama -lggml -lggml-base "$cache/opusfile-build/libopusfile.a" "$cache/opus-build/libopus.a" "$cache/ogg-build/libogg.a" -Wl,-rpath,@executable_path -o "$output/brevia-inference"
+xcrun clang++ -std=c++17 -O2 -mmacosx-version-min=14.0 -I "$cache/sherpa-headers" -I "$llama/vendor" -I "$llama/common" -I "$llama/include" -I "$llama/ggml/include" macos/inference/NativeInference.cpp macos/inference/AudioDecode.cpp -I "$cache" -L "$output" -lsherpa-onnx-c-api -lllama -lggml -lggml-base "$cache/opusfile-build/libopusfile.a" "$cache/opus-build/libopus.a" "$cache/ogg-build/libogg.a" -Wl,-rpath,@executable_path -o "$output/brevia-inference"
 swift package --package-path macos/inference resolve
 alignment=macos/inference/.build/checkouts/mlx-audio-swift/Sources/MLXAudioSTT/Models/Nemo/NemoAlignment.swift
 if ! grep -q '"tokens":' "$alignment"; then
@@ -105,6 +105,8 @@ done < <(otool -l "$output/brevia-mlx" | awk '/cmd LC_RPATH/{getline;getline; pr
 strip -S -x "$output/brevia-mlx" "$output/brevia-inference"
 mkdir -p "$output/licenses"
 cp "$llama/LICENSE" "$output/licenses/llama.cpp-LICENSE"
+download 'https://raw.githubusercontent.com/nlohmann/json/v3.12.0/LICENSE.MIT' "$output/licenses/nlohmann-LICENSE" 46a65cffd1ea955132d95a8dd921640714a8d6b537d2e4e482d31145ae95b603
+cp "$llama/common/base64.hpp" "$output/licenses/base64-LICENSE"
 cp "$cache/libogg-1.3.6/COPYING" "$output/licenses/libogg-LICENSE"
 cp "$cache/opus-1.6.1/COPYING" "$output/licenses/opus-LICENSE"
 cp "$cache/opusfile-0.12/COPYING" "$output/licenses/opusfile-LICENSE"

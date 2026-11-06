@@ -2,14 +2,18 @@ const { spawn } = require('node:child_process');
 const { createInterface } = require('node:readline');
 
 class EngineClient {
-  constructor(binary) {
+  constructor(binary, args = []) {
     this.binary = binary;
+    this.args = args;
     this.sequence = 0;
     this.pending = new Map();
   }
   start() {
     if (this.child) return;
-    const child = spawn(this.binary, [], { stdio: ['pipe', 'pipe', 'inherit'] });
+    const child = spawn(this.binary, this.args, {
+      stdio: ['pipe', 'pipe', 'inherit'],
+      windowsHide: true,
+    });
     this.child = child;
     const fail = (error) => {
       if (this.child !== child) return;
