@@ -77,6 +77,10 @@ async function main() {
     assert.equal(installed.length, 1, JSON.stringify(installed));
     assert.equal(installed[0].directory.toLowerCase(), directory.toLowerCase());
     assert.equal(installed[0].hive, 'HKLM');
+    assert.equal(
+      registry('HKLM', `${uninstallRoot}\\${legacyGuid}`, 'DisplayName', installed[0].view),
+      'Brevia 1.4.5',
+    );
     fs.mkdirSync(profile);
     createdProfile = true;
     const sentinel = path.join(profile, 'upgrade-preserved.txt');

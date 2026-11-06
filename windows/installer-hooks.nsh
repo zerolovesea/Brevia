@@ -73,7 +73,7 @@ LangString BreviaMigrationFailed 2052 "旧版程序未能完成迁移。请修�
       ReadRegStr $2 ${root} "${BREVIA_LEGACY_KEY}" "UninstallString"
       StrCpy $3 $BreviaLegacyDir 1 1
       StrLen $4 $BreviaLegacyDir
-      ${If} $1 != "Brevia"
+      ${If} $1 != "Brevia 1.4.5"
       ${OrIf} $3 != ":"
       ${OrIf} $4 <= 3
       ${OrIf} $2 != '$\"$BreviaLegacyDir\Uninstall Brevia.exe$\" /${scope}'

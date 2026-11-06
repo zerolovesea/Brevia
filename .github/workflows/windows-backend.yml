@@ -98,6 +98,7 @@ jobs:
             dist/native-win/app/
             macos/host/target/release/Brevia.exe
           if-no-files-found: error
+          include-hidden-files: true
           retention-days: 7
       - uses: actions/upload-artifact@v4
         with:
@@ -106,6 +107,7 @@ jobs:
             dist/native-win/app/
             dist/native-win/Brevia-*-x64-setup.exe
           if-no-files-found: error
+          include-hidden-files: true
           retention-days: 7
       - name: Preserve native build cache
         if: ${{ !cancelled() && (steps.native-build.outcome == 'success' || steps.native-build.outcome == 'failure') && steps.native-build-cache.outputs.cache-hit != 'true' }}
