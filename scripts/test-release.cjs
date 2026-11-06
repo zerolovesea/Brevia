@@ -5,10 +5,12 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { test } = require('node:test');
 const { runInNewContext } = require('node:vm');
+const prettier = require('prettier');
 
 const root = path.resolve(__dirname, '..');
-test('release links migrate Electron filenames and can update native filenames again', () => {
+test('release links migrate Electron filenames and keep formatting through later native updates', async () => {
   const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'brevia-release-links-'));
+  const formatOptions = await prettier.resolveConfig(path.join(root, 'README.md'));
   try {
     fs.mkdirSync(path.join(scratch, 'docs'));
     fs.mkdirSync(path.join(scratch, 'website'));
@@ -38,6 +40,8 @@ test('release links migrate Electron filenames and can update native filenames a
         assert.ok(content.includes(`Brevia-${version}-x64-setup.exe`), file);
         assert.ok(!content.includes(`Brevia-${version}-arm64.dmg`), file);
         assert.ok(!content.includes('native-release-pending'), file);
+        if (file.endsWith('.md'))
+          assert.ok(await prettier.check(content, { ...formatOptions, filepath: file }), file);
       }
     }
   } finally {

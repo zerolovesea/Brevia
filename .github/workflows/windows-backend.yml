@@ -82,7 +82,14 @@ jobs:
         run: |
           node scripts/prepare-native-smoke.cjs dist/native-smoke-models
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          node macos/inference/smoke.cjs dist/native-smoke-models dist/native-win/app/resources/engines
+          $modelPath = 'dist/中文用户 模型'
+          Move-Item dist/native-smoke-models $modelPath
+          try {
+            node macos/inference/smoke.cjs $modelPath dist/native-win/app/resources/engines
+            if ($LASTEXITCODE) { throw 'Native model smoke failed' }
+          } finally {
+            Move-Item $modelPath dist/native-smoke-models
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: windows-native-${{ github.sha }}

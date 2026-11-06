@@ -8,12 +8,15 @@
 
 ## 下载
 
-| 设备    | 下载                                                                                                        | 系统要求                     |
-| ------- | ----------------------------------------------------------------------------------------------------------- | ---------------------------- |
-| Mac     | [macOS 版](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/Brevia-1.4.5-arm64.dmg)       | Apple Silicon · macOS 14+    |
-| Windows | [Windows 版](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/Brevia-1.4.5-x64-setup.exe) | Windows 10 / 11 · x64 · AVX2 |
-| iPhone  | [App Store](https://apps.apple.com/app/id6819869442)                                                        | iOS 15+                      |
-| Android | [APK](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk)        | Android 7+                   |
+| 设备    | 下载                                                                                                 | 系统要求                     |
+| ------- | ---------------------------------------------------------------------------------------------------- | ---------------------------- |
+| Mac     | [macOS 版][download-mac]                                                                             | Apple Silicon · macOS 14+    |
+| Windows | [Windows 版][download-windows]                                                                       | Windows 10 / 11 · x64 · AVX2 |
+| iPhone  | [App Store](https://apps.apple.com/app/id6819869442)                                                 | iOS 15+                      |
+| Android | [APK](https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/android/Brevia-android.apk) | Android 7+                   |
+
+[download-mac]: https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/Brevia-1.4.5-arm64.dmg
+[download-windows]: https://modelscope.cn/models/zyaztec/brevia-release/resolve/master/Brevia-1.4.5-x64-setup.exe
 
 [GitHub Releases](https://github.com/zerolovesea/Brevia/releases) · [官网](https://brevia.work)
 
