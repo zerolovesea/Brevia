@@ -302,8 +302,28 @@ class LiveSubtitles {
     this.paragraphs = new Map();
     this.tails = new Map();
     this.joinStyles = new Map();
+    this.units = new Map();
+  }
+  publishUnit(event, text, voiceSpans) {
+    const previous = this.units.get(event.track);
+    this.units.set(event.track, { ...event, text });
+    if (previous && ['pause', 'cut'].includes(previous.boundary)) {
+      const gap = event.start_ms - previous.end_ms,
+        duration = event.end_ms - event.start_ms;
+      // 只去除真实回看时间窗内的精确重复；没有重叠的自然重复照常保留。
+      // 已落盘的两个识别单元不拼接，也不按字数重算起止时间。
+      if (-this.overlapMs <= gap && gap < 0 && duration > 0)
+        text = dedupeSeam(
+          previous.text,
+          text,
+          Math.max(2, Math.min(8, roundEven((-gap * charLength(text)) / duration))),
+        );
+    }
+    // 整段只是上次回看的重复时，保留接缝状态但不生成标点字幕或重复 AI 任务。
+    if (/[\p{L}\p{N}]/u.test(text)) this.publish({ ...event, text }, voiceSpans);
   }
   push(event, text) {
+    this.units.delete(event.track);
     const track = event.track,
       sentences = attachLeadingClosers(splitSentences(text).filter((sentence) => sentence.trim()));
     if (!sentences.length) return;

@@ -21,6 +21,42 @@ test('Live subtitles preserve original tail-only holding, seam repair and paragr
 test('Seam alignment preserves pauses and repairs partial re-decoding', () => {
   for (const [input, expected] of fixture.seams) assert.equal(joinPending(...input), expected);
 });
+test('Independent recognition units keep natural repetition and original time bounds', () => {
+  const emitted = [],
+    subtitles = new LiveSubtitles((value, spans) => emitted.push({ value, spans })),
+    first = { segment_id: 'first', track: 'mic', start_ms: 0, end_ms: 3000, boundary: 'cut' },
+    spans = [{ start: 3000, end: 6000 }];
+  subtitles.publishUnit(first, '请确认。');
+  subtitles.publishUnit(
+    { ...first, segment_id: 'next', start_ms: 3000, end_ms: 6000 },
+    '确认以后继续。',
+    spans,
+  );
+  subtitles.publishUnit(
+    { ...first, segment_id: 'system', track: 'system', start_ms: 5600, end_ms: 9000 },
+    '继续继续。',
+  );
+  assert.deepEqual(
+    emitted.map(({ value }) => value.text),
+    ['请确认。', '确认以后继续。', '继续继续。'],
+  );
+  assert.equal(emitted[1].value.start_ms, 3000);
+  assert.equal(emitted[1].value.end_ms, 6000);
+  assert.deepEqual(emitted[1].spans, spans);
+});
+test('A duplicate-only lookback produces no punctuation caption and preserves the next seam', () => {
+  const emitted = [],
+    subtitles = new LiveSubtitles((value) => emitted.push(value)),
+    event = { track: 'mic', start_ms: 0, end_ms: 20000, boundary: 'cut' };
+  subtitles.publishUnit(event, '确认。');
+  subtitles.publishUnit({ ...event, start_ms: 19600, end_ms: 20400 }, '确认。');
+  assert.equal(emitted.length, 1);
+  subtitles.publishUnit({ ...event, start_ms: 20000, end_ms: 22000 }, '确认后开始。');
+  assert.deepEqual(
+    emitted.map((value) => value.text),
+    ['确认。', '后开始。'],
+  );
+});
 test('Sentence splitting and word anchors match previous Unicode timing and refinement rules', () => {
   for (const [event, text, merge, expected] of fixture.sentences)
     assert.deepEqual(sentenceSubtitles(event, text, merge), expected);

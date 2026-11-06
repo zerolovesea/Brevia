@@ -116,6 +116,8 @@ class SentenceVAD {
         start_ms: Math.round((absolute - prefix.length / 2) / 16),
         end_ms: Math.round(this.origin + end / 16),
         audio: Buffer.concat([prefix, body]),
+        // 声纹只采原始有声区间，不把 ASR 的回看前缀或合并间隙当作说话。
+        voiceSpans: [{ start: Math.round(absolute / 16), end: Math.round(this.origin + end / 16) }],
       });
       this.delivered = Math.round(this.origin * 16) + end;
     }
@@ -135,6 +137,7 @@ class SentenceVAD {
               Buffer.alloc(Math.max(0, Math.round(gap * 16)) * 2),
               segment.audio,
             ]),
+            voiceSpans: [...(this.pending.voiceSpans || []), ...(segment.voiceSpans || [])],
           };
         } else completed.push({ ...this.pending, boundary: 'endpoint' });
       }

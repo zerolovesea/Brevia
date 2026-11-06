@@ -5,6 +5,7 @@ const path = require('node:path');
 const { test } = require('node:test');
 const { Worker } = require('./worker.cjs');
 const { SentenceVAD } = require('./sentence-vad.cjs');
+const { EMBEDDING_MODEL } = require('./worker-speakers.cjs');
 
 async function setup(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'brevia-live-performance-')),
@@ -137,6 +138,109 @@ test('Preview excludes initial silence and bounds snapshots without consuming VA
   assert.equal(vad.speechStart, 16000);
   vad.close();
 });
+
+test('VAD preserves separate speech spans while retaining merged ASR audio and lookback', async (t) => {
+  const { worker } = await setup(t),
+    vad = new SentenceVAD(worker, { language: 'zh' }, 20, 10000);
+  const audio = Buffer.alloc(8 * 32000, 1);
+  vad.remember(audio);
+  vad.samples = audio.length / 2;
+  const parts = vad.drain([
+    { start_ms: 1000, end_ms: 3000, pcm: audio.subarray(1000 * 32, 3000 * 32).toString('base64') },
+    { start_ms: 3400, end_ms: 6000, pcm: audio.subarray(3400 * 32, 6000 * 32).toString('base64') },
+  ]);
+  assert.equal(vad.collect(parts).length, 0);
+  assert.equal(vad.pending.start_ms, 10600);
+  assert.equal(vad.pending.end_ms, 16000);
+  assert.deepEqual(vad.pending.audio, audio.subarray(600 * 32, 6000 * 32));
+  assert.deepEqual(vad.pending.voiceSpans, [
+    { start: 11000, end: 13000 },
+    { start: 13400, end: 16000 },
+  ]);
+  vad.close();
+});
+
+test('Voiceprint captions retain hard-cut lookback deduplication without merging ASR units', async (t) => {
+  const { worker, events, engines } = await setup(t);
+  await start(worker);
+  worker.session.previewed.add('mic');
+  const recognizer = engines.find((engine) => engine.calls.includes('asr.load')),
+    request = recognizer.request.bind(recognizer),
+    results = ['先确认发布计划。', '计划之后开始测试。'];
+  recognizer.request = async (type, payload) => {
+    const result = await request(type, payload);
+    return type === 'asr.decode' ? { text: results.shift() || '' } : result;
+  };
+  await audio(worker, 0, 20000);
+  await audio(worker, 20000, 20000);
+  const finals = events.filter((event) => event.type === 'transcript.final').map((e) => e.payload);
+  assert.equal(finals.length, 2);
+  assert.deepEqual(
+    finals.map((event) => event.text),
+    ['先确认发布计划。', '之后开始测试。'],
+  );
+  assert.ok(finals[1].start_ms < finals[0].end_ms, 'Actual VAD hard cuts retain lookback audio');
+  assert.notEqual(finals[0].segment_id, finals[1].segment_id);
+  assert.equal(recognizer.calls.filter((call) => call === 'asr.decode').length, 2);
+  await worker.handlers['meeting.stop']({ meeting_id: 'early', duration_ms: 40000 });
+  assert.equal(worker.store.getMeeting('early', true).segments.length, 2);
+});
+
+for (const installed of [true, false])
+  test(`ASR units preserve source boundaries with voiceprints ${installed ? 'installed' : 'absent'} and drain once on pause/stop`, async (t) => {
+    const { worker, events, engines } = await setup(t);
+    worker.models.isReady = (id) => id !== EMBEDDING_MODEL || installed;
+    await start(worker);
+    const notes = [];
+    worker.aiNoteOnSegment = (event) => notes.push(event.segment_id);
+    worker.session.recognition.vads.set('mic', {
+      origin: 0,
+      samples: 0,
+      async accept(pcm, startMs) {
+        this.samples += pcm.length / 2;
+        const end = startMs + pcm.length / 32;
+        return [
+          {
+            start_ms: startMs,
+            end_ms: end,
+            boundary: 'endpoint',
+            pcm: pcm.toString('base64'),
+            voiceSpans: [{ start: startMs + 100, end: end - 100 }],
+          },
+        ];
+      },
+      preview: () => null,
+      flush: async () => [],
+      close() {},
+    });
+    await audio(worker, 0, 3000);
+    await audio(worker, 3000, 3000);
+    let finals = events.filter((event) => event.type === 'transcript.final');
+    assert.equal(finals.length, installed ? 2 : 0);
+    if (installed)
+      assert.deepEqual(
+        finals.map((e) => [e.payload.start_ms, e.payload.end_ms]),
+        [
+          [0, 3000],
+          [3000, 6000],
+        ],
+      );
+    await worker.handlers['meeting.pause']({ meeting_id: 'early', paused: true });
+    await worker.handlers['meeting.pause']({ meeting_id: 'early', paused: false });
+    await audio(worker, 6000, 3000);
+    await worker.handlers['meeting.stop']({ meeting_id: 'early', duration_ms: 9000 });
+    finals = events.filter((event) => event.type === 'transcript.final');
+    assert.equal(finals.length, installed ? 3 : 2);
+    assert.equal(notes.length, finals.length);
+    assert.equal(new Set(notes).size, notes.length);
+    assert.equal(
+      events.filter((event) => event.type === 'transcript.settled').length,
+      finals.length,
+    );
+    const recognizer = engines.find((engine) => engine.calls.includes('asr.load'));
+    assert.equal(recognizer.calls.filter((call) => call === 'asr.decode').length, 3);
+    assert.equal(worker.store.getMeeting('early', true).segments.length, finals.length);
+  });
 
 test('Refinement reuses one speaker engine across windows and closes it afterwards', async (t) => {
   const { worker, engines } = await setup(t);

@@ -92,11 +92,11 @@ function attachRecording(worker) {
           ? new AlignedAudioMixer(16000, worker.settings.live_asr.mix_max_delay_ms)
           : null,
     };
-    session.subtitles = new LiveSubtitles((event) => {
+    session.subtitles = new LiveSubtitles((event, voiceSpans) => {
       if (!worker.store.saveSegment(event)) return;
       worker.emit('transcript.final', event);
       worker.emit('transcript.settled', event);
-      session.liveSpeakers.enqueue(event);
+      session.liveSpeakers.enqueue(event, voiceSpans);
       try {
         worker.aiNoteOnSegment?.(event);
       } catch (error) {
@@ -239,8 +239,15 @@ function attachRecording(worker) {
             start_ms: event.start_ms + word.start_ms,
             end_ms: event.start_ms + word.end_ms,
           }));
-        session.subtitles.push(event, text);
-        session.subtitles.flush(event.end_ms, (recognition.maximum + 2) * 1000);
+        if (session.liveSpeakers.hasModel()) {
+          // 已装声纹时保留真实识别单元，避免把不同人的 ASR 结果合成一段。
+          // 推理输入与调用次数不变，也不按字数猜测说话人或拆分文字时间线。
+          session.subtitles.flush();
+          session.subtitles.publishUnit(event, text, segment.voiceSpans);
+        } else {
+          session.subtitles.push(event, text);
+          session.subtitles.flush(event.end_ms, (recognition.maximum + 2) * 1000);
+        }
       } catch (error) {
         worker.emit('worker.warning', {
           meeting_id: session.meeting.id,
